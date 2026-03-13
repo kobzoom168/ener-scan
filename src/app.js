@@ -2,6 +2,9 @@ import express from "express"
 import axios from "axios"
 import dotenv from "dotenv"
 import OpenAI from "openai"
+import imghash from "imghash"
+import fs from "fs"
+import path from "path"
 
 dotenv.config()
 
@@ -14,11 +17,16 @@ const openai = new OpenAI({
 
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
 
-// health check
+// เก็บ hash ของรูปที่เคย scan
+const scannedHashes = new Set()
+
+// ===============================
+// HEALTH CHECK
+// ===============================
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok" })
 })
-
 
 // ===============================
 // LINE WEBHOOK
@@ -42,7 +50,7 @@ app.post("/webhook/line", async (req, res) => {
 
       await reply(
         replyToken,
-        "Ener Scan พร้อมแล้ว 👁️\n\nส่งรูปพระ / crystal / เครื่องราง มาได้เลย"
+        "🔮 Ener Scan พร้อมแล้ว\n\nส่งรูปพระ / crystal / เครื่องราง มาได้เลย"
       )
 
     }
@@ -59,6 +67,27 @@ app.post("/webhook/line", async (req, res) => {
 
         const imageBuffer = await downloadImage(messageId)
 
+        // save temp file
+        const filePath = "./temp.jpg"
+        fs.writeFileSync(filePath, imageBuffer)
+
+        // generate hash
+        const hash = await imghash.hash(filePath)
+
+        // ตรวจรูปซ้ำ
+        if (scannedHashes.has(hash)) {
+
+          await reply(
+            replyToken,
+            "⚠️ รูปนี้เคยถูกสแกนแล้ว\n\nหากต้องการวิเคราะห์ใหม่ กรุณาถ่ายภาพใหม่ของวัตถุ"
+          )
+
+          return
+        }
+
+        // บันทึก hash
+        scannedHashes.add(hash)
+
         const base64Image = Buffer.from(imageBuffer).toString("base64")
 
         const result = await analyzeImage(base64Image)
@@ -69,7 +98,10 @@ app.post("/webhook/line", async (req, res) => {
 
         console.error(err)
 
-        await reply(replyToken, "Ener Scan วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง")
+        await reply(
+          replyToken,
+          "Ener Scan วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง"
+        )
 
       }
 
@@ -80,7 +112,6 @@ app.post("/webhook/line", async (req, res) => {
   res.sendStatus(200)
 
 })
-
 
 // ===============================
 // DOWNLOAD IMAGE FROM LINE
@@ -101,7 +132,6 @@ async function downloadImage(messageId) {
 
 }
 
-
 // ===============================
 // OPENAI VISION ANALYSIS
 // ===============================
@@ -113,6 +143,7 @@ async function analyzeImage(base64Image) {
     model: "gpt-4.1",
 
     messages: [
+
       {
         role: "system",
         content: `
@@ -122,7 +153,6 @@ Analyze spiritual objects such as:
 - Thai amulets
 - crystals
 - talismans
-- sacred objects
 
 Respond in Thai.
 
@@ -132,9 +162,10 @@ Format:
 
 Object Type:
 Energy Type:
-Energy Score: (1-10)
+Energy Score (1-10):
 
 Meaning:
+
 Advice:
 `
       },
@@ -144,7 +175,7 @@ Advice:
         content: [
           {
             type: "text",
-            text: "Analyze this object"
+            text: "Analyze the energy of this object"
           },
           {
             type: "image_url",
@@ -163,9 +194,8 @@ Advice:
 
 }
 
-
 // ===============================
-// REPLY TO LINE
+// REPLY MESSAGE
 // ===============================
 
 async function reply(token, text) {
@@ -190,7 +220,6 @@ async function reply(token, text) {
   )
 
 }
-
 
 // ===============================
 // START SERVER
