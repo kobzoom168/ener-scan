@@ -16,7 +16,6 @@ const openai = new OpenAI({
 
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
 
-// เก็บ hash รูป
 const scannedImages = new Set()
 
 // --------------------
@@ -26,7 +25,6 @@ const scannedImages = new Set()
 app.get("/health", (req, res) => {
   res.json({ status: "ok" })
 })
-
 
 // --------------------
 // webhook
@@ -42,21 +40,23 @@ app.post("/webhook/line", async (req, res) => {
 
     const replyToken = event.replyToken
 
-    // ----------------
     // TEXT
-    // ----------------
 
     if (event.message.type === "text") {
 
       await reply(replyToken,
-        "🔮 Ener Oracle พร้อมแล้ว\n\nส่งภาพ\n• คริสตัล\n• พระเครื่อง\n• เครื่องราง\n\nเพื่ออ่านพลัง"
-      )
+`🔮 Ener Oracle พร้อมแล้ว
+
+ส่งภาพ
+• คริสตัล
+• พระเครื่อง
+• เครื่องราง
+
+เพื่ออ่านพลัง`)
 
     }
 
-    // ----------------
     // IMAGE
-    // ----------------
 
     if (event.message.type === "image") {
 
@@ -67,19 +67,17 @@ app.post("/webhook/line", async (req, res) => {
         const imageBuffer = await downloadImage(messageId)
 
         const filePath = `./tmp-${messageId}.jpg`
+
         fs.writeFileSync(filePath, imageBuffer)
 
-        // ----------------
         // HASH CHECK
-        // ----------------
 
         const hash = await imghash.hash(filePath)
 
         if (scannedImages.has(hash)) {
 
           await reply(replyToken,
-            "⚠️ รูปนี้เคยถูกสแกนแล้ว\n\nหากต้องการวิเคราะห์ใหม่ กรุณาถ่ายภาพใหม่ของวัตถุ"
-          )
+"⚠️ รูปนี้เคยถูกสแกนแล้ว กรุณาถ่ายภาพใหม่")
 
           fs.unlinkSync(filePath)
           continue
@@ -87,11 +85,9 @@ app.post("/webhook/line", async (req, res) => {
 
         scannedImages.add(hash)
 
-        // ----------------
-        // CLASSIFY OBJECT
-        // ----------------
+        // OBJECT CLASSIFY
 
-        const type = await classifyObject()
+        const type = await classifyObject(imageBuffer)
 
         if (type === "NOT_SUPPORTED") {
 
@@ -110,11 +106,9 @@ Ener Scan รองรับเฉพาะ
           continue
         }
 
-        // ----------------
         // ANALYZE ENERGY
-        // ----------------
 
-        const result = await analyzeEnergy()
+        const result = await analyzeEnergy(imageBuffer)
 
         await reply(replyToken, result)
 
@@ -125,8 +119,7 @@ Ener Scan รองรับเฉพาะ
         console.error(err)
 
         await reply(replyToken,
-          "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง"
-        )
+"เกิดข้อผิดพลาด กรุณาลองใหม่")
 
       }
 
@@ -160,10 +153,12 @@ async function downloadImage(messageId) {
 
 
 // --------------------
-// OBJECT CLASSIFIER
+// CLASSIFY OBJECT
 // --------------------
 
-async function classifyObject() {
+async function classifyObject(imageBuffer) {
+
+  const base64 = Buffer.from(imageBuffer).toString("base64")
 
   const completion = await openai.chat.completions.create({
 
@@ -175,22 +170,37 @@ async function classifyObject() {
         content: `
 You classify objects in images.
 
-Supported objects ONLY:
+Supported objects:
 
 - crystal
 - amulet
 - talisman
 - sacred object
 
-If the object is NOT one of these
+If the object looks like one of these
 return ONLY:
+
+SUPPORTED
+
+If not return ONLY:
 
 NOT_SUPPORTED
 `
       },
       {
         role: "user",
-        content: "Classify the object."
+        content: [
+          {
+            type: "text",
+            text: "Classify this object."
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${base64}`
+            }
+          }
+        ]
       }
     ]
 
@@ -202,17 +212,18 @@ NOT_SUPPORTED
 
 
 // --------------------
-// ENERGY ANALYSIS
+// ANALYZE ENERGY
 // --------------------
 
-async function analyzeEnergy() {
+async function analyzeEnergy(imageBuffer) {
+
+  const base64 = Buffer.from(imageBuffer).toString("base64")
 
   const completion = await openai.chat.completions.create({
 
     model: "gpt-4o-mini",
 
     messages: [
-
       {
         role: "system",
         content: `
@@ -220,7 +231,7 @@ You analyze mystical energy of sacred objects.
 
 Return format:
 
-Ener Scan Result
+🔮 Ener Scan Result
 
 Object Type:
 Energy Type:
@@ -231,12 +242,21 @@ Meaning:
 Advice:
 `
       },
-
       {
         role: "user",
-        content: "Analyze the object's spiritual energy."
+        content: [
+          {
+            type: "text",
+            text: "Analyze this object's spiritual energy."
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${base64}`
+            }
+          }
+        ]
       }
-
     ]
 
   })
@@ -247,7 +267,7 @@ Advice:
 
 
 // --------------------
-// REPLY LINE
+// LINE REPLY
 // --------------------
 
 async function reply(token, text) {
@@ -281,5 +301,7 @@ async function reply(token, text) {
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log("Ener Oracle running")
+
+  console.log("Ener Scan Server running")
+
 })
