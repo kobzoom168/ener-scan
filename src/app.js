@@ -4,7 +4,6 @@ import dotenv from "dotenv"
 import OpenAI from "openai"
 import imghash from "imghash"
 import fs from "fs"
-import path from "path"
 
 dotenv.config()
 
@@ -17,20 +16,21 @@ const openai = new OpenAI({
 
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
 
-// เก็บ hash ของรูปที่เคย scan
-const scannedHashes = new Set()
+// เก็บ hash รูป
+const scannedImages = new Set()
 
-// ===============================
-// HEALTH CHECK
-// ===============================
+// --------------------
+// health check
+// --------------------
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" })
 })
 
-// ===============================
-// LINE WEBHOOK
-// ===============================
+
+// --------------------
+// webhook
+// --------------------
 
 app.post("/webhook/line", async (req, res) => {
 
@@ -42,22 +42,21 @@ app.post("/webhook/line", async (req, res) => {
 
     const replyToken = event.replyToken
 
-    // ===============================
-    // TEXT MESSAGE
-    // ===============================
+    // ----------------
+    // TEXT
+    // ----------------
 
     if (event.message.type === "text") {
 
-      await reply(
-        replyToken,
-        "🔮 Ener Scan พร้อมแล้ว\n\nส่งรูปพระ / crystal / เครื่องราง มาได้เลย"
+      await reply(replyToken,
+        "🔮 Ener Oracle พร้อมแล้ว\n\nส่งภาพ\n• คริสตัล\n• พระเครื่อง\n• เครื่องราง\n\nเพื่ออ่านพลัง"
       )
 
     }
 
-    // ===============================
-    // IMAGE MESSAGE
-    // ===============================
+    // ----------------
+    // IMAGE
+    // ----------------
 
     if (event.message.type === "image") {
 
@@ -67,40 +66,66 @@ app.post("/webhook/line", async (req, res) => {
 
         const imageBuffer = await downloadImage(messageId)
 
-        // save temp file
-        const filePath = "./temp.jpg"
+        const filePath = `./tmp-${messageId}.jpg`
         fs.writeFileSync(filePath, imageBuffer)
 
-        // generate hash
+        // ----------------
+        // HASH CHECK
+        // ----------------
+
         const hash = await imghash.hash(filePath)
 
-        // ตรวจรูปซ้ำ
-        if (scannedHashes.has(hash)) {
+        if (scannedImages.has(hash)) {
 
-          await reply(
-            replyToken,
+          await reply(replyToken,
             "⚠️ รูปนี้เคยถูกสแกนแล้ว\n\nหากต้องการวิเคราะห์ใหม่ กรุณาถ่ายภาพใหม่ของวัตถุ"
           )
 
-          return
+          fs.unlinkSync(filePath)
+          continue
         }
 
-        // บันทึก hash
-        scannedHashes.add(hash)
+        scannedImages.add(hash)
 
-        const base64Image = Buffer.from(imageBuffer).toString("base64")
+        // ----------------
+        // CLASSIFY OBJECT
+        // ----------------
 
-        const result = await analyzeImage(base64Image)
+        const type = await classifyObject()
+
+        if (type === "NOT_SUPPORTED") {
+
+          await reply(replyToken,
+`⚠️ Ener Oracle
+
+ภาพนี้ไม่ใช่วัตถุที่ Oracle สามารถอ่านพลังได้
+
+Ener Scan รองรับเฉพาะ
+
+• คริสตัล
+• พระเครื่อง
+• เครื่องราง`)
+
+          fs.unlinkSync(filePath)
+          continue
+        }
+
+        // ----------------
+        // ANALYZE ENERGY
+        // ----------------
+
+        const result = await analyzeEnergy()
 
         await reply(replyToken, result)
+
+        fs.unlinkSync(filePath)
 
       } catch (err) {
 
         console.error(err)
 
-        await reply(
-          replyToken,
-          "Ener Scan วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง"
+        await reply(replyToken,
+          "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง"
         )
 
       }
@@ -113,9 +138,10 @@ app.post("/webhook/line", async (req, res) => {
 
 })
 
-// ===============================
-// DOWNLOAD IMAGE FROM LINE
-// ===============================
+
+// --------------------
+// DOWNLOAD IMAGE
+// --------------------
 
 async function downloadImage(messageId) {
 
@@ -132,33 +158,69 @@ async function downloadImage(messageId) {
 
 }
 
-// ===============================
-// OPENAI VISION ANALYSIS
-// ===============================
 
-async function analyzeImage(base64Image) {
+// --------------------
+// OBJECT CLASSIFIER
+// --------------------
+
+async function classifyObject() {
 
   const completion = await openai.chat.completions.create({
 
-    model: "gpt-4.1",
+    model: "gpt-4o-mini",
+
+    messages: [
+      {
+        role: "system",
+        content: `
+You classify objects in images.
+
+Supported objects ONLY:
+
+- crystal
+- amulet
+- talisman
+- sacred object
+
+If the object is NOT one of these
+return ONLY:
+
+NOT_SUPPORTED
+`
+      },
+      {
+        role: "user",
+        content: "Classify the object."
+      }
+    ]
+
+  })
+
+  return completion.choices[0].message.content.trim()
+
+}
+
+
+// --------------------
+// ENERGY ANALYSIS
+// --------------------
+
+async function analyzeEnergy() {
+
+  const completion = await openai.chat.completions.create({
+
+    model: "gpt-4o-mini",
 
     messages: [
 
       {
         role: "system",
         content: `
-You are Ener Scan AI.
+You analyze mystical energy of sacred objects.
 
-Analyze spiritual objects such as:
-- Thai amulets
-- crystals
-- talismans
+Return format:
 
-Respond in Thai.
-
-Format:
-
-🔮 Ener Scan Result
+Ener Scan Result
 
 Object Type:
 Energy Type:
@@ -172,18 +234,7 @@ Advice:
 
       {
         role: "user",
-        content: [
-          {
-            type: "text",
-            text: "Analyze the energy of this object"
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:image/jpeg;base64,${base64Image}`
-            }
-          }
-        ]
+        content: "Analyze the object's spiritual energy."
       }
 
     ]
@@ -194,9 +245,10 @@ Advice:
 
 }
 
-// ===============================
-// REPLY MESSAGE
-// ===============================
+
+// --------------------
+// REPLY LINE
+// --------------------
 
 async function reply(token, text) {
 
@@ -221,12 +273,13 @@ async function reply(token, text) {
 
 }
 
-// ===============================
+
+// --------------------
 // START SERVER
-// ===============================
+// --------------------
 
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log("Ener Scan Server running")
+  console.log("Ener Oracle running")
 })
