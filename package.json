@@ -1,7 +1,7 @@
 {
-  "type": "module",
   "name": "ener-scan",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -10,7 +10,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "axios": "^1.13.5",
     "dotenv": "^17.3.1",
