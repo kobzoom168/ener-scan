@@ -16,19 +16,21 @@ const openai = new OpenAI({
 
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
 
+// กันรูปซ้ำ
 const scannedImages = new Set()
 
-// --------------------
-// health check
-// --------------------
+// ----------------
+// HEALTH CHECK
+// ----------------
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" })
 })
 
-// --------------------
-// webhook
-// --------------------
+
+// ----------------
+// LINE WEBHOOK
+// ----------------
 
 app.post("/webhook/line", async (req, res) => {
 
@@ -40,7 +42,9 @@ app.post("/webhook/line", async (req, res) => {
 
     const replyToken = event.replyToken
 
-    // TEXT
+    // ----------------
+    // TEXT MESSAGE
+    // ----------------
 
     if (event.message.type === "text") {
 
@@ -52,11 +56,13 @@ app.post("/webhook/line", async (req, res) => {
 • พระเครื่อง
 • เครื่องราง
 
-เพื่ออ่านพลัง`)
+เพื่ออ่านพลังวัตถุ`)
 
     }
 
-    // IMAGE
+    // ----------------
+    // IMAGE MESSAGE
+    // ----------------
 
     if (event.message.type === "image") {
 
@@ -67,17 +73,21 @@ app.post("/webhook/line", async (req, res) => {
         const imageBuffer = await downloadImage(messageId)
 
         const filePath = `./tmp-${messageId}.jpg`
-
         fs.writeFileSync(filePath, imageBuffer)
 
+        // ----------------
         // HASH CHECK
+        // ----------------
 
         const hash = await imghash.hash(filePath)
 
         if (scannedImages.has(hash)) {
 
           await reply(replyToken,
-"⚠️ รูปนี้เคยถูกสแกนแล้ว กรุณาถ่ายภาพใหม่")
+`⚠️ รูปนี้เคยถูกสแกนแล้ว
+
+หากต้องการวิเคราะห์ใหม่
+กรุณาถ่ายภาพใหม่ของวัตถุ`)
 
           fs.unlinkSync(filePath)
           continue
@@ -85,7 +95,9 @@ app.post("/webhook/line", async (req, res) => {
 
         scannedImages.add(hash)
 
-        // OBJECT CLASSIFY
+        // ----------------
+        // CLASSIFY OBJECT
+        // ----------------
 
         const type = await classifyObject(imageBuffer)
 
@@ -106,7 +118,9 @@ Ener Scan รองรับเฉพาะ
           continue
         }
 
+        // ----------------
         // ANALYZE ENERGY
+        // ----------------
 
         const result = await analyzeEnergy(imageBuffer)
 
@@ -119,7 +133,7 @@ Ener Scan รองรับเฉพาะ
         console.error(err)
 
         await reply(replyToken,
-"เกิดข้อผิดพลาด กรุณาลองใหม่")
+"เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง")
 
       }
 
@@ -132,9 +146,9 @@ Ener Scan รองรับเฉพาะ
 })
 
 
-// --------------------
+// ----------------
 // DOWNLOAD IMAGE
-// --------------------
+// ----------------
 
 async function downloadImage(messageId) {
 
@@ -152,9 +166,9 @@ async function downloadImage(messageId) {
 }
 
 
-// --------------------
-// CLASSIFY OBJECT
-// --------------------
+// ----------------
+// OBJECT CLASSIFIER
+// ----------------
 
 async function classifyObject(imageBuffer) {
 
@@ -168,21 +182,21 @@ async function classifyObject(imageBuffer) {
       {
         role: "system",
         content: `
-You classify objects in images.
+คุณคือระบบตรวจจับวัตถุ
 
-Supported objects:
+ตรวจว่าภาพนี้เป็นวัตถุประเภท
 
-- crystal
-- amulet
+- คริสตัล
+- พระเครื่อง
+- เครื่องราง
 - talisman
-- sacred object
+- amulet
 
-If the object looks like one of these
-return ONLY:
+ถ้าใช่ให้ตอบ
 
 SUPPORTED
 
-If not return ONLY:
+ถ้าไม่ใช่ให้ตอบ
 
 NOT_SUPPORTED
 `
@@ -192,7 +206,7 @@ NOT_SUPPORTED
         content: [
           {
             type: "text",
-            text: "Classify this object."
+            text: "วัตถุในภาพนี้คืออะไร"
           },
           {
             type: "image_url",
@@ -211,9 +225,9 @@ NOT_SUPPORTED
 }
 
 
-// --------------------
-// ANALYZE ENERGY
-// --------------------
+// ----------------
+// ENERGY ANALYSIS
+// ----------------
 
 async function analyzeEnergy(imageBuffer) {
 
@@ -227,19 +241,26 @@ async function analyzeEnergy(imageBuffer) {
       {
         role: "system",
         content: `
-You analyze mystical energy of sacred objects.
+คุณคือ Ener Oracle
 
-Return format:
+หน้าที่ของคุณคือวิเคราะห์พลังของ
+คริสตัล พระเครื่อง และเครื่องราง
+
+ตอบเป็นภาษาไทยเท่านั้น
+
+รูปแบบคำตอบต้องเป็นแบบนี้
 
 🔮 Ener Scan Result
 
-Object Type:
-Energy Type:
-Energy Score (1-10):
+✨ ประเภทวัตถุ:
+⚡ ประเภทพลังงาน:
+📊 คะแนนพลังงาน (1-10):
 
-Meaning:
+🧿 ความหมาย:
+อธิบายพลังของวัตถุ
 
-Advice:
+🪬 คำแนะนำ:
+แนะนำการพกพา การใช้ หรือการดูแล
 `
       },
       {
@@ -247,7 +268,7 @@ Advice:
         content: [
           {
             type: "text",
-            text: "Analyze this object's spiritual energy."
+            text: "วิเคราะห์พลังของวัตถุในภาพนี้"
           },
           {
             type: "image_url",
@@ -266,9 +287,9 @@ Advice:
 }
 
 
-// --------------------
+// ----------------
 // LINE REPLY
-// --------------------
+// ----------------
 
 async function reply(token, text) {
 
@@ -294,14 +315,12 @@ async function reply(token, text) {
 }
 
 
-// --------------------
+// ----------------
 // START SERVER
-// --------------------
+// ----------------
 
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-
   console.log("Ener Scan Server running")
-
 })
