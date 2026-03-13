@@ -1,79 +1,132 @@
-require("dotenv").config();
-const express = require("express");
-const axios = require("axios");
+import express from "express"
+import axios from "axios"
+import dotenv from "dotenv"
+import OpenAI from "openai"
 
-const app = express();
-app.use(express.json());
+dotenv.config()
 
-// ======================
-// Health Check
-// ======================
+const app = express()
+app.use(express.json())
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+})
+
+const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
+
+// health check
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
-});
+  res.json({ status: "ok" })
+})
 
-// ======================
-// Root Route (optional)
-app.get("/", (req, res) => {
-  res.send("Ener Scan API Running 🚀");
-});
-
-// ======================
-// LINE Webhook
-// ======================
+// webhook
 app.post("/webhook/line", async (req, res) => {
-  console.log("LINE EVENT RECEIVED:");
-  console.log(JSON.stringify(req.body, null, 2));
+  const events = req.body.events
 
-  const events = req.body.events;
+  for (const event of events) {
 
-  if (!events || events.length === 0) {
-    return res.status(200).send("OK");
-  }
+    if (event.type !== "message") continue
 
-  const event = events[0];
+    const replyToken = event.replyToken
 
-  // ตอบเฉพาะข้อความ text ก่อน
-  if (event.type === "message" && event.message.type === "text") {
-    const replyToken = event.replyToken;
+    // TEXT
+    if (event.message.type === "text") {
 
-    try {
-      await axios.post(
-        "https://api.line.me/v2/bot/message/reply",
-        {
-          replyToken: replyToken,
-          messages: [
-            {
-              type: "text",
-              text: "Ener Scan Online แล้ว 👁️",
-            },
-          ],
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
-          },
-        }
-      );
+      await reply(replyToken, "Ener Scan พร้อมแล้ว 👁️ ส่งรูปมาได้เลย")
 
-      console.log("Reply sent successfully");
-    } catch (error) {
-      console.error(
-        "Error replying to LINE:",
-        error.response?.data || error.message
-      );
     }
+
+    // IMAGE
+    if (event.message.type === "image") {
+
+      const messageId = event.message.id
+
+      try {
+
+        const imageBuffer = await downloadImage(messageId)
+
+        const result = await analyzeImage()
+
+        await reply(replyToken, result)
+
+      } catch (err) {
+
+        console.error(err)
+
+        await reply(replyToken, "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง")
+
+      }
+
+    }
+
   }
 
-  res.status(200).send("OK");
-});
+  res.sendStatus(200)
 
-// ======================
-// Start Server
-// ======================
-const PORT = process.env.PORT || 3000;
+})
+
+async function downloadImage(messageId) {
+
+  const url = `https://api-data.line.me/v2/bot/message/${messageId}/content`
+
+  const response = await axios.get(url, {
+    responseType: "arraybuffer",
+    headers: {
+      Authorization: `Bearer ${LINE_TOKEN}`
+    }
+  })
+
+  return response.data
+
+}
+
+async function analyzeImage() {
+
+  const completion = await openai.chat.completions.create({
+
+    model: "gpt-4o-mini",
+
+    messages: [
+      {
+        role: "system",
+        content: "You analyze amulets, talismans, and crystals and describe symbolic energy."
+      },
+      {
+        role: "user",
+        content: "Describe the object's energy in Thai."
+      }
+    ]
+
+  })
+
+  return completion.choices[0].message.content
+
+}
+
+async function reply(token, text) {
+
+  await axios.post(
+    "https://api.line.me/v2/bot/message/reply",
+    {
+      replyToken: token,
+      messages: [
+        {
+          type: "text",
+          text: text
+        }
+      ]
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${LINE_TOKEN}`
+      }
+    }
+  )
+
+}
+
+const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+  console.log("Server running")
+})
