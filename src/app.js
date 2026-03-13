@@ -19,8 +19,13 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" })
 })
 
-// webhook
+
+// ===============================
+// LINE WEBHOOK
+// ===============================
+
 app.post("/webhook/line", async (req, res) => {
+
   const events = req.body.events
 
   for (const event of events) {
@@ -29,14 +34,23 @@ app.post("/webhook/line", async (req, res) => {
 
     const replyToken = event.replyToken
 
-    // TEXT
+    // ===============================
+    // TEXT MESSAGE
+    // ===============================
+
     if (event.message.type === "text") {
 
-      await reply(replyToken, "Ener Scan พร้อมแล้ว 👁️ ส่งรูปมาได้เลย")
+      await reply(
+        replyToken,
+        "Ener Scan พร้อมแล้ว 👁️\n\nส่งรูปพระ / crystal / เครื่องราง มาได้เลย"
+      )
 
     }
 
-    // IMAGE
+    // ===============================
+    // IMAGE MESSAGE
+    // ===============================
+
     if (event.message.type === "image") {
 
       const messageId = event.message.id
@@ -45,7 +59,9 @@ app.post("/webhook/line", async (req, res) => {
 
         const imageBuffer = await downloadImage(messageId)
 
-        const result = await analyzeImage()
+        const base64Image = Buffer.from(imageBuffer).toString("base64")
+
+        const result = await analyzeImage(base64Image)
 
         await reply(replyToken, result)
 
@@ -53,7 +69,7 @@ app.post("/webhook/line", async (req, res) => {
 
         console.error(err)
 
-        await reply(replyToken, "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง")
+        await reply(replyToken, "Ener Scan วิเคราะห์ไม่สำเร็จ ลองใหม่อีกครั้ง")
 
       }
 
@@ -64,6 +80,11 @@ app.post("/webhook/line", async (req, res) => {
   res.sendStatus(200)
 
 })
+
+
+// ===============================
+// DOWNLOAD IMAGE FROM LINE
+// ===============================
 
 async function downloadImage(messageId) {
 
@@ -80,21 +101,60 @@ async function downloadImage(messageId) {
 
 }
 
-async function analyzeImage() {
+
+// ===============================
+// OPENAI VISION ANALYSIS
+// ===============================
+
+async function analyzeImage(base64Image) {
 
   const completion = await openai.chat.completions.create({
 
-    model: "gpt-4o-mini",
+    model: "gpt-4.1",
 
     messages: [
       {
         role: "system",
-        content: "You analyze amulets, talismans, and crystals and describe symbolic energy."
+        content: `
+You are Ener Scan AI.
+
+Analyze spiritual objects such as:
+- Thai amulets
+- crystals
+- talismans
+- sacred objects
+
+Respond in Thai.
+
+Format:
+
+🔮 Ener Scan Result
+
+Object Type:
+Energy Type:
+Energy Score: (1-10)
+
+Meaning:
+Advice:
+`
       },
+
       {
         role: "user",
-        content: "Describe the object's energy in Thai."
+        content: [
+          {
+            type: "text",
+            text: "Analyze this object"
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${base64Image}`
+            }
+          }
+        ]
       }
+
     ]
 
   })
@@ -102,6 +162,11 @@ async function analyzeImage() {
   return completion.choices[0].message.content
 
 }
+
+
+// ===============================
+// REPLY TO LINE
+// ===============================
 
 async function reply(token, text) {
 
@@ -118,15 +183,21 @@ async function reply(token, text) {
     },
     {
       headers: {
-        Authorization: `Bearer ${LINE_TOKEN}`
+        Authorization: `Bearer ${LINE_TOKEN}`,
+        "Content-Type": "application/json"
       }
     }
   )
 
 }
 
+
+// ===============================
+// START SERVER
+// ===============================
+
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log("Server running")
+  console.log("Ener Scan Server running")
 })
