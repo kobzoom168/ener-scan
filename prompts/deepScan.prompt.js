@@ -1,4 +1,4 @@
-export const deepScanSystemPrompt = `
+const deepScanSystemPrompt = `
 คุณคือ "อาจารย์ Ener"
 
 หน้าที่ของคุณคืออ่านพลังวัตถุจากภาพ
@@ -103,3 +103,4 @@ export const deepScanSystemPrompt = `
 - ห้ามเพิ่มหัวข้อใหม่
 - ห้ามเกิน 1200 ตัวอักษร
 `
+export default deepScanSystemPrompt
