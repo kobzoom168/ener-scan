@@ -2,20 +2,13 @@
   "name": "ener-scan",
   "version": "1.0.0",
   "type": "module",
-  "description": "",
-  "main": "index.js",
   "scripts": {
     "start": "node src/app.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@line/bot-sdk": "^10.6.0",
-    "axios": "^1.13.6",
-    "dotenv": "^17.3.1",
-    "express": "^5.2.1",
-    "fs": "^0.0.1-security",
+    "@line/bot-sdk": "^7.5.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "imghash": "^1.1.2",
     "openai": "^6.27.0"
   }
