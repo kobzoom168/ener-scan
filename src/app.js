@@ -5,9 +5,29 @@ import OpenAI from "openai"
 import imghash from "imghash"
 import fs from "fs"
 import path from "path"
+import crypto from "crypto"
+
 import { deepScanSystemPrompt } from "../prompts/deepScan.prompt.js"
 
 dotenv.config()
+
+// -------------------------
+// ENV CHECK
+// -------------------------
+
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error("OPENAI_API_KEY missing")
+}
+
+if (!process.env.CHANNEL_ACCESS_TOKEN) {
+  throw new Error("CHANNEL_ACCESS_TOKEN missing")
+}
+
+if (!process.env.CHANNEL_SECRET) {
+  throw new Error("CHANNEL_SECRET missing")
+}
+
+// -------------------------
 
 const app = express()
 
@@ -31,7 +51,7 @@ const openai = new OpenAI({
 })
 
 // -------------------------
-// MEMORY STORES
+// MEMORY STORES (MVP)
 // -------------------------
 
 const scannedHashes = new Set()
@@ -39,15 +59,15 @@ const userSessions = new Map()
 const userRateLimit = new Map()
 
 // -------------------------
-// HEALTH
+// HEALTH CHECK
 // -------------------------
-
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" })
-})
 
 app.get("/", (req, res) => {
   res.send("Ener Scan API running")
+})
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" })
 })
 
 // -------------------------
@@ -70,7 +90,21 @@ function isRateLimited(userId) {
   }
 
   record.count++
+
   return record.count > 5
+}
+
+// -------------------------
+// TIMEOUT GUARD
+// -------------------------
+
+async function withTimeout(promise, ms = 15000) {
+
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Timeout")), ms)
+  )
+
+  return Promise.race([promise, timeout])
 }
 
 // -------------------------
@@ -85,6 +119,8 @@ async function lineWebhookHandler(req, res) {
       ? req.body.events
       : []
 
+    console.log("Incoming events:", events.length)
+
     await Promise.all(events.map(handleEvent))
 
     res.json({ success: true })
@@ -97,11 +133,9 @@ async function lineWebhookHandler(req, res) {
 }
 
 // -------------------------
-// ROUTES
+// ROUTE
 // -------------------------
 
-app.post("/", line.middleware(config), lineWebhookHandler)
-app.post("/webhook", line.middleware(config), lineWebhookHandler)
 app.post("/webhook/line", line.middleware(config), lineWebhookHandler)
 
 // -------------------------
@@ -110,33 +144,42 @@ app.post("/webhook/line", line.middleware(config), lineWebhookHandler)
 
 async function handleEvent(event) {
 
-  if (event.type !== "message") return null
+  try {
 
-  const userId = getUserId(event)
-  const replyToken = event.replyToken
-  const session = userSessions.get(userId)
+    if (event.type !== "message") return null
 
-  if (isRateLimited(userId)) {
+    const userId = getUserId(event)
+    const replyToken = event.replyToken
+    const session = userSessions.get(userId)
 
-    return client.replyMessage(replyToken, {
-      type: "text",
-      text: "⚠️ กรุณารอสักครู่ก่อนส่งข้อความใหม่"
-    })
-  }
+    console.log("User:", userId)
+    console.log("Message type:", event.message.type)
 
-  if (event.message.type === "text") {
+    if (isRateLimited(userId)) {
 
-    const text = (event.message.text || "").trim()
+      return client.replyMessage(replyToken, {
+        type: "text",
+        text: "⚠️ กรุณารอสักครู่ก่อนส่งข้อความใหม่"
+      })
+    }
 
-    if (session?.step === "WAIT_BIRTHDATE") {
+    // -------------------------
+    // TEXT MESSAGE
+    // -------------------------
 
-      const birthdate = normalizeBirthdate(text)
+    if (event.message.type === "text") {
 
-      if (!birthdate) {
+      const text = (event.message.text || "").trim()
 
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: `🔮 อาจารย์ Ener
+      if (session?.step === "WAIT_BIRTHDATE") {
+
+        const birthdate = normalizeBirthdate(text)
+
+        if (!birthdate) {
+
+          return client.replyMessage(replyToken, {
+            type: "text",
+            text: `🔮 อาจารย์ Ener
 
 กรุณาส่งวันเกิดเจ้าของวัตถุ
 
@@ -144,26 +187,31 @@ async function handleEvent(event) {
 15/04
 15/04/1995
 1995-04-15`
+          })
+        }
+
+        console.log("Birthdate received:", birthdate)
+
+        const result = await withTimeout(
+          analyzeDeepScan({
+            base64Image: session.base64Image,
+            birthdate,
+            objectTypeHint: session.objectTypeHint
+          }),
+          20000
+        )
+
+        userSessions.delete(userId)
+
+        return client.replyMessage(replyToken, {
+          type: "text",
+          text: result
         })
       }
 
-      const result = await analyzeDeepScan({
-        base64Image: session.base64Image,
-        birthdate,
-        objectTypeHint: session.objectTypeHint
-      })
-
-      userSessions.delete(userId)
-
       return client.replyMessage(replyToken, {
         type: "text",
-        text: result
-      })
-    }
-
-    return client.replyMessage(replyToken, {
-      type: "text",
-      text: `🔮 อาจารย์ Ener
+        text: `🔮 อาจารย์ Ener
 
 ส่งภาพ
 คริสตัล
@@ -171,64 +219,84 @@ async function handleEvent(event) {
 เครื่องราง
 
 เพื่อให้อาจารย์อ่านพลัง`
-    })
-  }
-
-  if (event.message.type === "image") {
-
-    const imageId = event.message.id
-
-    const buffer = await downloadLineImage(imageId)
-
-    const tempPath = path.join(process.cwd(), `tmp-${imageId}.jpg`)
-
-    fs.writeFileSync(tempPath, buffer)
-
-    const hash = await imghash.hash(tempPath)
-
-    fs.unlinkSync(tempPath)
-
-    if (scannedHashes.has(hash)) {
-
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text: "⚠️ รูปนี้เคยถูกสแกนแล้ว"
       })
     }
 
-    const base64Image = buffer.toString("base64")
+    // -------------------------
+    // IMAGE MESSAGE
+    // -------------------------
 
-    const classify = await classifyObject(base64Image)
+    if (event.message.type === "image") {
 
-    if (classify === "NOT_SUPPORTED") {
+      const imageId = event.message.id
 
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text: `⚠️ Ener Scan รองรับเฉพาะ
+      console.log("Image received:", imageId)
+
+      const buffer = await downloadLineImage(imageId)
+
+      const tempPath = path.join(process.cwd(), `tmp-${imageId}.jpg`)
+
+      fs.writeFileSync(tempPath, buffer)
+
+      const hash = await imghash.hash(tempPath)
+
+      fs.unlinkSync(tempPath)
+
+      if (scannedHashes.has(hash)) {
+
+        return client.replyMessage(replyToken, {
+          type: "text",
+          text: "⚠️ รูปนี้เคยถูกสแกนแล้ว"
+        })
+      }
+
+      const base64Image = buffer.toString("base64")
+
+      const classify = await withTimeout(
+        classifyObject(base64Image),
+        15000
+      )
+
+      if (classify === "NOT_SUPPORTED") {
+
+        return client.replyMessage(replyToken, {
+          type: "text",
+          text: `⚠️ Ener Scan รองรับเฉพาะ
 
 คริสตัล
 พระเครื่อง
 เครื่องราง`
+        })
+      }
+
+      const scanId = crypto.randomUUID()
+
+      scannedHashes.add(hash)
+
+      userSessions.set(userId, {
+
+        scanId,
+        step: "WAIT_BIRTHDATE",
+        base64Image,
+        hash,
+        objectTypeHint: classify
       })
-    }
 
-    scannedHashes.add(hash)
+      console.log("Session created:", scanId)
 
-    userSessions.set(userId, {
-      step: "WAIT_BIRTHDATE",
-      base64Image,
-      hash,
-      objectTypeHint: classify
-    })
-
-    return client.replyMessage(replyToken, {
-      type: "text",
-      text: `🔮 อาจารย์ Ener
+      return client.replyMessage(replyToken, {
+        type: "text",
+        text: `🔮 อาจารย์ Ener
 
 รับรูปแล้ว
 
 ต่อไปขอวันเกิดเจ้าของวัตถุ`
-    })
+      })
+    }
+
+  } catch (err) {
+
+    console.error("handleEvent error:", err)
   }
 
   return null
@@ -281,15 +349,17 @@ async function downloadLineImage(messageId) {
 
 async function classifyObject(base64Image) {
 
-  const completion = await openai.chat.completions.create({
+  try {
 
-    model: "gpt-4o-mini",
+    const completion = await openai.chat.completions.create({
 
-    messages: [
+      model: "gpt-4o-mini",
 
-      {
-        role: "system",
-        content: `ตรวจว่าวัตถุเป็น
+      messages: [
+
+        {
+          role: "system",
+          content: `ตรวจว่าวัตถุเป็น
 
 คริสตัล
 พระเครื่อง
@@ -302,37 +372,43 @@ SUPPORTED: <ประเภท>
 หรือ
 
 NOT_SUPPORTED`
-      },
+        },
 
-      {
-        role: "user",
-        content: [
+        {
+          role: "user",
+          content: [
 
-          { type: "text", text: "วัตถุในภาพคืออะไร" },
+            { type: "text", text: "วัตถุในภาพคืออะไร" },
 
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:image/jpeg;base64,${base64Image}`
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`
+              }
             }
-          }
 
-        ]
-      }
-    ]
-  })
+          ]
+        }
+      ]
+    })
 
-  const raw = String(
-    completion?.choices?.[0]?.message?.content || ""
-  ).trim()
+    const raw = String(
+      completion?.choices?.[0]?.message?.content || ""
+    ).trim()
 
-  if (raw.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
+    if (raw.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
 
-  if (raw.includes("SUPPORTED")) {
-    return raw.replace("SUPPORTED:", "").trim()
+    if (raw.includes("SUPPORTED")) {
+      return raw.replace("SUPPORTED:", "").trim()
+    }
+
+    return "NOT_SUPPORTED"
+
+  } catch (err) {
+
+    console.error("classifyObject error:", err)
+    return "NOT_SUPPORTED"
   }
-
-  return "NOT_SUPPORTED"
 }
 
 // -------------------------
@@ -341,42 +417,51 @@ NOT_SUPPORTED`
 
 async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
 
-  const completion = await openai.chat.completions.create({
+  try {
 
-    model: "gpt-4o-mini",
-    temperature: 0.2,
+    const completion = await openai.chat.completions.create({
 
-    messages: [
+      model: "gpt-4o-mini",
+      temperature: 0.2,
 
-      {
-        role: "system",
-        content: deepScanSystemPrompt
-      },
+      messages: [
 
-      {
-        role: "user",
-        content: [
+        {
+          role: "system",
+          content: deepScanSystemPrompt
+        },
 
-          {
-            type: "text",
-            text: `วันเกิดเจ้าของ ${birthdate}
+        {
+          role: "user",
+          content: [
+
+            {
+              type: "text",
+              text: `วันเกิดเจ้าของ ${birthdate}
 ประเภทวัตถุ ${objectTypeHint}`
-          },
+            },
 
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:image/jpeg;base64,${base64Image}`
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`
+              }
             }
-          }
 
-        ]
-      }
-    ]
-  })
+          ]
+        }
+      ]
+    })
 
-  return completion?.choices?.[0]?.message?.content ||
-    "อาจารย์ Ener ไม่สามารถอ่านพลังได้"
+    return completion?.choices?.[0]?.message?.content ||
+      "อาจารย์ Ener ไม่สามารถอ่านพลังได้"
+
+  } catch (err) {
+
+    console.error("DeepScan error:", err)
+
+    return "⚠️ ระบบอ่านพลังไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
+  }
 }
 
 // -------------------------
