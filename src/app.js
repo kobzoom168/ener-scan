@@ -6,10 +6,11 @@ import imghash from "imghash"
 import fs from "fs"
 import path from "path"
 
+import { deepScanSystemPrompt } from "./prompts/deepScan.prompt.js"
+
 dotenv.config()
 
 const app = express()
-
 
 // -------------------------
 // LINE CONFIG
@@ -46,7 +47,7 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" })
 })
 
-app.get("/", (req,res)=>{
+app.get("/", (req, res) => {
   res.send("Ener Scan API running")
 })
 
@@ -57,7 +58,6 @@ app.get("/", (req,res)=>{
 function isRateLimited(userId) {
 
   const now = Date.now()
-
   const record = userRateLimit.get(userId)
 
   if (!record) {
@@ -71,7 +71,6 @@ function isRateLimited(userId) {
   }
 
   record.count++
-
   return record.count > 5
 }
 
@@ -87,8 +86,6 @@ async function lineWebhookHandler(req, res) {
       ? req.body.events
       : []
 
-    console.log("LINE events:", events.length)
-
     await Promise.all(events.map(handleEvent))
 
     res.json({ success: true })
@@ -96,7 +93,6 @@ async function lineWebhookHandler(req, res) {
   } catch (err) {
 
     console.error("Webhook error:", err)
-
     res.status(500).end()
   }
 }
@@ -129,10 +125,6 @@ async function handleEvent(event) {
     })
   }
 
-  // -------------------------
-  // TEXT
-  // -------------------------
-
   if (event.message.type === "text") {
 
     const text = (event.message.text || "").trim()
@@ -156,32 +148,18 @@ async function handleEvent(event) {
         })
       }
 
-      try {
+      const result = await analyzeDeepScan({
+        base64Image: session.base64Image,
+        birthdate,
+        objectTypeHint: session.objectTypeHint
+      })
 
-        const result = await analyzeDeepScan({
-          base64Image: session.base64Image,
-          birthdate,
-          objectTypeHint: session.objectTypeHint
-        })
+      userSessions.delete(userId)
 
-        userSessions.delete(userId)
-
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: result
-        })
-
-      } catch (err) {
-
-        console.error("Deep scan error:", err)
-
-        userSessions.delete(userId)
-
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: "อาจารย์ Ener ไม่สามารถอ่านพลังได้ในขณะนี้"
-        })
-      }
+      return client.replyMessage(replyToken, {
+        type: "text",
+        text: result
+      })
     }
 
     return client.replyMessage(replyToken, {
@@ -197,90 +175,61 @@ async function handleEvent(event) {
     })
   }
 
-  // -------------------------
-  // IMAGE
-  // -------------------------
-
   if (event.message.type === "image") {
 
-    try {
+    const imageId = event.message.id
 
-      if (session?.step === "WAIT_BIRTHDATE") {
+    const buffer = await downloadLineImage(imageId)
 
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: "กรุณาส่งวันเกิดก่อน"
-        })
-      }
+    const tempPath = path.join(process.cwd(), `tmp-${imageId}.jpg`)
 
-      const imageId = event.message.id
+    fs.writeFileSync(tempPath, buffer)
 
-      const buffer = await downloadLineImage(imageId)
+    const hash = await imghash.hash(tempPath)
 
-      const tempPath = path.join(process.cwd(), `tmp-${imageId}.jpg`)
+    fs.unlinkSync(tempPath)
 
-      fs.writeFileSync(tempPath, buffer)
+    if (scannedHashes.has(hash)) {
 
-      const hash = await imghash.hash(tempPath)
+      return client.replyMessage(replyToken, {
+        type: "text",
+        text: "⚠️ รูปนี้เคยถูกสแกนแล้ว"
+      })
+    }
 
-      fs.unlinkSync(tempPath)
+    const base64Image = buffer.toString("base64")
 
-      if (scannedHashes.has(hash)) {
+    const classify = await classifyObject(base64Image)
 
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: "⚠️ รูปนี้เคยถูกสแกนแล้ว"
-        })
-      }
+    if (classify === "NOT_SUPPORTED") {
 
-      const base64Image = buffer.toString("base64")
-
-      const classify = await classifyObject(base64Image)
-
-      if (classify === "NOT_SUPPORTED") {
-
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: `⚠️ Ener Scan รองรับเฉพาะ
+      return client.replyMessage(replyToken, {
+        type: "text",
+        text: `⚠️ Ener Scan รองรับเฉพาะ
 
 คริสตัล
 พระเครื่อง
 เครื่องราง`
-        })
-      }
-
-      scannedHashes.add(hash)
-
-      // limit memory
-      if (scannedHashes.size > 1000) {
-        scannedHashes.clear()
-      }
-
-      userSessions.set(userId, {
-        step: "WAIT_BIRTHDATE",
-        base64Image,
-        hash,
-        objectTypeHint: classify
       })
+    }
 
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text: `🔮 อาจารย์ Ener
+    scannedHashes.add(hash)
+
+    userSessions.set(userId, {
+      step: "WAIT_BIRTHDATE",
+      base64Image,
+      hash,
+      objectTypeHint: classify
+    })
+
+    return client.replyMessage(replyToken, {
+      type: "text",
+      text: `🔮 อาจารย์ Ener
 
 รับรูปแล้ว
 
 ต่อไปขอวันเกิดเจ้าของวัตถุ`
-      })
-
-    } catch (err) {
-
-      console.error("Image error:", err)
-
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text: "ไม่สามารถอ่านภาพได้"
-      })
-    }
+    })
   }
 
   return null
@@ -305,7 +254,6 @@ function normalizeBirthdate(text) {
   const value = String(text).trim()
 
   if (/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(value)) return value
-
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(value)) return value
 
   return null
@@ -397,49 +345,13 @@ async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
   const completion = await openai.chat.completions.create({
 
     model: "gpt-4o-mini",
+    temperature: 0.2,
 
     messages: [
 
       {
         role: "system",
-        content: `
-คุณคือ "อาจารย์ Ener"
-
-ให้วิเคราะห์พลังวัตถุจากภาพและวันเกิดเจ้าของ
-
-ตอบตามรูปแบบนี้
-
-🔮 ผลการตรวจพลังวัตถุ
-โดย อาจารย์ Ener
-
-━━━━━━━━━━━━
-
-ระดับพลังวัตถุ
-1-10
-
-ประเภทพลัง
-
-อายุพลัง
-พลังเก่า หรือ พลังใหม่
-
-ความเสถียรของพลัง
-เสถียร หรือ ไม่เสถียร
-
-พลังซ่อนเร้น
-พบพลังซ่อน หรือ ไม่พบ
-
-ความสอดคล้องกับเจ้าของ
-%
-
-━━━━━━━━━━━━
-
-จากนั้นอธิบายพลังของวัตถุ
-ความสัมพันธ์กับเจ้าของ
-และให้คำแนะนำการใช้
-
-ตอบภาษาไทย
-ไม่เกิน 1200 ตัวอักษร
-`
+        content: deepScanSystemPrompt
       },
 
       {
@@ -448,7 +360,8 @@ async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
 
           {
             type: "text",
-            text: `วันเกิดเจ้าของ ${birthdate}`
+            text: `วันเกิดเจ้าของ ${birthdate}
+ประเภทวัตถุ ${objectTypeHint}`
           },
 
           {
@@ -464,7 +377,7 @@ async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
   })
 
   return completion?.choices?.[0]?.message?.content ||
-  "อาจารย์ Ener ไม่สามารถอ่านพลังได้"
+    "อาจารย์ Ener ไม่สามารถอ่านพลังได้"
 }
 
 // -------------------------
@@ -474,6 +387,5 @@ async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  
+  console.log("Ener Scan server running on port", PORT)
 })
-
