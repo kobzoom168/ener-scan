@@ -10,6 +10,10 @@ dotenv.config()
 
 const app = express()
 
+// -------------------------
+// LINE CONFIG
+// -------------------------
+
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.CHANNEL_SECRET
@@ -17,74 +21,136 @@ const config = {
 
 const client = new line.Client(config)
 
+// -------------------------
+// OPENAI
+// -------------------------
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
+// -------------------------
+// MEMORY STORES
+// -------------------------
+
 // กันรูปซ้ำ
 const scannedHashes = new Set()
 
-// session ชั่วคราวต่อ user
+// session user
 const userSessions = new Map()
 
+// anti spam
+const userRateLimit = new Map()
+
 // -------------------------
-// health check
+// HEALTH CHECK
 // -------------------------
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok" })
 })
 
 // -------------------------
-// webhook
+// RATE LIMIT
 // -------------------------
-app.post("/webhook/line", line.middleware(config), async (req, res) => {
+
+function isRateLimited(userId) {
+
+  const now = Date.now()
+
+  const record = userRateLimit.get(userId)
+
+  if (!record) {
+    userRateLimit.set(userId, {
+      count: 1,
+      time: now
+    })
+    return false
+  }
+
+  if (now - record.time > 10000) {
+    userRateLimit.set(userId, {
+      count: 1,
+      time: now
+    })
+    return false
+  }
+
+  record.count++
+
+  if (record.count > 5) {
+    return true
+  }
+
+  return false
+}
+
+// -------------------------
+// WEBHOOK HANDLER
+// -------------------------
+
+async function lineWebhookHandler(req, res) {
+
   try {
+
     const events = Array.isArray(req.body.events) ? req.body.events : []
 
-    // ถ้ามีหลายรูปมาใน webhook เดียวกัน ให้บล็อกเลย
-    const imageEvents = events.filter(
-      (event) => event.type === "message" && event.message?.type === "image"
-    )
-
-    if (imageEvents.length > 1) {
-      await client.replyMessage(imageEvents[0].replyToken, {
-        type: "text",
-        text: `⚠️ อาจารย์ Ener
-
-กรุณาส่งรูปได้ทีละ 1 รูปเท่านั้น`
-      })
-      return res.json({ success: true })
-    }
+    console.log("LINE EVENTS:", events.length)
 
     await Promise.all(events.map(handleEvent))
+
     res.json({ success: true })
+
   } catch (error) {
+
     console.error("Webhook error:", error)
+
     res.status(500).end()
   }
-})
+}
 
 // -------------------------
-// main handler
+// ROUTES
 // -------------------------
+
+app.post("/", line.middleware(config), lineWebhookHandler)
+app.post("/webhook", line.middleware(config), lineWebhookHandler)
+app.post("/webhook/line", line.middleware(config), lineWebhookHandler)
+
+// -------------------------
+// MAIN EVENT HANDLER
+// -------------------------
+
 async function handleEvent(event) {
+
   if (event.type !== "message") return null
 
   const userId = getUserId(event)
   const replyToken = event.replyToken
   const session = userSessions.get(userId)
 
+  if (isRateLimited(userId)) {
+
+    return client.replyMessage(replyToken, {
+      type: "text",
+      text: "⚠️ กรุณารอสักครู่ก่อนส่งข้อความใหม่"
+    })
+  }
+
   // -------------------------
   // TEXT MESSAGE
   // -------------------------
+
   if (event.message.type === "text") {
+
     const text = (event.message.text || "").trim()
 
-    // ถ้ากำลังรอวันเกิด
     if (session?.step === "WAIT_BIRTHDATE") {
+
       const birthdate = normalizeBirthdate(text)
 
       if (!birthdate) {
+
         return client.replyMessage(replyToken, {
           type: "text",
           text: `🔮 อาจารย์ Ener
@@ -99,6 +165,7 @@ async function handleEvent(event) {
       }
 
       try {
+
         const result = await analyzeDeepScan({
           base64Image: session.base64Image,
           birthdate,
@@ -111,20 +178,20 @@ async function handleEvent(event) {
           type: "text",
           text: result
         })
+
       } catch (error) {
+
         console.error("Deep scan error:", error)
+
         userSessions.delete(userId)
 
         return client.replyMessage(replyToken, {
           type: "text",
-          text: `อาจารย์ Ener ไม่สามารถอ่านพลังได้ในขณะนี้
-
-กรุณาลองใหม่อีกครั้ง`
+          text: "อาจารย์ Ener ไม่สามารถอ่านพลังได้ในขณะนี้"
         })
       }
     }
 
-    // default text
     return client.replyMessage(replyToken, {
       type: "text",
       text: `🔮 อาจารย์ Ener
@@ -134,74 +201,49 @@ async function handleEvent(event) {
 • พระเครื่อง
 • เครื่องราง
 
-เพื่อให้อาจารย์อ่านพลัง
-
-ระบบรองรับการสแกนทีละ 1 รูป`
+เพื่อให้อาจารย์อ่านพลัง`
     })
   }
 
   // -------------------------
   // IMAGE MESSAGE
   // -------------------------
+
   if (event.message.type === "image") {
-    // กัน image set หลายรูป
-    if (isMultipleImageSet(event)) {
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text: `⚠️ อาจารย์ Ener
-
-กรุณาส่งรูปได้ทีละ 1 รูปเท่านั้น`
-      })
-    }
-
-    // ถ้ายังมี session ค้างอยู่ ให้เคลียร์ก่อน
-    if (session?.step === "WAIT_BIRTHDATE") {
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text: `⚠️ อาจารย์ Ener
-
-กรุณาส่งวันเกิดของเจ้าของวัตถุก่อน
-แล้วอาจารย์จะอ่านพลังให้ต่อ`
-      })
-    }
 
     try {
+
       const imageId = event.message.id
+
       const buffer = await downloadLineImage(imageId)
 
-      const tempFilePath = path.join(process.cwd(), `tmp-${imageId}.jpg`)
-      fs.writeFileSync(tempFilePath, buffer)
+      const tempPath = path.join(process.cwd(), `tmp-${imageId}.jpg`)
 
-      // hash กันรูปซ้ำ
-      const hash = await imghash.hash(tempFilePath)
+      fs.writeFileSync(tempPath, buffer)
 
-      if (fs.existsSync(tempFilePath)) {
-        fs.unlinkSync(tempFilePath)
+      const hash = await imghash.hash(tempPath)
+
+      if (fs.existsSync(tempPath)) {
+        fs.unlinkSync(tempPath)
       }
 
       if (scannedHashes.has(hash)) {
+
         return client.replyMessage(replyToken, {
           type: "text",
-          text: `⚠️ รูปนี้เคยถูกสแกนแล้ว
-
-หากต้องการวิเคราะห์ใหม่
-กรุณาถ่ายภาพใหม่ของวัตถุ`
+          text: `⚠️ รูปนี้เคยถูกสแกนแล้ว`
         })
       }
 
       const base64Image = buffer.toString("base64")
 
-      // คัดว่ารองรับไหม
-      const classifyResult = await classifyObject(base64Image)
+      const classify = await classifyObject(base64Image)
 
-      if (classifyResult === "NOT_SUPPORTED") {
+      if (classify === "NOT_SUPPORTED") {
+
         return client.replyMessage(replyToken, {
           type: "text",
-          text: `⚠️ อาจารย์ Ener
-
-ภาพนี้ไม่ใช่วัตถุที่อาจารย์ Ener สามารถอ่านพลังได้
-
-Ener Scan รองรับเฉพาะ
+          text: `⚠️ Ener Scan รองรับเฉพาะ
 
 • คริสตัล
 • พระเครื่อง
@@ -209,38 +251,31 @@ Ener Scan รองรับเฉพาะ
         })
       }
 
-      // mark ว่ารูปนี้ผ่านแล้ว
       scannedHashes.add(hash)
 
-      // เก็บ session แล้วถามวันเกิด
       userSessions.set(userId, {
         step: "WAIT_BIRTHDATE",
         base64Image,
         hash,
-        objectTypeHint: classifyResult
+        objectTypeHint: classify
       })
 
       return client.replyMessage(replyToken, {
         type: "text",
         text: `🔮 อาจารย์ Ener
 
-อาจารย์รับรูปแล้ว
-ต่อไปขอวันเกิดของเจ้าของวัตถุ
-เพื่อวิเคราะห์พลังเจ้าของและความเข้ากันกับวัตถุ
+รับรูปแล้ว
 
-ส่งได้แบบนี้
-• 15/04
-• 15/04/1995
-• 1995-04-15`
+ต่อไปขอวันเกิดเจ้าของวัตถุ`
       })
+
     } catch (error) {
+
       console.error("Image flow error:", error)
 
       return client.replyMessage(replyToken, {
         type: "text",
-        text: `อาจารย์ Ener ไม่สามารถอ่านพลังได้ในขณะนี้
-
-กรุณาลองใหม่อีกครั้ง`
+        text: "ไม่สามารถอ่านภาพได้"
       })
     }
   }
@@ -249,9 +284,11 @@ Ener Scan รองรับเฉพาะ
 }
 
 // -------------------------
-// helper
+// HELPERS
 // -------------------------
+
 function getUserId(event) {
+
   return (
     event?.source?.userId ||
     event?.source?.groupId ||
@@ -260,33 +297,26 @@ function getUserId(event) {
   )
 }
 
-function isMultipleImageSet(event) {
-  const total = Number(event?.message?.imageSet?.total ?? 1)
-  return total > 1
-}
-
 function normalizeBirthdate(text) {
+
   const value = String(text || "").trim()
 
-  // รับ 15/04 หรือ 15/04/1995
   if (/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(value)) return value
-
-  // รับ 15-04 หรือ 15-04-1995
-  if (/^\d{1,2}-\d{1,2}(-\d{2,4})?$/.test(value)) return value
-
-  // รับ 1995-04-15
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(value)) return value
 
   return null
 }
 
 // -------------------------
-// download image from LINE
+// DOWNLOAD LINE IMAGE
 // -------------------------
+
 async function downloadLineImage(messageId) {
+
   const stream = await client.getMessageContent(messageId)
 
   const chunks = []
+
   for await (const chunk of stream) {
     chunks.push(chunk)
   }
@@ -295,162 +325,119 @@ async function downloadLineImage(messageId) {
 }
 
 // -------------------------
-// classify object
+// CLASSIFY OBJECT
 // -------------------------
+
 async function classifyObject(base64Image) {
+
   const completion = await openai.chat.completions.create({
+
     model: "gpt-4o-mini",
+
     messages: [
+
       {
         role: "system",
-        content: `
-คุณคือด่านคัดกรองภาพของ Ener Scan
+        content: `ตรวจว่าวัตถุเป็น
 
-หน้าที่คือดูว่าภาพนี้เป็นวัตถุที่ระบบรองรับหรือไม่
+คริสตัล พระเครื่อง เครื่องราง
 
-รองรับเฉพาะ
-- คริสตัล
-- พระเครื่อง
-- เครื่องราง
-- talisman
-- amulet
-- sacred object
+ตอบ
 
-ถ้าเป็นวัตถุที่รองรับ ให้ตอบสั้นที่สุดว่า
-SUPPORTED: <ชื่อหมวด>
+SUPPORTED: <ประเภท>
 
-ตัวอย่าง
-SUPPORTED: คริสตัล
-SUPPORTED: พระเครื่อง
-SUPPORTED: เครื่องราง
+หรือ
 
-ถ้าไม่ใช่ ให้ตอบว่า
-NOT_SUPPORTED
-
-ห้ามตอบอย่างอื่น
-`
+NOT_SUPPORTED`
       },
+
       {
         role: "user",
         content: [
+
           {
             type: "text",
-            text: "ตรวจว่าภาพนี้เป็นวัตถุที่ระบบรองรับหรือไม่"
+            text: "วัตถุในภาพคืออะไร"
           },
+
           {
             type: "image_url",
             image_url: {
               url: `data:image/jpeg;base64,${base64Image}`
             }
           }
+
         ]
       }
     ]
   })
 
-  const raw = String(completion.choices[0].message.content || "").trim()
+  const raw = String(
+    completion?.choices?.[0]?.message?.content || ""
+  ).trim()
 
-  if (raw.toUpperCase().includes("NOT_SUPPORTED")) {
-    return "NOT_SUPPORTED"
-  }
+  if (raw.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
 
-  if (raw.toUpperCase().includes("SUPPORTED")) {
-    return raw.replace(/^SUPPORTED:\s*/i, "").trim() || "วัตถุมงคล"
+  if (raw.includes("SUPPORTED")) {
+    return raw.replace("SUPPORTED:", "").trim()
   }
 
   return "NOT_SUPPORTED"
 }
 
 // -------------------------
-// deep scan
+// DEEP SCAN
 // -------------------------
-async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
+
+async function analyzeDeepScan({ base64Image, birthdate }) {
+
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+
+    model: "gpt-4o",
+
     messages: [
+
       {
         role: "system",
-        content: `
-คุณคือ "อาจารย์ Ener"
+        content: `คุณคืออาจารย์ Ener
 
-บทบาท:
-- อ่านพลังของวัตถุ
-- อ่านพลังพื้นฐานของเจ้าของจากวันเกิด
-- วิเคราะห์ความเข้ากันระหว่างเจ้าของกับวัตถุ
-- ตอบแบบชัดเจนกว่า AI ทั่วไป
-- อย่าตอบกลางเกินไป
-- ต้องชี้ให้ชัดว่าเด่นด้านไหนเป็นหลัก
+อ่านพลังวัตถุจากภาพ
+อ่านพลังเจ้าของจากวันเกิด
 
-หลักการตอบ:
-- ตอบเป็นภาษาไทยเท่านั้น
-- ใช้น้ำเสียงแบบอาจารย์ผู้รู้ สุขุม ลึก อ่านง่าย
-- ใช้คำว่า มีแนวโน้ม / มักสะท้อน / ช่วยเสริม
-- ห้ามฟันธงเกินจริง
-- ห้ามเดาชนิดหินแบบวิทยาศาสตร์ให้มั่ว
-- ถ้าไม่แน่ใจ ให้ใช้คำว่า "ลักษณะพลังใกล้เคียงกับ..."
-- ต้องเลือก "พลังหลัก" ให้ชัดเจนเพียง 1 อย่าง
-- พลังหลักที่เลือกได้ เช่น
-  การเงิน / โชคลาภ / ปกป้อง / เมตตา / ความรัก / สมาธิ / ความนิ่ง / พลังจิต / การเปลี่ยนแปลง
-
-ให้วิเคราะห์จาก:
-1. ภาพวัตถุ
-2. วันเกิดของเจ้าของ = ${birthdate}
-3. หมวดวัตถุเบื้องต้น = ${objectTypeHint}
-
-รูปแบบคำตอบต้องเป็นแบบนี้เท่านั้น
-
-🔮 ผลการอ่านจากอาจารย์ Ener
-
-✨ ประเภทวัตถุ:
-⚡ พลังหลัก:
-📊 ระดับพลัง (1-10):
-🧭 สถานะพลัง:
-
-👤 พลังของเจ้าของ:
-อธิบายพลังพื้นฐานของเจ้าของจากวันเกิดแบบสั้นและชัด
-
-🤝 ความเข้ากันกับเจ้าของ:
-อธิบายว่าวัตถุนี้เข้ากับเจ้าของในด้านไหน
-และช่วยเสริมเรื่องอะไรเป็นหลัก
-
-🧿 คำอ่านพลัง:
-อธิบายลึกขึ้นอีกนิด แต่ไม่ยาวเกินไป
-
-🪬 คำแนะนำ:
-แนะนำการใช้ การพก หรือช่วงที่เหมาะกับเจ้าของ
-
-เงื่อนไขสำคัญ:
-- ทุกส่วนต้องอ่านง่ายใน LINE
-- ไม่เกินประมาณ 1200 ตัวอักษร
-- ห้ามใช้ภาษาอังกฤษ
-`
+ตอบภาษาไทย
+ไม่เกิน 1200 ตัวอักษร`
       },
+
       {
         role: "user",
         content: [
+
           {
             type: "text",
-            text: `ช่วยอ่านพลังของวัตถุนี้ โดยใช้วันเกิดเจ้าของคือ ${birthdate}`
+            text: `วันเกิดเจ้าของ ${birthdate}`
           },
+
           {
             type: "image_url",
             image_url: {
               url: `data:image/jpeg;base64,${base64Image}`
             }
           }
+
         ]
       }
     ]
   })
 
-  return completion.choices[0].message.content
+  return completion?.choices?.[0]?.message?.content || "ไม่สามารถวิเคราะห์ได้"
 }
 
 // -------------------------
-// start server
+// SERVER
 // -------------------------
+
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log("อาจารย์ Ener running on port " + PORT)
+  console.log("Ener Scan running on port " + PORT)
 })
