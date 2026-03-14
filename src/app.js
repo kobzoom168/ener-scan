@@ -415,7 +415,7 @@ async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
     const completion = await openai.chat.completions.create({
 
       model: "gpt-4o-mini",
-      temperature: 0.2,
+      temperature: 0.7,
 
       messages: [
 
