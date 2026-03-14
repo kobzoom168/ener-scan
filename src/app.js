@@ -9,6 +9,7 @@ import path from "path"
 dotenv.config()
 
 const app = express()
+app.use(express.json())
 
 // -------------------------
 // LINE CONFIG
@@ -33,17 +34,12 @@ const openai = new OpenAI({
 // MEMORY STORES
 // -------------------------
 
-// กันรูปซ้ำ
 const scannedHashes = new Set()
-
-// session user
 const userSessions = new Map()
-
-// anti spam
 const userRateLimit = new Map()
 
 // -------------------------
-// HEALTH CHECK
+// HEALTH
 // -------------------------
 
 app.get("/health", (req, res) => {
@@ -61,49 +57,41 @@ function isRateLimited(userId) {
   const record = userRateLimit.get(userId)
 
   if (!record) {
-    userRateLimit.set(userId, {
-      count: 1,
-      time: now
-    })
+    userRateLimit.set(userId, { count: 1, time: now })
     return false
   }
 
   if (now - record.time > 10000) {
-    userRateLimit.set(userId, {
-      count: 1,
-      time: now
-    })
+    userRateLimit.set(userId, { count: 1, time: now })
     return false
   }
 
   record.count++
 
-  if (record.count > 5) {
-    return true
-  }
-
-  return false
+  return record.count > 5
 }
 
 // -------------------------
-// WEBHOOK HANDLER
+// WEBHOOK
 // -------------------------
 
 async function lineWebhookHandler(req, res) {
 
   try {
 
-    const events = Array.isArray(req.body.events) ? req.body.events : []
+    const events = Array.isArray(req.body.events)
+      ? req.body.events
+      : []
 
-    console.log("LINE EVENTS:", events.length)
+    console.log("LINE events:", events.length)
 
     await Promise.all(events.map(handleEvent))
 
     res.json({ success: true })
 
-  } catch (error) {
+  } catch (err) {
 
-    console.error("Webhook error:", error)
+    console.error("Webhook error:", err)
 
     res.status(500).end()
   }
@@ -118,7 +106,7 @@ app.post("/webhook", line.middleware(config), lineWebhookHandler)
 app.post("/webhook/line", line.middleware(config), lineWebhookHandler)
 
 // -------------------------
-// MAIN EVENT HANDLER
+// MAIN HANDLER
 // -------------------------
 
 async function handleEvent(event) {
@@ -138,7 +126,7 @@ async function handleEvent(event) {
   }
 
   // -------------------------
-  // TEXT MESSAGE
+  // TEXT
   // -------------------------
 
   if (event.message.type === "text") {
@@ -158,9 +146,9 @@ async function handleEvent(event) {
 กรุณาส่งวันเกิดเจ้าของวัตถุ
 
 ตัวอย่าง
-• 15/04
-• 15/04/1995
-• 1995-04-15`
+15/04
+15/04/1995
+1995-04-15`
         })
       }
 
@@ -179,9 +167,9 @@ async function handleEvent(event) {
           text: result
         })
 
-      } catch (error) {
+      } catch (err) {
 
-        console.error("Deep scan error:", error)
+        console.error("Deep scan error:", err)
 
         userSessions.delete(userId)
 
@@ -197,21 +185,29 @@ async function handleEvent(event) {
       text: `🔮 อาจารย์ Ener
 
 ส่งภาพ
-• คริสตัล
-• พระเครื่อง
-• เครื่องราง
+คริสตัล
+พระเครื่อง
+เครื่องราง
 
 เพื่อให้อาจารย์อ่านพลัง`
     })
   }
 
   // -------------------------
-  // IMAGE MESSAGE
+  // IMAGE
   // -------------------------
 
   if (event.message.type === "image") {
 
     try {
+
+      if (session?.step === "WAIT_BIRTHDATE") {
+
+        return client.replyMessage(replyToken, {
+          type: "text",
+          text: "กรุณาส่งวันเกิดก่อน"
+        })
+      }
 
       const imageId = event.message.id
 
@@ -223,15 +219,13 @@ async function handleEvent(event) {
 
       const hash = await imghash.hash(tempPath)
 
-      if (fs.existsSync(tempPath)) {
-        fs.unlinkSync(tempPath)
-      }
+      fs.unlinkSync(tempPath)
 
       if (scannedHashes.has(hash)) {
 
         return client.replyMessage(replyToken, {
           type: "text",
-          text: `⚠️ รูปนี้เคยถูกสแกนแล้ว`
+          text: "⚠️ รูปนี้เคยถูกสแกนแล้ว"
         })
       }
 
@@ -245,13 +239,18 @@ async function handleEvent(event) {
           type: "text",
           text: `⚠️ Ener Scan รองรับเฉพาะ
 
-• คริสตัล
-• พระเครื่อง
-• เครื่องราง`
+คริสตัล
+พระเครื่อง
+เครื่องราง`
         })
       }
 
       scannedHashes.add(hash)
+
+      // limit memory
+      if (scannedHashes.size > 1000) {
+        scannedHashes.clear()
+      }
 
       userSessions.set(userId, {
         step: "WAIT_BIRTHDATE",
@@ -269,9 +268,9 @@ async function handleEvent(event) {
 ต่อไปขอวันเกิดเจ้าของวัตถุ`
       })
 
-    } catch (error) {
+    } catch (err) {
 
-      console.error("Image flow error:", error)
+      console.error("Image error:", err)
 
       return client.replyMessage(replyToken, {
         type: "text",
@@ -299,16 +298,17 @@ function getUserId(event) {
 
 function normalizeBirthdate(text) {
 
-  const value = String(text || "").trim()
+  const value = String(text).trim()
 
   if (/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(value)) return value
+
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(value)) return value
 
   return null
 }
 
 // -------------------------
-// DOWNLOAD LINE IMAGE
+// DOWNLOAD IMAGE
 // -------------------------
 
 async function downloadLineImage(messageId) {
@@ -340,7 +340,9 @@ async function classifyObject(base64Image) {
         role: "system",
         content: `ตรวจว่าวัตถุเป็น
 
-คริสตัล พระเครื่อง เครื่องราง
+คริสตัล
+พระเครื่อง
+เครื่องราง
 
 ตอบ
 
@@ -355,10 +357,7 @@ NOT_SUPPORTED`
         role: "user",
         content: [
 
-          {
-            type: "text",
-            text: "วัตถุในภาพคืออะไร"
-          },
+          { type: "text", text: "วัตถุในภาพคืออะไร" },
 
           {
             type: "image_url",
@@ -389,23 +388,54 @@ NOT_SUPPORTED`
 // DEEP SCAN
 // -------------------------
 
-async function analyzeDeepScan({ base64Image, birthdate }) {
+async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
 
   const completion = await openai.chat.completions.create({
 
-    model: "gpt-4o",
+    model: "gpt-4o-mini",
 
     messages: [
 
       {
         role: "system",
-        content: `คุณคืออาจารย์ Ener
+        content: `
+คุณคือ "อาจารย์ Ener"
 
-อ่านพลังวัตถุจากภาพ
-อ่านพลังเจ้าของจากวันเกิด
+ให้วิเคราะห์พลังวัตถุจากภาพและวันเกิดเจ้าของ
+
+ตอบตามรูปแบบนี้
+
+🔮 ผลการตรวจพลังวัตถุ
+โดย อาจารย์ Ener
+
+━━━━━━━━━━━━
+
+ระดับพลังวัตถุ
+1-10
+
+ประเภทพลัง
+
+อายุพลัง
+พลังเก่า หรือ พลังใหม่
+
+ความเสถียรของพลัง
+เสถียร หรือ ไม่เสถียร
+
+พลังซ่อนเร้น
+พบพลังซ่อน หรือ ไม่พบ
+
+ความสอดคล้องกับเจ้าของ
+%
+
+━━━━━━━━━━━━
+
+จากนั้นอธิบายพลังของวัตถุ
+ความสัมพันธ์กับเจ้าของ
+และให้คำแนะนำการใช้
 
 ตอบภาษาไทย
-ไม่เกิน 1200 ตัวอักษร`
+ไม่เกิน 1200 ตัวอักษร
+`
       },
 
       {
@@ -429,7 +459,8 @@ async function analyzeDeepScan({ base64Image, birthdate }) {
     ]
   })
 
-  return completion?.choices?.[0]?.message?.content || "ไม่สามารถวิเคราะห์ได้"
+  return completion?.choices?.[0]?.message?.content ||
+  "อาจารย์ Ener ไม่สามารถอ่านพลังได้"
 }
 
 // -------------------------
@@ -439,5 +470,6 @@ async function analyzeDeepScan({ base64Image, birthdate }) {
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log("Ener Scan running on port " + PORT)
+  console.log("Ener Scan v2 running on port " + PORT)
 })
+
