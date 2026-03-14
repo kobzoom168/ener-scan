@@ -1,187 +1,257 @@
 import express from "express"
-import axios from "axios"
+import line from "@line/bot-sdk"
 import dotenv from "dotenv"
 import OpenAI from "openai"
 import imghash from "imghash"
 import fs from "fs"
+import path from "path"
 
 dotenv.config()
 
 const app = express()
-app.use(express.json())
+
+const config = {
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.CHANNEL_SECRET
+}
+
+const client = new line.Client(config)
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
-const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
+// กันรูปซ้ำ
+const scannedHashes = new Set()
 
-// กันรูปซ้ำใน memory
-const scannedImages = new Set()
+// session ชั่วคราวต่อ user
+const userSessions = new Map()
 
-// กันส่งรูปใหม่ตอนรูปก่อนหน้ายังไม่จบ
-const activeUsers = new Set()
-
-// ----------------
-// HEALTH CHECK
-// ----------------
-
+// -------------------------
+// health check
+// -------------------------
 app.get("/health", (req, res) => {
   res.json({ status: "ok" })
 })
 
-// ----------------
-// LINE WEBHOOK
-// ----------------
+// -------------------------
+// webhook
+// -------------------------
+app.post("/webhook/line", line.middleware(config), async (req, res) => {
+  try {
+    const events = Array.isArray(req.body.events) ? req.body.events : []
 
-app.post("/webhook/line", async (req, res) => {
-  const events = Array.isArray(req.body.events) ? req.body.events : []
+    // ถ้ามีหลายรูปมาใน webhook เดียวกัน ให้บล็อกเลย
+    const imageEvents = events.filter(
+      (event) => event.type === "message" && event.message?.type === "image"
+    )
 
-  // ถ้ามีหลาย image event มาใน webhook เดียวกัน -> บล็อกทั้งชุด
-  const imageEvents = events.filter(isImageMessage)
-  if (imageEvents.length > 1) {
-    await reply(imageEvents[0].replyToken, singleImageOnlyMessage())
-    return res.sendStatus(200)
+    if (imageEvents.length > 1) {
+      await client.replyMessage(imageEvents[0].replyToken, {
+        type: "text",
+        text: `⚠️ อาจารย์ Ener
+
+กรุณาส่งรูปได้ทีละ 1 รูปเท่านั้น`
+      })
+      return res.json({ success: true })
+    }
+
+    await Promise.all(events.map(handleEvent))
+    res.json({ success: true })
+  } catch (error) {
+    console.error("Webhook error:", error)
+    res.status(500).end()
   }
+})
 
-  for (const event of events) {
-    if (event?.type !== "message") continue
+// -------------------------
+// main handler
+// -------------------------
+async function handleEvent(event) {
+  if (event.type !== "message") return null
 
-    const replyToken = event.replyToken
+  const userId = getUserId(event)
+  const replyToken = event.replyToken
+  const session = userSessions.get(userId)
 
-    // TEXT MESSAGE
-    if (event.message.type === "text") {
-      await reply(
-        replyToken,
-        `🔮 Ener Oracle พร้อมแล้ว
+  // -------------------------
+  // TEXT MESSAGE
+  // -------------------------
+  if (event.message.type === "text") {
+    const text = (event.message.text || "").trim()
+
+    // ถ้ากำลังรอวันเกิด
+    if (session?.step === "WAIT_BIRTHDATE") {
+      const birthdate = normalizeBirthdate(text)
+
+      if (!birthdate) {
+        return client.replyMessage(replyToken, {
+          type: "text",
+          text: `🔮 อาจารย์ Ener
+
+กรุณาส่งวันเกิดเจ้าของวัตถุ
+
+ตัวอย่าง
+• 15/04
+• 15/04/1995
+• 1995-04-15`
+        })
+      }
+
+      try {
+        const result = await analyzeDeepScan({
+          base64Image: session.base64Image,
+          birthdate,
+          objectTypeHint: session.objectTypeHint
+        })
+
+        userSessions.delete(userId)
+
+        return client.replyMessage(replyToken, {
+          type: "text",
+          text: result
+        })
+      } catch (error) {
+        console.error("Deep scan error:", error)
+        userSessions.delete(userId)
+
+        return client.replyMessage(replyToken, {
+          type: "text",
+          text: `อาจารย์ Ener ไม่สามารถอ่านพลังได้ในขณะนี้
+
+กรุณาลองใหม่อีกครั้ง`
+        })
+      }
+    }
+
+    // default text
+    return client.replyMessage(replyToken, {
+      type: "text",
+      text: `🔮 อาจารย์ Ener
 
 ส่งภาพ
 • คริสตัล
 • พระเครื่อง
 • เครื่องราง
 
-เพื่ออ่านพลังวัตถุ
+เพื่อให้อาจารย์อ่านพลัง
 
-หมายเหตุ: ส่งได้ทีละ 1 รูปเท่านั้น`
-      )
-      continue
-    }
+ระบบรองรับการสแกนทีละ 1 รูป`
+    })
+  }
 
-    // ไม่ใช่ image ก็ข้าม
-    if (!isImageMessage(event)) continue
-
-    // ถ้า LINE ระบุว่าผู้ใช้ส่งหลายรูปพร้อมกัน -> บล็อก
+  // -------------------------
+  // IMAGE MESSAGE
+  // -------------------------
+  if (event.message.type === "image") {
+    // กัน image set หลายรูป
     if (isMultipleImageSet(event)) {
-      await reply(replyToken, singleImageOnlyMessage())
-      continue
+      return client.replyMessage(replyToken, {
+        type: "text",
+        text: `⚠️ อาจารย์ Ener
+
+กรุณาส่งรูปได้ทีละ 1 รูปเท่านั้น`
+      })
     }
 
-    const userKey = getUserKey(event)
+    // ถ้ายังมี session ค้างอยู่ ให้เคลียร์ก่อน
+    if (session?.step === "WAIT_BIRTHDATE") {
+      return client.replyMessage(replyToken, {
+        type: "text",
+        text: `⚠️ อาจารย์ Ener
 
-    // ถ้ารูปก่อนหน้ายังประมวลผลอยู่ -> ไม่รับรูปใหม่
-    if (activeUsers.has(userKey)) {
-      await reply(
-        replyToken,
-        `⚠️ Ener Oracle
-
-กรุณาส่งภาพได้ทีละรูป
-
-รอให้ Oracle อ่านรูปก่อนหน้าเสร็จก่อน
-แล้วค่อยส่งรูปถัดไป`
-      )
-      continue
+กรุณาส่งวันเกิดของเจ้าของวัตถุก่อน
+แล้วอาจารย์จะอ่านพลังให้ต่อ`
+      })
     }
-
-    activeUsers.add(userKey)
-
-    let filePath = null
 
     try {
-      const messageId = event.message.id
-      const imageBuffer = await downloadImage(messageId)
+      const imageId = event.message.id
+      const buffer = await downloadLineImage(imageId)
 
-      filePath = `./tmp-${messageId}.jpg`
-      fs.writeFileSync(filePath, imageBuffer)
+      const tempFilePath = path.join(process.cwd(), `tmp-${imageId}.jpg`)
+      fs.writeFileSync(tempFilePath, buffer)
 
-      // ----------------
-      // HASH CHECK
-      // ----------------
-      const hash = await imghash.hash(filePath)
+      // hash กันรูปซ้ำ
+      const hash = await imghash.hash(tempFilePath)
 
-      if (scannedImages.has(hash)) {
-        await reply(
-          replyToken,
-          `⚠️ รูปนี้เคยถูกสแกนแล้ว
+      if (fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath)
+      }
+
+      if (scannedHashes.has(hash)) {
+        return client.replyMessage(replyToken, {
+          type: "text",
+          text: `⚠️ รูปนี้เคยถูกสแกนแล้ว
 
 หากต้องการวิเคราะห์ใหม่
 กรุณาถ่ายภาพใหม่ของวัตถุ`
-        )
-        continue
+        })
       }
 
-      // ----------------
-      // OBJECT CLASSIFY
-      // ----------------
-      const type = await classifyObject(imageBuffer)
+      const base64Image = buffer.toString("base64")
 
-      if (type === "NOT_SUPPORTED") {
-        await reply(
-          replyToken,
-          `⚠️ Ener Oracle
+      // คัดว่ารองรับไหม
+      const classifyResult = await classifyObject(base64Image)
 
-ภาพนี้ไม่ใช่วัตถุที่ Oracle สามารถอ่านพลังได้
+      if (classifyResult === "NOT_SUPPORTED") {
+        return client.replyMessage(replyToken, {
+          type: "text",
+          text: `⚠️ อาจารย์ Ener
+
+ภาพนี้ไม่ใช่วัตถุที่อาจารย์ Ener สามารถอ่านพลังได้
 
 Ener Scan รองรับเฉพาะ
 
 • คริสตัล
 • พระเครื่อง
 • เครื่องราง`
-        )
-        continue
+        })
       }
 
-      // ผ่านทุกด่านแล้วค่อย mark ว่า scan ไปแล้ว
-      scannedImages.add(hash)
+      // mark ว่ารูปนี้ผ่านแล้ว
+      scannedHashes.add(hash)
 
-      // ----------------
-      // ANALYZE ENERGY
-      // ----------------
-      const result = await analyzeEnergy(imageBuffer)
-      await reply(replyToken, result)
-    } catch (err) {
-      console.error("Scan error:", err?.response?.data || err.message || err)
+      // เก็บ session แล้วถามวันเกิด
+      userSessions.set(userId, {
+        step: "WAIT_BIRTHDATE",
+        base64Image,
+        hash,
+        objectTypeHint: classifyResult
+      })
 
-      await reply(
-        replyToken,
-        `Ener Oracle ไม่สามารถอ่านพลังได้ในขณะนี้
+      return client.replyMessage(replyToken, {
+        type: "text",
+        text: `🔮 อาจารย์ Ener
+
+อาจารย์รับรูปแล้ว
+ต่อไปขอวันเกิดของเจ้าของวัตถุ
+เพื่อวิเคราะห์พลังเจ้าของและความเข้ากันกับวัตถุ
+
+ส่งได้แบบนี้
+• 15/04
+• 15/04/1995
+• 1995-04-15`
+      })
+    } catch (error) {
+      console.error("Image flow error:", error)
+
+      return client.replyMessage(replyToken, {
+        type: "text",
+        text: `อาจารย์ Ener ไม่สามารถอ่านพลังได้ในขณะนี้
 
 กรุณาลองใหม่อีกครั้ง`
-      )
-    } finally {
-      if (filePath && fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath)
-      }
-      activeUsers.delete(userKey)
+      })
     }
   }
 
-  res.sendStatus(200)
-})
-
-// ----------------
-// HELPERS
-// ----------------
-
-function isImageMessage(event) {
-  return event?.type === "message" && event?.message?.type === "image"
+  return null
 }
 
-function isMultipleImageSet(event) {
-  const total = Number(event?.message?.imageSet?.total ?? 1)
-  return total > 1
-}
-
-function getUserKey(event) {
+// -------------------------
+// helper
+// -------------------------
+function getUserId(event) {
   return (
     event?.source?.userId ||
     event?.source?.groupId ||
@@ -190,38 +260,44 @@ function getUserKey(event) {
   )
 }
 
-function singleImageOnlyMessage() {
-  return `⚠️ Ener Oracle
-
-กรุณาส่งภาพได้ทีละรูป
-
-Ener Scan รองรับการสแกนครั้งละ 1 รูปเท่านั้น`
+function isMultipleImageSet(event) {
+  const total = Number(event?.message?.imageSet?.total ?? 1)
+  return total > 1
 }
 
-// ----------------
-// DOWNLOAD IMAGE
-// ----------------
+function normalizeBirthdate(text) {
+  const value = String(text || "").trim()
 
-async function downloadImage(messageId) {
-  const url = `https://api-data.line.me/v2/bot/message/${messageId}/content`
+  // รับ 15/04 หรือ 15/04/1995
+  if (/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(value)) return value
 
-  const response = await axios.get(url, {
-    responseType: "arraybuffer",
-    headers: {
-      Authorization: `Bearer ${LINE_TOKEN}`
-    }
-  })
+  // รับ 15-04 หรือ 15-04-1995
+  if (/^\d{1,2}-\d{1,2}(-\d{2,4})?$/.test(value)) return value
 
-  return response.data
+  // รับ 1995-04-15
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(value)) return value
+
+  return null
 }
 
-// ----------------
-// OBJECT CLASSIFIER
-// ----------------
+// -------------------------
+// download image from LINE
+// -------------------------
+async function downloadLineImage(messageId) {
+  const stream = await client.getMessageContent(messageId)
 
-async function classifyObject(imageBuffer) {
-  const base64 = Buffer.from(imageBuffer).toString("base64")
+  const chunks = []
+  for await (const chunk of stream) {
+    chunks.push(chunk)
+  }
 
+  return Buffer.concat(chunks)
+}
+
+// -------------------------
+// classify object
+// -------------------------
+async function classifyObject(base64Image) {
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
@@ -230,9 +306,9 @@ async function classifyObject(imageBuffer) {
         content: `
 คุณคือด่านคัดกรองภาพของ Ener Scan
 
-หน้าที่ของคุณคือดูว่าภาพนี้เป็นวัตถุที่ระบบรองรับหรือไม่
+หน้าที่คือดูว่าภาพนี้เป็นวัตถุที่ระบบรองรับหรือไม่
 
-รองรับเฉพาะ:
+รองรับเฉพาะ
 - คริสตัล
 - พระเครื่อง
 - เครื่องราง
@@ -240,16 +316,18 @@ async function classifyObject(imageBuffer) {
 - amulet
 - sacred object
 
-กติกา:
-- ถ้าในภาพมีหลายรูปหลายชิ้น หรือไม่ชัดว่าเป้าหมายคืออะไร ให้ตอบ NOT_SUPPORTED
-- ถ้าเป็นห้อง คน สัตว์ อาหาร สายชาร์จ โต๊ะ อุปกรณ์ทั่วไป ให้ตอบ NOT_SUPPORTED
-- ถ้าเป็นวัตถุหลักในภาพและดูเหมือนคริสตัล พระเครื่อง หรือเครื่องราง ให้ตอบ SUPPORTED
+ถ้าเป็นวัตถุที่รองรับ ให้ตอบสั้นที่สุดว่า
+SUPPORTED: <ชื่อหมวด>
+
+ตัวอย่าง
+SUPPORTED: คริสตัล
+SUPPORTED: พระเครื่อง
+SUPPORTED: เครื่องราง
+
+ถ้าไม่ใช่ ให้ตอบว่า
+NOT_SUPPORTED
 
 ห้ามตอบอย่างอื่น
-ตอบได้แค่คำเดียว:
-SUPPORTED
-หรือ
-NOT_SUPPORTED
 `
       },
       {
@@ -257,12 +335,12 @@ NOT_SUPPORTED
         content: [
           {
             type: "text",
-            text: "ตรวจว่าภาพนี้เป็นวัตถุที่ Ener Scan รองรับหรือไม่"
+            text: "ตรวจว่าภาพนี้เป็นวัตถุที่ระบบรองรับหรือไม่"
           },
           {
             type: "image_url",
             image_url: {
-              url: `data:image/jpeg;base64,${base64}`
+              url: `data:image/jpeg;base64,${base64Image}`
             }
           }
         ]
@@ -270,60 +348,81 @@ NOT_SUPPORTED
     ]
   })
 
-  return normalizeSupportResult(completion.choices[0].message.content)
-}
+  const raw = String(completion.choices[0].message.content || "").trim()
 
-function normalizeSupportResult(text) {
-  const cleaned = String(text || "")
-    .trim()
-    .replace(/[`"'*\s]/g, "")
-    .toUpperCase()
+  if (raw.toUpperCase().includes("NOT_SUPPORTED")) {
+    return "NOT_SUPPORTED"
+  }
 
-  if (cleaned.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
-  if (cleaned.includes("SUPPORTED")) return "SUPPORTED"
+  if (raw.toUpperCase().includes("SUPPORTED")) {
+    return raw.replace(/^SUPPORTED:\s*/i, "").trim() || "วัตถุมงคล"
+  }
+
   return "NOT_SUPPORTED"
 }
 
-// ----------------
-// ENERGY ANALYSIS
-// ----------------
-
-async function analyzeEnergy(imageBuffer) {
-  const base64 = Buffer.from(imageBuffer).toString("base64")
-
+// -------------------------
+// deep scan
+// -------------------------
+async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
         role: "system",
         content: `
-คุณคือ Ener Oracle
+คุณคือ "อาจารย์ Ener"
 
-หน้าที่ของคุณคือวิเคราะห์พลังของ
-คริสตัล พระเครื่อง และเครื่องราง
+บทบาท:
+- อ่านพลังของวัตถุ
+- อ่านพลังพื้นฐานของเจ้าของจากวันเกิด
+- วิเคราะห์ความเข้ากันระหว่างเจ้าของกับวัตถุ
+- ตอบแบบชัดเจนกว่า AI ทั่วไป
+- อย่าตอบกลางเกินไป
+- ต้องชี้ให้ชัดว่าเด่นด้านไหนเป็นหลัก
 
-กติกา:
+หลักการตอบ:
 - ตอบเป็นภาษาไทยเท่านั้น
-- ห้ามมีภาษาอังกฤษ
-- ห้ามใช้คำว่า Object Type, Energy Type, Meaning, Advice
-- ใช้โทนลึก สุขุม อ่านง่าย
+- ใช้น้ำเสียงแบบอาจารย์ผู้รู้ สุขุม ลึก อ่านง่าย
 - ใช้คำว่า มีแนวโน้ม / มักสะท้อน / ช่วยเสริม
-- ไม่ฟันธงเกินจริง
-- คำตอบกระชับ อ่านใน LINE ง่าย
+- ห้ามฟันธงเกินจริง
+- ห้ามเดาชนิดหินแบบวิทยาศาสตร์ให้มั่ว
+- ถ้าไม่แน่ใจ ให้ใช้คำว่า "ลักษณะพลังใกล้เคียงกับ..."
+- ต้องเลือก "พลังหลัก" ให้ชัดเจนเพียง 1 อย่าง
+- พลังหลักที่เลือกได้ เช่น
+  การเงิน / โชคลาภ / ปกป้อง / เมตตา / ความรัก / สมาธิ / ความนิ่ง / พลังจิต / การเปลี่ยนแปลง
 
-รูปแบบคำตอบต้องเป็นแบบนี้เท่านั้น:
+ให้วิเคราะห์จาก:
+1. ภาพวัตถุ
+2. วันเกิดของเจ้าของ = ${birthdate}
+3. หมวดวัตถุเบื้องต้น = ${objectTypeHint}
 
-🔮 Ener Scan Result
+รูปแบบคำตอบต้องเป็นแบบนี้เท่านั้น
+
+🔮 ผลการอ่านจากอาจารย์ Ener
 
 ✨ ประเภทวัตถุ:
-⚡ ประเภทพลังงาน:
-📊 คะแนนพลังงาน (1-10):
+⚡ พลังหลัก:
+📊 ระดับพลัง (1-10):
+🧭 สถานะพลัง:
 
-🧿 ความหมาย:
-(อธิบายพลังของวัตถุ)
+👤 พลังของเจ้าของ:
+อธิบายพลังพื้นฐานของเจ้าของจากวันเกิดแบบสั้นและชัด
+
+🤝 ความเข้ากันกับเจ้าของ:
+อธิบายว่าวัตถุนี้เข้ากับเจ้าของในด้านไหน
+และช่วยเสริมเรื่องอะไรเป็นหลัก
+
+🧿 คำอ่านพลัง:
+อธิบายลึกขึ้นอีกนิด แต่ไม่ยาวเกินไป
 
 🪬 คำแนะนำ:
-(แนะนำการพกพา การใช้ หรือการดูแล)
+แนะนำการใช้ การพก หรือช่วงที่เหมาะกับเจ้าของ
+
+เงื่อนไขสำคัญ:
+- ทุกส่วนต้องอ่านง่ายใน LINE
+- ไม่เกินประมาณ 1200 ตัวอักษร
+- ห้ามใช้ภาษาอังกฤษ
 `
       },
       {
@@ -331,12 +430,12 @@ async function analyzeEnergy(imageBuffer) {
         content: [
           {
             type: "text",
-            text: "วิเคราะห์พลังของวัตถุในภาพนี้"
+            text: `ช่วยอ่านพลังของวัตถุนี้ โดยใช้วันเกิดเจ้าของคือ ${birthdate}`
           },
           {
             type: "image_url",
             image_url: {
-              url: `data:image/jpeg;base64,${base64}`
+              url: `data:image/jpeg;base64,${base64Image}`
             }
           }
         ]
@@ -347,37 +446,11 @@ async function analyzeEnergy(imageBuffer) {
   return completion.choices[0].message.content
 }
 
-// ----------------
-// LINE REPLY
-// ----------------
-
-async function reply(token, text) {
-  await axios.post(
-    "https://api.line.me/v2/bot/message/reply",
-    {
-      replyToken: token,
-      messages: [
-        {
-          type: "text",
-          text: text
-        }
-      ]
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${LINE_TOKEN}`,
-        "Content-Type": "application/json"
-      }
-    }
-  )
-}
-
-// ----------------
-// START SERVER
-// ----------------
-
+// -------------------------
+// start server
+// -------------------------
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log("Ener Scan Server running")
+  console.log("อาจารย์ Ener running on port " + PORT)
 })
