@@ -11,29 +11,31 @@ import { deepScanSystemPrompt } from "../prompts/deepScan.prompt.js"
 
 dotenv.config()
 
-// -------------------------
+// ===============================
 // ENV CHECK
-// -------------------------
+// ===============================
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY missing")
+const REQUIRED_ENV = [
+  "OPENAI_API_KEY",
+  "CHANNEL_ACCESS_TOKEN",
+  "CHANNEL_SECRET"
+]
+
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    throw new Error(`${key} missing`)
+  }
 }
 
-if (!process.env.CHANNEL_ACCESS_TOKEN) {
-  throw new Error("CHANNEL_ACCESS_TOKEN missing")
-}
-
-if (!process.env.CHANNEL_SECRET) {
-  throw new Error("CHANNEL_SECRET missing")
-}
-
-// -------------------------
+// ===============================
+// APP
+// ===============================
 
 const app = express()
 
-// -------------------------
+// ===============================
 // LINE CONFIG
-// -------------------------
+// ===============================
 
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
@@ -42,25 +44,25 @@ const config = {
 
 const client = new line.Client(config)
 
-// -------------------------
+// ===============================
 // OPENAI
-// -------------------------
+// ===============================
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
-// -------------------------
-// MEMORY STORES (MVP)
-// -------------------------
+// ===============================
+// MEMORY (MVP)
+// ===============================
 
 const scannedHashes = new Set()
 const userSessions = new Map()
 const userRateLimit = new Map()
 
-// -------------------------
-// HEALTH CHECK
-// -------------------------
+// ===============================
+// ROUTES
+// ===============================
 
 app.get("/", (req, res) => {
   res.send("Ener Scan API running")
@@ -70,9 +72,11 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" })
 })
 
-// -------------------------
+app.post("/webhook/line", line.middleware(config), lineWebhookHandler)
+
+// ===============================
 // RATE LIMIT
-// -------------------------
+// ===============================
 
 function isRateLimited(userId) {
 
@@ -94,9 +98,9 @@ function isRateLimited(userId) {
   return record.count > 5
 }
 
-// -------------------------
-// TIMEOUT GUARD
-// -------------------------
+// ===============================
+// TIMEOUT
+// ===============================
 
 async function withTimeout(promise, ms = 15000) {
 
@@ -107,40 +111,33 @@ async function withTimeout(promise, ms = 15000) {
   return Promise.race([promise, timeout])
 }
 
-// -------------------------
+// ===============================
 // WEBHOOK
-// -------------------------
+// ===============================
 
 async function lineWebhookHandler(req, res) {
 
   try {
 
-    const events = Array.isArray(req.body.events)
-      ? req.body.events
-      : []
+    const events = req.body.events || []
 
     console.log("Incoming events:", events.length)
 
     await Promise.all(events.map(handleEvent))
 
-    res.json({ success: true })
+    res.json({ ok: true })
 
   } catch (err) {
 
     console.error("Webhook error:", err)
+
     res.status(500).end()
   }
 }
 
-// -------------------------
-// ROUTE
-// -------------------------
-
-app.post("/webhook/line", line.middleware(config), lineWebhookHandler)
-
-// -------------------------
-// MAIN HANDLER
-// -------------------------
+// ===============================
+// EVENT HANDLER
+// ===============================
 
 async function handleEvent(event) {
 
@@ -153,19 +150,16 @@ async function handleEvent(event) {
     const session = userSessions.get(userId)
 
     console.log("User:", userId)
-    console.log("Message type:", event.message.type)
+    console.log("Type:", event.message.type)
 
     if (isRateLimited(userId)) {
 
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text: "⚠️ กรุณารอสักครู่ก่อนส่งข้อความใหม่"
-      })
+      return reply(replyToken, "⚠️ กรุณารอสักครู่ก่อนส่งข้อความใหม่")
     }
 
-    // -------------------------
+    // =========================
     // TEXT MESSAGE
-    // -------------------------
+    // =========================
 
     if (event.message.type === "text") {
 
@@ -177,60 +171,51 @@ async function handleEvent(event) {
 
         if (!birthdate) {
 
-          return client.replyMessage(replyToken, {
-            type: "text",
-            text: `🔮 อาจารย์ Ener
+          return reply(replyToken, `🔮 อาจารย์ Ener
 
 กรุณาส่งวันเกิดเจ้าของวัตถุ
 
 ตัวอย่าง
-15/04
-15/04/1995
-1995-04-15`
-          })
+19/08/1985`)
         }
 
-        console.log("Birthdate received:", birthdate)
+        console.log("Birthdate:", birthdate)
 
         const result = await withTimeout(
+
           analyzeDeepScan({
             base64Image: session.base64Image,
             birthdate,
             objectTypeHint: session.objectTypeHint
           }),
+
           20000
         )
 
         userSessions.delete(userId)
 
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: result
-        })
+        return reply(replyToken, result)
       }
 
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text: `🔮 อาจารย์ Ener
+      return reply(replyToken, `🔮 อาจารย์ Ener
 
 ส่งภาพ
 คริสตัล
 พระเครื่อง
 เครื่องราง
 
-เพื่อให้อาจารย์อ่านพลัง`
-      })
+เพื่อให้อาจารย์อ่านพลัง`)
     }
 
-    // -------------------------
+    // =========================
     // IMAGE MESSAGE
-    // -------------------------
+    // =========================
 
     if (event.message.type === "image") {
 
       const imageId = event.message.id
 
-      console.log("Image received:", imageId)
+      console.log("Image:", imageId)
 
       const buffer = await downloadLineImage(imageId)
 
@@ -244,10 +229,7 @@ async function handleEvent(event) {
 
       if (scannedHashes.has(hash)) {
 
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: "⚠️ รูปนี้เคยถูกสแกนแล้ว"
-        })
+        return reply(replyToken, "⚠️ รูปนี้เคยถูกสแกนแล้ว")
       }
 
       const base64Image = buffer.toString("base64")
@@ -259,14 +241,11 @@ async function handleEvent(event) {
 
       if (classify === "NOT_SUPPORTED") {
 
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: `⚠️ Ener Scan รองรับเฉพาะ
+        return reply(replyToken, `⚠️ Ener Scan รองรับเฉพาะ
 
 คริสตัล
 พระเครื่อง
-เครื่องราง`
-        })
+เครื่องราง`)
       }
 
       const scanId = crypto.randomUUID()
@@ -278,20 +257,16 @@ async function handleEvent(event) {
         scanId,
         step: "WAIT_BIRTHDATE",
         base64Image,
-        hash,
         objectTypeHint: classify
       })
 
-      console.log("Session created:", scanId)
+      console.log("Session:", scanId)
 
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text: `🔮 อาจารย์ Ener
+      return reply(replyToken, `🔮 อาจารย์ Ener
 
 รับรูปแล้ว
 
-ต่อไปขอวันเกิดเจ้าของวัตถุ`
-      })
+ต่อไปขอวันเกิดเจ้าของวัตถุ`)
     }
 
   } catch (err) {
@@ -302,9 +277,21 @@ async function handleEvent(event) {
   return null
 }
 
-// -------------------------
-// HELPERS
-// -------------------------
+// ===============================
+// REPLY
+// ===============================
+
+function reply(replyToken, text) {
+
+  return client.replyMessage(replyToken, {
+    type: "text",
+    text
+  })
+}
+
+// ===============================
+// USER ID
+// ===============================
 
 function getUserId(event) {
 
@@ -316,19 +303,26 @@ function getUserId(event) {
   )
 }
 
+// ===============================
+// BIRTHDATE NORMALIZE
+// ===============================
+
 function normalizeBirthdate(text) {
 
-  const value = String(text).trim()
+  const numbers = text.replace(/[^\d]/g, "")
 
-  if (/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(value)) return value
-  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(value)) return value
+  if (numbers.length !== 8) return null
 
-  return null
+  const day = numbers.substring(0, 2)
+  const month = numbers.substring(2, 4)
+  const year = numbers.substring(4)
+
+  return `${year}-${month}-${day}`
 }
 
-// -------------------------
+// ===============================
 // DOWNLOAD IMAGE
-// -------------------------
+// ===============================
 
 async function downloadLineImage(messageId) {
 
@@ -343,9 +337,9 @@ async function downloadLineImage(messageId) {
   return Buffer.concat(chunks)
 }
 
-// -------------------------
+// ===============================
 // CLASSIFY OBJECT
-// -------------------------
+// ===============================
 
 async function classifyObject(base64Image) {
 
@@ -386,19 +380,17 @@ NOT_SUPPORTED`
                 url: `data:image/jpeg;base64,${base64Image}`
               }
             }
-
           ]
         }
       ]
     })
 
-    const raw = String(
-      completion?.choices?.[0]?.message?.content || ""
-    ).trim()
+    const raw = completion.choices?.[0]?.message?.content || ""
 
     if (raw.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
 
     if (raw.includes("SUPPORTED")) {
+
       return raw.replace("SUPPORTED:", "").trim()
     }
 
@@ -407,13 +399,14 @@ NOT_SUPPORTED`
   } catch (err) {
 
     console.error("classifyObject error:", err)
+
     return "NOT_SUPPORTED"
   }
 }
 
-// -------------------------
+// ===============================
 // DEEP SCAN
-// -------------------------
+// ===============================
 
 async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
 
@@ -447,13 +440,12 @@ async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
                 url: `data:image/jpeg;base64,${base64Image}`
               }
             }
-
           ]
         }
       ]
     })
 
-    return completion?.choices?.[0]?.message?.content ||
+    return completion.choices?.[0]?.message?.content ||
       "อาจารย์ Ener ไม่สามารถอ่านพลังได้"
 
   } catch (err) {
@@ -464,9 +456,9 @@ async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
   }
 }
 
-// -------------------------
+// ===============================
 // SERVER
-// -------------------------
+// ===============================
 
 const PORT = process.env.PORT || 3000
 
