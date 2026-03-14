@@ -16,16 +16,18 @@ dotenv.config()
 // -------------------------
 
 if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY missing")
+throw new Error("OPENAI_API_KEY missing")
 }
 
 if (!process.env.CHANNEL_ACCESS_TOKEN) {
-  throw new Error("CHANNEL_ACCESS_TOKEN missing")
+throw new Error("CHANNEL_ACCESS_TOKEN missing")
 }
 
 if (!process.env.CHANNEL_SECRET) {
-  throw new Error("CHANNEL_SECRET missing")
+throw new Error("CHANNEL_SECRET missing")
 }
+
+// -------------------------
 
 const app = express()
 
@@ -34,8 +36,8 @@ const app = express()
 // -------------------------
 
 const config = {
-  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.CHANNEL_SECRET
+channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
+channelSecret: process.env.CHANNEL_SECRET
 }
 
 const client = new line.Client(config)
@@ -45,7 +47,7 @@ const client = new line.Client(config)
 // -------------------------
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+apiKey: process.env.OPENAI_API_KEY
 })
 
 // -------------------------
@@ -61,11 +63,11 @@ const userRateLimit = new Map()
 // -------------------------
 
 app.get("/", (req, res) => {
-  res.send("Ener Scan API running")
+res.send("Ener Scan API running")
 })
 
 app.get("/health", (req, res) => {
-  res.json({ status: "ok" })
+res.json({ status: "ok" })
 })
 
 // -------------------------
@@ -74,75 +76,86 @@ app.get("/health", (req, res) => {
 
 function isRateLimited(userId) {
 
-  const now = Date.now()
-  const record = userRateLimit.get(userId)
+const now = Date.now()
+const record = userRateLimit.get(userId)
 
-  if (!record) {
-    userRateLimit.set(userId, { count: 1, time: now })
-    return false
-  }
+if (!record) {
+userRateLimit.set(userId, { count: 1, time: now })
+return false
+}
 
-  if (now - record.time > 10000) {
-    userRateLimit.set(userId, { count: 1, time: now })
-    return false
-  }
+if (now - record.time > 10000) {
+userRateLimit.set(userId, { count: 1, time: now })
+return false
+}
 
-  record.count++
-  return record.count > 5
+record.count++
+
+return record.count > 5
 }
 
 // -------------------------
-// ENER RANK
+// ENER RANK SYSTEM
 // -------------------------
 
 function generateEnerRank() {
 
-  const rand = Math.random()
+const rand = Math.random()
 
-  if (rand < 0.45) return "พลังทั่วไป"
-  if (rand < 0.75) return "พลังเด่น"
-  if (rand < 0.90) return "พลังหายาก"
-  if (rand < 0.98) return "พลังโบราณ"
-  return "พลังตำนาน"
+if (rand < 0.45) return "พลังทั่วไป"
+if (rand < 0.75) return "พลังเด่น"
+if (rand < 0.90) return "พลังหายาก"
+if (rand < 0.98) return "พลังโบราณ"
+
+return "พลังตำนาน"
 }
 
 // -------------------------
-// TIMEOUT
+// TIMEOUT GUARD
 // -------------------------
 
 async function withTimeout(promise, ms = 15000) {
 
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Timeout")), ms)
-  )
+const timeout = new Promise((_, reject) =>
+setTimeout(() => reject(new Error("Timeout")), ms)
+)
 
-  return Promise.race([promise, timeout])
+return Promise.race([promise, timeout])
 }
 
 // -------------------------
 // WEBHOOK
 // -------------------------
 
-app.post("/webhook/line", line.middleware(config), async (req, res) => {
+async function lineWebhookHandler(req, res) {
 
-  try {
+try {
 
-    const events = Array.isArray(req.body.events)
-      ? req.body.events
-      : []
+```
+const events = Array.isArray(req.body.events)
+  ? req.body.events
+  : []
 
-    await Promise.all(events.map(handleEvent))
+await Promise.all(events.map(handleEvent))
 
-    res.json({ success: true })
+res.json({ success: true })
+```
 
-  } catch (err) {
+} catch (err) {
 
-    console.error("Webhook error:", err)
-    res.status(500).end()
+```
+console.error("Webhook error:", err)
+res.status(500).end()
+```
 
-  }
+}
+}
 
-})
+// -------------------------
+// ROUTE
+// -------------------------
+
+app.post("/webhook/line", line.middleware(config), lineWebhookHandler)
 
 // -------------------------
 // MAIN HANDLER
@@ -150,41 +163,41 @@ app.post("/webhook/line", line.middleware(config), async (req, res) => {
 
 async function handleEvent(event) {
 
-  try {
+try {
 
-    if (event.type !== "message") return null
+```
+if (event.type !== "message") return null
 
-    const userId = getUserId(event)
-    const replyToken = event.replyToken
-    const session = userSessions.get(userId)
+const userId = getUserId(event)
+const replyToken = event.replyToken
+const session = userSessions.get(userId)
 
-    if (isRateLimited(userId)) {
+if (isRateLimited(userId)) {
+
+  return client.replyMessage(replyToken, {
+    type: "text",
+    text: "⚠️ กรุณารอสักครู่ก่อนส่งข้อความใหม่"
+  })
+}
+
+// -------------------------
+// TEXT MESSAGE
+// -------------------------
+
+if (event.message.type === "text") {
+
+  const text = (event.message.text || "").trim()
+
+  if (session?.step === "WAIT_BIRTHDATE") {
+
+    const birthdate = normalizeBirthdate(text)
+
+    if (!birthdate) {
 
       return client.replyMessage(replyToken, {
         type: "text",
-        text: "⚠️ กรุณารอสักครู่ก่อนส่งข้อความใหม่"
-      })
-
-    }
-
-    // -------------------------
-    // TEXT
-    // -------------------------
-
-    if (event.message.type === "text") {
-
-      const text = (event.message.text || "").trim()
-
-      if (session?.step === "WAIT_BIRTHDATE") {
-
-        const birthdate = normalizeBirthdate(text)
-
-        if (!birthdate) {
-
-          return client.replyMessage(replyToken, {
-            type: "text",
-            text:
-`🔮 อาจารย์ Ener
+        text: `🔮 อาจารย์ Ener
+```
 
 รับรูปแล้ว
 
@@ -192,35 +205,34 @@ async function handleEvent(event) {
 
 ตัวอย่าง
 19/08/1985`
-          })
+})
+}
 
-        }
+```
+    const rank = generateEnerRank()
 
-        const rank = generateEnerRank()
+    const result = await withTimeout(
+      analyzeDeepScan({
+        base64Image: session.base64Image,
+        birthdate,
+        objectTypeHint: session.objectTypeHint,
+        rank
+      }),
+      20000
+    )
 
-        const result = await withTimeout(
-          analyzeDeepScan({
-            base64Image: session.base64Image,
-            birthdate,
-            objectTypeHint: session.objectTypeHint,
-            rank
-          }),
-          20000
-        )
+    userSessions.delete(userId)
 
-        userSessions.delete(userId)
+    return client.replyMessage(replyToken, {
+      type: "text",
+      text: result
+    })
+  }
 
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: result
-        })
-
-      }
-
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text:
-`🔮 อาจารย์ Ener
+  return client.replyMessage(replyToken, {
+    type: "text",
+    text: `🔮 อาจารย์ Ener
+```
 
 ส่งภาพ
 
@@ -229,139 +241,261 @@ async function handleEvent(event) {
 คริสตัล
 
 เพื่อให้อาจารย์อ่านพลัง`
-      })
+})
+}
 
-    }
+```
+// -------------------------
+// IMAGE MESSAGE
+// -------------------------
 
-    // -------------------------
-    // IMAGE
-    // -------------------------
+if (event.message.type === "image") {
 
-    if (event.message.type === "image") {
+  const imageId = event.message.id
 
-      const imageId = event.message.id
+  const buffer = await downloadLineImage(imageId)
 
-      const buffer = await downloadLineImage(imageId)
+  const tempPath = path.join(process.cwd(), `tmp-${imageId}.jpg`)
 
-      const tempPath = path.join(process.cwd(), `tmp-${imageId}.jpg`)
+  fs.writeFileSync(tempPath, buffer)
 
-      fs.writeFileSync(tempPath, buffer)
+  const hash = await imghash.hash(tempPath)
 
-      const hash = await imghash.hash(tempPath)
+  fs.unlinkSync(tempPath)
 
-      fs.unlinkSync(tempPath)
+  if (scannedHashes.has(hash)) {
 
-      if (scannedHashes.has(hash)) {
+    return client.replyMessage(replyToken, {
+      type: "text",
+      text: "⚠️ รูปนี้เคยถูกสแกนแล้ว"
+    })
+  }
 
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text: "⚠️ รูปนี้เคยถูกสแกนแล้ว"
-        })
+  const base64Image = buffer.toString("base64")
 
-      }
+  const classify = await classifyObject(base64Image)
 
-      const base64Image = buffer.toString("base64")
+  if (classify === "NOT_SUPPORTED") {
 
-      const classify = await classifyObject(base64Image)
-
-      if (classify === "NOT_SUPPORTED") {
-
-        return client.replyMessage(replyToken, {
-          type: "text",
-          text:
-`⚠️ Ener Scan รองรับเฉพาะ
+    return client.replyMessage(replyToken, {
+      type: "text",
+      text: `⚠️ Ener Scan รองรับเฉพาะ
+```
 
 พระเครื่อง
 เครื่องราง
 คริสตัล`
-        })
+})
+}
 
-      }
+```
+  const scanId = crypto.randomUUID()
 
-      const scanId = crypto.randomUUID()
+  scannedHashes.add(hash)
 
-      scannedHashes.add(hash)
+  userSessions.set(userId, {
 
-      userSessions.set(userId, {
+    scanId,
+    step: "WAIT_BIRTHDATE",
+    base64Image,
+    hash,
+    objectTypeHint: classify
+  })
 
-        scanId,
-        step: "WAIT_BIRTHDATE",
-        base64Image,
-        hash,
-        objectTypeHint: classify
-
-      })
-
-      return client.replyMessage(replyToken, {
-        type: "text",
-        text:
-`🔮 อาจารย์ Ener
+  return client.replyMessage(replyToken, {
+    type: "text",
+    text: `🔮 อาจารย์ Ener
+```
 
 รับรูปแล้ว
 
 ต่อไปขอวันเกิดเจ้าของวัตถุ`
-      })
-
-    }
-
-  } catch (err) {
-
-    console.error("handleEvent error:", err)
-
-  }
-
-  return null
+})
 }
 
+} catch (err) {
+
+```
+console.error("handleEvent error:", err)
+```
+
+}
+
+return null
+}
+
+// -------------------------
+// HELPERS
 // -------------------------
 
 function getUserId(event) {
 
-  return (
-    event?.source?.userId ||
-    event?.source?.groupId ||
-    event?.source?.roomId ||
-    "unknown"
-  )
-
+return (
+event?.source?.userId ||
+event?.source?.groupId ||
+event?.source?.roomId ||
+"unknown"
+)
 }
 
 function normalizeBirthdate(text) {
 
-  const clean = text.replace(/[^\d]/g, "")
+const clean = text.replace(/[^\d]/g, "")
 
-  if (clean.length === 8) {
+if (clean.length === 8) {
 
-    const day = clean.substring(0,2)
-    const month = clean.substring(2,4)
-    const year = clean.substring(4)
+```
+const day = clean.substring(0,2)
+const month = clean.substring(2,4)
+const year = clean.substring(4)
 
-    return `${year}-${month}-${day}`
+return `${year}-${month}-${day}`
+```
 
-  }
-
-  return null
 }
 
+return null
+}
+
+// -------------------------
+// DOWNLOAD IMAGE
 // -------------------------
 
 async function downloadLineImage(messageId) {
 
-  const stream = await client.getMessageContent(messageId)
+const stream = await client.getMessageContent(messageId)
 
-  const chunks = []
+const chunks = []
 
-  for await (const chunk of stream) {
-    chunks.push(chunk)
-  }
-
-  return Buffer.concat(chunks)
+for await (const chunk of stream) {
+chunks.push(chunk)
 }
 
+return Buffer.concat(chunks)
+}
+
+// -------------------------
+// CLASSIFY OBJECT
+// -------------------------
+
+async function classifyObject(base64Image) {
+
+const completion = await openai.chat.completions.create({
+
+```
+model: "gpt-4o-mini",
+
+messages: [
+
+  {
+    role: "system",
+    content: `ตรวจว่าวัตถุเป็น
+```
+
+คริสตัล
+พระเครื่อง
+เครื่องราง
+
+ตอบ
+
+SUPPORTED: <ประเภท>
+
+หรือ
+
+NOT_SUPPORTED`
+},
+
+```
+  {
+    role: "user",
+    content: [
+
+      { type: "text", text: "วัตถุในภาพคืออะไร" },
+
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:image/jpeg;base64,${base64Image}`
+        }
+      }
+
+    ]
+  }
+]
+```
+
+})
+
+const raw = String(
+completion?.choices?.[0]?.message?.content || ""
+).trim()
+
+if (raw.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
+
+if (raw.includes("SUPPORTED")) {
+return raw.replace("SUPPORTED:", "").trim()
+}
+
+return "NOT_SUPPORTED"
+}
+
+// -------------------------
+// DEEP SCAN
+// -------------------------
+
+async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint, rank }) {
+
+const completion = await openai.chat.completions.create({
+
+```
+model: "gpt-4o-mini",
+temperature: 0.7,
+
+messages: [
+
+  {
+    role: "system",
+    content: deepScanSystemPrompt
+  },
+
+  {
+    role: "user",
+    content: [
+
+      {
+        type: "text",
+        text: `วันเกิดเจ้าของ ${birthdate}
+```
+
+ประเภทวัตถุ ${objectTypeHint}
+ระดับพลัง ${rank}`
+},
+
+```
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:image/jpeg;base64,${base64Image}`
+        }
+      }
+
+    ]
+  }
+]
+```
+
+})
+
+return completion?.choices?.[0]?.message?.content ||
+"อาจารย์ Ener ไม่สามารถอ่านพลังได้"
+}
+
+// -------------------------
+// SERVER
 // -------------------------
 
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log("Ener Scan server running on port", PORT)
+console.log("Ener Scan server running on port", PORT)
 })
