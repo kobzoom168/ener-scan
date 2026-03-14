@@ -11,9 +11,7 @@ import { deepScanSystemPrompt } from "../prompts/deepScan.prompt.js"
 
 dotenv.config()
 
-// -------------------------
 // ENV CHECK
-// -------------------------
 
 if (!process.env.OPENAI_API_KEY) {
 throw new Error("OPENAI_API_KEY missing")
@@ -27,13 +25,9 @@ if (!process.env.CHANNEL_SECRET) {
 throw new Error("CHANNEL_SECRET missing")
 }
 
-// -------------------------
-
 const app = express()
 
-// -------------------------
 // LINE CONFIG
-// -------------------------
 
 const config = {
 channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN,
@@ -42,25 +36,19 @@ channelSecret: process.env.CHANNEL_SECRET
 
 const client = new line.Client(config)
 
-// -------------------------
 // OPENAI
-// -------------------------
 
 const openai = new OpenAI({
 apiKey: process.env.OPENAI_API_KEY
 })
 
-// -------------------------
-// MEMORY (MVP)
-// -------------------------
+// MEMORY
 
 const scannedHashes = new Set()
 const userSessions = new Map()
 const userRateLimit = new Map()
 
-// -------------------------
 // HEALTH
-// -------------------------
 
 app.get("/", (req, res) => {
 res.send("Ener Scan API running")
@@ -70,9 +58,7 @@ app.get("/health", (req, res) => {
 res.json({ status: "ok" })
 })
 
-// -------------------------
 // RATE LIMIT
-// -------------------------
 
 function isRateLimited(userId) {
 
@@ -94,9 +80,7 @@ record.count++
 return record.count > 5
 }
 
-// -------------------------
-// ENER RANK SYSTEM
-// -------------------------
+// ENER RANK
 
 function generateEnerRank() {
 
@@ -110,9 +94,7 @@ if (rand < 0.98) return "พลังโบราณ"
 return "พลังตำนาน"
 }
 
-// -------------------------
-// TIMEOUT GUARD
-// -------------------------
+// TIMEOUT
 
 async function withTimeout(promise, ms = 15000) {
 
@@ -123,9 +105,7 @@ setTimeout(() => reject(new Error("Timeout")), ms)
 return Promise.race([promise, timeout])
 }
 
-// -------------------------
 // WEBHOOK
-// -------------------------
 
 async function lineWebhookHandler(req, res) {
 
@@ -151,15 +131,9 @@ res.status(500).end()
 }
 }
 
-// -------------------------
-// ROUTE
-// -------------------------
-
 app.post("/webhook/line", line.middleware(config), lineWebhookHandler)
 
-// -------------------------
 // MAIN HANDLER
-// -------------------------
 
 async function handleEvent(event) {
 
@@ -180,10 +154,6 @@ if (isRateLimited(userId)) {
   })
 }
 
-// -------------------------
-// TEXT MESSAGE
-// -------------------------
-
 if (event.message.type === "text") {
 
   const text = (event.message.text || "").trim()
@@ -196,19 +166,10 @@ if (event.message.type === "text") {
 
       return client.replyMessage(replyToken, {
         type: "text",
-        text: `🔮 อาจารย์ Ener
-```
+        text: "🔮 อาจารย์ Ener\n\nรับรูปแล้ว\n\nกรุณาส่งวันเกิดเจ้าของวัตถุ\n\nตัวอย่าง\n19/08/1985"
+      })
+    }
 
-รับรูปแล้ว
-
-กรุณาส่งวันเกิดเจ้าของวัตถุ
-
-ตัวอย่าง
-19/08/1985`
-})
-}
-
-```
     const rank = generateEnerRank()
 
     const result = await withTimeout(
@@ -231,23 +192,9 @@ if (event.message.type === "text") {
 
   return client.replyMessage(replyToken, {
     type: "text",
-    text: `🔮 อาจารย์ Ener
-```
-
-ส่งภาพ
-
-พระเครื่อง
-เครื่องราง
-คริสตัล
-
-เพื่อให้อาจารย์อ่านพลัง`
-})
+    text: "🔮 อาจารย์ Ener\n\nส่งภาพ\n\nพระเครื่อง\nเครื่องราง\nคริสตัล\n\nเพื่อให้อาจารย์อ่านพลัง"
+  })
 }
-
-```
-// -------------------------
-// IMAGE MESSAGE
-// -------------------------
 
 if (event.message.type === "image") {
 
@@ -279,16 +226,10 @@ if (event.message.type === "image") {
 
     return client.replyMessage(replyToken, {
       type: "text",
-      text: `⚠️ Ener Scan รองรับเฉพาะ
-```
+      text: "⚠️ Ener Scan รองรับเฉพาะ\n\nพระเครื่อง\nเครื่องราง\nคริสตัล"
+    })
+  }
 
-พระเครื่อง
-เครื่องราง
-คริสตัล`
-})
-}
-
-```
   const scanId = crypto.randomUUID()
 
   scannedHashes.add(hash)
@@ -304,14 +245,10 @@ if (event.message.type === "image") {
 
   return client.replyMessage(replyToken, {
     type: "text",
-    text: `🔮 อาจารย์ Ener
-```
-
-รับรูปแล้ว
-
-ต่อไปขอวันเกิดเจ้าของวัตถุ`
-})
+    text: "🔮 อาจารย์ Ener\n\nรับรูปแล้ว\n\nต่อไปขอวันเกิดเจ้าของวัตถุ"
+  })
 }
+```
 
 } catch (err) {
 
@@ -324,9 +261,7 @@ console.error("handleEvent error:", err)
 return null
 }
 
-// -------------------------
 // HELPERS
-// -------------------------
 
 function getUserId(event) {
 
@@ -357,9 +292,7 @@ return `${year}-${month}-${day}`
 return null
 }
 
-// -------------------------
 // DOWNLOAD IMAGE
-// -------------------------
 
 async function downloadLineImage(messageId) {
 
@@ -374,83 +307,69 @@ chunks.push(chunk)
 return Buffer.concat(chunks)
 }
 
-// -------------------------
 // CLASSIFY OBJECT
-// -------------------------
+
 async function classifyObject(base64Image) {
 
-  try {
+try {
 
-    const completion = await openai.chat.completions.create({
+```
+const completion = await openai.chat.completions.create({
 
-      model: "gpt-4o-mini",
+  model: "gpt-4o-mini",
 
-      messages: [
+  messages: [
 
-        {
-          role: "system",
-          content: `ตรวจว่าวัตถุในภาพว่าเป็นประเภทอะไร
+    {
+      role: "system",
+      content: "ตรวจว่าวัตถุในภาพเป็นประเภทอะไร (พระเครื่อง เครื่องราง คริสตัล) ถ้าใช่ให้ตอบ SUPPORTED: <ประเภท> ถ้าไม่ใช่ให้ตอบ NOT_SUPPORTED"
+    },
 
-ตอบได้แค่
+    {
+      role: "user",
+      content: [
 
-SUPPORTED: พระเครื่อง
-SUPPORTED: เครื่องราง
-SUPPORTED: คริสตัล
-
-หรือ
-
-NOT_SUPPORTED`
-        },
+        { type: "text", text: "วัตถุในภาพคืออะไร" },
 
         {
-          role: "user",
-          content: [
-
-            {
-              type: "text",
-              text: "วัตถุในภาพคืออะไร"
-            },
-
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/jpeg;base64,${base64Image}`
-              }
-            }
-
-          ]
+          type: "image_url",
+          image_url: {
+            url: `data:image/jpeg;base64,${base64Image}`
+          }
         }
 
       ]
-
-    })
-
-    const raw = String(
-      completion?.choices?.[0]?.message?.content || ""
-    ).trim()
-
-    if (raw.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
-
-    if (raw.includes("SUPPORTED")) {
-
-      return raw.replace("SUPPORTED:", "").trim()
-
     }
 
-    return "NOT_SUPPORTED"
+  ]
 
-  } catch (err) {
+})
 
-    console.error("classifyObject error:", err)
+const raw = String(
+  completion?.choices?.[0]?.message?.content || ""
+).trim()
 
-    return "NOT_SUPPORTED"
+if (raw.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
 
-  }
+if (raw.includes("SUPPORTED")) {
+  return raw.replace("SUPPORTED:", "").trim()
 }
 
-// -------------------------
+return "NOT_SUPPORTED"
+```
+
+} catch (err) {
+
+```
+console.error("classifyObject error:", err)
+
+return "NOT_SUPPORTED"
+```
+
+}
+}
+
 // DEEP SCAN
-// -------------------------
 
 async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint, rank }) {
 
@@ -499,9 +418,7 @@ return completion?.choices?.[0]?.message?.content ||
 "อาจารย์ Ener ไม่สามารถอ่านพลังได้"
 }
 
-// -------------------------
 // SERVER
-// -------------------------
 
 const PORT = process.env.PORT || 3000
 
