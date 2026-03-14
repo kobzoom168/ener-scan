@@ -377,66 +377,75 @@ return Buffer.concat(chunks)
 // -------------------------
 // CLASSIFY OBJECT
 // -------------------------
-
 async function classifyObject(base64Image) {
 
-const completion = await openai.chat.completions.create({
+  try {
 
-```
-model: "gpt-4o-mini",
+    const completion = await openai.chat.completions.create({
 
-messages: [
+      model: "gpt-4o-mini",
 
-  {
-    role: "system",
-    content: `ตรวจว่าวัตถุเป็น
-```
+      messages: [
 
-คริสตัล
-พระเครื่อง
-เครื่องราง
+        {
+          role: "system",
+          content: `ตรวจว่าวัตถุในภาพว่าเป็นประเภทอะไร
 
-ตอบ
+ตอบได้แค่
 
-SUPPORTED: <ประเภท>
+SUPPORTED: พระเครื่อง
+SUPPORTED: เครื่องราง
+SUPPORTED: คริสตัล
 
 หรือ
 
 NOT_SUPPORTED`
-},
+        },
 
-```
-  {
-    role: "user",
-    content: [
+        {
+          role: "user",
+          content: [
 
-      { type: "text", text: "วัตถุในภาพคืออะไร" },
+            {
+              type: "text",
+              text: "วัตถุในภาพคืออะไร"
+            },
 
-      {
-        type: "image_url",
-        image_url: {
-          url: `data:image/jpeg;base64,${base64Image}`
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`
+              }
+            }
+
+          ]
         }
-      }
 
-    ]
+      ]
+
+    })
+
+    const raw = String(
+      completion?.choices?.[0]?.message?.content || ""
+    ).trim()
+
+    if (raw.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
+
+    if (raw.includes("SUPPORTED")) {
+
+      return raw.replace("SUPPORTED:", "").trim()
+
+    }
+
+    return "NOT_SUPPORTED"
+
+  } catch (err) {
+
+    console.error("classifyObject error:", err)
+
+    return "NOT_SUPPORTED"
+
   }
-]
-```
-
-})
-
-const raw = String(
-completion?.choices?.[0]?.message?.content || ""
-).trim()
-
-if (raw.includes("NOT_SUPPORTED")) return "NOT_SUPPORTED"
-
-if (raw.includes("SUPPORTED")) {
-return raw.replace("SUPPORTED:", "").trim()
-}
-
-return "NOT_SUPPORTED"
 }
 
 // -------------------------
