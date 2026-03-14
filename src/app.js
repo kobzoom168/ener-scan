@@ -9,7 +9,7 @@ import path from "path"
 dotenv.config()
 
 const app = express()
-app.use(express.json())
+
 
 // -------------------------
 // LINE CONFIG
@@ -44,6 +44,10 @@ const userRateLimit = new Map()
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" })
+})
+
+app.get("/", (req,res)=>{
+  res.send("Ener Scan API running")
 })
 
 // -------------------------
@@ -470,6 +474,6 @@ async function analyzeDeepScan({ base64Image, birthdate, objectTypeHint }) {
 const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log("Ener Scan v2 running on port " + PORT)
+  
 })
 
