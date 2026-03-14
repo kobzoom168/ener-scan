@@ -5,7 +5,7 @@ import OpenAI from "openai"
 import imghash from "imghash"
 import fs from "fs"
 import path from "path"
-import deepScanPrompt from "../prompts/deepScan.prompt.js"
+import { deepScanSystemPrompt } from "../prompts/deepScan.prompt.js"
 
 dotenv.config()
 
