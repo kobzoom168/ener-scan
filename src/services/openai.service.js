@@ -21,42 +21,66 @@ export async function generateScanText({
 ${retryHint ? `\nเงื่อนไขเพิ่ม: ${retryHint}` : ""}
 `;
 
-  console.log("generateScanText called");
-  console.log("birthdate:", birthdate);
-  console.log("retryHint:", retryHint || "none");
-  console.log("imageBase64 exists:", Boolean(imageBase64));
+  console.log("[OPENAI] generateScanText called");
+  console.log("[OPENAI] birthdate:", birthdate);
+  console.log("[OPENAI] retryHint:", retryHint || "none");
+  console.log("[OPENAI] imageBase64 exists:", Boolean(imageBase64));
 
-  const response = await openai.responses.create({
-    model: "gpt-4.1-mini",
-    temperature: 0.8,
-    input: [
-      {
-        role: "system",
-        content: [
-          {
-            type: "input_text",
-            text: deepScanSystemPrompt,
-          },
-        ],
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: userPrompt,
-          },
-          {
-            type: "input_image",
-            image_url: `data:image/jpeg;base64,${imageBase64}`,
-          },
-        ],
-      },
-    ],
-  });
+  const startedAt = Date.now();
+  console.log("[OPENAI_TIMING] startedAt:", startedAt);
 
-  const outputText = (response.output_text || "").trim();
-  console.log("openai output length:", outputText.length);
+  try {
+    const response = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      temperature: 0.8,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: deepScanSystemPrompt,
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: userPrompt,
+            },
+            {
+              type: "input_image",
+              image_url: `data:image/jpeg;base64,${imageBase64}`,
+            },
+          ],
+        },
+      ],
+    });
 
-  return outputText;
+    const endedAt = Date.now();
+    const elapsedMs = endedAt - startedAt;
+    const elapsedSec = (elapsedMs / 1000).toFixed(2);
+
+    const outputText = (response.output_text || "").trim();
+
+    console.log("[OPENAI] output length:", outputText.length);
+    console.log("[OPENAI_TIMING] endedAt:", endedAt);
+    console.log("[OPENAI_TIMING] elapsedMs:", elapsedMs);
+    console.log("[OPENAI_TIMING] elapsedSec:", elapsedSec);
+
+    return outputText;
+  } catch (error) {
+    const endedAt = Date.now();
+    const elapsedMs = endedAt - startedAt;
+    const elapsedSec = (elapsedMs / 1000).toFixed(2);
+
+    console.error("[OPENAI] request failed:", error?.message || error);
+    console.error("[OPENAI_TIMING] failedAt:", endedAt);
+    console.error("[OPENAI_TIMING] elapsedMs_before_fail:", elapsedMs);
+    console.error("[OPENAI_TIMING] elapsedSec_before_fail:", elapsedSec);
+
+    throw error;
+  }
 }
