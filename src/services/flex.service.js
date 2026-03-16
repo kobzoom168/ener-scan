@@ -61,9 +61,7 @@ function safeWrapText(text, maxLength = 300) {
 }
 
 function stripBullet(text) {
-  return String(text || "")
-    .replace(/^•\s*/, "")
-    .trim();
+  return String(text || "").replace(/^•\s*/, "").trim();
 }
 
 function normalizeScore(scoreText) {
@@ -139,22 +137,84 @@ function createChip(text) {
   return {
     type: "box",
     layout: "vertical",
-    paddingTop: "6px",
-    paddingBottom: "6px",
+    paddingTop: "5px",
+    paddingBottom: "5px",
     paddingStart: "10px",
     paddingEnd: "10px",
-    backgroundColor: "#262626",
+    backgroundColor: "#232323",
     cornerRadius: "999px",
+    borderColor: "#3A3426",
+    borderWidth: "1px",
     contents: [
       {
         type: "text",
-        text: safeWrapText(text, 52),
+        text: safeWrapText(text, 24),
         size: "xs",
-        color: "#EAEAEA",
-        wrap: true,
+        color: "#F2F2F2",
+        wrap: false,
       },
     ],
   };
+}
+
+function splitToneToChips(tone) {
+  const clean = stripBullet(tone);
+  if (!clean || clean === "-") return [];
+
+  const parts = clean
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) return [];
+
+  const chips = [];
+  const toneColor = parts[0];
+  const archetype = parts[1];
+
+  if (toneColor) {
+    chips.push(`โทน${toneColor}`);
+  }
+
+  if (archetype) {
+    chips.push(archetype);
+  }
+
+  return chips;
+}
+
+function mapHiddenToChip(hidden) {
+  const clean = stripBullet(hidden);
+  if (!clean || clean === "-" || clean === "ไม่เด่นชัด") return null;
+
+  if (clean.includes("เมตตา")) return "เมตตาแฝง";
+  if (clean.includes("ปกป้อง")) return "เกราะพลัง";
+  if (clean.includes("อำนาจ")) return "อำนาจแฝง";
+  if (clean.includes("โชค")) return "โชคแฝง";
+  if (clean.includes("ดึงดูด")) return "แรงดึงดูด";
+  if (clean.includes("สิ่งศักดิ์สิทธิ์")) return "แรงศักดิ์สิทธิ์";
+  if (clean.includes("บางเบา")) return "พลังรอง";
+  if (clean.includes("แฝง")) return "พลังแฝง";
+
+  return safeWrapText(clean, 18);
+}
+
+function buildEnergyChips({ personality, tone, hidden }) {
+  const chips = [];
+  const personalityText = stripBullet(personality);
+
+  if (personalityText && personalityText !== "-") {
+    chips.push(personalityText);
+  }
+
+  chips.push(...splitToneToChips(tone));
+
+  const hiddenChip = mapHiddenToChip(hidden);
+  if (hiddenChip) {
+    chips.push(hiddenChip);
+  }
+
+  return chips.slice(0, 4);
 }
 
 function createSectionCard(title, body, backgroundColor, maxLength = 120) {
@@ -220,20 +280,7 @@ function buildSummaryBubble({
   tone,
   hidden,
 }) {
-  const chips = [
-    createChip(stripBullet(personality) || "พลังนิ่ง"),
-    createChip(
-      stripBullet(tone)
-        .replace(/^ขาว\s*\|\s*/g, "โทนขาว | ")
-        .replace(/^ดำ\s*\|\s*/g, "โทนดำ | ")
-        .replace(/^ทอง\s*\|\s*/g, "โทนทอง | ")
-        || "โทนพลังเฉพาะทาง"
-    ),
-  ];
-
-  if (hidden && hidden !== "-") {
-    chips.push(createChip(stripBullet(hidden)));
-  }
+  const chipLabels = buildEnergyChips({ personality, tone, hidden });
 
   return {
     type: "bubble",
@@ -358,9 +405,10 @@ function buildSummaryBubble({
             },
             {
               type: "box",
-              layout: "vertical",
+              layout: "horizontal",
               spacing: "sm",
-              contents: chips,
+              flexWrap: "wrap",
+              contents: chipLabels.map((label) => createChip(label)),
             },
           ],
         },
@@ -379,6 +427,7 @@ function buildReadingBubble({
   suitable,
   notStrong,
   closing,
+  accentColor,
 }) {
   const suitableLines =
     suitable.length > 0
@@ -489,12 +538,22 @@ function buildReadingBubble({
       type: "box",
       layout: "vertical",
       paddingAll: "16px",
+      spacing: "sm",
       backgroundColor: "#141414",
       contents: [
         {
+          type: "text",
+          text: "ถ้าสงสัยว่ามีอีกชิ้นแรงกว่า ลองเทียบต่อได้",
+          size: "xs",
+          align: "center",
+          color: "#AFAFAF",
+          wrap: true,
+        },
+        {
           type: "button",
-          style: "secondary",
-          color: "#2A2A2A",
+          style: "primary",
+          height: "sm",
+          color: accentColor,
           action: {
             type: "message",
             label: "ส่งชิ้นถัดไป",
@@ -552,6 +611,7 @@ export function buildScanFlex(rawText) {
           suitable,
           notStrong,
           closing,
+          accentColor,
         }),
       ],
     },
