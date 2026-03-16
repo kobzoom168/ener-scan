@@ -1,5 +1,5 @@
 export function normalizeWhitespace(text) {
-  return text
+  return String(text || "")
     .replace(/\r/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n[ \t]+/g, "\n")

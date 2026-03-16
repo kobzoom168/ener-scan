@@ -7,7 +7,7 @@ const bannedPhrases = [
 ];
 
 function tokenize(text) {
-  return text
+  return String(text || "")
     .toLowerCase()
     .replace(/[^\u0E00-\u0E7Fa-z0-9\s]/gi, " ")
     .split(/\s+/)

@@ -20,6 +20,11 @@ export async function generateScanText({
 ${retryHint ? `\nเงื่อนไขเพิ่ม: ${retryHint}` : ""}
 `;
 
+  console.log("generateScanText called");
+  console.log("birthdate:", birthdate);
+  console.log("retryHint:", retryHint || "none");
+  console.log("imageBase64 exists:", Boolean(imageBase64));
+
   const response = await openai.responses.create({
     model: "gpt-4.1-mini",
     temperature: 0.6,
@@ -49,5 +54,8 @@ ${retryHint ? `\nเงื่อนไขเพิ่ม: ${retryHint}` : ""}
     ],
   });
 
-  return (response.output_text || "").trim();
+  const outputText = (response.output_text || "").trim();
+  console.log("openai output length:", outputText.length);
+
+  return outputText;
 }

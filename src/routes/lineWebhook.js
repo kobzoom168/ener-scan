@@ -23,49 +23,86 @@ export function lineWebhookRouter(lineConfig) {
     try {
       const events = Array.isArray(req.body.events) ? req.body.events : [];
 
+      console.log("========== LINE WEBHOOK ==========");
+      console.log("event count:", events.length);
+      console.log("raw body:", JSON.stringify(req.body, null, 2));
+
       await Promise.all(
-        events.map(async (event) => {
+        events.map(async (event, index) => {
           try {
+            console.log(`\n----- handling event #${index + 1} -----`);
+            console.log("event.type:", event.type);
+            console.log("replyToken exists:", Boolean(event.replyToken));
+            console.log("userId:", event.source?.userId || "no-user-id");
+            console.log("message.type:", event.message?.type || "no-message-type");
+            console.log("timestamp:", event.timestamp || "no-timestamp");
+
             await handleEvent({ client, event });
+
+            console.log(`event #${index + 1} handled successfully`);
           } catch (error) {
-            console.error("handleEvent error:", error);
+            console.error(`handleEvent error on event #${index + 1}:`, error);
 
             if (event.replyToken) {
-              await replyText(
-                client,
-                event.replyToken,
-                "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ"
-              );
+              try {
+                await replyText(
+                  client,
+                  event.replyToken,
+                  "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ"
+                );
+                console.log("fallback reply sent");
+              } catch (replyError) {
+                console.error("fallback reply failed:", replyError);
+              }
             }
           }
         })
       );
 
+      console.log("webhook response: 200");
       res.status(200).json({ ok: true });
     } catch (error) {
-      console.error("webhook error:", error);
+      console.error("webhook fatal error:", error);
       res.status(500).json({ error: "webhook_failed" });
     }
   };
 }
 
 async function handleEvent({ client, event }) {
-  if (event.type !== "message") return;
-  if (!event.replyToken) return;
+  if (event.type !== "message") {
+    console.log("skip: event is not message");
+    return;
+  }
+
+  if (!event.replyToken) {
+    console.log("skip: no reply token");
+    return;
+  }
 
   const userId = event.source?.userId;
   if (!userId) {
+    console.log("stop: no userId");
     await replyText(client, event.replyToken, "ไม่พบข้อมูลผู้ใช้ครับ");
     return;
   }
 
   const session = getSession(userId);
+  console.log("current session:", {
+    hasPendingImage: Boolean(session.pendingImage),
+    birthdate: session.birthdate || null,
+  });
 
   if (event.message.type === "image") {
+    console.log("step: received image");
+
     const imageBuffer = await getImageBufferFromLineMessage(client, event.message.id);
+    console.log("image buffer size:", imageBuffer.length);
 
     const isDuplicate = await isDuplicateImage(imageBuffer);
+    console.log("is duplicate image:", isDuplicate);
+
     if (isDuplicate) {
+      console.log("reply: duplicate image warning");
       await replyText(
         client,
         event.replyToken,
@@ -79,6 +116,9 @@ async function handleEvent({ client, event }) {
       imageBuffer,
     });
 
+    console.log("session updated: pendingImage set");
+    console.log("reply: ask for birthdate");
+
     await replyText(
       client,
       event.replyToken,
@@ -89,8 +129,11 @@ async function handleEvent({ client, event }) {
 
   if (event.message.type === "text") {
     const text = event.message.text?.trim() || "";
+    console.log("step: received text");
+    console.log("text:", text);
 
     if (!session.pendingImage) {
+      console.log("reply: no pending image in session");
       await replyText(
         client,
         event.replyToken,
@@ -100,6 +143,7 @@ async function handleEvent({ client, event }) {
     }
 
     if (!isValidBirthdate(text)) {
+      console.log("reply: invalid birthdate format");
       await replyText(
         client,
         event.replyToken,
@@ -109,14 +153,24 @@ async function handleEvent({ client, event }) {
     }
 
     setBirthdate(userId, text);
+    console.log("session updated: birthdate set");
 
+    console.log("step: running deep scan...");
     const resultText = await runDeepScan({
       imageBuffer: session.pendingImage.imageBuffer,
       birthdate: text,
       userId,
     });
 
+    console.log("scan result length:", resultText.length);
+    console.log("reply: sending final scan result");
+
     await replyText(client, event.replyToken, resultText);
+
     clearSession(userId);
+    console.log("session cleared");
+    return;
   }
+
+  console.log("skip: unsupported message type");
 }
