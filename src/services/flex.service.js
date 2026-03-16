@@ -104,7 +104,9 @@ export function buildScanFlex(rawText) {
   } = parseScanText(rawText);
 
   const suitableLines =
-    suitable.length > 0 ? suitable : ["• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
+    suitable.length > 0
+      ? suitable
+      : ["• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
 
   return {
     type: "flex",
@@ -226,7 +228,7 @@ export function buildScanFlex(rawText) {
               },
               {
                 type: "text",
-                text: safeWrapText(overview, 420),
+                text: safeWrapText(overview, 280),
                 size: "sm",
                 color: "#E0E0E0",
                 wrap: true,
@@ -248,7 +250,7 @@ export function buildScanFlex(rawText) {
               },
               ...suitableLines.map((line) => ({
                 type: "text",
-                text: safeWrapText(line, 160),
+                text: safeWrapText(line, 140),
                 size: "sm",
                 color: "#E0E0E0",
                 wrap: true,
@@ -270,7 +272,7 @@ export function buildScanFlex(rawText) {
               },
               {
                 type: "text",
-                text: safeWrapText(notStrong, 220),
+                text: safeWrapText(notStrong, 120),
                 size: "sm",
                 color: "#E0E0E0",
                 wrap: true,
@@ -287,7 +289,7 @@ export function buildScanFlex(rawText) {
             contents: [
               {
                 type: "text",
-                text: safeWrapText(closing, 180),
+                text: safeWrapText(closing, 90),
                 size: "sm",
                 color: "#FFFFFF",
                 wrap: true,
