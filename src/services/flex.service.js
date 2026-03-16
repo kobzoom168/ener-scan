@@ -131,56 +131,9 @@ function createMetricCard(label, value) {
   };
 }
 
-function createChip(text) {
-  return {
-    type: "box",
-    layout: "vertical",
-    paddingTop: "5px",
-    paddingBottom: "5px",
-    paddingStart: "10px",
-    paddingEnd: "10px",
-    backgroundColor: "#232323",
-    cornerRadius: "999px",
-    borderColor: "#3A3426",
-    borderWidth: "1px",
-    flex: 1,
-    contents: [
-      {
-        type: "text",
-        text: safeWrapText(text, 24),
-        size: "xs",
-        color: "#F2F2F2",
-        wrap: false,
-        align: "center",
-      },
-    ],
-  };
-}
-
-function splitToneToChips(tone) {
-  const clean = stripBullet(tone);
-  if (!clean || clean === "-") return [];
-
-  const parts = clean
-    .split("|")
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  if (parts.length === 0) return [];
-
-  const chips = [];
-  const toneColor = parts[0];
-  const archetype = parts[1];
-
-  if (toneColor) chips.push(`โทน${toneColor}`);
-  if (archetype) chips.push(archetype);
-
-  return chips;
-}
-
-function mapHiddenToChip(hidden) {
+function mapHiddenToShortText(hidden) {
   const clean = stripBullet(hidden);
-  if (!clean || clean === "-" || clean === "ไม่เด่นชัด") return null;
+  if (!clean || clean === "-" || clean === "ไม่เด่นชัด") return "-";
 
   if (clean.includes("เมตตา")) return "เมตตาแฝง";
   if (clean.includes("ปกป้อง")) return "เกราะพลัง";
@@ -191,52 +144,62 @@ function mapHiddenToChip(hidden) {
   if (clean.includes("บางเบา")) return "พลังรอง";
   if (clean.includes("แฝง")) return "พลังแฝง";
 
-  return safeWrapText(clean, 18);
+  return safeWrapText(clean, 28);
 }
 
-function buildEnergyChips({ personality, tone, hidden }) {
-  const chips = [];
+function formatToneLine(tone) {
+  const clean = stripBullet(tone);
+  if (!clean || clean === "-") return "-";
+
+  const parts = clean
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) return clean;
+  if (parts.length === 1) return `โทน${parts[0]}`;
+
+  return `โทน${parts[0]} | ${parts[1]}`;
+}
+
+function buildEnergyLines({ personality, tone, hidden }) {
+  const lines = [];
+
   const personalityText = stripBullet(personality);
-
   if (personalityText && personalityText !== "-") {
-    chips.push(personalityText);
+    lines.push(personalityText);
   }
 
-  chips.push(...splitToneToChips(tone));
-
-  const hiddenChip = mapHiddenToChip(hidden);
-  if (hiddenChip) {
-    chips.push(hiddenChip);
+  const toneText = formatToneLine(tone);
+  if (toneText && toneText !== "-") {
+    lines.push(toneText);
   }
 
-  return chips.slice(0, 4);
+  const hiddenText = mapHiddenToShortText(hidden);
+  if (hiddenText && hiddenText !== "-") {
+    lines.push(hiddenText);
+  }
+
+  return lines.slice(0, 3);
 }
 
-function buildChipRows(labels = []) {
-  const items = labels.slice(0, 4);
-  const row1 = items.slice(0, 2);
-  const row2 = items.slice(2, 4);
-  const rows = [];
-
-  if (row1.length > 0) {
-    rows.push({
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      contents: row1.map((label) => createChip(label)),
-    });
-  }
-
-  if (row2.length > 0) {
-    rows.push({
-      type: "box",
-      layout: "horizontal",
-      spacing: "sm",
-      contents: row2.map((label) => createChip(label)),
-    });
-  }
-
-  return rows;
+function createEnergyLine(text) {
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingAll: "12px",
+    backgroundColor: "#1E1E1E",
+    cornerRadius: "12px",
+    contents: [
+      {
+        type: "text",
+        text: safeWrapText(text, 40),
+        size: "sm",
+        color: "#F2F2F2",
+        wrap: true,
+      },
+    ],
+  };
 }
 
 function createSectionCard(title, body, backgroundColor, maxLength = 120) {
@@ -302,7 +265,7 @@ function buildSummaryBubble({
   tone,
   hidden,
 }) {
-  const chipLabels = buildEnergyChips({ personality, tone, hidden });
+  const energyLines = buildEnergyLines({ personality, tone, hidden });
 
   return {
     type: "bubble",
@@ -425,7 +388,7 @@ function buildSummaryBubble({
               size: "md",
               color: "#FFFFFF",
             },
-            ...buildChipRows(chipLabels),
+            ...energyLines.map((line) => createEnergyLine(line)),
           ],
         },
       ],
@@ -438,23 +401,7 @@ function buildSummaryBubble({
   };
 }
 
-function buildReadingBubble({
-  overview,
-  suitable,
-  notStrong,
-  closing,
-  accentColor,
-}) {
-  const suitableLines =
-    suitable.length > 0
-      ? suitable.slice(0, 1)
-      : ["• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
-
-  const suitableDisplay = suitableLines
-    .filter(Boolean)
-    .map((line) => `• ${stripBullet(line)}`)
-    .join("\n");
-
+function buildReadingBubble({ overview, closing }) {
   return {
     type: "bubble",
     size: "giga",
@@ -499,33 +446,13 @@ function buildReadingBubble({
               contents: [
                 {
                   type: "text",
-                  text: safeWrapText(overview, 180),
+                  text: safeWrapText(overview, 220),
                   size: "sm",
                   color: "#E0E0E0",
                   wrap: true,
                 },
               ],
             },
-          ],
-        },
-        {
-          type: "box",
-          layout: "vertical",
-          margin: "md",
-          spacing: "md",
-          contents: [
-            createSectionCard(
-              "เหมาะใช้เมื่อ",
-              suitableDisplay || "• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง",
-              "#1D221C",
-              90
-            ),
-            createSectionCard(
-              "อาจไม่เด่นเมื่อ",
-              notStrong || "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว",
-              "#221D1D",
-              70
-            ),
           ],
         },
         {
@@ -540,12 +467,79 @@ function buildReadingBubble({
               type: "text",
               text: safeWrapText(
                 closing || "ลองส่งชิ้นถัดไปเพื่อเทียบพลังได้",
-                60
+                90
               ),
               size: "sm",
               color: "#FFFFFF",
               wrap: true,
             },
+          ],
+        },
+      ],
+    },
+    styles: {
+      body: {
+        backgroundColor: "#141414",
+      },
+    },
+  };
+}
+
+function buildUsageBubble({
+  suitable,
+  notStrong,
+  accentColor,
+}) {
+  const suitableLines =
+    suitable.length > 0
+      ? suitable.slice(0, 2)
+      : ["• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
+
+  const suitableDisplay = suitableLines
+    .filter(Boolean)
+    .map((line) => `• ${stripBullet(line)}`)
+    .join("\n");
+
+  return {
+    type: "bubble",
+    size: "giga",
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "18px",
+      spacing: "md",
+      backgroundColor: "#141414",
+      contents: [
+        {
+          type: "text",
+          text: "จังหวะที่เหมาะ",
+          weight: "bold",
+          size: "lg",
+          color: "#F5F5F5",
+        },
+        {
+          type: "separator",
+          margin: "md",
+          color: "#2E2E2E",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "md",
+          spacing: "md",
+          contents: [
+            createSectionCard(
+              "เหมาะใช้เมื่อ",
+              suitableDisplay || "• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง",
+              "#1D221C",
+              130
+            ),
+            createSectionCard(
+              "อาจไม่เด่นเมื่อ",
+              notStrong || "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว",
+              "#221D1D",
+              90
+            ),
           ],
         },
       ],
@@ -613,9 +607,11 @@ export function buildScanFlex(rawText) {
         }),
         buildReadingBubble({
           overview,
+          closing,
+        }),
+        buildUsageBubble({
           suitable,
           notStrong,
-          closing,
           accentColor,
         }),
       ],
