@@ -30,12 +30,10 @@ function extractSection(lines, startTitle, stopTitles = []) {
 
   const collected = [];
 
-  for (let i = startIndex + 1; i < lines.length; i++) {
+  for (let i = startIndex + 1; i < lines.length; i += 1) {
     const line = lines[i];
-
     if (stopTitles.includes(line)) break;
     if (!line) continue;
-
     collected.push(line);
   }
 
@@ -58,6 +56,130 @@ function safeWrapText(text, maxLength = 300) {
   if (!clean) return "-";
   if (clean.length <= maxLength) return clean;
   return `${clean.slice(0, maxLength - 1).trim()}…`;
+}
+
+function stripBullet(text) {
+  return String(text || "")
+    .replace(/^•\s*/, "")
+    .trim();
+}
+
+function normalizeScore(scoreText) {
+  const raw = String(scoreText || "").trim();
+  const match = raw.match(/(\d+(?:\.\d+)?)/);
+  if (!match) {
+    return {
+      raw: raw || "-",
+      numeric: null,
+      display: raw || "-",
+      percent: "50%",
+    };
+  }
+
+  const numeric = Number(match[1]);
+  const clamped = Number.isFinite(numeric)
+    ? Math.max(0, Math.min(10, numeric))
+    : null;
+
+  const percent = clamped === null ? 50 : Math.round((clamped / 10) * 100);
+
+  return {
+    raw,
+    numeric: clamped,
+    display: match[1],
+    percent: `${percent}%`,
+  };
+}
+
+function getEnergyShortLabel(mainEnergy) {
+  const value = String(mainEnergy || "").trim();
+
+  if (value.includes("ปกป้อง")) return "พลังปกป้องเด่น";
+  if (value.includes("อำนาจ")) return "พลังอำนาจเด่น";
+  if (value.includes("โชคลาภ")) return "พลังโชคลาภเด่น";
+  if (value.includes("สมดุล")) return "พลังสมดุลเด่น";
+  if (value.includes("เมตตา")) return "พลังเมตตาเด่น";
+  if (value.includes("ดึงดูด")) return "พลังดึงดูดเด่น";
+
+  return value !== "-" ? value : "พลังเฉพาะทาง";
+}
+
+function createChip(text) {
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingTop: "6px",
+    paddingBottom: "6px",
+    paddingStart: "10px",
+    paddingEnd: "10px",
+    backgroundColor: "#262626",
+    cornerRadius: "999px",
+    contents: [
+      {
+        type: "text",
+        text: safeWrapText(text, 60),
+        size: "xs",
+        color: "#EAEAEA",
+        wrap: true,
+      },
+    ],
+  };
+}
+
+function createMetricCard(label, value) {
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingAll: "12px",
+    backgroundColor: "#1E1E1E",
+    cornerRadius: "12px",
+    flex: 1,
+    contents: [
+      {
+        type: "text",
+        text: label,
+        size: "xs",
+        color: "#9E9E9E",
+      },
+      {
+        type: "text",
+        text: safeWrapText(value, 60),
+        size: "md",
+        weight: "bold",
+        color: "#FFFFFF",
+        wrap: true,
+        margin: "sm",
+      },
+    ],
+  };
+}
+
+function createInfoCard(title, body, backgroundColor) {
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingAll: "14px",
+    backgroundColor,
+    cornerRadius: "14px",
+    flex: 1,
+    contents: [
+      {
+        type: "text",
+        text: title,
+        weight: "bold",
+        size: "sm",
+        color: "#FFFFFF",
+      },
+      {
+        type: "text",
+        text: safeWrapText(body, 120),
+        margin: "sm",
+        size: "xs",
+        color: "#DADADA",
+        wrap: true,
+      },
+    ],
+  };
 }
 
 function parseScanText(rawText) {
@@ -103,23 +225,43 @@ export function buildScanFlex(rawText) {
     closing,
   } = parseScanText(rawText);
 
+  const score = normalizeScore(energyScore);
   const suitableLines =
     suitable.length > 0
       ? suitable
       : ["• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
 
+  const suitableLine1 = suitableLines[0] || "• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง";
+  const suitableLine2 = suitableLines[1] || "";
+
+  const chips = [
+    createChip(`บุคลิก: ${stripBullet(personality) || "-"}`),
+    createChip(`โทน: ${stripBullet(tone) || "-"}`),
+  ];
+
+  if (hidden && hidden !== "-") {
+    chips.push(createChip(`พลังซ่อน: ${stripBullet(hidden)}`));
+  }
+
+  const suitableText = [suitableLine1, suitableLine2]
+    .filter(Boolean)
+    .map((line) => stripBullet(line))
+    .join("\n• ");
+
+  const suitableDisplay = suitableText ? `• ${suitableText}` : "• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง";
+
   return {
     type: "flex",
-    altText: `ผลการตรวจพลังวัตถุ: ${mainEnergy} ${energyScore}`,
+    altText: `ผลการตรวจพลังวัตถุ: ${mainEnergy} ${score.raw || energyScore}`,
     contents: {
       type: "bubble",
       size: "giga",
       body: {
         type: "box",
         layout: "vertical",
-        paddingAll: "18px",
+        paddingAll: "20px",
         spacing: "md",
-        backgroundColor: "#1F1F1F",
+        backgroundColor: "#141414",
         contents: [
           {
             type: "box",
@@ -131,50 +273,92 @@ export function buildScanFlex(rawText) {
                 text: "🔮 ผลการตรวจพลังวัตถุ",
                 weight: "bold",
                 size: "lg",
-                color: "#FFFFFF",
+                color: "#F5F5F5",
                 wrap: true,
               },
               {
                 type: "text",
                 text: "โดย อาจารย์ Ener",
                 size: "sm",
-                color: "#BDBDBD",
+                color: "#A8A8A8",
               },
             ],
           },
           {
             type: "separator",
             margin: "md",
-            color: "#3A3A3A",
+            color: "#2E2E2E",
           },
           {
             type: "box",
             layout: "vertical",
+            margin: "lg",
             spacing: "sm",
-            margin: "md",
             contents: [
               {
                 type: "text",
-                text: `ระดับพลัง: ${energyScore}`,
-                weight: "bold",
-                size: "xl",
-                color: accentColor,
-                wrap: true,
+                text: "ระดับพลัง",
+                size: "sm",
+                color: "#9E9E9E",
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                spacing: "sm",
+                contents: [
+                  {
+                    type: "text",
+                    text: score.display,
+                    weight: "bold",
+                    size: "xxl",
+                    color: accentColor,
+                    flex: 0,
+                  },
+                  {
+                    type: "text",
+                    text: "/ 10",
+                    size: "md",
+                    color: "#D0D0D0",
+                    flex: 0,
+                  },
+                ],
               },
               {
                 type: "text",
-                text: `พลังหลัก: ${mainEnergy}`,
-                size: "md",
-                color: "#FFFFFF",
+                text: getEnergyShortLabel(mainEnergy),
+                size: "sm",
+                color: "#E6E6E6",
                 wrap: true,
               },
               {
-                type: "text",
-                text: `ความสอดคล้องกับเจ้าของ: ${compatibility}`,
-                size: "md",
-                color: "#E0E0E0",
-                wrap: true,
+                type: "box",
+                layout: "vertical",
+                margin: "sm",
+                backgroundColor: "#2A2A2A",
+                cornerRadius: "8px",
+                height: "8px",
+                contents: [
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    width: score.percent,
+                    backgroundColor: accentColor,
+                    cornerRadius: "8px",
+                    height: "8px",
+                    contents: [],
+                  },
+                ],
               },
+            ],
+          },
+          {
+            type: "box",
+            layout: "horizontal",
+            margin: "lg",
+            spacing: "md",
+            contents: [
+              createMetricCard("พลังหลัก", mainEnergy),
+              createMetricCard("ความสอดคล้อง", compatibility),
             ],
           },
           {
@@ -191,25 +375,10 @@ export function buildScanFlex(rawText) {
                 color: "#FFFFFF",
               },
               {
-                type: "text",
-                text: `• บุคลิก: ${personality}`,
-                size: "sm",
-                color: "#E0E0E0",
-                wrap: true,
-              },
-              {
-                type: "text",
-                text: `• โทนพลัง: ${tone}`,
-                size: "sm",
-                color: "#E0E0E0",
-                wrap: true,
-              },
-              {
-                type: "text",
-                text: `• พลังซ่อน: ${hidden}`,
-                size: "sm",
-                color: "#E0E0E0",
-                wrap: true,
+                type: "box",
+                layout: "vertical",
+                spacing: "sm",
+                contents: chips,
               },
             ],
           },
@@ -227,80 +396,71 @@ export function buildScanFlex(rawText) {
                 color: "#FFFFFF",
               },
               {
-                type: "text",
-                text: safeWrapText(overview, 280),
-                size: "sm",
-                color: "#E0E0E0",
-                wrap: true,
+                type: "box",
+                layout: "vertical",
+                paddingAll: "14px",
+                backgroundColor: "#1B1B1B",
+                cornerRadius: "14px",
+                contents: [
+                  {
+                    type: "text",
+                    text: safeWrapText(overview, 260),
+                    size: "sm",
+                    color: "#E0E0E0",
+                    wrap: true,
+                  },
+                ],
               },
+            ],
+          },
+          {
+            type: "box",
+            layout: "horizontal",
+            margin: "lg",
+            spacing: "md",
+            contents: [
+              createInfoCard("เหมาะใช้เมื่อ", suitableDisplay, "#1D221C"),
+              createInfoCard(
+                "อาจไม่เด่นเมื่อ",
+                notStrong || "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว",
+                "#221D1D"
+              ),
             ],
           },
           {
             type: "box",
             layout: "vertical",
             margin: "lg",
-            spacing: "sm",
+            paddingAll: "14px",
+            backgroundColor: "#242424",
+            cornerRadius: "14px",
             contents: [
               {
                 type: "text",
-                text: "เหมาะใช้เมื่อ",
-                weight: "bold",
-                size: "md",
-                color: "#FFFFFF",
-              },
-              ...suitableLines.map((line) => ({
-                type: "text",
-                text: safeWrapText(line, 140),
+                text: safeWrapText(
+                  closing || "หากมีหลายชิ้น ลองส่งชิ้นถัดไปเพื่อดูพลังที่ต่างกัน",
+                  110
+                ),
                 size: "sm",
-                color: "#E0E0E0",
-                wrap: true,
-              })),
-            ],
-          },
-          {
-            type: "box",
-            layout: "vertical",
-            margin: "lg",
-            spacing: "sm",
-            contents: [
-              {
-                type: "text",
-                text: "อาจไม่เด่นเมื่อ",
-                weight: "bold",
-                size: "md",
                 color: "#FFFFFF",
-              },
-              {
-                type: "text",
-                text: safeWrapText(notStrong, 120),
-                size: "sm",
-                color: "#E0E0E0",
                 wrap: true,
               },
             ],
           },
           {
-            type: "box",
-            layout: "vertical",
+            type: "text",
+            text: "ส่งภาพชิ้นถัดไปเพื่อดูพลังเพิ่มเติมได้",
             margin: "lg",
-            paddingAll: "12px",
-            backgroundColor: "#2A2A2A",
-            cornerRadius: "12px",
-            contents: [
-              {
-                type: "text",
-                text: safeWrapText(closing, 90),
-                size: "sm",
-                color: "#FFFFFF",
-                wrap: true,
-              },
-            ],
+            size: "xs",
+            align: "center",
+            color: "#9E9E9E",
+            wrap: true,
           },
         ],
       },
       styles: {
         body: {
-          backgroundColor: "#1F1F1F",
+          backgroundColor: "#141414",
         },
       },
     },
