@@ -172,13 +172,8 @@ function splitToneToChips(tone) {
   const toneColor = parts[0];
   const archetype = parts[1];
 
-  if (toneColor) {
-    chips.push(`โทน${toneColor}`);
-  }
-
-  if (archetype) {
-    chips.push(archetype);
-  }
+  if (toneColor) chips.push(`โทน${toneColor}`);
+  if (archetype) chips.push(archetype);
 
   return chips;
 }
@@ -452,7 +447,7 @@ function buildReadingBubble({
 }) {
   const suitableLines =
     suitable.length > 0
-      ? suitable
+      ? suitable.slice(0, 1)
       : ["• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
 
   const suitableDisplay = suitableLines
@@ -466,7 +461,7 @@ function buildReadingBubble({
     body: {
       type: "box",
       layout: "vertical",
-      paddingAll: "20px",
+      paddingAll: "18px",
       spacing: "md",
       backgroundColor: "#141414",
       contents: [
@@ -485,7 +480,7 @@ function buildReadingBubble({
         {
           type: "box",
           layout: "vertical",
-          margin: "lg",
+          margin: "md",
           spacing: "sm",
           contents: [
             {
@@ -498,13 +493,13 @@ function buildReadingBubble({
             {
               type: "box",
               layout: "vertical",
-              paddingAll: "14px",
+              paddingAll: "12px",
               backgroundColor: "#1B1B1B",
               cornerRadius: "14px",
               contents: [
                 {
                   type: "text",
-                  text: safeWrapText(overview, 260),
+                  text: safeWrapText(overview, 180),
                   size: "sm",
                   color: "#E0E0E0",
                   wrap: true,
@@ -516,37 +511,36 @@ function buildReadingBubble({
         {
           type: "box",
           layout: "vertical",
-          margin: "lg",
+          margin: "md",
           spacing: "md",
           contents: [
             createSectionCard(
               "เหมาะใช้เมื่อ",
               suitableDisplay || "• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง",
               "#1D221C",
-              150
+              90
             ),
             createSectionCard(
               "อาจไม่เด่นเมื่อ",
               notStrong || "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว",
               "#221D1D",
-              120
+              70
             ),
           ],
         },
         {
           type: "box",
           layout: "vertical",
-          margin: "lg",
-          paddingAll: "14px",
+          margin: "md",
+          paddingAll: "12px",
           backgroundColor: "#242424",
           cornerRadius: "14px",
           contents: [
             {
               type: "text",
               text: safeWrapText(
-                closing ||
-                  "ชิ้นนี้มีเรื่องราวลึกกว่าที่ตาเห็น ลองส่งชิ้นถัดไปเพื่อเทียบพลังได้",
-                110
+                closing || "ลองส่งชิ้นถัดไปเพื่อเทียบพลังได้",
+                60
               ),
               size: "sm",
               color: "#FFFFFF",
@@ -559,21 +553,11 @@ function buildReadingBubble({
     footer: {
       type: "box",
       layout: "vertical",
-      paddingAll: "16px",
-      spacing: "sm",
+      paddingAll: "14px",
       contents: [
-        {
-          type: "text",
-          text: "ถ้าสงสัยว่ามีอีกชิ้นแรงกว่า ลองเทียบต่อได้",
-          size: "xs",
-          align: "center",
-          color: "#AFAFAF",
-          wrap: true,
-        },
         {
           type: "button",
           style: "primary",
-          height: "sm",
           color: accentColor,
           action: {
             type: "message",
