@@ -1,25 +1,36 @@
 export async function replyText(client, replyToken, text) {
-  console.log("replyText called");
-  console.log("replyToken exists:", Boolean(replyToken));
-  console.log("reply text length:", text?.length || 0);
+  console.log("[LINE_REPLY_TEXT] start");
+  console.log("[LINE_REPLY_TEXT] replyToken exists:", Boolean(replyToken));
+  console.log("[LINE_REPLY_TEXT] text length:", text?.length || 0);
 
   const safeText = String(text || "").slice(0, 4900);
 
-  const result = await client.replyMessage(replyToken, {
-    type: "text",
-    text: safeText,
-  });
+  try {
+    const result = await client.replyMessage(replyToken, {
+      type: "text",
+      text: safeText,
+    });
 
-  console.log("replyText success");
-  return result;
+    console.log("[LINE_REPLY_TEXT] success");
+    return result;
+  } catch (error) {
+    console.error("[LINE_REPLY_TEXT] failed:", error?.message || error);
+    throw error;
+  }
 }
 
 export async function replyFlex(client, replyToken, flexMessage) {
-  console.log("replyFlex called");
-  console.log("replyToken exists:", Boolean(replyToken));
+  console.log("[LINE_REPLY_FLEX] start");
+  console.log("[LINE_REPLY_FLEX] replyToken exists:", Boolean(replyToken));
+  console.log("[LINE_REPLY_FLEX] altText:", flexMessage?.altText || "no-altText");
 
-  const result = await client.replyMessage(replyToken, flexMessage);
+  try {
+    const result = await client.replyMessage(replyToken, flexMessage);
 
-  console.log("replyFlex success");
-  return result;
+    console.log("[LINE_REPLY_FLEX] success");
+    return result;
+  } catch (error) {
+    console.error("[LINE_REPLY_FLEX] failed:", error?.message || error);
+    throw error;
+  }
 }

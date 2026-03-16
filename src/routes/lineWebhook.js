@@ -54,9 +54,9 @@ export function lineWebhookRouter(lineConfig) {
                   event.replyToken,
                   "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ"
                 );
-                console.log("fallback reply sent");
+                console.log("[FALLBACK_ERROR_REPLY] success");
               } catch (replyError) {
-                console.error("fallback reply failed:", replyError);
+                console.error("[FALLBACK_ERROR_REPLY] failed:", replyError);
               }
             }
           }
@@ -172,14 +172,34 @@ async function handleEvent({ client, event }) {
     console.log("scan result length:", resultText.length);
     console.log("reply: sending final scan result");
 
+    let replyMode = "unknown";
+
     try {
       const flexMessage = buildScanFlex(resultText);
+      console.log("[FINAL_REPLY] trying flex...");
       await replyFlex(client, event.replyToken, flexMessage);
-      console.log("final flex reply sent");
+      replyMode = "flex_success";
+      console.log("[FINAL_REPLY] flex success");
     } catch (flexError) {
-      console.error("flex reply failed, fallback to text:", flexError);
-      await replyText(client, event.replyToken, resultText);
-      console.log("final text fallback sent");
+      console.error("[FINAL_REPLY] flex failed:", flexError?.message || flexError);
+
+      try {
+        console.log("[FINAL_REPLY] fallback to text...");
+        await replyText(client, event.replyToken, resultText);
+        replyMode = "text_fallback_success";
+        console.log("[FINAL_REPLY] text fallback success");
+      } catch (textError) {
+        replyMode = "text_fallback_failed";
+        console.error(
+          "[FINAL_REPLY] text fallback failed:",
+          textError?.message || textError
+        );
+        throw textError;
+      }
+    } finally {
+      console.log("[FINAL_REPLY] mode:", replyMode);
+      console.log("[FINAL_REPLY] userId:", userId);
+      console.log("[FINAL_REPLY] timestamp:", event.timestamp || "no-timestamp");
     }
 
     clearSession(userId);
