@@ -32,10 +32,8 @@ function extractSection(lines, startTitle, stopTitles = []) {
 
   for (let i = startIndex + 1; i < lines.length; i += 1) {
     const line = lines[i];
-
     if (stopTitles.includes(line)) break;
     if (!line) continue;
-
     collected.push(line);
   }
 
@@ -145,6 +143,7 @@ function createChip(text) {
     cornerRadius: "999px",
     borderColor: "#3A3426",
     borderWidth: "1px",
+    flex: 1,
     contents: [
       {
         type: "text",
@@ -152,6 +151,7 @@ function createChip(text) {
         size: "xs",
         color: "#F2F2F2",
         wrap: false,
+        align: "center",
       },
     ],
   };
@@ -215,6 +215,33 @@ function buildEnergyChips({ personality, tone, hidden }) {
   }
 
   return chips.slice(0, 4);
+}
+
+function buildChipRows(labels = []) {
+  const items = labels.slice(0, 4);
+  const row1 = items.slice(0, 2);
+  const row2 = items.slice(2, 4);
+  const rows = [];
+
+  if (row1.length > 0) {
+    rows.push({
+      type: "box",
+      layout: "horizontal",
+      spacing: "sm",
+      contents: row1.map((label) => createChip(label)),
+    });
+  }
+
+  if (row2.length > 0) {
+    rows.push({
+      type: "box",
+      layout: "horizontal",
+      spacing: "sm",
+      contents: row2.map((label) => createChip(label)),
+    });
+  }
+
+  return rows;
 }
 
 function createSectionCard(title, body, backgroundColor, maxLength = 120) {
@@ -403,13 +430,7 @@ function buildSummaryBubble({
               size: "md",
               color: "#FFFFFF",
             },
-            {
-              type: "box",
-              layout: "horizontal",
-              spacing: "sm",
-              flexWrap: "wrap",
-              contents: chipLabels.map((label) => createChip(label)),
-            },
+            ...buildChipRows(chipLabels),
           ],
         },
       ],
@@ -523,7 +544,8 @@ function buildReadingBubble({
             {
               type: "text",
               text: safeWrapText(
-                closing || "ชิ้นนี้มีเรื่องราวลึกกว่าที่ตาเห็น ลองส่งชิ้นถัดไปเพื่อเทียบพลังได้",
+                closing ||
+                  "ชิ้นนี้มีเรื่องราวลึกกว่าที่ตาเห็น ลองส่งชิ้นถัดไปเพื่อเทียบพลังได้",
                 110
               ),
               size: "sm",
@@ -539,7 +561,6 @@ function buildReadingBubble({
       layout: "vertical",
       paddingAll: "16px",
       spacing: "sm",
-      backgroundColor: "#141414",
       contents: [
         {
           type: "text",
