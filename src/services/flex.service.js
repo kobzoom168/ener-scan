@@ -8,86 +8,121 @@ function pickMainEnergyColor(text) {
   return "#D4AF37";
 }
 
-function extractField(text, label) {
-  const regex = new RegExp(`${label}:\\s*(.+)`);
-  const match = text.match(regex);
-  return match ? match[1].trim() : "-";
+function cleanLine(line) {
+  return String(line || "").trim();
 }
 
-function extractSection(text, sectionName, nextSections = []) {
-  const escapedSection = sectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const nextPattern = nextSections
-    .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("|");
-
-  const regex = nextPattern
-    ? new RegExp(`${escapedSection}\\n([\\s\\S]*?)(?=\\n(?:${nextPattern})\\b|$)`)
-    : new RegExp(`${escapedSection}\\n([\\s\\S]*)`);
-
-  const match = text.match(regex);
-  return match ? match[1].trim() : "";
+function getLineValue(lines, prefix) {
+  const found = lines.find((line) => line.startsWith(prefix));
+  if (!found) return "-";
+  return found.slice(prefix.length).trim() || "-";
 }
 
-function toBulletLines(text) {
-  return text
+function getBulletValue(lines, prefix) {
+  const found = lines.find((line) => line.startsWith(prefix));
+  if (!found) return "-";
+  return found.slice(prefix.length).trim() || "-";
+}
+
+function extractSection(lines, startTitle, stopTitles = []) {
+  const startIndex = lines.findIndex((line) => line === startTitle);
+  if (startIndex === -1) return "";
+
+  const collected = [];
+
+  for (let i = startIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (stopTitles.includes(line)) break;
+    if (!line) continue;
+
+    collected.push(line);
+  }
+
+  return collected.join("\n").trim();
+}
+
+function extractBulletSection(lines, startTitle, stopTitles = []) {
+  const raw = extractSection(lines, startTitle, stopTitles);
+
+  return raw
     .split("\n")
-    .map((line) => line.trim())
+    .map((line) => cleanLine(line))
     .filter(Boolean)
-    .map((line) => (line.startsWith("•") ? line : `• ${line}`));
+    .map((line) => (line.startsWith("•") ? line : `• ${line}`))
+    .slice(0, 2);
 }
 
-function safeWrapText(text, maxLength = 220) {
+function safeWrapText(text, maxLength = 300) {
   const clean = String(text || "").trim();
+  if (!clean) return "-";
   if (clean.length <= maxLength) return clean;
   return `${clean.slice(0, maxLength - 1).trim()}…`;
+}
+
+function parseScanText(rawText) {
+  const lines = String(rawText || "")
+    .split("\n")
+    .map((line) => cleanLine(line))
+    .filter((line) => line !== "");
+
+  return {
+    energyScore: getLineValue(lines, "ระดับพลัง:"),
+    mainEnergy: getLineValue(lines, "พลังหลัก:"),
+    compatibility: getLineValue(lines, "ความสอดคล้องกับเจ้าของ:"),
+    personality: getBulletValue(lines, "• บุคลิก:"),
+    tone: getBulletValue(lines, "• โทนพลัง:"),
+    hidden: getBulletValue(lines, "• พลังซ่อน:"),
+    overview: extractSection(lines, "ภาพรวม", [
+      "เหมาะใช้เมื่อ",
+      "อาจไม่เด่นเมื่อ",
+      "ปิดท้าย",
+    ]),
+    suitable: extractBulletSection(lines, "เหมาะใช้เมื่อ", [
+      "อาจไม่เด่นเมื่อ",
+      "ปิดท้าย",
+    ]),
+    notStrong: extractSection(lines, "อาจไม่เด่นเมื่อ", ["ปิดท้าย"]),
+    closing: extractSection(lines, "ปิดท้าย"),
+  };
 }
 
 export function buildScanFlex(rawText) {
   const accentColor = pickMainEnergyColor(rawText);
 
-  const energyScore = extractField(rawText, "ระดับพลัง");
-  const mainEnergy = extractField(rawText, "พลังหลัก");
-  const compatibility = extractField(rawText, "ความสอดคล้องกับเจ้าของ");
+  const {
+    energyScore,
+    mainEnergy,
+    compatibility,
+    personality,
+    tone,
+    hidden,
+    overview,
+    suitable,
+    notStrong,
+    closing,
+  } = parseScanText(rawText);
 
-  const personality = rawText.match(/•\s*บุคลิก:\s*(.+)/)?.[1]?.trim() || "-";
-  const tone = rawText.match(/•\s*โทนพลัง:\s*(.+)/)?.[1]?.trim() || "-";
-  const hidden = rawText.match(/•\s*พลังซ่อน:\s*(.+)/)?.[1]?.trim() || "-";
-
-  const overview = extractSection(rawText, "ภาพรวม", [
-    "เหมาะใช้เมื่อ",
-    "อาจไม่เด่นเมื่อ",
-    "ปิดท้าย",
-  ]);
-
-  const suitable = extractSection(rawText, "เหมาะใช้เมื่อ", [
-    "อาจไม่เด่นเมื่อ",
-    "ปิดท้าย",
-  ]);
-
-  const notStrong = extractSection(rawText, "อาจไม่เด่นเมื่อ", [
-    "ปิดท้าย",
-  ]);
-
-  const closing = extractSection(rawText, "ปิดท้าย");
-
-  const suitableLines = toBulletLines(suitable).slice(0, 2);
+  const suitableLines =
+    suitable.length > 0 ? suitable : ["• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
 
   return {
     type: "flex",
-    altText: `ผลการตรวจพลังวัตถุ: ${mainEnergy} (${energyScore})`,
+    altText: `ผลการตรวจพลังวัตถุ: ${mainEnergy} ${energyScore}`,
     contents: {
       type: "bubble",
       size: "giga",
       body: {
         type: "box",
         layout: "vertical",
+        paddingAll: "18px",
         spacing: "md",
         backgroundColor: "#1F1F1F",
         contents: [
           {
             type: "box",
             layout: "vertical",
-            spacing: "sm",
+            spacing: "xs",
             contents: [
               {
                 type: "text",
@@ -113,8 +148,8 @@ export function buildScanFlex(rawText) {
           {
             type: "box",
             layout: "vertical",
-            margin: "md",
             spacing: "sm",
+            margin: "md",
             contents: [
               {
                 type: "text",
@@ -191,7 +226,7 @@ export function buildScanFlex(rawText) {
               },
               {
                 type: "text",
-                text: safeWrapText(overview, 260),
+                text: safeWrapText(overview, 420),
                 size: "sm",
                 color: "#E0E0E0",
                 wrap: true,
@@ -213,7 +248,7 @@ export function buildScanFlex(rawText) {
               },
               ...suitableLines.map((line) => ({
                 type: "text",
-                text: line,
+                text: safeWrapText(line, 160),
                 size: "sm",
                 color: "#E0E0E0",
                 wrap: true,
@@ -235,7 +270,7 @@ export function buildScanFlex(rawText) {
               },
               {
                 type: "text",
-                text: safeWrapText(notStrong, 140),
+                text: safeWrapText(notStrong, 220),
                 size: "sm",
                 color: "#E0E0E0",
                 wrap: true,
@@ -246,14 +281,13 @@ export function buildScanFlex(rawText) {
             type: "box",
             layout: "vertical",
             margin: "lg",
-            spacing: "sm",
             paddingAll: "12px",
             backgroundColor: "#2A2A2A",
             cornerRadius: "12px",
             contents: [
               {
                 type: "text",
-                text: safeWrapText(closing, 120),
+                text: safeWrapText(closing, 180),
                 size: "sm",
                 color: "#FFFFFF",
                 wrap: true,
