@@ -17,6 +17,7 @@ export async function generateScanText({
 
 คำสั่ง:
 ช่วยอ่านพลังจากภาพวัตถุนี้ตาม format ที่กำหนด
+ให้ข้อความกระชับ อ่านง่าย ดูเฉพาะชิ้น และหลีกเลี่ยงคำซ้ำจากเคสมาตรฐาน
 ${retryHint ? `\nเงื่อนไขเพิ่ม: ${retryHint}` : ""}
 `;
 
@@ -27,7 +28,7 @@ ${retryHint ? `\nเงื่อนไขเพิ่ม: ${retryHint}` : ""}
 
   const response = await openai.responses.create({
     model: "gpt-4.1-mini",
-    temperature: 0.6,
+    temperature: 0.8,
     input: [
       {
         role: "system",
