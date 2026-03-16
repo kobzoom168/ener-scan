@@ -10,10 +10,11 @@ import {
 import { getImageBufferFromLineMessage } from "../services/image.service.js";
 import { isDuplicateImage } from "../services/dedupe.service.js";
 import { runDeepScan } from "../services/scan.service.js";
-import { replyText } from "../services/lineReply.service.js";
+import { replyText, replyFlex } from "../services/lineReply.service.js";
+import { buildScanFlex } from "../services/flex.service.js";
 
 function isValidBirthdate(text) {
-  return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(text.trim());
+  return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
 }
 
 export function lineWebhookRouter(lineConfig) {
@@ -34,7 +35,10 @@ export function lineWebhookRouter(lineConfig) {
             console.log("event.type:", event.type);
             console.log("replyToken exists:", Boolean(event.replyToken));
             console.log("userId:", event.source?.userId || "no-user-id");
-            console.log("message.type:", event.message?.type || "no-message-type");
+            console.log(
+              "message.type:",
+              event.message?.type || "no-message-type"
+            );
             console.log("timestamp:", event.timestamp || "no-timestamp");
 
             await handleEvent({ client, event });
@@ -92,10 +96,13 @@ async function handleEvent({ client, event }) {
     birthdate: session.birthdate || null,
   });
 
-  if (event.message.type === "image") {
+  if (event.message?.type === "image") {
     console.log("step: received image");
 
-    const imageBuffer = await getImageBufferFromLineMessage(client, event.message.id);
+    const imageBuffer = await getImageBufferFromLineMessage(
+      client,
+      event.message.id
+    );
     console.log("image buffer size:", imageBuffer.length);
 
     const isDuplicate = await isDuplicateImage(imageBuffer);
@@ -127,7 +134,7 @@ async function handleEvent({ client, event }) {
     return;
   }
 
-  if (event.message.type === "text") {
+  if (event.message?.type === "text") {
     const text = event.message.text?.trim() || "";
     console.log("step: received text");
     console.log("text:", text);
@@ -165,7 +172,15 @@ async function handleEvent({ client, event }) {
     console.log("scan result length:", resultText.length);
     console.log("reply: sending final scan result");
 
-    await replyText(client, event.replyToken, resultText);
+    try {
+      const flexMessage = buildScanFlex(resultText);
+      await replyFlex(client, event.replyToken, flexMessage);
+      console.log("final flex reply sent");
+    } catch (flexError) {
+      console.error("flex reply failed, fallback to text:", flexError);
+      await replyText(client, event.replyToken, resultText);
+      console.log("final text fallback sent");
+    }
 
     clearSession(userId);
     console.log("session cleared");

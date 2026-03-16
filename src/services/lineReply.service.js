@@ -13,3 +13,13 @@ export async function replyText(client, replyToken, text) {
   console.log("replyText success");
   return result;
 }
+
+export async function replyFlex(client, replyToken, flexMessage) {
+  console.log("replyFlex called");
+  console.log("replyToken exists:", Boolean(replyToken));
+
+  const result = await client.replyMessage(replyToken, flexMessage);
+
+  console.log("replyFlex success");
+  return result;
+}
