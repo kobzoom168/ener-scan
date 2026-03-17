@@ -161,13 +161,6 @@ async function handleImageMessage({ client, event, userId, session }) {
       clearLatestScanJob(userId);
       clearSession(userId);
 
-      console.log("[WEBHOOK] image rejected as multiple", {
-        userId,
-        messageId: event.message.id,
-        timestamp: event.timestamp,
-        flowVersion,
-      });
-
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -386,11 +379,6 @@ export function lineWebhookRouter(lineConfig) {
               multiImageUsersReplied.add(userId);
               clearLatestScanJob(userId);
               clearSession(userId);
-
-              console.log("[WEBHOOK] multi image request rejected", {
-                userId,
-                flowVersion,
-              });
 
               await replyFlexWithFallback({
                 client,
