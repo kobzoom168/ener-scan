@@ -58,11 +58,24 @@ function saveBirthdate(userId, birthdate) {
 
 /*
 ------------------------------------------------
-ANTI-SPAM IMAGE BURST GUARD
-กันการตอบซ้ำเวลาส่งมาหลายรูปติดกัน
+ANTI-SPAM IMAGE GUARDS
+1) activeImageUsers = กัน event ซ้อนระหว่างกำลังประมวลผล
+2) recentImageAcceptedAtMap = กัน burst ต่อเนื่องหลังรูปแรกจบแล้ว
 ------------------------------------------------
 */
 const activeImageUsers = new Set();
+const recentImageAcceptedAtMap = new Map();
+const IMAGE_BURST_WINDOW_MS = 8000;
+
+function isInImageBurstWindow(userId) {
+  const lastAcceptedAt = recentImageAcceptedAtMap.get(userId);
+  if (!lastAcceptedAt) return false;
+  return Date.now() - lastAcceptedAt < IMAGE_BURST_WINDOW_MS;
+}
+
+function markImageAcceptedNow(userId) {
+  recentImageAcceptedAtMap.set(userId, Date.now());
+}
 
 function isValidBirthdate(text) {
   return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
@@ -390,8 +403,13 @@ async function runScanFlow({
 }
 
 async function handleImageMessage({ client, event, userId, session }) {
+  if (isInImageBurstWindow(userId)) {
+    console.log("[WEBHOOK] ignore image: burst window", userId);
+    return;
+  }
+
   if (activeImageUsers.has(userId)) {
-    console.log("[WEBHOOK] ignore image burst:", userId);
+    console.log("[WEBHOOK] ignore image: active processing", userId);
     return;
   }
 
@@ -401,6 +419,7 @@ async function handleImageMessage({ client, event, userId, session }) {
   }
 
   activeImageUsers.add(userId);
+  markImageAcceptedNow(userId);
 
   try {
     const imageBuffer = await getImageBufferFromLineMessage(
@@ -484,7 +503,6 @@ async function handleImageMessage({ client, event, userId, session }) {
         imageBuffer,
         birthdate: savedBirthdate,
       });
-
       return;
     }
 
