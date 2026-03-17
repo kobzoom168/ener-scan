@@ -2,7 +2,6 @@ import { generateScanText } from "./openai.service.js";
 import { generateWithRetry } from "./retry.service.js";
 import { formatScanOutput } from "./formatter.service.js";
 import { checkSingleObject } from "./objectCheck.service.js";
-import { addScanHistory } from "../stores/scanHistory.store.js";
 
 import {
   hasRepeatedPhrase,
@@ -22,7 +21,6 @@ function toBase64(buffer) {
 }
 
 function validateOutput(text, userRecents, globalRecents) {
-
   if (!text || text.length < 120) {
     return { isBad: true, reason: "too_short" };
   }
@@ -59,7 +57,6 @@ function validateOutput(text, userRecents, globalRecents) {
 }
 
 function buildRetryHint(lastOutput, attempt, reason) {
-
   const base =
     "ผลลัพธ์ก่อนหน้าคล้ายข้อความเดิมมากเกินไป ให้เขียนใหม่โดยเปลี่ยนคำเด่น มุมเล่า คำเปรียบเทียบ และคำปิดท้ายทั้งหมด แต่ยังคงความหมายเดิมและคง format เดิม";
 
@@ -82,7 +79,6 @@ function buildRetryHint(lastOutput, attempt, reason) {
 }
 
 export async function runDeepScan({ imageBuffer, birthdate, userId }) {
-
   const scanStartedAt = Date.now();
 
   console.log("[SCAN_TIMING] startedAt:", scanStartedAt);
@@ -110,6 +106,14 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
     throw new Error("image_unclear");
   }
 
+  if (objectCheck === "unsupported") {
+    throw new Error("unsupported_object_type");
+  }
+
+  if (objectCheck !== "single_supported") {
+    throw new Error("unsupported_object_type");
+  }
+
   /*
   ------------------------------------------------
   LOAD RECENTS
@@ -132,11 +136,9 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   const generateStartedAt = Date.now();
 
   const result = await generateWithRetry({
-
     maxRetries: 2,
 
     generateFn: async ({ attempt, retryHint }) => {
-
       const attemptStartedAt = Date.now();
 
       console.log(`[SCAN_ATTEMPT] #${attempt}`);
@@ -151,13 +153,15 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
       const attemptEndedAt = Date.now();
 
       console.log(`[SCAN_ATTEMPT] output length:`, text.length);
-      console.log(`[SCAN_ATTEMPT] elapsedMs:`, attemptEndedAt - attemptStartedAt);
+      console.log(
+        `[SCAN_ATTEMPT] elapsedMs:`,
+        attemptEndedAt - attemptStartedAt
+      );
 
       return text;
     },
 
     isBadOutputFn: (text) => {
-
       const validation = validateOutput(text, userRecents, globalRecents);
 
       console.log("[SCAN_VALIDATION]", validation);
@@ -188,7 +192,10 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   const formatEndedAt = Date.now();
 
   console.log("[SCAN] formatted length:", finalText.length);
-  console.log("[SCAN_TIMING] formatElapsedMs:", formatEndedAt - formatStartedAt);
+  console.log(
+    "[SCAN_TIMING] formatElapsedMs:",
+    formatEndedAt - formatStartedAt
+  );
 
   /*
   ------------------------------------------------
@@ -209,7 +216,7 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   const storeStartedAt = Date.now();
 
   addRecentOutput(userId, finalText);
-  addScanHistory(userId, finalText);
+
   const storeEndedAt = Date.now();
 
   console.log("[SCAN] recent output saved");

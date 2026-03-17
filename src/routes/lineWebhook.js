@@ -61,8 +61,15 @@ function formatHistory(history) {
 function buildStartInstructionText() {
   return [
     "ได้รับภาพแล้วครับ ✨",
-    "กรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป",
-    "หากมีหลายชิ้น กรุณาแยกส่งทีละภาพ",
+    "",
+    "Ener Scan รองรับเฉพาะ",
+    "• พระเครื่อง",
+    "• เครื่องราง",
+    "• คริสตัล / หิน",
+    "• วัตถุสายพลังที่เป็นชิ้นเดี่ยว",
+    "",
+    "กรุณาถ่าย 1 ชิ้นต่อ 1 รูป",
+    "หากเป็นของหลายชิ้น กรุณาแยกส่งทีละภาพ",
     "",
     "รบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น",
     "14/09/1995",
@@ -85,6 +92,20 @@ function buildUnclearImageText() {
     "ภาพยังไม่ชัดเจนพอสำหรับการวิเคราะห์",
     "ลองถ่ายใหม่ให้เห็นวัตถุชัด ๆ",
     "และให้มีเพียง 1 ชิ้นต่อ 1 รูปครับ",
+  ].join("\n");
+}
+
+function buildUnsupportedObjectText() {
+  return [
+    "Ener Scan ยังไม่รองรับภาพประเภทนี้ครับ",
+    "",
+    "ระบบรองรับเฉพาะ",
+    "• พระเครื่อง",
+    "• เครื่องราง",
+    "• คริสตัล / หิน",
+    "• วัตถุสายพลังแบบชิ้นเดี่ยว",
+    "",
+    "กรุณาส่งภาพใหม่ที่ตรงประเภทอีกครั้งครับ",
   ].join("\n");
 }
 
@@ -113,7 +134,10 @@ export function lineWebhookRouter(lineConfig) {
             console.log(`\n----- event #${index + 1} -----`);
             console.log("type:", event.type);
             console.log("userId:", event.source?.userId || "no-user-id");
-            console.log("message type:", event.message?.type || "no-message-type");
+            console.log(
+              "message type:",
+              event.message?.type || "no-message-type"
+            );
 
             await handleEvent({ client, event });
           } catch (err) {
@@ -307,6 +331,16 @@ async function handleEvent({ client, event }) {
 
       if (err.message === "image_unclear") {
         await replyText(client, event.replyToken, buildUnclearImageText());
+        clearSession(userId);
+        return;
+      }
+
+      if (err.message === "unsupported_object_type") {
+        await replyText(
+          client,
+          event.replyToken,
+          buildUnsupportedObjectText()
+        );
         clearSession(userId);
         return;
       }
