@@ -40,6 +40,30 @@ import {
 
 import { parseScanResultForHistory } from "../services/history/history.parser.js";
 
+/*
+------------------------------------------------
+TEMP BIRTHDATE STORE
+เปลี่ยนส่วนนี้เป็น DB/store จริงภายหลังได้
+------------------------------------------------
+*/
+const savedBirthdateMap = new Map();
+
+function getSavedBirthdate(userId) {
+  return savedBirthdateMap.get(userId) || null;
+}
+
+function saveBirthdate(userId, birthdate) {
+  savedBirthdateMap.set(userId, birthdate);
+}
+
+/*
+------------------------------------------------
+ANTI-SPAM IMAGE BURST GUARD
+กันการตอบซ้ำเวลาส่งมาหลายรูปติดกัน
+------------------------------------------------
+*/
+const activeImageUsers = new Set();
+
 function isValidBirthdate(text) {
   return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
 }
@@ -80,16 +104,7 @@ function formatHistory(history) {
 
 function buildStartInstructionText() {
   return [
-    "ได้รับภาพแล้วครับ ✨",
-    "",
-    "Ener Scan รองรับเฉพาะ",
-    "• พระเครื่อง",
-    "• เครื่องราง",
-    "• คริสตัล / หิน",
-    "• วัตถุสายพลังที่เป็นชิ้นเดี่ยว",
-    "",
-    "กรุณาถ่าย 1 ชิ้นต่อ 1 รูป",
-    "หากเป็นของหลายชิ้น กรุณาแยกส่งทีละภาพ",
+    "ได้รับภาพที่ผ่านเงื่อนไขแล้วครับ ✨",
     "",
     "รบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น",
     "14/09/1995",
@@ -243,95 +258,6 @@ async function handleStatsCommand({ client, replyToken, userId }) {
   );
 }
 
-async function handleImageMessage({ client, event, userId, session }) {
-  if (session.pendingImage) {
-    console.log("[WEBHOOK] ignore image: waiting birthdate");
-    return;
-  }
-
-  const imageBuffer = await getImageBufferFromLineMessage(
-    client,
-    event.message.id
-  );
-
-  console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
-
-  const isDuplicate = await isDuplicateImage(imageBuffer);
-
-  if (isDuplicate) {
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildDuplicateImageFlex(),
-      fallbackText: buildDuplicateImageText(),
-      logLabel: "duplicate image flex",
-    });
-    return;
-  }
-
-  const imageBase64 = toBase64(imageBuffer);
-  const objectCheck = await checkSingleObject(imageBase64);
-
-  console.log("[WEBHOOK] object check result:", objectCheck);
-
-  if (objectCheck === "multiple") {
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildMultipleObjectsFlex(),
-      fallbackText: buildMultipleObjectsText(),
-      logLabel: "multiple objects flex",
-    });
-    return;
-  }
-
-  if (objectCheck === "unclear") {
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildUnclearImageFlex(),
-      fallbackText: buildUnclearImageText(),
-      logLabel: "unclear image flex",
-    });
-    return;
-  }
-
-  if (objectCheck === "unsupported") {
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildUnsupportedObjectFlex(),
-      fallbackText: buildUnsupportedObjectText(),
-      logLabel: "unsupported object flex",
-    });
-    return;
-  }
-
-  if (objectCheck !== "single_supported") {
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildUnsupportedObjectFlex(),
-      fallbackText: buildUnsupportedObjectText(),
-      logLabel: "unsupported object flex",
-    });
-    return;
-  }
-
-  setPendingImage(userId, {
-    messageId: event.message.id,
-    imageBuffer,
-  });
-
-  await replyFlexWithFallback({
-    client,
-    replyToken: event.replyToken,
-    flex: buildStartInstructionFlex(),
-    fallbackText: buildStartInstructionText(),
-    logLabel: "start instruction flex",
-  });
-}
-
 function saveScanArtifacts(userId, resultText) {
   const parsed = parseScanResultForHistory(resultText);
 
@@ -362,13 +288,19 @@ async function replyScanResult({ client, replyToken, resultText }) {
   }
 }
 
-async function runScanFlow({ client, event, userId, session, birthdate }) {
+async function runScanFlow({
+  client,
+  replyToken,
+  userId,
+  imageBuffer,
+  birthdate,
+}) {
   const rate = checkScanRateLimit(userId);
 
   if (!rate.allowed) {
     await replyFlexWithFallback({
       client,
-      replyToken: event.replyToken,
+      replyToken,
       flex: buildRateLimitFlex(rate.retryAfterSec),
       fallbackText: buildRateLimitText(rate.retryAfterSec),
       logLabel: "rate limit flex",
@@ -382,7 +314,7 @@ async function runScanFlow({ client, event, userId, session, birthdate }) {
   if (!cooldown.allowed) {
     await replyFlexWithFallback({
       client,
-      replyToken: event.replyToken,
+      replyToken,
       flex: buildCooldownFlex(cooldown.remainingSec),
       fallbackText: buildCooldownText(cooldown.remainingSec),
       logLabel: "cooldown flex",
@@ -392,12 +324,13 @@ async function runScanFlow({ client, event, userId, session, birthdate }) {
   }
 
   setBirthdate(userId, birthdate);
+  saveBirthdate(userId, birthdate);
 
   let resultText = "";
 
   try {
     resultText = await runDeepScan({
-      imageBuffer: session.pendingImage.imageBuffer,
+      imageBuffer,
       birthdate,
       userId,
     });
@@ -407,7 +340,7 @@ async function runScanFlow({ client, event, userId, session, birthdate }) {
     if (err.message === "multiple_objects_detected") {
       await replyFlexWithFallback({
         client,
-        replyToken: event.replyToken,
+        replyToken,
         flex: buildMultipleObjectsFlex(),
         fallbackText: buildMultipleObjectsText(),
         logLabel: "multiple objects flex",
@@ -419,7 +352,7 @@ async function runScanFlow({ client, event, userId, session, birthdate }) {
     if (err.message === "image_unclear") {
       await replyFlexWithFallback({
         client,
-        replyToken: event.replyToken,
+        replyToken,
         flex: buildUnclearImageFlex(),
         fallbackText: buildUnclearImageText(),
         logLabel: "unclear image flex",
@@ -431,7 +364,7 @@ async function runScanFlow({ client, event, userId, session, birthdate }) {
     if (err.message === "unsupported_object_type") {
       await replyFlexWithFallback({
         client,
-        replyToken: event.replyToken,
+        replyToken,
         flex: buildUnsupportedObjectFlex(),
         fallbackText: buildUnsupportedObjectText(),
         logLabel: "unsupported object flex",
@@ -449,11 +382,127 @@ async function runScanFlow({ client, event, userId, session, birthdate }) {
 
   await replyScanResult({
     client,
-    replyToken: event.replyToken,
+    replyToken,
     resultText,
   });
 
   clearSession(userId);
+}
+
+async function handleImageMessage({ client, event, userId, session }) {
+  if (activeImageUsers.has(userId)) {
+    console.log("[WEBHOOK] ignore image burst:", userId);
+    return;
+  }
+
+  if (session.pendingImage) {
+    console.log("[WEBHOOK] ignore image: waiting birthdate");
+    return;
+  }
+
+  activeImageUsers.add(userId);
+
+  try {
+    const imageBuffer = await getImageBufferFromLineMessage(
+      client,
+      event.message.id
+    );
+
+    console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
+
+    const isDuplicate = await isDuplicateImage(imageBuffer);
+
+    if (isDuplicate) {
+      await replyFlexWithFallback({
+        client,
+        replyToken: event.replyToken,
+        flex: buildDuplicateImageFlex(),
+        fallbackText: buildDuplicateImageText(),
+        logLabel: "duplicate image flex",
+      });
+      return;
+    }
+
+    const imageBase64 = toBase64(imageBuffer);
+    const objectCheck = await checkSingleObject(imageBase64);
+
+    console.log("[WEBHOOK] object check result:", objectCheck);
+
+    if (objectCheck === "multiple") {
+      await replyFlexWithFallback({
+        client,
+        replyToken: event.replyToken,
+        flex: buildMultipleObjectsFlex(),
+        fallbackText: buildMultipleObjectsText(),
+        logLabel: "multiple objects flex",
+      });
+      return;
+    }
+
+    if (objectCheck === "unclear") {
+      await replyFlexWithFallback({
+        client,
+        replyToken: event.replyToken,
+        flex: buildUnclearImageFlex(),
+        fallbackText: buildUnclearImageText(),
+        logLabel: "unclear image flex",
+      });
+      return;
+    }
+
+    if (objectCheck === "unsupported") {
+      await replyFlexWithFallback({
+        client,
+        replyToken: event.replyToken,
+        flex: buildUnsupportedObjectFlex(),
+        fallbackText: buildUnsupportedObjectText(),
+        logLabel: "unsupported object flex",
+      });
+      return;
+    }
+
+    if (objectCheck !== "single_supported") {
+      await replyFlexWithFallback({
+        client,
+        replyToken: event.replyToken,
+        flex: buildUnsupportedObjectFlex(),
+        fallbackText: buildUnsupportedObjectText(),
+        logLabel: "unsupported object flex",
+      });
+      return;
+    }
+
+    const savedBirthdate = getSavedBirthdate(userId);
+
+    if (savedBirthdate) {
+      console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
+
+      await runScanFlow({
+        client,
+        replyToken: event.replyToken,
+        userId,
+        imageBuffer,
+        birthdate: savedBirthdate,
+      });
+
+      return;
+    }
+
+    setPendingImage(userId, {
+      messageId: event.message.id,
+      imageBuffer,
+    });
+
+    await replyFlexWithFallback({
+      client,
+      replyToken: event.replyToken,
+      flex: buildStartInstructionFlex(),
+      fallbackText: buildStartInstructionText(),
+      logLabel: "start instruction flex",
+    });
+  } finally {
+    activeImageUsers.delete(userId);
+  }
 }
 
 async function handleTextMessage({ client, event, userId, session }) {
@@ -496,9 +545,9 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   await runScanFlow({
     client,
-    event,
+    replyToken: event.replyToken,
     userId,
-    session,
+    imageBuffer: session.pendingImage.imageBuffer,
     birthdate: text,
   });
 }
