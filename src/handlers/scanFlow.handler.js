@@ -127,7 +127,27 @@ export async function runScanFlow({
   const scanJobId = startScanJob(userId);
 
   setBirthdate(userId, birthdate);
-  await saveBirthdate(userId, birthdate);
+
+  try {
+    console.log("[WEBHOOK] before saveBirthdate", {
+      userId,
+      birthdate,
+    });
+
+    await saveBirthdate(userId, birthdate);
+
+    console.log("[WEBHOOK] after saveBirthdate");
+  } catch (error) {
+    console.error("[WEBHOOK] saveBirthdate failed:", error);
+    await replyText(
+      client,
+      replyToken,
+      "ขออภัยครับ ระบบบันทึกวันเกิดไม่สำเร็จ ลองส่งวันเกิดใหม่อีกครั้งได้เลยครับ"
+    );
+    clearLatestScanJob(userId, scanJobId);
+    clearSession(userId);
+    return;
+  }
 
   let resultText = "";
 
@@ -194,8 +214,14 @@ export async function runScanFlow({
       return;
     }
 
+    await replyText(
+      client,
+      replyToken,
+      "ขออภัยครับ ระบบวิเคราะห์ยังไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
+    );
+
     clearSession(userId);
-    throw err;
+    return;
   }
 
   if (!isCurrentFlowVersion(userId, flowVersion)) {
