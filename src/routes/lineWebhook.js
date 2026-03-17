@@ -3,23 +3,31 @@ import line from "@line/bot-sdk";
 import {
   getSession,
   setPendingImage,
-  setBirthdate,
   clearSession,
 } from "../stores/session.store.js";
 
 import {
   getSavedBirthdate,
-  saveBirthdate,
 } from "../stores/userProfile.store.js";
+
+import {
+  getEventTimestamp,
+  isUserProcessingImage,
+  setUserProcessingImage,
+  clearUserProcessingImage,
+  isInImageBurstWindow,
+  markAcceptedImageEvent,
+  clearLatestScanJob,
+} from "../stores/runtime.store.js";
+
+import { getScanHistory } from "../stores/scanHistory.store.js";
+import { getUserStats } from "../stores/userStats.store.js";
 
 import { getImageBufferFromLineMessage } from "../services/image.service.js";
 import { isDuplicateImage } from "../services/dedupe.service.js";
-import { runDeepScan } from "../services/scan.service.js";
 import { checkSingleObject } from "../services/objectCheck.service.js";
 
-import { replyText, replyFlex } from "../services/lineReply.service.js";
-import { buildScanFlex } from "../services/flex/flex.service.js";
-
+import { replyText } from "../services/lineReply.service.js";
 import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
 import {
   buildUnsupportedObjectFlex,
@@ -27,258 +35,33 @@ import {
   buildDuplicateImageFlex,
   buildMultipleObjectsFlex,
   buildUnclearImageFlex,
-  buildRateLimitFlex,
-  buildCooldownFlex,
 } from "../services/flex/status.flex.js";
 
-import { checkScanRateLimit } from "../stores/rateLimit.store.js";
 import {
-  getCooldownStatus,
-  setCooldownNow,
-} from "../stores/cooldown.store.js";
+  isValidBirthdate,
+  toBase64,
+  formatHistory,
+  formatBangkokDateTime,
+  buildStartInstructionText,
+  buildMultiImageInRequestText,
+  buildMultipleObjectsText,
+  buildUnclearImageText,
+  buildUnsupportedObjectText,
+  buildDuplicateImageText,
+  buildNoHistoryText,
+  buildNoStatsText,
+  buildIdleText,
+  buildInvalidBirthdateText,
+  buildSystemErrorText,
+  isHistoryCommand,
+  isStatsCommand,
+  groupImageEventCountByUser,
+} from "../utils/webhookText.util.js";
 
-import { getScanHistory, addScanHistory } from "../stores/scanHistory.store.js";
 import {
-  updateUserStats,
-  getUserStats,
-} from "../stores/userStats.store.js";
-
-import { parseScanResultForHistory } from "../services/history/history.parser.js";
-
-/*
-------------------------------------------------
-ANTI-SPAM IMAGE GUARDS
-1) activeImageUsers = กัน event ซ้อนระหว่างกำลังประมวลผล
-2) lastAcceptedImageEventAtMap = กันรูปถี่เกินไปหลังเพิ่งรับเคสก่อนหน้า
-3) latestScanJobMap = กันผล scan เก่าหลุดมาตอบทีหลัง
-------------------------------------------------
-*/
-const activeImageUsers = new Set();
-const lastAcceptedImageEventAtMap = new Map();
-const latestScanJobMap = new Map();
-
-const IMAGE_BURST_WINDOW_MS = 8000;
-
-function getEventTimestamp(event) {
-  const ts = Number(event?.timestamp || 0);
-  return Number.isFinite(ts) && ts > 0 ? ts : Date.now();
-}
-
-function isInImageBurstWindow(userId, eventTimestamp) {
-  const lastAcceptedEventAt = lastAcceptedImageEventAtMap.get(userId);
-  if (!lastAcceptedEventAt) return false;
-  return eventTimestamp - lastAcceptedEventAt < IMAGE_BURST_WINDOW_MS;
-}
-
-function markAcceptedImageEvent(userId, eventTimestamp) {
-  lastAcceptedImageEventAtMap.set(userId, eventTimestamp);
-}
-
-function startScanJob(userId) {
-  const jobId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  latestScanJobMap.set(userId, jobId);
-  return jobId;
-}
-
-function isLatestScanJob(userId, jobId) {
-  return latestScanJobMap.get(userId) === jobId;
-}
-
-function clearLatestScanJob(userId, jobId = null) {
-  if (!jobId) {
-    latestScanJobMap.delete(userId);
-    return;
-  }
-
-  if (latestScanJobMap.get(userId) === jobId) {
-    latestScanJobMap.delete(userId);
-  }
-}
-
-function isValidBirthdate(text) {
-  return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
-}
-
-function toBase64(buffer) {
-  return buffer.toString("base64");
-}
-
-function formatBangkokDateTime(time) {
-  return new Date(time).toLocaleString("th-TH", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatHistory(history) {
-  return history
-    .slice(0, 5)
-    .map((h, i) => {
-      const formatted = formatBangkokDateTime(h.time);
-
-      const mainEnergy =
-        h.mainEnergy && h.mainEnergy !== "-" ? ` | ${h.mainEnergy}` : "";
-
-      const score =
-        h.energyScore && h.energyScore !== "-"
-          ? ` | ${h.energyScore}/10`
-          : "";
-
-      return `${i + 1}. ${formatted}${mainEnergy}${score}`;
-    })
-    .join("\n");
-}
-
-function buildStartInstructionText() {
-  return [
-    "ได้รับภาพที่ผ่านเงื่อนไขแล้วครับ ✨",
-    "",
-    "รบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น",
-    "14/09/1995",
-  ].join("\n");
-}
-
-function buildMultiImageInRequestText() {
-  return [
-    "🔍 Ener Scan",
-    "",
-    "ระบบพบว่าคุณส่งมาหลายรูปพร้อมกัน",
-    "กรุณาส่งเพียง 1 รูปต่อ 1 ครั้ง",
-    "",
-    "หากมีหลายชิ้น กรุณาแยกส่งทีละรูปแล้วค่อยสแกนใหม่ครับ",
-  ].join("\n");
-}
-
-function buildMultipleObjectsText() {
-  return [
-    "🔍 Ener Scan",
-    "",
-    "ระบบพบว่าวัตถุในภาพมีมากกว่า 1 ชิ้น",
-    "กรุณาถ่ายวัตถุเพียง 1 ชิ้นต่อ 1 รูป",
-    "",
-    "แล้วส่งมาใหม่อีกครั้งครับ",
-  ].join("\n");
-}
-
-function buildUnclearImageText() {
-  return [
-    "ภาพยังไม่ชัดเจนพอสำหรับการวิเคราะห์",
-    "ลองถ่ายใหม่ให้เห็นวัตถุชัด ๆ",
-    "และให้มีเพียง 1 ชิ้นต่อ 1 รูปครับ",
-  ].join("\n");
-}
-
-function buildUnsupportedObjectText() {
-  return [
-    "Ener Scan ยังไม่รองรับภาพประเภทนี้ครับ",
-    "",
-    "ระบบรองรับเฉพาะ",
-    "• พระเครื่อง",
-    "• เครื่องราง",
-    "• คริสตัล / หิน",
-    "• วัตถุสายพลังแบบชิ้นเดี่ยว",
-    "",
-    "กรุณาส่งภาพใหม่ที่ตรงประเภทอีกครั้งครับ",
-  ].join("\n");
-}
-
-function buildDuplicateImageText() {
-  return [
-    "🔍 Ener Scan",
-    "",
-    "ระบบพบว่ารูปนี้เคยถูกสแกนแล้ว",
-    "กรุณาส่งภาพใหม่ของวัตถุครับ",
-  ].join("\n");
-}
-
-function buildRateLimitText(retryAfterSec = 0) {
-  return [
-    "🔍 Ener Scan",
-    "",
-    "ระบบมีการใช้งานต่อเนื่อง",
-    retryAfterSec > 0
-      ? `กรุณารออีก ${retryAfterSec} วินาทีก่อนสแกนใหม่`
-      : "กรุณารอสักครู่ก่อนสแกนใหม่",
-  ].join("\n");
-}
-
-function buildCooldownText(remainingSec = 0) {
-  return [
-    "🔍 Ener Scan",
-    "",
-    remainingSec > 0
-      ? `กรุณารออีก ${remainingSec} วินาทีก่อนสแกนใหม่`
-      : "กรุณารอสักครู่ก่อนสแกนใหม่",
-    "เพื่อให้ระบบอ่านพลังได้เสถียรมากขึ้นครับ",
-  ].join("\n");
-}
-
-function buildNoHistoryText() {
-  return "ยังไม่มีประวัติการสแกนครับ";
-}
-
-function buildNoStatsText() {
-  return "ยังไม่มีสถิติการสแกนครับ";
-}
-
-function buildIdleText() {
-  return "ส่งรูปวัตถุมาได้เลยครับ\nกรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป";
-}
-
-function buildInvalidBirthdateText() {
-  return ["รูปแบบวันเกิดยังไม่ถูกครับ", "ลองพิมพ์แบบ", "14/09/1995"].join(
-    "\n"
-  );
-}
-
-function buildSystemErrorText() {
-  return "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ";
-}
-
-function isHistoryCommand(text, lowerText) {
-  return lowerText === "history" || text === "ประวัติ";
-}
-
-function isStatsCommand(text, lowerText) {
-  return lowerText === "stats" || text === "สถิติ";
-}
-
-function groupImageEventCountByUser(events = []) {
-  const map = new Map();
-
-  for (const event of events) {
-    if (event?.type !== "message") continue;
-    if (event?.message?.type !== "image") continue;
-
-    const userId = event?.source?.userId;
-    if (!userId) continue;
-
-    map.set(userId, (map.get(userId) || 0) + 1);
-  }
-
-  return map;
-}
-
-async function replyFlexWithFallback({
-  client,
-  replyToken,
-  flex,
-  fallbackText,
-  logLabel = "status flex",
-}) {
-  try {
-    await replyFlex(client, replyToken, flex);
-    console.log(`[WEBHOOK] ${logLabel} sent as flex`);
-  } catch (error) {
-    console.error(`[WEBHOOK] ${logLabel} failed:`, error);
-    await replyText(client, replyToken, fallbackText);
-    console.log(`[WEBHOOK] ${logLabel} fallback sent as text`);
-  }
-}
+  replyFlexWithFallback,
+  runScanFlow,
+} from "../handlers/scanFlow.handler.js";
 
 async function handleHistoryCommand({ client, replyToken, userId }) {
   const history = getScanHistory(userId);
@@ -316,170 +99,10 @@ async function handleStatsCommand({ client, replyToken, userId }) {
   );
 }
 
-function saveScanArtifacts(userId, resultText) {
-  const parsed = parseScanResultForHistory(resultText);
-
-  const scanItem = {
-    time: Date.now(),
-    result: resultText,
-    energyScore: parsed.energyScore,
-    mainEnergy: parsed.mainEnergy,
-    compatibility: parsed.compatibility,
-  };
-
-  addScanHistory(userId, scanItem);
-  updateUserStats(userId, scanItem);
-
-  console.log("[WEBHOOK] history saved");
-  console.log("[WEBHOOK] stats updated");
-}
-
-async function replyScanResult({ client, replyToken, resultText }) {
-  try {
-    const flex = buildScanFlex(resultText);
-    await replyFlex(client, replyToken, flex);
-    console.log("[WEBHOOK] replied with flex");
-  } catch (flexError) {
-    console.error("[WEBHOOK] flex reply failed:", flexError);
-    await replyText(client, replyToken, resultText);
-    console.log("[WEBHOOK] fallback replied with text");
-  }
-}
-
-async function runScanFlow({
-  client,
-  replyToken,
-  userId,
-  imageBuffer,
-  birthdate,
-}) {
-  const rate = checkScanRateLimit(userId);
-
-  if (!rate.allowed) {
-    await replyFlexWithFallback({
-      client,
-      replyToken,
-      flex: buildRateLimitFlex(rate.retryAfterSec),
-      fallbackText: buildRateLimitText(rate.retryAfterSec),
-      logLabel: "rate limit flex",
-    });
-    clearSession(userId);
-    return;
-  }
-
-  const cooldown = getCooldownStatus(userId);
-
-  if (!cooldown.allowed) {
-    await replyFlexWithFallback({
-      client,
-      replyToken,
-      flex: buildCooldownFlex(cooldown.remainingSec),
-      fallbackText: buildCooldownText(cooldown.remainingSec),
-      logLabel: "cooldown flex",
-    });
-    clearSession(userId);
-    return;
-  }
-
-  const scanJobId = startScanJob(userId);
-
-  setBirthdate(userId, birthdate);
-  saveBirthdate(userId, birthdate);
-
-  let resultText = "";
-
-  try {
-    console.log("[WEBHOOK] runScanFlow start", {
-      userId,
-      scanJobId,
-      birthdate,
-      imageBufferLength: imageBuffer?.length || 0,
-      startedAt: Date.now(),
-    });
-
-    resultText = await runDeepScan({
-      imageBuffer,
-      birthdate,
-      userId,
-    });
-
-    console.log("[WEBHOOK] runScanFlow result ready", {
-      userId,
-      scanJobId,
-      resultLength: resultText?.length || 0,
-      finishedAt: Date.now(),
-    });
-  } catch (err) {
-    console.error("[WEBHOOK] scan failed:", err?.message || err);
-    clearLatestScanJob(userId, scanJobId);
-
-    if (err.message === "multiple_objects_detected") {
-      await replyFlexWithFallback({
-        client,
-        replyToken,
-        flex: buildMultipleObjectsFlex(),
-        fallbackText: buildMultipleObjectsText(),
-        logLabel: "multiple objects flex",
-      });
-      clearSession(userId);
-      return;
-    }
-
-    if (err.message === "image_unclear") {
-      await replyFlexWithFallback({
-        client,
-        replyToken,
-        flex: buildUnclearImageFlex(),
-        fallbackText: buildUnclearImageText(),
-        logLabel: "unclear image flex",
-      });
-      clearSession(userId);
-      return;
-    }
-
-    if (err.message === "unsupported_object_type") {
-      await replyFlexWithFallback({
-        client,
-        replyToken,
-        flex: buildUnsupportedObjectFlex(),
-        fallbackText: buildUnsupportedObjectText(),
-        logLabel: "unsupported object flex",
-      });
-      clearSession(userId);
-      return;
-    }
-
-    clearSession(userId);
-    throw err;
-  }
-
-  if (!isLatestScanJob(userId, scanJobId)) {
-    console.log("[WEBHOOK] skip stale scan result", {
-      userId,
-      scanJobId,
-      latestScanJobId: latestScanJobMap.get(userId),
-    });
-    clearSession(userId);
-    return;
-  }
-
-  saveScanArtifacts(userId, resultText);
-  setCooldownNow(userId);
-
-  await replyScanResult({
-    client,
-    replyToken,
-    resultText,
-  });
-
-  clearLatestScanJob(userId, scanJobId);
-  clearSession(userId);
-}
-
 async function handleImageMessage({ client, event, userId, session }) {
   const eventTimestamp = getEventTimestamp(event);
 
-  if (activeImageUsers.has(userId)) {
+  if (isUserProcessingImage(userId)) {
     console.log("[WEBHOOK] ignore image: active processing", userId);
     return;
   }
@@ -494,7 +117,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     return;
   }
 
-  activeImageUsers.add(userId);
+  setUserProcessingImage(userId);
 
   try {
     const imageBuffer = await getImageBufferFromLineMessage(
@@ -509,6 +132,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     if (isDuplicate) {
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
+      clearSession(userId);
 
       await replyFlexWithFallback({
         client,
@@ -528,6 +152,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     if (objectCheck === "multiple") {
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
+      clearSession(userId);
 
       console.log("[WEBHOOK] image rejected as multiple", {
         userId,
@@ -548,6 +173,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     if (objectCheck === "unclear") {
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
+      clearSession(userId);
 
       await replyFlexWithFallback({
         client,
@@ -562,6 +188,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     if (objectCheck === "unsupported") {
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
+      clearSession(userId);
 
       await replyFlexWithFallback({
         client,
@@ -576,6 +203,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     if (objectCheck !== "single_supported") {
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
+      clearSession(userId);
 
       await replyFlexWithFallback({
         client,
@@ -617,7 +245,7 @@ async function handleImageMessage({ client, event, userId, session }) {
       logLabel: "start instruction flex",
     });
   } finally {
-    activeImageUsers.delete(userId);
+    clearUserProcessingImage(userId);
   }
 }
 
@@ -737,6 +365,7 @@ export function lineWebhookRouter(lineConfig) {
             if (!multiImageUsersReplied.has(userId) && event.replyToken) {
               multiImageUsersReplied.add(userId);
               clearLatestScanJob(userId);
+              clearSession(userId);
 
               await replyFlexWithFallback({
                 client,

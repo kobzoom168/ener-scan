@@ -1,0 +1,167 @@
+export function isValidBirthdate(text) {
+  return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
+}
+
+export function toBase64(buffer) {
+  return buffer.toString("base64");
+}
+
+export function formatBangkokDateTime(time) {
+  return new Date(time).toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function formatHistory(history) {
+  return history
+    .slice(0, 5)
+    .map((h, i) => {
+      const formatted = formatBangkokDateTime(h.time);
+
+      const mainEnergy =
+        h.mainEnergy && h.mainEnergy !== "-" ? ` | ${h.mainEnergy}` : "";
+
+      const score =
+        h.energyScore && h.energyScore !== "-"
+          ? ` | ${h.energyScore}/10`
+          : "";
+
+      return `${i + 1}. ${formatted}${mainEnergy}${score}`;
+    })
+    .join("\n");
+}
+
+export function buildStartInstructionText() {
+  return [
+    "ได้รับภาพที่ผ่านเงื่อนไขแล้วครับ ✨",
+    "",
+    "รบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น",
+    "14/09/1995",
+  ].join("\n");
+}
+
+export function buildMultiImageInRequestText() {
+  return [
+    "🔍 Ener Scan",
+    "",
+    "ระบบพบว่าคุณส่งมาหลายรูปพร้อมกัน",
+    "กรุณาส่งเพียง 1 รูปต่อ 1 ครั้ง",
+    "",
+    "หากมีหลายชิ้น กรุณาแยกส่งทีละรูปแล้วค่อยสแกนใหม่ครับ",
+  ].join("\n");
+}
+
+export function buildMultipleObjectsText() {
+  return [
+    "🔍 Ener Scan",
+    "",
+    "ระบบพบว่าวัตถุในภาพมีมากกว่า 1 ชิ้น",
+    "กรุณาถ่ายวัตถุเพียง 1 ชิ้นต่อ 1 รูป",
+    "",
+    "แล้วส่งมาใหม่อีกครั้งครับ",
+  ].join("\n");
+}
+
+export function buildUnclearImageText() {
+  return [
+    "ภาพยังไม่ชัดเจนพอสำหรับการวิเคราะห์",
+    "ลองถ่ายใหม่ให้เห็นวัตถุชัด ๆ",
+    "และให้มีเพียง 1 ชิ้นต่อ 1 รูปครับ",
+  ].join("\n");
+}
+
+export function buildUnsupportedObjectText() {
+  return [
+    "Ener Scan ยังไม่รองรับภาพประเภทนี้ครับ",
+    "",
+    "ระบบรองรับเฉพาะ",
+    "• พระเครื่อง",
+    "• เครื่องราง",
+    "• คริสตัล / หิน",
+    "• วัตถุสายพลังแบบชิ้นเดี่ยว",
+    "",
+    "กรุณาส่งภาพใหม่ที่ตรงประเภทอีกครั้งครับ",
+  ].join("\n");
+}
+
+export function buildDuplicateImageText() {
+  return [
+    "🔍 Ener Scan",
+    "",
+    "ระบบพบว่ารูปนี้เคยถูกสแกนแล้ว",
+    "กรุณาส่งภาพใหม่ของวัตถุครับ",
+  ].join("\n");
+}
+
+export function buildRateLimitText(retryAfterSec = 0) {
+  return [
+    "🔍 Ener Scan",
+    "",
+    "ระบบมีการใช้งานต่อเนื่อง",
+    retryAfterSec > 0
+      ? `กรุณารออีก ${retryAfterSec} วินาทีก่อนสแกนใหม่`
+      : "กรุณารอสักครู่ก่อนสแกนใหม่",
+  ].join("\n");
+}
+
+export function buildCooldownText(remainingSec = 0) {
+  return [
+    "🔍 Ener Scan",
+    "",
+    remainingSec > 0
+      ? `กรุณารออีก ${remainingSec} วินาทีก่อนสแกนใหม่`
+      : "กรุณารอสักครู่ก่อนสแกนใหม่",
+    "เพื่อให้ระบบอ่านพลังได้เสถียรมากขึ้นครับ",
+  ].join("\n");
+}
+
+export function buildNoHistoryText() {
+  return "ยังไม่มีประวัติการสแกนครับ";
+}
+
+export function buildNoStatsText() {
+  return "ยังไม่มีสถิติการสแกนครับ";
+}
+
+export function buildIdleText() {
+  return "ส่งรูปวัตถุมาได้เลยครับ\nกรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป";
+}
+
+export function buildInvalidBirthdateText() {
+  return ["รูปแบบวันเกิดยังไม่ถูกครับ", "ลองพิมพ์แบบ", "14/09/1995"].join(
+    "\n"
+  );
+}
+
+export function buildSystemErrorText() {
+  return "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ";
+}
+
+export function isHistoryCommand(text, lowerText) {
+  return lowerText === "history" || text === "ประวัติ";
+}
+
+export function isStatsCommand(text, lowerText) {
+  return lowerText === "stats" || text === "สถิติ";
+}
+
+export function groupImageEventCountByUser(events = []) {
+  const map = new Map();
+
+  for (const event of events) {
+    if (event?.type !== "message") continue;
+    if (event?.message?.type !== "image") continue;
+
+    const userId = event?.source?.userId;
+    if (!userId) continue;
+
+    map.set(userId, (map.get(userId) || 0) + 1);
+  }
+
+  return map;
+}
