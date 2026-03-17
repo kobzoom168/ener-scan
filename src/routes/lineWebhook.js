@@ -10,6 +10,7 @@ import {
 import { getImageBufferFromLineMessage } from "../services/image.service.js";
 import { isDuplicateImage } from "../services/dedupe.service.js";
 import { runDeepScan } from "../services/scan.service.js";
+
 import { replyText, replyFlex } from "../services/lineReply.service.js";
 import { buildScanFlex } from "../services/flex.service.js";
 
@@ -26,90 +27,75 @@ export function lineWebhookRouter(lineConfig) {
 
       console.log("========== LINE WEBHOOK ==========");
       console.log("event count:", events.length);
-      console.log("raw body:", JSON.stringify(req.body, null, 2));
 
       await Promise.all(
         events.map(async (event, index) => {
           try {
-            console.log(`\n----- handling event #${index + 1} -----`);
-            console.log("event.type:", event.type);
-            console.log("replyToken exists:", Boolean(event.replyToken));
-            console.log("userId:", event.source?.userId || "no-user-id");
-            console.log(
-              "message.type:",
-              event.message?.type || "no-message-type"
-            );
-            console.log("timestamp:", event.timestamp || "no-timestamp");
+            console.log(`\n----- event #${index + 1} -----`);
+            console.log("type:", event.type);
+            console.log("userId:", event.source?.userId);
+            console.log("message type:", event.message?.type);
 
             await handleEvent({ client, event });
-
-            console.log(`event #${index + 1} handled successfully`);
-          } catch (error) {
-            console.error(`handleEvent error on event #${index + 1}:`, error);
+          } catch (err) {
+            console.error("event error:", err);
 
             if (event.replyToken) {
-              try {
-                await replyText(
-                  client,
-                  event.replyToken,
-                  "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ"
-                );
-                console.log("[FALLBACK_ERROR_REPLY] success");
-              } catch (replyError) {
-                console.error("[FALLBACK_ERROR_REPLY] failed:", replyError);
-              }
+              await replyText(
+                client,
+                event.replyToken,
+                "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ"
+              );
             }
           }
         })
       );
 
-      console.log("webhook response: 200");
       res.status(200).json({ ok: true });
     } catch (error) {
-      console.error("webhook fatal error:", error);
+      console.error("webhook fatal:", error);
       res.status(500).json({ error: "webhook_failed" });
     }
   };
 }
 
 async function handleEvent({ client, event }) {
-  if (event.type !== "message") {
-    console.log("skip: event is not message");
-    return;
-  }
-
-  if (!event.replyToken) {
-    console.log("skip: no reply token");
-    return;
-  }
+  if (event.type !== "message") return;
+  if (!event.replyToken) return;
 
   const userId = event.source?.userId;
+
   if (!userId) {
-    console.log("stop: no userId");
     await replyText(client, event.replyToken, "ไม่พบข้อมูลผู้ใช้ครับ");
     return;
   }
 
   const session = getSession(userId);
-  console.log("current session:", {
-    hasPendingImage: Boolean(session.pendingImage),
+
+  console.log("session:", {
+    pendingImage: !!session.pendingImage,
     birthdate: session.birthdate || null,
   });
 
-  if (event.message?.type === "image") {
-    console.log("step: received image");
+  /*
+  -------------------------
+  IMAGE MESSAGE
+  -------------------------
+  */
+
+  if (event.message.type === "image") {
+    console.log("received image");
 
     const imageBuffer = await getImageBufferFromLineMessage(
       client,
       event.message.id
     );
-    console.log("image buffer size:", imageBuffer.length);
+
+    console.log("image size:", imageBuffer.length);
 
     const isDuplicate = await isDuplicateImage(imageBuffer);
-    console.log("is duplicate image:", isDuplicate);
 
     if (isDuplicate) {
-      console.log("reply: duplicate image warning");
       await replyText(
         client,
         event.replyToken,
@@ -123,24 +109,25 @@ async function handleEvent({ client, event }) {
       imageBuffer,
     });
 
-    console.log("session updated: pendingImage set");
-    console.log("reply: ask for birthdate");
-
     await replyText(
       client,
       event.replyToken,
       "ได้รับภาพแล้วครับ ✨\nรบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น 14/09/1995"
     );
+
     return;
   }
 
-  if (event.message?.type === "text") {
-    const text = event.message.text?.trim() || "";
-    console.log("step: received text");
-    console.log("text:", text);
+  /*
+  -------------------------
+  TEXT MESSAGE
+  -------------------------
+  */
+
+  if (event.message.type === "text") {
+    const text = event.message.text?.trim();
 
     if (!session.pendingImage) {
-      console.log("reply: no pending image in session");
       await replyText(
         client,
         event.replyToken,
@@ -150,7 +137,6 @@ async function handleEvent({ client, event }) {
     }
 
     if (!isValidBirthdate(text)) {
-      console.log("reply: invalid birthdate format");
       await replyText(
         client,
         event.replyToken,
@@ -160,52 +146,67 @@ async function handleEvent({ client, event }) {
     }
 
     setBirthdate(userId, text);
-    console.log("session updated: birthdate set");
 
-    console.log("step: running deep scan...");
-    const resultText = await runDeepScan({
-      imageBuffer: session.pendingImage.imageBuffer,
-      birthdate: text,
-      userId,
-    });
+    console.log("running scan...");
 
-    console.log("scan result length:", resultText.length);
-    console.log("reply: sending final scan result");
-
-    let replyMode = "unknown";
+    let resultText;
 
     try {
-      const flexMessage = buildScanFlex(resultText);
-      console.log("[FINAL_REPLY] trying flex...");
-      await replyFlex(client, event.replyToken, flexMessage);
-      replyMode = "flex_success";
-      console.log("[FINAL_REPLY] flex success");
-    } catch (flexError) {
-      console.error("[FINAL_REPLY] flex failed:", flexError?.message || flexError);
+      resultText = await runDeepScan({
+        imageBuffer: session.pendingImage.imageBuffer,
+        birthdate: text,
+        userId,
+      });
+    } catch (err) {
+      console.error("scan error:", err);
 
-      try {
-        console.log("[FINAL_REPLY] fallback to text...");
-        await replyText(client, event.replyToken, resultText);
-        replyMode = "text_fallback_success";
-        console.log("[FINAL_REPLY] text fallback success");
-      } catch (textError) {
-        replyMode = "text_fallback_failed";
-        console.error(
-          "[FINAL_REPLY] text fallback failed:",
-          textError?.message || textError
+      if (err.message === "multiple_objects_detected") {
+        await replyText(
+          client,
+          event.replyToken,
+          "กรุณาถ่ายภาพวัตถุเพียง 1 ชิ้นต่อ 1 รูป แล้วส่งมาอีกครั้งครับ"
         );
-        throw textError;
+        clearSession(userId);
+        return;
       }
-    } finally {
-      console.log("[FINAL_REPLY] mode:", replyMode);
-      console.log("[FINAL_REPLY] userId:", userId);
-      console.log("[FINAL_REPLY] timestamp:", event.timestamp || "no-timestamp");
+
+      if (err.message === "image_unclear") {
+        await replyText(
+          client,
+          event.replyToken,
+          "ภาพยังไม่ชัดเจนพอสำหรับการวิเคราะห์\nลองถ่ายใหม่ให้เห็นวัตถุชัด ๆ ครับ"
+        );
+        clearSession(userId);
+        return;
+      }
+
+      throw err;
+    }
+
+    /*
+    -------------------------
+    SEND RESULT
+    -------------------------
+    */
+
+    try {
+      const flex = buildScanFlex(resultText);
+
+      await replyFlex(client, event.replyToken, flex);
+
+      console.log("reply flex success");
+    } catch (flexError) {
+      console.error("flex failed:", flexError);
+
+      await replyText(client, event.replyToken, resultText);
+
+      console.log("fallback text success");
     }
 
     clearSession(userId);
-    console.log("session cleared");
+
     return;
   }
 
-  console.log("skip: unsupported message type");
+  console.log("unsupported message type");
 }
