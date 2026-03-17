@@ -17,31 +17,47 @@ import {
 } from "../stores/recentOutputs.store.js";
 
 function toBase64(buffer) {
-  return buffer.toString("base64");
+  return Buffer.isBuffer(buffer) ? buffer.toString("base64") : "";
+}
+
+function ensureScanInputs({ imageBuffer, birthdate, userId }) {
+  if (!Buffer.isBuffer(imageBuffer) || imageBuffer.length === 0) {
+    throw new Error("invalid_image_buffer");
+  }
+
+  if (!String(birthdate || "").trim()) {
+    throw new Error("missing_birthdate");
+  }
+
+  if (!String(userId || "").trim()) {
+    throw new Error("missing_user_id");
+  }
 }
 
 function validateOutput(text, userRecents, globalRecents) {
-  if (!text || text.length < 120) {
+  const cleanText = String(text || "").trim();
+
+  if (!cleanText || cleanText.length < 120) {
     return { isBad: true, reason: "too_short" };
   }
 
-  if (hasRepeatedPhrase(text)) {
+  if (hasRepeatedPhrase(cleanText)) {
     return { isBad: true, reason: "banned_phrase" };
   }
 
-  if (hasRepeatedClosing(text)) {
+  if (hasRepeatedClosing(cleanText)) {
     return { isBad: true, reason: "repeated_closing" };
   }
 
-  if (tooSimilarToRecent(text, userRecents, 0.62)) {
+  if (tooSimilarToRecent(cleanText, userRecents, 0.62)) {
     return { isBad: true, reason: "too_similar_user_recent" };
   }
 
-  if (tooSimilarToRecent(text, globalRecents, 0.70)) {
+  if (tooSimilarToRecent(cleanText, globalRecents, 0.7)) {
     return { isBad: true, reason: "too_similar_global_recent" };
   }
 
-  const duplicateFeelCount = countMatchesFromList(text, [
+  const duplicateFeelCount = countMatchesFromList(cleanText, [
     "ความสงบ",
     "ความมั่นคง",
     "นิ่ง",
@@ -71,6 +87,7 @@ function buildRetryHint(lastOutput, attempt, reason) {
       "ผลลัพธ์นี้คล้ายกับเคสล่าสุดโดยรวมมากเกินไป ต้องเปลี่ยนภาพรวมและคำเปรียบเทียบ",
     too_generic_feel:
       "ภาษายังกลางเกินไป ให้ทำให้เฉพาะชิ้นมากขึ้นและมีคำเด่นที่จำง่าย",
+    empty_output: "ตอบใหม่ตาม format เดิมให้ครบทุกหัวข้อ",
   };
 
   return `${base} เงื่อนไขเฉพาะรอบนี้: ${
@@ -78,22 +95,7 @@ function buildRetryHint(lastOutput, attempt, reason) {
   }`;
 }
 
-export async function runDeepScan({ imageBuffer, birthdate, userId }) {
-  const scanStartedAt = Date.now();
-
-  console.log("[SCAN_TIMING] startedAt:", scanStartedAt);
-  console.log("[SCAN] runDeepScan started");
-  console.log("[SCAN] birthdate:", birthdate);
-  console.log("[SCAN] userId:", userId);
-
-  const imageBase64 = toBase64(imageBuffer);
-
-  /*
-  ------------------------------------------------
-  OBJECT CHECK
-  ------------------------------------------------
-  */
-
+async function runObjectCheck(imageBase64) {
   const objectCheck = await checkSingleObject(imageBase64);
 
   console.log("[OBJECT_CHECK] result:", objectCheck);
@@ -114,35 +116,23 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
     throw new Error("unsupported_object_type");
   }
 
-  /*
-  ------------------------------------------------
-  LOAD RECENTS
-  ------------------------------------------------
-  */
+  return objectCheck;
+}
 
-  const userRecents = getRecentOutputs(userId);
-  const globalRecents = getGlobalRecentOutputs();
-
-  console.log("[SCAN] user recent outputs:", userRecents.length);
-  console.log("[SCAN] global recent outputs:", globalRecents.length);
-  console.log("[SCAN] image base64 length:", imageBase64.length);
-
-  /*
-  ------------------------------------------------
-  GENERATE AI
-  ------------------------------------------------
-  */
-
-  const generateStartedAt = Date.now();
-
-  const result = await generateWithRetry({
+async function generateScanWithValidation({
+  imageBase64,
+  birthdate,
+  userRecents,
+  globalRecents,
+}) {
+  return generateWithRetry({
     maxRetries: 2,
 
     generateFn: async ({ attempt, retryHint }) => {
       const attemptStartedAt = Date.now();
 
       console.log(`[SCAN_ATTEMPT] #${attempt}`);
-      console.log(`[SCAN_ATTEMPT] retryHint:`, retryHint || "none");
+      console.log("[SCAN_ATTEMPT] retryHint:", retryHint || "none");
 
       const text = await generateScanText({
         imageBase64,
@@ -152,9 +142,9 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
 
       const attemptEndedAt = Date.now();
 
-      console.log(`[SCAN_ATTEMPT] output length:`, text.length);
+      console.log("[SCAN_ATTEMPT] output length:", String(text || "").length);
       console.log(
-        `[SCAN_ATTEMPT] elapsedMs:`,
+        "[SCAN_ATTEMPT] elapsedMs:",
         attemptEndedAt - attemptStartedAt
       );
 
@@ -163,13 +153,59 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
 
     isBadOutputFn: (text) => {
       const validation = validateOutput(text, userRecents, globalRecents);
-
       console.log("[SCAN_VALIDATION]", validation);
-
       return validation;
     },
 
     buildRetryHintFn: buildRetryHint,
+  });
+}
+
+export async function runDeepScan({ imageBuffer, birthdate, userId }) {
+  const scanStartedAt = Date.now();
+
+  console.log("[SCAN_TIMING] startedAt:", scanStartedAt);
+  console.log("[SCAN] runDeepScan started");
+  console.log("[SCAN] birthdate:", birthdate);
+  console.log("[SCAN] userId:", userId);
+
+  ensureScanInputs({ imageBuffer, birthdate, userId });
+
+  const imageBase64 = toBase64(imageBuffer);
+
+  console.log("[SCAN] image buffer length:", imageBuffer.length);
+  console.log("[SCAN] image base64 length:", imageBase64.length);
+
+  /*
+  ------------------------------------------------
+  OBJECT CHECK
+  ------------------------------------------------
+  */
+  await runObjectCheck(imageBase64);
+
+  /*
+  ------------------------------------------------
+  LOAD RECENTS
+  ------------------------------------------------
+  */
+  const userRecents = getRecentOutputs(userId);
+  const globalRecents = getGlobalRecentOutputs();
+
+  console.log("[SCAN] user recent outputs:", userRecents.length);
+  console.log("[SCAN] global recent outputs:", globalRecents.length);
+
+  /*
+  ------------------------------------------------
+  GENERATE AI
+  ------------------------------------------------
+  */
+  const generateStartedAt = Date.now();
+
+  const result = await generateScanWithValidation({
+    imageBase64,
+    birthdate,
+    userRecents,
+    globalRecents,
   });
 
   const generateEndedAt = Date.now();
@@ -178,13 +214,17 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
     "[SCAN_TIMING] generateElapsedMs:",
     generateEndedAt - generateStartedAt
   );
+  console.log("[SCAN] generate result:", {
+    attempt: result.attempt,
+    accepted: result.accepted,
+    reason: result.reason,
+  });
 
   /*
   ------------------------------------------------
   FORMAT OUTPUT
   ------------------------------------------------
   */
-
   const formatStartedAt = Date.now();
 
   const finalText = formatScanOutput(result.output);
@@ -202,17 +242,21 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   FINAL VALIDATION
   ------------------------------------------------
   */
-
   const finalValidation = validateOutput(finalText, userRecents, globalRecents);
 
   console.log("[SCAN] final validation:", finalValidation);
+
+  if (finalValidation.isBad) {
+    console.log(
+      "[SCAN] final output still not ideal, but returning best available result"
+    );
+  }
 
   /*
   ------------------------------------------------
   SAVE RECENT
   ------------------------------------------------
   */
-
   const storeStartedAt = Date.now();
 
   addRecentOutput(userId, finalText);
@@ -227,7 +271,6 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   FINISH
   ------------------------------------------------
   */
-
   const scanEndedAt = Date.now();
 
   console.log("[SCAN_TIMING] totalElapsedMs:", scanEndedAt - scanStartedAt);

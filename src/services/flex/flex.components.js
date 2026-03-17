@@ -5,26 +5,48 @@ import {
   getEnergyShortLabel
 } from "./flex.utils.js";
 
+function createTopAccent(accentColor) {
+  return {
+    type: "box",
+    layout: "vertical",
+    height: "6px",
+    backgroundColor: accentColor,
+    cornerRadius: "12px",
+    contents: [],
+  };
+}
+
+function createSectionTitle(text) {
+  return {
+    type: "text",
+    text,
+    weight: "bold",
+    size: "md",
+    color: "#FFFFFF",
+  };
+}
 
 export function createMetricCard(label, value) {
   return {
     type: "box",
     layout: "vertical",
-    paddingAll: "12px",
-    backgroundColor: "#1E1E1E",
-    cornerRadius: "12px",
+    paddingAll: "14px",
+    backgroundColor: "#18181A",
+    cornerRadius: "16px",
+    borderWidth: "1px",
+    borderColor: "#2A2A2D",
     flex: 1,
     contents: [
       {
         type: "text",
         text: label,
         size: "xs",
-        color: "#9E9E9E",
+        color: "#8F8F95",
       },
       {
         type: "text",
-        text: safeWrapText(value, 60),
-        size: "md",
+        text: safeWrapText(value || "-", 40),
+        size: "lg",
         weight: "bold",
         color: "#FFFFFF",
         wrap: true,
@@ -34,26 +56,35 @@ export function createMetricCard(label, value) {
   };
 }
 
-
 export function createEnergyLine(text) {
   return {
     type: "box",
-    layout: "vertical",
+    layout: "horizontal",
     paddingAll: "12px",
-    backgroundColor: "#1E1E1E",
-    cornerRadius: "12px",
+    backgroundColor: "#171717",
+    cornerRadius: "14px",
+    borderWidth: "1px",
+    borderColor: "#242427",
     contents: [
       {
         type: "text",
-        text: safeWrapText(text, 40),
+        text: "•",
+        size: "sm",
+        color: "#D4AF37",
+        flex: 0,
+      },
+      {
+        type: "text",
+        text: safeWrapText(text || "-", 44),
         size: "sm",
         color: "#F2F2F2",
         wrap: true,
+        margin: "sm",
+        flex: 1,
       },
     ],
   };
 }
-
 
 export function createSectionCard(title, body, backgroundColor, maxLength = 120) {
   return {
@@ -61,7 +92,8 @@ export function createSectionCard(title, body, backgroundColor, maxLength = 120)
     layout: "vertical",
     paddingAll: "14px",
     backgroundColor,
-    cornerRadius: "14px",
+    cornerRadius: "16px",
+    spacing: "sm",
     contents: [
       {
         type: "text",
@@ -72,16 +104,33 @@ export function createSectionCard(title, body, backgroundColor, maxLength = 120)
       },
       {
         type: "text",
-        text: safeWrapText(body, maxLength),
-        margin: "sm",
-        size: "xs",
-        color: "#DADADA",
+        text: safeWrapText(body || "-", maxLength),
+        size: "sm",
+        color: "#E3E3E3",
         wrap: true,
       },
     ],
   };
 }
 
+function createSoftNote(text, color = "#F4E3AE", backgroundColor = "#1D1A14") {
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor,
+    cornerRadius: "16px",
+    paddingAll: "14px",
+    contents: [
+      {
+        type: "text",
+        text: safeWrapText(text || "-", 100),
+        size: "sm",
+        color,
+        wrap: true,
+      },
+    ],
+  };
+}
 
 export function buildSummaryBubble({
   accentColor,
@@ -92,377 +141,297 @@ export function buildSummaryBubble({
   tone,
   hidden
 }) {
-
   const energyLines = buildEnergyLines({ personality, tone, hidden });
 
   return {
     type: "bubble",
-    size: "giga",
-
+    size: "mega",
     body: {
       type: "box",
       layout: "vertical",
-      paddingAll: "20px",
+      paddingAll: "18px",
       spacing: "md",
-      backgroundColor: "#141414",
-
+      backgroundColor: "#101010",
       contents: [
+        createTopAccent(accentColor),
 
         {
           type: "box",
           layout: "vertical",
+          margin: "md",
           spacing: "xs",
           contents: [
             {
               type: "text",
-              text: "🔮 ผลการตรวจพลังวัตถุ",
+              text: "ผลการตรวจพลังวัตถุ",
               weight: "bold",
-              size: "lg",
-              color: "#F5F5F5",
+              size: "xl",
+              color: "#F8F8F8",
               wrap: true,
             },
             {
               type: "text",
               text: "โดย อาจารย์ Ener",
               size: "sm",
-              color: "#A8A8A8",
+              color: "#A4A4A8",
             },
           ],
         },
 
         {
-          type: "separator",
-          margin: "md",
-          color: "#2E2E2E",
-        },
-
-        {
           type: "box",
           layout: "vertical",
-          margin: "lg",
+          backgroundColor: "#151515",
+          cornerRadius: "18px",
+          borderWidth: "1px",
+          borderColor: "#262629",
+          paddingAll: "16px",
           spacing: "sm",
           contents: [
-
             {
               type: "text",
               text: "ระดับพลัง",
               size: "sm",
-              color: "#9E9E9E",
+              color: "#9B9BA1",
             },
-
             {
               type: "box",
               layout: "baseline",
               spacing: "sm",
               contents: [
-
                 {
                   type: "text",
-                  text: score.display,
+                  text: score.display || "-",
                   weight: "bold",
-                  size: "xxl",
+                  size: "4xl",
                   color: accentColor,
                   flex: 0,
                 },
-
                 {
                   type: "text",
                   text: "/ 10",
                   size: "md",
                   color: "#D0D0D0",
                   flex: 0,
-                }
-
+                },
               ],
             },
-
             {
               type: "text",
-              text: getEnergyShortLabel(mainEnergy),
+              text: getEnergyShortLabel(mainEnergy || "พลังทั่วไป"),
               size: "sm",
-              color: "#E6E6E6",
+              color: "#ECECEC",
               wrap: true,
             },
-
             {
               type: "box",
               layout: "vertical",
               margin: "sm",
-              backgroundColor: "#2A2A2A",
+              backgroundColor: "#2B2B2E",
               cornerRadius: "8px",
-              height: "8px",
+              height: "10px",
               contents: [
                 {
                   type: "box",
                   layout: "vertical",
-                  width: score.percent,
+                  width: score.percent || "50%",
                   backgroundColor: accentColor,
                   cornerRadius: "8px",
-                  height: "8px",
+                  height: "10px",
                   contents: [],
                 },
               ],
             },
-
           ],
         },
 
         {
           type: "box",
           layout: "horizontal",
-          margin: "lg",
           spacing: "md",
           contents: [
-            createMetricCard("พลังหลัก", mainEnergy),
-            createMetricCard("ความสอดคล้อง", compatibility),
+            createMetricCard("พลังหลัก", mainEnergy || "-"),
+            createMetricCard("ความสอดคล้อง", compatibility || "-"),
           ],
         },
 
         {
           type: "box",
           layout: "vertical",
-          margin: "lg",
           spacing: "sm",
           contents: [
-
-            {
-              type: "text",
-              text: "ลักษณะพลัง",
-              weight: "bold",
-              size: "md",
-              color: "#FFFFFF",
-            },
-
-            ...energyLines.map(line => createEnergyLine(line))
-
+            createSectionTitle("ลักษณะพลัง"),
+            ...energyLines.map((line) => createEnergyLine(line)),
           ],
         },
-
       ],
     },
-
     styles: {
       body: {
-        backgroundColor: "#141414",
+        backgroundColor: "#101010",
       },
     },
-
   };
-
 }
 
-
-export function buildReadingBubble({ overview, closing }) {
-
+export function buildReadingBubble({ overview, closing, accentColor }) {
   return {
-
     type: "bubble",
-    size: "giga",
-
+    size: "mega",
     body: {
       type: "box",
       layout: "vertical",
       paddingAll: "18px",
       spacing: "md",
-      backgroundColor: "#141414",
-
+      backgroundColor: "#101010",
       contents: [
+        createTopAccent(accentColor),
 
         {
           type: "text",
           text: "คำอ่านพลัง",
           weight: "bold",
-          size: "lg",
+          size: "xl",
           color: "#F5F5F5",
-        },
-
-        {
-          type: "separator",
           margin: "md",
-          color: "#2E2E2E",
         },
 
         {
           type: "box",
           layout: "vertical",
-          margin: "md",
+          backgroundColor: "#161616",
+          cornerRadius: "18px",
+          borderWidth: "1px",
+          borderColor: "#262629",
+          paddingAll: "16px",
           spacing: "sm",
-
           contents: [
-
             {
               type: "text",
               text: "ภาพรวม",
               weight: "bold",
-              size: "md",
+              size: "sm",
               color: "#FFFFFF",
             },
-
-            {
-              type: "box",
-              layout: "vertical",
-              paddingAll: "12px",
-              backgroundColor: "#1B1B1B",
-              cornerRadius: "14px",
-              contents: [
-                {
-                  type: "text",
-                  text: safeWrapText(overview, 220),
-                  size: "sm",
-                  color: "#E0E0E0",
-                  wrap: true,
-                },
-              ],
-            },
-
-          ],
-        },
-
-        {
-          type: "box",
-          layout: "vertical",
-          margin: "md",
-          paddingAll: "12px",
-          backgroundColor: "#242424",
-          cornerRadius: "14px",
-          contents: [
             {
               type: "text",
               text: safeWrapText(
-                closing || "ลองส่งชิ้นถัดไปเพื่อเทียบพลังได้",
-                90
+                overview || "วัตถุชิ้นนี้มีพลังบางอย่างที่เด่นในเชิงการใช้งานและการหนุนจังหวะชีวิต",
+                260
               ),
               size: "sm",
-              color: "#FFFFFF",
+              color: "#E3E3E3",
               wrap: true,
             },
           ],
         },
 
+        createSoftNote(
+          closing || "ลองส่งชิ้นถัดไปเพื่อเทียบพลังได้",
+          "#F4E3AE",
+          "#1D1A14"
+        ),
       ],
     },
-
+    styles: {
+      body: {
+        backgroundColor: "#101010",
+      },
+    },
   };
-
 }
-
 
 export function buildUsageBubble({
   suitable,
   notStrong,
   accentColor
 }) {
-
   const suitableLines =
-    suitable.length > 0
+    Array.isArray(suitable) && suitable.length > 0
       ? suitable.slice(0, 2)
-      : ["• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
+      : ["ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
 
   const suitableDisplay = suitableLines
     .filter(Boolean)
-    .map(line => `• ${stripBullet(line)}`)
+    .map((line) => `• ${stripBullet(line)}`)
     .join("\n");
 
-
   return {
-
     type: "bubble",
-    size: "giga",
-
+    size: "mega",
     body: {
       type: "box",
       layout: "vertical",
       paddingAll: "18px",
       spacing: "md",
-      backgroundColor: "#141414",
-
+      backgroundColor: "#101010",
       contents: [
+        createTopAccent(accentColor),
 
         {
           type: "text",
           text: "จังหวะที่เหมาะ",
           weight: "bold",
-          size: "lg",
+          size: "xl",
           color: "#F5F5F5",
-        },
-
-        {
-          type: "separator",
           margin: "md",
-          color: "#2E2E2E",
         },
 
-        {
-          type: "box",
-          layout: "vertical",
-          margin: "md",
-          spacing: "md",
-          contents: [
+        createSectionCard(
+          "เหมาะใช้เมื่อ",
+          suitableDisplay || "• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง",
+          "#152017",
+          140
+        ),
 
-            createSectionCard(
-              "เหมาะใช้เมื่อ",
-              suitableDisplay || "• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง",
-              "#1D221C",
-              130
-            ),
-
-            createSectionCard(
-              "อาจไม่เด่นเมื่อ",
-              notStrong || "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว",
-              "#221D1D",
-              90
-            ),
-
-          ],
-        },
-
+        createSectionCard(
+          "อาจไม่เด่นเมื่อ",
+          notStrong || "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว",
+          "#241919",
+          100
+        ),
       ],
     },
 
-
     footer: {
-
       type: "box",
       layout: "vertical",
-      paddingAll: "14px",
+      backgroundColor: "#101010",
+      paddingTop: "4px",
+      paddingBottom: "14px",
+      paddingStart: "18px",
+      paddingEnd: "18px",
       spacing: "sm",
-
       contents: [
-
         {
           type: "button",
           style: "secondary",
           action: {
             type: "message",
-            label: "ประวัติการสแกนล่าสุด",
+            label: "ดูประวัติ",
             text: "history"
           }
         },
-
         {
           type: "button",
           style: "primary",
           color: accentColor,
           action: {
             type: "message",
-            label: "ส่งชิ้นถัดไป",
+            label: "สแกนชิ้นต่อไป",
             text: "ขอสแกนชิ้นถัดไป"
           }
         }
-
       ],
-
     },
 
     styles: {
       body: {
-        backgroundColor: "#141414",
+        backgroundColor: "#101010",
       },
       footer: {
-        backgroundColor: "#141414",
+        backgroundColor: "#101010",
       },
     },
-
   };
-
 }

@@ -14,23 +14,8 @@ unclear          = ภาพไม่ชัด / ไม่แน่ใจ
 unsupported      = มี 1 ชิ้น แต่ไม่ใช่ประเภทที่ Ener Scan รองรับ
 */
 
-export async function checkSingleObject(imageBase64) {
-  console.log("[OBJECT_CHECK] start");
-  console.log("[OBJECT_CHECK] imageBase64 length:", imageBase64?.length || 0);
-
-  const startedAt = Date.now();
-
-  try {
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      temperature: 0,
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: `
+function buildObjectCheckPrompt() {
+  return `
 ตรวจสอบภาพนี้ แล้วตอบเพียงคำเดียวจากตัวเลือกด้านล่าง
 
 คำอธิบายระบบ:
@@ -58,48 +43,93 @@ single_supported
 multiple
 unclear
 unsupported
-              `,
+  `.trim();
+}
+
+function normalizeObjectCheckOutput(text) {
+  const output = String(text || "").trim().toLowerCase();
+
+  if (output === "multiple" || output.includes("multiple")) {
+    return "multiple";
+  }
+
+  if (output === "unclear" || output.includes("unclear")) {
+    return "unclear";
+  }
+
+  if (output === "unsupported" || output.includes("unsupported")) {
+    return "unsupported";
+  }
+
+  if (
+    output === "single_supported" ||
+    output.includes("single_supported")
+  ) {
+    return "single_supported";
+  }
+
+  return null;
+}
+
+export async function checkSingleObject(imageBase64) {
+  const cleanImageBase64 = String(imageBase64 || "").trim();
+
+  console.log("[OBJECT_CHECK] start");
+  console.log("[OBJECT_CHECK] imageBase64 length:", cleanImageBase64.length);
+
+  if (!cleanImageBase64) {
+    console.log("[OBJECT_CHECK] empty imageBase64 -> fallback unsupported");
+    return "unsupported";
+  }
+
+  const startedAt = Date.now();
+
+  try {
+    const response = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      temperature: 0,
+      max_output_tokens: 20,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: buildObjectCheckPrompt(),
             },
             {
               type: "input_image",
-              image_url: `data:image/jpeg;base64,${imageBase64}`,
+              image_url: `data:image/jpeg;base64,${cleanImageBase64}`,
             },
           ],
         },
       ],
     });
 
-    const output = (response.output_text || "").trim().toLowerCase();
+    const rawOutput = String(response.output_text || "").trim();
+    const normalized = normalizeObjectCheckOutput(rawOutput);
 
     const endedAt = Date.now();
     const elapsed = endedAt - startedAt;
 
-    console.log("[OBJECT_CHECK] raw result:", output);
+    console.log("[OBJECT_CHECK] raw result:", rawOutput || "-");
+    console.log("[OBJECT_CHECK] normalized result:", normalized || "invalid");
     console.log("[OBJECT_CHECK] elapsedMs:", elapsed);
 
-    if (output.includes("multiple")) {
-      return "multiple";
+    if (normalized) {
+      return normalized;
     }
 
-    if (output.includes("unclear")) {
-      return "unclear";
-    }
-
-    if (output.includes("unsupported")) {
-      return "unsupported";
-    }
-
-    if (output.includes("single_supported")) {
-      return "single_supported";
-    }
-
-    // fallback กรณี model ตอบหลุด format
-    console.log("[OBJECT_CHECK] fallback to unsupported");
+    console.log("[OBJECT_CHECK] invalid output -> fallback unsupported");
     return "unsupported";
   } catch (error) {
-    console.error("[OBJECT_CHECK] failed:", error?.message || error);
+    const endedAt = Date.now();
+    const elapsed = endedAt - startedAt;
 
-    // ถ้า AI ล้มเหลว ไม่ควรปล่อยผ่านเป็น single แล้ว
+    console.error("[OBJECT_CHECK] failed:", error?.message || error);
+    console.error("[OBJECT_CHECK] elapsedMs_before_fail:", elapsed);
+
+    // ถ้า AI ล้มเหลว ไม่ควรปล่อยผ่านเป็น single
     // ให้ถือว่าไม่รองรับไว้ก่อนเพื่อกันผลสแกนมั่ว
     return "unsupported";
   }

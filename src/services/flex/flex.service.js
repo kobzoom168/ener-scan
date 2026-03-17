@@ -8,7 +8,6 @@ import {
 } from "./flex.components.js";
 
 export function buildScanFlex(rawText) {
-
   const accentColor = pickMainEnergyColor(rawText);
 
   const {
@@ -44,6 +43,7 @@ export function buildScanFlex(rawText) {
         buildReadingBubble({
           overview,
           closing,
+          accentColor,
         }),
         buildUsageBubble({
           suitable,
@@ -53,5 +53,4 @@ export function buildScanFlex(rawText) {
       ],
     },
   };
-
 }

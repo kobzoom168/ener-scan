@@ -1,73 +1,209 @@
-import { cleanLine } from "./flex.utils.js";
+import { cleanLine, stripBullet } from "./flex.utils.js";
 
-function getLineValue(lines, prefix) {
-  const found = lines.find((line) => line.startsWith(prefix));
-  if (!found) return "-";
-  return found.slice(prefix.length).trim() || "-";
+function normalizeText(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .replace(/[：﹕]/g, ":")
+    .replace(/\t/g, " ")
+    .trim();
 }
 
-function getBulletValue(lines, prefix) {
-  const found = lines.find((line) => line.startsWith(prefix));
-  if (!found) return "-";
-  return found.slice(prefix.length).trim() || "-";
+function normalizeLines(rawText) {
+  return normalizeText(rawText)
+    .split("\n")
+    .map((line) => cleanLine(line))
+    .filter((line) => line !== "");
 }
 
-function extractSection(lines, startTitle, stopTitles = []) {
-  const startIndex = lines.findIndex((line) => line === startTitle);
+function isExactTitle(line, title) {
+  return cleanLine(line) === cleanLine(title);
+}
+
+function findLineByPrefixes(lines, prefixes = []) {
+  for (const line of lines) {
+    const normalizedLine = cleanLine(line);
+
+    for (const prefix of prefixes) {
+      const normalizedPrefix = cleanLine(prefix);
+      if (normalizedLine.startsWith(normalizedPrefix)) {
+        return normalizedLine;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getLineValue(lines, prefixes = [], fallback = "-") {
+  const found = findLineByPrefixes(lines, prefixes);
+  if (!found) return fallback;
+
+  for (const prefix of prefixes) {
+    const normalizedPrefix = cleanLine(prefix);
+    if (found.startsWith(normalizedPrefix)) {
+      const value = found.slice(normalizedPrefix.length).trim();
+      return value || fallback;
+    }
+  }
+
+  return fallback;
+}
+
+function findSectionStartIndex(lines, titles = []) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = cleanLine(lines[i]);
+    const matched = titles.some((title) => isExactTitle(line, title));
+    if (matched) return i;
+  }
+
+  return -1;
+}
+
+function isStopTitle(line, stopTitles = []) {
+  return stopTitles.some((title) => isExactTitle(line, title));
+}
+
+function extractSection(lines, startTitles = [], stopTitles = []) {
+  const startIndex = findSectionStartIndex(lines, startTitles);
   if (startIndex === -1) return "";
 
   const collected = [];
 
   for (let i = startIndex + 1; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (stopTitles.includes(line)) break;
+    const line = cleanLine(lines[i]);
+
     if (!line) continue;
+    if (isStopTitle(line, stopTitles)) break;
+
     collected.push(line);
   }
 
   return collected.join("\n").trim();
 }
 
-function extractBulletSection(lines, startTitle, stopTitles = []) {
-  const raw = extractSection(lines, startTitle, stopTitles);
+function extractBulletSection(lines, startTitles = [], stopTitles = [], limit = 2) {
+  const raw = extractSection(lines, startTitles, stopTitles);
+
+  if (!raw) return [];
 
   return raw
     .split("\n")
     .map((line) => cleanLine(line))
     .filter(Boolean)
-    .map((line) => (line.startsWith("•") ? line : `• ${line}`))
-    .slice(0, 2);
+    .map((line) => `• ${stripBullet(line)}`)
+    .slice(0, limit);
+}
+
+function extractSingleLineAfterTitle(lines, startTitles = [], stopTitles = [], fallback = "-") {
+  const section = extractSection(lines, startTitles, stopTitles);
+
+  if (!section) return fallback;
+
+  const firstLine = section
+    .split("\n")
+    .map((line) => cleanLine(line))
+    .find(Boolean);
+
+  return firstLine || fallback;
+}
+
+function findFallbackMainEnergy(rawText) {
+  const text = normalizeText(rawText);
+
+  if (text.includes("พลังปกป้อง")) return "พลังปกป้อง";
+  if (text.includes("พลังอำนาจ")) return "พลังอำนาจ";
+  if (text.includes("พลังโชคลาภ")) return "พลังโชคลาภ";
+  if (text.includes("พลังสมดุล")) return "พลังสมดุล";
+  if (text.includes("พลังเมตตา")) return "พลังเมตตา";
+  if (text.includes("พลังดึงดูด")) return "พลังดึงดูด";
+
+  return "-";
 }
 
 export function parseScanText(rawText) {
+  const lines = normalizeLines(rawText);
 
-  const lines = String(rawText || "")
-    .split("\n")
-    .map((line) => cleanLine(line))
-    .filter((line) => line !== "");
+  const energyScore = getLineValue(lines, [
+    "ระดับพลัง:",
+    "ระดับพลัง :",
+    "คะแนนพลัง:",
+    "คะแนนพลัง :",
+  ]);
+
+  const parsedMainEnergy = getLineValue(lines, [
+    "พลังหลัก:",
+    "พลังหลัก :",
+    "ประเภทพลัง:",
+    "ประเภทพลัง :",
+  ]);
+
+  const mainEnergy =
+    parsedMainEnergy && parsedMainEnergy !== "-"
+      ? parsedMainEnergy
+      : findFallbackMainEnergy(rawText);
+
+  const compatibility = getLineValue(lines, [
+    "ความสอดคล้องกับเจ้าของ:",
+    "ความสอดคล้องกับเจ้าของ :",
+    "ความสอดคล้อง:",
+    "ความสอดคล้อง :",
+  ]);
+
+  const personality = getLineValue(lines, [
+    "• บุคลิก:",
+    "• บุคลิก :",
+    "บุคลิก:",
+    "บุคลิก :",
+  ]);
+
+  const tone = getLineValue(lines, [
+    "• โทนพลัง:",
+    "• โทนพลัง :",
+    "โทนพลัง:",
+    "โทนพลัง :",
+  ]);
+
+  const hidden = getLineValue(lines, [
+    "• พลังซ่อน:",
+    "• พลังซ่อน :",
+    "พลังซ่อน:",
+    "พลังซ่อน :",
+  ]);
+
+  const overview =
+    extractSection(
+      lines,
+      ["ภาพรวม", "คำอ่านพลัง", "สรุปภาพรวม"],
+      ["เหมาะใช้เมื่อ", "อาจไม่เด่นเมื่อ", "ปิดท้าย"]
+    ) || "-";
+
+  const suitable = extractBulletSection(
+    lines,
+    ["เหมาะใช้เมื่อ", "เหมาะในช่วง", "เหมาะกับจังหวะ"],
+    ["อาจไม่เด่นเมื่อ", "ปิดท้าย"],
+    2
+  );
+
+  const notStrong = extractSingleLineAfterTitle(
+    lines,
+    ["อาจไม่เด่นเมื่อ", "ไม่เด่นเมื่อ", "ควรระวังเมื่อ"],
+    ["ปิดท้าย"],
+    "-"
+  );
+
+  const closing =
+    extractSection(lines, ["ปิดท้าย", "คำแนะนำเพิ่มเติม", "ข้อแนะนำเพิ่มเติม"]) || "-";
 
   return {
-    energyScore: getLineValue(lines, "ระดับพลัง:"),
-    mainEnergy: getLineValue(lines, "พลังหลัก:"),
-    compatibility: getLineValue(lines, "ความสอดคล้องกับเจ้าของ:"),
-    personality: getBulletValue(lines, "• บุคลิก:"),
-    tone: getBulletValue(lines, "• โทนพลัง:"),
-    hidden: getBulletValue(lines, "• พลังซ่อน:"),
-
-    overview: extractSection(lines, "ภาพรวม", [
-      "เหมาะใช้เมื่อ",
-      "อาจไม่เด่นเมื่อ",
-      "ปิดท้าย",
-    ]),
-
-    suitable: extractBulletSection(lines, "เหมาะใช้เมื่อ", [
-      "อาจไม่เด่นเมื่อ",
-      "ปิดท้าย",
-    ]),
-
-    notStrong: extractSection(lines, "อาจไม่เด่นเมื่อ", ["ปิดท้าย"]),
-
-    closing: extractSection(lines, "ปิดท้าย"),
+    energyScore: energyScore || "-",
+    mainEnergy: mainEnergy || "-",
+    compatibility: compatibility || "-",
+    personality: personality || "-",
+    tone: tone || "-",
+    hidden: hidden || "-",
+    overview,
+    suitable: suitable.length > 0 ? suitable : [],
+    notStrong: notStrong || "-",
+    closing: closing || "-",
   };
-
 }
