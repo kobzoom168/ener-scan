@@ -1,6 +1,7 @@
 const activeImageUsers = new Set();
 const lastAcceptedImageEventAtMap = new Map();
 const latestScanJobMap = new Map();
+const userFlowVersionMap = new Map();
 
 const IMAGE_BURST_WINDOW_MS = 8000;
 
@@ -51,6 +52,29 @@ export function markAcceptedImageEvent(userId, eventTimestamp) {
   lastAcceptedImageEventAtMap.set(normalizedUserId, eventTimestamp);
 }
 
+export function bumpUserFlowVersion(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return 0;
+
+  const nextVersion = (userFlowVersionMap.get(normalizedUserId) || 0) + 1;
+  userFlowVersionMap.set(normalizedUserId, nextVersion);
+  return nextVersion;
+}
+
+export function getUserFlowVersion(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return 0;
+
+  return userFlowVersionMap.get(normalizedUserId) || 0;
+}
+
+export function isCurrentFlowVersion(userId, version) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return false;
+
+  return (userFlowVersionMap.get(normalizedUserId) || 0) === version;
+}
+
 export function startScanJob(userId) {
   const normalizedUserId = normalizeUserId(userId);
   if (!normalizedUserId) return null;
@@ -86,6 +110,16 @@ export function getLatestScanJobId(userId) {
   if (!normalizedUserId) return null;
 
   return latestScanJobMap.get(normalizedUserId) || null;
+}
+
+export function clearUserRuntime(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
+
+  activeImageUsers.delete(normalizedUserId);
+  lastAcceptedImageEventAtMap.delete(normalizedUserId);
+  latestScanJobMap.delete(normalizedUserId);
+  userFlowVersionMap.delete(normalizedUserId);
 }
 
 export function getRuntimeConfig() {

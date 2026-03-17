@@ -6,9 +6,7 @@ import {
   clearSession,
 } from "../stores/session.store.js";
 
-import {
-  getSavedBirthdate,
-} from "../stores/userProfile.store.js";
+import { getSavedBirthdate } from "../stores/userProfile.store.js";
 
 import {
   getEventTimestamp,
@@ -18,6 +16,7 @@ import {
   isInImageBurstWindow,
   markAcceptedImageEvent,
   clearLatestScanJob,
+  bumpUserFlowVersion,
 } from "../stores/runtime.store.js";
 
 import { getScanHistory } from "../stores/scanHistory.store.js";
@@ -101,6 +100,7 @@ async function handleStatsCommand({ client, replyToken, userId }) {
 
 async function handleImageMessage({ client, event, userId, session }) {
   const eventTimestamp = getEventTimestamp(event);
+  const flowVersion = bumpUserFlowVersion(userId);
 
   if (isUserProcessingImage(userId)) {
     console.log("[WEBHOOK] ignore image: active processing", userId);
@@ -126,6 +126,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     );
 
     console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
+    console.log("[WEBHOOK] flowVersion(image):", flowVersion);
 
     const isDuplicate = await isDuplicateImage(imageBuffer);
 
@@ -158,6 +159,7 @@ async function handleImageMessage({ client, event, userId, session }) {
         userId,
         messageId: event.message.id,
         timestamp: event.timestamp,
+        flowVersion,
       });
 
       await replyFlexWithFallback({
@@ -228,6 +230,7 @@ async function handleImageMessage({ client, event, userId, session }) {
         userId,
         imageBuffer,
         birthdate: savedBirthdate,
+        flowVersion,
       });
       return;
     }
@@ -287,12 +290,17 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
+  const flowVersion = bumpUserFlowVersion(userId);
+
+  console.log("[WEBHOOK] flowVersion(text):", flowVersion);
+
   await runScanFlow({
     client,
     replyToken: event.replyToken,
     userId,
     imageBuffer: session.pendingImage.imageBuffer,
     birthdate: text,
+    flowVersion,
   });
 }
 
@@ -362,10 +370,17 @@ export function lineWebhookRouter(lineConfig) {
             event.message?.type === "image" &&
             (imageCountByUser.get(userId) || 0) > 1
           ) {
+            const flowVersion = bumpUserFlowVersion(userId);
+
             if (!multiImageUsersReplied.has(userId) && event.replyToken) {
               multiImageUsersReplied.add(userId);
               clearLatestScanJob(userId);
               clearSession(userId);
+
+              console.log("[WEBHOOK] multi image request rejected", {
+                userId,
+                flowVersion,
+              });
 
               await replyFlexWithFallback({
                 client,

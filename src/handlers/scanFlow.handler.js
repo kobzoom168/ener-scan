@@ -1,11 +1,6 @@
-import {
-  setBirthdate,
-  clearSession,
-} from "../stores/session.store.js";
+import { setBirthdate, clearSession } from "../stores/session.store.js";
 
-import {
-  saveBirthdate,
-} from "../stores/userProfile.store.js";
+import { saveBirthdate } from "../stores/userProfile.store.js";
 
 import { runDeepScan } from "../services/scan.service.js";
 import { replyText, replyFlex } from "../services/lineReply.service.js";
@@ -35,6 +30,7 @@ import {
   isLatestScanJob,
   clearLatestScanJob,
   getLatestScanJobId,
+  isCurrentFlowVersion,
 } from "../stores/runtime.store.js";
 
 import {
@@ -98,6 +94,7 @@ export async function runScanFlow({
   userId,
   imageBuffer,
   birthdate,
+  flowVersion,
 }) {
   const rate = checkScanRateLimit(userId);
 
@@ -138,6 +135,7 @@ export async function runScanFlow({
     console.log("[WEBHOOK] runScanFlow start", {
       userId,
       scanJobId,
+      flowVersion,
       birthdate,
       imageBufferLength: imageBuffer?.length || 0,
       startedAt: Date.now(),
@@ -152,6 +150,7 @@ export async function runScanFlow({
     console.log("[WEBHOOK] runScanFlow result ready", {
       userId,
       scanJobId,
+      flowVersion,
       resultLength: resultText?.length || 0,
       finishedAt: Date.now(),
     });
@@ -199,8 +198,18 @@ export async function runScanFlow({
     throw err;
   }
 
+  if (!isCurrentFlowVersion(userId, flowVersion)) {
+    console.log("[WEBHOOK] skip stale scan result by flowVersion", {
+      userId,
+      flowVersion,
+    });
+    clearLatestScanJob(userId, scanJobId);
+    clearSession(userId);
+    return;
+  }
+
   if (!isLatestScanJob(userId, scanJobId)) {
-    console.log("[WEBHOOK] skip stale scan result", {
+    console.log("[WEBHOOK] skip stale scan result by scanJob", {
       userId,
       scanJobId,
       latestScanJobId: getLatestScanJobId(userId),
@@ -211,6 +220,16 @@ export async function runScanFlow({
 
   saveScanArtifacts(userId, resultText);
   setCooldownNow(userId);
+
+  if (!isCurrentFlowVersion(userId, flowVersion)) {
+    console.log("[WEBHOOK] skip stale reply after save", {
+      userId,
+      flowVersion,
+    });
+    clearLatestScanJob(userId, scanJobId);
+    clearSession(userId);
+    return;
+  }
 
   await replyScanResult({
     client,
