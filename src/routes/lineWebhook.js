@@ -23,30 +23,20 @@ import { getScanHistory } from "../stores/scanHistory.store.js";
 import { getUserStats } from "../stores/userStats.store.js";
 
 import { getImageBufferFromLineMessage } from "../services/image.service.js";
-import { isDuplicateImage } from "../services/dedupe.service.js";
-import { checkSingleObject } from "../services/objectCheck.service.js";
 
 import { replyText } from "../services/lineReply.service.js";
 import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
 import {
-  buildUnsupportedObjectFlex,
   buildIdleFlex,
-  buildDuplicateImageFlex,
   buildMultipleObjectsFlex,
-  buildUnclearImageFlex,
 } from "../services/flex/status.flex.js";
 
 import {
   isValidBirthdate,
-  toBase64,
   formatHistory,
   formatBangkokDateTime,
   buildStartInstructionText,
   buildMultiImageInRequestText,
-  buildMultipleObjectsText,
-  buildUnclearImageText,
-  buildUnsupportedObjectText,
-  buildDuplicateImageText,
   buildNoHistoryText,
   buildNoStatsText,
   buildIdleText,
@@ -131,92 +121,8 @@ async function handleImageMessage({ client, event, userId, session }) {
     console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
     console.log("[WEBHOOK] flowVersion(image):", flowVersion);
 
-    console.log("[WEBHOOK] before isDuplicateImage");
-    const isDuplicate = await isDuplicateImage(imageBuffer);
-    console.log("[WEBHOOK] after isDuplicateImage:", isDuplicate);
-
-    if (isDuplicate) {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildDuplicateImageFlex(),
-        fallbackText: buildDuplicateImageText(),
-        logLabel: "duplicate image flex",
-      });
-      return;
-    }
-
-    const imageBase64 = toBase64(imageBuffer);
-
-    console.log("[WEBHOOK] before checkSingleObject");
-    const objectCheck = await checkSingleObject(imageBase64);
-    console.log("[WEBHOOK] after checkSingleObject:", objectCheck);
-
-    if (objectCheck === "multiple") {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildMultipleObjectsFlex(),
-        fallbackText: buildMultipleObjectsText(),
-        logLabel: "multiple objects flex",
-      });
-      return;
-    }
-
-    if (objectCheck === "unclear") {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildUnclearImageFlex(),
-        fallbackText: buildUnclearImageText(),
-        logLabel: "unclear image flex",
-      });
-      return;
-    }
-
-    if (objectCheck === "unsupported") {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildUnsupportedObjectFlex(),
-        fallbackText: buildUnsupportedObjectText(),
-        logLabel: "unsupported object flex",
-      });
-      return;
-    }
-
-    if (objectCheck !== "single_supported") {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildUnsupportedObjectFlex(),
-        fallbackText: buildUnsupportedObjectText(),
-        logLabel: "unsupported object flex",
-      });
-      return;
-    }
-
     markAcceptedImageEvent(userId, eventTimestamp);
+    clearLatestScanJob(userId);
 
     console.log("[WEBHOOK] before getSavedBirthdate");
     const savedBirthdate = await getSavedBirthdate(userId);
@@ -250,6 +156,11 @@ async function handleImageMessage({ client, event, userId, session }) {
       fallbackText: buildStartInstructionText(),
       logLabel: "start instruction flex",
     });
+
+    console.log("[WEBHOOK] after start instruction reply");
+  } catch (error) {
+    console.error("[WEBHOOK] handleImageMessage error:", error);
+    throw error;
   } finally {
     clearUserProcessingImage(userId);
   }
