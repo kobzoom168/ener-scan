@@ -21,6 +21,26 @@ function isValidBirthdate(text) {
   return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
 }
 
+function formatHistory(history) {
+  return history
+    .slice(0, 5)
+    .map((h, i) => {
+      const date = new Date(h.time);
+
+      const formatted = date.toLocaleString("th-TH", {
+        timeZone: "Asia/Bangkok",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      return `${i + 1}. ${formatted}`;
+    })
+    .join("\n");
+}
+
 function buildStartInstructionText() {
   return [
     "ได้รับภาพแล้วครับ ✨",
@@ -60,25 +80,6 @@ function buildRateLimitText() {
   ].join("\n");
 }
 
-function formatHistory(history) {
-  return history
-    .slice(0, 5)
-    .map((h, i) => {
-      const date = new Date(h.time);
-
-      const formatted =
-        date.toLocaleDateString("th-TH") +
-        " " +
-        date.toLocaleTimeString("th-TH", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-
-      return `${i + 1}. ${formatted}`;
-    })
-    .join("\n");
-}
-
 export function lineWebhookRouter(lineConfig) {
   const client = new line.Client(lineConfig);
 
@@ -94,11 +95,12 @@ export function lineWebhookRouter(lineConfig) {
           try {
             console.log(`\n----- event #${index + 1} -----`);
             console.log("type:", event.type);
-            console.log("userId:", event.source?.userId);
+            console.log("userId:", event.source?.userId || "no-user-id");
+            console.log("message type:", event.message?.type);
 
             await handleEvent({ client, event });
           } catch (err) {
-            console.error("event error:", err);
+            console.error(`event #${index + 1} error:`, err);
 
             if (event.replyToken) {
               await replyText(
@@ -184,10 +186,7 @@ async function handleEvent({ client, event }) {
     -------------------------
     */
 
-    if (
-      text.toLowerCase() === "history" ||
-      text === "ประวัติ"
-    ) {
+    if (text.toLowerCase() === "history" || text === "ประวัติ") {
       const history = getScanHistory(userId);
 
       if (history.length === 0) {
