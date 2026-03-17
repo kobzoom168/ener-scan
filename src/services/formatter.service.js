@@ -12,30 +12,49 @@ function cleanupRepeatedPhrases(text) {
 }
 
 function ensureSectionSpacing(text) {
-  return text
-    .replace(/ลักษณะพลัง/g, "\nลักษณะพลัง")
-    .replace(/ภาพรวม/g, "\nภาพรวม")
-    .replace(/เหตุผลที่เข้ากับเจ้าของ/g, "\nเหตุผลที่เข้ากับเจ้าของ")
-    .replace(/ชิ้นนี้หนุนเรื่อง/g, "\nชิ้นนี้หนุนเรื่อง")
-    .replace(/เหมาะใช้เมื่อ/g, "\nเหมาะใช้เมื่อ")
-    .replace(/อาจไม่เด่นเมื่อ/g, "\nอาจไม่เด่นเมื่อ")
-    .replace(/ควรใช้แบบไหน/g, "\nควรใช้แบบไหน")
-    .replace(/ปิดท้าย/g, "\nปิดท้าย");
+  const headings = [
+    "ลักษณะพลัง",
+    "ภาพรวม",
+    "เหตุผลที่เข้ากับเจ้าของ",
+    "ชิ้นนี้หนุนเรื่อง",
+    "เหมาะใช้เมื่อ",
+    "อาจไม่เด่นเมื่อ",
+    "ควรใช้แบบไหน",
+    "ปิดท้าย",
+  ];
+
+  let result = String(text || "");
+
+  for (const heading of headings) {
+    const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    result = result.replace(
+      new RegExp(`(^|\\n)\\s*${escaped}\\s*:??\\s*`, "g"),
+      `$1${heading}\n`
+    );
+
+    result = result.replace(
+      new RegExp(`([^\\n])\\s+${escaped}\\s*:??\\s*`, "g"),
+      `$1\n${heading}\n`
+    );
+  }
+
+  return result;
 }
 
 export function formatScanOutput(rawText) {
   let text = normalizeWhitespace(rawText);
 
   text = cleanupRepeatedPhrases(text);
-  text = text.replace(/\n{3,}/g, "\n\n");
-  text = text.replace(/ +/g, " ");
 
   if (!text.startsWith("🔮")) {
     text = `🔮 ผลการตรวจพลังวัตถุ โดย อาจารย์ Ener\n\n${text}`;
   }
 
   text = ensureSectionSpacing(text);
+
   text = text.replace(/\n{3,}/g, "\n\n");
+  text = text.replace(/[ \t]{2,}/g, " ");
 
   text = clampTextLength(text, MAX_SCAN_OUTPUT_LENGTH);
 

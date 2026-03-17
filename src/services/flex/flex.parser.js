@@ -8,8 +8,31 @@ function normalizeText(text) {
     .trim();
 }
 
+function forceHeadingLineBreaks(text) {
+  const headings = [
+    "ลักษณะพลัง",
+    "ภาพรวม",
+    "เหตุผลที่เข้ากับเจ้าของ",
+    "ชิ้นนี้หนุนเรื่อง",
+    "เหมาะใช้เมื่อ",
+    "อาจไม่เด่นเมื่อ",
+    "ควรใช้แบบไหน",
+    "ปิดท้าย",
+  ];
+
+  let result = String(text || "");
+
+  for (const heading of headings) {
+    const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\s*${escaped}\\s*`, "g");
+    result = result.replace(regex, `\n${heading}\n`);
+  }
+
+  return result;
+}
+
 function normalizeLines(rawText) {
-  return normalizeText(rawText)
+  return forceHeadingLineBreaks(normalizeText(rawText))
     .split("\n")
     .map((line) => cleanLine(line))
     .filter((line) => line !== "");

@@ -12,7 +12,7 @@ import { isDuplicateImage } from "../services/dedupe.service.js";
 import { runDeepScan } from "../services/scan.service.js";
 
 import { replyText, replyFlex } from "../services/lineReply.service.js";
-import { buildScanFlex } from "../services/flex.service.js";
+import { buildScanFlex } from "../services/flex/flex.service.js";
 
 import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
 import {
