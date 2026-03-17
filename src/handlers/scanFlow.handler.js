@@ -1,6 +1,6 @@
 import { setBirthdate, clearSession } from "../stores/session.store.js";
 
-import { saveBirthdate } from "../stores/userProfile.store.js";
+import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
 import { replyText, replyFlex } from "../services/lineReply.service.js";
@@ -127,7 +127,7 @@ export async function runScanFlow({
   const scanJobId = startScanJob(userId);
 
   setBirthdate(userId, birthdate);
-  saveBirthdate(userId, birthdate);
+  await saveBirthdate(userId, birthdate);
 
   let resultText = "";
 

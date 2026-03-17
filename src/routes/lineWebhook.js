@@ -6,7 +6,7 @@ import {
   clearSession,
 } from "../stores/session.store.js";
 
-import { getSavedBirthdate } from "../stores/userProfile.store.js";
+import { getSavedBirthdate } from "../stores/userProfile.db.js";
 
 import {
   getEventTimestamp,
@@ -219,7 +219,7 @@ async function handleImageMessage({ client, event, userId, session }) {
 
     markAcceptedImageEvent(userId, eventTimestamp);
 
-    const savedBirthdate = getSavedBirthdate(userId);
+    const savedBirthdate = await getSavedBirthdate(userId);
 
     if (savedBirthdate) {
       console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
