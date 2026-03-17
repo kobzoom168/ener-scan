@@ -15,8 +15,19 @@ function normalizeLines(rawText) {
     .filter((line) => line !== "");
 }
 
-function isExactTitle(line, title) {
-  return cleanLine(line) === cleanLine(title);
+function normalizeTitle(text) {
+  return cleanLine(text)
+    .replace(/\s*:\s*$/, "")
+    .trim();
+}
+
+function isTitleMatch(line, title) {
+  return normalizeTitle(line) === normalizeTitle(title);
+}
+
+function startsWithAnyTitle(line, titles = []) {
+  const normalizedLine = normalizeTitle(line);
+  return titles.some((title) => normalizedLine === normalizeTitle(title));
 }
 
 function findLineByPrefixes(lines, prefixes = []) {
@@ -52,15 +63,22 @@ function getLineValue(lines, prefixes = [], fallback = "-") {
 function findSectionStartIndex(lines, titles = []) {
   for (let i = 0; i < lines.length; i += 1) {
     const line = cleanLine(lines[i]);
-    const matched = titles.some((title) => isExactTitle(line, title));
-    if (matched) return i;
+    if (startsWithAnyTitle(line, titles)) {
+      return i;
+    }
   }
 
   return -1;
 }
 
 function isStopTitle(line, stopTitles = []) {
-  return stopTitles.some((title) => isExactTitle(line, title));
+  return startsWithAnyTitle(line, stopTitles);
+}
+
+function sanitizeSectionLines(collected = []) {
+  return collected
+    .map((line) => cleanLine(line))
+    .filter(Boolean);
 }
 
 function extractSection(lines, startTitles = [], stopTitles = []) {
@@ -78,7 +96,7 @@ function extractSection(lines, startTitles = [], stopTitles = []) {
     collected.push(line);
   }
 
-  return collected.join("\n").trim();
+  return sanitizeSectionLines(collected).join("\n").trim();
 }
 
 function extractBulletSection(lines, startTitles = [], stopTitles = [], limit = 2) {
@@ -94,7 +112,12 @@ function extractBulletSection(lines, startTitles = [], stopTitles = [], limit = 
     .slice(0, limit);
 }
 
-function extractSingleLineAfterTitle(lines, startTitles = [], stopTitles = [], fallback = "-") {
+function extractSingleLineAfterTitle(
+  lines,
+  startTitles = [],
+  stopTitles = [],
+  fallback = "-"
+) {
   const section = extractSection(lines, startTitles, stopTitles);
 
   if (!section) return fallback;
@@ -174,25 +197,55 @@ export function parseScanText(rawText) {
     extractSection(
       lines,
       ["ภาพรวม", "คำอ่านพลัง", "สรุปภาพรวม"],
-      ["เหมาะใช้เมื่อ", "อาจไม่เด่นเมื่อ", "ปิดท้าย"]
+      [
+        "เหมาะใช้เมื่อ",
+        "เหมาะใช้เมื่อ:",
+        "เหมาะใช้เมื่อ :",
+        "เหมาะในช่วง",
+        "เหมาะกับจังหวะ",
+        "อาจไม่เด่นเมื่อ",
+        "อาจไม่เด่นเมื่อ:",
+        "อาจไม่เด่นเมื่อ :",
+        "ไม่เด่นเมื่อ",
+        "ควรระวังเมื่อ",
+        "ปิดท้าย",
+        "ปิดท้าย:",
+        "ปิดท้าย :",
+      ]
     ) || "-";
 
   const suitable = extractBulletSection(
     lines,
-    ["เหมาะใช้เมื่อ", "เหมาะในช่วง", "เหมาะกับจังหวะ"],
-    ["อาจไม่เด่นเมื่อ", "ปิดท้าย"],
+    ["เหมาะใช้เมื่อ", "เหมาะใช้เมื่อ:", "เหมาะในช่วง", "เหมาะกับจังหวะ"],
+    [
+      "อาจไม่เด่นเมื่อ",
+      "อาจไม่เด่นเมื่อ:",
+      "ไม่เด่นเมื่อ",
+      "ควรระวังเมื่อ",
+      "ปิดท้าย",
+      "ปิดท้าย:",
+    ],
     2
   );
 
   const notStrong = extractSingleLineAfterTitle(
     lines,
-    ["อาจไม่เด่นเมื่อ", "ไม่เด่นเมื่อ", "ควรระวังเมื่อ"],
-    ["ปิดท้าย"],
+    [
+      "อาจไม่เด่นเมื่อ",
+      "อาจไม่เด่นเมื่อ:",
+      "ไม่เด่นเมื่อ",
+      "ควรระวังเมื่อ",
+    ],
+    ["ปิดท้าย", "ปิดท้าย:"],
     "-"
   );
 
   const closing =
-    extractSection(lines, ["ปิดท้าย", "คำแนะนำเพิ่มเติม", "ข้อแนะนำเพิ่มเติม"]) || "-";
+    extractSection(
+      lines,
+      ["ปิดท้าย", "ปิดท้าย:", "คำแนะนำเพิ่มเติม", "ข้อแนะนำเพิ่มเติม"],
+      []
+    ) || "-";
 
   return {
     energyScore: energyScore || "-",

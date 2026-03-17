@@ -123,7 +123,7 @@ function createSoftNote(text, color = "#F4E3AE", backgroundColor = "#1D1A14") {
     contents: [
       {
         type: "text",
-        text: safeWrapText(text || "-", 100),
+        text: safeWrapText(text || "-", 140),
         size: "sm",
         color,
         wrap: true,
@@ -275,6 +275,10 @@ export function buildSummaryBubble({
 }
 
 export function buildReadingBubble({ overview, closing, accentColor }) {
+  const cleanOverview =
+    String(overview || "").trim() ||
+    "วัตถุชิ้นนี้มีพลังบางอย่างที่เด่นในเชิงการใช้งานและการหนุนจังหวะชีวิต";
+
   return {
     type: "bubble",
     size: "mega",
@@ -315,10 +319,7 @@ export function buildReadingBubble({ overview, closing, accentColor }) {
             },
             {
               type: "text",
-              text: safeWrapText(
-                overview || "วัตถุชิ้นนี้มีพลังบางอย่างที่เด่นในเชิงการใช้งานและการหนุนจังหวะชีวิต",
-                260
-              ),
+              text: cleanOverview,
               size: "sm",
               color: "#E3E3E3",
               wrap: true,
@@ -381,14 +382,14 @@ export function buildUsageBubble({
           "เหมาะใช้เมื่อ",
           suitableDisplay || "• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง",
           "#152017",
-          140
+          180
         ),
 
         createSectionCard(
           "อาจไม่เด่นเมื่อ",
           notStrong || "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว",
           "#241919",
-          100
+          140
         ),
       ],
     },
