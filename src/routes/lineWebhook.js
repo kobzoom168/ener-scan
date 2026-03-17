@@ -14,6 +14,8 @@ import { runDeepScan } from "../services/scan.service.js";
 import { replyText, replyFlex } from "../services/lineReply.service.js";
 import { buildScanFlex } from "../services/flex.service.js";
 
+import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
+
 import { checkScanRateLimit } from "../stores/rateLimit.store.js";
 import {
   getCooldownStatus,
@@ -239,7 +241,14 @@ async function handleImageMessage({ client, event, userId, session }) {
     imageBuffer,
   });
 
-  await replyText(client, event.replyToken, buildStartInstructionText());
+  try {
+    await replyFlex(client, event.replyToken, buildStartInstructionFlex());
+    console.log("[WEBHOOK] start instruction sent as flex");
+  } catch (error) {
+    console.error("[WEBHOOK] start instruction flex failed:", error);
+    await replyText(client, event.replyToken, buildStartInstructionText());
+    console.log("[WEBHOOK] fallback start instruction sent as text");
+  }
 }
 
 function saveScanArtifacts(userId, resultText) {
