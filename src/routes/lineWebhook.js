@@ -110,23 +110,42 @@ async function handleImageMessage({ client, event, userId, session }) {
   setUserProcessingImage(userId);
 
   try {
-    console.log("[WEBHOOK] before getImageBuffer");
+    let imageBuffer;
 
-    const imageBuffer = await getImageBufferFromLineMessage(
-      client,
-      event.message.id
-    );
+    try {
+      console.log("[WEBHOOK] before getImageBuffer");
 
-    console.log("[WEBHOOK] after getImageBuffer");
-    console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
-    console.log("[WEBHOOK] flowVersion(image):", flowVersion);
+      imageBuffer = await getImageBufferFromLineMessage(
+        client,
+        event.message.id
+      );
+
+      console.log("[WEBHOOK] after getImageBuffer");
+      console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
+      console.log("[WEBHOOK] flowVersion(image):", flowVersion);
+    } catch (error) {
+      console.error("[WEBHOOK] image download failed:", error);
+
+      await replyText(
+        client,
+        event.replyToken,
+        "ขออภัยครับ ระบบโหลดรูปจาก LINE ไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
+      );
+      return;
+    }
 
     markAcceptedImageEvent(userId, eventTimestamp);
     clearLatestScanJob(userId);
 
-    console.log("[WEBHOOK] before getSavedBirthdate");
-    const savedBirthdate = await getSavedBirthdate(userId);
-    console.log("[WEBHOOK] after getSavedBirthdate:", savedBirthdate);
+    let savedBirthdate = null;
+
+    try {
+      console.log("[WEBHOOK] before getSavedBirthdate");
+      savedBirthdate = await getSavedBirthdate(userId);
+      console.log("[WEBHOOK] after getSavedBirthdate:", savedBirthdate);
+    } catch (error) {
+      console.error("[WEBHOOK] getSavedBirthdate failed:", error);
+    }
 
     if (savedBirthdate) {
       console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
@@ -158,9 +177,6 @@ async function handleImageMessage({ client, event, userId, session }) {
     });
 
     console.log("[WEBHOOK] after start instruction reply");
-  } catch (error) {
-    console.error("[WEBHOOK] handleImageMessage error:", error);
-    throw error;
   } finally {
     clearUserProcessingImage(userId);
   }
