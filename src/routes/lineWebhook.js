@@ -86,6 +86,12 @@ async function handleEvent({ client, event }) {
   if (event.message.type === "image") {
     console.log("received image");
 
+    // 🔒 กันส่งหลายรูปตอนรอ birthdate
+    if (session.pendingImage) {
+      console.log("ignore image: already waiting birthdate");
+      return;
+    }
+
     const imageBuffer = await getImageBufferFromLineMessage(
       client,
       event.message.id
@@ -112,7 +118,7 @@ async function handleEvent({ client, event }) {
     await replyText(
       client,
       event.replyToken,
-      "ได้รับภาพแล้วครับ ✨\nรบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น 14/09/1995"
+      "ได้รับภาพแล้วครับ ✨\nกรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป\n\nรบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น\n14/09/1995"
     );
 
     return;
@@ -140,7 +146,7 @@ async function handleEvent({ client, event }) {
       await replyText(
         client,
         event.replyToken,
-        "รูปแบบวันเกิดยังไม่ถูกครับ\nลองพิมพ์แบบ 14/09/1995"
+        "รูปแบบวันเกิดยังไม่ถูกครับ\nลองพิมพ์แบบ\n14/09/1995"
       );
       return;
     }
