@@ -21,10 +21,6 @@ function normalizeTitle(text) {
     .trim();
 }
 
-function isTitleMatch(line, title) {
-  return normalizeTitle(line) === normalizeTitle(title);
-}
-
 function startsWithAnyTitle(line, titles = []) {
   const normalizedLine = normalizeTitle(line);
   return titles.some((title) => normalizedLine === normalizeTitle(title));
@@ -198,6 +194,10 @@ export function parseScanText(rawText) {
       lines,
       ["ภาพรวม", "คำอ่านพลัง", "สรุปภาพรวม"],
       [
+        "เหตุผลที่เข้ากับเจ้าของ",
+        "เหตุผลที่เข้ากับเจ้าของ:",
+        "ชิ้นนี้หนุนเรื่อง",
+        "ชิ้นนี้หนุนเรื่อง:",
         "เหมาะใช้เมื่อ",
         "เหมาะใช้เมื่อ:",
         "เหมาะใช้เมื่อ :",
@@ -208,11 +208,47 @@ export function parseScanText(rawText) {
         "อาจไม่เด่นเมื่อ :",
         "ไม่เด่นเมื่อ",
         "ควรระวังเมื่อ",
+        "ควรใช้แบบไหน",
+        "ควรใช้แบบไหน:",
         "ปิดท้าย",
         "ปิดท้าย:",
         "ปิดท้าย :",
       ]
     ) || "-";
+
+  const fitReason =
+    extractSection(
+      lines,
+      ["เหตุผลที่เข้ากับเจ้าของ", "เหตุผลที่เข้ากับเจ้าของ:"],
+      [
+        "ชิ้นนี้หนุนเรื่อง",
+        "ชิ้นนี้หนุนเรื่อง:",
+        "เหมาะใช้เมื่อ",
+        "เหมาะใช้เมื่อ:",
+        "อาจไม่เด่นเมื่อ",
+        "อาจไม่เด่นเมื่อ:",
+        "ควรใช้แบบไหน",
+        "ควรใช้แบบไหน:",
+        "ปิดท้าย",
+        "ปิดท้าย:",
+      ]
+    ) || "-";
+
+  const supportTopics = extractBulletSection(
+    lines,
+    ["ชิ้นนี้หนุนเรื่อง", "ชิ้นนี้หนุนเรื่อง:"],
+    [
+      "เหมาะใช้เมื่อ",
+      "เหมาะใช้เมื่อ:",
+      "อาจไม่เด่นเมื่อ",
+      "อาจไม่เด่นเมื่อ:",
+      "ควรใช้แบบไหน",
+      "ควรใช้แบบไหน:",
+      "ปิดท้าย",
+      "ปิดท้าย:",
+    ],
+    2
+  );
 
   const suitable = extractBulletSection(
     lines,
@@ -222,6 +258,8 @@ export function parseScanText(rawText) {
       "อาจไม่เด่นเมื่อ:",
       "ไม่เด่นเมื่อ",
       "ควรระวังเมื่อ",
+      "ควรใช้แบบไหน",
+      "ควรใช้แบบไหน:",
       "ปิดท้าย",
       "ปิดท้าย:",
     ],
@@ -236,6 +274,13 @@ export function parseScanText(rawText) {
       "ไม่เด่นเมื่อ",
       "ควรระวังเมื่อ",
     ],
+    ["ควรใช้แบบไหน", "ควรใช้แบบไหน:", "ปิดท้าย", "ปิดท้าย:"],
+    "-"
+  );
+
+  const usageGuide = extractSingleLineAfterTitle(
+    lines,
+    ["ควรใช้แบบไหน", "ควรใช้แบบไหน:"],
     ["ปิดท้าย", "ปิดท้าย:"],
     "-"
   );
@@ -255,8 +300,11 @@ export function parseScanText(rawText) {
     tone: tone || "-",
     hidden: hidden || "-",
     overview,
+    fitReason,
+    supportTopics: supportTopics.length > 0 ? supportTopics : [],
     suitable: suitable.length > 0 ? suitable : [],
     notStrong: notStrong || "-",
+    usageGuide: usageGuide || "-",
     closing: closing || "-",
   };
 }

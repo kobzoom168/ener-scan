@@ -75,7 +75,7 @@ export function createEnergyLine(text) {
       },
       {
         type: "text",
-        text: safeWrapText(text || "-", 44),
+        text: safeWrapText(text || "-", 60),
         size: "sm",
         color: "#F2F2F2",
         wrap: true,
@@ -86,7 +86,7 @@ export function createEnergyLine(text) {
   };
 }
 
-export function createSectionCard(title, body, backgroundColor, maxLength = 120) {
+export function createSectionCard(title, body, backgroundColor, maxLength = 180) {
   return {
     type: "box",
     layout: "vertical",
@@ -123,9 +123,43 @@ function createSoftNote(text, color = "#F4E3AE", backgroundColor = "#1D1A14") {
     contents: [
       {
         type: "text",
-        text: safeWrapText(text || "-", 140),
+        text: safeWrapText(text || "-", 160),
         size: "sm",
         color,
+        wrap: true,
+      },
+    ],
+  };
+}
+
+function createBulletBlock(title, lines = [], backgroundColor = "#152017") {
+  const normalizedLines =
+    Array.isArray(lines) && lines.length > 0
+      ? lines.filter(Boolean).slice(0, 2)
+      : ["• -"];
+
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingAll: "14px",
+    backgroundColor,
+    cornerRadius: "16px",
+    spacing: "sm",
+    contents: [
+      {
+        type: "text",
+        text: title,
+        weight: "bold",
+        size: "sm",
+        color: "#FFFFFF",
+      },
+      {
+        type: "text",
+        text: normalizedLines
+          .map((line) => `• ${stripBullet(line)}`)
+          .join("\n"),
+        size: "sm",
+        color: "#E3E3E3",
         wrap: true,
       },
     ],
@@ -274,10 +308,19 @@ export function buildSummaryBubble({
   };
 }
 
-export function buildReadingBubble({ overview, closing, accentColor }) {
+export function buildReadingBubble({
+  overview,
+  fitReason,
+  closing,
+  accentColor
+}) {
   const cleanOverview =
     String(overview || "").trim() ||
     "วัตถุชิ้นนี้มีพลังบางอย่างที่เด่นในเชิงการใช้งานและการหนุนจังหวะชีวิต";
+
+  const cleanFitReason =
+    String(fitReason || "").trim() ||
+    "ชิ้นนี้เข้ากับเจ้าของในเชิงหนุนความนิ่งและประคองจังหวะ มากกว่าการผลักให้พุ่งเร็วทันที";
 
   return {
     type: "bubble",
@@ -327,8 +370,15 @@ export function buildReadingBubble({ overview, closing, accentColor }) {
           ],
         },
 
+        createSectionCard(
+          "เหตุผลที่เข้ากับเจ้าของ",
+          cleanFitReason,
+          "#141C22",
+          220
+        ),
+
         createSoftNote(
-          closing || "ลองส่งชิ้นถัดไปเพื่อเทียบพลังได้",
+          closing || "ถ้ามีอีกชิ้น ลองส่งมาเทียบกันได้ครับ จะเห็นมุมพลังที่ต่างกันชัดขึ้น",
           "#F4E3AE",
           "#1D1A14"
         ),
@@ -343,19 +393,28 @@ export function buildReadingBubble({ overview, closing, accentColor }) {
 }
 
 export function buildUsageBubble({
+  supportTopics,
   suitable,
   notStrong,
+  usageGuide,
   accentColor
 }) {
+  const supportLines =
+    Array.isArray(supportTopics) && supportTopics.length > 0
+      ? supportTopics.slice(0, 2)
+      : [
+          "ใจนิ่งเวลาต้องตัดสินใจ",
+          "รับแรงกดดันได้มั่นคงขึ้น",
+        ];
+
   const suitableLines =
     Array.isArray(suitable) && suitable.length > 0
       ? suitable.slice(0, 2)
       : ["ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
 
-  const suitableDisplay = suitableLines
-    .filter(Boolean)
-    .map((line) => `• ${stripBullet(line)}`)
-    .join("\n");
+  const cleanUsageGuide =
+    String(usageGuide || "").trim() ||
+    "เหมาะพกติดตัวในวันที่ต้องรับแรงกดดัน หรือใช้ต่อเนื่องเพื่อให้พลังค่อย ๆ หนุนจังหวะ";
 
   return {
     type: "bubble",
@@ -371,25 +430,37 @@ export function buildUsageBubble({
 
         {
           type: "text",
-          text: "จังหวะที่เหมาะ",
+          text: "ใช้ยังไงให้คุ้ม",
           weight: "bold",
           size: "xl",
           color: "#F5F5F5",
           margin: "md",
         },
 
-        createSectionCard(
+        createBulletBlock(
+          "ชิ้นนี้หนุนเรื่อง",
+          supportLines,
+          "#152017"
+        ),
+
+        createBulletBlock(
           "เหมาะใช้เมื่อ",
-          suitableDisplay || "• ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง",
-          "#152017",
-          180
+          suitableLines,
+          "#14201B"
         ),
 
         createSectionCard(
           "อาจไม่เด่นเมื่อ",
           notStrong || "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว",
           "#241919",
-          140
+          160
+        ),
+
+        createSectionCard(
+          "ควรใช้แบบไหน",
+          cleanUsageGuide,
+          "#1B1824",
+          180
         ),
       ],
     },

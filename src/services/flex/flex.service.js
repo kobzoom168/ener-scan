@@ -18,8 +18,11 @@ export function buildScanFlex(rawText) {
     tone,
     hidden,
     overview,
+    fitReason,
+    supportTopics,
     suitable,
     notStrong,
+    usageGuide,
     closing,
   } = parseScanText(rawText);
 
@@ -42,12 +45,15 @@ export function buildScanFlex(rawText) {
         }),
         buildReadingBubble({
           overview,
+          fitReason,
           closing,
           accentColor,
         }),
         buildUsageBubble({
+          supportTopics,
           suitable,
           notStrong,
+          usageGuide,
           accentColor,
         }),
       ],
