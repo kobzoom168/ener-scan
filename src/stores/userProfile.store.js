@@ -29,3 +29,7 @@ export function clearSavedBirthdate(userId) {
 
   userProfileMap.set(userId, next);
 }
+
+export function clearUserProfile(userId) {
+  userProfileMap.delete(userId);
+}

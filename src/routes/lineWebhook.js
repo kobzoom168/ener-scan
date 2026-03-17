@@ -49,21 +49,27 @@ import { parseScanResultForHistory } from "../services/history/history.parser.js
 ------------------------------------------------
 ANTI-SPAM IMAGE GUARDS
 1) activeImageUsers = กัน event ซ้อนระหว่างกำลังประมวลผล
-2) recentImageAcceptedAtMap = กัน burst ต่อเนื่องหลังรูปแรกจบแล้ว
+2) lastAcceptedImageEventAtMap = กันหลายรูปใน "ชุดเดียวกัน"
+   โดยอิงจาก event.timestamp ของ LINE ไม่ใช่เวลาที่ server ประมวลผล
 ------------------------------------------------
 */
 const activeImageUsers = new Set();
-const recentImageAcceptedAtMap = new Map();
-const IMAGE_BURST_WINDOW_MS = 8000;
+const lastAcceptedImageEventAtMap = new Map();
+const IMAGE_BURST_WINDOW_MS = 20000;
 
-function isInImageBurstWindow(userId) {
-  const lastAcceptedAt = recentImageAcceptedAtMap.get(userId);
-  if (!lastAcceptedAt) return false;
-  return Date.now() - lastAcceptedAt < IMAGE_BURST_WINDOW_MS;
+function getEventTimestamp(event) {
+  const ts = Number(event?.timestamp || 0);
+  return Number.isFinite(ts) && ts > 0 ? ts : Date.now();
 }
 
-function markImageAcceptedNow(userId) {
-  recentImageAcceptedAtMap.set(userId, Date.now());
+function isInImageBurstWindow(userId, eventTimestamp) {
+  const lastAcceptedEventAt = lastAcceptedImageEventAtMap.get(userId);
+  if (!lastAcceptedEventAt) return false;
+  return eventTimestamp - lastAcceptedEventAt < IMAGE_BURST_WINDOW_MS;
+}
+
+function markAcceptedImageEvent(userId, eventTimestamp) {
+  lastAcceptedImageEventAtMap.set(userId, eventTimestamp);
 }
 
 function isValidBirthdate(text) {
@@ -392,8 +398,10 @@ async function runScanFlow({
 }
 
 async function handleImageMessage({ client, event, userId, session }) {
-  if (isInImageBurstWindow(userId)) {
-    console.log("[WEBHOOK] ignore image: burst window", userId);
+  const eventTimestamp = getEventTimestamp(event);
+
+  if (isInImageBurstWindow(userId, eventTimestamp)) {
+    console.log("[WEBHOOK] ignore image: burst window", userId, eventTimestamp);
     return;
   }
 
@@ -403,12 +411,11 @@ async function handleImageMessage({ client, event, userId, session }) {
   }
 
   if (session.pendingImage) {
-    console.log("[WEBHOOK] ignore image: waiting birthdate");
+    console.log("[WEBHOOK] ignore image: waiting birthdate", userId);
     return;
   }
 
   activeImageUsers.add(userId);
-  markImageAcceptedNow(userId);
 
   try {
     const imageBuffer = await getImageBufferFromLineMessage(
@@ -421,6 +428,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     const isDuplicate = await isDuplicateImage(imageBuffer);
 
     if (isDuplicate) {
+      markAcceptedImageEvent(userId, eventTimestamp);
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -437,6 +445,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     console.log("[WEBHOOK] object check result:", objectCheck);
 
     if (objectCheck === "multiple") {
+      markAcceptedImageEvent(userId, eventTimestamp);
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -448,6 +457,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     }
 
     if (objectCheck === "unclear") {
+      markAcceptedImageEvent(userId, eventTimestamp);
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -459,6 +469,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     }
 
     if (objectCheck === "unsupported") {
+      markAcceptedImageEvent(userId, eventTimestamp);
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -470,6 +481,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     }
 
     if (objectCheck !== "single_supported") {
+      markAcceptedImageEvent(userId, eventTimestamp);
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -481,6 +493,8 @@ async function handleImageMessage({ client, event, userId, session }) {
     }
 
     const savedBirthdate = getSavedBirthdate(userId);
+
+    markAcceptedImageEvent(userId, eventTimestamp);
 
     if (savedBirthdate) {
       console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
@@ -609,6 +623,7 @@ export function lineWebhookRouter(lineConfig) {
             "[WEBHOOK] message type:",
             event.message?.type || "no-message-type"
           );
+          console.log("[WEBHOOK] timestamp:", event.timestamp || "no-timestamp");
 
           await handleEvent({ client, event });
         } catch (err) {
