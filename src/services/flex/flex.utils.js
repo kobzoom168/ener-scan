@@ -19,7 +19,7 @@ export function safeWrapText(text, maxLength = 300) {
   const sliced = clean.slice(0, Math.max(1, maxLength - 1));
   const lastSpace = sliced.lastIndexOf(" ");
 
-  if (lastSpace > Math.floor(maxLength * 0.6)) {
+  if (lastSpace > Math.floor(maxLength * 0.55)) {
     return `${sliced.slice(0, lastSpace).trim()}…`;
   }
 
@@ -117,7 +117,7 @@ export function normalizeScore(scoreText) {
 export function getEnergyShortLabel(mainEnergy) {
   const value = cleanLine(mainEnergy);
 
-  if (!value || value === "-") return "พลังเฉพาะทาง";
+  if (!value || value === "-") return "พลังหลักเฉพาะทาง";
 
   if (value.includes("ปกป้อง") || value.includes("คุ้มครอง")) {
     return "พลังปกป้องเด่น";
@@ -143,7 +143,7 @@ export function getEnergyShortLabel(mainEnergy) {
     return "พลังดึงดูดเด่น";
   }
 
-  return safeWrapText(value, 40);
+  return safeWrapText(value, 32);
 }
 
 export function mapHiddenToShortText(hidden) {
@@ -158,9 +158,11 @@ export function mapHiddenToShortText(hidden) {
   if (clean.includes("ดึงดูด") || clean.includes("เสน่ห์")) return "แรงดึงดูด";
   if (clean.includes("สิ่งศักดิ์สิทธิ์")) return "แรงศักดิ์สิทธิ์";
   if (clean.includes("บางเบา")) return "พลังรอง";
+  if (clean.includes("ลึก")) return "พลังลึก";
+  if (clean.includes("นิ่ง")) return "พลังนิ่งแฝง";
   if (clean.includes("แฝง")) return "พลังแฝง";
 
-  return safeWrapText(clean, 28);
+  return safeWrapText(clean, 24);
 }
 
 export function formatToneLine(tone) {
@@ -195,6 +197,10 @@ export function buildEnergyLines({ personality, tone, hidden }) {
   const hiddenText = mapHiddenToShortText(hidden);
   if (hiddenText && hiddenText !== "-") {
     lines.push(safeWrapText(hiddenText, 60));
+  }
+
+  if (lines.length === 0) {
+    return ["พลังนิ่ง", "โทนเฉพาะทาง"];
   }
 
   return lines.slice(0, 3);

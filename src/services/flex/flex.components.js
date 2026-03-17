@@ -16,6 +16,32 @@ function createTopAccent(accentColor) {
   };
 }
 
+function createMainTitle(title, subtitle) {
+  return {
+    type: "box",
+    layout: "vertical",
+    margin: "md",
+    spacing: "xs",
+    contents: [
+      {
+        type: "text",
+        text: title,
+        weight: "bold",
+        size: "xl",
+        color: "#F8F8F8",
+        wrap: true,
+      },
+      {
+        type: "text",
+        text: subtitle,
+        size: "sm",
+        color: "#A4A4A8",
+        wrap: true,
+      },
+    ],
+  };
+}
+
 function createSectionTitle(text) {
   return {
     type: "text",
@@ -23,6 +49,50 @@ function createSectionTitle(text) {
     weight: "bold",
     size: "md",
     color: "#FFFFFF",
+  };
+}
+
+function createCardShell(contents, options = {}) {
+  const {
+    backgroundColor = "#151515",
+    borderColor = "#262629",
+    cornerRadius = "18px",
+    paddingAll = "16px",
+    spacing = "sm",
+  } = options;
+
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor,
+    cornerRadius,
+    borderWidth: "1px",
+    borderColor,
+    paddingAll,
+    spacing,
+    contents,
+  };
+}
+
+function createProgressBar(percent = "50%", accentColor = "#D4AF37") {
+  return {
+    type: "box",
+    layout: "vertical",
+    margin: "sm",
+    backgroundColor: "#2B2B2E",
+    cornerRadius: "8px",
+    height: "10px",
+    contents: [
+      {
+        type: "box",
+        layout: "vertical",
+        width: percent,
+        backgroundColor: accentColor,
+        cornerRadius: "8px",
+        height: "10px",
+        contents: [],
+      },
+    ],
   };
 }
 
@@ -166,6 +236,29 @@ function createBulletBlock(title, lines = [], backgroundColor = "#152017") {
   };
 }
 
+function createFooterButton({
+  label,
+  text,
+  style = "secondary",
+  color,
+}) {
+  const button = {
+    type: "button",
+    style,
+    action: {
+      type: "message",
+      label,
+      text,
+    },
+  };
+
+  if (color) {
+    button.color = color;
+  }
+
+  return button;
+}
+
 export function buildSummaryBubble({
   accentColor,
   score,
@@ -175,7 +268,11 @@ export function buildSummaryBubble({
   tone,
   hidden
 }) {
-  const energyLines = buildEnergyLines({ personality, tone, hidden });
+  const rawEnergyLines = buildEnergyLines({ personality, tone, hidden });
+  const energyLines =
+    Array.isArray(rawEnergyLines) && rawEnergyLines.length > 0
+      ? rawEnergyLines
+      : ["พลังนิ่ง", "โทนพลังเฉพาะทาง"];
 
   return {
     type: "bubble",
@@ -189,39 +286,10 @@ export function buildSummaryBubble({
       contents: [
         createTopAccent(accentColor),
 
-        {
-          type: "box",
-          layout: "vertical",
-          margin: "md",
-          spacing: "xs",
-          contents: [
-            {
-              type: "text",
-              text: "ผลการตรวจพลังวัตถุ",
-              weight: "bold",
-              size: "xl",
-              color: "#F8F8F8",
-              wrap: true,
-            },
-            {
-              type: "text",
-              text: "โดย อาจารย์ Ener",
-              size: "sm",
-              color: "#A4A4A8",
-            },
-          ],
-        },
+        createMainTitle("ผลการตรวจพลังวัตถุ", "โดย อาจารย์ Ener"),
 
-        {
-          type: "box",
-          layout: "vertical",
-          backgroundColor: "#151515",
-          cornerRadius: "18px",
-          borderWidth: "1px",
-          borderColor: "#262629",
-          paddingAll: "16px",
-          spacing: "sm",
-          contents: [
+        createCardShell(
+          [
             {
               type: "text",
               text: "ระดับพลัง",
@@ -257,27 +325,16 @@ export function buildSummaryBubble({
               color: "#ECECEC",
               wrap: true,
             },
-            {
-              type: "box",
-              layout: "vertical",
-              margin: "sm",
-              backgroundColor: "#2B2B2E",
-              cornerRadius: "8px",
-              height: "10px",
-              contents: [
-                {
-                  type: "box",
-                  layout: "vertical",
-                  width: score.percent || "50%",
-                  backgroundColor: accentColor,
-                  cornerRadius: "8px",
-                  height: "10px",
-                  contents: [],
-                },
-              ],
-            },
+            createProgressBar(score.percent || "50%", accentColor),
           ],
-        },
+          {
+            backgroundColor: "#151515",
+            borderColor: "#262629",
+            cornerRadius: "18px",
+            paddingAll: "16px",
+            spacing: "sm",
+          }
+        ),
 
         {
           type: "box",
@@ -343,16 +400,8 @@ export function buildReadingBubble({
           margin: "md",
         },
 
-        {
-          type: "box",
-          layout: "vertical",
-          backgroundColor: "#161616",
-          cornerRadius: "18px",
-          borderWidth: "1px",
-          borderColor: "#262629",
-          paddingAll: "16px",
-          spacing: "sm",
-          contents: [
+        createCardShell(
+          [
             {
               type: "text",
               text: "ภาพรวม",
@@ -362,19 +411,26 @@ export function buildReadingBubble({
             },
             {
               type: "text",
-              text: cleanOverview,
+              text: safeWrapText(cleanOverview, 280),
               size: "sm",
               color: "#E3E3E3",
               wrap: true,
             },
           ],
-        },
+          {
+            backgroundColor: "#161616",
+            borderColor: "#262629",
+            cornerRadius: "18px",
+            paddingAll: "16px",
+            spacing: "sm",
+          }
+        ),
 
         createSectionCard(
           "เหตุผลที่เข้ากับเจ้าของ",
           cleanFitReason,
           "#141C22",
-          220
+          240
         ),
 
         createSoftNote(
@@ -416,6 +472,10 @@ export function buildUsageBubble({
     String(usageGuide || "").trim() ||
     "เหมาะพกติดตัวในวันที่ต้องรับแรงกดดัน หรือใช้ต่อเนื่องเพื่อให้พลังค่อย ๆ หนุนจังหวะ";
 
+  const cleanNotStrong =
+    String(notStrong || "").trim() ||
+    "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว";
+
   return {
     type: "bubble",
     size: "mega",
@@ -440,26 +500,26 @@ export function buildUsageBubble({
         createBulletBlock(
           "ชิ้นนี้หนุนเรื่อง",
           supportLines,
-          "#152017"
+          "#122817"
         ),
 
         createBulletBlock(
           "เหมาะใช้เมื่อ",
           suitableLines,
-          "#14201B"
+          "#0F2A23"
         ),
 
         createSectionCard(
           "อาจไม่เด่นเมื่อ",
-          notStrong || "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว",
-          "#241919",
+          cleanNotStrong,
+          "#2A1719",
           160
         ),
 
         createSectionCard(
           "ควรใช้แบบไหน",
           cleanUsageGuide,
-          "#1B1824",
+          "#1B1830",
           180
         ),
       ],
@@ -475,25 +535,17 @@ export function buildUsageBubble({
       paddingEnd: "18px",
       spacing: "sm",
       contents: [
-        {
-          type: "button",
+        createFooterButton({
+          label: "ดูประวัติ",
+          text: "history",
           style: "secondary",
-          action: {
-            type: "message",
-            label: "ดูประวัติ",
-            text: "history"
-          }
-        },
-        {
-          type: "button",
+        }),
+        createFooterButton({
+          label: "สแกนชิ้นต่อไป",
+          text: "ขอสแกนชิ้นถัดไป",
           style: "primary",
           color: accentColor,
-          action: {
-            type: "message",
-            label: "สแกนชิ้นต่อไป",
-            text: "ขอสแกนชิ้นถัดไป"
-          }
-        }
+        }),
       ],
     },
 

@@ -24,8 +24,16 @@ function forceHeadingLineBreaks(text) {
 
   for (const heading of headings) {
     const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`\\s*${escaped}\\s*`, "g");
-    result = result.replace(regex, `\n${heading}\n`);
+
+    result = result.replace(
+      new RegExp(`(^|\\n)\\s*${escaped}\\s*:?\\s*`, "g"),
+      `$1${heading}\n`
+    );
+
+    result = result.replace(
+      new RegExp(`([^\\n])\\s+${escaped}\\s*:?\\s*`, "g"),
+      `$1\n${heading}\n`
+    );
   }
 
   return result;
@@ -126,7 +134,7 @@ function extractBulletSection(lines, startTitles = [], stopTitles = [], limit = 
   return raw
     .split("\n")
     .map((line) => cleanLine(line))
-    .filter(Boolean)
+    .filter((line) => line && line !== "-" && !/^[:\-–—•]+$/.test(line))
     .map((line) => `• ${stripBullet(line)}`)
     .slice(0, limit);
 }
@@ -141,23 +149,43 @@ function extractSingleLineAfterTitle(
 
   if (!section) return fallback;
 
-  const firstLine = section
+  const extractedLines = section
     .split("\n")
     .map((line) => cleanLine(line))
-    .find(Boolean);
+    .filter(Boolean)
+    .slice(0, 2);
 
-  return firstLine || fallback;
+  if (extractedLines.length === 0) return fallback;
+
+  return extractedLines.join(" ");
 }
 
 function findFallbackMainEnergy(rawText) {
   const text = normalizeText(rawText);
 
-  if (text.includes("พลังปกป้อง")) return "พลังปกป้อง";
-  if (text.includes("พลังอำนาจ")) return "พลังอำนาจ";
-  if (text.includes("พลังโชคลาภ")) return "พลังโชคลาภ";
-  if (text.includes("พลังสมดุล")) return "พลังสมดุล";
-  if (text.includes("พลังเมตตา")) return "พลังเมตตา";
-  if (text.includes("พลังดึงดูด")) return "พลังดึงดูด";
+  if (text.includes("พลังปกป้อง") || text.includes("ปกป้อง") || text.includes("คุ้มครอง")) {
+    return "พลังปกป้อง";
+  }
+
+  if (text.includes("พลังอำนาจ") || text.includes("อำนาจ") || text.includes("บารมี")) {
+    return "พลังอำนาจ";
+  }
+
+  if (text.includes("พลังโชคลาภ") || text.includes("โชคลาภ") || text.includes("โชค")) {
+    return "พลังโชคลาภ";
+  }
+
+  if (text.includes("พลังสมดุล") || text.includes("สมดุล") || text.includes("นิ่ง")) {
+    return "พลังสมดุล";
+  }
+
+  if (text.includes("พลังเมตตา") || text.includes("เมตตา")) {
+    return "พลังเมตตา";
+  }
+
+  if (text.includes("พลังดึงดูด") || text.includes("ดึงดูด") || text.includes("เสน่ห์")) {
+    return "พลังดึงดูด";
+  }
 
   return "-";
 }
