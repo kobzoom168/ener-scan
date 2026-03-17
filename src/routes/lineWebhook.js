@@ -50,10 +50,13 @@ import { parseScanResultForHistory } from "../services/history/history.parser.js
 ANTI-SPAM IMAGE GUARDS
 1) activeImageUsers = กัน event ซ้อนระหว่างกำลังประมวลผล
 2) lastAcceptedImageEventAtMap = กันรูปถี่เกินไปหลังเพิ่งรับเคสก่อนหน้า
+3) latestScanJobMap = กันผล scan เก่าหลุดมาตอบทีหลัง
 ------------------------------------------------
 */
 const activeImageUsers = new Set();
 const lastAcceptedImageEventAtMap = new Map();
+const latestScanJobMap = new Map();
+
 const IMAGE_BURST_WINDOW_MS = 8000;
 
 function getEventTimestamp(event) {
@@ -69,6 +72,27 @@ function isInImageBurstWindow(userId, eventTimestamp) {
 
 function markAcceptedImageEvent(userId, eventTimestamp) {
   lastAcceptedImageEventAtMap.set(userId, eventTimestamp);
+}
+
+function startScanJob(userId) {
+  const jobId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  latestScanJobMap.set(userId, jobId);
+  return jobId;
+}
+
+function isLatestScanJob(userId, jobId) {
+  return latestScanJobMap.get(userId) === jobId;
+}
+
+function clearLatestScanJob(userId, jobId = null) {
+  if (!jobId) {
+    latestScanJobMap.delete(userId);
+    return;
+  }
+
+  if (latestScanJobMap.get(userId) === jobId) {
+    latestScanJobMap.delete(userId);
+  }
 }
 
 function isValidBirthdate(text) {
@@ -357,19 +381,37 @@ async function runScanFlow({
     return;
   }
 
+  const scanJobId = startScanJob(userId);
+
   setBirthdate(userId, birthdate);
   saveBirthdate(userId, birthdate);
 
   let resultText = "";
 
   try {
+    console.log("[WEBHOOK] runScanFlow start", {
+      userId,
+      scanJobId,
+      birthdate,
+      imageBufferLength: imageBuffer?.length || 0,
+      startedAt: Date.now(),
+    });
+
     resultText = await runDeepScan({
       imageBuffer,
       birthdate,
       userId,
     });
+
+    console.log("[WEBHOOK] runScanFlow result ready", {
+      userId,
+      scanJobId,
+      resultLength: resultText?.length || 0,
+      finishedAt: Date.now(),
+    });
   } catch (err) {
     console.error("[WEBHOOK] scan failed:", err?.message || err);
+    clearLatestScanJob(userId, scanJobId);
 
     if (err.message === "multiple_objects_detected") {
       await replyFlexWithFallback({
@@ -411,6 +453,16 @@ async function runScanFlow({
     throw err;
   }
 
+  if (!isLatestScanJob(userId, scanJobId)) {
+    console.log("[WEBHOOK] skip stale scan result", {
+      userId,
+      scanJobId,
+      latestScanJobId: latestScanJobMap.get(userId),
+    });
+    clearSession(userId);
+    return;
+  }
+
   saveScanArtifacts(userId, resultText);
   setCooldownNow(userId);
 
@@ -420,6 +472,7 @@ async function runScanFlow({
     resultText,
   });
 
+  clearLatestScanJob(userId, scanJobId);
   clearSession(userId);
 }
 
@@ -455,6 +508,8 @@ async function handleImageMessage({ client, event, userId, session }) {
 
     if (isDuplicate) {
       markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -472,6 +527,14 @@ async function handleImageMessage({ client, event, userId, session }) {
 
     if (objectCheck === "multiple") {
       markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+
+      console.log("[WEBHOOK] image rejected as multiple", {
+        userId,
+        messageId: event.message.id,
+        timestamp: event.timestamp,
+      });
+
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -484,6 +547,8 @@ async function handleImageMessage({ client, event, userId, session }) {
 
     if (objectCheck === "unclear") {
       markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -496,6 +561,8 @@ async function handleImageMessage({ client, event, userId, session }) {
 
     if (objectCheck === "unsupported") {
       markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -508,6 +575,8 @@ async function handleImageMessage({ client, event, userId, session }) {
 
     if (objectCheck !== "single_supported") {
       markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
@@ -667,6 +736,7 @@ export function lineWebhookRouter(lineConfig) {
           ) {
             if (!multiImageUsersReplied.has(userId) && event.replyToken) {
               multiImageUsersReplied.add(userId);
+              clearLatestScanJob(userId);
 
               await replyFlexWithFallback({
                 client,
