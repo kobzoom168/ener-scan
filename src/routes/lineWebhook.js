@@ -14,6 +14,8 @@ import { runDeepScan } from "../services/scan.service.js";
 import { replyText, replyFlex } from "../services/lineReply.service.js";
 import { buildScanFlex } from "../services/flex.service.js";
 
+import { checkScanRateLimit } from "../stores/rateLimit.store.js";
+
 function isValidBirthdate(text) {
   return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
 }
@@ -49,6 +51,15 @@ function buildUnclearImageText() {
   ].join("\n");
 }
 
+function buildRateLimitText() {
+  return [
+    "🔍 Ener Scan",
+    "",
+    "ระบบมีการใช้งานต่อเนื่อง",
+    "กรุณารอสักครู่ก่อนสแกนใหม่",
+  ].join("\n");
+}
+
 export function lineWebhookRouter(lineConfig) {
   const client = new line.Client(lineConfig);
 
@@ -65,31 +76,26 @@ export function lineWebhookRouter(lineConfig) {
             console.log(`\n----- event #${index + 1} -----`);
             console.log("type:", event.type);
             console.log("userId:", event.source?.userId || "no-user-id");
-            console.log("message type:", event.message?.type || "no-message-type");
-            console.log("timestamp:", event.timestamp || "no-timestamp");
+            console.log("message type:", event.message?.type);
 
             await handleEvent({ client, event });
 
-            console.log(`event #${index + 1} handled successfully`);
           } catch (err) {
             console.error(`event #${index + 1} error:`, err);
 
             if (event.replyToken) {
-              try {
-                await replyText(
-                  client,
-                  event.replyToken,
-                  "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ"
-                );
-              } catch (replyErr) {
-                console.error("fallback error reply failed:", replyErr);
-              }
+              await replyText(
+                client,
+                event.replyToken,
+                "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ"
+              );
             }
           }
         })
       );
 
       res.status(200).json({ ok: true });
+
     } catch (error) {
       console.error("webhook fatal:", error);
       res.status(500).json({ error: "webhook_failed" });
@@ -98,20 +104,13 @@ export function lineWebhookRouter(lineConfig) {
 }
 
 async function handleEvent({ client, event }) {
-  if (event.type !== "message") {
-    console.log("skip: not message event");
-    return;
-  }
 
-  if (!event.replyToken) {
-    console.log("skip: no reply token");
-    return;
-  }
+  if (event.type !== "message") return;
+  if (!event.replyToken) return;
 
   const userId = event.source?.userId;
 
   if (!userId) {
-    console.log("stop: no userId");
     await replyText(client, event.replyToken, "ไม่พบข้อมูลผู้ใช้ครับ");
     return;
   }
@@ -124,17 +123,15 @@ async function handleEvent({ client, event }) {
   });
 
   /*
-   * -------------------------
-   * IMAGE MESSAGE
-   * -------------------------
-   */
-  if (event.message?.type === "image") {
-    console.log("step: received image");
+  -------------------------
+  IMAGE MESSAGE
+  -------------------------
+  */
 
-    // ถ้ามี pendingImage อยู่แล้ว แปลว่าระบบกำลังรอวันเกิด
-    // ให้ ignore รูปใหม่ เพื่อกันเคสส่งหลายรูปติดกันแล้ว bot ตอบหลายครั้ง
+  if (event.message?.type === "image") {
+
     if (session.pendingImage) {
-      console.log("ignore image: already waiting for birthdate");
+      console.log("ignore image: already waiting birthdate");
       return;
     }
 
@@ -143,10 +140,7 @@ async function handleEvent({ client, event }) {
       event.message.id
     );
 
-    console.log("image size:", imageBuffer.length);
-
     const isDuplicate = await isDuplicateImage(imageBuffer);
-    console.log("is duplicate:", isDuplicate);
 
     if (isDuplicate) {
       await replyText(
@@ -162,31 +156,25 @@ async function handleEvent({ client, event }) {
       imageBuffer,
     });
 
-    console.log("pending image saved");
     await replyText(client, event.replyToken, buildStartInstructionText());
     return;
   }
 
   /*
-   * -------------------------
-   * TEXT MESSAGE
-   * -------------------------
-   */
-  if (event.message?.type === "text") {
-    const text = String(event.message.text || "").trim();
+  -------------------------
+  TEXT MESSAGE
+  -------------------------
+  */
 
-    console.log("step: received text");
-    console.log("text:", text);
+  if (event.message?.type === "text") {
+
+    const text = String(event.message.text || "").trim();
 
     if (!session.pendingImage) {
       await replyText(
         client,
         event.replyToken,
-        [
-          "ส่งรูปวัตถุมาได้เลยครับ",
-          "กรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป",
-          "แล้วผมจะให้กรอกวันเกิดเจ้าของต่อให้",
-        ].join("\n")
+        "ส่งรูปวัตถุมาได้เลยครับ\nกรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป"
       );
       return;
     }
@@ -200,13 +188,33 @@ async function handleEvent({ client, event }) {
       return;
     }
 
+    /*
+    -------------------------
+    RATE LIMIT CHECK
+    -------------------------
+    */
+
+    const rate = checkScanRateLimit(userId);
+
+    console.log("[RATE_LIMIT]", userId, rate);
+
+    if (!rate.allowed) {
+
+      await replyText(
+        client,
+        event.replyToken,
+        buildRateLimitText()
+      );
+
+      clearSession(userId);
+      return;
+    }
+
     setBirthdate(userId, text);
-    console.log("birthdate saved");
 
     let resultText = "";
 
     try {
-      console.log("running deep scan...");
 
       resultText = await runDeepScan({
         imageBuffer: session.pendingImage.imageBuffer,
@@ -214,44 +222,36 @@ async function handleEvent({ client, event }) {
         userId,
       });
 
-      console.log("scan finished, result length:", resultText.length);
     } catch (err) {
-      console.error("scan error:", err);
 
       if (err.message === "multiple_objects_detected") {
         await replyText(client, event.replyToken, buildMultipleObjectsText());
         clearSession(userId);
-        console.log("session cleared after multiple_objects_detected");
         return;
       }
 
       if (err.message === "image_unclear") {
         await replyText(client, event.replyToken, buildUnclearImageText());
         clearSession(userId);
-        console.log("session cleared after image_unclear");
         return;
       }
 
       clearSession(userId);
-      console.log("session cleared after unexpected scan error");
       throw err;
     }
 
     try {
-      const flex = buildScanFlex(resultText);
 
-      console.log("trying flex reply...");
+      const flex = buildScanFlex(resultText);
       await replyFlex(client, event.replyToken, flex);
-      console.log("flex reply success");
+
     } catch (flexError) {
-      console.error("flex failed:", flexError);
 
       await replyText(client, event.replyToken, resultText);
-      console.log("text fallback success");
+
     }
 
     clearSession(userId);
-    console.log("session cleared after success");
     return;
   }
 
