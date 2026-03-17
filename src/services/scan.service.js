@@ -2,6 +2,7 @@ import { generateScanText } from "./openai.service.js";
 import { generateWithRetry } from "./retry.service.js";
 import { formatScanOutput } from "./formatter.service.js";
 import { checkSingleObject } from "./objectCheck.service.js";
+import { addScanHistory } from "../stores/scanHistory.store.js";
 
 import {
   hasRepeatedPhrase,
@@ -208,7 +209,7 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   const storeStartedAt = Date.now();
 
   addRecentOutput(userId, finalText);
-
+  addScanHistory(userId, finalText);
   const storeEndedAt = Date.now();
 
   console.log("[SCAN] recent output saved");

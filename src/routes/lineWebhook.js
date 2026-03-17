@@ -15,6 +15,7 @@ import { replyText, replyFlex } from "../services/lineReply.service.js";
 import { buildScanFlex } from "../services/flex.service.js";
 
 import { checkScanRateLimit } from "../stores/rateLimit.store.js";
+import { getScanHistory } from "../stores/scanHistory.store.js";
 
 function isValidBirthdate(text) {
   return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
@@ -36,7 +37,6 @@ function buildMultipleObjectsText() {
     "🔍 Ener Scan",
     "",
     "ระบบพบว่าวัตถุในภาพมีมากกว่า 1 ชิ้น",
-    "เพื่อให้การวิเคราะห์ชัดเจน",
     "กรุณาถ่ายวัตถุเพียง 1 ชิ้นต่อ 1 รูป",
     "",
     "แล้วส่งมาใหม่อีกครั้งครับ",
@@ -60,6 +60,25 @@ function buildRateLimitText() {
   ].join("\n");
 }
 
+function formatHistory(history) {
+  return history
+    .slice(0, 5)
+    .map((h, i) => {
+      const date = new Date(h.time);
+
+      const formatted =
+        date.toLocaleDateString("th-TH") +
+        " " +
+        date.toLocaleTimeString("th-TH", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+      return `${i + 1}. ${formatted}`;
+    })
+    .join("\n");
+}
+
 export function lineWebhookRouter(lineConfig) {
   const client = new line.Client(lineConfig);
 
@@ -75,13 +94,11 @@ export function lineWebhookRouter(lineConfig) {
           try {
             console.log(`\n----- event #${index + 1} -----`);
             console.log("type:", event.type);
-            console.log("userId:", event.source?.userId || "no-user-id");
-            console.log("message type:", event.message?.type);
+            console.log("userId:", event.source?.userId);
 
             await handleEvent({ client, event });
-
           } catch (err) {
-            console.error(`event #${index + 1} error:`, err);
+            console.error("event error:", err);
 
             if (event.replyToken) {
               await replyText(
@@ -95,7 +112,6 @@ export function lineWebhookRouter(lineConfig) {
       );
 
       res.status(200).json({ ok: true });
-
     } catch (error) {
       console.error("webhook fatal:", error);
       res.status(500).json({ error: "webhook_failed" });
@@ -104,7 +120,6 @@ export function lineWebhookRouter(lineConfig) {
 }
 
 async function handleEvent({ client, event }) {
-
   if (event.type !== "message") return;
   if (!event.replyToken) return;
 
@@ -117,11 +132,6 @@ async function handleEvent({ client, event }) {
 
   const session = getSession(userId);
 
-  console.log("session:", {
-    hasPendingImage: Boolean(session.pendingImage),
-    birthdate: session.birthdate || null,
-  });
-
   /*
   -------------------------
   IMAGE MESSAGE
@@ -129,9 +139,8 @@ async function handleEvent({ client, event }) {
   */
 
   if (event.message?.type === "image") {
-
     if (session.pendingImage) {
-      console.log("ignore image: already waiting birthdate");
+      console.log("ignore image: waiting birthdate");
       return;
     }
 
@@ -146,7 +155,7 @@ async function handleEvent({ client, event }) {
       await replyText(
         client,
         event.replyToken,
-        "🔍 Ener Scan\n\nระบบพบว่ารูปนี้เคยถูกสแกนแล้ว\nหากต้องการวิเคราะห์ใหม่ กรุณาส่งภาพใหม่ของวัตถุครับ"
+        "🔍 Ener Scan\n\nระบบพบว่ารูปนี้เคยถูกสแกนแล้ว\nกรุณาส่งภาพใหม่ของวัตถุครับ"
       );
       return;
     }
@@ -167,8 +176,35 @@ async function handleEvent({ client, event }) {
   */
 
   if (event.message?.type === "text") {
-
     const text = String(event.message.text || "").trim();
+
+    /*
+    -------------------------
+    HISTORY COMMAND
+    -------------------------
+    */
+
+    if (
+      text.toLowerCase() === "history" ||
+      text === "ประวัติ"
+    ) {
+      const history = getScanHistory(userId);
+
+      if (history.length === 0) {
+        await replyText(client, event.replyToken, "ยังไม่มีประวัติการสแกนครับ");
+        return;
+      }
+
+      const formatted = formatHistory(history);
+
+      await replyText(
+        client,
+        event.replyToken,
+        `ประวัติการสแกนล่าสุด\n\n${formatted}`
+      );
+
+      return;
+    }
 
     if (!session.pendingImage) {
       await replyText(
@@ -190,22 +226,14 @@ async function handleEvent({ client, event }) {
 
     /*
     -------------------------
-    RATE LIMIT CHECK
+    RATE LIMIT
     -------------------------
     */
 
     const rate = checkScanRateLimit(userId);
 
-    console.log("[RATE_LIMIT]", userId, rate);
-
     if (!rate.allowed) {
-
-      await replyText(
-        client,
-        event.replyToken,
-        buildRateLimitText()
-      );
-
+      await replyText(client, event.replyToken, buildRateLimitText());
       clearSession(userId);
       return;
     }
@@ -215,15 +243,12 @@ async function handleEvent({ client, event }) {
     let resultText = "";
 
     try {
-
       resultText = await runDeepScan({
         imageBuffer: session.pendingImage.imageBuffer,
         birthdate: text,
         userId,
       });
-
     } catch (err) {
-
       if (err.message === "multiple_objects_detected") {
         await replyText(client, event.replyToken, buildMultipleObjectsText());
         clearSession(userId);
@@ -241,19 +266,15 @@ async function handleEvent({ client, event }) {
     }
 
     try {
-
       const flex = buildScanFlex(resultText);
       await replyFlex(client, event.replyToken, flex);
-
     } catch (flexError) {
-
       await replyText(client, event.replyToken, resultText);
-
     }
 
     clearSession(userId);
     return;
   }
 
-  console.log("skip: unsupported message type");
+  console.log("skip unsupported message");
 }
