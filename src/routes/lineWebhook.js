@@ -49,13 +49,12 @@ import { parseScanResultForHistory } from "../services/history/history.parser.js
 ------------------------------------------------
 ANTI-SPAM IMAGE GUARDS
 1) activeImageUsers = กัน event ซ้อนระหว่างกำลังประมวลผล
-2) lastAcceptedImageEventAtMap = กันหลายรูปใน "ชุดเดียวกัน"
-   โดยอิงจาก event.timestamp ของ LINE ไม่ใช่เวลาที่ server ประมวลผล
+2) lastAcceptedImageEventAtMap = กันรูปถี่เกินไปหลังเพิ่งรับเคสก่อนหน้า
 ------------------------------------------------
 */
 const activeImageUsers = new Set();
 const lastAcceptedImageEventAtMap = new Map();
-const IMAGE_BURST_WINDOW_MS = 20000;
+const IMAGE_BURST_WINDOW_MS = 8000;
 
 function getEventTimestamp(event) {
   const ts = Number(event?.timestamp || 0);
@@ -116,6 +115,17 @@ function buildStartInstructionText() {
     "",
     "รบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น",
     "14/09/1995",
+  ].join("\n");
+}
+
+function buildMultiImageInRequestText() {
+  return [
+    "🔍 Ener Scan",
+    "",
+    "ระบบพบว่าคุณส่งมาหลายรูปพร้อมกัน",
+    "กรุณาส่งเพียง 1 รูปต่อ 1 ครั้ง",
+    "",
+    "หากมีหลายชิ้น กรุณาแยกส่งทีละรูปแล้วค่อยสแกนใหม่ครับ",
   ].join("\n");
 }
 
@@ -211,6 +221,22 @@ function isHistoryCommand(text, lowerText) {
 
 function isStatsCommand(text, lowerText) {
   return lowerText === "stats" || text === "สถิติ";
+}
+
+function groupImageEventCountByUser(events = []) {
+  const map = new Map();
+
+  for (const event of events) {
+    if (event?.type !== "message") continue;
+    if (event?.message?.type !== "image") continue;
+
+    const userId = event?.source?.userId;
+    if (!userId) continue;
+
+    map.set(userId, (map.get(userId) || 0) + 1);
+  }
+
+  return map;
 }
 
 async function replyFlexWithFallback({
@@ -400,13 +426,13 @@ async function runScanFlow({
 async function handleImageMessage({ client, event, userId, session }) {
   const eventTimestamp = getEventTimestamp(event);
 
-  if (isInImageBurstWindow(userId, eventTimestamp)) {
-    console.log("[WEBHOOK] ignore image: burst window", userId, eventTimestamp);
+  if (activeImageUsers.has(userId)) {
+    console.log("[WEBHOOK] ignore image: active processing", userId);
     return;
   }
 
-  if (activeImageUsers.has(userId)) {
-    console.log("[WEBHOOK] ignore image: active processing", userId);
+  if (isInImageBurstWindow(userId, eventTimestamp)) {
+    console.log("[WEBHOOK] ignore image: burst window", userId, eventTimestamp);
     return;
   }
 
@@ -492,9 +518,9 @@ async function handleImageMessage({ client, event, userId, session }) {
       return;
     }
 
-    const savedBirthdate = getSavedBirthdate(userId);
-
     markAcceptedImageEvent(userId, eventTimestamp);
+
+    const savedBirthdate = getSavedBirthdate(userId);
 
     if (savedBirthdate) {
       console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
@@ -605,9 +631,15 @@ export function lineWebhookRouter(lineConfig) {
   return async (req, res) => {
     try {
       const events = Array.isArray(req.body.events) ? req.body.events : [];
+      const imageCountByUser = groupImageEventCountByUser(events);
+      const multiImageUsersReplied = new Set();
 
       console.log("========== LINE WEBHOOK ==========");
       console.log("event count:", events.length);
+      console.log(
+        "[WEBHOOK] imageCountByUser:",
+        Object.fromEntries(imageCountByUser)
+      );
 
       for (let index = 0; index < events.length; index += 1) {
         const event = events[index];
@@ -624,6 +656,33 @@ export function lineWebhookRouter(lineConfig) {
             event.message?.type || "no-message-type"
           );
           console.log("[WEBHOOK] timestamp:", event.timestamp || "no-timestamp");
+
+          const userId = event.source?.userId;
+
+          if (
+            userId &&
+            event.type === "message" &&
+            event.message?.type === "image" &&
+            (imageCountByUser.get(userId) || 0) > 1
+          ) {
+            if (!multiImageUsersReplied.has(userId) && event.replyToken) {
+              multiImageUsersReplied.add(userId);
+
+              await replyFlexWithFallback({
+                client,
+                replyToken: event.replyToken,
+                flex: buildMultipleObjectsFlex(),
+                fallbackText: buildMultiImageInRequestText(),
+                logLabel: "multi image request flex",
+              });
+            }
+
+            console.log(
+              "[WEBHOOK] skip image because multiple image events in same request",
+              userId
+            );
+            continue;
+          }
 
           await handleEvent({ client, event });
         } catch (err) {
