@@ -1,0 +1,355 @@
+function createTopAccent(color = "#D4AF37") {
+  return {
+    type: "box",
+    layout: "vertical",
+    height: "6px",
+    backgroundColor: color,
+    cornerRadius: "12px",
+    contents: [],
+  };
+}
+
+function createHeader(title, subtitle) {
+  return {
+    type: "box",
+    layout: "vertical",
+    margin: "md",
+    spacing: "xs",
+    contents: [
+      {
+        type: "text",
+        text: title,
+        weight: "bold",
+        size: "xl",
+        color: "#F8F8F8",
+        wrap: true,
+      },
+      {
+        type: "text",
+        text: subtitle,
+        size: "sm",
+        color: "#A4A4A8",
+        wrap: true,
+      },
+    ],
+  };
+}
+
+function createCard(title, body, options = {}) {
+  const {
+    backgroundColor = "#151515",
+    borderColor = "#262629",
+    bodyColor = "#E3E3E3",
+  } = options;
+
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor,
+    cornerRadius: "18px",
+    borderWidth: "1px",
+    borderColor,
+    paddingAll: "16px",
+    spacing: "sm",
+    contents: [
+      {
+        type: "text",
+        text: title,
+        weight: "bold",
+        size: "sm",
+        color: "#FFFFFF",
+      },
+      {
+        type: "text",
+        text: body,
+        size: "sm",
+        color: bodyColor,
+        wrap: true,
+      },
+    ],
+  };
+}
+
+function createExampleCard(label, exampleText) {
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: "#1D1A14",
+    cornerRadius: "16px",
+    paddingAll: "14px",
+    spacing: "xs",
+    contents: [
+      {
+        type: "text",
+        text: label,
+        weight: "bold",
+        size: "sm",
+        color: "#FFFFFF",
+      },
+      {
+        type: "text",
+        text: exampleText,
+        size: "md",
+        weight: "bold",
+        color: "#F4E3AE",
+        wrap: true,
+      },
+    ],
+  };
+}
+
+function createPrimaryFooterButton(label, text, color = "#D4AF37") {
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: "#101010",
+    paddingTop: "0px",
+    paddingBottom: "16px",
+    paddingStart: "18px",
+    paddingEnd: "18px",
+    contents: [
+      {
+        type: "button",
+        style: "primary",
+        color,
+        action: {
+          type: "message",
+          label,
+          text,
+        },
+      },
+    ],
+  };
+}
+
+function createSecondaryFooterButtons(buttons = []) {
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: "#101010",
+    paddingTop: "0px",
+    paddingBottom: "16px",
+    paddingStart: "18px",
+    paddingEnd: "18px",
+    spacing: "sm",
+    contents: buttons.map((btn, index) => ({
+      type: "button",
+      style: index === buttons.length - 1 ? "primary" : "secondary",
+      color: index === buttons.length - 1 ? btn.color || "#D4AF37" : undefined,
+      action: {
+        type: "message",
+        label: btn.label,
+        text: btn.text,
+      },
+    })),
+  };
+}
+
+function createBaseBubble({ accentColor, title, subtitle, bodyContents, footer }) {
+  return {
+    type: "flex",
+    altText: title,
+    contents: {
+      type: "bubble",
+      size: "mega",
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "18px",
+        spacing: "md",
+        backgroundColor: "#101010",
+        contents: [
+          createTopAccent(accentColor),
+          createHeader(title, subtitle),
+          ...bodyContents,
+        ],
+      },
+      footer,
+      styles: {
+        body: {
+          backgroundColor: "#101010",
+        },
+        footer: {
+          backgroundColor: "#101010",
+        },
+      },
+    },
+  };
+}
+
+export function buildUnsupportedObjectFlex() {
+  return createBaseBubble({
+    accentColor: "#8E24AA",
+    title: "ยังไม่รองรับภาพประเภทนี้",
+    subtitle: "Ener Scan อ่านได้เฉพาะวัตถุสายพลังที่อยู่ในขอบเขตของระบบ",
+    bodyContents: [
+      createCard(
+        "ระบบรองรับเฉพาะ",
+        "• พระเครื่อง\n• เครื่องราง\n• คริสตัล / หิน\n• วัตถุสายพลังแบบชิ้นเดี่ยว"
+      ),
+      createCard(
+        "คำแนะนำ",
+        "กรุณาส่งภาพใหม่ที่เป็นวัตถุ 1 ชิ้น และอยู่ในประเภทที่รองรับ",
+        {
+          backgroundColor: "#171717",
+          borderColor: "#242427",
+        }
+      ),
+    ],
+    footer: createPrimaryFooterButton("ส่งรูปใหม่", "ขอสแกนชิ้นถัดไป"),
+  });
+}
+
+export function buildIdleFlex() {
+  return createBaseBubble({
+    accentColor: "#1565C0",
+    title: "เริ่มสแกนวัตถุได้เลย",
+    subtitle: "ส่งรูปวัตถุที่ต้องการให้ Ener Scan อ่านพลังได้ทันที",
+    bodyContents: [
+      createCard(
+        "ข้อสำคัญ",
+        "กรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป\nเพื่อให้ระบบอ่านพลังได้ชัดเจนขึ้น",
+        {
+          backgroundColor: "#171717",
+          borderColor: "#242427",
+        }
+      ),
+      createCard(
+        "ประเภทที่เหมาะ",
+        "• พระเครื่อง\n• เครื่องราง\n• คริสตัล / หิน\n• วัตถุสายพลังแบบชิ้นเดี่ยว"
+      ),
+    ],
+    footer: createPrimaryFooterButton("พร้อมเริ่มแล้ว", "ขอสแกนชิ้นถัดไป", "#1565C0"),
+  });
+}
+
+export function buildDuplicateImageFlex() {
+  return createBaseBubble({
+    accentColor: "#C62828",
+    title: "พบว่ารูปนี้เคยถูกสแกนแล้ว",
+    subtitle: "เพื่อให้ผลลัพธ์ใหม่และแม่นขึ้น กรุณาส่งภาพใหม่ของวัตถุ",
+    bodyContents: [
+      createCard(
+        "คำแนะนำ",
+        "ลองถ่ายใหม่ให้เห็นวัตถุชัดขึ้น หรือเปลี่ยนมุมภาพก่อนส่งอีกครั้ง",
+        {
+          backgroundColor: "#1C1515",
+          borderColor: "#352626",
+        }
+      ),
+    ],
+    footer: createPrimaryFooterButton("ส่งรูปใหม่", "ขอสแกนชิ้นถัดไป", "#C62828"),
+  });
+}
+
+export function buildWaitingBirthdateFlex() {
+  return createBaseBubble({
+    accentColor: "#D4AF37",
+    title: "ระบบกำลังรอวันเกิดของเจ้าของวัตถุ",
+    subtitle: "ส่งวันเกิดเพื่อให้ Ener Scan อ่านความสอดคล้องกับเจ้าของได้",
+    bodyContents: [
+      createCard(
+        "ขั้นตอนถัดไป",
+        "กรุณาพิมพ์วันเกิดของเจ้าของวัตถุในรูปแบบ วัน/เดือน/ปี",
+        {
+          backgroundColor: "#171717",
+          borderColor: "#242427",
+        }
+      ),
+      createExampleCard("ตัวอย่าง", "14/09/1995"),
+    ],
+    footer: createSecondaryFooterButtons([
+      {
+        label: "ส่งวันเกิด",
+        text: "14/09/1995",
+        color: "#D4AF37",
+      },
+    ]),
+  });
+}
+
+export function buildMultipleObjectsFlex() {
+  return createBaseBubble({
+    accentColor: "#C62828",
+    title: "พบว่าวัตถุในภาพมีมากกว่า 1 ชิ้น",
+    subtitle: "เพื่อให้ระบบอ่านพลังได้แม่นขึ้น กรุณาส่งเพียง 1 ชิ้นต่อ 1 รูป",
+    bodyContents: [
+      createCard(
+        "คำแนะนำ",
+        "หากเป็นของหลายชิ้น กรุณาแยกส่งทีละภาพ แล้วค่อยสแกนทีละชิ้น",
+        {
+          backgroundColor: "#1C1515",
+          borderColor: "#352626",
+        }
+      ),
+    ],
+    footer: createPrimaryFooterButton("ส่งรูปใหม่", "ขอสแกนชิ้นถัดไป", "#C62828"),
+  });
+}
+
+export function buildUnclearImageFlex() {
+  return createBaseBubble({
+    accentColor: "#8E24AA",
+    title: "ภาพยังไม่ชัดเจนพอ",
+    subtitle: "ลองถ่ายใหม่ให้เห็นวัตถุชัดขึ้น เพื่อให้ระบบอ่านพลังได้ดีขึ้น",
+    bodyContents: [
+      createCard(
+        "คำแนะนำ",
+        "ควรถ่ายให้เห็นวัตถุชัด ๆ แสงพอเหมาะ และมีเพียง 1 ชิ้นต่อ 1 รูป",
+        {
+          backgroundColor: "#171717",
+          borderColor: "#242427",
+        }
+      ),
+    ],
+    footer: createPrimaryFooterButton("ส่งรูปใหม่", "ขอสแกนชิ้นถัดไป", "#8E24AA"),
+  });
+}
+
+export function buildRateLimitFlex(retryAfterSec = 0) {
+  const waitText =
+    retryAfterSec > 0
+      ? `กรุณารออีก ${retryAfterSec} วินาทีก่อนสแกนใหม่`
+      : "กรุณารอสักครู่ก่อนสแกนใหม่";
+
+  return createBaseBubble({
+    accentColor: "#1565C0",
+    title: "ระบบมีการใช้งานต่อเนื่อง",
+    subtitle: "เพื่อให้การทำงานเสถียร ระบบจะเว้นจังหวะการสแกนไว้ชั่วคราว",
+    bodyContents: [
+      createCard(
+        "สถานะตอนนี้",
+        waitText,
+        {
+          backgroundColor: "#141A22",
+          borderColor: "#243344",
+        }
+      ),
+    ],
+    footer: createPrimaryFooterButton("ดูประวัติ", "history", "#1565C0"),
+  });
+}
+
+export function buildCooldownFlex(remainingSec = 0) {
+  const waitText =
+    remainingSec > 0
+      ? `กรุณารออีก ${remainingSec} วินาทีก่อนสแกนใหม่`
+      : "กรุณารอสักครู่ก่อนสแกนใหม่";
+
+  return createBaseBubble({
+    accentColor: "#2E7D32",
+    title: "เว้นจังหวะสักครู่ก่อนสแกนใหม่",
+    subtitle: "เพื่อให้ระบบอ่านพลังได้เสถียรมากขึ้น",
+    bodyContents: [
+      createCard(
+        "สถานะตอนนี้",
+        waitText,
+        {
+          backgroundColor: "#142016",
+          borderColor: "#26402B",
+        }
+      ),
+    ],
+    footer: createPrimaryFooterButton("ดูประวัติ", "history", "#2E7D32"),
+  });
+}
