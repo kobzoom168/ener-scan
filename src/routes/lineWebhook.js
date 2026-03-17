@@ -10,6 +10,7 @@ import {
 import { getImageBufferFromLineMessage } from "../services/image.service.js";
 import { isDuplicateImage } from "../services/dedupe.service.js";
 import { runDeepScan } from "../services/scan.service.js";
+import { checkSingleObject } from "../services/objectCheck.service.js";
 
 import { replyText, replyFlex } from "../services/lineReply.service.js";
 import { buildScanFlex } from "../services/flex/flex.service.js";
@@ -42,6 +43,10 @@ import { parseScanResultForHistory } from "../services/history/history.parser.js
 
 function isValidBirthdate(text) {
   return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
+}
+
+function toBase64(buffer) {
+  return buffer.toString("base64");
 }
 
 function formatBangkokDateTime(time) {
@@ -276,6 +281,55 @@ async function handleImageMessage({ client, event, userId, session }) {
       flex: buildDuplicateImageFlex(),
       fallbackText: buildDuplicateImageText(),
       logLabel: "duplicate image flex",
+    });
+    return;
+  }
+
+  const imageBase64 = toBase64(imageBuffer);
+  const objectCheck = await checkSingleObject(imageBase64);
+
+  console.log("[WEBHOOK] object check result:", objectCheck);
+
+  if (objectCheck === "multiple") {
+    await replyFlexWithFallback({
+      client,
+      replyToken: event.replyToken,
+      flex: buildMultipleObjectsFlex(),
+      fallbackText: buildMultipleObjectsText(),
+      logLabel: "multiple objects flex",
+    });
+    return;
+  }
+
+  if (objectCheck === "unclear") {
+    await replyFlexWithFallback({
+      client,
+      replyToken: event.replyToken,
+      flex: buildUnclearImageFlex(),
+      fallbackText: buildUnclearImageText(),
+      logLabel: "unclear image flex",
+    });
+    return;
+  }
+
+  if (objectCheck === "unsupported") {
+    await replyFlexWithFallback({
+      client,
+      replyToken: event.replyToken,
+      flex: buildUnsupportedObjectFlex(),
+      fallbackText: buildUnsupportedObjectText(),
+      logLabel: "unsupported object flex",
+    });
+    return;
+  }
+
+  if (objectCheck !== "single_supported") {
+    await replyFlexWithFallback({
+      client,
+      replyToken: event.replyToken,
+      flex: buildUnsupportedObjectFlex(),
+      fallbackText: buildUnsupportedObjectText(),
+      logLabel: "unsupported object flex",
     });
     return;
   }
