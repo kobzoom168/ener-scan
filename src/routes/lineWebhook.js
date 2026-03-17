@@ -7,6 +7,11 @@ import {
   clearSession,
 } from "../stores/session.store.js";
 
+import {
+  getSavedBirthdate,
+  saveBirthdate,
+} from "../stores/userProfile.store.js";
+
 import { getImageBufferFromLineMessage } from "../services/image.service.js";
 import { isDuplicateImage } from "../services/dedupe.service.js";
 import { runDeepScan } from "../services/scan.service.js";
@@ -39,22 +44,6 @@ import {
 } from "../stores/userStats.store.js";
 
 import { parseScanResultForHistory } from "../services/history/history.parser.js";
-
-/*
-------------------------------------------------
-TEMP BIRTHDATE STORE
-เปลี่ยนส่วนนี้เป็น DB/store จริงภายหลังได้
-------------------------------------------------
-*/
-const savedBirthdateMap = new Map();
-
-function getSavedBirthdate(userId) {
-  return savedBirthdateMap.get(userId) || null;
-}
-
-function saveBirthdate(userId, birthdate) {
-  savedBirthdateMap.set(userId, birthdate);
-}
 
 /*
 ------------------------------------------------
