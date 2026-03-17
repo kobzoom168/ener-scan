@@ -28,6 +28,24 @@ export function buildScanFlex(rawText) {
 
   const score = normalizeScore(energyScore);
 
+  console.log("[FLEX_RAW_TEXT]", rawText);
+
+  console.log("[FLEX_PARSE]", {
+    energyScore,
+    mainEnergy,
+    compatibility,
+    personality,
+    tone,
+    hidden,
+    overview,
+    fitReason,
+    supportTopics,
+    suitable,
+    notStrong,
+    usageGuide,
+    closing,
+  });
+
   return {
     type: "flex",
     altText: `ผลการตรวจพลังวัตถุ: ${mainEnergy} ${score.raw || energyScore}`,
