@@ -20,7 +20,6 @@ import {
   buildUnsupportedObjectFlex,
   buildIdleFlex,
   buildDuplicateImageFlex,
-  buildWaitingBirthdateFlex,
   buildMultipleObjectsFlex,
   buildUnclearImageFlex,
   buildRateLimitFlex,
@@ -93,14 +92,6 @@ function buildStartInstructionText() {
     "หากเป็นของหลายชิ้น กรุณาแยกส่งทีละภาพ",
     "",
     "รบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น",
-    "14/09/1995",
-  ].join("\n");
-}
-
-function buildWaitingBirthdateText() {
-  return [
-    "ตอนนี้ระบบกำลังรอวันเกิดของเจ้าของวัตถุอยู่ครับ",
-    "กรุณาพิมพ์วันเกิด เช่น",
     "14/09/1995",
   ].join("\n");
 }
@@ -255,13 +246,6 @@ async function handleStatsCommand({ client, replyToken, userId }) {
 async function handleImageMessage({ client, event, userId, session }) {
   if (session.pendingImage) {
     console.log("[WEBHOOK] ignore image: waiting birthdate");
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildWaitingBirthdateFlex(),
-      fallbackText: buildWaitingBirthdateText(),
-      logLabel: "waiting birthdate flex",
-    });
     return;
   }
 
@@ -555,38 +539,38 @@ export function lineWebhookRouter(lineConfig) {
       console.log("========== LINE WEBHOOK ==========");
       console.log("event count:", events.length);
 
-      await Promise.all(
-        events.map(async (event, index) => {
-          try {
-            console.log(`\n----- event #${index + 1} -----`);
-            console.log("[WEBHOOK] type:", event.type);
-            console.log(
-              "[WEBHOOK] userId:",
-              event.source?.userId || "no-user-id"
-            );
-            console.log(
-              "[WEBHOOK] message type:",
-              event.message?.type || "no-message-type"
-            );
+      for (let index = 0; index < events.length; index += 1) {
+        const event = events[index];
 
-            await handleEvent({ client, event });
-          } catch (err) {
-            console.error(`[WEBHOOK] event #${index + 1} error:`, err);
+        try {
+          console.log(`\n----- event #${index + 1} -----`);
+          console.log("[WEBHOOK] type:", event.type);
+          console.log(
+            "[WEBHOOK] userId:",
+            event.source?.userId || "no-user-id"
+          );
+          console.log(
+            "[WEBHOOK] message type:",
+            event.message?.type || "no-message-type"
+          );
 
-            if (event.replyToken) {
-              try {
-                await replyText(
-                  client,
-                  event.replyToken,
-                  buildSystemErrorText()
-                );
-              } catch (replyErr) {
-                console.error("[WEBHOOK] fallback error reply failed:", replyErr);
-              }
+          await handleEvent({ client, event });
+        } catch (err) {
+          console.error(`[WEBHOOK] event #${index + 1} error:`, err);
+
+          if (event.replyToken) {
+            try {
+              await replyText(
+                client,
+                event.replyToken,
+                buildSystemErrorText()
+              );
+            } catch (replyErr) {
+              console.error("[WEBHOOK] fallback error reply failed:", replyErr);
             }
           }
-        })
-      );
+        }
+      }
 
       res.status(200).json({ ok: true });
     } catch (error) {
