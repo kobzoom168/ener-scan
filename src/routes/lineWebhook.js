@@ -120,15 +120,20 @@ async function handleImageMessage({ client, event, userId, session }) {
   setUserProcessingImage(userId);
 
   try {
+    console.log("[WEBHOOK] before getImageBuffer");
+
     const imageBuffer = await getImageBufferFromLineMessage(
       client,
       event.message.id
     );
 
+    console.log("[WEBHOOK] after getImageBuffer");
     console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
     console.log("[WEBHOOK] flowVersion(image):", flowVersion);
 
+    console.log("[WEBHOOK] before isDuplicateImage");
     const isDuplicate = await isDuplicateImage(imageBuffer);
+    console.log("[WEBHOOK] after isDuplicateImage:", isDuplicate);
 
     if (isDuplicate) {
       markAcceptedImageEvent(userId, eventTimestamp);
@@ -146,9 +151,10 @@ async function handleImageMessage({ client, event, userId, session }) {
     }
 
     const imageBase64 = toBase64(imageBuffer);
-    const objectCheck = await checkSingleObject(imageBase64);
 
-    console.log("[WEBHOOK] object check result:", objectCheck);
+    console.log("[WEBHOOK] before checkSingleObject");
+    const objectCheck = await checkSingleObject(imageBase64);
+    console.log("[WEBHOOK] after checkSingleObject:", objectCheck);
 
     if (objectCheck === "multiple") {
       markAcceptedImageEvent(userId, eventTimestamp);
@@ -219,7 +225,9 @@ async function handleImageMessage({ client, event, userId, session }) {
 
     markAcceptedImageEvent(userId, eventTimestamp);
 
+    console.log("[WEBHOOK] before getSavedBirthdate");
     const savedBirthdate = await getSavedBirthdate(userId);
+    console.log("[WEBHOOK] after getSavedBirthdate:", savedBirthdate);
 
     if (savedBirthdate) {
       console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
@@ -239,6 +247,8 @@ async function handleImageMessage({ client, event, userId, session }) {
       messageId: event.message.id,
       imageBuffer,
     });
+
+    console.log("[WEBHOOK] before start instruction reply");
 
     await replyFlexWithFallback({
       client,
