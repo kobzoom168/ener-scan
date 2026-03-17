@@ -1,7 +1,6 @@
 import { generateScanText } from "./openai.service.js";
 import { generateWithRetry } from "./retry.service.js";
 import { formatScanOutput } from "./formatter.service.js";
-import { checkSingleObject } from "./objectCheck.service.js";
 
 import {
   hasRepeatedPhrase,
@@ -95,30 +94,6 @@ function buildRetryHint(lastOutput, attempt, reason) {
   }`;
 }
 
-async function runObjectCheck(imageBase64) {
-  const objectCheck = await checkSingleObject(imageBase64);
-
-  console.log("[OBJECT_CHECK] result:", objectCheck);
-
-  if (objectCheck === "multiple") {
-    throw new Error("multiple_objects_detected");
-  }
-
-  if (objectCheck === "unclear") {
-    throw new Error("image_unclear");
-  }
-
-  if (objectCheck === "unsupported") {
-    throw new Error("unsupported_object_type");
-  }
-
-  if (objectCheck !== "single_supported") {
-    throw new Error("unsupported_object_type");
-  }
-
-  return objectCheck;
-}
-
 async function generateScanWithValidation({
   imageBase64,
   birthdate,
@@ -175,13 +150,6 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
 
   console.log("[SCAN] image buffer length:", imageBuffer.length);
   console.log("[SCAN] image base64 length:", imageBase64.length);
-
-  /*
-  ------------------------------------------------
-  OBJECT CHECK
-  ------------------------------------------------
-  */
-  await runObjectCheck(imageBase64);
 
   /*
   ------------------------------------------------
