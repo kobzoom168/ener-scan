@@ -15,11 +15,13 @@ import { replyText, replyFlex } from "../services/lineReply.service.js";
 import { buildScanFlex } from "../services/flex.service.js";
 
 import { checkScanRateLimit } from "../stores/rateLimit.store.js";
-import { getScanHistory } from "../stores/scanHistory.store.js";
+import { getScanHistory, addScanHistory } from "../stores/scanHistory.store.js";
+
 
 function isValidBirthdate(text) {
   return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
 }
+
 
 function formatHistory(history) {
   return history
@@ -41,6 +43,7 @@ function formatHistory(history) {
     .join("\n");
 }
 
+
 function buildStartInstructionText() {
   return [
     "ได้รับภาพแล้วครับ ✨",
@@ -51,6 +54,7 @@ function buildStartInstructionText() {
     "14/09/1995",
   ].join("\n");
 }
+
 
 function buildMultipleObjectsText() {
   return [
@@ -63,6 +67,7 @@ function buildMultipleObjectsText() {
   ].join("\n");
 }
 
+
 function buildUnclearImageText() {
   return [
     "ภาพยังไม่ชัดเจนพอสำหรับการวิเคราะห์",
@@ -70,6 +75,7 @@ function buildUnclearImageText() {
     "และให้มีเพียง 1 ชิ้นต่อ 1 รูปครับ",
   ].join("\n");
 }
+
 
 function buildRateLimitText() {
   return [
@@ -80,11 +86,16 @@ function buildRateLimitText() {
   ].join("\n");
 }
 
+
+
 export function lineWebhookRouter(lineConfig) {
+
   const client = new line.Client(lineConfig);
 
   return async (req, res) => {
+
     try {
+
       const events = Array.isArray(req.body.events) ? req.body.events : [];
 
       console.log("========== LINE WEBHOOK ==========");
@@ -92,14 +103,18 @@ export function lineWebhookRouter(lineConfig) {
 
       await Promise.all(
         events.map(async (event, index) => {
+
           try {
+
             console.log(`\n----- event #${index + 1} -----`);
             console.log("type:", event.type);
             console.log("userId:", event.source?.userId || "no-user-id");
             console.log("message type:", event.message?.type);
 
             await handleEvent({ client, event });
+
           } catch (err) {
+
             console.error(`event #${index + 1} error:`, err);
 
             if (event.replyToken) {
@@ -109,19 +124,30 @@ export function lineWebhookRouter(lineConfig) {
                 "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ"
               );
             }
+
           }
+
         })
       );
 
       res.status(200).json({ ok: true });
+
     } catch (error) {
+
       console.error("webhook fatal:", error);
+
       res.status(500).json({ error: "webhook_failed" });
+
     }
+
   };
+
 }
 
+
+
 async function handleEvent({ client, event }) {
+
   if (event.type !== "message") return;
   if (!event.replyToken) return;
 
@@ -134,6 +160,7 @@ async function handleEvent({ client, event }) {
 
   const session = getSession(userId);
 
+
   /*
   -------------------------
   IMAGE MESSAGE
@@ -141,6 +168,7 @@ async function handleEvent({ client, event }) {
   */
 
   if (event.message?.type === "image") {
+
     if (session.pendingImage) {
       console.log("ignore image: waiting birthdate");
       return;
@@ -154,11 +182,13 @@ async function handleEvent({ client, event }) {
     const isDuplicate = await isDuplicateImage(imageBuffer);
 
     if (isDuplicate) {
+
       await replyText(
         client,
         event.replyToken,
         "🔍 Ener Scan\n\nระบบพบว่ารูปนี้เคยถูกสแกนแล้ว\nกรุณาส่งภาพใหม่ของวัตถุครับ"
       );
+
       return;
     }
 
@@ -168,8 +198,12 @@ async function handleEvent({ client, event }) {
     });
 
     await replyText(client, event.replyToken, buildStartInstructionText());
+
     return;
+
   }
+
+
 
   /*
   -------------------------
@@ -178,7 +212,10 @@ async function handleEvent({ client, event }) {
   */
 
   if (event.message?.type === "text") {
+
     const text = String(event.message.text || "").trim();
+
+
 
     /*
     -------------------------
@@ -187,11 +224,15 @@ async function handleEvent({ client, event }) {
     */
 
     if (text.toLowerCase() === "history" || text === "ประวัติ") {
+
       const history = getScanHistory(userId);
 
       if (history.length === 0) {
+
         await replyText(client, event.replyToken, "ยังไม่มีประวัติการสแกนครับ");
+
         return;
+
       }
 
       const formatted = formatHistory(history);
@@ -199,29 +240,42 @@ async function handleEvent({ client, event }) {
       await replyText(
         client,
         event.replyToken,
-        `ประวัติการสแกนล่าสุด\n\n${formatted}`
+        `📜 ประวัติการสแกนล่าสุด\n\n${formatted}`
       );
 
       return;
+
     }
 
+
+
     if (!session.pendingImage) {
+
       await replyText(
         client,
         event.replyToken,
         "ส่งรูปวัตถุมาได้เลยครับ\nกรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป"
       );
+
       return;
+
     }
 
+
+
     if (!isValidBirthdate(text)) {
+
       await replyText(
         client,
         event.replyToken,
         "รูปแบบวันเกิดยังไม่ถูกครับ\nลองพิมพ์แบบ\n14/09/1995"
       );
+
       return;
+
     }
+
+
 
     /*
     -------------------------
@@ -232,48 +286,98 @@ async function handleEvent({ client, event }) {
     const rate = checkScanRateLimit(userId);
 
     if (!rate.allowed) {
+
       await replyText(client, event.replyToken, buildRateLimitText());
+
       clearSession(userId);
+
       return;
+
     }
+
+
 
     setBirthdate(userId, text);
 
+
+
     let resultText = "";
 
+
+
     try {
+
       resultText = await runDeepScan({
         imageBuffer: session.pendingImage.imageBuffer,
         birthdate: text,
         userId,
       });
+
     } catch (err) {
+
       if (err.message === "multiple_objects_detected") {
+
         await replyText(client, event.replyToken, buildMultipleObjectsText());
+
         clearSession(userId);
+
         return;
+
       }
 
       if (err.message === "image_unclear") {
+
         await replyText(client, event.replyToken, buildUnclearImageText());
+
         clearSession(userId);
+
         return;
+
       }
 
       clearSession(userId);
+
       throw err;
+
     }
+
+
+
+    /*
+    -------------------------
+    SAVE HISTORY
+    -------------------------
+    */
+
+    addScanHistory(userId, {
+      time: Date.now(),
+      result: resultText
+    });
+
+
 
     try {
+
       const flex = buildScanFlex(resultText);
+
       await replyFlex(client, event.replyToken, flex);
+
     } catch (flexError) {
+
       await replyText(client, event.replyToken, resultText);
+
     }
 
+
+
     clearSession(userId);
+
     return;
+
   }
 
+
+
   console.log("skip unsupported message");
+
 }
