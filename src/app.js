@@ -1,10 +1,16 @@
 import express from "express";
 import line from "@line/bot-sdk";
+
 import { env } from "./config/env.js";
 import { lineWebhookRouter } from "./routes/lineWebhook.js";
 import { saveBirthdate } from "./stores/userProfile.db.js";
 
 const app = express();
+
+const lineConfig = {
+  channelAccessToken: env.CHANNEL_ACCESS_TOKEN,
+  channelSecret: env.CHANNEL_SECRET,
+};
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
@@ -30,4 +36,17 @@ app.get("/debug/save-birthdate", async (req, res) => {
   }
 });
 
-// webhook route ...
+app.post(
+  "/webhook/line",
+  line.middleware(lineConfig),
+  lineWebhookRouter(lineConfig)
+);
+
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "internal_server_error" });
+});
+
+app.listen(env.PORT, () => {
+  console.log(`Ener Scan API listening on port ${env.PORT}`);
+});
