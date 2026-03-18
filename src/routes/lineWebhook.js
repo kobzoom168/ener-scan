@@ -66,6 +66,13 @@ import {
   runScanFlow,
 } from "../handlers/scanFlow.handler.js";
 
+function buildWaitingBirthdateText() {
+  return [
+    "ตอนนี้ระบบกำลังรอวันเกิดของภาพก่อนหน้าอยู่ครับ",
+    "กรุณาส่งวันเกิดของเจ้าของวัตถุก่อน เช่น 14/09/1995",
+  ].join("\n");
+}
+
 async function handleHistoryCommand({ client, replyToken, userId }) {
   const history = getScanHistory(userId);
 
@@ -124,6 +131,33 @@ async function handleImageMessage({ client, event, userId, session }) {
     return;
   }
 
+  /*
+  ------------------------------------------------
+  ถ้ากำลังรอวันเกิดอยู่ ห้ามรับรูปใหม่
+  - ไม่เปิดเคสใหม่
+  - ไม่ล้าง pendingImage เดิม
+  - ตอบเตือนให้ส่งวันเกิดก่อน
+  ------------------------------------------------
+  */
+  if (session.pendingImage) {
+    console.log("[WEBHOOK] ignore image: waiting birthdate", {
+      userId,
+      flowVersion,
+      sessionFlowVersion: session.flowVersion || 0,
+    });
+
+    await replyText(client, event.replyToken, buildWaitingBirthdateText());
+    return;
+  }
+
+  /*
+  ------------------------------------------------
+  burst guard
+  ใช้กันกรณีหลายรูปถี่ผิดปกติ
+  แต่ตอนนี้เช็กหลัง session.pendingImage แล้ว
+  เพื่อไม่ให้ไปล้างเคสที่กำลังรอวันเกิด
+  ------------------------------------------------
+  */
   if (isInImageBurstWindow(userId, eventTimestamp)) {
     console.log("[WEBHOOK] reject image: burst window", userId, eventTimestamp);
 
@@ -138,11 +172,6 @@ async function handleImageMessage({ client, event, userId, session }) {
       fallbackText: buildMultiImageInRequestText(),
       logLabel: "multi image burst flex",
     });
-    return;
-  }
-
-  if (session.pendingImage) {
-    console.log("[WEBHOOK] reject image: waiting birthdate", userId);
     return;
   }
 
@@ -480,6 +509,11 @@ export function lineWebhookRouter(lineConfig) {
 
           const userId = event.source?.userId;
 
+          /*
+          ------------------------------------------------
+          หลายรูปใน request เดียว = reject ทั้งก้อน
+          ------------------------------------------------
+          */
           if (
             userId &&
             event.type === "message" &&
