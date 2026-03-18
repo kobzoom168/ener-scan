@@ -145,16 +145,32 @@ export async function runScanFlow({
   }
 
   try {
-    console.log("[WEBHOOK] before saveBirthdate", {
+    console.log("[WEBHOOK] saveBirthdate payload:", {
       userId,
       birthdate,
+      flowVersion,
+      scanJobId,
     });
 
     await saveBirthdate(userId, birthdate);
 
-    console.log("[WEBHOOK] after saveBirthdate");
+    console.log("[WEBHOOK] saveBirthdate success:", {
+      userId,
+      birthdate,
+      flowVersion,
+      scanJobId,
+    });
   } catch (error) {
-    console.error("[WEBHOOK] saveBirthdate failed but continue scan:", error);
+    console.error("[WEBHOOK] saveBirthdate failed but continue scan:", {
+      userId,
+      birthdate,
+      flowVersion,
+      scanJobId,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
   }
 
   let resultText = "";
