@@ -66,13 +66,6 @@ import {
   runScanFlow,
 } from "../handlers/scanFlow.handler.js";
 
-function buildWaitingBirthdateText() {
-  return [
-    "ตอนนี้ระบบกำลังรอวันเกิดของภาพก่อนหน้าอยู่ครับ",
-    "กรุณาส่งวันเกิดของเจ้าของวัตถุก่อน เช่น 14/09/1995",
-  ].join("\n");
-}
-
 async function handleHistoryCommand({ client, replyToken, userId }) {
   const history = getScanHistory(userId);
 
@@ -133,10 +126,10 @@ async function handleImageMessage({ client, event, userId, session }) {
 
   /*
   ------------------------------------------------
-  ถ้ากำลังรอวันเกิดอยู่ ห้ามรับรูปใหม่
-  - ไม่เปิดเคสใหม่
-  - ไม่ล้าง pendingImage เดิม
-  - ตอบเตือนให้ส่งวันเกิดก่อน
+  ถ้ากำลังรอวันเกิดอยู่แล้ว
+  - ไม่รับรูปใหม่
+  - ไม่ตอบซ้ำ
+  - เงียบไปเลย
   ------------------------------------------------
   */
   if (session.pendingImage) {
@@ -145,8 +138,6 @@ async function handleImageMessage({ client, event, userId, session }) {
       flowVersion,
       sessionFlowVersion: session.flowVersion || 0,
     });
-
-    await replyText(client, event.replyToken, buildWaitingBirthdateText());
     return;
   }
 
@@ -154,7 +145,7 @@ async function handleImageMessage({ client, event, userId, session }) {
   ------------------------------------------------
   burst guard
   ใช้กันกรณีหลายรูปถี่ผิดปกติ
-  แต่ตอนนี้เช็กหลัง session.pendingImage แล้ว
+  ตอนนี้เช็กหลัง session.pendingImage แล้ว
   เพื่อไม่ให้ไปล้างเคสที่กำลังรอวันเกิด
   ------------------------------------------------
   */
