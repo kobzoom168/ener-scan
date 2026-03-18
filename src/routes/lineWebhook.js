@@ -108,7 +108,7 @@ async function handleStatsCommand({ client, replyToken, userId }) {
 
 async function handleImageMessage({ client, event, userId, session }) {
   const eventTimestamp = getEventTimestamp(event);
-  const flowVersion = session.flowVersion || 0;
+  const flowVersion = bumpUserFlowVersion(userId);
 
   if (isUserBlockedForRequest(userId)) {
     console.log("[WEBHOOK] ignore image: request-blocked", {
@@ -150,10 +150,13 @@ async function handleImageMessage({ client, event, userId, session }) {
 
   try {
     if (isUserBlockedForRequest(userId)) {
-      console.log("[WEBHOOK] ignore image after processing lock: request-blocked", {
-        userId,
-        flowVersion,
-      });
+      console.log(
+        "[WEBHOOK] ignore image after processing lock: request-blocked",
+        {
+          userId,
+          flowVersion,
+        }
+      );
       return;
     }
 
@@ -350,6 +353,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     userId,
     text,
     hasPendingImage: !!session.pendingImage,
+    sessionFlowVersion: session.flowVersion || 0,
   });
 
   if (isHistoryCommand(text, lowerText)) {
@@ -388,7 +392,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   const flowVersion = session.flowVersion || 0;
 
-  console.log("[WEBHOOK] flowVersion(text):", flowVersion);
+  console.log("[WEBHOOK] use session flowVersion(text):", flowVersion);
   console.log("[WEBHOOK] going to runScanFlow from text", {
     userId,
     birthdate: text,
@@ -482,7 +486,7 @@ export function lineWebhookRouter(lineConfig) {
             event.message?.type === "image" &&
             (imageCountByUser.get(userId) || 0) > 1
           ) {
-            const flowVersion = session.flowVersion || 0;
+            const flowVersion = bumpUserFlowVersion(userId);
 
             blockUserForRequest(userId);
             clearLatestScanJob(userId);
@@ -538,68 +542,4 @@ export function lineWebhookRouter(lineConfig) {
       res.status(500).json({ error: "webhook_failed" });
     }
   };
-}
-
-async function handleTextMessage({ client, event, userId, session }) {
-  const text = String(event.message.text || "").trim();
-  const lowerText = text.toLowerCase();
-
-  console.log("[WEBHOOK] text received:", {
-    userId,
-    text,
-    hasPendingImage: !!session.pendingImage,
-    sessionFlowVersion: session.flowVersion || 0,
-  });
-
-  if (isHistoryCommand(text, lowerText)) {
-    await handleHistoryCommand({
-      client,
-      replyToken: event.replyToken,
-      userId,
-    });
-    return;
-  }
-
-  if (isStatsCommand(text, lowerText)) {
-    await handleStatsCommand({
-      client,
-      replyToken: event.replyToken,
-      userId,
-    });
-    return;
-  }
-
-  if (!session.pendingImage) {
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildIdleFlex(),
-      fallbackText: buildIdleText(),
-      logLabel: "idle flex",
-    });
-    return;
-  }
-
-  if (!isValidBirthdate(text)) {
-    await replyText(client, event.replyToken, buildInvalidBirthdateText());
-    return;
-  }
-
-  const flowVersion = session.flowVersion || 0;
-
-  console.log("[WEBHOOK] use session flowVersion(text):", flowVersion);
-  console.log("[WEBHOOK] going to runScanFlow from text", {
-    userId,
-    birthdate: text,
-    flowVersion,
-  });
-
-  await runScanFlow({
-    client,
-    replyToken: event.replyToken,
-    userId,
-    imageBuffer: session.pendingImage.imageBuffer,
-    birthdate: text,
-    flowVersion,
-  });
 }
