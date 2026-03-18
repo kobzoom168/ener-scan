@@ -3,9 +3,11 @@ const lastAcceptedImageEventAtMap = new Map();
 const latestScanJobMap = new Map();
 const userFlowVersionMap = new Map();
 const requestBlockedUsersMap = new Map();
+const pendingImageCandidateMap = new Map();
 
 const IMAGE_BURST_WINDOW_MS = 8000;
 const REQUEST_BLOCK_TTL_MS = 8000;
+const IMAGE_CANDIDATE_WINDOW_MS = 2000;
 
 function normalizeUserId(userId) {
   return String(userId || "").trim();
@@ -153,6 +155,63 @@ export function cleanupExpiredRequestBlocks() {
   }
 }
 
+export function setPendingImageCandidate(userId, payload) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
+
+  pendingImageCandidateMap.set(normalizedUserId, payload);
+}
+
+export function getPendingImageCandidate(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return null;
+
+  return pendingImageCandidateMap.get(normalizedUserId) || null;
+}
+
+export function clearPendingImageCandidate(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
+
+  pendingImageCandidateMap.delete(normalizedUserId);
+}
+
+export function hasRecentImageCandidate(userId, eventTimestamp) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return false;
+
+  const candidate = pendingImageCandidateMap.get(normalizedUserId);
+  if (!candidate) return false;
+
+  return eventTimestamp - candidate.eventTimestamp < IMAGE_CANDIDATE_WINDOW_MS;
+}
+
+export function clearExpiredImageCandidates() {
+  const now = Date.now();
+
+  for (const [userId, candidate] of pendingImageCandidateMap.entries()) {
+    if (!candidate?.eventTimestamp) {
+      pendingImageCandidateMap.delete(userId);
+      continue;
+    }
+
+    if (now - candidate.eventTimestamp >= IMAGE_CANDIDATE_WINDOW_MS * 3) {
+      pendingImageCandidateMap.delete(userId);
+    }
+  }
+}
+
+export function getRuntimeConfig() {
+  return {
+    imageBurstWindowMs: IMAGE_BURST_WINDOW_MS,
+    imageBurstWindowSec: Math.ceil(IMAGE_BURST_WINDOW_MS / 1000),
+    requestBlockTtlMs: REQUEST_BLOCK_TTL_MS,
+    requestBlockTtlSec: Math.ceil(REQUEST_BLOCK_TTL_MS / 1000),
+    imageCandidateWindowMs: IMAGE_CANDIDATE_WINDOW_MS,
+    imageCandidateWindowSec: IMAGE_CANDIDATE_WINDOW_MS / 1000,
+  };
+}
+
 export function clearUserRuntime(userId) {
   const normalizedUserId = normalizeUserId(userId);
   if (!normalizedUserId) return;
@@ -162,13 +221,5 @@ export function clearUserRuntime(userId) {
   latestScanJobMap.delete(normalizedUserId);
   userFlowVersionMap.delete(normalizedUserId);
   requestBlockedUsersMap.delete(normalizedUserId);
-}
-
-export function getRuntimeConfig() {
-  return {
-    imageBurstWindowMs: IMAGE_BURST_WINDOW_MS,
-    imageBurstWindowSec: Math.ceil(IMAGE_BURST_WINDOW_MS / 1000),
-    requestBlockTtlMs: REQUEST_BLOCK_TTL_MS,
-    requestBlockTtlSec: Math.ceil(REQUEST_BLOCK_TTL_MS / 1000),
-  };
+  pendingImageCandidateMap.delete(normalizedUserId);
 }
