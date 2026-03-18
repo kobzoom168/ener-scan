@@ -4,6 +4,7 @@ import {
   getSession,
   setPendingImage,
   clearSession,
+  clearSessionIfFlowVersionMatches,
 } from "../stores/session.store.js";
 
 import { getSavedBirthdate } from "../stores/userProfile.db.js";
