@@ -1,535 +1,174 @@
-import line from "@line/bot-sdk";
+const activeImageUsers = new Set();
+const lastAcceptedImageEventAtMap = new Map();
+const latestScanJobMap = new Map();
+const userFlowVersionMap = new Map();
+const requestBlockedUsersMap = new Map();
 
-import {
-  getSession,
-  setPendingImage,
-  clearSession,
-} from "../stores/session.store.js";
+const IMAGE_BURST_WINDOW_MS = 8000;
+const REQUEST_BLOCK_TTL_MS = 8000;
 
-import { getSavedBirthdate } from "../stores/userProfile.db.js";
-
-import {
-  getEventTimestamp,
-  isUserProcessingImage,
-  setUserProcessingImage,
-  clearUserProcessingImage,
-  isInImageBurstWindow,
-  markAcceptedImageEvent,
-  clearLatestScanJob,
-  bumpUserFlowVersion,
-  blockUserForRequest,
-  isUserBlockedForRequest,
-  cleanupExpiredRequestBlocks,
-} from "../stores/runtime.store.js";
-
-import { getScanHistory } from "../stores/scanHistory.store.js";
-import { getUserStats } from "../stores/userStats.store.js";
-
-import { getImageBufferFromLineMessage } from "../services/image.service.js";
-import { isDuplicateImage } from "../services/dedupe.service.js";
-import { checkSingleObject } from "../services/objectCheck.service.js";
-
-import { replyText } from "../services/lineReply.service.js";
-import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
-import {
-  buildUnsupportedObjectFlex,
-  buildIdleFlex,
-  buildDuplicateImageFlex,
-  buildMultipleObjectsFlex,
-  buildUnclearImageFlex,
-} from "../services/flex/status.flex.js";
-
-import {
-  isValidBirthdate,
-  toBase64,
-  formatHistory,
-  formatBangkokDateTime,
-  buildStartInstructionText,
-  buildMultiImageInRequestText,
-  buildMultipleObjectsText,
-  buildUnclearImageText,
-  buildUnsupportedObjectText,
-  buildDuplicateImageText,
-  buildNoHistoryText,
-  buildNoStatsText,
-  buildIdleText,
-  buildInvalidBirthdateText,
-  buildSystemErrorText,
-  isHistoryCommand,
-  isStatsCommand,
-  groupImageEventCountByUser,
-} from "../utils/webhookText.util.js";
-
-import {
-  replyFlexWithFallback,
-  runScanFlow,
-} from "../handlers/scanFlow.handler.js";
-
-async function handleHistoryCommand({ client, replyToken, userId }) {
-  const history = getScanHistory(userId);
-
-  if (!history.length) {
-    await replyText(client, replyToken, buildNoHistoryText());
-    return;
-  }
-
-  const formatted = formatHistory(history);
-  await replyText(
-    client,
-    replyToken,
-    `📜 ประวัติการสแกนล่าสุด\n\n${formatted}`
-  );
+function normalizeUserId(userId) {
+  return String(userId || "").trim();
 }
 
-async function handleStatsCommand({ client, replyToken, userId }) {
-  const stats = getUserStats(userId);
-
-  if (!stats) {
-    await replyText(client, replyToken, buildNoStatsText());
-    return;
-  }
-
-  const last = stats.lastScanAt ? formatBangkokDateTime(stats.lastScanAt) : "-";
-
-  await replyText(
-    client,
-    replyToken,
-    [
-      "📊 สถิติการสแกนของคุณ",
-      "",
-      `สแกนทั้งหมด: ${stats.totalScans} ครั้ง`,
-      `พลังที่พบบ่อย: ${stats.topEnergy}`,
-      `คะแนนเฉลี่ย: ${stats.avgScore} / 10`,
-      `สแกนล่าสุด: ${last}`,
-    ].join("\n")
-  );
+export function getEventTimestamp(event) {
+  const ts = Number(event?.timestamp || 0);
+  return Number.isFinite(ts) && ts > 0 ? ts : Date.now();
 }
 
-async function handleImageMessage({ client, event, userId, session }) {
-  const eventTimestamp = getEventTimestamp(event);
-  const flowVersion = bumpUserFlowVersion(userId);
+export function isUserProcessingImage(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return false;
 
-  if (isUserBlockedForRequest(userId)) {
-    console.log("[WEBHOOK] ignore image: request-blocked", {
-      userId,
-      flowVersion,
-      eventTimestamp,
-    });
+  return activeImageUsers.has(normalizedUserId);
+}
+
+export function setUserProcessingImage(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
+
+  activeImageUsers.add(normalizedUserId);
+}
+
+export function clearUserProcessingImage(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
+
+  activeImageUsers.delete(normalizedUserId);
+}
+
+export function isInImageBurstWindow(userId, eventTimestamp) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return false;
+
+  const lastAcceptedEventAt = lastAcceptedImageEventAtMap.get(normalizedUserId);
+  if (!lastAcceptedEventAt) return false;
+
+  return eventTimestamp - lastAcceptedEventAt < IMAGE_BURST_WINDOW_MS;
+}
+
+export function markAcceptedImageEvent(userId, eventTimestamp) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
+
+  lastAcceptedImageEventAtMap.set(normalizedUserId, eventTimestamp);
+}
+
+export function bumpUserFlowVersion(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return 0;
+
+  const nextVersion = (userFlowVersionMap.get(normalizedUserId) || 0) + 1;
+  userFlowVersionMap.set(normalizedUserId, nextVersion);
+  return nextVersion;
+}
+
+export function getUserFlowVersion(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return 0;
+
+  return userFlowVersionMap.get(normalizedUserId) || 0;
+}
+
+export function isCurrentFlowVersion(userId, version) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return false;
+
+  return (userFlowVersionMap.get(normalizedUserId) || 0) === Number(version || 0);
+}
+
+export function startScanJob(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return null;
+
+  const jobId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  latestScanJobMap.set(normalizedUserId, jobId);
+  return jobId;
+}
+
+export function isLatestScanJob(userId, jobId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId || !jobId) return false;
+
+  return latestScanJobMap.get(normalizedUserId) === jobId;
+}
+
+export function clearLatestScanJob(userId, jobId = null) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
+
+  if (!jobId) {
+    latestScanJobMap.delete(normalizedUserId);
     return;
   }
 
-  if (isUserProcessingImage(userId)) {
-    console.log("[WEBHOOK] ignore image: active processing", userId);
-    return;
-  }
-
-  if (isInImageBurstWindow(userId, eventTimestamp)) {
-    console.log("[WEBHOOK] reject image: burst window", userId, eventTimestamp);
-
-    blockUserForRequest(userId);
-    clearLatestScanJob(userId);
-    clearSession(userId);
-
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildMultipleObjectsFlex(),
-      fallbackText: buildMultiImageInRequestText(),
-      logLabel: "multi image burst flex",
-    });
-    return;
-  }
-
-  if (session.pendingImage) {
-    console.log("[WEBHOOK] reject image: waiting birthdate", userId);
-    return;
-  }
-
-  setUserProcessingImage(userId);
-
-  try {
-    if (isUserBlockedForRequest(userId)) {
-      console.log("[WEBHOOK] ignore image after processing lock: request-blocked", {
-        userId,
-        flowVersion,
-      });
-      return;
-    }
-
-    const imageBuffer = await getImageBufferFromLineMessage(
-      client,
-      event.message.id
-    );
-
-    if (isUserBlockedForRequest(userId)) {
-      console.log("[WEBHOOK] ignore image after download: request-blocked", {
-        userId,
-        flowVersion,
-      });
-      return;
-    }
-
-    console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
-    console.log("[WEBHOOK] flowVersion(image):", flowVersion);
-
-    const isDuplicate = await isDuplicateImage(imageBuffer);
-
-    if (isDuplicate) {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildDuplicateImageFlex(),
-        fallbackText: buildDuplicateImageText(),
-        logLabel: "duplicate image flex",
-      });
-      return;
-    }
-
-    if (isUserBlockedForRequest(userId)) {
-      console.log("[WEBHOOK] ignore image after dedupe: request-blocked", {
-        userId,
-        flowVersion,
-      });
-      return;
-    }
-
-    const imageBase64 = toBase64(imageBuffer);
-    const objectCheck = await checkSingleObject(imageBase64);
-
-    console.log("[WEBHOOK] object check result:", objectCheck);
-
-    if (objectCheck === "multiple") {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      console.log("[WEBHOOK] image rejected as multiple", {
-        userId,
-        messageId: event.message.id,
-        timestamp: event.timestamp,
-        flowVersion,
-      });
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildMultipleObjectsFlex(),
-        fallbackText: buildMultipleObjectsText(),
-        logLabel: "multiple objects flex",
-      });
-      return;
-    }
-
-    if (objectCheck === "unclear") {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildUnclearImageFlex(),
-        fallbackText: buildUnclearImageText(),
-        logLabel: "unclear image flex",
-      });
-      return;
-    }
-
-    if (objectCheck === "unsupported") {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildUnsupportedObjectFlex(),
-        fallbackText: buildUnsupportedObjectText(),
-        logLabel: "unsupported object flex",
-      });
-      return;
-    }
-
-    if (objectCheck !== "single_supported") {
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      clearSession(userId);
-
-      await replyFlexWithFallback({
-        client,
-        replyToken: event.replyToken,
-        flex: buildUnsupportedObjectFlex(),
-        fallbackText: buildUnsupportedObjectText(),
-        logLabel: "unsupported object flex",
-      });
-      return;
-    }
-
-    if (isUserBlockedForRequest(userId)) {
-      console.log("[WEBHOOK] ignore image before next flow: request-blocked", {
-        userId,
-        flowVersion,
-      });
-      return;
-    }
-
-    markAcceptedImageEvent(userId, eventTimestamp);
-
-    let savedBirthdate = null;
-
-    try {
-      console.log("[WEBHOOK] before getSavedBirthdate", { userId });
-      savedBirthdate = await getSavedBirthdate(userId);
-      console.log("[WEBHOOK] after getSavedBirthdate:", {
-        userId,
-        savedBirthdate,
-      });
-    } catch (error) {
-      console.error("[WEBHOOK] getSavedBirthdate failed:", {
-        userId,
-        message: error?.message,
-        code: error?.code,
-        details: error?.details,
-        hint: error?.hint,
-      });
-    }
-
-    if (isUserBlockedForRequest(userId)) {
-      console.log("[WEBHOOK] ignore image before setPendingImage/runScanFlow: request-blocked", {
-        userId,
-        flowVersion,
-      });
-      return;
-    }
-
-    if (savedBirthdate) {
-      console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
-
-      await runScanFlow({
-        client,
-        replyToken: event.replyToken,
-        userId,
-        imageBuffer,
-        birthdate: savedBirthdate,
-        flowVersion,
-      });
-      return;
-    }
-
-    setPendingImage(userId, {
-      messageId: event.message.id,
-      imageBuffer,
-    });
-
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildStartInstructionFlex(),
-      fallbackText: buildStartInstructionText(),
-      logLabel: "start instruction flex",
-    });
-  } finally {
-    clearUserProcessingImage(userId);
+  if (latestScanJobMap.get(normalizedUserId) === jobId) {
+    latestScanJobMap.delete(normalizedUserId);
   }
 }
 
-async function handleTextMessage({ client, event, userId, session }) {
-  const text = String(event.message.text || "").trim();
-  const lowerText = text.toLowerCase();
+export function getLatestScanJobId(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return null;
 
-  console.log("[WEBHOOK] text received:", {
-    userId,
-    text,
-    hasPendingImage: !!session.pendingImage,
-  });
-
-  if (isHistoryCommand(text, lowerText)) {
-    await handleHistoryCommand({
-      client,
-      replyToken: event.replyToken,
-      userId,
-    });
-    return;
-  }
-
-  if (isStatsCommand(text, lowerText)) {
-    await handleStatsCommand({
-      client,
-      replyToken: event.replyToken,
-      userId,
-    });
-    return;
-  }
-
-  if (!session.pendingImage) {
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildIdleFlex(),
-      fallbackText: buildIdleText(),
-      logLabel: "idle flex",
-    });
-    return;
-  }
-
-  if (!isValidBirthdate(text)) {
-    await replyText(client, event.replyToken, buildInvalidBirthdateText());
-    return;
-  }
-
-  const flowVersion = bumpUserFlowVersion(userId);
-
-  console.log("[WEBHOOK] flowVersion(text):", flowVersion);
-  console.log("[WEBHOOK] going to runScanFlow from text", {
-    userId,
-    birthdate: text,
-    flowVersion,
-  });
-
-  await runScanFlow({
-    client,
-    replyToken: event.replyToken,
-    userId,
-    imageBuffer: session.pendingImage.imageBuffer,
-    birthdate: text,
-    flowVersion,
-  });
+  return latestScanJobMap.get(normalizedUserId) || null;
 }
 
-async function handleEvent({ client, event }) {
-  if (event.type !== "message") return;
-  if (!event.replyToken) return;
+export function blockUserForRequest(userId, ttlMs = REQUEST_BLOCK_TTL_MS) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
 
-  const userId = event.source?.userId;
-
-  if (!userId) {
-    await replyText(client, event.replyToken, "ไม่พบข้อมูลผู้ใช้ครับ");
-    return;
-  }
-
-  if (isUserBlockedForRequest(userId)) {
-    console.log("[WEBHOOK] skip event: request-blocked", {
-      userId,
-      messageType: event.message?.type || "no-message-type",
-    });
-    return;
-  }
-
-  const session = getSession(userId);
-
-  if (event.message?.type === "image") {
-    await handleImageMessage({ client, event, userId, session });
-    return;
-  }
-
-  if (event.message?.type === "text") {
-    await handleTextMessage({ client, event, userId, session });
-    return;
-  }
-
-  console.log("[WEBHOOK] skip unsupported message");
+  requestBlockedUsersMap.set(normalizedUserId, Date.now() + ttlMs);
 }
 
-export function lineWebhookRouter(lineConfig) {
-  const client = new line.Client(lineConfig);
+export function isUserBlockedForRequest(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return false;
 
-  return async (req, res) => {
-    try {
-      const events = Array.isArray(req.body.events) ? req.body.events : [];
-      const imageCountByUser = groupImageEventCountByUser(events);
-      const multiImageUsersReplied = new Set();
+  const expireAt = requestBlockedUsersMap.get(normalizedUserId);
+  if (!expireAt) return false;
 
-      console.log("========== LINE WEBHOOK ==========");
-      console.log("event count:", events.length);
-      console.log(
-        "[WEBHOOK] imageCountByUser:",
-        Object.fromEntries(imageCountByUser)
-      );
+  if (Date.now() >= expireAt) {
+    requestBlockedUsersMap.delete(normalizedUserId);
+    return false;
+  }
 
-      cleanupExpiredRequestBlocks();
+  return true;
+}
 
-      for (let index = 0; index < events.length; index += 1) {
-        const event = events[index];
+export function clearUserRequestBlock(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
 
-        try {
-          console.log(`\n----- event #${index + 1} -----`);
-          console.log("[WEBHOOK] type:", event.type);
-          console.log(
-            "[WEBHOOK] userId:",
-            event.source?.userId || "no-user-id"
-          );
-          console.log(
-            "[WEBHOOK] message type:",
-            event.message?.type || "no-message-type"
-          );
-          console.log("[WEBHOOK] timestamp:", event.timestamp || "no-timestamp");
+  requestBlockedUsersMap.delete(normalizedUserId);
+}
 
-          const userId = event.source?.userId;
+export function cleanupExpiredRequestBlocks() {
+  const now = Date.now();
 
-          if (
-            userId &&
-            event.type === "message" &&
-            event.message?.type === "image" &&
-            (imageCountByUser.get(userId) || 0) > 1
-          ) {
-            const flowVersion = bumpUserFlowVersion(userId);
-
-            blockUserForRequest(userId);
-            clearLatestScanJob(userId);
-            clearSession(userId);
-
-            if (!multiImageUsersReplied.has(userId) && event.replyToken) {
-              multiImageUsersReplied.add(userId);
-
-              console.log("[WEBHOOK] multi image request rejected", {
-                userId,
-                flowVersion,
-              });
-
-              await replyFlexWithFallback({
-                client,
-                replyToken: event.replyToken,
-                flex: buildMultipleObjectsFlex(),
-                fallbackText: buildMultiImageInRequestText(),
-                logLabel: "multi image request flex",
-              });
-            }
-
-            console.log(
-              "[WEBHOOK] skip image because multiple image events in same request",
-              userId
-            );
-            continue;
-          }
-
-          await handleEvent({ client, event });
-        } catch (err) {
-          console.error(`[WEBHOOK] event #${index + 1} error:`, err);
-
-          if (event.replyToken) {
-            try {
-              await replyText(
-                client,
-                event.replyToken,
-                buildSystemErrorText()
-              );
-            } catch (replyErr) {
-              console.error("[WEBHOOK] fallback error reply failed:", replyErr);
-            }
-          }
-        }
-      }
-
-      cleanupExpiredRequestBlocks();
-
-      res.status(200).json({ ok: true });
-    } catch (error) {
-      console.error("[WEBHOOK] fatal:", error);
-      res.status(500).json({ error: "webhook_failed" });
+  for (const [userId, expireAt] of requestBlockedUsersMap.entries()) {
+    if (now >= expireAt) {
+      requestBlockedUsersMap.delete(userId);
     }
+  }
+}
+
+export function clearUserRuntime(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
+
+  activeImageUsers.delete(normalizedUserId);
+  lastAcceptedImageEventAtMap.delete(normalizedUserId);
+  latestScanJobMap.delete(normalizedUserId);
+  userFlowVersionMap.delete(normalizedUserId);
+  requestBlockedUsersMap.delete(normalizedUserId);
+}
+
+export function getRuntimeConfig() {
+  return {
+    imageBurstWindowMs: IMAGE_BURST_WINDOW_MS,
+    imageBurstWindowSec: Math.ceil(IMAGE_BURST_WINDOW_MS / 1000),
+    requestBlockTtlMs: REQUEST_BLOCK_TTL_MS,
+    requestBlockTtlSec: Math.ceil(REQUEST_BLOCK_TTL_MS / 1000),
   };
 }
