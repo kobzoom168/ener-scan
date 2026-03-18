@@ -83,3 +83,69 @@ app.use((err, req, res, next) => {
 app.listen(env.PORT, () => {
   console.log(`Ener Scan API listening on port ${env.PORT}`);
 });
+
+app.get("/debug/line-users", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,birthdate,updated_at")
+      .like("id", "U%")
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      return res.status(500).json({
+        ok: false,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+    }
+
+    res.json({
+      ok: true,
+      count: data.length,
+      users: data,
+    });
+  } catch (error) {
+    console.error("[DEBUG] /debug/line-users failed:", error);
+    res.status(500).json({
+      ok: false,
+      message: error?.message,
+    });
+  }
+});
+
+app.get("/debug/line-users", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,birthdate,updated_at")
+      .like("id", "U%")
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      return res.status(500).json({
+        ok: false,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+    }
+
+    res.json({
+      ok: true,
+      count: data.length,
+      users: data,
+    });
+  } catch (error) {
+    console.error("[DEBUG] /debug/line-users failed:", error);
+    res.status(500).json({
+      ok: false,
+      message: error?.message,
+    });
+  }
+});
