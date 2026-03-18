@@ -258,7 +258,6 @@ export async function runScanFlow({
       flowVersion,
     });
     clearLatestScanJob(userId, scanJobId);
-    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
@@ -268,7 +267,6 @@ export async function runScanFlow({
       scanJobId,
       latestScanJobId: getLatestScanJobId(userId),
     });
-    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
@@ -281,7 +279,6 @@ export async function runScanFlow({
       flowVersion,
     });
     clearLatestScanJob(userId, scanJobId);
-    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
