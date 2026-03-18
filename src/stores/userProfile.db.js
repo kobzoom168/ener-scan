@@ -9,6 +9,7 @@ export async function getSavedBirthdate(userId) {
 
   if (error) {
     console.error("[SUPABASE] getSavedBirthdate error:", {
+      userId,
       message: error.message,
       code: error.code,
       details: error.details,
@@ -17,11 +18,19 @@ export async function getSavedBirthdate(userId) {
     throw error;
   }
 
+  console.log("[SUPABASE] getSavedBirthdate success:", {
+    userId,
+    birthdate: data?.birthdate || null,
+  });
+
   return data?.birthdate || null;
 }
 
 export async function saveBirthdate(userId, birthdate) {
-  console.log("[SUPABASE] saveBirthdate input:", { userId, birthdate });
+  console.log("[SUPABASE] saveBirthdate input:", {
+    userId,
+    birthdate,
+  });
 
   const payload = {
     id: String(userId),
@@ -38,6 +47,8 @@ export async function saveBirthdate(userId, birthdate) {
 
   if (error) {
     console.error("[SUPABASE] saveBirthdate error:", {
+      userId,
+      birthdate,
       message: error.message,
       code: error.code,
       details: error.details,
@@ -46,6 +57,10 @@ export async function saveBirthdate(userId, birthdate) {
     throw error;
   }
 
-  console.log("[SUPABASE] saveBirthdate success");
+  console.log("[SUPABASE] saveBirthdate success:", {
+    userId,
+    birthdate,
+  });
+
   return true;
 }
