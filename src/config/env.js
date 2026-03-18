@@ -16,6 +16,7 @@ for (const key of requiredEnv) {
   }
 }
 
+
 export const env = {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   CHANNEL_ACCESS_TOKEN: process.env.CHANNEL_ACCESS_TOKEN,
