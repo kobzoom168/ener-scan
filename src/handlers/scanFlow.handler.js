@@ -1,4 +1,7 @@
-import { setBirthdate, clearSession } from "../stores/session.store.js";
+import {
+  setBirthdate,
+  clearSessionIfFlowVersionMatches,
+} from "../stores/session.store.js";
 import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
@@ -105,7 +108,7 @@ export async function runScanFlow({
       fallbackText: buildRateLimitText(rate.retryAfterSec),
       logLabel: "rate limit flex",
     });
-    clearSession(userId);
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
@@ -119,18 +122,19 @@ export async function runScanFlow({
       fallbackText: buildCooldownText(cooldown.remainingSec),
       logLabel: "cooldown flex",
     });
-    clearSession(userId);
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
   const scanJobId = startScanJob(userId);
 
-  setBirthdate(userId, birthdate);
+  setBirthdate(userId, birthdate, flowVersion);
 
   if (!imageBuffer || !imageBuffer.length) {
     console.error("[WEBHOOK] missing imageBuffer before scan", {
       userId,
       flowVersion,
+      scanJobId,
     });
 
     await replyText(
@@ -140,7 +144,7 @@ export async function runScanFlow({
     );
 
     clearLatestScanJob(userId, scanJobId);
-    clearSession(userId);
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
@@ -210,7 +214,7 @@ export async function runScanFlow({
         fallbackText: buildMultipleObjectsText(),
         logLabel: "multiple objects flex",
       });
-      clearSession(userId);
+      clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
 
@@ -222,7 +226,7 @@ export async function runScanFlow({
         fallbackText: buildUnclearImageText(),
         logLabel: "unclear image flex",
       });
-      clearSession(userId);
+      clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
 
@@ -234,7 +238,7 @@ export async function runScanFlow({
         fallbackText: buildUnsupportedObjectText(),
         logLabel: "unsupported object flex",
       });
-      clearSession(userId);
+      clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
 
@@ -244,7 +248,7 @@ export async function runScanFlow({
       "ขออภัยครับ ระบบวิเคราะห์ยังไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
     );
 
-    clearSession(userId);
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
@@ -254,7 +258,7 @@ export async function runScanFlow({
       flowVersion,
     });
     clearLatestScanJob(userId, scanJobId);
-    clearSession(userId);
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
@@ -264,7 +268,7 @@ export async function runScanFlow({
       scanJobId,
       latestScanJobId: getLatestScanJobId(userId),
     });
-    clearSession(userId);
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
@@ -277,7 +281,7 @@ export async function runScanFlow({
       flowVersion,
     });
     clearLatestScanJob(userId, scanJobId);
-    clearSession(userId);
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
 
@@ -288,5 +292,5 @@ export async function runScanFlow({
   });
 
   clearLatestScanJob(userId, scanJobId);
-  clearSession(userId);
+  clearSessionIfFlowVersionMatches(userId, flowVersion);
 }
