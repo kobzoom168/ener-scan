@@ -23,20 +23,30 @@ import { getScanHistory } from "../stores/scanHistory.store.js";
 import { getUserStats } from "../stores/userStats.store.js";
 
 import { getImageBufferFromLineMessage } from "../services/image.service.js";
+import { isDuplicateImage } from "../services/dedupe.service.js";
+import { checkSingleObject } from "../services/objectCheck.service.js";
 
 import { replyText } from "../services/lineReply.service.js";
 import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
 import {
+  buildUnsupportedObjectFlex,
   buildIdleFlex,
+  buildDuplicateImageFlex,
   buildMultipleObjectsFlex,
+  buildUnclearImageFlex,
 } from "../services/flex/status.flex.js";
 
 import {
   isValidBirthdate,
+  toBase64,
   formatHistory,
   formatBangkokDateTime,
   buildStartInstructionText,
   buildMultiImageInRequestText,
+  buildMultipleObjectsText,
+  buildUnclearImageText,
+  buildUnsupportedObjectText,
+  buildDuplicateImageText,
   buildNoHistoryText,
   buildNoStatsText,
   buildIdleText,
@@ -110,41 +120,122 @@ async function handleImageMessage({ client, event, userId, session }) {
   setUserProcessingImage(userId);
 
   try {
-    let imageBuffer;
+    const imageBuffer = await getImageBufferFromLineMessage(
+      client,
+      event.message.id
+    );
 
-    try {
-      console.log("[WEBHOOK] before getImageBuffer");
+    console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
+    console.log("[WEBHOOK] flowVersion(image):", flowVersion);
 
-      imageBuffer = await getImageBufferFromLineMessage(
+    const isDuplicate = await isDuplicateImage(imageBuffer);
+
+    if (isDuplicate) {
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+      clearSession(userId);
+
+      await replyFlexWithFallback({
         client,
-        event.message.id
-      );
+        replyToken: event.replyToken,
+        flex: buildDuplicateImageFlex(),
+        fallbackText: buildDuplicateImageText(),
+        logLabel: "duplicate image flex",
+      });
+      return;
+    }
 
-      console.log("[WEBHOOK] after getImageBuffer");
-      console.log("[WEBHOOK] image buffer length:", imageBuffer?.length || 0);
-      console.log("[WEBHOOK] flowVersion(image):", flowVersion);
-    } catch (error) {
-      console.error("[WEBHOOK] image download failed:", error);
+    const imageBase64 = toBase64(imageBuffer);
+    const objectCheck = await checkSingleObject(imageBase64);
 
-      await replyText(
+    console.log("[WEBHOOK] object check result:", objectCheck);
+
+    if (objectCheck === "multiple") {
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+      clearSession(userId);
+
+      console.log("[WEBHOOK] image rejected as multiple", {
+        userId,
+        messageId: event.message.id,
+        timestamp: event.timestamp,
+        flowVersion,
+      });
+
+      await replyFlexWithFallback({
         client,
-        event.replyToken,
-        "ขออภัยครับ ระบบโหลดรูปจาก LINE ไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
-      );
+        replyToken: event.replyToken,
+        flex: buildMultipleObjectsFlex(),
+        fallbackText: buildMultipleObjectsText(),
+        logLabel: "multiple objects flex",
+      });
+      return;
+    }
+
+    if (objectCheck === "unclear") {
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+      clearSession(userId);
+
+      await replyFlexWithFallback({
+        client,
+        replyToken: event.replyToken,
+        flex: buildUnclearImageFlex(),
+        fallbackText: buildUnclearImageText(),
+        logLabel: "unclear image flex",
+      });
+      return;
+    }
+
+    if (objectCheck === "unsupported") {
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+      clearSession(userId);
+
+      await replyFlexWithFallback({
+        client,
+        replyToken: event.replyToken,
+        flex: buildUnsupportedObjectFlex(),
+        fallbackText: buildUnsupportedObjectText(),
+        logLabel: "unsupported object flex",
+      });
+      return;
+    }
+
+    if (objectCheck !== "single_supported") {
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+      clearSession(userId);
+
+      await replyFlexWithFallback({
+        client,
+        replyToken: event.replyToken,
+        flex: buildUnsupportedObjectFlex(),
+        fallbackText: buildUnsupportedObjectText(),
+        logLabel: "unsupported object flex",
+      });
       return;
     }
 
     markAcceptedImageEvent(userId, eventTimestamp);
-    clearLatestScanJob(userId);
 
     let savedBirthdate = null;
 
     try {
-      console.log("[WEBHOOK] before getSavedBirthdate");
+      console.log("[WEBHOOK] before getSavedBirthdate", { userId });
       savedBirthdate = await getSavedBirthdate(userId);
-      console.log("[WEBHOOK] after getSavedBirthdate:", savedBirthdate);
+      console.log("[WEBHOOK] after getSavedBirthdate:", {
+        userId,
+        savedBirthdate,
+      });
     } catch (error) {
-      console.error("[WEBHOOK] getSavedBirthdate failed:", error);
+      console.error("[WEBHOOK] getSavedBirthdate failed:", {
+        userId,
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+      });
     }
 
     if (savedBirthdate) {
@@ -166,8 +257,6 @@ async function handleImageMessage({ client, event, userId, session }) {
       imageBuffer,
     });
 
-    console.log("[WEBHOOK] before start instruction reply");
-
     await replyFlexWithFallback({
       client,
       replyToken: event.replyToken,
@@ -175,8 +264,6 @@ async function handleImageMessage({ client, event, userId, session }) {
       fallbackText: buildStartInstructionText(),
       logLabel: "start instruction flex",
     });
-
-    console.log("[WEBHOOK] after start instruction reply");
   } finally {
     clearUserProcessingImage(userId);
   }
@@ -185,6 +272,12 @@ async function handleImageMessage({ client, event, userId, session }) {
 async function handleTextMessage({ client, event, userId, session }) {
   const text = String(event.message.text || "").trim();
   const lowerText = text.toLowerCase();
+
+  console.log("[WEBHOOK] text received:", {
+    userId,
+    text,
+    hasPendingImage: !!session.pendingImage,
+  });
 
   if (isHistoryCommand(text, lowerText)) {
     await handleHistoryCommand({
@@ -223,6 +316,11 @@ async function handleTextMessage({ client, event, userId, session }) {
   const flowVersion = bumpUserFlowVersion(userId);
 
   console.log("[WEBHOOK] flowVersion(text):", flowVersion);
+  console.log("[WEBHOOK] going to runScanFlow from text", {
+    userId,
+    birthdate: text,
+    flowVersion,
+  });
 
   await runScanFlow({
     client,
@@ -306,6 +404,11 @@ export function lineWebhookRouter(lineConfig) {
               multiImageUsersReplied.add(userId);
               clearLatestScanJob(userId);
               clearSession(userId);
+
+              console.log("[WEBHOOK] multi image request rejected", {
+                userId,
+                flowVersion,
+              });
 
               await replyFlexWithFallback({
                 client,
