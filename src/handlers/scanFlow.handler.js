@@ -144,6 +144,7 @@ export async function runScanFlow({
 
   // payment gate (after rate limit + cooldown)
   try {
+    console.log("[PAYMENT_DEBUG] runScanFlow payment gate calling checkScanAccess", { userId });
     const access = await checkScanAccess({ userId });
 
     if (!access.allowed) {
@@ -161,6 +162,13 @@ export async function runScanFlow({
       return;
     }
   } catch (error) {
+    console.error("[PAYMENT_DEBUG] runScanFlow payment gate catch", {
+      userId,
+      errorMessage: error?.message,
+      errorCode: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
     console.error("[WEBHOOK] payment gate failed:", {
       userId,
       message: error?.message,
