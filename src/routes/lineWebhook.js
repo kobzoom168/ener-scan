@@ -36,6 +36,10 @@ import { getImageBufferFromLineMessage } from "../services/image.service.js";
 import { isDuplicateImage } from "../services/dedupe.service.js";
 import { checkSingleObject } from "../services/objectCheck.service.js";
 
+import { env } from "../config/env.js";
+import { ensureUserByLineUserId, touchUserLastActive } from "../stores/users.db.js";
+import { createPaymentPending } from "../stores/payments.db.js";
+
 import { replyText } from "../services/lineReply.service.js";
 import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
 import {
@@ -63,6 +67,8 @@ import {
   buildIdleText,
   buildInvalidBirthdateText,
   buildSystemErrorText,
+  isPaymentCommand,
+  buildPaymentInstructionText,
   isHistoryCommand,
   isStatsCommand,
   groupImageEventCountByUser,
@@ -452,6 +458,34 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (!session.pendingImage) {
+    if (isPaymentCommand(text, lowerText)) {
+      let paymentId = null;
+      const amount = env.PAYMENT_UNLOCK_AMOUNT_THB || 0;
+      const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
+      try {
+        const appUser = await ensureUserByLineUserId(userId);
+        paymentId = await createPaymentPending({
+          appUserId: appUser.id,
+          amount,
+          currency,
+        });
+      } catch (err) {
+        console.error("[WEBHOOK] createPaymentPending failed:", {
+          userId,
+          message: err?.message,
+          code: err?.code,
+          details: err?.details,
+          hint: err?.hint,
+        });
+      }
+      await replyText(
+        client,
+        event.replyToken,
+        buildPaymentInstructionText({ paymentId, amount, currency })
+      );
+      return;
+    }
+
     await replyFlexWithFallback({
       client,
       replyToken: event.replyToken,
@@ -497,6 +531,21 @@ async function handleEvent({ client, event }) {
   if (!userId) {
     await replyText(client, event.replyToken, "ไม่พบข้อมูลผู้ใช้ครับ");
     return;
+  }
+
+  // Ensure production app user exists (app_users uses UUID PK)
+  try {
+    const appUser = await ensureUserByLineUserId(userId);
+    await touchUserLastActive(appUser.id);
+  } catch (error) {
+    console.error("[WEBHOOK] ensure app user failed:", {
+      lineUserId: userId,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
+    // Keep current scan flow intact even if app_users is unavailable.
   }
 
   if (isUserBlockedForRequest(userId)) {

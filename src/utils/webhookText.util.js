@@ -169,6 +169,21 @@ export function buildCooldownText(remainingSec = 0) {
   ].join("\n");
 }
 
+export function buildPaymentRequiredText({ usedScans = 0, freeLimit = 3 } = {}) {
+  const used = Number(usedScans || 0);
+  const limit = Number(freeLimit || 3);
+
+  return [
+    "🔍 Ener Scan",
+    "",
+    `คุณใช้สิทธิ์สแกนฟรีครบ ${limit} ครั้งแล้ว (ใช้ไป ${used} ครั้ง)`,
+    "เพื่อสแกนต่อ กรุณาชำระเงินเพื่อปลดล็อกการใช้งาน 24 ชั่วโมง",
+    "",
+    "พิมพ์: payment",
+    "เพื่อดูวิธีชำระเงินครับ",
+  ].join("\n");
+}
+
 export function buildNoHistoryText() {
   return "ยังไม่มีประวัติการสแกนครับ";
 }
@@ -189,6 +204,48 @@ export function buildInvalidBirthdateText() {
 
 export function buildSystemErrorText() {
   return "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ";
+}
+
+export function isPaymentCommand(text, lowerText) {
+  const t = String(text || "").trim();
+  const lt = String(lowerText || t.toLowerCase()).trim();
+
+  return lt === "payment" || t === "จ่ายเงิน" || t === "ปลดล็อก";
+}
+
+export function buildPaymentInstructionText({
+  paymentId = null,
+  amount = null,
+  currency = "THB",
+} = {}) {
+  const ref = paymentId ? String(paymentId).trim() : null;
+  const amountNum = amount != null ? Number(amount) : null;
+  const hasAmount = amountNum !== null && !Number.isNaN(amountNum) && amountNum > 0;
+  const amountLine =
+    hasAmount && currency
+      ? `จำนวน ${amountNum} ${String(currency).trim()}`
+      : "จำนวนตามที่แอดมินแจ้ง";
+
+  const refLine = ref ? `   รหัสอ้างอิง: ${ref}` : "";
+  const amountLineOnly =
+    hasAmount && currency ? `   ${amountLine}` : ref ? "   จำนวนตามที่แอดมินแจ้ง" : "";
+
+  const lines = [
+    "💳 วิธีชำระเงินเพื่อปลดล็อก Ener Scan",
+    "",
+    "ปลดล็อกการใช้งานได้ 24 ชั่วโมงหลังชำระเงิน",
+    "",
+    "ขั้นตอน",
+    "1) โอนเงินตามช่องทางที่ระบบกำหนด",
+    refLine,
+    amountLineOnly,
+    "2) ส่งสลิป/หลักฐานการโอนให้แอดมิน",
+    "3) รอระบบยืนยัน แล้วกลับมาสแกนได้ทันที",
+    "",
+    "หากต้องการให้ระบบทำเป็นอัตโนมัติ แจ้งได้ครับ (จะเพิ่มลิงก์ชำระเงินและยืนยันอัตโนมัติให้)",
+  ].filter(Boolean);
+
+  return lines.join("\n");
 }
 
 export function isHistoryCommand(text, lowerText) {

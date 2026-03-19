@@ -353,3 +353,34 @@ export function buildCooldownFlex(remainingSec = 0) {
     footer: createPrimaryFooterButton("ดูประวัติ", "history", "#2E7D32"),
   });
 }
+
+export function buildPaymentRequiredFlex({ usedScans = 0, freeLimit = 3 } = {}) {
+  const used = Number(usedScans || 0);
+  const limit = Number(freeLimit || 3);
+
+  return createBaseBubble({
+    accentColor: "#D4AF37",
+    title: "ต้องชำระเงินก่อนสแกนต่อ",
+    subtitle: `คุณใช้สิทธิ์สแกนฟรีครบ ${limit} ครั้งแล้ว`,
+    bodyContents: [
+      createCard(
+        "สถานะตอนนี้",
+        `ใช้ไปแล้ว ${used} ครั้ง\nปลดล็อกการใช้งานได้ 24 ชั่วโมงหลังชำระเงิน`,
+        {
+          backgroundColor: "#171717",
+          borderColor: "#242427",
+        }
+      ),
+      createCard(
+        "ขั้นตอนถัดไป",
+        "พิมพ์คำว่า payment เพื่อดูวิธีชำระเงิน",
+        {
+          backgroundColor: "#1D1A14",
+          borderColor: "#3A2F1D",
+          bodyColor: "#F4E3AE",
+        }
+      ),
+    ],
+    footer: createPrimaryFooterButton("ดูวิธีชำระเงิน", "payment", "#D4AF37"),
+  });
+}
