@@ -15,14 +15,15 @@ export async function getUserPaidUntil(lineUserId) {
   const normalized = normalizeLineUserId(lineUserId);
   if (!normalized) return null;
 
+  console.log("[PAYMENT_DEBUG] getUserPaidUntil query", { lineUserId: normalized });
   const { data, error } = await supabase
     .from("app_users")
     .select("paid_until")
     .eq("line_user_id", normalized)
-    .maybeSingle();
+    .limit(1);
 
   if (error) {
-    console.error("[SUPABASE] getUserPaidUntil error:", {
+    console.error("[PAYMENT_DEBUG] getUserPaidUntil error:", {
       lineUserId: normalized,
       message: error.message,
       code: error.code,
@@ -32,23 +33,25 @@ export async function getUserPaidUntil(lineUserId) {
     throw error;
   }
 
-  if (!data) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
 
-  return data.paid_until ? String(data.paid_until) : null;
+  return row.paid_until ? String(row.paid_until) : null;
 }
 
 export async function getUserScanCount(lineUserId) {
   const normalized = normalizeLineUserId(lineUserId);
   if (!normalized) return 0;
 
-  const { data: appUser, error: userError } = await supabase
+  console.log("[PAYMENT_DEBUG] getUserScanCount app_users query", { lineUserId: normalized });
+  const { data: appUserRows, error: userError } = await supabase
     .from("app_users")
     .select("id")
     .eq("line_user_id", normalized)
-    .maybeSingle();
+    .limit(1);
 
   if (userError) {
-    console.error("[SUPABASE] getUserScanCount (app_users) error:", {
+    console.error("[PAYMENT_DEBUG] getUserScanCount (app_users) error:", {
       lineUserId: normalized,
       message: userError.message,
       code: userError.code,
@@ -58,16 +61,22 @@ export async function getUserScanCount(lineUserId) {
     throw userError;
   }
 
+  const appUser = Array.isArray(appUserRows) ? appUserRows[0] : appUserRows;
   if (!appUser?.id) return 0;
 
+  const appUserId = String(appUser.id);
+  console.log("[PAYMENT_DEBUG] getUserScanCount scan_results query", {
+    appUserId,
+    lineUserId: normalized,
+  });
   const { count, error: countError } = await supabase
     .from("scan_results")
     .select("*", { count: "exact", head: true })
-    .eq("user_id", appUser.id);
+    .eq("user_id", appUserId);
 
   if (countError) {
-    console.error("[SUPABASE] getUserScanCount (scan_results) error:", {
-      appUserId: appUser.id,
+    console.error("[PAYMENT_DEBUG] getUserScanCount (scan_results) error:", {
+      appUserId,
       lineUserId: normalized,
       message: countError.message,
       code: countError.code,
