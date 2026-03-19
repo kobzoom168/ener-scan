@@ -68,9 +68,8 @@ export async function markPaymentSucceededAndExtendEntitlement({
 
   const { data: payment, error: fetchError } = await supabase
     .from("payments")
-    .select("user_id, unlock_hours")
+    .select("user_id, unlock_hours, status, unlocked_until")
     .eq("id", id)
-    .eq("status", "pending")
     .maybeSingle();
 
   if (fetchError) {
@@ -85,14 +84,17 @@ export async function markPaymentSucceededAndExtendEntitlement({
   }
 
   if (!payment?.user_id) {
-    throw new Error("payment_not_found_or_not_pending");
+    throw new Error("payment_not_found");
   }
 
-  const hours = Number(unlockHours) || Number(payment.unlock_hours) || DEFAULT_UNLOCK_HOURS;
+  const hours =
+    Number(unlockHours) ||
+    Number(payment.unlock_hours) ||
+    DEFAULT_UNLOCK_HOURS;
 
   const { data: user, error: userError } = await supabase
     .from("app_users")
-    .select("paid_until")
+    .select("paid_until,line_user_id")
     .eq("id", payment.user_id)
     .maybeSingle();
 
@@ -107,11 +109,58 @@ export async function markPaymentSucceededAndExtendEntitlement({
     throw userError;
   }
 
-  const paidUntilMs = user?.paid_until ? Date.parse(user.paid_until) : NaN;
-  const baseMs = Number.isFinite(paidUntilMs) && paidUntilMs > Date.now() ? paidUntilMs : Date.now();
-  const unlockedUntil = new Date(baseMs + hours * 60 * 60 * 1000).toISOString();
+  const prevPaidUntil = user?.paid_until ? String(user.paid_until) : null;
+  const prevPaidUntilMs = user?.paid_until
+    ? Date.parse(user.paid_until)
+    : NaN;
 
-  const { error: updatePaymentError } = await supabase
+  // Idempotency: if already succeeded, do not extend again.
+  if (payment?.status === "succeeded") {
+    const targetPaidUntil = payment?.unlocked_until
+      ? String(payment.unlocked_until)
+      : prevPaidUntil;
+
+    // If entitlement was not applied earlier (partial failure), reconcile once.
+    const targetMs = payment?.unlocked_until
+      ? Date.parse(payment.unlocked_until)
+      : NaN;
+    const needsReconcile =
+      payment?.unlocked_until &&
+      Number.isFinite(targetMs) &&
+      (!Number.isFinite(prevPaidUntilMs) || prevPaidUntilMs < targetMs);
+
+    if (needsReconcile) {
+      const { error: reconcileUserError } = await supabase
+        .from("app_users")
+        .update({
+          paid_until: payment.unlocked_until,
+          updated_at: nowIso,
+        })
+        .eq("id", payment.user_id);
+
+      if (reconcileUserError) throw reconcileUserError;
+    }
+
+    console.log("[PAYMENT_UNLOCK]", {
+      lineUserId: user?.line_user_id || null,
+      paymentId: id,
+      previousPaidUntil: prevPaidUntil,
+      paidUntil: targetPaidUntil || prevPaidUntil,
+      idempotent: true,
+    });
+
+    return { paidUntil: targetPaidUntil || prevPaidUntil };
+  }
+
+  const baseMs =
+    Number.isFinite(prevPaidUntilMs) && prevPaidUntilMs > Date.now()
+      ? prevPaidUntilMs
+      : Date.now();
+  const unlockedUntil = new Date(
+    baseMs + hours * 60 * 60 * 1000
+  ).toISOString();
+
+  const { data: updatedPayment, error: updatePaymentError } = await supabase
     .from("payments")
     .update({
       status: "succeeded",
@@ -120,7 +169,10 @@ export async function markPaymentSucceededAndExtendEntitlement({
       verified_by: verifiedBy || null,
       note: note || null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
 
   if (updatePaymentError) {
     console.error("[SUPABASE] markPaymentSucceeded update payment error:", {
@@ -131,6 +183,32 @@ export async function markPaymentSucceededAndExtendEntitlement({
       hint: updatePaymentError.hint,
     });
     throw updatePaymentError;
+  }
+
+  // If the payment row wasn't updated (e.g. duplicate/concurrent webhook),
+  // do not extend again; just return the latest entitlement we can read.
+  if (!updatedPayment?.id) {
+    const { data: latestUser, error: latestUserError } = await supabase
+      .from("app_users")
+      .select("paid_until,line_user_id")
+      .eq("id", payment.user_id)
+      .maybeSingle();
+
+    if (latestUserError) throw latestUserError;
+
+    const latestPaidUntil = latestUser?.paid_until
+      ? String(latestUser.paid_until)
+      : null;
+
+    console.log("[PAYMENT_UNLOCK]", {
+      lineUserId: latestUser?.line_user_id || null,
+      paymentId: id,
+      previousPaidUntil: prevPaidUntil,
+      paidUntil: latestPaidUntil || prevPaidUntil,
+      idempotent: true,
+    });
+
+    return { paidUntil: latestPaidUntil || prevPaidUntil };
   }
 
   const { error: updateUserError } = await supabase
@@ -151,6 +229,14 @@ export async function markPaymentSucceededAndExtendEntitlement({
     });
     throw updateUserError;
   }
+
+  console.log("[PAYMENT_UNLOCK]", {
+    lineUserId: user?.line_user_id || null,
+    paymentId: id,
+    previousPaidUntil: prevPaidUntil,
+    paidUntil: unlockedUntil,
+    idempotent: false,
+  });
 
   return { paidUntil: unlockedUntil };
 }

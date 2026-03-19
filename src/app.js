@@ -6,6 +6,7 @@ import { supabase } from "./config/supabase.js";
 import { lineWebhookRouter } from "./routes/lineWebhook.js";
 import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
+import { markPaymentSucceededAndExtendEntitlement } from "./stores/payments.db.js";
 
 process.on("uncaughtException", (error) => {
   console.error("[FATAL] uncaughtException", {
@@ -58,6 +59,40 @@ app.post(
   line.middleware(lineConfig),
   lineWebhookRouter(lineConfig)
 );
+
+app.post("/webhook/payment", express.json(), async (req, res) => {
+  const payload = req.body || {};
+  const paymentId =
+    payload?.paymentId || payload?.payment_id || payload?.payment?.id || null;
+
+  console.log("[PAYMENT_WEBHOOK] received", {
+    paymentId,
+    hasPaymentId: Boolean(paymentId),
+  });
+
+  try {
+    if (!paymentId) {
+      throw new Error("paymentId_missing_in_payload");
+    }
+
+    await markPaymentSucceededAndExtendEntitlement({
+      paymentId,
+      verifiedBy: "payment_webhook",
+    });
+
+    console.log("[PAYMENT_WEBHOOK] success", { paymentId });
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("[PAYMENT_WEBHOOK] failed", {
+      paymentId,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
+    res.status(500).json({ ok: false, message: error?.message || "payment_webhook_failed" });
+  }
+});
 
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
