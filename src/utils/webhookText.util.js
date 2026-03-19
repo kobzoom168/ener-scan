@@ -1,5 +1,54 @@
+function normalizeBirthdateText(text) {
+  return String(text || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/[.]/g, "/")
+    .replace(/-/g, "/");
+}
+
+function isLeapYear(year) {
+  return year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
+}
+
+function getDaysInMonth(month, year) {
+  const monthDays = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return monthDays[month - 1] || 0;
+}
+
 export function isValidBirthdate(text) {
-  return /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(text || "").trim());
+  const normalized = normalizeBirthdateText(text);
+  const match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (!match) return false;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
+    return false;
+  }
+
+  if (year < 1900 || year > 2100) return false;
+  if (month < 1 || month > 12) return false;
+
+  const maxDay = getDaysInMonth(month, year);
+  if (day < 1 || day > maxDay) return false;
+
+  return true;
+}
+
+export function normalizeBirthdateForScan(text) {
+  const normalized = normalizeBirthdateText(text);
+  const match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (!match) return normalized;
+
+  const day = String(Number(match[1])).padStart(2, "0");
+  const month = String(Number(match[2])).padStart(2, "0");
+  const year = match[3];
+
+  return `${day}/${month}/${year}`;
 }
 
 export function toBase64(buffer) {

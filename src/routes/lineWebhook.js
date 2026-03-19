@@ -21,11 +21,12 @@ import {
   blockUserForRequest,
   isUserBlockedForRequest,
   cleanupExpiredRequestBlocks,
-  setPendingImageCandidate,
   getPendingImageCandidate,
   clearPendingImageCandidate,
-  hasRecentImageCandidate,
   clearExpiredImageCandidates,
+  hasPendingImageCandidate,
+  registerImageCandidateEvent,
+  isCandidateWindowActive,
 } from "../stores/runtime.store.js";
 
 import { getScanHistory } from "../stores/scanHistory.store.js";
@@ -47,6 +48,7 @@ import {
 
 import {
   isValidBirthdate,
+  normalizeBirthdateForScan,
   toBase64,
   formatHistory,
   formatBangkokDateTime,
@@ -291,19 +293,68 @@ async function handleImageMessage({ client, event, userId, session }) {
 
   /*
   ------------------------------------------------
-  debounce candidate
-  - รูปแรก: ตั้งเป็น candidate แล้วรอ 2 วินาที
-  - ถ้ามีรูปใหม่เข้ามาในช่วงนั้น: ตีเป็น multi-image
-  - ถ้าไม่มี: ค่อย finalize รับรูป
+  collect window
+  - รูปแรก: ลง candidate แล้วรอ 5 วินาที
+  - รูปถัดมาใน window เดียวกัน: เพิ่ม count
+  - เมื่อครบ window:
+      count > 1 => reject multi-image
+      count = 1 => finalize รับรูป
   ------------------------------------------------
   */
-  if (hasRecentImageCandidate(userId, eventTimestamp)) {
-    const existingCandidate = getPendingImageCandidate(userId);
+  const flowVersion = bumpUserFlowVersion(userId);
 
-    console.log("[WEBHOOK] reject image: second image within candidate window", {
+  const candidateBefore = getPendingImageCandidate(userId);
+
+  if (!candidateBefore || !isCandidateWindowActive(userId, eventTimestamp)) {
+    clearPendingImageCandidate(userId);
+  }
+
+  const candidate = registerImageCandidateEvent(userId, {
+    eventTimestamp,
+    messageId: event.message.id,
+    replyToken: event.replyToken,
+    flowVersion,
+  });
+
+  console.log("[WEBHOOK] image candidate registered", {
+    userId,
+    flowVersion,
+    eventTimestamp,
+    messageId: event.message.id,
+    candidateCount: candidate?.count || 0,
+    firstMessageId: candidate?.firstMessageId || null,
+    latestMessageId: candidate?.latestMessageId || null,
+  });
+
+  await sleep(5000);
+
+  const latestCandidate = getPendingImageCandidate(userId);
+
+  if (!latestCandidate) {
+    console.log("[WEBHOOK] candidate disappeared, skip", {
       userId,
-      currentEventTimestamp: eventTimestamp,
-      candidateEventTimestamp: existingCandidate?.eventTimestamp,
+      flowVersion,
+    });
+    return;
+  }
+
+  if (latestCandidate.firstMessageId !== event.message.id) {
+    console.log("[WEBHOOK] not first candidate message, skip", {
+      userId,
+      flowVersion,
+      firstMessageId: latestCandidate.firstMessageId,
+      currentMessageId: event.message.id,
+    });
+    return;
+  }
+
+  if ((latestCandidate.count || 0) > 1) {
+    console.log("[WEBHOOK] reject image group: multiple images collected", {
+      userId,
+      flowVersion,
+      count: latestCandidate.count,
+      firstMessageId: latestCandidate.firstMessageId,
+      latestMessageId: latestCandidate.latestMessageId,
     });
 
     blockUserForRequest(userId);
@@ -316,54 +367,7 @@ async function handleImageMessage({ client, event, userId, session }) {
       replyToken: event.replyToken,
       flex: buildMultipleObjectsFlex(),
       fallbackText: buildMultiImageInRequestText(),
-      logLabel: "multi image debounce flex",
-    });
-    return;
-  }
-
-  const flowVersion = bumpUserFlowVersion(userId);
-
-  setPendingImageCandidate(userId, {
-    eventTimestamp,
-    flowVersion,
-    messageId: event.message.id,
-    replyToken: event.replyToken,
-  });
-
-  console.log("[WEBHOOK] image candidate created", {
-    userId,
-    flowVersion,
-    eventTimestamp,
-    messageId: event.message.id,
-  });
-
-  await sleep(2000);
-
-  const latestCandidate = getPendingImageCandidate(userId);
-
-  if (!latestCandidate) {
-    console.log("[WEBHOOK] candidate disappeared, skip", {
-      userId,
-      flowVersion,
-    });
-    return;
-  }
-
-  if (latestCandidate.flowVersion !== flowVersion) {
-    console.log("[WEBHOOK] candidate superseded by newer flow", {
-      userId,
-      flowVersion,
-      latestCandidateFlowVersion: latestCandidate.flowVersion,
-    });
-    return;
-  }
-
-  if (latestCandidate.messageId !== event.message.id) {
-    console.log("[WEBHOOK] candidate message mismatch, skip", {
-      userId,
-      flowVersion,
-      latestCandidateMessageId: latestCandidate.messageId,
-      currentMessageId: event.message.id,
+      logLabel: "multi image collect-window flex",
     });
     return;
   }
@@ -464,11 +468,13 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   const flowVersion = session.flowVersion || 0;
+  const normalizedBirthdate = normalizeBirthdateForScan(text);
 
   console.log("[WEBHOOK] use session flowVersion(text):", flowVersion);
+  console.log("[WEBHOOK] normalized birthdate:", normalizedBirthdate);
   console.log("[WEBHOOK] going to runScanFlow from text", {
     userId,
-    birthdate: text,
+    birthdate: normalizedBirthdate,
     flowVersion,
   });
 
@@ -477,7 +483,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     replyToken: event.replyToken,
     userId,
     imageBuffer: session.pendingImage.imageBuffer,
-    birthdate: text,
+    birthdate: normalizedBirthdate,
     flowVersion,
   });
 }

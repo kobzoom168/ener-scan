@@ -7,7 +7,7 @@ const pendingImageCandidateMap = new Map();
 
 const IMAGE_BURST_WINDOW_MS = 8000;
 const REQUEST_BLOCK_TTL_MS = 8000;
-const IMAGE_CANDIDATE_WINDOW_MS = 2000;
+const IMAGE_CANDIDATE_WINDOW_MS = 5000;
 
 function normalizeUserId(userId) {
   return String(userId || "").trim();
@@ -159,7 +159,14 @@ export function setPendingImageCandidate(userId, payload) {
   const normalizedUserId = normalizeUserId(userId);
   if (!normalizedUserId) return;
 
-  pendingImageCandidateMap.set(normalizedUserId, payload);
+  pendingImageCandidateMap.set(normalizedUserId, {
+    eventTimestamp: Number(payload?.eventTimestamp || Date.now()),
+    firstMessageId: payload?.firstMessageId || null,
+    latestMessageId: payload?.latestMessageId || payload?.firstMessageId || null,
+    replyToken: payload?.replyToken || null,
+    flowVersion: Number(payload?.flowVersion || 0),
+    count: Number(payload?.count || 1),
+  });
 }
 
 export function getPendingImageCandidate(userId) {
@@ -169,6 +176,43 @@ export function getPendingImageCandidate(userId) {
   return pendingImageCandidateMap.get(normalizedUserId) || null;
 }
 
+export function hasPendingImageCandidate(userId) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return false;
+
+  return pendingImageCandidateMap.has(normalizedUserId);
+}
+
+export function registerImageCandidateEvent(userId, payload) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return null;
+
+  const existing = pendingImageCandidateMap.get(normalizedUserId);
+
+  if (!existing) {
+    const created = {
+      eventTimestamp: Number(payload?.eventTimestamp || Date.now()),
+      firstMessageId: payload?.messageId || null,
+      latestMessageId: payload?.messageId || null,
+      replyToken: payload?.replyToken || null,
+      flowVersion: Number(payload?.flowVersion || 0),
+      count: 1,
+    };
+    pendingImageCandidateMap.set(normalizedUserId, created);
+    return created;
+  }
+
+  const updated = {
+    ...existing,
+    latestMessageId: payload?.messageId || existing.latestMessageId,
+    replyToken: payload?.replyToken || existing.replyToken,
+    count: Number(existing.count || 1) + 1,
+  };
+
+  pendingImageCandidateMap.set(normalizedUserId, updated);
+  return updated;
+}
+
 export function clearPendingImageCandidate(userId) {
   const normalizedUserId = normalizeUserId(userId);
   if (!normalizedUserId) return;
@@ -176,14 +220,14 @@ export function clearPendingImageCandidate(userId) {
   pendingImageCandidateMap.delete(normalizedUserId);
 }
 
-export function hasRecentImageCandidate(userId, eventTimestamp) {
+export function isCandidateWindowActive(userId, now = Date.now()) {
   const normalizedUserId = normalizeUserId(userId);
   if (!normalizedUserId) return false;
 
   const candidate = pendingImageCandidateMap.get(normalizedUserId);
-  if (!candidate) return false;
+  if (!candidate?.eventTimestamp) return false;
 
-  return eventTimestamp - candidate.eventTimestamp < IMAGE_CANDIDATE_WINDOW_MS;
+  return now - candidate.eventTimestamp < IMAGE_CANDIDATE_WINDOW_MS;
 }
 
 export function clearExpiredImageCandidates() {
