@@ -145,6 +145,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "internal_server_error" });
 });
 
-app.listen(env.PORT, () => {
-  console.log(`Ener Scan API listening on port ${env.PORT}`);
+const port = process.env.PORT || 3000;
+
+app.listen(port, () => {
+  console.log(`Ener Scan API listening on port ${port}`);
 });
