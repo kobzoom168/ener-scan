@@ -388,7 +388,30 @@ export async function runScanFlow({
   }
 
   // persist scan result to DB
-  const parsed = parseScanResultForHistory(resultText);
+  const parsedFallback = {
+    energyScore: null,
+    mainEnergy: null,
+    compatibility: null,
+  };
+
+  let parsed = parsedFallback;
+  try {
+  const parsedResult = parseScanResultForHistory(resultText);
+  parsed = parsedResult || parsedFallback;
+  } catch (error) {
+    console.warn(
+      "[SCAN_PARSE] parseScanResultForHistory failed, fallback to null fields",
+      {
+        userId,
+        flowVersion,
+        scanJobId,
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+      }
+    );
+  }
 
   // 1) Legacy history table (keyed by line_user_id) - non-blocking for billing
   try {
