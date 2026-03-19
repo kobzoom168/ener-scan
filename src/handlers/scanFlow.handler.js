@@ -387,11 +387,11 @@ export async function runScanFlow({
     return;
   }
 
-  // persist scan result to DB (source of truth for used scans)
-  try {
-    const parsed = parseScanResultForHistory(resultText);
+  // persist scan result to DB
+  const parsed = parseScanResultForHistory(resultText);
 
-    // Legacy history table (existing behavior, keyed by line_user_id)
+  // 1) Legacy history table (keyed by line_user_id) - non-blocking for billing
+  try {
     await addScanHistoryDb(userId, {
       time: Date.now(),
       result: resultText,
@@ -399,50 +399,52 @@ export async function runScanFlow({
       mainEnergy: parsed.mainEnergy,
       compatibility: parsed.compatibility,
     });
+  } catch (error) {
+    console.error(
+      "[LEGACY_HISTORY] addScanHistoryDb failed (ignored for billing, user will still be replied)",
+      {
+        userId,
+        flowVersion,
+        scanJobId,
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+      }
+    );
+  }
 
-    // New normalized scan_results table (keyed by app_users.id + scan_requests.id)
-    if (scanRequestId && appUserId) {
-      try {
-        const scanFinishedAt = Date.now();
-        const responseTimeMs = scanFinishedAt - scanStartedAt;
+  // 2) New normalized scan_results table (source of truth for used scans)
+  if (scanRequestId && appUserId) {
+    try {
+      const scanFinishedAt = Date.now();
+      const responseTimeMs = scanFinishedAt - scanStartedAt;
 
-        await createScanResult({
+      await createScanResult({
+        scanRequestId,
+        appUserId,
+        resultText,
+        resultSummary: null,
+        energyScore: parsed.energyScore,
+        mainEnergy: parsed.mainEnergy,
+        compatibility: parsed.compatibility,
+        modelName: "gpt-4.1-mini",
+        promptVersion: "v1",
+        responseTimeMs,
+      });
+    } catch (scanResultError) {
+      console.error(
+        "[BILLING_INCIDENT] createScanResult failed but user will be replied",
+        {
           scanRequestId,
           appUserId,
-          resultText,
-          resultSummary: null,
-          energyScore: parsed.energyScore,
-          mainEnergy: parsed.mainEnergy,
-          compatibility: parsed.compatibility,
-          modelName: "gpt-4.1-mini",
-          promptVersion: "v1",
-          responseTimeMs,
-        });
-      } catch (scanResultError) {
-        console.error(
-          "[WEBHOOK] createScanResult failed but continue reply:",
-          {
-            scanRequestId,
-            appUserId,
-            message: scanResultError?.message,
-            code: scanResultError?.code,
-            details: scanResultError?.details,
-            hint: scanResultError?.hint,
-          }
-        );
-      }
+          message: scanResultError?.message,
+          code: scanResultError?.code,
+          details: scanResultError?.details,
+          hint: scanResultError?.hint,
+        }
+      );
     }
-  } catch (error) {
-    // Per requirement: still reply to user, but log incident clearly.
-    console.error("[BILLING_INCIDENT] scan persisted failed but user will be replied", {
-      userId,
-      flowVersion,
-      scanJobId,
-      message: error?.message,
-      code: error?.code,
-      details: error?.details,
-      hint: error?.hint,
-    });
   }
 
   if (scanRequestId) {
