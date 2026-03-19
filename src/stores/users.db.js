@@ -28,6 +28,10 @@ export async function ensureUserByLineUserId(lineUserId, { displayName } = {}) {
   }
 
   if (existing?.id) {
+    console.log("[USER_DEBUG] ensureUserByLineUserId found existing user", {
+      appUserId: existing.id,
+      lineUserId: existing.line_user_id,
+    });
     // Optionally backfill display_name when missing
     if (displayName && !existing.display_name) {
       const { error: updateError } = await supabase
@@ -91,6 +95,11 @@ export async function ensureUserByLineUserId(lineUserId, { displayName } = {}) {
   if (!inserted?.id) {
     throw new Error("app_user_insert_failed");
   }
+
+  console.log("[USER_DEBUG] ensureUserByLineUserId created new user", {
+    appUserId: inserted.id,
+    lineUserId: inserted.line_user_id,
+  });
 
   return {
     id: inserted.id,

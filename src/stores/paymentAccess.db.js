@@ -62,7 +62,12 @@ export async function getUserScanCount(lineUserId) {
   }
 
   const appUser = Array.isArray(appUserRows) ? appUserRows[0] : appUserRows;
-  if (!appUser?.id) return 0;
+  if (!appUser?.id) {
+    console.log("[PAYMENT_DEBUG] getUserScanCount no app_users row, treating as 0 scans", {
+      lineUserId: normalized,
+    });
+    return 0;
+  }
 
   const appUserId = String(appUser.id);
   console.log("[PAYMENT_DEBUG] getUserScanCount scan_results query", {
@@ -85,6 +90,12 @@ export async function getUserScanCount(lineUserId) {
     });
     throw countError;
   }
+
+  console.log("[PAYMENT_DEBUG] getUserScanCount success", {
+    appUserId,
+    lineUserId: normalized,
+    count: count ?? 0,
+  });
 
   return count ?? 0;
 }

@@ -5,6 +5,7 @@ import { env } from "./config/env.js";
 import { supabase } from "./config/supabase.js";
 import { lineWebhookRouter } from "./routes/lineWebhook.js";
 import { saveBirthdate } from "./stores/userProfile.db.js";
+import { checkScanAccess } from "./services/paymentAccess.service.js";
 
 process.on("uncaughtException", (error) => {
   console.error("[FATAL] uncaughtException", {
@@ -111,6 +112,24 @@ app.get("/debug/line-users", async (req, res) => {
     res.status(500).json({
       ok: false,
       message: error?.message,
+    });
+  }
+});
+
+app.get("/debug/payment-access/:lineUserId", async (req, res) => {
+  const lineUserId = String(req.params?.lineUserId || "").trim();
+  console.log("[DEBUG] /debug/payment-access", { lineUserId });
+
+  try {
+    const access = await checkScanAccess({ userId: lineUserId });
+    res.json({ ok: true, access });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
     });
   }
 });
