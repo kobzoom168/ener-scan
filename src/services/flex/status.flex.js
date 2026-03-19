@@ -415,24 +415,62 @@ export function buildPaymentPaywallFlex({
   paymentUrl,
   priceTHB = 29,
 } = {}) {
-  const used = Number(usedScans || 0);
-  const limit = Number(freeLimit || 3);
-  const priceLine = `• ราคา ${priceTHB} บาท`;
+  const priceLine = `เพียง ${priceTHB} บาท`;
+
+  const footer = {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: "#101010",
+    paddingTop: "0px",
+    paddingBottom: "16px",
+    paddingStart: "18px",
+    paddingEnd: "18px",
+    contents: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#D4AF37",
+        action: {
+          type: "uri",
+          label: "🔓 ปลดล็อกทันที",
+          uri: paymentUrl,
+        },
+      },
+      {
+        type: "text",
+        text: "ระบบจะปลดล็อกทันทีหลังชำระเงิน",
+        size: "xs",
+        color: "#A4A4A8",
+        wrap: true,
+      },
+    ],
+  };
 
   return createBaseBubble({
     accentColor: "#D4AF37",
-    title: "🔒 วันนี้คุณใช้สิทธิ์ฟรีครบแล้ว",
-    subtitle: `คุณใช้สิทธิ์สแกนฟรีครบ ${limit} ครั้งแล้ว (ใช้ไป ${used} ครั้ง)`,
+    title: "🔮 คุณเปิดพลังได้แค่บางส่วน...",
+    subtitle: "ใช้งานได้ไม่จำกัด 24 ชั่วโมง",
     bodyContents: [
       createCard(
-        "ปลดล็อก Ener Scan",
-        `• ใช้งานต่อได้ทันที\n• สแกนไม่จำกัด 24 ชั่วโมง\n${priceLine}`,
+        "ปลดล็อกเพื่อดู:",
+        [
+          "ผลที่คุณเห็นตอนนี้เป็นเพียง 'ชั้นแรกของพลัง'",
+          "ยังมีรายละเอียดลึกที่ยังไม่ถูกเปิดเผย",
+          "",
+          "• พลังซ่อนเร้นของวัตถุ",
+          "• ความเชื่อมโยงกับตัวคุณแบบละเอียด",
+          "• คำแนะนำเฉพาะตัว",
+          "",
+          `✨ ${"ใช้งานได้ไม่จำกัด 24 ชั่วโมง"}`,
+          "",
+          `💎 ${priceLine}`,
+        ].join("\n"),
         {
           backgroundColor: "#171717",
           borderColor: "#242427",
         }
       ),
     ],
-    footer: createUriFooterButton("🔓 ชำระเงินทันที", paymentUrl, "#D4AF37"),
+    footer,
   });
 }
