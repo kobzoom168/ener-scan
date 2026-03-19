@@ -528,12 +528,6 @@ async function handleEvent({ client, event }) {
 
   const userId = event.source?.userId;
 
-  console.log(
-    `[LINE_USER_DEBUG] userId=${userId} eventType=${event.type} messageType=${
-      event.message?.type || "unknown"
-    }`
-  );
-
   if (!userId) {
     await replyText(client, event.replyToken, "ไม่พบข้อมูลผู้ใช้ครับ");
     return;

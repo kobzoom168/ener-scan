@@ -1,4 +1,5 @@
 import { getUserPaidUntil, getUserScanCount } from "../stores/paymentAccess.db.js";
+import { ensureUserByLineUserId } from "../stores/users.db.js";
 import { buildPaymentRequiredFlex } from "./flex/status.flex.js";
 import { buildPaymentRequiredText } from "../utils/webhookText.util.js";
 
@@ -20,6 +21,20 @@ export async function checkScanAccess({ userId, now = new Date() }) {
       freeScansRemaining: 0,
       paidUntil: null,
     };
+  }
+
+  // Ensure app_users row exists for this LINE user (safe, non-fatal).
+  try {
+    await ensureUserByLineUserId(normalizedUserId);
+  } catch (error) {
+    console.error("[PAYMENT_DEBUG] checkScanAccess ensureUserByLineUserId failed (ignored):", {
+      lineUserId: normalizedUserId,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
+    // Keep payment gate semantics unchanged: fall through to existing logic.
   }
 
   const [paidUntil, usedScans] = await Promise.all([
