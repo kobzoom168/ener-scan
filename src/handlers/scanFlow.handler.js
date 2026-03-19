@@ -154,6 +154,12 @@ export async function runScanFlow({
   try {
     const access = await checkScanAccess({ userId });
 
+    console.log("[SCAN_ACCESS]", {
+      userId,
+      allowed: access?.allowed,
+      reason: access?.reason,
+    });
+
     if (!access.allowed) {
       const reply = buildPaymentGateReply({ decision: access });
 
