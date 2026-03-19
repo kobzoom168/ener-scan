@@ -7,6 +7,8 @@ import { lineWebhookRouter } from "./routes/lineWebhook.js";
 import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
 import { markPaymentSucceededAndExtendEntitlement } from "./stores/payments.db.js";
+import { createPaymentPending } from "./stores/payments.db.js";
+import { getAppUserByLineUserId } from "./stores/users.db.js";
 
 process.on("uncaughtException", (error) => {
   console.error("[FATAL] uncaughtException", {
@@ -92,6 +94,72 @@ app.post("/webhook/payment", express.json(), async (req, res) => {
     });
     res.status(500).json({ ok: false, message: error?.message || "payment_webhook_failed" });
   }
+});
+
+app.post("/payments/create", express.json(), async (req, res) => {
+  const lineUserId = req.body?.lineUserId;
+
+  console.log("[PAYMENTS_CREATE] received", { lineUserId });
+
+  try {
+    if (!lineUserId) {
+      res.status(400).json({ ok: false, message: "lineUserId_missing" });
+      return;
+    }
+
+    const appUser = await getAppUserByLineUserId(lineUserId);
+    if (!appUser?.id) {
+      res.status(404).json({ ok: false, message: "user_not_found" });
+      return;
+    }
+
+    const paymentId = await createPaymentPending({
+      appUserId: appUser.id,
+      amount: 29,
+      currency: "THB",
+    });
+
+    const paymentUrl = `https://ener-scan-production.up.railway.app/payments/mock/${paymentId}`;
+
+    console.log("[PAYMENTS_CREATE] success", { lineUserId, paymentId });
+    res.status(200).json({ ok: true, paymentId, paymentUrl });
+  } catch (error) {
+    console.error("[PAYMENTS_CREATE] failed", {
+      lineUserId,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
+    res.status(500).json({
+      ok: false,
+      message: "payment_create_failed",
+    });
+  }
+});
+
+app.get("/payments/mock/:paymentId", async (req, res) => {
+  const paymentId = String(req.params?.paymentId || "").trim();
+
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Ener Scan Mock Payment</title>
+  </head>
+  <body style="font-family: Arial, sans-serif; max-width: 720px; margin: 24px auto;">
+    <h2>Mock Payment</h2>
+    <p><b>paymentId:</b> ${paymentId}</p>
+    <p>สำหรับ MVP ตอนนี้ คุณสามารถยืนยันการชำระเงินด้วยการเรียก endpoint:</p>
+    <pre style="background: #f6f6f6; padding: 12px; border-radius: 8px;">curl -X POST http://localhost:3000/webhook/payment \\
+-H "Content-Type: application/json" \\
+-d '{"paymentId":"${paymentId}"}'</pre>
+    <p><i>หมายเหตุ:</i> เปลี่ยน host/port ให้ตรงกับ environment ที่คุณทดสอบ</p>
+  </body>
+</html>`;
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.status(200).send(html);
 });
 
 app.use((err, req, res, next) => {

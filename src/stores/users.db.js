@@ -111,6 +111,27 @@ export async function ensureUserByLineUserId(lineUserId, { displayName } = {}) {
   };
 }
 
+/**
+ * Find an existing app user by LINE user id.
+ * Non-creating (returns null when not found).
+ */
+export async function getAppUserByLineUserId(lineUserId) {
+  const normalizedLineUserId = normalizeLineUserId(lineUserId);
+  if (!normalizedLineUserId) return null;
+
+  const { data: existing, error } = await supabase
+    .from("app_users")
+    .select("id,line_user_id,paid_until,status")
+    .eq("line_user_id", normalizedLineUserId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return existing || null;
+}
+
 export async function touchUserLastActive(appUserId) {
   const normalizedId = String(appUserId || "").trim();
   if (!normalizedId) return false;

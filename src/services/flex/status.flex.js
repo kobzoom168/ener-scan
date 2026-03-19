@@ -122,6 +122,30 @@ function createPrimaryFooterButton(label, text, color = "#D4AF37") {
   };
 }
 
+function createUriFooterButton(label, uri, color = "#D4AF37") {
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: "#101010",
+    paddingTop: "0px",
+    paddingBottom: "16px",
+    paddingStart: "18px",
+    paddingEnd: "18px",
+    contents: [
+      {
+        type: "button",
+        style: "primary",
+        color,
+        action: {
+          type: "uri",
+          label,
+          uri,
+        },
+      },
+    ],
+  };
+}
+
 function createSecondaryFooterButtons(buttons = []) {
   return {
     type: "box",
@@ -382,5 +406,33 @@ export function buildPaymentRequiredFlex({ usedScans = 0, freeLimit = 3 } = {}) 
       ),
     ],
     footer: createPrimaryFooterButton("ดูวิธีชำระเงิน", "payment", "#D4AF37"),
+  });
+}
+
+export function buildPaymentPaywallFlex({
+  usedScans = 0,
+  freeLimit = 3,
+  paymentUrl,
+  priceTHB = 29,
+} = {}) {
+  const used = Number(usedScans || 0);
+  const limit = Number(freeLimit || 3);
+  const priceLine = `• ราคา ${priceTHB} บาท`;
+
+  return createBaseBubble({
+    accentColor: "#D4AF37",
+    title: "🔒 วันนี้คุณใช้สิทธิ์ฟรีครบแล้ว",
+    subtitle: `คุณใช้สิทธิ์สแกนฟรีครบ ${limit} ครั้งแล้ว (ใช้ไป ${used} ครั้ง)`,
+    bodyContents: [
+      createCard(
+        "ปลดล็อก Ener Scan",
+        `• ใช้งานต่อได้ทันที\n• สแกนไม่จำกัด 24 ชั่วโมง\n${priceLine}`,
+        {
+          backgroundColor: "#171717",
+          borderColor: "#242427",
+        }
+      ),
+    ],
+    footer: createUriFooterButton("🔓 ชำระเงินทันที", paymentUrl, "#D4AF37"),
   });
 }

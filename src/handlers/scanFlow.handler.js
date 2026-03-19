@@ -15,6 +15,7 @@ import {
   buildRateLimitFlex,
   buildCooldownFlex,
   buildPaymentRequiredFlex,
+  buildPaymentPaywallFlex,
 } from "../services/flex/status.flex.js";
 
 import { checkScanRateLimit } from "../stores/rateLimit.store.js";
@@ -58,6 +59,7 @@ import {
   updateScanRequestStatus,
 } from "../stores/scanRequests.db.js";
 import { createScanResult } from "../stores/scanResults.db.js";
+import { createPaymentPending } from "../stores/payments.db.js";
 
 export async function replyFlexWithFallback({
   client,
@@ -163,13 +165,52 @@ export async function runScanFlow({
     if (!access.allowed) {
       const reply = buildPaymentGateReply({ decision: access });
 
-      await replyFlexWithFallback({
-        client,
-        replyToken,
-        flex: reply.flex || buildPaymentRequiredFlex(),
-        fallbackText: reply.fallbackText || buildPaymentRequiredText(),
-        logLabel: "payment required flex",
-      });
+      if (access?.reason === "payment_required") {
+        try {
+          const MVP_PRICE_THB = 29;
+          const MVP_CURRENCY = "THB";
+
+          const appUser = await ensureUserByLineUserId(userId);
+          const paymentId = await createPaymentPending({
+            appUserId: appUser.id,
+            amount: MVP_PRICE_THB,
+            currency: MVP_CURRENCY,
+          });
+
+          const paymentUrl = `https://ener-scan-production.up.railway.app/payments/mock/${paymentId}`;
+
+          const paywallFlex = buildPaymentPaywallFlex({
+            usedScans: access?.usedScans,
+            freeLimit: access?.freeScansLimit,
+            paymentUrl,
+            priceTHB: MVP_PRICE_THB,
+          });
+
+          await replyFlexWithFallback({
+            client,
+            replyToken,
+            flex: paywallFlex,
+            fallbackText: reply.fallbackText || buildPaymentRequiredText(),
+            logLabel: "payment required flex",
+          });
+        } catch (err) {
+          await replyFlexWithFallback({
+            client,
+            replyToken,
+            flex: reply.flex || buildPaymentRequiredFlex(),
+            fallbackText: reply.fallbackText || buildPaymentRequiredText(),
+            logLabel: "payment required flex",
+          });
+        }
+      } else {
+        await replyFlexWithFallback({
+          client,
+          replyToken,
+          flex: reply.flex || buildPaymentRequiredFlex(),
+          fallbackText: reply.fallbackText || buildPaymentRequiredText(),
+          logLabel: "payment required flex",
+        });
+      }
 
       clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
