@@ -9,6 +9,7 @@ import { checkScanAccess } from "./services/paymentAccess.service.js";
 import { markPaymentSucceededAndExtendEntitlement } from "./stores/payments.db.js";
 import { createPaymentPending } from "./stores/payments.db.js";
 import { getAppUserByLineUserId } from "./stores/users.db.js";
+import { createGbPrimePayPromptPayQr } from "./services/gbPrimePay.service.js";
 
 process.on("uncaughtException", (error) => {
   console.error("[FATAL] uncaughtException", {
@@ -64,18 +65,69 @@ app.post(
 
 app.post("/webhook/payment", express.json(), async (req, res) => {
   const payload = req.body || {};
-  const paymentId =
+  const paymentIdDirect =
     payload?.paymentId || payload?.payment_id || payload?.payment?.id || null;
+
+  const gbpReferenceNo =
+    payload?.gbpReferenceNo ||
+    payload?.gbp_reference_no ||
+    payload?.gbpReference ||
+    payload?.txn?.gbpReferenceNo ||
+    payload?.txn?.gbpReference;
+
+  const referenceNo =
+    payload?.referenceNo ||
+    payload?.reference_no ||
+    payload?.reference ||
+    payload?.txn?.referenceNo ||
+    payload?.txn?.reference;
+
+  let paymentId = paymentIdDirect;
 
   console.log("[PAYMENT_WEBHOOK] received", {
     paymentId,
-    hasPaymentId: Boolean(paymentId),
+    hasPaymentId: Boolean(paymentIdDirect),
+    hasProviderRefs: Boolean(gbpReferenceNo || referenceNo),
   });
 
   try {
-    if (!paymentId) {
-      throw new Error("paymentId_missing_in_payload");
+    let mappedPaymentId = null;
+
+    // GB webhook mapping: prefer gbpReferenceNo -> provider_payment_id, then referenceNo -> provider_reference_no
+    if (gbpReferenceNo || referenceNo) {
+      if (gbpReferenceNo) {
+        const { data, error } = await supabase
+          .from("payments")
+          .select("id")
+          .eq("provider_payment_id", gbpReferenceNo)
+          .maybeSingle();
+
+        if (error) throw error;
+        mappedPaymentId = data?.id || null;
+      }
+
+      if (!mappedPaymentId && referenceNo) {
+        const { data, error } = await supabase
+          .from("payments")
+          .select("id")
+          .eq("provider_reference_no", referenceNo)
+          .maybeSingle();
+
+        if (error) throw error;
+        mappedPaymentId = data?.id || null;
+      }
+
+      if (mappedPaymentId) paymentId = mappedPaymentId;
+
+      console.log("[GB_WEBHOOK_MAP]", {
+        referenceNo,
+        gbpReferenceNo,
+        mappedPaymentId,
+        usedInternalPaymentId: Boolean(paymentId),
+      });
     }
+
+    if (!paymentId) throw new Error("paymentId_missing_in_payload");
 
     await markPaymentSucceededAndExtendEntitlement({
       paymentId,
@@ -115,9 +167,25 @@ app.post("/payments/create", express.json(), async (req, res) => {
 
     const paymentId = await createPaymentPending({
       appUserId: appUser.id,
-      amount: 29,
+      amount: 49,
       currency: "THB",
     });
+
+    // Create GB Prime Pay PromptPay QR exactly once per internal payment row.
+    const qr = await createGbPrimePayPromptPayQr({ paymentId, amountTHB: 49 });
+
+    console.log("[GB_CREATE]", {
+      paymentId,
+      referenceNo: qr?.referenceNo || null,
+      gbpReferenceNo: qr?.gbpReferenceNo || null,
+      hasQrBase64: Boolean(qr?.qrBase64),
+    });
+
+    await supabase.from("payments").update({
+      provider_payment_id: qr?.gbpReferenceNo || null,
+      provider_reference_no: qr?.referenceNo || null,
+      qr_base64: qr?.qrBase64 || null,
+    }).eq("id", paymentId);
 
     const paymentUrl = `https://ener-scan-production.up.railway.app/payments/mock/${paymentId}`;
 
@@ -141,6 +209,25 @@ app.post("/payments/create", express.json(), async (req, res) => {
 app.get("/payments/mock/:paymentId", async (req, res) => {
   const paymentId = String(req.params?.paymentId || "").trim();
 
+  const { data: payment, error } = await supabase
+    .from("payments")
+    .select("amount, qr_base64")
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  const qrImgBase64 = payment?.qr_base64 || null;
+  console.log("[GB_RENDER]", {
+    paymentId,
+    hasQrBase64: Boolean(qrImgBase64),
+    amount: payment?.amount ?? null,
+  });
+
+  const qrImgTag = qrImgBase64
+    ? `<img alt="GB Prime Pay QR" src="data:image/png;base64,${qrImgBase64}" style="width:260px;height:260px;margin:16px 0;border-radius:12px;"/>`
+    : `<p><i>ไม่สามารถสร้าง QR ได้ตอนนี้</i></p>`;
+
   const html = `<!doctype html>
 <html>
   <head>
@@ -150,6 +237,7 @@ app.get("/payments/mock/:paymentId", async (req, res) => {
   <body style="font-family: Arial, sans-serif; max-width: 720px; margin: 24px auto;">
     <h2>Mock Payment</h2>
     <p><b>paymentId:</b> ${paymentId}</p>
+    ${qrImgTag}
     <p>สำหรับ MVP ตอนนี้ คุณสามารถยืนยันการชำระเงินด้วยการเรียก endpoint:</p>
     <pre style="background: #f6f6f6; padding: 12px; border-radius: 8px;">curl -X POST http://localhost:3000/webhook/payment \\
 -H "Content-Type: application/json" \\

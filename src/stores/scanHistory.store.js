@@ -55,6 +55,20 @@ export function getScanHistoryCount(userId) {
   return getScanHistory(userId).length;
 }
 
+export function getUserScanCountLast24h(userId) {
+  const history = getScanHistory(userId);
+  const sinceMs = Date.now() - 24 * 60 * 60 * 1000;
+
+  let count = 0;
+  for (const item of history) {
+    if (typeof item?.time === "number" && item.time >= sinceMs) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
 export function clearScanHistory(userId) {
   if (!userId) return;
   userScanHistory.delete(userId);

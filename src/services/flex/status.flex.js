@@ -413,7 +413,7 @@ export function buildPaymentPaywallFlex({
   usedScans = 0,
   freeLimit = 3,
   paymentUrl,
-  priceTHB = 29,
+  priceTHB = 49,
 } = {}) {
   const priceLine = `เพียง ${priceTHB} บาท`;
 
@@ -442,27 +442,27 @@ export function buildPaymentPaywallFlex({
         size: "xs",
         color: "#A4A4A8",
         wrap: true,
+        margin: "md",
       },
     ],
   };
 
   return createBaseBubble({
     accentColor: "#D4AF37",
-    title: "🔮 คุณเปิดพลังได้แค่บางส่วน...",
-    subtitle: "ใช้งานได้ไม่จำกัด 24 ชั่วโมง",
+    title: "🔒 วันนี้คุณใช้สิทธิ์ฟรีครบแล้ว",
+    subtitle: "ปลดล็อก Ener Scan ได้ทันที",
     bodyContents: [
       createCard(
-        "ปลดล็อกเพื่อดู:",
+        "ยังมีพลังอีกส่วนที่ยังไม่ถูกเปิดเผย",
         [
-          "ผลที่คุณเห็นตอนนี้เป็นเพียง 'ชั้นแรกของพลัง'",
-          "ยังมีรายละเอียดลึกที่ยังไม่ถูกเปิดเผย",
+          `คุณใช้ครบ ${freeLimit} ครั้งฟรีแล้ว`,
           "",
+          "ปลดล็อกเพื่อดูต่อ:",
           "• พลังซ่อนเร้นของวัตถุ",
           "• ความเชื่อมโยงกับตัวคุณแบบละเอียด",
           "• คำแนะนำเฉพาะตัว",
           "",
-          `✨ ${"ใช้งานได้ไม่จำกัด 24 ชั่วโมง"}`,
-          "",
+          "✨ ใช้งานได้ไม่จำกัด 24 ชั่วโมง (แนะนำ)",
           `💎 ${priceLine}`,
         ].join("\n"),
         {

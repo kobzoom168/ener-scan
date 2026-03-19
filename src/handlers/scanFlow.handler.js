@@ -25,6 +25,7 @@ import {
 } from "../stores/cooldown.store.js";
 
 import { addScanHistory } from "../stores/scanHistory.store.js";
+import { getUserScanCountLast24h } from "../stores/scanHistory.store.js";
 import { updateUserStats } from "../stores/userStats.store.js";
 
 import { parseScanResultForHistory } from "../services/history/history.parser.js";
@@ -124,6 +125,8 @@ export async function runScanFlow({
     birthdate,
   });
 
+  let paidLimitWarningText = null;
+
   const rate = checkScanRateLimit(userId);
 
   if (!rate.allowed) {
@@ -167,7 +170,7 @@ export async function runScanFlow({
 
       if (access?.reason === "payment_required") {
         try {
-          const MVP_PRICE_THB = 29;
+          const MVP_PRICE_THB = 49;
           const MVP_CURRENCY = "THB";
 
           const appUser = await ensureUserByLineUserId(userId);
@@ -214,6 +217,61 @@ export async function runScanFlow({
 
       clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
+    }
+
+    if (access?.allowed === true && access?.reason === "paid") {
+      const scanCount = getUserScanCountLast24h(userId);
+
+      if (scanCount >= 30) {
+        console.log("[PAID_LIMIT]", { userId, scanCount });
+
+        const fallbackText =
+          "คุณใช้สิทธิ์ครบแล้วในช่วง 24 ชั่วโมงนี้\nปลดล็อกรอบใหม่เพื่อใช้งานต่อได้ทันที";
+
+        try {
+          const MVP_PRICE_THB = 49;
+          const MVP_CURRENCY = "THB";
+
+          const appUser = await ensureUserByLineUserId(userId);
+          const paymentId = await createPaymentPending({
+            appUserId: appUser.id,
+            amount: MVP_PRICE_THB,
+            currency: MVP_CURRENCY,
+          });
+
+          const paymentUrl = `https://ener-scan-production.up.railway.app/payments/mock/${paymentId}`;
+
+          const paywallFlex = buildPaymentPaywallFlex({
+            usedScans: access?.usedScans,
+            freeLimit: access?.freeScansLimit,
+            paymentUrl,
+            priceTHB: MVP_PRICE_THB,
+          });
+
+          await replyFlexWithFallback({
+            client,
+            replyToken,
+            flex: paywallFlex,
+            fallbackText,
+            logLabel: "payment required flex",
+          });
+        } catch (err) {
+          await replyText(client, replyToken, fallbackText);
+        }
+        return;
+      }
+
+      const remaining = 30 - scanCount;
+      if (remaining === 3 || remaining === 2 || remaining === 1) {
+        console.log("[PAID_LIMIT_WARNING]", { userId, scanCount, remaining });
+
+        paidLimitWarningText =
+          remaining === 3
+            ? "หมายเหตุ: คุณเหลือสิทธิ์สแกนอีก 3 ครั้งในรอบ 24 ชั่วโมงนี้"
+            : remaining === 2
+              ? "หมายเหตุ: คุณเหลือสิทธิ์สแกนอีก 2 ครั้งในรอบ 24 ชั่วโมงนี้"
+              : "หมายเหตุ: คุณเหลือสิทธิ์สแกนอีก 1 ครั้งในรอบ 24 ชั่วโมงนี้";
+      }
     }
   } catch (error) {
     console.error("[PAYMENT_DEBUG] runScanFlow payment gate catch", {
@@ -546,10 +604,14 @@ export async function runScanFlow({
     return;
   }
 
+  const replyResultText = paidLimitWarningText
+    ? `${resultText}\n\n${paidLimitWarningText}`
+    : resultText;
+
   await replyScanResult({
     client,
     replyToken,
-    resultText,
+    resultText: replyResultText,
   });
 
   clearLatestScanJob(userId, scanJobId);
