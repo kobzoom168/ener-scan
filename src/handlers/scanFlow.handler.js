@@ -114,6 +114,14 @@ export async function runScanFlow({
   birthdate,
   flowVersion,
 }) {
+  console.log("[TRACE] runScanFlow entry", {
+    userId,
+    flowVersion,
+    hasReplyToken: Boolean(replyToken),
+    hasImageBuffer: Boolean(imageBuffer?.length),
+    birthdate,
+  });
+
   const rate = checkScanRateLimit(userId);
 
   if (!rate.allowed) {

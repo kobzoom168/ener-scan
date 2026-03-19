@@ -6,6 +6,19 @@ import { supabase } from "./config/supabase.js";
 import { lineWebhookRouter } from "./routes/lineWebhook.js";
 import { saveBirthdate } from "./stores/userProfile.db.js";
 
+process.on("uncaughtException", (error) => {
+  console.error("[FATAL] uncaughtException", {
+    message: error?.message,
+    stack: error?.stack,
+  });
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] unhandledRejection", {
+    reason,
+  });
+});
+
 const app = express();
 
 const lineConfig = {
