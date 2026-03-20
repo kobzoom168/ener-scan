@@ -50,13 +50,19 @@ export async function checkScanAccess({ userId, now = new Date() }) {
   const nowMs = now.getTime();
 
   // 1) Paid access first (DB paid_until OR in-memory manual unlock).
+  // Keep the same counting logic path for both sources (manual + DB).
+  let paidUntilUsed = null;
+  let paidUntilSource = "db";
   let paidUntilMs = null;
+
   if (hasPaymentAccess(normalizedUserId)) {
+    paidUntilSource = "manual";
     const state = getPaymentState(normalizedUserId);
-    if (state?.state === "unlocked") {
-      paidUntilMs = Number(state.unlockedUntilMs);
-    }
+    paidUntilUsed = state?.state === "unlocked" ? state.unlockedUntilMs : null;
+    paidUntilMs = Number(paidUntilUsed);
   } else {
+    paidUntilSource = "db";
+    paidUntilUsed = paidUntil;
     const paidUntilCandidateMs = paidUntil ? toMs(paidUntil) : NaN;
     paidUntilMs = Number.isFinite(paidUntilCandidateMs)
       ? paidUntilCandidateMs
@@ -65,6 +71,8 @@ export async function checkScanAccess({ userId, now = new Date() }) {
 
   if (paidUntilMs && paidUntilMs > nowMs) {
     const paidWindowStartMs = paidUntilMs - PAID_WINDOW_MS;
+    const paidWindowStartIso = new Date(paidWindowStartMs).toISOString();
+    const paidUntilIso = new Date(paidUntilMs).toISOString();
 
     // Count scan_results within the last 24h window ending at paid_until.
     const { data: appUserRow, error: userError } = await supabase
@@ -77,26 +85,46 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     if (userError) throw userError;
 
     const appUserId = appUserRow?.id ? String(appUserRow.id) : null;
-    let paidUsedScans = 0;
+    let paidUsedScans = PAID_SCAN_LIMIT; // fail-closed if we cannot reliably count
 
     if (appUserId) {
-      const startIso = new Date(paidWindowStartMs).toISOString();
-      const endIso = new Date(paidUntilMs).toISOString();
+      const startIso = paidWindowStartIso;
+      const endIso = paidUntilIso;
 
       const { count, error: countError } = await supabase
         .from("scan_results")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("user_id", appUserId)
         .gte("created_at", startIso)
         .lt("created_at", endIso);
 
       if (countError) throw countError;
-      paidUsedScans = count ?? 0;
+      // If count is null/undefined, we treat it as unknown and deny (fail-closed).
+      if (count === null || count === undefined) {
+        paidUsedScans = PAID_SCAN_LIMIT;
+      } else {
+        paidUsedScans = Number(count);
+      }
     }
 
-    const remainingPaidScans = Math.max(0, PAID_SCAN_LIMIT - paidUsedScans);
+    const remainingPaidScans = Math.max(
+      0,
+      PAID_SCAN_LIMIT - (Number.isFinite(paidUsedScans) ? paidUsedScans : PAID_SCAN_LIMIT)
+    );
+    const allowed = paidUsedScans < PAID_SCAN_LIMIT;
 
-    if (remainingPaidScans > 0) {
+    console.log("[PAYMENT_QUOTA_DEBUG]", {
+      userId: normalizedUserId,
+      paidUntil: paidUntilUsed,
+      paidUntilSource,
+      paidUntilMs,
+      paidWindowStart: paidWindowStartIso,
+      paidUsedScans,
+      remainingPaidScans,
+      finalDecision: { allowed, reason: allowed ? "paid" : "payment_required" },
+    });
+
+    if (allowed) {
       return {
         allowed: true,
         reason: "paid",
@@ -104,9 +132,10 @@ export async function checkScanAccess({ userId, now = new Date() }) {
         usedScans,
         freeScansLimit: FREE_SCANS_LIMIT,
         freeScansRemaining: 0,
-        paidUntil,
+        paidUntil: paidUntilUsed,
       };
     }
+
     return {
       allowed: false,
       reason: "payment_required",
@@ -114,7 +143,7 @@ export async function checkScanAccess({ userId, now = new Date() }) {
       usedScans,
       freeScansLimit: FREE_SCANS_LIMIT,
       freeScansRemaining: 0,
-      paidUntil,
+      paidUntil: paidUntilUsed,
     };
   }
 
