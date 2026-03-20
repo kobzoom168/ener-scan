@@ -474,3 +474,97 @@ export function buildPaymentPaywallFlex({
     footer,
   });
 }
+
+export function buildBirthdateSettingsBubble({ birthdate } = {}) {
+  const safeBirthdate = birthdate ? String(birthdate) : "-";
+
+  return {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "18px",
+      spacing: "md",
+      backgroundColor: "#101010",
+      contents: [
+        {
+          type: "text",
+          text: "ตั้งค่าข้อมูลของคุณ",
+          weight: "bold",
+          size: "xl",
+          color: "#F8F8F8",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: `วันเกิดที่บันทึก: ${safeBirthdate}`,
+          size: "sm",
+          color: "#A4A4A8",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: "การเปลี่ยนวันเกิดจะมีผลต่อการตีความผลการสแกนของคุณ",
+          size: "sm",
+          color: "#E3E3E3",
+          wrap: true,
+        },
+      ],
+    },
+    footer: createPrimaryFooterButton("เปลี่ยนวันเกิด", "เปลี่ยนวันเกิด", "#D4AF37"),
+  };
+}
+
+export function buildMainMenuFlex() {
+  const bubble1 = createBaseBubble({
+    accentColor: "#1565C0",
+    title: "เมนูหลัก",
+    subtitle: "เลือกหมวดที่ต้องการ (หน้า 1/2)",
+    bodyContents: [
+      createCard(
+        "ตัวเลือก",
+        ["• สแกนพลังงาน", "• ประวัติ", "• สถิติ"].join("\n"),
+        {
+          backgroundColor: "#171717",
+          borderColor: "#242427",
+        }
+      ),
+    ],
+    footer: createSecondaryFooterButtons([
+      { label: "สแกนพลังงาน", text: "สแกนพลังงาน", color: "#1565C0" },
+      { label: "ประวัติ", text: "ประวัติ", color: "#1565C0" },
+      { label: "สถิติ", text: "สถิติ", color: "#1565C0" },
+    ]),
+  }).contents;
+
+  const bubble2 = createBaseBubble({
+    accentColor: "#1565C0",
+    title: "เมนูหลัก",
+    subtitle: "เลือกหมวดที่ต้องการ (หน้า 2/2)",
+    bodyContents: [
+      createCard(
+        "ตัวเลือก",
+        ["• ชำระเงิน", "• ตั้งค่าข้อมูลของคุณ", "• วิธีใช้งาน"].join("\n"),
+        {
+          backgroundColor: "#171717",
+          borderColor: "#242427",
+        }
+      ),
+    ],
+    footer: createSecondaryFooterButtons([
+      { label: "ชำระเงิน", text: "จ่ายเงิน", color: "#1565C0" },
+      { label: "ตั้งค่าข้อมูลของคุณ", text: "เปลี่ยนวันเกิด", color: "#1565C0" },
+      { label: "วิธีใช้งาน", text: "วิธีใช้", color: "#1565C0" },
+    ]),
+  }).contents;
+
+  return {
+    type: "flex",
+    altText: "เมนูหลัก",
+    contents: {
+      type: "carousel",
+      contents: [bubble1, bubble2],
+    },
+  };
+}

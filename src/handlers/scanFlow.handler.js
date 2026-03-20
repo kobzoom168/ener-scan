@@ -16,6 +16,7 @@ import {
   buildCooldownFlex,
   buildPaymentRequiredFlex,
   buildPaymentPaywallFlex,
+  buildBirthdateSettingsBubble,
 } from "../services/flex/status.flex.js";
 
 import { checkScanRateLimit } from "../stores/rateLimit.store.js";
@@ -62,6 +63,7 @@ import {
 } from "../stores/scanRequests.db.js";
 import { createScanResult } from "../stores/scanResults.db.js";
 import { createPaymentPending } from "../stores/payments.db.js";
+import { getSavedBirthdate } from "../stores/userProfile.db.js";
 
 export async function replyFlexWithFallback({
   client,
@@ -98,9 +100,32 @@ export function saveScanArtifacts(userId, resultText) {
   console.log("[WEBHOOK] stats updated");
 }
 
-export async function replyScanResult({ client, replyToken, resultText }) {
+export async function replyScanResult({ client, replyToken, userId, resultText }) {
   try {
     const flex = buildScanFlex(resultText);
+
+    // Append settings bubble at the end of the scan result.
+    try {
+      const savedBirthdate = await getSavedBirthdate(userId);
+      const settingsBubble = buildBirthdateSettingsBubble({
+        birthdate: savedBirthdate,
+      });
+
+      if (flex?.contents?.type === "carousel" && Array.isArray(flex.contents.contents)) {
+        flex.contents.contents.push(settingsBubble);
+      } else if (flex?.contents?.type === "bubble") {
+        flex.contents = {
+          type: "carousel",
+          contents: [flex.contents, settingsBubble],
+        };
+      }
+    } catch (bubbleErr) {
+      console.error("[BIRTHDATE_UPDATE] settings bubble build failed (ignored):", {
+        userId,
+        message: bubbleErr?.message,
+      });
+    }
+
     await replyFlex(client, replyToken, flex);
     console.log("[WEBHOOK] replied with flex");
   } catch (flexError) {
@@ -620,6 +645,7 @@ export async function runScanFlow({
   await replyScanResult({
     client,
     replyToken,
+    userId,
     resultText: replyResultText,
   });
 

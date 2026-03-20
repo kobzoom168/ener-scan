@@ -8,6 +8,7 @@ function createEmptySession() {
   return {
     pendingImage: null,
     birthdate: null,
+    awaitingBirthdateUpdate: false,
     flowVersion: 0,
   };
 }
@@ -109,4 +110,17 @@ export function clearSessionIfFlowVersionMatches(userId, flowVersion) {
   }
 
   sessions.delete(normalizedUserId);
+}
+
+export function setAwaitingBirthdateUpdate(userId, awaiting = true) {
+  const normalizedUserId = normalizeUserId(userId);
+  if (!normalizedUserId) return;
+
+  const session = getSession(normalizedUserId);
+  session.awaitingBirthdateUpdate = Boolean(awaiting);
+  sessions.set(normalizedUserId, session);
+}
+
+export function clearAwaitingBirthdateUpdate(userId) {
+  setAwaitingBirthdateUpdate(userId, false);
 }

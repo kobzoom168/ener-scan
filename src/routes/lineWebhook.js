@@ -5,9 +5,11 @@ import {
   setPendingImage,
   clearSession,
   clearSessionIfFlowVersionMatches,
+  clearAwaitingBirthdateUpdate,
+  setAwaitingBirthdateUpdate,
 } from "../stores/session.store.js";
 
-import { getSavedBirthdate } from "../stores/userProfile.db.js";
+import { getSavedBirthdate, saveBirthdate } from "../stores/userProfile.db.js";
 
 import {
   getEventTimestamp,
@@ -48,6 +50,7 @@ import {
   buildDuplicateImageFlex,
   buildMultipleObjectsFlex,
   buildUnclearImageFlex,
+  buildMainMenuFlex,
 } from "../services/flex/status.flex.js";
 
 import {
@@ -338,6 +341,15 @@ async function handleImageMessage({ client, event, userId, session }) {
     return;
   }
 
+  if (session.awaitingBirthdateUpdate) {
+    await replyText(
+      client,
+      event.replyToken,
+      "กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995"
+    );
+    return;
+  }
+
   if (
     session.pendingImage &&
     getPaymentState(userId).state !== "awaiting_slip"
@@ -491,6 +503,106 @@ async function handleTextMessage({ client, event, userId, session }) {
     sessionFlowVersion: session.flowVersion || 0,
   });
 
+  // Priority 1: awaiting birthdate update
+  if (session.awaitingBirthdateUpdate) {
+    if (text === "เปลี่ยนวันเกิด") {
+      await replyText(
+        client,
+        event.replyToken,
+        "กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995"
+      );
+      return;
+    }
+
+    const candidateValid = isValidBirthdate(text);
+    if (!candidateValid) {
+      console.log("[BIRTHDATE_UPDATE] invalid", {
+        userId,
+        text,
+      });
+      await replyText(
+        client,
+        event.replyToken,
+        "รูปแบบวันเกิดไม่ถูกต้อง\nกรุณาพิมพ์เป็น DD/MM/YYYY\nตัวอย่าง: 14/09/1995"
+      );
+      return;
+    }
+
+    const normalizedBirthdate = normalizeBirthdateForScan(text);
+    await saveBirthdate(userId, normalizedBirthdate);
+
+    clearAwaitingBirthdateUpdate(userId);
+    console.log("[BIRTHDATE_UPDATE] saved", {
+      userId,
+      birthdate: normalizedBirthdate,
+    });
+
+    await replyText(
+      client,
+      event.replyToken,
+      `บันทึกวันเกิดใหม่เรียบร้อยแล้ว\nวันเกิดปัจจุบัน: ${normalizedBirthdate}\n\nส่งรูปใหม่มาได้เลยครับ`
+    );
+    return;
+  }
+
+  // Priority 2: awaiting_slip reminder (must not be replaced by menu)
+  if (
+    getPaymentState(userId).state === "awaiting_slip" &&
+    !isPaymentCommand(text, lowerText)
+  ) {
+    await replyText(
+      client,
+      event.replyToken,
+      buildAwaitingSlipReminderText()
+    );
+    return;
+  }
+
+  // Priority 3: pendingImage / waiting birthdate for scan
+  if (session.pendingImage) {
+    if (!isValidBirthdate(text)) {
+      await replyText(
+        client,
+        event.replyToken,
+        buildInvalidBirthdateText()
+      );
+      return;
+    }
+
+    const flowVersion = session.flowVersion || 0;
+    const normalizedBirthdate = normalizeBirthdateForScan(text);
+
+    console.log("[WEBHOOK] use session flowVersion(text):", flowVersion);
+    console.log("[WEBHOOK] normalized birthdate:", normalizedBirthdate);
+    console.log("[WEBHOOK] going to runScanFlow from text", {
+      userId,
+      birthdate: normalizedBirthdate,
+      flowVersion,
+    });
+
+    await runScanFlow({
+      client,
+      replyToken: event.replyToken,
+      userId,
+      imageBuffer: session.pendingImage.imageBuffer,
+      birthdate: normalizedBirthdate,
+      flowVersion,
+    });
+    return;
+  }
+
+  // Priority 4: explicit commands
+  if (text === "เปลี่ยนวันเกิด") {
+    console.log("[BIRTHDATE_UPDATE] requested", { userId });
+    setAwaitingBirthdateUpdate(userId, true);
+    await replyText(
+      client,
+      event.replyToken,
+      "กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995"
+    );
+    return;
+  }
+
   if (isHistoryCommand(text, lowerText)) {
     await handleHistoryCommand({
       client,
@@ -509,80 +621,94 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
-  if (!session.pendingImage) {
-    if (
-      getPaymentState(userId).state === "awaiting_slip" &&
-      !isPaymentCommand(text, lowerText)
-    ) {
-      await replyText(
-        client,
-        event.replyToken,
-        buildAwaitingSlipReminderText()
-      );
-      return;
+  if (isPaymentCommand(text, lowerText)) {
+    let paymentId = null;
+    const amount = env.PAYMENT_UNLOCK_AMOUNT_THB || 0;
+    const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
+    try {
+      const appUser = await ensureUserByLineUserId(userId);
+      paymentId = await createPaymentPending({
+        appUserId: appUser.id,
+        amount,
+        currency,
+      });
+    } catch (err) {
+      console.error("[WEBHOOK] createPaymentPending failed:", {
+        userId,
+        message: err?.message,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint,
+      });
     }
 
-    if (isPaymentCommand(text, lowerText)) {
-      let paymentId = null;
-      const amount = env.PAYMENT_UNLOCK_AMOUNT_THB || 0;
-      const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
-      try {
-        const appUser = await ensureUserByLineUserId(userId);
-        paymentId = await createPaymentPending({
-          appUserId: appUser.id,
-          amount,
-          currency,
-        });
-      } catch (err) {
-        console.error("[WEBHOOK] createPaymentPending failed:", {
-          userId,
-          message: err?.message,
-          code: err?.code,
-          details: err?.details,
-          hint: err?.hint,
-        });
-      }
-      await replyText(
-        client,
-        event.replyToken,
-        buildPaymentInstructionText({ paymentId, amount, currency })
-      );
-      return;
-    }
+    await replyText(
+      client,
+      event.replyToken,
+      buildPaymentInstructionText({ paymentId, amount, currency })
+    );
+    return;
+  }
 
+  if (text === "สแกนพลังงาน") {
     await replyFlexWithFallback({
       client,
       replyToken: event.replyToken,
       flex: buildIdleFlex(),
       fallbackText: buildIdleText(),
-      logLabel: "idle flex",
+      logLabel: "idle flex (scan)",
     });
     return;
   }
 
-  if (!isValidBirthdate(text)) {
-    await replyText(client, event.replyToken, buildInvalidBirthdateText());
+  // main menu / help / start aliases
+  const menuAliases = new Set([
+    "เมนู",
+    "เมนูหลัก",
+    "menu",
+    "help",
+    "start",
+    "เริ่ม",
+    "วิธีใช้งาน",
+    "วิธีใช้",
+  ]);
+
+  // "วิธีใช้" should show usage instructions (not the menu itself)
+  if (text === "วิธีใช้" || text === "วิธีใช้งาน") {
+    await replyText(
+      client,
+      event.replyToken,
+      [
+        "วิธีใช้งาน Ener Scan",
+        "",
+        "1) ส่งรูปวัตถุที่ต้องการสแกน",
+        "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
+        "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
+        "",
+        "หากหมดสิทธิ์ฟรี: พิมพ์ `payment` หรือ `จ่ายเงิน`",
+      ].join("\n")
+    );
     return;
   }
 
-  const flowVersion = session.flowVersion || 0;
-  const normalizedBirthdate = normalizeBirthdateForScan(text);
+  if (menuAliases.has(text) || menuAliases.has(lowerText)) {
+    await replyFlexWithFallback({
+      client,
+      replyToken: event.replyToken,
+      flex: buildMainMenuFlex(),
+      fallbackText: buildIdleText(),
+      logLabel: "main menu flex",
+    });
+    return;
+  }
 
-  console.log("[WEBHOOK] use session flowVersion(text):", flowVersion);
-  console.log("[WEBHOOK] normalized birthdate:", normalizedBirthdate);
-  console.log("[WEBHOOK] going to runScanFlow from text", {
-    userId,
-    birthdate: normalizedBirthdate,
-    flowVersion,
-  });
-
-  await runScanFlow({
+  // fallback => show main menu
+  await replyFlexWithFallback({
     client,
     replyToken: event.replyToken,
-    userId,
-    imageBuffer: session.pendingImage.imageBuffer,
-    birthdate: normalizedBirthdate,
-    flowVersion,
+    flex: buildMainMenuFlex(),
+    fallbackText: buildIdleText(),
+    logLabel: "main menu fallback",
   });
 }
 
