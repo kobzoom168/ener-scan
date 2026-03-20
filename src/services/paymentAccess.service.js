@@ -6,7 +6,7 @@ import { buildPaymentRequiredText } from "../utils/webhookText.util.js";
 import { supabase } from "../config/supabase.js";
 
 const FREE_SCANS_LIMIT = 2; // lifetime free scans for new users
-const PAID_SCAN_LIMIT = 15;
+const PAID_SCAN_LIMIT = 5;
 const PAID_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h window
 
 function toMs(isoString) {
@@ -107,6 +107,15 @@ export async function checkScanAccess({ userId, now = new Date() }) {
         paidUntil,
       };
     }
+    return {
+      allowed: false,
+      reason: "payment_required",
+      remaining: 0,
+      usedScans,
+      freeScansLimit: FREE_SCANS_LIMIT,
+      freeScansRemaining: 0,
+      paidUntil,
+    };
   }
 
   // 2) Else: lifetime free scans (max 2).

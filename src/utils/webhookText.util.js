@@ -172,17 +172,19 @@ export function buildCooldownText(remainingSec = 0) {
 }
 
 export function buildPaymentRequiredText({ usedScans = 0, freeLimit = 3 } = {}) {
+  const qrUrl = getPromptPayQrPublicUrl();
   return [
     "🔍 Ener Scan",
     "",
     "คุณใช้สิทธิ์ทดลองครบแล้ว",
     "",
-    "✨ ปลดล็อกการสแกน 15 ครั้ง",
-    "ใช้งานได้ภายใน 24 ชั่วโมง",
-    "",
+    "✨ ปลดล็อกการสแกน 5 ครั้ง ใช้ได้ภายใน 24 ชั่วโมง",
     "ราคา 99 บาท",
+    `QR เพื่อโอน: ${qrUrl}`,
+    "โอนแล้วส่งสลิปในแชทนี้",
+    "หลังรับสลิปแล้วส่งรูปสแกนอีกครั้ง",
     "",
-    "พิมพ์: payment",
+    "พิมพ์: payment (ดู QR อีกครั้ง)",
   ].join("\n");
 }
 
@@ -220,55 +222,29 @@ export function buildPaymentInstructionText({
   amount = null,
   currency = "THB",
 } = {}) {
-  const ref = paymentId ? String(paymentId).trim() : null;
-  const amountNum = amount != null ? Number(amount) : null;
-  const hasAmount = amountNum !== null && !Number.isNaN(amountNum) && amountNum > 0;
-  const amountLine =
-    hasAmount && currency
-      ? `จำนวน ${amountNum} ${String(currency).trim()}`
-      : "จำนวนตามที่แอดมินแจ้ง";
-
-  const refLine = ref ? `   รหัสอ้างอิง: ${ref}` : "";
-  const amountLineOnly =
-    hasAmount && currency ? `   ${amountLine}` : ref ? "   จำนวนตามที่แอดมินแจ้ง" : "";
-
   const qrUrl = getPromptPayQrPublicUrl();
-
-  const lines = [
-    "💳 วิธีชำระเงินเพื่อปลดล็อก Ener Scan",
+  return [
+    "💳 วิธีปลดล็อก Ener Scan",
     "",
-    `🔗 สแกน QR ที่: ${qrUrl}`,
-    "ปลดล็อกการใช้งาน Ener Scan ได้ 24 ชั่วโมงหลังชำระเงิน",
-    "ภายใน 24 ชั่วโมงนี้ คุณสามารถสแกนได้ไม่จำกัดจำนวนครั้ง",
-    "",
-    "ขั้นตอน",
-    "1) โอนเงินตามช่องทางที่แอดมินแจ้ง",
-    refLine,
-    amountLineOnly,
-    "2) ส่งสลิป/หลักฐานการโอน พร้อมรหัสอ้างอิงนี้ให้แอดมิน",
-    "3) รอแอดมินยืนยัน แล้วกลับมาสแกนได้ไม่จำกัดภายใน 24 ชั่วโมง",
-  ].filter(Boolean);
-
-  return lines.join("\n");
+    "โอน 99 บาท (ปลดล็อกได้ 5 ครั้ง ใช้ได้ภายใน 24 ชั่วโมง)",
+    `🔗 QR: ${qrUrl}`,
+    "ส่งสลิป 1 รูปในแชทนี้",
+    "หลังรับสลิปแล้วส่งรูปสแกนอีกครั้ง",
+  ].join("\n");
 }
 
 /** MVP: user hit payment gate on scan image — ask for QR payment + slip photo. */
 export function buildManualPaymentRequestText() {
   const qrUrl = getPromptPayQrPublicUrl();
   return [
-    "💳 ต้องชำระเงินก่อนจึงจะสแกนต่อได้ครับ",
+    "🔒 หมดสิทธิ์ทดลองแล้ว ต้องชำระเงินก่อนสแกนต่อ",
     "",
-    `🔗 สแกน QR ที่: ${qrUrl}`,
-    "ขั้นตอน (แบบง่าย)",
-    "1) สแกน QR PromptPay / โอนเงินตามที่แจ้ง",
-    "2) ส่งภาพสลิปโอนเงินมาในแชทนี้ (ส่งเป็นรูป 1 รูป)",
+    "โอน 99 บาท (ปลดล็อกได้ 5 ครั้ง ใช้ได้ภายใน 24 ชั่วโมง)",
+    `🔗 QR: ${qrUrl}`,
+    "ส่งสลิป 1 รูปในแชทนี้",
+    "หลังรับสลิปแล้วส่งรูปสแกนอีกครั้ง",
     "",
-    "หมายเหตุ: ระบบยังไม่อ่าน OCR จากสลิป — การส่งรูปสลิปถือเป็นหลักฐานเบื้องต้นเท่านั้น",
-    "",
-    "หลังส่งสลิปแล้ว ระบบจะปลดล็อกให้สแกนต่อชั่วคราว",
-    "จากนั้นกรุณาส่งรูปวัตถุที่ต้องการสแกนอีกครั้งครับ",
-    "",
-    "พิมพ์ payment เพื่อดูข้อความชำระเงินแบบเต็มได้ครับ",
+    "พิมพ์: payment (ดู QR อีกครั้ง)",
   ].join("\n");
 }
 
@@ -277,19 +253,18 @@ export function buildSlipReceivedText() {
   return [
     "✅ รับสลิปแล้วครับ",
     "",
-    "ปลดล็อกให้สแกนต่อได้แล้ว (ชั่วคราว 24 ชั่วโมง ตามการตั้งค่า MVP)",
-    "กรุณาส่งรูปวัตถุที่ต้องการสแกนอีกครั้ง (1 ชิ้น / 1 รูป) ได้เลยครับ",
+    "ปลดล็อกให้สแกนได้ 5 ครั้ง ใช้ได้ภายใน 24 ชั่วโมง (99 บาท)",
+    "ต่อไป: ส่งรูปวัตถุที่ต้องการสแกนอีกครั้ง (1 รูป/ครั้ง)",
   ].join("\n");
 }
 
 /** User typed text while waiting for slip. */
 export function buildAwaitingSlipReminderText() {
   return [
-    "⏳ กำลังรอรูปสลิปโอนเงินครับ",
+    "⏳ รอสลิปอยู่ครับ",
     "",
-    "กรุณาส่งภาพสลิปเป็นรูป 1 รูปในแชทนี้",
-    "",
-    "พิมพ์ payment หากต้องการดูวิธีชำระเงินอีกครั้ง",
+    "โอนแล้วส่งสลิป 1 รูปในแชทนี้",
+    "หลังรับสลิปแล้วส่งรูปสแกนอีกครั้ง",
   ].join("\n");
 }
 
