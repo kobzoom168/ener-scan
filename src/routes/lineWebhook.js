@@ -96,11 +96,17 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
+
 async function handleHistoryCommand({ client, replyToken, userId }) {
   const history = getScanHistory(userId);
 
   if (!history.length) {
-    await replyText(client, replyToken, buildNoHistoryText());
+    await replyText(
+      client,
+      replyToken,
+      `${buildNoHistoryText()}\n\n${MAIN_MENU_HINT_TEXT}`
+    );
     return;
   }
 
@@ -108,7 +114,7 @@ async function handleHistoryCommand({ client, replyToken, userId }) {
   await replyText(
     client,
     replyToken,
-    `📜 ประวัติการสแกนล่าสุด\n\n${formatted}`
+    `📜 ประวัติการสแกนล่าสุด\n\n${formatted}\n\n${MAIN_MENU_HINT_TEXT}`
   );
 }
 
@@ -132,6 +138,8 @@ async function handleStatsCommand({ client, replyToken, userId }) {
       `พลังที่พบบ่อย: ${stats.topEnergy}`,
       `คะแนนเฉลี่ย: ${stats.avgScore} / 10`,
       `สแกนล่าสุด: ${last}`,
+      "",
+      MAIN_MENU_HINT_TEXT,
     ].join("\n")
   );
 }
@@ -345,7 +353,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     await replyText(
       client,
       event.replyToken,
-      "กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995"
+      `กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995\n\n${MAIN_MENU_HINT_TEXT}`
     );
     return;
   }
@@ -509,7 +517,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       await replyText(
         client,
         event.replyToken,
-        "กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995"
+        `กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995\n\n${MAIN_MENU_HINT_TEXT}`
       );
       return;
     }
@@ -523,7 +531,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       await replyText(
         client,
         event.replyToken,
-        "รูปแบบวันเกิดไม่ถูกต้อง\nกรุณาพิมพ์เป็น DD/MM/YYYY\nตัวอย่าง: 14/09/1995"
+        `รูปแบบวันเกิดไม่ถูกต้อง\nกรุณาพิมพ์เป็น DD/MM/YYYY\nตัวอย่าง: 14/09/1995\n\n${MAIN_MENU_HINT_TEXT}`
       );
       return;
     }
@@ -540,7 +548,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     await replyText(
       client,
       event.replyToken,
-      `บันทึกวันเกิดใหม่เรียบร้อยแล้ว\nวันเกิดปัจจุบัน: ${normalizedBirthdate}\n\nส่งรูปใหม่มาได้เลยครับ`
+      `บันทึกวันเกิดใหม่เรียบร้อยแล้ว\nวันเกิดปัจจุบัน: ${normalizedBirthdate}\n\nส่งรูปใหม่มาได้เลยครับ\n\n${MAIN_MENU_HINT_TEXT}`
     );
     return;
   }
@@ -598,7 +606,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     await replyText(
       client,
       event.replyToken,
-      "กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995"
+      `กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995\n\n${MAIN_MENU_HINT_TEXT}`
     );
     return;
   }
@@ -645,19 +653,34 @@ async function handleTextMessage({ client, event, userId, session }) {
     await replyText(
       client,
       event.replyToken,
-      buildPaymentInstructionText({ paymentId, amount, currency })
+      `${buildPaymentInstructionText({ paymentId, amount, currency })}\n\n${MAIN_MENU_HINT_TEXT}`
     );
     return;
   }
 
   if (text === "สแกนพลังงาน") {
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildIdleFlex(),
-      fallbackText: buildIdleText(),
-      logLabel: "idle flex (scan)",
-    });
+    let savedBirthdate = null;
+    try {
+      savedBirthdate = await getSavedBirthdate(userId);
+    } catch (error) {
+      console.error("[BIRTHDATE_UPDATE] getSavedBirthdate failed (ignored):", {
+        userId,
+        message: error?.message,
+      });
+    }
+
+    const helperText = [
+      "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
+      savedBirthdate
+        ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว ระบบจะเริ่มสแกนให้ทันที"
+        : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะให้คุณพิมพ์วันเกิดก่อนสแกน",
+      "",
+      "ส่งรูปถัดไปมาได้เลยครับ",
+      "",
+      MAIN_MENU_HINT_TEXT,
+    ].join("\n");
+
+    await replyText(client, event.replyToken, helperText);
     return;
   }
 
@@ -686,6 +709,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
         "",
         "หากหมดสิทธิ์ฟรี: พิมพ์ `payment` หรือ `จ่ายเงิน`",
+        "",
+        MAIN_MENU_HINT_TEXT,
       ].join("\n")
     );
     return;

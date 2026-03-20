@@ -512,7 +512,18 @@ export function buildBirthdateSettingsBubble({ birthdate } = {}) {
         },
       ],
     },
-    footer: createPrimaryFooterButton("เปลี่ยนวันเกิด", "เปลี่ยนวันเกิด", "#D4AF37"),
+    footer: createSecondaryFooterButtons([
+      {
+        label: "เปลี่ยนวันเกิด",
+        text: "เปลี่ยนวันเกิด",
+        color: "#D4AF37",
+      },
+      {
+        label: "เมนูหลัก",
+        text: "เมนูหลัก",
+        color: "#1565C0",
+      },
+    ]),
   };
 }
 
