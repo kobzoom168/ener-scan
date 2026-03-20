@@ -151,7 +151,7 @@ async function finalizeAcceptedImage({
   // MVP manual payment: any image counts as slip while awaiting (no object/OCR checks).
   const slipState = getPaymentState(userId);
   if (slipState.state === "awaiting_slip") {
-    unlockPaymentAccess(userId);
+    await unlockPaymentAccess(userId);
     markAcceptedImageEvent(userId, eventTimestamp);
     clearLatestScanJob(userId);
     clearSession(userId);

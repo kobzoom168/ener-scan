@@ -3,6 +3,8 @@
  * Lost on server restart. Does not replace DB paid_until / payments.
  */
 
+import { supabase } from "../config/supabase.js";
+
 const store = new Map();
 
 /** How long we wait for a slip after prompting (then reset to none). */
@@ -10,6 +12,9 @@ const AWAITING_SLIP_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** How long unlock lasts after a slip image is accepted. */
 const UNLOCK_TTL_MS = 24 * 60 * 60 * 1000;
+
+const PAID_REMAINING_SCANS = 15;
+const PAID_PLAN_CODE = "99baht_15scans_24h";
 
 function nowMs() {
   return Date.now();
@@ -77,15 +82,40 @@ export function setAwaitingPayment(userId, _data) {
  * @param {string} userId
  * @param {number} [ttlMs] override unlock duration
  */
-export function unlockPaymentAccess(userId, ttlMs = UNLOCK_TTL_MS) {
+export async function unlockPaymentAccess(userId, ttlMs = UNLOCK_TTL_MS) {
   const id = String(userId || "").trim();
   if (!id) return;
 
   const ms = Number(ttlMs) > 0 ? Number(ttlMs) : UNLOCK_TTL_MS;
+  const paidUntilIso = new Date(nowMs() + ms).toISOString();
+
   store.set(id, {
     state: "unlocked",
     unlockedUntilMs: nowMs() + ms,
   });
+
+  // Keep manual unlock consistent with paid access source-of-truth in app_users.
+  // Paid access requires: app_users.paid_until > now AND app_users.paid_remaining_scans > 0
+  try {
+    const nowIso = new Date().toISOString();
+    await supabase
+      .from("app_users")
+      .update({
+        paid_until: paidUntilIso,
+        paid_remaining_scans: PAID_REMAINING_SCANS,
+        paid_plan_code: PAID_PLAN_CODE,
+        updated_at: nowIso,
+      })
+      .eq("line_user_id", id);
+  } catch (error) {
+    console.error("[PAYMENT_UNLOCK_MANUAL_DB] update app_users failed (ignored):", {
+      lineUserId: id,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
+  }
 }
 
 /**

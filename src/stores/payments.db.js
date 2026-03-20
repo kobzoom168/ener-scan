@@ -5,6 +5,9 @@ const DEFAULT_AMOUNT = 0;
 const DEFAULT_CURRENCY = "THB";
 const PROVIDER_MANUAL = "promptpay_manual";
 
+const PAID_PLAN_CODE = "99baht_15scans_24h";
+const PAID_REMAINING_SCANS = 15;
+
 /**
  * Create a pending payment row (manual PromptPay flow).
  * Returns payment id (uuid string). Throws on DB error.
@@ -110,55 +113,49 @@ export async function markPaymentSucceededAndExtendEntitlement({
   }
 
   const prevPaidUntil = user?.paid_until ? String(user.paid_until) : null;
-  const prevPaidUntilMs = user?.paid_until
-    ? Date.parse(user.paid_until)
-    : NaN;
 
   // Idempotency: if already succeeded, do not extend again.
   if (payment?.status === "succeeded") {
-    const targetPaidUntil = payment?.unlocked_until
-      ? String(payment.unlocked_until)
-      : prevPaidUntil;
+    const targetPaidUntil =
+      payment?.unlocked_until ? String(payment.unlocked_until) : prevPaidUntil;
 
-    // If entitlement was not applied earlier (partial failure), reconcile once.
-    const targetMs = payment?.unlocked_until
-      ? Date.parse(payment.unlocked_until)
-      : NaN;
-    const needsReconcile =
-      payment?.unlocked_until &&
-      Number.isFinite(targetMs) &&
-      (!Number.isFinite(prevPaidUntilMs) || prevPaidUntilMs < targetMs);
+    // Overwrite existing paid package (no stacking) even on duplicate webhook.
+    // Prefer payment.unlocked_until when present.
+    const targetPaidUntilMs = targetPaidUntil ? Date.parse(targetPaidUntil) : NaN;
+    const unlockedUntil =
+      Number.isFinite(targetPaidUntilMs) && targetPaidUntilMs > 0
+        ? targetPaidUntil
+        : new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 
-    if (needsReconcile) {
-      const { error: reconcileUserError } = await supabase
-        .from("app_users")
-        .update({
-          paid_until: payment.unlocked_until,
-          updated_at: nowIso,
-        })
-        .eq("id", payment.user_id);
+    const { error: reconcileUserError } = await supabase
+      .from("app_users")
+      .update({
+        paid_until: unlockedUntil,
+        paid_remaining_scans: PAID_REMAINING_SCANS,
+        paid_plan_code: PAID_PLAN_CODE,
+        updated_at: nowIso,
+      })
+      .eq("id", payment.user_id);
 
-      if (reconcileUserError) throw reconcileUserError;
-    }
+    if (reconcileUserError) throw reconcileUserError;
 
     console.log("[PAYMENT_UNLOCK]", {
       lineUserId: user?.line_user_id || null,
       paymentId: id,
       previousPaidUntil: prevPaidUntil,
-      paidUntil: targetPaidUntil || prevPaidUntil,
+      paidUntil: unlockedUntil,
+      remainingScans: PAID_REMAINING_SCANS,
       idempotent: true,
     });
 
-    return { paidUntil: targetPaidUntil || prevPaidUntil };
+    return {
+      paidUntil: unlockedUntil,
+      lineUserId: user?.line_user_id || null,
+    };
   }
 
-  const baseMs =
-    Number.isFinite(prevPaidUntilMs) && prevPaidUntilMs > Date.now()
-      ? prevPaidUntilMs
-      : Date.now();
-  const unlockedUntil = new Date(
-    baseMs + hours * 60 * 60 * 1000
-  ).toISOString();
+  // Overwrite existing paid package (no stacking): paid_until = now + 24 hours
+  const unlockedUntil = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 
   const { data: updatedPayment, error: updatePaymentError } = await supabase
     .from("payments")
@@ -196,25 +193,39 @@ export async function markPaymentSucceededAndExtendEntitlement({
 
     if (latestUserError) throw latestUserError;
 
-    const latestPaidUntil = latestUser?.paid_until
-      ? String(latestUser.paid_until)
-      : null;
+    const latestPaidUntil = latestUser?.paid_until ? String(latestUser.paid_until) : null;
+
+    // Ensure package activation is still applied on concurrent webhook scenarios.
+    const { error: reconcileUserError } = await supabase
+      .from("app_users")
+      .update({
+        paid_until: unlockedUntil,
+        paid_remaining_scans: PAID_REMAINING_SCANS,
+        paid_plan_code: PAID_PLAN_CODE,
+        updated_at: nowIso,
+      })
+      .eq("id", payment.user_id);
+
+    if (reconcileUserError) throw reconcileUserError;
 
     console.log("[PAYMENT_UNLOCK]", {
       lineUserId: latestUser?.line_user_id || null,
       paymentId: id,
       previousPaidUntil: prevPaidUntil,
-      paidUntil: latestPaidUntil || prevPaidUntil,
+      paidUntil: unlockedUntil || latestPaidUntil || prevPaidUntil,
+      remainingScans: PAID_REMAINING_SCANS,
       idempotent: true,
     });
 
-    return { paidUntil: latestPaidUntil || prevPaidUntil };
+    return { paidUntil: unlockedUntil || latestPaidUntil || prevPaidUntil, lineUserId: latestUser?.line_user_id || null };
   }
 
   const { error: updateUserError } = await supabase
     .from("app_users")
     .update({
       paid_until: unlockedUntil,
+      paid_remaining_scans: PAID_REMAINING_SCANS,
+      paid_plan_code: PAID_PLAN_CODE,
       updated_at: nowIso,
     })
     .eq("id", payment.user_id);
@@ -235,8 +246,9 @@ export async function markPaymentSucceededAndExtendEntitlement({
     paymentId: id,
     previousPaidUntil: prevPaidUntil,
     paidUntil: unlockedUntil,
+    remainingScans: PAID_REMAINING_SCANS,
     idempotent: false,
   });
 
-  return { paidUntil: unlockedUntil };
+  return { paidUntil: unlockedUntil, lineUserId: user?.line_user_id || null };
 }

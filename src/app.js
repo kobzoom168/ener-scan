@@ -156,6 +156,138 @@ app.post("/webhook/payment", express.json(), async (req, res) => {
   }
 });
 
+app.post("/payments/webhook", express.json(), async (req, res) => {
+  const payload = req.body || {};
+
+  const paymentIdDirect =
+    payload?.paymentId ||
+    payload?.payment_id ||
+    payload?.payment?.id ||
+    null;
+
+  const gbpReferenceNo =
+    payload?.gbpReferenceNo ||
+    payload?.gbp_reference_no ||
+    payload?.gbpReference ||
+    payload?.txn?.gbpReferenceNo ||
+    payload?.txn?.gbpReference ||
+    null;
+
+  const referenceNo =
+    payload?.referenceNo ||
+    payload?.reference_no ||
+    payload?.reference ||
+    payload?.txn?.referenceNo ||
+    payload?.txn?.reference ||
+    null;
+
+  const lineUserId = String(payload?.lineUserId || payload?.line_user_id || "").trim() || null;
+  const verifiedBy =
+    payload?.verifiedBy || payload?.verified_by || "payment_webhook";
+
+  const verified =
+    payload?.verified === true ||
+    payload?.status === "succeeded" ||
+    payload?.success === true ||
+    payload?.event === "payment_succeeded";
+
+  console.log("[PAYMENT_WEBHOOK] received", {
+    paymentId: paymentIdDirect,
+    verified,
+    hasProviderRefs: Boolean(gbpReferenceNo || referenceNo),
+    lineUserId,
+  });
+
+  try {
+    if (!verified) throw new Error("payment_not_verified");
+    console.log("[PAYMENT_WEBHOOK] verified", { verifiedBy, paymentId: paymentIdDirect });
+
+    let paymentId = paymentIdDirect;
+
+    // Map GB provider refs to internal payment row (when paymentId is not provided).
+    if (!paymentId && (gbpReferenceNo || referenceNo)) {
+      if (gbpReferenceNo) {
+        const { data, error } = await supabase
+          .from("payments")
+          .select("id")
+          .eq("provider_payment_id", gbpReferenceNo)
+          .maybeSingle();
+        if (error) throw error;
+        paymentId = data?.id || null;
+      }
+
+      if (!paymentId && referenceNo) {
+        const { data, error } = await supabase
+          .from("payments")
+          .select("id")
+          .eq("provider_reference_no", referenceNo)
+          .maybeSingle();
+        if (error) throw error;
+        paymentId = data?.id || null;
+      }
+    }
+
+    // If we still don't have an internal payment row, create one (succeeded) using lineUserId.
+    if (!paymentId) {
+      if (!lineUserId) throw new Error("paymentId_missing_and_lineUserId_missing");
+
+      const appUser = await getAppUserByLineUserId(lineUserId);
+      if (!appUser?.id) throw new Error("appUser_not_found_for_lineUserId");
+
+      const nowIso = new Date().toISOString();
+      const unlockedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      const { data, error } = await supabase
+        .from("payments")
+        .insert({
+          user_id: appUser.id,
+          provider: "payment_webhook",
+          amount: 99,
+          currency: "THB",
+          status: "succeeded",
+          paid_at: nowIso,
+          unlock_hours: 24,
+          unlocked_until: unlockedUntil,
+          verified_by: verifiedBy,
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (error) throw error;
+      paymentId = data?.id || null;
+    }
+
+    if (!paymentId) throw new Error("paymentId_missing_after_mapping");
+
+    const activation = await markPaymentSucceededAndExtendEntitlement({
+      paymentId,
+      verifiedBy,
+    });
+
+    console.log("[PAYMENT_WEBHOOK] user mapped", {
+      paymentId,
+      lineUserId: activation?.lineUserId || null,
+    });
+
+    console.log("[PAYMENT_WEBHOOK] package activated", {
+      paymentId,
+      paidUntil: activation?.paidUntil || null,
+    });
+
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("[PAYMENT_WEBHOOK] failed", {
+      paymentId: paymentIdDirect,
+      lineUserId,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
+    res.status(500).json({ ok: false, message: error?.message || "payments_webhook_failed" });
+  }
+});
+
 app.post("/payments/create", express.json(), async (req, res) => {
   const lineUserId = req.body?.lineUserId;
 
@@ -175,16 +307,16 @@ app.post("/payments/create", express.json(), async (req, res) => {
 
     const paymentId = await createPaymentPending({
       appUserId: appUser.id,
-      amount: 49,
+      amount: 99,
       currency: "THB",
     });
 
     // Create GB Prime Pay PromptPay QR exactly once per internal payment row.
-    console.log("[GB_CREATE_START]", { lineUserId, paymentId, amountTHB: 49 });
+    console.log("[GB_CREATE_START]", { lineUserId, paymentId, amountTHB: 99 });
 
     let qr = null;
     try {
-      qr = await createGbPrimePayPromptPayQr({ paymentId, amountTHB: 49 });
+      qr = await createGbPrimePayPromptPayQr({ paymentId, amountTHB: 99 });
     } catch (err) {
       console.error("[GB_CREATE_ERROR]", {
         lineUserId,

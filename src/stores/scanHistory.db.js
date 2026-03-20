@@ -2,8 +2,7 @@
  * Legacy DB history module.
  *
  * The project uses `public.scan_results` as the billing/source-of-truth for used scans.
- * Older history writes to `public.scans` are obsolete and can break deployments
- * (e.g. "Could not find the table public.scans").
+ * Older history writes to a legacy `scans` table are obsolete and can break deployments.
  *
  * This module is kept to preserve imports, but it no longer writes/reads from DB.
  * Runtime scan history UX is served from the in-memory store (`scanHistory.store.js`).

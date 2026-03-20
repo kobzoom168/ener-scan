@@ -36,6 +36,7 @@ import {
 } from "../services/paymentAccess.service.js";
 
 import { addScanHistory as addScanHistoryDb } from "../stores/scanHistory.db.js";
+import { decrementUserPaidRemainingScans } from "../stores/paymentAccess.db.js";
 
 import {
   startScanJob,
@@ -156,6 +157,7 @@ export async function runScanFlow({
   }
 
   // payment gate (after rate limit + cooldown)
+  let accessSource = null; // "paid" | "free" | null
   try {
     const access = await checkScanAccess({ userId });
 
@@ -165,12 +167,14 @@ export async function runScanFlow({
       reason: access?.reason,
     });
 
+    accessSource = access?.reason || null;
+
     if (!access.allowed) {
       const reply = buildPaymentGateReply({ decision: access });
 
       if (access?.reason === "payment_required") {
         try {
-          const MVP_PRICE_THB = 49;
+          const MVP_PRICE_THB = 99;
           const MVP_CURRENCY = "THB";
 
           const appUser = await ensureUserByLineUserId(userId);
@@ -229,7 +233,7 @@ export async function runScanFlow({
           "คุณใช้สิทธิ์ครบแล้วในช่วง 24 ชั่วโมงนี้\nปลดล็อกรอบใหม่เพื่อใช้งานต่อได้ทันที";
 
         try {
-          const MVP_PRICE_THB = 49;
+          const MVP_PRICE_THB = 99;
           const MVP_CURRENCY = "THB";
 
           const appUser = await ensureUserByLineUserId(userId);
@@ -548,7 +552,7 @@ export async function runScanFlow({
       const scanFinishedAt = Date.now();
       const responseTimeMs = scanFinishedAt - scanStartedAt;
 
-      await createScanResult({
+      const scanResultId = await createScanResult({
         scanRequestId,
         appUserId,
         resultText,
@@ -560,6 +564,11 @@ export async function runScanFlow({
         promptVersion: "v1",
         responseTimeMs,
       });
+
+      // Paid quota enforcement (consume 1 remaining scan after DB insert succeeds)
+      if (scanResultId && accessSource === "paid") {
+        await decrementUserPaidRemainingScans(appUserId);
+      }
     } catch (scanResultError) {
       console.error(
         "[BILLING_INCIDENT] createScanResult failed but user will be replied",

@@ -1,22 +1,26 @@
-import { getUserPaidUntil, getUserScanCount } from "../stores/paymentAccess.db.js";
 import { ensureUserByLineUserId } from "../stores/users.db.js";
-import { getPaymentState, hasPaymentAccess } from "../stores/manualPaymentAccess.store.js";
 import { buildPaymentRequiredFlex } from "./flex/status.flex.js";
 import { buildPaymentRequiredText } from "../utils/webhookText.util.js";
 import { supabase } from "../config/supabase.js";
 
-const FREE_SCANS_LIMIT = 2; // lifetime free scans for new users
-const PAID_SCAN_LIMIT = 5;
-const PAID_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h window
-
-function toMs(isoString) {
-  const ms = Date.parse(String(isoString || ""));
-  return Number.isFinite(ms) ? ms : NaN;
-}
+const FREE_SCANS_LIMIT = 2; // free scans per day
 
 export async function checkScanAccess({ userId, now = new Date() }) {
-  const normalizedUserId = String(userId || "").trim();
-  if (!normalizedUserId) {
+  const lineUserId = String(userId || "").trim();
+  const nowIso = now.toISOString();
+  const nowMs = now.getTime();
+
+  if (!lineUserId) {
+    const finalDecision = { allowed: false, reason: "payment_required" };
+    console.log("[SCAN_ACCESS_DEBUG]", {
+      userId: lineUserId,
+      nowIso,
+      paidUntil: null,
+      paidRemainingScans: 0,
+      freeUsedToday: 0,
+      freeRemainingToday: 0,
+      finalDecision,
+    });
     return {
       allowed: false,
       reason: "payment_required",
@@ -30,143 +34,129 @@ export async function checkScanAccess({ userId, now = new Date() }) {
 
   // Ensure app_users row exists for this LINE user (safe, non-fatal).
   try {
-    await ensureUserByLineUserId(normalizedUserId);
+    await ensureUserByLineUserId(lineUserId);
   } catch (error) {
-    console.error("[PAYMENT_DEBUG] checkScanAccess ensureUserByLineUserId failed (ignored):", {
-      lineUserId: normalizedUserId,
+    console.error("[SCAN_ACCESS] ensureUserByLineUserId failed (ignored):", {
+      lineUserId,
       message: error?.message,
       code: error?.code,
       details: error?.details,
       hint: error?.hint,
     });
-    // Keep payment gate semantics unchanged: fall through to existing logic.
+    // Keep payment gate semantics unchanged: fall through to fail-closed behavior.
   }
 
-  const [paidUntil, usedScans] = await Promise.all([
-    getUserPaidUntil(normalizedUserId),
-    getUserScanCount(normalizedUserId),
-  ]);
+  // Get app_user + entitlement
+  const { data: appUserRow, error: appUserErr } = await supabase
+    .from("app_users")
+    .select("id, paid_until, paid_remaining_scans")
+    .eq("line_user_id", lineUserId)
+    .limit(1)
+    .maybeSingle();
 
-  const nowMs = now.getTime();
+  if (appUserErr) throw appUserErr;
 
-  // 1) Paid access first (DB paid_until OR in-memory manual unlock).
-  // Keep the same counting logic path for both sources (manual + DB).
-  let paidUntilUsed = null;
-  let paidUntilSource = "db";
-  let paidUntilMs = null;
+  const appUserId = appUserRow?.id ? String(appUserRow.id) : null;
 
-  if (hasPaymentAccess(normalizedUserId)) {
-    paidUntilSource = "manual";
-    const state = getPaymentState(normalizedUserId);
-    paidUntilUsed = state?.state === "unlocked" ? state.unlockedUntilMs : null;
-    paidUntilMs = Number(paidUntilUsed);
-  } else {
-    paidUntilSource = "db";
-    paidUntilUsed = paidUntil;
-    const paidUntilCandidateMs = paidUntil ? toMs(paidUntil) : NaN;
-    paidUntilMs = Number.isFinite(paidUntilCandidateMs)
-      ? paidUntilCandidateMs
-      : null;
+  const paidUntil = appUserRow?.paid_until ? String(appUserRow.paid_until) : null;
+  const paidUntilMs = paidUntil ? Date.parse(paidUntil) : NaN;
+  const paidRemainingScans = appUserRow?.paid_remaining_scans
+    ? Number(appUserRow.paid_remaining_scans)
+    : 0;
+
+  // Free usage: count scans created today (server local time).
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(startOfToday);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+
+  let freeUsedToday = 0;
+  if (appUserId) {
+    const { count, error: freeCountErr } = await supabase
+      .from("scan_results")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", appUserId)
+      .gte("created_at", startOfToday.toISOString())
+      .lt("created_at", endOfToday.toISOString());
+
+    if (freeCountErr) throw freeCountErr;
+    freeUsedToday = count ?? 0;
   }
 
-  if (paidUntilMs && paidUntilMs > nowMs) {
-    const paidWindowStartMs = paidUntilMs - PAID_WINDOW_MS;
-    const paidWindowStartIso = new Date(paidWindowStartMs).toISOString();
-    const paidUntilIso = new Date(paidUntilMs).toISOString();
+  const freeRemainingToday = Math.max(
+    0,
+    FREE_SCANS_LIMIT - (Number.isFinite(freeUsedToday) ? freeUsedToday : 0)
+  );
 
-    // Count scan_results within the last 24h window ending at paid_until.
-    const { data: appUserRow, error: userError } = await supabase
-      .from("app_users")
-      .select("id")
-      .eq("line_user_id", normalizedUserId)
-      .limit(1)
-      .maybeSingle();
+  // Paid is active only when paid_until is in the future AND paid_remaining_scans > 0
+  const paidActive =
+    Number.isFinite(paidUntilMs) &&
+    paidUntilMs > nowMs &&
+    paidRemainingScans > 0;
 
-    if (userError) throw userError;
-
-    const appUserId = appUserRow?.id ? String(appUserRow.id) : null;
-    let paidUsedScans = PAID_SCAN_LIMIT; // fail-closed if we cannot reliably count
-
-    if (appUserId) {
-      const startIso = paidWindowStartIso;
-      const endIso = paidUntilIso;
-
-      const { count, error: countError } = await supabase
-        .from("scan_results")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", appUserId)
-        .gte("created_at", startIso)
-        .lt("created_at", endIso);
-
-      if (countError) throw countError;
-      // If count is null/undefined, we treat it as unknown and deny (fail-closed).
-      if (count === null || count === undefined) {
-        paidUsedScans = PAID_SCAN_LIMIT;
-      } else {
-        paidUsedScans = Number(count);
-      }
-    }
-
-    const remainingPaidScans = Math.max(
-      0,
-      PAID_SCAN_LIMIT - (Number.isFinite(paidUsedScans) ? paidUsedScans : PAID_SCAN_LIMIT)
-    );
-    const allowed = paidUsedScans < PAID_SCAN_LIMIT;
-
-    console.log("[PAYMENT_QUOTA_DEBUG]", {
-      userId: normalizedUserId,
-      paidUntil: paidUntilUsed,
-      paidUntilSource,
-      paidUntilMs,
-      paidWindowStart: paidWindowStartIso,
-      paidUsedScans,
-      remainingPaidScans,
-      finalDecision: { allowed, reason: allowed ? "paid" : "payment_required" },
+  let finalDecision;
+  if (paidActive) {
+    finalDecision = { allowed: true, reason: "paid" };
+    console.log("[SCAN_ACCESS_DEBUG]", {
+      userId: lineUserId,
+      nowIso,
+      paidUntil,
+      paidRemainingScans,
+      freeUsedToday,
+      freeRemainingToday,
+      finalDecision,
     });
 
-    if (allowed) {
-      return {
-        allowed: true,
-        reason: "paid",
-        remaining: remainingPaidScans,
-        usedScans,
-        freeScansLimit: FREE_SCANS_LIMIT,
-        freeScansRemaining: 0,
-        paidUntil: paidUntilUsed,
-      };
-    }
-
-    return {
-      allowed: false,
-      reason: "payment_required",
-      remaining: 0,
-      usedScans,
-      freeScansLimit: FREE_SCANS_LIMIT,
-      freeScansRemaining: 0,
-      paidUntil: paidUntilUsed,
-    };
-  }
-
-  // 2) Else: lifetime free scans (max 2).
-  const remainingFreeScans = Math.max(0, FREE_SCANS_LIMIT - usedScans);
-  if (usedScans < FREE_SCANS_LIMIT) {
     return {
       allowed: true,
-      reason: "free",
-      remaining: remainingFreeScans,
-      usedScans,
+      reason: "paid",
+      remaining: paidRemainingScans,
+      usedScans: freeUsedToday,
       freeScansLimit: FREE_SCANS_LIMIT,
-      freeScansRemaining: remainingFreeScans,
+      freeScansRemaining: freeRemainingToday,
       paidUntil,
     };
   }
 
-  // 3) Deny: payment required.
+  if (freeUsedToday < FREE_SCANS_LIMIT) {
+    finalDecision = { allowed: true, reason: "free" };
+    console.log("[SCAN_ACCESS_DEBUG]", {
+      userId: lineUserId,
+      nowIso,
+      paidUntil,
+      paidRemainingScans,
+      freeUsedToday,
+      freeRemainingToday,
+      finalDecision,
+    });
+
+    return {
+      allowed: true,
+      reason: "free",
+      remaining: freeRemainingToday,
+      usedScans: freeUsedToday,
+      freeScansLimit: FREE_SCANS_LIMIT,
+      freeScansRemaining: freeRemainingToday,
+      paidUntil,
+    };
+  }
+
+  finalDecision = { allowed: false, reason: "payment_required" };
+  console.log("[SCAN_ACCESS_DEBUG]", {
+    userId: lineUserId,
+    nowIso,
+    paidUntil,
+    paidRemainingScans,
+    freeUsedToday,
+    freeRemainingToday,
+    finalDecision,
+  });
+
   return {
     allowed: false,
     reason: "payment_required",
     remaining: 0,
-    usedScans,
+    usedScans: freeUsedToday,
     freeScansLimit: FREE_SCANS_LIMIT,
     freeScansRemaining: 0,
     paidUntil,

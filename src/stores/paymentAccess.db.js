@@ -99,3 +99,37 @@ export async function getUserScanCount(lineUserId) {
 
   return count ?? 0;
 }
+
+/**
+ * Consume 1 paid scan after a scan has fully succeeded.
+ * Must only be called when the caller already knows access source is "paid".
+ */
+export async function decrementUserPaidRemainingScans(appUserId) {
+  const normalizedAppUserId = String(appUserId || "").trim();
+  if (!normalizedAppUserId) throw new Error("decrementPaid_missing_app_user_id");
+
+  // Read current remaining then update (simple non-transactional decrement; scan flow is resilient).
+  const { data: userRow, error: readError } = await supabase
+    .from("app_users")
+    .select("paid_remaining_scans")
+    .eq("id", normalizedAppUserId)
+    .maybeSingle();
+
+  if (readError) throw readError;
+
+  const current = Number(userRow?.paid_remaining_scans) || 0;
+  const next = Math.max(0, current - 1);
+
+  const nowIso = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("app_users")
+    .update({
+      paid_remaining_scans: next,
+      updated_at: nowIso,
+    })
+    .eq("id", normalizedAppUserId);
+
+  if (updateError) throw updateError;
+
+  return next;
+}
