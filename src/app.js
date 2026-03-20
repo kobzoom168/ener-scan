@@ -1,5 +1,6 @@
 import express from "express";
 import line from "@line/bot-sdk";
+import path from "path";
 
 import { env } from "./config/env.js";
 import { supabase } from "./config/supabase.js";
@@ -38,6 +39,13 @@ app.get("/health", (req, res) => {
 app.get("/", (req, res) => {
   res.send("Ener Scan API running");
 });
+
+// Serve static PromptPay QR for manual payments.
+// URL: /payment/promptpay-qr.jpg
+app.use(
+  "/payment",
+  express.static(path.join(process.cwd(), "src", "payment"))
+);
 
 app.get("/debug/payment-access/:lineUserId", async (req, res) => {
   const lineUserId = String(req.params?.lineUserId || "").trim();

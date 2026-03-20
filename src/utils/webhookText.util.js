@@ -1,3 +1,5 @@
+import { getPromptPayQrPublicUrl } from "./promptpayQrPublicUrl.util.js";
+
 function normalizeBirthdateText(text) {
   return String(text || "")
     .trim()
@@ -170,18 +172,17 @@ export function buildCooldownText(remainingSec = 0) {
 }
 
 export function buildPaymentRequiredText({ usedScans = 0, freeLimit = 3 } = {}) {
-  const used = Number(usedScans || 0);
-  const limit = Number(freeLimit || 3);
-
   return [
     "🔍 Ener Scan",
     "",
-    `คุณใช้สิทธิ์สแกนฟรีครบ ${limit} ครั้งแล้ว (ใช้ไป ${used} ครั้ง)`,
-    "หากต้องการสแกนต่อ สามารถปลดล็อกการใช้งาน Ener Scan ได้ 24 ชั่วโมง",
-    "ภายใน 24 ชั่วโมงนี้ คุณสแกนได้ไม่จำกัดจำนวนครั้ง ด้วยแพ็กเกจ 99 บาท",
+    "คุณใช้สิทธิ์ทดลองครบแล้ว",
+    "",
+    "✨ ปลดล็อกการสแกน 15 ครั้ง",
+    "ใช้งานได้ภายใน 24 ชั่วโมง",
+    "",
+    "ราคา 99 บาท",
     "",
     "พิมพ์: payment",
-    "เพื่อดูวิธีชำระเงินและรหัสอ้างอิงครับ",
   ].join("\n");
 }
 
@@ -231,9 +232,12 @@ export function buildPaymentInstructionText({
   const amountLineOnly =
     hasAmount && currency ? `   ${amountLine}` : ref ? "   จำนวนตามที่แอดมินแจ้ง" : "";
 
+  const qrUrl = getPromptPayQrPublicUrl();
+
   const lines = [
     "💳 วิธีชำระเงินเพื่อปลดล็อก Ener Scan",
     "",
+    `🔗 สแกน QR ที่: ${qrUrl}`,
     "ปลดล็อกการใช้งาน Ener Scan ได้ 24 ชั่วโมงหลังชำระเงิน",
     "ภายใน 24 ชั่วโมงนี้ คุณสามารถสแกนได้ไม่จำกัดจำนวนครั้ง",
     "",
@@ -250,9 +254,11 @@ export function buildPaymentInstructionText({
 
 /** MVP: user hit payment gate on scan image — ask for QR payment + slip photo. */
 export function buildManualPaymentRequestText() {
+  const qrUrl = getPromptPayQrPublicUrl();
   return [
     "💳 ต้องชำระเงินก่อนจึงจะสแกนต่อได้ครับ",
     "",
+    `🔗 สแกน QR ที่: ${qrUrl}`,
     "ขั้นตอน (แบบง่าย)",
     "1) สแกน QR PromptPay / โอนเงินตามที่แจ้ง",
     "2) ส่งภาพสลิปโอนเงินมาในแชทนี้ (ส่งเป็นรูป 1 รูป)",

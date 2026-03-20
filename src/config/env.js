@@ -24,6 +24,11 @@ export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   PORT: process.env.PORT || 3000,
+  /** Public base URL (for showing QR image URL). Optional. */
+  APP_BASE_URL:
+    process.env.APP_BASE_URL ||
+    process.env.PUBLIC_APP_URL ||
+    `http://localhost:${process.env.PORT || 3000}`,
   /** Amount in THB for 24h unlock (manual PromptPay). Optional; 0 = "ตามที่แอดมินแจ้ง" */
   PAYMENT_UNLOCK_AMOUNT_THB: Number(process.env.PAYMENT_UNLOCK_AMOUNT_THB) || 0,
   PAYMENT_UNLOCK_CURRENCY: process.env.PAYMENT_UNLOCK_CURRENCY || "THB",
