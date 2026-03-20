@@ -42,12 +42,21 @@ const lineConfig = {
 
 const lineClient = new line.Client(lineConfig);
 
+console.log("[BUILD_INFO]", {
+  version: "payment-slip-fix-v2",
+  startedAt: new Date().toISOString(),
+});
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
 app.get("/", (req, res) => {
   res.send("Ener Scan API running");
+});
+
+app.get("/version", (req, res) => {
+  res.status(200).json({ ok: true, version: "payment-slip-fix-v2" });
 });
 
 // Serve static PromptPay QR for manual payments.
@@ -96,6 +105,10 @@ function requireAdmin(req, res, next) {
 }
 
 app.get("/admin/payments", requireAdmin, async (req, res) => {
+  console.log("[ADMIN_PAYMENTS_HANDLER] start", {
+    route: "GET /admin/payments",
+    startedAt: new Date().toISOString(),
+  });
   try {
     const payments = await getPaymentsPendingVerifyForAdmin({ limit: 100 });
 

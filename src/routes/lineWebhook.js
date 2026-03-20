@@ -170,6 +170,11 @@ async function finalizeAcceptedImage({
   // This prevents "any random image = paid".
   let pendingPayment = null;
   try {
+    console.log("[SLIP_VERIFY_LOOKUP] start", {
+      userId,
+      source: "finalizeAcceptedImage",
+      messageId: event?.message?.id || null,
+    });
     pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
   } catch (err) {
     console.error("[PAYMENT_SLIP_VERIFY] lookup pending payment failed:", {

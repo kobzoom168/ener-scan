@@ -86,6 +86,9 @@ export async function createPaymentPending({
 
 export async function getLatestAwaitingPaymentForLineUserId(lineUserId) {
   const lu = String(lineUserId || "").trim();
+  console.log("[PAYMENTS_DB] getLatestAwaitingPaymentForLineUserId:start", {
+    lineUserId: lu || null,
+  });
   if (!lu) return null;
 
   const { data, error } = await supabase
@@ -148,6 +151,9 @@ export async function setPaymentSlipPendingVerify({
 export async function getPaymentsPendingVerifyForAdmin({
   limit = 50,
 } = {}) {
+  console.log("[PAYMENTS_DB] getPaymentsPendingVerifyForAdmin:start", {
+    limit,
+  });
   const minCreatedAtIso = new Date(Date.now() - PAYMENT_VERIFY_EXPIRE_MS).toISOString();
   const { data, error } = await supabase
     .from("payments")
