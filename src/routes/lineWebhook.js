@@ -69,10 +69,20 @@ import {
   buildSystemErrorText,
   isPaymentCommand,
   buildPaymentInstructionText,
+  buildManualPaymentRequestText,
+  buildSlipReceivedText,
+  buildAwaitingSlipReminderText,
   isHistoryCommand,
   isStatsCommand,
   groupImageEventCountByUser,
 } from "../utils/webhookText.util.js";
+
+import {
+  getPaymentState,
+  setAwaitingPayment,
+  unlockPaymentAccess,
+} from "../stores/manualPaymentAccess.store.js";
+import { checkScanAccess } from "../services/paymentAccess.service.js";
 
 import {
   replyFlexWithFallback,
@@ -137,6 +147,18 @@ async function finalizeAcceptedImage({
     eventTimestamp,
     imageBufferLength: imageBuffer?.length || 0,
   });
+
+  // MVP manual payment: any image counts as slip while awaiting (no object/OCR checks).
+  const slipState = getPaymentState(userId);
+  if (slipState.state === "awaiting_slip") {
+    unlockPaymentAccess(userId);
+    markAcceptedImageEvent(userId, eventTimestamp);
+    clearLatestScanJob(userId);
+    clearSession(userId);
+
+    await replyText(client, event.replyToken, buildSlipReceivedText());
+    return;
+  }
 
   const isDuplicate = await isDuplicateImage(imageBuffer);
 
@@ -222,6 +244,33 @@ async function finalizeAcceptedImage({
 
   markAcceptedImageEvent(userId, eventTimestamp);
 
+  let accessDecision;
+  try {
+    accessDecision = await checkScanAccess({ userId });
+  } catch (accessErr) {
+    console.error("[WEBHOOK] checkScanAccess before scan failed:", {
+      userId,
+      message: accessErr?.message,
+      code: accessErr?.code,
+      details: accessErr?.details,
+      hint: accessErr?.hint,
+    });
+    throw accessErr;
+  }
+
+  if (!accessDecision.allowed && accessDecision.reason === "payment_required") {
+    setAwaitingPayment(userId);
+    clearLatestScanJob(userId);
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
+
+    await replyText(
+      client,
+      event.replyToken,
+      buildManualPaymentRequestText()
+    );
+    return;
+  }
+
   let savedBirthdate = null;
 
   try {
@@ -289,7 +338,10 @@ async function handleImageMessage({ client, event, userId, session }) {
     return;
   }
 
-  if (session.pendingImage) {
+  if (
+    session.pendingImage &&
+    getPaymentState(userId).state !== "awaiting_slip"
+  ) {
     console.log("[WEBHOOK] ignore image: waiting birthdate", {
       userId,
       sessionFlowVersion: session.flowVersion || 0,
@@ -458,6 +510,18 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (!session.pendingImage) {
+    if (
+      getPaymentState(userId).state === "awaiting_slip" &&
+      !isPaymentCommand(text, lowerText)
+    ) {
+      await replyText(
+        client,
+        event.replyToken,
+        buildAwaitingSlipReminderText()
+      );
+      return;
+    }
+
     if (isPaymentCommand(text, lowerText)) {
       let paymentId = null;
       const amount = env.PAYMENT_UNLOCK_AMOUNT_THB || 0;

@@ -1,5 +1,6 @@
 import { getUserPaidUntil, getUserScanCount } from "../stores/paymentAccess.db.js";
 import { ensureUserByLineUserId } from "../stores/users.db.js";
+import { hasPaymentAccess } from "../stores/manualPaymentAccess.store.js";
 import { buildPaymentRequiredFlex } from "./flex/status.flex.js";
 import { buildPaymentRequiredText } from "../utils/webhookText.util.js";
 
@@ -41,6 +42,19 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     getUserPaidUntil(normalizedUserId),
     getUserScanCount(normalizedUserId),
   ]);
+
+  // MVP: in-memory unlock after user sends slip image (LINE webhook). Same UX as paid for scan caps.
+  if (hasPaymentAccess(normalizedUserId)) {
+    const freeScansRemaining = Math.max(0, FREE_SCANS_LIMIT - usedScans);
+    return {
+      allowed: true,
+      reason: "paid",
+      usedScans,
+      freeScansLimit: FREE_SCANS_LIMIT,
+      freeScansRemaining,
+      paidUntil,
+    };
+  }
 
   const paidUntilMs = paidUntil ? toMs(paidUntil) : NaN;
   const isPaidActive =

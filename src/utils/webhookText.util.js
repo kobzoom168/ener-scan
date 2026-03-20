@@ -248,6 +248,45 @@ export function buildPaymentInstructionText({
   return lines.join("\n");
 }
 
+/** MVP: user hit payment gate on scan image — ask for QR payment + slip photo. */
+export function buildManualPaymentRequestText() {
+  return [
+    "💳 ต้องชำระเงินก่อนจึงจะสแกนต่อได้ครับ",
+    "",
+    "ขั้นตอน (แบบง่าย)",
+    "1) สแกน QR PromptPay / โอนเงินตามที่แจ้ง",
+    "2) ส่งภาพสลิปโอนเงินมาในแชทนี้ (ส่งเป็นรูป 1 รูป)",
+    "",
+    "หมายเหตุ: ระบบยังไม่อ่าน OCR จากสลิป — การส่งรูปสลิปถือเป็นหลักฐานเบื้องต้นเท่านั้น",
+    "",
+    "หลังส่งสลิปแล้ว ระบบจะปลดล็อกให้สแกนต่อชั่วคราว",
+    "จากนั้นกรุณาส่งรูปวัตถุที่ต้องการสแกนอีกครั้งครับ",
+    "",
+    "พิมพ์ payment เพื่อดูข้อความชำระเงินแบบเต็มได้ครับ",
+  ].join("\n");
+}
+
+/** MVP: slip image accepted, in-memory unlock applied. */
+export function buildSlipReceivedText() {
+  return [
+    "✅ รับสลิปแล้วครับ",
+    "",
+    "ปลดล็อกให้สแกนต่อได้แล้ว (ชั่วคราว 24 ชั่วโมง ตามการตั้งค่า MVP)",
+    "กรุณาส่งรูปวัตถุที่ต้องการสแกนอีกครั้ง (1 ชิ้น / 1 รูป) ได้เลยครับ",
+  ].join("\n");
+}
+
+/** User typed text while waiting for slip. */
+export function buildAwaitingSlipReminderText() {
+  return [
+    "⏳ กำลังรอรูปสลิปโอนเงินครับ",
+    "",
+    "กรุณาส่งภาพสลิปเป็นรูป 1 รูปในแชทนี้",
+    "",
+    "พิมพ์ payment หากต้องการดูวิธีชำระเงินอีกครั้ง",
+  ].join("\n");
+}
+
 export function isHistoryCommand(text, lowerText) {
   return lowerText === "history" || text === "ประวัติ";
 }

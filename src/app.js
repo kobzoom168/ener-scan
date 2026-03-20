@@ -172,20 +172,68 @@ app.post("/payments/create", express.json(), async (req, res) => {
     });
 
     // Create GB Prime Pay PromptPay QR exactly once per internal payment row.
-    const qr = await createGbPrimePayPromptPayQr({ paymentId, amountTHB: 49 });
+    console.log("[GB_CREATE_START]", { lineUserId, paymentId, amountTHB: 49 });
 
-    console.log("[GB_CREATE]", {
+    let qr = null;
+    try {
+      qr = await createGbPrimePayPromptPayQr({ paymentId, amountTHB: 49 });
+    } catch (err) {
+      console.error("[GB_CREATE_ERROR]", {
+        lineUserId,
+        paymentId,
+        message: err?.message,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint,
+        // Intentionally keep a raw error dump for faster diagnosis
+        raw: err,
+      });
+      throw err;
+    }
+
+    console.log("[GB_CREATE_RESPONSE]", {
       paymentId,
       referenceNo: qr?.referenceNo || null,
       gbpReferenceNo: qr?.gbpReferenceNo || null,
+      resultCode: qr?.resultCode || null,
       hasQrBase64: Boolean(qr?.qrBase64),
+      qrBase64Length: typeof qr?.qrBase64 === "string" ? qr.qrBase64.length : 0,
     });
 
-    await supabase.from("payments").update({
+    const updatePayload = {
       provider_payment_id: qr?.gbpReferenceNo || null,
       provider_reference_no: qr?.referenceNo || null,
       qr_base64: qr?.qrBase64 || null,
-    }).eq("id", paymentId);
+    };
+
+    console.log("[GB_DB_UPDATE_ATTEMPT]", {
+      paymentId,
+      provider_payment_id: updatePayload.provider_payment_id,
+      provider_reference_no: updatePayload.provider_reference_no,
+      hasQrBase64: Boolean(updatePayload.qr_base64),
+    });
+
+    const { data: updatedPayment, error: updateError } = await supabase
+      .from("payments")
+      .update(updatePayload)
+      .eq("id", paymentId)
+      .select(
+        "id, provider_payment_id, provider_reference_no, qr_base64, updated_at"
+      )
+      .maybeSingle();
+
+    console.log("[GB_DB_UPDATE_RESULT]", {
+      paymentId,
+      ok: !updateError,
+      errorMessage: updateError?.message || null,
+      hasRow: Boolean(updatedPayment?.id),
+      provider_payment_id: updatedPayment?.provider_payment_id || null,
+      provider_reference_no: updatedPayment?.provider_reference_no || null,
+      qrBase64Length:
+        typeof updatedPayment?.qr_base64 === "string"
+          ? updatedPayment.qr_base64.length
+          : 0,
+    });
 
     const paymentUrl = `https://ener-scan-production.up.railway.app/payments/mock/${paymentId}`;
 
