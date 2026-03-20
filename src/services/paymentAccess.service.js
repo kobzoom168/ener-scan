@@ -54,7 +54,25 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     .limit(1)
     .maybeSingle();
 
-  if (appUserErr) throw appUserErr;
+  if (appUserErr) {
+    // Make future schema drift obvious in logs (does not change behavior).
+    const missingColumn =
+      typeof appUserErr?.message === "string"
+        ? appUserErr.message.match(/column\s+([a-zA-Z0-9_.]+)\s+does not exist/i)?.[1] ||
+          null
+        : null;
+
+    console.error("[PAYMENT_ACCESS_SCHEMA_MISMATCH]", {
+      userId: lineUserId,
+      supabaseCode: appUserErr?.code,
+      supabaseMessage: appUserErr?.message,
+      missingColumn,
+      hint:
+        "Check SQL migrations for app_users paid columns: paid_remaining_scans, paid_until, paid_plan_code",
+    });
+
+    throw appUserErr;
+  }
 
   const appUserId = appUserRow?.id ? String(appUserRow.id) : null;
 
