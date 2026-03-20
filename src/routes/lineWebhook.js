@@ -40,7 +40,13 @@ import { checkSingleObject } from "../services/objectCheck.service.js";
 
 import { env } from "../config/env.js";
 import { ensureUserByLineUserId, touchUserLastActive } from "../stores/users.db.js";
-import { createPaymentPending } from "../stores/payments.db.js";
+import {
+  createPaymentPending,
+  getLatestAwaitingPaymentForLineUserId,
+  setPaymentSlipPendingVerify,
+} from "../stores/payments.db.js";
+
+import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 
 import { replyText } from "../services/lineReply.service.js";
 import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
@@ -83,7 +89,7 @@ import {
 import {
   getPaymentState,
   setAwaitingPayment,
-  unlockPaymentAccess,
+  clearPaymentState,
 } from "../stores/manualPaymentAccess.store.js";
 import { checkScanAccess } from "../services/paymentAccess.service.js";
 
@@ -159,16 +165,66 @@ async function finalizeAcceptedImage({
     imageBufferLength: imageBuffer?.length || 0,
   });
 
-  // MVP manual payment: any image counts as slip while awaiting (no object/OCR checks).
-  const slipState = getPaymentState(userId);
-  if (slipState.state === "awaiting_slip") {
-    await unlockPaymentAccess(userId);
-    markAcceptedImageEvent(userId, eventTimestamp);
-    clearLatestScanJob(userId);
-    clearSession(userId);
+  // Payment slip verify (DB-based):
+  // If user has an awaiting/pending payment, treat the next image as a slip upload.
+  // This prevents "any random image = paid".
+  let pendingPayment = null;
+  try {
+    pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
+  } catch (err) {
+    console.error("[PAYMENT_SLIP_VERIFY] lookup pending payment failed:", {
+      userId,
+      message: err?.message,
+      code: err?.code,
+      hint: err?.hint,
+    });
+  }
 
-    await replyText(client, event.replyToken, buildSlipReceivedText());
-    return;
+  if (pendingPayment) {
+    const slipMessageId = event?.message?.id;
+    const paymentId = pendingPayment.id;
+
+    try {
+      const slipUrl = await uploadSlipImageToStorage({
+        buffer: imageBuffer,
+        lineUserId: userId,
+        paymentId,
+        slipMessageId,
+      });
+
+      await setPaymentSlipPendingVerify({
+        paymentId,
+        slipUrl,
+        slipMessageId,
+      });
+
+      clearPaymentState(userId);
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+
+      await replyText(
+        client,
+        event.replyToken,
+        "ได้รับสลิปแล้ว ระบบกำลังตรวจสอบการชำระเงินครับ"
+      );
+      return;
+    } catch (err) {
+      console.error("[PAYMENT_SLIP_VERIFY] slip upload/update failed:", {
+        userId,
+        paymentId,
+        slipMessageId,
+        message: err?.message,
+        code: err?.code,
+        hint: err?.hint,
+      });
+
+      await replyText(
+        client,
+        event.replyToken,
+        "ขออภัยครับ ระบบบันทึกสลิปไม่สำเร็จ กรุณาลองส่งสลิปใหม่อีกครั้ง"
+      );
+      return;
+    }
   }
 
   const isDuplicate = await isDuplicateImage(imageBuffer);
@@ -270,9 +326,33 @@ async function finalizeAcceptedImage({
   }
 
   if (!accessDecision.allowed && accessDecision.reason === "payment_required") {
+    // Create (or re-create) the pending payment row for this LINE user.
+    // All subsequent images will be treated as slip upload until admin verifies.
+    try {
+      const appUser = await ensureUserByLineUserId(userId);
+      const existing = await getLatestAwaitingPaymentForLineUserId(userId);
+      if (!existing || existing.status !== "awaiting_payment") {
+        await createPaymentPending({
+          appUserId: appUser.id,
+          amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
+          currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
+        });
+      }
+    } catch (err) {
+      console.error("[WEBHOOK] createPaymentPending (payment_required) failed:", {
+        userId,
+        message: err?.message,
+        code: err?.code,
+        hint: err?.hint,
+      });
+      // Still proceed with the user-facing payment instructions.
+    }
+
     setAwaitingPayment(userId);
     clearLatestScanJob(userId);
-    clearSessionIfFlowVersionMatches(userId, flowVersion);
+
+    // Preserve the scan image candidate so user can continue after approval.
+    setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
     await replyText(
       client,
@@ -362,11 +442,43 @@ async function handleImageMessage({ client, event, userId, session }) {
     session.pendingImage &&
     getPaymentState(userId).state !== "awaiting_slip"
   ) {
-    console.log("[WEBHOOK] ignore image: waiting birthdate", {
-      userId,
-      sessionFlowVersion: session.flowVersion || 0,
-    });
-    return;
+    // Allow slip uploads while a pending payment exists in DB.
+    // Otherwise keep the original behavior: ignore images while waiting birthdate.
+    let pendingPaymentExists = false;
+    try {
+      const pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
+      pendingPaymentExists = Boolean(pendingPayment);
+    } catch (err) {
+      console.error("[WEBHOOK] pendingPaymentExists check failed:", {
+        userId,
+        message: err?.message,
+        code: err?.code,
+      });
+    }
+
+    if (!pendingPaymentExists) {
+      // If birthdate is already saved, allow images to proceed to scan flow.
+      // Otherwise keep the original behavior: ignore images while waiting birthdate.
+      let birthdateExists = false;
+      try {
+        const savedBirthdate = await getSavedBirthdate(userId);
+        birthdateExists = Boolean(savedBirthdate);
+      } catch (err) {
+        console.error("[WEBHOOK] getSavedBirthdate in ignore-guard failed (ignored):", {
+          userId,
+          message: err?.message,
+          code: err?.code,
+        });
+      }
+
+      if (!birthdateExists) {
+        console.log("[WEBHOOK] ignore image: waiting birthdate", {
+          userId,
+          sessionFlowVersion: session.flowVersion || 0,
+        });
+        return;
+      }
+    }
   }
 
   /*
@@ -568,6 +680,27 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // Priority 3: pendingImage / waiting birthdate for scan
   if (session.pendingImage) {
+    // If user is currently in payment slip verification flow,
+    // do not treat arbitrary text as a birthdate input.
+    // We'll wait until admin approves/rejects.
+    try {
+      const pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
+      if (pendingPayment) {
+        await replyText(
+          client,
+          event.replyToken,
+          "ระบบกำลังตรวจสอบการชำระเงินโดยแอดมินอยู่ครับ\n\nรอการอนุมัติแล้วคุณจะสแกนต่อได้ทันที"
+        );
+        return;
+      }
+    } catch (err) {
+      console.error("[PAYMENT_FLOW_GUARD] pending payment check failed (ignored):", {
+        userId,
+        message: err?.message,
+        code: err?.code,
+      });
+    }
+
     if (!isValidBirthdate(text)) {
       await replyText(
         client,

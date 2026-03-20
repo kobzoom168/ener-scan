@@ -24,6 +24,8 @@ export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   PORT: process.env.PORT || 3000,
+  /** Admin secret token for /admin endpoints (optional, but required for production use). */
+  ADMIN_TOKEN: process.env.ADMIN_TOKEN || "",
   /** Public base URL (for showing QR image URL). Optional. */
   APP_BASE_URL:
     process.env.APP_BASE_URL ||
