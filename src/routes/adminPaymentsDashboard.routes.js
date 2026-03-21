@@ -12,6 +12,7 @@ import {
   markPaymentApprovedAndUnlock,
   markPaymentRejected,
 } from "../stores/payments.db.js";
+import { resetFreeTrialForLineUserByAdmin } from "../stores/adminReset.db.js";
 import { getScanUsageSummaryForAppUser } from "../stores/paymentAccess.db.js";
 import {
   buildPaymentApprovedText,
@@ -763,6 +764,15 @@ function renderDetailPage({
       ? `<div>reject_reason</div><div style="word-break:break-word;">${p.reject_reason ? escapeHtml(String(p.reject_reason)) : "—"}</div>`
       : "";
 
+  const lineUid = p.line_user_id ? String(p.line_user_id).trim() : "";
+  const adminToolsHtml = lineUid
+    ? `<div class="panel" style="margin-top:14px;">
+    <h2>การดูแล (แอดมิน)</h2>
+    <p class="reject-hint">รีเซ็ตสิทธิ์ชำระเงิน (paid) และโควต้าฟรีวันนี้ให้เหลือ 2 ครั้ง (ตามระบบ) — <strong>ไม่ลบ</strong>ประวัติการสแกน · payment ที่ค้างจะถูกปิด</p>
+    <button type="button" class="btn btn-neu js-reset-free">รีเซ็ตสิทธิ์ทดลองฟรี</button>
+  </div>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="th">
 <head>
@@ -815,6 +825,7 @@ function renderDetailPage({
           : `<p style="color:var(--muted);">ไม่มีไฟล์สลิป</p>`
       }
     </div>
+    ${adminToolsHtml}
   </div>
   ${
     canAct
@@ -831,6 +842,7 @@ function renderDetailPage({
   <script>
     (function () {
       var pid = ${JSON.stringify(p.id)};
+      var lineUid = ${lineUid ? JSON.stringify(lineUid) : "null"};
       function qs(s) { return document.querySelector(s); }
       function showToast(msg, kind) {
         var t = qs("#toast");
@@ -914,6 +926,27 @@ function renderDetailPage({
       var rj = document.querySelector(".js-reject");
       if (ap) ap.addEventListener("click", function () { approve(ap); });
       if (rj) rj.addEventListener("click", function () { reject(rj); });
+      var rb = document.querySelector(".js-reset-free");
+      if (rb && lineUid) {
+        rb.addEventListener("click", async function () {
+          if (!confirm("ยืนยันรีเซ็ตสิทธิ์ทดลองฟรี?\\n\\n• ยกเลิก paid\\n• โควต้าฟรีวันนี้กลับไป 2 ครั้ง (ไม่ลบประวัติ)\\n• ปิด payment ที่ค้าง")) return;
+          rb.disabled = true;
+          try {
+            var r = await fetch("/admin/users/" + encodeURIComponent(lineUid) + "/reset-free-trial", {
+              method: "POST",
+              headers: { Accept: "application/json" },
+              credentials: "same-origin"
+            });
+            var j = await r.json().catch(function () { return null; });
+            if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || "รีเซ็ตไม่สำเร็จ");
+            showToast("รีเซ็ตสิทธิ์ทดลองฟรีแล้ว", "ok");
+            setTimeout(function () { location.reload(); }, 650);
+          } catch (e) {
+            showToast(e.message || "เกิดข้อผิดพลาด", "err");
+            rb.disabled = false;
+          }
+        });
+      }
     })();
   </script>
 </body>
@@ -1112,6 +1145,48 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       }
     }
   });
+
+  router.post(
+    "/admin/users/:lineUserId/reset-free-trial",
+    requireAdminSession,
+    async (req, res) => {
+      let lineUserId = String(req.params?.lineUserId || "").trim();
+      try {
+        lineUserId = decodeURIComponent(lineUserId);
+      } catch {
+        /* ignore */
+      }
+      if (!lineUserId) {
+        if (wantsJsonResponse(req)) {
+          res.status(400).json({ ok: false, message: "line_user_id_missing" });
+        } else {
+          res.status(400).send("line_user_id_missing");
+        }
+        return;
+      }
+
+      try {
+        const result = await resetFreeTrialForLineUserByAdmin({
+          lineUserId,
+          adminLabel: "admin_dashboard",
+        });
+        if (wantsJsonResponse(req)) {
+          res.status(200).json({ ok: true, ...result });
+        } else {
+          res.status(200).send("ok");
+        }
+      } catch (err) {
+        console.error("[ADMIN_DASH] reset_free_trial failed:", err);
+        const msg = err?.message || "reset_free_trial_failed";
+        const code = msg === "app_user_not_found" ? 404 : 409;
+        if (wantsJsonResponse(req)) {
+          res.status(code).json({ ok: false, message: msg });
+        } else {
+          res.status(code).send(msg);
+        }
+      }
+    }
+  );
 
   return router;
 }

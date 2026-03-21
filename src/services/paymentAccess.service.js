@@ -1,4 +1,8 @@
 import { ensureUserByLineUserId } from "../stores/users.db.js";
+import {
+  countScanResultsTodayForAppUser,
+  getLocalDateKey,
+} from "../stores/paymentAccess.db.js";
 import { buildPaymentRequiredFlex } from "./flex/status.flex.js";
 import { buildPaymentRequiredText } from "../utils/webhookText.util.js";
 import { supabase } from "../config/supabase.js";
@@ -82,23 +86,22 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     ? Number(appUserRow.paid_remaining_scans)
     : 0;
 
-  // Free usage: count scans created today (server local time).
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = new Date(startOfToday);
-  endOfToday.setDate(endOfToday.getDate() + 1);
-
+  // Free usage: count scans created today (server local time), minus admin reset offset.
   let freeUsedToday = 0;
   if (appUserId) {
-    const { count, error: freeCountErr } = await supabase
-      .from("scan_results")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", appUserId)
-      .gte("created_at", startOfToday.toISOString())
-      .lt("created_at", endOfToday.toISOString());
+    freeUsedToday = await countScanResultsTodayForAppUser(appUserId, now);
+  }
 
-    if (freeCountErr) throw freeCountErr;
-    freeUsedToday = count ?? 0;
+  const offsetDate = appUserRow?.free_scan_offset_date
+    ? String(appUserRow.free_scan_offset_date).slice(0, 10)
+    : null;
+  const offsetN = Number(appUserRow?.free_scan_daily_offset) || 0;
+  if (
+    offsetDate &&
+    offsetDate === getLocalDateKey(now) &&
+    offsetN > 0
+  ) {
+    freeUsedToday = Math.max(0, freeUsedToday - offsetN);
   }
 
   const freeRemainingToday = Math.max(
