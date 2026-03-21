@@ -12,11 +12,13 @@
 
 ### Login (recommended)
 
-1. Set **`ADMIN_USERNAME`**, **`ADMIN_PASSWORD`**, and **`SESSION_SECRET`** (and `NODE_ENV=production` as usual).
-2. Open **`GET /admin/login`** on your deployed app, sign in, then use **Payments** as usual.
+1. Set **`ADMIN_USERNAME`**, **`SESSION_SECRET`**, and either **`ADMIN_PASSWORD_HASH`** (bcrypt, recommended) or plain **`ADMIN_PASSWORD`**, plus `NODE_ENV=production` as usual.
+2. Open **`GET /admin/login`**, sign in, then use **Payments** as usual.
 3. **Logout:** `POST /admin/logout` (button on dashboard).
 
-Session cookie is **httpOnly**; use **HTTPS** in production so `secure` cookies work.
+Session cookie **`ener_admin_sid`** is **httpOnly**, **sameSite=lax**, **~8h** max age; use **HTTPS** in production so `secure` cookies work.
+
+**Rate limit:** after **5 failed** login attempts from the same IP within **15 minutes**, further attempts are blocked until the window cools down (in-memory; single server).
 
 ### Legacy token (optional)
 
