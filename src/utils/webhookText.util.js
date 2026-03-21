@@ -331,17 +331,30 @@ export function buildPaymentApprovedText({
   return lines.join("\n");
 }
 
-/** LINE push after admin rejected slip. */
-export function buildPaymentRejectedText() {
-  return [
+/**
+ * LINE push after admin rejected slip.
+ * @param {{ reason?: string | null }} [opts] Optional short reason from admin (stored in DB).
+ */
+export function buildPaymentRejectedText({ reason = null } = {}) {
+  const r = String(reason ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 400);
+  const lines = [
     "แอดมินปฏิเสธสลิปนี้ครับ — รายการชำระเงินเดิมจบแล้ว ระบบจะไม่ใช้สลิปนี้ต่อ",
     "",
+  ];
+  if (r) {
+    lines.push("รายละเอียดจากแอดมิน:", `• ${r}`, "");
+  }
+  lines.push(
     "กรุณาเริ่มขั้นตอนชำระเงินใหม่ด้วยตัวเอง:",
     "• สแกนรูปที่ต้องการสแกนอีกครั้ง (เมื่อบอทขอชำระเงิน) หรือ",
     "• พิมพ์ payment / จ่ายเงิน / ปลดล็อก เพื่อดู QR อีกครั้ง",
     "",
-    "จากนั้นโอนตามยอดและส่งสลิปใหม่ในแชทนี้",
-  ].join("\n");
+    "จากนั้นโอนตามยอดและส่งสลิปใหม่ในแชทนี้"
+  );
+  return lines.join("\n");
 }
 
 /** Commands that may still run while slip is pending_verify (menu, history, etc.). */

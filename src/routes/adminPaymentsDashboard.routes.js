@@ -7,6 +7,7 @@ import { supabase } from "../config/supabase.js";
 import { requireAdminSession } from "../middleware/requireAdmin.js";
 import {
   getPaymentsForAdminByStatus,
+  getPaymentStatusCountsForAdmin,
   getPaymentDetailForAdmin,
   markPaymentApprovedAndUnlock,
   markPaymentRejected,
@@ -65,6 +66,53 @@ function embeddedAppUser(row) {
   const u = row?.app_users;
   if (Array.isArray(u)) return u[0] || null;
   return u || null;
+}
+
+/** Preset reasons — value stored + combined with optional detail for DB / LINE. */
+const REJECT_PRESETS = [
+  { value: "blur", label: "สลิปไม่ชัด" },
+  { value: "amount", label: "ยอดเงินไม่ตรง" },
+  { value: "not_found", label: "ไม่พบรายการชำระเงิน" },
+  { value: "expired", label: "รายการหมดอายุแล้ว" },
+  { value: "other", label: "อื่น ๆ (ระบุเอง)" },
+];
+
+function sanitizeRejectReason(raw) {
+  const s = String(raw ?? "")
+    .trim()
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ");
+  if (s.length > 500) return s.slice(0, 500);
+  return s;
+}
+
+function resolveRejectReasonFromPreset(presetValue, detailRaw) {
+  const preset = String(presetValue || "").trim();
+  const detail = sanitizeRejectReason(detailRaw);
+  if (preset === "other") {
+    return detail || null;
+  }
+  const found = REJECT_PRESETS.find((x) => x.value === preset);
+  if (found && found.value !== "other") {
+    return detail ? `${found.label} — ${detail}` : found.label;
+  }
+  return detail || null;
+}
+
+/** @param {Record<string, unknown>} body */
+function parseRejectReasonFromBody(body) {
+  const preset = body?.reject_preset;
+  if (preset != null && String(preset).trim() !== "") {
+    return resolveRejectReasonFromPreset(String(preset), body?.reject_detail);
+  }
+  return sanitizeRejectReason(body?.reject_reason || body?.reason) || null;
+}
+
+function rejectPresetOptionsHtml() {
+  return REJECT_PRESETS.map(
+    (x) =>
+      `<option value="${escapeHtml(x.value)}">${escapeHtml(x.label)}</option>`
+  ).join("");
 }
 
 const DASHBOARD_STYLES = `
@@ -282,21 +330,93 @@ table.data .t-actions { white-space: nowrap; }
   border-radius: 8px;
 }
 .flash-ok { color: var(--ok); font-weight: 700; }
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+@media (min-width: 720px) {
+  .stat-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.stat-box {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.stat-box:hover { border-color: var(--accent); }
+.stat-box.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.stat-box .num {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.stat-box .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 4px; font-weight: 600; }
 .toast {
   position: fixed;
-  top: 12px;
+  top: max(12px, env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 120;
-  background: var(--ok);
-  color: #fff;
-  padding: 10px 18px;
-  border-radius: 999px;
-  font-weight: 700;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  z-index: 200;
+  max-width: min(92vw, 420px);
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.22);
   display: none;
+  text-align: center;
+  line-height: 1.4;
 }
 .toast.show { display: block; }
+.toast.toast-ok { background: var(--ok); color: #fff; }
+.toast.toast-err { background: var(--bad); color: #fff; }
+.modal.modal-dialog { cursor: pointer; align-items: flex-end; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+@media (min-width: 500px) {
+  .modal.modal-dialog { align-items: center; padding-bottom: 16px; }
+}
+.dialog-inner {
+  cursor: default;
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  max-height: 90vh;
+  overflow: auto;
+}
+.dialog-inner label { display: block; font-size: 0.78rem; color: var(--muted); margin: 10px 0 6px; }
+.dialog-inner select, .dialog-inner textarea, .reject-panel select, .reject-panel textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+.reject-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.reject-panel h3 { margin: 0 0 10px; font-size: 0.95rem; }
+.reject-panel label { display: block; font-size: 0.78rem; color: var(--muted); margin: 10px 0 6px; }
+.reject-hint { font-size: 0.8rem; color: var(--muted); margin: 0 0 8px; }
 `;
 
 function slipThumbHtml(slipUrl) {
@@ -307,13 +427,30 @@ function slipThumbHtml(slipUrl) {
   return `<img class="thumb slip-zoom" src="${u}" alt="slip" width="72" height="72" loading="lazy" referrerpolicy="no-referrer" data-full="${u}" />`;
 }
 
-function renderListPage({ rows, filterStatus, flash }) {
+function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
+  const c = statusCounts || {};
   const tabs = [
     ["pending_verify", "รอตรวจสลิป"],
     ["awaiting_payment", "รอสลิป"],
     ["paid", "จ่ายแล้ว"],
     ["rejected", "ปฏิเสธ"],
   ];
+
+  const statStripTabs = [
+    ["pending_verify", "รอตรวจสลิป"],
+    ["awaiting_payment", "รอสลิป"],
+    ["paid", "จ่ายแล้ว"],
+    ["rejected", "ปฏิเสธ"],
+  ];
+  const statStripHtml = statStripTabs
+    .map(
+      ([st, label]) => `
+    <a class="stat-box${st === filterStatus ? " active" : ""}" href="/admin/payments?status=${encodeURIComponent(st)}">
+      <div class="num">${escapeHtml(String(Number(c[st] ?? 0)))}</div>
+      <div class="lbl">${escapeHtml(label)}</div>
+    </a>`
+    )
+    .join("");
 
   const tabsHtml = tabs
     .map(
@@ -331,6 +468,10 @@ function renderListPage({ rows, filterStatus, flash }) {
           : "—";
       const pu = au?.paid_until ? fmtDateOnly(au.paid_until) : "—";
       const canAct = String(p.status) === "pending_verify";
+      const reasonRow =
+        String(p.status) === "rejected" && p.reject_reason
+          ? `<div class="card-row"><b>เหตุผล</b> <span style="word-break:break-word;">${escapeHtml(String(p.reject_reason))}</span></div>`
+          : "";
       return `
     <article class="card" data-payment-id="${escapeHtml(p.id)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
@@ -342,6 +483,7 @@ function renderListPage({ rows, filterStatus, flash }) {
           <div class="card-row"><b>สร้างเมื่อ</b> ${fmtDt(p.created_at)}</div>
           <div class="card-row"><b>สแกนคงเหลือ</b> ${rem}</div>
           <div class="card-row"><b>หมดอายุ</b> ${pu}</div>
+          ${reasonRow}
         </div>
         ${slipThumbHtml(p.slip_url)}
       </div>
@@ -368,12 +510,17 @@ function renderListPage({ rows, filterStatus, flash }) {
           : "—";
       const pu = au?.paid_until ? fmtDateOnly(au.paid_until) : "—";
       const canAct = String(p.status) === "pending_verify";
+      const reasonShort = p.reject_reason
+        ? escapeHtml(String(p.reject_reason).slice(0, 48)) +
+          (String(p.reject_reason).length > 48 ? "…" : "")
+        : "—";
       return `
       <tr>
         <td style="max-width:140px;word-break:break-all;font-size:0.78rem;">${escapeHtml(p.line_user_id || "—")}</td>
         <td>${fmtMoney(p)}</td>
         <td>${escapeHtml(p.package_code || "—")}</td>
         <td><span class="${statusBadgeClass(p.status)}">${escapeHtml(p.status)}</span></td>
+        <td style="max-width:100px;font-size:0.76rem;">${reasonShort}</td>
         <td>${fmtDt(p.created_at)}</td>
         <td>${rem}</td>
         <td>${pu}</td>
@@ -394,6 +541,8 @@ function renderListPage({ rows, filterStatus, flash }) {
 
   const empty = rows.length === 0 ? `<p class="card" style="text-align:center;color:var(--muted);">ไม่มีรายการ</p>` : "";
 
+  const presetOpts = rejectPresetOptionsHtml();
+
   return `<!DOCTYPE html>
 <html lang="th">
 <head>
@@ -403,7 +552,7 @@ function renderListPage({ rows, filterStatus, flash }) {
   <style>${DASHBOARD_STYLES}</style>
 </head>
 <body>
-  <div id="toast" class="toast">อนุมัติแล้ว ✅</div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div class="wrap">
     <div class="topbar">
       <h1>💳 Payments</h1>
@@ -411,6 +560,7 @@ function renderListPage({ rows, filterStatus, flash }) {
         <button type="submit">ออกจากระบบ</button>
       </form>
     </div>
+    <div class="stat-strip">${statStripHtml}</div>
     <nav class="tabs">${tabsHtml}</nav>
     <div class="cards">${empty}${cardsHtml}</div>
     <div class="table-wrap">
@@ -421,6 +571,7 @@ function renderListPage({ rows, filterStatus, flash }) {
             <th>amount</th>
             <th>package</th>
             <th>status</th>
+            <th>เหตุผล</th>
             <th>created</th>
             <th>remaining</th>
             <th>paid_until</th>
@@ -428,20 +579,50 @@ function renderListPage({ rows, filterStatus, flash }) {
             <th>actions</th>
           </tr>
         </thead>
-        <tbody>${tableRows || `<tr><td colspan="9" style="text-align:center;color:var(--muted);">ไม่มีรายการ</td></tr>`}</tbody>
+        <tbody>${tableRows || `<tr><td colspan="10" style="text-align:center;color:var(--muted);">ไม่มีรายการ</td></tr>`}</tbody>
       </table>
     </div>
   </div>
   <div id="slip-modal" class="modal hidden" aria-hidden="true"><img alt="slip full" /></div>
+  <div id="reject-modal" class="modal modal-dialog hidden" aria-hidden="true">
+    <div class="dialog-inner" role="dialog" aria-labelledby="reject-title">
+      <h3 id="reject-title" style="margin:0 0 12px;font-size:1rem;">ปฏิเสธสลิป</h3>
+      <p class="reject-hint">เลือกเหตุผลหลัก หรือระบุเพิ่มในช่องรายละเอียด</p>
+      <label for="reject-preset">เหตุผล</label>
+      <select id="reject-preset">${presetOpts}</select>
+      <label for="reject-detail">รายละเอียดเพิ่มเติม (ถ้ามี)</label>
+      <textarea id="reject-detail" rows="3" placeholder="เช่น หมายเลขอ้างอิง / หมายเหตุสั้น ๆ"></textarea>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-neu" id="reject-cancel" style="flex:1;">ยกเลิก</button>
+        <button type="button" class="btn btn-bad" id="reject-confirm" style="flex:1;">ยืนยันปฏิเสธ</button>
+      </div>
+    </div>
+  </div>
   <script>
     (function () {
       var initialFlash = ${JSON.stringify(flash || "")};
+      var pendingRejectBtn = null;
       function qs(sel) { return document.querySelector(sel); }
-      function showToast(msg) {
+      function showToast(msg, kind) {
         var t = qs("#toast");
         t.textContent = msg;
-        t.classList.add("show");
-        setTimeout(function () { t.classList.remove("show"); }, 2200);
+        t.className = "toast show " + (kind === "err" ? "toast-err" : "toast-ok");
+        clearTimeout(t._tm);
+        t._tm = setTimeout(function () { t.className = "toast"; }, 3200);
+      }
+      function openRejectModal(btn) {
+        pendingRejectBtn = btn;
+        qs("#reject-detail").value = "";
+        qs("#reject-preset").selectedIndex = 0;
+        var m = qs("#reject-modal");
+        m.classList.remove("hidden");
+        m.setAttribute("aria-hidden", "false");
+      }
+      function closeRejectModal() {
+        var m = qs("#reject-modal");
+        m.classList.add("hidden");
+        m.setAttribute("aria-hidden", "true");
+        pendingRejectBtn = null;
       }
       function openModal(src) {
         var m = qs("#slip-modal");
@@ -455,61 +636,61 @@ function renderListPage({ rows, filterStatus, flash }) {
         m.setAttribute("aria-hidden", "true");
       }
       document.getElementById("slip-modal").addEventListener("click", closeModal);
+      document.getElementById("reject-modal").addEventListener("click", function (e) {
+        if (e.target === this) closeRejectModal();
+      });
+      document.getElementById("reject-cancel").addEventListener("click", closeRejectModal);
       document.body.addEventListener("click", function (e) {
         var z = e.target.closest(".slip-zoom");
         if (z && z.dataset.full) openModal(z.dataset.full);
       });
       if (initialFlash) {
-        showToast(initialFlash);
+        showToast(initialFlash, "ok");
         try {
           var u = new URL(location.href);
           u.searchParams.delete("flash");
           history.replaceState({}, "", u.toString());
         } catch (_) {}
       }
-      async function postAction(path, btn, loadingLabel) {
+      async function postApprove(btn) {
         if (!btn || btn.disabled) return;
         btn.disabled = true;
         var orig = btn.textContent;
-        btn.textContent = loadingLabel;
+        btn.textContent = "กำลังอนุมัติ…";
         try {
-          var r = await fetch(path, {
+          var r = await fetch("/admin/payments/" + btn.dataset.id + "/approve", {
             method: "POST",
             headers: { Accept: "application/json" },
             credentials: "same-origin"
           });
           var j = null;
           try { j = await r.json(); } catch (_) {}
-          if (!r.ok) throw new Error((j && j.message) || r.statusText || "failed");
-          showToast(path.indexOf("approve") !== -1 ? "อนุมัติแล้ว ✅" : "ปฏิเสธแล้ว");
-          setTimeout(function () { location.reload(); }, 600);
+          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || r.statusText || "อนุมัติไม่สำเร็จ");
+          showToast("อนุมัติแล้ว ✅", "ok");
+          setTimeout(function () { location.reload(); }, 650);
         } catch (err) {
-          alert(err.message || "เกิดข้อผิดพลาด");
+          showToast(err.message || "เกิดข้อผิดพลาด", "err");
           btn.disabled = false;
           btn.textContent = orig;
         }
       }
-      document.body.addEventListener("click", function (e) {
-        var a = e.target.closest(".js-approve");
-        if (a) {
-          e.preventDefault();
-          postAction("/admin/payments/" + a.dataset.id + "/approve", a, "กำลังอนุมัติ…");
-        }
-        var rj = e.target.closest(".js-reject");
-        if (rj) {
-          e.preventDefault();
-          var reason = prompt("เหตุผลปฏิเสธ (ถ้ามี):") || "";
-          postReject(rj, reason);
-        }
-      });
-      async function postReject(btn, reason) {
+      async function postRejectFromModal() {
+        var btn = pendingRejectBtn;
         if (!btn || btn.disabled) return;
+        var preset = qs("#reject-preset").value;
+        var detail = qs("#reject-detail").value;
+        if (preset === "other" && !String(detail).trim()) {
+          showToast("กรุณาระบุเหตุผลเมื่อเลือก \"อื่น ๆ\"", "err");
+          return;
+        }
         btn.disabled = true;
         var orig = btn.textContent;
         btn.textContent = "กำลังปฏิเสธ…";
+        closeRejectModal();
         try {
           var body = new URLSearchParams();
-          if (reason) body.set("reject_reason", reason);
+          body.set("reject_preset", preset);
+          body.set("reject_detail", detail);
           var r = await fetch("/admin/payments/" + btn.dataset.id + "/reject", {
             method: "POST",
             headers: {
@@ -521,15 +702,28 @@ function renderListPage({ rows, filterStatus, flash }) {
           });
           var j = null;
           try { j = await r.json(); } catch (_) {}
-          if (!r.ok) throw new Error((j && j.message) || r.statusText || "failed");
-          showToast("ปฏิเสธแล้ว");
-          setTimeout(function () { location.reload(); }, 600);
+          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || r.statusText || "ปฏิเสธไม่สำเร็จ");
+          showToast("บันทึกการปฏิเสธแล้ว", "ok");
+          setTimeout(function () { location.reload(); }, 650);
         } catch (err) {
-          alert(err.message || "เกิดข้อผิดพลาด");
+          showToast(err.message || "เกิดข้อผิดพลาด", "err");
           btn.disabled = false;
           btn.textContent = orig;
         }
       }
+      document.getElementById("reject-confirm").addEventListener("click", postRejectFromModal);
+      document.body.addEventListener("click", function (e) {
+        var a = e.target.closest(".js-approve");
+        if (a) {
+          e.preventDefault();
+          postApprove(a);
+        }
+        var rj = e.target.closest(".js-reject");
+        if (rj) {
+          e.preventDefault();
+          openRejectModal(rj);
+        }
+      });
     })();
   </script>
 </body>
@@ -553,6 +747,22 @@ function renderDetailPage({
     ? `<p class="flash-ok" style="margin:0 0 12px;">${escapeHtml(flash)}</p>`
     : "";
 
+  const rejectPanelHtml = canAct
+    ? `<div class="reject-panel" id="reject-panel-block">
+    <h3>ปฏิเสธสลิป</h3>
+    <p class="reject-hint">เลือกเหตุผลหลัก หรือระบุเพิ่ม (ถ้าเลือก &quot;อื่น ๆ&quot; ต้องกรอกรายละเอียด)</p>
+    <label for="detail-reject-preset">เหตุผล</label>
+    <select id="detail-reject-preset">${rejectPresetOptionsHtml()}</select>
+    <label for="detail-reject-detail">รายละเอียดเพิ่มเติม (ถ้ามี)</label>
+    <textarea id="detail-reject-detail" rows="3" placeholder="เช่น หมายเลขอ้างอิง / หมายเหตุสั้น ๆ"></textarea>
+  </div>`
+    : "";
+
+  const rejectReasonKv =
+    String(p.status) === "rejected"
+      ? `<div>reject_reason</div><div style="word-break:break-word;">${p.reject_reason ? escapeHtml(String(p.reject_reason)) : "—"}</div>`
+      : "";
+
   return `<!DOCTYPE html>
 <html lang="th">
 <head>
@@ -562,12 +772,14 @@ function renderDetailPage({
   <style>${DASHBOARD_STYLES}</style>
 </head>
 <body>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div class="wrap">
     ${flashHtml}
     <p style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;">
       <a href="/admin/payments?status=${encodeURIComponent(String(p.status))}">← กลับรายการ</a>
       <form method="POST" action="/admin/logout" style="margin:0;"><button type="submit" class="btn btn-neu" style="padding:6px 12px;font-size:0.85rem;">ออกจากระบบ</button></form>
     </p>
+    ${rejectPanelHtml}
     <div class="detail-grid">
       <div class="panel">
         <h2>ข้อมูลการชำระเงิน</h2>
@@ -580,6 +792,7 @@ function renderDetailPage({
           <div>created_at</div><div>${fmtDt(p.created_at)}</div>
           <div>verified_at</div><div>${fmtDt(p.verified_at)}</div>
           <div>rejected_at</div><div>${fmtDt(p.rejected_at)}</div>
+          ${rejectReasonKv}
         </div>
       </div>
       <div class="panel">
@@ -617,7 +830,15 @@ function renderDetailPage({
   <div id="slip-modal" class="modal hidden" aria-hidden="true"><img alt="slip full" /></div>
   <script>
     (function () {
+      var pid = ${JSON.stringify(p.id)};
       function qs(s) { return document.querySelector(s); }
+      function showToast(msg, kind) {
+        var t = qs("#toast");
+        t.textContent = msg;
+        t.className = "toast show " + (kind === "err" ? "toast-err" : "toast-ok");
+        clearTimeout(t._tm);
+        t._tm = setTimeout(function () { t.className = "toast"; }, 3200);
+      }
       function openModal(src) {
         var m = qs("#slip-modal");
         m.querySelector("img").src = src;
@@ -634,49 +855,65 @@ function renderDetailPage({
         btn.disabled = true;
         btn.textContent = "กำลังอนุมัติ…";
         try {
-          var r = await fetch("/admin/payments/" + btn.dataset.id + "/approve", {
+          var r = await fetch("/admin/payments/" + pid + "/approve", {
             method: "POST",
             headers: { Accept: "application/json" },
             credentials: "same-origin"
           });
           var j = await r.json().catch(function () { return null; });
-          if (!r.ok) throw new Error((j && j.message) || "failed");
-          location.href = "/admin/payments?status=paid&flash=approved";
+          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || "อนุมัติไม่สำเร็จ");
+          showToast("อนุมัติแล้ว ✅", "ok");
+          setTimeout(function () {
+            location.href = "/admin/payments?status=paid&flash=approved";
+          }, 500);
         } catch (e) {
-          alert(e.message);
+          showToast(e.message || "เกิดข้อผิดพลาด", "err");
           btn.disabled = false;
           btn.textContent = "✅ อนุมัติ";
         }
       }
       async function reject(btn) {
         if (!btn || btn.disabled) return;
-        var reason = prompt("เหตุผลปฏิเสธ (ถ้ามี):") || "";
+        var presetEl = qs("#detail-reject-preset");
+        var detailEl = qs("#detail-reject-detail");
+        if (!presetEl || !detailEl) {
+          showToast("ไม่พบฟอร์มเหตุผล", "err");
+          return;
+        }
+        var preset = presetEl.value;
+        var detail = detailEl.value;
+        if (preset === "other" && !String(detail).trim()) {
+          showToast("กรุณาระบุเหตุผลเมื่อเลือก \"อื่น ๆ\"", "err");
+          return;
+        }
         btn.disabled = true;
         btn.textContent = "กำลังปฏิเสธ…";
         try {
           var body = new URLSearchParams();
-          if (reason) body.set("reject_reason", reason);
-          var r = await fetch("/admin/payments/" + btn.dataset.id + "/reject", {
+          body.set("reject_preset", preset);
+          body.set("reject_detail", detail);
+          var r = await fetch("/admin/payments/" + pid + "/reject", {
             method: "POST",
             headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
             body: body.toString(),
             credentials: "same-origin"
           });
           var j = await r.json().catch(function () { return null; });
-          if (!r.ok) throw new Error((j && j.message) || "failed");
-          location.href = "/admin/payments?status=rejected&flash=rejected";
+          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || "ปฏิเสธไม่สำเร็จ");
+          showToast("บันทึกการปฏิเสธแล้ว", "ok");
+          setTimeout(function () {
+            location.href = "/admin/payments?status=rejected&flash=rejected";
+          }, 500);
         } catch (e) {
-          alert(e.message);
+          showToast(e.message || "เกิดข้อผิดพลาด", "err");
           btn.disabled = false;
           btn.textContent = "❌ ปฏิเสธ";
         }
       }
-      document.querySelector(".js-approve") && document.querySelector(".js-approve").addEventListener("click", function () {
-        approve(document.querySelector(".js-approve"));
-      });
-      document.querySelector(".js-reject") && document.querySelector(".js-reject").addEventListener("click", function () {
-        reject(document.querySelector(".js-reject"));
-      });
+      var ap = document.querySelector(".js-approve");
+      var rj = document.querySelector(".js-reject");
+      if (ap) ap.addEventListener("click", function () { approve(ap); });
+      if (rj) rj.addEventListener("click", function () { reject(rj); });
     })();
   </script>
 </body>
@@ -689,16 +926,19 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
   router.get("/admin/payments", requireAdminSession, async (req, res) => {
     try {
       const status = String(req.query?.status || "pending_verify").trim();
-      const { rows, filterStatus } = await getPaymentsForAdminByStatus({
-        status,
-        limit: 200,
-      });
+      const [{ rows, filterStatus }, statusCounts] = await Promise.all([
+        getPaymentsForAdminByStatus({
+          status,
+          limit: 200,
+        }),
+        getPaymentStatusCountsForAdmin(),
+      ]);
       const flashMap = {
         approved: "อนุมัติแล้ว ✅",
         rejected: "บันทึกการปฏิเสธแล้ว",
       };
       const flash = flashMap[String(req.query?.flash || "")] || "";
-      const html = renderListPage({ rows, filterStatus, flash });
+      const html = renderListPage({ rows, filterStatus, flash, statusCounts });
       res.status(200).type("html").send(html);
     } catch (err) {
       console.error("[ADMIN_DASH] list failed:", err);
@@ -832,7 +1072,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
 
   router.post("/admin/payments/:id/reject", requireAdminSession, async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();
-    const rejectReason = req.body?.reject_reason || req.body?.reason || null;
+    const rejectReason = parseRejectReasonFromBody(req.body || {});
     const approvedBy = "admin_dashboard";
 
     if (!paymentId) {
@@ -854,7 +1094,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       if (lineUserId) {
         await lineClient.pushMessage(lineUserId, {
           type: "text",
-          text: buildPaymentRejectedText(),
+          text: buildPaymentRejectedText({ reason: rejectReason }),
         });
       }
 

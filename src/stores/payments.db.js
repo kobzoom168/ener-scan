@@ -395,6 +395,7 @@ export async function getPaymentsForAdminByStatus({
       created_at,
       verified_at,
       rejected_at,
+      reject_reason,
       app_users ( paid_until, paid_remaining_scans )
     `
     )
@@ -404,6 +405,29 @@ export async function getPaymentsForAdminByStatus({
 
   if (error) throw error;
   return { rows: data || [], filterStatus: safeStatus };
+}
+
+/**
+ * Row counts per status for admin dashboard summary (manual flow statuses only).
+ */
+export async function getPaymentStatusCountsForAdmin() {
+  const statuses = [
+    "pending_verify",
+    "awaiting_payment",
+    "paid",
+    "rejected",
+  ];
+  const pairs = await Promise.all(
+    statuses.map(async (s) => {
+      const { count, error } = await supabase
+        .from("payments")
+        .select("*", { count: "exact", head: true })
+        .eq("status", s);
+      if (error) throw error;
+      return [s, count ?? 0];
+    })
+  );
+  return Object.fromEntries(pairs);
 }
 
 /**
