@@ -12,6 +12,10 @@ import {
   markPaymentApprovedAndUnlock,
   markPaymentRejected,
 } from "./stores/payments.db.js";
+import {
+  buildPaymentApprovedText,
+  buildPaymentRejectedText,
+} from "./utils/webhookText.util.js";
 
 process.on("uncaughtException", (error) => {
   console.error("[FATAL] uncaughtException", {
@@ -226,11 +230,10 @@ app.post("/admin/payments/:id/approve", requireAdmin, async (req, res) => {
         ? "สแกนได้ไม่จำกัดช่วงที่สิทธิ์ใช้งานอยู่"
         : `สแกนได้อีก ${activation.paidRemainingScans} ครั้ง`;
 
-    const message =
-      `แอดมินอนุมัติสลิปแล้ว ระบบเปิดสิทธิ์ให้เรียบร้อยครับ\n\n` +
-      `${paidRemainingText}\n` +
-      `หมดอายุ: ${paidUntilText}\n\n` +
-      `กรุณาส่งรูปเพื่อสแกนต่อได้ครับ`;
+    const message = buildPaymentApprovedText({
+      paidRemainingLine: paidRemainingText,
+      paidUntilLine: `หมดอายุ: ${paidUntilText}`,
+    });
 
     await lineClient.pushMessage(activation.lineUserId, {
       type: "text",
@@ -267,8 +270,7 @@ app.post("/admin/payments/:id/reject", requireAdmin, async (req, res) => {
     });
 
     if (lineUserId) {
-      const message =
-        "แอดมินปฏิเสธสลิปนี้ครับ — รายการชำระเงินเดิมจบแล้ว ระบบจะไม่ใช้สลิปนี้ต่อ\n\nกรุณาเริ่มขั้นตอนชำระเงินใหม่ด้วยตัวเอง:\n• สแกนรูปที่ต้องการสแกนอีกครั้ง (เมื่อบอทขอชำระเงิน) หรือ\n• พิมพ์ payment / จ่ายเงิน / ปลดล็อก เพื่อดู QR อีกครั้ง\n\nจากนั้นโอนตามยอดและส่งสลิปใหม่ในแชทนี้";
+      const message = buildPaymentRejectedText();
 
       await lineClient.pushMessage(lineUserId, {
         type: "text",

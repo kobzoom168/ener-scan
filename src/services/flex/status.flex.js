@@ -475,6 +475,32 @@ export function buildPaymentPaywallFlex({
   });
 }
 
+/** Image received while slip is already pending_verify — do not run object/scan flow. */
+export function buildPendingVerifyFlex() {
+  return createBaseBubble({
+    accentColor: "#6A4A00",
+    title: "⏳ รอแอดมินตรวจสลิป",
+    subtitle: "ยังส่งรูปสแกนต่อไม่ได้",
+    bodyContents: [
+      createCard(
+        "สถานะตอนนี้",
+        [
+          "ระบบได้รับสลิปไปตรวจแล้ว",
+          "ไม่ต้องส่งสลิปซ้ำ",
+          "รอแอดมินตรวจ — เมื่ออนุมัติแล้วบอทจะแจ้งอัตโนมัติ",
+          "จากนั้นค่อยส่งรูปวัตถุเพื่อสแกนต่อ",
+        ].join("\n"),
+        {
+          backgroundColor: "#1A170F",
+          borderColor: "#3D3518",
+          bodyColor: "#E8D9A8",
+        }
+      ),
+    ],
+    footer: createPrimaryFooterButton("รับทราบ", "เมนูหลัก", "#8D8D8D"),
+  });
+}
+
 export function buildBirthdateSettingsBubble({ birthdate } = {}) {
   const safeBirthdate = birthdate ? String(birthdate) : "-";
 

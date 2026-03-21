@@ -57,6 +57,7 @@ import {
   buildMultipleObjectsFlex,
   buildUnclearImageFlex,
   buildMainMenuFlex,
+  buildPendingVerifyFlex,
 } from "../services/flex/status.flex.js";
 
 import {
@@ -80,6 +81,10 @@ import {
   buildPaymentInstructionText,
   buildManualPaymentRequestText,
   buildSlipReceivedText,
+  buildPendingVerifyReminderText,
+  buildPendingVerifyBlockScanText,
+  buildPendingVerifyPaymentCommandText,
+  allowsUtilityCommandsDuringPendingVerify,
   buildAwaitingSlipReminderText,
   isHistoryCommand,
   isStatsCommand,
@@ -214,6 +219,19 @@ async function finalizeAcceptedImage({
   });
 
   if (!accessDecision?.allowed && pendingPayment) {
+    if (String(pendingPayment.status) === "pending_verify") {
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+      await replyFlexWithFallback({
+        client,
+        replyToken: event.replyToken,
+        flex: buildPendingVerifyFlex(),
+        fallbackText: buildPendingVerifyBlockScanText(),
+        logLabel: "pending verify block scan flex",
+      });
+      return;
+    }
+
     const slipMessageId = event?.message?.id;
     const paymentId = pendingPayment.id;
 
@@ -692,61 +710,36 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
-  // Priority 3: pendingImage / waiting birthdate for scan
-  if (session.pendingImage) {
-    // If user is currently in payment slip verification flow,
-    // do not treat arbitrary text as a birthdate input.
-    // We'll wait until admin approves/rejects.
-    try {
-      const pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
-      if (pendingPayment) {
+  // Priority 2b: DB pending_verify — short replies; payment cmd = already queued
+  try {
+    const pendingVerifyRow = await getLatestAwaitingPaymentForLineUserId(userId);
+    if (pendingVerifyRow && String(pendingVerifyRow.status) === "pending_verify") {
+      if (isPaymentCommand(text, lowerText)) {
         await replyText(
           client,
           event.replyToken,
-          "สลิปของคุณอยู่ระหว่างให้แอดมินตรวจครับ\n\nเมื่อแอดมินอนุมัติแล้ว ระบบจึงจะเปิดสิทธิ์ — จากนั้นคุณจึงสแกนต่อได้"
+          buildPendingVerifyPaymentCommandText()
         );
         return;
       }
-    } catch (err) {
-      console.error("[PAYMENT_FLOW_GUARD] pending payment check failed (ignored):", {
-        userId,
-        message: err?.message,
-        code: err?.code,
-      });
+      if (!allowsUtilityCommandsDuringPendingVerify(text, lowerText)) {
+        await replyText(
+          client,
+          event.replyToken,
+          buildPendingVerifyReminderText()
+        );
+        return;
+      }
     }
-
-    if (!isValidBirthdate(text)) {
-      await replyText(
-        client,
-        event.replyToken,
-        buildInvalidBirthdateText()
-      );
-      return;
-    }
-
-    const flowVersion = session.flowVersion || 0;
-    const normalizedBirthdate = normalizeBirthdateForScan(text);
-
-    console.log("[WEBHOOK] use session flowVersion(text):", flowVersion);
-    console.log("[WEBHOOK] normalized birthdate:", normalizedBirthdate);
-    console.log("[WEBHOOK] going to runScanFlow from text", {
+  } catch (pvErr) {
+    console.error("[PAYMENT_PENDING_VERIFY] lookup failed (ignored):", {
       userId,
-      birthdate: normalizedBirthdate,
-      flowVersion,
+      message: pvErr?.message,
+      code: pvErr?.code,
     });
-
-    await runScanFlow({
-      client,
-      replyToken: event.replyToken,
-      userId,
-      imageBuffer: session.pendingImage.imageBuffer,
-      birthdate: normalizedBirthdate,
-      flowVersion,
-    });
-    return;
   }
 
-  // Priority 4: explicit commands
+  // Priority 3: explicit commands (before pendingImage so history/menu work during pending_verify)
   if (text === "เปลี่ยนวันเกิด") {
     console.log("[BIRTHDATE_UPDATE] requested", { userId });
     setAwaitingBirthdateUpdate(userId, true);
@@ -802,6 +795,57 @@ async function handleTextMessage({ client, event, userId, session }) {
       event.replyToken,
       `${buildPaymentInstructionText({ paymentId, amount, currency })}\n\n${MAIN_MENU_HINT_TEXT}`
     );
+    return;
+  }
+
+  // Priority 4: pendingImage / waiting birthdate for scan
+  if (session.pendingImage) {
+    try {
+      const pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
+      if (pendingPayment && String(pendingPayment.status) === "awaiting_payment") {
+        await replyText(
+          client,
+          event.replyToken,
+          buildAwaitingSlipReminderText()
+        );
+        return;
+      }
+    } catch (err) {
+      console.error("[PAYMENT_FLOW_GUARD] pending payment check failed (ignored):", {
+        userId,
+        message: err?.message,
+        code: err?.code,
+      });
+    }
+
+    if (!isValidBirthdate(text)) {
+      await replyText(
+        client,
+        event.replyToken,
+        buildInvalidBirthdateText()
+      );
+      return;
+    }
+
+    const flowVersion = session.flowVersion || 0;
+    const normalizedBirthdate = normalizeBirthdateForScan(text);
+
+    console.log("[WEBHOOK] use session flowVersion(text):", flowVersion);
+    console.log("[WEBHOOK] normalized birthdate:", normalizedBirthdate);
+    console.log("[WEBHOOK] going to runScanFlow from text", {
+      userId,
+      birthdate: normalizedBirthdate,
+      flowVersion,
+    });
+
+    await runScanFlow({
+      client,
+      replyToken: event.replyToken,
+      userId,
+      imageBuffer: session.pendingImage.imageBuffer,
+      birthdate: normalizedBirthdate,
+      flowVersion,
+    });
     return;
   }
 

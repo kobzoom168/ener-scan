@@ -246,11 +246,99 @@ export function buildManualPaymentRequestText() {
 /** slip image accepted: now waiting for admin verification. */
 export function buildSlipReceivedText() {
   return [
-    "✅ รับสลิปแล้วครับ",
+    "✅ ได้รับสลิปของคุณแล้วครับ",
     "",
-    "แอดมินจะตรวจสอบสลิปก่อนเปิดสิทธิ์",
-    "เมื่ออนุมัติแล้ว คุณจึงจะสแกนต่อได้ — รอแจ้งผลทางแชทนี้ครับ",
+    "สลิปอยู่ระหว่างให้แอดมินตรวจสอบ",
+    "ไม่ต้องส่งสลิปซ้ำ — รอผลจากรายการนี้ได้เลย",
+    "ระหว่างนี้ยังสแกนรูปวัตถุต่อไม่ได้ครับ",
+    "เมื่อแอดมินอนุมัติแล้ว บอทจะแจ้งข้อความอัตโนมัติในแชทนี้",
   ].join("\n");
+}
+
+/** User typed non-command text while payment row is pending_verify (reduce repeat nudges). */
+export function buildPendingVerifyReminderText() {
+  return [
+    "⏳ สลิปของคุณรอแอดมินตรวจอยู่ครับ",
+    "",
+    "ไม่ต้องส่งสลิปซ้ำหากส่งครบแล้ว",
+    "ยังสแกนรูปวัตถุต่อไม่ได้ — รอผลการตรวจก่อน",
+    "เมื่ออนุมัติแล้ว บอทจะแจ้งอัตโนมัติในแชทนี้",
+  ].join("\n");
+}
+
+/** User sent another image while slip is already pending_verify (block scan / duplicate slip). */
+export function buildPendingVerifyBlockScanText() {
+  return [
+    "📷 ระบบได้รับสลิปไปตรวจแล้วครับ",
+    "",
+    "อย่าส่งรูปสแกนวัตถุในตอนนี้ — รอแอดมินตรวจสลิปก่อน",
+    "ไม่ต้องส่งสลิปซ้ำ",
+    "เมื่ออนุมัติแล้ว บอทจะแจ้งอัตโนมัติ จากนั้นค่อยส่งรูปเพื่อสแกนต่อ",
+  ].join("\n");
+}
+
+/** User typed payment / จ่ายเงิน / ปลดล็อก while already pending_verify. */
+export function buildPendingVerifyPaymentCommandText() {
+  return [
+    "คุณมีสลิปรอแอดมินตรวจอยู่แล้วครับ",
+    "",
+    "ไม่ต้องพิมพ์ payment / จ่ายเงิน / ปลดล็อก ซ้ำในตอนนี้",
+    "รอผลตรวจ — เมื่ออนุมัติหรือปฏิเสธ บอทจะแจ้งข้อความอัตโนมัติ",
+  ].join("\n");
+}
+
+/**
+ * LINE push after admin approved slip.
+ * @param {{ paidRemainingLine?: string, paidUntilLine?: string }} [opts] Pre-formatted lines (e.g. quota + หมดอายุ).
+ */
+export function buildPaymentApprovedText({
+  paidRemainingLine = "",
+  paidUntilLine = "",
+} = {}) {
+  const lines = [
+    "✅ แอดมินอนุมัติสลิปแล้ว ระบบเปิดสิทธิ์ให้แล้วครับ",
+    "",
+  ];
+  if (paidRemainingLine) lines.push(paidRemainingLine);
+  if (paidUntilLine) lines.push(paidUntilLine);
+  if (paidRemainingLine || paidUntilLine) lines.push("");
+  lines.push("กรุณาส่งรูปเพื่อสแกนต่อได้ครับ");
+  return lines.join("\n");
+}
+
+/** LINE push after admin rejected slip. */
+export function buildPaymentRejectedText() {
+  return [
+    "แอดมินปฏิเสธสลิปนี้ครับ — รายการชำระเงินเดิมจบแล้ว ระบบจะไม่ใช้สลิปนี้ต่อ",
+    "",
+    "กรุณาเริ่มขั้นตอนชำระเงินใหม่ด้วยตัวเอง:",
+    "• สแกนรูปที่ต้องการสแกนอีกครั้ง (เมื่อบอทขอชำระเงิน) หรือ",
+    "• พิมพ์ payment / จ่ายเงิน / ปลดล็อก เพื่อดู QR อีกครั้ง",
+    "",
+    "จากนั้นโอนตามยอดและส่งสลิปใหม่ในแชทนี้",
+  ].join("\n");
+}
+
+/** Commands that may still run while slip is pending_verify (menu, history, etc.). */
+export function allowsUtilityCommandsDuringPendingVerify(text, lowerText) {
+  const t = String(text || "").trim();
+  const lt = String(lowerText || t.toLowerCase()).trim();
+
+  if (isHistoryCommand(t, lt) || isStatsCommand(t, lt)) return true;
+  if (t === "เปลี่ยนวันเกิด" || t === "สแกนพลังงาน") return true;
+  if (t === "วิธีใช้" || t === "วิธีใช้งาน") return true;
+
+  const menu = new Set([
+    "เมนู",
+    "เมนูหลัก",
+    "menu",
+    "help",
+    "start",
+    "เริ่ม",
+    "วิธีใช้งาน",
+    "วิธีใช้",
+  ]);
+  return menu.has(t) || menu.has(lt);
 }
 
 /** User typed text while waiting for slip. */
