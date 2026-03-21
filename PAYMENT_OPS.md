@@ -10,16 +10,27 @@
 
 ## Admin Dashboard (v2)
 
-Open in a browser (use your deployed base URL):
+### Login (recommended)
 
-- **List:** `GET /admin/payments?token=<ADMIN_TOKEN>&status=pending_verify`  
+1. Set **`ADMIN_USERNAME`**, **`ADMIN_PASSWORD`**, and **`SESSION_SECRET`** (and `NODE_ENV=production` as usual).
+2. Open **`GET /admin/login`** on your deployed app, sign in, then use **Payments** as usual.
+3. **Logout:** `POST /admin/logout` (button on dashboard).
+
+Session cookie is **httpOnly**; use **HTTPS** in production so `secure` cookies work.
+
+### Legacy token (optional)
+
+- **`ADMIN_TOKEN`** still works: `?token=...` or header `x-admin-token` for scripts / emergency access.
+- JSON APIs can use `Accept: application/json` + token if not logged in.
+
+### URLs
+
+- **List:** `GET /admin/payments?status=pending_verify` (after login)  
   Tabs: `pending_verify` (default), `awaiting_payment`, `paid`, `rejected`
-- **Detail:** `GET /admin/payments/<paymentId>?token=<ADMIN_TOKEN>`
-- **JSON API (automation):** same detail URL with header `Accept: application/json` returns `{ ok, payment }`.
+- **Detail:** `GET /admin/payments/<paymentId>`
+- **JSON API:** same detail URL with header `Accept: application/json` returns `{ ok, payment }`.
 
-Approve/reject from the UI use `fetch` + `Accept: application/json` (one-click, no double submit). Legacy `POST` without that header still returns plain `ok`.
-
-Requires `ADMIN_TOKEN` in environment (same as before).
+Approve/reject use `fetch` + session cookie (`credentials: include`) or legacy token.
 
 ## How to verify manually
 

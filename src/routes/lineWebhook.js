@@ -39,6 +39,10 @@ import { isDuplicateImage } from "../services/dedupe.service.js";
 import { checkSingleObject } from "../services/objectCheck.service.js";
 
 import { env } from "../config/env.js";
+import {
+  getPromptPayQrPublicUrl,
+  isPromptPayQrUrlHttpsForLine,
+} from "../utils/promptpayQrPublicUrl.util.js";
 import { ensureUserByLineUserId, touchUserLastActive } from "../stores/users.db.js";
 import {
   createPaymentPending,
@@ -48,7 +52,10 @@ import {
 
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 
-import { replyText } from "../services/lineReply.service.js";
+import {
+  replyText,
+  replyPaymentInstructionWithQr,
+} from "../services/lineReply.service.js";
 import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
 import {
   buildUnsupportedObjectFlex,
@@ -79,6 +86,8 @@ import {
   buildSystemErrorText,
   isPaymentCommand,
   buildPaymentInstructionText,
+  buildPaymentCommandIntroText,
+  buildPaymentSlipFollowUpText,
   buildManualPaymentRequestText,
   buildSlipReceivedText,
   buildPendingVerifyReminderText,
@@ -770,12 +779,12 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (isPaymentCommand(text, lowerText)) {
-    let paymentId = null;
     const amount = env.PAYMENT_UNLOCK_AMOUNT_THB || 0;
     const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
+    const amountForCopy = amount > 0 ? amount : 99;
     try {
       const appUser = await ensureUserByLineUserId(userId);
-      paymentId = await createPaymentPending({
+      await createPaymentPending({
         appUserId: appUser.id,
         amount,
         currency,
@@ -790,10 +799,34 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
     }
 
+    const qrUrl = getPromptPayQrPublicUrl();
+    const intro = buildPaymentCommandIntroText({ amount: amountForCopy });
+    const slipBlock = `${buildPaymentSlipFollowUpText()}\n\n${MAIN_MENU_HINT_TEXT}`;
+
+    if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
+      try {
+        await replyPaymentInstructionWithQr(client, event.replyToken, {
+          introText: intro,
+          qrImageUrl: qrUrl,
+          slipText: slipBlock,
+        });
+        return;
+      } catch (qrErr) {
+        console.error("[WEBHOOK] replyPaymentInstructionWithQr failed, fallback text:", {
+          userId,
+          message: qrErr?.message,
+        });
+      }
+    } else {
+      console.warn("[WEBHOOK] QR URL not HTTPS — LINE cannot load image; send text + link. Set APP_BASE_URL to public https URL.", {
+        qrUrl,
+      });
+    }
+
     await replyText(
       client,
       event.replyToken,
-      `${buildPaymentInstructionText({ paymentId, amount, currency })}\n\n${MAIN_MENU_HINT_TEXT}`
+      `${buildPaymentInstructionText({ amount: amountForCopy, currency })}\n\n${MAIN_MENU_HINT_TEXT}`
     );
     return;
   }

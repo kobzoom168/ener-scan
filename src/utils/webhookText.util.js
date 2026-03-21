@@ -215,18 +215,43 @@ export function isPaymentCommand(text, lowerText) {
   return lt === "payment" || t === "จ่ายเงิน" || t === "ปลดล็อก";
 }
 
+const DEFAULT_PAYMENT_THB = 99;
+
+function displayAmountThb(amount) {
+  const n = Number(amount);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_PAYMENT_THB;
+}
+
+/** ข้อความยาวหลังคำสั่ง payment / จ่ายเงิน (ใช้คู่กับรูป QR แยกข้อความ) */
+export function buildPaymentCommandIntroText({ amount = DEFAULT_PAYMENT_THB } = {}) {
+  const thb = displayAmountThb(amount);
+  return [
+    "💳 วิธีชำระเงิน (พร้อมเพย์ + สลิป)",
+    "",
+    `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ — แอดมินจะตรวจก่อนเปิดสิทธิ์`,
+    "หลังอนุมัติสลิปแล้ว จึงจะได้สิทธิ์สแกนตามแพ็กเกจ (เช่น 15 ครั้ง / 24 ชม.)",
+  ].join("\n");
+}
+
+/** ข้อความสั้นหลังรูป QR — ให้ส่งสลิปกลับมา */
+export function buildPaymentSlipFollowUpText() {
+  return "📎 หลังโอนแล้ว ส่งรูปสลิปในแชทนี้เพื่อให้แอดมินตรวจครับ";
+}
+
+/** ข้อความเดียว (fallback เมื่อส่งรูป QR ไม่ได้ / LINE error) */
 export function buildPaymentInstructionText({
   paymentId = null,
   amount = null,
   currency = "THB",
 } = {}) {
   const qrUrl = getPromptPayQrPublicUrl();
+  const thb = displayAmountThb(amount);
   return [
     "💳 วิธีชำระเงิน (พร้อมเพย์ + สลิป)",
     "",
-    "โอน 99 บาท แล้วส่งสลิป 1 รูปในแชทนี้ — แอดมินจะตรวจก่อนเปิดสิทธิ์",
+    `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ — แอดมินจะตรวจก่อนเปิดสิทธิ์`,
     "หลังอนุมัติสลิปแล้ว จึงจะได้สิทธิ์สแกนตามแพ็กเกจ (เช่น 15 ครั้ง / 24 ชม.)",
-    `🔗 QR: ${qrUrl}`,
+    `🔗 เปิด QR: ${qrUrl}`,
   ].join("\n");
 }
 

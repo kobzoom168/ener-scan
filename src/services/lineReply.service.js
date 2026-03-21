@@ -34,3 +34,47 @@ export async function replyFlex(client, replyToken, flexMessage) {
     throw error;
   }
 }
+
+/**
+ * Manual payment: intro text → QR image → short slip reminder (max 5 messages in one reply).
+ * @param {{ introText: string, qrImageUrl: string, slipText: string }} opts
+ */
+export async function replyPaymentInstructionWithQr(client, replyToken, opts) {
+  const introText = String(opts?.introText || "").slice(0, 4900);
+  const qrImageUrl = String(opts?.qrImageUrl || "").trim();
+  const slipText = String(opts?.slipText || "").slice(0, 4900);
+
+  if (!qrImageUrl) {
+    throw new Error("replyPaymentInstructionWithQr_missing_qrImageUrl");
+  }
+
+  const messages = [
+    { type: "text", text: introText },
+    {
+      type: "image",
+      originalContentUrl: qrImageUrl,
+      previewImageUrl: qrImageUrl,
+    },
+    { type: "text", text: slipText },
+  ];
+
+  console.log("[LINE_REPLY_PAYMENT_QR] start", {
+    replyTokenExists: Boolean(replyToken),
+    qrHost: (() => {
+      try {
+        return new URL(qrImageUrl).hostname;
+      } catch {
+        return null;
+      }
+    })(),
+  });
+
+  try {
+    const result = await client.replyMessage(replyToken, messages);
+    console.log("[LINE_REPLY_PAYMENT_QR] success");
+    return result;
+  } catch (error) {
+    console.error("[LINE_REPLY_PAYMENT_QR] failed:", error?.message || error);
+    throw error;
+  }
+}

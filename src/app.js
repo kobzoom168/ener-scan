@@ -1,9 +1,11 @@
 import express from "express";
+import session from "express-session";
 import line from "@line/bot-sdk";
 import path from "path";
 
 import { env } from "./config/env.js";
 import { lineWebhookRouter } from "./routes/lineWebhook.js";
+import createAdminAuthRouter from "./routes/adminAuth.routes.js";
 import createAdminPaymentsDashboardRouter from "./routes/adminPaymentsDashboard.routes.js";
 import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
@@ -23,8 +25,37 @@ process.on("unhandledRejection", (reason) => {
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 // Needed for admin approve/reject POST from basic HTML forms.
 app.use(express.urlencoded({ extended: false }));
+
+const sessionSecret =
+  String(env.SESSION_SECRET || "").trim() ||
+  (process.env.NODE_ENV !== "production"
+    ? "ener-scan-dev-session-insecure"
+    : null);
+
+if (!sessionSecret) {
+  throw new Error(
+    "SESSION_SECRET is required in production for admin sessions (set env SESSION_SECRET)"
+  );
+}
+
+app.use(
+  session({
+    name: "ener_admin_sid",
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 8 * 60 * 60 * 1000,
+    },
+  })
+);
 
 const lineConfig = {
   channelAccessToken: env.CHANNEL_ACCESS_TOKEN,
@@ -75,6 +106,7 @@ app.get("/debug/payment-access/:lineUserId", async (req, res) => {
   }
 });
 
+app.use(createAdminAuthRouter());
 app.use(createAdminPaymentsDashboardRouter(lineClient));
 
 app.post(

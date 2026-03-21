@@ -4,7 +4,7 @@
 import { Router } from "express";
 
 import { supabase } from "../config/supabase.js";
-import { requireAdmin } from "../middleware/requireAdmin.js";
+import { requireAdminSession } from "../middleware/requireAdmin.js";
 import {
   getPaymentsForAdminByStatus,
   getPaymentDetailForAdmin,
@@ -24,10 +24,6 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function qToken(token) {
-  return encodeURIComponent(String(token || ""));
 }
 
 function statusBadgeClass(status) {
@@ -117,6 +113,17 @@ a { color: var(--info); }
   margin-bottom: 16px;
 }
 .topbar h1 { font-size: 1.25rem; margin: 0; flex: 1 1 200px; }
+.topbar form { margin: 0; }
+.topbar button[type="submit"] {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -300,7 +307,7 @@ function slipThumbHtml(slipUrl) {
   return `<img class="thumb slip-zoom" src="${u}" alt="slip" width="72" height="72" loading="lazy" referrerpolicy="no-referrer" data-full="${u}" />`;
 }
 
-function renderListPage({ rows, filterStatus, token, flash }) {
+function renderListPage({ rows, filterStatus, flash }) {
   const tabs = [
     ["pending_verify", "รอตรวจสลิป"],
     ["awaiting_payment", "รอสลิป"],
@@ -311,7 +318,7 @@ function renderListPage({ rows, filterStatus, token, flash }) {
   const tabsHtml = tabs
     .map(
       ([st, label]) => `
-    <a class="tab${st === filterStatus ? " active" : ""}" href="/admin/payments?token=${qToken(token)}&status=${encodeURIComponent(st)}">${escapeHtml(label)}</a>`
+    <a class="tab${st === filterStatus ? " active" : ""}" href="/admin/payments?status=${encodeURIComponent(st)}">${escapeHtml(label)}</a>`
     )
     .join("");
 
@@ -339,7 +346,7 @@ function renderListPage({ rows, filterStatus, token, flash }) {
         ${slipThumbHtml(p.slip_url)}
       </div>
       <div class="actions">
-        <a class="btn btn-neu" href="/admin/payments/${escapeHtml(p.id)}?token=${qToken(token)}">👁 รายละเอียด</a>
+        <a class="btn btn-neu" href="/admin/payments/${escapeHtml(p.id)}">👁 รายละเอียด</a>
         ${
           canAct
             ? `
@@ -372,7 +379,7 @@ function renderListPage({ rows, filterStatus, token, flash }) {
         <td>${pu}</td>
         <td>${slipThumbHtml(p.slip_url)}</td>
         <td class="t-actions">
-          <a class="btn btn-neu" style="padding:6px 10px;font-size:0.78rem;" href="/admin/payments/${escapeHtml(p.id)}?token=${qToken(token)}">ดู</a>
+          <a class="btn btn-neu" style="padding:6px 10px;font-size:0.78rem;" href="/admin/payments/${escapeHtml(p.id)}">ดู</a>
           ${
             canAct
               ? `
@@ -400,6 +407,9 @@ function renderListPage({ rows, filterStatus, token, flash }) {
   <div class="wrap">
     <div class="topbar">
       <h1>💳 Payments</h1>
+      <form method="POST" action="/admin/logout" style="margin:0;">
+        <button type="submit">ออกจากระบบ</button>
+      </form>
     </div>
     <nav class="tabs">${tabsHtml}</nav>
     <div class="cards">${empty}${cardsHtml}</div>
@@ -425,7 +435,6 @@ function renderListPage({ rows, filterStatus, token, flash }) {
   <div id="slip-modal" class="modal hidden" aria-hidden="true"><img alt="slip full" /></div>
   <script>
     (function () {
-      var token = ${JSON.stringify(String(token || ""))};
       var initialFlash = ${JSON.stringify(flash || "")};
       function qs(sel) { return document.querySelector(sel); }
       function showToast(msg) {
@@ -464,7 +473,7 @@ function renderListPage({ rows, filterStatus, token, flash }) {
         var orig = btn.textContent;
         btn.textContent = loadingLabel;
         try {
-          var r = await fetch(path + "?token=" + encodeURIComponent(token), {
+          var r = await fetch(path, {
             method: "POST",
             headers: { Accept: "application/json" },
             credentials: "same-origin"
@@ -500,7 +509,6 @@ function renderListPage({ rows, filterStatus, token, flash }) {
         btn.textContent = "กำลังปฏิเสธ…";
         try {
           var body = new URLSearchParams();
-          body.set("token", token);
           if (reason) body.set("reject_reason", reason);
           var r = await fetch("/admin/payments/" + btn.dataset.id + "/reject", {
             method: "POST",
@@ -531,7 +539,6 @@ function renderListPage({ rows, filterStatus, token, flash }) {
 function renderDetailPage({
   payment,
   scanSummary,
-  token,
   flash,
 }) {
   const p = payment;
@@ -557,7 +564,10 @@ function renderDetailPage({
 <body>
   <div class="wrap">
     ${flashHtml}
-    <p><a href="/admin/payments?token=${qToken(token)}&status=${encodeURIComponent(String(p.status))}">← กลับรายการ</a></p>
+    <p style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;">
+      <a href="/admin/payments?status=${encodeURIComponent(String(p.status))}">← กลับรายการ</a>
+      <form method="POST" action="/admin/logout" style="margin:0;"><button type="submit" class="btn btn-neu" style="padding:6px 12px;font-size:0.85rem;">ออกจากระบบ</button></form>
+    </p>
     <div class="detail-grid">
       <div class="panel">
         <h2>ข้อมูลการชำระเงิน</h2>
@@ -596,18 +606,17 @@ function renderDetailPage({
   ${
     canAct
       ? `<div class="sticky-actions">
-    <a class="btn btn-neu" href="/admin/payments?token=${qToken(token)}&status=pending_verify">← กลับ</a>
+    <a class="btn btn-neu" href="/admin/payments?status=pending_verify">← กลับ</a>
     <button type="button" class="btn btn-ok js-approve" data-id="${escapeHtml(p.id)}">✅ อนุมัติ</button>
     <button type="button" class="btn btn-bad js-reject" data-id="${escapeHtml(p.id)}">❌ ปฏิเสธ</button>
   </div>`
       : `<div class="sticky-actions">
-    <a class="btn btn-neu" href="/admin/payments?token=${qToken(token)}&status=${encodeURIComponent(String(p.status))}">← กลับรายการ</a>
+    <a class="btn btn-neu" href="/admin/payments?status=${encodeURIComponent(String(p.status))}">← กลับรายการ</a>
   </div>`
   }
   <div id="slip-modal" class="modal hidden" aria-hidden="true"><img alt="slip full" /></div>
   <script>
     (function () {
-      var token = ${JSON.stringify(String(token || ""))};
       function qs(s) { return document.querySelector(s); }
       function openModal(src) {
         var m = qs("#slip-modal");
@@ -625,13 +634,14 @@ function renderDetailPage({
         btn.disabled = true;
         btn.textContent = "กำลังอนุมัติ…";
         try {
-          var r = await fetch("/admin/payments/" + btn.dataset.id + "/approve?token=" + encodeURIComponent(token), {
+          var r = await fetch("/admin/payments/" + btn.dataset.id + "/approve", {
             method: "POST",
-            headers: { Accept: "application/json" }
+            headers: { Accept: "application/json" },
+            credentials: "same-origin"
           });
           var j = await r.json().catch(function () { return null; });
           if (!r.ok) throw new Error((j && j.message) || "failed");
-          location.href = "/admin/payments?token=" + encodeURIComponent(token) + "&status=paid&flash=approved";
+          location.href = "/admin/payments?status=paid&flash=approved";
         } catch (e) {
           alert(e.message);
           btn.disabled = false;
@@ -645,16 +655,16 @@ function renderDetailPage({
         btn.textContent = "กำลังปฏิเสธ…";
         try {
           var body = new URLSearchParams();
-          body.set("token", token);
           if (reason) body.set("reject_reason", reason);
           var r = await fetch("/admin/payments/" + btn.dataset.id + "/reject", {
             method: "POST",
             headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-            body: body.toString()
+            body: body.toString(),
+            credentials: "same-origin"
           });
           var j = await r.json().catch(function () { return null; });
           if (!r.ok) throw new Error((j && j.message) || "failed");
-          location.href = "/admin/payments?token=" + encodeURIComponent(token) + "&status=rejected&flash=rejected";
+          location.href = "/admin/payments?status=rejected&flash=rejected";
         } catch (e) {
           alert(e.message);
           btn.disabled = false;
@@ -676,20 +686,19 @@ function renderDetailPage({
 export default function createAdminPaymentsDashboardRouter(lineClient) {
   const router = Router();
 
-  router.get("/admin/payments", requireAdmin, async (req, res) => {
+  router.get("/admin/payments", requireAdminSession, async (req, res) => {
     try {
       const status = String(req.query?.status || "pending_verify").trim();
       const { rows, filterStatus } = await getPaymentsForAdminByStatus({
         status,
         limit: 200,
       });
-      const token = String(req.query?.token || "");
       const flashMap = {
         approved: "อนุมัติแล้ว ✅",
         rejected: "บันทึกการปฏิเสธแล้ว",
       };
       const flash = flashMap[String(req.query?.flash || "")] || "";
-      const html = renderListPage({ rows, filterStatus, token, flash });
+      const html = renderListPage({ rows, filterStatus, flash });
       res.status(200).type("html").send(html);
     } catch (err) {
       console.error("[ADMIN_DASH] list failed:", err);
@@ -697,7 +706,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
     }
   });
 
-  router.get("/admin/payments/:id", requireAdmin, async (req, res) => {
+  router.get("/admin/payments/:id", requireAdminSession, async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();
     const wantsJson =
       String(req.get("Accept") || "").includes("application/json") &&
@@ -738,14 +747,12 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         ? await getScanUsageSummaryForAppUser(uid)
         : { totalScans: 0, lastScanAt: null };
 
-      const token = String(req.query?.token || "");
       const flashMap = { approved: "อนุมัติแล้ว ✅", rejected: "บันทึกการปฏิเสธแล้ว" };
       const flash = flashMap[String(req.query?.flash || "")] || "";
 
       const html = renderDetailPage({
         payment,
         scanSummary,
-        token,
         flash,
       });
       res.status(200).type("html").send(html);
@@ -759,7 +766,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
     return String(req.get("Accept") || "").includes("application/json");
   }
 
-  router.post("/admin/payments/:id/approve", requireAdmin, async (req, res) => {
+  router.post("/admin/payments/:id/approve", requireAdminSession, async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();
     const approvedBy = "admin_dashboard";
 
@@ -823,7 +830,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
     }
   });
 
-  router.post("/admin/payments/:id/reject", requireAdmin, async (req, res) => {
+  router.post("/admin/payments/:id/reject", requireAdminSession, async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();
     const rejectReason = req.body?.reject_reason || req.body?.reason || null;
     const approvedBy = "admin_dashboard";
