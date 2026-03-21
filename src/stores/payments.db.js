@@ -84,6 +84,10 @@ export async function createPaymentPending({
   return data.id;
 }
 
+/**
+ * Latest row for slip flow only: awaiting_payment (need slip) or pending_verify (re-upload slip).
+ * Never matches paid | rejected | expired (those must not capture scan images as slips).
+ */
 export async function getLatestAwaitingPaymentForLineUserId(lineUserId) {
   const lu = String(lineUserId || "").trim();
   console.log("[PAYMENTS_DB] getLatestAwaitingPaymentForLineUserId:start", {

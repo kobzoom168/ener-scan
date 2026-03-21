@@ -165,27 +165,55 @@ async function finalizeAcceptedImage({
     imageBufferLength: imageBuffer?.length || 0,
   });
 
-  // Payment slip verify (DB-based):
-  // If user has an awaiting/pending payment, treat the next image as a slip upload.
-  // This prevents "any random image = paid".
-  let pendingPayment = null;
+  // Image routing: scan access first — never treat as slip if user already has scan access
+  // (e.g. paid after admin approve, while stale awaiting_payment rows may still exist).
+  let accessDecision;
   try {
-    console.log("[SLIP_VERIFY_LOOKUP] start", {
+    accessDecision = await checkScanAccess({ userId });
+  } catch (accessErr) {
+    console.error("[WEBHOOK] checkScanAccess (image routing) failed:", {
       userId,
-      source: "finalizeAcceptedImage",
-      messageId: event?.message?.id || null,
+      message: accessErr?.message,
+      code: accessErr?.code,
+      details: accessErr?.details,
+      hint: accessErr?.hint,
     });
-    pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
-  } catch (err) {
-    console.error("[PAYMENT_SLIP_VERIFY] lookup pending payment failed:", {
-      userId,
-      message: err?.message,
-      code: err?.code,
-      hint: err?.hint,
-    });
+    throw accessErr;
   }
 
-  if (pendingPayment) {
+  const hasPaidAccess =
+    accessDecision?.allowed === true && accessDecision?.reason === "paid";
+
+  let pendingPayment = null;
+  if (!accessDecision?.allowed) {
+    try {
+      console.log("[SLIP_VERIFY_LOOKUP] start", {
+        userId,
+        source: "finalizeAcceptedImage",
+        messageId: event?.message?.id || null,
+      });
+      pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
+    } catch (err) {
+      console.error("[PAYMENT_SLIP_VERIFY] lookup pending payment failed:", {
+        userId,
+        message: err?.message,
+        code: err?.code,
+        hint: err?.hint,
+      });
+    }
+  }
+
+  const chosenPath =
+    !accessDecision?.allowed && pendingPayment ? "slip" : "scan";
+  console.log("[IMAGE_ROUTING_DECISION]", {
+    userId,
+    hasPaidAccess,
+    accessReason: accessDecision?.reason ?? null,
+    hasAwaitingPayment: Boolean(pendingPayment),
+    chosenPath,
+  });
+
+  if (!accessDecision?.allowed && pendingPayment) {
     const slipMessageId = event?.message?.id;
     const paymentId = pendingPayment.id;
 
@@ -316,20 +344,7 @@ async function finalizeAcceptedImage({
 
   markAcceptedImageEvent(userId, eventTimestamp);
 
-  let accessDecision;
-  try {
-    accessDecision = await checkScanAccess({ userId });
-  } catch (accessErr) {
-    console.error("[WEBHOOK] checkScanAccess before scan failed:", {
-      userId,
-      message: accessErr?.message,
-      code: accessErr?.code,
-      details: accessErr?.details,
-      hint: accessErr?.hint,
-    });
-    throw accessErr;
-  }
-
+  // Reuse accessDecision from image routing (same request; avoids slip vs scan mismatch).
   if (!accessDecision.allowed && accessDecision.reason === "payment_required") {
     // Create (or re-create) the pending payment row for this LINE user.
     // All subsequent images will be treated as slip upload until admin verifies.
