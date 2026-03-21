@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+import { grantEntitlementForPackage } from "../services/entitlement.service.js";
 
 const DEFAULT_UNLOCK_HOURS = 24;
 const DEFAULT_AMOUNT = 0;
@@ -10,21 +11,143 @@ const PAID_REMAINING_SCANS = 15;
 const DEFAULT_PACKAGE_CODE = PAID_PLAN_CODE;
 const DEFAULT_PACKAGE_NAME = "15 scans / 24 hours";
 const DEFAULT_EXPECTED_AMOUNT = 99;
-const PAYMENT_VERIFY_EXPIRE_MS = 24 * 60 * 60 * 1000; // 24h from created_at
+/** User must complete PromptPay + slip within this window (awaiting_payment only). */
+const AWAITING_PAYMENT_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Manual flow only: open checkout / slip verification.
+ */
+const ACTIVE_PAYMENT_STATUSES = ["awaiting_payment", "pending_verify"];
 
 function getNowIso() {
   return new Date().toISOString();
 }
 
-/**
- * Package -> entitlement mapping should live in entitlement.service.js
- * but this file orchestrates payment record + calls the entitlement service.
- */
-import { grantEntitlementForPackage } from "../services/entitlement.service.js";
+/** @param {unknown} id */
+function normalizePaymentIdString(id) {
+  const s = String(id ?? "").trim();
+  if (!s) throw new Error("payment_id_empty");
+  return s;
+}
 
 /**
- * Create a pending payment row (manual PromptPay flow).
- * Returns payment id (uuid string). Throws on DB error.
+ * Expire only stale awaiting_payment. pending_verify is never auto-expired in this patch.
+ */
+async function expirePaymentRowIfStale(paymentRow) {
+  if (!paymentRow?.id) return null;
+  if (String(paymentRow.status) === "pending_verify") {
+    return paymentRow;
+  }
+  const createdAt = paymentRow.created_at ? Date.parse(String(paymentRow.created_at)) : NaN;
+  if (
+    String(paymentRow.status) === "awaiting_payment" &&
+    Number.isFinite(createdAt) &&
+    Date.now() - createdAt > AWAITING_PAYMENT_TTL_MS
+  ) {
+    const { error } = await supabase
+      .from("payments")
+      .update({ status: "expired", updated_at: getNowIso() })
+      .eq("id", paymentRow.id);
+    if (error) throw error;
+    return null;
+  }
+  return paymentRow;
+}
+
+async function expirePaymentRowById(paymentId) {
+  const pid = String(paymentId || "").trim();
+  if (!pid) return;
+  const { error } = await supabase
+    .from("payments")
+    .update({ status: "expired", updated_at: getNowIso() })
+    .eq("id", pid);
+  if (error) throw error;
+}
+
+/**
+ * Latest active payment for an app user (for deduping createPaymentPending).
+ */
+export async function getLatestActivePaymentForAppUser(appUserId) {
+  const uid = String(appUserId || "").trim();
+  if (!uid) return null;
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,amount,created_at"
+    )
+    .eq("user_id", uid)
+    .in("status", ACTIVE_PAYMENT_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return expirePaymentRowIfStale(data);
+}
+
+/**
+ * After a payment is confirmed paid, expire any other open rows for the same user
+ * so slip lookup / admin queues are not confused by stale actives.
+ */
+export async function cleanupOtherActivePaymentsForUser({
+  appUserId,
+  keepPaymentId,
+} = {}) {
+  const uid = String(appUserId || "").trim();
+  const keepId = String(keepPaymentId || "").trim();
+  if (!uid || !keepId) return { expiredCount: 0 };
+
+  const { data, error } = await supabase
+    .from("payments")
+    .update({ status: "expired", updated_at: getNowIso() })
+    .eq("user_id", uid)
+    .neq("id", keepId)
+    .in("status", ACTIVE_PAYMENT_STATUSES)
+    .select("id");
+
+  if (error) throw error;
+  const count = Array.isArray(data) ? data.length : 0;
+  console.log(
+    JSON.stringify({
+      event: "payments_cleanup",
+      outcome: "ok",
+      action: "expired_other_active",
+      appUserId: uid,
+      keepPaymentId: keepId,
+      count,
+    })
+  );
+  return { expiredCount: count };
+}
+
+async function safeCleanupOtherActivePaymentsForUser(appUserId, keepPaymentId) {
+  try {
+    return await cleanupOtherActivePaymentsForUser({
+      appUserId,
+      keepPaymentId,
+    });
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        event: "payments_cleanup",
+        outcome: "error",
+        appUserId,
+        keepPaymentId,
+        message: err?.message || null,
+        code: err?.code || null,
+      })
+    );
+    return { expiredCount: 0 };
+  }
+}
+
+/**
+ * Create a pending payment row (manual PromptPay flow), or reuse one active row
+ * when package_code + expected_amount match.
+ * @returns {Promise<string>} payment UUID (same shape for insert and reuse)
  */
 export async function createPaymentPending({
   appUserId,
@@ -39,6 +162,12 @@ export async function createPaymentPending({
   const userId = String(appUserId || "").trim();
   if (!userId) throw new Error("payments_missing_app_user_id");
 
+  const requestedPkg = String(packageCode ?? DEFAULT_PACKAGE_CODE);
+  const requestedAmt =
+    Number(expectedAmount) ||
+    Number(amount) ||
+    DEFAULT_EXPECTED_AMOUNT;
+
   // Store LINE user id for admin + slip verify flows.
   const { data: appUserRow, error: appUserErr } = await supabase
     .from("app_users")
@@ -48,6 +177,52 @@ export async function createPaymentPending({
   if (appUserErr) throw appUserErr;
 
   const lineUserId = appUserRow?.line_user_id ? String(appUserRow.line_user_id) : null;
+
+  let guard = 0;
+  while (guard++ < 12) {
+    const active = await getLatestActivePaymentForAppUser(userId);
+    if (!active?.id) break;
+
+    const rowPkg = String(active.package_code || "");
+    const rowAmt = Number(
+      active.expected_amount != null && active.expected_amount !== ""
+        ? active.expected_amount
+        : active.amount
+    );
+
+    const pkgMatch = rowPkg === requestedPkg;
+    const amtMatch =
+      Number.isFinite(rowAmt) && rowAmt === requestedAmt;
+
+    if (pkgMatch && amtMatch) {
+      console.log(
+        JSON.stringify({
+          event: "payments_create",
+          outcome: "reuse",
+          paymentId: active.id,
+          appUserId: userId,
+          status: active.status,
+          packageCode: requestedPkg,
+          expectedAmount: requestedAmt,
+        })
+      );
+      return normalizePaymentIdString(active.id);
+    }
+
+    await expirePaymentRowById(active.id);
+    console.log(
+      JSON.stringify({
+        event: "payments_create",
+        outcome: "expire_mismatch",
+        paymentId: active.id,
+        appUserId: userId,
+        rowPackageCode: rowPkg,
+        rowAmount: rowAmt,
+        requestedPackageCode: requestedPkg,
+        requestedAmount: requestedAmt,
+      })
+    );
+  }
 
   const payload = {
     user_id: userId,
@@ -81,7 +256,17 @@ export async function createPaymentPending({
   }
 
   if (!data?.id) throw new Error("payment_insert_failed");
-  return data.id;
+  console.log(
+    JSON.stringify({
+      event: "payments_create",
+      outcome: "insert",
+      paymentId: data.id,
+      appUserId: userId,
+      packageCode: requestedPkg,
+      expectedAmount: requestedAmt,
+    })
+  );
+  return normalizePaymentIdString(data.id);
 }
 
 /**
@@ -107,15 +292,20 @@ export async function getLatestAwaitingPaymentForLineUserId(lineUserId) {
   if (error) throw error;
   if (!data) return null;
 
-  // Mark stale payments as expired (basic TTL hardening).
+  // awaiting_payment: 24h TTL. pending_verify: no auto-expire here.
   try {
-    const createdAt = data?.created_at ? Date.parse(String(data.created_at)) : NaN;
-    if (Number.isFinite(createdAt) && Date.now() - createdAt > PAYMENT_VERIFY_EXPIRE_MS) {
-      await supabase
-        .from("payments")
-        .update({ status: "expired", updated_at: getNowIso() })
-        .eq("id", data.id);
-      return null;
+    if (String(data.status) === "awaiting_payment") {
+      const createdAt = data?.created_at ? Date.parse(String(data.created_at)) : NaN;
+      if (
+        Number.isFinite(createdAt) &&
+        Date.now() - createdAt > AWAITING_PAYMENT_TTL_MS
+      ) {
+        await supabase
+          .from("payments")
+          .update({ status: "expired", updated_at: getNowIso() })
+          .eq("id", data.id);
+        return null;
+      }
     }
   } catch (ttlErr) {
     // Non-fatal: do not block the flow if TTL check fails.
@@ -158,12 +348,10 @@ export async function getPaymentsPendingVerifyForAdmin({
   console.log("[PAYMENTS_DB] getPaymentsPendingVerifyForAdmin:start", {
     limit,
   });
-  const minCreatedAtIso = new Date(Date.now() - PAYMENT_VERIFY_EXPIRE_MS).toISOString();
   const { data, error } = await supabase
     .from("payments")
     .select("id,line_user_id,package_code,package_name,expected_amount,status,slip_url,slip_message_id,created_at")
     .eq("status", "pending_verify")
-    .gte("created_at", minCreatedAtIso)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -189,6 +377,7 @@ export async function markPaymentApprovedAndUnlock({
   if (!payment) throw new Error("payment_not_found");
 
   if (payment.status === "paid") {
+    await safeCleanupOtherActivePaymentsForUser(payment.user_id, id);
     return { lineUserId: payment.line_user_id || null };
   }
   if (payment.status !== "pending_verify") {
@@ -215,6 +404,8 @@ export async function markPaymentApprovedAndUnlock({
     appUserId: payment.user_id,
     packageCode,
   });
+
+  await safeCleanupOtherActivePaymentsForUser(payment.user_id, id);
 
   return {
     lineUserId: payment.line_user_id || null,
@@ -263,205 +454,4 @@ export async function markPaymentRejected({
   if (updateError) throw updateError;
 
   return { lineUserId: payment.line_user_id || null };
-}
-
-/**
- * Mark payment as succeeded and extend app_users.paid_until by unlock_hours.
- * Uses greatest(now(), current paid_until) + interval so existing entitlement is extended.
- * Throws on DB error.
- */
-export async function markPaymentSucceededAndExtendEntitlement({
-  paymentId,
-  verifiedBy = null,
-  note = null,
-  unlockHours = DEFAULT_UNLOCK_HOURS,
-} = {}) {
-  const id = String(paymentId || "").trim();
-  if (!id) throw new Error("payments_missing_payment_id");
-
-  const nowIso = new Date().toISOString();
-
-  const { data: payment, error: fetchError } = await supabase
-    .from("payments")
-    .select("user_id, unlock_hours, status, unlocked_until")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (fetchError) {
-    console.error("[SUPABASE] markPaymentSucceeded fetch error:", {
-      paymentId: id,
-      message: fetchError.message,
-      code: fetchError.code,
-      details: fetchError.details,
-      hint: fetchError.hint,
-    });
-    throw fetchError;
-  }
-
-  if (!payment?.user_id) {
-    throw new Error("payment_not_found");
-  }
-
-  const hours =
-    Number(unlockHours) ||
-    Number(payment.unlock_hours) ||
-    DEFAULT_UNLOCK_HOURS;
-
-  const { data: user, error: userError } = await supabase
-    .from("app_users")
-    .select("paid_until,line_user_id")
-    .eq("id", payment.user_id)
-    .maybeSingle();
-
-  if (userError) {
-    console.error("[SUPABASE] markPaymentSucceeded get paid_until error:", {
-      appUserId: payment.user_id,
-      message: userError.message,
-      code: userError.code,
-      details: userError.details,
-      hint: userError.hint,
-    });
-    throw userError;
-  }
-
-  const prevPaidUntil = user?.paid_until ? String(user.paid_until) : null;
-
-  // Idempotency: if already succeeded, do not extend again.
-  if (payment?.status === "paid" || payment?.status === "succeeded") {
-    const targetPaidUntil =
-      payment?.unlocked_until ? String(payment.unlocked_until) : prevPaidUntil;
-
-    // Overwrite existing paid package (no stacking) even on duplicate webhook.
-    // Prefer payment.unlocked_until when present.
-    const targetPaidUntilMs = targetPaidUntil ? Date.parse(targetPaidUntil) : NaN;
-    const unlockedUntil =
-      Number.isFinite(targetPaidUntilMs) && targetPaidUntilMs > 0
-        ? targetPaidUntil
-        : new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-
-    const { error: reconcileUserError } = await supabase
-      .from("app_users")
-      .update({
-        paid_until: unlockedUntil,
-        paid_remaining_scans: PAID_REMAINING_SCANS,
-        paid_plan_code: PAID_PLAN_CODE,
-        updated_at: nowIso,
-      })
-      .eq("id", payment.user_id);
-
-    if (reconcileUserError) throw reconcileUserError;
-
-    console.log("[PAYMENT_UNLOCK]", {
-      lineUserId: user?.line_user_id || null,
-      paymentId: id,
-      previousPaidUntil: prevPaidUntil,
-      paidUntil: unlockedUntil,
-      remainingScans: PAID_REMAINING_SCANS,
-      idempotent: true,
-    });
-
-    return {
-      paidUntil: unlockedUntil,
-      lineUserId: user?.line_user_id || null,
-    };
-  }
-
-  // Overwrite existing paid package (no stacking): paid_until = now + 24 hours
-  const unlockedUntil = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-
-  const { data: updatedPayment, error: updatePaymentError } = await supabase
-    .from("payments")
-    .update({
-      status: "paid",
-      paid_at: nowIso,
-      verified_at: nowIso,
-      unlocked_until: unlockedUntil,
-      verified_by: verifiedBy || null,
-      note: note || null,
-    })
-    .eq("id", id)
-    .in("status", ["pending", "awaiting_payment", "pending_verify"])
-    .select("id")
-    .maybeSingle();
-
-  if (updatePaymentError) {
-    console.error("[SUPABASE] markPaymentSucceeded update payment error:", {
-      paymentId: id,
-      message: updatePaymentError.message,
-      code: updatePaymentError.code,
-      details: updatePaymentError.details,
-      hint: updatePaymentError.hint,
-    });
-    throw updatePaymentError;
-  }
-
-  // If the payment row wasn't updated (e.g. duplicate/concurrent webhook),
-  // do not extend again; just return the latest entitlement we can read.
-  if (!updatedPayment?.id) {
-    const { data: latestUser, error: latestUserError } = await supabase
-      .from("app_users")
-      .select("paid_until,line_user_id")
-      .eq("id", payment.user_id)
-      .maybeSingle();
-
-    if (latestUserError) throw latestUserError;
-
-    const latestPaidUntil = latestUser?.paid_until ? String(latestUser.paid_until) : null;
-
-    // Ensure package activation is still applied on concurrent webhook scenarios.
-    const { error: reconcileUserError } = await supabase
-      .from("app_users")
-      .update({
-        paid_until: unlockedUntil,
-        paid_remaining_scans: PAID_REMAINING_SCANS,
-        paid_plan_code: PAID_PLAN_CODE,
-        updated_at: nowIso,
-      })
-      .eq("id", payment.user_id);
-
-    if (reconcileUserError) throw reconcileUserError;
-
-    console.log("[PAYMENT_UNLOCK]", {
-      lineUserId: latestUser?.line_user_id || null,
-      paymentId: id,
-      previousPaidUntil: prevPaidUntil,
-      paidUntil: unlockedUntil || latestPaidUntil || prevPaidUntil,
-      remainingScans: PAID_REMAINING_SCANS,
-      idempotent: true,
-    });
-
-    return { paidUntil: unlockedUntil || latestPaidUntil || prevPaidUntil, lineUserId: latestUser?.line_user_id || null };
-  }
-
-  const { error: updateUserError } = await supabase
-    .from("app_users")
-    .update({
-      paid_until: unlockedUntil,
-      paid_remaining_scans: PAID_REMAINING_SCANS,
-      paid_plan_code: PAID_PLAN_CODE,
-      updated_at: nowIso,
-    })
-    .eq("id", payment.user_id);
-
-  if (updateUserError) {
-    console.error("[SUPABASE] markPaymentSucceeded update app_users.paid_until error:", {
-      appUserId: payment.user_id,
-      message: updateUserError.message,
-      code: updateUserError.code,
-      details: updateUserError.details,
-      hint: updateUserError.hint,
-    });
-    throw updateUserError;
-  }
-
-  console.log("[PAYMENT_UNLOCK]", {
-    lineUserId: user?.line_user_id || null,
-    paymentId: id,
-    previousPaidUntil: prevPaidUntil,
-    paidUntil: unlockedUntil,
-    remainingScans: PAID_REMAINING_SCANS,
-    idempotent: false,
-  });
-
-  return { paidUntil: unlockedUntil, lineUserId: user?.line_user_id || null };
 }

@@ -5,8 +5,8 @@
 1. **Free scans** – First 3 successful scans per user are free (counted from `scan_results`).
 2. **Gate** – After 3 scans, the user must have an active paid entitlement to scan again.
 3. **Entitlement** – Stored in `app_users.paid_until`. If `paid_until` is in the future, the user can scan.
-4. **User flow** – User sends a payment-related command (`payment`, `จ่ายเงิน`, `ปลดล็อก`) in LINE. The bot creates a **pending** payment row and replies with instructions plus a **payment reference (UUID)** and amount (if configured).
-5. **Manual verification** – An admin verifies the transfer (e.g. slip), then runs the verify command with that payment reference. The app marks the payment succeeded and sets `app_users.paid_until` to now + 24 hours (or extends existing entitlement).
+4. **User flow** – User pays via PromptPay (static QR), sends a **slip image** in LINE, and waits for admin. The bot keeps a payment row in `awaiting_payment` / `pending_verify` as appropriate.
+5. **Manual verification** – An admin approves the slip (admin UI or `npm run payment:verify`). The app marks the payment **paid**, grants entitlement by package, and sets `app_users.paid_until` / remaining scans accordingly.
 
 ## How to verify manually
 
@@ -45,5 +45,5 @@ Example:
 npm run payment:verify -- a1b2c3d4-e5f6-7890-abcd-ef1234567890 admin
 ```
 
-Success: prints `Payment verified. paid_until: <iso date>`.  
+Success: prints `Payment approved. paid_until: <iso date>`.  
 Failure: prints an error and exits with code 1.

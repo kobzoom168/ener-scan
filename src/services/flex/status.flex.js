@@ -389,7 +389,7 @@ export function buildPaymentRequiredFlex({ usedScans = 0, freeLimit = 3 } = {}) 
     bodyContents: [
       createCard(
         "สถานะตอนนี้",
-        `ใช้ไปแล้ว ${used} ครั้ง\nปลดล็อกการใช้งานได้ 24 ชั่วโมงหลังชำระเงิน`,
+        `ใช้ไปแล้ว ${used} ครั้ง\nโอนแล้วส่งสลิปในแชทนี้ แอดมินจะอนุมัติและเปิดสิทธิ์ตามแพ็กเกจ`,
         {
           backgroundColor: "#171717",
           borderColor: "#242427",
@@ -432,13 +432,13 @@ export function buildPaymentPaywallFlex({
         color: "#D4AF37",
         action: {
           type: "uri",
-          label: "🔓 ปลดล็อกทันที",
+          label: "📱 เปิด QR พร้อมเพย์",
           uri: paymentUrl,
         },
       },
       {
         type: "text",
-        text: "ระบบจะปลดล็อกทันทีหลังชำระเงิน",
+        text: "โอนตามยอดแล้วส่งสลิป 1 รูปในแชทนี้ แอดมินจะตรวจสอบก่อนเปิดสิทธิ์",
         size: "xs",
         color: "#A4A4A8",
         wrap: true,
@@ -450,19 +450,19 @@ export function buildPaymentPaywallFlex({
   return createBaseBubble({
     accentColor: "#D4AF37",
     title: "🔒 วันนี้คุณใช้สิทธิ์ฟรีครบแล้ว",
-    subtitle: "ปลดล็อก Ener Scan ได้ทันที",
+    subtitle: "ชำระผ่านพร้อมเพย์ ส่งสลิป รอแอดมินตรวจ",
     bodyContents: [
       createCard(
         "ยังมีพลังอีกส่วนที่ยังไม่ถูกเปิดเผย",
         [
           `คุณใช้ครบ ${freeLimit} ครั้งฟรีแล้ว`,
           "",
-          "ปลดล็อกเพื่อดูต่อ:",
+          "หลังแอดมินอนุมัติสลิปแล้ว คุณจะดูต่อได้:",
           "• พลังซ่อนเร้นของวัตถุ",
           "• ความเชื่อมโยงกับตัวคุณแบบละเอียด",
           "• คำแนะนำเฉพาะตัว",
           "",
-          "✨ ใช้งานได้ไม่จำกัด 24 ชั่วโมง (แนะนำ)",
+          "✨ แพ็กเกจแนะนำ: สิทธิ์ตามที่แจ้งหลังอนุมัติ (เช่น ใช้ในช่วง 24 ชม.)",
           `💎 ${priceLine}`,
         ].join("\n"),
         {

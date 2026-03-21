@@ -235,11 +235,7 @@ async function finalizeAcceptedImage({
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
 
-      await replyText(
-        client,
-        event.replyToken,
-        "ได้รับสลิปแล้ว ระบบกำลังตรวจสอบการชำระเงินครับ"
-      );
+      await replyText(client, event.replyToken, buildSlipReceivedText());
       return;
     } catch (err) {
       console.error("[PAYMENT_SLIP_VERIFY] slip upload/update failed:", {
@@ -350,14 +346,12 @@ async function finalizeAcceptedImage({
     // All subsequent images will be treated as slip upload until admin verifies.
     try {
       const appUser = await ensureUserByLineUserId(userId);
-      const existing = await getLatestAwaitingPaymentForLineUserId(userId);
-      if (!existing || existing.status !== "awaiting_payment") {
-        await createPaymentPending({
-          appUserId: appUser.id,
-          amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
-          currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
-        });
-      }
+      // createPaymentPending dedupes: reuses active awaiting_payment / pending_verify row
+      await createPaymentPending({
+        appUserId: appUser.id,
+        amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
+        currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
+      });
     } catch (err) {
       console.error("[WEBHOOK] createPaymentPending (payment_required) failed:", {
         userId,
@@ -709,7 +703,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         await replyText(
           client,
           event.replyToken,
-          "ระบบกำลังตรวจสอบการชำระเงินโดยแอดมินอยู่ครับ\n\nรอการอนุมัติแล้วคุณจะสแกนต่อได้ทันที"
+          "สลิปของคุณอยู่ระหว่างให้แอดมินตรวจครับ\n\nเมื่อแอดมินอนุมัติแล้ว ระบบจึงจะเปิดสิทธิ์ — จากนั้นคุณจึงสแกนต่อได้"
         );
         return;
       }

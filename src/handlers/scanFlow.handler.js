@@ -55,6 +55,7 @@ import {
   buildCooldownText,
   buildPaymentRequiredText,
 } from "../utils/webhookText.util.js";
+import { getPromptPayQrPublicUrl } from "../utils/promptpayQrPublicUrl.util.js";
 
 import { ensureUserByLineUserId } from "../stores/users.db.js";
 import {
@@ -203,13 +204,13 @@ export async function runScanFlow({
           const MVP_CURRENCY = "THB";
 
           const appUser = await ensureUserByLineUserId(userId);
-          const paymentId = await createPaymentPending({
+          await createPaymentPending({
             appUserId: appUser.id,
             amount: MVP_PRICE_THB,
             currency: MVP_CURRENCY,
           });
 
-          const paymentUrl = `https://ener-scan-production.up.railway.app/payments/mock/${paymentId}`;
+          const paymentUrl = getPromptPayQrPublicUrl();
 
           const paywallFlex = buildPaymentPaywallFlex({
             usedScans: access?.usedScans,
@@ -255,20 +256,20 @@ export async function runScanFlow({
         console.log("[PAID_LIMIT]", { userId, scanCount });
 
         const fallbackText =
-          "คุณใช้สิทธิ์ครบแล้วในช่วง 24 ชั่วโมงนี้\nปลดล็อกรอบใหม่เพื่อใช้งานต่อได้ทันที";
+          "คุณใช้สิทธิ์ครบแล้วในช่วง 24 ชั่วโมงนี้\n\nหากต้องการรอบใหม่: โอน → ส่งสลิป → รอแอดมินตรวจและอนุมัติ → จึงสแกนต่อได้\n(เริ่มได้จากคำสั่ง payment หรือสแกนรูปใหม่เมื่อระบบขอชำระเงิน)";
 
         try {
           const MVP_PRICE_THB = 99;
           const MVP_CURRENCY = "THB";
 
           const appUser = await ensureUserByLineUserId(userId);
-          const paymentId = await createPaymentPending({
+          await createPaymentPending({
             appUserId: appUser.id,
             amount: MVP_PRICE_THB,
             currency: MVP_CURRENCY,
           });
 
-          const paymentUrl = `https://ener-scan-production.up.railway.app/payments/mock/${paymentId}`;
+          const paymentUrl = getPromptPayQrPublicUrl();
 
           const paywallFlex = buildPaymentPaywallFlex({
             usedScans: access?.usedScans,
