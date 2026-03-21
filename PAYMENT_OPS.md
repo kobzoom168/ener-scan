@@ -8,6 +8,19 @@
 4. **User flow** – User pays via PromptPay (static QR), sends a **slip image** in LINE, and waits for admin. The bot keeps a payment row in `awaiting_payment` / `pending_verify` as appropriate.
 5. **Manual verification** – An admin approves the slip (admin UI or `npm run payment:verify`). The app marks the payment **paid**, grants entitlement by package, and sets `app_users.paid_until` / remaining scans accordingly.
 
+## Admin Dashboard (v2)
+
+Open in a browser (use your deployed base URL):
+
+- **List:** `GET /admin/payments?token=<ADMIN_TOKEN>&status=pending_verify`  
+  Tabs: `pending_verify` (default), `awaiting_payment`, `paid`, `rejected`
+- **Detail:** `GET /admin/payments/<paymentId>?token=<ADMIN_TOKEN>`
+- **JSON API (automation):** same detail URL with header `Accept: application/json` returns `{ ok, payment }`.
+
+Approve/reject from the UI use `fetch` + `Accept: application/json` (one-click, no double submit). Legacy `POST` without that header still returns plain `ok`.
+
+Requires `ADMIN_TOKEN` in environment (same as before).
+
 ## How to verify manually
 
 1. Get the **payment reference (UUID)** from the user (they see it in the LINE instruction message).

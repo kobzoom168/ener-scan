@@ -359,6 +359,75 @@ export async function getPaymentsPendingVerifyForAdmin({
   return data || [];
 }
 
+const ADMIN_LIST_STATUSES = [
+  "pending_verify",
+  "awaiting_payment",
+  "paid",
+  "rejected",
+];
+
+/**
+ * Admin dashboard list with current entitlement snapshot from app_users.
+ * @param {{ status?: string, limit?: number }} opts
+ */
+export async function getPaymentsForAdminByStatus({
+  status = "pending_verify",
+  limit = 200,
+} = {}) {
+  const s = String(status || "").trim();
+  const safeStatus = ADMIN_LIST_STATUSES.includes(s) ? s : "pending_verify";
+  const lim = Math.min(Math.max(Number(limit) || 200, 1), 500);
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      `
+      id,
+      user_id,
+      line_user_id,
+      package_code,
+      package_name,
+      expected_amount,
+      amount,
+      currency,
+      status,
+      slip_url,
+      created_at,
+      verified_at,
+      rejected_at,
+      app_users ( paid_until, paid_remaining_scans )
+    `
+    )
+    .eq("status", safeStatus)
+    .order("created_at", { ascending: false })
+    .limit(lim);
+
+  if (error) throw error;
+  return { rows: data || [], filterStatus: safeStatus };
+}
+
+/**
+ * Single payment + nested app_users for admin detail.
+ */
+export async function getPaymentDetailForAdmin(paymentId) {
+  const id = String(paymentId || "").trim();
+  if (!id) throw new Error("payments_missing_payment_id");
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      `
+      *,
+      app_users ( id, line_user_id, paid_until, paid_remaining_scans, paid_plan_code )
+    `
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function markPaymentApprovedAndUnlock({
   paymentId,
   approvedBy = null,

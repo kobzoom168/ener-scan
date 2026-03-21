@@ -133,3 +133,35 @@ export async function decrementUserPaidRemainingScans(appUserId) {
 
   return next;
 }
+
+/**
+ * Total scans + last scan time for admin dashboard (by app_users.id).
+ */
+export async function getScanUsageSummaryForAppUser(appUserId) {
+  const uid = String(appUserId || "").trim();
+  if (!uid) {
+    return { totalScans: 0, lastScanAt: null };
+  }
+
+  const { count, error: countError } = await supabase
+    .from("scan_results")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", uid);
+
+  if (countError) throw countError;
+
+  const { data: lastRow, error: lastError } = await supabase
+    .from("scan_results")
+    .select("created_at")
+    .eq("user_id", uid)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lastError) throw lastError;
+
+  return {
+    totalScans: count ?? 0,
+    lastScanAt: lastRow?.created_at ? String(lastRow.created_at) : null,
+  };
+}
