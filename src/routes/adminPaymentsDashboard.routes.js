@@ -310,12 +310,16 @@ table.data td:nth-child(9) {
   display: block;
   margin: 0 auto;
 }
+/* Detail slip: avoid overflow painting over the fixed bottom bar on some browsers. */
+.detail-slip-panel { overflow: hidden; position: relative; z-index: 0; }
 .sticky-actions {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  /* Opaque fallback if color-mix unsupported (avoids “invisible” bar / weird hit-testing). */
+  background: var(--surface);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(10px);
   border-top: 1px solid var(--border);
@@ -323,21 +327,28 @@ table.data td:nth-child(9) {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  z-index: 40;
+  z-index: 1000;
+  pointer-events: auto;
+  isolation: isolate;
 }
 .sticky-actions .btn { flex: 1 1 140px; max-width: 220px; }
 .modal {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.85);
-  z-index: 100;
+  /* Above sticky bar (1000), below toast (1200). */
+  z-index: 1100;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
   cursor: zoom-out;
 }
-.modal.hidden { display: none; }
+.modal.hidden {
+  display: none !important;
+  visibility: hidden;
+  pointer-events: none !important;
+}
 .modal img {
   max-width: 100%;
   max-height: 100%;
@@ -381,7 +392,7 @@ table.data td:nth-child(9) {
   top: max(12px, env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 200;
+  z-index: 1200;
   max-width: min(92vw, 420px);
   padding: 12px 18px;
   border-radius: 12px;
@@ -862,6 +873,7 @@ function renderDetailPage({
 </head>
 <body>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="slip-modal" class="modal hidden" aria-hidden="true"><img alt="slip full" /></div>
   <div class="wrap">
     ${flashHtml}
     <p style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;">
@@ -895,7 +907,7 @@ function renderDetailPage({
         </div>
       </div>
     </div>
-    <div class="panel" style="margin-top:14px;">
+    <div class="panel detail-slip-panel" style="margin-top:14px;">
       <h2>สลิป</h2>
       ${
         slip
@@ -917,15 +929,16 @@ function renderDetailPage({
     <a class="btn btn-neu" href="/admin/payments?status=${encodeURIComponent(String(p.status))}">← กลับรายการ</a>
   </div>`
   }
-  <div id="slip-modal" class="modal hidden" aria-hidden="true"><img alt="slip full" /></div>
   <script>
     (function () {
+      try {
       var pid = ${JSON.stringify(p.id)};
       var lineUid = ${lineUid ? JSON.stringify(lineUid) : "null"};
       var ADMIN_JSON_HEADERS = { Accept: "application/json", "X-Admin-Json": "1" };
       function qs(s) { return document.querySelector(s); }
       function showToast(msg, kind) {
         var t = qs("#toast");
+        if (!t) return;
         t.textContent = msg;
         t.className = "toast show " + (kind === "err" ? "toast-err" : "toast-ok");
         clearTimeout(t._tm);
@@ -947,11 +960,20 @@ function renderDetailPage({
       }
       function openModal(src) {
         var m = qs("#slip-modal");
-        m.querySelector("img").src = src;
+        if (!m) return;
+        var im = m.querySelector("img");
+        if (im) im.src = src;
         m.classList.remove("hidden");
+        m.setAttribute("aria-hidden", "false");
       }
-      function closeModal() { qs("#slip-modal").classList.add("hidden"); }
-      qs("#slip-modal").addEventListener("click", closeModal);
+      function closeModal() {
+        var m = qs("#slip-modal");
+        if (!m) return;
+        m.classList.add("hidden");
+        m.setAttribute("aria-hidden", "true");
+      }
+      var slipModalRoot = qs("#slip-modal");
+      if (slipModalRoot) slipModalRoot.addEventListener("click", closeModal);
       document.body.addEventListener("click", function (e) {
         var z = e.target.closest(".slip-zoom");
         if (z && z.dataset.full) openModal(z.dataset.full);
@@ -960,7 +982,7 @@ function renderDetailPage({
         if (!btn || btn.disabled) return;
         setDetailStickyBusy(true, btn, "กำลังอนุมัติ…");
         try {
-          var r = await fetch("/admin/payments/" + pid + "/approve", {
+          var r = await fetch("/admin/payments/" + encodeURIComponent(String(pid || "").trim()) + "/approve", {
             method: "POST",
             headers: Object.assign({}, ADMIN_JSON_HEADERS),
             credentials: "same-origin"
@@ -995,7 +1017,7 @@ function renderDetailPage({
           var body = new URLSearchParams();
           body.set("reject_preset", preset);
           body.set("reject_detail", detail);
-          var r = await fetch("/admin/payments/" + pid + "/reject", {
+          var r = await fetch("/admin/payments/" + encodeURIComponent(String(pid || "").trim()) + "/reject", {
             method: "POST",
             headers: Object.assign(
               { "Content-Type": "application/x-www-form-urlencoded" },
@@ -1060,6 +1082,9 @@ function renderDetailPage({
             rp.disabled = false;
           }
         });
+      }
+      } catch (detailInitErr) {
+        console.error("[admin-payments-detail] script init failed", detailInitErr);
       }
     })();
   </script>
