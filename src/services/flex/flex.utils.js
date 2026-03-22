@@ -45,6 +45,71 @@ export function stripBullet(text) {
     .trim();
 }
 
+/** Lower-left "ลักษณะพลัง" boxes — label mode: one tight line each, readability over completeness. */
+export const FLEX_TRAIT_PERSONALITY_MAX = 28;
+export const FLEX_TRAIT_TONE_MAX = 30;
+export const FLEX_TRAIT_HIDDEN_MAX = 22;
+
+const TRAIT_HIDDEN_FALLBACK = "เสริมพลังในใจ";
+
+function stripPersonalityExplanationPrefixes(s) {
+  return cleanLine(
+    String(s || "")
+      .replace(/^ช่วยให้\s*|^ทำให้\s*|^เพื่อให้\s*|^ที่จะ\s*/giu, "")
+      .trim(),
+  );
+}
+
+function firstShortClauseForTraitLabel(s, maxLen) {
+  const t = cleanLine(s);
+  if (!t) return "";
+  if (t.length <= maxLen) return t;
+  const stop = t.search(/[。！？]/u);
+  if (stop > 0 && stop <= maxLen + 14) {
+    const one = t.slice(0, stop).trim();
+    if (one.length <= maxLen) return one;
+  }
+  const commaTh = t.indexOf("，");
+  const commaEn = t.indexOf(",");
+  const comma =
+    commaTh >= 0 && commaEn >= 0
+      ? Math.min(commaTh, commaEn)
+      : Math.max(commaTh, commaEn);
+  if (comma > 6 && comma <= maxLen + 10) {
+    const one = t.slice(0, comma).trim();
+    if (one.length <= maxLen) return one;
+  }
+  return safeThaiCut(t, maxLen);
+}
+
+function normalizeHiddenForTraitBox(s) {
+  let t = cleanLine(s);
+  if (!t) return "";
+  const rules = [
+    [/^ให้ความรู้สึกเหมือน/u, ""],
+    [/^ให้ความรู้สึกว่า/u, ""],
+    [/^ให้ความรู้สึก/u, ""],
+    [/^รู้สึกเหมือน/u, ""],
+    [/^ทำให้มีภูมิต้านทาน/u, "เสริมภูมิต้านทาน"],
+    [/^ทำให้/u, ""],
+    [/^ช่วยให้/u, ""],
+    [/^เพื่อให้/u, ""],
+  ];
+  for (const [re, rep] of rules) {
+    t = t.replace(re, rep);
+  }
+  return cleanLine(t);
+}
+
+/**
+ * Single-line cap for trait bullets — no manual newlines; Thai-safe tail.
+ */
+export function finalizeTraitBoxLine(text, maxChars) {
+  const flat = cleanLine(String(text || "").replace(/\n+/g, " "));
+  if (!flat || flat === "-") return "";
+  return sanitizeFlexDisplayText(safeThaiCut(flat, maxChars));
+}
+
 /**
  * Thai dependent marks that must not end a truncated segment (incomplete display cluster).
  * Ranges: MAI HAN-AKAT, vowel signs, PHINTHU, MAITAIKHU, tone marks, etc. (U+0E00 block).
@@ -52,7 +117,7 @@ export function stripBullet(text) {
 function isThaiDependentMarkCode(code) {
   if (code === 0x0e31) return true;
   if (code >= 0x0e34 && code <= 0x0e3a) return true;
-  if (code >= 0x0e47 && code <= 0x0e4e) return true;
+  if (code >= 0x0e47 && code <= 0x0e4b) return true;
   if (code >= 0x0e38 && code <= 0x0e39) return true;
   return false;
 }
@@ -247,7 +312,7 @@ export function formatMainEnergyForCard(text, headMax = 18, hintMax = 16) {
 }
 
 /**
- * Trait rows (บุคลิก / โทน / พลังซ่อน): compact "category · short hint" — detail stays in reading cards.
+ * Trait rows (บุคลิก): one short label line — "พลังหลัก · ใจสงบ" style, not explanation.
  */
 export function compactEnergyTraitForFlex(raw) {
   const t = cleanLine(stripBullet(raw));
@@ -255,16 +320,19 @@ export function compactEnergyTraitForFlex(raw) {
 
   const open = t.indexOf("(");
   if (open > 0) {
-    const head = t.slice(0, open).trim();
+    const head = stripPersonalityExplanationPrefixes(t.slice(0, open).trim());
     const close = t.indexOf(")", open + 1);
     const inner = close > open ? t.slice(open + 1, close) : "";
-    const hint = compactParenHint(inner, 14);
-    const h = safeWrapText(head, 16);
-    if (hint) return sanitizeFlexDisplayText(`${h} · ${hint}`);
-    return sanitizeFlexDisplayText(h);
+    const hint = compactParenHint(inner, 12);
+    const h = safeWrapText(head, 14);
+    let out = hint ? `${h} · ${hint}` : h;
+    out = finalizeTraitBoxLine(out, FLEX_TRAIT_PERSONALITY_MAX);
+    return out || "-";
   }
 
-  return sanitizeFlexDisplayText(safeWrapText(t, 30));
+  const plain = stripPersonalityExplanationPrefixes(t);
+  const out = firstShortClauseForTraitLabel(plain, FLEX_TRAIT_PERSONALITY_MAX);
+  return finalizeTraitBoxLine(out, FLEX_TRAIT_PERSONALITY_MAX) || "-";
 }
 
 /** Drop empty / bullet-only rows so Flex bullet blocks never show lone "•". */
@@ -409,18 +477,32 @@ export function mapHiddenToShortText(hidden) {
 
   if (!clean || clean === "-" || clean === "ไม่เด่นชัด") return "-";
 
-  if (clean.includes("เมตตา")) return "เมตตาแฝง";
-  if (clean.includes("ปกป้อง") || clean.includes("คุ้มครอง")) return "เกราะพลัง";
-  if (clean.includes("อำนาจ") || clean.includes("บารมี")) return "อำนาจแฝง";
-  if (clean.includes("โชค")) return "โชคแฝง";
-  if (clean.includes("ดึงดูด") || clean.includes("เสน่ห์")) return "แรงดึงดูด";
-  if (clean.includes("สิ่งศักดิ์สิทธิ์")) return "แรงศักดิ์สิทธิ์";
-  if (clean.includes("บางเบา")) return "พลังรอง";
-  if (clean.includes("ลึก")) return "พลังลึก";
-  if (clean.includes("นิ่ง")) return "พลังนิ่งแฝง";
-  if (clean.includes("แฝง")) return "พลังแฝง";
+  const asLabel = (phrase) =>
+    finalizeTraitBoxLine(phrase, FLEX_TRAIT_HIDDEN_MAX) || TRAIT_HIDDEN_FALLBACK;
 
-  return sanitizeFlexDisplayText(safeWrapText(clean, 24));
+  if (clean.includes("เมตตา")) return asLabel("เมตตาแฝง");
+  if (clean.includes("ปกป้อง") || clean.includes("คุ้มครอง")) return asLabel("เกราะพลัง");
+  if (clean.includes("อำนาจ") || clean.includes("บารมี")) return asLabel("อำนาจแฝง");
+  if (clean.includes("โชค")) return asLabel("โชคแฝง");
+  if (clean.includes("ดึงดูด") || clean.includes("เสน่ห์")) return asLabel("แรงดึงดูด");
+  if (clean.includes("สิ่งศักดิ์สิทธิ์")) return asLabel("แรงศักดิ์สิทธิ์");
+  if (clean.includes("บางเบา")) return asLabel("พลังรอง");
+  if (clean.includes("ลึก")) return asLabel("พลังลึก");
+  if (clean.includes("นิ่ง")) return asLabel("พลังนิ่งแฝง");
+  if (clean.includes("แฝง")) return asLabel("พลังแฝง");
+
+  let rest = normalizeHiddenForTraitBox(clean);
+  if (!rest) return TRAIT_HIDDEN_FALLBACK;
+  if (clean.length > 28 && rest.length > 0 && rest.length < 3) {
+    return TRAIT_HIDDEN_FALLBACK;
+  }
+  if (rest.length <= FLEX_TRAIT_HIDDEN_MAX) {
+    return asLabel(rest);
+  }
+  rest = firstShortClauseForTraitLabel(rest, FLEX_TRAIT_HIDDEN_MAX);
+  const cut = finalizeTraitBoxLine(rest, FLEX_TRAIT_HIDDEN_MAX);
+  if (cut && cut.length >= 6) return cut;
+  return TRAIT_HIDDEN_FALLBACK;
 }
 
 export function formatToneLine(tone) {
@@ -434,13 +516,19 @@ export function formatToneLine(tone) {
     .filter(Boolean);
 
   if (parts.length === 0) return "-";
+
+  const stripTonePrefix = (p) => p.replace(/^\s*โทน\s*/u, "").trim();
+
   if (parts.length === 1) {
-    return sanitizeFlexDisplayText(safeWrapText(`โทน${parts[0]}`, 24));
+    const only = stripTonePrefix(parts[0]);
+    const line = `โทน${safeThaiCut(only, 18)}`;
+    return finalizeTraitBoxLine(line, FLEX_TRAIT_TONE_MAX) || "-";
   }
 
-  return sanitizeFlexDisplayText(
-    safeWrapText(`โทน${parts[0]} | ${parts[1]}`, 28),
-  );
+  const left = safeThaiCut(stripTonePrefix(parts[0]), 12);
+  const right = safeThaiCut(stripTonePrefix(parts[1]), 16);
+  const line = `โทน${left} | ${right}`;
+  return finalizeTraitBoxLine(line, FLEX_TRAIT_TONE_MAX) || "-";
 }
 
 export function buildEnergyLines({ personality, tone, hidden }) {
@@ -459,7 +547,7 @@ export function buildEnergyLines({ personality, tone, hidden }) {
 
   const hiddenText = mapHiddenToShortText(hidden);
   if (hiddenText && hiddenText !== "-") {
-    lines.push(sanitizeFlexDisplayText(safeWrapText(hiddenText, 20)));
+    lines.push(hiddenText);
   }
 
   if (lines.length === 0) {

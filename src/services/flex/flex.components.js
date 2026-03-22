@@ -211,8 +211,10 @@ export function createMainEnergyMetricCard(mainEnergy) {
 }
 
 export function createEnergyLine(text) {
-  const body =
-    clampToFlexLines(String(text || "-"), 2, 18).join("\n") || "—";
+  const raw = String(text ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const body = raw || "—";
 
   return {
     type: "box",
@@ -236,7 +238,7 @@ export function createEnergyLine(text) {
         size: "sm",
         color: "#F2F2F2",
         wrap: true,
-        maxLines: 2,
+        maxLines: 1,
         margin: "sm",
         flex: 1,
       },
