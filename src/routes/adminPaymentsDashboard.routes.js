@@ -44,18 +44,31 @@ function paymentRowCanAct(p) {
 
 /**
  * List table: actions column — all controls MUST live inside this single <td> (no floating siblings).
+ * Approve/reject use plain POST forms (no fetch) so clicks work even if JS fails or is blocked.
+ * Quick reject from list uses default preset "blur"; full reason selection remains on detail page.
  */
 function adminListTableActionsTd(p) {
   const idRaw = String(p?.id ?? "").trim();
-  const idAttr = escapeHtml(idRaw);
   const detailHref = adminPaymentDetailHref(p);
   const canAct = paymentRowCanAct(p);
+  const postBase = idRaw ? `/admin/payments/${encodeURIComponent(idRaw)}` : "";
   const detailLink = `<a class="btn btn-neu" style="padding:6px 10px;font-size:0.78rem;" href="${detailHref}">ดู</a>`;
   const approveReject =
-    canAct && idRaw
-      ? `<button type="button" class="btn btn-ok js-approve" style="padding:6px 10px;font-size:0.78rem;" data-id="${idAttr}" data-payment-id="${idAttr}">อนุมัติ</button><button type="button" class="btn btn-bad js-reject" style="padding:6px 10px;font-size:0.78rem;" data-id="${idAttr}" data-payment-id="${idAttr}">ปฏิเสธ</button>`
+    canAct && postBase
+      ? `<form method="POST" action="${postBase}/approve" class="adm-inline-form"><button type="submit" class="btn btn-ok" style="padding:6px 10px;font-size:0.78rem;">อนุมัติ</button></form><form method="POST" action="${postBase}/reject" class="adm-inline-form"><input type="hidden" name="reject_preset" value="blur" /><input type="hidden" name="reject_detail" value="" /><button type="submit" class="btn btn-bad" style="padding:6px 10px;font-size:0.78rem;">ปฏิเสธ</button></form>`
       : "";
   return `<td class="t-actions">${detailLink}${approveReject}</td>`;
+}
+
+/** Mobile cards: same POST forms as table row. */
+function adminListCardActionForms(p) {
+  const idRaw = String(p?.id ?? "").trim();
+  const canAct = paymentRowCanAct(p);
+  const postBase = idRaw ? `/admin/payments/${encodeURIComponent(idRaw)}` : "";
+  if (!canAct || !postBase) return "";
+  return `
+        <form method="POST" action="${postBase}/approve" class="adm-inline-form"><button type="submit" class="btn btn-ok">✅ อนุมัติ</button></form>
+        <form method="POST" action="${postBase}/reject" class="adm-inline-form"><input type="hidden" name="reject_preset" value="blur" /><input type="hidden" name="reject_detail" value="" /><button type="submit" class="btn btn-bad">❌ ปฏิเสธ</button></form>`;
 }
 
 function statusBadgeClass(status) {
@@ -273,6 +286,18 @@ a { color: var(--info); }
   padding: 4px;
 }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; position: relative; z-index: 1; }
+.actions .adm-inline-form,
+.t-actions .adm-inline-form {
+  display: inline-block;
+  margin: 0;
+  vertical-align: middle;
+}
+.t-actions .adm-inline-form + .adm-inline-form {
+  margin-left: 4px;
+}
+.actions .adm-inline-form + .adm-inline-form {
+  margin-left: 0;
+}
 .btn {
   border: none;
   border-radius: 10px;
@@ -514,7 +539,6 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
           ? escapeHtml(String(au.paid_remaining_scans))
           : "—";
       const pu = au?.paid_until ? fmtDateOnly(au.paid_until) : "—";
-      const canAct = paymentRowCanAct(p);
       const reasonRow =
         String(p.status) === "rejected" && p.reject_reason
           ? `<div class="card-row"><b>เหตุผล</b> <span style="word-break:break-word;">${escapeHtml(String(p.reject_reason))}</span></div>`
@@ -536,13 +560,7 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
       </div>
       <div class="actions">
         <a class="btn btn-neu" href="${adminPaymentDetailHref(p)}">👁 รายละเอียด</a>
-        ${
-          canAct
-            ? `
-        <button type="button" class="btn btn-ok js-approve" data-id="${escapeHtml(p.id)}" data-payment-id="${escapeHtml(p.id)}">✅ อนุมัติ</button>
-        <button type="button" class="btn btn-bad js-reject" data-id="${escapeHtml(p.id)}" data-payment-id="${escapeHtml(p.id)}">❌ ปฏิเสธ</button>`
-            : ""
-        }
+        ${adminListCardActionForms(p)}
       </div>
     </article>`;
     })
@@ -577,8 +595,6 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
     .join("");
 
   const empty = rows.length === 0 ? `<p class="card" style="text-align:center;color:var(--muted);">ไม่มีรายการ</p>` : "";
-
-  const presetOpts = rejectPresetOptionsHtml();
 
   return `<!DOCTYPE html>
 <html lang="th">
@@ -619,28 +635,15 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         <tbody>${tableRows || `<tr><td colspan="10" style="text-align:center;color:var(--muted);">ไม่มีรายการ</td></tr>`}</tbody>
       </table>
     </div>
+    <p class="reject-hint" style="margin:12px 0 0;font-size:0.8rem;color:var(--muted);">
+      ปฏิเสธจากรายการนี้ใช้เหตุผลเริ่มต้น &quot;สลิปไม่ชัด&quot; — ถ้าต้องการระบุเหตุผลเอง ให้เปิดหน้ารายละเอียด
+    </p>
   </div>
   <div id="slip-modal" class="modal hidden" aria-hidden="true"><img alt="slip full" /></div>
-  <div id="reject-modal" class="modal modal-dialog hidden" aria-hidden="true">
-    <div class="dialog-inner" role="dialog" aria-labelledby="reject-title">
-      <h3 id="reject-title" style="margin:0 0 12px;font-size:1rem;">ปฏิเสธสลิป</h3>
-      <p class="reject-hint">เลือกเหตุผลหลัก หรือระบุเพิ่มในช่องรายละเอียด</p>
-      <label for="reject-preset">เหตุผล</label>
-      <select id="reject-preset">${presetOpts}</select>
-      <label for="reject-detail">รายละเอียดเพิ่มเติม (ถ้ามี)</label>
-      <textarea id="reject-detail" rows="3" placeholder="เช่น หมายเลขอ้างอิง / หมายเหตุสั้น ๆ"></textarea>
-      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
-        <button type="button" class="btn btn-neu" id="reject-cancel" style="flex:1;">ยกเลิก</button>
-        <button type="button" class="btn btn-bad" id="reject-confirm" style="flex:1;">ยืนยันปฏิเสธ</button>
-      </div>
-    </div>
-  </div>
   <script>
     (function () {
       try {
       var initialFlash = ${JSON.stringify(flash || "")};
-      var pendingRejectBtn = null;
-      var ADMIN_JSON_HEADERS = { Accept: "application/json", "X-Admin-Json": "1" };
       function qs(sel) { return document.querySelector(sel); }
       function showToast(msg, kind) {
         var t = qs("#toast");
@@ -649,57 +652,6 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         t.className = "toast show " + (kind === "err" ? "toast-err" : "toast-ok");
         clearTimeout(t._tm);
         t._tm = setTimeout(function () { t.className = "toast"; }, kind === "err" ? 4200 : 2800);
-      }
-      function actionScopeFromBtn(btn) {
-        return btn && (btn.closest("article.card") || btn.closest("tr"));
-      }
-      function setScopeActionBusy(scope, busy, activeBtn, loadingLabel) {
-        if (!scope) {
-          if (activeBtn) {
-            if (busy) {
-              if (!activeBtn.dataset._admOrig) activeBtn.dataset._admOrig = activeBtn.textContent;
-              activeBtn.disabled = true;
-              activeBtn.textContent = loadingLabel || "…";
-            } else {
-              activeBtn.disabled = false;
-              if (activeBtn.dataset._admOrig) activeBtn.textContent = activeBtn.dataset._admOrig;
-            }
-          }
-          return;
-        }
-        var xs = scope.querySelectorAll(".js-approve, .js-reject");
-        for (var i = 0; i < xs.length; i++) {
-          var b = xs[i];
-          if (busy) {
-            if (!b.dataset._admOrig) b.dataset._admOrig = b.textContent;
-            b.disabled = true;
-            if (activeBtn === b) b.textContent = loadingLabel || "…";
-          } else {
-            b.disabled = false;
-            if (b.dataset._admOrig) b.textContent = b.dataset._admOrig;
-          }
-        }
-      }
-      function openRejectModal(btn) {
-        pendingRejectBtn = btn;
-        var rd = qs("#reject-detail");
-        var rp = qs("#reject-preset");
-        var rc = qs("#reject-confirm");
-        var m = qs("#reject-modal");
-        if (!rd || !rp || !rc || !m) return;
-        rd.value = "";
-        rp.selectedIndex = 0;
-        rc.disabled = false;
-        rc.textContent = "ยืนยันปฏิเสธ";
-        m.classList.remove("hidden");
-        m.setAttribute("aria-hidden", "false");
-      }
-      function closeRejectModal() {
-        var m = qs("#reject-modal");
-        if (!m) return;
-        m.classList.add("hidden");
-        m.setAttribute("aria-hidden", "true");
-        pendingRejectBtn = null;
       }
       function openModal(src) {
         var m = qs("#slip-modal");
@@ -717,108 +669,18 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
       }
       var slipModalEl = document.getElementById("slip-modal");
       if (slipModalEl) slipModalEl.addEventListener("click", closeModal);
-      var rejectModalEl = document.getElementById("reject-modal");
-      if (rejectModalEl) {
-        rejectModalEl.addEventListener("click", function (e) {
-          if (e.target === this) closeRejectModal();
-        });
-      }
-      var rejectCancelEl = document.getElementById("reject-cancel");
-      if (rejectCancelEl) rejectCancelEl.addEventListener("click", closeRejectModal);
       document.body.addEventListener("click", function (e) {
         var z = e.target.closest(".slip-zoom");
         if (z && z.dataset.full) openModal(z.dataset.full);
       });
       if (initialFlash) {
-        showToast(initialFlash, "ok");
+        showToast(initialFlash, initialFlash.indexOf("ไม่สำเร็จ") >= 0 ? "err" : "ok");
         try {
           var u = new URL(location.href);
           u.searchParams.delete("flash");
           history.replaceState({}, "", u.toString());
         } catch (_) {}
       }
-      async function postApprove(btn) {
-        if (!btn || btn.disabled) return;
-        var scope = actionScopeFromBtn(btn);
-        setScopeActionBusy(scope, true, btn, "กำลังอนุมัติ…");
-        try {
-          var payId = String(btn.dataset.id || "").trim();
-          if (!payId) throw new Error("missing_payment_id");
-          var r = await fetch("/admin/payments/" + encodeURIComponent(payId) + "/approve", {
-            method: "POST",
-            headers: Object.assign({}, ADMIN_JSON_HEADERS),
-            credentials: "same-origin"
-          });
-          var j = null;
-          try { j = await r.json(); } catch (_) {}
-          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || ("HTTP " + r.status));
-          showToast("อนุมัติแล้ว ✅", "ok");
-          setTimeout(function () { location.reload(); }, 900);
-        } catch (err) {
-          showToast(err.message || "เกิดข้อผิดพลาด", "err");
-          setScopeActionBusy(scope, false, btn);
-        }
-      }
-      async function postRejectFromModal() {
-        var btn = pendingRejectBtn;
-        if (!btn || btn.disabled) return;
-        var rpEl = qs("#reject-preset");
-        var rdEl = qs("#reject-detail");
-        var rc = qs("#reject-confirm");
-        if (!rpEl || !rdEl || !rc) return;
-        var preset = rpEl.value;
-        var detail = rdEl.value;
-        if (preset === "other" && !String(detail).trim()) {
-          showToast("กรุณาระบุเหตุผลเมื่อเลือก \"อื่น ๆ\"", "err");
-          return;
-        }
-        var scope = actionScopeFromBtn(btn);
-        var rcOrig = rc.textContent;
-        setScopeActionBusy(scope, true, btn, "กำลังปฏิเสธ…");
-        rc.disabled = true;
-        rc.textContent = "กำลังส่ง…";
-        closeRejectModal();
-        try {
-          var body = new URLSearchParams();
-          body.set("reject_preset", preset);
-          body.set("reject_detail", detail);
-          var payId2 = String(btn.dataset.id || "").trim();
-          if (!payId2) throw new Error("missing_payment_id");
-          var r = await fetch("/admin/payments/" + encodeURIComponent(payId2) + "/reject", {
-            method: "POST",
-            headers: Object.assign(
-              { "Content-Type": "application/x-www-form-urlencoded" },
-              ADMIN_JSON_HEADERS
-            ),
-            body: body.toString(),
-            credentials: "same-origin"
-          });
-          var j = null;
-          try { j = await r.json(); } catch (_) {}
-          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || ("HTTP " + r.status));
-          showToast("บันทึกการปฏิเสธแล้ว", "ok");
-          setTimeout(function () { location.reload(); }, 900);
-        } catch (err) {
-          showToast(err.message || "เกิดข้อผิดพลาด", "err");
-          setScopeActionBusy(scope, false, btn);
-          rc.disabled = false;
-          rc.textContent = rcOrig;
-        }
-      }
-      var rejectConfirmEl = document.getElementById("reject-confirm");
-      if (rejectConfirmEl) rejectConfirmEl.addEventListener("click", postRejectFromModal);
-      document.body.addEventListener("click", function (e) {
-        var a = e.target.closest(".js-approve");
-        if (a) {
-          e.preventDefault();
-          postApprove(a);
-        }
-        var rj = e.target.closest(".js-reject");
-        if (rj) {
-          e.preventDefault();
-          openRejectModal(rj);
-        }
-      });
       } catch (initErr) {
         console.error("[admin-payments-list] script init failed", initErr);
       }
@@ -1119,6 +981,8 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       const flashMap = {
         approved: "อนุมัติแล้ว ✅",
         rejected: "บันทึกการปฏิเสธแล้ว",
+        approve_err: "อนุมัติไม่สำเร็จ — ลองใหม่หรือเปิดหน้ารายละเอียด",
+        reject_err: "ปฏิเสธไม่สำเร็จ — ลองใหม่หรือเปิดหน้ารายละเอียด",
       };
       const flash = flashMap[String(req.query?.flash || "")] || "";
       const html = renderListPage({ rows, filterStatus, flash, statusCounts });
@@ -1253,14 +1117,17 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       if (prefersAdminJson(req)) {
         res.status(200).json({ ok: true, idempotent: Boolean(isIdempotent) });
       } else {
-        res.status(200).send("ok");
+        res.redirect(302, "/admin/payments?status=paid&flash=approved");
       }
     } catch (err) {
       console.error("[ADMIN_DASH] approve failed:", err);
       if (prefersAdminJson(req)) {
         res.status(409).json({ ok: false, message: err?.message || "approve_failed" });
       } else {
-        res.status(409).send(err?.message || "approve_failed");
+        res.redirect(
+          302,
+          "/admin/payments?status=pending_verify&flash=approve_err"
+        );
       }
     }
   });
@@ -1302,14 +1169,17 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       if (prefersAdminJson(req)) {
         res.status(200).json({ ok: true });
       } else {
-        res.status(200).send("ok");
+        res.redirect(302, "/admin/payments?status=rejected&flash=rejected");
       }
     } catch (err) {
       console.error("[ADMIN_DASH] reject failed:", err);
       if (prefersAdminJson(req)) {
         res.status(409).json({ ok: false, message: err?.message || "reject_failed" });
       } else {
-        res.status(409).send(err?.message || "reject_failed");
+        res.redirect(
+          302,
+          "/admin/payments?status=pending_verify&flash=reject_err"
+        );
       }
     }
   });
