@@ -8,7 +8,7 @@ export const MAIN_LABEL_BY_TONE = {
   standard: MAIN_LABEL,
   mystic: {
     [ENERGY_TYPES.PROTECT]: "คุ้มกันและกันแรงรบกวน",
-    [ENERGY_TYPES.BALANCE]: "สมดุลและพลังนิ่งในใจ",
+    [ENERGY_TYPES.BALANCE]: "ประคองใจและพลังนิ่งในใจ",
     [ENERGY_TYPES.POWER]: "พลังอำนาจและคุมจังหวะ",
     [ENERGY_TYPES.KINDNESS]: "เมตตาและคนเปิดใจ",
     [ENERGY_TYPES.ATTRACT]: "เสน่ห์และแรงดึงดูด",
@@ -31,7 +31,7 @@ export const MAIN_LABEL_ALT_BY_TONE = {
   standard: MAIN_LABEL_ALT,
   mystic: {
     [ENERGY_TYPES.PROTECT]: "คุ้มกันและกันรบกวน",
-    [ENERGY_TYPES.BALANCE]: "สมดุล พลังนิ่ง",
+    [ENERGY_TYPES.BALANCE]: "ประคองใจ พลังนิ่ง",
     [ENERGY_TYPES.POWER]: "อำนาจและคุมจังหวะ",
     [ENERGY_TYPES.KINDNESS]: "เมตตาและเปิดใจ",
     [ENERGY_TYPES.ATTRACT]: "เสน่ห์และดึงดูด",

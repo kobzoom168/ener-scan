@@ -153,7 +153,7 @@ export function createMainEnergyMetricCard(mainEnergy, summary = null) {
     const valueContents = [
       {
         type: "text",
-        text: line1 || "—",
+        text: line1 || "-",
         size: "md",
         weight: "bold",
         color: "#FFFFFF",
@@ -162,7 +162,7 @@ export function createMainEnergyMetricCard(mainEnergy, summary = null) {
       },
       {
         type: "text",
-        text: line2 || "—",
+        text: line2 || "-",
         size: "xs",
         color: "#B8B8BE",
         wrap: true,
@@ -226,7 +226,7 @@ export function createMainEnergyMetricCard(mainEnergy, summary = null) {
                 20,
               ).join("\n") ||
               parts[1] ||
-              "—",
+              "-",
             size: "xs",
             color: "#B8B8BE",
             wrap: true,
@@ -277,7 +277,7 @@ export function createEnergyLine(text) {
   const raw = String(text ?? "")
     .replace(/\s+/g, " ")
     .trim();
-  const body = raw || "—";
+  const body = raw || "-";
 
   return {
     type: "box",
@@ -389,7 +389,7 @@ function createBulletBlock(title, lines = [], backgroundColor = "#152017") {
       : [
           {
             type: "text",
-            text: "—",
+            text: "-",
             size: "sm",
             color: "#8A8A8E",
           },
@@ -586,11 +586,11 @@ export function buildSummaryBubble({
 }
 
 const DEFAULT_OVERVIEW_FLEX =
-  "ชิ้นนี้เล่นมุมมั่นใจเนียน ๆ — โทนอ่านแล้วรู้สึกว่ามีหลักในใจ ไม่ใช่แค่พลังลอย ๆ";
+  "ชิ้นนี้เล่นมุมมั่นใจเนียน ๆ โทนอ่านแล้วรู้สึกว่ามีหลักในใจ ไม่ใช่แค่พลังลอย ๆ";
 const DEFAULT_FIT_FLEX =
-  "โยงกับจังหวะเจ้าของที่ต้องการความนิ่งในวันหนัก — ตัวเลขไม่ได้เล่าทั้งเรื่อง แต่โยงกับแพตเทิร์นในใจ";
+  "โยงกับจังหวะเจ้าของที่ต้องการความนิ่งในวันหนัก ตัวเลขไม่ได้เล่าทั้งเรื่อง แต่โยงกับแพตเทิร์นในใจ";
 const DEFAULT_CLOSING_FLEX =
-  "ของชิ้นนี้โทนประคองและตั้งหลัก มากกว่าทางเปิดเกมหรือเร่งผล";
+  "ของชิ้นนี้โทนประคองใจและตั้งหลัก มากกว่าทางเปิดเกมหรือเร่งผล";
 
 /** Parser closing + optional deterministic age-tone hook (second line). */
 function createClosingWithRetentionHook(primaryText, retentionHook) {
@@ -736,19 +736,22 @@ export function buildUsageBubble({
   const supportLines =
     Array.isArray(supportTopics) && supportTopics.length > 0
       ? supportTopics.slice(0, 2)
-      : ["ช่วยให้ตัดสินใจได้หนักแน่นขึ้น", "ช่วยให้รับแรงกดดันได้ดีขึ้น"];
+      : [
+          "หนุนให้ตัดสินใจหนักแน่นขึ้น",
+          "คุ้มใจเวลาโดนแรงกดดันหรือของไม่ดีเข้ามา",
+        ];
 
   const suitableLines =
     Array.isArray(suitable) && suitable.length > 0
       ? suitable.slice(0, 2)
       : [
           "วันที่ต้องการความชัดหรือใจนิ่งในงาน",
-          "เวลาต้องคุมสถานการณ์หรือพูดให้คนฟัง",
+          "เวลาต้องยืนทรง คุมสถานการณ์ หรือพูดให้คนฟัง",
         ];
 
   const cleanNotStrong =
     String(notStrong || "").trim() ||
-    "ช่วงที่อยากได้ผลทันทีหรือการเปลี่ยนแปลงแบบรวดเร็วมาก ๆ — อาจไม่ใช่จุดแข็งของชิ้นนี้";
+    "ช่วงที่อยากได้ผลทันทีหรือการเปลี่ยนแปลงแบบรวดเร็วมาก ๆ อาจไม่ใช่จุดแข็งของชิ้นนี้";
 
   return {
     type: "bubble",

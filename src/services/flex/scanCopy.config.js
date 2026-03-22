@@ -8,7 +8,7 @@
  * Bump when `ENERGY_COPY`, `MAIN_LABEL`, scan tone bundles, trait rules, or age-tone retention copy meaningfully change.
  * Independent from `SCAN_CACHE_PROMPT_VERSION` (deep-scan LLM prompt).
  */
-export const SCAN_COPY_CONFIG_VERSION = "6";
+export const SCAN_COPY_CONFIG_VERSION = "7";
 
 /** Canonical energy keys (Thai strings — match `resolveEnergyType` output). */
 export const ENERGY_TYPES = {
@@ -30,7 +30,7 @@ export const SCORE_TIERS = {
 /** Short plain headline under score (small box). */
 export const MAIN_LABEL = {
   [ENERGY_TYPES.PROTECT]: "ปกป้องและมั่นคง",
-  [ENERGY_TYPES.BALANCE]: "สมดุลและจังหวะในใจ",
+  [ENERGY_TYPES.BALANCE]: "ประคองใจและพยุงช่วงแกว่ง",
   [ENERGY_TYPES.POWER]: "มั่นใจและตัดสินใจชัด",
   [ENERGY_TYPES.KINDNESS]: "อ่อนโยนกับคนรอบข้าง",
   [ENERGY_TYPES.ATTRACT]: "น่าเข้าหาและโดดเด่น",
@@ -41,7 +41,7 @@ export const MAIN_LABEL = {
 /** Shorter label for LINE altText / notifications. */
 export const MAIN_LABEL_ALT = {
   [ENERGY_TYPES.PROTECT]: "ปกป้องและมั่นคง",
-  [ENERGY_TYPES.BALANCE]: "สมดุลและจังหวะ",
+  [ENERGY_TYPES.BALANCE]: "ประคองใจและจังหวะ",
   [ENERGY_TYPES.POWER]: "มั่นใจและตัดสินใจ",
   [ENERGY_TYPES.KINDNESS]: "อ่อนโยนกับคน",
   [ENERGY_TYPES.ATTRACT]: "น่าเข้าหาและโดดเด่น",
@@ -91,11 +91,11 @@ export const ENERGY_COPY = {
   [ENERGY_TYPES.BALANCE]: {
     summary: {
       high: [
-        "แนวสมดุลในใจ",
+        "แนวประคองใจและดึงใจกลับเข้าที่",
         "โทนอยู่กับตอนนี้ได้มั่นขึ้น",
       ],
       medium: [
-        "แนวคลายวุ่นในใจ",
+        "แนวคลายวุ่นและพยุงช่วงตก",
         "โทนนิ่งกับปัจจุบันมากขึ้น",
       ],
       low: [
@@ -227,11 +227,11 @@ export const ENERGY_COPY = {
   [ENERGY_TYPES.LUCK]: {
     summary: {
       high: [
-        "แนวโชคลาภและจังหวะ",
+        "แนวเปิดทางและหนุนโชค",
         "โทนมองเห็นช่องทางชัดขึ้น",
       ],
       medium: [
-        "แนวโล่งและเปิดรับ",
+        "แนวเปิดทางและเรียกจังหวะดี",
         "โทนตัดสินใจเรื่องโอกาสได้ดีขึ้น",
       ],
       low: [

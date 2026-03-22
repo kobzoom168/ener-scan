@@ -159,7 +159,7 @@ export const GOAL_UNCLEAR = [
  * Optional softer caveat — suggestive, not denial of the reading.
  */
 export const GOAL_NOT_PRIMARY_HINT = {
-  [ENERGY_TYPES.LUCK]: "ไม่ได้ชี้ผลลัพธ์ขาด — เป็นแนวโอกาสและจังหวะมากกว่าตัวเลขชี้ขาด",
-  [ENERGY_TYPES.PROTECT]: "ไม่ได้หมายถึงกันทุกสิ่ง — เป็นแนวคุ้มกันในใจมากกว่าคำมั่น",
-  [ENERGY_TYPES.ATTRACT]: "ไม่ได้ชี้ว่าทุกคนจะชอบ — เป็นแนวเข้าหาง่ายในโทนนุ่ม",
+  [ENERGY_TYPES.LUCK]: "ไม่ได้ชี้ผลลัพธ์ขาด เป็นแนวโอกาสและจังหวะมากกว่าตัวเลขชี้ขาด",
+  [ENERGY_TYPES.PROTECT]: "ไม่ได้หมายถึงกันทุกสิ่ง เป็นแนวคุ้มกันในใจมากกว่าคำมั่น",
+  [ENERGY_TYPES.ATTRACT]: "ไม่ได้ชี้ว่าทุกคนจะชอบ เป็นแนวเข้าหาง่ายในโทนนุ่ม",
 };
