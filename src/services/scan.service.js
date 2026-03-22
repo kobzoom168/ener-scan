@@ -6,7 +6,7 @@ import {
   getCachedScanResult,
   saveCachedScanResult,
   markCachedScanHit,
-  SCAN_CACHE_PROMPT_VERSION,
+  getScanCacheVersion,
 } from "../stores/scanResultCache.db.js";
 
 import {
@@ -29,6 +29,17 @@ import {
 
 function toBase64(buffer) {
   return Buffer.isBuffer(buffer) ? buffer.toString("base64") : "";
+}
+
+function isScanCacheBypassEnabled() {
+  const v = String(
+    process.env.SCAN_CACHE_BYPASS ||
+      process.env.DISABLE_SCAN_RESULT_CACHE ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
 }
 
 function ensureScanInputs({ imageBuffer, birthdate, userId }) {
@@ -168,43 +179,60 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   PERSISTENT CACHE (after same validations as caller: buffer + birthdate)
   ------------------------------------------------
   */
+  const cacheVersion = getScanCacheVersion();
+  const skipCache = isScanCacheBypassEnabled();
+
+  if (skipCache) {
+    console.log(
+      JSON.stringify({
+        event: "scan_result_cache",
+        outcome: "bypass",
+        reason: "SCAN_CACHE_BYPASS or DISABLE_SCAN_RESULT_CACHE",
+        cacheVersion,
+        userId,
+      }),
+    );
+  }
+
   let imageHash = "";
   try {
     imageHash = await getImageHash(imageBuffer);
-    const cached = await getCachedScanResult({
-      imageHash,
-      birthdate,
-      promptVersion: SCAN_CACHE_PROMPT_VERSION,
-    });
-    if (cached?.result_text) {
-      try {
-        await markCachedScanHit(cached.id);
-      } catch (hitErr) {
-        console.error("[SCAN_CACHE] markCachedScanHit failed (ignored):", hitErr?.message);
+    if (!skipCache) {
+      const cached = await getCachedScanResult({
+        imageHash,
+        birthdate,
+        promptVersion: cacheVersion,
+      });
+      if (cached?.result_text) {
+        try {
+          await markCachedScanHit(cached.id);
+        } catch (hitErr) {
+          console.error("[SCAN_CACHE] markCachedScanHit failed (ignored):", hitErr?.message);
+        }
+        const finalText = String(cached.result_text).trim();
+        addRecentOutput(userId, finalText);
+        const scanEndedAt = Date.now();
+        console.log(
+          JSON.stringify({
+            event: "scan_result_cache",
+            outcome: "hit",
+            userId,
+            cacheId: cached.id,
+            elapsedMs: scanEndedAt - scanStartedAt,
+          })
+        );
+        return {
+          resultText: finalText,
+          fromCache: true,
+          qualityAnalytics: enrichQualityAnalyticsForPersist(
+            createEmptyQualityAnalytics({
+              improve_skipped_reason: QUALITY_SKIP_REASONS.FROM_CACHE,
+              latency_ms: 0,
+            }),
+            { resultText: finalText },
+          ),
+        };
       }
-      const finalText = String(cached.result_text).trim();
-      addRecentOutput(userId, finalText);
-      const scanEndedAt = Date.now();
-      console.log(
-        JSON.stringify({
-          event: "scan_result_cache",
-          outcome: "hit",
-          userId,
-          cacheId: cached.id,
-          elapsedMs: scanEndedAt - scanStartedAt,
-        })
-      );
-      return {
-        resultText: finalText,
-        fromCache: true,
-        qualityAnalytics: enrichQualityAnalyticsForPersist(
-          createEmptyQualityAnalytics({
-            improve_skipped_reason: QUALITY_SKIP_REASONS.FROM_CACHE,
-            latency_ms: 0,
-          }),
-          { resultText: finalText },
-        ),
-      };
     }
   } catch (cacheErr) {
     console.error("[SCAN_CACHE] lookup failed (continuing with OpenAI):", {
@@ -301,26 +329,35 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   SAVE CACHE (best-effort) — only when final validation passed (good quality)
   ------------------------------------------------
   */
-  if (imageHash && !finalValidation.isBad) {
+  if (imageHash && !skipCache && !finalValidation.isBad) {
     try {
       await saveCachedScanResult({
         imageHash,
         birthdate,
         resultText: finalText,
         objectType: "single_supported",
-        promptVersion: SCAN_CACHE_PROMPT_VERSION,
+        promptVersion: cacheVersion,
       });
       console.log(
         JSON.stringify({
           event: "scan_result_cache",
           outcome: "saved",
           userId,
-          promptVersion: SCAN_CACHE_PROMPT_VERSION,
+          promptVersion: cacheVersion,
         })
       );
     } catch (saveErr) {
       console.error("[SCAN_CACHE] save failed (ignored):", saveErr?.message);
     }
+  } else if (imageHash && skipCache) {
+    console.log(
+      JSON.stringify({
+        event: "scan_result_cache",
+        outcome: "skip_save",
+        reason: "bypass",
+        userId,
+      }),
+    );
   } else if (imageHash && finalValidation.isBad) {
     console.log(
       JSON.stringify({

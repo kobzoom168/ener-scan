@@ -1,9 +1,16 @@
 import {
   safeWrapText,
-  stripBullet,
   buildEnergyLines,
-  getEnergyShortLabel
+  getEnergyShortLabel,
+  formatMainEnergyForCard,
+  sanitizeBulletLines,
+  clampToFlexLines,
 } from "./flex.utils.js";
+import {
+  FLEX_OVERVIEW_MAX_CHARS,
+  FLEX_FIT_REASON_MAX_CHARS,
+  FLEX_CLOSING_MAX_CHARS,
+} from "./flex.display.js";
 
 function createTopAccent(accentColor) {
   return {
@@ -115,18 +122,91 @@ export function createMetricCard(label, value) {
       },
       {
         type: "text",
-        text: safeWrapText(value || "-", 40),
-        size: "lg",
+        text: clampToFlexLines(safeWrapText(value || "-", 48), 2, 20).join("\n"),
+        size: "md",
         weight: "bold",
         color: "#FFFFFF",
         wrap: true,
+        maxLines: 2,
         margin: "sm",
       },
     ],
   };
 }
 
+/** Narrow card: category + short hint — avoids one long truncated line for พลังหลัก */
+export function createMainEnergyMetricCard(mainEnergy) {
+  const formatted = formatMainEnergyForCard(mainEnergy || "-");
+  const parts = String(formatted)
+    .split("\n")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const valueContents =
+    parts.length >= 2
+      ? [
+          {
+            type: "text",
+            text: clampToFlexLines(parts[0], 1, 22)[0] || parts[0] || "—",
+            size: "md",
+            weight: "bold",
+            color: "#FFFFFF",
+            wrap: true,
+            maxLines: 1,
+          },
+          {
+            type: "text",
+            text: clampToFlexLines(parts[1], 1, 26)[0] || parts[1] || "—",
+            size: "xs",
+            color: "#B8B8BE",
+            wrap: true,
+            maxLines: 1,
+            margin: "xs",
+          },
+        ]
+      : [
+          {
+            type: "text",
+            text: clampToFlexLines(formatted, 2, 22).join("\n") || "—",
+            size: "md",
+            weight: "bold",
+            color: "#FFFFFF",
+            wrap: true,
+            maxLines: 2,
+          },
+        ];
+
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingAll: "14px",
+    backgroundColor: "#18181A",
+    cornerRadius: "16px",
+    borderWidth: "1px",
+    borderColor: "#2A2A2D",
+    flex: 1,
+    contents: [
+      {
+        type: "text",
+        text: "พลังหลัก",
+        size: "xs",
+        color: "#8F8F95",
+      },
+      {
+        type: "box",
+        layout: "vertical",
+        spacing: "xs",
+        margin: "sm",
+        contents: valueContents,
+      },
+    ],
+  };
+}
+
 export function createEnergyLine(text) {
+  const body =
+    clampToFlexLines(String(text || "-"), 2, 22).join("\n") || "—";
+
   return {
     type: "box",
     layout: "horizontal",
@@ -145,10 +225,11 @@ export function createEnergyLine(text) {
       },
       {
         type: "text",
-        text: safeWrapText(text || "-", 60),
+        text: body,
         size: "sm",
         color: "#F2F2F2",
         wrap: true,
+        maxLines: 2,
         margin: "sm",
         flex: 1,
       },
@@ -193,20 +274,54 @@ function createSoftNote(text, color = "#F4E3AE", backgroundColor = "#1D1A14") {
     contents: [
       {
         type: "text",
-        text: safeWrapText(text || "-", 160),
+        text: safeWrapText(text || "-", FLEX_CLOSING_MAX_CHARS),
         size: "sm",
         color,
         wrap: true,
+        maxLines: 4,
       },
     ],
   };
 }
 
 function createBulletBlock(title, lines = [], backgroundColor = "#152017") {
-  const normalizedLines =
-    Array.isArray(lines) && lines.length > 0
-      ? lines.filter(Boolean).slice(0, 2)
-      : ["• -"];
+  const normalizedLines = sanitizeBulletLines(
+    Array.isArray(lines) && lines.length > 0 ? lines : [],
+  );
+
+  const bulletRows =
+    normalizedLines.length > 0
+      ? normalizedLines.map((line) => ({
+          type: "box",
+          layout: "horizontal",
+          spacing: "sm",
+          contents: [
+            {
+              type: "text",
+              text: "•",
+              size: "sm",
+              color: "#A8C9B8",
+              flex: 0,
+            },
+            {
+              type: "text",
+              text: line,
+              size: "sm",
+              color: "#E3E3E3",
+              wrap: true,
+              maxLines: 2,
+              flex: 1,
+            },
+          ],
+        }))
+      : [
+          {
+            type: "text",
+            text: "—",
+            size: "sm",
+            color: "#8A8A8E",
+          },
+        ];
 
   return {
     type: "box",
@@ -223,15 +338,7 @@ function createBulletBlock(title, lines = [], backgroundColor = "#152017") {
         size: "sm",
         color: "#FFFFFF",
       },
-      {
-        type: "text",
-        text: normalizedLines
-          .map((line) => `• ${stripBullet(line)}`)
-          .join("\n"),
-        size: "sm",
-        color: "#E3E3E3",
-        wrap: true,
-      },
+      ...bulletRows,
     ],
   };
 }
@@ -320,10 +427,15 @@ export function buildSummaryBubble({
             },
             {
               type: "text",
-              text: getEnergyShortLabel(mainEnergy || "พลังทั่วไป"),
+              text: clampToFlexLines(
+                getEnergyShortLabel(mainEnergy || "พลังทั่วไป"),
+                2,
+                26,
+              ).join("\n"),
               size: "sm",
               color: "#ECECEC",
               wrap: true,
+              maxLines: 2,
             },
             createProgressBar(score.percent || "50%", accentColor),
           ],
@@ -341,8 +453,8 @@ export function buildSummaryBubble({
           layout: "horizontal",
           spacing: "md",
           contents: [
-            createMetricCard("พลังหลัก", mainEnergy || "-"),
-            createMetricCard("ความสอดคล้อง", compatibility || "-"),
+            createMainEnergyMetricCard(mainEnergy || "-"),
+            createMetricCard("เข้ากับคุณ", compatibility || "-"),
           ],
         },
 
@@ -365,19 +477,23 @@ export function buildSummaryBubble({
   };
 }
 
+const DEFAULT_OVERVIEW_FLEX =
+  "เด่นในเชิงใช้งานและจังหวะชีวิต — อ่านเป็นภาพได้";
+const DEFAULT_FIT_FLEX =
+  "โยงกับเจ้าของในเชิงหนุนจังหวะและความนิ่ง";
+const DEFAULT_CLOSING_FLEX = "มีอีกชิ้น ส่งมาเทียบกันได้ครับ";
+
 export function buildReadingBubble({
   overview,
   fitReason,
   closing,
   accentColor
 }) {
-  const cleanOverview =
-    String(overview || "").trim() ||
-    "วัตถุชิ้นนี้มีพลังบางอย่างที่เด่นในเชิงการใช้งานและการหนุนจังหวะชีวิต";
+  const cleanOverview = String(overview || "").trim() || DEFAULT_OVERVIEW_FLEX;
+  const cleanFitReason = String(fitReason || "").trim() || DEFAULT_FIT_FLEX;
 
-  const cleanFitReason =
-    String(fitReason || "").trim() ||
-    "ชิ้นนี้เข้ากับเจ้าของในเชิงหนุนความนิ่งและประคองจังหวะ มากกว่าการผลักให้พุ่งเร็วทันที";
+  const overviewText = safeWrapText(cleanOverview, FLEX_OVERVIEW_MAX_CHARS + 10);
+  const fitText = safeWrapText(cleanFitReason, FLEX_FIT_REASON_MAX_CHARS + 10);
 
   return {
     type: "bubble",
@@ -411,10 +527,11 @@ export function buildReadingBubble({
             },
             {
               type: "text",
-              text: safeWrapText(cleanOverview, 280),
+              text: overviewText,
               size: "sm",
               color: "#E3E3E3",
               wrap: true,
+              maxLines: 8,
             },
           ],
           {
@@ -428,13 +545,13 @@ export function buildReadingBubble({
 
         createSectionCard(
           "เหตุผลที่เข้ากับเจ้าของ",
-          cleanFitReason,
+          fitText,
           "#141C22",
-          240
+          FLEX_FIT_REASON_MAX_CHARS + 10
         ),
 
         createSoftNote(
-          closing || "ถ้ามีอีกชิ้น ลองส่งมาเทียบกันได้ครับ จะเห็นมุมพลังที่ต่างกันชัดขึ้น",
+          String(closing || "").trim() || DEFAULT_CLOSING_FLEX,
           "#F4E3AE",
           "#1D1A14"
         ),
@@ -458,15 +575,12 @@ export function buildUsageBubble({
   const supportLines =
     Array.isArray(supportTopics) && supportTopics.length > 0
       ? supportTopics.slice(0, 2)
-      : [
-          "ใจนิ่งเวลาต้องตัดสินใจ",
-          "รับแรงกดดันได้มั่นคงขึ้น",
-        ];
+      : ["หนุนจังหวะตัดสินใจ", "รับแรงกดดันได้ดีขึ้น"];
 
   const suitableLines =
     Array.isArray(suitable) && suitable.length > 0
       ? suitable.slice(0, 2)
-      : ["ใช้ในจังหวะที่ต้องการความชัดและความนิ่ง"];
+      : ["ต้องการความชัดหรือนิ่งในงาน", "วันที่ต้องคุมสถานการณ์"];
 
   const cleanUsageGuide =
     String(usageGuide || "").trim() ||

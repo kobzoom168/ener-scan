@@ -1,3 +1,7 @@
+/**
+ * Output is cached in DB by `getScanCacheVersion()` in `scanResultCache.db.js`.
+ * Bump `SCAN_CACHE_FORMAT_VERSION` there when this formatter’s output shape changes.
+ */
 import { clampTextLength, normalizeWhitespace } from "../utils/text.js";
 
 const MAX_SCAN_OUTPUT_LENGTH = 1200;
@@ -11,6 +15,7 @@ function cleanupRepeatedPhrases(text) {
     .replace(/สายน้ำที่ไหล/gi, "แรงที่เคลื่อนอย่างต่อเนื่อง");
 }
 
+/** Section titles here must stay in sync with `src/services/flex/flex.parser.js` (`forceHeadingLineBreaks`). */
 function ensureSectionSpacing(text) {
   const headings = [
     "ลักษณะพลัง",

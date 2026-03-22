@@ -1,5 +1,15 @@
 import { parseScanText } from "./flex.parser.js";
-import { pickMainEnergyColor, normalizeScore } from "./flex.utils.js";
+import {
+  pickMainEnergyColor,
+  normalizeScore,
+  getEnergyShortLabel,
+} from "./flex.utils.js";
+import {
+  prepareScanFlexDisplay,
+  buildScanFlexAltText,
+  splitSentencesForFlex,
+  FLEX_SPLIT_WARN_THRESHOLD,
+} from "./flex.display.js";
 
 import {
   buildSummaryBubble,
@@ -10,6 +20,9 @@ import {
 export function buildScanFlex(rawText) {
   const accentColor = pickMainEnergyColor(rawText);
 
+  const parsed = parseScanText(rawText);
+  const display = prepareScanFlexDisplay(parsed);
+
   const {
     energyScore,
     mainEnergy,
@@ -17,16 +30,26 @@ export function buildScanFlex(rawText) {
     personality,
     tone,
     hidden,
-    overview,
-    fitReason,
     supportTopics,
     suitable,
     notStrong,
     usageGuide,
-    closing,
-  } = parseScanText(rawText);
+  } = display;
 
   const score = normalizeScore(energyScore);
+
+  const altText = buildScanFlexAltText({
+    mainEnergyLabel: getEnergyShortLabel(mainEnergy || "-"),
+    scoreDisplay: score.display || String(energyScore || "").trim(),
+  });
+
+  const overviewRaw =
+    parsed.overview === "-" ? "" : String(parsed.overview || "");
+  const fitRaw =
+    parsed.fitReason === "-" ? "" : String(parsed.fitReason || "");
+
+  const splitOverview = splitSentencesForFlex(overviewRaw).length;
+  const splitFit = splitSentencesForFlex(fitRaw).length;
 
   console.log("[FLEX_RAW_TEXT]", rawText);
 
@@ -37,18 +60,33 @@ export function buildScanFlex(rawText) {
     personality,
     tone,
     hidden,
-    overview,
-    fitReason,
+    overview: parsed.overview,
+    fitReason: parsed.fitReason,
+    overviewForFlex: display.overviewForFlex,
+    fitReasonForFlex: display.fitReasonForFlex,
     supportTopics,
     suitable,
     notStrong,
     usageGuide,
-    closing,
+    closing: parsed.closing,
+    closingForFlex: display.closingForFlex,
+    /** QA: segment counts after split (if ≥ warn, check for over-fragmentation) */
+    flexSplitCounts: {
+      overview: splitOverview,
+      fitReason: splitFit,
+      warnThreshold: FLEX_SPLIT_WARN_THRESHOLD,
+    },
+    flexSplitHighFragmentCount:
+      splitOverview >= FLEX_SPLIT_WARN_THRESHOLD ||
+      splitFit >= FLEX_SPLIT_WARN_THRESHOLD,
+    /** Per-field: scoresByIndex, rankByScoreDesc vs pickedOriginalIndices, laterOutperformsEarlier */
+    flexInsightDebug: display.flexInsightDebug,
+    altText,
   });
 
   return {
     type: "flex",
-    altText: `ผลการตรวจพลังวัตถุ: ${mainEnergy} ${score.raw || energyScore}`,
+    altText,
     contents: {
       type: "carousel",
       contents: [
@@ -62,9 +100,9 @@ export function buildScanFlex(rawText) {
           hidden,
         }),
         buildReadingBubble({
-          overview,
-          fitReason,
-          closing,
+          overview: display.overviewForFlex,
+          fitReason: display.fitReasonForFlex,
+          closing: display.closingForFlex,
           accentColor,
         }),
         buildUsageBubble({

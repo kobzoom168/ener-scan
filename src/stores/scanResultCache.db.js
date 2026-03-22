@@ -1,11 +1,25 @@
 /**
  * Persistent cache: perceptual image hash + normalized birthdate + prompt_version → result_text.
+ *
+ * Version string combines:
+ * - SCAN_CACHE_PROMPT_VERSION — bump when `deepScan.prompt.js` / model contract changes
+ * - SCAN_CACHE_FORMAT_VERSION — bump when `formatter.service.js` or Flex parse/display contract changes
+ *
+ * Old rows (e.g. v5) are not reused after bump; optional SQL cleanup in sql/015_*.sql
  */
 import { supabase } from "../config/supabase.js";
 import { normalizeBirthdateForScan } from "../utils/webhookText.util.js";
 
-/** Must match deep-scan prompt generation; bump when prompt/format contract changes. */
-export const SCAN_CACHE_PROMPT_VERSION = "v5";
+/** Bump when deep-scan prompt / output schema changes. */
+export const SCAN_CACHE_PROMPT_VERSION = "v6";
+
+/** Bump when post-process formatter or Flex field mapping changes (invalidates cached text shape). */
+export const SCAN_CACHE_FORMAT_VERSION = "1";
+
+/** Full key stored in DB `prompt_version` column (name kept for schema compatibility). */
+export function getScanCacheVersion() {
+  return `${SCAN_CACHE_PROMPT_VERSION}-fmt${SCAN_CACHE_FORMAT_VERSION}`;
+}
 
 export function normalizeBirthdateCacheKey(birthdate) {
   return normalizeBirthdateForScan(String(birthdate || "").trim());
@@ -17,11 +31,11 @@ export function normalizeBirthdateCacheKey(birthdate) {
 export async function getCachedScanResult({
   imageHash,
   birthdate,
-  promptVersion = SCAN_CACHE_PROMPT_VERSION,
+  promptVersion = getScanCacheVersion(),
 } = {}) {
   const h = String(imageHash || "").trim();
   const b = normalizeBirthdateCacheKey(birthdate);
-  const pv = String(promptVersion || SCAN_CACHE_PROMPT_VERSION).trim();
+  const pv = String(promptVersion || getScanCacheVersion()).trim();
   if (!h || !b || !pv) return null;
 
   const { data, error } = await supabase
@@ -55,12 +69,12 @@ export async function saveCachedScanResult({
   birthdate,
   resultText,
   objectType = "single_supported",
-  promptVersion = SCAN_CACHE_PROMPT_VERSION,
+  promptVersion = getScanCacheVersion(),
 } = {}) {
   const h = String(imageHash || "").trim();
   const b = normalizeBirthdateCacheKey(birthdate);
   const text = String(resultText || "").trim();
-  const pv = String(promptVersion || SCAN_CACHE_PROMPT_VERSION).trim();
+  const pv = String(promptVersion || getScanCacheVersion()).trim();
   if (!h || !b || !text || !pv) return null;
 
   const payload = {

@@ -1,3 +1,7 @@
+/**
+ * Parsed headings must match `ensureSectionSpacing` / section order in `formatter.service.js`
+ * and the model contract in `deepScan.prompt.js` so Flex sections align with stored text.
+ */
 import { cleanLine, stripBullet } from "./flex.utils.js";
 
 function normalizeText(text) {
@@ -135,7 +139,14 @@ function extractBulletSection(lines, startTitles = [], stopTitles = [], limit = 
     .split("\n")
     .map((line) => cleanLine(line))
     .filter((line) => line && line !== "-" && !/^[:\-–—•]+$/.test(line))
-    .map((line) => `• ${stripBullet(line)}`)
+    .map((line) => stripBullet(line))
+    .filter(
+      (line) =>
+        line &&
+        line !== "-" &&
+        !/^[•\-\–\—\s]+$/.test(line),
+    )
+    .map((line) => `• ${line}`)
     .slice(0, limit);
 }
 
