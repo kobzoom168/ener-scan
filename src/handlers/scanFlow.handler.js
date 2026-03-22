@@ -334,30 +334,74 @@ export async function runScanFlow({
   let scanRequestId = null;
   let appUserId = null;
 
-  // Create scan_requests row (write-path only, keep flow resilient)
-  try {
-    const appUser = await ensureUserByLineUserId(userId);
-    appUserId = appUser.id;
+  // scan_requests row is required before scan (billing / scan_results source of truth)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const appUser = await ensureUserByLineUserId(userId);
+      appUserId = appUser.id;
 
-    scanRequestId = await createScanRequest({
-      appUserId: appUser.id,
-      flowVersion,
-      scanJobId,
-      birthdateUsed: birthdate,
-      // TODO: wire usedSavedBirthdate flag from caller when available
-      usedSavedBirthdate: false,
-      requestSource: "line",
-    });
-  } catch (error) {
-    console.error("[WEBHOOK] createScanRequest failed but continue scan:", {
-      lineUserId: userId,
-      flowVersion,
-      scanJobId,
-      message: error?.message,
-      code: error?.code,
-      details: error?.details,
-      hint: error?.hint,
-    });
+      scanRequestId = await createScanRequest({
+        appUserId: appUser.id,
+        flowVersion,
+        scanJobId,
+        birthdateUsed: birthdate,
+        usedSavedBirthdate: false,
+        requestSource: "line",
+      });
+      break;
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          event: "SCAN_REQUEST_FAILED",
+          outcome: attempt < 2 ? "retry" : "final",
+          attempt,
+          lineUserId: userId,
+          flowVersion,
+          scanJobId,
+          message: error?.message,
+          code: error?.code,
+        })
+      );
+      if (attempt >= 2) {
+        console.error(
+          JSON.stringify({
+            event: "BILLING_PATH",
+            outcome: "blocked_no_scan_request",
+            lineUserId: userId,
+            flowVersion,
+            scanJobId,
+            appUserId: appUserId || null,
+          })
+        );
+        clearLatestScanJob(userId, scanJobId);
+        await replyText(
+          client,
+          replyToken,
+          "ขออภัยครับ ระบบเตรียมการสแกนไม่สำเร็จ กรุณาลองส่งรูปใหม่อีกครั้งในอีกสักครู่ครับ"
+        );
+        clearSessionIfFlowVersionMatches(userId, flowVersion);
+        return;
+      }
+    }
+  }
+
+  if (!scanRequestId || !appUserId) {
+    console.error(
+      JSON.stringify({
+        event: "BILLING_PATH",
+        outcome: "blocked_missing_ids",
+        lineUserId: userId,
+        scanJobId,
+      })
+    );
+    clearLatestScanJob(userId, scanJobId);
+    await replyText(
+      client,
+      replyToken,
+      "ขออภัยครับ ระบบเตรียมการสแกนไม่สำเร็จ กรุณาลองส่งรูปใหม่อีกครั้งครับ"
+    );
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
+    return;
   }
 
   setBirthdate(userId, birthdate, flowVersion);
@@ -552,7 +596,63 @@ export async function runScanFlow({
     );
   }
 
-  // 1) Legacy history table (keyed by line_user_id) - non-blocking for billing
+  // scan_results + paid decrement (source of truth) — must succeed before user sees success
+  try {
+    const scanFinishedAt = Date.now();
+    const responseTimeMs = scanFromCache
+      ? 0
+      : scanFinishedAt - scanStartedAt;
+
+    const scanResultId = await createScanResult({
+      scanRequestId,
+      appUserId,
+      resultText,
+      resultSummary: null,
+      energyScore: parsed.energyScore,
+      mainEnergy: parsed.mainEnergy,
+      compatibility: parsed.compatibility,
+      modelName: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
+      promptVersion: scanFromCache ? "cache_v1" : "v1",
+      responseTimeMs,
+      fromCache: scanFromCache,
+    });
+
+    if (!scanResultId) {
+      throw new Error("scan_result_insert_empty");
+    }
+
+    if (accessSource === "paid") {
+      await decrementUserPaidRemainingScans(appUserId);
+    }
+  } catch (billingErr) {
+    console.error(
+      JSON.stringify({
+        event: "BILLING_PATH",
+        outcome: "create_scan_result_or_decrement_failed",
+        lineUserId: userId,
+        appUserId,
+        scanRequestId,
+        accessSource,
+        message: billingErr?.message,
+        code: billingErr?.code,
+      })
+    );
+    try {
+      await updateScanRequestStatus(scanRequestId, "failed");
+    } catch (_) {
+      /* ignore */
+    }
+    clearLatestScanJob(userId, scanJobId);
+    await replyText(
+      client,
+      replyToken,
+      "ขออภัยครับ ระบบบันทึกผลลัพธ์ไม่สำเร็จ กรุณาลองส่งรูปใหม่อีกครั้งครับ"
+    );
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
+    return;
+  }
+
+  // Legacy history table (keyed by line_user_id) - after billing success
   try {
     await addScanHistoryDb(userId, {
       time: Date.now(),
@@ -574,47 +674,6 @@ export async function runScanFlow({
         hint: error?.hint,
       }
     );
-  }
-
-  // 2) New normalized scan_results table (source of truth for used scans)
-  if (scanRequestId && appUserId) {
-    try {
-      const scanFinishedAt = Date.now();
-      const responseTimeMs = scanFromCache
-        ? 0
-        : scanFinishedAt - scanStartedAt;
-
-      const scanResultId = await createScanResult({
-        scanRequestId,
-        appUserId,
-        resultText,
-        resultSummary: null,
-        energyScore: parsed.energyScore,
-        mainEnergy: parsed.mainEnergy,
-        compatibility: parsed.compatibility,
-        modelName: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
-        promptVersion: scanFromCache ? "cache_v1" : "v1",
-        responseTimeMs,
-        fromCache: scanFromCache,
-      });
-
-      // Paid quota enforcement (consume 1 remaining scan after DB insert succeeds)
-      if (scanResultId && accessSource === "paid") {
-        await decrementUserPaidRemainingScans(appUserId);
-      }
-    } catch (scanResultError) {
-      console.error(
-        "[BILLING_INCIDENT] createScanResult failed but user will be replied",
-        {
-          scanRequestId,
-          appUserId,
-          message: scanResultError?.message,
-          code: scanResultError?.code,
-          details: scanResultError?.details,
-          hint: scanResultError?.hint,
-        }
-      );
-    }
   }
 
   if (scanRequestId) {

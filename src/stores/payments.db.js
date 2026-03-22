@@ -479,8 +479,8 @@ export async function markPaymentApprovedAndUnlock({
 
   const packageCode = payment.package_code || DEFAULT_PACKAGE_CODE;
 
-  // 1) Update payment row first.
-  const { error: updatePaymentError } = await supabase
+  // 1) Claim row: only pending_verify -> paid (prevents double grant on concurrent approve)
+  const { data: updatedRows, error: updatePaymentError } = await supabase
     .from("payments")
     .update({
       status: "paid",
@@ -488,9 +488,27 @@ export async function markPaymentApprovedAndUnlock({
       approved_by: approvedBy || null,
       updated_at: nowIso,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "pending_verify")
+    .select("id");
 
   if (updatePaymentError) throw updatePaymentError;
+
+  if (!updatedRows || updatedRows.length === 0) {
+    const { data: rowAgain, error: againErr } = await supabase
+      .from("payments")
+      .select("id,user_id,line_user_id,status")
+      .eq("id", id)
+      .maybeSingle();
+    if (againErr) throw againErr;
+    if (rowAgain?.status === "paid") {
+      await safeCleanupOtherActivePaymentsForUser(rowAgain.user_id, id);
+      return { lineUserId: rowAgain.line_user_id || null };
+    }
+    throw new Error(
+      `payment_not_approvable_in_status_${rowAgain?.status || "unknown"}`
+    );
+  }
 
   // 2) Grant entitlement by package code.
   const entitlement = await grantEntitlementForPackage({
