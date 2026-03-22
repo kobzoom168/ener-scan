@@ -58,6 +58,7 @@ export function buildScanFlex(rawText, options = {}) {
     hidden,
     birthdate,
     display,
+    scanToneLevel: options.scanToneLevel,
   });
 
   const altText = buildScanFlexAltText({
@@ -116,6 +117,7 @@ export function buildScanFlex(rawText, options = {}) {
           clarityLabelThai: scanCopy.goals.clarityLabelThai,
         }
       : null,
+    scanToneLevel: scanCopy.retention?.scanToneLevel,
   });
 
   return {

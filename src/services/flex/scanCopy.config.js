@@ -5,10 +5,10 @@
  */
 
 /**
- * Bump when `ENERGY_COPY`, `MAIN_LABEL`, trait rules, or age-tone retention copy meaningfully change.
+ * Bump when `ENERGY_COPY`, `MAIN_LABEL`, scan tone bundles, trait rules, or age-tone retention copy meaningfully change.
  * Independent from `SCAN_CACHE_PROMPT_VERSION` (deep-scan LLM prompt).
  */
-export const SCAN_COPY_CONFIG_VERSION = "5";
+export const SCAN_COPY_CONFIG_VERSION = "6";
 
 /** Canonical energy keys (Thai strings — match `resolveEnergyType` output). */
 export const ENERGY_TYPES = {

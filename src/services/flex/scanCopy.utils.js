@@ -12,6 +12,11 @@ import {
   SCORE_TIERS,
 } from "./scanCopy.config.js";
 import {
+  ENERGY_COPY_MYSTIC,
+  ENERGY_COPY_MYSTIC_SALES,
+} from "./scanCopy.energyByTone.js";
+import { SCAN_TONE_LEVEL } from "./scanCopy.toneLevel.js";
+import {
   cleanLine,
   sanitizeFlexDisplayText,
   safeThaiCut,
@@ -50,7 +55,23 @@ export function fallbackText(value, fallback = "") {
   return text || fallback;
 }
 
-export function getEnergyCopyBlock(energyType) {
+/**
+ * @param {string} energyType
+ * @param {import('./scanCopy.toneLevel.js').ScanToneLevel} [scanToneLevel]
+ */
+export function getEnergyCopyBlock(energyType, scanToneLevel = SCAN_TONE_LEVEL.STANDARD) {
+  if (scanToneLevel === SCAN_TONE_LEVEL.MYSTIC) {
+    return (
+      ENERGY_COPY_MYSTIC[energyType] ||
+      ENERGY_COPY_MYSTIC[ENERGY_TYPES.BOOST]
+    );
+  }
+  if (scanToneLevel === SCAN_TONE_LEVEL.MYSTIC_SALES) {
+    return (
+      ENERGY_COPY_MYSTIC_SALES[energyType] ||
+      ENERGY_COPY_MYSTIC_SALES[ENERGY_TYPES.BOOST]
+    );
+  }
   return ENERGY_COPY[energyType] || ENERGY_COPY[ENERGY_TYPES.BOOST];
 }
 
@@ -64,8 +85,8 @@ export function getTierTraitLine(map, tier, fallbackLine) {
   return map[tier] || map[SCORE_TIERS.MEDIUM] || fallbackLine;
 }
 
-export function getSummaryPair(energyType, tier) {
-  const block = getEnergyCopyBlock(energyType);
+export function getSummaryPair(energyType, tier, scanToneLevel = SCAN_TONE_LEVEL.STANDARD) {
+  const block = getEnergyCopyBlock(energyType, scanToneLevel);
   const pair = block.summary?.[tier] || DEFAULT_COPY.summary[tier];
   const fb = DEFAULT_COPY.summary[SCORE_TIERS.MEDIUM];
   const line1 = pair?.[0] ?? fb[0];
@@ -80,8 +101,8 @@ function capTrait(s, maxLen) {
   return sanitizeFlexDisplayText(safeThaiCut(t, maxLen));
 }
 
-export function pickFeel(energyType, tier, personality) {
-  const block = getEnergyCopyBlock(energyType);
+export function pickFeel(energyType, tier, personality, scanToneLevel = SCAN_TONE_LEVEL.STANDARD) {
+  const block = getEnergyCopyBlock(energyType, scanToneLevel);
   const base = getTierTraitLine(
     block.traits?.feel,
     tier,
@@ -104,8 +125,8 @@ export function pickFeel(energyType, tier, personality) {
 }
 
 /** Middle trait slot: received signal in the body — not situations (those belong in Bubble 3). */
-export function pickUseCase(energyType, tier, tone) {
-  const block = getEnergyCopyBlock(energyType);
+export function pickUseCase(energyType, tier, tone, scanToneLevel = SCAN_TONE_LEVEL.STANDARD) {
+  const block = getEnergyCopyBlock(energyType, scanToneLevel);
   const base = getTierTraitLine(
     block.traits?.useCase,
     tier,
@@ -123,8 +144,8 @@ export function pickUseCase(energyType, tier, tone) {
   return capTrait(base, CAP_USE);
 }
 
-export function pickEffect(energyType, tier, hidden) {
-  const block = getEnergyCopyBlock(energyType);
+export function pickEffect(energyType, tier, hidden, scanToneLevel = SCAN_TONE_LEVEL.STANDARD) {
+  const block = getEnergyCopyBlock(energyType, scanToneLevel);
   const base = getTierTraitLine(
     block.traits?.effect,
     tier,

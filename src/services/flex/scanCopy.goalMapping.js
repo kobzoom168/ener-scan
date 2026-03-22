@@ -5,10 +5,11 @@
 import { ENERGY_TYPES, SCORE_TIERS } from "./scanCopy.config.js";
 import {
   GOAL_CLARITY_LABEL_THAI,
-  GOAL_HEADLINES,
   GOAL_NOT_PRIMARY_HINT,
   GOAL_UNCLEAR,
 } from "./scanCopy.goals.config.js";
+import { GOAL_HEADLINES_BY_TONE } from "./scanCopy.goalHeadlines.byTone.js";
+import { DEFAULT_SCAN_TONE_LEVEL } from "./scanCopy.toneLevel.js";
 import { cleanLine } from "./flex.utils.js";
 
 /**
@@ -46,9 +47,10 @@ function tierToClarity(tier) {
  * @param {string} energyType
  * @param {string} pickKey
  */
-function pickGoalHeadline(clarityKey, energyType, pickKey) {
-  const block =
-    GOAL_HEADLINES[energyType] || GOAL_HEADLINES[ENERGY_TYPES.BOOST];
+function pickGoalHeadline(clarityKey, energyType, pickKey, goalHeadlinesTable) {
+  const table =
+    goalHeadlinesTable || GOAL_HEADLINES_BY_TONE[DEFAULT_SCAN_TONE_LEVEL];
+  const block = table[energyType] || table[ENERGY_TYPES.BOOST];
   const lines = block?.[clarityKey];
   const picked = pickDeterministic(lines || [], pickKey);
   return picked || pickDeterministic(block?.soft || [], pickKey);
@@ -74,7 +76,11 @@ export function deriveGoalMapping({
   energyType,
   scoreNumeric,
   tier,
+  scanToneLevel,
 }) {
+  const goalTable =
+    GOAL_HEADLINES_BY_TONE[scanToneLevel] ||
+    GOAL_HEADLINES_BY_TONE[DEFAULT_SCAN_TONE_LEVEL];
   const me = cleanLine(mainEnergy ?? "");
   const scoreOk =
     scoreNumeric != null && Number.isFinite(Number(scoreNumeric));
@@ -102,9 +108,10 @@ export function deriveGoalMapping({
     };
   }
 
-  const et = energyType && GOAL_HEADLINES[energyType] ? energyType : ENERGY_TYPES.BOOST;
+  const et =
+    energyType && goalTable[energyType] ? energyType : ENERGY_TYPES.BOOST;
   const pickKey = `${et}|${tier}|${clarity}`;
-  const goalHeadline = pickGoalHeadline(clarity, et, pickKey);
+  const goalHeadline = pickGoalHeadline(clarity, et, pickKey, goalTable);
   const notPrimaryFor = GOAL_NOT_PRIMARY_HINT[et];
 
   return {

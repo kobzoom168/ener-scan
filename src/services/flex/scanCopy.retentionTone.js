@@ -1,9 +1,11 @@
 /**
  * Rule-based retention microcopy by tone preset (no LLM).
  * Picks are deterministic from (tone + energy key + score tier + compat bucket).
+ * `scanToneLevel` (standard | mystic | mystic_sales) optionally overrides hook/CTA copy.
  */
 import { ENERGY_TYPES, SCORE_TIERS } from "./scanCopy.config.js";
 import { cleanLine, safeThaiCut } from "./flex.utils.js";
+import { SCAN_TONE_LEVEL } from "./scanCopy.toneLevel.js";
 
 const MAX_NICK = 26;
 const MAX_HOOK = 72;
@@ -224,13 +226,85 @@ const CTA = {
   },
 };
 
+/** When scan tone is mystic / mystic_sales — hook lines (compat bucket). Interpretive only. */
+const HOOK_SCAN_TONE = {
+  mystic: {
+    high: [
+      "พลังเงียบแต่ลึก — ยังมีชั้นที่ไม่ได้เอ่ย",
+      "ชิ้นนี้คุ้มใจ — ทางลึกยังไม่ปิด",
+    ],
+    mid: [
+      "สัมผัสต่อไปอาจเล่นคนละชั้น",
+      "พกประจำชิ้นนี้ — แสงยังว่างให้มุมอื่น",
+    ],
+    low: [
+      "ยังไม่ใช่ชิ้นที่สุด — ความลึกยังว่าง",
+      "มุมอื่นยังพร่า — ยังไม่จบ",
+    ],
+  },
+  mystic_sales: {
+    high: [
+      "โทนนี้ชัด — ลองสแกนชิ้นอื่นเพื่อดูความต่าง",
+      "ชิ้นนี้ใช้งานได้จริง — ยังมีมุมที่ว่างให้เปรียบเทียบ",
+    ],
+    mid: [
+      "พกบ่อยชิ้นนี้ — โทนก็ยังเปิดอยู่นิด ๆ",
+      "ยังรู้สึกว่ามีมุมที่ไม่ได้จับ",
+    ],
+    low: [
+      "บางทียังมีมุมที่อ่อนกว่านี้",
+      "ยังไม่โดนใจ — ฟีลยังลอยอยู่เล็กน้อย",
+    ],
+  },
+};
+
+const CTA_SCAN_TONE = {
+  mystic: {
+    label: "ลึกกว่าไหม",
+    text: "ขอสแกนชิ้นถัดไป",
+  },
+  mystic_sales: {
+    label: "ดูชิ้นถัดไป",
+    text: "ลองสแกนเพื่อเปรียบเทียบ",
+  },
+};
+
 function nickTable(tone) {
   return NICK[tone] || NICK.warm;
+}
+
+function hookLinesForScanTone(tonePreset, scanToneLevel, compatBucket) {
+  const cb =
+    compatBucket === "high" || compatBucket === "low" ? compatBucket : "mid";
+  if (scanToneLevel === SCAN_TONE_LEVEL.STANDARD) {
+    const tone =
+      tonePreset === "youthful" || tonePreset === "mystic" ? tonePreset : "warm";
+    return HOOK[tone]?.[cb] || HOOK.warm[cb];
+  }
+  const scanHook = HOOK_SCAN_TONE[scanToneLevel]?.[cb];
+  if (Array.isArray(scanHook) && scanHook.length > 0) return scanHook;
+  const tone =
+    tonePreset === "youthful" || tonePreset === "mystic" ? tonePreset : "warm";
+  return HOOK[tone]?.[cb] || HOOK.warm[cb];
+}
+
+function ctaForScanTone(tonePreset, scanToneLevel) {
+  if (scanToneLevel === SCAN_TONE_LEVEL.STANDARD) {
+    const tone =
+      tonePreset === "youthful" || tonePreset === "mystic" ? tonePreset : "warm";
+    return CTA[tone] || CTA.warm;
+  }
+  return (
+    CTA_SCAN_TONE[scanToneLevel] ||
+    CTA[tonePreset === "youthful" || tonePreset === "mystic" ? tonePreset : "warm"] ||
+    CTA.warm
+  );
 }
 
 /**
  * @param {{
  *   tonePreset: 'youthful'|'warm'|'mystic',
+ *   scanToneLevel?: import('./scanCopy.toneLevel.js').ScanToneLevel,
  *   energyType: string,
  *   tier: string,
  *   compatBucket: CompatBucket,
@@ -238,6 +312,7 @@ function nickTable(tone) {
  */
 export function getRetentionMicrocopy({
   tonePreset,
+  scanToneLevel = SCAN_TONE_LEVEL.STANDARD,
   energyType,
   tier,
   compatBucket,
@@ -257,13 +332,13 @@ export function getRetentionMicrocopy({
     MAX_NICK,
   );
 
-  const hookOpts = HOOK[tone]?.[cb] || HOOK.warm[cb];
+  const hookOpts = hookLinesForScanTone(tonePreset, scanToneLevel, compatBucket);
   const hook = cap(
     pickDeterministic(hookOpts, keyParts(et, tr, cb)),
     MAX_HOOK,
   );
 
-  const cta = CTA[tone] || CTA.warm;
+  const cta = ctaForScanTone(tonePreset, scanToneLevel);
 
   return {
     energyNickname: nick,

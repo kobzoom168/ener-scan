@@ -7,9 +7,11 @@ import {
   CAP_MAIN_LABEL,
   CAP_MAIN_LABEL_ALT,
   ENERGY_TYPES,
-  MAIN_LABEL,
-  MAIN_LABEL_ALT,
 } from "./scanCopy.config.js";
+import {
+  MAIN_LABEL_ALT_BY_TONE,
+  MAIN_LABEL_BY_TONE,
+} from "./scanCopy.mainLabelsByTone.js";
 import {
   getSummaryPair,
   pickEffect,
@@ -30,6 +32,7 @@ import {
   getRetentionMicrocopy,
 } from "./scanCopy.retentionTone.js";
 import { deriveGoalMapping } from "./scanCopy.goalMapping.js";
+import { resolveScanToneLevel } from "./scanCopy.toneLevel.js";
 
 export { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.config.js";
 export { resolveEnergyType, resolveScoreTier } from "./scanCopy.utils.js";
@@ -52,6 +55,7 @@ function capMainLabel(s, maxLen) {
  *   hidden?: string,
  *   birthdate?: string|null,
  *   tonePreset?: 'youthful'|'warm'|'mystic',
+ *   scanToneLevel?: import('./scanCopy.toneLevel.js').ScanToneLevel,
  *   birthdateSignals?: unknown,
  *   objectSignals?: unknown,
  *   display?: Record<string, unknown>,
@@ -62,12 +66,15 @@ export function generateScanCopy(input) {
   const energyType = resolveEnergyType(mainEnergy);
   const tier = resolveScoreTier(input.scoreNumeric);
 
+  const scanToneLevel = resolveScanToneLevel(input);
+
   const tonePreset =
     input.tonePreset ||
     getAgeTonePresetFromBirthdate(input.birthdate).tonePreset;
   const compatBucket = compatibilityToBucket(input.compatibility);
   const retention = getRetentionMicrocopy({
     tonePreset,
+    scanToneLevel,
     energyType,
     tier,
     compatBucket,
@@ -78,22 +85,28 @@ export function generateScanCopy(input) {
     energyType,
     scoreNumeric: input.scoreNumeric,
     tier,
+    scanToneLevel,
   });
 
-  console.log("[FLEX_AGE_TONE]", { tonePreset });
+  console.log("[FLEX_AGE_TONE]", { tonePreset, scanToneLevel });
 
-  const label0 = MAIN_LABEL[energyType] || MAIN_LABEL[ENERGY_TYPES.BOOST];
-  const labelAlt0 = MAIN_LABEL_ALT[energyType] || MAIN_LABEL_ALT[ENERGY_TYPES.BOOST];
-  const [line1, line2] = getSummaryPair(energyType, tier);
+  const labelMap =
+    MAIN_LABEL_BY_TONE[scanToneLevel] || MAIN_LABEL_BY_TONE.standard;
+  const labelAltMap =
+    MAIN_LABEL_ALT_BY_TONE[scanToneLevel] || MAIN_LABEL_ALT_BY_TONE.standard;
+  const label0 = labelMap[energyType] || labelMap[ENERGY_TYPES.BOOST];
+  const labelAlt0 =
+    labelAltMap[energyType] || labelAltMap[ENERGY_TYPES.BOOST];
+  const [line1, line2] = getSummaryPair(energyType, tier, scanToneLevel);
 
   const mainEnergyLabel = capMainLabel(label0, CAP_MAIN_LABEL) || label0;
   const mainEnergyLabelAlt = capMainLabel(labelAlt0, CAP_MAIN_LABEL_ALT) || labelAlt0;
   const mainEnergyLine1 = sanitizeFlexDisplayText(line1);
   const mainEnergyLine2 = sanitizeFlexDisplayText(line2);
 
-  const feelShort = pickFeel(energyType, tier, input.personality ?? "-");
-  const useCaseShort = pickUseCase(energyType, tier, input.tone ?? "-");
-  const effectShort = pickEffect(energyType, tier, input.hidden ?? "-");
+  const feelShort = pickFeel(energyType, tier, input.personality ?? "-", scanToneLevel);
+  const useCaseShort = pickUseCase(energyType, tier, input.tone ?? "-", scanToneLevel);
+  const effectShort = pickEffect(energyType, tier, input.hidden ?? "-", scanToneLevel);
 
   const display = input.display || {};
 
@@ -137,6 +150,7 @@ export function generateScanCopy(input) {
     /** Short retention copy only; does not replace parsed reading body. */
     retention: {
       tonePreset,
+      scanToneLevel,
       energyNickname: retention.energyNickname,
       retentionHook: retention.retentionHook,
       nextScanCta: retention.nextScanCta,
