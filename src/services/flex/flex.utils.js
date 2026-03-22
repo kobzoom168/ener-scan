@@ -10,20 +10,39 @@ export function stripBullet(text) {
     .trim();
 }
 
-export function safeWrapText(text, maxLength = 300) {
-  const clean = cleanLine(text);
+/**
+ * Truncate at a space when possible — no "…" / "..." in Flex copy.
+ * If there is no space in-range, cuts at maxChars (last resort for unbroken Thai tokens).
+ */
+export function truncateAtWordBoundaryWithRest(text, maxChars) {
+  const t = cleanLine(text);
+  if (!t) return { line: "", rest: "" };
+  if (t.length <= maxChars) return { line: t, rest: "" };
 
-  if (!clean) return "-";
-  if (clean.length <= maxLength) return clean;
-
-  const sliced = clean.slice(0, Math.max(1, maxLength - 1));
+  const sliced = t.slice(0, maxChars);
   const lastSpace = sliced.lastIndexOf(" ");
-
-  if (lastSpace > Math.floor(maxLength * 0.55)) {
-    return `${sliced.slice(0, lastSpace).trim()}…`;
+  if (lastSpace > Math.floor(maxChars * 0.35)) {
+    return {
+      line: t.slice(0, lastSpace).trim(),
+      rest: t.slice(lastSpace).trim(),
+    };
   }
 
-  return `${sliced.trim()}…`;
+  return {
+    line: t.slice(0, maxChars).trim(),
+    rest: t.slice(maxChars).trim(),
+  };
+}
+
+export function truncateAtWordBoundary(text, maxLength) {
+  const { line } = truncateAtWordBoundaryWithRest(text, maxLength);
+  return line || "-";
+}
+
+export function safeWrapText(text, maxLength = 300) {
+  const clean = cleanLine(text);
+  if (!clean) return "-";
+  return truncateAtWordBoundary(clean, maxLength);
 }
 
 /** Collapse horizontal spaces only — keeps newline boundaries for multi-line Flex text. */
@@ -34,17 +53,9 @@ function normalizeFlexLine(s) {
 function splitOverflowSegment(singleLine, maxChars) {
   const s = normalizeFlexLine(singleLine);
   if (!s) return { line: "-", rest: "" };
-  if (s.length <= maxChars) return { line: s, rest: "" };
-
-  const slice = s.slice(0, maxChars);
-  const sp = slice.lastIndexOf(" ");
-  if (sp > Math.floor(maxChars * 0.35)) {
-    const part = s.slice(0, sp).trim();
-    return { line: `${part}…`, rest: s.slice(sp).trim() };
-  }
-
-  const part = s.slice(0, maxChars - 1).trim();
-  return { line: `${part}…`, rest: s.slice(maxChars - 1).trim() };
+  const { line, rest } = truncateAtWordBoundaryWithRest(s, maxChars);
+  if (!line) return { line: "-", rest: rest || "" };
+  return { line, rest: rest || "" };
 }
 
 function takeOneLineSegment(singleLine, maxChars) {
@@ -94,7 +105,18 @@ export function compactParenHint(inner, maxLen = 16) {
     .replace(/^เพื่อให้\s*/i, "")
     .trim();
   if (s.length <= maxLen) return s;
-  return safeWrapText(s, maxLen);
+  const commaTh = s.indexOf("，");
+  const commaEn = s.indexOf(",");
+  const comma =
+    commaTh >= 0 && commaEn >= 0
+      ? Math.min(commaTh, commaEn)
+      : Math.max(commaTh, commaEn);
+  if (comma > 6) {
+    const first = s.slice(0, comma).trim();
+    if (first.length <= maxLen) return first;
+    return truncateAtWordBoundary(first, maxLen);
+  }
+  return truncateAtWordBoundary(s, maxLen);
 }
 
 /**
