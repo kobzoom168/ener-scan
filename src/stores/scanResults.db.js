@@ -11,6 +11,7 @@ export async function createScanResult({
   modelName,
   promptVersion,
   responseTimeMs,
+  fromCache = false,
 }) {
   const normalizedUserId = String(appUserId || "").trim();
   const normalizedRequestId = String(scanRequestId || "").trim();
@@ -36,6 +37,7 @@ export async function createScanResult({
       typeof responseTimeMs === "number" && Number.isFinite(responseTimeMs)
         ? Math.max(0, Math.round(responseTimeMs))
         : null,
+    from_cache: Boolean(fromCache),
   };
 
   const { data, error } = await supabase

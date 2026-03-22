@@ -1,6 +1,12 @@
 import { generateScanText } from "./openai.service.js";
 import { generateWithRetry } from "./retry.service.js";
 import { formatScanOutput } from "./formatter.service.js";
+import { getImageHash } from "./dedupe.service.js";
+import {
+  getCachedScanResult,
+  saveCachedScanResult,
+  markCachedScanHit,
+} from "../stores/scanResultCache.db.js";
 
 import {
   hasRepeatedPhrase,
@@ -153,6 +159,45 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
 
   /*
   ------------------------------------------------
+  PERSISTENT CACHE (after same validations as caller: buffer + birthdate)
+  ------------------------------------------------
+  */
+  let imageHash = "";
+  try {
+    imageHash = await getImageHash(imageBuffer);
+    const cached = await getCachedScanResult({
+      imageHash,
+      birthdate,
+    });
+    if (cached?.result_text) {
+      try {
+        await markCachedScanHit(cached.id);
+      } catch (hitErr) {
+        console.error("[SCAN_CACHE] markCachedScanHit failed (ignored):", hitErr?.message);
+      }
+      const finalText = String(cached.result_text).trim();
+      addRecentOutput(userId, finalText);
+      const scanEndedAt = Date.now();
+      console.log(
+        JSON.stringify({
+          event: "scan_result_cache",
+          outcome: "hit",
+          userId,
+          cacheId: cached.id,
+          elapsedMs: scanEndedAt - scanStartedAt,
+        })
+      );
+      return { resultText: finalText, fromCache: true };
+    }
+  } catch (cacheErr) {
+    console.error("[SCAN_CACHE] lookup failed (continuing with OpenAI):", {
+      message: cacheErr?.message,
+      code: cacheErr?.code,
+    });
+  }
+
+  /*
+  ------------------------------------------------
   LOAD RECENTS
   ------------------------------------------------
   */
@@ -236,6 +281,31 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
 
   /*
   ------------------------------------------------
+  SAVE CACHE (best-effort)
+  ------------------------------------------------
+  */
+  if (imageHash) {
+    try {
+      await saveCachedScanResult({
+        imageHash,
+        birthdate,
+        resultText: finalText,
+        objectType: "single_supported",
+      });
+      console.log(
+        JSON.stringify({
+          event: "scan_result_cache",
+          outcome: "saved",
+          userId,
+        })
+      );
+    } catch (saveErr) {
+      console.error("[SCAN_CACHE] save failed (ignored):", saveErr?.message);
+    }
+  }
+
+  /*
+  ------------------------------------------------
   FINISH
   ------------------------------------------------
   */
@@ -243,5 +313,5 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
 
   console.log("[SCAN_TIMING] totalElapsedMs:", scanEndedAt - scanStartedAt);
 
-  return finalText;
+  return { resultText: finalText, fromCache: false };
 }

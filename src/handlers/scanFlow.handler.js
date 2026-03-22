@@ -410,6 +410,7 @@ export async function runScanFlow({
   }
 
   let resultText = "";
+  let scanFromCache = false;
   const scanStartedAt = Date.now();
 
   try {
@@ -422,11 +423,13 @@ export async function runScanFlow({
       startedAt: scanStartedAt,
     });
 
-    resultText = await runDeepScan({
+    const scanOut = await runDeepScan({
       imageBuffer,
       birthdate,
       userId,
     });
+    resultText = scanOut.resultText;
+    scanFromCache = Boolean(scanOut.fromCache);
 
     const scanFinishedAt = Date.now();
     console.log("[WEBHOOK] runScanFlow result ready", {
@@ -436,6 +439,7 @@ export async function runScanFlow({
       resultLength: resultText?.length || 0,
       finishedAt: scanFinishedAt,
       elapsedMs: scanFinishedAt - scanStartedAt,
+      fromCache: scanFromCache,
     });
   } catch (err) {
     console.error("[WEBHOOK] scan failed:", err?.message || err);
@@ -576,7 +580,9 @@ export async function runScanFlow({
   if (scanRequestId && appUserId) {
     try {
       const scanFinishedAt = Date.now();
-      const responseTimeMs = scanFinishedAt - scanStartedAt;
+      const responseTimeMs = scanFromCache
+        ? 0
+        : scanFinishedAt - scanStartedAt;
 
       const scanResultId = await createScanResult({
         scanRequestId,
@@ -586,9 +592,10 @@ export async function runScanFlow({
         energyScore: parsed.energyScore,
         mainEnergy: parsed.mainEnergy,
         compatibility: parsed.compatibility,
-        modelName: "gpt-4.1-mini",
-        promptVersion: "v1",
+        modelName: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
+        promptVersion: scanFromCache ? "cache_v1" : "v1",
         responseTimeMs,
+        fromCache: scanFromCache,
       });
 
       // Paid quota enforcement (consume 1 remaining scan after DB insert succeeds)
