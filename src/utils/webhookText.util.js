@@ -1,5 +1,3 @@
-import { getPromptPayQrPublicUrl } from "./promptpayQrPublicUrl.util.js";
-
 function normalizeBirthdateText(text) {
   return String(text || "")
     .trim()
@@ -171,18 +169,36 @@ export function buildCooldownText(remainingSec = 0) {
   ].join("\n");
 }
 
+/** ข้อความหลักสำหรับชำระเงิน (ไม่ใส่ URL — QR ส่งแยกเป็น image message) */
+export function buildPaymentQrIntroText() {
+  return [
+    "🔒 หมดสิทธิ์ทดลองใช้ฟรีแล้ว ต้องชำระเงินก่อนสแกนต่อ",
+    "",
+    "แพ็กเกจ: 99 บาท / สแกนได้ 15 ครั้ง",
+    "",
+    "วิธีชำระ:",
+    "1. สแกน QR ที่ส่งด้านล่าง",
+    "2. โอนแล้วส่งสลิปในแชตนี้",
+    "3. รอแอดมินตรวจสอบและเปิดสิทธิ์",
+    "",
+    "เมื่ออนุมัติแล้ว ระบบจะแจ้งกลับอัตโนมัติในแชตนี้",
+  ].join("\n");
+}
+
+export function buildPaymentQrSlipText() {
+  return "ส่งสลิปในแชตนี้ได้เลยครับ";
+}
+
 export function buildPaymentRequiredText({ usedScans = 0, freeLimit = 3 } = {}) {
-  const qrUrl = getPromptPayQrPublicUrl();
   return [
     "🔍 Ener Scan",
     "",
     "คุณใช้สิทธิ์ทดลองครบแล้ว",
     "",
     "✨ แพ็กเกจแนะนำ: โอน 99 บาท → ส่งสลิป → รอแอดมินตรวจ → หลังอนุมัติจึงได้สิทธิ์สแกน 15 ครั้งภายใน 24 ชม.",
-    `🔗 QR เพื่อโอน: ${qrUrl}`,
     "ขั้นตอน: โอนตามยอด → ส่งสลิป 1 รูปในแชทนี้ → รอแอดมินตรวจและอนุมัติ",
     "",
-    "พิมพ์: payment (ดูวิธีชำระเงิน / QR อีกครั้ง)",
+    "พิมพ์: payment เพื่อดู QR และวิธีชำระเงิน",
   ].join("\n");
 }
 
@@ -238,33 +254,26 @@ export function buildPaymentSlipFollowUpText() {
   return "📎 หลังโอนแล้ว ส่งรูปสลิปในแชทนี้เพื่อให้แอดมินตรวจครับ";
 }
 
-/** ข้อความเดียว (fallback เมื่อส่งรูป QR ไม่ได้ / LINE error) */
+/** ข้อความเดียว (fallback เมื่อส่งรูป QR ไม่ได้ / LINE error) — ไม่ใส่ลิงก์ QR */
 export function buildPaymentInstructionText({
   paymentId = null,
   amount = null,
   currency = "THB",
 } = {}) {
-  const qrUrl = getPromptPayQrPublicUrl();
   const thb = displayAmountThb(amount);
   return [
-    "💳 วิธีชำระเงิน (พร้อมเพย์ + สลิป)",
+    buildPaymentQrIntroText().replace("99 บาท", `${thb} บาท`),
     "",
-    `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ — แอดมินจะตรวจก่อนเปิดสิทธิ์`,
-    "หลังอนุมัติสลิปแล้ว จึงจะได้สิทธิ์สแกนตามแพ็กเกจ (เช่น 15 ครั้ง / 24 ชม.)",
-    `🔗 เปิด QR: ${qrUrl}`,
+    "⚠️ ระบบไม่สามารถแสดงรูป QR ในแชทได้ชั่วคราว — กรุณาพิมพ์ payment อีกครั้งภายหลัง หรือติดต่อแอดมิน",
   ].join("\n");
 }
 
-/** MVP: user hit payment gate on scan image — ask for QR payment + slip photo. */
+/** @deprecated Prefer replyPaymentInstructions + image; kept for rare text-only fallback */
 export function buildManualPaymentRequestText() {
-  const qrUrl = getPromptPayQrPublicUrl();
   return [
-    "🔒 หมดสิทธิ์ทดลองแล้ว ต้องชำระเงินก่อนสแกนต่อ",
+    buildPaymentQrIntroText(),
     "",
-    "ขั้นตอน: โอน 99 บาท → ส่งสลิปในแชทนี้ → รอแอดมินตรวจ → อนุมัติแล้วจึงเปิดสิทธิ์",
-    `🔗 QR: ${qrUrl}`,
-    "",
-    "พิมพ์: payment (ดูวิธีชำระเงิน / QR อีกครั้ง)",
+    "พิมพ์: payment เพื่อดู QR และวิธีชำระเงินอีกครั้ง",
   ].join("\n");
 }
 

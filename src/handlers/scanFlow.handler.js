@@ -5,7 +5,7 @@ import {
 import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
-import { replyText, replyFlex } from "../services/lineReply.service.js";
+import { replyText, replyFlex, replyPaymentInstructions } from "../services/lineReply.service.js";
 import { buildScanFlex } from "../services/flex/flex.service.js";
 
 import {
@@ -15,7 +15,6 @@ import {
   buildRateLimitFlex,
   buildCooldownFlex,
   buildPaymentRequiredFlex,
-  buildPaymentPaywallFlex,
   buildBirthdateSettingsBubble,
 } from "../services/flex/status.flex.js";
 
@@ -54,8 +53,14 @@ import {
   buildRateLimitText,
   buildCooldownText,
   buildPaymentRequiredText,
+  buildPaymentQrIntroText,
+  buildPaymentQrSlipText,
+  buildPaymentInstructionText,
 } from "../utils/webhookText.util.js";
-import { getPromptPayQrPublicUrl } from "../utils/promptpayQrPublicUrl.util.js";
+import {
+  getPromptPayQrPublicUrl,
+  isPromptPayQrUrlHttpsForLine,
+} from "../utils/promptpayQrPublicUrl.util.js";
 
 import { ensureUserByLineUserId } from "../stores/users.db.js";
 import {
@@ -65,6 +70,27 @@ import {
 import { createScanResult } from "../stores/scanResults.db.js";
 import { createPaymentPending } from "../stores/payments.db.js";
 import { getSavedBirthdate } from "../stores/userProfile.db.js";
+
+async function replyPaymentQrTripleOrFallback({
+  client,
+  replyToken,
+  amountForFallback = 99,
+}) {
+  const qrUrl = getPromptPayQrPublicUrl();
+  if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
+    await replyPaymentInstructions(client, replyToken, {
+      introText: buildPaymentQrIntroText(),
+      qrImageUrl: qrUrl,
+      slipText: buildPaymentQrSlipText(),
+    });
+  } else {
+    await replyText(
+      client,
+      replyToken,
+      buildPaymentInstructionText({ amount: amountForFallback }),
+    );
+  }
+}
 
 export async function replyFlexWithFallback({
   client,
@@ -210,21 +236,10 @@ export async function runScanFlow({
             currency: MVP_CURRENCY,
           });
 
-          const paymentUrl = getPromptPayQrPublicUrl();
-
-          const paywallFlex = buildPaymentPaywallFlex({
-            usedScans: access?.usedScans,
-            freeLimit: access?.freeScansLimit,
-            paymentUrl,
-            priceTHB: MVP_PRICE_THB,
-          });
-
-          await replyFlexWithFallback({
+          await replyPaymentQrTripleOrFallback({
             client,
             replyToken,
-            flex: paywallFlex,
-            fallbackText: reply.fallbackText || buildPaymentRequiredText(),
-            logLabel: "payment required flex",
+            amountForFallback: MVP_PRICE_THB,
           });
         } catch (err) {
           await replyFlexWithFallback({
@@ -255,9 +270,6 @@ export async function runScanFlow({
       if (scanCount >= 30) {
         console.log("[PAID_LIMIT]", { userId, scanCount });
 
-        const fallbackText =
-          "คุณใช้สิทธิ์ครบแล้วในช่วง 24 ชั่วโมงนี้\n\nหากต้องการรอบใหม่: โอน → ส่งสลิป → รอแอดมินตรวจและอนุมัติ → จึงสแกนต่อได้\n(เริ่มได้จากคำสั่ง payment หรือสแกนรูปใหม่เมื่อระบบขอชำระเงิน)";
-
         try {
           const MVP_PRICE_THB = 99;
           const MVP_CURRENCY = "THB";
@@ -269,24 +281,17 @@ export async function runScanFlow({
             currency: MVP_CURRENCY,
           });
 
-          const paymentUrl = getPromptPayQrPublicUrl();
-
-          const paywallFlex = buildPaymentPaywallFlex({
-            usedScans: access?.usedScans,
-            freeLimit: access?.freeScansLimit,
-            paymentUrl,
-            priceTHB: MVP_PRICE_THB,
-          });
-
-          await replyFlexWithFallback({
+          await replyPaymentQrTripleOrFallback({
             client,
             replyToken,
-            flex: paywallFlex,
-            fallbackText,
-            logLabel: "payment required flex",
+            amountForFallback: MVP_PRICE_THB,
           });
         } catch (err) {
-          await replyText(client, replyToken, fallbackText);
+          await replyText(
+            client,
+            replyToken,
+            buildPaymentInstructionText({ amount: 99, currency: "THB" }),
+          );
         }
         return;
       }

@@ -54,7 +54,7 @@ import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 
 import {
   replyText,
-  replyPaymentInstructionWithQr,
+  replyPaymentInstructions,
 } from "../services/lineReply.service.js";
 import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
 import {
@@ -86,9 +86,8 @@ import {
   buildSystemErrorText,
   isPaymentCommand,
   buildPaymentInstructionText,
-  buildPaymentCommandIntroText,
-  buildPaymentSlipFollowUpText,
-  buildManualPaymentRequestText,
+  buildPaymentQrIntroText,
+  buildPaymentQrSlipText,
   buildSlipReceivedText,
   buildPendingVerifyReminderText,
   buildPendingVerifyBlockScanText,
@@ -395,10 +394,38 @@ async function finalizeAcceptedImage({
     // Preserve the scan image candidate so user can continue after approval.
     setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
+    const qrUrl = getPromptPayQrPublicUrl();
+    if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
+      try {
+        await replyPaymentInstructions(client, event.replyToken, {
+          introText: buildPaymentQrIntroText(),
+          qrImageUrl: qrUrl,
+          slipText: buildPaymentQrSlipText(),
+        });
+        return;
+      } catch (qrErr) {
+        console.error(
+          "[WEBHOOK] replyPaymentInstructions (finalizeAcceptedImage payment_required) failed:",
+          {
+            userId,
+            message: qrErr?.message,
+          },
+        );
+      }
+    } else {
+      console.warn(
+        "[WEBHOOK] QR URL not HTTPS — LINE cannot load image. Set APP_BASE_URL to public https URL.",
+        { qrUrl },
+      );
+    }
+
     await replyText(
       client,
       event.replyToken,
-      buildManualPaymentRequestText()
+      buildPaymentInstructionText({
+        amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
+        currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
+      }),
     );
     return;
   }
@@ -800,27 +827,30 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
 
     const qrUrl = getPromptPayQrPublicUrl();
-    const intro = buildPaymentCommandIntroText({ amount: amountForCopy });
-    const slipBlock = `${buildPaymentSlipFollowUpText()}\n\n${MAIN_MENU_HINT_TEXT}`;
+    const intro = buildPaymentQrIntroText();
+    const slipText = buildPaymentQrSlipText();
 
     if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
       try {
-        await replyPaymentInstructionWithQr(client, event.replyToken, {
+        await replyPaymentInstructions(client, event.replyToken, {
           introText: intro,
           qrImageUrl: qrUrl,
-          slipText: slipBlock,
+          slipText,
         });
         return;
       } catch (qrErr) {
-        console.error("[WEBHOOK] replyPaymentInstructionWithQr failed, fallback text:", {
+        console.error("[WEBHOOK] replyPaymentInstructions failed, fallback text:", {
           userId,
           message: qrErr?.message,
         });
       }
     } else {
-      console.warn("[WEBHOOK] QR URL not HTTPS — LINE cannot load image; send text + link. Set APP_BASE_URL to public https URL.", {
-        qrUrl,
-      });
+      console.warn(
+        "[WEBHOOK] QR URL not HTTPS — LINE cannot load QR image. Set APP_BASE_URL to public https URL.",
+        {
+          qrUrl,
+        },
+      );
     }
 
     await replyText(

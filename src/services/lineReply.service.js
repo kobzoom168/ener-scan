@@ -78,3 +78,8 @@ export async function replyPaymentInstructionWithQr(client, replyToken, opts) {
     throw error;
   }
 }
+
+/** Alias ตามสเปค — ส่ง text + image QR + text สลิป */
+export async function replyPaymentInstructions(client, replyToken, opts) {
+  return replyPaymentInstructionWithQr(client, replyToken, opts);
+}
