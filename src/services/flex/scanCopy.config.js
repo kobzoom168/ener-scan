@@ -4,6 +4,12 @@
  * Tone: `docs/ENER_SYSTEM_TONE_GUIDE.md`
  */
 
+/**
+ * Bump when `ENERGY_COPY`, `MAIN_LABEL`, or trait rules meaningfully change (QA, cache notes, rollout).
+ * Independent from `SCAN_CACHE_PROMPT_VERSION` (deep-scan LLM prompt).
+ */
+export const SCAN_COPY_CONFIG_VERSION = "1";
+
 /** Canonical energy keys (Thai strings — match `resolveEnergyType` output). */
 export const ENERGY_TYPES = {
   PROTECT: "ปกป้อง",

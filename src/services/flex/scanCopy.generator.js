@@ -25,6 +25,7 @@ import {
   sanitizeFlexDisplayText,
 } from "./flex.utils.js";
 
+export { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.config.js";
 export { resolveEnergyType, resolveScoreTier } from "./scanCopy.utils.js";
 
 function capMainLabel(s, maxLen) {

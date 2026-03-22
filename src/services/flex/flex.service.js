@@ -16,7 +16,10 @@ import {
   buildReadingBubble,
   buildUsageBubble
 } from "./flex.components.js";
-import { generateScanCopy } from "./scanCopy.generator.js";
+import {
+  generateScanCopy,
+  SCAN_COPY_CONFIG_VERSION,
+} from "./scanCopy.generator.js";
 
 export function buildScanFlex(rawText) {
   const accentColor = pickMainEnergyColor(rawText);
@@ -97,6 +100,7 @@ export function buildScanFlex(rawText) {
     /** Per-field: scoresByIndex, rankByScoreDesc vs pickedOriginalIndices, laterOutperformsEarlier */
     flexInsightDebug: display.flexInsightDebug,
     altText,
+    scanCopyConfigVersion: SCAN_COPY_CONFIG_VERSION,
     scanCopySummary: scanCopy.summary,
     scanCopyTraits: scanCopy.traits,
   });

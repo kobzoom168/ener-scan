@@ -40,6 +40,7 @@
 
 ## Copy / voice
 - **Ener System Tone Guide:** `docs/ENER_SYSTEM_TONE_GUIDE.md` — single intentional voice (Thai, clear, warm, grounded). Template copy lives in `src/services/flex/scanCopy.config.js` (assembled by `scanCopy.generator.js` + `scanCopy.utils.js`); UI fallbacks (`flex.components.js`, `flex.utils.js`); model prompts under `src/prompts/`.
+- **`SCAN_COPY_CONFIG_VERSION`** (`scanCopy.config.js`): bump when Flex template copy changes materially; appears in `[FLEX_PARSE]` as `scanCopyConfigVersion`. Separate from **`SCAN_CACHE_PROMPT_VERSION`** (LLM prompt / model output).
 
 ## Deep scan (OpenAI)
 - Layer 1: `gpt-4.1-mini` → draft (fixed format) — `src/services/openaiDeepScan.api.js` + `src/prompts/deepScan.prompt.js`
