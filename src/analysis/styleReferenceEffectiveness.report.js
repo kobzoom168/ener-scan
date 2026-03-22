@@ -186,3 +186,169 @@ export function buildStyleReferenceEffectivenessReport({
     recommendation,
   };
 }
+
+/**
+ * Operational confidence (not statistical CI).
+ * @param {{
+ *   usedStats: ReturnType<typeof computeCohortMetrics>,
+ *   notUsedStats: ReturnType<typeof computeCohortMetrics>,
+ *   minCohortN?: number,
+ * }} opts
+ * @returns {"high"|"medium"|"low"}
+ */
+export function computeConfidenceLevel({
+  usedStats,
+  notUsedStats,
+  minCohortN = 30,
+}) {
+  const strong = minCohortN * 2;
+  const u = usedStats.n;
+  const v = notUsedStats.n;
+  const du = usedStats.avg_score_after;
+  const dn = notUsedStats.avg_score_after;
+  if (!Number.isFinite(du) || !Number.isFinite(dn)) return "low";
+  if (u >= strong && v >= strong) return "high";
+  if (u >= minCohortN && v >= minCohortN) return "medium";
+  return "low";
+}
+
+/**
+ * Snapshot for history persistence and trend lines.
+ * @param {{
+ *   usedStats: ReturnType<typeof computeCohortMetrics>,
+ *   notUsedStats: ReturnType<typeof computeCohortMetrics>,
+ *   rec: ReturnType<typeof recommendRollout>,
+ *   limitQuery: number,
+ * }} opts
+ */
+export function buildKeyMetricsSnapshot({
+  usedStats,
+  notUsedStats,
+  rec,
+  limitQuery,
+}) {
+  const gap =
+    Number.isFinite(rec.gap) ? rec.gap
+    : Number.isFinite(usedStats.avg_score_after) &&
+        Number.isFinite(notUsedStats.avg_score_after)
+      ? usedStats.avg_score_after - notUsedStats.avg_score_after
+      : null;
+
+  return {
+    query_limit: limitQuery,
+    used_n: usedStats.n,
+    not_used_n: notUsedStats.n,
+    avg_score_after_used: usedStats.avg_score_after,
+    avg_score_after_not_used: notUsedStats.avg_score_after,
+    score_after_gap: gap,
+    avg_delta_used: usedStats.avg_delta,
+    avg_delta_not_used: notUsedStats.avg_delta,
+    avg_improve_gain_ratio_used: usedStats.avg_improve_gain_ratio,
+    avg_improve_gain_ratio_not_used: notUsedStats.avg_improve_gain_ratio,
+    improve_applied_rate_used: usedStats.improve_applied_rate,
+    improve_applied_rate_not_used: notUsedStats.improve_applied_rate,
+  };
+}
+
+/**
+ * Compare score_after gap vs previous run (higher gap = relatively better for style-used cohort).
+ * @param {{ score_after_gap: number | null }} [latest]
+ * @param {{ score_after_gap: number | null }} [previous]
+ */
+export function compareGapTrend(latest, previous) {
+  if (!latest || !previous) {
+    return {
+      direction: "unknown",
+      detail: "missing_snapshot",
+      gap_delta: null,
+    };
+  }
+  const g1 = Number(latest.score_after_gap);
+  const g0 = Number(previous.score_after_gap);
+  if (!Number.isFinite(g1) || !Number.isFinite(g0)) {
+    return {
+      direction: "unknown",
+      detail: "non_numeric_gap",
+      gap_delta: null,
+    };
+  }
+  const delta = g1 - g0;
+  const eps = 0.05;
+  if (delta > eps) {
+    return {
+      direction: "improving",
+      detail: "score_after_gap_increased_vs_previous_run",
+      gap_delta: Math.round(delta * 10000) / 10000,
+    };
+  }
+  if (delta < -eps) {
+    return {
+      direction: "degrading",
+      detail: "score_after_gap_decreased_vs_previous_run",
+      gap_delta: Math.round(delta * 10000) / 10000,
+    };
+  }
+  return {
+    direction: "stable",
+    detail: "score_after_gap_similar_to_previous_run",
+    gap_delta: Math.round(delta * 10000) / 10000,
+  };
+}
+
+/**
+ * @param {{
+ *   report: ReturnType<typeof buildStyleReferenceEffectivenessReport>,
+ *   confidence: string,
+ *   trend: object,
+ * }} opts
+ */
+export function buildCompactSummaryBlock({
+  report,
+  confidence,
+  trend,
+}) {
+  const rec = report.recommendation || {};
+  const cmp = report.comparisons?.style_reference_used_true_vs_false;
+  const u = cmp?.used;
+  const n = cmp?.not_used;
+  const lines = [
+    "══════════════════════════════════════════════════════",
+    " Style reference effectiveness — operational summary",
+    "══════════════════════════════════════════════════════",
+    `Generated: ${report.generated_at}`,
+    `Rows analyzed: ${report.total_rows_analyzed}`,
+    "",
+    `Recommendation: ${rec.recommendation ?? "(n/a)"}`,
+    `Confidence: ${confidence}`,
+    `Reason: ${rec.reason ?? "(n/a)"}`,
+  ];
+  if (rec.gap != null && Number.isFinite(rec.gap)) {
+    lines.push(`Score gap (avg score_after, used − not): ${rec.gap.toFixed(4)}`);
+  }
+  lines.push("");
+  lines.push("Headline metrics (used vs not used):");
+  lines.push(`  n: ${u?.n ?? "?"} vs ${n?.n ?? "?"}`);
+  lines.push(
+    `  avg score_after: ${u?.avg_score_after ?? "?"} vs ${n?.avg_score_after ?? "?"}`,
+  );
+  lines.push(`  avg delta: ${u?.avg_delta ?? "?"} vs ${n?.avg_delta ?? "?"}`);
+  lines.push(
+    `  improve_applied rate: ${u?.improve_applied_rate ?? "?"} vs ${n?.improve_applied_rate ?? "?"}`,
+  );
+  lines.push(
+    `  avg improve_gain_ratio: ${u?.avg_improve_gain_ratio ?? "?"} vs ${n?.avg_improve_gain_ratio ?? "?"}`,
+  );
+  if (Array.isArray(rec.warnings) && rec.warnings.length) {
+    lines.push("");
+    lines.push("Warnings:");
+    for (const w of rec.warnings) lines.push(`  ⚠ ${w}`);
+  }
+  lines.push("");
+  lines.push("Trend vs previous persisted run:");
+  lines.push(`  direction: ${trend.direction}`);
+  lines.push(`  detail: ${trend.detail}`);
+  if (trend.gap_delta != null) {
+    lines.push(`  gap change (this run − previous): ${trend.gap_delta}`);
+  }
+  return lines.join("\n");
+}
