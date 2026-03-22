@@ -59,7 +59,7 @@
 
 ## LINE Flex QA (prompt/UI)
 
-- **Real-device QA (5–10 scans, LINE mobile):** step-by-step checklist → **`docs/QA_LINE_FLEX.md`**. **Freeze:** no further scoring/splitting complexity until QA findings; **only** minimal patches for obvious bad cases.
+- **Real-device QA:** **`docs/QA_LINE_FLEX.md`** (incl. **Pass 2** after display polish — verify metric card, trait density, reading cards only; **no** scoring/splitting/layout changes; screenshot-driven tiny display tweaks only if needed).
 - **Cache bypass:** `SCAN_CACHE_BYPASS=true` or `DISABLE_SCAN_RESULT_CACHE=1` so `scan_result_cache` does not mask current prompt / formatter / Flex.
 - **Display vs parse:** `parseScanText` (`flex.parser.js`) reads the same section titles the formatter normalizes (`formatter.service.js`). Flex UI uses **`prepareScanFlexDisplay`** (`flex.display.js`) for **substance + capped pattern** scoring, **`genericFillerPhrasePenalty`** (e.g. long generic phrases), **`positionBias`** + **`isStrongOpeningSentence`** (avoid penalizing strong openers), **`mergeShortSegments`** (only glues **short** fragments), **`flexSplitHighFragmentCount`** / **`flexSplitCounts`**, **`flexInsightDebug`** (per-field scores, `rankByScoreDesc` vs `pickedOriginalIndices`, `laterOutperformsEarlier`), then bubbles; layout clamps in `flex.components.js`. Logs: **`[FLEX_PARSE]`** includes raw vs `*ForFlex`, **`altText`**.
 - **Real-device checks:** long `พลังหลัก` (summary metric + `getEnergyShortLabel` strip), 2-item bullet blocks (`ชิ้นนี้หนุนเรื่อง` / `เหมาะใช้เมื่อ`), missing sections (defaults in `buildReadingBubble` / `buildUsageBubble`), notification **`altText`** (~`FLEX_ALT_TEXT_MAX` in `flex.display.js`).

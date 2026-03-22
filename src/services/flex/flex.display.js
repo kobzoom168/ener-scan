@@ -7,11 +7,30 @@ import { cleanLine, safeWrapText } from "./flex.utils.js";
 /** LINE altText: keep short; score suffix should remain visible. */
 export const FLEX_ALT_TEXT_MAX = 118;
 
+/** Caps for insight picker (unchanged). */
 export const FLEX_OVERVIEW_MAX_CHARS = 190;
 export const FLEX_OVERVIEW_MAX_SENTENCES = 2;
 
 export const FLEX_FIT_REASON_MAX_CHARS = 170;
 export const FLEX_FIT_REASON_MAX_SENTENCES = 2;
+
+/** Tighter caps after pick — instant readability, no new scoring logic. */
+export const FLEX_OVERVIEW_DISPLAY_MAX = 148;
+export const FLEX_FIT_DISPLAY_MAX = 128;
+
+/**
+ * Display-only polish: prefer first sentence when clearer, then hard wrap.
+ */
+export function polishReadingLineForFlex(text, maxChars) {
+  const t = cleanLine(text);
+  if (!t) return t;
+  let out = t;
+  const first = t.split(/[。！？]/)[0]?.trim();
+  if (first && first.length >= 28 && first.length < t.length) {
+    out = first;
+  }
+  return safeWrapText(out, maxChars);
+}
 
 export const FLEX_CLOSING_MAX_CHARS = 120;
 
@@ -552,8 +571,12 @@ export function prepareScanFlexDisplay(parsed) {
 
   return {
     ...parsed,
-    overviewForFlex: ov.text,
-    fitReasonForFlex: fit.text,
+    overviewForFlex: ovClean
+      ? polishReadingLineForFlex(ov.text, FLEX_OVERVIEW_DISPLAY_MAX)
+      : "",
+    fitReasonForFlex: fitClean
+      ? polishReadingLineForFlex(fit.text, FLEX_FIT_DISPLAY_MAX)
+      : "",
     closingForFlex: cl.text,
     /** For `[FLEX_PARSE]`: scores, rank order vs picked order, later vs first */
     flexInsightDebug: {

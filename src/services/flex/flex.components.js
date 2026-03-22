@@ -7,8 +7,8 @@ import {
   clampToFlexLines,
 } from "./flex.utils.js";
 import {
-  FLEX_OVERVIEW_MAX_CHARS,
-  FLEX_FIT_REASON_MAX_CHARS,
+  FLEX_OVERVIEW_DISPLAY_MAX,
+  FLEX_FIT_DISPLAY_MAX,
   FLEX_CLOSING_MAX_CHARS,
 } from "./flex.display.js";
 
@@ -156,7 +156,14 @@ export function createMainEnergyMetricCard(mainEnergy) {
           },
           {
             type: "text",
-            text: clampToFlexLines(parts[1], 1, 26)[0] || parts[1] || "—",
+            text:
+              clampToFlexLines(
+                String(parts[1] || "").replace(/^\(|\)$/g, "").trim(),
+                1,
+                18,
+              )[0] ||
+              parts[1] ||
+              "—",
             size: "xs",
             color: "#B8B8BE",
             wrap: true,
@@ -205,7 +212,7 @@ export function createMainEnergyMetricCard(mainEnergy) {
 
 export function createEnergyLine(text) {
   const body =
-    clampToFlexLines(String(text || "-"), 2, 22).join("\n") || "—";
+    clampToFlexLines(String(text || "-"), 2, 18).join("\n") || "—";
 
   return {
     type: "box",
@@ -477,10 +484,8 @@ export function buildSummaryBubble({
   };
 }
 
-const DEFAULT_OVERVIEW_FLEX =
-  "เด่นในเชิงใช้งานและจังหวะชีวิต — อ่านเป็นภาพได้";
-const DEFAULT_FIT_FLEX =
-  "โยงกับเจ้าของในเชิงหนุนจังหวะและความนิ่ง";
+const DEFAULT_OVERVIEW_FLEX = "เด่นในเชิงใช้งานและจังหวะชีวิต";
+const DEFAULT_FIT_FLEX = "โยงกับเจ้าของเรื่องจังหวะและความนิ่ง";
 const DEFAULT_CLOSING_FLEX = "มีอีกชิ้น ส่งมาเทียบกันได้ครับ";
 
 export function buildReadingBubble({
@@ -492,8 +497,8 @@ export function buildReadingBubble({
   const cleanOverview = String(overview || "").trim() || DEFAULT_OVERVIEW_FLEX;
   const cleanFitReason = String(fitReason || "").trim() || DEFAULT_FIT_FLEX;
 
-  const overviewText = safeWrapText(cleanOverview, FLEX_OVERVIEW_MAX_CHARS + 10);
-  const fitText = safeWrapText(cleanFitReason, FLEX_FIT_REASON_MAX_CHARS + 10);
+  const overviewText = safeWrapText(cleanOverview, FLEX_OVERVIEW_DISPLAY_MAX);
+  const fitText = safeWrapText(cleanFitReason, FLEX_FIT_DISPLAY_MAX);
 
   return {
     type: "bubble",
@@ -547,7 +552,7 @@ export function buildReadingBubble({
           "เหตุผลที่เข้ากับเจ้าของ",
           fitText,
           "#141C22",
-          FLEX_FIT_REASON_MAX_CHARS + 10
+          FLEX_FIT_DISPLAY_MAX
         ),
 
         createSoftNote(

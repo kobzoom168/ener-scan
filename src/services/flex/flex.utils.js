@@ -83,10 +83,25 @@ export function clampToFlexLines(text, maxLines = 2, charsPerLine = 22) {
 }
 
 /**
- * Compact "พลังหลัก" for small Flex metric cards: line 1 = category, line 2 = short hint.
- * Strictly capped so summary cards never overflow on LINE mobile width.
+ * Short human hint from parenthetical text — not a long explanation (metric card only).
  */
-export function formatMainEnergyForCard(text, headMax = 22, hintMax = 24) {
+export function compactParenHint(inner, maxLen = 16) {
+  let s = cleanLine(inner);
+  if (!s) return "";
+  s = s
+    .replace(/^ช่วยให้\s*/i, "")
+    .replace(/^ที่จะ\s*/i, "")
+    .replace(/^เพื่อให้\s*/i, "")
+    .trim();
+  if (s.length <= maxLen) return s;
+  return safeWrapText(s, maxLen);
+}
+
+/**
+ * Compact "พลังหลัก" for small metric cards:
+ * line 1 = category only · line 2 = short label (no "(...)" long explanations).
+ */
+export function formatMainEnergyForCard(text, headMax = 18, hintMax = 16) {
   const c = cleanLine(text);
   if (!c || c === "-") return "-";
 
@@ -101,14 +116,39 @@ export function formatMainEnergyForCard(text, headMax = 22, hintMax = 24) {
   const innerRaw =
     close > open ? c.slice(open + 1, close) : c.slice(open + 1);
   const inner = cleanLine(innerRaw);
+  const headLine = safeWrapText(head, headMax);
+
   if (!inner) {
-    return safeWrapText(head, headMax);
+    return headLine;
   }
 
-  const headLine = safeWrapText(head, headMax);
-  const innerShort =
-    inner.length > hintMax ? `${inner.slice(0, Math.max(1, hintMax - 1)).trim()}…` : inner;
-  return `${headLine}\n(${innerShort})`;
+  const hint = compactParenHint(inner, hintMax);
+  if (!hint) {
+    return headLine;
+  }
+
+  return `${headLine}\n${hint}`;
+}
+
+/**
+ * Trait rows (บุคลิก / โทน / พลังซ่อน): compact "category · short hint" — detail stays in reading cards.
+ */
+export function compactEnergyTraitForFlex(raw) {
+  const t = cleanLine(stripBullet(raw));
+  if (!t || t === "-") return "-";
+
+  const open = t.indexOf("(");
+  if (open > 0) {
+    const head = t.slice(0, open).trim();
+    const close = t.indexOf(")", open + 1);
+    const inner = close > open ? t.slice(open + 1, close) : "";
+    const hint = compactParenHint(inner, 14);
+    const h = safeWrapText(head, 16);
+    if (hint) return `${h} · ${hint}`;
+    return h;
+  }
+
+  return safeWrapText(t, 30);
 }
 
 /** Drop empty / bullet-only rows so Flex bullet blocks never show lone "•". */
@@ -278,9 +318,9 @@ export function formatToneLine(tone) {
     .filter(Boolean);
 
   if (parts.length === 0) return "-";
-  if (parts.length === 1) return `โทน${parts[0]}`;
+  if (parts.length === 1) return safeWrapText(`โทน${parts[0]}`, 24);
 
-  return `โทน${parts[0]} | ${parts[1]}`;
+  return safeWrapText(`โทน${parts[0]} | ${parts[1]}`, 28);
 }
 
 export function buildEnergyLines({ personality, tone, hidden }) {
@@ -288,17 +328,18 @@ export function buildEnergyLines({ personality, tone, hidden }) {
 
   const personalityText = stripBullet(personality);
   if (personalityText && personalityText !== "-") {
-    lines.push(safeWrapText(personalityText, 120));
+    const line = compactEnergyTraitForFlex(personalityText);
+    if (line && line !== "-") lines.push(line);
   }
 
   const toneText = formatToneLine(tone);
   if (toneText && toneText !== "-") {
-    lines.push(safeWrapText(toneText, 120));
+    lines.push(toneText);
   }
 
   const hiddenText = mapHiddenToShortText(hidden);
   if (hiddenText && hiddenText !== "-") {
-    lines.push(safeWrapText(hiddenText, 120));
+    lines.push(safeWrapText(hiddenText, 20));
   }
 
   if (lines.length === 0) {

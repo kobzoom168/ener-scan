@@ -53,4 +53,27 @@ Use these only to **explain** odd UI; do **not** expand scoring/splitting logic 
 
 ---
 
-*Last updated: QA phase — algorithm freeze.*
+## 6. Pass 2 — real device (after display-side polish)
+
+**Frozen (do not change):** scoring / splitting / selection in `flex.display.js`, and Flex **layout** structure in `flex.components.js`.
+
+**Do:** run another **LINE mobile** session with `SCAN_CACHE_BYPASS=true` and verify **only** these three things:
+
+| # | Check | Pass? |
+|---|--------|-------|
+| 1 | **Main energy metric card** — category + short hint readable; no dense parenthetical block |
+| 2 | **Lower-left trait boxes** — `compactEnergyTraitForFlex` lines feel light enough (not wall-of-text) |
+| 3 | **Reading cards** — `overviewForFlex` / `fitReasonForFlex` after `polishReadingLineForFlex` feel easy to read at a glance |
+
+**If something is still wrong:** capture a **screenshot**, note which of (1)(2)(3), then allow **only** small **display-side** tweaks (e.g. char caps in `flex.display.js`, `compactParenHint`, `formatMainEnergyForCard`, trait `safeWrapText` limits) — **not** selector logic.
+
+### Pass 2 findings
+
+| # | Screenshot / note | Issue (1/2/3) | Tiny fix applied? |
+|---|-------------------|-----------------|-------------------|
+| 1 | | | |
+| 2 | | | |
+
+---
+
+*Last updated: QA pass 2 — verify polish only; logic/layout freeze.*
