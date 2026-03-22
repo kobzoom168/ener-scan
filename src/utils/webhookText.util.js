@@ -66,6 +66,34 @@ export function formatBangkokDateTime(time) {
   });
 }
 
+/**
+ * Thai-friendly date + time in Asia/Bangkok (พ.ศ.), e.g. 23/03/2569 15:45 น.
+ * ISO strings from DB are parsed as UTC instant then displayed in local TZ.
+ */
+export function formatThaiPaidUntilForLine(isoOrDate) {
+  const d =
+    isoOrDate instanceof Date
+      ? isoOrDate
+      : new Date(String(isoOrDate || ""));
+  if (!Number.isFinite(d.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
+  const day = get("day").padStart(2, "0");
+  const month = get("month").padStart(2, "0");
+  const year = get("year");
+  const hour = get("hour").padStart(2, "0");
+  const minute = get("minute").padStart(2, "0");
+  return `${day}/${month}/${year} ${hour}:${minute} น.`;
+}
+
 export function formatHistory(history) {
   return history
     .slice(0, 5)
@@ -345,41 +373,74 @@ export function buildPendingVerifyPaymentCommandText({ paymentRef } = {}) {
 
 /**
  * LINE push after admin approved slip.
- * @param {{ paidRemainingLine?: string, paidUntilLine?: string }} [opts] Pre-formatted lines (e.g. quota + หมดอายุ).
+ * Prefer `paidRemainingScans` + `paidUntil` (ISO) from entitlement — no hardcoded scan counts.
+ * Legacy: `paidRemainingLine` + `paidUntilLine` still supported if numeric fields absent.
+ *
+ * @param {{
+ *   paidRemainingScans?: number | null,
+ *   paidUntil?: string | null,
+ *   paidRemainingLine?: string,
+ *   paidUntilLine?: string,
+ *   paymentRef?: string | null,
+ * }} [opts]
  */
 export function buildPaymentApprovedText({
+  paidRemainingScans = null,
+  paidUntil = null,
   paidRemainingLine = "",
   paidUntilLine = "",
   paymentRef = null,
 } = {}) {
-  const expiryFromLine = String(paidUntilLine || "")
-    .replace(/^\s*หมดอายุ:\s*/i, "")
-    .trim();
+  const scansNum =
+    paidRemainingScans != null && paidRemainingScans !== ""
+      ? Number(paidRemainingScans)
+      : NaN;
+  const hasScans = Number.isFinite(scansNum);
+  const untilRaw = String(paidUntil || "").trim();
 
-  const pr = String(paidRemainingLine || "").trim();
-  let packageScansLine = "แพ็กเกจนี้ใช้งานได้ 10 ครั้ง";
-  if (pr.includes("ไม่จำกัด")) {
-    packageScansLine =
-      "แพ็กเกจนี้ใช้งานได้แบบไม่จำกัดจำนวนครั้ง (ในช่วงที่สิทธิ์ยังใช้ได้)";
-  } else {
-    const m = pr.match(/สแกนได้อีก\s+(\d+)\s+ครั้ง/);
-    if (m) {
-      packageScansLine = `แพ็กเกจนี้ใช้งานได้ ${m[1]} ครั้ง`;
+  let scanLine;
+  let untilLine;
+
+  if (hasScans) {
+    if (scansNum >= 999999) {
+      scanLine =
+        "สแกนได้ไม่จำกัดจำนวนครั้ง (ในช่วงที่สิทธิ์ยังใช้ได้)";
+    } else {
+      scanLine = `สแกนได้อีก ${scansNum} ครั้ง`;
     }
+    untilLine = `ใช้ได้ถึง: ${
+      untilRaw ? formatThaiPaidUntilForLine(untilRaw) : "—"
+    }`;
+  } else {
+    const pr = String(paidRemainingLine || "").trim();
+    const expiryFromLine = String(paidUntilLine || "")
+      .replace(/^\s*หมดอายุ:\s*/i, "")
+      .replace(/^\s*ใช้ได้ถึง:\s*/i, "")
+      .trim();
+
+    if (pr.includes("ไม่จำกัด")) {
+      scanLine =
+        "สแกนได้ไม่จำกัดจำนวนครั้ง (ในช่วงที่สิทธิ์ยังใช้ได้)";
+    } else {
+      const m = pr.match(/สแกนได้อีก\s+(\d+)\s+ครั้ง/);
+      scanLine = m
+        ? `สแกนได้อีก ${m[1]} ครั้ง`
+        : pr || "สแกนได้ตามสิทธิ์ที่เปิดให้";
+    }
+    untilLine = `ใช้ได้ถึง: ${expiryFromLine || "—"}`;
   }
 
-  const expiryText = expiryFromLine || "—";
-
-  const lines = ["✅ อนุมัติเรียบร้อยแล้วครับ"];
+  const lines = [
+    "✅ แอดมินอนุมัติสลิปแล้ว ระบบเปิดสิทธิ์ให้แล้วครับ",
+  ];
   const refLine = formatPaymentRefLine(paymentRef);
   if (refLine) lines.push("", refLine);
   lines.push(
     "",
-    "ตอนนี้คุณสามารถสแกนต่อได้แล้ว",
-    packageScansLine,
-    `หมดอายุ: ${expiryText}`,
+    scanLine,
+    untilLine,
     "",
-    "ส่งรูปมาเพื่อสแกนต่อได้เลยครับ",
+    "กรุณาส่งรูปเพื่อสแกนต่อได้ครับ",
   );
   return lines.join("\n");
 }

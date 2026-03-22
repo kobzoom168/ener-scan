@@ -73,6 +73,13 @@ export function generateScanCopy(input) {
     compatBucket,
   });
 
+  const goals = deriveGoalMapping({
+    mainEnergy: input.mainEnergy,
+    energyType,
+    scoreNumeric: input.scoreNumeric,
+    tier,
+  });
+
   console.log("[FLEX_AGE_TONE]", { tonePreset });
 
   const label0 = MAIN_LABEL[energyType] || MAIN_LABEL[ENERGY_TYPES.BOOST];

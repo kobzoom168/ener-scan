@@ -1196,18 +1196,6 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         activation.paidUntil == null && activation.paidRemainingScans == null;
 
       if (!isIdempotent) {
-        const paidUntilDate = activation.paidUntil
-          ? new Date(activation.paidUntil)
-          : null;
-        const paidUntilText = paidUntilDate
-          ? paidUntilDate.toLocaleDateString("th-TH")
-          : "ภายใน 24 ชั่วโมง";
-
-        const paidRemainingText =
-          Number(activation.paidRemainingScans) >= 999999
-            ? "สแกนได้ไม่จำกัดช่วงที่สิทธิ์ใช้งานอยู่"
-            : `สแกนได้อีก ${activation.paidRemainingScans} ครั้ง`;
-
         let paymentRefForPush = null;
         try {
           paymentRefForPush = await ensurePaymentRefForPaymentId(paymentId);
@@ -1216,8 +1204,8 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         }
 
         const message = buildPaymentApprovedText({
-          paidRemainingLine: paidRemainingText,
-          paidUntilLine: `หมดอายุ: ${paidUntilText}`,
+          paidRemainingScans: activation.paidRemainingScans,
+          paidUntil: activation.paidUntil,
           paymentRef: paymentRefForPush,
         });
 
