@@ -128,9 +128,15 @@ export function saveScanArtifacts(userId, resultText) {
   console.log("[WEBHOOK] stats updated");
 }
 
-export async function replyScanResult({ client, replyToken, userId, resultText }) {
+export async function replyScanResult({
+  client,
+  replyToken,
+  userId,
+  resultText,
+  birthdate = null,
+}) {
   try {
-    const flex = buildScanFlex(resultText);
+    const flex = buildScanFlex(resultText, { birthdate });
 
     // Append settings bubble at the end of the scan result.
     try {
@@ -299,16 +305,24 @@ export async function runScanFlow({
         return;
       }
 
-      const remaining = 30 - scanCount;
-      if (remaining === 3 || remaining === 2 || remaining === 1) {
-        console.log("[PAID_LIMIT_WARNING]", { userId, scanCount, remaining });
+      const remainingPaid = Number(access.remaining);
+      if (
+        Number.isFinite(remainingPaid) &&
+        remainingPaid >= 1 &&
+        remainingPaid <= 3
+      ) {
+        console.log("[PAID_LIMIT_WARNING]", {
+          userId,
+          scanCount,
+          remainingPaid,
+        });
 
         paidLimitWarningText =
-          remaining === 3
-            ? "หมายเหตุ: คุณเหลือสิทธิ์สแกนอีก 3 ครั้งในรอบ 24 ชั่วโมงนี้"
-            : remaining === 2
-              ? "หมายเหตุ: คุณเหลือสิทธิ์สแกนอีก 2 ครั้งในรอบ 24 ชั่วโมงนี้"
-              : "หมายเหตุ: คุณเหลือสิทธิ์สแกนอีก 1 ครั้งในรอบ 24 ชั่วโมงนี้";
+          remainingPaid === 3
+            ? "หมายเหตุ: คุณเหลือสิทธิ์สแกนตามแพ็กเกจอีก 3 ครั้ง (ภายในรอบ 24 ชั่วโมง)"
+            : remainingPaid === 2
+              ? "หมายเหตุ: คุณเหลือสิทธิ์สแกนตามแพ็กเกจอีก 2 ครั้ง (ภายในรอบ 24 ชั่วโมง)"
+              : "หมายเหตุ: คุณเหลือสิทธิ์สแกนตามแพ็กเกจอีก 1 ครั้ง (ภายในรอบ 24 ชั่วโมง)";
       }
     }
   } catch (error) {
@@ -726,6 +740,7 @@ export async function runScanFlow({
     replyToken,
     userId,
     resultText: replyResultText,
+    birthdate,
   });
 
   clearLatestScanJob(userId, scanJobId);

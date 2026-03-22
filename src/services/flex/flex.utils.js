@@ -45,7 +45,7 @@ export function stripBullet(text) {
     .trim();
 }
 
-/** Lower-left "ลักษณะพลัง" boxes — label mode: one tight line each, readability over completeness. */
+/** Lower-left "สิ่งที่ชิ้นนี้ให้" trait boxes — label mode: one tight line each, readability over completeness. */
 export const FLEX_TRAIT_PERSONALITY_MAX = 28;
 export const FLEX_TRAIT_TONE_MAX = 30;
 export const FLEX_TRAIT_HIDDEN_MAX = 22;

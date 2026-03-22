@@ -7,7 +7,7 @@ const DEFAULT_AMOUNT = 0;
 const DEFAULT_CURRENCY = "THB";
 const PROVIDER_MANUAL = "promptpay_manual";
 
-const PAID_PLAN_CODE = "99baht_15scans_24h";
+const PAID_PLAN_CODE = "99baht_10scans_24h";
 const PAID_REMAINING_SCANS = 15;
 const DEFAULT_PACKAGE_CODE = PAID_PLAN_CODE;
 const DEFAULT_PACKAGE_NAME = "15 scans / 24 hours";

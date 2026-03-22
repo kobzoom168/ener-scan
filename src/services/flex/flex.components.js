@@ -517,6 +517,19 @@ export function buildSummaryBubble({
               maxLines: 4,
             },
             createProgressBar(score.percent || "50%", accentColor),
+            ...(scanCopy?.retention?.energyNickname
+              ? [
+                  {
+                    type: "text",
+                    text: safeWrapText(scanCopy.retention.energyNickname, 28),
+                    size: "xs",
+                    color: "#8F8F95",
+                    wrap: true,
+                    maxLines: 2,
+                    margin: "sm",
+                  },
+                ]
+              : []),
           ],
           {
             backgroundColor: "#151515",
@@ -545,7 +558,7 @@ export function buildSummaryBubble({
           layout: "vertical",
           spacing: "sm",
           contents: [
-            createSectionTitle("ลักษณะพลัง"),
+            createSectionTitle("สิ่งที่ชิ้นนี้ให้"),
             ...energyLines.map((line) => createEnergyLine(line)),
           ],
         },
@@ -566,11 +579,47 @@ const DEFAULT_FIT_FLEX =
 const DEFAULT_CLOSING_FLEX =
   "มีชิ้นอื่นอยากให้ช่วยดู ส่งมาได้เลยครับ";
 
+/** Parser closing + optional deterministic age-tone hook (second line). */
+function createClosingWithRetentionHook(primaryText, retentionHook) {
+  const primary = String(primaryText || "").trim() || DEFAULT_CLOSING_FLEX;
+  const contents = [
+    {
+      type: "text",
+      text: safeWrapText(primary, FLEX_CLOSING_MAX_CHARS),
+      size: "sm",
+      color: "#F4E3AE",
+      wrap: true,
+      maxLines: 4,
+    },
+  ];
+  const hook = String(retentionHook || "").trim();
+  if (hook) {
+    contents.push({
+      type: "text",
+      text: safeWrapText(hook, 120),
+      size: "xs",
+      color: "#8F8F95",
+      wrap: true,
+      maxLines: 3,
+      margin: "md",
+    });
+  }
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: "#1D1A14",
+    cornerRadius: "16px",
+    paddingAll: "14px",
+    contents,
+  };
+}
+
 export function buildReadingBubble({
   overview,
   fitReason,
   closing,
-  accentColor
+  retentionHook,
+  accentColor,
 }) {
   const cleanOverview = String(overview || "").trim() || DEFAULT_OVERVIEW_FLEX;
   const cleanFitReason = String(fitReason || "").trim() || DEFAULT_FIT_FLEX;
@@ -592,7 +641,7 @@ export function buildReadingBubble({
 
         {
           type: "text",
-          text: "คำอ่านพลัง",
+          text: "ชิ้นนี้บอกอะไร",
           weight: "bold",
           size: "xl",
           color: "#F5F5F5",
@@ -603,7 +652,7 @@ export function buildReadingBubble({
           [
             {
               type: "text",
-              text: "ภาพรวม",
+              text: "ชิ้นนี้เด่นทางไหน",
               weight: "bold",
               size: "sm",
               color: "#FFFFFF",
@@ -633,11 +682,18 @@ export function buildReadingBubble({
           FLEX_FIT_DISPLAY_MAX
         ),
 
-        createSoftNote(
-          String(closing || "").trim() || DEFAULT_CLOSING_FLEX,
-          "#F4E3AE",
-          "#1D1A14"
-        ),
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            createSectionTitle("บทบาทของชิ้นนี้"),
+            createClosingWithRetentionHook(
+              String(closing || "").trim() || DEFAULT_CLOSING_FLEX,
+              retentionHook,
+            ),
+          ],
+        },
       ],
     },
     styles: {
@@ -652,9 +708,18 @@ export function buildUsageBubble({
   supportTopics,
   suitable,
   notStrong,
-  usageGuide,
-  accentColor
+  accentColor,
+  nextScanCta = null,
 }) {
+  const cta =
+    nextScanCta &&
+    String(nextScanCta.label || "").trim() &&
+    String(nextScanCta.text || "").trim()
+      ? {
+          label: String(nextScanCta.label).trim(),
+          text: String(nextScanCta.text).trim(),
+        }
+      : { label: "สแกนชิ้นต่อไป", text: "ขอสแกนชิ้นถัดไป" };
   const supportLines =
     Array.isArray(supportTopics) && supportTopics.length > 0
       ? supportTopics.slice(0, 2)
@@ -667,10 +732,6 @@ export function buildUsageBubble({
           "วันที่ต้องการความชัดหรือใจนิ่งในงาน",
           "เวลาต้องคุมสถานการณ์หรือพูดให้คนฟัง",
         ];
-
-  const cleanUsageGuide =
-    String(usageGuide || "").trim() ||
-    "เหมาะพกในวันที่แรงกดดันสูง หรือใช้ต่อเนื่องให้จังหวะในใจค่อย ๆ นิ่งขึ้น";
 
   const cleanNotStrong =
     String(notStrong || "").trim() ||
@@ -715,13 +776,6 @@ export function buildUsageBubble({
           "#2A1719",
           160
         ),
-
-        createSectionCard(
-          "ควรใช้แบบไหน",
-          cleanUsageGuide,
-          "#1B1830",
-          180
-        ),
       ],
     },
 
@@ -741,8 +795,8 @@ export function buildUsageBubble({
           style: "secondary",
         }),
         createFooterButton({
-          label: "สแกนชิ้นต่อไป",
-          text: "ขอสแกนชิ้นถัดไป",
+          label: cta.label,
+          text: cta.text,
           style: "primary",
           color: accentColor,
         }),

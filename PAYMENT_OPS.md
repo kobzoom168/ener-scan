@@ -2,11 +2,11 @@
 
 ## How payment works
 
-1. **Free scans** – First 3 successful scans per user are free (counted from `scan_results`).
-2. **Gate** – After 3 scans, the user must have an active paid entitlement to scan again.
+1. **Free scans** – **2** successful scans per **calendar day** per user are free (counted from `scan_results`, local date).
+2. **Gate** – After free quota, the user must have an active paid entitlement to scan again.
 3. **Entitlement** – Stored in `app_users.paid_until`. If `paid_until` is in the future, the user can scan.
 4. **User flow** – User pays via PromptPay (static QR), sends a **slip image** in LINE, and waits for admin. The bot keeps a payment row in `awaiting_payment` / `pending_verify` as appropriate.
-5. **Manual verification** – An admin approves the slip (admin UI or `npm run payment:verify`). The app marks the payment **paid**, grants entitlement by package, and sets `app_users.paid_until` / remaining scans accordingly.
+5. **Manual verification** – An admin approves the slip (admin UI or `npm run payment:verify`). The app marks the payment **paid**, grants entitlement by package (default promo: **99 THB / 10 scans / 24h**), and sets `app_users.paid_until` / `paid_remaining_scans` accordingly.
 
 ## Admin Dashboard (v2)
 

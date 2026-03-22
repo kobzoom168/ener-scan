@@ -1,11 +1,22 @@
 import { supabase } from "../config/supabase.js";
 
+/** โปรเปิดตัว: 99 บาท / 10 ครั้ง / 24 ชม. */
+const PAID_PLAN_CODE_10SCANS_24H = "99baht_10scans_24h";
+/** Legacy แพ็กเกจเดิม (อนุมัติสลิปเก่าที่ยังอ้าง package นี้) */
 const PAID_PLAN_CODE_15SCANS_24H = "99baht_15scans_24h";
 
 function parsePackageCodeToEntitlement(packageCode) {
   const code = String(packageCode || "").trim();
 
   // Count-based packages
+  if (code.includes("10scans") || code === PAID_PLAN_CODE_10SCANS_24H) {
+    return {
+      paid_until_ms: Date.now() + 24 * 60 * 60 * 1000,
+      paid_remaining_scans: 10,
+      paid_plan_code: code || PAID_PLAN_CODE_10SCANS_24H,
+    };
+  }
+
   if (code.includes("15scans") || code === PAID_PLAN_CODE_15SCANS_24H) {
     return {
       paid_until_ms: Date.now() + 24 * 60 * 60 * 1000,

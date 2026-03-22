@@ -24,6 +24,11 @@ import {
   sanitizeBulletLines,
   sanitizeFlexDisplayText,
 } from "./flex.utils.js";
+import { getAgeTonePresetFromBirthdate } from "./ageTone.util.js";
+import {
+  compatibilityToBucket,
+  getRetentionMicrocopy,
+} from "./scanCopy.retentionTone.js";
 
 export { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.config.js";
 export { resolveEnergyType, resolveScoreTier } from "./scanCopy.utils.js";
@@ -44,6 +49,8 @@ function capMainLabel(s, maxLen) {
  *   personality?: string,
  *   tone?: string,
  *   hidden?: string,
+ *   birthdate?: string|null,
+ *   tonePreset?: 'youthful'|'warm'|'mystic',
  *   birthdateSignals?: unknown,
  *   objectSignals?: unknown,
  *   display?: Record<string, unknown>,
@@ -53,6 +60,19 @@ export function generateScanCopy(input) {
   const mainEnergy = input.mainEnergy ?? "-";
   const energyType = resolveEnergyType(mainEnergy);
   const tier = resolveScoreTier(input.scoreNumeric);
+
+  const tonePreset =
+    input.tonePreset ||
+    getAgeTonePresetFromBirthdate(input.birthdate).tonePreset;
+  const compatBucket = compatibilityToBucket(input.compatibility);
+  const retention = getRetentionMicrocopy({
+    tonePreset,
+    energyType,
+    tier,
+    compatBucket,
+  });
+
+  console.log("[FLEX_AGE_TONE]", { tonePreset });
 
   const label0 = MAIN_LABEL[energyType] || MAIN_LABEL[ENERGY_TYPES.BOOST];
   const labelAlt0 = MAIN_LABEL_ALT[energyType] || MAIN_LABEL_ALT[ENERGY_TYPES.BOOST];
@@ -105,6 +125,13 @@ export function generateScanCopy(input) {
       suitableBullets,
       notStrongMedium,
       usageGuideMedium,
+    },
+    /** Short retention copy only; does not replace parsed reading body. */
+    retention: {
+      tonePreset,
+      energyNickname: retention.energyNickname,
+      retentionHook: retention.retentionHook,
+      nextScanCta: retention.nextScanCta,
     },
   };
 }

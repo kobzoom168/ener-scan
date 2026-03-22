@@ -21,7 +21,13 @@ import {
   SCAN_COPY_CONFIG_VERSION,
 } from "./scanCopy.generator.js";
 
-export function buildScanFlex(rawText) {
+/**
+ * @param {string} rawText
+ * @param {{ birthdate?: string|null }} [options]
+ */
+export function buildScanFlex(rawText, options = {}) {
+  const birthdate = options.birthdate ?? null;
+
   const accentColor = pickMainEnergyColor(rawText);
 
   const parsed = parseScanText(rawText);
@@ -50,6 +56,7 @@ export function buildScanFlex(rawText) {
     personality,
     tone,
     hidden,
+    birthdate,
     display,
   });
 
@@ -125,14 +132,15 @@ export function buildScanFlex(rawText) {
           overview: display.overviewForFlex,
           fitReason: display.fitReasonForFlex,
           closing: display.closingForFlex,
+          retentionHook: scanCopy.retention?.retentionHook,
           accentColor,
         }),
         buildUsageBubble({
           supportTopics,
           suitable,
           notStrong,
-          usageGuide,
           accentColor,
+          nextScanCta: scanCopy.retention?.nextScanCta,
         }),
       ],
     },

@@ -378,9 +378,9 @@ export function buildCooldownFlex(remainingSec = 0) {
   });
 }
 
-export function buildPaymentRequiredFlex({ usedScans = 0, freeLimit = 3 } = {}) {
+export function buildPaymentRequiredFlex({ usedScans = 0, freeLimit = 2 } = {}) {
   const used = Number(usedScans || 0);
-  const limit = Number(freeLimit || 3);
+  const limit = Number(freeLimit || 2);
 
   return createBaseBubble({
     accentColor: "#D4AF37",
@@ -411,7 +411,7 @@ export function buildPaymentRequiredFlex({ usedScans = 0, freeLimit = 3 } = {}) 
 
 export function buildPaymentPaywallFlex({
   usedScans = 0,
-  freeLimit = 3,
+  freeLimit = 2,
   paymentUrl,
   priceTHB = 49,
 } = {}) {
