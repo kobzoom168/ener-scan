@@ -158,7 +158,7 @@ export function createMainEnergyMetricCard(mainEnergy, summary = null) {
         weight: "bold",
         color: "#FFFFFF",
         wrap: true,
-        maxLines: 2,
+        maxLines: 5,
       },
       {
         type: "text",
@@ -166,7 +166,7 @@ export function createMainEnergyMetricCard(mainEnergy, summary = null) {
         size: "xs",
         color: "#B8B8BE",
         wrap: true,
-        maxLines: 2,
+        maxLines: 4,
         margin: "xs",
       },
     ];
@@ -208,39 +208,41 @@ export function createMainEnergyMetricCard(mainEnergy, summary = null) {
       ? [
           {
             type: "text",
-            text: clampToFlexLines(parts[0], 1, 22)[0] || parts[0] || "—",
+            text:
+              clampToFlexLines(parts[0], 4, 22).join("\n") || parts[0] || "—",
             size: "md",
             weight: "bold",
             color: "#FFFFFF",
             wrap: true,
-            maxLines: 1,
+            // Allow multiple wrapped lines; maxLines: 1 was truncating Thai with ellipsis.
+            maxLines: 5,
           },
           {
             type: "text",
             text:
               clampToFlexLines(
                 String(parts[1] || "").replace(/^\(|\)$/g, "").trim(),
-                1,
-                18,
-              )[0] ||
+                3,
+                20,
+              ).join("\n") ||
               parts[1] ||
               "—",
             size: "xs",
             color: "#B8B8BE",
             wrap: true,
-            maxLines: 1,
+            maxLines: 4,
             margin: "xs",
           },
         ]
       : [
           {
             type: "text",
-            text: clampToFlexLines(formatted, 2, 22).join("\n") || "—",
+            text: clampToFlexLines(formatted, 4, 22).join("\n") || "—",
             size: "md",
             weight: "bold",
             color: "#FFFFFF",
             wrap: true,
-            maxLines: 2,
+            maxLines: 5,
           },
         ];
 

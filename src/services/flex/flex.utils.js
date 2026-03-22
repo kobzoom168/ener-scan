@@ -188,8 +188,27 @@ function takeOneLineSegment(singleLine, maxChars) {
 }
 
 /**
- * Hard cap for narrow mobile Flex columns: at most 2 lines, ~`charsPerLine` chars each.
+ * Split one logical line into up to `maxLines` physical lines for narrow Flex columns
+ * without dropping overflow (each line capped at `charsPerLine`).
+ */
+function wrapSegmentToLines(segment, maxLines, charsPerLine) {
+  const out = [];
+  let remaining = normalizeFlexLine(segment);
+  let safety = 0;
+  while (remaining && out.length < maxLines && safety < maxLines + 8) {
+    safety += 1;
+    const { line, rest } = splitOverflowSegment(remaining, charsPerLine);
+    if (line && line !== "-") out.push(line);
+    remaining = rest;
+    if (!rest) break;
+  }
+  return out.filter((x) => x && x !== "-");
+}
+
+/**
+ * Hard cap for narrow mobile Flex columns: at most `maxLines` lines, ~`charsPerLine` chars each.
  * Preserves explicit newlines from the model (does not collapse \\n into spaces).
+ * Overflow is wrapped into extra lines up to `maxLines` (no silent drop after line 1).
  */
 export function clampToFlexLines(text, maxLines = 2, charsPerLine = 22) {
   const raw = String(text ?? "").trim();
@@ -202,19 +221,18 @@ export function clampToFlexLines(text, maxLines = 2, charsPerLine = 22) {
     .filter(Boolean);
 
   if (parts.length >= 2) {
-    const l1 = takeOneLineSegment(parts[0], charsPerLine);
-    const l2 = takeOneLineSegment(parts.slice(1).join(" "), charsPerLine);
-    return [l1, l2].filter(Boolean);
+    const budgetFirst = Math.max(1, Math.ceil(maxLines / 2));
+    const firstBlock = wrapSegmentToLines(parts[0], budgetFirst, charsPerLine);
+    const restBudget = Math.max(1, maxLines - firstBlock.length);
+    const secondBlock = wrapSegmentToLines(
+      parts.slice(1).join(" "),
+      restBudget,
+      charsPerLine,
+    );
+    return [...firstBlock, ...secondBlock].slice(0, maxLines);
   }
 
-  const single = parts[0] || "";
-  const { line: l1, rest: r1 } = splitOverflowSegment(single, charsPerLine);
-  if (!r1 || maxLines < 2) {
-    return l1 && l1 !== "-" ? [l1] : [];
-  }
-
-  const l2 = takeOneLineSegment(r1, charsPerLine);
-  return [l1, l2].filter((x) => x && x !== "-");
+  return wrapSegmentToLines(parts[0] || "", maxLines, charsPerLine);
 }
 
 /**
@@ -247,13 +265,13 @@ export function compactParenHint(inner, maxLen = 16) {
  * Compact "พลังหลัก" for small metric cards:
  * line 1 = category only · line 2 = short label (no "(...)" long explanations).
  */
-export function formatMainEnergyForCard(text, headMax = 18, hintMax = 16) {
+export function formatMainEnergyForCard(text, headMax = 22, hintMax = 22) {
   const c = cleanLine(text);
   if (!c || c === "-") return "-";
 
   const open = c.indexOf("(");
   if (open <= 0) {
-    const lines = clampToFlexLines(c, 2, headMax);
+    const lines = clampToFlexLines(c, 4, headMax);
     return sanitizeFlexDisplayText(lines.join("\n"));
   }
 
