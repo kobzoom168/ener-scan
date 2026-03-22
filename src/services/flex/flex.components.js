@@ -573,11 +573,11 @@ export function buildSummaryBubble({
 }
 
 const DEFAULT_OVERVIEW_FLEX =
-  "เด่นเรื่องใช้งานจริงและจังหวะในวัน อ่านแล้วเห็นภาพว่าช่วยตอนไหน";
+  "ชิ้นนี้เล่นมุมมั่นใจเนียน ๆ — โทนอ่านแล้วรู้สึกว่ามีหลักในใจ ไม่ใช่แค่พลังลอย ๆ";
 const DEFAULT_FIT_FLEX =
-  "เข้ากับเจ้าของเรื่องจังหวะและความนิ่งในใจ — ไม่ใช่แค่แทรกวันเกิด";
+  "โยงกับจังหวะเจ้าของที่ต้องการความนิ่งในวันหนัก — ตัวเลขไม่ได้เล่าทั้งเรื่อง แต่โยงกับแพตเทิร์นในใจ";
 const DEFAULT_CLOSING_FLEX =
-  "มีชิ้นอื่นอยากให้ช่วยดู ส่งมาได้เลยครับ";
+  "ทำหน้าที่เป็นที่พิงในใจมากกว่าจะเป็นคำตอบของทุกเรื่อง — ยังมีมุมอื่นให้เติมภายหลัง";
 
 /** Parser closing + optional deterministic age-tone hook (second line). */
 function createClosingWithRetentionHook(primaryText, retentionHook) {
@@ -751,7 +751,7 @@ export function buildUsageBubble({
 
         {
           type: "text",
-          text: "ใช้ยังไงให้คุ้ม",
+          text: "ชิ้นนี้ขึ้นตอนไหน",
           weight: "bold",
           size: "xl",
           color: "#F5F5F5",

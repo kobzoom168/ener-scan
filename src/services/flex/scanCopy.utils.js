@@ -90,19 +90,20 @@ export function pickFeel(energyType, tier, personality) {
   const s = cleanLine(stripBullet(personality));
   if (s && s !== "-" && (/นิ่ง|สงบ|เย็น/.test(s) || /ใจไม่วอกแวก/.test(s))) {
     return (
-      capTrait("ช่วยให้ใจเย็นและสงบขึ้น", CAP_FEEL) ||
+      capTrait("ใจเย็นและตั้งหลักขึ้นในโทนนิ่ง ๆ", CAP_FEEL) ||
       capTrait(base, CAP_FEEL)
     );
   }
   if (s && s !== "-" && /มั่นใจ|กล้า/.test(s)) {
     return (
-      capTrait("ช่วยให้กล้าเผชิญหน้าเรื่องสำคัญมากขึ้น", CAP_FEEL) ||
+      capTrait("ใจกล้าและตั้งหลักขึ้นในระดับพอดี", CAP_FEEL) ||
       capTrait(base, CAP_FEEL)
     );
   }
   return capTrait(base, CAP_FEEL);
 }
 
+/** Middle trait slot: received signal in the body — not situations (those belong in Bubble 3). */
 export function pickUseCase(energyType, tier, tone) {
   const block = getEnergyCopyBlock(energyType);
   const base = getTierTraitLine(
@@ -113,10 +114,10 @@ export function pickUseCase(energyType, tier, tone) {
   const s = cleanLine(stripBullet(tone));
   if (s && s !== "-" && /ตัดสินใจ|ประชุม|งาน|เดินทาง|สังคม/.test(s)) {
     if (/ตัดสินใจ/.test(s)) {
-      return capTrait("เหมาะกับเวลาที่ต้องตัดสินใจ", CAP_USE);
+      return capTrait("ใจนิ่งพอตัดสินใจได้ชัดขึ้น", CAP_USE);
     }
     if (/ประชุม|นำทีม/.test(s)) {
-      return capTrait("เหมาะกับการประชุมหรือเจรจา", CAP_USE);
+      return capTrait("ถือตัวตรงและน่าเชื่อถือขึ้นในใจ", CAP_USE);
     }
   }
   return capTrait(base, CAP_USE);
@@ -132,10 +133,10 @@ export function pickEffect(energyType, tier, hidden) {
   const s = cleanLine(stripBullet(hidden));
   if (s && s !== "-" && /มั่นใจ|อดทน|หลัก|ภูมิ|ตั้งใจ/.test(s)) {
     if (/อดทน|ภูมิ/.test(s)) {
-      return capTrait("ทำให้อดทนและยืนหยัดได้ดีขึ้น", CAP_EFFECT);
+      return capTrait("อดทนและยืนหยัดได้ดีขึ้นในแกนใจ", CAP_EFFECT);
     }
     if (/มั่นใจ|ตั้งใจ|หลักใจ/.test(s)) {
-      return capTrait("ทำให้มั่นใจและตั้งใจมั่นขึ้น", CAP_EFFECT);
+      return capTrait("ตั้งใจมั่นและนิ่งขึ้นในการลงมือ", CAP_EFFECT);
     }
   }
   return capTrait(base, CAP_EFFECT);
