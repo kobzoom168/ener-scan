@@ -20,7 +20,7 @@ export async function createScanResult({
     throw new Error("scan_result_missing_user_or_request_id");
   }
 
-  const payload = {
+  const basePayload = {
     scan_request_id: normalizedRequestId,
     user_id: normalizedUserId,
     result_text: String(resultText || ""),
@@ -37,14 +37,34 @@ export async function createScanResult({
       typeof responseTimeMs === "number" && Number.isFinite(responseTimeMs)
         ? Math.max(0, Math.round(responseTimeMs))
         : null,
+  };
+
+  const payloadWithCache = {
+    ...basePayload,
     from_cache: Boolean(fromCache),
   };
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("scan_results")
-    .insert(payload)
+    .insert(payloadWithCache)
     .select("id")
     .maybeSingle();
+
+  const missingFromCache =
+    error &&
+    typeof error.message === "string" &&
+    /from_cache/i.test(error.message);
+
+  if (missingFromCache) {
+    console.warn(
+      "[SUPABASE] createScanResult: from_cache column missing, retry without it (run sql/011_scan_results_from_cache.sql)"
+    );
+    ({ data, error } = await supabase
+      .from("scan_results")
+      .insert(basePayload)
+      .select("id")
+      .maybeSingle());
+  }
 
   if (error) {
     console.error("[SUPABASE] createScanResult error:", {

@@ -88,3 +88,69 @@ export async function resetFreeTrialForLineUserByAdmin({
     expiredPayments: expiredCount,
   };
 }
+
+/**
+ * Clear paid entitlement only — does not change free-scan offset or history.
+ * Expires open manual payment rows; clears in-memory slip state.
+ */
+export async function revokePaidAccessForLineUserByAdmin({
+  lineUserId,
+  adminLabel = "admin_dashboard",
+} = {}) {
+  const lu = String(lineUserId || "").trim();
+  if (!lu) throw new Error("line_user_id_missing");
+
+  const nowIso = getNowIso();
+
+  const { data: userRow, error: uErr } = await supabase
+    .from("app_users")
+    .select("id,line_user_id")
+    .eq("line_user_id", lu)
+    .maybeSingle();
+
+  if (uErr) throw uErr;
+  if (!userRow?.id) throw new Error("app_user_not_found");
+
+  const appUserId = String(userRow.id);
+
+  const { error: updErr } = await supabase
+    .from("app_users")
+    .update({
+      paid_until: null,
+      paid_remaining_scans: 0,
+      paid_plan_code: null,
+      updated_at: nowIso,
+    })
+    .eq("id", appUserId);
+
+  if (updErr) throw updErr;
+
+  const { data: expRows, error: expErr } = await supabase
+    .from("payments")
+    .update({ status: "expired", updated_at: nowIso })
+    .eq("user_id", appUserId)
+    .in("status", ["awaiting_payment", "pending_verify"])
+    .select("id");
+
+  if (expErr) throw expErr;
+  const expiredCount = Array.isArray(expRows) ? expRows.length : 0;
+
+  clearPaymentState(lu);
+
+  console.log(
+    JSON.stringify({
+      event: "admin_revoke_paid_access",
+      outcome: "ok",
+      lineUserId: lu,
+      appUserId,
+      adminLabel,
+      expiredPayments: expiredCount,
+    })
+  );
+
+  return {
+    appUserId,
+    lineUserId: lu,
+    expiredPayments: expiredCount,
+  };
+}

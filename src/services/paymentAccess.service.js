@@ -53,7 +53,9 @@ export async function checkScanAccess({ userId, now = new Date() }) {
   // Get app_user + entitlement
   const { data: appUserRow, error: appUserErr } = await supabase
     .from("app_users")
-    .select("id, paid_until, paid_remaining_scans")
+    .select(
+      "id, paid_until, paid_remaining_scans, free_scan_daily_offset, free_scan_offset_date"
+    )
     .eq("line_user_id", lineUserId)
     .limit(1)
     .maybeSingle();

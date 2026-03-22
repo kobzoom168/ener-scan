@@ -12,7 +12,10 @@ import {
   markPaymentApprovedAndUnlock,
   markPaymentRejected,
 } from "../stores/payments.db.js";
-import { resetFreeTrialForLineUserByAdmin } from "../stores/adminReset.db.js";
+import {
+  resetFreeTrialForLineUserByAdmin,
+  revokePaidAccessForLineUserByAdmin,
+} from "../stores/adminReset.db.js";
 import { getScanUsageSummaryForAppUser } from "../stores/paymentAccess.db.js";
 import {
   buildPaymentApprovedText,
@@ -768,8 +771,12 @@ function renderDetailPage({
   const adminToolsHtml = lineUid
     ? `<div class="panel" style="margin-top:14px;">
     <h2>การดูแล (แอดมิน)</h2>
-    <p class="reject-hint">รีเซ็ตสิทธิ์ชำระเงิน (paid) และโควต้าฟรีวันนี้ให้เหลือ 2 ครั้ง (ตามระบบ) — <strong>ไม่ลบ</strong>ประวัติการสแกน · payment ที่ค้างจะถูกปิด</p>
-    <button type="button" class="btn btn-neu js-reset-free">รีเซ็ตสิทธิ์ทดลองฟรี</button>
+    <p class="reject-hint"><strong>รีเซ็ตสิทธิ์ทดลองฟรี</strong> — เคลียร์ paid + ตั้งโควต้าฟรีวันนี้ให้เหลือ 2 ครั้ง (offset) · <strong>ไม่ลบ</strong>ประวัติ · ปิด payment ที่ค้าง</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <button type="button" class="btn btn-neu js-reset-free">รีเซ็ตสิทธิ์ทดลองฟรี</button>
+    </div>
+    <p class="reject-hint"><strong>เพิกถอนสิทธิ์ชำระเงิน</strong> — ล้าง paid_until / โควต้า paid เท่านั้น · <strong>ไม่</strong>รีเซ็ตโควต้าฟรี · ปิด payment ที่ค้าง</p>
+    <button type="button" class="btn btn-neu js-revoke-paid" style="border-color:var(--bad);color:var(--bad);">เพิกถอนสิทธิ์ชำระเงิน</button>
   </div>`
     : "";
 
@@ -944,6 +951,27 @@ function renderDetailPage({
           } catch (e) {
             showToast(e.message || "เกิดข้อผิดพลาด", "err");
             rb.disabled = false;
+          }
+        });
+      }
+      var rp = document.querySelector(".js-revoke-paid");
+      if (rp && lineUid) {
+        rp.addEventListener("click", async function () {
+          if (!confirm("ยืนยันเพิกถอนสิทธิ์ชำระเงิน (paid)?\\n\\n• ล้าง paid_until / โควต้า paid\\n• ไม่รีเซ็ตโควต้าฟรี\\n• ปิด payment ที่ค้าง")) return;
+          rp.disabled = true;
+          try {
+            var r2 = await fetch("/admin/users/" + encodeURIComponent(lineUid) + "/revoke-paid-access", {
+              method: "POST",
+              headers: { Accept: "application/json" },
+              credentials: "same-origin"
+            });
+            var j2 = await r2.json().catch(function () { return null; });
+            if (!r2.ok || (j2 && j2.ok === false)) throw new Error((j2 && j2.message) || "เพิกถอนไม่สำเร็จ");
+            showToast("เพิกถอนสิทธิ์ชำระเงินแล้ว", "ok");
+            setTimeout(function () { location.reload(); }, 650);
+          } catch (e2) {
+            showToast(e2.message || "เกิดข้อผิดพลาด", "err");
+            rp.disabled = false;
           }
         });
       }
@@ -1178,6 +1206,48 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       } catch (err) {
         console.error("[ADMIN_DASH] reset_free_trial failed:", err);
         const msg = err?.message || "reset_free_trial_failed";
+        const code = msg === "app_user_not_found" ? 404 : 409;
+        if (wantsJsonResponse(req)) {
+          res.status(code).json({ ok: false, message: msg });
+        } else {
+          res.status(code).send(msg);
+        }
+      }
+    }
+  );
+
+  router.post(
+    "/admin/users/:lineUserId/revoke-paid-access",
+    requireAdminSession,
+    async (req, res) => {
+      let lineUserId = String(req.params?.lineUserId || "").trim();
+      try {
+        lineUserId = decodeURIComponent(lineUserId);
+      } catch {
+        /* ignore */
+      }
+      if (!lineUserId) {
+        if (wantsJsonResponse(req)) {
+          res.status(400).json({ ok: false, message: "line_user_id_missing" });
+        } else {
+          res.status(400).send("line_user_id_missing");
+        }
+        return;
+      }
+
+      try {
+        const result = await revokePaidAccessForLineUserByAdmin({
+          lineUserId,
+          adminLabel: "admin_dashboard",
+        });
+        if (wantsJsonResponse(req)) {
+          res.status(200).json({ ok: true, ...result });
+        } else {
+          res.status(200).send("ok");
+        }
+      } catch (err) {
+        console.error("[ADMIN_DASH] revoke_paid_access failed:", err);
+        const msg = err?.message || "revoke_paid_access_failed";
         const code = msg === "app_user_not_found" ? 404 : 409;
         if (wantsJsonResponse(req)) {
           res.status(code).json({ ok: false, message: msg });
