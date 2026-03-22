@@ -378,10 +378,10 @@ export function generateScanCopy(input) {
   const closingMedium = display.closingForFlex ?? "";
 
   const supportBullets = Array.isArray(display.supportTopics)
-    ? sanitizeBulletLines(display.supportTopics, 42)
+    ? sanitizeBulletLines(display.supportTopics, 26)
     : [];
   const suitableBullets = Array.isArray(display.suitable)
-    ? sanitizeBulletLines(display.suitable, 42)
+    ? sanitizeBulletLines(display.suitable, 26)
     : [];
   const notStrongMedium = cleanLine(display.notStrong || "") || "";
   const usageGuideMedium = cleanLine(display.usageGuide || "") || "";

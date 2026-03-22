@@ -144,6 +144,31 @@ export function safeWrapText(text, maxLength = 300) {
   return truncateAtWordBoundary(clean, maxLength);
 }
 
+/**
+ * Wrap Thai/space-separated text into multiple lines for LINE Flex without **dropping** tail text.
+ * (Contrast: `safeWrapText` truncates to a single segment.)
+ * @param {string} text
+ * @param {number} [maxCharsPerLine] — soft wrap width for narrow columns (~26 bullets, ~32 score row)
+ */
+export function wrapFlexTextNoTruncate(text, maxCharsPerLine = 26) {
+  const t = cleanLine(text);
+  if (!t) return "";
+  const lines = [];
+  let remaining = t;
+  let safety = 0;
+  while (remaining && safety < 20) {
+    safety += 1;
+    const { line, rest } = truncateAtWordBoundaryWithRest(remaining, maxCharsPerLine);
+    if (line) lines.push(line);
+    remaining = rest;
+    if (!rest) break;
+  }
+  if (remaining) {
+    lines.push(remaining);
+  }
+  return sanitizeFlexDisplayText(lines.join("\n"));
+}
+
 /** Collapse horizontal spaces only — keeps newline boundaries for multi-line Flex text. */
 function normalizeFlexLine(s) {
   return String(s || "").replace(/[ \t]+/g, " ").trim();
@@ -270,7 +295,7 @@ export function buildTraitLinesFromCopy(traits) {
 }
 
 /** Drop empty / bullet-only rows so Flex bullet blocks never show lone "•". */
-export function sanitizeBulletLines(lines, wrapAt = 42) {
+export function sanitizeBulletLines(lines, charsPerLine = 26) {
   if (!Array.isArray(lines)) return [];
 
   return lines
@@ -283,7 +308,7 @@ export function sanitizeBulletLines(lines, wrapAt = 42) {
         !/^[•:\s\u2013\u2014-]+$/u.test(line),
     )
     .slice(0, 2)
-    .map((line) => safeWrapText(line, wrapAt));
+    .map((line) => wrapFlexTextNoTruncate(line, charsPerLine));
 }
 
 export function pickMainEnergyColor(text) {

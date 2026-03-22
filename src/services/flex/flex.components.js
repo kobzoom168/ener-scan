@@ -6,6 +6,7 @@ import {
   sanitizeBulletLines,
   clampToFlexLines,
   cleanLine,
+  wrapFlexTextNoTruncate,
 } from "./flex.utils.js";
 import {
   FLEX_OVERVIEW_DISPLAY_MAX,
@@ -157,7 +158,7 @@ export function createMainEnergyMetricCard(mainEnergy, summary = null) {
         weight: "bold",
         color: "#FFFFFF",
         wrap: true,
-        maxLines: 1,
+        maxLines: 2,
       },
       {
         type: "text",
@@ -165,7 +166,7 @@ export function createMainEnergyMetricCard(mainEnergy, summary = null) {
         size: "xs",
         color: "#B8B8BE",
         wrap: true,
-        maxLines: 1,
+        maxLines: 2,
         margin: "xs",
       },
     ];
@@ -298,7 +299,7 @@ export function createEnergyLine(text) {
         size: "sm",
         color: "#F2F2F2",
         wrap: true,
-        maxLines: 1,
+        maxLines: 6,
         margin: "sm",
         flex: 1,
       },
@@ -503,16 +504,15 @@ export function buildSummaryBubble({
             },
             {
               type: "text",
-              text: clampToFlexLines(
+              text: wrapFlexTextNoTruncate(
                 scanCopy?.summary?.mainEnergyLabel ||
                   getEnergyShortLabel(mainEnergy || "พลังทั่วไป"),
-                2,
-                26,
-              ).join("\n"),
+                32,
+              ),
               size: "sm",
               color: "#ECECEC",
               wrap: true,
-              maxLines: 2,
+              maxLines: 4,
             },
             createProgressBar(score.percent || "50%", accentColor),
           ],
