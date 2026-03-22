@@ -1,8 +1,11 @@
 /**
- * Persistent cache: perceptual image hash + normalized birthdate → scan result text.
+ * Persistent cache: perceptual image hash + normalized birthdate + prompt_version → result_text.
  */
 import { supabase } from "../config/supabase.js";
 import { normalizeBirthdateForScan } from "../utils/webhookText.util.js";
+
+/** Must match deep-scan prompt generation; bump when prompt/format contract changes. */
+export const SCAN_CACHE_PROMPT_VERSION = "v1";
 
 export function normalizeBirthdateCacheKey(birthdate) {
   return normalizeBirthdateForScan(String(birthdate || "").trim());
@@ -11,16 +14,22 @@ export function normalizeBirthdateCacheKey(birthdate) {
 /**
  * @returns {Promise<{ id: string, result_text: string, object_type: string | null } | null>}
  */
-export async function getCachedScanResult({ imageHash, birthdate }) {
+export async function getCachedScanResult({
+  imageHash,
+  birthdate,
+  promptVersion = SCAN_CACHE_PROMPT_VERSION,
+} = {}) {
   const h = String(imageHash || "").trim();
   const b = normalizeBirthdateCacheKey(birthdate);
-  if (!h || !b) return null;
+  const pv = String(promptVersion || SCAN_CACHE_PROMPT_VERSION).trim();
+  if (!h || !b || !pv) return null;
 
   const { data, error } = await supabase
     .from("scan_result_cache")
     .select("id, result_text, object_type")
     .eq("image_hash", h)
     .eq("birthdate", b)
+    .eq("prompt_version", pv)
     .maybeSingle();
 
   if (error) {
@@ -46,15 +55,18 @@ export async function saveCachedScanResult({
   birthdate,
   resultText,
   objectType = "single_supported",
+  promptVersion = SCAN_CACHE_PROMPT_VERSION,
 } = {}) {
   const h = String(imageHash || "").trim();
   const b = normalizeBirthdateCacheKey(birthdate);
   const text = String(resultText || "").trim();
-  if (!h || !b || !text) return null;
+  const pv = String(promptVersion || SCAN_CACHE_PROMPT_VERSION).trim();
+  if (!h || !b || !text || !pv) return null;
 
   const payload = {
     image_hash: h,
     birthdate: b,
+    prompt_version: pv,
     result_text: text,
     object_type: objectType != null ? String(objectType) : null,
     hit_count: 0,

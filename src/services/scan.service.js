@@ -6,6 +6,7 @@ import {
   getCachedScanResult,
   saveCachedScanResult,
   markCachedScanHit,
+  SCAN_CACHE_PROMPT_VERSION,
 } from "../stores/scanResultCache.db.js";
 
 import {
@@ -168,6 +169,7 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
     const cached = await getCachedScanResult({
       imageHash,
       birthdate,
+      promptVersion: SCAN_CACHE_PROMPT_VERSION,
     });
     if (cached?.result_text) {
       try {
@@ -281,27 +283,39 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
 
   /*
   ------------------------------------------------
-  SAVE CACHE (best-effort)
+  SAVE CACHE (best-effort) — only when final validation passed (good quality)
   ------------------------------------------------
   */
-  if (imageHash) {
+  if (imageHash && !finalValidation.isBad) {
     try {
       await saveCachedScanResult({
         imageHash,
         birthdate,
         resultText: finalText,
         objectType: "single_supported",
+        promptVersion: SCAN_CACHE_PROMPT_VERSION,
       });
       console.log(
         JSON.stringify({
           event: "scan_result_cache",
           outcome: "saved",
           userId,
+          promptVersion: SCAN_CACHE_PROMPT_VERSION,
         })
       );
     } catch (saveErr) {
       console.error("[SCAN_CACHE] save failed (ignored):", saveErr?.message);
     }
+  } else if (imageHash && finalValidation.isBad) {
+    console.log(
+      JSON.stringify({
+        event: "scan_result_cache",
+        outcome: "skip_save",
+        reason: "final_validation_bad",
+        validationReason: finalValidation.reason,
+        userId,
+      })
+    );
   }
 
   /*
