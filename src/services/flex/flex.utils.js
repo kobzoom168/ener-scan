@@ -11,8 +11,63 @@ export function stripBullet(text) {
 }
 
 /**
+ * Thai dependent marks that must not end a truncated segment (incomplete display cluster).
+ * Ranges: MAI HAN-AKAT, vowel signs, PHINTHU, MAITAIKHU, tone marks, etc. (U+0E00 block).
+ */
+function isThaiDependentMarkCode(code) {
+  if (code === 0x0e31) return true;
+  if (code >= 0x0e34 && code <= 0x0e3a) return true;
+  if (code >= 0x0e47 && code <= 0x0e4e) return true;
+  if (code >= 0x0e38 && code <= 0x0e39) return true;
+  return false;
+}
+
+/**
+ * After a hard cut, `rest` may start with marks that belong to the previous syllable — drop them for clean Flex lines.
+ */
+function stripLeadingThaiOrphansAfterCut(rest) {
+  let t = String(rest);
+  while (t.length > 0 && isThaiDependentMarkCode(t.charCodeAt(0))) {
+    t = t.slice(1);
+  }
+  return t;
+}
+
+/**
+ * Thai-safe head cut: never end on tone/vowel marks or other trailing dependents.
+ * Tries slightly shorter heads (back off 1–2) if stripping marks would empty the slice.
+ * Does not exceed `maxChars` (display width); no ellipsis.
+ */
+export function safeThaiCut(str, maxChars) {
+  const s = String(str);
+  if (!s) return "";
+  const n = Math.min(Math.max(0, maxChars), s.length);
+  if (n === 0) return "";
+
+  const tryEnds = [n, n - 1, n - 2].filter((e) => e > 0);
+
+  for (const startEnd of tryEnds) {
+    for (let end = startEnd; end > 0; end--) {
+      let cut = s.slice(0, end);
+      while (cut.length > 0 && isThaiDependentMarkCode(cut.charCodeAt(cut.length - 1))) {
+        cut = cut.slice(0, -1);
+      }
+      if (cut.length > 0) {
+        return cut;
+      }
+    }
+  }
+
+  const first = s.charCodeAt(0);
+  if (!isThaiDependentMarkCode(first)) {
+    return s.slice(0, 1);
+  }
+  return s.slice(0, Math.min(2, s.length));
+}
+
+/**
  * Truncate at a space when possible — no "…" / "..." in Flex copy.
- * If there is no space in-range, cuts at maxChars (last resort for unbroken Thai tokens).
+ * If there is no space in-range, uses Thai-safe cutting (not raw slice at maxChars).
  */
 export function truncateAtWordBoundaryWithRest(text, maxChars) {
   const t = cleanLine(text);
@@ -22,16 +77,20 @@ export function truncateAtWordBoundaryWithRest(text, maxChars) {
   const sliced = t.slice(0, maxChars);
   const lastSpace = sliced.lastIndexOf(" ");
   if (lastSpace > Math.floor(maxChars * 0.35)) {
+    const headRaw = t.slice(0, lastSpace).trim();
+    const line = headRaw
+      ? safeThaiCut(headRaw, Math.min(maxChars, headRaw.length))
+      : "";
+    const rest = stripLeadingThaiOrphansAfterCut(t.slice(lastSpace + 1).trim());
     return {
-      line: t.slice(0, lastSpace).trim(),
-      rest: t.slice(lastSpace).trim(),
+      line,
+      rest: rest.trim(),
     };
   }
 
-  return {
-    line: t.slice(0, maxChars).trim(),
-    rest: t.slice(maxChars).trim(),
-  };
+  const line = safeThaiCut(t, maxChars);
+  const rest = stripLeadingThaiOrphansAfterCut(t.slice(line.length));
+  return { line: line || "", rest: rest.trim() };
 }
 
 export function truncateAtWordBoundary(text, maxLength) {
