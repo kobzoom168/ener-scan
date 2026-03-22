@@ -32,6 +32,7 @@
 - scanJobId
 - image burst window
 - waiting_birthdate state
+- **Abuse guard v2 (in-memory):** `src/stores/abuseGuard.store.js` — separate `textSpamScore` / `scanSpamScore` / `paymentSpamScore`, independent **scan** vs **payment/slip** temp locks (`scanLockUntil`, `paymentLockUntil`), global hard block at `HARD_BLOCK_THRESHOLD`; integrated in `lineWebhook.js` (global gate, image routing: slip path → payment lock only / scan path → scan lock, `finalizeAcceptedImage`, payment command). Logs: `[ABUSE_GUARD_GLOBAL_STATUS]`, `[ABUSE_GUARD_SCAN_*]`, `[ABUSE_GUARD_PAYMENT_*]`, etc. No Redis/DB yet; resets on process restart.
 
 ## Constraints
 - 1 image per case

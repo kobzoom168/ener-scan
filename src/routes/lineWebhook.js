@@ -112,11 +112,28 @@ import {
   runScanFlow,
 } from "../handlers/scanFlow.handler.js";
 
+import {
+  checkGlobalAbuseStatus,
+  checkPaymentAbuseStatus,
+  checkScanAbuseStatus,
+  recordLockedImageActivity,
+  registerPaymentIntent,
+  registerScanIntent,
+  registerSlipEvent,
+  registerTextEvent,
+} from "../stores/abuseGuard.store.js";
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
+
+const ABUSE_MSG_HARD = "ไม่สามารถใช้งานได้ชั่วคราว";
+const ABUSE_MSG_SCAN_LOCK =
+  "มีการสแกนถี่เกินไป ขอพักระบบสักครู่แล้วค่อยลองใหม่นะครับ 🙏";
+const ABUSE_MSG_PAYMENT_LOCK =
+  "มีการส่งข้อมูลการชำระถี่เกินไป กรุณารอสักครู่แล้วลองใหม่อีกครั้งนะครับ";
 
 async function handleHistoryCommand({ client, replyToken, userId }) {
   const history = getScanHistory(userId);
@@ -228,6 +245,21 @@ async function finalizeAcceptedImage({
   });
 
   if (!accessDecision?.allowed && pendingPayment) {
+    const payNow = Date.now();
+    const payStatus = checkPaymentAbuseStatus(userId, payNow);
+    console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
+      userId,
+      ...payStatus,
+    });
+    if (payStatus.isLocked) {
+      console.warn("[ABUSE_GUARD_PAYMENT_LOCK]", {
+        userId,
+        lockUntil: payStatus.lockUntil,
+      });
+      await replyText(client, event.replyToken, ABUSE_MSG_PAYMENT_LOCK);
+      return;
+    }
+
     if (String(pendingPayment.status) === "pending_verify") {
       let paymentRef = null;
       try {
@@ -251,6 +283,15 @@ async function finalizeAcceptedImage({
 
     const slipMessageId = event?.message?.id;
     const paymentId = pendingPayment.id;
+
+    const slipReg = registerSlipEvent(userId, payNow);
+    if (slipReg.abusive) {
+      console.warn("[ABUSE_GUARD_PAYMENT_ABUSE]", {
+        userId,
+        reasons: slipReg.reasons,
+        paymentSpamScore: slipReg.state.paymentSpamScore,
+      });
+    }
 
     try {
       const slipUrl = await uploadSlipImageToStorage({
@@ -302,6 +343,20 @@ async function finalizeAcceptedImage({
       );
       return;
     }
+  }
+
+  const scanIntentNow = Date.now();
+  const scanIntent = registerScanIntent(userId, scanIntentNow);
+  if (scanIntent.abusive) {
+    console.warn("[ABUSE_GUARD_SCAN_ABUSE]", {
+      userId,
+      reasons: scanIntent.reasons,
+      scanSpamScore: scanIntent.state.scanSpamScore,
+    });
+  }
+  if (scanIntent.state.isHardBlocked) {
+    await replyText(client, event.replyToken, ABUSE_MSG_HARD);
+    return;
   }
 
   const isDuplicate = await isDuplicateImage(imageBuffer);
@@ -390,6 +445,33 @@ async function finalizeAcceptedImage({
 
   // Reuse accessDecision from image routing (same request; avoids slip vs scan mismatch).
   if (!accessDecision.allowed && accessDecision.reason === "payment_required") {
+    const payReqGateNow = Date.now();
+    const payReqStatus = checkPaymentAbuseStatus(userId, payReqGateNow);
+    console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
+      userId,
+      gate: "finalize_payment_required",
+      ...payReqStatus,
+    });
+    if (payReqStatus.isLocked) {
+      console.warn("[ABUSE_GUARD_PAYMENT_LOCK]", {
+        userId,
+        lockUntil: payReqStatus.lockUntil,
+        gate: "finalize_payment_required",
+      });
+      await replyText(client, event.replyToken, ABUSE_MSG_PAYMENT_LOCK);
+      return;
+    }
+
+    const payIntentNow = Date.now();
+    const payIntent = registerPaymentIntent(userId, payIntentNow);
+    if (payIntent.abusive) {
+      console.warn("[ABUSE_GUARD_PAYMENT_ABUSE]", {
+        userId,
+        reasons: payIntent.reasons,
+        paymentSpamScore: payIntent.state.paymentSpamScore,
+      });
+    }
+
     // Create (or re-create) the pending payment row for this LINE user.
     // All subsequent images will be treated as slip upload until admin verifies.
     let createdPaymentRef = null;
@@ -509,6 +591,78 @@ async function finalizeAcceptedImage({
 }
 
 async function handleImageMessage({ client, event, userId, session }) {
+  const now = Date.now();
+
+  const lockedBump = recordLockedImageActivity(userId, now);
+  if (lockedBump.bumped) {
+    console.log("[ABUSE_GUARD_LOCKED_IMAGE_ACTIVITY]", { userId });
+  }
+
+  const globalAfter = checkGlobalAbuseStatus(userId, now);
+  if (globalAfter.isHardBlocked) {
+    console.warn("[ABUSE_GUARD_HARD_BLOCK]", {
+      userId,
+      source: "after_locked_image_activity",
+    });
+    await replyText(client, event.replyToken, ABUSE_MSG_HARD);
+    return;
+  }
+
+  let routeAccessDecision;
+  try {
+    routeAccessDecision = await checkScanAccess({ userId });
+  } catch (routeErr) {
+    console.error("[ABUSE_GUARD] checkScanAccess (image route) failed:", {
+      userId,
+      message: routeErr?.message,
+    });
+    routeAccessDecision = { allowed: false };
+  }
+
+  let routePendingPayment = null;
+  if (!routeAccessDecision?.allowed) {
+    try {
+      routePendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
+    } catch (_) {
+      routePendingPayment = null;
+    }
+  }
+
+  const imageWillUseSlipPath =
+    !routeAccessDecision?.allowed && routePendingPayment;
+
+  if (imageWillUseSlipPath) {
+    const payStatus = checkPaymentAbuseStatus(userId, now);
+    console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
+      userId,
+      gate: "handleImageMessage_slip_route",
+      ...payStatus,
+    });
+    if (payStatus.isLocked) {
+      console.warn("[ABUSE_GUARD_PAYMENT_LOCK]", {
+        userId,
+        lockUntil: payStatus.lockUntil,
+        gate: "handleImageMessage_slip_route",
+      });
+      await replyText(client, event.replyToken, ABUSE_MSG_PAYMENT_LOCK);
+      return;
+    }
+  } else {
+    const scanStatus = checkScanAbuseStatus(userId, now);
+    console.log("[ABUSE_GUARD_SCAN_STATUS]", {
+      userId,
+      ...scanStatus,
+    });
+    if (scanStatus.isLocked) {
+      console.warn("[ABUSE_GUARD_SCAN_LOCK]", {
+        userId,
+        lockUntil: scanStatus.lockUntil,
+      });
+      await replyText(client, event.replyToken, ABUSE_MSG_SCAN_LOCK);
+      return;
+    }
+  }
+
   const eventTimestamp = getEventTimestamp(event);
 
   if (isUserBlockedForRequest(userId)) {
@@ -710,6 +864,25 @@ async function handleImageMessage({ client, event, userId, session }) {
 async function handleTextMessage({ client, event, userId, session }) {
   const text = String(event.message.text || "").trim();
   const lowerText = text.toLowerCase();
+  const now = Date.now();
+
+  const textSpam = registerTextEvent(userId, text, now);
+
+  if (textSpam.state.isHardBlocked) {
+    console.warn("[ABUSE_GUARD_HARD_BLOCK]", { userId, source: "text_register" });
+    await replyText(client, event.replyToken, ABUSE_MSG_HARD);
+    return;
+  }
+
+  if (textSpam.abusive) {
+    console.warn("[ABUSE_GUARD_TEXT_SPAM]", {
+      userId,
+      reasons: textSpam.reasons,
+      textSpamScore: textSpam.state.textSpamScore,
+      scanSpamScore: textSpam.state.scanSpamScore,
+      paymentSpamScore: textSpam.state.paymentSpamScore,
+    });
+  }
 
   console.log("[WEBHOOK] text received:", {
     userId,
@@ -851,6 +1024,35 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (isPaymentCommand(text, lowerText)) {
+    const payCmdNow = Date.now();
+    const payCmdStatus = checkPaymentAbuseStatus(userId, payCmdNow);
+    console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
+      userId,
+      ...payCmdStatus,
+    });
+    if (payCmdStatus.isLocked) {
+      console.warn("[ABUSE_GUARD_PAYMENT_LOCK]", {
+        userId,
+        lockUntil: payCmdStatus.lockUntil,
+        source: "payment_command",
+      });
+      await replyText(client, event.replyToken, ABUSE_MSG_PAYMENT_LOCK);
+      return;
+    }
+
+    const payCmdIntent = registerPaymentIntent(userId, payCmdNow);
+    if (payCmdIntent.abusive) {
+      console.warn("[ABUSE_GUARD_PAYMENT_ABUSE]", {
+        userId,
+        reasons: payCmdIntent.reasons,
+        paymentSpamScore: payCmdIntent.state.paymentSpamScore,
+      });
+    }
+    if (payCmdIntent.state.isHardBlocked) {
+      await replyText(client, event.replyToken, ABUSE_MSG_HARD);
+      return;
+    }
+
     const amount = env.PAYMENT_UNLOCK_AMOUNT_THB || 0;
     const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
     const amountForCopy = amount > 0 ? amount : 99;
@@ -952,6 +1154,23 @@ async function handleTextMessage({ client, event, userId, session }) {
       flowVersion,
     });
 
+    const scanGateNow = Date.now();
+    const scanGateFromText = checkScanAbuseStatus(userId, scanGateNow);
+    console.log("[ABUSE_GUARD_SCAN_STATUS]", {
+      userId,
+      gate: "pendingImage_birthdate_text",
+      ...scanGateFromText,
+    });
+    if (scanGateFromText.isLocked) {
+      console.warn("[ABUSE_GUARD_SCAN_LOCK]", {
+        userId,
+        lockUntil: scanGateFromText.lockUntil,
+        gate: "pendingImage_birthdate_text",
+      });
+      await replyText(client, event.replyToken, ABUSE_MSG_SCAN_LOCK);
+      return;
+    }
+
     await runScanFlow({
       client,
       replyToken: event.replyToken,
@@ -1050,6 +1269,19 @@ async function handleEvent({ client, event }) {
 
   if (!userId) {
     await replyText(client, event.replyToken, "ไม่พบข้อมูลผู้ใช้ครับ");
+    return;
+  }
+
+  const now = Date.now();
+  const globalStatus = checkGlobalAbuseStatus(userId, now);
+  console.log("[ABUSE_GUARD_GLOBAL_STATUS]", {
+    userId,
+    ...globalStatus,
+  });
+
+  if (globalStatus.isHardBlocked) {
+    console.warn("[ABUSE_GUARD_HARD_BLOCK]", { userId, gate: "handleEvent" });
+    await replyText(client, event.replyToken, ABUSE_MSG_HARD);
     return;
   }
 
