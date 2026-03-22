@@ -39,7 +39,7 @@
 - multi-image protection
 
 ## Copy / voice
-- **Ener System Tone Guide:** `docs/ENER_SYSTEM_TONE_GUIDE.md` — single intentional voice (Thai, clear, warm, grounded). Applies to Flex `scanCopy` (`scanCopy.generator.js`), UI fallbacks (`flex.components.js`, `flex.utils.js`), and model prompts under `src/prompts/`.
+- **Ener System Tone Guide:** `docs/ENER_SYSTEM_TONE_GUIDE.md` — single intentional voice (Thai, clear, warm, grounded). Template copy lives in `src/services/flex/scanCopy.config.js` (assembled by `scanCopy.generator.js` + `scanCopy.utils.js`); UI fallbacks (`flex.components.js`, `flex.utils.js`); model prompts under `src/prompts/`.
 
 ## Deep scan (OpenAI)
 - Layer 1: `gpt-4.1-mini` → draft (fixed format) — `src/services/openaiDeepScan.api.js` + `src/prompts/deepScan.prompt.js`

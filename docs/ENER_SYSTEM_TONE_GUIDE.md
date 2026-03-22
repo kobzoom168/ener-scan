@@ -2,7 +2,7 @@
 
 **Purpose:** ทุกข้อความในระบบ (สรุป ลักษณะพลัง คำอ่าน การใช้ ปิดท้าย) ต้องรู้สึกว่ามาจาก **เสียงเดียวกัน** — ชัด อบอุ่น ติดดิน ไม่สับสน
 
-**Scope:** ใช้เป็นเกณฑ์หลักสำหรับ copy ที่เขียนในโค้ด (`scanCopy.generator.js`) และคำแนะนำสำหรับข้อความจากโมเดล (`deepScan.prompt.js`)  
+**Scope:** ใช้เป็นเกณฑ์หลักสำหรับ copy ใน `src/services/flex/scanCopy.config.js` (assembler: `scanCopy.generator.js`) และคำแนะนำสำหรับข้อความจากโมเดล (`deepScan.prompt.js`)  
 **ไม่เปลี่ยน:** layout, routing, scoring
 
 ---
@@ -52,8 +52,8 @@
 
 | พื้นที่ | แหล่งหลัก |
 |---------|-----------|
-| สรุป (หัวข้อใต้คะแนน, การ์ดพลังหลัก 2 บรรทัด) | `src/services/flex/scanCopy.generator.js` (`MAIN_LABEL`, `MAIN_PAIR`, …) |
-| ลักษณะพลัง 3 บรรทัด (feel / use / effect) | `scanCopy.generator.js` (`FEEL`, `USE_CASE`, `EFFECT`) |
+| สรุป (หัวข้อใต้คะแนน, การ์ดพลังหลัก 2 บรรทัด) | `scanCopy.config.js` (`MAIN_LABEL`, `ENERGY_COPY` → `summary`) |
+| ลักษณะพลัง 3 บรรทัด (feel / use / effect) | `scanCopy.config.js` (`ENERGY_COPY` → `traits`) + `scanCopy.utils.js` (pick / cap) |
 | คำอ่าน (ภาพรวม / เหตุผล / ปิดท้าย) | จากโมเดล + `flex.display.js` — โมเดลต้องทำตามคู่มือนี้ |
 | การใช้ (หัวข้อย่อย + bullets) | จากโมเดล + default ใน `flex.components.js` |
 | Fallback เมื่อไม่มี `scanCopy` | `getEnergyShortLabel` ใน `flex.utils.js` |
