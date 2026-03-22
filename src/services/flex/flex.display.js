@@ -2,7 +2,11 @@
  * Flex-only display shaping (does not change stored scan text).
  * Sentence selection balances substance/position with light keyword hints (not keyword-only).
  */
-import { cleanLine, safeWrapText } from "./flex.utils.js";
+import {
+  cleanLine,
+  safeWrapText,
+  sanitizeFlexDisplayText,
+} from "./flex.utils.js";
 
 /** LINE altText: keep short; score suffix should remain visible. */
 export const FLEX_ALT_TEXT_MAX = 118;
@@ -29,7 +33,7 @@ export function polishReadingLineForFlex(text, maxChars) {
   if (first && first.length >= 28 && first.length < t.length) {
     out = first;
   }
-  return safeWrapText(out, maxChars);
+  return sanitizeFlexDisplayText(safeWrapText(out, maxChars));
 }
 
 export const FLEX_CLOSING_MAX_CHARS = 120;
@@ -577,7 +581,7 @@ export function prepareScanFlexDisplay(parsed) {
     fitReasonForFlex: fitClean
       ? polishReadingLineForFlex(fit.text, FLEX_FIT_DISPLAY_MAX)
       : "",
-    closingForFlex: cl.text,
+    closingForFlex: cl.text ? sanitizeFlexDisplayText(cl.text) : "",
     /** For `[FLEX_PARSE]`: scores, rank order vs picked order, later vs first */
     flexInsightDebug: {
       overview: ov.debug,

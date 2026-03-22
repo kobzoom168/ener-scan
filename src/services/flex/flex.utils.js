@@ -4,6 +4,41 @@ export function cleanLine(line) {
     .trim();
 }
 
+/**
+ * Flex display-only: strip trailing ellipsis-like junk from upstream text and weak
+ * trailing separators (|, ·, •). No scoring/layout impact.
+ */
+function sanitizeFlexDisplayLine(line) {
+  let s = String(line).replace(/[ \t]+/g, " ").trim();
+  if (!s) return "";
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(/\s+$/, "");
+    s = s.replace(
+      /(?:\s*[|·\u00B7•\u2022])+[\s]*(?:\.{3,}|…)+\s*$/u,
+      "",
+    );
+    s = s.replace(/\s*(?:\.{3,}|…)\s*$/u, "");
+    s = s.replace(/(?:\.{3,}|…)+$/u, "");
+    s = s.replace(/\s+$/, "");
+    s = s.replace(/(?:\s*[|·\u00B7•\u2022])+\s*$/u, "");
+    s = s.replace(/\s+$/, "");
+  } while (s !== prev);
+  return s;
+}
+
+export function sanitizeFlexDisplayText(input) {
+  const raw = String(input ?? "");
+  if (!raw.includes("\n")) {
+    return sanitizeFlexDisplayLine(raw);
+  }
+  return raw
+    .split("\n")
+    .map((line) => sanitizeFlexDisplayLine(line))
+    .join("\n");
+}
+
 export function stripBullet(text) {
   return String(text || "")
     .replace(/^[•\u2022\u00B7\*\s\u2013\u2014-]+/u, "")
@@ -189,7 +224,7 @@ export function formatMainEnergyForCard(text, headMax = 18, hintMax = 16) {
   const open = c.indexOf("(");
   if (open <= 0) {
     const lines = clampToFlexLines(c, 2, headMax);
-    return lines.join("\n");
+    return sanitizeFlexDisplayText(lines.join("\n"));
   }
 
   const head = c.slice(0, open).trim();
@@ -200,15 +235,15 @@ export function formatMainEnergyForCard(text, headMax = 18, hintMax = 16) {
   const headLine = safeWrapText(head, headMax);
 
   if (!inner) {
-    return headLine;
+    return sanitizeFlexDisplayText(headLine);
   }
 
   const hint = compactParenHint(inner, hintMax);
   if (!hint) {
-    return headLine;
+    return sanitizeFlexDisplayText(headLine);
   }
 
-  return `${headLine}\n${hint}`;
+  return sanitizeFlexDisplayText(`${headLine}\n${hint}`);
 }
 
 /**
@@ -225,11 +260,11 @@ export function compactEnergyTraitForFlex(raw) {
     const inner = close > open ? t.slice(open + 1, close) : "";
     const hint = compactParenHint(inner, 14);
     const h = safeWrapText(head, 16);
-    if (hint) return `${h} · ${hint}`;
-    return h;
+    if (hint) return sanitizeFlexDisplayText(`${h} · ${hint}`);
+    return sanitizeFlexDisplayText(h);
   }
 
-  return safeWrapText(t, 30);
+  return sanitizeFlexDisplayText(safeWrapText(t, 30));
 }
 
 /** Drop empty / bullet-only rows so Flex bullet blocks never show lone "•". */
@@ -366,7 +401,7 @@ export function getEnergyShortLabel(mainEnergy) {
     return "เน้นดึงดูด";
   }
 
-  return safeWrapText(value, 28);
+  return sanitizeFlexDisplayText(safeWrapText(value, 28));
 }
 
 export function mapHiddenToShortText(hidden) {
@@ -385,7 +420,7 @@ export function mapHiddenToShortText(hidden) {
   if (clean.includes("นิ่ง")) return "พลังนิ่งแฝง";
   if (clean.includes("แฝง")) return "พลังแฝง";
 
-  return safeWrapText(clean, 24);
+  return sanitizeFlexDisplayText(safeWrapText(clean, 24));
 }
 
 export function formatToneLine(tone) {
@@ -399,9 +434,13 @@ export function formatToneLine(tone) {
     .filter(Boolean);
 
   if (parts.length === 0) return "-";
-  if (parts.length === 1) return safeWrapText(`โทน${parts[0]}`, 24);
+  if (parts.length === 1) {
+    return sanitizeFlexDisplayText(safeWrapText(`โทน${parts[0]}`, 24));
+  }
 
-  return safeWrapText(`โทน${parts[0]} | ${parts[1]}`, 28);
+  return sanitizeFlexDisplayText(
+    safeWrapText(`โทน${parts[0]} | ${parts[1]}`, 28),
+  );
 }
 
 export function buildEnergyLines({ personality, tone, hidden }) {
@@ -420,12 +459,19 @@ export function buildEnergyLines({ personality, tone, hidden }) {
 
   const hiddenText = mapHiddenToShortText(hidden);
   if (hiddenText && hiddenText !== "-") {
-    lines.push(safeWrapText(hiddenText, 20));
+    lines.push(sanitizeFlexDisplayText(safeWrapText(hiddenText, 20)));
   }
 
   if (lines.length === 0) {
     return ["ดูนิ่ง มั่นคง"];
   }
 
-  return lines.slice(0, 3);
+  const cleaned = lines
+    .slice(0, 3)
+    .map((line) => sanitizeFlexDisplayText(line))
+    .filter((line) => line && line !== "-");
+  if (cleaned.length === 0) {
+    return ["ดูนิ่ง มั่นคง"];
+  }
+  return cleaned;
 }
