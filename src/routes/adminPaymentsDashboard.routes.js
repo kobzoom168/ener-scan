@@ -606,18 +606,52 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
     (function () {
       var initialFlash = ${JSON.stringify(flash || "")};
       var pendingRejectBtn = null;
+      var ADMIN_JSON_HEADERS = { Accept: "application/json", "X-Admin-Json": "1" };
       function qs(sel) { return document.querySelector(sel); }
       function showToast(msg, kind) {
         var t = qs("#toast");
         t.textContent = msg;
         t.className = "toast show " + (kind === "err" ? "toast-err" : "toast-ok");
         clearTimeout(t._tm);
-        t._tm = setTimeout(function () { t.className = "toast"; }, 3200);
+        t._tm = setTimeout(function () { t.className = "toast"; }, kind === "err" ? 4200 : 2800);
+      }
+      function actionScopeFromBtn(btn) {
+        return btn && (btn.closest("article.card") || btn.closest("tr"));
+      }
+      function setScopeActionBusy(scope, busy, activeBtn, loadingLabel) {
+        if (!scope) {
+          if (activeBtn) {
+            if (busy) {
+              if (!activeBtn.dataset._admOrig) activeBtn.dataset._admOrig = activeBtn.textContent;
+              activeBtn.disabled = true;
+              activeBtn.textContent = loadingLabel || "…";
+            } else {
+              activeBtn.disabled = false;
+              if (activeBtn.dataset._admOrig) activeBtn.textContent = activeBtn.dataset._admOrig;
+            }
+          }
+          return;
+        }
+        var xs = scope.querySelectorAll(".js-approve, .js-reject");
+        for (var i = 0; i < xs.length; i++) {
+          var b = xs[i];
+          if (busy) {
+            if (!b.dataset._admOrig) b.dataset._admOrig = b.textContent;
+            b.disabled = true;
+            if (activeBtn === b) b.textContent = loadingLabel || "…";
+          } else {
+            b.disabled = false;
+            if (b.dataset._admOrig) b.textContent = b.dataset._admOrig;
+          }
+        }
       }
       function openRejectModal(btn) {
         pendingRejectBtn = btn;
         qs("#reject-detail").value = "";
         qs("#reject-preset").selectedIndex = 0;
+        var rc = qs("#reject-confirm");
+        rc.disabled = false;
+        rc.textContent = "ยืนยันปฏิเสธ";
         var m = qs("#reject-modal");
         m.classList.remove("hidden");
         m.setAttribute("aria-hidden", "false");
@@ -658,24 +692,22 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
       }
       async function postApprove(btn) {
         if (!btn || btn.disabled) return;
-        btn.disabled = true;
-        var orig = btn.textContent;
-        btn.textContent = "กำลังอนุมัติ…";
+        var scope = actionScopeFromBtn(btn);
+        setScopeActionBusy(scope, true, btn, "กำลังอนุมัติ…");
         try {
           var r = await fetch("/admin/payments/" + btn.dataset.id + "/approve", {
             method: "POST",
-            headers: { Accept: "application/json" },
+            headers: Object.assign({}, ADMIN_JSON_HEADERS),
             credentials: "same-origin"
           });
           var j = null;
           try { j = await r.json(); } catch (_) {}
-          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || r.statusText || "อนุมัติไม่สำเร็จ");
+          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || ("HTTP " + r.status));
           showToast("อนุมัติแล้ว ✅", "ok");
-          setTimeout(function () { location.reload(); }, 650);
+          setTimeout(function () { location.reload(); }, 900);
         } catch (err) {
           showToast(err.message || "เกิดข้อผิดพลาด", "err");
-          btn.disabled = false;
-          btn.textContent = orig;
+          setScopeActionBusy(scope, false, btn);
         }
       }
       async function postRejectFromModal() {
@@ -687,9 +719,12 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
           showToast("กรุณาระบุเหตุผลเมื่อเลือก \"อื่น ๆ\"", "err");
           return;
         }
-        btn.disabled = true;
-        var orig = btn.textContent;
-        btn.textContent = "กำลังปฏิเสธ…";
+        var scope = actionScopeFromBtn(btn);
+        var rc = qs("#reject-confirm");
+        var rcOrig = rc.textContent;
+        setScopeActionBusy(scope, true, btn, "กำลังปฏิเสธ…");
+        rc.disabled = true;
+        rc.textContent = "กำลังส่ง…";
         closeRejectModal();
         try {
           var body = new URLSearchParams();
@@ -697,22 +732,23 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
           body.set("reject_detail", detail);
           var r = await fetch("/admin/payments/" + btn.dataset.id + "/reject", {
             method: "POST",
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/x-www-form-urlencoded"
-            },
+            headers: Object.assign(
+              { "Content-Type": "application/x-www-form-urlencoded" },
+              ADMIN_JSON_HEADERS
+            ),
             body: body.toString(),
             credentials: "same-origin"
           });
           var j = null;
           try { j = await r.json(); } catch (_) {}
-          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || r.statusText || "ปฏิเสธไม่สำเร็จ");
+          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || ("HTTP " + r.status));
           showToast("บันทึกการปฏิเสธแล้ว", "ok");
-          setTimeout(function () { location.reload(); }, 650);
+          setTimeout(function () { location.reload(); }, 900);
         } catch (err) {
           showToast(err.message || "เกิดข้อผิดพลาด", "err");
-          btn.disabled = false;
-          btn.textContent = orig;
+          setScopeActionBusy(scope, false, btn);
+          rc.disabled = false;
+          rc.textContent = rcOrig;
         }
       }
       document.getElementById("reject-confirm").addEventListener("click", postRejectFromModal);
@@ -850,13 +886,28 @@ function renderDetailPage({
     (function () {
       var pid = ${JSON.stringify(p.id)};
       var lineUid = ${lineUid ? JSON.stringify(lineUid) : "null"};
+      var ADMIN_JSON_HEADERS = { Accept: "application/json", "X-Admin-Json": "1" };
       function qs(s) { return document.querySelector(s); }
       function showToast(msg, kind) {
         var t = qs("#toast");
         t.textContent = msg;
         t.className = "toast show " + (kind === "err" ? "toast-err" : "toast-ok");
         clearTimeout(t._tm);
-        t._tm = setTimeout(function () { t.className = "toast"; }, 3200);
+        t._tm = setTimeout(function () { t.className = "toast"; }, kind === "err" ? 4200 : 2800);
+      }
+      function setDetailStickyBusy(busy, activeBtn, loadingLabel) {
+        var nodes = document.querySelectorAll(".sticky-actions .js-approve, .sticky-actions .js-reject");
+        for (var i = 0; i < nodes.length; i++) {
+          var b = nodes[i];
+          if (busy) {
+            if (!b.dataset._admOrig) b.dataset._admOrig = b.textContent;
+            b.disabled = true;
+            if (b === activeBtn) b.textContent = loadingLabel || "…";
+          } else {
+            b.disabled = false;
+            if (b.dataset._admOrig) b.textContent = b.dataset._admOrig;
+          }
+        }
       }
       function openModal(src) {
         var m = qs("#slip-modal");
@@ -871,24 +922,22 @@ function renderDetailPage({
       });
       async function approve(btn) {
         if (!btn || btn.disabled) return;
-        btn.disabled = true;
-        btn.textContent = "กำลังอนุมัติ…";
+        setDetailStickyBusy(true, btn, "กำลังอนุมัติ…");
         try {
           var r = await fetch("/admin/payments/" + pid + "/approve", {
             method: "POST",
-            headers: { Accept: "application/json" },
+            headers: Object.assign({}, ADMIN_JSON_HEADERS),
             credentials: "same-origin"
           });
           var j = await r.json().catch(function () { return null; });
-          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || "อนุมัติไม่สำเร็จ");
+          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || ("HTTP " + r.status));
           showToast("อนุมัติแล้ว ✅", "ok");
           setTimeout(function () {
             location.href = "/admin/payments?status=paid&flash=approved";
-          }, 500);
+          }, 900);
         } catch (e) {
           showToast(e.message || "เกิดข้อผิดพลาด", "err");
-          btn.disabled = false;
-          btn.textContent = "✅ อนุมัติ";
+          setDetailStickyBusy(false, btn);
         }
       }
       async function reject(btn) {
@@ -905,28 +954,29 @@ function renderDetailPage({
           showToast("กรุณาระบุเหตุผลเมื่อเลือก \"อื่น ๆ\"", "err");
           return;
         }
-        btn.disabled = true;
-        btn.textContent = "กำลังปฏิเสธ…";
+        setDetailStickyBusy(true, btn, "กำลังปฏิเสธ…");
         try {
           var body = new URLSearchParams();
           body.set("reject_preset", preset);
           body.set("reject_detail", detail);
           var r = await fetch("/admin/payments/" + pid + "/reject", {
             method: "POST",
-            headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+            headers: Object.assign(
+              { "Content-Type": "application/x-www-form-urlencoded" },
+              ADMIN_JSON_HEADERS
+            ),
             body: body.toString(),
             credentials: "same-origin"
           });
           var j = await r.json().catch(function () { return null; });
-          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || "ปฏิเสธไม่สำเร็จ");
+          if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || ("HTTP " + r.status));
           showToast("บันทึกการปฏิเสธแล้ว", "ok");
           setTimeout(function () {
             location.href = "/admin/payments?status=rejected&flash=rejected";
-          }, 500);
+          }, 900);
         } catch (e) {
           showToast(e.message || "เกิดข้อผิดพลาด", "err");
-          btn.disabled = false;
-          btn.textContent = "❌ ปฏิเสธ";
+          setDetailStickyBusy(false, btn);
         }
       }
       var ap = document.querySelector(".js-approve");
@@ -1067,12 +1117,18 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
     return String(req.get("Accept") || "").includes("application/json");
   }
 
+  /** Dashboard fetch + mobile Safari; pair with header X-Admin-Json: 1 from client. */
+  function prefersAdminJson(req) {
+    if (wantsJsonResponse(req)) return true;
+    return String(req.get("X-Admin-Json") || "").trim() === "1";
+  }
+
   router.post("/admin/payments/:id/approve", requireAdminSession, async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();
     const approvedBy = "admin_dashboard";
 
     if (!paymentId) {
-      if (wantsJsonResponse(req)) {
+      if (prefersAdminJson(req)) {
         res.status(400).json({ ok: false, message: "paymentId_missing" });
       } else {
         res.status(400).send("paymentId_missing");
@@ -1110,20 +1166,26 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           paidUntilLine: `หมดอายุ: ${paidUntilText}`,
         });
 
-        await lineClient.pushMessage(activation.lineUserId, {
-          type: "text",
-          text: message,
-        });
+        void lineClient
+          .pushMessage(activation.lineUserId, {
+            type: "text",
+            text: message,
+          })
+          .catch((pushErr) => {
+            console.error("[ADMIN_DASH] LINE push after approve failed:", {
+              message: pushErr?.message,
+            });
+          });
       }
 
-      if (wantsJsonResponse(req)) {
+      if (prefersAdminJson(req)) {
         res.status(200).json({ ok: true, idempotent: Boolean(isIdempotent) });
       } else {
         res.status(200).send("ok");
       }
     } catch (err) {
       console.error("[ADMIN_DASH] approve failed:", err);
-      if (wantsJsonResponse(req)) {
+      if (prefersAdminJson(req)) {
         res.status(409).json({ ok: false, message: err?.message || "approve_failed" });
       } else {
         res.status(409).send(err?.message || "approve_failed");
@@ -1137,7 +1199,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
     const approvedBy = "admin_dashboard";
 
     if (!paymentId) {
-      if (wantsJsonResponse(req)) {
+      if (prefersAdminJson(req)) {
         res.status(400).json({ ok: false, message: "paymentId_missing" });
       } else {
         res.status(400).send("paymentId_missing");
@@ -1153,20 +1215,26 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       });
 
       if (lineUserId) {
-        await lineClient.pushMessage(lineUserId, {
-          type: "text",
-          text: buildPaymentRejectedText({ reason: rejectReason }),
-        });
+        void lineClient
+          .pushMessage(lineUserId, {
+            type: "text",
+            text: buildPaymentRejectedText({ reason: rejectReason }),
+          })
+          .catch((pushErr) => {
+            console.error("[ADMIN_DASH] LINE push after reject failed:", {
+              message: pushErr?.message,
+            });
+          });
       }
 
-      if (wantsJsonResponse(req)) {
+      if (prefersAdminJson(req)) {
         res.status(200).json({ ok: true });
       } else {
         res.status(200).send("ok");
       }
     } catch (err) {
       console.error("[ADMIN_DASH] reject failed:", err);
-      if (wantsJsonResponse(req)) {
+      if (prefersAdminJson(req)) {
         res.status(409).json({ ok: false, message: err?.message || "reject_failed" });
       } else {
         res.status(409).send(err?.message || "reject_failed");
