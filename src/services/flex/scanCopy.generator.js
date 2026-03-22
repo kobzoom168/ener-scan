@@ -1,7 +1,7 @@
 /**
- * Unified intentional copy for Ener Scan Flex (Thai, warm, grounded).
- * Phase 1: summary.mainEnergy + traits (feel / use case / effect).
- * Reading & usage: pass-through from prepared display until Phase 2–3 template expansion.
+ * Unified intentional copy for Ener Scan Flex.
+ * Tone: see `docs/ENER_SYSTEM_TONE_GUIDE.md` (Thai, clear, warm, grounded).
+ * Summary + traits: generated here. Reading & usage: pass-through from prepared display.
  */
 import {
   cleanLine,
@@ -52,26 +52,26 @@ function capTrait(s, maxLen) {
   return sanitizeFlexDisplayText(safeThaiCut(t, maxLen));
 }
 
-/** Short headline under score (one line). */
+/** Short plain headline under score (small box — label mode). */
 const MAIN_LABEL = {
-  ปกป้อง: "โฟกัสปกป้องและความมั่นคง",
-  สมดุล: "โฟกัสสมดุลและความนิ่ง",
-  อำนาจ: "โฟกัสอำนาจบารมี",
-  เมตตา: "โฟกัสเมตตาและความอ่อนโยน",
-  ดึงดูด: "โฟกัสเสน่ห์และการดึงดูด",
-  โชคลาภ: "โฟกัสโชคลาภและจังหวะ",
-  เสริมพลัง: "โฟกัสเสริมพลังในทุกวัน",
+  ปกป้อง: "ปกป้องและมั่นคง",
+  สมดุล: "สมดุลและจังหวะในใจ",
+  อำนาจ: "มั่นใจและตัดสินใจชัด",
+  เมตตา: "อ่อนโยนกับคนรอบข้าง",
+  ดึงดูด: "น่าเข้าหาและโดดเด่น",
+  โชคลาภ: "โอกาสและจังหวะ",
+  เสริมพลัง: "กำลังใจในทุกวัน",
 };
 
-/** Shorter label for LINE altText — natural, fits notifications without sounding clipped. */
+/** Shorter label for LINE altText — natural, notification-friendly. */
 const MAIN_LABEL_ALT = {
-  ปกป้อง: "โฟกัสปกป้องและมั่นคง",
-  สมดุล: "โฟกัสสมดุลและนิ่ง",
-  อำนาจ: "โฟกัสบารมีและความมั่นใจ",
-  เมตตา: "โฟกัสเมตตาและอ่อนโยน",
-  ดึงดูด: "โฟกัสเสน่ห์และความโดดเด่น",
-  โชคลาภ: "โฟกัสโชคและจังหวะ",
-  เสริมพลัง: "โฟกัสเสริมพลังใจ",
+  ปกป้อง: "ปกป้องและมั่นคง",
+  สมดุล: "สมดุลและจังหวะ",
+  อำนาจ: "มั่นใจและตัดสินใจ",
+  เมตตา: "อ่อนโยนกับคน",
+  ดึงดูด: "น่าเข้าหาและโดดเด่น",
+  โชคลาภ: "โอกาสและจังหวะ",
+  เสริมพลัง: "กำลังใจทุกวัน",
 };
 
 /** Intentional 2-line main energy card (meaning + context). */
@@ -82,7 +82,7 @@ const MAIN_PAIR = {
       line2: "ช่วยให้ใจนิ่งเวลาเผชิญเรื่องสำคัญ",
     },
     medium: {
-      line1: "เน้นความปลอดภัยและความมั่นคง",
+      line1: "รับแรงกดดันและความปลอดภัยในใจ",
       line2: "ช่วยให้ใจสบายขึ้นเวลาใช้งานในทุกวัน",
     },
     low: {
@@ -93,11 +93,11 @@ const MAIN_PAIR = {
   สมดุล: {
     high: {
       line1: "สมดุลระหว่างหนักเบาในใจ",
-      line2: "พาให้โฟกัสกับตอนนี้ได้มั่นขึ้น ไม่ปล่อยให้ใจลอย",
+      line2: "ช่วยให้ใจอยู่กับตอนนี้ได้มั่นขึ้น ไม่ปล่อยให้ใจลอย",
     },
     medium: {
       line1: "คลายความวุ่นวายในใจ",
-      line2: "ช่วยให้โฟกัสกับปัจจุบันมากขึ้น",
+      line2: "ช่วยให้ใจอยู่กับปัจจุบันมากขึ้น",
     },
     low: {
       line1: "นุ่มนวลลงเล็กน้อยในทุกวัน",
@@ -106,7 +106,7 @@ const MAIN_PAIR = {
   },
   อำนาจ: {
     high: {
-      line1: "เสริมบารมีและความมั่นใจ",
+      line1: "เสริมความมั่นใจและการตัดสินใจ",
       line2: "ช่วยให้ยืนหยัดในที่ประชุมได้ดีขึ้น",
     },
     medium: {
@@ -148,7 +148,7 @@ const MAIN_PAIR = {
   },
   โชคลาภ: {
     high: {
-      line1: "โฟกัสจังหวะและโอกาสรอบตัว",
+      line1: "จับจังหวะและโอกาสรอบตัว",
       line2: "ช่วยให้มองเห็นช่องทางได้ชัดขึ้น",
     },
     medium: {
@@ -191,7 +191,7 @@ const FEEL = {
   อำนาจ: {
     high: "ช่วยให้ถือตัวตรงและน่าเชื่อถือขึ้น",
     medium: "ช่วยให้กล้าพูดและยืนหยัดในที่ประชุม",
-    low: "ช่วยให้รู้สึกมีบารมีในระดับพอดี",
+    low: "ช่วยให้รู้สึกมั่นใจในระดับพอดี",
   },
   เมตตา: {
     high: "ช่วยให้พูดจาอ่อนโยนขึ้น",
@@ -224,7 +224,7 @@ const USE_CASE = {
   },
   สมดุล: {
     high: "เหมาะกับเวลาที่หัวร้อนหรือวุ่นวาย",
-    medium: "เหมาะกับช่วงที่ต้องโฟกัสยาว",
+    medium: "เหมาะกับช่วงที่ต้องทำงานยาว ๆ",
     low: "เหมาะกับวันที่ต้องการความนิ่ง",
   },
   อำนาจ: {
@@ -263,7 +263,7 @@ const EFFECT = {
   },
   สมดุล: {
     high: "ทำให้เห็นทางเลือกชัดและไม่หลงกับอารมณ์",
-    medium: "ทำให้จับโฟกัสกับปัจจุบันได้นานขึ้น",
+    medium: "ทำให้ใจอยู่กับปัจจุบันได้นานขึ้น",
     low: "ทำให้ใจไม่ร้อนรนจนเกินเหตุ",
   },
   อำนาจ: {
@@ -298,7 +298,7 @@ function pickFeel(type, tier, personality) {
   const s = cleanLine(stripBullet(personality));
   if (s && s !== "-" && (/นิ่ง|สงบ|เย็น/.test(s) || /ใจไม่วอกแวก/.test(s))) {
     return (
-      capTrait("ช่วยให้ใจสงบและนิ่งขึ้น", CAP_FEEL) ||
+      capTrait("ช่วยให้ใจเย็นและสงบขึ้น", CAP_FEEL) ||
       capTrait(base, CAP_FEEL)
     );
   }

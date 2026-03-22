@@ -380,27 +380,27 @@ export function getEnergyShortLabel(mainEnergy) {
   if (!value || value === "-") return "พลังหลักชัด ๆ";
 
   if (value.includes("ปกป้อง") || value.includes("คุ้มครอง")) {
-    return "เน้นปกป้อง";
+    return "ปกป้องและมั่นคง";
   }
 
   if (value.includes("อำนาจ") || value.includes("บารมี")) {
-    return "เน้นอำนาจบารมี";
+    return "มั่นใจและตัดสินใจ";
   }
 
   if (value.includes("โชคลาภ") || value.includes("โชค")) {
-    return "เน้นโชคลาภ";
+    return "โอกาสและจังหวะ";
   }
 
   if (value.includes("สมดุล") || value.includes("นิ่ง")) {
-    return "เน้นสมดุล";
+    return "สมดุลและจังหวะ";
   }
 
   if (value.includes("เมตตา")) {
-    return "เน้นเมตตา";
+    return "อ่อนโยนกับคน";
   }
 
   if (value.includes("ดึงดูด") || value.includes("เสน่ห์")) {
-    return "เน้นดึงดูด";
+    return "น่าเข้าหาและโดดเด่น";
   }
 
   return sanitizeFlexDisplayText(safeWrapText(value, 28));

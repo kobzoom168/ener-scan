@@ -11,7 +11,7 @@ import { supabase } from "../config/supabase.js";
 import { normalizeBirthdateForScan } from "../utils/webhookText.util.js";
 
 /** Bump when deep-scan prompt / output schema changes. */
-export const SCAN_CACHE_PROMPT_VERSION = "v6";
+export const SCAN_CACHE_PROMPT_VERSION = "v7";
 
 /** Bump when post-process formatter or Flex field mapping changes (invalidates cached text shape). */
 export const SCAN_CACHE_FORMAT_VERSION = "1";

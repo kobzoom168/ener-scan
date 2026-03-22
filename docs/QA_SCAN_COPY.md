@@ -1,5 +1,7 @@
 # QA: Scan copy (`scanCopy.generator.js`)
 
+**Voice:** All template copy must follow **`docs/ENER_SYSTEM_TONE_GUIDE.md`** (one system voice).
+
 Production path: **`src/services/flex/flex.service.js`** → `generateScanCopy` → `buildSummaryBubble({ scanCopy })`.
 
 Legacy entry **`src/services/flex.service.js`** re-exports the same `buildScanFlex` — no duplicate copy path.

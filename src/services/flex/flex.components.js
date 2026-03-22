@@ -557,9 +557,12 @@ export function buildSummaryBubble({
   };
 }
 
-const DEFAULT_OVERVIEW_FLEX = "เด่นในเชิงใช้งานและจังหวะชีวิต";
-const DEFAULT_FIT_FLEX = "โยงกับเจ้าของเรื่องจังหวะและความนิ่ง";
-const DEFAULT_CLOSING_FLEX = "มีอีกชิ้น ส่งมาเทียบกันได้ครับ";
+const DEFAULT_OVERVIEW_FLEX =
+  "เด่นเรื่องใช้งานจริงและจังหวะในวัน อ่านแล้วเห็นภาพว่าช่วยตอนไหน";
+const DEFAULT_FIT_FLEX =
+  "เข้ากับเจ้าของเรื่องจังหวะและความนิ่งในใจ — ไม่ใช่แค่แทรกวันเกิด";
+const DEFAULT_CLOSING_FLEX =
+  "มีชิ้นอื่นอยากให้ช่วยดู ส่งมาได้เลยครับ";
 
 export function buildReadingBubble({
   overview,
@@ -653,20 +656,23 @@ export function buildUsageBubble({
   const supportLines =
     Array.isArray(supportTopics) && supportTopics.length > 0
       ? supportTopics.slice(0, 2)
-      : ["หนุนจังหวะตัดสินใจ", "รับแรงกดดันได้ดีขึ้น"];
+      : ["ช่วยให้ตัดสินใจได้หนักแน่นขึ้น", "ช่วยให้รับแรงกดดันได้ดีขึ้น"];
 
   const suitableLines =
     Array.isArray(suitable) && suitable.length > 0
       ? suitable.slice(0, 2)
-      : ["ต้องการความชัดหรือนิ่งในงาน", "วันที่ต้องคุมสถานการณ์"];
+      : [
+          "วันที่ต้องการความชัดหรือใจนิ่งในงาน",
+          "เวลาต้องคุมสถานการณ์หรือพูดให้คนฟัง",
+        ];
 
   const cleanUsageGuide =
     String(usageGuide || "").trim() ||
-    "เหมาะพกติดตัวในวันที่ต้องรับแรงกดดัน หรือใช้ต่อเนื่องเพื่อให้พลังค่อย ๆ หนุนจังหวะ";
+    "เหมาะพกในวันที่แรงกดดันสูง หรือใช้ต่อเนื่องให้จังหวะในใจค่อย ๆ นิ่งขึ้น";
 
   const cleanNotStrong =
     String(notStrong || "").trim() ||
-    "อยู่ในช่วงที่ต้องการการเร่งผลทันทีหรือการเปลี่ยนแปลงรวดเร็ว";
+    "ช่วงที่อยากได้ผลทันทีหรือการเปลี่ยนแปลงแบบรวดเร็วมาก ๆ — อาจไม่ใช่จุดแข็งของชิ้นนี้";
 
   return {
     type: "bubble",
