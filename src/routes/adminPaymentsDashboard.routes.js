@@ -6,12 +6,14 @@ import { Router } from "express";
 import { supabase } from "../config/supabase.js";
 import { requireAdminSession } from "../middleware/requireAdmin.js";
 import {
+  ensurePaymentRefForPaymentId,
   getPaymentsForAdminByStatus,
   getPaymentStatusCountsForAdmin,
   getPaymentDetailForAdmin,
   markPaymentApprovedAndUnlock,
   markPaymentRejected,
 } from "../stores/payments.db.js";
+import { checkScanAccess } from "../services/paymentAccess.service.js";
 import {
   resetFreeTrialForLineUserByAdmin,
   revokePaidAccessForLineUserByAdmin,
@@ -29,6 +31,25 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function abbreviateLineUserId(id) {
+  const s = String(id || "").trim();
+  if (!s) return "—";
+  if (s.length <= 16) return s;
+  return `${s.slice(0, 6)}…${s.slice(-6)}`;
+}
+
+/** @param {string} label */
+function copyBtnHtml(label, value) {
+  const raw = String(value ?? "");
+  if (!raw) return "";
+  return `<button type="button" class="btn-copy" data-copy="${escapeHtml(raw)}" title="คัดลอก ${escapeHtml(label)}" aria-label="คัดลอก ${escapeHtml(label)}">📋</button>`;
+}
+
+function searchQuerySuffix(q) {
+  const s = String(q || "").trim();
+  return s ? `&q=${encodeURIComponent(s)}` : "";
 }
 
 /** Safe path for admin payment detail (path segment encoded for Express). */
@@ -320,6 +341,45 @@ a { color: var(--info); }
 .btn-ok { background: var(--ok); color: #fff; }
 .btn-bad { background: var(--bad); color: #fff; }
 .btn-neu { background: var(--border); color: var(--text); }
+.btn-copy {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.btn-copy:active { opacity: 0.85; }
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.search-bar input[type="search"] {
+  flex: 1 1 200px;
+  min-width: 160px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.search-bar button[type="submit"] {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--accent);
+  color: #0a0a0a;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ref-cell { font-weight: 700; font-family: ui-monospace, monospace; font-size: 0.78rem; }
 .btn-link { background: transparent; color: var(--info); padding: 8px 10px; }
 .table-wrap { display: none; overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 table.data { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
@@ -327,8 +387,8 @@ table.data th, table.data td { padding: 10px 8px; text-align: left; border-botto
 table.data th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 table.data tr:last-child td { border-bottom: none; }
 table.data .t-actions { white-space: nowrap; position: relative; z-index: 2; }
-/* Slip column (9th): clip overflow so thumbs cannot sit on top of Actions (10th). */
-table.data td:nth-child(9) {
+/* Slip column: clip overflow so thumbs cannot sit on top of Actions. */
+table.data td:nth-child(10) {
   overflow: hidden;
   max-width: 96px;
 }
@@ -505,8 +565,16 @@ function slipThumbHtml(slipUrl) {
   return `<img class="thumb slip-zoom" src="${u}" alt="slip" width="72" height="72" loading="lazy" referrerpolicy="no-referrer" data-full="${u}" />`;
 }
 
-function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
+function renderListPage({
+  rows,
+  filterStatus,
+  flash,
+  statusCounts = {},
+  searchQuery = "",
+}) {
   const c = statusCounts || {};
+  const q = String(searchQuery || "").trim();
+  const qSuffix = searchQuerySuffix(q);
   const tabs = [
     ["pending_verify", "รอตรวจสลิป"],
     ["awaiting_payment", "รอสลิป"],
@@ -523,7 +591,7 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
   const statStripHtml = statStripTabs
     .map(
       ([st, label]) => `
-    <a class="stat-box${st === filterStatus ? " active" : ""}" href="/admin/payments?status=${encodeURIComponent(st)}">
+    <a class="stat-box${st === filterStatus ? " active" : ""}" href="/admin/payments?status=${encodeURIComponent(st)}${qSuffix}">
       <div class="num">${escapeHtml(String(Number(c[st] ?? 0)))}</div>
       <div class="lbl">${escapeHtml(label)}</div>
     </a>`
@@ -533,7 +601,7 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
   const tabsHtml = tabs
     .map(
       ([st, label]) => `
-    <a class="tab${st === filterStatus ? " active" : ""}" href="/admin/payments?status=${encodeURIComponent(st)}">${escapeHtml(label)}</a>`
+    <a class="tab${st === filterStatus ? " active" : ""}" href="/admin/payments?status=${encodeURIComponent(st)}${qSuffix}">${escapeHtml(label)}</a>`
     )
     .join("");
 
@@ -545,6 +613,11 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
           ? escapeHtml(String(au.paid_remaining_scans))
           : "—";
       const pu = au?.paid_until ? fmtDateOnly(au.paid_until) : "—";
+      const pref = p.payment_ref
+        ? `<span class="ref-cell">${escapeHtml(String(p.payment_ref))}</span>${copyBtnHtml("REF", p.payment_ref)}`
+        : "—";
+      const lineFull = escapeHtml(p.line_user_id || "—");
+      const lineDisp = escapeHtml(abbreviateLineUserId(p.line_user_id));
       const reasonRow =
         String(p.status) === "rejected" && p.reject_reason
           ? `<div class="card-row"><b>เหตุผล</b> <span style="word-break:break-word;">${escapeHtml(String(p.reject_reason))}</span></div>`
@@ -554,7 +627,8 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
         <div>
           <span class="${statusBadgeClass(p.status)}">${escapeHtml(p.status)}</span>
-          <div class="card-row"><b>LINE</b> <span style="word-break:break-all;">${escapeHtml(p.line_user_id || "—")}</span></div>
+          <div class="card-row"><b>REF</b> ${pref}</div>
+          <div class="card-row"><b>LINE</b> <span title="${lineFull}">${lineDisp}</span>${copyBtnHtml("LINE", p.line_user_id || "")}</div>
           <div class="card-row"><b>แพ็กเกจ</b> ${escapeHtml(p.package_code || "—")}</div>
           <div class="card-row"><b>ยอด</b> ${fmtMoney(p)}</div>
           <div class="card-row"><b>สร้างเมื่อ</b> ${fmtDt(p.created_at)}</div>
@@ -584,9 +658,15 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         ? escapeHtml(String(p.reject_reason).slice(0, 48)) +
           (String(p.reject_reason).length > 48 ? "…" : "")
         : "—";
+      const pref = p.payment_ref
+        ? `<span class="ref-cell">${escapeHtml(String(p.payment_ref))}</span>${copyBtnHtml("REF", p.payment_ref)}`
+        : "—";
+      const lineTitle = escapeHtml(p.line_user_id || "");
+      const lineDisp = escapeHtml(abbreviateLineUserId(p.line_user_id));
       return `
       <tr>
-        <td style="max-width:140px;word-break:break-all;font-size:0.78rem;">${escapeHtml(p.line_user_id || "—")}</td>
+        <td class="ref-cell">${pref}</td>
+        <td style="max-width:120px;word-break:break-all;font-size:0.78rem;" title="${lineTitle}">${lineDisp}${copyBtnHtml("LINE", p.line_user_id || "")}</td>
         <td>${fmtMoney(p)}</td>
         <td>${escapeHtml(p.package_code || "—")}</td>
         <td><span class="${statusBadgeClass(p.status)}">${escapeHtml(p.status)}</span></td>
@@ -619,6 +699,16 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         <button type="submit">ออกจากระบบ</button>
       </form>
     </div>
+    <form class="search-bar" method="get" action="/admin/payments">
+      <input type="hidden" name="status" value="${escapeHtml(filterStatus)}" />
+      <input type="search" name="q" value="${escapeHtml(q)}" placeholder="ค้นหา REF (เช่น PAY-…), LINE user id…" autocomplete="off" />
+      <button type="submit">ค้นหา</button>
+      ${
+        q
+          ? `<a class="btn btn-neu" style="padding:8px 12px;font-size:0.85rem;text-decoration:none;" href="/admin/payments?status=${encodeURIComponent(filterStatus)}">ล้าง</a>`
+          : ""
+      }
+    </form>
     <div class="stat-strip">${statStripHtml}</div>
     <nav class="tabs">${tabsHtml}</nav>
     <div class="cards">${empty}${cardsHtml}</div>
@@ -626,7 +716,8 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
       <table class="data">
         <thead>
           <tr>
-            <th>line_user_id</th>
+            <th>REF</th>
+            <th>LINE</th>
             <th>amount</th>
             <th>package</th>
             <th>status</th>
@@ -638,7 +729,7 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
             <th>actions</th>
           </tr>
         </thead>
-        <tbody>${tableRows || `<tr><td colspan="10" style="text-align:center;color:var(--muted);">ไม่มีรายการ</td></tr>`}</tbody>
+        <tbody>${tableRows || `<tr><td colspan="11" style="text-align:center;color:var(--muted);">ไม่มีรายการ</td></tr>`}</tbody>
       </table>
     </div>
     <p class="reject-hint" style="margin:12px 0 0;font-size:0.8rem;color:var(--muted);">
@@ -679,6 +770,20 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         var z = e.target.closest(".slip-zoom");
         if (z && z.dataset.full) openModal(z.dataset.full);
       });
+      document.body.addEventListener("click", function (e) {
+        var btn = e.target.closest(".btn-copy");
+        if (!btn || !btn.dataset.copy) return;
+        var text = btn.dataset.copy;
+        if (!text) return;
+        function ok() { showToast("คัดลอกแล้ว", "ok"); }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(ok).catch(function () {
+            showToast("คัดลอกไม่สำเร็จ", "err");
+          });
+        } else {
+          showToast("คัดลอกไม่สำเร็จ", "err");
+        }
+      });
       if (initialFlash) {
         showToast(initialFlash, initialFlash.indexOf("ไม่สำเร็จ") >= 0 ? "err" : "ok");
         try {
@@ -696,10 +801,36 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
 </html>`;
 }
 
+function renderAccessSnapshotPanel(accessSnapshot) {
+  if (!accessSnapshot) {
+    return `<p class="reject-hint" style="margin:0;">ไม่สามารถโหลดสรุปสิทธิ์ได้</p>`;
+  }
+  const allowed = accessSnapshot.allowed ? "ได้" : "ไม่ได้";
+  const reason = escapeHtml(String(accessSnapshot.reason ?? "—"));
+  const rem =
+    accessSnapshot.remaining != null
+      ? escapeHtml(String(accessSnapshot.remaining))
+      : "—";
+  const pd = accessSnapshot.paidUntil ? fmtDateOnly(accessSnapshot.paidUntil) : "—";
+  const freeRem =
+    accessSnapshot.freeScansRemaining != null
+      ? escapeHtml(String(accessSnapshot.freeScansRemaining))
+      : "—";
+  return `
+        <div class="kv">
+          <div>สแกนได้ตอนนี้</div><div><strong>${escapeHtml(allowed)}</strong></div>
+          <div>เหตุผล</div><div>${reason}</div>
+          <div>โควต้าฟรีคงเหลือ (วันนี้)</div><div>${freeRem}</div>
+          <div>สิทธิ์ที่เหลือ (แพ็กเกจ)</div><div>${rem}</div>
+          <div>หมดอายุ paid</div><div>${pd}</div>
+        </div>`;
+}
+
 function renderDetailPage({
   payment,
   scanSummary,
   flash,
+  accessSnapshot = null,
 }) {
   const p = payment;
   const au = embeddedAppUser(p);
@@ -767,8 +898,9 @@ function renderDetailPage({
       <div class="panel">
         <h2>ข้อมูลการชำระเงิน</h2>
         <div class="kv">
+          <div>payment_ref</div><div><span class="ref-cell">${escapeHtml(p.payment_ref || "—")}</span>${p.payment_ref ? copyBtnHtml("REF", p.payment_ref) : ""}</div>
           <div>id</div><div style="word-break:break-all;">${escapeHtml(p.id)}</div>
-          <div>line_user_id</div><div style="word-break:break-all;">${escapeHtml(p.line_user_id || "—")}</div>
+          <div>line_user_id</div><div style="word-break:break-all;">${escapeHtml(p.line_user_id || "—")}${p.line_user_id ? copyBtnHtml("LINE", p.line_user_id) : ""}</div>
           <div>package_code</div><div>${escapeHtml(p.package_code || "—")}</div>
           <div>amount</div><div>${fmtMoney(p)}</div>
           <div>status</div><div><span class="${statusBadgeClass(p.status)}">${escapeHtml(p.status)}</span></div>
@@ -780,6 +912,9 @@ function renderDetailPage({
       </div>
       <div class="panel">
         <h2>สิทธิ์ & การใช้งาน</h2>
+        <p class="reject-hint" style="margin:0 0 10px;"><strong>สรุปสิทธิ์ลูกค้า</strong> (ตาม checkScanAccess — สแกนได้หรือไม่ตอนนี้)</p>
+        ${renderAccessSnapshotPanel(accessSnapshot)}
+        <h3 style="margin:16px 0 8px;font-size:0.92rem;color:var(--muted);">ข้อมูลใน DB (app_users)</h3>
         <div class="kv">
           <div>paid_remaining_scans</div><div>${rem}</div>
           <div>paid_until</div><div>${au?.paid_until ? fmtDateOnly(au.paid_until) : "—"}</div>
@@ -844,6 +979,20 @@ function renderDetailPage({
         var z = e.target.closest(".slip-zoom");
         if (z && z.dataset.full) openModal(z.dataset.full);
       });
+      document.body.addEventListener("click", function (e) {
+        var btn = e.target.closest(".btn-copy");
+        if (!btn || !btn.dataset.copy) return;
+        var text = btn.dataset.copy;
+        if (!text) return;
+        function ok() { showToast("คัดลอกแล้ว", "ok"); }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(ok).catch(function () {
+            showToast("คัดลอกไม่สำเร็จ", "err");
+          });
+        } else {
+          showToast("คัดลอกไม่สำเร็จ", "err");
+        }
+      });
       var rb = document.querySelector(".js-reset-free");
       if (rb && lineUid) {
         rb.addEventListener("click", async function () {
@@ -901,10 +1050,12 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
   router.get("/admin/payments", requireAdminSession, async (req, res) => {
     try {
       const status = String(req.query?.status || "pending_verify").trim();
+      const q = String(req.query?.q || "").trim();
       const [{ rows, filterStatus }, statusCounts] = await Promise.all([
         getPaymentsForAdminByStatus({
           status,
           limit: 200,
+          q,
         }),
         getPaymentStatusCountsForAdmin(),
       ]);
@@ -915,9 +1066,15 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         reject_err: "ปฏิเสธไม่สำเร็จ — ลองใหม่หรือเปิดหน้ารายละเอียด",
       };
       const flash = flashMap[String(req.query?.flash || "")] || "";
-      const html = renderListPage({ rows, filterStatus, flash, statusCounts });
+      const html = renderListPage({
+        rows,
+        filterStatus,
+        flash,
+        statusCounts,
+        searchQuery: q,
+      });
       res.status(200).type("html").send(html);
-    } catch (err) {
+   } catch (err) {
       console.error("[ADMIN_DASH] list failed:", err);
       res.status(500).send("admin_list_failed");
     }
@@ -959,10 +1116,28 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         return;
       }
 
+      try {
+        const ref = await ensurePaymentRefForPaymentId(paymentId);
+        if (ref) payment.payment_ref = ref;
+      } catch (refErr) {
+        console.error("[ADMIN_DASH] ensurePaymentRefForPaymentId failed:", refErr);
+      }
+
       const uid = payment.user_id || embeddedAppUser(payment)?.id;
       const scanSummary = uid
         ? await getScanUsageSummaryForAppUser(uid)
         : { totalScans: 0, lastScanAt: null };
+
+      let accessSnapshot = null;
+      try {
+        if (payment.line_user_id) {
+          accessSnapshot = await checkScanAccess({
+            userId: String(payment.line_user_id).trim(),
+          });
+        }
+      } catch (accErr) {
+        console.error("[ADMIN_DASH] checkScanAccess failed:", accErr);
+      }
 
       const flashMap = {
         approved: "อนุมัติแล้ว ✅",
@@ -976,8 +1151,9 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         payment,
         scanSummary,
         flash,
+        accessSnapshot,
       });
-      res.status(200).type("html").send(html);
+   res.status(200).type("html").send(html);
     } catch (err) {
       console.error("[ADMIN_DASH] detail failed:", err);
       res.status(500).send("admin_detail_failed");
@@ -1032,9 +1208,17 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
             ? "สแกนได้ไม่จำกัดช่วงที่สิทธิ์ใช้งานอยู่"
             : `สแกนได้อีก ${activation.paidRemainingScans} ครั้ง`;
 
+        let paymentRefForPush = null;
+        try {
+          paymentRefForPush = await ensurePaymentRefForPaymentId(paymentId);
+        } catch (refErr) {
+          console.error("[ADMIN_DASH] ensurePaymentRefForPaymentId (approve push):", refErr);
+        }
+
         const message = buildPaymentApprovedText({
           paidRemainingLine: paidRemainingText,
           paidUntilLine: `หมดอายุ: ${paidUntilText}`,
+          paymentRef: paymentRefForPush,
         });
 
         void lineClient

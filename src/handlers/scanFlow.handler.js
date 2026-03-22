@@ -75,11 +75,12 @@ async function replyPaymentQrTripleOrFallback({
   client,
   replyToken,
   amountForFallback = 99,
+  paymentRef = null,
 }) {
   const qrUrl = getPromptPayQrPublicUrl();
   if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
     await replyPaymentInstructions(client, replyToken, {
-      introText: buildPaymentQrIntroText(),
+      introText: buildPaymentQrIntroText({ paymentRef }),
       qrImageUrl: qrUrl,
       slipText: buildPaymentQrSlipText(),
     });
@@ -87,7 +88,7 @@ async function replyPaymentQrTripleOrFallback({
     await replyText(
       client,
       replyToken,
-      buildPaymentInstructionText({ amount: amountForFallback }),
+      buildPaymentInstructionText({ amount: amountForFallback, paymentRef }),
     );
   }
 }
@@ -230,7 +231,7 @@ export async function runScanFlow({
           const MVP_CURRENCY = "THB";
 
           const appUser = await ensureUserByLineUserId(userId);
-          await createPaymentPending({
+          const { paymentRef } = await createPaymentPending({
             appUserId: appUser.id,
             amount: MVP_PRICE_THB,
             currency: MVP_CURRENCY,
@@ -240,6 +241,7 @@ export async function runScanFlow({
             client,
             replyToken,
             amountForFallback: MVP_PRICE_THB,
+            paymentRef,
           });
         } catch (err) {
           await replyFlexWithFallback({
@@ -275,7 +277,7 @@ export async function runScanFlow({
           const MVP_CURRENCY = "THB";
 
           const appUser = await ensureUserByLineUserId(userId);
-          await createPaymentPending({
+          const { paymentRef } = await createPaymentPending({
             appUserId: appUser.id,
             amount: MVP_PRICE_THB,
             currency: MVP_CURRENCY,
@@ -285,6 +287,7 @@ export async function runScanFlow({
             client,
             replyToken,
             amountForFallback: MVP_PRICE_THB,
+            paymentRef,
           });
         } catch (err) {
           await replyText(

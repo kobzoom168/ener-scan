@@ -169,9 +169,22 @@ export function buildCooldownText(remainingSec = 0) {
   ].join("\n");
 }
 
+/** บรรทัดเดียวสำหรับอ้างอิงรายการชำระเงิน (แชร์กับแอดมินได้) */
+export function formatPaymentRefLine(paymentRef) {
+  const r = String(paymentRef || "").trim();
+  if (!r) return "";
+  return `รหัสรายการ: ${r}`;
+}
+
+function appendPaymentRefLine(bodyText, paymentRef) {
+  const line = formatPaymentRefLine(paymentRef);
+  if (!line) return String(bodyText || "").trim();
+  return `${String(bodyText || "").trim()}\n\n${line}`;
+}
+
 /** ข้อความหลักสำหรับชำระเงิน (ไม่ใส่ URL — QR ส่งแยกเป็น image message) */
-export function buildPaymentQrIntroText() {
-  return [
+export function buildPaymentQrIntroText({ paymentRef } = {}) {
+  const base = [
     "🔒 สิทธิ์สแกนฟรีของคุณครบแล้วครับ",
     "",
     "หากต้องการสแกนต่อ",
@@ -185,6 +198,7 @@ export function buildPaymentQrIntroText() {
     "",
     "พออนุมัติแล้ว จะมีข้อความแจ้งกลับในแชตนี้อัตโนมัติ",
   ].join("\n");
+  return appendPaymentRefLine(base, paymentRef);
 }
 
 export function buildPaymentQrSlipText() {
@@ -258,10 +272,11 @@ export function buildPaymentInstructionText({
   paymentId = null,
   amount = null,
   currency = "THB",
+  paymentRef = null,
 } = {}) {
   const thb = displayAmountThb(amount);
   return [
-    buildPaymentQrIntroText().replace(
+    buildPaymentQrIntroText({ paymentRef }).replace(
       "แพ็กเกจนี้ราคา 99 บาท",
       `แพ็กเกจนี้ราคา ${thb} บาท`,
     ),
@@ -271,17 +286,17 @@ export function buildPaymentInstructionText({
 }
 
 /** @deprecated Prefer replyPaymentInstructions + image; kept for rare text-only fallback */
-export function buildManualPaymentRequestText() {
+export function buildManualPaymentRequestText({ paymentRef } = {}) {
   return [
-    buildPaymentQrIntroText(),
+    buildPaymentQrIntroText({ paymentRef }),
     "",
     "พิมพ์: payment เพื่อดู QR และวิธีชำระเงินอีกครั้ง",
   ].join("\n");
 }
 
 /** slip image accepted: now waiting for admin verification. */
-export function buildSlipReceivedText() {
-  return [
+export function buildSlipReceivedText({ paymentRef } = {}) {
+  const base = [
     "✅ ได้รับสลิปของคุณแล้วครับ",
     "",
     "ตอนนี้กำลังรอตรวจสอบรายการ",
@@ -290,38 +305,42 @@ export function buildSlipReceivedText() {
     "ระหว่างนี้ยังสแกนต่อไม่ได้",
     "พออนุมัติแล้ว เดี๋ยวแจ้งกลับในแชตนี้ให้อัตโนมัติครับ",
   ].join("\n");
+  return appendPaymentRefLine(base, paymentRef);
 }
 
 /** User typed non-command text while payment row is pending_verify (reduce repeat nudges). */
-export function buildPendingVerifyReminderText() {
-  return [
+export function buildPendingVerifyReminderText({ paymentRef } = {}) {
+  const base = [
     "⏳ สลิปของคุณกำลังรอตรวจสอบอยู่ครับ",
     "",
     "ไม่ต้องส่งสลิปซ้ำหากส่งครบแล้ว",
     "ตอนนี้ยังสแกนต่อไม่ได้ — รอผลอีกสักครู่นะครับ",
     "พออนุมัติแล้ว เดี๋ยวแจ้งกลับในแชตนี้ให้ครับ",
   ].join("\n");
+  return appendPaymentRefLine(base, paymentRef);
 }
 
 /** User sent another image while slip is already pending_verify (block scan / duplicate slip). */
-export function buildPendingVerifyBlockScanText() {
-  return [
+export function buildPendingVerifyBlockScanText({ paymentRef } = {}) {
+  const base = [
     "เราได้รับสลิปของคุณแล้วครับ",
     "ตอนนี้กำลังรอตรวจสอบรายการอยู่",
     "",
     "ระหว่างนี้ยังสแกนต่อไม่ได้",
     "พออนุมัติแล้ว เดี๋ยวแจ้งในแชตนี้ทันทีครับ",
   ].join("\n");
+  return appendPaymentRefLine(base, paymentRef);
 }
 
 /** User typed payment / จ่ายเงิน / ปลดล็อก while already pending_verify. */
-export function buildPendingVerifyPaymentCommandText() {
-  return [
+export function buildPendingVerifyPaymentCommandText({ paymentRef } = {}) {
+  const base = [
     "ตอนนี้มีสลิปรอตรวจอยู่แล้วครับ",
     "",
     "ไม่ต้องพิมพ์ payment ซ้ำในตอนนี้",
     "รอผลตรวจก่อนนะครับ — เมื่ออนุมัติหรือปฏิเสธ จะแจ้งกลับในแชตนี้ให้ครับ",
   ].join("\n");
+  return appendPaymentRefLine(base, paymentRef);
 }
 
 /**
@@ -331,6 +350,7 @@ export function buildPendingVerifyPaymentCommandText() {
 export function buildPaymentApprovedText({
   paidRemainingLine = "",
   paidUntilLine = "",
+  paymentRef = null,
 } = {}) {
   const expiryFromLine = String(paidUntilLine || "")
     .replace(/^\s*หมดอายุ:\s*/i, "")
@@ -350,15 +370,18 @@ export function buildPaymentApprovedText({
 
   const expiryText = expiryFromLine || "—";
 
-  return [
-    "✅ อนุมัติเรียบร้อยแล้วครับ",
+  const lines = ["✅ อนุมัติเรียบร้อยแล้วครับ"];
+  const refLine = formatPaymentRefLine(paymentRef);
+  if (refLine) lines.push("", refLine);
+  lines.push(
     "",
     "ตอนนี้คุณสามารถสแกนต่อได้แล้ว",
     packageScansLine,
     `หมดอายุ: ${expiryText}`,
     "",
     "ส่งรูปมาเพื่อสแกนต่อได้เลยครับ",
-  ].join("\n");
+  );
+  return lines.join("\n");
 }
 
 /**
@@ -410,13 +433,14 @@ export function allowsUtilityCommandsDuringPendingVerify(text, lowerText) {
 }
 
 /** User typed text while waiting for slip. */
-export function buildAwaitingSlipReminderText() {
-  return [
+export function buildAwaitingSlipReminderText({ paymentRef } = {}) {
+  const base = [
     "⏳ รอสลิปอยู่ครับ",
     "",
     "หลังโอนแล้ว ส่งสลิป 1 รูปในแชตนี้ได้เลย",
     "เราจะตรวจให้ก่อนเปิดสิทธิ์ — พออนุมัติแล้วค่อยสแกนต่อได้ครับ",
   ].join("\n");
+  return appendPaymentRefLine(base, paymentRef);
 }
 
 export function isHistoryCommand(text, lowerText) {

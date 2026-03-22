@@ -46,6 +46,7 @@ import {
 import { ensureUserByLineUserId, touchUserLastActive } from "../stores/users.db.js";
 import {
   createPaymentPending,
+  ensurePaymentRefForPaymentId,
   getLatestAwaitingPaymentForLineUserId,
   setPaymentSlipPendingVerify,
 } from "../stores/payments.db.js";
@@ -228,13 +229,21 @@ async function finalizeAcceptedImage({
 
   if (!accessDecision?.allowed && pendingPayment) {
     if (String(pendingPayment.status) === "pending_verify") {
+      let paymentRef = null;
+      try {
+        paymentRef =
+          pendingPayment.payment_ref ||
+          (await ensurePaymentRefForPaymentId(pendingPayment.id));
+      } catch (_) {
+        paymentRef = null;
+      }
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
       await replyFlexWithFallback({
         client,
         replyToken: event.replyToken,
         flex: buildPendingVerifyFlex(),
-        fallbackText: buildPendingVerifyBlockScanText(),
+        fallbackText: buildPendingVerifyBlockScanText({ paymentRef }),
         logLabel: "pending verify block scan flex",
       });
       return;
@@ -261,7 +270,20 @@ async function finalizeAcceptedImage({
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
 
-      await replyText(client, event.replyToken, buildSlipReceivedText());
+      let slipPaymentRef = null;
+      try {
+        slipPaymentRef =
+          pendingPayment.payment_ref ||
+          (await ensurePaymentRefForPaymentId(paymentId));
+      } catch (_) {
+        slipPaymentRef = null;
+      }
+
+      await replyText(
+        client,
+        event.replyToken,
+        buildSlipReceivedText({ paymentRef: slipPaymentRef }),
+      );
       return;
     } catch (err) {
       console.error("[PAYMENT_SLIP_VERIFY] slip upload/update failed:", {
@@ -370,14 +392,16 @@ async function finalizeAcceptedImage({
   if (!accessDecision.allowed && accessDecision.reason === "payment_required") {
     // Create (or re-create) the pending payment row for this LINE user.
     // All subsequent images will be treated as slip upload until admin verifies.
+    let createdPaymentRef = null;
     try {
       const appUser = await ensureUserByLineUserId(userId);
       // createPaymentPending dedupes: reuses active awaiting_payment / pending_verify row
-      await createPaymentPending({
+      const created = await createPaymentPending({
         appUserId: appUser.id,
         amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
         currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
       });
+      createdPaymentRef = created?.paymentRef ?? null;
     } catch (err) {
       console.error("[WEBHOOK] createPaymentPending (payment_required) failed:", {
         userId,
@@ -398,7 +422,9 @@ async function finalizeAcceptedImage({
     if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
       try {
         await replyPaymentInstructions(client, event.replyToken, {
-          introText: buildPaymentQrIntroText(),
+          introText: buildPaymentQrIntroText({
+            paymentRef: createdPaymentRef,
+          }),
           qrImageUrl: qrUrl,
           slipText: buildPaymentQrSlipText(),
         });
@@ -425,6 +451,7 @@ async function finalizeAcceptedImage({
       buildPaymentInstructionText({
         amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
         currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
+        paymentRef: createdPaymentRef,
       }),
     );
     return;
@@ -738,10 +765,20 @@ async function handleTextMessage({ client, event, userId, session }) {
     getPaymentState(userId).state === "awaiting_slip" &&
     !isPaymentCommand(text, lowerText)
   ) {
+    let paymentRef = null;
+    try {
+      const row = await getLatestAwaitingPaymentForLineUserId(userId);
+      if (row?.id) {
+        paymentRef =
+          row.payment_ref || (await ensurePaymentRefForPaymentId(row.id));
+      }
+    } catch (_) {
+      paymentRef = null;
+    }
     await replyText(
       client,
       event.replyToken,
-      buildAwaitingSlipReminderText()
+      buildAwaitingSlipReminderText({ paymentRef })
     );
     return;
   }
@@ -750,11 +787,19 @@ async function handleTextMessage({ client, event, userId, session }) {
   try {
     const pendingVerifyRow = await getLatestAwaitingPaymentForLineUserId(userId);
     if (pendingVerifyRow && String(pendingVerifyRow.status) === "pending_verify") {
+      let paymentRef = null;
+      try {
+        paymentRef =
+          pendingVerifyRow.payment_ref ||
+          (await ensurePaymentRefForPaymentId(pendingVerifyRow.id));
+      } catch (_) {
+        paymentRef = null;
+      }
       if (isPaymentCommand(text, lowerText)) {
         await replyText(
           client,
           event.replyToken,
-          buildPendingVerifyPaymentCommandText()
+          buildPendingVerifyPaymentCommandText({ paymentRef })
         );
         return;
       }
@@ -762,7 +807,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         await replyText(
           client,
           event.replyToken,
-          buildPendingVerifyReminderText()
+          buildPendingVerifyReminderText({ paymentRef })
         );
         return;
       }
@@ -809,13 +854,15 @@ async function handleTextMessage({ client, event, userId, session }) {
     const amount = env.PAYMENT_UNLOCK_AMOUNT_THB || 0;
     const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
     const amountForCopy = amount > 0 ? amount : 99;
+    let cmdPaymentRef = null;
     try {
       const appUser = await ensureUserByLineUserId(userId);
-      await createPaymentPending({
+      const created = await createPaymentPending({
         appUserId: appUser.id,
         amount,
         currency,
       });
+      cmdPaymentRef = created?.paymentRef ?? null;
     } catch (err) {
       console.error("[WEBHOOK] createPaymentPending failed:", {
         userId,
@@ -827,7 +874,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
 
     const qrUrl = getPromptPayQrPublicUrl();
-    const intro = buildPaymentQrIntroText();
+    const intro = buildPaymentQrIntroText({ paymentRef: cmdPaymentRef });
     const slipText = buildPaymentQrSlipText();
 
     if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
@@ -856,7 +903,11 @@ async function handleTextMessage({ client, event, userId, session }) {
     await replyText(
       client,
       event.replyToken,
-      `${buildPaymentInstructionText({ amount: amountForCopy, currency })}\n\n${MAIN_MENU_HINT_TEXT}`
+      `${buildPaymentInstructionText({
+        amount: amountForCopy,
+        currency,
+        paymentRef: cmdPaymentRef,
+      })}\n\n${MAIN_MENU_HINT_TEXT}`
     );
     return;
   }

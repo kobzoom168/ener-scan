@@ -1,5 +1,6 @@
 import { supabase } from "../config/supabase.js";
 import { grantEntitlementForPackage } from "../services/entitlement.service.js";
+import { generatePaymentRef } from "../utils/paymentRef.util.js";
 
 const DEFAULT_UNLOCK_HOURS = 24;
 const DEFAULT_AMOUNT = 0;
@@ -28,6 +29,71 @@ function normalizePaymentIdString(id) {
   const s = String(id ?? "").trim();
   if (!s) throw new Error("payment_id_empty");
   return s;
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Backfill or return existing human-readable ref (for old rows without payment_ref).
+ */
+export async function ensurePaymentRefForPaymentId(paymentId) {
+  const id = String(paymentId || "").trim();
+  if (!id) return null;
+
+  const { data: row, error } = await supabase
+    .from("payments")
+    .select("id,payment_ref")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!row) return null;
+  if (row.payment_ref) return String(row.payment_ref);
+
+  for (let i = 0; i < 12; i++) {
+    const ref = generatePaymentRef();
+    const { data: updated, error: uerr } = await supabase
+      .from("payments")
+      .update({ payment_ref: ref, updated_at: getNowIso() })
+      .eq("id", id)
+      .is("payment_ref", null)
+      .select("payment_ref")
+      .maybeSingle();
+
+    if (uerr) throw uerr;
+    if (updated?.payment_ref) return String(updated.payment_ref);
+
+    const { data: again } = await supabase
+      .from("payments")
+      .select("payment_ref")
+      .eq("id", id)
+      .maybeSingle();
+    if (again?.payment_ref) return String(again.payment_ref);
+  }
+
+  throw new Error("payment_ref_backfill_failed");
+}
+
+async function insertPaymentRowWithUniqueRef(payload) {
+  const maxAttempts = 12;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const paymentRef = generatePaymentRef();
+    const { data, error } = await supabase
+      .from("payments")
+      .insert({ ...payload, payment_ref: paymentRef })
+      .select("id,payment_ref")
+      .maybeSingle();
+
+    if (error?.code === "23505") continue;
+    if (error) throw error;
+    if (!data?.id) throw new Error("payment_insert_failed");
+    return {
+      paymentId: normalizePaymentIdString(data.id),
+      paymentRef: String(data.payment_ref || paymentRef),
+    };
+  }
+  throw new Error("payment_ref_generation_failed");
 }
 
 /**
@@ -74,7 +140,7 @@ export async function getLatestActivePaymentForAppUser(appUserId) {
   const { data, error } = await supabase
     .from("payments")
     .select(
-      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,amount,created_at"
+      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,amount,created_at,payment_ref"
     )
     .eq("user_id", uid)
     .in("status", ACTIVE_PAYMENT_STATUSES)
@@ -195,6 +261,7 @@ export async function createPaymentPending({
       Number.isFinite(rowAmt) && rowAmt === requestedAmt;
 
     if (pkgMatch && amtMatch) {
+      const ref = (await ensurePaymentRefForPaymentId(active.id)) || "";
       console.log(
         JSON.stringify({
           event: "payments_create",
@@ -206,7 +273,10 @@ export async function createPaymentPending({
           expectedAmount: requestedAmt,
         })
       );
-      return normalizePaymentIdString(active.id);
+      return {
+        paymentId: normalizePaymentIdString(active.id),
+        paymentRef: ref,
+      };
     }
 
     await expirePaymentRowById(active.id);
@@ -238,35 +308,20 @@ export async function createPaymentPending({
     unlock_hours: DEFAULT_UNLOCK_HOURS,
   };
 
-  const { data, error } = await supabase
-    .from("payments")
-    .insert(payload)
-    .select("id")
-    .maybeSingle();
+  const { paymentId, paymentRef } = await insertPaymentRowWithUniqueRef(payload);
 
-  if (error) {
-    console.error("[SUPABASE] createPaymentPending error:", {
-      appUserId: userId,
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-    });
-    throw error;
-  }
-
-  if (!data?.id) throw new Error("payment_insert_failed");
   console.log(
     JSON.stringify({
       event: "payments_create",
       outcome: "insert",
-      paymentId: data.id,
+      paymentId,
+      paymentRef,
       appUserId: userId,
       packageCode: requestedPkg,
       expectedAmount: requestedAmt,
     })
   );
-  return normalizePaymentIdString(data.id);
+  return { paymentId, paymentRef };
 }
 
 /**
@@ -282,7 +337,9 @@ export async function getLatestAwaitingPaymentForLineUserId(lineUserId) {
 
   const { data, error } = await supabase
     .from("payments")
-    .select("id,user_id,line_user_id,status,package_code,package_name,expected_amount,created_at")
+    .select(
+      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,created_at,payment_ref"
+    )
     .eq("line_user_id", lu)
     .in("status", ["awaiting_payment", "pending_verify"])
     .order("created_at", { ascending: false })
@@ -368,23 +425,13 @@ const ADMIN_LIST_STATUSES = [
 
 /**
  * Admin dashboard list with current entitlement snapshot from app_users.
- * @param {{ status?: string, limit?: number }} opts
+ * @param {{ status?: string, limit?: number, q?: string }} opts
  */
-export async function getPaymentsForAdminByStatus({
-  status = "pending_verify",
-  limit = 200,
-} = {}) {
-  const s = String(status || "").trim();
-  const safeStatus = ADMIN_LIST_STATUSES.includes(s) ? s : "pending_verify";
-  const lim = Math.min(Math.max(Number(limit) || 200, 1), 500);
-
-  const { data, error } = await supabase
-    .from("payments")
-    .select(
-      `
+const ADMIN_PAYMENT_LIST_SELECT = `
       id,
       user_id,
       line_user_id,
+      payment_ref,
       package_code,
       package_name,
       expected_amount,
@@ -397,8 +444,66 @@ export async function getPaymentsForAdminByStatus({
       rejected_at,
       reject_reason,
       app_users ( paid_until, paid_remaining_scans )
-    `
-    )
+    `;
+
+export async function getPaymentsForAdminByStatus({
+  status = "pending_verify",
+  limit = 200,
+  q = "",
+} = {}) {
+  const s = String(status || "").trim();
+  const safeStatus = ADMIN_LIST_STATUSES.includes(s) ? s : "pending_verify";
+  const lim = Math.min(Math.max(Number(limit) || 200, 1), 500);
+  const searchRaw = String(q || "").trim();
+
+  if (searchRaw && UUID_RE.test(searchRaw)) {
+    const { data, error } = await supabase
+      .from("payments")
+      .select(ADMIN_PAYMENT_LIST_SELECT)
+      .eq("status", safeStatus)
+      .eq("id", searchRaw)
+      .order("created_at", { ascending: false })
+      .limit(lim);
+    if (error) throw error;
+    return { rows: data || [], filterStatus: safeStatus };
+  }
+
+  if (searchRaw) {
+    const safe = searchRaw.replace(/%/g, "").slice(0, 80);
+    const pat = `%${safe}%`;
+    const [r1, r2] = await Promise.all([
+      supabase
+        .from("payments")
+        .select(ADMIN_PAYMENT_LIST_SELECT)
+        .eq("status", safeStatus)
+        .ilike("payment_ref", pat)
+        .order("created_at", { ascending: false })
+        .limit(lim),
+      supabase
+        .from("payments")
+        .select(ADMIN_PAYMENT_LIST_SELECT)
+        .eq("status", safeStatus)
+        .ilike("line_user_id", pat)
+        .order("created_at", { ascending: false })
+        .limit(lim),
+    ]);
+    if (r1.error) throw r1.error;
+    if (r2.error) throw r2.error;
+    const map = new Map();
+    for (const row of [...(r1.data || []), ...(r2.data || [])]) {
+      if (row?.id) map.set(String(row.id), row);
+    }
+    const merged = Array.from(map.values()).sort((x, y) => {
+      const ax = Date.parse(String(x.created_at || "")) || 0;
+      const ay = Date.parse(String(y.created_at || "")) || 0;
+      return ay - ax;
+    });
+    return { rows: merged.slice(0, lim), filterStatus: safeStatus };
+  }
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select(ADMIN_PAYMENT_LIST_SELECT)
     .eq("status", safeStatus)
     .order("created_at", { ascending: false })
     .limit(lim);
