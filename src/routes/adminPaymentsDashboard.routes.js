@@ -37,6 +37,27 @@ function adminPaymentDetailHref(p) {
   return id ? `/admin/payments/${encodeURIComponent(id)}` : "/admin/payments";
 }
 
+/** Approve/reject only when row is waiting for slip verification (status may vary in casing/whitespace). */
+function paymentRowCanAct(p) {
+  return String(p?.status ?? "").trim().toLowerCase() === "pending_verify";
+}
+
+/**
+ * List table: actions column — all controls MUST live inside this single <td> (no floating siblings).
+ */
+function adminListTableActionsTd(p) {
+  const idRaw = String(p?.id ?? "").trim();
+  const idAttr = escapeHtml(idRaw);
+  const detailHref = adminPaymentDetailHref(p);
+  const canAct = paymentRowCanAct(p);
+  const detailLink = `<a class="btn btn-neu" style="padding:6px 10px;font-size:0.78rem;" href="${detailHref}">ดู</a>`;
+  const approveReject =
+    canAct && idRaw
+      ? `<button type="button" class="btn btn-ok js-approve" style="padding:6px 10px;font-size:0.78rem;" data-id="${idAttr}" data-payment-id="${idAttr}">อนุมัติ</button><button type="button" class="btn btn-bad js-reject" style="padding:6px 10px;font-size:0.78rem;" data-id="${idAttr}" data-payment-id="${idAttr}">ปฏิเสธ</button>`
+      : "";
+  return `<td class="t-actions">${detailLink}${approveReject}</td>`;
+}
+
 function statusBadgeClass(status) {
   const s = String(status || "");
   if (s === "pending_verify") return "badge badge-warn";
@@ -493,7 +514,7 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
           ? escapeHtml(String(au.paid_remaining_scans))
           : "—";
       const pu = au?.paid_until ? fmtDateOnly(au.paid_until) : "—";
-      const canAct = String(p.status) === "pending_verify";
+      const canAct = paymentRowCanAct(p);
       const reasonRow =
         String(p.status) === "rejected" && p.reject_reason
           ? `<div class="card-row"><b>เหตุผล</b> <span style="word-break:break-word;">${escapeHtml(String(p.reject_reason))}</span></div>`
@@ -518,8 +539,8 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         ${
           canAct
             ? `
-        <button type="button" class="btn btn-ok js-approve" data-id="${escapeHtml(p.id)}">✅ อนุมัติ</button>
-        <button type="button" class="btn btn-bad js-reject" data-id="${escapeHtml(p.id)}">❌ ปฏิเสธ</button>`
+        <button type="button" class="btn btn-ok js-approve" data-id="${escapeHtml(p.id)}" data-payment-id="${escapeHtml(p.id)}">✅ อนุมัติ</button>
+        <button type="button" class="btn btn-bad js-reject" data-id="${escapeHtml(p.id)}" data-payment-id="${escapeHtml(p.id)}">❌ ปฏิเสธ</button>`
             : ""
         }
       </div>
@@ -535,7 +556,6 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
           ? escapeHtml(String(au.paid_remaining_scans))
           : "—";
       const pu = au?.paid_until ? fmtDateOnly(au.paid_until) : "—";
-      const canAct = String(p.status) === "pending_verify";
       const reasonShort = p.reject_reason
         ? escapeHtml(String(p.reject_reason).slice(0, 48)) +
           (String(p.reject_reason).length > 48 ? "…" : "")
@@ -551,16 +571,7 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         <td>${rem}</td>
         <td>${pu}</td>
         <td>${slipThumbHtml(p.slip_url)}</td>
-        <td class="t-actions">
-          <a class="btn btn-neu" style="padding:6px 10px;font-size:0.78rem;" href="${adminPaymentDetailHref(p)}">ดู</a>
-          ${
-            canAct
-              ? `
-          <button type="button" class="btn btn-ok js-approve" style="padding:6px 10px;font-size:0.78rem;" data-id="${escapeHtml(p.id)}">อนุมัติ</button>
-          <button type="button" class="btn btn-bad js-reject" style="padding:6px 10px;font-size:0.78rem;" data-id="${escapeHtml(p.id)}">ปฏิเสธ</button>`
-              : ""
-          }
-        </td>
+        ${adminListTableActionsTd(p)}
       </tr>`;
     })
     .join("");
