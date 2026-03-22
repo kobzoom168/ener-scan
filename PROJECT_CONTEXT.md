@@ -37,3 +37,9 @@
 - 1 image per case
 - duplicate protection
 - multi-image protection
+
+## Deep scan (OpenAI)
+- Layer 1: `gpt-4.1-mini` → draft (fixed format) — `src/services/openaiDeepScan.api.js` + `src/prompts/deepScan.prompt.js`
+- Layer 2 (optional): `gpt-4o` rewrite — `ENABLE_DEEP_SCAN_REWRITE=true` in env; orchestration `src/services/deepScan.service.js`
+- Format check: `src/services/deepScanFormat.service.js`
+- Cache key version: `SCAN_CACHE_PROMPT_VERSION` in `src/stores/scanResultCache.db.js` (bump when prompt/pipeline changes)

@@ -1,0 +1,89 @@
+import { env } from "../config/env.js";
+import { deepScanSystemPrompt } from "../prompts/deepScan.prompt.js";
+import {
+  deepScanRewriteSystemPrompt,
+  buildDeepScanRewriteUserPrompt,
+} from "../prompts/deepScanRewrite.prompt.js";
+import {
+  generateDeepScanDraft,
+  rewriteDeepScanDraft,
+} from "./openaiDeepScan.api.js";
+import {
+  isDeepScanFormatValid,
+  normalizeDeepScanText,
+} from "./deepScanFormat.service.js";
+
+function buildDeepScanUserPrompt({ birthdate, retryHint = "" }) {
+  const cleanBirthdate = String(birthdate || "").trim();
+  const cleanRetryHint = String(retryHint || "").trim();
+  return `
+กรุณาอ่านพลังจากวัตถุในภาพนี้ และเชื่อมโยงกับวันเกิดเจ้าของวัตถุ
+
+วันเกิดเจ้าของวัตถุ: ${cleanBirthdate}
+
+ข้อสำคัญ:
+- ระบุผลให้อยู่ใน format ที่กำหนดเท่านั้น
+- ใช้ภาษาคน อ่านง่าย
+- ต้องรู้สึกเฉพาะชิ้น
+- ถ้าภาพไม่ชัด ให้ลดระดับความมั่นใจอย่างนุ่มนวล
+${cleanRetryHint ? `\nเงื่อนไขเพิ่มสำหรับรอบนี้:\n${cleanRetryHint}` : ""}
+`.trim();
+}
+
+/**
+ * @param {{ imageBase64: string, birthdate: string, retryHint?: string, mimeType?: string }} opts
+ */
+export async function runDeepScanPipeline({
+  imageBase64,
+  birthdate,
+  retryHint = "",
+  mimeType = "image/jpeg",
+}) {
+  const userPrompt = buildDeepScanUserPrompt({ birthdate, retryHint });
+
+  const draft = normalizeDeepScanText(
+    await generateDeepScanDraft({
+      systemPrompt: deepScanSystemPrompt,
+      userPrompt,
+      imageBase64,
+      mimeType,
+    }),
+  );
+
+  if (!isDeepScanFormatValid(draft)) {
+    console.warn("[DEEP_SCAN] invalid draft format, using draft as fallback", {
+      draftPreview: draft.slice(0, 300),
+    });
+    return draft;
+  }
+
+  if (!env.ENABLE_DEEP_SCAN_REWRITE) {
+    return draft;
+  }
+
+  try {
+    const rewritten = normalizeDeepScanText(
+      await rewriteDeepScanDraft({
+        systemPrompt: deepScanRewriteSystemPrompt,
+        userPrompt: buildDeepScanRewriteUserPrompt(draft),
+      }),
+    );
+
+    if (!isDeepScanFormatValid(rewritten)) {
+      console.warn("[DEEP_SCAN] invalid rewritten format, fallback to draft", {
+        rewrittenPreview: rewritten.slice(0, 300),
+      });
+      return draft;
+    }
+
+    return rewritten;
+  } catch (error) {
+    console.error("[DEEP_SCAN] rewrite failed, fallback to draft", {
+      message: error?.message,
+    });
+    return draft;
+  }
+}
+
+/** Alias — same as `runDeepScanPipeline` */
+export const runDeepScanWithRewrite = runDeepScanPipeline;

@@ -63,4 +63,9 @@ export const env = {
   /** Amount in THB for 24h unlock (manual PromptPay). Optional; 0 = "ตามที่แอดมินแจ้ง" */
   PAYMENT_UNLOCK_AMOUNT_THB: Number(process.env.PAYMENT_UNLOCK_AMOUNT_THB) || 0,
   PAYMENT_UNLOCK_CURRENCY: process.env.PAYMENT_UNLOCK_CURRENCY || "THB",
+  /**
+   * Second LLM pass (gpt-4o) to polish draft from gpt-4.1-mini. Set "false" to save cost/latency.
+   * @type {boolean}
+   */
+  ENABLE_DEEP_SCAN_REWRITE: process.env.ENABLE_DEEP_SCAN_REWRITE === "true",
 };
