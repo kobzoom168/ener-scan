@@ -110,6 +110,12 @@ export function buildScanFlex(rawText, options = {}) {
     scanCopyConfigVersion: SCAN_COPY_CONFIG_VERSION,
     scanCopySummary: scanCopy.summary,
     scanCopyTraits: scanCopy.traits,
+    scanCopyGoals: scanCopy.goals
+      ? {
+          clarity: scanCopy.goals.clarity,
+          clarityLabelThai: scanCopy.goals.clarityLabelThai,
+        }
+      : null,
   });
 
   return {

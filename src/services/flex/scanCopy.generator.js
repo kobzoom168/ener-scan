@@ -29,6 +29,7 @@ import {
   compatibilityToBucket,
   getRetentionMicrocopy,
 } from "./scanCopy.retentionTone.js";
+import { deriveGoalMapping } from "./scanCopy.goalMapping.js";
 
 export { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.config.js";
 export { resolveEnergyType, resolveScoreTier } from "./scanCopy.utils.js";
@@ -133,5 +134,7 @@ export function generateScanCopy(input) {
       retentionHook: retention.retentionHook,
       nextScanCta: retention.nextScanCta,
     },
+    /** Deterministic life-goal layer (additive; interpretive). */
+    goals,
   };
 }

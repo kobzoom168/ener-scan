@@ -516,6 +516,19 @@ export function buildSummaryBubble({
               wrap: true,
               maxLines: 4,
             },
+            ...(scanCopy?.goals?.goalHeadline
+              ? [
+                  {
+                    type: "text",
+                    text: safeWrapText(scanCopy.goals.goalHeadline, 96),
+                    size: "xs",
+                    color: "#8F8F95",
+                    wrap: true,
+                    maxLines: 4,
+                    margin: "sm",
+                  },
+                ]
+              : []),
             createProgressBar(score.percent || "50%", accentColor),
             ...(scanCopy?.retention?.energyNickname
               ? [
@@ -577,7 +590,7 @@ const DEFAULT_OVERVIEW_FLEX =
 const DEFAULT_FIT_FLEX =
   "โยงกับจังหวะเจ้าของที่ต้องการความนิ่งในวันหนัก — ตัวเลขไม่ได้เล่าทั้งเรื่อง แต่โยงกับแพตเทิร์นในใจ";
 const DEFAULT_CLOSING_FLEX =
-  "ทำหน้าที่เป็นที่พิงในใจมากกว่าจะเป็นคำตอบของทุกเรื่อง — ยังมีมุมอื่นให้เติมภายหลัง";
+  "ของชิ้นนี้โทนประคองและตั้งหลัก มากกว่าทางเปิดเกมหรือเร่งผล";
 
 /** Parser closing + optional deterministic age-tone hook (second line). */
 function createClosingWithRetentionHook(primaryText, retentionHook) {
