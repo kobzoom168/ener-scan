@@ -1,10 +1,11 @@
 import {
   safeWrapText,
-  buildEnergyLines,
+  buildTraitLinesFromCopy,
   getEnergyShortLabel,
   formatMainEnergyForCard,
   sanitizeBulletLines,
   clampToFlexLines,
+  cleanLine,
 } from "./flex.utils.js";
 import {
   FLEX_OVERVIEW_DISPLAY_MAX,
@@ -134,8 +135,67 @@ export function createMetricCard(label, value) {
   };
 }
 
-/** Narrow card: category + short hint — avoids one long truncated line for พลังหลัก */
-export function createMainEnergyMetricCard(mainEnergy) {
+/**
+ * Narrow card: intentional 2-line copy when `summary` is provided; else legacy format from raw mainEnergy.
+ * @param {string} mainEnergy
+ * @param {{ mainEnergyLine1?: string, mainEnergyLine2?: string } | null} [summary]
+ */
+export function createMainEnergyMetricCard(mainEnergy, summary = null) {
+  const useCopy =
+    summary &&
+    cleanLine(summary.mainEnergyLine1) &&
+    cleanLine(summary.mainEnergyLine2);
+
+  if (useCopy) {
+    const line1 = cleanLine(summary.mainEnergyLine1);
+    const line2 = cleanLine(summary.mainEnergyLine2);
+    const valueContents = [
+      {
+        type: "text",
+        text: line1 || "—",
+        size: "md",
+        weight: "bold",
+        color: "#FFFFFF",
+        wrap: true,
+        maxLines: 1,
+      },
+      {
+        type: "text",
+        text: line2 || "—",
+        size: "xs",
+        color: "#B8B8BE",
+        wrap: true,
+        maxLines: 1,
+        margin: "xs",
+      },
+    ];
+    return {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "14px",
+      backgroundColor: "#18181A",
+      cornerRadius: "16px",
+      borderWidth: "1px",
+      borderColor: "#2A2A2D",
+      flex: 1,
+      contents: [
+        {
+          type: "text",
+          text: "พลังหลัก",
+          size: "xs",
+          color: "#8F8F95",
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "xs",
+          margin: "sm",
+          contents: valueContents,
+        },
+      ],
+    };
+  }
+
   const formatted = formatMainEnergyForCard(mainEnergy || "-");
   const parts = String(formatted)
     .split("\n")
@@ -382,13 +442,20 @@ export function buildSummaryBubble({
   compatibility,
   personality,
   tone,
-  hidden
+  hidden,
+  scanCopy,
 }) {
-  const rawEnergyLines = buildEnergyLines({ personality, tone, hidden });
+  const rawEnergyLines = scanCopy?.traits
+    ? buildTraitLinesFromCopy(scanCopy.traits)
+    : [];
   const energyLines =
     Array.isArray(rawEnergyLines) && rawEnergyLines.length > 0
       ? rawEnergyLines
-      : ["พลังนิ่ง", "โทนพลังเฉพาะทาง"];
+      : [
+          "ช่วยให้ใจสบายขึ้นในทุกวัน",
+          "เหมาะกับใช้งานประจำวัน",
+          "ทำให้รู้สึกมั่นใจขึ้น",
+        ];
 
   return {
     type: "bubble",
@@ -437,7 +504,8 @@ export function buildSummaryBubble({
             {
               type: "text",
               text: clampToFlexLines(
-                getEnergyShortLabel(mainEnergy || "พลังทั่วไป"),
+                scanCopy?.summary?.mainEnergyLabel ||
+                  getEnergyShortLabel(mainEnergy || "พลังทั่วไป"),
                 2,
                 26,
               ).join("\n"),
@@ -462,7 +530,10 @@ export function buildSummaryBubble({
           layout: "horizontal",
           spacing: "md",
           contents: [
-            createMainEnergyMetricCard(mainEnergy || "-"),
+            createMainEnergyMetricCard(
+              mainEnergy || "-",
+              scanCopy?.summary || null,
+            ),
             createMetricCard("เข้ากับคุณ", compatibility || "-"),
           ],
         },

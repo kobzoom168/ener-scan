@@ -16,6 +16,7 @@ import {
   buildReadingBubble,
   buildUsageBubble
 } from "./flex.components.js";
+import { generateScanCopy } from "./scanCopy.generator.js";
 
 export function buildScanFlex(rawText) {
   const accentColor = pickMainEnergyColor(rawText);
@@ -38,8 +39,22 @@ export function buildScanFlex(rawText) {
 
   const score = normalizeScore(energyScore);
 
+  const scanCopy = generateScanCopy({
+    mainEnergy,
+    energyScore,
+    scoreNumeric: score.numeric,
+    compatibility,
+    personality,
+    tone,
+    hidden,
+    display,
+  });
+
   const altText = buildScanFlexAltText({
-    mainEnergyLabel: getEnergyShortLabel(mainEnergy || "-"),
+    mainEnergyLabel:
+      scanCopy.summary.mainEnergyLabelAlt ||
+      scanCopy.summary.mainEnergyLabel ||
+      getEnergyShortLabel(mainEnergy || "-"),
     scoreDisplay: score.display || String(energyScore || "").trim(),
   });
 
@@ -82,6 +97,8 @@ export function buildScanFlex(rawText) {
     /** Per-field: scoresByIndex, rankByScoreDesc vs pickedOriginalIndices, laterOutperformsEarlier */
     flexInsightDebug: display.flexInsightDebug,
     altText,
+    scanCopySummary: scanCopy.summary,
+    scanCopyTraits: scanCopy.traits,
   });
 
   return {
@@ -98,6 +115,7 @@ export function buildScanFlex(rawText) {
           personality,
           tone,
           hidden,
+          scanCopy,
         }),
         buildReadingBubble({
           overview: display.overviewForFlex,

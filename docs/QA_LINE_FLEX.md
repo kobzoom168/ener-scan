@@ -62,7 +62,7 @@ Use these only to **explain** odd UI; do **not** expand scoring/splitting logic 
 | # | Check | Pass? |
 |---|--------|-------|
 | 1 | **Main energy metric card** — category + short hint readable; no dense parenthetical block |
-| 2 | **Lower-left trait boxes** — `compactEnergyTraitForFlex` lines feel light enough (not wall-of-text) |
+| 2 | **Lower-left trait boxes** — `generateScanCopy().traits` (feel / use case / effect) read as plain short Thai |
 | 3 | **Reading cards** — `overviewForFlex` / `fitReasonForFlex` after `polishReadingLineForFlex` feel easy to read at a glance |
 
 **If something is still wrong:** capture a **screenshot**, note which of (1)(2)(3), then allow **only** small **display-side** tweaks (e.g. char caps in `flex.display.js`, `compactParenHint`, `formatMainEnergyForCard`, trait `safeWrapText` limits) — **not** selector logic.
