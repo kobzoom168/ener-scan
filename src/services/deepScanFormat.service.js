@@ -24,3 +24,51 @@ export function normalizeDeepScanText(text) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+/**
+ * First line containing `needle` (from that position to newline).
+ * @param {string} text
+ * @param {string} needle
+ * @returns {string | null}
+ */
+function lineStartingWithNeedle(text, needle) {
+  const t = String(text || "");
+  const i = t.indexOf(needle);
+  if (i < 0) return null;
+  const rest = t.slice(i);
+  const nl = rest.indexOf("\n");
+  return nl < 0 ? rest.trim() : rest.slice(0, nl).trim();
+}
+
+/**
+ * Heuristic: "พลังหลัก" + "บุคลิก" lines must include () human gloss.
+ * โทนพลัง intentionally may omit () — meaning lives in ภาพรวม / เหมาะใช้เมื่อ.
+ */
+export function isDeepScanHumanReadable(text) {
+  const t = String(text || "");
+  if (!t.includes("(") || !t.includes(")")) return false;
+
+  const pk = lineStartingWithNeedle(t, "พลังหลัก:");
+  const bk = lineStartingWithNeedle(t, "บุคลิก:");
+
+  if (!pk || !pk.includes("(")) return false;
+  if (!bk || !bk.includes("(")) return false;
+
+  return true;
+}
+
+/** Too many "(" → cluttered; prompts cap at 5 total opens */
+export function isDeepScanTooDense(text) {
+  const n = (String(text || "").match(/\(/g) || []).length;
+  return n > 5;
+}
+
+/** Passes human gloss on key lines + not over-parenthesized */
+export function isDeepScanPolished(text) {
+  return isDeepScanHumanReadable(text) && !isDeepScanTooDense(text);
+}
+
+/** Alias for `isDeepScanHumanReadable` (safeguard name) */
+export function ensureHumanReadable(text) {
+  return isDeepScanHumanReadable(text);
+}
