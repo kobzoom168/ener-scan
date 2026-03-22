@@ -1,3 +1,20 @@
+/**
+ * @param {unknown} raw
+ * @returns {{ text: string, qualityAnalytics: unknown }}
+ */
+function normalizeGenerateOutput(raw) {
+  if (raw && typeof raw === "object" && "text" in raw) {
+    const o = /** @type {{ text?: string, qualityAnalytics?: unknown }} */ (
+      raw
+    );
+    return {
+      text: String(o.text || "").trim(),
+      qualityAnalytics: o.qualityAnalytics ?? null,
+    };
+  }
+  return { text: String(raw || "").trim(), qualityAnalytics: null };
+}
+
 export async function generateWithRetry({
   generateFn,
   isBadOutputFn,
@@ -18,6 +35,8 @@ export async function generateWithRetry({
       : () => "";
 
   let lastOutput = "";
+  /** @type {unknown} */
+  let lastQualityAnalytics = null;
   let lastReason = "unknown";
   let lastAttempt = 0;
 
@@ -36,7 +55,10 @@ export async function generateWithRetry({
       retryHint,
     });
 
-    lastOutput = String(output || "").trim();
+    const normalized = normalizeGenerateOutput(output);
+
+    lastOutput = normalized.text;
+    lastQualityAnalytics = normalized.qualityAnalytics;
 
     console.log("[RETRY] output length:", lastOutput.length);
     console.log("[RETRY] output preview:", lastOutput.slice(0, 160) || "-");
@@ -64,6 +86,7 @@ export async function generateWithRetry({
 
       return {
         output: lastOutput,
+        qualityAnalytics: lastQualityAnalytics,
         attempt,
         accepted: true,
         reason: "ok",
@@ -82,6 +105,7 @@ export async function generateWithRetry({
 
   return {
     output: lastOutput,
+    qualityAnalytics: lastQualityAnalytics,
     attempt: lastAttempt,
     accepted: false,
     reason: lastReason,

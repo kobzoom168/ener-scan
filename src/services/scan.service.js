@@ -21,6 +21,11 @@ import {
   getRecentOutputs,
   getGlobalRecentOutputs,
 } from "../stores/recentOutputs.store.js";
+import {
+  createEmptyQualityAnalytics,
+  enrichQualityAnalyticsForPersist,
+  QUALITY_SKIP_REASONS,
+} from "./deepScanQualityAnalytics.service.js";
 
 function toBase64(buffer) {
   return Buffer.isBuffer(buffer) ? buffer.toString("base64") : "";
@@ -189,7 +194,17 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
           elapsedMs: scanEndedAt - scanStartedAt,
         })
       );
-      return { resultText: finalText, fromCache: true };
+      return {
+        resultText: finalText,
+        fromCache: true,
+        qualityAnalytics: enrichQualityAnalyticsForPersist(
+          createEmptyQualityAnalytics({
+            improve_skipped_reason: QUALITY_SKIP_REASONS.FROM_CACHE,
+            latency_ms: 0,
+          }),
+          { resultText: finalText },
+        ),
+      };
     }
   } catch (cacheErr) {
     console.error("[SCAN_CACHE] lookup failed (continuing with OpenAI):", {
@@ -327,5 +342,16 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
 
   console.log("[SCAN_TIMING] totalElapsedMs:", scanEndedAt - scanStartedAt);
 
-  return { resultText: finalText, fromCache: false };
+  const qualityAnalytics = enrichQualityAnalyticsForPersist(
+    result.qualityAnalytics ?? null,
+    { resultText: finalText },
+  );
+
+  console.log("[SCAN_QUALITY_ANALYTICS]", qualityAnalytics);
+
+  return {
+    resultText: finalText,
+    fromCache: false,
+    qualityAnalytics,
+  };
 }

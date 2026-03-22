@@ -463,6 +463,8 @@ export async function runScanFlow({
 
   let resultText = "";
   let scanFromCache = false;
+  /** @type {object | null} */
+  let scanQualityAnalytics = null;
   const scanStartedAt = Date.now();
 
   try {
@@ -482,6 +484,7 @@ export async function runScanFlow({
     });
     resultText = scanOut.resultText;
     scanFromCache = Boolean(scanOut.fromCache);
+    scanQualityAnalytics = scanOut.qualityAnalytics ?? null;
 
     const scanFinishedAt = Date.now();
     console.log("[WEBHOOK] runScanFlow result ready", {
@@ -623,6 +626,7 @@ export async function runScanFlow({
       promptVersion: scanFromCache ? "cache_v1" : "v1",
       responseTimeMs,
       fromCache: scanFromCache,
+      qualityAnalytics: scanQualityAnalytics,
     });
 
     if (!scanResultId) {

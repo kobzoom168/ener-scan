@@ -68,4 +68,32 @@ export const env = {
    * @type {boolean}
    */
   ENABLE_DEEP_SCAN_REWRITE: process.env.ENABLE_DEEP_SCAN_REWRITE === "true",
+  /** gpt-4o-mini quality score after draft/rewrite. */
+  ENABLE_DEEP_SCAN_SCORING: process.env.ENABLE_DEEP_SCAN_SCORING === "true",
+  /** Min total_score (0–50) before optional auto-improve. */
+  DEEP_SCAN_MIN_QUALITY_SCORE: (() => {
+    const raw = process.env.DEEP_SCAN_MIN_QUALITY_SCORE;
+    const n = raw === undefined || raw === "" ? 35 : Number(raw);
+    return Number.isFinite(n) ? n : 35;
+  })(),
+  /**
+   * If total_score >= this, skip improve (preserve already-strong output; save cost).
+   * 0–50; default 44.
+   */
+  DEEP_SCAN_HIGH_QUALITY_SCORE: (() => {
+    const raw = process.env.DEEP_SCAN_HIGH_QUALITY_SCORE;
+    const n = raw === undefined || raw === "" ? 44 : Number(raw);
+    return Number.isFinite(n) ? n : 44;
+  })(),
+  /**
+   * If total_score <= this, skip improve (likely prompt/image failure; fixing rarely helps).
+   * Default 15.
+   */
+  DEEP_SCAN_IMPROVE_FLOOR_SCORE: (() => {
+    const raw = process.env.DEEP_SCAN_IMPROVE_FLOOR_SCORE;
+    const n = raw === undefined || raw === "" ? 15 : Number(raw);
+    return Number.isFinite(n) ? n : 15;
+  })(),
+  /** One gpt-4o pass when score below threshold (requires scoring on). */
+  ENABLE_DEEP_SCAN_AUTO_IMPROVE: process.env.ENABLE_DEEP_SCAN_AUTO_IMPROVE === "true",
 };

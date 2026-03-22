@@ -1,5 +1,13 @@
 import { supabase } from "../config/supabase.js";
 
+async function insertScanResultRow(payload) {
+  return supabase
+    .from("scan_results")
+    .insert(payload)
+    .select("id")
+    .maybeSingle();
+}
+
 export async function createScanResult({
   scanRequestId,
   appUserId,
@@ -12,6 +20,8 @@ export async function createScanResult({
   promptVersion,
   responseTimeMs,
   fromCache = false,
+  /** @type {Record<string, unknown> | null | undefined} */
+  qualityAnalytics = null,
 }) {
   const normalizedUserId = String(appUserId || "").trim();
   const normalizedRequestId = String(scanRequestId || "").trim();
@@ -39,16 +49,33 @@ export async function createScanResult({
         : null,
   };
 
-  const payloadWithCache = {
-    ...basePayload,
-    from_cache: Boolean(fromCache),
-  };
+  const qa =
+    qualityAnalytics && typeof qualityAnalytics === "object"
+      ? qualityAnalytics
+      : null;
 
-  let { data, error } = await supabase
-    .from("scan_results")
-    .insert(payloadWithCache)
-    .select("id")
-    .maybeSingle();
+  const withCache = Boolean(fromCache);
+
+  let { data, error } = await insertScanResultRow({
+    ...basePayload,
+    from_cache: withCache,
+    ...(qa ? { quality_analytics: qa } : {}),
+  });
+
+  if (
+    error &&
+    qa &&
+    typeof error.message === "string" &&
+    /quality_analytics/i.test(error.message)
+  ) {
+    console.warn(
+      "[SUPABASE] createScanResult: quality_analytics missing, retry without it (run sql/012_scan_results_quality_analytics.sql)"
+    );
+    ({ data, error } = await insertScanResultRow({
+      ...basePayload,
+      from_cache: withCache,
+    }));
+  }
 
   const missingFromCache =
     error &&
@@ -57,13 +84,26 @@ export async function createScanResult({
 
   if (missingFromCache) {
     console.warn(
-      "[SUPABASE] createScanResult: from_cache column missing, retry without it (run sql/011_scan_results_from_cache.sql)"
+      "[SUPABASE] createScanResult: from_cache missing, retry without it (run sql/011_scan_results_from_cache.sql)"
     );
-    ({ data, error } = await supabase
-      .from("scan_results")
-      .insert(basePayload)
-      .select("id")
-      .maybeSingle());
+    ({ data, error } = await insertScanResultRow({
+      ...basePayload,
+      ...(qa ? { quality_analytics: qa } : {}),
+    }));
+  }
+
+  if (
+    error &&
+    qa &&
+    typeof error.message === "string" &&
+    /quality_analytics/i.test(error.message)
+  ) {
+    console.warn(
+      "[SUPABASE] createScanResult: quality_analytics missing (after from_cache fallback), retry base payload only"
+    );
+    ({ data, error } = await insertScanResultRow({
+      ...basePayload,
+    }));
   }
 
   if (error) {
@@ -80,4 +120,3 @@ export async function createScanResult({
 
   return data?.id || null;
 }
-
