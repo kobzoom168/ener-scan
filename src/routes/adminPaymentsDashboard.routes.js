@@ -31,6 +31,12 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+/** Safe path for admin payment detail (path segment encoded for Express). */
+function adminPaymentDetailHref(p) {
+  const id = String(p?.id ?? "").trim();
+  return id ? `/admin/payments/${encodeURIComponent(id)}` : "/admin/payments";
+}
+
 function statusBadgeClass(status) {
   const s = String(status || "");
   if (s === "pending_verify") return "badge badge-warn";
@@ -245,7 +251,7 @@ a { color: var(--info); }
   text-align: center;
   padding: 4px;
 }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; position: relative; z-index: 1; }
 .btn {
   border: none;
   border-radius: 10px;
@@ -269,7 +275,12 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 table.data th, table.data td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
 table.data th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 table.data tr:last-child td { border-bottom: none; }
-table.data .t-actions { white-space: nowrap; }
+table.data .t-actions { white-space: nowrap; position: relative; z-index: 2; }
+/* Slip column (9th): clip overflow so thumbs cannot sit on top of Actions (10th). */
+table.data td:nth-child(9) {
+  overflow: hidden;
+  max-width: 96px;
+}
 @media (min-width: 900px) {
   .cards { display: none; }
   .table-wrap { display: block; }
@@ -492,7 +503,7 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         ${slipThumbHtml(p.slip_url)}
       </div>
       <div class="actions">
-        <a class="btn btn-neu" href="/admin/payments/${escapeHtml(p.id)}">👁 รายละเอียด</a>
+        <a class="btn btn-neu" href="${adminPaymentDetailHref(p)}">👁 รายละเอียด</a>
         ${
           canAct
             ? `
@@ -530,7 +541,7 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         <td>${pu}</td>
         <td>${slipThumbHtml(p.slip_url)}</td>
         <td class="t-actions">
-          <a class="btn btn-neu" style="padding:6px 10px;font-size:0.78rem;" href="/admin/payments/${escapeHtml(p.id)}">ดู</a>
+          <a class="btn btn-neu" style="padding:6px 10px;font-size:0.78rem;" href="${adminPaymentDetailHref(p)}">ดู</a>
           ${
             canAct
               ? `
@@ -604,12 +615,14 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
   </div>
   <script>
     (function () {
+      try {
       var initialFlash = ${JSON.stringify(flash || "")};
       var pendingRejectBtn = null;
       var ADMIN_JSON_HEADERS = { Accept: "application/json", "X-Admin-Json": "1" };
       function qs(sel) { return document.querySelector(sel); }
       function showToast(msg, kind) {
         var t = qs("#toast");
+        if (!t) return;
         t.textContent = msg;
         t.className = "toast show " + (kind === "err" ? "toast-err" : "toast-ok");
         clearTimeout(t._tm);
@@ -647,37 +660,49 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
       }
       function openRejectModal(btn) {
         pendingRejectBtn = btn;
-        qs("#reject-detail").value = "";
-        qs("#reject-preset").selectedIndex = 0;
+        var rd = qs("#reject-detail");
+        var rp = qs("#reject-preset");
         var rc = qs("#reject-confirm");
+        var m = qs("#reject-modal");
+        if (!rd || !rp || !rc || !m) return;
+        rd.value = "";
+        rp.selectedIndex = 0;
         rc.disabled = false;
         rc.textContent = "ยืนยันปฏิเสธ";
-        var m = qs("#reject-modal");
         m.classList.remove("hidden");
         m.setAttribute("aria-hidden", "false");
       }
       function closeRejectModal() {
         var m = qs("#reject-modal");
+        if (!m) return;
         m.classList.add("hidden");
         m.setAttribute("aria-hidden", "true");
         pendingRejectBtn = null;
       }
       function openModal(src) {
         var m = qs("#slip-modal");
-        m.querySelector("img").src = src;
+        if (!m) return;
+        var im = m.querySelector("img");
+        if (im) im.src = src;
         m.classList.remove("hidden");
         m.setAttribute("aria-hidden", "false");
       }
       function closeModal() {
         var m = qs("#slip-modal");
+        if (!m) return;
         m.classList.add("hidden");
         m.setAttribute("aria-hidden", "true");
       }
-      document.getElementById("slip-modal").addEventListener("click", closeModal);
-      document.getElementById("reject-modal").addEventListener("click", function (e) {
-        if (e.target === this) closeRejectModal();
-      });
-      document.getElementById("reject-cancel").addEventListener("click", closeRejectModal);
+      var slipModalEl = document.getElementById("slip-modal");
+      if (slipModalEl) slipModalEl.addEventListener("click", closeModal);
+      var rejectModalEl = document.getElementById("reject-modal");
+      if (rejectModalEl) {
+        rejectModalEl.addEventListener("click", function (e) {
+          if (e.target === this) closeRejectModal();
+        });
+      }
+      var rejectCancelEl = document.getElementById("reject-cancel");
+      if (rejectCancelEl) rejectCancelEl.addEventListener("click", closeRejectModal);
       document.body.addEventListener("click", function (e) {
         var z = e.target.closest(".slip-zoom");
         if (z && z.dataset.full) openModal(z.dataset.full);
@@ -695,7 +720,9 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
         var scope = actionScopeFromBtn(btn);
         setScopeActionBusy(scope, true, btn, "กำลังอนุมัติ…");
         try {
-          var r = await fetch("/admin/payments/" + btn.dataset.id + "/approve", {
+          var payId = String(btn.dataset.id || "").trim();
+          if (!payId) throw new Error("missing_payment_id");
+          var r = await fetch("/admin/payments/" + encodeURIComponent(payId) + "/approve", {
             method: "POST",
             headers: Object.assign({}, ADMIN_JSON_HEADERS),
             credentials: "same-origin"
@@ -713,14 +740,17 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
       async function postRejectFromModal() {
         var btn = pendingRejectBtn;
         if (!btn || btn.disabled) return;
-        var preset = qs("#reject-preset").value;
-        var detail = qs("#reject-detail").value;
+        var rpEl = qs("#reject-preset");
+        var rdEl = qs("#reject-detail");
+        var rc = qs("#reject-confirm");
+        if (!rpEl || !rdEl || !rc) return;
+        var preset = rpEl.value;
+        var detail = rdEl.value;
         if (preset === "other" && !String(detail).trim()) {
           showToast("กรุณาระบุเหตุผลเมื่อเลือก \"อื่น ๆ\"", "err");
           return;
         }
         var scope = actionScopeFromBtn(btn);
-        var rc = qs("#reject-confirm");
         var rcOrig = rc.textContent;
         setScopeActionBusy(scope, true, btn, "กำลังปฏิเสธ…");
         rc.disabled = true;
@@ -730,7 +760,9 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
           var body = new URLSearchParams();
           body.set("reject_preset", preset);
           body.set("reject_detail", detail);
-          var r = await fetch("/admin/payments/" + btn.dataset.id + "/reject", {
+          var payId2 = String(btn.dataset.id || "").trim();
+          if (!payId2) throw new Error("missing_payment_id");
+          var r = await fetch("/admin/payments/" + encodeURIComponent(payId2) + "/reject", {
             method: "POST",
             headers: Object.assign(
               { "Content-Type": "application/x-www-form-urlencoded" },
@@ -751,7 +783,8 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
           rc.textContent = rcOrig;
         }
       }
-      document.getElementById("reject-confirm").addEventListener("click", postRejectFromModal);
+      var rejectConfirmEl = document.getElementById("reject-confirm");
+      if (rejectConfirmEl) rejectConfirmEl.addEventListener("click", postRejectFromModal);
       document.body.addEventListener("click", function (e) {
         var a = e.target.closest(".js-approve");
         if (a) {
@@ -764,6 +797,9 @@ function renderListPage({ rows, filterStatus, flash, statusCounts = {} }) {
           openRejectModal(rj);
         }
       });
+      } catch (initErr) {
+        console.error("[admin-payments-list] script init failed", initErr);
+      }
     })();
   </script>
 </body>
