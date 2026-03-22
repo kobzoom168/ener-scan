@@ -23,6 +23,15 @@ import {
   createEmptyQualityAnalytics,
   QUALITY_SKIP_REASONS,
 } from "./deepScanQualityAnalytics.service.js";
+import {
+  buildDefaultStyleReferenceAnalyticsMeta,
+  prepareRewriteStyleReferenceAugmentation,
+} from "./deepScanStyleReference.service.js";
+
+/** @param {object} qa @param {object} styleMeta */
+function mergeStyleIntoQa(qa, styleMeta) {
+  return { ...qa, ...styleMeta };
+}
 
 function buildDeepScanUserPrompt({ birthdate, retryHint = "" }) {
   const cleanBirthdate = String(birthdate || "").trim();
@@ -71,10 +80,13 @@ export async function runDeepScanPipeline({
     });
     return {
       text: draft,
-      qualityAnalytics: createEmptyQualityAnalytics({
-        improve_skipped_reason: QUALITY_SKIP_REASONS.DRAFT_FORMAT_INVALID,
-        latency_ms: 0,
-      }),
+      qualityAnalytics: mergeStyleIntoQa(
+        createEmptyQualityAnalytics({
+          improve_skipped_reason: QUALITY_SKIP_REASONS.DRAFT_FORMAT_INVALID,
+          latency_ms: 0,
+        }),
+        buildDefaultStyleReferenceAnalyticsMeta(),
+      ),
     };
   }
 
@@ -91,11 +103,50 @@ export async function runDeepScanPipeline({
 
   let finalText = draft;
 
+  /** Persisted on quality_analytics for A/B analysis */
+  let styleMeta = buildDefaultStyleReferenceAnalyticsMeta();
+
   if (env.ENABLE_DEEP_SCAN_REWRITE) {
     try {
+      let rewriteSystemPrompt = deepScanRewriteSystemPrompt;
+
+      const styleRef = await prepareRewriteStyleReferenceAugmentation();
+      styleMeta = {
+        style_reference_mode: styleRef.mode,
+        style_reference_enabled: styleRef.style_reference_enabled,
+        style_reference_sample_selected:
+          styleRef.style_reference_sample_selected ?? null,
+        style_reference_used: Boolean(styleRef.use),
+        style_reference_fragment_count: styleRef.use
+          ? styleRef.fragmentCount
+          : 0,
+        style_reference_source: styleRef.sourcePath,
+        rewrite_with_style: Boolean(
+          styleRef.use && styleRef.systemPromptAugmentation,
+        ),
+      };
+
+      if (styleRef.use && styleRef.systemPromptAugmentation) {
+        rewriteSystemPrompt = `${deepScanRewriteSystemPrompt}\n\n${styleRef.systemPromptAugmentation}`;
+      }
+
+      if (styleRef.mode !== "off") {
+        console.log("[DEEP_SCAN_STYLE_REFERENCE_USED]", {
+          used: styleRef.use,
+          reason: styleRef.skipReason,
+          mode: styleRef.mode,
+        });
+        console.log("[DEEP_SCAN_STYLE_REFERENCE_COUNT]", {
+          fragment_count: styleMeta.style_reference_fragment_count,
+        });
+        console.log("[DEEP_SCAN_STYLE_REFERENCE_SOURCE]", {
+          path: styleMeta.style_reference_source,
+        });
+      }
+
       const rewritten = normalizeDeepScanText(
         await rewriteDeepScanDraft({
-          systemPrompt: deepScanRewriteSystemPrompt,
+          systemPrompt: rewriteSystemPrompt,
           userPrompt: buildDeepScanRewriteUserPrompt(draft),
         }),
       );
@@ -134,7 +185,10 @@ export async function runDeepScanPipeline({
       improve_skipped_reason: QUALITY_SKIP_REASONS.SCORING_DISABLED,
       latency_ms: 0,
     });
-    return { text: finalText, qualityAnalytics: qa };
+    return {
+      text: finalText,
+      qualityAnalytics: mergeStyleIntoQa(qa, styleMeta),
+    };
   }
 
   if (!isDeepScanFormatValid(finalText) || !isDeepScanPolished(finalText)) {
@@ -143,7 +197,10 @@ export async function runDeepScanPipeline({
       improve_skipped_reason: QUALITY_SKIP_REASONS.NOT_ELIGIBLE_NOT_POLISHED,
       latency_ms: 0,
     });
-    return { text: finalText, qualityAnalytics: qa };
+    return {
+      text: finalText,
+      qualityAnalytics: mergeStyleIntoQa(qa, styleMeta),
+    };
   }
 
   const qLayerStart = Date.now();
@@ -286,14 +343,20 @@ export async function runDeepScanPipeline({
     console.error("[DEEP_SCAN] scoring/improve failed, skip quality layer", {
       message: error?.message,
     });
-    qa = createEmptyQualityAnalytics({
-      scoring_enabled: true,
-      improve_skipped_reason: QUALITY_SKIP_REASONS.QUALITY_LAYER_ERROR,
-      latency_ms: Math.max(0, Date.now() - qLayerStart),
-    });
+    qa = mergeStyleIntoQa(
+      createEmptyQualityAnalytics({
+        scoring_enabled: true,
+        improve_skipped_reason: QUALITY_SKIP_REASONS.QUALITY_LAYER_ERROR,
+        latency_ms: Math.max(0, Date.now() - qLayerStart),
+      }),
+      styleMeta,
+    );
   }
 
-  return { text: finalText, qualityAnalytics: qa };
+  return {
+    text: finalText,
+    qualityAnalytics: mergeStyleIntoQa(qa, styleMeta),
+  };
 }
 
 /** Alias — same as `runDeepScanPipeline` */

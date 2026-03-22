@@ -1,3 +1,5 @@
+/** Base prompt; runtime may append optional style pack (wording only).
+ * @see ../services/deepScanStyleReference.service.js */
 export const deepScanRewriteSystemPrompt = `
 คุณคือผู้ช่วยเกลาภาษาให้ผลอ่านพลังของ "อาจารย์ Ener"
 

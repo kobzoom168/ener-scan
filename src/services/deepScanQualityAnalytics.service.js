@@ -14,6 +14,13 @@
  * @property {string | null} [quality_tier] — excellent | good | ok | poor
  * @property {{ has_signature_phrase: boolean, has_life_scenario: boolean, has_emotional_hook: boolean }} [signals]
  * @property {number | null} [improve_gain_ratio] — delta / score_before when defined
+ * @property {string | null} [style_reference_mode] — off | on | sample
+ * @property {boolean} [style_reference_enabled] — cohort attempted load (on, or sample hit)
+ * @property {boolean | null} [style_reference_sample_selected] — sample mode only
+ * @property {boolean} [style_reference_used] — pack applied to rewrite prompt
+ * @property {number} [style_reference_fragment_count]
+ * @property {string | null} [style_reference_source]
+ * @property {boolean} [rewrite_with_style] — augmentation present on rewrite call
  */
 
 /**

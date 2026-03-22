@@ -77,3 +77,27 @@ export async function listTopPerformingScanResults(opts = {}) {
     limit: opts.limit ?? 50,
   });
 }
+
+/**
+ * Broader sample for aggregates (e.g. avg gain ratio by quality_tier).
+ * @param {{ limit?: number }} [opts]
+ */
+export async function fetchRecentScanResultsWithQuality({ limit = 500 } = {}) {
+  const cap = Math.min(2000, Math.max(50, Number(limit) || 500));
+
+  const { data, error } = await supabase
+    .from("scan_results")
+    .select("id, created_at, result_text, quality_analytics")
+    .not("quality_analytics", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(cap);
+
+  if (error) {
+    console.error("[scanQualityInsights] fetchRecentScanResultsWithQuality", {
+      message: error.message,
+    });
+    throw error;
+  }
+
+  return data || [];
+}

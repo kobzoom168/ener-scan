@@ -96,4 +96,25 @@ export const env = {
   })(),
   /** One gpt-4o pass when score below threshold (requires scoring on). */
   ENABLE_DEEP_SCAN_AUTO_IMPROVE: process.env.ENABLE_DEEP_SCAN_AUTO_IMPROVE === "true",
+  /**
+   * Append compact guidance from `data/style-reference-pack.json` (or DEEP_SCAN_STYLE_REFERENCE_PATH) to rewrite system prompt only.
+   * If `DEEP_SCAN_STYLE_REFERENCE_MODE` is unset, this flag maps to mode `on` (legacy).
+   * @type {boolean}
+   */
+  ENABLE_DEEP_SCAN_STYLE_REFERENCES:
+    process.env.ENABLE_DEEP_SCAN_STYLE_REFERENCES === "true",
+  /**
+   * Style pack A/B: `off` | `on` | `sample`. When unset, falls back to ENABLE_DEEP_SCAN_STYLE_REFERENCES → `on`, else `off`.
+   */
+  DEEP_SCAN_STYLE_REFERENCE_MODE: (process.env.DEEP_SCAN_STYLE_REFERENCE_MODE || "")
+    .trim()
+    .toLowerCase(),
+  /**
+   * When MODE=sample, fraction of rewrites that attempt style (0–100). Default 10.
+   */
+  DEEP_SCAN_STYLE_REFERENCE_SAMPLE_PCT: (() => {
+    const raw = process.env.DEEP_SCAN_STYLE_REFERENCE_SAMPLE_PCT;
+    const n = raw === undefined || raw === "" ? 10 : Number(raw);
+    return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 10;
+  })(),
 };

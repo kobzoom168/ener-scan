@@ -5,7 +5,9 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "node src/app.js",
-    "payment:verify": "node scripts/verify-payment.js"
+    "payment:verify": "node scripts/verify-payment.js",
+    "analyze:style": "node scripts/analyze-top-quality.mjs",
+    "report:style-effectiveness": "node scripts/report-style-reference-effectiveness.mjs"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
