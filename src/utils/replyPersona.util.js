@@ -9,6 +9,7 @@ import { getAssignedPersonaVariant } from "./personaVariant.util.js";
 const lastPatternSigByUser = new Map();
 const lastSlotIndexByUser = new Map();
 const lastRenderedSignatureByUser = new Map();
+const duplicateGuardStatsByType = new Map();
 
 function serializePattern(slots) {
   return Array.isArray(slots) ? slots.join("-") : "";
@@ -38,6 +39,41 @@ function signatureForMessages(messages) {
   return (Array.isArray(messages) ? messages : [])
     .map((m) => String(m || "").trim())
     .join("\n\n");
+}
+
+function bumpDuplicateGuardStats(replyType, suppressed) {
+  const type = String(replyType || "").trim() || "unknown";
+  const prev = duplicateGuardStatsByType.get(type) || {
+    total: 0,
+    suppressed: 0,
+  };
+  const next = {
+    total: prev.total + 1,
+    suppressed: prev.suppressed + (suppressed ? 1 : 0),
+  };
+  duplicateGuardStatsByType.set(type, next);
+  if (next.total % 50 === 0) {
+    const rate = next.total > 0 ? next.suppressed / next.total : 0;
+    if (rate >= 0.15) {
+      console.warn("[PERSONA_DUPLICATE_GUARD_FREQUENT]", {
+        replyType: type,
+        total: next.total,
+        suppressed: next.suppressed,
+        suppressionRate: Number(rate.toFixed(4)),
+      });
+    }
+  }
+}
+
+function logDuplicateGuard({ userId, replyType, retryCount, suppressed }) {
+  const payload = {
+    userId: String(userId || "").trim(),
+    replyType: String(replyType || "").trim(),
+    retryCount: Number(retryCount) || 0,
+    suppressed: Boolean(suppressed),
+  };
+  console.log("[PERSONA_DUPLICATE_GUARD]", payload);
+  bumpDuplicateGuardStats(payload.replyType, payload.suppressed);
 }
 
 /**
@@ -156,6 +192,14 @@ export async function generatePersonaReplyMeta(userId, type, opts = {}) {
     const renderedSig = signatureForMessages(lastMessages);
     if (renderedSig && renderedSig !== prevSig) {
       lastRenderedSignatureByUser.set(dedupeKey, renderedSig);
+      if (attempt > 0) {
+        logDuplicateGuard({
+          userId,
+          replyType: type,
+          retryCount: attempt,
+          suppressed: false,
+        });
+      }
       return {
         messages: lastMessages,
         patternUsed,
@@ -177,6 +221,12 @@ export async function generatePersonaReplyMeta(userId, type, opts = {}) {
   // Still identical: suppress send (messages = []).
   const renderedSig = signatureForMessages(lastMessages);
   if (renderedSig && renderedSig === prevSig) {
+    logDuplicateGuard({
+      userId,
+      replyType: type,
+      retryCount: totalAttempts - 1,
+      suppressed: true,
+    });
     return {
       messages: [],
       patternUsed: lastPatternUsed || null,
