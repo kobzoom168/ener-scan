@@ -6,7 +6,11 @@ import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
 import { replyText, replyFlex, replyPaymentInstructions } from "../services/lineReply.service.js";
-import { sendTextSequence, pushText } from "../services/lineSequenceReply.service.js";
+import { pushText } from "../services/lineSequenceReply.service.js";
+import {
+  sendNonScanReply,
+  sendNonScanSequenceReply,
+} from "../services/nonScanReply.gateway.js";
 import { buildScanFlex } from "../services/flex/flex.service.js";
 
 import { buildBirthdateSettingsBubble } from "../services/flex/status.flex.js";
@@ -40,11 +44,6 @@ import {
 } from "../stores/runtime.store.js";
 
 import {
-  buildMultipleObjectsText,
-  buildUnclearImageText,
-  buildUnsupportedObjectText,
-  buildRateLimitText,
-  buildCooldownText,
   buildPaymentRequiredText,
   buildPaymentQrIntroText,
   buildPaymentQrSlipText,
@@ -112,11 +111,34 @@ async function sendPaymentGateTextReply({ client, replyToken, userId, reply }) {
 
   const msgs = await paywallMessageSequence(userId);
   if (msgs.length > 1) {
-    await sendTextSequence({ client, replyToken, userId, messages: msgs });
+    await sendNonScanSequenceReply({
+      client,
+      userId,
+      replyToken,
+      replyType: "payment_gate_persona_sequence",
+      semanticKey: "payment_gate_sequence",
+      messages: msgs,
+    });
   } else if (msgs.length === 1) {
-    await replyText(client, replyToken, msgs[0]);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken,
+      replyType: "payment_gate_persona_single",
+      semanticKey: "payment_gate_sequence",
+      text: msgs[0],
+      alternateTexts: [fallbackText],
+    });
   } else {
-    await replyText(client, replyToken, fallbackText);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken,
+      replyType: "payment_gate_fallback",
+      semanticKey: "payment_gate_fallback",
+      text: fallbackText,
+      alternateTexts: [],
+    });
   }
 }
 
@@ -144,11 +166,21 @@ async function replyPaymentQrTripleOrFallback({
       });
     }
   } else {
-    await replyText(
+    const payBody = buildPaymentInstructionText({
+      amount: amountForFallback,
+      paymentRef,
+    });
+    await sendNonScanReply({
       client,
+      userId,
       replyToken,
-      buildPaymentInstructionText({ amount: amountForFallback, paymentRef }),
-    );
+      replyType: "payment_instruction_text_fallback",
+      semanticKey: "payment_qr_text_fallback_scan_flow",
+      text: payBody,
+      alternateTexts: [
+        `${payBody}\n\nส่งสลิปมาในแชทนี้ได้เลยครับ`,
+      ],
+    });
     if (userId) {
       await logPaywallShown(userId, {
         patternUsed: "qr_text_fallback",
@@ -240,11 +272,16 @@ export async function runScanFlow({
   const rate = checkScanRateLimit(userId);
 
   if (!rate.allowed) {
-    await replyText(
+    const rl = getRateLimitReplyCandidates(rate.retryAfterSec);
+    await sendNonScanReply({
       client,
+      userId,
       replyToken,
-      buildRateLimitText(rate.retryAfterSec)
-    );
+      replyType: "rate_limit",
+      semanticKey: "rate_limit",
+      text: rl[0],
+      alternateTexts: rl.slice(1),
+    });
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
@@ -252,11 +289,16 @@ export async function runScanFlow({
   const cooldown = getCooldownStatus(userId);
 
   if (!cooldown.allowed) {
-    await replyText(
+    const cd = getCooldownReplyCandidates(cooldown.remainingSec);
+    await sendNonScanReply({
       client,
+      userId,
       replyToken,
-      buildCooldownText(cooldown.remainingSec)
-    );
+      replyType: "cooldown",
+      semanticKey: "scan_cooldown",
+      text: cd[0],
+      alternateTexts: cd.slice(1),
+    });
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
@@ -344,11 +386,21 @@ export async function runScanFlow({
             paymentId,
           });
         } catch (err) {
-          await replyText(
+          const payLim = buildPaymentInstructionText({
+            amount: 99,
+            currency: "THB",
+          });
+          await sendNonScanReply({
             client,
+            userId,
             replyToken,
-            buildPaymentInstructionText({ amount: 99, currency: "THB" }),
-          );
+            replyType: "payment_instruction_paid_limit",
+            semanticKey: "payment_qr_text_fallback_paid_limit",
+            text: payLim,
+            alternateTexts: [
+              `${payLim}\n\nส่งสลิปมาในแชทนี้ได้เลยครับ`,
+            ],
+          });
           await logPaywallShown(userId, {
             patternUsed: "qr_text_fallback",
             bubbleCount: 1,
@@ -394,11 +446,17 @@ export async function runScanFlow({
       hint: error?.hint,
     });
 
-    await replyText(
+    await sendNonScanReply({
       client,
+      userId,
       replyToken,
-      "ขออภัยครับ ตรวจสิทธิ์ไม่สำเร็จชั่วคราว ลองใหม่อีกครั้งได้เลยครับ"
-    );
+      replyType: "payment_gate_error",
+      semanticKey: "scan_access_error",
+      text: "ขออภัยครับ ตรวจสิทธิ์ไม่สำเร็จชั่วคราว ลองใหม่อีกครั้งได้เลยครับ",
+      alternateTexts: [
+        "ตรวจสิทธิ์ไม่สำเร็จชั่วคราว ลองส่งรูปใหม่อีกครั้งได้เลยครับ",
+      ],
+    });
 
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
@@ -449,11 +507,17 @@ export async function runScanFlow({
           })
         );
         clearLatestScanJob(userId, scanJobId);
-        await replyText(
+        await sendNonScanReply({
           client,
+          userId,
           replyToken,
-          "ขออภัยครับ เตรียมการสแกนไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งในอีกสักครู่นะครับ"
-        );
+          replyType: "scan_request_failed",
+          semanticKey: "scan_prepare_failed",
+          text: "ขออภัยครับ เตรียมการสแกนไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งในอีกสักครู่นะครับ",
+          alternateTexts: [
+            "เตรียมการสแกนไม่สำเร็จชั่วคราว ลองส่งรูปใหม่ได้เลยครับ",
+          ],
+        });
         clearSessionIfFlowVersionMatches(userId, flowVersion);
         return;
       }
@@ -470,11 +534,17 @@ export async function runScanFlow({
       })
     );
     clearLatestScanJob(userId, scanJobId);
-    await replyText(
+    await sendNonScanReply({
       client,
+      userId,
       replyToken,
-      "ขออภัยครับ เตรียมการสแกนไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
-    );
+      replyType: "scan_request_missing_ids",
+      semanticKey: "scan_prepare_failed",
+      text: "ขออภัยครับ เตรียมการสแกนไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ",
+      alternateTexts: [
+        "เตรียมการสแกนไม่สำเร็จ ลองส่งรูปใหม่ได้เลยครับ",
+      ],
+    });
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
@@ -488,11 +558,17 @@ export async function runScanFlow({
       scanJobId,
     });
 
-    await replyText(
+    await sendNonScanReply({
       client,
+      userId,
       replyToken,
-      "ขออภัยครับ ไม่พบรูปสำหรับการสแกน กรุณาส่งรูปใหม่อีกครั้งได้เลยครับ"
-    );
+      replyType: "missing_image_buffer",
+      semanticKey: "missing_scan_image",
+      text: "ขออภัยครับ ไม่พบรูปสำหรับการสแกน กรุณาส่งรูปใหม่อีกครั้งได้เลยครับ",
+      alternateTexts: [
+        "ไม่พบรูปสำหรับสแกน ลองส่งรูปใหม่ได้เลยครับ",
+      ],
+    });
 
     clearLatestScanJob(userId, scanJobId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
@@ -587,28 +663,61 @@ export async function runScanFlow({
     clearLatestScanJob(userId, scanJobId);
 
     if (err.message === "multiple_objects_detected") {
-      await replyText(client, replyToken, buildMultipleObjectsText());
+      const c = getMultipleObjectsReplyCandidates();
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken,
+        replyType: "multiple_objects_scan",
+        semanticKey: "multiple_objects",
+        text: c[0],
+        alternateTexts: c.slice(1),
+      });
       clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
 
     if (err.message === "image_unclear") {
-      await replyText(client, replyToken, buildUnclearImageText());
+      const c = getUnclearImageReplyCandidates();
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken,
+        replyType: "unclear_image_scan",
+        semanticKey: "unclear_image",
+        text: c[0],
+        alternateTexts: c.slice(1),
+      });
       clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
 
     if (err.message === "unsupported_object_type") {
-      await replyText(client, replyToken, buildUnsupportedObjectText());
+      const c = getUnsupportedObjectReplyCandidates();
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken,
+        replyType: "unsupported_object_scan",
+        semanticKey: "unsupported_object",
+        text: c[0],
+        alternateTexts: c.slice(1),
+      });
       clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
 
-    await replyText(
+    await sendNonScanReply({
       client,
+      userId,
       replyToken,
-      "ขออภัยครับ วิเคราะห์ยังไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
-    );
+      replyType: "scan_failed_generic",
+      semanticKey: "scan_pipeline_error",
+      text: "ขออภัยครับ วิเคราะห์ยังไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ",
+      alternateTexts: [
+        "วิเคราะห์ไม่สำเร็จชั่วคราว ลองส่งรูปใหม่ได้เลยครับ",
+      ],
+    });
 
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
@@ -706,11 +815,17 @@ export async function runScanFlow({
       /* ignore */
     }
     clearLatestScanJob(userId, scanJobId);
-    await replyText(
+    await sendNonScanReply({
       client,
+      userId,
       replyToken,
-      "ขออภัยครับ บันทึกผลไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
-    );
+      replyType: "scan_billing_failed",
+      semanticKey: "scan_result_persist_failed",
+      text: "ขออภัยครับ บันทึกผลไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ",
+      alternateTexts: [
+        "บันทึกผลไม่สำเร็จชั่วคราว ลองส่งรูปใหม่ได้เลยครับ",
+      ],
+    });
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }

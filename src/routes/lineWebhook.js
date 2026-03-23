@@ -54,13 +54,17 @@ import {
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 
 import {
-  replyText,
   replyPaymentInstructions,
+  replyText,
 } from "../services/lineReply.service.js";
 import {
-  sendTextSequence,
-  replyTextSequenceOrSingle,
-} from "../services/lineSequenceReply.service.js";
+  sendNonScanReply,
+  sendNonScanSequenceReply,
+} from "../services/nonScanReply.gateway.js";
+import {
+  handleStickerLikeInput,
+  isLineStickerPlaceholderText,
+} from "../handlers/stickerMessage.handler.js";
 import {
   parseBirthdateInput,
   looksLikeBirthdateInput,
@@ -85,6 +89,11 @@ import {
   buildUnclearImageText,
   buildUnsupportedObjectText,
   buildDuplicateImageText,
+  getDuplicateImageReplyCandidates,
+  getMultipleObjectsReplyCandidates,
+  getUnclearImageReplyCandidates,
+  getUnsupportedObjectReplyCandidates,
+  getMultiImageInRequestReplyCandidates,
   buildNoHistoryText,
   buildNoStatsText,
   buildIdleText,
@@ -135,20 +144,22 @@ function logWaitingBirthdate(event, payload = {}) {
 }
 
 const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
-const lastIdleTextSignatureByUser = new Map();
-
-function signatureForText(text) {
-  return String(text || "").replace(/\r\n/g, "\n").trim();
-}
 
 async function replyIdleTextNoDuplicate({ client, replyToken, userId }) {
   const text = await buildIdleText(userId);
   if (!String(text || "").trim()) return;
-  const sig = signatureForText(text);
-  const prev = lastIdleTextSignatureByUser.get(userId) || null;
-  if (prev === sig) return;
-  lastIdleTextSignatureByUser.set(userId, sig);
-  await replyText(client, replyToken, text);
+  await sendNonScanReply({
+    client,
+    userId,
+    replyToken,
+    replyType: "idle_post_scan",
+    semanticKey: "idle_post_scan",
+    text,
+    alternateTexts: [
+      "ส่งรูปมาได้เลย\nผมจะดูให้ทีละชิ้น",
+      "มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้",
+    ],
+  });
 }
 
 const ABUSE_MSG_HARD = "ตอนนี้ใช้งานไม่ได้ชั่วคราว ลองใหม่ในแป๊บนะครับ";
@@ -161,36 +172,59 @@ async function handleHistoryCommand({ client, replyToken, userId }) {
   const history = getScanHistory(userId);
 
   if (!history.length) {
-    await replyText(
+    await sendNonScanReply({
       client,
+      userId,
       replyToken,
-      `${buildNoHistoryText()}\n\n${MAIN_MENU_HINT_TEXT}`
-    );
+      replyType: "history_empty",
+      semanticKey: "history_empty",
+      text: `${buildNoHistoryText()}\n\n${MAIN_MENU_HINT_TEXT}`,
+      alternateTexts: [
+        `${buildNoHistoryText()}\n\nลองส่งรูปมาใหม่ได้เลยครับ`,
+      ],
+    });
     return;
   }
 
   const formatted = formatHistory(history);
-  await replyText(
+  await sendNonScanReply({
     client,
+    userId,
     replyToken,
-    `ประวัติการสแกนล่าสุด\n\n${formatted}\n\n${MAIN_MENU_HINT_TEXT}`
-  );
+    replyType: "history_list",
+    semanticKey: "history_list",
+    text: `ประวัติการสแกนล่าสุด\n\n${formatted}\n\n${MAIN_MENU_HINT_TEXT}`,
+    alternateTexts: [
+      `ประวัติการสแกน\n\n${formatted}\n\n${MAIN_MENU_HINT_TEXT}`,
+    ],
+  });
 }
 
 async function handleStatsCommand({ client, replyToken, userId }) {
   const stats = getUserStats(userId);
 
   if (!stats) {
-    await replyText(client, replyToken, buildNoStatsText());
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken,
+      replyType: "stats_empty",
+      semanticKey: "stats_empty",
+      text: buildNoStatsText(),
+      alternateTexts: ["ยังไม่มีสถิติสแกนให้แสดงตอนนี้ครับ"],
+    });
     return;
   }
 
   const last = stats.lastScanAt ? formatBangkokDateTime(stats.lastScanAt) : "-";
 
-  await replyText(
+  await sendNonScanReply({
     client,
+    userId,
     replyToken,
-    [
+    replyType: "stats_list",
+    semanticKey: "stats_list",
+    text: [
       "สถิติการสแกนของคุณ",
       "",
       `สแกนทั้งหมด: ${stats.totalScans} ครั้ง`,
@@ -199,8 +233,20 @@ async function handleStatsCommand({ client, replyToken, userId }) {
       `สแกนล่าสุด: ${last}`,
       "",
       MAIN_MENU_HINT_TEXT,
-    ].join("\n")
-  );
+    ].join("\n"),
+    alternateTexts: [
+      [
+        "สรุปสถิติสแกน",
+        "",
+        `ทั้งหมด ${stats.totalScans} ครั้ง`,
+        `พลังที่เจอบ่อย: ${stats.topEnergy}`,
+        `เฉลี่ย ${stats.avgScore} / 10`,
+        `ล่าสุด: ${last}`,
+        "",
+        MAIN_MENU_HINT_TEXT,
+      ].join("\n"),
+    ],
+  });
 }
 
 async function finalizeAcceptedImage({
@@ -278,7 +324,17 @@ async function finalizeAcceptedImage({
         userId,
         lockUntil: payStatus.lockUntil,
       });
-      await replyText(client, event.replyToken, ABUSE_MSG_PAYMENT_LOCK);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "abuse_payment_lock",
+        semanticKey: "abuse_payment_lock",
+        text: ABUSE_MSG_PAYMENT_LOCK,
+        alternateTexts: [
+          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+        ],
+      });
       return;
     }
 
@@ -293,11 +349,17 @@ async function finalizeAcceptedImage({
       }
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
-      await replyText(
+      await sendNonScanReply({
         client,
-        event.replyToken,
-        buildPendingVerifyBlockScanText({ userId, paymentRef })
-      );
+        userId,
+        replyToken: event.replyToken,
+        replyType: "pending_verify_block_scan",
+        semanticKey: "pending_verify_block_scan",
+        text: buildPendingVerifyBlockScanText({ userId, paymentRef }),
+        alternateTexts: [
+          "ตอนนี้รอตรวจสลิปอยู่นะครับ ส่งสลิปหรือรอแอดมินก่อน แล้วค่อยสแกนใหม่ได้",
+        ],
+      });
       return;
     }
 
@@ -340,11 +402,17 @@ async function finalizeAcceptedImage({
         slipPaymentRef = null;
       }
 
-      await replyText(
+      await sendNonScanReply({
         client,
-        event.replyToken,
-        buildSlipReceivedText({ paymentRef: slipPaymentRef }),
-      );
+        userId,
+        replyToken: event.replyToken,
+        replyType: "slip_received",
+        semanticKey: "slip_received",
+        text: buildSlipReceivedText({ paymentRef: slipPaymentRef }),
+        alternateTexts: [
+          "รับสลิปแล้วครับ รอแอดมินตรวจแป๊บนึงนะครับ",
+        ],
+      });
       logEvent("slip_uploaded", {
         userId,
         personaVariant: await getAssignedPersonaVariant(userId),
@@ -363,11 +431,17 @@ async function finalizeAcceptedImage({
         hint: err?.hint,
       });
 
-      await replyText(
+      await sendNonScanReply({
         client,
-        event.replyToken,
-        "ขออภัยครับ ระบบบันทึกสลิปไม่สำเร็จ กรุณาลองส่งสลิปใหม่อีกครั้ง"
-      );
+        userId,
+        replyToken: event.replyToken,
+        replyType: "slip_save_failed",
+        semanticKey: "slip_save_failed",
+        text: "ขออภัยครับ ระบบบันทึกสลิปไม่สำเร็จ กรุณาลองส่งสลิปใหม่อีกครั้ง",
+        alternateTexts: [
+          "บันทึกสลิปไม่สำเร็จชั่วคราว ลองส่งสลิปใหม่อีกครั้งได้เลยครับ",
+        ],
+      });
       return;
     }
   }
@@ -382,7 +456,17 @@ async function finalizeAcceptedImage({
     });
   }
   if (scanIntent.state.isHardBlocked) {
-    await replyText(client, event.replyToken, ABUSE_MSG_HARD);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "abuse_hard_block",
+      semanticKey: "abuse_hard_block",
+      text: ABUSE_MSG_HARD,
+      alternateTexts: [
+        "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
+      ],
+    });
     return;
   }
 
@@ -393,7 +477,16 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyText(client, event.replyToken, buildDuplicateImageText());
+    const dupCand = getDuplicateImageReplyCandidates();
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "duplicate_image",
+      semanticKey: "duplicate_image",
+      text: dupCand[0],
+      alternateTexts: dupCand.slice(1),
+    });
     return;
   }
 
@@ -407,7 +500,16 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyText(client, event.replyToken, buildMultipleObjectsText());
+    const c = getMultipleObjectsReplyCandidates();
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "multiple_objects",
+      semanticKey: "multiple_objects",
+      text: c[0],
+      alternateTexts: c.slice(1),
+    });
     return;
   }
 
@@ -416,7 +518,16 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyText(client, event.replyToken, buildUnclearImageText());
+    const c = getUnclearImageReplyCandidates();
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "unclear_image",
+      semanticKey: "unclear_image",
+      text: c[0],
+      alternateTexts: c.slice(1),
+    });
     return;
   }
 
@@ -425,7 +536,16 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyText(client, event.replyToken, buildUnsupportedObjectText());
+    const c = getUnsupportedObjectReplyCandidates();
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "unsupported_object",
+      semanticKey: "unsupported_object",
+      text: c[0],
+      alternateTexts: c.slice(1),
+    });
     return;
   }
 
@@ -434,7 +554,16 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyText(client, event.replyToken, buildUnsupportedObjectText());
+    const c = getUnsupportedObjectReplyCandidates();
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "unsupported_object_fallback",
+      semanticKey: "unsupported_object",
+      text: c[0],
+      alternateTexts: c.slice(1),
+    });
     return;
   }
 
@@ -455,7 +584,17 @@ async function finalizeAcceptedImage({
         lockUntil: payReqStatus.lockUntil,
         gate: "finalize_payment_required",
       });
-      await replyText(client, event.replyToken, ABUSE_MSG_PAYMENT_LOCK);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "abuse_payment_lock",
+        semanticKey: "abuse_payment_lock_finalize",
+        text: ABUSE_MSG_PAYMENT_LOCK,
+        alternateTexts: [
+          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+        ],
+      });
       return;
     }
 
@@ -532,15 +671,22 @@ async function finalizeAcceptedImage({
       );
     }
 
-    await replyText(
+    const payInstr = buildPaymentInstructionText({
+      amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
+      currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
+      paymentRef: createdPaymentRef,
+    });
+    await sendNonScanReply({
       client,
-      event.replyToken,
-      buildPaymentInstructionText({
-        amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
-        currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
-        paymentRef: createdPaymentRef,
-      }),
-    );
+      userId,
+      replyToken: event.replyToken,
+      replyType: "payment_instruction_text",
+      semanticKey: "payment_instruction_finalize_image",
+      text: payInstr,
+      alternateTexts: [
+        `${payInstr}\n\nถ้าส่งสลิปแล้ว รอแอดมินตรวจได้เลยครับ`,
+      ],
+    });
     await logPaywallShown(userId, {
       patternUsed: "qr_text_fallback",
       bubbleCount: 1,
@@ -592,10 +738,12 @@ async function finalizeAcceptedImage({
     flowVersion
   );
 
-  await replyTextSequenceOrSingle({
+  await sendNonScanSequenceReply({
     client,
-    replyToken: event.replyToken,
     userId,
+    replyToken: event.replyToken,
+    replyType: "start_instruction",
+    semanticKey: "start_instruction",
     messages: await buildStartInstructionMessages(userId),
   });
 }
@@ -614,7 +762,17 @@ async function handleImageMessage({ client, event, userId, session }) {
       userId,
       source: "after_locked_image_activity",
     });
-    await replyText(client, event.replyToken, ABUSE_MSG_HARD);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "abuse_hard_block",
+      semanticKey: "abuse_hard_block_image",
+      text: ABUSE_MSG_HARD,
+      alternateTexts: [
+        "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
+      ],
+    });
     return;
   }
 
@@ -654,7 +812,17 @@ async function handleImageMessage({ client, event, userId, session }) {
         lockUntil: payStatus.lockUntil,
         gate: "handleImageMessage_slip_route",
       });
-      await replyText(client, event.replyToken, ABUSE_MSG_PAYMENT_LOCK);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "abuse_payment_lock",
+        semanticKey: "abuse_payment_lock_image_slip",
+        text: ABUSE_MSG_PAYMENT_LOCK,
+        alternateTexts: [
+          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+        ],
+      });
       return;
     }
   } else {
@@ -668,7 +836,17 @@ async function handleImageMessage({ client, event, userId, session }) {
         userId,
         lockUntil: scanStatus.lockUntil,
       });
-      await replyText(client, event.replyToken, ABUSE_MSG_SCAN_LOCK);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "abuse_scan_lock",
+        semanticKey: "abuse_scan_lock",
+        text: ABUSE_MSG_SCAN_LOCK,
+        alternateTexts: [
+          "สแกนถี่ไปหน่อย รอพักแล้วค่อยลองใหม่นะครับ",
+        ],
+      });
       return;
     }
   }
@@ -689,11 +867,17 @@ async function handleImageMessage({ client, event, userId, session }) {
   }
 
   if (session.awaitingBirthdateUpdate) {
-    await replyText(
+    await sendNonScanReply({
       client,
-      event.replyToken,
-      `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
-    );
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_update_prompt_image",
+      semanticKey: "birthdate_update_prompt",
+      text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      alternateTexts: [
+        `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
+      ],
+    });
     return;
   }
 
@@ -739,10 +923,12 @@ async function handleImageMessage({ client, event, userId, session }) {
           userId,
           sessionFlowVersion: session.flowVersion || 0,
         });
-        await replyTextSequenceOrSingle({
+        await sendNonScanSequenceReply({
           client,
-          replyToken: event.replyToken,
           userId,
+          replyToken: event.replyToken,
+          replyType: "waiting_birthdate_image_reminder",
+          semanticKey: "waiting_birthdate_image_reminder",
           messages: await buildWaitingBirthdateImageReminderMessages(userId),
         });
         return;
@@ -821,11 +1007,16 @@ async function handleImageMessage({ client, event, userId, session }) {
     clearSession(userId);
     clearPendingImageCandidate(userId);
 
-    await replyText(
+    const multiCandGroup = getMultiImageInRequestReplyCandidates();
+    await sendNonScanReply({
       client,
-      event.replyToken,
-      buildMultiImageInRequestText()
-    );
+      userId,
+      replyToken: event.replyToken,
+      replyType: "multi_image_in_request_group",
+      semanticKey: "multi_image_in_request",
+      text: multiCandGroup[0],
+      alternateTexts: multiCandGroup.slice(1),
+    });
     return;
   }
 
@@ -846,11 +1037,16 @@ async function handleImageMessage({ client, event, userId, session }) {
     clearSession(userId);
     clearPendingImageCandidate(userId);
 
-    await replyText(
+    const multiCand2 = getMultiImageInRequestReplyCandidates();
+    await sendNonScanReply({
       client,
-      event.replyToken,
-      buildMultiImageInRequestText()
-    );
+      userId,
+      replyToken: event.replyToken,
+      replyType: "multi_image_burst",
+      semanticKey: "multi_image_in_request",
+      text: multiCand2[0],
+      alternateTexts: multiCand2.slice(1),
+    });
     return;
   }
 
@@ -886,7 +1082,28 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   if (textSpam.state.isHardBlocked) {
     console.warn("[ABUSE_GUARD_HARD_BLOCK]", { userId, source: "text_register" });
-    await replyText(client, event.replyToken, ABUSE_MSG_HARD);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "abuse_hard_block",
+      semanticKey: "abuse_hard_block_text",
+      text: ABUSE_MSG_HARD,
+      alternateTexts: [
+        "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
+      ],
+    });
+    return;
+  }
+
+  if (isLineStickerPlaceholderText(text)) {
+    await handleStickerLikeInput({
+      client,
+      event,
+      userId,
+      session,
+      source: "placeholder_text",
+    });
     return;
   }
 
@@ -924,11 +1141,18 @@ async function handleTextMessage({ client, event, userId, session }) {
     } catch (_) {
       paymentRef = null;
     }
-    await replyText(
+    const slipRem = await buildAwaitingSlipReminderText({ userId, paymentRef });
+    await sendNonScanReply({
       client,
-      event.replyToken,
-      await buildAwaitingSlipReminderText({ userId, paymentRef })
-    );
+      userId,
+      replyToken: event.replyToken,
+      replyType: "awaiting_slip_reminder",
+      semanticKey: "awaiting_slip_reminder",
+      text: slipRem,
+      alternateTexts: [
+        "รอสลิปโอนอยู่นะครับ ส่งสลิปมาในแชทนี้ได้เลย",
+      ],
+    });
     return;
   }
 
@@ -945,19 +1169,35 @@ async function handleTextMessage({ client, event, userId, session }) {
         paymentRef = null;
       }
       if (isPaymentCommand(text, lowerText)) {
-        await replyText(
+        await sendNonScanReply({
           client,
-          event.replyToken,
-          buildPendingVerifyPaymentCommandText({ userId, paymentRef })
-        );
+          userId,
+          replyToken: event.replyToken,
+          replyType: "pending_verify_payment_cmd",
+          semanticKey: "pending_verify_payment_cmd",
+          text: buildPendingVerifyPaymentCommandText({ userId, paymentRef }),
+          alternateTexts: [
+            "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้ส่งสลิป ส่งมาได้เลย",
+          ],
+        });
         return;
       }
       if (!allowsUtilityCommandsDuringPendingVerify(text, lowerText)) {
-        await replyText(
+        const pvRem = buildPendingVerifyReminderText({
+          userId,
+          paymentRef,
+        });
+        await sendNonScanReply({
           client,
-          event.replyToken,
-          buildPendingVerifyReminderText({ userId, paymentRef })
-        );
+          userId,
+          replyToken: event.replyToken,
+          replyType: "pending_verify_reminder",
+          semanticKey: "pending_verify_reminder",
+          text: pvRem,
+          alternateTexts: [
+            "รอตรวจสลิปแป๊บนึงนะครับ แจ้งแอดมินถ้ารอนานเกินไป",
+          ],
+        });
         return;
       }
     }
@@ -992,11 +1232,17 @@ async function handleTextMessage({ client, event, userId, session }) {
         }
         if (text === "เปลี่ยนวันเกิด") {
           setAwaitingBirthdateUpdate(userId, true);
-          await replyText(
+          await sendNonScanReply({
             client,
-            event.replyToken,
-            `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
-          );
+            userId,
+            replyToken: event.replyToken,
+            replyType: "birthdate_update_prompt_pending_verify",
+            semanticKey: "birthdate_update_prompt",
+            text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+            alternateTexts: [
+              `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+            ],
+          });
           return;
         }
         if (text === "สแกนพลังงาน") {
@@ -1019,25 +1265,48 @@ async function handleTextMessage({ client, event, userId, session }) {
             "",
             MAIN_MENU_HINT_TEXT,
           ].join("\n");
-          await replyText(client, event.replyToken, helperText);
+          await sendNonScanReply({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: "scan_energy_helper_pending_verify",
+            semanticKey: "scan_energy_helper",
+            text: helperText,
+            alternateTexts: [
+              "ส่งรูปวัตถุ 1 รูปมาได้เลยครับ แล้วตามด้วยวันเกิดถ้าระบบถาม",
+            ],
+          });
           return;
         }
         if (text === "วิธีใช้" || text === "วิธีใช้งาน") {
-          await replyText(
+          const usage = [
+            "วิธีใช้งาน Ener Scan",
+            "",
+            "1) ส่งรูปวัตถุที่ต้องการสแกน",
+            "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
+            "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
+            "",
+            "หากหมดสิทธิ์ฟรี: พิมพ์ payment หรือ จ่ายเงิน",
+            "",
+            MAIN_MENU_HINT_TEXT,
+          ].join("\n");
+          await sendNonScanReply({
             client,
-            event.replyToken,
-            [
-              "วิธีใช้งาน Ener Scan",
-              "",
-              "1) ส่งรูปวัตถุที่ต้องการสแกน",
-              "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
-              "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
-              "",
-              "หากหมดสิทธิ์ฟรี: พิมพ์ payment หรือ จ่ายเงิน",
-              "",
-              MAIN_MENU_HINT_TEXT,
-            ].join("\n")
-          );
+            userId,
+            replyToken: event.replyToken,
+            replyType: "usage_help_pending_verify",
+            semanticKey: "usage_help",
+            text: usage,
+            alternateTexts: [
+              [
+                "สรุปวิธีใช้",
+                "",
+                "ส่งรูป 1 รูป → พิมพ์วันเกิด DD/MM/YYYY → รอผลในแชท",
+                "",
+                MAIN_MENU_HINT_TEXT,
+              ].join("\n"),
+            ],
+          });
           return;
         }
         if (isMainMenuAlias(text, lowerText)) {
@@ -1060,11 +1329,17 @@ async function handleTextMessage({ client, event, userId, session }) {
   // 3) awaiting birthdate update (profile)
   if (session.awaitingBirthdateUpdate) {
     if (text === "เปลี่ยนวันเกิด") {
-      await replyText(
+      await sendNonScanReply({
         client,
-        event.replyToken,
-        `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
-      );
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_update_prompt_repeat",
+        semanticKey: "birthdate_update_prompt",
+        text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        alternateTexts: [
+          `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+        ],
+      });
       return;
     }
 
@@ -1093,10 +1368,12 @@ async function handleTextMessage({ client, event, userId, session }) {
         if (errMsgs.length) {
           errMsgs[errMsgs.length - 1] = `${errMsgs[errMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
         }
-        await replyTextSequenceOrSingle({
+        await sendNonScanSequenceReply({
           client,
-          replyToken: event.replyToken,
           userId,
+          replyToken: event.replyToken,
+          replyType: "birthdate_update_error",
+          semanticKey: "birthdate_error_profile",
           messages: errMsgs,
         });
         return;
@@ -1105,10 +1382,12 @@ async function handleTextMessage({ client, event, userId, session }) {
       if (gMsgs.length) {
         gMsgs[gMsgs.length - 1] = `${gMsgs[gMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
       }
-      await replyTextSequenceOrSingle({
+      await sendNonScanSequenceReply({
         client,
-        replyToken: event.replyToken,
         userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_update_guidance",
+        semanticKey: "birthdate_guidance_profile",
         messages: gMsgs.length
           ? gMsgs
           : [`${await buildWaitingBirthdateGuidanceText(userId)}\n\n${MAIN_MENU_HINT_TEXT}`],
@@ -1132,11 +1411,17 @@ async function handleTextMessage({ client, event, userId, session }) {
       birthdate: normalizedBirthdate,
     });
 
-    await replyText(
+    await sendNonScanReply({
       client,
-      event.replyToken,
-      `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\n${MAIN_MENU_HINT_TEXT}`
-    );
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_saved_profile",
+      semanticKey: "birthdate_saved",
+      text: `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      alternateTexts: [
+        `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
+      ],
+    });
     return;
   }
 
@@ -1159,21 +1444,37 @@ async function handleTextMessage({ client, event, userId, session }) {
         } catch (_) {
           paymentRef = null;
         }
-        await replyText(
+        const slipRem2 = await buildAwaitingSlipReminderText({
+          userId,
+          paymentRef,
+        });
+        await sendNonScanReply({
           client,
-          event.replyToken,
-          await buildAwaitingSlipReminderText({ userId, paymentRef })
-        );
+          userId,
+          replyToken: event.replyToken,
+          replyType: "awaiting_slip_reminder_waiting_bd",
+          semanticKey: "awaiting_slip_reminder",
+          text: slipRem2,
+          alternateTexts: [
+            "รอสลิปโอนอยู่นะครับ ส่งสลิปมาในแชทนี้ได้เลย",
+          ],
+        });
         return;
       }
 
       if (text === "เปลี่ยนวันเกิด") {
         setAwaitingBirthdateUpdate(userId, true);
-        await replyText(
+        await sendNonScanReply({
           client,
-          event.replyToken,
-          `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
-        );
+          userId,
+          replyToken: event.replyToken,
+          replyType: "birthdate_update_prompt_waiting_bd",
+          semanticKey: "birthdate_update_prompt",
+          text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+          alternateTexts: [
+            `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+          ],
+        });
         return;
       }
 
@@ -1195,7 +1496,17 @@ async function handleTextMessage({ client, event, userId, session }) {
             lockUntil: scanGateFromText.lockUntil,
             gate: "waiting_birthdate",
           });
-          await replyText(client, event.replyToken, ABUSE_MSG_SCAN_LOCK);
+          await sendNonScanReply({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: "abuse_scan_lock",
+            semanticKey: "abuse_scan_lock_waiting_bd",
+            text: ABUSE_MSG_SCAN_LOCK,
+            alternateTexts: [
+              "สแกนถี่ไปหน่อย รอพักแล้วค่อยลองใหม่นะครับ",
+            ],
+          });
           return;
         }
 
@@ -1207,10 +1518,12 @@ async function handleTextMessage({ client, event, userId, session }) {
           normalizedDisplay: normalizedBirthdate,
         });
         try {
-          await sendTextSequence({
+          await sendNonScanSequenceReply({
             client,
-            replyToken: null,
             userId,
+            replyToken: null,
+            replyType: "before_scan_sequence",
+            semanticKey: "before_scan_sequence",
             messages: await beforeScanMessageSequence(userId),
           });
         } catch (beforeScanErr) {
@@ -1236,10 +1549,12 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           reason: parsedLock.reason,
         });
-        await replyTextSequenceOrSingle({
+        await sendNonScanSequenceReply({
           client,
-          replyToken: event.replyToken,
           userId,
+          replyToken: event.replyToken,
+          replyType: "waiting_birthdate_error",
+          semanticKey: "birthdate_error_waiting_scan",
           messages: await buildBirthdateErrorMessages(userId, parsedLock.reason),
         });
         return;
@@ -1251,10 +1566,12 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           hint: "blocked_intent",
         });
-        await replyTextSequenceOrSingle({
+        await sendNonScanSequenceReply({
           client,
-          replyToken: event.replyToken,
           userId,
+          replyToken: event.replyToken,
+          replyType: "waiting_birthdate_guidance_blocked",
+          semanticKey: "waiting_birthdate_guidance",
           messages: await buildWaitingBirthdateGuidanceMessages(userId),
         });
         return;
@@ -1265,10 +1582,12 @@ async function handleTextMessage({ client, event, userId, session }) {
         userId,
         hint: "default",
       });
-      await replyTextSequenceOrSingle({
+      await sendNonScanSequenceReply({
         client,
-        replyToken: event.replyToken,
         userId,
+        replyToken: event.replyToken,
+        replyType: "waiting_birthdate_guidance",
+        semanticKey: "waiting_birthdate_guidance",
         messages: await buildWaitingBirthdateGuidanceMessages(userId),
       });
       return;
@@ -1284,11 +1603,17 @@ async function handleTextMessage({ client, event, userId, session }) {
   if (text === "เปลี่ยนวันเกิด") {
     console.log("[BIRTHDATE_UPDATE] requested", { userId });
     setAwaitingBirthdateUpdate(userId, true);
-    await replyText(
+    await sendNonScanReply({
       client,
-      event.replyToken,
-      `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
-    );
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_update_prompt_open",
+      semanticKey: "birthdate_update_prompt",
+      text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      alternateTexts: [
+        `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+      ],
+    });
     return;
   }
 
@@ -1329,10 +1654,12 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           hint: "pending_scan_needs_birthdate",
         });
-        await replyTextSequenceOrSingle({
+        await sendNonScanSequenceReply({
           client,
-          replyToken: event.replyToken,
           userId,
+          replyToken: event.replyToken,
+          replyType: "payment_cmd_needs_birthdate",
+          semanticKey: "waiting_birthdate_guidance",
           messages: await buildWaitingBirthdateGuidanceMessages(userId),
         });
         return;
@@ -1353,7 +1680,17 @@ async function handleTextMessage({ client, event, userId, session }) {
         lockUntil: payCmdStatus.lockUntil,
         source: "payment_command",
       });
-      await replyText(client, event.replyToken, ABUSE_MSG_PAYMENT_LOCK);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "abuse_payment_lock",
+        semanticKey: "abuse_payment_lock_pay_cmd",
+        text: ABUSE_MSG_PAYMENT_LOCK,
+        alternateTexts: [
+          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+        ],
+      });
       return;
     }
 
@@ -1366,7 +1703,17 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
     }
     if (payCmdIntent.state.isHardBlocked) {
-      await replyText(client, event.replyToken, ABUSE_MSG_HARD);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "abuse_hard_block",
+        semanticKey: "abuse_hard_block_pay_cmd",
+        text: ABUSE_MSG_HARD,
+        alternateTexts: [
+          "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
+        ],
+      });
       return;
     }
 
@@ -1436,15 +1783,26 @@ async function handleTextMessage({ client, event, userId, session }) {
       );
     }
 
-    await replyText(
+    const payCmdBody = `${buildPaymentInstructionText({
+      amount: amountForCopy,
+      currency,
+      paymentRef: cmdPaymentRef,
+    })}\n\n${MAIN_MENU_HINT_TEXT}`;
+    await sendNonScanReply({
       client,
-      event.replyToken,
-      `${buildPaymentInstructionText({
-        amount: amountForCopy,
-        currency,
-        paymentRef: cmdPaymentRef,
-      })}\n\n${MAIN_MENU_HINT_TEXT}`
-    );
+      userId,
+      replyToken: event.replyToken,
+      replyType: "payment_instruction_text",
+      semanticKey: "payment_command_text_fallback",
+      text: payCmdBody,
+      alternateTexts: [
+        `${buildPaymentInstructionText({
+          amount: amountForCopy,
+          currency,
+          paymentRef: cmdPaymentRef,
+        })}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
+      ],
+    });
     await logPaywallShown(userId, {
       patternUsed: "qr_text_fallback",
       bubbleCount: 1,
@@ -1476,7 +1834,17 @@ async function handleTextMessage({ client, event, userId, session }) {
       MAIN_MENU_HINT_TEXT,
     ].join("\n");
 
-    await replyText(client, event.replyToken, helperText);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "scan_energy_helper",
+      semanticKey: "scan_energy_helper",
+      text: helperText,
+      alternateTexts: [
+        "ส่งรูปวัตถุ 1 รูปมาได้เลยครับ แล้วตามด้วยวันเกิดถ้าระบบถาม",
+      ],
+    });
     return;
   }
 
@@ -1494,21 +1862,34 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // "วิธีใช้" should show usage instructions (not the menu itself)
   if (text === "วิธีใช้" || text === "วิธีใช้งาน") {
-    await replyText(
+    const usageMain = [
+      "วิธีใช้งาน Ener Scan",
+      "",
+      "1) ส่งรูปวัตถุที่ต้องการสแกน",
+      "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
+      "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
+      "",
+      "หากหมดสิทธิ์ฟรี: พิมพ์ จ่ายเงิน ได้เลย",
+      "",
+      MAIN_MENU_HINT_TEXT,
+    ].join("\n");
+    await sendNonScanReply({
       client,
-      event.replyToken,
-      [
-        "วิธีใช้งาน Ener Scan",
-        "",
-        "1) ส่งรูปวัตถุที่ต้องการสแกน",
-        "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
-        "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
-        "",
-        "หากหมดสิทธิ์ฟรี: พิมพ์ จ่ายเงิน ได้เลย",
-        "",
-        MAIN_MENU_HINT_TEXT,
-      ].join("\n")
-    );
+      userId,
+      replyToken: event.replyToken,
+      replyType: "usage_help",
+      semanticKey: "usage_help",
+      text: usageMain,
+      alternateTexts: [
+        [
+          "สรุปวิธีใช้",
+          "",
+          "ส่งรูป 1 รูป → พิมพ์วันเกิด DD/MM/YYYY → รอผลในแชท",
+          "",
+          MAIN_MENU_HINT_TEXT,
+        ].join("\n"),
+      ],
+    });
     return;
   }
 
@@ -1549,7 +1930,17 @@ async function handleEvent({ client, event }) {
 
   if (globalStatus.isHardBlocked) {
     console.warn("[ABUSE_GUARD_HARD_BLOCK]", { userId, gate: "handleEvent" });
-    await replyText(client, event.replyToken, ABUSE_MSG_HARD);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "abuse_hard_block",
+      semanticKey: "abuse_hard_block_handle_event",
+      text: ABUSE_MSG_HARD,
+      alternateTexts: [
+        "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
+      ],
+    });
     return;
   }
 
@@ -1586,6 +1977,17 @@ async function handleEvent({ client, event }) {
 
   if (event.message?.type === "text") {
     await handleTextMessage({ client, event, userId, session });
+    return;
+  }
+
+  if (event.message?.type === "sticker") {
+    await handleStickerLikeInput({
+      client,
+      event,
+      userId,
+      session,
+      source: "sticker",
+    });
     return;
   }
 
@@ -1650,11 +2052,16 @@ export function lineWebhookRouter(lineConfig) {
                 flowVersion,
               });
 
-              await replyText(
+              const multiCandReq = getMultiImageInRequestReplyCandidates();
+              await sendNonScanReply({
                 client,
-                event.replyToken,
-                buildMultiImageInRequestText()
-              );
+                userId,
+                replyToken: event.replyToken,
+                replyType: "multi_image_same_request",
+                semanticKey: "multi_image_in_request",
+                text: multiCandReq[0],
+                alternateTexts: multiCandReq.slice(1),
+              });
             }
 
             console.log(
@@ -1670,11 +2077,26 @@ export function lineWebhookRouter(lineConfig) {
 
           if (event.replyToken) {
             try {
-              await replyText(
-                client,
-                event.replyToken,
-                buildSystemErrorText()
-              );
+              const errUid = event.source?.userId || "";
+              if (errUid) {
+                await sendNonScanReply({
+                  client,
+                  userId: errUid,
+                  replyToken: event.replyToken,
+                  replyType: "webhook_event_error",
+                  semanticKey: "system_error",
+                  text: buildSystemErrorText(),
+                  alternateTexts: [
+                    "ขออภัยครับ มีข้อผิดพลาดชั่วคราว ลองส่งใหม่อีกครั้งได้เลย",
+                  ],
+                });
+              } else {
+                await replyText(
+                  client,
+                  event.replyToken,
+                  buildSystemErrorText(),
+                );
+              }
             } catch (replyErr) {
               console.error("[WEBHOOK] fallback error reply failed:", replyErr);
             }

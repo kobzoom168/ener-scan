@@ -163,6 +163,48 @@ export function buildDuplicateImageText() {
   ].join("\n");
 }
 
+/** Primary + alternates for non-scan reply gateway (duplicate suppression). */
+export function getDuplicateImageReplyCandidates() {
+  return [
+    buildDuplicateImageText(),
+    "รูปนี้เคยสแกนไปแล้วนะ ลองส่งภาพวัตถุใหม่ได้เลยครับ",
+    "ซ้ำกับที่เคยส่งมาแล้ว ขอเป็นภาพใหม่ของชิ้นนั้นนะครับ",
+  ];
+}
+
+export function getMultipleObjectsReplyCandidates() {
+  return [
+    buildMultipleObjectsText(),
+    "ในภาพมีหลายชิ้นอยู่นะครับ ขอถ่ายทีละชิ้นต่อรูป แล้วส่งมาใหม่ได้เลย",
+    "ขอวัตถุชิ้นเดียวในเฟรมนะครับ แยกชิ้นแล้วถ่ายทีละรูปได้เลย",
+  ];
+}
+
+export function getUnclearImageReplyCandidates() {
+  return [
+    buildUnclearImageText(),
+    "ภาพยังไม่ชัดพอนะครับ ลองถ่ายใหม่ให้เห็นชิ้นง่าย ๆ ทีละชิ้น",
+    "ยังอ่านชิ้นในภาพไม่ชัด ลองถ่ายใกล้ ๆ ทีละชิ้นต่อรูปนะครับ",
+  ];
+}
+
+export function getUnsupportedObjectReplyCandidates() {
+  return [
+    buildUnsupportedObjectText(),
+    "แบบนี้ยังไม่รับนะ ลองส่งพระ เครื่องราง หรือหินทีละชิ้นต่อรูป",
+    "ยังไม่รับประเภทนี้ ขอเป็นวัตถุสายพลังชิ้นเดียวต่อรูปนะครับ",
+  ];
+}
+
+export function getMultiImageInRequestReplyCandidates() {
+  const primary = buildMultiImageInRequestText();
+  return [
+    primary,
+    "ส่งทีละรูปนะครับ ถ้ามีหลายชิ้นแยกส่งมาได้เลย",
+    "ตอนนี้รับทีละรูปอย่างเดียว ลองส่งใหม่ทีละภาพครับ",
+  ];
+}
+
 export function buildRateLimitText(retryAfterSec = 0) {
   return [
     "เอเนอร์สแกน",
@@ -181,6 +223,20 @@ export function buildCooldownText(remainingSec = 0) {
       : "กรุณารอสักครู่ก่อนสแกนใหม่",
     "เพื่อให้ระบบอ่านพลังได้เสถียรมากขึ้นครับ",
   ].join("\n");
+}
+
+export function getRateLimitReplyCandidates(retryAfterSec = 0) {
+  return [
+    buildRateLimitText(retryAfterSec),
+    "ใช้งานถี่ไปหน่อย ขอพักแป๊บแล้วค่อยสแกนใหม่นะครับ",
+  ];
+}
+
+export function getCooldownReplyCandidates(remainingSec = 0) {
+  return [
+    buildCooldownText(remainingSec),
+    "ระบบขอเว้นระยะนิดนึงก่อนสแกนรอบถัดไปนะครับ",
+  ];
 }
 
 /** บรรทัดเดียวสำหรับอ้างอิงรายการชำระเงิน (แชร์กับแอดมินได้) */
