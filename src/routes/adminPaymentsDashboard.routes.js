@@ -23,6 +23,8 @@ import {
   buildPaymentApprovedText,
   buildPaymentRejectedText,
 } from "../utils/webhookText.util.js";
+import { logEvent } from "../utils/personaAnalytics.util.js";
+import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -1196,6 +1198,14 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         activation.paidUntil == null && activation.paidRemainingScans == null;
 
       if (!isIdempotent) {
+        logEvent("payment_success", {
+          userId: activation.lineUserId,
+          personaVariant: await getAssignedPersonaVariant(activation.lineUserId),
+          patternUsed: null,
+          bubbleCount: 1,
+          paymentId,
+          source: "admin_dashboard_approve",
+        });
         let paymentRefForPush = null;
         try {
           paymentRefForPush = await ensurePaymentRefForPaymentId(paymentId);
@@ -1203,10 +1213,11 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           console.error("[ADMIN_DASH] ensurePaymentRefForPaymentId (approve push):", refErr);
         }
 
-        const message = buildPaymentApprovedText({
+        const message = await buildPaymentApprovedText({
           paidRemainingScans: activation.paidRemainingScans,
           paidUntil: activation.paidUntil,
           paymentRef: paymentRefForPush,
+          lineUserId: activation.lineUserId,
         });
 
         void lineClient

@@ -117,4 +117,116 @@ export const env = {
     const n = raw === undefined || raw === "" ? 10 : Number(raw);
     return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 10;
   })(),
+  /**
+   * Chat persona A/B: number of variants (1–26). When optimization is off,
+   * `hashAssignPersonaVariant` / `getAssignedPersonaVariant` → A…Z via stable hash % N.
+   */
+  PERSONA_AB_VARIANT_COUNT: (() => {
+    const raw = process.env.PERSONA_AB_VARIANT_COUNT;
+    const n = raw === undefined || raw === "" ? 3 : Number(raw);
+    return Number.isFinite(n) ? Math.min(26, Math.max(1, Math.floor(n))) : 3;
+  })(),
+  /**
+   * When true: sticky weighted persona variants (Supabase tables + daily recompute).
+   * When false: deterministic hash-only assignment (no DB reads for variant).
+   */
+  PERSONA_AB_OPTIMIZE_ENABLED:
+    String(process.env.PERSONA_AB_OPTIMIZE_ENABLED || "").trim().toLowerCase() ===
+    "true",
+  /** Minimum traffic share per variant after recompute (0–0.49). */
+  PERSONA_AB_MIN_WEIGHT: (() => {
+    const raw = process.env.PERSONA_AB_MIN_WEIGHT;
+    const n = raw === undefined || raw === "" ? 0.15 : Number(raw);
+    return Number.isFinite(n) ? Math.min(0.49, Math.max(0, n)) : 0.15;
+  })(),
+  /** Do not optimize weights until this many paywall_shown events (all variants combined). */
+  PERSONA_AB_MIN_SAMPLE_PAYWALL: (() => {
+    const raw = process.env.PERSONA_AB_MIN_SAMPLE_PAYWALL;
+    const n = raw === undefined || raw === "" ? 100 : Number(raw);
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 100;
+  })(),
+  /** How often to run recomputeWeights (ms). Default: 24h. */
+  PERSONA_AB_RECOMPUTE_INTERVAL_MS: (() => {
+    const raw = process.env.PERSONA_AB_RECOMPUTE_INTERVAL_MS;
+    const n = raw === undefined || raw === "" ? 86400000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(60000, Math.floor(n)) : 86400000;
+  })(),
+  /**
+   * Future: score = (1-b)*success_rate + b*intent_rate. Default false = success_rate only.
+   * @type {boolean}
+   */
+  PERSONA_AB_USE_BLENDED_SCORE:
+    String(process.env.PERSONA_AB_USE_BLENDED_SCORE || "")
+      .trim()
+      .toLowerCase() === "true",
+  /** When blended score is on: weight of intent_rate (0–1). Default 0.3. */
+  PERSONA_AB_BLENDED_INTENT_WEIGHT: (() => {
+    const raw = process.env.PERSONA_AB_BLENDED_INTENT_WEIGHT;
+    const n = raw === undefined || raw === "" ? 0.3 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.3;
+  })(),
+  /**
+   * Rolling window (ms) for funnel dedupe when `paymentId` is absent (paywall / intent without row).
+   * Default 10 minutes.
+   */
+  PERSONA_FUNNEL_DEDUPE_WINDOW_MS: (() => {
+    const raw = process.env.PERSONA_FUNNEL_DEDUPE_WINDOW_MS;
+    const n = raw === undefined || raw === "" ? 600000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(60_000, Math.floor(n)) : 600000;
+  })(),
+  /**
+   * TTL (ms) for in-memory dedupe keys scoped with `paymentId` (payment session).
+   * Default 48 hours.
+   */
+  PERSONA_FUNNEL_DEDUPE_PAYMENT_TTL_MS: (() => {
+    const raw = process.env.PERSONA_FUNNEL_DEDUPE_PAYMENT_TTL_MS;
+    const n = raw === undefined || raw === "" ? 172800000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(60_000, Math.floor(n)) : 172800000;
+  })(),
+  /** Rolling calendar days for funnel stats used in recompute (server local date). */
+  PERSONA_AB_STATS_WINDOW_DAYS: (() => {
+    const raw = process.env.PERSONA_AB_STATS_WINDOW_DAYS;
+    const n = raw === undefined || raw === "" ? 14 : Number(raw);
+    return Number.isFinite(n) ? Math.min(365, Math.max(1, Math.floor(n))) : 14;
+  })(),
+  /**
+   * How daily buckets are weighted: `uniform` | `linear` | `exp` (recent days heavier).
+   */
+  PERSONA_AB_STATS_WEIGHT_MODE: (process.env.PERSONA_AB_STATS_WEIGHT_MODE || "uniform")
+    .trim()
+    .toLowerCase(),
+  /** When WEIGHT_MODE=exp: growth per day step (oldest→newest). */
+  PERSONA_AB_STATS_EXP_LAMBDA: (() => {
+    const raw = process.env.PERSONA_AB_STATS_EXP_LAMBDA;
+    const n = raw === undefined || raw === "" ? 0.35 : Number(raw);
+    return Number.isFinite(n) ? Math.min(3, Math.max(0.01, n)) : 0.35;
+  })(),
+  /** Bayesian smoothing for success (and intent when blended): (success + α) / (paywall + β). */
+  PERSONA_AB_BAYES_ALPHA: (() => {
+    const raw = process.env.PERSONA_AB_BAYES_ALPHA;
+    const n = raw === undefined || raw === "" ? 1 : Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : 1;
+  })(),
+  PERSONA_AB_BAYES_BETA: (() => {
+    const raw = process.env.PERSONA_AB_BAYES_BETA;
+    const n = raw === undefined || raw === "" ? 1 : Number(raw);
+    return Number.isFinite(n) ? Math.max(1e-9, n) : 1;
+  })(),
+  /** Hybrid AI rephrasing for non-scan persona copy only (routing/state/payment remain deterministic). */
+  HYBRID_PERSONA_ENABLED:
+    String(process.env.HYBRID_PERSONA_ENABLED || "").trim().toLowerCase() ===
+    "true",
+  /** Comma-separated reply types allowed for hybrid AI rollout. */
+  HYBRID_PERSONA_ALLOWED_TYPES:
+    process.env.HYBRID_PERSONA_ALLOWED_TYPES ||
+    "waiting_birthdate_guidance,pending_verify,paywall",
+  /** Small/fast model for short Thai chat rephrase JSON output. */
+  HYBRID_PERSONA_MODEL:
+    String(process.env.HYBRID_PERSONA_MODEL || "").trim() || "gpt-4.1-mini",
+  /** Timeout for hybrid AI call (ms). */
+  HYBRID_PERSONA_TIMEOUT_MS: (() => {
+    const raw = process.env.HYBRID_PERSONA_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 2500 : Number(raw);
+    return Number.isFinite(n) ? Math.max(300, Math.floor(n)) : 2500;
+  })(),
 };

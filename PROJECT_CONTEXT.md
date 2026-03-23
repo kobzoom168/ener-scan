@@ -9,6 +9,16 @@
 ## Architecture
 - routes -> handlers -> services -> stores
 
+## Two copy layers (do not mix)
+
+| Layer | Scope | Role |
+|--------|--------|------|
+| **1. Scan copy system** | Scan result only | Wording, structure, and meaning of the **deep-scan output** delivered as LINE Flex (and text fallback). Prompts, formatter, `scanCopy.*`, Flex parse/display. |
+| **2. Chat persona system (Ajarn Ener)** | **Non-scan only** | Conversational LINE replies: birthdate prompts, guidance, payment/slip tone, idle/help paths, etc. Human-like, non-repetitive, pattern + slot pools. **Does not** change scan result text or Flex rendering. |
+
+- **Scan copy:** `src/prompts/deepScan*.prompt.js`, `src/services/flex/`, `scanCopy.generator.js`, `formatter.service.js`, `replyScanResult` in `scanFlow.handler.js`.
+- **Chat persona:** `src/config/personaEner.th.js`, `src/utils/replyPersona.util.js`, `src/utils/replyCopy.util.js` (wiring), `lineWebhook.js` + sequence helpers (`lineSequenceReply.service.js`). See `docs/AJARN_ENER_PERSONA.md`.
+
 ## Main Flow
 1. user sends image
 2. runtime guard (burst / multi-image)
@@ -40,7 +50,8 @@
 - multi-image protection
 
 ## Copy / voice
-- **Ener System Tone Guide:** `docs/ENER_SYSTEM_TONE_GUIDE.md` — single intentional voice (Thai, clear, warm, grounded). Template copy lives in `src/services/flex/scanCopy.config.js` (assembled by `scanCopy.generator.js` + `scanCopy.utils.js`); UI fallbacks (`flex.components.js`, `flex.utils.js`); model prompts under `src/prompts/`.
+- **Split:** Scan result voice follows the **scan copy system** (above). Chat / onboarding / payment chat lines follow **Ajarn Ener** (`personaEner.th.js` + `replyPersona.util.js`) — see **Two copy layers**.
+- **Ener System Tone Guide:** `docs/ENER_SYSTEM_TONE_GUIDE.md` — single intentional voice for **scan output** (Thai, clear, warm, grounded). Template copy lives in `src/services/flex/scanCopy.config.js` (assembled by `scanCopy.generator.js` + `scanCopy.utils.js`); UI fallbacks (`flex.components.js`, `flex.utils.js`); model prompts under `src/prompts/`.
 - **Age-tone (v1, deterministic):** `ageTone.util.js` (birthdate → band → preset) + `scanCopy.retentionTone.js` (dictionaries). Affects only short retention fields in `scanCopy.retention` (`energyNickname`, `retentionHook`, `nextScanCta`); passed via `buildScanFlex(rawText, { birthdate })` from `runScanFlow`. No age shown to users; invalid/missing birthdate → **warm** preset.
 - **`SCAN_COPY_CONFIG_VERSION`** (`scanCopy.config.js`): bump when Flex template copy changes materially; appears in `[FLEX_PARSE]` as `scanCopyConfigVersion`. Separate from **`SCAN_CACHE_PROMPT_VERSION`** (LLM prompt / model output).
 

@@ -6,17 +6,10 @@ import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
 import { replyText, replyFlex, replyPaymentInstructions } from "../services/lineReply.service.js";
+import { sendTextSequence } from "../services/lineSequenceReply.service.js";
 import { buildScanFlex } from "../services/flex/flex.service.js";
 
-import {
-  buildUnsupportedObjectFlex,
-  buildMultipleObjectsFlex,
-  buildUnclearImageFlex,
-  buildRateLimitFlex,
-  buildCooldownFlex,
-  buildPaymentRequiredFlex,
-  buildBirthdateSettingsBubble,
-} from "../services/flex/status.flex.js";
+import { buildBirthdateSettingsBubble } from "../services/flex/status.flex.js";
 
 import { checkScanRateLimit } from "../stores/rateLimit.store.js";
 import {
@@ -57,6 +50,7 @@ import {
   buildPaymentQrSlipText,
   buildPaymentInstructionText,
 } from "../utils/webhookText.util.js";
+import { paywallMessageSequence } from "../utils/replyCopy.util.js";
 import {
   getPromptPayQrPublicUrl,
   isPromptPayQrUrlHttpsForLine,
@@ -71,11 +65,35 @@ import { createScanResult } from "../stores/scanResults.db.js";
 import { createPaymentPending } from "../stores/payments.db.js";
 import { getSavedBirthdate } from "../stores/userProfile.db.js";
 
+import { logPaywallShown, logEvent } from "../utils/personaAnalytics.util.js";
+import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
+
+async function sendPaymentGateTextReply({ client, replyToken, userId, reply }) {
+  const fallbackText =
+    reply?.fallbackText || (await buildPaymentRequiredText({ userId }));
+
+  if (!userId) {
+    await replyText(client, replyToken, fallbackText);
+    return;
+  }
+
+  const msgs = await paywallMessageSequence(userId);
+  if (msgs.length > 1) {
+    await sendTextSequence({ client, replyToken, userId, messages: msgs });
+  } else if (msgs.length === 1) {
+    await replyText(client, replyToken, msgs[0]);
+  } else {
+    await replyText(client, replyToken, fallbackText);
+  }
+}
+
 async function replyPaymentQrTripleOrFallback({
   client,
   replyToken,
+  userId = null,
   amountForFallback = 99,
   paymentRef = null,
+  paymentId = null,
 }) {
   const qrUrl = getPromptPayQrPublicUrl();
   if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
@@ -84,29 +102,28 @@ async function replyPaymentQrTripleOrFallback({
       qrImageUrl: qrUrl,
       slipText: buildPaymentQrSlipText(),
     });
+    if (userId) {
+      await logPaywallShown(userId, {
+        patternUsed: "qr_intro_image_slip",
+        bubbleCount: 3,
+        source: "scan_flow_qr",
+        ...(paymentId ? { paymentId } : {}),
+      });
+    }
   } else {
     await replyText(
       client,
       replyToken,
       buildPaymentInstructionText({ amount: amountForFallback, paymentRef }),
     );
-  }
-}
-
-export async function replyFlexWithFallback({
-  client,
-  replyToken,
-  flex,
-  fallbackText,
-  logLabel = "status flex",
-}) {
-  try {
-    await replyFlex(client, replyToken, flex);
-    console.log(`[WEBHOOK] ${logLabel} sent as flex`);
-  } catch (error) {
-    console.error(`[WEBHOOK] ${logLabel} failed:`, error);
-    await replyText(client, replyToken, fallbackText);
-    console.log(`[WEBHOOK] ${logLabel} fallback sent as text`);
+    if (userId) {
+      await logPaywallShown(userId, {
+        patternUsed: "qr_text_fallback",
+        bubbleCount: 1,
+        source: "scan_flow_qr_text_fallback",
+        ...(paymentId ? { paymentId } : {}),
+      });
+    }
   }
 }
 
@@ -190,13 +207,11 @@ export async function runScanFlow({
   const rate = checkScanRateLimit(userId);
 
   if (!rate.allowed) {
-    await replyFlexWithFallback({
+    await replyText(
       client,
       replyToken,
-      flex: buildRateLimitFlex(rate.retryAfterSec),
-      fallbackText: buildRateLimitText(rate.retryAfterSec),
-      logLabel: "rate limit flex",
-    });
+      buildRateLimitText(rate.retryAfterSec)
+    );
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
@@ -204,13 +219,11 @@ export async function runScanFlow({
   const cooldown = getCooldownStatus(userId);
 
   if (!cooldown.allowed) {
-    await replyFlexWithFallback({
+    await replyText(
       client,
       replyToken,
-      flex: buildCooldownFlex(cooldown.remainingSec),
-      fallbackText: buildCooldownText(cooldown.remainingSec),
-      logLabel: "cooldown flex",
-    });
+      buildCooldownText(cooldown.remainingSec)
+    );
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
   }
@@ -229,7 +242,7 @@ export async function runScanFlow({
     accessSource = access?.reason || null;
 
     if (!access.allowed) {
-      const reply = buildPaymentGateReply({ decision: access });
+      const reply = await buildPaymentGateReply({ decision: access, userId });
 
       if (access?.reason === "payment_required") {
         try {
@@ -237,7 +250,7 @@ export async function runScanFlow({
           const MVP_CURRENCY = "THB";
 
           const appUser = await ensureUserByLineUserId(userId);
-          const { paymentRef } = await createPaymentPending({
+          const { paymentRef, paymentId } = await createPaymentPending({
             appUserId: appUser.id,
             amount: MVP_PRICE_THB,
             currency: MVP_CURRENCY,
@@ -246,25 +259,25 @@ export async function runScanFlow({
           await replyPaymentQrTripleOrFallback({
             client,
             replyToken,
+            userId,
             amountForFallback: MVP_PRICE_THB,
             paymentRef,
+            paymentId,
           });
         } catch (err) {
-          await replyFlexWithFallback({
+          await sendPaymentGateTextReply({
             client,
             replyToken,
-            flex: reply.flex || buildPaymentRequiredFlex(),
-            fallbackText: reply.fallbackText || buildPaymentRequiredText(),
-            logLabel: "payment required flex",
+            userId,
+            reply,
           });
         }
       } else {
-        await replyFlexWithFallback({
+        await sendPaymentGateTextReply({
           client,
           replyToken,
-          flex: reply.flex || buildPaymentRequiredFlex(),
-          fallbackText: reply.fallbackText || buildPaymentRequiredText(),
-          logLabel: "payment required flex",
+          userId,
+          reply,
         });
       }
 
@@ -283,7 +296,7 @@ export async function runScanFlow({
           const MVP_CURRENCY = "THB";
 
           const appUser = await ensureUserByLineUserId(userId);
-          const { paymentRef } = await createPaymentPending({
+          const { paymentRef, paymentId } = await createPaymentPending({
             appUserId: appUser.id,
             amount: MVP_PRICE_THB,
             currency: MVP_CURRENCY,
@@ -292,8 +305,10 @@ export async function runScanFlow({
           await replyPaymentQrTripleOrFallback({
             client,
             replyToken,
+            userId,
             amountForFallback: MVP_PRICE_THB,
             paymentRef,
+            paymentId,
           });
         } catch (err) {
           await replyText(
@@ -301,6 +316,11 @@ export async function runScanFlow({
             replyToken,
             buildPaymentInstructionText({ amount: 99, currency: "THB" }),
           );
+          await logPaywallShown(userId, {
+            patternUsed: "qr_text_fallback",
+            bubbleCount: 1,
+            source: "scan_flow_paid_limit_catch",
+          });
         }
         return;
       }
@@ -319,10 +339,10 @@ export async function runScanFlow({
 
         paidLimitWarningText =
           remainingPaid === 3
-            ? "หมายเหตุ: คุณเหลือสิทธิ์สแกนตามแพ็กเกจอีก 3 ครั้ง (ภายในรอบ 24 ชั่วโมง)"
+            ? "หมายเหตุ: เหลือสิทธิ์สแกนตามแพ็กเกจอีก 3 ครั้ง (ในรอบ 24 ชม.)"
             : remainingPaid === 2
-              ? "หมายเหตุ: คุณเหลือสิทธิ์สแกนตามแพ็กเกจอีก 2 ครั้ง (ภายในรอบ 24 ชั่วโมง)"
-              : "หมายเหตุ: คุณเหลือสิทธิ์สแกนตามแพ็กเกจอีก 1 ครั้ง (ภายในรอบ 24 ชั่วโมง)";
+              ? "หมายเหตุ: เหลือสิทธิ์สแกนตามแพ็กเกจอีก 2 ครั้ง (ในรอบ 24 ชม.)"
+              : "หมายเหตุ: เหลือสิทธิ์สแกนตามแพ็กเกจอีก 1 ครั้ง (ในรอบ 24 ชม.)";
       }
     }
   } catch (error) {
@@ -344,7 +364,7 @@ export async function runScanFlow({
     await replyText(
       client,
       replyToken,
-      "ขออภัยครับ ระบบตรวจสอบสิทธิ์ใช้งานขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งครับ"
+      "ขออภัยครับ ตรวจสิทธิ์ไม่สำเร็จชั่วคราว ลองใหม่อีกครั้งได้เลยครับ"
     );
 
     clearSessionIfFlowVersionMatches(userId, flowVersion);
@@ -399,7 +419,7 @@ export async function runScanFlow({
         await replyText(
           client,
           replyToken,
-          "ขออภัยครับ ระบบเตรียมการสแกนไม่สำเร็จ กรุณาลองส่งรูปใหม่อีกครั้งในอีกสักครู่ครับ"
+          "ขออภัยครับ เตรียมการสแกนไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งในอีกสักครู่นะครับ"
         );
         clearSessionIfFlowVersionMatches(userId, flowVersion);
         return;
@@ -420,7 +440,7 @@ export async function runScanFlow({
     await replyText(
       client,
       replyToken,
-      "ขออภัยครับ ระบบเตรียมการสแกนไม่สำเร็จ กรุณาลองส่งรูปใหม่อีกครั้งครับ"
+      "ขออภัยครับ เตรียมการสแกนไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
     );
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
@@ -532,37 +552,19 @@ export async function runScanFlow({
     clearLatestScanJob(userId, scanJobId);
 
     if (err.message === "multiple_objects_detected") {
-      await replyFlexWithFallback({
-        client,
-        replyToken,
-        flex: buildMultipleObjectsFlex(),
-        fallbackText: buildMultipleObjectsText(),
-        logLabel: "multiple objects flex",
-      });
+      await replyText(client, replyToken, buildMultipleObjectsText());
       clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
 
     if (err.message === "image_unclear") {
-      await replyFlexWithFallback({
-        client,
-        replyToken,
-        flex: buildUnclearImageFlex(),
-        fallbackText: buildUnclearImageText(),
-        logLabel: "unclear image flex",
-      });
+      await replyText(client, replyToken, buildUnclearImageText());
       clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
 
     if (err.message === "unsupported_object_type") {
-      await replyFlexWithFallback({
-        client,
-        replyToken,
-        flex: buildUnsupportedObjectFlex(),
-        fallbackText: buildUnsupportedObjectText(),
-        logLabel: "unsupported object flex",
-      });
+      await replyText(client, replyToken, buildUnsupportedObjectText());
       clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
@@ -570,7 +572,7 @@ export async function runScanFlow({
     await replyText(
       client,
       replyToken,
-      "ขออภัยครับ ระบบวิเคราะห์ยังไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
+      "ขออภัยครับ วิเคราะห์ยังไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
     );
 
     clearSessionIfFlowVersionMatches(userId, flowVersion);
@@ -672,7 +674,7 @@ export async function runScanFlow({
     await replyText(
       client,
       replyToken,
-      "ขออภัยครับ ระบบบันทึกผลลัพธ์ไม่สำเร็จ กรุณาลองส่งรูปใหม่อีกครั้งครับ"
+      "ขออภัยครับ บันทึกผลไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งได้เลยครับ"
     );
     clearSessionIfFlowVersionMatches(userId, flowVersion);
     return;
@@ -742,6 +744,15 @@ export async function runScanFlow({
     resultText: replyResultText,
     birthdate,
   });
+
+  if (accessSource === "free") {
+    logEvent("preview_shown", {
+      userId,
+      personaVariant: await getAssignedPersonaVariant(userId),
+      patternUsed: "scan_result_flex",
+      bubbleCount: 1,
+    });
+  }
 
   clearLatestScanJob(userId, scanJobId);
   clearSessionIfFlowVersionMatches(userId, flowVersion);

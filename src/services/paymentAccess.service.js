@@ -3,7 +3,6 @@ import {
   countScanResultsTodayForAppUser,
   getLocalDateKey,
 } from "../stores/paymentAccess.db.js";
-import { buildPaymentRequiredFlex } from "./flex/status.flex.js";
 import { buildPaymentRequiredText } from "../utils/webhookText.util.js";
 import { supabase } from "../config/supabase.js";
 
@@ -186,15 +185,13 @@ export async function checkScanAccess({ userId, now = new Date() }) {
   };
 }
 
-export function buildPaymentGateReply({ decision }) {
+/** Text-only paywall reply (LINE Flex reserved for final scan result). */
+export async function buildPaymentGateReply({ decision, userId = null }) {
   return {
-    flex: buildPaymentRequiredFlex({
+    fallbackText: await buildPaymentRequiredText({
       usedScans: decision?.usedScans ?? FREE_SCANS_LIMIT,
       freeLimit: decision?.freeScansLimit ?? FREE_SCANS_LIMIT,
-    }),
-    fallbackText: buildPaymentRequiredText({
-      usedScans: decision?.usedScans ?? FREE_SCANS_LIMIT,
-      freeLimit: decision?.freeScansLimit ?? FREE_SCANS_LIMIT,
+      userId,
     }),
   };
 }

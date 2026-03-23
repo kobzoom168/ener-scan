@@ -1,54 +1,38 @@
-function normalizeBirthdateText(text) {
-  return String(text || "")
-    .trim()
-    .replace(/\s+/g, "")
-    .replace(/[.]/g, "/")
-    .replace(/-/g, "/");
-}
+import { parseBirthdateInput, looksLikeBirthdateInput } from "./birthdateParse.util.js";
+import {
+  waitingBirthdateInitial,
+  waitingBirthdateGuidance,
+  waitingBirthdateInitialMessages,
+  waitingBirthdateGuidanceMessages,
+  waitingBirthdateInvalidFormat,
+  waitingBirthdateImageReminder,
+  waitingBirthdateImageReminderMessages,
+  birthdateErrorMessages,
+  paywallText,
+  awaitingSlipReminderText,
+  pendingVerifyReminderText,
+  pendingVerifyBlockScanText,
+  pendingVerifyPaymentAgainText,
+  approvedIntroLine,
+} from "./replyCopy.util.js";
 
-function isLeapYear(year) {
-  return year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
-}
+/** Backward-compatible alias for `looksLikeBirthdateInput`. */
+export { looksLikeBirthdateInput as isBirthdateLikeInput };
 
-function getDaysInMonth(month, year) {
-  const monthDays = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return monthDays[month - 1] || 0;
-}
+/** @deprecated use `isLeapYear` from `birthdateParse.util.js` */
+export { isLeapYear, daysInMonth } from "./birthdateParse.util.js";
 
 export function isValidBirthdate(text) {
-  const normalized = normalizeBirthdateText(text);
-  const match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-
-  if (!match) return false;
-
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-
-  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) {
-    return false;
-  }
-
-  if (year < 1900 || year > 2100) return false;
-  if (month < 1 || month > 12) return false;
-
-  const maxDay = getDaysInMonth(month, year);
-  if (day < 1 || day > maxDay) return false;
-
-  return true;
+  return parseBirthdateInput(text).ok === true;
 }
 
+/**
+ * Normalizes a valid birthdate to DD/MM/YYYY (CE). If parsing fails, returns trimmed input (legacy behavior).
+ */
 export function normalizeBirthdateForScan(text) {
-  const normalized = normalizeBirthdateText(text);
-  const match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-
-  if (!match) return normalized;
-
-  const day = String(Number(match[1])).padStart(2, "0");
-  const month = String(Number(match[2])).padStart(2, "0");
-  const year = match[3];
-
-  return `${day}/${month}/${year}`;
+  const parsed = parseBirthdateInput(text);
+  if (parsed.ok) return parsed.normalizedDisplay;
+  return String(text || "").trim();
 }
 
 export function toBase64(buffer) {
@@ -113,23 +97,29 @@ export function formatHistory(history) {
     .join("\n");
 }
 
-export function buildStartInstructionText() {
-  return [
-    "ได้รับภาพที่ผ่านเงื่อนไขแล้วครับ ✨",
-    "",
-    "รบกวนพิมพ์วันเกิดของเจ้าของวัตถุ เช่น",
-    "14/09/1995",
-  ].join("\n");
+/** @param {string} userId LINE user id (pattern-based copy). */
+export async function buildStartInstructionText(userId) {
+  return waitingBirthdateInitial(userId);
+}
+
+/** 1–3 short messages; last includes birthdate example (for reply + push sequence). */
+export async function buildStartInstructionMessages(userId) {
+  return waitingBirthdateInitialMessages(userId);
+}
+
+/** 1–3 short messages; last includes birthdate example. */
+export async function buildWaitingBirthdateGuidanceMessages(userId) {
+  return waitingBirthdateGuidanceMessages(userId);
 }
 
 export function buildMultiImageInRequestText() {
   return [
     "🔍 Ener Scan",
     "",
-    "ระบบพบว่าคุณส่งมาหลายรูปพร้อมกัน",
-    "กรุณาส่งเพียง 1 รูปต่อ 1 ครั้ง",
+    "ตอนนี้ส่งมาหลายรูปพร้อมกันนะ",
+    "ขอทีละรูปพอ — 1 รูปต่อครั้ง",
     "",
-    "หากมีหลายชิ้น กรุณาแยกส่งทีละรูปแล้วค่อยสแกนใหม่ครับ",
+    "ถ้ามีหลายชิ้น แยกส่งมาได้เลยครับ",
   ].join("\n");
 }
 
@@ -137,8 +127,8 @@ export function buildMultipleObjectsText() {
   return [
     "🔍 Ener Scan",
     "",
-    "ระบบพบว่าวัตถุในภาพมีมากกว่า 1 ชิ้น",
-    "กรุณาถ่ายวัตถุเพียง 1 ชิ้นต่อ 1 รูป",
+    "ในภาพมีมากกว่า 1 ชิ้นนะ",
+    "ขอถ่ายวัตถุชิ้นเดียวต่อรูป",
     "",
     "แล้วส่งมาใหม่อีกครั้งครับ",
   ].join("\n");
@@ -146,23 +136,23 @@ export function buildMultipleObjectsText() {
 
 export function buildUnclearImageText() {
   return [
-    "ภาพยังไม่ชัดเจนพอสำหรับการวิเคราะห์",
+    "ภาพยังไม่ค่อยชัดนะ",
     "ลองถ่ายใหม่ให้เห็นวัตถุชัด ๆ",
-    "และให้มีเพียง 1 ชิ้นต่อ 1 รูปครับ",
+    "ทีละชิ้นต่อรูปครับ",
   ].join("\n");
 }
 
 export function buildUnsupportedObjectText() {
   return [
-    "Ener Scan ยังไม่รองรับภาพประเภทนี้ครับ",
+    "ประเภทนี้ผมยังไม่รับนะครับ",
     "",
-    "ระบบรองรับเฉพาะ",
+    "พอรับได้ตอนนี้ เช่น",
     "• พระเครื่อง",
     "• เครื่องราง",
     "• คริสตัล / หิน",
-    "• วัตถุสายพลังแบบชิ้นเดี่ยว",
+    "• วัตถุสายพลังแบบชิ้นเดียว",
     "",
-    "กรุณาส่งภาพใหม่ที่ตรงประเภทอีกครั้งครับ",
+    "ลองส่งภาพใหม่ที่ตรงแบบนี้ได้เลยครับ",
   ].join("\n");
 }
 
@@ -179,10 +169,10 @@ export function buildRateLimitText(retryAfterSec = 0) {
   return [
     "🔍 Ener Scan",
     "",
-    "ระบบมีการใช้งานต่อเนื่อง",
+    "ใช้งานถี่ไปนิดนึง",
     retryAfterSec > 0
-      ? `กรุณารออีก ${retryAfterSec} วินาทีก่อนสแกนใหม่`
-      : "กรุณารอสักครู่ก่อนสแกนใหม่",
+      ? `ขอรออีก ${retryAfterSec} วินาที แล้วค่อยสแกนใหม่ครับ`
+      : "ขอรอสักครู่ แล้วค่อยสแกนใหม่ครับ",
   ].join("\n");
 }
 
@@ -215,16 +205,16 @@ export function buildPaymentQrIntroText({ paymentRef } = {}) {
   const base = [
     "🔒 สิทธิ์สแกนฟรีของคุณครบแล้วครับ",
     "",
-    "หากต้องการสแกนต่อ",
+    "จะสแกนต่อได้แบบนี้",
     "แพ็กเกจนี้ราคา 99 บาท",
-    "ใช้งานได้ 10 ครั้ง (ภายใน 24 ชม. หลังอนุมัติ)",
+    "ใช้ได้ 10 ครั้ง (ภายใน 24 ชม. หลังอนุมัติ)",
     "",
-    "วิธีชำระ:",
-    "1. สแกน QR ที่ส่งด้านล่าง",
+    "ทำตามนี้ได้เลย",
+    "1. สแกน QR ด้านล่าง",
     "2. โอนแล้วส่งสลิปในแชตนี้",
-    "3. เดี๋ยวเราตรวจสอบและเปิดสิทธิ์ให้ครับ",
+    "3. เดี๋ยวมีคนตรวจแล้วเปิดสิทธิ์ให้",
     "",
-    "พออนุมัติแล้ว จะมีข้อความแจ้งกลับในแชตนี้อัตโนมัติ",
+    "พออนุมัติแล้ว จะมีข้อความแจ้งในแชตนี้ให้ครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -233,10 +223,19 @@ export function buildPaymentQrSlipText() {
   return "โอนแล้วส่งสลิปในแชตนี้ได้เลยครับ";
 }
 
-export function buildPaymentRequiredText({ usedScans = 0, freeLimit = 3 } = {}) {
+/**
+ * @param {{ usedScans?: number, freeLimit?: number, userId?: string }} opts
+ * `userId` enables non-repetitive paywall wording; limits unchanged at gate.
+ */
+export async function buildPaymentRequiredText({
+  usedScans = 0,
+  freeLimit = 3,
+  userId = null,
+} = {}) {
+  void usedScans;
+  void freeLimit;
+  if (userId) return paywallText(userId);
   return [
-    "🔍 Ener Scan",
-    "",
     "สิทธิ์สแกนฟรีของคุณครบแล้วครับ",
     "",
     "พิมพ์ payment เพื่อดู QR และวิธีชำระเงินได้เลยครับ",
@@ -252,17 +251,79 @@ export function buildNoStatsText() {
 }
 
 export function buildIdleText() {
-  return "ส่งรูปวัตถุมาได้เลยครับ\nกรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป";
+  return "ส่งรูปวัตถุมาได้เลยครับ\nถ่ายทีละชิ้นต่อรูปนะ";
 }
 
-export function buildInvalidBirthdateText() {
-  return ["รูปแบบวันเกิดยังไม่ถูกครับ", "ลองพิมพ์แบบ", "14/09/1995"].join(
-    "\n"
+export async function buildInvalidBirthdateText(userId) {
+  return waitingBirthdateInvalidFormat(userId);
+}
+
+/** User is expected to type birthdate next (after image accepted). */
+export async function buildWaitingBirthdateGuidanceText(userId) {
+  return waitingBirthdateGuidance(userId);
+}
+
+/** Second image while still waiting for birthdate (do not start a new scan). */
+export async function buildWaitingBirthdateImageReminderText(userId) {
+  return waitingBirthdateImageReminder(userId);
+}
+
+/** 1–3 persona bubbles for second-image reminder. */
+export async function buildWaitingBirthdateImageReminderMessages(userId) {
+  return waitingBirthdateImageReminderMessages(userId);
+}
+
+/** Persona bubbles for birthdate validation errors (`invalid_format` | `invalid_date` | `out_of_range`). */
+export async function buildBirthdateErrorMessages(userId, reason) {
+  return birthdateErrorMessages(userId, reason);
+}
+
+export function isMainMenuAlias(text, lowerText) {
+  const t = String(text || "").trim();
+  const lt = String(lowerText || t.toLowerCase()).trim();
+  const menuAliases = new Set([
+    "เมนู",
+    "เมนูหลัก",
+    "menu",
+    "help",
+    "start",
+    "เริ่ม",
+    "วิธีใช้งาน",
+    "วิธีใช้",
+  ]);
+  return menuAliases.has(t) || menuAliases.has(lt);
+}
+
+export function isScanIntentLikeText(text, lowerText) {
+  const t = String(text || "").trim();
+  const lt = String(lowerText || t.toLowerCase()).trim();
+  if (lt === "สแกนพลังงาน") return true;
+  return /สแกน|อ่านพลัง|ดูให้หน่อย|ดูพลัง|อ่านให้|scan/i.test(t);
+}
+
+/** Keywords that must not steal routing while waiting for birthdate. */
+export function isBlockedIntentDuringWaitingBirthdate(text, lowerText) {
+  return (
+    isPaymentCommand(text, lowerText) ||
+    isHistoryCommand(text, lowerText) ||
+    isStatsCommand(text, lowerText) ||
+    isMainMenuAlias(text, lowerText) ||
+    isScanIntentLikeText(text, lowerText)
   );
 }
 
+/** Payment / slip in progress (text guard when not utility command). */
+export function buildPaymentFlowLockedGuidanceText() {
+  return [
+    "ตอนนี้รายการนี้อยู่ระหว่างการชำระเงิน / ตรวจสอบสลิปครับ",
+    "",
+    "หากโอนแล้ว สามารถส่งสลิปในแชตนี้ได้เลย",
+    "เราจะตรวจให้ก่อนเปิดสิทธิ์สแกนครับ",
+  ].join("\n");
+}
+
 export function buildSystemErrorText() {
-  return "ขออภัยครับ ระบบขัดข้องชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ";
+  return "ขออภัยครับ ติดขัดชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ";
 }
 
 export function isPaymentCommand(text, lowerText) {
@@ -285,14 +346,14 @@ export function buildPaymentCommandIntroText({ amount = DEFAULT_PAYMENT_THB } = 
   return [
     "💳 วิธีชำระเงิน (พร้อมเพย์ + สลิป)",
     "",
-    `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ — แอดมินจะตรวจก่อนเปิดสิทธิ์`,
-    "หลังอนุมัติสลิปแล้ว จึงจะได้สิทธิ์สแกนตามแพ็กเกจ (เช่น 10 ครั้ง / 24 ชม.)",
+    `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ — แอดมินตรวจก่อนเปิดสิทธิ์`,
+    "พออนุมัติแล้ว จะได้สิทธิ์สแกนตามแพ็กเกจ (เช่น 10 ครั้ง / 24 ชม.)",
   ].join("\n");
 }
 
 /** ข้อความสั้นหลังรูป QR — ให้ส่งสลิปกลับมา */
 export function buildPaymentSlipFollowUpText() {
-  return "📎 หลังโอนแล้ว ส่งรูปสลิปในแชทนี้เพื่อให้แอดมินตรวจครับ";
+  return "📎 โอนแล้วส่งรูปสลิปในแชทนี้ เดี๋ยวแอดมินตรวจให้ครับ";
 }
 
 /** ข้อความเดียว (fallback เมื่อส่งรูป QR ไม่ได้ / LINE error) — ไม่ใส่ลิงก์ QR */
@@ -325,37 +386,31 @@ export function buildManualPaymentRequestText({ paymentRef } = {}) {
 /** slip image accepted: now waiting for admin verification. */
 export function buildSlipReceivedText({ paymentRef } = {}) {
   const base = [
-    "✅ ได้รับสลิปของคุณแล้วครับ",
+    "✅ รับสลิปแล้วครับ",
     "",
-    "ตอนนี้กำลังรอตรวจสอบรายการ",
-    "ยังไม่ต้องส่งสลิปซ้ำก็ได้ครับ",
+    "กำลังรอตรวจสอบ",
+    "ยังไม่ต้องส่งซ้ำนะ",
     "",
-    "ระหว่างนี้ยังสแกนต่อไม่ได้",
-    "พออนุมัติแล้ว เดี๋ยวแจ้งกลับในแชตนี้ให้อัตโนมัติครับ",
+    "ตอนนี้ยังสแกนต่อไม่ได้",
+    "พออนุมัติแล้ว เดี๋ยวแจ้งในแชตนี้ให้ครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
 
 /** User typed non-command text while payment row is pending_verify (reduce repeat nudges). */
 export function buildPendingVerifyReminderText({ paymentRef } = {}) {
-  const base = [
-    "⏳ สลิปของคุณกำลังรอตรวจสอบอยู่ครับ",
-    "",
-    "ไม่ต้องส่งสลิปซ้ำหากส่งครบแล้ว",
-    "ตอนนี้ยังสแกนต่อไม่ได้ — รอผลอีกสักครู่นะครับ",
-    "พออนุมัติแล้ว เดี๋ยวแจ้งกลับในแชตนี้ให้ครับ",
-  ].join("\n");
+  const base = buildPaymentFlowLockedGuidanceText();
   return appendPaymentRefLine(base, paymentRef);
 }
 
 /** User sent another image while slip is already pending_verify (block scan / duplicate slip). */
 export function buildPendingVerifyBlockScanText({ paymentRef } = {}) {
   const base = [
-    "เราได้รับสลิปของคุณแล้วครับ",
-    "ตอนนี้กำลังรอตรวจสอบรายการอยู่",
+    "รับสลิปแล้วครับ",
+    "กำลังรอตรวจอยู่",
     "",
-    "ระหว่างนี้ยังสแกนต่อไม่ได้",
-    "พออนุมัติแล้ว เดี๋ยวแจ้งในแชตนี้ทันทีครับ",
+    "ตอนนี้ยังสแกนต่อไม่ได้",
+    "พออนุมัติแล้ว เดี๋ยวแจ้งในแชตนี้ให้ครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -366,7 +421,7 @@ export function buildPendingVerifyPaymentCommandText({ paymentRef } = {}) {
     "ตอนนี้มีสลิปรอตรวจอยู่แล้วครับ",
     "",
     "ไม่ต้องพิมพ์ payment ซ้ำในตอนนี้",
-    "รอผลตรวจก่อนนะครับ — เมื่ออนุมัติหรือปฏิเสธ จะแจ้งกลับในแชตนี้ให้ครับ",
+    "รอผลตรวจก่อนนะ — อนุมัติหรือปฏิเสธ เดี๋ยวแจ้งในแชตนี้ให้ครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -384,12 +439,13 @@ export function buildPendingVerifyPaymentCommandText({ paymentRef } = {}) {
  *   paymentRef?: string | null,
  * }} [opts]
  */
-export function buildPaymentApprovedText({
+export async function buildPaymentApprovedText({
   paidRemainingScans = null,
   paidUntil = null,
   paidRemainingLine = "",
   paidUntilLine = "",
   paymentRef = null,
+  lineUserId = null,
 } = {}) {
   const scansNum =
     paidRemainingScans != null && paidRemainingScans !== ""
@@ -431,7 +487,9 @@ export function buildPaymentApprovedText({
   }
 
   const lines = [
-    "✅ แอดมินอนุมัติสลิปแล้ว ระบบเปิดสิทธิ์ให้แล้วครับ",
+    lineUserId
+      ? await approvedIntroLine(lineUserId)
+      : "แอดมินอนุมัติสลิปแล้ว ระบบเปิดสิทธิ์ให้แล้วครับ",
   ];
   const refLine = formatPaymentRefLine(paymentRef);
   if (refLine) lines.push("", refLine);
@@ -440,7 +498,7 @@ export function buildPaymentApprovedText({
     scanLine,
     untilLine,
     "",
-    "กรุณาส่งรูปเพื่อสแกนต่อได้ครับ",
+    "ส่งรูปมาสแกนต่อได้เลยครับ",
   );
   return lines.join("\n");
 }
@@ -462,11 +520,11 @@ export function buildPaymentRejectedText({ reason = null } = {}) {
     lines.push("รายละเอียดจากแอดมิน:", `• ${r}`, "");
   }
   lines.push(
-    "กรุณาเริ่มขั้นตอนชำระเงินใหม่ด้วยตัวเอง:",
-    "• สแกนรูปที่ต้องการสแกนอีกครั้ง (เมื่อบอทขอชำระเงิน) หรือ",
+    "เริ่มขั้นตอนชำระใหม่ได้แบบนี้",
+    "• ส่งรูปสแกนอีกครั้ง (ตอนที่บอทขอชำระ) หรือ",
     "• พิมพ์ payment / จ่ายเงิน / ปลดล็อก เพื่อดู QR อีกครั้ง",
     "",
-    "จากนั้นโอนตามยอดและส่งสลิปใหม่ในแชทนี้"
+    "แล้วโอนตามยอด ส่งสลิปใหม่ในแชทนี้ได้เลย"
   );
   return lines.join("\n");
 }
@@ -494,14 +552,17 @@ export function allowsUtilityCommandsDuringPendingVerify(text, lowerText) {
 }
 
 /** User typed text while waiting for slip. */
-export function buildAwaitingSlipReminderText({ paymentRef } = {}) {
-  const base = [
-    "⏳ รอสลิปอยู่ครับ",
-    "",
-    "หลังโอนแล้ว ส่งสลิป 1 รูปในแชตนี้ได้เลย",
-    "เราจะตรวจให้ก่อนเปิดสิทธิ์ — พออนุมัติแล้วค่อยสแกนต่อได้ครับ",
-  ].join("\n");
-  return appendPaymentRefLine(base, paymentRef);
+export async function buildAwaitingSlipReminderText({ userId, paymentRef } = {}) {
+  if (!userId) {
+    const base = [
+      "รอสลิปอยู่ครับ",
+      "",
+      "โอนแล้วส่งสลิป 1 รูปในแชตนี้ได้เลย",
+      "ตรวจก่อนแล้วค่อยเปิดสิทธิ์ — พออนุมัติแล้วค่อยสแกนต่อได้ครับ",
+    ].join("\n");
+    return appendPaymentRefLine(base, paymentRef);
+  }
+  return awaitingSlipReminderText(userId, paymentRef);
 }
 
 export function isHistoryCommand(text, lowerText) {

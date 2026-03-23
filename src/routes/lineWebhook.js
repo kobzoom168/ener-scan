@@ -57,24 +57,29 @@ import {
   replyText,
   replyPaymentInstructions,
 } from "../services/lineReply.service.js";
-import { buildStartInstructionFlex } from "../services/flex/startInstruction.flex.js";
 import {
-  buildUnsupportedObjectFlex,
-  buildIdleFlex,
-  buildDuplicateImageFlex,
-  buildMultipleObjectsFlex,
-  buildUnclearImageFlex,
-  buildMainMenuFlex,
-  buildPendingVerifyFlex,
-} from "../services/flex/status.flex.js";
+  sendTextSequence,
+  replyTextSequenceOrSingle,
+} from "../services/lineSequenceReply.service.js";
+import {
+  parseBirthdateInput,
+  looksLikeBirthdateInput,
+} from "../utils/birthdateParse.util.js";
+import {
+  beforeScanMessageSequence,
+  birthdateUpdatePrompt,
+  birthdateSavedAfterUpdate,
+} from "../utils/replyCopy.util.js";
+import { sleep } from "../utils/timing.util.js";
+import { logEvent, logPaywallShown } from "../utils/personaAnalytics.util.js";
+import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
 
 import {
-  isValidBirthdate,
-  normalizeBirthdateForScan,
   toBase64,
   formatHistory,
   formatBangkokDateTime,
-  buildStartInstructionText,
+  buildStartInstructionMessages,
+  buildWaitingBirthdateGuidanceMessages,
   buildMultiImageInRequestText,
   buildMultipleObjectsText,
   buildUnclearImageText,
@@ -83,7 +88,6 @@ import {
   buildNoHistoryText,
   buildNoStatsText,
   buildIdleText,
-  buildInvalidBirthdateText,
   buildSystemErrorText,
   isPaymentCommand,
   buildPaymentInstructionText,
@@ -95,6 +99,11 @@ import {
   buildPendingVerifyPaymentCommandText,
   allowsUtilityCommandsDuringPendingVerify,
   buildAwaitingSlipReminderText,
+  buildWaitingBirthdateGuidanceText,
+  buildWaitingBirthdateImageReminderMessages,
+  buildBirthdateErrorMessages,
+  isBlockedIntentDuringWaitingBirthdate,
+  isMainMenuAlias,
   isHistoryCommand,
   isStatsCommand,
   groupImageEventCountByUser,
@@ -107,10 +116,7 @@ import {
 } from "../stores/manualPaymentAccess.store.js";
 import { checkScanAccess } from "../services/paymentAccess.service.js";
 
-import {
-  replyFlexWithFallback,
-  runScanFlow,
-} from "../handlers/scanFlow.handler.js";
+import { runScanFlow } from "../handlers/scanFlow.handler.js";
 
 import {
   checkGlobalAbuseStatus,
@@ -123,17 +129,18 @@ import {
   registerTextEvent,
 } from "../stores/abuseGuard.store.js";
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Lightweight QA logs (grep: `[WAITING_BIRTHDATE]`). */
+function logWaitingBirthdate(event, payload = {}) {
+  console.log(`[WAITING_BIRTHDATE] ${event}`, payload);
 }
 
 const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
 
-const ABUSE_MSG_HARD = "ไม่สามารถใช้งานได้ชั่วคราว";
+const ABUSE_MSG_HARD = "ตอนนี้ใช้งานไม่ได้ชั่วคราว ลองใหม่ในแป๊บนะครับ";
 const ABUSE_MSG_SCAN_LOCK =
-  "มีการสแกนถี่เกินไป ขอพักระบบสักครู่แล้วค่อยลองใหม่นะครับ 🙏";
+  "สแกนถี่ไปหน่อย ขอพักแป๊บนึงแล้วค่อยลองใหม่นะครับ";
 const ABUSE_MSG_PAYMENT_LOCK =
-  "มีการส่งข้อมูลการชำระถี่เกินไป กรุณารอสักครู่แล้วลองใหม่อีกครั้งนะครับ";
+  "ส่งเรื่องชำระเงินถี่ไปหน่อย ขอรอสักครู่แล้วลองใหม่นะครับ";
 
 async function handleHistoryCommand({ client, replyToken, userId }) {
   const history = getScanHistory(userId);
@@ -271,13 +278,11 @@ async function finalizeAcceptedImage({
       }
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
-      await replyFlexWithFallback({
+      await replyText(
         client,
-        replyToken: event.replyToken,
-        flex: buildPendingVerifyFlex(),
-        fallbackText: buildPendingVerifyBlockScanText({ paymentRef }),
-        logLabel: "pending verify block scan flex",
-      });
+        event.replyToken,
+        buildPendingVerifyBlockScanText({ userId, paymentRef })
+      );
       return;
     }
 
@@ -325,6 +330,13 @@ async function finalizeAcceptedImage({
         event.replyToken,
         buildSlipReceivedText({ paymentRef: slipPaymentRef }),
       );
+      logEvent("slip_uploaded", {
+        userId,
+        personaVariant: await getAssignedPersonaVariant(userId),
+        patternUsed: null,
+        bubbleCount: 1,
+        paymentId,
+      });
       return;
     } catch (err) {
       console.error("[PAYMENT_SLIP_VERIFY] slip upload/update failed:", {
@@ -366,13 +378,7 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildDuplicateImageFlex(),
-      fallbackText: buildDuplicateImageText(),
-      logLabel: "duplicate image flex",
-    });
+    await replyText(client, event.replyToken, buildDuplicateImageText());
     return;
   }
 
@@ -386,13 +392,7 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildMultipleObjectsFlex(),
-      fallbackText: buildMultipleObjectsText(),
-      logLabel: "multiple objects flex",
-    });
+    await replyText(client, event.replyToken, buildMultipleObjectsText());
     return;
   }
 
@@ -401,13 +401,7 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildUnclearImageFlex(),
-      fallbackText: buildUnclearImageText(),
-      logLabel: "unclear image flex",
-    });
+    await replyText(client, event.replyToken, buildUnclearImageText());
     return;
   }
 
@@ -416,13 +410,7 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildUnsupportedObjectFlex(),
-      fallbackText: buildUnsupportedObjectText(),
-      logLabel: "unsupported object flex",
-    });
+    await replyText(client, event.replyToken, buildUnsupportedObjectText());
     return;
   }
 
@@ -431,13 +419,7 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildUnsupportedObjectFlex(),
-      fallbackText: buildUnsupportedObjectText(),
-      logLabel: "unsupported object flex",
-    });
+    await replyText(client, event.replyToken, buildUnsupportedObjectText());
     return;
   }
 
@@ -475,6 +457,7 @@ async function finalizeAcceptedImage({
     // Create (or re-create) the pending payment row for this LINE user.
     // All subsequent images will be treated as slip upload until admin verifies.
     let createdPaymentRef = null;
+    let createdPaymentId = null;
     try {
       const appUser = await ensureUserByLineUserId(userId);
       // createPaymentPending dedupes: reuses active awaiting_payment / pending_verify row
@@ -484,6 +467,7 @@ async function finalizeAcceptedImage({
         currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
       });
       createdPaymentRef = created?.paymentRef ?? null;
+      createdPaymentId = created?.paymentId ?? null;
     } catch (err) {
       console.error("[WEBHOOK] createPaymentPending (payment_required) failed:", {
         userId,
@@ -509,6 +493,12 @@ async function finalizeAcceptedImage({
           }),
           qrImageUrl: qrUrl,
           slipText: buildPaymentQrSlipText(),
+        });
+        await logPaywallShown(userId, {
+          patternUsed: "qr_intro_image_slip",
+          bubbleCount: 3,
+          source: "finalize_image_payment_required",
+          ...(createdPaymentId ? { paymentId: createdPaymentId } : {}),
         });
         return;
       } catch (qrErr) {
@@ -536,6 +526,12 @@ async function finalizeAcceptedImage({
         paymentRef: createdPaymentRef,
       }),
     );
+    await logPaywallShown(userId, {
+      patternUsed: "qr_text_fallback",
+      bubbleCount: 1,
+      source: "finalize_image_payment_required_text",
+      ...(createdPaymentId ? { paymentId: createdPaymentId } : {}),
+    });
     return;
   }
 
@@ -581,12 +577,11 @@ async function finalizeAcceptedImage({
     flowVersion
   );
 
-  await replyFlexWithFallback({
+  await replyTextSequenceOrSingle({
     client,
     replyToken: event.replyToken,
-    flex: buildStartInstructionFlex(),
-    fallbackText: buildStartInstructionText(),
-    logLabel: "start instruction flex",
+    userId,
+    messages: await buildStartInstructionMessages(userId),
   });
 }
 
@@ -682,7 +677,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     await replyText(
       client,
       event.replyToken,
-      `กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995\n\n${MAIN_MENU_HINT_TEXT}`
+      `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
     );
     return;
   }
@@ -724,6 +719,16 @@ async function handleImageMessage({ client, event, userId, session }) {
         console.log("[WEBHOOK] ignore image: waiting birthdate", {
           userId,
           sessionFlowVersion: session.flowVersion || 0,
+        });
+        logWaitingBirthdate("second_image_reminder", {
+          userId,
+          sessionFlowVersion: session.flowVersion || 0,
+        });
+        await replyTextSequenceOrSingle({
+          client,
+          replyToken: event.replyToken,
+          userId,
+          messages: await buildWaitingBirthdateImageReminderMessages(userId),
         });
         return;
       }
@@ -801,13 +806,11 @@ async function handleImageMessage({ client, event, userId, session }) {
     clearSession(userId);
     clearPendingImageCandidate(userId);
 
-    await replyFlexWithFallback({
+    await replyText(
       client,
-      replyToken: event.replyToken,
-      flex: buildMultipleObjectsFlex(),
-      fallbackText: buildMultiImageInRequestText(),
-      logLabel: "multi image collect-window flex",
-    });
+      event.replyToken,
+      buildMultiImageInRequestText()
+    );
     return;
   }
 
@@ -828,13 +831,11 @@ async function handleImageMessage({ client, event, userId, session }) {
     clearSession(userId);
     clearPendingImageCandidate(userId);
 
-    await replyFlexWithFallback({
+    await replyText(
       client,
-      replyToken: event.replyToken,
-      flex: buildMultipleObjectsFlex(),
-      fallbackText: buildMultiImageInRequestText(),
-      logLabel: "multi image burst flex",
-    });
+      event.replyToken,
+      buildMultiImageInRequestText()
+    );
     return;
   }
 
@@ -891,49 +892,9 @@ async function handleTextMessage({ client, event, userId, session }) {
     sessionFlowVersion: session.flowVersion || 0,
   });
 
-  // Priority 1: awaiting birthdate update
-  if (session.awaitingBirthdateUpdate) {
-    if (text === "เปลี่ยนวันเกิด") {
-      await replyText(
-        client,
-        event.replyToken,
-        `กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995\n\n${MAIN_MENU_HINT_TEXT}`
-      );
-      return;
-    }
+  // --- STATE-FIRST: awaiting_slip → pending_verify → awaitingBirthdateUpdate → waiting_birthdate ---
 
-    const candidateValid = isValidBirthdate(text);
-    if (!candidateValid) {
-      console.log("[BIRTHDATE_UPDATE] invalid", {
-        userId,
-        text,
-      });
-      await replyText(
-        client,
-        event.replyToken,
-        `รูปแบบวันเกิดไม่ถูกต้อง\nกรุณาพิมพ์เป็น DD/MM/YYYY\nตัวอย่าง: 14/09/1995\n\n${MAIN_MENU_HINT_TEXT}`
-      );
-      return;
-    }
-
-    const normalizedBirthdate = normalizeBirthdateForScan(text);
-    await saveBirthdate(userId, normalizedBirthdate);
-
-    clearAwaitingBirthdateUpdate(userId);
-    console.log("[BIRTHDATE_UPDATE] saved", {
-      userId,
-      birthdate: normalizedBirthdate,
-    });
-
-    await replyText(
-      client,
-      event.replyToken,
-      `บันทึกวันเกิดใหม่เรียบร้อยแล้ว\nวันเกิดปัจจุบัน: ${normalizedBirthdate}\n\nส่งรูปใหม่มาได้เลยครับ\n\n${MAIN_MENU_HINT_TEXT}`
-    );
-    return;
-  }
-
-  // Priority 2: awaiting_slip reminder (must not be replaced by menu)
+  // 1) awaiting_slip (strict: any non-payment text stays in slip flow)
   if (
     getPaymentState(userId).state === "awaiting_slip" &&
     !isPaymentCommand(text, lowerText)
@@ -951,12 +912,12 @@ async function handleTextMessage({ client, event, userId, session }) {
     await replyText(
       client,
       event.replyToken,
-      buildAwaitingSlipReminderText({ paymentRef })
+      await buildAwaitingSlipReminderText({ userId, paymentRef })
     );
     return;
   }
 
-  // Priority 2b: DB pending_verify — short replies; payment cmd = already queued
+  // 2) pending_verify — payment cmd / lock / utility passthrough handled next
   try {
     const pendingVerifyRow = await getLatestAwaitingPaymentForLineUserId(userId);
     if (pendingVerifyRow && String(pendingVerifyRow.status) === "pending_verify") {
@@ -972,7 +933,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         await replyText(
           client,
           event.replyToken,
-          buildPendingVerifyPaymentCommandText({ paymentRef })
+          buildPendingVerifyPaymentCommandText({ userId, paymentRef })
         );
         return;
       }
@@ -980,7 +941,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         await replyText(
           client,
           event.replyToken,
-          buildPendingVerifyReminderText({ paymentRef })
+          buildPendingVerifyReminderText({ userId, paymentRef })
         );
         return;
       }
@@ -993,14 +954,321 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
   }
 
-  // Priority 3: explicit commands (before pendingImage so history/menu work during pending_verify)
+  // 2c) pending_verify — allowed utility commands (before birthdate lock)
+  try {
+    const pvForUtility = await getLatestAwaitingPaymentForLineUserId(userId);
+    if (pvForUtility && String(pvForUtility.status) === "pending_verify") {
+      if (allowsUtilityCommandsDuringPendingVerify(text, lowerText)) {
+        if (isHistoryCommand(text, lowerText)) {
+          await handleHistoryCommand({
+            client,
+            replyToken: event.replyToken,
+            userId,
+          });
+          return;
+        }
+        if (isStatsCommand(text, lowerText)) {
+          await handleStatsCommand({
+            client,
+            replyToken: event.replyToken,
+            userId,
+          });
+          return;
+        }
+        if (text === "เปลี่ยนวันเกิด") {
+          setAwaitingBirthdateUpdate(userId, true);
+          await replyText(
+            client,
+            event.replyToken,
+            `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
+          );
+          return;
+        }
+        if (text === "สแกนพลังงาน") {
+          let savedBirthdate = null;
+          try {
+            savedBirthdate = await getSavedBirthdate(userId);
+          } catch (error) {
+            console.error("[BIRTHDATE_UPDATE] getSavedBirthdate failed (ignored):", {
+              userId,
+              message: error?.message,
+            });
+          }
+          const helperText = [
+            "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
+            savedBirthdate
+              ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว ระบบจะเริ่มสแกนให้ทันที"
+              : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะให้คุณพิมพ์วันเกิดก่อนสแกน",
+            "",
+            "ส่งรูปถัดไปมาได้เลยครับ",
+            "",
+            MAIN_MENU_HINT_TEXT,
+          ].join("\n");
+          await replyText(client, event.replyToken, helperText);
+          return;
+        }
+        if (text === "วิธีใช้" || text === "วิธีใช้งาน") {
+          await replyText(
+            client,
+            event.replyToken,
+            [
+              "วิธีใช้งาน Ener Scan",
+              "",
+              "1) ส่งรูปวัตถุที่ต้องการสแกน",
+              "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
+              "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
+              "",
+              "หากหมดสิทธิ์ฟรี: พิมพ์ payment หรือ จ่ายเงิน",
+              "",
+              MAIN_MENU_HINT_TEXT,
+            ].join("\n")
+          );
+          return;
+        }
+        if (isMainMenuAlias(text, lowerText)) {
+          await replyText(client, event.replyToken, buildIdleText());
+          return;
+        }
+      }
+    }
+  } catch (pvUtilErr) {
+    console.error("[WEBHOOK] pending_verify utility branch failed (ignored):", {
+      userId,
+      message: pvUtilErr?.message,
+    });
+  }
+
+  // 3) awaiting birthdate update (profile)
+  if (session.awaitingBirthdateUpdate) {
+    if (text === "เปลี่ยนวันเกิด") {
+      await replyText(
+        client,
+        event.replyToken,
+        `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
+      );
+      return;
+    }
+
+    const parsedBd = parseBirthdateInput(text);
+    if (!parsedBd.ok) {
+      console.log("[BIRTHDATE_UPDATE] invalid", {
+        userId,
+        text,
+        reason: parsedBd.reason,
+      });
+      if (looksLikeBirthdateInput(text)) {
+        logWaitingBirthdate("invalid_date_attempt", {
+          gate: "birthdate_update_profile",
+          userId,
+          reason: parsedBd.reason,
+        });
+      } else {
+        logWaitingBirthdate("guidance", {
+          gate: "birthdate_update_profile",
+          userId,
+          hint: "non_date_like",
+        });
+      }
+      if (looksLikeBirthdateInput(text)) {
+        const errMsgs = await buildBirthdateErrorMessages(userId, parsedBd.reason);
+        if (errMsgs.length) {
+          errMsgs[errMsgs.length - 1] = `${errMsgs[errMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
+        }
+        await replyTextSequenceOrSingle({
+          client,
+          replyToken: event.replyToken,
+          userId,
+          messages: errMsgs,
+        });
+        return;
+      }
+      const gMsgs = await buildWaitingBirthdateGuidanceMessages(userId);
+      if (gMsgs.length) {
+        gMsgs[gMsgs.length - 1] = `${gMsgs[gMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
+      }
+      await replyTextSequenceOrSingle({
+        client,
+        replyToken: event.replyToken,
+        userId,
+        messages: gMsgs.length
+          ? gMsgs
+          : [`${await buildWaitingBirthdateGuidanceText(userId)}\n\n${MAIN_MENU_HINT_TEXT}`],
+      });
+      return;
+    }
+
+    const normalizedBirthdate = parsedBd.normalizedDisplay;
+    await saveBirthdate(userId, normalizedBirthdate);
+
+    clearAwaitingBirthdateUpdate(userId);
+    logWaitingBirthdate("accepted", {
+      gate: "birthdate_update_profile",
+      userId,
+      yearCE: parsedBd.yearCE,
+      isoDate: parsedBd.isoDate,
+      normalizedDisplay: normalizedBirthdate,
+    });
+    console.log("[BIRTHDATE_UPDATE] saved", {
+      userId,
+      birthdate: normalizedBirthdate,
+    });
+
+    await replyText(
+      client,
+      event.replyToken,
+      `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\n${MAIN_MENU_HINT_TEXT}`
+    );
+    return;
+  }
+
+  // 4) waiting_birthdate (pending scan image; includes awaiting_payment slip reminder branch)
+  try {
+    const paymentState = getPaymentState(userId).state;
+    const pendingPayRow = await getLatestAwaitingPaymentForLineUserId(userId);
+    const hasAwaitingPaymentRow =
+      pendingPayRow && String(pendingPayRow.status) === "awaiting_payment";
+
+    if (session.pendingImage && paymentState !== "awaiting_slip") {
+      if (hasAwaitingPaymentRow) {
+        let paymentRef = null;
+        try {
+          if (pendingPayRow?.id) {
+            paymentRef =
+              pendingPayRow.payment_ref ||
+              (await ensurePaymentRefForPaymentId(pendingPayRow.id));
+          }
+        } catch (_) {
+          paymentRef = null;
+        }
+        await replyText(
+          client,
+          event.replyToken,
+          await buildAwaitingSlipReminderText({ userId, paymentRef })
+        );
+        return;
+      }
+
+      if (text === "เปลี่ยนวันเกิด") {
+        setAwaitingBirthdateUpdate(userId, true);
+        await replyText(
+          client,
+          event.replyToken,
+          `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
+        );
+        return;
+      }
+
+      const parsedLock = parseBirthdateInput(text);
+      if (parsedLock.ok) {
+        const flowVersion = session.flowVersion || 0;
+        const normalizedBirthdate = parsedLock.normalizedDisplay;
+
+        const scanGateNow = Date.now();
+        const scanGateFromText = checkScanAbuseStatus(userId, scanGateNow);
+        console.log("[ABUSE_GUARD_SCAN_STATUS]", {
+          userId,
+          gate: "waiting_birthdate",
+          ...scanGateFromText,
+        });
+        if (scanGateFromText.isLocked) {
+          console.warn("[ABUSE_GUARD_SCAN_LOCK]", {
+            userId,
+            lockUntil: scanGateFromText.lockUntil,
+            gate: "waiting_birthdate",
+          });
+          await replyText(client, event.replyToken, ABUSE_MSG_SCAN_LOCK);
+          return;
+        }
+
+        logWaitingBirthdate("accepted", {
+          gate: "waiting_birthdate",
+          userId,
+          yearCE: parsedLock.yearCE,
+          isoDate: parsedLock.isoDate,
+          normalizedDisplay: normalizedBirthdate,
+        });
+        try {
+          await sendTextSequence({
+            client,
+            replyToken: null,
+            userId,
+            messages: await beforeScanMessageSequence(userId),
+          });
+        } catch (beforeScanErr) {
+          console.error("[LINE] before_scan push failed (ignored):", {
+            userId,
+            message: beforeScanErr?.message,
+          });
+        }
+        await runScanFlow({
+          client,
+          replyToken: event.replyToken,
+          userId,
+          imageBuffer: session.pendingImage.imageBuffer,
+          birthdate: normalizedBirthdate,
+          flowVersion,
+        });
+        return;
+      }
+
+      if (looksLikeBirthdateInput(text)) {
+        logWaitingBirthdate("invalid_date_attempt", {
+          gate: "waiting_birthdate",
+          userId,
+          reason: parsedLock.reason,
+        });
+        await replyTextSequenceOrSingle({
+          client,
+          replyToken: event.replyToken,
+          userId,
+          messages: await buildBirthdateErrorMessages(userId, parsedLock.reason),
+        });
+        return;
+      }
+
+      if (isBlockedIntentDuringWaitingBirthdate(text, lowerText)) {
+        logWaitingBirthdate("guidance", {
+          gate: "waiting_birthdate",
+          userId,
+          hint: "blocked_intent",
+        });
+        await replyTextSequenceOrSingle({
+          client,
+          replyToken: event.replyToken,
+          userId,
+          messages: await buildWaitingBirthdateGuidanceMessages(userId),
+        });
+        return;
+      }
+
+      logWaitingBirthdate("guidance", {
+        gate: "waiting_birthdate",
+        userId,
+        hint: "default",
+      });
+      await replyTextSequenceOrSingle({
+        client,
+        replyToken: event.replyToken,
+        userId,
+        messages: await buildWaitingBirthdateGuidanceMessages(userId),
+      });
+      return;
+    }
+  } catch (birthLockErr) {
+    console.error("[WEBHOOK] waiting_birthdate branch failed:", {
+      userId,
+      message: birthLockErr?.message,
+    });
+  }
+
+  // 5) explicit commands (no active lock above)
   if (text === "เปลี่ยนวันเกิด") {
     console.log("[BIRTHDATE_UPDATE] requested", { userId });
     setAwaitingBirthdateUpdate(userId, true);
     await replyText(
       client,
       event.replyToken,
-      `กรุณาพิมพ์วันเกิดใหม่ของคุณ\nตัวอย่าง: 14/09/1995\n\n${MAIN_MENU_HINT_TEXT}`
+      `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`
     );
     return;
   }
@@ -1024,6 +1292,36 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (isPaymentCommand(text, lowerText)) {
+    // Do not open payment while user must finish birthdate for a pending scan image.
+    try {
+      const ps = getPaymentState(userId).state;
+      const row = await getLatestAwaitingPaymentForLineUserId(userId);
+      const slipRow =
+        row &&
+        (String(row.status) === "awaiting_payment" ||
+          String(row.status) === "pending_verify");
+      if (
+        session.pendingImage &&
+        ps !== "awaiting_slip" &&
+        !slipRow
+      ) {
+        logWaitingBirthdate("guidance", {
+          gate: "payment_command_blocked",
+          userId,
+          hint: "pending_scan_needs_birthdate",
+        });
+        await replyTextSequenceOrSingle({
+          client,
+          replyToken: event.replyToken,
+          userId,
+          messages: await buildWaitingBirthdateGuidanceMessages(userId),
+        });
+        return;
+      }
+    } catch (_) {
+      // ignore
+    }
+
     const payCmdNow = Date.now();
     const payCmdStatus = checkPaymentAbuseStatus(userId, payCmdNow);
     console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
@@ -1057,6 +1355,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
     const amountForCopy = amount > 0 ? amount : 99;
     let cmdPaymentRef = null;
+    let cmdPaymentId = null;
     try {
       const appUser = await ensureUserByLineUserId(userId);
       const created = await createPaymentPending({
@@ -1065,6 +1364,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         currency,
       });
       cmdPaymentRef = created?.paymentRef ?? null;
+      cmdPaymentId = created?.paymentId ?? null;
     } catch (err) {
       console.error("[WEBHOOK] createPaymentPending failed:", {
         userId,
@@ -1074,6 +1374,15 @@ async function handleTextMessage({ client, event, userId, session }) {
         hint: err?.hint,
       });
     }
+
+    logEvent("payment_intent", {
+      userId,
+      personaVariant: await getAssignedPersonaVariant(userId),
+      patternUsed: null,
+      bubbleCount: 1,
+      source: "payment_command",
+      ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
+    });
 
     const qrUrl = getPromptPayQrPublicUrl();
     const intro = buildPaymentQrIntroText({ paymentRef: cmdPaymentRef });
@@ -1085,6 +1394,12 @@ async function handleTextMessage({ client, event, userId, session }) {
           introText: intro,
           qrImageUrl: qrUrl,
           slipText,
+        });
+        await logPaywallShown(userId, {
+          patternUsed: "qr_intro_image_slip",
+          bubbleCount: 3,
+          source: "payment_command",
+          ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
         });
         return;
       } catch (qrErr) {
@@ -1111,73 +1426,11 @@ async function handleTextMessage({ client, event, userId, session }) {
         paymentRef: cmdPaymentRef,
       })}\n\n${MAIN_MENU_HINT_TEXT}`
     );
-    return;
-  }
-
-  // Priority 4: pendingImage / waiting birthdate for scan
-  if (session.pendingImage) {
-    try {
-      const pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
-      if (pendingPayment && String(pendingPayment.status) === "awaiting_payment") {
-        await replyText(
-          client,
-          event.replyToken,
-          buildAwaitingSlipReminderText()
-        );
-        return;
-      }
-    } catch (err) {
-      console.error("[PAYMENT_FLOW_GUARD] pending payment check failed (ignored):", {
-        userId,
-        message: err?.message,
-        code: err?.code,
-      });
-    }
-
-    if (!isValidBirthdate(text)) {
-      await replyText(
-        client,
-        event.replyToken,
-        buildInvalidBirthdateText()
-      );
-      return;
-    }
-
-    const flowVersion = session.flowVersion || 0;
-    const normalizedBirthdate = normalizeBirthdateForScan(text);
-
-    console.log("[WEBHOOK] use session flowVersion(text):", flowVersion);
-    console.log("[WEBHOOK] normalized birthdate:", normalizedBirthdate);
-    console.log("[WEBHOOK] going to runScanFlow from text", {
-      userId,
-      birthdate: normalizedBirthdate,
-      flowVersion,
-    });
-
-    const scanGateNow = Date.now();
-    const scanGateFromText = checkScanAbuseStatus(userId, scanGateNow);
-    console.log("[ABUSE_GUARD_SCAN_STATUS]", {
-      userId,
-      gate: "pendingImage_birthdate_text",
-      ...scanGateFromText,
-    });
-    if (scanGateFromText.isLocked) {
-      console.warn("[ABUSE_GUARD_SCAN_LOCK]", {
-        userId,
-        lockUntil: scanGateFromText.lockUntil,
-        gate: "pendingImage_birthdate_text",
-      });
-      await replyText(client, event.replyToken, ABUSE_MSG_SCAN_LOCK);
-      return;
-    }
-
-    await runScanFlow({
-      client,
-      replyToken: event.replyToken,
-      userId,
-      imageBuffer: session.pendingImage.imageBuffer,
-      birthdate: normalizedBirthdate,
-      flowVersion,
+    await logPaywallShown(userId, {
+      patternUsed: "qr_text_fallback",
+      bubbleCount: 1,
+      source: "payment_command_text",
+      ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
     });
     return;
   }
@@ -1241,24 +1494,12 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (menuAliases.has(text) || menuAliases.has(lowerText)) {
-    await replyFlexWithFallback({
-      client,
-      replyToken: event.replyToken,
-      flex: buildMainMenuFlex(),
-      fallbackText: buildIdleText(),
-      logLabel: "main menu flex",
-    });
+    await replyText(client, event.replyToken, buildIdleText());
     return;
   }
 
   // fallback => show main menu
-  await replyFlexWithFallback({
-    client,
-    replyToken: event.replyToken,
-    flex: buildMainMenuFlex(),
-    fallbackText: buildIdleText(),
-    logLabel: "main menu fallback",
-  });
+  await replyText(client, event.replyToken, buildIdleText());
 }
 
 async function handleEvent({ client, event }) {
@@ -1268,7 +1509,7 @@ async function handleEvent({ client, event }) {
   const userId = event.source?.userId;
 
   if (!userId) {
-    await replyText(client, event.replyToken, "ไม่พบข้อมูลผู้ใช้ครับ");
+    await replyText(client, event.replyToken, "ยังไม่พบข้อมูลผู้ใช้ครับ");
     return;
   }
 
@@ -1382,13 +1623,11 @@ export function lineWebhookRouter(lineConfig) {
                 flowVersion,
               });
 
-              await replyFlexWithFallback({
+              await replyText(
                 client,
-                replyToken: event.replyToken,
-                flex: buildMultipleObjectsFlex(),
-                fallbackText: buildMultiImageInRequestText(),
-                logLabel: "multi image request flex",
-              });
+                event.replyToken,
+                buildMultiImageInRequestText()
+              );
             }
 
             console.log(

@@ -9,6 +9,7 @@ import createAdminAuthRouter from "./routes/adminAuth.routes.js";
 import createAdminPaymentsDashboardRouter from "./routes/adminPaymentsDashboard.routes.js";
 import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
+import { schedulePersonaAbRecompute } from "./services/personaAbSchedule.service.js";
 
 process.on("uncaughtException", (error) => {
   console.error("[FATAL] uncaughtException", {
@@ -136,4 +137,5 @@ const port = process.env.PORT || 3000;
 
 app.listen(port, () => {
   console.log(`Ener Scan API listening on port ${port}`);
+  schedulePersonaAbRecompute();
 });
