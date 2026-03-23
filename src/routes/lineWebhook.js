@@ -135,6 +135,21 @@ function logWaitingBirthdate(event, payload = {}) {
 }
 
 const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
+const lastIdleTextSignatureByUser = new Map();
+
+function signatureForText(text) {
+  return String(text || "").replace(/\r\n/g, "\n").trim();
+}
+
+async function replyIdleTextNoDuplicate({ client, replyToken, userId }) {
+  const text = await buildIdleText(userId);
+  if (!String(text || "").trim()) return;
+  const sig = signatureForText(text);
+  const prev = lastIdleTextSignatureByUser.get(userId) || null;
+  if (prev === sig) return;
+  lastIdleTextSignatureByUser.set(userId, sig);
+  await replyText(client, replyToken, text);
+}
 
 const ABUSE_MSG_HARD = "ตอนนี้ใช้งานไม่ได้ชั่วคราว ลองใหม่ในแป๊บนะครับ";
 const ABUSE_MSG_SCAN_LOCK =
@@ -158,7 +173,7 @@ async function handleHistoryCommand({ client, replyToken, userId }) {
   await replyText(
     client,
     replyToken,
-    `📜 ประวัติการสแกนล่าสุด\n\n${formatted}\n\n${MAIN_MENU_HINT_TEXT}`
+    `ประวัติการสแกนล่าสุด\n\n${formatted}\n\n${MAIN_MENU_HINT_TEXT}`
   );
 }
 
@@ -176,7 +191,7 @@ async function handleStatsCommand({ client, replyToken, userId }) {
     client,
     replyToken,
     [
-      "📊 สถิติการสแกนของคุณ",
+      "สถิติการสแกนของคุณ",
       "",
       `สแกนทั้งหมด: ${stats.totalScans} ครั้ง`,
       `พลังที่พบบ่อย: ${stats.topEnergy}`,
@@ -1026,7 +1041,11 @@ async function handleTextMessage({ client, event, userId, session }) {
           return;
         }
         if (isMainMenuAlias(text, lowerText)) {
-          await replyText(client, event.replyToken, buildIdleText());
+          await replyIdleTextNoDuplicate({
+            client,
+            replyToken: event.replyToken,
+            userId,
+          });
           return;
         }
       }
@@ -1485,7 +1504,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
         "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
         "",
-        "หากหมดสิทธิ์ฟรี: พิมพ์ `payment` หรือ `จ่ายเงิน`",
+        "หากหมดสิทธิ์ฟรี: พิมพ์ จ่ายเงิน ได้เลย",
         "",
         MAIN_MENU_HINT_TEXT,
       ].join("\n")
@@ -1494,12 +1513,20 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (menuAliases.has(text) || menuAliases.has(lowerText)) {
-    await replyText(client, event.replyToken, buildIdleText());
+    await replyIdleTextNoDuplicate({
+      client,
+      replyToken: event.replyToken,
+      userId,
+    });
     return;
   }
 
   // fallback => show main menu
-  await replyText(client, event.replyToken, buildIdleText());
+  await replyIdleTextNoDuplicate({
+    client,
+    replyToken: event.replyToken,
+    userId,
+  });
 }
 
 async function handleEvent({ client, event }) {

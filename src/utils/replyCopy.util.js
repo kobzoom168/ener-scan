@@ -213,5 +213,14 @@ export function birthdateSavedAfterUpdate(userId, normalizedBirthdate) {
 
 export async function approvedIntroLine(userId) {
   const m = await generatePersonaReply(userId, "approved_intro");
-  return m[0] || "";
+  return m.join("\n") || "";
+}
+
+export async function idlePostScanMessages(userId) {
+  return generatePersonaReply(userId, "idle_post_scan");
+}
+
+export async function idlePostScanText(userId) {
+  const m = await idlePostScanMessages(userId);
+  return m.join("\n");
 }

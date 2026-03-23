@@ -14,6 +14,7 @@ import {
   pendingVerifyBlockScanText,
   pendingVerifyPaymentAgainText,
   approvedIntroLine,
+  idlePostScanText,
 } from "./replyCopy.util.js";
 
 /** Backward-compatible alias for `looksLikeBirthdateInput`. */
@@ -59,7 +60,7 @@ export function formatThaiPaidUntilForLine(isoOrDate) {
     isoOrDate instanceof Date
       ? isoOrDate
       : new Date(String(isoOrDate || ""));
-  if (!Number.isFinite(d.getTime())) return "—";
+  if (!Number.isFinite(d.getTime())) return "ไม่ระบุ";
   const parts = new Intl.DateTimeFormat("th-TH", {
     timeZone: "Asia/Bangkok",
     day: "2-digit",
@@ -114,10 +115,9 @@ export async function buildWaitingBirthdateGuidanceMessages(userId) {
 
 export function buildMultiImageInRequestText() {
   return [
-    "🔍 Ener Scan",
-    "",
+    "เอเนอร์สแกน",
     "ตอนนี้ส่งมาหลายรูปพร้อมกันนะ",
-    "ขอทีละรูปพอ — 1 รูปต่อครั้ง",
+    "ขอทีละรูป พอ 1 รูปต่อครั้ง",
     "",
     "ถ้ามีหลายชิ้น แยกส่งมาได้เลยครับ",
   ].join("\n");
@@ -125,8 +125,7 @@ export function buildMultiImageInRequestText() {
 
 export function buildMultipleObjectsText() {
   return [
-    "🔍 Ener Scan",
-    "",
+    "เอเนอร์สแกน",
     "ในภาพมีมากกว่า 1 ชิ้นนะ",
     "ขอถ่ายวัตถุชิ้นเดียวต่อรูป",
     "",
@@ -147,10 +146,10 @@ export function buildUnsupportedObjectText() {
     "ประเภทนี้ผมยังไม่รับนะครับ",
     "",
     "พอรับได้ตอนนี้ เช่น",
-    "• พระเครื่อง",
-    "• เครื่องราง",
-    "• คริสตัล / หิน",
-    "• วัตถุสายพลังแบบชิ้นเดียว",
+    "พระเครื่อง",
+    "เครื่องราง",
+    "คริสตัล / หิน",
+    "วัตถุสายพลังแบบชิ้นเดียว",
     "",
     "ลองส่งภาพใหม่ที่ตรงแบบนี้ได้เลยครับ",
   ].join("\n");
@@ -158,8 +157,7 @@ export function buildUnsupportedObjectText() {
 
 export function buildDuplicateImageText() {
   return [
-    "🔍 Ener Scan",
-    "",
+    "เอเนอร์สแกน",
     "ระบบพบว่ารูปนี้เคยถูกสแกนแล้ว",
     "กรุณาส่งภาพใหม่ของวัตถุครับ",
   ].join("\n");
@@ -167,8 +165,7 @@ export function buildDuplicateImageText() {
 
 export function buildRateLimitText(retryAfterSec = 0) {
   return [
-    "🔍 Ener Scan",
-    "",
+    "เอเนอร์สแกน",
     "ใช้งานถี่ไปนิดนึง",
     retryAfterSec > 0
       ? `ขอรออีก ${retryAfterSec} วินาที แล้วค่อยสแกนใหม่ครับ`
@@ -178,8 +175,7 @@ export function buildRateLimitText(retryAfterSec = 0) {
 
 export function buildCooldownText(remainingSec = 0) {
   return [
-    "🔍 Ener Scan",
-    "",
+    "เอเนอร์สแกน",
     remainingSec > 0
       ? `กรุณารออีก ${remainingSec} วินาทีก่อนสแกนใหม่`
       : "กรุณารอสักครู่ก่อนสแกนใหม่",
@@ -203,14 +199,14 @@ function appendPaymentRefLine(bodyText, paymentRef) {
 /** ข้อความหลักสำหรับชำระเงิน (ไม่ใส่ URL — QR ส่งแยกเป็น image message) */
 export function buildPaymentQrIntroText({ paymentRef } = {}) {
   const base = [
-    "🔒 สิทธิ์สแกนฟรีของคุณครบแล้วครับ",
+    "สิทธิ์สแกนฟรีของคุณครบแล้วครับ",
     "",
     "จะสแกนต่อได้แบบนี้",
     "แพ็กเกจนี้ราคา 99 บาท",
     "ใช้ได้ 10 ครั้ง (ภายใน 24 ชม. หลังอนุมัติ)",
     "",
     "ทำตามนี้ได้เลย",
-    "1. สแกน QR ด้านล่าง",
+    "1. สแกนคิวอาร์ ด้านล่าง",
     "2. โอนแล้วส่งสลิปในแชตนี้",
     "3. เดี๋ยวมีคนตรวจแล้วเปิดสิทธิ์ให้",
     "",
@@ -253,8 +249,11 @@ export function buildNoStatsText() {
   return "ยังไม่มีสถิติการสแกนครับ";
 }
 
-export function buildIdleText() {
-  return "ส่งรูปวัตถุมาได้เลยครับ\nถ่ายทีละชิ้นต่อรูปนะ";
+export async function buildIdleText(userId = null) {
+  if (!String(userId || "").trim()) {
+    return "ส่งรูปมาได้เลย\nผมจะดูให้ทีละชิ้น";
+  }
+  return idlePostScanText(userId);
 }
 
 export async function buildInvalidBirthdateText(userId) {
@@ -347,16 +346,16 @@ function displayAmountThb(amount) {
 export function buildPaymentCommandIntroText({ amount = DEFAULT_PAYMENT_THB } = {}) {
   const thb = displayAmountThb(amount);
   return [
-    "💳 วิธีชำระเงิน (พร้อมเพย์ + สลิป)",
+    "วิธีชำระเงิน (พร้อมเพย์ + สลิป)",
     "",
-    `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ — แอดมินตรวจก่อนเปิดสิทธิ์`,
+    `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ แอดมินตรวจก่อนเปิดสิทธิ์`,
     "พออนุมัติแล้ว จะได้สิทธิ์สแกนตามแพ็กเกจ (เช่น 10 ครั้ง / 24 ชม.)",
   ].join("\n");
 }
 
 /** ข้อความสั้นหลังรูป QR — ให้ส่งสลิปกลับมา */
 export function buildPaymentSlipFollowUpText() {
-  return "📎 โอนแล้วส่งรูปสลิปในแชทนี้ เดี๋ยวแอดมินตรวจให้ครับ";
+  return "โอนแล้วส่งรูปสลิปในแชทนี้ เดี๋ยวแอดมินตรวจให้ครับ";
 }
 
 /** ข้อความเดียว (fallback เมื่อส่งรูป QR ไม่ได้ / LINE error) — ไม่ใส่ลิงก์ QR */
@@ -373,7 +372,7 @@ export function buildPaymentInstructionText({
       `แพ็กเกจนี้ราคา ${thb} บาท`,
     ),
     "",
-    "⚠️ ตอนนี้ยังโหลดรูป QR ในแชตไม่ได้ชั่วคราว — ลองพิมพ์ payment อีกครั้งภายหลัง หรือติดต่อเราได้ครับ",
+    "ตอนนี้ยังโหลดรูปคิวอาร์ ในแชตไม่ได้ชั่วคราว ลองพิมพ์ จ่ายเงิน อีกครั้งภายหลัง หรือติดต่อเราได้ครับ",
   ].join("\n");
 }
 
@@ -382,14 +381,14 @@ export function buildManualPaymentRequestText({ paymentRef } = {}) {
   return [
     buildPaymentQrIntroText({ paymentRef }),
     "",
-    "พิมพ์: payment เพื่อดู QR และวิธีชำระเงินอีกครั้ง",
+    "พิมพ์: จ่ายเงิน เพื่อดูคิวอาร์ และวิธีชำระเงินอีกครั้ง",
   ].join("\n");
 }
 
 /** slip image accepted: now waiting for admin verification. */
 export function buildSlipReceivedText({ paymentRef } = {}) {
   const base = [
-    "✅ รับสลิปแล้วครับ",
+    "รับสลิปแล้วครับ",
     "",
     "กำลังรอตรวจสอบ",
     "ยังไม่ต้องส่งซ้ำนะ",
@@ -423,8 +422,8 @@ export function buildPendingVerifyPaymentCommandText({ paymentRef } = {}) {
   const base = [
     "ตอนนี้มีสลิปรอตรวจอยู่แล้วครับ",
     "",
-    "ไม่ต้องพิมพ์ payment ซ้ำในตอนนี้",
-    "รอผลตรวจก่อนนะ — อนุมัติหรือปฏิเสธ เดี๋ยวแจ้งในแชตนี้ให้ครับ",
+    "ไม่ต้องพิมพ์ จ่ายเงิน ซ้ำในตอนนี้",
+    "รอผลตรวจก่อนนะ อนุมัติหรือปฏิเสธ เดี๋ยวแจ้งในแชตนี้ให้ครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -468,7 +467,7 @@ export async function buildPaymentApprovedText({
       scanLine = `สแกนได้อีก ${scansNum} ครั้ง`;
     }
     untilLine = `ใช้ได้ถึง: ${
-      untilRaw ? formatThaiPaidUntilForLine(untilRaw) : "—"
+      untilRaw ? formatThaiPaidUntilForLine(untilRaw) : "ไม่ระบุ"
     }`;
   } else {
     const pr = String(paidRemainingLine || "").trim();
@@ -486,7 +485,7 @@ export async function buildPaymentApprovedText({
         ? `สแกนได้อีก ${m[1]} ครั้ง`
         : pr || "สแกนได้ตามสิทธิ์ที่เปิดให้";
     }
-    untilLine = `ใช้ได้ถึง: ${expiryFromLine || "—"}`;
+    untilLine = `ใช้ได้ถึง: ${expiryFromLine || "ไม่ระบุ"}`;
   }
 
   const lines = [
@@ -516,16 +515,16 @@ export function buildPaymentRejectedText({ reason = null } = {}) {
     .replace(/\s+/g, " ")
     .slice(0, 400);
   const lines = [
-    "แอดมินปฏิเสธสลิปนี้ครับ — รายการชำระเงินเดิมจบแล้ว ระบบจะไม่ใช้สลิปนี้ต่อ",
+    "แอดมินปฏิเสธสลิปนี้ครับ รายการชำระเงินเดิมจบแล้ว ระบบจะไม่ใช้สลิปนี้ต่อ",
     "",
   ];
   if (r) {
-    lines.push("รายละเอียดจากแอดมิน:", `• ${r}`, "");
+    lines.push("รายละเอียดจากแอดมิน:", r, "");
   }
   lines.push(
     "เริ่มขั้นตอนชำระใหม่ได้แบบนี้",
-    "• ส่งรูปสแกนอีกครั้ง (ตอนที่บอทขอชำระ) หรือ",
-    "• พิมพ์ payment / จ่ายเงิน / ปลดล็อก เพื่อดู QR อีกครั้ง",
+    "ส่งรูปสแกนอีกครั้ง (ตอนที่บอทขอชำระ) หรือ",
+    "พิมพ์ จ่ายเงิน หรือ ปลดล็อก เพื่อดูคิวอาร์ อีกครั้ง",
     "",
     "แล้วโอนตามยอด ส่งสลิปใหม่ในแชทนี้ได้เลย"
   );
@@ -561,7 +560,7 @@ export async function buildAwaitingSlipReminderText({ userId, paymentRef } = {})
       "รอสลิปอยู่ครับ",
       "",
       "โอนแล้วส่งสลิป 1 รูปในแชตนี้ได้เลย",
-      "ตรวจก่อนแล้วค่อยเปิดสิทธิ์ — พออนุมัติแล้วค่อยสแกนต่อได้ครับ",
+      "ตรวจก่อนแล้วค่อยเปิดสิทธิ์ พออนุมัติแล้วค่อยสแกนต่อได้ครับ",
     ].join("\n");
     return appendPaymentRefLine(base, paymentRef);
   }
