@@ -14,7 +14,7 @@ function humanObjectTypeLabel(raw) {
 }
 
 /**
- * Prefer first clause before em/en dash; keeps one readable “core” line for the summary strip.
+ * Prefer first clause before em/en dash; short enough for 1 line when tight, else fits ~2 lines in UI.
  * @param {unknown} raw
  * @returns {string}
  */
@@ -24,12 +24,22 @@ function distillSummaryLine(raw) {
     .replace(/\s+/g, " ");
   if (!t) return "";
   const splitDash = t.split(/\s*[—–]\s*/);
-  if (splitDash.length > 1 && splitDash[0].length >= 8) return splitDash[0].trim();
+  if (splitDash.length > 1 && splitDash[0].length >= 6) return splitDash[0].trim();
   const firstLine = t.split(/\n/)[0].trim();
-  if (firstLine.length <= 96) return firstLine;
-  const cut = firstLine.slice(0, 88);
+  if (firstLine.length <= 108) return firstLine;
+  const cut = firstLine.slice(0, 100);
   const sp = cut.lastIndexOf(" ");
-  return (sp > 28 ? cut.slice(0, sp) : cut) + "…";
+  return (sp > 32 ? cut.slice(0, sp) : cut) + "…";
+}
+
+/**
+ * Short distilled lines read best as a single line; longer text may use two.
+ * @param {string} distilled
+ * @returns {string}
+ */
+function summaryLineDensityClass(distilled) {
+  const len = [...String(distilled)].length;
+  return len <= 34 ? "summary-line--tight" : "summary-line--roomy";
 }
 
 /**
@@ -78,16 +88,20 @@ function hero(p) {
   const imageUrl = String(p.object?.objectImageUrl || "").trim();
   const labelRaw = String(p.object?.objectLabel ?? "").trim();
   const main = String(p.summary?.mainEnergyLabel ?? "").trim();
+  const level = String(p.summary?.energyLevelLabel ?? "").trim();
   const genericLabels = new Set(["วัตถุของคุณ", "วัตถุจากการสแกน"]);
+  const evocativeLead = "ชิ้นในรายงานนี้";
   let label;
   if (labelRaw && !genericLabels.has(labelRaw)) {
     label = labelRaw;
   } else if (main) {
-    label = `วัตถุชิ้นนี้ · ${main}`;
+    label = `${evocativeLead} · ${main}`;
+  } else if (level) {
+    label = `${evocativeLead} · ${level}`;
   } else if (labelRaw) {
-    label = labelRaw;
+    label = genericLabels.has(labelRaw) ? evocativeLead : labelRaw;
   } else {
-    label = "วัตถุในรายงานนี้";
+    label = evocativeLead;
   }
   const typeLabel = humanObjectTypeLabel(p.object?.objectType);
   const alt = imageUrl
@@ -146,6 +160,7 @@ function summary(p) {
   );
   const mainShort = s.mainEnergyLabel || "—";
   const coreSummary = distillSummaryLine(s.summaryLine);
+  const summaryDensity = coreSummary ? summaryLineDensityClass(coreSummary) : "";
   return `
   <section class="card card--summary" aria-labelledby="summary-heading">
     <h2 class="summary-eyebrow" id="summary-heading">สรุปภาพรวม</h2>
@@ -170,7 +185,7 @@ function summary(p) {
         <span class="summary-tier-label">ความเข้ากัน</span>
         <span class="summary-tier-value summary-tier-value--compat gold">${escapeHtml(compat)}</span>
       </div>
-      ${coreSummary ? `<p class="summary-line summary-line--distilled">${escapeHtml(coreSummary)}</p>` : ""}
+      ${coreSummary ? `<p class="summary-line summary-line--distilled ${summaryDensity}">${escapeHtml(coreSummary)}</p>` : ""}
     </div>
   </section>`;
 }
@@ -182,22 +197,12 @@ function trustBlock(p) {
   const t = p.trust || {};
   const note = t.trustNote || "";
   return `
-  <div class="report-trust-footer" role="note">
+  <div class="report-trust-footer" role="contentinfo">
     <p class="report-trust-kicker">หมายเหตุ</p>
     ${note ? `<p class="trust-text">${escapeHtml(note)}</p>` : `<p class="trust-text trust-text--empty">ไม่มีหมายเหตุเพิ่มเติม</p>`}
     <p class="meta tiny">เวอร์ชันรายงาน ${escapeHtml(p.reportVersion)} · render ${escapeHtml(t.rendererVersion || "")}${t.modelLabel ? ` · ${escapeHtml(t.modelLabel)}` : ""}</p>
-  </div>`;
-}
-
-/**
- * Calm closing — no action buttons; subtle orientation only.
- * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} _p
- */
-function reportOutro(_p) {
-  return `
-  <footer class="report-outro" role="contentinfo">
     <p class="report-outro-hint">ดำเนินการต่อจากแชท LINE ได้เมื่อต้องการ</p>
-  </footer>`;
+  </div>`;
 }
 
 /**
@@ -542,10 +547,10 @@ export function renderMobileReportHtml(payload) {
       border-left-width: 2px;
       padding: 0.68rem 0.82rem 0.76rem;
       margin-bottom: 0.85rem;
-      opacity: 0.76;
-      background: rgba(7, 8, 10, 0.78);
-      border-color: rgba(255, 255, 255, 0.022);
-      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+      opacity: 0.73;
+      background: rgba(7, 8, 10, 0.76);
+      border-color: rgba(255, 255, 255, 0.02);
+      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.09);
     }
     .card--section-support .card-title {
       font-size: 0.78rem;
@@ -563,6 +568,12 @@ export function renderMobileReportHtml(payload) {
     .card--tone-a { border-left-color: rgba(212, 175, 55, 0.65); }
     .card--tone-b { border-left-color: rgba(130, 155, 190, 0.38); }
     .card--tone-c { border-left-color: rgba(170, 140, 195, 0.32); }
+    .card--section-support.card--tone-b {
+      border-left-color: rgba(130, 155, 190, 0.26);
+    }
+    .card--section-support.card--tone-c {
+      border-left-color: rgba(170, 140, 195, 0.22);
+    }
     .card--empty {
       border-left-color: rgba(255, 255, 255, 0.1);
       opacity: 0.92;
@@ -718,16 +729,27 @@ export function renderMobileReportHtml(payload) {
       overflow: hidden;
     }
     .summary-line--distilled {
-      padding-top: 0.55rem;
-      font-size: 0.84rem;
-      line-height: 1.38;
+      padding-top: 0.5rem;
+      font-size: 0.82rem;
+      line-height: 1.36;
       letter-spacing: 0.01em;
-      color: rgba(178, 174, 166, 0.88);
-      -webkit-line-clamp: 1;
-      max-width: 20rem;
+      color: rgba(172, 168, 160, 0.86);
       margin-left: auto;
       margin-right: auto;
       text-align: center;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .summary-line--distilled.summary-line--tight {
+      -webkit-line-clamp: 1;
+      max-width: 19rem;
+      line-height: 1.34;
+    }
+    .summary-line--distilled.summary-line--roomy {
+      -webkit-line-clamp: 2;
+      max-width: 21.5rem;
+      line-height: 1.42;
     }
     .gold { color: var(--gold-bright); }
     .meter-label {
@@ -798,25 +820,21 @@ export function renderMobileReportHtml(payload) {
     .report-trust-footer .tiny {
       opacity: 0.72;
     }
+    .report-trust-footer .report-outro-hint {
+      margin: 1rem 0 0;
+      padding-top: 0.9rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 0.66rem;
+      font-weight: 400;
+      letter-spacing: 0.035em;
+      line-height: 1.55;
+      color: rgba(98, 95, 90, 0.9);
+    }
     .tiny {
       font-size: 0.68rem;
       color: var(--muted2);
       margin: 0;
       line-height: 1.5;
-    }
-    /* —— Outro: calm close, no buttons —— */
-    .report-outro {
-      margin-top: 0.5rem;
-      padding: 1.35rem 0.5rem 0;
-      text-align: center;
-    }
-    .report-outro-hint {
-      margin: 0;
-      font-size: 0.68rem;
-      font-weight: 400;
-      letter-spacing: 0.04em;
-      line-height: 1.55;
-      color: rgba(105, 102, 96, 0.92);
     }
   </style>
 </head>
@@ -828,7 +846,6 @@ export function renderMobileReportHtml(payload) {
     ${owner}
     ${best}
     ${trustBlock(p)}
-    ${reportOutro(p)}
   </div>
 </body>
 </html>`;
