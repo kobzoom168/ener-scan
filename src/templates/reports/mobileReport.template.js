@@ -72,7 +72,7 @@ function hero(p) {
       <div class="hero-caption">
         <span class="badge"><span class="badge-inner">Ener Scan</span><span class="badge-sep" aria-hidden="true"></span><span class="badge-sub">รายงานเฉพาะชิ้น</span></span>
         <p class="hero-reading">การอ่านวัตถุชิ้นนี้</p>
-        <h1 class="hero-object-name">${escapeHtml(label)}</h1>
+        <h1 class="hero-object-name"><span class="hero-object-name__text">${escapeHtml(label)}</span></h1>
         <p class="hero-doc-title">รายงานพลังวัตถุ</p>
         ${date ? `<p class="hero-date"><span class="hero-date-inner">${escapeHtml(date)}</span></p>` : ""}
       </div>
@@ -123,7 +123,7 @@ function summary(p) {
         <span class="summary-tier-label">ความเข้ากัน</span>
         <span class="summary-tier-value summary-tier-value--compat gold">${escapeHtml(compat)}</span>
       </div>
-      <p class="summary-line">${escapeHtml(s.summaryLine || "")}</p>
+      <p class="summary-line summary-line--distilled">${escapeHtml(s.summaryLine || "")}</p>
     </div>
   </section>`;
 }
@@ -150,26 +150,27 @@ function actionBar(p) {
   const buttons = [];
   if (a.rescanUrl)
     buttons.push(
-      `<a class="btn btn-primary" href="${escapeHtml(a.rescanUrl)}">สแกนใหม่</a>`,
+      `<a class="btn btn-primary" href="${escapeHtml(a.rescanUrl)}">สแกนวัตถุใหม่</a>`,
     );
   if (a.historyUrl)
     buttons.push(
-      `<a class="btn btn-secondary" href="${escapeHtml(a.historyUrl)}">ดูประวัติ</a>`,
+      `<a class="btn btn-secondary" href="${escapeHtml(a.historyUrl)}">ประวัติการสแกน</a>`,
     );
   if (a.changeBirthdateUrl)
     buttons.push(
-      `<a class="btn btn-secondary" href="${escapeHtml(a.changeBirthdateUrl)}">เปลี่ยนวันเกิด</a>`,
+      `<a class="btn btn-secondary" href="${escapeHtml(a.changeBirthdateUrl)}">ปรับวันเกิด</a>`,
     );
   if (a.lineHomeUrl)
     buttons.push(
-      `<a class="btn btn-secondary" href="${escapeHtml(a.lineHomeUrl)}">กลับ LINE</a>`,
+      `<a class="btn btn-secondary" href="${escapeHtml(a.lineHomeUrl)}">กลับแชท LINE</a>`,
     );
   if (!buttons.length)
     buttons.push(
-      `<span class="btn btn-disabled" role="note">เปิดจาก LINE เพื่อใช้งานต่อ</span>`,
+      `<span class="btn btn-disabled" role="note">เปิดใน LINE เพื่อดำเนินการต่อ</span>`,
     );
   return `
   <footer class="action-bar action-bar--premium">
+    <p class="action-bar-caption">ลงมือต่อได้จากแชททันที</p>
     <div class="action-bar-inner">
       ${buttons.join("")}
     </div>
@@ -418,10 +419,19 @@ export function renderMobileReportHtml(payload) {
       font-weight: 700;
       line-height: 1.35;
       color: rgba(248, 245, 240, 0.98);
-      letter-spacing: 0.04em;
+      letter-spacing: 0.02em;
       text-shadow: 0 2px 20px rgba(0, 0, 0, 0.35);
       overflow-wrap: anywhere;
       word-break: break-word;
+    }
+    .hero-object-name__text {
+      display: inline-block;
+      max-width: 100%;
+      padding-bottom: 0.38rem;
+      border-bottom: 1px solid rgba(212, 175, 55, 0.38);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+      background: linear-gradient(180deg, rgba(248, 245, 240, 0.04), transparent 65%);
+      border-radius: 2px;
     }
     .hero-doc-title {
       margin: 0;
@@ -500,23 +510,25 @@ export function renderMobileReportHtml(payload) {
     }
     .card--section-support {
       border-left-width: 2px;
-      padding: 0.85rem 1rem 0.95rem;
-      opacity: 0.9;
-      background: rgba(10, 11, 15, 0.88);
-      border-color: rgba(255, 255, 255, 0.04);
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+      padding: 0.72rem 0.88rem 0.82rem;
+      margin-bottom: 0.85rem;
+      opacity: 0.82;
+      background: rgba(8, 9, 12, 0.82);
+      border-color: rgba(255, 255, 255, 0.028);
+      box-shadow: 0 1px 8px rgba(0, 0, 0, 0.14);
     }
     .card--section-support .card-title {
-      font-size: 0.86rem;
+      font-size: 0.8rem;
       font-weight: 600;
-      color: rgba(180, 175, 168, 0.95);
-      margin-bottom: 0.5rem;
-      letter-spacing: 0.04em;
+      color: rgba(150, 146, 138, 0.88);
+      margin-bottom: 0.42rem;
+      letter-spacing: 0.05em;
     }
     .card--section-support .bullet-list,
     .card--section-support .para {
-      font-size: 0.94rem;
-      color: rgba(212, 208, 200, 0.88);
+      font-size: 0.88rem;
+      line-height: 1.55;
+      color: rgba(175, 170, 162, 0.82);
     }
     .card--tone-a { border-left-color: rgba(212, 175, 55, 0.65); }
     .card--tone-b { border-left-color: rgba(130, 155, 190, 0.38); }
@@ -675,6 +687,18 @@ export function renderMobileReportHtml(payload) {
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
+    .summary-line--distilled {
+      padding-top: 0.65rem;
+      font-size: 0.86rem;
+      line-height: 1.42;
+      letter-spacing: 0.01em;
+      color: rgba(188, 184, 176, 0.9);
+      -webkit-line-clamp: 2;
+      max-width: 22rem;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+    }
     .gold { color: var(--gold-bright); }
     .meter-label {
       display: block;
@@ -752,8 +776,18 @@ export function renderMobileReportHtml(payload) {
     }
     /* —— CTA: tactile, clearly tappable —— */
     .action-bar--premium {
-      margin-top: 1.15rem;
-      padding-top: 0.35rem;
+      margin-top: 1.35rem;
+      padding-top: 0.45rem;
+      border-top: 1px solid rgba(212, 175, 55, 0.12);
+    }
+    .action-bar-caption {
+      margin: 0 0 0.85rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      text-align: center;
+      color: rgba(163, 158, 150, 0.92);
     }
     .action-bar-inner {
       display: flex;
@@ -786,13 +820,14 @@ export function renderMobileReportHtml(payload) {
       color: rgba(240, 237, 232, 0.92);
     }
     .btn-primary {
-      background: linear-gradient(175deg, rgba(232, 207, 106, 0.22), rgba(212, 175, 55, 0.1));
-      border: 1px solid rgba(212, 175, 55, 0.55);
+      min-height: 3.2rem;
+      background: linear-gradient(175deg, rgba(232, 207, 106, 0.28), rgba(212, 175, 55, 0.12));
+      border: 1px solid rgba(212, 175, 55, 0.62);
       color: var(--gold-bright);
       box-shadow:
-        0 4px 18px rgba(0, 0, 0, 0.35),
-        0 0 0 1px rgba(0, 0, 0, 0.2) inset,
-        0 1px 0 rgba(255, 255, 255, 0.08) inset;
+        0 6px 22px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(0, 0, 0, 0.22) inset,
+        0 1px 0 rgba(255, 255, 255, 0.1) inset;
     }
     .btn-primary:active {
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
