@@ -1,5 +1,37 @@
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 
+/** Internal / non-display object type slugs (not shown as a label). */
+const OBJECT_TYPE_INTERNAL = new Set(["single_supported", "mock"]);
+
+/**
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function humanObjectTypeLabel(raw) {
+  const t = String(raw ?? "").trim();
+  if (!t || OBJECT_TYPE_INTERNAL.has(t)) return "";
+  return t;
+}
+
+/**
+ * Prefer first clause before em/en dash; keeps one readable “core” line for the summary strip.
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function distillSummaryLine(raw) {
+  const t = String(raw ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!t) return "";
+  const splitDash = t.split(/\s*[—–]\s*/);
+  if (splitDash.length > 1 && splitDash[0].length >= 8) return splitDash[0].trim();
+  const firstLine = t.split(/\n/)[0].trim();
+  if (firstLine.length <= 96) return firstLine;
+  const cut = firstLine.slice(0, 88);
+  const sp = cut.lastIndexOf(" ");
+  return (sp > 28 ? cut.slice(0, sp) : cut) + "…";
+}
+
 /**
  * Optional section: show muted empty hint when no content (graceful).
  * @param {string} title
@@ -44,7 +76,20 @@ function ulList(items) {
  */
 function hero(p) {
   const imageUrl = String(p.object?.objectImageUrl || "").trim();
-  const label = p.object?.objectLabel || "วัตถุของคุณ";
+  const labelRaw = String(p.object?.objectLabel ?? "").trim();
+  const main = String(p.summary?.mainEnergyLabel ?? "").trim();
+  const genericLabels = new Set(["วัตถุของคุณ", "วัตถุจากการสแกน"]);
+  let label;
+  if (labelRaw && !genericLabels.has(labelRaw)) {
+    label = labelRaw;
+  } else if (main) {
+    label = `วัตถุชิ้นนี้ · ${main}`;
+  } else if (labelRaw) {
+    label = labelRaw;
+  } else {
+    label = "วัตถุในรายงานนี้";
+  }
+  const typeLabel = humanObjectTypeLabel(p.object?.objectType);
   const alt = imageUrl
     ? `รูปวัตถุ — ${escapeHtml(label)}`
     : "ไม่มีรูปวัตถุจากระบบ";
@@ -72,6 +117,7 @@ function hero(p) {
       <div class="hero-caption">
         <span class="badge"><span class="badge-inner">Ener Scan</span><span class="badge-sep" aria-hidden="true"></span><span class="badge-sub">รายงานเฉพาะชิ้น</span></span>
         <p class="hero-reading">การอ่านวัตถุชิ้นนี้</p>
+        ${typeLabel ? `<p class="hero-object-kind">${escapeHtml(typeLabel)}</p>` : ""}
         <h1 class="hero-object-name"><span class="hero-object-name__text">${escapeHtml(label)}</span></h1>
         <p class="hero-doc-title">รายงานพลังวัตถุ</p>
         ${date ? `<p class="hero-date"><span class="hero-date-inner">${escapeHtml(date)}</span></p>` : ""}
@@ -99,6 +145,7 @@ function summary(p) {
     Math.max(0, Number(s.energyScore) * 10 || 0),
   );
   const mainShort = s.mainEnergyLabel || "—";
+  const coreSummary = distillSummaryLine(s.summaryLine);
   return `
   <section class="card card--summary" aria-labelledby="summary-heading">
     <h2 class="summary-eyebrow" id="summary-heading">สรุปภาพรวม</h2>
@@ -123,7 +170,7 @@ function summary(p) {
         <span class="summary-tier-label">ความเข้ากัน</span>
         <span class="summary-tier-value summary-tier-value--compat gold">${escapeHtml(compat)}</span>
       </div>
-      <p class="summary-line summary-line--distilled">${escapeHtml(s.summaryLine || "")}</p>
+      ${coreSummary ? `<p class="summary-line summary-line--distilled">${escapeHtml(coreSummary)}</p>` : ""}
     </div>
   </section>`;
 }
@@ -143,37 +190,13 @@ function trustBlock(p) {
 }
 
 /**
- * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ * Calm closing — no action buttons; subtle orientation only.
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} _p
  */
-function actionBar(p) {
-  const a = p.actions || {};
-  const buttons = [];
-  if (a.rescanUrl)
-    buttons.push(
-      `<a class="btn btn-primary" href="${escapeHtml(a.rescanUrl)}">สแกนวัตถุใหม่</a>`,
-    );
-  if (a.historyUrl)
-    buttons.push(
-      `<a class="btn btn-secondary" href="${escapeHtml(a.historyUrl)}">ประวัติการสแกน</a>`,
-    );
-  if (a.changeBirthdateUrl)
-    buttons.push(
-      `<a class="btn btn-secondary" href="${escapeHtml(a.changeBirthdateUrl)}">ปรับวันเกิด</a>`,
-    );
-  if (a.lineHomeUrl)
-    buttons.push(
-      `<a class="btn btn-secondary" href="${escapeHtml(a.lineHomeUrl)}">กลับแชท LINE</a>`,
-    );
-  if (!buttons.length)
-    buttons.push(
-      `<span class="btn btn-disabled" role="note">เปิดใน LINE เพื่อดำเนินการต่อ</span>`,
-    );
+function reportOutro(_p) {
   return `
-  <footer class="action-bar action-bar--premium">
-    <p class="action-bar-caption">ลงมือต่อได้จากแชททันที</p>
-    <div class="action-bar-inner">
-      ${buttons.join("")}
-    </div>
+  <footer class="report-outro" role="contentinfo">
+    <p class="report-outro-hint">ดำเนินการต่อจากแชท LINE ได้เมื่อต้องการ</p>
   </footer>`;
 }
 
@@ -268,7 +291,7 @@ export function renderMobileReportHtml(payload) {
     .wrap {
       max-width: 26rem;
       margin: 0 auto;
-      padding: 1.35rem 1.2rem 3rem;
+      padding: 1.35rem 1.2rem 4.25rem;
     }
     /* —— Hero: sacred focal + caption bonded to frame (“this object is being read”) —— */
     .hero {
@@ -399,7 +422,7 @@ export function renderMobileReportHtml(payload) {
     .hero-caption {
       flex-shrink: 0;
       text-align: center;
-      padding: 1rem 0.85rem 1.2rem;
+      padding: 1.25rem 1rem 1.45rem;
       margin: 0 0.1rem 0.35rem;
       border-radius: 0 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px);
       border-top: 1px solid rgba(212, 175, 55, 0.22);
@@ -412,6 +435,13 @@ export function renderMobileReportHtml(payload) {
       letter-spacing: 0.2em;
       text-transform: uppercase;
       color: rgba(212, 175, 55, 0.75);
+    }
+    .hero-object-kind {
+      margin: 0 0 0.35rem;
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      color: rgba(188, 182, 172, 0.88);
     }
     .hero-object-name {
       margin: 0.4rem 0 0.25rem;
@@ -510,25 +540,25 @@ export function renderMobileReportHtml(payload) {
     }
     .card--section-support {
       border-left-width: 2px;
-      padding: 0.72rem 0.88rem 0.82rem;
+      padding: 0.68rem 0.82rem 0.76rem;
       margin-bottom: 0.85rem;
-      opacity: 0.82;
-      background: rgba(8, 9, 12, 0.82);
-      border-color: rgba(255, 255, 255, 0.028);
-      box-shadow: 0 1px 8px rgba(0, 0, 0, 0.14);
+      opacity: 0.76;
+      background: rgba(7, 8, 10, 0.78);
+      border-color: rgba(255, 255, 255, 0.022);
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
     }
     .card--section-support .card-title {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       font-weight: 600;
-      color: rgba(150, 146, 138, 0.88);
-      margin-bottom: 0.42rem;
+      color: rgba(138, 134, 130, 0.82);
+      margin-bottom: 0.38rem;
       letter-spacing: 0.05em;
     }
     .card--section-support .bullet-list,
     .card--section-support .para {
-      font-size: 0.88rem;
-      line-height: 1.55;
-      color: rgba(175, 170, 162, 0.82);
+      font-size: 0.86rem;
+      line-height: 1.52;
+      color: rgba(168, 164, 156, 0.78);
     }
     .card--tone-a { border-left-color: rgba(212, 175, 55, 0.65); }
     .card--tone-b { border-left-color: rgba(130, 155, 190, 0.38); }
@@ -688,13 +718,13 @@ export function renderMobileReportHtml(payload) {
       overflow: hidden;
     }
     .summary-line--distilled {
-      padding-top: 0.65rem;
-      font-size: 0.86rem;
-      line-height: 1.42;
+      padding-top: 0.55rem;
+      font-size: 0.84rem;
+      line-height: 1.38;
       letter-spacing: 0.01em;
-      color: rgba(188, 184, 176, 0.9);
-      -webkit-line-clamp: 2;
-      max-width: 22rem;
+      color: rgba(178, 174, 166, 0.88);
+      -webkit-line-clamp: 1;
+      max-width: 20rem;
       margin-left: auto;
       margin-right: auto;
       text-align: center;
@@ -744,8 +774,8 @@ export function renderMobileReportHtml(payload) {
     /* —— Trust: footer strip, not a content card —— */
     .report-trust-footer {
       margin-top: 1.35rem;
-      padding: 0.85rem 0.35rem 0;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 0.85rem 0.35rem 0.85rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
       text-align: center;
     }
     .report-trust-kicker {
@@ -774,81 +804,19 @@ export function renderMobileReportHtml(payload) {
       margin: 0;
       line-height: 1.5;
     }
-    /* —— CTA: tactile, clearly tappable —— */
-    .action-bar--premium {
-      margin-top: 1.35rem;
-      padding-top: 0.45rem;
-      border-top: 1px solid rgba(212, 175, 55, 0.12);
-    }
-    .action-bar-caption {
-      margin: 0 0 0.85rem;
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
+    /* —— Outro: calm close, no buttons —— */
+    .report-outro {
+      margin-top: 0.5rem;
+      padding: 1.35rem 0.5rem 0;
       text-align: center;
-      color: rgba(163, 158, 150, 0.92);
     }
-    .action-bar-inner {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    .btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 3.05rem;
-      padding: 0.75rem 1.15rem;
-      border-radius: 999px;
-      font-size: 0.98rem;
-      font-weight: 600;
-      text-decoration: none;
-      color: var(--text);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(255, 255, 255, 0.05);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .btn:active {
-      transform: scale(0.98);
-    }
-    .btn-secondary {
-      border-color: rgba(212, 175, 55, 0.28);
-      background: rgba(255, 255, 255, 0.04);
-      color: rgba(240, 237, 232, 0.92);
-    }
-    .btn-primary {
-      min-height: 3.2rem;
-      background: linear-gradient(175deg, rgba(232, 207, 106, 0.28), rgba(212, 175, 55, 0.12));
-      border: 1px solid rgba(212, 175, 55, 0.62);
-      color: var(--gold-bright);
-      box-shadow:
-        0 6px 22px rgba(0, 0, 0, 0.4),
-        0 0 0 1px rgba(0, 0, 0, 0.22) inset,
-        0 1px 0 rgba(255, 255, 255, 0.1) inset;
-    }
-    .btn-primary:active {
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-    }
-    .btn-disabled {
-      opacity: 0.48;
-      cursor: default;
-      font-weight: 500;
-      box-shadow: none;
-    }
-    @media (min-width: 380px) {
-      .action-bar-inner {
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-      .btn {
-        flex: 1 1 auto;
-        min-width: 44%;
-        max-width: 100%;
-      }
+    .report-outro-hint {
+      margin: 0;
+      font-size: 0.68rem;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+      line-height: 1.55;
+      color: rgba(105, 102, 96, 0.92);
     }
   </style>
 </head>
@@ -860,7 +828,7 @@ export function renderMobileReportHtml(payload) {
     ${owner}
     ${best}
     ${trustBlock(p)}
-    ${actionBar(p)}
+    ${reportOutro(p)}
   </div>
 </body>
 </html>`;
