@@ -65,14 +65,17 @@ function hero(p) {
   const heroModifier = imageUrl ? " hero--with-image" : " hero--no-image";
   return `
   <header class="hero${heroModifier}">
-    <div class="hero-frame">
-      ${media}
-    </div>
-    <div class="hero-text">
-      <span class="badge">Ener Scan · รายงานฉบับเต็ม</span>
-      <h1 class="title">รายงานพลังวัตถุ</h1>
-      <p class="byline">${escapeHtml(label)}</p>
-      ${date ? `<p class="hero-date"><span class="hero-date-inner">${escapeHtml(date)}</span></p>` : ""}
+    <div class="hero-stage">
+      <div class="hero-frame">
+        ${media}
+      </div>
+      <div class="hero-caption">
+        <span class="badge"><span class="badge-inner">Ener Scan</span><span class="badge-sep" aria-hidden="true"></span><span class="badge-sub">รายงานเฉพาะชิ้น</span></span>
+        <p class="hero-reading">การอ่านวัตถุชิ้นนี้</p>
+        <h1 class="hero-object-name">${escapeHtml(label)}</h1>
+        <p class="hero-doc-title">รายงานพลังวัตถุ</p>
+        ${date ? `<p class="hero-date"><span class="hero-date-inner">${escapeHtml(date)}</span></p>` : ""}
+      </div>
     </div>
   </header>`;
 }
@@ -97,29 +100,30 @@ function summary(p) {
   );
   const mainShort = s.mainEnergyLabel || "—";
   return `
-  <section class="card card--summary">
-    <div class="summary-head">
-      <h2 class="card-title card-title--inline">สรุปภาพรวม</h2>
-    </div>
-    <p class="summary-line">${escapeHtml(s.summaryLine || "")}</p>
-    <div class="summary-metrics">
-      <div class="metric metric--highlight">
-        <span class="metric-label">คะแนนพลัง</span>
-        <span class="metric-value gold">${escapeHtml(score)}</span>
-        <span class="metric-sub">${escapeHtml(s.energyLevelLabel || "—")}</span>
+  <section class="card card--summary" aria-labelledby="summary-heading">
+    <h2 class="summary-eyebrow" id="summary-heading">สรุปภาพรวม</h2>
+    <div class="summary-stack">
+      <div class="summary-tier summary-tier--score">
+        <span class="summary-score-label">คะแนนพลัง</span>
+        <div class="summary-score-row">
+          <span class="summary-score-num gold">${escapeHtml(score)}</span>
+          <span class="summary-score-denom">/ 10</span>
+        </div>
+        <span class="summary-score-band">${escapeHtml(s.energyLevelLabel || "—")}</span>
+        <div class="summary-meter-block">
+          <span class="meter-label meter-label--sr-only">ระดับพลังโดยรวม</span>
+          <div class="meter meter--summary" role="presentation" aria-hidden="true"><span class="meter-fill" style="width:${meterPct}%"></span></div>
+        </div>
       </div>
-      <div class="metric metric--wide">
-        <span class="metric-label">พลังหลัก</span>
-        <span class="metric-value metric-value--text">${escapeHtml(mainShort)}</span>
+      <div class="summary-tier summary-tier--energy">
+        <span class="summary-tier-label">พลังหลัก</span>
+        <p class="summary-tier-value summary-tier-value--energy">${escapeHtml(mainShort)}</p>
       </div>
-      <div class="metric metric--highlight">
-        <span class="metric-label">ความเข้ากัน</span>
-        <span class="metric-value gold">${escapeHtml(compat)}</span>
+      <div class="summary-tier summary-tier--compat">
+        <span class="summary-tier-label">ความเข้ากัน</span>
+        <span class="summary-tier-value summary-tier-value--compat gold">${escapeHtml(compat)}</span>
       </div>
-    </div>
-    <div class="meter-wrap">
-      <span class="meter-label">ระดับพลังโดยรวม</span>
-      <div class="meter" role="presentation" aria-hidden="true"><span class="meter-fill" style="width:${meterPct}%"></span></div>
+      <p class="summary-line">${escapeHtml(s.summaryLine || "")}</p>
     </div>
   </section>`;
 }
@@ -131,11 +135,11 @@ function trustBlock(p) {
   const t = p.trust || {};
   const note = t.trustNote || "";
   return `
-  <section class="card card--section card--trust">
-    <h2 class="card-title">หมายเหตุ</h2>
-    ${note ? `<p class="trust-text">${escapeHtml(note)}</p>` : `<p class="empty-hint">ไม่มีหมายเหตุเพิ่มเติม</p>`}
+  <div class="report-trust-footer" role="note">
+    <p class="report-trust-kicker">หมายเหตุ</p>
+    ${note ? `<p class="trust-text">${escapeHtml(note)}</p>` : `<p class="trust-text trust-text--empty">ไม่มีหมายเหตุเพิ่มเติม</p>`}
     <p class="meta tiny">เวอร์ชันรายงาน ${escapeHtml(p.reportVersion)} · render ${escapeHtml(t.rendererVersion || "")}${t.modelLabel ? ` · ${escapeHtml(t.modelLabel)}` : ""}</p>
-  </section>`;
+  </div>`;
 }
 
 /**
@@ -165,7 +169,7 @@ function actionBar(p) {
       `<span class="btn btn-disabled" role="note">เปิดจาก LINE เพื่อใช้งานต่อ</span>`,
     );
   return `
-  <footer class="action-bar">
+  <footer class="action-bar action-bar--premium">
     <div class="action-bar-inner">
       ${buttons.join("")}
     </div>
@@ -190,16 +194,20 @@ export function renderMobileReportHtml(payload) {
   const ownerBody = `${ownerMatchReason.length ? ulList(ownerMatchReason) : ""}${sec.roleDescription ? `<p class="para">${escapeHtml(sec.roleDescription)}</p>` : ""}`;
   const bestBody = ulList(bestUseCases);
 
-  const what = sectionOrEmpty("สิ่งที่วัตถุนี้มอบให้", whatBody, "card--tone-a");
+  const what = sectionOrEmpty(
+    "สิ่งที่วัตถุนี้มอบให้",
+    whatBody,
+    "card--tone-a card--section-lead",
+  );
   const owner = sectionOrEmpty(
     "ทำไมถึงเข้ากับเจ้าของ",
     ownerBody,
-    "card--tone-b",
+    "card--tone-b card--section-support",
   );
   const best = sectionOrEmpty(
     "จังหวะที่เหมาะจะใช้",
     bestBody,
-    "card--tone-c",
+    "card--tone-c card--section-support",
   );
 
   return `<!DOCTYPE html>
@@ -210,24 +218,32 @@ export function renderMobileReportHtml(payload) {
   <meta name="color-scheme" content="dark"/>
   <title>${escapeHtml(p.summary?.summaryLine?.slice(0, 48) || "Ener Scan — รายงาน")}</title>
   <style>
+    /*
+     * Visual direction: Mystic Premium (base) + light Amulet Luxury cues
+     * — dark ceremonial base, restrained gold, subtle glow only, not dashboard / not flashy.
+     */
     :root {
-      --bg: #080a0d;
-      --bg-elevated: #0e1117;
-      --card: #12161d;
-      --card-edge: rgba(255, 255, 255, 0.07);
-      --text: #eceae7;
-      --muted: #9b968f;
-      --muted2: #6f6a64;
+      --bg: #060608;
+      --bg-elevated: #0c0d12;
+      --card: #101218;
+      --card-edge: rgba(255, 255, 255, 0.055);
+      --text: #f0ede8;
+      --muted: #a39e96;
+      --muted2: #6e6962;
       --gold: #d4af37;
-      --gold-soft: rgba(212, 175, 55, 0.14);
-      --gold-dim: #9a7b1a;
-      --radius: 16px;
-      --radius-sm: 12px;
+      --gold-bright: #e8cf6a;
+      --gold-soft: rgba(212, 175, 55, 0.11);
+      --gold-dim: #8a7020;
+      --mystic-violet: rgba(88, 72, 120, 0.14);
+      --amulet-wine: rgba(72, 38, 52, 0.35);
+      --radius: 18px;
+      --radius-sm: 14px;
       --font: "Sarabun", "Noto Sans Thai", system-ui, sans-serif;
-      --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
-      --section-accent-a: rgba(212, 175, 55, 0.22);
-      --section-accent-b: rgba(120, 160, 200, 0.12);
-      --section-accent-c: rgba(180, 140, 200, 0.1);
+      --shadow-elevated: 0 20px 48px rgba(0, 0, 0, 0.55);
+      --glow-gold-soft: 0 0 42px rgba(212, 175, 55, 0.07);
+      --section-accent-a: rgba(212, 175, 55, 0.28);
+      --section-accent-b: rgba(130, 155, 190, 0.14);
+      --section-accent-c: rgba(160, 130, 185, 0.12);
     }
     * { box-sizing: border-box; }
     html { -webkit-text-size-adjust: 100%; }
@@ -235,11 +251,14 @@ export function renderMobileReportHtml(payload) {
       margin: 0;
       font-family: var(--font);
       background: var(--bg);
-      background-image: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(212, 175, 55, 0.06), transparent 50%);
+      background-image:
+        radial-gradient(ellipse 100% 70% at 50% -15%, rgba(212, 175, 55, 0.07), transparent 52%),
+        radial-gradient(ellipse 80% 50% at 100% 100%, var(--mystic-violet), transparent 45%),
+        radial-gradient(ellipse 60% 40% at 0% 80%, rgba(212, 175, 55, 0.03), transparent 40%);
       color: var(--text);
-      line-height: 1.7;
+      line-height: 1.75;
       font-size: 17px;
-      letter-spacing: 0.01em;
+      letter-spacing: 0.02em;
       -webkit-font-smoothing: antialiased;
       text-rendering: optimizeLegibility;
       overflow-wrap: break-word;
@@ -248,37 +267,93 @@ export function renderMobileReportHtml(payload) {
     .wrap {
       max-width: 26rem;
       margin: 0 auto;
-      padding: 1.25rem 1.125rem 2.75rem;
+      padding: 1.35rem 1.2rem 3rem;
     }
-    /* Hero */
+    /* —— Hero: sacred focal + caption bonded to frame (“this object is being read”) —— */
     .hero {
-      margin-bottom: 1.5rem;
+      margin-bottom: 1.65rem;
+    }
+    .hero-stage {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      padding: 0.35rem;
+      padding-bottom: 0;
+      border-radius: calc(var(--radius) + 4px);
+      background: linear-gradient(160deg, rgba(255, 255, 255, 0.04), transparent 40%, var(--amulet-wine));
+      box-shadow: var(--glow-gold-soft), var(--shadow-elevated);
+      overflow: hidden;
+    }
+    /* Corner brackets: subtle luxury cue */
+    .hero-stage::before,
+    .hero-stage::after {
+      content: "";
+      position: absolute;
+      width: 1.25rem;
+      height: 1.25rem;
+      pointer-events: none;
+      z-index: 2;
+      border-color: rgba(212, 175, 55, 0.28);
+      border-style: solid;
+    }
+    .hero-stage::before {
+      top: 0.5rem;
+      left: 0.5rem;
+      border-width: 1px 0 0 1px;
+      border-radius: 2px 0 0 0;
+    }
+    .hero-stage::after {
+      bottom: 0.5rem;
+      right: 0.5rem;
+      border-width: 0 1px 1px 0;
+      border-radius: 0 0 2px 0;
     }
     .hero-frame {
-      border-radius: var(--radius);
-      padding: 1px;
-      background: linear-gradient(145deg, rgba(212, 175, 55, 0.35), rgba(255, 255, 255, 0.06) 40%, rgba(212, 175, 55, 0.12));
-      box-shadow: var(--shadow-card);
+      flex-shrink: 0;
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 2px;
+      background: linear-gradient(
+        155deg,
+        rgba(232, 207, 106, 0.45),
+        rgba(255, 255, 255, 0.08) 38%,
+        rgba(212, 175, 55, 0.15) 72%,
+        rgba(72, 38, 52, 0.25)
+      );
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 4px 24px rgba(0, 0, 0, 0.45);
       overflow: hidden;
     }
     .hero-media {
       position: relative;
-      border-radius: calc(var(--radius) - 1px);
-      background: linear-gradient(160deg, #1a1f2a 0%, #0d1016 100%);
+      border-radius: calc(var(--radius) - 2px);
+      background: linear-gradient(165deg, #141820 0%, #08090c 100%);
+    }
+    .hero-media::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background: radial-gradient(ellipse 90% 75% at 50% 45%, transparent 35%, rgba(0, 0, 0, 0.45) 100%);
     }
     .hero-media--empty .hero-placeholder {
-      border-radius: calc(var(--radius) - 1px);
+      border-radius: calc(var(--radius) - 2px);
     }
     .hero-img,
     .hero-placeholder {
       display: block;
       width: 100%;
-      aspect-ratio: 4 / 3;
+      aspect-ratio: 4 / 5;
       object-fit: cover;
       object-position: center;
-      border-radius: calc(var(--radius) - 1px);
-      background: linear-gradient(160deg, #1a1f2a 0%, #0d1016 100%);
+      border-radius: calc(var(--radius) - 2px);
+      background: linear-gradient(165deg, #1a1f28 0%, #0a0b0f 100%);
       border: none;
+    }
+    .hero--no-image .hero-img,
+    .hero--no-image .hero-placeholder {
+      aspect-ratio: 4 / 3;
     }
     .hero-img--broken {
       display: none !important;
@@ -286,13 +361,16 @@ export function renderMobileReportHtml(payload) {
     .hero-fallback {
       display: none;
       width: 100%;
-      aspect-ratio: 4 / 3;
+      aspect-ratio: 4 / 5;
       align-items: center;
       justify-content: center;
       color: var(--muted2);
       font-size: 0.9rem;
-      border-radius: calc(var(--radius) - 1px);
-      background: linear-gradient(160deg, #1a1f2a 0%, #0d1016 100%);
+      border-radius: calc(var(--radius) - 2px);
+      background: linear-gradient(165deg, #1a1f28 0%, #0a0b0f 100%);
+    }
+    .hero--no-image .hero-fallback {
+      aspect-ratio: 4 / 3;
     }
     .hero-media--broken .hero-fallback {
       display: flex;
@@ -305,78 +383,154 @@ export function renderMobileReportHtml(payload) {
       font-size: 0.9rem;
     }
     .hero-placeholder-inner {
-      padding: 0.5rem 1rem;
-      border: 1px dashed rgba(212, 175, 55, 0.2);
+      padding: 0.55rem 1.1rem;
+      border: 1px solid rgba(212, 175, 55, 0.18);
       border-radius: var(--radius-sm);
+      background: rgba(0, 0, 0, 0.2);
     }
     .hero--no-image .hero-frame {
-      background: linear-gradient(145deg, rgba(212, 175, 55, 0.2), rgba(255, 255, 255, 0.04) 45%, rgba(212, 175, 55, 0.08));
+      border-radius: var(--radius);
+      background: linear-gradient(150deg, rgba(212, 175, 55, 0.18), rgba(255, 255, 255, 0.03) 50%, var(--amulet-wine));
     }
-    .hero-text {
-      padding: 1.1rem 0.15rem 0;
+    .hero--no-image .hero-caption {
+      border-radius: 0 0 calc(var(--radius) + 2px) calc(var(--radius) + 2px);
+    }
+    .hero-caption {
+      flex-shrink: 0;
+      text-align: center;
+      padding: 1rem 0.85rem 1.2rem;
+      margin: 0 0.1rem 0.35rem;
+      border-radius: 0 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px);
+      border-top: 1px solid rgba(212, 175, 55, 0.22);
+      background: linear-gradient(180deg, rgba(4, 5, 7, 0.97), rgba(10, 11, 15, 0.99));
+    }
+    .hero-reading {
+      margin: 0 0 0.35rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(212, 175, 55, 0.75);
+    }
+    .hero-object-name {
+      margin: 0.4rem 0 0.25rem;
+      font-size: 1.42rem;
+      font-weight: 700;
+      line-height: 1.35;
+      color: rgba(248, 245, 240, 0.98);
+      letter-spacing: 0.04em;
+      text-shadow: 0 2px 20px rgba(0, 0, 0, 0.35);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .hero-doc-title {
+      margin: 0;
+      font-size: 0.82rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(163, 158, 150, 0.88);
     }
     .badge {
-      display: inline-block;
-      font-size: 0.72rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.68rem;
       font-weight: 600;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: var(--gold);
-      background: var(--gold-soft);
-      padding: 0.35rem 0.65rem;
+      color: var(--gold-bright);
+      background: rgba(0, 0, 0, 0.35);
+      padding: 0.4rem 0.85rem;
       border-radius: 999px;
-      margin: 0 0 0.65rem;
+      margin: 0 0 0.55rem;
+      border: 1px solid rgba(212, 175, 55, 0.22);
     }
-    .title {
-      font-size: 1.55rem;
-      font-weight: 700;
-      margin: 0 0 0.4rem;
-      line-height: 1.35;
-      letter-spacing: -0.02em;
+    .badge-sep {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: rgba(212, 175, 55, 0.5);
     }
-    .byline {
-      margin: 0;
+    .badge-sub {
+      letter-spacing: 0.08em;
+      font-weight: 500;
       color: var(--muted);
-      font-size: 1rem;
-      line-height: 1.55;
+      text-transform: none;
+      font-size: 0.72rem;
     }
     .hero-date {
       margin: 0.75rem 0 0;
     }
     .hero-date-inner {
       display: inline-block;
-      font-size: 0.8rem;
-      color: var(--muted);
-      padding: 0.25rem 0.6rem;
-      background: rgba(255, 255, 255, 0.04);
-      border-radius: 8px;
+      font-size: 0.78rem;
+      color: var(--muted2);
+      padding: 0.3rem 0.75rem;
+      background: rgba(255, 255, 255, 0.035);
+      border-radius: 999px;
       border: 1px solid rgba(255, 255, 255, 0.06);
     }
-    /* Cards */
+    /* —— Cards: hierarchy (lead vs support vs fine print) —— */
     .card {
       background: var(--card);
       border-radius: var(--radius);
-      padding: 1.15rem 1.2rem;
-      margin-bottom: 1rem;
+      padding: 1.2rem 1.25rem;
+      margin-bottom: 1.1rem;
       border: 1px solid var(--card-edge);
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
     }
     .card--section {
       border-left: 3px solid var(--section-accent-a);
-      background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--card) 100%);
+      background: linear-gradient(175deg, rgba(15, 16, 22, 0.98) 0%, var(--card) 100%);
     }
-    .card--tone-a { border-left-color: rgba(212, 175, 55, 0.55); }
-    .card--tone-b { border-left-color: rgba(130, 170, 210, 0.45); }
-    .card--tone-c { border-left-color: rgba(190, 150, 210, 0.4); }
+    .card--section-lead {
+      border-left-width: 5px;
+      padding: 1.45rem 1.35rem 1.5rem;
+      background: linear-gradient(168deg, rgba(212, 175, 55, 0.06) 0%, rgba(16, 18, 24, 0.99) 55%);
+      box-shadow:
+        0 4px 28px rgba(0, 0, 0, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+    .card--section-lead .card-title {
+      font-size: 1.18rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--gold-bright);
+    }
+    .card--section-support {
+      border-left-width: 2px;
+      padding: 0.85rem 1rem 0.95rem;
+      opacity: 0.9;
+      background: rgba(10, 11, 15, 0.88);
+      border-color: rgba(255, 255, 255, 0.04);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+    }
+    .card--section-support .card-title {
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: rgba(180, 175, 168, 0.95);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.04em;
+    }
+    .card--section-support .bullet-list,
+    .card--section-support .para {
+      font-size: 0.94rem;
+      color: rgba(212, 208, 200, 0.88);
+    }
+    .card--tone-a { border-left-color: rgba(212, 175, 55, 0.65); }
+    .card--tone-b { border-left-color: rgba(130, 155, 190, 0.38); }
+    .card--tone-c { border-left-color: rgba(170, 140, 195, 0.32); }
     .card--empty {
-      border-left-color: rgba(255, 255, 255, 0.12);
+      border-left-color: rgba(255, 255, 255, 0.1);
+      opacity: 0.92;
     }
     .card--empty .card-title {
       opacity: 0.85;
     }
     .empty-hint {
       margin: 0;
-      font-size: 0.92rem;
+      font-size: 0.9rem;
       color: var(--muted2);
       font-style: normal;
     }
@@ -385,101 +539,174 @@ export function renderMobileReportHtml(payload) {
       margin: 0 0 0.75rem;
       color: var(--gold);
       font-weight: 600;
-      line-height: 1.4;
+      line-height: 1.45;
     }
-    .card-title--inline { margin-bottom: 0.5rem; }
-    .summary-head {
-      margin-bottom: 0.35rem;
-    }
-    /* Summary */
+    /* —— Summary: tier 1 score → tier 2 main energy → tier 3 compat → short line —— */
     .card--summary {
-      background: linear-gradient(165deg, rgba(212, 175, 55, 0.08) 0%, var(--card) 45%);
-      border-color: rgba(212, 175, 55, 0.18);
+      margin-top: 0.15rem;
+      margin-bottom: 1.35rem;
+      padding: 1.35rem 1.2rem 1.4rem;
+      background: linear-gradient(168deg, rgba(212, 175, 55, 0.07) 0%, rgba(16, 18, 24, 0.98) 42%, var(--card) 100%);
+      border-color: rgba(212, 175, 55, 0.2);
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
     }
-    .summary-line {
+    .summary-eyebrow {
       margin: 0 0 1.1rem;
-      font-size: 1rem;
-      line-height: 1.75;
-      color: var(--text);
-    }
-    .summary-metrics {
-      display: grid;
-      grid-template-columns: 1fr 1.4fr 1fr;
-      gap: 0.6rem;
-      margin-bottom: 1rem;
-      align-items: stretch;
-    }
-    .metric {
-      background: rgba(0, 0, 0, 0.28);
-      border-radius: var(--radius-sm);
-      padding: 0.65rem 0.45rem;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(163, 158, 150, 0.9);
       text-align: center;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      min-height: 5.25rem;
+    }
+    .summary-stack {
       display: flex;
       flex-direction: column;
+      gap: 0;
+    }
+    .summary-tier--score {
+      text-align: center;
+      padding: 0.25rem 0 1.05rem;
+    }
+    .summary-score-label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      letter-spacing: 0.08em;
+    }
+    .summary-score-row {
+      display: flex;
+      align-items: baseline;
       justify-content: center;
+      gap: 0.15rem;
+      line-height: 1;
     }
-    .metric--wide {
-      grid-column: span 1;
+    .summary-score-num {
+      font-size: 3.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      text-shadow: 0 0 32px rgba(212, 175, 55, 0.14);
     }
-    .metric-label {
+    .summary-score-denom {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--muted2);
+      align-self: flex-end;
+      padding-bottom: 0.4rem;
+    }
+    .summary-score-band {
+      display: block;
+      margin-top: 0.4rem;
+      margin-bottom: 0.85rem;
+      font-size: 0.82rem;
+      color: rgba(232, 207, 106, 0.92);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+    }
+    .summary-meter-block {
+      max-width: 17rem;
+      margin: 0 auto;
+    }
+    .meter-label--sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .summary-tier--energy {
+      padding: 1rem 0.15rem 1rem;
+      text-align: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .summary-tier-label {
       display: block;
       font-size: 0.68rem;
-      color: var(--muted);
-      margin-bottom: 0.25rem;
-      line-height: 1.3;
+      color: var(--muted2);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 0.45rem;
     }
-    .metric-value {
-      display: block;
-      font-size: 1.5rem;
-      font-weight: 700;
-      line-height: 1.2;
-    }
-    .metric-value--text {
-      font-size: 0.82rem;
+    .summary-tier-value--energy {
+      margin: 0;
+      font-size: 1.05rem;
       font-weight: 600;
-      line-height: 1.45;
+      line-height: 1.55;
+      color: rgba(248, 245, 240, 0.96);
+      max-width: 22rem;
+      margin-left: auto;
+      margin-right: auto;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .summary-tier--compat {
+      padding: 0.65rem 0.15rem 0.75rem;
+      text-align: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .summary-tier--compat .summary-tier-label {
+      margin-bottom: 0.25rem;
+      font-size: 0.65rem;
+      opacity: 0.9;
+    }
+    .summary-tier-value--compat {
+      font-size: 1.12rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+    .summary-line {
+      margin: 0;
+      padding: 0.85rem 0.15rem 0;
+      font-size: 0.92rem;
+      line-height: 1.65;
+      color: rgba(212, 208, 200, 0.88);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
       display: -webkit-box;
       -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
-    .metric-sub {
-      font-size: 0.68rem;
-      color: var(--muted);
-      margin-top: 0.2rem;
-    }
-    .gold { color: var(--gold); }
-    .meter-wrap {
-      padding-top: 0.25rem;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-    }
+    .gold { color: var(--gold-bright); }
     .meter-label {
       display: block;
-      font-size: 0.72rem;
-      color: var(--muted);
-      margin-bottom: 0.4rem;
+      font-size: 0.7rem;
+      color: var(--muted2);
+      margin-bottom: 0.45rem;
+      text-align: center;
+      letter-spacing: 0.04em;
     }
     .meter {
-      height: 7px;
-      background: rgba(255, 255, 255, 0.07);
-      border-radius: 4px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
       overflow: hidden;
+    }
+    .meter--summary {
+      height: 8px;
     }
     .meter-fill {
       display: block;
       height: 100%;
-      background: linear-gradient(90deg, var(--gold-dim), var(--gold));
-      border-radius: 4px;
+      background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+      border-radius: 999px;
+      box-shadow: 0 0 12px rgba(212, 175, 55, 0.2);
     }
     .bullet-list {
       margin: 0;
-      padding-left: 1.2rem;
+      padding-left: 1.15rem;
     }
     .bullet-list li {
-      margin-bottom: 0.55rem;
-      padding-left: 0.15rem;
+      margin-bottom: 0.6rem;
+      padding-left: 0.1rem;
     }
     .bullet-list li::marker {
       color: var(--gold-dim);
@@ -487,59 +714,94 @@ export function renderMobileReportHtml(payload) {
     .para {
       margin: 0.65rem 0 0;
       color: var(--muted);
-      font-size: 0.95rem;
-      line-height: 1.7;
-    }
-    .card--trust .trust-text {
-      margin: 0 0 0.65rem;
       font-size: 0.94rem;
-      line-height: 1.7;
-      color: var(--text);
+      line-height: 1.75;
+    }
+    /* —— Trust: footer strip, not a content card —— */
+    .report-trust-footer {
+      margin-top: 1.35rem;
+      padding: 0.85rem 0.35rem 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      text-align: center;
+    }
+    .report-trust-kicker {
+      margin: 0 0 0.45rem;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(110, 105, 98, 0.95);
+    }
+    .report-trust-footer .trust-text {
+      margin: 0 0 0.55rem;
+      font-size: 0.84rem;
+      line-height: 1.65;
+      color: rgba(163, 158, 150, 0.96);
+    }
+    .trust-text--empty {
+      opacity: 0.8;
+    }
+    .report-trust-footer .tiny {
+      opacity: 0.72;
     }
     .tiny {
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       color: var(--muted2);
       margin: 0;
       line-height: 1.5;
     }
-    /* Action bar */
-    .action-bar {
-      margin-top: 1.25rem;
-      padding-top: 0.25rem;
+    /* —— CTA: tactile, clearly tappable —— */
+    .action-bar--premium {
+      margin-top: 1.15rem;
+      padding-top: 0.35rem;
     }
     .action-bar-inner {
       display: flex;
       flex-direction: column;
-      gap: 0.6rem;
+      gap: 0.75rem;
     }
     .btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 2.85rem;
-      padding: 0.6rem 1rem;
-      border-radius: var(--radius-sm);
-      font-size: 0.95rem;
+      min-height: 3.05rem;
+      padding: 0.75rem 1.15rem;
+      border-radius: 999px;
+      font-size: 0.98rem;
       font-weight: 600;
       text-decoration: none;
       color: var(--text);
       border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(255, 255, 255, 0.04);
-      transition: background 0.15s ease, border-color 0.15s ease;
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active {
+      transform: scale(0.98);
     }
     .btn-secondary {
-      border-color: rgba(212, 175, 55, 0.22);
-      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(212, 175, 55, 0.28);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(240, 237, 232, 0.92);
     }
     .btn-primary {
-      background: linear-gradient(180deg, rgba(212, 175, 55, 0.22), rgba(212, 175, 55, 0.06));
-      border-color: rgba(212, 175, 55, 0.45);
-      color: var(--gold);
+      background: linear-gradient(175deg, rgba(232, 207, 106, 0.22), rgba(212, 175, 55, 0.1));
+      border: 1px solid rgba(212, 175, 55, 0.55);
+      color: var(--gold-bright);
+      box-shadow:
+        0 4px 18px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(0, 0, 0, 0.2) inset,
+        0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    }
+    .btn-primary:active {
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
     }
     .btn-disabled {
-      opacity: 0.5;
+      opacity: 0.48;
       cursor: default;
       font-weight: 500;
+      box-shadow: none;
     }
     @media (min-width: 380px) {
       .action-bar-inner {
