@@ -6,7 +6,7 @@ import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
 import { replyText, replyFlex, replyPaymentInstructions } from "../services/lineReply.service.js";
-import { sendTextSequence } from "../services/lineSequenceReply.service.js";
+import { sendTextSequence, pushText } from "../services/lineSequenceReply.service.js";
 import { buildScanFlex } from "../services/flex/flex.service.js";
 
 import { buildBirthdateSettingsBubble } from "../services/flex/status.flex.js";
@@ -64,9 +64,42 @@ import {
 import { createScanResult } from "../stores/scanResults.db.js";
 import { createPaymentPending } from "../stores/payments.db.js";
 import { getSavedBirthdate } from "../stores/userProfile.db.js";
+import { randomBetween, sleep } from "../utils/timing.util.js";
 
 import { logPaywallShown, logEvent } from "../utils/personaAnalytics.util.js";
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
+
+const PRE_SCAN_ACK_VARIANTS = [
+  ["ได้รูปแล้วนะ", "รอแป๊บนึง เดี๋ยวผมกำลังอ่านให้"],
+  ["รับภาพแล้ว", "เดี๋ยวผมดูให้ ขอเวลาแป๊บเดียว"],
+  ["โอเค ได้แล้ว", "รอสักครู่ เดี๋ยวผมอ่านให้ต่อ"],
+];
+
+async function sendPreScanAcknowledgement({ client, userId }) {
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  const chosen =
+    PRE_SCAN_ACK_VARIANTS[
+      Math.floor(Math.random() * PRE_SCAN_ACK_VARIANTS.length)
+    ] || PRE_SCAN_ACK_VARIANTS[0];
+  const first = String(chosen?.[0] || "").trim();
+  const second = String(chosen?.[1] || "").trim();
+  if (!first || !second) return;
+
+  // Keep scan execution non-blocking: send first now, queue second shortly after.
+  await pushText(client, uid, first);
+  void (async () => {
+    try {
+      await sleep(randomBetween(400, 800));
+      await pushText(client, uid, second);
+    } catch (err) {
+      console.error("[PRE_SCAN_ACK] push second failed (ignored):", {
+        userId: uid,
+        message: err?.message,
+      });
+    }
+  })();
+}
 
 async function sendPaymentGateTextReply({ client, replyToken, userId, reply }) {
   const fallbackText =
@@ -510,6 +543,8 @@ export async function runScanFlow({
       imageBufferLength: imageBuffer?.length || 0,
       startedAt: scanStartedAt,
     });
+
+    await sendPreScanAcknowledgement({ client, userId });
 
     const scanOut = await runDeepScan({
       imageBuffer,
