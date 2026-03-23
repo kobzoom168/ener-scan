@@ -8,7 +8,7 @@ Operational reference: **what** is sent **how**, without changing product logic.
 
 | Step | Location | Mechanism |
 |------|----------|-----------|
-| Success | `src/handlers/scanFlow.handler.js` → `replyScanResult()` | `replyFlex()` with `buildScanFlex()` + optional `buildBirthdateSettingsBubble` appended |
+| Success | `src/handlers/scanFlow.handler.js` → `replyScanResult()` | `replyFlex()` with **`buildScanFlex()`** (default) or **`buildScanSummaryFirstFlex()`** when `FLEX_SCAN_SUMMARY_FIRST=true` + optional `buildBirthdateSettingsBubble` appended |
 | Flex error | same | `replyText()` with raw scan text |
 
 **Rule:** `replyFlex` is only called from `replyScanResult` in `scanFlow.handler.js`.  

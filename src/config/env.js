@@ -229,4 +229,27 @@ export const env = {
     const n = raw === undefined || raw === "" ? 2500 : Number(raw);
     return Number.isFinite(n) ? Math.max(300, Math.floor(n)) : 2500;
   })(),
+  /**
+   * Supabase Storage bucket for scan object images (public read; used in HTML report hero).
+   * Set to empty string to skip uploads — report still works with placeholder.
+   */
+  SCAN_OBJECT_IMAGE_BUCKET: String(
+    process.env.SCAN_OBJECT_IMAGE_BUCKET ?? "scan-object-images",
+  ).trim(),
+  /**
+   * Phase 2.3: use summary-first Flex (1–2 bubbles) instead of legacy 3-carousel + optional report.
+   * @type {boolean}
+   */
+  FLEX_SCAN_SUMMARY_FIRST:
+    String(process.env.FLEX_SCAN_SUMMARY_FIRST || "").trim().toLowerCase() ===
+    "true",
+  /**
+   * When FLEX_SCAN_SUMMARY_FIRST: add a separate carousel bubble for the HTML report link
+   * (instead of embedding the URI button in the summary bubble footer).
+   * @type {boolean}
+   */
+  FLEX_SUMMARY_APPEND_REPORT_BUBBLE:
+    String(process.env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE || "")
+      .trim()
+      .toLowerCase() === "true",
 };

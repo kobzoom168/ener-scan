@@ -10,6 +10,7 @@ import createAdminPaymentsDashboardRouter from "./routes/adminPaymentsDashboard.
 import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
 import { schedulePersonaAbRecompute } from "./services/personaAbSchedule.service.js";
+import reportRoutes from "./routes/report.routes.js";
 
 process.on("uncaughtException", (error) => {
   console.error("[FATAL] uncaughtException", {
@@ -81,6 +82,8 @@ app.get("/", (req, res) => {
 app.get("/version", (req, res) => {
   res.status(200).json({ ok: true, version: "payment-slip-fix-v2" });
 });
+
+app.use(reportRoutes);
 
 // Serve static PromptPay QR for manual payments.
 // URL: /payment/promptpay-qr.jpg

@@ -14,7 +14,7 @@ import {
   FLEX_CLOSING_MAX_CHARS,
 } from "./flex.display.js";
 
-function createTopAccent(accentColor) {
+export function createTopAccent(accentColor) {
   return {
     type: "box",
     layout: "vertical",
@@ -25,7 +25,7 @@ function createTopAccent(accentColor) {
   };
 }
 
-function createMainTitle(title, subtitle) {
+export function createMainTitle(title, subtitle) {
   return {
     type: "box",
     layout: "vertical",
@@ -61,7 +61,7 @@ function createSectionTitle(text) {
   };
 }
 
-function createCardShell(contents, options = {}) {
+export function createCardShell(contents, options = {}) {
   const {
     backgroundColor = "#151515",
     borderColor = "#262629",
@@ -83,7 +83,7 @@ function createCardShell(contents, options = {}) {
   };
 }
 
-function createProgressBar(percent = "50%", accentColor = "#D4AF37") {
+export function createProgressBar(percent = "50%", accentColor = "#D4AF37") {
   return {
     type: "box",
     layout: "vertical",
@@ -824,6 +824,59 @@ export function buildUsageBubble({
         backgroundColor: "#101010",
       },
       footer: {
+        backgroundColor: "#101010",
+      },
+    },
+  };
+}
+
+/**
+ * Extra carousel bubble: opens full HTML report (HTTPS URI required in production).
+ * @param {{ reportUrl: string, accentColor?: string }} opts
+ */
+export function buildReportLinkBubble({ reportUrl, accentColor = "#D4AF37" }) {
+  const url = String(reportUrl || "").trim();
+  return {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "18px",
+      spacing: "md",
+      backgroundColor: "#101010",
+      contents: [
+        createTopAccent(accentColor),
+        {
+          type: "text",
+          text: "รายงานฉบับเต็ม",
+          weight: "bold",
+          size: "xl",
+          color: "#F5F5F5",
+          margin: "md",
+        },
+        {
+          type: "text",
+          text: "เปิดอ่านบนมือถือได้เต็มหน้าจอ",
+          size: "sm",
+          color: "#A4A4A8",
+          wrap: true,
+        },
+        {
+          type: "button",
+          style: "primary",
+          color: accentColor,
+          height: "sm",
+          action: {
+            type: "uri",
+            label: "ดูรายงานฉบับเต็ม",
+            uri: url,
+          },
+        },
+      ],
+    },
+    styles: {
+      body: {
         backgroundColor: "#101010",
       },
     },

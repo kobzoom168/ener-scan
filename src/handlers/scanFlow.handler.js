@@ -12,6 +12,12 @@ import {
   sendNonScanSequenceReply,
 } from "../services/nonScanReply.gateway.js";
 import { buildScanFlex } from "../services/flex/flex.service.js";
+import { buildScanSummaryFirstFlex } from "../services/flex/flex.summaryFirst.js";
+import { buildReportPayloadFromScan } from "../services/reports/reportPayload.builder.js";
+import { buildPublicReportUrl } from "../services/reports/reportLink.service.js";
+import { generatePublicToken } from "../utils/reports/reportToken.util.js";
+import { insertScanPublicReport } from "../stores/scanPublicReports.db.js";
+import { uploadScanObjectImageForReport } from "../services/storage/scanObjectImage.storage.js";
 
 import { buildBirthdateSettingsBubble } from "../services/flex/status.flex.js";
 
@@ -66,6 +72,17 @@ import { getSavedBirthdate } from "../stores/userProfile.db.js";
 import { randomBetween, sleep } from "../utils/timing.util.js";
 
 import { logPaywallShown, logEvent } from "../utils/personaAnalytics.util.js";
+import { env } from "../config/env.js";
+import {
+  REPORT_ROLLOUT_SCHEMA_VERSION,
+  getRolloutExecutionContext,
+  deriveFlexPresentationMode,
+  deriveReportLinkPlacement,
+  logScanResultFlexRollout,
+  logScanResultTextFallback,
+  safeLineUserIdPrefix,
+  safeTokenPrefix,
+} from "../utils/reports/reportRolloutTelemetry.util.js";
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
 
 const PRE_SCAN_ACK_VARIANTS = [
@@ -216,9 +233,45 @@ export async function replyScanResult({
   userId,
   resultText,
   birthdate = null,
+  reportUrl = null,
+  reportPayload = null,
+  scanAccessSource = null,
 }) {
+  const lineUserIdPrefix = safeLineUserIdPrefix(userId);
+  let summaryFirstBuildFailed = false;
+
   try {
-    const flex = buildScanFlex(resultText, { birthdate });
+    let flex;
+    if (env.FLEX_SCAN_SUMMARY_FIRST) {
+      try {
+        flex = buildScanSummaryFirstFlex(resultText, {
+          birthdate,
+          reportUrl,
+          reportPayload,
+          appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+        });
+      } catch (summaryFirstErr) {
+        summaryFirstBuildFailed = true;
+        console.error(
+          JSON.stringify({
+            event: "FLEX_SUMMARY_FIRST_FAIL",
+            outcome: "fallback_legacy",
+            message: summaryFirstErr?.message,
+          }),
+        );
+        flex = buildScanFlex(resultText, { birthdate, reportUrl });
+      }
+    } else {
+      flex = buildScanFlex(resultText, { birthdate, reportUrl });
+    }
+
+    const scanResultBubbleCount =
+      flex?.contents?.type === "carousel" &&
+      Array.isArray(flex.contents.contents)
+        ? flex.contents.contents.length
+        : flex?.contents?.type === "bubble"
+          ? 1
+          : 0;
 
     // Append settings bubble at the end of the scan result.
     try {
@@ -242,12 +295,65 @@ export async function replyScanResult({
       });
     }
 
+    const totalCarouselBubbles =
+      flex?.contents?.type === "carousel" &&
+      Array.isArray(flex.contents.contents)
+        ? flex.contents.contents.length
+        : scanResultBubbleCount;
+
+    const settingsBubbleAppended = totalCarouselBubbles > scanResultBubbleCount;
+
+    const flexPresentationMode = deriveFlexPresentationMode({
+      flexSummaryFirstEnabled: env.FLEX_SCAN_SUMMARY_FIRST,
+      summaryFirstBuildFailed,
+      appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+    });
+
+    const hasReportLink = Boolean(String(reportUrl || "").trim());
+    const reportLinkPlacement = deriveReportLinkPlacement(
+      flexPresentationMode,
+      hasReportLink,
+    );
+    const hasObjectImage = Boolean(
+      String(reportPayload?.object?.objectImageUrl || "").trim(),
+    );
+
     await replyFlex(client, replyToken, flex);
     console.log("[WEBHOOK] replied with flex");
+
+    logScanResultFlexRollout({
+      lineUserIdPrefix,
+      flexPresentationMode,
+      scanResultBubbleCount,
+      totalCarouselBubbles,
+      settingsBubbleAppended,
+      hasReportLink,
+      reportLinkPlacement,
+      hasObjectImage,
+      scanAccessSource,
+      summaryFirstBuildFailed,
+      envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
+      envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+    });
+
+    return {
+      flexPresentationMode,
+      totalCarouselBubbles,
+      scanResultBubbleCount,
+      hasReportLink,
+      reportLinkPlacement,
+      hasObjectImage,
+    };
   } catch (flexError) {
     console.error("[WEBHOOK] flex reply failed:", flexError);
     await replyText(client, replyToken, resultText);
     console.log("[WEBHOOK] fallback replied with text");
+    logScanResultTextFallback({
+      lineUserIdPrefix,
+      envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
+      envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+    });
+    return null;
   }
 }
 
@@ -767,6 +873,11 @@ export async function runScanFlow({
     );
   }
 
+  /** Set when scan_results row + scan_public_reports insert succeed. */
+  let reportUrl = null;
+  /** Set when public report row is inserted; used for summary-first Flex (Phase 2.3). */
+  let reportPayloadForReply = null;
+
   // scan_results + paid decrement (source of truth) — must succeed before user sees success
   try {
     const scanFinishedAt = Date.now();
@@ -791,6 +902,74 @@ export async function runScanFlow({
 
     if (!scanResultId) {
       throw new Error("scan_result_insert_empty");
+    }
+
+    /** Public HTML report (optional — failure does not block scan success). */
+    try {
+      const publicToken = generatePublicToken();
+      let objectImageUrl = "";
+      try {
+        const uploaded = await uploadScanObjectImageForReport({
+          buffer: imageBuffer,
+          publicToken,
+          lineUserId: userId,
+        });
+        objectImageUrl = uploaded ? String(uploaded).trim() : "";
+      } catch (imgErr) {
+        console.error(
+          JSON.stringify({
+            event: "SCAN_OBJECT_IMAGE",
+            outcome: "upload_exception_ignored",
+            message: imgErr?.message,
+          }),
+        );
+      }
+      const reportPayload = buildReportPayloadFromScan({
+        resultText,
+        scanResultId,
+        scanRequestId,
+        lineUserId: userId,
+        birthdateUsed: birthdate,
+        publicToken,
+        modelLabel: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
+        objectImageUrl,
+      });
+      await insertScanPublicReport({
+        scanResultId,
+        publicToken,
+        reportPayload,
+        reportVersion: reportPayload.reportVersion,
+      });
+      reportPayloadForReply = reportPayload;
+      reportUrl = buildPublicReportUrl(publicToken);
+      console.log(
+        JSON.stringify({
+          event: "REPORT_PUBLIC_OK",
+          schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+          ...getRolloutExecutionContext(),
+          lineUserIdPrefix: safeLineUserIdPrefix(userId),
+          scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+          tokenPrefix: String(publicToken || "").slice(0, 12),
+          publicTokenPrefix8: safeTokenPrefix(publicToken, 8),
+          hasObjectImage: Boolean(String(objectImageUrl || "").trim()),
+          hasReportLink: true,
+          flexSummaryFirstEnv: env.FLEX_SCAN_SUMMARY_FIRST,
+          flexSummaryAppendReportBubbleEnv: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+        }),
+      );
+    } catch (reportErr) {
+      console.error(
+        JSON.stringify({
+          event: "REPORT_PUBLIC_FAIL",
+          schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+          outcome: "persist_ignored",
+          ...getRolloutExecutionContext(),
+          lineUserIdPrefix: safeLineUserIdPrefix(userId),
+          scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+          message: reportErr?.message,
+          code: reportErr?.code,
+        }),
+      );
     }
 
     if (accessSource === "paid") {
@@ -887,12 +1066,15 @@ export async function runScanFlow({
     ? `${resultText}\n\n${paidLimitWarningText}`
     : resultText;
 
-  await replyScanResult({
+  const flexRollout = await replyScanResult({
     client,
     replyToken,
     userId,
     resultText: replyResultText,
     birthdate,
+    reportUrl,
+    reportPayload: reportPayloadForReply,
+    scanAccessSource: accessSource,
   });
 
   if (accessSource === "free") {
@@ -900,7 +1082,19 @@ export async function runScanFlow({
       userId,
       personaVariant: await getAssignedPersonaVariant(userId),
       patternUsed: "scan_result_flex",
-      bubbleCount: 1,
+      scanDeliveryMode: flexRollout ? "flex" : "text_fallback",
+      bubbleCount: flexRollout?.totalCarouselBubbles ?? 0,
+      flexPresentationMode: flexRollout?.flexPresentationMode ?? "unknown",
+      flexMode:
+        flexRollout?.flexPresentationMode === "legacy" ||
+        flexRollout?.flexPresentationMode === "summary_first_fallback_legacy"
+          ? "legacy"
+          : flexRollout?.flexPresentationMode
+            ? "summary_first"
+            : "unknown",
+      hasReportLink: flexRollout?.hasReportLink ?? false,
+      reportLinkPlacement: flexRollout?.reportLinkPlacement ?? "none",
+      hasObjectImage: flexRollout?.hasObjectImage ?? false,
     });
   }
 

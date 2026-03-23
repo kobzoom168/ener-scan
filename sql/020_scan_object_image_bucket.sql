@@ -1,0 +1,14 @@
+-- Phase 2.2: scan object images for public HTML reports (Supabase Storage)
+--
+-- 1. Dashboard → Storage → New bucket
+--    Name: scan-object-images (or match env SCAN_OBJECT_IMAGE_BUCKET)
+--    Public bucket: ON  (required for getPublicUrl() to work in browsers / LINE WebView)
+--
+-- 2. Policies: allow public read on objects in this bucket; uploads use service role (server).
+--
+-- Example (adjust to your project; run in SQL editor if your Supabase version supports it):
+--   insert into storage.buckets (id, name, public)
+--   values ('scan-object-images', 'scan-object-images', true)
+--   on conflict (id) do nothing;
+--
+-- No application DB schema change: object image URL lives in scan_public_reports.report_payload JSON.

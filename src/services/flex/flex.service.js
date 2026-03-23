@@ -14,7 +14,8 @@ import {
 import {
   buildSummaryBubble,
   buildReadingBubble,
-  buildUsageBubble
+  buildUsageBubble,
+  buildReportLinkBubble,
 } from "./flex.components.js";
 import {
   generateScanCopy,
@@ -23,10 +24,11 @@ import {
 
 /**
  * @param {string} rawText
- * @param {{ birthdate?: string|null }} [options]
+ * @param {{ birthdate?: string|null, reportUrl?: string|null }} [options]
  */
 export function buildScanFlex(rawText, options = {}) {
   const birthdate = options.birthdate ?? null;
+  const reportUrl = options.reportUrl ?? null;
 
   const accentColor = pickMainEnergyColor(rawText);
 
@@ -120,37 +122,45 @@ export function buildScanFlex(rawText, options = {}) {
     scanToneLevel: scanCopy.retention?.scanToneLevel,
   });
 
+  const carouselContents = [
+    buildSummaryBubble({
+      accentColor,
+      score,
+      mainEnergy,
+      compatibility,
+      personality,
+      tone,
+      hidden,
+      scanCopy,
+    }),
+    buildReadingBubble({
+      overview: display.overviewForFlex,
+      fitReason: display.fitReasonForFlex,
+      closing: display.closingForFlex,
+      retentionHook: scanCopy.retention?.retentionHook,
+      accentColor,
+    }),
+    buildUsageBubble({
+      supportTopics,
+      suitable,
+      notStrong,
+      accentColor,
+      nextScanCta: scanCopy.retention?.nextScanCta,
+    }),
+  ];
+
+  if (reportUrl && String(reportUrl).trim()) {
+    carouselContents.push(
+      buildReportLinkBubble({ reportUrl: String(reportUrl).trim(), accentColor }),
+    );
+  }
+
   return {
     type: "flex",
     altText,
     contents: {
       type: "carousel",
-      contents: [
-        buildSummaryBubble({
-          accentColor,
-          score,
-          mainEnergy,
-          compatibility,
-          personality,
-          tone,
-          hidden,
-          scanCopy,
-        }),
-        buildReadingBubble({
-          overview: display.overviewForFlex,
-          fitReason: display.fitReasonForFlex,
-          closing: display.closingForFlex,
-          retentionHook: scanCopy.retention?.retentionHook,
-          accentColor,
-        }),
-        buildUsageBubble({
-          supportTopics,
-          suitable,
-          notStrong,
-          accentColor,
-          nextScanCta: scanCopy.retention?.nextScanCta,
-        }),
-      ],
+      contents: carouselContents,
     },
   };
 }

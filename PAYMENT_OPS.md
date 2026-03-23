@@ -54,6 +54,11 @@ For **payment amount** (optional):
 
 For the **verify script**, the same Supabase env vars are required (script loads `.env` via the app config).
 
+For **public HTML report hero images** (Phase 2.2), **Flex migration** (Phase 2.3+), and **rollout execution** (runbook, optional `ROLLOUT_WINDOW_LABEL`), see **`docs/REPORT_OPS.md`** and **`docs/REPORT_ROLLOUT_RUNBOOK.md`**.
+
+- `SCAN_OBJECT_IMAGE_BUCKET` – Supabase Storage bucket name (default `scan-object-images`). Set to **empty** to skip uploads; reports still render with a placeholder.
+- Create the bucket as **public** (see `sql/020_scan_object_image_bucket.sql`). Uploads use the service role; URLs are `https://…` only at render time.
+
 ## Exact command to verify a payment
 
 From the project root, with `.env` (or env) set:
