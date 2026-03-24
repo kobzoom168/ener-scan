@@ -64,6 +64,38 @@ test("sendNonScanReply: suppresses when no alternate escapes duplicate", async (
   assert.equal(c.payloads.length, 1);
 });
 
+test("sendNonScanReply: SCAN_OFFER_REPLY_BUILT on send when scanOfferMeta set", async () => {
+  const c = mockClient();
+  const uid = `u_so_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const logs = [];
+  const orig = console.log;
+  console.log = (...args) => {
+    logs.push(args.map(String).join(" "));
+  };
+  try {
+    await sendNonScanReply({
+      client: c,
+      userId: uid,
+      replyToken: "tok_so",
+      replyType: "offer_intro",
+      semanticKey: "scan_offer:test:v1",
+      text: "primary offer text",
+      alternateTexts: ["alt a"],
+      scanOfferMeta: {
+        replyType: "offer_intro",
+        semanticKey: "scan_offer:test:v1",
+        alternateCount: 1,
+        offerConfigVersion: "1",
+        variantIndex: 0,
+      },
+    });
+  } finally {
+    console.log = orig;
+  }
+  assert.ok(logs.some((l) => l.includes('"event":"SCAN_OFFER_REPLY_BUILT"')));
+  assert.equal(c.payloads.length, 1);
+});
+
 test("sendNonScanReply: semantic duplicate blocks same normalized text within window", async () => {
   const c = mockClient();
   const uid = `u_sem_${Date.now()}_${Math.random().toString(16).slice(2)}`;

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { decideScanGate } from "../src/services/scanOfferAccess.resolver.js";
 import { loadActiveScanOffer } from "../src/services/scanOffer.loader.js";
+import { buildPaymentGateReply } from "../src/services/paymentAccess.service.js";
 
 /**
  * PR1: gate math is shared with `checkScanAccess` via `decideScanGate`.
@@ -35,4 +36,24 @@ test("gate behavior tracks freeQuotaPerDay from config (no FREE_SCANS_LIMIT cons
   });
   assert.equal(g3.allowed, true);
   assert.equal(g3.freeScansLimit, 3);
+});
+
+test("buildPaymentGateReply returns scanOffer bundle for payment_required", async () => {
+  const r = await buildPaymentGateReply({
+    decision: {
+      allowed: false,
+      reason: "payment_required",
+      usedScans: 2,
+      freeScansLimit: 2,
+      freeScansRemaining: 0,
+      paidUntil: null,
+      paidRemainingScans: 0,
+    },
+    userId: "U_paywall_test",
+  });
+  assert.ok(r.scanOffer);
+  assert.equal(r.scanOffer.replyType, "free_quota_exhausted");
+  assert.ok(String(r.fallbackText || "").length > 20);
+  assert.ok(r.scanOffer.semanticKey.includes("free_quota_exhausted"));
+  assert.ok(Array.isArray(r.scanOffer.alternateTexts));
 });

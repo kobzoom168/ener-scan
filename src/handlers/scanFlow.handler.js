@@ -120,10 +120,43 @@ async function sendPreScanAcknowledgement({ client, userId }) {
 
 async function sendPaymentGateTextReply({ client, replyToken, userId, reply }) {
   const fallbackText =
-    reply?.fallbackText || (await buildPaymentRequiredText({ userId }));
+    reply?.fallbackText ||
+    (await buildPaymentRequiredText({ userId, decision: reply?.decision }));
 
   if (!userId) {
     await replyText(client, replyToken, fallbackText);
+    return;
+  }
+
+  if (reply?.scanOffer) {
+    const gateResult = await sendNonScanReply({
+      client,
+      userId,
+      replyToken,
+      replyType: reply.scanOffer.replyType,
+      semanticKey: reply.scanOffer.semanticKey,
+      text: reply.scanOffer.primaryText,
+      alternateTexts: reply.scanOffer.alternateTexts,
+      scanOfferMeta: reply.scanOffer.scanOfferMeta,
+    });
+    if (
+      reply.scanOffer.replyType === "free_quota_exhausted" &&
+      gateResult?.sent
+    ) {
+      console.log(
+        JSON.stringify({
+          event: "FREE_QUOTA_EXHAUSTED_REPLY_ROUTED",
+          lineUserId: userId,
+          replyType: reply.scanOffer.replyType,
+          semanticKey: reply.scanOffer.semanticKey,
+        }),
+      );
+    }
+    await logPaywallShown(userId, {
+      source: "scan_offer_copy",
+      patternUsed: reply.scanOffer.replyType,
+      bubbleCount: 1,
+    });
     return;
   }
 

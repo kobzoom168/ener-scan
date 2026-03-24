@@ -61,6 +61,7 @@ import {
   sendNonScanReply,
   sendNonScanSequenceReply,
 } from "../services/nonScanReply.gateway.js";
+import { sendScanLockReply } from "../utils/scanLockReply.util.js";
 import {
   handleStickerLikeInput,
   isLineStickerPlaceholderText,
@@ -162,9 +163,6 @@ async function replyIdleTextNoDuplicate({ client, replyToken, userId }) {
   });
 }
 
-const ABUSE_MSG_HARD = "ตอนนี้ใช้งานไม่ได้ชั่วคราว ลองใหม่ในแป๊บนะครับ";
-const ABUSE_MSG_SCAN_LOCK =
-  "สแกนถี่ไปหน่อย ขอพักแป๊บนึงแล้วค่อยลองใหม่นะครับ";
 const ABUSE_MSG_PAYMENT_LOCK =
   "ส่งเรื่องชำระเงินถี่ไปหน่อย ขอรอสักครู่แล้วลองใหม่นะครับ";
 
@@ -456,16 +454,11 @@ async function finalizeAcceptedImage({
     });
   }
   if (scanIntent.state.isHardBlocked) {
-    await sendNonScanReply({
-      client,
+    await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
-      replyType: "abuse_hard_block",
-      semanticKey: "abuse_hard_block",
-      text: ABUSE_MSG_HARD,
-      alternateTexts: [
-        "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
-      ],
+      lockType: "hard",
+      semanticKey: "scan_locked_hard:finalize_accepted_image",
     });
     return;
   }
@@ -762,16 +755,11 @@ async function handleImageMessage({ client, event, userId, session }) {
       userId,
       source: "after_locked_image_activity",
     });
-    await sendNonScanReply({
-      client,
+    await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
-      replyType: "abuse_hard_block",
-      semanticKey: "abuse_hard_block_image",
-      text: ABUSE_MSG_HARD,
-      alternateTexts: [
-        "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
-      ],
+      lockType: "hard",
+      semanticKey: "scan_locked_hard:handle_image_after_locked_activity",
     });
     return;
   }
@@ -836,16 +824,11 @@ async function handleImageMessage({ client, event, userId, session }) {
         userId,
         lockUntil: scanStatus.lockUntil,
       });
-      await sendNonScanReply({
-        client,
+      await sendScanLockReply(client, {
         userId,
         replyToken: event.replyToken,
-        replyType: "abuse_scan_lock",
-        semanticKey: "abuse_scan_lock",
-        text: ABUSE_MSG_SCAN_LOCK,
-        alternateTexts: [
-          "สแกนถี่ไปหน่อย รอพักแล้วค่อยลองใหม่นะครับ",
-        ],
+        lockType: "soft",
+        semanticKey: "scan_locked_soft:handle_image_scan_route",
       });
       return;
     }
@@ -1082,16 +1065,11 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   if (textSpam.state.isHardBlocked) {
     console.warn("[ABUSE_GUARD_HARD_BLOCK]", { userId, source: "text_register" });
-    await sendNonScanReply({
-      client,
+    await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
-      replyType: "abuse_hard_block",
-      semanticKey: "abuse_hard_block_text",
-      text: ABUSE_MSG_HARD,
-      alternateTexts: [
-        "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
-      ],
+      lockType: "hard",
+      semanticKey: "scan_locked_hard:text_register",
     });
     return;
   }
@@ -1496,16 +1474,11 @@ async function handleTextMessage({ client, event, userId, session }) {
             lockUntil: scanGateFromText.lockUntil,
             gate: "waiting_birthdate",
           });
-          await sendNonScanReply({
-            client,
+          await sendScanLockReply(client, {
             userId,
             replyToken: event.replyToken,
-            replyType: "abuse_scan_lock",
-            semanticKey: "abuse_scan_lock_waiting_bd",
-            text: ABUSE_MSG_SCAN_LOCK,
-            alternateTexts: [
-              "สแกนถี่ไปหน่อย รอพักแล้วค่อยลองใหม่นะครับ",
-            ],
+            lockType: "soft",
+            semanticKey: "scan_locked_soft:waiting_birthdate",
           });
           return;
         }
@@ -1703,16 +1676,11 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
     }
     if (payCmdIntent.state.isHardBlocked) {
-      await sendNonScanReply({
-        client,
+      await sendScanLockReply(client, {
         userId,
         replyToken: event.replyToken,
-        replyType: "abuse_hard_block",
-        semanticKey: "abuse_hard_block_pay_cmd",
-        text: ABUSE_MSG_HARD,
-        alternateTexts: [
-          "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
-        ],
+        lockType: "hard",
+        semanticKey: "scan_locked_hard:payment_command",
       });
       return;
     }
@@ -1930,16 +1898,11 @@ async function handleEvent({ client, event }) {
 
   if (globalStatus.isHardBlocked) {
     console.warn("[ABUSE_GUARD_HARD_BLOCK]", { userId, gate: "handleEvent" });
-    await sendNonScanReply({
-      client,
+    await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
-      replyType: "abuse_hard_block",
-      semanticKey: "abuse_hard_block_handle_event",
-      text: ABUSE_MSG_HARD,
-      alternateTexts: [
-        "ตอนนี้ระบบพักการตอบชั่วคราว ลองใหม่ในอีกสักครู่นะครับ",
-      ],
+      lockType: "hard",
+      semanticKey: "scan_locked_hard:handle_event",
     });
     return;
   }

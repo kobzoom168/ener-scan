@@ -29,6 +29,7 @@ import {
   formatBangkokDateTime,
   formatBangkokDate,
 } from "../utils/dateTime.util.js";
+import { buildAdminFreeResetConfirmationPayload } from "../utils/adminResetNotify.util.js";
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -1322,8 +1323,28 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           lineUserId,
           adminLabel: "admin_dashboard",
         });
+        const confirm = buildAdminFreeResetConfirmationPayload();
+        const resetAt = new Date().toISOString();
+        console.log(
+          JSON.stringify({
+            event: "ADMIN_FREE_RESET_SUCCESS",
+            lineUserId,
+            freeQuotaPerDay: confirm.freeQuotaPerDay,
+            resetAt,
+            offerLabel: confirm.offerLabel,
+            configVersion: confirm.configVersion,
+          }),
+        );
+        void lineClient
+          .pushMessage(lineUserId, { type: "text", text: confirm.text })
+          .catch((pushErr) => {
+            console.error("[ADMIN_DASH] LINE push after free-trial reset failed:", {
+              lineUserId,
+              message: pushErr?.message,
+            });
+          });
         if (wantsJsonResponse(req)) {
-          res.status(200).json({ ok: true, ...result });
+          res.status(200).json({ ok: true, ...result, freeQuotaPerDay: confirm.freeQuotaPerDay });
         } else {
           res.status(200).send("ok");
         }

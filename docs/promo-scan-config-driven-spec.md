@@ -31,10 +31,29 @@
 
 **PR1 non-goals (ล็อก)**
 
-- ยังไม่ทำ template pool ภาษาไทย / `scanOffer.copy` (PR2)
-- ยังไม่เปลี่ยนข้อความทุกจุด — `buildPaymentRequiredText` ยังมีตัวเลข “2” ใน fallback แบบไม่มี `userId` (มี TODO PR2 ใน `webhookText.util.js`)
-- ยังไม่แก้ logic `nonScanReply.gateway.js` — PR2 จะส่ง `replyType` / `semanticKey` / `alternateTexts` ผ่าน gateway เดิม
-- ยังไม่แตะ scan engine, rollout, report layer, admin UI
+- ไม่แตะ scan engine, rollout, report layer, admin UI
+
+---
+
+## PR2 (implemented) — template pool + copy + gateway
+
+**Scope**
+
+- **Templates:** `src/config/scanOffer.templates.th.js` — pools สำหรับ `free_quota_low`, `free_quota_exhausted`, `paid_quota_exhausted`, `offer_intro`, `approved_intro` (placeholder: `{price}`, `{count}`, `{hours}`, `{nextResetLabel}`, `{freeRemaining}`, `{offerLabel}`)
+- **Reply type map:** `src/services/scanOffer.replyType.js` — `chooseScanOfferReplyType(accessContext, gate)`
+- **Copy builder:** `src/services/scanOffer.copy.js` — `fillPlaceholders`, `buildScanOfferReply()`, `buildApprovedIntroReply()`; `semanticKey` = `scan_offer:<replyType>:v<configVersion>`
+- **Payment gate reply:** `buildPaymentGateReply()` คืน `{ fallbackText, scanOffer: { replyType, semanticKey, primaryText, alternateTexts, scanOfferMeta }, decision }`
+- **Webhook:** `buildPaymentRequiredText` (ไม่มี `userId`) ใช้ template จาก offer; `buildPaymentApprovedMessageLines` ใช้ `approved_intro` แทน persona `approvedIntroLine`
+- **Scan flow:** `sendPaymentGateTextReply` — ถ้ามี `reply.scanOffer` ส่งผ่าน `sendNonScanReply` พร้อม `replyType` / `semanticKey` / `alternateTexts` / `scanOfferMeta` และข้าม persona paywall sequence
+- **Gateway:** `sendNonScanReply` รับ optional `scanOfferMeta` → log **`SCAN_OFFER_REPLY_BUILT`** (phase `send`) เมื่อส่งสำเร็จ
+
+**Extra field on access decision**
+
+- `checkScanAccess()` คืนเพิ่ม `paidRemainingScans` (ตัวเลขจาก DB) เพื่อประกอบ context ตอนสร้าง copy
+
+**PR2 non-goals**
+
+- ไม่มี admin UI, ไม่เปลี่ยน rollout/report, ไม่เปลี่ยน scan engine, ไม่เปลี่ยน logic อนุมัติสลิป (แค่ข้อความหลังอนุมัติจาก template)
 
 ---
 

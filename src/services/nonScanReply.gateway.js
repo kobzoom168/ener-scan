@@ -91,6 +91,7 @@ function logGateway(payload) {
  * @param {string} [opts.semanticKey] — defaults to replyType; used for semantic duplicate window
  * @param {string} opts.text — primary copy
  * @param {string[]} [opts.alternateTexts] — additional candidates (not including primary)
+ * @param {Record<string, unknown>} [opts.scanOfferMeta] — PR2: log SCAN_OFFER_REPLY_BUILT on successful send
  * @returns {Promise<{ sent: boolean, suppressed: boolean, exactDuplicate: boolean, semanticDuplicate: boolean, retryCount: number }>}
  */
 export async function sendNonScanReply(opts) {
@@ -102,6 +103,7 @@ export async function sendNonScanReply(opts) {
     semanticKey,
     text,
     alternateTexts = [],
+    scanOfferMeta,
   } = opts;
 
   const uid = String(userId || "").trim();
@@ -166,6 +168,16 @@ export async function sendNonScanReply(opts) {
     if (!lastEval.blocked) {
       await replyText(client, replyToken, body);
       recordSent(uid, dedupeKey, body);
+      if (scanOfferMeta && typeof scanOfferMeta === "object") {
+        console.log(
+          JSON.stringify({
+            event: "SCAN_OFFER_REPLY_BUILT",
+            phase: "send",
+            userIdPrefix: uid.slice(0, 8),
+            ...scanOfferMeta,
+          }),
+        );
+      }
       logGateway({
         userId: uid,
         replyType: rt,

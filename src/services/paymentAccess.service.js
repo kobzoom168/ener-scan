@@ -3,13 +3,13 @@ import {
   countScanResultsTodayForAppUser,
   getLocalDateKey,
 } from "../stores/paymentAccess.db.js";
-import { buildPaymentRequiredText } from "../utils/webhookText.util.js";
 import { supabase } from "../config/supabase.js";
 import { loadActiveScanOffer } from "./scanOffer.loader.js";
 import {
   decideScanGate,
   resolveScanOfferAccessContext,
 } from "./scanOfferAccess.resolver.js";
+import { buildScanOfferReply } from "./scanOffer.copy.js";
 
 export async function checkScanAccess({ userId, now = new Date() }) {
   const lineUserId = String(userId || "").trim();
@@ -36,6 +36,7 @@ export async function checkScanAccess({ userId, now = new Date() }) {
       freeScansLimit: freeQuotaPerDay,
       freeScansRemaining: 0,
       paidUntil: null,
+      paidRemainingScans: 0,
     };
   }
 
@@ -160,18 +161,39 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     freeScansLimit: gate.freeScansLimit,
     freeScansRemaining: gate.freeScansRemaining,
     paidUntil: gate.paidUntil,
+    paidRemainingScans,
   };
 }
 
 /** Text-only paywall reply (LINE Flex reserved for final scan result). */
 export async function buildPaymentGateReply({ decision, userId = null }) {
   const offer = loadActiveScanOffer();
-  const lim = decision?.freeScansLimit ?? offer.freeQuotaPerDay;
+  const ctx = resolveScanOfferAccessContext({
+    offer,
+    freeUsedToday: decision?.usedScans ?? 0,
+    paidUntil: decision?.paidUntil ?? null,
+    paidRemainingScans: decision?.paidRemainingScans ?? 0,
+    now: new Date(),
+  });
+  const gate = {
+    allowed: Boolean(decision?.allowed),
+    reason: String(decision?.reason || "payment_required"),
+  };
+  const built = buildScanOfferReply({
+    offer,
+    accessContext: ctx,
+    gate,
+    userId,
+  });
   return {
-    fallbackText: await buildPaymentRequiredText({
-      usedScans: decision?.usedScans ?? lim,
-      freeLimit: lim,
-      userId,
-    }),
+    fallbackText: built.primaryText,
+    scanOffer: {
+      replyType: built.replyType,
+      semanticKey: built.semanticKey,
+      primaryText: built.primaryText,
+      alternateTexts: built.alternateTexts,
+      scanOfferMeta: built.scanOfferMeta,
+    },
+    decision,
   };
 }

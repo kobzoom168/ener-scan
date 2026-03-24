@@ -13,9 +13,14 @@ import {
   pendingVerifyReminderText,
   pendingVerifyBlockScanText,
   pendingVerifyPaymentAgainText,
-  approvedIntroLine,
   idlePostScanText,
 } from "./replyCopy.util.js";
+import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
+import { resolveScanOfferAccessContext } from "../services/scanOfferAccess.resolver.js";
+import {
+  buildApprovedIntroReply,
+  buildScanOfferReply,
+} from "../services/scanOffer.copy.js";
 
 /** Backward-compatible alias for `looksLikeBirthdateInput`. */
 export { looksLikeBirthdateInput as isBirthdateLikeInput };
@@ -273,27 +278,45 @@ export function buildPaymentQrSlipText() {
 }
 
 /**
- * @param {{ usedScans?: number, freeLimit?: number, userId?: string }} opts
- * `userId` enables non-repetitive paywall wording; limits unchanged at gate.
+ * @param {{ usedScans?: number, freeLimit?: number, userId?: string, decision?: object }} opts
+ * `userId` enables non-repetitive paywall wording (persona). Without userId, uses scan-offer template pool.
  */
 export async function buildPaymentRequiredText({
-  usedScans = 0,
+  usedScans,
   freeLimit = 3,
   userId = null,
+  decision = null,
 } = {}) {
-  void usedScans;
-  void freeLimit;
   if (userId) return paywallText(userId);
-  // TODO PR2 (scanOffer.copy): derive lines from scan offer context + template pool;
-  // avoid hardcoded "2" here — freeLimit already passed from payment gate when available.
-  return [
-    "วันนี้ใช้ฟรีครบ 2 ครั้งแล้วนะ",
-    "",
-    "ระบบให้ใช้ฟรีวันละ 2 ครั้ง",
-    "ถ้ายังอยากสแกนต่อวันนี้ พิมพ์ จ่ายเงิน ได้เลย",
-    "",
-    "หรือจะกลับมาสแกนใหม่พรุ่งนี้ก็ได้",
-  ].join("\n");
+
+  const offer = loadActiveScanOffer();
+  const quota = Number.isFinite(Number(freeLimit))
+    ? Number(freeLimit)
+    : offer.freeQuotaPerDay;
+  const used =
+    decision?.usedScans != null && Number.isFinite(Number(decision.usedScans))
+      ? Number(decision.usedScans)
+      : usedScans != null && Number.isFinite(Number(usedScans))
+        ? Number(usedScans)
+        : quota;
+  const ctx = resolveScanOfferAccessContext({
+    offer,
+    freeUsedToday: Math.min(used, quota),
+    paidUntil: decision?.paidUntil ?? null,
+    paidRemainingScans: decision?.paidRemainingScans ?? 0,
+    now: new Date(),
+  });
+  const gate = {
+    allowed: false,
+    reason: "payment_required",
+  };
+  const built = buildScanOfferReply({
+    offer,
+    accessContext: ctx,
+    gate,
+    userId: null,
+  });
+  return built.primaryText;
 }
 
 export function buildNoHistoryText() {
@@ -545,7 +568,12 @@ export async function buildPaymentApprovedText({
 
   const lines = [
     lineUserId
-      ? await approvedIntroLine(lineUserId)
+      ? (
+          await buildApprovedIntroReply({
+            offer: loadActiveScanOffer(),
+            userId: lineUserId,
+          })
+        ).primaryText
       : "แอดมินอนุมัติสลิปแล้ว ระบบเปิดสิทธิ์ให้แล้วครับ",
   ];
   const refLine = formatPaymentRefLine(paymentRef);
