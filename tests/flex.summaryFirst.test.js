@@ -64,7 +64,7 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   const footer = flex.contents.footer;
   assert.ok(footer);
   const primaryBtn = footer.contents.find(
-    (c) => c.type === "button" && c.action?.label === "ดูรายงานฉบับเต็ม",
+    (c) => c.type === "button" && c.action?.label === "เปิดรายงานฉบับเต็ม",
   );
   assert.ok(primaryBtn);
   assert.equal(primaryBtn.action.uri, "https://example.com/r/abc123");

@@ -26,6 +26,37 @@ import { ENERGY_TYPES } from "./scanCopy.config.js";
 import { resolveEnergyType } from "./scanCopy.utils.js";
 import { createTopAccent } from "./flex.components.js";
 
+const SUMMARY_CARD_COPY = {
+  variantKey: "premium_minimal",
+  objectLabel: "วัตถุสายอำนาจ",
+  headline: "ชิ้นนี้เด่นด้านอำนาจและการตั้งหลัก",
+  scoreLabel: "ระดับพลัง",
+  compatibilityLabel: "เข้ากับคุณ",
+  mainEnergyTitleByType: {
+    [ENERGY_TYPES.POWER]: "พลังหลัก · พลังอำนาจ",
+    [ENERGY_TYPES.PROTECT]: "พลังหลัก · พลังคุ้มกัน",
+    [ENERGY_TYPES.BALANCE]: "พลังหลัก · พลังสมดุล",
+    [ENERGY_TYPES.KINDNESS]: "พลังหลัก · พลังเมตตา",
+    [ENERGY_TYPES.ATTRACT]: "พลังหลัก · พลังดึงดูด",
+    [ENERGY_TYPES.LUCK]: "พลังหลัก · พลังโชคลาภ",
+    [ENERGY_TYPES.BOOST]: "พลังหลัก · พลังเสริม",
+  },
+  bullets: [
+    "เด่นด้านการตั้งพลังให้นิ่ง",
+    "เหมาะกับช่วงที่ต้องเดินหน้าอย่างมีจังหวะ",
+  ],
+  ctaText: "เปิดรายงานฉบับเต็ม",
+  traitLabelsByType: {
+    [ENERGY_TYPES.POWER]: "อำนาจ",
+    [ENERGY_TYPES.PROTECT]: "คุ้มกัน",
+    [ENERGY_TYPES.BALANCE]: "สมดุล",
+    [ENERGY_TYPES.KINDNESS]: "เมตตา",
+    [ENERGY_TYPES.ATTRACT]: "ดึงดูด",
+    [ENERGY_TYPES.LUCK]: "โชคลาภ",
+    [ENERGY_TYPES.BOOST]: "เสริมพลัง",
+  },
+};
+
 /**
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
  * @param {string} fallbackCompat
@@ -60,7 +91,7 @@ function flexHeadlineFromPayload(reportPayload) {
   if (mp) return safeWrapText(mp, 64);
   const d = distillSummaryLine(reportPayload?.summary?.summaryLine || "");
   if (d) return safeWrapText(d, 64);
-  return "ภาพรวมใน LINE สั้นมาก — ฉบับเต็มมีเรื่องเล่าต่อ";
+  return SUMMARY_CARD_COPY.headline;
 }
 
 function tightenTeaserCopy(text, maxChars = 48) {
@@ -116,7 +147,12 @@ function createCompactMetricStrip({
         borderWidth: "1px",
         borderColor: "#2A2A2D",
         contents: [
-          { type: "text", text: "ระดับพลัง", size: "xs", color: "#94949A" },
+          {
+            type: "text",
+            text: SUMMARY_CARD_COPY.scoreLabel,
+            size: "xs",
+            color: "#94949A",
+          },
           {
             type: "text",
             text: levelValue || "-",
@@ -139,7 +175,12 @@ function createCompactMetricStrip({
         borderWidth: "1px",
         borderColor: "#2A2A2D",
         contents: [
-          { type: "text", text: "เข้ากับคุณ", size: "xs", color: "#94949A" },
+          {
+            type: "text",
+            text: SUMMARY_CARD_COPY.compatibilityLabel,
+            size: "xs",
+            color: "#94949A",
+          },
           {
             type: "text",
             text: compatLabel || "-",
@@ -157,13 +198,13 @@ function createCompactMetricStrip({
 }
 
 const FAMILY_LABEL = {
-  [ENERGY_TYPES.PROTECT]: "คุ้มกัน",
-  [ENERGY_TYPES.BALANCE]: "สมดุล",
-  [ENERGY_TYPES.POWER]: "อำนาจ",
-  [ENERGY_TYPES.KINDNESS]: "เมตตา",
-  [ENERGY_TYPES.ATTRACT]: "ดึงดูด",
-  [ENERGY_TYPES.LUCK]: "โชคลาภ",
-  [ENERGY_TYPES.BOOST]: "เสริมพลัง",
+  [ENERGY_TYPES.PROTECT]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.PROTECT],
+  [ENERGY_TYPES.BALANCE]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.BALANCE],
+  [ENERGY_TYPES.POWER]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.POWER],
+  [ENERGY_TYPES.KINDNESS]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.KINDNESS],
+  [ENERGY_TYPES.ATTRACT]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.ATTRACT],
+  [ENERGY_TYPES.LUCK]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.LUCK],
+  [ENERGY_TYPES.BOOST]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.BOOST],
 };
 
 const FAMILY_POOL = [
@@ -369,18 +410,16 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const headline = flexHeadlineFromPayload(reportPayload);
   let bullets = flexTeaserBullets(reportPayload);
   if (bullets.length === 0) {
-    bullets = [
-      "สรุปใน LINE เป็นภาพรวมสั้น ๆ เท่านั้น",
-      "ฉบับเต็มมีรายละเอียดและบริบทเพิ่ม",
-    ];
+    bullets = [...SUMMARY_CARD_COPY.bullets];
   } else if (bullets.length === 1) {
     bullets = [
       bullets[0],
-      safeWrapText("ฉบับเต็มจะเล่าต่อในบริบทที่ชัดเจนกว่า", 72),
+      safeWrapText(SUMMARY_CARD_COPY.bullets[1], 72),
     ];
   }
   const objectLbl =
-    String(reportPayload?.object?.objectLabel || "").trim() || "ชิ้นนี้";
+    String(reportPayload?.object?.objectLabel || "").trim() ||
+    SUMMARY_CARD_COPY.objectLabel;
   const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
   const heroOk = /^https:\/\//i.test(imgUrl);
   const url = String(reportUrl || "").trim();
@@ -413,7 +452,9 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     }),
     {
       type: "text",
-      text: `พลังหลัก · ${safeWrapText(mainLabel, 28)}`,
+      text:
+        SUMMARY_CARD_COPY.mainEnergyTitleByType[resolvedType] ||
+        `พลังหลัก · ${safeWrapText(mainLabel, 28)}`,
       size: "sm",
       weight: "bold",
       color: "#D0D0D6",
@@ -485,7 +526,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
           style: "primary",
           color: accentColor,
           height: "sm",
-          action: { type: "uri", label: "ดูรายงานฉบับเต็ม", uri: url },
+          action: { type: "uri", label: SUMMARY_CARD_COPY.ctaText, uri: url },
         },
       ],
     };

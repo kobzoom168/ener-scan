@@ -1161,6 +1161,300 @@ async function handleTextMessage({ client, event, userId, session }) {
     sessionFlowVersion: session.flowVersion || 0,
   });
 
+  // Active-state routing hardening:
+  // deterministic state chooses reply family first, before generic routing.
+  let activeAccessDecision = null;
+  let activePendingPaymentRow = null;
+  try {
+    activeAccessDecision = await checkScanAccess({ userId });
+  } catch (err) {
+    console.error("[ACTIVE_STATE_ROUTING] checkScanAccess failed (ignored):", {
+      userId,
+      message: err?.message,
+      code: err?.code,
+    });
+  }
+  try {
+    activePendingPaymentRow = await getLatestAwaitingPaymentForLineUserId(userId);
+  } catch (err) {
+    console.error("[ACTIVE_STATE_ROUTING] pending payment lookup failed (ignored):", {
+      userId,
+      message: err?.message,
+      code: err?.code,
+    });
+  }
+
+  const paymentMemoryState = getPaymentState(userId).state;
+  const pendingStatus = String(activePendingPaymentRow?.status || "").trim();
+  const hasPendingVerify = pendingStatus === "pending_verify";
+  const hasAwaitingSlip = pendingStatus === "awaiting_payment";
+  const accessState = activeAccessDecision?.allowed
+    ? activeAccessDecision?.reason === "paid"
+      ? "paid_active"
+      : "free_available"
+    : activeAccessDecision?.reason || "payment_required";
+  const flowState = session.pendingImage ? "waiting_birthdate" : "idle";
+  let paymentState = "none";
+  if (hasPendingVerify) {
+    paymentState = "pending_verify";
+  } else if (hasAwaitingSlip || paymentMemoryState === "awaiting_slip") {
+    paymentState = "awaiting_slip";
+  } else if (
+    !activeAccessDecision?.allowed &&
+    activeAccessDecision?.reason === "payment_required" &&
+    session.pendingImage
+  ) {
+    paymentState = "paywall_selecting_package";
+  } else if (activeAccessDecision?.allowed && activeAccessDecision?.reason === "paid") {
+    paymentState = "approved_intro";
+  }
+
+  if (
+    flowState === "waiting_birthdate" &&
+    ["paywall_selecting_package", "awaiting_slip", "pending_verify"].includes(
+      paymentState,
+    )
+  ) {
+    console.log("[STATE_CONFLICT_RESOLVED]", {
+      userId,
+      previousFlowState: "waiting_birthdate",
+      previousPaymentState: paymentState,
+      nextFlowState: "suspended_by_payment_state",
+      nextPaymentState: paymentState,
+      reason: "payment_state_wins",
+    });
+  }
+
+  if (paymentState === "paywall_selecting_package") {
+    const offer = loadActiveScanOffer();
+    const pickedKey = parsePackageSelectionFromText(text, offer);
+    if (pickedKey) {
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        expectedInputType: "package_selection",
+        text,
+        chosenReplyType: "payment_package_selected",
+        routeReason: "accepted_package_selection",
+      });
+      // Continue to explicit package-selection handler below.
+    } else {
+      const guidance = `${buildPackageSelectionPromptFromOffer(
+        offer,
+      )}\n\nพิมพ์ 49 หรือ 99 เพื่อเลือกแพ็ก แล้วพิมพ์ จ่ายเงิน`;
+      console.log("[UNEXPECTED_INPUT_HANDLED]", {
+        userId,
+        activeState: paymentState,
+        inputText: text,
+        normalizedIntent: "unexpected_for_package_selection",
+        chosenReplyType: "payment_package_prompt",
+      });
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        expectedInputType: "package_selection",
+        text,
+        chosenReplyType: "payment_package_prompt",
+        routeReason: "unexpected_input_kept_in_state",
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "payment_package_prompt",
+        semanticKey: "payment_need_package_first",
+        text: guidance,
+        alternateTexts: [buildPackageSelectionPromptFromOffer(offer)],
+      });
+      return;
+    }
+  }
+
+  if (paymentState === "awaiting_slip") {
+    let paymentRef = null;
+    try {
+      if (activePendingPaymentRow?.id) {
+        paymentRef =
+          activePendingPaymentRow.payment_ref ||
+          (await ensurePaymentRefForPaymentId(activePendingPaymentRow.id));
+      }
+    } catch (_) {
+      paymentRef = null;
+    }
+    const slipReminder = await buildAwaitingSlipReminderText({
+      userId,
+      paymentRef,
+    });
+    console.log("[UNEXPECTED_INPUT_HANDLED]", {
+      userId,
+      activeState: paymentState,
+      inputText: text,
+      normalizedIntent: "awaiting_slip_reminder",
+      chosenReplyType: "awaiting_slip_reminder",
+    });
+    console.log("[ACTIVE_STATE_ROUTING]", {
+      userId,
+      flowState,
+      paymentState,
+      accessState,
+      expectedInputType: "slip_image",
+      text,
+      chosenReplyType: "awaiting_slip_reminder",
+      routeReason: "awaiting_slip_text_guard",
+    });
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "awaiting_slip_reminder",
+      semanticKey: "awaiting_slip_reminder",
+      text: slipReminder,
+      alternateTexts: ["ส่งรูปสลิปในแชตนี้ได้เลยครับ"],
+    });
+    return;
+  }
+
+  if (paymentState === "pending_verify") {
+    let paymentRef = null;
+    try {
+      if (activePendingPaymentRow?.id) {
+        paymentRef =
+          activePendingPaymentRow.payment_ref ||
+          (await ensurePaymentRefForPaymentId(activePendingPaymentRow.id));
+      }
+    } catch (_) {
+      paymentRef = null;
+    }
+    const pendingText = buildPendingVerifyReminderText({ paymentRef });
+    const isStatusLike = /สถานะ|คืบหน้า|รอ|ตรวจ|อนุมัติ|pending/i.test(text);
+    console.log("[UNEXPECTED_INPUT_HANDLED]", {
+      userId,
+      activeState: paymentState,
+      inputText: text,
+      normalizedIntent: isStatusLike
+        ? "status_like_pending_verify"
+        : "unexpected_pending_verify",
+      chosenReplyType: "pending_verify_reminder",
+    });
+    console.log("[ACTIVE_STATE_ROUTING]", {
+      userId,
+      flowState,
+      paymentState,
+      accessState,
+      expectedInputType: "status_only",
+      text,
+      chosenReplyType: "pending_verify_reminder",
+      routeReason: "pending_verify_text_guard",
+    });
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "pending_verify_reminder",
+      semanticKey: "pending_verify_reminder",
+      text: pendingText,
+      alternateTexts: ["สลิปอยู่ระหว่างตรวจครับ รอแจ้งผลในแชตนี้ได้เลย"],
+    });
+    return;
+  }
+
+  if (flowState === "waiting_birthdate" && paymentState === "none") {
+    const parsedEarly = parseBirthdateInput(text);
+    if (parsedEarly.ok) {
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        expectedInputType: "birthdate_dd_mm_yyyy",
+        text,
+        chosenReplyType: "waiting_birthdate_accepted",
+        routeReason: "accepted_birthdate",
+      });
+      // Continue to existing waiting_birthdate branch below.
+    } else {
+      const isDateLike = looksLikeBirthdateInput(text);
+      const guidanceMsgs = await buildWaitingBirthdateGuidanceMessages(userId);
+      const errMsgs = await buildBirthdateErrorMessages(userId, parsedEarly.reason);
+      console.log("[UNEXPECTED_INPUT_HANDLED]", {
+        userId,
+        activeState: flowState,
+        inputText: text,
+        normalizedIntent: isDateLike ? "invalid_date_like" : "non_date_like",
+        chosenReplyType: isDateLike
+          ? "waiting_birthdate_error"
+          : "waiting_birthdate_guidance",
+      });
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        expectedInputType: "birthdate_dd_mm_yyyy",
+        text,
+        chosenReplyType: isDateLike
+          ? "waiting_birthdate_error"
+          : "waiting_birthdate_guidance",
+        routeReason: "unexpected_input_kept_in_state",
+      });
+      await sendNonScanSequenceReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: isDateLike
+          ? "waiting_birthdate_error"
+          : "waiting_birthdate_guidance",
+        semanticKey: isDateLike
+          ? "birthdate_error_waiting_scan"
+          : "waiting_birthdate_guidance",
+        messages: isDateLike ? errMsgs : guidanceMsgs,
+      });
+      return;
+    }
+  }
+
+  if (paymentState === "approved_intro") {
+    if (
+      !isHistoryCommand(text, lowerText) &&
+      !isStatsCommand(text, lowerText) &&
+      !isMainMenuAlias(text, lowerText) &&
+      !isPaymentCommand(text, lowerText) &&
+      text !== "เปลี่ยนวันเกิด" &&
+      text !== "สแกนพลังงาน"
+    ) {
+      const scanReadyText = [
+        "ตอนนี้คุณพร้อมสแกนแล้วครับ",
+        "",
+        "ส่งรูปวัตถุ 1 รูปในแชตนี้ได้เลย",
+        "ระบบจะเริ่มอ่านให้ทันที",
+      ].join("\n");
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        expectedInputType: "object_image",
+        text,
+        chosenReplyType: "scan_energy_helper_paid_active",
+        routeReason: "paid_active_scan_ready_guidance",
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "scan_energy_helper_paid_active",
+        semanticKey: "scan_ready_paid_active",
+        text: scanReadyText,
+        alternateTexts: ["ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ"],
+      });
+      return;
+    }
+  }
+
   // --- STATE-FIRST: awaiting_slip → pending_verify → awaitingBirthdateUpdate → waiting_birthdate ---
 
   // 1) awaiting_slip (strict: any non-payment text stays in slip flow)
