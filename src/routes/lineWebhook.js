@@ -1193,6 +1193,12 @@ async function handleTextMessage({ client, event, userId, session }) {
       ? "paid_active"
       : "free_available"
     : activeAccessDecision?.reason || "payment_required";
+  /** User exhausted free quota, saw paywall, pending scan image — package text must not go to birthdate flow. */
+  const isPaywallGateWithPendingScan =
+    Boolean(session.pendingImage) &&
+    activeAccessDecision != null &&
+    !activeAccessDecision.allowed &&
+    activeAccessDecision.reason === "payment_required";
   const flowState = session.pendingImage ? "waiting_birthdate" : "idle";
   let paymentState = "none";
   if (hasPendingVerify) {
@@ -1239,7 +1245,39 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: "payment_package_selected",
         routeReason: "accepted_package_selection",
       });
-      // Continue to explicit package-selection handler below.
+      console.log("[STATE_CONFLICT_RESOLVED]", {
+        userId,
+        previousFlowState: flowState,
+        previousPaymentState: paymentState,
+        nextFlowState: "package_selected_pending_pay_command",
+        nextPaymentState: paymentState,
+        reason:
+          "package_selection_consumed_turn_payment_wins_over_waiting_birthdate",
+      });
+      setSelectedPaymentPackageKey(userId, pickedKey);
+      const pkg = findPackageByKey(offer, pickedKey);
+      console.log(
+        JSON.stringify({
+          event: "PAYMENT_PACKAGE_SELECTED",
+          lineUserId: userId,
+          packageKey: pickedKey,
+          priceThb: pkg?.priceThb ?? null,
+          scanCount: pkg?.scanCount ?? null,
+          windowHours: pkg?.windowHours ?? null,
+          source: "paywall_selecting_package_text_route",
+        }),
+      );
+      const ack = buildPaymentPackageSelectedAck(pkg);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "payment_package_selected",
+        semanticKey: "payment_package_selected",
+        text: ack,
+        alternateTexts: [buildPackageSelectionPromptFromOffer(offer)],
+      });
+      return;
     } else {
       const guidance = `${buildPackageSelectionPromptFromOffer(
         offer,
@@ -1763,7 +1801,11 @@ async function handleTextMessage({ client, event, userId, session }) {
     const hasAwaitingPaymentRow =
       pendingPayRow && String(pendingPayRow.status) === "awaiting_payment";
 
-    if (session.pendingImage && paymentState !== "awaiting_slip") {
+    if (
+      session.pendingImage &&
+      paymentState !== "awaiting_slip" &&
+      !isPaywallGateWithPendingScan
+    ) {
       if (hasAwaitingPaymentRow) {
         let paymentRef = null;
         try {
@@ -1971,7 +2013,12 @@ async function handleTextMessage({ client, event, userId, session }) {
         row &&
         (String(row.status) === "awaiting_payment" ||
           String(row.status) === "pending_verify");
-      if (session.pendingImage && ps !== "awaiting_slip" && !slipRow) {
+      if (
+        session.pendingImage &&
+        ps !== "awaiting_slip" &&
+        !slipRow &&
+        !isPaywallGateWithPendingScan
+      ) {
         logWaitingBirthdate("guidance", {
           gate: "package_pick_blocked",
           userId,
@@ -2028,7 +2075,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       if (
         session.pendingImage &&
         ps !== "awaiting_slip" &&
-        !slipRow
+        !slipRow &&
+        !isPaywallGateWithPendingScan
       ) {
         logWaitingBirthdate("guidance", {
           gate: "payment_command_blocked",
