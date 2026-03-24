@@ -9,7 +9,6 @@ import {
   waitingBirthdateImageReminderMessages,
   birthdateErrorMessages,
   paywallText,
-  awaitingSlipReminderText,
   pendingVerifyReminderText,
   pendingVerifyBlockScanText,
   pendingVerifyPaymentAgainText,
@@ -25,6 +24,7 @@ import {
   findPackageByKey,
   getDefaultPackage,
   listActivePackages,
+  parsePackageSelectionFromText,
 } from "../services/scanOffer.packages.js";
 
 /** Backward-compatible alias for `looksLikeBirthdateInput`. */
@@ -310,6 +310,114 @@ export function buildPaymentPackageSelectedAck(paidPackage) {
   return `${line}\n\nพิมพ์ จ่ายเงิน เมื่อพร้อมโอน จะได้คิวอาร์และขั้นตอนในแชตนี้ครับ`;
 }
 
+/** Deterministic slot from LINE user id (stable per user). */
+function slotFromUserId(userId, modulo) {
+  const s = String(userId || "");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  return modulo > 0 ? h % modulo : 0;
+}
+
+/** User re-sent the same package token while still on paywall — stay in flow, nudge to pay. */
+export function buildPackageAlreadySelectedContinueHuman(paidPackage) {
+  const p = paidPackage;
+  if (!p) {
+    return "เลือกแพ็กไว้แล้วครับ พิมพ์ จ่ายเงิน เมื่อพร้อมโอนได้เลย";
+  }
+  return [
+    `แพ็ก ${p.priceThb} บาทเลือกไว้แล้วครับ`,
+    "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ",
+  ].join("\n");
+}
+
+/**
+ * State-safe paywall guidance (Thai, no emoji). `guidanceReason` drives tone, not routing.
+ * @param {"unexpected" | "birthdate_deferred" | "pay_intent_no_package"} guidanceReason
+ */
+export function buildPaywallHumanGuidanceText({
+  offer = loadActiveScanOffer(),
+  userId = "",
+  guidanceReason = "unexpected",
+} = {}) {
+  void offer;
+  if (guidanceReason === "birthdate_deferred") {
+    return "เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้เลือกแพ็กก่อน พิมพ์ 49 หรือ 99 ได้เลย";
+  }
+  if (guidanceReason === "pay_intent_no_package") {
+    const lines = [
+      "ถ้ายังไม่เลือกแพ็ก เลือก 49 หรือ 99 มาก่อนได้ครับ",
+      "ตอนนี้ผมรอเลือกแพ็กอยู่ครับ พิมพ์ 49 หรือ 99 ได้เลย",
+    ];
+    return lines[slotFromUserId(userId, lines.length)];
+  }
+  const soft = [
+    "ตอนนี้ผมรอเลือกแพ็กอยู่ครับ ถ้าจะเปิดสิทธิ์ พิมพ์ 49 หรือ 99 ได้เลย",
+    "ถ้าสะดวกเปิดสิทธิ์ พิมพ์ 49 หรือ 99 มาได้เลยครับ",
+  ];
+  return soft[slotFromUserId(userId, soft.length)];
+}
+
+/** Pay intent without package (generic path / not on paywall gate). */
+export function buildPaymentPayIntentNoPackageHumanText({
+  offer = loadActiveScanOffer(),
+  userId = "",
+} = {}) {
+  const menu = buildPackageSelectionPromptFromOffer(offer);
+  const lines = [
+    "ยังไม่ได้เลือกแพ็กครับ เลือก 49 หรือ 99 ก่อน แล้วค่อยพิมพ์ จ่ายเงิน ได้เลย",
+    "เลือกแพ็กก่อนนะครับ พิมพ์ 49 หรือ 99 แล้วตามด้วย จ่ายเงิน เมื่อพร้อม",
+  ];
+  const head = lines[slotFromUserId(userId, lines.length)];
+  return `${head}\n\n${menu}`;
+}
+
+export function isPackageSelectionTokenText(text, offer = loadActiveScanOffer()) {
+  return Boolean(parsePackageSelectionFromText(text, offer));
+}
+
+/**
+ * Waiting for birthdate: payment/package/menu must not steal the turn — one short human line.
+ */
+export async function buildWaitingBirthdateDateFirstGuidanceMessages(userId) {
+  const lines = [
+    "ขอวันเกิดก่อนครับ พิมพ์แบบ 19/08/1985 ได้เลย",
+    "ตอนนี้ผมรอวันเกิดอยู่ครับ เดี๋ยวได้อ่านต่อให้เลย",
+  ];
+  const primary = lines[slotFromUserId(userId, lines.length)];
+  return [primary];
+}
+
+/** Deterministic awaiting_slip text guard (persona may still vary alternates). */
+export function buildAwaitingSlipDeterministicGuidanceText({ paymentRef } = {}) {
+  const base = [
+    "ตอนนี้ผมรอสลิปอยู่ครับ",
+    "ส่งรูปสลิปมาในแชตนี้ได้เลย",
+    "ถ้าต้องการดูคิวอาร์อีกครั้ง พิมพ์ จ่ายเงิน ได้เลยครับ",
+  ].join("\n");
+  return appendPaymentRefLine(base, paymentRef);
+}
+
+export function buildPendingVerifyHumanGuidanceText({ paymentRef } = {}) {
+  const base = [
+    "สลิปอยู่ระหว่างให้ทีมตรวจครับ",
+    "รอแจ้งผลในแชตนี้ได้เลย",
+    "ถ้ายังไม่ได้ส่งสลิป ส่งรูปมาได้เลยครับ",
+  ].join("\n");
+  return appendPaymentRefLine(base, paymentRef);
+}
+
+export function buildPaidActiveScanReadyHumanText(userId) {
+  const variants = [
+    ["ตอนนี้คุณพร้อมสแกนแล้วครับ", "ส่งรูปวัตถุ 1 รูปในแชตนี้ได้เลย"].join(
+      "\n\n",
+    ),
+    ["พร้อมสแกนแล้วครับ", "ส่งรูปมา 1 รูป เดี๋ยวผมอ่านให้"].join("\n\n"),
+  ];
+  return variants[slotFromUserId(userId, variants.length)];
+}
+
 export function buildPaymentQrSlipText() {
   return "โอนแล้วส่งสลิปในแชตนี้ได้เลยครับ";
 }
@@ -364,9 +472,14 @@ export function buildNoStatsText() {
   return "ยังไม่มีสถิติการสแกนครับ";
 }
 
+/** Deterministic idle copy — routing owns when this applies; persona may only vary alternates. */
+export function buildIdleDeterministicPrimaryText() {
+  return "ส่งรูปมาได้เลย\nผมจะดูให้ทีละชิ้น";
+}
+
 export async function buildIdleText(userId = null) {
   if (!String(userId || "").trim()) {
-    return "ส่งรูปมาได้เลย\nผมจะดูให้ทีละชิ้น";
+    return buildIdleDeterministicPrimaryText();
   }
   return idlePostScanText(userId);
 }
@@ -695,18 +808,10 @@ export function allowsUtilityCommandsDuringPendingVerify(text, lowerText) {
   return menu.has(t) || menu.has(lt);
 }
 
-/** User typed text while waiting for slip. */
+/** User typed text while waiting for slip — deterministic state-safe copy (routing owns flow). */
 export async function buildAwaitingSlipReminderText({ userId, paymentRef } = {}) {
-  if (!userId) {
-    const base = [
-      "รอสลิปอยู่ครับ",
-      "",
-      "โอนแล้วส่งสลิป 1 รูปในแชตนี้ได้เลย",
-      "ตรวจก่อนแล้วค่อยเปิดสิทธิ์ พออนุมัติแล้วค่อยสแกนต่อได้ครับ",
-    ].join("\n");
-    return appendPaymentRefLine(base, paymentRef);
-  }
-  return awaitingSlipReminderText(userId, paymentRef);
+  void userId;
+  return buildAwaitingSlipDeterministicGuidanceText({ paymentRef });
 }
 
 export function isHistoryCommand(text, lowerText) {

@@ -41,6 +41,13 @@ import { isDuplicateImage } from "../services/dedupe.service.js";
 import { checkSingleObject } from "../services/objectCheck.service.js";
 
 import { env } from "../config/env.js";
+import { logConversationCost } from "../utils/conversationCost.util.js";
+import {
+  evaluateTextEdgeGate,
+  isSoftVerifyPending,
+  clearSoftVerifyPending,
+  isSoftVerifyUnlockText,
+} from "../stores/edgeGate.store.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
 import { resolveScanOfferAccessContext } from "../services/scanOfferAccess.resolver.js";
 import { buildScanOfferReply } from "../services/scanOffer.copy.js";
@@ -93,7 +100,7 @@ import {
   formatHistory,
   formatBangkokDateTime,
   buildStartInstructionMessages,
-  buildWaitingBirthdateGuidanceMessages,
+  buildWaitingBirthdateDateFirstGuidanceMessages,
   buildMultiImageInRequestText,
   buildMultipleObjectsText,
   buildUnclearImageText,
@@ -107,6 +114,7 @@ import {
   buildNoHistoryText,
   buildNoStatsText,
   buildIdleText,
+  buildIdleDeterministicPrimaryText,
   buildSystemErrorText,
   isPaymentCommand,
   buildPaymentInstructionText,
@@ -116,6 +124,11 @@ import {
   buildPaymentPackageSelectedAck,
   buildSlipReceivedText,
   buildPendingVerifyReminderText,
+  buildPendingVerifyHumanGuidanceText,
+  buildPaywallHumanGuidanceText,
+  buildPackageAlreadySelectedContinueHuman,
+  buildPaymentPayIntentNoPackageHumanText,
+  buildPaidActiveScanReadyHumanText,
   buildPendingVerifyBlockScanText,
   buildPendingVerifyPaymentCommandText,
   allowsUtilityCommandsDuringPendingVerify,
@@ -197,7 +210,7 @@ async function handlePaymentCommandTextRoute({
         replyToken: event.replyToken,
         replyType: "payment_cmd_needs_birthdate",
         semanticKey: "waiting_birthdate_guidance",
-        messages: await buildWaitingBirthdateGuidanceMessages(userId),
+        messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId),
       });
       return true;
     }
@@ -264,15 +277,19 @@ async function handlePaymentCommandTextRoute({
         reason: "pay_intent_no_package_selected",
       }),
     );
-    const prompt = buildPackageSelectionPromptFromOffer(offerPay);
+    const humanNoPkg = buildPaymentPayIntentNoPackageHumanText({
+      offer: offerPay,
+      userId,
+    });
+    const menuAlt = buildPackageSelectionPromptFromOffer(offerPay);
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "payment_package_prompt",
-      semanticKey: "payment_need_package_first",
-      text: prompt,
-      alternateTexts: [prompt],
+      replyType: "payment_pay_intent_no_package",
+      semanticKey: "payment_pay_intent_no_package",
+      text: humanNoPkg,
+      alternateTexts: [menuAlt],
     });
     logEvent("payment_intent", {
       userId,
@@ -391,17 +408,27 @@ async function handlePaymentCommandTextRoute({
 }
 
 async function replyIdleTextNoDuplicate({ client, replyToken, userId }) {
-  const text = await buildIdleText(userId);
-  if (!String(text || "").trim()) return;
+  const primary = buildIdleDeterministicPrimaryText();
+  let personaSoft = null;
+  try {
+    personaSoft = await buildIdleText(userId);
+  } catch (_) {
+    personaSoft = null;
+  }
+  const altPersona =
+    String(personaSoft || "").trim() &&
+    String(personaSoft).trim() !== primary.trim()
+      ? String(personaSoft).trim()
+      : null;
   await sendNonScanReply({
     client,
     userId,
     replyToken,
     replyType: "idle_post_scan",
     semanticKey: "idle_post_scan",
-    text,
+    text: primary,
     alternateTexts: [
-      "ส่งรูปมาได้เลย\nผมจะดูให้ทีละชิ้น",
+      ...(altPersona ? [altPersona] : []),
       "มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้",
     ],
   });
@@ -1352,6 +1379,108 @@ async function handleTextMessage({ client, event, userId, session }) {
   const lowerText = text.toLowerCase();
   const now = Date.now();
 
+  if (env.EDGE_GATE_SOFT_VERIFY_ENABLED && isSoftVerifyPending(userId)) {
+    if (!isSoftVerifyUnlockText(text)) {
+      logConversationCost({
+        layer: "layer0_edge",
+        aiPath: "edge_gate",
+        edgeGateAction: "soft_verify_block",
+        userId,
+        usedAi: false,
+        modelUsed: null,
+        replyType: "soft_verify_prompt",
+        stateOwner: "soft_verify_gate",
+        fallbackToDeterministic: true,
+        suppressedDuplicate: false,
+        softVerifyTriggered: false,
+        softVerifyPassed: false,
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "soft_verify_prompt",
+        semanticKey: "soft_verify_prompt",
+        text: "ก่อนคุยต่อ พิมพ์ ยืนยัน ได้เลยครับ",
+        alternateTexts: [
+          "ถ้าต้องการใช้งานต่อ พิมพ์ เริ่ม ได้เลยครับ",
+        ],
+      });
+      return;
+    }
+    clearSoftVerifyPending(userId);
+    logConversationCost({
+      layer: "layer0_edge",
+      aiPath: "edge_gate",
+      edgeGateAction: "soft_verify_passed",
+      userId,
+      usedAi: false,
+      modelUsed: null,
+      replyType: null,
+      stateOwner: "soft_verify_gate",
+      fallbackToDeterministic: true,
+      suppressedDuplicate: false,
+      softVerifyTriggered: false,
+      softVerifyPassed: true,
+    });
+  }
+
+  const messageId = event.message?.id ?? null;
+  const edge = evaluateTextEdgeGate({ userId, messageId, text, now });
+  if (edge.action === "drop_duplicate_event") {
+    logConversationCost({
+      layer: "layer0_edge",
+      aiPath: "edge_gate",
+      edgeGateAction: "drop_duplicate_event",
+      userId,
+      messageId: edge.messageId ?? null,
+      suppressedDuplicate: true,
+      usedAi: false,
+      modelUsed: null,
+      replyType: null,
+      stateOwner: null,
+      fallbackToDeterministic: true,
+      softVerifyTriggered: false,
+      softVerifyPassed: false,
+    });
+    return;
+  }
+  if (edge.action === "ignore_empty") {
+    logConversationCost({
+      layer: "layer0_edge",
+      aiPath: "edge_gate",
+      edgeGateAction: "ignore_empty",
+      userId,
+      usedAi: false,
+      modelUsed: null,
+      replyType: null,
+      stateOwner: null,
+      fallbackToDeterministic: true,
+      suppressedDuplicate: false,
+      softVerifyTriggered: false,
+      softVerifyPassed: false,
+    });
+    return;
+  }
+  if (edge.action === "suppress_identical_inbound") {
+    logConversationCost({
+      layer: "layer0_edge",
+      aiPath: "edge_gate",
+      edgeGateAction: "suppress_identical_inbound",
+      userId,
+      suppressedDuplicate: true,
+      usedAi: false,
+      modelUsed: null,
+      replyType: null,
+      stateOwner: null,
+      fallbackToDeterministic: true,
+      repeatHint: edge.repeatHint ?? null,
+      softVerifyTriggered: false,
+      softVerifyPassed: false,
+    });
+    return;
+  }
+
   const textSpam = registerTextEvent(userId, text, now);
 
   if (textSpam.state.isHardBlocked) {
@@ -1394,7 +1523,9 @@ async function handleTextMessage({ client, event, userId, session }) {
   });
 
   // Active-state routing hardening:
-  // deterministic state chooses reply family first, before generic routing.
+  // Deterministic state ownership decides the turn (replyType / semanticKey).
+  // Persona / content pools must not choose branches — only soften wording (e.g. idle alternates).
+  // Generic menu/idle runs only when no interactive session still owns the turn.
   let activeAccessDecision = null;
   let activePendingPaymentRow = null;
   try {
@@ -1447,6 +1578,26 @@ async function handleTextMessage({ client, event, userId, session }) {
     paymentState = "approved_intro";
   }
 
+  const selectedPkgKeyForOwner = getSelectedPaymentPackageKey(userId);
+  let conversationOwner = "idle";
+  if (hasPendingVerify) {
+    conversationOwner = "pending_verify";
+  } else if (hasAwaitingSlip || paymentMemoryState === "awaiting_slip") {
+    conversationOwner = "awaiting_slip";
+  } else if (
+    !activeAccessDecision?.allowed &&
+    activeAccessDecision?.reason === "payment_required" &&
+    session.pendingImage
+  ) {
+    conversationOwner = selectedPkgKeyForOwner
+      ? "payment_package_selected"
+      : "paywall_selecting_package";
+  } else if (activeAccessDecision?.allowed && activeAccessDecision?.reason === "paid") {
+    conversationOwner = "paid_active_scan_ready";
+  } else if (flowState === "waiting_birthdate" && paymentState === "none") {
+    conversationOwner = "waiting_birthdate";
+  }
+
   if (
     flowState === "waiting_birthdate" &&
     ["paywall_selecting_package", "awaiting_slip", "pending_verify"].includes(
@@ -1466,12 +1617,56 @@ async function handleTextMessage({ client, event, userId, session }) {
   if (paymentState === "paywall_selecting_package") {
     const offer = loadActiveScanOffer();
     const pickedKey = parsePackageSelectionFromText(text, offer);
+    const selectedKey = getSelectedPaymentPackageKey(userId);
+
+    if (pickedKey && selectedKey && pickedKey === selectedKey) {
+      const pkg = findPackageByKey(offer, pickedKey);
+      const human = buildPackageAlreadySelectedContinueHuman(pkg);
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        conversationOwner,
+        stateOwner: conversationOwner,
+        replyFamily: "paywall",
+        selectedPaymentPackageKey: selectedKey,
+        expectedInputType: "pay_intent_or_package_change",
+        text,
+        chosenReplyType: "payment_package_selected",
+        routeReason: "same_package_reselected_stay_in_flow",
+      });
+      console.log("[UNEXPECTED_INPUT_HANDLED]", {
+        userId,
+        activeState: paymentState,
+        inputText: text,
+        normalizedIntent: "package_already_selected",
+        chosenReplyType: "payment_package_selected",
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "payment_package_selected",
+        semanticKey: "payment_package_already_selected",
+        text: human,
+        alternateTexts: [
+          "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ",
+          buildPaymentPackageSelectedAck(pkg),
+        ],
+      });
+      return;
+    }
+
     if (pickedKey) {
       console.log("[ACTIVE_STATE_ROUTING]", {
         userId,
         flowState,
         paymentState,
         accessState,
+        conversationOwner,
+        stateOwner: conversationOwner,
+        replyFamily: "paywall",
         expectedInputType: "package_selection",
         text,
         chosenReplyType: "payment_package_selected",
@@ -1512,7 +1707,6 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    const selectedKey = getSelectedPaymentPackageKey(userId);
     if (selectedKey && isPaymentCommand(text, lowerText)) {
       console.log(
         JSON.stringify({
@@ -1536,22 +1730,46 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    const guidance = `${buildPackageSelectionPromptFromOffer(
+    const selectedForPrompt = selectedKey;
+    let guidanceReason = "unexpected_input_not_package_selection";
+    let chosenReplyType = "payment_package_prompt";
+    let semanticKey = "payment_need_package_first";
+    let primaryText = buildPaywallHumanGuidanceText({
       offer,
-    )}\n\nพิมพ์ 49 หรือ 99 เพื่อเลือกแพ็ก แล้วพิมพ์ จ่ายเงิน`;
-    const selectedForPrompt = getSelectedPaymentPackageKey(userId);
-    const promptReason =
-      isPaymentCommand(text, lowerText) && !selectedForPrompt
-        ? "pay_intent_no_package_selected"
-        : "unexpected_input_not_package_selection";
+      userId,
+      guidanceReason: "unexpected",
+    });
+    const menuCompact = buildPackageSelectionPromptFromOffer(offer);
+
+    if (isPaymentCommand(text, lowerText) && !selectedForPrompt) {
+      chosenReplyType = "payment_pay_intent_no_package";
+      semanticKey = "payment_pay_intent_no_package";
+      guidanceReason = "pay_intent_no_package_selected";
+      primaryText = buildPaywallHumanGuidanceText({
+        offer,
+        userId,
+        guidanceReason: "pay_intent_no_package",
+      });
+    } else if (looksLikeBirthdateInput(text)) {
+      chosenReplyType = "payment_package_prompt";
+      semanticKey = "paywall_birthdate_deferred";
+      guidanceReason = "birthdate_like_while_selecting_package";
+      primaryText = buildPaywallHumanGuidanceText({
+        offer,
+        userId,
+        guidanceReason: "birthdate_deferred",
+      });
+    }
+
     console.log(
       JSON.stringify({
         event: "PAYMENT_PACKAGE_PROMPT_REASON",
         userId,
         paymentState,
+        conversationOwner,
         selectedPaymentPackageKey: selectedForPrompt,
         inputText: text,
-        reason: promptReason,
+        reason: guidanceReason,
       }),
     );
     console.log("[UNEXPECTED_INPUT_HANDLED]", {
@@ -1559,26 +1777,32 @@ async function handleTextMessage({ client, event, userId, session }) {
       activeState: paymentState,
       inputText: text,
       normalizedIntent: "unexpected_for_package_selection",
-      chosenReplyType: "payment_package_prompt",
+      chosenReplyType,
+      guidanceReason,
     });
     console.log("[ACTIVE_STATE_ROUTING]", {
       userId,
       flowState,
       paymentState,
       accessState,
+      conversationOwner,
+      stateOwner: conversationOwner,
+      replyFamily: "paywall",
+      guidanceReason,
+      selectedPaymentPackageKey: selectedForPrompt,
       expectedInputType: "package_selection",
       text,
-      chosenReplyType: "payment_package_prompt",
+      chosenReplyType,
       routeReason: "unexpected_input_kept_in_state",
     });
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "payment_package_prompt",
-      semanticKey: "payment_need_package_first",
-      text: guidance,
-      alternateTexts: [buildPackageSelectionPromptFromOffer(offer)],
+      replyType: chosenReplyType,
+      semanticKey,
+      text: primaryText,
+      alternateTexts: [menuCompact],
     });
     return;
   }
@@ -1602,27 +1826,33 @@ async function handleTextMessage({ client, event, userId, session }) {
       userId,
       activeState: paymentState,
       inputText: text,
-      normalizedIntent: "awaiting_slip_reminder",
-      chosenReplyType: "awaiting_slip_reminder",
+      normalizedIntent: "awaiting_slip_guidance",
+      chosenReplyType: "awaiting_slip_guidance",
     });
     console.log("[ACTIVE_STATE_ROUTING]", {
       userId,
       flowState,
       paymentState,
       accessState,
-      expectedInputType: "slip_image",
+      conversationOwner,
+      stateOwner: conversationOwner,
+      replyFamily: "awaiting_slip",
+      expectedInputType: "slip_image_or_slip_status",
       text,
-      chosenReplyType: "awaiting_slip_reminder",
+      chosenReplyType: "awaiting_slip_guidance",
       routeReason: "awaiting_slip_text_guard",
     });
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "awaiting_slip_reminder",
-      semanticKey: "awaiting_slip_reminder",
+      replyType: "awaiting_slip_guidance",
+      semanticKey: "awaiting_slip_guidance",
       text: slipReminder,
-      alternateTexts: ["ส่งรูปสลิปในแชตนี้ได้เลยครับ"],
+      alternateTexts: [
+        "ส่งรูปสลิปในแชตนี้ได้เลยครับ",
+        "ถ้าต้องการดูคิวอาร์อีกครั้ง พิมพ์ จ่ายเงิน ได้เลยครับ",
+      ],
     });
     return;
   }
@@ -1638,8 +1868,14 @@ async function handleTextMessage({ client, event, userId, session }) {
     } catch (_) {
       paymentRef = null;
     }
-    const pendingText = buildPendingVerifyReminderText({ paymentRef });
     const isStatusLike = /สถานะ|คืบหน้า|รอ|ตรวจ|อนุมัติ|pending/i.test(text);
+    const pendingText = buildPendingVerifyHumanGuidanceText({ paymentRef });
+    const pvReplyType = isStatusLike
+      ? "pending_verify_status"
+      : "pending_verify_guidance";
+    const pvSemantic = isStatusLike
+      ? "pending_verify_status"
+      : "pending_verify_guidance";
     console.log("[UNEXPECTED_INPUT_HANDLED]", {
       userId,
       activeState: paymentState,
@@ -1647,26 +1883,32 @@ async function handleTextMessage({ client, event, userId, session }) {
       normalizedIntent: isStatusLike
         ? "status_like_pending_verify"
         : "unexpected_pending_verify",
-      chosenReplyType: "pending_verify_reminder",
+      chosenReplyType: pvReplyType,
     });
     console.log("[ACTIVE_STATE_ROUTING]", {
       userId,
       flowState,
       paymentState,
       accessState,
-      expectedInputType: "status_only",
+      conversationOwner,
+      stateOwner: conversationOwner,
+      replyFamily: "pending_verify",
+      expectedInputType: "status_like",
       text,
-      chosenReplyType: "pending_verify_reminder",
+      chosenReplyType: pvReplyType,
       routeReason: "pending_verify_text_guard",
     });
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "pending_verify_reminder",
-      semanticKey: "pending_verify_reminder",
+      replyType: pvReplyType,
+      semanticKey: pvSemantic,
       text: pendingText,
-      alternateTexts: ["สลิปอยู่ระหว่างตรวจครับ รอแจ้งผลในแชตนี้ได้เลย"],
+      alternateTexts: [
+        "รอแจ้งผลในแชตนี้ได้เลยครับ",
+        buildPendingVerifyReminderText({ paymentRef }),
+      ],
     });
     return;
   }
@@ -1687,7 +1929,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       // Continue to existing waiting_birthdate branch below.
     } else {
       const isDateLike = looksLikeBirthdateInput(text);
-      const guidanceMsgs = await buildWaitingBirthdateGuidanceMessages(userId);
+      const guidanceMsgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
       const errMsgs = await buildBirthdateErrorMessages(userId, parsedEarly.reason);
       console.log("[UNEXPECTED_INPUT_HANDLED]", {
         userId,
@@ -1735,30 +1977,31 @@ async function handleTextMessage({ client, event, userId, session }) {
       text !== "เปลี่ยนวันเกิด" &&
       text !== "สแกนพลังงาน"
     ) {
-      const scanReadyText = [
-        "ตอนนี้คุณพร้อมสแกนแล้วครับ",
-        "",
-        "ส่งรูปวัตถุ 1 รูปในแชตนี้ได้เลย",
-        "ระบบจะเริ่มอ่านให้ทันที",
-      ].join("\n");
+      const scanReadyText = buildPaidActiveScanReadyHumanText(userId);
       console.log("[ACTIVE_STATE_ROUTING]", {
         userId,
         flowState,
         paymentState,
         accessState,
+        conversationOwner,
+        stateOwner: conversationOwner,
+        replyFamily: "paid_active",
         expectedInputType: "object_image",
         text,
-        chosenReplyType: "scan_energy_helper_paid_active",
+        chosenReplyType: "scan_ready_guidance",
         routeReason: "paid_active_scan_ready_guidance",
       });
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "scan_energy_helper_paid_active",
-        semanticKey: "scan_ready_paid_active",
+        replyType: "scan_ready_guidance",
+        semanticKey: "scan_ready_guidance",
         text: scanReadyText,
-        alternateTexts: ["ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ"],
+        alternateTexts: [
+          "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
+          "ส่งรูปมา 1 รูป เดี๋ยวผมอ่านให้",
+        ],
       });
       return;
     }
@@ -1786,8 +2029,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "awaiting_slip_reminder",
-      semanticKey: "awaiting_slip_reminder",
+      replyType: "awaiting_slip_guidance",
+      semanticKey: "awaiting_slip_guidance",
       text: slipRem,
       alternateTexts: [
         "รอสลิปโอนอยู่นะครับ ส่งสลิปมาในแชทนี้ได้เลย",
@@ -2018,7 +2261,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         });
         return;
       }
-      const gMsgs = await buildWaitingBirthdateGuidanceMessages(userId);
+      const gMsgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
       if (gMsgs.length) {
         gMsgs[gMsgs.length - 1] = `${gMsgs[gMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
       }
@@ -2182,6 +2425,38 @@ async function handleTextMessage({ client, event, userId, session }) {
         return;
       }
 
+      const offerBd = loadActiveScanOffer();
+      if (
+        parsePackageSelectionFromText(text, offerBd) ||
+        isPaymentCommand(text, lowerText)
+      ) {
+        logWaitingBirthdate("guidance", {
+          gate: "waiting_birthdate",
+          userId,
+          hint: "payment_or_package_deferred",
+        });
+        console.log("[ACTIVE_STATE_ROUTING]", {
+          userId,
+          flowState,
+          paymentState,
+          accessState,
+          conversationOwner: "waiting_birthdate",
+          expectedInputType: "date_like",
+          text,
+          chosenReplyType: "waiting_birthdate_guidance",
+          routeReason: "package_or_pay_deferred_date_first",
+        });
+        await sendNonScanSequenceReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "waiting_birthdate_guidance",
+          semanticKey: "waiting_birthdate_guidance",
+          messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId),
+        });
+        return;
+      }
+
       if (looksLikeBirthdateInput(text)) {
         logWaitingBirthdate("invalid_date_attempt", {
           gate: "waiting_birthdate",
@@ -2211,7 +2486,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           replyToken: event.replyToken,
           replyType: "waiting_birthdate_guidance_blocked",
           semanticKey: "waiting_birthdate_guidance",
-          messages: await buildWaitingBirthdateGuidanceMessages(userId),
+          messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId),
         });
         return;
       }
@@ -2227,7 +2502,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyToken: event.replyToken,
         replyType: "waiting_birthdate_guidance",
         semanticKey: "waiting_birthdate_guidance",
-        messages: await buildWaitingBirthdateGuidanceMessages(userId),
+        messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId),
       });
       return;
     }
@@ -2236,6 +2511,33 @@ async function handleTextMessage({ client, event, userId, session }) {
       userId,
       message: birthLockErr?.message,
     });
+    if (session.pendingImage) {
+      try {
+        const msgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
+        console.log("[ACTIVE_STATE_ROUTING]", {
+          userId,
+          flowState: "waiting_birthdate",
+          paymentState,
+          accessState,
+          conversationOwner: "waiting_birthdate",
+          expectedInputType: "date_like",
+          text,
+          chosenReplyType: "waiting_birthdate_guidance",
+          routeReason: "waiting_birthdate_branch_error_guard",
+        });
+        await sendNonScanSequenceReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "waiting_birthdate_guidance",
+          semanticKey: "waiting_birthdate_guidance",
+          messages: msgs,
+        });
+      } catch (_) {
+        /* ignore */
+      }
+      return;
+    }
   }
 
   // 5) explicit commands (no active lock above)
@@ -2301,12 +2603,31 @@ async function handleTextMessage({ client, event, userId, session }) {
           replyToken: event.replyToken,
           replyType: "payment_cmd_needs_birthdate",
           semanticKey: "waiting_birthdate_guidance",
-          messages: await buildWaitingBirthdateGuidanceMessages(userId),
+          messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId),
         });
         return;
       }
     } catch (_) {
       /* ignore */
+    }
+
+    const alreadySelectedKey = getSelectedPaymentPackageKey(userId);
+    if (alreadySelectedKey && pickedKey === alreadySelectedKey) {
+      const pkg = findPackageByKey(offerPick, pickedKey);
+      const human = buildPackageAlreadySelectedContinueHuman(pkg);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "payment_package_selected",
+        semanticKey: "payment_package_already_selected",
+        text: human,
+        alternateTexts: [
+          "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ",
+          buildPaymentPackageSelectedAck(pkg),
+        ],
+      });
+      return;
     }
 
     setSelectedPaymentPackageKey(userId, pickedKey);
@@ -2345,6 +2666,61 @@ async function handleTextMessage({ client, event, userId, session }) {
       isPaywallGateWithPendingScan,
     })
   ) {
+    return;
+  }
+
+  if (session.pendingImage) {
+    const msgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
+    console.log("[UNEXPECTED_INPUT_HANDLED]", {
+      userId,
+      activeState: "waiting_birthdate",
+      inputText: text,
+      normalizedIntent: "terminal_guard_prevent_generic_idle",
+      chosenReplyType: "waiting_birthdate_guidance",
+    });
+    console.log("[ACTIVE_STATE_ROUTING]", {
+      userId,
+      flowState: "waiting_birthdate",
+      paymentState,
+      accessState,
+      conversationOwner: "waiting_birthdate",
+      expectedInputType: "date_like",
+      text,
+      chosenReplyType: "waiting_birthdate_guidance",
+      routeReason: "terminal_guard_no_generic_fallback",
+    });
+    await sendNonScanSequenceReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "waiting_birthdate_guidance",
+      semanticKey: "waiting_birthdate_guidance",
+      messages: msgs,
+    });
+    return;
+  }
+
+  if (session.awaitingBirthdateUpdate) {
+    const msgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
+    console.log("[ACTIVE_STATE_ROUTING]", {
+      userId,
+      flowState: "awaiting_birthdate_update",
+      paymentState,
+      accessState,
+      conversationOwner: "waiting_birthdate",
+      expectedInputType: "date_like",
+      text,
+      chosenReplyType: "birthdate_update_guidance",
+      routeReason: "terminal_guard_profile_birthdate_no_generic_idle",
+    });
+    await sendNonScanSequenceReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_update_guidance",
+      semanticKey: "birthdate_guidance_profile",
+      messages: msgs,
+    });
     return;
   }
 
@@ -2438,7 +2814,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
-  // fallback => show main menu
+  // True idle / menu only — interactive sessions are handled above (terminal guards + state blocks).
   await replyIdleTextNoDuplicate({
     client,
     replyToken: event.replyToken,

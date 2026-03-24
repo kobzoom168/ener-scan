@@ -268,4 +268,40 @@ export const env = {
     String(process.env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE || "")
       .trim()
       .toLowerCase() === "true",
+  /**
+   * Layer 0: drop duplicate LINE `message.id` redeliveries + suppress identical text bursts (no LLM).
+   * @type {boolean}
+   */
+  EDGE_GATE_ENABLED:
+    String(process.env.EDGE_GATE_ENABLED ?? "true")
+      .trim()
+      .toLowerCase() !== "false",
+  /** TTL for seen LINE message ids (ms). Default 10 minutes. */
+  EDGE_GATE_MESSAGE_DEDUP_TTL_MS: (() => {
+    const raw = process.env.EDGE_GATE_MESSAGE_DEDUP_TTL_MS;
+    const n = raw === undefined || raw === "" ? 600_000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(60_000, Math.floor(n)) : 600_000;
+  })(),
+  /**
+   * If the user sends the same normalized text again within this window (ms), suppress (no reply).
+   * Default 7.5s. Set 0 to disable identical-text suppression (dedup only).
+   */
+  EDGE_GATE_IDENTICAL_TEXT_WINDOW_MS: (() => {
+    const raw = process.env.EDGE_GATE_IDENTICAL_TEXT_WINDOW_MS;
+    const n = raw === undefined || raw === "" ? 7500 : Number(raw);
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 7500;
+  })(),
+  /**
+   * Risk-based: after N edge suppressions in a 10-minute window, require unlock phrase (rare).
+   * @type {boolean}
+   */
+  EDGE_GATE_SOFT_VERIFY_ENABLED:
+    String(process.env.EDGE_GATE_SOFT_VERIFY_ENABLED || "")
+      .trim()
+      .toLowerCase() === "true",
+  EDGE_GATE_SOFT_VERIFY_SUPPRESSION_THRESHOLD: (() => {
+    const raw = process.env.EDGE_GATE_SOFT_VERIFY_SUPPRESSION_THRESHOLD;
+    const n = raw === undefined || raw === "" ? 4 : Number(raw);
+    return Number.isFinite(n) ? Math.max(2, Math.floor(n)) : 4;
+  })(),
 };

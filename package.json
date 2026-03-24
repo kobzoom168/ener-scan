@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/birthdateParse.test.js tests/conversationPattern.test.js tests/personaAbOptimize.test.js tests/hybridPersona.validator.test.js tests/nonScanReply.gateway.test.js tests/reportPayload.hardening.test.js tests/reportImageUrl.util.test.js tests/scanObjectImage.storage.test.js tests/dateTime.util.test.js tests/flex.summaryFirst.test.js tests/scanFlexReply.builder.test.js tests/reportRolloutTelemetry.util.test.js tests/scanOffer.loader.test.js tests/scanOfferAccess.resolver.test.js tests/paymentAccess.service.test.js tests/scanOffer.copy.test.js tests/adminResetAndScanLock.test.js tests/adminFreeResetAbuse.test.js",
+    "test": "node --test tests/birthdateParse.test.js tests/conversationPattern.test.js tests/personaAbOptimize.test.js tests/hybridPersona.validator.test.js tests/nonScanReply.gateway.test.js tests/reportPayload.hardening.test.js tests/reportImageUrl.util.test.js tests/scanObjectImage.storage.test.js tests/dateTime.util.test.js tests/flex.summaryFirst.test.js tests/scanFlexReply.builder.test.js tests/reportRolloutTelemetry.util.test.js tests/scanOffer.loader.test.js tests/scanOfferAccess.resolver.test.js tests/paymentAccess.service.test.js tests/scanOffer.copy.test.js tests/adminResetAndScanLock.test.js tests/adminFreeResetAbuse.test.js tests/edgeGate.store.test.js",
     "start": "node src/app.js",
     "dev": "node src/app.js",
     "payment:verify": "node scripts/verify-payment.js",
     "analyze:style": "node scripts/analyze-top-quality.mjs",
-    "report:style-effectiveness": "node scripts/report-style-reference-effectiveness.mjs"
+    "report:style-effectiveness": "node scripts/report-style-reference-effectiveness.mjs",
+    "conv-cost:readout": "node scripts/conv-cost-readout.mjs"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
