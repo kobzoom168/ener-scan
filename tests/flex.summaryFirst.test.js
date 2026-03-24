@@ -12,7 +12,7 @@ const SAMPLE_TEXT = `คะแนนพลัง: 8.2/10
 บทบาทของชิ้นนี้
 ปิดท้ายด้วยความอบอุ่น`;
 
-test("buildScanSummaryFirstFlex: carousel with report URL (footer button)", () => {
+test("buildScanSummaryFirstFlex: always two carousel pages; page2 has full-report CTA", () => {
   const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
     reportPayload: {
@@ -52,15 +52,25 @@ test("buildScanSummaryFirstFlex: carousel with report URL (footer button)", () =
   });
   assert.equal(flex.type, "flex");
   assert.equal(flex.contents.type, "carousel");
-  assert.equal(flex.contents.contents.length, 1);
-  assert.ok(flex.contents.contents[0].footer);
+  assert.equal(flex.contents.contents.length, 2);
+  assert.equal(
+    flex.contents.contents[0].body.contents[1].contents[0].text,
+    "สรุปพลังชิ้นนี้",
+  );
+  const page2Footer = flex.contents.contents[1].footer;
+  assert.ok(page2Footer);
+  const primaryBtn = page2Footer.contents.find(
+    (c) => c.type === "button" && c.action?.label === "ดูรายงานฉบับเต็ม",
+  );
+  assert.ok(primaryBtn);
+  assert.equal(primaryBtn.action.uri, "https://example.com/r/abc123");
 });
 
-test("buildScanSummaryFirstFlex: append report bubble when flag", () => {
+test("buildScanSummaryFirstFlex: appendReportBubble flag ignored (two-page design)", () => {
   const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
     appendReportBubble: true,
   });
   assert.equal(flex.contents.contents.length, 2);
-  assert.equal(flex.contents.contents[1].body.contents[1].text, "รายงานฉบับเต็ม");
+  assert.equal(flex.contents.contents[1].body.contents[1].text, "อ่านต่อบนเว็บ");
 });

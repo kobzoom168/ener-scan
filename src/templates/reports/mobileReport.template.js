@@ -1,4 +1,9 @@
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
+import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
+import {
+  distillSummaryLine,
+  summaryLineDensityClass,
+} from "../../utils/reports/reportSummaryText.util.js";
 
 /** Internal / non-display object type slugs (not shown as a label). */
 const OBJECT_TYPE_INTERNAL = new Set(["single_supported", "mock"]);
@@ -14,32 +19,39 @@ function humanObjectTypeLabel(raw) {
 }
 
 /**
- * Prefer first clause before em/en dash; short enough for 1 line when tight, else fits ~2 lines in UI.
- * @param {unknown} raw
- * @returns {string}
+ * Opening line under hero — piece-specific from payload sections.
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
  */
-function distillSummaryLine(raw) {
-  const t = String(raw ?? "")
-    .trim()
-    .replace(/\s+/g, " ");
-  if (!t) return "";
-  const splitDash = t.split(/\s*[—–]\s*/);
-  if (splitDash.length > 1 && splitDash[0].length >= 6) return splitDash[0].trim();
-  const firstLine = t.split(/\n/)[0].trim();
-  if (firstLine.length <= 108) return firstLine;
-  const cut = firstLine.slice(0, 100);
-  const sp = cut.lastIndexOf(" ");
-  return (sp > 32 ? cut.slice(0, sp) : cut) + "…";
+function heroOpeningLine(p) {
+  const sec = p.sections || {};
+  const mp = Array.isArray(sec.messagePoints) ? sec.messagePoints : [];
+  const wi = Array.isArray(sec.whatItGives) ? sec.whatItGives : [];
+  const raw = String(mp[0] || wi[0] || "").trim();
+  if (!raw) return "";
+  return raw.length > 160 ? `${raw.slice(0, 157)}…` : raw;
 }
 
 /**
- * Short distilled lines read best as a single line; longer text may use two.
- * @param {string} distilled
- * @returns {string}
+ * “ควรเปิดอ่านเมื่อ…” — short moments from payload.
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
  */
-function summaryLineDensityClass(distilled) {
-  const len = [...String(distilled)].length;
-  return len <= 34 ? "summary-line--tight" : "summary-line--roomy";
+function whenToReadItems(p) {
+  const sec = p.sections || {};
+  const best = Array.isArray(sec.bestUseCases) ? sec.bestUseCases : [];
+  const tips = Array.isArray(sec.guidanceTips) ? sec.guidanceTips : [];
+  const merged = [...best, ...tips]
+    .map((s) => String(s).trim())
+    .filter(Boolean);
+  return merged.slice(0, 4);
+}
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ */
+function retentionReminderText(p) {
+  const cn = p.sections?.careNotes?.[0];
+  if (cn && String(cn).trim()) return String(cn).trim();
+  return "บางชิ้นไม่ได้เด่นตอนสบาย แต่จะเด่นชัดในวันที่ใจรับแรงมาก — บันทึกไว้เตือนใจ";
 }
 
 /**
@@ -115,12 +127,9 @@ function hero(p) {
     : `<div class="hero-media hero-media--empty" aria-label="${escapeHtml(alt)}">
     <div class="hero-placeholder"><span class="hero-placeholder-inner">ยังไม่มีรูปวัตถุในรายงาน</span></div>
   </div>`;
-  const date = p.generatedAt
-    ? new Date(p.generatedAt).toLocaleString("th-TH", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
-    : "";
+  const dateRaw = formatBangkokDateTime(p.generatedAt);
+  const date = dateRaw !== "-" ? dateRaw : "";
+  const opening = heroOpeningLine(p);
   const heroModifier = imageUrl ? " hero--with-image" : " hero--no-image";
   return `
   <header class="hero${heroModifier}">
@@ -133,6 +142,7 @@ function hero(p) {
         <p class="hero-reading">การอ่านวัตถุชิ้นนี้</p>
         ${typeLabel ? `<p class="hero-object-kind">${escapeHtml(typeLabel)}</p>` : ""}
         <h1 class="hero-object-name"><span class="hero-object-name__text">${escapeHtml(label)}</span></h1>
+        ${opening ? `<p class="hero-hook">${escapeHtml(opening)}</p>` : ""}
         <p class="hero-doc-title">รายงานพลังวัตถุ</p>
         ${date ? `<p class="hero-date"><span class="hero-date-inner">${escapeHtml(date)}</span></p>` : ""}
       </div>
@@ -188,6 +198,39 @@ function summary(p) {
       ${coreSummary ? `<p class="summary-line summary-line--distilled ${summaryDensity}">${escapeHtml(coreSummary)}</p>` : ""}
     </div>
   </section>`;
+}
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ */
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ */
+function whenToReadSection(p) {
+  const items = whenToReadItems(p);
+  if (!items.length) return "";
+  const lis = items.map((i) => `<li>${escapeHtml(i)}</li>`).join("");
+  return `
+  <section class="card card--when-read" aria-labelledby="when-read-h">
+    <h2 class="card-title card-title--when-read" id="when-read-h">ควรเปิดอ่านเมื่อ…</h2>
+    <ul class="when-read-list">${lis}</ul>
+  </section>`;
+}
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ */
+function retentionReminderBlock(p) {
+  return `<p class="report-retention">${escapeHtml(retentionReminderText(p))}</p>`;
+}
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ */
+function ecosystemScanLink(p) {
+  const url = String(p.actions?.rescanUrl || "").trim();
+  if (!url) return "";
+  return `<p class="report-ecosystem"><a class="report-ecosystem-link" href="${escapeHtml(url)}">สแกนอีกชิ้น</a></p>`;
 }
 
 /**
@@ -468,6 +511,14 @@ export function renderMobileReportHtml(payload) {
       background: linear-gradient(180deg, rgba(248, 245, 240, 0.04), transparent 65%);
       border-radius: 2px;
     }
+    .hero-hook {
+      margin: 0.45rem auto 0.5rem;
+      max-width: 22rem;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      font-weight: 400;
+      color: rgba(200, 195, 186, 0.92);
+    }
     .hero-doc-title {
       margin: 0;
       font-size: 0.82rem;
@@ -515,6 +566,51 @@ export function renderMobileReportHtml(payload) {
       background: rgba(255, 255, 255, 0.035);
       border-radius: 999px;
       border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .card--when-read {
+      margin-bottom: 1rem;
+      padding: 0.95rem 1.05rem;
+      border-left: 2px solid rgba(212, 175, 55, 0.22);
+      background: rgba(10, 11, 14, 0.72);
+      border-color: rgba(255, 255, 255, 0.04);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    }
+    .card-title--when-read {
+      font-size: 0.88rem;
+      margin: 0 0 0.5rem;
+      color: rgba(200, 192, 175, 0.95);
+      font-weight: 600;
+    }
+    .when-read-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      font-size: 0.86rem;
+      line-height: 1.52;
+      color: rgba(175, 170, 162, 0.85);
+    }
+    .when-read-list li {
+      margin-bottom: 0.35rem;
+    }
+    .report-retention {
+      margin: 1rem 0 0;
+      padding: 0 0.5rem;
+      font-size: 0.78rem;
+      line-height: 1.62;
+      color: rgba(125, 120, 112, 0.9);
+      text-align: center;
+    }
+    .report-ecosystem {
+      margin: 0.75rem 0 0;
+      text-align: center;
+    }
+    .report-ecosystem-link {
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: rgba(105, 102, 96, 0.95);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(212, 175, 55, 0.12);
+      padding-bottom: 0.12rem;
     }
     /* —— Cards: hierarchy (lead vs support vs fine print) —— */
     .card {
@@ -845,7 +941,10 @@ export function renderMobileReportHtml(payload) {
     ${what}
     ${owner}
     ${best}
+    ${whenToReadSection(p)}
     ${trustBlock(p)}
+    ${retentionReminderBlock(p)}
+    ${ecosystemScanLink(p)}
   </div>
 </body>
 </html>`;

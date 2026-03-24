@@ -8,16 +8,7 @@ function pickColorByEnergy(text) {
   return "#D4AF37";
 }
 
-function formatBangkokTime(time) {
-  return new Date(time).toLocaleString("th-TH", {
-    timeZone: "Asia/Bangkok",
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
 
 function buildHistoryBubble(item, index) {
   const accent = pickColorByEnergy(item.mainEnergy || "");
@@ -65,7 +56,7 @@ function buildHistoryBubble(item, index) {
         },
         {
           type: "text",
-          text: formatBangkokTime(item.time),
+          text: formatBangkokDateTime(item.time),
           size: "xs",
           color: "#A8A8A8",
           wrap: true,

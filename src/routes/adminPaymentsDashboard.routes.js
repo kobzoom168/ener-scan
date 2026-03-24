@@ -25,6 +25,10 @@ import {
 } from "../utils/webhookText.util.js";
 import { logEvent } from "../utils/personaAnalytics.util.js";
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
+import {
+  formatBangkokDateTime,
+  formatBangkokDate,
+} from "../utils/dateTime.util.js";
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -111,21 +115,13 @@ function fmtMoney(p) {
 }
 
 function fmtDt(iso) {
-  if (!iso) return "—";
-  try {
-    return escapeHtml(new Date(iso).toLocaleString("th-TH"));
-  } catch {
-    return "—";
-  }
+  const s = formatBangkokDateTime(iso);
+  return s === "-" ? "—" : escapeHtml(s);
 }
 
 function fmtDateOnly(iso) {
-  if (!iso) return "—";
-  try {
-    return escapeHtml(new Date(iso).toLocaleDateString("th-TH"));
-  } catch {
-    return "—";
-  }
+  const s = formatBangkokDate(iso);
+  return s === "-" ? "—" : escapeHtml(s);
 }
 
 /** Supabase may return embedded `app_users` as object or single-element array. */

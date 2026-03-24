@@ -1,5 +1,9 @@
 import { renderMobileReportHtml } from "../../templates/reports/mobileReport.template.js";
 import { normalizeReportPayloadForRender } from "../../utils/reports/reportPayloadNormalize.util.js";
+import {
+  BANGKOK_TIME_ZONE,
+  formatBangkokDateTime,
+} from "../../utils/dateTime.util.js";
 
 /**
  * @param {import("./reportPayload.types.js").ReportPayload} payload
@@ -17,5 +21,15 @@ export function renderReportHtmlPage(payload) {
       }),
     );
   }
+  const formattedAt = formatBangkokDateTime(normalized.generatedAt);
+  console.log(
+    JSON.stringify({
+      event: "REPORT_RENDER_TIMEZONE_OK",
+      timeZone: BANGKOK_TIME_ZONE,
+      locale: "th-TH",
+      generatedAtRaw: normalized.generatedAt,
+      generatedAtBangkok: formattedAt,
+    }),
+  );
   return renderMobileReportHtml(normalized);
 }
