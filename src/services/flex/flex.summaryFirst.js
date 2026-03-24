@@ -322,17 +322,17 @@ function resolveSummaryCardCopyVariant(reportPayload) {
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
  * @param {string} fallbackHeadline
  */
-function flexHeadlineFromPayload(reportPayload, fallbackHeadline, familyPattern) {
+function resolveFlexHeadline(reportPayload, fallbackHeadline, familyPattern) {
   const mp = String(reportPayload?.sections?.messagePoints?.[0] || "").trim();
-  if (mp) return safeWrapText(mp, 64);
+  if (mp) return { text: safeWrapText(mp, 64), source: "payload" };
   const d = distillSummaryLine(reportPayload?.summary?.summaryLine || "");
-  if (d) return safeWrapText(d, 64);
+  if (d) return { text: safeWrapText(d, 64), source: "payload" };
   if (familyPattern?.headlinePatterns?.length) {
     const seed = String(reportPayload?.reportId || reportPayload?.scanId || "headline");
     const picked = stablePick(familyPattern.headlinePatterns, seed);
-    if (picked) return safeWrapText(picked, 64);
+    if (picked) return { text: safeWrapText(picked, 64), source: "family_pattern" };
   }
-  return fallbackHeadline;
+  return { text: fallbackHeadline, source: "default_variant" };
 }
 
 /**
@@ -650,49 +650,48 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const overviewRaw =
     parsed.overview === "-" ? "" : String(parsed.overview || "");
   const splitOverview = splitSentencesForFlex(overviewRaw).length;
-
-  console.log(
-    JSON.stringify({
-      event: "FLEX_SUMMARY_FIRST",
-      schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
-      flexPresentationMode: "single_page_handoff",
-      scanCopyConfigVersion: SCAN_COPY_CONFIG_VERSION,
-      altText,
-      hasReportPayload: Boolean(reportPayload),
-      hasReportUrl: Boolean(String(reportUrl || "").trim()),
-      appendReportBubbleLegacyIgnored: Boolean(options.appendReportBubble),
-      summaryCardCopyVariant: summaryCardCopy.variantKey,
-      flexSplitCounts: {
-        overview: splitOverview,
-        warnThreshold: FLEX_SPLIT_WARN_THRESHOLD,
-      },
-    }),
+  const resolvedType = resolveEnergyType(
+    String(reportPayload?.summary?.mainEnergyLabel || mainEnergy || "").trim(),
   );
+  const familyPattern = resolveFamilyPattern(reportPayload, resolvedType);
+  const familyPatternUsed = Object.entries(SUMMARY_CARD_FAMILY_PATTERNS).find(
+    ([, v]) => v === familyPattern,
+  )?.[0] || "none";
+  const headlineResolved = resolveFlexHeadline(
+    reportPayload,
+    summaryCardCopy.headline,
+    familyPattern,
+  );
+  const headline = headlineResolved.text;
+  const headlineFrom =
+    headlineResolved.source === "family_pattern"
+      ? "family_pattern"
+      : headlineResolved.source === "payload"
+        ? "payload"
+        : "default_variant";
 
   const compatLabel = compatibilityLabelForFlex(reportPayload, compatibility);
   const mainLabel =
     String(reportPayload?.summary?.mainEnergyLabel || "").trim() ||
     scanCopy?.summary?.mainEnergyLabel ||
     wrapFlexTextNoTruncate(getEnergyShortLabel(mainEnergy || "พลังทั่วไป"), 32);
-  const resolvedType = resolveEnergyType(
-    String(reportPayload?.summary?.mainEnergyLabel || mainEnergy || "").trim(),
-  );
-  const familyPattern = resolveFamilyPattern(reportPayload, resolvedType);
-  const headline = flexHeadlineFromPayload(
-    reportPayload,
-    summaryCardCopy.headline,
-    familyPattern,
-  );
+  let bulletFallbackUsed = false;
+  let usedGenericBulletGuard = false;
   let bullets = flexTeaserBullets(reportPayload);
   if (bullets.length === 0) {
+    bulletFallbackUsed = true;
     if (familyPattern?.bulletStyleRules?.should_sound_like?.length) {
       const seedBase = String(reportPayload?.reportId || reportPayload?.scanId || "bullet");
       const b1 = stablePick(familyPattern.bulletStyleRules.should_sound_like, `${seedBase}:1`);
       const b2 = stablePick(familyPattern.bulletStyleRules.should_sound_like, `${seedBase}:2`);
       bullets = [b1, b2].filter(Boolean).slice(0, 2);
     }
-    if (bullets.length < 2) bullets = [...summaryCardCopy.bullets];
+    if (bullets.length < 2) {
+      bulletFallbackUsed = true;
+      bullets = [...summaryCardCopy.bullets];
+    }
   } else if (bullets.length === 1) {
+    bulletFallbackUsed = true;
     const fallbackB2 = familyPattern?.bulletStyleRules?.should_sound_like?.length
       ? stablePick(
           familyPattern.bulletStyleRules.should_sound_like,
@@ -703,6 +702,8 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   }
   bullets = bullets.map((b, idx) => {
     if (!isOverlyGenericBullet(b, familyPattern)) return b;
+    usedGenericBulletGuard = true;
+    bulletFallbackUsed = true;
     const familyFallback = familyPattern?.bulletStyleRules?.should_sound_like?.length
       ? stablePick(
           familyPattern.bulletStyleRules.should_sound_like,
@@ -715,13 +716,39 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     );
   });
   bullets = bullets.slice(0, 2);
-  const objectLbl =
-    String(reportPayload?.object?.objectLabel || "").trim() ||
-    stablePick(
-      familyPattern?.objectLabelPatterns || [summaryCardCopy.objectLabel],
-      String(reportPayload?.reportId || reportPayload?.scanId || "obj"),
-    ) ||
-    summaryCardCopy.objectLabel;
+  const payloadObjectLabel = String(reportPayload?.object?.objectLabel || "").trim();
+  const familyObjectLabel = stablePick(
+    familyPattern?.objectLabelPatterns || [],
+    String(reportPayload?.reportId || reportPayload?.scanId || "obj"),
+  );
+  const objectLbl = payloadObjectLabel || familyObjectLabel || summaryCardCopy.objectLabel;
+  const objectLabelFrom = payloadObjectLabel
+    ? "payload"
+    : familyObjectLabel
+      ? "family_pattern"
+      : "default_variant";
+  console.log(
+    JSON.stringify({
+      event: "FLEX_SUMMARY_FIRST",
+      schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+      flexPresentationMode: "single_page_handoff",
+      scanCopyConfigVersion: SCAN_COPY_CONFIG_VERSION,
+      altText,
+      hasReportPayload: Boolean(reportPayload),
+      hasReportUrl: Boolean(String(reportUrl || "").trim()),
+      appendReportBubbleLegacyIgnored: Boolean(options.appendReportBubble),
+      summaryCardCopyVariant: summaryCardCopy.variantKey,
+      familyPatternUsed,
+      objectLabelFrom,
+      headlineFrom,
+      bulletFallbackUsed,
+      usedGenericBulletGuard,
+      flexSplitCounts: {
+        overview: splitOverview,
+        warnThreshold: FLEX_SPLIT_WARN_THRESHOLD,
+      },
+    }),
+  );
   const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
   const heroOk = /^https:\/\//i.test(imgUrl);
   const url = String(reportUrl || "").trim();
