@@ -158,6 +158,238 @@ function logWaitingBirthdate(event, payload = {}) {
 
 const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
 
+/**
+ * Shared path for payment / จ่ายเงิน / ปลดล็อก (create or reuse payment, QR / text fallback).
+ * @returns {Promise<boolean>} true if input was a payment command and was fully handled.
+ */
+async function handlePaymentCommandTextRoute({
+  client,
+  event,
+  userId,
+  session,
+  text,
+  lowerText,
+  isPaywallGateWithPendingScan,
+}) {
+  if (!isPaymentCommand(text, lowerText)) return false;
+
+  try {
+    const ps = getPaymentState(userId).state;
+    const row = await getLatestAwaitingPaymentForLineUserId(userId);
+    const slipRow =
+      row &&
+      (String(row.status) === "awaiting_payment" ||
+        String(row.status) === "pending_verify");
+    if (
+      session.pendingImage &&
+      ps !== "awaiting_slip" &&
+      !slipRow &&
+      !isPaywallGateWithPendingScan
+    ) {
+      logWaitingBirthdate("guidance", {
+        gate: "payment_command_blocked",
+        userId,
+        hint: "pending_scan_needs_birthdate",
+      });
+      await sendNonScanSequenceReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "payment_cmd_needs_birthdate",
+        semanticKey: "waiting_birthdate_guidance",
+        messages: await buildWaitingBirthdateGuidanceMessages(userId),
+      });
+      return true;
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  const payCmdNow = Date.now();
+  const payCmdStatus = checkPaymentAbuseStatus(userId, payCmdNow);
+  console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
+    userId,
+    ...payCmdStatus,
+  });
+  if (payCmdStatus.isLocked) {
+    console.warn("[ABUSE_GUARD_PAYMENT_LOCK]", {
+      userId,
+      lockUntil: payCmdStatus.lockUntil,
+      source: "payment_command",
+    });
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "abuse_payment_lock",
+      semanticKey: "abuse_payment_lock_pay_cmd",
+      text: ABUSE_MSG_PAYMENT_LOCK,
+      alternateTexts: [
+        "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+      ],
+    });
+    return true;
+  }
+
+  const payCmdIntent = registerPaymentIntent(userId, payCmdNow);
+  if (payCmdIntent.abusive) {
+    console.warn("[ABUSE_GUARD_PAYMENT_ABUSE]", {
+      userId,
+      reasons: payCmdIntent.reasons,
+      paymentSpamScore: payCmdIntent.state.paymentSpamScore,
+    });
+  }
+  if (payCmdIntent.state.isHardBlocked) {
+    await sendScanLockReply(client, {
+      userId,
+      replyToken: event.replyToken,
+      lockType: "hard",
+      semanticKey: "scan_locked_hard:payment_command",
+    });
+    return true;
+  }
+
+  const offerPay = loadActiveScanOffer();
+  const selKey = getSelectedPaymentPackageKey(userId);
+  const paidPackage = selKey ? findPackageByKey(offerPay, selKey) : null;
+
+  if (!paidPackage) {
+    console.log(
+      JSON.stringify({
+        event: "PAYMENT_PACKAGE_PROMPT_REASON",
+        userId,
+        paymentState: null,
+        selectedPaymentPackageKey: getSelectedPaymentPackageKey(userId),
+        inputText: text,
+        reason: "pay_intent_no_package_selected",
+      }),
+    );
+    const prompt = buildPackageSelectionPromptFromOffer(offerPay);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "payment_package_prompt",
+      semanticKey: "payment_need_package_first",
+      text: prompt,
+      alternateTexts: [prompt],
+    });
+    logEvent("payment_intent", {
+      userId,
+      personaVariant: await getAssignedPersonaVariant(userId),
+      patternUsed: "need_package_first",
+      bubbleCount: 1,
+      source: "payment_command",
+    });
+    return true;
+  }
+
+  const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
+  let cmdPaymentRef = null;
+  let cmdPaymentId = null;
+  try {
+    const appUser = await ensureUserByLineUserId(userId);
+    const created = await createPaymentPending({
+      appUserId: appUser.id,
+      amount: paidPackage.priceThb,
+      currency,
+      packageCode: paidPackage.key,
+      packageName: paidPackage.label,
+      expectedAmount: paidPackage.priceThb,
+      unlockHours: paidPackage.windowHours,
+    });
+    cmdPaymentRef = created?.paymentRef ?? null;
+    cmdPaymentId = created?.paymentId ?? null;
+  } catch (err) {
+    console.error("[WEBHOOK] createPaymentPending failed:", {
+      userId,
+      message: err?.message,
+      code: err?.code,
+      details: err?.details,
+      hint: err?.hint,
+    });
+  }
+
+  logEvent("payment_intent", {
+    userId,
+    personaVariant: await getAssignedPersonaVariant(userId),
+    patternUsed: null,
+    bubbleCount: 1,
+    source: "payment_command",
+    ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
+  });
+
+  if (cmdPaymentId) {
+    setAwaitingPayment(userId);
+  }
+
+  const qrUrl = getPromptPayQrPublicUrl();
+  const intro = buildPaymentQrIntroText({
+    paymentRef: cmdPaymentRef,
+    paidPackage,
+  });
+  const slipText = buildPaymentQrSlipText();
+
+  if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
+    try {
+      await replyPaymentInstructions(client, event.replyToken, {
+        introText: intro,
+        qrImageUrl: qrUrl,
+        slipText,
+      });
+      await logPaywallShown(userId, {
+        patternUsed: "qr_intro_image_slip",
+        bubbleCount: 3,
+        source: "payment_command",
+        ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
+      });
+      return true;
+    } catch (qrErr) {
+      console.error("[WEBHOOK] replyPaymentInstructions failed, fallback text:", {
+        userId,
+        message: qrErr?.message,
+      });
+    }
+  } else {
+    console.warn(
+      "[WEBHOOK] QR URL not HTTPS — LINE cannot load QR image. Set APP_BASE_URL to public https URL.",
+      {
+        qrUrl,
+      },
+    );
+  }
+
+  const payCmdBody = `${buildPaymentInstructionText({
+    amount: paidPackage.priceThb,
+    currency,
+    paymentRef: cmdPaymentRef,
+    paidPackage,
+  })}\n\n${MAIN_MENU_HINT_TEXT}`;
+  await sendNonScanReply({
+    client,
+    userId,
+    replyToken: event.replyToken,
+    replyType: "payment_instruction_text",
+    semanticKey: "payment_command_text_fallback",
+    text: payCmdBody,
+    alternateTexts: [
+      `${buildPaymentInstructionText({
+        amount: paidPackage.priceThb,
+        currency,
+        paymentRef: cmdPaymentRef,
+        paidPackage,
+      })}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
+    ],
+  });
+  await logPaywallShown(userId, {
+    patternUsed: "qr_text_fallback",
+    bubbleCount: 1,
+    source: "payment_command_text",
+    ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
+  });
+  return true;
+}
+
 async function replyIdleTextNoDuplicate({ client, replyToken, userId }) {
   const text = await buildIdleText(userId);
   if (!String(text || "").trim()) return;
@@ -1278,38 +1510,77 @@ async function handleTextMessage({ client, event, userId, session }) {
         alternateTexts: [buildPackageSelectionPromptFromOffer(offer)],
       });
       return;
-    } else {
-      const guidance = `${buildPackageSelectionPromptFromOffer(
-        offer,
-      )}\n\nพิมพ์ 49 หรือ 99 เพื่อเลือกแพ็ก แล้วพิมพ์ จ่ายเงิน`;
-      console.log("[UNEXPECTED_INPUT_HANDLED]", {
-        userId,
-        activeState: paymentState,
-        inputText: text,
-        normalizedIntent: "unexpected_for_package_selection",
-        chosenReplyType: "payment_package_prompt",
-      });
-      console.log("[ACTIVE_STATE_ROUTING]", {
-        userId,
-        flowState,
-        paymentState,
-        accessState,
-        expectedInputType: "package_selection",
-        text,
-        chosenReplyType: "payment_package_prompt",
-        routeReason: "unexpected_input_kept_in_state",
-      });
-      await sendNonScanReply({
+    }
+
+    const selectedKey = getSelectedPaymentPackageKey(userId);
+    if (selectedKey && isPaymentCommand(text, lowerText)) {
+      console.log(
+        JSON.stringify({
+          event: "PAYMENT_PAY_INTENT_CONSUMED",
+          userId,
+          paymentState,
+          selectedPaymentPackageKey: selectedKey,
+          inputText: text,
+          action: "create_or_show_payment_qr",
+        }),
+      );
+      await handlePaymentCommandTextRoute({
         client,
+        event,
         userId,
-        replyToken: event.replyToken,
-        replyType: "payment_package_prompt",
-        semanticKey: "payment_need_package_first",
-        text: guidance,
-        alternateTexts: [buildPackageSelectionPromptFromOffer(offer)],
+        session,
+        text,
+        lowerText,
+        isPaywallGateWithPendingScan,
       });
       return;
     }
+
+    const guidance = `${buildPackageSelectionPromptFromOffer(
+      offer,
+    )}\n\nพิมพ์ 49 หรือ 99 เพื่อเลือกแพ็ก แล้วพิมพ์ จ่ายเงิน`;
+    const selectedForPrompt = getSelectedPaymentPackageKey(userId);
+    const promptReason =
+      isPaymentCommand(text, lowerText) && !selectedForPrompt
+        ? "pay_intent_no_package_selected"
+        : "unexpected_input_not_package_selection";
+    console.log(
+      JSON.stringify({
+        event: "PAYMENT_PACKAGE_PROMPT_REASON",
+        userId,
+        paymentState,
+        selectedPaymentPackageKey: selectedForPrompt,
+        inputText: text,
+        reason: promptReason,
+      }),
+    );
+    console.log("[UNEXPECTED_INPUT_HANDLED]", {
+      userId,
+      activeState: paymentState,
+      inputText: text,
+      normalizedIntent: "unexpected_for_package_selection",
+      chosenReplyType: "payment_package_prompt",
+    });
+    console.log("[ACTIVE_STATE_ROUTING]", {
+      userId,
+      flowState,
+      paymentState,
+      accessState,
+      expectedInputType: "package_selection",
+      text,
+      chosenReplyType: "payment_package_prompt",
+      routeReason: "unexpected_input_kept_in_state",
+    });
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "payment_package_prompt",
+      semanticKey: "payment_need_package_first",
+      text: guidance,
+      alternateTexts: [buildPackageSelectionPromptFromOffer(offer)],
+    });
+    return;
   }
 
   if (paymentState === "awaiting_slip") {
@@ -2063,212 +2334,17 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
-  if (isPaymentCommand(text, lowerText)) {
-    // Do not open payment while user must finish birthdate for a pending scan image.
-    try {
-      const ps = getPaymentState(userId).state;
-      const row = await getLatestAwaitingPaymentForLineUserId(userId);
-      const slipRow =
-        row &&
-        (String(row.status) === "awaiting_payment" ||
-          String(row.status) === "pending_verify");
-      if (
-        session.pendingImage &&
-        ps !== "awaiting_slip" &&
-        !slipRow &&
-        !isPaywallGateWithPendingScan
-      ) {
-        logWaitingBirthdate("guidance", {
-          gate: "payment_command_blocked",
-          userId,
-          hint: "pending_scan_needs_birthdate",
-        });
-        await sendNonScanSequenceReply({
-          client,
-          userId,
-          replyToken: event.replyToken,
-          replyType: "payment_cmd_needs_birthdate",
-          semanticKey: "waiting_birthdate_guidance",
-          messages: await buildWaitingBirthdateGuidanceMessages(userId),
-        });
-        return;
-      }
-    } catch (_) {
-      // ignore
-    }
-
-    const payCmdNow = Date.now();
-    const payCmdStatus = checkPaymentAbuseStatus(userId, payCmdNow);
-    console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
-      userId,
-      ...payCmdStatus,
-    });
-    if (payCmdStatus.isLocked) {
-      console.warn("[ABUSE_GUARD_PAYMENT_LOCK]", {
-        userId,
-        lockUntil: payCmdStatus.lockUntil,
-        source: "payment_command",
-      });
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "abuse_payment_lock",
-        semanticKey: "abuse_payment_lock_pay_cmd",
-        text: ABUSE_MSG_PAYMENT_LOCK,
-        alternateTexts: [
-          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
-        ],
-      });
-      return;
-    }
-
-    const payCmdIntent = registerPaymentIntent(userId, payCmdNow);
-    if (payCmdIntent.abusive) {
-      console.warn("[ABUSE_GUARD_PAYMENT_ABUSE]", {
-        userId,
-        reasons: payCmdIntent.reasons,
-        paymentSpamScore: payCmdIntent.state.paymentSpamScore,
-      });
-    }
-    if (payCmdIntent.state.isHardBlocked) {
-      await sendScanLockReply(client, {
-        userId,
-        replyToken: event.replyToken,
-        lockType: "hard",
-        semanticKey: "scan_locked_hard:payment_command",
-      });
-      return;
-    }
-
-    const offerPay = loadActiveScanOffer();
-    const selKey = getSelectedPaymentPackageKey(userId);
-    const paidPackage = selKey ? findPackageByKey(offerPay, selKey) : null;
-
-    if (!paidPackage) {
-      const prompt = buildPackageSelectionPromptFromOffer(offerPay);
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "payment_package_prompt",
-        semanticKey: "payment_need_package_first",
-        text: prompt,
-        alternateTexts: [prompt],
-      });
-      logEvent("payment_intent", {
-        userId,
-        personaVariant: await getAssignedPersonaVariant(userId),
-        patternUsed: "need_package_first",
-        bubbleCount: 1,
-        source: "payment_command",
-      });
-      return;
-    }
-
-    const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
-    let cmdPaymentRef = null;
-    let cmdPaymentId = null;
-    try {
-      const appUser = await ensureUserByLineUserId(userId);
-      const created = await createPaymentPending({
-        appUserId: appUser.id,
-        amount: paidPackage.priceThb,
-        currency,
-        packageCode: paidPackage.key,
-        packageName: paidPackage.label,
-        expectedAmount: paidPackage.priceThb,
-        unlockHours: paidPackage.windowHours,
-      });
-      cmdPaymentRef = created?.paymentRef ?? null;
-      cmdPaymentId = created?.paymentId ?? null;
-    } catch (err) {
-      console.error("[WEBHOOK] createPaymentPending failed:", {
-        userId,
-        message: err?.message,
-        code: err?.code,
-        details: err?.details,
-        hint: err?.hint,
-      });
-    }
-
-    logEvent("payment_intent", {
-      userId,
-      personaVariant: await getAssignedPersonaVariant(userId),
-      patternUsed: null,
-      bubbleCount: 1,
-      source: "payment_command",
-      ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
-    });
-
-    if (cmdPaymentId) {
-      setAwaitingPayment(userId);
-    }
-
-    const qrUrl = getPromptPayQrPublicUrl();
-    const intro = buildPaymentQrIntroText({
-      paymentRef: cmdPaymentRef,
-      paidPackage,
-    });
-    const slipText = buildPaymentQrSlipText();
-
-    if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
-      try {
-        await replyPaymentInstructions(client, event.replyToken, {
-          introText: intro,
-          qrImageUrl: qrUrl,
-          slipText,
-        });
-        await logPaywallShown(userId, {
-          patternUsed: "qr_intro_image_slip",
-          bubbleCount: 3,
-          source: "payment_command",
-          ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
-        });
-        return;
-      } catch (qrErr) {
-        console.error("[WEBHOOK] replyPaymentInstructions failed, fallback text:", {
-          userId,
-          message: qrErr?.message,
-        });
-      }
-    } else {
-      console.warn(
-        "[WEBHOOK] QR URL not HTTPS — LINE cannot load QR image. Set APP_BASE_URL to public https URL.",
-        {
-          qrUrl,
-        },
-      );
-    }
-
-    const payCmdBody = `${buildPaymentInstructionText({
-      amount: paidPackage.priceThb,
-      currency,
-      paymentRef: cmdPaymentRef,
-      paidPackage,
-    })}\n\n${MAIN_MENU_HINT_TEXT}`;
-    await sendNonScanReply({
+  if (
+    await handlePaymentCommandTextRoute({
       client,
+      event,
       userId,
-      replyToken: event.replyToken,
-      replyType: "payment_instruction_text",
-      semanticKey: "payment_command_text_fallback",
-      text: payCmdBody,
-      alternateTexts: [
-        `${buildPaymentInstructionText({
-          amount: paidPackage.priceThb,
-          currency,
-          paymentRef: cmdPaymentRef,
-          paidPackage,
-        })}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
-      ],
-    });
-    await logPaywallShown(userId, {
-      patternUsed: "qr_text_fallback",
-      bubbleCount: 1,
-      source: "payment_command_text",
-      ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
-    });
+      session,
+      text,
+      lowerText,
+      isPaywallGateWithPendingScan,
+    })
+  ) {
     return;
   }
 
