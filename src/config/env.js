@@ -241,7 +241,9 @@ export const env = {
    * @type {boolean}
    */
   FLEX_SCAN_SUMMARY_FIRST:
-    String(process.env.FLEX_SCAN_SUMMARY_FIRST || "").trim().toLowerCase() ===
+    String(process.env.FLEX_SCAN_SUMMARY_FIRST ?? "true")
+      .trim()
+      .toLowerCase() ===
     "true",
   /**
    * When {@link FLEX_SCAN_SUMMARY_FIRST} is true: fraction of LINE users (0–100) who receive
