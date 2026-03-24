@@ -312,7 +312,12 @@ async function finalizeAcceptedImage({
   }
 
   const chosenPath =
-    !accessDecision?.allowed && pendingPayment ? "slip" : "scan";
+    !accessDecision?.allowed && pendingPayment
+      ? "slip"
+      : !accessDecision?.allowed &&
+          accessDecision?.reason === "payment_required"
+        ? "payment_gate"
+        : "scan";
   console.log("[IMAGE_ROUTING_DECISION]", {
     userId,
     hasPaidAccess,
@@ -320,6 +325,76 @@ async function finalizeAcceptedImage({
     hasAwaitingPayment: Boolean(pendingPayment),
     chosenPath,
   });
+
+  // Fast-exit: when payment is required and there's no awaiting slip row,
+  // route directly to package/paywall copy instead of going through object-check.
+  if (
+    !accessDecision?.allowed &&
+    accessDecision?.reason === "payment_required" &&
+    !pendingPayment
+  ) {
+    const payReqGateNow = Date.now();
+    const payReqStatus = checkPaymentAbuseStatus(userId, payReqGateNow);
+    console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
+      userId,
+      gate: "finalize_payment_required",
+      ...payReqStatus,
+    });
+    if (payReqStatus.isLocked) {
+      console.warn("[ABUSE_GUARD_PAYMENT_LOCK]", {
+        userId,
+        lockUntil: payReqStatus.lockUntil,
+        gate: "finalize_payment_required",
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "abuse_payment_lock",
+        semanticKey: "abuse_payment_lock_finalize",
+        text: ABUSE_MSG_PAYMENT_LOCK,
+        alternateTexts: [
+          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+        ],
+      });
+      return;
+    }
+
+    const payIntentNow = Date.now();
+    const payIntent = registerPaymentIntent(userId, payIntentNow);
+    if (payIntent.abusive) {
+      console.warn("[ABUSE_GUARD_PAYMENT_ABUSE]", {
+        userId,
+        reasons: payIntent.reasons,
+        paymentSpamScore: payIntent.state.paymentSpamScore,
+      });
+    }
+
+    clearLatestScanJob(userId);
+    setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
+
+    const paywallBody = await buildPaymentRequiredText({
+      userId,
+      decision: accessDecision,
+    });
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "free_quota_exhausted",
+      semanticKey: "finalize_image_select_package",
+      text: paywallBody,
+      alternateTexts: [
+        `${paywallBody}\n\nพิมพ์ จ่ายเงิน หลังเลือกแพ็ก (49 หรือ 99) ได้เลยครับ`,
+      ],
+    });
+    await logPaywallShown(userId, {
+      patternUsed: "finalize_image_package_prompt",
+      bubbleCount: 1,
+      source: "finalize_image_payment_required_text_only",
+    });
+    return;
+  }
 
   if (!accessDecision?.allowed && pendingPayment) {
     const payNow = Date.now();
