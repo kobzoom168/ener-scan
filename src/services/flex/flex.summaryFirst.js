@@ -120,6 +120,168 @@ const SUMMARY_CARD_COPY_VARIANTS = {
 };
 
 const SUMMARY_CARD_COPY = SUMMARY_CARD_COPY_VARIANTS.premium_minimal;
+const SUMMARY_CARD_FAMILY_PATTERNS = {
+  protection: {
+    objectLabelPatterns: [
+      "วัตถุสายคุ้มแรงใจ",
+      "วัตถุสายประคองพลัง",
+      "วัตถุสายพยุงความนิ่ง",
+      "วัตถุสายตั้งหลักใจ",
+    ],
+    headlinePatterns: [
+      "ชิ้นนี้เด่นด้านการประคองใจและรักษาความนิ่งภายใน",
+      "พลังของชิ้นนี้คือการช่วยตั้งหลักใจไม่ให้เสียศูนย์ง่าย",
+      "เด่นกับช่วงที่ต้องการความนิ่งท่ามกลางแรงกดรอบตัว",
+      "ชิ้นนี้ให้พลังคุ้มกันแบบอ่อนลึกและช่วยพยุงใจได้ดี",
+    ],
+    bulletStyleRules: {
+      should_sound_like: [
+        "ช่วยประคองความนิ่งเมื่อเจอเรื่องหลายด้านพร้อมกัน",
+        "เหมาะกับช่วงที่อยากรักษาใจให้นิ่งขึ้นในชีวิตประจำวัน",
+        "เด่นเวลามีแรงกดจากคนรอบตัว งาน หรือความคิดสะสม",
+        "ช่วยให้กลับมาอยู่กับตัวเองได้ง่ายขึ้นเมื่อใจเริ่มแกว่ง",
+      ],
+    },
+    forbiddenGenericPhrases: [
+      "เหมาะกับคนที่ต้องการความมั่นคง",
+      "ช่วยเรื่องความมั่นคง",
+      "ดีในหลายด้าน",
+      "เสริมพลังโดยรวม",
+    ],
+  },
+  shielding: {
+    objectLabelPatterns: [
+      "วัตถุสายตั้งมั่น",
+      "วัตถุสายกันแรงรบกวน",
+      "วัตถุสายรับแรงกด",
+      "วัตถุสายคุมขอบเขตพลัง",
+    ],
+    headlinePatterns: [
+      "ชิ้นนี้ให้พลังปกป้องแบบนิ่งและหนักแน่น",
+      "เด่นด้านกันแรงปะทะและช่วยให้ใจไม่ไหลตามแรงรอบตัวง่าย",
+      "พลังของชิ้นนี้คือการตั้งขอบเขตและยืนให้มั่นกว่าเดิม",
+      "เหมาะกับช่วงที่ต้องรับแรงกดและยังต้องคุมตัวเองให้อยู่",
+    ],
+    bulletStyleRules: {
+      should_sound_like: [
+        "เด่นในช่วงที่ต้องตัดสินใจท่ามกลางแรงกดหรือสถานการณ์ไม่นิ่ง",
+        "เหมาะกับคนที่ไม่อยากให้ใจไหลตามแรงรอบตัวง่ายเกินไป",
+        "ช่วยตั้งขอบเขตทางใจเมื่อเจอคนเยอะ เรื่องเยอะ หรือแรงปะทะสะสม",
+        "ใช้ดีในช่วงที่ต้องยืนกับการตัดสินใจของตัวเองให้ชัดขึ้น",
+      ],
+    },
+    forbiddenGenericPhrases: [
+      "ช่วยให้มั่นคงขึ้น",
+      "เด่นเรื่องปกป้อง",
+      "ดีต่อการตั้งหลัก",
+      "มีพลังคุ้มกัน",
+    ],
+  },
+  authority: {
+    objectLabelPatterns: [
+      "วัตถุสายอำนาจ",
+      "วัตถุสายคุมเกม",
+      "วัตถุสายตั้งหลักและอำนาจนำ",
+      "วัตถุสายบารมีนิ่ง",
+    ],
+    headlinePatterns: [
+      "ชิ้นนี้เด่นด้านอำนาจและการตั้งหลัก",
+      "พลังของชิ้นนี้คือความนิ่งที่ช่วยให้คุมจังหวะได้ดีขึ้น",
+      "เด่นกับช่วงที่ต้องตัดสินใจเองและยืนในจังหวะของตัวเอง",
+      "ชิ้นนี้ให้แรงคุมเกมแบบนิ่ง ไม่เร่ง แต่ชัด",
+    ],
+    bulletStyleRules: {
+      should_sound_like: [
+        "เหมาะกับช่วงที่ต้องคุมอารมณ์และตัดสินใจเรื่องสำคัญ",
+        "เด่นเมื่ออยากเดินหน้าอย่างมั่นใจโดยไม่เสียจังหวะตัวเอง",
+        "ช่วยหนุนแรงยืนระยะและความชัดในเวลาที่ต้องคุมสถานการณ์",
+        "ใช้ดีเมื่อจำเป็นต้องนิ่งกว่าความกดดันรอบตัว",
+      ],
+    },
+    forbiddenGenericPhrases: [
+      "เหมาะกับคนที่อยากมั่นใจ",
+      "ช่วยเรื่องการงาน",
+      "ดีด้านอำนาจ",
+      "มีบารมี",
+    ],
+  },
+  attraction: {
+    objectLabelPatterns: [
+      "วัตถุสายดึงดูด",
+      "วัตถุสายเมตตาและแรงเปิด",
+      "วัตถุสายคนเอ็นดู",
+      "วัตถุสายเสน่ห์นุ่ม",
+    ],
+    headlinePatterns: [
+      "ชิ้นนี้เด่นด้านแรงดึงดูดที่ดูนุ่มแต่มีผลกับคนรอบตัว",
+      "พลังของชิ้นนี้คือการเปิดบรรยากาศให้คนเข้าหาง่ายขึ้น",
+      "เด่นกับช่วงที่อยากให้ความสัมพันธ์และจังหวะการพบเจอดูไหลลื่นขึ้น",
+      "ชิ้นนี้ให้แรงเมตตาและความเป็นมิตรที่ค่อย ๆ เปิดทาง",
+    ],
+    bulletStyleRules: {
+      should_sound_like: [
+        "เหมาะกับช่วงที่อยากให้คนรอบตัวรับพลังของคุณได้ง่ายขึ้น",
+        "เด่นด้านบรรยากาศ ความเอ็นดู และความรู้สึกเข้าถึงได้",
+        "ช่วยให้จังหวะการคุย การพบเจอ หรือความสัมพันธ์ดูไหลลื่นขึ้น",
+        "ใช้ดีในช่วงที่อยากเปิดทางเรื่องคนและความรู้สึก",
+      ],
+    },
+    forbiddenGenericPhrases: [
+      "ช่วยเรื่องเมตตา",
+      "ดีเรื่องเสน่ห์",
+      "มีแรงดึงดูด",
+      "เหมาะกับคนอยากมีเสน่ห์",
+    ],
+  },
+};
+
+const GENERIC_BULLET_PHRASES = new Set([
+  "ช่วยเรื่องความมั่นคง",
+  "เหมาะกับคนที่ต้องการความมั่นคง",
+  "ดีในหลายด้าน",
+  "เสริมพลังโดยรวม",
+]);
+
+function stablePick(list, seed = "") {
+  const arr = Array.isArray(list) ? list.filter(Boolean) : [];
+  if (!arr.length) return "";
+  const s = String(seed || "summary-flex");
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return arr[Math.abs(h) % arr.length] || arr[0];
+}
+
+function resolveFamilyPattern(reportPayload, resolvedType) {
+  const wf = String(reportPayload?.summary?.wordingFamily || "")
+    .trim()
+    .toLowerCase();
+  const wfAlias = {
+    protection: "protection",
+    shielding: "shielding",
+    authority: "authority",
+    attraction: "attraction",
+  };
+  const explicit = wfAlias[wf] || null;
+  if (explicit && SUMMARY_CARD_FAMILY_PATTERNS[explicit]) {
+    return SUMMARY_CARD_FAMILY_PATTERNS[explicit];
+  }
+  const byType = {
+    [ENERGY_TYPES.PROTECT]: "protection",
+    [ENERGY_TYPES.POWER]: "authority",
+    [ENERGY_TYPES.ATTRACT]: "attraction",
+    [ENERGY_TYPES.KINDNESS]: "attraction",
+  };
+  const k = byType[resolvedType] || null;
+  return (k && SUMMARY_CARD_FAMILY_PATTERNS[k]) || null;
+}
+
+function isOverlyGenericBullet(text, familyPattern) {
+  const t = String(text || "").trim();
+  if (!t) return true;
+  if (GENERIC_BULLET_PHRASES.has(t)) return true;
+  const forbidden = familyPattern?.forbiddenGenericPhrases || [];
+  return forbidden.some((x) => t.includes(String(x || "").trim()));
+}
 
 function resolveSummaryCardCopyVariant(reportPayload) {
   const rawWordingFamily = String(reportPayload?.summary?.wordingFamily || "")
@@ -160,11 +322,16 @@ function resolveSummaryCardCopyVariant(reportPayload) {
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
  * @param {string} fallbackHeadline
  */
-function flexHeadlineFromPayload(reportPayload, fallbackHeadline) {
+function flexHeadlineFromPayload(reportPayload, fallbackHeadline, familyPattern) {
   const mp = String(reportPayload?.sections?.messagePoints?.[0] || "").trim();
   if (mp) return safeWrapText(mp, 64);
   const d = distillSummaryLine(reportPayload?.summary?.summaryLine || "");
   if (d) return safeWrapText(d, 64);
+  if (familyPattern?.headlinePatterns?.length) {
+    const seed = String(reportPayload?.reportId || reportPayload?.scanId || "headline");
+    const picked = stablePick(familyPattern.headlinePatterns, seed);
+    if (picked) return safeWrapText(picked, 64);
+  }
   return fallbackHeadline;
 }
 
@@ -510,18 +677,50 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const resolvedType = resolveEnergyType(
     String(reportPayload?.summary?.mainEnergyLabel || mainEnergy || "").trim(),
   );
-  const headline = flexHeadlineFromPayload(reportPayload, summaryCardCopy.headline);
+  const familyPattern = resolveFamilyPattern(reportPayload, resolvedType);
+  const headline = flexHeadlineFromPayload(
+    reportPayload,
+    summaryCardCopy.headline,
+    familyPattern,
+  );
   let bullets = flexTeaserBullets(reportPayload);
   if (bullets.length === 0) {
-    bullets = [...summaryCardCopy.bullets];
+    if (familyPattern?.bulletStyleRules?.should_sound_like?.length) {
+      const seedBase = String(reportPayload?.reportId || reportPayload?.scanId || "bullet");
+      const b1 = stablePick(familyPattern.bulletStyleRules.should_sound_like, `${seedBase}:1`);
+      const b2 = stablePick(familyPattern.bulletStyleRules.should_sound_like, `${seedBase}:2`);
+      bullets = [b1, b2].filter(Boolean).slice(0, 2);
+    }
+    if (bullets.length < 2) bullets = [...summaryCardCopy.bullets];
   } else if (bullets.length === 1) {
-    bullets = [
-      bullets[0],
-      safeWrapText(summaryCardCopy.bullets[1], 72),
-    ];
+    const fallbackB2 = familyPattern?.bulletStyleRules?.should_sound_like?.length
+      ? stablePick(
+          familyPattern.bulletStyleRules.should_sound_like,
+          String(reportPayload?.reportId || reportPayload?.scanId || "bullet:single"),
+        )
+      : summaryCardCopy.bullets[1];
+    bullets = [bullets[0], safeWrapText(fallbackB2 || summaryCardCopy.bullets[1], 72)];
   }
+  bullets = bullets.map((b, idx) => {
+    if (!isOverlyGenericBullet(b, familyPattern)) return b;
+    const familyFallback = familyPattern?.bulletStyleRules?.should_sound_like?.length
+      ? stablePick(
+          familyPattern.bulletStyleRules.should_sound_like,
+          `${String(reportPayload?.reportId || reportPayload?.scanId || "bullet")}:${idx}`,
+        )
+      : "";
+    return safeWrapText(
+      familyFallback || summaryCardCopy.bullets[idx] || summaryCardCopy.bullets[0],
+      72,
+    );
+  });
+  bullets = bullets.slice(0, 2);
   const objectLbl =
     String(reportPayload?.object?.objectLabel || "").trim() ||
+    stablePick(
+      familyPattern?.objectLabelPatterns || [summaryCardCopy.objectLabel],
+      String(reportPayload?.reportId || reportPayload?.scanId || "obj"),
+    ) ||
     summaryCardCopy.objectLabel;
   const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
   const heroOk = /^https:\/\//i.test(imgUrl);

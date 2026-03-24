@@ -167,9 +167,7 @@ test("buildScanSummaryFirstFlex: guardrails for summary-card structure", () => {
 
   const body = flex.contents.body;
   const allTexts = collectTextNodes(body);
-  const headline = allTexts.find((t) =>
-    t.includes("เด่นด้านอำนาจและการตั้งหลัก"),
-  );
+  const headline = allTexts.find((t) => t && !t.startsWith("• ") && !t.startsWith("พลังหลัก ·"));
   assert.ok(headline, "headline must always exist");
 
   const bulletCount = allTexts.filter((t) => t.startsWith("• ")).length;
@@ -186,4 +184,5 @@ test("buildScanSummaryFirstFlex: guardrails for summary-card structure", () => {
   assert.doesNotMatch(bodyStr, /เหตุผลที่เข้ากับเจ้าของ/);
   assert.doesNotMatch(bodyStr, /ชิ้นนี้หนุนเรื่อง/);
   assert.doesNotMatch(bodyStr, /เหมาะใช้เมื่อ/);
+  assert.doesNotMatch(bodyStr, /ช่วยเรื่องความมั่นคง/);
 });
