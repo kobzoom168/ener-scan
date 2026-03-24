@@ -104,7 +104,7 @@ function createCompactMetricStrip({
     type: "box",
     layout: "horizontal",
     spacing: "sm",
-    margin: "md",
+    margin: "sm",
     contents: [
       {
         type: "box",
@@ -116,7 +116,7 @@ function createCompactMetricStrip({
         borderWidth: "1px",
         borderColor: "#2A2A2D",
         contents: [
-          { type: "text", text: "ระดับพลัง", size: "xs", color: "#8F8F95" },
+          { type: "text", text: "ระดับพลัง", size: "xs", color: "#94949A" },
           {
             type: "text",
             text: levelValue || "-",
@@ -139,7 +139,7 @@ function createCompactMetricStrip({
         borderWidth: "1px",
         borderColor: "#2A2A2D",
         contents: [
-          { type: "text", text: "เข้ากับคุณ", size: "xs", color: "#8F8F95" },
+          { type: "text", text: "เข้ากับคุณ", size: "xs", color: "#94949A" },
           {
             type: "text",
             text: compatLabel || "-",
@@ -230,7 +230,7 @@ function createAspectStarsBlock(resolvedType) {
         type: "text",
         text: "ระดับเด่นของชิ้นนี้",
         size: "xs",
-        color: "#9A9AA0",
+        color: "#94949A",
       },
       ...rows.map((r) =>
         (function buildRow() {
@@ -268,6 +268,7 @@ function createAspectStarsBlock(resolvedType) {
                 size: "xs",
                 color: "#B8B8BE",
                 flex: 3,
+                maxLines: 1,
               },
               {
                 type: "box",
@@ -390,10 +391,10 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       type: "text",
       text: objectLbl,
       size: "xs",
-      color: "#9A9AA0",
+      color: "#94949A",
       wrap: true,
       maxLines: 1,
-      margin: "md",
+      margin: "sm",
     },
     {
       type: "text",
@@ -403,6 +404,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       color: "#E8E8EC",
       wrap: true,
       maxLines: 2,
+      margin: "xs",
     },
     createCompactMetricStrip({
       accentColor,
@@ -412,18 +414,19 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     {
       type: "text",
       text: `พลังหลัก · ${safeWrapText(mainLabel, 28)}`,
-      size: "xs",
-      color: "#C8C8CE",
+      size: "sm",
+      weight: "bold",
+      color: "#D0D0D6",
       wrap: true,
       maxLines: 2,
-      margin: "xs",
+      margin: "sm",
     },
     createAspectStarsBlock(resolvedType),
     {
       type: "box",
       layout: "vertical",
       spacing: "xs",
-      margin: "sm",
+      margin: "md",
       contents: bullets.slice(0, 2).map((b) => ({
         type: "text",
         text: `• ${b}`,
@@ -472,8 +475,8 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       type: "box",
       layout: "vertical",
       backgroundColor: "#101010",
-      paddingTop: "4px",
-      paddingBottom: "16px",
+      paddingTop: "8px",
+      paddingBottom: "18px",
       paddingStart: "20px",
       paddingEnd: "20px",
       contents: [
