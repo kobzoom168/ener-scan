@@ -394,3 +394,155 @@ Wire these patterns into existing builders **without** changing rollout: `mobile
 | `restore_strength` | พระพักฟื้นที่คืนความทรงตัว… | เด่นชัดเรื่องช่วยเก็บแรงและฟื้นฟู… |
 | `confidence_lead` | เหรียญทรงตัวนำที่ให้น้ำหนัก… | เด่นชัดเรื่องยืนหยัดและสื่อสารให้จบ… |
 | `action_push` | พระขยับจังหวะที่ให้ลงมือได้จริง… | เด่นชัดเรื่องผลักให้เริ่มและปิดงาน… |
+
+---
+
+## Score / Confidence / Section-Agreement → Clarity Level Mapping (L1 / L2 / L3)
+
+**Purpose:** Derive a single **`clarityLevel`** for wording matrices (7×4 and 7×3×surfaces) from **`ReportPayload` + parse quality**, without changing underlying life meaning — only **wording strength** (see clarity sections above).
+
+---
+
+### 1) Input signals (3 tiers each)
+
+| Signal | Symbol | Meaning |
+|--------|--------|---------|
+| **Score tier** | `scoreTier` | From numeric **`summary.energyScore`** (0–10), heuristic below |
+| **Confidence tier** | `confidenceTier` | How complete / trustworthy the **scan parse + payload build** is (heuristic below) |
+| **Section agreement tier** | `agreementTier` | How well **sections** align with each other and with **`mainEnergyLabel` / family** (heuristic below) |
+
+Each input is one of: **`low` | `medium` | `high`**.
+
+---
+
+### 2) Output
+
+| Field | Type | Values |
+|-------|------|--------|
+| **`clarityLevel`** | enum | `L1` \| `L2` \| `L3` |
+| **`clarityLabelThai`** | string | `L1` → **มีแนวโน้ม** · `L2` → **ค่อนข้างชัด** · `L3` → **เด่นชัด** |
+
+---
+
+### 3) Score tier heuristic (`energyScore`)
+
+Use **`summary.energyScore`** as number in **0–10** (normalize if stored otherwise).
+
+| `scoreTier` | Range (inclusive) |
+|-------------|-------------------|
+| **low** | 0.0 – 4.9 |
+| **medium** | 5.0 – 7.4 |
+| **high** | 7.5 – 10.0 |
+
+Missing / invalid score → treat as **low** for mapping (conservative).
+
+---
+
+### 4) Section agreement heuristic (`agreementTier`)
+
+**Goal:** Same story across **energy**, **one-line thesis**, **what it gives**, **when to use**.
+
+**Inputs to consider (from `ReportPayload`):**
+
+| Field | Role |
+|-------|------|
+| `summary.mainEnergyLabel` + mapped **wording family** (`protect_anchor`, …) | Anchor theme |
+| `sections.messagePoints[0]` | Short thesis / hook |
+| `sections.whatItGives` (non-empty) | Concrete “gives” |
+| `sections.bestUseCases` (non-empty) | “When it shines” |
+| `summary.summaryLine` | Overall summary line |
+
+**Agreement checks (conceptual — implement as fuzzy match / keywords / classifier later):**
+
+1. **Family consistency:** `mainEnergyLabel` (or derived family tag) is **not** in obvious contradiction with the **tone** of `messagePoints[0]` + first line of `summaryLine` (e.g. all “protect” vs “เปิดโชคลาภอย่างเดียว” without bridge).
+2. **Coverage:** At least **two** of: `messagePoints[0]` non-empty, `whatItGives.length ≥ 1`, `bestUseCases.length ≥ 1`, `summaryLine` non-generic (not only placeholder).
+3. **Conflict:** If **major** contradiction between sections (e.g. `whatItGives` vs `bestUseCases` vs `summaryLine` theme) → treat as **low** agreement regardless of fill.
+
+| `agreementTier` | Suggested rule |
+|-----------------|----------------|
+| **high** | Family + `messagePoints[0]` + `summaryLine` + (`whatItGives` **and** `bestUseCases` present) align; no major conflict |
+| **medium** | Partial fill or soft tension (e.g. only one of whatItGives/bestUseCases, or light mismatch fixable by distillation) |
+| **low** | Thin sections, **major conflict**, or missing thesis + empty lists |
+
+**Thin payload** (for mapping): e.g. `summaryLine` empty/default, **and** `whatItGives` empty **and** `messagePoints` empty → treat as **low** `agreementTier` (and triggers L1 in §5).
+
+---
+
+### 5) Confidence tier heuristic (`confidenceTier`)
+
+**Derived from parser completeness + presence of fallbacks** (no separate ML model required for v1).
+
+| Signal toward | **low** | **medium** | **high** |
+|-----------------|--------|------------|----------|
+| Parse / scan text | Many placeholders (`-`), missing blocks | Most blocks present | Full structured output |
+| Payload build | Used **defaults** for many fields (`reportPayloadNormalize` warnings, generic labels) | Few warnings | Clean payload |
+| Image / object | No object image + generic object label | Optional | Stable `objectLabel` / image when applicable |
+
+**Suggested rule:**
+
+- **high:** Parse complete; payload normalize **no** or **minor** warnings; `summaryLine` not only default.
+- **medium:** Some gaps or one fallback path (e.g. missing `bestUseCases` only).
+- **low:** Heavy placeholders, **or** normalize marked **thin** payload, **or** explicit fallback copy used in multiple sections.
+
+---
+
+### 6) Mapping rules → `clarityLevel` (priority order)
+
+Evaluate **in order**; first match wins.
+
+| # | Condition | Result |
+|---|-----------|--------|
+| 1 | **Thin payload** OR **major section conflict** | **force L1** (`clarityReasonCode`: `thin_or_conflict`) |
+| 2 | **`scoreTier` = low** | **L1** (`score_low`) |
+| 3 | **`confidenceTier` = low** AND **`scoreTier` ≠ high** | **L1** (`confidence_low`) |
+| 4 | **`confidenceTier` = low** AND **`scoreTier` = high** | **L2** (`confidence_low_score_high`) |
+| 5 | **`agreementTier` = low** AND **`scoreTier` ≠ high** | **L1** (`agreement_low`) |
+| 6 | **`agreementTier` = low** AND **`scoreTier` = high** | **L2** (`agreement_low_score_high`) |
+| 7 | **`scoreTier` = high** AND **`confidenceTier` = high** AND **`agreementTier` = high** | **L3** (`all_high`) |
+| 8 | *(otherwise)* | **L2** (`default_medium`) |
+
+**Notes:**
+
+- **High + high + high** ⇒ **L3** (rule 7).
+- **Low score** ⇒ **L1** (rule 2) unless overridden by rule 1 (thin/conflict always L1).
+- **Low confidence** ⇒ **L1**, **except** when **score is high** ⇒ **L2** (rules 3–4).
+- **Low agreement** ⇒ **L1**, **except** when **score is high** ⇒ **L2** (rules 5–6).
+- **Otherwise** ⇒ **L2**.
+
+**L3 should be relatively hard to reach at first:** only **all three** high **and** no thin/conflict override — aligns with product caution.
+
+---
+
+### 7) Usage notes
+
+- **Meaning constant:** Same **wording family** + same **life thread**; only **L1/L2/L3** wording strength changes (see **Clarity levels** section above).
+- **Only wording strength** — no new claims at L3 vs L1.
+- **Safe fallback:** If mapping yields **L3** but copy tables are empty for a family, **still** apply **Safe fallback** from hero / Flex / HTML sections — never invent temple/model.
+- **Iteration:** Tighten `clarityReasonCode` thresholds in code after telemetry; **do not** change rollout flags in this spec.
+
+---
+
+### 8) Suggested debug / log fields (structured JSON)
+
+Emit once per report render or per Flex build (implementation TBD), **no PII**:
+
+| Field | Type | Example |
+|-------|------|---------|
+| `clarityLevel` | `"L1"\|"L2"\|"L3"` | `"L2"` |
+| `clarityLabelThai` | string | `"ค่อนข้างชัด"` |
+| `scoreTier` | `"low"\|"medium"\|"high"` | `"medium"` |
+| `confidenceTier` | `"low"\|"medium"\|"high"` | `"high"` |
+| `agreementTier` | `"low"\|"medium"\|"high"` | `"medium"` |
+| `clarityReasonCode` | string | `"default_medium"` — see rule table §6 |
+| `usedFallback` | boolean | `true` if any **Safe fallback** path used for hero/Flex/HTML |
+| `wordingFamily` | string \| null | e.g. `"protect_anchor"` when mapped |
+
+Optional:
+
+| Field | Notes |
+|-------|--------|
+| `energyScoreRaw` | number for audit |
+| `agreementConflictFlags` | `string[]` if implementer detects contradictions |
+| `normalizeWarningsCount` | from `reportPayload` normalize step |
+
+**Event name suggestion:** `REPORT_CLARITY_MAPPING` or nested under existing `REPORT_RENDER_*` / flex build logs — **do not** log full tokens or LINE user id.
