@@ -277,7 +277,9 @@ export function checkPaymentAbuseStatus(userId, now = nowMs()) {
 export function isGarbageText(text) {
   const t = String(text || "").trim();
   if (!t) return true;
-  if (/^[\W_]+$/u.test(t)) return true;
+  // Avoid false positives for Thai / Unicode words (e.g. "ได้ยัง").
+  // Treat as garbage only when it contains no letters/numbers and is punctuation/symbols only.
+  if (!/[\p{L}\p{N}]/u.test(t) && /^[\p{P}\p{S}\s_]+$/u.test(t)) return true;
   if (/^(5){5,}$/u.test(t)) return true;
   if (/^(.)\1{4,}$/u.test(t.replace(/\s/g, ""))) return true;
   if (/^[😂🤣😭😅🙏👍❤️🔥✨🎉💥]+$/u.test(t)) return true;

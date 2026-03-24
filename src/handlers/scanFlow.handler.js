@@ -355,6 +355,7 @@ export async function runScanFlow({
   imageBuffer,
   birthdate,
   flowVersion,
+  skipBirthdateSave = false,
 }) {
   console.log("[TRACE] runScanFlow entry", {
     userId,
@@ -616,33 +617,41 @@ export async function runScanFlow({
     return;
   }
 
-  try {
-    console.log("[WEBHOOK] saveBirthdate payload:", {
+  if (skipBirthdateSave) {
+    console.log("[WEBHOOK] saveBirthdate skipped (already saved)", {
       userId,
-      birthdate,
       flowVersion,
       scanJobId,
     });
+  } else {
+    try {
+      console.log("[WEBHOOK] saveBirthdate payload:", {
+        userId,
+        birthdate,
+        flowVersion,
+        scanJobId,
+      });
 
-    await saveBirthdate(userId, birthdate);
+      await saveBirthdate(userId, birthdate);
 
-    console.log("[WEBHOOK] saveBirthdate success:", {
-      userId,
-      birthdate,
-      flowVersion,
-      scanJobId,
-    });
-  } catch (error) {
-    console.error("[WEBHOOK] saveBirthdate failed but continue scan:", {
-      userId,
-      birthdate,
-      flowVersion,
-      scanJobId,
-      message: error?.message,
-      code: error?.code,
-      details: error?.details,
-      hint: error?.hint,
-    });
+      console.log("[WEBHOOK] saveBirthdate success:", {
+        userId,
+        birthdate,
+        flowVersion,
+        scanJobId,
+      });
+    } catch (error) {
+      console.error("[WEBHOOK] saveBirthdate failed but continue scan:", {
+        userId,
+        birthdate,
+        flowVersion,
+        scanJobId,
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+      });
+    }
   }
 
   let resultText = "";

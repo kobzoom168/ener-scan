@@ -5,6 +5,11 @@ const openai = new OpenAI({
   apiKey: env.OPENAI_API_KEY,
 });
 
+const OBJECT_CHECK_PROVIDER = "openai.responses";
+const OBJECT_CHECK_MODEL = "gpt-4.1-mini";
+const OBJECT_CHECK_TIMEOUT_MS = Number(env.OBJECT_CHECK_TIMEOUT_MS || 35000);
+const OBJECT_CHECK_MAX_RETRIES = Number(env.OBJECT_CHECK_MAX_RETRIES || 0);
+
 /*
 ผลลัพธ์ที่คืน
 
@@ -62,22 +67,38 @@ function normalizeObjectCheckOutput(outputText) {
 }
 
 export async function checkSingleObject(imageBase64) {
-  console.log("[OBJECT_CHECK] start");
-  console.log("[OBJECT_CHECK] imageBase64 length:", imageBase64?.length || 0);
-
+  const base64Len = imageBase64?.length || 0;
+  const imageBytesApprox = Math.max(0, Math.floor((base64Len * 3) / 4));
   const startedAt = Date.now();
+  const maxAttempts = Math.max(1, 1 + OBJECT_CHECK_MAX_RETRIES);
 
-  try {
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      temperature: 0,
-      input: [
-        {
-          role: "user",
-          content: [
+  console.log(
+    JSON.stringify({
+      event: "OBJECT_CHECK_START",
+      provider: OBJECT_CHECK_PROVIDER,
+      model: OBJECT_CHECK_MODEL,
+      imageBase64Length: base64Len,
+      imageBytesApprox,
+      timeoutMs: OBJECT_CHECK_TIMEOUT_MS,
+      maxAttempts,
+    }),
+  );
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const attemptStartedAt = Date.now();
+    try {
+      const response = await Promise.race([
+        openai.responses.create({
+          model: OBJECT_CHECK_MODEL,
+          temperature: 0,
+          input: [
             {
-              type: "input_text",
-              text: `
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: `
 ตรวจสอบภาพนี้ แล้วตอบเพียงคำเดียวจากตัวเลือกด้านล่าง
 
 คำอธิบายระบบ:
@@ -113,27 +134,69 @@ multiple
 unclear
 unsupported
               `,
-            },
-            {
-              type: "input_image",
-              image_url: `data:image/jpeg;base64,${imageBase64}`,
+                },
+                {
+                  type: "input_image",
+                  image_url: `data:image/jpeg;base64,${imageBase64}`,
+                },
+              ],
             },
           ],
-        },
-      ],
-    });
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("object_check_timeout")), OBJECT_CHECK_TIMEOUT_MS),
+        ),
+      ]);
 
-    const normalized = normalizeObjectCheckOutput(response.output_text || "");
-
-    const endedAt = Date.now();
-    const elapsed = endedAt - startedAt;
-
-    console.log("[OBJECT_CHECK] normalized result:", normalized);
-    console.log("[OBJECT_CHECK] elapsedMs:", elapsed);
-
-    return normalized;
-  } catch (error) {
-    console.error("[OBJECT_CHECK] failed:", error?.message || error);
-    return "unsupported";
+      const normalized = normalizeObjectCheckOutput(response?.output_text || "");
+      const endedAt = Date.now();
+      console.log(
+        JSON.stringify({
+          event: "OBJECT_CHECK_END",
+          provider: OBJECT_CHECK_PROVIDER,
+          model: OBJECT_CHECK_MODEL,
+          attempt,
+          attemptsTotal: maxAttempts,
+          result: normalized,
+          elapsedMs: endedAt - startedAt,
+          attemptElapsedMs: endedAt - attemptStartedAt,
+          endCause: "success",
+        }),
+      );
+      return normalized;
+    } catch (error) {
+      lastError = error;
+      const message = String(error?.message || error || "");
+      const timeout = /timeout/i.test(message);
+      const status = Number(error?.status || 0);
+      const retryable =
+        timeout ||
+        status === 408 ||
+        status === 409 ||
+        status === 429 ||
+        status >= 500;
+      const willRetry = retryable && attempt < maxAttempts;
+      console.error(
+        JSON.stringify({
+          event: "OBJECT_CHECK_FAIL",
+          provider: OBJECT_CHECK_PROVIDER,
+          model: OBJECT_CHECK_MODEL,
+          attempt,
+          attemptsTotal: maxAttempts,
+          timeout,
+          retryable,
+          willRetry,
+          status: Number.isFinite(status) ? status : 0,
+          message,
+          elapsedMs: Date.now() - startedAt,
+          attemptElapsedMs: Date.now() - attemptStartedAt,
+          endCause: willRetry ? "retry" : "fallback_unsupported",
+        }),
+      );
+      if (!willRetry) break;
+    }
   }
+
+  console.error("[OBJECT_CHECK] failed:", lastError?.message || lastError);
+  return "unsupported";
 }

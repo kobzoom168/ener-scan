@@ -7,6 +7,11 @@ import { normalizeBirthdateForScan } from "../utils/webhookText.util.js";
 /** Must match deep-scan prompt generation; bump when prompt/format contract changes. */
 export const SCAN_CACHE_PROMPT_VERSION = "v4";
 
+/** Back-compat accessor used by scan.service.js import. */
+export function getScanCacheVersion() {
+  return SCAN_CACHE_PROMPT_VERSION;
+}
+
 export function normalizeBirthdateCacheKey(birthdate) {
   return normalizeBirthdateForScan(String(birthdate || "").trim());
 }

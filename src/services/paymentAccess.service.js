@@ -8,6 +8,7 @@ import { loadActiveScanOffer } from "./scanOffer.loader.js";
 import {
   decideScanGate,
   resolveScanOfferAccessContext,
+  computePaidActive,
 } from "./scanOfferAccess.resolver.js";
 import { buildScanOfferReply } from "./scanOffer.copy.js";
 
@@ -91,9 +92,13 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     ? Number(appUserRow.paid_remaining_scans)
     : 0;
 
-  // Free usage: count scans created today (server local time), minus admin reset offset.
+  const paidActiveNow = computePaidActive(paidUntil, paidRemainingScans, now);
+
+  // Free usage for gate math:
+  // - paid_active => keep free quota untouched for this request (prevents paid scans from exhausting free quota)
+  // - non-paid path => count scans created today, then apply admin offset
   let freeUsedToday = 0;
-  if (appUserId) {
+  if (appUserId && !paidActiveNow) {
     freeUsedToday = await countScanResultsTodayForAppUser(appUserId, now);
   }
 
@@ -154,6 +159,7 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     nowIso,
     paidUntil,
     paidRemainingScans,
+    paidActiveNow,
     freeUsedToday,
     freeRemainingToday: gate.freeScansRemaining,
     finalDecision,

@@ -670,6 +670,7 @@ async function finalizeAcceptedImage({
       imageBuffer,
       birthdate: savedBirthdate,
       flowVersion,
+      skipBirthdateSave: true,
     });
     return;
   }
