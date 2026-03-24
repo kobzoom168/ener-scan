@@ -21,6 +21,11 @@ import {
   buildApprovedIntroReply,
   buildScanOfferReply,
 } from "../services/scanOffer.copy.js";
+import {
+  findPackageByKey,
+  getDefaultPackage,
+  listActivePackages,
+} from "../services/scanOffer.packages.js";
 
 /** Backward-compatible alias for `looksLikeBirthdateInput`. */
 export { looksLikeBirthdateInput as isBirthdateLikeInput };
@@ -254,14 +259,22 @@ function appendPaymentRefLine(bodyText, paymentRef) {
   return `${String(bodyText || "").trim()}\n\n${line}`;
 }
 
-/** ข้อความหลักสำหรับชำระเงิน (ไม่ใส่ URL — QR ส่งแยกเป็น image message) */
-export function buildPaymentQrIntroText({ paymentRef } = {}) {
+/**
+ * ข้อความหลักสำหรับชำระเงิน (ไม่ใส่ URL — QR ส่งแยกเป็น image message)
+ * @param {{ paymentRef?: string|null, paidPackage?: { priceThb: number, scanCount: number, windowHours: number }|null }} [opts]
+ */
+export function buildPaymentQrIntroText({ paymentRef, paidPackage = null } = {}) {
+  const offer = loadActiveScanOffer();
+  const pkg = paidPackage || getDefaultPackage(offer);
+  const priceThb = pkg?.priceThb ?? offer.paidPriceThb;
+  const scanCount = pkg?.scanCount ?? offer.paidScanCount;
+  const windowHours = pkg?.windowHours ?? offer.paidWindowHours;
   const base = [
     "สิทธิ์สแกนฟรีของคุณครบแล้วครับ",
     "",
     "จะสแกนต่อได้แบบนี้",
-    "แพ็กเกจนี้ราคา 99 บาท",
-    "ใช้ได้ 10 ครั้ง (ภายใน 24 ชม. หลังอนุมัติ)",
+    `แพ็กเกจนี้ราคา ${priceThb} บาท`,
+    `ใช้ได้ ${scanCount} ครั้ง (ภายใน ${windowHours} ชม. หลังอนุมัติ)`,
     "",
     "ทำตามนี้ได้เลย",
     "1. สแกนคิวอาร์ ด้านล่าง",
@@ -271,6 +284,30 @@ export function buildPaymentQrIntroText({ paymentRef } = {}) {
     "พออนุมัติแล้ว จะมีข้อความแจ้งในแชตนี้ให้ครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
+}
+
+/** ข้อความเลือกแพ็ก (ก่อนพิมพ์ จ่ายเงิน) — ดึงจาก config */
+export function buildPackageSelectionPromptFromOffer(offer = loadActiveScanOffer()) {
+  const pkgs = listActivePackages(offer);
+  if (!pkgs.length) {
+    return "ตอนนี้ยังไม่มีแพ็กเกจให้เลือก กรุณาลองใหม่ภายหลังครับ";
+  }
+  const lines = pkgs
+    .map(
+      (p, i) =>
+        `${i + 1}) ${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
+    )
+    .join("\n\n");
+  const tokens = pkgs.map((p) => String(p.priceThb)).join(" หรือ ");
+  return `เลือกได้ ${pkgs.length} แบบครับ\n\n${lines}\n\nถ้าต้องการอันไหน พิมพ์ ${tokens} ได้เลยครับ`;
+}
+
+/** หลังผู้ใช้พิมพ์เลขแพ็ก */
+export function buildPaymentPackageSelectedAck(paidPackage) {
+  const p = paidPackage;
+  if (!p) return buildPackageSelectionPromptFromOffer();
+  const line = `แพ็กเกจที่เลือกคือ ${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`;
+  return `${line}\n\nพิมพ์ จ่ายเงิน เมื่อพร้อมโอน จะได้คิวอาร์และขั้นตอนในแชตนี้ครับ`;
 }
 
 export function buildPaymentQrSlipText() {
@@ -413,21 +450,29 @@ export function isPaymentCommand(text, lowerText) {
   return lt === "payment" || t === "จ่ายเงิน" || t === "ปลดล็อก";
 }
 
-const DEFAULT_PAYMENT_THB = 99;
-
-function displayAmountThb(amount) {
+function displayAmountThb(amount, fallbackThb) {
   const n = Number(amount);
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_PAYMENT_THB;
+  const fb = Number(fallbackThb);
+  if (Number.isFinite(n) && n > 0) return n;
+  if (Number.isFinite(fb) && fb > 0) return fb;
+  return 1;
 }
 
 /** ข้อความยาวหลังคำสั่ง payment / จ่ายเงิน (ใช้คู่กับรูป QR แยกข้อความ) */
-export function buildPaymentCommandIntroText({ amount = DEFAULT_PAYMENT_THB } = {}) {
-  const thb = displayAmountThb(amount);
+export function buildPaymentCommandIntroText({
+  amount = null,
+  paidPackage = null,
+} = {}) {
+  const offer = loadActiveScanOffer();
+  const pkg = paidPackage || getDefaultPackage(offer);
+  const thb = displayAmountThb(amount, pkg?.priceThb ?? offer.paidPriceThb);
+  const cnt = pkg?.scanCount ?? offer.paidScanCount;
+  const hrs = pkg?.windowHours ?? offer.paidWindowHours;
   return [
     "วิธีชำระเงิน (พร้อมเพย์ + สลิป)",
     "",
     `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ แอดมินตรวจก่อนเปิดสิทธิ์`,
-    "พออนุมัติแล้ว จะได้สิทธิ์สแกนตามแพ็กเกจ (เช่น 10 ครั้ง / 24 ชม.)",
+    `พออนุมัติแล้ว จะได้สแกนต่อได้ ${cnt} ครั้ง ภายใน ${hrs} ชั่วโมง`,
   ].join("\n");
 }
 
@@ -442,13 +487,13 @@ export function buildPaymentInstructionText({
   amount = null,
   currency = "THB",
   paymentRef = null,
+  paidPackage = null,
 } = {}) {
-  const thb = displayAmountThb(amount);
+  const offer = loadActiveScanOffer();
+  const pkg = paidPackage || getDefaultPackage(offer);
+  const thb = displayAmountThb(amount, pkg?.priceThb ?? offer.paidPriceThb);
   return [
-    buildPaymentQrIntroText({ paymentRef }).replace(
-      "แพ็กเกจนี้ราคา 99 บาท",
-      `แพ็กเกจนี้ราคา ${thb} บาท`,
-    ),
+    buildPaymentQrIntroText({ paymentRef, paidPackage: pkg }),
     "",
     "ตอนนี้ยังโหลดรูปคิวอาร์ ในแชตไม่ได้ชั่วคราว ลองพิมพ์ จ่ายเงิน อีกครั้งภายหลัง หรือติดต่อเราได้ครับ",
   ].join("\n");
@@ -526,6 +571,7 @@ export async function buildPaymentApprovedText({
   paidUntilLine = "",
   paymentRef = null,
   lineUserId = null,
+  paidPlanCode = null,
 } = {}) {
   const scansNum =
     paidRemainingScans != null && paidRemainingScans !== ""
@@ -566,12 +612,25 @@ export async function buildPaymentApprovedText({
     untilLine = `ใช้ได้ถึง: ${expiryFromLine || "ไม่ระบุ"}`;
   }
 
+  const offer = loadActiveScanOffer();
+  const introPkg = paidPlanCode
+    ? findPackageByKey(offer, paidPlanCode)
+    : null;
+  const introShape = introPkg
+    ? {
+        priceThb: introPkg.priceThb,
+        scanCount: introPkg.scanCount,
+        windowHours: introPkg.windowHours,
+      }
+    : null;
+
   const lines = [
     lineUserId
       ? (
           await buildApprovedIntroReply({
-            offer: loadActiveScanOffer(),
+            offer,
             userId: lineUserId,
+            introPackage: introShape,
           })
         ).primaryText
       : "แอดมินอนุมัติสลิปแล้ว ระบบเปิดสิทธิ์ให้แล้วครับ",

@@ -5,7 +5,7 @@ import {
 import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
-import { replyText, replyFlex, replyPaymentInstructions } from "../services/lineReply.service.js";
+import { replyText, replyFlex } from "../services/lineReply.service.js";
 import { pushText } from "../services/lineSequenceReply.service.js";
 import {
   sendNonScanReply,
@@ -50,15 +50,9 @@ import {
 
 import {
   buildPaymentRequiredText,
-  buildPaymentQrIntroText,
-  buildPaymentQrSlipText,
-  buildPaymentInstructionText,
+  buildPackageSelectionPromptFromOffer,
 } from "../utils/webhookText.util.js";
 import { paywallMessageSequence } from "../utils/replyCopy.util.js";
-import {
-  getPromptPayQrPublicUrl,
-  isPromptPayQrUrlHttpsForLine,
-} from "../utils/promptpayQrPublicUrl.util.js";
 
 import { ensureUserByLineUserId } from "../stores/users.db.js";
 import {
@@ -66,8 +60,8 @@ import {
   updateScanRequestStatus,
 } from "../stores/scanRequests.db.js";
 import { createScanResult } from "../stores/scanResults.db.js";
-import { createPaymentPending } from "../stores/payments.db.js";
 import { getSavedBirthdate } from "../stores/userProfile.db.js";
+import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
 import { randomBetween, sleep } from "../utils/timing.util.js";
 
 import { logPaywallShown, logEvent } from "../utils/personaAnalytics.util.js";
@@ -190,56 +184,6 @@ async function sendPaymentGateTextReply({ client, replyToken, userId, reply }) {
       text: fallbackText,
       alternateTexts: [],
     });
-  }
-}
-
-async function replyPaymentQrTripleOrFallback({
-  client,
-  replyToken,
-  userId = null,
-  amountForFallback = 99,
-  paymentRef = null,
-  paymentId = null,
-}) {
-  const qrUrl = getPromptPayQrPublicUrl();
-  if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
-    await replyPaymentInstructions(client, replyToken, {
-      introText: buildPaymentQrIntroText({ paymentRef }),
-      qrImageUrl: qrUrl,
-      slipText: buildPaymentQrSlipText(),
-    });
-    if (userId) {
-      await logPaywallShown(userId, {
-        patternUsed: "qr_intro_image_slip",
-        bubbleCount: 3,
-        source: "scan_flow_qr",
-        ...(paymentId ? { paymentId } : {}),
-      });
-    }
-  } else {
-    const payBody = buildPaymentInstructionText({
-      amount: amountForFallback,
-      paymentRef,
-    });
-    await sendNonScanReply({
-      client,
-      userId,
-      replyToken,
-      replyType: "payment_instruction_text_fallback",
-      semanticKey: "payment_qr_text_fallback_scan_flow",
-      text: payBody,
-      alternateTexts: [
-        `${payBody}\n\nส่งสลิปมาในแชทนี้ได้เลยครับ`,
-      ],
-    });
-    if (userId) {
-      await logPaywallShown(userId, {
-        patternUsed: "qr_text_fallback",
-        bubbleCount: 1,
-        source: "scan_flow_qr_text_fallback",
-        ...(paymentId ? { paymentId } : {}),
-      });
-    }
   }
 }
 
@@ -471,44 +415,12 @@ export async function runScanFlow({
 
     if (!access.allowed) {
       const reply = await buildPaymentGateReply({ decision: access, userId });
-
-      if (access?.reason === "payment_required") {
-        try {
-          const MVP_PRICE_THB = 99;
-          const MVP_CURRENCY = "THB";
-
-          const appUser = await ensureUserByLineUserId(userId);
-          const { paymentRef, paymentId } = await createPaymentPending({
-            appUserId: appUser.id,
-            amount: MVP_PRICE_THB,
-            currency: MVP_CURRENCY,
-          });
-
-          await replyPaymentQrTripleOrFallback({
-            client,
-            replyToken,
-            userId,
-            amountForFallback: MVP_PRICE_THB,
-            paymentRef,
-            paymentId,
-          });
-        } catch (err) {
-          await sendPaymentGateTextReply({
-            client,
-            replyToken,
-            userId,
-            reply,
-          });
-        }
-      } else {
-        await sendPaymentGateTextReply({
-          client,
-          replyToken,
-          userId,
-          reply,
-        });
-      }
-
+      await sendPaymentGateTextReply({
+        client,
+        replyToken,
+        userId,
+        reply,
+      });
       clearSessionIfFlowVersionMatches(userId, flowVersion);
       return;
     }
@@ -519,47 +431,23 @@ export async function runScanFlow({
       if (scanCount >= 30) {
         console.log("[PAID_LIMIT]", { userId, scanCount });
 
-        try {
-          const MVP_PRICE_THB = 99;
-          const MVP_CURRENCY = "THB";
-
-          const appUser = await ensureUserByLineUserId(userId);
-          const { paymentRef, paymentId } = await createPaymentPending({
-            appUserId: appUser.id,
-            amount: MVP_PRICE_THB,
-            currency: MVP_CURRENCY,
-          });
-
-          await replyPaymentQrTripleOrFallback({
-            client,
-            replyToken,
-            userId,
-            amountForFallback: MVP_PRICE_THB,
-            paymentRef,
-            paymentId,
-          });
-        } catch (err) {
-          const payLim = buildPaymentInstructionText({
-            amount: 99,
-            currency: "THB",
-          });
-          await sendNonScanReply({
-            client,
-            userId,
-            replyToken,
-            replyType: "payment_instruction_paid_limit",
-            semanticKey: "payment_qr_text_fallback_paid_limit",
-            text: payLim,
-            alternateTexts: [
-              `${payLim}\n\nส่งสลิปมาในแชทนี้ได้เลยครับ`,
-            ],
-          });
-          await logPaywallShown(userId, {
-            patternUsed: "qr_text_fallback",
-            bubbleCount: 1,
-            source: "scan_flow_paid_limit_catch",
-          });
-        }
+        const pkgHint = buildPackageSelectionPromptFromOffer(
+          loadActiveScanOffer(),
+        );
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken,
+          replyType: "paid_scan_burst_cap",
+          semanticKey: "paid_scan_burst_cap",
+          text: `ช่วงนี้สแกนถี่ไปหน่อย เว้นระยะสักครู่นะครับ\n\nถ้าอยากเปิดแพ็กใหม่เมื่อพร้อม\n\n${pkgHint}`,
+          alternateTexts: [pkgHint],
+        });
+        await logPaywallShown(userId, {
+          patternUsed: "paid_burst_package_hint",
+          bubbleCount: 1,
+          source: "paid_scan_burst_cap",
+        });
         return;
       }
 

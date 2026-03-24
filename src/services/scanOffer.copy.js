@@ -1,5 +1,6 @@
 import { SCAN_OFFER_TEMPLATES_TH } from "../config/scanOffer.templates.th.js";
 import { chooseScanOfferReplyType } from "./scanOffer.replyType.js";
+import { listActivePackages } from "./scanOffer.packages.js";
 
 /**
  * @param {string} template
@@ -18,6 +19,20 @@ export function fillPlaceholders(template, vars) {
  * @param {import("./scanOfferAccess.resolver.js").ScanOfferAccessContext} accessContext
  */
 export function buildPlaceholderVars(offer, accessContext) {
+  const pkgs = listActivePackages(offer);
+  const pkgPaywallLines = pkgs
+    .map(
+      (p) =>
+        `${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`,
+    )
+    .join("\n");
+  const pkgNumberedList = pkgs
+    .map(
+      (p, i) =>
+        `${i + 1}) ${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
+    )
+    .join("\n\n");
+  const priceTokens = pkgs.map((p) => String(p.priceThb)).join(" หรือ ");
   return {
     price: offer.paidPriceThb,
     count: offer.paidScanCount,
@@ -25,6 +40,10 @@ export function buildPlaceholderVars(offer, accessContext) {
     nextResetLabel: accessContext.nextResetLabel || "",
     freeRemaining: accessContext.freeRemainingToday,
     offerLabel: offer.label || "มาตรฐาน",
+    freeQuotaPerDay: offer.freeQuotaPerDay,
+    pkgPaywallLines,
+    pkgNumberedList,
+    priceTokens,
   };
 }
 
@@ -139,16 +158,31 @@ export function buildScanOfferReply({
  * @param {import("./scanOffer.loader.js").NormalizedScanOffer} opts.offer
  * @param {string|null} [opts.userId]
  */
-export function buildApprovedIntroReply({ offer, userId = null }) {
+/**
+ * @param {object} opts
+ * @param {import("./scanOffer.loader.js").NormalizedScanOffer} opts.offer
+ * @param {string|null} [opts.userId]
+ * @param {{ priceThb: number, scanCount: number, windowHours: number }|null} [opts.introPackage] entitlement package (overrides offer defaults)
+ */
+export function buildApprovedIntroReply({
+  offer,
+  userId = null,
+  introPackage = null,
+}) {
   const pool = SCAN_OFFER_TEMPLATES_TH.approved_intro || [];
   const idx = stableVariantIndex(userId, pool.length || 1);
+  const pkg = introPackage;
   const vars = {
-    price: offer.paidPriceThb,
-    count: offer.paidScanCount,
-    hours: offer.paidWindowHours,
+    price: pkg ? pkg.priceThb : offer.paidPriceThb,
+    count: pkg ? pkg.scanCount : offer.paidScanCount,
+    hours: pkg ? pkg.windowHours : offer.paidWindowHours,
     nextResetLabel: "",
     freeRemaining: 0,
     offerLabel: offer.label || "มาตรฐาน",
+    freeQuotaPerDay: offer.freeQuotaPerDay,
+    pkgPaywallLines: "",
+    pkgNumberedList: "",
+    priceTokens: "",
   };
   const primaryText = renderVariant(pool[idx] || [], vars);
   const alternates = pool

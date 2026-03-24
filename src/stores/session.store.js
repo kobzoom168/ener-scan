@@ -10,6 +10,8 @@ function createEmptySession() {
     birthdate: null,
     awaitingBirthdateUpdate: false,
     flowVersion: 0,
+    /** @type {string|null} selected paid package key from scan-offer config */
+    selectedPaymentPackageKey: null,
   };
 }
 
@@ -96,6 +98,31 @@ export function clearSession(userId) {
   if (!normalizedUserId) return;
 
   sessions.delete(normalizedUserId);
+}
+
+export function setSelectedPaymentPackageKey(userId, packageKey) {
+  const id = normalizeUserId(userId);
+  if (!id) return;
+  const session = getSession(id);
+  const k = String(packageKey || "").trim();
+  session.selectedPaymentPackageKey = k || null;
+  sessions.set(id, session);
+}
+
+export function getSelectedPaymentPackageKey(userId) {
+  const id = normalizeUserId(userId);
+  if (!id) return null;
+  const session = sessions.get(id);
+  const k = session?.selectedPaymentPackageKey;
+  return k ? String(k).trim() : null;
+}
+
+export function clearSelectedPaymentPackageKey(userId) {
+  const id = normalizeUserId(userId);
+  if (!id) return;
+  const session = getSession(id);
+  session.selectedPaymentPackageKey = null;
+  sessions.set(id, session);
 }
 
 export function clearSessionIfFlowVersionMatches(userId, flowVersion) {

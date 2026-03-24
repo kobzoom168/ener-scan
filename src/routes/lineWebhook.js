@@ -7,6 +7,8 @@ import {
   clearSessionIfFlowVersionMatches,
   clearAwaitingBirthdateUpdate,
   setAwaitingBirthdateUpdate,
+  setSelectedPaymentPackageKey,
+  getSelectedPaymentPackageKey,
 } from "../stores/session.store.js";
 
 import { getSavedBirthdate, saveBirthdate } from "../stores/userProfile.db.js";
@@ -39,6 +41,11 @@ import { isDuplicateImage } from "../services/dedupe.service.js";
 import { checkSingleObject } from "../services/objectCheck.service.js";
 
 import { env } from "../config/env.js";
+import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
+import {
+  parsePackageSelectionFromText,
+  findPackageByKey,
+} from "../services/scanOffer.packages.js";
 import {
   getPromptPayQrPublicUrl,
   isPromptPayQrUrlHttpsForLine,
@@ -103,6 +110,9 @@ import {
   buildPaymentInstructionText,
   buildPaymentQrIntroText,
   buildPaymentQrSlipText,
+  buildPaymentRequiredText,
+  buildPackageSelectionPromptFromOffer,
+  buildPaymentPackageSelectedAck,
   buildSlipReceivedText,
   buildPendingVerifyReminderText,
   buildPendingVerifyBlockScanText,
@@ -602,90 +612,31 @@ async function finalizeAcceptedImage({
       });
     }
 
-    // Create (or re-create) the pending payment row for this LINE user.
-    // All subsequent images will be treated as slip upload until admin verifies.
-    let createdPaymentRef = null;
-    let createdPaymentId = null;
-    try {
-      const appUser = await ensureUserByLineUserId(userId);
-      // createPaymentPending dedupes: reuses active awaiting_payment / pending_verify row
-      const created = await createPaymentPending({
-        appUserId: appUser.id,
-        amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
-        currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
-      });
-      createdPaymentRef = created?.paymentRef ?? null;
-      createdPaymentId = created?.paymentId ?? null;
-    } catch (err) {
-      console.error("[WEBHOOK] createPaymentPending (payment_required) failed:", {
-        userId,
-        message: err?.message,
-        code: err?.code,
-        hint: err?.hint,
-      });
-      // Still proceed with the user-facing payment instructions.
-    }
-
-    setAwaitingPayment(userId);
+    // No payment row until user picks a package (49 / 99) and sends จ่ายเงิน.
     clearLatestScanJob(userId);
 
     // Preserve the scan image candidate so user can continue after approval.
     setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
-    const qrUrl = getPromptPayQrPublicUrl();
-    if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
-      try {
-        await replyPaymentInstructions(client, event.replyToken, {
-          introText: buildPaymentQrIntroText({
-            paymentRef: createdPaymentRef,
-          }),
-          qrImageUrl: qrUrl,
-          slipText: buildPaymentQrSlipText(),
-        });
-        await logPaywallShown(userId, {
-          patternUsed: "qr_intro_image_slip",
-          bubbleCount: 3,
-          source: "finalize_image_payment_required",
-          ...(createdPaymentId ? { paymentId: createdPaymentId } : {}),
-        });
-        return;
-      } catch (qrErr) {
-        console.error(
-          "[WEBHOOK] replyPaymentInstructions (finalizeAcceptedImage payment_required) failed:",
-          {
-            userId,
-            message: qrErr?.message,
-          },
-        );
-      }
-    } else {
-      console.warn(
-        "[WEBHOOK] QR URL not HTTPS — LINE cannot load image. Set APP_BASE_URL to public https URL.",
-        { qrUrl },
-      );
-    }
-
-    const payInstr = buildPaymentInstructionText({
-      amount: env.PAYMENT_UNLOCK_AMOUNT_THB || 99,
-      currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
-      paymentRef: createdPaymentRef,
+    const paywallBody = await buildPaymentRequiredText({
+      userId,
+      decision: accessDecision,
     });
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "payment_instruction_text",
-      semanticKey: "payment_instruction_finalize_image",
-      text: payInstr,
+      replyType: "free_quota_exhausted",
+      semanticKey: "finalize_image_select_package",
+      text: paywallBody,
       alternateTexts: [
-        `${payInstr}\n\nถ้าส่งสลิปแล้ว รอแอดมินตรวจได้เลยครับ`,
+        `${paywallBody}\n\nพิมพ์ จ่ายเงิน หลังเลือกแพ็ก (49 หรือ 99) ได้เลยครับ`,
       ],
     });
     await logPaywallShown(userId, {
-      patternUsed: "qr_text_fallback",
+      patternUsed: "finalize_image_package_prompt",
       bubbleCount: 1,
-      source: "finalize_image_payment_required_text",
-      ...(createdPaymentId ? { paymentId: createdPaymentId } : {}),
+      source: "finalize_image_payment_required_text_only",
     });
     return;
   }
@@ -1265,7 +1216,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
             "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
             "",
-            "หากหมดสิทธิ์ฟรี: พิมพ์ payment หรือ จ่ายเงิน",
+            "หากหมดสิทธิ์ฟรี: พิมพ์ 49 หรือ 99 เลือกแพ็ก แล้วพิมพ์ จ่ายเงิน",
             "",
             MAIN_MENU_HINT_TEXT,
           ].join("\n");
@@ -1609,6 +1560,61 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
+  const offerPick = loadActiveScanOffer();
+  const pickedKey = parsePackageSelectionFromText(text, offerPick);
+  if (pickedKey) {
+    try {
+      const ps = getPaymentState(userId).state;
+      const row = await getLatestAwaitingPaymentForLineUserId(userId);
+      const slipRow =
+        row &&
+        (String(row.status) === "awaiting_payment" ||
+          String(row.status) === "pending_verify");
+      if (session.pendingImage && ps !== "awaiting_slip" && !slipRow) {
+        logWaitingBirthdate("guidance", {
+          gate: "package_pick_blocked",
+          userId,
+          hint: "pending_scan_needs_birthdate",
+        });
+        await sendNonScanSequenceReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "payment_cmd_needs_birthdate",
+          semanticKey: "waiting_birthdate_guidance",
+          messages: await buildWaitingBirthdateGuidanceMessages(userId),
+        });
+        return;
+      }
+    } catch (_) {
+      /* ignore */
+    }
+
+    setSelectedPaymentPackageKey(userId, pickedKey);
+    const pkg = findPackageByKey(offerPick, pickedKey);
+    console.log(
+      JSON.stringify({
+        event: "PAYMENT_PACKAGE_SELECTED",
+        lineUserId: userId,
+        packageKey: pickedKey,
+        priceThb: pkg?.priceThb ?? null,
+        scanCount: pkg?.scanCount ?? null,
+        windowHours: pkg?.windowHours ?? null,
+      }),
+    );
+    const ack = buildPaymentPackageSelectedAck(pkg);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "payment_package_selected",
+      semanticKey: "payment_package_selected",
+      text: ack,
+      alternateTexts: [buildPackageSelectionPromptFromOffer(offerPick)],
+    });
+    return;
+  }
+
   if (isPaymentCommand(text, lowerText)) {
     // Do not open payment while user must finish birthdate for a pending scan image.
     try {
@@ -1686,17 +1692,44 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    const amount = env.PAYMENT_UNLOCK_AMOUNT_THB || 0;
+    const offerPay = loadActiveScanOffer();
+    const selKey = getSelectedPaymentPackageKey(userId);
+    const paidPackage = selKey ? findPackageByKey(offerPay, selKey) : null;
+
+    if (!paidPackage) {
+      const prompt = buildPackageSelectionPromptFromOffer(offerPay);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "payment_package_prompt",
+        semanticKey: "payment_need_package_first",
+        text: prompt,
+        alternateTexts: [prompt],
+      });
+      logEvent("payment_intent", {
+        userId,
+        personaVariant: await getAssignedPersonaVariant(userId),
+        patternUsed: "need_package_first",
+        bubbleCount: 1,
+        source: "payment_command",
+      });
+      return;
+    }
+
     const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
-    const amountForCopy = amount > 0 ? amount : 99;
     let cmdPaymentRef = null;
     let cmdPaymentId = null;
     try {
       const appUser = await ensureUserByLineUserId(userId);
       const created = await createPaymentPending({
         appUserId: appUser.id,
-        amount,
+        amount: paidPackage.priceThb,
         currency,
+        packageCode: paidPackage.key,
+        packageName: paidPackage.label,
+        expectedAmount: paidPackage.priceThb,
+        unlockHours: paidPackage.windowHours,
       });
       cmdPaymentRef = created?.paymentRef ?? null;
       cmdPaymentId = created?.paymentId ?? null;
@@ -1719,8 +1752,15 @@ async function handleTextMessage({ client, event, userId, session }) {
       ...(cmdPaymentId ? { paymentId: cmdPaymentId } : {}),
     });
 
+    if (cmdPaymentId) {
+      setAwaitingPayment(userId);
+    }
+
     const qrUrl = getPromptPayQrPublicUrl();
-    const intro = buildPaymentQrIntroText({ paymentRef: cmdPaymentRef });
+    const intro = buildPaymentQrIntroText({
+      paymentRef: cmdPaymentRef,
+      paidPackage,
+    });
     const slipText = buildPaymentQrSlipText();
 
     if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
@@ -1753,9 +1793,10 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
 
     const payCmdBody = `${buildPaymentInstructionText({
-      amount: amountForCopy,
+      amount: paidPackage.priceThb,
       currency,
       paymentRef: cmdPaymentRef,
+      paidPackage,
     })}\n\n${MAIN_MENU_HINT_TEXT}`;
     await sendNonScanReply({
       client,
@@ -1766,9 +1807,10 @@ async function handleTextMessage({ client, event, userId, session }) {
       text: payCmdBody,
       alternateTexts: [
         `${buildPaymentInstructionText({
-          amount: amountForCopy,
+          amount: paidPackage.priceThb,
           currency,
           paymentRef: cmdPaymentRef,
+          paidPackage,
         })}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
       ],
     });
@@ -1838,7 +1880,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
       "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
       "",
-      "หากหมดสิทธิ์ฟรี: พิมพ์ จ่ายเงิน ได้เลย",
+      "หากหมดสิทธิ์ฟรี: พิมพ์ 49 หรือ 99 เพื่อเลือกแพ็ก แล้วพิมพ์ จ่ายเงิน",
       "",
       MAIN_MENU_HINT_TEXT,
     ].join("\n");

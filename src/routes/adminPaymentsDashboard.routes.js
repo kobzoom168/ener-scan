@@ -1245,6 +1245,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           paidUntil: activation.paidUntil,
           paymentRef: paymentRefForPush,
           lineUserId: activation.lineUserId,
+          paidPlanCode: activation.paidPlanCode,
         });
 
         void lineClient

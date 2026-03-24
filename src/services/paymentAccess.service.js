@@ -125,6 +125,10 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     now,
   });
 
+  const pkgKeys = Array.isArray(offer.packages)
+    ? offer.packages.filter((p) => p?.active !== false).map((p) => p.key)
+    : [];
+
   console.log(
     JSON.stringify({
       event: "SCAN_OFFER_ACCESS_RESOLVED",
@@ -133,6 +137,8 @@ export async function checkScanAccess({ userId, now = new Date() }) {
       offerLabel: ctx.offerLabel,
       configVersion: ctx.offerConfigVersion,
       freeQuotaPerDay: ctx.freeQuotaPerDay,
+      defaultPackageKey: offer.defaultPackageKey,
+      packageKeys: pkgKeys,
       paidPriceThb: ctx.paidPriceThb,
       paidScanCount: ctx.paidScanCount,
       paidWindowHours: ctx.paidWindowHours,

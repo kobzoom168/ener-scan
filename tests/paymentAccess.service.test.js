@@ -9,12 +9,13 @@ import { buildPaymentGateReply } from "../src/services/paymentAccess.service.js"
  * Integration tests with Supabase are out of scope; behavior vs quota is covered here.
  */
 
-test("default offer from loader matches 2 free / 49 / 5 / 24", () => {
+test("default offer from loader: 2 free / default pack 49×4 / 24h + 2 packages", () => {
   const o = loadActiveScanOffer(new Date());
   assert.equal(o.freeQuotaPerDay, 2);
   assert.equal(o.paidPriceThb, 49);
-  assert.equal(o.paidScanCount, 5);
+  assert.equal(o.paidScanCount, 4);
   assert.equal(o.paidWindowHours, 24);
+  assert.equal(o.packages.length, 2);
 });
 
 test("gate behavior tracks freeQuotaPerDay from config (no FREE_SCANS_LIMIT constant)", () => {

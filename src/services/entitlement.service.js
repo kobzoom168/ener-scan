@@ -1,19 +1,27 @@
 import { supabase } from "../config/supabase.js";
+import { resolveActiveScanOfferCalm } from "./scanOffer.loader.js";
+import { findPackageByKey } from "./scanOffer.packages.js";
 
-/** โปรเปิดตัว: 99 บาท / 10 ครั้ง / 24 ชม. */
-const PAID_PLAN_CODE_10SCANS_24H = "99baht_10scans_24h";
 /** Legacy แพ็กเกจเดิม (อนุมัติสลิปเก่าที่ยังอ้าง package นี้) */
 const PAID_PLAN_CODE_15SCANS_24H = "99baht_15scans_24h";
 
 function parsePackageCodeToEntitlement(packageCode) {
   const code = String(packageCode || "").trim();
 
-  // Count-based packages
-  if (code.includes("10scans") || code === PAID_PLAN_CODE_10SCANS_24H) {
+  // Count-based packages (legacy keys — prefer config-backed grant when possible)
+  if (code.includes("10scans") || code === "99baht_10scans_24h") {
     return {
       paid_until_ms: Date.now() + 24 * 60 * 60 * 1000,
       paid_remaining_scans: 10,
-      paid_plan_code: code || PAID_PLAN_CODE_10SCANS_24H,
+      paid_plan_code: code || "99baht_10scans_24h",
+    };
+  }
+
+  if (code.includes("4scans") || code === "49baht_4scans_24h") {
+    return {
+      paid_until_ms: Date.now() + 24 * 60 * 60 * 1000,
+      paid_remaining_scans: 4,
+      paid_plan_code: code || "49baht_4scans_24h",
     };
   }
 
@@ -69,6 +77,36 @@ function parsePackageCodeToEntitlement(packageCode) {
 export async function grantEntitlementForPackage({ appUserId, packageCode }) {
   const appUserIdStr = String(appUserId || "").trim();
   if (!appUserIdStr) throw new Error("grantEntitlement_missing_appUserId");
+
+  const offer = resolveActiveScanOfferCalm();
+  const pkg = findPackageByKey(offer, packageCode);
+  if (pkg) {
+    const paid_until_ms = Date.now() + pkg.windowHours * 60 * 60 * 1000;
+    const entitlement = {
+      paid_until_ms,
+      paid_remaining_scans: pkg.scanCount,
+      paid_plan_code: pkg.key,
+    };
+    const paidUntilIso = new Date(entitlement.paid_until_ms).toISOString();
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase
+      .from("app_users")
+      .update({
+        paid_until: paidUntilIso,
+        paid_remaining_scans: entitlement.paid_remaining_scans,
+        paid_plan_code: entitlement.paid_plan_code,
+        updated_at: nowIso,
+      })
+      .eq("id", appUserIdStr);
+
+    if (error) throw error;
+
+    return {
+      paidUntil: paidUntilIso,
+      paidRemainingScans: entitlement.paid_remaining_scans,
+      paidPlanCode: entitlement.paid_plan_code,
+    };
+  }
 
   const entitlement = parsePackageCodeToEntitlement(packageCode);
   const paidUntilIso = new Date(entitlement.paid_until_ms).toISOString();

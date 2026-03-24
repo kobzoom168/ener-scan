@@ -3,15 +3,8 @@ import { grantEntitlementForPackage } from "../services/entitlement.service.js";
 import { generatePaymentRef } from "../utils/paymentRef.util.js";
 
 const DEFAULT_UNLOCK_HOURS = 24;
-const DEFAULT_AMOUNT = 0;
 const DEFAULT_CURRENCY = "THB";
 const PROVIDER_MANUAL = "promptpay_manual";
-
-const PAID_PLAN_CODE = "99baht_10scans_24h";
-const PAID_REMAINING_SCANS = 15;
-const DEFAULT_PACKAGE_CODE = PAID_PLAN_CODE;
-const DEFAULT_PACKAGE_NAME = "15 scans / 24 hours";
-const DEFAULT_EXPECTED_AMOUNT = 99;
 /** User must complete PromptPay + slip within this window (awaiting_payment only). */
 const AWAITING_PAYMENT_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -217,22 +210,38 @@ async function safeCleanupOtherActivePaymentsForUser(appUserId, keepPaymentId) {
  */
 export async function createPaymentPending({
   appUserId,
-  amount = DEFAULT_AMOUNT,
+  amount,
   currency = DEFAULT_CURRENCY,
   scanRequestId = null,
   provider = PROVIDER_MANUAL,
-  packageCode = DEFAULT_PACKAGE_CODE,
-  packageName = DEFAULT_PACKAGE_NAME,
-  expectedAmount = amount || DEFAULT_EXPECTED_AMOUNT,
+  packageCode,
+  packageName,
+  expectedAmount,
+  unlockHours = DEFAULT_UNLOCK_HOURS,
 } = {}) {
   const userId = String(appUserId || "").trim();
   if (!userId) throw new Error("payments_missing_app_user_id");
 
-  const requestedPkg = String(packageCode ?? DEFAULT_PACKAGE_CODE);
-  const requestedAmt =
-    Number(expectedAmount) ||
-    Number(amount) ||
-    DEFAULT_EXPECTED_AMOUNT;
+  const requestedPkg = String(packageCode || "").trim();
+  if (!requestedPkg) throw new Error("payments_missing_package_code");
+
+  const amt = Number(amount);
+  const exp =
+    expectedAmount != null && expectedAmount !== ""
+      ? Number(expectedAmount)
+      : amt;
+  if (!Number.isFinite(amt) || amt < 1) {
+    throw new Error("payments_invalid_amount");
+  }
+  if (!Number.isFinite(exp) || exp < 1) {
+    throw new Error("payments_invalid_expected_amount");
+  }
+  const requestedAmt = exp;
+
+  const pkgLabel = String(packageName || requestedPkg).trim() || requestedPkg;
+  const uh = Math.floor(Number(unlockHours));
+  const unlockH =
+    Number.isFinite(uh) && uh >= 1 ? uh : DEFAULT_UNLOCK_HOURS;
 
   // Store LINE user id for admin + slip verify flows.
   const { data: appUserRow, error: appUserErr } = await supabase
@@ -271,7 +280,7 @@ export async function createPaymentPending({
           status: active.status,
           packageCode: requestedPkg,
           expectedAmount: requestedAmt,
-        })
+        }),
       );
       return {
         paymentId: normalizePaymentIdString(active.id),
@@ -299,17 +308,30 @@ export async function createPaymentPending({
     line_user_id: lineUserId,
     scan_request_id: scanRequestId || null,
     provider: provider || PROVIDER_MANUAL,
-    amount: Number(amount) || DEFAULT_AMOUNT,
+    amount: amt,
     currency: String(currency || DEFAULT_CURRENCY).trim() || DEFAULT_CURRENCY,
-    expected_amount: Number(expectedAmount) || DEFAULT_EXPECTED_AMOUNT,
-    package_code: packageCode,
-    package_name: packageName,
+    expected_amount: requestedAmt,
+    package_code: requestedPkg,
+    package_name: pkgLabel,
     status: "awaiting_payment",
-    unlock_hours: DEFAULT_UNLOCK_HOURS,
+    unlock_hours: unlockH,
   };
 
   const { paymentId, paymentRef } = await insertPaymentRowWithUniqueRef(payload);
 
+  console.log(
+    JSON.stringify({
+      event: "PAYMENT_CREATED_WITH_PACKAGE",
+      paymentId,
+      paymentRef,
+      appUserId: userId,
+      packageKey: requestedPkg,
+      packageName: pkgLabel,
+      priceThb: amt,
+      expectedAmount: requestedAmt,
+      unlockHours: unlockH,
+    }),
+  );
   console.log(
     JSON.stringify({
       event: "payments_create",
@@ -319,7 +341,7 @@ export async function createPaymentPending({
       appUserId: userId,
       packageCode: requestedPkg,
       expectedAmount: requestedAmt,
-    })
+    }),
   );
   return { paymentId, paymentRef };
 }
@@ -567,7 +589,9 @@ export async function markPaymentApprovedAndUnlock({
   const nowIso = getNowIso();
   const { data: payment, error: fetchError } = await supabase
     .from("payments")
-    .select("id,user_id,line_user_id,status,package_code,package_name,expected_amount")
+    .select(
+      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,unlock_hours",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -582,7 +606,10 @@ export async function markPaymentApprovedAndUnlock({
     throw new Error(`payment_not_approvable_in_status_${payment.status}`);
   }
 
-  const packageCode = payment.package_code || DEFAULT_PACKAGE_CODE;
+  const packageCode = String(payment.package_code || "").trim();
+  if (!packageCode) {
+    throw new Error("payment_missing_package_code");
+  }
 
   // 1) Claim row: only pending_verify -> paid (prevents double grant on concurrent approve)
   const { data: updatedRows, error: updatePaymentError } = await supabase
@@ -620,6 +647,18 @@ export async function markPaymentApprovedAndUnlock({
     appUserId: payment.user_id,
     packageCode,
   });
+
+  console.log(
+    JSON.stringify({
+      event: "PAYMENT_APPROVED_ENTITLEMENT_GRANTED",
+      paymentId: id,
+      appUserId: payment.user_id,
+      packageKey: entitlement.paidPlanCode,
+      priceThb: payment.expected_amount != null ? Number(payment.expected_amount) : null,
+      scanCount: entitlement.paidRemainingScans,
+      windowHours: payment.unlock_hours != null ? Number(payment.unlock_hours) : null,
+    }),
+  );
 
   await safeCleanupOtherActivePaymentsForUser(payment.user_id, id);
 
