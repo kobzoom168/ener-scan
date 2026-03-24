@@ -70,6 +70,14 @@ console.log("[BUILD_INFO]", {
   version: "payment-slip-fix-v2",
   startedAt: new Date().toISOString(),
 });
+console.log(
+  JSON.stringify({
+    event: "FLEX_STARTUP_FLAGS",
+    flexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
+    flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+    flexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+  }),
+);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
