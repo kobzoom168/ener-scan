@@ -12,6 +12,17 @@ const SAMPLE_TEXT = `คะแนนพลัง: 8.2/10
 บทบาทของชิ้นนี้
 ปิดท้ายด้วยความอบอุ่น`;
 
+function collectTextNodes(node, out = []) {
+  if (!node || typeof node !== "object") return out;
+  if (node.type === "text" && typeof node.text === "string") {
+    out.push(node.text);
+  }
+  if (Array.isArray(node.contents)) {
+    for (const c of node.contents) collectTextNodes(c, out);
+  }
+  return out;
+}
+
 test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () => {
   const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
@@ -117,4 +128,62 @@ test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA"
   const bodyText = JSON.stringify(flex.contents.body);
   assert.match(bodyText, /ลิงก์รายงานยังไม่พร้อม/);
   assert.equal(flex.contents.footer, undefined);
+});
+
+test("buildScanSummaryFirstFlex: guardrails for summary-card structure", () => {
+  const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+    reportUrl: "https://example.com/r/abc123",
+    reportPayload: {
+      reportId: "rid2",
+      publicToken: "tok2",
+      scanId: "s2",
+      userId: "u2",
+      birthdateUsed: null,
+      generatedAt: new Date().toISOString(),
+      reportVersion: "1.0.0",
+      object: { objectLabel: "", objectType: "" },
+      summary: {
+        energyScore: 7.2,
+        mainEnergyLabel: "อำนาจ",
+        compatibilityPercent: 78,
+        wordingFamily: "unknown_family",
+        clarityLevel: "uncertain",
+      },
+      sections: {
+        whatItGives: [],
+        messagePoints: [],
+        ownerMatchReason: [],
+        roleDescription: "",
+        bestUseCases: [],
+        weakMoments: [],
+        guidanceTips: [],
+        careNotes: [],
+        miniRitual: [],
+      },
+      trust: { trustNote: "", rendererVersion: "0" },
+      actions: {},
+    },
+  });
+
+  const body = flex.contents.body;
+  const allTexts = collectTextNodes(body);
+  const headline = allTexts.find((t) =>
+    t.includes("เด่นด้านอำนาจและการตั้งหลัก"),
+  );
+  assert.ok(headline, "headline must always exist");
+
+  const bulletCount = allTexts.filter((t) => t.startsWith("• ")).length;
+  assert.equal(bulletCount, 2, "bullets length must be exactly 2");
+
+  const buttons =
+    flex.contents.footer?.contents?.filter((c) => c.type === "button") || [];
+  assert.equal(buttons.length, 1, "must have exactly one CTA");
+
+  const mainEnergyLine = allTexts.find((t) => t.startsWith("พลังหลัก ·"));
+  assert.ok(mainEnergyLine, "mainEnergyTitle must start with `พลังหลัก ·`");
+
+  const bodyStr = JSON.stringify(body);
+  assert.doesNotMatch(bodyStr, /เหตุผลที่เข้ากับเจ้าของ/);
+  assert.doesNotMatch(bodyStr, /ชิ้นนี้หนุนเรื่อง/);
+  assert.doesNotMatch(bodyStr, /เหมาะใช้เมื่อ/);
 });

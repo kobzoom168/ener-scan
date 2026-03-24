@@ -26,36 +26,147 @@ import { ENERGY_TYPES } from "./scanCopy.config.js";
 import { resolveEnergyType } from "./scanCopy.utils.js";
 import { createTopAccent } from "./flex.components.js";
 
-const SUMMARY_CARD_COPY = {
-  variantKey: "premium_minimal",
-  objectLabel: "วัตถุสายอำนาจ",
-  headline: "ชิ้นนี้เด่นด้านอำนาจและการตั้งหลัก",
-  scoreLabel: "ระดับพลัง",
-  compatibilityLabel: "เข้ากับคุณ",
-  mainEnergyTitleByType: {
-    [ENERGY_TYPES.POWER]: "พลังหลัก · พลังอำนาจ",
-    [ENERGY_TYPES.PROTECT]: "พลังหลัก · พลังคุ้มกัน",
-    [ENERGY_TYPES.BALANCE]: "พลังหลัก · พลังสมดุล",
-    [ENERGY_TYPES.KINDNESS]: "พลังหลัก · พลังเมตตา",
-    [ENERGY_TYPES.ATTRACT]: "พลังหลัก · พลังดึงดูด",
-    [ENERGY_TYPES.LUCK]: "พลังหลัก · พลังโชคลาภ",
-    [ENERGY_TYPES.BOOST]: "พลังหลัก · พลังเสริม",
+const SUMMARY_CARD_COPY_VARIANTS = {
+  premium_minimal: {
+    variantKey: "premium_minimal",
+    objectLabel: "วัตถุสายอำนาจ",
+    headline: "ชิ้นนี้เด่นด้านอำนาจและการตั้งหลัก",
+    scoreLabel: "ระดับพลัง",
+    compatibilityLabel: "เข้ากับคุณ",
+    mainEnergyTitleByType: {
+      [ENERGY_TYPES.POWER]: "พลังหลัก · พลังอำนาจ",
+      [ENERGY_TYPES.PROTECT]: "พลังหลัก · พลังคุ้มกัน",
+      [ENERGY_TYPES.BALANCE]: "พลังหลัก · พลังสมดุล",
+      [ENERGY_TYPES.KINDNESS]: "พลังหลัก · พลังเมตตา",
+      [ENERGY_TYPES.ATTRACT]: "พลังหลัก · พลังดึงดูด",
+      [ENERGY_TYPES.LUCK]: "พลังหลัก · พลังโชคลาภ",
+      [ENERGY_TYPES.BOOST]: "พลังหลัก · พลังเสริม",
+    },
+    bullets: [
+      "เด่นด้านการตั้งพลังให้นิ่ง",
+      "เหมาะกับช่วงที่ต้องเดินหน้าอย่างมีจังหวะ",
+    ],
+    ctaText: "เปิดรายงานฉบับเต็ม",
+    traitLabelsByType: {
+      [ENERGY_TYPES.POWER]: "อำนาจ",
+      [ENERGY_TYPES.PROTECT]: "คุ้มกัน",
+      [ENERGY_TYPES.BALANCE]: "สมดุล",
+      [ENERGY_TYPES.KINDNESS]: "เมตตา",
+      [ENERGY_TYPES.ATTRACT]: "ดึงดูด",
+      [ENERGY_TYPES.LUCK]: "โชคลาภ",
+      [ENERGY_TYPES.BOOST]: "เสริมพลัง",
+    },
   },
-  bullets: [
-    "เด่นด้านการตั้งพลังให้นิ่ง",
-    "เหมาะกับช่วงที่ต้องเดินหน้าอย่างมีจังหวะ",
-  ],
-  ctaText: "เปิดรายงานฉบับเต็ม",
-  traitLabelsByType: {
-    [ENERGY_TYPES.POWER]: "อำนาจ",
-    [ENERGY_TYPES.PROTECT]: "คุ้มกัน",
-    [ENERGY_TYPES.BALANCE]: "สมดุล",
-    [ENERGY_TYPES.KINDNESS]: "เมตตา",
-    [ENERGY_TYPES.ATTRACT]: "ดึงดูด",
-    [ENERGY_TYPES.LUCK]: "โชคลาภ",
-    [ENERGY_TYPES.BOOST]: "เสริมพลัง",
+  thai_mystic: {
+    variantKey: "thai_mystic",
+    objectLabel: "วัตถุสายบารมี",
+    headline: "วัตถุชิ้นนี้เด่นเรื่องบารมี อำนาจ และแรงคุมเกม",
+    scoreLabel: "ระดับพลัง",
+    compatibilityLabel: "เข้ากับคุณ",
+    mainEnergyTitleByType: {
+      [ENERGY_TYPES.POWER]: "พลังหลัก · บารมีอำนาจ",
+      [ENERGY_TYPES.PROTECT]: "พลังหลัก · บารมีคุ้มกัน",
+      [ENERGY_TYPES.BALANCE]: "พลังหลัก · บารมีสมดุล",
+      [ENERGY_TYPES.KINDNESS]: "พลังหลัก · บารมีเมตตา",
+      [ENERGY_TYPES.ATTRACT]: "พลังหลัก · บารมีดึงดูด",
+      [ENERGY_TYPES.LUCK]: "พลังหลัก · บารมีโชคลาภ",
+      [ENERGY_TYPES.BOOST]: "พลังหลัก · บารมีเสริม",
+    },
+    bullets: [
+      "เหมาะกับช่วงที่ต้องตัดสินใจเรื่องสำคัญ",
+      "เด่นด้านคุมจังหวะและตั้งหลักไม่ให้เสียศูนย์",
+    ],
+    ctaText: "ดูคำอ่านฉบับเต็ม",
+    traitLabelsByType: {
+      [ENERGY_TYPES.POWER]: "อำนาจ",
+      [ENERGY_TYPES.PROTECT]: "คุ้มกัน",
+      [ENERGY_TYPES.BALANCE]: "สมดุล",
+      [ENERGY_TYPES.KINDNESS]: "เมตตา",
+      [ENERGY_TYPES.ATTRACT]: "ดึงดูด",
+      [ENERGY_TYPES.LUCK]: "โชคลาภ",
+      [ENERGY_TYPES.BOOST]: "เสริมพลัง",
+    },
+  },
+  conversion_focus: {
+    variantKey: "conversion_focus",
+    objectLabel: "วัตถุสายตั้งมั่น",
+    headline: "พลังของการตั้งหลัก กล้าตัดสินใจ และไม่เสียศูนย์ง่าย",
+    scoreLabel: "ระดับพลัง",
+    compatibilityLabel: "เข้ากับคุณ",
+    mainEnergyTitleByType: {
+      [ENERGY_TYPES.POWER]: "พลังหลัก · อำนาจนำ",
+      [ENERGY_TYPES.PROTECT]: "พลังหลัก · คุ้มกันนำ",
+      [ENERGY_TYPES.BALANCE]: "พลังหลัก · สมดุลนำ",
+      [ENERGY_TYPES.KINDNESS]: "พลังหลัก · เมตตานำ",
+      [ENERGY_TYPES.ATTRACT]: "พลังหลัก · ดึงดูดนำ",
+      [ENERGY_TYPES.LUCK]: "พลังหลัก · โชคนำ",
+      [ENERGY_TYPES.BOOST]: "พลังหลัก · เสริมนำ",
+    },
+    bullets: [
+      "ใช้เด่นเมื่ออยู่ในช่วงกดดันหรือมีเรื่องให้เลือกตัดสินใจ",
+      "ช่วยเสริมแรงคุมอารมณ์และความมั่นใจในตัวเอง",
+    ],
+    ctaText: "ดูพลังฉบับเต็ม",
+    traitLabelsByType: {
+      [ENERGY_TYPES.POWER]: "อำนาจ",
+      [ENERGY_TYPES.PROTECT]: "คุ้มกัน",
+      [ENERGY_TYPES.BALANCE]: "สมดุล",
+      [ENERGY_TYPES.KINDNESS]: "เมตตา",
+      [ENERGY_TYPES.ATTRACT]: "ดึงดูด",
+      [ENERGY_TYPES.LUCK]: "โชคลาภ",
+      [ENERGY_TYPES.BOOST]: "เสริมพลัง",
+    },
   },
 };
+
+const SUMMARY_CARD_COPY = SUMMARY_CARD_COPY_VARIANTS.premium_minimal;
+
+function resolveSummaryCardCopyVariant(reportPayload) {
+  const rawWordingFamily = String(reportPayload?.summary?.wordingFamily || "")
+    .trim()
+    .toLowerCase();
+  const rawClarityLevel = String(reportPayload?.summary?.clarityLevel || "")
+    .trim()
+    .toLowerCase();
+  const wordingFamilyAlias = {
+    authority: "authority",
+    premium: "authority",
+    authoritative: "authority",
+    thai_mystic: "thai_mystic",
+    mystic_th: "thai_mystic",
+    thaibelief: "thai_mystic",
+    conversion: "conversion",
+    conversion_focus: "conversion",
+    cta_focus: "conversion",
+  };
+  const clarityLevelAlias = {
+    l2: "l2",
+    clear: "l2",
+    concise: "l2",
+  };
+  const wordingFamily =
+    wordingFamilyAlias[rawWordingFamily] || rawWordingFamily;
+  const clarityLevel = clarityLevelAlias[rawClarityLevel] || rawClarityLevel;
+  const strictMap = {
+    "authority:l2": "premium_minimal",
+    "thai_mystic:l2": "thai_mystic",
+    "conversion:l2": "conversion_focus",
+  };
+  const mapped = strictMap[`${wordingFamily}:${clarityLevel}`];
+  return SUMMARY_CARD_COPY_VARIANTS[mapped] || SUMMARY_CARD_COPY;
+}
+
+/**
+ * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
+ * @param {string} fallbackHeadline
+ */
+function flexHeadlineFromPayload(reportPayload, fallbackHeadline) {
+  const mp = String(reportPayload?.sections?.messagePoints?.[0] || "").trim();
+  if (mp) return safeWrapText(mp, 64);
+  const d = distillSummaryLine(reportPayload?.summary?.summaryLine || "");
+  if (d) return safeWrapText(d, 64);
+  return fallbackHeadline;
+}
 
 /**
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
@@ -80,18 +191,6 @@ function scoreNormalizedForFlex(reportPayload, energyScoreText) {
     return normalizeScore(String(n));
   }
   return normalizeScore(energyScoreText);
-}
-
-/**
- * One sharp headline — prefer messagePoints[0], else distilled summaryLine.
- * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
- */
-function flexHeadlineFromPayload(reportPayload) {
-  const mp = String(reportPayload?.sections?.messagePoints?.[0] || "").trim();
-  if (mp) return safeWrapText(mp, 64);
-  const d = distillSummaryLine(reportPayload?.summary?.summaryLine || "");
-  if (d) return safeWrapText(d, 64);
-  return SUMMARY_CARD_COPY.headline;
 }
 
 function tightenTeaserCopy(text, maxChars = 48) {
@@ -129,6 +228,8 @@ function createCompactMetricStrip({
   accentColor,
   scoreDisplay,
   compatLabel,
+  scoreLabel,
+  compatibilityLabel,
 }) {
   const levelValue = `${String(scoreDisplay || "-").trim() || "-"} / 10`;
   return {
@@ -149,7 +250,7 @@ function createCompactMetricStrip({
         contents: [
           {
             type: "text",
-            text: SUMMARY_CARD_COPY.scoreLabel,
+            text: scoreLabel,
             size: "xs",
             color: "#94949A",
           },
@@ -177,7 +278,7 @@ function createCompactMetricStrip({
         contents: [
           {
             type: "text",
-            text: SUMMARY_CARD_COPY.compatibilityLabel,
+            text: compatibilityLabel,
             size: "xs",
             color: "#94949A",
           },
@@ -341,6 +442,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const birthdate = options.birthdate ?? null;
   const reportUrl = options.reportUrl ?? null;
   const reportPayload = options.reportPayload ?? null;
+  const summaryCardCopy = resolveSummaryCardCopyVariant(reportPayload);
 
   const accentColor = pickMainEnergyColor(rawText);
   const parsed = parseScanText(rawText);
@@ -392,6 +494,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       hasReportPayload: Boolean(reportPayload),
       hasReportUrl: Boolean(String(reportUrl || "").trim()),
       appendReportBubbleLegacyIgnored: Boolean(options.appendReportBubble),
+      summaryCardCopyVariant: summaryCardCopy.variantKey,
       flexSplitCounts: {
         overview: splitOverview,
         warnThreshold: FLEX_SPLIT_WARN_THRESHOLD,
@@ -407,19 +510,19 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const resolvedType = resolveEnergyType(
     String(reportPayload?.summary?.mainEnergyLabel || mainEnergy || "").trim(),
   );
-  const headline = flexHeadlineFromPayload(reportPayload);
+  const headline = flexHeadlineFromPayload(reportPayload, summaryCardCopy.headline);
   let bullets = flexTeaserBullets(reportPayload);
   if (bullets.length === 0) {
-    bullets = [...SUMMARY_CARD_COPY.bullets];
+    bullets = [...summaryCardCopy.bullets];
   } else if (bullets.length === 1) {
     bullets = [
       bullets[0],
-      safeWrapText(SUMMARY_CARD_COPY.bullets[1], 72),
+      safeWrapText(summaryCardCopy.bullets[1], 72),
     ];
   }
   const objectLbl =
     String(reportPayload?.object?.objectLabel || "").trim() ||
-    SUMMARY_CARD_COPY.objectLabel;
+    summaryCardCopy.objectLabel;
   const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
   const heroOk = /^https:\/\//i.test(imgUrl);
   const url = String(reportUrl || "").trim();
@@ -449,11 +552,13 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       accentColor,
       scoreDisplay: score.display || "-",
       compatLabel,
+      scoreLabel: summaryCardCopy.scoreLabel,
+      compatibilityLabel: summaryCardCopy.compatibilityLabel,
     }),
     {
       type: "text",
       text:
-        SUMMARY_CARD_COPY.mainEnergyTitleByType[resolvedType] ||
+        summaryCardCopy.mainEnergyTitleByType[resolvedType] ||
         `พลังหลัก · ${safeWrapText(mainLabel, 28)}`,
       size: "sm",
       weight: "bold",
@@ -526,7 +631,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
           style: "primary",
           color: accentColor,
           height: "sm",
-          action: { type: "uri", label: SUMMARY_CARD_COPY.ctaText, uri: url },
+          action: { type: "uri", label: summaryCardCopy.ctaText, uri: url },
         },
       ],
     };
