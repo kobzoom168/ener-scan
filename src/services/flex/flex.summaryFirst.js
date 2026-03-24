@@ -727,6 +727,12 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     : familyObjectLabel
       ? "family_pattern"
       : "default_variant";
+  const copyShapingActive =
+    familyPatternUsed !== "none" ||
+    objectLabelFrom === "family_pattern" ||
+    headlineFrom === "family_pattern" ||
+    bulletFallbackUsed === true ||
+    usedGenericBulletGuard === true;
   console.log(
     JSON.stringify({
       event: "FLEX_SUMMARY_FIRST",
@@ -743,6 +749,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       headlineFrom,
       bulletFallbackUsed,
       usedGenericBulletGuard,
+      copyShapingActive,
       flexSplitCounts: {
         overview: splitOverview,
         warnThreshold: FLEX_SPLIT_WARN_THRESHOLD,
