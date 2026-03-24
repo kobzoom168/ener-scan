@@ -284,6 +284,8 @@ export async function buildPaymentRequiredText({
   void usedScans;
   void freeLimit;
   if (userId) return paywallText(userId);
+  // TODO PR2 (scanOffer.copy): derive lines from scan offer context + template pool;
+  // avoid hardcoded "2" here — freeLimit already passed from payment gate when available.
   return [
     "วันนี้ใช้ฟรีครบ 2 ครั้งแล้วนะ",
     "",

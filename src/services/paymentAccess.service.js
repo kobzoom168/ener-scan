@@ -5,13 +5,17 @@ import {
 } from "../stores/paymentAccess.db.js";
 import { buildPaymentRequiredText } from "../utils/webhookText.util.js";
 import { supabase } from "../config/supabase.js";
-
-const FREE_SCANS_LIMIT = 2; // free scans per day
+import { loadActiveScanOffer } from "./scanOffer.loader.js";
+import {
+  decideScanGate,
+  resolveScanOfferAccessContext,
+} from "./scanOfferAccess.resolver.js";
 
 export async function checkScanAccess({ userId, now = new Date() }) {
   const lineUserId = String(userId || "").trim();
   const nowIso = now.toISOString();
-  const nowMs = now.getTime();
+  const offer = loadActiveScanOffer(now);
+  const freeQuotaPerDay = offer.freeQuotaPerDay;
 
   if (!lineUserId) {
     const finalDecision = { allowed: false, reason: "payment_required" };
@@ -29,7 +33,7 @@ export async function checkScanAccess({ userId, now = new Date() }) {
       reason: "payment_required",
       remaining: 0,
       usedScans: 0,
-      freeScansLimit: FREE_SCANS_LIMIT,
+      freeScansLimit: freeQuotaPerDay,
       freeScansRemaining: 0,
       paidUntil: null,
     };
@@ -82,7 +86,6 @@ export async function checkScanAccess({ userId, now = new Date() }) {
   const appUserId = appUserRow?.id ? String(appUserRow.id) : null;
 
   const paidUntil = appUserRow?.paid_until ? String(appUserRow.paid_until) : null;
-  const paidUntilMs = paidUntil ? Date.parse(paidUntil) : NaN;
   const paidRemainingScans = appUserRow?.paid_remaining_scans
     ? Number(appUserRow.paid_remaining_scans)
     : 0;
@@ -105,92 +108,69 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     freeUsedToday = Math.max(0, freeUsedToday - offsetN);
   }
 
-  const freeRemainingToday = Math.max(
-    0,
-    FREE_SCANS_LIMIT - (Number.isFinite(freeUsedToday) ? freeUsedToday : 0)
+  const gate = decideScanGate({
+    freeUsedToday,
+    freeQuotaPerDay,
+    paidUntil,
+    paidRemainingScans,
+    now,
+  });
+
+  const ctx = resolveScanOfferAccessContext({
+    offer,
+    freeUsedToday,
+    paidUntil,
+    paidRemainingScans,
+    now,
+  });
+
+  console.log(
+    JSON.stringify({
+      event: "SCAN_OFFER_ACCESS_RESOLVED",
+      userIdPrefix: lineUserId.slice(0, 8),
+      scenario: ctx.scenario,
+      offerLabel: ctx.offerLabel,
+      configVersion: ctx.offerConfigVersion,
+      freeQuotaPerDay: ctx.freeQuotaPerDay,
+      paidPriceThb: ctx.paidPriceThb,
+      paidScanCount: ctx.paidScanCount,
+      paidWindowHours: ctx.paidWindowHours,
+    }),
   );
 
-  // Paid is active only when paid_until is in the future AND paid_remaining_scans > 0
-  const paidActive =
-    Number.isFinite(paidUntilMs) &&
-    paidUntilMs > nowMs &&
-    paidRemainingScans > 0;
+  const finalDecision = gate.allowed
+    ? { allowed: true, reason: gate.reason }
+    : { allowed: false, reason: "payment_required" };
 
-  let finalDecision;
-  if (paidActive) {
-    finalDecision = { allowed: true, reason: "paid" };
-    console.log("[SCAN_ACCESS_DEBUG]", {
-      userId: lineUserId,
-      nowIso,
-      paidUntil,
-      paidRemainingScans,
-      freeUsedToday,
-      freeRemainingToday,
-      finalDecision,
-    });
-
-    return {
-      allowed: true,
-      reason: "paid",
-      remaining: paidRemainingScans,
-      usedScans: freeUsedToday,
-      freeScansLimit: FREE_SCANS_LIMIT,
-      freeScansRemaining: freeRemainingToday,
-      paidUntil,
-    };
-  }
-
-  if (freeUsedToday < FREE_SCANS_LIMIT) {
-    finalDecision = { allowed: true, reason: "free" };
-    console.log("[SCAN_ACCESS_DEBUG]", {
-      userId: lineUserId,
-      nowIso,
-      paidUntil,
-      paidRemainingScans,
-      freeUsedToday,
-      freeRemainingToday,
-      finalDecision,
-    });
-
-    return {
-      allowed: true,
-      reason: "free",
-      remaining: freeRemainingToday,
-      usedScans: freeUsedToday,
-      freeScansLimit: FREE_SCANS_LIMIT,
-      freeScansRemaining: freeRemainingToday,
-      paidUntil,
-    };
-  }
-
-  finalDecision = { allowed: false, reason: "payment_required" };
   console.log("[SCAN_ACCESS_DEBUG]", {
     userId: lineUserId,
     nowIso,
     paidUntil,
     paidRemainingScans,
     freeUsedToday,
-    freeRemainingToday,
+    freeRemainingToday: gate.freeScansRemaining,
     finalDecision,
   });
 
   return {
-    allowed: false,
-    reason: "payment_required",
-    remaining: 0,
-    usedScans: freeUsedToday,
-    freeScansLimit: FREE_SCANS_LIMIT,
-    freeScansRemaining: 0,
-    paidUntil,
+    allowed: gate.allowed,
+    reason: gate.reason,
+    remaining: gate.remaining,
+    usedScans: gate.usedScans,
+    freeScansLimit: gate.freeScansLimit,
+    freeScansRemaining: gate.freeScansRemaining,
+    paidUntil: gate.paidUntil,
   };
 }
 
 /** Text-only paywall reply (LINE Flex reserved for final scan result). */
 export async function buildPaymentGateReply({ decision, userId = null }) {
+  const offer = loadActiveScanOffer();
+  const lim = decision?.freeScansLimit ?? offer.freeQuotaPerDay;
   return {
     fallbackText: await buildPaymentRequiredText({
-      usedScans: decision?.usedScans ?? FREE_SCANS_LIMIT,
-      freeLimit: decision?.freeScansLimit ?? FREE_SCANS_LIMIT,
+      usedScans: decision?.usedScans ?? lim,
+      freeLimit: lim,
       userId,
     }),
   };

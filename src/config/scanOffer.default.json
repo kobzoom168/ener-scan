@@ -1,0 +1,11 @@
+{
+  "active": true,
+  "label": "default",
+  "freeQuotaPerDay": 2,
+  "paidPriceThb": 49,
+  "paidScanCount": 5,
+  "paidWindowHours": 24,
+  "startAt": null,
+  "endAt": null,
+  "configVersion": "1"
+}
