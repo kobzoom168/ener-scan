@@ -42,6 +42,8 @@ import { checkSingleObject } from "../services/objectCheck.service.js";
 
 import { env } from "../config/env.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
+import { resolveScanOfferAccessContext } from "../services/scanOfferAccess.resolver.js";
+import { buildScanOfferReply } from "../services/scanOffer.copy.js";
 import {
   parsePackageSelectionFromText,
   findPackageByKey,
@@ -110,7 +112,6 @@ import {
   buildPaymentInstructionText,
   buildPaymentQrIntroText,
   buildPaymentQrSlipText,
-  buildPaymentRequiredText,
   buildPackageSelectionPromptFromOffer,
   buildPaymentPackageSelectedAck,
   buildSlipReceivedText,
@@ -373,20 +374,35 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
-    const paywallBody = await buildPaymentRequiredText({
-      userId,
+    const offer = loadActiveScanOffer();
+    const accessContext = resolveScanOfferAccessContext({
+      offer,
       decision: accessDecision,
+      now: new Date(),
+    });
+    const strictPaywallReply = buildScanOfferReply({
+      offer,
+      accessContext,
+      gate: { allowed: false, reason: "payment_required" },
+      userId: null,
+    });
+    console.log("[PAYMENT_GATE_REPLY_SELECTION]", {
+      userId,
+      chosenPath,
+      accessAllowed: Boolean(accessDecision?.allowed),
+      accessReason: accessDecision?.reason ?? null,
+      replyType: strictPaywallReply.replyType,
+      copyKey: strictPaywallReply.semanticKey,
+      templateKey: strictPaywallReply.replyType,
     });
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "free_quota_exhausted",
-      semanticKey: "finalize_image_select_package",
-      text: paywallBody,
-      alternateTexts: [
-        `${paywallBody}\n\nพิมพ์ จ่ายเงิน หลังเลือกแพ็ก (49 หรือ 99) ได้เลยครับ`,
-      ],
+      replyType: strictPaywallReply.replyType,
+      semanticKey: strictPaywallReply.semanticKey,
+      text: strictPaywallReply.primaryText,
+      alternateTexts: strictPaywallReply.alternateTexts,
     });
     await logPaywallShown(userId, {
       patternUsed: "finalize_image_package_prompt",
@@ -693,20 +709,35 @@ async function finalizeAcceptedImage({
     // Preserve the scan image candidate so user can continue after approval.
     setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
-    const paywallBody = await buildPaymentRequiredText({
-      userId,
+    const offer = loadActiveScanOffer();
+    const accessContext = resolveScanOfferAccessContext({
+      offer,
       decision: accessDecision,
+      now: new Date(),
+    });
+    const strictPaywallReply = buildScanOfferReply({
+      offer,
+      accessContext,
+      gate: { allowed: false, reason: "payment_required" },
+      userId: null,
+    });
+    console.log("[PAYMENT_GATE_REPLY_SELECTION]", {
+      userId,
+      chosenPath: "payment_gate_post_object_check",
+      accessAllowed: Boolean(accessDecision?.allowed),
+      accessReason: accessDecision?.reason ?? null,
+      replyType: strictPaywallReply.replyType,
+      copyKey: strictPaywallReply.semanticKey,
+      templateKey: strictPaywallReply.replyType,
     });
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "free_quota_exhausted",
-      semanticKey: "finalize_image_select_package",
-      text: paywallBody,
-      alternateTexts: [
-        `${paywallBody}\n\nพิมพ์ จ่ายเงิน หลังเลือกแพ็ก (49 หรือ 99) ได้เลยครับ`,
-      ],
+      replyType: strictPaywallReply.replyType,
+      semanticKey: strictPaywallReply.semanticKey,
+      text: strictPaywallReply.primaryText,
+      alternateTexts: strictPaywallReply.alternateTexts,
     });
     await logPaywallShown(userId, {
       patternUsed: "finalize_image_package_prompt",
