@@ -1,7 +1,7 @@
 /**
  * Admin Dashboard v2 — payments list + detail (mobile-first, dark mode, one-click actions).
  */
-import { Router } from "express";
+import express, { Router } from "express";
 
 import { supabase } from "../config/supabase.js";
 import { requireAdminSession } from "../middleware/requireAdmin.js";
@@ -30,6 +30,16 @@ import {
   formatBangkokDate,
 } from "../utils/dateTime.util.js";
 import { buildAdminFreeResetConfirmationPayload } from "../utils/adminResetNotify.util.js";
+import {
+  adminResetScanAbuseState,
+  snapshotAbuseForAdminResetLog,
+} from "../stores/abuseGuard.store.js";
+
+const ADMIN_FREE_RESET_MODES = new Set([
+  "reset_free_quota_only",
+  "reset_free_quota_and_scan_abuse",
+]);
+const DEFAULT_ADMIN_FREE_RESET_MODE = "reset_free_quota_only";
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -866,9 +876,11 @@ function renderDetailPage({
   const adminToolsHtml = lineUid
     ? `<div class="panel" style="margin-top:14px;">
     <h2>การดูแล (แอดมิน)</h2>
-    <p class="reject-hint"><strong>รีเซ็ตสิทธิ์ทดลองฟรี</strong> — เคลียร์ paid + ตั้งโควต้าฟรีวันนี้ให้เหลือ 2 ครั้ง (offset) · <strong>ไม่ลบ</strong>ประวัติ · ปิด payment ที่ค้าง</p>
+    <p class="reject-hint"><strong>รีเซ็ตสิทธิ์ทดลองใช้ฟรี</strong> — เคลียร์ paid + คืนโควต้าฟรีวันนี้ตาม config (offset) · <strong>ไม่ลบ</strong>ประวัติ · ปิด payment ที่ค้าง · <strong>ไม่</strong>แตะ anti-scan ในเซิร์ฟเวอร์</p>
+    <p class="reject-hint"><strong>รีเซ็ตสิทธิ์ฟรี + ปลดล็อก anti-scan</strong> — เหมือนข้างบน + เคลียร์คะแนน/ล็อกสแกนชั่วคราว และปลด hard block ถ้าเหลือแค่สาเหตุอื่นที่ยังไม่ถึงเกณฑ์ · <strong>ไม่</strong>รีเซ็ต payment / slip abuse</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-      <button type="button" class="btn btn-neu js-reset-free">รีเซ็ตสิทธิ์ทดลองฟรี</button>
+      <button type="button" class="btn btn-neu js-reset-free" data-reset-mode="reset_free_quota_only">รีเซ็ตสิทธิ์ทดลองใช้ฟรี</button>
+      <button type="button" class="btn btn-neu js-reset-free-scan-abuse" data-reset-mode="reset_free_quota_and_scan_abuse" style="border-color:var(--accent,#6b8);">รีเซ็ตสิทธิ์ฟรี + ปลดล็อก anti-scan</button>
     </div>
     <p class="reject-hint"><strong>เพิกถอนสิทธิ์ชำระเงิน</strong> — ล้าง paid_until / โควต้า paid เท่านั้น · <strong>ไม่</strong>รีเซ็ตโควต้าฟรี · ปิด payment ที่ค้าง</p>
     <button type="button" class="btn btn-neu js-revoke-paid" style="border-color:var(--bad);color:var(--bad);">เพิกถอนสิทธิ์ชำระเงิน</button>
@@ -992,27 +1004,45 @@ function renderDetailPage({
           showToast("คัดลอกไม่สำเร็จ", "err");
         }
       });
-      var rb = document.querySelector(".js-reset-free");
-      if (rb && lineUid) {
-        rb.addEventListener("click", async function () {
-          if (!confirm("ยืนยันรีเซ็ตสิทธิ์ทดลองฟรี?\\n\\n• ยกเลิก paid\\n• โควต้าฟรีวันนี้กลับไป 2 ครั้ง (ไม่ลบประวัติ)\\n• ปิด payment ที่ค้าง")) return;
-          rb.disabled = true;
+      function wireFreeReset(btn, confirmMsg, okToast) {
+        if (!btn || !lineUid) return;
+        var mode = String(btn.dataset.resetMode || "reset_free_quota_only").trim();
+        btn.addEventListener("click", async function () {
+          if (!confirm(confirmMsg)) return;
+          btn.disabled = true;
+          var pair = document.querySelector(".js-reset-free-scan-abuse");
+          var other = document.querySelector(".js-reset-free");
+          if (pair) pair.disabled = true;
+          if (other && other !== btn) other.disabled = true;
           try {
             var r = await fetch("/admin/users/" + encodeURIComponent(lineUid) + "/reset-free-trial", {
               method: "POST",
-              headers: { Accept: "application/json" },
-              credentials: "same-origin"
+              headers: { Accept: "application/json", "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ resetMode: mode })
             });
             var j = await r.json().catch(function () { return null; });
             if (!r.ok || (j && j.ok === false)) throw new Error((j && j.message) || "รีเซ็ตไม่สำเร็จ");
-            showToast("รีเซ็ตสิทธิ์ทดลองฟรีแล้ว", "ok");
+            showToast(okToast, "ok");
             setTimeout(function () { location.reload(); }, 650);
           } catch (e) {
             showToast(e.message || "เกิดข้อผิดพลาด", "err");
-            rb.disabled = false;
+            btn.disabled = false;
+            if (pair) pair.disabled = false;
+            if (other && other !== btn) other.disabled = false;
           }
         });
       }
+      wireFreeReset(
+        document.querySelector(".js-reset-free"),
+        "ยืนยันรีเซ็ตสิทธิ์ทดลองใช้ฟรี?\\n\\n• ยกเลิก paid\\n• คืนโควต้าฟรีวันนี้ตาม config\\n• ปิด payment ที่ค้าง\\n• ไม่ปลดล็อก anti-scan",
+        "รีเซ็ตสิทธิ์ทดลองใช้ฟรีแล้ว"
+      );
+      wireFreeReset(
+        document.querySelector(".js-reset-free-scan-abuse"),
+        "ยืนยันรีเซ็ตสิทธิ์ฟรี + ปลดล็อก anti-scan?\\n\\n• เหมือนรีเซ็ตฟรี\\n• เพิ่มเติม: เคลียร์คะแนน/ล็อกสแกน และปลด hard block ถ้าเหลือคะแนนรวมต่ำกว่าเกณฑ์\\n• ไม่รีเซ็ต payment / slip abuse",
+        "รีเซ็ตสิทธิ์ฟรีและปลดล็อก anti-scan เรียบร้อยแล้ว"
+      );
       var rp = document.querySelector(".js-revoke-paid");
       if (rp && lineUid) {
         rp.addEventListener("click", async function () {
@@ -1302,6 +1332,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
   router.post(
     "/admin/users/:lineUserId/reset-free-trial",
     requireAdminSession,
+    express.json(),
     async (req, res) => {
       let lineUserId = String(req.params?.lineUserId || "").trim();
       try {
@@ -1318,23 +1349,78 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         return;
       }
 
+      const rawMode =
+        typeof req.body?.resetMode === "string"
+          ? req.body.resetMode.trim()
+          : DEFAULT_ADMIN_FREE_RESET_MODE;
+      const resetMode = ADMIN_FREE_RESET_MODES.has(rawMode)
+        ? rawMode
+        : null;
+      if (!resetMode) {
+        if (wantsJsonResponse(req)) {
+          res.status(400).json({ ok: false, message: "invalid_reset_mode" });
+        } else {
+          res.status(400).send("invalid_reset_mode");
+        }
+        return;
+      }
+
       try {
+        const tAdmin0 = Date.now();
+        const abuseBefore = snapshotAbuseForAdminResetLog(lineUserId, tAdmin0);
+
         const result = await resetFreeTrialForLineUserByAdmin({
           lineUserId,
           adminLabel: "admin_dashboard",
         });
         const confirm = buildAdminFreeResetConfirmationPayload();
         const resetAt = new Date().toISOString();
+
+        let abuseAfter = snapshotAbuseForAdminResetLog(lineUserId, Date.now());
+        let scanAbuseSnapshot = null;
+        if (resetMode === "reset_free_quota_and_scan_abuse") {
+          scanAbuseSnapshot = adminResetScanAbuseState(lineUserId, Date.now());
+          abuseAfter = snapshotAbuseForAdminResetLog(lineUserId, Date.now());
+        }
+
         console.log(
           JSON.stringify({
             event: "ADMIN_FREE_RESET_SUCCESS",
             lineUserId,
+            resetMode,
             freeQuotaPerDay: confirm.freeQuotaPerDay,
             resetAt,
             offerLabel: confirm.offerLabel,
             configVersion: confirm.configVersion,
+            previousScanSpamScore: abuseBefore.scanSpamScore,
+            previousLockState: abuseBefore.lockState,
+            newScanSpamScore: abuseAfter.scanSpamScore,
+            newLockState: abuseAfter.lockState,
+            newIsHardBlocked: abuseAfter.isHardBlocked,
+            previousTextSpamScore: abuseBefore.textSpamScore,
+            previousPaymentSpamScore: abuseBefore.paymentSpamScore,
+            newTextSpamScore: abuseAfter.textSpamScore,
+            newPaymentSpamScore: abuseAfter.paymentSpamScore,
+            scanAbuseResetApplied: Boolean(scanAbuseSnapshot),
           }),
         );
+
+        if (scanAbuseSnapshot) {
+          console.log(
+            JSON.stringify({
+              event: "ADMIN_SCAN_ABUSE_RESET_SUCCESS",
+              lineUserId,
+              resetMode,
+              resetAt,
+              previousScanSpamScore: scanAbuseSnapshot.previousScanSpamScore,
+              previousLockState: scanAbuseSnapshot.previousLockState,
+              newScanSpamScore: scanAbuseSnapshot.newScanSpamScore,
+              newLockState: scanAbuseSnapshot.newLockState,
+              newIsHardBlocked: scanAbuseSnapshot.newIsHardBlocked,
+            }),
+          );
+        }
+
         void lineClient
           .pushMessage(lineUserId, { type: "text", text: confirm.text })
           .catch((pushErr) => {
@@ -1344,7 +1430,13 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
             });
           });
         if (wantsJsonResponse(req)) {
-          res.status(200).json({ ok: true, ...result, freeQuotaPerDay: confirm.freeQuotaPerDay });
+          res.status(200).json({
+            ok: true,
+            ...result,
+            resetMode,
+            scanAbuseReset: Boolean(scanAbuseSnapshot),
+            freeQuotaPerDay: confirm.freeQuotaPerDay,
+          });
         } else {
           res.status(200).send("ok");
         }

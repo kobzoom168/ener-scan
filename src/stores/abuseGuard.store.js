@@ -83,6 +83,114 @@ function recomputeHardBlock(state) {
   return state;
 }
 
+function buildLockStateSnapshot(state, now) {
+  return {
+    scanLocked: Boolean(state.scanLockUntil && now < state.scanLockUntil),
+    scanLockUntil: state.scanLockUntil,
+    paymentLocked: Boolean(state.paymentLockUntil && now < state.paymentLockUntil),
+    paymentLockUntil: state.paymentLockUntil,
+    isHardBlocked: state.isHardBlocked,
+  };
+}
+
+/**
+ * Compact snapshot for admin reset logs (before/after).
+ */
+export function snapshotAbuseForAdminResetLog(userId, now = nowMs()) {
+  const state = resetAbuseStateIfExpired(userId, now);
+  return {
+    textSpamScore: state.textSpamScore,
+    scanSpamScore: state.scanSpamScore,
+    paymentSpamScore: state.paymentSpamScore,
+    totalScore: totalScore(state),
+    isHardBlocked: state.isHardBlocked,
+    scanLockUntil: state.scanLockUntil,
+    paymentLockUntil: state.paymentLockUntil,
+    lockState: buildLockStateSnapshot(state, now),
+  };
+}
+
+/**
+ * Diagnostics for handleEvent global gate (single snapshot; use for logging + branch).
+ */
+export function getHandleEventAbuseGateDiagnostics(userId, now = nowMs()) {
+  const state = resetAbuseStateIfExpired(userId, now);
+  const textSpamScore = state.textSpamScore;
+  const scanSpamScore = state.scanSpamScore;
+  const paymentSpamScore = state.paymentSpamScore;
+  const total = totalScore(state);
+  const isHardBlocked = state.isHardBlocked;
+  const scanLockUntil = state.scanLockUntil;
+  const paymentLockUntil = state.paymentLockUntil;
+  const scanLocked = Boolean(scanLockUntil && now < scanLockUntil);
+  const paymentLocked = Boolean(paymentLockUntil && now < paymentLockUntil);
+
+  let hardBlockReason = null;
+  if (isHardBlocked) {
+    if (total >= HARD_BLOCK_THRESHOLD) {
+      hardBlockReason = {
+        code: `total_score_ge_${HARD_BLOCK_THRESHOLD}`,
+        textSpamScore,
+        scanSpamScore,
+        paymentSpamScore,
+        totalScore: total,
+      };
+    } else {
+      hardBlockReason = {
+        code: "hard_block_flag_below_threshold",
+        textSpamScore,
+        scanSpamScore,
+        paymentSpamScore,
+        totalScore: total,
+      };
+    }
+  }
+
+  return {
+    textSpamScore,
+    scanSpamScore,
+    paymentSpamScore,
+    totalScore: total,
+    isHardBlocked,
+    scanLockUntil,
+    paymentLockUntil,
+    scanLocked,
+    paymentLocked,
+    hardBlockReason,
+  };
+}
+
+/**
+ * Admin-only: clear scan-side abuse (score, windows, temp lock). Preserves text + payment scores, payment lock, slip/payment windows.
+ * If total score falls below HARD_BLOCK_THRESHOLD, clears global hard block; otherwise re-applies from remaining scores.
+ */
+export function adminResetScanAbuseState(userId, now = nowMs()) {
+  const state = resetAbuseStateIfExpired(userId, now);
+  const previousScanSpamScore = state.scanSpamScore;
+  const previousLockState = buildLockStateSnapshot(state, now);
+
+  state.scanSpamScore = 0;
+  state.scanLockUntil = 0;
+  state.recentScanTimestamps = [];
+  state.recentImageTimestamps = [];
+  state.scanWarningCount = 0;
+
+  if (totalScore(state) < HARD_BLOCK_THRESHOLD) {
+    state.isHardBlocked = false;
+  } else {
+    recomputeHardBlock(state);
+  }
+
+  const newLockState = buildLockStateSnapshot(state, now);
+  return {
+    previousScanSpamScore,
+    previousLockState,
+    newScanSpamScore: state.scanSpamScore,
+    newLockState,
+    newIsHardBlocked: state.isHardBlocked,
+  };
+}
+
 function maybeApplyScanLock(state, now, prevScanScore) {
   if (state.scanSpamScore >= SCAN_TEMP_LOCK_THRESHOLD) {
     state.scanLockUntil = Math.max(state.scanLockUntil || 0, now + SCAN_TEMP_LOCK_MS);

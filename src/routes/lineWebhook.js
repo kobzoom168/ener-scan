@@ -132,6 +132,7 @@ import {
   checkGlobalAbuseStatus,
   checkPaymentAbuseStatus,
   checkScanAbuseStatus,
+  getHandleEventAbuseGateDiagnostics,
   recordLockedImageActivity,
   registerPaymentIntent,
   registerScanIntent,
@@ -1890,14 +1891,42 @@ async function handleEvent({ client, event }) {
   }
 
   const now = Date.now();
-  const globalStatus = checkGlobalAbuseStatus(userId, now);
+  const gateDiag = getHandleEventAbuseGateDiagnostics(userId, now);
+  console.log(
+    JSON.stringify({
+      event: "ABUSE_GUARD_HANDLE_EVENT_GATE",
+      userId,
+      gate: "handleEvent",
+      textSpamScore: gateDiag.textSpamScore,
+      scanSpamScore: gateDiag.scanSpamScore,
+      paymentSpamScore: gateDiag.paymentSpamScore,
+      totalScore: gateDiag.totalScore,
+      isHardBlocked: gateDiag.isHardBlocked,
+      scanLockUntil: gateDiag.scanLockUntil,
+      paymentLockUntil: gateDiag.paymentLockUntil,
+      scanLocked: gateDiag.scanLocked,
+      paymentLocked: gateDiag.paymentLocked,
+      hardBlockReason: gateDiag.hardBlockReason,
+    }),
+  );
+  const globalStatus = {
+    isHardBlocked: gateDiag.isHardBlocked,
+    totalScore: gateDiag.totalScore,
+    textSpamScore: gateDiag.textSpamScore,
+    scanSpamScore: gateDiag.scanSpamScore,
+    paymentSpamScore: gateDiag.paymentSpamScore,
+  };
   console.log("[ABUSE_GUARD_GLOBAL_STATUS]", {
     userId,
     ...globalStatus,
   });
 
   if (globalStatus.isHardBlocked) {
-    console.warn("[ABUSE_GUARD_HARD_BLOCK]", { userId, gate: "handleEvent" });
+    console.warn("[ABUSE_GUARD_HARD_BLOCK]", {
+      userId,
+      gate: "handleEvent",
+      hardBlockReason: gateDiag.hardBlockReason,
+    });
     await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
