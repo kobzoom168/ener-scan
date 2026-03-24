@@ -57,10 +57,19 @@ function scoreNormalizedForFlex(reportPayload, energyScoreText) {
  */
 function flexHeadlineFromPayload(reportPayload) {
   const mp = String(reportPayload?.sections?.messagePoints?.[0] || "").trim();
-  if (mp) return safeWrapText(mp, 88);
+  if (mp) return safeWrapText(mp, 64);
   const d = distillSummaryLine(reportPayload?.summary?.summaryLine || "");
-  if (d) return safeWrapText(d, 88);
+  if (d) return safeWrapText(d, 64);
   return "ภาพรวมใน LINE สั้นมาก — ฉบับเต็มมีเรื่องเล่าต่อ";
+}
+
+function tightenTeaserCopy(text, maxChars = 48) {
+  const s = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) return "";
+  if (s.length <= maxChars) return s;
+  return `${s.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
 }
 
 /**
@@ -72,14 +81,14 @@ function flexTeaserBullets(reportPayload) {
   if (Array.isArray(w) && w.length) {
     return w
       .slice(0, 2)
-      .map((x) => safeWrapText(String(x).trim(), 72))
+      .map((x) => safeWrapText(tightenTeaserCopy(String(x).trim(), 48), 56))
       .filter(Boolean);
   }
   const m = reportPayload?.sections?.messagePoints;
   if (Array.isArray(m) && m.length >= 2) {
     return m
       .slice(1, 3)
-      .map((x) => safeWrapText(String(x).trim(), 72))
+      .map((x) => safeWrapText(tightenTeaserCopy(String(x).trim(), 48), 56))
       .filter(Boolean);
   }
   return [];
@@ -168,8 +177,13 @@ const FAMILY_POOL = [
 ];
 
 function stars(n) {
-  const v = Math.max(1, Math.min(5, Math.round(Number(n) || 0)));
-  return `${"★".repeat(v)}${"☆".repeat(5 - v)}`;
+  const filled = Math.max(1, Math.min(5, Math.round(Number(n) || 0)));
+  return {
+    filled,
+    empty: 5 - filled,
+    filledText: "★".repeat(filled),
+    emptyText: "☆".repeat(5 - filled),
+  };
 }
 
 /**
@@ -209,8 +223,8 @@ function createAspectStarsBlock(resolvedType) {
   return {
     type: "box",
     layout: "vertical",
-    margin: "md",
-    spacing: "xs",
+    margin: "sm",
+    spacing: "none",
     contents: [
       {
         type: "text",
@@ -221,21 +235,39 @@ function createAspectStarsBlock(resolvedType) {
       ...rows.map((r) => ({
         type: "box",
         layout: "horizontal",
+        margin: "xs",
         contents: [
           {
             type: "text",
             text: r.label,
             size: "xs",
             color: "#B8B8BE",
-            flex: 2,
+            flex: 3,
           },
           {
-            type: "text",
-            text: stars(r.stars),
-            size: "xs",
-            color: "#D4AF37",
-            align: "end",
-            flex: 3,
+            type: "box",
+            layout: "horizontal",
+            justifyContent: "flex-end",
+            flex: 4,
+            spacing: "none",
+            contents: [
+              {
+                type: "text",
+                text: stars(r.stars).filledText,
+                size: "xs",
+                color: "#D4AF37",
+                align: "end",
+                flex: 0,
+              },
+              {
+                type: "text",
+                text: stars(r.stars).emptyText,
+                size: "xs",
+                color: "#5E5E65",
+                align: "end",
+                flex: 0,
+              },
+            ],
           },
         ],
       })),
@@ -360,7 +392,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       size: "md",
       color: "#E8E8EC",
       wrap: true,
-      maxLines: 3,
+      maxLines: 2,
     },
     createCompactMetricStrip({
       accentColor,
@@ -388,7 +420,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
         size: "xs",
         color: "#B8B8BE",
         wrap: true,
-        maxLines: 3,
+        maxLines: 2,
       })),
     },
   ];
@@ -420,7 +452,9 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       type: "image",
       url: imgUrl,
       size: "full",
-      aspectRatio: "20:13",
+      aspectRatio: "1:1",
+      aspectMode: "cover",
+      backgroundColor: "#0B0B0D",
     };
   }
   if (url) {
