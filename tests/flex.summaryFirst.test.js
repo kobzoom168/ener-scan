@@ -12,7 +12,7 @@ const SAMPLE_TEXT = `คะแนนพลัง: 8.2/10
 บทบาทของชิ้นนี้
 ปิดท้ายด้วยความอบอุ่น`;
 
-test("buildScanSummaryFirstFlex: always two carousel pages; page2 has full-report CTA", () => {
+test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () => {
   const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
     reportPayload: {
@@ -51,28 +51,31 @@ test("buildScanSummaryFirstFlex: always two carousel pages; page2 has full-repor
     },
   });
   assert.equal(flex.type, "flex");
-  assert.equal(flex.contents.type, "carousel");
-  assert.equal(flex.contents.contents.length, 2);
-  assert.equal(
-    flex.contents.contents[0].body.contents[1].contents[0].text,
-    "สรุปพลังชิ้นนี้",
-  );
-  const page2Footer = flex.contents.contents[1].footer;
-  assert.ok(page2Footer);
-  const primaryBtn = page2Footer.contents.find(
+  assert.equal(flex.contents.type, "bubble");
+  assert.equal(flex.contents.hero?.type, "image");
+  assert.equal(flex.contents.hero?.url, "https://cdn.example.com/x.jpg");
+  const bodyStr = JSON.stringify(flex.contents.body);
+  assert.match(bodyStr, /ระดับพลัง/);
+  assert.match(bodyStr, /พลังหลัก/);
+  assert.match(bodyStr, /เข้ากับคุณ/);
+  assert.match(bodyStr, /ระดับเด่นของชิ้นนี้/);
+  assert.match(bodyStr, /★/);
+  const footer = flex.contents.footer;
+  assert.ok(footer);
+  const primaryBtn = footer.contents.find(
     (c) => c.type === "button" && c.action?.label === "ดูรายงานฉบับเต็ม",
   );
   assert.ok(primaryBtn);
   assert.equal(primaryBtn.action.uri, "https://example.com/r/abc123");
+  assert.equal(footer.contents.filter((c) => c.type === "button").length, 1);
 });
 
-test("buildScanSummaryFirstFlex: appendReportBubble flag ignored (two-page design)", () => {
+test("buildScanSummaryFirstFlex: appendReportBubble flag ignored (single-bubble design)", () => {
   const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
     appendReportBubble: true,
   });
-  assert.equal(flex.contents.contents.length, 2);
-  assert.equal(flex.contents.contents[1].body.contents[1].text, "อ่านต่อบนเว็บ");
+  assert.equal(flex.contents.type, "bubble");
 });
 
 test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA", () => {
@@ -109,16 +112,8 @@ test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA"
       actions: {},
     },
   });
-  assert.equal(flex.contents.contents.length, 2);
-  const page2 = flex.contents.contents[1];
-  const bodyText = JSON.stringify(page2.body);
+  assert.equal(flex.contents.type, "bubble");
+  const bodyText = JSON.stringify(flex.contents.body);
   assert.match(bodyText, /ลิงก์รายงานยังไม่พร้อม/);
-  const footer = page2.footer;
-  if (footer) {
-    const hasPrimary = footer.contents.some(
-      (c) =>
-        c.type === "button" && c.action?.label === "ดูรายงานฉบับเต็ม",
-    );
-    assert.equal(hasPrimary, false);
-  }
+  assert.equal(flex.contents.footer, undefined);
 });

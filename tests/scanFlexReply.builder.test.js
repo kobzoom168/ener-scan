@@ -18,7 +18,7 @@ function fakeSummaryFlex() {
   return {
     type: "flex",
     altText: "summary",
-    contents: { type: "carousel", contents: [{}, {}] },
+    contents: { type: "bubble", body: {} },
   };
 }
 
@@ -60,7 +60,7 @@ test("buildScanResultFlexWithFallback: summaryFirst on → summary builder", () 
   );
   assert.equal(out.summaryFirstBuildFailed, false);
   assert.equal(out.flex.altText, "summary");
-  assert.equal(out.flex.contents.contents.length, 2);
+  assert.equal(out.flex.contents.type, "bubble");
 });
 
 test("buildScanResultFlexWithFallback: summary-first throws → legacy + flag", () => {

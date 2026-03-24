@@ -18,7 +18,6 @@ import { generatePublicToken } from "../utils/reports/reportToken.util.js";
 import { insertScanPublicReport } from "../stores/scanPublicReports.db.js";
 import { uploadScanObjectImageForReport } from "../services/storage/scanObjectImage.storage.js";
 
-import { buildBirthdateSettingsBubble } from "../services/flex/status.flex.js";
 
 import { checkScanRateLimit } from "../stores/rateLimit.store.js";
 import {
@@ -60,7 +59,6 @@ import {
   updateScanRequestStatus,
 } from "../stores/scanRequests.db.js";
 import { createScanResult } from "../stores/scanResults.db.js";
-import { getSavedBirthdate } from "../stores/userProfile.db.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
 import { randomBetween, sleep } from "../utils/timing.util.js";
 
@@ -258,27 +256,8 @@ export async function replyScanResult({
           ? 1
           : 0;
 
-    // Append settings bubble at the end of the scan result.
-    try {
-      const savedBirthdate = await getSavedBirthdate(userId);
-      const settingsBubble = buildBirthdateSettingsBubble({
-        birthdate: savedBirthdate,
-      });
-
-      if (flex?.contents?.type === "carousel" && Array.isArray(flex.contents.contents)) {
-        flex.contents.contents.push(settingsBubble);
-      } else if (flex?.contents?.type === "bubble") {
-        flex.contents = {
-          type: "carousel",
-          contents: [flex.contents, settingsBubble],
-        };
-      }
-    } catch (bubbleErr) {
-      console.error("[BIRTHDATE_UPDATE] settings bubble build failed (ignored):", {
-        userId,
-        message: bubbleErr?.message,
-      });
-    }
+    // Do not append birthdate/settings bubble in scan-result delivery path.
+    // Flex must stay single-message handoff when summary-first returns bubble.
 
     const totalCarouselBubbles =
       flex?.contents?.type === "carousel" &&
@@ -286,7 +265,7 @@ export async function replyScanResult({
         ? flex.contents.contents.length
         : scanResultBubbleCount;
 
-    const settingsBubbleAppended = totalCarouselBubbles > scanResultBubbleCount;
+    const settingsBubbleAppended = false;
 
     const flexPresentationMode = deriveFlexPresentationMode({
       flexSummaryFirstEnabled: summaryFirstSelected,
@@ -410,6 +389,8 @@ export async function runScanFlow({
       userId,
       allowed: access?.allowed,
       reason: access?.reason,
+      freeUsedToday: access?.usedScans ?? 0,
+      freeUsedTodayForGate: access?.usedScans ?? 0,
     });
 
     accessSource = access?.reason || null;

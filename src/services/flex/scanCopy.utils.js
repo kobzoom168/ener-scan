@@ -30,7 +30,13 @@ import {
 export function resolveEnergyType(mainEnergy) {
   const s = cleanLine(mainEnergy);
   if (!s || s === "-") return ENERGY_TYPES.BOOST;
-  if (s.includes("ปกป้อง") || s.includes("คุ้มครอง")) return ENERGY_TYPES.PROTECT;
+  if (
+    s.includes("ปกป้อง") ||
+    s.includes("คุ้มครอง") ||
+    s.includes("ป้องกัน")
+  ) {
+    return ENERGY_TYPES.PROTECT;
+  }
   if (s.includes("อำนาจ") || s.includes("บารมี")) return ENERGY_TYPES.POWER;
   if (s.includes("โชคลาภ") || s.includes("โชค")) return ENERGY_TYPES.LUCK;
   if (s.includes("สมดุล") || s.includes("นิ่ง")) return ENERGY_TYPES.BALANCE;

@@ -1,3 +1,4 @@
+import { ENERGY_TYPES } from "./scanCopy.config.js";
 import {
   safeWrapText,
   buildTraitLinesFromCopy,
@@ -22,6 +23,60 @@ export function createTopAccent(accentColor) {
     backgroundColor: accentColor,
     cornerRadius: "12px",
     contents: [],
+  };
+}
+
+const ENERGY_FAMILY_ORDER = [
+  ENERGY_TYPES.PROTECT,
+  ENERGY_TYPES.BALANCE,
+  ENERGY_TYPES.POWER,
+  ENERGY_TYPES.KINDNESS,
+  ENERGY_TYPES.ATTRACT,
+  ENERGY_TYPES.LUCK,
+  ENERGY_TYPES.BOOST,
+];
+
+/**
+ * Segmented energy-family bar for summary-first handoff card.
+ * @param {string} accentColor
+ * @param {string} resolvedEnergyType
+ */
+export function createEnergyFamilySegmentBar(accentColor, resolvedEnergyType) {
+  const activeIndex = Math.max(
+    0,
+    ENERGY_FAMILY_ORDER.indexOf(String(resolvedEnergyType || "")),
+  );
+  const activeLabel = ENERGY_FAMILY_ORDER[activeIndex] || ENERGY_TYPES.BOOST;
+  const segments = ENERGY_FAMILY_ORDER.map((_, i) => ({
+    type: "box",
+    layout: "vertical",
+    flex: 1,
+    height: "6px",
+    cornerRadius: "3px",
+    backgroundColor: i === activeIndex ? accentColor : "#2A2A2D",
+    contents: [],
+  }));
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    margin: "md",
+    contents: [
+      {
+        type: "box",
+        layout: "horizontal",
+        spacing: "3px",
+        contents: segments,
+      },
+      {
+        type: "text",
+        text: `หมวดหลัก · ${activeLabel}`,
+        size: "xs",
+        color: "#9A9AA0",
+        wrap: true,
+        maxLines: 1,
+      },
+    ],
   };
 }
 

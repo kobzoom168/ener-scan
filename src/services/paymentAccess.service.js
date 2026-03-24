@@ -20,12 +20,14 @@ export async function checkScanAccess({ userId, now = new Date() }) {
 
   if (!lineUserId) {
     const finalDecision = { allowed: false, reason: "payment_required" };
+    const freeUsedTodayForGate = 0;
     console.log("[SCAN_ACCESS_DEBUG]", {
       userId: lineUserId,
       nowIso,
       paidUntil: null,
       paidRemainingScans: 0,
-      freeUsedToday: 0,
+      freeUsedToday: freeUsedTodayForGate,
+      freeUsedTodayForGate,
       freeRemainingToday: 0,
       finalDecision,
     });
@@ -144,6 +146,8 @@ export async function checkScanAccess({ userId, now = new Date() }) {
       freeQuotaPerDay: ctx.freeQuotaPerDay,
       defaultPackageKey: offer.defaultPackageKey,
       packageKeys: pkgKeys,
+      freeUsedToday: ctx.freeUsedToday,
+      freeUsedTodayForGate: ctx.freeUsedToday,
       paidPriceThb: ctx.paidPriceThb,
       paidScanCount: ctx.paidScanCount,
       paidWindowHours: ctx.paidWindowHours,
@@ -161,6 +165,7 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     paidRemainingScans,
     paidActiveNow,
     freeUsedToday,
+    freeUsedTodayForGate: freeUsedToday,
     freeRemainingToday: gate.freeScansRemaining,
     finalDecision,
   });
