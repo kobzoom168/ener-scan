@@ -74,3 +74,51 @@ test("buildScanSummaryFirstFlex: appendReportBubble flag ignored (two-page desig
   assert.equal(flex.contents.contents.length, 2);
   assert.equal(flex.contents.contents[1].body.contents[1].text, "อ่านต่อบนเว็บ");
 });
+
+test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA", () => {
+  const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+    reportUrl: null,
+    reportPayload: {
+      reportId: "r",
+      publicToken: "t",
+      scanId: "s",
+      userId: "u",
+      birthdateUsed: null,
+      generatedAt: new Date().toISOString(),
+      reportVersion: "1.0.0",
+      object: { objectLabel: "วัตถุ", objectType: "" },
+      summary: {
+        energyScore: 8,
+        energyLevelLabel: "สูง",
+        mainEnergyLabel: "ป้องกัน",
+        compatibilityPercent: 70,
+        summaryLine: "สรุป",
+      },
+      sections: {
+        whatItGives: [],
+        messagePoints: [],
+        ownerMatchReason: [],
+        roleDescription: "",
+        bestUseCases: [],
+        weakMoments: [],
+        guidanceTips: [],
+        careNotes: [],
+        miniRitual: [],
+      },
+      trust: { trustNote: "", rendererVersion: "0" },
+      actions: {},
+    },
+  });
+  assert.equal(flex.contents.contents.length, 2);
+  const page2 = flex.contents.contents[1];
+  const bodyText = JSON.stringify(page2.body);
+  assert.match(bodyText, /ลิงก์รายงานยังไม่พร้อม/);
+  const footer = page2.footer;
+  if (footer) {
+    const hasPrimary = footer.contents.some(
+      (c) =>
+        c.type === "button" && c.action?.label === "ดูรายงานฉบับเต็ม",
+    );
+    assert.equal(hasPrimary, false);
+  }
+});

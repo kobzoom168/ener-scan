@@ -4,13 +4,15 @@ import {
   REPORT_ROLLOUT_SCHEMA_VERSION,
   deriveFlexPresentationMode,
   deriveReportLinkPlacement,
+  flexRolloutBucket0to99,
   getRolloutExecutionContext,
+  isSummaryFirstFlexSelectedForUser,
   safeLineUserIdPrefix,
   safeTokenPrefix,
 } from "../src/utils/reports/reportRolloutTelemetry.util.js";
 
-test("REPORT_ROLLOUT_SCHEMA_VERSION is 3 (Phase 2.6)", () => {
-  assert.equal(REPORT_ROLLOUT_SCHEMA_VERSION, 3);
+test("REPORT_ROLLOUT_SCHEMA_VERSION is 4 (soft rollout fields)", () => {
+  assert.equal(REPORT_ROLLOUT_SCHEMA_VERSION, 4);
 });
 
 test("getRolloutExecutionContext: NODE_ENV and label truncation", (t) => {
@@ -77,6 +79,34 @@ test("deriveFlexPresentationMode", () => {
       appendReportBubble: false,
     }),
     "summary_first_footer",
+  );
+});
+
+test("flexRolloutBucket0to99: stable for same userId", () => {
+  const a = flexRolloutBucket0to99("Udeadbeefcafe");
+  const b = flexRolloutBucket0to99("Udeadbeefcafe");
+  assert.equal(a, b);
+  assert.ok(a >= 0 && a <= 99);
+});
+
+test("isSummaryFirstFlexSelectedForUser: master off → false", () => {
+  assert.equal(
+    isSummaryFirstFlexSelectedForUser("U1", false, 15),
+    false,
+  );
+});
+
+test("isSummaryFirstFlexSelectedForUser: pct 100 → true when master on", () => {
+  assert.equal(
+    isSummaryFirstFlexSelectedForUser("U1", true, 100),
+    true,
+  );
+});
+
+test("isSummaryFirstFlexSelectedForUser: pct 0 → false", () => {
+  assert.equal(
+    isSummaryFirstFlexSelectedForUser("U1", true, 0),
+    false,
   );
 });
 

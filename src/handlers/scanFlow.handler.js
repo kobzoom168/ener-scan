@@ -11,8 +11,7 @@ import {
   sendNonScanReply,
   sendNonScanSequenceReply,
 } from "../services/nonScanReply.gateway.js";
-import { buildScanFlex } from "../services/flex/flex.service.js";
-import { buildScanSummaryFirstFlex } from "../services/flex/flex.summaryFirst.js";
+import { buildScanResultFlexWithFallback } from "../services/flex/scanFlexReply.builder.js";
 import { buildReportPayloadFromScan } from "../services/reports/reportPayload.builder.js";
 import { buildPublicReportUrl } from "../services/reports/reportLink.service.js";
 import { generatePublicToken } from "../utils/reports/reportToken.util.js";
@@ -78,6 +77,8 @@ import {
   getRolloutExecutionContext,
   deriveFlexPresentationMode,
   deriveReportLinkPlacement,
+  flexRolloutBucket0to99,
+  isSummaryFirstFlexSelectedForUser,
   logScanResultFlexRollout,
   logScanResultTextFallback,
   safeLineUserIdPrefix,
@@ -238,31 +239,38 @@ export async function replyScanResult({
   scanAccessSource = null,
 }) {
   const lineUserIdPrefix = safeLineUserIdPrefix(userId);
+  const rolloutBucket = flexRolloutBucket0to99(userId);
+  const summaryFirstSelected = isSummaryFirstFlexSelectedForUser(
+    userId,
+    env.FLEX_SCAN_SUMMARY_FIRST,
+    env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+  );
   let summaryFirstBuildFailed = false;
 
   try {
-    let flex;
-    if (env.FLEX_SCAN_SUMMARY_FIRST) {
-      try {
-        flex = buildScanSummaryFirstFlex(resultText, {
-          birthdate,
-          reportUrl,
-          reportPayload,
-          appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-        });
-      } catch (summaryFirstErr) {
-        summaryFirstBuildFailed = true;
-        console.error(
-          JSON.stringify({
-            event: "FLEX_SUMMARY_FIRST_FAIL",
-            outcome: "fallback_legacy",
-            message: summaryFirstErr?.message,
-          }),
-        );
-        flex = buildScanFlex(resultText, { birthdate, reportUrl });
-      }
-    } else {
-      flex = buildScanFlex(resultText, { birthdate, reportUrl });
+    const built = buildScanResultFlexWithFallback({
+      summaryFirstEnabled: summaryFirstSelected,
+      resultText,
+      birthdate,
+      reportUrl,
+      reportPayload,
+      appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+    });
+    let flex = built.flex;
+    summaryFirstBuildFailed = built.summaryFirstBuildFailed;
+    if (summaryFirstBuildFailed && built.error) {
+      console.error(
+        JSON.stringify({
+          event: "FLEX_SUMMARY_FIRST_FAIL",
+          outcome: "fallback_legacy",
+          schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+          lineUserIdPrefix,
+          message: built.error?.message,
+          flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+          flexScanSummaryFirstSelected: summaryFirstSelected,
+          flexRolloutBucket0to99: rolloutBucket,
+        }),
+      );
     }
 
     const scanResultBubbleCount =
@@ -304,7 +312,7 @@ export async function replyScanResult({
     const settingsBubbleAppended = totalCarouselBubbles > scanResultBubbleCount;
 
     const flexPresentationMode = deriveFlexPresentationMode({
-      flexSummaryFirstEnabled: env.FLEX_SCAN_SUMMARY_FIRST,
+      flexSummaryFirstEnabled: summaryFirstSelected,
       summaryFirstBuildFailed,
       appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
     });
@@ -334,6 +342,9 @@ export async function replyScanResult({
       summaryFirstBuildFailed,
       envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
       envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+      flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+      flexScanSummaryFirstSelected: summaryFirstSelected,
+      flexRolloutBucket0to99: rolloutBucket,
     });
 
     return {
@@ -352,6 +363,9 @@ export async function replyScanResult({
       lineUserIdPrefix,
       envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
       envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+      flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+      flexScanSummaryFirstSelected: summaryFirstSelected,
+      flexRolloutBucket0to99: rolloutBucket,
     });
     return null;
   }
@@ -954,6 +968,13 @@ export async function runScanFlow({
           hasObjectImage: Boolean(String(objectImageUrl || "").trim()),
           hasReportLink: true,
           flexSummaryFirstEnv: env.FLEX_SCAN_SUMMARY_FIRST,
+          flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+          flexScanSummaryFirstSelected: isSummaryFirstFlexSelectedForUser(
+            userId,
+            env.FLEX_SCAN_SUMMARY_FIRST,
+            env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+          ),
+          flexRolloutBucket0to99: flexRolloutBucket0to99(userId),
           flexSummaryAppendReportBubbleEnv: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
         }),
       );

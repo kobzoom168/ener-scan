@@ -4,6 +4,7 @@ import {
   BANGKOK_TIME_ZONE,
   formatBangkokDateTime,
 } from "../../utils/dateTime.util.js";
+import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
 
 /**
  * @param {import("./reportPayload.types.js").ReportPayload} payload
@@ -25,6 +26,7 @@ export function renderReportHtmlPage(payload) {
   console.log(
     JSON.stringify({
       event: "REPORT_RENDER_TIMEZONE_OK",
+      schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
       timeZone: BANGKOK_TIME_ZONE,
       locale: "th-TH",
       generatedAtRaw: normalized.generatedAt,

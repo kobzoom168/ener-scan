@@ -7,8 +7,9 @@
  * Bump when adding/removing log fields (for log pipeline contracts).
  * v2: env snapshot on rollout + text fallback; httpStatus on REPORT_PAGE_OPEN.
  * v3: execution context — nodeEnv + optional rolloutWindowLabel (Phase 2.6).
+ * v4: soft rollout — FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT + bucket0to99 + selected flag.
  */
-export const REPORT_ROLLOUT_SCHEMA_VERSION = 3;
+export const REPORT_ROLLOUT_SCHEMA_VERSION = 4;
 
 const ROLLOUT_WINDOW_LABEL_MAX = 64;
 
@@ -52,6 +53,41 @@ export function safeLineUserIdPrefix(lineUserId, len = 8) {
 }
 
 /**
+ * Stable 0–99 bucket for LINE user id (FNV-1a style). Used for %-rollout of summary-first Flex.
+ * @param {unknown} lineUserId
+ * @returns {number}
+ */
+export function flexRolloutBucket0to99(lineUserId) {
+  const s = String(lineUserId || "");
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h) % 100;
+}
+
+/**
+ * Whether this user is in the summary-first Flex cohort (master on + rollout %).
+ * @param {unknown} lineUserId
+ * @param {boolean} masterEnabled `FLEX_SCAN_SUMMARY_FIRST`
+ * @param {number} rolloutPct100 `FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT` (0–100)
+ */
+export function isSummaryFirstFlexSelectedForUser(
+  lineUserId,
+  masterEnabled,
+  rolloutPct100,
+) {
+  if (!masterEnabled) return false;
+  const pct = Number.isFinite(rolloutPct100)
+    ? Math.min(100, Math.max(0, Math.floor(rolloutPct100)))
+    : 100;
+  if (pct >= 100) return true;
+  if (pct <= 0) return false;
+  return flexRolloutBucket0to99(lineUserId) < pct;
+}
+
+/**
  * @param {{ flexSummaryFirstEnabled: boolean, summaryFirstBuildFailed: boolean, appendReportBubble: boolean }} p
  * @returns {"legacy" | "summary_first_footer" | "summary_first_append" | "summary_first_fallback_legacy"}
  */
@@ -89,6 +125,9 @@ export function deriveReportLinkPlacement(mode, hasReportLink) {
  * @param {boolean} p.summaryFirstBuildFailed
  * @param {boolean} p.envFlexScanSummaryFirst — process env at send time (self-describing logs)
  * @param {boolean} p.envFlexSummaryAppendReportBubble
+ * @param {number} [p.flexScanSummaryFirstRolloutPct] 0–100
+ * @param {boolean} [p.flexScanSummaryFirstSelected] effective cohort (rollout applied)
+ * @param {number|null} [p.flexRolloutBucket0to99] 0–99 for this user
  */
 export function logScanResultFlexRollout(p) {
   const ctx = getRolloutExecutionContext();
@@ -111,6 +150,13 @@ export function logScanResultFlexRollout(p) {
       summaryFirstBuildFailed: p.summaryFirstBuildFailed,
       envFlexScanSummaryFirst: Boolean(p.envFlexScanSummaryFirst),
       envFlexSummaryAppendReportBubble: Boolean(p.envFlexSummaryAppendReportBubble),
+      flexScanSummaryFirstRolloutPct:
+        p.flexScanSummaryFirstRolloutPct ?? null,
+      flexScanSummaryFirstSelected: Boolean(p.flexScanSummaryFirstSelected),
+      flexRolloutBucket0to99:
+        p.flexRolloutBucket0to99 === undefined
+          ? null
+          : p.flexRolloutBucket0to99,
     }),
   );
 }
@@ -133,6 +179,13 @@ export function logScanResultTextFallback(p) {
       lineUserIdPrefix: p.lineUserIdPrefix || "",
       envFlexScanSummaryFirst: Boolean(p.envFlexScanSummaryFirst),
       envFlexSummaryAppendReportBubble: Boolean(p.envFlexSummaryAppendReportBubble),
+      flexScanSummaryFirstRolloutPct:
+        p.flexScanSummaryFirstRolloutPct ?? null,
+      flexScanSummaryFirstSelected: Boolean(p.flexScanSummaryFirstSelected),
+      flexRolloutBucket0to99:
+        p.flexRolloutBucket0to99 === undefined
+          ? null
+          : p.flexRolloutBucket0to99,
     }),
   );
 }

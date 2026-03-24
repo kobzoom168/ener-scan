@@ -244,6 +244,20 @@ export const env = {
     String(process.env.FLEX_SCAN_SUMMARY_FIRST || "").trim().toLowerCase() ===
     "true",
   /**
+   * When {@link FLEX_SCAN_SUMMARY_FIRST} is true: fraction of LINE users (0–100) who receive
+   * summary-first UI (stable bucket from `userId`). Default 100 = all traffic.
+   * Set to 10–20 for soft rollout; set 0 to disable summary-first for everyone without toggling master.
+   * @type {number}
+   */
+  FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT: (() => {
+    const raw = process.env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT;
+    if (raw === undefined || raw === "") return 100;
+    const n = Number(raw);
+    return Number.isFinite(n)
+      ? Math.min(100, Math.max(0, Math.floor(n)))
+      : 100;
+  })(),
+  /**
    * When FLEX_SCAN_SUMMARY_FIRST: add a separate carousel bubble for the HTML report link
    * (instead of embedding the URI button in the summary bubble footer).
    * @type {boolean}
