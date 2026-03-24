@@ -232,45 +232,55 @@ function createAspectStarsBlock(resolvedType) {
         size: "xs",
         color: "#9A9AA0",
       },
-      ...rows.map((r) => ({
-        type: "box",
-        layout: "horizontal",
-        margin: "xs",
-        contents: [
-          {
-            type: "text",
-            text: r.label,
-            size: "xs",
-            color: "#B8B8BE",
-            flex: 3,
-          },
-          {
+      ...rows.map((r) =>
+        (function buildRow() {
+          const s = stars(r.stars);
+          /** @type {Array<Record<string, unknown>>} */
+          const starContents = [];
+          if (s.filledText) {
+            starContents.push({
+              type: "text",
+              text: s.filledText,
+              size: "xs",
+              color: "#D4AF37",
+              align: "end",
+              flex: 0,
+            });
+          }
+          if (s.emptyText) {
+            starContents.push({
+              type: "text",
+              text: s.emptyText,
+              size: "xs",
+              color: "#5E5E65",
+              align: "end",
+              flex: 0,
+            });
+          }
+          return {
             type: "box",
             layout: "horizontal",
-            justifyContent: "flex-end",
-            flex: 4,
-            spacing: "none",
+            margin: "xs",
             contents: [
               {
                 type: "text",
-                text: stars(r.stars).filledText,
+                text: r.label,
                 size: "xs",
-                color: "#D4AF37",
-                align: "end",
-                flex: 0,
+                color: "#B8B8BE",
+                flex: 3,
               },
               {
-                type: "text",
-                text: stars(r.stars).emptyText,
-                size: "xs",
-                color: "#5E5E65",
-                align: "end",
-                flex: 0,
+                type: "box",
+                layout: "horizontal",
+                justifyContent: "flex-end",
+                flex: 4,
+                spacing: "none",
+                contents: starContents,
               },
             ],
-          },
-        ],
-      })),
+          };
+        })(),
+      ),
     ],
   };
 }

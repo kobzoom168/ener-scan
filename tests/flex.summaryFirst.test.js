@@ -60,6 +60,7 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.match(bodyStr, /เข้ากับคุณ/);
   assert.match(bodyStr, /ระดับเด่นของชิ้นนี้/);
   assert.match(bodyStr, /★/);
+  assert.doesNotMatch(bodyStr, /"text":""/);
   const footer = flex.contents.footer;
   assert.ok(footer);
   const primaryBtn = footer.contents.find(

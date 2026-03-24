@@ -15,6 +15,10 @@ export async function replyText(client, replyToken, text) {
     return result;
   } catch (error) {
     console.error("[LINE_REPLY_TEXT] failed:", error?.message || error);
+    console.error(
+      "[LINE_REPLY_TEXT] error.response.data:",
+      error?.response?.data || null,
+    );
     throw error;
   }
 }
@@ -31,6 +35,10 @@ export async function replyFlex(client, replyToken, flexMessage) {
     return result;
   } catch (error) {
     console.error("[LINE_REPLY_FLEX] failed:", error?.message || error);
+    console.error(
+      "[LINE_REPLY_FLEX] error.response.data:",
+      error?.response?.data || null,
+    );
     throw error;
   }
 }
