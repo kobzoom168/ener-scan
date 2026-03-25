@@ -14,7 +14,7 @@ function createEmptySession() {
     selectedPaymentPackageKey: null,
     /**
      * Consecutive no-progress text turns per interactive state (menu fatigue / shorter reminders).
-     * Keys: paywall_selecting_package | payment_package_selected | awaiting_slip | waiting_birthdate | pending_verify
+     * Keys: paywall_offer_single | awaiting_slip | waiting_birthdate | pending_verify
      */
     guidanceNoProgressByState: {},
   };
@@ -158,8 +158,7 @@ export function clearAwaitingBirthdateUpdate(userId) {
 }
 
 const GUIDANCE_STATE_KEYS = new Set([
-  "paywall_selecting_package",
-  "payment_package_selected",
+  "paywall_offer_single",
   "awaiting_slip",
   "waiting_birthdate",
   "pending_verify",

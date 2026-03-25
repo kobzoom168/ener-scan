@@ -7,8 +7,6 @@ import {
   clearSessionIfFlowVersionMatches,
   clearAwaitingBirthdateUpdate,
   setAwaitingBirthdateUpdate,
-  setSelectedPaymentPackageKey,
-  getSelectedPaymentPackageKey,
   bumpGuidanceNoProgress,
   resetGuidanceNoProgress,
 } from "../stores/session.store.js";
@@ -55,7 +53,7 @@ import { resolveScanOfferAccessContext } from "../services/scanOfferAccess.resol
 import { buildScanOfferReply } from "../services/scanOffer.copy.js";
 import {
   parsePackageSelectionFromText,
-  findPackageByKey,
+  getDefaultPackage,
 } from "../services/scanOffer.packages.js";
 import {
   getPromptPayQrPublicUrl,
@@ -98,6 +96,8 @@ import {
   isPackageSelectedHesitation,
   isPackageChangeIntentPhrase,
   isWaitingBirthdatePackageOrPaymentWords,
+  isWaitForTomorrowIntent,
+  isSingleOfferPriceToken,
 } from "../utils/stateMicroIntent.util.js";
 import {
   beforeScanMessageSequence,
@@ -134,6 +134,7 @@ import {
   buildPaymentInstructionText,
   buildPaymentQrIntroText,
   buildPaymentQrSlipText,
+  buildSingleOfferPaywallAltText,
   buildPackageSelectionPromptFromOffer,
   buildPaymentPackageSelectedAck,
   buildSlipReceivedText,
@@ -300,8 +301,7 @@ async function handlePaymentCommandTextRoute({
   }
 
   const offerPay = loadActiveScanOffer();
-  const selKey = getSelectedPaymentPackageKey(userId);
-  const paidPackage = selKey ? findPackageByKey(offerPay, selKey) : null;
+  const paidPackage = getDefaultPackage(offerPay);
 
   if (!paidPackage) {
     console.log(
@@ -309,16 +309,16 @@ async function handlePaymentCommandTextRoute({
         event: "PAYMENT_PACKAGE_PROMPT_REASON",
         userId,
         paymentState: null,
-        selectedPaymentPackageKey: getSelectedPaymentPackageKey(userId),
+        selectedPaymentPackageKey: null,
         inputText: text,
-        reason: "pay_intent_no_package_selected",
+        reason: "no_default_package_in_offer",
       }),
     );
     const humanNoPkg = buildPaymentPayIntentNoPackageHumanText({
       offer: offerPay,
       userId,
     });
-    const menuAlt = buildPackageSelectionPromptFromOffer(offerPay);
+    const menuAlt = buildSingleOfferPaywallAltText(offerPay);
     await sendNonScanReply({
       client,
       userId,
@@ -375,7 +375,7 @@ async function handlePaymentCommandTextRoute({
 
   if (cmdPaymentId) {
     setAwaitingPayment(userId);
-    resetGuidanceNoProgress(userId, "payment_package_selected");
+    resetGuidanceNoProgress(userId, "paywall_offer_single");
     resetGuidanceNoProgress(userId, "awaiting_slip");
   }
 
@@ -1001,7 +1001,7 @@ async function finalizeAcceptedImage({
       });
     }
 
-    // No payment row until user picks a package (49 / 99) and sends จ่ายเงิน.
+    // No payment row until user sends จ่ายเงิน (single default package from scan offer).
     clearLatestScanJob(userId);
 
     // Preserve the scan image candidate so user can continue after approval.
@@ -1565,8 +1565,8 @@ async function handleTextMessage({ client, event, userId, session }) {
    * Interactive text route priority (single owner per turn; no LLM routing).
    * Order after abuse/sticker gates matches the branch sequence below:
    * 1) Hard / abuse locks (handled above)
-   * 2) Payment interactive: pending_verify → awaiting_slip → paywall_selecting_package
-   *    (paywall includes payment_package_selected as sub-owner via session.selectedPaymentPackageKey)
+   * 2) Payment interactive: pending_verify → awaiting_slip → paywall_offer_single
+   *    (single paid offer — no package selection)
    * 3) waiting_birthdate — only when paymentState === "none" and session.pendingImage
    * 4) approved_intro / explicit commands (history, stats, menu, … further down)
    * 5) Generic non-scan fallback (idle persona) — must not run while 2) or 3) owns the turn
@@ -1625,12 +1625,11 @@ async function handleTextMessage({ client, event, userId, session }) {
     activeAccessDecision?.reason === "payment_required" &&
     session.pendingImage
   ) {
-    paymentState = "paywall_selecting_package";
+    paymentState = "paywall_offer_single";
   } else if (activeAccessDecision?.allowed && activeAccessDecision?.reason === "paid") {
     paymentState = "approved_intro";
   }
 
-  const selectedPkgKeyForOwner = getSelectedPaymentPackageKey(userId);
   let conversationOwner = "idle";
   if (hasPendingVerify) {
     conversationOwner = "pending_verify";
@@ -1641,9 +1640,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     activeAccessDecision?.reason === "payment_required" &&
     session.pendingImage
   ) {
-    conversationOwner = selectedPkgKeyForOwner
-      ? "payment_package_selected"
-      : "paywall_selecting_package";
+    conversationOwner = "paywall_offer_single";
   } else if (activeAccessDecision?.allowed && activeAccessDecision?.reason === "paid") {
     conversationOwner = "paid_active_scan_ready";
   } else if (flowState === "waiting_birthdate" && paymentState === "none") {
@@ -1652,7 +1649,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   if (
     flowState === "waiting_birthdate" &&
-    ["paywall_selecting_package", "awaiting_slip", "pending_verify"].includes(
+    ["paywall_offer_single", "awaiting_slip", "pending_verify"].includes(
       paymentState,
     )
   ) {
@@ -1666,346 +1663,48 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
   }
 
-  if (paymentState === "paywall_selecting_package") {
+  if (paymentState === "paywall_offer_single") {
     const offer = loadActiveScanOffer();
-    const selectedKey = getSelectedPaymentPackageKey(userId);
-
-    const pickPaywall = () =>
-      parsePackageSelectionFromText(text, offer, {
-        thaiRelativeAliases: true,
-        allowEoaPricePhrase: true,
-      });
-    const pickSelected = () =>
-      parsePackageSelectionFromText(text, offer, {
-        thaiRelativeAliases: false,
-        allowEoaPricePhrase: true,
-      });
-
-    if (!selectedKey) {
-      const pickedKey = pickPaywall();
-
-      if (pickedKey) {
-        logSafeIntentConsumed({
-          userId,
-          activeState: "paywall_selecting_package",
-          inputText: text,
-          normalizedIntent: "package_selection",
-          action: "set_package",
-        });
-        logStateMicroIntent({
-          userId,
-          activeState: "paywall_selecting_package",
-          inputText: text,
-          normalizedIntent: "package_selection",
-          confidence: "near_safe",
-          chosenReplyType: "payment_package_selected",
-        });
-        resetGuidanceNoProgress(userId, "paywall_selecting_package");
-        resetGuidanceNoProgress(userId, "payment_package_selected");
-        console.log("[ACTIVE_STATE_ROUTING]", {
-          userId,
-          flowState,
-          paymentState,
-          accessState,
-          conversationOwner,
-          stateOwner: conversationOwner,
-          replyFamily: "paywall",
-          expectedInputType: "package_selection",
-          text,
-          chosenReplyType: "payment_package_selected",
-          routeReason: "accepted_package_selection",
-        });
-        console.log("[STATE_CONFLICT_RESOLVED]", {
-          userId,
-          previousFlowState: flowState,
-          previousPaymentState: paymentState,
-          nextFlowState: "package_selected_pending_pay_command",
-          nextPaymentState: paymentState,
-          reason:
-            "package_selection_consumed_turn_payment_wins_over_waiting_birthdate",
-        });
-        setSelectedPaymentPackageKey(userId, pickedKey);
-        const pkg = findPackageByKey(offer, pickedKey);
-        console.log(
-          JSON.stringify({
-            event: "PAYMENT_PACKAGE_SELECTED",
-            lineUserId: userId,
-            packageKey: pickedKey,
-            priceThb: pkg?.priceThb ?? null,
-            scanCount: pkg?.scanCount ?? null,
-            windowHours: pkg?.windowHours ?? null,
-            source: "paywall_selecting_package_text_route",
-          }),
-        );
-        const ack = buildPaymentPackageSelectedAck(pkg);
-        await sendNonScanReply({
-          client,
-          userId,
-          replyToken: event.replyToken,
-          replyType: "payment_package_selected",
-          semanticKey: "payment_package_selected",
-          text: ack,
-          alternateTexts: [buildPackageSelectionPromptFromOffer(offer)],
-        });
-        return;
-      }
-
-      if (isPaymentCommand(text, lowerText)) {
-        const streak = bumpGuidanceNoProgress(userId, "paywall_selecting_package");
-        const tier = guidanceTierFromStreak(streak);
-        logStateGuidanceLevel({
-          userId,
-          activeState: "paywall_selecting_package",
-          noProgressCount: streak,
-          guidanceLevel: tier,
-        });
-        logStateMicroIntent({
-          userId,
-          activeState: "paywall_selecting_package",
-          inputText: text,
-          normalizedIntent: "pay_intent_too_early",
-          confidence: "exact",
-          chosenReplyType: "payment_package_prompt_pay_too_early",
-        });
-        const primaryText = buildPaywallFatiguePromptText({
-          offer,
-          userId,
-          tier,
-          branch: "pay_too_early",
-        });
-        const chosenReplyType = resolvePaywallPromptReplyType("pay_too_early", tier);
-        console.log(
-          JSON.stringify({
-            event: "PAYMENT_PACKAGE_PROMPT_REASON",
-            userId,
-            paymentState,
-            conversationOwner,
-            selectedPaymentPackageKey: null,
-            inputText: text,
-            reason: "pay_intent_no_package_selected",
-          }),
-        );
-        console.log("[ACTIVE_STATE_ROUTING]", {
-          userId,
-          flowState,
-          paymentState,
-          accessState,
-          conversationOwner,
-          stateOwner: conversationOwner,
-          replyFamily: "paywall",
-          guidanceReason: "pay_intent_no_package_selected",
-          selectedPaymentPackageKey: null,
-          expectedInputType: "package_selection",
-          text,
-          chosenReplyType,
-          routeReason: "pay_intent_before_package_micro",
-        });
-        await sendNonScanReply({
-          client,
-          userId,
-          replyToken: event.replyToken,
-          replyType: chosenReplyType,
-          semanticKey: "payment_pay_intent_no_package",
-          text: primaryText,
-          alternateTexts: [buildPackageSelectionPromptFromOffer(offer)],
-        });
-        return;
-      }
-
-      let branch = "unclear";
-      if (looksLikeBirthdateInput(text)) branch = "date_wrong";
-      else if (isGenericAckText(text)) branch = "ack";
-
-      const streak = bumpGuidanceNoProgress(userId, "paywall_selecting_package");
-      const tier = guidanceTierFromStreak(streak);
-      logStateGuidanceLevel({
-        userId,
-        activeState: "paywall_selecting_package",
-        noProgressCount: streak,
-        guidanceLevel: tier,
-      });
-      const primaryText = buildPaywallFatiguePromptText({
-        offer,
-        userId,
-        tier,
-        branch: branch === "date_wrong" ? "date_wrong" : branch === "ack" ? "ack" : "unclear",
-      });
-      const chosenReplyType = resolvePaywallPromptReplyType(
-        branch === "date_wrong" ? "date_wrong" : branch === "ack" ? "ack" : "unclear",
-        tier,
-      );
-      const semanticKey =
-        branch === "date_wrong"
-          ? "paywall_birthdate_deferred"
-          : "payment_need_package_first";
-      logStateMicroIntent({
-        userId,
-        activeState: "paywall_selecting_package",
-        inputText: text,
-        normalizedIntent:
-          branch === "date_wrong"
-            ? "wrong_state_date_like"
-            : branch === "ack"
-              ? "generic_ack"
-              : isUnclearNoiseText(text)
-                ? "unclear_noise"
-                : "unclear",
-        confidence: branch === "date_wrong" ? "near_safe" : "unclear",
-        chosenReplyType,
-      });
-      console.log(
-        JSON.stringify({
-          event: "PAYMENT_PACKAGE_PROMPT_REASON",
-          userId,
-          paymentState,
-          conversationOwner,
-          selectedPaymentPackageKey: null,
-          inputText: text,
-          reason:
-            branch === "date_wrong"
-              ? "birthdate_like_while_selecting_package"
-              : "unexpected_input_not_package_selection",
-        }),
-      );
-      console.log("[ACTIVE_STATE_ROUTING]", {
-        userId,
-        flowState,
-        paymentState,
-        accessState,
-        conversationOwner,
-        stateOwner: conversationOwner,
-        replyFamily: "paywall",
-        guidanceReason: branch,
-        selectedPaymentPackageKey: null,
-        expectedInputType: "package_selection",
-        text,
-        chosenReplyType,
-        routeReason: "unexpected_input_kept_in_state",
-      });
-      const menuAlt = buildPackageSelectionPromptFromOffer(offer);
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: chosenReplyType,
-        semanticKey,
-        text: primaryText,
-        alternateTexts: [menuAlt],
-      });
-      return;
-    }
-
-    const pickedSelected = pickSelected();
-
-    if (pickedSelected && selectedKey && pickedSelected === selectedKey) {
-      const pkg = findPackageByKey(offer, pickedSelected);
-      const human = buildPackageAlreadySelectedContinueHuman(pkg);
-      resetGuidanceNoProgress(userId, "payment_package_selected");
-      console.log("[ACTIVE_STATE_ROUTING]", {
-        userId,
-        flowState,
-        paymentState,
-        accessState,
-        conversationOwner,
-        stateOwner: conversationOwner,
-        replyFamily: "paywall",
-        selectedPaymentPackageKey: selectedKey,
-        expectedInputType: "pay_intent_or_package_change",
-        text,
-        chosenReplyType: "payment_package_selected",
-        routeReason: "same_package_reselected_stay_in_flow",
-      });
-      logStateMicroIntent({
-        userId,
-        activeState: "payment_package_selected",
-        inputText: text,
-        normalizedIntent: "package_already_selected",
-        confidence: "exact",
-        chosenReplyType: "payment_package_selected",
-      });
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "payment_package_selected",
-        semanticKey: "payment_package_already_selected",
-        text: human,
-        alternateTexts: [
-          "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ",
-          buildPaymentPackageSelectedAck(pkg),
-        ],
-      });
-      return;
-    }
-
-    if (pickedSelected && pickedSelected !== selectedKey) {
-      logSafeIntentConsumed({
-        userId,
-        activeState: "payment_package_selected",
-        inputText: text,
-        normalizedIntent: "package_change",
-        action: "set_package",
-      });
-      logStateMicroIntent({
-        userId,
-        activeState: "payment_package_selected",
-        inputText: text,
-        normalizedIntent: "package_change",
-        confidence: "near_safe",
-        chosenReplyType: "payment_package_selected_package_change",
-      });
-      resetGuidanceNoProgress(userId, "payment_package_selected");
-      setSelectedPaymentPackageKey(userId, pickedSelected);
-      const pkg = findPackageByKey(offer, pickedSelected);
-      console.log(
-        JSON.stringify({
-          event: "PAYMENT_PACKAGE_SELECTED",
-          lineUserId: userId,
-          packageKey: pickedSelected,
-          priceThb: pkg?.priceThb ?? null,
-          scanCount: pkg?.scanCount ?? null,
-          windowHours: pkg?.windowHours ?? null,
-          source: "payment_package_selected_text_route",
-        }),
-      );
-      const ack = buildPaymentPackageSelectedAck(pkg);
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "payment_package_selected",
-        semanticKey: "payment_package_selected",
-        text: ack,
-        alternateTexts: [buildPackageSelectionPromptFromOffer(offer)],
-      });
-      return;
-    }
+    const defaultPkg = getDefaultPackage(offer);
 
     if (isPaymentCommand(text, lowerText)) {
+      resetGuidanceNoProgress(userId, "paywall_offer_single");
       console.log(
         JSON.stringify({
           event: "PAYMENT_PAY_INTENT_CONSUMED",
           userId,
           paymentState,
-          selectedPaymentPackageKey: selectedKey,
           inputText: text,
           action: "create_or_show_payment_qr",
         }),
       );
       logSafeIntentConsumed({
         userId,
-        activeState: "payment_package_selected",
+        activeState: "paywall_offer_single",
         inputText: text,
         normalizedIntent: "pay_intent",
         action: "create_or_show_payment_qr",
       });
       logStateMicroIntent({
         userId,
-        activeState: "payment_package_selected",
+        activeState: "paywall_offer_single",
         inputText: text,
         normalizedIntent: "pay_intent",
         confidence: "exact",
-        chosenReplyType: "payment_package_selected_pay_intent_confirm",
+        chosenReplyType: "single_offer_paywall_pay_intent",
+      });
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        conversationOwner,
+        stateOwner: conversationOwner,
+        replyFamily: "paywall_single_offer",
+        expectedInputType: "payment_command",
+        text,
+        chosenReplyType: "single_offer_paywall_pay_intent",
+        routeReason: "pay_intent_to_qr",
       });
       await handlePaymentCommandTextRoute({
         client,
@@ -2019,120 +1718,251 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isPackageSelectedHesitation(text)) {
-      const streak = bumpGuidanceNoProgress(userId, "payment_package_selected");
-      const tier = guidanceTierFromStreak(streak);
-      logStateGuidanceLevel({
-        userId,
-        activeState: "payment_package_selected",
-        noProgressCount: streak,
-        guidanceLevel: tier,
-      });
-      const pkg = findPackageByKey(offer, selectedKey);
-      const primaryText = buildPaymentPackageSelectedHesitationText(pkg, offer);
+    const priceOrPackAck =
+      defaultPkg &&
+      (isSingleOfferPriceToken(text, offer) ||
+        parsePackageSelectionFromText(text, offer, {
+          thaiRelativeAliases: true,
+          allowEoaPricePhrase: true,
+        }));
+
+    if (priceOrPackAck) {
+      const pkg = defaultPkg;
+      resetGuidanceNoProgress(userId, "paywall_offer_single");
       logStateMicroIntent({
         userId,
-        activeState: "payment_package_selected",
+        activeState: "paywall_offer_single",
         inputText: text,
-        normalizedIntent: "hesitation",
+        normalizedIntent: "single_offer_ack_price_or_pack",
         confidence: "near_safe",
-        chosenReplyType: "payment_package_selected_hesitation",
+        chosenReplyType: "single_offer_paywall_ready_ack",
       });
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        conversationOwner,
+        replyFamily: "paywall_single_offer",
+        routeReason: "single_offer_price_or_token_ack",
+        text,
+        chosenReplyType: "single_offer_paywall_ready_ack",
+      });
+      const ack = buildPaymentPackageSelectedAck(pkg);
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "payment_package_selected_hesitation",
-        semanticKey: "payment_package_selected_hesitation",
-        text: primaryText,
-        alternateTexts: [buildPaymentPackageSelectedGentleRemindText()],
+        replyType: "single_offer_paywall_ready_ack",
+        semanticKey: "single_offer_paywall_ready_ack",
+        text: ack,
+        alternateTexts: [buildSingleOfferPaywallAltText(offer)],
       });
       return;
     }
 
-    if (isGenericAckText(text)) {
-      const streak = bumpGuidanceNoProgress(userId, "payment_package_selected");
+    if (isWaitForTomorrowIntent(text)) {
+      const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
       const tier = guidanceTierFromStreak(streak);
       logStateGuidanceLevel({
         userId,
-        activeState: "payment_package_selected",
+        activeState: "paywall_offer_single",
         noProgressCount: streak,
         guidanceLevel: tier,
       });
       logStateMicroIntent({
         userId,
-        activeState: "payment_package_selected",
+        activeState: "paywall_offer_single",
         inputText: text,
-        normalizedIntent: "generic_ack",
+        normalizedIntent: "wait_for_free_tomorrow",
         confidence: "near_safe",
-        chosenReplyType: "payment_package_selected_ack",
+        chosenReplyType: resolvePaywallPromptReplyType("wait_tomorrow", tier),
+      });
+      const primaryText = buildPaywallFatiguePromptText({
+        offer,
+        userId,
+        tier,
+        branch: "wait_tomorrow",
+      });
+      const chosenReplyType = resolvePaywallPromptReplyType("wait_tomorrow", tier);
+      console.log(
+        JSON.stringify({
+          event: "PAYMENT_SINGLE_OFFER_PROMPT",
+          userId,
+          paymentState,
+          conversationOwner,
+          inputText: text,
+          reason: "wait_tomorrow_path",
+        }),
+      );
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        conversationOwner,
+        replyFamily: "paywall_single_offer",
+        guidanceReason: "wait_tomorrow",
+        text,
+        chosenReplyType,
+        routeReason: "same_state_wait_tomorrow",
       });
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "payment_package_selected_ack",
-        semanticKey: "payment_package_selected_ack",
-        text: buildPaymentPackageSelectedGentleRemindText(),
+        replyType: chosenReplyType,
+        semanticKey: "single_offer_paywall_wait_tomorrow",
+        text: primaryText,
+        alternateTexts: [buildSingleOfferPaywallAltText(offer)],
+      });
+      return;
+    }
+
+    if (isPackageSelectedHesitation(text)) {
+      const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
+      const tier = guidanceTierFromStreak(streak);
+      logStateGuidanceLevel({
+        userId,
+        activeState: "paywall_offer_single",
+        noProgressCount: streak,
+        guidanceLevel: tier,
+      });
+      const primaryText = buildPaymentPackageSelectedHesitationText(defaultPkg, offer);
+      logStateMicroIntent({
+        userId,
+        activeState: "paywall_offer_single",
+        inputText: text,
+        normalizedIntent: "hesitation",
+        confidence: "near_safe",
+        chosenReplyType: "single_offer_paywall_hesitation",
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "single_offer_paywall_hesitation",
+        semanticKey: "single_offer_paywall_hesitation",
+        text: primaryText,
         alternateTexts: [buildPaymentPackageSelectedGentleRemindText()],
       });
       return;
     }
 
     if (isPackageChangeIntentPhrase(text)) {
-      const streak = bumpGuidanceNoProgress(userId, "payment_package_selected");
+      const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
       const tier = guidanceTierFromStreak(streak);
       logStateGuidanceLevel({
         userId,
-        activeState: "payment_package_selected",
+        activeState: "paywall_offer_single",
         noProgressCount: streak,
         guidanceLevel: tier,
       });
       logStateMicroIntent({
         userId,
-        activeState: "payment_package_selected",
+        activeState: "paywall_offer_single",
         inputText: text,
-        normalizedIntent: "package_change_unclear",
+        normalizedIntent: "package_change_not_available_single_offer",
         confidence: "unclear",
-        chosenReplyType: "payment_package_selected_package_change",
+        chosenReplyType: "single_offer_paywall_no_package_change",
       });
       const primaryText = buildPaymentPackageSelectedUnclearText({ tier });
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "payment_package_selected_package_change",
-        semanticKey: "payment_package_selected_package_change",
+        replyType: "single_offer_paywall_no_package_change",
+        semanticKey: "single_offer_paywall_no_package_change",
         text: primaryText,
         alternateTexts: [buildPaymentPackageSelectedGentleRemindText()],
       });
       return;
     }
 
-    const streak = bumpGuidanceNoProgress(userId, "payment_package_selected");
+    let branch = "unclear";
+    if (looksLikeBirthdateInput(text)) branch = "date_wrong";
+    else if (isGenericAckText(text)) branch = "ack";
+
+    const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
     const tier = guidanceTierFromStreak(streak);
     logStateGuidanceLevel({
       userId,
-      activeState: "payment_package_selected",
+      activeState: "paywall_offer_single",
       noProgressCount: streak,
       guidanceLevel: tier,
     });
+    const primaryText = buildPaywallFatiguePromptText({
+      offer,
+      userId,
+      tier,
+      branch: branch === "date_wrong" ? "date_wrong" : branch === "ack" ? "ack" : "unclear",
+    });
+    const chosenReplyType = resolvePaywallPromptReplyType(
+      branch === "date_wrong" ? "date_wrong" : branch === "ack" ? "ack" : "unclear",
+      tier,
+    );
+    const semanticKey =
+      branch === "date_wrong"
+        ? "paywall_birthdate_deferred"
+        : "single_offer_paywall_guidance";
     logStateMicroIntent({
       userId,
-      activeState: "payment_package_selected",
+      activeState: "paywall_offer_single",
       inputText: text,
-      normalizedIntent: isUnclearNoiseText(text) ? "unclear_noise" : "unclear",
-      confidence: "unclear",
-      chosenReplyType: "payment_package_selected_gentle_remind",
+      normalizedIntent:
+        branch === "date_wrong"
+          ? "wrong_state_date_like"
+          : branch === "ack"
+            ? "generic_ack"
+            : isUnclearNoiseText(text)
+              ? "unclear_noise"
+              : "unclear",
+      confidence: branch === "date_wrong" ? "near_safe" : "unclear",
+      chosenReplyType,
     });
+    console.log(
+      JSON.stringify({
+        event: "PAYMENT_SINGLE_OFFER_PROMPT",
+        userId,
+        paymentState,
+        conversationOwner,
+        inputText: text,
+        reason:
+          branch === "date_wrong"
+            ? "birthdate_like_while_paywall"
+            : "unexpected_input_same_state",
+      }),
+    );
+    console.log("[ACTIVE_STATE_ROUTING]", {
+      userId,
+      flowState,
+      paymentState,
+      accessState,
+      conversationOwner,
+      stateOwner: conversationOwner,
+      replyFamily: "paywall_single_offer",
+      guidanceReason: branch,
+      expectedInputType: "payment_or_wait_or_ack",
+      text,
+      chosenReplyType,
+      routeReason: "unexpected_input_kept_in_state",
+    });
+    console.log("[UNEXPECTED_INPUT_HANDLED]", {
+      userId,
+      activeState: "paywall_offer_single",
+      inputText: text,
+      normalizedIntent: branch,
+      chosenReplyType,
+    });
+    const menuAlt = buildSingleOfferPaywallAltText(offer);
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "payment_package_selected_gentle_remind",
-      semanticKey: "payment_package_selected_gentle_remind",
-      text: buildPaymentPackageSelectedUnclearText({ tier }),
-      alternateTexts: [buildPaymentPackageSelectedGentleRemindText()],
+      replyType: chosenReplyType,
+      semanticKey,
+      text: primaryText,
+      alternateTexts: [menuAlt],
     });
     return;
   }
@@ -3004,6 +2834,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
       const offerBd = loadActiveScanOffer();
       if (
+        isSingleOfferPriceToken(text, offerBd) ||
         parsePackageSelectionFromText(text, offerBd) ||
         isPaymentCommand(text, lowerText)
       ) {
@@ -3154,8 +2985,10 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   const offerPick = loadActiveScanOffer();
-  const pickedKey = parsePackageSelectionFromText(text, offerPick);
-  if (pickedKey) {
+  const idlePayHint =
+    isSingleOfferPriceToken(text, offerPick) ||
+    parsePackageSelectionFromText(text, offerPick);
+  if (idlePayHint) {
     try {
       const ps = getPaymentState(userId).state;
       const row = await getLatestAwaitingPaymentForLineUserId(userId);
@@ -3188,48 +3021,29 @@ async function handleTextMessage({ client, event, userId, session }) {
       /* ignore */
     }
 
-    const alreadySelectedKey = getSelectedPaymentPackageKey(userId);
-    if (alreadySelectedKey && pickedKey === alreadySelectedKey) {
-      const pkg = findPackageByKey(offerPick, pickedKey);
-      const human = buildPackageAlreadySelectedContinueHuman(pkg);
+    const pkg = getDefaultPackage(offerPick);
+    if (pkg) {
+      console.log(
+        JSON.stringify({
+          event: "PAYMENT_SINGLE_OFFER_HINT",
+          lineUserId: userId,
+          packageKey: pkg.key,
+          priceThb: pkg.priceThb,
+          source: "idle_text_route",
+        }),
+      );
+      const ack = buildPaymentPackageSelectedAck(pkg);
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "payment_package_selected",
-        semanticKey: "payment_package_already_selected",
-        text: human,
-        alternateTexts: [
-          "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ",
-          buildPaymentPackageSelectedAck(pkg),
-        ],
+        replyType: "single_offer_paywall_ready_ack",
+        semanticKey: "single_offer_paywall_ready_ack",
+        text: ack,
+        alternateTexts: [buildSingleOfferPaywallAltText(offerPick)],
       });
       return;
     }
-
-    setSelectedPaymentPackageKey(userId, pickedKey);
-    const pkg = findPackageByKey(offerPick, pickedKey);
-    console.log(
-      JSON.stringify({
-        event: "PAYMENT_PACKAGE_SELECTED",
-        lineUserId: userId,
-        packageKey: pickedKey,
-        priceThb: pkg?.priceThb ?? null,
-        scanCount: pkg?.scanCount ?? null,
-        windowHours: pkg?.windowHours ?? null,
-      }),
-    );
-    const ack = buildPaymentPackageSelectedAck(pkg);
-    await sendNonScanReply({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      replyType: "payment_package_selected",
-      semanticKey: "payment_package_selected",
-      text: ack,
-      alternateTexts: [buildPackageSelectionPromptFromOffer(offerPick)],
-    });
-    return;
   }
 
   if (

@@ -49,7 +49,7 @@ import {
 
 import {
   buildPaymentRequiredText,
-  buildPackageSelectionPromptFromOffer,
+  buildSingleOfferPaywallAltText,
 } from "../utils/webhookText.util.js";
 import { paywallMessageSequence } from "../utils/replyCopy.util.js";
 
@@ -413,16 +413,14 @@ export async function runScanFlow({
       if (scanCount >= 30) {
         console.log("[PAID_LIMIT]", { userId, scanCount });
 
-        const pkgHint = buildPackageSelectionPromptFromOffer(
-          loadActiveScanOffer(),
-        );
+        const pkgHint = buildSingleOfferPaywallAltText(loadActiveScanOffer());
         await sendNonScanReply({
           client,
           userId,
           replyToken,
           replyType: "paid_scan_burst_cap",
           semanticKey: "paid_scan_burst_cap",
-          text: `ช่วงนี้สแกนถี่ไปหน่อย เว้นระยะสักครู่นะครับ\n\nถ้าอยากเปิดแพ็กใหม่เมื่อพร้อม\n\n${pkgHint}`,
+          text: `ช่วงนี้สแกนถี่ไปหน่อย เว้นระยะสักครู่นะครับ\n\nถ้าอยากเปิดสิทธิ์ใหม่เมื่อพร้อม\n\n${pkgHint}`,
           alternateTexts: [pkgHint],
         });
         await logPaywallShown(userId, {

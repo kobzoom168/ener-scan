@@ -22,30 +22,36 @@ import { loadActiveScanOffer } from "../src/services/scanOffer.loader.js";
 const uid = "test_stabilization_user";
 
 test("fatigue: streak 1–3 maps to tiers via bumpGuidanceNoProgress", () => {
-  resetGuidanceNoProgress(uid, "paywall_selecting_package");
-  let n = bumpGuidanceNoProgress(uid, "paywall_selecting_package");
+  resetGuidanceNoProgress(uid, "paywall_offer_single");
+  let n = bumpGuidanceNoProgress(uid, "paywall_offer_single");
   assert.equal(n, 1);
   assert.equal(guidanceTierFromStreak(n), "full");
-  n = bumpGuidanceNoProgress(uid, "paywall_selecting_package");
+  n = bumpGuidanceNoProgress(uid, "paywall_offer_single");
   assert.equal(n, 2);
   assert.equal(guidanceTierFromStreak(n), "short");
-  n = bumpGuidanceNoProgress(uid, "paywall_selecting_package");
+  n = bumpGuidanceNoProgress(uid, "paywall_offer_single");
   assert.equal(n, 3);
   assert.equal(guidanceTierFromStreak(n), "micro");
-  resetGuidanceNoProgress(uid, "paywall_selecting_package");
-  assert.equal(getGuidanceNoProgressCount(uid, "paywall_selecting_package"), 0);
+  resetGuidanceNoProgress(uid, "paywall_offer_single");
+  assert.equal(getGuidanceNoProgressCount(uid, "paywall_offer_single"), 0);
 });
 
 test("paywall replyType: unclear tier full vs micro", () => {
-  assert.equal(resolvePaywallPromptReplyType("unclear", "full"), "payment_package_prompt_full");
-  assert.equal(resolvePaywallPromptReplyType("unclear", "micro"), "payment_package_prompt_micro");
   assert.equal(
-    resolvePaywallPromptReplyType("pay_too_early", "full"),
-    "payment_package_prompt_pay_too_early",
+    resolvePaywallPromptReplyType("unclear", "full"),
+    "single_offer_paywall_unclear_full",
+  );
+  assert.equal(
+    resolvePaywallPromptReplyType("unclear", "micro"),
+    "single_offer_paywall_unclear_micro",
+  );
+  assert.equal(
+    resolvePaywallPromptReplyType("wait_tomorrow", "full"),
+    "single_offer_paywall_wait_tomorrow",
   );
   assert.equal(
     resolvePaywallPromptReplyType("date_wrong", "short"),
-    "payment_package_prompt_date_wrong_state",
+    "single_offer_paywall_date_wrong_state",
   );
 });
 
@@ -58,7 +64,7 @@ test("paywall fatigue copy: noise tier micro stays short (no giant menu in prima
   assert.ok(!t.includes("เลือกได้ 2 แบบ"), "micro should not open full menu text");
 });
 
-test("package_selected: แพง does not parse as 99 when thaiRelativeAliases off", () => {
+test("single offer: แพง does not parse when thaiRelativeAliases off", () => {
   const offer = loadActiveScanOffer();
   assert.equal(parsePackageSelectionFromText("แพง", offer), null);
   assert.equal(
@@ -67,11 +73,11 @@ test("package_selected: แพง does not parse as 99 when thaiRelativeAliases 
   );
 });
 
-test("hesitation copy for 99 suggests 49, does not reopen selection menu", () => {
+test("hesitation copy: single-offer gentle nudge (no cheaper tier)", () => {
   const offer = loadActiveScanOffer();
-  const pkg99 = findPackageByKey(offer, "99baht_10scans_24h");
-  const body = buildPaymentPackageSelectedHesitationText(pkg99);
-  assert.match(body, /49/);
+  const pkg = findPackageByKey(offer, "49baht_4scans_24h");
+  const body = buildPaymentPackageSelectedHesitationText(pkg, offer);
+  assert.ok(body.includes("จ่ายเงิน"));
   assert.ok(!body.includes("เลือกได้"));
 });
 
@@ -97,11 +103,10 @@ test("parse: เอา <price> and Thai cheap/expensive use active offer prices"
   );
 });
 
-test("hesitation: next cheaper tier comes from offer (not hardcoded 49)", () => {
+test("hesitation: multi-package mini-offer still returns gentle nudge (UI is single-offer in prod)", () => {
   const pkgHigh = findPackageByKey(offerMini, "high");
   const body = buildPaymentPackageSelectedHesitationText(pkgHigh, offerMini);
-  assert.match(body, /30/);
-  assert.ok(!body.includes("49"));
+  assert.ok(body.includes("จ่ายเงิน"));
 });
 
 test("pending_verify: utility commands pass through (not payment)", () => {

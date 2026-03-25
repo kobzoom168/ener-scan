@@ -12,7 +12,7 @@ import {
 } from "../src/services/scanOffer.packages.js";
 import {
   formatPaywallPriceTokensForLine,
-  buildPackageSelectionPromptFromOffer,
+  buildSingleOfferPaywallAltText,
   buildPaymentApprovedText,
   allowsUtilityCommandsDuringPendingVerify,
   isPaymentCommand,
@@ -65,17 +65,13 @@ test("release: approve path can resolve entitlement when package key is stale bu
   assert.equal(byAmt.scanCount, 10);
 });
 
-test("release: paywall package menu footer uses same price token line as formatPaywallPriceTokensForLine", () => {
-  const offer = {
-    packages: [
-      { key: "a", priceThb: 99, scanCount: 1, windowHours: 24, active: true },
-      { key: "b", priceThb: 49, scanCount: 2, windowHours: 24, active: true },
-    ],
-  };
+test("release: single-offer alt text includes price from formatPaywallPriceTokensForLine", () => {
+  const offer = loadActiveScanOffer(new Date());
   const tokens = formatPaywallPriceTokensForLine(offer);
-  assert.equal(tokens, "49 หรือ 99");
-  const menu = buildPackageSelectionPromptFromOffer(offer);
-  assert.ok(menu.includes(`พิมพ์ ${tokens} ได้เลยครับ`));
+  assert.equal(tokens, "49");
+  const alt = buildSingleOfferPaywallAltText(offer);
+  assert.ok(alt.includes("49"));
+  assert.ok(alt.includes("จ่ายเงิน"));
 });
 
 test("release: buildPaymentApprovedText reflects DB fields and paidPlanCode intro shape", async () => {

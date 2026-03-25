@@ -1,6 +1,6 @@
 import { SCAN_OFFER_TEMPLATES_TH } from "../config/scanOffer.templates.th.js";
 import { chooseScanOfferReplyType } from "./scanOffer.replyType.js";
-import { listActivePackages } from "./scanOffer.packages.js";
+import { getDefaultPackage, listActivePackages } from "./scanOffer.packages.js";
 
 /**
  * @param {string} template
@@ -20,19 +20,29 @@ export function fillPlaceholders(template, vars) {
  */
 export function buildPlaceholderVars(offer, accessContext) {
   const pkgs = listActivePackages(offer);
-  const pkgPaywallLines = pkgs
-    .map(
-      (p) =>
-        `${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`,
-    )
-    .join("\n");
-  const pkgNumberedList = pkgs
-    .map(
-      (p, i) =>
-        `${i + 1}) ${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
-    )
-    .join("\n\n");
-  const priceTokens = pkgs.map((p) => String(p.priceThb)).join(" หรือ ");
+  const def = getDefaultPackage(offer);
+  const pkgPaywallLines =
+    pkgs.length <= 1 && def
+      ? `${def.priceThb} บาท ใช้ได้ ${def.scanCount} ครั้ง ภายใน ${def.windowHours} ชั่วโมงหลังอนุมัติ`
+      : pkgs
+          .map(
+            (p) =>
+              `${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`,
+          )
+          .join("\n");
+  const pkgNumberedList =
+    pkgs.length <= 1 && def
+      ? `${def.priceThb} บาท ใช้ได้ ${def.scanCount} ครั้ง ภายใน ${def.windowHours} ชั่วโมง`
+      : pkgs
+          .map(
+            (p, i) =>
+              `${i + 1}) ${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
+          )
+          .join("\n\n");
+  const priceTokens =
+    pkgs.length <= 1 && def
+      ? String(def.priceThb)
+      : pkgs.map((p) => String(p.priceThb)).join(" หรือ ");
   return {
     price: offer.paidPriceThb,
     count: offer.paidScanCount,

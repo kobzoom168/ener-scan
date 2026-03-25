@@ -74,7 +74,7 @@ Clear in tests: `clearPersonaMemory()` (also `clearConversationPatternMemory()` 
 | `waiting_birthdate_guidance` | `["ยังรอวันเกิดอยู่นะ", "พิมพ์วันเกิดมาก่อน"]` + example on last if needed |
 | `waiting_birthdate_invalid_format` | `["รูปแบบยังไม่ตรงที่ผมอ่านได้", "ลองพิมพ์ใหม่อีกทีได้", "14/09/1995 หรือ 14/09/2538"]` |
 | `before_scan` | `["รอสักครู่นะ", "โอเค เดี๋ยวผมดูให้เลย"]` |
-| `paywall` | After `{{AMOUNT}}` inject: `["รอบฟรีวันนี้หมดแล้วนะ", "ถ้าจะดูละเอียดกว่านี้ ผมมีผลเต็มให้", "ราคา 99 บาท\n\nถ้าพร้อม พิมพ์ จ่ายเงิน ได้เลย"]` |
+| `paywall` | After `{{AMOUNT}}` inject: `["รอบฟรีวันนี้หมดแล้วนะ", "ถ้าจะดูละเอียดกว่านี้ ผมมีผลเต็มให้", "ราคา 49 บาท\n\nถ้าพร้อม พิมพ์ จ่ายเงิน ได้เลย"]` |
 | `awaiting_slip` | `["รอสลิปอยู่ครับ", "โอนแล้วส่งรูปเดียวในแชตนี้ได้เลย"]` |
 | `pending_verify` | `["รับสลิปแล้วนะ กำลังตรวจอยู่", "มีอัปเดตจะบอกในแชตนี้"]` |
 | `approved_intro` | `["ผ่านแล้วครับ สิทธิ์พร้อมใช้งานแล้ว"]` (single bubble; body still from `buildPaymentApprovedText`) |

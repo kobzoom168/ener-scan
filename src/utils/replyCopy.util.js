@@ -15,7 +15,7 @@ export {
 function paywallAmountDisplay() {
   const n = Number(env.PAYMENT_UNLOCK_AMOUNT_THB);
   if (Number.isFinite(n) && n > 0) return String(Math.floor(n));
-  return "99";
+  return "49";
 }
 
 function injectPaywallPlaceholders(lines) {

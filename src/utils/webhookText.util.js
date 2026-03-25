@@ -289,20 +289,21 @@ export function buildPaymentQrIntroText({ paymentRef, paidPackage = null } = {})
   return appendPaymentRefLine(base, paymentRef);
 }
 
-/** ข้อความเลือกแพ็ก (ก่อนพิมพ์ จ่ายเงิน) — ดึงจาก config */
-export function buildPackageSelectionPromptFromOffer(offer = loadActiveScanOffer()) {
-  const pkgs = listActivePackages(offer);
-  if (!pkgs.length) {
-    return "ตอนนี้ยังไม่มีแพ็กเกจให้เลือก กรุณาลองใหม่ภายหลังครับ";
+/** Single paid offer — short alternate (no multi-package menu). */
+export function buildSingleOfferPaywallAltText(offer = loadActiveScanOffer()) {
+  const pkg = getDefaultPackage(offer);
+  if (!pkg) {
+    return "ตอนนี้ยังไม่เปิดแพ็กชำระเงิน กรุณาลองใหม่ภายหลังครับ";
   }
-  const lines = pkgs
-    .map(
-      (p, i) =>
-        `${i + 1}) ${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
-    )
-    .join("\n\n");
-  const tokens = formatPaywallPriceTokensForLine(offer);
-  return `เลือกได้ ${pkgs.length} แบบครับ\n\n${lines}\n\nถ้าต้องการอันไหน พิมพ์ ${tokens} ได้เลยครับ`;
+  return [
+    `เปิดสิทธิ์เพิ่ม ${pkg.priceThb} บาท สแกนได้ ${pkg.scanCount} ครั้ง ภายใน ${pkg.windowHours} ชม. หลังอนุมัติ`,
+    "พร้อมแล้วพิมพ์ 'จ่ายเงิน' ได้เลยครับ",
+  ].join("\n");
+}
+
+/** @deprecated Use buildSingleOfferPaywallAltText — kept for call sites. */
+export function buildPackageSelectionPromptFromOffer(offer = loadActiveScanOffer()) {
+  return buildSingleOfferPaywallAltText(offer);
 }
 
 /** Active package price tokens for short paywall lines (sorted asc, unique). */
@@ -319,17 +320,16 @@ export function formatPaywallPriceTokensForLine(offer = loadActiveScanOffer()) {
   return prices.map(String).join(" หรือ ");
 }
 
-function paywallPickPackageShortPhrase(offer) {
-  const tokens = formatPaywallPriceTokensForLine(offer);
-  return tokens || "แพ็กจากเมนู";
-}
-
-/** หลังผู้ใช้พิมพ์เลขแพ็ก */
+/** หลังผู้ใช้ยืนยันจะเปิดสิทธิ์ (แพ็กเดียวจาก config) */
 export function buildPaymentPackageSelectedAck(paidPackage) {
-  const p = paidPackage;
-  if (!p) return buildPackageSelectionPromptFromOffer();
-  const line = `แพ็กเกจที่เลือกคือ ${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`;
-  return `${line}\n\nพิมพ์ จ่ายเงิน เมื่อพร้อมโอน จะได้คิวอาร์และขั้นตอนในแชตนี้ครับ`;
+  const p = paidPackage || getDefaultPackage(loadActiveScanOffer());
+  if (!p) return buildSingleOfferPaywallAltText();
+  return [
+    `ได้เลยครับ`,
+    `แพ็กนี้ ${p.priceThb} บาท ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`,
+    "",
+    `พิมพ์ 'จ่ายเงิน' ได้เลย เดี๋ยวผมส่งคิวอาร์ให้ครับ`,
+  ].join("\n");
 }
 
 /** Deterministic slot from LINE user id (stable per user). */
@@ -342,20 +342,20 @@ function slotFromUserId(userId, modulo) {
   return modulo > 0 ? h % modulo : 0;
 }
 
-/** User re-sent the same package token while still on paywall — stay in flow, nudge to pay. */
+/** Single paid offer — gentle nudge to pay. */
 export function buildPackageAlreadySelectedContinueHuman(paidPackage) {
-  const p = paidPackage;
+  const p = paidPackage || getDefaultPackage(loadActiveScanOffer());
   if (!p) {
-    return "เลือกแพ็กไว้แล้วครับ พิมพ์ จ่ายเงิน เมื่อพร้อมโอนได้เลย";
+    return "พร้อมแล้วพิมพ์ 'จ่ายเงิน' ได้เลยครับ";
   }
   return [
-    `แพ็ก ${p.priceThb} บาทเลือกไว้แล้วครับ`,
-    "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ",
+    `ตกลงแล้วครับ แพ็ก ${p.priceThb} บาท`,
+    "ถ้าพร้อมโอน พิมพ์ 'จ่ายเงิน' ได้เลยครับ",
   ].join("\n");
 }
 
 /**
- * State-safe paywall guidance (Thai, no emoji). `guidanceReason` drives tone, not routing.
+ * State-safe paywall guidance — single paid offer (no package choice).
  * @param {"unexpected" | "birthdate_deferred" | "pay_intent_no_package"} guidanceReason
  */
 export function buildPaywallHumanGuidanceText({
@@ -363,37 +363,37 @@ export function buildPaywallHumanGuidanceText({
   userId = "",
   guidanceReason = "unexpected",
 } = {}) {
-  const pick = paywallPickPackageShortPhrase(offer);
+  const pkg = getDefaultPackage(offer);
+  const price = pkg?.priceThb ?? offer.paidPriceThb;
   if (guidanceReason === "birthdate_deferred") {
-    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้เลือกแพ็กก่อน พิมพ์ ${pick} ได้เลย`;
+    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
   }
   if (guidanceReason === "pay_intent_no_package") {
     const lines = [
-      `ถ้ายังไม่เลือกแพ็ก เลือก ${pick} มาก่อนได้ครับ`,
-      `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ พิมพ์ ${pick} ได้เลย`,
+      `ถ้าพร้อมเปิดสิทธิ์ ${price} บาท พิมพ์ 'จ่ายเงิน' ได้เลยครับ`,
+      `ตอนนี้รอคำสั่งชำระเงินอยู่ครับ พิมพ์ 'จ่ายเงิน' มาได้เลย`,
     ];
     return lines[slotFromUserId(userId, lines.length)];
   }
   const soft = [
-    `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ ถ้าจะเปิดสิทธิ์ พิมพ์ ${pick} ได้เลย`,
-    `ถ้าสะดวกเปิดสิทธิ์ พิมพ์ ${pick} มาได้เลยครับ`,
+    `ถ้าต้องการใช้ต่อ พิมพ์ 'จ่ายเงิน' ได้เลยครับ`,
+    `พร้อมเมื่อไหร่ พิมพ์ 'จ่ายเงิน' มาได้เลยครับ`,
   ];
   return soft[slotFromUserId(userId, soft.length)];
 }
 
-/** Pay intent without package (generic path / not on paywall gate). */
+/** Pay intent outside paywall gate (e.g. idle) — still single offer. */
 export function buildPaymentPayIntentNoPackageHumanText({
   offer = loadActiveScanOffer(),
   userId = "",
 } = {}) {
-  const menu = buildPackageSelectionPromptFromOffer(offer);
-  const pick = paywallPickPackageShortPhrase(offer);
+  const alt = buildSingleOfferPaywallAltText(offer);
   const lines = [
-    `ยังไม่ได้เลือกแพ็กครับ เลือก ${pick} ก่อน แล้วค่อยพิมพ์ จ่ายเงิน ได้เลย`,
-    `เลือกแพ็กก่อนนะครับ พิมพ์ ${pick} แล้วตามด้วย จ่ายเงิน เมื่อพร้อม`,
+    "ตอนนี้ยังไม่ได้อยู่ในขั้นตอนชำระเงินครับ ถ้าฟรีหมดแล้ว จะมีข้อความบอกแพ็กให้",
+    "หรือถ้าอยู่ช่วงชำระเงินอยู่แล้ว พิมพ์ 'จ่ายเงิน' ตามที่บอทบอกได้เลยครับ",
   ];
   const head = lines[slotFromUserId(userId, lines.length)];
-  return `${head}\n\n${menu}`;
+  return `${head}\n\n${alt}`;
 }
 
 export function isPackageSelectionTokenText(text, offer = loadActiveScanOffer()) {
@@ -426,17 +426,19 @@ export async function buildWaitingBirthdateDateFirstGuidanceMessages(userId, opt
 /** Deterministic awaiting_slip text guard (persona may still vary alternates). */
 export function buildAwaitingSlipDeterministicGuidanceText({ paymentRef } = {}) {
   const base = [
-    "ตอนนี้ผมรอสลิปอยู่ครับ",
-    "ส่งรูปสลิปมาในแชตนี้ได้เลย",
-    "ถ้าต้องการดูคิวอาร์อีกครั้ง พิมพ์ จ่ายเงิน ได้เลยครับ",
+    "ถ้าโอนแล้ว ส่งสลิปมาในแชตนี้ได้เลยครับ",
+    "เดี๋ยวมีคนตรวจสอบแล้วเปิดสิทธิ์ให้",
+    "",
+    "อยากดูคิวอาร์อีกครั้ง พิมพ์ 'จ่ายเงิน' ได้เลยครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
 
 export function buildPendingVerifyHumanGuidanceText({ paymentRef } = {}) {
   const base = [
-    "สลิปอยู่ระหว่างให้ทีมตรวจครับ",
-    "รอแจ้งผลในแชตนี้ได้เลย",
+    "ตอนนี้ระบบได้รับสลิปแล้วครับ",
+    "กำลังรอตรวจสอบให้สักครู่ พออนุมัติแล้วจะแจ้งในแชตนี้ทันทีครับ",
+    "",
     "ถ้ายังไม่ได้ส่งสลิป ส่งรูปมาได้เลยครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
@@ -852,8 +854,9 @@ export async function buildAwaitingSlipReminderText({ userId, paymentRef } = {})
 // --- Micro-intent / menu fatigue (deterministic reply families) ---
 
 /**
+ * Single-offer paywall fatigue (tier × branch). No multi-package wording.
  * @param {"full" | "short" | "micro"} tier
- * @param {"pay_too_early" | "date_wrong" | "ack" | "unclear"} branch
+ * @param {"wait_tomorrow" | "date_wrong" | "ack" | "unclear"} branch
  */
 export function buildPaywallFatiguePromptText({
   offer = loadActiveScanOffer(),
@@ -861,29 +864,47 @@ export function buildPaywallFatiguePromptText({
   tier = "full",
   branch = "unclear",
 } = {}) {
-  const pick = paywallPickPackageShortPhrase(offer);
-  if (branch === "pay_too_early") {
+  const pkg = getDefaultPackage(offer);
+  const price = pkg?.priceThb ?? offer.paidPriceThb;
+  const scanCount = pkg?.scanCount ?? offer.paidScanCount;
+  const hours = pkg?.windowHours ?? offer.paidWindowHours;
+  const freeQ = offer.freeQuotaPerDay;
+
+  if (branch === "wait_tomorrow") {
     if (tier === "micro") {
-      return `เลือกแพ็ก ${pick} ก่อนนะครับ แล้วค่อยสั่งจ่ายเงิน`;
+      return "โอเคครับ พรุ่งนี้มีฟรีใหม่อีกครับ หรือจะเปิดวันนี้ พิมพ์ 'จ่ายเงิน' ได้เลย";
     }
     if (tier === "short") {
-      return `ยังต้องเลือกแพ็กก่อนครับ พิมพ์ ${pick} ได้เลย แล้วค่อยสั่งจ่ายเงิน`;
+      return `รอพรุ่งนี้ได้เลยครับ ฟรีจะกลับมา ${freeQ} ครั้ง ถ้าจะใช้ต่อวันนี้ เปิดเพิ่ม ${price} บาท พิมพ์ 'จ่ายเงิน' ได้เลย`;
     }
-    return `ถ้ายังไม่เลือกแพ็ก เลือก ${pick} มาก่อนได้ครับ แล้วค่อยพิมพ์ จ่ายเงิน หรือ พิมพ์ จ่าย เมื่อพร้อม`;
+    return [
+      "วันนี้สิทธิ์ฟรีครบแล้วครับ",
+      "ถ้าสะดวก รอพรุ่งนี้แล้วค่อยสแกนต่อได้เลย",
+      "",
+      "แต่ถ้าต้องการใช้ต่อทันที",
+      `เปิดสิทธิ์เพิ่ม ${price} บาท สแกนได้ ${scanCount} ครั้ง ภายใน ${hours} ชม. หลังอนุมัติ`,
+      "",
+      "พร้อมแล้วพิมพ์ 'จ่ายเงิน' ได้เลยครับ",
+    ].join("\n");
   }
   if (branch === "date_wrong") {
-    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้เลือกแพ็กก่อน พิมพ์ ${pick} ได้เลย`;
+    if (tier === "micro") {
+      return "เดี๋ยวค่อยใส่วันเกิดตอนสแกนครับ ตอนนี้พิมพ์ 'จ่ายเงิน' ถ้าจะเปิดสิทธิ์";
+    }
+    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ ${price} บาท พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
   }
   if (branch === "ack") {
-    if (tier === "micro") return `เอา ${pick} ดีครับ`;
+    if (tier === "micro") return `รับทราบครับ พิมพ์ 'จ่ายเงิน' เมื่อพร้อม`;
     if (tier === "short") {
-      return `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ พิมพ์ ${pick} ได้เลย`;
+      return `ถ้าพร้อมชำระ พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
     }
-    return `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ ถ้าจะเปิดสิทธิ์ พิมพ์ ${pick} ได้เลย`;
+    return `ถ้าต้องการเปิดสิทธิ์เพิ่ม เดี๋ยวผมส่งคิวอาร์ให้ครับ พิมพ์ 'จ่ายเงิน' มาได้เลย`;
   }
-  if (tier === "micro") return `เอา ${pick} ดีครับ`;
+  if (tier === "micro") {
+    return `สิทธิ์ฟรีวันนี้ครบแล้วครับ ถ้าจะใช้ต่อ พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
+  }
   if (tier === "short") {
-    return `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ พิมพ์ ${pick} ได้เลย`;
+    return `ตอนนี้สิทธิ์ฟรีของวันนี้ครบแล้วครับ ถ้าต้องการใช้ต่อ เปิดเพิ่มได้ ${price} บาท / ${scanCount} ครั้ง / ${hours} ชม. พร้อมแล้วพิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
   }
   return buildPaywallHumanGuidanceText({
     offer,
@@ -894,52 +915,44 @@ export function buildPaywallFatiguePromptText({
 
 /**
  * Maps paywall branch + tier → replyType label for observability.
- * @param {"pay_too_early" | "date_wrong" | "ack" | "unclear"} branch
+ * @param {"wait_tomorrow" | "date_wrong" | "ack" | "unclear"} branch
  * @param {"full" | "short" | "micro"} tier
  */
 export function resolvePaywallPromptReplyType(branch, tier) {
-  if (branch === "pay_too_early") return "payment_package_prompt_pay_too_early";
-  if (branch === "date_wrong") return "payment_package_prompt_date_wrong_state";
+  if (branch === "wait_tomorrow") return "single_offer_paywall_wait_tomorrow";
+  if (branch === "date_wrong") return "single_offer_paywall_date_wrong_state";
   if (branch === "ack") {
-    if (tier === "full") return "payment_package_prompt_soft_redirect";
-    if (tier === "short") return "payment_package_prompt_short";
-    return "payment_package_prompt_micro";
+    if (tier === "full") return "single_offer_paywall_ack_full";
+    if (tier === "short") return "single_offer_paywall_ack_short";
+    return "single_offer_paywall_ack_micro";
   }
-  if (tier === "full") return "payment_package_prompt_full";
-  if (tier === "short") return "payment_package_prompt_short";
-  return "payment_package_prompt_micro";
+  if (tier === "full") return "single_offer_paywall_unclear_full";
+  if (tier === "short") return "single_offer_paywall_unclear_short";
+  return "single_offer_paywall_unclear_micro";
 }
 
+/** @deprecated Single-package flow — no cheaper tier; hesitation = gentle pay nudge. */
 export function buildPaymentPackageSelectedHesitationText(
   paidPackage,
   offer = loadActiveScanOffer(),
 ) {
-  const p = paidPackage;
-  if (!p) return "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ";
-  const pkgs = listActivePackages(offer)
-    .filter((x) => x && Number.isFinite(Number(x.priceThb)))
-    .sort((a, b) => Number(a.priceThb) - Number(b.priceThb));
-  const cur = Number(p.priceThb);
-  const cheaperTiers = pkgs.filter((x) => Number(x.priceThb) < cur);
-  const lighter = cheaperTiers.length ? cheaperTiers[cheaperTiers.length - 1] : null;
-  if (lighter) {
-    return `ถ้าจะเอาเบากว่านี้ ใช้แพ็ก ${lighter.priceThb} ได้ครับ ตอนนี้ผมตั้งแพ็กนี้ไว้ให้แล้ว`;
-  }
-  return "แพ็กนี้เบาสุดที่ตั้งให้แล้วครับ ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลย";
+  void paidPackage;
+  void offer;
+  return "ถ้าพร้อมโอน พิมพ์ 'จ่ายเงิน' ได้เลยครับ";
 }
 
 export function buildPaymentPackageSelectedGentleRemindText() {
-  return "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ";
+  return "ถ้าพร้อมโอน พิมพ์ 'จ่ายเงิน' ได้เลยครับ";
 }
 
 export function buildPaymentPackageSelectedUnclearText({ tier = "short" } = {}) {
   if (tier === "micro") {
-    return "พิมพ์ จ่ายเงิน หรือ พิมพ์ จ่าย เมื่อพร้อมโอนได้เลยครับ";
+    return "พิมพ์ 'จ่ายเงิน' เมื่อพร้อมได้เลยครับ";
   }
   if (tier === "short") {
-    return "ตอนนี้ผมตั้งแพ็กไว้ให้แล้ว ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ";
+    return "ถ้าพร้อมเปิดสิทธิ์ พิมพ์ 'จ่ายเงิน' ได้เลยครับ";
   }
-  return "ตอนนี้ผมตั้งแพ็กไว้ให้แล้ว ถ้าพร้อมโอน พิมพ์ จ่ายเงิน หรือ พิมพ์ จ่าย ได้เลยครับ";
+  return "ตอนนี้อยู่ช่วงเลือกเปิดสิทธิ์ครับ พิมพ์ 'จ่ายเงิน' ได้เลยครับ";
 }
 
 export function buildAwaitingSlipStatusHintText({ paymentRef } = {}) {
@@ -976,13 +989,12 @@ export function buildAwaitingSlipFatigueGuidanceText({
 }
 
 export function buildPendingVerifyStatusShortText({ paymentRef } = {}) {
-  const base =
-    "สลิปอยู่ระหว่างให้ทีมตรวจครับ รอแจ้งผลในแชตนี้ได้เลย ถ้ายังไม่ได้ส่งสลิป ส่งรูปมาได้เลย";
+  const base = "ตอนนี้กำลังตรวจสอบสลิปให้อยู่นะครับ พอมีผลจะแจ้งในแชตนี้ทันที";
   return appendPaymentRefLine(base, paymentRef);
 }
 
 export function buildPendingVerifyGentleRemindText({ paymentRef } = {}) {
-  const base = "รอตรวจสลิปอยู่ครับ แจ้งผลในแชตนี้เมื่อมีอัปเดต";
+  const base = "รอตรวจสลิปอยู่ครับ เดี๋ยวแจ้งในแชตนี้ให้";
   return appendPaymentRefLine(base, paymentRef);
 }
 

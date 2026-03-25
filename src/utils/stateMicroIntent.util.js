@@ -2,6 +2,8 @@
  * Deterministic micro-intent labels for active interactive states (no LLM routing).
  */
 
+import { listActivePackages } from "../services/scanOffer.packages.js";
+
 /** @param {number} streak */
 export function guidanceTierFromStreak(streak) {
   const n = Number(streak) || 0;
@@ -25,6 +27,8 @@ const GENERIC_ACK = new Set([
   "ค่ะ",
   "ได้",
   "อืม",
+  "ตกลง",
+  "พร้อม",
   "ok",
   "okay",
 ]);
@@ -63,8 +67,35 @@ export function isUnclearNoiseText(text) {
   return false;
 }
 
+/** Single paid offer: pay intent is never "too early" vs package choice — still used for logging edge cases. */
 export function isPayIntentTooEarlyInPaywall(text) {
   return isLoosePayIntentExact(text);
+}
+
+/** User defers to tomorrow / later — stay on paywall, no payment push. */
+export function isWaitForTomorrowIntent(text) {
+  const t = normText(text);
+  if (!t) return false;
+  return /พรุ่งนี้|มะรืน|รอก่อน|เดี๋ยวค่อย|ค่อยมา|ค่อยว่ากัน|ไม่สะดวกตอนนี้|ยังไม่พร้อม|ขอคิดก่อน/i.test(
+    t,
+  );
+}
+
+/**
+ * @param {string} text
+ * @param {import("../services/scanOffer.loader.js").NormalizedScanOffer} offer
+ */
+export function isSingleOfferPriceToken(text, offer) {
+  const t = normText(text);
+  if (!t) return false;
+  const pkgs = listActivePackages(offer);
+  const p = pkgs.length === 1 ? pkgs[0] : null;
+  if (!p) return false;
+  const priceStr = String(p.priceThb);
+  if (t === priceStr) return true;
+  if (t === `${priceStr} บาท`) return true;
+  if (new RegExp(`^${priceStr}\\s*บาท$`, "i").test(t)) return true;
+  return false;
 }
 
 const HESITATION_PACKAGE_SELECTED = new Set([
@@ -123,7 +154,7 @@ export function isWaitingBirthdatePackageOrPaymentWords(text) {
   const t = normText(text);
   if (!t) return false;
   if (isLoosePayIntentExact(t)) return true;
-  if (/แพ็ก|แพ็ค|แพ็กเกจ|package|บาท|49|99|ชำระ|โอน|จ่าย|คิวอาร์|qr/i.test(t)) {
+  if (/แพ็ก|แพ็ค|แพ็กเกจ|package|บาท|49|ชำระ|โอน|จ่าย|คิวอาร์|qr/i.test(t)) {
     return true;
   }
   return false;

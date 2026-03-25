@@ -34,16 +34,16 @@ test("parsePackageSelectionFromText thaiRelativeAliases (paywall-only)", () => {
   );
   assert.equal(
     parsePackageSelectionFromText("แพง", offer, { thaiRelativeAliases: true }),
-    "99baht_10scans_24h",
+    "49baht_4scans_24h",
   );
   assert.equal(parsePackageSelectionFromText("แพง", offer), null);
 });
 
-test("parsePackageSelectionFromText เอา 99 phrase", () => {
+test("parsePackageSelectionFromText เอา 49 phrase", () => {
   const offer = loadActiveScanOffer();
   assert.equal(
-    parsePackageSelectionFromText("เอา 99", offer, { allowEoaPricePhrase: true }),
-    "99baht_10scans_24h",
+    parsePackageSelectionFromText("เอา 49", offer, { allowEoaPricePhrase: true }),
+    "49baht_4scans_24h",
   );
 });
 

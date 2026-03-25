@@ -11,14 +11,6 @@
       "windowHours": 24,
       "active": true,
       "label": "49 บาท 4 ครั้ง / 24 ชม."
-    },
-    {
-      "key": "99baht_10scans_24h",
-      "priceThb": 99,
-      "scanCount": 10,
-      "windowHours": 24,
-      "active": true,
-      "label": "99 บาท 10 ครั้ง / 24 ชม."
     }
   ],
   "paidPriceThb": 49,
@@ -26,5 +18,5 @@
   "paidWindowHours": 24,
   "startAt": null,
   "endAt": null,
-  "configVersion": "2"
+  "configVersion": "3"
 }
