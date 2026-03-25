@@ -1,6 +1,9 @@
 import { supabase } from "../config/supabase.js";
 import { resolveActiveScanOfferCalm } from "./scanOffer.loader.js";
-import { findPackageByKey } from "./scanOffer.packages.js";
+import {
+  findActivePackageByPriceThb,
+  findPackageByKey,
+} from "./scanOffer.packages.js";
 
 /** Legacy แพ็กเกจเดิม (อนุมัติสลิปเก่าที่ยังอ้าง package นี้) */
 const PAID_PLAN_CODE_15SCANS_24H = "99baht_15scans_24h";
@@ -74,14 +77,38 @@ function parsePackageCodeToEntitlement(packageCode) {
   };
 }
 
-export async function grantEntitlementForPackage({ appUserId, packageCode }) {
+function paidUntilMsFromUnlockHint(unlockHoursFromPayment, pkg) {
+  const u = Number(unlockHoursFromPayment);
+  if (Number.isFinite(u) && u > 0) {
+    return Date.now() + u * 60 * 60 * 1000;
+  }
+  if (pkg && Number.isFinite(Number(pkg.windowHours)) && Number(pkg.windowHours) > 0) {
+    return Date.now() + Number(pkg.windowHours) * 60 * 60 * 1000;
+  }
+  return null;
+}
+
+export async function grantEntitlementForPackage({
+  appUserId,
+  packageCode,
+  expectedAmountThb = null,
+  unlockHoursFromPayment = null,
+} = {}) {
   const appUserIdStr = String(appUserId || "").trim();
   if (!appUserIdStr) throw new Error("grantEntitlement_missing_appUserId");
 
   const offer = resolveActiveScanOfferCalm();
-  const pkg = findPackageByKey(offer, packageCode);
+  let pkg = findPackageByKey(offer, packageCode);
+  if (!pkg && expectedAmountThb != null) {
+    const amt = Number(expectedAmountThb);
+    if (Number.isFinite(amt) && amt > 0) {
+      pkg = findActivePackageByPriceThb(offer, amt);
+    }
+  }
   if (pkg) {
-    const paid_until_ms = Date.now() + pkg.windowHours * 60 * 60 * 1000;
+    const paid_until_ms =
+      paidUntilMsFromUnlockHint(unlockHoursFromPayment, pkg) ??
+      Date.now() + 24 * 60 * 60 * 1000;
     const entitlement = {
       paid_until_ms,
       paid_remaining_scans: pkg.scanCount,
@@ -109,15 +136,21 @@ export async function grantEntitlementForPackage({ appUserId, packageCode }) {
   }
 
   const entitlement = parsePackageCodeToEntitlement(packageCode);
-  const paidUntilIso = new Date(entitlement.paid_until_ms).toISOString();
+  let paidUntilMs = entitlement.paid_until_ms;
+  const unlock = Number(unlockHoursFromPayment);
+  if (Number.isFinite(unlock) && unlock > 0) {
+    paidUntilMs = Date.now() + unlock * 60 * 60 * 1000;
+  }
+  const legacy = { ...entitlement, paid_until_ms: paidUntilMs };
+  const paidUntilIso = new Date(legacy.paid_until_ms).toISOString();
 
   const nowIso = new Date().toISOString();
   const { error } = await supabase
     .from("app_users")
     .update({
       paid_until: paidUntilIso,
-      paid_remaining_scans: entitlement.paid_remaining_scans,
-      paid_plan_code: entitlement.paid_plan_code,
+      paid_remaining_scans: legacy.paid_remaining_scans,
+      paid_plan_code: legacy.paid_plan_code,
       updated_at: nowIso,
     })
     .eq("id", appUserIdStr);
@@ -126,8 +159,8 @@ export async function grantEntitlementForPackage({ appUserId, packageCode }) {
 
   return {
     paidUntil: paidUntilIso,
-    paidRemainingScans: entitlement.paid_remaining_scans,
-    paidPlanCode: entitlement.paid_plan_code,
+    paidRemainingScans: legacy.paid_remaining_scans,
+    paidPlanCode: legacy.paid_plan_code,
   };
 }
 

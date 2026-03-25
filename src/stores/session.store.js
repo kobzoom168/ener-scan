@@ -12,6 +12,11 @@ function createEmptySession() {
     flowVersion: 0,
     /** @type {string|null} selected paid package key from scan-offer config */
     selectedPaymentPackageKey: null,
+    /**
+     * Consecutive no-progress text turns per interactive state (menu fatigue / shorter reminders).
+     * Keys: paywall_selecting_package | payment_package_selected | awaiting_slip | waiting_birthdate | pending_verify
+     */
+    guidanceNoProgressByState: {},
   };
 }
 
@@ -150,4 +155,52 @@ export function setAwaitingBirthdateUpdate(userId, awaiting = true) {
 
 export function clearAwaitingBirthdateUpdate(userId) {
   setAwaitingBirthdateUpdate(userId, false);
+}
+
+const GUIDANCE_STATE_KEYS = new Set([
+  "paywall_selecting_package",
+  "payment_package_selected",
+  "awaiting_slip",
+  "waiting_birthdate",
+  "pending_verify",
+]);
+
+function getGuidanceMap(userId) {
+  const s = getSession(userId);
+  if (!s.guidanceNoProgressByState || typeof s.guidanceNoProgressByState !== "object") {
+    s.guidanceNoProgressByState = {};
+  }
+  return s.guidanceNoProgressByState;
+}
+
+/** @param {string} stateKey */
+export function resetGuidanceNoProgress(userId, stateKey) {
+  const id = normalizeUserId(userId);
+  const k = String(stateKey || "").trim();
+  if (!id || !GUIDANCE_STATE_KEYS.has(k)) return;
+  const map = getGuidanceMap(id);
+  map[k] = 0;
+  sessions.set(id, getSession(id));
+}
+
+/**
+ * Increment no-progress streak for an interactive state (after a guidance-only reply).
+ * @returns {number} new streak count (>= 1)
+ */
+export function bumpGuidanceNoProgress(userId, stateKey) {
+  const id = normalizeUserId(userId);
+  const k = String(stateKey || "").trim();
+  if (!id || !GUIDANCE_STATE_KEYS.has(k)) return 0;
+  const map = getGuidanceMap(id);
+  const next = Number(map[k] || 0) + 1;
+  map[k] = next;
+  sessions.set(id, getSession(id));
+  return next;
+}
+
+export function getGuidanceNoProgressCount(userId, stateKey) {
+  const id = normalizeUserId(userId);
+  const k = String(stateKey || "").trim();
+  if (!id || !GUIDANCE_STATE_KEYS.has(k)) return 0;
+  return Number(getGuidanceMap(id)[k] || 0);
 }

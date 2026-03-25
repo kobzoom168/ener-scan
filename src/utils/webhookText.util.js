@@ -26,6 +26,9 @@ import {
   listActivePackages,
   parsePackageSelectionFromText,
 } from "../services/scanOffer.packages.js";
+import {
+  isLoosePayIntentExact,
+} from "./stateMicroIntent.util.js";
 
 /** Backward-compatible alias for `looksLikeBirthdateInput`. */
 export { looksLikeBirthdateInput as isBirthdateLikeInput };
@@ -298,8 +301,27 @@ export function buildPackageSelectionPromptFromOffer(offer = loadActiveScanOffer
         `${i + 1}) ${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
     )
     .join("\n\n");
-  const tokens = pkgs.map((p) => String(p.priceThb)).join(" หรือ ");
+  const tokens = formatPaywallPriceTokensForLine(offer);
   return `เลือกได้ ${pkgs.length} แบบครับ\n\n${lines}\n\nถ้าต้องการอันไหน พิมพ์ ${tokens} ได้เลยครับ`;
+}
+
+/** Active package price tokens for short paywall lines (sorted asc, unique). */
+export function formatPaywallPriceTokensForLine(offer = loadActiveScanOffer()) {
+  const pkgs = listActivePackages(offer);
+  if (!pkgs.length) return "";
+  const prices = [
+    ...new Set(
+      pkgs
+        .map((p) => Number(p.priceThb))
+        .filter((n) => Number.isFinite(n)),
+    ),
+  ].sort((a, b) => a - b);
+  return prices.map(String).join(" หรือ ");
+}
+
+function paywallPickPackageShortPhrase(offer) {
+  const tokens = formatPaywallPriceTokensForLine(offer);
+  return tokens || "แพ็กจากเมนู";
 }
 
 /** หลังผู้ใช้พิมพ์เลขแพ็ก */
@@ -341,20 +363,20 @@ export function buildPaywallHumanGuidanceText({
   userId = "",
   guidanceReason = "unexpected",
 } = {}) {
-  void offer;
+  const pick = paywallPickPackageShortPhrase(offer);
   if (guidanceReason === "birthdate_deferred") {
-    return "เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้เลือกแพ็กก่อน พิมพ์ 49 หรือ 99 ได้เลย";
+    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้เลือกแพ็กก่อน พิมพ์ ${pick} ได้เลย`;
   }
   if (guidanceReason === "pay_intent_no_package") {
     const lines = [
-      "ถ้ายังไม่เลือกแพ็ก เลือก 49 หรือ 99 มาก่อนได้ครับ",
-      "ตอนนี้ผมรอเลือกแพ็กอยู่ครับ พิมพ์ 49 หรือ 99 ได้เลย",
+      `ถ้ายังไม่เลือกแพ็ก เลือก ${pick} มาก่อนได้ครับ`,
+      `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ พิมพ์ ${pick} ได้เลย`,
     ];
     return lines[slotFromUserId(userId, lines.length)];
   }
   const soft = [
-    "ตอนนี้ผมรอเลือกแพ็กอยู่ครับ ถ้าจะเปิดสิทธิ์ พิมพ์ 49 หรือ 99 ได้เลย",
-    "ถ้าสะดวกเปิดสิทธิ์ พิมพ์ 49 หรือ 99 มาได้เลยครับ",
+    `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ ถ้าจะเปิดสิทธิ์ พิมพ์ ${pick} ได้เลย`,
+    `ถ้าสะดวกเปิดสิทธิ์ พิมพ์ ${pick} มาได้เลยครับ`,
   ];
   return soft[slotFromUserId(userId, soft.length)];
 }
@@ -365,9 +387,10 @@ export function buildPaymentPayIntentNoPackageHumanText({
   userId = "",
 } = {}) {
   const menu = buildPackageSelectionPromptFromOffer(offer);
+  const pick = paywallPickPackageShortPhrase(offer);
   const lines = [
-    "ยังไม่ได้เลือกแพ็กครับ เลือก 49 หรือ 99 ก่อน แล้วค่อยพิมพ์ จ่ายเงิน ได้เลย",
-    "เลือกแพ็กก่อนนะครับ พิมพ์ 49 หรือ 99 แล้วตามด้วย จ่ายเงิน เมื่อพร้อม",
+    `ยังไม่ได้เลือกแพ็กครับ เลือก ${pick} ก่อน แล้วค่อยพิมพ์ จ่ายเงิน ได้เลย`,
+    `เลือกแพ็กก่อนนะครับ พิมพ์ ${pick} แล้วตามด้วย จ่ายเงิน เมื่อพร้อม`,
   ];
   const head = lines[slotFromUserId(userId, lines.length)];
   return `${head}\n\n${menu}`;
@@ -380,7 +403,18 @@ export function isPackageSelectionTokenText(text, offer = loadActiveScanOffer())
 /**
  * Waiting for birthdate: payment/package/menu must not steal the turn — one short human line.
  */
-export async function buildWaitingBirthdateDateFirstGuidanceMessages(userId) {
+/**
+ * @param {string} userId
+ * @param {{ tier?: "full" | "short" | "micro" }} [opts]
+ */
+export async function buildWaitingBirthdateDateFirstGuidanceMessages(userId, opts = {}) {
+  const tier = opts.tier || "full";
+  if (tier === "micro") {
+    return ["พิมพ์วันเกิดแบบ วัน/เดือน/ปี เช่น 19/08/1985 ได้เลยครับ"];
+  }
+  if (tier === "short") {
+    return ["พิมพ์วันเกิดเป็น DD/MM/YYYY ได้เลยครับ เช่น 19/08/1985"];
+  }
   const lines = [
     "ขอวันเกิดก่อนครับ พิมพ์แบบ 19/08/1985 ได้เลย",
     "ตอนนี้ผมรอวันเกิดอยู่ครับ เดี๋ยวได้อ่านต่อให้เลย",
@@ -560,7 +594,8 @@ export function isPaymentCommand(text, lowerText) {
   const t = String(text || "").trim();
   const lt = String(lowerText || t.toLowerCase()).trim();
 
-  return lt === "payment" || t === "จ่ายเงิน" || t === "ปลดล็อก";
+  if (lt === "payment" || t === "จ่ายเงิน" || t === "ปลดล็อก") return true;
+  return isLoosePayIntentExact(t);
 }
 
 function displayAmountThb(amount, fallbackThb) {
@@ -812,6 +847,147 @@ export function allowsUtilityCommandsDuringPendingVerify(text, lowerText) {
 export async function buildAwaitingSlipReminderText({ userId, paymentRef } = {}) {
   void userId;
   return buildAwaitingSlipDeterministicGuidanceText({ paymentRef });
+}
+
+// --- Micro-intent / menu fatigue (deterministic reply families) ---
+
+/**
+ * @param {"full" | "short" | "micro"} tier
+ * @param {"pay_too_early" | "date_wrong" | "ack" | "unclear"} branch
+ */
+export function buildPaywallFatiguePromptText({
+  offer = loadActiveScanOffer(),
+  userId = "",
+  tier = "full",
+  branch = "unclear",
+} = {}) {
+  const pick = paywallPickPackageShortPhrase(offer);
+  if (branch === "pay_too_early") {
+    if (tier === "micro") {
+      return `เลือกแพ็ก ${pick} ก่อนนะครับ แล้วค่อยสั่งจ่ายเงิน`;
+    }
+    if (tier === "short") {
+      return `ยังต้องเลือกแพ็กก่อนครับ พิมพ์ ${pick} ได้เลย แล้วค่อยสั่งจ่ายเงิน`;
+    }
+    return `ถ้ายังไม่เลือกแพ็ก เลือก ${pick} มาก่อนได้ครับ แล้วค่อยพิมพ์ จ่ายเงิน หรือ พิมพ์ จ่าย เมื่อพร้อม`;
+  }
+  if (branch === "date_wrong") {
+    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้เลือกแพ็กก่อน พิมพ์ ${pick} ได้เลย`;
+  }
+  if (branch === "ack") {
+    if (tier === "micro") return `เอา ${pick} ดีครับ`;
+    if (tier === "short") {
+      return `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ พิมพ์ ${pick} ได้เลย`;
+    }
+    return `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ ถ้าจะเปิดสิทธิ์ พิมพ์ ${pick} ได้เลย`;
+  }
+  if (tier === "micro") return `เอา ${pick} ดีครับ`;
+  if (tier === "short") {
+    return `ตอนนี้ผมรอเลือกแพ็กอยู่ครับ พิมพ์ ${pick} ได้เลย`;
+  }
+  return buildPaywallHumanGuidanceText({
+    offer,
+    userId,
+    guidanceReason: "unexpected",
+  });
+}
+
+/**
+ * Maps paywall branch + tier → replyType label for observability.
+ * @param {"pay_too_early" | "date_wrong" | "ack" | "unclear"} branch
+ * @param {"full" | "short" | "micro"} tier
+ */
+export function resolvePaywallPromptReplyType(branch, tier) {
+  if (branch === "pay_too_early") return "payment_package_prompt_pay_too_early";
+  if (branch === "date_wrong") return "payment_package_prompt_date_wrong_state";
+  if (branch === "ack") {
+    if (tier === "full") return "payment_package_prompt_soft_redirect";
+    if (tier === "short") return "payment_package_prompt_short";
+    return "payment_package_prompt_micro";
+  }
+  if (tier === "full") return "payment_package_prompt_full";
+  if (tier === "short") return "payment_package_prompt_short";
+  return "payment_package_prompt_micro";
+}
+
+export function buildPaymentPackageSelectedHesitationText(
+  paidPackage,
+  offer = loadActiveScanOffer(),
+) {
+  const p = paidPackage;
+  if (!p) return "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ";
+  const pkgs = listActivePackages(offer)
+    .filter((x) => x && Number.isFinite(Number(x.priceThb)))
+    .sort((a, b) => Number(a.priceThb) - Number(b.priceThb));
+  const cur = Number(p.priceThb);
+  const cheaperTiers = pkgs.filter((x) => Number(x.priceThb) < cur);
+  const lighter = cheaperTiers.length ? cheaperTiers[cheaperTiers.length - 1] : null;
+  if (lighter) {
+    return `ถ้าจะเอาเบากว่านี้ ใช้แพ็ก ${lighter.priceThb} ได้ครับ ตอนนี้ผมตั้งแพ็กนี้ไว้ให้แล้ว`;
+  }
+  return "แพ็กนี้เบาสุดที่ตั้งให้แล้วครับ ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลย";
+}
+
+export function buildPaymentPackageSelectedGentleRemindText() {
+  return "ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ";
+}
+
+export function buildPaymentPackageSelectedUnclearText({ tier = "short" } = {}) {
+  if (tier === "micro") {
+    return "พิมพ์ จ่ายเงิน หรือ พิมพ์ จ่าย เมื่อพร้อมโอนได้เลยครับ";
+  }
+  if (tier === "short") {
+    return "ตอนนี้ผมตั้งแพ็กไว้ให้แล้ว ถ้าพร้อมโอน พิมพ์ จ่ายเงิน ได้เลยครับ";
+  }
+  return "ตอนนี้ผมตั้งแพ็กไว้ให้แล้ว ถ้าพร้อมโอน พิมพ์ จ่ายเงิน หรือ พิมพ์ จ่าย ได้เลยครับ";
+}
+
+export function buildAwaitingSlipStatusHintText({ paymentRef } = {}) {
+  const base =
+    "ตอนนี้ผมรอสลิปอยู่ครับ ส่งรูปสลิปโอนมาในแชตนี้ได้เลย";
+  return appendPaymentRefLine(base, paymentRef);
+}
+
+/**
+ * @param {"full" | "short" | "micro"} tier
+ * @param {"default" | "status"} kind
+ */
+export function buildAwaitingSlipFatigueGuidanceText({
+  paymentRef,
+  tier = "full",
+  kind = "default",
+} = {}) {
+  if (kind === "status") {
+    return buildAwaitingSlipStatusHintText({ paymentRef });
+  }
+  if (tier === "micro") {
+    return appendPaymentRefLine(
+      "รอสลิปอยู่ครับ ส่งรูปมาในแชตนี้ได้เลย",
+      paymentRef,
+    );
+  }
+  if (tier === "short") {
+    return appendPaymentRefLine(
+      "ตอนนี้ผมรอสลิปอยู่ครับ ส่งรูปสลิปมาในแชตนี้ได้เลย",
+      paymentRef,
+    );
+  }
+  return buildAwaitingSlipDeterministicGuidanceText({ paymentRef });
+}
+
+export function buildPendingVerifyStatusShortText({ paymentRef } = {}) {
+  const base =
+    "สลิปอยู่ระหว่างให้ทีมตรวจครับ รอแจ้งผลในแชตนี้ได้เลย ถ้ายังไม่ได้ส่งสลิป ส่งรูปมาได้เลย";
+  return appendPaymentRefLine(base, paymentRef);
+}
+
+export function buildPendingVerifyGentleRemindText({ paymentRef } = {}) {
+  const base = "รอตรวจสลิปอยู่ครับ แจ้งผลในแชตนี้เมื่อมีอัปเดต";
+  return appendPaymentRefLine(base, paymentRef);
+}
+
+export function buildWaitingBirthdatePaymentDeferredRedirectText() {
+  return "เดี๋ยวเรื่องชำระค่อยทำตามขั้นตอนครับ ตอนนี้ขอวันเกิดก่อน พิมพ์แบบ 19/08/1985 ได้เลย";
 }
 
 export function isHistoryCommand(text, lowerText) {

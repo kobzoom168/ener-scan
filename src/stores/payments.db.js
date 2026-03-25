@@ -646,6 +646,10 @@ export async function markPaymentApprovedAndUnlock({
   const entitlement = await grantEntitlementForPackage({
     appUserId: payment.user_id,
     packageCode,
+    expectedAmountThb:
+      payment.expected_amount != null ? Number(payment.expected_amount) : null,
+    unlockHoursFromPayment:
+      payment.unlock_hours != null ? Number(payment.unlock_hours) : null,
   });
 
   console.log(
