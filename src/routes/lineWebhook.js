@@ -9,6 +9,8 @@ import {
   setAwaitingBirthdateUpdate,
   bumpGuidanceNoProgress,
   resetGuidanceNoProgress,
+  bumpSameStateAckStreak,
+  resetSameStateAckStreak,
 } from "../stores/session.store.js";
 
 import { getSavedBirthdate, saveBirthdate } from "../stores/userProfile.db.js";
@@ -98,6 +100,7 @@ import {
   isWaitingBirthdatePackageOrPaymentWords,
   isWaitForTomorrowIntent,
   isSingleOfferPriceToken,
+  isBirthdateChangeIntentPhrase,
 } from "../utils/stateMicroIntent.util.js";
 import {
   beforeScanMessageSequence,
@@ -158,6 +161,8 @@ import {
   buildPaymentPackageSelectedUnclearText,
   buildPendingVerifyStatusShortText,
   buildPendingVerifyGentleRemindText,
+  buildAwaitingSlipAckContinueText,
+  buildPendingVerifyAckContinueText,
   buildWaitingBirthdateGuidanceText,
   buildWaitingBirthdateImageReminderMessages,
   buildBirthdateErrorMessages,
@@ -207,6 +212,121 @@ function logSafeIntentConsumed(payload) {
 }
 
 const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
+
+function logHumanConversationMemory(payload) {
+  console.log(JSON.stringify(payload));
+}
+
+/**
+ * Deterministic birthdate-update mode — runs before payment / paywall branches so
+ * date-like text is not mis-routed while `awaitingBirthdateUpdate` is true.
+ * @returns {Promise<boolean>} true if the turn was fully handled
+ */
+async function handleAwaitingBirthdateUpdateTurn({
+  client,
+  event,
+  userId,
+  session,
+  text,
+}) {
+  if (!session.awaitingBirthdateUpdate) return false;
+
+  const parsedBd = parseBirthdateInput(text);
+  if (parsedBd.ok) {
+    const normalizedBirthdate = parsedBd.normalizedDisplay;
+    await saveBirthdate(userId, normalizedBirthdate);
+
+    clearAwaitingBirthdateUpdate(userId);
+    logWaitingBirthdate("accepted", {
+      gate: "birthdate_update_profile",
+      userId,
+      yearCE: parsedBd.yearCE,
+      isoDate: parsedBd.isoDate,
+      normalizedDisplay: normalizedBirthdate,
+    });
+    console.log("[BIRTHDATE_UPDATE] saved", {
+      userId,
+      birthdate: normalizedBirthdate,
+    });
+
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_saved_profile",
+      semanticKey: "birthdate_saved",
+      text: `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      alternateTexts: [
+        `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
+      ],
+    });
+    return true;
+  }
+
+  if (isBirthdateChangeIntentPhrase(text)) {
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_update_prompt_repeat",
+      semanticKey: "birthdate_update_prompt",
+      text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      alternateTexts: [
+        `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+      ],
+    });
+    return true;
+  }
+
+  console.log("[BIRTHDATE_UPDATE] invalid", {
+    userId,
+    text,
+    reason: parsedBd.reason,
+  });
+  if (looksLikeBirthdateInput(text)) {
+    logWaitingBirthdate("invalid_date_attempt", {
+      gate: "birthdate_update_profile",
+      userId,
+      reason: parsedBd.reason,
+    });
+  } else {
+    logWaitingBirthdate("guidance", {
+      gate: "birthdate_update_profile",
+      userId,
+      hint: "non_date_like",
+    });
+  }
+  if (looksLikeBirthdateInput(text)) {
+    const errMsgs = await buildBirthdateErrorMessages(userId, parsedBd.reason);
+    if (errMsgs.length) {
+      errMsgs[errMsgs.length - 1] = `${errMsgs[errMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
+    }
+    await sendNonScanSequenceReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_update_error",
+      semanticKey: "birthdate_error_profile",
+      messages: errMsgs,
+    });
+    return true;
+  }
+  const gMsgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
+  if (gMsgs.length) {
+    gMsgs[gMsgs.length - 1] = `${gMsgs[gMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
+  }
+  await sendNonScanSequenceReply({
+    client,
+    userId,
+    replyToken: event.replyToken,
+    replyType: "birthdate_update_guidance",
+    semanticKey: "birthdate_guidance_profile",
+    messages: gMsgs.length
+      ? gMsgs
+      : [`${await buildWaitingBirthdateGuidanceText(userId)}\n\n${MAIN_MENU_HINT_TEXT}`],
+  });
+  return true;
+}
 
 /**
  * Shared path for payment / จ่ายเงิน / ปลดล็อก (create or reuse payment, QR / text fallback).
@@ -1663,12 +1783,50 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
   }
 
+  if (session.awaitingBirthdateUpdate) {
+    const bdDone = await handleAwaitingBirthdateUpdateTurn({
+      client,
+      event,
+      userId,
+      session,
+      text,
+    });
+    if (bdDone) return;
+  }
+
   if (paymentState === "paywall_offer_single") {
     const offer = loadActiveScanOffer();
     const defaultPkg = getDefaultPackage(offer);
 
+    if (isBirthdateChangeIntentPhrase(text)) {
+      console.log(
+        JSON.stringify({
+          event: "BIRTHDATE_CHANGE_INTENT",
+          userId,
+          activeState: "paywall_offer_single",
+          inputText: text,
+        }),
+      );
+      setAwaitingBirthdateUpdate(userId, true);
+      resetSameStateAckStreak(userId, "paywall_offer_single");
+      resetGuidanceNoProgress(userId, "paywall_offer_single");
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_update_prompt_paywall",
+        semanticKey: "birthdate_update_prompt",
+        text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        alternateTexts: [
+          `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+        ],
+      });
+      return;
+    }
+
     if (isPaymentCommand(text, lowerText)) {
       resetGuidanceNoProgress(userId, "paywall_offer_single");
+      resetSameStateAckStreak(userId, "paywall_offer_single");
       console.log(
         JSON.stringify({
           event: "PAYMENT_PAY_INTENT_CONSUMED",
@@ -1729,6 +1887,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     if (priceOrPackAck) {
       const pkg = defaultPkg;
       resetGuidanceNoProgress(userId, "paywall_offer_single");
+      resetSameStateAckStreak(userId, "paywall_offer_single");
       logStateMicroIntent({
         userId,
         activeState: "paywall_offer_single",
@@ -1762,6 +1921,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
 
     if (isWaitForTomorrowIntent(text)) {
+      resetSameStateAckStreak(userId, "paywall_offer_single");
       const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
       const tier = guidanceTierFromStreak(streak);
       logStateGuidanceLevel({
@@ -1820,6 +1980,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
 
     if (isPackageSelectedHesitation(text)) {
+      resetSameStateAckStreak(userId, "paywall_offer_single");
       const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
       const tier = guidanceTierFromStreak(streak);
       logStateGuidanceLevel({
@@ -1850,6 +2011,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
 
     if (isPackageChangeIntentPhrase(text)) {
+      resetSameStateAckStreak(userId, "paywall_offer_single");
       const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
       const tier = guidanceTierFromStreak(streak);
       logStateGuidanceLevel({
@@ -1883,6 +2045,92 @@ async function handleTextMessage({ client, event, userId, session }) {
     if (looksLikeBirthdateInput(text)) branch = "date_wrong";
     else if (isGenericAckText(text)) branch = "ack";
 
+    if (branch === "ack") {
+      const ackStreak = bumpSameStateAckStreak(userId, "paywall_offer_single");
+      const ackTier = guidanceTierFromStreak(ackStreak);
+      logHumanConversationMemory({
+        event: "STATE_ACK_CONTINUE",
+        userId,
+        activeState: "paywall_offer_single",
+        ackStreak,
+        normalizedIntent: "ack_continue",
+      });
+      if (ackStreak >= 2) {
+        logHumanConversationMemory({
+          event: "SAME_STATE_ACK_SHORT",
+          userId,
+          activeState: "paywall_offer_single",
+          ackStreak,
+        });
+      }
+      if (ackStreak >= 3) {
+        logHumanConversationMemory({
+          event: "SAME_STATE_ACK_MICRO",
+          userId,
+          activeState: "paywall_offer_single",
+          ackStreak,
+        });
+        logHumanConversationMemory({
+          event: "REPLY_REPEAT_AVOIDED",
+          userId,
+          activeState: "paywall_offer_single",
+          reason: "instruction_light_or_absent",
+        });
+      }
+      logHumanConversationMemory({
+        event: "HUMAN_SURFACE_FALLBACK",
+        userId,
+        surface: "deterministic_paywall_ack",
+      });
+      const primaryText = buildPaywallFatiguePromptText({
+        offer,
+        userId,
+        tier: ackTier,
+        branch: "ack",
+        ackStreak,
+      });
+      const chosenReplyType = resolvePaywallPromptReplyType("ack", ackTier);
+      logStateGuidanceLevel({
+        userId,
+        activeState: "paywall_offer_single",
+        noProgressCount: ackStreak,
+        guidanceLevel: ackTier,
+        ladder: "ack_continue",
+      });
+      logStateMicroIntent({
+        userId,
+        activeState: "paywall_offer_single",
+        inputText: text,
+        normalizedIntent: "ack_continue",
+        confidence: "near_safe",
+        chosenReplyType,
+      });
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        conversationOwner,
+        replyFamily: "paywall_single_offer",
+        guidanceReason: "ack_continue",
+        text,
+        chosenReplyType,
+        routeReason: "same_state_ack_human",
+      });
+      const menuAlt = buildSingleOfferPaywallAltText(offer);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: chosenReplyType,
+        semanticKey: chosenReplyType,
+        text: primaryText,
+        alternateTexts: [menuAlt],
+      });
+      return;
+    }
+
+    resetSameStateAckStreak(userId, "paywall_offer_single");
     const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
     const tier = guidanceTierFromStreak(streak);
     logStateGuidanceLevel({
@@ -1895,10 +2143,10 @@ async function handleTextMessage({ client, event, userId, session }) {
       offer,
       userId,
       tier,
-      branch: branch === "date_wrong" ? "date_wrong" : branch === "ack" ? "ack" : "unclear",
+      branch: branch === "date_wrong" ? "date_wrong" : "unclear",
     });
     const chosenReplyType = resolvePaywallPromptReplyType(
-      branch === "date_wrong" ? "date_wrong" : branch === "ack" ? "ack" : "unclear",
+      branch === "date_wrong" ? "date_wrong" : "unclear",
       tier,
     );
     const semanticKey =
@@ -1912,11 +2160,9 @@ async function handleTextMessage({ client, event, userId, session }) {
       normalizedIntent:
         branch === "date_wrong"
           ? "wrong_state_date_like"
-          : branch === "ack"
-            ? "generic_ack"
-            : isUnclearNoiseText(text)
-              ? "unclear_noise"
-              : "unclear",
+          : isUnclearNoiseText(text)
+            ? "unrelated_noise"
+            : "unclear",
       confidence: branch === "date_wrong" ? "near_safe" : "unclear",
       chosenReplyType,
     });
@@ -1954,6 +2200,11 @@ async function handleTextMessage({ client, event, userId, session }) {
       normalizedIntent: branch,
       chosenReplyType,
     });
+    logHumanConversationMemory({
+      event: "HUMAN_SURFACE_FALLBACK",
+      userId,
+      surface: "deterministic_paywall_unclear",
+    });
     const menuAlt = buildSingleOfferPaywallAltText(offer);
     await sendNonScanReply({
       client,
@@ -1979,6 +2230,31 @@ async function handleTextMessage({ client, event, userId, session }) {
       paymentRef = null;
     }
 
+    if (isBirthdateChangeIntentPhrase(text)) {
+      console.log(
+        JSON.stringify({
+          event: "BIRTHDATE_CHANGE_INTENT",
+          userId,
+          activeState: "awaiting_slip",
+          inputText: text,
+        }),
+      );
+      setAwaitingBirthdateUpdate(userId, true);
+      resetSameStateAckStreak(userId, "awaiting_slip");
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_update_prompt_awaiting_slip",
+        semanticKey: "birthdate_update_prompt",
+        text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        alternateTexts: [
+          `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+        ],
+      });
+      return;
+    }
+
     if (isPaymentCommand(text, lowerText) || isResendQrIntentText(text)) {
       const isResend = isResendQrIntentText(text);
       logSafeIntentConsumed({
@@ -1996,6 +2272,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         confidence: "exact",
         chosenReplyType: "awaiting_slip_resend_qr",
       });
+      resetSameStateAckStreak(userId, "awaiting_slip");
       await handlePaymentCommandTextRoute({
         client,
         event,
@@ -2010,6 +2287,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
 
     if (isAwaitingSlipStatusLikeText(text)) {
+      resetSameStateAckStreak(userId, "awaiting_slip");
       const streak = bumpGuidanceNoProgress(userId, "awaiting_slip");
       const tier = guidanceTierFromStreak(streak);
       logStateGuidanceLevel({
@@ -2058,6 +2336,77 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
+    if (isGenericAckText(text)) {
+      const ackStreak = bumpSameStateAckStreak(userId, "awaiting_slip");
+      logHumanConversationMemory({
+        event: "STATE_ACK_CONTINUE",
+        userId,
+        activeState: "awaiting_slip",
+        ackStreak,
+        normalizedIntent: "ack_continue",
+      });
+      if (ackStreak >= 3) {
+        logHumanConversationMemory({
+          event: "REPLY_REPEAT_AVOIDED",
+          userId,
+          activeState: "awaiting_slip",
+          reason: "slip_ack_micro",
+        });
+      }
+      logHumanConversationMemory({
+        event: "HUMAN_SURFACE_FALLBACK",
+        userId,
+        surface: "deterministic_awaiting_slip_ack",
+      });
+      const slipAckText = buildAwaitingSlipAckContinueText({
+        userId,
+        ackStreak,
+        paymentRef,
+      });
+      const ackTier = guidanceTierFromStreak(ackStreak);
+      logStateGuidanceLevel({
+        userId,
+        activeState: "awaiting_slip",
+        noProgressCount: ackStreak,
+        guidanceLevel: ackTier,
+        ladder: "ack_continue",
+      });
+      logStateMicroIntent({
+        userId,
+        activeState: "awaiting_slip",
+        inputText: text,
+        normalizedIntent: "ack_continue",
+        confidence: "near_safe",
+        chosenReplyType:
+          ackTier === "full"
+            ? "awaiting_slip_guidance"
+            : "awaiting_slip_gentle_remind",
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType:
+          ackTier === "full"
+            ? "awaiting_slip_guidance"
+            : "awaiting_slip_gentle_remind",
+        semanticKey:
+          ackTier === "full"
+            ? "awaiting_slip_guidance"
+            : "awaiting_slip_gentle_remind",
+        text: slipAckText,
+        alternateTexts: [
+          buildAwaitingSlipFatigueGuidanceText({
+            paymentRef,
+            tier: "short",
+            kind: "default",
+          }),
+        ],
+      });
+      return;
+    }
+
+    resetSameStateAckStreak(userId, "awaiting_slip");
     const streak = bumpGuidanceNoProgress(userId, "awaiting_slip");
     const tier = guidanceTierFromStreak(streak);
     logStateGuidanceLevel({
@@ -2070,7 +2419,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       userId,
       activeState: "awaiting_slip",
       inputText: text,
-      normalizedIntent: isGenericAckText(text) ? "generic_ack" : "default_guidance",
+      normalizedIntent: "default_guidance",
       confidence: "unclear",
       chosenReplyType:
         tier === "full" ? "awaiting_slip_guidance" : "awaiting_slip_gentle_remind",
@@ -2079,6 +2428,11 @@ async function handleTextMessage({ client, event, userId, session }) {
       paymentRef,
       tier,
       kind: "default",
+    });
+    logHumanConversationMemory({
+      event: "HUMAN_SURFACE_FALLBACK",
+      userId,
+      surface: "deterministic_awaiting_slip_default",
     });
     console.log("[ACTIVE_STATE_ROUTING]", {
       userId,
@@ -2123,7 +2477,33 @@ async function handleTextMessage({ client, event, userId, session }) {
       paymentRef = null;
     }
 
+    if (isBirthdateChangeIntentPhrase(text)) {
+      console.log(
+        JSON.stringify({
+          event: "BIRTHDATE_CHANGE_INTENT",
+          userId,
+          activeState: "pending_verify",
+          inputText: text,
+        }),
+      );
+      setAwaitingBirthdateUpdate(userId, true);
+      resetSameStateAckStreak(userId, "pending_verify");
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_update_prompt_pending_verify",
+        semanticKey: "birthdate_update_prompt",
+        text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        alternateTexts: [
+          `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+        ],
+      });
+      return;
+    }
+
     if (isPaymentCommand(text, lowerText)) {
+      resetSameStateAckStreak(userId, "pending_verify");
       await sendNonScanReply({
         client,
         userId,
@@ -2148,6 +2528,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
     if (!allowsUtilityCommandsDuringPendingVerify(text, lowerText)) {
       if (isPendingVerifyStatusLikeText(text)) {
+      resetSameStateAckStreak(userId, "pending_verify");
       const streak = bumpGuidanceNoProgress(userId, "pending_verify");
       const tier = guidanceTierFromStreak(streak);
       logStateGuidanceLevel({
@@ -2196,6 +2577,93 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
+    if (isGenericAckText(text)) {
+      const ackStreak = bumpSameStateAckStreak(userId, "pending_verify");
+      logHumanConversationMemory({
+        event: "STATE_ACK_CONTINUE",
+        userId,
+        activeState: "pending_verify",
+        ackStreak,
+        normalizedIntent: "ack_continue",
+      });
+      if (ackStreak >= 3) {
+        logHumanConversationMemory({
+          event: "REPLY_REPEAT_AVOIDED",
+          userId,
+          activeState: "pending_verify",
+          reason: "pv_ack_micro",
+        });
+      }
+      logHumanConversationMemory({
+        event: "HUMAN_SURFACE_FALLBACK",
+        userId,
+        surface: "deterministic_pending_verify_ack",
+      });
+      const ackTier = guidanceTierFromStreak(ackStreak);
+      const pendingText = buildPendingVerifyAckContinueText({
+        userId,
+        ackStreak,
+        paymentRef,
+      });
+      logStateGuidanceLevel({
+        userId,
+        activeState: "pending_verify",
+        noProgressCount: ackStreak,
+        guidanceLevel: ackTier,
+        ladder: "ack_continue",
+      });
+      logStateMicroIntent({
+        userId,
+        activeState: "pending_verify",
+        inputText: text,
+        normalizedIntent: "ack_continue",
+        confidence: "near_safe",
+        chosenReplyType:
+          ackTier === "full"
+            ? "pending_verify_guidance"
+            : "pending_verify_gentle_remind",
+      });
+      const pvReplyType =
+        ackTier === "full"
+          ? "pending_verify_guidance"
+          : "pending_verify_gentle_remind";
+      const pvSemantic = pvReplyType;
+      console.log("[UNEXPECTED_INPUT_HANDLED]", {
+        userId,
+        activeState: paymentState,
+        inputText: text,
+        normalizedIntent: "ack_continue_pending_verify",
+        chosenReplyType: pvReplyType,
+      });
+      console.log("[ACTIVE_STATE_ROUTING]", {
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        conversationOwner,
+        stateOwner: conversationOwner,
+        replyFamily: "pending_verify",
+        expectedInputType: "short_ack",
+        text,
+        chosenReplyType: pvReplyType,
+        routeReason: "pending_verify_ack_human",
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: pvReplyType,
+        semanticKey: pvSemantic,
+        text: pendingText,
+        alternateTexts: [
+          "รอแจ้งผลในแชตนี้ได้เลยครับ",
+          buildPendingVerifyReminderText({ paymentRef }),
+        ],
+      });
+      return;
+    }
+
+    resetSameStateAckStreak(userId, "pending_verify");
     const streak = bumpGuidanceNoProgress(userId, "pending_verify");
     const tier = guidanceTierFromStreak(streak);
     logStateGuidanceLevel({
@@ -2204,33 +2672,34 @@ async function handleTextMessage({ client, event, userId, session }) {
       noProgressCount: streak,
       guidanceLevel: tier,
     });
-    const isAck = isGenericAckText(text);
     logStateMicroIntent({
       userId,
       activeState: "pending_verify",
       inputText: text,
-      normalizedIntent: isAck ? "generic_ack" : "default_guidance",
+      normalizedIntent: "default_guidance",
       confidence: "unclear",
-      chosenReplyType: isAck
-        ? "pending_verify_gentle_remind"
-        : "pending_verify_guidance",
+      chosenReplyType:
+        tier === "full" ? "pending_verify_guidance" : "pending_verify_gentle_remind",
     });
-    const pendingText = isAck
-      ? buildPendingVerifyGentleRemindText({ paymentRef })
-      : tier === "full"
+    const pendingText =
+      tier === "full"
         ? buildPendingVerifyHumanGuidanceText({ paymentRef })
         : buildPendingVerifyGentleRemindText({ paymentRef });
-    const pvReplyType = isAck
-      ? "pending_verify_gentle_remind"
-      : "pending_verify_guidance";
-    const pvSemantic = isAck
-      ? "pending_verify_gentle_remind"
-      : "pending_verify_guidance";
+    const pvReplyType =
+      tier === "full"
+        ? "pending_verify_guidance"
+        : "pending_verify_gentle_remind";
+    const pvSemantic = pvReplyType;
+    logHumanConversationMemory({
+      event: "HUMAN_SURFACE_FALLBACK",
+      userId,
+      surface: "deterministic_pending_verify_default",
+    });
     console.log("[UNEXPECTED_INPUT_HANDLED]", {
       userId,
       activeState: paymentState,
       inputText: text,
-      normalizedIntent: isAck ? "generic_ack_pending_verify" : "unexpected_pending_verify",
+      normalizedIntent: "unexpected_pending_verify",
       chosenReplyType: pvReplyType,
     });
     console.log("[ACTIVE_STATE_ROUTING]", {
@@ -2406,7 +2875,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       !isStatsCommand(text, lowerText) &&
       !isMainMenuAlias(text, lowerText) &&
       !isPaymentCommand(text, lowerText) &&
-      text !== "เปลี่ยนวันเกิด" &&
+      !isBirthdateChangeIntentPhrase(text) &&
       text !== "สแกนพลังงาน"
     ) {
       const scanReadyText = buildPaidActiveScanReadyHumanText(userId);
@@ -2517,7 +2986,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           });
           return;
         }
-        if (text === "เปลี่ยนวันเกิด") {
+        if (isBirthdateChangeIntentPhrase(text)) {
           setAwaitingBirthdateUpdate(userId, true);
           await sendNonScanReply({
             client,
@@ -2616,106 +3085,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
   }
 
-  // 3) awaiting birthdate update (profile)
-  if (session.awaitingBirthdateUpdate) {
-    if (text === "เปลี่ยนวันเกิด") {
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "birthdate_update_prompt_repeat",
-        semanticKey: "birthdate_update_prompt",
-        text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
-        alternateTexts: [
-          `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
-        ],
-      });
-      return;
-    }
-
-    const parsedBd = parseBirthdateInput(text);
-    if (!parsedBd.ok) {
-      console.log("[BIRTHDATE_UPDATE] invalid", {
-        userId,
-        text,
-        reason: parsedBd.reason,
-      });
-      if (looksLikeBirthdateInput(text)) {
-        logWaitingBirthdate("invalid_date_attempt", {
-          gate: "birthdate_update_profile",
-          userId,
-          reason: parsedBd.reason,
-        });
-      } else {
-        logWaitingBirthdate("guidance", {
-          gate: "birthdate_update_profile",
-          userId,
-          hint: "non_date_like",
-        });
-      }
-      if (looksLikeBirthdateInput(text)) {
-        const errMsgs = await buildBirthdateErrorMessages(userId, parsedBd.reason);
-        if (errMsgs.length) {
-          errMsgs[errMsgs.length - 1] = `${errMsgs[errMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
-        }
-        await sendNonScanSequenceReply({
-          client,
-          userId,
-          replyToken: event.replyToken,
-          replyType: "birthdate_update_error",
-          semanticKey: "birthdate_error_profile",
-          messages: errMsgs,
-        });
-        return;
-      }
-      const gMsgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
-      if (gMsgs.length) {
-        gMsgs[gMsgs.length - 1] = `${gMsgs[gMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
-      }
-      await sendNonScanSequenceReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "birthdate_update_guidance",
-        semanticKey: "birthdate_guidance_profile",
-        messages: gMsgs.length
-          ? gMsgs
-          : [`${await buildWaitingBirthdateGuidanceText(userId)}\n\n${MAIN_MENU_HINT_TEXT}`],
-      });
-      return;
-    }
-
-    const normalizedBirthdate = parsedBd.normalizedDisplay;
-    await saveBirthdate(userId, normalizedBirthdate);
-
-    clearAwaitingBirthdateUpdate(userId);
-    logWaitingBirthdate("accepted", {
-      gate: "birthdate_update_profile",
-      userId,
-      yearCE: parsedBd.yearCE,
-      isoDate: parsedBd.isoDate,
-      normalizedDisplay: normalizedBirthdate,
-    });
-    console.log("[BIRTHDATE_UPDATE] saved", {
-      userId,
-      birthdate: normalizedBirthdate,
-    });
-
-    await sendNonScanReply({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      replyType: "birthdate_saved_profile",
-      semanticKey: "birthdate_saved",
-      text: `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\n${MAIN_MENU_HINT_TEXT}`,
-      alternateTexts: [
-        `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
-      ],
-    });
-    return;
-  }
-
-  // 4) waiting_birthdate (pending scan image; includes awaiting_payment slip reminder branch)
+  // 3) waiting_birthdate (pending scan image; includes awaiting_payment slip reminder branch)
   try {
     const paymentState = getPaymentState(userId).state;
     const pendingPayRow = await getLatestAwaitingPaymentForLineUserId(userId);
@@ -2756,7 +3126,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         return;
       }
 
-      if (text === "เปลี่ยนวันเกิด") {
+      if (isBirthdateChangeIntentPhrase(text)) {
         setAwaitingBirthdateUpdate(userId, true);
         await sendNonScanReply({
           client,
@@ -2949,7 +3319,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   // 5) explicit commands (no active lock above)
-  if (text === "เปลี่ยนวันเกิด") {
+  if (isBirthdateChangeIntentPhrase(text)) {
     console.log("[BIRTHDATE_UPDATE] requested", { userId });
     setAwaitingBirthdateUpdate(userId, true);
     await sendNonScanReply({
@@ -3086,30 +3456,6 @@ async function handleTextMessage({ client, event, userId, session }) {
       replyToken: event.replyToken,
       replyType: "waiting_birthdate_guidance",
       semanticKey: "waiting_birthdate_guidance",
-      messages: msgs,
-    });
-    return;
-  }
-
-  if (session.awaitingBirthdateUpdate) {
-    const msgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
-    console.log("[ACTIVE_STATE_ROUTING]", {
-      userId,
-      flowState: "awaiting_birthdate_update",
-      paymentState,
-      accessState,
-      conversationOwner: "waiting_birthdate",
-      expectedInputType: "date_like",
-      text,
-      chosenReplyType: "birthdate_update_guidance",
-      routeReason: "terminal_guard_profile_birthdate_no_generic_idle",
-    });
-    await sendNonScanSequenceReply({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      replyType: "birthdate_update_guidance",
-      semanticKey: "birthdate_guidance_profile",
       messages: msgs,
     });
     return;

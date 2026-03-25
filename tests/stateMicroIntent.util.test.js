@@ -9,6 +9,7 @@ import {
   isGenericAckText,
   isUnclearNoiseText,
   isPackageSelectedHesitation,
+  isBirthdateChangeIntentPhrase,
 } from "../src/utils/stateMicroIntent.util.js";
 import { parsePackageSelectionFromText } from "../src/services/scanOffer.packages.js";
 import { loadActiveScanOffer } from "../src/services/scanOffer.loader.js";
@@ -55,8 +56,24 @@ test("resend QR / status hints", () => {
 
 test("generic ack + noise", () => {
   assert.equal(isGenericAckText("โอเค"), true);
+  assert.equal(isGenericAckText("เค"), true);
+  assert.equal(isGenericAckText("ดี"), true);
+  assert.equal(isGenericAckText("👌"), true);
   assert.equal(isUnclearNoiseText("พพ"), true);
   assert.equal(isUnclearNoiseText("411"), true);
+});
+
+test("status phrases are not mistaken for generic ack", () => {
+  assert.equal(isPendingVerifyStatusLikeText("เช็กยัง"), true);
+  assert.equal(isGenericAckText("เช็กยัง"), false);
+  assert.equal(isGenericAckText("รับทราบ"), true);
+});
+
+test("birthdate change intent phrases (deterministic)", () => {
+  assert.equal(isBirthdateChangeIntentPhrase("ขอเปลี่ยนวันเกิด"), true);
+  assert.equal(isBirthdateChangeIntentPhrase("แก้วันเกิด"), true);
+  assert.equal(isBirthdateChangeIntentPhrase("วันเกิดไม่ถูก"), true);
+  assert.equal(isBirthdateChangeIntentPhrase("14/09/1995"), false);
 });
 
 test("hesitation on package selected", () => {

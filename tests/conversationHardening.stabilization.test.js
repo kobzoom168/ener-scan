@@ -9,6 +9,8 @@ import {
 import {
   resolvePaywallPromptReplyType,
   buildPaywallFatiguePromptText,
+  buildPaywallFullOfferIntroText,
+  buildPaywallAckContinueText,
   buildPaymentPackageSelectedHesitationText,
   allowsUtilityCommandsDuringPendingVerify,
   isPaymentCommand,
@@ -62,6 +64,18 @@ test("paywall fatigue copy: noise tier micro stays short (no giant menu in prima
   });
   assert.ok(t.length < 120, "micro primary should stay compact");
   assert.ok(!t.includes("เลือกได้ 2 แบบ"), "micro should not open full menu text");
+});
+
+test("paywall full intro + ack ladder stay human and bounded", () => {
+  const full = buildPaywallFullOfferIntroText();
+  assert.ok(full.includes("พรุ่งนี้"));
+  assert.ok(full.includes("จ่ายเงิน"));
+  const microAck = buildPaywallAckContinueText({
+    userId: "u_test_ack",
+    ackStreak: 3,
+  });
+  assert.ok(microAck.length < 40);
+  assert.ok(!microAck.includes("จ่ายเงิน"));
 });
 
 test("single offer: แพง does not parse when thaiRelativeAliases off", () => {

@@ -31,12 +31,26 @@ const GENERIC_ACK = new Set([
   "พร้อม",
   "ok",
   "okay",
+  "เค",
+  "ดี",
+  "คับ",
+  "รับทราบ",
 ]);
 
 function normText(text) {
   return String(text || "")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+/** Short acknowledgement / light agreement (not pay intent, not status). */
+export function isGenericAckText(text) {
+  const t = normText(text);
+  if (!t) return false;
+  const lt = t.toLowerCase();
+  if (GENERIC_ACK.has(t) || GENERIC_ACK.has(lt)) return true;
+  if (/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]$/u.test(t)) return true;
+  return false;
 }
 
 /** @returns {boolean} */
@@ -46,12 +60,6 @@ export function isLoosePayIntentExact(text) {
   const lt = t.toLowerCase();
   if (lt === "payment") return true;
   return PAY_INTENT_WORDS.has(t);
-}
-
-export function isGenericAckText(text) {
-  const t = normText(text);
-  if (!t) return false;
-  return GENERIC_ACK.has(t) || GENERIC_ACK.has(t.toLowerCase());
 }
 
 /** Short junk / typo-like (stay in state; do not treat as commands). */
@@ -116,6 +124,16 @@ export function isPackageChangeIntentPhrase(text) {
   return PACKAGE_CHANGE_VERBS.test(normText(text));
 }
 
+/** Natural Thai phrases asking to change saved birthdate (deterministic; not LLM). */
+export function isBirthdateChangeIntentPhrase(text) {
+  const t = normText(text);
+  if (!t) return false;
+  if (t === "เปลี่ยนวันเกิด") return true;
+  return /^(ขอ)?(เปลี่ยน|แก้|อัปเดต|อัพเดต)วันเกิด|วันเกิด(ไม่ถูก|ผิด|คลาด)|ขอแก้วันเกิด|แก้เดือนเกิด|ขอเปลี่ยนเดือนเกิด/i.test(
+    t,
+  );
+}
+
 /** awaiting_slip / resend QR */
 export function isResendQrIntentText(text) {
   const t = normText(text);
@@ -133,20 +151,24 @@ export function isResendQrIntentText(text) {
 export function isAwaitingSlipStatusLikeText(text) {
   const t = normText(text);
   if (!t) return false;
+  if (isGenericAckText(t)) return false;
   return (
-    /ยังไง|ยังไงบ้าง|ถึงไหน|ถึงไหนแล้ว|ตรวจ|อนุมัติ|สถานะ|คืบหน้า|รอ|pending|เมื่อไหร่|เมื่อไร/i.test(
+    /ยังไง|ยังไงบ้าง|ถึงไหน|ถึงไหนแล้ว|ตรวจ|อนุมัติ|สถานะ|คืบหน้า|pending|เมื่อไหร่|เมื่อไร|เช็ก|เช็ค|โอนแล้ว|เข้ายัง|ยังไม่เข้า/i.test(
       t,
-    )
+    ) ||
+    (/รอ/i.test(t) && t.length >= 4)
   );
 }
 
 export function isPendingVerifyStatusLikeText(text) {
   const t = normText(text);
   if (!t) return false;
+  if (isGenericAckText(t)) return false;
   return (
-    /สถานะ|คืบหน้า|รอ|ตรวจ|อนุมัติ|pending|ยังไง|ถึงไหน|เมื่อไหร่|เมื่อไร/i.test(
+    /สถานะ|คืบหน้า|ตรวจ|อนุมัติ|pending|ยังไง|ถึงไหน|เมื่อไหร่|เมื่อไร|เช็ก|เช็ค|ยังไม่เข้า|ยังไม่อนุมัติ|ยังไม่ผ่าน|โอนแล้วทำไม|ทำไมยังไม่|เรียบร้อยยัง/i.test(
       t,
-    )
+    ) ||
+    (/รอ/i.test(t) && t.length >= 4)
   );
 }
 

@@ -17,6 +17,11 @@ function createEmptySession() {
      * Keys: paywall_offer_single | awaiting_slip | waiting_birthdate | pending_verify
      */
     guidanceNoProgressByState: {},
+    /**
+     * Consecutive short-ack turns in the same interactive state (human ack ladder).
+     * Keys: paywall_offer_single | awaiting_slip | waiting_birthdate | pending_verify
+     */
+    sameStateAckStreakByState: {},
   };
 }
 
@@ -202,4 +207,46 @@ export function getGuidanceNoProgressCount(userId, stateKey) {
   const k = String(stateKey || "").trim();
   if (!id || !GUIDANCE_STATE_KEYS.has(k)) return 0;
   return Number(getGuidanceMap(id)[k] || 0);
+}
+
+function getAckStreakMap(userId) {
+  const s = getSession(userId);
+  if (!s.sameStateAckStreakByState || typeof s.sameStateAckStreakByState !== "object") {
+    s.sameStateAckStreakByState = {};
+  }
+  return s.sameStateAckStreakByState;
+}
+
+/** @param {string} stateKey */
+export function resetSameStateAckStreak(userId, stateKey) {
+  const id = normalizeUserId(userId);
+  const k = String(stateKey || "").trim();
+  if (!id || !GUIDANCE_STATE_KEYS.has(k)) return;
+  const map = getAckStreakMap(id);
+  map[k] = 0;
+  sessions.set(id, getSession(id));
+}
+
+/**
+ * Increment consecutive same-state acknowledgement streak (short Thai ack / emoji).
+ * @param {string} stateKey
+ * @returns {number} new streak (>= 1)
+ */
+export function bumpSameStateAckStreak(userId, stateKey) {
+  const id = normalizeUserId(userId);
+  const k = String(stateKey || "").trim();
+  if (!id || !GUIDANCE_STATE_KEYS.has(k)) return 0;
+  const map = getAckStreakMap(id);
+  const next = Number(map[k] || 0) + 1;
+  map[k] = next;
+  sessions.set(id, getSession(id));
+  return next;
+}
+
+/** @param {string} stateKey */
+export function getSameStateAckStreak(userId, stateKey) {
+  const id = normalizeUserId(userId);
+  const k = String(stateKey || "").trim();
+  if (!id || !GUIDANCE_STATE_KEYS.has(k)) return 0;
+  return Number(getAckStreakMap(id)[k] || 0);
 }

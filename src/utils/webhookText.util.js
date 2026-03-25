@@ -28,6 +28,7 @@ import {
 } from "../services/scanOffer.packages.js";
 import {
   isLoosePayIntentExact,
+  isBirthdateChangeIntentPhrase,
 } from "./stateMicroIntent.util.js";
 
 /** Backward-compatible alias for `looksLikeBirthdateInput`. */
@@ -829,7 +830,8 @@ export function allowsUtilityCommandsDuringPendingVerify(text, lowerText) {
   const lt = String(lowerText || t.toLowerCase()).trim();
 
   if (isHistoryCommand(t, lt) || isStatsCommand(t, lt)) return true;
-  if (t === "เปลี่ยนวันเกิด" || t === "สแกนพลังงาน") return true;
+  if (t === "สแกนพลังงาน") return true;
+  if (isBirthdateChangeIntentPhrase(t)) return true;
   if (t === "วิธีใช้" || t === "วิธีใช้งาน") return true;
 
   const menu = new Set([
@@ -853,22 +855,73 @@ export async function buildAwaitingSlipReminderText({ userId, paymentRef } = {})
 
 // --- Micro-intent / menu fatigue (deterministic reply families) ---
 
+/** First full paywall explanation (single offer) — used on unclear tier full. */
+export function buildPaywallFullOfferIntroText(offer = loadActiveScanOffer()) {
+  const pkg = getDefaultPackage(offer);
+  const price = pkg?.priceThb ?? offer.paidPriceThb;
+  const scanCount = pkg?.scanCount ?? offer.paidScanCount;
+  const hours = pkg?.windowHours ?? offer.paidWindowHours;
+  return [
+    "วันนี้สิทธิ์ฟรีครบแล้วครับ",
+    "",
+    "ถ้ายังไม่รีบ พรุ่งนี้ค่อยส่งรูปมาใหม่ก็ได้",
+    "",
+    "ถ้าต้องการใช้ต่อวันนี้",
+    `เปิดสิทธิ์เพิ่มได้ ${price} บาท`,
+    `สแกนได้ ${scanCount} ครั้ง ภายใน ${hours} ชั่วโมงหลังอนุมัติ`,
+    "",
+    "ถ้าพร้อมค่อยพิมพ์ 'จ่ายเงิน' มาได้เลยครับ",
+  ].join("\n");
+}
+
+/**
+ * Short acknowledgement ladder while still on paywall (same-state ack; no routing change).
+ * @param {number} ackStreak consecutive ack turns in this state (>=1)
+ */
+export function buildPaywallAckContinueText({
+  offer = loadActiveScanOffer(),
+  userId = "",
+  ackStreak = 1,
+} = {}) {
+  void offer;
+  const n = Math.max(1, Number(ackStreak) || 1);
+  if (n >= 3) {
+    const pure = ["รับทราบครับ", "ได้ครับ", "โอเคครับ"];
+    return pure[slotFromUserId(userId, pure.length)];
+  }
+  if (n === 2) {
+    const v = ["โอเคครับ ยังไม่รีบก็ได้ครับ", "รับทราบครับ"];
+    return v[slotFromUserId(userId, v.length)];
+  }
+  const v = [
+    "ได้ครับ",
+    "โอเคครับ ถ้าจะเปิดสิทธิ์ต่อเมื่อไร พิมพ์ 'จ่ายเงิน' มาได้เลยครับ",
+  ];
+  return v[slotFromUserId(userId, v.length)];
+}
+
 /**
  * Single-offer paywall fatigue (tier × branch). No multi-package wording.
  * @param {"full" | "short" | "micro"} tier
  * @param {"wait_tomorrow" | "date_wrong" | "ack" | "unclear"} branch
+ * @param {number} [ackStreak] when branch ack — ladder from buildPaywallAckContinueText
  */
 export function buildPaywallFatiguePromptText({
   offer = loadActiveScanOffer(),
   userId = "",
   tier = "full",
   branch = "unclear",
+  ackStreak = 1,
 } = {}) {
   const pkg = getDefaultPackage(offer);
   const price = pkg?.priceThb ?? offer.paidPriceThb;
   const scanCount = pkg?.scanCount ?? offer.paidScanCount;
   const hours = pkg?.windowHours ?? offer.paidWindowHours;
   const freeQ = offer.freeQuotaPerDay;
+
+  if (branch === "ack") {
+    return buildPaywallAckContinueText({ offer, userId, ackStreak });
+  }
 
   if (branch === "wait_tomorrow") {
     if (tier === "micro") {
@@ -893,24 +946,13 @@ export function buildPaywallFatiguePromptText({
     }
     return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ ${price} บาท พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
   }
-  if (branch === "ack") {
-    if (tier === "micro") return `รับทราบครับ พิมพ์ 'จ่ายเงิน' เมื่อพร้อม`;
-    if (tier === "short") {
-      return `ถ้าพร้อมชำระ พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
-    }
-    return `ถ้าต้องการเปิดสิทธิ์เพิ่ม เดี๋ยวผมส่งคิวอาร์ให้ครับ พิมพ์ 'จ่ายเงิน' มาได้เลย`;
-  }
   if (tier === "micro") {
     return `สิทธิ์ฟรีวันนี้ครบแล้วครับ ถ้าจะใช้ต่อ พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
   }
   if (tier === "short") {
     return `ตอนนี้สิทธิ์ฟรีของวันนี้ครบแล้วครับ ถ้าต้องการใช้ต่อ เปิดเพิ่มได้ ${price} บาท / ${scanCount} ครั้ง / ${hours} ชม. พร้อมแล้วพิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
   }
-  return buildPaywallHumanGuidanceText({
-    offer,
-    userId,
-    guidanceReason: "unexpected",
-  });
+  return buildPaywallFullOfferIntroText(offer);
 }
 
 /**
@@ -995,6 +1037,56 @@ export function buildPendingVerifyStatusShortText({ paymentRef } = {}) {
 
 export function buildPendingVerifyGentleRemindText({ paymentRef } = {}) {
   const base = "รอตรวจสลิปอยู่ครับ เดี๋ยวแจ้งในแชตนี้ให้";
+  return appendPaymentRefLine(base, paymentRef);
+}
+
+/**
+ * awaiting_slip: short ack ladder (does not repeat full slip menu every turn).
+ * @param {number} ackStreak consecutive ack turns in awaiting_slip
+ */
+export function buildAwaitingSlipAckContinueText({
+  userId = "",
+  ackStreak = 1,
+  paymentRef,
+} = {}) {
+  const n = Math.max(1, Number(ackStreak) || 1);
+  if (n >= 3) {
+    const b = ["รับทราบครับ", "ได้ครับ", "โอเคครับ"];
+    return appendPaymentRefLine(b[slotFromUserId(userId, b.length)], paymentRef);
+  }
+  if (n === 2) {
+    const b = ["โอเคครับ ยังไม่รีบก็ได้ครับ", "รับทราบครับ"];
+    return appendPaymentRefLine(b[slotFromUserId(userId, b.length)], paymentRef);
+  }
+  const v = [
+    "ได้ครับ",
+    "ถ้าโอนแล้ว ส่งสลิปมาในแชตนี้ได้เลยครับ เดี๋ยวตรวจสอบให้ต่อครับ",
+  ];
+  return appendPaymentRefLine(v[slotFromUserId(userId, v.length)], paymentRef);
+}
+
+/**
+ * pending_verify: reassurance ack ladder (not “pay again”).
+ * @param {number} ackStreak consecutive ack turns in pending_verify
+ */
+export function buildPendingVerifyAckContinueText({
+  userId = "",
+  ackStreak = 1,
+  paymentRef,
+} = {}) {
+  const n = Math.max(1, Number(ackStreak) || 1);
+  if (n >= 3) {
+    const b = ["รับทราบครับ", "ได้ครับ", "โอเคครับ"];
+    return appendPaymentRefLine(b[slotFromUserId(userId, b.length)], paymentRef);
+  }
+  if (n === 2) {
+    const b = [
+      "โอเคครับ รอแป๊บนึงนะครับ",
+      "รับทราบครับ กำลังเช็กให้อยู่นะครับ",
+    ];
+    return appendPaymentRefLine(b[slotFromUserId(userId, b.length)], paymentRef);
+  }
+  const base = "ตอนนี้รับสลิปแล้วครับ กำลังเช็กให้อยู่นะครับ";
   return appendPaymentRefLine(base, paymentRef);
 }
 
