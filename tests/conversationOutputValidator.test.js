@@ -28,7 +28,7 @@ test("validator: accepts same price and preserves fact", () => {
     nextStep: "select_package",
     microIntent: "",
   };
-  const ok = validateConversationOutput("เปิดสิทธิ์ 49 บาท พิมพ์จ่ายเงินได้เลยครับ", contract);
+  const ok = validateConversationOutput("เปิดสิทธิ์ 49 บาท แจ้งว่าจ่ายเงินมาก็ได้ครับ", contract);
   assert.equal(ok.valid, true);
   assert.ok(String(ok.sanitizedText || "").includes("49"));
 });

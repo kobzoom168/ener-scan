@@ -274,7 +274,7 @@ export function buildWaitingBirthdateFlex() {
     bodyContents: [
       createCard(
         "ขั้นตอนถัดไป",
-        "กรุณาพิมพ์วันเกิดของเจ้าของวัตถุในรูปแบบ วัน/เดือน/ปี",
+        "ขอวันเกิดของเจ้าของวัตถุในรูปแบบ วัน/เดือน/ปี",
         {
           backgroundColor: "#171717",
           borderColor: "#242427",
@@ -397,7 +397,7 @@ export function buildPaymentRequiredFlex({ usedScans = 0, freeLimit = 2 } = {}) 
       ),
       createCard(
         "ขั้นตอนถัดไป",
-        "พิมพ์คำว่า payment เพื่อดูวิธีชำระเงิน",
+        "ดูวิธีชำระเงินได้ โดยแจ้งว่าจ่ายเงิน หรือส่งคำว่า payment มาก็ได้ครับ",
         {
           backgroundColor: "#1D1A14",
           borderColor: "#3A2F1D",

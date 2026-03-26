@@ -274,16 +274,13 @@ export function buildPaymentQrIntroText({ paymentRef, paidPackage = null } = {})
   const base = [
     "สิทธิ์สแกนฟรีของคุณครบแล้วครับ",
     "",
-    "จะสแกนต่อได้แบบนี้",
-    `แพ็กเกจนี้ราคา ${priceThb} บาท`,
-    `ใช้ได้ ${scanCount} ครั้ง (ภายใน ${windowHours} ชม. หลังอนุมัติ)`,
+    "ถ้าจะสแกนต่อในรอบนี้",
+    `แพ็กนี้ ${priceThb} บาท ใช้ได้ ${scanCount} ครั้ง ภายใน ${windowHours} ชม. หลังอนุมัติ`,
     "",
-    "ทำตามนี้ได้เลย",
-    "1. สแกนคิวอาร์ ด้านล่าง",
-    "2. โอนแล้วส่งสลิปในแชตนี้",
-    "3. เดี๋ยวมีคนตรวจแล้วเปิดสิทธิ์ให้",
+    "สแกนคิวอาร์ด้านล่าง โอนแล้วแนบสลิปไว้ในแชตนี้ได้เลยครับ",
+    "เดี๋ยวมีคนตรวจแล้วเปิดสิทธิ์ให้ครับ",
     "",
-    "พออนุมัติแล้ว จะมีข้อความแจ้งในแชตนี้ให้ครับ",
+    "พออนุมัติแล้ว เดี๋ยวผมแจ้งต่อในแชตนี้เลยครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -296,7 +293,7 @@ export function buildSingleOfferPaywallAltText(offer = loadActiveScanOffer()) {
   }
   return [
     `เปิดสิทธิ์เพิ่ม ${pkg.priceThb} บาท สแกนได้ ${pkg.scanCount} ครั้ง ภายใน ${pkg.windowHours} ชม. หลังอนุมัติ`,
-    "พร้อมแล้วพิมพ์ 'จ่ายเงิน' ได้เลยครับ",
+    "พร้อมเมื่อไหร่ บอกว่าจ่ายเงิน หรือ ปลดล็อก มาก็ได้ครับ",
   ].join("\n");
 }
 
@@ -324,10 +321,9 @@ export function buildPaymentPackageSelectedAck(paidPackage) {
   const p = paidPackage || getDefaultPackage(loadActiveScanOffer());
   if (!p) return buildSingleOfferPaywallAltText();
   return [
-    `ได้เลยครับ`,
-    `แพ็กนี้ ${p.priceThb} บาท ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`,
+    `โอเคครับ ยึดแพ็กนี้นะครับ ${p.priceThb} บาท ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`,
     "",
-    `พิมพ์ 'จ่ายเงิน' ได้เลย เดี๋ยวผมส่งคิวอาร์ให้ครับ`,
+    "เดี๋ยวผมส่งรายละเอียดกับคิวอาร์ให้ครับ ขอคิวชำระบอกผมได้เลยครับ",
   ].join("\n");
 }
 
@@ -345,11 +341,11 @@ function slotFromUserId(userId, modulo) {
 export function buildPackageAlreadySelectedContinueHuman(paidPackage) {
   const p = paidPackage || getDefaultPackage(loadActiveScanOffer());
   if (!p) {
-    return "พร้อมแล้วพิมพ์ 'จ่ายเงิน' ได้เลยครับ";
+    return "พร้อมเมื่อไหร่ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
   }
   return [
-    `ตกลงแล้วครับ แพ็ก ${p.priceThb} บาท`,
-    "ถ้าพร้อมโอน พิมพ์ 'จ่ายเงิน' ได้เลยครับ",
+    `ตกลงครับ แพ็ก ${p.priceThb} บาท`,
+    "พร้อมโอนเมื่อไหร่ แจ้งผมได้เลยครับ",
   ].join("\n");
 }
 
@@ -365,18 +361,18 @@ export function buildPaywallHumanGuidanceText({
   const pkg = getDefaultPackage(offer);
   const price = pkg?.priceThb ?? offer.paidPriceThb;
   if (guidanceReason === "birthdate_deferred") {
-    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
+    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้จะเปิดสิทธิ์ แจ้งผมได้เลยครับ`;
   }
   if (guidanceReason === "pay_intent_no_package") {
     const lines = [
-      `ถ้าพร้อมเปิดสิทธิ์ ${price} บาท พิมพ์ 'จ่ายเงิน' ได้เลยครับ`,
-      `ตอนนี้รอคำสั่งชำระเงินอยู่ครับ พิมพ์ 'จ่ายเงิน' มาได้เลย`,
+      `ถ้าพร้อมเปิดสิทธิ์ ${price} บาท บอกว่าจ่ายเงินมาก็ได้ครับ`,
+      `ตอนนี้รอคิวชำระอยู่ครับ แจ้งว่าจ่ายเงินมาได้เลยครับ`,
     ];
     return lines[slotFromUserId(userId, lines.length)];
   }
   const soft = [
-    `ถ้าต้องการใช้ต่อ พิมพ์ 'จ่ายเงิน' ได้เลยครับ`,
-    `พร้อมเมื่อไหร่ พิมพ์ 'จ่ายเงิน' มาได้เลยครับ`,
+    `ถ้าจะใช้ต่อ แจ้งผมได้เลยครับ`,
+    `พร้อมเมื่อไหร่บอกได้ครับ`,
   ];
   return soft[slotFromUserId(userId, soft.length)];
 }
@@ -389,7 +385,7 @@ export function buildPaymentPayIntentNoPackageHumanText({
   const alt = buildSingleOfferPaywallAltText(offer);
   const lines = [
     "ตอนนี้ยังไม่ได้อยู่ในขั้นตอนชำระเงินครับ ถ้าฟรีหมดแล้ว จะมีข้อความบอกแพ็กให้",
-    "หรือถ้าอยู่ช่วงชำระเงินอยู่แล้ว พิมพ์ 'จ่ายเงิน' ตามที่บอทบอกได้เลยครับ",
+    "หรือถ้าอยู่ช่วงชำระเงินอยู่แล้ว แจ้งว่าจ่ายเงินตามที่บอทบอกได้เลยครับ",
   ];
   const head = lines[slotFromUserId(userId, lines.length)];
   return `${head}\n\n${alt}`;
@@ -409,14 +405,14 @@ export function isPackageSelectionTokenText(text, offer = loadActiveScanOffer())
 export async function buildWaitingBirthdateDateFirstGuidanceMessages(userId, opts = {}) {
   const tier = opts.tier || "full";
   if (tier === "micro") {
-    return ["พิมพ์วันเกิดมาได้เลยครับ"];
+    return ["ขอวันเกิดหน่อยครับ"];
   }
   if (tier === "short") {
-    return ["ขอวันเกิดหน่อยครับ เช่น 19/08/2528"];
+    return ["ผมรอวันเกิดอยู่ครับ เช่น 19/08/2528"];
   }
   const lines = [
-    "ขอวันเกิดที่ใช้ในระบบหน่อยครับ พิมพ์แบบ 19/08/2528 ได้เลย",
-    "รอวันเกิดอยู่ครับ ส่งมาได้เลย เช่น 19-08-2528",
+    "ขอวันเกิดที่ใช้ในระบบหน่อยครับ อ่านแบบ 19/08/2528 นะครับ",
+    "รอวันเกิดอยู่ครับ เช่น 19-08-2528 บอกผมได้เลยครับ",
   ];
   const primary = lines[slotFromUserId(userId, lines.length)];
   return [primary];
@@ -433,7 +429,7 @@ export function buildDeterministicBirthdateErrorText(
 ) {
   const r = String(reason || "invalid_format");
   if (tier === "micro") {
-    return "ลองส่งวันเกิดอีกครั้งได้เลยครับ";
+    return "ลองบอกวันเกิดอีกครั้งได้เลยครับ";
   }
   if (tier === "short") {
     if (r === "out_of_range") return "วันเกิดอยู่นอกช่วงที่ใช้ได้ครับ ลองปีอื่นดูนะครับ";
@@ -444,7 +440,7 @@ export function buildDeterministicBirthdateErrorText(
     return "วันเกิดนี้ยังใช้ในระบบไม่ได้ครับ ลองปีอื่นที่อยู่ในช่วงที่รองรับ";
   }
   if (r === "invalid_date") {
-    return "วันที่ไม่ตรงกับปฏิทินครับ ลองส่งใหม่อีกครั้ง";
+    return "วันที่ไม่ตรงกับปฏิทินครับ ลองบอกใหม่อีกครั้งนะครับ";
   }
   return "ยังอ่านวันเกิดไม่ได้ครับ ลองแบบ 19/08/2528 หรือ 19082528";
 }
@@ -452,20 +448,20 @@ export function buildDeterministicBirthdateErrorText(
 /** Deterministic awaiting_slip text guard (persona may still vary alternates). */
 export function buildAwaitingSlipDeterministicGuidanceText({ paymentRef } = {}) {
   const base = [
-    "ถ้าโอนแล้ว ส่งสลิปมาในแชตนี้ได้เลยครับ",
-    "เดี๋ยวมีคนตรวจสอบแล้วเปิดสิทธิ์ให้",
+    "ถ้าโอนแล้ว แนบสลิปไว้ในแชตนี้ได้เลยครับ",
+    "เดี๋ยวมีคนตรวจแล้วเปิดสิทธิ์ให้ครับ",
     "",
-    "อยากดูคิวอาร์อีกครั้ง พิมพ์ 'จ่ายเงิน' ได้เลยครับ",
+    "อยากดูคิวอาร์อีกครั้ง แจ้งว่าจ่ายเงินมาก็ได้ครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
 
 export function buildPendingVerifyHumanGuidanceText({ paymentRef } = {}) {
   const base = [
-    "ตอนนี้ระบบได้รับสลิปแล้วครับ",
-    "กำลังรอตรวจสอบให้สักครู่ พออนุมัติแล้วจะแจ้งในแชตนี้ทันทีครับ",
+    "ได้รับสลิปแล้วครับ ตอนนี้กำลังตรวจสอบให้อยู่นะครับ",
+    "พอมีผล เดี๋ยวผมแจ้งต่อในแชตนี้เลยครับ",
     "",
-    "ถ้ายังไม่ได้ส่งสลิป ส่งรูปมาได้เลยครับ",
+    "ถ้ายังไม่ได้แนบสลิป รูปสลิปแนบในแชตนี้ได้เลยครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -607,10 +603,10 @@ export function isBlockedIntentDuringWaitingBirthdate(text, lowerText) {
 /** Payment / slip in progress (text guard when not utility command). */
 export function buildPaymentFlowLockedGuidanceText() {
   return [
-    "ตอนนี้รายการนี้อยู่ระหว่างการชำระเงิน / ตรวจสอบสลิปครับ",
+    "ตอนนี้รายการนี้อยู่ระหว่างชำระเงิน / ตรวจสอบสลิปครับ",
     "",
-    "หากโอนแล้ว สามารถส่งสลิปในแชตนี้ได้เลย",
-    "เราจะตรวจให้ก่อนเปิดสิทธิ์สแกนครับ",
+    "ถ้าโอนแล้ว แนบสลิปในแชตนี้ได้เลยครับ",
+    "เดี๋ยวตรวจให้ก่อนเปิดสิทธิ์สแกนครับ",
   ].join("\n");
 }
 
@@ -671,7 +667,7 @@ export function buildPaymentInstructionText({
   return [
     buildPaymentQrIntroText({ paymentRef, paidPackage: pkg }),
     "",
-    "ตอนนี้ยังโหลดรูปคิวอาร์ ในแชตไม่ได้ชั่วคราว ลองพิมพ์ จ่ายเงิน อีกครั้งภายหลัง หรือติดต่อเราได้ครับ",
+    "ตอนนี้ยังโหลดรูปคิวอาร์ในแชตไม่ได้ชั่วคราว ลองแจ้งว่าจ่ายเงินอีกครั้งภายหลัง หรือติดต่อเราได้ครับ",
   ].join("\n");
 }
 
@@ -680,7 +676,7 @@ export function buildManualPaymentRequestText({ paymentRef } = {}) {
   return [
     buildPaymentQrIntroText({ paymentRef }),
     "",
-    "พิมพ์: จ่ายเงิน เพื่อดูคิวอาร์ และวิธีชำระเงินอีกครั้ง",
+    "แจ้งว่าจ่ายเงิน เพื่อดูคิวอาร์และวิธีชำระเงินอีกครั้ง",
   ].join("\n");
 }
 
@@ -721,7 +717,7 @@ export function buildPendingVerifyPaymentCommandText({ paymentRef } = {}) {
   const base = [
     "ตอนนี้มีสลิปรอตรวจอยู่แล้วครับ",
     "",
-    "ไม่ต้องพิมพ์ จ่ายเงิน ซ้ำในตอนนี้",
+    "ไม่ต้องส่งคำสั่งจ่ายเงินซ้ำในตอนนี้นะครับ",
     "รอผลตรวจก่อนนะ อนุมัติหรือปฏิเสธ เดี๋ยวแจ้งในแชตนี้ให้ครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
@@ -842,9 +838,9 @@ export function buildPaymentRejectedText({ reason = null } = {}) {
   lines.push(
     "เริ่มขั้นตอนชำระใหม่ได้แบบนี้",
     "ส่งรูปสแกนอีกครั้ง (ตอนที่บอทขอชำระ) หรือ",
-    "พิมพ์ จ่ายเงิน หรือ ปลดล็อก เพื่อดูคิวอาร์ อีกครั้ง",
+    "แจ้งว่า จ่ายเงิน หรือ ปลดล็อก เพื่อดูคิวอาร์อีกครั้ง",
     "",
-    "แล้วโอนตามยอด ส่งสลิปใหม่ในแชทนี้ได้เลย"
+    "แล้วโอนตามยอด แนบสลิปใหม่ในแชทนี้ได้เลยครับ"
   );
   return lines.join("\n");
 }
@@ -889,13 +885,13 @@ export function buildPaywallFullOfferIntroText(offer = loadActiveScanOffer()) {
   return [
     "วันนี้สิทธิ์ฟรีครบแล้วครับ",
     "",
-    "ถ้ายังไม่รีบ พรุ่งนี้ค่อยส่งรูปมาใหม่ก็ได้",
+    "พรุ่งนี้ยังมีฟรีต่อได้อีกครับ ถ้ายังไม่รีบค่อยมาใหม่ก็ได้",
     "",
-    "ถ้าต้องการใช้ต่อวันนี้",
+    "ถ้าอยากสแกนต่อวันนี้",
     `เปิดสิทธิ์เพิ่มได้ ${price} บาท`,
     `สแกนได้ ${scanCount} ครั้ง ภายใน ${hours} ชั่วโมงหลังอนุมัติ`,
     "",
-    "ถ้าพร้อมค่อยพิมพ์ 'จ่ายเงิน' มาได้เลยครับ",
+    "พร้อมเมื่อไหร่ บอกว่าจ่ายเงิน หรือ ปลดล็อก มาก็ได้ครับ",
   ].join("\n");
 }
 
@@ -920,7 +916,7 @@ export function buildPaywallAckContinueText({
   }
   const v = [
     "ได้ครับ",
-    "โอเคครับ ถ้าจะเปิดสิทธิ์ต่อเมื่อไร พิมพ์ 'จ่ายเงิน' มาได้เลยครับ",
+    "โอเคครับ ถ้าจะเปิดสิทธิ์ต่อเมื่อไหร่ แจ้งผมได้เลยครับ",
   ];
   return v[slotFromUserId(userId, v.length)];
 }
@@ -950,10 +946,10 @@ export function buildPaywallFatiguePromptText({
 
   if (branch === "wait_tomorrow") {
     if (tier === "micro") {
-      return "โอเคครับ พรุ่งนี้มีฟรีใหม่อีกครับ หรือจะเปิดวันนี้ พิมพ์ 'จ่ายเงิน' ได้เลย";
+      return "โอเคครับ พรุ่งนี้มีฟรีใหม่อีกครับ หรือจะเปิดวันนี้ บอกว่าจ่ายเงินมาก็ได้ครับ";
     }
     if (tier === "short") {
-      return `รอพรุ่งนี้ได้เลยครับ ฟรีจะกลับมา ${freeQ} ครั้ง ถ้าจะใช้ต่อวันนี้ เปิดเพิ่ม ${price} บาท พิมพ์ 'จ่ายเงิน' ได้เลย`;
+      return `รอพรุ่งนี้ได้เลยครับ ฟรีจะกลับมา ${freeQ} ครั้ง ถ้าจะใช้ต่อวันนี้ เปิดเพิ่ม ${price} บาท แจ้งว่าจ่ายเงินมาก็ได้ครับ`;
     }
     return [
       "วันนี้สิทธิ์ฟรีครบแล้วครับ",
@@ -962,20 +958,20 @@ export function buildPaywallFatiguePromptText({
       "แต่ถ้าต้องการใช้ต่อทันที",
       `เปิดสิทธิ์เพิ่ม ${price} บาท สแกนได้ ${scanCount} ครั้ง ภายใน ${hours} ชม. หลังอนุมัติ`,
       "",
-      "พร้อมแล้วพิมพ์ 'จ่ายเงิน' ได้เลยครับ",
+      "พร้อมเมื่อไหร่ บอกว่าจ่ายเงินมาก็ได้ครับ",
     ].join("\n");
   }
   if (branch === "date_wrong") {
     if (tier === "micro") {
-      return "เดี๋ยวค่อยใส่วันเกิดตอนสแกนครับ ตอนนี้พิมพ์ 'จ่ายเงิน' ถ้าจะเปิดสิทธิ์";
+      return "เดี๋ยวค่อยใส่วันเกิดตอนสแกนครับ ตอนนี้จะเปิดสิทธิ์ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
     }
-    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ ${price} บาท พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
+    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ ${price} บาท แจ้งว่าจ่ายเงินมาก็ได้ครับ`;
   }
   if (tier === "micro") {
-    return `สิทธิ์ฟรีวันนี้ครบแล้วครับ ถ้าจะใช้ต่อ พิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
+    return `ฟรีวันนี้ครบแล้วครับ จะต่อวันนี้ บอกว่าจ่ายเงินมาก็ได้ครับ`;
   }
   if (tier === "short") {
-    return `ตอนนี้สิทธิ์ฟรีของวันนี้ครบแล้วครับ ถ้าต้องการใช้ต่อ เปิดเพิ่มได้ ${price} บาท / ${scanCount} ครั้ง / ${hours} ชม. พร้อมแล้วพิมพ์ 'จ่ายเงิน' ได้เลยครับ`;
+    return `ตอนนี้สิทธิ์ฟรีของวันนี้ครบแล้วครับ ถ้าต้องการใช้ต่อ เปิดเพิ่มได้ ${price} บาท / ${scanCount} ครั้ง / ${hours} ชม. พร้อมเมื่อไหร่แจ้งว่าจ่ายเงินมาก็ได้ครับ`;
   }
   return buildPaywallFullOfferIntroText(offer);
 }
@@ -1005,26 +1001,26 @@ export function buildPaymentPackageSelectedHesitationText(
 ) {
   void paidPackage;
   void offer;
-  return "ถ้าพร้อมโอน พิมพ์ 'จ่ายเงิน' ได้เลยครับ";
+  return "ถ้าพร้อมโอน แจ้งว่าจ่ายเงินมาก็ได้ครับ";
 }
 
 export function buildPaymentPackageSelectedGentleRemindText() {
-  return "ถ้าพร้อมโอน พิมพ์ 'จ่ายเงิน' ได้เลยครับ";
+  return "ถ้าพร้อมโอน แจ้งว่าจ่ายเงินมาก็ได้ครับ";
 }
 
 export function buildPaymentPackageSelectedUnclearText({ tier = "short" } = {}) {
   if (tier === "micro") {
-    return "พิมพ์ 'จ่ายเงิน' เมื่อพร้อมได้เลยครับ";
+    return "พร้อมเมื่อไหร่ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
   }
   if (tier === "short") {
-    return "ถ้าพร้อมเปิดสิทธิ์ พิมพ์ 'จ่ายเงิน' ได้เลยครับ";
+    return "ถ้าพร้อมเปิดสิทธิ์ บอกว่าจ่ายเงินมาก็ได้ครับ";
   }
-  return "ตอนนี้อยู่ช่วงเลือกเปิดสิทธิ์ครับ พิมพ์ 'จ่ายเงิน' ได้เลยครับ";
+  return "ตอนนี้อยู่ช่วงรอเปิดสิทธิ์ครับ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
 }
 
 export function buildAwaitingSlipStatusHintText({ paymentRef } = {}) {
   const base =
-    "ตอนนี้ผมรอสลิปอยู่ครับ ส่งรูปสลิปโอนมาในแชตนี้ได้เลย";
+    "ตอนนี้ผมรอสลิปอยู่ครับ แนบรูปสลิปโอนในแชตนี้ได้เลยครับ";
   return appendPaymentRefLine(base, paymentRef);
 }
 
@@ -1042,13 +1038,13 @@ export function buildAwaitingSlipFatigueGuidanceText({
   }
   if (tier === "micro") {
     return appendPaymentRefLine(
-      "รอสลิปอยู่ครับ ส่งรูปมาในแชตนี้ได้เลย",
+      "รอสลิปอยู่ครับ แนบในแชตนี้ได้เลยครับ",
       paymentRef,
     );
   }
   if (tier === "short") {
     return appendPaymentRefLine(
-      "ตอนนี้ผมรอสลิปอยู่ครับ ส่งรูปสลิปมาในแชตนี้ได้เลย",
+      "ตอนนี้ผมรอสลิปอยู่ครับ แนบรูปสลิปในแชตนี้ได้เลยครับ",
       paymentRef,
     );
   }
@@ -1085,7 +1081,7 @@ export function buildAwaitingSlipAckContinueText({
   }
   const v = [
     "ได้ครับ",
-    "ถ้าโอนแล้ว ส่งสลิปมาในแชตนี้ได้เลยครับ เดี๋ยวตรวจสอบให้ต่อครับ",
+    "ถ้าโอนแล้ว แนบสลิปไว้ในแชตนี้ได้เลยครับ เดี๋ยวตรวจให้ต่อครับ",
   ];
   return appendPaymentRefLine(v[slotFromUserId(userId, v.length)], paymentRef);
 }
@@ -1116,7 +1112,7 @@ export function buildPendingVerifyAckContinueText({
 }
 
 export function buildWaitingBirthdatePaymentDeferredRedirectText() {
-  return "เรื่องชำระค่อยทำทีหลังได้ครับ ตอนนี้ขอวันเกิดก่อน เช่น 19/08/2528";
+  return "เรื่องชำระค่อยทำทีหลังได้ครับ ตอนนี้ขอวันเกิดก่อนนะครับ เช่น 19/08/2528";
 }
 
 export function isHistoryCommand(text, lowerText) {

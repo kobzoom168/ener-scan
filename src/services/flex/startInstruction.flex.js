@@ -109,7 +109,7 @@ export function buildStartInstructionFlex() {
             contents: [
               {
                 type: "text",
-                text: "พิมพ์วันเกิดของเจ้าของวัตถุ",
+                text: "ขอวันเกิดของเจ้าของวัตถุ",
                 weight: "bold",
                 size: "sm",
                 color: "#FFFFFF",

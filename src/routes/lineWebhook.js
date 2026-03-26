@@ -244,7 +244,8 @@ function logSafeIntentConsumed(payload) {
   console.log(JSON.stringify({ event: "SAFE_INTENT_CONSUMED", ...payload }));
 }
 
-const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
+const MAIN_MENU_HINT_TEXT =
+  "กลับเมนูหลักได้ตลอดนะครับ บอกว่าเมนูหลักมาก็ได้";
 
 function logHumanConversationMemory(payload) {
   console.log(JSON.stringify(payload));
@@ -373,7 +374,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_please_confirm_first",
         semanticKey: "birthdate_change_candidate",
-        text: "ขอคอนเฟิร์มก่อนนะครับ จะเปลี่ยนวันเกิดในระบบใช่ไหม\nพิมพ์ ใช่ หรือ โอเค ได้เลยครับ",
+        text: "ขอคอนเฟิร์มก่อนนะครับ จะเปลี่ยนวันเกิดในระบบใช่ไหม\nถ้าใช่ ตอบว่าใช่ หรือโอเค มาก็ได้ครับ",
       });
       return true;
     }
@@ -495,7 +496,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_ask_date_again",
         semanticKey: "waiting_birthdate_change",
-        text: `โอเคครับ ส่งวันเกิดมาใหม่ได้เลยครับ\n\n${ask}`,
+        text: `โอเคครับ บอกวันเกิดมาใหม่ได้เลยครับ\n\n${ask}`,
       });
       return true;
     }
@@ -506,7 +507,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_please_confirm_first_final",
         semanticKey: "waiting_birthdate_change_confirm",
-        text: "ถ้าถูก พิมพ์ ใช่ ได้เลยครับ",
+        text: "ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้ครับ",
       });
       return true;
     }
@@ -1560,12 +1561,12 @@ async function handleImageMessage({ client, event, userId, session }) {
   if (getBirthdateChangeFlowState(userId)) {
     const st = getBirthdateChangeFlowState(userId);
     let hint =
-      "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก พิมพ์ ใช่ หรือ โอเค ได้เลย";
+      "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     if (st === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
       hint = pickBirthdateAskDateLine(userId);
     } else if (st === BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM) {
       hint =
-        "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก พิมพ์ ใช่ ได้เลย";
+        "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     }
     await sendNonScanReply({
       client,
@@ -1575,7 +1576,7 @@ async function handleImageMessage({ client, event, userId, session }) {
       semanticKey: "birthdate_update_prompt",
       text: hint,
       alternateTexts: [
-        `${hint}\n\nพิมพ์วันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
+        `${hint}\n\nลองบอกวันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
       ],
     });
     return;
@@ -1800,9 +1801,9 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyToken: event.replyToken,
         replyType: "soft_verify_prompt",
         semanticKey: "soft_verify_prompt",
-        text: "ก่อนคุยต่อ พิมพ์ ยืนยัน ได้เลยครับ",
+        text: "ก่อนคุยต่อ ตอบว่ายืนยันมาก็ได้ครับ",
         alternateTexts: [
-          "ถ้าต้องการใช้งานต่อ พิมพ์ เริ่ม ได้เลยครับ",
+          "ถ้าต้องการใช้งานต่อ บอกว่าเริ่มมาก็ได้ครับ",
         ],
       });
       return;
@@ -2058,7 +2059,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "birthdate_change_candidate",
         text: pickBirthdateFirstConfirmQuestion(userId),
         alternateTexts: [
-          `${pickBirthdateFirstConfirmQuestion(userId)}\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
         ],
       });
       return;
@@ -2560,7 +2561,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "birthdate_change_candidate",
         text: pickBirthdateFirstConfirmQuestion(userId),
         alternateTexts: [
-          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
         ],
       });
       return;
@@ -2782,7 +2783,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       text: slipReminder,
       alternateTexts: [
         "ส่งรูปสลิปในแชตนี้ได้เลยครับ",
-        "ถ้าต้องการดูคิวอาร์อีกครั้ง พิมพ์ จ่ายเงิน ได้เลยครับ",
+        "อยากดูคิวอาร์อีกครั้ง แจ้งว่าจ่ายเงินมาก็ได้ครับ",
       ],
       convSurface: buildConvSurfaceAwaitingSlip(
         userId,
@@ -2827,7 +2828,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "birthdate_change_candidate",
         text: pickBirthdateFirstConfirmQuestion(userId),
         alternateTexts: [
-          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
         ],
       });
       return;
@@ -2843,7 +2844,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "pending_verify_payment_cmd",
         text: buildPendingVerifyPaymentCommandText({ userId, paymentRef }),
         alternateTexts: [
-          "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้ส่งสลิป ส่งมาได้เลย",
+          "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้เลยครับ",
         ],
       });
       logStateMicroIntent({
@@ -3109,7 +3110,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         const ambTier = guidanceTierFromStreak(ambStreak);
         const ambMsg =
           ambTier === "micro"
-            ? "พิมพ์วันเกิดมาใหม่ได้เลยครับ"
+            ? "ลองบอกวันเกิดมาใหม่ได้เลยครับ"
             : BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT;
         logStateMicroIntent({
           userId,
@@ -3202,7 +3203,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "waiting_birthdate_wrong_state_redirect",
           text: bdDeferPrimary,
           alternateTexts: [
-            "ตอนนี้ขอวันเกิดก่อนนะครับ พิมพ์แบบ 19/08/1985 ได้เลย",
+            "ตอนนี้ขอวันเกิดก่อนนะครับ เช่น 19/08/1985 บอกผมได้เลยครับ",
           ],
           convSurface: buildConvSurfaceBirthdate(
             userId,
@@ -3328,7 +3329,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "pending_verify_payment_cmd",
           text: buildPendingVerifyPaymentCommandText({ userId, paymentRef }),
           alternateTexts: [
-            "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้ส่งสลิป ส่งมาได้เลย",
+            "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้เลยครับ",
           ],
         });
         return;
@@ -3399,7 +3400,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             semanticKey: "birthdate_change_candidate",
             text: pickBirthdateFirstConfirmQuestion(userId),
             alternateTexts: [
-              `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
+              `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
             ],
           });
           return;
@@ -3418,7 +3419,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
             savedBirthdate
               ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว ระบบจะเริ่มสแกนให้ทันที"
-              : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะให้คุณพิมพ์วันเกิดก่อนสแกน",
+              : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะขอวันเกิดก่อนสแกน",
             "",
             "ส่งรูปถัดไปมาได้เลยครับ",
           ].join("\n");
@@ -3443,10 +3444,10 @@ async function handleTextMessage({ client, event, userId, session }) {
             "วิธีใช้งาน Ener Scan",
             "",
             "1) ส่งรูปวัตถุที่ต้องการสแกน",
-            "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
+            "2) ระบบจะขอวันเกิด (DD/MM/YYYY)",
             "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
             "",
-            `หากหมดสิทธิ์ฟรี: พิมพ์ ${payPick} เลือกแพ็ก แล้วพิมพ์ จ่ายเงิน`,
+            `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
             "",
             MAIN_MENU_HINT_TEXT,
           ].join("\n");
@@ -3461,7 +3462,7 @@ async function handleTextMessage({ client, event, userId, session }) {
               [
                 "สรุปวิธีใช้",
                 "",
-                "ส่งรูป 1 รูป → พิมพ์วันเกิด DD/MM/YYYY → รอผลในแชท",
+                "ส่งรูป 1 รูป → บอกวันเกิด DD/MM/YYYY → รอผลในแชท",
                 "",
                 MAIN_MENU_HINT_TEXT,
               ].join("\n"),
@@ -3537,7 +3538,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "birthdate_change_candidate",
           text: pickBirthdateFirstConfirmQuestion(userId),
           alternateTexts: [
-            `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
+            `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
           ],
         });
         return;
@@ -3609,7 +3610,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         const ambTier = guidanceTierFromStreak(ambStreak);
         const ambMsg =
           ambTier === "micro"
-            ? "พิมพ์วันเกิดมาใหม่ได้เลยครับ"
+            ? "ลองบอกวันเกิดมาใหม่ได้เลยครับ"
             : BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT;
         await sendNonScanSequenceReply({
           client,
@@ -3768,7 +3769,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       semanticKey: "birthdate_change_candidate",
             text: pickBirthdateFirstConfirmQuestion(userId),
       alternateTexts: [
-        `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
+        `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
       ],
     });
     return;
@@ -3930,7 +3931,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
       savedBirthdate
         ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว ระบบจะเริ่มสแกนให้ทันที"
-        : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะให้คุณพิมพ์วันเกิดก่อนสแกน",
+        : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะขอวันเกิดก่อนสแกน",
       "",
       "ส่งรูปถัดไปมาได้เลยครับ",
     ].join("\n");
@@ -3969,10 +3970,10 @@ async function handleTextMessage({ client, event, userId, session }) {
       "วิธีใช้งาน Ener Scan",
       "",
       "1) ส่งรูปวัตถุที่ต้องการสแกน",
-      "2) ระบบให้พิมพ์วันเกิด (DD/MM/YYYY)",
+      "2) ระบบจะขอวันเกิด (DD/MM/YYYY)",
       "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
       "",
-      `หากหมดสิทธิ์ฟรี: พิมพ์ ${payPickMain} เพื่อเลือกแพ็ก แล้วพิมพ์ จ่ายเงิน`,
+      `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
       "",
       MAIN_MENU_HINT_TEXT,
     ].join("\n");
@@ -3987,7 +3988,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         [
           "สรุปวิธีใช้",
           "",
-          "ส่งรูป 1 รูป → พิมพ์วันเกิด DD/MM/YYYY → รอผลในแชท",
+          "ส่งรูป 1 รูป → บอกวันเกิด DD/MM/YYYY → รอผลในแชท",
           "",
           MAIN_MENU_HINT_TEXT,
         ].join("\n"),

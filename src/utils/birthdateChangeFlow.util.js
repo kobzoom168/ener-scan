@@ -26,8 +26,8 @@ const FIRST_CONFIRM_QUESTIONS = [
 ];
 
 const ASK_DATE_LINES = [
-  "ขอวันเกิดที่ใช้ในระบบหน่อยครับ พิมพ์แบบ 19/08/2528 ได้เลย",
-  "ส่งวันเกิดมาได้เลยครับ เช่น 19-08-2528 หรือ 19082528",
+  "ขอวันเกิดที่ใช้ในระบบหน่อยครับ อ่านแบบ 19/08/2528 นะครับ",
+  "รอวันเกิดอยู่ครับ เช่น 19-08-2528 หรือ 19082528 บอกผมได้เลยครับ",
 ];
 
 const CONFIRM_YES = new Set([
@@ -123,14 +123,14 @@ export function pickBirthdateAskDateLine(userId = "") {
  */
 export function pickBirthdateFinalConfirmText(_userId = "", echo = "") {
   const e = String(echo || "").trim();
-  return `ได้ครับ ผมอ่านเป็น ${e} ใช่ไหมครับ\n\nถ้าถูก พิมพ์ ใช่ ได้เลยครับ`;
+  return `ได้ครับ ผมอ่านเป็น ${e} ใช่ไหมครับ\n\nถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้ครับ`;
 }
 
 export const BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT =
   "ยังอ่านวันเกิดไม่ได้ครับ ลองแบบ 19/08/2528 ได้เลย";
 
 export const BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT =
-  "ส่งวันเกิดมาใหม่อีกครั้งได้ไหมครับ แบบ 19/08/2528";
+  "ลองบอกวันเกิดอีกครั้งได้ไหมครับ แบบ 19/08/2528";
 
 /**
  * Echo string for user-visible confirmations — compact input is expanded to DD/MM/YYYY (BE year kept when applicable).

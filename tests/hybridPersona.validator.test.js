@@ -18,7 +18,7 @@ test("hybrid validator accepts valid strict json", () => {
 
 test("hybrid validator rejects forbidden phrase", () => {
   const raw = JSON.stringify({
-    messages: ["ตอนนี้ขอวันเกิดก่อนนะ", "พิมพ์ payment ได้เลย"],
+    messages: ["ตอนนี้ขอวันเกิดก่อนนะ", "ส่งคำว่า payment มาก็ได้"],
   });
   const out = validateHybridPersonaOutput(raw, {
     forbiddenPhrases: ["payment"],
@@ -30,7 +30,7 @@ test("hybrid validator rejects forbidden phrase", () => {
 
 test("hybrid validator rejects missing required phrase", () => {
   const raw = JSON.stringify({
-    messages: ["ตอนนี้ขอวันเกิดก่อนนะ", "พิมพ์มาได้เลย"],
+    messages: ["ตอนนี้ขอวันเกิดก่อนนะ", "บอกมาได้เลย"],
   });
   const out = validateHybridPersonaOutput(raw, {
     requiredPhrases: ["14/09/1995", "14/09/2538"],

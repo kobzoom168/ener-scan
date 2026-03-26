@@ -131,12 +131,12 @@ export async function handleStickerLikeInput(opts) {
   const bdFlow = getBirthdateChangeFlowState(uid);
   if (bdFlow) {
     let hint =
-      "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก พิมพ์ ใช่ หรือ โอเค ได้เลย";
+      "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     if (bdFlow === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
       hint = pickBirthdateAskDateLine(uid);
     } else if (bdFlow === BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM) {
       hint =
-        "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก พิมพ์ ใช่ ได้เลย";
+        "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     }
     const text = hint;
     await sendNonScanReply({
@@ -147,7 +147,7 @@ export async function handleStickerLikeInput(opts) {
       semanticKey: "sticker_birthdate_change_flow",
       text,
       alternateTexts: [
-        `${hint}\n\nพิมพ์วันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
+        `${hint}\n\nลองบอกวันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
       ],
     });
     return;
@@ -164,7 +164,7 @@ export async function handleStickerLikeInput(opts) {
       semanticKey: "sticker_waiting_birthdate",
       text,
       alternateTexts: [
-        "รอวันเกิดก่อนสแกนนะครับ พิมพ์ DD/MM/YYYY ได้เลย",
+        "รอวันเกิดก่อนสแกนนะครับ บอกเป็น DD/MM/YYYY ได้เลยครับ",
       ],
     });
     return;
