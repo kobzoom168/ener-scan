@@ -202,13 +202,14 @@ export function birthdateUpdatePrompt(userId) {
   return appendExample(v);
 }
 
-export function birthdateSavedAfterUpdate(userId, normalizedBirthdate) {
+/** @param {string} displayBirthdateForUser — same era/style as user typed (echo), not forced CE. */
+export function birthdateSavedAfterUpdate(userId, displayBirthdateForUser) {
   const v = pickVariant(
     userId,
     "birthdate_saved_after_update",
     REPLY_VARIANTS.birthdate_saved_after_update
   );
-  return `${v}\nวันเกิดตอนนี้: ${normalizedBirthdate}`;
+  return `${v}\nวันเกิดตอนนี้: ${displayBirthdateForUser}`;
 }
 
 export async function approvedIntroLine(userId) {

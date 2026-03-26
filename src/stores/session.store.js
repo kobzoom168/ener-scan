@@ -8,7 +8,18 @@ function createEmptySession() {
   return {
     pendingImage: null,
     birthdate: null,
+    /** Kept in sync with `birthdateChangeFlowState` for legacy checks (image/sticker). */
     awaitingBirthdateUpdate: false,
+    /**
+     * Birthdate profile change subflow (soft-detect + confirm).
+     * @type {'birthdate_change_candidate' | 'waiting_birthdate_change' | 'waiting_birthdate_change_confirm' | null}
+     */
+    birthdateChangeFlowState: null,
+    /**
+     * Pending final save (after date parse, before user confirms).
+     * @type {{ rawBirthdateInput: string, normalizedBirthdate: string, echoDisplay: string, isoDate: string, yearCE: number } | null}
+     */
+    birthdateChangePending: null,
     flowVersion: 0,
     /** @type {string|null} selected paid package key from scan-offer config */
     selectedPaymentPackageKey: null,
@@ -149,17 +160,47 @@ export function clearSessionIfFlowVersionMatches(userId, flowVersion) {
   sessions.delete(normalizedUserId);
 }
 
-export function setAwaitingBirthdateUpdate(userId, awaiting = true) {
-  const normalizedUserId = normalizeUserId(userId);
-  if (!normalizedUserId) return;
+export function getBirthdateChangeFlowState(userId) {
+  const s = getSession(userId);
+  const st = s?.birthdateChangeFlowState;
+  return st ? String(st).trim() : null;
+}
 
-  const session = getSession(normalizedUserId);
-  session.awaitingBirthdateUpdate = Boolean(awaiting);
-  sessions.set(normalizedUserId, session);
+export function getBirthdateChangePending(userId) {
+  const s = getSession(userId);
+  return s?.birthdateChangePending ?? null;
+}
+
+/**
+ * @param {'birthdate_change_candidate' | 'waiting_birthdate_change' | 'waiting_birthdate_change_confirm' | null} state
+ * @param {Record<string, unknown> | null} [pending]
+ */
+export function setBirthdateChangeFlowState(userId, state, pending = null) {
+  const id = normalizeUserId(userId);
+  if (!id) return;
+
+  const session = getSession(id);
+  session.birthdateChangeFlowState = state || null;
+  session.birthdateChangePending = pending;
+  session.awaitingBirthdateUpdate = Boolean(state);
+  sessions.set(id, session);
+}
+
+export function clearBirthdateChangeFlow(userId) {
+  setBirthdateChangeFlowState(userId, null, null);
+}
+
+/** Legacy: `true` starts at first confirmation (candidate), not direct date entry. */
+export function setAwaitingBirthdateUpdate(userId, awaiting = true) {
+  if (!awaiting) {
+    clearBirthdateChangeFlow(userId);
+    return;
+  }
+  setBirthdateChangeFlowState(userId, "birthdate_change_candidate", null);
 }
 
 export function clearAwaitingBirthdateUpdate(userId) {
-  setAwaitingBirthdateUpdate(userId, false);
+  clearBirthdateChangeFlow(userId);
 }
 
 const GUIDANCE_STATE_KEYS = new Set([

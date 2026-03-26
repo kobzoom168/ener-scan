@@ -26,11 +26,26 @@ export async function getSavedBirthdate(userId) {
   return data?.birthdate || null;
 }
 
-export async function saveBirthdate(userId, birthdate) {
+/**
+ * @param {string} userId
+ * @param {string} birthdate — normalized display stored in DB (CE DD/MM/YYYY from parser).
+ * @param {{ rawBirthdateInput?: string | null }} [options]
+ */
+export async function saveBirthdate(userId, birthdate, options = {}) {
+  const rawIn = options.rawBirthdateInput;
   console.log("[SUPABASE] saveBirthdate input:", {
     userId,
     birthdate,
+    rawBirthdateInput: rawIn ?? null,
   });
+  console.log(
+    JSON.stringify({
+      event: "BIRTHDATE_SAVED",
+      userId,
+      normalizedBirthdate: String(birthdate),
+      rawBirthdateInput: rawIn == null ? null : String(rawIn),
+    }),
+  );
 
   const payload = {
     id: String(userId),

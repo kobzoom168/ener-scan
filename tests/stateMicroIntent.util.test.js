@@ -72,6 +72,8 @@ test("status phrases are not mistaken for generic ack", () => {
 test("birthdate change intent phrases (deterministic)", () => {
   assert.equal(isBirthdateChangeIntentPhrase("ขอเปลี่ยนวันเกิด"), true);
   assert.equal(isBirthdateChangeIntentPhrase("แก้วันเกิด"), true);
+  assert.equal(isBirthdateChangeIntentPhrase("อยากแก้วันเกิดค่ะ"), true);
+  assert.equal(isBirthdateChangeIntentPhrase("ขอเปลี่ยนวันเกิดหน่อยครับ"), true);
   assert.equal(isBirthdateChangeIntentPhrase("วันเกิดไม่ถูก"), true);
   assert.equal(isBirthdateChangeIntentPhrase("14/09/1995"), false);
 });

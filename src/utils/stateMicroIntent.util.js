@@ -129,6 +129,8 @@ export function isBirthdateChangeIntentPhrase(text) {
   const t = normText(text);
   if (!t) return false;
   if (t === "เปลี่ยนวันเกิด") return true;
+  // Mid-sentence: "ขอแก้วันเกิดหน่อย", "อยากเปลี่ยนวันเกิดค่ะ"
+  if (/แก้วันเกิด|เปลี่ยนวันเกิด/i.test(t)) return true;
   return /^(ขอ)?(เปลี่ยน|แก้|อัปเดต|อัพเดต)วันเกิด|วันเกิด(ไม่ถูก|ผิด|คลาด)|ขอแก้วันเกิด|แก้เดือนเกิด|ขอเปลี่ยนเดือนเกิด/i.test(
     t,
   );

@@ -1,8 +1,13 @@
 import { getPaymentState } from "../stores/manualPaymentAccess.store.js";
+import { getBirthdateChangeFlowState } from "../stores/session.store.js";
 import {
   ensurePaymentRefForPaymentId,
   getLatestAwaitingPaymentForLineUserId,
 } from "../stores/payments.db.js";
+import {
+  BIRTHDATE_CHANGE_FLOW,
+  pickBirthdateAskDateLine,
+} from "../utils/birthdateChangeFlow.util.js";
 import {
   buildAwaitingSlipReminderText,
   buildPendingVerifyReminderText,
@@ -31,6 +36,8 @@ export function isLineStickerPlaceholderText(text) {
   if (!/^[A-Z][a-zA-Z0-9]{1,24}$/.test(second)) return false;
   return true;
 }
+
+const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
 
 const IDLE_STICKER_LINES = [
   "ได้ครับ",
@@ -122,18 +129,27 @@ export async function handleStickerLikeInput(opts) {
     /* ignore */
   }
 
-  // Profile flow: changing birthdate
-  if (session?.awaitingBirthdateUpdate) {
-    const text = `${await buildWaitingBirthdateGuidanceText(uid)}\n\nพิมพ์วันเกิดตามรูปแบบ DD/MM/YYYY ได้เลยครับ`;
+  // Profile flow: birthdate change (soft-detect + confirm; mirror image-handler hints)
+  const bdFlow = getBirthdateChangeFlowState(uid);
+  if (bdFlow) {
+    let hint =
+      "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก พิมพ์ ใช่ หรือ โอเค ได้เลย";
+    if (bdFlow === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
+      hint = pickBirthdateAskDateLine(uid);
+    } else if (bdFlow === BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM) {
+      hint =
+        "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก พิมพ์ ใช่ ได้เลย";
+    }
+    const text = `${hint}\n\n${MAIN_MENU_HINT_TEXT}`;
     await sendNonScanReply({
       client,
       userId: uid,
       replyToken,
       replyType,
-      semanticKey: "sticker_waiting_birthdate_profile",
+      semanticKey: "sticker_birthdate_change_flow",
       text,
       alternateTexts: [
-        "ตอนนี้รอวันเกิดใหม่นะครับ พิมพ์เป็น DD/MM/YYYY ได้เลย",
+        `${hint}\n\nพิมพ์วันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
       ],
     });
     return;

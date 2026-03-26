@@ -26,10 +26,8 @@ import {
   listActivePackages,
   parsePackageSelectionFromText,
 } from "../services/scanOffer.packages.js";
-import {
-  isLoosePayIntentExact,
-  isBirthdateChangeIntentPhrase,
-} from "./stateMicroIntent.util.js";
+import { isLoosePayIntentExact } from "./stateMicroIntent.util.js";
+import { isBirthdateChangeCandidateText } from "./birthdateChangeFlow.util.js";
 
 /** Backward-compatible alias for `looksLikeBirthdateInput`. */
 export { looksLikeBirthdateInput as isBirthdateLikeInput };
@@ -831,7 +829,7 @@ export function allowsUtilityCommandsDuringPendingVerify(text, lowerText) {
 
   if (isHistoryCommand(t, lt) || isStatsCommand(t, lt)) return true;
   if (t === "สแกนพลังงาน") return true;
-  if (isBirthdateChangeIntentPhrase(t)) return true;
+  if (isBirthdateChangeCandidateText(t)) return true;
   if (t === "วิธีใช้" || t === "วิธีใช้งาน") return true;
 
   const menu = new Set([

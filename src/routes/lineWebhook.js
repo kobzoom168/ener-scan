@@ -7,6 +7,10 @@ import {
   clearSessionIfFlowVersionMatches,
   clearAwaitingBirthdateUpdate,
   setAwaitingBirthdateUpdate,
+  getBirthdateChangeFlowState,
+  getBirthdateChangePending,
+  setBirthdateChangeFlowState,
+  clearBirthdateChangeFlow,
   bumpGuidanceNoProgress,
   resetGuidanceNoProgress,
   bumpSameStateAckStreak,
@@ -100,11 +104,20 @@ import {
   isWaitingBirthdatePackageOrPaymentWords,
   isWaitForTomorrowIntent,
   isSingleOfferPriceToken,
-  isBirthdateChangeIntentPhrase,
 } from "../utils/stateMicroIntent.util.js";
 import {
+  isBirthdateChangeCandidateText,
+  isBirthdateFlowConfirmYes,
+  isBirthdateFlowConfirmNo,
+  pickBirthdateFirstConfirmQuestion,
+  pickBirthdateAskDateLine,
+  pickBirthdateFinalConfirmText,
+  buildBirthdateEchoForUser,
+  BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT,
+  BIRTHDATE_CHANGE_FLOW,
+} from "../utils/birthdateChangeFlow.util.js";
+import {
   beforeScanMessageSequence,
-  birthdateUpdatePrompt,
   birthdateSavedAfterUpdate,
 } from "../utils/replyCopy.util.js";
 import { sleep } from "../utils/timing.util.js";
@@ -218,114 +231,194 @@ function logHumanConversationMemory(payload) {
 }
 
 /**
- * Deterministic birthdate-update mode — runs before payment / paywall branches so
- * date-like text is not mis-routed while `awaitingBirthdateUpdate` is true.
+ * Birthdate-change subflow (soft-detect → confirm intent → date → final confirm → save).
+ * Runs before payment / paywall branches so date-like text is not mis-routed mid-flow.
  * @returns {Promise<boolean>} true if the turn was fully handled
  */
-async function handleAwaitingBirthdateUpdateTurn({
+async function handleBirthdateChangeFlowTurn({
   client,
   event,
   userId,
   session,
   text,
 }) {
-  if (!session.awaitingBirthdateUpdate) return false;
+  void session;
+  const flowState = getBirthdateChangeFlowState(userId);
+  if (!flowState) return false;
 
-  const parsedBd = parseBirthdateInput(text);
-  if (parsedBd.ok) {
-    const normalizedBirthdate = parsedBd.normalizedDisplay;
-    await saveBirthdate(userId, normalizedBirthdate);
-
-    clearAwaitingBirthdateUpdate(userId);
-    logWaitingBirthdate("accepted", {
-      gate: "birthdate_update_profile",
-      userId,
-      yearCE: parsedBd.yearCE,
-      isoDate: parsedBd.isoDate,
-      normalizedDisplay: normalizedBirthdate,
-    });
-    console.log("[BIRTHDATE_UPDATE] saved", {
-      userId,
-      birthdate: normalizedBirthdate,
-    });
-
-    await sendNonScanReply({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      replyType: "birthdate_saved_profile",
-      semanticKey: "birthdate_saved",
-      text: `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\n${MAIN_MENU_HINT_TEXT}`,
-      alternateTexts: [
-        `${birthdateSavedAfterUpdate(userId, normalizedBirthdate)}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
-      ],
-    });
-    return true;
-  }
-
-  if (isBirthdateChangeIntentPhrase(text)) {
-    await sendNonScanReply({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      replyType: "birthdate_update_prompt_repeat",
-      semanticKey: "birthdate_update_prompt",
-      text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
-      alternateTexts: [
-        `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
-      ],
-    });
-    return true;
-  }
-
-  console.log("[BIRTHDATE_UPDATE] invalid", {
-    userId,
-    text,
-    reason: parsedBd.reason,
-  });
-  if (looksLikeBirthdateInput(text)) {
-    logWaitingBirthdate("invalid_date_attempt", {
-      gate: "birthdate_update_profile",
-      userId,
-      reason: parsedBd.reason,
-    });
-  } else {
-    logWaitingBirthdate("guidance", {
-      gate: "birthdate_update_profile",
-      userId,
-      hint: "non_date_like",
-    });
-  }
-  if (looksLikeBirthdateInput(text)) {
-    const errMsgs = await buildBirthdateErrorMessages(userId, parsedBd.reason);
-    if (errMsgs.length) {
-      errMsgs[errMsgs.length - 1] = `${errMsgs[errMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
+  if (flowState === BIRTHDATE_CHANGE_FLOW.CANDIDATE) {
+    if (isBirthdateFlowConfirmYes(text)) {
+      setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
+      const ask = pickBirthdateAskDateLine(userId);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_ask_date",
+        semanticKey: "waiting_birthdate_change",
+        text: `${ask}\n\n${MAIN_MENU_HINT_TEXT}`,
+        alternateTexts: [`${ask}\n\n${MAIN_MENU_HINT_TEXT}`],
+      });
+      return true;
     }
-    await sendNonScanSequenceReply({
+    if (isBirthdateFlowConfirmNo(text)) {
+      clearBirthdateChangeFlow(userId);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_cancelled",
+        semanticKey: "birthdate_change_cancelled",
+        text: `โอเคครับ ถ้าจะเปลี่ยนทีหลัง บอกได้เลย\n\n${MAIN_MENU_HINT_TEXT}`,
+      });
+      return true;
+    }
+    if (looksLikeBirthdateInput(text)) {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_please_confirm_first",
+        semanticKey: "birthdate_change_candidate",
+        text: `กรุณายืนยันก่อนนะครับว่าต้องการเปลี่ยนวันเกิดที่ใช้ในระบบ\n\nพิมพ์ ใช่ หรือ โอเค ได้เลยครับ\n\n${MAIN_MENU_HINT_TEXT}`,
+      });
+      return true;
+    }
+    await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "birthdate_update_error",
-      semanticKey: "birthdate_error_profile",
-      messages: errMsgs,
+      replyType: "birthdate_change_ask_intent_again",
+      semanticKey: "birthdate_change_candidate",
+      text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
     });
     return true;
   }
-  const gMsgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
-  if (gMsgs.length) {
-    gMsgs[gMsgs.length - 1] = `${gMsgs[gMsgs.length - 1]}\n\n${MAIN_MENU_HINT_TEXT}`;
+
+  if (flowState === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
+    const parsedBd = parseBirthdateInput(text);
+    if (parsedBd.ok) {
+      const echo = buildBirthdateEchoForUser(parsedBd);
+      const pending = {
+        rawBirthdateInput: parsedBd.originalInput,
+        normalizedBirthdate: parsedBd.normalizedDisplay,
+        echoDisplay: echo,
+        isoDate: parsedBd.isoDate,
+        yearCE: parsedBd.yearCE,
+      };
+      setBirthdateChangeFlowState(
+        userId,
+        BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM,
+        pending,
+      );
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_confirm_final",
+        semanticKey: "waiting_birthdate_change_confirm",
+        text: `${pickBirthdateFinalConfirmText(userId, echo)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      });
+      return true;
+    }
+    if (looksLikeBirthdateInput(text)) {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_invalid_format",
+        semanticKey: "birthdate_change_invalid",
+        text: `${BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT}\n\n${MAIN_MENU_HINT_TEXT}`,
+      });
+      return true;
+    }
+    const ask = pickBirthdateAskDateLine(userId);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_change_remind_date",
+      semanticKey: "waiting_birthdate_change",
+      text: `${ask}\n\n${MAIN_MENU_HINT_TEXT}`,
+    });
+    return true;
   }
-  await sendNonScanSequenceReply({
-    client,
-    userId,
-    replyToken: event.replyToken,
-    replyType: "birthdate_update_guidance",
-    semanticKey: "birthdate_guidance_profile",
-    messages: gMsgs.length
-      ? gMsgs
-      : [`${await buildWaitingBirthdateGuidanceText(userId)}\n\n${MAIN_MENU_HINT_TEXT}`],
-  });
-  return true;
+
+  if (flowState === BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM) {
+    const pending = getBirthdateChangePending(userId);
+    if (isBirthdateFlowConfirmYes(text)) {
+      if (!pending?.normalizedBirthdate) {
+        clearBirthdateChangeFlow(userId);
+        return true;
+      }
+      await saveBirthdate(userId, pending.normalizedBirthdate, {
+        rawBirthdateInput: pending.rawBirthdateInput,
+      });
+      clearBirthdateChangeFlow(userId);
+      logWaitingBirthdate("accepted", {
+        gate: "birthdate_update_profile",
+        userId,
+        yearCE: pending.yearCE,
+        isoDate: pending.isoDate,
+        normalizedDisplay: pending.normalizedBirthdate,
+        rawBirthdateInput: pending.rawBirthdateInput,
+        echoDisplay: pending.echoDisplay,
+      });
+      console.log("[BIRTHDATE_UPDATE] saved", {
+        userId,
+        normalizedBirthdate: pending.normalizedBirthdate,
+        rawBirthdateInput: pending.rawBirthdateInput,
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_saved_profile",
+        semanticKey: "birthdate_saved",
+        text: `${birthdateSavedAfterUpdate(userId, pending.echoDisplay)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        alternateTexts: [
+          `${birthdateSavedAfterUpdate(userId, pending.echoDisplay)}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
+        ],
+      });
+      return true;
+    }
+    if (isBirthdateFlowConfirmNo(text)) {
+      setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
+      const ask = pickBirthdateAskDateLine(userId);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_ask_date_again",
+        semanticKey: "waiting_birthdate_change",
+        text: `โอเคครับ ส่งวันเกิดมาใหม่ได้เลยครับ\n\n${ask}\n\n${MAIN_MENU_HINT_TEXT}`,
+      });
+      return true;
+    }
+    if (looksLikeBirthdateInput(text)) {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_please_confirm_first_final",
+        semanticKey: "waiting_birthdate_change_confirm",
+        text: `ขอทวนอีกครั้งนะครับ ถ้าถูก พิมพ์ ใช่ ได้เลยครับ\n\n${MAIN_MENU_HINT_TEXT}`,
+      });
+      return true;
+    }
+    const pe = pending?.echoDisplay || "";
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_change_ask_final_again",
+      semanticKey: "waiting_birthdate_change_confirm",
+      text: `${pickBirthdateFinalConfirmText(userId, pe)}\n\n${MAIN_MENU_HINT_TEXT}`,
+    });
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -1326,16 +1419,25 @@ async function handleImageMessage({ client, event, userId, session }) {
     return;
   }
 
-  if (session.awaitingBirthdateUpdate) {
+  if (getBirthdateChangeFlowState(userId)) {
+    const st = getBirthdateChangeFlowState(userId);
+    let hint =
+      "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก พิมพ์ ใช่ หรือ โอเค ได้เลย";
+    if (st === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
+      hint = pickBirthdateAskDateLine(userId);
+    } else if (st === BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM) {
+      hint =
+        "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก พิมพ์ ใช่ ได้เลย";
+    }
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
       replyType: "birthdate_update_prompt_image",
       semanticKey: "birthdate_update_prompt",
-      text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      text: `${hint}\n\n${MAIN_MENU_HINT_TEXT}`,
       alternateTexts: [
-        `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
+        `${hint}\n\nพิมพ์วันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
       ],
     });
     return;
@@ -1783,8 +1885,8 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
   }
 
-  if (session.awaitingBirthdateUpdate) {
-    const bdDone = await handleAwaitingBirthdateUpdateTurn({
+  if (getBirthdateChangeFlowState(userId)) {
+    const bdDone = await handleBirthdateChangeFlowTurn({
       client,
       event,
       userId,
@@ -1798,7 +1900,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     const offer = loadActiveScanOffer();
     const defaultPkg = getDefaultPackage(offer);
 
-    if (isBirthdateChangeIntentPhrase(text)) {
+    if (isBirthdateChangeCandidateText(text)) {
       console.log(
         JSON.stringify({
           event: "BIRTHDATE_CHANGE_INTENT",
@@ -1807,7 +1909,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           inputText: text,
         }),
       );
-      setAwaitingBirthdateUpdate(userId, true);
+      setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
       resetSameStateAckStreak(userId, "paywall_offer_single");
       resetGuidanceNoProgress(userId, "paywall_offer_single");
       await sendNonScanReply({
@@ -1815,10 +1917,10 @@ async function handleTextMessage({ client, event, userId, session }) {
         userId,
         replyToken: event.replyToken,
         replyType: "birthdate_update_prompt_paywall",
-        semanticKey: "birthdate_update_prompt",
-        text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        semanticKey: "birthdate_change_candidate",
+        text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
         alternateTexts: [
-          `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
         ],
       });
       return;
@@ -2230,7 +2332,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       paymentRef = null;
     }
 
-    if (isBirthdateChangeIntentPhrase(text)) {
+    if (isBirthdateChangeCandidateText(text)) {
       console.log(
         JSON.stringify({
           event: "BIRTHDATE_CHANGE_INTENT",
@@ -2239,17 +2341,17 @@ async function handleTextMessage({ client, event, userId, session }) {
           inputText: text,
         }),
       );
-      setAwaitingBirthdateUpdate(userId, true);
+      setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
       resetSameStateAckStreak(userId, "awaiting_slip");
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
         replyType: "birthdate_update_prompt_awaiting_slip",
-        semanticKey: "birthdate_update_prompt",
-        text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        semanticKey: "birthdate_change_candidate",
+        text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
         alternateTexts: [
-          `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
         ],
       });
       return;
@@ -2477,7 +2579,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       paymentRef = null;
     }
 
-    if (isBirthdateChangeIntentPhrase(text)) {
+    if (isBirthdateChangeCandidateText(text)) {
       console.log(
         JSON.stringify({
           event: "BIRTHDATE_CHANGE_INTENT",
@@ -2486,17 +2588,17 @@ async function handleTextMessage({ client, event, userId, session }) {
           inputText: text,
         }),
       );
-      setAwaitingBirthdateUpdate(userId, true);
+      setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
       resetSameStateAckStreak(userId, "pending_verify");
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
         replyType: "birthdate_update_prompt_pending_verify",
-        semanticKey: "birthdate_update_prompt",
-        text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        semanticKey: "birthdate_change_candidate",
+        text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
         alternateTexts: [
-          `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
         ],
       });
       return;
@@ -2875,7 +2977,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       !isStatsCommand(text, lowerText) &&
       !isMainMenuAlias(text, lowerText) &&
       !isPaymentCommand(text, lowerText) &&
-      !isBirthdateChangeIntentPhrase(text) &&
+      !isBirthdateChangeCandidateText(text) &&
       text !== "สแกนพลังงาน"
     ) {
       const scanReadyText = buildPaidActiveScanReadyHumanText(userId);
@@ -2986,17 +3088,17 @@ async function handleTextMessage({ client, event, userId, session }) {
           });
           return;
         }
-        if (isBirthdateChangeIntentPhrase(text)) {
-          setAwaitingBirthdateUpdate(userId, true);
+        if (isBirthdateChangeCandidateText(text)) {
+          setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
           await sendNonScanReply({
             client,
             userId,
             replyToken: event.replyToken,
             replyType: "birthdate_update_prompt_pending_verify",
-            semanticKey: "birthdate_update_prompt",
-            text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+            semanticKey: "birthdate_change_candidate",
+            text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
             alternateTexts: [
-              `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+              `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
             ],
           });
           return;
@@ -3126,17 +3228,17 @@ async function handleTextMessage({ client, event, userId, session }) {
         return;
       }
 
-      if (isBirthdateChangeIntentPhrase(text)) {
-        setAwaitingBirthdateUpdate(userId, true);
+      if (isBirthdateChangeCandidateText(text)) {
+        setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
         await sendNonScanReply({
           client,
           userId,
           replyToken: event.replyToken,
           replyType: "birthdate_update_prompt_waiting_bd",
-          semanticKey: "birthdate_update_prompt",
-          text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+          semanticKey: "birthdate_change_candidate",
+          text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
           alternateTexts: [
-            `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+            `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
           ],
         });
         return;
@@ -3319,18 +3421,18 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   // 5) explicit commands (no active lock above)
-  if (isBirthdateChangeIntentPhrase(text)) {
+  if (isBirthdateChangeCandidateText(text)) {
     console.log("[BIRTHDATE_UPDATE] requested", { userId });
-    setAwaitingBirthdateUpdate(userId, true);
+    setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
       replyType: "birthdate_update_prompt_open",
-      semanticKey: "birthdate_update_prompt",
-      text: `${birthdateUpdatePrompt(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      semanticKey: "birthdate_change_candidate",
+      text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
       alternateTexts: [
-        `${birthdateUpdatePrompt(userId)}\n\nพิมพ์วันเกิดใหม่เป็น DD/MM/YYYY ได้เลยครับ`,
+        `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
       ],
     });
     return;
