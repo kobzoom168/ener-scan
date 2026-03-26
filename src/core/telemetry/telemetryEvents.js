@@ -35,6 +35,8 @@ export const TelemetryEvents = {
   SLIP_CHECK_ACCEPTED: "SLIP_CHECK_ACCEPTED",
   SLIP_CHECK_REJECTED: "SLIP_CHECK_REJECTED",
   SLIP_CHECK_UNCLEAR: "SLIP_CHECK_UNCLEAR",
+  /** Canonical per-evaluation slip gate outcome (label, scores, mode, decision). */
+  SLIP_CHECK_RESOLVED: "SLIP_CHECK_RESOLVED",
 };
 
 /**

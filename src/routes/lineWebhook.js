@@ -1116,22 +1116,21 @@ async function finalizeAcceptedImage({
       stateOwner: "awaiting_slip",
     });
 
-    if (gate.decision === "reject") {
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "slip_gate_rejected",
-        semanticKey: "slip_gate_rejected",
-        text: buildSlipGateRejectedText({ slipLabel: gate.slipLabel }),
-        alternateTexts: [
-          buildSlipGateRejectedText({ slipLabel: "other_image" }),
-        ],
-      });
-      return;
-    }
-
-    if (gate.decision === "unclear") {
+    if (gate.decision !== "accept") {
+      if (gate.decision === "reject") {
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "slip_gate_rejected",
+          semanticKey: "slip_gate_rejected",
+          text: buildSlipGateRejectedText({ slipLabel: gate.slipLabel }),
+          alternateTexts: [
+            buildSlipGateRejectedText({ slipLabel: "other_image" }),
+          ],
+        });
+        return;
+      }
       await sendNonScanReply({
         client,
         userId,

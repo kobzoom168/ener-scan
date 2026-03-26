@@ -30,3 +30,11 @@ export function logSlipCheckRejected(payload) {
 export function logSlipCheckUnclear(payload) {
   logTelemetryEvent(TelemetryEvents.SLIP_CHECK_UNCLEAR, payload);
 }
+
+/**
+ * One event per `evaluateSlipGate` completion — use for dashboards (label, scores, mode, decision).
+ * @param {Record<string, unknown>} payload
+ */
+export function logSlipCheckResolved(payload) {
+  logTelemetryEvent(TelemetryEvents.SLIP_CHECK_RESOLVED, payload);
+}

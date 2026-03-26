@@ -17,6 +17,7 @@ JSON schema:
 {
   "slipLabel": "likely_slip" | "chat_screenshot" | "object_photo" | "other_image",
   "evidenceScore": number between 0 and 1,
+  "hardNegatives": string[],
   "signals": {
     "amountVisible": boolean,
     "dateTimeVisible": boolean,
@@ -31,13 +32,16 @@ Rules:
 - object_photo: single physical object (amulet, crystal, product photo) with no bank slip UI.
 - other_image: anything else (meme, unrelated, unreadable).
 
-Be conservative: if unsure between likely_slip and other_image, use other_image with low evidenceScore.`;
+hardNegatives: optional list of snake_case hints when the image resembles chat UI, messaging chrome, a physical product shot, or other non-slip patterns. Use tokens like chat_bubbles, line_ui, whatsapp_ui, messaging_chrome, conversation_thread, physical_product, single_object_focus, portrait_product. Empty array if none.
+
+Be conservative: if unsure between likely_slip and other_image, use other_image with low evidenceScore. Prefer chat_screenshot or object_photo over likely_slip when any chat or product-photo pattern is visible.`;
 
 /**
  * @param {string} imageBase64 raw base64 (no data: prefix)
  * @returns {Promise<{
  *   slipLabel: import('./slipCheck.types.js').SlipLabel,
  *   evidenceScore: number,
+ *   hardNegatives: string[],
  *   signals: import('./slipCheck.types.js').SlipEvidenceSignals,
  * } | null>}
  */
@@ -96,7 +100,19 @@ export async function classifySlipWithVision(imageBase64) {
       referenceLikeText: Boolean(sig.referenceLikeText),
     };
 
-    return { slipLabel, evidenceScore, signals };
+    let hardNegatives = [];
+    if (Array.isArray(parsed.hardNegatives)) {
+      hardNegatives = parsed.hardNegatives
+        .map((x) =>
+          String(x || "")
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "_"),
+        )
+        .filter(Boolean);
+    }
+
+    return { slipLabel, evidenceScore, hardNegatives, signals };
   } catch {
     return null;
   }

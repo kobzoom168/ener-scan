@@ -6,8 +6,8 @@
 /** @typedef {'jpeg' | 'png' | 'webp' | 'gif' | 'unknown'} ImageFormat */
 
 const MIN_BYTES_UNCLEAR = 1200;
-/** Very tall single-frame screenshots (LINE chat, etc.) */
-const CHAT_ASPECT_MIN = 2.35;
+/** Very tall single-frame screenshots (LINE chat, etc.) — tighter catches more portrait chat UI */
+const CHAT_ASPECT_MIN = 2.15;
 const CHAT_MIN_WIDTH = 320;
 
 /**

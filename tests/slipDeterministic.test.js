@@ -23,7 +23,7 @@ test("deterministic: tall PNG aspect → fast_reject_chat", () => {
   const meta = getImageMetadata(buf);
   assert.equal(meta.width, 400);
   assert.equal(meta.height, 1000);
-  assert.ok(meta.aspectRatio >= 2.35);
+  assert.ok(meta.aspectRatio >= 2.15);
   const r = deterministicSlipPreCheck(buf);
   assert.equal(r.kind, "fast_reject_chat");
 });
