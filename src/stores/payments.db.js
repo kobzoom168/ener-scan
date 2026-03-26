@@ -1,4 +1,8 @@
 import { supabase } from "../config/supabase.js";
+import {
+  emitPaymentApprovedFunnel,
+  emitPaymentRejectedFunnel,
+} from "../core/telemetry/paymentLifecycleTelemetry.service.js";
 import { grantEntitlementForPackage } from "../services/entitlement.service.js";
 import { generatePaymentRef } from "../utils/paymentRef.util.js";
 
@@ -666,6 +670,17 @@ export async function markPaymentApprovedAndUnlock({
 
   await safeCleanupOtherActivePaymentsForUser(payment.user_id, id);
 
+  const lineUid = String(payment.line_user_id || "").trim();
+  if (lineUid) {
+    emitPaymentApprovedFunnel({
+      userId: lineUid,
+      paymentId: id,
+      paymentRef: payment.payment_ref ?? null,
+      packageKey: payment.package_code ?? null,
+      reason: "admin_approve",
+    });
+  }
+
   return {
     lineUserId: payment.line_user_id || null,
     paidUntil: entitlement.paidUntil,
@@ -686,7 +701,7 @@ export async function markPaymentRejected({
 
   const { data: payment, error: fetchError } = await supabase
     .from("payments")
-    .select("id,line_user_id,status")
+    .select("id,line_user_id,status,payment_ref,package_code")
     .eq("id", id)
     .maybeSingle();
   if (fetchError) throw fetchError;
@@ -711,6 +726,17 @@ export async function markPaymentRejected({
     .eq("id", id);
 
   if (updateError) throw updateError;
+
+  const lineUid = String(payment.line_user_id || "").trim();
+  if (lineUid) {
+    emitPaymentRejectedFunnel({
+      userId: lineUid,
+      paymentId: id,
+      paymentRef: payment.payment_ref ?? null,
+      packageKey: payment.package_code ?? null,
+      reason: rejectReason != null ? String(rejectReason).slice(0, 200) : "admin_reject",
+    });
+  }
 
   return { lineUserId: payment.line_user_id || null };
 }

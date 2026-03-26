@@ -18,6 +18,18 @@ export const TelemetryEvents = {
   STATE_NO_PROGRESS_STREAK: "STATE_NO_PROGRESS_STREAK",
   NONSCAN_REPLY_GATEWAY_PAYMENT_QR: "NONSCAN_REPLY_GATEWAY_PAYMENT_QR",
   NONSCAN_GATEWAY_PUSH: "NONSCAN_GATEWAY_PUSH",
+  /** replyText/pushText outside gateway is OK only inside an exempt block; `reason` identifies path. */
+  NONSCAN_AUDIT_EXEMPT: "NONSCAN_AUDIT_EXEMPT",
+  PACKAGE_SELECTED_ENTERED: "package_selected_entered",
+  PACKAGE_SELECTED_CLEARED: "package_selected_cleared",
+  AWAITING_PAYMENT_ENTERED: "awaiting_payment_entered",
+  PAYMENT_QR_BUNDLE_SENT: "payment_qr_bundle_sent",
+  SLIP_PHASE_ENTERED: "slip_phase_entered",
+  /** Canonical payment funnel / UX phase change (see docs/payment-funnel-telemetry.md). */
+  PAYMENT_FUNNEL_TRANSITION: "PAYMENT_FUNNEL_TRANSITION",
+  PENDING_VERIFY_ENTERED: "pending_verify_entered",
+  PAYMENT_APPROVED_FUNNEL: "payment_approved_funnel",
+  PAYMENT_REJECTED_FUNNEL: "payment_rejected_funnel",
 };
 
 /**

@@ -18,6 +18,9 @@ const SHORT = {
   pp_no_package_change: "แพ็กนี้เป็นชุดเดียวครับ ถ้าพร้อมโอน พิมพ์จ่ายเงินได้เลยครับ",
   pp_hesitation: "ถ้าพร้อมโอน พิมพ์จ่ายเงินได้เลยครับ",
   pp_status_misroute_nudge: "ตอนนี้อยู่ช่วงรอชำระครับ พิมพ์จ่ายเงินได้เลยครับ",
+  // Same line as pw_date_wrong_state; pp_* = package-selected copy family.
+  pp_date_wrong_state:
+    "เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ พิมพ์จ่ายเงินได้เลยครับ",
   pp_remind_pay: "พิมพ์จ่ายเงินได้เลยครับ เดี๋ยวส่งคิวอาร์ให้",
   slip_resend_qr: "ส่งคิวอาร์ให้อีกครั้งได้เลยครับ พิมพ์จ่ายเงินได้เลย",
   slip_status_micro: "รอสลิปอยู่ครับ ส่งรูปมาได้เลย",
@@ -76,9 +79,14 @@ export function getDeterministicFallback(replyType, ctx = {}) {
     case "pp_hesitation":
       return tier >= 3 ? SHORT.pp_remind_pay : SHORT.pp_hesitation;
     case "pp_status_misroute_nudge":
-      return SHORT.pp_status_misroute_nudge;
+      return tier >= 3 ? SHORT.pw_guidance_micro : SHORT.pp_status_misroute_nudge;
     case "pp_remind_pay":
       return tier >= 3 ? "พิมพ์จ่ายเงินได้เลยครับ" : SHORT.pp_remind_pay;
+    case "pp_date_wrong_state":
+      return tier >= 3 ? SHORT.pw_guidance_micro : SHORT.pp_date_wrong_state;
+    // Unclear in package_selected: tiering matches pw_guidance; key is pp_* for observability.
+    case "pp_selected_guidance":
+      return tier >= 3 ? SHORT.pw_guidance_micro : "ถ้าจะใช้ต่อ พิมพ์จ่ายเงินได้เลยครับ";
 
     case "slip_resend_qr":
       return SHORT.slip_resend_qr + ref;

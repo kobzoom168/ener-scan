@@ -3,6 +3,7 @@ import { replyTextSequenceOrSingle, pushText } from "./lineSequenceReply.service
 import { preparePhaseAHumanizedSendTexts } from "../core/conversation/conversationPipeline.service.js";
 import { TelemetryEvents, logTelemetryEvent } from "../core/telemetry/telemetryEvents.js";
 import { emitStateFallbackReason } from "../core/telemetry/stateTelemetry.service.js";
+import { emitPaymentQrBundleSent } from "../core/telemetry/paymentLifecycleTelemetry.service.js";
 import { gatewayPathEnter, gatewayPathExit } from "./lineReplyAudit.context.js";
 
 /** @type {Map<string, string>} */
@@ -425,6 +426,9 @@ export async function sendNonScanSequenceReply(opts) {
  * @param {string} opts.slipText
  * @param {string} [opts.replyType]
  * @param {string} [opts.semanticKey]
+ * @param {string|number} [opts.paymentId]
+ * @param {string|null} [opts.paymentRef]
+ * @param {string|null} [opts.packageKey] — funnel correlation only
  */
 export async function sendNonScanPaymentQrInstructions(opts) {
   gatewayPathEnter();
@@ -438,6 +442,9 @@ export async function sendNonScanPaymentQrInstructions(opts) {
       slipText,
       replyType = "payment_qr_instructions_bundle",
       semanticKey = "payment_qr_bundle",
+      paymentId,
+      paymentRef,
+      packageKey,
     } = opts;
     const uid = String(userId || "").trim();
     const rt = String(replyType || "").trim() || "payment_qr_instructions_bundle";
@@ -463,6 +470,14 @@ export async function sendNonScanPaymentQrInstructions(opts) {
       userId: uid,
       replyType: rt,
       semanticKey: sk,
+    });
+    emitPaymentQrBundleSent({
+      userId: uid,
+      replyType: rt,
+      semanticKey: sk,
+      paymentId,
+      paymentRef,
+      packageKey,
     });
   } finally {
     gatewayPathExit();

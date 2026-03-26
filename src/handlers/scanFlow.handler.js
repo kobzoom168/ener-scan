@@ -8,6 +8,7 @@ import { runDeepScan } from "../services/scan.service.js";
 import { replyText, replyFlex } from "../services/lineReply.service.js";
 import { pushText } from "../services/lineSequenceReply.service.js";
 import {
+  AuditExemptReason,
   auditExemptEnter,
   auditExemptExit,
   scanPathEnter,
@@ -132,7 +133,7 @@ async function sendPaymentGateTextReply({ client, replyToken, userId, reply }) {
     (await buildPaymentRequiredText({ userId, decision: reply?.decision }));
 
   if (!userId) {
-    auditExemptEnter();
+    auditExemptEnter(AuditExemptReason.SCAN_PAYMENT_GATE_NO_USER_ID);
     try {
       await replyText(client, replyToken, fallbackText);
     } finally {

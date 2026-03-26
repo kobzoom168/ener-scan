@@ -322,4 +322,7 @@ export const env = {
    */
   NONSCAN_REPLY_AUDIT:
     String(process.env.NONSCAN_REPLY_AUDIT || "").trim().toLowerCase() || "off",
+  /** When `true`: unregistered `auditExemptEnter` reasons throw (CI / strict rollouts). */
+  NONSCAN_AUDIT_EXEMPT_STRICT:
+    String(process.env.NONSCAN_AUDIT_EXEMPT_STRICT || "").trim() === "1",
 };

@@ -90,7 +90,18 @@ import {
   emitStateMicroIntent,
   emitStateGuidanceLevel,
 } from "../core/telemetry/stateTelemetry.service.js";
-import { auditExemptEnter, auditExemptExit } from "../services/lineReplyAudit.context.js";
+import {
+  emitAwaitingPaymentEntered,
+  emitPackageSelectedEntered,
+  emitPendingVerifyEntered,
+  emitSlipPhaseEntered,
+  FunnelPhase,
+} from "../core/telemetry/paymentLifecycleTelemetry.service.js";
+import {
+  AuditExemptReason,
+  auditExemptEnter,
+  auditExemptExit,
+} from "../services/lineReplyAudit.context.js";
 import { sendScanLockReply } from "../utils/scanLockReply.util.js";
 import {
   handleStickerLikeInput,
@@ -680,7 +691,23 @@ async function handlePaymentCommandTextRoute({
   });
 
   if (cmdPaymentId) {
+    const hadPackageKey = Boolean(getSelectedPaymentPackageKey(userId));
+    emitAwaitingPaymentEntered({
+      userId,
+      paymentId: cmdPaymentId,
+      paymentRef: cmdPaymentRef,
+      packageKey: paidPackage?.key,
+      source: "payment_command_text_route",
+      hadPackageSelected: hadPackageKey,
+    });
     setAwaitingPayment(userId);
+    emitSlipPhaseEntered({
+      userId,
+      paymentId: cmdPaymentId,
+      paymentRef: cmdPaymentRef,
+      packageKey: paidPackage?.key,
+      source: "payment_command_text_route",
+    });
     clearSelectedPaymentPackageKey(userId);
     resetGuidanceNoProgress(userId, "paywall_offer_single");
     resetGuidanceNoProgress(userId, "awaiting_slip");
@@ -706,6 +733,9 @@ async function handlePaymentCommandTextRoute({
         semanticKey: cmdPaymentRef
           ? `payment_qr_bundle:${cmdPaymentRef}`
           : "payment_qr_bundle",
+        paymentId: cmdPaymentId,
+        paymentRef: cmdPaymentRef,
+        packageKey: paidPackage?.key,
       });
       await logPaywallShown(userId, {
         patternUsed: "qr_intro_image_slip",
@@ -1098,10 +1128,6 @@ async function finalizeAcceptedImage({
         slipMessageId,
       });
 
-      clearPaymentState(userId);
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-
       let slipPaymentRef = null;
       try {
         slipPaymentRef =
@@ -1110,6 +1136,20 @@ async function finalizeAcceptedImage({
       } catch (_) {
         slipPaymentRef = null;
       }
+
+      emitPendingVerifyEntered({
+        userId,
+        paymentId,
+        paymentRef: slipPaymentRef,
+        packageKey: pendingPayment?.package_code
+          ? String(pendingPayment.package_code).trim()
+          : undefined,
+        reason: "slip_uploaded_set_pending_verify",
+      });
+
+      clearPaymentState(userId);
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
 
       await sendNonScanReply({
         client,
@@ -2092,6 +2132,11 @@ async function handleTextMessage({ client, event, userId, session }) {
       resetGuidanceNoProgress(userId, "paywall_offer_single");
       resetSameStateAckStreak(userId, "paywall_offer_single");
       setSelectedPaymentPackageKey(userId, pkg.key);
+      emitPackageSelectedEntered({
+        userId,
+        packageKey: pkg.key,
+        source: "paywall_offer_single_price_or_pack_ack",
+      });
       const outboundRt = "package_selected_ack_full";
       logStateMicroIntent({
         userId,
@@ -3796,6 +3841,12 @@ async function handleTextMessage({ client, event, userId, session }) {
         }),
       );
       setSelectedPaymentPackageKey(userId, pkg.key);
+      emitPackageSelectedEntered({
+        userId,
+        packageKey: pkg.key,
+        source: "idle_text_package_hint",
+        fromState: FunnelPhase.IDLE,
+      });
       const idlePackRt = "package_selected_ack_full";
       const ack = buildPaymentPackageSelectedAck(pkg);
       await sendNonScanReplyWithOptionalConvSurface({
@@ -3980,7 +4031,7 @@ async function handleEvent({ client, event }) {
   const userId = event.source?.userId;
 
   if (!userId) {
-    auditExemptEnter();
+    auditExemptEnter(AuditExemptReason.LINE_WEBHOOK_MISSING_USER_ID);
     try {
       await replyText(client, event.replyToken, "ยังไม่พบข้อมูลผู้ใช้ครับ");
     } finally {
@@ -4182,7 +4233,7 @@ export function lineWebhookRouter(lineConfig) {
                   ],
                 });
               } else {
-                auditExemptEnter();
+                auditExemptEnter(AuditExemptReason.LINE_WEBHOOK_EVENT_ERROR_NO_USER);
                 try {
                   await replyText(
                     client,

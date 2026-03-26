@@ -2,6 +2,9 @@
  * Bridges legacy LINE replyType strings (observability labels) to Phase A
  * `{ stateOwner, phaseReplyType, nextStep, microIntent }` for humanizer contracts.
  * Returns null when this reply must stay purely deterministic (fail closed).
+ *
+ * Copy family: `stateOwner === "payment_package_selected"` uses **pp\_*** phase keys only
+ * (`getDeterministicFallback`), so humanized + deterministic tiers stay aligned by `phaseReplyType`.
  */
 
 /** @typedef {import("./contracts.types.js").StateOwner} StateOwner */
@@ -134,7 +137,7 @@ const LEGACY_MAP = {
   },
   package_selected_date_wrong_state: {
     stateOwner: PACKAGE_SELECTED,
-    phaseReplyType: "pw_date_wrong_state",
+    phaseReplyType: "pp_date_wrong_state",
     nextStep: "await_pay_command",
     microIntent: "wrong_state_date",
   },
@@ -158,19 +161,19 @@ const LEGACY_MAP = {
   },
   package_selected_unclear_full: {
     stateOwner: PACKAGE_SELECTED,
-    phaseReplyType: "pw_guidance",
+    phaseReplyType: "pp_selected_guidance",
     nextStep: "await_pay_command",
     microIntent: "unclear_noise",
   },
   package_selected_unclear_short: {
     stateOwner: PACKAGE_SELECTED,
-    phaseReplyType: "pw_guidance",
+    phaseReplyType: "pp_selected_guidance",
     nextStep: "await_pay_command",
     microIntent: "unclear_noise",
   },
   package_selected_unclear_micro: {
     stateOwner: PACKAGE_SELECTED,
-    phaseReplyType: "pw_guidance",
+    phaseReplyType: "pp_selected_guidance",
     nextStep: "await_pay_command",
     microIntent: "unclear_noise",
   },

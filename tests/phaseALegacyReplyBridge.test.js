@@ -40,3 +40,17 @@ test("bridge maps package-selected wait_tomorrow to status-like phase key", () =
   assert.equal(b.stateOwner, "payment_package_selected");
   assert.equal(b.phaseReplyType, "pp_status_misroute_nudge");
 });
+
+test("bridge maps package-selected date_wrong to pp copy family", () => {
+  const b = legacyReplyTypeToPhaseA("package_selected_date_wrong_state");
+  assert.ok(b);
+  assert.equal(b.stateOwner, "payment_package_selected");
+  assert.equal(b.phaseReplyType, "pp_date_wrong_state");
+});
+
+test("bridge maps package-selected unclear to pp_selected_guidance", () => {
+  const b = legacyReplyTypeToPhaseA("package_selected_unclear_full");
+  assert.ok(b);
+  assert.equal(b.stateOwner, "payment_package_selected");
+  assert.equal(b.phaseReplyType, "pp_selected_guidance");
+});
