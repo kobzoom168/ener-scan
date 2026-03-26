@@ -30,6 +30,11 @@ export const TelemetryEvents = {
   PENDING_VERIFY_ENTERED: "pending_verify_entered",
   PAYMENT_APPROVED_FUNNEL: "payment_approved_funnel",
   PAYMENT_REJECTED_FUNNEL: "payment_rejected_funnel",
+  /** Payment slip classification gate (awaiting_slip image). */
+  SLIP_CHECK_REQUESTED: "SLIP_CHECK_REQUESTED",
+  SLIP_CHECK_ACCEPTED: "SLIP_CHECK_ACCEPTED",
+  SLIP_CHECK_REJECTED: "SLIP_CHECK_REJECTED",
+  SLIP_CHECK_UNCLEAR: "SLIP_CHECK_UNCLEAR",
 };
 
 /**

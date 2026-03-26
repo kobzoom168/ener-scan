@@ -77,6 +77,7 @@ import {
 } from "../stores/payments.db.js";
 
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
+import { evaluateSlipGate } from "../core/payments/slipCheck/slipGate.service.js";
 
 import { replyText } from "../services/lineReply.service.js";
 import {
@@ -175,6 +176,8 @@ import {
   buildPackageSelectionPromptFromOffer,
   buildPaymentPackageSelectedAck,
   buildSlipReceivedText,
+  buildSlipGateRejectedText,
+  buildSlipGateUnclearText,
   buildPendingVerifyReminderText,
   buildPendingVerifyHumanGuidanceText,
   buildPaywallHumanGuidanceText,
@@ -1105,6 +1108,41 @@ async function finalizeAcceptedImage({
 
     const slipMessageId = event?.message?.id;
     const paymentId = pendingPayment.id;
+
+    const gate = await evaluateSlipGate({
+      imageBuffer,
+      lineUserId: userId,
+      paymentId,
+      stateOwner: "awaiting_slip",
+    });
+
+    if (gate.decision === "reject") {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "slip_gate_rejected",
+        semanticKey: "slip_gate_rejected",
+        text: buildSlipGateRejectedText({ slipLabel: gate.slipLabel }),
+        alternateTexts: [
+          buildSlipGateRejectedText({ slipLabel: "other_image" }),
+        ],
+      });
+      return;
+    }
+
+    if (gate.decision === "unclear") {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "slip_gate_unclear",
+        semanticKey: "slip_gate_unclear",
+        text: buildSlipGateUnclearText(),
+        alternateTexts: [],
+      });
+      return;
+    }
 
     const slipReg = registerSlipEvent(userId, payNow);
     if (slipReg.abusive) {

@@ -325,4 +325,21 @@ export const env = {
   /** When `true`: unregistered `auditExemptEnter` reasons throw (CI / strict rollouts). */
   NONSCAN_AUDIT_EXEMPT_STRICT:
     String(process.env.NONSCAN_AUDIT_EXEMPT_STRICT || "").trim() === "1",
+  /**
+   * Payment slip gate: optional vision classifier. Default on. Set `false` to skip API calls;
+   * non-fast-reject images become unclear (fail closed).
+   */
+  SLIP_GATE_VISION_ENABLED: process.env.SLIP_GATE_VISION_ENABLED !== "false",
+  SLIP_GATE_VISION_MODEL:
+    String(process.env.SLIP_GATE_VISION_MODEL || "").trim() || "gpt-4.1-mini",
+  SLIP_ACCEPT_MIN_SCORE: (() => {
+    const raw = process.env.SLIP_ACCEPT_MIN_SCORE;
+    const n = raw === undefined || raw === "" ? 0.72 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.72;
+  })(),
+  SLIP_EVIDENCE_MIN_SIGNALS: (() => {
+    const raw = process.env.SLIP_EVIDENCE_MIN_SIGNALS;
+    const n = raw === undefined || raw === "" ? 2 : Number(raw);
+    return Number.isFinite(n) ? Math.min(4, Math.max(1, Math.floor(n))) : 2;
+  })(),
 };

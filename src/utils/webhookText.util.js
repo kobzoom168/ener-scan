@@ -694,6 +694,38 @@ export function buildSlipReceivedText({ paymentRef } = {}) {
   return appendPaymentRefLine(base, paymentRef);
 }
 
+/**
+ * awaiting_slip: image failed slip gate (not accepted as payment slip).
+ * @param {{ slipLabel?: string }} [opts]
+ */
+export function buildSlipGateRejectedText({ slipLabel = "other_image" } = {}) {
+  const label = String(slipLabel || "other_image").trim();
+  if (label === "chat_screenshot") {
+    return [
+      "รูปนี้ดูเหมือนภาพหน้าจอแชตนะครับ",
+      "ขอรูปสลิปโอนจากแอปธนาคารหรือพร้อมเพย์ที่เห็นยอดและเวลาชัด ๆ แนบมาใหม่ในแชตนี้ได้เลยครับ",
+    ].join("\n");
+  }
+  if (label === "object_photo") {
+    return [
+      "รูปนี้ดูเป็นภาพวัตถุ/ของชิ้นนะครับ ยังไม่ใช่สลิปโอน",
+      "แนบสลิปโอนที่เห็นยอดกับเวลาในแชตนี้ได้เลยครับ",
+    ].join("\n");
+  }
+  return [
+    "ยังอ่านไม่ได้ว่าเป็นสลิปโอนครับ",
+    "ขอรูปจากหน้าโอนที่เห็นยอด วัน-เวลา และรายการชัด ๆ นะครับ",
+  ].join("\n");
+}
+
+/** awaiting_slip: gate could not confirm slip (weak evidence / tiny file / vision off). */
+export function buildSlipGateUnclearText() {
+  return [
+    "รูปนี้ยังยืนยันไม่ได้ว่าเป็นสลิปโอนนะครับ",
+    "ลองส่งใหม่ให้เห็นยอดกับเวลาชัด ๆ หรือถ่ายใกล้ ๆ หน่อยครับ",
+  ].join("\n");
+}
+
 /** User typed non-command text while payment row is pending_verify (reduce repeat nudges). */
 export function buildPendingVerifyReminderText({ paymentRef } = {}) {
   const base = buildPaymentFlowLockedGuidanceText();
