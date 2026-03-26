@@ -4,7 +4,7 @@
  */
 
 /** Shown with birthdate prompts so users always see a concrete example. */
-export const BIRTHDATE_EXAMPLE_LINE = "14/09/1995 หรือ 14/09/2538";
+export const BIRTHDATE_EXAMPLE_LINE = "19/08/2528";
 
 export const REPLY_VARIANTS = {
   birthdate_update_prompt: [

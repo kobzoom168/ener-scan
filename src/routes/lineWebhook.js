@@ -114,6 +114,7 @@ import {
   pickBirthdateFinalConfirmText,
   buildBirthdateEchoForUser,
   BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT,
+  BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT,
   BIRTHDATE_CHANGE_FLOW,
 } from "../utils/birthdateChangeFlow.util.js";
 import {
@@ -130,6 +131,7 @@ import {
   formatBangkokDateTime,
   buildStartInstructionMessages,
   buildWaitingBirthdateDateFirstGuidanceMessages,
+  buildDeterministicBirthdateErrorText,
   buildWaitingBirthdatePaymentDeferredRedirectText,
   buildMultiImageInRequestText,
   buildMultipleObjectsText,
@@ -178,7 +180,6 @@ import {
   buildPendingVerifyAckContinueText,
   buildWaitingBirthdateGuidanceText,
   buildWaitingBirthdateImageReminderMessages,
-  buildBirthdateErrorMessages,
   isBlockedIntentDuringWaitingBirthdate,
   isMainMenuAlias,
   isHistoryCommand,
@@ -256,8 +257,8 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_ask_date",
         semanticKey: "waiting_birthdate_change",
-        text: `${ask}\n\n${MAIN_MENU_HINT_TEXT}`,
-        alternateTexts: [`${ask}\n\n${MAIN_MENU_HINT_TEXT}`],
+        text: ask,
+        alternateTexts: [ask],
       });
       return true;
     }
@@ -269,7 +270,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_cancelled",
         semanticKey: "birthdate_change_cancelled",
-        text: `โอเคครับ ถ้าจะเปลี่ยนทีหลัง บอกได้เลย\n\n${MAIN_MENU_HINT_TEXT}`,
+        text: "โอเคครับ ถ้าจะเปลี่ยนทีหลัง บอกได้เลย",
       });
       return true;
     }
@@ -280,7 +281,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_please_confirm_first",
         semanticKey: "birthdate_change_candidate",
-        text: `กรุณายืนยันก่อนนะครับว่าต้องการเปลี่ยนวันเกิดที่ใช้ในระบบ\n\nพิมพ์ ใช่ หรือ โอเค ได้เลยครับ\n\n${MAIN_MENU_HINT_TEXT}`,
+        text: "ขอคอนเฟิร์มก่อนนะครับ จะเปลี่ยนวันเกิดในระบบใช่ไหม\nพิมพ์ ใช่ หรือ โอเค ได้เลยครับ",
       });
       return true;
     }
@@ -290,12 +291,13 @@ async function handleBirthdateChangeFlowTurn({
       replyToken: event.replyToken,
       replyType: "birthdate_change_ask_intent_again",
       semanticKey: "birthdate_change_candidate",
-      text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      text: pickBirthdateFirstConfirmQuestion(userId),
     });
     return true;
   }
 
   if (flowState === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
+    const trimmed = String(text || "").trim();
     const parsedBd = parseBirthdateInput(text);
     if (parsedBd.ok) {
       const echo = buildBirthdateEchoForUser(parsedBd);
@@ -317,7 +319,18 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_confirm_final",
         semanticKey: "waiting_birthdate_change_confirm",
-        text: `${pickBirthdateFinalConfirmText(userId, echo)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        text: pickBirthdateFinalConfirmText(userId, echo),
+      });
+      return true;
+    }
+    if (/^\d{6,7}$/.test(trimmed)) {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_low_confidence",
+        semanticKey: "birthdate_change_invalid",
+        text: BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT,
       });
       return true;
     }
@@ -328,7 +341,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_invalid_format",
         semanticKey: "birthdate_change_invalid",
-        text: `${BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT}\n\n${MAIN_MENU_HINT_TEXT}`,
+        text: BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT,
       });
       return true;
     }
@@ -339,7 +352,7 @@ async function handleBirthdateChangeFlowTurn({
       replyToken: event.replyToken,
       replyType: "birthdate_change_remind_date",
       semanticKey: "waiting_birthdate_change",
-      text: `${ask}\n\n${MAIN_MENU_HINT_TEXT}`,
+      text: ask,
     });
     return true;
   }
@@ -369,16 +382,15 @@ async function handleBirthdateChangeFlowTurn({
         normalizedBirthdate: pending.normalizedBirthdate,
         rawBirthdateInput: pending.rawBirthdateInput,
       });
+      const savedLine = birthdateSavedAfterUpdate(userId, pending.echoDisplay);
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
         replyType: "birthdate_saved_profile",
         semanticKey: "birthdate_saved",
-        text: `${birthdateSavedAfterUpdate(userId, pending.echoDisplay)}\n\n${MAIN_MENU_HINT_TEXT}`,
-        alternateTexts: [
-          `${birthdateSavedAfterUpdate(userId, pending.echoDisplay)}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
-        ],
+        text: savedLine,
+        alternateTexts: [savedLine],
       });
       return true;
     }
@@ -391,7 +403,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_ask_date_again",
         semanticKey: "waiting_birthdate_change",
-        text: `โอเคครับ ส่งวันเกิดมาใหม่ได้เลยครับ\n\n${ask}\n\n${MAIN_MENU_HINT_TEXT}`,
+        text: `โอเคครับ ส่งวันเกิดมาใหม่ได้เลยครับ\n\n${ask}`,
       });
       return true;
     }
@@ -402,7 +414,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_please_confirm_first_final",
         semanticKey: "waiting_birthdate_change_confirm",
-        text: `ขอทวนอีกครั้งนะครับ ถ้าถูก พิมพ์ ใช่ ได้เลยครับ\n\n${MAIN_MENU_HINT_TEXT}`,
+        text: "ถ้าถูก พิมพ์ ใช่ ได้เลยครับ",
       });
       return true;
     }
@@ -413,7 +425,7 @@ async function handleBirthdateChangeFlowTurn({
       replyToken: event.replyToken,
       replyType: "birthdate_change_ask_final_again",
       semanticKey: "waiting_birthdate_change_confirm",
-      text: `${pickBirthdateFinalConfirmText(userId, pe)}\n\n${MAIN_MENU_HINT_TEXT}`,
+      text: pickBirthdateFinalConfirmText(userId, pe),
     });
     return true;
   }
@@ -628,12 +640,12 @@ async function handlePaymentCommandTextRoute({
     );
   }
 
-  const payCmdBody = `${buildPaymentInstructionText({
+  const payCmdBody = buildPaymentInstructionText({
     amount: paidPackage.priceThb,
     currency,
     paymentRef: cmdPaymentRef,
     paidPackage,
-  })}\n\n${MAIN_MENU_HINT_TEXT}`;
+  });
   await sendNonScanReply({
     client,
     userId,
@@ -641,14 +653,7 @@ async function handlePaymentCommandTextRoute({
     replyType: "payment_instruction_text",
     semanticKey: "payment_command_text_fallback",
     text: payCmdBody,
-    alternateTexts: [
-      `${buildPaymentInstructionText({
-        amount: paidPackage.priceThb,
-        currency,
-        paymentRef: cmdPaymentRef,
-        paidPackage,
-      })}\n\nพิมพ์เมนูหลักได้ตลอดครับ`,
-    ],
+    alternateTexts: [payCmdBody],
   });
   await logPaywallShown(userId, {
     patternUsed: "qr_text_fallback",
@@ -659,7 +664,12 @@ async function handlePaymentCommandTextRoute({
   return true;
 }
 
-async function replyIdleTextNoDuplicate({ client, replyToken, userId }) {
+async function replyIdleTextNoDuplicate({
+  client,
+  replyToken,
+  userId,
+  appendMenuFooter = false,
+}) {
   const primary = buildIdleDeterministicPrimaryText();
   let personaSoft = null;
   try {
@@ -672,16 +682,23 @@ async function replyIdleTextNoDuplicate({ client, replyToken, userId }) {
     String(personaSoft).trim() !== primary.trim()
       ? String(personaSoft).trim()
       : null;
+  const body = appendMenuFooter ? `${primary}\n\n${MAIN_MENU_HINT_TEXT}` : primary;
+  const altBody =
+    altPersona && appendMenuFooter
+      ? `${altPersona}\n\n${MAIN_MENU_HINT_TEXT}`
+      : altPersona;
   await sendNonScanReply({
     client,
     userId,
     replyToken,
     replyType: "idle_post_scan",
     semanticKey: "idle_post_scan",
-    text: primary,
+    text: body,
     alternateTexts: [
-      ...(altPersona ? [altPersona] : []),
-      "มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้",
+      ...(altBody ? [altBody] : []),
+      appendMenuFooter
+        ? `มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้\n\n${MAIN_MENU_HINT_TEXT}`
+        : "มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้",
     ],
   });
 }
@@ -699,10 +716,8 @@ async function handleHistoryCommand({ client, replyToken, userId }) {
       replyToken,
       replyType: "history_empty",
       semanticKey: "history_empty",
-      text: `${buildNoHistoryText()}\n\n${MAIN_MENU_HINT_TEXT}`,
-      alternateTexts: [
-        `${buildNoHistoryText()}\n\nลองส่งรูปมาใหม่ได้เลยครับ`,
-      ],
+      text: buildNoHistoryText(),
+      alternateTexts: [`${buildNoHistoryText()}\nลองส่งรูปมาใหม่ได้เลยครับ`],
     });
     return;
   }
@@ -714,10 +729,8 @@ async function handleHistoryCommand({ client, replyToken, userId }) {
     replyToken,
     replyType: "history_list",
     semanticKey: "history_list",
-    text: `ประวัติการสแกนล่าสุด\n\n${formatted}\n\n${MAIN_MENU_HINT_TEXT}`,
-    alternateTexts: [
-      `ประวัติการสแกน\n\n${formatted}\n\n${MAIN_MENU_HINT_TEXT}`,
-    ],
+    text: `ประวัติการสแกนล่าสุด\n\n${formatted}`,
+    alternateTexts: [`ประวัติการสแกน\n\n${formatted}`],
   });
 }
 
@@ -752,8 +765,6 @@ async function handleStatsCommand({ client, replyToken, userId }) {
       `พลังที่พบบ่อย: ${stats.topEnergy}`,
       `คะแนนเฉลี่ย: ${stats.avgScore} / 10`,
       `สแกนล่าสุด: ${last}`,
-      "",
-      MAIN_MENU_HINT_TEXT,
     ].join("\n"),
     alternateTexts: [
       [
@@ -763,8 +774,6 @@ async function handleStatsCommand({ client, replyToken, userId }) {
         `พลังที่เจอบ่อย: ${stats.topEnergy}`,
         `เฉลี่ย ${stats.avgScore} / 10`,
         `ล่าสุด: ${last}`,
-        "",
-        MAIN_MENU_HINT_TEXT,
       ].join("\n"),
     ],
   });
@@ -1435,7 +1444,7 @@ async function handleImageMessage({ client, event, userId, session }) {
       replyToken: event.replyToken,
       replyType: "birthdate_update_prompt_image",
       semanticKey: "birthdate_update_prompt",
-      text: `${hint}\n\n${MAIN_MENU_HINT_TEXT}`,
+      text: hint,
       alternateTexts: [
         `${hint}\n\nพิมพ์วันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
       ],
@@ -1918,9 +1927,9 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyToken: event.replyToken,
         replyType: "birthdate_update_prompt_paywall",
         semanticKey: "birthdate_change_candidate",
-        text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        text: pickBirthdateFirstConfirmQuestion(userId),
         alternateTexts: [
-          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
         ],
       });
       return;
@@ -2349,7 +2358,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyToken: event.replyToken,
         replyType: "birthdate_update_prompt_awaiting_slip",
         semanticKey: "birthdate_change_candidate",
-        text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        text: pickBirthdateFirstConfirmQuestion(userId),
         alternateTexts: [
           `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
         ],
@@ -2596,7 +2605,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyToken: event.replyToken,
         replyType: "birthdate_update_prompt_pending_verify",
         semanticKey: "birthdate_change_candidate",
-        text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+        text: pickBirthdateFirstConfirmQuestion(userId),
         alternateTexts: [
           `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
         ],
@@ -2834,6 +2843,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (flowState === "waiting_birthdate" && paymentState === "none") {
+    const trimmedEarly = String(text || "").trim();
     const parsedEarly = parseBirthdateInput(text);
     if (parsedEarly.ok) {
       console.log("[ACTIVE_STATE_ROUTING]", {
@@ -2850,8 +2860,39 @@ async function handleTextMessage({ client, event, userId, session }) {
     } else {
       const isDateLike = looksLikeBirthdateInput(text);
 
+      if (!parsedEarly.ok && /^\d{6,7}$/.test(trimmedEarly)) {
+        const ambStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
+        const ambTier = guidanceTierFromStreak(ambStreak);
+        const ambMsg =
+          ambTier === "micro"
+            ? "พิมพ์วันเกิดมาใหม่ได้เลยครับ"
+            : BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT;
+        logStateMicroIntent({
+          userId,
+          activeState: "waiting_birthdate",
+          inputText: text,
+          normalizedIntent: "ambiguous_compact_date",
+          confidence: "near_safe",
+          chosenReplyType: "waiting_birthdate_ambiguous_compact",
+        });
+        await sendNonScanSequenceReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "waiting_birthdate_error",
+          semanticKey: "birthdate_error_waiting_scan",
+          messages: [ambMsg],
+        });
+        return;
+      }
+
       if (isDateLike) {
-        const errMsgs = await buildBirthdateErrorMessages(userId, parsedEarly.reason);
+        const errStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
+        const errTier = guidanceTierFromStreak(errStreak);
+        const errLine = buildDeterministicBirthdateErrorText(
+          errTier,
+          parsedEarly.reason,
+        );
         logStateMicroIntent({
           userId,
           activeState: "waiting_birthdate",
@@ -2886,7 +2927,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           replyToken: event.replyToken,
           replyType: "waiting_birthdate_error",
           semanticKey: "birthdate_error_waiting_scan",
-          messages: errMsgs,
+          messages: [errLine],
         });
         return;
       }
@@ -3096,7 +3137,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             replyToken: event.replyToken,
             replyType: "birthdate_update_prompt_pending_verify",
             semanticKey: "birthdate_change_candidate",
-            text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+            text: pickBirthdateFirstConfirmQuestion(userId),
             alternateTexts: [
               `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
             ],
@@ -3120,8 +3161,6 @@ async function handleTextMessage({ client, event, userId, session }) {
               : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะให้คุณพิมพ์วันเกิดก่อนสแกน",
             "",
             "ส่งรูปถัดไปมาได้เลยครับ",
-            "",
-            MAIN_MENU_HINT_TEXT,
           ].join("\n");
           await sendNonScanReply({
             client,
@@ -3236,7 +3275,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           replyToken: event.replyToken,
           replyType: "birthdate_update_prompt_waiting_bd",
           semanticKey: "birthdate_change_candidate",
-          text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+          text: pickBirthdateFirstConfirmQuestion(userId),
           alternateTexts: [
             `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
           ],
@@ -3244,6 +3283,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         return;
       }
 
+      const trimmedLock = String(text || "").trim();
       const parsedLock = parseBirthdateInput(text);
       if (parsedLock.ok) {
         const flowVersion = session.flowVersion || 0;
@@ -3304,6 +3344,24 @@ async function handleTextMessage({ client, event, userId, session }) {
         return;
       }
 
+      if (!parsedLock.ok && /^\d{6,7}$/.test(trimmedLock)) {
+        const ambStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
+        const ambTier = guidanceTierFromStreak(ambStreak);
+        const ambMsg =
+          ambTier === "micro"
+            ? "พิมพ์วันเกิดมาใหม่ได้เลยครับ"
+            : BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT;
+        await sendNonScanSequenceReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "waiting_birthdate_error",
+          semanticKey: "birthdate_error_waiting_scan",
+          messages: [ambMsg],
+        });
+        return;
+      }
+
       const offerBd = loadActiveScanOffer();
       if (
         isSingleOfferPriceToken(text, offerBd) ||
@@ -3326,13 +3384,17 @@ async function handleTextMessage({ client, event, userId, session }) {
           chosenReplyType: "waiting_birthdate_guidance",
           routeReason: "package_or_pay_deferred_date_first",
         });
+        const payDeferStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
+        const payDeferTier = guidanceTierFromStreak(payDeferStreak);
         await sendNonScanSequenceReply({
           client,
           userId,
           replyToken: event.replyToken,
           replyType: "waiting_birthdate_guidance",
           semanticKey: "waiting_birthdate_guidance",
-          messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId),
+          messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId, {
+            tier: payDeferTier,
+          }),
         });
         return;
       }
@@ -3343,13 +3405,19 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           reason: parsedLock.reason,
         });
+        const errStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
+        const errTier = guidanceTierFromStreak(errStreak);
+        const errLine = buildDeterministicBirthdateErrorText(
+          errTier,
+          parsedLock.reason,
+        );
         await sendNonScanSequenceReply({
           client,
           userId,
           replyToken: event.replyToken,
           replyType: "waiting_birthdate_error",
           semanticKey: "birthdate_error_waiting_scan",
-          messages: await buildBirthdateErrorMessages(userId, parsedLock.reason),
+          messages: [errLine],
         });
         return;
       }
@@ -3360,13 +3428,17 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           hint: "blocked_intent",
         });
+        const blkStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
+        const blkTier = guidanceTierFromStreak(blkStreak);
         await sendNonScanSequenceReply({
           client,
           userId,
           replyToken: event.replyToken,
           replyType: "waiting_birthdate_guidance_blocked",
           semanticKey: "waiting_birthdate_guidance",
-          messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId),
+          messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId, {
+            tier: blkTier,
+          }),
         });
         return;
       }
@@ -3376,13 +3448,17 @@ async function handleTextMessage({ client, event, userId, session }) {
         userId,
         hint: "default",
       });
+      const defStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
+      const defTier = guidanceTierFromStreak(defStreak);
       await sendNonScanSequenceReply({
         client,
         userId,
         replyToken: event.replyToken,
         replyType: "waiting_birthdate_guidance",
         semanticKey: "waiting_birthdate_guidance",
-        messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId),
+        messages: await buildWaitingBirthdateDateFirstGuidanceMessages(userId, {
+          tier: defTier,
+        }),
       });
       return;
     }
@@ -3430,7 +3506,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       replyToken: event.replyToken,
       replyType: "birthdate_update_prompt_open",
       semanticKey: "birthdate_change_candidate",
-      text: `${pickBirthdateFirstConfirmQuestion(userId)}\n\n${MAIN_MENU_HINT_TEXT}`,
+            text: pickBirthdateFirstConfirmQuestion(userId),
       alternateTexts: [
         `${pickBirthdateFirstConfirmQuestion(userId)}\n\nพิมพ์ ใช่ หรือ โอเค เพื่อยืนยัน`,
       ],
@@ -3581,8 +3657,6 @@ async function handleTextMessage({ client, event, userId, session }) {
         : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะให้คุณพิมพ์วันเกิดก่อนสแกน",
       "",
       "ส่งรูปถัดไปมาได้เลยครับ",
-      "",
-      MAIN_MENU_HINT_TEXT,
     ].join("\n");
 
     await sendNonScanReply({
@@ -3647,19 +3721,30 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (menuAliases.has(text) || menuAliases.has(lowerText)) {
+    const tMenu = String(text || "").trim();
+    const ltMenu = String(lowerText || tMenu.toLowerCase()).trim();
+    const menuExplicit =
+      tMenu === "เมนู" ||
+      tMenu === "เมนูหลัก" ||
+      ltMenu === "menu" ||
+      ltMenu === "help" ||
+      ltMenu === "start" ||
+      tMenu === "เริ่ม";
     await replyIdleTextNoDuplicate({
       client,
       replyToken: event.replyToken,
       userId,
+      appendMenuFooter: menuExplicit,
     });
     return;
   }
 
-  // True idle / menu only — interactive sessions are handled above (terminal guards + state blocks).
+  // True idle — generic fallback / recovery (show menu hint once).
   await replyIdleTextNoDuplicate({
     client,
     replyToken: event.replyToken,
     userId,
+    appendMenuFooter: true,
   });
 }
 

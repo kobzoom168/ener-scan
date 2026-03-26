@@ -13,6 +13,7 @@ describe("parseBirthdateInput — CE / BE", () => {
   it("accepts CE 14/09/1995", () => {
     const r = parseBirthdateInput("14/09/1995");
     assert.equal(r.ok, true);
+    assert.equal(r.confidence, "high");
     assert.equal(r.yearCE, 1995);
     assert.equal(r.normalizedDisplay, "14/09/1995");
     assert.equal(r.isoDate, "1995-09-14");
@@ -21,10 +22,26 @@ describe("parseBirthdateInput — CE / BE", () => {
   it("accepts BE 2538 and normalizes to CE 1995", () => {
     const r = parseBirthdateInput("14/09/2538");
     assert.equal(r.ok, true);
+    assert.equal(r.confidence, "high");
     assert.equal(r.yearCE, 1995);
     assert.equal(r.yearBE, 2538);
     assert.equal(r.normalizedDisplay, "14/09/1995");
     assert.equal(r.normalizedDisplayBE, "14/09/2538");
+  });
+
+  it("accepts compact 8-digit BE 19082528", () => {
+    const r = parseBirthdateInput("19082528");
+    assert.equal(r.ok, true);
+    assert.equal(r.confidence, "medium");
+    assert.equal(r.yearCE, 1985);
+    assert.equal(r.echoForConfirm, "19/08/2528");
+  });
+
+  it("accepts compact 8-digit CE 19081985", () => {
+    const r = parseBirthdateInput("19081985");
+    assert.equal(r.ok, true);
+    assert.equal(r.yearCE, 1985);
+    assert.equal(r.echoForConfirm, "19/08/1985");
   });
 
   it("accepts BE with single-digit month 14-9-2538", () => {
@@ -61,5 +78,9 @@ describe("looksLikeBirthdateInput — date-like", () => {
   it("true for slash dates", () => {
     assert.equal(looksLikeBirthdateInput("14/09/1995"), true);
     assert.equal(looksLikeBirthdateInput("14/09/2538"), true);
+  });
+
+  it("true for compact 8-digit", () => {
+    assert.equal(looksLikeBirthdateInput("19082528"), true);
   });
 });

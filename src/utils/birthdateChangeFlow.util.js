@@ -4,6 +4,7 @@
  */
 
 import { isBirthdateChangeIntentPhrase } from "./stateMicroIntent.util.js";
+import { userFacingBirthdateEcho } from "./birthdateParse.util.js";
 
 function normText(text) {
   return String(text || "")
@@ -20,13 +21,13 @@ export const BIRTHDATE_CHANGE_FLOW = {
 };
 
 const FIRST_CONFIRM_QUESTIONS = [
-  "ต้องการเปลี่ยนวันเกิดที่ใช้ในระบบใช่ไหมครับ",
-  "ถ้าจะเปลี่ยนวันเกิด เดี๋ยวผมอัปเดตให้ได้ครับ ใช่ไหมครับ",
+  "จะเปลี่ยนวันเกิดในระบบใช่ไหมครับ",
+  "ขอแก้วันเกิดที่บันทึกไว้ใช่ไหมครับ",
 ];
 
 const ASK_DATE_LINES = [
-  "ส่งวันเกิดมาได้เลยครับ เช่น 19/08/1985 หรือ 19/08/2528",
-  "พิมพ์วันเกิดมาในแชตนี้ได้เลยครับ รองรับทั้ง ค.ศ. และ พ.ศ. เช่น 19-8-1985 หรือ 19-8-2528",
+  "ขอวันเกิดที่ใช้ในระบบหน่อยครับ พิมพ์แบบ 19/08/2528 ได้เลย",
+  "ส่งวันเกิดมาได้เลยครับ เช่น 19-08-2528 หรือ 19082528",
 ];
 
 const CONFIRM_YES = new Set([
@@ -117,34 +118,23 @@ export function pickBirthdateAskDateLine(userId = "") {
   return ASK_DATE_LINES[h % ASK_DATE_LINES.length];
 }
 
-const FINAL_CONFIRM_BODIES = [
-  (echo) =>
-    `ขอทวนอีกครั้งนะครับ ใช้วันเกิด ${echo} ใช่ไหมครับ\n\nถ้าถูก พิมพ์ ใช่ ได้เลยครับ`,
-  (echo) =>
-    `เดี๋ยวผมใช้วันเกิด ${echo} นะครับ ถ้าถูก พิมพ์ ใช่ ได้เลยครับ`,
-];
-
 /**
- * Last step before saveBirthdate: deterministic copy that echoes `echo` (user’s CE/BE style preserved).
+ * Last step before saveBirthdate: light confirm; `echo` uses CE/BE display from parser.
  */
-export function pickBirthdateFinalConfirmText(userId = "", echo = "") {
+export function pickBirthdateFinalConfirmText(_userId = "", echo = "") {
   const e = String(echo || "").trim();
-  const s = String(userId || "");
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (h * 41 + s.charCodeAt(i)) >>> 0;
-  }
-  return FINAL_CONFIRM_BODIES[h % FINAL_CONFIRM_BODIES.length](e);
+  return `ได้ครับ ผมอ่านเป็น ${e} ใช่ไหมครับ\n\nถ้าถูก พิมพ์ ใช่ ได้เลยครับ`;
 }
 
 export const BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT =
-  "วันเกิดรูปแบบนี้ยังไม่ถูกครับ ลองส่งใหม่เป็นแบบ 19/08/1985 หรือ 19/08/2528 ได้เลยครับ";
+  "ยังอ่านวันเกิดไม่ได้ครับ ลองแบบ 19/08/2528 ได้เลย";
+
+export const BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT =
+  "ส่งวันเกิดมาใหม่อีกครั้งได้ไหมครับ แบบ 19/08/2528";
 
 /**
- * Echo string for user-visible confirmations — preserves input style (slashes vs dashes, CE vs BE year).
- * @param {{ ok: true, originalInput: string }} parsed
+ * Echo string for user-visible confirmations — compact input is expanded to DD/MM/YYYY (BE year kept when applicable).
  */
 export function buildBirthdateEchoForUser(parsed) {
-  if (!parsed?.ok) return "";
-  return String(parsed.originalInput || "").trim();
+  return userFacingBirthdateEcho(parsed);
 }

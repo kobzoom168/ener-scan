@@ -6,6 +6,7 @@ import {
   buildBirthdateEchoForUser,
   BIRTHDATE_CHANGE_FLOW,
 } from "../src/utils/birthdateChangeFlow.util.js";
+import { parseBirthdateInput } from "../src/utils/birthdateParse.util.js";
 
 test("BIRTHDATE_CHANGE_FLOW labels", () => {
   assert.equal(BIRTHDATE_CHANGE_FLOW.CANDIDATE, "birthdate_change_candidate");
@@ -30,23 +31,18 @@ test("soft-detect: pure date is not a candidate (avoid accidental profile routin
   assert.equal(isBirthdateChangeCandidateText("19/08/2528"), false);
 });
 
-test("pickBirthdateFinalConfirmText echoes user style; two deterministic variants", () => {
+test("pickBirthdateFinalConfirmText is light confirm with echo", () => {
   const a = pickBirthdateFinalConfirmText("u_a", "19/08/2528");
-  const b = pickBirthdateFinalConfirmText("u_b", "19/08/1985");
   assert.ok(a.includes("19/08/2528"));
-  assert.ok(b.includes("19/08/1985"));
-  assert.ok(
-    a.startsWith("ขอทวน") || a.startsWith("เดี๋ยวผมใช้วันเกิด"),
-    a,
-  );
+  assert.ok(a.startsWith("ได้ครับ ผมอ่านเป็น"));
 });
 
-test("buildBirthdateEchoForUser uses parser originalInput", () => {
-  assert.equal(
-    buildBirthdateEchoForUser({
-      ok: true,
-      originalInput: "19-8-2528",
-    }),
-    "19-8-2528",
-  );
+test("buildBirthdateEchoForUser uses echoForConfirm for compact", () => {
+  const p = parseBirthdateInput("19082528");
+  assert.equal(buildBirthdateEchoForUser(p), "19/08/2528");
+});
+
+test("buildBirthdateEchoForUser keeps delimiter style when present", () => {
+  const p = parseBirthdateInput("19-8-2528");
+  assert.equal(buildBirthdateEchoForUser(p), "19-8-2528");
 });

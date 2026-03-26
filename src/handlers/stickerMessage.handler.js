@@ -37,8 +37,6 @@ export function isLineStickerPlaceholderText(text) {
   return true;
 }
 
-const MAIN_MENU_HINT_TEXT = "พิมพ์เมนูหลัก เพื่อกลับเมนูหลักได้ตลอดครับ";
-
 const IDLE_STICKER_LINES = [
   "ได้ครับ",
   "ส่งรูปมาได้เลย เดี๋ยวผมดูให้",
@@ -140,7 +138,7 @@ export async function handleStickerLikeInput(opts) {
       hint =
         "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก พิมพ์ ใช่ ได้เลย";
     }
-    const text = `${hint}\n\n${MAIN_MENU_HINT_TEXT}`;
+    const text = hint;
     await sendNonScanReply({
       client,
       userId: uid,

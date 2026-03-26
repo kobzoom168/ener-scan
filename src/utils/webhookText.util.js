@@ -409,17 +409,44 @@ export function isPackageSelectionTokenText(text, offer = loadActiveScanOffer())
 export async function buildWaitingBirthdateDateFirstGuidanceMessages(userId, opts = {}) {
   const tier = opts.tier || "full";
   if (tier === "micro") {
-    return ["พิมพ์วันเกิดแบบ วัน/เดือน/ปี เช่น 19/08/1985 ได้เลยครับ"];
+    return ["พิมพ์วันเกิดมาได้เลยครับ"];
   }
   if (tier === "short") {
-    return ["พิมพ์วันเกิดเป็น DD/MM/YYYY ได้เลยครับ เช่น 19/08/1985"];
+    return ["ขอวันเกิดหน่อยครับ เช่น 19/08/2528"];
   }
   const lines = [
-    "ขอวันเกิดก่อนครับ พิมพ์แบบ 19/08/1985 ได้เลย",
-    "ตอนนี้ผมรอวันเกิดอยู่ครับ เดี๋ยวได้อ่านต่อให้เลย",
+    "ขอวันเกิดที่ใช้ในระบบหน่อยครับ พิมพ์แบบ 19/08/2528 ได้เลย",
+    "รอวันเกิดอยู่ครับ ส่งมาได้เลย เช่น 19-08-2528",
   ];
   const primary = lines[slotFromUserId(userId, lines.length)];
   return [primary];
+}
+
+/**
+ * Short deterministic errors for waiting_birthdate (avoid repeating long format lessons).
+ * @param {"full" | "short" | "micro"} tier
+ * @param {"invalid_format" | "invalid_date" | "out_of_range"} reason
+ */
+export function buildDeterministicBirthdateErrorText(
+  tier = "full",
+  reason = "invalid_format",
+) {
+  const r = String(reason || "invalid_format");
+  if (tier === "micro") {
+    return "ลองส่งวันเกิดอีกครั้งได้เลยครับ";
+  }
+  if (tier === "short") {
+    if (r === "out_of_range") return "วันเกิดอยู่นอกช่วงที่ใช้ได้ครับ ลองปีอื่นดูนะครับ";
+    if (r === "invalid_date") return "วันที่ไม่ตรงปฏิทินครับ ลองใหม่อีกครั้ง";
+    return "รูปแบบยังไม่ตรงครับ ลองเช่น 19/08/2528";
+  }
+  if (r === "out_of_range") {
+    return "วันเกิดนี้ยังใช้ในระบบไม่ได้ครับ ลองปีอื่นที่อยู่ในช่วงที่รองรับ";
+  }
+  if (r === "invalid_date") {
+    return "วันที่ไม่ตรงกับปฏิทินครับ ลองส่งใหม่อีกครั้ง";
+  }
+  return "ยังอ่านวันเกิดไม่ได้ครับ ลองแบบ 19/08/2528 หรือ 19082528";
 }
 
 /** Deterministic awaiting_slip text guard (persona may still vary alternates). */
@@ -1089,7 +1116,7 @@ export function buildPendingVerifyAckContinueText({
 }
 
 export function buildWaitingBirthdatePaymentDeferredRedirectText() {
-  return "เดี๋ยวเรื่องชำระค่อยทำตามขั้นตอนครับ ตอนนี้ขอวันเกิดก่อน พิมพ์แบบ 19/08/1985 ได้เลย";
+  return "เรื่องชำระค่อยทำทีหลังได้ครับ ตอนนี้ขอวันเกิดก่อน เช่น 19/08/2528";
 }
 
 export function isHistoryCommand(text, lowerText) {

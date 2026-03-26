@@ -204,12 +204,9 @@ export function birthdateUpdatePrompt(userId) {
 
 /** @param {string} displayBirthdateForUser — same era/style as user typed (echo), not forced CE. */
 export function birthdateSavedAfterUpdate(userId, displayBirthdateForUser) {
-  const v = pickVariant(
-    userId,
-    "birthdate_saved_after_update",
-    REPLY_VARIANTS.birthdate_saved_after_update
-  );
-  return `${v}\nวันเกิดตอนนี้: ${displayBirthdateForUser}`;
+  void userId;
+  void displayBirthdateForUser;
+  return "โอเคครับ ผมตั้งวันเกิดนี้ให้แล้ว เดี๋ยวไปต่อให้ครับ";
 }
 
 export async function approvedIntroLine(userId) {
