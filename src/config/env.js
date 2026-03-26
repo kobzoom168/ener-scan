@@ -316,6 +316,36 @@ export const env = {
     const n = raw === undefined || raw === "" ? 3200 : Number(raw);
     return Number.isFinite(n) ? Math.max(400, Math.floor(n)) : 3200;
   })(),
+  /** Optional: Google AI Gemini API key (also accepts GOOGLE_API_KEY). */
+  GEMINI_API_KEY: String(process.env.GEMINI_API_KEY || "").trim(),
+  GOOGLE_API_KEY: String(process.env.GOOGLE_API_KEY || "").trim(),
+  /**
+   * Front conversation: Gemini Flash-Lite planner + phrasing (non-scan only).
+   * When false, orchestrator is off regardless of GEMINI_FRONT_ORCHESTRATOR_MODE.
+   */
+  GEMINI_FRONT_ORCHESTRATOR_ENABLED:
+    String(process.env.GEMINI_FRONT_ORCHESTRATOR_ENABLED || "")
+      .trim()
+      .toLowerCase() === "true",
+  /** `off` | `shadow` | `active` */
+  GEMINI_FRONT_ORCHESTRATOR_MODE: (() => {
+    const m = String(process.env.GEMINI_FRONT_ORCHESTRATOR_MODE || "off")
+      .trim()
+      .toLowerCase();
+    if (m === "shadow" || m === "active" || m === "off") return m;
+    return "off";
+  })(),
+  /** When true, Gemini routing applies only to Phase-1 funnel states. */
+  GEMINI_FRONT_PHASE1_ONLY:
+    String(process.env.GEMINI_FRONT_PHASE1_ONLY || "true").trim().toLowerCase() !==
+    "false",
+  GEMINI_FRONT_MODEL:
+    String(process.env.GEMINI_FRONT_MODEL || "").trim() || "gemini-2.5-flash-lite",
+  GEMINI_FRONT_TIMEOUT_MS: (() => {
+    const raw = process.env.GEMINI_FRONT_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 3200 : Number(raw);
+    return Number.isFinite(n) ? Math.max(400, Math.floor(n)) : 3200;
+  })(),
   /**
    * When `warn`: log NONSCAN_REPLY_BYPASS_SUSPECT if replyText/pushText is used outside
    * scan path and outside non-scan gateway (rollout / dev visibility).

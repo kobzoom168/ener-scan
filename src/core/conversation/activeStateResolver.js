@@ -5,7 +5,7 @@
  * Priority:
  * 1) hard_blocked
  * 2) soft_locked (scan)
- * 3) payment interactive (pending_verify > awaiting_slip > paywall > package_selected)
+ * 3) payment interactive (pending_verify > awaiting_slip > package_selected > paywall)
  * 4) waiting_birthdate (pending scan image, birthdate needed)
  * 5) paid_active_scan_ready
  * 6) explicit_command (utility/menu/history — narrow surface)
@@ -49,20 +49,20 @@ export function resolveActiveState(s) {
         resolutionReason: "db_awaiting_slip",
       };
     }
-    if (s.paymentInteractiveKind === "paywall") {
-      return {
-        stateOwner: "paywall_selecting_package",
-        expectedInputKind: "package_or_pay_or_wait",
-        noProgressStreak: 0,
-        resolutionReason: "paywall_gate",
-      };
-    }
     if (s.paymentInteractiveKind === "package_selected") {
       return {
         stateOwner: "payment_package_selected",
         expectedInputKind: "pay_command",
         noProgressStreak: 0,
         resolutionReason: "package_selected_await_pay",
+      };
+    }
+    if (s.paymentInteractiveKind === "paywall") {
+      return {
+        stateOwner: "paywall_selecting_package",
+        expectedInputKind: "package_or_pay_or_wait",
+        noProgressStreak: 0,
+        resolutionReason: "paywall_gate",
       };
     }
   }

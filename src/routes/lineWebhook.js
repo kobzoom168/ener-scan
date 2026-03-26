@@ -63,6 +63,7 @@ import { buildScanOfferReply } from "../services/scanOffer.copy.js";
 import {
   parsePackageSelectionFromText,
   getDefaultPackage,
+  findPackageByKey,
 } from "../services/scanOffer.packages.js";
 import {
   getPromptPayQrPublicUrl,
@@ -78,6 +79,9 @@ import {
 
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 import { evaluateSlipGate } from "../core/payments/slipCheck/slipGate.service.js";
+import { runGeminiFrontOrchestrator } from "../core/conversation/geminiFront/geminiFrontOrchestrator.service.js";
+import { resolveGeminiPhase1StateKey } from "../core/conversation/geminiFront/geminiFront.featureFlags.js";
+import { invokePhase1GeminiShadow } from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
 
 import { replyText } from "../services/lineReply.service.js";
 import {
@@ -124,6 +128,9 @@ import {
   isWaitingBirthdatePackageOrPaymentWords,
   isWaitForTomorrowIntent,
   isSingleOfferPriceToken,
+  shouldPackageSelectedShortcutToQr,
+  isPackageSelectedProceedIntentText,
+  isPackageSelectedSamePackageConfirmText,
 } from "../utils/stateMicroIntent.util.js";
 import {
   isBirthdateChangeCandidateText,
@@ -543,7 +550,9 @@ async function handlePaymentCommandTextRoute({
   isPaywallGateWithPendingScan,
   forcePaymentIntent = false,
 }) {
-  if (!forcePaymentIntent && !isPaymentCommand(text, lowerText)) return false;
+  if (!forcePaymentIntent && !isPaymentCommand(text, lowerText)) {
+    return false;
+  }
 
   try {
     const ps = getPaymentState(userId).state;
@@ -622,7 +631,10 @@ async function handlePaymentCommandTextRoute({
   }
 
   const offerPay = loadActiveScanOffer();
-  const paidPackage = getDefaultPackage(offerPay);
+  const selectedPayKey = getSelectedPaymentPackageKey(userId);
+  const paidPackage =
+    (selectedPayKey && findPackageByKey(offerPay, selectedPayKey)) ||
+    getDefaultPackage(offerPay);
 
   if (!paidPackage) {
     console.log(
@@ -2072,6 +2084,58 @@ async function handleTextMessage({ client, event, userId, session }) {
     if (bdDone) return;
   }
 
+  /** Phase-1 Gemini runs only after deterministic shortcuts / micro-intents above each insertion point. */
+  const invokePhase1GeminiOrchestrator = async () => {
+    const phase1GeminiKey = resolveGeminiPhase1StateKey({
+      session,
+      paymentState,
+      flowState,
+      hasPendingVerify,
+      hasAwaitingSlip,
+      paymentMemoryState,
+      selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    });
+    if (!phase1GeminiKey) return { handled: false };
+    return runGeminiFrontOrchestrator({
+      userId,
+      text,
+      lowerText,
+      phase1State: phase1GeminiKey,
+      conversationOwner,
+      paymentState,
+      flowState,
+      accessState,
+      pendingPaymentStatus: pendingStatus || null,
+      selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+      sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts }) => {
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType,
+          semanticKey,
+          text,
+          alternateTexts: alternateTexts || [],
+        });
+      },
+      delegates: {
+        sendQrBundle: async () => {
+          const ok = await handlePaymentCommandTextRoute({
+            client,
+            event,
+            userId,
+            session,
+            text,
+            lowerText,
+            isPaywallGateWithPendingScan,
+            forcePaymentIntent: true,
+          });
+          return Boolean(ok);
+        },
+      },
+    });
+  };
+
   if (paymentState === "paywall_offer_single") {
     const offer = loadActiveScanOffer();
     const defaultPkg = getDefaultPackage(offer);
@@ -2098,6 +2162,81 @@ async function handleTextMessage({ client, event, userId, session }) {
         alternateTexts: [
           `${pickBirthdateFirstConfirmQuestion(userId)}\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
         ],
+      });
+      return;
+    }
+
+    const selectedKeyPaywall = getSelectedPaymentPackageKey(userId);
+    const selectedPkgPaywall =
+      selectedKeyPaywall && offer
+        ? findPackageByKey(offer, selectedKeyPaywall)
+        : null;
+
+    if (selectedPkgPaywall && shouldPackageSelectedShortcutToQr(text, selectedPkgPaywall, offer)) {
+      let normalizedIntent = "package_selected_proceed";
+      if (isPaymentCommand(text, lowerText)) {
+        normalizedIntent = "pay_intent";
+      } else if (isGenericAckText(text)) {
+        normalizedIntent = "generic_proceed";
+      } else if (
+        isPackageSelectedSamePackageConfirmText(text, selectedPkgPaywall, offer)
+      ) {
+        normalizedIntent = "same_package_confirm";
+      } else if (isResendQrIntentText(text)) {
+        normalizedIntent = "resend_qr";
+      } else if (isPackageSelectedProceedIntentText(text)) {
+        normalizedIntent = "pay_now_proceed";
+      }
+
+      resetGuidanceNoProgress(userId, "paywall_offer_single");
+      resetSameStateAckStreak(userId, "paywall_offer_single");
+      console.log(
+        JSON.stringify({
+          event: "PAYMENT_PAY_INTENT_CONSUMED",
+          userId,
+          paymentState,
+          inputText: text,
+          action: "create_or_show_payment_qr",
+          source: "package_selected_shortcut",
+        }),
+      );
+      logSafeIntentConsumed({
+        userId,
+        activeState: "payment_package_selected",
+        inputText: text,
+        normalizedIntent,
+        action: "create_or_show_payment_qr",
+      });
+      logStateMicroIntent({
+        userId,
+        activeState: "payment_package_selected",
+        inputText: text,
+        normalizedIntent,
+        confidence: "exact",
+        chosenReplyType: "package_selected_pay_now",
+      });
+      emitActiveStateRouting({
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        conversationOwner,
+        stateOwner: "payment_package_selected",
+        replyFamily: "paywall_single_offer",
+        expectedInputType: "payment_command",
+        text,
+        chosenReplyType: "package_selected_pay_now",
+        routeReason: "package_selected_to_qr_shortcut",
+      });
+      await handlePaymentCommandTextRoute({
+        client,
+        event,
+        userId,
+        session,
+        text,
+        lowerText,
+        isPaywallGateWithPendingScan,
+        forcePaymentIntent: true,
       });
       return;
     }
@@ -2470,21 +2609,69 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
+    /** Phase-1 shadow scope here: `phase1KeyPaywall` is paywall_selecting_package or payment_package_selected (single paywall block). */
+    const phase1KeyPaywall = resolveGeminiPhase1StateKey({
+      session,
+      paymentState,
+      flowState,
+      hasPendingVerify,
+      hasAwaitingSlip,
+      paymentMemoryState,
+      selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    });
+    const paywallShadowDeterministicBranch =
+      branch === "date_wrong"
+        ? selectedPkgPaywall
+          ? "payment_package_selected_date_wrong"
+          : "paywall_selecting_date_wrong"
+        : selectedPkgPaywall
+          ? "payment_package_selected_unclear"
+          : "paywall_selecting_unclear";
+    void invokePhase1GeminiShadow({
+      userId,
+      text,
+      deterministicBranch: paywallShadowDeterministicBranch,
+      phase1State: phase1KeyPaywall,
+      conversationOwner,
+      paymentState,
+      flowState,
+      accessState,
+      pendingPaymentStatus: pendingStatus || null,
+      selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    });
+    /** Active Phase-1 stays off for date_wrong (deterministic birthdate-like copy only). */
+    if (branch !== "date_wrong") {
+      const geminiFront = await invokePhase1GeminiOrchestrator();
+      if (geminiFront.handled) return;
+    }
+
     resetSameStateAckStreak(userId, "paywall_offer_single");
     const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
     const tier = guidanceTierFromStreak(streak);
     logStateGuidanceLevel({
       userId,
-      activeState: "paywall_offer_single",
+      activeState: selectedPkgPaywall
+        ? "payment_package_selected"
+        : "paywall_offer_single",
       noProgressCount: streak,
       guidanceLevel: tier,
     });
-    const primaryText = buildPaywallFatiguePromptText({
-      offer,
-      userId,
-      tier,
-      branch: branch === "date_wrong" ? "date_wrong" : "unclear",
-    });
+    const primaryText =
+      branch === "date_wrong"
+        ? buildPaywallFatiguePromptText({
+            offer,
+            userId,
+            tier,
+            branch: "date_wrong",
+          })
+        : selectedPkgPaywall
+          ? buildPaymentPackageSelectedUnclearText({ tier })
+          : buildPaywallFatiguePromptText({
+              offer,
+              userId,
+              tier,
+              branch: "unclear",
+            });
     const chosenReplyType = resolvePaywallPromptReplyType(
       branch === "date_wrong" ? "date_wrong" : "unclear",
       tier,
@@ -2496,7 +2683,9 @@ async function handleTextMessage({ client, event, userId, session }) {
     const unclearOutboundRt = mapPaywallSurfaceReplyType(convLegacyKey, userId);
     logStateMicroIntent({
       userId,
-      activeState: "paywall_offer_single",
+      activeState: selectedPkgPaywall
+        ? "payment_package_selected"
+        : "paywall_offer_single",
       inputText: text,
       normalizedIntent:
         branch === "date_wrong"
@@ -2526,7 +2715,9 @@ async function handleTextMessage({ client, event, userId, session }) {
       paymentState,
       accessState,
       conversationOwner,
-      stateOwner: conversationOwner,
+      stateOwner: selectedPkgPaywall
+        ? "payment_package_selected"
+        : conversationOwner,
       replyFamily: "paywall_single_offer",
       guidanceReason: branch,
       expectedInputType: "payment_or_wait_or_ack",
@@ -2536,7 +2727,9 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
     console.log("[UNEXPECTED_INPUT_HANDLED]", {
       userId,
-      activeState: "paywall_offer_single",
+      activeState: selectedPkgPaywall
+        ? "payment_package_selected"
+        : "paywall_offer_single",
       inputText: text,
       normalizedIntent: branch,
       chosenReplyType: unclearOutboundRt,
@@ -2546,7 +2739,9 @@ async function handleTextMessage({ client, event, userId, session }) {
       userId,
       surface: "deterministic_paywall_unclear",
     });
-    const menuAlt = buildSingleOfferPaywallAltText(offer);
+    const menuAlt = selectedPkgPaywall
+      ? buildPaymentPackageSelectedGentleRemindText()
+      : buildSingleOfferPaywallAltText(offer);
     await sendNonScanReplyWithOptionalConvSurface({
       client,
       userId,
@@ -2766,6 +2961,30 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
       return;
     }
+
+    const phase1KeyAwaitingSlip = resolveGeminiPhase1StateKey({
+      session,
+      paymentState,
+      flowState,
+      hasPendingVerify,
+      hasAwaitingSlip,
+      paymentMemoryState,
+      selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    });
+    void invokePhase1GeminiShadow({
+      userId,
+      text,
+      deterministicBranch: "awaiting_slip_default",
+      phase1State: phase1KeyAwaitingSlip,
+      conversationOwner,
+      paymentState,
+      flowState,
+      accessState,
+      pendingPaymentStatus: pendingStatus || null,
+      selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    });
+    const geminiAwaitingSlip = await invokePhase1GeminiOrchestrator();
+    if (geminiAwaitingSlip.handled) return;
 
     resetSameStateAckStreak(userId, "awaiting_slip");
     const streak = bumpGuidanceNoProgress(userId, "awaiting_slip");
@@ -3048,6 +3267,30 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
+    const phase1KeyPendingVerify = resolveGeminiPhase1StateKey({
+      session,
+      paymentState,
+      flowState,
+      hasPendingVerify,
+      hasAwaitingSlip,
+      paymentMemoryState,
+      selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    });
+    void invokePhase1GeminiShadow({
+      userId,
+      text,
+      deterministicBranch: "pending_verify_default",
+      phase1State: phase1KeyPendingVerify,
+      conversationOwner,
+      paymentState,
+      flowState,
+      accessState,
+      pendingPaymentStatus: pendingStatus || null,
+      selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    });
+    const geminiPendingVerify = await invokePhase1GeminiOrchestrator();
+    if (geminiPendingVerify.handled) return;
+
     resetSameStateAckStreak(userId, "pending_verify");
     const streak = bumpGuidanceNoProgress(userId, "pending_verify");
     const tier = guidanceTierFromStreak(streak);
@@ -3252,6 +3495,9 @@ async function handleTextMessage({ client, event, userId, session }) {
         });
         return;
       }
+
+      const geminiWaitingBd = await invokePhase1GeminiOrchestrator();
+      if (geminiWaitingBd.handled) return;
 
       const streak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
       const tier = guidanceTierFromStreak(streak);

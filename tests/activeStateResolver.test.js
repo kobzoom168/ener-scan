@@ -43,3 +43,17 @@ test("active state: waiting_birthdate when only scan pending", () => {
   });
   assert.equal(r.stateOwner, "waiting_birthdate");
 });
+
+test("active state: package_selected before paywall in payment interactive chain", () => {
+  const r = resolveActiveState({
+    userId: "u1",
+    hardBlocked: false,
+    softLockedScan: false,
+    hasAwaitingPaymentInteractive: true,
+    paymentInteractiveKind: "package_selected",
+    waitingBirthdateForScan: false,
+    accessPaidReady: false,
+    explicitCommandOrUtility: false,
+  });
+  assert.equal(r.stateOwner, "payment_package_selected");
+});

@@ -2,7 +2,10 @@
  * Deterministic micro-intent labels for active interactive states (no LLM routing).
  */
 
-import { listActivePackages } from "../services/scanOffer.packages.js";
+import {
+  listActivePackages,
+  parsePackageSelectionFromText,
+} from "../services/scanOffer.packages.js";
 
 /** @param {number} streak */
 export function guidanceTierFromStreak(streak) {
@@ -60,6 +63,70 @@ export function isLoosePayIntentExact(text) {
   const lt = t.toLowerCase();
   if (lt === "payment") return true;
   return PAY_INTENT_WORDS.has(t);
+}
+
+/** Mirrors `isPaymentCommand` from webhookText (no LLM) — paywall / package-selected routing. */
+export function isPaymentCommandLikeText(text) {
+  const t = normText(text);
+  if (!t) return false;
+  const lt = t.toLowerCase();
+  if (lt === "payment" || t === "จ่ายเงิน" || t === "ปลดล็อก") return true;
+  return isLoosePayIntentExact(t);
+}
+
+/**
+ * Proceed / send-QR style intents while already in `payment_package_selected` (no free-quota intro).
+ */
+export function isPackageSelectedProceedIntentText(text) {
+  const t = normText(text);
+  if (!t) return false;
+  if (t.length > 32) return false;
+  const lt = t.toLowerCase();
+  if (lt === "payment") return true;
+  const exact = new Set([
+    "ส่งมาเลย",
+    "เอาเลย",
+    "ต่อเลย",
+    "ได้เลย",
+    "เปิดยอด",
+    "จ่ายเลย",
+  ]);
+  if (exact.has(t)) return true;
+  if (/^ขอคิวอาร์|^ส่งคิวอาร์/.test(t)) return true;
+  if (/^qr\b/i.test(lt)) return true;
+  return false;
+}
+
+/**
+ * @param {import("../services/scanOffer.loader.js").NormalizedScanOffer} offer
+ * @param {{ key: string, priceThb?: number }} selectedPkg
+ */
+export function isPackageSelectedSamePackageConfirmText(text, selectedPkg, offer) {
+  if (!selectedPkg?.key) return false;
+  const t = normText(text);
+  if (!t) return false;
+  if (t === "แพ็กนี้" || t === "อันนี้") return true;
+  const parsed = parsePackageSelectionFromText(text, offer, {
+    thaiRelativeAliases: true,
+    allowEoaPricePhrase: true,
+  });
+  return Boolean(parsed && parsed === selectedPkg.key);
+}
+
+/**
+ * Route straight to QR bundle when `payment_package_selected` is sticky (session package key set).
+ * @param {import("../services/scanOffer.loader.js").NormalizedScanOffer} offer
+ * @param {{ key: string }} selectedPkg
+ */
+export function shouldPackageSelectedShortcutToQr(text, selectedPkg, offer) {
+  if (!selectedPkg) return false;
+  return (
+    isPaymentCommandLikeText(text) ||
+    isPackageSelectedProceedIntentText(text) ||
+    isPackageSelectedSamePackageConfirmText(text, selectedPkg, offer) ||
+    isGenericAckText(text) ||
+    isResendQrIntentText(text)
+  );
 }
 
 /** Short junk / typo-like (stay in state; do not treat as commands). */
