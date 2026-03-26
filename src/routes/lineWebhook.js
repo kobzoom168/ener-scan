@@ -81,7 +81,10 @@ import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 import { evaluateSlipGate } from "../core/payments/slipCheck/slipGate.service.js";
 import { runGeminiFrontOrchestrator } from "../core/conversation/geminiFront/geminiFrontOrchestrator.service.js";
 import { resolveGeminiPhase1StateKey } from "../core/conversation/geminiFront/geminiFront.featureFlags.js";
-import { invokePhase1GeminiShadow } from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
+import {
+  invokePhase1GeminiShadow,
+  isShadowPhase1Eligible,
+} from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
 
 import { replyText } from "../services/lineReply.service.js";
 import {
@@ -2096,6 +2099,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
     });
     if (!phase1GeminiKey) return { handled: false };
+    /** Payment-funnel Phase-1 only (paywall / slip / pending_verify); not waiting_birthdate. */
+    if (!isShadowPhase1Eligible(phase1GeminiKey)) return { handled: false };
     return runGeminiFrontOrchestrator({
       userId,
       text,
@@ -2131,6 +2136,190 @@ async function handleTextMessage({ client, event, userId, session }) {
             forcePaymentIntent: true,
           });
           return Boolean(ok);
+        },
+        createOrReusePayment: async () => {
+          const ok = await handlePaymentCommandTextRoute({
+            client,
+            event,
+            userId,
+            session,
+            text,
+            lowerText,
+            isPaywallGateWithPendingScan,
+            forcePaymentIntent: true,
+          });
+          return Boolean(ok);
+        },
+        getPaymentStatusReply: async () => {
+          const offer = loadActiveScanOffer();
+          if (paymentState === "pending_verify") {
+            let paymentRef = null;
+            try {
+              if (activePendingPaymentRow?.id) {
+                paymentRef =
+                  activePendingPaymentRow.payment_ref ||
+                  (await ensurePaymentRefForPaymentId(activePendingPaymentRow.id));
+              }
+            } catch (_) {
+              paymentRef = null;
+            }
+            resetSameStateAckStreak(userId, "pending_verify");
+            const streak = bumpGuidanceNoProgress(userId, "pending_verify");
+            const tier = guidanceTierFromStreak(streak);
+            const pendingText =
+              tier === "full"
+                ? buildPendingVerifyHumanGuidanceText({ paymentRef })
+                : buildPendingVerifyStatusShortText({ paymentRef });
+            await sendNonScanReplyWithOptionalConvSurface({
+              client,
+              userId,
+              replyToken: event.replyToken,
+              replyType: "pending_verify_status",
+              semanticKey: "pending_verify_status",
+              text: pendingText,
+              alternateTexts: [
+                "รอแจ้งผลในแชตนี้ได้เลยครับ",
+                buildPendingVerifyReminderText({ paymentRef }),
+              ],
+              convSurface: buildConvSurfacePendingVerify(
+                userId,
+                text,
+                "pending_verify_status",
+                pendingText,
+                tier,
+                paymentRef,
+              ),
+            });
+            return true;
+          }
+          if (paymentState === "awaiting_slip") {
+            let paymentRef = null;
+            try {
+              if (activePendingPaymentRow?.id) {
+                paymentRef =
+                  activePendingPaymentRow.payment_ref ||
+                  (await ensurePaymentRefForPaymentId(activePendingPaymentRow.id));
+              }
+            } catch (_) {
+              paymentRef = null;
+            }
+            resetSameStateAckStreak(userId, "awaiting_slip");
+            const hintText = buildAwaitingSlipStatusHintText({ paymentRef });
+            await sendNonScanReplyWithOptionalConvSurface({
+              client,
+              userId,
+              replyToken: event.replyToken,
+              replyType: "awaiting_slip_status_hint",
+              semanticKey: "awaiting_slip_status_hint",
+              text: hintText,
+              alternateTexts: [
+                buildAwaitingSlipFatigueGuidanceText({
+                  paymentRef,
+                  tier: "short",
+                  kind: "default",
+                }),
+              ],
+              convSurface: buildConvSurfaceAwaitingSlip(
+                userId,
+                text,
+                "awaiting_slip_status_hint",
+                hintText,
+                "short",
+                paymentRef,
+              ),
+            });
+            return true;
+          }
+          if (paymentState === "paywall_offer_single") {
+            const defaultPkg = getDefaultPackage(offer);
+            const selectedKey = getSelectedPaymentPackageKey(userId);
+            const selectedPkg =
+              selectedKey && offer
+                ? findPackageByKey(offer, selectedKey)
+                : null;
+            const primary = selectedPkg
+              ? buildPaymentPackageSelectedGentleRemindText()
+              : buildSingleOfferPaywallAltText(offer);
+            const menuAlt = defaultPkg
+              ? buildSingleOfferPaywallAltText(offer)
+              : primary;
+            await sendNonScanReplyWithOptionalConvSurface({
+              client,
+              userId,
+              replyToken: event.replyToken,
+              replyType: "paywall_payment_status_delegate",
+              semanticKey: "paywall_payment_status_delegate",
+              text: primary,
+              alternateTexts: [menuAlt],
+              convSurface: buildConvSurfacePaywall(
+                userId,
+                text,
+                "paywall_payment_status_delegate",
+                primary,
+                "short",
+                defaultPkg,
+              ),
+            });
+            return true;
+          }
+          return false;
+        },
+        selectPackageFromText: async () => {
+          if (paymentState !== "paywall_offer_single") return false;
+          const offer = loadActiveScanOffer();
+          const defaultPkg = getDefaultPackage(offer);
+          if (!defaultPkg) return false;
+          const priceOrPackAck =
+            defaultPkg &&
+            (isSingleOfferPriceToken(text, offer) ||
+              parsePackageSelectionFromText(text, offer, {
+                thaiRelativeAliases: true,
+                allowEoaPricePhrase: true,
+              }));
+          if (!priceOrPackAck) return false;
+          const pkg = defaultPkg;
+          resetGuidanceNoProgress(userId, "paywall_offer_single");
+          resetSameStateAckStreak(userId, "paywall_offer_single");
+          setSelectedPaymentPackageKey(userId, pkg.key);
+          emitPackageSelectedEntered({
+            userId,
+            packageKey: pkg.key,
+            source: "gemini_delegate_select_package",
+          });
+          const outboundRt = "package_selected_ack_full";
+          const ack = buildPaymentPackageSelectedAck(pkg);
+          await sendNonScanReplyWithOptionalConvSurface({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: outboundRt,
+            semanticKey: outboundRt,
+            text: ack,
+            alternateTexts: [buildSingleOfferPaywallAltText(offer)],
+            convSurface: buildConvSurfacePaywall(
+              userId,
+              text,
+              "single_offer_paywall_ready_ack",
+              ack,
+              "full",
+              defaultPkg,
+            ),
+          });
+          return true;
+        },
+        sendHelpDeterministic: async () => {
+          await sendNonScanReply({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: "gemini_front_help_deterministic",
+            semanticKey: "gemini_front_help_deterministic:phase1",
+            text: "ช่วยสั้นๆ: ต้องการชำระแจ้งว่าจ่ายเงินได้ หรือส่งรูปสลิปในแชตนี้หลังโอน รอแอดมินตรวจสลิปก่อนใช้ครับ",
+            alternateTexts: [
+              "ถ้าส่งสลิปแล้ว รอแจ้งผลในแชตนี้ได้เลยครับ",
+            ],
+          });
+          return true;
         },
       },
     });

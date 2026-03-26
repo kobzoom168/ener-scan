@@ -35,10 +35,13 @@ const CONFIRM_YES = new Set([
   "ใช้",
   "ครับ",
   "ค่ะ",
+  "คะ",
   "โอเค",
   "เปลี่ยนเลย",
   "ok",
   "okay",
+  "ถูก",
+  "ถูกต้อง",
 ]);
 
 const CONFIRM_NO = new Set([
@@ -48,14 +51,50 @@ const CONFIRM_NO = new Set([
   "ยกเลิก",
   "ไม่เอา",
   "ไม่เปลี่ยน",
+  "ไม่ใช่",
+  "ผิด",
+  "เปลี่ยน",
+  "แก้วันเกิด",
 ]);
+
+/**
+ * Strip trailing Thai polite particles (repeat) for stem matching, e.g. "ใช่ครับ" → "ใช่".
+ * @param {string} s
+ */
+function stripTrailingPoliteParticles(s) {
+  let x = String(s || "").trim();
+  for (let i = 0; i < 6; i++) {
+    const next = x.replace(/(?:นะ)?(?:ครับ|ค่ะ|คะ)$/u, "").trim();
+    if (next === x) break;
+    x = next;
+  }
+  return x;
+}
 
 /** User confirmed they want to change birthdate (first or final step). */
 export function isBirthdateFlowConfirmYes(text) {
   const t = normText(text);
   if (!t) return false;
+  if (isBirthdateFlowConfirmNo(text)) return false;
+
   const lt = t.toLowerCase();
   if (CONFIRM_YES.has(t) || CONFIRM_YES.has(lt)) return true;
+
+  const compact = t.replace(/\s+/g, " ");
+  if (/^(ครับ|ค่ะ|คะ)\s+(ใช่|โอเค|ถูกต้อง?)(?:\s+(ครับ|ค่ะ|คะ))?$/u.test(compact)) {
+    return true;
+  }
+  if (/^(ใช่|โอเค|ถูกต้อง?)(?:\s+(ครับ|ค่ะ|คะ))$/u.test(compact)) {
+    return true;
+  }
+
+  const stem = stripTrailingPoliteParticles(compact);
+  if (!stem) return false;
+  const stemLower = stem.toLowerCase();
+  if (CONFIRM_YES.has(stem) || CONFIRM_YES.has(stemLower)) return true;
+
+  if (/^(ถูก|ถูกต้อง)$/u.test(stem)) return true;
+
   return false;
 }
 
@@ -64,6 +103,7 @@ export function isBirthdateFlowConfirmNo(text) {
   if (!t) return false;
   if (CONFIRM_NO.has(t)) return true;
   if (/^ยังไม่/i.test(t)) return true;
+  if (/ไม่ใช่|ผิด|แก้วันเกิด/i.test(t)) return true;
   return false;
 }
 

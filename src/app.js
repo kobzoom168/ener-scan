@@ -4,6 +4,7 @@ import line from "@line/bot-sdk";
 import path from "path";
 
 import { env } from "./config/env.js";
+import { getGeminiFrontMode } from "./core/conversation/geminiFront/geminiFront.featureFlags.js";
 import { lineWebhookRouter } from "./routes/lineWebhook.js";
 import createAdminAuthRouter from "./routes/adminAuth.routes.js";
 import createAdminPaymentsDashboardRouter from "./routes/adminPaymentsDashboard.routes.js";
@@ -70,6 +71,21 @@ console.log("[BUILD_INFO]", {
   version: "payment-slip-fix-v2",
   startedAt: new Date().toISOString(),
 });
+console.log(
+  JSON.stringify({
+    event: "GEMINI_FRONT_STARTUP",
+    effectiveMode: getGeminiFrontMode(),
+    orchestratorEnabled: env.GEMINI_FRONT_ORCHESTRATOR_ENABLED,
+    rawMode: env.GEMINI_FRONT_ORCHESTRATOR_MODE,
+    phase1Only: env.GEMINI_FRONT_PHASE1_ONLY,
+    model: env.GEMINI_FRONT_MODEL,
+    timeoutMs: env.GEMINI_FRONT_TIMEOUT_MS,
+    apiKeyConfigured: Boolean(
+      String(env.GEMINI_API_KEY || "").trim() ||
+        String(env.GOOGLE_API_KEY || "").trim(),
+    ),
+  }),
+);
 console.log(
   JSON.stringify({
     event: "FLEX_STARTUP_FLAGS",
