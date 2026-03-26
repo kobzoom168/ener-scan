@@ -8,6 +8,7 @@
 
 const WAIT_BIRTHDATE = "waiting_birthdate";
 const PAYWALL = "paywall_selecting_package";
+const PACKAGE_SELECTED = "payment_package_selected";
 const SLIP = "awaiting_slip";
 const PV = "pending_verify";
 
@@ -102,6 +103,75 @@ const LEGACY_MAP = {
     stateOwner: PAYWALL,
     phaseReplyType: "pw_guidance",
     nextStep: "select_package",
+    microIntent: "unclear_noise",
+  },
+
+  /** Legacy reply surfaces after user acknowledged a package (payment_package_selected). */
+  package_selected_pay_now: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pp_show_payment_flow",
+    nextStep: "show_qr_or_await_slip",
+    microIntent: "pay_intent",
+  },
+  package_selected_hesitation: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pp_hesitation",
+    nextStep: "await_pay_command",
+    microIntent: "hesitation",
+  },
+  package_selected_package_change: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pp_no_package_change",
+    nextStep: "await_pay_command",
+    microIntent: "package_change_intent",
+  },
+  /** “status-like” scheduling / deferral (e.g. wait until tomorrow). */
+  package_selected_wait_tomorrow: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pp_status_misroute_nudge",
+    nextStep: "await_pay_command",
+    microIntent: "wait_for_free_tomorrow",
+  },
+  package_selected_date_wrong_state: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pw_date_wrong_state",
+    nextStep: "await_pay_command",
+    microIntent: "wrong_state_date",
+  },
+  package_selected_ack_full: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pp_remind_pay",
+    nextStep: "await_pay_command",
+    microIntent: "generic_ack",
+  },
+  package_selected_ack_short: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pp_remind_pay",
+    nextStep: "await_pay_command",
+    microIntent: "generic_ack",
+  },
+  package_selected_ack_micro: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pp_remind_pay",
+    nextStep: "await_pay_command",
+    microIntent: "generic_ack",
+  },
+  package_selected_unclear_full: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pw_guidance",
+    nextStep: "await_pay_command",
+    microIntent: "unclear_noise",
+  },
+  package_selected_unclear_short: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pw_guidance",
+    nextStep: "await_pay_command",
+    microIntent: "unclear_noise",
+  },
+  package_selected_unclear_micro: {
+    stateOwner: PACKAGE_SELECTED,
+    phaseReplyType: "pw_guidance",
+    nextStep: "await_pay_command",
     microIntent: "unclear_noise",
   },
 

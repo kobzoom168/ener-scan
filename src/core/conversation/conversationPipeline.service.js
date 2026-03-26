@@ -82,16 +82,19 @@ export async function preparePhaseAHumanizedSendTexts(input) {
 
   const guidanceTier = tierStringToGuidanceNumeric(input.tierString || "full");
   const paymentTruth = input.paymentTruth || {};
-  if (bridge.stateOwner === "paywall_selecting_package") {
+  if (
+    bridge.stateOwner === "paywall_selecting_package" ||
+    bridge.stateOwner === "payment_package_selected"
+  ) {
     const hasPrice =
       paymentTruth.priceThb != null &&
       Number.isFinite(Number(paymentTruth.priceThb));
     if (!hasPrice) {
       logTelemetryEvent(TelemetryEvents.CONV_AI_SKIPPED, {
         userId: input.userId,
-        reason: "missing_price_truth_paywall",
+        reason: "missing_price_truth_paywall_or_package_selected",
       });
-      return { ok: false, reason: "missing_price_truth_paywall" };
+      return { ok: false, reason: "missing_price_truth_paywall_or_package_selected" };
     }
   }
   const allowedFacts = buildAllowedFactsForBridge(bridge, paymentTruth);

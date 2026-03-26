@@ -1,4 +1,20 @@
+import { env } from "../config/env.js";
+import { isAuditNonScanBypassSuspect } from "./lineReplyAudit.context.js";
+
 export async function replyText(client, replyToken, text) {
+  if (
+    env.NONSCAN_REPLY_AUDIT === "warn" &&
+    isAuditNonScanBypassSuspect()
+  ) {
+    console.warn(
+      JSON.stringify({
+        event: "NONSCAN_REPLY_BYPASS_SUSPECT",
+        channel: "replyText",
+        replyTokenExists: Boolean(replyToken),
+        textLen: String(text || "").length,
+      }),
+    );
+  }
   console.log("[LINE_REPLY_TEXT] start");
   console.log("[LINE_REPLY_TEXT] replyToken exists:", Boolean(replyToken));
   console.log("[LINE_REPLY_TEXT] text length:", text?.length || 0);

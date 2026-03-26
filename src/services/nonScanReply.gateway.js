@@ -1,7 +1,9 @@
-import { replyText } from "./lineReply.service.js";
-import { replyTextSequenceOrSingle } from "./lineSequenceReply.service.js";
+import { replyText, replyPaymentInstructions } from "./lineReply.service.js";
+import { replyTextSequenceOrSingle, pushText } from "./lineSequenceReply.service.js";
 import { preparePhaseAHumanizedSendTexts } from "../core/conversation/conversationPipeline.service.js";
 import { TelemetryEvents, logTelemetryEvent } from "../core/telemetry/telemetryEvents.js";
+import { emitStateFallbackReason } from "../core/telemetry/stateTelemetry.service.js";
+import { gatewayPathEnter, gatewayPathExit } from "./lineReplyAudit.context.js";
 
 /** @type {Map<string, string>} */
 const lastNonScanTextByUser = new Map();
@@ -118,6 +120,12 @@ export async function sendNonScanReplyWithOptionalConvSurface(opts) {
       modelUsed = prep.modelUsed ?? null;
     } else {
       fallbackReason = prep.reason ?? null;
+      emitStateFallbackReason({
+        userId: base.userId,
+        replyType: base.replyType,
+        fallbackReason,
+        microIntent: convSurface?.legacyReplyType ?? null,
+      });
     }
   }
 
@@ -142,6 +150,8 @@ export async function sendNonScanReplyWithOptionalConvSurface(opts) {
 }
 
 export async function sendNonScanReply(opts) {
+  gatewayPathEnter();
+  try {
   const {
     client,
     userId,
@@ -261,6 +271,9 @@ export async function sendNonScanReply(opts) {
     semanticDuplicate: lastEval.semanticDuplicate,
     retryCount: candidates.length,
   };
+  } finally {
+    gatewayPathExit();
+  }
 }
 
 function fingerprintSequence(messages) {
@@ -278,6 +291,8 @@ function fingerprintSequence(messages) {
  * @param {string[][]} [opts.alternateSequences]
  */
 export async function sendNonScanSequenceReply(opts) {
+  gatewayPathEnter();
+  try {
   const {
     client,
     userId,
@@ -393,4 +408,196 @@ export async function sendNonScanSequenceReply(opts) {
     semanticDuplicate: lastEval.semanticDuplicate,
     retryCount: candidates.length,
   };
+  } finally {
+    gatewayPathExit();
+  }
+}
+
+/**
+ * PromptPay QR bundle (text + image + text) — must not bypass gateway observability.
+ *
+ * @param {object} opts
+ * @param {*} opts.client
+ * @param {string|null|undefined} opts.replyToken
+ * @param {string} opts.userId
+ * @param {string} opts.introText
+ * @param {string} opts.qrImageUrl
+ * @param {string} opts.slipText
+ * @param {string} [opts.replyType]
+ * @param {string} [opts.semanticKey]
+ */
+export async function sendNonScanPaymentQrInstructions(opts) {
+  gatewayPathEnter();
+  try {
+    const {
+      client,
+      replyToken,
+      userId,
+      introText,
+      qrImageUrl,
+      slipText,
+      replyType = "payment_qr_instructions_bundle",
+      semanticKey = "payment_qr_bundle",
+    } = opts;
+    const uid = String(userId || "").trim();
+    const rt = String(replyType || "").trim() || "payment_qr_instructions_bundle";
+    const sk = String(semanticKey || "").trim() || "payment_qr_bundle";
+
+    await replyPaymentInstructions(client, replyToken, {
+      introText,
+      qrImageUrl,
+      slipText,
+    });
+
+    logGateway({
+      userId: uid,
+      replyType: rt,
+      semanticKey: sk,
+      suppressed: false,
+      exactDuplicate: false,
+      semanticDuplicate: false,
+      retryCount: 1,
+      deliveryMode: "payment_qr_multipart",
+    });
+    logTelemetryEvent(TelemetryEvents.NONSCAN_REPLY_GATEWAY_PAYMENT_QR, {
+      userId: uid,
+      replyType: rt,
+      semanticKey: sk,
+    });
+  } finally {
+    gatewayPathExit();
+  }
+}
+
+/**
+ * Push-only non-scan text with the same duplicate suppression as {@link sendNonScanReply}.
+ *
+ * @param {object} opts
+ * @param {*} opts.client
+ * @param {string} opts.userId
+ * @param {string} opts.replyType
+ * @param {string} [opts.semanticKey]
+ * @param {string} opts.text
+ * @param {string[]} [opts.alternateTexts]
+ */
+export async function sendNonScanPushMessage(opts) {
+  gatewayPathEnter();
+  try {
+    const {
+      client,
+      userId,
+      replyType,
+      semanticKey,
+      text,
+      alternateTexts = [],
+    } = opts;
+
+    const uid = String(userId || "").trim();
+    const dedupeKey = resolveDedupeKey(replyType, semanticKey);
+    const rt = String(replyType || "").trim() || "unknown";
+    const skLog = String(semanticKey || "").trim() || dedupeKey;
+
+    if (!uid) {
+      logGateway({
+        userId: "",
+        replyType: rt,
+        semanticKey: skLog,
+        exactDuplicate: false,
+        semanticDuplicate: false,
+        suppressed: true,
+        retryCount: 0,
+        channel: "push",
+        reason: "missing_userId",
+      });
+      return {
+        sent: false,
+        suppressed: true,
+        exactDuplicate: false,
+        semanticDuplicate: false,
+        retryCount: 0,
+      };
+    }
+
+    const primary = String(text || "").trim();
+    const alts = (Array.isArray(alternateTexts) ? alternateTexts : [])
+      .map((t) => String(t || "").trim())
+      .filter(Boolean);
+    const candidates = [primary, ...alts].filter(Boolean);
+
+    if (candidates.length === 0) {
+      logGateway({
+        userId: uid,
+        replyType: rt,
+        semanticKey: skLog,
+        suppressed: true,
+        channel: "push",
+        reason: "empty_candidates",
+      });
+      return {
+        sent: false,
+        suppressed: true,
+        exactDuplicate: false,
+        semanticDuplicate: false,
+        retryCount: 0,
+      };
+    }
+
+    let lastEval = {
+      exactDuplicate: false,
+      semanticDuplicate: false,
+    };
+
+    for (let i = 0; i < candidates.length; i += 1) {
+      const body = candidates[i];
+      lastEval = evaluateDuplicate(uid, dedupeKey, body);
+      if (!lastEval.blocked) {
+        await pushText(client, uid, body);
+        recordSent(uid, dedupeKey, body);
+        logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
+          userId: uid,
+          replyType: rt,
+          semanticKey: skLog,
+          retryCount: i + 1,
+          suppressed: false,
+        });
+        logGateway({
+          userId: uid,
+          replyType: rt,
+          semanticKey: skLog,
+          exactDuplicate: false,
+          semanticDuplicate: false,
+          suppressed: false,
+          retryCount: i + 1,
+          channel: "push",
+        });
+        return {
+          sent: true,
+          suppressed: false,
+          exactDuplicate: false,
+          semanticDuplicate: false,
+          retryCount: i + 1,
+        };
+      }
+    }
+
+    logGateway({
+      userId: uid,
+      replyType: rt,
+      semanticKey: skLog,
+      exactDuplicate: lastEval.exactDuplicate,
+      semanticDuplicate: lastEval.semanticDuplicate,
+      suppressed: true,
+      retryCount: candidates.length,
+      channel: "push",
+    });
+    return {
+      sent: false,
+      suppressed: true,
+      exactDuplicate: lastEval.exactDuplicate,
+      semanticDuplicate: lastEval.semanticDuplicate,
+      retryCount: candidates.length,
+    };
+  } finally {
+    gatewayPathExit();
+  }
 }

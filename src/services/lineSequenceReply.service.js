@@ -1,5 +1,7 @@
 import { replyText } from "./lineReply.service.js";
 import { randomBetween, sleep } from "../utils/timing.util.js";
+import { env } from "../config/env.js";
+import { isAuditNonScanBypassSuspect } from "./lineReplyAudit.context.js";
 
 /**
  * Push a single text (LINE Messaging API).
@@ -9,6 +11,20 @@ import { randomBetween, sleep } from "../utils/timing.util.js";
  */
 export async function pushText(client, userId, text) {
   const uid = String(userId || "").trim();
+  if (
+    uid &&
+    env.NONSCAN_REPLY_AUDIT === "warn" &&
+    isAuditNonScanBypassSuspect()
+  ) {
+    console.warn(
+      JSON.stringify({
+        event: "NONSCAN_PUSH_BYPASS_SUSPECT",
+        channel: "pushText",
+        userIdPrefix: uid.slice(0, 8),
+        textLen: String(text || "").length,
+      }),
+    );
+  }
   if (!uid) {
     throw new Error("pushText_missing_userId");
   }

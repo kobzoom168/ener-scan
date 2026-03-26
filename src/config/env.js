@@ -316,4 +316,10 @@ export const env = {
     const n = raw === undefined || raw === "" ? 3200 : Number(raw);
     return Number.isFinite(n) ? Math.max(400, Math.floor(n)) : 3200;
   })(),
+  /**
+   * When `warn`: log NONSCAN_REPLY_BYPASS_SUSPECT if replyText/pushText is used outside
+   * scan path and outside non-scan gateway (rollout / dev visibility).
+   */
+  NONSCAN_REPLY_AUDIT:
+    String(process.env.NONSCAN_REPLY_AUDIT || "").trim().toLowerCase() || "off",
 };

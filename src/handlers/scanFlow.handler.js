@@ -8,6 +8,12 @@ import { runDeepScan } from "../services/scan.service.js";
 import { replyText, replyFlex } from "../services/lineReply.service.js";
 import { pushText } from "../services/lineSequenceReply.service.js";
 import {
+  auditExemptEnter,
+  auditExemptExit,
+  scanPathEnter,
+  scanPathExit,
+} from "../services/lineReplyAudit.context.js";
+import {
   sendNonScanReply,
   sendNonScanSequenceReply,
 } from "../services/nonScanReply.gateway.js";
@@ -96,11 +102,21 @@ async function sendPreScanAcknowledgement({ client, userId }) {
   if (!first || !second) return;
 
   // Keep scan execution non-blocking: send first now, queue second shortly after.
-  await pushText(client, uid, first);
+  scanPathEnter();
+  try {
+    await pushText(client, uid, first);
+  } finally {
+    scanPathExit();
+  }
   void (async () => {
     try {
       await sleep(randomBetween(400, 800));
-      await pushText(client, uid, second);
+      scanPathEnter();
+      try {
+        await pushText(client, uid, second);
+      } finally {
+        scanPathExit();
+      }
     } catch (err) {
       console.error("[PRE_SCAN_ACK] push second failed (ignored):", {
         userId: uid,
@@ -116,7 +132,12 @@ async function sendPaymentGateTextReply({ client, replyToken, userId, reply }) {
     (await buildPaymentRequiredText({ userId, decision: reply?.decision }));
 
   if (!userId) {
-    await replyText(client, replyToken, fallbackText);
+    auditExemptEnter();
+    try {
+      await replyText(client, replyToken, fallbackText);
+    } finally {
+      auditExemptExit();
+    }
     return;
   }
 
@@ -222,108 +243,113 @@ export async function replyScanResult({
   );
   let summaryFirstBuildFailed = false;
 
+  scanPathEnter();
   try {
-    const built = buildScanResultFlexWithFallback({
-      summaryFirstEnabled: summaryFirstSelected,
-      resultText,
-      birthdate,
-      reportUrl,
-      reportPayload,
-      appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-    });
-    let flex = built.flex;
-    summaryFirstBuildFailed = built.summaryFirstBuildFailed;
-    if (summaryFirstBuildFailed && built.error) {
-      console.error(
-        JSON.stringify({
-          event: "FLEX_SUMMARY_FIRST_FAIL",
-          outcome: "fallback_legacy",
-          schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
-          lineUserIdPrefix,
-          message: built.error?.message,
-          flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
-          flexScanSummaryFirstSelected: summaryFirstSelected,
-          flexRolloutBucket0to99: rolloutBucket,
-        }),
+    try {
+      const built = buildScanResultFlexWithFallback({
+        summaryFirstEnabled: summaryFirstSelected,
+        resultText,
+        birthdate,
+        reportUrl,
+        reportPayload,
+        appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+      });
+      let flex = built.flex;
+      summaryFirstBuildFailed = built.summaryFirstBuildFailed;
+      if (summaryFirstBuildFailed && built.error) {
+        console.error(
+          JSON.stringify({
+            event: "FLEX_SUMMARY_FIRST_FAIL",
+            outcome: "fallback_legacy",
+            schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+            lineUserIdPrefix,
+            message: built.error?.message,
+            flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+            flexScanSummaryFirstSelected: summaryFirstSelected,
+            flexRolloutBucket0to99: rolloutBucket,
+          }),
+        );
+      }
+
+      const scanResultBubbleCount =
+        flex?.contents?.type === "carousel" &&
+        Array.isArray(flex.contents.contents)
+          ? flex.contents.contents.length
+          : flex?.contents?.type === "bubble"
+            ? 1
+            : 0;
+
+      // Do not append birthdate/settings bubble in scan-result delivery path.
+      // Flex must stay single-message handoff when summary-first returns bubble.
+
+      const totalCarouselBubbles =
+        flex?.contents?.type === "carousel" &&
+        Array.isArray(flex.contents.contents)
+          ? flex.contents.contents.length
+          : scanResultBubbleCount;
+
+      const settingsBubbleAppended = false;
+
+      const flexPresentationMode = deriveFlexPresentationMode({
+        flexSummaryFirstEnabled: summaryFirstSelected,
+        summaryFirstBuildFailed,
+        appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+      });
+
+      const hasReportLink = Boolean(String(reportUrl || "").trim());
+      const reportLinkPlacement = deriveReportLinkPlacement(
+        flexPresentationMode,
+        hasReportLink,
       );
+      const hasObjectImage = Boolean(
+        String(reportPayload?.object?.objectImageUrl || "").trim(),
+      );
+
+      await replyFlex(client, replyToken, flex);
+      console.log("[WEBHOOK] replied with flex");
+
+      logScanResultFlexRollout({
+        lineUserIdPrefix,
+        flexPresentationMode,
+        scanResultBubbleCount,
+        totalCarouselBubbles,
+        settingsBubbleAppended,
+        hasReportLink,
+        reportLinkPlacement,
+        hasObjectImage,
+        scanAccessSource,
+        summaryFirstBuildFailed,
+        envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
+        envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+        flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+        flexScanSummaryFirstSelected: summaryFirstSelected,
+        flexRolloutBucket0to99: rolloutBucket,
+      });
+
+      return {
+        flexPresentationMode,
+        totalCarouselBubbles,
+        scanResultBubbleCount,
+        hasReportLink,
+        reportLinkPlacement,
+        hasObjectImage,
+      };
+    } catch (flexError) {
+      console.error("[WEBHOOK] flex reply failed:", flexError);
+      await replyText(client, replyToken, resultText);
+      console.log("[WEBHOOK] fallback replied with text");
+      logScanResultTextFallback({
+        lineUserIdPrefix,
+        envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
+        envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+        flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+        flexScanSummaryFirstSelected: summaryFirstSelected,
+        flexRolloutBucket0to99: rolloutBucket,
+      });
+      return null;
     }
-
-    const scanResultBubbleCount =
-      flex?.contents?.type === "carousel" &&
-      Array.isArray(flex.contents.contents)
-        ? flex.contents.contents.length
-        : flex?.contents?.type === "bubble"
-          ? 1
-          : 0;
-
-    // Do not append birthdate/settings bubble in scan-result delivery path.
-    // Flex must stay single-message handoff when summary-first returns bubble.
-
-    const totalCarouselBubbles =
-      flex?.contents?.type === "carousel" &&
-      Array.isArray(flex.contents.contents)
-        ? flex.contents.contents.length
-        : scanResultBubbleCount;
-
-    const settingsBubbleAppended = false;
-
-    const flexPresentationMode = deriveFlexPresentationMode({
-      flexSummaryFirstEnabled: summaryFirstSelected,
-      summaryFirstBuildFailed,
-      appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-    });
-
-    const hasReportLink = Boolean(String(reportUrl || "").trim());
-    const reportLinkPlacement = deriveReportLinkPlacement(
-      flexPresentationMode,
-      hasReportLink,
-    );
-    const hasObjectImage = Boolean(
-      String(reportPayload?.object?.objectImageUrl || "").trim(),
-    );
-
-    await replyFlex(client, replyToken, flex);
-    console.log("[WEBHOOK] replied with flex");
-
-    logScanResultFlexRollout({
-      lineUserIdPrefix,
-      flexPresentationMode,
-      scanResultBubbleCount,
-      totalCarouselBubbles,
-      settingsBubbleAppended,
-      hasReportLink,
-      reportLinkPlacement,
-      hasObjectImage,
-      scanAccessSource,
-      summaryFirstBuildFailed,
-      envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
-      envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-      flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
-      flexScanSummaryFirstSelected: summaryFirstSelected,
-      flexRolloutBucket0to99: rolloutBucket,
-    });
-
-    return {
-      flexPresentationMode,
-      totalCarouselBubbles,
-      scanResultBubbleCount,
-      hasReportLink,
-      reportLinkPlacement,
-      hasObjectImage,
-    };
-  } catch (flexError) {
-    console.error("[WEBHOOK] flex reply failed:", flexError);
-    await replyText(client, replyToken, resultText);
-    console.log("[WEBHOOK] fallback replied with text");
-    logScanResultTextFallback({
-      lineUserIdPrefix,
-      envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
-      envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-      flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
-      flexScanSummaryFirstSelected: summaryFirstSelected,
-      flexRolloutBucket0to99: rolloutBucket,
-    });
-    return null;
+  } finally {
+    scanPathExit();
   }
 }
 

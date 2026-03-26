@@ -15,6 +15,9 @@ import {
   resetGuidanceNoProgress,
   bumpSameStateAckStreak,
   resetSameStateAckStreak,
+  setSelectedPaymentPackageKey,
+  getSelectedPaymentPackageKey,
+  clearSelectedPaymentPackageKey,
 } from "../stores/session.store.js";
 
 import { getSavedBirthdate, saveBirthdate } from "../stores/userProfile.db.js";
@@ -75,15 +78,19 @@ import {
 
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 
-import {
-  replyPaymentInstructions,
-  replyText,
-} from "../services/lineReply.service.js";
+import { replyText } from "../services/lineReply.service.js";
 import {
   sendNonScanReply,
   sendNonScanReplyWithOptionalConvSurface,
   sendNonScanSequenceReply,
+  sendNonScanPaymentQrInstructions,
 } from "../services/nonScanReply.gateway.js";
+import {
+  emitActiveStateRouting,
+  emitStateMicroIntent,
+  emitStateGuidanceLevel,
+} from "../core/telemetry/stateTelemetry.service.js";
+import { auditExemptEnter, auditExemptExit } from "../services/lineReplyAudit.context.js";
 import { sendScanLockReply } from "../utils/scanLockReply.util.js";
 import {
   handleStickerLikeInput,
@@ -215,11 +222,11 @@ function logWaitingBirthdate(event, payload = {}) {
 }
 
 function logStateMicroIntent(payload) {
-  console.log(JSON.stringify({ event: "STATE_MICRO_INTENT", ...payload }));
+  emitStateMicroIntent(payload);
 }
 
 function logStateGuidanceLevel(payload) {
-  console.log(JSON.stringify({ event: "STATE_GUIDANCE_LEVEL", ...payload }));
+  emitStateGuidanceLevel(payload);
 }
 
 function logSafeIntentConsumed(payload) {
@@ -232,10 +239,29 @@ function logHumanConversationMemory(payload) {
   console.log(JSON.stringify(payload));
 }
 
+function mapPaywallSurfaceReplyType(legacyReplyType, userId) {
+  if (!getSelectedPaymentPackageKey(userId)) return legacyReplyType;
+  const m = {
+    single_offer_paywall_ready_ack: "package_selected_ack_full",
+    single_offer_paywall_hesitation: "package_selected_hesitation",
+    single_offer_paywall_no_package_change: "package_selected_package_change",
+    single_offer_paywall_wait_tomorrow: "package_selected_wait_tomorrow",
+    single_offer_paywall_date_wrong_state: "package_selected_date_wrong_state",
+    single_offer_paywall_ack_full: "package_selected_ack_full",
+    single_offer_paywall_ack_short: "package_selected_ack_short",
+    single_offer_paywall_ack_micro: "package_selected_ack_micro",
+    single_offer_paywall_unclear_full: "package_selected_unclear_full",
+    single_offer_paywall_unclear_short: "package_selected_unclear_short",
+    single_offer_paywall_unclear_micro: "package_selected_unclear_micro",
+  };
+  return m[legacyReplyType] || legacyReplyType;
+}
+
 function buildConvSurfacePaywall(userId, text, legacyReplyType, primaryText, tier, defaultPkg) {
+  const legacy = mapPaywallSurfaceReplyType(legacyReplyType, userId);
   return {
     userId,
-    legacyReplyType,
+    legacyReplyType: legacy,
     lastUserText: text,
     deterministicPrimary: primaryText,
     tierString: tier,
@@ -655,6 +681,7 @@ async function handlePaymentCommandTextRoute({
 
   if (cmdPaymentId) {
     setAwaitingPayment(userId);
+    clearSelectedPaymentPackageKey(userId);
     resetGuidanceNoProgress(userId, "paywall_offer_single");
     resetGuidanceNoProgress(userId, "awaiting_slip");
   }
@@ -668,10 +695,17 @@ async function handlePaymentCommandTextRoute({
 
   if (isPromptPayQrUrlHttpsForLine(qrUrl)) {
     try {
-      await replyPaymentInstructions(client, event.replyToken, {
+      await sendNonScanPaymentQrInstructions({
+        client,
+        userId,
+        replyToken: event.replyToken,
         introText: intro,
         qrImageUrl: qrUrl,
         slipText,
+        replyType: "payment_qr_instructions_bundle",
+        semanticKey: cmdPaymentRef
+          ? `payment_qr_bundle:${cmdPaymentRef}`
+          : "payment_qr_bundle",
       });
       await logPaywallShown(userId, {
         patternUsed: "qr_intro_image_slip",
@@ -681,7 +715,7 @@ async function handlePaymentCommandTextRoute({
       });
       return true;
     } catch (qrErr) {
-      console.error("[WEBHOOK] replyPaymentInstructions failed, fallback text:", {
+      console.error("[WEBHOOK] payment QR gateway send failed, fallback text:", {
         userId,
         message: qrErr?.message,
       });
@@ -2009,15 +2043,18 @@ async function handleTextMessage({ client, event, userId, session }) {
         normalizedIntent: "pay_intent",
         action: "create_or_show_payment_qr",
       });
+      const payIntentReplyType = getSelectedPaymentPackageKey(userId)
+        ? "package_selected_pay_now"
+        : "single_offer_paywall_pay_intent";
       logStateMicroIntent({
         userId,
         activeState: "paywall_offer_single",
         inputText: text,
         normalizedIntent: "pay_intent",
         confidence: "exact",
-        chosenReplyType: "single_offer_paywall_pay_intent",
+        chosenReplyType: payIntentReplyType,
       });
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -2027,7 +2064,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyFamily: "paywall_single_offer",
         expectedInputType: "payment_command",
         text,
-        chosenReplyType: "single_offer_paywall_pay_intent",
+        chosenReplyType: payIntentReplyType,
         routeReason: "pay_intent_to_qr",
       });
       await handlePaymentCommandTextRoute({
@@ -2054,15 +2091,17 @@ async function handleTextMessage({ client, event, userId, session }) {
       const pkg = defaultPkg;
       resetGuidanceNoProgress(userId, "paywall_offer_single");
       resetSameStateAckStreak(userId, "paywall_offer_single");
+      setSelectedPaymentPackageKey(userId, pkg.key);
+      const outboundRt = "package_selected_ack_full";
       logStateMicroIntent({
         userId,
         activeState: "paywall_offer_single",
         inputText: text,
         normalizedIntent: "single_offer_ack_price_or_pack",
         confidence: "near_safe",
-        chosenReplyType: "single_offer_paywall_ready_ack",
+        chosenReplyType: outboundRt,
       });
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -2071,15 +2110,15 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyFamily: "paywall_single_offer",
         routeReason: "single_offer_price_or_token_ack",
         text,
-        chosenReplyType: "single_offer_paywall_ready_ack",
+        chosenReplyType: outboundRt,
       });
       const ack = buildPaymentPackageSelectedAck(pkg);
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "single_offer_paywall_ready_ack",
-        semanticKey: "single_offer_paywall_ready_ack",
+        replyType: outboundRt,
+        semanticKey: outboundRt,
         text: ack,
         alternateTexts: [buildSingleOfferPaywallAltText(offer)],
         convSurface: buildConvSurfacePaywall(
@@ -2104,13 +2143,17 @@ async function handleTextMessage({ client, event, userId, session }) {
         noProgressCount: streak,
         guidanceLevel: tier,
       });
+      const waitOutboundRt = mapPaywallSurfaceReplyType(
+        "single_offer_paywall_wait_tomorrow",
+        userId,
+      );
       logStateMicroIntent({
         userId,
         activeState: "paywall_offer_single",
         inputText: text,
         normalizedIntent: "wait_for_free_tomorrow",
         confidence: "near_safe",
-        chosenReplyType: resolvePaywallPromptReplyType("wait_tomorrow", tier),
+        chosenReplyType: waitOutboundRt,
       });
       const primaryText = buildPaywallFatiguePromptText({
         offer,
@@ -2118,7 +2161,6 @@ async function handleTextMessage({ client, event, userId, session }) {
         tier,
         branch: "wait_tomorrow",
       });
-      const chosenReplyType = resolvePaywallPromptReplyType("wait_tomorrow", tier);
       console.log(
         JSON.stringify({
           event: "PAYMENT_SINGLE_OFFER_PROMPT",
@@ -2129,7 +2171,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           reason: "wait_tomorrow_path",
         }),
       );
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -2138,15 +2180,15 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyFamily: "paywall_single_offer",
         guidanceReason: "wait_tomorrow",
         text,
-        chosenReplyType,
+        chosenReplyType: waitOutboundRt,
         routeReason: "same_state_wait_tomorrow",
       });
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: chosenReplyType,
-        semanticKey: "single_offer_paywall_wait_tomorrow",
+        replyType: waitOutboundRt,
+        semanticKey: waitOutboundRt,
         text: primaryText,
         alternateTexts: [buildSingleOfferPaywallAltText(offer)],
         convSurface: buildConvSurfacePaywall(
@@ -2172,20 +2214,24 @@ async function handleTextMessage({ client, event, userId, session }) {
         guidanceLevel: tier,
       });
       const primaryText = buildPaymentPackageSelectedHesitationText(defaultPkg, offer);
+      const hesRt = mapPaywallSurfaceReplyType(
+        "single_offer_paywall_hesitation",
+        userId,
+      );
       logStateMicroIntent({
         userId,
         activeState: "paywall_offer_single",
         inputText: text,
         normalizedIntent: "hesitation",
         confidence: "near_safe",
-        chosenReplyType: "single_offer_paywall_hesitation",
+        chosenReplyType: hesRt,
       });
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "single_offer_paywall_hesitation",
-        semanticKey: "single_offer_paywall_hesitation",
+        replyType: hesRt,
+        semanticKey: hesRt,
         text: primaryText,
         alternateTexts: [buildPaymentPackageSelectedGentleRemindText()],
         convSurface: buildConvSurfacePaywall(
@@ -2210,21 +2256,25 @@ async function handleTextMessage({ client, event, userId, session }) {
         noProgressCount: streak,
         guidanceLevel: tier,
       });
+      const pcRt = mapPaywallSurfaceReplyType(
+        "single_offer_paywall_no_package_change",
+        userId,
+      );
       logStateMicroIntent({
         userId,
         activeState: "paywall_offer_single",
         inputText: text,
         normalizedIntent: "package_change_not_available_single_offer",
         confidence: "unclear",
-        chosenReplyType: "single_offer_paywall_no_package_change",
+        chosenReplyType: pcRt,
       });
       const primaryText = buildPaymentPackageSelectedUnclearText({ tier });
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "single_offer_paywall_no_package_change",
-        semanticKey: "single_offer_paywall_no_package_change",
+        replyType: pcRt,
+        semanticKey: pcRt,
         text: primaryText,
         alternateTexts: [buildPaymentPackageSelectedGentleRemindText()],
         convSurface: buildConvSurfacePaywall(
@@ -2288,6 +2338,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         ackStreak,
       });
       const chosenReplyType = resolvePaywallPromptReplyType("ack", ackTier);
+      const ackOutboundRt = mapPaywallSurfaceReplyType(chosenReplyType, userId);
       logStateGuidanceLevel({
         userId,
         activeState: "paywall_offer_single",
@@ -2301,9 +2352,9 @@ async function handleTextMessage({ client, event, userId, session }) {
         inputText: text,
         normalizedIntent: "ack_continue",
         confidence: "near_safe",
-        chosenReplyType,
+        chosenReplyType: ackOutboundRt,
       });
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -2312,7 +2363,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyFamily: "paywall_single_offer",
         guidanceReason: "ack_continue",
         text,
-        chosenReplyType,
+        chosenReplyType: ackOutboundRt,
         routeReason: "same_state_ack_human",
       });
       const menuAlt = buildSingleOfferPaywallAltText(offer);
@@ -2320,8 +2371,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: chosenReplyType,
-        semanticKey: chosenReplyType,
+        replyType: ackOutboundRt,
+        semanticKey: ackOutboundRt,
         text: primaryText,
         alternateTexts: [menuAlt],
         convSurface: buildConvSurfacePaywall(
@@ -2355,10 +2406,11 @@ async function handleTextMessage({ client, event, userId, session }) {
       branch === "date_wrong" ? "date_wrong" : "unclear",
       tier,
     );
-    const semanticKey =
+    const convLegacyKey =
       branch === "date_wrong"
-        ? "paywall_birthdate_deferred"
-        : "single_offer_paywall_guidance";
+        ? "single_offer_paywall_date_wrong_state"
+        : chosenReplyType;
+    const unclearOutboundRt = mapPaywallSurfaceReplyType(convLegacyKey, userId);
     logStateMicroIntent({
       userId,
       activeState: "paywall_offer_single",
@@ -2370,7 +2422,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             ? "unrelated_noise"
             : "unclear",
       confidence: branch === "date_wrong" ? "near_safe" : "unclear",
-      chosenReplyType,
+      chosenReplyType: unclearOutboundRt,
     });
     console.log(
       JSON.stringify({
@@ -2385,7 +2437,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             : "unexpected_input_same_state",
       }),
     );
-    console.log("[ACTIVE_STATE_ROUTING]", {
+    emitActiveStateRouting({
       userId,
       flowState,
       paymentState,
@@ -2396,7 +2448,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       guidanceReason: branch,
       expectedInputType: "payment_or_wait_or_ack",
       text,
-      chosenReplyType,
+      chosenReplyType: unclearOutboundRt,
       routeReason: "unexpected_input_kept_in_state",
     });
     console.log("[UNEXPECTED_INPUT_HANDLED]", {
@@ -2404,7 +2456,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       activeState: "paywall_offer_single",
       inputText: text,
       normalizedIntent: branch,
-      chosenReplyType,
+      chosenReplyType: unclearOutboundRt,
     });
     logHumanConversationMemory({
       event: "HUMAN_SURFACE_FALLBACK",
@@ -2416,14 +2468,14 @@ async function handleTextMessage({ client, event, userId, session }) {
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: chosenReplyType,
-      semanticKey,
+      replyType: unclearOutboundRt,
+      semanticKey: unclearOutboundRt,
       text: primaryText,
       alternateTexts: [menuAlt],
       convSurface: buildConvSurfacePaywall(
         userId,
         text,
-        chosenReplyType,
+        convLegacyKey,
         primaryText,
         tier,
         defaultPkg,
@@ -2519,7 +2571,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: "awaiting_slip_status_hint",
       });
       const hintText = buildAwaitingSlipStatusHintText({ paymentRef });
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -2660,7 +2712,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       userId,
       surface: "deterministic_awaiting_slip_default",
     });
-    console.log("[ACTIVE_STATE_ROUTING]", {
+    emitActiveStateRouting({
       userId,
       flowState,
       paymentState,
@@ -2783,7 +2835,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         tier === "full"
           ? buildPendingVerifyHumanGuidanceText({ paymentRef })
           : buildPendingVerifyStatusShortText({ paymentRef });
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -2877,7 +2929,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         normalizedIntent: "ack_continue_pending_verify",
         chosenReplyType: pvReplyType,
       });
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -2952,7 +3004,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       normalizedIntent: "unexpected_pending_verify",
       chosenReplyType: pvReplyType,
     });
-    console.log("[ACTIVE_STATE_ROUTING]", {
+    emitActiveStateRouting({
       userId,
       flowState,
       paymentState,
@@ -2993,7 +3045,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     const trimmedEarly = String(text || "").trim();
     const parsedEarly = parseBirthdateInput(text);
     if (parsedEarly.ok) {
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -3058,7 +3110,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           normalizedIntent: "invalid_date_like",
           chosenReplyType: "waiting_birthdate_error",
         });
-        console.log("[ACTIVE_STATE_ROUTING]", {
+        emitActiveStateRouting({
           userId,
           flowState,
           paymentState,
@@ -3145,7 +3197,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         normalizedIntent: "non_date_like",
         chosenReplyType: "waiting_birthdate_guidance",
       });
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -3177,7 +3229,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       text !== "สแกนพลังงาน"
     ) {
       const scanReadyText = buildPaidActiveScanReadyHumanText(userId);
-      console.log("[ACTIVE_STATE_ROUTING]", {
+      emitActiveStateRouting({
         userId,
         flowState,
         paymentState,
@@ -3536,7 +3588,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           hint: "payment_or_package_deferred",
         });
-        console.log("[ACTIVE_STATE_ROUTING]", {
+        emitActiveStateRouting({
           userId,
           flowState,
           paymentState,
@@ -3633,7 +3685,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     if (session.pendingImage) {
       try {
         const msgs = await buildWaitingBirthdateDateFirstGuidanceMessages(userId);
-        console.log("[ACTIVE_STATE_ROUTING]", {
+        emitActiveStateRouting({
           userId,
           flowState: "waiting_birthdate",
           paymentState,
@@ -3743,13 +3795,15 @@ async function handleTextMessage({ client, event, userId, session }) {
           source: "idle_text_route",
         }),
       );
+      setSelectedPaymentPackageKey(userId, pkg.key);
+      const idlePackRt = "package_selected_ack_full";
       const ack = buildPaymentPackageSelectedAck(pkg);
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "single_offer_paywall_ready_ack",
-        semanticKey: "single_offer_paywall_ready_ack",
+        replyType: idlePackRt,
+        semanticKey: "package_selected_idle_package_pick",
         text: ack,
         alternateTexts: [buildSingleOfferPaywallAltText(offerPick)],
         convSurface: buildConvSurfacePaywall(
@@ -3788,7 +3842,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       normalizedIntent: "terminal_guard_prevent_generic_idle",
       chosenReplyType: "waiting_birthdate_guidance",
     });
-    console.log("[ACTIVE_STATE_ROUTING]", {
+    emitActiveStateRouting({
       userId,
       flowState: "waiting_birthdate",
       paymentState,
@@ -3926,7 +3980,12 @@ async function handleEvent({ client, event }) {
   const userId = event.source?.userId;
 
   if (!userId) {
-    await replyText(client, event.replyToken, "ยังไม่พบข้อมูลผู้ใช้ครับ");
+    auditExemptEnter();
+    try {
+      await replyText(client, event.replyToken, "ยังไม่พบข้อมูลผู้ใช้ครับ");
+    } finally {
+      auditExemptExit();
+    }
     return;
   }
 
@@ -4123,11 +4182,16 @@ export function lineWebhookRouter(lineConfig) {
                   ],
                 });
               } else {
-                await replyText(
-                  client,
-                  event.replyToken,
-                  buildSystemErrorText(),
-                );
+                auditExemptEnter();
+                try {
+                  await replyText(
+                    client,
+                    event.replyToken,
+                    buildSystemErrorText(),
+                  );
+                } finally {
+                  auditExemptExit();
+                }
               }
             } catch (replyErr) {
               console.error("[WEBHOOK] fallback error reply failed:", replyErr);

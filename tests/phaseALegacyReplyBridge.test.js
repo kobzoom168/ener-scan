@@ -19,3 +19,24 @@ test("bridge maps pending verify status", () => {
 test("bridge returns null for unmapped type", () => {
   assert.equal(legacyReplyTypeToPhaseA("idle_post_scan"), null);
 });
+
+test("bridge maps package-selected pay_now to payment_package_selected", () => {
+  const b = legacyReplyTypeToPhaseA("package_selected_pay_now");
+  assert.ok(b);
+  assert.equal(b.stateOwner, "payment_package_selected");
+  assert.equal(b.phaseReplyType, "pp_show_payment_flow");
+});
+
+test("bridge maps package-selected ack to remind_pay contract", () => {
+  const b = legacyReplyTypeToPhaseA("package_selected_ack_full");
+  assert.ok(b);
+  assert.equal(b.stateOwner, "payment_package_selected");
+  assert.equal(b.phaseReplyType, "pp_remind_pay");
+});
+
+test("bridge maps package-selected wait_tomorrow to status-like phase key", () => {
+  const b = legacyReplyTypeToPhaseA("package_selected_wait_tomorrow");
+  assert.ok(b);
+  assert.equal(b.stateOwner, "payment_package_selected");
+  assert.equal(b.phaseReplyType, "pp_status_misroute_nudge");
+});
