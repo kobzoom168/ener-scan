@@ -323,6 +323,8 @@ function resolveSummaryCardCopyVariant(reportPayload) {
  * @param {string} fallbackHeadline
  */
 function resolveFlexHeadline(reportPayload, fallbackHeadline, familyPattern) {
+  const wf = String(reportPayload?.wording?.flexHeadline || "").trim();
+  if (wf) return { text: safeWrapText(wf, 64), source: "wording" };
   const mp = String(reportPayload?.sections?.messagePoints?.[0] || "").trim();
   if (mp) return { text: safeWrapText(mp, 64), source: "payload" };
   const d = distillSummaryLine(reportPayload?.summary?.summaryLine || "");
@@ -374,6 +376,13 @@ function tightenTeaserCopy(text, maxChars = 48) {
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
  */
 function flexTeaserBullets(reportPayload) {
+  const wb = reportPayload?.wording?.flexBullets;
+  if (Array.isArray(wb) && wb.length >= 2) {
+    return wb
+      .slice(0, 2)
+      .map((x) => safeWrapText(tightenTeaserCopy(String(x).trim(), 48), 56))
+      .filter(Boolean);
+  }
   const w = reportPayload?.sections?.whatItGives;
   if (Array.isArray(w) && w.length) {
     return w
@@ -664,11 +673,13 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   );
   const headline = headlineResolved.text;
   const headlineFrom =
-    headlineResolved.source === "family_pattern"
-      ? "family_pattern"
-      : headlineResolved.source === "payload"
-        ? "payload"
-        : "default_variant";
+    headlineResolved.source === "wording"
+      ? "wording"
+      : headlineResolved.source === "family_pattern"
+        ? "family_pattern"
+        : headlineResolved.source === "payload"
+          ? "payload"
+          : "default_variant";
 
   const compatLabel = compatibilityLabelForFlex(reportPayload, compatibility);
   const mainLabel =

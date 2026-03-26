@@ -24,10 +24,12 @@ export function createPhase1MockReportPayload() {
     summary: {
       energyScore: 8.2,
       energyLevelLabel: "สูง",
-      mainEnergyLabel: "พลังป้องกัน / ความมั่นคงภายใน",
+      mainEnergyLabel: "ปกป้อง",
       compatibilityPercent: 78,
       summaryLine:
         "ชิ้นนี้เน้นพลังป้องกันและความนิ่งของจิต เหมาะกับช่วงที่ต้องการรากฐานภายในมากกว่าการเร่งแรง",
+      wordingFamily: "protection",
+      clarityLevel: "l2",
     },
     sections: {
       whatItGives: [
@@ -73,6 +75,43 @@ export function createPhase1MockReportPayload() {
       rescanUrl: "",
       changeBirthdateUrl: "",
       lineHomeUrl: "https://line.me/",
+    },
+    wording: {
+      objectLabel: "วัตถุสายพลัง",
+      heroNaming: "พลังคุ้มกันสายตั้งหลัก",
+      energyCharacter:
+        "พลังของชิ้นนี้จะไปทางคุ้มกันและตั้งหลัก มากกว่าสายเร่งแรงจากภายนอก",
+      mainEnergy: "ปกป้อง",
+      secondaryEnergies: [],
+      powerScore: 8.2,
+      compatibilityScore: 78,
+      energyBreakdown: {
+        protection: 82,
+        balance: 0,
+        authority: 0,
+        metta: 0,
+        attraction: 0,
+      },
+      lifeTranslation:
+        "เหมาะกับช่วงที่ต้องคุมใจ รับแรงกดดัน และตัดสินใจอย่างมั่นคง",
+      bestFor: "ก่อนเข้าเจรจาหรือพูดคุยสำคัญ",
+      notTheBestFor:
+        "ไม่ใช่สายดึงดูดหรือเมตตาที่นำ — ถ้าต้องการโดดเด่นเรื่องเสน่ห์เป็นหลัก อาจไม่ใช่จุดแข็งของชิ้นนี้",
+      practicalEffects: [
+        "ช่วยให้ใจไม่แกว่งง่ายเวลาเจอแรงกดดัน",
+        "เหมาะกับช่วงที่ต้องตัดสินใจเรื่องสำคัญ",
+        "ช่วยประคองสติและแรงใจเมื่ออยู่ในบรรยากาศกดดัน",
+      ],
+      flexHeadline:
+        "พลังของชิ้นนี้จะไปทางคุ้มกันและตั้งหลัก มากกว่าสายเร่งแรงจากภายนอก",
+      flexBullets: [
+        "ช่วยให้ใจไม่แกว่งง่ายเวลาเจอแรงกดดัน",
+        "เหมาะกับช่วงที่ต้องตัดสินใจเรื่องสำคัญ",
+      ],
+      htmlOpeningLine:
+        "พลังของชิ้นนี้จะไปทางคุ้มกันและตั้งหลัก เหมาะกับช่วงที่ต้องคุมใจและรับแรงกดดัน ช่วงที่เข้ากับชิ้นนี้: ก่อนเข้าเจรจาหรือพูดคุยสำคัญ",
+      wordingFamily: "protection",
+      clarityLevel: "l2",
     },
   };
 }

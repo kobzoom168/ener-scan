@@ -23,12 +23,74 @@ function humanObjectTypeLabel(raw) {
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
  */
 function heroOpeningLine(p) {
+  const w = String(p.wording?.htmlOpeningLine || "").trim();
+  if (w) return w.length > 280 ? `${w.slice(0, 277)}…` : w;
   const sec = p.sections || {};
   const mp = Array.isArray(sec.messagePoints) ? sec.messagePoints : [];
   const wi = Array.isArray(sec.whatItGives) ? sec.whatItGives : [];
   const raw = String(mp[0] || wi[0] || "").trim();
   if (!raw) return "";
   return raw.length > 160 ? `${raw.slice(0, 157)}…` : raw;
+}
+
+/**
+ * Deeper interpretation from structured wording (when present).
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ */
+function wordingInterpretationSection(p) {
+  const w = p.wording;
+  if (!w || typeof w !== "object") return "";
+  const heroNaming = String(w.heroNaming || "").trim();
+  const mainE = String(w.mainEnergy || "").trim();
+  const ec = String(w.energyCharacter || "").trim();
+  const lt = String(w.lifeTranslation || "").trim();
+  const best = String(w.bestFor || "").trim();
+  const notBest = String(w.notTheBestFor || "").trim();
+  const pe = Array.isArray(w.practicalEffects) ? w.practicalEffects : [];
+  const practical = pe.map((x) => String(x || "").trim()).filter(Boolean);
+
+  const hasBody =
+    mainE ||
+    ec ||
+    lt ||
+    best ||
+    notBest ||
+    practical.length > 0 ||
+    heroNaming;
+  if (!hasBody) return "";
+
+  const mainBlock = mainE
+    ? `<p class="para wording-lead"><strong>${escapeHtml(mainE)}</strong> — พลังหลักที่อ่านได้จากชิ้นนี้</p>`
+    : "";
+
+  const narrative = [ec, lt].filter(Boolean).map(
+    (t) => `<p class="para">${escapeHtml(t)}</p>`,
+  );
+
+  const fitBlock =
+    best || notBest
+      ? `${best ? `<p class="para"><span class="wording-label">เหมาะกับ</span> ${escapeHtml(best)}</p>` : ""}${
+          notBest
+            ? `<p class="para wording-muted"><span class="wording-label">ไม่ใช่จุดเน้นหลัก</span> ${escapeHtml(notBest)}</p>`
+            : ""
+        }`
+      : "";
+
+  const practicalBlock =
+    practical.length > 0
+      ? `<ul class="bullet-list">${practical
+          .slice(0, 3)
+          .map((t) => `<li>${escapeHtml(t)}</li>`)
+          .join("")}</ul>`
+      : "";
+
+  const inner = `${mainBlock}${narrative.join("")}${fitBlock}${practicalBlock}`;
+  return sectionCard(
+    "ความหมายเชิงลึก",
+    inner,
+    "",
+    "card--tone-a card--wording-deep",
+  );
 }
 
 /**
@@ -141,6 +203,7 @@ function hero(p) {
         <span class="badge"><span class="badge-inner">Ener Scan</span><span class="badge-sep" aria-hidden="true"></span><span class="badge-sub">รายงานเฉพาะชิ้น</span></span>
         <p class="hero-reading">การอ่านวัตถุชิ้นนี้</p>
         ${typeLabel ? `<p class="hero-object-kind">${escapeHtml(typeLabel)}</p>` : ""}
+        ${String(p.wording?.heroNaming || "").trim() ? `<p class="hero-energy-style">${escapeHtml(String(p.wording.heroNaming).trim())}</p>` : ""}
         <h1 class="hero-object-name"><span class="hero-object-name__text">${escapeHtml(label)}</span></h1>
         ${opening ? `<p class="hero-hook">${escapeHtml(opening)}</p>` : ""}
         <p class="hero-doc-title">รายงานพลังวัตถุ</p>
@@ -889,6 +952,30 @@ export function renderMobileReportHtml(payload) {
       font-size: 0.94rem;
       line-height: 1.75;
     }
+    .hero-energy-style {
+      margin: 0.35rem 0 0.5rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: rgba(232, 207, 106, 0.88);
+      line-height: 1.45;
+    }
+    .wording-lead {
+      margin-top: 0.15rem;
+      color: rgba(240, 237, 232, 0.94);
+    }
+    .wording-label {
+      display: inline-block;
+      margin-right: 0.35rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(163, 158, 150, 0.95);
+    }
+    .wording-muted {
+      opacity: 0.92;
+    }
     /* —— Trust: footer strip, not a content card —— */
     .report-trust-footer {
       margin-top: 1.35rem;
@@ -938,6 +1025,7 @@ export function renderMobileReportHtml(payload) {
   <div class="wrap">
     ${hero(p)}
     ${summary(p)}
+    ${wordingInterpretationSection(p)}
     ${what}
     ${owner}
     ${best}

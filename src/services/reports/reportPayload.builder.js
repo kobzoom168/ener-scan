@@ -2,6 +2,7 @@ import { parseScanText } from "../flex/flex.parser.js";
 import { normalizeScore, stripBullet } from "../flex/flex.utils.js";
 import { REPORT_PAYLOAD_VERSION } from "./reportPayload.types.js";
 import { sanitizeHttpsPublicImageUrl } from "../../utils/reports/reportImageUrl.util.js";
+import { deriveReportWordingFromParsed } from "./reportWording.derive.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -203,6 +204,12 @@ export function buildReportPayloadFromScan(opts) {
   const rid = String(scanResultId || "").trim();
   const tok = String(publicToken || "").trim();
 
+  const wording = deriveReportWordingFromParsed(parsed, {
+    seed: rid || scanResultId,
+    energyScore,
+    compatibilityPercent: compatPct,
+  });
+
   console.log(
     JSON.stringify({
       event: "REPORT_PAYLOAD_BUILT",
@@ -219,6 +226,7 @@ export function buildReportPayloadFromScan(opts) {
       energyScorePresent: energyScore != null,
       compatPresent: compatPct != null,
       hasObjectImage: Boolean(objectImageUrl),
+      hasWording: Boolean(wording?.mainEnergy),
     }),
   );
 
@@ -238,12 +246,15 @@ export function buildReportPayloadFromScan(opts) {
     summary: {
       energyScore,
       energyLevelLabel: energyLevelLabelFromScore(energyScore),
-      mainEnergyLabel:
-        parsed.mainEnergy && parsed.mainEnergy !== "-"
+      mainEnergyLabel: wording.mainEnergy
+        ? String(wording.mainEnergy)
+        : parsed.mainEnergy && parsed.mainEnergy !== "-"
           ? String(parsed.mainEnergy)
           : "",
       compatibilityPercent: compatPct,
       summaryLine,
+      wordingFamily: wording.wordingFamily || undefined,
+      clarityLevel: wording.clarityLevel || undefined,
     },
     sections: {
       whatItGives,
@@ -267,6 +278,10 @@ export function buildReportPayloadFromScan(opts) {
       rescanUrl: "",
       changeBirthdateUrl: "",
       lineHomeUrl: "",
+    },
+    wording: {
+      ...wording,
+      objectLabel: "วัตถุจากการสแกน",
     },
   };
 }

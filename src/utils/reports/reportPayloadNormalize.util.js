@@ -67,6 +67,18 @@ export function normalizeReportPayloadForRender(input) {
     return v.map((x) => str(x).trim()).filter(Boolean);
   }
 
+  const wordingIn =
+    raw.wording && typeof raw.wording === "object"
+      ? /** @type {Record<string, unknown>} */ (raw.wording)
+      : null;
+
+  /** @param {unknown} v */
+  function numOrZero(v) {
+    if (v == null || v === "") return 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
   let generatedAt = str(raw.generatedAt).trim();
   if (generatedAt) {
     const t = Date.parse(generatedAt);
@@ -107,6 +119,8 @@ export function normalizeReportPayloadForRender(input) {
       summaryLine:
         str(summaryIn?.summaryLine).trim() ||
         "สรุปผลการสแกน — ดูรายละเอียดด้านล่าง",
+      wordingFamily: str(summaryIn?.wordingFamily).trim() || undefined,
+      clarityLevel: str(summaryIn?.clarityLevel).trim() || undefined,
     },
     sections: {
       whatItGives: strArr(sectionsIn?.whatItGives),
@@ -131,6 +145,38 @@ export function normalizeReportPayloadForRender(input) {
       rescanUrl: str(actionsIn?.rescanUrl),
       changeBirthdateUrl: str(actionsIn?.changeBirthdateUrl),
       lineHomeUrl: str(actionsIn?.lineHomeUrl),
+    },
+    wording: {
+      objectLabel: str(wordingIn?.objectLabel),
+      heroNaming: str(wordingIn?.heroNaming),
+      energyCharacter: str(wordingIn?.energyCharacter),
+      mainEnergy: str(wordingIn?.mainEnergy),
+      secondaryEnergies: strArr(wordingIn?.secondaryEnergies),
+      powerScore: numOrZero(wordingIn?.powerScore),
+      compatibilityScore: numOrZero(wordingIn?.compatibilityScore),
+      energyBreakdown: (() => {
+        const eb =
+          wordingIn?.energyBreakdown &&
+          typeof wordingIn.energyBreakdown === "object"
+            ? /** @type {Record<string, unknown>} */ (wordingIn.energyBreakdown)
+            : null;
+        return {
+          protection: numOrZero(eb?.protection),
+          balance: numOrZero(eb?.balance),
+          authority: numOrZero(eb?.authority),
+          metta: numOrZero(eb?.metta),
+          attraction: numOrZero(eb?.attraction),
+        };
+      })(),
+      lifeTranslation: str(wordingIn?.lifeTranslation),
+      bestFor: str(wordingIn?.bestFor),
+      notTheBestFor: str(wordingIn?.notTheBestFor),
+      practicalEffects: strArr(wordingIn?.practicalEffects).slice(0, 3),
+      flexHeadline: str(wordingIn?.flexHeadline),
+      flexBullets: strArr(wordingIn?.flexBullets).slice(0, 2),
+      htmlOpeningLine: str(wordingIn?.htmlOpeningLine),
+      wordingFamily: str(wordingIn?.wordingFamily),
+      clarityLevel: str(wordingIn?.clarityLevel),
     },
   };
 
