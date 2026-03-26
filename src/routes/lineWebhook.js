@@ -98,6 +98,11 @@ import {
   emitStateMicroIntent,
   emitStateGuidanceLevel,
 } from "../core/telemetry/stateTelemetry.service.js";
+import { TelemetryEvents, logTelemetryEvent } from "../core/telemetry/telemetryEvents.js";
+import {
+  mapWebhookContextToStateOwner,
+  resolveStateMicroIntent,
+} from "../core/conversation/stateMicroIntentRouter.js";
 import {
   emitAwaitingPaymentEntered,
   emitPackageSelectedEntered,
@@ -129,6 +134,8 @@ import {
   isPackageSelectedHesitation,
   isPackageChangeIntentPhrase,
   isWaitingBirthdatePackageOrPaymentWords,
+  isPendingVerifyReassuranceIntent,
+  isSlipClaimWithoutImageIntent,
   isWaitForTomorrowIntent,
   isSingleOfferPriceToken,
   shouldPackageSelectedShortcutToQr,
@@ -254,7 +261,21 @@ function logStateGuidanceLevel(payload) {
 }
 
 function logSafeIntentConsumed(payload) {
-  console.log(JSON.stringify({ event: "SAFE_INTENT_CONSUMED", ...payload }));
+  logTelemetryEvent(TelemetryEvents.SAFE_INTENT_CONSUMED, payload);
+}
+
+function logSafeIntentResolved(userId, stateOwner, text, lowerText, extra = {}) {
+  const r = resolveStateMicroIntent(stateOwner, text, { lowerText });
+  logTelemetryEvent(TelemetryEvents.SAFE_INTENT_CONSUMED, {
+    userId,
+    stateOwner,
+    microIntent: r.microIntent,
+    confidence: r.confidence,
+    reason: r.reason,
+    safeToConsume: r.safeToConsume,
+    ...extra,
+  });
+  return r;
 }
 
 const MAIN_MENU_HINT_TEXT =
@@ -465,9 +486,30 @@ async function handleBirthdateChangeFlowTurn({
 
   if (flowState === BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM) {
     const pending = getBirthdateChangePending(userId);
-    if (isBirthdateFlowConfirmYes(text)) {
+    const confirmYes = isBirthdateFlowConfirmYes(text);
+    const confirmNo = isBirthdateFlowConfirmNo(text);
+    console.log(
+      JSON.stringify({
+        event: "BIRTHDATE_FLOW_FINAL_CONFIRM_DEBUG",
+        userId,
+        flowState: BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM,
+        inputText: String(text ?? ""),
+        isBirthdateFlowConfirmYes: confirmYes,
+        isBirthdateFlowConfirmNo: confirmNo,
+        hasPendingNormalizedBirthdate: Boolean(pending?.normalizedBirthdate),
+      }),
+    );
+    if (confirmYes) {
       if (!pending?.normalizedBirthdate) {
         clearBirthdateChangeFlow(userId);
+        console.log(
+          JSON.stringify({
+            event: "BIRTHDATE_FLOW_FINAL_CONFIRM_OUTCOME",
+            userId,
+            outcome: "yes_ack_but_missing_pending_cleared",
+            turnConsumedByHandler: true,
+          }),
+        );
         return true;
       }
       await saveBirthdate(userId, pending.normalizedBirthdate, {
@@ -500,7 +542,7 @@ async function handleBirthdateChangeFlowTurn({
       });
       return true;
     }
-    if (isBirthdateFlowConfirmNo(text)) {
+    if (confirmNo) {
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
       const ask = pickBirthdateAskDateLine(userId);
       await sendNonScanReply({
@@ -533,6 +575,14 @@ async function handleBirthdateChangeFlowTurn({
       semanticKey: "waiting_birthdate_change_confirm",
       text: pickBirthdateFinalConfirmText(userId, pe),
     });
+    console.log(
+      JSON.stringify({
+        event: "BIRTHDATE_FLOW_FINAL_CONFIRM_OUTCOME",
+        userId,
+        outcome: "reask_final_confirm",
+        turnConsumedByHandler: true,
+      }),
+    );
     return true;
   }
 
@@ -2329,6 +2379,17 @@ async function handleTextMessage({ client, event, userId, session }) {
     const offer = loadActiveScanOffer();
     const defaultPkg = getDefaultPackage(offer);
 
+    const paywallOwner = mapWebhookContextToStateOwner({
+      userId,
+      paymentState: "paywall_offer_single",
+      paymentMemoryState,
+    });
+    if (paywallOwner) {
+      logSafeIntentResolved(userId, paywallOwner, text, lowerText, {
+        routeReason: "paywall_text_guard",
+      });
+    }
+
     if (isBirthdateChangeCandidateText(text)) {
       console.log(
         JSON.stringify({
@@ -2963,6 +3024,10 @@ async function handleTextMessage({ client, event, userId, session }) {
       paymentRef = null;
     }
 
+    logSafeIntentResolved(userId, "awaiting_slip", text, lowerText, {
+      routeReason: "awaiting_slip_text_guard",
+    });
+
     if (isBirthdateChangeCandidateText(text)) {
       console.log(
         JSON.stringify({
@@ -3015,6 +3080,55 @@ async function handleTextMessage({ client, event, userId, session }) {
         lowerText: "จ่ายเงิน",
         isPaywallGateWithPendingScan,
         forcePaymentIntent: true,
+      });
+      return;
+    }
+
+    if (isSlipClaimWithoutImageIntent(text)) {
+      resetSameStateAckStreak(userId, "awaiting_slip");
+      const streakClaim = bumpGuidanceNoProgress(userId, "awaiting_slip");
+      const tierClaim = guidanceTierFromStreak(streakClaim);
+      logStateGuidanceLevel({
+        userId,
+        activeState: "awaiting_slip",
+        noProgressCount: streakClaim,
+        guidanceLevel: tierClaim,
+      });
+      const slipRtClaim =
+        tierClaim === "full" ? "awaiting_slip_guidance" : "awaiting_slip_gentle_remind";
+      emitStateMicroIntent({
+        userId,
+        activeState: "awaiting_slip",
+        stateOwner: "awaiting_slip",
+        microIntent: "slip_claim_but_no_image",
+        inputText: text,
+        confidence: "near_safe",
+        chosenReplyType: slipRtClaim,
+      });
+      const slipReminderClaim = buildAwaitingSlipFatigueGuidanceText({
+        paymentRef,
+        tier: tierClaim,
+        kind: "default",
+      });
+      await sendNonScanReplyWithOptionalConvSurface({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: slipRtClaim,
+        semanticKey: slipRtClaim,
+        text: slipReminderClaim,
+        alternateTexts: [
+          "ส่งรูปสลิปในแชตนี้ได้เลยครับ",
+          "ถ้าโอนแล้ว แนบสลิปมาในแชตนี้ได้เลยครับ",
+        ],
+        convSurface: buildConvSurfaceAwaitingSlip(
+          userId,
+          text,
+          slipRtClaim,
+          slipReminderClaim,
+          tierClaim,
+          paymentRef,
+        ),
       });
       return;
     }
@@ -3254,6 +3368,10 @@ async function handleTextMessage({ client, event, userId, session }) {
       paymentRef = null;
     }
 
+    logSafeIntentResolved(userId, "pending_verify", text, lowerText, {
+      routeReason: "pending_verify_text_guard",
+    });
+
     if (isBirthdateChangeCandidateText(text)) {
       console.log(
         JSON.stringify({
@@ -3361,6 +3479,56 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
       return;
     }
+
+      if (isPendingVerifyReassuranceIntent(text)) {
+        resetSameStateAckStreak(userId, "pending_verify");
+        const streakPvRe = bumpGuidanceNoProgress(userId, "pending_verify");
+        const tierPvRe = guidanceTierFromStreak(streakPvRe);
+        logStateGuidanceLevel({
+          userId,
+          activeState: "pending_verify",
+          noProgressCount: streakPvRe,
+          guidanceLevel: tierPvRe,
+        });
+        emitStateMicroIntent({
+          userId,
+          activeState: "pending_verify",
+          stateOwner: "pending_verify",
+          microIntent: "reassurance_needed",
+          inputText: text,
+          confidence: "near_safe",
+          chosenReplyType:
+            tierPvRe === "full"
+              ? "pending_verify_guidance"
+              : "pending_verify_gentle_remind",
+        });
+        const pendingTextRe = buildPendingVerifyGentleRemindText({ paymentRef });
+        const pvReplyTypeRe =
+          tierPvRe === "full"
+            ? "pending_verify_guidance"
+            : "pending_verify_gentle_remind";
+        await sendNonScanReplyWithOptionalConvSurface({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: pvReplyTypeRe,
+          semanticKey: pvReplyTypeRe,
+          text: pendingTextRe,
+          alternateTexts: [
+            "รอแจ้งผลในแชตนี้ได้เลยครับ",
+            buildPendingVerifyReminderText({ paymentRef }),
+          ],
+          convSurface: buildConvSurfacePendingVerify(
+            userId,
+            text,
+            pvReplyTypeRe,
+            pendingTextRe,
+            tierPvRe,
+            paymentRef,
+          ),
+        });
+        return;
+      }
 
     if (isGenericAckText(text)) {
       const ackStreak = bumpSameStateAckStreak(userId, "pending_verify");
@@ -3572,6 +3740,10 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
       // Continue to existing waiting_birthdate branch below.
     } else {
+      logSafeIntentResolved(userId, "waiting_birthdate", text, lowerText, {
+        routeReason: "waiting_birthdate_early_non_parse",
+      });
+
       const isDateLike = looksLikeBirthdateInput(text);
 
       if (!parsedEarly.ok && /^\d{6,7}$/.test(trimmedEarly)) {
@@ -3581,11 +3753,12 @@ async function handleTextMessage({ client, event, userId, session }) {
           ambTier === "micro"
             ? "ลองบอกวันเกิดมาใหม่ได้เลยครับ"
             : BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT;
-        logStateMicroIntent({
+        emitStateMicroIntent({
           userId,
           activeState: "waiting_birthdate",
+          stateOwner: "waiting_birthdate",
+          microIntent: "invalid_date",
           inputText: text,
-          normalizedIntent: "ambiguous_compact_date",
           confidence: "near_safe",
           chosenReplyType: "waiting_birthdate_ambiguous_compact",
         });
@@ -3607,11 +3780,12 @@ async function handleTextMessage({ client, event, userId, session }) {
           errTier,
           parsedEarly.reason,
         );
-        logStateMicroIntent({
+        emitStateMicroIntent({
           userId,
           activeState: "waiting_birthdate",
+          stateOwner: "waiting_birthdate",
+          microIntent: "invalid_date",
           inputText: text,
-          normalizedIntent: "invalid_date_like",
           confidence: "near_safe",
           chosenReplyType:
             parsedEarly.reason === "invalid_format"
@@ -3655,11 +3829,12 @@ async function handleTextMessage({ client, event, userId, session }) {
           noProgressCount: streak,
           guidanceLevel: tier,
         });
-        logStateMicroIntent({
+        emitStateMicroIntent({
           userId,
           activeState: "waiting_birthdate",
+          stateOwner: "waiting_birthdate",
+          microIntent: "paymentish_text",
           inputText: text,
-          normalizedIntent: "package_payment_words_wrong_state",
           confidence: "near_safe",
           chosenReplyType: "waiting_birthdate_wrong_state_redirect",
         });
@@ -3700,11 +3875,12 @@ async function handleTextMessage({ client, event, userId, session }) {
         tier,
       });
       const ack = isGenericAckText(text) || isUnclearNoiseText(text);
-      logStateMicroIntent({
+      emitStateMicroIntent({
         userId,
         activeState: "waiting_birthdate",
+        stateOwner: "waiting_birthdate",
+        microIntent: ack ? "ack" : "unrelated_noise",
         inputText: text,
-        normalizedIntent: ack ? "generic_ack_or_noise" : "non_date_like",
         confidence: "unclear",
         chosenReplyType: "waiting_birthdate_guidance",
       });

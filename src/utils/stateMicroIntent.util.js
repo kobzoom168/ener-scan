@@ -250,3 +250,38 @@ export function isWaitingBirthdatePackageOrPaymentWords(text) {
   }
   return false;
 }
+
+/** Paywall: user asks price / amount again (stay on paywall; deterministic tier). */
+export function isAskPriceAgainIntent(text) {
+  const t = normText(text);
+  if (!t || t.length > 96) return false;
+  return /(ราคา|บาท|เท่าไหร|เท่าไร|กี่บาท|ถามราค|ราคาเท่า|ถูกไหม)/i.test(t);
+}
+
+/**
+ * awaiting_slip: user claims they transferred / sent slip but only text (no image this turn).
+ * Narrow: not a status/progress question (those stay status_check).
+ */
+export function isSlipClaimWithoutImageIntent(text) {
+  const t = normText(text);
+  if (!t || t.length > 120) return false;
+  if (isResendQrIntentText(t)) return false;
+  if (/(ยังไง|ถึงไหน|สถานะ|คืบหน้า|เมื่อไหร่|เมื่อไร|อนุมัติ|ตรวจ|pending|เช็ก|เช็ค)/i.test(t)) {
+    return false;
+  }
+  return /(โอนแล้ว|จ่ายแล้ว|ส่งแล้ว|ส่งสลิป|แนบแล้ว|ส่งไปแล้ว|ตัดเงินแล้ว|โอนให้แล้ว)/i.test(t);
+}
+
+/**
+ * pending_verify: emotional reassurance / worry (not raw status check).
+ * Excludes lines already classified as status_like.
+ */
+export function isPendingVerifyReassuranceIntent(text) {
+  const t = normText(text);
+  if (!t || t.length > 160) return false;
+  if (isGenericAckText(t)) return false;
+  if (isPendingVerifyStatusLikeText(t)) return false;
+  return /(กังวล|ไม่แน่ใจ|จะได้ไหม|โอเคไหม|หายห่วง|รอไม่ไหว|รอนาน|ยังไม่เห็น|ช่วยดู|ช่วยเช็ค|เป็นห่วง|ไม่เข้าใจ)/i.test(
+    t,
+  );
+}

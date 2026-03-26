@@ -1,13 +1,12 @@
 import { loadActiveScanOffer } from "../../../services/scanOffer.loader.js";
-import {
-  parsePackageSelectionFromText,
-  isSingleOfferPriceToken,
-} from "../../../services/scanOffer.packages.js";
+import { parsePackageSelectionFromText } from "../../../services/scanOffer.packages.js";
 import {
   isGenericAckText,
   isUnclearNoiseText,
   isPackageSelectedHesitation,
   isPackageChangeIntentPhrase,
+  isAskPriceAgainIntent,
+  isSingleOfferPriceToken,
 } from "../../../utils/stateMicroIntent.util.js";
 import { isPaymentCommand } from "../../../utils/webhookText.util.js";
 import { looksLikeBirthdateInput } from "../../../utils/birthdateParse.util.js";
@@ -61,6 +60,15 @@ export function resolvePaywallSelectingPackageMicroIntent(text, opts = {}) {
       confidence: "high",
       safeToConsume: true,
       reason: "hesitation_phrase",
+    };
+  }
+
+  if (isAskPriceAgainIntent(t)) {
+    return {
+      microIntent: "ask_price_again",
+      confidence: "medium",
+      safeToConsume: true,
+      reason: "ask_price_or_amount",
     };
   }
 

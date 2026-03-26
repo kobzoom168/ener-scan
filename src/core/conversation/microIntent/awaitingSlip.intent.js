@@ -5,6 +5,7 @@ import {
   isResendQrIntentText,
   isAwaitingSlipStatusLikeText,
   isGenericAckText,
+  isSlipClaimWithoutImageIntent,
 } from "../../../utils/stateMicroIntent.util.js";
 
 /**
@@ -22,6 +23,15 @@ export function resolveAwaitingSlipMicroIntent(text, opts = {}) {
 
   if (isPaymentCommand(t, lowerText)) {
     return { microIntent: "resend_qr", confidence: "high", safeToConsume: true, reason: "pay_again_show_qr" };
+  }
+
+  if (isSlipClaimWithoutImageIntent(t)) {
+    return {
+      microIntent: "slip_claim_but_no_image",
+      confidence: "medium",
+      safeToConsume: true,
+      reason: "text_claim_no_image",
+    };
   }
 
   if (isAwaitingSlipStatusLikeText(t)) {

@@ -6,6 +6,7 @@ import {
   isPackageChangeIntentPhrase,
   isPackageSelectedHesitation,
   isGenericAckText,
+  isResendQrIntentText,
 } from "../../../utils/stateMicroIntent.util.js";
 import {
   isAwaitingSlipStatusLikeText,
@@ -27,6 +28,15 @@ export function resolvePaymentPackageSelectedMicroIntent(text, opts = {}) {
       confidence: "high",
       safeToConsume: true,
       reason: "payment_command",
+    };
+  }
+
+  if (isResendQrIntentText(t)) {
+    return {
+      microIntent: "resend_qr",
+      confidence: "high",
+      safeToConsume: true,
+      reason: "resend_qr",
     };
   }
 
@@ -71,9 +81,9 @@ export function resolvePaymentPackageSelectedMicroIntent(text, opts = {}) {
   }
 
   return {
-    microIntent: "ack",
+    microIntent: "unrelated_same_state",
     confidence: "low",
     safeToConsume: true,
-    reason: "default_nudge_pay",
+    reason: "default_same_state_guidance",
   };
 }

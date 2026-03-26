@@ -4,6 +4,7 @@ import {
 import {
   isPendingVerifyStatusLikeText,
   isGenericAckText,
+  isPendingVerifyReassuranceIntent,
 } from "../../../utils/stateMicroIntent.util.js";
 
 /**
@@ -39,6 +40,15 @@ export function resolvePendingVerifyMicroIntent(text, opts = {}) {
       confidence: "high",
       safeToConsume: true,
       reason: "ack",
+    };
+  }
+
+  if (isPendingVerifyReassuranceIntent(t)) {
+    return {
+      microIntent: "reassurance_needed",
+      confidence: "medium",
+      safeToConsume: true,
+      reason: "reassurance_emotional",
     };
   }
 
