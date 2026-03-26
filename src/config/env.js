@@ -304,4 +304,16 @@ export const env = {
     const n = raw === undefined || raw === "" ? 4 : Number(raw);
     return Number.isFinite(n) ? Math.max(2, Math.floor(n)) : 4;
   })(),
+  /**
+   * Phase A: LLM may rephrase non-scan copy only; routing and truth remain deterministic (fail closed).
+   */
+  CONV_AI_ENABLED:
+    String(process.env.CONV_AI_ENABLED || "").trim().toLowerCase() === "true",
+  CONV_AI_MODEL:
+    String(process.env.CONV_AI_MODEL || "").trim() || "gpt-4.1-mini",
+  CONV_AI_TIMEOUT_MS: (() => {
+    const raw = process.env.CONV_AI_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 3200 : Number(raw);
+    return Number.isFinite(n) ? Math.max(400, Math.floor(n)) : 3200;
+  })(),
 };

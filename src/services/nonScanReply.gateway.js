@@ -1,5 +1,7 @@
 import { replyText } from "./lineReply.service.js";
 import { replyTextSequenceOrSingle } from "./lineSequenceReply.service.js";
+import { preparePhaseAHumanizedSendTexts } from "../core/conversation/conversationPipeline.service.js";
+import { TelemetryEvents, logTelemetryEvent } from "../core/telemetry/telemetryEvents.js";
 
 /** @type {Map<string, string>} */
 const lastNonScanTextByUser = new Map();
@@ -94,6 +96,51 @@ function logGateway(payload) {
  * @param {Record<string, unknown>} [opts.scanOfferMeta] — PR2: log SCAN_OFFER_REPLY_BUILT on successful send
  * @returns {Promise<{ sent: boolean, suppressed: boolean, exactDuplicate: boolean, semanticDuplicate: boolean, retryCount: number }>}
  */
+/**
+ * Same as {@link sendNonScanReply} but optionally rephrases `text` via Phase A conversation surface
+ * when `opts.convSurface` is set and `CONV_AI_ENABLED=true`.
+ *
+ * @param {Parameters<typeof sendNonScanReply>[0] & { convSurface?: Record<string, unknown> }} opts
+ * @returns {Promise<Awaited<ReturnType<typeof sendNonScanReply>> & { usedAi: boolean, modelUsed: string|null, fallbackReason: string|null }>}
+ */
+export async function sendNonScanReplyWithOptionalConvSurface(opts) {
+  const { convSurface, ...base } = opts;
+  let text = base.text;
+  let usedAi = false;
+  let modelUsed = null;
+  let fallbackReason = null;
+
+  if (convSurface) {
+    const prep = await preparePhaseAHumanizedSendTexts(convSurface);
+    if (prep.ok && prep.primaryText) {
+      text = prep.primaryText;
+      usedAi = true;
+      modelUsed = prep.modelUsed ?? null;
+    } else {
+      fallbackReason = prep.reason ?? null;
+    }
+  }
+
+  const sendRes = await sendNonScanReply({
+    ...base,
+    text,
+  });
+
+  if (convSurface) {
+    logTelemetryEvent(TelemetryEvents.NONSCAN_REPLY_SENT, {
+      userId: base.userId,
+      replyType: base.replyType,
+      usedAi,
+      modelUsed,
+      fallbackReason,
+      suppressedDuplicate: sendRes.suppressed,
+      semanticKey: base.semanticKey,
+    });
+  }
+
+  return { ...sendRes, usedAi, modelUsed, fallbackReason };
+}
+
 export async function sendNonScanReply(opts) {
   const {
     client,

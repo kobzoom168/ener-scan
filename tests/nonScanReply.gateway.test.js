@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sendNonScanReply } from "../src/services/nonScanReply.gateway.js";
+import {
+  sendNonScanReply,
+  sendNonScanReplyWithOptionalConvSurface,
+} from "../src/services/nonScanReply.gateway.js";
 import { isLineStickerPlaceholderText } from "../src/handlers/stickerMessage.handler.js";
 
 function mockClient() {
@@ -94,6 +97,31 @@ test("sendNonScanReply: SCAN_OFFER_REPLY_BUILT on send when scanOfferMeta set", 
   }
   assert.ok(logs.some((l) => l.includes('"event":"SCAN_OFFER_REPLY_BUILT"')));
   assert.equal(c.payloads.length, 1);
+});
+
+test("sendNonScanReplyWithOptionalConvSurface: skips LLM when CONV_AI off, sends baseline", async () => {
+  const c = mockClient();
+  const uid = `u_conv_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const r = await sendNonScanReplyWithOptionalConvSurface({
+    client: c,
+    userId: uid,
+    replyToken: "tconv",
+    replyType: "single_offer_paywall_hesitation",
+    semanticKey: "single_offer_paywall_hesitation",
+    text: "baseline thai",
+    alternateTexts: [],
+    convSurface: {
+      userId: uid,
+      legacyReplyType: "single_offer_paywall_hesitation",
+      lastUserText: "hello",
+      deterministicPrimary: "baseline thai",
+      tierString: "full",
+      paymentTruth: { priceThb: 49, paymentStatusVerbal: "none" },
+    },
+  });
+  assert.equal(r.sent, true);
+  assert.equal(r.usedAi, false);
+  assert.equal(c.payloads[0]?.text, "baseline thai");
 });
 
 test("sendNonScanReply: semantic duplicate blocks same normalized text within window", async () => {
