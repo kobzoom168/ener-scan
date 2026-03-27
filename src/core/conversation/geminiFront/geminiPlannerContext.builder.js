@@ -3,6 +3,7 @@ import { getDefaultPackage, findPackageByKey } from "../../../services/scanOffer
 
 /**
  * Builds a compact JSON-serializable object for the planner (no secrets).
+ * For `phase1State` `scan_ready_idle` / `idle`, `p.allowedActions` must be `["noop_phrase_only"]` (see allowedActionsForPhase1State).
  * @param {{
  *   userId: string,
  *   text: string,

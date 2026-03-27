@@ -2361,6 +2361,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       hasAwaitingSlip,
       paymentMemoryState,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+      canonicalStateOwner,
     });
     if (!phase1GeminiKey) return { handled: false };
     /** Payment-funnel Phase-1 only (paywall / slip / pending_verify); not waiting_birthdate. */
@@ -3086,6 +3087,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       hasAwaitingSlip,
       paymentMemoryState,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+      canonicalStateOwner,
     });
     const paywallShadowDeterministicBranch =
       branch === "date_wrong"
@@ -3491,6 +3493,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       hasAwaitingSlip,
       paymentMemoryState,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+      canonicalStateOwner,
     });
     void invokePhase1GeminiShadow({
       userId,
@@ -3850,6 +3853,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       hasAwaitingSlip,
       paymentMemoryState,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+      canonicalStateOwner,
     });
     void invokePhase1GeminiShadow({
       userId,
@@ -4140,6 +4144,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       !isBirthdateChangeCandidateText(text) &&
       text !== "สแกนพลังงาน"
     ) {
+      const gfScanReady = await invokePhase1GeminiOrchestrator();
+      if (gfScanReady.handled) return;
       const scanReadyText = buildPaidActiveScanReadyHumanText(userId);
       emitActiveStateRouting({
         userId,
@@ -4880,6 +4886,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       ltMenu === "help" ||
       ltMenu === "start" ||
       tMenu === "เริ่ม";
+    const gfIdle = await invokePhase1GeminiOrchestrator();
+    if (gfIdle.handled) return;
     await replyIdleTextNoDuplicate({
       client,
       replyToken: event.replyToken,
@@ -4890,6 +4898,8 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   // True idle — generic fallback / recovery (show menu hint once).
+  const gfIdle = await invokePhase1GeminiOrchestrator();
+  if (gfIdle.handled) return;
   await replyIdleTextNoDuplicate({
     client,
     replyToken: event.replyToken,

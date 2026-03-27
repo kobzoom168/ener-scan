@@ -62,6 +62,9 @@ export function allowedActionsForPhase1State(phase1) {
         "send_help_reply",
         "get_conversation_context",
       ];
+    case "scan_ready_idle":
+    case "idle":
+      return ["noop_phrase_only"];
     default:
       return ["noop_phrase_only", "send_help_reply"];
   }
