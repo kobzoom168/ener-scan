@@ -207,6 +207,7 @@ import {
   buildPaidActiveScanReadyHumanText,
   buildPendingVerifyBlockScanText,
   buildPendingVerifyPaymentCommandText,
+  buildPayNotNeededIntentPayload,
   allowsUtilityCommandsDuringPendingVerify,
   buildAwaitingSlipReminderText,
   buildAwaitingSlipFatigueGuidanceText,
@@ -236,6 +237,11 @@ import {
   clearPaymentState,
 } from "../stores/manualPaymentAccess.store.js";
 import { checkScanAccess } from "../services/paymentAccess.service.js";
+import {
+  isActiveSlipPaymentRow,
+  paymentRowOwnsImageRouting,
+  shouldEmitPayNotNeededForPaymentIntent,
+} from "../utils/paymentConversationRouting.util.js";
 
 import { runScanFlow } from "../handlers/scanFlow.handler.js";
 
@@ -687,6 +693,153 @@ async function handlePaymentCommandTextRoute({
     return true;
   }
 
+  let accessForPayIntent = null;
+  try {
+    accessForPayIntent = await checkScanAccess({ userId });
+  } catch (e) {
+    console.error("[WEBHOOK] checkScanAccess (payment command guard) failed:", {
+      userId,
+      message: e?.message,
+    });
+  }
+
+  let rowForPayIntent = null;
+  try {
+    rowForPayIntent = await getLatestAwaitingPaymentForLineUserId(userId);
+  } catch (_) {}
+
+  if (shouldEmitPayNotNeededForPaymentIntent(accessForPayIntent, rowForPayIntent)) {
+    const payload = buildPayNotNeededIntentPayload({
+      accessDecision: accessForPayIntent,
+      session,
+    });
+    console.log(
+      JSON.stringify({
+        event: "PAYMENT_INTENT_BLOCKED_ACCESS_ALLOWED",
+        userId,
+        accessReason: accessForPayIntent?.reason ?? null,
+        replyType: payload.replyType,
+      }),
+    );
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: payload.replyType,
+      semanticKey: payload.semanticKey,
+      text: payload.primaryText,
+      alternateTexts: payload.alternateTexts,
+    });
+    return true;
+  }
+
+  if (
+    accessForPayIntent?.allowed === true &&
+    rowForPayIntent &&
+    isActiveSlipPaymentRow(rowForPayIntent)
+  ) {
+    if (String(rowForPayIntent.status) === "pending_verify") {
+      let paymentRefPv = null;
+      try {
+        paymentRefPv =
+          rowForPayIntent.payment_ref ||
+          (await ensurePaymentRefForPaymentId(rowForPayIntent.id));
+      } catch (_) {
+        paymentRefPv = null;
+      }
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "pending_verify_payment_cmd",
+        semanticKey: "pending_verify_payment_cmd_inflight",
+        text: buildPendingVerifyPaymentCommandText({ userId, paymentRef: paymentRefPv }),
+        alternateTexts: [
+          "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้เลยครับ",
+        ],
+      });
+      return true;
+    }
+    if (String(rowForPayIntent.status) === "awaiting_payment") {
+      const offerInflight = loadActiveScanOffer();
+      const pkgInflight = rowForPayIntent.package_code
+        ? findPackageByKey(offerInflight, String(rowForPayIntent.package_code))
+        : null;
+      const paidPackageInflight = pkgInflight || getDefaultPackage(offerInflight);
+      let paymentRefInflight = null;
+      try {
+        paymentRefInflight =
+          rowForPayIntent.payment_ref ||
+          (await ensurePaymentRefForPaymentId(rowForPayIntent.id));
+      } catch (_) {
+        paymentRefInflight = null;
+      }
+      if (!paidPackageInflight) {
+        const humanNoPkgInflight = buildPaymentPayIntentNoPackageHumanText({
+          offer: offerInflight,
+          userId,
+        });
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "payment_pay_intent_no_package",
+          semanticKey: "payment_pay_intent_no_package_inflight",
+          text: humanNoPkgInflight,
+          alternateTexts: [],
+        });
+        return true;
+      }
+      const qrUrlInflight = getPromptPayQrPublicUrl();
+      const introInflight = buildPaymentQrIntroText({
+        paymentRef: paymentRefInflight,
+        paidPackage: paidPackageInflight,
+      });
+      const slipTextInflight = buildPaymentQrSlipText();
+      if (isPromptPayQrUrlHttpsForLine(qrUrlInflight)) {
+        try {
+          await sendNonScanPaymentQrInstructions({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            introText: introInflight,
+            qrImageUrl: qrUrlInflight,
+            slipText: slipTextInflight,
+            replyType: "payment_qr_instructions_bundle",
+            semanticKey: paymentRefInflight
+              ? `payment_qr_bundle_resend:${paymentRefInflight}`
+              : "payment_qr_bundle_resend",
+            paymentId: rowForPayIntent.id,
+            paymentRef: paymentRefInflight,
+            packageKey: paidPackageInflight?.key,
+          });
+          return true;
+        } catch (qrErr) {
+          console.error("[WEBHOOK] payment QR resend (inflight) failed:", {
+            userId,
+            message: qrErr?.message,
+          });
+        }
+      }
+      const payCmdBodyInflight = buildPaymentInstructionText({
+        amount: paidPackageInflight.priceThb,
+        currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
+        paymentRef: paymentRefInflight,
+        paidPackage: paidPackageInflight,
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "payment_instruction_text",
+        semanticKey: "payment_command_text_resend_inflight",
+        text: payCmdBodyInflight,
+        alternateTexts: [payCmdBodyInflight],
+      });
+      return true;
+    }
+  }
+
   const offerPay = loadActiveScanOffer();
   const selectedPayKey = getSelectedPaymentPackageKey(userId);
   const paidPackage =
@@ -986,8 +1139,7 @@ async function finalizeAcceptedImage({
     imageBufferLength: imageBuffer?.length || 0,
   });
 
-  // Image routing: scan access first — never treat as slip if user already has scan access
-  // (e.g. paid after admin approve, while stale awaiting_payment rows may still exist).
+  // Access truth + DB payment row together: active slip rows win over object-scan even if scan access is allowed.
   let accessDecision;
   try {
     accessDecision = await checkScanAccess({ userId });
@@ -1006,29 +1158,30 @@ async function finalizeAcceptedImage({
     accessDecision?.allowed === true && accessDecision?.reason === "paid";
 
   let pendingPayment = null;
-  if (!accessDecision?.allowed) {
-    try {
-      console.log("[SLIP_VERIFY_LOOKUP] start", {
-        userId,
-        source: "finalizeAcceptedImage",
-        messageId: event?.message?.id || null,
-      });
-      pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
-    } catch (err) {
-      console.error("[PAYMENT_SLIP_VERIFY] lookup pending payment failed:", {
-        userId,
-        message: err?.message,
-        code: err?.code,
-        hint: err?.hint,
-      });
-    }
+  try {
+    console.log("[SLIP_VERIFY_LOOKUP] start", {
+      userId,
+      source: "finalizeAcceptedImage",
+      messageId: event?.message?.id || null,
+    });
+    pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
+  } catch (err) {
+    console.error("[PAYMENT_SLIP_VERIFY] lookup pending payment failed:", {
+      userId,
+      message: err?.message,
+      code: err?.code,
+      hint: err?.hint,
+    });
   }
 
+  const paymentOwnsImage = paymentRowOwnsImageRouting(pendingPayment);
+
   const chosenPath =
-    !accessDecision?.allowed && pendingPayment
+    paymentOwnsImage && pendingPayment
       ? "slip"
       : !accessDecision?.allowed &&
-          accessDecision?.reason === "payment_required"
+          accessDecision?.reason === "payment_required" &&
+          !paymentOwnsImage
         ? "payment_gate"
         : "scan";
   console.log("[IMAGE_ROUTING_DECISION]", {
@@ -1036,6 +1189,7 @@ async function finalizeAcceptedImage({
     hasPaidAccess,
     accessReason: accessDecision?.reason ?? null,
     hasAwaitingPayment: Boolean(pendingPayment),
+    paymentOwnsImage,
     chosenPath,
   });
 
@@ -1044,7 +1198,7 @@ async function finalizeAcceptedImage({
   if (
     !accessDecision?.allowed &&
     accessDecision?.reason === "payment_required" &&
-    !pendingPayment
+    !paymentOwnsImage
   ) {
     const payReqGateNow = Date.now();
     const payReqStatus = checkPaymentAbuseStatus(userId, payReqGateNow);
@@ -1124,7 +1278,16 @@ async function finalizeAcceptedImage({
     return;
   }
 
-  if (!accessDecision?.allowed && pendingPayment) {
+  if (paymentOwnsImage && pendingPayment) {
+    console.log(
+      JSON.stringify({
+        event: "PAYMENT_STATE_WON_IMAGE_ROUTING",
+        userId,
+        paymentId: pendingPayment.id ?? null,
+        status: pendingPayment.status ?? null,
+        accessAllowed: Boolean(accessDecision?.allowed),
+      }),
+    );
     const payNow = Date.now();
     const payStatus = checkPaymentAbuseStatus(userId, payNow);
     console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
@@ -1161,6 +1324,14 @@ async function finalizeAcceptedImage({
       }
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
+      console.log(
+        JSON.stringify({
+          event: "PENDING_VERIFY_STATE_ENFORCED",
+          userId,
+          paymentId: pendingPayment.id ?? null,
+          replyType: "pending_verify_block_scan",
+        }),
+      );
       await sendNonScanReply({
         client,
         userId,
@@ -1234,6 +1405,15 @@ async function finalizeAcceptedImage({
         slipUrl,
         slipMessageId,
       });
+
+      console.log(
+        JSON.stringify({
+          event: "SLIP_RECEIVED_STATE_TRANSITION",
+          userId,
+          paymentId,
+          nextStatus: "pending_verify",
+        }),
+      );
 
       let slipPaymentRef = null;
       try {

@@ -756,6 +756,60 @@ export function buildPendingVerifyPaymentCommandText({ paymentRef } = {}) {
 }
 
 /**
+ * User still has scan access but typed payment-ish text — no paywall / no new payment row.
+ * @param {{ reason?: string } | null} accessDecision
+ * @param {{ pendingImage?: unknown } | null} [session]
+ */
+export function buildPayNotNeededIntentPayload({ accessDecision, session } = {}) {
+  const pendingImage = Boolean(session?.pendingImage);
+  const reason = String(accessDecision?.reason || "");
+
+  if (pendingImage) {
+    return {
+      replyType: "pay_not_needed_scan_ready_after_result",
+      semanticKey: "pay_not_needed_scan_ready_after_result",
+      primaryText: [
+        "ตอนนี้สิทธิ์สแกนของคุณยังไม่หมดครับ",
+        "",
+        "ถ้าจะสแกนต่อ ส่งรูปพระ เครื่องราง หรือหินที่ต้องการได้เลยครับ",
+      ].join("\n"),
+      alternateTexts: [
+        "ตอนนี้ยังใช้งานสแกนได้ตามปกติครับ ส่งรูปชิ้นถัดไปในแชทนี้ได้เลยครับ",
+      ],
+    };
+  }
+
+  if (reason === "paid") {
+    return {
+      replyType: "pay_not_needed_paid_active",
+      semanticKey: "pay_not_needed_paid_active",
+      primaryText: [
+        "ตอนนี้ยังใช้งานสแกนได้ตามปกติครับ",
+        "ยังไม่ต้องจ่ายเพิ่มในตอนนี้",
+        "",
+        "ส่งรูปพระ เครื่องราง หรือหินทีละชิ้นต่อรูปได้เลยครับ",
+      ].join("\n"),
+      alternateTexts: [
+        "สิทธิ์สแกนของคุณยังใช้งานได้อยู่ครับ ส่งรูปมาได้เลย",
+      ],
+    };
+  }
+
+  return {
+    replyType: "pay_not_needed_free_available",
+    semanticKey: "pay_not_needed_free_available",
+    primaryText: [
+      "ตอนนี้สิทธิ์สแกนของคุณยังไม่หมดครับ",
+      "",
+      "ส่งรูปพระ เครื่องราง หรือหินทีละชิ้นต่อรูปได้เลยครับ",
+    ].join("\n"),
+    alternateTexts: [
+      "ตอนนี้ยังใช้งานสแกนได้ตามปกติครับ ยังไม่ต้องจ่ายเพิ่ม",
+    ],
+  };
+}
+
+/**
  * LINE push after admin approved slip.
  * Prefer `paidRemainingScans` + `paidUntil` (ISO) from entitlement — no hardcoded scan counts.
  * Legacy: `paidRemainingLine` + `paidUntilLine` still supported if numeric fields absent.
