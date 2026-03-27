@@ -14,6 +14,7 @@ import { getDefaultPackage, findPackageByKey } from "../../../services/scanOffer
  *   pendingPaymentStatus: string | null,
  *   selectedPackageKey: string | null,
  *   allowedActions: string[],
+ *   conversationHistory?: { role: 'user'|'bot', text: string }[],
  * }} p
  */
 export function buildPlannerContextPayload(p) {
@@ -23,11 +24,16 @@ export function buildPlannerContextPayload(p) {
     ? findPackageByKey(offer, p.selectedPackageKey)
     : null;
 
+  const conversationHistory = Array.isArray(p.conversationHistory)
+    ? p.conversationHistory
+    : [];
+
   return {
     v: 1,
     user_id_prefix: String(p.userId || "").slice(0, 8),
     user_text: String(p.text || "").slice(0, 500),
     phase1_state: p.phase1State,
+    conversation_history: conversationHistory,
     truth: {
       conversation_owner: p.conversationOwner,
       payment_state: p.paymentState,

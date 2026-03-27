@@ -30,12 +30,12 @@ function baseCtx() {
   };
 }
 
-test("isShadowPhase1Eligible: four states only", () => {
+test("isShadowPhase1Eligible: includes waiting_birthdate", () => {
   assert.equal(isShadowPhase1Eligible("awaiting_slip"), true);
   assert.equal(isShadowPhase1Eligible("pending_verify"), true);
   assert.equal(isShadowPhase1Eligible("paywall_selecting_package"), true);
   assert.equal(isShadowPhase1Eligible("payment_package_selected"), true);
-  assert.equal(isShadowPhase1Eligible("waiting_birthdate"), false);
+  assert.equal(isShadowPhase1Eligible("waiting_birthdate"), true);
   assert.equal(isShadowPhase1Eligible(null), false);
 });
 
@@ -52,20 +52,42 @@ test("mode off: no planner telemetry (shadow pipeline skipped)", async () => {
   assert.equal(logs.length, 0);
 });
 
-test("ineligible state (waiting_birthdate): shadow does not run", async () => {
+test("shadow + waiting_birthdate: planner runs (now eligible)", async () => {
   const logs = [];
+  let plannerCalls = 0;
   const r = await runPhase1GeminiShadowPipeline(
-    { ...baseCtx(), phase1State: "waiting_birthdate" },
+    {
+      ...baseCtx(),
+      phase1State: "waiting_birthdate",
+      conversationOwner: "waiting_birthdate",
+      paymentState: "none",
+      flowState: "waiting_birthdate",
+      deterministicBranch: "waiting_birthdate_guidance",
+    },
     {
       getGeminiFrontMode: () => "shadow",
       logTelemetryEvent: (ev, p) => logs.push({ ev, p }),
       bypassEnabledGate: true,
       bypassModeGate: true,
+      runGeminiPlannerWithMeta: async () => {
+        plannerCalls += 1;
+        return {
+          plan: {
+            intent: "unknown",
+            state_guess: "waiting_birthdate",
+            proposed_action: "noop_phrase_only",
+            confidence: 0.99,
+            reply_style: "neutral_help",
+          },
+          outcome: "ok",
+        };
+      },
     },
   );
-  assert.equal(r.skipped, true);
-  assert.equal(r.reason, "ineligible_state");
-  assert.equal(logs.length, 0);
+  assert.equal(r.skipped, undefined);
+  assert.equal(plannerCalls, 1);
+  assert.ok(logs.some((l) => l.ev === TelemetryEvents.GEMINI_FRONT_SHADOW_REQUESTED));
+  assert.ok(logs.some((l) => l.ev === TelemetryEvents.GEMINI_FRONT_SHADOW_RESULT));
 });
 
 test("shadow + eligible: planner + validator, no side effects", async () => {

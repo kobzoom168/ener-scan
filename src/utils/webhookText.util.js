@@ -572,10 +572,13 @@ export function isMainMenuAlias(text, lowerText) {
   const menuAliases = new Set([
     "เมนู",
     "เมนูหลัก",
+    "กลับเมนู",
     "menu",
     "help",
     "start",
     "เริ่ม",
+    "เริ่มใหม่",
+    "ขอเริ่มใหม่",
     "วิธีใช้งาน",
     "วิธีใช้",
   ]);

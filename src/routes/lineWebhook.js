@@ -236,9 +236,11 @@ import {
   setAwaitingPayment,
   clearPaymentState,
 } from "../stores/manualPaymentAccess.store.js";
+import { insertLineConversationMessage } from "../stores/conversationMessages.db.js";
 import { checkScanAccess } from "../services/paymentAccess.service.js";
 import {
   isActiveSlipPaymentRow,
+  isAwaitingPaymentActionableForTextRouting,
   paymentRowOwnsImageRouting,
   shouldEmitPayNotNeededForPaymentIntent,
 } from "../utils/paymentConversationRouting.util.js";
@@ -2215,7 +2217,7 @@ async function handleTextMessage({ client, event, userId, session }) {
    * 2) Payment interactive: pending_verify → awaiting_slip → paywall_offer_single
    *    (single paid offer — no package selection)
    * 3) waiting_birthdate — only when paymentState === "none" and session.pendingImage
-   * 4) approved_intro / explicit commands (history, stats, menu, … further down)
+   * 4) approved_intro / explicit commands (history, stats, menu — resolveActiveState ranks menu before scan-ready idle)
    * 5) Generic non-scan fallback (idle persona) — must not run while 2) or 3) owns the turn
    *
    * PAYMENT_WINS: when flowState is waiting_birthdate but paymentState is active, payment branches run first;
@@ -2271,6 +2273,43 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   const canonicalStateOwner = activeResolved.stateOwner;
   const geminiConversationOwner = toGeminiConversationOwner(activeResolved.stateOwner);
+
+  console.log(
+    JSON.stringify({
+      event: "TEXT_TURN_ROUTING_SNAPSHOT",
+      lineUserId: userId,
+      lastUserText: text.slice(0, 200),
+      checkScanAccess: activeAccessDecision
+        ? {
+            allowed: activeAccessDecision.allowed,
+            reason: activeAccessDecision.reason ?? null,
+            paidRemainingScans: activeAccessDecision.paidRemainingScans ?? null,
+          }
+        : null,
+      latestPaymentRow: activePendingPaymentRow
+        ? {
+            id: activePendingPaymentRow.id ?? null,
+            status: activePendingPaymentRow.status ?? null,
+            created_at: activePendingPaymentRow.created_at ?? null,
+          }
+        : null,
+      manualPaymentStore: { state: paymentMemoryState || "none" },
+      wsActive: {
+        paymentState,
+        flowState,
+        accessState,
+        pendingStatus,
+        hasAwaitingSlip,
+        hasPendingVerify,
+        canonicalStateOwner,
+        resolutionReason: activeResolved.resolutionReason,
+      },
+      chosenBranch: canonicalStateOwner,
+      replyType: null,
+    }),
+  );
+
+  void insertLineConversationMessage(userId, "user", text);
 
   emitActiveStateRouting({
     userId,
@@ -4316,17 +4355,24 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // 3) waiting_birthdate (pending scan image; includes awaiting_payment slip reminder branch)
   try {
-    const paymentState = getPaymentState(userId).state;
+    const memoryPaymentStateForBd = getPaymentState(userId).state;
     const pendingPayRow = await getLatestAwaitingPaymentForLineUserId(userId);
     const hasAwaitingPaymentRow =
       pendingPayRow && String(pendingPayRow.status) === "awaiting_payment";
+    const slipReminderActionable =
+      hasAwaitingPaymentRow &&
+      isAwaitingPaymentActionableForTextRouting({
+        accessDecision: activeAccessDecision,
+        latestPaymentRow: pendingPayRow,
+        paymentMemoryState: memoryPaymentStateForBd,
+      });
 
     if (
       session.pendingImage &&
-      paymentState !== "awaiting_slip" &&
+      memoryPaymentStateForBd !== "awaiting_slip" &&
       !isPaywallGateWithPendingScan
     ) {
-      if (hasAwaitingPaymentRow) {
+      if (slipReminderActionable) {
         let paymentRef = null;
         try {
           if (pendingPayRow?.id) {

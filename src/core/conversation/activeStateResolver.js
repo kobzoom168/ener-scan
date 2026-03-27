@@ -7,8 +7,8 @@
  * 2) soft_locked (scan)
  * 3) payment interactive (pending_verify > awaiting_slip > package_selected > paywall)
  * 4) waiting_birthdate (pending scan image, birthdate needed)
- * 5) paid_active_scan_ready
- * 6) explicit_command (utility/menu/history — narrow surface)
+ * 5) explicit_command (utility/menu/history — narrow surface; wins over scan-ready idle)
+ * 6) paid_active_scan_ready (scan allowed: free or paid quota)
  * 7) idle
  *
  * @param {import("./contracts.types.js").ActiveStateResolutionInput} s
@@ -81,21 +81,21 @@ export function resolveActiveState(s) {
     };
   }
 
-  if (s.accessPaidReady) {
-    return {
-      stateOwner: "paid_active_scan_ready",
-      expectedInputKind: "scan_image",
-      noProgressStreak: np,
-      resolutionReason: "paid_active",
-    };
-  }
-
   if (s.explicitCommandOrUtility) {
     return {
       stateOwner: "idle",
       expectedInputKind: "command",
       noProgressStreak: np,
       resolutionReason: "explicit_command",
+    };
+  }
+
+  if (s.accessPaidReady) {
+    return {
+      stateOwner: "paid_active_scan_ready",
+      expectedInputKind: "scan_image",
+      noProgressStreak: np,
+      resolutionReason: "paid_active",
     };
   }
 

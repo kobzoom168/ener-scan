@@ -8,6 +8,10 @@ import {
   toGeminiConversationOwner,
 } from "../src/utils/webhookTextActiveState.util.js";
 import { isGenericAckText } from "../src/utils/stateMicroIntent.util.js";
+import { isMainMenuAlias } from "../src/utils/webhookText.util.js";
+import {
+  shouldEmitPayNotNeededForPaymentIntent,
+} from "../src/utils/paymentConversationRouting.util.js";
 
 const uid = "U_integration_test_user";
 
@@ -149,4 +153,92 @@ test("soft scan lock → soft_locked", () => {
 test("toGeminiConversationOwner maps paywall canonical to legacy string", () => {
   assert.equal(toGeminiConversationOwner("paywall_selecting_package"), "paywall_offer_single");
   assert.equal(toGeminiConversationOwner("payment_package_selected"), "paywall_offer_single");
+});
+
+test("R1: free quota + waiting_birthdate + stale awaiting_payment row → waiting_birthdate owner", () => {
+  const r = computeWebhookTextActiveState({
+    userId: uid,
+    session: baseSession({ pendingImage: {} }),
+    text: "01/01/2540",
+    lowerText: "01/01/2540",
+    activeAccessDecision: { allowed: true, reason: "free" },
+    activePendingPaymentRow: {
+      status: "awaiting_payment",
+      id: "p1",
+      created_at: new Date().toISOString(),
+    },
+    paymentMemoryState: "",
+    scanAbuseStatus: { isLocked: false },
+  });
+  assert.equal(r.resolved.stateOwner, "waiting_birthdate");
+  assert.equal(r.paymentState, "none");
+});
+
+test("R2: access allowed + stale awaiting_payment + pay intent uses pay-not-needed path", () => {
+  assert.equal(
+    shouldEmitPayNotNeededForPaymentIntent(
+      { allowed: true, reason: "free" },
+      { status: "awaiting_payment" },
+    ),
+    true,
+  );
+});
+
+test("R3: กลับเมนู is main menu alias (explicit utility)", () => {
+  assert.equal(isMainMenuAlias("กลับเมนู", "กลับเมนู"), true);
+  const r = computeWebhookTextActiveState({
+    userId: uid,
+    session: baseSession(),
+    text: "กลับเมนู",
+    lowerText: "กลับเมนู",
+    activeAccessDecision: { allowed: true, reason: "free" },
+    activePendingPaymentRow: { status: "awaiting_payment" },
+    paymentMemoryState: "",
+    scanAbuseStatus: { isLocked: false },
+  });
+  assert.equal(r.resolved.stateOwner, "idle");
+  assert.equal(r.resolved.resolutionReason, "explicit_command");
+});
+
+test("R4: access denied + awaiting_payment → awaiting_slip owner", () => {
+  const r = computeWebhookTextActiveState({
+    userId: uid,
+    session: baseSession(),
+    text: "ครับ",
+    lowerText: "ครับ",
+    activeAccessDecision: { allowed: false, reason: "payment_required" },
+    activePendingPaymentRow: { status: "awaiting_payment" },
+    paymentMemoryState: "",
+    scanAbuseStatus: { isLocked: false },
+  });
+  assert.equal(r.resolved.stateOwner, "awaiting_slip");
+});
+
+test("R5: pending_verify + access allowed + menu text → still pending_verify owner", () => {
+  const r = computeWebhookTextActiveState({
+    userId: uid,
+    session: baseSession(),
+    text: "กลับเมนู",
+    lowerText: "กลับเมนู",
+    activeAccessDecision: { allowed: true, reason: "free" },
+    activePendingPaymentRow: { status: "pending_verify" },
+    paymentMemoryState: "",
+    scanAbuseStatus: { isLocked: false },
+  });
+  assert.equal(r.resolved.stateOwner, "pending_verify");
+});
+
+test("R6: scan idle + access allowed + no actionable payment → paid_active_scan_ready not slip", () => {
+  const r = computeWebhookTextActiveState({
+    userId: uid,
+    session: baseSession(),
+    text: "สวัสดี",
+    lowerText: "สวัสดี",
+    activeAccessDecision: { allowed: true, reason: "free", paidRemainingScans: 0 },
+    activePendingPaymentRow: null,
+    paymentMemoryState: "none",
+    scanAbuseStatus: { isLocked: false },
+  });
+  assert.equal(r.resolved.stateOwner, "paid_active_scan_ready");
+  assert.equal(r.paymentState, "none");
 });

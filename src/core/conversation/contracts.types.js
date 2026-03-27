@@ -19,7 +19,7 @@
  * @property {boolean} hasAwaitingPaymentInteractive
  * @property {'none'|'awaiting_slip'|'pending_verify'|'paywall'|'package_selected'} paymentInteractiveKind
  * @property {boolean} waitingBirthdateForScan
- * @property {boolean} accessPaidReady
+ * @property {boolean} accessPaidReady — true when `checkScanAccess().allowed` (free or paid)
  * @property {boolean} explicitCommandOrUtility
  * @property {number} [noProgressStreak] — optional session streak from `getGuidanceNoProgressCount` (wired at webhook later)
  */

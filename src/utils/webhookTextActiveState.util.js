@@ -12,6 +12,7 @@ import {
   isMainMenuAlias,
   isStatsCommand,
 } from "./webhookText.util.js";
+import { isAwaitingPaymentActionableForTextRouting } from "./paymentConversationRouting.util.js";
 
 /**
  * Gemini / legacy logs still expect `paywall_offer_single` instead of canonical owners.
@@ -49,7 +50,17 @@ export function computeWebhookTextActiveState(ctx) {
 
   const pendingStatus = String(activePendingPaymentRow?.status || "").trim();
   const hasPendingVerify = pendingStatus === "pending_verify";
-  const hasAwaitingSlip = pendingStatus === "awaiting_payment";
+
+  const paymentInteractiveActionable = isAwaitingPaymentActionableForTextRouting({
+    accessDecision: activeAccessDecision,
+    latestPaymentRow: activePendingPaymentRow,
+    paymentMemoryState,
+  });
+
+  const hasAwaitingSlip =
+    paymentInteractiveActionable &&
+    !hasPendingVerify &&
+    (pendingStatus === "awaiting_payment" || paymentMemoryState === "awaiting_slip");
 
   const accessAllowed = activeAccessDecision?.allowed === true;
   const accessReason = String(activeAccessDecision?.reason || "").trim();
@@ -57,7 +68,7 @@ export function computeWebhookTextActiveState(ctx) {
   let paymentState = "none";
   if (hasPendingVerify) {
     paymentState = "pending_verify";
-  } else if (hasAwaitingSlip || paymentMemoryState === "awaiting_slip") {
+  } else if (hasAwaitingSlip) {
     paymentState = "awaiting_slip";
   } else if (
     !accessAllowed &&
@@ -110,7 +121,8 @@ export function computeWebhookTextActiveState(ctx) {
   const waitingBirthdateForScan =
     Boolean(session.pendingImage) && paymentState === "none";
 
-  const accessPaidReady = accessAllowed && accessReason === "paid";
+  /** Scan-ready owner: any allowed gate (free or paid), not only paid entitlement. */
+  const accessPaidReady = accessAllowed;
 
   const explicitCommandOrUtility =
     isHistoryCommand(text, lowerText) ||
@@ -121,7 +133,7 @@ export function computeWebhookTextActiveState(ctx) {
     if (hasPendingVerify) {
       return getGuidanceNoProgressCount(userId, "pending_verify");
     }
-    if (hasAwaitingSlip || paymentMemoryState === "awaiting_slip") {
+    if (hasAwaitingSlip) {
       return getGuidanceNoProgressCount(userId, "awaiting_slip");
     }
     if (paymentState === "paywall_offer_single") {

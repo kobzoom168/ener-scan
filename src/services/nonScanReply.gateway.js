@@ -5,6 +5,7 @@ import { TelemetryEvents, logTelemetryEvent } from "../core/telemetry/telemetryE
 import { emitStateFallbackReason } from "../core/telemetry/stateTelemetry.service.js";
 import { emitPaymentQrBundleSent } from "../core/telemetry/paymentLifecycleTelemetry.service.js";
 import { gatewayPathEnter, gatewayPathExit } from "./lineReplyAudit.context.js";
+import { insertLineConversationMessage } from "../stores/conversationMessages.db.js";
 
 /** @type {Map<string, string>} */
 const lastNonScanTextByUser = new Map();
@@ -226,6 +227,7 @@ export async function sendNonScanReply(opts) {
     if (!lastEval.blocked) {
       await replyText(client, replyToken, body);
       recordSent(uid, dedupeKey, body);
+      void insertLineConversationMessage(uid, "bot", body);
       if (scanOfferMeta && typeof scanOfferMeta === "object") {
         console.log(
           JSON.stringify({
@@ -371,6 +373,7 @@ export async function sendNonScanSequenceReply(opts) {
         messages: list,
       });
       recordSent(uid, dedupeKey, fingerprint);
+      void insertLineConversationMessage(uid, "bot", list.join("\n\n"));
       logGateway({
         userId: uid,
         replyType: rt,
@@ -455,6 +458,13 @@ export async function sendNonScanPaymentQrInstructions(opts) {
       qrImageUrl,
       slipText,
     });
+    void insertLineConversationMessage(
+      uid,
+      "bot",
+      [String(introText || "").trim(), String(slipText || "").trim()]
+        .filter(Boolean)
+        .join("\n\n"),
+    );
 
     logGateway({
       userId: uid,
@@ -568,6 +578,7 @@ export async function sendNonScanPushMessage(opts) {
       if (!lastEval.blocked) {
         await pushText(client, uid, body);
         recordSent(uid, dedupeKey, body);
+        void insertLineConversationMessage(uid, "bot", body);
         logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
           userId: uid,
           replyType: rt,

@@ -1,6 +1,7 @@
 import { env } from "../../../config/env.js";
 import { getGeminiFrontMode } from "./geminiFront.featureFlags.js";
 import { buildPlannerContextPayload } from "./geminiPlannerContext.builder.js";
+import { getGeminiConversationHistory } from "../../../utils/conversationHistory.util.js";
 import { runGeminiPlannerWithMeta } from "./geminiPlanner.service.js";
 import {
   validateProposedAction,
@@ -11,12 +12,13 @@ import {
   logTelemetryEvent,
 } from "../../telemetry/telemetryEvents.js";
 
-/** Phase-1 shadow observability: excludes waiting_birthdate (optional later). */
+/** Phase-1 shadow observability (includes waiting_birthdate for Gemini eligibility). */
 export const SHADOW_SCOPE_PHASE1_STATES = new Set([
   "paywall_selecting_package",
   "payment_package_selected",
   "awaiting_slip",
   "pending_verify",
+  "waiting_birthdate",
 ]);
 
 /**
@@ -197,6 +199,7 @@ export async function runPhase1GeminiShadowPipeline(ctx, deps = {}) {
   }
 
   const allowedActions = allowedActionsForPhase1State(phase1);
+  const conversationHistory = await getGeminiConversationHistory(ctx.userId, 8, 2000);
   const plannerPayload = buildPlannerContextPayload({
     userId: ctx.userId,
     text: ctx.text,
@@ -208,6 +211,7 @@ export async function runPhase1GeminiShadowPipeline(ctx, deps = {}) {
     pendingPaymentStatus: ctx.pendingPaymentStatus,
     selectedPackageKey: ctx.selectedPackageKey,
     allowedActions,
+    conversationHistory,
   });
   const plannerJson = JSON.stringify(plannerPayload);
 

@@ -12,6 +12,7 @@ import {
 } from "./geminiPhrasingContext.builder.js";
 import { runGeminiPhrasing } from "./geminiPhrasing.service.js";
 import { logGeminiOrchestrator } from "./geminiFront.telemetry.js";
+import { getGeminiConversationHistory } from "../../../utils/conversationHistory.util.js";
 
 /**
  * @param {{
@@ -47,6 +48,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
   }
 
   const allowedActions = allowedActionsForPhase1State(phase1);
+  const conversationHistory = await getGeminiConversationHistory(ctx.userId, 8, 2000);
   const plannerPayload = buildPlannerContextPayload({
     userId: ctx.userId,
     text: ctx.text,
@@ -58,6 +60,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
     pendingPaymentStatus: ctx.pendingPaymentStatus,
     selectedPackageKey: ctx.selectedPackageKey,
     allowedActions,
+    conversationHistory,
   });
   const plannerJson = JSON.stringify(plannerPayload);
 
@@ -143,6 +146,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
     nextStep: buildNextStepHint(phase1, v.deny_reason),
     replyStyle: plan.reply_style,
     userText: ctx.text,
+    conversationHistory,
   });
 
   if (!ph) {

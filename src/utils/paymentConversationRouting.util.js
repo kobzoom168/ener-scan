@@ -15,6 +15,45 @@ export function isActiveSlipPaymentRow(row) {
 }
 
 /**
+ * Whether an in-flight manual payment / slip row should own LINE **text** routing.
+ * DB status wins over in-memory MVP state. `pending_verify` stays actionable even when
+ * `checkScanAccess` is still allowed (e.g. free quota).
+ *
+ * @param {{
+ *   accessDecision?: { allowed?: boolean, reason?: string } | null;
+ *   latestPaymentRow?: { status?: string } | null;
+ *   paymentMemoryState?: string;
+ * }} [ctx]
+ * @returns {boolean}
+ */
+export function isAwaitingPaymentActionableForTextRouting({
+  accessDecision,
+  latestPaymentRow,
+  paymentMemoryState,
+} = {}) {
+  const status = String(latestPaymentRow?.status || "").trim();
+  const mem = String(paymentMemoryState || "").trim();
+
+  if (status === "pending_verify") {
+    return true;
+  }
+
+  if (accessDecision?.allowed === true) {
+    return false;
+  }
+
+  if (status === "awaiting_payment") {
+    return true;
+  }
+
+  if (mem === "awaiting_slip") {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * User may open paywall / create payment only when scan access is denied for quota/entitlement.
  * If scan is still allowed and there is no in-flight slip row, payment-ish text is guidance-only.
  *
@@ -27,7 +66,9 @@ export function shouldEmitPayNotNeededForPaymentIntent(
   pendingPaymentRow,
 ) {
   if (!accessDecision?.allowed) return false;
-  if (isActiveSlipPaymentRow(pendingPaymentRow)) return false;
+  if (String(pendingPaymentRow?.status || "").trim() === "pending_verify") {
+    return false;
+  }
   return true;
 }
 

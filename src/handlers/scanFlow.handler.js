@@ -53,6 +53,7 @@ import {
   getLatestScanJobId,
   isCurrentFlowVersion,
 } from "../stores/runtime.store.js";
+import { clearPaymentState } from "../stores/manualPaymentAccess.store.js";
 
 import {
   buildPaymentRequiredText,
@@ -1056,5 +1057,6 @@ export async function runScanFlow({
   }
 
   clearLatestScanJob(userId, scanJobId);
+  clearPaymentState(userId);
   clearSessionIfFlowVersionMatches(userId, flowVersion);
 }

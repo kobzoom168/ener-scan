@@ -15,6 +15,7 @@ export async function runGeminiPhrasing({
   nextStep,
   replyStyle,
   userText,
+  conversationHistory,
 }) {
   if (!isGeminiConfigured()) {
     logGeminiPhrasing({ outcome: "skipped_no_api_key" });
@@ -31,6 +32,7 @@ export async function runGeminiPhrasing({
     nextStep,
     replyStyle,
     userText,
+    conversationHistory,
   });
   try {
     const text = await generateTextWithTimeout(
