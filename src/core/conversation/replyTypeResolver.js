@@ -40,7 +40,7 @@ export function resolveReplyType(stateOwner, microIntent, ctx = {}) {
   }
 
   if (stateOwner === "paywall_selecting_package") {
-    if (microIntent === "choose_49") {
+    if (microIntent === "choose_49" || microIntent === "choose_99") {
       return { replyType: "pw_package_selected", nextStep: "await_pay_command", guidanceTier: 1 };
     }
     if (microIntent === "pay_too_early") {

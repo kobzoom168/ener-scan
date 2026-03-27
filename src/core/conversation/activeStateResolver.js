@@ -15,11 +15,16 @@
  * @returns {import("./contracts.types.js").ActiveStateResolution}
  */
 export function resolveActiveState(s) {
+  const np =
+    s.noProgressStreak != null && Number.isFinite(Number(s.noProgressStreak))
+      ? Math.max(0, Number(s.noProgressStreak))
+      : 0;
+
   if (s.hardBlocked) {
     return {
       stateOwner: "hard_blocked",
       expectedInputKind: "none",
-      noProgressStreak: 0,
+      noProgressStreak: np,
       resolutionReason: "abuse_hard_block",
     };
   }
@@ -27,7 +32,7 @@ export function resolveActiveState(s) {
     return {
       stateOwner: "soft_locked",
       expectedInputKind: "scan_unlock_or_wait",
-      noProgressStreak: 0,
+      noProgressStreak: np,
       resolutionReason: "scan_soft_lock",
     };
   }
@@ -37,7 +42,7 @@ export function resolveActiveState(s) {
       return {
         stateOwner: "pending_verify",
         expectedInputKind: "slip_or_status_or_waiting",
-        noProgressStreak: 0,
+        noProgressStreak: np,
         resolutionReason: "db_pending_verify",
       };
     }
@@ -45,7 +50,7 @@ export function resolveActiveState(s) {
       return {
         stateOwner: "awaiting_slip",
         expectedInputKind: "slip_image_or_pay_again",
-        noProgressStreak: 0,
+        noProgressStreak: np,
         resolutionReason: "db_awaiting_slip",
       };
     }
@@ -53,7 +58,7 @@ export function resolveActiveState(s) {
       return {
         stateOwner: "payment_package_selected",
         expectedInputKind: "pay_command",
-        noProgressStreak: 0,
+        noProgressStreak: np,
         resolutionReason: "package_selected_await_pay",
       };
     }
@@ -61,7 +66,7 @@ export function resolveActiveState(s) {
       return {
         stateOwner: "paywall_selecting_package",
         expectedInputKind: "package_or_pay_or_wait",
-        noProgressStreak: 0,
+        noProgressStreak: np,
         resolutionReason: "paywall_gate",
       };
     }
@@ -71,7 +76,7 @@ export function resolveActiveState(s) {
     return {
       stateOwner: "waiting_birthdate",
       expectedInputKind: "birthdate_or_deferred_intent",
-      noProgressStreak: 0,
+      noProgressStreak: np,
       resolutionReason: "pending_image_needs_birthdate",
     };
   }
@@ -80,7 +85,7 @@ export function resolveActiveState(s) {
     return {
       stateOwner: "paid_active_scan_ready",
       expectedInputKind: "scan_image",
-      noProgressStreak: 0,
+      noProgressStreak: np,
       resolutionReason: "paid_active",
     };
   }
@@ -89,7 +94,7 @@ export function resolveActiveState(s) {
     return {
       stateOwner: "idle",
       expectedInputKind: "command",
-      noProgressStreak: 0,
+      noProgressStreak: np,
       resolutionReason: "explicit_command",
     };
   }
@@ -97,7 +102,7 @@ export function resolveActiveState(s) {
   return {
     stateOwner: "idle",
     expectedInputKind: "open",
-    noProgressStreak: 0,
+    noProgressStreak: np,
     resolutionReason: "default_idle",
   };
 }

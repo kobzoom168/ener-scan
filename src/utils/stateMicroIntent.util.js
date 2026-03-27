@@ -46,12 +46,24 @@ function normText(text) {
     .replace(/\s+/g, " ");
 }
 
+/** Strips common Thai polite tails so "โอเคครับ" matches ack tokens. */
+function ackTokenWithoutPolite(t) {
+  const s = String(t || "").trim();
+  if (!s) return "";
+  return s.replace(/(นะครับ|นะคะ|ครับ|ค่ะ|คับ)$/u, "").trim();
+}
+
 /** Short acknowledgement / light agreement (not pay intent, not status). */
 export function isGenericAckText(text) {
   const t = normText(text);
   if (!t) return false;
   const lt = t.toLowerCase();
   if (GENERIC_ACK.has(t) || GENERIC_ACK.has(lt)) return true;
+  const stripped = ackTokenWithoutPolite(t);
+  if (stripped && stripped !== t) {
+    const ls = stripped.toLowerCase();
+    if (GENERIC_ACK.has(stripped) || GENERIC_ACK.has(ls)) return true;
+  }
   if (/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]$/u.test(t)) return true;
   return false;
 }

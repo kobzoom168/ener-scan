@@ -21,6 +21,7 @@
  * @property {boolean} waitingBirthdateForScan
  * @property {boolean} accessPaidReady
  * @property {boolean} explicitCommandOrUtility
+ * @property {number} [noProgressStreak] — optional session streak from `getGuidanceNoProgressCount` (wired at webhook later)
  */
 
 /**

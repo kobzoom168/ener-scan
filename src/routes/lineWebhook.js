@@ -143,6 +143,10 @@ import {
   isPackageSelectedSamePackageConfirmText,
 } from "../utils/stateMicroIntent.util.js";
 import {
+  computeWebhookTextActiveState,
+  toGeminiConversationOwner,
+} from "../utils/webhookTextActiveState.util.js";
+import {
   isBirthdateChangeCandidateText,
   isBirthdateFlowConfirmYes,
   isBirthdateFlowConfirmNo,
@@ -2063,52 +2067,43 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   const paymentMemoryState = getPaymentState(userId).state;
-  const pendingStatus = String(activePendingPaymentRow?.status || "").trim();
-  const hasPendingVerify = pendingStatus === "pending_verify";
-  const hasAwaitingSlip = pendingStatus === "awaiting_payment";
-  const accessState = activeAccessDecision?.allowed
-    ? activeAccessDecision?.reason === "paid"
-      ? "paid_active"
-      : "free_available"
-    : activeAccessDecision?.reason || "payment_required";
-  /** User exhausted free quota, saw paywall, pending scan image — package text must not go to birthdate flow. */
-  const isPaywallGateWithPendingScan =
-    Boolean(session.pendingImage) &&
-    activeAccessDecision != null &&
-    !activeAccessDecision.allowed &&
-    activeAccessDecision.reason === "payment_required";
-  const flowState = session.pendingImage ? "waiting_birthdate" : "idle";
-  let paymentState = "none";
-  if (hasPendingVerify) {
-    paymentState = "pending_verify";
-  } else if (hasAwaitingSlip || paymentMemoryState === "awaiting_slip") {
-    paymentState = "awaiting_slip";
-  } else if (
-    !activeAccessDecision?.allowed &&
-    activeAccessDecision?.reason === "payment_required" &&
-    session.pendingImage
-  ) {
-    paymentState = "paywall_offer_single";
-  } else if (activeAccessDecision?.allowed && activeAccessDecision?.reason === "paid") {
-    paymentState = "approved_intro";
-  }
+  const scanAbuseStatus = checkScanAbuseStatus(userId, now);
+  const wsActive = computeWebhookTextActiveState({
+    userId,
+    session,
+    text,
+    lowerText,
+    activeAccessDecision,
+    activePendingPaymentRow,
+    paymentMemoryState,
+    scanAbuseStatus,
+  });
+  const {
+    resolved: activeResolved,
+    paymentState,
+    flowState,
+    accessState,
+    isPaywallGateWithPendingScan,
+    pendingStatus,
+    hasPendingVerify,
+    hasAwaitingSlip,
+  } = wsActive;
 
-  let conversationOwner = "idle";
-  if (hasPendingVerify) {
-    conversationOwner = "pending_verify";
-  } else if (hasAwaitingSlip || paymentMemoryState === "awaiting_slip") {
-    conversationOwner = "awaiting_slip";
-  } else if (
-    !activeAccessDecision?.allowed &&
-    activeAccessDecision?.reason === "payment_required" &&
-    session.pendingImage
-  ) {
-    conversationOwner = "paywall_offer_single";
-  } else if (activeAccessDecision?.allowed && activeAccessDecision?.reason === "paid") {
-    conversationOwner = "paid_active_scan_ready";
-  } else if (flowState === "waiting_birthdate" && paymentState === "none") {
-    conversationOwner = "waiting_birthdate";
-  }
+  const canonicalStateOwner = activeResolved.stateOwner;
+  const geminiConversationOwner = toGeminiConversationOwner(activeResolved.stateOwner);
+
+  emitActiveStateRouting({
+    userId,
+    stateOwner: activeResolved.stateOwner,
+    resolutionReason: activeResolved.resolutionReason,
+    expectedInputKind: activeResolved.expectedInputKind,
+    noProgressStreak: activeResolved.noProgressStreak,
+    flowState,
+    paymentState,
+    accessState,
+    text: text.slice(0, 120),
+    primarySnapshot: true,
+  });
 
   if (
     flowState === "waiting_birthdate" &&
@@ -2156,7 +2151,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       text,
       lowerText,
       phase1State: phase1GeminiKey,
-      conversationOwner,
+      conversationOwner: geminiConversationOwner,
       paymentState,
       flowState,
       accessState,
@@ -2379,11 +2374,15 @@ async function handleTextMessage({ client, event, userId, session }) {
     const offer = loadActiveScanOffer();
     const defaultPkg = getDefaultPackage(offer);
 
-    const paywallOwner = mapWebhookContextToStateOwner({
-      userId,
-      paymentState: "paywall_offer_single",
-      paymentMemoryState,
-    });
+    const paywallOwner =
+      canonicalStateOwner === "paywall_selecting_package" ||
+      canonicalStateOwner === "payment_package_selected"
+        ? canonicalStateOwner
+        : mapWebhookContextToStateOwner({
+            userId,
+            paymentState: "paywall_offer_single",
+            paymentMemoryState,
+          });
     if (paywallOwner) {
       logSafeIntentResolved(userId, paywallOwner, text, lowerText, {
         routeReason: "paywall_text_guard",
@@ -2470,7 +2469,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         flowState,
         paymentState,
         accessState,
-        conversationOwner,
+        canonicalStateOwner,
         stateOwner: "payment_package_selected",
         replyFamily: "paywall_single_offer",
         expectedInputType: "payment_command",
@@ -2526,8 +2525,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         flowState,
         paymentState,
         accessState,
-        conversationOwner,
-        stateOwner: conversationOwner,
+        canonicalStateOwner,
+        stateOwner: canonicalStateOwner,
         replyFamily: "paywall_single_offer",
         expectedInputType: "payment_command",
         text,
@@ -2578,7 +2577,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         flowState,
         paymentState,
         accessState,
-        conversationOwner,
+        canonicalStateOwner,
         replyFamily: "paywall_single_offer",
         routeReason: "single_offer_price_or_token_ack",
         text,
@@ -2638,7 +2637,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           event: "PAYMENT_SINGLE_OFFER_PROMPT",
           userId,
           paymentState,
-          conversationOwner,
+          canonicalStateOwner,
           inputText: text,
           reason: "wait_tomorrow_path",
         }),
@@ -2648,7 +2647,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         flowState,
         paymentState,
         accessState,
-        conversationOwner,
+        canonicalStateOwner,
         replyFamily: "paywall_single_offer",
         guidanceReason: "wait_tomorrow",
         text,
@@ -2831,7 +2830,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         flowState,
         paymentState,
         accessState,
-        conversationOwner,
+        canonicalStateOwner,
         replyFamily: "paywall_single_offer",
         guidanceReason: "ack_continue",
         text,
@@ -2882,7 +2881,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       text,
       deterministicBranch: paywallShadowDeterministicBranch,
       phase1State: phase1KeyPaywall,
-      conversationOwner,
+      conversationOwner: geminiConversationOwner,
       paymentState,
       flowState,
       accessState,
@@ -2951,7 +2950,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         event: "PAYMENT_SINGLE_OFFER_PROMPT",
         userId,
         paymentState,
-        conversationOwner,
+        canonicalStateOwner,
         inputText: text,
         reason:
           branch === "date_wrong"
@@ -2964,10 +2963,10 @@ async function handleTextMessage({ client, event, userId, session }) {
       flowState,
       paymentState,
       accessState,
-      conversationOwner,
+      canonicalStateOwner,
       stateOwner: selectedPkgPaywall
         ? "payment_package_selected"
-        : conversationOwner,
+        : canonicalStateOwner,
       replyFamily: "paywall_single_offer",
       guidanceReason: branch,
       expectedInputType: "payment_or_wait_or_ack",
@@ -3157,8 +3156,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         flowState,
         paymentState,
         accessState,
-        conversationOwner,
-        stateOwner: conversationOwner,
+        canonicalStateOwner,
+        stateOwner: canonicalStateOwner,
         replyFamily: "awaiting_slip",
         expectedInputType: "slip_status",
         text,
@@ -3279,7 +3278,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       text,
       deterministicBranch: "awaiting_slip_default",
       phase1State: phase1KeyAwaitingSlip,
-      conversationOwner,
+      conversationOwner: geminiConversationOwner,
       paymentState,
       flowState,
       accessState,
@@ -3322,8 +3321,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       flowState,
       paymentState,
       accessState,
-      conversationOwner,
-      stateOwner: conversationOwner,
+      canonicalStateOwner,
+      stateOwner: canonicalStateOwner,
       replyFamily: "awaiting_slip",
       expectedInputType: "slip_image_or_slip_status",
       text,
@@ -3449,8 +3448,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         flowState,
         paymentState,
         accessState,
-        conversationOwner,
-        stateOwner: conversationOwner,
+        canonicalStateOwner,
+        stateOwner: canonicalStateOwner,
         replyFamily: "pending_verify",
         expectedInputType: "status_like",
         text,
@@ -3593,8 +3592,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         flowState,
         paymentState,
         accessState,
-        conversationOwner,
-        stateOwner: conversationOwner,
+        canonicalStateOwner,
+        stateOwner: canonicalStateOwner,
         replyFamily: "pending_verify",
         expectedInputType: "short_ack",
         text,
@@ -3638,7 +3637,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       text,
       deterministicBranch: "pending_verify_default",
       phase1State: phase1KeyPendingVerify,
-      conversationOwner,
+      conversationOwner: geminiConversationOwner,
       paymentState,
       flowState,
       accessState,
@@ -3692,8 +3691,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       flowState,
       paymentState,
       accessState,
-      conversationOwner,
-      stateOwner: conversationOwner,
+      canonicalStateOwner,
+      stateOwner: canonicalStateOwner,
       replyFamily: "pending_verify",
       expectedInputType: "status_like",
       text,
@@ -3928,8 +3927,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         flowState,
         paymentState,
         accessState,
-        conversationOwner,
-        stateOwner: conversationOwner,
+        canonicalStateOwner,
+        stateOwner: canonicalStateOwner,
         replyFamily: "paid_active",
         expectedInputType: "object_image",
         text,
@@ -4784,6 +4783,8 @@ async function handleEvent({ client, event }) {
 
   console.log("[WEBHOOK] skip unsupported message");
 }
+
+export { handleTextMessage, handleEvent };
 
 export function lineWebhookRouter(lineConfig) {
   const client = new line.Client(lineConfig);
