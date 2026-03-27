@@ -2377,6 +2377,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       accessState,
       pendingPaymentStatus: pendingStatus || null,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+      noProgressStreak: activeResolved.noProgressStreak ?? 0,
       sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts }) => {
         await sendNonScanReply({
           client,
@@ -3111,8 +3112,13 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
     /** Active Phase-1 stays off for date_wrong (deterministic birthdate-like copy only). */
     if (branch !== "date_wrong") {
-      const geminiFront = await invokePhase1GeminiOrchestrator();
-      if (geminiFront.handled) return;
+      const gf = await invokePhase1GeminiOrchestrator();
+      console.log("[GEMINI_PAYWALL_DEBUG]", {
+        handled: gf.handled,
+        reason: gf.reason,
+        mode: gf.mode,
+      });
+      if (gf.handled) return;
     }
 
     resetSameStateAckStreak(userId, "paywall_offer_single");

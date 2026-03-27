@@ -16,6 +16,7 @@ import { getDefaultPackage, findPackageByKey } from "../../../services/scanOffer
  *   selectedPackageKey: string | null,
  *   allowedActions: string[],
  *   conversationHistory?: { role: 'user'|'bot', text: string }[],
+ *   noProgressStreak?: number,
  * }} p
  */
 export function buildPlannerContextPayload(p) {
@@ -28,6 +29,11 @@ export function buildPlannerContextPayload(p) {
   const conversationHistory = Array.isArray(p.conversationHistory)
     ? p.conversationHistory
     : [];
+
+  const noProgressStreak =
+    p.noProgressStreak != null && Number.isFinite(Number(p.noProgressStreak))
+      ? Math.max(0, Math.floor(Number(p.noProgressStreak)))
+      : 0;
 
   return {
     v: 1,
@@ -54,6 +60,7 @@ export function buildPlannerContextPayload(p) {
             price_thb: selectedPkg.priceThb,
           }
         : null,
+      no_progress_streak: noProgressStreak,
     },
     allowed_actions: p.allowedActions,
   };

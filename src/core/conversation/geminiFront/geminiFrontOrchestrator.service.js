@@ -26,6 +26,7 @@ import { getGeminiConversationHistory } from "../../../utils/conversationHistory
  *   accessState: string,
  *   pendingPaymentStatus: string | null,
  *   selectedPackageKey: string | null,
+ *   noProgressStreak?: number,
  *   sendGatewayReply: (o: {
  *     replyType: string,
  *     semanticKey: string,
@@ -61,6 +62,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
     selectedPackageKey: ctx.selectedPackageKey,
     allowedActions,
     conversationHistory,
+    noProgressStreak: ctx.noProgressStreak,
   });
   const plannerJson = JSON.stringify(plannerPayload);
 

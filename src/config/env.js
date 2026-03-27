@@ -373,3 +373,9 @@ export const env = {
     return Number.isFinite(n) ? Math.min(4, Math.max(1, Math.floor(n))) : 3;
   })(),
 };
+
+console.log("[ENV_CHECK]", {
+  GEMINI_FRONT_ORCHESTRATOR_ENABLED: env.GEMINI_FRONT_ORCHESTRATOR_ENABLED,
+  GEMINI_FRONT_ORCHESTRATOR_MODE: env.GEMINI_FRONT_ORCHESTRATOR_MODE,
+  GEMINI_FRONT_PHASE1_ONLY: env.GEMINI_FRONT_PHASE1_ONLY,
+});
