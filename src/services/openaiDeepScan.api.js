@@ -5,6 +5,9 @@ export const openai = new OpenAI({
   apiKey: env.OPENAI_API_KEY,
 });
 
+/** Model id sent to `openai.responses.create` for deep-scan draft + rewrite. */
+const OPENAI_DEEP_SCAN_RESPONSES_MODEL = "gpt-4.1-mini";
+
 const OPENAI_RATE_LIMIT_RETRY_MS = 10_000;
 
 function sleep(ms) {
@@ -55,9 +58,11 @@ export async function generateDeepScanDraft({
 }) {
   const startedAt = Date.now();
 
-  const response = await withOpenAi429RetryOnce(() =>
-    openai.responses.create({
-      model: "gpt-4.1-mini",
+  const response = await withOpenAi429RetryOnce(() => {
+    const model = OPENAI_DEEP_SCAN_RESPONSES_MODEL;
+    console.log("[OPENAI_MODEL]", model);
+    return openai.responses.create({
+      model,
       input: [
         {
           role: "system",
@@ -75,13 +80,13 @@ export async function generateDeepScanDraft({
         },
       ],
       temperature: 0.7,
-    }),
-  );
+    });
+  });
 
   const text = String(response.output_text || "").trim();
 
   console.log("[OPENAI_DRAFT_TIMING]", {
-    model: "gpt-4.1-mini",
+    model: OPENAI_DEEP_SCAN_RESPONSES_MODEL,
     ms: Date.now() - startedAt,
     outputLength: text.length,
   });
@@ -99,9 +104,11 @@ export async function generateDeepScanDraft({
 export async function rewriteDeepScanDraft({ systemPrompt, userPrompt }) {
   const startedAt = Date.now();
 
-  const response = await withOpenAi429RetryOnce(() =>
-    openai.responses.create({
-      model: "gpt-4.1-mini",
+  const response = await withOpenAi429RetryOnce(() => {
+    const model = OPENAI_DEEP_SCAN_RESPONSES_MODEL;
+    console.log("[OPENAI_MODEL]", model);
+    return openai.responses.create({
+      model,
       input: [
         {
           role: "system",
@@ -113,13 +120,13 @@ export async function rewriteDeepScanDraft({ systemPrompt, userPrompt }) {
         },
       ],
       temperature: 0.8,
-    }),
-  );
+    });
+  });
 
   const text = String(response.output_text || "").trim();
 
   console.log("[OPENAI_REWRITE_TIMING]", {
-    model: "gpt-4.1-mini",
+    model: OPENAI_DEEP_SCAN_RESPONSES_MODEL,
     ms: Date.now() - startedAt,
     outputLength: text.length,
   });

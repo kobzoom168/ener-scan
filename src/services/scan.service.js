@@ -1,5 +1,5 @@
 import { generateScanText } from "./openai.service.js";
-import { openai } from "./openaiDeepScan.api.js";
+import { openai, withOpenAi429RetryOnce } from "./openaiDeepScan.api.js";
 import { getKnowledgeForCategory } from "../config/scanKnowledgeBase.js";
 import { generateWithRetry } from "./retry.service.js";
 import { formatScanOutput } from "./formatter.service.js";
@@ -62,26 +62,30 @@ export async function classifyObjectCategory(imageBase64) {
   if (!clean) return OBJECT_CLASSIFIER_DEFAULT;
 
   try {
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      temperature: 0,
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: `You MUST decide from the actual pixels in the image (not from assumptions). Classify the object into exactly one category:
+    const response = await withOpenAi429RetryOnce(() => {
+      const model = "gpt-4.1-mini";
+      console.log("[OPENAI_MODEL]", model);
+      return openai.responses.create({
+        model,
+        temperature: 0,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `You MUST decide from the actual pixels in the image (not from assumptions). Classify the object into exactly one category:
 พระเครื่อง | คริสตัล/หิน | เครื่องรางของขลัง | พระบูชา | อื่นๆ
 Reply with only the category name in Thai. Nothing else.`,
-            },
-            {
-              type: "input_image",
-              image_url: `data:image/jpeg;base64,${clean}`,
-            },
-          ],
-        },
-      ],
+              },
+              {
+                type: "input_image",
+                image_url: `data:image/jpeg;base64,${clean}`,
+              },
+            ],
+          },
+        ],
+      });
     });
     const raw = String(response.output_text || "").trim();
     return normalizeClassifierCategoryLabel(raw);

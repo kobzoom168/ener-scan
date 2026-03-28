@@ -1,9 +1,5 @@
-import OpenAI from "openai";
 import { env } from "../config/env.js";
-
-const openai = new OpenAI({
-  apiKey: env.OPENAI_API_KEY,
-});
+import { openai, withOpenAi429RetryOnce } from "./openaiDeepScan.api.js";
 
 const OBJECT_CHECK_PROVIDER = "openai.responses";
 const OBJECT_CHECK_MODEL = "gpt-4.1-mini";
@@ -167,10 +163,13 @@ export async function checkSingleObject(imageBase64) {
     const attemptStartedAt = Date.now();
     try {
       const response = await Promise.race([
-        openai.responses.create({
-          model: OBJECT_CHECK_MODEL,
-          temperature: 0,
-          input: [
+        withOpenAi429RetryOnce(() => {
+          const model = OBJECT_CHECK_MODEL;
+          console.log("[OPENAI_MODEL]", model);
+          return openai.responses.create({
+            model,
+            temperature: 0,
+            input: [
             {
               role: "user",
               content: [
@@ -221,6 +220,7 @@ unsupported
               ],
             },
           ],
+          });
         }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("object_check_timeout")), OBJECT_CHECK_TIMEOUT_MS),

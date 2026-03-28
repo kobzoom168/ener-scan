@@ -1,4 +1,4 @@
-import { openai } from "./openaiDeepScan.api.js";
+import { openai, withOpenAi429RetryOnce } from "./openaiDeepScan.api.js";
 import { deepScanScoreSystemPrompt } from "../prompts/deepScanScore.prompt.js";
 import { deepScanImproveSystemPrompt } from "../prompts/deepScanImprove.prompt.js";
 
@@ -94,19 +94,23 @@ ${improveHint || "-"}
 ช่วยปรับข้อความตามกติกาเดิม โดยคง format เดิม 100%
 `.trim();
 
-  const response = await openai.responses.create({
-    model: "gpt-4.1-mini",
-    input: [
-      {
-        role: "system",
-        content: [{ type: "input_text", text: deepScanImproveSystemPrompt }],
-      },
-      {
-        role: "user",
-        content: [{ type: "input_text", text: userPrompt }],
-      },
-    ],
-    temperature: 0.7,
+  const response = await withOpenAi429RetryOnce(() => {
+    const model = "gpt-4.1-mini";
+    console.log("[OPENAI_MODEL]", model);
+    return openai.responses.create({
+      model,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: deepScanImproveSystemPrompt }],
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text: userPrompt }],
+        },
+      ],
+      temperature: 0.7,
+    });
   });
 
   const improved = String(response.output_text || "").trim();
