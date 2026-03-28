@@ -20,6 +20,8 @@ export const SHADOW_SCOPE_PHASE1_STATES = new Set([
   "pending_verify",
   "waiting_birthdate",
   "scan_ready_idle",
+  "hard_blocked",
+  "soft_locked",
   "idle",
 ]);
 

@@ -17,6 +17,10 @@ export function buildNextStepHint(phase1, denyReason) {
       return "รอสลิปโอน หรือแจ้งสถานะสั้นๆ";
     case "pending_verify":
       return "แจ้งว่ารอตรวจสลิป/อนุมัติ ไม่ให้สมมติว่าอนุมัติแล้ว";
+    case "hard_blocked":
+      return "แจ้งอ่อนโยนว่าติดล็อกชั่วคราว ไม่โทษ แนะนำรอแล้วลองใหม่";
+    case "soft_locked":
+      return "แจ้งว่าสแกนถี่ไปหน่อย ขอพักสั้นๆ แล้วค่อยลองใหม่";
     default:
       return "ตอบสั้นๆ ช่วยผู้ใช้ต่อในขั้นตอนที่ถูกต้อง";
   }

@@ -290,9 +290,6 @@ function logSafeIntentResolved(userId, stateOwner, text, lowerText, extra = {}) 
   return r;
 }
 
-const MAIN_MENU_HINT_TEXT =
-  "กลับเมนูหลักได้ตลอดนะครับ บอกว่าเมนูหลักมาก็ได้";
-
 function logHumanConversationMemory(payload) {
   console.log(JSON.stringify(payload));
 }
@@ -381,8 +378,10 @@ async function handleBirthdateChangeFlowTurn({
   userId,
   session,
   text,
+  tryGeminiBeforeTextReply = null,
 }) {
   void session;
+  const tryGem = tryGeminiBeforeTextReply;
   const flowState = getBirthdateChangeFlowState(userId);
   if (!flowState) return false;
 
@@ -390,6 +389,7 @@ async function handleBirthdateChangeFlowTurn({
     if (isBirthdateFlowConfirmYes(text)) {
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
       const ask = pickBirthdateAskDateLine(userId);
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -403,6 +403,7 @@ async function handleBirthdateChangeFlowTurn({
     }
     if (isBirthdateFlowConfirmNo(text)) {
       clearBirthdateChangeFlow(userId);
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -414,6 +415,7 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (looksLikeBirthdateInput(text)) {
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -424,6 +426,7 @@ async function handleBirthdateChangeFlowTurn({
       });
       return true;
     }
+    if (tryGem && (await tryGem())) return true;
     await sendNonScanReply({
       client,
       userId,
@@ -452,6 +455,7 @@ async function handleBirthdateChangeFlowTurn({
         BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM,
         pending,
       );
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -463,6 +467,7 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (/^\d{6,7}$/.test(trimmed)) {
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -474,6 +479,7 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (looksLikeBirthdateInput(text)) {
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -485,6 +491,7 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     const ask = pickBirthdateAskDateLine(userId);
+    if (tryGem && (await tryGem())) return true;
     await sendNonScanReply({
       client,
       userId,
@@ -543,6 +550,7 @@ async function handleBirthdateChangeFlowTurn({
         rawBirthdateInput: pending.rawBirthdateInput,
       });
       const savedLine = birthdateSavedAfterUpdate(userId, pending.echoDisplay);
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -557,6 +565,7 @@ async function handleBirthdateChangeFlowTurn({
     if (confirmNo) {
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
       const ask = pickBirthdateAskDateLine(userId);
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -568,6 +577,7 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (looksLikeBirthdateInput(text)) {
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -579,6 +589,7 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     const pe = pending?.echoDisplay || "";
+    if (tryGem && (await tryGem())) return true;
     await sendNonScanReply({
       client,
       userId,
@@ -614,7 +625,9 @@ async function handlePaymentCommandTextRoute({
   lowerText,
   isPaywallGateWithPendingScan,
   forcePaymentIntent = false,
+  tryGeminiBeforeTextReply = null,
 }) {
+  const tryGem = tryGeminiBeforeTextReply;
   if (!forcePaymentIntent && !isPaymentCommand(text, lowerText)) {
     return false;
   }
@@ -637,6 +650,7 @@ async function handlePaymentCommandTextRoute({
         userId,
         hint: "pending_scan_needs_birthdate",
       });
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanSequenceReply({
         client,
         userId,
@@ -663,6 +677,7 @@ async function handlePaymentCommandTextRoute({
       lockUntil: payCmdStatus.lockUntil,
       source: "payment_command",
     });
+    if (tryGem && (await tryGem())) return true;
     await sendNonScanReply({
       client,
       userId,
@@ -723,6 +738,7 @@ async function handlePaymentCommandTextRoute({
         replyType: payload.replyType,
       }),
     );
+    if (tryGem && (await tryGem())) return true;
     await sendNonScanReply({
       client,
       userId,
@@ -749,6 +765,7 @@ async function handlePaymentCommandTextRoute({
       } catch (_) {
         paymentRefPv = null;
       }
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -781,6 +798,7 @@ async function handlePaymentCommandTextRoute({
           offer: offerInflight,
           userId,
         });
+        if (tryGem && (await tryGem())) return true;
         await sendNonScanReply({
           client,
           userId,
@@ -829,6 +847,7 @@ async function handlePaymentCommandTextRoute({
         paymentRef: paymentRefInflight,
         paidPackage: paidPackageInflight,
       });
+      if (tryGem && (await tryGem())) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -864,6 +883,7 @@ async function handlePaymentCommandTextRoute({
       userId,
     });
     const menuAlt = buildSingleOfferPaywallAltText(offerPay);
+    if (tryGem && (await tryGem())) return true;
     await sendNonScanReply({
       client,
       userId,
@@ -993,6 +1013,7 @@ async function handlePaymentCommandTextRoute({
     paymentRef: cmdPaymentRef,
     paidPackage,
   });
+  if (tryGem && (await tryGem())) return true;
   await sendNonScanReply({
     client,
     userId,
@@ -1011,12 +1032,7 @@ async function handlePaymentCommandTextRoute({
   return true;
 }
 
-async function replyIdleTextNoDuplicate({
-  client,
-  replyToken,
-  userId,
-  appendMenuFooter = false,
-}) {
+async function replyIdleTextNoDuplicate({ client, replyToken, userId }) {
   const primary = buildIdleDeterministicPrimaryText();
   let personaSoft = null;
   try {
@@ -1029,23 +1045,16 @@ async function replyIdleTextNoDuplicate({
     String(personaSoft).trim() !== primary.trim()
       ? String(personaSoft).trim()
       : null;
-  const body = appendMenuFooter ? `${primary}\n\n${MAIN_MENU_HINT_TEXT}` : primary;
-  const altBody =
-    altPersona && appendMenuFooter
-      ? `${altPersona}\n\n${MAIN_MENU_HINT_TEXT}`
-      : altPersona;
   await sendNonScanReply({
     client,
     userId,
     replyToken,
     replyType: "idle_post_scan",
     semanticKey: "idle_post_scan",
-    text: body,
+    text: primary,
     alternateTexts: [
-      ...(altBody ? [altBody] : []),
-      appendMenuFooter
-        ? `มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้\n\n${MAIN_MENU_HINT_TEXT}`
-        : "มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้",
+      ...(altPersona ? [altPersona] : []),
+      "มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้",
     ],
   });
 }
@@ -1053,10 +1062,17 @@ async function replyIdleTextNoDuplicate({
 const ABUSE_MSG_PAYMENT_LOCK =
   "ส่งเรื่องชำระเงินถี่ไปหน่อย ขอรอสักครู่แล้วลองใหม่นะครับ";
 
-async function handleHistoryCommand({ client, replyToken, userId }) {
+async function handleHistoryCommand({
+  client,
+  replyToken,
+  userId,
+  tryGeminiBeforeTextReply = null,
+}) {
+  const tryGem = tryGeminiBeforeTextReply;
   const history = getScanHistory(userId);
 
   if (!history.length) {
+    if (tryGem && (await tryGem())) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1070,6 +1086,7 @@ async function handleHistoryCommand({ client, replyToken, userId }) {
   }
 
   const formatted = formatHistory(history);
+  if (tryGem && (await tryGem())) return;
   await sendNonScanReply({
     client,
     userId,
@@ -1081,10 +1098,17 @@ async function handleHistoryCommand({ client, replyToken, userId }) {
   });
 }
 
-async function handleStatsCommand({ client, replyToken, userId }) {
+async function handleStatsCommand({
+  client,
+  replyToken,
+  userId,
+  tryGeminiBeforeTextReply = null,
+}) {
+  const tryGem = tryGeminiBeforeTextReply;
   const stats = getUserStats(userId);
 
   if (!stats) {
+    if (tryGem && (await tryGem())) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1099,6 +1123,7 @@ async function handleStatsCommand({ client, replyToken, userId }) {
 
   const last = stats.lastScanAt ? formatBangkokDateTime(stats.lastScanAt) : "-";
 
+  if (tryGem && (await tryGem())) return;
   await sendNonScanReply({
     client,
     userId,
@@ -2067,52 +2092,6 @@ async function handleTextMessage({ client, event, userId, session }) {
   const lowerText = text.toLowerCase();
   const now = Date.now();
 
-  if (env.EDGE_GATE_SOFT_VERIFY_ENABLED && isSoftVerifyPending(userId)) {
-    if (!isSoftVerifyUnlockText(text)) {
-      logConversationCost({
-        layer: "layer0_edge",
-        aiPath: "edge_gate",
-        edgeGateAction: "soft_verify_block",
-        userId,
-        usedAi: false,
-        modelUsed: null,
-        replyType: "soft_verify_prompt",
-        stateOwner: "soft_verify_gate",
-        fallbackToDeterministic: true,
-        suppressedDuplicate: false,
-        softVerifyTriggered: false,
-        softVerifyPassed: false,
-      });
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "soft_verify_prompt",
-        semanticKey: "soft_verify_prompt",
-        text: "ก่อนคุยต่อ ตอบว่ายืนยันมาก็ได้ครับ",
-        alternateTexts: [
-          "ถ้าต้องการใช้งานต่อ บอกว่าเริ่มมาก็ได้ครับ",
-        ],
-      });
-      return;
-    }
-    clearSoftVerifyPending(userId);
-    logConversationCost({
-      layer: "layer0_edge",
-      aiPath: "edge_gate",
-      edgeGateAction: "soft_verify_passed",
-      userId,
-      usedAi: false,
-      modelUsed: null,
-      replyType: null,
-      stateOwner: "soft_verify_gate",
-      fallbackToDeterministic: true,
-      suppressedDuplicate: false,
-      softVerifyTriggered: false,
-      softVerifyPassed: true,
-    });
-  }
-
   const messageId = event.message?.id ?? null;
   const edge = evaluateTextEdgeGate({ userId, messageId, text, now });
   if (edge.action === "drop_duplicate_event") {
@@ -2338,17 +2317,6 @@ async function handleTextMessage({ client, event, userId, session }) {
       nextPaymentState: paymentState,
       reason: "payment_state_wins",
     });
-  }
-
-  if (getBirthdateChangeFlowState(userId)) {
-    const bdDone = await handleBirthdateChangeFlowTurn({
-      client,
-      event,
-      userId,
-      session,
-      text,
-    });
-    if (bdDone) return;
   }
 
   /** Phase-1 Gemini runs only after deterministic shortcuts / micro-intents above each insertion point. */
@@ -2591,6 +2559,70 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
   };
 
+  const tryGeminiBeforeTextReply = async () => {
+    const gf = await invokePhase1GeminiOrchestrator();
+    return Boolean(gf.handled);
+  };
+
+  if (env.EDGE_GATE_SOFT_VERIFY_ENABLED && isSoftVerifyPending(userId)) {
+    if (!isSoftVerifyUnlockText(text)) {
+      logConversationCost({
+        layer: "layer0_edge",
+        aiPath: "edge_gate",
+        edgeGateAction: "soft_verify_block",
+        userId,
+        usedAi: false,
+        modelUsed: null,
+        replyType: "soft_verify_prompt",
+        stateOwner: "soft_verify_gate",
+        fallbackToDeterministic: true,
+        suppressedDuplicate: false,
+        softVerifyTriggered: false,
+        softVerifyPassed: false,
+      });
+      if (await tryGeminiBeforeTextReply()) return;
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "soft_verify_prompt",
+        semanticKey: "soft_verify_prompt",
+        text: "ก่อนคุยต่อ ตอบว่ายืนยันมาก็ได้ครับ",
+        alternateTexts: [
+          "ถ้าต้องการใช้งานต่อ บอกว่าเริ่มมาก็ได้ครับ",
+        ],
+      });
+      return;
+    }
+    clearSoftVerifyPending(userId);
+    logConversationCost({
+      layer: "layer0_edge",
+      aiPath: "edge_gate",
+      edgeGateAction: "soft_verify_passed",
+      userId,
+      usedAi: false,
+      modelUsed: null,
+      replyType: null,
+      stateOwner: "soft_verify_gate",
+      fallbackToDeterministic: true,
+      suppressedDuplicate: false,
+      softVerifyTriggered: false,
+      softVerifyPassed: true,
+    });
+  }
+
+  if (getBirthdateChangeFlowState(userId)) {
+    const bdDone = await handleBirthdateChangeFlowTurn({
+      client,
+      event,
+      userId,
+      session,
+      text,
+      tryGeminiBeforeTextReply,
+    });
+    if (bdDone) return;
+  }
+
   if (paymentState === "paywall_offer_single") {
     const offer = loadActiveScanOffer();
     const defaultPkg = getDefaultPackage(offer);
@@ -2622,6 +2654,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
       resetSameStateAckStreak(userId, "paywall_offer_single");
       resetGuidanceNoProgress(userId, "paywall_offer_single");
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReply({
         client,
         userId,
@@ -2707,6 +2740,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         lowerText,
         isPaywallGateWithPendingScan,
         forcePaymentIntent: true,
+        tryGeminiBeforeTextReply,
       });
       return;
     }
@@ -2762,6 +2796,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         text,
         lowerText,
         isPaywallGateWithPendingScan,
+        tryGeminiBeforeTextReply,
       });
       return;
     }
@@ -2805,6 +2840,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: outboundRt,
       });
       const ack = buildPaymentPackageSelectedAck(pkg);
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -2875,6 +2911,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: waitOutboundRt,
         routeReason: "same_state_wait_tomorrow",
       });
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -2918,6 +2955,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         confidence: "near_safe",
         chosenReplyType: hesRt,
       });
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -2961,6 +2999,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: pcRt,
       });
       const primaryText = buildPaymentPackageSelectedUnclearText({ tier });
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3059,6 +3098,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         routeReason: "same_state_ack_human",
       });
       const menuAlt = buildSingleOfferPaywallAltText(offer);
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3110,16 +3150,6 @@ async function handleTextMessage({ client, event, userId, session }) {
       pendingPaymentStatus: pendingStatus || null,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
     });
-    /** Active Phase-1 stays off for date_wrong (deterministic birthdate-like copy only). */
-    if (branch !== "date_wrong") {
-      const gf = await invokePhase1GeminiOrchestrator();
-      console.log("[GEMINI_PAYWALL_DEBUG]", {
-        handled: gf.handled,
-        reason: gf.reason,
-        mode: gf.mode,
-      });
-      if (gf.handled) return;
-    }
 
     resetSameStateAckStreak(userId, "paywall_offer_single");
     const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
@@ -3218,6 +3248,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     const menuAlt = selectedPkgPaywall
       ? buildPaymentPackageSelectedGentleRemindText()
       : buildSingleOfferPaywallAltText(offer);
+    if (await tryGeminiBeforeTextReply()) return;
     await sendNonScanReplyWithOptionalConvSurface({
       client,
       userId,
@@ -3265,6 +3296,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       );
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
       resetSameStateAckStreak(userId, "awaiting_slip");
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReply({
         client,
         userId,
@@ -3306,6 +3338,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         lowerText: "จ่ายเงิน",
         isPaywallGateWithPendingScan,
         forcePaymentIntent: true,
+        tryGeminiBeforeTextReply,
       });
       return;
     }
@@ -3336,6 +3369,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         tier: tierClaim,
         kind: "default",
       });
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3391,6 +3425,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: "awaiting_slip_status_hint",
         routeReason: "awaiting_slip_status_micro",
       });
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3465,6 +3500,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
       const slipAckReplyType =
         ackTier === "full" ? "awaiting_slip_guidance" : "awaiting_slip_gentle_remind";
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3513,8 +3549,6 @@ async function handleTextMessage({ client, event, userId, session }) {
       pendingPaymentStatus: pendingStatus || null,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
     });
-    const geminiAwaitingSlip = await invokePhase1GeminiOrchestrator();
-    if (geminiAwaitingSlip.handled) return;
 
     resetSameStateAckStreak(userId, "awaiting_slip");
     const streak = bumpGuidanceNoProgress(userId, "awaiting_slip");
@@ -3560,6 +3594,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
     const slipRemReplyType =
       tier === "full" ? "awaiting_slip_guidance" : "awaiting_slip_gentle_remind";
+    if (await tryGeminiBeforeTextReply()) return;
     await sendNonScanReplyWithOptionalConvSurface({
       client,
       userId,
@@ -3610,6 +3645,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       );
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
       resetSameStateAckStreak(userId, "pending_verify");
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReply({
         client,
         userId,
@@ -3626,6 +3662,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
     if (isPaymentCommand(text, lowerText)) {
       resetSameStateAckStreak(userId, "pending_verify");
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReply({
         client,
         userId,
@@ -3684,6 +3721,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: "pending_verify_status",
         routeReason: "pending_verify_status_micro",
       });
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3734,6 +3772,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           tierPvRe === "full"
             ? "pending_verify_guidance"
             : "pending_verify_gentle_remind";
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanReplyWithOptionalConvSurface({
           client,
           userId,
@@ -3828,6 +3867,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: pvReplyType,
         routeReason: "pending_verify_ack_human",
       });
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3873,8 +3913,6 @@ async function handleTextMessage({ client, event, userId, session }) {
       pendingPaymentStatus: pendingStatus || null,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
     });
-    const geminiPendingVerify = await invokePhase1GeminiOrchestrator();
-    if (geminiPendingVerify.handled) return;
 
     resetSameStateAckStreak(userId, "pending_verify");
     const streak = bumpGuidanceNoProgress(userId, "pending_verify");
@@ -3928,6 +3966,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       chosenReplyType: pvReplyType,
       routeReason: "pending_verify_text_guard",
     });
+    if (await tryGeminiBeforeTextReply()) return;
     await sendNonScanReplyWithOptionalConvSurface({
       client,
       userId,
@@ -3990,6 +4029,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           confidence: "near_safe",
           chosenReplyType: "waiting_birthdate_ambiguous_compact",
         });
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4037,6 +4077,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           chosenReplyType: "waiting_birthdate_error",
           routeReason: "unexpected_input_kept_in_state",
         });
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4067,6 +4108,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           chosenReplyType: "waiting_birthdate_wrong_state_redirect",
         });
         const bdDeferPrimary = buildWaitingBirthdatePaymentDeferredRedirectText();
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanReplyWithOptionalConvSurface({
           client,
           userId,
@@ -4088,8 +4130,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         return;
       }
 
-      const geminiWaitingBd = await invokePhase1GeminiOrchestrator();
-      if (geminiWaitingBd.handled) return;
+      if (await tryGeminiBeforeTextReply()) return;
 
       const streak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
       const tier = guidanceTierFromStreak(streak);
@@ -4150,8 +4191,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       !isBirthdateChangeCandidateText(text) &&
       text !== "สแกนพลังงาน"
     ) {
-      const gfScanReady = await invokePhase1GeminiOrchestrator();
-      if (gfScanReady.handled) return;
+      if (await tryGeminiBeforeTextReply()) return;
       const scanReadyText = buildPaidActiveScanReadyHumanText(userId);
       emitActiveStateRouting({
         userId,
@@ -4199,6 +4239,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         paymentRef = null;
       }
       if (isPaymentCommand(text, lowerText)) {
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanReply({
           client,
           userId,
@@ -4217,6 +4258,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           paymentRef,
         });
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanReplyWithOptionalConvSurface({
           client,
           userId,
@@ -4257,6 +4299,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             client,
             replyToken: event.replyToken,
             userId,
+            tryGeminiBeforeTextReply,
           });
           return;
         }
@@ -4265,11 +4308,13 @@ async function handleTextMessage({ client, event, userId, session }) {
             client,
             replyToken: event.replyToken,
             userId,
+            tryGeminiBeforeTextReply,
           });
           return;
         }
         if (isBirthdateChangeCandidateText(text)) {
           setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
+          if (await tryGeminiBeforeTextReply()) return;
           await sendNonScanReply({
             client,
             userId,
@@ -4301,6 +4346,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "",
             "ส่งรูปถัดไปมาได้เลยครับ",
           ].join("\n");
+          if (await tryGeminiBeforeTextReply()) return;
           await sendNonScanReply({
             client,
             userId,
@@ -4326,9 +4372,8 @@ async function handleTextMessage({ client, event, userId, session }) {
             "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
             "",
             `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
-            "",
-            MAIN_MENU_HINT_TEXT,
           ].join("\n");
+          if (await tryGeminiBeforeTextReply()) return;
           await sendNonScanReply({
             client,
             userId,
@@ -4341,14 +4386,13 @@ async function handleTextMessage({ client, event, userId, session }) {
                 "สรุปวิธีใช้",
                 "",
                 "ส่งรูป 1 รูป → บอกวันเกิด DD/MM/YYYY → รอผลในแชท",
-                "",
-                MAIN_MENU_HINT_TEXT,
               ].join("\n"),
             ],
           });
           return;
         }
         if (isMainMenuAlias(text, lowerText)) {
+          if (await tryGeminiBeforeTextReply()) return;
           await replyIdleTextNoDuplicate({
             client,
             replyToken: event.replyToken,
@@ -4399,6 +4443,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           paymentRef,
         });
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanReply({
           client,
           userId,
@@ -4415,6 +4460,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
       if (isBirthdateChangeCandidateText(text)) {
         setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanReply({
           client,
           userId,
@@ -4497,6 +4543,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           ambTier === "micro"
             ? "ลองบอกวันเกิดมาใหม่ได้เลยครับ"
             : BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT;
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4532,6 +4579,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         });
         const payDeferStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
         const payDeferTier = guidanceTierFromStreak(payDeferStreak);
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4557,6 +4605,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           errTier,
           parsedLock.reason,
         );
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4576,6 +4625,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         });
         const blkStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
         const blkTier = guidanceTierFromStreak(blkStreak);
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4596,6 +4646,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
       const defStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
       const defTier = guidanceTierFromStreak(defStreak);
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanSequenceReply({
         client,
         userId,
@@ -4627,6 +4678,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           chosenReplyType: "waiting_birthdate_guidance",
           routeReason: "waiting_birthdate_branch_error_guard",
         });
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4646,6 +4698,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   if (isBirthdateChangeCandidateText(text)) {
     console.log("[BIRTHDATE_UPDATE] requested", { userId });
     setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
+    if (await tryGeminiBeforeTextReply()) return;
     await sendNonScanReply({
       client,
       userId,
@@ -4665,6 +4718,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       client,
       replyToken: event.replyToken,
       userId,
+      tryGeminiBeforeTextReply,
     });
     return;
   }
@@ -4674,6 +4728,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       client,
       replyToken: event.replyToken,
       userId,
+      tryGeminiBeforeTextReply,
     });
     return;
   }
@@ -4701,6 +4756,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           hint: "pending_scan_needs_birthdate",
         });
+        if (await tryGeminiBeforeTextReply()) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4735,6 +4791,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
       const idlePackRt = "package_selected_ack_full";
       const ack = buildPaymentPackageSelectedAck(pkg);
+      if (await tryGeminiBeforeTextReply()) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -4765,6 +4822,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       text,
       lowerText,
       isPaywallGateWithPendingScan,
+      tryGeminiBeforeTextReply,
     })
   ) {
     return;
@@ -4790,6 +4848,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       chosenReplyType: "waiting_birthdate_guidance",
       routeReason: "terminal_guard_no_generic_fallback",
     });
+    if (await tryGeminiBeforeTextReply()) return;
     await sendNonScanSequenceReply({
       client,
       userId,
@@ -4821,6 +4880,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "ส่งรูปถัดไปมาได้เลยครับ",
     ].join("\n");
 
+    if (await tryGeminiBeforeTextReply()) return;
     await sendNonScanReply({
       client,
       userId,
@@ -4859,9 +4919,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
       "",
       `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
-      "",
-      MAIN_MENU_HINT_TEXT,
     ].join("\n");
+    if (await tryGeminiBeforeTextReply()) return;
     await sendNonScanReply({
       client,
       userId,
@@ -4874,8 +4933,6 @@ async function handleTextMessage({ client, event, userId, session }) {
           "สรุปวิธีใช้",
           "",
           "ส่งรูป 1 รูป → บอกวันเกิด DD/MM/YYYY → รอผลในแชท",
-          "",
-          MAIN_MENU_HINT_TEXT,
         ].join("\n"),
       ],
     });
@@ -4883,34 +4940,21 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (menuAliases.has(text) || menuAliases.has(lowerText)) {
-    const tMenu = String(text || "").trim();
-    const ltMenu = String(lowerText || tMenu.toLowerCase()).trim();
-    const menuExplicit =
-      tMenu === "เมนู" ||
-      tMenu === "เมนูหลัก" ||
-      ltMenu === "menu" ||
-      ltMenu === "help" ||
-      ltMenu === "start" ||
-      tMenu === "เริ่ม";
-    const gfIdle = await invokePhase1GeminiOrchestrator();
-    if (gfIdle.handled) return;
+    if (await tryGeminiBeforeTextReply()) return;
     await replyIdleTextNoDuplicate({
       client,
       replyToken: event.replyToken,
       userId,
-      appendMenuFooter: menuExplicit,
     });
     return;
   }
 
-  // True idle — generic fallback / recovery (show menu hint once).
-  const gfIdle = await invokePhase1GeminiOrchestrator();
-  if (gfIdle.handled) return;
+  // True idle — generic fallback / recovery.
+  if (await tryGeminiBeforeTextReply()) return;
   await replyIdleTextNoDuplicate({
     client,
     replyToken: event.replyToken,
     userId,
-    appendMenuFooter: true,
   });
 }
 

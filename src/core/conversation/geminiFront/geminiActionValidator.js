@@ -63,6 +63,8 @@ export function allowedActionsForPhase1State(phase1) {
         "get_conversation_context",
       ];
     case "scan_ready_idle":
+    case "hard_blocked":
+    case "soft_locked":
     case "idle":
       return ["noop_phrase_only"];
     default:

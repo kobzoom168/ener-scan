@@ -56,28 +56,57 @@ test("resolveGeminiPhase1StateKey: pending_verify beats idle canonical", () => {
   assert.equal(k, "pending_verify");
 });
 
+test("resolveGeminiPhase1StateKey: hard_blocked + soft_locked canonical", () => {
+  if (!env.GEMINI_FRONT_PHASE1_ONLY) return;
+  assert.equal(
+    resolveGeminiPhase1StateKey(baseS({ canonicalStateOwner: "hard_blocked" })),
+    "hard_blocked",
+  );
+  assert.equal(
+    resolveGeminiPhase1StateKey(baseS({ canonicalStateOwner: "soft_locked" })),
+    "soft_locked",
+  );
+});
+
 test("allowedActions + shadow: idle and scan_ready_idle are phrase-only noop", () => {
   assert.deepEqual(allowedActionsForPhase1State("idle"), ["noop_phrase_only"]);
   assert.deepEqual(allowedActionsForPhase1State("scan_ready_idle"), [
     "noop_phrase_only",
   ]);
+  assert.deepEqual(allowedActionsForPhase1State("hard_blocked"), [
+    "noop_phrase_only",
+  ]);
+  assert.deepEqual(allowedActionsForPhase1State("soft_locked"), [
+    "noop_phrase_only",
+  ]);
   assert.equal(isShadowPhase1Eligible("idle"), true);
   assert.equal(isShadowPhase1Eligible("scan_ready_idle"), true);
+  assert.equal(isShadowPhase1Eligible("hard_blocked"), true);
+  assert.equal(isShadowPhase1Eligible("soft_locked"), true);
 });
 
 test("lineWebhook: idle/menu + true-idle paths call Phase-1 Gemini before replyIdleTextNoDuplicate", () => {
   const src = fs.readFileSync(lineWebhookPath, "utf8");
   const re =
-    /const gfIdle = await invokePhase1GeminiOrchestrator\(\);[\s\S]*?replyIdleTextNoDuplicate/g;
+    /if \(await tryGeminiBeforeTextReply\(\)\) return;[\s\S]*?replyIdleTextNoDuplicate/g;
   const matches = src.match(re);
-  assert.ok(matches && matches.length >= 2, "expected ≥2 gfIdle blocks before replyIdleTextNoDuplicate");
+  assert.ok(
+    matches && matches.length >= 2,
+    "expected ≥2 tryGeminiBeforeTextReply guards before replyIdleTextNoDuplicate",
+  );
 });
 
 test("lineWebhook: scan-ready guidance calls Phase-1 Gemini before buildPaidActiveScanReadyHumanText", () => {
   const src = fs.readFileSync(lineWebhookPath, "utf8");
-  const iOrc = src.indexOf("const gfScanReady = await invokePhase1GeminiOrchestrator()");
-  const iBuild = src.indexOf("buildPaidActiveScanReadyHumanText(userId)");
-  assert.ok(iOrc > 0 && iBuild > iOrc);
+  const anchor = 'routeReason: "paid_active_scan_ready_guidance"';
+  const iAnchor = src.indexOf(anchor);
+  assert.ok(iAnchor > 0, "expected paid_active_scan_ready_guidance anchor");
+  const windowStart = src.lastIndexOf('if (paymentState === "approved_intro")', iAnchor);
+  assert.ok(windowStart > 0);
+  const window = src.slice(windowStart, iAnchor + anchor.length);
+  const iGuard = window.indexOf("if (await tryGeminiBeforeTextReply()) return;");
+  const iBuild = window.indexOf("buildPaidActiveScanReadyHumanText(userId)");
+  assert.ok(iGuard > 0 && iBuild > iGuard);
 });
 
 test("idle + สวัสดี path: noop_phrase_only validates (orchestrator→runGeminiPhrasing branch)", () => {

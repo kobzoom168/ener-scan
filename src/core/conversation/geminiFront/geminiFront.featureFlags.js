@@ -16,7 +16,7 @@ export function getGeminiFrontMode() {
 
 /**
  * Phase-1 state keys for Gemini-first routing (must match planner contract).
- * @typedef {'waiting_birthdate' | 'paywall_selecting_package' | 'payment_package_selected' | 'awaiting_slip' | 'pending_verify' | 'scan_ready_idle' | 'idle' | null} GeminiPhase1StateKey
+ * @typedef {'waiting_birthdate' | 'paywall_selecting_package' | 'payment_package_selected' | 'awaiting_slip' | 'pending_verify' | 'scan_ready_idle' | 'hard_blocked' | 'soft_locked' | 'idle' | null} GeminiPhase1StateKey
  */
 
 /**
@@ -45,6 +45,12 @@ export function resolveGeminiPhase1StateKey(s) {
   }
   if (s.flowState === "waiting_birthdate" && s.paymentState === "none") {
     return "waiting_birthdate";
+  }
+  if (s.canonicalStateOwner === "hard_blocked") {
+    return "hard_blocked";
+  }
+  if (s.canonicalStateOwner === "soft_locked") {
+    return "soft_locked";
   }
   if (s.canonicalStateOwner === "paid_active_scan_ready") {
     return "scan_ready_idle";
