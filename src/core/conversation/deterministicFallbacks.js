@@ -10,29 +10,29 @@ const SHORT = {
   wb_ask_birthdate_again: "ลองบอกวันเกิดอีกครั้งได้เลยครับ เช่น 19/08/2528",
   wb_defer_pay_collect_bd:
     "เรื่องชำระค่อยทำทีหลังได้ครับ ตอนนี้ขอวันเกิดก่อนนะครับ เช่น 19/08/2528",
-  wb_ack_remind_birthdate: "ได้ครับ รอวันเกิดอยู่ครับ บอกผมได้เลยครับ",
+  wb_ack_remind_birthdate: "ได้ครับ รอวันเกิดอยู่ครับ บอกอาจารย์ได้เลยครับ",
   wb_guidance_birthdate_micro: "ขอวันเกิดหน่อยครับ",
   pw_date_wrong_state:
-    "เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ แจ้งผมได้เลยครับ",
+    "เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ แจ้งอาจารย์ได้เลยครับ",
   pw_pay_intent_before_ack:
-    "ตกลงแพ็กก่อนนะครับ ราคาแพ็กที่บอทบอก แล้วค่อยขอคิวชำระบอกผมได้เลยครับ",
-  pw_hesitation_nudge: "ถ้าพร้อมเปิดสิทธิ์ แจ้งผมได้เลยครับ",
-  pw_ack_continue: "ได้ครับ พร้อมเมื่อไหร่ขอคิวชำระบอกผมได้เลยครับ",
+    "ตกลงแพ็กก่อนนะครับ ราคาแพ็กที่บอทบอก แล้วค่อยขอคิวชำระบอกอาจารย์ได้เลยครับ",
+  pw_hesitation_nudge: "ถ้าพร้อมเปิดสิทธิ์ แจ้งอาจารย์ได้เลยครับ",
+  pw_ack_continue: "ได้ครับ พร้อมเมื่อไหร่ขอคิวชำระบอกอาจารย์ได้เลยครับ",
   pw_guidance_micro: "พร้อมเมื่อไหร่แจ้งได้ครับ",
-  pp_no_package_change: "แพ็กนี้เป็นชุดเดียวครับ ถ้าพร้อมโอน แจ้งผมได้เลยครับ",
-  pp_hesitation: "ถ้าพร้อมโอน แจ้งผมได้เลยครับ",
-  pp_status_misroute_nudge: "ตอนนี้อยู่ช่วงรอชำระครับ แจ้งผมได้เลยครับ",
+  pp_no_package_change: "แพ็กนี้เป็นชุดเดียวครับ ถ้าพร้อมโอน แจ้งอาจารย์ได้เลยครับ",
+  pp_hesitation: "ถ้าพร้อมโอน แจ้งอาจารย์ได้เลยครับ",
+  pp_status_misroute_nudge: "ตอนนี้อยู่ช่วงรอชำระครับ แจ้งอาจารย์ได้เลยครับ",
   pp_date_wrong_state:
-    "เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ แจ้งผมได้เลยครับ",
-  pp_remind_pay: "พร้อมเมื่อไหร่ขอคิวชำระบอกผมได้เลยครับ เดี๋ยวผมส่งรายละเอียดให้ครับ",
-  slip_resend_qr: "ขอคิวอาร์อีกครั้งบอกผมได้เลยครับ",
+    "เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ แจ้งอาจารย์ได้เลยครับ",
+  pp_remind_pay: "พร้อมเมื่อไหร่ขอคิวชำระบอกอาจารย์ได้เลยครับ เดี๋ยวอาจารย์ส่งรายละเอียดให้ครับ",
+  slip_resend_qr: "ขอคิวอาร์อีกครั้งบอกอาจารย์ได้เลยครับ",
   slip_status_micro: "รอสลิปอยู่ครับ แนบในแชตนี้ได้เลยครับ",
   slip_remind_micro: "แนบสลิปโอนมาในแชตนี้ได้เลยครับ",
   slip_ack_micro: "ได้ครับ",
   pv_status_micro: "กำลังตรวจสอบให้อยู่ครับ",
   pv_reassure: "รอแอดมินตรวจสลิปแป๊บนึงนะครับ",
   pv_ack_micro: "รับทราบครับ",
-  pv_wait_micro: "เดี๋ยวผมแจ้งต่อในแชตนี้เลยครับ",
+  pv_wait_micro: "เดี๋ยวอาจารย์แจ้งต่อในแชตนี้เลยครับ",
 };
 
 /**
@@ -56,12 +56,12 @@ export function getDeterministicFallback(replyType, ctx = {}) {
     case "wb_guidance_birthdate":
       return tier >= 3
         ? SHORT.wb_guidance_birthdate_micro
-        : "ขอวันเกิดที่ใช้ในระบบหน่อยครับ เช่น 19/08/2528 บอกผมได้เลยครับ";
+        : "ขอวันเกิดที่ใช้ในระบบหน่อยครับ เช่น 19/08/2528 บอกอาจารย์ได้เลยครับ";
 
     case "pw_package_selected":
       return price
-        ? `ได้เลยครับ ${price} ยึดแพ็กนี้นะครับ\n\nเดี๋ยวผมเปิดรายการชำระให้ต่อได้ครับ`
-        : "ได้เลยครับ ยึดแพ็กนี้นะครับ เดี๋ยวผมเปิดรายการชำระให้ต่อได้ครับ";
+        ? `ได้เลยครับ ${price} ยึดแพ็กนี้นะครับ\n\nเดี๋ยวอาจารย์เปิดรายการชำระให้ต่อได้ครับ`
+        : "ได้เลยครับ ยึดแพ็กนี้นะครับ เดี๋ยวอาจารย์เปิดรายการชำระให้ต่อได้ครับ";
 
     case "pw_pay_intent_before_ack":
       return tier >= 3 ? SHORT.pw_guidance_micro : SHORT.pw_pay_intent_before_ack;
@@ -72,10 +72,10 @@ export function getDeterministicFallback(replyType, ctx = {}) {
     case "pw_ack_continue":
       return tier >= 3 ? SHORT.pw_guidance_micro : SHORT.pw_ack_continue;
     case "pw_guidance":
-      return tier >= 3 ? SHORT.pw_guidance_micro : "ถ้าจะใช้ต่อ แจ้งผมได้เลยครับ";
+      return tier >= 3 ? SHORT.pw_guidance_micro : "ถ้าจะใช้ต่อ แจ้งอาจารย์ได้เลยครับ";
 
     case "pp_show_payment_flow":
-      return "ได้ครับ เดี๋ยวผมแนบรายละเอียดให้ครับ" + ref;
+      return "ได้ครับ เดี๋ยวอาจารย์แนบรายละเอียดให้ครับ" + ref;
 
     case "pp_no_package_change":
       return tier >= 3 ? SHORT.pp_remind_pay : SHORT.pp_no_package_change;
@@ -88,14 +88,14 @@ export function getDeterministicFallback(replyType, ctx = {}) {
     case "pp_date_wrong_state":
       return tier >= 3 ? SHORT.pw_guidance_micro : SHORT.pp_date_wrong_state;
     case "pp_selected_guidance":
-      return tier >= 3 ? SHORT.pw_guidance_micro : "ถ้าจะใช้ต่อ แจ้งผมได้เลยครับ";
+      return tier >= 3 ? SHORT.pw_guidance_micro : "ถ้าจะใช้ต่อ แจ้งอาจารย์ได้เลยครับ";
 
     case "slip_resend_qr":
       return SHORT.slip_resend_qr + ref;
     case "slip_status_hint":
       return tier >= 3
         ? `ตอนนี้รอสลิปอยู่ครับ${ref}`
-        : `ตอนนี้ผมรอสลิปอยู่ครับ แนบในแชตนี้ได้เลยครับ${ref}`;
+        : `ตอนนี้อาจารย์รอสลิปอยู่ครับ แนบในแชตนี้ได้เลยครับ${ref}`;
     case "slip_ack":
       return tier >= 3 ? SHORT.slip_ack_micro : `ได้ครับ แนบสลิปมาได้เลยครับ${ref}`;
     case "slip_remind":
@@ -111,7 +111,7 @@ export function getDeterministicFallback(replyType, ctx = {}) {
       return tier >= 3 ? SHORT.pv_wait_micro : `รอตรวจสลิปอยู่ครับ เดี๋ยวแจ้งในแชตนี้ให้ครับ${ref}`;
 
     default:
-      return "บอกผมได้เลยครับ";
+      return "บอกอาจารย์ได้เลยครับ";
   }
 }
 

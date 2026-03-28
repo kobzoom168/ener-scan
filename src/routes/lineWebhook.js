@@ -4383,7 +4383,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "waiting_birthdate_wrong_state_redirect",
           text: bdDeferPrimary,
           alternateTexts: [
-            "ตอนนี้ขอวันเกิดก่อนนะครับ เช่น 19/08/1985 บอกผมได้เลยครับ",
+            "ตอนนี้ขอวันเกิดก่อนนะครับ เช่น 19/08/1985 บอกอาจารย์ได้เลยครับ",
           ],
           convSurface: buildConvSurfaceBirthdate(
             userId,
@@ -4481,7 +4481,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         text: scanReadyText,
         alternateTexts: [
           "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
-          "ส่งรูปมา 1 รูป เดี๋ยวผมอ่านให้",
+          "ส่งรูปมา 1 รูป เดี๋ยวอาจารย์อ่านให้",
         ],
       });
       return;

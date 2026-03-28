@@ -36,7 +36,7 @@ test("soft-detect: pure date is not a candidate (avoid accidental profile routin
 test("pickBirthdateFinalConfirmText is light confirm with echo", () => {
   const a = pickBirthdateFinalConfirmText("u_a", "19/08/2528");
   assert.ok(a.includes("19/08/2528"));
-  assert.ok(a.startsWith("ได้ครับ ผมอ่านเป็น"));
+  assert.ok(a.startsWith("ได้ครับ อาจารย์อ่านเป็น"));
 });
 
 test("buildBirthdateEchoForUser uses echoForConfirm for compact", () => {

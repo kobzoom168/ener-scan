@@ -206,7 +206,7 @@ export function birthdateUpdatePrompt(userId) {
 export function birthdateSavedAfterUpdate(userId, displayBirthdateForUser) {
   void userId;
   void displayBirthdateForUser;
-  return "โอเคครับ ผมตั้งวันเกิดนี้ให้แล้ว เดี๋ยวไปต่อให้ครับ";
+  return "โอเคครับ อาจารย์ตั้งวันเกิดนี้ให้แล้ว เดี๋ยวไปต่อให้ครับ";
 }
 
 export async function approvedIntroLine(userId) {

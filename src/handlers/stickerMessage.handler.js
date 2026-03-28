@@ -39,7 +39,7 @@ export function isLineStickerPlaceholderText(text) {
 
 const IDLE_STICKER_LINES = [
   "ได้ครับ",
-  "ส่งรูปมาได้เลย เดี๋ยวผมดูให้",
+  "ส่งรูปมาได้เลย เดี๋ยวอาจารย์ดูให้",
   "ถ้ามีชิ้นที่อยากให้ดู ส่งมาได้เลย",
 ];
 

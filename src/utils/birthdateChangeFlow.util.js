@@ -27,7 +27,7 @@ const FIRST_CONFIRM_QUESTIONS = [
 
 const ASK_DATE_LINES = [
   "ขอวันเกิดที่ใช้ในระบบหน่อยครับ อ่านแบบ 19/08/2528 นะครับ",
-  "รอวันเกิดอยู่ครับ เช่น 19-08-2528 หรือ 19082528 บอกผมได้เลยครับ",
+  "รอวันเกิดอยู่ครับ เช่น 19-08-2528 หรือ 19082528 บอกอาจารย์ได้เลยครับ",
 ];
 
 const CONFIRM_YES = new Set([
@@ -163,7 +163,7 @@ export function pickBirthdateAskDateLine(userId = "") {
  */
 export function pickBirthdateFinalConfirmText(_userId = "", echo = "") {
   const e = String(echo || "").trim();
-  return `ได้ครับ ผมอ่านเป็น ${e} ใช่ไหมครับ\n\nถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้ครับ`;
+  return `ได้ครับ อาจารย์อ่านเป็น ${e} ใช่ไหมครับ\n\nถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้ครับ`;
 }
 
 export const BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT =

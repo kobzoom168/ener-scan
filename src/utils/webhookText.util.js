@@ -152,9 +152,9 @@ export function buildUnclearImageText() {
 
 export function buildUnsupportedObjectText() {
   return [
-    "ประเภทนี้ผมยังไม่รับนะครับ",
+    "ประเภทนี้อาจารย์ยังไม่รับนะครับ",
     "",
-    "พอรับได้ตอนนี้ เช่น",
+    "รับได้ตอนนี้ เช่น",
     "พระเครื่อง",
     "เครื่องราง",
     "คริสตัล / หิน",
@@ -200,8 +200,8 @@ export function getUnclearImageReplyCandidates() {
 export function getUnsupportedObjectReplyCandidates() {
   return [
     buildUnsupportedObjectText(),
-    "แบบนี้ยังไม่รับนะ ลองส่งพระ เครื่องราง หรือหินทีละชิ้นต่อรูป",
-    "ยังไม่รับประเภทนี้ ขอเป็นวัตถุสายพลังชิ้นเดียวต่อรูปนะครับ",
+    "แบบนี้อาจารย์ยังไม่รับนะ ลองส่งพระ เครื่องราง หรือหินทีละชิ้นต่อรูป",
+    "อาจารย์ยังไม่รับประเภทนี้ ขอเป็นวัตถุสายพลังชิ้นเดียวต่อรูปนะครับ",
   ];
 }
 
@@ -280,7 +280,7 @@ export function buildPaymentQrIntroText({ paymentRef, paidPackage = null } = {})
     "สแกนคิวอาร์ด้านล่าง โอนแล้วแนบสลิปไว้ในแชตนี้ได้เลยครับ",
     "เดี๋ยวมีคนตรวจแล้วเปิดสิทธิ์ให้ครับ",
     "",
-    "พออนุมัติแล้ว เดี๋ยวผมแจ้งต่อในแชตนี้เลยครับ",
+    "พออนุมัติแล้ว เดี๋ยวอาจารย์แจ้งต่อในแชตนี้เลยครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -323,7 +323,7 @@ export function buildPaymentPackageSelectedAck(paidPackage) {
   return [
     `โอเคครับ ยึดแพ็กนี้นะครับ ${p.priceThb} บาท ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`,
     "",
-    "เดี๋ยวผมส่งรายละเอียดกับคิวอาร์ให้ครับ ขอคิวชำระบอกผมได้เลยครับ",
+    "เดี๋ยวอาจารย์ส่งรายละเอียดกับคิวอาร์ให้ครับ ขอคิวชำระบอกอาจารย์ได้เลยครับ",
   ].join("\n");
 }
 
@@ -345,7 +345,7 @@ export function buildPackageAlreadySelectedContinueHuman(paidPackage) {
   }
   return [
     `ตกลงครับ แพ็ก ${p.priceThb} บาท`,
-    "พร้อมโอนเมื่อไหร่ แจ้งผมได้เลยครับ",
+    "พร้อมโอนเมื่อไหร่ แจ้งอาจารย์ได้เลยครับ",
   ].join("\n");
 }
 
@@ -361,7 +361,7 @@ export function buildPaywallHumanGuidanceText({
   const pkg = getDefaultPackage(offer);
   const price = pkg?.priceThb ?? offer.paidPriceThb;
   if (guidanceReason === "birthdate_deferred") {
-    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้จะเปิดสิทธิ์ แจ้งผมได้เลยครับ`;
+    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้จะเปิดสิทธิ์ แจ้งอาจารย์ได้เลยครับ`;
   }
   if (guidanceReason === "pay_intent_no_package") {
     const lines = [
@@ -371,7 +371,7 @@ export function buildPaywallHumanGuidanceText({
     return lines[slotFromUserId(userId, lines.length)];
   }
   const soft = [
-    `ถ้าจะใช้ต่อ แจ้งผมได้เลยครับ`,
+    `ถ้าจะใช้ต่อ แจ้งอาจารย์ได้เลยครับ`,
     `พร้อมเมื่อไหร่บอกได้ครับ`,
   ];
   return soft[slotFromUserId(userId, soft.length)];
@@ -408,11 +408,11 @@ export async function buildWaitingBirthdateDateFirstGuidanceMessages(userId, opt
     return ["ขอวันเกิดหน่อยครับ"];
   }
   if (tier === "short") {
-    return ["ผมรอวันเกิดอยู่ครับ เช่น 19/08/2528"];
+    return ["อาจารย์รอวันเกิดอยู่ครับ เช่น 19/08/2528"];
   }
   const lines = [
     "ขอวันเกิดที่ใช้ในระบบหน่อยครับ อ่านแบบ 19/08/2528 นะครับ",
-    "รอวันเกิดอยู่ครับ เช่น 19-08-2528 บอกผมได้เลยครับ",
+    "รอวันเกิดอยู่ครับ เช่น 19-08-2528 บอกอาจารย์ได้เลยครับ",
   ];
   const primary = lines[slotFromUserId(userId, lines.length)];
   return [primary];
@@ -459,7 +459,7 @@ export function buildAwaitingSlipDeterministicGuidanceText({ paymentRef } = {}) 
 export function buildPendingVerifyHumanGuidanceText({ paymentRef } = {}) {
   const base = [
     "ได้รับสลิปแล้วครับ ตอนนี้กำลังตรวจสอบให้อยู่นะครับ",
-    "พอมีผล เดี๋ยวผมแจ้งต่อในแชตนี้เลยครับ",
+    "พอมีผล เดี๋ยวอาจารย์แจ้งต่อในแชตนี้เลยครับ",
     "",
     "ถ้ายังไม่ได้แนบสลิป รูปสลิปแนบในแชตนี้ได้เลยครับ",
   ].join("\n");
@@ -471,7 +471,7 @@ export function buildPaidActiveScanReadyHumanText(userId) {
     ["ตอนนี้คุณพร้อมสแกนแล้วครับ", "ส่งรูปวัตถุ 1 รูปในแชตนี้ได้เลย"].join(
       "\n\n",
     ),
-    ["พร้อมสแกนแล้วครับ", "ส่งรูปมา 1 รูป เดี๋ยวผมอ่านให้"].join("\n\n"),
+    ["พร้อมสแกนแล้วครับ", "ส่งรูปมา 1 รูป เดี๋ยวอาจารย์อ่านให้"].join("\n\n"),
   ];
   return variants[slotFromUserId(userId, variants.length)];
 }
@@ -532,7 +532,7 @@ export function buildNoStatsText() {
 
 /** Deterministic idle copy — routing owns when this applies; persona may only vary alternates. */
 export function buildIdleDeterministicPrimaryText() {
-  return "ส่งรูปมาได้เลย\nผมจะดูให้ทีละชิ้น";
+  return "ส่งรูปมาได้เลย\nอาจารย์จะดูให้ทีละชิ้น";
 }
 
 export async function buildIdleText(userId = null) {
@@ -1005,7 +1005,7 @@ export function buildPaywallAckContinueText({
   }
   const v = [
     "ได้ครับ",
-    "โอเคครับ ถ้าจะเปิดสิทธิ์ต่อเมื่อไหร่ แจ้งผมได้เลยครับ",
+    "โอเคครับ ถ้าจะเปิดสิทธิ์ต่อเมื่อไหร่ แจ้งอาจารย์ได้เลยครับ",
   ];
   return v[slotFromUserId(userId, v.length)];
 }
@@ -1109,7 +1109,7 @@ export function buildPaymentPackageSelectedUnclearText({ tier = "short" } = {}) 
 
 export function buildAwaitingSlipStatusHintText({ paymentRef } = {}) {
   const base =
-    "ตอนนี้ผมรอสลิปอยู่ครับ แนบรูปสลิปโอนในแชตนี้ได้เลยครับ";
+    "ตอนนี้อาจารย์รอสลิปอยู่ครับ แนบรูปสลิปโอนในแชตนี้ได้เลยครับ";
   return appendPaymentRefLine(base, paymentRef);
 }
 
@@ -1133,7 +1133,7 @@ export function buildAwaitingSlipFatigueGuidanceText({
   }
   if (tier === "short") {
     return appendPaymentRefLine(
-      "ตอนนี้ผมรอสลิปอยู่ครับ แนบรูปสลิปในแชตนี้ได้เลยครับ",
+      "ตอนนี้อาจารย์รอสลิปอยู่ครับ แนบรูปสลิปในแชตนี้ได้เลยครับ",
       paymentRef,
     );
   }
