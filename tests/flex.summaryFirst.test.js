@@ -23,6 +23,17 @@ function collectTextNodes(node, out = []) {
   return out;
 }
 
+function collectButtons(node, out = []) {
+  if (!node || typeof node !== "object") return out;
+  if (node.type === "button") out.push(node);
+  if (Array.isArray(node.contents)) {
+    for (const c of node.contents) collectButtons(c, out);
+  }
+  if (node.body) collectButtons(node.body, out);
+  if (node.footer) collectButtons(node.footer, out);
+  return out;
+}
+
 test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () => {
   const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
@@ -72,14 +83,14 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.match(bodyStr, /ระดับเด่นของชิ้นนี้/);
   assert.match(bodyStr, /★/);
   assert.doesNotMatch(bodyStr, /"text":""/);
-  const footer = flex.contents.footer;
-  assert.ok(footer);
-  const primaryBtn = footer.contents.find(
+  assert.equal(flex.contents.footer, undefined);
+  const buttons = collectButtons(flex.contents.body);
+  const primaryBtn = buttons.find(
     (c) => c.type === "button" && c.action?.label === "เปิดรายงานฉบับเต็ม",
   );
   assert.ok(primaryBtn);
   assert.equal(primaryBtn.action.uri, "https://example.com/r/abc123");
-  assert.equal(footer.contents.filter((c) => c.type === "button").length, 1);
+  assert.equal(buttons.filter((c) => c.type === "button").length, 1);
 });
 
 test("buildScanSummaryFirstFlex: appendReportBubble flag ignored (single-bubble design)", () => {
@@ -173,9 +184,9 @@ test("buildScanSummaryFirstFlex: guardrails for summary-card structure", () => {
   const bulletCount = allTexts.filter((t) => t.startsWith("• ")).length;
   assert.equal(bulletCount, 2, "bullets length must be exactly 2");
 
-  const buttons =
-    flex.contents.footer?.contents?.filter((c) => c.type === "button") || [];
+  const buttons = collectButtons(flex.contents.body);
   assert.equal(buttons.length, 1, "must have exactly one CTA");
+  assert.equal(flex.contents.footer, undefined);
 
   const mainEnergyLine = allTexts.find((t) => t.startsWith("พลังหลัก ·"));
   assert.ok(mainEnergyLine, "mainEnergyTitle must start with `พลังหลัก ·`");

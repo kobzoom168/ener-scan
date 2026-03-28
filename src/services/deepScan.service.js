@@ -22,6 +22,10 @@ import {
   parseDeepScanModelJson,
   renderDeepScanJsonToLegacyText,
 } from "./deepScanJson.service.js";
+import {
+  calculateCompatibilityPercentNumber,
+  calculateUserAgeFromBirthdate,
+} from "../utils/scanCompatibility.util.js";
 
 /**
  * @param {{ imageBase64: string, birthdate: string, retryHint?: string, mimeType?: string, objectCategory?: string, knowledgeBase?: string }} opts
@@ -34,11 +38,15 @@ export async function runDeepScanPipeline({
   objectCategory = "พระเครื่อง",
   knowledgeBase = "",
 }) {
+  const compatibilityPercent = calculateCompatibilityPercentNumber(birthdate);
+  const userAge = calculateUserAgeFromBirthdate(birthdate);
   const userPrompt = buildDeepScanJsonUserPrompt({
     objectCategory,
     knowledgeBase,
     birthdate,
     retryHint,
+    userAge,
+    compatibilityPercent,
   });
 
   const rawModelText = normalizeDeepScanText(
@@ -53,7 +61,9 @@ export async function runDeepScanPipeline({
   const parsed = parseDeepScanModelJson(rawModelText);
   const draft = normalizeDeepScanText(
     parsed
-      ? renderDeepScanJsonToLegacyText(parsed, objectCategory)
+      ? renderDeepScanJsonToLegacyText(parsed, objectCategory, {
+          compatibilityPercent,
+        })
       : rawModelText,
   );
 

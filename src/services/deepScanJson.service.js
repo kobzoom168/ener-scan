@@ -79,6 +79,14 @@ function clampPctFromScore(score) {
   return Math.min(95, Math.max(50, base));
 }
 
+function resolveCompatPercent(p, options = {}) {
+  const opt = options.compatibilityPercent;
+  if (opt != null && Number.isFinite(Number(opt))) {
+    return Math.min(95, Math.max(65, Math.round(Number(opt))));
+  }
+  return clampPctFromScore(p.energyScore);
+}
+
 function splitTwoShortParagraphs(text) {
   const t = String(text || "").trim();
   if (!t) return ["", ""];
@@ -131,16 +139,14 @@ export function renderDeepScanJsonToLegacyText(p, objectCategory) {
   return `
 ผลการตรวจพลังวัตถุ โดย อาจารย์ Ener
 
-หมวดวัตถุ: ${cat}
-
 ระดับพลัง: ${scoreDisplay} / 10
 พลังหลัก: ${p.energyName} (เฉพาะชิ้นนี้จากภาพและหมวด ${cat})
-ความสอดคล้องกับเจ้าของ: ${compatPct} %
+ความสอดคล้องกับเจ้าของ: ${compatPct}%
 
 ลักษณะพลัง
 • บุคลิก: โดดเด่นด้าน ${topDim} (สอดคล้องกับแกนพลังของชิ้นนี้)
 • โทนพลัง: หลากมิติ | ดูจากคะแนนรายด้านด้านล่าง
-• พลังซ่อน: ${p.description.length > 120 ? p.description.slice(0, 117) + "…" : p.description}
+• พลังซ่อน: ${p.description}
 
 ${dimBlock}
 

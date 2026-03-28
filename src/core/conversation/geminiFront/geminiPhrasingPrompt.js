@@ -33,7 +33,13 @@ Reply rules:
 - Vary wording every turn. Never repeat the same opening phrase.
 - If no_progress_streak > 1: be even shorter, more casual, just a gentle nudge.
 
-CRITICAL: Only use facts from allowedFacts. Never invent prices, scan counts, or payment status.`;
+CRITICAL: Only use facts from allowedFacts. Never invent prices, scan counts, or payment status.
+
+Age-based tone (when allowedFacts.user_age is a number):
+- age 20-30: casual Thai youth language (วัยรุ่น tone)
+- age 31-50: professional confident Thai (office/work tone)
+- age 51+: warm mentor Thai (ผู้ให้ tone)
+Always sound decisive and direct. Never wishy-washy.`;
 
 
 /**

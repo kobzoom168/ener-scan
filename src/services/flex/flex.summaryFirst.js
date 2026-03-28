@@ -15,6 +15,22 @@ import {
 /** Soft wrap width for body copy (bullets, headlines); no "..." truncation. */
 const FLEX_WRAP_CHARS = 40;
 
+/** Summary teaser: max two wrapped lines, สายมู / energy punch, never "…". */
+const SAIMU_TEASER_CHARS_PER_LINE = 34;
+
+function buildSaimuTeaserFromOverview(overviewRaw) {
+  const t = String(overviewRaw || "").replace(/\s+/g, " ").trim();
+  if (!t) {
+    return "พลังชิ้นนี้มาแรง เข้าท่า — เปิดรายงานโค้ดลับต่อได้เลย";
+  }
+  const wrapped = wrapFlexTextNoTruncate(t, SAIMU_TEASER_CHARS_PER_LINE);
+  const lines = wrapped
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return lines.slice(0, 2).join("\n");
+}
+
 function wrapFlexLine(text) {
   const t = String(text || "").trim();
   if (!t) return "-";
@@ -730,20 +746,9 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     );
   });
   bullets = bullets.slice(0, 2);
-  const payloadObjectLabel = String(reportPayload?.object?.objectLabel || "").trim();
-  const familyObjectLabel = stablePick(
-    familyPattern?.objectLabelPatterns || [],
-    String(reportPayload?.reportId || reportPayload?.scanId || "obj"),
-  );
-  const objectLbl = payloadObjectLabel || familyObjectLabel || summaryCardCopy.objectLabel;
-  const objectLabelFrom = payloadObjectLabel
-    ? "payload"
-    : familyObjectLabel
-      ? "family_pattern"
-      : "default_variant";
+  const objectLabelFrom = "omitted_from_flex";
   const copyShapingActive =
     familyPatternUsed !== "none" ||
-    objectLabelFrom === "family_pattern" ||
     headlineFrom === "family_pattern" ||
     bulletFallbackUsed === true ||
     usedGenericBulletGuard === true;
@@ -778,18 +783,18 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     createTopAccent(accentColor),
     {
       type: "text",
-      text: objectLbl,
-      size: "xs",
-      color: "#94949A",
-      wrap: true,
-      margin: "sm",
-    },
-    {
-      type: "text",
       text: headline,
       weight: "bold",
       size: "md",
       color: "#E8E8EC",
+      wrap: true,
+      margin: "xs",
+    },
+    {
+      type: "text",
+      text: buildSaimuTeaserFromOverview(overviewRaw),
+      size: "sm",
+      color: "#C8C8CE",
       wrap: true,
       margin: "xs",
     },
@@ -836,6 +841,15 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       wrap: true,
       margin: "lg",
     });
+  } else {
+    bodyContents.push({
+      type: "button",
+      style: "primary",
+      color: accentColor,
+      height: "sm",
+      margin: "lg",
+      action: { type: "uri", label: summaryCardCopy.ctaText, uri: url },
+    });
   }
   const bubble = {
     type: "bubble",
@@ -859,27 +873,6 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       aspectMode: "cover",
       backgroundColor: "#0B0B0D",
     };
-  }
-  if (url) {
-    bubble.footer = {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: "#101010",
-      paddingTop: "8px",
-      paddingBottom: "18px",
-      paddingStart: "20px",
-      paddingEnd: "20px",
-      contents: [
-        {
-          type: "button",
-          style: "primary",
-          color: accentColor,
-          height: "sm",
-          action: { type: "uri", label: summaryCardCopy.ctaText, uri: url },
-        },
-      ],
-    };
-    bubble.styles.footer = { backgroundColor: "#101010" };
   }
 
   return {
