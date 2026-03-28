@@ -355,6 +355,27 @@ export async function replyScanResult({
   }
 }
 
+/**
+ * Flow-level detection for OpenAI rate limits (SDK / wrapper shapes differ).
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function isOpenAi429Error(err) {
+  if (!err || typeof err !== "object") return false;
+  const o = /** @type {{ status?: number; response?: { status?: number }; message?: string }} */ (
+    err
+  );
+  if (o.status === 429) return true;
+  if (o.response?.status === 429) return true;
+  const msg = o.message ?? "";
+  if (typeof msg === "string") {
+    if (msg.includes("429")) return true;
+    if (msg.includes("rate limit")) return true;
+    if (msg.toLowerCase().includes("rate_limit")) return true;
+  }
+  return false;
+}
+
 export async function runScanFlow({
   client,
   replyToken,
@@ -679,11 +700,23 @@ export async function runScanFlow({
 
     await sendPreScanAcknowledgement({ client, userId });
 
-    const scanOut = await runDeepScan({
-      imageBuffer,
-      birthdate,
-      userId,
-    });
+    let scanOut;
+    try {
+      scanOut = await runDeepScan({
+        imageBuffer,
+        birthdate,
+        userId,
+      });
+    } catch (deepErr) {
+      if (!isOpenAi429Error(deepErr)) throw deepErr;
+      console.log("[SCAN_FLOW] 429 from OpenAI, waiting 15s before retry");
+      await new Promise((r) => setTimeout(r, 15_000));
+      scanOut = await runDeepScan({
+        imageBuffer,
+        birthdate,
+        userId,
+      });
+    }
     resultText = scanOut.resultText;
     scanFromCache = Boolean(scanOut.fromCache);
     scanQualityAnalytics = scanOut.qualityAnalytics ?? null;
