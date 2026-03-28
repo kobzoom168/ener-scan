@@ -11,8 +11,8 @@ import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import { ENERGY_TYPES } from "./scanCopy.config.js";
 import { resolveEnergyType } from "./scanCopy.utils.js";
 
-const FLEX_CARD_BG = "#1a1a1a";
-const FLEX_BOX_BG = "#2a2a2a";
+const FLEX_CARD_BG = "#000000";
+const FLEX_BOX_BG = "#111111";
 const FLEX_ACCENT = "#E8593C";
 const FLEX_TEXT_PRIMARY = "#ffffff";
 const FLEX_TEXT_SECONDARY = "#888888";
@@ -763,7 +763,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       type: "image",
       url: imgUrl,
       size: "full",
-      aspectRatio: "1:1",
+      aspectRatio: "20:13",
       aspectMode: "cover",
       backgroundColor: FLEX_CARD_BG,
     };

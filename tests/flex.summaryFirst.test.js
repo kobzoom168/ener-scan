@@ -99,6 +99,7 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.equal(flex.contents.type, "bubble");
   assert.equal(flex.contents.hero?.type, "image");
   assert.equal(flex.contents.hero?.url, "https://cdn.example.com/x.jpg");
+  assert.equal(flex.contents.hero?.aspectRatio, "20:13");
   const bodyStr = JSON.stringify(flex.contents.body);
   assert.match(bodyStr, /ระดับพลัง/);
   assert.match(bodyStr, /พลังหลัก · พลังเสริม/);
@@ -107,7 +108,8 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.match(bodyStr, /คุ้มกัน/);
   assert.match(bodyStr, /★/);
   assert.match(bodyStr, /#E8593C/);
-  assert.match(bodyStr, /#1a1a1a/);
+  assert.match(bodyStr, /#000000/);
+  assert.match(bodyStr, /#111111/);
   assert.doesNotMatch(bodyStr, /"text":""/);
   assert.equal(flex.contents.footer, undefined);
   const buttons = collectButtons(flex.contents.body);
