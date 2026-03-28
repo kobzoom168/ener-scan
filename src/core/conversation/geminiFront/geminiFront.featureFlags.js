@@ -30,6 +30,9 @@ export function getGeminiFrontMode() {
  *   selectedPackageKey: string | null,
  *   canonicalStateOwner?: string | null,
  * }} s
+ * When `GEMINI_FRONT_PHASE1_ONLY` is off, returns `null` (deterministic routing only).
+ * When on, always returns a non-null key; final fallback is `"idle"`.
+ *
  * @returns {GeminiPhase1StateKey}
  */
 export function resolveGeminiPhase1StateKey(s) {

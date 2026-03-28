@@ -81,10 +81,7 @@ import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 import { evaluateSlipGate } from "../core/payments/slipCheck/slipGate.service.js";
 import { runGeminiFrontOrchestrator } from "../core/conversation/geminiFront/geminiFrontOrchestrator.service.js";
 import { resolveGeminiPhase1StateKey } from "../core/conversation/geminiFront/geminiFront.featureFlags.js";
-import {
-  invokePhase1GeminiShadow,
-  isShadowPhase1Eligible,
-} from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
+import { invokePhase1GeminiShadow } from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
 
 import { replyText } from "../services/lineReply.service.js";
 import {
@@ -367,6 +364,164 @@ function buildConvSurfacePendingVerify(userId, text, legacyReplyType, primaryTex
   };
 }
 
+function buildNoopGeminiDelegates() {
+  return {
+    sendQrBundle: async () => false,
+    createOrReusePayment: async () => false,
+    getPaymentStatusReply: async () => false,
+    selectPackageFromText: async () => false,
+    sendHelpDeterministic: async () => false,
+  };
+}
+
+async function loadGeminiRoutingSnapshot({
+  userId,
+  session,
+  text,
+  lowerText,
+  now,
+}) {
+  let activeAccessDecision = null;
+  let activePendingPaymentRow = null;
+  try {
+    activeAccessDecision = await checkScanAccess({ userId });
+  } catch (err) {
+    console.error("[GEMINI_ROUTING] checkScanAccess failed (ignored):", {
+      userId,
+      message: err?.message,
+      code: err?.code,
+    });
+  }
+  try {
+    activePendingPaymentRow = await getLatestAwaitingPaymentForLineUserId(userId);
+  } catch (err) {
+    console.error("[GEMINI_ROUTING] pending payment lookup failed (ignored):", {
+      userId,
+      message: err?.message,
+      code: err?.code,
+    });
+  }
+  const paymentMemoryState = getPaymentState(userId).state;
+  const scanAbuseStatus = checkScanAbuseStatus(userId, now);
+  const wsActive = computeWebhookTextActiveState({
+    userId,
+    session,
+    text,
+    lowerText,
+    activeAccessDecision,
+    activePendingPaymentRow,
+    paymentMemoryState,
+    scanAbuseStatus,
+  });
+  const {
+    resolved: activeResolved,
+    paymentState,
+    flowState,
+    accessState,
+    isPaywallGateWithPendingScan,
+    pendingStatus,
+    hasPendingVerify,
+    hasAwaitingSlip,
+  } = wsActive;
+  return {
+    activeAccessDecision,
+    activePendingPaymentRow,
+    paymentMemoryState,
+    wsActive,
+    activeResolved,
+    paymentState,
+    flowState,
+    accessState,
+    isPaywallGateWithPendingScan,
+    pendingStatus,
+    hasPendingVerify,
+    hasAwaitingSlip,
+    canonicalStateOwner: activeResolved.stateOwner,
+    geminiConversationOwner: toGeminiConversationOwner(activeResolved.stateOwner),
+  };
+}
+
+async function invokePhase1GeminiFromSnapshot({
+  snapshot,
+  userId,
+  text,
+  lowerText,
+  client,
+  event,
+  session,
+  delegates,
+}) {
+  const phase1GeminiKey = resolveGeminiPhase1StateKey({
+    session,
+    paymentState: snapshot.paymentState,
+    flowState: snapshot.flowState,
+    hasPendingVerify: snapshot.hasPendingVerify,
+    hasAwaitingSlip: snapshot.hasAwaitingSlip,
+    paymentMemoryState: snapshot.paymentMemoryState,
+    selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    canonicalStateOwner: snapshot.canonicalStateOwner,
+  });
+  if (!phase1GeminiKey) return { handled: false };
+  return runGeminiFrontOrchestrator({
+    userId,
+    text,
+    lowerText,
+    phase1State: phase1GeminiKey,
+    conversationOwner: snapshot.geminiConversationOwner,
+    paymentState: snapshot.paymentState,
+    flowState: snapshot.flowState,
+    accessState: snapshot.accessState,
+    pendingPaymentStatus: snapshot.pendingStatus || null,
+    selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    noProgressStreak: snapshot.activeResolved.noProgressStreak ?? 0,
+    sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts }) => {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType,
+        semanticKey,
+        text,
+        alternateTexts: alternateTexts || [],
+      });
+    },
+    delegates,
+  });
+}
+
+async function invokePhase1FreshNoop({
+  userId,
+  client,
+  event,
+  session,
+  text = "",
+  lowerText = "",
+}) {
+  const snapshot = await loadGeminiRoutingSnapshot({
+    userId,
+    session,
+    text,
+    lowerText,
+    now: Date.now(),
+  });
+  return invokePhase1GeminiFromSnapshot({
+    snapshot,
+    userId,
+    text,
+    lowerText,
+    client,
+    event,
+    session,
+    delegates: buildNoopGeminiDelegates(),
+  });
+}
+
+async function sendScanLockReplyAfterPhase1(client, opts, invokePhase1GeminiOrchestrator) {
+  const gf = await invokePhase1GeminiOrchestrator();
+  if (gf.handled) return;
+  await sendScanLockReply(client, opts);
+}
+
 /**
  * Birthdate-change subflow (soft-detect → confirm intent → date → final confirm → save).
  * Runs before payment / paywall branches so date-like text is not mis-routed mid-flow.
@@ -378,10 +533,9 @@ async function handleBirthdateChangeFlowTurn({
   userId,
   session,
   text,
-  tryGeminiBeforeTextReply = null,
+  invokePhase1GeminiOrchestrator = null,
 }) {
   void session;
-  const tryGem = tryGeminiBeforeTextReply;
   const flowState = getBirthdateChangeFlowState(userId);
   if (!flowState) return false;
 
@@ -389,7 +543,11 @@ async function handleBirthdateChangeFlowTurn({
     if (isBirthdateFlowConfirmYes(text)) {
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
       const ask = pickBirthdateAskDateLine(userId);
-      if (tryGem && (await tryGem())) return true;
+      if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -403,7 +561,11 @@ async function handleBirthdateChangeFlowTurn({
     }
     if (isBirthdateFlowConfirmNo(text)) {
       clearBirthdateChangeFlow(userId);
-      if (tryGem && (await tryGem())) return true;
+      if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -415,7 +577,11 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (looksLikeBirthdateInput(text)) {
-      if (tryGem && (await tryGem())) return true;
+      if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -426,7 +592,11 @@ async function handleBirthdateChangeFlowTurn({
       });
       return true;
     }
-    if (tryGem && (await tryGem())) return true;
+    if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
     await sendNonScanReply({
       client,
       userId,
@@ -455,7 +625,11 @@ async function handleBirthdateChangeFlowTurn({
         BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM,
         pending,
       );
-      if (tryGem && (await tryGem())) return true;
+      if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -467,7 +641,11 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (/^\d{6,7}$/.test(trimmed)) {
-      if (tryGem && (await tryGem())) return true;
+      if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -479,7 +657,11 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (looksLikeBirthdateInput(text)) {
-      if (tryGem && (await tryGem())) return true;
+      if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -491,7 +673,11 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     const ask = pickBirthdateAskDateLine(userId);
-    if (tryGem && (await tryGem())) return true;
+    if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
     await sendNonScanReply({
       client,
       userId,
@@ -550,7 +736,11 @@ async function handleBirthdateChangeFlowTurn({
         rawBirthdateInput: pending.rawBirthdateInput,
       });
       const savedLine = birthdateSavedAfterUpdate(userId, pending.echoDisplay);
-      if (tryGem && (await tryGem())) return true;
+      if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -565,7 +755,11 @@ async function handleBirthdateChangeFlowTurn({
     if (confirmNo) {
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
       const ask = pickBirthdateAskDateLine(userId);
-      if (tryGem && (await tryGem())) return true;
+      if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -577,7 +771,11 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (looksLikeBirthdateInput(text)) {
-      if (tryGem && (await tryGem())) return true;
+      if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -589,7 +787,11 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     const pe = pending?.echoDisplay || "";
-    if (tryGem && (await tryGem())) return true;
+    if (
+        invokePhase1GeminiOrchestrator &&
+        (await invokePhase1GeminiOrchestrator()).handled
+      )
+        return true;
     await sendNonScanReply({
       client,
       userId,
@@ -625,12 +827,29 @@ async function handlePaymentCommandTextRoute({
   lowerText,
   isPaywallGateWithPendingScan,
   forcePaymentIntent = false,
-  tryGeminiBeforeTextReply = null,
 }) {
-  const tryGem = tryGeminiBeforeTextReply;
   if (!forcePaymentIntent && !isPaymentCommand(text, lowerText)) {
     return false;
   }
+
+  const payRouteSnapshot = await loadGeminiRoutingSnapshot({
+    userId,
+    session,
+    text,
+    lowerText,
+    now: Date.now(),
+  });
+  const invokePhase1PaymentRoute = async () =>
+    invokePhase1GeminiFromSnapshot({
+      snapshot: payRouteSnapshot,
+      userId,
+      text,
+      lowerText,
+      client,
+      event,
+      session,
+      delegates: buildNoopGeminiDelegates(),
+    });
 
   try {
     const ps = getPaymentState(userId).state;
@@ -650,7 +869,7 @@ async function handlePaymentCommandTextRoute({
         userId,
         hint: "pending_scan_needs_birthdate",
       });
-      if (tryGem && (await tryGem())) return true;
+      if ((await invokePhase1PaymentRoute()).handled) return true;
       await sendNonScanSequenceReply({
         client,
         userId,
@@ -677,7 +896,7 @@ async function handlePaymentCommandTextRoute({
       lockUntil: payCmdStatus.lockUntil,
       source: "payment_command",
     });
-    if (tryGem && (await tryGem())) return true;
+    if ((await invokePhase1PaymentRoute()).handled) return true;
     await sendNonScanReply({
       client,
       userId,
@@ -701,6 +920,7 @@ async function handlePaymentCommandTextRoute({
     });
   }
   if (payCmdIntent.state.isHardBlocked) {
+    if ((await invokePhase1PaymentRoute()).handled) return true;
     await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
@@ -738,7 +958,7 @@ async function handlePaymentCommandTextRoute({
         replyType: payload.replyType,
       }),
     );
-    if (tryGem && (await tryGem())) return true;
+    if ((await invokePhase1PaymentRoute()).handled) return true;
     await sendNonScanReply({
       client,
       userId,
@@ -765,7 +985,7 @@ async function handlePaymentCommandTextRoute({
       } catch (_) {
         paymentRefPv = null;
       }
-      if (tryGem && (await tryGem())) return true;
+      if ((await invokePhase1PaymentRoute()).handled) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -798,7 +1018,7 @@ async function handlePaymentCommandTextRoute({
           offer: offerInflight,
           userId,
         });
-        if (tryGem && (await tryGem())) return true;
+        if ((await invokePhase1PaymentRoute()).handled) return true;
         await sendNonScanReply({
           client,
           userId,
@@ -847,7 +1067,7 @@ async function handlePaymentCommandTextRoute({
         paymentRef: paymentRefInflight,
         paidPackage: paidPackageInflight,
       });
-      if (tryGem && (await tryGem())) return true;
+      if ((await invokePhase1PaymentRoute()).handled) return true;
       await sendNonScanReply({
         client,
         userId,
@@ -883,7 +1103,7 @@ async function handlePaymentCommandTextRoute({
       userId,
     });
     const menuAlt = buildSingleOfferPaywallAltText(offerPay);
-    if (tryGem && (await tryGem())) return true;
+    if ((await invokePhase1PaymentRoute()).handled) return true;
     await sendNonScanReply({
       client,
       userId,
@@ -1013,7 +1233,7 @@ async function handlePaymentCommandTextRoute({
     paymentRef: cmdPaymentRef,
     paidPackage,
   });
-  if (tryGem && (await tryGem())) return true;
+  if ((await invokePhase1PaymentRoute()).handled) return true;
   await sendNonScanReply({
     client,
     userId,
@@ -1032,7 +1252,17 @@ async function handlePaymentCommandTextRoute({
   return true;
 }
 
-async function replyIdleTextNoDuplicate({ client, replyToken, userId }) {
+async function replyIdleTextNoDuplicate({
+  client,
+  replyToken,
+  userId,
+  invokePhase1GeminiOrchestrator = null,
+}) {
+  if (
+    invokePhase1GeminiOrchestrator &&
+    (await invokePhase1GeminiOrchestrator()).handled
+  )
+    return;
   const primary = buildIdleDeterministicPrimaryText();
   let personaSoft = null;
   try {
@@ -1066,13 +1296,16 @@ async function handleHistoryCommand({
   client,
   replyToken,
   userId,
-  tryGeminiBeforeTextReply = null,
+  invokePhase1GeminiOrchestrator = null,
 }) {
-  const tryGem = tryGeminiBeforeTextReply;
   const history = getScanHistory(userId);
 
   if (!history.length) {
-    if (tryGem && (await tryGem())) return;
+    if (
+      invokePhase1GeminiOrchestrator &&
+      (await invokePhase1GeminiOrchestrator()).handled
+    )
+      return;
     await sendNonScanReply({
       client,
       userId,
@@ -1086,7 +1319,11 @@ async function handleHistoryCommand({
   }
 
   const formatted = formatHistory(history);
-  if (tryGem && (await tryGem())) return;
+  if (
+    invokePhase1GeminiOrchestrator &&
+    (await invokePhase1GeminiOrchestrator()).handled
+  )
+    return;
   await sendNonScanReply({
     client,
     userId,
@@ -1102,13 +1339,16 @@ async function handleStatsCommand({
   client,
   replyToken,
   userId,
-  tryGeminiBeforeTextReply = null,
+  invokePhase1GeminiOrchestrator = null,
 }) {
-  const tryGem = tryGeminiBeforeTextReply;
   const stats = getUserStats(userId);
 
   if (!stats) {
-    if (tryGem && (await tryGem())) return;
+    if (
+      invokePhase1GeminiOrchestrator &&
+      (await invokePhase1GeminiOrchestrator()).handled
+    )
+      return;
     await sendNonScanReply({
       client,
       userId,
@@ -1123,7 +1363,11 @@ async function handleStatsCommand({
 
   const last = stats.lastScanAt ? formatBangkokDateTime(stats.lastScanAt) : "-";
 
-  if (tryGem && (await tryGem())) return;
+  if (
+    invokePhase1GeminiOrchestrator &&
+    (await invokePhase1GeminiOrchestrator()).handled
+  )
+    return;
   await sendNonScanReply({
     client,
     userId,
@@ -1220,6 +1464,14 @@ async function finalizeAcceptedImage({
     chosenPath,
   });
 
+  const imgPhase1Invoke = async () =>
+    invokePhase1FreshNoop({
+      userId,
+      client,
+      event,
+      session: getSession(userId),
+    });
+
   // Fast-exit: when payment is required and there's no awaiting slip row,
   // route directly to package/paywall copy instead of going through object-check.
   if (
@@ -1240,6 +1492,7 @@ async function finalizeAcceptedImage({
         lockUntil: payReqStatus.lockUntil,
         gate: "finalize_payment_required",
       });
+      if ((await imgPhase1Invoke()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -1288,6 +1541,7 @@ async function finalizeAcceptedImage({
       copyKey: strictPaywallReply.semanticKey,
       templateKey: strictPaywallReply.replyType,
     });
+    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1326,6 +1580,7 @@ async function finalizeAcceptedImage({
         userId,
         lockUntil: payStatus.lockUntil,
       });
+      if ((await imgPhase1Invoke()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -1359,6 +1614,7 @@ async function finalizeAcceptedImage({
           replyType: "pending_verify_block_scan",
         }),
       );
+      if ((await imgPhase1Invoke()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -1385,6 +1641,7 @@ async function finalizeAcceptedImage({
 
     if (gate.decision !== "accept") {
       if (gate.decision === "reject") {
+        if ((await imgPhase1Invoke()).handled) return;
         await sendNonScanReply({
           client,
           userId,
@@ -1398,6 +1655,7 @@ async function finalizeAcceptedImage({
         });
         return;
       }
+      if ((await imgPhase1Invoke()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -1465,6 +1723,7 @@ async function finalizeAcceptedImage({
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
 
+      if ((await imgPhase1Invoke()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -1494,6 +1753,7 @@ async function finalizeAcceptedImage({
         hint: err?.hint,
       });
 
+      if ((await imgPhase1Invoke()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -1519,6 +1779,7 @@ async function finalizeAcceptedImage({
     });
   }
   if (scanIntent.state.isHardBlocked) {
+    if ((await imgPhase1Invoke()).handled) return;
     await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
@@ -1536,6 +1797,7 @@ async function finalizeAcceptedImage({
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
     const dupCand = getDuplicateImageReplyCandidates();
+    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1559,6 +1821,7 @@ async function finalizeAcceptedImage({
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
     const c = getMultipleObjectsReplyCandidates();
+    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1577,6 +1840,7 @@ async function finalizeAcceptedImage({
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
     const c = getUnclearImageReplyCandidates();
+    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1595,6 +1859,7 @@ async function finalizeAcceptedImage({
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
     const c = getUnsupportedObjectReplyCandidates();
+    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1613,6 +1878,7 @@ async function finalizeAcceptedImage({
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
     const c = getUnsupportedObjectReplyCandidates();
+    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1642,6 +1908,7 @@ async function finalizeAcceptedImage({
         lockUntil: payReqStatus.lockUntil,
         gate: "finalize_payment_required",
       });
+      if ((await imgPhase1Invoke()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -1693,6 +1960,7 @@ async function finalizeAcceptedImage({
       copyKey: strictPaywallReply.semanticKey,
       templateKey: strictPaywallReply.replyType,
     });
+    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1753,6 +2021,7 @@ async function finalizeAcceptedImage({
     flowVersion
   );
 
+  if ((await imgPhase1Invoke()).handled) return;
   await sendNonScanSequenceReply({
     client,
     userId,
@@ -1766,6 +2035,15 @@ async function finalizeAcceptedImage({
 async function handleImageMessage({ client, event, userId, session }) {
   const now = Date.now();
 
+  const imagePhase1Invoke = async () =>
+    invokePhase1FreshNoop({
+      userId,
+      client,
+      event,
+      session,
+    });
+
+
   const lockedBump = recordLockedImageActivity(userId, now);
   if (lockedBump.bumped) {
     console.log("[ABUSE_GUARD_LOCKED_IMAGE_ACTIVITY]", { userId });
@@ -1777,6 +2055,7 @@ async function handleImageMessage({ client, event, userId, session }) {
       userId,
       source: "after_locked_image_activity",
     });
+    if ((await imagePhase1Invoke()).handled) return;
     await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
@@ -1822,6 +2101,7 @@ async function handleImageMessage({ client, event, userId, session }) {
         lockUntil: payStatus.lockUntil,
         gate: "handleImageMessage_slip_route",
       });
+      if ((await imagePhase1Invoke()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -1846,6 +2126,7 @@ async function handleImageMessage({ client, event, userId, session }) {
         userId,
         lockUntil: scanStatus.lockUntil,
       });
+      if ((await imagePhase1Invoke()).handled) return;
       await sendScanLockReply(client, {
         userId,
         replyToken: event.replyToken,
@@ -1881,6 +2162,7 @@ async function handleImageMessage({ client, event, userId, session }) {
       hint =
         "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     }
+    if ((await imagePhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1937,6 +2219,7 @@ async function handleImageMessage({ client, event, userId, session }) {
           userId,
           sessionFlowVersion: session.flowVersion || 0,
         });
+        if ((await imagePhase1Invoke()).handled) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -2022,6 +2305,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     clearPendingImageCandidate(userId);
 
     const multiCandGroup = getMultiImageInRequestReplyCandidates();
+    if ((await imagePhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -2052,6 +2336,7 @@ async function handleImageMessage({ client, event, userId, session }) {
     clearPendingImageCandidate(userId);
 
     const multiCand2 = getMultiImageInRequestReplyCandidates();
+    if ((await imagePhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -2148,10 +2433,31 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
+  const geminiSnapshot = await loadGeminiRoutingSnapshot({
+    userId,
+    session,
+    text,
+    lowerText,
+    now,
+  });
+
   const textSpam = registerTextEvent(userId, text, now);
 
   if (textSpam.state.isHardBlocked) {
     console.warn("[ABUSE_GUARD_HARD_BLOCK]", { userId, source: "text_register" });
+    const invokeP1TextHard = async () =>
+      invokePhase1GeminiFromSnapshot({
+        snapshot: geminiSnapshot,
+        userId,
+        text,
+        lowerText,
+        client,
+        event,
+        session,
+        delegates: buildNoopGeminiDelegates(),
+      });
+    const gfHard = await invokeP1TextHard();
+    if (gfHard.handled) return;
     await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
@@ -2206,41 +2512,12 @@ async function handleTextMessage({ client, event, userId, session }) {
   // Deterministic state ownership decides the turn (replyType / semanticKey).
   // Persona / content pools must not choose branches — only soften wording (e.g. idle alternates).
   // Generic menu/idle runs only when no interactive session still owns the turn.
-  let activeAccessDecision = null;
-  let activePendingPaymentRow = null;
-  try {
-    activeAccessDecision = await checkScanAccess({ userId });
-  } catch (err) {
-    console.error("[ACTIVE_STATE_ROUTING] checkScanAccess failed (ignored):", {
-      userId,
-      message: err?.message,
-      code: err?.code,
-    });
-  }
-  try {
-    activePendingPaymentRow = await getLatestAwaitingPaymentForLineUserId(userId);
-  } catch (err) {
-    console.error("[ACTIVE_STATE_ROUTING] pending payment lookup failed (ignored):", {
-      userId,
-      message: err?.message,
-      code: err?.code,
-    });
-  }
-
-  const paymentMemoryState = getPaymentState(userId).state;
-  const scanAbuseStatus = checkScanAbuseStatus(userId, now);
-  const wsActive = computeWebhookTextActiveState({
-    userId,
-    session,
-    text,
-    lowerText,
+  const {
     activeAccessDecision,
     activePendingPaymentRow,
     paymentMemoryState,
-    scanAbuseStatus,
-  });
-  const {
-    resolved: activeResolved,
+    wsActive,
+    activeResolved,
     paymentState,
     flowState,
     accessState,
@@ -2248,10 +2525,9 @@ async function handleTextMessage({ client, event, userId, session }) {
     pendingStatus,
     hasPendingVerify,
     hasAwaitingSlip,
-  } = wsActive;
-
-  const canonicalStateOwner = activeResolved.stateOwner;
-  const geminiConversationOwner = toGeminiConversationOwner(activeResolved.stateOwner);
+    canonicalStateOwner,
+    geminiConversationOwner,
+  } = geminiSnapshot;
 
   console.log(
     JSON.stringify({
@@ -2332,8 +2608,6 @@ async function handleTextMessage({ client, event, userId, session }) {
       canonicalStateOwner,
     });
     if (!phase1GeminiKey) return { handled: false };
-    /** Payment-funnel Phase-1 only (paywall / slip / pending_verify); not waiting_birthdate. */
-    if (!isShadowPhase1Eligible(phase1GeminiKey)) return { handled: false };
     return runGeminiFrontOrchestrator({
       userId,
       text,
@@ -2559,11 +2833,6 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
   };
 
-  const tryGeminiBeforeTextReply = async () => {
-    const gf = await invokePhase1GeminiOrchestrator();
-    return Boolean(gf.handled);
-  };
-
   if (env.EDGE_GATE_SOFT_VERIFY_ENABLED && isSoftVerifyPending(userId)) {
     if (!isSoftVerifyUnlockText(text)) {
       logConversationCost({
@@ -2580,7 +2849,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         softVerifyTriggered: false,
         softVerifyPassed: false,
       });
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -2618,7 +2887,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       userId,
       session,
       text,
-      tryGeminiBeforeTextReply,
+      invokePhase1GeminiOrchestrator,
     });
     if (bdDone) return;
   }
@@ -2654,7 +2923,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
       resetSameStateAckStreak(userId, "paywall_offer_single");
       resetGuidanceNoProgress(userId, "paywall_offer_single");
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -2740,7 +3009,6 @@ async function handleTextMessage({ client, event, userId, session }) {
         lowerText,
         isPaywallGateWithPendingScan,
         forcePaymentIntent: true,
-        tryGeminiBeforeTextReply,
       });
       return;
     }
@@ -2796,7 +3064,6 @@ async function handleTextMessage({ client, event, userId, session }) {
         text,
         lowerText,
         isPaywallGateWithPendingScan,
-        tryGeminiBeforeTextReply,
       });
       return;
     }
@@ -2840,7 +3107,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: outboundRt,
       });
       const ack = buildPaymentPackageSelectedAck(pkg);
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -2911,7 +3178,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: waitOutboundRt,
         routeReason: "same_state_wait_tomorrow",
       });
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -2955,7 +3222,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         confidence: "near_safe",
         chosenReplyType: hesRt,
       });
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -2999,7 +3266,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: pcRt,
       });
       const primaryText = buildPaymentPackageSelectedUnclearText({ tier });
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3098,7 +3365,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         routeReason: "same_state_ack_human",
       });
       const menuAlt = buildSingleOfferPaywallAltText(offer);
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3248,7 +3515,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     const menuAlt = selectedPkgPaywall
       ? buildPaymentPackageSelectedGentleRemindText()
       : buildSingleOfferPaywallAltText(offer);
-    if (await tryGeminiBeforeTextReply()) return;
+    if ((await invokePhase1GeminiOrchestrator()).handled) return;
     await sendNonScanReplyWithOptionalConvSurface({
       client,
       userId,
@@ -3296,7 +3563,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       );
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
       resetSameStateAckStreak(userId, "awaiting_slip");
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -3338,7 +3605,6 @@ async function handleTextMessage({ client, event, userId, session }) {
         lowerText: "จ่ายเงิน",
         isPaywallGateWithPendingScan,
         forcePaymentIntent: true,
-        tryGeminiBeforeTextReply,
       });
       return;
     }
@@ -3369,7 +3635,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         tier: tierClaim,
         kind: "default",
       });
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3425,7 +3691,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: "awaiting_slip_status_hint",
         routeReason: "awaiting_slip_status_micro",
       });
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3500,7 +3766,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
       const slipAckReplyType =
         ackTier === "full" ? "awaiting_slip_guidance" : "awaiting_slip_gentle_remind";
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3594,7 +3860,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
     const slipRemReplyType =
       tier === "full" ? "awaiting_slip_guidance" : "awaiting_slip_gentle_remind";
-    if (await tryGeminiBeforeTextReply()) return;
+    if ((await invokePhase1GeminiOrchestrator()).handled) return;
     await sendNonScanReplyWithOptionalConvSurface({
       client,
       userId,
@@ -3645,7 +3911,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       );
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
       resetSameStateAckStreak(userId, "pending_verify");
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -3662,7 +3928,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
     if (isPaymentCommand(text, lowerText)) {
       resetSameStateAckStreak(userId, "pending_verify");
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReply({
         client,
         userId,
@@ -3721,7 +3987,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: "pending_verify_status",
         routeReason: "pending_verify_status_micro",
       });
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3772,7 +4038,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           tierPvRe === "full"
             ? "pending_verify_guidance"
             : "pending_verify_gentle_remind";
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanReplyWithOptionalConvSurface({
           client,
           userId,
@@ -3867,7 +4133,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: pvReplyType,
         routeReason: "pending_verify_ack_human",
       });
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -3966,7 +4232,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       chosenReplyType: pvReplyType,
       routeReason: "pending_verify_text_guard",
     });
-    if (await tryGeminiBeforeTextReply()) return;
+    if ((await invokePhase1GeminiOrchestrator()).handled) return;
     await sendNonScanReplyWithOptionalConvSurface({
       client,
       userId,
@@ -4029,7 +4295,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           confidence: "near_safe",
           chosenReplyType: "waiting_birthdate_ambiguous_compact",
         });
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4077,7 +4343,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           chosenReplyType: "waiting_birthdate_error",
           routeReason: "unexpected_input_kept_in_state",
         });
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4108,7 +4374,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           chosenReplyType: "waiting_birthdate_wrong_state_redirect",
         });
         const bdDeferPrimary = buildWaitingBirthdatePaymentDeferredRedirectText();
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanReplyWithOptionalConvSurface({
           client,
           userId,
@@ -4130,7 +4396,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         return;
       }
 
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
 
       const streak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
       const tier = guidanceTierFromStreak(streak);
@@ -4191,7 +4457,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       !isBirthdateChangeCandidateText(text) &&
       text !== "สแกนพลังงาน"
     ) {
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       const scanReadyText = buildPaidActiveScanReadyHumanText(userId);
       emitActiveStateRouting({
         userId,
@@ -4239,7 +4505,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         paymentRef = null;
       }
       if (isPaymentCommand(text, lowerText)) {
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanReply({
           client,
           userId,
@@ -4258,7 +4524,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           paymentRef,
         });
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanReplyWithOptionalConvSurface({
           client,
           userId,
@@ -4299,7 +4565,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             client,
             replyToken: event.replyToken,
             userId,
-            tryGeminiBeforeTextReply,
+            invokePhase1GeminiOrchestrator,
           });
           return;
         }
@@ -4308,13 +4574,13 @@ async function handleTextMessage({ client, event, userId, session }) {
             client,
             replyToken: event.replyToken,
             userId,
-            tryGeminiBeforeTextReply,
+            invokePhase1GeminiOrchestrator,
           });
           return;
         }
         if (isBirthdateChangeCandidateText(text)) {
           setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
-          if (await tryGeminiBeforeTextReply()) return;
+          if ((await invokePhase1GeminiOrchestrator()).handled) return;
           await sendNonScanReply({
             client,
             userId,
@@ -4346,7 +4612,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "",
             "ส่งรูปถัดไปมาได้เลยครับ",
           ].join("\n");
-          if (await tryGeminiBeforeTextReply()) return;
+          if ((await invokePhase1GeminiOrchestrator()).handled) return;
           await sendNonScanReply({
             client,
             userId,
@@ -4373,7 +4639,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "",
             `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
           ].join("\n");
-          if (await tryGeminiBeforeTextReply()) return;
+          if ((await invokePhase1GeminiOrchestrator()).handled) return;
           await sendNonScanReply({
             client,
             userId,
@@ -4392,11 +4658,11 @@ async function handleTextMessage({ client, event, userId, session }) {
           return;
         }
         if (isMainMenuAlias(text, lowerText)) {
-          if (await tryGeminiBeforeTextReply()) return;
           await replyIdleTextNoDuplicate({
             client,
             replyToken: event.replyToken,
             userId,
+            invokePhase1GeminiOrchestrator,
           });
           return;
         }
@@ -4443,7 +4709,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           paymentRef,
         });
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanReply({
           client,
           userId,
@@ -4460,7 +4726,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
       if (isBirthdateChangeCandidateText(text)) {
         setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanReply({
           client,
           userId,
@@ -4494,6 +4760,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             lockUntil: scanGateFromText.lockUntil,
             gate: "waiting_birthdate",
           });
+          if ((await invokePhase1GeminiOrchestrator()).handled) return;
           await sendScanLockReply(client, {
             userId,
             replyToken: event.replyToken,
@@ -4543,7 +4810,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           ambTier === "micro"
             ? "ลองบอกวันเกิดมาใหม่ได้เลยครับ"
             : BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT;
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4579,7 +4846,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         });
         const payDeferStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
         const payDeferTier = guidanceTierFromStreak(payDeferStreak);
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4605,7 +4872,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           errTier,
           parsedLock.reason,
         );
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4625,7 +4892,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         });
         const blkStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
         const blkTier = guidanceTierFromStreak(blkStreak);
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4646,7 +4913,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
       const defStreak = bumpGuidanceNoProgress(userId, "waiting_birthdate");
       const defTier = guidanceTierFromStreak(defStreak);
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanSequenceReply({
         client,
         userId,
@@ -4678,7 +4945,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           chosenReplyType: "waiting_birthdate_guidance",
           routeReason: "waiting_birthdate_branch_error_guard",
         });
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4698,14 +4965,14 @@ async function handleTextMessage({ client, event, userId, session }) {
   if (isBirthdateChangeCandidateText(text)) {
     console.log("[BIRTHDATE_UPDATE] requested", { userId });
     setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.CANDIDATE, null);
-    if (await tryGeminiBeforeTextReply()) return;
+    if ((await invokePhase1GeminiOrchestrator()).handled) return;
     await sendNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
       replyType: "birthdate_update_prompt_open",
       semanticKey: "birthdate_change_candidate",
-            text: pickBirthdateFirstConfirmQuestion(userId),
+      text: pickBirthdateFirstConfirmQuestion(userId),
       alternateTexts: [
         `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
       ],
@@ -4718,7 +4985,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       client,
       replyToken: event.replyToken,
       userId,
-      tryGeminiBeforeTextReply,
+      invokePhase1GeminiOrchestrator,
     });
     return;
   }
@@ -4728,7 +4995,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       client,
       replyToken: event.replyToken,
       userId,
-      tryGeminiBeforeTextReply,
+      invokePhase1GeminiOrchestrator,
     });
     return;
   }
@@ -4756,7 +5023,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           userId,
           hint: "pending_scan_needs_birthdate",
         });
-        if (await tryGeminiBeforeTextReply()) return;
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -4791,7 +5058,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       });
       const idlePackRt = "package_selected_ack_full";
       const ack = buildPaymentPackageSelectedAck(pkg);
-      if (await tryGeminiBeforeTextReply()) return;
+      if ((await invokePhase1GeminiOrchestrator()).handled) return;
       await sendNonScanReplyWithOptionalConvSurface({
         client,
         userId,
@@ -4822,7 +5089,6 @@ async function handleTextMessage({ client, event, userId, session }) {
       text,
       lowerText,
       isPaywallGateWithPendingScan,
-      tryGeminiBeforeTextReply,
     })
   ) {
     return;
@@ -4848,7 +5114,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       chosenReplyType: "waiting_birthdate_guidance",
       routeReason: "terminal_guard_no_generic_fallback",
     });
-    if (await tryGeminiBeforeTextReply()) return;
+    if ((await invokePhase1GeminiOrchestrator()).handled) return;
     await sendNonScanSequenceReply({
       client,
       userId,
@@ -4880,7 +5146,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "ส่งรูปถัดไปมาได้เลยครับ",
     ].join("\n");
 
-    if (await tryGeminiBeforeTextReply()) return;
+    if ((await invokePhase1GeminiOrchestrator()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -4920,7 +5186,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "",
       `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
     ].join("\n");
-    if (await tryGeminiBeforeTextReply()) return;
+    if ((await invokePhase1GeminiOrchestrator()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -4940,21 +5206,21 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (menuAliases.has(text) || menuAliases.has(lowerText)) {
-    if (await tryGeminiBeforeTextReply()) return;
     await replyIdleTextNoDuplicate({
       client,
       replyToken: event.replyToken,
       userId,
+      invokePhase1GeminiOrchestrator,
     });
     return;
   }
 
   // True idle — generic fallback / recovery.
-  if (await tryGeminiBeforeTextReply()) return;
   await replyIdleTextNoDuplicate({
     client,
     replyToken: event.replyToken,
     userId,
+    invokePhase1GeminiOrchestrator,
   });
 }
 
@@ -5005,12 +5271,22 @@ async function handleEvent({ client, event }) {
     ...globalStatus,
   });
 
+  const session = getSession(userId);
+  const eventPhase1Invoke = async () =>
+    invokePhase1FreshNoop({
+      userId,
+      client,
+      event,
+      session,
+    });
+
   if (globalStatus.isHardBlocked) {
     console.warn("[ABUSE_GUARD_HARD_BLOCK]", {
       userId,
       gate: "handleEvent",
       hardBlockReason: gateDiag.hardBlockReason,
     });
+    if ((await eventPhase1Invoke()).handled) return;
     await sendScanLockReply(client, {
       userId,
       replyToken: event.replyToken,
@@ -5043,8 +5319,6 @@ async function handleEvent({ client, event }) {
     });
     return;
   }
-
-  const session = getSession(userId);
 
   if (event.message?.type === "image") {
     await handleImageMessage({ client, event, userId, session });
@@ -5115,6 +5389,7 @@ export function lineWebhookRouter(lineConfig) {
             event.message?.type === "image" &&
             (imageCountByUser.get(userId) || 0) > 1
           ) {
+            const sessionBeforeMultiImageClear = getSession(userId);
             const flowVersion = bumpUserFlowVersion(userId);
 
             blockUserForRequest(userId);
@@ -5131,6 +5406,22 @@ export function lineWebhookRouter(lineConfig) {
               });
 
               const multiCandReq = getMultiImageInRequestReplyCandidates();
+              const gfMulti =
+                await invokePhase1FreshNoop({
+                  userId,
+                  client,
+                  event,
+                  session: sessionBeforeMultiImageClear,
+                  text: "",
+                  lowerText: "",
+                });
+              if (gfMulti.handled) {
+                console.log(
+                  "[WEBHOOK] skip image because multiple image events in same request",
+                  userId,
+                );
+                continue;
+              }
               await sendNonScanReply({
                 client,
                 userId,
@@ -5157,17 +5448,27 @@ export function lineWebhookRouter(lineConfig) {
             try {
               const errUid = event.source?.userId || "";
               if (errUid) {
-                await sendNonScanReply({
-                  client,
+                const gfErr = await invokePhase1FreshNoop({
                   userId: errUid,
-                  replyToken: event.replyToken,
-                  replyType: "webhook_event_error",
-                  semanticKey: "system_error",
-                  text: buildSystemErrorText(),
-                  alternateTexts: [
-                    "ขออภัยครับ มีข้อผิดพลาดชั่วคราว ลองส่งใหม่อีกครั้งได้เลย",
-                  ],
+                  client,
+                  event,
+                  session: getSession(errUid),
+                  text: "",
+                  lowerText: "",
                 });
+                if (!gfErr.handled) {
+                  await sendNonScanReply({
+                    client,
+                    userId: errUid,
+                    replyToken: event.replyToken,
+                    replyType: "webhook_event_error",
+                    semanticKey: "system_error",
+                    text: buildSystemErrorText(),
+                    alternateTexts: [
+                      "ขออภัยครับ มีข้อผิดพลาดชั่วคราว ลองส่งใหม่อีกครั้งได้เลย",
+                    ],
+                  });
+                }
               } else {
                 auditExemptEnter(AuditExemptReason.LINE_WEBHOOK_EVENT_ERROR_NO_USER);
                 try {

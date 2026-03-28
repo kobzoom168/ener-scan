@@ -85,15 +85,18 @@ test("allowedActions + shadow: idle and scan_ready_idle are phrase-only noop", (
   assert.equal(isShadowPhase1Eligible("soft_locked"), true);
 });
 
-test("lineWebhook: idle/menu + true-idle paths call Phase-1 Gemini before replyIdleTextNoDuplicate", () => {
+test("lineWebhook: replyIdleTextNoDuplicate invokes Phase-1 Gemini before sendNonScanReply", () => {
   const src = fs.readFileSync(lineWebhookPath, "utf8");
-  const re =
-    /if \(await tryGeminiBeforeTextReply\(\)\) return;[\s\S]*?replyIdleTextNoDuplicate/g;
-  const matches = src.match(re);
-  assert.ok(
-    matches && matches.length >= 2,
-    "expected ≥2 tryGeminiBeforeTextReply guards before replyIdleTextNoDuplicate",
+  const fnStart = src.indexOf("async function replyIdleTextNoDuplicate");
+  assert.ok(fnStart > 0, "replyIdleTextNoDuplicate not found");
+  const nextAsync = src.indexOf("\nasync function ", fnStart + 10);
+  const body = src.slice(
+    fnStart,
+    nextAsync > 0 ? nextAsync : fnStart + 1200,
   );
+  const iInvoke = body.indexOf("invokePhase1GeminiOrchestrator");
+  const iSend = body.indexOf("await sendNonScanReply");
+  assert.ok(iInvoke > 0 && iSend > iInvoke, "Phase-1 must run before idle send");
 });
 
 test("lineWebhook: scan-ready guidance calls Phase-1 Gemini before buildPaidActiveScanReadyHumanText", () => {
@@ -104,7 +107,9 @@ test("lineWebhook: scan-ready guidance calls Phase-1 Gemini before buildPaidActi
   const windowStart = src.lastIndexOf('if (paymentState === "approved_intro")', iAnchor);
   assert.ok(windowStart > 0);
   const window = src.slice(windowStart, iAnchor + anchor.length);
-  const iGuard = window.indexOf("if (await tryGeminiBeforeTextReply()) return;");
+  const iGuard = window.indexOf(
+    "if ((await invokePhase1GeminiOrchestrator()).handled) return;",
+  );
   const iBuild = window.indexOf("buildPaidActiveScanReadyHumanText(userId)");
   assert.ok(iGuard > 0 && iBuild > iGuard);
 });
