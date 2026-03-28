@@ -6,7 +6,6 @@ const bannedPhrases = [
   "สายน้ำที่ไหล",
   "แสงจันทร์ที่นุ่มนวล",
   "มั่นคงและนิ่ง",
-  "พลังสงบ",
 ];
 
 const bannedClosings = [

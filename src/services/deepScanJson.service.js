@@ -33,12 +33,18 @@ export function extractJsonObjectString(raw) {
  *   tips: string[],
  * } | null}
  */
+function stripEnergyNameParenSuffix(s) {
+  const t = String(s || "").trim();
+  const i = t.indexOf("(");
+  return i >= 0 ? t.slice(0, i).trim() : t;
+}
+
 export function parseDeepScanModelJson(raw) {
   try {
     const jsonStr = extractJsonObjectString(raw);
     if (!jsonStr) return null;
     const parsed = JSON.parse(jsonStr);
-    const energyName = String(parsed.energyName || "").trim();
+    const energyName = stripEnergyNameParenSuffix(parsed.energyName);
     const secondaryEnergyName = String(
       parsed.secondaryEnergyName || "",
     ).trim();
@@ -130,7 +136,7 @@ function starLine(label, n) {
  * @returns {string}
  */
 export function renderDeepScanJsonToLegacyText(p, objectCategory, options = {}) {
-  const cat = String(objectCategory || "").trim() || "พระเครื่อง";
+  void objectCategory;
   const scoreDisplay = Number.isFinite(p.energyScore)
     ? p.energyScore.toFixed(1).replace(/\.0$/, "")
     : String(p.energyScore);
@@ -155,7 +161,7 @@ export function renderDeepScanJsonToLegacyText(p, objectCategory, options = {}) 
 ผลการตรวจพลังวัตถุ โดย อาจารย์ Ener
 
 ระดับพลัง: ${scoreDisplay} / 10
-พลังหลัก: ${p.energyName} (เฉพาะชิ้นนี้จากภาพและหมวด ${cat})
+พลังหลัก: ${p.energyName}
 ความสอดคล้องกับเจ้าของ: ${compatPct}%
 
 ลักษณะพลัง

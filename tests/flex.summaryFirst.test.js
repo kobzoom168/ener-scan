@@ -5,7 +5,7 @@ import { buildScanSummaryFirstFlex } from "../src/services/flex/flex.summaryFirs
 const SAMPLE_TEXT = `ผลการตรวจพลังวัตถุ โดย อาจารย์ Ener
 
 ระดับพลัง: 8.2 / 10
-พลังหลัก: ป้องกัน (เฉพาะชิ้นนี้จากภาพและหมวด พระเครื่อง)
+พลังหลัก: ป้องกัน
 พลังเสริม: พลังสมดุล
 ความสอดคล้องกับเจ้าของ: 78%
 
