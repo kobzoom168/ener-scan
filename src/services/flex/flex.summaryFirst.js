@@ -97,7 +97,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr) {
   };
 }
 
-function createEnergyBadgePills(mainLabel, subLabel) {
+function createEnergyBadgePill(mainLabel) {
   return {
     type: "box",
     layout: "vertical",
@@ -106,7 +106,7 @@ function createEnergyBadgePills(mainLabel, subLabel) {
     contents: [
       {
         type: "text",
-        text: "พลังหลัก · พลังเสริม",
+        text: "พลังหลัก",
         size: "xs",
         color: FLEX_TEXT_SECONDARY,
         wrap: true,
@@ -114,7 +114,6 @@ function createEnergyBadgePills(mainLabel, subLabel) {
       {
         type: "box",
         layout: "horizontal",
-        spacing: "sm",
         contents: [
           {
             type: "box",
@@ -130,33 +129,12 @@ function createEnergyBadgePills(mainLabel, subLabel) {
             contents: [
               {
                 type: "text",
-                text: String(mainLabel || "-").trim(),
+                text: truncateEnergyBadgeLabel(String(mainLabel || "-").trim()),
                 size: "sm",
                 weight: "bold",
                 color: FLEX_ACCENT,
-                wrap: true,
-              },
-            ],
-          },
-          {
-            type: "box",
-            layout: "horizontal",
-            flex: 1,
-            paddingTop: "10px",
-            paddingBottom: "10px",
-            paddingStart: "14px",
-            paddingEnd: "14px",
-            borderWidth: "1px",
-            borderColor: FLEX_BORDER,
-            backgroundColor: FLEX_BOX_BG,
-            contents: [
-              {
-                type: "text",
-                text: String(subLabel || "-").trim(),
-                size: "sm",
-                weight: "bold",
-                color: FLEX_TEXT_SECONDARY,
-                wrap: true,
+                wrap: false,
+                maxLines: 1,
               },
             ],
           },
@@ -682,11 +660,6 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     energyNameForPill(mainEnergy) ||
     String(reportPayload?.summary?.mainEnergyLabel || "").trim() ||
     "พลังหลัก";
-  const subPill =
-    String(reportPayload?.summary?.secondaryEnergyLabel || "").trim() ||
-    (parsed.secondaryEnergy && parsed.secondaryEnergy !== "-"
-      ? String(parsed.secondaryEnergy).trim()
-      : "พลังสมดุล");
 
   const dimsPayload =
     reportPayload?.summary?.scanDimensions &&
@@ -715,7 +688,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
 
   const bodyContents = [
     createScoreRowTwoUp(score.display || "-", pctDisplay),
-    createEnergyBadgePills(mainPill, subPill),
+    createEnergyBadgePill(mainPill),
     createScanDimensionStarBlock(dimensions),
     createCompatibilityTeaserBlock(birthdayLabel, compatReason),
     ...(tipRows.length > 0

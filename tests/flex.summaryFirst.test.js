@@ -102,7 +102,8 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.equal(flex.contents.hero?.aspectRatio, "20:13");
   const bodyStr = JSON.stringify(flex.contents.body);
   assert.match(bodyStr, /ระดับพลัง/);
-  assert.match(bodyStr, /พลังหลัก · พลังเสริม/);
+  assert.match(bodyStr, /พลังหลัก/);
+  assert.doesNotMatch(bodyStr, /พลังหลัก · พลังเสริม/);
   assert.match(bodyStr, /เข้ากับคุณ/);
   assert.doesNotMatch(bodyStr, /เข้ากับคุณยังไง/);
   assert.match(bodyStr, /คุ้มกัน/);
@@ -207,8 +208,8 @@ test("buildScanSummaryFirstFlex: guardrails for summary-card structure", () => {
   const body = flex.contents.body;
   const allTexts = collectTextNodes(body);
   assert.ok(
-    allTexts.some((t) => t.includes("พลังหลัก · พลังเสริม")),
-    "energy badges section label",
+    allTexts.some((t) => t === "พลังหลัก"),
+    "energy badge section label",
   );
 
   const chevronTips = allTexts.filter((t) => t.startsWith("› "));

@@ -3,10 +3,7 @@
  * (compatible with flex parser, history parser, format validation).
  */
 
-import {
-  DEEP_SCAN_ALLOWED_ENERGY_NAMES,
-  SCAN_DIMENSION_TO_FALLBACK_ENERGY,
-} from "../config/scanKnowledgeBase.js";
+import { SCAN_DIMENSION_TO_FALLBACK_ENERGY } from "../config/scanKnowledgeBase.js";
 import { sortDimensionKeysForStarDisplay } from "./flex/flex.utils.js";
 
 const DIM_KEYS = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
@@ -15,23 +12,6 @@ export function stripEnergyNameParenSuffix(s) {
   const t = String(s || "").trim();
   const i = t.indexOf("(");
   return i >= 0 ? t.slice(0, i).trim() : t;
-}
-
-/**
- * Primary = highest dimension; secondary = 2nd rank in same sort as Flex star rows.
- * Sort: score desc, ties {@link sortDimensionKeysForStarDisplay}.
- * @param {Record<string, number>} dimensions
- * @returns {{ primaryEnergy: string, secondaryEnergy: string }}
- */
-function deriveEnergyNamesFromDimensions(dimensions) {
-  const rankedKeys = sortDimensionKeysForStarDisplay(dimensions);
-  const primaryEnergy = SCAN_DIMENSION_TO_FALLBACK_ENERGY[rankedKeys[0]];
-  const secondaryEnergy =
-    rankedKeys.length >= 2
-      ? SCAN_DIMENSION_TO_FALLBACK_ENERGY[rankedKeys[1]]
-      : DEEP_SCAN_ALLOWED_ENERGY_NAMES.find((n) => n !== primaryEnergy) ??
-        primaryEnergy;
-  return { primaryEnergy, secondaryEnergy };
 }
 
 /**
@@ -91,15 +71,15 @@ export function parseDeepScanModelJson(raw) {
 
     if (!description || !compatibilityReason) return null;
 
-    // Align pills with star row: always derive from dimensions (ignores GPT labels
-    // e.g. "พลังความมั่นคง" not in allow-list or contradicting scores).
-    const { primaryEnergy, secondaryEnergy } =
-      deriveEnergyNamesFromDimensions(dimensions);
-    const energyName = primaryEnergy;
+    const rankedKeys = sortDimensionKeysForStarDisplay(dimensions);
+    const energyName = SCAN_DIMENSION_TO_FALLBACK_ENERGY[rankedKeys[0]];
+    const secondaryEnergyName = stripEnergyNameParenSuffix(
+      String(parsed.secondaryEnergyName ?? "").trim(),
+    );
 
     return {
       energyName,
-      secondaryEnergyName: secondaryEnergy,
+      secondaryEnergyName,
       energyScore: Number.isFinite(energyScore)
         ? Math.min(10, Math.max(0, energyScore))
         : 5,
