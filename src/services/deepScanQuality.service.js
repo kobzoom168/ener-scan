@@ -49,7 +49,7 @@ export async function scoreDeepScanText(text) {
   const startedAt = Date.now();
 
   const response = await openai.responses.create({
-    model: "gpt-4o",
+    model: "gpt-4.1-mini",
     input: [
       {
         role: "system",
@@ -66,7 +66,7 @@ export async function scoreDeepScanText(text) {
   const raw = String(response.output_text || "").trim() || "{}";
 
   console.log("[DEEP_SCAN_SCORE_TIMING]", {
-    model: "gpt-4o",
+    model: "gpt-4.1-mini",
     ms: Date.now() - startedAt,
     outputLength: raw.length,
   });
@@ -95,7 +95,7 @@ ${improveHint || "-"}
 `.trim();
 
   const response = await openai.responses.create({
-    model: "gpt-4o",
+    model: "gpt-4.1-mini",
     input: [
       {
         role: "system",
@@ -112,7 +112,7 @@ ${improveHint || "-"}
   const improved = String(response.output_text || "").trim();
 
   console.log("[DEEP_SCAN_IMPROVE_TIMING]", {
-    model: "gpt-4o",
+    model: "gpt-4.1-mini",
     ms: Date.now() - startedAt,
     outputLength: improved.length,
   });

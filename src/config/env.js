@@ -64,11 +64,11 @@ export const env = {
   PAYMENT_UNLOCK_AMOUNT_THB: Number(process.env.PAYMENT_UNLOCK_AMOUNT_THB) || 0,
   PAYMENT_UNLOCK_CURRENCY: process.env.PAYMENT_UNLOCK_CURRENCY || "THB",
   /**
-   * Second LLM pass (gpt-4o) to polish draft from primary gpt-4o scan. Set "false" to save cost/latency.
+   * Second LLM pass (gpt-4.1-mini) to polish draft from primary gpt-4.1-mini scan. Set "false" to save cost/latency.
    * @type {boolean}
    */
   ENABLE_DEEP_SCAN_REWRITE: process.env.ENABLE_DEEP_SCAN_REWRITE === "true",
-  /** gpt-4o quality score after draft/rewrite. */
+  /** gpt-4.1-mini quality score after draft/rewrite. */
   ENABLE_DEEP_SCAN_SCORING: process.env.ENABLE_DEEP_SCAN_SCORING === "true",
   /** Min total_score (0–50) before optional auto-improve. */
   DEEP_SCAN_MIN_QUALITY_SCORE: (() => {
@@ -94,7 +94,7 @@ export const env = {
     const n = raw === undefined || raw === "" ? 15 : Number(raw);
     return Number.isFinite(n) ? n : 15;
   })(),
-  /** One gpt-4o pass when score below threshold (requires scoring on). */
+  /** One gpt-4.1-mini pass when score below threshold (requires scoring on). */
   ENABLE_DEEP_SCAN_AUTO_IMPROVE: process.env.ENABLE_DEEP_SCAN_AUTO_IMPROVE === "true",
   /**
    * Append compact guidance from `data/style-reference-pack.json` (or DEEP_SCAN_STYLE_REFERENCE_PATH) to rewrite system prompt only.

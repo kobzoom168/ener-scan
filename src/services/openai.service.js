@@ -25,8 +25,8 @@ function validateInput({ imageBase64, birthdate }) {
 }
 
 /**
- * Full pipeline: draft (gpt-4o, JSON contract → legacy Thai layout) → validate →
- * rewrite (4o) optional → validate → fallback.
+ * Full pipeline: draft (gpt-4.1-mini, JSON contract → legacy Thai layout) → validate →
+ * rewrite (gpt-4.1-mini) optional → validate → fallback.
  * Used by scan.service retry layer via `retryHint`.
  */
 export async function generateScanText({

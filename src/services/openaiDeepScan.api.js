@@ -45,7 +45,7 @@ export async function withOpenAi429RetryOnce(fn) {
 }
 
 /**
- * Layer 1: gpt-4o — image + prompts → draft (JSON scan contract → rendered client-side).
+ * Layer 1: gpt-4.1-mini — image + prompts → draft (JSON scan contract → rendered client-side).
  */
 export async function generateDeepScanDraft({
   systemPrompt,
@@ -57,7 +57,7 @@ export async function generateDeepScanDraft({
 
   const response = await withOpenAi429RetryOnce(() =>
     openai.responses.create({
-      model: "gpt-4o",
+      model: "gpt-4.1-mini",
       input: [
         {
           role: "system",
@@ -81,7 +81,7 @@ export async function generateDeepScanDraft({
   const text = String(response.output_text || "").trim();
 
   console.log("[OPENAI_DRAFT_TIMING]", {
-    model: "gpt-4o",
+    model: "gpt-4.1-mini",
     ms: Date.now() - startedAt,
     outputLength: text.length,
   });
@@ -94,14 +94,14 @@ export async function generateDeepScanDraft({
 }
 
 /**
- * Layer 2: gpt-4o — rewrite draft (same format, polished language).
+ * Layer 2: gpt-4.1-mini — rewrite draft (same format, polished language).
  */
 export async function rewriteDeepScanDraft({ systemPrompt, userPrompt }) {
   const startedAt = Date.now();
 
   const response = await withOpenAi429RetryOnce(() =>
     openai.responses.create({
-      model: "gpt-4o",
+      model: "gpt-4.1-mini",
       input: [
         {
           role: "system",
@@ -119,7 +119,7 @@ export async function rewriteDeepScanDraft({ systemPrompt, userPrompt }) {
   const text = String(response.output_text || "").trim();
 
   console.log("[OPENAI_REWRITE_TIMING]", {
-    model: "gpt-4o",
+    model: "gpt-4.1-mini",
     ms: Date.now() - startedAt,
     outputLength: text.length,
   });

@@ -6,7 +6,7 @@ const openai = new OpenAI({
 });
 
 const OBJECT_CHECK_PROVIDER = "openai.responses";
-const OBJECT_CHECK_MODEL = "gpt-4o";
+const OBJECT_CHECK_MODEL = "gpt-4.1-mini";
 const OBJECT_CHECK_TIMEOUT_MS = Number(env.OBJECT_CHECK_TIMEOUT_MS || 35000);
 const OBJECT_CHECK_MAX_RETRIES = Number(env.OBJECT_CHECK_MAX_RETRIES || 0);
 

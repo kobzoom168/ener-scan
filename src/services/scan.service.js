@@ -63,7 +63,7 @@ export async function classifyObjectCategory(imageBase64) {
 
   try {
     const response = await openai.responses.create({
-      model: "gpt-4o",
+      model: "gpt-4.1-mini",
       temperature: 0,
       input: [
         {
