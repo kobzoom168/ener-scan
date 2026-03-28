@@ -3,28 +3,44 @@
  * (compatible with flex parser, history parser, format validation).
  */
 
-import {
-  DEEP_SCAN_ALLOWED_ENERGY_NAMES,
-  SCAN_DIMENSION_TO_FALLBACK_ENERGY,
-} from "../config/scanKnowledgeBase.js";
+import { DEEP_SCAN_ALLOWED_ENERGY_NAMES } from "../config/scanKnowledgeBase.js";
 
 const DIM_KEYS = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
 
+export function stripEnergyNameParenSuffix(s) {
+  const t = String(s || "").trim();
+  const i = t.indexOf("(");
+  return i >= 0 ? t.slice(0, i).trim() : t;
+}
+
 /**
- * @param {string} energyName
- * @param {Record<string, number>} dimensions
+ * @param {string} primaryEnergyName
  */
-function fallbackSecondaryEnergyName(energyName, dimensions) {
-  const primary = String(energyName || "").trim();
-  const ranked = DIM_KEYS.map((k) => [k, dimensions[k] || 0]).sort(
-    (a, b) => b[1] - a[1],
+function pickRandomSecondaryEnergyName(primaryEnergyName) {
+  const primary = String(primaryEnergyName || "").trim();
+  const fallbackPool = DEEP_SCAN_ALLOWED_ENERGY_NAMES.filter(
+    (name) => name !== primary,
   );
-  for (const [key] of ranked) {
-    const candidate = SCAN_DIMENSION_TO_FALLBACK_ENERGY[key];
-    if (candidate && candidate !== primary) return candidate;
-  }
-  const alt = DEEP_SCAN_ALLOWED_ENERGY_NAMES.find((n) => n !== primary);
-  return alt || "พลังสมดุล";
+  const randomSecondary =
+    fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+  return randomSecondary ?? DEEP_SCAN_ALLOWED_ENERGY_NAMES[0];
+}
+
+/**
+ * @param {string} primaryEnergyName
+ * @param {string} secondaryRaw
+ */
+function resolveSecondaryEnergyName(primaryEnergyName, secondaryRaw) {
+  const primary = String(primaryEnergyName || "").trim();
+  const secondary = stripEnergyNameParenSuffix(
+    String(secondaryRaw || "").trim(),
+  );
+  const allowed =
+    secondary &&
+    DEEP_SCAN_ALLOWED_ENERGY_NAMES.includes(secondary) &&
+    secondary !== primary;
+  if (allowed) return secondary;
+  return pickRandomSecondaryEnergyName(primary);
 }
 
 /**
@@ -55,19 +71,13 @@ export function extractJsonObjectString(raw) {
  *   tips: string[],
  * } | null}
  */
-function stripEnergyNameParenSuffix(s) {
-  const t = String(s || "").trim();
-  const i = t.indexOf("(");
-  return i >= 0 ? t.slice(0, i).trim() : t;
-}
-
 export function parseDeepScanModelJson(raw) {
   try {
     const jsonStr = extractJsonObjectString(raw);
     if (!jsonStr) return null;
     const parsed = JSON.parse(jsonStr);
     const energyName = stripEnergyNameParenSuffix(parsed.energyName);
-    const secondaryEnergyName = String(
+    const secondaryEnergyNameRaw = String(
       parsed.secondaryEnergyName || "",
     ).trim();
     const energyScore = Number(parsed.energyScore);
@@ -94,10 +104,10 @@ export function parseDeepScanModelJson(raw) {
 
     if (!energyName || !description || !compatibilityReason) return null;
 
-    let subEnergy = secondaryEnergyName;
-    if (!subEnergy) {
-      subEnergy = fallbackSecondaryEnergyName(energyName, dimensions);
-    }
+    const subEnergy = resolveSecondaryEnergyName(
+      energyName,
+      secondaryEnergyNameRaw,
+    );
 
     return {
       energyName,

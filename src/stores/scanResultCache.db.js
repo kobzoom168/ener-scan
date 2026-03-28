@@ -5,7 +5,7 @@ import { supabase } from "../config/supabase.js";
 import { normalizeBirthdateForScan } from "../utils/webhookText.util.js";
 
 /** Must match deep-scan prompt generation; bump when prompt/format contract changes. */
-export const SCAN_CACHE_PROMPT_VERSION = "v10";
+export const SCAN_CACHE_PROMPT_VERSION = "v11";
 
 /** Back-compat accessor used by scan.service.js import. */
 export function getScanCacheVersion() {
