@@ -34,7 +34,6 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr) {
         flex: 1,
         paddingAll: "14px",
         backgroundColor: FLEX_BOX_BG,
-        cornerRadius: "10px",
         contents: [
           {
             type: "text",
@@ -60,7 +59,6 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr) {
         flex: 1,
         paddingAll: "14px",
         backgroundColor: FLEX_BOX_BG,
-        cornerRadius: "10px",
         contents: [
           {
             type: "text",
@@ -111,7 +109,6 @@ function createEnergyBadgePills(mainLabel, subLabel) {
             paddingBottom: "10px",
             paddingStart: "14px",
             paddingEnd: "14px",
-            cornerRadius: "20px",
             borderWidth: "1px",
             borderColor: FLEX_ACCENT,
             backgroundColor: FLEX_BOX_BG,
@@ -134,7 +131,6 @@ function createEnergyBadgePills(mainLabel, subLabel) {
             paddingBottom: "10px",
             paddingStart: "14px",
             paddingEnd: "14px",
-            cornerRadius: "20px",
             borderWidth: "1px",
             borderColor: FLEX_BORDER,
             backgroundColor: FLEX_BOX_BG,
@@ -219,7 +215,6 @@ function createCompatibilityTeaserBlock(birthdayLabel, reasonText) {
     paddingAll: "14px",
     spacing: "sm",
     backgroundColor: FLEX_BOX_BG,
-    cornerRadius: "12px",
     borderWidth: "1px",
     borderColor: FLEX_ACCENT,
     margin: "md",
