@@ -18,6 +18,8 @@ import { resolveEnergyType } from "./scanCopy.utils.js";
 const FLEX_CARD_BG = "#000000";
 const FLEX_BOX_BG = "#111111";
 const FLEX_ACCENT = "#E8593C";
+/** Gold accent for score row number + energy badge only (stars / compat / CTA stay orange). */
+const FLEX_BADGE_AND_SCORE_GOLD = "#D4AF37";
 const FLEX_TEXT_PRIMARY = "#ffffff";
 const FLEX_TEXT_SECONDARY = "#888888";
 const FLEX_BORDER = "#333333";
@@ -62,7 +64,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr) {
             text: levelValue,
             size: "xl",
             weight: "bold",
-            color: FLEX_ACCENT,
+            color: FLEX_BADGE_AND_SCORE_GOLD,
             margin: "sm",
             wrap: true,
           },
@@ -119,12 +121,13 @@ function createEnergyBadgePill(mainLabel) {
             type: "box",
             layout: "horizontal",
             flex: 1,
+            gravity: "center",
             paddingTop: "10px",
             paddingBottom: "10px",
             paddingStart: "14px",
             paddingEnd: "14px",
             borderWidth: "1px",
-            borderColor: FLEX_ACCENT,
+            borderColor: FLEX_BADGE_AND_SCORE_GOLD,
             backgroundColor: FLEX_BOX_BG,
             contents: [
               {
@@ -132,7 +135,8 @@ function createEnergyBadgePill(mainLabel) {
                 text: truncateEnergyBadgeLabel(String(mainLabel || "-").trim()),
                 size: "sm",
                 weight: "bold",
-                color: FLEX_ACCENT,
+                color: FLEX_BADGE_AND_SCORE_GOLD,
+                align: "center",
                 wrap: true,
               },
             ],
