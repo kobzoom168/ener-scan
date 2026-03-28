@@ -9,9 +9,17 @@ import {
   pickMainEnergyColor,
   normalizeScore,
   getEnergyShortLabel,
-  safeWrapText,
   wrapFlexTextNoTruncate,
 } from "./flex.utils.js";
+
+/** Soft wrap width for body copy (bullets, headlines); no "..." truncation. */
+const FLEX_WRAP_CHARS = 40;
+
+function wrapFlexLine(text) {
+  const t = String(text || "").trim();
+  if (!t) return "-";
+  return wrapFlexTextNoTruncate(t, FLEX_WRAP_CHARS);
+}
 import {
   prepareScanFlexDisplay,
   buildScanFlexAltText,
@@ -324,17 +332,17 @@ function resolveSummaryCardCopyVariant(reportPayload) {
  */
 function resolveFlexHeadline(reportPayload, fallbackHeadline, familyPattern) {
   const wf = String(reportPayload?.wording?.flexHeadline || "").trim();
-  if (wf) return { text: safeWrapText(wf, 64), source: "wording" };
+  if (wf) return { text: wrapFlexLine(wf), source: "wording" };
   const mp = String(reportPayload?.sections?.messagePoints?.[0] || "").trim();
-  if (mp) return { text: safeWrapText(mp, 64), source: "payload" };
+  if (mp) return { text: wrapFlexLine(mp), source: "payload" };
   const d = distillSummaryLine(reportPayload?.summary?.summaryLine || "");
-  if (d) return { text: safeWrapText(d, 64), source: "payload" };
+  if (d) return { text: wrapFlexLine(d), source: "payload" };
   if (familyPattern?.headlinePatterns?.length) {
     const seed = String(reportPayload?.reportId || reportPayload?.scanId || "headline");
     const picked = stablePick(familyPattern.headlinePatterns, seed);
-    if (picked) return { text: safeWrapText(picked, 64), source: "family_pattern" };
+    if (picked) return { text: wrapFlexLine(picked), source: "family_pattern" };
   }
-  return { text: fallbackHeadline, source: "default_variant" };
+  return { text: wrapFlexLine(fallbackHeadline), source: "default_variant" };
 }
 
 /**
@@ -362,17 +370,9 @@ function scoreNormalizedForFlex(reportPayload, energyScoreText) {
   return normalizeScore(energyScoreText);
 }
 
-function tightenTeaserCopy(text, maxChars = 48) {
-  const s = String(text || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!s) return "";
-  if (s.length <= maxChars) return s;
-  return `${s.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
-}
-
 /**
  * Up to 2 short bullets: what the object “shines” at (from payload sections).
+ * Full sentences, soft-wrapped (no "..." truncation).
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
  */
 function flexTeaserBullets(reportPayload) {
@@ -380,21 +380,21 @@ function flexTeaserBullets(reportPayload) {
   if (Array.isArray(wb) && wb.length >= 2) {
     return wb
       .slice(0, 2)
-      .map((x) => safeWrapText(tightenTeaserCopy(String(x).trim(), 48), 56))
+      .map((x) => wrapFlexLine(String(x).trim()))
       .filter(Boolean);
   }
   const w = reportPayload?.sections?.whatItGives;
   if (Array.isArray(w) && w.length) {
     return w
       .slice(0, 2)
-      .map((x) => safeWrapText(tightenTeaserCopy(String(x).trim(), 48), 56))
+      .map((x) => wrapFlexLine(String(x).trim()))
       .filter(Boolean);
   }
   const m = reportPayload?.sections?.messagePoints;
   if (Array.isArray(m) && m.length >= 2) {
     return m
       .slice(1, 3)
-      .map((x) => safeWrapText(tightenTeaserCopy(String(x).trim(), 48), 56))
+      .map((x) => wrapFlexLine(String(x).trim()))
       .filter(Boolean);
   }
   return [];
@@ -429,6 +429,7 @@ function createCompactMetricStrip({
             text: scoreLabel,
             size: "xs",
             color: "#94949A",
+            wrap: true,
           },
           {
             type: "text",
@@ -437,7 +438,6 @@ function createCompactMetricStrip({
             weight: "bold",
             color: accentColor,
             wrap: true,
-            maxLines: 1,
             margin: "sm",
           },
         ],
@@ -457,6 +457,7 @@ function createCompactMetricStrip({
             text: compatibilityLabel,
             size: "xs",
             color: "#94949A",
+            wrap: true,
           },
           {
             type: "text",
@@ -465,7 +466,6 @@ function createCompactMetricStrip({
             weight: "bold",
             color: "#E8E8EC",
             wrap: true,
-            maxLines: 1,
             margin: "sm",
           },
         ],
@@ -549,6 +549,7 @@ function createAspectStarsBlock(resolvedType) {
         text: "ระดับเด่นของชิ้นนี้",
         size: "xs",
         color: "#94949A",
+        wrap: true,
       },
       ...rows.map((r) =>
         (function buildRow() {
@@ -586,7 +587,7 @@ function createAspectStarsBlock(resolvedType) {
                 size: "xs",
                 color: "#B8B8BE",
                 flex: 3,
-                maxLines: 1,
+                wrap: true,
               },
               {
                 type: "box",
@@ -682,10 +683,10 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
           : "default_variant";
 
   const compatLabel = compatibilityLabelForFlex(reportPayload, compatibility);
-  const mainLabel =
+  const mainEnergyRaw =
     String(reportPayload?.summary?.mainEnergyLabel || "").trim() ||
     scanCopy?.summary?.mainEnergyLabel ||
-    wrapFlexTextNoTruncate(getEnergyShortLabel(mainEnergy || "พลังทั่วไป"), 32);
+    getEnergyShortLabel(mainEnergy || "พลังทั่วไป");
   let bulletFallbackUsed = false;
   let usedGenericBulletGuard = false;
   let bullets = flexTeaserBullets(reportPayload);
@@ -695,11 +696,11 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       const seedBase = String(reportPayload?.reportId || reportPayload?.scanId || "bullet");
       const b1 = stablePick(familyPattern.bulletStyleRules.should_sound_like, `${seedBase}:1`);
       const b2 = stablePick(familyPattern.bulletStyleRules.should_sound_like, `${seedBase}:2`);
-      bullets = [b1, b2].filter(Boolean).slice(0, 2);
+      bullets = [b1, b2].filter(Boolean).map((x) => wrapFlexLine(x)).slice(0, 2);
     }
     if (bullets.length < 2) {
       bulletFallbackUsed = true;
-      bullets = [...summaryCardCopy.bullets];
+      bullets = summaryCardCopy.bullets.map((x) => wrapFlexLine(x));
     }
   } else if (bullets.length === 1) {
     bulletFallbackUsed = true;
@@ -709,7 +710,10 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
           String(reportPayload?.reportId || reportPayload?.scanId || "bullet:single"),
         )
       : summaryCardCopy.bullets[1];
-    bullets = [bullets[0], safeWrapText(fallbackB2 || summaryCardCopy.bullets[1], 72)];
+    bullets = [
+      bullets[0],
+      wrapFlexLine(fallbackB2 || summaryCardCopy.bullets[1]),
+    ];
   }
   bullets = bullets.map((b, idx) => {
     if (!isOverlyGenericBullet(b, familyPattern)) return b;
@@ -721,9 +725,8 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
           `${String(reportPayload?.reportId || reportPayload?.scanId || "bullet")}:${idx}`,
         )
       : "";
-    return safeWrapText(
+    return wrapFlexLine(
       familyFallback || summaryCardCopy.bullets[idx] || summaryCardCopy.bullets[0],
-      72,
     );
   });
   bullets = bullets.slice(0, 2);
@@ -779,7 +782,6 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       size: "xs",
       color: "#94949A",
       wrap: true,
-      maxLines: 1,
       margin: "sm",
     },
     {
@@ -789,7 +791,6 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       size: "md",
       color: "#E8E8EC",
       wrap: true,
-      maxLines: 2,
       margin: "xs",
     },
     createCompactMetricStrip({
@@ -801,14 +802,14 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     }),
     {
       type: "text",
-      text:
+      text: wrapFlexLine(
         summaryCardCopy.mainEnergyTitleByType[resolvedType] ||
-        `พลังหลัก · ${safeWrapText(mainLabel, 28)}`,
+          `พลังหลัก · ${mainEnergyRaw}`,
+      ),
       size: "sm",
       weight: "bold",
       color: "#D0D0D6",
       wrap: true,
-      maxLines: 2,
       margin: "sm",
     },
     createAspectStarsBlock(resolvedType),
@@ -823,7 +824,6 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
         size: "xs",
         color: "#B8B8BE",
         wrap: true,
-        maxLines: 2,
       })),
     },
   ];

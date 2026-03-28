@@ -4,6 +4,10 @@
 
 export const deepScanJsonSystemPrompt = `
 คุณเป็นผู้ช่วยวิเคราะห์พลังวัตถุมงคลจากภาพ
+CRITICAL: You MUST analyze the actual image provided. Do NOT guess based on category alone.
+The objectCategory and knowledgeBase are hints only — the image is the primary source of truth.
+If the image shows something different from the category hint, trust what you SEE in the image.
+Describe the specific object visible (pose, frame, material cues), not only the category name.
 ตอบเฉพาะ JSON object เดียว ไม่มี markdown ไม่มี backtick ไม่มีข้อความอื่นก่อนหรือหลัง
 ค่าข้อความใน JSON ใช้ภาษาไทย
 ใช้ double quotes รอบชื่อฟิลด์และสตริงตามมาตรฐาน JSON
@@ -34,9 +38,9 @@ export function buildDeepScanJsonUserPrompt({
   return `
 คุณคืออาจารย์ผู้เชี่ยวชาญด้านพลังงานวัตถุมงคล
 
-วัตถุในภาพนี้อยู่ในหมวด: ${cat}
+หมวดจากขั้นตอนจำแนกเบื้องต้น (hint เท่านั้น — อย่าตอบตามหมวดถ้าไม่ตรงกับสิ่งที่เห็นในภาพ): ${cat}
 
-ความรู้เบื้องต้นของหมวดนี้:
+ความรู้เบื้องต้นของหมวดนี้ (อ้างอิงได้ แต่ต้องสอดคล้องกับภาพจริง ห้ามคัดลอกชื่อวัตถุจากข้อความด้านล่างถ้าภาพไม่ใช่แบบนั้น):
 ${kbBlock}
 
 วันเกิดของเจ้าของ: ${bd}

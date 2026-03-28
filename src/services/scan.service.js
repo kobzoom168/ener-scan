@@ -71,7 +71,7 @@ export async function classifyObjectCategory(imageBase64) {
           content: [
             {
               type: "input_text",
-              text: `Look at this image. Classify the object into exactly one category:
+              text: `You MUST decide from the actual pixels in the image (not from assumptions). Classify the object into exactly one category:
 พระเครื่อง | คริสตัล/หิน | เครื่องรางของขลัง | พระบูชา | อื่นๆ
 Reply with only the category name in Thai. Nothing else.`,
             },
