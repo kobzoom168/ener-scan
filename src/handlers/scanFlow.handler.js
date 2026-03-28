@@ -707,8 +707,15 @@ export async function runScanFlow({
         birthdate,
         userId,
       });
-    } catch (deepErr) {
-      if (!isOpenAi429Error(deepErr)) throw deepErr;
+    } catch (err) {
+      console.log("[SCAN_FLOW] runDeepScan error details:", {
+        message: err?.message,
+        status: err?.status,
+        responseStatus: err?.response?.status,
+        code: err?.code,
+        name: err?.name,
+      });
+      if (!isOpenAi429Error(err)) throw err;
       console.log("[SCAN_FLOW] 429 from OpenAI, waiting 15s before retry");
       await new Promise((r) => setTimeout(r, 15_000));
       scanOut = await runDeepScan({
