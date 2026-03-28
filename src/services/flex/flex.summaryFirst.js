@@ -5,7 +5,11 @@
 import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
 import { formatScanBirthdayLabelThai } from "../../utils/scanBirthdayLabel.util.js";
 import { parseScanText } from "./flex.parser.js";
-import { normalizeScore, getEnergyShortLabel } from "./flex.utils.js";
+import {
+  normalizeScore,
+  getEnergyShortLabel,
+  sortDimensionKeysForStarDisplay,
+} from "./flex.utils.js";
 import { buildScanFlexAltText, FLEX_SPLIT_WARN_THRESHOLD, splitSentencesForFlex } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import { ENERGY_TYPES } from "./scanCopy.config.js";
@@ -177,7 +181,8 @@ function dimensionStarLine(n) {
 }
 
 function createScanDimensionStarBlock(dimensions) {
-  const rows = FLEX_DIM_ORDER.map((key, idx) => {
+  const sortedKeys = sortDimensionKeysForStarDisplay(dimensions, FLEX_DIM_ORDER);
+  const rows = sortedKeys.map((key, idx) => {
     const raw = dimensions?.[key];
     const v =
       raw != null && Number.isFinite(Number(raw)) ? Number(raw) : 3;
@@ -214,7 +219,7 @@ function createScanDimensionStarBlock(dimensions) {
             },
           ],
         },
-        ...(idx < FLEX_DIM_ORDER.length - 1
+        ...(idx < sortedKeys.length - 1
           ? [{ type: "separator", color: FLEX_BORDER, margin: "sm" }]
           : []),
       ],

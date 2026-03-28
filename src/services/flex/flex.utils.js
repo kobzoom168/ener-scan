@@ -4,6 +4,42 @@ export function cleanLine(line) {
     .trim();
 }
 
+/** Flex star rows + deep-scan badges: when scores tie, this order wins (top first). */
+export const FLEX_DIMENSION_TIE_ORDER = [
+  "คุ้มกัน",
+  "สมดุล",
+  "อำนาจ",
+  "เมตตา",
+  "ดึงดูด",
+];
+
+/**
+ * @param {Record<string, unknown>} [dimensions]
+ * @param {string} key
+ */
+export function dimensionScoreForSort(dimensions, key) {
+  const raw = dimensions?.[key];
+  return raw != null && Number.isFinite(Number(raw)) ? Number(raw) : 3;
+}
+
+/**
+ * Highest score first; ties: {@link FLEX_DIMENSION_TIE_ORDER}.
+ * @param {Record<string, unknown>} [dimensions]
+ * @param {readonly string[]} [keys]
+ * @returns {string[]}
+ */
+export function sortDimensionKeysForStarDisplay(
+  dimensions,
+  keys = FLEX_DIMENSION_TIE_ORDER,
+) {
+  return [...keys].sort((a, b) => {
+    const va = dimensionScoreForSort(dimensions, a);
+    const vb = dimensionScoreForSort(dimensions, b);
+    if (vb !== va) return vb - va;
+    return keys.indexOf(a) - keys.indexOf(b);
+  });
+}
+
 /**
  * Flex display-only: strip trailing ellipsis-like junk from upstream text and weak
  * trailing separators (|, ·, •). No scoring/layout impact.

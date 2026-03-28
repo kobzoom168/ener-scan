@@ -7,6 +7,7 @@ import {
   DEEP_SCAN_ALLOWED_ENERGY_NAMES,
   SCAN_DIMENSION_TO_FALLBACK_ENERGY,
 } from "../config/scanKnowledgeBase.js";
+import { sortDimensionKeysForStarDisplay } from "./flex/flex.utils.js";
 
 const DIM_KEYS = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
 
@@ -17,43 +18,19 @@ export function stripEnergyNameParenSuffix(s) {
 }
 
 /**
- * @param {string} primaryEnergyName
- */
-function pickRandomSecondaryEnergyName(primaryEnergyName) {
-  const primary = String(primaryEnergyName || "").trim();
-  const fallbackPool = DEEP_SCAN_ALLOWED_ENERGY_NAMES.filter(
-    (name) => name !== primary,
-  );
-  const randomSecondary =
-    fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
-  return randomSecondary ?? DEEP_SCAN_ALLOWED_ENERGY_NAMES[0];
-}
-
-/**
- * Primary = highest dimension (tie-break: order in DIM_KEYS).
- * Secondary = next distinct mapped energy by rank.
+ * Primary = highest dimension; secondary = 2nd rank in same sort as Flex star rows.
+ * Sort: score desc, ties {@link sortDimensionKeysForStarDisplay}.
  * @param {Record<string, number>} dimensions
  * @returns {{ primaryEnergy: string, secondaryEnergy: string }}
  */
 function deriveEnergyNamesFromDimensions(dimensions) {
-  const rankedKeys = [...DIM_KEYS].sort((a, b) => {
-    const da = dimensions[a] ?? 0;
-    const db = dimensions[b] ?? 0;
-    if (db !== da) return db - da;
-    return DIM_KEYS.indexOf(a) - DIM_KEYS.indexOf(b);
-  });
+  const rankedKeys = sortDimensionKeysForStarDisplay(dimensions, DIM_KEYS);
   const primaryEnergy = SCAN_DIMENSION_TO_FALLBACK_ENERGY[rankedKeys[0]];
-  let secondaryEnergy = "";
-  for (let i = 1; i < rankedKeys.length; i += 1) {
-    const cand = SCAN_DIMENSION_TO_FALLBACK_ENERGY[rankedKeys[i]];
-    if (cand && cand !== primaryEnergy) {
-      secondaryEnergy = cand;
-      break;
-    }
-  }
-  if (!secondaryEnergy) {
-    secondaryEnergy = pickRandomSecondaryEnergyName(primaryEnergy);
-  }
+  const secondaryEnergy =
+    rankedKeys.length >= 2
+      ? SCAN_DIMENSION_TO_FALLBACK_ENERGY[rankedKeys[1]]
+      : DEEP_SCAN_ALLOWED_ENERGY_NAMES.find((n) => n !== primaryEnergy) ??
+        primaryEnergy;
   return { primaryEnergy, secondaryEnergy };
 }
 
