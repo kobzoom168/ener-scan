@@ -151,9 +151,18 @@ function createEnergyBadgePills(mainLabel, subLabel) {
   };
 }
 
-function dimensionStarStrings(n) {
-  const v = Math.min(5, Math.max(1, Math.round(Number(n) || 3)));
-  return { filled: "★".repeat(v), empty: "☆".repeat(5 - v) };
+/**
+ * Integer 0–5 from scan dimensions. Single string avoids LINE truncating
+ * multiple text nodes with an ellipsis between them.
+ * @param {number} n
+ * @returns {string} exactly 5 chars, only ★ and ☆
+ */
+function dimensionStarLine(n) {
+  const x = Number(n);
+  const v = Number.isFinite(x)
+    ? Math.min(5, Math.max(0, Math.round(x)))
+    : 3;
+  return "★".repeat(v) + "☆".repeat(5 - v);
 }
 
 function createScanDimensionStarBlock(dimensions) {
@@ -161,13 +170,7 @@ function createScanDimensionStarBlock(dimensions) {
     const raw = dimensions?.[key];
     const v =
       raw != null && Number.isFinite(Number(raw)) ? Number(raw) : 3;
-    const { filled, empty } = dimensionStarStrings(v);
-    const starTexts = [
-      { type: "text", text: filled, size: "sm", color: FLEX_ACCENT },
-      ...(empty
-        ? [{ type: "text", text: empty, size: "sm", color: "#666666" }]
-        : []),
-    ];
+    const starsText = dimensionStarLine(v);
     return {
       type: "box",
       layout: "vertical",
@@ -189,7 +192,14 @@ function createScanDimensionStarBlock(dimensions) {
               layout: "horizontal",
               flex: 3,
               justifyContent: "flex-end",
-              contents: starTexts,
+              contents: [
+                {
+                  type: "text",
+                  text: starsText,
+                  size: "sm",
+                  color: FLEX_ACCENT,
+                },
+              ],
             },
           ],
         },
