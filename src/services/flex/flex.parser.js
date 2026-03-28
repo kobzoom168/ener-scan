@@ -91,6 +91,36 @@ function getLineValue(lines, prefixes = [], fallback = "-") {
   return fallback;
 }
 
+/** Deep-scan dimension lines: `• คุ้มกัน: ★★★☆☆ — 3/5 ดาว` */
+const SCAN_DIMENSION_KEYS = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
+
+/**
+ * @param {string[]} lines normalized scan lines
+ * @returns {Record<string, number>}
+ */
+export function parseScanDimensionScores(lines) {
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const k of SCAN_DIMENSION_KEYS) {
+    const prefixes = [`• ${k}:`, `• ${k} :`];
+    const found = findLineByPrefixes(lines, prefixes);
+    if (!found) continue;
+    const slash = found.match(/(\d+)\s*\/\s*5\s*ดาว/);
+    if (slash) {
+      const n = Number(slash[1]);
+      if (Number.isFinite(n)) {
+        out[k] = Math.min(5, Math.max(1, Math.round(n)));
+        continue;
+      }
+    }
+    const filled = (found.match(/★/g) || []).length;
+    if (filled >= 1) {
+      out[k] = Math.min(5, Math.max(1, filled));
+    }
+  }
+  return out;
+}
+
 function findSectionStartIndex(lines, titles = []) {
   for (let i = 0; i < lines.length; i += 1) {
     const line = cleanLine(lines[i]);
@@ -354,6 +384,12 @@ export function parseScanText(rawText) {
       []
     ) || "-";
 
+  const secondaryEnergy = getLineValue(lines, [
+    "พลังเสริม:",
+    "พลังเสริม :",
+  ]);
+  const dimensions = parseScanDimensionScores(lines);
+
   return {
     energyScore: energyScore || "-",
     mainEnergy: mainEnergy || "-",
@@ -368,5 +404,7 @@ export function parseScanText(rawText) {
     notStrong: notStrong || "-",
     usageGuide: usageGuide || "-",
     closing: closing || "-",
+    secondaryEnergy,
+    dimensions,
   };
 }

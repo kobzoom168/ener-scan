@@ -2,6 +2,7 @@ import { parseScanText } from "../flex/flex.parser.js";
 import { normalizeScore, stripBullet } from "../flex/flex.utils.js";
 import { REPORT_PAYLOAD_VERSION } from "./reportPayload.types.js";
 import { sanitizeHttpsPublicImageUrl } from "../../utils/reports/reportImageUrl.util.js";
+import { formatScanBirthdayLabelThai } from "../../utils/scanBirthdayLabel.util.js";
 import { deriveReportWordingFromParsed } from "./reportWording.derive.js";
 
 /**
@@ -155,6 +156,19 @@ export function buildReportPayloadFromScan(opts) {
   const fitReason =
     parsed.fitReason && parsed.fitReason !== "-" ? String(parsed.fitReason) : "";
 
+  const birthdayLabel = birthdateUsed
+    ? formatScanBirthdayLabelThai(birthdateUsed)
+    : "";
+  const compatibilityReason = fitReason;
+  const secondaryEnergyLabel =
+    parsed.secondaryEnergy && parsed.secondaryEnergy !== "-"
+      ? String(parsed.secondaryEnergy).trim()
+      : "";
+  const scanDimensions =
+    parsed.dimensions && typeof parsed.dimensions === "object"
+      ? parsed.dimensions
+      : {};
+
   let summaryLine = "";
   if (overview) {
     const firstLine = overview.split(/\n/)[0]?.trim() || overview;
@@ -255,6 +269,12 @@ export function buildReportPayloadFromScan(opts) {
       summaryLine,
       wordingFamily: wording.wordingFamily || undefined,
       clarityLevel: wording.clarityLevel || undefined,
+      birthdayLabel: birthdayLabel || undefined,
+      compatibilityReason: compatibilityReason || undefined,
+      secondaryEnergyLabel: secondaryEnergyLabel || undefined,
+      scanDimensions:
+        Object.keys(scanDimensions).length > 0 ? scanDimensions : undefined,
+      scanTips: whatItGives.length > 0 ? whatItGives.slice(0, 2) : undefined,
     },
     sections: {
       whatItGives,

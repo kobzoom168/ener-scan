@@ -71,6 +71,11 @@
  * @property {string} [mainEnergyLabel]
  * @property {number|null} compatibilityPercent
  * @property {string} summaryLine
+ * @property {string} [birthdayLabel] — e.g. วันจันทร์ 19 ส.ค. 2528
+ * @property {string} [compatibilityReason] — birth-day fit copy for Flex / report
+ * @property {string} [secondaryEnergyLabel] — sub-energy from scan output
+ * @property {Record<string, number>} [scanDimensions] — pillars 1–5 stars
+ * @property {string[]} [scanTips] — model `tips` / “ชิ้นนี้หนุนเรื่อง” lines for Flex (max 2)
  */
 
 /**

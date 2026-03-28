@@ -25,10 +25,11 @@ export function extractJsonObjectString(raw) {
  * @param {string} raw
  * @returns {{
  *   energyName: string,
+ *   secondaryEnergyName: string,
  *   energyScore: number,
  *   dimensions: Record<string, number>,
  *   description: string,
- *   compatibility: string,
+ *   compatibilityReason: string,
  *   tips: string[],
  * } | null}
  */
@@ -38,9 +39,15 @@ export function parseDeepScanModelJson(raw) {
     if (!jsonStr) return null;
     const parsed = JSON.parse(jsonStr);
     const energyName = String(parsed.energyName || "").trim();
+    const secondaryEnergyName = String(
+      parsed.secondaryEnergyName || "",
+    ).trim();
     const energyScore = Number(parsed.energyScore);
     const description = String(parsed.description || "").trim();
-    const compatibility = String(parsed.compatibility || "").trim();
+    const compatibilityLegacy = String(parsed.compatibility || "").trim();
+    const compatibilityReason = String(
+      parsed.compatibilityReason || compatibilityLegacy || "",
+    ).trim();
     const tipsIn = Array.isArray(parsed.tips)
       ? parsed.tips.map((t) => String(t || "").trim()).filter(Boolean)
       : [];
@@ -57,16 +64,26 @@ export function parseDeepScanModelJson(raw) {
         : 3;
     }
 
-    if (!energyName || !description) return null;
+    if (!energyName || !description || !compatibilityReason) return null;
+
+    let subEnergy = secondaryEnergyName;
+    if (!subEnergy) {
+      const ranked = DIM_KEYS.map((k) => [k, dimensions[k] || 0]).sort(
+        (a, b) => b[1] - a[1],
+      );
+      const secondKey = ranked[1]?.[0] || "สมดุล";
+      subEnergy = `พลัง${secondKey}`;
+    }
 
     return {
       energyName,
+      secondaryEnergyName: subEnergy,
       energyScore: Number.isFinite(energyScore)
         ? Math.min(10, Math.max(0, energyScore))
         : 5,
       dimensions,
       description,
-      compatibility: compatibility || description.slice(0, 200),
+      compatibilityReason,
       tips: tipsIn.length >= 2 ? tipsIn.slice(0, 2) : tipsIn,
     };
   } catch {
@@ -109,18 +126,16 @@ function starLine(label, n) {
 /**
  * @param {NonNullable<ReturnType<typeof parseDeepScanModelJson>>} p
  * @param {string} objectCategory
+ * @param {{ compatibilityPercent?: number }} [options]
  * @returns {string}
  */
-export function renderDeepScanJsonToLegacyText(p, objectCategory) {
+export function renderDeepScanJsonToLegacyText(p, objectCategory, options = {}) {
   const cat = String(objectCategory || "").trim() || "พระเครื่อง";
   const scoreDisplay = Number.isFinite(p.energyScore)
     ? p.energyScore.toFixed(1).replace(/\.0$/, "")
     : String(p.energyScore);
-  const compatPct = clampPctFromScore(p.energyScore);
+  const compatPct = resolveCompatPercent(p, options);
   const [sum1, sum2] = splitTwoShortParagraphs(p.description);
-  const [why1, why2] = splitTwoShortParagraphs(
-    p.compatibility || p.description,
-  );
   const topDim = DIM_KEYS.reduce(
     (best, k) =>
       (p.dimensions[k] || 0) > (p.dimensions[best] || 0) ? k : best,
@@ -155,8 +170,7 @@ ${sum1 || p.description}
 ${sum2 || ""}
 
 เหตุผลที่เข้ากับเจ้าของ
-${why1 || p.compatibility}
-${why2 || ""}
+${p.compatibilityReason}
 
 ชิ้นนี้หนุนเรื่อง
 • ${tip1}
@@ -164,7 +178,7 @@ ${why2 || ""}
 
 เหมาะใช้เมื่อ
 • ${tip1}
-• ${why1 ? why1.slice(0, Math.min(80, why1.length)) : "ต้องการเสริมจังหวะชีวิตให้สอดคล้องกับพลังของวัตถุ"}
+• ${p.compatibilityReason.slice(0, Math.min(80, p.compatibilityReason.length))}
 
 อาจไม่เด่นเมื่อ
 เจ้าของยังไม่พร้อมรับฟังหรือใช้ข้อควรระวังของวัตถุมงคลอย่างต่อเนื่อง

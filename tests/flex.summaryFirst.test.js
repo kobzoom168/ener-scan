@@ -2,15 +2,34 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildScanSummaryFirstFlex } from "../src/services/flex/flex.summaryFirst.js";
 
-const SAMPLE_TEXT = `คะแนนพลัง: 8.2/10
-พลังหลัก: ป้องกัน
-ความเข้ากัน: 78%
-บทสรุปภาพรวม
+const SAMPLE_TEXT = `ผลการตรวจพลังวัตถุ โดย อาจารย์ Ener
+
+ระดับพลัง: 8.2 / 10
+พลังหลัก: ป้องกัน (เฉพาะชิ้นนี้จากภาพและหมวด พระเครื่อง)
+พลังเสริม: พลังสมดุล
+ความสอดคล้องกับเจ้าของ: 78%
+
+ลักษณะพลัง
+• บุคลิก: โดดเด่นด้าน คุ้มกัน (สอดคล้องกับแกนพลังของชิ้นนี้)
+
+• คุ้มกัน: ★★★★☆ — 4/5 ดาว
+• สมดุล: ★★★☆☆ — 3/5 ดาว
+• อำนาจ: ★★★☆☆ — 3/5 ดาว
+• เมตตา: ★★☆☆☆ — 2/5 ดาว
+• ดึงดูด: ★★☆☆☆ — 2/5 ดาว
+
+ภาพรวม
 ชิ้นนี้ให้ความมั่นใจแบบนิ่ง
+
 เหตุผลที่เข้ากับเจ้าของ
 โยงกับจังหวะที่ต้องการความนิ่ง
-บทบาทของชิ้นนี้
-ปิดท้ายด้วยความอบอุ่น`;
+
+ชิ้นนี้หนุนเรื่อง
+• ตั้งเจตนาก่อนใช้ในวันสำคัญ
+• พักเรื่องกดดันตอนกลางคืน
+
+ปิดท้าย
+ส่งรูปต่อได้`;
 
 function collectTextNodes(node, out = []) {
   if (!node || typeof node !== "object") return out;
@@ -36,13 +55,14 @@ function collectButtons(node, out = []) {
 
 test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () => {
   const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+    birthdate: "19/08/1985",
     reportUrl: "https://example.com/r/abc123",
     reportPayload: {
       reportId: "rid",
       publicToken: "tok",
       scanId: "s",
       userId: "u",
-      birthdateUsed: null,
+      birthdateUsed: "19/08/1985",
       generatedAt: new Date().toISOString(),
       reportVersion: "1.0.0",
       object: {
@@ -56,6 +76,9 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
         mainEnergyLabel: "ป้องกัน",
         compatibilityPercent: 78,
         summaryLine: "สรุปสั้นจาก payload",
+        birthdayLabel: "วันจันทร์ 19 ส.ค. 2528",
+        compatibilityReason: "วันจันทร์รับพลังคุ้มกันได้ดี ชิ้นนี้ตรงจุดมาก",
+        secondaryEnergyLabel: "พลังสมดุล",
       },
       sections: {
         whatItGives: [],
@@ -78,10 +101,13 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.equal(flex.contents.hero?.url, "https://cdn.example.com/x.jpg");
   const bodyStr = JSON.stringify(flex.contents.body);
   assert.match(bodyStr, /ระดับพลัง/);
-  assert.match(bodyStr, /พลังหลัก/);
+  assert.match(bodyStr, /พลังหลัก · พลังเสริม/);
   assert.match(bodyStr, /เข้ากับคุณ/);
-  assert.match(bodyStr, /ระดับเด่นของชิ้นนี้/);
+  assert.match(bodyStr, /เข้ากับคุณยังไง/);
+  assert.match(bodyStr, /คุ้มกัน/);
   assert.match(bodyStr, /★/);
+  assert.match(bodyStr, /#E8593C/);
+  assert.match(bodyStr, /#1a1a1a/);
   assert.doesNotMatch(bodyStr, /"text":""/);
   assert.equal(flex.contents.footer, undefined);
   const buttons = collectButtons(flex.contents.body);
@@ -178,18 +204,17 @@ test("buildScanSummaryFirstFlex: guardrails for summary-card structure", () => {
 
   const body = flex.contents.body;
   const allTexts = collectTextNodes(body);
-  const headline = allTexts.find((t) => t && !t.startsWith("• ") && !t.startsWith("พลังหลัก ·"));
-  assert.ok(headline, "headline must always exist");
+  assert.ok(
+    allTexts.some((t) => t.includes("พลังหลัก · พลังเสริม")),
+    "energy badges section label",
+  );
 
-  const bulletCount = allTexts.filter((t) => t.startsWith("• ")).length;
-  assert.equal(bulletCount, 2, "bullets length must be exactly 2");
+  const chevronTips = allTexts.filter((t) => t.startsWith("› "));
+  assert.equal(chevronTips.length, 2, "must have exactly two › tip lines");
 
   const buttons = collectButtons(flex.contents.body);
   assert.equal(buttons.length, 1, "must have exactly one CTA");
   assert.equal(flex.contents.footer, undefined);
-
-  const mainEnergyLine = allTexts.find((t) => t.startsWith("พลังหลัก ·"));
-  assert.ok(mainEnergyLine, "mainEnergyTitle must start with `พลังหลัก ·`");
 
   const bodyStr = JSON.stringify(body);
   assert.doesNotMatch(bodyStr, /เหตุผลที่เข้ากับเจ้าของ/);

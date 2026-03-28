@@ -3,52 +3,281 @@
  * HTML report stays primary artifact; Flex is teaser only.
  */
 import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
-import { distillSummaryLine } from "../../utils/reports/reportSummaryText.util.js";
+import { formatScanBirthdayLabelThai } from "../../utils/scanBirthdayLabel.util.js";
 import { parseScanText } from "./flex.parser.js";
-import {
-  pickMainEnergyColor,
-  normalizeScore,
-  getEnergyShortLabel,
-  wrapFlexTextNoTruncate,
-} from "./flex.utils.js";
-
-/** Soft wrap width for body copy (bullets, headlines); no "..." truncation. */
-const FLEX_WRAP_CHARS = 40;
-
-/** Summary teaser: max two wrapped lines, สายมู / energy punch, never "…". */
-const SAIMU_TEASER_CHARS_PER_LINE = 34;
-
-function buildSaimuTeaserFromOverview(overviewRaw) {
-  const t = String(overviewRaw || "").replace(/\s+/g, " ").trim();
-  if (!t) {
-    return "พลังชิ้นนี้มาแรง เข้าท่า — เปิดรายงานโค้ดลับต่อได้เลย";
-  }
-  const wrapped = wrapFlexTextNoTruncate(t, SAIMU_TEASER_CHARS_PER_LINE);
-  const lines = wrapped
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-  return lines.slice(0, 2).join("\n");
-}
-
-function wrapFlexLine(text) {
-  const t = String(text || "").trim();
-  if (!t) return "-";
-  return wrapFlexTextNoTruncate(t, FLEX_WRAP_CHARS);
-}
-import {
-  prepareScanFlexDisplay,
-  buildScanFlexAltText,
-  FLEX_SPLIT_WARN_THRESHOLD,
-  splitSentencesForFlex,
-} from "./flex.display.js";
-import {
-  generateScanCopy,
-  SCAN_COPY_CONFIG_VERSION,
-} from "./scanCopy.generator.js";
+import { normalizeScore, getEnergyShortLabel } from "./flex.utils.js";
+import { buildScanFlexAltText, FLEX_SPLIT_WARN_THRESHOLD, splitSentencesForFlex } from "./flex.display.js";
+import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import { ENERGY_TYPES } from "./scanCopy.config.js";
 import { resolveEnergyType } from "./scanCopy.utils.js";
-import { createTopAccent } from "./flex.components.js";
+
+const FLEX_CARD_BG = "#1a1a1a";
+const FLEX_BOX_BG = "#2a2a2a";
+const FLEX_ACCENT = "#E8593C";
+const FLEX_TEXT_PRIMARY = "#ffffff";
+const FLEX_TEXT_SECONDARY = "#888888";
+const FLEX_BORDER = "#333333";
+const FLEX_DIM_ORDER = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
+
+function createScoreRowTwoUp(scoreDisplay, compatPctStr) {
+  const levelValue = `${String(scoreDisplay || "-").trim() || "-"} / 10`;
+  const pct = String(compatPctStr || "-").trim().replace(/\s+/g, "");
+  return {
+    type: "box",
+    layout: "horizontal",
+    spacing: "sm",
+    margin: "md",
+    contents: [
+      {
+        type: "box",
+        layout: "vertical",
+        flex: 1,
+        paddingAll: "14px",
+        backgroundColor: FLEX_BOX_BG,
+        cornerRadius: "10px",
+        contents: [
+          {
+            type: "text",
+            text: "ระดับพลัง",
+            size: "xs",
+            color: FLEX_TEXT_SECONDARY,
+            wrap: true,
+          },
+          {
+            type: "text",
+            text: levelValue,
+            size: "xl",
+            weight: "bold",
+            color: FLEX_ACCENT,
+            margin: "sm",
+            wrap: true,
+          },
+        ],
+      },
+      {
+        type: "box",
+        layout: "vertical",
+        flex: 1,
+        paddingAll: "14px",
+        backgroundColor: FLEX_BOX_BG,
+        cornerRadius: "10px",
+        contents: [
+          {
+            type: "text",
+            text: "เข้ากับคุณ",
+            size: "xs",
+            color: FLEX_TEXT_SECONDARY,
+            wrap: true,
+          },
+          {
+            type: "text",
+            text: pct,
+            size: "xl",
+            weight: "bold",
+            color: FLEX_TEXT_PRIMARY,
+            margin: "sm",
+            wrap: true,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function createEnergyBadgePills(mainLabel, subLabel) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    margin: "md",
+    contents: [
+      {
+        type: "text",
+        text: "พลังหลัก · พลังเสริม",
+        size: "xs",
+        color: FLEX_TEXT_SECONDARY,
+        wrap: true,
+      },
+      {
+        type: "box",
+        layout: "horizontal",
+        spacing: "sm",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            flex: 1,
+            paddingAll: "10px 14px",
+            cornerRadius: "20px",
+            borderWidth: "1px",
+            borderColor: FLEX_ACCENT,
+            backgroundColor: FLEX_BOX_BG,
+            contents: [
+              {
+                type: "text",
+                text: String(mainLabel || "-").trim(),
+                size: "sm",
+                weight: "bold",
+                color: FLEX_ACCENT,
+                wrap: true,
+              },
+            ],
+          },
+          {
+            type: "box",
+            layout: "horizontal",
+            flex: 1,
+            paddingAll: "10px 14px",
+            cornerRadius: "20px",
+            borderWidth: "1px",
+            borderColor: FLEX_BORDER,
+            backgroundColor: FLEX_BOX_BG,
+            contents: [
+              {
+                type: "text",
+                text: String(subLabel || "-").trim(),
+                size: "sm",
+                weight: "bold",
+                color: FLEX_TEXT_SECONDARY,
+                wrap: true,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function dimensionStarStrings(n) {
+  const v = Math.min(5, Math.max(1, Math.round(Number(n) || 3)));
+  return { filled: "★".repeat(v), empty: "☆".repeat(5 - v) };
+}
+
+function createScanDimensionStarBlock(dimensions) {
+  const rows = FLEX_DIM_ORDER.map((key, idx) => {
+    const raw = dimensions?.[key];
+    const v =
+      raw != null && Number.isFinite(Number(raw)) ? Number(raw) : 3;
+    const { filled, empty } = dimensionStarStrings(v);
+    return {
+      type: "box",
+      layout: "vertical",
+      spacing: "xs",
+      margin: "none",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: [
+            {
+              type: "text",
+              text: key,
+              flex: 4,
+              size: "sm",
+              color: FLEX_TEXT_SECONDARY,
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              flex: 3,
+              justifyContent: "flex-end",
+              spacing: "none",
+              contents: [
+                { type: "text", text: filled, size: "sm", color: FLEX_ACCENT },
+                { type: "text", text: empty, size: "sm", color: "#666666" },
+              ],
+            },
+          ],
+        },
+        ...(idx < FLEX_DIM_ORDER.length - 1
+          ? [{ type: "separator", color: FLEX_BORDER, margin: "sm" }]
+          : []),
+      ],
+    };
+  });
+  return {
+    type: "box",
+    layout: "vertical",
+    margin: "md",
+    spacing: "none",
+    contents: rows,
+  };
+}
+
+function createCompatibilityTeaserBlock(birthdayLabel, reasonText) {
+  const reason = String(reasonText || "").trim() || "โยงพลังวันเกิดกับแกนหลักของชิ้นนี้ได้ตรงจุด — ดูฉบับเต็มในรายงาน";
+  return {
+    type: "box",
+    layout: "vertical",
+    paddingAll: "14px",
+    spacing: "sm",
+    backgroundColor: FLEX_BOX_BG,
+    cornerRadius: "12px",
+    borderWidth: "1px",
+    borderColor: FLEX_ACCENT,
+    margin: "md",
+    contents: [
+      {
+        type: "text",
+        text: "เข้ากับคุณยังไง",
+        size: "xs",
+        color: FLEX_TEXT_SECONDARY,
+        wrap: true,
+      },
+      {
+        type: "text",
+        text: `วันเกิด: ${birthdayLabel}`,
+        size: "sm",
+        color: FLEX_ACCENT,
+        wrap: true,
+      },
+      {
+        type: "text",
+        text: reason,
+        size: "sm",
+        color: FLEX_TEXT_PRIMARY,
+        wrap: true,
+      },
+    ],
+  };
+}
+
+/**
+ * @param {string} line
+ * @returns {{ type: string, text: string, size: string, color: string, wrap: boolean, margin: string } | null}
+ */
+function createTipBulletRow(line) {
+  const t = String(line ?? "").replace(/\r?\n/g, " ").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  return {
+    type: "text",
+    text: `› ${t}`,
+    size: "sm",
+    color: "#cccccc",
+    wrap: true,
+    margin: "xs",
+  };
+}
+
+/**
+ * Scan JSON `tips` / legacy “ชิ้นนี้หนุนเรื่อง” bullets → max 2 strings for Flex.
+ * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
+ * @param {ReturnType<typeof parseScanText>} parsed
+ */
+function resolveFlexScanTips(reportPayload, parsed) {
+  const fromPayload = reportPayload?.summary?.scanTips;
+  if (Array.isArray(fromPayload) && fromPayload.length) {
+    return fromPayload
+      .map((x) => String(x ?? "").trim())
+      .filter(Boolean)
+      .slice(0, 2);
+  }
+  return (parsed.supportTopics || [])
+    .map((x) => String(x ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 2);
+}
 
 const SUMMARY_CARD_COPY_VARIANTS = {
   premium_minimal: {
@@ -259,22 +488,6 @@ const SUMMARY_CARD_FAMILY_PATTERNS = {
   },
 };
 
-const GENERIC_BULLET_PHRASES = new Set([
-  "ช่วยเรื่องความมั่นคง",
-  "เหมาะกับคนที่ต้องการความมั่นคง",
-  "ดีในหลายด้าน",
-  "เสริมพลังโดยรวม",
-]);
-
-function stablePick(list, seed = "") {
-  const arr = Array.isArray(list) ? list.filter(Boolean) : [];
-  if (!arr.length) return "";
-  const s = String(seed || "summary-flex");
-  let h = 0;
-  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return arr[Math.abs(h) % arr.length] || arr[0];
-}
-
 function resolveFamilyPattern(reportPayload, resolvedType) {
   const wf = String(reportPayload?.summary?.wordingFamily || "")
     .trim()
@@ -297,14 +510,6 @@ function resolveFamilyPattern(reportPayload, resolvedType) {
   };
   const k = byType[resolvedType] || null;
   return (k && SUMMARY_CARD_FAMILY_PATTERNS[k]) || null;
-}
-
-function isOverlyGenericBullet(text, familyPattern) {
-  const t = String(text || "").trim();
-  if (!t) return true;
-  if (GENERIC_BULLET_PHRASES.has(t)) return true;
-  const forbidden = familyPattern?.forbiddenGenericPhrases || [];
-  return forbidden.some((x) => t.includes(String(x || "").trim()));
 }
 
 function resolveSummaryCardCopyVariant(reportPayload) {
@@ -344,25 +549,6 @@ function resolveSummaryCardCopyVariant(reportPayload) {
 
 /**
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
- * @param {string} fallbackHeadline
- */
-function resolveFlexHeadline(reportPayload, fallbackHeadline, familyPattern) {
-  const wf = String(reportPayload?.wording?.flexHeadline || "").trim();
-  if (wf) return { text: wrapFlexLine(wf), source: "wording" };
-  const mp = String(reportPayload?.sections?.messagePoints?.[0] || "").trim();
-  if (mp) return { text: wrapFlexLine(mp), source: "payload" };
-  const d = distillSummaryLine(reportPayload?.summary?.summaryLine || "");
-  if (d) return { text: wrapFlexLine(d), source: "payload" };
-  if (familyPattern?.headlinePatterns?.length) {
-    const seed = String(reportPayload?.reportId || reportPayload?.scanId || "headline");
-    const picked = stablePick(familyPattern.headlinePatterns, seed);
-    if (picked) return { text: wrapFlexLine(picked), source: "family_pattern" };
-  }
-  return { text: wrapFlexLine(fallbackHeadline), source: "default_variant" };
-}
-
-/**
- * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
  * @param {string} fallbackCompat
  */
 function compatibilityLabelForFlex(reportPayload, fallbackCompat) {
@@ -386,239 +572,12 @@ function scoreNormalizedForFlex(reportPayload, energyScoreText) {
   return normalizeScore(energyScoreText);
 }
 
-/**
- * Up to 2 short bullets: what the object “shines” at (from payload sections).
- * Full sentences, soft-wrapped (no "..." truncation).
- * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
- */
-function flexTeaserBullets(reportPayload) {
-  const wb = reportPayload?.wording?.flexBullets;
-  if (Array.isArray(wb) && wb.length >= 2) {
-    return wb
-      .slice(0, 2)
-      .map((x) => wrapFlexLine(String(x).trim()))
-      .filter(Boolean);
-  }
-  const w = reportPayload?.sections?.whatItGives;
-  if (Array.isArray(w) && w.length) {
-    return w
-      .slice(0, 2)
-      .map((x) => wrapFlexLine(String(x).trim()))
-      .filter(Boolean);
-  }
-  const m = reportPayload?.sections?.messagePoints;
-  if (Array.isArray(m) && m.length >= 2) {
-    return m
-      .slice(1, 3)
-      .map((x) => wrapFlexLine(String(x).trim()))
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function createCompactMetricStrip({
-  accentColor,
-  scoreDisplay,
-  compatLabel,
-  scoreLabel,
-  compatibilityLabel,
-}) {
-  const levelValue = `${String(scoreDisplay || "-").trim() || "-"} / 10`;
-  return {
-    type: "box",
-    layout: "horizontal",
-    spacing: "sm",
-    margin: "sm",
-    contents: [
-      {
-        type: "box",
-        layout: "vertical",
-        flex: 1,
-        paddingAll: "13px",
-        backgroundColor: "#18181A",
-        cornerRadius: "12px",
-        borderWidth: "1px",
-        borderColor: "#2A2A2D",
-        contents: [
-          {
-            type: "text",
-            text: scoreLabel,
-            size: "xs",
-            color: "#94949A",
-            wrap: true,
-          },
-          {
-            type: "text",
-            text: levelValue || "-",
-            size: "md",
-            weight: "bold",
-            color: accentColor,
-            wrap: true,
-            margin: "sm",
-          },
-        ],
-      },
-      {
-        type: "box",
-        layout: "vertical",
-        flex: 1,
-        paddingAll: "13px",
-        backgroundColor: "#18181A",
-        cornerRadius: "12px",
-        borderWidth: "1px",
-        borderColor: "#2A2A2D",
-        contents: [
-          {
-            type: "text",
-            text: compatibilityLabel,
-            size: "xs",
-            color: "#94949A",
-            wrap: true,
-          },
-          {
-            type: "text",
-            text: compatLabel || "-",
-            size: "md",
-            weight: "bold",
-            color: "#E8E8EC",
-            wrap: true,
-            margin: "sm",
-          },
-        ],
-      },
-    ],
-  };
-}
-
-const FAMILY_LABEL = {
-  [ENERGY_TYPES.PROTECT]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.PROTECT],
-  [ENERGY_TYPES.BALANCE]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.BALANCE],
-  [ENERGY_TYPES.POWER]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.POWER],
-  [ENERGY_TYPES.KINDNESS]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.KINDNESS],
-  [ENERGY_TYPES.ATTRACT]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.ATTRACT],
-  [ENERGY_TYPES.LUCK]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.LUCK],
-  [ENERGY_TYPES.BOOST]: SUMMARY_CARD_COPY.traitLabelsByType[ENERGY_TYPES.BOOST],
-};
-
-const FAMILY_POOL = [
-  ENERGY_TYPES.PROTECT,
-  ENERGY_TYPES.BALANCE,
-  ENERGY_TYPES.POWER,
-  ENERGY_TYPES.KINDNESS,
-  ENERGY_TYPES.ATTRACT,
-  ENERGY_TYPES.LUCK,
-  ENERGY_TYPES.BOOST,
-];
-
-function stars(n) {
-  const filled = Math.max(1, Math.min(5, Math.round(Number(n) || 0)));
-  return {
-    filled,
-    empty: 5 - filled,
-    filledText: "★".repeat(filled),
-    emptyText: "☆".repeat(5 - filled),
-  };
-}
-
-/**
- * Deterministic prominence mapping from main energy family.
- * Main family is always highest or tied-highest.
- * @param {string} resolvedType
- */
-function buildAspectProminence(resolvedType) {
-  /** @type {Record<string, number>} */
-  const score = Object.fromEntries(FAMILY_POOL.map((k) => [k, 2]));
-  const main = FAMILY_POOL.includes(resolvedType)
-    ? resolvedType
-    : ENERGY_TYPES.BOOST;
-  score[main] = 5;
-  const nearBy = {
-    [ENERGY_TYPES.PROTECT]: [ENERGY_TYPES.BALANCE, ENERGY_TYPES.BOOST],
-    [ENERGY_TYPES.BALANCE]: [ENERGY_TYPES.BOOST, ENERGY_TYPES.KINDNESS],
-    [ENERGY_TYPES.POWER]: [ENERGY_TYPES.PROTECT, ENERGY_TYPES.ATTRACT],
-    [ENERGY_TYPES.KINDNESS]: [ENERGY_TYPES.BALANCE, ENERGY_TYPES.ATTRACT],
-    [ENERGY_TYPES.ATTRACT]: [ENERGY_TYPES.KINDNESS, ENERGY_TYPES.POWER],
-    [ENERGY_TYPES.LUCK]: [ENERGY_TYPES.BOOST, ENERGY_TYPES.ATTRACT],
-    [ENERGY_TYPES.BOOST]: [ENERGY_TYPES.BALANCE, ENERGY_TYPES.LUCK],
-  };
-  for (const k of nearBy[main] || []) {
-    score[k] = Math.max(score[k], 4);
-  }
-  const aspects = [main, ...FAMILY_POOL.filter((k) => k !== main)].slice(0, 5);
-  return aspects.map((family) => ({
-    family,
-    label: FAMILY_LABEL[family] || family,
-    stars: score[family],
-  }));
-}
-
-function createAspectStarsBlock(resolvedType) {
-  const rows = buildAspectProminence(resolvedType);
-  return {
-    type: "box",
-    layout: "vertical",
-    margin: "sm",
-    spacing: "none",
-    contents: [
-      {
-        type: "text",
-        text: "ระดับเด่นของชิ้นนี้",
-        size: "xs",
-        color: "#94949A",
-        wrap: true,
-      },
-      ...rows.map((r) =>
-        (function buildRow() {
-          const s = stars(r.stars);
-          /** @type {Array<Record<string, unknown>>} */
-          const starContents = [];
-          if (s.filledText) {
-            starContents.push({
-              type: "text",
-              text: s.filledText,
-              size: "xs",
-              color: "#D4AF37",
-              align: "end",
-              flex: 0,
-            });
-          }
-          if (s.emptyText) {
-            starContents.push({
-              type: "text",
-              text: s.emptyText,
-              size: "xs",
-              color: "#5E5E65",
-              align: "end",
-              flex: 0,
-            });
-          }
-          return {
-            type: "box",
-            layout: "horizontal",
-            margin: "xs",
-            contents: [
-              {
-                type: "text",
-                text: r.label,
-                size: "xs",
-                color: "#B8B8BE",
-                flex: 3,
-                wrap: true,
-              },
-              {
-                type: "box",
-                layout: "horizontal",
-                justifyContent: "flex-end",
-                flex: 4,
-                spacing: "none",
-                contents: starContents,
-              },
-            ],
-          };
-        })(),
-      ),
-    ],
-  };
+function energyNameForPill(mainEnergyLine) {
+  let s = String(mainEnergyLine || "").trim();
+  if (!s || s === "-") return "";
+  const i = s.indexOf("(");
+  if (i >= 0) s = s.slice(0, i).trim();
+  return s;
 }
 
 /**
@@ -637,40 +596,24 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const reportPayload = options.reportPayload ?? null;
   const summaryCardCopy = resolveSummaryCardCopyVariant(reportPayload);
 
-  const accentColor = pickMainEnergyColor(rawText);
   const parsed = parseScanText(rawText);
-  const display = prepareScanFlexDisplay(parsed);
+  const mainEnergy =
+    parsed.mainEnergy && parsed.mainEnergy !== "-"
+      ? String(parsed.mainEnergy)
+      : "";
+  const compatibility =
+    parsed.compatibility && parsed.compatibility !== "-"
+      ? parsed.compatibility
+      : "-";
 
-  const {
-    energyScore,
-    mainEnergy,
-    compatibility,
-    personality,
-    tone,
-    hidden,
-  } = display;
+  const score = scoreNormalizedForFlex(reportPayload, parsed.energyScore);
 
-  const score = scoreNormalizedForFlex(reportPayload, energyScore);
-
-  const scanCopy = generateScanCopy({
-    mainEnergy,
-    energyScore,
-    scoreNumeric: score.numeric,
-    compatibility,
-    personality,
-    tone,
-    hidden,
-    birthdate,
-    display,
-    scanToneLevel: options.scanToneLevel,
-  });
-
+  const altMain =
+    String(reportPayload?.summary?.mainEnergyLabel || "").trim() ||
+    getEnergyShortLabel(mainEnergy || "พลังทั่วไป");
   const altText = buildScanFlexAltText({
-    mainEnergyLabel:
-      scanCopy.summary.mainEnergyLabelAlt ||
-      scanCopy.summary.mainEnergyLabel ||
-      getEnergyShortLabel(mainEnergy || "-"),
-    scoreDisplay: score.display || String(energyScore || "").trim(),
+    mainEnergyLabel: altMain,
+    scoreDisplay: score.display || String(parsed.energyScore || "").trim(),
   });
 
   const overviewRaw =
@@ -683,75 +626,10 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const familyPatternUsed = Object.entries(SUMMARY_CARD_FAMILY_PATTERNS).find(
     ([, v]) => v === familyPattern,
   )?.[0] || "none";
-  const headlineResolved = resolveFlexHeadline(
-    reportPayload,
-    summaryCardCopy.headline,
-    familyPattern,
-  );
-  const headline = headlineResolved.text;
-  const headlineFrom =
-    headlineResolved.source === "wording"
-      ? "wording"
-      : headlineResolved.source === "family_pattern"
-        ? "family_pattern"
-        : headlineResolved.source === "payload"
-          ? "payload"
-          : "default_variant";
 
-  const compatLabel = compatibilityLabelForFlex(reportPayload, compatibility);
-  const mainEnergyRaw =
-    String(reportPayload?.summary?.mainEnergyLabel || "").trim() ||
-    scanCopy?.summary?.mainEnergyLabel ||
-    getEnergyShortLabel(mainEnergy || "พลังทั่วไป");
-  let bulletFallbackUsed = false;
-  let usedGenericBulletGuard = false;
-  let bullets = flexTeaserBullets(reportPayload);
-  if (bullets.length === 0) {
-    bulletFallbackUsed = true;
-    if (familyPattern?.bulletStyleRules?.should_sound_like?.length) {
-      const seedBase = String(reportPayload?.reportId || reportPayload?.scanId || "bullet");
-      const b1 = stablePick(familyPattern.bulletStyleRules.should_sound_like, `${seedBase}:1`);
-      const b2 = stablePick(familyPattern.bulletStyleRules.should_sound_like, `${seedBase}:2`);
-      bullets = [b1, b2].filter(Boolean).map((x) => wrapFlexLine(x)).slice(0, 2);
-    }
-    if (bullets.length < 2) {
-      bulletFallbackUsed = true;
-      bullets = summaryCardCopy.bullets.map((x) => wrapFlexLine(x));
-    }
-  } else if (bullets.length === 1) {
-    bulletFallbackUsed = true;
-    const fallbackB2 = familyPattern?.bulletStyleRules?.should_sound_like?.length
-      ? stablePick(
-          familyPattern.bulletStyleRules.should_sound_like,
-          String(reportPayload?.reportId || reportPayload?.scanId || "bullet:single"),
-        )
-      : summaryCardCopy.bullets[1];
-    bullets = [
-      bullets[0],
-      wrapFlexLine(fallbackB2 || summaryCardCopy.bullets[1]),
-    ];
-  }
-  bullets = bullets.map((b, idx) => {
-    if (!isOverlyGenericBullet(b, familyPattern)) return b;
-    usedGenericBulletGuard = true;
-    bulletFallbackUsed = true;
-    const familyFallback = familyPattern?.bulletStyleRules?.should_sound_like?.length
-      ? stablePick(
-          familyPattern.bulletStyleRules.should_sound_like,
-          `${String(reportPayload?.reportId || reportPayload?.scanId || "bullet")}:${idx}`,
-        )
-      : "";
-    return wrapFlexLine(
-      familyFallback || summaryCardCopy.bullets[idx] || summaryCardCopy.bullets[0],
-    );
-  });
-  bullets = bullets.slice(0, 2);
-  const objectLabelFrom = "omitted_from_flex";
-  const copyShapingActive =
-    familyPatternUsed !== "none" ||
-    headlineFrom === "family_pattern" ||
-    bulletFallbackUsed === true ||
-    usedGenericBulletGuard === true;
+  const flexScanTips = resolveFlexScanTips(reportPayload, parsed);
+
+  const copyShapingActive = familyPatternUsed !== "none";
   console.log(
     JSON.stringify({
       event: "FLEX_SUMMARY_FIRST",
@@ -764,10 +642,6 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       appendReportBubbleLegacyIgnored: Boolean(options.appendReportBubble),
       summaryCardCopyVariant: summaryCardCopy.variantKey,
       familyPatternUsed,
-      objectLabelFrom,
-      headlineFrom,
-      bulletFallbackUsed,
-      usedGenericBulletGuard,
       copyShapingActive,
       flexSplitCounts: {
         overview: splitOverview,
@@ -779,65 +653,70 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const heroOk = /^https:\/\//i.test(imgUrl);
   const url = String(reportUrl || "").trim();
 
+  const compatForRow = compatibilityLabelForFlex(reportPayload, compatibility);
+  const pctDisplay = compatForRow.includes("%")
+    ? compatForRow.replace(/\s+/g, "")
+    : `${String(compatForRow).replace(/%/g, "").trim() || "-"}%`;
+
+  const mainPill =
+    energyNameForPill(mainEnergy) ||
+    String(reportPayload?.summary?.mainEnergyLabel || "").trim() ||
+    "พลังหลัก";
+  const subPill =
+    String(reportPayload?.summary?.secondaryEnergyLabel || "").trim() ||
+    (parsed.secondaryEnergy && parsed.secondaryEnergy !== "-"
+      ? String(parsed.secondaryEnergy).trim()
+      : "พลังสมดุล");
+
+  const dimsPayload =
+    reportPayload?.summary?.scanDimensions &&
+    typeof reportPayload.summary.scanDimensions === "object"
+      ? reportPayload.summary.scanDimensions
+      : {};
+  const dimensions = { ...parsed.dimensions };
+  for (const k of FLEX_DIM_ORDER) {
+    const v = dimsPayload[k];
+    if (v != null && Number.isFinite(Number(v))) dimensions[k] = Number(v);
+  }
+
+  const birthdayLabel =
+    String(reportPayload?.summary?.birthdayLabel || "").trim() ||
+    (birthdate ? formatScanBirthdayLabelThai(birthdate) : "") ||
+    "—";
+  const compatReason =
+    String(reportPayload?.summary?.compatibilityReason || "").trim() ||
+    (parsed.fitReason && parsed.fitReason !== "-"
+      ? String(parsed.fitReason).trim()
+      : "");
+
+  const tipRows = flexScanTips
+    .map((line) => createTipBulletRow(line))
+    .filter(Boolean);
+
   const bodyContents = [
-    createTopAccent(accentColor),
-    {
-      type: "text",
-      text: headline,
-      weight: "bold",
-      size: "md",
-      color: "#E8E8EC",
-      wrap: true,
-      margin: "xs",
-    },
-    {
-      type: "text",
-      text: buildSaimuTeaserFromOverview(overviewRaw),
-      size: "sm",
-      color: "#C8C8CE",
-      wrap: true,
-      margin: "xs",
-    },
-    createCompactMetricStrip({
-      accentColor,
-      scoreDisplay: score.display || "-",
-      compatLabel,
-      scoreLabel: summaryCardCopy.scoreLabel,
-      compatibilityLabel: summaryCardCopy.compatibilityLabel,
-    }),
-    {
-      type: "text",
-      text: wrapFlexLine(
-        summaryCardCopy.mainEnergyTitleByType[resolvedType] ||
-          `พลังหลัก · ${mainEnergyRaw}`,
-      ),
-      size: "sm",
-      weight: "bold",
-      color: "#D0D0D6",
-      wrap: true,
-      margin: "sm",
-    },
-    createAspectStarsBlock(resolvedType),
-    {
-      type: "box",
-      layout: "vertical",
-      spacing: "xs",
-      margin: "md",
-      contents: bullets.slice(0, 2).map((b) => ({
-        type: "text",
-        text: `• ${b}`,
-        size: "xs",
-        color: "#B8B8BE",
-        wrap: true,
-      })),
-    },
+    createScoreRowTwoUp(score.display || "-", pctDisplay),
+    createEnergyBadgePills(mainPill, subPill),
+    createScanDimensionStarBlock(dimensions),
+    createCompatibilityTeaserBlock(birthdayLabel, compatReason),
+    ...(tipRows.length > 0
+      ? [
+          {
+            type: "box",
+            layout: "vertical",
+            spacing: "none",
+            margin: "md",
+            contents: tipRows,
+          },
+        ]
+      : []),
   ];
+
   if (!url) {
     bodyContents.push({
       type: "text",
       text: "ลิงก์รายงานยังไม่พร้อม — กลับไปที่แชทแล้วลองอีกครั้งเมื่อสะดวก",
       size: "xs",
-      color: "#8F8F95",
+      color: FLEX_TEXT_SECONDARY,
       wrap: true,
       margin: "lg",
     });
@@ -845,12 +724,17 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     bodyContents.push({
       type: "button",
       style: "primary",
-      color: accentColor,
-      height: "sm",
+      color: FLEX_ACCENT,
+      height: "md",
       margin: "lg",
-      action: { type: "uri", label: summaryCardCopy.ctaText, uri: url },
+      action: {
+        type: "uri",
+        label: summaryCardCopy.ctaText,
+        uri: url,
+      },
     });
   }
+
   const bubble = {
     type: "bubble",
     size: "mega",
@@ -859,10 +743,10 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       layout: "vertical",
       paddingAll: "20px",
       spacing: "md",
-      backgroundColor: "#101010",
+      backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },
-    styles: { body: { backgroundColor: "#101010" } },
+    styles: { body: { backgroundColor: FLEX_CARD_BG } },
   };
   if (heroOk) {
     bubble.hero = {
@@ -871,7 +755,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       size: "full",
       aspectRatio: "1:1",
       aspectMode: "cover",
-      backgroundColor: "#0B0B0D",
+      backgroundColor: FLEX_CARD_BG,
     };
   }
 
