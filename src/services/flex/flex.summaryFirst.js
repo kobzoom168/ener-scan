@@ -121,7 +121,7 @@ function createEnergyBadgePill(mainLabel) {
             type: "box",
             layout: "horizontal",
             flex: 1,
-            gravity: "center",
+            justifyContent: "center",
             paddingTop: "10px",
             paddingBottom: "10px",
             paddingStart: "14px",
