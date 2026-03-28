@@ -48,19 +48,23 @@ export function safeParseDeepScanScore(raw) {
 export async function scoreDeepScanText(text) {
   const startedAt = Date.now();
 
-  const response = await openai.responses.create({
-    model: "gpt-4.1-mini",
-    input: [
-      {
-        role: "system",
-        content: [{ type: "input_text", text: deepScanScoreSystemPrompt }],
-      },
-      {
-        role: "user",
-        content: [{ type: "input_text", text }],
-      },
-    ],
-    temperature: 0.2,
+  const response = await withOpenAi429RetryOnce(() => {
+    const model = "gpt-4.1-mini";
+    console.log("[OPENAI_MODEL]", model);
+    return openai.responses.create({
+      model,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: deepScanScoreSystemPrompt }],
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text }],
+        },
+      ],
+      temperature: 0.2,
+    });
   });
 
   const raw = String(response.output_text || "").trim() || "{}";

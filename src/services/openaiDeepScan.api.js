@@ -18,9 +18,17 @@ function sleep(ms) {
 
 function isOpenAi429Error(err) {
   if (!err || typeof err !== "object") return false;
-  if (/** @type {{ status?: number }} */ (err).status === 429) return true;
-  const res = /** @type {{ response?: { status?: number } }} */ (err).response;
+  const o = /** @type {Record<string, unknown>} */ (err);
+  if (o.status === 429) return true;
+  const res = /** @type {{ status?: number } | undefined} */ (o.response);
   if (res?.status === 429) return true;
+  const code = String(o.code || "");
+  if (code === "rate_limit_exceeded" || code.includes("429")) return true;
+  const nested = /** @type {{ code?: string } | undefined} */ (o.error);
+  if (nested && String(nested.code || "") === "rate_limit_exceeded") return true;
+  const msg = String(o.message || "").toLowerCase();
+  if (msg.includes("429") || msg.includes("rate limit") || msg.includes("too many requests"))
+    return true;
   return false;
 }
 
