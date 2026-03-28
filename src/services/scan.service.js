@@ -1,4 +1,6 @@
 import { generateScanText } from "./openai.service.js";
+import { openai } from "./openaiDeepScan.api.js";
+import { getKnowledgeForCategory } from "../config/scanKnowledgeBase.js";
 import { generateWithRetry } from "./retry.service.js";
 import { formatScanOutput } from "./formatter.service.js";
 import { getImageHash } from "./dedupe.service.js";
@@ -29,6 +31,66 @@ import {
 
 function toBase64(buffer) {
   return Buffer.isBuffer(buffer) ? buffer.toString("base64") : "";
+}
+
+const OBJECT_CLASSIFIER_DEFAULT = "พระเครื่อง";
+
+const OBJECT_CLASSIFIER_VALID = [
+  "พระเครื่อง",
+  "คริสตัล/หิน",
+  "เครื่องรางของขลัง",
+  "พระบูชา",
+  "อื่นๆ",
+];
+
+function normalizeClassifierCategoryLabel(text) {
+  const t = String(text || "").trim();
+  for (const label of OBJECT_CLASSIFIER_VALID) {
+    if (t === label || t.includes(label)) return label;
+  }
+  return OBJECT_CLASSIFIER_DEFAULT;
+}
+
+/**
+ * Lightweight vision step before deep scan: single Thai category label.
+ * On any failure returns "พระเครื่อง".
+ * @param {string} imageBase64
+ * @returns {Promise<string>}
+ */
+export async function classifyObjectCategory(imageBase64) {
+  const clean = String(imageBase64 || "").trim();
+  if (!clean) return OBJECT_CLASSIFIER_DEFAULT;
+
+  try {
+    const response = await openai.responses.create({
+      model: "gpt-4o",
+      temperature: 0,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `Look at this image. Classify the object into exactly one category:
+พระเครื่อง | คริสตัล/หิน | เครื่องรางของขลัง | พระบูชา | อื่นๆ
+Reply with only the category name in Thai. Nothing else.`,
+            },
+            {
+              type: "input_image",
+              image_url: `data:image/jpeg;base64,${clean}`,
+            },
+          ],
+        },
+      ],
+    });
+    const raw = String(response.output_text || "").trim();
+    return normalizeClassifierCategoryLabel(raw);
+  } catch (err) {
+    console.error("[OBJECT_CLASSIFY] failed, using default category:", {
+      message: err?.message,
+    });
+    return OBJECT_CLASSIFIER_DEFAULT;
+  }
 }
 
 function isScanCacheBypassEnabled() {
@@ -122,6 +184,8 @@ async function generateScanWithValidation({
   birthdate,
   userRecents,
   globalRecents,
+  objectCategory,
+  knowledgeBase,
 }) {
   return generateWithRetry({
     maxRetries: 2,
@@ -136,6 +200,8 @@ async function generateScanWithValidation({
         imageBase64,
         birthdate,
         retryHint,
+        objectCategory,
+        knowledgeBase,
       });
 
       const attemptEndedAt = Date.now();
@@ -254,6 +320,24 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
 
   /*
   ------------------------------------------------
+  OBJECT CATEGORY + KNOWLEDGE (before deep scan)
+  ------------------------------------------------
+  */
+  let objectCategory = OBJECT_CLASSIFIER_DEFAULT;
+  try {
+    objectCategory = await classifyObjectCategory(imageBase64);
+  } catch (clasErr) {
+    console.error("[SCAN] classifyObjectCategory failed (ignored):", {
+      message: clasErr?.message,
+    });
+  }
+  const knowledgeBase = getKnowledgeForCategory(objectCategory);
+  console.log("[SCAN] objectCategory:", objectCategory, {
+    knowledgeChars: knowledgeBase.length,
+  });
+
+  /*
+  ------------------------------------------------
   GENERATE AI
   ------------------------------------------------
   */
@@ -264,6 +348,8 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
     birthdate,
     userRecents,
     globalRecents,
+    objectCategory,
+    knowledgeBase,
   });
 
   const generateEndedAt = Date.now();

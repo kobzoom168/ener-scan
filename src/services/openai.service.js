@@ -25,13 +25,16 @@ function validateInput({ imageBase64, birthdate }) {
 }
 
 /**
- * Full pipeline: draft (4.1-mini) → validate → rewrite (4o) optional → validate → fallback.
+ * Full pipeline: draft (gpt-4o, JSON contract → legacy Thai layout) → validate →
+ * rewrite (4o) optional → validate → fallback.
  * Used by scan.service retry layer via `retryHint`.
  */
 export async function generateScanText({
   imageBase64,
   birthdate,
   retryHint = "",
+  objectCategory = "พระเครื่อง",
+  knowledgeBase = "",
 }) {
   const { cleanBirthdate, cleanImageBase64 } = validateInput({
     imageBase64,
@@ -41,6 +44,7 @@ export async function generateScanText({
   console.log("[OPENAI] generateScanText → runDeepScanPipeline");
   console.log("[OPENAI] birthdate:", cleanBirthdate);
   console.log("[OPENAI] retryHint:", retryHint ? "provided" : "none");
+  console.log("[OPENAI] objectCategory:", objectCategory);
   console.log("[OPENAI] imageBase64 exists:", Boolean(cleanImageBase64));
 
   return runDeepScanPipeline({
@@ -48,5 +52,7 @@ export async function generateScanText({
     birthdate: cleanBirthdate,
     retryHint,
     mimeType: "image/jpeg",
+    objectCategory,
+    knowledgeBase,
   });
 }

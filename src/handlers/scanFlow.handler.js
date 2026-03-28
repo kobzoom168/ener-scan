@@ -844,7 +844,7 @@ export async function runScanFlow({
       energyScore: parsed.energyScore,
       mainEnergy: parsed.mainEnergy,
       compatibility: parsed.compatibility,
-      modelName: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
+      modelName: scanFromCache ? "persistent_cache" : "gpt-4o",
       promptVersion: scanFromCache ? "cache_v1" : "v1",
       responseTimeMs,
       fromCache: scanFromCache,
@@ -882,7 +882,7 @@ export async function runScanFlow({
         lineUserId: userId,
         birthdateUsed: birthdate,
         publicToken,
-        modelLabel: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
+        modelLabel: scanFromCache ? "persistent_cache" : "gpt-4o",
         objectImageUrl,
       });
       await insertScanPublicReport({

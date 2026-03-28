@@ -49,7 +49,7 @@ export async function scoreDeepScanText(text) {
   const startedAt = Date.now();
 
   const response = await openai.responses.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4o",
     input: [
       {
         role: "system",
@@ -66,7 +66,7 @@ export async function scoreDeepScanText(text) {
   const raw = String(response.output_text || "").trim() || "{}";
 
   console.log("[DEEP_SCAN_SCORE_TIMING]", {
-    model: "gpt-4o-mini",
+    model: "gpt-4o",
     ms: Date.now() - startedAt,
     outputLength: raw.length,
   });

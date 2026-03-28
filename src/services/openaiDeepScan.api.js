@@ -6,7 +6,7 @@ export const openai = new OpenAI({
 });
 
 /**
- * Layer 1: gpt-4.1-mini — image + birthdate → draft (fixed format).
+ * Layer 1: gpt-4o — image + prompts → draft (JSON scan contract → rendered client-side).
  */
 export async function generateDeepScanDraft({
   systemPrompt,
@@ -17,7 +17,7 @@ export async function generateDeepScanDraft({
   const startedAt = Date.now();
 
   const response = await openai.responses.create({
-    model: "gpt-4.1-mini",
+    model: "gpt-4o",
     input: [
       {
         role: "system",
@@ -40,7 +40,7 @@ export async function generateDeepScanDraft({
   const text = String(response.output_text || "").trim();
 
   console.log("[OPENAI_DRAFT_TIMING]", {
-    model: "gpt-4.1-mini",
+    model: "gpt-4o",
     ms: Date.now() - startedAt,
     outputLength: text.length,
   });
