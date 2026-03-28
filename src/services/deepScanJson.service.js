@@ -3,7 +3,10 @@
  * (compatible with flex parser, history parser, format validation).
  */
 
-import { DEEP_SCAN_ALLOWED_ENERGY_NAMES } from "../config/scanKnowledgeBase.js";
+import {
+  DEEP_SCAN_ALLOWED_ENERGY_NAMES,
+  SCAN_DIMENSION_TO_FALLBACK_ENERGY,
+} from "../config/scanKnowledgeBase.js";
 
 const DIM_KEYS = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
 
@@ -27,20 +30,31 @@ function pickRandomSecondaryEnergyName(primaryEnergyName) {
 }
 
 /**
- * @param {string} primaryEnergyName
- * @param {string} secondaryRaw
+ * Primary = highest dimension (tie-break: order in DIM_KEYS).
+ * Secondary = next distinct mapped energy by rank.
+ * @param {Record<string, number>} dimensions
+ * @returns {{ primaryEnergy: string, secondaryEnergy: string }}
  */
-function resolveSecondaryEnergyName(primaryEnergyName, secondaryRaw) {
-  const primary = String(primaryEnergyName || "").trim();
-  const secondary = stripEnergyNameParenSuffix(
-    String(secondaryRaw || "").trim(),
-  );
-  const allowed =
-    secondary &&
-    DEEP_SCAN_ALLOWED_ENERGY_NAMES.includes(secondary) &&
-    secondary !== primary;
-  if (allowed) return secondary;
-  return pickRandomSecondaryEnergyName(primary);
+function deriveEnergyNamesFromDimensions(dimensions) {
+  const rankedKeys = [...DIM_KEYS].sort((a, b) => {
+    const da = dimensions[a] ?? 0;
+    const db = dimensions[b] ?? 0;
+    if (db !== da) return db - da;
+    return DIM_KEYS.indexOf(a) - DIM_KEYS.indexOf(b);
+  });
+  const primaryEnergy = SCAN_DIMENSION_TO_FALLBACK_ENERGY[rankedKeys[0]];
+  let secondaryEnergy = "";
+  for (let i = 1; i < rankedKeys.length; i += 1) {
+    const cand = SCAN_DIMENSION_TO_FALLBACK_ENERGY[rankedKeys[i]];
+    if (cand && cand !== primaryEnergy) {
+      secondaryEnergy = cand;
+      break;
+    }
+  }
+  if (!secondaryEnergy) {
+    secondaryEnergy = pickRandomSecondaryEnergyName(primaryEnergy);
+  }
+  return { primaryEnergy, secondaryEnergy };
 }
 
 /**
@@ -76,10 +90,6 @@ export function parseDeepScanModelJson(raw) {
     const jsonStr = extractJsonObjectString(raw);
     if (!jsonStr) return null;
     const parsed = JSON.parse(jsonStr);
-    const energyName = stripEnergyNameParenSuffix(parsed.energyName);
-    const secondaryEnergyNameRaw = String(
-      parsed.secondaryEnergyName || "",
-    ).trim();
     const energyScore = Number(parsed.energyScore);
     const description = String(parsed.description || "").trim();
     const compatibilityLegacy = String(parsed.compatibility || "").trim();
@@ -102,16 +112,17 @@ export function parseDeepScanModelJson(raw) {
         : 3;
     }
 
-    if (!energyName || !description || !compatibilityReason) return null;
+    if (!description || !compatibilityReason) return null;
 
-    const subEnergy = resolveSecondaryEnergyName(
-      energyName,
-      secondaryEnergyNameRaw,
-    );
+    // Align pills with star row: always derive from dimensions (ignores GPT labels
+    // e.g. "พลังความมั่นคง" not in allow-list or contradicting scores).
+    const { primaryEnergy, secondaryEnergy } =
+      deriveEnergyNamesFromDimensions(dimensions);
+    const energyName = primaryEnergy;
 
     return {
       energyName,
-      secondaryEnergyName: subEnergy,
+      secondaryEnergyName: secondaryEnergy,
       energyScore: Number.isFinite(energyScore)
         ? Math.min(10, Math.max(0, energyScore))
         : 5,
