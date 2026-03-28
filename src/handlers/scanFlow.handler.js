@@ -688,18 +688,25 @@ export async function runScanFlow({
   let scanQualityAnalytics = null;
   const scanStartedAt = Date.now();
 
+  console.log("[WEBHOOK] runScanFlow start", {
+    userId,
+    scanJobId,
+    flowVersion,
+    birthdate,
+    imageBufferLength: imageBuffer?.length || 0,
+    startedAt: scanStartedAt,
+  });
+
   try {
-    console.log("[WEBHOOK] runScanFlow start", {
-      userId,
-      scanJobId,
-      flowVersion,
-      birthdate,
-      imageBufferLength: imageBuffer?.length || 0,
-      startedAt: scanStartedAt,
-    });
-
     await sendPreScanAcknowledgement({ client, userId });
+  } catch (ackErr) {
+    console.log("[SCAN_FLOW] pre-scan ack failed (ignored):", {
+      message: ackErr?.message,
+      status: ackErr?.status,
+    });
+  }
 
+  try {
     let scanOut;
     try {
       scanOut = await runDeepScan({
