@@ -19,6 +19,17 @@ const FLEX_TEXT_SECONDARY = "#888888";
 const FLEX_BORDER = "#333333";
 const FLEX_DIM_ORDER = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
 
+/**
+ * Hard cap for LINE badge single-line layout (Thai code units).
+ * @param {string} text
+ * @param {number} [maxLen]
+ */
+function truncateEnergyBadgeLabel(text, maxLen = 8) {
+  const s = String(text || "").trim();
+  if (!s) return "-";
+  return s.length > maxLen ? s.slice(0, maxLen) : s;
+}
+
 function createScoreRowTwoUp(scoreDisplay, compatPctStr) {
   const levelValue = `${String(scoreDisplay || "-").trim() || "-"} / 10`;
   const pct = String(compatPctStr || "-").trim().replace(/\s+/g, "");
@@ -229,13 +240,6 @@ function createCompatibilityTeaserBlock(birthdayLabel, reasonText) {
     borderColor: FLEX_ACCENT,
     margin: "md",
     contents: [
-      {
-        type: "text",
-        text: "เข้ากับคุณยังไง",
-        size: "xs",
-        color: FLEX_TEXT_SECONDARY,
-        wrap: true,
-      },
       {
         type: "text",
         text: `วันเกิด: ${birthdayLabel}`,

@@ -3,7 +3,29 @@
  * (compatible with flex parser, history parser, format validation).
  */
 
+import {
+  DEEP_SCAN_ALLOWED_ENERGY_NAMES,
+  SCAN_DIMENSION_TO_FALLBACK_ENERGY,
+} from "../config/scanKnowledgeBase.js";
+
 const DIM_KEYS = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
+
+/**
+ * @param {string} energyName
+ * @param {Record<string, number>} dimensions
+ */
+function fallbackSecondaryEnergyName(energyName, dimensions) {
+  const primary = String(energyName || "").trim();
+  const ranked = DIM_KEYS.map((k) => [k, dimensions[k] || 0]).sort(
+    (a, b) => b[1] - a[1],
+  );
+  for (const [key] of ranked) {
+    const candidate = SCAN_DIMENSION_TO_FALLBACK_ENERGY[key];
+    if (candidate && candidate !== primary) return candidate;
+  }
+  const alt = DEEP_SCAN_ALLOWED_ENERGY_NAMES.find((n) => n !== primary);
+  return alt || "พลังสมดุล";
+}
 
 /**
  * Extract JSON object string from model output (fences or raw).
@@ -74,11 +96,7 @@ export function parseDeepScanModelJson(raw) {
 
     let subEnergy = secondaryEnergyName;
     if (!subEnergy) {
-      const ranked = DIM_KEYS.map((k) => [k, dimensions[k] || 0]).sort(
-        (a, b) => b[1] - a[1],
-      );
-      const secondKey = ranked[1]?.[0] || "สมดุล";
-      subEnergy = `พลัง${secondKey}`;
+      subEnergy = fallbackSecondaryEnergyName(energyName, dimensions);
     }
 
     return {

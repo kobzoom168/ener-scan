@@ -104,7 +104,7 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.match(bodyStr, /ระดับพลัง/);
   assert.match(bodyStr, /พลังหลัก · พลังเสริม/);
   assert.match(bodyStr, /เข้ากับคุณ/);
-  assert.match(bodyStr, /เข้ากับคุณยังไง/);
+  assert.doesNotMatch(bodyStr, /เข้ากับคุณยังไง/);
   assert.match(bodyStr, /คุ้มกัน/);
   assert.match(bodyStr, /★/);
   assert.match(bodyStr, /#E8593C/);
