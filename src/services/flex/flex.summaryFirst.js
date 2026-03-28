@@ -181,7 +181,7 @@ function dimensionStarLine(n) {
 }
 
 function createScanDimensionStarBlock(dimensions) {
-  const sortedKeys = sortDimensionKeysForStarDisplay(dimensions, FLEX_DIM_ORDER);
+  const sortedKeys = sortDimensionKeysForStarDisplay(dimensions);
   const rows = sortedKeys.map((key, idx) => {
     const raw = dimensions?.[key];
     const v =

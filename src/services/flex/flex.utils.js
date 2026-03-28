@@ -36,7 +36,12 @@ export function sortDimensionKeysForStarDisplay(
     const va = dimensionScoreForSort(dimensions, a);
     const vb = dimensionScoreForSort(dimensions, b);
     if (vb !== va) return vb - va;
-    return keys.indexOf(a) - keys.indexOf(b);
+    const ta = FLEX_DIMENSION_TIE_ORDER.indexOf(a);
+    const tb = FLEX_DIMENSION_TIE_ORDER.indexOf(b);
+    return (
+      (ta === -1 ? Number.MAX_SAFE_INTEGER : ta) -
+      (tb === -1 ? Number.MAX_SAFE_INTEGER : tb)
+    );
   });
 }
 
@@ -457,6 +462,42 @@ export function getEnergyShortLabel(mainEnergy) {
   const value = cleanLine(mainEnergy);
 
   if (!value || value === "-") return "พลังหลักชัด ๆ";
+
+  if (value.includes("ดูดเงิน")) {
+    return "ดึงทรัพย์และโชค";
+  }
+
+  if (value.includes("เปิดทาง")) {
+    return "เปิดโอกาสใหม่";
+  }
+
+  if (value.includes("พลังการงาน")) {
+    return "เสริมหน้าที่การงาน";
+  }
+
+  if (value.includes("วาสนา")) {
+    return "บุญหนุนและวาสนา";
+  }
+
+  if (value.includes("ใจนิ่ง")) {
+    return "สงบและมั่นคงใจ";
+  }
+
+  if (value.includes("ปัญญา")) {
+    return "เฉลียวฉลาดและแก้ปัญหา";
+  }
+
+  if (value.includes("มหานิยม")) {
+    return "เป็นที่รักและนิยม";
+  }
+
+  if (value.includes("เสน่หา")) {
+    return "ดึงดูดและน่าหลงใหล";
+  }
+
+  if (value.includes("ป้องกัน")) {
+    return "ป้องกันสิ่งร้าย";
+  }
 
   if (value.includes("ปกป้อง") || value.includes("คุ้มครอง")) {
     return "ปกป้องและมั่นคง";

@@ -24,7 +24,7 @@ export function stripEnergyNameParenSuffix(s) {
  * @returns {{ primaryEnergy: string, secondaryEnergy: string }}
  */
 function deriveEnergyNamesFromDimensions(dimensions) {
-  const rankedKeys = sortDimensionKeysForStarDisplay(dimensions, DIM_KEYS);
+  const rankedKeys = sortDimensionKeysForStarDisplay(dimensions);
   const primaryEnergy = SCAN_DIMENSION_TO_FALLBACK_ENERGY[rankedKeys[0]];
   const secondaryEnergy =
     rankedKeys.length >= 2
