@@ -291,7 +291,7 @@ const SUMMARY_CARD_COPY_VARIANTS = {
       [ENERGY_TYPES.KINDNESS]: "พลังหลัก · พลังเมตตา",
       [ENERGY_TYPES.ATTRACT]: "พลังหลัก · พลังดึงดูด",
       [ENERGY_TYPES.LUCK]: "พลังหลัก · พลังโชคลาภ",
-      [ENERGY_TYPES.BOOST]: "พลังหลัก · พลังเสริม",
+      [ENERGY_TYPES.BOOST]: "พลังหลัก",
     },
     bullets: [
       "เด่นด้านการตั้งพลังให้นิ่ง",
