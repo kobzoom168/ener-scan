@@ -43,6 +43,15 @@ export async function replyFlex(client, replyToken, flexMessage) {
   console.log("[LINE_REPLY_FLEX] start");
   console.log("[LINE_REPLY_FLEX] replyToken exists:", Boolean(replyToken));
   console.log("[LINE_REPLY_FLEX] altText:", flexMessage?.altText || "no-altText");
+  try {
+    const flexPayloadJson = JSON.stringify(flexMessage);
+    console.log(
+      "[LINE_REPLY_FLEX] payload_json_preview:",
+      flexPayloadJson.slice(0, 500),
+    );
+  } catch {
+    console.log("[LINE_REPLY_FLEX] payload_json_preview: <stringify failed>");
+  }
 
   try {
     const result = await client.replyMessage(replyToken, flexMessage);

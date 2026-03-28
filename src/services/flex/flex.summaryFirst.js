@@ -162,11 +162,16 @@ function createScanDimensionStarBlock(dimensions) {
     const v =
       raw != null && Number.isFinite(Number(raw)) ? Number(raw) : 3;
     const { filled, empty } = dimensionStarStrings(v);
+    const starTexts = [
+      { type: "text", text: filled, size: "sm", color: FLEX_ACCENT },
+      ...(empty
+        ? [{ type: "text", text: empty, size: "sm", color: "#666666" }]
+        : []),
+    ];
     return {
       type: "box",
       layout: "vertical",
       spacing: "xs",
-      margin: "none",
       contents: [
         {
           type: "box",
@@ -184,11 +189,7 @@ function createScanDimensionStarBlock(dimensions) {
               layout: "horizontal",
               flex: 3,
               justifyContent: "flex-end",
-              spacing: "none",
-              contents: [
-                { type: "text", text: filled, size: "sm", color: FLEX_ACCENT },
-                { type: "text", text: empty, size: "sm", color: "#666666" },
-              ],
+              contents: starTexts,
             },
           ],
         },
@@ -202,7 +203,6 @@ function createScanDimensionStarBlock(dimensions) {
     type: "box",
     layout: "vertical",
     margin: "md",
-    spacing: "none",
     contents: rows,
   };
 }
@@ -704,7 +704,6 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
           {
             type: "box",
             layout: "vertical",
-            spacing: "none",
             margin: "md",
             contents: tipRows,
           },
