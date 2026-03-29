@@ -246,6 +246,7 @@ import {
 } from "../utils/paymentConversationRouting.util.js";
 
 import { runScanFlow } from "../handlers/scanFlow.handler.js";
+import { ingestScanImageAsyncV2 } from "../services/scanV2/webhookImageIngestion.service.js";
 
 import {
   checkGlobalAbuseStatus,
@@ -2002,6 +2003,41 @@ async function finalizeAcceptedImage({
 
   if (savedBirthdate) {
     console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
+
+    if (env.ENABLE_ASYNC_SCAN_V2) {
+      try {
+        const ing = await ingestScanImageAsyncV2({
+          userId,
+          lineMessageId: event.message.id,
+          imageBuffer,
+          birthdateSnapshot: savedBirthdate,
+          accessDecision,
+        });
+        if (ing?.ok) {
+          console.log(
+            JSON.stringify({
+              event: "SCAN_V2_INGEST_OK",
+              duplicate: Boolean(ing.duplicate),
+              jobIdPrefix: ing.jobId ? String(ing.jobId).slice(0, 8) : null,
+            }),
+          );
+          return;
+        }
+        console.warn(
+          JSON.stringify({
+            event: "SCAN_V2_INGEST_FALLBACK_SYNC",
+            reason: ing?.error ?? "unknown",
+          }),
+        );
+      } catch (ingErr) {
+        console.error(
+          JSON.stringify({
+            event: "SCAN_V2_INGEST_EXCEPTION",
+            message: ingErr?.message,
+          }),
+        );
+      }
+    }
 
     await runScanFlow({
       client,

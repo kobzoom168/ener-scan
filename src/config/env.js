@@ -380,6 +380,28 @@ export const env = {
     const n = raw === undefined || raw === "" ? 3 : Number(raw);
     return Number.isFinite(n) ? Math.min(4, Math.max(1, Math.floor(n))) : 3;
   })(),
+
+  /**
+   * Ener Scan V2: async webhook → storage → DB queue → workers (see docs/ENER_SCAN_V2_ROLLOUT.md).
+   * When `true`, image+saved-birthdate path enqueues scan_jobs instead of inline runScanFlow.
+   */
+  ENABLE_ASYNC_SCAN_V2: process.env.ENABLE_ASYNC_SCAN_V2 === "true",
+  /** Supabase Storage bucket for scan_uploads (create bucket + policies in dashboard). */
+  SCAN_V2_UPLOAD_BUCKET:
+    String(process.env.SCAN_V2_UPLOAD_BUCKET || "").trim() || "scan-uploads",
+  /** Optional Redis for rate-limit keys / dedupe (workers use DB locks if unset). */
+  REDIS_URL: String(process.env.REDIS_URL || "").trim() || null,
+  ENABLE_SCAN_WORKER: process.env.ENABLE_SCAN_WORKER === "true",
+  ENABLE_DELIVERY_WORKER: process.env.ENABLE_DELIVERY_WORKER === "true",
+  ENABLE_MAINTENANCE_WORKER: process.env.ENABLE_MAINTENANCE_WORKER === "true",
+  SCAN_WORKER_CONCURRENCY: Math.max(
+    1,
+    Number(process.env.SCAN_WORKER_CONCURRENCY || 2) || 2,
+  ),
+  DELIVERY_WORKER_CONCURRENCY: Math.max(
+    1,
+    Number(process.env.DELIVERY_WORKER_CONCURRENCY || 1) || 1,
+  ),
 };
 
 console.log("[ENV_CHECK]", {
