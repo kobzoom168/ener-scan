@@ -51,12 +51,21 @@ export async function replyTextSequenceOrSingle({
   userId,
   messages,
 }) {
+  const uid = String(userId || "").trim();
   const list = (Array.isArray(messages) ? messages : [])
     .map((m) => String(m || "").trim())
     .filter(Boolean);
   if (list.length === 0) return;
   if (list.length === 1) {
-    await replyText(client, replyToken, list[0]);
+    const rt = String(replyToken || "").trim();
+    if (rt) {
+      await replyText(client, rt, list[0]);
+    } else {
+      if (!uid) {
+        throw new Error("replyTextSequenceOrSingle_missing_userId_for_push");
+      }
+      await pushText(client, uid, list[0]);
+    }
     return;
   }
   await sendTextSequence({ client, replyToken, userId, messages: list });

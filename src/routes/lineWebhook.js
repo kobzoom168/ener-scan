@@ -18,6 +18,8 @@ import {
   setSelectedPaymentPackageKey,
   getSelectedPaymentPackageKey,
   clearSelectedPaymentPackageKey,
+  resetScanFlowReplyTokenSpent,
+  markScanFlowReplyTokenSpent,
 } from "../stores/session.store.js";
 
 import { getSavedBirthdate, saveBirthdate } from "../stores/userProfile.db.js";
@@ -2034,6 +2036,7 @@ async function finalizeAcceptedImage({
 
 async function handleImageMessage({ client, event, userId, session }) {
   const now = Date.now();
+  resetScanFlowReplyTokenSpent(userId);
 
   const imagePhase1Invoke = async () =>
     invokePhase1FreshNoop({
@@ -4801,6 +4804,9 @@ async function handleTextMessage({ client, event, userId, session }) {
           exactDuplicate: Boolean(beforeScanSendResult?.exactDuplicate),
           semanticDuplicate: Boolean(beforeScanSendResult?.semanticDuplicate),
         });
+        if (beforeScanAckSent) {
+          markScanFlowReplyTokenSpent(userId);
+        }
         await runScanFlow({
           client,
           replyToken: beforeScanAckSent ? null : event.replyToken,

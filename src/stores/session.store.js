@@ -33,6 +33,11 @@ function createEmptySession() {
      * Keys: paywall_offer_single | awaiting_slip | waiting_birthdate | pending_verify
      */
     sameStateAckStreakByState: {},
+    /**
+     * LINE reply token for this image/webhook flow was already used (before_scan or pre-scan ack).
+     * Global error fallbacks must use push, not replyMessage (avoids 400 after token consumed).
+     */
+    scanFlowReplyTokenSpent: false,
   };
 }
 
@@ -143,6 +148,29 @@ export function clearSelectedPaymentPackageKey(userId) {
   if (!id) return;
   const session = getSession(id);
   session.selectedPaymentPackageKey = null;
+  sessions.set(id, session);
+}
+
+export function markScanFlowReplyTokenSpent(userId) {
+  const id = normalizeUserId(userId);
+  if (!id) return;
+  const session = getSession(id);
+  session.scanFlowReplyTokenSpent = true;
+  sessions.set(id, session);
+}
+
+export function isScanFlowReplyTokenSpent(userId) {
+  const id = normalizeUserId(userId);
+  if (!id) return false;
+  return Boolean(getSession(id).scanFlowReplyTokenSpent);
+}
+
+/** Reset at the start of each image message so a new webhook event gets a fresh token lifecycle. */
+export function resetScanFlowReplyTokenSpent(userId) {
+  const id = normalizeUserId(userId);
+  if (!id) return;
+  const session = getSession(id);
+  session.scanFlowReplyTokenSpent = false;
   sessions.set(id, session);
 }
 

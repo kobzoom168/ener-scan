@@ -1,5 +1,6 @@
 import { replyText, replyPaymentInstructions } from "./lineReply.service.js";
 import { replyTextSequenceOrSingle, pushText } from "./lineSequenceReply.service.js";
+import { isScanFlowReplyTokenSpent } from "../stores/session.store.js";
 import { preparePhaseAHumanizedSendTexts } from "../core/conversation/conversationPipeline.service.js";
 import { TelemetryEvents, logTelemetryEvent } from "../core/telemetry/telemetryEvents.js";
 import { emitStateFallbackReason } from "../core/telemetry/stateTelemetry.service.js";
@@ -225,7 +226,23 @@ export async function sendNonScanReply(opts) {
     const body = candidates[i];
     lastEval = evaluateDuplicate(uid, dedupeKey, body);
     if (!lastEval.blocked) {
-      await replyText(client, replyToken, body);
+      const tokenStr = String(replyToken || "").trim();
+      const tokenSpent = isScanFlowReplyTokenSpent(uid);
+      if (!tokenStr || tokenSpent) {
+        await pushText(client, uid, body);
+        logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
+          userId: uid,
+          replyType: rt,
+          semanticKey: skLog,
+          retryCount: i + 1,
+          suppressed: false,
+          reason: tokenSpent
+            ? "scan_flow_reply_token_spent"
+            : "missing_reply_token",
+        });
+      } else {
+        await replyText(client, replyToken, body);
+      }
       recordSent(uid, dedupeKey, body);
       void insertLineConversationMessage(uid, "bot", body);
       if (scanOfferMeta && typeof scanOfferMeta === "object") {
@@ -366,9 +383,13 @@ export async function sendNonScanSequenceReply(opts) {
     const { list, fingerprint } = candidates[i];
     lastEval = evaluateDuplicate(uid, dedupeKey, fingerprint);
     if (!lastEval.blocked) {
+      const tokenSpent = isScanFlowReplyTokenSpent(uid);
+      const effectiveReplyToken = tokenSpent
+        ? null
+        : String(replyToken || "").trim() || null;
       await replyTextSequenceOrSingle({
         client,
-        replyToken,
+        replyToken: effectiveReplyToken,
         userId,
         messages: list,
       });

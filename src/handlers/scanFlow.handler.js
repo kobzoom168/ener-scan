@@ -1,11 +1,12 @@
 import {
   setBirthdate,
   clearSessionIfFlowVersionMatches,
+  markScanFlowReplyTokenSpent,
 } from "../stores/session.store.js";
 import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
-import { replyText, pushFlex } from "../services/lineReply.service.js";
+import { replyText } from "../services/lineReply.service.js";
 import { pushText } from "../services/lineSequenceReply.service.js";
 import {
   AuditExemptReason,
@@ -85,6 +86,7 @@ import {
   safeTokenPrefix,
 } from "../utils/reports/reportRolloutTelemetry.util.js";
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
+import { sendScanResultPushWith429Retry } from "../utils/linePush429Retry.util.js";
 
 const PRE_SCAN_ACK_VARIANTS = [
   ["ได้รูปแล้วนะ", "รอแป๊บนึง เดี๋ยวอาจารย์กำลังอ่านให้"],
@@ -109,6 +111,7 @@ async function sendPreScanAcknowledgement({ client, replyToken, userId }) {
     scanPathEnter();
     try {
       await replyText(client, rt, combined);
+      markScanFlowReplyTokenSpent(uid);
     } finally {
       scanPathExit();
     }
@@ -257,109 +260,125 @@ export async function replyScanResult({
 
   scanPathEnter();
   try {
-    try {
-      const built = buildScanResultFlexWithFallback({
-        summaryFirstEnabled: summaryFirstSelected,
-        resultText,
-        birthdate,
-        reportUrl,
-        reportPayload,
-        appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-      });
-      let flex = built.flex;
-      summaryFirstBuildFailed = built.summaryFirstBuildFailed;
-      if (summaryFirstBuildFailed && built.error) {
-        console.error(
-          JSON.stringify({
-            event: "FLEX_SUMMARY_FIRST_FAIL",
-            outcome: "fallback_legacy",
-            schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
-            lineUserIdPrefix,
-            message: built.error?.message,
-            flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
-            flexScanSummaryFirstSelected: summaryFirstSelected,
-            flexRolloutBucket0to99: rolloutBucket,
-          }),
-        );
-      }
-
-      const scanResultBubbleCount =
-        flex?.contents?.type === "carousel" &&
-        Array.isArray(flex.contents.contents)
-          ? flex.contents.contents.length
-          : flex?.contents?.type === "bubble"
-            ? 1
-            : 0;
-
-      // Do not append birthdate/settings bubble in scan-result delivery path.
-      // Flex must stay single-message handoff when summary-first returns bubble.
-
-      const totalCarouselBubbles =
-        flex?.contents?.type === "carousel" &&
-        Array.isArray(flex.contents.contents)
-          ? flex.contents.contents.length
-          : scanResultBubbleCount;
-
-      const settingsBubbleAppended = false;
-
-      const flexPresentationMode = deriveFlexPresentationMode({
-        flexSummaryFirstEnabled: summaryFirstSelected,
-        summaryFirstBuildFailed,
-        appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-      });
-
-      const hasReportLink = Boolean(String(reportUrl || "").trim());
-      const reportLinkPlacement = deriveReportLinkPlacement(
-        flexPresentationMode,
-        hasReportLink,
+    const built = buildScanResultFlexWithFallback({
+      summaryFirstEnabled: summaryFirstSelected,
+      resultText,
+      birthdate,
+      reportUrl,
+      reportPayload,
+      appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+    });
+    let flex = built.flex;
+    summaryFirstBuildFailed = built.summaryFirstBuildFailed;
+    if (summaryFirstBuildFailed && built.error) {
+      console.error(
+        JSON.stringify({
+          event: "FLEX_SUMMARY_FIRST_FAIL",
+          outcome: "fallback_legacy",
+          schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+          lineUserIdPrefix,
+          message: built.error?.message,
+          flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+          flexScanSummaryFirstSelected: summaryFirstSelected,
+          flexRolloutBucket0to99: rolloutBucket,
+        }),
       );
-      const hasObjectImage = Boolean(
-        String(reportPayload?.object?.objectImageUrl || "").trim(),
-      );
-
-      await pushFlex(client, userId, flex);
-      console.log("[WEBHOOK] pushed flex scan result");
-
-      logScanResultFlexRollout({
-        lineUserIdPrefix,
-        flexPresentationMode,
-        scanResultBubbleCount,
-        totalCarouselBubbles,
-        settingsBubbleAppended,
-        hasReportLink,
-        reportLinkPlacement,
-        hasObjectImage,
-        scanAccessSource,
-        summaryFirstBuildFailed,
-        envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
-        envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-        flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
-        flexScanSummaryFirstSelected: summaryFirstSelected,
-        flexRolloutBucket0to99: rolloutBucket,
-      });
-
-      return {
-        flexPresentationMode,
-        totalCarouselBubbles,
-        scanResultBubbleCount,
-        hasReportLink,
-        reportLinkPlacement,
-        hasObjectImage,
-      };
-    } catch (flexError) {
-      console.error("[WEBHOOK] flex push failed:", flexError);
-      await pushText(client, userId, resultText);
-      console.log("[WEBHOOK] fallback pushed text");
-      logScanResultTextFallback({
-        lineUserIdPrefix,
-        envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
-        envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-        flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
-        flexScanSummaryFirstSelected: summaryFirstSelected,
-        flexRolloutBucket0to99: rolloutBucket,
-      });
-      return null;
     }
+
+    const scanResultBubbleCount =
+      flex?.contents?.type === "carousel" &&
+      Array.isArray(flex.contents.contents)
+        ? flex.contents.contents.length
+        : flex?.contents?.type === "bubble"
+          ? 1
+          : 0;
+
+    const totalCarouselBubbles =
+      flex?.contents?.type === "carousel" &&
+      Array.isArray(flex.contents.contents)
+        ? flex.contents.contents.length
+        : scanResultBubbleCount;
+
+    const settingsBubbleAppended = false;
+
+    const flexPresentationMode = deriveFlexPresentationMode({
+      flexSummaryFirstEnabled: summaryFirstSelected,
+      summaryFirstBuildFailed,
+      appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+    });
+
+    const hasReportLink = Boolean(String(reportUrl || "").trim());
+    const reportLinkPlacement = deriveReportLinkPlacement(
+      flexPresentationMode,
+      hasReportLink,
+    );
+    const hasObjectImage = Boolean(
+      String(reportPayload?.object?.objectImageUrl || "").trim(),
+    );
+
+    const rolloutMeta = {
+      flexPresentationMode,
+      totalCarouselBubbles,
+      scanResultBubbleCount,
+      hasReportLink,
+      reportLinkPlacement,
+      hasObjectImage,
+    };
+
+    const delivery = await sendScanResultPushWith429Retry({
+      client,
+      userId,
+      flexMessage: flex,
+      text: resultText,
+      logPrefix: "[SCAN_RESULT_LINE_PUSH]",
+    });
+
+    if (delivery.sent) {
+      console.log("[WEBHOOK] scan result delivered", {
+        method: delivery.method,
+        attempts: delivery.attempts,
+      });
+      if (delivery.method === "push_flex") {
+        logScanResultFlexRollout({
+          lineUserIdPrefix,
+          flexPresentationMode,
+          scanResultBubbleCount,
+          totalCarouselBubbles,
+          settingsBubbleAppended,
+          hasReportLink,
+          reportLinkPlacement,
+          hasObjectImage,
+          scanAccessSource,
+          summaryFirstBuildFailed,
+          envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
+          envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+          flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+          flexScanSummaryFirstSelected: summaryFirstSelected,
+          flexRolloutBucket0to99: rolloutBucket,
+        });
+      } else {
+        logScanResultTextFallback({
+          lineUserIdPrefix,
+          envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
+          envFlexSummaryAppendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+          flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+          flexScanSummaryFirstSelected: summaryFirstSelected,
+          flexRolloutBucket0to99: rolloutBucket,
+        });
+      }
+    } else {
+      console.error(
+        JSON.stringify({
+          event: "SCAN_RESULT_DELIVERY_FAILED",
+          lineUserIdPrefix,
+          ...delivery,
+          scanAccessSource,
+          flexPresentationMode,
+        }),
+      );
+    }
+
+    return { ...rolloutMeta, delivery };
   } finally {
     scanPathExit();
   }
@@ -1104,11 +1123,20 @@ export async function runScanFlow({
   });
 
   if (accessSource === "free") {
+    const d = flexRollout?.delivery;
+    const scanDeliveryMode = !d?.sent
+      ? "delivery_failed"
+      : d.method === "push_flex"
+        ? "flex"
+        : "text_fallback";
     logEvent("preview_shown", {
       userId,
       personaVariant: await getAssignedPersonaVariant(userId),
       patternUsed: "scan_result_flex",
-      scanDeliveryMode: flexRollout ? "flex" : "text_fallback",
+      scanDeliveryMode,
+      resultDelivered: Boolean(d?.sent),
+      scanResultDeliveryAttempts: d?.attempts ?? 0,
+      scanResultDeliveryIs429: Boolean(d?.is429),
       bubbleCount: flexRollout?.totalCarouselBubbles ?? 0,
       flexPresentationMode: flexRollout?.flexPresentationMode ?? "unknown",
       flexMode:
@@ -1123,6 +1151,18 @@ export async function runScanFlow({
       hasObjectImage: flexRollout?.hasObjectImage ?? false,
     });
   }
+
+  console.log(
+    JSON.stringify({
+      event: "SCAN_FLOW_COMPLETE",
+      userId,
+      scanJobId,
+      resultPersisted: true,
+      resultDelivered: Boolean(flexRollout?.delivery?.sent),
+      deliveryMethod: flexRollout?.delivery?.method ?? null,
+      deliveryAttempts: flexRollout?.delivery?.attempts ?? 0,
+    }),
+  );
 
   clearLatestScanJob(userId, scanJobId);
   clearPaymentState(userId);
