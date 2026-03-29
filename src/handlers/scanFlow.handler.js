@@ -87,7 +87,10 @@ import {
   safeTokenPrefix,
 } from "../utils/reports/reportRolloutTelemetry.util.js";
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
-import { sendScanResultPushWith429Retry } from "../utils/linePush429Retry.util.js";
+import {
+  sendScanResultPushWith429Retry,
+  sendScanResultReplyWith429Retry,
+} from "../utils/linePush429Retry.util.js";
 
 const PRE_SCAN_ACK_VARIANTS = [
   ["ได้รูปแล้วนะ", "รอแป๊บนึง เดี๋ยวอาจารย์กำลังอ่านให้"],
