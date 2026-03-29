@@ -260,27 +260,48 @@ export async function replyScanResult({
 
   scanPathEnter();
   try {
-    const built = buildScanResultFlexWithFallback({
-      summaryFirstEnabled: summaryFirstSelected,
-      resultText,
-      birthdate,
-      reportUrl,
-      reportPayload,
-      appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-    });
-    let flex = built.flex;
-    summaryFirstBuildFailed = built.summaryFirstBuildFailed;
-    if (summaryFirstBuildFailed && built.error) {
+    /** @type {Record<string, unknown>|null} */
+    let flex = null;
+    let flexBuildException = false;
+
+    try {
+      const built = buildScanResultFlexWithFallback({
+        summaryFirstEnabled: summaryFirstSelected,
+        resultText,
+        birthdate,
+        reportUrl,
+        reportPayload,
+        appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+      });
+      flex = built.flex;
+      summaryFirstBuildFailed = built.summaryFirstBuildFailed;
+      if (summaryFirstBuildFailed && built.error) {
+        console.error(
+          JSON.stringify({
+            event: "FLEX_SUMMARY_FIRST_FAIL",
+            outcome: "fallback_legacy",
+            schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+            lineUserIdPrefix,
+            message: built.error?.message,
+            flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+            flexScanSummaryFirstSelected: summaryFirstSelected,
+            flexRolloutBucket0to99: rolloutBucket,
+          }),
+        );
+      }
+    } catch (buildErr) {
+      flex = null;
+      flexBuildException = true;
+      summaryFirstBuildFailed = true;
+      const buildMsg =
+        buildErr && typeof buildErr === "object" && "message" in buildErr
+          ? String(/** @type {{ message?: unknown }} */ (buildErr).message)
+          : String(buildErr);
       console.error(
         JSON.stringify({
-          event: "FLEX_SUMMARY_FIRST_FAIL",
-          outcome: "fallback_legacy",
-          schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+          event: "SCAN_RESULT_FLEX_BUILD_FAILED",
           lineUserIdPrefix,
-          message: built.error?.message,
-          flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
-          flexScanSummaryFirstSelected: summaryFirstSelected,
-          flexRolloutBucket0to99: rolloutBucket,
+          message: buildMsg,
         }),
       );
     }
@@ -323,6 +344,7 @@ export async function replyScanResult({
       hasReportLink,
       reportLinkPlacement,
       hasObjectImage,
+      flexBuildException,
     };
 
     const delivery = await sendScanResultPushWith429Retry({
