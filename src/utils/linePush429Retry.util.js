@@ -398,11 +398,11 @@ export async function tryLinePushMessageWith429RetryOnce(
       JSON.stringify({
         event: "ADMIN_PUSH_RETRY",
         reason: "429",
-        waitMs: 3000,
+        waitMs: 15000,
         lineUserIdPrefix: uid.slice(0, 8),
       }),
     );
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 15000));
     try {
       await client.pushMessage(uid, messagePayload);
       console.log(
