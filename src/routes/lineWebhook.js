@@ -1,5 +1,6 @@
 import line from "@line/bot-sdk";
 
+import { maybeFlushPendingApprovedIntroCompensation } from "../utils/adminApproveIntroCompensation.util.js";
 import {
   getSession,
   setPendingImage,
@@ -5324,6 +5325,11 @@ async function handleEvent({ client, event }) {
     });
     return;
   }
+
+  await maybeFlushPendingApprovedIntroCompensation({
+    client,
+    userId,
+  });
 
   if (event.message?.type === "image") {
     await handleImageMessage({ client, event, userId, session });
