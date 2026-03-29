@@ -38,6 +38,7 @@ import {
   adminResetScanAbuseState,
   snapshotAbuseForAdminResetLog,
 } from "../stores/abuseGuard.store.js";
+import { setPendingApprovedIntroCompensation } from "../stores/session.store.js";
 
 const ADMIN_FREE_RESET_MODES = new Set([
   "reset_free_quota_only",
@@ -1249,6 +1250,17 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           : "";
 
       if (!isIdempotent) {
+        console.log(
+          JSON.stringify({
+            event: "APPROVE_ENTITLEMENT_GRANTED",
+            paymentId,
+            lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
+            paidRemainingScans: activation.paidRemainingScans ?? null,
+            paidUntil: activation.paidUntil ?? null,
+            paidPlanCode: activation.paidPlanCode ?? null,
+          }),
+        );
+
         logEvent("payment_success", {
           userId: activation.lineUserId,
           personaVariant: await getAssignedPersonaVariant(activation.lineUserId),
@@ -1272,6 +1284,16 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           paidPlanCode: activation.paidPlanCode,
         });
 
+        console.log(
+          JSON.stringify({
+            event: "APPROVE_USER_NOTIFY_START",
+            paymentId,
+            lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
+            hasInlineReplyToken: Boolean(lineReplyToken),
+            textLen: String(message || "").length,
+          }),
+        );
+
         notifyResult = await notifyLineUserTextAfterAdminAction({
           client: lineClient,
           lineUserId: activation.lineUserId,
@@ -1279,6 +1301,35 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           replyToken: lineReplyToken || null,
           eventTag: "ADMIN_APPROVE_NOTIFY",
         });
+
+        if (notifyResult.userNotified) {
+          console.log(
+            JSON.stringify({
+              event: "APPROVE_USER_NOTIFY_OK",
+              paymentId,
+              lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
+              channel: notifyResult.channel,
+              attempts: notifyResult.attempts,
+            }),
+          );
+        } else {
+          setPendingApprovedIntroCompensation(activation.lineUserId, {
+            text: message,
+            paymentId,
+          });
+          console.log(
+            JSON.stringify({
+              event: "APPROVE_USER_NOTIFY_FAILED",
+              paymentId,
+              lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
+              notifyError: notifyResult.notifyError,
+              attempts: notifyResult.attempts,
+              finalStatus: notifyResult.finalStatus,
+              is429: notifyResult.is429,
+              pendingIntroQueued: true,
+            }),
+          );
+        }
       }
 
       if (prefersAdminJson(req)) {
@@ -1309,6 +1360,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
               ? {}
               : {
                   notifyError: notifyResult.notifyError || "line_send_failed",
+                  pendingIntroQueued: true,
                 }),
           });
         }
