@@ -4777,28 +4777,38 @@ async function handleTextMessage({ client, event, userId, session }) {
           isoDate: parsedLock.isoDate,
           normalizedDisplay: normalizedBirthdate,
         });
+        let beforeScanSendResult = null;
         try {
-          await sendNonScanSequenceReply({
+          beforeScanSendResult = await sendNonScanSequenceReply({
             client,
             userId,
-            replyToken: null,
+            replyToken: event.replyToken,
             replyType: "before_scan_sequence",
             semanticKey: "before_scan_sequence",
             messages: await beforeScanMessageSequence(userId),
           });
         } catch (beforeScanErr) {
-          console.error("[LINE] before_scan push failed (ignored):", {
+          console.error("[LINE] before_scan sequence failed (ignored):", {
             userId,
             message: beforeScanErr?.message,
           });
         }
+        const beforeScanAckSent = Boolean(beforeScanSendResult?.sent);
+        console.log("[WEBHOOK] before_scan_sequence outcome", {
+          userId,
+          sent: beforeScanAckSent,
+          suppressed: Boolean(beforeScanSendResult?.suppressed),
+          exactDuplicate: Boolean(beforeScanSendResult?.exactDuplicate),
+          semanticDuplicate: Boolean(beforeScanSendResult?.semanticDuplicate),
+        });
         await runScanFlow({
           client,
-          replyToken: event.replyToken,
+          replyToken: beforeScanAckSent ? null : event.replyToken,
           userId,
           imageBuffer: session.pendingImage.imageBuffer,
           birthdate: normalizedBirthdate,
           flowVersion,
+          skipPreScanAcknowledgement: beforeScanAckSent,
         });
         return;
       }

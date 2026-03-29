@@ -394,6 +394,7 @@ export async function runScanFlow({
   birthdate,
   flowVersion,
   skipBirthdateSave = false,
+  skipPreScanAcknowledgement = false,
 }) {
   console.log("[TRACE] runScanFlow entry", {
     userId,
@@ -401,6 +402,7 @@ export async function runScanFlow({
     hasReplyToken: Boolean(replyToken),
     hasImageBuffer: Boolean(imageBuffer?.length),
     birthdate,
+    skipPreScanAcknowledgement,
   });
 
   let paidLimitWarningText = null;
@@ -705,14 +707,24 @@ export async function runScanFlow({
     birthdate,
     imageBufferLength: imageBuffer?.length || 0,
     startedAt: scanStartedAt,
+    skipPreScanAcknowledgement,
+    hasReplyTokenForInternalAck: Boolean(String(replyToken || "").trim()),
   });
 
-  try {
-    await sendPreScanAcknowledgement({ client, replyToken, userId });
-  } catch (ackErr) {
-    console.log("[SCAN_FLOW] pre-scan ack failed (ignored):", {
-      message: ackErr?.message,
-      status: ackErr?.status,
+  if (!skipPreScanAcknowledgement) {
+    try {
+      await sendPreScanAcknowledgement({ client, replyToken, userId });
+    } catch (ackErr) {
+      console.log("[SCAN_FLOW] pre-scan ack failed (ignored):", {
+        message: ackErr?.message,
+        status: ackErr?.status,
+      });
+    }
+  } else {
+    console.log("[SCAN_FLOW] skipped internal pre-scan ack", {
+      userId,
+      scanJobId,
+      reason: "before_scan_sequence_owned_webhook_layer",
     });
   }
 
