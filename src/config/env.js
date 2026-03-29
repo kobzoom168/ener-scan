@@ -347,12 +347,11 @@ export const env = {
     return Number.isFinite(n) ? Math.max(400, Math.floor(n)) : 3200;
   })(),
   /**
-   * When true (default): `runScanFlow` sends a short pre-scan push ack and lineWebhook skips
-   * `before_scan_sequence` on birthdate→scan so users get one pre-scan message set.
-   * Set env `SEND_PRE_SCAN_ACK_PUSH_ONLY=false` to restore `before_scan_sequence` and disable that push ack.
+   * When `true`: `runScanFlow` sends a short pre-scan push ack and lineWebhook skips
+   * `before_scan_sequence` on birthdate→scan. Default off (set `SEND_PRE_SCAN_ACK_PUSH_ONLY=true` to re-enable push-only ack and skip `before_scan_sequence`).
    */
   SEND_PRE_SCAN_ACK_PUSH_ONLY:
-    process.env.SEND_PRE_SCAN_ACK_PUSH_ONLY !== "false",
+    process.env.SEND_PRE_SCAN_ACK_PUSH_ONLY === "true",
   /**
    * When `warn`: log NONSCAN_REPLY_BYPASS_SUSPECT if replyText/pushText is used outside
    * scan path and outside non-scan gateway (rollout / dev visibility).

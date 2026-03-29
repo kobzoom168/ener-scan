@@ -233,6 +233,8 @@ export function saveScanArtifacts(userId, resultText) {
 export async function replyScanResult({
   client,
   userId,
+  /** Webhook reply token reserved for this scan result (never use a free `replyToken` variable here). */
+  replyToken: replyTokenForScanResult = null,
   resultText,
   birthdate = null,
   reportUrl = null,
@@ -337,7 +339,19 @@ export async function replyScanResult({
       flexBuildException,
     };
 
-    const rt = String(replyToken || "").trim();
+    const rt = String(replyTokenForScanResult || "").trim();
+    const hasReplyToken = Boolean(rt);
+    const deliveryMode = hasReplyToken ? "reply" : "push";
+    console.log(
+      JSON.stringify({
+        event: "SCAN_RESULT_DELIVERY_START",
+        lineUserIdPrefix,
+        hasReplyToken,
+        deliveryMode,
+        scanAccessSource,
+      }),
+    );
+
     /** @type {Awaited<ReturnType<typeof sendScanResultPushWith429Retry>>} */
     let delivery;
     if (rt) {
@@ -1045,14 +1059,11 @@ export async function runScanFlow({
       );
     }
 
-    if (accessSource === "paid") {
-      await decrementUserPaidRemainingScans(appUserId);
-    }
   } catch (billingErr) {
     console.error(
       JSON.stringify({
         event: "BILLING_PATH",
-        outcome: "create_scan_result_or_decrement_failed",
+        outcome: "create_scan_result_failed",
         lineUserId: userId,
         appUserId,
         scanRequestId,
@@ -1107,6 +1118,23 @@ export async function runScanFlow({
   });
 
   const delivered = Boolean(flexRollout?.delivery?.sent);
+
+  if (delivered && accessSource === "paid" && appUserId) {
+    try {
+      await decrementUserPaidRemainingScans(appUserId);
+    } catch (decErr) {
+      console.error(
+        JSON.stringify({
+          event: "PAID_REMAINING_DECREMENT_AFTER_DELIVERY_FAILED",
+          userId,
+          appUserId,
+          scanJobId,
+          message: decErr?.message,
+          code: decErr?.code,
+        }),
+      );
+    }
+  }
 
   if (!delivered && accessSource === "free" && scanResultId && appUserId) {
     console.error(
