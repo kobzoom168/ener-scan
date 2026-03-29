@@ -1200,7 +1200,11 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
     return String(req.get("X-Admin-Json") || "").trim() === "1";
   }
 
-  router.post("/admin/payments/:id/approve", requireAdminSession, async (req, res) => {
+  router.post(
+    "/admin/payments/:id/approve",
+    requireAdminSession,
+    express.json(),
+    async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();
     const approvedBy = "admin_dashboard";
 
@@ -1224,6 +1228,22 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
 
       const isIdempotent =
         activation.paidUntil == null && activation.paidRemainingScans == null;
+
+      console.log(
+        JSON.stringify({
+          event: "ADMIN_APPROVE_APPLIED",
+          paymentId,
+          lineUserId: activation.lineUserId,
+          idempotent: Boolean(isIdempotent),
+        }),
+      );
+
+      /** @type {Awaited<ReturnType<typeof notifyLineUserTextAfterAdminAction>> | null} */
+      let notifyResult = null;
+      const lineReplyToken =
+        typeof req.body?.lineReplyToken === "string"
+          ? req.body.lineReplyToken.trim()
+          : "";
 
       if (!isIdempotent) {
         logEvent("payment_success", {
@@ -1249,20 +1269,46 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           paidPlanCode: activation.paidPlanCode,
         });
 
-        void lineClient
-          .pushMessage(activation.lineUserId, {
-            type: "text",
-            text: message,
-          })
-          .catch((pushErr) => {
-            console.error("[ADMIN_DASH] LINE push after approve failed:", {
-              message: pushErr?.message,
-            });
-          });
+        notifyResult = await notifyLineUserTextAfterAdminAction({
+          client: lineClient,
+          lineUserId: activation.lineUserId,
+          text: message,
+          replyToken: lineReplyToken || null,
+          eventTag: "ADMIN_APPROVE_NOTIFY",
+        });
       }
 
       if (prefersAdminJson(req)) {
-        res.status(200).json({ ok: true, idempotent: Boolean(isIdempotent) });
+        const approvalApplied = true;
+        const jsonBase = {
+          ok: true,
+          idempotent: Boolean(isIdempotent),
+          approvalApplied,
+        };
+        if (isIdempotent) {
+          res.status(200).json({
+            ...jsonBase,
+            userNotified: false,
+            notifySkipped: "idempotent_already_active",
+          });
+        } else {
+          res.status(200).json({
+            ...jsonBase,
+            userNotified: notifyResult.userNotified,
+            notifyChannel: notifyResult.channel,
+            notifyAttempts: notifyResult.attempts,
+            sent: notifyResult.sent,
+            method: notifyResult.method,
+            finalStatus: notifyResult.finalStatus,
+            finalMessage: notifyResult.finalMessage,
+            is429: notifyResult.is429,
+            ...(notifyResult.userNotified
+              ? {}
+              : {
+                  notifyError: notifyResult.notifyError || "line_send_failed",
+                }),
+          });
+        }
       } else {
         res.redirect(302, "/admin/payments?status=paid&flash=approved");
       }

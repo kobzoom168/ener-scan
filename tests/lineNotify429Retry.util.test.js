@@ -39,6 +39,11 @@ test("notifyLineUserTextAfterAdminAction: first push attempt succeeds", async (t
     channel: "push",
     attempts: 1,
     notifyError: null,
+    sent: true,
+    method: "push",
+    finalStatus: null,
+    finalMessage: null,
+    is429: false,
   });
 });
 
@@ -124,5 +129,10 @@ test("notifyLineUserTextAfterAdminAction: reply failure falls back to push", asy
     channel: "push",
     attempts: 1,
     notifyError: null,
+    sent: true,
+    method: "push",
+    finalStatus: null,
+    finalMessage: null,
+    is429: false,
   });
 });
