@@ -96,9 +96,8 @@ import {
 
 /** แจ้งรับรูปก่อนเริ่มสแกน — ใช้ push เท่านั้น ไม่กิน replyToken (เก็บไว้ส่ง Flex ตอนจบ) */
 const PRE_SCAN_ACK_VARIANTS = [
-  ["ได้รูปแล้วนะ", "รอแป๊บนึง เดี๋ยวอาจารย์กำลังอ่านให้"],
-  ["รับภาพแล้ว", "เดี๋ยวอาจารย์ดูให้ ขอเวลาแป๊บเดียว"],
-  ["โอเค ได้แล้ว", "รอสักครู่ เดี๋ยวอาจารย์อ่านให้ต่อ"],
+  ["ได้รับรูปแล้วนะ", "รอแป๊บนึง เดี๋ยวอาจารย์กำลังอ่านให้"],
+  ["ได้รับรูปแล้วนะ", "รอแป๊บ เดี๋ยวอาจารย์อ่านให้"],
 ];
 
 async function sendPreScanAcknowledgementPushOnly({ client, userId }) {
@@ -123,10 +122,24 @@ async function sendPreScanAcknowledgementPushOnly({ client, userId }) {
       }),
     );
   } catch (err) {
-    console.log("[SCAN_FLOW] pre-scan push ack failed (ignored):", {
-      message: err?.message,
-      status: err?.status,
-    });
+    const safe =
+      err && typeof err === "object"
+        ? {
+            message:
+              "message" in err ? String(/** @type {{ message?: unknown }} */ (err).message) : null,
+            status:
+              "status" in err && typeof /** @type {{ status?: unknown }} */ (err).status === "number"
+                ? /** @type {{ status?: number }} */ (err).status
+                : /** @type {{ response?: { status?: number } }} */ (err).response?.status ?? null,
+          }
+        : { message: String(err), status: null };
+    console.error(
+      JSON.stringify({
+        event: "SCAN_PRE_ACK_PUSH_FAILED",
+        lineUserIdPrefix: uid.slice(0, 8),
+        ...safe,
+      }),
+    );
   } finally {
     scanPathExit();
   }

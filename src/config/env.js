@@ -348,10 +348,12 @@ export const env = {
   })(),
   /**
    * When `true`: `runScanFlow` sends a short pre-scan push ack and lineWebhook skips
-   * `before_scan_sequence` on birthdate→scan. Default off (set `SEND_PRE_SCAN_ACK_PUSH_ONLY=true` to re-enable push-only ack and skip `before_scan_sequence`).
+   * `before_scan_sequence` on birthdate→scan. Default on (legacy UX). Set
+   * `SEND_PRE_SCAN_ACK_PUSH_ONLY=false` to disable push-only ack and show `before_scan_sequence` again.
    */
   SEND_PRE_SCAN_ACK_PUSH_ONLY:
-    process.env.SEND_PRE_SCAN_ACK_PUSH_ONLY === "true",
+    String(process.env.SEND_PRE_SCAN_ACK_PUSH_ONLY ?? "true").trim().toLowerCase() !==
+    "false",
   /**
    * When `warn`: log NONSCAN_REPLY_BYPASS_SUSPECT if replyText/pushText is used outside
    * scan path and outside non-scan gateway (rollout / dev visibility).

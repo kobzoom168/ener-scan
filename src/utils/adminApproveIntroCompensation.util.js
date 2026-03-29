@@ -22,6 +22,14 @@ export async function maybeFlushPendingApprovedIntroCompensation({
     const pending = getPendingApprovedIntroCompensation(uid);
     if (!pending?.text) return;
 
+    console.log(
+      JSON.stringify({
+        event: "APPROVE_PENDING_INTRO_FLUSH_START",
+        lineUserIdPrefix: uid.slice(0, 8),
+        paymentId: pending.paymentId ?? null,
+      }),
+    );
+
     clearPendingApprovedIntroCompensation(uid);
 
     let result;
