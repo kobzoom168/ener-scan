@@ -40,7 +40,7 @@ function createEmptySession() {
     scanFlowReplyTokenSpent: false,
     /**
      * Admin approve notify failed after LINE retries; intro text pushed on next inbound webhook.
-     * @type {{ text: string, paymentId: string, atMs: number } | null}
+     * @type {{ text: string, createdAt: string, paymentId?: string | null } | null}
      */
     pendingApprovedIntroCompensation: null,
   };
@@ -182,33 +182,49 @@ export function resetScanFlowReplyTokenSpent(userId) {
 /**
  * Queue approved-payment intro copy when admin-dashboard LINE notify fails after retries.
  * @param {string} userId
- * @param {{ text: string, paymentId?: string }} payload
+ * @param {{ text: string, paymentId?: string | null, createdAt?: string }} payload
  */
 export function setPendingApprovedIntroCompensation(userId, payload) {
   const id = normalizeUserId(userId);
   if (!id || !payload?.text) return;
   const session = getSession(id);
+  const createdAt =
+    typeof payload.createdAt === "string" && payload.createdAt.trim()
+      ? payload.createdAt.trim()
+      : new Date().toISOString();
+  const pid = payload.paymentId;
   session.pendingApprovedIntroCompensation = {
     text: String(payload.text).slice(0, 4900),
-    paymentId: String(payload.paymentId || "").trim(),
-    atMs: Date.now(),
+    createdAt,
+    paymentId:
+      pid != null && String(pid).trim() ? String(pid).trim() : null,
   };
   sessions.set(id, session);
 }
 
 /**
  * @param {string} userId
- * @returns {{ text: string, paymentId: string, atMs: number } | null}
+ * @returns {{ text: string, createdAt: string, paymentId?: string | null } | null}
  */
-export function takePendingApprovedIntroCompensation(userId) {
+export function getPendingApprovedIntroCompensation(userId) {
   const id = normalizeUserId(userId);
   if (!id) return null;
   const session = sessions.get(id);
   const p = session?.pendingApprovedIntroCompensation;
   if (!p?.text) return null;
+  return {
+    text: p.text,
+    createdAt: p.createdAt,
+    paymentId: p.paymentId ?? null,
+  };
+}
+
+export function clearPendingApprovedIntroCompensation(userId) {
+  const id = normalizeUserId(userId);
+  if (!id) return;
+  const session = getSession(id);
   session.pendingApprovedIntroCompensation = null;
   sessions.set(id, session);
-  return p;
 }
 
 export function clearSessionIfFlowVersionMatches(userId, flowVersion) {

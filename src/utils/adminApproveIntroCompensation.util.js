@@ -1,53 +1,94 @@
-import { tryLinePushMessageWith429RetryOnce } from "./linePush429Retry.util.js";
+import { notifyLineUserTextAfterAdminAction } from "./lineNotify429Retry.util.js";
 import {
+  clearPendingApprovedIntroCompensation,
+  getPendingApprovedIntroCompensation,
   setPendingApprovedIntroCompensation,
-  takePendingApprovedIntroCompensation,
 } from "../stores/session.store.js";
 
 /**
- * If admin approve notify failed, we queue intro text; push it on the next inbound webhook (does not consume replyToken).
+ * Push-only retry path for queued approved-intro text (does not use inbound replyToken).
  * @param {object} opts
  * @param {*} opts.client
  * @param {string} opts.userId
- * @returns {Promise<{ attempted: boolean, sent: boolean, requeued: boolean }>}
  */
 export async function maybeFlushPendingApprovedIntroCompensation({
   client,
   userId,
 }) {
-  const pending = takePendingApprovedIntroCompensation(userId);
-  if (!pending?.text) {
-    return { attempted: false, sent: false, requeued: false };
-  }
-
   const uid = String(userId || "").trim();
-  const payload = { type: "text", text: pending.text };
-  const result = await tryLinePushMessageWith429RetryOnce(client, uid, payload);
+  if (!uid) return;
 
-  if (result.ok) {
+  try {
+    const pending = getPendingApprovedIntroCompensation(uid);
+    if (!pending?.text) return;
+
+    clearPendingApprovedIntroCompensation(uid);
+
+    let result;
+    try {
+      result = await notifyLineUserTextAfterAdminAction({
+        client,
+        lineUserId: uid,
+        text: pending.text,
+        replyToken: null,
+        eventTag: "APPROVE_PENDING_INTRO",
+        logPrefix: "[APPROVE_PENDING_INTRO]",
+      });
+    } catch (err) {
+      setPendingApprovedIntroCompensation(uid, {
+        text: pending.text,
+        paymentId: pending.paymentId,
+        createdAt: pending.createdAt,
+      });
+      console.log(
+        JSON.stringify({
+          event: "APPROVE_PENDING_INTRO_REQUEUED",
+          reason: "notify_threw",
+          paymentId: pending.paymentId ?? null,
+          lineUserIdPrefix: uid.slice(0, 8),
+          message: err && typeof err === "object" && "message" in err ? String(/** @type {{ message?: unknown }} */ (err).message) : String(err),
+        }),
+      );
+      return;
+    }
+
+    if (result.userNotified) {
+      console.log(
+        JSON.stringify({
+          event: "APPROVE_PENDING_INTRO_PUSH_OK",
+          paymentId: pending.paymentId ?? null,
+          lineUserIdPrefix: uid.slice(0, 8),
+          attempts: result.attempts,
+        }),
+      );
+      return;
+    }
+
+    setPendingApprovedIntroCompensation(uid, {
+      text: pending.text,
+      paymentId: pending.paymentId,
+      createdAt: pending.createdAt,
+    });
     console.log(
       JSON.stringify({
-        event: "APPROVE_PENDING_INTRO_PUSH_OK",
-        paymentId: pending.paymentId || null,
+        event: "APPROVE_PENDING_INTRO_REQUEUED",
+        paymentId: pending.paymentId ?? null,
         lineUserIdPrefix: uid.slice(0, 8),
+        notifyError: result.notifyError,
         attempts: result.attempts,
+        is429: result.is429,
       }),
     );
-    return { attempted: true, sent: true, requeued: false };
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        event: "APPROVE_PENDING_INTRO_FLUSH_UNHANDLED",
+        lineUserIdPrefix: uid.slice(0, 8),
+        message:
+          err && typeof err === "object" && "message" in err
+            ? String(/** @type {{ message?: unknown }} */ (err).message)
+            : String(err),
+      }),
+    );
   }
-
-  setPendingApprovedIntroCompensation(uid, {
-    text: pending.text,
-    paymentId: pending.paymentId,
-  });
-  console.log(
-    JSON.stringify({
-      event: "APPROVE_PENDING_INTRO_REQUEUED",
-      paymentId: pending.paymentId || null,
-      lineUserIdPrefix: uid.slice(0, 8),
-      attempts: result.attempts,
-      lastIs429: Boolean(result.lastIs429),
-    }),
-  );
-  return { attempted: true, sent: false, requeued: true };
 }

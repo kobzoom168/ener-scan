@@ -31,8 +31,6 @@ import {
 } from "../utils/dateTime.util.js";
 import { buildAdminFreeResetConfirmationPayload } from "../utils/adminResetNotify.util.js";
 import { notifyLineUserTextAfterAdminAction } from "../utils/lineNotify429Retry.util.js";
-import { tryLinePushMessageWith429RetryOnce } from "../utils/linePush429Retry.util.js";
-import { invokeLinePushMessage } from "../utils/lineClientTransport.util.js";
 import { serializeLineErrorSafe } from "../utils/lineErrorLog.util.js";
 import {
   adminResetScanAbuseState,
@@ -1300,6 +1298,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           text: message,
           replyToken: lineReplyToken || null,
           eventTag: "ADMIN_APPROVE_NOTIFY",
+          logPrefix: "[ADMIN_APPROVE_NOTIFY]",
         });
 
         if (notifyResult.userNotified) {
@@ -1402,14 +1401,33 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       });
 
       if (lineUserId) {
-        void invokeLinePushMessage(lineClient, "admin.payments.reject", lineUserId, {
-          type: "text",
-          text: buildPaymentRejectedText({ reason: rejectReason }),
-        }).catch((pushErr) => {
-          console.error("[ADMIN_DASH] LINE push after reject failed:", {
-            message: pushErr?.message,
+        try {
+          const rejectNotify = await notifyLineUserTextAfterAdminAction({
+            client: lineClient,
+            lineUserId,
+            text: buildPaymentRejectedText({ reason: rejectReason }),
+            replyToken: null,
+            eventTag: "ADMIN_REJECT_NOTIFY",
+            logPrefix: "[ADMIN_REJECT_NOTIFY]",
           });
-        });
+          if (!rejectNotify.userNotified) {
+            console.error(
+              JSON.stringify({
+                event: "ADMIN_REJECT_NOTIFY_FAILED",
+                paymentId,
+                lineUserIdPrefix: String(lineUserId).slice(0, 8),
+                notifyError: rejectNotify.notifyError,
+                attempts: rejectNotify.attempts,
+                is429: rejectNotify.is429,
+              }),
+            );
+          }
+        } catch (notifyErr) {
+          console.error("[ADMIN_DASH] reject notify threw:", {
+            paymentId,
+            message: notifyErr?.message,
+          });
+        }
       }
 
       if (prefersAdminJson(req)) {
