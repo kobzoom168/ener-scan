@@ -159,6 +159,7 @@ import {
   BIRTHDATE_CHANGE_FLOW,
 } from "../utils/birthdateChangeFlow.util.js";
 import {
+  beforeScanMessageSequence,
   birthdateSavedAfterUpdate,
 } from "../utils/replyCopy.util.js";
 import { sleep } from "../utils/timing.util.js";
@@ -4773,6 +4774,21 @@ async function handleTextMessage({ client, event, userId, session }) {
           isoDate: parsedLock.isoDate,
           normalizedDisplay: normalizedBirthdate,
         });
+        try {
+          await sendNonScanSequenceReply({
+            client,
+            userId,
+            replyToken: null,
+            replyType: "before_scan_sequence",
+            semanticKey: "before_scan_sequence",
+            messages: await beforeScanMessageSequence(userId),
+          });
+        } catch (beforeScanErr) {
+          console.error("[LINE] before_scan sequence failed (ignored):", {
+            userId,
+            message: beforeScanErr?.message,
+          });
+        }
         await runScanFlow({
           client,
           replyToken: event.replyToken,
