@@ -92,7 +92,7 @@ export async function sendScanResultPushWith429Retry({
    * @param {"push_flex" | "push_text"} method
    */
   async function pushWithRetries(payload, method) {
-    const backoffs = [800, 1600];
+    const backoffs = [5000, 10000];
     /** @type {unknown} */
     let lastErr = null;
 
@@ -255,7 +255,7 @@ export async function sendScanResultReplyWith429Retry({
    * @param {"reply_flex" | "reply_text"} method
    */
   async function replyWithRetries(messages, method) {
-    const backoffs = [800, 1600];
+    const backoffs = [3000, 6000];
     /** @type {unknown} */
     let lastErr = null;
 

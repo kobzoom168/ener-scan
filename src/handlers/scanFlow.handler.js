@@ -764,25 +764,8 @@ export async function runScanFlow({
     hasReplyTokenForScanResult: Boolean(String(replyToken || "").trim()),
   });
 
-  // ── Pre-scan ack: use replyToken once, then Flex goes via push ──
-  const _ackRt = String(replyToken || "").trim();
-  if (_ackRt) {
-    const _ackVariant =
-      PRE_SCAN_ACK_VARIANTS[
-        Math.floor(Math.random() * PRE_SCAN_ACK_VARIANTS.length)
-      ] || PRE_SCAN_ACK_VARIANTS[0];
-    scanPathEnter();
-    try {
-      await replyText(client, _ackRt, `${_ackVariant[0]}\n${_ackVariant[1]}`);
-    } catch (_ackErr) {
-      console.log("[SCAN_FLOW] pre-scan ack failed (ignored):", {
-        message: _ackErr?.message,
-      });
-    } finally {
-      scanPathExit();
-    }
-    replyToken = null; // spent — Flex will use push path
-  }
+  
+
 
   try {
     let scanOut;
