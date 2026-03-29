@@ -1,7 +1,6 @@
 import {
   setBirthdate,
   clearSessionIfFlowVersionMatches,
-  markScanFlowReplyTokenSpent,
 } from "../stores/session.store.js";
 import { saveBirthdate } from "../stores/userProfile.db.js";
 
@@ -91,60 +90,6 @@ import {
 } from "../utils/reports/reportRolloutTelemetry.util.js";
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
 import { sendScanResultPushWith429Retry } from "../utils/linePush429Retry.util.js";
-
-const PRE_SCAN_ACK_VARIANTS = [
-  ["ได้รูปแล้วนะ", "รอแป๊บนึง เดี๋ยวอาจารย์กำลังอ่านให้"],
-  ["รับภาพแล้ว", "เดี๋ยวอาจารย์ดูให้ ขอเวลาแป๊บเดียว"],
-  ["โอเค ได้แล้ว", "รอสักครู่ เดี๋ยวอาจารย์อ่านให้ต่อ"],
-];
-
-async function sendPreScanAcknowledgement({ client, replyToken, userId }) {
-  const uid = String(userId || "").trim();
-  if (!uid) return;
-  const chosen =
-    PRE_SCAN_ACK_VARIANTS[
-      Math.floor(Math.random() * PRE_SCAN_ACK_VARIANTS.length)
-    ] || PRE_SCAN_ACK_VARIANTS[0];
-  const first = String(chosen?.[0] || "").trim();
-  const second = String(chosen?.[1] || "").trim();
-  if (!first || !second) return;
-
-  const rt = String(replyToken || "").trim();
-  if (rt) {
-    const combined = `${first}\n${second}`;
-    scanPathEnter();
-    try {
-      await replyText(client, rt, combined);
-      markScanFlowReplyTokenSpent(uid);
-    } finally {
-      scanPathExit();
-    }
-    return;
-  }
-
-  scanPathEnter();
-  try {
-    await pushText(client, uid, first);
-  } finally {
-    scanPathExit();
-  }
-  void (async () => {
-    try {
-      await sleep(randomBetween(400, 800));
-      scanPathEnter();
-      try {
-        await pushText(client, uid, second);
-      } finally {
-        scanPathExit();
-      }
-    } catch (err) {
-      console.error("[PRE_SCAN_ACK] push second failed (ignored):", {
-        userId: uid,
-        message: err?.message,
-      });
-    }
-  })();
-}
 
 async function sendPaymentGateTextReply({ client, replyToken, userId, reply }) {
   const fallbackText =
@@ -439,7 +384,6 @@ export async function runScanFlow({
   birthdate,
   flowVersion,
   skipBirthdateSave = false,
-  skipPreScanAcknowledgement = false,
 }) {
   console.log("[TRACE] runScanFlow entry", {
     userId,
@@ -447,7 +391,6 @@ export async function runScanFlow({
     hasReplyToken: Boolean(replyToken),
     hasImageBuffer: Boolean(imageBuffer?.length),
     birthdate,
-    skipPreScanAcknowledgement,
   });
 
   let paidLimitWarningText = null;
@@ -752,26 +695,8 @@ export async function runScanFlow({
     birthdate,
     imageBufferLength: imageBuffer?.length || 0,
     startedAt: scanStartedAt,
-    skipPreScanAcknowledgement,
-    hasReplyTokenForInternalAck: Boolean(String(replyToken || "").trim()),
+    hasReplyTokenForScanResult: Boolean(String(replyToken || "").trim()),
   });
-
-  if (!skipPreScanAcknowledgement) {
-    try {
-      await sendPreScanAcknowledgement({ client, replyToken, userId });
-    } catch (ackErr) {
-      console.log("[SCAN_FLOW] pre-scan ack failed (ignored):", {
-        message: ackErr?.message,
-        status: ackErr?.status,
-      });
-    }
-  } else {
-    console.log("[SCAN_FLOW] skipped internal pre-scan ack", {
-      userId,
-      scanJobId,
-      reason: "before_scan_sequence_owned_webhook_layer",
-    });
-  }
 
   try {
     let scanOut;
@@ -1098,6 +1023,7 @@ export async function runScanFlow({
   const flexRollout = await replyScanResult({
     client,
     userId,
+    replyToken,
     resultText: replyResultText,
     birthdate,
     reportUrl,

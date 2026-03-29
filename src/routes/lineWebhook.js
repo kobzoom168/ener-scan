@@ -19,7 +19,6 @@ import {
   getSelectedPaymentPackageKey,
   clearSelectedPaymentPackageKey,
   resetScanFlowReplyTokenSpent,
-  markScanFlowReplyTokenSpent,
 } from "../stores/session.store.js";
 
 import { getSavedBirthdate, saveBirthdate } from "../stores/userProfile.db.js";
@@ -160,7 +159,6 @@ import {
   BIRTHDATE_CHANGE_FLOW,
 } from "../utils/birthdateChangeFlow.util.js";
 import {
-  beforeScanMessageSequence,
   birthdateSavedAfterUpdate,
 } from "../utils/replyCopy.util.js";
 import { sleep } from "../utils/timing.util.js";
@@ -4782,41 +4780,13 @@ async function handleTextMessage({ client, event, userId, session }) {
           isoDate: parsedLock.isoDate,
           normalizedDisplay: normalizedBirthdate,
         });
-        let beforeScanSendResult = null;
-        try {
-          beforeScanSendResult = await sendNonScanSequenceReply({
-            client,
-            userId,
-            replyToken: event.replyToken,
-            replyType: "before_scan_sequence",
-            semanticKey: "before_scan_sequence",
-            messages: await beforeScanMessageSequence(userId),
-          });
-        } catch (beforeScanErr) {
-          console.error("[LINE] before_scan sequence failed (ignored):", {
-            userId,
-            message: beforeScanErr?.message,
-          });
-        }
-        const beforeScanAckSent = Boolean(beforeScanSendResult?.sent);
-        console.log("[WEBHOOK] before_scan_sequence outcome", {
-          userId,
-          sent: beforeScanAckSent,
-          suppressed: Boolean(beforeScanSendResult?.suppressed),
-          exactDuplicate: Boolean(beforeScanSendResult?.exactDuplicate),
-          semanticDuplicate: Boolean(beforeScanSendResult?.semanticDuplicate),
-        });
-        if (beforeScanAckSent) {
-          markScanFlowReplyTokenSpent(userId);
-        }
         await runScanFlow({
           client,
-          replyToken: beforeScanAckSent ? null : event.replyToken,
+          replyToken: event.replyToken,
           userId,
           imageBuffer: session.pendingImage.imageBuffer,
           birthdate: normalizedBirthdate,
           flowVersion,
-          skipPreScanAcknowledgement: beforeScanAckSent,
         });
         return;
       }
