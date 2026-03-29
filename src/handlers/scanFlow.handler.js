@@ -91,6 +91,43 @@ import {
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
 import { sendScanResultPushWith429Retry } from "../utils/linePush429Retry.util.js";
 
+/** แจ้งรับรูปก่อนเริ่มสแกน — ใช้ push เท่านั้น ไม่กิน replyToken (เก็บไว้ส่ง Flex ตอนจบ) */
+const PRE_SCAN_ACK_VARIANTS = [
+  ["ได้รูปแล้วนะ", "รอแป๊บนึง เดี๋ยวอาจารย์กำลังอ่านให้"],
+  ["รับภาพแล้ว", "เดี๋ยวอาจารย์ดูให้ ขอเวลาแป๊บเดียว"],
+  ["โอเค ได้แล้ว", "รอสักครู่ เดี๋ยวอาจารย์อ่านให้ต่อ"],
+];
+
+async function sendPreScanAcknowledgementPushOnly({ client, userId }) {
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  const chosen =
+    PRE_SCAN_ACK_VARIANTS[
+      Math.floor(Math.random() * PRE_SCAN_ACK_VARIANTS.length)
+    ] || PRE_SCAN_ACK_VARIANTS[0];
+  const first = String(chosen?.[0] || "").trim();
+  const second = String(chosen?.[1] || "").trim();
+  if (!first || !second) return;
+  const combined = `${first}\n${second}`;
+  scanPathEnter();
+  try {
+    await pushText(client, uid, combined);
+    console.log(
+      JSON.stringify({
+        event: "SCAN_PRE_ACK_PUSH_OK",
+        lineUserIdPrefix: uid.slice(0, 8),
+      }),
+    );
+  } catch (err) {
+    console.log("[SCAN_FLOW] pre-scan push ack failed (ignored):", {
+      message: err?.message,
+      status: err?.status,
+    });
+  } finally {
+    scanPathExit();
+  }
+}
+
 async function sendPaymentGateTextReply({ client, replyToken, userId, reply }) {
   const fallbackText =
     reply?.fallbackText ||
@@ -697,6 +734,8 @@ export async function runScanFlow({
     startedAt: scanStartedAt,
     hasReplyTokenForScanResult: Boolean(String(replyToken || "").trim()),
   });
+
+  await sendPreScanAcknowledgementPushOnly({ client, userId });
 
   try {
     let scanOut;
