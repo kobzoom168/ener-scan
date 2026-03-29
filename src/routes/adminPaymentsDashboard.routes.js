@@ -1411,7 +1411,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
             logPrefix: "[ADMIN_REJECT_NOTIFY]",
           });
           if (!rejectNotify.userNotified) {
-            console.error(
+            console.log(
               JSON.stringify({
                 event: "ADMIN_REJECT_NOTIFY_FAILED",
                 paymentId,
@@ -1423,10 +1423,20 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
             );
           }
         } catch (notifyErr) {
-          console.error("[ADMIN_DASH] reject notify threw:", {
-            paymentId,
-            message: notifyErr?.message,
-          });
+          console.log(
+            JSON.stringify({
+              event: "ADMIN_REJECT_NOTIFY_FAILED",
+              paymentId,
+              lineUserIdPrefix: String(lineUserId).slice(0, 8),
+              reason: "notify_threw",
+              message:
+                notifyErr &&
+                typeof notifyErr === "object" &&
+                "message" in notifyErr
+                  ? String(/** @type {{ message?: unknown }} */ (notifyErr).message)
+                  : String(notifyErr),
+            }),
+          );
         }
       }
 
