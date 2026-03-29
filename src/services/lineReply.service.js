@@ -69,6 +69,44 @@ export async function replyFlex(client, replyToken, flexMessage) {
 }
 
 /**
+ * Push Flex (Messaging API). Use after the webhook `replyToken` has been consumed.
+ * @param {*} client
+ * @param {string} userId
+ * @param {*} flexMessage
+ */
+export async function pushFlex(client, userId, flexMessage) {
+  const uid = String(userId || "").trim();
+  if (!uid) {
+    throw new Error("pushFlex_missing_userId");
+  }
+  console.log("[LINE_PUSH_FLEX] start");
+  console.log("[LINE_PUSH_FLEX] userId prefix:", uid.slice(0, 8));
+  console.log("[LINE_PUSH_FLEX] altText:", flexMessage?.altText || "no-altText");
+  try {
+    const flexPayloadJson = JSON.stringify(flexMessage);
+    console.log(
+      "[LINE_PUSH_FLEX] payload_json_preview:",
+      flexPayloadJson.slice(0, 500),
+    );
+  } catch {
+    console.log("[LINE_PUSH_FLEX] payload_json_preview: <stringify failed>");
+  }
+
+  try {
+    const result = await client.pushMessage(uid, flexMessage);
+    console.log("[LINE_PUSH_FLEX] success");
+    return result;
+  } catch (error) {
+    console.error("[LINE_PUSH_FLEX] failed:", error?.message || error);
+    console.error(
+      "[LINE_PUSH_FLEX] error.response.data:",
+      error?.response?.data || null,
+    );
+    throw error;
+  }
+}
+
+/**
  * Manual payment: intro text → QR image → short slip reminder (max 5 messages in one reply).
  * @param {{ introText: string, qrImageUrl: string, slipText: string }} opts
  */

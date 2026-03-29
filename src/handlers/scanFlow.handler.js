@@ -5,7 +5,7 @@ import {
 import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
-import { replyText, replyFlex } from "../services/lineReply.service.js";
+import { replyText, pushFlex } from "../services/lineReply.service.js";
 import { pushText } from "../services/lineSequenceReply.service.js";
 import {
   AuditExemptReason,
@@ -92,7 +92,7 @@ const PRE_SCAN_ACK_VARIANTS = [
   ["โอเค ได้แล้ว", "รอสักครู่ เดี๋ยวอาจารย์อ่านให้ต่อ"],
 ];
 
-async function sendPreScanAcknowledgement({ client, userId }) {
+async function sendPreScanAcknowledgement({ client, replyToken, userId }) {
   const uid = String(userId || "").trim();
   if (!uid) return;
   const chosen =
@@ -103,7 +103,18 @@ async function sendPreScanAcknowledgement({ client, userId }) {
   const second = String(chosen?.[1] || "").trim();
   if (!first || !second) return;
 
-  // Keep scan execution non-blocking: send first now, queue second shortly after.
+  const rt = String(replyToken || "").trim();
+  if (rt) {
+    const combined = `${first}\n${second}`;
+    scanPathEnter();
+    try {
+      await replyText(client, rt, combined);
+    } finally {
+      scanPathExit();
+    }
+    return;
+  }
+
   scanPathEnter();
   try {
     await pushText(client, uid, first);
@@ -228,7 +239,6 @@ export function saveScanArtifacts(userId, resultText) {
 
 export async function replyScanResult({
   client,
-  replyToken,
   userId,
   resultText,
   birthdate = null,
@@ -307,8 +317,8 @@ export async function replyScanResult({
         String(reportPayload?.object?.objectImageUrl || "").trim(),
       );
 
-      await replyFlex(client, replyToken, flex);
-      console.log("[WEBHOOK] replied with flex");
+      await pushFlex(client, userId, flex);
+      console.log("[WEBHOOK] pushed flex scan result");
 
       logScanResultFlexRollout({
         lineUserIdPrefix,
@@ -337,9 +347,9 @@ export async function replyScanResult({
         hasObjectImage,
       };
     } catch (flexError) {
-      console.error("[WEBHOOK] flex reply failed:", flexError);
-      await replyText(client, replyToken, resultText);
-      console.log("[WEBHOOK] fallback replied with text");
+      console.error("[WEBHOOK] flex push failed:", flexError);
+      await pushText(client, userId, resultText);
+      console.log("[WEBHOOK] fallback pushed text");
       logScanResultTextFallback({
         lineUserIdPrefix,
         envFlexScanSummaryFirst: env.FLEX_SCAN_SUMMARY_FIRST,
@@ -698,7 +708,7 @@ export async function runScanFlow({
   });
 
   try {
-    await sendPreScanAcknowledgement({ client, userId });
+    await sendPreScanAcknowledgement({ client, replyToken, userId });
   } catch (ackErr) {
     console.log("[SCAN_FLOW] pre-scan ack failed (ignored):", {
       message: ackErr?.message,
@@ -1073,7 +1083,6 @@ export async function runScanFlow({
 
   const flexRollout = await replyScanResult({
     client,
-    replyToken,
     userId,
     resultText: replyResultText,
     birthdate,
