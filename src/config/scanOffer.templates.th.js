@@ -94,6 +94,7 @@ export const SCAN_OFFER_TEMPLATES_TH = {
    * After slip approved (push / system line) — detail lines follow in webhook builder.
    */
   approved_intro: [
+    ["อนุมัติแล้วครับ", "ส่งรูปมาสแกนต่อได้เลยครับ"],
     [
       "อนุมัติแล้วครับ",
       "ตอนนี้ใช้สแกนเพิ่มได้ {count} ครั้ง ภายใน {hours} ชั่วโมงนับจากตอนนี้",
