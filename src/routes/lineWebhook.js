@@ -191,6 +191,7 @@ import {
   buildIdleDeterministicPrimaryText,
   buildSystemErrorText,
   isPaymentCommand,
+  isPaywallInstantQrIntentText,
   buildPaymentInstructionText,
   buildPaymentQrIntroText,
   buildPaymentQrSlipText,
@@ -2951,7 +2952,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
     if (selectedPkgPaywall && shouldPackageSelectedShortcutToQr(text, selectedPkgPaywall, offer)) {
       let normalizedIntent = "package_selected_proceed";
-      if (isPaymentCommand(text, lowerText)) {
+      if (isPaywallInstantQrIntentText(text, lowerText)) {
         normalizedIntent = "pay_intent";
       } else if (isGenericAckText(text)) {
         normalizedIntent = "generic_proceed";
@@ -3018,7 +3019,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isPaymentCommand(text, lowerText)) {
+    if (isPaywallInstantQrIntentText(text, lowerText)) {
       resetGuidanceNoProgress(userId, "paywall_offer_single");
       resetSameStateAckStreak(userId, "paywall_offer_single");
       console.log(
@@ -3111,24 +3112,16 @@ async function handleTextMessage({ client, event, userId, session }) {
         text,
         chosenReplyType: outboundRt,
       });
-      const ack = buildPaymentPackageSelectedAck(pkg);
       if ((await invokePhase1GeminiOrchestrator()).handled) return;
-      await sendNonScanReplyWithOptionalConvSurface({
+      await handlePaymentCommandTextRoute({
         client,
+        event,
         userId,
-        replyToken: event.replyToken,
-        replyType: outboundRt,
-        semanticKey: outboundRt,
-        text: ack,
-        alternateTexts: [buildSingleOfferPaywallAltText(offer)],
-        convSurface: buildConvSurfacePaywall(
-          userId,
-          text,
-          "single_offer_paywall_ready_ack",
-          ack,
-          "full",
-          defaultPkg,
-        ),
+        session,
+        text,
+        lowerText,
+        isPaywallGateWithPendingScan,
+        forcePaymentIntent: true,
       });
       return;
     }

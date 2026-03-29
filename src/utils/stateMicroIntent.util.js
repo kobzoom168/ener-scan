@@ -53,6 +53,30 @@ function ackTokenWithoutPolite(t) {
   return s.replace(/(นะครับ|นะคะ|ครับ|ค่ะ|คับ)$/u, "").trim();
 }
 
+/** Extra “send QR now” phrases on single-offer paywall (beyond `isPaymentCommand`). */
+export function matchesPaywallInstantQrPhrase(text) {
+  const t = normText(text);
+  if (!t) return false;
+  const lt = t.toLowerCase();
+  const bag = new Set([
+    "ตกลง",
+    "เอา",
+    "สนใจ",
+    "พร้อม",
+    "ได้เลย",
+    "โอเค",
+    "ok",
+    "okay",
+  ]);
+  if (bag.has(t) || bag.has(lt)) return true;
+  const stripped = ackTokenWithoutPolite(t);
+  if (stripped && stripped !== t) {
+    const ls = stripped.toLowerCase();
+    if (bag.has(stripped) || bag.has(ls)) return true;
+  }
+  return false;
+}
+
 /** Short acknowledgement / light agreement (not pay intent, not status). */
 export function isGenericAckText(text) {
   const t = normText(text);
@@ -134,6 +158,7 @@ export function shouldPackageSelectedShortcutToQr(text, selectedPkg, offer) {
   if (!selectedPkg) return false;
   return (
     isPaymentCommandLikeText(text) ||
+    matchesPaywallInstantQrPhrase(text) ||
     isPackageSelectedProceedIntentText(text) ||
     isPackageSelectedSamePackageConfirmText(text, selectedPkg, offer) ||
     isGenericAckText(text) ||

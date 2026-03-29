@@ -26,7 +26,10 @@ import {
   listActivePackages,
   parsePackageSelectionFromText,
 } from "../services/scanOffer.packages.js";
-import { isLoosePayIntentExact } from "./stateMicroIntent.util.js";
+import {
+  isLoosePayIntentExact,
+  matchesPaywallInstantQrPhrase,
+} from "./stateMicroIntent.util.js";
 import { isBirthdateChangeCandidateText } from "./birthdateChangeFlow.util.js";
 
 /** Backward-compatible alias for `looksLikeBirthdateInput`. */
@@ -623,6 +626,12 @@ export function isPaymentCommand(text, lowerText) {
 
   if (lt === "payment" || t === "จ่ายเงิน" || t === "ปลดล็อก") return true;
   return isLoosePayIntentExact(t);
+}
+
+/** Single-offer paywall: broad payment-confirm → show QR in one step (no extra ack). */
+export function isPaywallInstantQrIntentText(text, lowerText) {
+  if (isPaymentCommand(text, lowerText)) return true;
+  return matchesPaywallInstantQrPhrase(text);
 }
 
 function displayAmountThb(amount, fallbackThb) {

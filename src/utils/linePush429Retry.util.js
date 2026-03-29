@@ -1,6 +1,7 @@
 import { randomBetween } from "./timing.util.js";
 import { isLine429Error } from "./lineNotify429Retry.util.js";
 import { replyFlex } from "../services/lineReply.service.js";
+import { logLineTransportError } from "./lineErrorLog.util.js";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -360,4 +361,73 @@ export async function sendScanResultReplyWith429Retry({
 
   const textMsgs = /** @type {unknown[]} */ ([{ type: "text", text: safeText }]);
   return replyWithRetries(textMsgs, "reply_text");
+}
+
+/**
+ * Admin / low-volume push: one attempt, on 429 wait 3s and retry once. Non-429 errors rethrow.
+ * @param {*} client
+ * @param {string} userId
+ * @param {unknown} messagePayload e.g. { type: "text", text }
+ * @returns {Promise<{ ok: boolean, attempts: number, lastError?: unknown, lastIs429?: boolean }>}
+ */
+export async function tryLinePushMessageWith429RetryOnce(
+  client,
+  userId,
+  messagePayload,
+) {
+  const uid = String(userId || "").trim();
+  if (!uid) {
+    throw new Error("tryLinePushMessageWith429RetryOnce_missing_userId");
+  }
+  try {
+    await client.pushMessage(uid, messagePayload);
+    console.log(
+      JSON.stringify({
+        event: "ADMIN_APPROVE_PUSH_OK",
+        lineUserIdPrefix: uid.slice(0, 8),
+        attempt: 1,
+      }),
+    );
+    return { ok: true, attempts: 1 };
+  } catch (err) {
+    if (!isLine429Error(err)) {
+      logLineTransportError("admin_approve_push", err);
+      throw err;
+    }
+    console.log(
+      JSON.stringify({
+        event: "ADMIN_PUSH_RETRY",
+        reason: "429",
+        waitMs: 3000,
+        lineUserIdPrefix: uid.slice(0, 8),
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 3000));
+    try {
+      await client.pushMessage(uid, messagePayload);
+      console.log(
+        JSON.stringify({
+          event: "ADMIN_APPROVE_PUSH_OK",
+          lineUserIdPrefix: uid.slice(0, 8),
+          attempt: 2,
+        }),
+      );
+      return { ok: true, attempts: 2 };
+    } catch (err2) {
+      logLineTransportError("admin_approve_push_retry", err2);
+      console.error(
+        JSON.stringify({
+          event: "ADMIN_APPROVE_PUSH_FAILED",
+          afterRetry: true,
+          lineUserIdPrefix: uid.slice(0, 8),
+        }),
+      );
+      return {
+        ok: false,
+        attempts: 2,
+        lastError: err2,
+        lastIs429: isLine429Error(err2),
+      };
+    }
+  }
 }
