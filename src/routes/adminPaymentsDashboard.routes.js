@@ -30,6 +30,7 @@ import {
   formatBangkokDate,
 } from "../utils/dateTime.util.js";
 import { buildAdminFreeResetConfirmationPayload } from "../utils/adminResetNotify.util.js";
+import { notifyLineUserTextAfterAdminAction } from "../utils/lineNotify429Retry.util.js";
 import {
   adminResetScanAbuseState,
   snapshotAbuseForAdminResetLog,
@@ -1422,17 +1423,61 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           );
         }
 
-        void lineClient
-          .pushMessage(lineUserId, { type: "text", text: confirm.text })
-          .catch((pushErr) => {
-            console.error("[ADMIN_DASH] LINE push after free-trial reset failed:", {
+        console.log(
+          JSON.stringify({
+            event: "ADMIN_DASH_FREE_TRIAL_RESET_APPLIED",
+            message: "[ADMIN_DASH] free-trial reset applied",
+            lineUserId,
+            appUserId: result.appUserId,
+            freeQuotaPerDay: confirm.freeQuotaPerDay,
+            scansTodayAtReset: result.scansToday,
+            resetMode,
+          }),
+        );
+
+        const lineReplyToken =
+          typeof req.body?.lineReplyToken === "string"
+            ? req.body.lineReplyToken.trim()
+            : "";
+
+        const notifyResult = await notifyLineUserTextAfterAdminAction({
+          client: lineClient,
+          lineUserId,
+          text: confirm.text,
+          replyToken: lineReplyToken || null,
+          logPrefix: "[ADMIN_DASH_FREE_RESET_NOTIFY]",
+        });
+
+        if (!notifyResult.userNotified) {
+          const le = /** @type {{ message?: string, status?: number, response?: { status?: number, data?: unknown } }} */ (
+            notifyResult.lastError
+          );
+          console.error(
+            JSON.stringify({
+              event: "ADMIN_FREE_RESET_NOTIFY_EXHAUSTED",
               lineUserId,
-              message: pushErr?.message,
-            });
-          });
+              resetApplied: true,
+              userNotified: false,
+              notifyError: notifyResult.notifyError,
+              attempts: notifyResult.attempts,
+              channel: notifyResult.channel,
+              message: le?.message,
+              status: le?.status ?? le?.response?.status,
+              responseData: le?.response?.data ?? null,
+            }),
+          );
+        }
+
         if (wantsJsonResponse(req)) {
           res.status(200).json({
             ok: true,
+            resetApplied: true,
+            userNotified: notifyResult.userNotified,
+            notifyChannel: notifyResult.channel,
+            notifyAttempts: notifyResult.attempts,
+            ...(notifyResult.userNotified
+              ? {}
+              : { notifyError: notifyResult.notifyError || "notify_failed" }),
             ...result,
             resetMode,
             scanAbuseReset: Boolean(scanAbuseSnapshot),

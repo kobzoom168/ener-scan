@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildAdminFreeResetConfirmationPayload } from "../src/utils/adminResetNotify.util.js";
+import {
+  ADMIN_FREE_RESET_CONFIRM_TEXT,
+  buildAdminFreeResetConfirmationPayload,
+} from "../src/utils/adminResetNotify.util.js";
 import {
   sendScanLockReply,
   SCAN_LOCKED_SOFT_PRIMARY,
@@ -10,9 +13,9 @@ import {
 import { decideScanGate } from "../src/services/scanOfferAccess.resolver.js";
 import { sendNonScanReply } from "../src/services/nonScanReply.gateway.js";
 
-test("admin free reset confirmation uses configured freeQuotaPerDay (not literal 2 only)", () => {
+test("admin free reset confirmation: deterministic user text + numeric freeQuotaPerDay from offer", () => {
   const p = buildAdminFreeResetConfirmationPayload();
-  assert.ok(String(p.text).includes(String(p.freeQuotaPerDay)));
+  assert.equal(p.text, ADMIN_FREE_RESET_CONFIRM_TEXT);
   assert.equal(typeof p.freeQuotaPerDay, "number");
   assert.ok(p.freeQuotaPerDay >= 1);
 });
