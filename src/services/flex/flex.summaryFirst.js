@@ -17,7 +17,7 @@ import { resolveEnergyType } from "./scanCopy.utils.js";
 
 const FLEX_CARD_BG = "#000000";
 const FLEX_BOX_BG = "#111111";
-const FLEX_ACCENT = "#E8593C";
+const FLEX_ACCENT = "#D4AF37";
 /** Gold accent for score row number + energy badge only (stars / compat / CTA stay orange). */
 const FLEX_BADGE_AND_SCORE_GOLD = "#D4AF37";
 const FLEX_TEXT_PRIMARY = "#ffffff";

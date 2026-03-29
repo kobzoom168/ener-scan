@@ -108,7 +108,7 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.doesNotMatch(bodyStr, /เข้ากับคุณยังไง/);
   assert.match(bodyStr, /คุ้มกัน/);
   assert.match(bodyStr, /★/);
-  assert.match(bodyStr, /#E8593C/);
+  assert.match(bodyStr, /#D4AF37/);
   assert.match(bodyStr, /#000000/);
   assert.match(bodyStr, /#111111/);
   assert.doesNotMatch(bodyStr, /"text":""/);
