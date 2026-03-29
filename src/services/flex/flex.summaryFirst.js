@@ -9,6 +9,7 @@ import {
   normalizeScore,
   getEnergyShortLabel,
   sortDimensionKeysForStarDisplay,
+  safeThaiCut,
 } from "./flex.utils.js";
 import { buildScanFlexAltText, FLEX_SPLIT_WARN_THRESHOLD, splitSentencesForFlex } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
@@ -209,13 +210,16 @@ function createScanDimensionStarBlock(dimensions) {
   return {
     type: "box",
     layout: "vertical",
-    margin: "md",
+    margin: "sm",
     contents: rows,
   };
 }
 
 function createCompatibilityTeaserBlock(birthdayLabel, reasonText) {
-  const reason = String(reasonText || "").trim() || "โยงพลังวันเกิดกับแกนหลักของชิ้นนี้ได้ตรงจุด — ดูฉบับเต็มในรายงาน";
+  const reasonFull =
+    String(reasonText || "").trim() ||
+    "โยงพลังวันเกิดกับแกนหลักของชิ้นนี้ได้ตรงจุด — ดูฉบับเต็มในรายงาน";
+  const reason = safeThaiCut(reasonFull, 80);
   return {
     type: "box",
     layout: "vertical",
@@ -224,7 +228,7 @@ function createCompatibilityTeaserBlock(birthdayLabel, reasonText) {
     backgroundColor: FLEX_BOX_BG,
     borderWidth: "1px",
     borderColor: FLEX_ACCENT,
-    margin: "md",
+    margin: "sm",
     contents: [
       {
         type: "text",
@@ -263,6 +267,7 @@ function createTipBulletRow(line) {
 
 /**
  * Scan JSON `tips` / legacy “ชิ้นนี้หนุนเรื่อง” bullets → max 2 strings for Flex.
+ * Only limits count (2); does not shorten each string before `createTipBulletRow`.
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
  * @param {ReturnType<typeof parseScanText>} parsed
  */
@@ -737,7 +742,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       type: "box",
       layout: "vertical",
       paddingAll: "20px",
-      spacing: "md",
+      spacing: "sm",
       backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },
