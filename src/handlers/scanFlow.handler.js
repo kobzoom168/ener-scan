@@ -6,6 +6,7 @@ import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
 import { replyText } from "../services/lineReply.service.js";
+import { pushText } from "../services/lineSequenceReply.service.js";
 import {
   AuditExemptReason,
   auditExemptEnter,
@@ -71,6 +72,7 @@ import {
 } from "../stores/scanResults.db.js";
 import { deleteScanPublicReportsForScanResult } from "../stores/scanPublicReports.db.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
+import { randomBetween, sleep } from "../utils/timing.util.js";
 
 import { logPaywallShown, logEvent } from "../utils/personaAnalytics.util.js";
 import { env } from "../config/env.js";
@@ -100,6 +102,7 @@ const PRE_SCAN_ACK_VARIANTS = [
 ];
 
 async function sendPreScanAcknowledgementPushOnly({ client, userId }) {
+  if (!env.SEND_PRE_SCAN_ACK_PUSH_ONLY) return;
   const uid = String(userId || "").trim();
   if (!uid) return;
   const chosen =
@@ -230,7 +233,6 @@ export function saveScanArtifacts(userId, resultText) {
 export async function replyScanResult({
   client,
   userId,
-  replyToken = null,
   resultText,
   birthdate = null,
   reportUrl = null,
@@ -336,29 +338,51 @@ export async function replyScanResult({
     };
 
     const rt = String(replyToken || "").trim();
-    const delivery = rt
-      ? await sendScanResultReplyWith429Retry({
+    /** @type {Awaited<ReturnType<typeof sendScanResultPushWith429Retry>>} */
+    let delivery;
+    if (rt) {
+      delivery = await sendScanResultReplyWith429Retry({
+        client,
+        replyToken: rt,
+        userId,
+        flexMessage: flex,
+        text: resultText,
+        logPrefix: "[SCAN_RESULT_LINE_REPLY]",
+      });
+      if (!delivery.sent) {
+        console.warn(
+          JSON.stringify({
+            event: "SCAN_RESULT_REPLY_FALLBACK_PUSH",
+            lineUserIdPrefix,
+            replyFailed: true,
+            priorMethod: delivery.method,
+            priorAttempts: delivery.attempts,
+          }),
+        );
+        delivery = await sendScanResultPushWith429Retry({
           client,
-          replyToken: rt,
           userId,
           flexMessage: flex,
           text: resultText,
-          logPrefix: "[SCAN_RESULT_LINE_REPLY]",
-        })
-      : await sendScanResultPushWith429Retry({
-          client,
-          userId,
-          flexMessage: flex,
-          text: resultText,
-          logPrefix: "[SCAN_RESULT_LINE_PUSH]",
+          logPrefix: "[SCAN_RESULT_LINE_PUSH_FALLBACK]",
         });
+      }
+    } else {
+      delivery = await sendScanResultPushWith429Retry({
+        client,
+        userId,
+        flexMessage: flex,
+        text: resultText,
+        logPrefix: "[SCAN_RESULT_LINE_PUSH]",
+      });
+    }
 
     if (delivery.sent) {
       console.log("[WEBHOOK] scan result delivered", {
         method: delivery.method,
         attempts: delivery.attempts,
       });
-      if (delivery.method === "reply_flex" || delivery.method === "push_flex") {
+      if (delivery.method === "push_flex" || delivery.method === "reply_flex") {
         logScanResultFlexRollout({
           lineUserIdPrefix,
           flexPresentationMode,
@@ -1171,7 +1195,7 @@ export async function runScanFlow({
     const d = flexRollout?.delivery;
     const scanDeliveryMode = !d?.sent
       ? "delivery_failed"
-      : d.method === "push_flex"
+      : d.method === "push_flex" || d.method === "reply_flex"
         ? "flex"
         : "text_fallback";
     logEvent("preview_shown", {

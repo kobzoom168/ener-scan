@@ -1,7 +1,10 @@
 import { randomBetween } from "./timing.util.js";
 import { isLine429Error } from "./lineNotify429Retry.util.js";
 import { replyFlex } from "../services/lineReply.service.js";
-import { logLineTransportError } from "./lineErrorLog.util.js";
+import {
+  invokeLinePushMessage,
+  invokeLineReplyMessage,
+} from "./lineClientTransport.util.js";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -118,7 +121,12 @@ export async function sendScanResultPushWith429Retry({
             lineUserIdPrefix: uid.slice(0, 8),
           }),
         );
-        await client.pushMessage(uid, payload);
+        await invokeLinePushMessage(
+          client,
+          "scanResult.pushWith429Retry",
+          uid,
+          payload,
+        );
         console.log(
           JSON.stringify({
             event: `${logPrefix}_ok`,
@@ -285,7 +293,12 @@ export async function sendScanResultReplyWith429Retry({
         if (single && typeof single === "object" && single.type === "flex") {
           await replyFlex(client, rt, single);
         } else {
-          await client.replyMessage(rt, messages);
+          await invokeLineReplyMessage(
+            client,
+            "scanResult.replyWith429Retry",
+            rt,
+            messages,
+          );
         }
         console.log(
           JSON.stringify({
@@ -380,7 +393,12 @@ export async function tryLinePushMessageWith429RetryOnce(
     throw new Error("tryLinePushMessageWith429RetryOnce_missing_userId");
   }
   try {
-    await client.pushMessage(uid, messagePayload);
+    await invokeLinePushMessage(
+      client,
+      "admin.tryLinePush429.attempt1",
+      uid,
+      messagePayload,
+    );
     console.log(
       JSON.stringify({
         event: "ADMIN_APPROVE_PUSH_OK",
@@ -391,7 +409,6 @@ export async function tryLinePushMessageWith429RetryOnce(
     return { ok: true, attempts: 1 };
   } catch (err) {
     if (!isLine429Error(err)) {
-      logLineTransportError("admin_approve_push", err);
       throw err;
     }
     console.log(
@@ -404,7 +421,12 @@ export async function tryLinePushMessageWith429RetryOnce(
     );
     await new Promise((r) => setTimeout(r, 30000));
     try {
-      await client.pushMessage(uid, messagePayload);
+      await invokeLinePushMessage(
+        client,
+        "admin.tryLinePush429.attempt2",
+        uid,
+        messagePayload,
+      );
       console.log(
         JSON.stringify({
           event: "ADMIN_APPROVE_PUSH_OK",
@@ -414,7 +436,6 @@ export async function tryLinePushMessageWith429RetryOnce(
       );
       return { ok: true, attempts: 2 };
     } catch (err2) {
-      logLineTransportError("admin_approve_push_retry", err2);
       console.error(
         JSON.stringify({
           event: "ADMIN_APPROVE_PUSH_FAILED",

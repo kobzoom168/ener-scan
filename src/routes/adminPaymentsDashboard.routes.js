@@ -32,6 +32,7 @@ import {
 import { buildAdminFreeResetConfirmationPayload } from "../utils/adminResetNotify.util.js";
 import { notifyLineUserTextAfterAdminAction } from "../utils/lineNotify429Retry.util.js";
 import { tryLinePushMessageWith429RetryOnce } from "../utils/linePush429Retry.util.js";
+import { invokeLinePushMessage } from "../utils/lineClientTransport.util.js";
 import { serializeLineErrorSafe } from "../utils/lineErrorLog.util.js";
 import {
   adminResetScanAbuseState,
@@ -1242,6 +1243,10 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
 
       /** @type {Awaited<ReturnType<typeof notifyLineUserTextAfterAdminAction>> | null} */
       let notifyResult = null;
+      const lineReplyToken =
+        typeof req.body?.lineReplyToken === "string"
+          ? req.body.lineReplyToken.trim()
+          : "";
 
       if (!isIdempotent) {
         logEvent("payment_success", {
@@ -1267,52 +1272,13 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           paidPlanCode: activation.paidPlanCode,
         });
 
-        const payload = { type: "text", text: message };
-        try {
-          const pushTry = await tryLinePushMessageWith429RetryOnce(
-            lineClient,
-            activation.lineUserId,
-            payload,
-          );
-          const safe = pushTry.lastError
-            ? serializeLineErrorSafe(pushTry.lastError)
-            : { status: null, message: null };
-          notifyResult = {
-            userNotified: pushTry.ok,
-            channel: /** @type {"push"} */ ("push"),
-            attempts: pushTry.attempts,
-            notifyError: pushTry.ok
-              ? null
-              : pushTry.lastIs429
-                ? "line_429"
-                : "line_send_failed",
-            sent: pushTry.ok,
-            method: /** @type {"push"} */ ("push"),
-            finalStatus: pushTry.ok ? null : (safe.status ?? null),
-            finalMessage: pushTry.ok ? null : String(safe.message || ""),
-            is429: Boolean(pushTry.lastIs429),
-          };
-        } catch (pushErr) {
-          const safe = serializeLineErrorSafe(pushErr);
-          console.error(
-            JSON.stringify({
-              event: "ADMIN_APPROVE_PUSH_FAILED",
-              non429: true,
-              ...safe,
-            }),
-          );
-          notifyResult = {
-            userNotified: false,
-            channel: "push",
-            attempts: 1,
-            notifyError: "line_send_failed",
-            sent: false,
-            method: "push",
-            finalStatus: typeof safe.status === "number" ? safe.status : null,
-            finalMessage: typeof safe.message === "string" ? safe.message : String(safe.message),
-            is429: false,
-          };
-        }
+        notifyResult = await notifyLineUserTextAfterAdminAction({
+          client: lineClient,
+          lineUserId: activation.lineUserId,
+          text: message,
+          replyToken: lineReplyToken || null,
+          eventTag: "ADMIN_APPROVE_NOTIFY",
+        });
       }
 
       if (prefersAdminJson(req)) {
@@ -1384,16 +1350,14 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       });
 
       if (lineUserId) {
-        void lineClient
-          .pushMessage(lineUserId, {
-            type: "text",
-            text: buildPaymentRejectedText({ reason: rejectReason }),
-          })
-          .catch((pushErr) => {
-            console.error("[ADMIN_DASH] LINE push after reject failed:", {
-              message: pushErr?.message,
-            });
+        void invokeLinePushMessage(lineClient, "admin.payments.reject", lineUserId, {
+          type: "text",
+          text: buildPaymentRejectedText({ reason: rejectReason }),
+        }).catch((pushErr) => {
+          console.error("[ADMIN_DASH] LINE push after reject failed:", {
+            message: pushErr?.message,
           });
+        });
       }
 
       if (prefersAdminJson(req)) {

@@ -1,5 +1,9 @@
 import { randomBetween } from "./timing.util.js";
-import { logLineTransportError, serializeLineErrorSafe } from "./lineErrorLog.util.js";
+import { serializeLineErrorSafe } from "./lineErrorLog.util.js";
+import {
+  invokeLinePushMessage,
+  invokeLineReplyMessage,
+} from "./lineClientTransport.util.js";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -125,7 +129,12 @@ export async function notifyLineUserTextAfterAdminAction({
             }),
           );
         }
-        await client.pushMessage(uid, payload);
+        await invokeLinePushMessage(
+          client,
+          "lineNotify.afterAdmin.pushRetry",
+          uid,
+          payload,
+        );
         if (tag) {
           console.log(
             JSON.stringify({
@@ -168,7 +177,6 @@ export async function notifyLineUserTextAfterAdminAction({
         }
         if (!is429 || i >= 2) {
           if (tag) {
-            logLineTransportError("admin_approve_notify_push", err);
             console.error(
               JSON.stringify({
                 event: `${tag}_FAILED`,
@@ -212,7 +220,6 @@ export async function notifyLineUserTextAfterAdminAction({
       }
     }
     if (tag && lastErr) {
-      logLineTransportError("admin_approve_notify_push", lastErr);
       console.error(
         JSON.stringify({
           event: `${tag}_FAILED`,
@@ -243,7 +250,12 @@ export async function notifyLineUserTextAfterAdminAction({
           }),
         );
       }
-      await client.replyMessage(rt, payload);
+      await invokeLineReplyMessage(
+        client,
+        "lineNotify.afterAdmin.reply",
+        rt,
+        payload,
+      );
       if (tag) {
         console.log(
           JSON.stringify({
@@ -268,9 +280,6 @@ export async function notifyLineUserTextAfterAdminAction({
         notifyError: null,
       });
     } catch (err) {
-      if (tag) {
-        logLineTransportError("admin_approve_notify_reply", err);
-      }
       console.error(
         JSON.stringify(
           tag

@@ -159,7 +159,6 @@ import {
   BIRTHDATE_CHANGE_FLOW,
 } from "../utils/birthdateChangeFlow.util.js";
 import {
-  beforeScanMessageSequence,
   birthdateSavedAfterUpdate,
 } from "../utils/replyCopy.util.js";
 import { sleep } from "../utils/timing.util.js";
@@ -190,7 +189,6 @@ import {
   buildIdleDeterministicPrimaryText,
   buildSystemErrorText,
   isPaymentCommand,
-  isPaywallInstantQrIntentText,
   buildPaymentInstructionText,
   buildPaymentQrIntroText,
   buildPaymentQrSlipText,
@@ -2951,7 +2949,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
     if (selectedPkgPaywall && shouldPackageSelectedShortcutToQr(text, selectedPkgPaywall, offer)) {
       let normalizedIntent = "package_selected_proceed";
-      if (isPaywallInstantQrIntentText(text, lowerText)) {
+      if (isPaymentCommand(text, lowerText)) {
         normalizedIntent = "pay_intent";
       } else if (isGenericAckText(text)) {
         normalizedIntent = "generic_proceed";
@@ -3018,7 +3016,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isPaywallInstantQrIntentText(text, lowerText)) {
+    if (isPaymentCommand(text, lowerText)) {
       resetGuidanceNoProgress(userId, "paywall_offer_single");
       resetSameStateAckStreak(userId, "paywall_offer_single");
       console.log(
@@ -3111,16 +3109,24 @@ async function handleTextMessage({ client, event, userId, session }) {
         text,
         chosenReplyType: outboundRt,
       });
+      const ack = buildPaymentPackageSelectedAck(pkg);
       if ((await invokePhase1GeminiOrchestrator()).handled) return;
-      await handlePaymentCommandTextRoute({
+      await sendNonScanReplyWithOptionalConvSurface({
         client,
-        event,
         userId,
-        session,
-        text,
-        lowerText,
-        isPaywallGateWithPendingScan,
-        forcePaymentIntent: true,
+        replyToken: event.replyToken,
+        replyType: outboundRt,
+        semanticKey: outboundRt,
+        text: ack,
+        alternateTexts: [buildSingleOfferPaywallAltText(offer)],
+        convSurface: buildConvSurfacePaywall(
+          userId,
+          text,
+          "single_offer_paywall_ready_ack",
+          ack,
+          "full",
+          defaultPkg,
+        ),
       });
       return;
     }
@@ -4774,20 +4780,22 @@ async function handleTextMessage({ client, event, userId, session }) {
           isoDate: parsedLock.isoDate,
           normalizedDisplay: normalizedBirthdate,
         });
-        try {
-          await sendNonScanSequenceReply({
-            client,
-            userId,
-            replyToken: null,
-            replyType: "before_scan_sequence",
-            semanticKey: "before_scan_sequence",
-            messages: await beforeScanMessageSequence(userId),
-          });
-        } catch (beforeScanErr) {
-          console.error("[LINE] before_scan sequence failed (ignored):", {
-            userId,
-            message: beforeScanErr?.message,
-          });
+        if (!env.SEND_PRE_SCAN_ACK_PUSH_ONLY) {
+          try {
+            await sendNonScanSequenceReply({
+              client,
+              userId,
+              replyToken: null,
+              replyType: "before_scan_sequence",
+              semanticKey: "before_scan_sequence",
+              messages: await beforeScanMessageSequence(userId),
+            });
+          } catch (beforeScanErr) {
+            console.error("[LINE] before_scan sequence failed (ignored):", {
+              userId,
+              message: beforeScanErr?.message,
+            });
+          }
         }
         await runScanFlow({
           client,

@@ -339,8 +339,7 @@ test("runPhase1GeminiShadowPipeline does not mutate ctx", async () => {
 
 test("lineWebhook: paywall recovery primaryText block does not reference shadow / geminiFront", () => {
   const lineWebhookPath = path.join(__dirname, "../src/routes/lineWebhook.js");
-  const raw = fs.readFileSync(lineWebhookPath, "utf8");
-  const src = raw.replace(/\r\n/g, "\n");
+  const src = fs.readFileSync(lineWebhookPath, "utf8").replace(/\r\n/g, "\n");
   const marker = '    const primaryText =\n      branch === "date_wrong"';
   const i = src.indexOf(marker);
   assert.ok(i >= 0, "paywall recovery primaryText anchor");

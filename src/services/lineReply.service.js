@@ -1,6 +1,9 @@
 import { env } from "../config/env.js";
 import { isAuditNonScanBypassSuspect } from "./lineReplyAudit.context.js";
-import { logLineTransportError } from "../utils/lineErrorLog.util.js";
+import {
+  invokeLinePushMessage,
+  invokeLineReplyMessage,
+} from "../utils/lineClientTransport.util.js";
 
 export async function replyText(client, replyToken, text) {
   if (
@@ -16,24 +19,12 @@ export async function replyText(client, replyToken, text) {
       }),
     );
   }
-  console.log("[LINE_REPLY_TEXT] start");
-  console.log("[LINE_REPLY_TEXT] replyToken exists:", Boolean(replyToken));
-  console.log("[LINE_REPLY_TEXT] text length:", text?.length || 0);
-
   const safeText = String(text || "").slice(0, 4900);
 
-  try {
-    const result = await client.replyMessage(replyToken, {
-      type: "text",
-      text: safeText,
-    });
-
-    console.log("[LINE_REPLY_TEXT] success");
-    return result;
-  } catch (error) {
-    logLineTransportError("LINE_REPLY_TEXT", error);
-    throw error;
-  }
+  return invokeLineReplyMessage(client, "lineReply.replyText", replyToken, {
+    type: "text",
+    text: safeText,
+  });
 }
 
 export async function replyFlex(client, replyToken, flexMessage) {
@@ -50,15 +41,9 @@ export async function replyFlex(client, replyToken, flexMessage) {
     console.log("[LINE_REPLY_FLEX] payload_json_preview: <stringify failed>");
   }
 
-  try {
-    const result = await client.replyMessage(replyToken, [flexMessage]);
-
-    console.log("[LINE_REPLY_FLEX] success");
-    return result;
-  } catch (error) {
-    logLineTransportError("LINE_REPLY_FLEX", error);
-    throw error;
-  }
+  return invokeLineReplyMessage(client, "lineReply.replyFlex", replyToken, [
+    flexMessage,
+  ]);
 }
 
 /**
@@ -85,14 +70,7 @@ export async function pushFlex(client, userId, flexMessage) {
     console.log("[LINE_PUSH_FLEX] payload_json_preview: <stringify failed>");
   }
 
-  try {
-    const result = await client.pushMessage(uid, flexMessage);
-    console.log("[LINE_PUSH_FLEX] success");
-    return result;
-  } catch (error) {
-    logLineTransportError("LINE_PUSH_FLEX", error);
-    throw error;
-  }
+  return invokeLinePushMessage(client, "lineReply.pushFlex", uid, flexMessage);
 }
 
 /**
@@ -129,14 +107,12 @@ export async function replyPaymentInstructionWithQr(client, replyToken, opts) {
     })(),
   });
 
-  try {
-    const result = await client.replyMessage(replyToken, messages);
-    console.log("[LINE_REPLY_PAYMENT_QR] success");
-    return result;
-  } catch (error) {
-    logLineTransportError("LINE_REPLY_PAYMENT_QR", error);
-    throw error;
-  }
+  return invokeLineReplyMessage(
+    client,
+    "lineReply.replyPaymentQr",
+    replyToken,
+    messages,
+  );
 }
 
 /** Alias ตามสเปค — ส่ง text + image QR + text สลิป */
