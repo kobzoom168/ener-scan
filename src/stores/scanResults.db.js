@@ -120,3 +120,35 @@ export async function createScanResult({
 
   return data?.id || null;
 }
+
+/**
+ * Remove a scan result row (e.g. free entitlement rollback when LINE delivery fails).
+ * @param {string} scanResultId
+ * @param {string} appUserId
+ * @returns {Promise<boolean>} true if delete ran without error
+ */
+export async function deleteScanResultForAppUser(scanResultId, appUserId) {
+  const sid = String(scanResultId || "").trim();
+  const uid = String(appUserId || "").trim();
+  if (!sid || !uid) return false;
+
+  const { error } = await supabase
+    .from("scan_results")
+    .delete()
+    .eq("id", sid)
+    .eq("user_id", uid);
+
+  if (error) {
+    console.error(
+      JSON.stringify({
+        event: "SCAN_RESULT_DELETE",
+        outcome: "error",
+        scanResultIdPrefix: sid.slice(0, 8),
+        message: error.message,
+        code: error.code,
+      }),
+    );
+    return false;
+  }
+  return true;
+}

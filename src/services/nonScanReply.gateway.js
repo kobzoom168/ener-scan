@@ -229,6 +229,16 @@ export async function sendNonScanReply(opts) {
       const tokenStr = String(replyToken || "").trim();
       const tokenSpent = isScanFlowReplyTokenSpent(uid);
       if (!tokenStr || tokenSpent) {
+        if (tokenSpent && tokenStr) {
+          console.log(
+            JSON.stringify({
+              event: "WEBHOOK_FALLBACK_REPLY_SKIPPED_ALREADY_CONSUMED",
+              userIdPrefix: uid.slice(0, 8),
+              replyType: rt,
+              semanticKey: skLog,
+            }),
+          );
+        }
         await pushText(client, uid, body);
         logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
           userId: uid,

@@ -12,8 +12,15 @@ function sleep(ms) {
  */
 function lineErrorStatus(err) {
   if (!err || typeof err !== "object") return null;
-  const o = /** @type {{ status?: number; response?: { status?: number } }} */ (err);
-  return o.status ?? o.response?.status ?? null;
+  const o = /** @type {{ statusCode?: number; status?: number; response?: { status?: number } }} */ (
+    err
+  );
+  return (
+    (typeof o.statusCode === "number" ? o.statusCode : null) ??
+    (typeof o.status === "number" ? o.status : null) ??
+    o.response?.status ??
+    null
+  );
 }
 
 /**

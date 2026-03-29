@@ -12,7 +12,10 @@ function sleep(ms) {
 export function isLine429Error(err) {
   if (!err || typeof err !== "object") return false;
   const o = /** @type {Record<string, unknown>} */ (err);
-  const status = o.status ?? /** @type {{ status?: number }} */ (o.response)?.status;
+  const status =
+    (typeof o.statusCode === "number" ? o.statusCode : null) ??
+    (typeof o.status === "number" ? o.status : null) ??
+    /** @type {{ status?: number }} */ (o.response)?.status;
   if (status === 429) return true;
   const msg = String(o.message || "").toLowerCase();
   if (msg.includes("429") || msg.includes("rate limit") || msg.includes("too many requests"))

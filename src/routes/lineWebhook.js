@@ -91,7 +91,9 @@ import {
   sendNonScanReplyWithOptionalConvSurface,
   sendNonScanSequenceReply,
   sendNonScanPaymentQrInstructions,
+  sendNonScanPushMessage,
 } from "../services/nonScanReply.gateway.js";
+import { serializeLineErrorSafe } from "../utils/lineErrorLog.util.js";
 import {
   emitActiveStateRouting,
   emitStateMicroIntent,
@@ -5458,7 +5460,10 @@ export function lineWebhookRouter(lineConfig) {
 
           await handleEvent({ client, event });
         } catch (err) {
-          console.error(`[WEBHOOK] event #${index + 1} error:`, err);
+          console.error(
+            `[WEBHOOK] event #${index + 1} error:`,
+            JSON.stringify(serializeLineErrorSafe(err)),
+          );
 
           if (event.replyToken) {
             try {
@@ -5473,10 +5478,17 @@ export function lineWebhookRouter(lineConfig) {
                   lowerText: "",
                 });
                 if (!gfErr.handled) {
-                  await sendNonScanReply({
+                  console.log(
+                    JSON.stringify({
+                      event: "WEBHOOK_FALLBACK_PUSH_NOT_REPLY",
+                      reason:
+                        "handler_error_reply_token_may_be_consumed_by_long_running_flow",
+                      userIdPrefix: errUid.slice(0, 8),
+                    }),
+                  );
+                  await sendNonScanPushMessage({
                     client,
                     userId: errUid,
-                    replyToken: event.replyToken,
                     replyType: "webhook_event_error",
                     semanticKey: "system_error",
                     text: buildSystemErrorText(),
@@ -5498,7 +5510,10 @@ export function lineWebhookRouter(lineConfig) {
                 }
               }
             } catch (replyErr) {
-              console.error("[WEBHOOK] fallback error reply failed:", replyErr);
+              console.error(
+                "[WEBHOOK] fallback error reply failed:",
+                JSON.stringify(serializeLineErrorSafe(replyErr)),
+              );
             }
           }
         }

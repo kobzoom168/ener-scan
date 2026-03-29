@@ -90,3 +90,31 @@ export async function getScanPublicReportByToken(publicToken) {
     report_version: data.report_version || "",
   };
 }
+
+/**
+ * @param {string} scanResultId
+ * @returns {Promise<boolean>}
+ */
+export async function deleteScanPublicReportsForScanResult(scanResultId) {
+  const sid = String(scanResultId || "").trim();
+  if (!sid) return false;
+
+  const { error } = await supabase
+    .from("scan_public_reports")
+    .delete()
+    .eq("scan_result_id", sid);
+
+  if (error) {
+    console.error(
+      JSON.stringify({
+        event: "REPORT_DB_DELETE",
+        outcome: "error",
+        scanResultIdPrefix: sid.slice(0, 8),
+        message: error.message,
+        code: error.code,
+      }),
+    );
+    return false;
+  }
+  return true;
+}

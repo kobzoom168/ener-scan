@@ -1,5 +1,6 @@
 import { env } from "../config/env.js";
 import { isAuditNonScanBypassSuspect } from "./lineReplyAudit.context.js";
+import { logLineTransportError } from "../utils/lineErrorLog.util.js";
 
 export async function replyText(client, replyToken, text) {
   if (
@@ -30,11 +31,7 @@ export async function replyText(client, replyToken, text) {
     console.log("[LINE_REPLY_TEXT] success");
     return result;
   } catch (error) {
-    console.error("[LINE_REPLY_TEXT] failed:", error?.message || error);
-    console.error(
-      "[LINE_REPLY_TEXT] error.response.data:",
-      error?.response?.data || null,
-    );
+    logLineTransportError("LINE_REPLY_TEXT", error);
     throw error;
   }
 }
@@ -59,11 +56,7 @@ export async function replyFlex(client, replyToken, flexMessage) {
     console.log("[LINE_REPLY_FLEX] success");
     return result;
   } catch (error) {
-    console.error("[LINE_REPLY_FLEX] failed:", error?.message || error);
-    console.error(
-      "[LINE_REPLY_FLEX] error.response.data:",
-      error?.response?.data || null,
-    );
+    logLineTransportError("LINE_REPLY_FLEX", error);
     throw error;
   }
 }
@@ -97,11 +90,7 @@ export async function pushFlex(client, userId, flexMessage) {
     console.log("[LINE_PUSH_FLEX] success");
     return result;
   } catch (error) {
-    console.error("[LINE_PUSH_FLEX] failed:", error?.message || error);
-    console.error(
-      "[LINE_PUSH_FLEX] error.response.data:",
-      error?.response?.data || null,
-    );
+    logLineTransportError("LINE_PUSH_FLEX", error);
     throw error;
   }
 }
@@ -145,7 +134,7 @@ export async function replyPaymentInstructionWithQr(client, replyToken, opts) {
     console.log("[LINE_REPLY_PAYMENT_QR] success");
     return result;
   } catch (error) {
-    console.error("[LINE_REPLY_PAYMENT_QR] failed:", error?.message || error);
+    logLineTransportError("LINE_REPLY_PAYMENT_QR", error);
     throw error;
   }
 }

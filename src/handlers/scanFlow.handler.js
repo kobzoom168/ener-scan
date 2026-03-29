@@ -67,7 +67,11 @@ import {
   createScanRequest,
   updateScanRequestStatus,
 } from "../stores/scanRequests.db.js";
-import { createScanResult } from "../stores/scanResults.db.js";
+import {
+  createScanResult,
+  deleteScanResultForAppUser,
+} from "../stores/scanResults.db.js";
+import { deleteScanPublicReportsForScanResult } from "../stores/scanPublicReports.db.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
 import { randomBetween, sleep } from "../utils/timing.util.js";
 
@@ -939,14 +943,15 @@ export async function runScanFlow({
   /** Set when public report row is inserted; used for summary-first Flex (Phase 2.3). */
   let reportPayloadForReply = null;
 
-  // scan_results + paid decrement (source of truth) — must succeed before user sees success
+  // scan_results + paid decrement — row exists for report FK; free tier rolled back if LINE delivery fails
+  let scanResultId = /** @type {string | null} */ (null);
   try {
     const scanFinishedAt = Date.now();
     const responseTimeMs = scanFromCache
       ? 0
       : scanFinishedAt - scanStartedAt;
 
-    const scanResultId = await createScanResult({
+    scanResultId = await createScanResult({
       scanRequestId,
       appUserId,
       resultText,
@@ -1077,7 +1082,71 @@ export async function runScanFlow({
     return;
   }
 
-  // Legacy history table (keyed by line_user_id) - after billing success
+  if (!isCurrentFlowVersion(userId, flowVersion)) {
+    console.log("[WEBHOOK] skip stale reply before LINE delivery", {
+      userId,
+      flowVersion,
+    });
+    clearLatestScanJob(userId, scanJobId);
+    return;
+  }
+
+  const replyResultText = paidLimitWarningText
+    ? `${resultText}\n\n${paidLimitWarningText}`
+    : resultText;
+
+  const flexRollout = await replyScanResult({
+    client,
+    userId,
+    resultText: replyResultText,
+    birthdate,
+    reportUrl,
+    reportPayload: reportPayloadForReply,
+    scanAccessSource: accessSource,
+  });
+
+  const delivered = Boolean(flexRollout?.delivery?.sent);
+
+  if (!delivered && accessSource === "free" && scanResultId && appUserId) {
+    console.error(
+      JSON.stringify({
+        event: "SCAN_FREE_DELIVERY_FAILED_ROLLBACK",
+        userId,
+        scanJobId,
+        scanResultIdPrefix: String(scanResultId).slice(0, 8),
+        delivery: flexRollout?.delivery ?? null,
+      }),
+    );
+    await deleteScanPublicReportsForScanResult(scanResultId);
+    await deleteScanResultForAppUser(scanResultId, appUserId);
+    try {
+      await updateScanRequestStatus(scanRequestId, "failed");
+    } catch (updateErr) {
+      console.error(
+        JSON.stringify({
+          event: "SCAN_ROLLBACK_UPDATE_REQUEST_FAILED",
+          scanRequestId,
+          message: updateErr?.message,
+        }),
+      );
+    }
+    clearLatestScanJob(userId, scanJobId);
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
+    console.log(
+      JSON.stringify({
+        event: "SCAN_FLOW_COMPLETE",
+        userId,
+        scanJobId,
+        resultPersisted: false,
+        resultDelivered: false,
+        freeEntitlementRollback: true,
+        delivery: flexRollout?.delivery ?? null,
+      }),
+    );
+    return;
+  }
+
+  // Legacy history + in-memory stats only after successful LINE delivery (or paid path with persisted result)
   try {
     await addScanHistoryDb(userId, {
       time: Date.now(),
@@ -1121,29 +1190,6 @@ export async function runScanFlow({
   saveScanArtifacts(userId, resultText);
   setCooldownNow(userId);
 
-  if (!isCurrentFlowVersion(userId, flowVersion)) {
-    console.log("[WEBHOOK] skip stale reply after save", {
-      userId,
-      flowVersion,
-    });
-    clearLatestScanJob(userId, scanJobId);
-    return;
-  }
-
-  const replyResultText = paidLimitWarningText
-    ? `${resultText}\n\n${paidLimitWarningText}`
-    : resultText;
-
-  const flexRollout = await replyScanResult({
-    client,
-    userId,
-    resultText: replyResultText,
-    birthdate,
-    reportUrl,
-    reportPayload: reportPayloadForReply,
-    scanAccessSource: accessSource,
-  });
-
   if (accessSource === "free") {
     const d = flexRollout?.delivery;
     const scanDeliveryMode = !d?.sent
@@ -1180,7 +1226,7 @@ export async function runScanFlow({
       userId,
       scanJobId,
       resultPersisted: true,
-      resultDelivered: Boolean(flexRollout?.delivery?.sent),
+      resultDelivered: delivered,
       deliveryMethod: flexRollout?.delivery?.method ?? null,
       deliveryAttempts: flexRollout?.delivery?.attempts ?? 0,
     }),
