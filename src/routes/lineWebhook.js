@@ -4780,6 +4780,23 @@ async function handleTextMessage({ client, event, userId, session }) {
           isoDate: parsedLock.isoDate,
           normalizedDisplay: normalizedBirthdate,
         });
+        if (!env.SEND_PRE_SCAN_ACK_PUSH_ONLY) {
+          try {
+            await sendNonScanSequenceReply({
+              client,
+              userId,
+              replyToken: null,
+              replyType: "before_scan_sequence",
+              semanticKey: "before_scan_sequence",
+              messages: await beforeScanMessageSequence(userId),
+            });
+          } catch (beforeScanErr) {
+            console.error("[LINE] before_scan sequence failed (ignored):", {
+              userId,
+              message: beforeScanErr?.message,
+            });
+          }
+        }
         await runScanFlow({
           client,
           replyToken: event.replyToken,

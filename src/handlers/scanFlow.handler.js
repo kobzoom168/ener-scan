@@ -89,7 +89,10 @@ import {
   safeTokenPrefix,
 } from "../utils/reports/reportRolloutTelemetry.util.js";
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
-import { sendScanResultPushWith429Retry } from "../utils/linePush429Retry.util.js";
+import {
+  sendScanResultPushWith429Retry,
+  sendScanResultReplyWith429Retry,
+} from "../utils/linePush429Retry.util.js";
 
 /** แจ้งรับรูปก่อนเริ่มสแกน — ใช้ push เท่านั้น ไม่กิน replyToken (เก็บไว้ส่ง Flex ตอนจบ) */
 const PRE_SCAN_ACK_VARIANTS = [
@@ -99,6 +102,7 @@ const PRE_SCAN_ACK_VARIANTS = [
 ];
 
 async function sendPreScanAcknowledgementPushOnly({ client, userId }) {
+  if (!env.SEND_PRE_SCAN_ACK_PUSH_ONLY) return;
   const uid = String(userId || "").trim();
   if (!uid) return;
   const chosen =
@@ -333,20 +337,52 @@ export async function replyScanResult({
       flexBuildException,
     };
 
-    const delivery = await sendScanResultPushWith429Retry({
-      client,
-      userId,
-      flexMessage: flex,
-      text: resultText,
-      logPrefix: "[SCAN_RESULT_LINE_PUSH]",
-    });
+    const rt = String(replyToken || "").trim();
+    /** @type {Awaited<ReturnType<typeof sendScanResultPushWith429Retry>>} */
+    let delivery;
+    if (rt) {
+      delivery = await sendScanResultReplyWith429Retry({
+        client,
+        replyToken: rt,
+        userId,
+        flexMessage: flex,
+        text: resultText,
+        logPrefix: "[SCAN_RESULT_LINE_REPLY]",
+      });
+      if (!delivery.sent) {
+        console.warn(
+          JSON.stringify({
+            event: "SCAN_RESULT_REPLY_FALLBACK_PUSH",
+            lineUserIdPrefix,
+            replyFailed: true,
+            priorMethod: delivery.method,
+            priorAttempts: delivery.attempts,
+          }),
+        );
+        delivery = await sendScanResultPushWith429Retry({
+          client,
+          userId,
+          flexMessage: flex,
+          text: resultText,
+          logPrefix: "[SCAN_RESULT_LINE_PUSH_FALLBACK]",
+        });
+      }
+    } else {
+      delivery = await sendScanResultPushWith429Retry({
+        client,
+        userId,
+        flexMessage: flex,
+        text: resultText,
+        logPrefix: "[SCAN_RESULT_LINE_PUSH]",
+      });
+    }
 
     if (delivery.sent) {
       console.log("[WEBHOOK] scan result delivered", {
         method: delivery.method,
         attempts: delivery.attempts,
       });
-      if (delivery.method === "push_flex") {
+      if (delivery.method === "push_flex" || delivery.method === "reply_flex") {
         logScanResultFlexRollout({
           lineUserIdPrefix,
           flexPresentationMode,
@@ -1159,7 +1195,7 @@ export async function runScanFlow({
     const d = flexRollout?.delivery;
     const scanDeliveryMode = !d?.sent
       ? "delivery_failed"
-      : d.method === "push_flex"
+      : d.method === "push_flex" || d.method === "reply_flex"
         ? "flex"
         : "text_fallback";
     logEvent("preview_shown", {

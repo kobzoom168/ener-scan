@@ -31,6 +31,9 @@ import {
 } from "../utils/dateTime.util.js";
 import { buildAdminFreeResetConfirmationPayload } from "../utils/adminResetNotify.util.js";
 import { notifyLineUserTextAfterAdminAction } from "../utils/lineNotify429Retry.util.js";
+import { tryLinePushMessageWith429RetryOnce } from "../utils/linePush429Retry.util.js";
+import { invokeLinePushMessage } from "../utils/lineClientTransport.util.js";
+import { serializeLineErrorSafe } from "../utils/lineErrorLog.util.js";
 import {
   adminResetScanAbuseState,
   snapshotAbuseForAdminResetLog,
@@ -1347,16 +1350,14 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
       });
 
       if (lineUserId) {
-        void lineClient
-          .pushMessage(lineUserId, {
-            type: "text",
-            text: buildPaymentRejectedText({ reason: rejectReason }),
-          })
-          .catch((pushErr) => {
-            console.error("[ADMIN_DASH] LINE push after reject failed:", {
-              message: pushErr?.message,
-            });
+        void invokeLinePushMessage(lineClient, "admin.payments.reject", lineUserId, {
+          type: "text",
+          text: buildPaymentRejectedText({ reason: rejectReason }),
+        }).catch((pushErr) => {
+          console.error("[ADMIN_DASH] LINE push after reject failed:", {
+            message: pushErr?.message,
           });
+        });
       }
 
       if (prefersAdminJson(req)) {

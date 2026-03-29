@@ -1,4 +1,5 @@
 import { replyText } from "./lineReply.service.js";
+import { invokeLinePushMessage } from "../utils/lineClientTransport.util.js";
 import { randomBetween, sleep } from "../utils/timing.util.js";
 import { env } from "../config/env.js";
 import { isAuditNonScanBypassSuspect } from "./lineReplyAudit.context.js";
@@ -29,7 +30,10 @@ export async function pushText(client, userId, text) {
     throw new Error("pushText_missing_userId");
   }
   const safeText = String(text || "").slice(0, 4900);
-  await client.pushMessage(uid, { type: "text", text: safeText });
+  await invokeLinePushMessage(client, "lineSequence.pushText", uid, {
+    type: "text",
+    text: safeText,
+  });
 }
 
 /**
