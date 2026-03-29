@@ -51,7 +51,7 @@ export async function replyFlex(client, replyToken, flexMessage) {
   }
 
   try {
-    const result = await client.replyMessage(replyToken, flexMessage);
+    const result = await client.replyMessage(replyToken, [flexMessage]);
 
     console.log("[LINE_REPLY_FLEX] success");
     return result;

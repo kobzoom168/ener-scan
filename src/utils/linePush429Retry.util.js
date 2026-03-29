@@ -1,5 +1,6 @@
 import { randomBetween } from "./timing.util.js";
 import { isLine429Error } from "./lineNotify429Retry.util.js";
+import { replyFlex } from "../services/lineReply.service.js";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -194,4 +195,169 @@ export async function sendScanResultPushWith429Retry({
     text: safeText,
   });
   return pushWithRetries(textPayload, "push_text");
+}
+
+/**
+ * Reply with flex (or text fallback) using webhook replyToken — jitter + 429-aware retries (3 attempts, 800ms / 1600ms).
+ * Uses one `replyMessage` call per attempt; flex failure may fall back to a text reply (second batch only if flex attempts exhausted).
+ *
+ * @param {object} opts
+ * @param {*} opts.client
+ * @param {string} opts.replyToken
+ * @param {string} opts.userId
+ * @param {Record<string, unknown>} [opts.flexMessage]
+ * @param {string} [opts.text]
+ * @param {string} [opts.logPrefix]
+ * @returns {Promise<{
+ *   sent: boolean,
+ *   method: "reply_flex" | "reply_text",
+ *   attempts: number,
+ *   finalStatus: number | null,
+ *   finalMessage: string | null,
+ *   is429: boolean,
+ * }>}
+ */
+export async function sendScanResultReplyWith429Retry({
+  client,
+  replyToken,
+  userId,
+  flexMessage = null,
+  text = "",
+  logPrefix = "[SCAN_RESULT_LINE_REPLY]",
+}) {
+  const rt = String(replyToken || "").trim();
+  const uid = String(userId || "").trim();
+  const safeText = String(text || "").slice(0, 4900);
+
+  const emptyResult = {
+    sent: false,
+    method: /** @type {"reply_text"} */ ("reply_text"),
+    attempts: 0,
+    finalStatus: null,
+    finalMessage: !rt ? "missing_reply_token" : !uid ? "missing_line_user_id" : "missing_content",
+    is429: false,
+  };
+
+  if (!rt || !uid) {
+    return emptyResult;
+  }
+
+  const hasFlex = flexMessage && typeof flexMessage === "object";
+  if (!hasFlex && !safeText) {
+    return emptyResult;
+  }
+
+  let totalAttempts = 0;
+
+  /**
+   * @param {unknown[]} messages
+   * @param {"reply_flex" | "reply_text"} method
+   */
+  async function replyWithRetries(messages, method) {
+    const backoffs = [800, 1600];
+    /** @type {unknown} */
+    let lastErr = null;
+
+    const jitterMs = randomBetween(300, 500);
+    console.log(
+      JSON.stringify({
+        event: `${logPrefix}_jitter`,
+        ms: jitterMs,
+        method,
+        lineUserIdPrefix: uid.slice(0, 8),
+      }),
+    );
+    await sleep(jitterMs);
+
+    for (let i = 0; i < 3; i += 1) {
+      totalAttempts += 1;
+      try {
+        console.log(
+          JSON.stringify({
+            event: `${logPrefix}_attempt`,
+            attempt: i + 1,
+            method,
+            lineUserIdPrefix: uid.slice(0, 8),
+          }),
+        );
+        const single = messages.length === 1 ? messages[0] : null;
+        if (single && typeof single === "object" && single.type === "flex") {
+          await replyFlex(client, rt, single);
+        } else {
+          await client.replyMessage(rt, messages);
+        }
+        console.log(
+          JSON.stringify({
+            event: `${logPrefix}_ok`,
+            attempt: i + 1,
+            method,
+            lineUserIdPrefix: uid.slice(0, 8),
+          }),
+        );
+        return {
+          sent: true,
+          method,
+          attempts: totalAttempts,
+          finalStatus: null,
+          finalMessage: null,
+          is429: false,
+        };
+      } catch (err) {
+        lastErr = err;
+        const is429 = isLine429Error(err);
+        console.error(
+          JSON.stringify({
+            event: `${logPrefix}_failed`,
+            attempt: i + 1,
+            method,
+            is429,
+            status: lineErrorStatus(err),
+            message: lineErrorMessage(err),
+            lineUserIdPrefix: uid.slice(0, 8),
+          }),
+        );
+        if (!is429 || i >= 2) {
+          return {
+            sent: false,
+            method,
+            attempts: totalAttempts,
+            finalStatus: lineErrorStatus(err),
+            finalMessage: lineErrorMessage(err),
+            is429,
+          };
+        }
+        const waitMs = backoffs[i] ?? 1600;
+        console.warn(
+          JSON.stringify({
+            event: `${logPrefix}_429_retry_wait`,
+            waitMs,
+            nextAttempt: i + 2,
+            method,
+            lineUserIdPrefix: uid.slice(0, 8),
+          }),
+        );
+        await sleep(waitMs);
+      }
+    }
+    return {
+      sent: false,
+      method,
+      attempts: totalAttempts,
+      finalStatus: lineErrorStatus(lastErr),
+      finalMessage: lineErrorMessage(lastErr),
+      is429: isLine429Error(lastErr),
+    };
+  }
+
+  if (hasFlex) {
+    const flexRes = await replyWithRetries([flexMessage], "reply_flex");
+    if (flexRes.sent) return flexRes;
+    if (!safeText) return flexRes;
+    const textMsgs = /** @type {unknown[]} */ ([{ type: "text", text: safeText }]);
+    const textRes = await replyWithRetries(textMsgs, "reply_text");
+    return textRes;
+  }
+
+  const textMsgs = /** @type {unknown[]} */ ([{ type: "text", text: safeText }]);
+  return replyWithRetries(textMsgs, "reply_text");
 }

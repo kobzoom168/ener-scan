@@ -1,13 +1,11 @@
 import {
   setBirthdate,
   clearSessionIfFlowVersionMatches,
-  markScanFlowReplyTokenSpent,
 } from "../stores/session.store.js";
 import { saveBirthdate } from "../stores/userProfile.db.js";
 
 import { runDeepScan } from "../services/scan.service.js";
 import { replyText } from "../services/lineReply.service.js";
-import { pushText } from "../services/lineSequenceReply.service.js";
 import {
   AuditExemptReason,
   auditExemptEnter,
@@ -73,7 +71,6 @@ import {
 } from "../stores/scanResults.db.js";
 import { deleteScanPublicReportsForScanResult } from "../stores/scanPublicReports.db.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
-import { randomBetween, sleep } from "../utils/timing.util.js";
 
 import { logPaywallShown, logEvent } from "../utils/personaAnalytics.util.js";
 import { env } from "../config/env.js";
@@ -247,6 +244,7 @@ export function saveScanArtifacts(userId, resultText) {
 export async function replyScanResult({
   client,
   userId,
+  replyToken = null,
   resultText,
   birthdate = null,
   reportUrl = null,
@@ -351,20 +349,30 @@ export async function replyScanResult({
       flexBuildException,
     };
 
-    const delivery = await sendScanResultPushWith429Retry({
-      client,
-      userId,
-      flexMessage: flex,
-      text: resultText,
-      logPrefix: "[SCAN_RESULT_LINE_PUSH]",
-    });
+    const rt = String(replyToken || "").trim();
+    const delivery = rt
+      ? await sendScanResultReplyWith429Retry({
+          client,
+          replyToken: rt,
+          userId,
+          flexMessage: flex,
+          text: resultText,
+          logPrefix: "[SCAN_RESULT_LINE_REPLY]",
+        })
+      : await sendScanResultPushWith429Retry({
+          client,
+          userId,
+          flexMessage: flex,
+          text: resultText,
+          logPrefix: "[SCAN_RESULT_LINE_PUSH]",
+        });
 
     if (delivery.sent) {
       console.log("[WEBHOOK] scan result delivered", {
         method: delivery.method,
         attempts: delivery.attempts,
       });
-      if (delivery.method === "push_flex") {
+      if (delivery.method === "reply_flex" || delivery.method === "push_flex") {
         logScanResultFlexRollout({
           lineUserIdPrefix,
           flexPresentationMode,
@@ -439,7 +447,6 @@ export async function runScanFlow({
   birthdate,
   flowVersion,
   skipBirthdateSave = false,
-  skipPreScanAcknowledgement = false,
 }) {
   console.log("[TRACE] runScanFlow entry", {
     userId,
@@ -447,7 +454,6 @@ export async function runScanFlow({
     hasReplyToken: Boolean(replyToken),
     hasImageBuffer: Boolean(imageBuffer?.length),
     birthdate,
-    skipPreScanAcknowledgement,
   });
 
   let paidLimitWarningText = null;
@@ -752,26 +758,8 @@ export async function runScanFlow({
     birthdate,
     imageBufferLength: imageBuffer?.length || 0,
     startedAt: scanStartedAt,
-    skipPreScanAcknowledgement,
-    hasReplyTokenForInternalAck: Boolean(String(replyToken || "").trim()),
+    hasReplyTokenForScanResult: Boolean(String(replyToken || "").trim()),
   });
-
-  if (!skipPreScanAcknowledgement) {
-    try {
-      await sendPreScanAcknowledgement({ client, replyToken, userId });
-    } catch (ackErr) {
-      console.log("[SCAN_FLOW] pre-scan ack failed (ignored):", {
-        message: ackErr?.message,
-        status: ackErr?.status,
-      });
-    }
-  } else {
-    console.log("[SCAN_FLOW] skipped internal pre-scan ack", {
-      userId,
-      scanJobId,
-      reason: "before_scan_sequence_owned_webhook_layer",
-    });
-  }
 
   try {
     let scanOut;
@@ -1098,6 +1086,7 @@ export async function runScanFlow({
   const flexRollout = await replyScanResult({
     client,
     userId,
+    replyToken,
     resultText: replyResultText,
     birthdate,
     reportUrl,

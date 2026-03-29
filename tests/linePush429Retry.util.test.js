@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sendScanResultPushWith429Retry } from "../src/utils/linePush429Retry.util.js";
+import {
+  sendScanResultPushWith429Retry,
+  sendScanResultReplyWith429Retry,
+} from "../src/utils/linePush429Retry.util.js";
 
 /** Minimal flex payload for pushMessage mocks. */
 const sampleFlex = {
@@ -139,4 +142,84 @@ test("sendScanResultPushWith429Retry: non-429 flex failure then text success", a
   assert.equal(result.attempts, 2);
   assert.equal(result.is429, false);
   assert.equal(result.finalStatus, null);
+});
+
+test("sendScanResultReplyWith429Retry: flex two 429s then success", async (t) => {
+  t.mock.method(Math, "random", () => 0);
+
+  let replies = 0;
+  const client = {
+    async replyMessage(rt, messages) {
+      assert.equal(rt, "one-time-token");
+      replies += 1;
+      assert.ok(Array.isArray(messages));
+      assert.equal(messages[0]?.type, "flex");
+      if (replies <= 2) throw err429();
+    },
+  };
+
+  const result = await sendScanResultReplyWith429Retry({
+    client,
+    replyToken: "one-time-token",
+    userId: "Udeadbeefcafe",
+    flexMessage: sampleFlex,
+    text: "fallback body",
+    logPrefix: "[TEST_SCAN_REPLY]",
+  });
+
+  assert.equal(replies, 3);
+  assert.equal(result.sent, true);
+  assert.equal(result.method, "reply_flex");
+  assert.equal(result.attempts, 3);
+  assert.equal(result.is429, false);
+});
+
+test("sendScanResultReplyWith429Retry: flex exhausted then text success", async (t) => {
+  t.mock.method(Math, "random", () => 0);
+
+  let replies = 0;
+  const client = {
+    async replyMessage(_rt, messages) {
+      replies += 1;
+      assert.ok(Array.isArray(messages));
+      const m0 = messages[0];
+      if (m0?.type === "flex") {
+        throw err429();
+      }
+      assert.equal(m0?.type, "text");
+      assert.ok(String(m0?.text || "").includes("fallback"));
+    },
+  };
+
+  const result = await sendScanResultReplyWith429Retry({
+    client,
+    replyToken: "one-time-token",
+    userId: "Udeadbeefcafe",
+    flexMessage: sampleFlex,
+    text: "fallback body",
+    logPrefix: "[TEST_SCAN_REPLY]",
+  });
+
+  assert.equal(replies, 4);
+  assert.equal(result.sent, true);
+  assert.equal(result.method, "reply_text");
+  assert.equal(result.attempts, 4);
+  assert.equal(result.is429, false);
+});
+
+test("sendScanResultReplyWith429Retry: missing token returns empty", async () => {
+  const client = {
+    async replyMessage() {
+      assert.fail("reply should not run");
+    },
+  };
+  const result = await sendScanResultReplyWith429Retry({
+    client,
+    replyToken: "",
+    userId: "Udeadbeefcafe",
+    flexMessage: sampleFlex,
+    text: "x",
+  });
+  assert.equal(result.sent, false);
+  assert.equal(result.finalMessage, "missing_reply_token");
 });

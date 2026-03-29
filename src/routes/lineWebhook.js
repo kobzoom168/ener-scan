@@ -4816,7 +4816,6 @@ async function handleTextMessage({ client, event, userId, session }) {
           imageBuffer: session.pendingImage.imageBuffer,
           birthdate: normalizedBirthdate,
           flowVersion,
-          skipPreScanAcknowledgement: beforeScanAckSent,
         });
         return;
       }
