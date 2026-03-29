@@ -5326,10 +5326,23 @@ async function handleEvent({ client, event }) {
     return;
   }
 
-  await maybeFlushPendingApprovedIntroCompensation({
-    client,
-    userId,
-  });
+  try {
+    await maybeFlushPendingApprovedIntroCompensation({
+      client,
+      userId,
+    });
+  } catch (flushErr) {
+    console.error(
+      JSON.stringify({
+        event: "APPROVE_PENDING_INTRO_FLUSH_OUTER",
+        lineUserIdPrefix: String(userId || "").slice(0, 8),
+        message:
+          flushErr && typeof flushErr === "object" && "message" in flushErr
+            ? String(/** @type {{ message?: unknown }} */ (flushErr).message)
+            : String(flushErr),
+      }),
+    );
+  }
 
   if (event.message?.type === "image") {
     await handleImageMessage({ client, event, userId, session });
