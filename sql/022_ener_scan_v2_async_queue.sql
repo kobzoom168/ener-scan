@@ -229,6 +229,7 @@ language plpgsql
 as $$
 declare
   r public.outbound_messages;
+  updated_count int;
 begin
   update public.outbound_messages m
   set
@@ -247,7 +248,9 @@ begin
   where m.id = picked.id
   returning m.* into r;
 
-  if not found then
+  get diagnostics updated_count = row_count;
+
+  if updated_count = 0 then
     return null;
   end if;
   return r;

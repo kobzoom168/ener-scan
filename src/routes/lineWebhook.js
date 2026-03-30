@@ -4,6 +4,7 @@ import { maybeFlushPendingApprovedIntroCompensation } from "../utils/adminApprov
 import {
   getSession,
   setPendingImage,
+  setBirthdate,
   clearSession,
   clearSessionIfFlowVersionMatches,
   clearAwaitingBirthdateUpdate,
@@ -2005,6 +2006,8 @@ async function finalizeAcceptedImage({
     console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
 
     if (env.ENABLE_ASYNC_SCAN_V2) {
+      let ingestFailed = false;
+      let ingestReason = "unknown";
       try {
         const ing = await ingestScanImageAsyncV2({
           userId,
@@ -2023,19 +2026,59 @@ async function finalizeAcceptedImage({
           );
           return;
         }
-        console.warn(
-          JSON.stringify({
-            event: "SCAN_V2_INGEST_FALLBACK_SYNC",
-            reason: ing?.error ?? "unknown",
-          }),
-        );
+        ingestFailed = true;
+        ingestReason = ing?.error ?? "unknown";
       } catch (ingErr) {
+        ingestFailed = true;
+        ingestReason = String(ingErr?.message || ingErr || "exception");
         console.error(
           JSON.stringify({
             event: "SCAN_V2_INGEST_EXCEPTION",
             message: ingErr?.message,
           }),
         );
+      }
+
+      if (ingestFailed) {
+        if (env.ENABLE_SYNC_SCAN_FALLBACK) {
+          console.warn(
+            JSON.stringify({
+              event: "SCAN_V2_INGEST_FALLBACK_SYNC",
+              reason: ingestReason,
+            }),
+          );
+          await runScanFlow({
+            client,
+            replyToken: event.replyToken,
+            userId,
+            imageBuffer,
+            birthdate: savedBirthdate,
+            flowVersion,
+            skipBirthdateSave: true,
+          });
+          return;
+        }
+        console.error(
+          JSON.stringify({
+            event: "SCAN_V2_INGEST_FAILED_NO_SYNC_FALLBACK",
+            reason: ingestReason,
+          }),
+        );
+        try {
+          await replyText(
+            client,
+            event.replyToken,
+            "ขออภัยครับ ระบบรับรูปชั่วคราวไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งนะครับ",
+          );
+        } catch (replyErr) {
+          console.error(
+            JSON.stringify({
+              event: "SCAN_V2_INGEST_FAIL_REPLY_ERROR",
+              message: replyErr?.message,
+            }),
+          );
+        }
+        return;
       }
     }
 
@@ -4834,6 +4877,105 @@ async function handleTextMessage({ client, event, userId, session }) {
             });
           }
         }
+
+        if (env.ENABLE_ASYNC_SCAN_V2) {
+          try {
+            await saveBirthdate(userId, normalizedBirthdate, {
+              rawBirthdateInput: trimmedLock,
+            });
+          } catch (bdErr) {
+            console.error(
+              "[WEBHOOK] saveBirthdate before V2 ingest failed (continue):",
+              {
+                userId,
+                message: bdErr?.message,
+              },
+            );
+          }
+          setBirthdate(userId, normalizedBirthdate, flowVersion);
+
+          let ingestFailed = false;
+          let ingestReason = "unknown";
+          try {
+            const ing = await ingestScanImageAsyncV2({
+              userId,
+              lineMessageId: session.pendingImage.messageId,
+              imageBuffer: session.pendingImage.imageBuffer,
+              birthdateSnapshot: normalizedBirthdate,
+              accessDecision: activeAccessDecision,
+            });
+            if (ing?.ok) {
+              console.log(
+                JSON.stringify({
+                  event: "SCAN_V2_INGEST_OK",
+                  duplicate: Boolean(ing.duplicate),
+                  jobIdPrefix: ing.jobId
+                    ? String(ing.jobId).slice(0, 8)
+                    : null,
+                  source: "waiting_birthdate_text",
+                }),
+              );
+              clearSessionIfFlowVersionMatches(userId, flowVersion);
+              return;
+            }
+            ingestFailed = true;
+            ingestReason = ing?.error ?? "unknown";
+          } catch (ingErr) {
+            ingestFailed = true;
+            ingestReason = String(ingErr?.message || ingErr || "exception");
+            console.error(
+              JSON.stringify({
+                event: "SCAN_V2_INGEST_EXCEPTION",
+                source: "waiting_birthdate_text",
+                message: ingErr?.message,
+              }),
+            );
+          }
+
+          if (ingestFailed) {
+            if (env.ENABLE_SYNC_SCAN_FALLBACK) {
+              console.warn(
+                JSON.stringify({
+                  event: "SCAN_V2_INGEST_FALLBACK_SYNC",
+                  reason: ingestReason,
+                  source: "waiting_birthdate_text",
+                }),
+              );
+              await runScanFlow({
+                client,
+                replyToken: event.replyToken,
+                userId,
+                imageBuffer: session.pendingImage.imageBuffer,
+                birthdate: normalizedBirthdate,
+                flowVersion,
+              });
+              return;
+            }
+            console.error(
+              JSON.stringify({
+                event: "SCAN_V2_INGEST_FAILED_NO_SYNC_FALLBACK",
+                reason: ingestReason,
+                source: "waiting_birthdate_text",
+              }),
+            );
+            try {
+              await replyText(
+                client,
+                event.replyToken,
+                "ขออภัยครับ ระบบรับรูปชั่วคราวไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งนะครับ",
+              );
+            } catch (replyErr) {
+              console.error(
+                JSON.stringify({
+                  event: "SCAN_V2_INGEST_FAIL_REPLY_ERROR",
+                  message: replyErr?.message,
+                }),
+              );
+            }
+            return;
+          }
+        }
+
         await runScanFlow({
           client,
           replyToken: event.replyToken,
