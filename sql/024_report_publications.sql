@@ -18,6 +18,7 @@ create table if not exists public.report_publications (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint report_publications_public_token_key unique (public_token),
+  -- MVP: one publication row per V2 result (simple token + URL surface). Republish/history/rotate may need a schema change later.
   constraint report_publications_scan_result_id_key unique (scan_result_id)
 );
 

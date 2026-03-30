@@ -27,6 +27,7 @@ import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js"
 import { buildPublicReportUrl } from "../reports/reportLink.service.js";
 import { generatePublicToken } from "../../utils/reports/reportToken.util.js";
 import { insertScanPublicReport } from "../../stores/scanPublicReports.db.js";
+import { upsertReportPublicationForScanResult } from "../../stores/reportPublications.db.js";
 import { uploadScanObjectImageForReport } from "../storage/scanObjectImage.storage.js";
 import {
   REPORT_ROLLOUT_SCHEMA_VERSION,
@@ -422,6 +423,25 @@ export async function processScanJob(workerId, jobRow) {
       hasReportLink: Boolean(String(reportUrl || "").trim()),
     }),
   );
+
+  if (publicToken && reportUrl && scanResultV2Id) {
+    try {
+      await upsertReportPublicationForScanResult({
+        scanResultV2Id: scanResultV2Id,
+        publicToken,
+        reportUrl,
+      });
+    } catch (pubErr) {
+      console.error(
+        JSON.stringify({
+          event: "SCAN_V2_REPORT_PUBLICATION_UPSERT_FAIL",
+          jobIdPrefix: String(jobId).slice(0, 8),
+          message: pubErr?.message,
+          code: pubErr?.code,
+        }),
+      );
+    }
+  }
 
   const reportOutboundRow = await insertOutboundMessage({
     line_user_id: lineUserId,

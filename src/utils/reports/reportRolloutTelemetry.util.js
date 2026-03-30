@@ -193,8 +193,8 @@ export function logScanResultTextFallback(p) {
 /**
  * @param {object} p
  * @param {string} p.tokenPrefix
- * @param {"ok" | "not_found"} p.outcome
- * @param {"memory" | "db" | null} p.loadSource
+ * @param {"ok" | "not_found" | "expired" | "unavailable"} p.outcome
+ * @param {"memory" | "db" | "publication" | null} p.loadSource
  * @param {boolean} p.hasObjectImage
  * @param {string|null|undefined} p.reportVersion
  * @param {boolean} [p.isDemoToken]

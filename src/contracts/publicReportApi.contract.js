@@ -1,7 +1,7 @@
 /**
- * Public report HTTP contract (Batch 1 — types only; route implementation in Batch 2+).
+ * Public report HTTP contract (types + GET /api/public-report/:publicToken in Batch 2).
  *
- * Planned: GET /api/public-report/:publicToken
+ * Implemented: GET /api/public-report/:publicToken
  *
  * Existing related storage:
  * - `scan_public_reports` (legacy FK → scan_results) — current token + JSON for HTML
