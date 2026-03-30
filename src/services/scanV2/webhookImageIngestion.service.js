@@ -55,13 +55,17 @@ export async function ingestScanImageAsyncV2({
     return { ok: true, duplicate: true, uploadId: existing.id };
   }
 
-  const dedupeFirst = await tryDedupeOnce(`ingest:line_msg:${mid}`, 90);
+  // Redis dedupe is keyed strictly by LINE message id (one inbound image event).
+  // Do not use user-only or coarse keys — that would collapse unrelated events.
+  const dedupeRedisKey = `scan_v2:ingest:line_message_id:${mid}`;
+  const dedupeFirst = await tryDedupeOnce(dedupeRedisKey, 90);
   if (!dedupeFirst) {
     const raced = await getScanUploadByLineMessageId(mid);
     if (raced?.id) {
       console.log(
         JSON.stringify({
           event: "SCAN_UPLOAD_DEDUPE_REDIS",
+          dedupeKeySuffix: "line_message_id",
           lineUserIdPrefix: lineUserId.slice(0, 8),
           lineMessageIdPrefix: mid.slice(0, 12),
         }),

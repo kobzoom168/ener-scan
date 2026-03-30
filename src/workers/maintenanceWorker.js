@@ -60,21 +60,38 @@ async function sweepStaleScanProcessing() {
     })
     .eq("status", "processing")
     .lt("locked_at", cutoff)
-    .select("id");
+    .select("id,locked_at,started_at");
 
   if (error) {
     console.error("[MAINTENANCE] stale scan processing sweep failed:", error.message);
     return;
   }
 
-  const n = data?.length ?? 0;
-  if (n > 0) {
+  const rows = data ?? [];
+  for (const row of rows) {
     console.log(
       JSON.stringify({
-        event: "SCAN_JOB_REQUEUED",
-        count: n,
+        event: "SCAN_JOB_STALE_REQUEUED",
+        jobIdPrefix: String(row.id || "").slice(0, 8),
+        reason: "locked_at_older_than_cutoff",
+        staleMs: ms,
+        cutoffIso: cutoff,
+        previousLockedAt: row.locked_at ?? null,
+        previousStartedAt: row.started_at ?? null,
+        note:
+          "Canary: if this appears often for long-running scans, raise SCAN_V2_STALE_PROCESSING_MS or investigate slow workers.",
+      }),
+    );
+  }
+
+  if (rows.length > 0) {
+    console.log(
+      JSON.stringify({
+        event: "SCAN_JOB_REQUEUED_BATCH",
+        count: rows.length,
         reason: "stale_processing",
         staleMs: ms,
+        cutoffIso: cutoff,
       }),
     );
   }

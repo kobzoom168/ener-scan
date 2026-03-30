@@ -39,12 +39,16 @@ Concrete defaults in `src/config/env.js`; override without code change:
 ## Stuck job recovery
 
 - **Outbound** `sending` stale &gt; 5 minutes → `retry_wait` (existing).
-- **Scan** `processing` with `locked_at` older than `SCAN_V2_STALE_PROCESSING_MS` (default 15 minutes) → back to `queued` with `error_message=requeued_stale_processing`.
+- **Scan** `processing` with `locked_at` older than `SCAN_V2_STALE_PROCESSING_MS` (default 15 minutes) → back to `queued` with `error_message=requeued_stale_processing`. Each requeued job logs **`SCAN_JOB_STALE_REQUEUED`** (job id prefix, cutoff, previous `locked_at`) plus a batch summary — use during canary to spot false positives from slow-but-valid scans.
 
 ## Dead-letter visibility
 
 - `outbound_messages.status in ('dead','failed')` surfaced in maintenance JSON log and `npm run scanV2:queue-health`.
-- **Replay (manual):** `npm run scanV2:replay-outbound -- <uuid>` — only `dead` or `failed`.
+- **Replay (manual):** `npm run scanV2:replay-outbound -- <uuid>` — **only** `dead` or `failed`. Conditional `UPDATE … WHERE status IN (dead,failed)` prevents overwriting `sent` / in-flight rows; explicit refusal if status is `sent` or `queued`/`sending`/`retry_wait`.
+
+## Ingest dedupe (Redis)
+
+- Key: `scan_v2:ingest:line_message_id:<LINE message id>` — one key per inbound LINE message (not per user), so unrelated events are never collapsed together.
 
 ## Rollback paths
 
@@ -56,6 +60,23 @@ Concrete defaults in `src/config/env.js`; override without code change:
 
 - `GET /health` — liveness.
 - `GET /health/scan-v2` — Redis ping + async/fallback flags.
+
+## Final canary (before declaring lockover)
+
+Do **not** flip to “permanent V2 only” until this soak passes.
+
+**Env (production candidate):**
+
+- `ENABLE_ASYNC_SCAN_V2=true`
+- `ENABLE_SCAN_WORKER=true`
+- `ENABLE_DELIVERY_WORKER=true`
+- `ENABLE_MAINTENANCE_WORKER=true`
+- `ENABLE_SYNC_SCAN_FALLBACK=false`
+
+**Checks:**
+
+- [ ] `GET /health/scan-v2` — Redis up + expected flags.
+- [ ] Run **5–10 real scans**; watch queue backlog, Redis 429/hour, delivery success, report publish (`SCAN_V2_REPORT_PUBLIC_*` logs), and **`SCAN_JOB_STALE_REQUEUED`** (should be rare; if frequent, increase `SCAN_V2_STALE_PROCESSING_MS` or investigate slow workers).
 
 ## Lockover candidate checklist
 
