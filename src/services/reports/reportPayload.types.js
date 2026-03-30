@@ -1,5 +1,6 @@
 /**
  * Canonical report payload for Flex summary-first + HTML full report (single shape).
+ * For hybrid Web-first contract evolution see `reportPayloadV1.types.js` (ReportPayloadV1).
  * Phase 2.3: `buildScanSummaryFirstFlex` prefers this when the DB row exists.
  * Phase 1: JSDoc only; runtime validation optional later.
  *
