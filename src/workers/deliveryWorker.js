@@ -31,6 +31,29 @@ async function loop() {
         continue;
       }
 
+      if (
+        !msg?.id ||
+        (typeof msg.id === "string" && msg.id.trim().toLowerCase() === "null")
+      ) {
+        console.log(
+          JSON.stringify({
+            event: "DELIVERY_EMPTY_CLAIM",
+            workerId: String(workerId).slice(0, 32),
+            msgId: msg?.id ?? null,
+          }),
+        );
+        continue;
+      }
+
+      console.log(
+        JSON.stringify({
+          event: "OUTBOUND_DELIVERY_PROCESS_START",
+          workerId: String(workerId).slice(0, 32),
+          outboundIdPrefix: String(msg.id).slice(0, 8),
+          kind: msg.kind ?? null,
+        }),
+      );
+
       const result = await deliverOutboundMessage(lineClient, msg);
       if (!result.sent) {
         await finalizeOutboundAttempt(msg.id, msg, result);
