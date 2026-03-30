@@ -9,6 +9,7 @@ import {
   deliverOutboundMessage,
   finalizeOutboundAttempt,
 } from "../services/scanV2/deliverOutbound.service.js";
+import { startWorkerHeartbeatLoop } from "../redis/scanV2Redis.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -54,6 +55,14 @@ async function main() {
       concurrency: env.DELIVERY_WORKER_CONCURRENCY,
     }),
   );
+
+  const stopHb = startWorkerHeartbeatLoop("delivery", workerId, 45, 15_000);
+  const onStop = () => {
+    stopHb();
+    process.exit(0);
+  };
+  process.on("SIGTERM", onStop);
+  process.on("SIGINT", onStop);
 
   const n = Math.max(1, env.DELIVERY_WORKER_CONCURRENCY || 1);
   await Promise.all(Array.from({ length: n }, () => loop()));

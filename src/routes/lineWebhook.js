@@ -2006,6 +2006,8 @@ async function finalizeAcceptedImage({
     console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
 
     if (env.ENABLE_ASYNC_SCAN_V2) {
+      let ingestFailed = false;
+      let ingestReason = "unknown";
       try {
         const ing = await ingestScanImageAsyncV2({
           userId,
@@ -2024,19 +2026,50 @@ async function finalizeAcceptedImage({
           );
           return;
         }
-        console.warn(
-          JSON.stringify({
-            event: "SCAN_V2_INGEST_FALLBACK_SYNC",
-            reason: ing?.error ?? "unknown",
-          }),
-        );
+        ingestFailed = true;
+        ingestReason = ing?.error ?? "unknown";
       } catch (ingErr) {
+        ingestFailed = true;
+        ingestReason = String(ingErr?.message || ingErr || "exception");
         console.error(
           JSON.stringify({
             event: "SCAN_V2_INGEST_EXCEPTION",
             message: ingErr?.message,
           }),
         );
+      }
+
+      if (ingestFailed) {
+        if (env.ENABLE_SYNC_SCAN_FALLBACK) {
+          console.warn(
+            JSON.stringify({
+              event: "SCAN_V2_INGEST_FALLBACK_SYNC",
+              reason: ingestReason,
+            }),
+          );
+        } else {
+          console.error(
+            JSON.stringify({
+              event: "SCAN_V2_INGEST_FAILED_NO_SYNC_FALLBACK",
+              reason: ingestReason,
+            }),
+          );
+          try {
+            await replyText(
+              client,
+              event.replyToken,
+              "ขออภัยครับ ระบบรับรูปชั่วคราวไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งนะครับ",
+            );
+          } catch (replyErr) {
+            console.error(
+              JSON.stringify({
+                event: "SCAN_V2_INGEST_FAIL_REPLY_ERROR",
+                message: replyErr?.message,
+              }),
+            );
+          }
+          return;
+        }
       }
     }
 

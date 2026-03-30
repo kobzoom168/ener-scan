@@ -12,6 +12,15 @@ import {
   OUTBOUND_BACKOFF_MS,
   OUTBOUND_MAX_ATTEMPTS,
 } from "../../stores/scanV2/outboundPriority.js";
+import {
+  incrementLine429CanaryCounter,
+  setDeliveryRateBackoffMs,
+  sleepIfRateHint,
+} from "../../redis/scanV2Redis.js";
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 /**
  * @param {*} client LINE SDK client
@@ -26,6 +35,8 @@ export async function deliverOutboundMessage(client, msg) {
     msg.payload_json && typeof msg.payload_json === "object"
       ? msg.payload_json
       : {};
+
+  await sleepIfRateHint(sleep, lineUserId);
 
   console.log(
     JSON.stringify({
@@ -341,7 +352,8 @@ export async function finalizeOutboundAttempt(id, msg, result) {
   if (result.sent) return;
 
   if (result.is429) {
-    const nextAttempt = (msg.attempt_count || 0);
+    await incrementLine429CanaryCounter();
+    const nextAttempt = msg.attempt_count || 0;
     if (nextAttempt >= max) {
       await updateOutboundMessage(id, {
         status: "dead",
@@ -363,6 +375,7 @@ export async function finalizeOutboundAttempt(id, msg, result) {
     const backoff =
       OUTBOUND_BACKOFF_MS[Math.min(nextAttempt - 1, OUTBOUND_BACKOFF_MS.length - 1)] ??
       40000;
+    await setDeliveryRateBackoffMs(msg.line_user_id, backoff, 120);
     const next = new Date(Date.now() + backoff).toISOString();
     await updateOutboundMessage(id, {
       status: "retry_wait",
