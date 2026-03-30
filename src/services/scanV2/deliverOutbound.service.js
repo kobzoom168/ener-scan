@@ -108,6 +108,25 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         return { sent: true };
       }
 
+      const deliveryStrategy =
+        payload.deliveryStrategy != null
+          ? String(payload.deliveryStrategy)
+          : "legacy_full";
+      const lineSummary = payload.lineSummary ?? null;
+      console.log(
+        JSON.stringify({
+          event: "OUTBOUND_SCAN_RESULT_LINE_PAYLOAD",
+          ...base(),
+          deliveryStrategy,
+          summaryLinkMode: deliveryStrategy === "summary_link",
+          textChars: String(payload.text || "").length,
+          hasFlex: Boolean(payload.flex && typeof payload.flex === "object"),
+          hasReportUrl: Boolean(String(payload.reportUrl || "").trim()),
+          hasLegacyReportPayload: Boolean(payload.reportPayload),
+          lineSummaryPresent: Boolean(lineSummary),
+        }),
+      );
+
       const flex = payload.flex ?? null;
       const text = String(payload.text || "");
       const delivery = await sendScanResultPushWith429Retry({
@@ -126,6 +145,11 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
             event: "OUTBOUND_SEND_SUCCESS",
             ...base(),
             method: delivery.method,
+            deliveryStrategy:
+              payload.deliveryStrategy != null
+                ? String(payload.deliveryStrategy)
+                : "legacy_full",
+            summaryLinkDelivered: deliveryStrategy === "summary_link",
           }),
         );
         return { sent: true };

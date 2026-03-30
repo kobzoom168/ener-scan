@@ -270,6 +270,21 @@ export const env = {
       .trim()
       .toLowerCase() === "true",
   /**
+   * Final scan result on LINE: `summary_link` = short summary + report URL only (no Flex, no full model text).
+   * `legacy_full` = previous behavior (Flex + full `resultText` as text fallback).
+   * Default `legacy_full` for safe rollout; set `LINE_FINAL_DELIVERY_MODE=summary_link` to enable Batch 3 behavior.
+   * @type {"summary_link" | "legacy_full"}
+   */
+  LINE_FINAL_DELIVERY_MODE: (() => {
+    const raw = String(
+      process.env.LINE_FINAL_DELIVERY_MODE || "legacy_full",
+    )
+      .trim()
+      .toLowerCase();
+    if (raw === "summary_link") return "summary_link";
+    return "legacy_full";
+  })(),
+  /**
    * Layer 0: drop duplicate LINE `message.id` redeliveries + suppress identical text bursts (no LLM).
    * @type {boolean}
    */

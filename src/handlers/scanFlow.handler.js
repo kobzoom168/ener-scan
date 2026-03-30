@@ -93,6 +93,11 @@ import {
   sendScanResultPushWith429Retry,
   sendScanResultReplyWith429Retry,
 } from "../utils/linePush429Retry.util.js";
+import {
+  extractLineSummaryFields,
+  buildSummaryLinkLineText,
+  buildSummaryLinkFallbackText,
+} from "../services/scanV2/lineFinalScanDelivery.builder.js";
 
 /** แจ้งรับรูปก่อนเริ่มสแกน — ใช้ push เท่านั้น ไม่กิน replyToken (เก็บไว้ส่ง Flex ตอนจบ) */
 const PRE_SCAN_ACK_VARIANTS = [
@@ -249,12 +254,15 @@ export async function replyScanResult({
   /** Webhook reply token reserved for this scan result (never use a free `replyToken` variable here). */
   replyToken: replyTokenForScanResult = null,
   resultText,
+  /** Appended after the main body (e.g. paid-tier limit warning). */
+  extraFooterText = null,
   birthdate = null,
   reportUrl = null,
   reportPayload = null,
   scanAccessSource = null,
 }) {
   const lineUserIdPrefix = safeLineUserIdPrefix(userId);
+  const footer = extraFooterText ? String(extraFooterText).trim() : "";
   const rolloutBucket = flexRolloutBucket0to99(userId);
   const summaryFirstSelected = isSummaryFirstFlexSelectedForUser(
     userId,
@@ -269,75 +277,122 @@ export async function replyScanResult({
     let flex = null;
     let flexBuildException = false;
 
-    try {
-      const built = buildScanResultFlexWithFallback({
-        summaryFirstEnabled: summaryFirstSelected,
-        resultText,
-        birthdate,
-        reportUrl,
-        reportPayload,
-        appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-      });
-      flex = built.flex;
-      summaryFirstBuildFailed = built.summaryFirstBuildFailed;
-      if (summaryFirstBuildFailed && built.error) {
+    let textForLine = footer ? `${resultText}\n\n${footer}` : resultText;
+
+    /** @type {"legacy" | "summary_first_footer" | "summary_first_append" | "summary_first_fallback_legacy" | "summary_link"} */
+    let flexPresentationMode = "legacy";
+    let scanResultBubbleCount = 0;
+    let totalCarouselBubbles = 0;
+
+    if (env.LINE_FINAL_DELIVERY_MODE === "summary_link") {
+      console.log(
+        JSON.stringify({
+          event: "SCAN_RESULT_DELIVERY_STRATEGY_SELECTED",
+          strategy: "summary_link",
+          lineUserIdPrefix,
+          hasReportPayload: Boolean(reportPayload),
+          hasReportUrl: Boolean(String(reportUrl || "").trim()),
+        }),
+      );
+      if (reportPayload) {
+        const fields = extractLineSummaryFields(reportPayload, null);
+        textForLine = buildSummaryLinkLineText({
+          ...fields,
+          reportUrl: reportUrl || "",
+        });
+      } else {
+        textForLine = buildSummaryLinkFallbackText(
+          resultText,
+          reportUrl || "",
+        );
+      }
+      if (footer) {
+        textForLine = `${textForLine}\n\n${footer}`;
+      }
+      flex = null;
+      flexPresentationMode = "summary_link";
+      summaryFirstBuildFailed = false;
+      flexBuildException = false;
+      console.log(
+        JSON.stringify({
+          event: "SCAN_RESULT_SUMMARY_LINK_BODY",
+          lineUserIdPrefix,
+          textChars: textForLine.length,
+        }),
+      );
+    } else {
+      try {
+        const built = buildScanResultFlexWithFallback({
+          summaryFirstEnabled: summaryFirstSelected,
+          resultText,
+          birthdate,
+          reportUrl,
+          reportPayload,
+          appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+        });
+        flex = built.flex;
+        summaryFirstBuildFailed = built.summaryFirstBuildFailed;
+        if (summaryFirstBuildFailed && built.error) {
+          console.error(
+            JSON.stringify({
+              event: "FLEX_SUMMARY_FIRST_FAIL",
+              outcome: "fallback_legacy",
+              schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+              lineUserIdPrefix,
+              message: built.error?.message,
+              flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+              flexScanSummaryFirstSelected: summaryFirstSelected,
+              flexRolloutBucket0to99: rolloutBucket,
+            }),
+          );
+        }
+      } catch (buildErr) {
+        flex = null;
+        flexBuildException = true;
+        summaryFirstBuildFailed = true;
+        const buildMsg =
+          buildErr && typeof buildErr === "object" && "message" in buildErr
+            ? String(/** @type {{ message?: unknown }} */ (buildErr).message)
+            : String(buildErr);
         console.error(
           JSON.stringify({
-            event: "FLEX_SUMMARY_FIRST_FAIL",
-            outcome: "fallback_legacy",
-            schemaVersion: REPORT_ROLLOUT_SCHEMA_VERSION,
+            event: "SCAN_RESULT_FLEX_BUILD_FAILED",
             lineUserIdPrefix,
-            message: built.error?.message,
-            flexScanSummaryFirstRolloutPct: env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
-            flexScanSummaryFirstSelected: summaryFirstSelected,
-            flexRolloutBucket0to99: rolloutBucket,
+            message: buildMsg,
           }),
         );
       }
-    } catch (buildErr) {
-      flex = null;
-      flexBuildException = true;
-      summaryFirstBuildFailed = true;
-      const buildMsg =
-        buildErr && typeof buildErr === "object" && "message" in buildErr
-          ? String(/** @type {{ message?: unknown }} */ (buildErr).message)
-          : String(buildErr);
-      console.error(
-        JSON.stringify({
-          event: "SCAN_RESULT_FLEX_BUILD_FAILED",
-          lineUserIdPrefix,
-          message: buildMsg,
-        }),
-      );
+
+      scanResultBubbleCount =
+        flex?.contents?.type === "carousel" &&
+        Array.isArray(flex.contents.contents)
+          ? flex.contents.contents.length
+          : flex?.contents?.type === "bubble"
+            ? 1
+            : 0;
+
+      totalCarouselBubbles =
+        flex?.contents?.type === "carousel" &&
+        Array.isArray(flex.contents.contents)
+          ? flex.contents.contents.length
+          : scanResultBubbleCount;
+
+      flexPresentationMode = deriveFlexPresentationMode({
+        flexSummaryFirstEnabled: summaryFirstSelected,
+        summaryFirstBuildFailed,
+        appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+      });
     }
-
-    const scanResultBubbleCount =
-      flex?.contents?.type === "carousel" &&
-      Array.isArray(flex.contents.contents)
-        ? flex.contents.contents.length
-        : flex?.contents?.type === "bubble"
-          ? 1
-          : 0;
-
-    const totalCarouselBubbles =
-      flex?.contents?.type === "carousel" &&
-      Array.isArray(flex.contents.contents)
-        ? flex.contents.contents.length
-        : scanResultBubbleCount;
 
     const settingsBubbleAppended = false;
 
-    const flexPresentationMode = deriveFlexPresentationMode({
-      flexSummaryFirstEnabled: summaryFirstSelected,
-      summaryFirstBuildFailed,
-      appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-    });
-
     const hasReportLink = Boolean(String(reportUrl || "").trim());
-    const reportLinkPlacement = deriveReportLinkPlacement(
-      flexPresentationMode,
-      hasReportLink,
-    );
+    const reportLinkPlacement =
+      flexPresentationMode === "summary_link"
+        ? hasReportLink
+          ? "footer_uri"
+          : "none"
+        : deriveReportLinkPlacement(flexPresentationMode, hasReportLink);
     const hasObjectImage = Boolean(
       String(reportPayload?.object?.objectImageUrl || "").trim(),
     );
@@ -361,6 +416,7 @@ export async function replyScanResult({
         lineUserIdPrefix,
         hasReplyToken,
         deliveryMode,
+        lineFinalDeliveryMode: env.LINE_FINAL_DELIVERY_MODE,
         scanAccessSource,
       }),
     );
@@ -373,7 +429,7 @@ export async function replyScanResult({
         replyToken: rt,
         userId,
         flexMessage: flex,
-        text: resultText,
+        text: textForLine,
         logPrefix: "[SCAN_RESULT_LINE_REPLY]",
       });
       if (!delivery.sent) {
@@ -390,7 +446,7 @@ export async function replyScanResult({
           client,
           userId,
           flexMessage: flex,
-          text: resultText,
+          text: textForLine,
           logPrefix: "[SCAN_RESULT_LINE_PUSH_FALLBACK]",
         });
       }
@@ -399,7 +455,7 @@ export async function replyScanResult({
         client,
         userId,
         flexMessage: flex,
-        text: resultText,
+        text: textForLine,
         logPrefix: "[SCAN_RESULT_LINE_PUSH]",
       });
     }
@@ -1115,15 +1171,12 @@ export async function runScanFlow({
     return;
   }
 
-  const replyResultText = paidLimitWarningText
-    ? `${resultText}\n\n${paidLimitWarningText}`
-    : resultText;
-
   const flexRollout = await replyScanResult({
     client,
     userId,
     replyToken,
-    resultText: replyResultText,
+    resultText,
+    extraFooterText: paidLimitWarningText || null,
     birthdate,
     reportUrl,
     reportPayload: reportPayloadForReply,
@@ -1236,9 +1289,11 @@ export async function runScanFlow({
     const d = flexRollout?.delivery;
     const scanDeliveryMode = !d?.sent
       ? "delivery_failed"
-      : d.method === "push_flex" || d.method === "reply_flex"
-        ? "flex"
-        : "text_fallback";
+      : flexRollout?.flexPresentationMode === "summary_link"
+        ? "summary_link_text"
+        : d.method === "push_flex" || d.method === "reply_flex"
+          ? "flex"
+          : "text_fallback";
     logEvent("preview_shown", {
       userId,
       personaVariant: await getAssignedPersonaVariant(userId),
@@ -1250,12 +1305,14 @@ export async function runScanFlow({
       bubbleCount: flexRollout?.totalCarouselBubbles ?? 0,
       flexPresentationMode: flexRollout?.flexPresentationMode ?? "unknown",
       flexMode:
-        flexRollout?.flexPresentationMode === "legacy" ||
-        flexRollout?.flexPresentationMode === "summary_first_fallback_legacy"
-          ? "legacy"
-          : flexRollout?.flexPresentationMode
-            ? "summary_first"
-            : "unknown",
+        flexRollout?.flexPresentationMode === "summary_link"
+          ? "summary_link"
+          : flexRollout?.flexPresentationMode === "legacy" ||
+              flexRollout?.flexPresentationMode === "summary_first_fallback_legacy"
+            ? "legacy"
+            : flexRollout?.flexPresentationMode
+              ? "summary_first"
+              : "unknown",
       hasReportLink: flexRollout?.hasReportLink ?? false,
       reportLinkPlacement: flexRollout?.reportLinkPlacement ?? "none",
       hasObjectImage: flexRollout?.hasObjectImage ?? false,

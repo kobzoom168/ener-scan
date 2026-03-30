@@ -42,6 +42,11 @@ import {
   idPrefix8,
   workerIdPrefix16,
 } from "../../utils/scanV2Trace.util.js";
+import {
+  extractLineSummaryFields,
+  buildSummaryLinkLineText,
+  buildSummaryLinkFallbackText,
+} from "./lineFinalScanDelivery.builder.js";
 
 /**
  * @param {string} workerId
@@ -339,25 +344,70 @@ export async function processScanJob(workerId, jobRow) {
     );
   }
 
-  const summaryFirstSelected = isSummaryFirstFlexSelectedForUser(
-    lineUserId,
-    env.FLEX_SCAN_SUMMARY_FIRST,
-    env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
-  );
-
+  const lineFinalMode = env.LINE_FINAL_DELIVERY_MODE;
+  /** @type {Record<string, unknown> | null} */
   let flex = null;
-  try {
-    const built = buildScanResultFlexWithFallback({
-      summaryFirstEnabled: summaryFirstSelected,
-      resultText,
-      birthdate,
-      reportUrl,
-      reportPayload: reportPayloadForReply,
-      appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
-    });
-    flex = built.flex;
-  } catch (e) {
-    console.error("[SCAN_V2] flex build failed", e?.message);
+  let lineDeliveryText = resultText;
+  /** @type {ReturnType<typeof extractLineSummaryFields> | null} */
+  let lineSummaryForOutbound = null;
+
+  if (lineFinalMode === "summary_link") {
+    if (reportPayloadForReply) {
+      lineSummaryForOutbound = extractLineSummaryFields(
+        reportPayloadForReply,
+        parsed,
+      );
+      lineDeliveryText = buildSummaryLinkLineText({
+        ...lineSummaryForOutbound,
+        reportUrl: reportUrl || "",
+      });
+    } else {
+      lineDeliveryText = buildSummaryLinkFallbackText(
+        resultText,
+        reportUrl || "",
+      );
+    }
+    console.log(
+      JSON.stringify({
+        event: "SCAN_JOB_LINE_DELIVERY_BUILT",
+        path: "worker-scan",
+        deliveryStrategy: "summary_link",
+        jobIdPrefix: String(jobId).slice(0, 8),
+        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+        textChars: lineDeliveryText.length,
+        hasReportUrl: Boolean(String(reportUrl || "").trim()),
+        hasReportPayload: Boolean(reportPayloadForReply),
+      }),
+    );
+  } else {
+    const summaryFirstSelected = isSummaryFirstFlexSelectedForUser(
+      lineUserId,
+      env.FLEX_SCAN_SUMMARY_FIRST,
+      env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
+    );
+    try {
+      const built = buildScanResultFlexWithFallback({
+        summaryFirstEnabled: summaryFirstSelected,
+        resultText,
+        birthdate,
+        reportUrl,
+        reportPayload: reportPayloadForReply,
+        appendReportBubble: env.FLEX_SUMMARY_APPEND_REPORT_BUBBLE,
+      });
+      flex = built.flex;
+    } catch (e) {
+      console.error("[SCAN_V2] flex build failed", e?.message);
+    }
+    console.log(
+      JSON.stringify({
+        event: "SCAN_JOB_LINE_DELIVERY_BUILT",
+        path: "worker-scan",
+        deliveryStrategy: "legacy_full",
+        jobIdPrefix: String(jobId).slice(0, 8),
+        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+        hasFlex: Boolean(flex),
+      }),
+    );
   }
 
   /** @type {string | null} */
@@ -449,10 +499,13 @@ export async function processScanJob(workerId, jobRow) {
     priority: OUTBOUND_PRIORITY.scan_result,
     related_job_id: jobId,
     payload_json: {
+      deliveryStrategy: lineFinalMode,
       flex,
-      text: resultText,
+      text: lineDeliveryText,
       reportUrl,
-      reportPayload: reportPayloadForReply,
+      lineSummary: lineSummaryForOutbound,
+      reportPayload:
+        lineFinalMode === "legacy_full" ? reportPayloadForReply : null,
       accessSource: job.access_source,
       appUserId,
       scanResultV2Id,
@@ -469,6 +522,7 @@ export async function processScanJob(workerId, jobRow) {
       jobIdPrefix: idPrefix8(jobId),
       lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
       outboundIdPrefix: idPrefix8(reportOutboundRow?.id ?? null),
+      deliveryStrategy: lineFinalMode,
       timestamp: scanV2TraceTs(),
     }),
   );
