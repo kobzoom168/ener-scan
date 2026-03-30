@@ -10,6 +10,12 @@ import {
   finalizeOutboundAttempt,
 } from "../services/scanV2/deliverOutbound.service.js";
 import { startWorkerHeartbeatLoop } from "../redis/scanV2Redis.js";
+import {
+  scanV2TraceTs,
+  lineUserIdPrefix8,
+  idPrefix8,
+  workerIdPrefix16,
+} from "../utils/scanV2Trace.util.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -38,25 +44,34 @@ async function loop() {
         console.log(
           JSON.stringify({
             event: "DELIVERY_EMPTY_CLAIM",
-            workerId: String(workerId).slice(0, 32),
+            path: "worker-delivery",
+            workerIdPrefix: workerIdPrefix16(workerId),
             msgId: msg?.id ?? null,
+            timestamp: scanV2TraceTs(),
           }),
         );
         continue;
       }
 
+      const attempt = Number(msg.attempt_count) || 0;
+      const traceCtx = { workerId, attempt };
+
       console.log(
         JSON.stringify({
           event: "OUTBOUND_DELIVERY_PROCESS_START",
-          workerId: String(workerId).slice(0, 32),
-          outboundIdPrefix: String(msg.id).slice(0, 8),
+          path: "worker-delivery",
+          workerIdPrefix: workerIdPrefix16(workerId),
+          outboundIdPrefix: idPrefix8(msg.id),
+          lineUserIdPrefix: lineUserIdPrefix8(msg.line_user_id),
           kind: msg.kind ?? null,
+          attempt,
+          timestamp: scanV2TraceTs(),
         }),
       );
 
-      const result = await deliverOutboundMessage(lineClient, msg);
+      const result = await deliverOutboundMessage(lineClient, msg, traceCtx);
       if (!result.sent) {
-        await finalizeOutboundAttempt(msg.id, msg, result);
+        await finalizeOutboundAttempt(msg.id, msg, result, traceCtx);
       }
     } catch (e) {
       console.error("[DELIVERY_WORKER] loop error:", e?.message || e);
@@ -70,6 +85,18 @@ async function main() {
     console.log(JSON.stringify({ event: "DELIVERY_WORKER_DISABLED" }));
     process.exit(0);
   }
+
+  console.log(
+    JSON.stringify({
+      event: "ENV_SCAN_V2_FLAGS",
+      path: "worker-delivery",
+      timestamp: scanV2TraceTs(),
+      ENABLE_DELIVERY_WORKER: env.ENABLE_DELIVERY_WORKER,
+      ENABLE_ASYNC_SCAN_V2: env.ENABLE_ASYNC_SCAN_V2,
+      ENABLE_SYNC_SCAN_FALLBACK: env.ENABLE_SYNC_SCAN_FALLBACK,
+      ENABLE_LEGACY_WEB_INLINE_SCAN: env.ENABLE_LEGACY_WEB_INLINE_SCAN,
+    }),
+  );
 
   console.log(
     JSON.stringify({

@@ -53,6 +53,11 @@ import { isDuplicateImage } from "../services/dedupe.service.js";
 import { checkSingleObject } from "../services/objectCheck.service.js";
 
 import { env } from "../config/env.js";
+import {
+  scanV2TraceTs,
+  lineUserIdPrefix8,
+  idPrefix8,
+} from "../utils/scanV2Trace.util.js";
 import { logConversationCost } from "../utils/conversationCost.util.js";
 import {
   evaluateTextEdgeGate,
@@ -1470,6 +1475,19 @@ async function finalizeAcceptedImage({
     chosenPath,
   });
 
+  if (chosenPath === "scan") {
+    console.log(
+      JSON.stringify({
+        event: "SCAN_V2_PATH_ENTER",
+        path: "web",
+        lineUserIdPrefix: lineUserIdPrefix8(userId),
+        messageId: event?.message?.id ?? null,
+        flowVersion,
+        timestamp: scanV2TraceTs(),
+      }),
+    );
+  }
+
   const imgPhase1Invoke = async () =>
     invokePhase1FreshNoop({
       userId,
@@ -1897,6 +1915,18 @@ async function finalizeAcceptedImage({
     return;
   }
 
+  console.log(
+    JSON.stringify({
+      event: "SCAN_V2_OBJECT_CHECK_OK",
+      path: "web",
+      lineUserIdPrefix: lineUserIdPrefix8(userId),
+      messageId: event?.message?.id ?? null,
+      flowVersion,
+      objectCheckResult: objectCheck,
+      timestamp: scanV2TraceTs(),
+    }),
+  );
+
   markAcceptedImageEvent(userId, eventTimestamp);
 
   // Reuse accessDecision from image routing (same request; avoids slip vs scan mismatch).
@@ -2005,8 +2035,31 @@ async function finalizeAcceptedImage({
 
   if (savedBirthdate) {
     console.log("[WEBHOOK] using saved birthdate:", savedBirthdate);
+    console.log(
+      JSON.stringify({
+        event: "SCAN_V2_BIRTHDATE_READY",
+        path: "web",
+        lineUserIdPrefix: lineUserIdPrefix8(userId),
+        messageId: event?.message?.id ?? null,
+        flowVersion,
+        hasSavedBirthdate: true,
+        source: "finalize_accepted_image",
+        timestamp: scanV2TraceTs(),
+      }),
+    );
 
     if (!env.ENABLE_ASYNC_SCAN_V2 && env.ENABLE_LEGACY_WEB_INLINE_SCAN) {
+      console.log(
+        JSON.stringify({
+          event: "LEGACY_WEB_INLINE_SCAN_ENTER",
+          path: "web",
+          lineUserIdPrefix: lineUserIdPrefix8(userId),
+          messageId: event?.message?.id ?? null,
+          flowVersion,
+          reason: "async_v2_off_legacy_inline",
+          timestamp: scanV2TraceTs(),
+        }),
+      );
       await runScanFlow({
         client,
         replyToken: event.replyToken,
@@ -2023,7 +2076,12 @@ async function finalizeAcceptedImage({
       console.error(
         JSON.stringify({
           event: "SCAN_V2_WEB_DISABLED",
+          path: "web",
+          lineUserIdPrefix: lineUserIdPrefix8(userId),
+          messageId: event?.message?.id ?? null,
+          flowVersion,
           reason: "ENABLE_ASYNC_SCAN_V2_not_true",
+          timestamp: scanV2TraceTs(),
         }),
       );
       try {
@@ -2036,7 +2094,11 @@ async function finalizeAcceptedImage({
         console.error(
           JSON.stringify({
             event: "SCAN_V2_WEB_DISABLED_REPLY_ERROR",
+            path: "web",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
             message: replyErr?.message,
+            timestamp: scanV2TraceTs(),
           }),
         );
       }
@@ -2045,6 +2107,7 @@ async function finalizeAcceptedImage({
 
     let ingestFailed = false;
     let ingestReason = "unknown";
+    let ingestErrorMessage = /** @type {string | null} */ (null);
     try {
       const ing = await ingestScanImageAsyncV2({
         userId,
@@ -2052,26 +2115,43 @@ async function finalizeAcceptedImage({
         imageBuffer,
         birthdateSnapshot: savedBirthdate,
         accessDecision,
+        flowVersion,
       });
       if (ing?.ok) {
         console.log(
           JSON.stringify({
             event: "SCAN_V2_INGEST_OK",
+            path: "web",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
+            flowVersion,
+            uploadIdPrefix: idPrefix8(ing.uploadId ?? null),
+            jobIdPrefix: idPrefix8(ing.jobId ?? null),
+            outboundIdPrefix: idPrefix8(ing.outboundId ?? null),
             duplicate: Boolean(ing.duplicate),
-            jobIdPrefix: ing.jobId ? String(ing.jobId).slice(0, 8) : null,
+            timestamp: scanV2TraceTs(),
           }),
         );
         return;
       }
       ingestFailed = true;
       ingestReason = ing?.error ?? "unknown";
+      ingestErrorMessage =
+        ing?.errorMessage != null ? String(ing.errorMessage) : null;
     } catch (ingErr) {
       ingestFailed = true;
-      ingestReason = String(ingErr?.message || ingErr || "exception");
+      ingestReason = "exception";
+      ingestErrorMessage = String(ingErr?.message || ingErr || "exception");
       console.error(
         JSON.stringify({
-          event: "SCAN_V2_INGEST_EXCEPTION",
-          message: ingErr?.message,
+          event: "SCAN_V2_INGEST_FAIL",
+          path: "web",
+          lineUserIdPrefix: lineUserIdPrefix8(userId),
+          messageId: event?.message?.id ?? null,
+          flowVersion,
+          reason: ingestReason,
+          errorMessage: ingestErrorMessage,
+          timestamp: scanV2TraceTs(),
         }),
       );
     }
@@ -2084,7 +2164,23 @@ async function finalizeAcceptedImage({
         console.warn(
           JSON.stringify({
             event: "SCAN_V2_INGEST_FALLBACK_SYNC",
+            path: "web",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
+            flowVersion,
             reason: ingestReason,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        console.log(
+          JSON.stringify({
+            event: "LEGACY_WEB_INLINE_SCAN_ENTER",
+            path: "web",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
+            flowVersion,
+            reason: "ingest_failed_sync_fallback_with_legacy",
+            timestamp: scanV2TraceTs(),
           }),
         );
         await runScanFlow({
@@ -2098,20 +2194,33 @@ async function finalizeAcceptedImage({
         });
         return;
       }
+      if (ingestReason !== "exception") {
+        console.error(
+          JSON.stringify({
+            event: "SCAN_V2_INGEST_FAIL",
+            path: "web",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
+            flowVersion,
+            reason: ingestReason,
+            errorMessage: ingestErrorMessage,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+      }
       if (env.ENABLE_SYNC_SCAN_FALLBACK) {
         console.warn(
           JSON.stringify({
             event: "SCAN_V2_SYNC_FALLBACK_SKIPPED_REQUIRES_LEGACY_FLAG",
+            path: "web",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
+            flowVersion,
             reason: ingestReason,
+            timestamp: scanV2TraceTs(),
           }),
         );
       }
-      console.error(
-        JSON.stringify({
-          event: "SCAN_V2_INGEST_FAILED_NO_INLINE",
-          reason: ingestReason,
-        }),
-      );
       try {
         await replyText(
           client,
@@ -2122,7 +2231,11 @@ async function finalizeAcceptedImage({
         console.error(
           JSON.stringify({
             event: "SCAN_V2_INGEST_FAIL_REPLY_ERROR",
+            path: "web",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
             message: replyErr?.message,
+            timestamp: scanV2TraceTs(),
           }),
         );
       }
@@ -4896,6 +5009,21 @@ async function handleTextMessage({ client, event, userId, session }) {
           isoDate: parsedLock.isoDate,
           normalizedDisplay: normalizedBirthdate,
         });
+        {
+          const pendingMsgId = session.pendingImage?.messageId ?? null;
+          console.log(
+            JSON.stringify({
+              event: "SCAN_V2_BIRTHDATE_READY",
+              path: "web",
+              lineUserIdPrefix: lineUserIdPrefix8(userId),
+              messageId: pendingMsgId,
+              flowVersion,
+              hasSavedBirthdate: true,
+              source: "waiting_birthdate_text",
+              timestamp: scanV2TraceTs(),
+            }),
+          );
+        }
         if (!env.SEND_PRE_SCAN_ACK_PUSH_ONLY) {
           try {
             await sendNonScanSequenceReply({
@@ -4914,7 +5042,21 @@ async function handleTextMessage({ client, event, userId, session }) {
           }
         }
 
+        const pendingMsgIdForV2 = session.pendingImage?.messageId ?? null;
+
         if (!env.ENABLE_ASYNC_SCAN_V2 && env.ENABLE_LEGACY_WEB_INLINE_SCAN) {
+          console.log(
+            JSON.stringify({
+              event: "LEGACY_WEB_INLINE_SCAN_ENTER",
+              path: "web",
+              lineUserIdPrefix: lineUserIdPrefix8(userId),
+              messageId: pendingMsgIdForV2,
+              flowVersion,
+              reason: "async_v2_off_legacy_inline",
+              source: "waiting_birthdate_text",
+              timestamp: scanV2TraceTs(),
+            }),
+          );
           await runScanFlow({
             client,
             replyToken: event.replyToken,
@@ -4930,8 +5072,13 @@ async function handleTextMessage({ client, event, userId, session }) {
           console.error(
             JSON.stringify({
               event: "SCAN_V2_WEB_DISABLED",
+              path: "web",
+              lineUserIdPrefix: lineUserIdPrefix8(userId),
+              messageId: pendingMsgIdForV2,
+              flowVersion,
               reason: "ENABLE_ASYNC_SCAN_V2_not_true",
               source: "waiting_birthdate_text",
+              timestamp: scanV2TraceTs(),
             }),
           );
           try {
@@ -4944,8 +5091,12 @@ async function handleTextMessage({ client, event, userId, session }) {
             console.error(
               JSON.stringify({
                 event: "SCAN_V2_WEB_DISABLED_REPLY_ERROR",
+                path: "web",
+                lineUserIdPrefix: lineUserIdPrefix8(userId),
+                messageId: pendingMsgIdForV2,
                 source: "waiting_birthdate_text",
                 message: replyErr?.message,
+                timestamp: scanV2TraceTs(),
               }),
             );
           }
@@ -4969,6 +5120,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
         let ingestFailed = false;
         let ingestReason = "unknown";
+        let ingestErrorMessage = /** @type {string | null} */ (null);
         try {
           const ing = await ingestScanImageAsyncV2({
             userId,
@@ -4976,16 +5128,22 @@ async function handleTextMessage({ client, event, userId, session }) {
             imageBuffer: session.pendingImage.imageBuffer,
             birthdateSnapshot: normalizedBirthdate,
             accessDecision: activeAccessDecision,
+            flowVersion,
           });
           if (ing?.ok) {
             console.log(
               JSON.stringify({
                 event: "SCAN_V2_INGEST_OK",
+                path: "web",
+                lineUserIdPrefix: lineUserIdPrefix8(userId),
+                messageId: pendingMsgIdForV2,
+                flowVersion,
+                uploadIdPrefix: idPrefix8(ing.uploadId ?? null),
+                jobIdPrefix: idPrefix8(ing.jobId ?? null),
+                outboundIdPrefix: idPrefix8(ing.outboundId ?? null),
                 duplicate: Boolean(ing.duplicate),
-                jobIdPrefix: ing.jobId
-                  ? String(ing.jobId).slice(0, 8)
-                  : null,
                 source: "waiting_birthdate_text",
+                timestamp: scanV2TraceTs(),
               }),
             );
             clearSessionIfFlowVersionMatches(userId, flowVersion);
@@ -4993,14 +5151,23 @@ async function handleTextMessage({ client, event, userId, session }) {
           }
           ingestFailed = true;
           ingestReason = ing?.error ?? "unknown";
+          ingestErrorMessage =
+            ing?.errorMessage != null ? String(ing.errorMessage) : null;
         } catch (ingErr) {
           ingestFailed = true;
-          ingestReason = String(ingErr?.message || ingErr || "exception");
+          ingestReason = "exception";
+          ingestErrorMessage = String(ingErr?.message || ingErr || "exception");
           console.error(
             JSON.stringify({
-              event: "SCAN_V2_INGEST_EXCEPTION",
+              event: "SCAN_V2_INGEST_FAIL",
+              path: "web",
+              lineUserIdPrefix: lineUserIdPrefix8(userId),
+              messageId: pendingMsgIdForV2,
+              flowVersion,
+              reason: ingestReason,
+              errorMessage: ingestErrorMessage,
               source: "waiting_birthdate_text",
-              message: ingErr?.message,
+              timestamp: scanV2TraceTs(),
             }),
           );
         }
@@ -5013,8 +5180,25 @@ async function handleTextMessage({ client, event, userId, session }) {
             console.warn(
               JSON.stringify({
                 event: "SCAN_V2_INGEST_FALLBACK_SYNC",
+                path: "web",
+                lineUserIdPrefix: lineUserIdPrefix8(userId),
+                messageId: pendingMsgIdForV2,
+                flowVersion,
                 reason: ingestReason,
                 source: "waiting_birthdate_text",
+                timestamp: scanV2TraceTs(),
+              }),
+            );
+            console.log(
+              JSON.stringify({
+                event: "LEGACY_WEB_INLINE_SCAN_ENTER",
+                path: "web",
+                lineUserIdPrefix: lineUserIdPrefix8(userId),
+                messageId: pendingMsgIdForV2,
+                flowVersion,
+                reason: "ingest_failed_sync_fallback_with_legacy",
+                source: "waiting_birthdate_text",
+                timestamp: scanV2TraceTs(),
               }),
             );
             await runScanFlow({
@@ -5027,22 +5211,35 @@ async function handleTextMessage({ client, event, userId, session }) {
             });
             return;
           }
+          if (ingestReason !== "exception") {
+            console.error(
+              JSON.stringify({
+                event: "SCAN_V2_INGEST_FAIL",
+                path: "web",
+                lineUserIdPrefix: lineUserIdPrefix8(userId),
+                messageId: pendingMsgIdForV2,
+                flowVersion,
+                reason: ingestReason,
+                errorMessage: ingestErrorMessage,
+                source: "waiting_birthdate_text",
+                timestamp: scanV2TraceTs(),
+              }),
+            );
+          }
           if (env.ENABLE_SYNC_SCAN_FALLBACK) {
             console.warn(
               JSON.stringify({
                 event: "SCAN_V2_SYNC_FALLBACK_SKIPPED_REQUIRES_LEGACY_FLAG",
+                path: "web",
+                lineUserIdPrefix: lineUserIdPrefix8(userId),
+                messageId: pendingMsgIdForV2,
+                flowVersion,
                 reason: ingestReason,
                 source: "waiting_birthdate_text",
+                timestamp: scanV2TraceTs(),
               }),
             );
           }
-          console.error(
-            JSON.stringify({
-              event: "SCAN_V2_INGEST_FAILED_NO_INLINE",
-              reason: ingestReason,
-              source: "waiting_birthdate_text",
-            }),
-          );
           try {
             await replyText(
               client,
@@ -5053,7 +5250,12 @@ async function handleTextMessage({ client, event, userId, session }) {
             console.error(
               JSON.stringify({
                 event: "SCAN_V2_INGEST_FAIL_REPLY_ERROR",
+                path: "web",
+                lineUserIdPrefix: lineUserIdPrefix8(userId),
+                messageId: pendingMsgIdForV2,
                 message: replyErr?.message,
+                source: "waiting_birthdate_text",
+                timestamp: scanV2TraceTs(),
               }),
             );
           }

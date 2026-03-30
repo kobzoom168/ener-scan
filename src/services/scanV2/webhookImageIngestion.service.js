@@ -11,6 +11,11 @@ import {
 } from "../../stores/scanV2/outboundPriority.js";
 import { mapAccessDecisionToSource } from "./mapAccessSource.js";
 import { tryDedupeOnce } from "../../redis/scanV2Redis.js";
+import {
+  scanV2TraceTs,
+  lineUserIdPrefix8,
+  idPrefix8,
+} from "../../utils/scanV2Trace.util.js";
 
 const PRE_SCAN_ACK_TEXT =
   "ได้รับรูปแล้วนะ\nรอแป๊บนึง เดี๋ยวอาจารย์กำลังอ่านให้";
@@ -23,7 +28,8 @@ const PRE_SCAN_ACK_TEXT =
  * @param {Buffer} opts.imageBuffer
  * @param {string} opts.birthdateSnapshot
  * @param {object} opts.accessDecision result of checkScanAccess
- * @returns {Promise<{ ok: boolean, duplicate?: boolean, jobId?: string, uploadId?: string, error?: string }>}
+ * @param {number|null|undefined} [opts.flowVersion]
+ * @returns {Promise<{ ok: boolean, duplicate?: boolean, jobId?: string|null, uploadId?: string|null, outboundId?: string|null, error?: string, errorMessage?: string|null }>}
  */
 export async function ingestScanImageAsyncV2({
   userId,
@@ -31,16 +37,41 @@ export async function ingestScanImageAsyncV2({
   imageBuffer,
   birthdateSnapshot,
   accessDecision,
+  flowVersion = null,
 }) {
   const lineUserId = String(userId || "").trim();
   const mid = String(lineMessageId || "").trim();
+  const base = () => ({
+    path: "web",
+    lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+    messageId: mid || null,
+    flowVersion: flowVersion ?? null,
+    timestamp: scanV2TraceTs(),
+  });
+
   if (!lineUserId || !mid || !imageBuffer?.length) {
-    return { ok: false, error: "missing_fields" };
+    console.error(
+      JSON.stringify({
+        event: "SCAN_V2_INGEST_FAIL",
+        ...base(),
+        reason: "missing_fields",
+        errorMessage: null,
+      }),
+    );
+    return { ok: false, error: "missing_fields", errorMessage: null };
   }
 
   const accessSource = mapAccessDecisionToSource(accessDecision);
   if (!accessSource) {
-    return { ok: false, error: "access_denied" };
+    console.error(
+      JSON.stringify({
+        event: "SCAN_V2_INGEST_FAIL",
+        ...base(),
+        reason: "access_denied",
+        errorMessage: null,
+      }),
+    );
+    return { ok: false, error: "access_denied", errorMessage: null };
   }
 
   const existing = await getScanUploadByLineMessageId(mid);
@@ -48,11 +79,17 @@ export async function ingestScanImageAsyncV2({
     console.log(
       JSON.stringify({
         event: "SCAN_UPLOAD_DEDUPE",
-        lineUserIdPrefix: lineUserId.slice(0, 8),
-        lineMessageIdPrefix: mid.slice(0, 12),
+        ...base(),
+        uploadIdPrefix: idPrefix8(existing.id),
       }),
     );
-    return { ok: true, duplicate: true, uploadId: existing.id };
+    return {
+      ok: true,
+      duplicate: true,
+      uploadId: existing.id,
+      jobId: null,
+      outboundId: null,
+    };
   }
 
   // Redis dedupe is keyed strictly by LINE message id (one inbound image event).
@@ -66,11 +103,17 @@ export async function ingestScanImageAsyncV2({
         JSON.stringify({
           event: "SCAN_UPLOAD_DEDUPE_REDIS",
           dedupeKeySuffix: "line_message_id",
-          lineUserIdPrefix: lineUserId.slice(0, 8),
-          lineMessageIdPrefix: mid.slice(0, 12),
+          ...base(),
+          uploadIdPrefix: idPrefix8(raced.id),
         }),
       );
-      return { ok: true, duplicate: true, uploadId: raced.id };
+      return {
+        ok: true,
+        duplicate: true,
+        uploadId: raced.id,
+        jobId: null,
+        outboundId: null,
+      };
     }
   }
 
@@ -96,14 +139,22 @@ export async function ingestScanImageAsyncV2({
   });
 
   if (!uploadRow?.id) {
-    return { ok: false, error: "upload_insert_failed" };
+    console.error(
+      JSON.stringify({
+        event: "SCAN_V2_INGEST_FAIL",
+        ...base(),
+        reason: "upload_insert_failed",
+        errorMessage: null,
+      }),
+    );
+    return { ok: false, error: "upload_insert_failed", errorMessage: null };
   }
 
   console.log(
     JSON.stringify({
       event: "SCAN_UPLOAD_STORED",
-      uploadIdPrefix: String(uploadRow.id).slice(0, 8),
-      lineUserIdPrefix: lineUserId.slice(0, 8),
+      ...base(),
+      uploadIdPrefix: idPrefix8(uploadRow.id),
       sizeBytes: stored.sizeBytes,
     }),
   );
@@ -119,14 +170,24 @@ export async function ingestScanImageAsyncV2({
   });
 
   if (!jobRow?.id) {
-    return { ok: false, error: "job_insert_failed" };
+    console.error(
+      JSON.stringify({
+        event: "SCAN_V2_INGEST_FAIL",
+        ...base(),
+        reason: "job_insert_failed",
+        errorMessage: null,
+        uploadIdPrefix: idPrefix8(uploadRow.id),
+      }),
+    );
+    return { ok: false, error: "job_insert_failed", errorMessage: null };
   }
 
   console.log(
     JSON.stringify({
       event: "SCAN_JOB_QUEUED",
-      jobIdPrefix: String(jobRow.id).slice(0, 8),
-      lineUserIdPrefix: lineUserId.slice(0, 8),
+      ...base(),
+      uploadIdPrefix: idPrefix8(uploadRow.id),
+      jobIdPrefix: idPrefix8(jobRow.id),
       accessSource,
     }),
   );
@@ -143,10 +204,16 @@ export async function ingestScanImageAsyncV2({
   console.log(
     JSON.stringify({
       event: "PRE_SCAN_ACK_ENQUEUED",
-      outboundIdPrefix: ackRow?.id ? String(ackRow.id).slice(0, 8) : null,
-      jobIdPrefix: String(jobRow.id).slice(0, 8),
+      ...base(),
+      jobIdPrefix: idPrefix8(jobRow.id),
+      outboundIdPrefix: ackRow?.id ? idPrefix8(ackRow.id) : null,
     }),
   );
 
-  return { ok: true, jobId: jobRow.id, uploadId: uploadRow.id };
+  return {
+    ok: true,
+    jobId: jobRow.id,
+    uploadId: uploadRow.id,
+    outboundId: ackRow?.id ?? null,
+  };
 }

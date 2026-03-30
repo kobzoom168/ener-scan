@@ -35,6 +35,12 @@ import {
   safeLineUserIdPrefix,
   safeTokenPrefix,
 } from "../../utils/reports/reportRolloutTelemetry.util.js";
+import {
+  scanV2TraceTs,
+  lineUserIdPrefix8,
+  idPrefix8,
+  workerIdPrefix16,
+} from "../../utils/scanV2Trace.util.js";
 
 /**
  * @param {string} workerId
@@ -49,8 +55,10 @@ export async function processScanJob(workerId, jobRow) {
     console.log(
       JSON.stringify({
         event: "SCAN_JOB_EMPTY_CLAIM",
-        workerId: String(workerId).slice(0, 32),
+        path: "worker-scan",
+        workerIdPrefix: workerIdPrefix16(workerId),
         jobRowId: jobRow?.id ?? null,
+        timestamp: scanV2TraceTs(),
       }),
     );
     return;
@@ -63,9 +71,11 @@ export async function processScanJob(workerId, jobRow) {
   console.log(
     JSON.stringify({
       event: "SCAN_JOB_CLAIMED",
-      jobIdPrefix: String(jobId).slice(0, 8),
-      workerId: String(workerId).slice(0, 32),
-      lineUserIdPrefix: String(lineUserId).slice(0, 8),
+      path: "worker-scan",
+      workerIdPrefix: workerIdPrefix16(workerId),
+      jobIdPrefix: idPrefix8(jobId),
+      lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+      timestamp: scanV2TraceTs(),
     }),
   );
 
@@ -74,7 +84,13 @@ export async function processScanJob(workerId, jobRow) {
 
   const upload = await getScanUploadById(job.upload_id);
   if (!upload) {
-    await failJob(jobId, "upload_missing", "scan_upload not found");
+    await failJob(
+      jobId,
+      "upload_missing",
+      "scan_upload not found",
+      lineUserId,
+      workerId,
+    );
     return;
   }
 
@@ -85,7 +101,13 @@ export async function processScanJob(workerId, jobRow) {
       upload.storage_path,
     );
   } catch (e) {
-    await failJob(jobId, "storage_read_failed", String(e?.message || e));
+    await failJob(
+      jobId,
+      "storage_read_failed",
+      String(e?.message || e),
+      lineUserId,
+      workerId,
+    );
     return;
   }
 
@@ -94,14 +116,24 @@ export async function processScanJob(workerId, jobRow) {
   console.log(
     JSON.stringify({
       event: "SCAN_JOB_OBJECT_VALIDATED",
-      jobIdPrefix: String(jobId).slice(0, 8),
-      objectCheck,
+      path: "worker-scan",
+      workerIdPrefix: workerIdPrefix16(workerId),
+      jobIdPrefix: idPrefix8(jobId),
+      lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+      objectCheckResult: objectCheck,
+      timestamp: scanV2TraceTs(),
     }),
   );
 
   if (objectCheck !== "single_supported") {
     const c = getUnsupportedObjectReplyCandidates();
-    await failJob(jobId, "object_validation_failed", String(objectCheck));
+    await failJob(
+      jobId,
+      "object_validation_failed",
+      String(objectCheck),
+      lineUserId,
+      workerId,
+    );
     await insertOutboundMessage({
       line_user_id: lineUserId,
       kind: "scan_result",
@@ -120,11 +152,18 @@ export async function processScanJob(workerId, jobRow) {
 
   const birthdate = String(job.birthdate_snapshot || "").trim();
   if (!birthdate) {
-    await failJob(jobId, "birthdate_missing", "no birthdate on job");
+    await failJob(
+      jobId,
+      "birthdate_missing",
+      "no birthdate on job",
+      lineUserId,
+      workerId,
+    );
     return;
   }
 
   let scanOut;
+  const aiStartedAt = Date.now();
   try {
     scanOut = await runDeepScan({
       imageBuffer,
@@ -132,15 +171,13 @@ export async function processScanJob(workerId, jobRow) {
       userId: lineUserId,
     });
   } catch (err) {
-    console.error(
-      JSON.stringify({
-        event: "SCAN_JOB_FAILED",
-        phase: "runDeepScan",
-        jobIdPrefix: String(jobId).slice(0, 8),
-        message: err?.message,
-      }),
+    await failJob(
+      jobId,
+      "deep_scan_failed",
+      String(err?.message || err),
+      lineUserId,
+      workerId,
     );
-    await failJob(jobId, "deep_scan_failed", String(err?.message || err));
     return;
   }
 
@@ -149,9 +186,14 @@ export async function processScanJob(workerId, jobRow) {
   console.log(
     JSON.stringify({
       event: "SCAN_JOB_AI_COMPLETED",
-      jobIdPrefix: String(jobId).slice(0, 8),
+      path: "worker-scan",
+      workerIdPrefix: workerIdPrefix16(workerId),
+      jobIdPrefix: idPrefix8(jobId),
+      lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+      elapsedMs: Date.now() - aiStartedAt,
       resultLength: resultText.length,
       fromCache: scanFromCache,
+      timestamp: scanV2TraceTs(),
     }),
   );
 
@@ -182,15 +224,13 @@ export async function processScanJob(workerId, jobRow) {
       requestSource: "scan_v2_worker",
     });
   } catch (reqErr) {
-    console.error(
-      JSON.stringify({
-        event: "SCAN_JOB_FAILED",
-        phase: "createScanRequest",
-        jobIdPrefix: String(jobId).slice(0, 8),
-        message: reqErr?.message,
-      }),
+    await failJob(
+      jobId,
+      "scan_request_failed",
+      String(reqErr?.message || reqErr),
+      lineUserId,
+      workerId,
     );
-    await failJob(jobId, "scan_request_failed", String(reqErr?.message || reqErr));
     return;
   }
 
@@ -213,15 +253,13 @@ export async function processScanJob(workerId, jobRow) {
     });
   } catch (crErr) {
     await updateScanRequestStatus(scanRequestId, "failed");
-    console.error(
-      JSON.stringify({
-        event: "SCAN_JOB_FAILED",
-        phase: "createScanResult",
-        jobIdPrefix: String(jobId).slice(0, 8),
-        message: crErr?.message,
-      }),
+    await failJob(
+      jobId,
+      "scan_result_legacy_failed",
+      String(crErr?.message || crErr),
+      lineUserId,
+      workerId,
     );
-    await failJob(jobId, "scan_result_legacy_failed", String(crErr?.message || crErr));
     return;
   }
 
@@ -345,21 +383,25 @@ export async function processScanJob(workerId, jobRow) {
       await deleteScanResultForAppUser(legacyScanResultId, appUserId);
     }
     await updateScanRequestStatus(scanRequestId, "failed");
-    console.error(
-      JSON.stringify({
-        event: "SCAN_JOB_FAILED",
-        phase: "insertScanResultV2",
-        jobIdPrefix: String(jobId).slice(0, 8),
-        message: v2Err?.message,
-      }),
+    await failJob(
+      jobId,
+      "scan_results_v2_insert_failed",
+      String(v2Err?.message || v2Err),
+      lineUserId,
+      workerId,
     );
-    await failJob(jobId, "scan_results_v2_insert_failed", String(v2Err?.message || v2Err));
     return;
   }
 
   if (!scanResultV2Id) {
     await updateScanRequestStatus(scanRequestId, "failed");
-    await failJob(jobId, "result_insert_failed", "scan_results_v2 insert empty");
+    await failJob(
+      jobId,
+      "result_insert_failed",
+      "scan_results_v2 insert empty",
+      lineUserId,
+      workerId,
+    );
     return;
   }
 
@@ -381,7 +423,7 @@ export async function processScanJob(workerId, jobRow) {
     }),
   );
 
-  await insertOutboundMessage({
+  const reportOutboundRow = await insertOutboundMessage({
     line_user_id: lineUserId,
     kind: "scan_result",
     priority: OUTBOUND_PRIORITY.scan_result,
@@ -401,8 +443,13 @@ export async function processScanJob(workerId, jobRow) {
 
   console.log(
     JSON.stringify({
-      event: "SCAN_JOB_DELIVERY_ENQUEUED",
-      jobIdPrefix: String(jobId).slice(0, 8),
+      event: "SCAN_JOB_REPORT_ENQUEUED",
+      path: "worker-scan",
+      workerIdPrefix: workerIdPrefix16(workerId),
+      jobIdPrefix: idPrefix8(jobId),
+      lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+      outboundIdPrefix: idPrefix8(reportOutboundRow?.id ?? null),
+      timestamp: scanV2TraceTs(),
     }),
   );
 }
@@ -412,7 +459,7 @@ export async function processScanJob(workerId, jobRow) {
  * @param {string} code
  * @param {string} message
  */
-async function failJob(jobId, code, message) {
+async function failJob(jobId, code, message, lineUserId, workerId) {
   await updateScanJob(jobId, {
     status: "failed",
     error_code: code,
@@ -420,12 +467,17 @@ async function failJob(jobId, code, message) {
     finished_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
+  const em = String(message).slice(0, 500);
   console.error(
     JSON.stringify({
       event: "SCAN_JOB_FAILED",
-      jobIdPrefix: String(jobId).slice(0, 8),
-      error_code: code,
-      error_message: String(message).slice(0, 500),
+      path: "worker-scan",
+      workerIdPrefix: workerIdPrefix16(workerId),
+      jobIdPrefix: idPrefix8(jobId),
+      lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+      reason: code,
+      errorMessage: em,
+      timestamp: scanV2TraceTs(),
     }),
   );
 }

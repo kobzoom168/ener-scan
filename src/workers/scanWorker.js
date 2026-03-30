@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 import { claimNextScanJob } from "../stores/scanV2/scanJobs.db.js";
 import { processScanJob } from "../services/scanV2/processScanJob.service.js";
 import { startWorkerHeartbeatLoop } from "../redis/scanV2Redis.js";
+import { scanV2TraceTs } from "../utils/scanV2Trace.util.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -34,6 +35,18 @@ async function main() {
     console.log(JSON.stringify({ event: "SCAN_WORKER_DISABLED" }));
     process.exit(0);
   }
+
+  console.log(
+    JSON.stringify({
+      event: "ENV_SCAN_V2_FLAGS",
+      path: "worker-scan",
+      timestamp: scanV2TraceTs(),
+      ENABLE_SCAN_WORKER: env.ENABLE_SCAN_WORKER,
+      ENABLE_ASYNC_SCAN_V2: env.ENABLE_ASYNC_SCAN_V2,
+      ENABLE_SYNC_SCAN_FALLBACK: env.ENABLE_SYNC_SCAN_FALLBACK,
+      ENABLE_LEGACY_WEB_INLINE_SCAN: env.ENABLE_LEGACY_WEB_INLINE_SCAN,
+    }),
+  );
 
   console.log(
     JSON.stringify({

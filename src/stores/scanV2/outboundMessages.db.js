@@ -1,4 +1,9 @@
 import { supabase } from "../../config/supabase.js";
+import {
+  scanV2TraceTs,
+  lineUserIdPrefix8,
+  workerIdPrefix16,
+} from "../../utils/scanV2Trace.util.js";
 
 /**
  * @param {object} row
@@ -120,10 +125,19 @@ export async function claimNextOutboundMessage(workerId) {
     }
   }
 
+  const lid = typeof row === "object" && row && "line_user_id" in row
+    ? row.line_user_id
+    : null;
+  const k = typeof row === "object" && row && "kind" in row ? row.kind : null;
   console.log(
     JSON.stringify({
       event: "OUTBOUND_CLAIM_ROW_OK",
+      path: "worker-delivery",
+      workerIdPrefix: workerIdPrefix16(wid),
       outboundIdPrefix: normRowIdPrefix(row),
+      lineUserIdPrefix: lineUserIdPrefix8(lid),
+      kind: k ?? null,
+      timestamp: scanV2TraceTs(),
     }),
   );
 

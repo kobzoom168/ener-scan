@@ -17,17 +17,43 @@ import {
   setDeliveryRateBackoffMs,
   sleepIfRateHint,
 } from "../../redis/scanV2Redis.js";
+import {
+  scanV2TraceTs,
+  lineUserIdPrefix8,
+  idPrefix8,
+  workerIdPrefix16,
+} from "../../utils/scanV2Trace.util.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 /**
+ * @param {object} msg
+ * @param {object} [traceCtx]
+ */
+function outboundDeliveryBase(msg, traceCtx = {}) {
+  const attempt = traceCtx.attempt ?? msg.attempt_count ?? null;
+  return {
+    path: "worker-delivery",
+    workerIdPrefix: traceCtx.workerId
+      ? workerIdPrefix16(traceCtx.workerId)
+      : null,
+    outboundIdPrefix: idPrefix8(msg.id),
+    lineUserIdPrefix: lineUserIdPrefix8(msg.line_user_id),
+    kind: msg.kind ?? null,
+    attempt,
+    timestamp: scanV2TraceTs(),
+  };
+}
+
+/**
  * @param {*} client LINE SDK client
  * @param {object} msg outbound_messages row
+ * @param {{ workerId?: string, attempt?: number }} [traceCtx]
  * @returns {Promise<{ sent: boolean, is429?: boolean, errorCode?: string, errorMessage?: string }>}
  */
-export async function deliverOutboundMessage(client, msg) {
+export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
   const id = msg.id;
   const lineUserId = msg.line_user_id;
   const kind = msg.kind;
@@ -35,16 +61,14 @@ export async function deliverOutboundMessage(client, msg) {
     msg.payload_json && typeof msg.payload_json === "object"
       ? msg.payload_json
       : {};
+  const base = () => outboundDeliveryBase(msg, traceCtx);
 
   await sleepIfRateHint(sleep, lineUserId);
 
   console.log(
     JSON.stringify({
       event: "OUTBOUND_SEND_START",
-      outboundIdPrefix: String(id).slice(0, 8),
-      kind,
-      lineUserIdPrefix: String(lineUserId).slice(0, 8),
-      attempt: msg.attempt_count,
+      ...base(),
     }),
   );
 
@@ -63,8 +87,7 @@ export async function deliverOutboundMessage(client, msg) {
       console.log(
         JSON.stringify({
           event: "OUTBOUND_SEND_SUCCESS",
-          outboundIdPrefix: String(id).slice(0, 8),
-          kind,
+          ...base(),
         }),
       );
       return { sent: true };
@@ -78,7 +101,7 @@ export async function deliverOutboundMessage(client, msg) {
         console.log(
           JSON.stringify({
             event: "OUTBOUND_SEND_SUCCESS",
-            outboundIdPrefix: String(id).slice(0, 8),
+            ...base(),
             kind: "scan_result_error_text",
           }),
         );
@@ -101,8 +124,7 @@ export async function deliverOutboundMessage(client, msg) {
         console.log(
           JSON.stringify({
             event: "OUTBOUND_SEND_SUCCESS",
-            outboundIdPrefix: String(id).slice(0, 8),
-            kind: "scan_result",
+            ...base(),
             method: delivery.method,
           }),
         );
@@ -163,8 +185,7 @@ export async function deliverOutboundMessage(client, msg) {
         console.log(
           JSON.stringify({
             event: "OUTBOUND_SEND_SUCCESS",
-            outboundIdPrefix: String(id).slice(0, 8),
-            kind,
+            ...base(),
             channel: r.channel,
             attempts: r.attempts,
           }),
@@ -227,8 +248,7 @@ export async function deliverOutboundMessage(client, msg) {
         console.log(
           JSON.stringify({
             event: "OUTBOUND_SEND_SUCCESS",
-            outboundIdPrefix: String(id).slice(0, 8),
-            kind: "payment_qr",
+            ...base(),
             hasImage: Boolean(imageUrl),
             hasText: Boolean(text),
           }),
@@ -260,8 +280,7 @@ export async function deliverOutboundMessage(client, msg) {
       console.log(
         JSON.stringify({
           event: "OUTBOUND_SEND_SUCCESS",
-          outboundIdPrefix: String(id).slice(0, 8),
-          kind,
+          ...base(),
           note: "generic_text",
         }),
       );
@@ -343,11 +362,13 @@ async function markSent(id) {
 /**
  * @param {string} id
  * @param {object} msg
- * @param {{ sent: boolean, is429?: boolean }} result
+ * @param {{ sent: boolean, is429?: boolean, errorCode?: string, errorMessage?: string }} result
+ * @param {{ workerId?: string, attempt?: number }} [traceCtx]
  */
-export async function finalizeOutboundAttempt(id, msg, result) {
+export async function finalizeOutboundAttempt(id, msg, result, traceCtx = {}) {
   const kind = msg.kind;
   const max = OUTBOUND_MAX_ATTEMPTS[kind] ?? 5;
+  const base = outboundDeliveryBase(msg, traceCtx);
 
   if (result.sent) return;
 
@@ -364,9 +385,10 @@ export async function finalizeOutboundAttempt(id, msg, result) {
       console.error(
         JSON.stringify({
           event: "OUTBOUND_SEND_FAILED",
-          outboundIdPrefix: String(id).slice(0, 8),
+          ...base,
+          attempt: nextAttempt,
           reason: "max_429",
-          kind,
+          errorMessage: "max_attempts",
         }),
       );
       return;
@@ -387,10 +409,11 @@ export async function finalizeOutboundAttempt(id, msg, result) {
     console.warn(
       JSON.stringify({
         event: "OUTBOUND_SEND_RETRY",
-        outboundIdPrefix: String(id).slice(0, 8),
-        kind,
-        nextRetryAt: next,
+        ...base,
+        attempt: nextAttempt + 1,
         backoffMs: backoff,
+        nextRetryAt: next,
+        reason: "line_429",
       }),
     );
     return;
@@ -405,8 +428,9 @@ export async function finalizeOutboundAttempt(id, msg, result) {
   console.error(
     JSON.stringify({
       event: "OUTBOUND_SEND_FAILED",
-      outboundIdPrefix: String(id).slice(0, 8),
-      code: result.errorCode || "send_failed",
+      ...base,
+      reason: result.errorCode || "send_failed",
+      errorMessage: String(result.errorMessage || "").slice(0, 500),
     }),
   );
 }

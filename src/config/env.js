@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { scanV2TraceTs } from "../utils/scanV2Trace.util.js";
 
 dotenv.config();
 
@@ -454,6 +455,8 @@ console.log("[ENV_CHECK]", {
 console.log(
   JSON.stringify({
     event: "ENV_SCAN_V2_FLAGS",
+    path: "web",
+    timestamp: scanV2TraceTs(),
     ENABLE_ASYNC_SCAN_V2: env.ENABLE_ASYNC_SCAN_V2,
     ENABLE_SYNC_SCAN_FALLBACK: env.ENABLE_SYNC_SCAN_FALLBACK,
     ENABLE_LEGACY_WEB_INLINE_SCAN: env.ENABLE_LEGACY_WEB_INLINE_SCAN,
