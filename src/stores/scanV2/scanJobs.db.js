@@ -25,8 +25,38 @@ export async function claimNextScanJob(workerId) {
   });
 
   if (error) throw error;
-  if (data == null) return null;
-  return Array.isArray(data) ? data[0] ?? null : data;
+
+  // Supabase RPC can return a NULL composite that is deserialized into an object
+  // whose fields are all `null` (or sometimes string "null"). Normalize that to `null`
+  // so the worker can treat it as "no job".
+  const row = Array.isArray(data) ? (data[0] ?? null) : data;
+  if (row == null) return null;
+
+  const norm = (v) => {
+    if (v == null) return null;
+    if (typeof v === "string" && v.trim().toLowerCase() === "null") return null;
+    return v;
+  };
+
+  if (typeof row === "object" && row !== null) {
+    const id = norm(row.id);
+    const lineUserId = norm(row.line_user_id);
+    const appUserId = norm(row.app_user_id);
+    const uploadId = norm(row.upload_id);
+    const status = norm(row.status);
+
+    if (
+      id == null &&
+      lineUserId == null &&
+      appUserId == null &&
+      uploadId == null &&
+      status == null
+    ) {
+      return null;
+    }
+  }
+
+  return row;
 }
 
 /**

@@ -42,6 +42,20 @@ import {
  * @returns {Promise<void>}
  */
 export async function processScanJob(workerId, jobRow) {
+  if (
+    !jobRow?.id ||
+    (typeof jobRow.id === "string" && jobRow.id.trim().toLowerCase() === "null")
+  ) {
+    console.log(
+      JSON.stringify({
+        event: "SCAN_JOB_EMPTY_CLAIM",
+        workerId: String(workerId).slice(0, 32),
+        jobRowId: jobRow?.id ?? null,
+      }),
+    );
+    return;
+  }
+
   const jobId = jobRow.id;
   const lineUserId = jobRow.line_user_id;
   const appUserId = jobRow.app_user_id;
