@@ -1,6 +1,10 @@
 import { pushText } from "../lineSequenceReply.service.js";
 import { sendScanResultPushWith429Retry } from "../../utils/linePush429Retry.util.js";
-import { isLine429Error } from "../../utils/lineNotify429Retry.util.js";
+import {
+  isLine429Error,
+  notifyLineUserTextAfterAdminAction,
+} from "../../utils/lineNotify429Retry.util.js";
+import { invokeLinePushMessage } from "../../utils/lineClientTransport.util.js";
 import { updateOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
 import { getScanJobById, updateScanJob } from "../../stores/scanV2/scanJobs.db.js";
 import { decrementUserPaidRemainingScans } from "../../stores/paymentAccess.db.js";
@@ -110,6 +114,132 @@ export async function deliverOutboundMessage(client, msg) {
         errorCode: "line_send_failed",
         errorMessage: delivery.finalMessage || "push_failed",
       };
+    }
+
+    if (
+      kind === "approve_notify" ||
+      kind === "reject_notify" ||
+      kind === "pending_intro"
+    ) {
+      const text = String(payload.text || "").trim();
+      if (!text) {
+        return {
+          sent: false,
+          errorCode: "empty_payload",
+          errorMessage: `${kind} missing text`,
+        };
+      }
+      const replyToken =
+        kind === "approve_notify" && payload.replyToken
+          ? String(payload.replyToken).trim()
+          : null;
+      const tag =
+        kind === "approve_notify"
+          ? "OUTBOUND_APPROVE_NOTIFY"
+          : kind === "reject_notify"
+            ? "OUTBOUND_REJECT_NOTIFY"
+            : "OUTBOUND_PENDING_INTRO";
+      const r = await notifyLineUserTextAfterAdminAction({
+        client,
+        lineUserId,
+        text,
+        replyToken: replyToken || null,
+        eventTag: tag,
+        logPrefix: "[OUTBOUND_ADMIN_TEXT]",
+      });
+      if (r.userNotified) {
+        await markSent(id);
+        console.log(
+          JSON.stringify({
+            event: "OUTBOUND_SEND_SUCCESS",
+            outboundIdPrefix: String(id).slice(0, 8),
+            kind,
+            channel: r.channel,
+            attempts: r.attempts,
+          }),
+        );
+        return { sent: true };
+      }
+      if (r.is429) {
+        console.warn(
+          JSON.stringify({
+            event: "LINE_RATE_LIMIT_HIT",
+            outboundIdPrefix: String(id).slice(0, 8),
+            kind,
+          }),
+        );
+        return {
+          sent: false,
+          is429: true,
+          errorCode: "line_429",
+        };
+      }
+      return {
+        sent: false,
+        errorCode: r.notifyError || "line_send_failed",
+        errorMessage: r.finalMessage || "notify_failed",
+      };
+    }
+
+    if (kind === "payment_qr") {
+      const imageUrl = String(payload.imageUrl || "").trim();
+      const text = String(payload.text || "").trim();
+      try {
+        if (imageUrl) {
+          await invokeLinePushMessage(
+            client,
+            "outbound.payment_qr.image",
+            lineUserId,
+            {
+              type: "image",
+              originalContentUrl: imageUrl,
+              previewImageUrl: imageUrl,
+            },
+          );
+        }
+        if (text) {
+          await invokeLinePushMessage(
+            client,
+            "outbound.payment_qr.text",
+            lineUserId,
+            { type: "text", text: text.slice(0, 4900) },
+          );
+        }
+        if (!imageUrl && !text) {
+          return {
+            sent: false,
+            errorCode: "empty_payload",
+            errorMessage: "payment_qr missing text and imageUrl",
+          };
+        }
+        await markSent(id);
+        console.log(
+          JSON.stringify({
+            event: "OUTBOUND_SEND_SUCCESS",
+            outboundIdPrefix: String(id).slice(0, 8),
+            kind: "payment_qr",
+            hasImage: Boolean(imageUrl),
+            hasText: Boolean(text),
+          }),
+        );
+        return { sent: true };
+      } catch (err) {
+        if (isLine429Error(err)) {
+          console.warn(
+            JSON.stringify({
+              event: "LINE_RATE_LIMIT_HIT",
+              outboundIdPrefix: String(id).slice(0, 8),
+              kind: "payment_qr",
+            }),
+          );
+          return { sent: false, is429: true, errorCode: "line_429" };
+        }
+        return {
+          sent: false,
+          errorCode: "line_send_failed",
+          errorMessage: String(err?.message || err),
+        };
+      }
     }
 
     const fallback = String(payload.text || "").trim();

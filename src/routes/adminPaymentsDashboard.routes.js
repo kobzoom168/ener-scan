@@ -30,13 +30,16 @@ import {
   formatBangkokDate,
 } from "../utils/dateTime.util.js";
 import { buildAdminFreeResetConfirmationPayload } from "../utils/adminResetNotify.util.js";
-import { notifyLineUserTextAfterAdminAction } from "../utils/lineNotify429Retry.util.js";
 import { serializeLineErrorSafe } from "../utils/lineErrorLog.util.js";
 import {
   adminResetScanAbuseState,
   snapshotAbuseForAdminResetLog,
 } from "../stores/abuseGuard.store.js";
-import { setPendingApprovedIntroCompensation } from "../stores/session.store.js";
+import {
+  enqueueApproveNotify,
+  enqueueAdminSystemText,
+  enqueueRejectNotify,
+} from "../services/scanV2/outboundAdminEnqueue.service.js";
 
 const ADMIN_FREE_RESET_MODES = new Set([
   "reset_free_quota_only",
@@ -1076,7 +1079,7 @@ function renderDetailPage({
 </html>`;
 }
 
-export default function createAdminPaymentsDashboardRouter(lineClient) {
+export default function createAdminPaymentsDashboardRouter(_lineClient) {
   const router = Router();
 
   router.get("/admin/payments", requireAdminSession, async (req, res) => {
@@ -1240,8 +1243,8 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         }),
       );
 
-      /** @type {Awaited<ReturnType<typeof notifyLineUserTextAfterAdminAction>> | null} */
-      let notifyResult = null;
+      /** @type {{ id: string | null, deduped: boolean } | null} */
+      let enqueueInfo = null;
       const lineReplyToken =
         typeof req.body?.lineReplyToken === "string"
           ? req.body.lineReplyToken.trim()
@@ -1284,7 +1287,7 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
 
         console.log(
           JSON.stringify({
-            event: "APPROVE_USER_NOTIFY_START",
+            event: "APPROVE_USER_NOTIFY_ENQUEUE",
             paymentId,
             lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
             hasInlineReplyToken: Boolean(lineReplyToken),
@@ -1292,43 +1295,24 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
           }),
         );
 
-        notifyResult = await notifyLineUserTextAfterAdminAction({
-          client: lineClient,
+        enqueueInfo = await enqueueApproveNotify({
           lineUserId: activation.lineUserId,
+          paymentId,
           text: message,
           replyToken: lineReplyToken || null,
-          eventTag: "ADMIN_APPROVE_NOTIFY",
-          logPrefix: "[ADMIN_APPROVE_NOTIFY]",
         });
 
-        if (notifyResult.userNotified) {
-          console.log(
-            JSON.stringify({
-              event: "APPROVE_USER_NOTIFY_OK",
-              paymentId,
-              lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
-              channel: notifyResult.channel,
-              attempts: notifyResult.attempts,
-            }),
-          );
-        } else {
-          setPendingApprovedIntroCompensation(activation.lineUserId, {
-            text: message,
+        console.log(
+          JSON.stringify({
+            event: "APPROVE_USER_NOTIFY_QUEUED",
             paymentId,
-          });
-          console.log(
-            JSON.stringify({
-              event: "APPROVE_USER_NOTIFY_FAILED",
-              paymentId,
-              lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
-              notifyError: notifyResult.notifyError,
-              attempts: notifyResult.attempts,
-              finalStatus: notifyResult.finalStatus,
-              is429: notifyResult.is429,
-              pendingIntroQueued: true,
-            }),
-          );
-        }
+            lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
+            outboundIdPrefix: enqueueInfo?.id
+              ? String(enqueueInfo.id).slice(0, 8)
+              : null,
+            deduped: Boolean(enqueueInfo?.deduped),
+          }),
+        );
       }
 
       if (prefersAdminJson(req)) {
@@ -1341,26 +1325,15 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
         if (isIdempotent) {
           res.status(200).json({
             ...jsonBase,
-            userNotified: false,
+            notifyQueued: false,
             notifySkipped: "idempotent_already_active",
           });
         } else {
           res.status(200).json({
             ...jsonBase,
-            userNotified: notifyResult.userNotified,
-            notifyChannel: notifyResult.channel,
-            notifyAttempts: notifyResult.attempts,
-            sent: notifyResult.sent,
-            method: notifyResult.method,
-            finalStatus: notifyResult.finalStatus,
-            finalMessage: notifyResult.finalMessage,
-            is429: notifyResult.is429,
-            ...(notifyResult.userNotified
-              ? {}
-              : {
-                  notifyError: notifyResult.notifyError || "line_send_failed",
-                  pendingIntroQueued: true,
-                }),
+            notifyQueued: true,
+            notifyDeduped: Boolean(enqueueInfo?.deduped),
+            outboundId: enqueueInfo?.id ?? null,
           });
         }
       } else {
@@ -1402,33 +1375,28 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
 
       if (lineUserId) {
         try {
-          const rejectNotify = await notifyLineUserTextAfterAdminAction({
-            client: lineClient,
+          const rejectEnq = await enqueueRejectNotify({
             lineUserId,
+            paymentId,
             text: buildPaymentRejectedText({ reason: rejectReason }),
-            replyToken: null,
-            eventTag: "ADMIN_REJECT_NOTIFY",
-            logPrefix: "[ADMIN_REJECT_NOTIFY]",
           });
-          if (!rejectNotify.userNotified) {
-            console.log(
-              JSON.stringify({
-                event: "ADMIN_REJECT_NOTIFY_FAILED",
-                paymentId,
-                lineUserIdPrefix: String(lineUserId).slice(0, 8),
-                notifyError: rejectNotify.notifyError,
-                attempts: rejectNotify.attempts,
-                is429: rejectNotify.is429,
-              }),
-            );
-          }
+          console.log(
+            JSON.stringify({
+              event: "ADMIN_REJECT_NOTIFY_QUEUED",
+              paymentId,
+              lineUserIdPrefix: String(lineUserId).slice(0, 8),
+              outboundIdPrefix: rejectEnq?.id
+                ? String(rejectEnq.id).slice(0, 8)
+                : null,
+              deduped: Boolean(rejectEnq?.deduped),
+            }),
+          );
         } catch (notifyErr) {
           console.log(
             JSON.stringify({
-              event: "ADMIN_REJECT_NOTIFY_FAILED",
+              event: "ADMIN_REJECT_NOTIFY_ENQUEUE_FAILED",
               paymentId,
               lineUserIdPrefix: String(lineUserId).slice(0, 8),
-              reason: "notify_threw",
               message:
                 notifyErr &&
                 typeof notifyErr === "object" &&
@@ -1567,44 +1535,29 @@ export default function createAdminPaymentsDashboardRouter(lineClient) {
             ? req.body.lineReplyToken.trim()
             : "";
 
-        const notifyResult = await notifyLineUserTextAfterAdminAction({
-          client: lineClient,
+        const resetEnqueue = await enqueueAdminSystemText({
           lineUserId,
           text: confirm.text,
           replyToken: lineReplyToken || null,
-          logPrefix: "[ADMIN_DASH_FREE_RESET_NOTIFY]",
+          source: "admin_free_reset",
         });
 
-        if (!notifyResult.userNotified) {
-          const le = /** @type {{ message?: string, status?: number, response?: { status?: number, data?: unknown } }} */ (
-            notifyResult.lastError
-          );
-          console.error(
-            JSON.stringify({
-              event: "ADMIN_FREE_RESET_NOTIFY_EXHAUSTED",
-              lineUserId,
-              resetApplied: true,
-              userNotified: false,
-              notifyError: notifyResult.notifyError,
-              attempts: notifyResult.attempts,
-              channel: notifyResult.channel,
-              message: le?.message,
-              status: le?.status ?? le?.response?.status,
-              responseData: le?.response?.data ?? null,
-            }),
-          );
-        }
+        console.log(
+          JSON.stringify({
+            event: "ADMIN_FREE_RESET_NOTIFY_QUEUED",
+            lineUserId,
+            outboundIdPrefix: resetEnqueue?.id
+              ? String(resetEnqueue.id).slice(0, 8)
+              : null,
+          }),
+        );
 
         if (wantsJsonResponse(req)) {
           res.status(200).json({
             ok: true,
             resetApplied: true,
-            userNotified: notifyResult.userNotified,
-            notifyChannel: notifyResult.channel,
-            notifyAttempts: notifyResult.attempts,
-            ...(notifyResult.userNotified
-              ? {}
-              : { notifyError: notifyResult.notifyError || "notify_failed" }),
+            notifyQueued: true,
+            outboundId: resetEnqueue?.id ?? null,
             ...result,
             resetMode,
             scanAbuseReset: Boolean(scanAbuseSnapshot),

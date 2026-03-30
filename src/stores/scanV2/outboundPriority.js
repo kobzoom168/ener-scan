@@ -2,6 +2,8 @@
 export const OUTBOUND_PRIORITY = {
   scan_result: 10,
   approve_notify: 20,
+  pending_intro: 21,
+  reject_notify: 22,
   payment_qr: 30,
   pre_scan_ack: 80,
 };

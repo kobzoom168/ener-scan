@@ -1,5 +1,8 @@
 # Ener Scan V2 — async queue rollout
 
+**Final migration plan (wave 2+, PR split, DoD, idempotency/DLQ, canary gates):**  
+→ [`ENER_SCAN_V2_FINAL_MIGRATION_PLAN.md`](./ENER_SCAN_V2_FINAL_MIGRATION_PLAN.md)
+
 ## Feature flag
 
 | Variable | Default | Purpose |

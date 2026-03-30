@@ -1,9 +1,8 @@
-import { notifyLineUserTextAfterAdminAction } from "./lineNotify429Retry.util.js";
 import {
   clearPendingApprovedIntroCompensation,
   getPendingApprovedIntroCompensation,
-  setPendingApprovedIntroCompensation,
 } from "../stores/session.store.js";
+import { enqueuePendingIntroMessage } from "../services/scanV2/outboundAdminEnqueue.service.js";
 
 /**
  * Push-only retry path for queued approved-intro text (does not use inbound replyToken).
@@ -30,61 +29,39 @@ export async function maybeFlushPendingApprovedIntroCompensation({
       }),
     );
 
-    clearPendingApprovedIntroCompensation(uid);
-
-    let result;
+    let enqueuedId = null;
     try {
-      result = await notifyLineUserTextAfterAdminAction({
-        client,
+      const enq = await enqueuePendingIntroMessage({
         lineUserId: uid,
+        paymentId: pending.paymentId ?? null,
         text: pending.text,
-        replyToken: null,
-        eventTag: "APPROVE_PENDING_INTRO",
-        logPrefix: "[APPROVE_PENDING_INTRO]",
-      });
-    } catch (err) {
-      setPendingApprovedIntroCompensation(uid, {
-        text: pending.text,
-        paymentId: pending.paymentId,
         createdAt: pending.createdAt,
       });
+      enqueuedId = enq?.id ?? null;
+    } catch (err) {
       console.log(
         JSON.stringify({
-          event: "APPROVE_PENDING_INTRO_REQUEUED",
-          reason: "notify_threw",
+          event: "APPROVE_PENDING_INTRO_ENQUEUE_FAILED",
+          reason: "enqueue_threw",
           paymentId: pending.paymentId ?? null,
           lineUserIdPrefix: uid.slice(0, 8),
-          message: err && typeof err === "object" && "message" in err ? String(/** @type {{ message?: unknown }} */ (err).message) : String(err),
+          message:
+            err && typeof err === "object" && "message" in err
+              ? String(/** @type {{ message?: unknown }} */ (err).message)
+              : String(err),
         }),
       );
       return;
     }
 
-    if (result.userNotified) {
-      console.log(
-        JSON.stringify({
-          event: "APPROVE_PENDING_INTRO_PUSH_OK",
-          paymentId: pending.paymentId ?? null,
-          lineUserIdPrefix: uid.slice(0, 8),
-          attempts: result.attempts,
-        }),
-      );
-      return;
-    }
+    clearPendingApprovedIntroCompensation(uid);
 
-    setPendingApprovedIntroCompensation(uid, {
-      text: pending.text,
-      paymentId: pending.paymentId,
-      createdAt: pending.createdAt,
-    });
     console.log(
       JSON.stringify({
-        event: "APPROVE_PENDING_INTRO_REQUEUED",
+        event: "APPROVE_PENDING_INTRO_QUEUED",
         paymentId: pending.paymentId ?? null,
         lineUserIdPrefix: uid.slice(0, 8),
-        notifyError: result.notifyError,
-        attempts: result.attempts,
-        is429: result.is429,
+        outboundIdPrefix: enqueuedId ? String(enqueuedId).slice(0, 8) : null,
       }),
     );
   } catch (err) {

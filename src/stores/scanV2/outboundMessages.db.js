@@ -41,3 +41,25 @@ export async function updateOutboundMessage(id, patch) {
 
   if (error) throw error;
 }
+
+/**
+ * Active = not yet terminal (sent/failed/dead).
+ * @param {string} paymentId UUID
+ * @param {string} kind
+ * @returns {Promise<{ id: string, status: string } | null>}
+ */
+export async function findActiveOutboundByPaymentAndKind(paymentId, kind) {
+  const pid = String(paymentId || "").trim();
+  if (!pid) return null;
+
+  const { data, error } = await supabase
+    .from("outbound_messages")
+    .select("id,status")
+    .eq("related_payment_id", pid)
+    .eq("kind", kind)
+    .in("status", ["queued", "sending", "retry_wait"])
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
