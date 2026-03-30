@@ -383,15 +383,22 @@ export const env = {
 
   /**
    * Ener Scan V2: async webhook → storage → DB queue → workers (see docs/ENER_SCAN_V2_ROLLOUT.md).
-   * When `true`, image+saved-birthdate path enqueues scan_jobs instead of inline runScanFlow.
+   * When `true`, web attempts `ingestScanImageAsyncV2` for scan image flows (requires literal trimmed `true`).
    */
-  ENABLE_ASYNC_SCAN_V2: process.env.ENABLE_ASYNC_SCAN_V2 === "true",
+  ENABLE_ASYNC_SCAN_V2:
+    String(process.env.ENABLE_ASYNC_SCAN_V2 || "").trim() === "true",
   /**
-   * When `true` and async ingest fails, fall back to legacy synchronous `runScanFlow`.
-   * Keep `false` in normal production; enable only during incidents (DB/storage partial outage).
+   * When `true` and async ingest fails, allow synchronous `runScanFlow` only if
+   * `ENABLE_LEGACY_WEB_INLINE_SCAN` is also `true`. Alone it does not enable inline scan.
    */
   ENABLE_SYNC_SCAN_FALLBACK:
     String(process.env.ENABLE_SYNC_SCAN_FALLBACK || "").trim() === "true",
+  /**
+   * Emergency only: allows `runScanFlow` (inline deep scan) from LINE webhook image flows.
+   * Must stay `false` in normal production.
+   */
+  ENABLE_LEGACY_WEB_INLINE_SCAN:
+    String(process.env.ENABLE_LEGACY_WEB_INLINE_SCAN || "").trim() === "true",
   /** Supabase Storage bucket for scan_uploads (create bucket + policies in dashboard). */
   SCAN_V2_UPLOAD_BUCKET:
     String(process.env.SCAN_V2_UPLOAD_BUCKET || "").trim() || "scan-uploads",
@@ -444,3 +451,11 @@ console.log("[ENV_CHECK]", {
   GEMINI_FRONT_ORCHESTRATOR_MODE: env.GEMINI_FRONT_ORCHESTRATOR_MODE,
   GEMINI_FRONT_PHASE1_ONLY: env.GEMINI_FRONT_PHASE1_ONLY,
 });
+console.log(
+  JSON.stringify({
+    event: "ENV_SCAN_V2_FLAGS",
+    ENABLE_ASYNC_SCAN_V2: env.ENABLE_ASYNC_SCAN_V2,
+    ENABLE_SYNC_SCAN_FALLBACK: env.ENABLE_SYNC_SCAN_FALLBACK,
+    ENABLE_LEGACY_WEB_INLINE_SCAN: env.ENABLE_LEGACY_WEB_INLINE_SCAN,
+  }),
+);

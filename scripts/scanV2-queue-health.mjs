@@ -61,6 +61,7 @@ async function main() {
     flags: {
       ENABLE_ASYNC_SCAN_V2: env.ENABLE_ASYNC_SCAN_V2,
       ENABLE_SYNC_SCAN_FALLBACK: env.ENABLE_SYNC_SCAN_FALLBACK,
+      ENABLE_LEGACY_WEB_INLINE_SCAN: env.ENABLE_LEGACY_WEB_INLINE_SCAN,
     },
     alerts: {
       backlog_high:
