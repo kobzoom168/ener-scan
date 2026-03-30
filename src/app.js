@@ -99,6 +99,28 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+app.get("/health/scan-v2", async (_req, res) => {
+  try {
+    const { pingScanV2Redis } = await import("./redis/scanV2Redis.js");
+    const redis = await pingScanV2Redis();
+    res.json({
+      status: "ok",
+      redis: redis.ok
+        ? { ok: true, latencyMs: redis.latencyMs }
+        : { ok: false, error: redis.error || "ping_failed" },
+      flags: {
+        ENABLE_ASYNC_SCAN_V2: env.ENABLE_ASYNC_SCAN_V2,
+        ENABLE_SYNC_SCAN_FALLBACK: env.ENABLE_SYNC_SCAN_FALLBACK,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({
+      status: "error",
+      message: e?.message || String(e),
+    });
+  }
+});
+
 app.get("/", (req, res) => {
   res.send("Ener Scan API running");
 });

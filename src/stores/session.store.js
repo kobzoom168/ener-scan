@@ -1,3 +1,5 @@
+import { queueConversationStatePersist } from "./conversationStatePersist.queue.js";
+
 const sessions = new Map();
 
 function normalizeUserId(userId) {
@@ -138,6 +140,7 @@ export function setSelectedPaymentPackageKey(userId, packageKey) {
   const k = String(packageKey || "").trim();
   session.selectedPaymentPackageKey = k || null;
   sessions.set(id, session);
+  queueConversationStatePersist(id);
 }
 
 export function getSelectedPaymentPackageKey(userId) {
@@ -154,6 +157,7 @@ export function clearSelectedPaymentPackageKey(userId) {
   const session = getSession(id);
   session.selectedPaymentPackageKey = null;
   sessions.set(id, session);
+  queueConversationStatePersist(id);
 }
 
 export function markScanFlowReplyTokenSpent(userId) {
@@ -162,6 +166,7 @@ export function markScanFlowReplyTokenSpent(userId) {
   const session = getSession(id);
   session.scanFlowReplyTokenSpent = true;
   sessions.set(id, session);
+  queueConversationStatePersist(id);
 }
 
 export function isScanFlowReplyTokenSpent(userId) {
@@ -177,6 +182,7 @@ export function resetScanFlowReplyTokenSpent(userId) {
   const session = getSession(id);
   session.scanFlowReplyTokenSpent = false;
   sessions.set(id, session);
+  queueConversationStatePersist(id);
 }
 
 /**
@@ -200,6 +206,7 @@ export function setPendingApprovedIntroCompensation(userId, payload) {
       pid != null && String(pid).trim() ? String(pid).trim() : null,
   };
   sessions.set(id, session);
+  queueConversationStatePersist(id);
 }
 
 /**
@@ -225,6 +232,7 @@ export function clearPendingApprovedIntroCompensation(userId) {
   const session = getSession(id);
   session.pendingApprovedIntroCompensation = null;
   sessions.set(id, session);
+  queueConversationStatePersist(id);
 }
 
 export function clearSessionIfFlowVersionMatches(userId, flowVersion) {
@@ -265,6 +273,7 @@ export function setBirthdateChangeFlowState(userId, state, pending = null) {
   session.birthdateChangePending = pending;
   session.awaitingBirthdateUpdate = Boolean(state);
   sessions.set(id, session);
+  queueConversationStatePersist(id);
 }
 
 export function clearBirthdateChangeFlow(userId) {

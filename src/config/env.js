@@ -386,11 +386,46 @@ export const env = {
    * When `true`, image+saved-birthdate path enqueues scan_jobs instead of inline runScanFlow.
    */
   ENABLE_ASYNC_SCAN_V2: process.env.ENABLE_ASYNC_SCAN_V2 === "true",
+  /**
+   * When `true` and async ingest fails, fall back to legacy synchronous `runScanFlow`.
+   * Keep `false` in normal production; enable only during incidents (DB/storage partial outage).
+   */
+  ENABLE_SYNC_SCAN_FALLBACK:
+    String(process.env.ENABLE_SYNC_SCAN_FALLBACK || "").trim() === "true",
   /** Supabase Storage bucket for scan_uploads (create bucket + policies in dashboard). */
   SCAN_V2_UPLOAD_BUCKET:
     String(process.env.SCAN_V2_UPLOAD_BUCKET || "").trim() || "scan-uploads",
   /** Optional Redis for rate-limit keys / dedupe (workers use DB locks if unset). */
   REDIS_URL: String(process.env.REDIS_URL || "").trim() || null,
+  /** Key prefix for Scan V2 Redis keys (locks, dedupe, heartbeats). */
+  SCAN_V2_REDIS_PREFIX:
+    String(process.env.SCAN_V2_REDIS_PREFIX || "ener-scan:v2:").trim() ||
+    "ener-scan:v2:",
+  /** Stale `scan_jobs.processing` requeue threshold (ms). Default 15 minutes. */
+  SCAN_V2_STALE_PROCESSING_MS: Math.max(
+    60_000,
+    Number(process.env.SCAN_V2_STALE_PROCESSING_MS || 900_000) || 900_000,
+  ),
+  /**
+   * Canary / monitoring thresholds (documented; app logs compare in maintenance / ops).
+   * Tune via env without code deploy.
+   */
+  CANARY_QUEUE_BACKLOG_MAX: Math.max(
+    0,
+    Number(process.env.CANARY_QUEUE_BACKLOG_MAX || 500) || 500,
+  ),
+  CANARY_LINE_429_RATE_MAX_PER_HOUR: Math.max(
+    0,
+    Number(process.env.CANARY_LINE_429_RATE_MAX_PER_HOUR || 120) || 120,
+  ),
+  CANARY_DELIVERY_SUCCESS_RATE_MIN: (() => {
+    const n = Number(process.env.CANARY_DELIVERY_SUCCESS_RATE_MIN || 0.95);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.95;
+  })(),
+  CANARY_REPORT_PUBLISH_SUCCESS_RATE_MIN: (() => {
+    const n = Number(process.env.CANARY_REPORT_PUBLISH_SUCCESS_RATE_MIN || 0.98);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.98;
+  })(),
   ENABLE_SCAN_WORKER: process.env.ENABLE_SCAN_WORKER === "true",
   ENABLE_DELIVERY_WORKER: process.env.ENABLE_DELIVERY_WORKER === "true",
   ENABLE_MAINTENANCE_WORKER: process.env.ENABLE_MAINTENANCE_WORKER === "true",

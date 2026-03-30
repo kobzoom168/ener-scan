@@ -5,6 +5,7 @@
 import { env } from "../config/env.js";
 import { claimNextScanJob } from "../stores/scanV2/scanJobs.db.js";
 import { processScanJob } from "../services/scanV2/processScanJob.service.js";
+import { startWorkerHeartbeatLoop } from "../redis/scanV2Redis.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -41,6 +42,14 @@ async function main() {
       concurrency: env.SCAN_WORKER_CONCURRENCY,
     }),
   );
+
+  const stopHb = startWorkerHeartbeatLoop("scan", workerId, 45, 15_000);
+  const onStop = () => {
+    stopHb();
+    process.exit(0);
+  };
+  process.on("SIGTERM", onStop);
+  process.on("SIGINT", onStop);
 
   const n = Math.max(1, env.SCAN_WORKER_CONCURRENCY || 1);
   await Promise.all(Array.from({ length: n }, () => loop()));

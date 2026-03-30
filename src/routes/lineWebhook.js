@@ -73,6 +73,7 @@ import {
   isPromptPayQrUrlHttpsForLine,
 } from "../utils/promptpayQrPublicUrl.util.js";
 import { ensureUserByLineUserId, touchUserLastActive } from "../stores/users.db.js";
+import { mergeConversationStateFromDbIntoSession } from "../services/conversationStateDualWrite.service.js";
 import {
   createPaymentPending,
   ensurePaymentRefForPaymentId,
@@ -5484,6 +5485,7 @@ async function handleEvent({ client, event }) {
   try {
     const appUser = await ensureUserByLineUserId(userId);
     await touchUserLastActive(appUser.id);
+    await mergeConversationStateFromDbIntoSession(userId);
   } catch (error) {
     console.error("[WEBHOOK] ensure app user failed:", {
       lineUserId: userId,

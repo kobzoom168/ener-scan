@@ -32,7 +32,7 @@ This document is the **execution plan after wave 1** (async queue core: `sql/022
 |----|--------|---------|
 | **PR 1 — Outbound unification** | Approve notify, pending intro, payment QR, reject notify → `outbound_messages`; extend delivery worker + metrics/logs; admin/payment routes enqueue instead of raw push where applicable. | “LINE outbound from one pipeline” for product-critical notifies. |
 | **PR 2 — State + report + Redis** | `conversation_state` dual-write; wire HTML/public report publish in V2 `processScanJob`; Redis client + locks/rate/dedupe/heartbeat; tighten fallback behavior (still allow sync emergency if flag exists). | Truth + artifacts + scale controls. |
-| **PR 3 — Cutover & cleanup** | `ENABLE_SYNC_SCAN_FALLBACK=false` (or remove path); delete dead legacy bypass; small PR, easy revert. | Final lockover candidate after metrics gate. |
+| **PR 3 — Redis + cutover** | Real Redis (`ioredis`), health, dedupe/rate/heartbeat, `ENABLE_SYNC_SCAN_FALLBACK` default off, maintenance DLQ/stuck scan sweep, canary env thresholds, replay script. Details: [`ENER_SCAN_V2_PR3_CUTOVER.md`](./ENER_SCAN_V2_PR3_CUTOVER.md). | Lockover candidate after metrics gate. |
 
 ---
 
