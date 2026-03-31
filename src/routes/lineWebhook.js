@@ -1480,19 +1480,6 @@ async function finalizeAcceptedImage({
     chosenPath,
   });
 
-  if (chosenPath === "scan") {
-    console.log(
-      JSON.stringify({
-        event: "SCAN_V2_PATH_ENTER",
-        path: "web",
-        lineUserIdPrefix: lineUserIdPrefix8(userId),
-        messageId: event?.message?.id ?? null,
-        flowVersion,
-        timestamp: scanV2TraceTs(),
-      }),
-    );
-  }
-
   const imgPhase1Invoke = async () =>
     invokePhase1FreshNoop({
       userId,
@@ -1501,13 +1488,18 @@ async function finalizeAcceptedImage({
       session: getSession(userId),
     });
 
-  // Fast-exit: when payment is required and there's no awaiting slip row,
-  // route directly to package/paywall copy instead of going through object-check.
-  if (
-    !accessDecision?.allowed &&
-    accessDecision?.reason === "payment_required" &&
-    !paymentOwnsImage
-  ) {
+  // Access denied (quota / paywall): end in non-scan gateway only — never duplicate/object/AI scan.
+  if (chosenPath === "payment_gate") {
+    console.log(
+      JSON.stringify({
+        event: "ACCESS_GATE_PAYWALL_NON_SCAN_ONLY",
+        userId,
+        flowVersion,
+        messageId: event?.message?.id ?? null,
+        chosenPath,
+        accessReason: accessDecision?.reason ?? null,
+      }),
+    );
     const payReqGateNow = Date.now();
     const payReqStatus = checkPaymentAbuseStatus(userId, payReqGateNow);
     console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
@@ -1565,7 +1557,7 @@ async function finalizeAcceptedImage({
       flowVersion,
       messageId: event?.message?.id ?? null,
       accessDecision,
-      pathSegment: "pre_object_check",
+      pathSegment: "access_gate",
     });
     await logPaywallShown(userId, {
       patternUsed: "finalize_image_free_quota_exhausted_deterministic",
@@ -1573,6 +1565,19 @@ async function finalizeAcceptedImage({
       source: "finalize_image_payment_required_text_only",
     });
     return;
+  }
+
+  if (chosenPath === "scan") {
+    console.log(
+      JSON.stringify({
+        event: "SCAN_V2_PATH_ENTER",
+        path: "web",
+        lineUserIdPrefix: lineUserIdPrefix8(userId),
+        messageId: event?.message?.id ?? null,
+        flowVersion,
+        timestamp: scanV2TraceTs(),
+      }),
+    );
   }
 
   if (paymentOwnsImage && pendingPayment) {
@@ -1914,77 +1919,7 @@ async function finalizeAcceptedImage({
 
   markAcceptedImageEvent(userId, eventTimestamp);
 
-  // Reuse accessDecision from image routing (same request; avoids slip vs scan mismatch).
-  if (!accessDecision.allowed && accessDecision.reason === "payment_required") {
-    const payReqGateNow = Date.now();
-    const payReqStatus = checkPaymentAbuseStatus(userId, payReqGateNow);
-    console.log("[ABUSE_GUARD_PAYMENT_STATUS]", {
-      userId,
-      gate: "finalize_payment_required",
-      ...payReqStatus,
-    });
-    if (payReqStatus.isLocked) {
-      console.warn("[ABUSE_GUARD_PAYMENT_LOCK]", {
-        userId,
-        lockUntil: payReqStatus.lockUntil,
-        gate: "finalize_payment_required",
-      });
-      if ((await imgPhase1Invoke()).handled) return;
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "abuse_payment_lock",
-        semanticKey: "abuse_payment_lock_finalize",
-        text: ABUSE_MSG_PAYMENT_LOCK,
-        alternateTexts: [
-          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
-        ],
-      });
-      return;
-    }
-
-    const payIntentNow = Date.now();
-    const payIntent = registerPaymentIntent(userId, payIntentNow);
-    if (payIntent.abusive) {
-      console.warn("[ABUSE_GUARD_PAYMENT_ABUSE]", {
-        userId,
-        reasons: payIntent.reasons,
-        paymentSpamScore: payIntent.state.paymentSpamScore,
-      });
-    }
-
-    // No payment row until user sends จ่ายเงิน (single default package from scan offer).
-    clearLatestScanJob(userId);
-
-    // Preserve the scan image candidate so user can continue after approval.
-    setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
-
-    console.log("[PAYMENT_GATE_REPLY_SELECTION]", {
-      userId,
-      chosenPath: "payment_gate_post_object_check",
-      accessAllowed: Boolean(accessDecision?.allowed),
-      accessReason: accessDecision?.reason ?? null,
-      replyType: "free_quota_exhausted_deterministic",
-      copyKey: "scan_offer:free_quota_exhausted_deterministic",
-      templateKey: "free_quota_exhausted_deterministic",
-    });
-    await sendFreeQuotaExhaustedPaywallViaGateway({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      flowVersion,
-      messageId: event?.message?.id ?? null,
-      accessDecision,
-      pathSegment: "post_object_check",
-    });
-    await logPaywallShown(userId, {
-      patternUsed: "finalize_image_free_quota_exhausted_deterministic",
-      bubbleCount: 1,
-      source: "finalize_image_payment_required_text_only",
-    });
-    return;
-  }
+  // Quota / access denied is handled only at `chosenPath === "payment_gate"` above (before duplicate/object/scan).
 
   let savedBirthdate = null;
 

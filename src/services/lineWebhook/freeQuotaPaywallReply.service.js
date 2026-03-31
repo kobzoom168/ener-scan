@@ -21,7 +21,7 @@ import {
  * @param {number|null} [opts.flowVersion]
  * @param {string|null} [opts.messageId]
  * @param {object} opts.accessDecision — {@link checkScanAccess} result
- * @param {"pre_object_check"|"post_object_check"} [opts.pathSegment]
+ * @param {"access_gate"|"pre_object_check"|"post_object_check"} [opts.pathSegment]
  * @returns {Promise<{ sent: boolean, suppressed: boolean, exactDuplicate?: boolean, semanticDuplicate?: boolean }>}
  */
 export async function sendFreeQuotaExhaustedPaywallViaGateway({
@@ -31,7 +31,7 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
   flowVersion = null,
   messageId = null,
   accessDecision,
-  pathSegment = "pre_object_check",
+  pathSegment = "access_gate",
 }) {
   const uid = String(userId || "").trim();
   const offer = loadActiveScanOffer();
