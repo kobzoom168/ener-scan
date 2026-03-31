@@ -175,6 +175,7 @@ import {
   BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT,
   BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT,
   BIRTHDATE_CHANGE_FLOW,
+  matchesExplicitBirthdateChangeCommand,
 } from "../utils/birthdateChangeFlow.util.js";
 import {
   birthdateSavedAfterUpdate,
@@ -558,6 +559,29 @@ async function handleBirthdateChangeFlowTurn({
   if (!flowState) return false;
 
   if (flowState === BIRTHDATE_CHANGE_FLOW.CANDIDATE) {
+    if (matchesExplicitBirthdateChangeCommand(text)) {
+      setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
+      console.log(
+        JSON.stringify({
+          event: "BIRTHDATE_CHANGE_STATE_ENTERED",
+          userId,
+          birthdateChangeState: "awaiting_new_birthdate",
+          sessionState: BIRTHDATE_CHANGE_FLOW.WAITING_DATE,
+          fromCandidate: true,
+        }),
+      );
+      const ask = pickBirthdateAskDateLine(userId);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_ask_date_direct",
+        semanticKey: "waiting_birthdate_change",
+        text: ask,
+        alternateTexts: [ask],
+      });
+      return true;
+    }
     if (isBirthdateFlowConfirmYes(text)) {
       setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
       const ask = pickBirthdateAskDateLine(userId);
@@ -579,6 +603,13 @@ async function handleBirthdateChangeFlowTurn({
     }
     if (isBirthdateFlowConfirmNo(text)) {
       clearBirthdateChangeFlow(userId);
+      console.log(
+        JSON.stringify({
+          event: "BIRTHDATE_CHANGE_STATE_CLEARED",
+          userId,
+          reason: "user_cancelled_candidate",
+        }),
+      );
       if (
         invokePhase1GeminiOrchestrator &&
         (await invokePhase1GeminiOrchestrator()).handled
@@ -638,16 +669,21 @@ async function handleBirthdateChangeFlowTurn({
         isoDate: parsedBd.isoDate,
         yearCE: parsedBd.yearCE,
       };
+      console.log(
+        JSON.stringify({
+          event: "BIRTHDATE_CHANGE_DATE_ACCEPTED",
+          userId,
+          birthdateChangeState: "awaiting_new_birthdate",
+          isoDate: parsedBd.isoDate ?? null,
+          yearCE: parsedBd.yearCE ?? null,
+          nextSessionState: BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM,
+        }),
+      );
       setBirthdateChangeFlowState(
         userId,
         BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM,
         pending,
       );
-      if (
-        invokePhase1GeminiOrchestrator &&
-        (await invokePhase1GeminiOrchestrator()).handled
-      )
-        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -659,11 +695,14 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (/^\d{6,7}$/.test(trimmed)) {
-      if (
-        invokePhase1GeminiOrchestrator &&
-        (await invokePhase1GeminiOrchestrator()).handled
-      )
-        return true;
+      console.log(
+        JSON.stringify({
+          event: "BIRTHDATE_CHANGE_DATE_REJECTED",
+          userId,
+          birthdateChangeState: "awaiting_new_birthdate",
+          reason: "low_confidence_digits",
+        }),
+      );
       await sendNonScanReply({
         client,
         userId,
@@ -675,11 +714,14 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     if (looksLikeBirthdateInput(text)) {
-      if (
-        invokePhase1GeminiOrchestrator &&
-        (await invokePhase1GeminiOrchestrator()).handled
-      )
-        return true;
+      console.log(
+        JSON.stringify({
+          event: "BIRTHDATE_CHANGE_DATE_REJECTED",
+          userId,
+          birthdateChangeState: "awaiting_new_birthdate",
+          reason: "invalid_format_or_date",
+        }),
+      );
       await sendNonScanReply({
         client,
         userId,
@@ -691,11 +733,6 @@ async function handleBirthdateChangeFlowTurn({
       return true;
     }
     const ask = pickBirthdateAskDateLine(userId);
-    if (
-        invokePhase1GeminiOrchestrator &&
-        (await invokePhase1GeminiOrchestrator()).handled
-      )
-        return true;
     await sendNonScanReply({
       client,
       userId,
@@ -727,6 +764,13 @@ async function handleBirthdateChangeFlowTurn({
         clearBirthdateChangeFlow(userId);
         console.log(
           JSON.stringify({
+            event: "BIRTHDATE_CHANGE_STATE_CLEARED",
+            userId,
+            reason: "final_confirm_yes_missing_pending",
+          }),
+        );
+        console.log(
+          JSON.stringify({
             event: "BIRTHDATE_FLOW_FINAL_CONFIRM_OUTCOME",
             userId,
             outcome: "yes_ack_but_missing_pending_cleared",
@@ -739,6 +783,14 @@ async function handleBirthdateChangeFlowTurn({
         rawBirthdateInput: pending.rawBirthdateInput,
       });
       clearBirthdateChangeFlow(userId);
+      console.log(
+        JSON.stringify({
+          event: "BIRTHDATE_CHANGE_STATE_CLEARED",
+          userId,
+          reason: "birthdate_saved",
+          isoDate: pending.isoDate ?? null,
+        }),
+      );
       logWaitingBirthdate("accepted", {
         gate: "birthdate_update_profile",
         userId,
@@ -754,11 +806,6 @@ async function handleBirthdateChangeFlowTurn({
         rawBirthdateInput: pending.rawBirthdateInput,
       });
       const savedLine = birthdateSavedAfterUpdate(userId, pending.echoDisplay);
-      if (
-        invokePhase1GeminiOrchestrator &&
-        (await invokePhase1GeminiOrchestrator()).handled
-      )
-        return true;
       await sendNonScanReply({
         client,
         userId,
@@ -2291,12 +2338,12 @@ async function handleImageMessage({ client, event, userId, session }) {
     let hint =
       "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     if (st === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
-      hint = pickBirthdateAskDateLine(userId);
+      const askLine = pickBirthdateAskDateLine(userId);
+      hint = `ตอนนี้กำลังรอวันเกิดใหม่อยู่ครับ รบกวนพิมพ์วันเกิดเป็นข้อความก่อนนะครับ\n\n${askLine}`;
     } else if (st === BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM) {
       hint =
         "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     }
-    if ((await imagePhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -3026,6 +3073,40 @@ async function handleTextMessage({ client, event, userId, session }) {
       softVerifyTriggered: false,
       softVerifyPassed: true,
     });
+  }
+
+  if (
+    !getBirthdateChangeFlowState(userId) &&
+    matchesExplicitBirthdateChangeCommand(text)
+  ) {
+    console.log(
+      JSON.stringify({
+        event: "BIRTHDATE_CHANGE_INTENT_MATCHED",
+        userId,
+        inputText: text,
+        matchKind: "explicit_command",
+      }),
+    );
+    setBirthdateChangeFlowState(userId, BIRTHDATE_CHANGE_FLOW.WAITING_DATE, null);
+    console.log(
+      JSON.stringify({
+        event: "BIRTHDATE_CHANGE_STATE_ENTERED",
+        userId,
+        birthdateChangeState: "awaiting_new_birthdate",
+        sessionState: BIRTHDATE_CHANGE_FLOW.WAITING_DATE,
+      }),
+    );
+    const askDirect = pickBirthdateAskDateLine(userId);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "birthdate_change_ask_date_direct",
+      semanticKey: "waiting_birthdate_change",
+      text: askDirect,
+      alternateTexts: [askDirect],
+    });
+    return;
   }
 
   if (getBirthdateChangeFlowState(userId)) {

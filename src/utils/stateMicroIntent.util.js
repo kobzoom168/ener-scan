@@ -228,17 +228,7 @@ export function isPackageChangeIntentPhrase(text) {
   return PACKAGE_CHANGE_VERBS.test(normText(text));
 }
 
-/** Natural Thai phrases asking to change saved birthdate (deterministic; not LLM). */
-export function isBirthdateChangeIntentPhrase(text) {
-  const t = normText(text);
-  if (!t) return false;
-  if (t === "เปลี่ยนวันเกิด") return true;
-  // Mid-sentence: "ขอแก้วันเกิดหน่อย", "อยากเปลี่ยนวันเกิดค่ะ"
-  if (/แก้วันเกิด|เปลี่ยนวันเกิด/i.test(t)) return true;
-  return /^(ขอ)?(เปลี่ยน|แก้|อัปเดต|อัพเดต)วันเกิด|วันเกิด(ไม่ถูก|ผิด|คลาด)|ขอแก้วันเกิด|แก้เดือนเกิด|ขอเปลี่ยนเดือนเกิด/i.test(
-    t,
-  );
-}
+export { isBirthdateChangeIntentPhrase } from "./birthdateChangeFlow.util.js";
 
 /** awaiting_slip / resend QR */
 export function isResendQrIntentText(text) {

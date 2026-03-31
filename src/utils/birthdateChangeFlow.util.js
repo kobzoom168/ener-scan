@@ -3,13 +3,52 @@
  * Routing stays in lineWebhook; this module holds labels + detectors only.
  */
 
-import { isBirthdateChangeIntentPhrase } from "./stateMicroIntent.util.js";
 import { userFacingBirthdateEcho } from "./birthdateParse.util.js";
 
 function normText(text) {
   return String(text || "")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+/**
+ * Normalize common Thai keyboard typos for verbs meaning "change" before intent matching.
+ * e.g. เปลืยน/เปลียน → เปลี่ยน
+ */
+export function normalizeBirthdateChangeIntentTypos(text) {
+  return String(text || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/เปลืยน/gu, "เปลี่ยน")
+    .replace(/เปลียน/gu, "เปลี่ยน");
+}
+
+/** Natural Thai phrases asking to change saved birthdate (deterministic; not LLM). */
+export function isBirthdateChangeIntentPhrase(text) {
+  const t = normalizeBirthdateChangeIntentTypos(normText(text));
+  if (!t) return false;
+  if (t === "เปลี่ยนวันเกิด") return true;
+  if (/แก้วันเกิด|เปลี่ยนวันเกิด/i.test(t)) return true;
+  return /^(ขอ)?(เปลี่ยน|แก้|อัปเดต|อัพเดต)วันเกิด|วันเกิด(ไม่ถูก|ผิด|คลาด)|ขอแก้วันเกิด|แก้เดือนเกิด|ขอเปลี่ยนเดือนเกิด/i.test(
+    t,
+  );
+}
+
+/**
+ * Explicit "change my birthdate" commands — skip candidate confirm; go straight to date entry.
+ * Typos like เปลืยน/เปลียน are normalized first.
+ */
+export function matchesExplicitBirthdateChangeCommand(text) {
+  const raw = normText(text);
+  if (!raw) return false;
+  let stem = stripTrailingPoliteParticles(
+    normalizeBirthdateChangeIntentTypos(raw).replace(/\s+/g, " "),
+  );
+  stem = stem.replace(/วันเกิดใหม่$/u, "วันเกิด").trim();
+  stem = stem.replace(/\s+ใหม่\s*$/u, "").trim();
+  if (/^(ขอ)?เปลี่ยนวันเกิด$/u.test(stem)) return true;
+  if (/^แก้วันเกิด$/u.test(stem)) return true;
+  return false;
 }
 
 /** @typedef {'birthdate_change_candidate' | 'waiting_birthdate_change' | 'waiting_birthdate_change_confirm'} BirthdateChangeFlowState */
@@ -112,7 +151,7 @@ export function isBirthdateFlowConfirmNo(text) {
  * Excludes pure date-like strings (handled by scan / paywall routing).
  */
 export function isBirthdateChangeCandidateText(text) {
-  const t = normText(text);
+  const t = normalizeBirthdateChangeIntentTypos(normText(text));
   if (!t) return false;
   if (isBirthdateChangeIntentPhrase(t)) return true;
 
