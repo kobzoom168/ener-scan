@@ -164,6 +164,7 @@ export async function sendNonScanReply(opts) {
     text,
     alternateTexts = [],
     scanOfferMeta,
+    turnPerf = undefined,
   } = opts;
 
   const uid = String(userId || "").trim();
@@ -226,6 +227,12 @@ export async function sendNonScanReply(opts) {
     const body = candidates[i];
     lastEval = evaluateDuplicate(uid, dedupeKey, body);
     if (!lastEval.blocked) {
+      if (turnPerf) {
+        turnPerf.log("NON_SCAN_REPLY_ROUTED", {
+          replyType: rt,
+          semanticKey: skLog,
+        });
+      }
       const tokenStr = String(replyToken || "").trim();
       const tokenSpent = isScanFlowReplyTokenSpent(uid);
       if (!tokenStr || tokenSpent) {
@@ -274,6 +281,12 @@ export async function sendNonScanReply(opts) {
         suppressed: false,
         retryCount: i + 1,
       });
+      if (turnPerf) {
+        turnPerf.log("NON_SCAN_REPLY_SENT", {
+          replyType: rt,
+          semanticKey: skLog,
+        });
+      }
       return {
         sent: true,
         suppressed: false,

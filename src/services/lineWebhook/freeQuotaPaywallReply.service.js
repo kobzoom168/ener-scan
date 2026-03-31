@@ -22,6 +22,7 @@ import {
  * @param {string|null} [opts.messageId]
  * @param {object} opts.accessDecision — {@link checkScanAccess} result
  * @param {"access_gate"|"pre_object_check"|"post_object_check"} [opts.pathSegment]
+ * @param {{ log: (event: string, extra?: object) => void }} [opts.turnPerf]
  * @returns {Promise<{ sent: boolean, suppressed: boolean, exactDuplicate?: boolean, semanticDuplicate?: boolean }>}
  */
 export async function sendFreeQuotaExhaustedPaywallViaGateway({
@@ -32,6 +33,7 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
   messageId = null,
   accessDecision,
   pathSegment = "access_gate",
+  turnPerf = undefined,
 }) {
   const uid = String(userId || "").trim();
   const offer = loadActiveScanOffer();
@@ -75,6 +77,7 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
     text: primary,
     alternateTexts: alternates,
     scanOfferMeta,
+    turnPerf,
   });
 
   if (res.suppressed) {

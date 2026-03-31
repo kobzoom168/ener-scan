@@ -181,6 +181,7 @@ import {
   birthdateSavedAfterUpdate,
 } from "../utils/replyCopy.util.js";
 import { sleep } from "../utils/timing.util.js";
+import { createTurnPerf } from "../utils/webhookTurnPerf.util.js";
 import { logEvent, logPaywallShown } from "../utils/personaAnalytics.util.js";
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
 
@@ -393,17 +394,32 @@ function buildNoopGeminiDelegates() {
   };
 }
 
+/**
+ * @typedef {{ accessDecision?: unknown, pendingPaymentRow?: unknown }} WebhookTurnCache
+ */
+
 async function loadGeminiRoutingSnapshot({
   userId,
   session,
   text,
   lowerText,
   now,
+  /** @type {WebhookTurnCache|undefined} */
+  turnCache = undefined,
+  turnPerf = undefined,
 }) {
   let activeAccessDecision = null;
   let activePendingPaymentRow = null;
+  let accessLookupSource = "fetch";
+  let paymentLookupSource = "fetch";
   try {
-    activeAccessDecision = await checkScanAccess({ userId });
+    if (turnCache && Object.prototype.hasOwnProperty.call(turnCache, "accessDecision")) {
+      activeAccessDecision = turnCache.accessDecision;
+      accessLookupSource = "cache";
+    } else {
+      activeAccessDecision = await checkScanAccess({ userId });
+      if (turnCache) turnCache.accessDecision = activeAccessDecision;
+    }
   } catch (err) {
     console.error("[GEMINI_ROUTING] checkScanAccess failed (ignored):", {
       userId,
@@ -411,14 +427,26 @@ async function loadGeminiRoutingSnapshot({
       code: err?.code,
     });
   }
+  if (turnPerf) {
+    turnPerf.log("ACCESS_SNAPSHOT_READY", { source: accessLookupSource });
+  }
   try {
-    activePendingPaymentRow = await getLatestAwaitingPaymentForLineUserId(userId);
+    if (turnCache && Object.prototype.hasOwnProperty.call(turnCache, "pendingPaymentRow")) {
+      activePendingPaymentRow = turnCache.pendingPaymentRow;
+      paymentLookupSource = "cache";
+    } else {
+      activePendingPaymentRow = await getLatestAwaitingPaymentForLineUserId(userId);
+      if (turnCache) turnCache.pendingPaymentRow = activePendingPaymentRow;
+    }
   } catch (err) {
     console.error("[GEMINI_ROUTING] pending payment lookup failed (ignored):", {
       userId,
       message: err?.message,
       code: err?.code,
     });
+  }
+  if (turnPerf) {
+    turnPerf.log("AWAITING_PAYMENT_LOOKUP_READY", { source: paymentLookupSource });
   }
   const paymentMemoryState = getPaymentState(userId).state;
   const scanAbuseStatus = checkScanAbuseStatus(userId, now);
@@ -515,6 +543,8 @@ async function invokePhase1FreshNoop({
   session,
   text = "",
   lowerText = "",
+  turnCache = undefined,
+  turnPerf = undefined,
 }) {
   const snapshot = await loadGeminiRoutingSnapshot({
     userId,
@@ -522,6 +552,8 @@ async function invokePhase1FreshNoop({
     text,
     lowerText,
     now: Date.now(),
+    turnCache,
+    turnPerf,
   });
   return invokePhase1GeminiFromSnapshot({
     snapshot,
@@ -553,6 +585,7 @@ async function handleBirthdateChangeFlowTurn({
   session,
   text,
   invokePhase1GeminiOrchestrator = null,
+  turnPerf = undefined,
 }) {
   void session;
   const flowState = getBirthdateChangeFlowState(userId);
@@ -814,6 +847,7 @@ async function handleBirthdateChangeFlowTurn({
         semanticKey: "birthdate_saved",
         text: savedLine,
         alternateTexts: [savedLine],
+        turnPerf,
       });
       return true;
     }
@@ -892,6 +926,8 @@ async function handlePaymentCommandTextRoute({
   lowerText,
   isPaywallGateWithPendingScan,
   forcePaymentIntent = false,
+  turnCache = undefined,
+  turnPerf = undefined,
 }) {
   if (!forcePaymentIntent && !isPaymentCommand(text, lowerText)) {
     return false;
@@ -903,6 +939,8 @@ async function handlePaymentCommandTextRoute({
     text,
     lowerText,
     now: Date.now(),
+    turnCache,
+    turnPerf,
   });
   const invokePhase1PaymentRoute = async () =>
     invokePhase1GeminiFromSnapshot({
@@ -918,7 +956,7 @@ async function handlePaymentCommandTextRoute({
 
   try {
     const ps = getPaymentState(userId).state;
-    const row = await getLatestAwaitingPaymentForLineUserId(userId);
+    const row = payRouteSnapshot.activePendingPaymentRow;
     const slipRow =
       row &&
       (String(row.status) === "awaiting_payment" ||
@@ -995,9 +1033,11 @@ async function handlePaymentCommandTextRoute({
     return true;
   }
 
-  let accessForPayIntent = null;
+  let accessForPayIntent = payRouteSnapshot.activeAccessDecision;
   try {
-    accessForPayIntent = await checkScanAccess({ userId });
+    if (accessForPayIntent == null) {
+      accessForPayIntent = await checkScanAccess({ userId });
+    }
   } catch (e) {
     console.error("[WEBHOOK] checkScanAccess (payment command guard) failed:", {
       userId,
@@ -1005,9 +1045,11 @@ async function handlePaymentCommandTextRoute({
     });
   }
 
-  let rowForPayIntent = null;
+  let rowForPayIntent = payRouteSnapshot.activePendingPaymentRow;
   try {
-    rowForPayIntent = await getLatestAwaitingPaymentForLineUserId(userId);
+    if (rowForPayIntent == null) {
+      rowForPayIntent = await getLatestAwaitingPaymentForLineUserId(userId);
+    }
   } catch (_) {}
 
   if (shouldEmitPayNotNeededForPaymentIntent(accessForPayIntent, rowForPayIntent)) {
@@ -1467,6 +1509,8 @@ async function finalizeAcceptedImage({
   flowVersion,
   eventTimestamp,
   imageBuffer,
+  turnCache = undefined,
+  turnPerf = undefined,
 }) {
   console.log("[WEBHOOK] finalize accepted image", {
     userId,
@@ -1477,37 +1521,59 @@ async function finalizeAcceptedImage({
 
   // Access truth + DB payment row together: active slip rows win over object-scan even if scan access is allowed.
   let accessDecision;
-  try {
-    accessDecision = await checkScanAccess({ userId });
-  } catch (accessErr) {
-    console.error("[WEBHOOK] checkScanAccess (image routing) failed:", {
-      userId,
-      message: accessErr?.message,
-      code: accessErr?.code,
-      details: accessErr?.details,
-      hint: accessErr?.hint,
-    });
-    throw accessErr;
+  const accessFromParent =
+    turnCache &&
+    Object.prototype.hasOwnProperty.call(turnCache, "accessDecision");
+  if (accessFromParent) {
+    accessDecision = turnCache.accessDecision;
+  } else {
+    try {
+      accessDecision = await checkScanAccess({ userId });
+      if (turnCache) turnCache.accessDecision = accessDecision;
+    } catch (accessErr) {
+      console.error("[WEBHOOK] checkScanAccess (image routing) failed:", {
+        userId,
+        message: accessErr?.message,
+        code: accessErr?.code,
+        details: accessErr?.details,
+        hint: accessErr?.hint,
+      });
+      throw accessErr;
+    }
   }
 
   const hasPaidAccess =
     accessDecision?.allowed === true && accessDecision?.reason === "paid";
 
   let pendingPayment = null;
-  try {
-    console.log("[SLIP_VERIFY_LOOKUP] start", {
-      userId,
-      source: "finalizeAcceptedImage",
-      messageId: event?.message?.id || null,
-    });
-    pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
-  } catch (err) {
-    console.error("[PAYMENT_SLIP_VERIFY] lookup pending payment failed:", {
-      userId,
-      message: err?.message,
-      code: err?.code,
-      hint: err?.hint,
-    });
+  const paymentFromParent =
+    turnCache &&
+    Object.prototype.hasOwnProperty.call(turnCache, "pendingPaymentRow");
+  if (paymentFromParent) {
+    pendingPayment = turnCache.pendingPaymentRow;
+    if (turnPerf) {
+      turnPerf.log("AWAITING_PAYMENT_LOOKUP_READY", {
+        source: "cache",
+        gate: "finalize_image",
+      });
+    }
+  } else {
+    try {
+      console.log("[SLIP_VERIFY_LOOKUP] start", {
+        userId,
+        source: "finalizeAcceptedImage",
+        messageId: event?.message?.id || null,
+      });
+      pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
+      if (turnCache) turnCache.pendingPaymentRow = pendingPayment;
+    } catch (err) {
+      console.error("[PAYMENT_SLIP_VERIFY] lookup pending payment failed:", {
+        userId,
+        message: err?.message,
+        code: err?.code,
+        hint: err?.hint,
+      });
+    }
   }
 
   const paymentOwnsImage = paymentRowOwnsImageRouting(pendingPayment);
@@ -1528,6 +1594,12 @@ async function finalizeAcceptedImage({
     paymentOwnsImage,
     chosenPath,
   });
+  if (turnPerf) {
+    turnPerf.log("ROUTE_DECIDED", {
+      chosenPath,
+      accessReason: accessDecision?.reason ?? null,
+    });
+  }
 
   const imgPhase1Invoke = async () =>
     invokePhase1FreshNoop({
@@ -1535,6 +1607,8 @@ async function finalizeAcceptedImage({
       client,
       event,
       session: getSession(userId),
+      turnCache,
+      turnPerf,
     });
 
   // Access denied (quota / paywall): end in non-scan gateway only — never duplicate/object/AI scan.
@@ -1607,6 +1681,7 @@ async function finalizeAcceptedImage({
       messageId: event?.message?.id ?? null,
       accessDecision,
       pathSegment: "access_gate",
+      turnPerf,
     });
     await logPaywallShown(userId, {
       patternUsed: "finalize_image_free_quota_exhausted_deterministic",
@@ -2216,14 +2291,19 @@ async function handleImageMessage({ client, event, userId, session }) {
   const now = Date.now();
   resetScanFlowReplyTokenSpent(userId);
 
+  const turnPerf = createTurnPerf(userId, "image");
+  const turnCache = {};
+  turnPerf.log("TURN_START", { messageId: event.message?.id ?? null });
+
   const imagePhase1Invoke = async () =>
     invokePhase1FreshNoop({
       userId,
       client,
       event,
       session,
+      turnCache,
+      turnPerf,
     });
-
 
   const lockedBump = recordLockedImageActivity(userId, now);
   if (lockedBump.bumped) {
@@ -2247,23 +2327,33 @@ async function handleImageMessage({ client, event, userId, session }) {
   }
 
   let routeAccessDecision;
+  let routePendingPayment = null;
   try {
-    routeAccessDecision = await checkScanAccess({ userId });
-  } catch (routeErr) {
-    console.error("[ABUSE_GUARD] checkScanAccess (image route) failed:", {
+    const [accResult, payResult] = await Promise.all([
+      checkScanAccess({ userId }).catch((routeErr) => {
+        console.error("[ABUSE_GUARD] checkScanAccess (image route) failed:", {
+          userId,
+          message: routeErr?.message,
+        });
+        return { allowed: false };
+      }),
+      getLatestAwaitingPaymentForLineUserId(userId).catch(() => null),
+    ]);
+    routeAccessDecision = accResult;
+    routePendingPayment = payResult;
+    turnCache.accessDecision = routeAccessDecision;
+    turnCache.pendingPaymentRow = routePendingPayment;
+    turnPerf.log("ACCESS_SNAPSHOT_READY", { source: "parallel_fetch" });
+    turnPerf.log("AWAITING_PAYMENT_LOOKUP_READY", { source: "parallel_fetch" });
+  } catch (bundleErr) {
+    console.error("[WEBHOOK] image route access+payment parallel fetch failed:", {
       userId,
-      message: routeErr?.message,
+      message: bundleErr?.message,
     });
     routeAccessDecision = { allowed: false };
-  }
-
-  let routePendingPayment = null;
-  if (!routeAccessDecision?.allowed) {
-    try {
-      routePendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
-    } catch (_) {
-      routePendingPayment = null;
-    }
+    routePendingPayment = null;
+    turnCache.accessDecision = routeAccessDecision;
+    turnCache.pendingPaymentRow = null;
   }
 
   const imageWillUseSlipPath =
@@ -2364,17 +2454,7 @@ async function handleImageMessage({ client, event, userId, session }) {
   ) {
     // Allow slip uploads while a pending payment exists in DB.
     // Otherwise keep the original behavior: ignore images while waiting birthdate.
-    let pendingPaymentExists = false;
-    try {
-      const pendingPayment = await getLatestAwaitingPaymentForLineUserId(userId);
-      pendingPaymentExists = Boolean(pendingPayment);
-    } catch (err) {
-      console.error("[WEBHOOK] pendingPaymentExists check failed:", {
-        userId,
-        message: err?.message,
-        code: err?.code,
-      });
-    }
+    const pendingPaymentExists = Boolean(turnCache.pendingPaymentRow);
 
     if (!pendingPaymentExists) {
       // If birthdate is already saved, allow images to proceed to scan flow.
@@ -2561,6 +2641,8 @@ async function handleImageMessage({ client, event, userId, session }) {
       flowVersion,
       eventTimestamp,
       imageBuffer,
+      turnCache,
+      turnPerf,
     });
   } finally {
     clearUserProcessingImage(userId);
@@ -2628,12 +2710,24 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
+  const turnPerf = createTurnPerf(userId, "text");
+  const turnCache = {};
+  turnPerf.log("TURN_START", { messageId: event.message?.id ?? null });
+
   const geminiSnapshot = await loadGeminiRoutingSnapshot({
     userId,
     session,
     text,
     lowerText,
     now,
+    turnCache,
+    turnPerf,
+  });
+
+  turnPerf.log("ROUTE_DECIDED", {
+    paymentState: geminiSnapshot.paymentState,
+    flowState: geminiSnapshot.flowState,
+    canonicalStateOwner: geminiSnapshot.canonicalStateOwner,
   });
 
   const textSpam = registerTextEvent(userId, text, now);
@@ -2837,6 +2931,8 @@ async function handleTextMessage({ client, event, userId, session }) {
             lowerText,
             isPaywallGateWithPendingScan,
             forcePaymentIntent: true,
+            turnCache,
+            turnPerf,
           });
           return Boolean(ok);
         },
@@ -2850,6 +2946,8 @@ async function handleTextMessage({ client, event, userId, session }) {
             lowerText,
             isPaywallGateWithPendingScan,
             forcePaymentIntent: true,
+            turnCache,
+            turnPerf,
           });
           return Boolean(ok);
         },
@@ -3105,6 +3203,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       semanticKey: "waiting_birthdate_change",
       text: askDirect,
       alternateTexts: [askDirect],
+      turnPerf,
     });
     return;
   }
@@ -3117,6 +3216,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       session,
       text,
       invokePhase1GeminiOrchestrator,
+      turnPerf,
     });
     if (bdDone) return;
   }
@@ -3238,6 +3338,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         lowerText,
         isPaywallGateWithPendingScan,
         forcePaymentIntent: true,
+        turnCache,
+        turnPerf,
       });
       return;
     }
@@ -3309,6 +3411,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         lowerText,
         isPaywallGateWithPendingScan,
         forcePaymentIntent: true,
+        turnCache,
+        turnPerf,
       });
       return;
     }
@@ -3886,6 +3990,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         lowerText: "จ่ายเงิน",
         isPaywallGateWithPendingScan,
         forcePaymentIntent: true,
+        turnCache,
+        turnPerf,
       });
       return;
     }
@@ -5598,6 +5704,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       text,
       lowerText,
       isPaywallGateWithPendingScan,
+      turnCache,
+      turnPerf,
     })
   ) {
     return;
