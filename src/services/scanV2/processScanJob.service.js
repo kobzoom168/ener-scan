@@ -42,6 +42,7 @@ import {
   idPrefix8,
   workerIdPrefix16,
 } from "../../utils/scanV2Trace.util.js";
+import { logScanPipelinePerf } from "../../utils/webhookTurnPerf.util.js";
 import {
   extractLineSummaryFields,
   buildSummaryLinkLineText,
@@ -55,6 +56,7 @@ import { logUnsupportedObjectRejected } from "../lineWebhook/unsupportedObjectRe
  * @returns {Promise<void>}
  */
 export async function processScanJob(workerId, jobRow) {
+  const workerTurnStartMs = Date.now();
   if (
     !jobRow?.id ||
     (typeof jobRow.id === "string" && jobRow.id.trim().toLowerCase() === "null")
@@ -180,6 +182,14 @@ export async function processScanJob(workerId, jobRow) {
 
   let scanOut;
   const aiStartedAt = Date.now();
+  logScanPipelinePerf("SCAN_AI_STARTED", {
+    path: "worker-scan",
+    workerIdPrefix: workerIdPrefix16(workerId),
+    jobIdPrefix: idPrefix8(jobId),
+    lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+    messageId: upload.line_message_id ?? null,
+    elapsedMs: Date.now() - workerTurnStartMs,
+  });
   try {
     scanOut = await runDeepScan({
       imageBuffer,

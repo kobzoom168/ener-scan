@@ -1949,6 +1949,9 @@ async function finalizeAcceptedImage({
 
   const imageBase64 = toBase64(imageBuffer);
   const objectCheck = await checkSingleObject(imageBase64);
+  if (turnPerf) {
+    turnPerf.log("OBJECT_CHECK_DONE", { objectCheckResult: objectCheck });
+  }
 
   console.log("[WEBHOOK] object check result:", objectCheck);
 
@@ -2156,6 +2159,14 @@ async function finalizeAcceptedImage({
             timestamp: scanV2TraceTs(),
           }),
         );
+        turnPerf?.log("SCAN_JOB_ENQUEUED", {
+          path: "web",
+          flowVersion,
+          uploadIdPrefix: idPrefix8(ing.uploadId ?? null),
+          jobIdPrefix: idPrefix8(ing.jobId ?? null),
+          outboundIdPrefix: idPrefix8(ing.outboundId ?? null),
+          duplicate: Boolean(ing.duplicate),
+        });
         return;
       }
       ingestFailed = true;
@@ -2291,9 +2302,11 @@ async function handleImageMessage({ client, event, userId, session }) {
   const now = Date.now();
   resetScanFlowReplyTokenSpent(userId);
 
-  const turnPerf = createTurnPerf(userId, "image");
+  const turnPerf = createTurnPerf(userId, "image", {
+    messageId: event.message?.id ?? null,
+  });
   const turnCache = {};
-  turnPerf.log("TURN_START", { messageId: event.message?.id ?? null });
+  turnPerf.log("TURN_START", {});
 
   const imagePhase1Invoke = async () =>
     invokePhase1FreshNoop({
@@ -2631,6 +2644,9 @@ async function handleImageMessage({ client, event, userId, session }) {
       client,
       event.message.id
     );
+    turnPerf.log("IMAGE_FETCH_DONE", {
+      imageBytes: imageBuffer?.length ?? 0,
+    });
 
     clearPendingImageCandidate(userId);
 
@@ -2710,9 +2726,11 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
-  const turnPerf = createTurnPerf(userId, "text");
+  const turnPerf = createTurnPerf(userId, "text", {
+    messageId: event.message?.id ?? null,
+  });
   const turnCache = {};
-  turnPerf.log("TURN_START", { messageId: event.message?.id ?? null });
+  turnPerf.log("TURN_START", {});
 
   const geminiSnapshot = await loadGeminiRoutingSnapshot({
     userId,
