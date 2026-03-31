@@ -26,6 +26,19 @@
  * @property {ReportWording} [wording] — structured copy for Flex teaser + HTML opening / life sections
  *
  * @property {ReportCompatibility} [compatibility] — deterministic v1 slice (HTML detail + Flex band via summary)
+ *
+ * @property {ReportObjectEnergy} [objectEnergy] — Object Energy Engine v1 + star mapping (HTML + Flex stars)
+ */
+
+/**
+ * @typedef {Object} ReportObjectEnergy
+ * @property {string} formulaVersion
+ * @property {Object} profile — balance, protection, authority, compassion, attraction (0–100)
+ * @property {Object} stars — same keys, star count 1–5
+ * @property {{ key: string, labelThai: string }} mainEnergyResolved
+ * @property {number} confidence — 0–1
+ * @property {Record<string, unknown>} [inputs]
+ * @property {string[]} [explain]
  */
 
 /**
@@ -121,4 +134,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.1.0";
+export const REPORT_PAYLOAD_VERSION = "1.2.0";

@@ -5,6 +5,8 @@ import { sanitizeHttpsPublicImageUrl } from "../../utils/reports/reportImageUrl.
 import { formatScanBirthdayLabelThai } from "../../utils/scanBirthdayLabel.util.js";
 import { deriveReportWordingFromParsed } from "./reportWording.derive.js";
 import { buildCompatibilityPayload } from "../reportPayload/buildCompatibilityPayload.js";
+import { buildObjectEnergyPayload } from "../reportPayload/buildObjectEnergyPayload.js";
+import { scanDimensionsFromObjectEnergyStars } from "../../utils/objectEnergyFormula.util.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -112,6 +114,10 @@ function emptyParsedShape() {
  * @param {string} [opts.objectFamily] — e.g. somdej (default generic)
  * @param {string} [opts.materialFamily] — e.g. powder
  * @param {string} [opts.shapeFamily] — e.g. rectangular (default unknown)
+ * @param {string} [opts.dominantColor] — e.g. gold | red (default unknown)
+ * @param {string} [opts.conditionClass] — e.g. good | worn (default unknown)
+ * @param {string} [opts.objectCheckResult] — short note from object check pipeline
+ * @param {number} [opts.objectCheckConfidence] — 0–1
  * @returns {import("./reportPayload.types.js").ReportPayload}
  */
 export function buildReportPayloadFromScan(opts) {
@@ -128,6 +134,10 @@ export function buildReportPayloadFromScan(opts) {
     objectFamily: objectFamilyOpt = "",
     materialFamily: materialFamilyOpt = "",
     shapeFamily: shapeFamilyOpt = "",
+    dominantColor: dominantColorOpt = "",
+    conditionClass: conditionClassOpt = "",
+    objectCheckResult: objectCheckResultOpt = "",
+    objectCheckConfidence: objectCheckConfidenceOpt,
   } = opts;
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
@@ -192,6 +202,36 @@ export function buildReportPayloadFromScan(opts) {
     compatPct = compatibilityPayload.score;
   }
 
+  /** @type {ReturnType<typeof buildObjectEnergyPayload> | null} */
+  let objectEnergyPayload = null;
+  try {
+    objectEnergyPayload = buildObjectEnergyPayload({
+      objectFamily: String(objectFamilyOpt || "generic").trim() || "generic",
+      materialFamily: String(materialFamilyOpt || "").trim() || undefined,
+      shapeFamily: String(shapeFamilyOpt || "unknown").trim() || "unknown",
+      dominantColor: String(dominantColorOpt || "").trim() || undefined,
+      conditionClass: String(conditionClassOpt || "").trim() || undefined,
+      energyScore: energyScore ?? 5,
+      mainEnergy:
+        parsed.mainEnergy && parsed.mainEnergy !== "-"
+          ? String(parsed.mainEnergy)
+          : "",
+      objectCheckResult: String(objectCheckResultOpt || "").trim() || undefined,
+      objectCheckConfidence:
+        objectCheckConfidenceOpt != null &&
+        Number.isFinite(Number(objectCheckConfidenceOpt))
+          ? Number(objectCheckConfidenceOpt)
+          : undefined,
+    });
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        event: "OBJECT_ENERGY_V1_BUILD_FAILED",
+        message: err?.message,
+      }),
+    );
+  }
+
   const overview =
     parsed.overview && parsed.overview !== "-" ? String(parsed.overview) : "";
   const fitReason =
@@ -205,7 +245,7 @@ export function buildReportPayloadFromScan(opts) {
     parsed.secondaryEnergy && parsed.secondaryEnergy !== "-"
       ? String(parsed.secondaryEnergy).trim()
       : "";
-  const scanDimensions =
+  const scanDimensionsParsed =
     parsed.dimensions && typeof parsed.dimensions === "object"
       ? parsed.dimensions
       : {};
@@ -319,8 +359,14 @@ export function buildReportPayloadFromScan(opts) {
       birthdayLabel: birthdayLabel || undefined,
       compatibilityReason: compatibilityReason || undefined,
       secondaryEnergyLabel: secondaryEnergyLabel || undefined,
-      scanDimensions:
-        Object.keys(scanDimensions).length > 0 ? scanDimensions : undefined,
+      scanDimensions: (() => {
+        if (objectEnergyPayload?.stars) {
+          return scanDimensionsFromObjectEnergyStars(objectEnergyPayload.stars);
+        }
+        return Object.keys(scanDimensionsParsed).length > 0
+          ? scanDimensionsParsed
+          : undefined;
+      })(),
       scanTips: whatItGives.length > 0 ? whatItGives.slice(0, 2) : undefined,
     },
     sections: {
@@ -358,6 +404,17 @@ export function buildReportPayloadFromScan(opts) {
           factors: compatibilityPayload.factors,
           inputs: compatibilityPayload.inputs,
           explain: compatibilityPayload.explain,
+        }
+      : undefined,
+    objectEnergy: objectEnergyPayload
+      ? {
+          formulaVersion: objectEnergyPayload.formulaVersion,
+          profile: objectEnergyPayload.profile,
+          stars: objectEnergyPayload.stars,
+          mainEnergyResolved: objectEnergyPayload.mainEnergyResolved,
+          confidence: objectEnergyPayload.confidence,
+          inputs: objectEnergyPayload.inputs,
+          explain: objectEnergyPayload.explain,
         }
       : undefined,
   };

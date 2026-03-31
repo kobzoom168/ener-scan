@@ -75,5 +75,11 @@ export function mapLegacyReportPayloadToPublicReportView({
       typeof obj.objectImageUrl === "string" && obj.objectImageUrl.trim()
         ? obj.objectImageUrl.trim()
         : undefined,
+    objectEnergy:
+      payload?.objectEnergy &&
+      typeof payload.objectEnergy === "object" &&
+      !Array.isArray(payload.objectEnergy)
+        ? payload.objectEnergy
+        : undefined,
   };
 }

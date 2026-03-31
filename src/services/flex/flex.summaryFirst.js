@@ -15,6 +15,7 @@ import { buildScanFlexAltText, FLEX_SPLIT_WARN_THRESHOLD, splitSentencesForFlex 
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import { ENERGY_TYPES } from "./scanCopy.config.js";
 import { resolveEnergyType } from "./scanCopy.utils.js";
+import { scanDimensionsFromObjectEnergyStars } from "../../utils/objectEnergyFormula.util.js";
 
 const FLEX_CARD_BG = "#000000";
 const FLEX_BOX_BG = "#111111";
@@ -678,10 +679,24 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     typeof reportPayload.summary.scanDimensions === "object"
       ? reportPayload.summary.scanDimensions
       : {};
-  const dimensions = { ...parsed.dimensions };
-  for (const k of FLEX_DIM_ORDER) {
-    const v = dimsPayload[k];
-    if (v != null && Number.isFinite(Number(v))) dimensions[k] = Number(v);
+  const starsFromPayload = reportPayload?.objectEnergy?.stars;
+  const hasObjectEnergyStars =
+    starsFromPayload &&
+    typeof starsFromPayload === "object" &&
+    !Array.isArray(starsFromPayload);
+
+  /** @type {Record<string, number>} */
+  let dimensions;
+  if (hasObjectEnergyStars) {
+    dimensions = scanDimensionsFromObjectEnergyStars(
+      /** @type {Record<string, number>} */ (starsFromPayload),
+    );
+  } else {
+    dimensions = { ...parsed.dimensions };
+    for (const k of FLEX_DIM_ORDER) {
+      const v = dimsPayload[k];
+      if (v != null && Number.isFinite(Number(v))) dimensions[k] = Number(v);
+    }
   }
 
   const birthdayLabel =

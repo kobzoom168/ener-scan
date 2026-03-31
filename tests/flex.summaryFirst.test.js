@@ -170,6 +170,63 @@ test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA"
   assert.equal(flex.contents.footer, undefined);
 });
 
+test("buildScanSummaryFirstFlex: star rows use objectEnergy.stars not parsed dimension lines", () => {
+  const textHighStars = SAMPLE_TEXT.replace(
+    "คุ้มกัน: ★★★★☆ — 4/5 ดาว",
+    "คุ้มกัน: ★★★★★ — 5/5 ดาว",
+  );
+  const flex = buildScanSummaryFirstFlex(textHighStars, {
+    reportUrl: "https://example.com/r/abc123",
+    reportPayload: {
+      reportId: "rid",
+      publicToken: "tok",
+      scanId: "s",
+      userId: "u",
+      birthdateUsed: null,
+      generatedAt: new Date().toISOString(),
+      reportVersion: "1.2.0",
+      object: { objectLabel: "x", objectType: "" },
+      summary: {
+        energyScore: 8.2,
+        mainEnergyLabel: "ป้องกัน",
+        compatibilityPercent: 78,
+        summaryLine: "สรุป",
+      },
+      objectEnergy: {
+        formulaVersion: "object_energy_v1",
+        profile: {},
+        stars: {
+          balance: 1,
+          protection: 1,
+          authority: 1,
+          compassion: 1,
+          attraction: 1,
+        },
+        mainEnergyResolved: { key: "protection", labelThai: "คุ้มกัน" },
+        confidence: 0.5,
+        inputs: {},
+        explain: [],
+      },
+      sections: {
+        whatItGives: [],
+        messagePoints: [],
+        ownerMatchReason: [],
+        roleDescription: "",
+        bestUseCases: [],
+        weakMoments: [],
+        guidanceTips: [],
+        careNotes: [],
+        miniRitual: [],
+      },
+      trust: { trustNote: "n", rendererVersion: "html-1.0.0" },
+      actions: {},
+    },
+  });
+  const bodyStr = JSON.stringify(flex.contents.body);
+  assert.match(bodyStr, /★☆☆☆☆/);
+  assert.doesNotMatch(bodyStr, /★★★★★/);
+});
+
 test("buildScanSummaryFirstFlex: compatibility row uses reportPayload not parsed scan text", () => {
   const textHighCompat = SAMPLE_TEXT.replace(
     "ความสอดคล้องกับเจ้าของ: 78%",

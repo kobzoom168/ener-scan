@@ -41,3 +41,25 @@ test("normalizeReportPayloadForRender: string energyScore", () => {
   });
   assert.equal(payload.summary.energyScore, 8.5);
 });
+
+test("normalizeReportPayloadForRender: objectEnergy nested optional fields", () => {
+  const { payload } = normalizeReportPayloadForRender({
+    reportId: "r",
+    publicToken: "p",
+    scanId: "s",
+    userId: "u",
+    generatedAt: new Date().toISOString(),
+    summary: { summaryLine: "ok" },
+    sections: {},
+    trust: {},
+    actions: {},
+    object: {},
+    objectEnergy: {
+      formulaVersion: "object_energy_v1",
+      stars: { balance: 2 },
+      profile: { balance: 40 },
+    },
+  });
+  assert.equal(payload.objectEnergy?.stars?.balance, 2);
+  assert.equal(payload.objectEnergy?.profile?.protection, 50);
+});

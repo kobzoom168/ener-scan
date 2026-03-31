@@ -95,6 +95,58 @@ export function normalizeReportPayloadForRender(input) {
   const compatibilityPercent = numOrNull(summaryIn?.compatibilityPercent);
   const compatibilityBand = str(summaryIn?.compatibilityBand).trim();
 
+  const DIM_EN = [
+    "balance",
+    "protection",
+    "authority",
+    "compassion",
+    "attraction",
+  ];
+
+  /** @param {unknown} sd */
+  function normalizeScanDimensions(sd) {
+    if (!sd || typeof sd !== "object" || Array.isArray(sd)) return undefined;
+    /** @type {Record<string, number>} */
+    const out = {};
+    for (const [k, v] of Object.entries(
+      /** @type {Record<string, unknown>} */ (sd),
+    )) {
+      const n = Number(v);
+      if (Number.isFinite(n)) out[k] = n;
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  /** @param {unknown} p */
+  function normalizeEnergyProfile(p) {
+    if (!p || typeof p !== "object" || Array.isArray(p)) return undefined;
+    const o = /** @type {Record<string, unknown>} */ (p);
+    /** @type {Record<string, number>} */
+    const out = {};
+    for (const k of DIM_EN) {
+      const n = Number(o[k]);
+      out[k] = Number.isFinite(n)
+        ? Math.min(100, Math.max(0, Math.round(n)))
+        : 50;
+    }
+    return out;
+  }
+
+  /** @param {unknown} s */
+  function normalizeEnergyStars(s) {
+    if (!s || typeof s !== "object" || Array.isArray(s)) return undefined;
+    const o = /** @type {Record<string, unknown>} */ (s);
+    /** @type {Record<string, number>} */
+    const out = {};
+    for (const k of DIM_EN) {
+      const n = Number(o[k]);
+      out[k] = Number.isFinite(n)
+        ? Math.min(5, Math.max(1, Math.round(n)))
+        : 3;
+    }
+    return out;
+  }
+
   /** @type {import("../../services/reports/reportPayload.types.js").ReportPayload} */
   const payload = {
     reportId: str(raw.reportId).trim() || "unknown",
@@ -118,6 +170,7 @@ export function normalizeReportPayloadForRender(input) {
       mainEnergyLabel: str(summaryIn?.mainEnergyLabel),
       compatibilityPercent,
       compatibilityBand: compatibilityBand || undefined,
+      scanDimensions: normalizeScanDimensions(summaryIn?.scanDimensions),
       summaryLine:
         str(summaryIn?.summaryLine).trim() ||
         "สรุปผลการสแกน — ดูรายละเอียดด้านล่าง",
@@ -199,6 +252,38 @@ export function normalizeReportPayloadForRender(input) {
           ? /** @type {Record<string, unknown>} */ (c.inputs)
           : undefined,
       explain: strArr(c.explain),
+    };
+  }
+
+  const oeRaw = raw.objectEnergy;
+  if (oeRaw && typeof oeRaw === "object" && !Array.isArray(oeRaw)) {
+    const oe = /** @type {Record<string, unknown>} */ (oeRaw);
+    const mer = oe.mainEnergyResolved;
+    const merObj =
+      mer && typeof mer === "object" && !Array.isArray(mer)
+        ? /** @type {Record<string, unknown>} */ (mer)
+        : null;
+    const conf = numOrNull(oe.confidence);
+    payload.objectEnergy = {
+      formulaVersion: str(oe.formulaVersion).trim() || undefined,
+      profile: normalizeEnergyProfile(oe.profile),
+      stars: normalizeEnergyStars(oe.stars),
+      mainEnergyResolved:
+        merObj && (str(merObj.key) || str(merObj.labelThai))
+          ? {
+              key: str(merObj.key).trim() || "balance",
+              labelThai: str(merObj.labelThai).trim() || "",
+            }
+          : undefined,
+      confidence:
+        conf != null && Number.isFinite(conf)
+          ? Math.min(1, Math.max(0, conf))
+          : undefined,
+      inputs:
+        oe.inputs && typeof oe.inputs === "object"
+          ? /** @type {Record<string, unknown>} */ (oe.inputs)
+          : undefined,
+      explain: strArr(oe.explain),
     };
   }
 
