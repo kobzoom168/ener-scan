@@ -126,13 +126,7 @@ export async function buildWaitingBirthdateGuidanceMessages(userId) {
 }
 
 export function buildMultiImageInRequestText() {
-  return [
-    "เอเนอร์สแกน",
-    "ตอนนี้ส่งมาหลายรูปพร้อมกันนะ",
-    "ขอทีละรูป พอ 1 รูปต่อครั้ง",
-    "",
-    "ถ้ามีหลายชิ้น แยกส่งมาได้เลยครับ",
-  ].join("\n");
+  return "ตอนนี้ระบบรองรับการสแกนทีละ 1 รูปเท่านั้นครับ กรุณาส่งใหม่ทีละ 1 รูป เพื่อให้วิเคราะห์ได้แม่นที่สุด";
 }
 
 export function buildMultipleObjectsText() {

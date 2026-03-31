@@ -100,6 +100,10 @@ import {
   sendNonScanPaymentQrInstructions,
   sendNonScanPushMessage,
 } from "../services/nonScanReply.gateway.js";
+import {
+  logMultiImageGroupRejected,
+  sendMultiImageRejectionViaGateway,
+} from "../services/lineWebhook/multiImageRejectionReply.service.js";
 import { serializeLineErrorSafe } from "../utils/lineErrorLog.util.js";
 import {
   emitActiveStateRouting,
@@ -181,7 +185,6 @@ import {
   buildWaitingBirthdateDateFirstGuidanceMessages,
   buildDeterministicBirthdateErrorText,
   buildWaitingBirthdatePaymentDeferredRedirectText,
-  buildMultiImageInRequestText,
   buildMultipleObjectsText,
   buildUnclearImageText,
   buildUnsupportedObjectText,
@@ -190,7 +193,6 @@ import {
   getMultipleObjectsReplyCandidates,
   getUnclearImageReplyCandidates,
   getUnsupportedObjectReplyCandidates,
-  getMultiImageInRequestReplyCandidates,
   buildNoHistoryText,
   buildNoStatsText,
   buildIdleText,
@@ -2536,16 +2538,23 @@ async function handleImageMessage({ client, event, userId, session }) {
     clearSession(userId);
     clearPendingImageCandidate(userId);
 
-    const multiCandGroup = getMultiImageInRequestReplyCandidates();
-    if ((await imagePhase1Invoke()).handled) return;
-    await sendNonScanReply({
+    logMultiImageGroupRejected({
+      userId,
+      flowVersion,
+      firstMessageId: latestCandidate.firstMessageId,
+      latestMessageId: latestCandidate.latestMessageId,
+      count: latestCandidate.count,
+      reason: "candidate_window",
+    });
+    await sendMultiImageRejectionViaGateway({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "multi_image_in_request_group",
-      semanticKey: "multi_image_in_request",
-      text: multiCandGroup[0],
-      alternateTexts: multiCandGroup.slice(1),
+      reason: "candidate_window",
+      flowVersion,
+      firstMessageId: latestCandidate.firstMessageId,
+      latestMessageId: latestCandidate.latestMessageId,
+      count: latestCandidate.count,
     });
     return;
   }
@@ -2567,16 +2576,23 @@ async function handleImageMessage({ client, event, userId, session }) {
     clearSession(userId);
     clearPendingImageCandidate(userId);
 
-    const multiCand2 = getMultiImageInRequestReplyCandidates();
-    if ((await imagePhase1Invoke()).handled) return;
-    await sendNonScanReply({
+    logMultiImageGroupRejected({
+      userId,
+      flowVersion,
+      firstMessageId: latestCandidate.firstMessageId,
+      latestMessageId: latestCandidate.latestMessageId,
+      count: latestCandidate.count,
+      reason: "burst_window",
+    });
+    await sendMultiImageRejectionViaGateway({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: "multi_image_burst",
-      semanticKey: "multi_image_in_request",
-      text: multiCand2[0],
-      alternateTexts: multiCand2.slice(1),
+      reason: "burst_window",
+      flowVersion,
+      firstMessageId: latestCandidate.firstMessageId,
+      latestMessageId: latestCandidate.latestMessageId,
+      count: latestCandidate.count,
     });
     return;
   }
@@ -5825,6 +5841,29 @@ async function handleEvent({ client, event }) {
 
 export { handleTextMessage, handleEvent };
 
+/**
+ * Image message ids for one user within a single webhook batch (same-request multi-image).
+ * @param {unknown[]} events
+ * @param {string} userId
+ * @returns {{ count: number, firstMessageId: string|null, latestMessageId: string|null }}
+ */
+function collectImageMessageMetaForUser(events, userId) {
+  const uid = String(userId || "").trim();
+  const ids = [];
+  for (const ev of events) {
+    if (ev?.type !== "message") continue;
+    if (ev?.message?.type !== "image") continue;
+    if (String(ev?.source?.userId || "").trim() !== uid) continue;
+    const mid = ev?.message?.id;
+    if (mid != null && mid !== "") ids.push(String(mid));
+  }
+  return {
+    count: ids.length,
+    firstMessageId: ids.length ? ids[0] : null,
+    latestMessageId: ids.length ? ids[ids.length - 1] : null,
+  };
+}
+
 export function lineWebhookRouter(lineConfig) {
   const client = new line.Client(lineConfig);
 
@@ -5868,53 +5907,48 @@ export function lineWebhookRouter(lineConfig) {
             event.message?.type === "image" &&
             (imageCountByUser.get(userId) || 0) > 1
           ) {
-            const sessionBeforeMultiImageClear = getSession(userId);
             const flowVersion = bumpUserFlowVersion(userId);
+            const batchMeta = collectImageMessageMetaForUser(events, userId);
 
             blockUserForRequest(userId);
             clearLatestScanJob(userId);
             clearSession(userId);
             clearPendingImageCandidate(userId);
 
-            if (!multiImageUsersReplied.has(userId) && event.replyToken) {
+            if (!multiImageUsersReplied.has(userId)) {
               multiImageUsersReplied.add(userId);
 
               console.log("[WEBHOOK] multi image request rejected", {
                 userId,
                 flowVersion,
+                count: batchMeta.count,
+                firstMessageId: batchMeta.firstMessageId,
+                latestMessageId: batchMeta.latestMessageId,
               });
 
-              const multiCandReq = getMultiImageInRequestReplyCandidates();
-              const gfMulti =
-                await invokePhase1FreshNoop({
-                  userId,
-                  client,
-                  event,
-                  session: sessionBeforeMultiImageClear,
-                  text: "",
-                  lowerText: "",
-                });
-              if (gfMulti.handled) {
-                console.log(
-                  "[WEBHOOK] skip image because multiple image events in same request",
-                  userId,
-                );
-                continue;
-              }
-              await sendNonScanReply({
+              logMultiImageGroupRejected({
+                userId,
+                flowVersion,
+                firstMessageId: batchMeta.firstMessageId,
+                latestMessageId: batchMeta.latestMessageId,
+                count: batchMeta.count,
+                reason: "same_webhook_batch",
+              });
+              await sendMultiImageRejectionViaGateway({
                 client,
                 userId,
-                replyToken: event.replyToken,
-                replyType: "multi_image_same_request",
-                semanticKey: "multi_image_in_request",
-                text: multiCandReq[0],
-                alternateTexts: multiCandReq.slice(1),
+                replyToken: event.replyToken || "",
+                reason: "same_webhook_batch",
+                flowVersion,
+                firstMessageId: batchMeta.firstMessageId,
+                latestMessageId: batchMeta.latestMessageId,
+                count: batchMeta.count,
               });
             }
 
             console.log(
               "[WEBHOOK] skip image because multiple image events in same request",
-              userId
+              userId,
             );
             continue;
           }
