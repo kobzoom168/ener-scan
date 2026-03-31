@@ -98,6 +98,17 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         const t = String(payload.text || "").trim() || "ขออภัยครับ ลองส่งรูปใหม่ได้เลย";
         await pushText(client, lineUserId, t);
         await markSent(id);
+        if (payload.rejectReason === "object_validation_failed") {
+          console.log(
+            JSON.stringify({
+              event: "UNSUPPORTED_OBJECT_REPLY_SENT",
+              path: "worker_delivery_push",
+              lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+              objectCheckResult: payload.objectCheckResult ?? null,
+              outboundIdPrefix: idPrefix8(id),
+            }),
+          );
+        }
         console.log(
           JSON.stringify({
             event: "OUTBOUND_SEND_SUCCESS",

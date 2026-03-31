@@ -47,6 +47,7 @@ import {
   buildSummaryLinkLineText,
   buildSummaryLinkFallbackText,
 } from "./lineFinalScanDelivery.builder.js";
+import { logUnsupportedObjectRejected } from "../lineWebhook/unsupportedObjectReply.service.js";
 
 /**
  * @param {string} workerId
@@ -132,6 +133,13 @@ export async function processScanJob(workerId, jobRow) {
   );
 
   if (objectCheck !== "single_supported") {
+    logUnsupportedObjectRejected({
+      path: "worker_scan",
+      userId: lineUserId,
+      flowVersion: null,
+      messageId: null,
+      objectCheckResult: String(objectCheck),
+    });
     const c = getUnsupportedObjectReplyCandidates();
     await failJob(
       jobId,
@@ -147,6 +155,8 @@ export async function processScanJob(workerId, jobRow) {
       related_job_id: jobId,
       payload_json: {
         error: true,
+        rejectReason: "object_validation_failed",
+        objectCheckResult: String(objectCheck),
         text: c[0] || "ขออภัยครับ ไม่สามารถอ่านภาพนี้ได้",
         accessSource: job.access_source,
         appUserId,

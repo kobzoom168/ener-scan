@@ -104,6 +104,7 @@ import {
   logMultiImageGroupRejected,
   sendMultiImageRejectionViaGateway,
 } from "../services/lineWebhook/multiImageRejectionReply.service.js";
+import { sendUnsupportedObjectRejectionViaGateway } from "../services/lineWebhook/unsupportedObjectReply.service.js";
 import { serializeLineErrorSafe } from "../utils/lineErrorLog.util.js";
 import {
   emitActiveStateRouting,
@@ -187,12 +188,10 @@ import {
   buildWaitingBirthdatePaymentDeferredRedirectText,
   buildMultipleObjectsText,
   buildUnclearImageText,
-  buildUnsupportedObjectText,
   buildDuplicateImageText,
   getDuplicateImageReplyCandidates,
   getMultipleObjectsReplyCandidates,
   getUnclearImageReplyCandidates,
-  getUnsupportedObjectReplyCandidates,
   buildNoHistoryText,
   buildNoStatsText,
   buildIdleText,
@@ -1823,7 +1822,6 @@ async function finalizeAcceptedImage({
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
     const dupCand = getDuplicateImageReplyCandidates();
-    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1847,7 +1845,6 @@ async function finalizeAcceptedImage({
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
     const c = getMultipleObjectsReplyCandidates();
-    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1866,7 +1863,6 @@ async function finalizeAcceptedImage({
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
     const c = getUnclearImageReplyCandidates();
-    if ((await imgPhase1Invoke()).handled) return;
     await sendNonScanReply({
       client,
       userId,
@@ -1884,16 +1880,14 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    const c = getUnsupportedObjectReplyCandidates();
-    if ((await imgPhase1Invoke()).handled) return;
-    await sendNonScanReply({
+    await sendUnsupportedObjectRejectionViaGateway({
       client,
       userId,
       replyToken: event.replyToken,
+      flowVersion,
+      messageId: event?.message?.id ?? null,
+      objectCheckResult: "unsupported",
       replyType: "unsupported_object",
-      semanticKey: "unsupported_object",
-      text: c[0],
-      alternateTexts: c.slice(1),
     });
     return;
   }
@@ -1903,16 +1897,14 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    const c = getUnsupportedObjectReplyCandidates();
-    if ((await imgPhase1Invoke()).handled) return;
-    await sendNonScanReply({
+    await sendUnsupportedObjectRejectionViaGateway({
       client,
       userId,
       replyToken: event.replyToken,
+      flowVersion,
+      messageId: event?.message?.id ?? null,
+      objectCheckResult: String(objectCheck),
       replyType: "unsupported_object_fallback",
-      semanticKey: "unsupported_object",
-      text: c[0],
-      alternateTexts: c.slice(1),
     });
     return;
   }
