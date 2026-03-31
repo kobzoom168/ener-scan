@@ -33,15 +33,15 @@ const testOffer = () =>
     configVersion: "t1",
   });
 
-test("buildDeterministicFreeQuotaExhaustedPaywallText: Ener Scan copy + offer numbers", () => {
+test("buildDeterministicFreeQuotaExhaustedPaywallText: short natural copy + offer numbers", () => {
   const o = testOffer();
   const t = buildDeterministicFreeQuotaExhaustedPaywallText(o);
   assert.ok(t.includes("วันนี้สิทธิ์สแกนฟรีครบแล้วครับ"));
-  assert.ok(t.includes("แพ็กเดียวตอนนี้คือ 49 บาท"));
+  assert.ok(t.includes("แพ็ก 49 บาท"));
   assert.ok(t.includes("4 ครั้ง"));
   assert.ok(t.includes("24 ชม."));
-  assert.ok(t.includes("• scan ต่อ"));
-  assert.ok(t.includes("• จ่าย"));
+  assert.ok(t.includes('"จ่าย"'));
+  assert.ok(!t.includes("• "));
 });
 
 test("buildDeterministicPaywallSoftCloseText", () => {

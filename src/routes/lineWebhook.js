@@ -87,7 +87,11 @@ import {
 } from "../stores/payments.db.js";
 
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
-import { evaluateSlipGate } from "../core/payments/slipCheck/slipGate.service.js";
+import {
+  evaluateAwaitingPaymentSlipImage,
+  buildSlipNotTransferReceiptText,
+  logSlipPendingVerifyRouted,
+} from "../services/lineWebhook/slipImageValidation.service.js";
 import { runGeminiFrontOrchestrator } from "../core/conversation/geminiFront/geminiFrontOrchestrator.service.js";
 import { resolveGeminiPhase1StateKey } from "../core/conversation/geminiFront/geminiFront.featureFlags.js";
 import { invokePhase1GeminiShadow } from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
@@ -206,8 +210,6 @@ import {
   buildPackageSelectionPromptFromOffer,
   buildPaymentPackageSelectedAck,
   buildSlipReceivedText,
-  buildSlipGateRejectedText,
-  buildSlipGateUnclearText,
   buildPendingVerifyReminderText,
   buildPendingVerifyHumanGuidanceText,
   buildPaywallHumanGuidanceText,
@@ -1653,38 +1655,25 @@ async function finalizeAcceptedImage({
     const slipMessageId = event?.message?.id;
     const paymentId = pendingPayment.id;
 
-    const gate = await evaluateSlipGate({
+    const slipVal = await evaluateAwaitingPaymentSlipImage({
       imageBuffer,
-      lineUserId: userId,
+      userId,
       paymentId,
-      stateOwner: "awaiting_slip",
+      messageId: slipMessageId ?? null,
+      flowState: "awaiting_payment",
     });
 
-    if (gate.decision !== "accept") {
-      if (gate.decision === "reject") {
-        if ((await imgPhase1Invoke()).handled) return;
-        await sendNonScanReply({
-          client,
-          userId,
-          replyToken: event.replyToken,
-          replyType: "slip_gate_rejected",
-          semanticKey: "slip_gate_rejected",
-          text: buildSlipGateRejectedText({ slipLabel: gate.slipLabel }),
-          alternateTexts: [
-            buildSlipGateRejectedText({ slipLabel: "other_image" }),
-          ],
-        });
-        return;
-      }
-      if ((await imgPhase1Invoke()).handled) return;
+    if (!slipVal.proceed) {
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "slip_gate_unclear",
-        semanticKey: "slip_gate_unclear",
-        text: buildSlipGateUnclearText(),
-        alternateTexts: [],
+        replyType: "slip_not_transfer_receipt",
+        semanticKey: "deterministic_slip_not_transfer_receipt",
+        text: buildSlipNotTransferReceiptText(),
+        alternateTexts: [
+          "ลองส่งสลิปโอนที่เห็นยอดและเวลาชัด ๆ ในแชตนี้ได้เลยครับ",
+        ],
       });
       return;
     }
@@ -1704,6 +1693,13 @@ async function finalizeAcceptedImage({
         lineUserId: userId,
         paymentId,
         slipMessageId,
+      });
+
+      logSlipPendingVerifyRouted({
+        userId,
+        paymentId,
+        messageId: slipMessageId ?? null,
+        flowState: "awaiting_payment",
       });
 
       await setPaymentSlipPendingVerify({
@@ -1744,7 +1740,6 @@ async function finalizeAcceptedImage({
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
 
-      if ((await imgPhase1Invoke()).handled) return;
       await sendNonScanReply({
         client,
         userId,
