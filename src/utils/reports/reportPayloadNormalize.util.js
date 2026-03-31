@@ -93,6 +93,7 @@ export function normalizeReportPayloadForRender(input) {
 
   const energyScore = numOrNull(summaryIn?.energyScore);
   const compatibilityPercent = numOrNull(summaryIn?.compatibilityPercent);
+  const compatibilityBand = str(summaryIn?.compatibilityBand).trim();
 
   /** @type {import("../../services/reports/reportPayload.types.js").ReportPayload} */
   const payload = {
@@ -116,6 +117,7 @@ export function normalizeReportPayloadForRender(input) {
       energyLevelLabel: str(summaryIn?.energyLevelLabel),
       mainEnergyLabel: str(summaryIn?.mainEnergyLabel),
       compatibilityPercent,
+      compatibilityBand: compatibilityBand || undefined,
       summaryLine:
         str(summaryIn?.summaryLine).trim() ||
         "สรุปผลการสแกน — ดูรายละเอียดด้านล่าง",
@@ -179,6 +181,26 @@ export function normalizeReportPayloadForRender(input) {
       clarityLevel: str(wordingIn?.clarityLevel),
     },
   };
+
+  const compatRaw = raw.compatibility;
+  if (compatRaw && typeof compatRaw === "object" && !Array.isArray(compatRaw)) {
+    /** @type {Record<string, unknown>} */
+    const c = /** @type {Record<string, unknown>} */ (compatRaw);
+    payload.compatibility = {
+      score: numOrZero(c.score),
+      band: str(c.band).trim() || undefined,
+      formulaVersion: str(c.formulaVersion).trim() || undefined,
+      factors:
+        c.factors && typeof c.factors === "object"
+          ? /** @type {Record<string, unknown>} */ (c.factors)
+          : undefined,
+      inputs:
+        c.inputs && typeof c.inputs === "object"
+          ? /** @type {Record<string, unknown>} */ (c.inputs)
+          : undefined,
+      explain: strArr(c.explain),
+    };
+  }
 
   if (!payload.summary.summaryLine || payload.summary.summaryLine.length < 3) {
     warnings.push("summary_line_empty_or_short");

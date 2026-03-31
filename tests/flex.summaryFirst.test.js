@@ -170,6 +170,50 @@ test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA"
   assert.equal(flex.contents.footer, undefined);
 });
 
+test("buildScanSummaryFirstFlex: compatibility row uses reportPayload not parsed scan text", () => {
+  const textHighCompat = SAMPLE_TEXT.replace(
+    "ความสอดคล้องกับเจ้าของ: 78%",
+    "ความสอดคล้องกับเจ้าของ: 99%",
+  );
+  const flex = buildScanSummaryFirstFlex(textHighCompat, {
+    reportUrl: "https://example.com/r/abc123",
+    reportPayload: {
+      reportId: "rid",
+      publicToken: "tok",
+      scanId: "s",
+      userId: "u",
+      birthdateUsed: "1985-08-19",
+      generatedAt: new Date().toISOString(),
+      reportVersion: "1.0.0",
+      object: { objectLabel: "x", objectType: "" },
+      summary: {
+        energyScore: 8.2,
+        mainEnergyLabel: "ป้องกัน",
+        compatibilityPercent: 81,
+        compatibilityBand: "เข้ากันดี",
+        summaryLine: "สรุป",
+      },
+      sections: {
+        whatItGives: [],
+        messagePoints: [],
+        ownerMatchReason: [],
+        roleDescription: "",
+        bestUseCases: [],
+        weakMoments: [],
+        guidanceTips: [],
+        careNotes: [],
+        miniRitual: [],
+      },
+      trust: { trustNote: "n", rendererVersion: "html-1.0.0" },
+      actions: {},
+    },
+  });
+  const bodyStr = JSON.stringify(flex.contents.body);
+  assert.match(bodyStr, /81%/);
+  assert.match(bodyStr, /เข้ากันดี/);
+  assert.doesNotMatch(bodyStr, /99%/);
+});
+
 test("buildScanSummaryFirstFlex: guardrails for summary-card structure", () => {
   const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",

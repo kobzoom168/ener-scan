@@ -1082,6 +1082,7 @@ export async function runScanFlow({
         publicToken,
         modelLabel: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
         objectImageUrl,
+        scannedAt: new Date().toISOString(),
       });
       await insertScanPublicReport({
         scanResultId,

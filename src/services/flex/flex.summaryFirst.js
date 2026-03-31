@@ -559,8 +559,12 @@ function resolveSummaryCardCopyVariant(reportPayload) {
  */
 function compatibilityLabelForFlex(reportPayload, fallbackCompat) {
   const p = reportPayload?.summary?.compatibilityPercent;
+  const band =
+    String(reportPayload?.summary?.compatibilityBand || "").trim() ||
+    String(reportPayload?.compatibility?.band || "").trim();
   if (p != null && Number.isFinite(Number(p))) {
-    return `${Math.round(Number(p))}%`;
+    const pct = `${Math.round(Number(p))}%`;
+    return band ? `${pct}\n${band}` : pct;
   }
   return String(fallbackCompat || "-").trim() || "-";
 }

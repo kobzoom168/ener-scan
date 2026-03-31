@@ -24,6 +24,18 @@
  * @property {ReportActions} actions
  *
  * @property {ReportWording} [wording] — structured copy for Flex teaser + HTML opening / life sections
+ *
+ * @property {ReportCompatibility} [compatibility] — deterministic v1 slice (HTML detail + Flex band via summary)
+ */
+
+/**
+ * @typedef {Object} ReportCompatibility
+ * @property {number} score — 35–98
+ * @property {string} band — Thai label e.g. เข้ากันดี
+ * @property {string} [formulaVersion] — e.g. compatibility_v1
+ * @property {Record<string, number>} [factors]
+ * @property {Record<string, unknown>} [inputs]
+ * @property {string[]} [explain]
  */
 
 /**
@@ -71,6 +83,7 @@
  * @property {string} [energyLevelLabel]
  * @property {string} [mainEnergyLabel]
  * @property {number|null} compatibilityPercent
+ * @property {string} [compatibilityBand] — Thai band from deterministic formula (Flex teaser)
  * @property {string} summaryLine
  * @property {string} [birthdayLabel] — e.g. วันจันทร์ 19 ส.ค. 2528
  * @property {string} [compatibilityReason] — birth-day fit copy for Flex / report

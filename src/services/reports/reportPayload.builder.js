@@ -4,6 +4,7 @@ import { REPORT_PAYLOAD_VERSION } from "./reportPayload.types.js";
 import { sanitizeHttpsPublicImageUrl } from "../../utils/reports/reportImageUrl.util.js";
 import { formatScanBirthdayLabelThai } from "../../utils/scanBirthdayLabel.util.js";
 import { deriveReportWordingFromParsed } from "./reportWording.derive.js";
+import { buildCompatibilityPayload } from "../reportPayload/buildCompatibilityPayload.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -107,6 +108,10 @@ function emptyParsedShape() {
  * @param {string} opts.publicToken — pre-generated token to embed in payload
  * @param {string} [opts.modelLabel] — e.g. gpt-4.1-mini
  * @param {string} [opts.objectImageUrl] — optional HTTPS URL for public hero image (from storage)
+ * @param {string} [opts.scannedAt] — ISO time for compatibility v1 (defaults to build time)
+ * @param {string} [opts.objectFamily] — e.g. somdej (default generic)
+ * @param {string} [opts.materialFamily] — e.g. powder
+ * @param {string} [opts.shapeFamily] — e.g. rectangular (default unknown)
  * @returns {import("./reportPayload.types.js").ReportPayload}
  */
 export function buildReportPayloadFromScan(opts) {
@@ -119,6 +124,10 @@ export function buildReportPayloadFromScan(opts) {
     publicToken,
     modelLabel = "",
     objectImageUrl: objectImageUrlRaw = "",
+    scannedAt: scannedAtOpt = "",
+    objectFamily: objectFamilyOpt = "",
+    materialFamily: materialFamilyOpt = "",
+    shapeFamily: shapeFamilyOpt = "",
   } = opts;
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
@@ -149,7 +158,39 @@ export function buildReportPayloadFromScan(opts) {
       ? scoreInfo.numeric
       : null;
 
-  const compatPct = parseCompatibilityPercent(parsed.compatibility);
+  const scannedAtEffective =
+    String(scannedAtOpt || "").trim() || new Date().toISOString();
+
+  /** @type {ReturnType<typeof buildCompatibilityPayload> | null} */
+  let compatibilityPayload = null;
+  if (birthdateUsed) {
+    try {
+      compatibilityPayload = buildCompatibilityPayload({
+        birthdate: String(birthdateUsed),
+        scannedAt: scannedAtEffective,
+        objectFamily: String(objectFamilyOpt || "generic").trim() || "generic",
+        materialFamily: String(materialFamilyOpt || "").trim() || undefined,
+        shapeFamily: String(shapeFamilyOpt || "unknown").trim() || "unknown",
+        mainEnergy:
+          (parsed.mainEnergy && parsed.mainEnergy !== "-"
+            ? String(parsed.mainEnergy)
+            : "") || "",
+        energyScore: energyScore ?? 0,
+      });
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "COMPATIBILITY_V1_BUILD_FAILED",
+          message: err?.message,
+        }),
+      );
+    }
+  }
+
+  let compatPct = parseCompatibilityPercent(parsed.compatibility);
+  if (compatibilityPayload != null) {
+    compatPct = compatibilityPayload.score;
+  }
 
   const overview =
     parsed.overview && parsed.overview !== "-" ? String(parsed.overview) : "";
@@ -224,6 +265,11 @@ export function buildReportPayloadFromScan(opts) {
     compatibilityPercent: compatPct,
   });
 
+  const compatibilityBand =
+    compatibilityPayload?.band != null
+      ? String(compatibilityPayload.band)
+      : "";
+
   console.log(
     JSON.stringify({
       event: "REPORT_PAYLOAD_BUILT",
@@ -266,6 +312,7 @@ export function buildReportPayloadFromScan(opts) {
           ? String(parsed.mainEnergy)
           : "",
       compatibilityPercent: compatPct,
+      compatibilityBand: compatibilityBand || undefined,
       summaryLine,
       wordingFamily: wording.wordingFamily || undefined,
       clarityLevel: wording.clarityLevel || undefined,
@@ -303,5 +350,15 @@ export function buildReportPayloadFromScan(opts) {
       ...wording,
       objectLabel: "วัตถุจากการสแกน",
     },
+    compatibility: compatibilityPayload
+      ? {
+          score: compatibilityPayload.score,
+          band: compatibilityPayload.band,
+          formulaVersion: compatibilityPayload.formulaVersion,
+          factors: compatibilityPayload.factors,
+          inputs: compatibilityPayload.inputs,
+          explain: compatibilityPayload.explain,
+        }
+      : undefined,
   };
 }
