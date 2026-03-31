@@ -105,6 +105,7 @@ import {
   sendMultiImageRejectionViaGateway,
 } from "../services/lineWebhook/multiImageRejectionReply.service.js";
 import { sendUnsupportedObjectRejectionViaGateway } from "../services/lineWebhook/unsupportedObjectReply.service.js";
+import { sendFreeQuotaExhaustedPaywallViaGateway } from "../services/lineWebhook/freeQuotaPaywallReply.service.js";
 import { serializeLineErrorSafe } from "../utils/lineErrorLog.util.js";
 import {
   emitActiveStateRouting,
@@ -232,6 +233,9 @@ import {
   buildPendingVerifyAckContinueText,
   buildWaitingBirthdateGuidanceText,
   buildWaitingBirthdateImageReminderMessages,
+  buildDeterministicPaywallSoftCloseText,
+  matchesDeterministicPaywallPurchaseIntent,
+  matchesDeterministicPaywallSoftDeclineIntent,
   isBlockedIntentDuringWaitingBirthdate,
   isMainMenuAlias,
   isHistoryCommand,
@@ -1545,39 +1549,26 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
-    const offer = loadActiveScanOffer();
-    const accessContext = resolveScanOfferAccessContext({
-      offer,
-      decision: accessDecision,
-      now: new Date(),
-    });
-    const strictPaywallReply = buildScanOfferReply({
-      offer,
-      accessContext,
-      gate: { allowed: false, reason: "payment_required" },
-      userId: null,
-    });
     console.log("[PAYMENT_GATE_REPLY_SELECTION]", {
       userId,
       chosenPath,
       accessAllowed: Boolean(accessDecision?.allowed),
       accessReason: accessDecision?.reason ?? null,
-      replyType: strictPaywallReply.replyType,
-      copyKey: strictPaywallReply.semanticKey,
-      templateKey: strictPaywallReply.replyType,
+      replyType: "free_quota_exhausted_deterministic",
+      copyKey: "scan_offer:free_quota_exhausted_deterministic",
+      templateKey: "free_quota_exhausted_deterministic",
     });
-    if ((await imgPhase1Invoke()).handled) return;
-    await sendNonScanReply({
+    await sendFreeQuotaExhaustedPaywallViaGateway({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: strictPaywallReply.replyType,
-      semanticKey: strictPaywallReply.semanticKey,
-      text: strictPaywallReply.primaryText,
-      alternateTexts: strictPaywallReply.alternateTexts,
+      flowVersion,
+      messageId: event?.message?.id ?? null,
+      accessDecision,
+      pathSegment: "pre_object_check",
     });
     await logPaywallShown(userId, {
-      patternUsed: "finalize_image_package_prompt",
+      patternUsed: "finalize_image_free_quota_exhausted_deterministic",
       bubbleCount: 1,
       source: "finalize_image_payment_required_text_only",
     });
@@ -1969,39 +1960,26 @@ async function finalizeAcceptedImage({
     // Preserve the scan image candidate so user can continue after approval.
     setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
-    const offer = loadActiveScanOffer();
-    const accessContext = resolveScanOfferAccessContext({
-      offer,
-      decision: accessDecision,
-      now: new Date(),
-    });
-    const strictPaywallReply = buildScanOfferReply({
-      offer,
-      accessContext,
-      gate: { allowed: false, reason: "payment_required" },
-      userId: null,
-    });
     console.log("[PAYMENT_GATE_REPLY_SELECTION]", {
       userId,
       chosenPath: "payment_gate_post_object_check",
       accessAllowed: Boolean(accessDecision?.allowed),
       accessReason: accessDecision?.reason ?? null,
-      replyType: strictPaywallReply.replyType,
-      copyKey: strictPaywallReply.semanticKey,
-      templateKey: strictPaywallReply.replyType,
+      replyType: "free_quota_exhausted_deterministic",
+      copyKey: "scan_offer:free_quota_exhausted_deterministic",
+      templateKey: "free_quota_exhausted_deterministic",
     });
-    if ((await imgPhase1Invoke()).handled) return;
-    await sendNonScanReply({
+    await sendFreeQuotaExhaustedPaywallViaGateway({
       client,
       userId,
       replyToken: event.replyToken,
-      replyType: strictPaywallReply.replyType,
-      semanticKey: strictPaywallReply.semanticKey,
-      text: strictPaywallReply.primaryText,
-      alternateTexts: strictPaywallReply.alternateTexts,
+      flowVersion,
+      messageId: event?.message?.id ?? null,
+      accessDecision,
+      pathSegment: "post_object_check",
     });
     await logPaywallShown(userId, {
-      patternUsed: "finalize_image_package_prompt",
+      patternUsed: "finalize_image_free_quota_exhausted_deterministic",
       bubbleCount: 1,
       source: "finalize_image_payment_required_text_only",
     });
@@ -3253,7 +3231,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isPaymentCommand(text, lowerText)) {
+    if (matchesDeterministicPaywallPurchaseIntent(text, lowerText)) {
       resetGuidanceNoProgress(userId, "paywall_offer_single");
       resetSameStateAckStreak(userId, "paywall_offer_single");
       console.log(
@@ -3263,6 +3241,21 @@ async function handleTextMessage({ client, event, userId, session }) {
           paymentState,
           inputText: text,
           action: "create_or_show_payment_qr",
+        }),
+      );
+      console.log(
+        JSON.stringify({
+          event: "PAYWALL_AFFIRM_INTENT_MATCHED",
+          userId,
+          paymentState,
+          inputText: text,
+        }),
+      );
+      console.log(
+        JSON.stringify({
+          event: "PAYMENT_DETAILS_ROUTED_FROM_PAYWALL_ACK",
+          userId,
+          inputText: text,
         }),
       );
       logSafeIntentConsumed({
@@ -3304,6 +3297,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         text,
         lowerText,
         isPaywallGateWithPendingScan,
+        forcePaymentIntent: true,
       });
       return;
     }
@@ -3364,6 +3358,42 @@ async function handleTextMessage({ client, event, userId, session }) {
           "full",
           defaultPkg,
         ),
+      });
+      return;
+    }
+
+    if (matchesDeterministicPaywallSoftDeclineIntent(text)) {
+      console.log(
+        JSON.stringify({
+          event: "PAYWALL_DECLINE_INTENT_MATCHED",
+          userId,
+          paymentState,
+          inputText: text,
+        }),
+      );
+      resetGuidanceNoProgress(userId, "paywall_offer_single");
+      resetSameStateAckStreak(userId, "paywall_offer_single");
+      emitActiveStateRouting({
+        userId,
+        flowState,
+        paymentState,
+        accessState,
+        canonicalStateOwner,
+        replyFamily: "paywall_single_offer",
+        routeReason: "deterministic_paywall_soft_close",
+        text,
+        chosenReplyType: "paywall_soft_decline_ack",
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "paywall_soft_decline_ack",
+        semanticKey: "deterministic_paywall_soft_close",
+        text: buildDeterministicPaywallSoftCloseText(),
+        alternateTexts: [
+          "โอเคครับ พรุ่งนี้ค่อยส่งรูปมาใหม่ได้เลยนะครับ",
+        ],
       });
       return;
     }

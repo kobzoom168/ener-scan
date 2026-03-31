@@ -1207,6 +1207,80 @@ export function buildWaitingBirthdatePaymentDeferredRedirectText() {
   return "เรื่องชำระค่อยทำทีหลังได้ครับ ตอนนี้ขอวันเกิดก่อนนะครับ เช่น 19/08/2528";
 }
 
+/**
+ * Deterministic paywall when free daily quota is exhausted (prices from active offer / default package).
+ */
+export function buildDeterministicFreeQuotaExhaustedPaywallText(offer) {
+  const o = offer || loadActiveScanOffer();
+  const pkg = getDefaultPackage(o);
+  const price = pkg?.priceThb ?? o.paidPriceThb;
+  const count = pkg?.scanCount ?? o.paidScanCount;
+  const hours = pkg?.windowHours ?? o.paidWindowHours;
+  return [
+    "วันนี้สิทธิ์สแกนฟรีครบแล้วครับ",
+    "",
+    "พรุ่งนี้ค่อยมาใหม่ก็ได้ หรือจะเปิดเพิ่มวันนี้ก็ได้นะครับ",
+    "",
+    `แพ็กเดียวตอนนี้คือ ${price} บาท สแกนได้ ${count} ครั้ง ภายใน ${hours} ชม.`,
+    "",
+    "ถ้าสนใจ พิมพ์ได้เลย เช่น",
+    "• แนวครับ",
+    "• โอเค",
+    "• scan ต่อ",
+    "• ตกลง",
+    "• จ่าย",
+    "• รายละเอียด",
+  ].join("\n");
+}
+
+/** Gateway alternates (dedupe / semantic window) — same facts, different wording. */
+export function getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(offer) {
+  const o = offer || loadActiveScanOffer();
+  const pkg = getDefaultPackage(o);
+  const price = pkg?.priceThb ?? o.paidPriceThb;
+  const count = pkg?.scanCount ?? o.paidScanCount;
+  const hours = pkg?.windowHours ?? o.paidWindowHours;
+  return [
+    [
+      "วันนี้สิทธิ์สแกนฟรีครบแล้วครับ",
+      "",
+      "พรุ่งนี้มีสิทธิ์ฟรีใหม่ตามรอบ หรือจะเปิดแพ็กเพิ่มวันนี้ก็ได้ครับ",
+      "",
+      `ตอนนี้แพ็กเดียวคือ ${price} บาท / ${count} ครั้ง / ${hours} ชม.`,
+      "",
+      "พิมพ์ โอเค / จ่าย / scan ต่อ เพื่อดูวิธีชำระได้เลยครับ",
+    ].join("\n"),
+  ];
+}
+
+export function buildDeterministicPaywallSoftCloseText() {
+  return "ได้เลยครับ พรุ่งนี้ค่อยส่งมาใหม่ได้เสมอครับ";
+}
+
+/**
+ * Purchase / proceed intents after deterministic free-quota paywall (includes {@link isPaywallInstantQrIntentText}).
+ */
+export function matchesDeterministicPaywallPurchaseIntent(text, lowerText) {
+  if (isPaywallInstantQrIntentText(text, lowerText)) return true;
+  const t = String(text || "").trim().replace(/\s+/g, " ");
+  const lt = String(lowerText || t.toLowerCase()).trim();
+  const exact = new Set([
+    "แนวครับ",
+    "scan ต่อ",
+    "รายละเอียด",
+    "เปิดเพิ่ม",
+    "เอาเลย",
+  ]);
+  return exact.has(t) || exact.has(lt);
+}
+
+/** Narrow deferral phrases → soft close without opening payment (exact match). */
+export function matchesDeterministicPaywallSoftDeclineIntent(text) {
+  const t = String(text || "").trim().replace(/\s+/g, " ");
+  if (!t) return false;
+  return new Set(["พรุ่งนี้", "ไว้ก่อน", "ยังไม่เอา", "เดี๋ยวก่อน"]).has(t);
+}
+
 export function isHistoryCommand(text, lowerText) {
   return lowerText === "history" || text === "ประวัติ";
 }
