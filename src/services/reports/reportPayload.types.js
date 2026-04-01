@@ -103,6 +103,10 @@
  * @property {string} [secondaryEnergyLabel] — sub-energy from scan output
  * @property {Record<string, number>} [scanDimensions] — pillars 1–5 stars
  * @property {string[]} [scanTips] — model `tips` / “ชิ้นนี้หนุนเรื่อง” lines for Flex (max 2)
+ * @property {string} [headlineShort] — Flex-only one-line hook (built in reportPayload.builder)
+ * @property {string} [fitReasonShort] — Flex-only short fit line
+ * @property {string[]} [bulletsShort] — exactly 2 short lines for LINE Flex
+ * @property {string} [ctaLabel] — primary button label for Flex handoff
  */
 
 /**

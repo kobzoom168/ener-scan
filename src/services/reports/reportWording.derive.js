@@ -4,6 +4,7 @@
  */
 import { ENERGY_TYPES } from "../flex/scanCopy.config.js";
 import { resolveEnergyType } from "../flex/scanCopy.utils.js";
+import { safeThaiCut } from "../flex/flex.utils.js";
 
 /**
  * @param {string} text
@@ -260,8 +261,7 @@ export function deriveReportWordingFromParsed(parsed, opts = {}) {
 
   const flexHeadline = (() => {
     const fromChar = energyCharacter;
-    if (fromChar.length <= 56) return fromChar;
-    return `${fromChar.slice(0, 53)}…`;
+    return safeThaiCut(fromChar, 56);
   })();
 
   const flexBullets = (() => {

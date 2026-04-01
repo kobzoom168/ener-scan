@@ -107,7 +107,7 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.match(bodyStr, /เข้ากับคุณ/);
   assert.doesNotMatch(bodyStr, /เข้ากับคุณยังไง/);
   assert.match(bodyStr, /คุ้มกัน/);
-  assert.match(bodyStr, /★/);
+  assert.doesNotMatch(bodyStr, /คุ้มกัน:\s*★/);
   assert.match(bodyStr, /#D4AF37/);
   assert.match(bodyStr, /#000000/);
   assert.match(bodyStr, /#111111/);
@@ -170,12 +170,8 @@ test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA"
   assert.equal(flex.contents.footer, undefined);
 });
 
-test("buildScanSummaryFirstFlex: star rows use objectEnergy.stars not parsed dimension lines", () => {
-  const textHighStars = SAMPLE_TEXT.replace(
-    "คุ้มกัน: ★★★★☆ — 4/5 ดาว",
-    "คุ้มกัน: ★★★★★ — 5/5 ดาว",
-  );
-  const flex = buildScanSummaryFirstFlex(textHighStars, {
+test("buildScanSummaryFirstFlex: summary-only Flex does not render 5-dimension star grid (stars stay in HTML)", () => {
+  const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
     reportPayload: {
       reportId: "rid",
@@ -191,16 +187,20 @@ test("buildScanSummaryFirstFlex: star rows use objectEnergy.stars not parsed dim
         mainEnergyLabel: "ป้องกัน",
         compatibilityPercent: 78,
         summaryLine: "สรุป",
+        headlineShort: "หัวข้อสั้น",
+        fitReasonShort: "เหตุผลสั้น",
+        bulletsShort: ["บูลเล็ต 1", "บูลเล็ต 2"],
+        ctaLabel: "เปิดรายงานฉบับเต็ม",
       },
       objectEnergy: {
         formulaVersion: "object_energy_v1",
         profile: {},
         stars: {
-          balance: 1,
-          protection: 1,
-          authority: 1,
-          compassion: 1,
-          attraction: 1,
+          balance: 5,
+          protection: 5,
+          authority: 5,
+          compassion: 5,
+          attraction: 5,
         },
         mainEnergyResolved: { key: "protection", labelThai: "คุ้มกัน" },
         confidence: 0.5,
@@ -223,8 +223,9 @@ test("buildScanSummaryFirstFlex: star rows use objectEnergy.stars not parsed dim
     },
   });
   const bodyStr = JSON.stringify(flex.contents.body);
-  assert.match(bodyStr, /★☆☆☆☆/);
+  assert.doesNotMatch(bodyStr, /ดาว.*5\s*มิติ/);
   assert.doesNotMatch(bodyStr, /★★★★★/);
+  assert.match(bodyStr, /หัวข้อสั้น/);
 });
 
 test("buildScanSummaryFirstFlex: compatibility row uses reportPayload not parsed scan text", () => {

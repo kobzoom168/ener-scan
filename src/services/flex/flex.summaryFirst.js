@@ -3,19 +3,17 @@
  * HTML report stays primary artifact; Flex is teaser only.
  */
 import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
-import { formatScanBirthdayLabelThai } from "../../utils/scanBirthdayLabel.util.js";
 import { parseScanText } from "./flex.parser.js";
 import {
   normalizeScore,
   getEnergyShortLabel,
-  sortDimensionKeysForStarDisplay,
   safeThaiCut,
 } from "./flex.utils.js";
+import { resolveFlexSummarySurfaceForLine } from "../../utils/reports/flexSummarySurface.util.js";
 import { buildScanFlexAltText, FLEX_SPLIT_WARN_THRESHOLD, splitSentencesForFlex } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import { ENERGY_TYPES } from "./scanCopy.config.js";
 import { resolveEnergyType } from "./scanCopy.utils.js";
-import { scanDimensionsFromObjectEnergyStars } from "../../utils/objectEnergyFormula.util.js";
 
 const FLEX_CARD_BG = "#000000";
 const FLEX_BOX_BG = "#111111";
@@ -24,8 +22,6 @@ const FLEX_ACCENT = "#D4AF37";
 const FLEX_BADGE_AND_SCORE_GOLD = "#D4AF37";
 const FLEX_TEXT_PRIMARY = "#ffffff";
 const FLEX_TEXT_SECONDARY = "#888888";
-const FLEX_BORDER = "#333333";
-const FLEX_DIM_ORDER = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
 
 /**
  * Hard cap for badge text (Thai code units). 14 covers longest deep-scan energy labels.
@@ -147,143 +143,6 @@ function createEnergyBadgePill(mainLabel) {
       },
     ],
   };
-}
-
-/**
- * Integer 0–5 from scan dimensions. Single string avoids LINE truncating
- * multiple text nodes with an ellipsis between them.
- * @param {number} n
- * @returns {string} exactly 5 chars, only ★ and ☆
- */
-function dimensionStarLine(n) {
-  const x = Number(n);
-  const v = Number.isFinite(x)
-    ? Math.min(5, Math.max(0, Math.round(x)))
-    : 3;
-  return "★".repeat(v) + "☆".repeat(5 - v);
-}
-
-function createScanDimensionStarBlock(dimensions) {
-  const sortedKeys = sortDimensionKeysForStarDisplay(dimensions);
-  const rows = sortedKeys.map((key, idx) => {
-    const raw = dimensions?.[key];
-    const v =
-      raw != null && Number.isFinite(Number(raw)) ? Number(raw) : 3;
-    const starsText = dimensionStarLine(v);
-    return {
-      type: "box",
-      layout: "vertical",
-      spacing: "xs",
-      contents: [
-        {
-          type: "box",
-          layout: "horizontal",
-          contents: [
-            {
-              type: "text",
-              text: key,
-              flex: 4,
-              size: "sm",
-              color: FLEX_TEXT_SECONDARY,
-            },
-            {
-              type: "box",
-              layout: "horizontal",
-              flex: 3,
-              justifyContent: "flex-end",
-              contents: [
-                {
-                  type: "text",
-                  text: starsText,
-                  size: "sm",
-                  color: FLEX_ACCENT,
-                },
-              ],
-            },
-          ],
-        },
-        ...(idx < sortedKeys.length - 1
-          ? [{ type: "separator", color: FLEX_BORDER, margin: "sm" }]
-          : []),
-      ],
-    };
-  });
-  return {
-    type: "box",
-    layout: "vertical",
-    margin: "sm",
-    contents: rows,
-  };
-}
-
-function createCompatibilityTeaserBlock(birthdayLabel, reasonText) {
-  const reasonFull =
-    String(reasonText || "").trim() ||
-    "โยงพลังวันเกิดกับแกนหลักของชิ้นนี้ได้ตรงจุด — ดูฉบับเต็มในรายงาน";
-  const reason = safeThaiCut(reasonFull, 80);
-  return {
-    type: "box",
-    layout: "vertical",
-    paddingAll: "14px",
-    spacing: "sm",
-    backgroundColor: FLEX_BOX_BG,
-    borderWidth: "1px",
-    borderColor: FLEX_ACCENT,
-    margin: "sm",
-    contents: [
-      {
-        type: "text",
-        text: `วันเกิด: ${birthdayLabel}`,
-        size: "sm",
-        color: FLEX_ACCENT,
-        wrap: true,
-      },
-      {
-        type: "text",
-        text: reason,
-        size: "sm",
-        color: FLEX_TEXT_PRIMARY,
-        wrap: true,
-      },
-    ],
-  };
-}
-
-/**
- * @param {string} line
- * @returns {{ type: string, text: string, size: string, color: string, wrap: boolean, margin: string } | null}
- */
-function createTipBulletRow(line) {
-  const t = String(line ?? "").replace(/\r?\n/g, " ").replace(/\s+/g, " ").trim();
-  if (!t) return null;
-  return {
-    type: "text",
-    text: `› ${t}`,
-    size: "sm",
-    color: "#cccccc",
-    wrap: true,
-    margin: "xs",
-  };
-}
-
-/**
- * Scan JSON `tips` / legacy “ชิ้นนี้หนุนเรื่อง” bullets → max 2 strings for Flex.
- * Only limits count (2); does not shorten each string before `createTipBulletRow`.
- * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
- * @param {ReturnType<typeof parseScanText>} parsed
- */
-function resolveFlexScanTips(reportPayload, parsed) {
-  const fromPayload = reportPayload?.summary?.scanTips;
-  if (Array.isArray(fromPayload) && fromPayload.length) {
-    return fromPayload
-      .map((x) => String(x ?? "").trim())
-      .filter(Boolean)
-      .slice(0, 2);
-  }
-  return (parsed.supportTopics || [])
-    .map((x) => String(x ?? "").trim())
-    .filter(Boolean)
-    .slice(0, 2);
 }
 
 const SUMMARY_CARD_COPY_VARIANTS = {
@@ -638,8 +497,6 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     ([, v]) => v === familyPattern,
   )?.[0] || "none";
 
-  const flexScanTips = resolveFlexScanTips(reportPayload, parsed);
-
   const copyShapingActive = familyPatternUsed !== "none";
   console.log(
     JSON.stringify({
@@ -674,57 +531,60 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     String(reportPayload?.summary?.mainEnergyLabel || "").trim() ||
     "พลังหลัก";
 
-  const dimsPayload =
-    reportPayload?.summary?.scanDimensions &&
-    typeof reportPayload.summary.scanDimensions === "object"
-      ? reportPayload.summary.scanDimensions
-      : {};
-  const starsFromPayload = reportPayload?.objectEnergy?.stars;
-  const hasObjectEnergyStars =
-    starsFromPayload &&
-    typeof starsFromPayload === "object" &&
-    !Array.isArray(starsFromPayload);
+  const surface = resolveFlexSummarySurfaceForLine(reportPayload, parsed);
+  const headlineText =
+    String(surface.headlineShort || "").trim() ||
+    safeThaiCut(String(altMain || mainPill || "สรุปผลการสแกน"), 72);
+  const fitLine = String(surface.fitReasonShort || "").trim();
+  const bulletLines = Array.isArray(surface.bulletsShort)
+    ? surface.bulletsShort.map((x) => String(x || "").trim()).filter(Boolean)
+    : [];
+  const ctaLabel =
+    String(surface.ctaLabel || "").trim() || summaryCardCopy.ctaText;
 
-  /** @type {Record<string, number>} */
-  let dimensions;
-  if (hasObjectEnergyStars) {
-    dimensions = scanDimensionsFromObjectEnergyStars(
-      /** @type {Record<string, number>} */ (starsFromPayload),
-    );
-  } else {
-    dimensions = { ...parsed.dimensions };
-    for (const k of FLEX_DIM_ORDER) {
-      const v = dimsPayload[k];
-      if (v != null && Number.isFinite(Number(v))) dimensions[k] = Number(v);
-    }
-  }
+  const headlineBlock = {
+    type: "text",
+    text: headlineText,
+    size: "md",
+    weight: "bold",
+    color: FLEX_TEXT_PRIMARY,
+    wrap: true,
+    margin: "sm",
+  };
 
-  const birthdayLabel =
-    String(reportPayload?.summary?.birthdayLabel || "").trim() ||
-    (birthdate ? formatScanBirthdayLabelThai(birthdate) : "") ||
-    "—";
-  const compatReason =
-    String(reportPayload?.summary?.compatibilityReason || "").trim() ||
-    (parsed.fitReason && parsed.fitReason !== "-"
-      ? String(parsed.fitReason).trim()
-      : "");
+  const fitBlock =
+    fitLine.length > 0
+      ? {
+          type: "text",
+          text: fitLine,
+          size: "xs",
+          color: FLEX_TEXT_SECONDARY,
+          wrap: true,
+          margin: "md",
+        }
+      : null;
 
-  const tipRows = flexScanTips
-    .map((line) => createTipBulletRow(line))
-    .filter(Boolean);
+  const bulletRows = bulletLines.slice(0, 2).map((line) => ({
+    type: "text",
+    text: `› ${line}`,
+    size: "sm",
+    color: "#cccccc",
+    wrap: true,
+    margin: "xs",
+  }));
 
   const bodyContents = [
+    headlineBlock,
     createScoreRowTwoUp(score.display || "-", pctDisplay),
     createEnergyBadgePill(mainPill),
-    createScanDimensionStarBlock(dimensions),
-    createCompatibilityTeaserBlock(birthdayLabel, compatReason),
-    ...(tipRows.length > 0
+    ...(fitBlock ? [fitBlock] : []),
+    ...(bulletRows.length > 0
       ? [
           {
             type: "box",
             layout: "vertical",
             margin: "md",
-            contents: tipRows,
+            contents: bulletRows,
           },
         ]
       : []),
@@ -748,7 +608,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       margin: "lg",
       action: {
         type: "uri",
-        label: summaryCardCopy.ctaText,
+        label: ctaLabel,
         uri: url,
       },
     });

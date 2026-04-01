@@ -12,6 +12,7 @@ import {
   resolveConditionClassPipelineSource,
   resolveDominantColorPipelineSource,
 } from "../../utils/reports/reportPipelineVisualSignals.util.js";
+import { buildFlexSummarySurfaceFields } from "../../utils/reports/flexSummarySurface.util.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -331,6 +332,13 @@ export function buildReportPayloadFromScan(opts) {
       ? String(compatibilityPayload.band)
       : "";
 
+  const flexSurface = buildFlexSummarySurfaceFields({
+    wording,
+    compatibilityReason,
+    summaryLine,
+    scanTips: whatItGives.length > 0 ? whatItGives.slice(0, 2) : undefined,
+  });
+
   const threadedSignalCount = countThreadedReportSignalFields({
     dominantColor: dominantColorResolved.normalized,
     conditionClass: conditionClassResolved.normalized,
@@ -425,6 +433,10 @@ export function buildReportPayloadFromScan(opts) {
           : undefined;
       })(),
       scanTips: whatItGives.length > 0 ? whatItGives.slice(0, 2) : undefined,
+      headlineShort: flexSurface.headlineShort,
+      fitReasonShort: flexSurface.fitReasonShort,
+      bulletsShort: flexSurface.bulletsShort,
+      ctaLabel: flexSurface.ctaLabel,
     },
     sections: {
       whatItGives,

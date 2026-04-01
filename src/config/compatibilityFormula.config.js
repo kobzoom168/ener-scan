@@ -167,3 +167,6 @@ export const CONTEXT_MATRIX = {
 };
 
 export const COMPATIBILITY_FORMULA_VERSION = "compatibility_v1";
+
+/** Same factor weights as v1, but scan time for number/context layers is derived from stable object+owner fingerprint (not wall-clock). */
+export const COMPATIBILITY_FORMULA_VERSION_STABLE = "compatibility_v1_stable";

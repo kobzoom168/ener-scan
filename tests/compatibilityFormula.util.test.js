@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeCompatibilityV1,
+  computeCompatibilityV1Stable,
   normalizeBirthdateIso,
 } from "../src/utils/compatibilityFormula.util.js";
 import { buildCompatibilityPayload } from "../src/services/reportPayload/buildCompatibilityPayload.js";
@@ -35,6 +36,26 @@ test("normalizeBirthdateIso: DD/MM/YYYY matches ISO life path", () => {
   const a = computeCompatibilityV1({ ...FIXED, birthdate: "1985-08-19" });
   const b = computeCompatibilityV1({ ...FIXED, birthdate: "19/08/1985" });
   assert.equal(a.score, b.score);
+});
+
+test("computeCompatibilityV1Stable: same object signals ignore wall-clock scan time", () => {
+  const a = computeCompatibilityV1Stable(FIXED);
+  const b = computeCompatibilityV1Stable({
+    ...FIXED,
+    scannedAt: "2026-12-25T23:59:00+07:00",
+  });
+  assert.equal(a.score, b.score);
+  assert.equal(a.band, b.band);
+  assert.ok(a.inputs.stableAnchors);
+});
+
+test("computeCompatibilityV1Stable: different objectFamily can change score", () => {
+  const base = computeCompatibilityV1Stable(FIXED);
+  const crystal = computeCompatibilityV1Stable({
+    ...FIXED,
+    objectFamily: "crystal",
+  });
+  assert.notEqual(base.score, crystal.score);
 });
 
 test("computeCompatibilityV1: missing materialFamily falls back to objectFamily element", () => {
@@ -98,9 +119,10 @@ test("buildReportPayloadFromScan: overrides AI compatibility with deterministic 
     materialFamily: "powder",
     shapeFamily: "rectangular",
   });
-  assert.equal(payload.summary.compatibilityPercent, 81);
-  assert.equal(payload.compatibility?.score, 81);
+  assert.equal(payload.summary.compatibilityPercent, 76);
+  assert.equal(payload.compatibility?.score, 76);
   assert.equal(payload.compatibility?.band, "เข้ากันดี");
+  assert.equal(payload.compatibility?.formulaVersion, "compatibility_v1_stable");
 });
 
 test("normalizeReportPayloadForRender: preserves compatibilityBand and compatibility block", () => {

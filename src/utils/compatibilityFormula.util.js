@@ -4,6 +4,7 @@
 
 import {
   COMPATIBILITY_FORMULA_VERSION,
+  COMPATIBILITY_FORMULA_VERSION_STABLE,
   CONTEXT_MATRIX,
   ELEMENT_MATRIX,
   LIFE_PATH_TO_ELEMENT,
@@ -329,4 +330,100 @@ export function compatibilityBand(score) {
   if (score >= 70) return "เข้ากันดี";
   if (score >= 55) return "ค่อนข้างเข้ากัน";
   return "ยังไม่ค่อยเข้ากัน";
+}
+
+/**
+ * Deterministic hash for stable compatibility anchoring (same owner+object signals → same pseudo time).
+ * @param {string[]} parts
+ * @returns {number}
+ */
+export function stableFingerprintHash(parts) {
+  const s = parts.join("|");
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 33) ^ s.charCodeAt(i);
+  }
+  return Math.abs(h >>> 0);
+}
+
+/**
+ * ISO instant with hour/minute from fingerprint — replaces wall-clock `scannedAt` for formula layers
+ * so same-object rescans do not drift from minute/hour noise.
+ * @param {string} birthdateIso
+ * @param {string} objectFamily
+ * @param {string} materialFamily
+ * @param {string} shapeFamily
+ * @param {string} mainEnergyKey
+ */
+export function stableScannedAtIsoFromFingerprint(
+  birthdateIso,
+  objectFamily,
+  materialFamily,
+  shapeFamily,
+  mainEnergyKey,
+) {
+  const h = stableFingerprintHash([
+    String(birthdateIso || ""),
+    String(objectFamily || ""),
+    String(materialFamily || ""),
+    String(shapeFamily || ""),
+    String(mainEnergyKey || ""),
+  ]);
+  const hour = h % 24;
+  const minute = (h >> 8) % 60;
+  return `2000-01-01T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+07:00`;
+}
+
+/**
+ * Quantize model energy score so small LLM jitter does not move compatibility bands.
+ * @param {unknown} n
+ * @returns {number}
+ */
+export function quantizeEnergyForCompatibility(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 0;
+  const c = Math.min(10, Math.max(0, x));
+  return Math.round(c * 2) / 2;
+}
+
+/**
+ * Same weights as {@link computeCompatibilityV1}, but:
+ * - uses fingerprint-derived pseudo `scannedAt` (not wall-clock) for number/context layers
+ * - quantizes energy score before symbol adjustment
+ *
+ * @param {CompatibilityV1Input} input
+ * @returns {import("./compatibilityExplain.util.js").CompatibilityComputed}
+ */
+export function computeCompatibilityV1Stable(input) {
+  const birthdate = normalizeBirthdateIso(String(input.birthdate || "").trim());
+  const objectFamily = String(input.objectFamily || "generic")
+    .trim()
+    .toLowerCase();
+  const materialFamily = String(input.materialFamily || "").trim().toLowerCase();
+  const shapeFamily = String(input.shapeFamily || "unknown").trim().toLowerCase();
+  const mainKey = normalizeMainEnergyKey(input.mainEnergy, "balance");
+  const stableScannedAt = stableScannedAtIsoFromFingerprint(
+    birthdate,
+    objectFamily,
+    materialFamily,
+    shapeFamily,
+    mainKey,
+  );
+  const energyQ = quantizeEnergyForCompatibility(input.energyScore ?? 0);
+  const base = computeCompatibilityV1({
+    ...input,
+    birthdate: input.birthdate,
+    scannedAt: stableScannedAt,
+    energyScore: energyQ,
+  });
+  return {
+    ...base,
+    formulaVersion: COMPATIBILITY_FORMULA_VERSION_STABLE,
+    inputs: {
+      ...base.inputs,
+      stableAnchors: true,
+      scannedAtActual: String(input.scannedAt || "").trim() || null,
+      scannedAtForFormula: stableScannedAt,
+    },
+  };
 }

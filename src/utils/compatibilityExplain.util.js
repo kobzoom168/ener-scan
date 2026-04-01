@@ -26,8 +26,18 @@ export function buildCompatibilityExplainBullets(computed) {
       ? "ธาตุเจ้าของกับธาตุวัตถุสอดคล้องในเชิงปรับสมดุล"
       : `ธาตุเจ้าของ (${oe}) เทียบกับธาตุวัตถุ (${ob}) ตามแนวปรับจังหวะภายใน`;
 
-  const line2 =
-    factors.numberScore >= 70
+  const stable = Boolean(
+    inputs &&
+      typeof inputs === "object" &&
+      /** @type {{ stableAnchors?: boolean }} */ (inputs).stableAnchors,
+  );
+  const line2 = stable
+    ? factors.numberScore >= 70
+      ? "เลขวันเกิดต่อกลุ่มพลังหลักได้ดี — จังหวะตัวเลขยึดจากสัญญาณวัตถุ+เจ้าของแบบคงที่ (ไม่ใช้เวลาสแกนจริง)"
+      : factors.numberScore >= 55
+        ? "เลขวันเกิดหนุนบางส่วนต่อพลังหลัก — จังหวะตัวเลขยึดแบบคงที่จากสัญญาณวัตถุ+เจ้าของ"
+        : "เลขวันเกิดกับกลุ่มพลังหลักยังไม่เต็มจังหวะ — ยังปรับใช้ได้ด้วยความตั้งใจ"
+    : factors.numberScore >= 70
       ? "เลขวันเกิดและเลขเวลาส่งอยู่ในกลุ่มพลังที่หนุนกัน"
       : factors.numberScore >= 55
         ? "เลขวันเกิดและเลขเวลาส่งหนุนบางส่วนต่อพลังหลักที่เลือก"

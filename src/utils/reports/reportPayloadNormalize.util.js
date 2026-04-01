@@ -176,6 +176,10 @@ export function normalizeReportPayloadForRender(input) {
         "สรุปผลการสแกน — ดูรายละเอียดด้านล่าง",
       wordingFamily: str(summaryIn?.wordingFamily).trim() || undefined,
       clarityLevel: str(summaryIn?.clarityLevel).trim() || undefined,
+      headlineShort: str(summaryIn?.headlineShort).trim() || undefined,
+      fitReasonShort: str(summaryIn?.fitReasonShort).trim() || undefined,
+      bulletsShort: strArr(summaryIn?.bulletsShort).slice(0, 2),
+      ctaLabel: str(summaryIn?.ctaLabel).trim() || undefined,
     },
     sections: {
       whatItGives: strArr(sectionsIn?.whatItGives),
