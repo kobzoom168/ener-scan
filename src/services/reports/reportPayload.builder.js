@@ -8,6 +8,10 @@ import { buildCompatibilityPayload } from "../reportPayload/buildCompatibilityPa
 import { buildObjectEnergyPayload } from "../reportPayload/buildObjectEnergyPayload.js";
 import { scanDimensionsFromObjectEnergyStars } from "../../utils/objectEnergyFormula.util.js";
 import { countThreadedReportSignalFields } from "../../utils/reports/scanPipelineReportSignals.util.js";
+import {
+  resolveConditionClassPipelineSource,
+  resolveDominantColorPipelineSource,
+} from "../../utils/reports/reportPipelineVisualSignals.util.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -115,8 +119,8 @@ function emptyParsedShape() {
  * @param {string} [opts.objectFamily] — e.g. somdej (default generic)
  * @param {string} [opts.materialFamily] — e.g. powder
  * @param {string} [opts.shapeFamily] — e.g. rectangular (default unknown)
- * @param {string} [opts.dominantColor] — e.g. gold | red (default unknown)
- * @param {string} [opts.conditionClass] — e.g. good | worn (default unknown)
+ * @param {string} [opts.dominantColor] — slug for formula when supplied by non-LLM upstream (never from parsed `tone`)
+ * @param {string} [opts.conditionClass] — slug when supplied by non-LLM upstream (not from object-gate enum alone)
  * @param {string} [opts.objectCheckResult] — short note from object check pipeline
  * @param {number} [opts.objectCheckConfidence] — 0–1
  * @param {string|null} [opts.pipelineObjectCategory] — Thai classifier label when known (telemetry only)
@@ -207,6 +211,9 @@ export function buildReportPayloadFromScan(opts) {
     compatPct = compatibilityPayload.score;
   }
 
+  const dominantColorResolved = resolveDominantColorPipelineSource(dominantColorOpt);
+  const conditionClassResolved = resolveConditionClassPipelineSource(conditionClassOpt);
+
   /** @type {ReturnType<typeof buildObjectEnergyPayload> | null} */
   let objectEnergyPayload = null;
   try {
@@ -214,8 +221,8 @@ export function buildReportPayloadFromScan(opts) {
       objectFamily: String(objectFamilyOpt || "generic").trim() || "generic",
       materialFamily: String(materialFamilyOpt || "").trim() || undefined,
       shapeFamily: String(shapeFamilyOpt || "unknown").trim() || "unknown",
-      dominantColor: String(dominantColorOpt || "").trim() || undefined,
-      conditionClass: String(conditionClassOpt || "").trim() || undefined,
+      dominantColor: dominantColorResolved.normalized,
+      conditionClass: conditionClassResolved.normalized,
       energyScore: energyScore ?? 5,
       mainEnergy:
         parsed.mainEnergy && parsed.mainEnergy !== "-"
@@ -316,8 +323,8 @@ export function buildReportPayloadFromScan(opts) {
       : "";
 
   const threadedSignalCount = countThreadedReportSignalFields({
-    dominantColor: dominantColorOpt,
-    conditionClass: conditionClassOpt,
+    dominantColor: dominantColorResolved.normalized,
+    conditionClass: conditionClassResolved.normalized,
     materialFamily: materialFamilyOpt,
     objectFamily: objectFamilyOpt,
     shapeFamily: shapeFamilyOpt,
@@ -326,8 +333,8 @@ export function buildReportPayloadFromScan(opts) {
     objectCategory: pipelineObjectCategoryOpt,
   });
 
-  const domPresent = Boolean(String(dominantColorOpt || "").trim());
-  const condPresent = Boolean(String(conditionClassOpt || "").trim());
+  const domPresent = Boolean(dominantColorResolved.normalized);
+  const condPresent = Boolean(conditionClassResolved.normalized);
   const occPresent =
     objectCheckConfidenceOpt != null &&
     Number.isFinite(Number(objectCheckConfidenceOpt));
@@ -341,7 +348,9 @@ export function buildReportPayloadFromScan(opts) {
       ),
       hasObjectCheckResult: Boolean(String(objectCheckResultOpt || "").trim()),
       dominantColorPresent: domPresent,
+      dominantColorPipelineSource: dominantColorResolved.source,
       conditionClassPresent: condPresent,
+      conditionClassPipelineSource: conditionClassResolved.source,
       objectCheckConfidencePresent: occPresent,
     }),
   );

@@ -2,9 +2,11 @@
  * Maps real pipeline outputs into report payload / object-energy slugs.
  * Heuristic only — do not treat as ground truth for fine-grained amulet subtype.
  *
- * NOT sourced here (still undefined until upstream exists):
- * - dominantColor — TODO: wire from vision / color extraction stage
- * - conditionClass — TODO: wire from image quality or conservator pipeline
+ * Visual signals (see `reportPipelineVisualSignals.util.js`):
+ * - dominantColor — no CV/palette pipeline in repo yet; do **not** use LLM `tone` (โทนพลัง) as
+ *   deterministic input. Future: pixel/vision stage or persisted column → pass slug via builder opts.
+ * - conditionClass — no physical-condition or quality-class model; `objectCheck` `unclear` is a
+ *   gate, not `excellent|good|…|damaged`. Future: dedicated assessment or human label → builder opts.
  * - objectCheckConfidence — only pass when a real numeric confidence exists (never fabricate)
  */
 
