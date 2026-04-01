@@ -136,6 +136,20 @@ test("buildReportPayloadFromScan: threads objectCheckResult into objectEnergy in
   assert.equal(payload.objectEnergy?.inputs?.objectCheckConfidence, null);
 });
 
+test("buildReportPayloadFromScan: dominantColor vision_v1 threads to objectEnergy inputs", () => {
+  const payload = buildReportPayloadFromScan({
+    resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
+    scanResultId: "00000000-0000-4000-8000-000000000200",
+    scanRequestId: "req-1",
+    lineUserId: "U1",
+    publicToken: "tok",
+    objectFamily: "generic",
+    dominantColor: "blue",
+    pipelineDominantColorSource: "vision_v1",
+  });
+  assert.equal(payload.objectEnergy?.inputs?.dominantColor, "blue");
+});
+
 test("buildReportPayloadFromScan: preserves numeric objectCheckConfidence when provided (not fabricated)", () => {
   const payload = buildReportPayloadFromScan({
     resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,

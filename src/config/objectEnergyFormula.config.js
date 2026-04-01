@@ -228,6 +228,56 @@ export const DOMINANT_COLOR_PROFILE = {
     compassion: 54,
     attraction: 46,
   },
+  /** v1 pixel-histogram slugs (reportPipelineDominantColor.util.js) */
+  silver: {
+    balance: 54,
+    protection: 52,
+    authority: 50,
+    compassion: 52,
+    attraction: 56,
+  },
+  bronze: {
+    balance: 52,
+    protection: 54,
+    authority: 54,
+    compassion: 50,
+    attraction: 50,
+  },
+  orange: {
+    balance: 50,
+    protection: 52,
+    authority: 56,
+    compassion: 52,
+    attraction: 58,
+  },
+  purple: {
+    balance: 56,
+    protection: 50,
+    authority: 48,
+    compassion: 54,
+    attraction: 58,
+  },
+  pink: {
+    balance: 54,
+    protection: 48,
+    authority: 46,
+    compassion: 58,
+    attraction: 62,
+  },
+  gray: {
+    balance: 56,
+    protection: 54,
+    authority: 52,
+    compassion: 50,
+    attraction: 48,
+  },
+  mixed: {
+    balance: 52,
+    protection: 52,
+    authority: 52,
+    compassion: 52,
+    attraction: 52,
+  },
 };
 
 /**

@@ -28,6 +28,7 @@ import {
   enrichQualityAnalyticsForPersist,
   QUALITY_SKIP_REASONS,
 } from "./deepScanQualityAnalytics.service.js";
+import { extractDominantColorSlugFromBuffer } from "../utils/reports/reportPipelineDominantColor.util.js";
 
 function toBase64(buffer) {
   return Buffer.isBuffer(buffer) ? buffer.toString("base64") : "";
@@ -285,18 +286,26 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
         /**
          * DB `scan_result_cache` does not persist `object_category` yet (only result_text + object_type).
          * Re-run the same vision classifier used on fresh scans so Object Energy gets a real label — not a guess from cache text.
+         * Dominant color: re-extract from the same buffer (not from cached text).
          */
-        let objectCategory = null;
-        /** @type {"cache_classify" | "missing"} */
-        let objectCategorySource = "missing";
-        try {
-          objectCategory = await classifyObjectCategory(imageBase64);
-          objectCategorySource = "cache_classify";
-        } catch (clasErr) {
-          console.error("[SCAN_CACHE] classifyObjectCategory on cache hit failed:", {
-            message: clasErr?.message,
-          });
-        }
+        const classifyPromise = (async () => {
+          try {
+            const oc = await classifyObjectCategory(imageBase64);
+            return { objectCategory: oc, objectCategorySource: /** @type {const} */ ("cache_classify") };
+          } catch (clasErr) {
+            console.error("[SCAN_CACHE] classifyObjectCategory on cache hit failed:", {
+              message: clasErr?.message,
+            });
+            return { objectCategory: null, objectCategorySource: /** @type {const} */ ("missing") };
+          }
+        })();
+        const colorPromise = extractDominantColorSlugFromBuffer(imageBuffer);
+        const [cls, domExtract] = await Promise.all([classifyPromise, colorPromise]);
+        const objectCategory = cls.objectCategory;
+        const objectCategorySource = cls.objectCategorySource;
+        const dominantColorSlug =
+          domExtract.source === "vision_v1" ? domExtract.slug : undefined;
+        const dominantColorSource = domExtract.source === "vision_v1" ? "vision_v1" : "none";
         console.log(
           JSON.stringify({
             event: "scan_result_cache",
@@ -306,13 +315,29 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
             elapsedMs: scanEndedAt - scanStartedAt,
             objectCategorySource,
             hasObjectCategory: Boolean(objectCategory && String(objectCategory).trim()),
+            dominantColorSource,
+            dominantColorSlug: dominantColorSlug ?? null,
           }),
         );
+        if (domExtract.source === "vision_v1") {
+          console.log(
+            JSON.stringify({
+              event: "SCAN_DOMINANT_COLOR_V1",
+              path: "cache_hit",
+              userId,
+              slug: domExtract.slug,
+              confidence: domExtract.confidence,
+              pixelCount: domExtract.pixelCount ?? null,
+            }),
+          );
+        }
         return {
           resultText: finalText,
           fromCache: true,
           objectCategory,
           objectCategorySource,
+          dominantColorSlug,
+          dominantColorSource,
           qualityAnalytics: enrichQualityAnalyticsForPersist(
             createEmptyQualityAnalytics({
               improve_skipped_reason: QUALITY_SKIP_REASONS.FROM_CACHE,
@@ -346,13 +371,25 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   OBJECT CATEGORY + KNOWLEDGE (before deep scan)
   ------------------------------------------------
   */
-  let objectCategory = OBJECT_CLASSIFIER_DEFAULT;
-  try {
-    objectCategory = await classifyObjectCategory(imageBase64);
-  } catch (clasErr) {
-    console.error("[SCAN] classifyObjectCategory failed (ignored):", {
-      message: clasErr?.message,
-    });
+  const [objectCategory, domExtract] = await Promise.all([
+    classifyObjectCategory(imageBase64),
+    extractDominantColorSlugFromBuffer(imageBuffer),
+  ]);
+  const dominantColorSlug =
+    domExtract.source === "vision_v1" ? domExtract.slug : undefined;
+  const dominantColorSource =
+    domExtract.source === "vision_v1" ? "vision_v1" : "none";
+  if (domExtract.source === "vision_v1") {
+    console.log(
+      JSON.stringify({
+        event: "SCAN_DOMINANT_COLOR_V1",
+        path: "fresh_scan",
+        userId,
+        slug: domExtract.slug,
+        confidence: domExtract.confidence,
+        pixelCount: domExtract.pixelCount ?? null,
+      }),
+    );
   }
   const knowledgeBase = getKnowledgeForCategory(objectCategory);
   console.log("[SCAN] objectCategory:", objectCategory, {
@@ -501,6 +538,8 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
     objectCategory,
     /** Thai classifier label — always from {@link classifyObjectCategory} on this image (fresh path). */
     objectCategorySource: "deep_scan",
+    dominantColorSlug,
+    dominantColorSource,
     qualityAnalytics,
   };
 }

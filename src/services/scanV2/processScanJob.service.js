@@ -319,7 +319,6 @@ export async function processScanJob(workerId, jobRow) {
     const catSig = mapObjectCategoryToPipelineSignals(
       scanOut?.objectCategory ?? null,
     );
-    /** Future: set `dominantColor` / `conditionClass` from non-LLM analysis of `imageBuffer` (not from `resultText`). */
     const reportPayload = buildReportPayloadFromScan({
       resultText,
       scanResultId: legacyScanResultId,
@@ -334,6 +333,9 @@ export async function processScanJob(workerId, jobRow) {
       materialFamily: catSig.materialFamily,
       shapeFamily: catSig.shapeFamily,
       objectCheckResult: objectCheck,
+      dominantColor: scanOut?.dominantColorSlug,
+      pipelineDominantColorSource:
+        scanOut?.dominantColorSource === "vision_v1" ? "vision_v1" : undefined,
       pipelineObjectCategory: scanOut?.objectCategory ?? null,
       pipelineObjectCategorySource:
         scanOut?.objectCategorySource ?? "unspecified",

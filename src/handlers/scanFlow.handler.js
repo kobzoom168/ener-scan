@@ -855,7 +855,7 @@ export async function runScanFlow({
   let scanFromCache = false;
   /** @type {object | null} */
   let scanQualityAnalytics = null;
-  /** @type {{ resultText: string, fromCache?: boolean, objectCategory?: string|null, objectCategorySource?: string, qualityAnalytics?: unknown } | null} */
+  /** @type {{ resultText: string, fromCache?: boolean, objectCategory?: string|null, objectCategorySource?: string, dominantColorSlug?: string, dominantColorSource?: string, qualityAnalytics?: unknown } | null} */
   let scanOut = null;
   const scanStartedAt = Date.now();
 
@@ -1104,7 +1104,12 @@ export async function runScanFlow({
         materialFamily: catSig.materialFamily,
         shapeFamily: catSig.shapeFamily,
         objectCheckResult: reportPipelineContext?.objectCheckResult,
-        dominantColor: reportPipelineContext?.dominantColor,
+        dominantColor:
+          scanOut?.dominantColorSlug ?? reportPipelineContext?.dominantColor,
+        pipelineDominantColorSource:
+          scanOut?.dominantColorSource === "vision_v1"
+            ? "vision_v1"
+            : undefined,
         conditionClass: reportPipelineContext?.conditionClass,
         pipelineObjectCategory: scanOut?.objectCategory ?? null,
         pipelineObjectCategorySource:

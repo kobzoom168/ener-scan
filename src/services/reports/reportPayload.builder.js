@@ -125,6 +125,7 @@ function emptyParsedShape() {
  * @param {number} [opts.objectCheckConfidence] — 0–1
  * @param {string|null} [opts.pipelineObjectCategory] — Thai classifier label when known (telemetry only)
  * @param {"deep_scan"|"cache_classify"|"missing"|"unspecified"} [opts.pipelineObjectCategorySource] — how category was obtained
+ * @param {"vision_v1"|"pipeline_opts"|"none"|undefined} [opts.pipelineDominantColorSource] — `vision_v1` when slug from pixel pipeline
  * @returns {import("./reportPayload.types.js").ReportPayload}
  */
 export function buildReportPayloadFromScan(opts) {
@@ -147,6 +148,7 @@ export function buildReportPayloadFromScan(opts) {
     objectCheckConfidence: objectCheckConfidenceOpt,
     pipelineObjectCategory: pipelineObjectCategoryOpt = null,
     pipelineObjectCategorySource: pipelineObjectCategorySourceOpt = "unspecified",
+    pipelineDominantColorSource: pipelineDominantColorSourceOpt,
   } = opts;
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
@@ -211,7 +213,10 @@ export function buildReportPayloadFromScan(opts) {
     compatPct = compatibilityPayload.score;
   }
 
-  const dominantColorResolved = resolveDominantColorPipelineSource(dominantColorOpt);
+  const dominantColorResolved = resolveDominantColorPipelineSource(
+    dominantColorOpt,
+    pipelineDominantColorSourceOpt === "vision_v1" ? "vision_v1" : undefined,
+  );
   const conditionClassResolved = resolveConditionClassPipelineSource(conditionClassOpt);
 
   /** @type {ReturnType<typeof buildObjectEnergyPayload> | null} */

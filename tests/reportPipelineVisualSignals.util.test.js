@@ -18,6 +18,12 @@ test("resolveDominantColorPipelineSource: explicit slug -> pipeline_opts + lower
   assert.equal(r.normalized, "gold");
 });
 
+test("resolveDominantColorPipelineSource: vision_v1 hint", () => {
+  const r = resolveDominantColorPipelineSource("Red", "vision_v1");
+  assert.equal(r.source, VISUAL_SIGNAL_SOURCE.VISION_V1);
+  assert.equal(r.normalized, "red");
+});
+
 test("resolveConditionClassPipelineSource: empty -> none", () => {
   const r = resolveConditionClassPipelineSource(null);
   assert.equal(r.source, VISUAL_SIGNAL_SOURCE.NONE);
