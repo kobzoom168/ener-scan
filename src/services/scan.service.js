@@ -9,6 +9,10 @@ import {
   saveCachedScanResult,
   markCachedScanHit,
   getScanCacheVersion,
+  updateCachedScanSignals,
+  shouldPersistDominantColorForCache,
+  cacheRowHasPersistedObjectCategory,
+  cacheRowHasPersistedDominantColor,
 } from "../stores/scanResultCache.db.js";
 
 import {
@@ -283,29 +287,77 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
         const finalText = String(cached.result_text).trim();
         addRecentOutput(userId, finalText);
         const scanEndedAt = Date.now();
-        /**
-         * DB `scan_result_cache` does not persist `object_category` yet (only result_text + object_type).
-         * Re-run the same vision classifier used on fresh scans so Object Energy gets a real label — not a guess from cache text.
-         * Dominant color: re-extract from the same buffer (not from cached text).
-         */
-        const classifyPromise = (async () => {
+
+        const hasPersistedCategory = cacheRowHasPersistedObjectCategory(cached);
+        const hasPersistedDom = cacheRowHasPersistedDominantColor(cached);
+
+        const catP = (async () => {
+          if (hasPersistedCategory) {
+            return {
+              objectCategory: String(cached.object_category).trim(),
+              objectCategorySource: /** @type {const} */ ("cache_persisted"),
+            };
+          }
           try {
             const oc = await classifyObjectCategory(imageBase64);
-            return { objectCategory: oc, objectCategorySource: /** @type {const} */ ("cache_classify") };
+            return {
+              objectCategory: oc,
+              objectCategorySource: /** @type {const} */ ("cache_classify"),
+            };
           } catch (clasErr) {
             console.error("[SCAN_CACHE] classifyObjectCategory on cache hit failed:", {
               message: clasErr?.message,
             });
-            return { objectCategory: null, objectCategorySource: /** @type {const} */ ("missing") };
+            return {
+              objectCategory: null,
+              objectCategorySource: /** @type {const} */ ("missing"),
+            };
           }
         })();
-        const colorPromise = extractDominantColorSlugFromBuffer(imageBuffer);
-        const [cls, domExtract] = await Promise.all([classifyPromise, colorPromise]);
+
+        const domP = (async () => {
+          if (hasPersistedDom) {
+            return {
+              dominantColorSlug: String(cached.dominant_color).trim().toLowerCase(),
+              dominantColorSource: /** @type {const} */ ("cache_persisted"),
+              domExtract: /** @type {const} */ (null),
+            };
+          }
+          const ex = await extractDominantColorSlugFromBuffer(imageBuffer);
+          return {
+            dominantColorSlug:
+              ex.source === "vision_v1" ? ex.slug : undefined,
+            dominantColorSource:
+              ex.source === "vision_v1"
+                ? /** @type {const} */ ("vision_v1")
+                : /** @type {const} */ ("none"),
+            domExtract: ex,
+          };
+        })();
+
+        const [cls, domR] = await Promise.all([catP, domP]);
         const objectCategory = cls.objectCategory;
         const objectCategorySource = cls.objectCategorySource;
-        const dominantColorSlug =
-          domExtract.source === "vision_v1" ? domExtract.slug : undefined;
-        const dominantColorSource = domExtract.source === "vision_v1" ? "vision_v1" : "none";
+        const dominantColorSlug = domR.dominantColorSlug;
+        const dominantColorSource = domR.dominantColorSource;
+
+        if (!hasPersistedCategory && objectCategorySource === "cache_classify" && objectCategory) {
+          await updateCachedScanSignals(cached.id, {
+            objectCategory,
+            objectCategorySource: "cache_classify",
+          });
+        }
+        if (
+          !hasPersistedDom &&
+          dominantColorSource === "vision_v1" &&
+          shouldPersistDominantColorForCache(dominantColorSlug, "vision_v1")
+        ) {
+          await updateCachedScanSignals(cached.id, {
+            dominantColor: dominantColorSlug,
+            dominantColorSource: "vision_v1",
+          });
+        }
+
         console.log(
           JSON.stringify({
             event: "scan_result_cache",
@@ -314,20 +366,22 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
             cacheId: cached.id,
             elapsedMs: scanEndedAt - scanStartedAt,
             objectCategorySource,
+            categoryFromCache: hasPersistedCategory,
             hasObjectCategory: Boolean(objectCategory && String(objectCategory).trim()),
             dominantColorSource,
+            colorFromCache: hasPersistedDom,
             dominantColorSlug: dominantColorSlug ?? null,
           }),
         );
-        if (domExtract.source === "vision_v1") {
+        if (domR.domExtract && domR.domExtract.source === "vision_v1") {
           console.log(
             JSON.stringify({
               event: "SCAN_DOMINANT_COLOR_V1",
-              path: "cache_hit",
+              path: "cache_hit_reextract",
               userId,
-              slug: domExtract.slug,
-              confidence: domExtract.confidence,
-              pixelCount: domExtract.pixelCount ?? null,
+              slug: domR.domExtract.slug,
+              confidence: domR.domExtract.confidence,
+              pixelCount: domR.domExtract.pixelCount ?? null,
             }),
           );
         }
@@ -483,6 +537,11 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
         resultText: finalText,
         objectType: "single_supported",
         promptVersion: cacheVersion,
+        objectCategory,
+        objectCategorySource: "deep_scan",
+        dominantColor: dominantColorSlug,
+        dominantColorSource:
+          dominantColorSource === "vision_v1" ? "vision_v1" : undefined,
       });
       console.log(
         JSON.stringify({

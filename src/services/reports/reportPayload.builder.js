@@ -124,8 +124,8 @@ function emptyParsedShape() {
  * @param {string} [opts.objectCheckResult] — short note from object check pipeline
  * @param {number} [opts.objectCheckConfidence] — 0–1
  * @param {string|null} [opts.pipelineObjectCategory] — Thai classifier label when known (telemetry only)
- * @param {"deep_scan"|"cache_classify"|"missing"|"unspecified"} [opts.pipelineObjectCategorySource] — how category was obtained
- * @param {"vision_v1"|"pipeline_opts"|"none"|undefined} [opts.pipelineDominantColorSource] — `vision_v1` when slug from pixel pipeline
+ * @param {"deep_scan"|"cache_classify"|"cache_persisted"|"missing"|"unspecified"} [opts.pipelineObjectCategorySource] — how category was obtained
+ * @param {"vision_v1"|"cache_persisted"|"pipeline_opts"|"none"|undefined} [opts.pipelineDominantColorSource]
  * @returns {import("./reportPayload.types.js").ReportPayload}
  */
 export function buildReportPayloadFromScan(opts) {
@@ -215,7 +215,11 @@ export function buildReportPayloadFromScan(opts) {
 
   const dominantColorResolved = resolveDominantColorPipelineSource(
     dominantColorOpt,
-    pipelineDominantColorSourceOpt === "vision_v1" ? "vision_v1" : undefined,
+    pipelineDominantColorSourceOpt === "vision_v1"
+      ? "vision_v1"
+      : pipelineDominantColorSourceOpt === "cache_persisted"
+        ? "cache_persisted"
+        : undefined,
   );
   const conditionClassResolved = resolveConditionClassPipelineSource(conditionClassOpt);
 

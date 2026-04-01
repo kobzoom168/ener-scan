@@ -335,7 +335,11 @@ export async function processScanJob(workerId, jobRow) {
       objectCheckResult: objectCheck,
       dominantColor: scanOut?.dominantColorSlug,
       pipelineDominantColorSource:
-        scanOut?.dominantColorSource === "vision_v1" ? "vision_v1" : undefined,
+        scanOut?.dominantColorSource === "vision_v1"
+          ? "vision_v1"
+          : scanOut?.dominantColorSource === "cache_persisted"
+            ? "cache_persisted"
+            : undefined,
       pipelineObjectCategory: scanOut?.objectCategory ?? null,
       pipelineObjectCategorySource:
         scanOut?.objectCategorySource ?? "unspecified",

@@ -24,6 +24,12 @@ test("resolveDominantColorPipelineSource: vision_v1 hint", () => {
   assert.equal(r.normalized, "red");
 });
 
+test("resolveDominantColorPipelineSource: cache_persisted hint (reuse DB slug)", () => {
+  const r = resolveDominantColorPipelineSource("Blue", "cache_persisted");
+  assert.equal(r.source, VISUAL_SIGNAL_SOURCE.CACHE_PERSISTED);
+  assert.equal(r.normalized, "blue");
+});
+
 test("resolveConditionClassPipelineSource: empty -> none", () => {
   const r = resolveConditionClassPipelineSource(null);
   assert.equal(r.source, VISUAL_SIGNAL_SOURCE.NONE);

@@ -150,6 +150,22 @@ test("buildReportPayloadFromScan: dominantColor vision_v1 threads to objectEnerg
   assert.equal(payload.objectEnergy?.inputs?.dominantColor, "blue");
 });
 
+test("buildReportPayloadFromScan: dominantColor cache_persisted threads like vision (deterministic slug)", () => {
+  const payload = buildReportPayloadFromScan({
+    resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
+    scanResultId: "00000000-0000-4000-8000-000000000201",
+    scanRequestId: "req-1",
+    lineUserId: "U1",
+    publicToken: "tok",
+    objectFamily: "generic",
+    dominantColor: "gold",
+    pipelineDominantColorSource: "cache_persisted",
+    pipelineObjectCategory: "พระเครื่อง",
+    pipelineObjectCategorySource: "cache_persisted",
+  });
+  assert.equal(payload.objectEnergy?.inputs?.dominantColor, "gold");
+});
+
 test("buildReportPayloadFromScan: preserves numeric objectCheckConfidence when provided (not fabricated)", () => {
   const payload = buildReportPayloadFromScan({
     resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,

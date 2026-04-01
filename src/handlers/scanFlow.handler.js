@@ -1109,7 +1109,9 @@ export async function runScanFlow({
         pipelineDominantColorSource:
           scanOut?.dominantColorSource === "vision_v1"
             ? "vision_v1"
-            : undefined,
+            : scanOut?.dominantColorSource === "cache_persisted"
+              ? "cache_persisted"
+              : undefined,
         conditionClass: reportPipelineContext?.conditionClass,
         pipelineObjectCategory: scanOut?.objectCategory ?? null,
         pipelineObjectCategorySource:
