@@ -24,6 +24,7 @@ import {
   deleteScanResultForAppUser,
 } from "../../stores/scanResults.db.js";
 import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js";
+import { mapObjectCategoryToPipelineSignals } from "../../utils/reports/scanPipelineReportSignals.util.js";
 import { buildPublicReportUrl } from "../reports/reportLink.service.js";
 import { generatePublicToken } from "../../utils/reports/reportToken.util.js";
 import { insertScanPublicReport } from "../../stores/scanPublicReports.db.js";
@@ -315,6 +316,9 @@ export async function processScanJob(workerId, jobRow) {
       );
     }
 
+    const catSig = mapObjectCategoryToPipelineSignals(
+      scanOut?.objectCategory ?? null,
+    );
     const reportPayload = buildReportPayloadFromScan({
       resultText,
       scanResultId: legacyScanResultId,
@@ -325,6 +329,11 @@ export async function processScanJob(workerId, jobRow) {
       modelLabel: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
       objectImageUrl,
       scannedAt: new Date().toISOString(),
+      objectFamily: catSig.objectFamily,
+      materialFamily: catSig.materialFamily,
+      shapeFamily: catSig.shapeFamily,
+      objectCheckResult: "single_supported",
+      pipelineObjectCategory: scanOut?.objectCategory ?? null,
     });
 
     await insertScanPublicReport({

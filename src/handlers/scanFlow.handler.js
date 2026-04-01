@@ -20,6 +20,7 @@ import {
 } from "../services/nonScanReply.gateway.js";
 import { buildScanResultFlexWithFallback } from "../services/flex/scanFlexReply.builder.js";
 import { buildReportPayloadFromScan } from "../services/reports/reportPayload.builder.js";
+import { mapObjectCategoryToPipelineSignals } from "../utils/reports/scanPipelineReportSignals.util.js";
 import { buildPublicReportUrl } from "../services/reports/reportLink.service.js";
 import { generatePublicToken } from "../utils/reports/reportToken.util.js";
 import { insertScanPublicReport } from "../stores/scanPublicReports.db.js";
@@ -540,6 +541,12 @@ export async function runScanFlow({
   birthdate,
   flowVersion,
   skipBirthdateSave = false,
+  /**
+   * Optional gate result from `checkSingleObject` when scan runs after image validation
+   * (e.g. finalize path). `waiting_birthdate` → `runScanFlow` may omit this — objectEnergy uses neutral.
+   * @type {{ objectCheckResult?: string } | null}
+   */
+  reportPipelineContext = null,
 }) {
   console.log("[TRACE] runScanFlow entry", {
     userId,
@@ -842,6 +849,8 @@ export async function runScanFlow({
   let scanFromCache = false;
   /** @type {object | null} */
   let scanQualityAnalytics = null;
+  /** @type {{ resultText: string, fromCache?: boolean, objectCategory?: string|null, qualityAnalytics?: unknown } | null} */
+  let scanOut = null;
   const scanStartedAt = Date.now();
 
   console.log("[WEBHOOK] runScanFlow start", {
@@ -1073,6 +1082,9 @@ export async function runScanFlow({
           }),
         );
       }
+      const catSig = mapObjectCategoryToPipelineSignals(
+        scanOut?.objectCategory ?? null,
+      );
       const reportPayload = buildReportPayloadFromScan({
         resultText,
         scanResultId,
@@ -1083,6 +1095,11 @@ export async function runScanFlow({
         modelLabel: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
         objectImageUrl,
         scannedAt: new Date().toISOString(),
+        objectFamily: catSig.objectFamily,
+        materialFamily: catSig.materialFamily,
+        shapeFamily: catSig.shapeFamily,
+        objectCheckResult: reportPipelineContext?.objectCheckResult,
+        pipelineObjectCategory: scanOut?.objectCategory ?? null,
       });
       await insertScanPublicReport({
         scanResultId,

@@ -216,6 +216,84 @@ function hero(p) {
 /**
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
  */
+/**
+ * Soft label for object-energy confidence (0–1).
+ * @param {number} conf
+ */
+function confidenceReadableForObjectEnergy(conf) {
+  const c = Number(conf);
+  if (!Number.isFinite(c)) return "";
+  const pct = Math.round(c * 100);
+  if (pct >= 80) return "ความมั่นใจของการประเมิน: ค่อนข้างสูง";
+  if (pct >= 58) return "ความมั่นใจของการประเมิน: ปานกลาง";
+  return "ความมั่นใจของการประเมิน: พอใช้เป็นภาพรวม";
+}
+
+/**
+ * Deterministic object-energy block — reads `payload.objectEnergy` only (never raw scan text).
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ */
+function objectEnergySection(p) {
+  const oe = p.objectEnergy;
+  if (!oe || typeof oe !== "object") return "";
+  const stars = oe.stars;
+  if (!stars || typeof stars !== "object") return "";
+  const profile = oe.profile && typeof oe.profile === "object" ? oe.profile : {};
+
+  const rows = /** @type {const} */ ([
+    { k: "balance", label: "สมดุล" },
+    { k: "protection", label: "คุ้มกัน" },
+    { k: "authority", label: "อำนาจ" },
+    { k: "compassion", label: "เมตตา" },
+    { k: "attraction", label: "แรงดึงดูด" },
+  ]);
+
+  const mer = oe.mainEnergyResolved;
+  const lead =
+    mer && String(mer.labelThai || "").trim()
+      ? `<p class="oe-lead">พลังหลักที่สรุปจากโปรไฟล์: <strong>${escapeHtml(String(mer.labelThai).trim())}</strong></p>`
+      : "";
+
+  const rowHtml = rows
+    .map(({ k, label }) => {
+      const st = stars[k];
+      const sc = profile[k];
+      const starN = Math.min(5, Math.max(1, Math.round(Number(st) || 3)));
+      const starStr = `${"★".repeat(starN)}${"☆".repeat(5 - starN)}`;
+      const scoreStr =
+        sc != null && Number.isFinite(Number(sc)) ? `${Math.round(Number(sc))}` : "—";
+      return `<div class="oe-row">
+  <span class="oe-label">${escapeHtml(label)}</span>
+  <span class="oe-stars" aria-label="${starN} จาก 5 ดาว">${starStr}</span>
+  <span class="oe-score">${escapeHtml(scoreStr)}</span>
+</div>`;
+    })
+    .join("");
+
+  const explain = Array.isArray(oe.explain)
+    ? oe.explain.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 4)
+    : [];
+  const bullets =
+    explain.length > 0
+      ? `<ul class="oe-explain">${explain.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>`
+      : "";
+
+  const conf = oe.confidence;
+  const confLine =
+    conf != null && Number.isFinite(Number(conf))
+      ? `<p class="oe-confidence">${escapeHtml(confidenceReadableForObjectEnergy(Number(conf)))}<span class="oe-confidence-pct"> (${Math.round(Number(conf) * 100)}%)</span></p>`
+      : "";
+
+  const inner = `<p class="oe-sub">โปรไฟล์พลัง 5 มิติจากสูตรกลางของระบบ — ไม่ได้ดึงจากข้อความ AI โดยตรง</p>${lead}<div class="oe-table" role="group" aria-label="โปรไฟล์พลังห้ามิติ">${rowHtml}</div>${bullets}${confLine}`;
+
+  return sectionCard(
+    "พลังของวัตถุชิ้นนี้",
+    inner,
+    "",
+    "card--tone-a card--object-energy",
+  );
+}
+
 function summary(p) {
   const s = p.summary || {};
   const score =
@@ -1019,12 +1097,77 @@ export function renderMobileReportHtml(payload) {
       margin: 0;
       line-height: 1.5;
     }
+    .card--object-energy .oe-sub {
+      margin: 0 0 0.55rem;
+      font-size: 0.8rem;
+      line-height: 1.55;
+      color: rgba(163, 158, 150, 0.92);
+    }
+    .card--object-energy .oe-lead {
+      margin: 0 0 0.75rem;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      color: rgba(240, 237, 232, 0.94);
+    }
+    .card--object-energy .oe-table {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      margin: 0.35rem 0 0;
+    }
+    .card--object-energy .oe-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(2rem, auto);
+      gap: 0.35rem 0.55rem;
+      align-items: center;
+      font-size: 0.9rem;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .card--object-energy .oe-row:last-child {
+      border-bottom: none;
+    }
+    .card--object-energy .oe-label {
+      color: var(--muted);
+    }
+    .card--object-energy .oe-stars {
+      color: var(--gold);
+      letter-spacing: 0.06em;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+    .card--object-energy .oe-score {
+      text-align: end;
+      font-variant-numeric: tabular-nums;
+      color: rgba(240, 237, 232, 0.88);
+      font-size: 0.82rem;
+    }
+    .card--object-energy .oe-explain {
+      margin: 0.75rem 0 0;
+      padding-left: 1.05rem;
+      color: rgba(163, 158, 150, 0.95);
+      font-size: 0.84rem;
+      line-height: 1.6;
+    }
+    .card--object-energy .oe-explain li {
+      margin: 0.25rem 0;
+    }
+    .card--object-energy .oe-confidence {
+      margin: 0.65rem 0 0;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      color: rgba(110, 105, 98, 0.98);
+    }
+    .card--object-energy .oe-confidence-pct {
+      opacity: 0.88;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     ${hero(p)}
     ${summary(p)}
+    ${objectEnergySection(p)}
     ${wordingInterpretationSection(p)}
     ${what}
     ${owner}

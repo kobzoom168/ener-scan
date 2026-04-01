@@ -30,9 +30,17 @@ export function buildObjectEnergyPayload(raw) {
     objectCheckConfidence: raw.objectCheckConfidence,
   });
 
+  const rawCheck = String(raw.objectCheckResult || "").trim().toLowerCase();
+  const internalOnly = new Set([
+    "single_supported",
+    "multiple",
+    "unclear",
+    "unsupported",
+  ]);
   const checkHint =
     raw.objectCheckResult != null &&
-    String(raw.objectCheckResult).trim().length > 0
+    String(raw.objectCheckResult).trim().length > 0 &&
+    !internalOnly.has(rawCheck)
       ? `หมายเหตุจากการตรวจวัตถุ: ${String(raw.objectCheckResult).trim().slice(0, 120)}`
       : "";
 

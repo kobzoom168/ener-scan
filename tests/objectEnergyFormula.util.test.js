@@ -119,6 +119,22 @@ test("buildReportPayloadFromScan: wires objectEnergy and summary.scanDimensions"
   assert.equal(typeof payload.summary.scanDimensions?.["สมดุล"], "number");
 });
 
+test("buildReportPayloadFromScan: threads objectCheckResult into objectEnergy inputs (no fabricated confidence)", () => {
+  const payload = buildReportPayloadFromScan({
+    resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
+    scanResultId: "00000000-0000-4000-8000-000000000099",
+    scanRequestId: "req-1",
+    lineUserId: "U1",
+    publicToken: "tok",
+    objectFamily: "crystal",
+    materialFamily: "crystal",
+    objectCheckResult: "single_supported",
+    pipelineObjectCategory: "คริสตัล/หิน",
+  });
+  assert.equal(payload.objectEnergy?.inputs?.objectCheckResult, "single_supported");
+  assert.equal(payload.objectEnergy?.inputs?.objectCheckConfidence, null);
+});
+
 test("normalizeReportPayloadForRender: preserves objectEnergy", () => {
   const { payload } = normalizeReportPayloadForRender({
     reportId: "r",

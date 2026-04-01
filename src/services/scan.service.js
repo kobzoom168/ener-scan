@@ -294,6 +294,8 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
         return {
           resultText: finalText,
           fromCache: true,
+          /** Not persisted on cache rows yet — classify again would cost extra call; leave null. */
+          objectCategory: null,
           qualityAnalytics: enrichQualityAnalyticsForPersist(
             createEmptyQualityAnalytics({
               improve_skipped_reason: QUALITY_SKIP_REASONS.FROM_CACHE,
@@ -479,6 +481,7 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   return {
     resultText: finalText,
     fromCache: false,
+    objectCategory,
     qualityAnalytics,
   };
 }

@@ -2095,6 +2095,7 @@ async function finalizeAcceptedImage({
         birthdate: savedBirthdate,
         flowVersion,
         skipBirthdateSave: true,
+        reportPipelineContext: { objectCheckResult: objectCheck },
       });
       return;
     }
@@ -2226,6 +2227,7 @@ async function finalizeAcceptedImage({
           birthdate: savedBirthdate,
           flowVersion,
           skipBirthdateSave: true,
+          reportPipelineContext: { objectCheckResult: objectCheck },
         });
         return;
       }

@@ -7,6 +7,7 @@ import { deriveReportWordingFromParsed } from "./reportWording.derive.js";
 import { buildCompatibilityPayload } from "../reportPayload/buildCompatibilityPayload.js";
 import { buildObjectEnergyPayload } from "../reportPayload/buildObjectEnergyPayload.js";
 import { scanDimensionsFromObjectEnergyStars } from "../../utils/objectEnergyFormula.util.js";
+import { countThreadedReportSignalFields } from "../../utils/reports/scanPipelineReportSignals.util.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -118,6 +119,7 @@ function emptyParsedShape() {
  * @param {string} [opts.conditionClass] — e.g. good | worn (default unknown)
  * @param {string} [opts.objectCheckResult] — short note from object check pipeline
  * @param {number} [opts.objectCheckConfidence] — 0–1
+ * @param {string|null} [opts.pipelineObjectCategory] — Thai classifier label when known (telemetry only)
  * @returns {import("./reportPayload.types.js").ReportPayload}
  */
 export function buildReportPayloadFromScan(opts) {
@@ -138,6 +140,7 @@ export function buildReportPayloadFromScan(opts) {
     conditionClass: conditionClassOpt = "",
     objectCheckResult: objectCheckResultOpt = "",
     objectCheckConfidence: objectCheckConfidenceOpt,
+    pipelineObjectCategory: pipelineObjectCategoryOpt = null,
   } = opts;
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
@@ -310,6 +313,17 @@ export function buildReportPayloadFromScan(opts) {
       ? String(compatibilityPayload.band)
       : "";
 
+  const threadedSignalCount = countThreadedReportSignalFields({
+    dominantColor: dominantColorOpt,
+    conditionClass: conditionClassOpt,
+    materialFamily: materialFamilyOpt,
+    objectFamily: objectFamilyOpt,
+    shapeFamily: shapeFamilyOpt,
+    objectCheckResult: objectCheckResultOpt,
+    objectCheckConfidence: objectCheckConfidenceOpt,
+    objectCategory: pipelineObjectCategoryOpt,
+  });
+
   console.log(
     JSON.stringify({
       event: "REPORT_PAYLOAD_BUILT",
@@ -327,6 +341,8 @@ export function buildReportPayloadFromScan(opts) {
       compatPresent: compatPct != null,
       hasObjectImage: Boolean(objectImageUrl),
       hasWording: Boolean(wording?.mainEnergy),
+      threadedSignalCount,
+      hasObjectEnergy: Boolean(objectEnergyPayload),
     }),
   );
 
