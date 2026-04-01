@@ -18,7 +18,7 @@ import {
 import {
   hasRepeatedPhrase,
   hasRepeatedClosing,
-  tooSimilarToRecent,
+  scoreTooSimilarToRecent,
   countMatchesFromList,
 } from "../utils/similarity.js";
 
@@ -127,7 +127,24 @@ function ensureScanInputs({ imageBuffer, birthdate, userId }) {
   }
 }
 
-function validateOutput(text, userRecents, globalRecents) {
+function logSimilarityReject(scope, detail) {
+  console.log(
+    JSON.stringify({
+      event: "SCAN_SIMILARITY_REJECT",
+      scope,
+      saveRecentMode: "accepted_only",
+      acceptedRecentCount: detail.acceptedRecentCount ?? null,
+      ...detail,
+    }),
+  );
+}
+
+function validateOutput(
+  text,
+  userRecents,
+  globalRecents,
+  { acceptedRecentCount } = {},
+) {
   const cleanText = String(text || "").trim();
 
   if (!cleanText || cleanText.length < 120) {
@@ -142,11 +159,35 @@ function validateOutput(text, userRecents, globalRecents) {
     return { isBad: true, reason: "repeated_closing" };
   }
 
-  if (tooSimilarToRecent(cleanText, userRecents, 0.62)) {
+  const userSim = scoreTooSimilarToRecent(cleanText, userRecents, "user");
+  if (userSim.tooSimilar) {
+    logSimilarityReject("user_recent", {
+      matchKind: userSim.matchKind,
+      userRecentMaxNarrativeWord: Number(userSim.maxNarrativeWord.toFixed(4)),
+      userRecentMaxNarrativeBigram: Number(userSim.maxNarrativeBigram.toFixed(4)),
+      userRecentMaxFullWord: Number(userSim.maxFullWord.toFixed(4)),
+      userRecentMaxFullBigram: Number(userSim.maxFullBigram.toFixed(4)),
+      comparedNarrativeLength: userSim.comparedNarrativeLength,
+      excludedStructuredSections: userSim.excludedStructuredSections,
+      acceptedRecentCount:
+        acceptedRecentCount != null ? acceptedRecentCount : userRecents.length,
+    });
     return { isBad: true, reason: "too_similar_user_recent" };
   }
 
-  if (tooSimilarToRecent(cleanText, globalRecents, 0.7)) {
+  const globalSim = scoreTooSimilarToRecent(cleanText, globalRecents, "global");
+  if (globalSim.tooSimilar) {
+    logSimilarityReject("global_recent", {
+      matchKind: globalSim.matchKind,
+      globalRecentMaxNarrativeWord: Number(globalSim.maxNarrativeWord.toFixed(4)),
+      globalRecentMaxNarrativeBigram: Number(
+        globalSim.maxNarrativeBigram.toFixed(4),
+      ),
+      globalRecentMaxFullWord: Number(globalSim.maxFullWord.toFixed(4)),
+      globalRecentMaxFullBigram: Number(globalSim.maxFullBigram.toFixed(4)),
+      comparedNarrativeLength: globalSim.comparedNarrativeLength,
+      excludedStructuredSections: globalSim.excludedStructuredSections,
+    });
     return { isBad: true, reason: "too_similar_global_recent" };
   }
 
@@ -165,7 +206,15 @@ function validateOutput(text, userRecents, globalRecents) {
   return { isBad: false, reason: "ok" };
 }
 
-function buildRetryHint(lastOutput, attempt, reason) {
+export function buildRetryHint(lastOutput, attempt, reason) {
+  const oneLine = String(lastOutput || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const antiEcho =
+    oneLine.length > 0
+      ? ` ห้ามพิมพ์ซ้ำหรือพาราเฟรสใกล้เคียงกับช่วงนี้ของรอบก่อน: "${oneLine.slice(0, 220)}${oneLine.length > 220 ? "…" : ""}"`
+      : "";
+
   const base =
     "ผลลัพธ์ก่อนหน้าคล้ายข้อความเดิมมากเกินไป ให้เขียนใหม่โดยเปลี่ยนคำเด่น มุมเล่า คำเปรียบเทียบ และคำปิดท้ายทั้งหมด แต่ยังคงความหมายเดิมและคง format เดิม";
 
@@ -175,17 +224,21 @@ function buildRetryHint(lastOutput, attempt, reason) {
     repeated_closing:
       "เปลี่ยนประโยคปิดท้ายใหม่ทั้งหมด ห้ามใช้ประโยคชวนต่อเดิม",
     too_similar_user_recent:
-      "ผลลัพธ์นี้คล้ายกับผลล่าสุดของผู้ใช้คนนี้มากเกินไป ต้องเปลี่ยนคำเด่นและโทนเล่า",
+      "โฟกัสที่ย่อหน้า ภาพรวม เหตุผลที่เข้ากับเจ้าของ ชิ้นนี้หนุนเรื่อง เหมาะใช้เมื่อ และปิดท้าย — ต้องใช้ประโยคเปิดใหม่ทั้งบล็อก ชุดอุปมาคนละชุด คนละสถานการณ์ชีวิต/บริบทการใช้ คนละคำคม/คำปิด ห้ามสลับแค่คำคุณศัพท์เดิม",
     too_similar_global_recent:
-      "ผลลัพธ์นี้คล้ายกับเคสล่าสุดโดยรวมมากเกินไป ต้องเปลี่ยนภาพรวมและคำเปรียบเทียบ",
+      "ผลลัพธ์นี้คล้ายกับเคสล่าสุดโดยรวมมากเกินไป ต้องเปลี่ยนภาพรวมและคำเปรียบเทียบให้เป็นคนละเรื่องเล่า",
     too_generic_feel:
       "ภาษายังกลางเกินไป ให้ทำให้เฉพาะชิ้นมากขึ้นและมีคำเด่นที่จำง่าย",
     empty_output: "ตอบใหม่ตาม format เดิมให้ครบทุกหัวข้อ",
   };
 
-  return `${base} เงื่อนไขเฉพาะรอบนี้: ${
-    reasonMap[reason] || "เขียนใหม่ให้สดขึ้น"
-  }`;
+  const specific = reasonMap[reason] || "เขียนใหม่ให้สดขึ้น";
+  const echoBlock =
+    reason === "too_similar_user_recent" || reason === "too_similar_global_recent"
+      ? antiEcho
+      : "";
+
+  return `${base} เงื่อนไขเฉพาะรอบนี้: ${specific}${echoBlock}`;
 }
 
 async function generateScanWithValidation({
@@ -225,7 +278,9 @@ async function generateScanWithValidation({
     },
 
     isBadOutputFn: (text) => {
-      const validation = validateOutput(text, userRecents, globalRecents);
+      const validation = validateOutput(text, userRecents, globalRecents, {
+        acceptedRecentCount: userRecents.length,
+      });
       console.log("[SCAN_VALIDATION]", validation);
       return validation;
     },
@@ -500,28 +555,40 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   FINAL VALIDATION
   ------------------------------------------------
   */
-  const finalValidation = validateOutput(finalText, userRecents, globalRecents);
+  const finalValidation = validateOutput(finalText, userRecents, globalRecents, {
+    acceptedRecentCount: userRecents.length,
+  });
 
   console.log("[SCAN] final validation:", finalValidation);
 
   if (finalValidation.isBad) {
     console.log(
-      "[SCAN] final output still not ideal, but returning best available result"
+      "[SCAN] final output still not ideal, but returning best available result",
+    );
+    console.log(
+      JSON.stringify({
+        event: "SCAN_RECENT_SKIP",
+        reason: "final_validation_bad",
+        validationReason: finalValidation.reason,
+        saveRecentMode: "accepted_only",
+      }),
     );
   }
 
   /*
   ------------------------------------------------
-  SAVE RECENT
+  SAVE RECENT (accepted outputs only — avoid poisoning anti-repeat with rejected text)
   ------------------------------------------------
   */
   const storeStartedAt = Date.now();
 
-  addRecentOutput(userId, finalText);
+  if (!finalValidation.isBad) {
+    addRecentOutput(userId, finalText);
+    console.log("[SCAN] recent output saved (accepted)");
+  }
 
   const storeEndedAt = Date.now();
 
-  console.log("[SCAN] recent output saved");
   console.log("[SCAN_TIMING] storeElapsedMs:", storeEndedAt - storeStartedAt);
 
   /*

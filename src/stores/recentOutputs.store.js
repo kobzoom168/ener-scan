@@ -4,6 +4,10 @@ const MAX_GLOBAL_RECENT = 50;
 const recentOutputsByUser = new Map();
 const globalRecentOutputs = [];
 
+/**
+ * Appends to per-user + global recents. Callers should pass only **accepted** scan text
+ * (see `scan.service.js`: skip when final validation failed).
+ */
 export function getRecentOutputs(userId) {
   return recentOutputsByUser.get(userId) || [];
 }
