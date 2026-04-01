@@ -58,6 +58,8 @@ test("buildScanResultOutboundTrace: summary_link vs legacy_full flags", () => {
   assert.equal(t1.hasLegacyReportPayload, false);
   assert.equal(t1.lineSummaryPresent, true);
   assert.equal(t1.hasReportUrl, true);
+  assert.equal(t1.quotaMode, "free");
+  assert.equal(t1.accessSource, "free");
 
   const legacy = {
     deliveryStrategy: "legacy_full",

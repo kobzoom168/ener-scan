@@ -114,6 +114,9 @@ export function buildScanResultOutboundTrace(msg, payload) {
     }),
     accessSource:
       typeof p.accessSource === "string" ? p.accessSource : null,
+    /** Same as accessSource when set (scan job quota / access gate); for log filters that expect `quotaMode`. */
+    quotaMode:
+      typeof p.accessSource === "string" ? p.accessSource : null,
     deliveryStrategy:
       p.deliveryStrategy != null
         ? String(p.deliveryStrategy)
