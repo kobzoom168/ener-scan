@@ -120,6 +120,7 @@ function emptyParsedShape() {
  * @param {string} [opts.objectCheckResult] — short note from object check pipeline
  * @param {number} [opts.objectCheckConfidence] — 0–1
  * @param {string|null} [opts.pipelineObjectCategory] — Thai classifier label when known (telemetry only)
+ * @param {"deep_scan"|"cache_classify"|"missing"|"unspecified"} [opts.pipelineObjectCategorySource] — how category was obtained
  * @returns {import("./reportPayload.types.js").ReportPayload}
  */
 export function buildReportPayloadFromScan(opts) {
@@ -141,6 +142,7 @@ export function buildReportPayloadFromScan(opts) {
     objectCheckResult: objectCheckResultOpt = "",
     objectCheckConfidence: objectCheckConfidenceOpt,
     pipelineObjectCategory: pipelineObjectCategoryOpt = null,
+    pipelineObjectCategorySource: pipelineObjectCategorySourceOpt = "unspecified",
   } = opts;
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
@@ -324,6 +326,26 @@ export function buildReportPayloadFromScan(opts) {
     objectCategory: pipelineObjectCategoryOpt,
   });
 
+  const domPresent = Boolean(String(dominantColorOpt || "").trim());
+  const condPresent = Boolean(String(conditionClassOpt || "").trim());
+  const occPresent =
+    objectCheckConfidenceOpt != null &&
+    Number.isFinite(Number(objectCheckConfidenceOpt));
+  console.log(
+    JSON.stringify({
+      event: "REPORT_PIPELINE_SIGNALS",
+      scanResultIdPrefix: rid ? `${rid.slice(0, 8)}` : "",
+      objectCategorySource: pipelineObjectCategorySourceOpt,
+      hasPipelineObjectCategory: Boolean(
+        pipelineObjectCategoryOpt && String(pipelineObjectCategoryOpt).trim(),
+      ),
+      hasObjectCheckResult: Boolean(String(objectCheckResultOpt || "").trim()),
+      dominantColorPresent: domPresent,
+      conditionClassPresent: condPresent,
+      objectCheckConfidencePresent: occPresent,
+    }),
+  );
+
   console.log(
     JSON.stringify({
       event: "REPORT_PAYLOAD_BUILT",
@@ -343,6 +365,7 @@ export function buildReportPayloadFromScan(opts) {
       hasWording: Boolean(wording?.mainEnergy),
       threadedSignalCount,
       hasObjectEnergy: Boolean(objectEnergyPayload),
+      pipelineObjectCategorySource: pipelineObjectCategorySourceOpt,
     }),
   );
 

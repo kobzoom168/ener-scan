@@ -130,9 +130,43 @@ test("buildReportPayloadFromScan: threads objectCheckResult into objectEnergy in
     materialFamily: "crystal",
     objectCheckResult: "single_supported",
     pipelineObjectCategory: "คริสตัล/หิน",
+    pipelineObjectCategorySource: "deep_scan",
   });
   assert.equal(payload.objectEnergy?.inputs?.objectCheckResult, "single_supported");
   assert.equal(payload.objectEnergy?.inputs?.objectCheckConfidence, null);
+});
+
+test("buildReportPayloadFromScan: preserves numeric objectCheckConfidence when provided (not fabricated)", () => {
+  const payload = buildReportPayloadFromScan({
+    resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
+    scanResultId: "00000000-0000-4000-8000-000000000100",
+    scanRequestId: "req-1",
+    lineUserId: "U1",
+    publicToken: "tok",
+    objectFamily: "generic",
+    objectCheckResult: "single_supported",
+    objectCheckConfidence: 0.82,
+    pipelineObjectCategory: "พระเครื่อง",
+    pipelineObjectCategorySource: "cache_classify",
+  });
+  assert.equal(payload.objectEnergy?.inputs?.objectCheckConfidence, 0.82);
+});
+
+test("buildReportPayloadFromScan: missing dominantColor/conditionClass still builds objectEnergy", () => {
+  const payload = buildReportPayloadFromScan({
+    resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
+    scanResultId: "00000000-0000-4000-8000-000000000101",
+    scanRequestId: "req-1",
+    lineUserId: "U1",
+    publicToken: "tok",
+    objectFamily: "generic",
+    dominantColor: "",
+    conditionClass: "",
+    pipelineObjectCategorySource: "missing",
+  });
+  assert.ok(payload.objectEnergy?.profile);
+  assert.equal(payload.objectEnergy?.inputs?.dominantColor, null);
+  assert.equal(payload.objectEnergy?.inputs?.conditionClass, null);
 });
 
 test("normalizeReportPayloadForRender: preserves objectEnergy", () => {

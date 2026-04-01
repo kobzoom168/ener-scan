@@ -543,7 +543,7 @@ export async function runScanFlow({
   skipBirthdateSave = false,
   /**
    * Optional gate result from `checkSingleObject` when scan runs after image validation
-   * (e.g. finalize path). `waiting_birthdate` → `runScanFlow` may omit this — objectEnergy uses neutral.
+   * (finalize path, or `waiting_birthdate` when stored on `session.pendingImage`).
    * @type {{ objectCheckResult?: string } | null}
    */
   reportPipelineContext = null,
@@ -849,7 +849,7 @@ export async function runScanFlow({
   let scanFromCache = false;
   /** @type {object | null} */
   let scanQualityAnalytics = null;
-  /** @type {{ resultText: string, fromCache?: boolean, objectCategory?: string|null, qualityAnalytics?: unknown } | null} */
+  /** @type {{ resultText: string, fromCache?: boolean, objectCategory?: string|null, objectCategorySource?: string, qualityAnalytics?: unknown } | null} */
   let scanOut = null;
   const scanStartedAt = Date.now();
 
@@ -866,7 +866,6 @@ export async function runScanFlow({
   await sendPreScanAcknowledgementPushOnly({ client, userId });
 
   try {
-    let scanOut;
     try {
       scanOut = await runDeepScan({
         imageBuffer,
@@ -1100,6 +1099,8 @@ export async function runScanFlow({
         shapeFamily: catSig.shapeFamily,
         objectCheckResult: reportPipelineContext?.objectCheckResult,
         pipelineObjectCategory: scanOut?.objectCategory ?? null,
+        pipelineObjectCategorySource:
+          scanOut?.objectCategorySource ?? "unspecified",
       });
       await insertScanPublicReport({
         scanResultId,

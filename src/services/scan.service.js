@@ -282,6 +282,21 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
         const finalText = String(cached.result_text).trim();
         addRecentOutput(userId, finalText);
         const scanEndedAt = Date.now();
+        /**
+         * DB `scan_result_cache` does not persist `object_category` yet (only result_text + object_type).
+         * Re-run the same vision classifier used on fresh scans so Object Energy gets a real label — not a guess from cache text.
+         */
+        let objectCategory = null;
+        /** @type {"cache_classify" | "missing"} */
+        let objectCategorySource = "missing";
+        try {
+          objectCategory = await classifyObjectCategory(imageBase64);
+          objectCategorySource = "cache_classify";
+        } catch (clasErr) {
+          console.error("[SCAN_CACHE] classifyObjectCategory on cache hit failed:", {
+            message: clasErr?.message,
+          });
+        }
         console.log(
           JSON.stringify({
             event: "scan_result_cache",
@@ -289,13 +304,15 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
             userId,
             cacheId: cached.id,
             elapsedMs: scanEndedAt - scanStartedAt,
-          })
+            objectCategorySource,
+            hasObjectCategory: Boolean(objectCategory && String(objectCategory).trim()),
+          }),
         );
         return {
           resultText: finalText,
           fromCache: true,
-          /** Not persisted on cache rows yet — classify again would cost extra call; leave null. */
-          objectCategory: null,
+          objectCategory,
+          objectCategorySource,
           qualityAnalytics: enrichQualityAnalyticsForPersist(
             createEmptyQualityAnalytics({
               improve_skipped_reason: QUALITY_SKIP_REASONS.FROM_CACHE,
@@ -482,6 +499,8 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
     resultText: finalText,
     fromCache: false,
     objectCategory,
+    /** Thai classifier label — always from {@link classifyObjectCategory} on this image (fresh path). */
+    objectCategorySource: "deep_scan",
     qualityAnalytics,
   };
 }

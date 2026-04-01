@@ -1,5 +1,8 @@
 /**
  * Persistent cache: perceptual image hash + normalized birthdate + prompt_version → result_text.
+ *
+ * TODO (schema): persist `object_category` (Thai classifier) on cache rows to avoid an extra
+ * `classifyObjectCategory` call on cache hits — see `scan.service.js` cache path.
  */
 import { supabase } from "../config/supabase.js";
 import { normalizeBirthdateForScan } from "../utils/webhookText.util.js";

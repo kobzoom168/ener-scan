@@ -332,8 +332,10 @@ export async function processScanJob(workerId, jobRow) {
       objectFamily: catSig.objectFamily,
       materialFamily: catSig.materialFamily,
       shapeFamily: catSig.shapeFamily,
-      objectCheckResult: "single_supported",
+      objectCheckResult: objectCheck,
       pipelineObjectCategory: scanOut?.objectCategory ?? null,
+      pipelineObjectCategorySource:
+        scanOut?.objectCategorySource ?? "unspecified",
     });
 
     await insertScanPublicReport({

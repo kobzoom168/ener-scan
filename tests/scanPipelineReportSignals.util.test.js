@@ -25,3 +25,15 @@ test("countThreadedReportSignalFields: counts category + check", () => {
   });
   assert.ok(n >= 3);
 });
+
+test("countThreadedReportSignalFields: numeric objectCheckConfidence counts when finite", () => {
+  const withOcc = countThreadedReportSignalFields({
+    objectCheckConfidence: 0.75,
+    objectCategory: "พระเครื่อง",
+  });
+  const withoutOcc = countThreadedReportSignalFields({
+    objectCheckConfidence: undefined,
+    objectCategory: "พระเครื่อง",
+  });
+  assert.equal(withOcc - withoutOcc, 1);
+});

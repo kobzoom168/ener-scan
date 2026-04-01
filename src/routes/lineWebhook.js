@@ -2285,6 +2285,8 @@ async function finalizeAcceptedImage({
     {
       messageId: event.message.id,
       imageBuffer,
+      /** From `checkSingleObject` — forwarded when user sends birthdate later (waiting_birthdate). */
+      objectCheckResult: objectCheck,
     },
     flowVersion
   );
@@ -5383,6 +5385,15 @@ async function handleTextMessage({ client, event, userId, session }) {
               imageBuffer: session.pendingImage.imageBuffer,
               birthdate: normalizedBirthdate,
               flowVersion,
+              reportPipelineContext:
+                session.pendingImage?.objectCheckResult != null &&
+                String(session.pendingImage.objectCheckResult).trim() !== ""
+                  ? {
+                      objectCheckResult: String(
+                        session.pendingImage.objectCheckResult,
+                      ).trim(),
+                    }
+                  : null,
             });
             return;
           }
