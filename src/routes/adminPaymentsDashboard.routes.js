@@ -35,6 +35,7 @@ import {
   adminResetScanAbuseState,
   snapshotAbuseForAdminResetLog,
 } from "../stores/abuseGuard.store.js";
+import { clearPaymentState } from "../stores/manualPaymentAccess.store.js";
 import {
   enqueueApproveNotify,
   enqueueAdminSystemText,
@@ -1243,6 +1244,20 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
         }),
       );
 
+      try {
+        clearPaymentState(activation.lineUserId);
+        console.log(
+          JSON.stringify({
+            event: "PAYMENT_ROUTE_STATE_CLEARED",
+            paymentId,
+            lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
+            source: "admin_dashboard_approve",
+          }),
+        );
+      } catch (clearErr) {
+        console.error("[ADMIN_DASH] clearPaymentState (approve):", clearErr);
+      }
+
       /** @type {{ id: string | null, deduped: boolean } | null} */
       let enqueueInfo = null;
       const lineReplyToken =
@@ -1254,6 +1269,16 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
         console.log(
           JSON.stringify({
             event: "APPROVE_ENTITLEMENT_GRANTED",
+            paymentId,
+            lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
+            paidRemainingScans: activation.paidRemainingScans ?? null,
+            paidUntil: activation.paidUntil ?? null,
+            paidPlanCode: activation.paidPlanCode ?? null,
+          }),
+        );
+        console.log(
+          JSON.stringify({
+            event: "PAYMENT_APPROVE_ENTITLEMENT_GRANTED",
             paymentId,
             lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
             paidRemainingScans: activation.paidRemainingScans ?? null,

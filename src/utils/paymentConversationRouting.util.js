@@ -3,6 +3,8 @@
  * Kept small for unit tests and webhook branches.
  */
 
+import { computePaidActive } from "../services/scanOfferAccess.resolver.js";
+
 export const ACTIVE_SLIP_PAYMENT_STATUSES = ["awaiting_payment", "pending_verify"];
 
 /**
@@ -81,4 +83,39 @@ export function shouldEmitPayNotNeededForPaymentIntent(
  */
 export function paymentRowOwnsImageRouting(pendingPaymentRow) {
   return isActiveSlipPaymentRow(pendingPaymentRow);
+}
+
+/**
+ * When paid entitlement is active (DB + gate math), object images must use the scan pipeline.
+ * Slip routing stays for users who still need to finish slip/payment without an active paid window.
+ *
+ * @param {{
+ *   allowed?: boolean;
+ *   reason?: string;
+ *   paidUntil?: string | null;
+ *   paidRemainingScans?: number;
+ * } | null | undefined} accessDecision
+ * @param {Date} [now]
+ * @returns {boolean}
+ */
+export function shouldRouteObjectImageToScanBeforeSlipPipeline(
+  accessDecision,
+  now = new Date(),
+) {
+  if (!accessDecision) return false;
+  const paidRem = Number(accessDecision.paidRemainingScans);
+  const rem = Number.isFinite(paidRem) ? paidRem : 0;
+  if (
+    computePaidActive(
+      accessDecision.paidUntil ?? null,
+      rem,
+      now,
+    )
+  ) {
+    return true;
+  }
+  if (accessDecision.allowed === true && accessDecision.reason === "paid") {
+    return true;
+  }
+  return false;
 }

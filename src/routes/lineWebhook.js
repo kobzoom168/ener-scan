@@ -259,6 +259,7 @@ import {
   isAwaitingPaymentActionableForTextRouting,
   paymentRowOwnsImageRouting,
   shouldEmitPayNotNeededForPaymentIntent,
+  shouldRouteObjectImageToScanBeforeSlipPipeline,
 } from "../utils/paymentConversationRouting.util.js";
 
 import { runScanFlow } from "../handlers/scanFlow.handler.js";
@@ -1519,7 +1520,7 @@ async function finalizeAcceptedImage({
     imageBufferLength: imageBuffer?.length || 0,
   });
 
-  // Access truth + DB payment row together: active slip rows win over object-scan even if scan access is allowed.
+  // Access truth + DB payment row: active slip rows own slip validation unless paid entitlement says scan first.
   let accessDecision;
   const accessFromParent =
     turnCache &&
@@ -1544,6 +1545,9 @@ async function finalizeAcceptedImage({
 
   const hasPaidAccess =
     accessDecision?.allowed === true && accessDecision?.reason === "paid";
+
+  const routeObjectToScanFirst =
+    shouldRouteObjectImageToScanBeforeSlipPipeline(accessDecision);
 
   let pendingPayment = null;
   const paymentFromParent =
@@ -1578,22 +1582,55 @@ async function finalizeAcceptedImage({
 
   const paymentOwnsImage = paymentRowOwnsImageRouting(pendingPayment);
 
+  const slipPipelineNeeded =
+    paymentOwnsImage && pendingPayment && !routeObjectToScanFirst;
+
+  if (
+    routeObjectToScanFirst &&
+    paymentOwnsImage &&
+    pendingPayment
+  ) {
+    console.log(
+      JSON.stringify({
+        event: "ACCESS_TRUTH_OVERRIDE_APPLIED",
+        source: "finalizeAcceptedImage",
+        lineUserIdPrefix: lineUserIdPrefix8(userId),
+        messageId: event?.message?.id ?? null,
+        paymentState: String(pendingPayment?.status ?? ""),
+        paymentId: pendingPayment?.id ?? null,
+        hasPaidAccess,
+        entitlementActive: routeObjectToScanFirst,
+        paidRemainingScans: accessDecision?.paidRemainingScans ?? null,
+        paidUntil: accessDecision?.paidUntil ?? null,
+        reason: "paid_entitlement_overrides_slip_row",
+      }),
+    );
+  }
+
   const chosenPath =
-    paymentOwnsImage && pendingPayment
+    slipPipelineNeeded
       ? "slip"
       : !accessDecision?.allowed &&
           accessDecision?.reason === "payment_required" &&
           !paymentOwnsImage
         ? "payment_gate"
         : "scan";
-  console.log("[IMAGE_ROUTING_DECISION]", {
-    userId,
-    hasPaidAccess,
-    accessReason: accessDecision?.reason ?? null,
-    hasAwaitingPayment: Boolean(pendingPayment),
-    paymentOwnsImage,
-    chosenPath,
-  });
+  console.log(
+    JSON.stringify({
+      event: "IMAGE_ROUTING_DECISION",
+      lineUserIdPrefix: lineUserIdPrefix8(userId),
+      messageId: event?.message?.id ?? null,
+      hasPaidAccess,
+      entitlementActive: routeObjectToScanFirst,
+      accessReason: accessDecision?.reason ?? null,
+      hasAwaitingPayment: Boolean(pendingPayment),
+      paymentOwnsImage,
+      slipPipelineNeeded,
+      routeObjectToScanFirst,
+      paidRemainingScans: accessDecision?.paidRemainingScans ?? null,
+      chosenPath,
+    }),
+  );
   if (turnPerf) {
     turnPerf.log("ROUTE_DECIDED", {
       chosenPath,
@@ -1704,7 +1741,7 @@ async function finalizeAcceptedImage({
     );
   }
 
-  if (paymentOwnsImage && pendingPayment) {
+  if (slipPipelineNeeded) {
     console.log(
       JSON.stringify({
         event: "PAYMENT_STATE_WON_IMAGE_ROUTING",
@@ -2373,8 +2410,13 @@ async function handleImageMessage({ client, event, userId, session }) {
     turnCache.pendingPaymentRow = null;
   }
 
+  const routeObjectToScanFirst =
+    shouldRouteObjectImageToScanBeforeSlipPipeline(routeAccessDecision);
+
   const imageWillUseSlipPath =
-    !routeAccessDecision?.allowed && routePendingPayment;
+    !routeObjectToScanFirst &&
+    !routeAccessDecision?.allowed &&
+    routePendingPayment;
 
   if (imageWillUseSlipPath) {
     const payStatus = checkPaymentAbuseStatus(userId, now);

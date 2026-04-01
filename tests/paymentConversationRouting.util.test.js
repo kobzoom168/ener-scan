@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   isAwaitingPaymentActionableForTextRouting,
   shouldEmitPayNotNeededForPaymentIntent,
+  shouldRouteObjectImageToScanBeforeSlipPipeline,
 } from "../src/utils/paymentConversationRouting.util.js";
 
 test("isAwaitingPaymentActionable: pending_verify wins even when access allowed", () => {
@@ -83,6 +84,54 @@ test("shouldEmitPayNotNeeded: denied → false", () => {
       { allowed: false, reason: "payment_required" },
       { status: "awaiting_payment" },
     ),
+    false,
+  );
+});
+
+test("shouldRouteObjectImageToScanBeforeSlipPipeline: paid reason → true", () => {
+  assert.equal(
+    shouldRouteObjectImageToScanBeforeSlipPipeline({
+      allowed: true,
+      reason: "paid",
+      paidUntil: new Date(Date.now() + 3600_000).toISOString(),
+      paidRemainingScans: 3,
+    }),
+    true,
+  );
+});
+
+test("shouldRouteObjectImageToScanBeforeSlipPipeline: paidUntil window + scans → true", () => {
+  assert.equal(
+    shouldRouteObjectImageToScanBeforeSlipPipeline({
+      allowed: false,
+      reason: "payment_required",
+      paidUntil: new Date(Date.now() + 3600_000).toISOString(),
+      paidRemainingScans: 1,
+    }),
+    true,
+  );
+});
+
+test("shouldRouteObjectImageToScanBeforeSlipPipeline: free + no paid window → false", () => {
+  assert.equal(
+    shouldRouteObjectImageToScanBeforeSlipPipeline({
+      allowed: true,
+      reason: "free",
+      paidUntil: null,
+      paidRemainingScans: 0,
+    }),
+    false,
+  );
+});
+
+test("shouldRouteObjectImageToScanBeforeSlipPipeline: exhausted paid scans → false", () => {
+  assert.equal(
+    shouldRouteObjectImageToScanBeforeSlipPipeline({
+      allowed: false,
+      reason: "payment_required",
+      paidUntil: new Date(Date.now() + 3600_000).toISOString(),
+      paidRemainingScans: 0,
+    }),
     false,
   );
 });
