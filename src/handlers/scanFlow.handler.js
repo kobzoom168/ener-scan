@@ -542,9 +542,15 @@ export async function runScanFlow({
   flowVersion,
   skipBirthdateSave = false,
   /**
-   * Optional gate result from `checkSingleObject` when scan runs after image validation
-   * (finalize path, or `waiting_birthdate` when stored on `session.pendingImage`).
-   * @type {{ objectCheckResult?: string } | null}
+   * Optional non-LLM pipeline signals for the report builder.
+   * - `objectCheckResult`: from `checkSingleObject` (finalize / pending image).
+   * - `dominantColor` / `conditionClass`: reserved for future upstream (e.g. vision histogram,
+   *   persisted columns). Do not pass parsed LLM `tone` here — see `reportPipelineVisualSignals.util.js`.
+   * @type {{
+   *   objectCheckResult?: string,
+   *   dominantColor?: string,
+   *   conditionClass?: string,
+   * } | null}
    */
   reportPipelineContext = null,
 }) {
@@ -1098,6 +1104,8 @@ export async function runScanFlow({
         materialFamily: catSig.materialFamily,
         shapeFamily: catSig.shapeFamily,
         objectCheckResult: reportPipelineContext?.objectCheckResult,
+        dominantColor: reportPipelineContext?.dominantColor,
+        conditionClass: reportPipelineContext?.conditionClass,
         pipelineObjectCategory: scanOut?.objectCategory ?? null,
         pipelineObjectCategorySource:
           scanOut?.objectCategorySource ?? "unspecified",
