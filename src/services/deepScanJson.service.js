@@ -4,6 +4,7 @@
  */
 
 import { SCAN_DIMENSION_TO_FALLBACK_ENERGY } from "../config/scanKnowledgeBase.js";
+import { glossForPrimaryEnergyName } from "../utils/deepScanHumanGloss.util.js";
 import { sortDimensionKeysForStarDisplay } from "./flex/flex.utils.js";
 
 const DIM_KEYS = ["คุ้มกัน", "สมดุล", "อำนาจ", "เมตตา", "ดึงดูด"];
@@ -157,12 +158,12 @@ export function renderDeepScanJsonToLegacyText(p, objectCategory, options = {}) 
 ผลการตรวจพลังวัตถุ โดย อาจารย์ Ener
 
 ระดับพลัง: ${scoreDisplay} / 10
-พลังหลัก: ${p.energyName}
+พลังหลัก: ${p.energyName} (${glossForPrimaryEnergyName(p.energyName)})
 ความสอดคล้องกับเจ้าของ: ${compatPct}%
 
 ลักษณะพลัง
 • บุคลิก: โดดเด่นด้าน ${topDim} (สอดคล้องกับแกนพลังของชิ้นนี้)
-• โทนพลัง: หลากมิติ | ดูจากคะแนนรายด้านด้านล่าง
+• โทนพลัง: หลากมิติ | ดูจากคะแนนรายด้าน (สังเกตความต่างของคะแนนแต่ละมิติ)
 • พลังซ่อน: ${p.description}
 
 ${dimBlock}

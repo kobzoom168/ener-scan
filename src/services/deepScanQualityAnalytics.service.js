@@ -41,12 +41,19 @@ export function getQualityTier(score) {
  * Lightweight pattern flags for clustering / prompt evolution (Thai copy).
  * @param {string} text
  */
+/**
+ * “Signature” = mild contrast / turn / hedge — many families to avoid one repeated hook
+ * (similarity layer already guards copy; this is for analytics only).
+ */
 export function extractSignals(text) {
   const t = String(text || "");
+  const signatureHints =
+    /ไม่ได้|แต่ถ้า|แต่|ทว่า|อย่างไรก็ตาม|อาจว่า|บางที|ถึงอย่างไร|ก็ยัง|หากจะว่า|ทั้งที่|ฉะนั้น/u;
   return {
-    has_signature_phrase: t.includes("ไม่ได้") || t.includes("แต่"),
-    has_life_scenario: t.includes("เวลา") || t.includes("เมื่อ"),
-    has_emotional_hook: t.includes("รู้สึก") || t.includes("จังหวะ"),
+    has_signature_phrase: signatureHints.test(t),
+    has_life_scenario:
+      /เวลา|เมื่อ|ช่วง|วันนี้|สัปดาห์|ก่อน|หลัง|ระหว่าง/u.test(t),
+    has_emotional_hook: /รู้สึก|จังหวะ|อารมณ์|ใจ|นิ่ง|วุ่น/u.test(t),
   };
 }
 
@@ -76,10 +83,16 @@ export function enrichQualityAnalyticsForPersist(qa, { resultText }) {
       ? { ...qa }
       : { ...createEmptyQualityAnalytics() };
 
+  const scoreAfter = base.score_after;
+  const tier =
+    scoreAfter != null && Number.isFinite(Number(scoreAfter))
+      ? getQualityTier(scoreAfter)
+      : null;
+
   return {
     ...base,
     version: Math.max(Number(base.version) || 1, 2),
-    quality_tier: getQualityTier(base.score_after),
+    quality_tier: tier,
     signals: extractSignals(resultText),
     improve_gain_ratio: computeImproveGainRatio(base.score_before, base.delta),
   };

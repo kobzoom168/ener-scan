@@ -26,6 +26,7 @@ import {
   calculateCompatibilityPercentNumber,
   calculateUserAgeFromBirthdate,
 } from "../utils/scanCompatibility.util.js";
+import { ensurePrimaryEnergyLineHasGloss } from "../utils/deepScanHumanGloss.util.js";
 
 /**
  * @param {{ imageBase64: string, birthdate: string, retryHint?: string, mimeType?: string, objectCategory?: string, knowledgeBase?: string }} opts
@@ -59,13 +60,25 @@ export async function runDeepScanPipeline({
   );
 
   const parsed = parseDeepScanModelJson(rawModelText);
-  const draft = normalizeDeepScanText(
+  let draft = normalizeDeepScanText(
     parsed
       ? renderDeepScanJsonToLegacyText(parsed, objectCategory, {
           compatibilityPercent,
         })
       : rawModelText,
   );
+  const hrBeforeGloss = isDeepScanHumanReadable(draft);
+  draft = ensurePrimaryEnergyLineHasGloss(draft);
+  const hrAfterGloss = isDeepScanHumanReadable(draft);
+  if (!hrBeforeGloss && hrAfterGloss) {
+    console.log(
+      JSON.stringify({
+        event: "SCAN_QUALITY_GLOSS_APPLIED",
+        reason: "primary_energy_gloss",
+        layer: "deterministic",
+      }),
+    );
+  }
 
   if (!parsed) {
     console.warn("[DEEP_SCAN] JSON parse failed, using raw model text", {
@@ -96,12 +109,13 @@ export async function runDeepScanPipeline({
   }
 
   try {
-    const rewritten = normalizeDeepScanText(
+    let rewritten = normalizeDeepScanText(
       await rewriteDeepScanDraft({
         systemPrompt: deepScanRewriteSystemPrompt,
         userPrompt: buildDeepScanRewriteUserPrompt(draft),
       }),
     );
+    rewritten = ensurePrimaryEnergyLineHasGloss(rewritten);
 
     if (!isDeepScanFormatValid(rewritten)) {
       console.warn("[DEEP_SCAN] invalid rewritten format, fallback to draft", {
