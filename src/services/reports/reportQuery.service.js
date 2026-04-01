@@ -4,6 +4,11 @@ import {
 } from "./mockReportPayload.js";
 import { getScanPublicReportByToken } from "../../stores/scanPublicReports.db.js";
 import { getPublicationWithScanResultV2ByToken } from "../../stores/reportPublications.db.js";
+import {
+  buildFinalDeliveryCorrelation,
+  FinalDeliveryErrorCode,
+  publicTokenPrefix12,
+} from "../../utils/scanV2/finalDeliveryTelemetry.util.js";
 
 /** @type {Map<string, import("./reportPayload.types.js").ReportPayload>} */
 const memoryByPublicToken = new Map();
@@ -51,18 +56,46 @@ export async function resolvePublicReportPayload(publicToken) {
   const key = String(publicToken || "").trim();
   if (!key) {
     console.log(
-      JSON.stringify({ event: "REPORT_LOOKUP", outcome: "empty_token" }),
+      JSON.stringify({
+        event: "REPORT_PUBLIC_LOOKUP_MISS",
+        path: "reportQuery",
+        worker: "resolvePublicReportPayload",
+        publicTokenPrefix: "",
+        sourceLayer: null,
+        errorCode: FinalDeliveryErrorCode.PUBLIC_REPORT_NOT_FOUND,
+        httpStatus: 404,
+        reason: "empty_token",
+      }),
     );
     return { kind: "error", code: "REPORT_NOT_FOUND", httpStatus: 404 };
   }
+
+  const tokP = publicTokenPrefix12(key);
+  console.log(
+    JSON.stringify({
+      event: "REPORT_PUBLIC_LOOKUP_START",
+      path: "reportQuery",
+      worker: "resolvePublicReportPayload",
+      publicTokenPrefix: tokP,
+    }),
+  );
 
   const mem = memoryByPublicToken.get(key);
   if (mem) {
     console.log(
       JSON.stringify({
-        event: "REPORT_LOOKUP",
-        outcome: "memory_hit",
-        tokenPrefix: `${key.slice(0, 12)}…`,
+        event: "REPORT_PUBLIC_LOOKUP_HIT",
+        path: "reportQuery",
+        worker: "resolvePublicReportPayload",
+        publicTokenPrefix: tokP,
+        sourceLayer: "memory",
+        status: "published",
+        httpStatus: 200,
+        payloadPresent: true,
+        reportUrlPresent: false,
+        ...buildFinalDeliveryCorrelation({
+          scanResultId: mem.reportId,
+        }),
       }),
     );
     return {
@@ -81,24 +114,86 @@ export async function resolvePublicReportPayload(publicToken) {
     if (isPublicationExpired(pub)) {
       console.log(
         JSON.stringify({
-          event: "REPORT_LOOKUP",
-          outcome: "publication_expired",
-          tokenPrefix: `${key.slice(0, 12)}…`,
+          event: "REPORT_PUBLIC_LOOKUP_MISS",
+          path: "reportQuery",
+          worker: "resolvePublicReportPayload",
+          publicTokenPrefix: tokP,
+          sourceLayer: "report_publications",
+          status: "expired",
+          publicationStatus: "expired",
+          errorCode: FinalDeliveryErrorCode.PUBLIC_REPORT_EXPIRED,
+          httpStatus: 410,
+          ...buildFinalDeliveryCorrelation({
+            publicationId: pub.id,
+            scanResultId: pub.scan_result_id,
+          }),
         }),
       );
       return { kind: "error", code: "REPORT_EXPIRED", httpStatus: 410 };
     }
 
     if (pub.status === "failed") {
+      console.log(
+        JSON.stringify({
+          event: "REPORT_PUBLIC_LOOKUP_MISS",
+          path: "reportQuery",
+          worker: "resolvePublicReportPayload",
+          publicTokenPrefix: tokP,
+          sourceLayer: "report_publications",
+          status: "failed",
+          publicationStatus: "failed",
+          errorCode: FinalDeliveryErrorCode.PUBLIC_REPORT_UNAVAILABLE,
+          httpStatus: 503,
+          ...buildFinalDeliveryCorrelation({
+            publicationId: pub.id,
+            scanResultId: pub.scan_result_id,
+          }),
+        }),
+      );
       return { kind: "error", code: "REPORT_UNAVAILABLE", httpStatus: 503 };
     }
 
     if (pub.status !== "published") {
+      console.log(
+        JSON.stringify({
+          event: "REPORT_PUBLIC_LOOKUP_MISS",
+          path: "reportQuery",
+          worker: "resolvePublicReportPayload",
+          publicTokenPrefix: tokP,
+          sourceLayer: "report_publications",
+          status: String(pub.status || "pending"),
+          publicationStatus: String(pub.status || "pending"),
+          errorCode: FinalDeliveryErrorCode.PUBLIC_REPORT_UNAVAILABLE,
+          httpStatus: 503,
+          ...buildFinalDeliveryCorrelation({
+            publicationId: pub.id,
+            scanResultId: pub.scan_result_id,
+          }),
+        }),
+      );
       return { kind: "error", code: "REPORT_UNAVAILABLE", httpStatus: 503 };
     }
 
     const raw = v2?.report_payload_json;
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+      console.log(
+        JSON.stringify({
+          event: "REPORT_PUBLIC_LOOKUP_MISS",
+          path: "reportQuery",
+          worker: "resolvePublicReportPayload",
+          publicTokenPrefix: tokP,
+          sourceLayer: "report_publications",
+          status: "published",
+          publicationStatus: "published",
+          errorCode: FinalDeliveryErrorCode.PUBLICATION_PAYLOAD_MISSING,
+          httpStatus: 503,
+          payloadPresent: false,
+          ...buildFinalDeliveryCorrelation({
+            publicationId: pub.id,
+            scanResultId: pub.scan_result_id,
+          }),
+        }),
+      );
       return { kind: "error", code: "REPORT_UNAVAILABLE", httpStatus: 503 };
     }
 
@@ -107,10 +202,20 @@ export async function resolvePublicReportPayload(publicToken) {
 
     console.log(
       JSON.stringify({
-        event: "REPORT_LOOKUP",
-        outcome: "publication_hit",
-        tokenPrefix: `${key.slice(0, 12)}…`,
-        scanResultIdPrefix: String(pub.scan_result_id || "").slice(0, 8),
+        event: "REPORT_PUBLIC_LOOKUP_HIT",
+        path: "reportQuery",
+        worker: "resolvePublicReportPayload",
+        publicTokenPrefix: tokP,
+        sourceLayer: "report_publications",
+        status: "published",
+        publicationStatus: "published",
+        httpStatus: 200,
+        payloadPresent: true,
+        reportUrlPresent: Boolean(String(pub.report_url || "").trim()),
+        ...buildFinalDeliveryCorrelation({
+          publicationId: pub.id,
+          scanResultId: pub.scan_result_id,
+        }),
       }),
     );
 
@@ -123,14 +228,28 @@ export async function resolvePublicReportPayload(publicToken) {
     };
   }
 
+  console.log(
+    JSON.stringify({
+      event: "REPORT_PUBLIC_LOOKUP_FALLBACK_LEGACY",
+      path: "reportQuery",
+      worker: "resolvePublicReportPayload",
+      publicTokenPrefix: tokP,
+    }),
+  );
+
   try {
     const row = await getScanPublicReportByToken(key);
     if (!row) {
       console.log(
         JSON.stringify({
-          event: "REPORT_LOOKUP",
-          outcome: "db_no_row",
-          tokenPrefix: `${key.slice(0, 12)}…`,
+          event: "REPORT_PUBLIC_LOOKUP_MISS",
+          path: "reportQuery",
+          worker: "resolvePublicReportPayload",
+          publicTokenPrefix: tokP,
+          sourceLayer: "legacy_scan_public_reports",
+          errorCode: FinalDeliveryErrorCode.PUBLIC_REPORT_NOT_FOUND,
+          httpStatus: 404,
+          reason: "legacy_no_row",
         }),
       );
       return { kind: "error", code: "REPORT_NOT_FOUND", httpStatus: 404 };
@@ -145,12 +264,21 @@ export async function resolvePublicReportPayload(publicToken) {
         );
       console.log(
         JSON.stringify({
-          event: "REPORT_LOOKUP",
-          outcome: "db_hit",
-          tokenPrefix: `${key.slice(0, 12)}…`,
+          event: "REPORT_PUBLIC_LOOKUP_HIT",
+          path: "reportQuery",
+          worker: "resolvePublicReportPayload",
+          publicTokenPrefix: tokP,
+          sourceLayer: "legacy_scan_public_reports",
+          status: "published",
+          httpStatus: 200,
+          payloadPresent: true,
+          reportUrlPresent: false,
           hasSummary,
           hasSections,
-          reportVersion: row.report_version || null,
+          reportPayloadVersion: row.report_version || null,
+          ...buildFinalDeliveryCorrelation({
+            scanResultId: payload.reportId,
+          }),
         }),
       );
       return {
@@ -163,21 +291,45 @@ export async function resolvePublicReportPayload(publicToken) {
     }
     console.log(
       JSON.stringify({
-        event: "REPORT_LOOKUP",
-        outcome: "db_malformed_payload",
-        tokenPrefix: `${key.slice(0, 12)}…`,
+        event: "REPORT_PUBLIC_LOOKUP_MISS",
+        path: "reportQuery",
+        worker: "resolvePublicReportPayload",
+        publicTokenPrefix: tokP,
+        sourceLayer: "legacy_scan_public_reports",
+        errorCode: FinalDeliveryErrorCode.PUBLICATION_PAYLOAD_MISSING,
+        httpStatus: 404,
+        reason: "legacy_malformed_payload",
       }),
     );
+    return { kind: "error", code: "REPORT_NOT_FOUND", httpStatus: 404 };
   } catch (err) {
     console.error(
       JSON.stringify({
-        event: "REPORT_LOOKUP",
-        outcome: "db_error",
-        tokenPrefix: `${key.slice(0, 12)}…`,
-        message: err?.message,
+        event: "REPORT_PUBLIC_LOOKUP_MISS",
+        path: "reportQuery",
+        worker: "resolvePublicReportPayload",
+        publicTokenPrefix: tokP,
+        sourceLayer: "legacy_scan_public_reports",
+        errorCode: FinalDeliveryErrorCode.PUBLIC_REPORT_UNAVAILABLE,
+        httpStatus: 503,
+        reason: "legacy_db_error",
+        message: String(err?.message || "").slice(0, 240),
       }),
     );
   }
+
+  console.log(
+    JSON.stringify({
+      event: "REPORT_PUBLIC_LOOKUP_MISS",
+      path: "reportQuery",
+      worker: "resolvePublicReportPayload",
+      publicTokenPrefix: tokP,
+      sourceLayer: "legacy_scan_public_reports",
+      errorCode: FinalDeliveryErrorCode.PUBLIC_REPORT_NOT_FOUND,
+      httpStatus: 404,
+      reason: "not_resolved",
+    }),
+  );
 
   return { kind: "error", code: "REPORT_NOT_FOUND", httpStatus: 404 };
 }

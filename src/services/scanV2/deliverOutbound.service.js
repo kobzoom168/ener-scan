@@ -23,6 +23,10 @@ import {
   idPrefix8,
   workerIdPrefix16,
 } from "../../utils/scanV2Trace.util.js";
+import {
+  buildScanResultOutboundTrace,
+  FinalDeliveryErrorCode,
+} from "../../utils/scanV2/finalDeliveryTelemetry.util.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -65,10 +69,15 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
 
   await sleepIfRateHint(sleep, lineUserId);
 
+  const scanResultTrace =
+    kind === "scan_result"
+      ? buildScanResultOutboundTrace(msg, payload)
+      : {};
   console.log(
     JSON.stringify({
       event: "OUTBOUND_SEND_START",
       ...base(),
+      ...scanResultTrace,
     }),
   );
 
@@ -128,6 +137,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         JSON.stringify({
           event: "OUTBOUND_SCAN_RESULT_LINE_PAYLOAD",
           ...base(),
+          ...buildScanResultOutboundTrace(msg, payload),
           deliveryStrategy,
           summaryLinkMode: deliveryStrategy === "summary_link",
           textChars: String(payload.text || "").length,
@@ -155,6 +165,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           JSON.stringify({
             event: "OUTBOUND_SEND_SUCCESS",
             ...base(),
+            ...buildScanResultOutboundTrace(msg, payload),
             method: delivery.method,
             deliveryStrategy:
               payload.deliveryStrategy != null
@@ -170,8 +181,11 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         console.warn(
           JSON.stringify({
             event: "LINE_RATE_LIMIT_HIT",
+            path: "worker-delivery",
+            errorCode: FinalDeliveryErrorCode.LINE_RATE_LIMITED,
             outboundIdPrefix: String(id).slice(0, 8),
             kind: "scan_result",
+            ...buildScanResultOutboundTrace(msg, payload),
           }),
         );
         return { sent: false, is429: true, errorCode: "line_429" };
@@ -404,6 +418,14 @@ export async function finalizeOutboundAttempt(id, msg, result, traceCtx = {}) {
   const kind = msg.kind;
   const max = OUTBOUND_MAX_ATTEMPTS[kind] ?? 5;
   const base = outboundDeliveryBase(msg, traceCtx);
+  const payload =
+    msg.payload_json && typeof msg.payload_json === "object"
+      ? msg.payload_json
+      : {};
+  const scanTrace =
+    kind === "scan_result"
+      ? buildScanResultOutboundTrace(msg, payload)
+      : {};
 
   if (result.sent) return;
 
@@ -419,8 +441,11 @@ export async function finalizeOutboundAttempt(id, msg, result, traceCtx = {}) {
       });
       console.error(
         JSON.stringify({
-          event: "OUTBOUND_SEND_FAILED",
+          event: "OUTBOUND_SEND_FAIL",
           ...base,
+          ...scanTrace,
+          errorCode: FinalDeliveryErrorCode.LINE_RATE_LIMITED,
+          statusCode: 429,
           attempt: nextAttempt,
           reason: "max_429",
           errorMessage: "max_attempts",
@@ -462,8 +487,16 @@ export async function finalizeOutboundAttempt(id, msg, result, traceCtx = {}) {
   });
   console.error(
     JSON.stringify({
-      event: "OUTBOUND_SEND_FAILED",
+      event: "OUTBOUND_SEND_FAIL",
       ...base,
+      ...scanTrace,
+      errorCode:
+        result.errorCode === "line_429"
+          ? FinalDeliveryErrorCode.LINE_RATE_LIMITED
+          : result.errorCode === "line_send_failed"
+            ? FinalDeliveryErrorCode.LINE_TRANSPORT_FAILED
+            : result.errorCode || "send_failed",
+      statusCode: result.is429 ? 429 : null,
       reason: result.errorCode || "send_failed",
       errorMessage: String(result.errorMessage || "").slice(0, 500),
     }),

@@ -50,6 +50,12 @@ import {
   buildSummaryLinkFallbackText,
 } from "./lineFinalScanDelivery.builder.js";
 import { logUnsupportedObjectRejected } from "../lineWebhook/unsupportedObjectReply.service.js";
+import {
+  buildFinalDeliveryCorrelation,
+  classifyReportPublicationBuildError,
+  FinalDeliveryErrorCode,
+  publicTokenPrefix12,
+} from "../../utils/scanV2/finalDeliveryTelemetry.util.js";
 
 /**
  * @param {string} workerId
@@ -296,6 +302,18 @@ export async function processScanJob(workerId, jobRow) {
   let publicToken = /** @type {string | null} */ (null);
 
   try {
+    console.log(
+      JSON.stringify({
+        event: "REPORT_PUBLICATION_BUILD_START",
+        path: "worker-scan",
+        worker: "processScanJob",
+        ...buildFinalDeliveryCorrelation({
+          jobId,
+          scanResultId: legacyScanResultId,
+          lineUserId,
+        }),
+      }),
+    );
     const token = generatePublicToken();
     let objectImageUrl = "";
     try {
@@ -355,6 +373,52 @@ export async function processScanJob(workerId, jobRow) {
     publicToken = token;
     reportUrl = buildPublicReportUrl(token);
 
+    const reportPayloadVersion =
+      reportPayload &&
+      typeof reportPayload === "object" &&
+      "reportVersion" in reportPayload
+        ? /** @type {{ reportVersion?: unknown }} */ (reportPayload).reportVersion
+        : null;
+
+    console.log(
+      JSON.stringify({
+        event: "REPORT_PUBLICATION_BUILD_OK",
+        path: "worker-scan",
+        worker: "processScanJob",
+        ...buildFinalDeliveryCorrelation({
+          jobId,
+          scanResultId: legacyScanResultId,
+          publicToken: token,
+          lineUserId,
+        }),
+        reportPayloadVersion: reportPayloadVersion ?? null,
+        reportUrlPresent: Boolean(String(reportUrl || "").trim()),
+        payloadPresent: true,
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "REPORT_PUBLICATION_TOKEN_READY",
+        path: "worker-scan",
+        ...buildFinalDeliveryCorrelation({
+          jobId,
+          scanResultId: legacyScanResultId,
+          publicToken: token,
+        }),
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "REPORT_PUBLICATION_URL_READY",
+        path: "worker-scan",
+        ...buildFinalDeliveryCorrelation({
+          jobId,
+          publicToken: token,
+        }),
+        reportUrlPresent: Boolean(String(reportUrl || "").trim()),
+      }),
+    );
+
     console.log(
       JSON.stringify({
         event: "SCAN_V2_REPORT_PUBLIC_OK",
@@ -369,6 +433,25 @@ export async function processScanJob(workerId, jobRow) {
       }),
     );
   } catch (reportErr) {
+    const errorCode = classifyReportPublicationBuildError(reportErr);
+    console.error(
+      JSON.stringify({
+        event: "REPORT_PUBLICATION_BUILD_FAIL",
+        path: "worker-scan",
+        worker: "processScanJob",
+        ...buildFinalDeliveryCorrelation({
+          jobId,
+          scanResultId: legacyScanResultId,
+          lineUserId,
+        }),
+        errorCode,
+        reason: String(
+          reportErr && typeof reportErr === "object" && "message" in reportErr
+            ? /** @type {{ message?: unknown }} */ (reportErr).message
+            : reportErr,
+        ).slice(0, 240),
+      }),
+    );
     console.error(
       JSON.stringify({
         event: "SCAN_V2_REPORT_PUBLIC_FAIL",
@@ -379,6 +462,7 @@ export async function processScanJob(workerId, jobRow) {
         jobIdPrefix: String(jobId).slice(0, 8),
         message: reportErr?.message,
         code: reportErr?.code,
+        errorCode,
       }),
     );
   }
@@ -389,6 +473,25 @@ export async function processScanJob(workerId, jobRow) {
   let lineDeliveryText = resultText;
   /** @type {ReturnType<typeof extractLineSummaryFields> | null} */
   let lineSummaryForOutbound = null;
+
+  console.log(
+    JSON.stringify({
+      event: "SCAN_RESULT_DELIVERY_STRATEGY_SELECTED",
+      path: "worker-scan",
+      worker: "processScanJob",
+      ...buildFinalDeliveryCorrelation({
+        jobId,
+        scanResultId: legacyScanResultId,
+        publicToken,
+        lineUserId,
+      }),
+      deliveryStrategy: lineFinalMode,
+      summaryLinkMode: lineFinalMode === "summary_link",
+      reportUrlPresent: Boolean(String(reportUrl || "").trim()),
+      hasReportPayload: Boolean(reportPayloadForReply),
+      publicTokenPrefix: publicTokenPrefix12(publicToken),
+    }),
+  );
 
   if (lineFinalMode === "summary_link") {
     if (reportPayloadForReply) {
@@ -411,11 +514,17 @@ export async function processScanJob(workerId, jobRow) {
         event: "SCAN_JOB_LINE_DELIVERY_BUILT",
         path: "worker-scan",
         deliveryStrategy: "summary_link",
-        jobIdPrefix: String(jobId).slice(0, 8),
-        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+        ...buildFinalDeliveryCorrelation({
+          jobId,
+          publicToken,
+          lineUserId,
+        }),
         textChars: lineDeliveryText.length,
         hasReportUrl: Boolean(String(reportUrl || "").trim()),
         hasReportPayload: Boolean(reportPayloadForReply),
+        lineSummaryPresent: Boolean(lineSummaryForOutbound),
+        hasFlex: false,
+        hasLegacyReportPayload: false,
       }),
     );
   } else {
@@ -442,9 +551,15 @@ export async function processScanJob(workerId, jobRow) {
         event: "SCAN_JOB_LINE_DELIVERY_BUILT",
         path: "worker-scan",
         deliveryStrategy: "legacy_full",
-        jobIdPrefix: String(jobId).slice(0, 8),
-        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+        ...buildFinalDeliveryCorrelation({
+          jobId,
+          publicToken,
+          lineUserId,
+        }),
         hasFlex: Boolean(flex),
+        hasReportUrl: Boolean(String(reportUrl || "").trim()),
+        hasLegacyReportPayload: Boolean(reportPayloadForReply),
+        lineSummaryPresent: false,
       }),
     );
   }
@@ -549,6 +664,8 @@ export async function processScanJob(workerId, jobRow) {
       appUserId,
       scanResultV2Id,
       legacyScanResultId,
+      publicToken,
+      reportPublicationId,
     },
     status: "queued",
   });
@@ -561,7 +678,11 @@ export async function processScanJob(workerId, jobRow) {
       jobIdPrefix: idPrefix8(jobId),
       lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
       outboundIdPrefix: idPrefix8(reportOutboundRow?.id ?? null),
+      publicationIdPrefix: idPrefix8(reportPublicationId),
+      publicTokenPrefix: publicTokenPrefix12(publicToken),
       deliveryStrategy: lineFinalMode,
+      summaryLinkMode: lineFinalMode === "summary_link",
+      reportUrlPresent: Boolean(String(reportUrl || "").trim()),
       timestamp: scanV2TraceTs(),
     }),
   );

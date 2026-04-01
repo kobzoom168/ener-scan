@@ -7,6 +7,10 @@ import {
   logReportPageOpen,
   safeTokenPrefix,
 } from "../utils/reports/reportRolloutTelemetry.util.js";
+import {
+  FinalDeliveryErrorCode,
+  publicTokenPrefix12,
+} from "../utils/scanV2/finalDeliveryTelemetry.util.js";
 
 const NOT_FOUND_HTML = `<!DOCTYPE html>
 <html lang="th"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>ไม่พบรายงาน</title>
@@ -54,6 +58,9 @@ export async function getReportByToken(req, res) {
         path: "getReportByToken",
         status,
         tokenPrefix: publicToken ? `${publicToken.slice(0, 12)}…` : "",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        loadSource: loadSource ?? null,
+        payloadPresent: false,
       }),
     );
     logReportPageOpen({
@@ -72,9 +79,63 @@ export async function getReportByToken(req, res) {
       .send(html);
     return;
   }
-  const html = renderReportHtmlPage(payload);
+  /** @type {string} */
+  let html;
+  try {
+    html = renderReportHtmlPage(payload);
+  } catch (renderErr) {
+    console.error(
+      JSON.stringify({
+        event: "REPORT_PUBLIC_RENDER_FAIL",
+        path: "getReportByToken",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        loadSource,
+        httpStatus: 503,
+        payloadPresent: true,
+        errorCode: FinalDeliveryErrorCode.REPORT_RENDER_FAILED,
+        reason: String(
+          renderErr && typeof renderErr === "object" && "message" in renderErr
+            ? /** @type {{ message?: unknown }} */ (renderErr).message
+            : renderErr,
+        ).slice(0, 240),
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "REPORT_HTTP",
+        path: "getReportByToken",
+        status: 503,
+        tokenPrefix: publicToken ? `${publicToken.slice(0, 12)}…` : "",
+      }),
+    );
+    logReportPageOpen({
+      tokenPrefix,
+      outcome: "unavailable",
+      httpStatus: 503,
+      loadSource,
+      hasObjectImage: false,
+      reportVersion: null,
+      isDemoToken: publicToken === PHASE1_DEMO_PUBLIC_TOKEN,
+    });
+    return res
+      .status(503)
+      .type("html")
+      .set("Cache-Control", "no-store")
+      .send(UNAVAILABLE_HTML);
+  }
   const hasObjectImage = Boolean(
     String(payload?.object?.objectImageUrl || "").trim(),
+  );
+  console.log(
+    JSON.stringify({
+      event: "REPORT_PUBLIC_RENDER_OK",
+      path: "getReportByToken",
+      publicTokenPrefix: publicTokenPrefix12(publicToken),
+      loadSource,
+      httpStatus: 200,
+      payloadPresent: true,
+      reportUrlPresent: false,
+    }),
   );
   console.log(
     JSON.stringify({

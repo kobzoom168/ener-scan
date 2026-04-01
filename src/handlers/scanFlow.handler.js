@@ -289,6 +289,8 @@ export async function replyScanResult({
       console.log(
         JSON.stringify({
           event: "SCAN_RESULT_DELIVERY_STRATEGY_SELECTED",
+          path: "sync-scan",
+          deliveryStrategy: "summary_link",
           strategy: "summary_link",
           lineUserIdPrefix,
           hasReportPayload: Boolean(reportPayload),
@@ -322,6 +324,17 @@ export async function replyScanResult({
         }),
       );
     } else {
+      console.log(
+        JSON.stringify({
+          event: "SCAN_RESULT_DELIVERY_STRATEGY_SELECTED",
+          path: "sync-scan",
+          deliveryStrategy: "legacy_full",
+          strategy: "legacy_full",
+          lineUserIdPrefix,
+          hasReportPayload: Boolean(reportPayload),
+          hasReportUrl: Boolean(String(reportUrl || "").trim()),
+        }),
+      );
       try {
         const built = buildScanResultFlexWithFallback({
           summaryFirstEnabled: summaryFirstSelected,

@@ -1,4 +1,8 @@
 import { supabase } from "../config/supabase.js";
+import {
+  buildFinalDeliveryCorrelation,
+  FinalDeliveryErrorCode,
+} from "../utils/scanV2/finalDeliveryTelemetry.util.js";
 
 /**
  * MVP: one publication row per `scan_results_v2.id` (upsert on conflict).
@@ -44,23 +48,35 @@ export async function upsertReportPublicationForScanResult({
   if (error) {
     console.error(
       JSON.stringify({
-        event: "REPORT_PUBLICATION_UPSERT",
-        outcome: "error",
-        code: error.code,
-        message: error.message,
-        scanResultIdPrefix: sid.slice(0, 8),
+        event: "REPORT_PUBLICATION_UPSERT_FAIL",
+        path: "reportPublicationsStore",
+        worker: "upsertReportPublicationForScanResult",
+        ...buildFinalDeliveryCorrelation({
+          scanResultId: sid,
+          publicToken: tok,
+        }),
+        errorCode: FinalDeliveryErrorCode.PUBLICATION_UPSERT_FAILED,
+        supabaseCode: error.code,
+        reason: String(error.message || "").slice(0, 240),
+        reportUrlPresent: Boolean(url),
       }),
     );
     throw error;
   }
 
+  const pubId = data?.id ? String(data.id) : null;
   console.log(
     JSON.stringify({
-      event: "REPORT_PUBLICATION_UPSERT",
-      outcome: "ok",
-      id: data?.id || null,
-      scanResultIdPrefix: sid.slice(0, 8),
-      tokenPrefix: `${tok.slice(0, 12)}…`,
+      event: "REPORT_PUBLICATION_UPSERT_OK",
+      path: "reportPublicationsStore",
+      worker: "upsertReportPublicationForScanResult",
+      ...buildFinalDeliveryCorrelation({
+        publicationId: pubId,
+        scanResultId: sid,
+        publicToken: tok,
+      }),
+      reportUrlPresent: Boolean(url),
+      status: "published",
     }),
   );
 
