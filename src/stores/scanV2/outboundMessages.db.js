@@ -4,6 +4,11 @@ import {
   lineUserIdPrefix8,
   workerIdPrefix16,
 } from "../../utils/scanV2Trace.util.js";
+import {
+  isOutboundClaimRowEffectivelyEmpty,
+  normalizeClaimNextOutboundRpcPayload,
+  pickOutboundClaimFields,
+} from "../../utils/outboundClaim.util.js";
 
 /**
  * @param {object} row
@@ -98,10 +103,10 @@ export async function claimNextOutboundMessage(workerId) {
     throw error;
   }
 
-  // Supabase RPC can return a NULL composite that is deserialized into an object
-  // whose fields are all `null` (or sometimes string "null"). Normalize that to `null`
-  // so the worker can treat it as "no message".
-  const row = Array.isArray(data) ? (data[0] ?? null) : data;
+  // Supabase/PostgREST: SQL NULL should be data==null. If claim_next_outbound_message
+  // returns an all-null composite (PG bug when UPDATE touches 0 rows — fixed in migration),
+  // treat as no row. See supabase/migrations/*fix_claim_next_outbound_message*.
+  const row = normalizeClaimNextOutboundRpcPayload(data);
   if (row == null) return null;
 
   const norm = (v) => {
@@ -110,33 +115,74 @@ export async function claimNextOutboundMessage(workerId) {
     return v;
   };
 
-  if (typeof row === "object" && row !== null) {
-    const id = norm(row.id);
-    const lineUserId = norm(row.line_user_id);
-    const status = norm(row.status);
+  const picked = pickOutboundClaimFields(row);
+  const id = norm(picked.id);
+  const lineUserId = norm(picked.line_user_id);
+  const status = norm(picked.status);
 
-    if (id == null && lineUserId == null && status == null) {
-      console.log(
-        JSON.stringify({
-          event: "OUTBOUND_CLAIM_ROW_ALL_NULL_FIELDS",
-        }),
-      );
-      return null;
-    }
+  if (isOutboundClaimRowEffectivelyEmpty(row, picked)) {
+    const keys = Object.keys(row);
+    const sample =
+      keys.length > 0
+        ? JSON.stringify(
+            Object.fromEntries(keys.slice(0, 12).map((k) => [k, row[k]])),
+          ).slice(0, 900)
+        : "{}";
+    console.log(
+      JSON.stringify({
+        event: "OUTBOUND_CLAIM_ROW_INVALID",
+        reason: "all_null_or_empty_composite",
+        legacyEvent: "OUTBOUND_CLAIM_ROW_ALL_NULL_FIELDS",
+        rowKeyCount: keys.length,
+        rowKeysSample: keys.slice(0, 20),
+        rowSample: sample,
+        hint: "apply_migration_claim_next_outbound_message_null_composite",
+      }),
+    );
+    return null;
   }
 
-  const lid = typeof row === "object" && row && "line_user_id" in row
-    ? row.line_user_id
-    : null;
-  const k = typeof row === "object" && row && "kind" in row ? row.kind : null;
+  if (id == null) {
+    const keys = Object.keys(row);
+    console.log(
+      JSON.stringify({
+        event: "OUTBOUND_CLAIM_ROW_INVALID",
+        reason: "missing_id_after_normalize",
+        rowKeyCount: keys.length,
+        rowKeysSample: keys.slice(0, 20),
+        hint: "check_postgrest_composite_or_rpc_return_type",
+      }),
+    );
+    return null;
+  }
+
+  const lid = picked.line_user_id ?? null;
+  const k = picked.kind ?? null;
   console.log(
     JSON.stringify({
       event: "OUTBOUND_CLAIM_ROW_OK",
       path: "worker-delivery",
       workerIdPrefix: workerIdPrefix16(wid),
       outboundIdPrefix: normRowIdPrefix(row),
-      lineUserIdPrefix: lineUserIdPrefix8(lid),
-      kind: k ?? null,
+      lineUserIdPrefix: lineUserIdPrefix8(
+        lid != null ? String(lid) : null,
+      ),
+      kind: k != null ? String(k) : null,
+      status: status != null ? String(status) : null,
+      timestamp: scanV2TraceTs(),
+    }),
+  );
+
+  console.log(
+    JSON.stringify({
+      event: "OUTBOUND_CLAIM_ROW_SHAPE",
+      path: "worker-delivery",
+      outboundIdPrefix: normRowIdPrefix(row),
+      hasPayloadJson: Boolean(row.payload_json),
+      lineUserIdPrefix: lineUserIdPrefix8(
+        lid != null ? String(lid) : null,
+      ),
+      kind: k != null ? String(k) : null,
       timestamp: scanV2TraceTs(),
     }),
   );

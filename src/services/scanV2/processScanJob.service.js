@@ -610,6 +610,106 @@ export async function processScanJob(workerId, jobRow) {
     return;
   }
 
+  /** @type {string | null} */
+  let reportPublicationId = null;
+  if (publicToken && reportUrl && scanResultV2Id) {
+    try {
+      const pubRow = await upsertReportPublicationForScanResult({
+        scanResultV2Id: scanResultV2Id,
+        publicToken,
+        reportUrl,
+      });
+      reportPublicationId = pubRow?.id ? String(pubRow.id) : null;
+    } catch (pubErr) {
+      console.error(
+        JSON.stringify({
+          event: "SCAN_V2_REPORT_PUBLICATION_UPSERT_FAIL",
+          jobIdPrefix: String(jobId).slice(0, 8),
+          message: pubErr?.message,
+          code: pubErr?.code,
+        }),
+      );
+    }
+  }
+
+  console.log(
+    JSON.stringify({
+      event: "SCAN_RESULT_OUTBOUND_ENQUEUE_START",
+      path: "worker-scan",
+      workerIdPrefix: workerIdPrefix16(workerId),
+      jobIdPrefix: idPrefix8(jobId),
+      lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+      scanResultIdPrefix: String(scanResultV2Id).slice(0, 8),
+      deliveryStrategy: lineFinalMode,
+      hasReportUrl: Boolean(String(reportUrl || "").trim()),
+      publicationIdPrefix: idPrefix8(reportPublicationId),
+      publicTokenPrefix: publicTokenPrefix12(publicToken),
+      timestamp: scanV2TraceTs(),
+    }),
+  );
+
+  /** @type {{ id?: string } | null} */
+  let reportOutboundRow = null;
+  try {
+    reportOutboundRow = await insertOutboundMessage({
+      line_user_id: lineUserId,
+      kind: "scan_result",
+      priority: OUTBOUND_PRIORITY.scan_result,
+      related_job_id: jobId,
+      payload_json: {
+        deliveryStrategy: lineFinalMode,
+        flex,
+        text: lineDeliveryText,
+        reportUrl,
+        lineSummary: lineSummaryForOutbound,
+        reportPayload:
+          lineFinalMode === "legacy_full" ? reportPayloadForReply : null,
+        accessSource: job.access_source,
+        appUserId,
+        scanResultV2Id,
+        legacyScanResultId,
+        publicToken,
+        reportPublicationId,
+      },
+      status: "queued",
+    });
+  } catch (enqueueErr) {
+    console.error(
+      JSON.stringify({
+        event: "SCAN_RESULT_OUTBOUND_ENQUEUE_FAIL",
+        path: "worker-scan",
+        workerIdPrefix: workerIdPrefix16(workerId),
+        jobIdPrefix: idPrefix8(jobId),
+        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+        scanResultIdPrefix: String(scanResultV2Id).slice(0, 8),
+        errorCode: enqueueErr?.code ?? null,
+        reason: String(enqueueErr?.message || enqueueErr).slice(0, 500),
+        timestamp: scanV2TraceTs(),
+      }),
+    );
+    await updateScanRequestStatus(scanRequestId, "failed");
+    await failJob(
+      jobId,
+      "outbound_enqueue_failed",
+      String(enqueueErr?.message || enqueueErr),
+      lineUserId,
+      workerId,
+    );
+    return;
+  }
+
+  console.log(
+    JSON.stringify({
+      event: "SCAN_RESULT_OUTBOUND_ENQUEUE_OK",
+      path: "worker-scan",
+      workerIdPrefix: workerIdPrefix16(workerId),
+      jobIdPrefix: idPrefix8(jobId),
+      outboundIdPrefix: idPrefix8(reportOutboundRow?.id ?? null),
+      scanResultIdPrefix: String(scanResultV2Id).slice(0, 8),
+      timestamp: scanV2TraceTs(),
+    }),
+  );
+
   await updateScanJob(jobId, {
     result_id: scanResultV2Id,
     status: "delivery_queued",
@@ -627,48 +727,6 @@ export async function processScanJob(workerId, jobRow) {
       hasReportLink: Boolean(String(reportUrl || "").trim()),
     }),
   );
-
-  if (publicToken && reportUrl && scanResultV2Id) {
-    try {
-      await upsertReportPublicationForScanResult({
-        scanResultV2Id: scanResultV2Id,
-        publicToken,
-        reportUrl,
-      });
-    } catch (pubErr) {
-      console.error(
-        JSON.stringify({
-          event: "SCAN_V2_REPORT_PUBLICATION_UPSERT_FAIL",
-          jobIdPrefix: String(jobId).slice(0, 8),
-          message: pubErr?.message,
-          code: pubErr?.code,
-        }),
-      );
-    }
-  }
-
-  const reportOutboundRow = await insertOutboundMessage({
-    line_user_id: lineUserId,
-    kind: "scan_result",
-    priority: OUTBOUND_PRIORITY.scan_result,
-    related_job_id: jobId,
-    payload_json: {
-      deliveryStrategy: lineFinalMode,
-      flex,
-      text: lineDeliveryText,
-      reportUrl,
-      lineSummary: lineSummaryForOutbound,
-      reportPayload:
-        lineFinalMode === "legacy_full" ? reportPayloadForReply : null,
-      accessSource: job.access_source,
-      appUserId,
-      scanResultV2Id,
-      legacyScanResultId,
-      publicToken,
-      reportPublicationId,
-    },
-    status: "queued",
-  });
 
   console.log(
     JSON.stringify({
