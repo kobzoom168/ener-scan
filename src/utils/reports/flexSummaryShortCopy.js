@@ -1,6 +1,11 @@
 /**
  * Flex “short” copy: complete Thai phrases only — no char-cut of long prose.
  * Thai has no reliable space word boundaries; truncation strategies belong here as composition, not tail cuts.
+ *
+ * TODO(energy-copy-db): Headline / fit / bullets are still composed from HEADLINE_POOLS + FIT_POOLS +
+ * BULLET_PAIR_POOLS below. When scan/report passes category_code + object_family, prefer loading copy via
+ * `getEnergyCopySet` from `src/services/energyCopy.service.js` (tables energy_categories,
+ * energy_copy_templates) so wording can be edited in DB without redeploy.
  */
 import { ENERGY_TYPES } from "../../services/flex/scanCopy.config.js";
 import { resolveEnergyType } from "../../services/flex/scanCopy.utils.js";

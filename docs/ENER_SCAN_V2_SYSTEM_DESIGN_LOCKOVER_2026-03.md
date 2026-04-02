@@ -199,10 +199,10 @@ LINE user
 
 ---
 
-## 8) Fallback policy
+## 8) Scan path policy
 
-- `ENABLE_ASYNC_SCAN_V2=true`
-- **`ENABLE_SYNC_SCAN_FALLBACK=false`** เป็น default canary/cutover — async เป็นเส้นหลัก; sync เฉพาะ emergency
+- `ENABLE_ASYNC_SCAN_V2=true` สำหรับ production scan flow
+- เส้น **inline sync / `runScanFlow`** ถูกถอดออกจาก runtime แล้ว — ไม่มี emergency sync scan ผ่าน env flag ชุดเก่า
 
 ---
 
@@ -229,7 +229,7 @@ LINE user
 
 ## 12) Current status
 
-ใน repo เดียวมี **Legacy sync path** คู่กับ **V2 async path** — V2 มี queue, workers, outbound unify, state dual-write, report wiring, Redis, cutover hardening
+**Primary path:** webhook ingest → `scan_jobs` / `outbound_messages` → worker-scan → report publish → worker-delivery — legacy inline scan ถูกลบออกจากโค้ดแล้ว
 
 ---
 

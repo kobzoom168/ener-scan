@@ -43,7 +43,7 @@ Assume: `session.pendingImage`, **no** active `awaiting_slip` text gate, **no** 
 | `ประวัติ` | **Guidance** (blocked intent). Log: `guidance`, `hint: blocked_intent` |
 | `สถิติ` | Same as ประวัติ |
 | `hello` | **Guidance** (not date-like). Log: `guidance`, `hint: default` |
-| `14/09/1995` | Valid → `accepted` → push `before_scan` + `runScanFlow` |
+| `14/09/1995` | Valid → `accepted` → push `before_scan` + async ingest (`ingestScanImageAsyncV2`) when `ENABLE_ASYNC_SCAN_V2=true` |
 | `14/09/2538` | Valid → CE `1995` → same as above |
 | `14-9-2538` | Valid → same CE normalization |
 | Second image (no saved birthdate, no slip row) | **Image reminder** variant; pending image not replaced. Log: `second_image_reminder` |

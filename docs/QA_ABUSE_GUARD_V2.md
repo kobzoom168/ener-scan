@@ -9,12 +9,12 @@ Manual QA on **real LINE** is required; this doc records **code-level verificati
 | 1 | **Separate locks** — scan abuse affects `scanLockUntil`; payment/slip affects `paymentLockUntil` | Pass | `src/stores/abuseGuard.store.js` — `maybeApplyScanLock` / `maybeApplyPaymentLock` |
 | 2 | **Scan lock does not block slip uploads** | Pass | `handleImageMessage`: if `imageWillUseSlipPath` (`!allowed && pendingPayment`), only `checkPaymentAbuseStatus` runs; **not** `checkScanAbuseStatus` (`src/routes/lineWebhook.js`) |
 | 3 | **Payment lock does not block normal scan** | Pass | Same routing: non–slip-path images use **scan** gate only; payment lock is not evaluated on scan route at image entry |
-| 4 | **Birthdate → `runScanFlow` under scan lock** | Pass | After valid birthdate with `session.pendingImage`, `checkScanAbuseStatus` runs; if `isLocked`, reply `ABUSE_MSG_SCAN_LOCK` and **no** `runScanFlow` (`gate: "pendingImage_birthdate_text"` in logs) |
+| 4 | **Birthdate → async ingest under scan lock** | Pass | After valid birthdate with `session.pendingImage`, `checkScanAbuseStatus` runs; if `isLocked`, reply `ABUSE_MSG_SCAN_LOCK` and **no** ingest/scan enqueue (`gate: "pendingImage_birthdate_text"` in logs) |
 | 5 | **Slip path in `finalizeAcceptedImage`** | Pass | Same condition as routing: `!accessDecision?.allowed && pendingPayment`; payment lock checked again before slip / `pending_verify` handling |
 
 **Note:** `finalizeAcceptedImage` runs **`registerScanIntent` only on the scan branch** (after slip branches return). Slip uploads do not increment scan intent windows for the main scan pipeline.
 
-**Note:** Immediate scan with **saved birthdate** in the same webhook as the image does not re-check scan lock before `runScanFlow` — the same request already passed `handleImageMessage` scan gating for scan-route images.
+**Note:** Immediate scan with **saved birthdate** in the same webhook as the image follows async ingest + worker path — scan lock behavior is enforced at the points documented in webhook handlers.
 
 ---
 

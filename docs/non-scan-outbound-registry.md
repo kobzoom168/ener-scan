@@ -1,20 +1,20 @@
 # Non-scan outbound registry (LINE)
 
-Audit goal: **non-scan text** should go through `nonScanReply.gateway` so duplicate suppression and gateway telemetry apply. Exceptions are **scan delivery**, **transport inside gateway**, or **registered audit exempts**.
+Audit goal: **non-scan text** should go through `nonScanReply.gateway` so duplicate suppression and gateway telemetry apply. Exceptions are **scan delivery** (worker + `scanPathEnter`/`scanPathExit`), **transport inside gateway**, or **registered audit exempts**.
 
 ## Classification summary
 
 | Location | Channel | Class |
 |----------|---------|--------|
 | `nonScanReply.gateway.js` | `replyText`, `replyPaymentInstructions`, `pushText` | **Inside gateway** (intended) |
-| `lineReply.service.js` | `replyText`, `replyFlex`, `replyPaymentInstructions` | **Transport** — called from gateway/scan/exempt only |
+| `lineReply.service.js` | `replyText`, `replyFlex`, `replyPaymentInstructions` | **Transport** — called from gateway/scan-path/exempt only |
 | `lineSequenceReply.service.js` | `pushText`, `replyTextSequenceOrSingle` | **Transport** — `pushText` warned when bypass suspect |
 | `lineWebhook.js` | `replyText` (no `userId`) | **Valid exempt** — `AuditExemptReason` (cannot scope gateway) |
 | `lineWebhook.js` | `replyText` (webhook error, no user) | **Valid exempt** — `AuditExemptReason` |
-| `scanFlow.handler.js` | `pushText` (pre-scan ack) | **Scan-path exempt** — `scanPathEnter`/`scanPathExit` |
-| `scanFlow.handler.js` | `replyFlex`, `replyText` (scan result) | **Scan-path exempt** |
-| `scanFlow.handler.js` | `replyText` (payment gate, no `userId`) | **Valid exempt** — `AuditExemptReason.SCAN_PAYMENT_GATE_NO_USER_ID` |
-| `scanFlow.handler.js` | `sendNonScanReply` / `sendNonScanSequenceReply` | **Gateway** |
+| `deliverOutbound.service.js` / `worker-delivery` | `pushMessage` / flex for `scan_result`, `pre_scan_ack`, etc. | **Scan-path exempt** — `scanPathEnter`/`scanPathExit` around LINE sends |
+| `sendNonScanReply` / `sendNonScanSequenceReply` | Gateway | **Gateway** |
+
+> **Note:** `src/handlers/scanFlow.handler.js` was removed. Scan results are delivered asynchronously via `outbound_messages` + delivery worker.
 
 ## Audit exempt reasons (`NONSCAN_AUDIT_EXEMPT`)
 

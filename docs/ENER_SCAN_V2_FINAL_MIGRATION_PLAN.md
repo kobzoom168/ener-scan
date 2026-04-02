@@ -22,7 +22,7 @@ This document is the **execution plan after wave 1** (async queue core: `sql/022
 2. **conversation_state dual-write** — DB write every time; read DB first, memory fallback until stable.  
 3. **Report publish in V2 scan worker** — report-first product direction requires full artifact on worker path.  
 4. **Redis first-class** — locks, rate hints, dedupe window, heartbeat for ~30 concurrent scans comfortably.  
-5. **Cut sync fallback last** — only after 1–4 are stable (`ENABLE_SYNC_SCAN_FALLBACK=false` or remove legacy path).
+5. **Legacy inline removal (done)** — synchronous `runScanFlow` / webhook inline scan and related env flags removed from runtime; async path is primary.
 
 ---
 
@@ -31,8 +31,8 @@ This document is the **execution plan after wave 1** (async queue core: `sql/022
 | PR | Scope | Outcome |
 |----|--------|---------|
 | **PR 1 — Outbound unification** | Approve notify, pending intro, payment QR, reject notify → `outbound_messages`; extend delivery worker + metrics/logs; admin/payment routes enqueue instead of raw push where applicable. | “LINE outbound from one pipeline” for product-critical notifies. |
-| **PR 2 — State + report + Redis** | `conversation_state` dual-write; wire HTML/public report publish in V2 `processScanJob`; Redis client + locks/rate/dedupe/heartbeat; tighten fallback behavior (still allow sync emergency if flag exists). | Truth + artifacts + scale controls. |
-| **PR 3 — Redis + cutover** | Real Redis (`ioredis`), health, dedupe/rate/heartbeat, `ENABLE_SYNC_SCAN_FALLBACK` default off, maintenance DLQ/stuck scan sweep, canary env thresholds, replay script. Details: [`ENER_SCAN_V2_PR3_CUTOVER.md`](./ENER_SCAN_V2_PR3_CUTOVER.md). | Lockover candidate after metrics gate. |
+| **PR 2 — State + report + Redis** | `conversation_state` dual-write; wire HTML/public report publish in V2 `processScanJob`; Redis client + locks/rate/dedupe/heartbeat. | Truth + artifacts + scale controls. |
+| **PR 3 — Redis + cutover** | Real Redis (`ioredis`), health, dedupe/rate/heartbeat, maintenance DLQ/stuck scan sweep, canary env thresholds, replay script. Details: [`ENER_SCAN_V2_PR3_CUTOVER.md`](./ENER_SCAN_V2_PR3_CUTOVER.md). | Lockover candidate after metrics gate. |
 
 ---
 
@@ -81,11 +81,10 @@ Unify first so fewer special cases bypass the queue.
 
 ---
 
-### 5) Disable sync fallback (last)
+### 5) Legacy inline scan removal (completed)
 
-- Only after PR 1–2 soak and canary gates pass.  
-- Introduce explicit flag e.g. `ENABLE_SYNC_SCAN_FALLBACK` (default `true` during migration) → `false` when safe.  
-- Remove or isolate `runScanFlow` from hot webhook path to emergency-only module.
+- Synchronous **`runScanFlow` / `replyScanResult`** and webhook branches that performed inline deep scan have been **removed** (not flag-gated).  
+- Env flags **`ENABLE_SYNC_SCAN_FALLBACK`**, **`ENABLE_LEGACY_WEB_INLINE_SCAN`**, **`ALLOW_LEGACY_SCAN_PATHS`** are no longer read by the app.
 
 ---
 
@@ -133,7 +132,7 @@ Tune **X / Y / Z** per environment; start conservative.
 
 Before announcing full lockover, all **six** must hold:
 
-1. Scan image webhook **does not** call deep scan inline (except documented emergency path).  
+1. Scan image webhook **does not** call deep scan inline (legacy path removed).  
 2. Final scan result **only** via delivery queue (push-first).  
 3. Paid quota **only** decrements after **successful** delivery (already directionally true in V2 delivery path — keep audits).  
 4. Important state **does not** use `session.store` as sole source of truth.  
@@ -146,7 +145,7 @@ Before announcing full lockover, all **six** must hold:
 
 | Action | Effect |
 |--------|--------|
-| `ENABLE_ASYNC_SCAN_V2=false` | Webhook uses legacy `runScanFlow` again; queued rows remain in DB for inspection. |
+| `ENABLE_ASYNC_SCAN_V2=false` | Async ingest off; users get unavailable/retry messaging — **no** inline deep scan (legacy removed). Queued rows remain in DB for inspection. |
 | Stop workers | No new claims; queues drain when workers restart. |
 | Revert PR 3 only | Restores fallback without undoing schema. |
 
@@ -156,7 +155,7 @@ Before announcing full lockover, all **six** must hold:
 
 | Area | Files |
 |------|--------|
-| Webhook / sync fallback | `src/routes/lineWebhook.js`, `src/handlers/scanFlow.handler.js` |
+| Webhook / async ingest | `src/routes/lineWebhook.js`, `src/services/scanV2/webhookImageIngestion.service.js` |
 | V2 ingest / scan / delivery | `src/services/scanV2/*.js`, `src/workers/*.js` |
 | Outbound DB | `src/stores/scanV2/outboundMessages.db.js`, `sql/022_*.sql`, future `023_*` idempotency/DLQ |
 | Admin / notify | `src/routes/adminPaymentsDashboard.routes.js`, `src/utils/adminApproveIntroCompensation.util.js`, `src/utils/lineNotify429Retry.util.js` |

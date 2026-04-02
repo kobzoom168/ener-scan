@@ -269,7 +269,7 @@ flowchart TD
 | `src/utils/replyCopy/scanOffer.copy.js` (ใหม่) | เลือก template, fill placeholder, สร้าง alternates |
 | `src/utils/webhookText.util.js` | เชื่อม `buildPaymentRequiredText` / paywall ให้ดึงจาก scanOffer.copy เมื่อ feature flag เปิด (หรือแทนที่ทีละจุด) |
 | `src/services/nonScanReply.gateway.js` | **ไม่แก้ logic** ถ้าไม่จำเป็น — แค่เรียกด้วย `replyType` / `semanticKey` / `alternateTexts` ใหม่ |
-| `src/handlers/scanFlow.handler.js` / `lineWebhook.js` | จุดที่ส่งข้อความ paywall / หมดสิทธิ์ — เปลี่ยนเป็นเรียก builder จาก copy layer แทน string ตรงๆ |
+| `lineWebhook.js` / `paymentAccess.service.js` / gateway | จุดที่ส่งข้อความ paywall / หมดสิทธิ์ — เปลี่ยนเป็นเรียก builder จาก copy layer แทน string ตรงๆ |
 
 ### Logging ที่แนะนำเพิ่ม
 

@@ -4,7 +4,7 @@
 
 - **Controls:** Scan result **wording and meaning** (what the user reads as the reading).
 - **Output:** Structured text → LINE **Flex** (final scan bubble) + optional text fallback.
-- **Where:** LLM prompts (`src/prompts/deepScan*.prompt.js`), formatter, `scanCopy.*`, `flex.*`, `replyScanResult` in `scanFlow.handler.js`.
+- **Where:** LLM prompts (`src/prompts/deepScan*.prompt.js`), formatter, `scanCopy.*`, `flex.*`, outbound/delivery builders (`scanFlexReply.builder.js`, `lineFinalScanDelivery.builder.js`, etc.).
 - **Not:** Random chat filler; not birthdate/payment menu copy.
 
 ## 2. Chat persona system (Ajarn Ener)

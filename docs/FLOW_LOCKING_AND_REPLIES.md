@@ -15,7 +15,7 @@
 
 ## Before scan ack
 
-After valid birthdate while `waiting_birthdate`, the **before_scan** line is sent with **`client.pushMessage`** (same webhook event cannot `reply` twice with one `replyToken`). Scan result still uses `replyToken` in `runScanFlow`. If push fails, scan continues.
+After valid birthdate while `waiting_birthdate`, the **before_scan** line is sent with **`client.pushMessage`** (same webhook event cannot `reply` twice with one `replyToken`). **Scan result** is sent later by **`worker-delivery`** (push/flex from `outbound_messages`), not inline in the webhook. If push fails, scan continues.
 
 ## Remaining edge cases
 

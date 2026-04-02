@@ -54,4 +54,4 @@
 - `tests/dateTime.util.test.js` — UTC ISO → Bangkok, invalid → `-`, date-only / time-only
 - `tests/flex.summaryFirst.test.js` — 2 หน้า, ไม่มี `reportUrl` fallback
 - `tests/scanFlexReply.builder.test.js` — fallback legacy เมื่อ summary-first throw
-- `src/services/flex/scanFlexReply.builder.js` — logic เดียวกับ `replyScanResult` (refactor เพื่อทดสอบ)
+- `src/services/flex/scanFlexReply.builder.js` — flex build path shared with delivery/outbound (tests)

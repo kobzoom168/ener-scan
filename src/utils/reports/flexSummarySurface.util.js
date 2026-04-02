@@ -1,6 +1,10 @@
 /**
  * Short, Flex-only copy: composed complete Thai phrases (see flexSummaryShortCopy.js).
  * Renderer maxLines/lineSpacing are guardrails only — content must already read finished.
+ *
+ * TODO(energy-copy-db): `composeFlexShortSurface` is still the source of headlineShort / fitReasonShort /
+ * bulletsShort. Future: optionally hydrate from `getEnergyCopySet` when payload exposes energy category +
+ * object_family (see energy_copy_templates).
  */
 import { cleanLine } from "../../services/flex/flex.utils.js";
 import {

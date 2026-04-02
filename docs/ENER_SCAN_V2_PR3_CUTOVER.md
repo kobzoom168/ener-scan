@@ -1,6 +1,6 @@
 # Ener Scan V2 — PR3 Redis, cutover hardening, queue safety
 
-PR3 makes **Redis first-class** when `REDIS_URL` is set, tightens **sync fallback**, adds **queue/DLQ visibility**, and **concrete canary thresholds** (env-tunable).
+PR3 makes **Redis first-class** when `REDIS_URL` is set, adds **queue/DLQ visibility**, and **concrete canary thresholds** (env-tunable). Legacy sync scan fallback has been **removed** from code (not merely disabled).
 
 ## Redis (`src/redis/scanV2Redis.js`)
 
@@ -15,15 +15,16 @@ PR3 makes **Redis first-class** when `REDIS_URL` is set, tightens **sync fallbac
 
 Prefix: `SCAN_V2_REDIS_PREFIX` (default `ener-scan:v2:`).
 
-## Feature flags
+## Feature flags (scan path)
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `ENABLE_ASYNC_SCAN_V2` | `false` | Async path (storage + `scan_jobs` + workers). **Preferred default when cut over.** |
-| `ENABLE_SYNC_SCAN_FALLBACK` | `false` | If async **ingest** fails, allow legacy `runScanFlow`. **Emergency only** — set `true` during partial outages. |
+| `ENABLE_ASYNC_SCAN_V2` | `false` | Async path (storage + `scan_jobs` + workers). **Required for production scan flow.** |
 | `REDIS_URL` | unset | When set, full Redis behavior above; when unset, DB remains source of truth and Redis helpers no-op or use safe defaults. |
 
-**Recommended production:** `ENABLE_ASYNC_SCAN_V2=true`, `ENABLE_SYNC_SCAN_FALLBACK=false`, `REDIS_URL` set.
+**Recommended production:** `ENABLE_ASYNC_SCAN_V2=true`, `REDIS_URL` set.
+
+> **Note:** `ENABLE_SYNC_SCAN_FALLBACK`, `ENABLE_LEGACY_WEB_INLINE_SCAN`, and `ALLOW_LEGACY_SCAN_PATHS` were removed from the application; do not set them in Railway.
 
 ## Canary thresholds (env)
 
@@ -50,16 +51,15 @@ Concrete defaults in `src/config/env.js`; override without code change:
 
 - Key: `scan_v2:ingest:line_message_id:<LINE message id>` — one key per inbound LINE message (not per user), so unrelated events are never collapsed together.
 
-## Rollback paths
+## Degraded operation (no inline fallback)
 
-1. **Disable async scan (full legacy path):** `ENABLE_ASYNC_SCAN_V2=false`, restart web. Optionally `ENABLE_SYNC_SCAN_FALLBACK=true` temporarily if ingest is flaky.
-2. **Keep async but allow sync on ingest failure:** `ENABLE_SYNC_SCAN_FALLBACK=true` (incident mode).
-3. **Workers off:** stop scan/delivery workers; queue grows — use health script and DB inspection; re-enable workers after fix.
+1. **Disable async ingest:** `ENABLE_ASYNC_SCAN_V2=false`, restart web — users get unavailable/retry messaging; **no** inline deep scan (legacy path removed).
+2. **Workers off:** stop scan/delivery workers; queue grows — use health script and DB inspection; re-enable workers after fix.
 
 ## Health endpoints
 
 - `GET /health` — liveness.
-- `GET /health/scan-v2` — Redis ping + async/fallback flags.
+- `GET /health/scan-v2` — JSON: `status`, `redis` ping, and `flags: { ENABLE_ASYNC_SCAN_V2 }` only (see `src/app.js`).
 
 ## Final canary (before declaring lockover)
 
@@ -71,11 +71,10 @@ Do **not** flip to “permanent V2 only” until this soak passes.
 - `ENABLE_SCAN_WORKER=true`
 - `ENABLE_DELIVERY_WORKER=true`
 - `ENABLE_MAINTENANCE_WORKER=true`
-- `ENABLE_SYNC_SCAN_FALLBACK=false`
 
 **Checks:**
 
-- [ ] `GET /health/scan-v2` — Redis up + expected flags.
+- [ ] `GET /health/scan-v2` — Redis up + `flags.ENABLE_ASYNC_SCAN_V2` as expected.
 - [ ] Run **5–10 real scans**; watch queue backlog, Redis 429/hour, delivery success, report publish (`SCAN_V2_REPORT_PUBLIC_*` logs), and **`SCAN_JOB_STALE_REQUEUED`** (should be rare; if frequent, increase `SCAN_V2_STALE_PROCESSING_MS` or investigate slow workers).
 
 ## Lockover candidate checklist
@@ -83,4 +82,4 @@ Do **not** flip to “permanent V2 only” until this soak passes.
 - [ ] `REDIS_URL` set; `/health/scan-v2` shows `redis.ok: true`.
 - [ ] Workers running with heartbeats (optional Redis `KEYS ener-scan:v2:hb:*` or monitor).
 - [ ] Maintenance worker running; no sustained `alerts.backlog_high` / `line429_high`.
-- [ ] `ENABLE_SYNC_SCAN_FALLBACK=false` in steady state.
+- [ ] No legacy sync env vars present in deployment (`ENABLE_SYNC_SCAN_FALLBACK` / `ENABLE_LEGACY_WEB_INLINE_SCAN` / `ALLOW_LEGACY_SCAN_PATHS` removed).

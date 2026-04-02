@@ -159,6 +159,9 @@ function createEnergyBadgePill(mainLabel) {
   };
 }
 
+// TODO(energy-copy-db): Variant headlines/bullets below are static marketing copy. When Flex should follow
+// DB-driven energy_categories / energy_copy_templates, load via getEnergyCopySet / getEnergyCategory and
+// keep these only as fallbacks or A/B overrides.
 const SUMMARY_CARD_COPY_VARIANTS = {
   premium_minimal: {
     variantKey: "premium_minimal",

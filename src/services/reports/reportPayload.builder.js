@@ -341,6 +341,9 @@ export function buildReportPayloadFromScan(opts) {
       ? String(compatibilityPayload.band)
       : "";
 
+  // TODO(energy-copy-db): summary.headlineShort / fitReasonShort / bulletsShort still come from
+  // buildFlexSummarySurfaceFields → composeFlexShortSurface (pools). When category_code + object_family
+  // are available on the pipeline, merge or replace with getEnergyCopySet() from energyCopy.service.js.
   const flexSurface = buildFlexSummarySurfaceFields({
     wording,
     compatibilityReason,
