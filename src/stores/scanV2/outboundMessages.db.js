@@ -75,10 +75,6 @@ export async function claimNextOutboundMessage(workerId) {
     throw e;
   }
 
-  const rawKeys =
-    data != null && typeof data === "object" && !Array.isArray(data)
-      ? Object.keys(/** @type {object} */ (data)).slice(0, 24)
-      : null;
   console.log(
     JSON.stringify({
       event: "OUTBOUND_CLAIM_RPC_RAW",
@@ -90,8 +86,6 @@ export async function claimNextOutboundMessage(workerId) {
       dataIsNull: data == null,
       dataIsArray: Array.isArray(data),
       dataType: data == null ? null : typeof data,
-      /** Helps confirm PostgREST shape: wrapper key vs row keys */
-      rawTopLevelKeysSample: rawKeys,
     }),
   );
 
@@ -114,20 +108,6 @@ export async function claimNextOutboundMessage(workerId) {
   // If SQL returns NULL, PostgREST usually sends JSON `null` → data==null. Some stacks still
   // return an object with every column JSON `null` for an empty composite; normalize maps that to null.
   const row = normalizeClaimNextOutboundRpcPayload(data);
-
-  const rowKeysForLog =
-    row != null && typeof row === "object" && !Array.isArray(row)
-      ? Object.keys(row).slice(0, 24)
-      : null;
-  console.log(
-    JSON.stringify({
-      event: "OUTBOUND_CLAIM_NORMALIZED",
-      normalizedIsNull: row == null,
-      normalizedType: row == null ? null : typeof row,
-      normalizedKeysSample: rowKeysForLog,
-    }),
-  );
-
   if (row == null) return null;
 
   const norm = (v) => {
@@ -141,43 +121,12 @@ export async function claimNextOutboundMessage(workerId) {
   const lineUserId = norm(picked.line_user_id);
   const status = norm(picked.status);
 
-  // Empty queue: no claimable row (all-null composite, unwrap quirks, etc.) — not an error.
   if (isOutboundClaimRowEffectivelyEmpty(row, picked)) {
-    const keys = Object.keys(row);
-    const sample =
-      keys.length > 0
-        ? JSON.stringify(
-            Object.fromEntries(keys.slice(0, 12).map((k) => [k, row[k]])),
-          ).slice(0, 900)
-        : "{}";
-    console.log(
-      JSON.stringify({
-        event: "OUTBOUND_CLAIM_EMPTY_QUEUE",
-        reason: "effectively_empty_row",
-        rowKeyCount: keys.length,
-        rowKeysSample: keys.slice(0, 20),
-        rowSample: sample,
-      }),
-    );
     return null;
   }
 
   if (id == null) {
     const keys = Object.keys(row);
-    const sample =
-      keys.length > 0
-        ? JSON.stringify(
-            Object.fromEntries(keys.slice(0, 12).map((k) => [k, row[k]])),
-          ).slice(0, 900)
-        : "{}";
-    console.log(
-      JSON.stringify({
-        event: "OUTBOUND_CLAIM_INVALID_PRECHECK",
-        rowIsNull: row == null,
-        rowKeysSample: keys.slice(0, 20),
-        rowSample: sample,
-      }),
-    );
     console.log(
       JSON.stringify({
         event: "OUTBOUND_CLAIM_ROW_INVALID",

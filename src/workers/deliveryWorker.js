@@ -2,7 +2,6 @@
  * ener-worker-delivery: claims outbound_messages, sends LINE push, retries on 429.
  * Run: ENABLE_DELIVERY_WORKER=true node src/workers/deliveryWorker.js
  */
-import fs from "node:fs";
 import line from "@line/bot-sdk";
 import { env } from "../config/env.js";
 import { claimNextOutboundMessage } from "../stores/scanV2/outboundMessages.db.js";
@@ -17,23 +16,6 @@ import {
   idPrefix8,
   workerIdPrefix16,
 } from "../utils/scanV2Trace.util.js";
-import { buildSupabaseWorkerStartupDiagnostics } from "../utils/supabaseStartupDiagnostics.util.js";
-
-/** Sync write so log shippers see project ref even if process crashes right after startup. */
-function logDeliverySupabaseDiagnosticsLine(emitReason) {
-  const payload = {
-    ...buildSupabaseWorkerStartupDiagnostics({ path: "worker-delivery" }),
-    emitReason,
-  };
-  const line = `${JSON.stringify(payload)}\n`;
-  try {
-    fs.writeSync(1, line);
-    fs.writeSync(2, line);
-  } catch {
-    console.log(JSON.stringify(payload));
-    console.error(JSON.stringify(payload));
-  }
-}
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -46,15 +28,9 @@ const lineClient = new line.Client({
   channelSecret: env.CHANNEL_SECRET,
 });
 
-let loggedDiagnosticsBeforeFirstClaim = false;
-
 async function loop() {
   while (true) {
     try {
-      if (!loggedDiagnosticsBeforeFirstClaim) {
-        loggedDiagnosticsBeforeFirstClaim = true;
-        logDeliverySupabaseDiagnosticsLine("before_first_claim_rpc");
-      }
       const msg = await claimNextOutboundMessage(workerId);
       if (!msg) {
         await sleep(500);
@@ -105,26 +81,9 @@ async function loop() {
 }
 
 async function main() {
-  logDeliverySupabaseDiagnosticsLine("process_startup");
-
   if (!env.ENABLE_DELIVERY_WORKER) {
     console.log(JSON.stringify({ event: "DELIVERY_WORKER_DISABLED" }));
     process.exit(0);
-  }
-
-  // Deployment trace only: grep logs for these to prove this build is live (not for business logic).
-  console.log("DELIVERY_BUILD_MARKER=claim-normalize-v2");
-  console.log("DELIVERY_PATCH=outbound-empty-queue-fix");
-  try {
-    const m = `${JSON.stringify({
-      event: "DELIVERY_BUILD_MARKER",
-      marker: "claim-normalize-v2",
-      patch: "outbound-empty-queue-fix",
-    })}\n`;
-    fs.writeSync(1, m);
-    fs.writeSync(2, m);
-  } catch {
-    /* ignore */
   }
 
   console.log(
