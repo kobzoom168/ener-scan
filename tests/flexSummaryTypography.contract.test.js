@@ -8,9 +8,9 @@ import {
 import { buildScanSummaryFirstFlex } from "../src/services/flex/flex.summaryFirst.js";
 
 test("Flex summary surface caps are mobile-tight", () => {
-  assert.equal(FLEX_SUMMARY_HEADLINE_MAX, 48);
-  assert.equal(FLEX_SUMMARY_FIT_MAX, 72);
-  assert.equal(FLEX_SUMMARY_BULLET_MAX, 44);
+  assert.equal(FLEX_SUMMARY_HEADLINE_MAX, 42);
+  assert.equal(FLEX_SUMMARY_FIT_MAX, 64);
+  assert.equal(FLEX_SUMMARY_BULLET_MAX, 38);
 });
 
 test("summary Flex: percent and band are separate text nodes (no 71%+band on one line)", () => {

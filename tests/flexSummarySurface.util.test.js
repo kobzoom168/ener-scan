@@ -18,10 +18,10 @@ test("buildFlexSummarySurfaceFields: caps lengths and yields 2 bullets", () => {
     summaryLine: "",
     scanTips: [],
   });
-  assert.ok(r.headlineShort.length <= 48);
-  assert.ok(r.fitReasonShort.length <= 72);
+  assert.ok(r.headlineShort.length <= 42);
+  assert.ok(r.fitReasonShort.length <= 64);
   assert.equal(r.bulletsShort.length, 2);
-  assert.ok(r.bulletsShort.every((b) => b.length <= 44));
+  assert.ok(r.bulletsShort.every((b) => b.length <= 38));
   assert.equal(r.ctaLabel, "เปิดรายงานฉบับเต็ม");
 });
 

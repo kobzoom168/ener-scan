@@ -2,14 +2,19 @@
  * Short, Flex-only copy derived in the report builder (not computed inside Flex UI).
  * Keeps LINE bubbles within safe lengths without ellipsis mid-clause from LINE.
  */
-import { cleanLine, safeThaiCut } from "../../services/flex/flex.utils.js";
+import {
+  cleanLine,
+  safeThaiCut,
+  truncateAtWordBoundary,
+} from "../../services/flex/flex.utils.js";
 
 /** Mobile-first caps (Thai); tune with flex.summaryFirst maxLines */
-export const FLEX_SUMMARY_HEADLINE_MAX = 48;
-export const FLEX_SUMMARY_FIT_MAX = 72;
-export const FLEX_SUMMARY_BULLET_MAX = 44;
+export const FLEX_SUMMARY_HEADLINE_MAX = 42;
+export const FLEX_SUMMARY_FIT_MAX = 64;
+export const FLEX_SUMMARY_BULLET_MAX = 38;
 
 /**
+ * Prefer word/space boundary when Thai has spaces; else Thai-safe head cut.
  * @param {string} text
  * @param {number} max
  */
@@ -17,7 +22,7 @@ function firstSentenceSafe(text, max) {
   const s = cleanLine(text);
   if (!s) return "";
   const cut = s.split(/(?<=[.!?])\s+/)[0] || s;
-  return safeThaiCut(cut, max);
+  return truncateAtWordBoundary(cut, max);
 }
 
 /**
@@ -35,7 +40,7 @@ export function buildFlexSummarySurfaceFields({
 }) {
   const headlineSrc =
     wording?.flexHeadline || summaryLine || wording?.energyCharacter || "";
-  const headlineShort = safeThaiCut(
+  const headlineShort = truncateAtWordBoundary(
     cleanLine(String(headlineSrc || "")),
     FLEX_SUMMARY_HEADLINE_MAX,
   );
@@ -53,7 +58,10 @@ export function buildFlexSummarySurfaceFields({
   ];
   const bulletsShort = [];
   for (const b of rawBullets) {
-    const t = safeThaiCut(cleanLine(String(b || "")), FLEX_SUMMARY_BULLET_MAX);
+    const t = truncateAtWordBoundary(
+      cleanLine(String(b || "")),
+      FLEX_SUMMARY_BULLET_MAX,
+    );
     if (t && !bulletsShort.includes(t)) bulletsShort.push(t);
     if (bulletsShort.length >= 2) break;
   }
@@ -93,10 +101,21 @@ export function resolveFlexSummarySurfaceForLine(reportPayload, _parsed) {
     s.bulletsShort.filter(Boolean).length >= 1
   ) {
     return {
-      headlineShort: s.headlineShort.trim(),
-      fitReasonShort: String(s.fitReasonShort || "").trim(),
+      headlineShort: truncateAtWordBoundary(
+        s.headlineShort.trim(),
+        FLEX_SUMMARY_HEADLINE_MAX,
+      ),
+      fitReasonShort: truncateAtWordBoundary(
+        String(s.fitReasonShort || "").trim(),
+        FLEX_SUMMARY_FIT_MAX,
+      ),
       bulletsShort: s.bulletsShort
-        .map((x) => safeThaiCut(cleanLine(String(x || "")), FLEX_SUMMARY_BULLET_MAX))
+        .map((x) =>
+          truncateAtWordBoundary(
+            cleanLine(String(x || "")),
+            FLEX_SUMMARY_BULLET_MAX,
+          ),
+        )
         .filter(Boolean)
         .slice(0, 2),
       ctaLabel: String(s.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",

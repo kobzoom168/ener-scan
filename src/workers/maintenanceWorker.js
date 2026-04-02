@@ -155,6 +155,10 @@ async function logQueueHealthAndDlq() {
           line429Hour > env.CANARY_LINE_429_RATE_MAX_PER_HOUR,
         dead_letter_visible: (outDead ?? 0) > 0 || (outFailed ?? 0) > 0,
       },
+      deadLetterInspectHint:
+        (outDead ?? 0) > 0
+          ? "sql/outbound_dead_letter_inspect.template.sql"
+          : null,
     }),
   );
 }

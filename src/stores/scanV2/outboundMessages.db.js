@@ -85,6 +85,7 @@ export async function claimNextOutboundMessage(workerId) {
         : null,
       dataIsNull: data == null,
       dataIsArray: Array.isArray(data),
+      dataType: data == null ? null : typeof data,
     }),
   );
 
@@ -133,10 +134,15 @@ export async function claimNextOutboundMessage(workerId) {
         event: "OUTBOUND_CLAIM_ROW_INVALID",
         reason: "all_null_or_empty_composite",
         legacyEvent: "OUTBOUND_CLAIM_ROW_ALL_NULL_FIELDS",
+        logAliases: [
+          "OUTBOUND_CLAIM_ROW_ALL_NULL_FIELDS",
+          "OUTBOUND_CLAIM_NULL_COMPOSITE",
+        ],
         rowKeyCount: keys.length,
         rowKeysSample: keys.slice(0, 20),
         rowSample: sample,
         hint: "apply_migration_claim_next_outbound_message_null_composite",
+        verifySql: "sql/verify_claim_next_outbound_message.sql",
       }),
     );
     return null;
