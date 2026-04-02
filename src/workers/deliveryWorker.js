@@ -112,6 +112,21 @@ async function main() {
     process.exit(0);
   }
 
+  // Deployment trace only: grep logs for these to prove this build is live (not for business logic).
+  console.log("DELIVERY_BUILD_MARKER=claim-normalize-v2");
+  console.log("DELIVERY_PATCH=outbound-empty-queue-fix");
+  try {
+    const m = `${JSON.stringify({
+      event: "DELIVERY_BUILD_MARKER",
+      marker: "claim-normalize-v2",
+      patch: "outbound-empty-queue-fix",
+    })}\n`;
+    fs.writeSync(1, m);
+    fs.writeSync(2, m);
+  } catch {
+    /* ignore */
+  }
+
   console.log(
     JSON.stringify({
       event: "ENV_SCAN_V2_FLAGS",
