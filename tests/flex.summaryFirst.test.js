@@ -53,8 +53,8 @@ function collectButtons(node, out = []) {
   return out;
 }
 
-test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () => {
-  const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", async () => {
+  const flex = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     birthdate: "19/08/1985",
     reportUrl: "https://example.com/r/abc123",
     reportPayload: {
@@ -106,7 +106,10 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.doesNotMatch(bodyStr, /พลังหลัก · พลังเสริม/);
   assert.match(bodyStr, /เข้ากับคุณ/);
   assert.doesNotMatch(bodyStr, /เข้ากับคุณยังไง/);
-  assert.match(bodyStr, /(คุ้มกัน|ป้องกัน)/);
+  assert.match(
+    bodyStr,
+    /(คุ้มกัน|ป้องกัน|กันแรงลบ|คุ้มครอง|ดันความมั่นใจ|เปิดเงินงาน)/,
+  );
   assert.doesNotMatch(bodyStr, /คุ้มกัน:\s*★/);
   assert.match(bodyStr, /#D4AF37/);
   assert.match(bodyStr, /#000000/);
@@ -122,16 +125,16 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.equal(buttons.filter((c) => c.type === "button").length, 1);
 });
 
-test("buildScanSummaryFirstFlex: appendReportBubble flag ignored (single-bubble design)", () => {
-  const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+test("buildScanSummaryFirstFlex: appendReportBubble flag ignored (single-bubble design)", async () => {
+  const flex = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
     appendReportBubble: true,
   });
   assert.equal(flex.contents.type, "bubble");
 });
 
-test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA", () => {
-  const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA", async () => {
+  const flex = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: null,
     reportPayload: {
       reportId: "r",
@@ -170,8 +173,8 @@ test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA"
   assert.equal(flex.contents.footer, undefined);
 });
 
-test("buildScanSummaryFirstFlex: summary-only Flex does not render 5-dimension star grid (stars stay in HTML)", () => {
-  const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+test("buildScanSummaryFirstFlex: summary-only Flex does not render 5-dimension star grid (stars stay in HTML)", async () => {
+  const flex = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
     reportPayload: {
       reportId: "rid",
@@ -225,15 +228,19 @@ test("buildScanSummaryFirstFlex: summary-only Flex does not render 5-dimension s
   const bodyStr = JSON.stringify(flex.contents.body);
   assert.doesNotMatch(bodyStr, /ดาว.*5\s*มิติ/);
   assert.doesNotMatch(bodyStr, /★★★★★/);
-  assert.match(bodyStr, /หัวข้อสั้น/);
+  assert.ok(
+    bodyStr.includes("หัวข้อสั้น") ||
+      /เด่นเรื่อง|สรุปผลการสแกน/u.test(bodyStr),
+    "headline from stored payload or DB/fallback",
+  );
 });
 
-test("buildScanSummaryFirstFlex: compatibility row uses reportPayload not parsed scan text", () => {
+test("buildScanSummaryFirstFlex: compatibility row uses reportPayload not parsed scan text", async () => {
   const textHighCompat = SAMPLE_TEXT.replace(
     "ความสอดคล้องกับเจ้าของ: 78%",
     "ความสอดคล้องกับเจ้าของ: 99%",
   );
-  const flex = buildScanSummaryFirstFlex(textHighCompat, {
+  const flex = await buildScanSummaryFirstFlex(textHighCompat, {
     reportUrl: "https://example.com/r/abc123",
     reportPayload: {
       reportId: "rid",
@@ -272,8 +279,8 @@ test("buildScanSummaryFirstFlex: compatibility row uses reportPayload not parsed
   assert.doesNotMatch(bodyStr, /99%/);
 });
 
-test("buildScanSummaryFirstFlex: guardrails for summary-card structure", () => {
-  const flex = buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+test("buildScanSummaryFirstFlex: guardrails for summary-card structure", async () => {
+  const flex = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/abc123",
     reportPayload: {
       reportId: "rid2",

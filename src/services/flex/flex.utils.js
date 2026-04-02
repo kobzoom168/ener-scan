@@ -1,3 +1,9 @@
+import {
+  inferEnergyCategoryCodeFromMainEnergy,
+  pickAccentColorFromCategoryCode,
+  ENERGY_CATEGORY_DISPLAY_SYNC,
+} from "../../utils/energyCategoryResolve.util.js";
+
 export function cleanLine(line) {
   return String(line || "")
     .replace(/\s+/g, " ")
@@ -370,7 +376,11 @@ export function sanitizeBulletLines(lines, charsPerLine = 26) {
     .map((line) => wrapFlexTextNoTruncate(line, charsPerLine));
 }
 
-export function pickMainEnergyColor(text) {
+/**
+ * Legacy color pick from Thai keywords (substring). Used only as fallback when category mapping fails.
+ * @param {string} text
+ */
+export function pickMainEnergyColorLegacy(text) {
   const clean = cleanLine(text);
 
   if (
@@ -405,10 +415,7 @@ export function pickMainEnergyColor(text) {
     return "#1565C0";
   }
 
-  if (
-    clean.includes("พลังเมตตา") ||
-    clean.includes("เมตตา")
-  ) {
+  if (clean.includes("พลังเมตตา") || clean.includes("เมตตา")) {
     return "#8E24AA";
   }
 
@@ -421,6 +428,19 @@ export function pickMainEnergyColor(text) {
   }
 
   return "#D4AF37";
+}
+
+/**
+ * Prefer `energy_categories`–aligned hex via category_code; fallback to legacy keyword matching.
+ * @param {string} text — main energy line / label
+ * @param {string} [categoryCodeHint] — from payload.summary.energyCategoryCode when known
+ */
+export function pickMainEnergyColor(text, categoryCodeHint) {
+  const hint = String(categoryCodeHint || "").trim();
+  const code = hint || inferEnergyCategoryCodeFromMainEnergy(text);
+  const byCode = pickAccentColorFromCategoryCode(code);
+  if (byCode) return byCode;
+  return pickMainEnergyColorLegacy(text);
 }
 
 export function normalizeScore(scoreText) {
@@ -458,7 +478,11 @@ export function normalizeScore(scoreText) {
   };
 }
 
-export function getEnergyShortLabel(mainEnergy) {
+/**
+ * Legacy short label from keyword substrings. Prefer {@link getEnergyShortLabel} with category sync/DB.
+ * @param {string} mainEnergy
+ */
+export function getEnergyShortLabelLegacy(mainEnergy) {
   const value = cleanLine(mainEnergy);
 
   if (!value || value === "-") return "พลังหลักชัด ๆ";
@@ -524,4 +548,24 @@ export function getEnergyShortLabel(mainEnergy) {
   }
 
   return sanitizeFlexDisplayText(safeWrapText(value, 28));
+}
+
+/**
+ * Short label for Flex / alt text: prefer energy category display names (sync mirror of DB);
+ * fallback to legacy substring rules.
+ * @param {string} mainEnergy
+ * @param {{ categoryCode?: string, displayNameTh?: string, shortNameTh?: string }} [options]
+ */
+export function getEnergyShortLabel(mainEnergy, options = {}) {
+  const d = String(options.displayNameTh || "").trim();
+  const sn = String(options.shortNameTh || "").trim();
+  if (d) return sanitizeFlexDisplayText(safeWrapText(d, 28));
+  if (sn) return sanitizeFlexDisplayText(safeWrapText(sn, 28));
+  const code =
+    String(options.categoryCode || "").trim() ||
+    inferEnergyCategoryCodeFromMainEnergy(mainEnergy);
+  const sync = ENERGY_CATEGORY_DISPLAY_SYNC[code];
+  if (sync?.display_name_th) return sync.display_name_th;
+  if (sync?.short_name_th) return sync.short_name_th;
+  return getEnergyShortLabelLegacy(mainEnergy);
 }

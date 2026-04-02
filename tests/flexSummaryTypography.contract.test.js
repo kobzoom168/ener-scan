@@ -13,8 +13,8 @@ test("Flex summary surface caps are mobile-tight", () => {
   assert.equal(FLEX_SUMMARY_BULLET_MAX, 38);
 });
 
-test("summary Flex: percent and band are separate text nodes (no 71%+band on one line)", () => {
-  const flex = buildScanSummaryFirstFlex("ระดับพลัง: 8/10\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%", {
+test("summary Flex: percent and band are separate text nodes (no 71%+band on one line)", async () => {
+  const flex = await buildScanSummaryFirstFlex("ระดับพลัง: 8/10\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%", {
     reportUrl: "https://example.com/r/t",
     reportPayload: {
       reportId: "r",

@@ -107,6 +107,8 @@
  * @property {string} [fitReasonShort] — Flex-only short fit line
  * @property {string[]} [bulletsShort] — exactly 2 short lines for LINE Flex
  * @property {string} [ctaLabel] — primary button label for Flex handoff
+ * @property {string} [energyCategoryCode] — energy_categories.code (sync-inferred for Flex DB resolver)
+ * @property {string} [energyCopyObjectFamily] — normalized slug for energy_copy_templates.object_family
  */
 
 /**

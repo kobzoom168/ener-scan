@@ -1,6 +1,6 @@
 /**
  * Data layer: energy category labels + copy templates (headline / fit_line / bullets).
- * Does not wire into scan/report pipeline — call sites can adopt later.
+ * Used by `energyCopyFlex.service.js` for LINE summary-first Flex; other call sites may adopt later.
  */
 import { supabase } from "../config/supabase.js";
 import { selectEnergyCopyFromTemplates } from "../utils/energyCopySelect.util.js";

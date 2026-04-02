@@ -6,6 +6,8 @@ import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRollout
 import { parseScanText } from "./flex.parser.js";
 import { normalizeScore, getEnergyShortLabel } from "./flex.utils.js";
 import { resolveFlexSummarySurfaceForLine } from "../../utils/reports/flexSummarySurface.util.js";
+import { composeFlexShortSurface } from "../../utils/reports/flexSummaryShortCopy.js";
+import { resolveEnergyCopyForFlex } from "../energyCopyFlex.service.js";
 import { buildScanFlexAltText, FLEX_SPLIT_WARN_THRESHOLD, splitSentencesForFlex } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import { ENERGY_TYPES } from "./scanCopy.config.js";
@@ -159,9 +161,7 @@ function createEnergyBadgePill(mainLabel) {
   };
 }
 
-// TODO(energy-copy-db): Variant headlines/bullets below are static marketing copy. When Flex should follow
-// DB-driven energy_categories / energy_copy_templates, load via getEnergyCopySet / getEnergyCategory and
-// keep these only as fallbacks or A/B overrides.
+/** Static variant metadata for telemetry / legacy; summary-first headline/bullets come from DB + fallback. */
 const SUMMARY_CARD_COPY_VARIANTS = {
   premium_minimal: {
     variantKey: "premium_minimal",
@@ -485,11 +485,12 @@ function energyNameForPill(mainEnergyLine) {
  *   appendReportBubble?: boolean,
  * }} [options]
  */
-export function buildScanSummaryFirstFlex(rawText, options = {}) {
+export async function buildScanSummaryFirstFlex(rawText, options = {}) {
   const birthdate = options.birthdate ?? null;
   const reportUrl = options.reportUrl ?? null;
   const reportPayload = options.reportPayload ?? null;
   const summaryCardCopy = resolveSummaryCardCopyVariant(reportPayload);
+  const s = reportPayload?.summary;
 
   const parsed = parseScanText(rawText);
   const mainEnergy =
@@ -503,14 +504,6 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
 
   const score = scoreNormalizedForFlex(reportPayload, parsed.energyScore);
 
-  const altMain =
-    String(reportPayload?.summary?.mainEnergyLabel || "").trim() ||
-    getEnergyShortLabel(mainEnergy || "พลังทั่วไป");
-  const altText = buildScanFlexAltText({
-    mainEnergyLabel: altMain,
-    scoreDisplay: score.display || String(parsed.energyScore || "").trim(),
-  });
-
   const overviewRaw =
     parsed.overview === "-" ? "" : String(parsed.overview || "");
   const splitOverview = splitSentencesForFlex(overviewRaw).length;
@@ -523,6 +516,102 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   )?.[0] || "none";
 
   const copyShapingActive = familyPatternUsed !== "none";
+  const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
+  const heroOk = /^https:\/\//i.test(imgUrl);
+  const url = String(reportUrl || "").trim();
+
+  const { pctStr: compatPctStr, bandStr: compatBandStr } =
+    compatPercentAndBandForFlex(reportPayload, compatibility);
+
+  const mainEnergyLabelForCopy =
+    String(s?.mainEnergyLabel || mainEnergy || "").trim() || "เสริมพลัง";
+  const wordingFam = s?.wordingFamily || reportPayload?.wording?.wordingFamily;
+  const seedFlex = String(reportPayload?.reportId || reportPayload?.scanId || "flex");
+
+  /** @type {string} */
+  let headlineText = "สรุปผลการสแกน";
+  /** @type {string} */
+  let fitLine = "";
+  /** @type {string[]} */
+  let bulletLines = [];
+  /** @type {string} */
+  let ctaLabel = summaryCardCopy.ctaText;
+  /** @type {string} */
+  let mainPill =
+    energyNameForPill(mainEnergy) ||
+    String(s?.mainEnergyLabel || "").trim() ||
+    "พลังหลัก";
+
+  let usedDbSurface = false;
+  try {
+    const ec = await resolveEnergyCopyForFlex({
+      categoryCode: s?.energyCategoryCode,
+      objectFamily: s?.energyCopyObjectFamily,
+      mainEnergy: mainEnergyLabelForCopy,
+      hidden:
+        parsed.hidden && parsed.hidden !== "-"
+          ? String(parsed.hidden)
+          : "",
+    });
+    if (ec.headline && ec.bullets?.length >= 1) {
+      usedDbSurface = true;
+      headlineText = ec.headline;
+      fitLine = ec.fitLine || "";
+      bulletLines = ec.bullets.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 2);
+      if (bulletLines.length === 1) {
+        const fb = composeFlexShortSurface({
+          mainEnergyLabel: mainEnergyLabelForCopy,
+          wordingFamily: wordingFam,
+          seed: seedFlex,
+        });
+        const second =
+          fb.bulletsShort[1] || fb.bulletsShort[0] || "";
+        if (second) bulletLines = [bulletLines[0], second];
+      }
+      mainPill =
+        ec.energyShortLabel ||
+        energyNameForPill(mainEnergy) ||
+        String(s?.mainEnergyLabel || "").trim() ||
+        "พลังหลัก";
+      ctaLabel = "เปิดรายงานฉบับเต็ม";
+    }
+  } catch (err) {
+    console.warn("[FLEX_SUMMARY_FIRST] resolveEnergyCopyForFlex failed", {
+      message: err?.message,
+    });
+  }
+
+  if (!usedDbSurface) {
+    const surface = resolveFlexSummarySurfaceForLine(reportPayload, parsed);
+    headlineText =
+      String(surface.headlineShort || "").trim() || "สรุปผลการสแกน";
+    fitLine = String(surface.fitReasonShort || "").trim();
+    bulletLines = Array.isArray(surface.bulletsShort)
+      ? surface.bulletsShort.map((x) => String(x || "").trim()).filter(Boolean)
+      : [];
+    ctaLabel =
+      String(surface.ctaLabel || "").trim() || summaryCardCopy.ctaText;
+    mainPill =
+      getEnergyShortLabel(mainEnergy || "-", {
+        categoryCode: s?.energyCategoryCode,
+      }) ||
+      energyNameForPill(mainEnergy) ||
+      String(s?.mainEnergyLabel || "").trim() ||
+      "พลังหลัก";
+  }
+
+  const altMain =
+    String(s?.mainEnergyLabel || "").trim() ||
+    (usedDbSurface
+      ? mainPill
+      : getEnergyShortLabel(mainEnergy || "พลังทั่วไป", {
+          categoryCode: s?.energyCategoryCode,
+        }));
+  const altText = buildScanFlexAltText({
+    mainEnergyLabel: altMain,
+    scoreDisplay: score.display || String(parsed.energyScore || "").trim(),
+  });
+
   console.log(
     JSON.stringify({
       event: "FLEX_SUMMARY_FIRST",
@@ -536,33 +625,13 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       summaryCardCopyVariant: summaryCardCopy.variantKey,
       familyPatternUsed,
       copyShapingActive,
+      energyCopySurface: usedDbSurface ? "db" : "fallback",
       flexSplitCounts: {
         overview: splitOverview,
         warnThreshold: FLEX_SPLIT_WARN_THRESHOLD,
       },
     }),
   );
-  const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
-  const heroOk = /^https:\/\//i.test(imgUrl);
-  const url = String(reportUrl || "").trim();
-
-  const { pctStr: compatPctStr, bandStr: compatBandStr } =
-    compatPercentAndBandForFlex(reportPayload, compatibility);
-
-  const mainPill =
-    energyNameForPill(mainEnergy) ||
-    String(reportPayload?.summary?.mainEnergyLabel || "").trim() ||
-    "พลังหลัก";
-
-  const surface = resolveFlexSummarySurfaceForLine(reportPayload, parsed);
-  const headlineText =
-    String(surface.headlineShort || "").trim() || "สรุปผลการสแกน";
-  const fitLine = String(surface.fitReasonShort || "").trim();
-  const bulletLines = Array.isArray(surface.bulletsShort)
-    ? surface.bulletsShort.map((x) => String(x || "").trim()).filter(Boolean)
-    : [];
-  const ctaLabel =
-    String(surface.ctaLabel || "").trim() || summaryCardCopy.ctaText;
 
   const headlineBlock = {
     type: "text",

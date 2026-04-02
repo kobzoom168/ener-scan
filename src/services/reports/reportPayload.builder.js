@@ -13,6 +13,10 @@ import {
   resolveDominantColorPipelineSource,
 } from "../../utils/reports/reportPipelineVisualSignals.util.js";
 import { buildFlexSummarySurfaceFields } from "../../utils/reports/flexSummarySurface.util.js";
+import {
+  inferEnergyCategoryCodeFromMainEnergy,
+  normalizeObjectFamilyForEnergyCopy,
+} from "../../utils/energyCategoryResolve.util.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -341,9 +345,21 @@ export function buildReportPayloadFromScan(opts) {
       ? String(compatibilityPayload.band)
       : "";
 
-  // TODO(energy-copy-db): summary.headlineShort / fitReasonShort / bulletsShort still come from
-  // buildFlexSummarySurfaceFields → composeFlexShortSurface (pools). When category_code + object_family
-  // are available on the pipeline, merge or replace with getEnergyCopySet() from energyCopy.service.js.
+  const mainEnergyLabelForCategory =
+    wording.mainEnergy
+      ? String(wording.mainEnergy)
+      : parsed.mainEnergy && parsed.mainEnergy !== "-"
+        ? String(parsed.mainEnergy)
+        : "";
+
+  const energyCategoryCode =
+    inferEnergyCategoryCodeFromMainEnergy(mainEnergyLabelForCategory);
+
+  const energyCopyObjectFamily = normalizeObjectFamilyForEnergyCopy(
+    String(objectFamilyOpt || ""),
+  );
+
+  /** Stored payload Flex teaser (fallback for web); LINE summary-first Flex prefers DB via reportPayload fields + async resolver. */
   const flexSurface = buildFlexSummarySurfaceFields({
     wording,
     compatibilityReason,
@@ -456,6 +472,8 @@ export function buildReportPayloadFromScan(opts) {
       fitReasonShort: flexSurface.fitReasonShort,
       bulletsShort: flexSurface.bulletsShort,
       ctaLabel: flexSurface.ctaLabel,
+      energyCategoryCode,
+      energyCopyObjectFamily,
     },
     sections: {
       whatItGives,

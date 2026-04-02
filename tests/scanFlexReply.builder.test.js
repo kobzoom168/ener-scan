@@ -22,8 +22,8 @@ function fakeSummaryFlex() {
   };
 }
 
-test("buildScanResultFlexWithFallback: summaryFirst off → legacy only", () => {
-  const out = buildScanResultFlexWithFallback(
+test("buildScanResultFlexWithFallback: summaryFirst off → legacy only", async () => {
+  const out = await buildScanResultFlexWithFallback(
     {
       summaryFirstEnabled: false,
       resultText: SAMPLE_TEXT,
@@ -34,7 +34,7 @@ test("buildScanResultFlexWithFallback: summaryFirst off → legacy only", () => 
     },
     {
       buildScanFlex: () => fakeLegacyFlex(),
-      buildScanSummaryFirstFlex: () => {
+      buildScanSummaryFirstFlex: async () => {
         throw new Error("should not call");
       },
     },
@@ -43,8 +43,8 @@ test("buildScanResultFlexWithFallback: summaryFirst off → legacy only", () => 
   assert.equal(out.flex.altText, "legacy");
 });
 
-test("buildScanResultFlexWithFallback: summaryFirst on → summary builder", () => {
-  const out = buildScanResultFlexWithFallback(
+test("buildScanResultFlexWithFallback: summaryFirst on → summary builder", async () => {
+  const out = await buildScanResultFlexWithFallback(
     {
       summaryFirstEnabled: true,
       resultText: SAMPLE_TEXT,
@@ -54,7 +54,7 @@ test("buildScanResultFlexWithFallback: summaryFirst on → summary builder", () 
       appendReportBubble: false,
     },
     {
-      buildScanSummaryFirstFlex: () => fakeSummaryFlex(),
+      buildScanSummaryFirstFlex: async () => fakeSummaryFlex(),
       buildScanFlex: () => fakeLegacyFlex(),
     },
   );
@@ -63,8 +63,8 @@ test("buildScanResultFlexWithFallback: summaryFirst on → summary builder", () 
   assert.equal(out.flex.contents.type, "bubble");
 });
 
-test("buildScanResultFlexWithFallback: summary-first throws → legacy + flag", () => {
-  const out = buildScanResultFlexWithFallback(
+test("buildScanResultFlexWithFallback: summary-first throws → legacy + flag", async () => {
+  const out = await buildScanResultFlexWithFallback(
     {
       summaryFirstEnabled: true,
       resultText: SAMPLE_TEXT,
@@ -74,7 +74,7 @@ test("buildScanResultFlexWithFallback: summary-first throws → legacy + flag", 
       appendReportBubble: false,
     },
     {
-      buildScanSummaryFirstFlex: () => {
+      buildScanSummaryFirstFlex: async () => {
         throw new Error("flex_build_boom");
       },
       buildScanFlex: () => fakeLegacyFlex(),

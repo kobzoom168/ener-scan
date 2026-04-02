@@ -13,9 +13,9 @@ import { buildScanSummaryFirstFlex } from "./flex.summaryFirst.js";
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} [options.reportPayload]
  * @param {boolean} [options.appendReportBubble]
  * @param {{ buildScanSummaryFirstFlex?: typeof buildScanSummaryFirstFlex, buildScanFlex?: typeof buildScanFlex }} [impl] test doubles
- * @returns {{ flex: Record<string, unknown>, summaryFirstBuildFailed: boolean, error?: unknown }}
+ * @returns {Promise<{ flex: Record<string, unknown>, summaryFirstBuildFailed: boolean, error?: unknown }>}
  */
-export function buildScanResultFlexWithFallback(options, impl = {}) {
+export async function buildScanResultFlexWithFallback(options, impl = {}) {
   const buildSummary =
     impl.buildScanSummaryFirstFlex ?? buildScanSummaryFirstFlex;
   const buildLegacy = impl.buildScanFlex ?? buildScanFlex;
@@ -38,7 +38,7 @@ export function buildScanResultFlexWithFallback(options, impl = {}) {
 
   try {
     return {
-      flex: buildSummary(resultText, {
+      flex: await buildSummary(resultText, {
         birthdate,
         reportUrl,
         reportPayload,

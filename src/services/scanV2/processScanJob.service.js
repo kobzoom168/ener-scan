@@ -538,7 +538,7 @@ export async function processScanJob(workerId, jobRow) {
       env.FLEX_SCAN_SUMMARY_FIRST_ROLLOUT_PCT,
     );
     try {
-      const built = buildScanResultFlexWithFallback({
+      const built = await buildScanResultFlexWithFallback({
         summaryFirstEnabled: summaryFirstSelected,
         resultText,
         birthdate,
