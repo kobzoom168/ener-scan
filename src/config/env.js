@@ -415,6 +415,14 @@ export const env = {
    */
   ENABLE_LEGACY_WEB_INLINE_SCAN:
     String(process.env.ENABLE_LEGACY_WEB_INLINE_SCAN || "").trim() === "true",
+  /**
+   * When `true`, legacy synchronous scan (`runScanFlow` / `replyScanResult` direct LINE send)
+   * may run. Default **false** — webhook no longer calls `runScanFlow`; handlers fail closed unless
+   * explicitly enabled (e.g. local debugging).
+   * @type {boolean}
+   */
+  ALLOW_LEGACY_SCAN_PATHS:
+    String(process.env.ALLOW_LEGACY_SCAN_PATHS || "").trim() === "true",
   /** Supabase Storage bucket for scan_uploads (create bucket + policies in dashboard). */
   SCAN_V2_UPLOAD_BUCKET:
     String(process.env.SCAN_V2_UPLOAD_BUCKET || "").trim() || "scan-uploads",
@@ -475,5 +483,6 @@ console.log(
     ENABLE_ASYNC_SCAN_V2: env.ENABLE_ASYNC_SCAN_V2,
     ENABLE_SYNC_SCAN_FALLBACK: env.ENABLE_SYNC_SCAN_FALLBACK,
     ENABLE_LEGACY_WEB_INLINE_SCAN: env.ENABLE_LEGACY_WEB_INLINE_SCAN,
+    ALLOW_LEGACY_SCAN_PATHS: env.ALLOW_LEGACY_SCAN_PATHS,
   }),
 );

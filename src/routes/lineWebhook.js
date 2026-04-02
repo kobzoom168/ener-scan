@@ -262,7 +262,10 @@ import {
   shouldRouteObjectImageToScanBeforeSlipPipeline,
 } from "../utils/paymentConversationRouting.util.js";
 
-import { runScanFlow } from "../handlers/scanFlow.handler.js";
+import {
+  runScanFlow,
+  LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
+} from "../handlers/scanFlow.handler.js";
 import { ingestScanImageAsyncV2 } from "../services/scanV2/webhookImageIngestion.service.js";
 
 import {
@@ -2113,6 +2116,40 @@ async function finalizeAcceptedImage({
     );
 
     if (!env.ENABLE_ASYNC_SCAN_V2 && env.ENABLE_LEGACY_WEB_INLINE_SCAN) {
+      if (!env.ALLOW_LEGACY_SCAN_PATHS) {
+        console.log(
+          JSON.stringify({
+            event: "LEGACY_SCAN_PATH_HIT",
+            path: "web",
+            source: "finalize_accepted_image",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
+            flowVersion,
+            reason: "async_v2_off_legacy_inline_blocked",
+            allowLegacyScanPaths: false,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        try {
+          await replyText(
+            client,
+            event.replyToken,
+            LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
+          );
+        } catch (replyErr) {
+          console.error(
+            JSON.stringify({
+              event: "LEGACY_SCAN_PATH_HIT_REPLY_ERROR",
+              path: "web",
+              source: "finalize_accepted_image",
+              lineUserIdPrefix: lineUserIdPrefix8(userId),
+              message: replyErr?.message,
+              timestamp: scanV2TraceTs(),
+            }),
+          );
+        }
+        return;
+      }
       console.log(
         JSON.stringify({
           event: "LEGACY_WEB_INLINE_SCAN_ENTER",
@@ -2234,6 +2271,41 @@ async function finalizeAcceptedImage({
         env.ENABLE_SYNC_SCAN_FALLBACK &&
         env.ENABLE_LEGACY_WEB_INLINE_SCAN
       ) {
+        if (!env.ALLOW_LEGACY_SCAN_PATHS) {
+          console.warn(
+            JSON.stringify({
+              event: "LEGACY_SCAN_PATH_HIT",
+              path: "web",
+              source: "finalize_accepted_image",
+              lineUserIdPrefix: lineUserIdPrefix8(userId),
+              messageId: event?.message?.id ?? null,
+              flowVersion,
+              reason: "ingest_failed_sync_fallback_legacy_blocked",
+              ingestReason,
+              allowLegacyScanPaths: false,
+              timestamp: scanV2TraceTs(),
+            }),
+          );
+          try {
+            await replyText(
+              client,
+              event.replyToken,
+              LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
+            );
+          } catch (replyErr) {
+            console.error(
+              JSON.stringify({
+                event: "LEGACY_SCAN_PATH_HIT_REPLY_ERROR",
+                path: "web",
+                source: "finalize_accepted_image",
+                lineUserIdPrefix: lineUserIdPrefix8(userId),
+                message: replyErr?.message,
+                timestamp: scanV2TraceTs(),
+              }),
+            );
+          }
+          return;
+        }
         console.warn(
           JSON.stringify({
             event: "SCAN_V2_INGEST_FALLBACK_SYNC",
@@ -5264,6 +5336,40 @@ async function handleTextMessage({ client, event, userId, session }) {
         const pendingMsgIdForV2 = session.pendingImage?.messageId ?? null;
 
         if (!env.ENABLE_ASYNC_SCAN_V2 && env.ENABLE_LEGACY_WEB_INLINE_SCAN) {
+          if (!env.ALLOW_LEGACY_SCAN_PATHS) {
+            console.log(
+              JSON.stringify({
+                event: "LEGACY_SCAN_PATH_HIT",
+                path: "web",
+                source: "waiting_birthdate_text",
+                lineUserIdPrefix: lineUserIdPrefix8(userId),
+                messageId: pendingMsgIdForV2,
+                flowVersion,
+                reason: "async_v2_off_legacy_inline_blocked",
+                allowLegacyScanPaths: false,
+                timestamp: scanV2TraceTs(),
+              }),
+            );
+            try {
+              await replyText(
+                client,
+                event.replyToken,
+                LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
+              );
+            } catch (replyErr) {
+              console.error(
+                JSON.stringify({
+                  event: "LEGACY_SCAN_PATH_HIT_REPLY_ERROR",
+                  path: "web",
+                  source: "waiting_birthdate_text",
+                  lineUserIdPrefix: lineUserIdPrefix8(userId),
+                  message: replyErr?.message,
+                  timestamp: scanV2TraceTs(),
+                }),
+              );
+            }
+            return;
+          }
           console.log(
             JSON.stringify({
               event: "LEGACY_WEB_INLINE_SCAN_ENTER",
@@ -5396,6 +5502,41 @@ async function handleTextMessage({ client, event, userId, session }) {
             env.ENABLE_SYNC_SCAN_FALLBACK &&
             env.ENABLE_LEGACY_WEB_INLINE_SCAN
           ) {
+            if (!env.ALLOW_LEGACY_SCAN_PATHS) {
+              console.warn(
+                JSON.stringify({
+                  event: "LEGACY_SCAN_PATH_HIT",
+                  path: "web",
+                  source: "waiting_birthdate_text",
+                  lineUserIdPrefix: lineUserIdPrefix8(userId),
+                  messageId: pendingMsgIdForV2,
+                  flowVersion,
+                  reason: "ingest_failed_sync_fallback_legacy_blocked",
+                  ingestReason,
+                  allowLegacyScanPaths: false,
+                  timestamp: scanV2TraceTs(),
+                }),
+              );
+              try {
+                await replyText(
+                  client,
+                  event.replyToken,
+                  LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
+                );
+              } catch (replyErr) {
+                console.error(
+                  JSON.stringify({
+                    event: "LEGACY_SCAN_PATH_HIT_REPLY_ERROR",
+                    path: "web",
+                    source: "waiting_birthdate_text",
+                    lineUserIdPrefix: lineUserIdPrefix8(userId),
+                    message: replyErr?.message,
+                    timestamp: scanV2TraceTs(),
+                  }),
+                );
+              }
+              return;
+            }
             console.warn(
               JSON.stringify({
                 event: "SCAN_V2_INGEST_FALLBACK_SYNC",

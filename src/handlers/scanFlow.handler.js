@@ -94,6 +94,10 @@ import {
   sendScanResultPushWith429Retry,
   sendScanResultReplyWith429Retry,
 } from "../utils/linePush429Retry.util.js";
+
+/** User-visible when legacy sync scan / direct LINE delivery is disabled (fail closed). */
+export const LEGACY_SCAN_PATH_DISABLED_USER_TEXT =
+  "ขออภัยครับ การสแกนแบบเดิมถูกปิดแล้ว กรุณาใช้ระบบคิวอัตโนมัติ (ส่งรูปเมื่อบริการพร้อม) หรือติดต่อทีมงานครับ";
 import {
   extractLineSummaryFields,
   buildSummaryLinkLineText,
@@ -262,6 +266,33 @@ export async function replyScanResult({
   reportPayload = null,
   scanAccessSource = null,
 }) {
+  if (!env.ALLOW_LEGACY_SCAN_PATHS) {
+    console.log(
+      JSON.stringify({
+        event: "LEGACY_SCAN_PATH_HIT",
+        path: "sync-scan",
+        function: "replyScanResult",
+        reason: "legacy_direct_line_delivery_disabled",
+        allowLegacyScanPaths: false,
+        lineUserIdPrefix: safeLineUserIdPrefix(userId),
+      }),
+    );
+    return {
+      flexPresentationMode: "legacy",
+      totalCarouselBubbles: 0,
+      scanResultBubbleCount: 0,
+      hasReportLink: false,
+      reportLinkPlacement: "none",
+      hasObjectImage: false,
+      flexBuildException: false,
+      delivery: {
+        sent: false,
+        method: "legacy_blocked",
+        attempts: 0,
+      },
+    };
+  }
+
   const lineUserIdPrefix = safeLineUserIdPrefix(userId);
   const footer = extraFooterText ? String(extraFooterText).trim() : "";
   const rolloutBucket = flexRolloutBucket0to99(userId);
@@ -574,6 +605,38 @@ export async function runScanFlow({
     hasImageBuffer: Boolean(imageBuffer?.length),
     birthdate,
   });
+
+  if (!env.ALLOW_LEGACY_SCAN_PATHS) {
+    console.log(
+      JSON.stringify({
+        event: "LEGACY_SCAN_PATH_HIT",
+        path: "sync-scan",
+        function: "runScanFlow",
+        reason: "legacy_inline_scan_execution_disabled",
+        allowLegacyScanPaths: false,
+        lineUserIdPrefix: safeLineUserIdPrefix(userId),
+        flowVersion: flowVersion ?? null,
+      }),
+    );
+    try {
+      const rt = String(replyToken || "").trim();
+      if (rt) {
+        await replyText(client, rt, LEGACY_SCAN_PATH_DISABLED_USER_TEXT);
+      } else {
+        await pushText(client, userId, LEGACY_SCAN_PATH_DISABLED_USER_TEXT);
+      }
+    } catch (e) {
+      console.error(
+        JSON.stringify({
+          event: "LEGACY_SCAN_PATH_BLOCK_REPLY_ERROR",
+          message: e?.message,
+          lineUserIdPrefix: safeLineUserIdPrefix(userId),
+        }),
+      );
+    }
+    clearSessionIfFlowVersionMatches(userId, flowVersion);
+    return;
+  }
 
   let paidLimitWarningText = null;
 
