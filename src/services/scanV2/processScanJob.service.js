@@ -84,6 +84,10 @@ export async function processScanJob(workerId, jobRow) {
   const lineUserId = jobRow.line_user_id;
   const appUserId = jobRow.app_user_id;
 
+  /** Set after `upsertReportPublicationForScanResult` (must exist for whole job to avoid ReferenceError). */
+  /** @type {string | null} */
+  let reportPublicationId = null;
+
   console.log(
     JSON.stringify({
       event: "SCAN_JOB_CLAIMED",
@@ -610,8 +614,6 @@ export async function processScanJob(workerId, jobRow) {
     return;
   }
 
-  /** @type {string | null} */
-  let reportPublicationId = null;
   if (publicToken && reportUrl && scanResultV2Id) {
     try {
       const pubRow = await upsertReportPublicationForScanResult({
@@ -620,6 +622,29 @@ export async function processScanJob(workerId, jobRow) {
         reportUrl,
       });
       reportPublicationId = pubRow?.id ? String(pubRow.id) : null;
+      if (!reportPublicationId) {
+        console.error(
+          JSON.stringify({
+            event: "SCAN_V2_REPORT_PUBLICATION_ID_MISSING",
+            path: "worker-scan",
+            jobIdPrefix: String(jobId).slice(0, 8),
+            scanResultIdPrefix: String(scanResultV2Id).slice(0, 8),
+            publicTokenPrefix: publicTokenPrefix12(publicToken),
+            reportUrlPresent: Boolean(String(reportUrl || "").trim()),
+            reason: "upsert_returned_no_id",
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        await updateScanRequestStatus(scanRequestId, "failed");
+        await failJob(
+          jobId,
+          "publication_id_missing_after_upsert",
+          "report_publications upsert ok but id missing",
+          lineUserId,
+          workerId,
+        );
+        return;
+      }
     } catch (pubErr) {
       console.error(
         JSON.stringify({
@@ -642,6 +667,7 @@ export async function processScanJob(workerId, jobRow) {
       scanResultIdPrefix: String(scanResultV2Id).slice(0, 8),
       deliveryStrategy: lineFinalMode,
       hasReportUrl: Boolean(String(reportUrl || "").trim()),
+      reportUrlPresent: Boolean(String(reportUrl || "").trim()),
       publicationIdPrefix: idPrefix8(reportPublicationId),
       publicTokenPrefix: publicTokenPrefix12(publicToken),
       timestamp: scanV2TraceTs(),
@@ -682,6 +708,9 @@ export async function processScanJob(workerId, jobRow) {
         jobIdPrefix: idPrefix8(jobId),
         lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
         scanResultIdPrefix: String(scanResultV2Id).slice(0, 8),
+        publicationIdPrefix: idPrefix8(reportPublicationId),
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        reportUrlPresent: Boolean(String(reportUrl || "").trim()),
         errorCode: enqueueErr?.code ?? null,
         reason: String(enqueueErr?.message || enqueueErr).slice(0, 500),
         timestamp: scanV2TraceTs(),
@@ -706,6 +735,9 @@ export async function processScanJob(workerId, jobRow) {
       jobIdPrefix: idPrefix8(jobId),
       outboundIdPrefix: idPrefix8(reportOutboundRow?.id ?? null),
       scanResultIdPrefix: String(scanResultV2Id).slice(0, 8),
+      publicationIdPrefix: idPrefix8(reportPublicationId),
+      publicTokenPrefix: publicTokenPrefix12(publicToken),
+      reportUrlPresent: Boolean(String(reportUrl || "").trim()),
       timestamp: scanV2TraceTs(),
     }),
   );
