@@ -363,8 +363,8 @@ export const env = {
     return Number.isFinite(n) ? Math.max(400, Math.floor(n)) : 3200;
   })(),
   /**
-   * When `true`: `runScanFlow` sends a short pre-scan push ack and lineWebhook skips
-   * `before_scan_sequence` on birthdate→scan. Default on (legacy UX). Set
+   * When `true`: pre-scan path may use push-only ack and lineWebhook may skip
+   * `before_scan_sequence` on birthdate→scan. Default on. Set
    * `SEND_PRE_SCAN_ACK_PUSH_ONLY=false` to disable push-only ack and show `before_scan_sequence` again.
    */
   SEND_PRE_SCAN_ACK_PUSH_ONLY:
@@ -403,26 +403,6 @@ export const env = {
    */
   ENABLE_ASYNC_SCAN_V2:
     String(process.env.ENABLE_ASYNC_SCAN_V2 || "").trim() === "true",
-  /**
-   * When `true` and async ingest fails, allow synchronous `runScanFlow` only if
-   * `ENABLE_LEGACY_WEB_INLINE_SCAN` is also `true`. Alone it does not enable inline scan.
-   */
-  ENABLE_SYNC_SCAN_FALLBACK:
-    String(process.env.ENABLE_SYNC_SCAN_FALLBACK || "").trim() === "true",
-  /**
-   * Emergency only: allows `runScanFlow` (inline deep scan) from LINE webhook image flows.
-   * Must stay `false` in normal production.
-   */
-  ENABLE_LEGACY_WEB_INLINE_SCAN:
-    String(process.env.ENABLE_LEGACY_WEB_INLINE_SCAN || "").trim() === "true",
-  /**
-   * When `true`, legacy synchronous scan (`runScanFlow` / `replyScanResult` direct LINE send)
-   * may run **only if** Round 1 code flags in `lineWebhook.js` / `scanFlow.handler.js` are also
-   * enabled (both default **false** in source). Default **false** for this env alone.
-   * @type {boolean}
-   */
-  ALLOW_LEGACY_SCAN_PATHS:
-    String(process.env.ALLOW_LEGACY_SCAN_PATHS || "").trim() === "true",
   /** Supabase Storage bucket for scan_uploads (create bucket + policies in dashboard). */
   SCAN_V2_UPLOAD_BUCKET:
     String(process.env.SCAN_V2_UPLOAD_BUCKET || "").trim() || "scan-uploads",
@@ -481,8 +461,5 @@ console.log(
     path: "web",
     timestamp: scanV2TraceTs(),
     ENABLE_ASYNC_SCAN_V2: env.ENABLE_ASYNC_SCAN_V2,
-    ENABLE_SYNC_SCAN_FALLBACK: env.ENABLE_SYNC_SCAN_FALLBACK,
-    ENABLE_LEGACY_WEB_INLINE_SCAN: env.ENABLE_LEGACY_WEB_INLINE_SCAN,
-    ALLOW_LEGACY_SCAN_PATHS: env.ALLOW_LEGACY_SCAN_PATHS,
   }),
 );

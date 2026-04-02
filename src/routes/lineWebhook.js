@@ -262,10 +262,6 @@ import {
   shouldRouteObjectImageToScanBeforeSlipPipeline,
 } from "../utils/paymentConversationRouting.util.js";
 
-import {
-  runScanFlow,
-  LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
-} from "../handlers/scanFlow.handler.js";
 import { ingestScanImageAsyncV2 } from "../services/scanV2/webhookImageIngestion.service.js";
 
 import {
@@ -279,13 +275,6 @@ import {
   registerSlipEvent,
   registerTextEvent,
 } from "../stores/abuseGuard.store.js";
-
-/**
- * Round 1: legacy inline `runScanFlow` from this file is off in code (not env-only).
- * Keep `false` until legacy removal. When re-enabling temporarily, also set
- * `ALLOW_LEGACY_SCAN_PATHS=true`.
- */
-const WEBHOOK_LEGACY_INLINE_SCAN_CODE_ENABLED = false;
 
 /** Lightweight QA logs (grep: `[WAITING_BIRTHDATE]`). */
 function logWaitingBirthdate(event, payload = {}) {
@@ -2122,73 +2111,6 @@ async function finalizeAcceptedImage({
       }),
     );
 
-    if (!env.ENABLE_ASYNC_SCAN_V2 && env.ENABLE_LEGACY_WEB_INLINE_SCAN) {
-      const branch =
-        "webhook:finalize_accepted_image:async_v2_off_legacy_inline";
-      console.log(
-        JSON.stringify({
-          event: "LEGACY_SCAN_PATH_HIT",
-          branch,
-          path: "web",
-          source: "finalize_accepted_image",
-          lineUserIdPrefix: lineUserIdPrefix8(userId),
-          messageId: event?.message?.id ?? null,
-          flowVersion,
-          reason: "legacy_inline_scan_disabled_round1",
-          webhookLegacyInlineScanCodeEnabled: WEBHOOK_LEGACY_INLINE_SCAN_CODE_ENABLED,
-          allowLegacyScanPaths: env.ALLOW_LEGACY_SCAN_PATHS,
-          timestamp: scanV2TraceTs(),
-        }),
-      );
-      if (
-        WEBHOOK_LEGACY_INLINE_SCAN_CODE_ENABLED &&
-        env.ALLOW_LEGACY_SCAN_PATHS
-      ) {
-        console.log(
-          JSON.stringify({
-            event: "LEGACY_WEB_INLINE_SCAN_ENTER",
-            path: "web",
-            lineUserIdPrefix: lineUserIdPrefix8(userId),
-            messageId: event?.message?.id ?? null,
-            flowVersion,
-            reason: "async_v2_off_legacy_inline",
-            timestamp: scanV2TraceTs(),
-          }),
-        );
-        await runScanFlow({
-          client,
-          replyToken: event.replyToken,
-          userId,
-          imageBuffer,
-          birthdate: savedBirthdate,
-          flowVersion,
-          skipBirthdateSave: true,
-          reportPipelineContext: { objectCheckResult: objectCheck },
-        });
-        return;
-      }
-      try {
-        await replyText(
-          client,
-          event.replyToken,
-          LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
-        );
-      } catch (replyErr) {
-        console.error(
-          JSON.stringify({
-            event: "LEGACY_SCAN_PATH_HIT_REPLY_ERROR",
-            path: "web",
-            source: "finalize_accepted_image",
-            branch,
-            lineUserIdPrefix: lineUserIdPrefix8(userId),
-            message: replyErr?.message,
-            timestamp: scanV2TraceTs(),
-          }),
-        );
-      }
-      return;
-    }
-
     if (!env.ENABLE_ASYNC_SCAN_V2) {
       console.error(
         JSON.stringify({
@@ -2282,88 +2204,6 @@ async function finalizeAcceptedImage({
     }
 
     if (ingestFailed) {
-      if (
-        env.ENABLE_SYNC_SCAN_FALLBACK &&
-        env.ENABLE_LEGACY_WEB_INLINE_SCAN
-      ) {
-        const branch =
-          "webhook:finalize_accepted_image:ingest_failed_sync_fallback";
-        console.warn(
-          JSON.stringify({
-            event: "LEGACY_SCAN_PATH_HIT",
-            branch,
-            path: "web",
-            source: "finalize_accepted_image",
-            lineUserIdPrefix: lineUserIdPrefix8(userId),
-            messageId: event?.message?.id ?? null,
-            flowVersion,
-            reason: "legacy_inline_scan_disabled_round1",
-            ingestReason,
-            webhookLegacyInlineScanCodeEnabled:
-              WEBHOOK_LEGACY_INLINE_SCAN_CODE_ENABLED,
-            allowLegacyScanPaths: env.ALLOW_LEGACY_SCAN_PATHS,
-            timestamp: scanV2TraceTs(),
-          }),
-        );
-        if (
-          WEBHOOK_LEGACY_INLINE_SCAN_CODE_ENABLED &&
-          env.ALLOW_LEGACY_SCAN_PATHS
-        ) {
-          console.warn(
-            JSON.stringify({
-              event: "SCAN_V2_INGEST_FALLBACK_SYNC",
-              path: "web",
-              lineUserIdPrefix: lineUserIdPrefix8(userId),
-              messageId: event?.message?.id ?? null,
-              flowVersion,
-              reason: ingestReason,
-              timestamp: scanV2TraceTs(),
-            }),
-          );
-          console.log(
-            JSON.stringify({
-              event: "LEGACY_WEB_INLINE_SCAN_ENTER",
-              path: "web",
-              lineUserIdPrefix: lineUserIdPrefix8(userId),
-              messageId: event?.message?.id ?? null,
-              flowVersion,
-              reason: "ingest_failed_sync_fallback_with_legacy",
-              timestamp: scanV2TraceTs(),
-            }),
-          );
-          await runScanFlow({
-            client,
-            replyToken: event.replyToken,
-            userId,
-            imageBuffer,
-            birthdate: savedBirthdate,
-            flowVersion,
-            skipBirthdateSave: true,
-            reportPipelineContext: { objectCheckResult: objectCheck },
-          });
-          return;
-        }
-        try {
-          await replyText(
-            client,
-            event.replyToken,
-            LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
-          );
-        } catch (replyErr) {
-          console.error(
-            JSON.stringify({
-              event: "LEGACY_SCAN_PATH_HIT_REPLY_ERROR",
-              path: "web",
-              source: "finalize_accepted_image",
-              branch,
-              lineUserIdPrefix: lineUserIdPrefix8(userId),
-              message: replyErr?.message,
-              timestamp: scanV2TraceTs(),
-            }),
-          );
-        }
-        return;
-      }
       if (ingestReason !== "exception") {
         console.error(
           JSON.stringify({
@@ -2374,19 +2214,6 @@ async function finalizeAcceptedImage({
             flowVersion,
             reason: ingestReason,
             errorMessage: ingestErrorMessage,
-            timestamp: scanV2TraceTs(),
-          }),
-        );
-      }
-      if (env.ENABLE_SYNC_SCAN_FALLBACK) {
-        console.warn(
-          JSON.stringify({
-            event: "SCAN_V2_SYNC_FALLBACK_SKIPPED_REQUIRES_LEGACY_FLAG",
-            path: "web",
-            lineUserIdPrefix: lineUserIdPrefix8(userId),
-            messageId: event?.message?.id ?? null,
-            flowVersion,
-            reason: ingestReason,
             timestamp: scanV2TraceTs(),
           }),
         );
@@ -5359,73 +5186,6 @@ async function handleTextMessage({ client, event, userId, session }) {
 
         const pendingMsgIdForV2 = session.pendingImage?.messageId ?? null;
 
-        if (!env.ENABLE_ASYNC_SCAN_V2 && env.ENABLE_LEGACY_WEB_INLINE_SCAN) {
-          const branch =
-            "webhook:waiting_birthdate_text:async_v2_off_legacy_inline";
-          console.log(
-            JSON.stringify({
-              event: "LEGACY_SCAN_PATH_HIT",
-              branch,
-              path: "web",
-              source: "waiting_birthdate_text",
-              lineUserIdPrefix: lineUserIdPrefix8(userId),
-              messageId: pendingMsgIdForV2,
-              flowVersion,
-              reason: "legacy_inline_scan_disabled_round1",
-              webhookLegacyInlineScanCodeEnabled:
-                WEBHOOK_LEGACY_INLINE_SCAN_CODE_ENABLED,
-              allowLegacyScanPaths: env.ALLOW_LEGACY_SCAN_PATHS,
-              timestamp: scanV2TraceTs(),
-            }),
-          );
-          if (
-            WEBHOOK_LEGACY_INLINE_SCAN_CODE_ENABLED &&
-            env.ALLOW_LEGACY_SCAN_PATHS
-          ) {
-            console.log(
-              JSON.stringify({
-                event: "LEGACY_WEB_INLINE_SCAN_ENTER",
-                path: "web",
-                lineUserIdPrefix: lineUserIdPrefix8(userId),
-                messageId: pendingMsgIdForV2,
-                flowVersion,
-                reason: "async_v2_off_legacy_inline",
-                source: "waiting_birthdate_text",
-                timestamp: scanV2TraceTs(),
-              }),
-            );
-            await runScanFlow({
-              client,
-              replyToken: event.replyToken,
-              userId,
-              imageBuffer: session.pendingImage.imageBuffer,
-              birthdate: normalizedBirthdate,
-              flowVersion,
-            });
-            return;
-          }
-          try {
-            await replyText(
-              client,
-              event.replyToken,
-              LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
-            );
-          } catch (replyErr) {
-            console.error(
-              JSON.stringify({
-                event: "LEGACY_SCAN_PATH_HIT_REPLY_ERROR",
-                path: "web",
-                source: "waiting_birthdate_text",
-                branch,
-                lineUserIdPrefix: lineUserIdPrefix8(userId),
-                message: replyErr?.message,
-                timestamp: scanV2TraceTs(),
-              }),
-            );
-          }
-          return;
-        }
-
         if (!env.ENABLE_ASYNC_SCAN_V2) {
           console.error(
             JSON.stringify({
@@ -5531,97 +5291,6 @@ async function handleTextMessage({ client, event, userId, session }) {
         }
 
         if (ingestFailed) {
-          if (
-            env.ENABLE_SYNC_SCAN_FALLBACK &&
-            env.ENABLE_LEGACY_WEB_INLINE_SCAN
-          ) {
-            const branch =
-              "webhook:waiting_birthdate_text:ingest_failed_sync_fallback";
-            console.warn(
-              JSON.stringify({
-                event: "LEGACY_SCAN_PATH_HIT",
-                branch,
-                path: "web",
-                source: "waiting_birthdate_text",
-                lineUserIdPrefix: lineUserIdPrefix8(userId),
-                messageId: pendingMsgIdForV2,
-                flowVersion,
-                reason: "legacy_inline_scan_disabled_round1",
-                ingestReason,
-                webhookLegacyInlineScanCodeEnabled:
-                  WEBHOOK_LEGACY_INLINE_SCAN_CODE_ENABLED,
-                allowLegacyScanPaths: env.ALLOW_LEGACY_SCAN_PATHS,
-                timestamp: scanV2TraceTs(),
-              }),
-            );
-            if (
-              WEBHOOK_LEGACY_INLINE_SCAN_CODE_ENABLED &&
-              env.ALLOW_LEGACY_SCAN_PATHS
-            ) {
-              console.warn(
-                JSON.stringify({
-                  event: "SCAN_V2_INGEST_FALLBACK_SYNC",
-                  path: "web",
-                  lineUserIdPrefix: lineUserIdPrefix8(userId),
-                  messageId: pendingMsgIdForV2,
-                  flowVersion,
-                  reason: ingestReason,
-                  source: "waiting_birthdate_text",
-                  timestamp: scanV2TraceTs(),
-                }),
-              );
-              console.log(
-                JSON.stringify({
-                  event: "LEGACY_WEB_INLINE_SCAN_ENTER",
-                  path: "web",
-                  lineUserIdPrefix: lineUserIdPrefix8(userId),
-                  messageId: pendingMsgIdForV2,
-                  flowVersion,
-                  reason: "ingest_failed_sync_fallback_with_legacy",
-                  source: "waiting_birthdate_text",
-                  timestamp: scanV2TraceTs(),
-                }),
-              );
-              await runScanFlow({
-                client,
-                replyToken: event.replyToken,
-                userId,
-                imageBuffer: session.pendingImage.imageBuffer,
-                birthdate: normalizedBirthdate,
-                flowVersion,
-                reportPipelineContext:
-                  session.pendingImage?.objectCheckResult != null &&
-                  String(session.pendingImage.objectCheckResult).trim() !== ""
-                    ? {
-                        objectCheckResult: String(
-                          session.pendingImage.objectCheckResult,
-                        ).trim(),
-                      }
-                    : null,
-              });
-              return;
-            }
-            try {
-              await replyText(
-                client,
-                event.replyToken,
-                LEGACY_SCAN_PATH_DISABLED_USER_TEXT,
-              );
-            } catch (replyErr) {
-              console.error(
-                JSON.stringify({
-                  event: "LEGACY_SCAN_PATH_HIT_REPLY_ERROR",
-                  path: "web",
-                  source: "waiting_birthdate_text",
-                  branch,
-                  lineUserIdPrefix: lineUserIdPrefix8(userId),
-                  message: replyErr?.message,
-                  timestamp: scanV2TraceTs(),
-                }),
-              );
-            }
-            return;
-          }
           if (ingestReason !== "exception") {
             console.error(
               JSON.stringify({
@@ -5632,20 +5301,6 @@ async function handleTextMessage({ client, event, userId, session }) {
                 flowVersion,
                 reason: ingestReason,
                 errorMessage: ingestErrorMessage,
-                source: "waiting_birthdate_text",
-                timestamp: scanV2TraceTs(),
-              }),
-            );
-          }
-          if (env.ENABLE_SYNC_SCAN_FALLBACK) {
-            console.warn(
-              JSON.stringify({
-                event: "SCAN_V2_SYNC_FALLBACK_SKIPPED_REQUIRES_LEGACY_FLAG",
-                path: "web",
-                lineUserIdPrefix: lineUserIdPrefix8(userId),
-                messageId: pendingMsgIdForV2,
-                flowVersion,
-                reason: ingestReason,
                 source: "waiting_birthdate_text",
                 timestamp: scanV2TraceTs(),
               }),

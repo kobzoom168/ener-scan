@@ -16,14 +16,15 @@
 4. save pending image in session
 5. ask birthdate
 6. validate birthdate
-7. run scan
-8. save history
-9. reply via LINE flex
+7. enqueue async scan (scan_jobs / workers)
+8. save history (worker)
+9. deliver result via LINE (outbound_messages / delivery worker)
 
 ## Core Files
 - src/app.js
 - src/routes/lineWebhook.js
-- src/handlers/scanFlow.handler.js
+- src/workers/scanWorker.js
+- src/workers/deliveryWorker.js
 - src/services/*
 - src/stores/*
 

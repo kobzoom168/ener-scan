@@ -110,9 +110,6 @@ app.get("/health/scan-v2", async (_req, res) => {
         : { ok: false, error: redis.error || "ping_failed" },
       flags: {
         ENABLE_ASYNC_SCAN_V2: env.ENABLE_ASYNC_SCAN_V2,
-        ENABLE_SYNC_SCAN_FALLBACK: env.ENABLE_SYNC_SCAN_FALLBACK,
-        ENABLE_LEGACY_WEB_INLINE_SCAN: env.ENABLE_LEGACY_WEB_INLINE_SCAN,
-        ALLOW_LEGACY_SCAN_PATHS: env.ALLOW_LEGACY_SCAN_PATHS,
       },
     });
   } catch (e) {
