@@ -98,6 +98,16 @@ import {
 /** User-visible when legacy sync scan / direct LINE delivery is disabled (fail closed). */
 export const LEGACY_SCAN_PATH_DISABLED_USER_TEXT =
   "ขออภัยครับ การสแกนแบบเดิมถูกปิดแล้ว กรุณาใช้ระบบคิวอัตโนมัติ (ส่งรูปเมื่อบริการพร้อม) หรือติดต่อทีมงานครับ";
+
+/**
+ * Round 1: legacy sync `runScanFlow` / `replyScanResult` are off in code (not env-only).
+ * Keep `false` until legacy removal. Re-enable only with `ALLOW_LEGACY_SCAN_PATHS=true` and intent.
+ */
+const LEGACY_SYNC_SCAN_HANDLER_CODE_ENABLED = false;
+
+function isLegacySyncScanExecutionAllowed() {
+  return LEGACY_SYNC_SCAN_HANDLER_CODE_ENABLED && env.ALLOW_LEGACY_SCAN_PATHS;
+}
 import {
   extractLineSummaryFields,
   buildSummaryLinkLineText,
@@ -266,14 +276,15 @@ export async function replyScanResult({
   reportPayload = null,
   scanAccessSource = null,
 }) {
-  if (!env.ALLOW_LEGACY_SCAN_PATHS) {
+  if (!isLegacySyncScanExecutionAllowed()) {
     console.log(
       JSON.stringify({
         event: "LEGACY_SCAN_PATH_HIT",
         path: "sync-scan",
         function: "replyScanResult",
-        reason: "legacy_direct_line_delivery_disabled",
-        allowLegacyScanPaths: false,
+        reason: "legacy_direct_line_delivery_disabled_round1",
+        legacySyncScanHandlerCodeEnabled: LEGACY_SYNC_SCAN_HANDLER_CODE_ENABLED,
+        allowLegacyScanPaths: env.ALLOW_LEGACY_SCAN_PATHS,
         lineUserIdPrefix: safeLineUserIdPrefix(userId),
       }),
     );
@@ -606,14 +617,15 @@ export async function runScanFlow({
     birthdate,
   });
 
-  if (!env.ALLOW_LEGACY_SCAN_PATHS) {
+  if (!isLegacySyncScanExecutionAllowed()) {
     console.log(
       JSON.stringify({
         event: "LEGACY_SCAN_PATH_HIT",
         path: "sync-scan",
         function: "runScanFlow",
-        reason: "legacy_inline_scan_execution_disabled",
-        allowLegacyScanPaths: false,
+        reason: "legacy_inline_scan_execution_disabled_round1",
+        legacySyncScanHandlerCodeEnabled: LEGACY_SYNC_SCAN_HANDLER_CODE_ENABLED,
+        allowLegacyScanPaths: env.ALLOW_LEGACY_SCAN_PATHS,
         lineUserIdPrefix: safeLineUserIdPrefix(userId),
         flowVersion: flowVersion ?? null,
       }),

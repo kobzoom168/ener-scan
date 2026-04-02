@@ -417,8 +417,8 @@ export const env = {
     String(process.env.ENABLE_LEGACY_WEB_INLINE_SCAN || "").trim() === "true",
   /**
    * When `true`, legacy synchronous scan (`runScanFlow` / `replyScanResult` direct LINE send)
-   * may run. Default **false** — webhook no longer calls `runScanFlow`; handlers fail closed unless
-   * explicitly enabled (e.g. local debugging).
+   * may run **only if** Round 1 code flags in `lineWebhook.js` / `scanFlow.handler.js` are also
+   * enabled (both default **false** in source). Default **false** for this env alone.
    * @type {boolean}
    */
   ALLOW_LEGACY_SCAN_PATHS:
