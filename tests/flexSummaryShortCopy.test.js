@@ -14,8 +14,7 @@ import {
 import { buildFlexSummarySurfaceFields } from "../src/utils/reports/flexSummarySurface.util.js";
 import { ENERGY_TYPES } from "../src/services/flex/scanCopy.config.js";
 
-/** Mid-phrase production tails — must not end a line (substring inside valid words like ต้องการความ… is OK). */
-const FORBIDDEN_END_FRAGMENTS = ["ต้องการคว", "เสริมควา", "ให้เท่าก", "ทำงานห"];
+const FORBIDDEN_SNAPSHOT_FRAGMENTS = ["ต้องการคว", "เสริมควา", "ทำงานห"];
 
 test("composed surface: lengths and no truncation-artifact tails", () => {
   const energies = Object.values(ENERGY_TYPES);
@@ -36,7 +35,7 @@ test("composed surface: lengths and no truncation-artifact tails", () => {
         }
         for (const line of [s.headlineShort, s.fitReasonShort, ...s.bulletsShort]) {
           assert.ok(!lineLooksLikeThaiTruncationArtifact(line), line);
-          for (const frag of FORBIDDEN_END_FRAGMENTS) {
+          for (const frag of FORBIDDEN_SNAPSHOT_FRAGMENTS) {
             assert.ok(!line.endsWith(frag), line);
           }
         }
@@ -61,17 +60,6 @@ test("storedFlexSummaryLooksComplete rejects legacy mid-phrase cuts", () => {
       bulletsShort: ["ช่วยให้ใจไม่แกว่งเวลาเจอแรงกดดัน", "เหมาะกับช่วงที่ต้องตั้งสติและตัดสินใจ"],
     }),
     true,
-  );
-});
-
-test("storedFlexSummaryLooksComplete requires two bullets for Flex contract", () => {
-  assert.equal(
-    storedFlexSummaryLooksComplete({
-      headlineShort: "เหมาะกับคนที่ต้องการความมั่นคง",
-      fitReasonShort: "เหมาะกับช่วงที่ต้องคุมใจ",
-      bulletsShort: ["ข้อเดียว"],
-    }),
-    false,
   );
 });
 

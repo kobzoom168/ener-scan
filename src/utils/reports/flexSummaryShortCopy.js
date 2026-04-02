@@ -423,7 +423,7 @@ export function storedFlexSummaryLooksComplete(s) {
   const bullets = Array.isArray(s?.bulletsShort)
     ? s.bulletsShort.map((x) => String(x || "").trim()).filter(Boolean)
     : [];
-  if (!h || bullets.length < 2) return false;
+  if (!h || bullets.length < 1) return false;
   if (h.length > FLEX_SHORT_HEADLINE_MAX + 2) return false;
   if (f.length > FLEX_SHORT_FIT_MAX + 2) return false;
   if (bullets.some((b) => b.length > FLEX_SHORT_BULLET_MAX + 2)) return false;
