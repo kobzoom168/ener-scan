@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   computeCompatibilityV1,
   computeCompatibilityV1Stable,
+  coarseDominantColorBucketForCompatibility,
   normalizeBirthdateIso,
+  stableScannedAtIsoFromFingerprint,
 } from "../src/utils/compatibilityFormula.util.js";
 import { buildCompatibilityPayload } from "../src/services/reportPayload/buildCompatibilityPayload.js";
 import { buildReportPayloadFromScan } from "../src/services/reports/reportPayload.builder.js";
@@ -56,6 +58,66 @@ test("computeCompatibilityV1Stable: different objectFamily can change score", ()
     objectFamily: "crystal",
   });
   assert.notEqual(base.score, crystal.score);
+});
+
+test("stableScannedAtIsoFromFingerprint: legacy 5-tuple when no distinct signals", () => {
+  const a = stableScannedAtIsoFromFingerprint(
+    "1985-08-19",
+    "somdej",
+    "powder",
+    "rectangular",
+    "balance",
+    undefined,
+  );
+  const b = stableScannedAtIsoFromFingerprint(
+    "1985-08-19",
+    "somdej",
+    "powder",
+    "rectangular",
+    "balance",
+    {},
+  );
+  assert.equal(a, b);
+});
+
+test("stableScannedAtIsoFromFingerprint: distinct pipeline signals change pseudo time", () => {
+  const base = stableScannedAtIsoFromFingerprint(
+    "1985-08-19",
+    "somdej",
+    "powder",
+    "rectangular",
+    "balance",
+    {},
+  );
+  const withCat = stableScannedAtIsoFromFingerprint(
+    "1985-08-19",
+    "somdej",
+    "powder",
+    "rectangular",
+    "balance",
+    { objectCategory: "พระปิดตา", dominantColor: "", conditionClass: "" },
+  );
+  assert.notEqual(base, withCat);
+});
+
+test("computeCompatibilityV1Stable: distinct pipeline signals change pseudo scan time", () => {
+  const bare = computeCompatibilityV1Stable(FIXED);
+  const labeled = computeCompatibilityV1Stable({
+    ...FIXED,
+    objectCategory: "พระปิดตาเนื้อผง",
+    dominantColor: "bronze",
+    conditionClass: "good",
+  });
+  assert.equal(labeled.inputs.distinctSignalsInFingerprint, true);
+  assert.notEqual(
+    String(bare.inputs.scannedAtForFormula || ""),
+    String(labeled.inputs.scannedAtForFormula || ""),
+  );
+});
+
+test("coarseDominantColorBucketForCompatibility: buckets metal tones", () => {
+  assert.equal(coarseDominantColorBucketForCompatibility("bronze"), "warm_metal");
+  assert.equal(coarseDominantColorBucketForCompatibility(""), "");
 });
 
 test("computeCompatibilityV1: missing materialFamily falls back to objectFamily element", () => {

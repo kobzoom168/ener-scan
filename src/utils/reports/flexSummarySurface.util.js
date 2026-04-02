@@ -4,6 +4,11 @@
  */
 import { cleanLine, safeThaiCut } from "../../services/flex/flex.utils.js";
 
+/** Mobile-first caps (Thai); tune with flex.summaryFirst maxLines */
+export const FLEX_SUMMARY_HEADLINE_MAX = 48;
+export const FLEX_SUMMARY_FIT_MAX = 72;
+export const FLEX_SUMMARY_BULLET_MAX = 44;
+
 /**
  * @param {string} text
  * @param {number} max
@@ -30,11 +35,17 @@ export function buildFlexSummarySurfaceFields({
 }) {
   const headlineSrc =
     wording?.flexHeadline || summaryLine || wording?.energyCharacter || "";
-  const headlineShort = safeThaiCut(cleanLine(String(headlineSrc || "")), 72);
+  const headlineShort = safeThaiCut(
+    cleanLine(String(headlineSrc || "")),
+    FLEX_SUMMARY_HEADLINE_MAX,
+  );
 
   const fitSrc =
     compatibilityReason || wording?.lifeTranslation || summaryLine || "";
-  const fitReasonShort = firstSentenceSafe(String(fitSrc || ""), 88);
+  const fitReasonShort = firstSentenceSafe(
+    String(fitSrc || ""),
+    FLEX_SUMMARY_FIT_MAX,
+  );
 
   const rawBullets = [
     ...(Array.isArray(wording?.flexBullets) ? wording.flexBullets : []),
@@ -42,11 +53,11 @@ export function buildFlexSummarySurfaceFields({
   ];
   const bulletsShort = [];
   for (const b of rawBullets) {
-    const t = safeThaiCut(cleanLine(String(b || "")), 56);
+    const t = safeThaiCut(cleanLine(String(b || "")), FLEX_SUMMARY_BULLET_MAX);
     if (t && !bulletsShort.includes(t)) bulletsShort.push(t);
     if (bulletsShort.length >= 2) break;
   }
-  const pad = safeThaiCut(cleanLine(String(wording?.bestFor || "")), 56);
+  const pad = safeThaiCut(cleanLine(String(wording?.bestFor || "")), FLEX_SUMMARY_BULLET_MAX);
   if (bulletsShort.length < 2 && pad && !bulletsShort.includes(pad)) {
     bulletsShort.push(pad);
   }
@@ -85,7 +96,7 @@ export function resolveFlexSummarySurfaceForLine(reportPayload, _parsed) {
       headlineShort: s.headlineShort.trim(),
       fitReasonShort: String(s.fitReasonShort || "").trim(),
       bulletsShort: s.bulletsShort
-        .map((x) => safeThaiCut(cleanLine(String(x || "")), 56))
+        .map((x) => safeThaiCut(cleanLine(String(x || "")), FLEX_SUMMARY_BULLET_MAX))
         .filter(Boolean)
         .slice(0, 2),
       ctaLabel: String(s.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",

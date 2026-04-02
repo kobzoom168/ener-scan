@@ -183,6 +183,18 @@ export function buildReportPayloadFromScan(opts) {
   const scannedAtEffective =
     String(scannedAtOpt || "").trim() || new Date().toISOString();
 
+  const dominantColorResolved = resolveDominantColorPipelineSource(
+    dominantColorOpt,
+    pipelineDominantColorSourceOpt === "vision_v1"
+      ? "vision_v1"
+      : pipelineDominantColorSourceOpt === "cache_persisted"
+        ? "cache_persisted"
+        : undefined,
+  );
+  const conditionClassResolved = resolveConditionClassPipelineSource(
+    conditionClassOpt,
+  );
+
   /** @type {ReturnType<typeof buildCompatibilityPayload> | null} */
   let compatibilityPayload = null;
   if (birthdateUsed) {
@@ -198,6 +210,13 @@ export function buildReportPayloadFromScan(opts) {
             ? String(parsed.mainEnergy)
             : "") || "",
         energyScore: energyScore ?? 0,
+        dominantColor: dominantColorResolved.normalized || undefined,
+        objectCategory:
+          pipelineObjectCategoryOpt &&
+          String(pipelineObjectCategoryOpt).trim()
+            ? String(pipelineObjectCategoryOpt).trim()
+            : undefined,
+        conditionClass: conditionClassResolved.normalized || undefined,
       });
     } catch (err) {
       console.warn(
@@ -213,16 +232,6 @@ export function buildReportPayloadFromScan(opts) {
   if (compatibilityPayload != null) {
     compatPct = compatibilityPayload.score;
   }
-
-  const dominantColorResolved = resolveDominantColorPipelineSource(
-    dominantColorOpt,
-    pipelineDominantColorSourceOpt === "vision_v1"
-      ? "vision_v1"
-      : pipelineDominantColorSourceOpt === "cache_persisted"
-        ? "cache_persisted"
-        : undefined,
-  );
-  const conditionClassResolved = resolveConditionClassPipelineSource(conditionClassOpt);
 
   /** @type {ReturnType<typeof buildObjectEnergyPayload> | null} */
   let objectEnergyPayload = null;

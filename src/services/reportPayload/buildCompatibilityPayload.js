@@ -14,6 +14,9 @@ import { buildCompatibilityExplainBullets } from "../../utils/compatibilityExpla
  * @param {string} [raw.shapeFamily]
  * @param {string} [raw.mainEnergy] — Thai or English
  * @param {number} [raw.energyScore]
+ * @param {string} [raw.dominantColor] — pipeline slug (optional; widens stable fingerprint when set)
+ * @param {string} [raw.objectCategory] — pipeline label (optional)
+ * @param {string} [raw.conditionClass] — pipeline slug (optional)
  * @returns {import("../../utils/compatibilityExplain.util.js").CompatibilityComputed & { explain: string[] }}
  */
 export function buildCompatibilityPayload(raw) {
@@ -25,6 +28,9 @@ export function buildCompatibilityPayload(raw) {
     shapeFamily: raw.shapeFamily,
     mainEnergy: raw.mainEnergy,
     energyScore: raw.energyScore,
+    dominantColor: raw.dominantColor,
+    objectCategory: raw.objectCategory,
+    conditionClass: raw.conditionClass,
   });
 
   const explain = buildCompatibilityExplainBullets(computed);

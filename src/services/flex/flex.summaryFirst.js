@@ -34,9 +34,44 @@ function truncateEnergyBadgeLabel(text, maxLen = 14) {
   return s.length > maxLen ? s.slice(0, maxLen) : s;
 }
 
-function createScoreRowTwoUp(scoreDisplay, compatPctStr) {
+/**
+ * @param {string} scoreDisplay
+ * @param {string} compatPctStr e.g. "71%"
+ * @param {string} [compatBandStr] e.g. "เข้ากันดี" — second line under percent
+ */
+function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
   const levelValue = `${String(scoreDisplay || "-").trim() || "-"} / 10`;
   const pct = String(compatPctStr || "-").trim().replace(/\s+/g, "");
+  const band = String(compatBandStr || "").trim();
+  const compatContents = [
+    {
+      type: "text",
+      text: "เข้ากับคุณ",
+      size: "xs",
+      color: FLEX_TEXT_SECONDARY,
+      wrap: true,
+    },
+    {
+      type: "text",
+      text: pct,
+      size: "xxl",
+      weight: "bold",
+      color: FLEX_BADGE_AND_SCORE_GOLD,
+      margin: "xs",
+      wrap: false,
+    },
+  ];
+  if (band) {
+    compatContents.push({
+      type: "text",
+      text: band,
+      size: "sm",
+      color: FLEX_TEXT_SECONDARY,
+      wrap: true,
+      maxLines: 2,
+      margin: "xs",
+    });
+  }
   return {
     type: "box",
     layout: "horizontal",
@@ -74,24 +109,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr) {
         flex: 1,
         paddingAll: "14px",
         backgroundColor: FLEX_BOX_BG,
-        contents: [
-          {
-            type: "text",
-            text: "เข้ากับคุณ",
-            size: "xs",
-            color: FLEX_TEXT_SECONDARY,
-            wrap: true,
-          },
-          {
-            type: "text",
-            text: pct,
-            size: "xl",
-            weight: "bold",
-            color: FLEX_TEXT_PRIMARY,
-            margin: "sm",
-            wrap: true,
-          },
-        ],
+        contents: compatContents,
       },
     ],
   };
@@ -414,19 +432,27 @@ function resolveSummaryCardCopyVariant(reportPayload) {
 }
 
 /**
+ * Percent string + band from ReportPayload (Flex does not compute compatibility).
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
- * @param {string} fallbackCompat
+ * @param {string} fallbackCompat — parsed scan line e.g. "71%"
  */
-function compatibilityLabelForFlex(reportPayload, fallbackCompat) {
+function compatPercentAndBandForFlex(reportPayload, fallbackCompat) {
   const p = reportPayload?.summary?.compatibilityPercent;
   const band =
     String(reportPayload?.summary?.compatibilityBand || "").trim() ||
     String(reportPayload?.compatibility?.band || "").trim();
   if (p != null && Number.isFinite(Number(p))) {
-    const pct = `${Math.round(Number(p))}%`;
-    return band ? `${pct}\n${band}` : pct;
+    return {
+      pctStr: `${Math.round(Number(p))}%`,
+      bandStr: band,
+    };
   }
-  return String(fallbackCompat || "-").trim() || "-";
+  const fb = String(fallbackCompat || "-").trim();
+  const m = fb.match(/(\d+(?:\.\d+)?)/);
+  if (m && Number.isFinite(Number(m[1]))) {
+    return { pctStr: `${Math.round(Number(m[1]))}%`, bandStr: band };
+  }
+  return { pctStr: "-", bandStr: band };
 }
 
 /**
@@ -521,10 +547,8 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const heroOk = /^https:\/\//i.test(imgUrl);
   const url = String(reportUrl || "").trim();
 
-  const compatForRow = compatibilityLabelForFlex(reportPayload, compatibility);
-  const pctDisplay = compatForRow.includes("%")
-    ? compatForRow.replace(/\s+/g, "")
-    : `${String(compatForRow).replace(/%/g, "").trim() || "-"}%`;
+  const { pctStr: compatPctStr, bandStr: compatBandStr } =
+    compatPercentAndBandForFlex(reportPayload, compatibility);
 
   const mainPill =
     energyNameForPill(mainEnergy) ||
@@ -534,7 +558,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
   const surface = resolveFlexSummarySurfaceForLine(reportPayload, parsed);
   const headlineText =
     String(surface.headlineShort || "").trim() ||
-    safeThaiCut(String(altMain || mainPill || "สรุปผลการสแกน"), 72);
+    safeThaiCut(String(altMain || mainPill || "สรุปผลการสแกน"), 48);
   const fitLine = String(surface.fitReasonShort || "").trim();
   const bulletLines = Array.isArray(surface.bulletsShort)
     ? surface.bulletsShort.map((x) => String(x || "").trim()).filter(Boolean)
@@ -549,6 +573,8 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     weight: "bold",
     color: FLEX_TEXT_PRIMARY,
     wrap: true,
+    maxLines: 2,
+    lineSpacing: "4px",
     margin: "sm",
   };
 
@@ -560,6 +586,8 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
           size: "xs",
           color: FLEX_TEXT_SECONDARY,
           wrap: true,
+          maxLines: 2,
+          lineSpacing: "3px",
           margin: "md",
         }
       : null;
@@ -570,12 +598,18 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
     size: "sm",
     color: "#cccccc",
     wrap: true,
+    maxLines: 2,
+    lineSpacing: "3px",
     margin: "xs",
   }));
 
   const bodyContents = [
     headlineBlock,
-    createScoreRowTwoUp(score.display || "-", pctDisplay),
+    createScoreRowTwoUp(
+      score.display || "-",
+      compatPctStr,
+      compatBandStr,
+    ),
     createEnergyBadgePill(mainPill),
     ...(fitBlock ? [fitBlock] : []),
     ...(bulletRows.length > 0
@@ -621,7 +655,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
       type: "box",
       layout: "vertical",
       paddingAll: "20px",
-      spacing: "sm",
+      spacing: "md",
       backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },

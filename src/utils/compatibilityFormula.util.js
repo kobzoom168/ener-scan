@@ -231,6 +231,9 @@ export function normalizeMainEnergyKey(label, fallback = "balance") {
  * @property {string} [mainEnergy] — Thai or English label
  * @property {string} [shapeFamily] — rectangular | … | unknown
  * @property {number} [energyScore] — 0–10
+ * @property {string} [dominantColor] — pipeline color slug (optional; stable path only)
+ * @property {string} [objectCategory] — pipeline Thai/slug label (optional)
+ * @property {string} [conditionClass] — pipeline condition slug (optional)
  */
 
 /**
@@ -326,9 +329,11 @@ export function computeCompatibilityV1(input) {
  * @returns {string}
  */
 export function compatibilityBand(score) {
-  if (score >= 85) return "เข้ากันมาก";
-  if (score >= 70) return "เข้ากันดี";
-  if (score >= 55) return "ค่อนข้างเข้ากัน";
+  const s = Number(score);
+  if (!Number.isFinite(s)) return "ยังไม่ค่อยเข้ากัน";
+  if (s >= 85) return "เข้ากันมาก";
+  if (s >= 70) return "เข้ากันดี";
+  if (s >= 55) return "ค่อนข้างเข้ากัน";
   return "ยังไม่ค่อยเข้ากัน";
 }
 
@@ -347,13 +352,43 @@ export function stableFingerprintHash(parts) {
 }
 
 /**
+ * Coarse color bucket so lighting jitter does not swing compatibility on same amulet;
+ * still separates clearly different pieces when combined with category/family.
+ * @param {string} slug
+ * @returns {string}
+ */
+export function coarseDominantColorBucketForCompatibility(slug) {
+  const s = String(slug || "")
+    .trim()
+    .toLowerCase();
+  if (!s || s === "unknown") return "";
+  if (/(gold|yellow|amber|bronze|copper|orange|ทอง|เหลือง)/.test(s)) {
+    return "warm_metal";
+  }
+  if (/(silver|gray|grey|white|chrome|เงิน|ขาว)/.test(s)) {
+    return "cool_metal";
+  }
+  if (/(black|dark|brown|ดำ|น้ำตาล)/.test(s)) return "dark";
+  if (/(green|blue|red|pink|purple|เขียว|น้ำเงิน|แดง)/.test(s)) {
+    return "chromatic";
+  }
+  return "other";
+}
+
+/**
  * ISO instant with hour/minute from fingerprint — replaces wall-clock `scannedAt` for formula layers
  * so same-object rescans do not drift from minute/hour noise.
+ *
+ * When at least one pipeline distinct signal is present (coarse color, object category, condition),
+ * those are mixed into the hash so different physical objects diverge without Flex-side math.
+ * When all are empty, the hash matches the legacy 5-tuple (backward compatible).
+ *
  * @param {string} birthdateIso
  * @param {string} objectFamily
  * @param {string} materialFamily
  * @param {string} shapeFamily
  * @param {string} mainEnergyKey
+ * @param {{ dominantColor?: string, objectCategory?: string, conditionClass?: string }} [distinct]
  */
 export function stableScannedAtIsoFromFingerprint(
   birthdateIso,
@@ -361,14 +396,28 @@ export function stableScannedAtIsoFromFingerprint(
   materialFamily,
   shapeFamily,
   mainEnergyKey,
+  distinct,
 ) {
-  const h = stableFingerprintHash([
+  const parts = [
     String(birthdateIso || ""),
     String(objectFamily || ""),
     String(materialFamily || ""),
     String(shapeFamily || ""),
     String(mainEnergyKey || ""),
-  ]);
+  ];
+  const dc = coarseDominantColorBucketForCompatibility(
+    distinct?.dominantColor != null ? String(distinct.dominantColor) : "",
+  );
+  const oc = String(distinct?.objectCategory || "")
+    .trim()
+    .toLowerCase();
+  const cc = String(distinct?.conditionClass || "")
+    .trim()
+    .toLowerCase();
+  if (dc || oc || cc) {
+    parts.push(dc || "_", oc || "_", cc || "_");
+  }
+  const h = stableFingerprintHash(parts);
   const hour = h % 24;
   const minute = (h >> 8) % 60;
   return `2000-01-01T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+07:00`;
@@ -402,26 +451,38 @@ export function computeCompatibilityV1Stable(input) {
   const materialFamily = String(input.materialFamily || "").trim().toLowerCase();
   const shapeFamily = String(input.shapeFamily || "unknown").trim().toLowerCase();
   const mainKey = normalizeMainEnergyKey(input.mainEnergy, "balance");
+  const energyQ = quantizeEnergyForCompatibility(input.energyScore ?? 0);
   const stableScannedAt = stableScannedAtIsoFromFingerprint(
     birthdate,
     objectFamily,
     materialFamily,
     shapeFamily,
     mainKey,
+    {
+      dominantColor: input.dominantColor,
+      objectCategory: input.objectCategory,
+      conditionClass: input.conditionClass,
+    },
   );
-  const energyQ = quantizeEnergyForCompatibility(input.energyScore ?? 0);
   const base = computeCompatibilityV1({
     ...input,
     birthdate: input.birthdate,
     scannedAt: stableScannedAt,
     energyScore: energyQ,
   });
+  const distinctUsed =
+    Boolean(
+      coarseDominantColorBucketForCompatibility(input.dominantColor || "") ||
+        String(input.objectCategory || "").trim() ||
+        String(input.conditionClass || "").trim(),
+    );
   return {
     ...base,
     formulaVersion: COMPATIBILITY_FORMULA_VERSION_STABLE,
     inputs: {
       ...base.inputs,
       stableAnchors: true,
+      distinctSignalsInFingerprint: distinctUsed,
       scannedAtActual: String(input.scannedAt || "").trim() || null,
       scannedAtForFormula: stableScannedAt,
     },
