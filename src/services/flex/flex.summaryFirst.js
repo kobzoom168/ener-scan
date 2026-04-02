@@ -543,6 +543,12 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
     "พลังหลัก";
 
   let usedDbSurface = false;
+  /** Wall time for Supabase round-trip inside resolveEnergyCopyForFlex (telemetry; outbound latency). */
+  let energyCopyFlexMs = null;
+  const tFlex0 =
+    typeof globalThis.performance?.now === "function"
+      ? globalThis.performance.now()
+      : Date.now();
   try {
     const ec = await resolveEnergyCopyForFlex({
       categoryCode: s?.energyCategoryCode,
@@ -553,6 +559,11 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
           ? String(parsed.hidden)
           : "",
     });
+    const tFlex1 =
+      typeof globalThis.performance?.now === "function"
+        ? globalThis.performance.now()
+        : Date.now();
+    energyCopyFlexMs = Math.round(tFlex1 - tFlex0);
     if (ec.headline && ec.bullets?.length >= 1) {
       usedDbSurface = true;
       headlineText = ec.headline;
@@ -576,6 +587,11 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
       ctaLabel = "เปิดรายงานฉบับเต็ม";
     }
   } catch (err) {
+    const tFlexErr =
+      typeof globalThis.performance?.now === "function"
+        ? globalThis.performance.now()
+        : Date.now();
+    energyCopyFlexMs = Math.round(tFlexErr - tFlex0);
     console.warn("[FLEX_SUMMARY_FIRST] resolveEnergyCopyForFlex failed", {
       message: err?.message,
     });
@@ -626,6 +642,7 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
       familyPatternUsed,
       copyShapingActive,
       energyCopySurface: usedDbSurface ? "db" : "fallback",
+      energyCopyFlexMs,
       flexSplitCounts: {
         overview: splitOverview,
         warnThreshold: FLEX_SPLIT_WARN_THRESHOLD,

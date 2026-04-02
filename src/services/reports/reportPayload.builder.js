@@ -359,6 +359,12 @@ export function buildReportPayloadFromScan(opts) {
     String(objectFamilyOpt || ""),
   );
 
+  /**
+   * Stored summary.headlineShort / fitReasonShort / bulletsShort: composed pools (fallback path).
+   * LINE summary-first may replace teaser copy at send time via energy_copy_templates — tone can differ
+   * from HTML until both paths read the same resolver or stored payload is unified after DB hydrate.
+   */
+
   /** Stored payload Flex teaser (fallback for web); LINE summary-first Flex prefers DB via reportPayload fields + async resolver. */
   const flexSurface = buildFlexSummarySurfaceFields({
     wording,

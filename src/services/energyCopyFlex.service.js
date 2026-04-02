@@ -14,7 +14,32 @@ import {
   getEnergyShortLabelLegacy,
   pickMainEnergyColorLegacy,
   safeWrapText,
+  truncateAtWordBoundary,
 } from "./flex/flex.utils.js";
+import {
+  FLEX_SHORT_BULLET_MAX,
+  FLEX_SHORT_FIT_MAX,
+  FLEX_SHORT_HEADLINE_MAX,
+} from "../utils/reports/flexSummaryShortCopy.js";
+
+/**
+ * Keeps DB strings inside the same summary-shell caps as composed pools (V4.1 teaser; avoids bubble bloat).
+ */
+function clampFlexDbSurfaceLines(headline, fitLine, bullets) {
+  const h = headline
+    ? truncateAtWordBoundary(String(headline).trim(), FLEX_SHORT_HEADLINE_MAX)
+    : null;
+  const f = fitLine
+    ? truncateAtWordBoundary(String(fitLine).trim(), FLEX_SHORT_FIT_MAX)
+    : "";
+  const b = (Array.isArray(bullets) ? bullets : [])
+    .slice(0, 2)
+    .map((line) =>
+      truncateAtWordBoundary(String(line || "").trim(), FLEX_SHORT_BULLET_MAX),
+    )
+    .filter(Boolean);
+  return { headline: h, fitLine: f, bullets: b };
+}
 
 /**
  * Short hidden line for Flex (truncation; no keyword substring map).
@@ -137,13 +162,19 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     (shortNameTh || displayNameTh || "").trim() ||
     getEnergyShortLabelLegacy(mainEnergy || "-");
 
+  const clamped = clampFlexDbSurfaceLines(
+    copySet.headline || null,
+    copySet.fitLine || null,
+    copySet.bullets,
+  );
+
   return {
     categoryCode: codeIn,
     accentColor: accent,
     energyShortLabel: label,
-    headline: copySet.headline || null,
-    fitLine: copySet.fitLine || null,
-    bullets: Array.isArray(copySet.bullets) ? [...copySet.bullets] : [],
+    headline: clamped.headline,
+    fitLine: clamped.fitLine,
+    bullets: clamped.bullets,
     hiddenShortText: mapHiddenToShortText(hidden, codeIn),
     fromDb,
   };
