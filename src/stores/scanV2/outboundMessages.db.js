@@ -75,6 +75,10 @@ export async function claimNextOutboundMessage(workerId) {
     throw e;
   }
 
+  const rawKeys =
+    data != null && typeof data === "object" && !Array.isArray(data)
+      ? Object.keys(/** @type {object} */ (data)).slice(0, 24)
+      : null;
   console.log(
     JSON.stringify({
       event: "OUTBOUND_CLAIM_RPC_RAW",
@@ -86,6 +90,8 @@ export async function claimNextOutboundMessage(workerId) {
       dataIsNull: data == null,
       dataIsArray: Array.isArray(data),
       dataType: data == null ? null : typeof data,
+      /** Helps confirm PostgREST shape: wrapper key vs row keys */
+      rawTopLevelKeysSample: rawKeys,
     }),
   );
 
@@ -104,9 +110,9 @@ export async function claimNextOutboundMessage(workerId) {
     throw error;
   }
 
-  // Supabase/PostgREST: SQL NULL should be data==null. If claim_next_outbound_message
-  // returns an all-null composite (PG bug when UPDATE touches 0 rows — fixed in migration),
-  // treat as no row. See supabase/migrations/*fix_claim_next_outbound_message*.
+  // supabase.rpc returns `res.data` from PostgREST JSON as-is (no extra NULL→object mapping).
+  // If SQL returns NULL, PostgREST usually sends JSON `null` → data==null. Some stacks still
+  // return an object with every column JSON `null` for an empty composite; normalize maps that to null.
   const row = normalizeClaimNextOutboundRpcPayload(data);
   if (row == null) return null;
 

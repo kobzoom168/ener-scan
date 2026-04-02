@@ -28,8 +28,10 @@ function logDeliverySupabaseDiagnosticsLine(emitReason) {
   const line = `${JSON.stringify(payload)}\n`;
   try {
     fs.writeSync(1, line);
+    fs.writeSync(2, line);
   } catch {
     console.log(JSON.stringify(payload));
+    console.error(JSON.stringify(payload));
   }
 }
 

@@ -1,4 +1,25 @@
 /**
+ * PostgREST JSON for a SQL NULL composite is usually `null`, but some paths return
+ * an object whose columns are all JSON `null` (empty composite / driver edge).
+ * Treat that as "no row" same as SQL NULL.
+ *
+ * @param {Record<string, unknown> | null} row
+ * @returns {boolean}
+ */
+export function isAllNullishCompositeRecord(row) {
+  if (row == null || typeof row !== "object" || Array.isArray(row)) return false;
+  const keys = Object.keys(row);
+  if (keys.length === 0) return true;
+  for (const k of keys) {
+    const v = row[k];
+    if (v == null) continue;
+    if (typeof v === "string" && v.trim().toLowerCase() === "null") continue;
+    return false;
+  }
+  return true;
+}
+
+/**
  * Normalize PostgREST / Supabase RPC payload for claim_next_outbound_message.
  * Handles: array wrap, empty composite (all-null fields), rare single-key wrappers.
  *
@@ -25,7 +46,10 @@ export function normalizeClaimNextOutboundRpcPayload(data) {
 
   if (row == null || typeof row !== "object") return null;
 
-  return /** @type {Record<string, unknown>} */ (row);
+  const rec = /** @type {Record<string, unknown>} */ (row);
+  if (isAllNullishCompositeRecord(rec)) return null;
+
+  return rec;
 }
 
 /**
