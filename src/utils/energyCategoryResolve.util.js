@@ -1,71 +1,114 @@
 /**
  * Maps scan "main energy" wording → energy_categories.code (sync, no DB).
- * Keep labels in sync with `energy_categories` seed / Supabase migration.
+ * Master labels (v2):
+ * - Thai amulet / talisman: โชคลาภ, เมตตา, คุ้มครอง, บารมี
+ * - Crystal: เงินงาน, เสน่ห์, คุ้มครอง, บารมี, โชคลาภ
+ * Keep in sync with Supabase seed / migrations.
  */
 import { ENERGY_TYPES } from "../services/flex/scanCopy.config.js";
 import { resolveEnergyType } from "../services/flex/scanCopy.utils.js";
 
-/** @type {Record<string, string>} */
-const ENERGY_TYPE_TO_CATEGORY_CODE = {
-  [ENERGY_TYPES.PROTECT]: "protection",
-  [ENERGY_TYPES.BALANCE]: "focus",
-  [ENERGY_TYPES.POWER]: "confidence",
-  [ENERGY_TYPES.KINDNESS]: "charm",
-  [ENERGY_TYPES.ATTRACT]: "charm",
-  [ENERGY_TYPES.LUCK]: "money_work",
-  [ENERGY_TYPES.BOOST]: "relief",
-};
-
 /**
  * Mirror of `energy_categories` display fields (fallback when DB unreadable).
- * Update when migration seed changes.
  */
 export const ENERGY_CATEGORY_DISPLAY_SYNC = {
   money_work: {
-    display_name_th: "เปิดเงินงาน",
+    display_name_th: "เงินงาน",
     short_name_th: "เงินงาน",
   },
   charm: {
-    display_name_th: "ดึงคนเข้าหา",
+    display_name_th: "เสน่ห์",
     short_name_th: "เสน่ห์",
   },
   confidence: {
-    display_name_th: "ดันความมั่นใจ",
-    short_name_th: "มั่นใจ",
+    display_name_th: "บารมี",
+    short_name_th: "บารมี",
   },
   protection: {
-    display_name_th: "กันแรงลบ",
+    display_name_th: "คุ้มครอง",
     short_name_th: "คุ้มครอง",
   },
-  focus: {
-    display_name_th: "ตั้งหลักไว",
-    short_name_th: "คุมใจ",
+  luck_fortune: {
+    display_name_th: "โชคลาภ",
+    short_name_th: "โชคลาภ",
   },
-  relief: {
-    display_name_th: "ลดความหนัก",
-    short_name_th: "เบาชีวิต",
+  metta: {
+    display_name_th: "เมตตา",
+    short_name_th: "เมตตา",
   },
 };
 
 /**
- * Accent hex for Flex (summary-first uses gold elsewhere; legacy carousel uses this on bubbles).
+ * Accent hex for Flex / legacy carousel.
  */
 export const ACCENT_COLOR_BY_CATEGORY_CODE = {
   money_work: "#2E7D32",
   charm: "#AD1457",
   confidence: "#C62828",
   protection: "#D4AF37",
-  focus: "#1565C0",
-  relief: "#78909C",
+  luck_fortune: "#2E7D32",
+  metta: "#8E24AA",
 };
 
 /**
  * @param {string} mainEnergy
+ * @param {string} [objectFamilyRaw] — pipeline slug; drives Thai vs crystal master set
  * @returns {string}
  */
-export function inferEnergyCategoryCodeFromMainEnergy(mainEnergy) {
-  const t = resolveEnergyType(String(mainEnergy || "").trim());
-  return ENERGY_TYPE_TO_CATEGORY_CODE[t] || "relief";
+export function inferEnergyCategoryCodeFromMainEnergy(mainEnergy, objectFamilyRaw) {
+  const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw || "");
+  const isCrystal = fam === "crystal";
+  const raw = String(mainEnergy || "").replace(/\s+/g, " ").trim();
+
+  if (isCrystal) {
+    const hasLuckWord = raw.includes("โชคลาภ") || raw.includes("โชค");
+    const hasMoneyWorkWord =
+      /เงิน|งาน|ทรัพย์|รายได้|ดูดเงิน|การงาน/.test(raw);
+    if (hasMoneyWorkWord && !hasLuckWord) {
+      return "money_work";
+    }
+    if (hasLuckWord) {
+      return "luck_fortune";
+    }
+  }
+
+  const t = resolveEnergyType(raw);
+
+  if (isCrystal) {
+    switch (t) {
+      case ENERGY_TYPES.PROTECT:
+        return "protection";
+      case ENERGY_TYPES.POWER:
+      case ENERGY_TYPES.BALANCE:
+        return "confidence";
+      case ENERGY_TYPES.KINDNESS:
+      case ENERGY_TYPES.ATTRACT:
+        return "charm";
+      case ENERGY_TYPES.LUCK:
+        return "luck_fortune";
+      case ENERGY_TYPES.BOOST:
+        return "luck_fortune";
+      default:
+        return "luck_fortune";
+    }
+  }
+
+  switch (t) {
+    case ENERGY_TYPES.PROTECT:
+      return "protection";
+    case ENERGY_TYPES.POWER:
+    case ENERGY_TYPES.BALANCE:
+      return "confidence";
+    case ENERGY_TYPES.KINDNESS:
+    case ENERGY_TYPES.ATTRACT:
+      return "metta";
+    case ENERGY_TYPES.LUCK:
+      return "luck_fortune";
+    case ENERGY_TYPES.BOOST:
+      return "luck_fortune";
+    default:
+      return "luck_fortune";
+  }
 }
 
 /**

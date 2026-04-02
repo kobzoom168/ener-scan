@@ -554,7 +554,7 @@ export function getEnergyShortLabelLegacy(mainEnergy) {
  * Short label for Flex / alt text: prefer energy category display names (sync mirror of DB);
  * fallback to legacy substring rules.
  * @param {string} mainEnergy
- * @param {{ categoryCode?: string, displayNameTh?: string, shortNameTh?: string }} [options]
+ * @param {{ categoryCode?: string, displayNameTh?: string, shortNameTh?: string, objectFamily?: string }} [options]
  */
 export function getEnergyShortLabel(mainEnergy, options = {}) {
   const d = String(options.displayNameTh || "").trim();
@@ -563,7 +563,10 @@ export function getEnergyShortLabel(mainEnergy, options = {}) {
   if (sn) return sanitizeFlexDisplayText(safeWrapText(sn, 28));
   const code =
     String(options.categoryCode || "").trim() ||
-    inferEnergyCategoryCodeFromMainEnergy(mainEnergy);
+    inferEnergyCategoryCodeFromMainEnergy(
+      mainEnergy,
+      String(options.objectFamily || "").trim(),
+    );
   const sync = ENERGY_CATEGORY_DISPLAY_SYNC[code];
   if (sync?.display_name_th) return sync.display_name_th;
   if (sync?.short_name_th) return sync.short_name_th;

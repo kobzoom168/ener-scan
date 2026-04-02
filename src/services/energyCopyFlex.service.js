@@ -115,10 +115,10 @@ async function loadCopyWithFallback(categoryCode, objectFamilyNormalized, tone) 
 export async function resolveEnergyCopyForFlex(input = {}) {
   const mainEnergy = String(input.mainEnergy || "").trim();
   const hidden = String(input.hidden || "").trim();
+  const famRaw = String(input.objectFamily || "").trim();
   const codeIn =
     String(input.categoryCode || "").trim() ||
-    inferEnergyCategoryCodeFromMainEnergy(mainEnergy);
-  const famRaw = String(input.objectFamily || "").trim();
+    inferEnergyCategoryCodeFromMainEnergy(mainEnergy, famRaw);
   const objectFamilyNorm = normalizeObjectFamilyForEnergyCopy(famRaw);
 
   let tone = "hard";

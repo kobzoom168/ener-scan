@@ -352,8 +352,10 @@ export function buildReportPayloadFromScan(opts) {
         ? String(parsed.mainEnergy)
         : "";
 
-  const energyCategoryCode =
-    inferEnergyCategoryCodeFromMainEnergy(mainEnergyLabelForCategory);
+  const energyCategoryCode = inferEnergyCategoryCodeFromMainEnergy(
+    mainEnergyLabelForCategory,
+    String(objectFamilyOpt || ""),
+  );
 
   const energyCopyObjectFamily = normalizeObjectFamilyForEnergyCopy(
     String(objectFamilyOpt || ""),

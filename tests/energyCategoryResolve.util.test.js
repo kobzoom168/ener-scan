@@ -8,54 +8,68 @@ import {
 } from "../src/utils/energyCategoryResolve.util.js";
 import { pickMainEnergyColor } from "../src/services/flex/flex.utils.js";
 
-test("crystal + protection: category + accent", () => {
+test("crystal + protection", () => {
   assert.equal(
-    inferEnergyCategoryCodeFromMainEnergy("พลังหลัก ปกป้องและคุ้มครอง"),
+    inferEnergyCategoryCodeFromMainEnergy("พลังหลัก ปกป้องและคุ้มครอง", "crystal"),
     "protection",
   );
   assert.equal(normalizeObjectFamilyForEnergyCopy("crystal"), "crystal");
   assert.equal(pickAccentColorFromCategoryCode("protection"), "#D4AF37");
 });
 
-test("crystal + confidence: power / authority → confidence", () => {
+test("crystal + confidence (อำนาจ / บารมี)", () => {
   assert.equal(
-    inferEnergyCategoryCodeFromMainEnergy("พลังอำนาจและบารมี"),
+    inferEnergyCategoryCodeFromMainEnergy("พลังอำนาจและบารมี", "crystal"),
     "confidence",
   );
-  assert.equal(normalizeObjectFamilyForEnergyCopy("crystal"), "crystal");
   assert.equal(ACCENT_COLOR_BY_CATEGORY_CODE.confidence, "#C62828");
 });
 
-test("crystal + money_work: luck line", () => {
+test("crystal + money_work (เงิน/งาน ไม่เน้นโชค)", () => {
   assert.equal(
-    inferEnergyCategoryCodeFromMainEnergy("พลังโชคลาภเด่น"),
+    inferEnergyCategoryCodeFromMainEnergy("เด่นเรื่องเงินและงาน", "crystal"),
     "money_work",
   );
   assert.equal(pickAccentColorFromCategoryCode("money_work"), "#2E7D32");
 });
 
+test("crystal + luck_fortune (โชคลาภ)", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("พลังโชคลาภเด่น", "crystal"),
+    "luck_fortune",
+  );
+});
+
 test("thai_amulet + protection", () => {
   assert.equal(
-    inferEnergyCategoryCodeFromMainEnergy("เน้นป้องกันและคุ้มครอง"),
+    inferEnergyCategoryCodeFromMainEnergy("เน้นป้องกันและคุ้มครอง", "generic"),
     "protection",
   );
   assert.equal(normalizeObjectFamilyForEnergyCopy("somdej"), "thai_amulet");
-  assert.equal(normalizeObjectFamilyForEnergyCopy("generic"), "thai_amulet");
 });
 
-test("thai_amulet + confidence", () => {
+test("thai_amulet + confidence (บารมี)", () => {
   assert.equal(
-    inferEnergyCategoryCodeFromMainEnergy("บารมีและอำนาจ"),
+    inferEnergyCategoryCodeFromMainEnergy("บารมีและอำนาจ", ""),
     "confidence",
   );
-  assert.equal(normalizeObjectFamilyForEnergyCopy(""), "thai_amulet");
 });
 
-test("thai_amulet + charm: เมตตา / attraction", () => {
-  assert.equal(inferEnergyCategoryCodeFromMainEnergy("เมตตาและความอ่อนโยน"), "charm");
+test("thai_amulet + metta (เมตตา / kindness)", () => {
   assert.equal(
-    inferEnergyCategoryCodeFromMainEnergy("เสน่ห์และดึงดูด"),
-    "charm",
+    inferEnergyCategoryCodeFromMainEnergy("เมตตาและความอ่อนโยน", "thai_amulet"),
+    "metta",
+  );
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("เสน่ห์และดึงดูด", "thai_amulet"),
+    "metta",
+  );
+});
+
+test("thai_amulet + luck_fortune", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("พลังโชคลาภ", "thai_amulet"),
+    "luck_fortune",
   );
 });
 
@@ -63,6 +77,6 @@ test("pickMainEnergyColor uses category hint then legacy", () => {
   assert.equal(pickMainEnergyColor("ข้อความไม่ระบุ", "money_work"), "#2E7D32");
   assert.equal(
     pickMainEnergyColor("พลังโชคลาภ", undefined),
-    pickAccentColorFromCategoryCode("money_work"),
+    pickAccentColorFromCategoryCode("luck_fortune"),
   );
 });

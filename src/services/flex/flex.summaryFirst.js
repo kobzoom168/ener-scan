@@ -610,6 +610,7 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
     mainPill =
       getEnergyShortLabel(mainEnergy || "-", {
         categoryCode: s?.energyCategoryCode,
+        objectFamily: s?.energyCopyObjectFamily,
       }) ||
       energyNameForPill(mainEnergy) ||
       String(s?.mainEnergyLabel || "").trim() ||
@@ -622,6 +623,7 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
       ? mainPill
       : getEnergyShortLabel(mainEnergy || "พลังทั่วไป", {
           categoryCode: s?.energyCategoryCode,
+          objectFamily: s?.energyCopyObjectFamily,
         }));
   const altText = buildScanFlexAltText({
     mainEnergyLabel: altMain,
