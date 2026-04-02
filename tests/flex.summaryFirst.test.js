@@ -106,7 +106,8 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", () =
   assert.doesNotMatch(bodyStr, /พลังหลัก · พลังเสริม/);
   assert.match(bodyStr, /เข้ากับคุณ/);
   assert.doesNotMatch(bodyStr, /เข้ากับคุณยังไง/);
-  assert.match(bodyStr, /คุ้มกัน/);
+  // Flex headline is composed short copy (complete phrases), not truncated scan prose — allow protection-themed hooks.
+  assert.match(bodyStr, /ความมั่นคง|พลังคุ้มครอง|เด่นด้านพลัง|เหมาะกับคนที่|เหมาะกับช่วง/);
   assert.doesNotMatch(bodyStr, /คุ้มกัน:\s*★/);
   assert.match(bodyStr, /#D4AF37/);
   assert.match(bodyStr, /#000000/);

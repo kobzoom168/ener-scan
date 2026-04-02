@@ -346,6 +346,13 @@ export function buildReportPayloadFromScan(opts) {
     compatibilityReason,
     summaryLine,
     scanTips: whatItGives.length > 0 ? whatItGives.slice(0, 2) : undefined,
+    mainEnergyLabel: wording.mainEnergy
+      ? String(wording.mainEnergy)
+      : parsed.mainEnergy && parsed.mainEnergy !== "-"
+        ? String(parsed.mainEnergy)
+        : "",
+    wordingFamily: wording.wordingFamily,
+    seed: rid || String(scanResultId || ""),
   });
 
   const threadedSignalCount = countThreadedReportSignalFields({

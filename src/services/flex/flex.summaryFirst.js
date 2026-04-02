@@ -4,15 +4,8 @@
  */
 import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
 import { parseScanText } from "./flex.parser.js";
-import {
-  normalizeScore,
-  getEnergyShortLabel,
-  truncateAtWordBoundary,
-} from "./flex.utils.js";
-import {
-  FLEX_SUMMARY_HEADLINE_MAX,
-  resolveFlexSummarySurfaceForLine,
-} from "../../utils/reports/flexSummarySurface.util.js";
+import { normalizeScore, getEnergyShortLabel } from "./flex.utils.js";
+import { resolveFlexSummarySurfaceForLine } from "../../utils/reports/flexSummarySurface.util.js";
 import { buildScanFlexAltText, FLEX_SPLIT_WARN_THRESHOLD, splitSentencesForFlex } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import { ENERGY_TYPES } from "./scanCopy.config.js";
@@ -560,11 +553,7 @@ export function buildScanSummaryFirstFlex(rawText, options = {}) {
 
   const surface = resolveFlexSummarySurfaceForLine(reportPayload, parsed);
   const headlineText =
-    String(surface.headlineShort || "").trim() ||
-    truncateAtWordBoundary(
-      String(altMain || mainPill || "สรุปผลการสแกน"),
-      FLEX_SUMMARY_HEADLINE_MAX,
-    );
+    String(surface.headlineShort || "").trim() || "สรุปผลการสแกน";
   const fitLine = String(surface.fitReasonShort || "").trim();
   const bulletLines = Array.isArray(surface.bulletsShort)
     ? surface.bulletsShort.map((x) => String(x || "").trim()).filter(Boolean)

@@ -4,7 +4,7 @@
  */
 import { ENERGY_TYPES } from "../flex/scanCopy.config.js";
 import { resolveEnergyType } from "../flex/scanCopy.utils.js";
-import { safeThaiCut } from "../flex/flex.utils.js";
+import { composeFlexWordingTeasers } from "../../utils/reports/flexSummaryShortCopy.js";
 
 /**
  * @param {string} text
@@ -259,36 +259,12 @@ export function deriveReportWordingFromParsed(parsed, opts = {}) {
     `${seed}:hero`,
   );
 
-  const flexHeadline = (() => {
-    const fromChar = energyCharacter;
-    return safeThaiCut(fromChar, 56);
-  })();
-
-  const flexBullets = (() => {
-    const pool = [
-      practicalEffects[0],
-      practicalEffects[1],
-      practicalEffects[2],
-      fbPractical[0],
-      fbPractical[1],
-      fbPractical[2],
-    ]
-      .map((x) => firstSentence(String(x || "")).slice(0, 72).trim())
-      .filter(Boolean);
-    const out = [];
-    for (const t of pool) {
-      if (t && !out.includes(t)) out.push(t);
-      if (out.length >= 2) break;
-    }
-    if (out.length < 2) {
-      for (const fb of fbPractical) {
-        const t = firstSentence(String(fb || "")).slice(0, 72).trim();
-        if (t && !out.includes(t)) out.push(t);
-        if (out.length >= 2) break;
-      }
-    }
-    return out.slice(0, 2);
-  })();
+  const wfKey = wordingFamilyFromType(energyType);
+  const { flexHeadline, flexBullets } = composeFlexWordingTeasers({
+    energyType,
+    wordingFamily: wfKey,
+    seed,
+  });
 
   const htmlOpeningLine = (() => {
     const parts = [
@@ -331,7 +307,7 @@ export function deriveReportWordingFromParsed(parsed, opts = {}) {
     flexHeadline,
     flexBullets: flexBullets.length >= 2 ? flexBullets.slice(0, 2) : flexBullets,
     htmlOpeningLine,
-    wordingFamily: wordingFamilyFromType(energyType),
+    wordingFamily: wfKey,
     clarityLevel: "l2",
   };
 }

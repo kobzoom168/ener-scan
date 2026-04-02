@@ -1,88 +1,55 @@
 /**
- * Short, Flex-only copy derived in the report builder (not computed inside Flex UI).
- * Keeps LINE bubbles within safe lengths without ellipsis mid-clause from LINE.
+ * Short, Flex-only copy: composed complete Thai phrases (see flexSummaryShortCopy.js).
+ * Renderer maxLines/lineSpacing are guardrails only — content must already read finished.
  */
+import { cleanLine } from "../../services/flex/flex.utils.js";
 import {
-  cleanLine,
-  safeThaiCut,
-  truncateAtWordBoundary,
-} from "../../services/flex/flex.utils.js";
+  composeFlexShortSurface,
+  FLEX_SHORT_BULLET_MAX,
+  FLEX_SHORT_FIT_MAX,
+  FLEX_SHORT_HEADLINE_MAX,
+  storedFlexSummaryLooksComplete,
+} from "./flexSummaryShortCopy.js";
 
-/** Mobile-first caps (Thai); tune with flex.summaryFirst maxLines */
-export const FLEX_SUMMARY_HEADLINE_MAX = 42;
-export const FLEX_SUMMARY_FIT_MAX = 64;
-export const FLEX_SUMMARY_BULLET_MAX = 38;
-
-/**
- * Prefer word/space boundary when Thai has spaces; else Thai-safe head cut.
- * @param {string} text
- * @param {number} max
- */
-function firstSentenceSafe(text, max) {
-  const s = cleanLine(text);
-  if (!s) return "";
-  const cut = s.split(/(?<=[.!?])\s+/)[0] || s;
-  return truncateAtWordBoundary(cut, max);
-}
+export const FLEX_SUMMARY_HEADLINE_MAX = FLEX_SHORT_HEADLINE_MAX;
+export const FLEX_SUMMARY_FIT_MAX = FLEX_SHORT_FIT_MAX;
+export const FLEX_SUMMARY_BULLET_MAX = FLEX_SHORT_BULLET_MAX;
 
 /**
  * @param {object} p
  * @param {object} [p.wording]
- * @param {string} [p.compatibilityReason]
- * @param {string} [p.summaryLine]
- * @param {string[]} [p.scanTips]
+ * @param {string} [p.mainEnergyLabel] — drives template pick (same as summary.mainEnergyLabel)
+ * @param {string} [p.wordingFamily] — protection | shielding | authority | attraction
+ * @param {string} [p.seed] — stable id for rotating variants
+ * @param {string} [p.compatibilityReason] — unused for Flex short copy (HTML / full report)
+ * @param {string} [p.summaryLine] — unused for Flex short copy
+ * @param {string[]} [p.scanTips] — unused for Flex short copy (avoid truncating long tips)
  */
 export function buildFlexSummarySurfaceFields({
   wording,
-  compatibilityReason,
-  summaryLine,
-  scanTips,
+  mainEnergyLabel,
+  wordingFamily,
+  seed,
+  compatibilityReason: _compatibilityReason,
+  summaryLine: _summaryLine,
+  scanTips: _scanTips,
 }) {
-  const headlineSrc =
-    wording?.flexHeadline || summaryLine || wording?.energyCharacter || "";
-  const headlineShort = truncateAtWordBoundary(
-    cleanLine(String(headlineSrc || "")),
-    FLEX_SUMMARY_HEADLINE_MAX,
-  );
+  const label =
+    String(mainEnergyLabel || wording?.mainEnergy || "").trim() ||
+    String(wording?.heroNaming || "").trim();
+  const wf = wordingFamily || wording?.wordingFamily;
+  const seedFinal = String(seed || wording?.heroNaming || "flex");
 
-  const fitSrc =
-    compatibilityReason || wording?.lifeTranslation || summaryLine || "";
-  const fitReasonShort = firstSentenceSafe(
-    String(fitSrc || ""),
-    FLEX_SUMMARY_FIT_MAX,
-  );
-
-  const rawBullets = [
-    ...(Array.isArray(wording?.flexBullets) ? wording.flexBullets : []),
-    ...(Array.isArray(scanTips) ? scanTips : []),
-  ];
-  const bulletsShort = [];
-  for (const b of rawBullets) {
-    const t = truncateAtWordBoundary(
-      cleanLine(String(b || "")),
-      FLEX_SUMMARY_BULLET_MAX,
-    );
-    if (t && !bulletsShort.includes(t)) bulletsShort.push(t);
-    if (bulletsShort.length >= 2) break;
-  }
-  const pad = safeThaiCut(cleanLine(String(wording?.bestFor || "")), FLEX_SUMMARY_BULLET_MAX);
-  if (bulletsShort.length < 2 && pad && !bulletsShort.includes(pad)) {
-    bulletsShort.push(pad);
-  }
-  const fallbacks = [
-    "รายละเอียดเชิงลึกอยู่ในรายงานฉบับเต็ม",
-    "แตะปุ่มด้านล่างเพื่ออ่านต่อ",
-  ];
-  let fi = 0;
-  while (bulletsShort.length < 2 && fi < fallbacks.length) {
-    const t = fallbacks[fi++];
-    if (!bulletsShort.includes(t)) bulletsShort.push(t);
-  }
+  const composed = composeFlexShortSurface({
+    mainEnergyLabel: label || "เสริมพลัง",
+    wordingFamily: wf,
+    seed: seedFinal,
+  });
 
   return {
-    headlineShort,
-    fitReasonShort,
-    bulletsShort: bulletsShort.slice(0, 2),
+    headlineShort: composed.headlineShort,
+    fitReasonShort: composed.fitReasonShort,
+    bulletsShort: composed.bulletsShort.slice(0, 2),
     ctaLabel: "เปิดรายงานฉบับเต็ม",
   };
 }
@@ -95,34 +62,31 @@ export function resolveFlexSummarySurfaceForLine(reportPayload, _parsed) {
   const s = reportPayload?.summary;
   if (
     s &&
-    typeof s.headlineShort === "string" &&
-    s.headlineShort.trim() &&
-    Array.isArray(s.bulletsShort) &&
-    s.bulletsShort.filter(Boolean).length >= 1
+    storedFlexSummaryLooksComplete({
+      headlineShort: s.headlineShort,
+      fitReasonShort: s.fitReasonShort,
+      bulletsShort: s.bulletsShort,
+    })
   ) {
+    const headlineShort = cleanLine(String(s.headlineShort || "").trim());
+    const fitReasonShort = cleanLine(String(s.fitReasonShort || "").trim());
+    const bulletsShort = (Array.isArray(s.bulletsShort) ? s.bulletsShort : [])
+      .map((x) => cleanLine(String(x || "")))
+      .filter(Boolean)
+      .slice(0, 2);
     return {
-      headlineShort: truncateAtWordBoundary(
-        s.headlineShort.trim(),
-        FLEX_SUMMARY_HEADLINE_MAX,
-      ),
-      fitReasonShort: truncateAtWordBoundary(
-        String(s.fitReasonShort || "").trim(),
-        FLEX_SUMMARY_FIT_MAX,
-      ),
-      bulletsShort: s.bulletsShort
-        .map((x) =>
-          truncateAtWordBoundary(
-            cleanLine(String(x || "")),
-            FLEX_SUMMARY_BULLET_MAX,
-          ),
-        )
-        .filter(Boolean)
-        .slice(0, 2),
+      headlineShort,
+      fitReasonShort,
+      bulletsShort,
       ctaLabel: String(s.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",
     };
   }
   return buildFlexSummarySurfaceFields({
     wording: reportPayload?.wording,
+    mainEnergyLabel:
+      s?.mainEnergyLabel || reportPayload?.wording?.mainEnergy || "",
+    wordingFamily: s?.wordingFamily || reportPayload?.wording?.wordingFamily,
+    seed: reportPayload?.reportId || reportPayload?.scanId || "flex",
     compatibilityReason: s?.compatibilityReason,
     summaryLine: s?.summaryLine,
     scanTips: s?.scanTips,
