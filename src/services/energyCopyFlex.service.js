@@ -134,6 +134,235 @@ function effectiveFlexFallbackCategoryCode(codeIn, objectFamilyNorm, crystalMode
 }
 
 /**
+ * @param {{ headline?: string|null, fitLine?: string|null, bullets?: string[] }} set
+ * @returns {boolean}
+ */
+function isUsableEnergyCopySet(set) {
+  return Boolean(
+    set &&
+      set.headline &&
+      Array.isArray(set.bullets) &&
+      set.bullets.length > 0,
+  );
+}
+
+/**
+ * Crystal Flex: crystal-only DB → offline crystal master → generic `all` rows → merged [crystal,all] last.
+ * Never starts from merged [crystal,all] — avoids generic `all` winning over incomplete crystal rows.
+ *
+ * @param {object} p
+ * @param {string} p.categoryCode
+ * @param {string} p.tone
+ * @param {string} p.crystalModeIn
+ */
+async function resolveCrystalFlexSurfaceCopy({ categoryCode, tone, crystalModeIn }) {
+  const code = String(categoryCode || "").trim();
+  const fallbackCode = effectiveFlexFallbackCategoryCode(
+    code,
+    "crystal",
+    crystalModeIn,
+  );
+
+  let crystalOnly = { headline: null, fitLine: null, bullets: [] };
+  try {
+    crystalOnly = await getEnergyCopySetCrystalOnly({
+      categoryCode: code,
+      tone,
+    });
+  } catch (e) {
+    console.warn("[energyCopyFlex] getEnergyCopySetCrystalOnly failed", {
+      categoryCode: code,
+      message: e?.message,
+    });
+  }
+
+  const hadPartialCrystalRow =
+    Boolean(crystalOnly?.headline) ||
+    Boolean(crystalOnly?.fitLine) ||
+    (Array.isArray(crystalOnly?.bullets) && crystalOnly.bullets.length > 0);
+
+  if (isUsableEnergyCopySet(crystalOnly)) {
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_DB_COPY_SELECTED",
+        objectFamilyNorm: "crystal",
+        categoryCode: code,
+        fallbackCode,
+        selectedSource: "crystal_db",
+        hadCrystalDbRow: true,
+        hadGenericAllRow: false,
+        reason: "crystal_only_rows_usable",
+      }),
+    );
+    return {
+      copySet: crystalOnly,
+      fromDb: true,
+      templateFromDb: true,
+      usedOfflineCrystalMaster: false,
+      usedGenericAllLastResort: false,
+    };
+  }
+
+  console.log(
+    JSON.stringify({
+      event: "CRYSTAL_DB_COPY_MISS",
+      objectFamilyNorm: "crystal",
+      categoryCode: code,
+      fallbackCode,
+      selectedSource: null,
+      hadCrystalDbRow: hadPartialCrystalRow,
+      hadGenericAllRow: false,
+      reason: hadPartialCrystalRow
+        ? "crystal_only_partial_incomplete"
+        : "crystal_only_zero_rows",
+    }),
+  );
+
+  if (
+    String(crystalModeIn || "").trim() === "spiritual_growth" &&
+    code !== "spiritual_growth"
+  ) {
+    let sgCrystal = { headline: null, fitLine: null, bullets: [] };
+    try {
+      sgCrystal = await getEnergyCopySetCrystalOnly({
+        categoryCode: "spiritual_growth",
+        tone,
+      });
+    } catch {
+      /* logged below if still miss */
+    }
+    if (isUsableEnergyCopySet(sgCrystal)) {
+      console.log(
+        JSON.stringify({
+          event: "CRYSTAL_DB_COPY_SELECTED",
+          objectFamilyNorm: "crystal",
+          categoryCode: "spiritual_growth",
+          fallbackCode: "spiritual_growth",
+          selectedSource: "crystal_db",
+          hadCrystalDbRow: true,
+          hadGenericAllRow: false,
+          reason: "spiritual_growth_category_retry",
+        }),
+      );
+      return {
+        copySet: sgCrystal,
+        fromDb: true,
+        templateFromDb: true,
+        usedOfflineCrystalMaster: false,
+        usedGenericAllLastResort: false,
+      };
+    }
+  }
+
+  const fb = getFallbackFlexSurfaceLines(fallbackCode, "crystal");
+  const fbSet = {
+    headline: fb.headline,
+    fitLine: fb.fitLine,
+    bullets: fb.bullets,
+  };
+  if (isUsableEnergyCopySet(fbSet)) {
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_DB_GENERIC_SKIPPED",
+        objectFamilyNorm: "crystal",
+        categoryCode: code,
+        fallbackCode,
+        selectedSource: "crystal_offline_master",
+        hadCrystalDbRow: hadPartialCrystalRow,
+        hadGenericAllRow: false,
+        reason: "prefer_crystal_offline_over_generic_all",
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_FALLBACK_SELECTED",
+        objectFamilyNorm: "crystal",
+        categoryCode: code,
+        fallbackCode,
+        selectedSource: "crystal_offline_master",
+        hadCrystalDbRow: hadPartialCrystalRow,
+        hadGenericAllRow: false,
+        reason: "offline_master_v2_crystal_branch",
+      }),
+    );
+    return {
+      copySet: fbSet,
+      fromDb: false,
+      templateFromDb: false,
+      usedOfflineCrystalMaster: true,
+      usedGenericAllLastResort: false,
+    };
+  }
+
+  let genericAllOnly = { headline: null, fitLine: null, bullets: [] };
+  try {
+    genericAllOnly = await getEnergyCopySet({
+      categoryCode: code,
+      objectFamily: "all",
+      tone,
+    });
+  } catch (e) {
+    console.warn("[energyCopyFlex] generic all-only last resort failed", {
+      categoryCode: code,
+      message: e?.message,
+    });
+  }
+
+  if (isUsableEnergyCopySet(genericAllOnly)) {
+    console.log(
+      JSON.stringify({
+        event: "GENERIC_ALL_ROW_LAST_RESORT_USED",
+        objectFamilyNorm: "crystal",
+        categoryCode: code,
+        fallbackCode,
+        selectedSource: "generic_all_db",
+        hadCrystalDbRow: hadPartialCrystalRow,
+        hadGenericAllRow: true,
+        reason: "object_family_all_only_after_crystal_paths_exhausted",
+      }),
+    );
+    return {
+      copySet: genericAllOnly,
+      fromDb: true,
+      templateFromDb: true,
+      usedOfflineCrystalMaster: false,
+      usedGenericAllLastResort: true,
+    };
+  }
+
+  const merged = await loadCopyWithFallback(code, "crystal", tone);
+  if (isUsableEnergyCopySet(merged)) {
+    console.log(
+      JSON.stringify({
+        event: "GENERIC_ALL_ROW_LAST_RESORT_USED",
+        objectFamilyNorm: "crystal",
+        categoryCode: code,
+        fallbackCode,
+        selectedSource: "merged_crystal_plus_all_db",
+        hadCrystalDbRow: hadPartialCrystalRow,
+        hadGenericAllRow: true,
+        reason: "legacy_merged_crystal_all_after_all_only_empty",
+      }),
+    );
+    return {
+      copySet: merged,
+      fromDb: true,
+      templateFromDb: true,
+      usedOfflineCrystalMaster: false,
+      usedGenericAllLastResort: true,
+    };
+  }
+
+  return {
+    copySet: { headline: null, fitLine: null, bullets: [] },
+    fromDb: false,
+    templateFromDb: false,
+    usedOfflineCrystalMaster: false,
+    usedGenericAllLastResort: false,
+  };
+}
+
+/**
  * @param {ResolveEnergyCopyForFlexInput} input
  * @returns {Promise<ResolveEnergyCopyForFlexResult>}
  */
@@ -168,87 +397,30 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     });
   }
 
-  let copySet = await loadCopyWithFallback(
-    codeIn,
-    objectFamilyNorm,
-    tone,
-  );
-  let hasDbCopy = Boolean(
-    copySet.headline &&
-      Array.isArray(copySet.bullets) &&
-      copySet.bullets.length > 0,
-  );
-  if (
-    !hasDbCopy &&
-    objectFamilyNorm === "crystal" &&
-    crystalModeIn === "spiritual_growth" &&
-    codeIn !== "spiritual_growth"
-  ) {
+  let copySet = { headline: null, fitLine: null, bullets: [] };
+  let usedOfflineCrystalMaster = false;
+
+  if (objectFamilyNorm === "crystal") {
+    const crystalRes = await resolveCrystalFlexSurfaceCopy({
+      categoryCode: codeIn,
+      tone,
+      crystalModeIn,
+    });
+    copySet = crystalRes.copySet;
+    usedOfflineCrystalMaster = crystalRes.usedOfflineCrystalMaster;
+    if (isUsableEnergyCopySet(crystalRes.copySet)) {
+      fromDb = crystalRes.templateFromDb === true;
+    } else {
+      fromDb = false;
+    }
+  } else {
     copySet = await loadCopyWithFallback(
-      "spiritual_growth",
+      codeIn,
       objectFamilyNorm,
       tone,
     );
-    hasDbCopy = Boolean(
-      copySet.headline &&
-        Array.isArray(copySet.bullets) &&
-        copySet.bullets.length > 0,
-    );
+    if (isUsableEnergyCopySet(copySet)) fromDb = true;
   }
-
-  let usedOfflineCrystalMaster = false;
-  if (objectFamilyNorm === "crystal") {
-    let crystalOnly = { headline: null, fitLine: null, bullets: [] };
-    try {
-      crystalOnly = await getEnergyCopySetCrystalOnly({
-        categoryCode: codeIn,
-        tone,
-      });
-    } catch (e) {
-      console.warn("[energyCopyFlex] getEnergyCopySetCrystalOnly failed", {
-        categoryCode: codeIn,
-        message: e?.message,
-      });
-    }
-    const crystalDbComplete = Boolean(
-      crystalOnly.headline &&
-        Array.isArray(crystalOnly.bullets) &&
-        crystalOnly.bullets.length > 0,
-    );
-
-    const preferOfflineCrystalWhenNoCrystalRows = new Set([
-      "protection",
-      "balance",
-      "confidence",
-      "luck_fortune",
-      "metta",
-      "money_work",
-      "charm",
-      "spiritual_growth",
-    ]);
-
-    if (crystalDbComplete) {
-      copySet = crystalOnly;
-      hasDbCopy = true;
-    } else if (preferOfflineCrystalWhenNoCrystalRows.has(codeIn)) {
-      const fbCode = effectiveFlexFallbackCategoryCode(
-        codeIn,
-        objectFamilyNorm,
-        crystalModeIn,
-      );
-      const fb = getFallbackFlexSurfaceLines(fbCode, "crystal");
-      copySet = {
-        headline: fb.headline,
-        fitLine: fb.fitLine,
-        bullets: fb.bullets,
-      };
-      hasDbCopy = true;
-      usedOfflineCrystalMaster = true;
-    }
-  }
-
-  if (hasDbCopy) fromDb = true;
-  if (usedOfflineCrystalMaster) fromDb = false;
 
   const accent =
     pickAccentColorFromCategoryCode(codeIn) ||
@@ -286,7 +458,9 @@ export async function resolveEnergyCopyForFlex(input = {}) {
       objectFamilyNorm,
       crystalModeIn,
     );
-    const fb = getFallbackFlexSurfaceLines(fbCode, objectFamilyNorm);
+    const fbBranch =
+      objectFamilyNorm === "crystal" ? "crystal" : objectFamilyNorm;
+    const fb = getFallbackFlexSurfaceLines(fbCode, fbBranch);
     clamped = clampFlexDbSurfaceLines(
       fb.headline,
       fb.fitLine,
