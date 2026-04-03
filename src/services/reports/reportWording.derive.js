@@ -186,7 +186,7 @@ function wordingFamilyFromType(energyType) {
 
 /**
  * @param {Record<string, unknown>} parsed — same shape as `parseScanText` output
- * @param {{ energyScore?: number|null, compatibilityPercent?: number|null, seed?: string }} opts
+ * @param {{ energyScore?: number|null, compatibilityPercent?: number|null, seed?: string, objectFamily?: string }} opts
  * @returns {import("./reportPayload.types.js").ReportWording}
  */
 export function deriveReportWordingFromParsed(parsed, opts = {}) {
@@ -264,6 +264,7 @@ export function deriveReportWordingFromParsed(parsed, opts = {}) {
     energyType,
     wordingFamily: wfKey,
     seed,
+    objectFamily: opts.objectFamily != null ? String(opts.objectFamily) : "",
   });
 
   const htmlOpeningLine = (() => {

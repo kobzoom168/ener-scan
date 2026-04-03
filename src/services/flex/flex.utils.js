@@ -479,75 +479,22 @@ export function normalizeScore(scoreText) {
 }
 
 /**
- * Legacy short label from keyword substrings. Prefer {@link getEnergyShortLabel} with category sync/DB.
+ * Last-resort short label: same master set as {@link ENERGY_CATEGORY_DISPLAY_SYNC} (no symptom-style keywords).
  * @param {string} mainEnergy
+ * @param {string} [objectFamily] — pipeline slug for Thai vs crystal inference
  */
-export function getEnergyShortLabelLegacy(mainEnergy) {
+export function getEnergyShortLabelLegacy(mainEnergy, objectFamily = "") {
   const value = cleanLine(mainEnergy);
-
-  if (!value || value === "-") return "พลังหลักชัด ๆ";
-
-  if (value.includes("ดูดเงิน")) {
-    return "ดึงทรัพย์และโชค";
+  if (!value || value === "-") {
+    return (
+      ENERGY_CATEGORY_DISPLAY_SYNC.luck_fortune.short_name_th || "โชคลาภ"
+    );
   }
-
-  if (value.includes("เปิดทาง")) {
-    return "เปิดโอกาสใหม่";
-  }
-
-  if (value.includes("พลังการงาน")) {
-    return "เสริมหน้าที่การงาน";
-  }
-
-  if (value.includes("วาสนา")) {
-    return "บุญหนุนและวาสนา";
-  }
-
-  if (value.includes("ใจนิ่ง")) {
-    return "สงบและมั่นคงใจ";
-  }
-
-  if (value.includes("ปัญญา")) {
-    return "เฉลียวฉลาดและแก้ปัญหา";
-  }
-
-  if (value.includes("มหานิยม")) {
-    return "เป็นที่รักและนิยม";
-  }
-
-  if (value.includes("เสน่หา")) {
-    return "ดึงดูดและน่าหลงใหล";
-  }
-
-  if (value.includes("ป้องกัน")) {
-    return "ป้องกันสิ่งร้าย";
-  }
-
-  if (value.includes("ปกป้อง") || value.includes("คุ้มครอง")) {
-    return "ปกป้องและมั่นคง";
-  }
-
-  if (value.includes("อำนาจ") || value.includes("บารมี")) {
-    return "มั่นใจและตัดสินใจ";
-  }
-
-  if (value.includes("โชคลาภ") || value.includes("โชค")) {
-    return "โอกาสและจังหวะ";
-  }
-
-  if (value.includes("สมดุล") || value.includes("นิ่ง")) {
-    return "สมดุลและจังหวะ";
-  }
-
-  if (value.includes("เมตตา")) {
-    return "อ่อนโยนกับคน";
-  }
-
-  if (value.includes("ดึงดูด") || value.includes("เสน่ห์")) {
-    return "น่าเข้าหาและโดดเด่น";
-  }
-
-  return sanitizeFlexDisplayText(safeWrapText(value, 28));
+  const code = inferEnergyCategoryCodeFromMainEnergy(value, objectFamily);
+  const sync = ENERGY_CATEGORY_DISPLAY_SYNC[code];
+  const th = sync?.short_name_th || sync?.display_name_th;
+  if (th) return sanitizeFlexDisplayText(safeWrapText(th, 28));
+  return ENERGY_CATEGORY_DISPLAY_SYNC.luck_fortune.short_name_th || "โชคลาภ";
 }
 
 /**

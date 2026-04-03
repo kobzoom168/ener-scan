@@ -574,6 +574,7 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
           mainEnergyLabel: mainEnergyLabelForCopy,
           wordingFamily: wordingFam,
           seed: seedFlex,
+          objectFamily: s?.energyCopyObjectFamily || "",
         });
         const second =
           fb.bulletsShort[1] || fb.bulletsShort[0] || "";

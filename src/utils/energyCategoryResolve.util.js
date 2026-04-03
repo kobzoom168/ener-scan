@@ -15,26 +15,32 @@ export const ENERGY_CATEGORY_DISPLAY_SYNC = {
   money_work: {
     display_name_th: "เงินงาน",
     short_name_th: "เงินงาน",
+    description_th: "เด่นเรื่องเงิน งาน และโอกาส",
   },
   charm: {
     display_name_th: "เสน่ห์",
     short_name_th: "เสน่ห์",
+    description_th: "เด่นเรื่องเสน่ห์และแรงดึงดูด",
   },
   confidence: {
     display_name_th: "บารมี",
     short_name_th: "บารมี",
+    description_th: "เด่นเรื่องบารมีและน้ำหนักในตัว",
   },
   protection: {
     display_name_th: "คุ้มครอง",
     short_name_th: "คุ้มครอง",
+    description_th: "เด่นเรื่องคุ้มครองและกันเรื่องไม่ดี",
   },
   luck_fortune: {
     display_name_th: "โชคลาภ",
     short_name_th: "โชคลาภ",
+    description_th: "เด่นเรื่องโชคและจังหวะดี",
   },
   metta: {
     display_name_th: "เมตตา",
     short_name_th: "เมตตา",
+    description_th: "เด่นเรื่องเมตตาและคนเปิดรับ",
   },
 };
 

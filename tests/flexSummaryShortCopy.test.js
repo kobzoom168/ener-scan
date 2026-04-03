@@ -6,6 +6,7 @@ import {
   storedFlexSummaryLooksComplete,
   TRUNCATION_ARTIFACT_SUFFIXES,
 } from "../src/utils/reports/flexSummaryShortCopy.js";
+import { lineContainsEnergyCopyAvoidWord } from "../src/utils/reports/energyCopyAvoidWords.util.js";
 import {
   FLEX_SUMMARY_BULLET_MAX,
   FLEX_SUMMARY_FIT_MAX,
@@ -35,6 +36,7 @@ test("composed surface: lengths and no truncation-artifact tails", () => {
         }
         for (const line of [s.headlineShort, s.fitReasonShort, ...s.bulletsShort]) {
           assert.ok(!lineLooksLikeThaiTruncationArtifact(line), line);
+          assert.ok(!lineContainsEnergyCopyAvoidWord(line), line);
           for (const frag of FORBIDDEN_SNAPSHOT_FRAGMENTS) {
             assert.ok(!line.endsWith(frag), line);
           }
@@ -60,6 +62,14 @@ test("storedFlexSummaryLooksComplete rejects legacy mid-phrase cuts", () => {
       bulletsShort: ["ช่วยให้ใจไม่แกว่งเวลาเจอแรงกดดัน", "เหมาะกับช่วงที่ต้องตั้งสติและตัดสินใจ"],
     }),
     true,
+  );
+  assert.equal(
+    storedFlexSummaryLooksComplete({
+      headlineShort: "หัวเรื่องมั่นใจ",
+      fitReasonShort: "ok",
+      bulletsShort: ["ก", "ข"],
+    }),
+    false,
   );
 });
 

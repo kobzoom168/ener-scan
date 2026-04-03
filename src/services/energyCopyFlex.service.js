@@ -20,7 +20,11 @@ import {
   FLEX_SHORT_BULLET_MAX,
   FLEX_SHORT_FIT_MAX,
   FLEX_SHORT_HEADLINE_MAX,
+  getFallbackFlexSurfaceLines,
 } from "../utils/reports/flexSummaryShortCopy.js";
+import {
+  lineContainsEnergyCopyAvoidWord,
+} from "../utils/reports/energyCopyAvoidWords.util.js";
 
 /**
  * Keeps DB strings inside the same summary-shell caps as composed pools (V4.1 teaser; avoids bubble bloat).
@@ -158,15 +162,39 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     pickAccentColorFromCategoryCode(codeIn) ||
     pickMainEnergyColorLegacy(mainEnergy || "พลังหลัก");
 
-  const label =
+  let label =
     (shortNameTh || displayNameTh || "").trim() ||
-    getEnergyShortLabelLegacy(mainEnergy || "-");
+    getEnergyShortLabelLegacy(mainEnergy || "-", famRaw);
 
-  const clamped = clampFlexDbSurfaceLines(
+  if (lineContainsEnergyCopyAvoidWord(label)) {
+    label =
+      ENERGY_CATEGORY_DISPLAY_SYNC[codeIn]?.short_name_th ||
+      ENERGY_CATEGORY_DISPLAY_SYNC[codeIn]?.display_name_th ||
+      getEnergyShortLabelLegacy(mainEnergy || "-", famRaw);
+  }
+
+  let clamped = clampFlexDbSurfaceLines(
     copySet.headline || null,
     copySet.fitLine || null,
     copySet.bullets,
   );
+
+  const guarded = [
+    clamped.headline,
+    clamped.fitLine,
+    ...(clamped.bullets || []),
+  ]
+    .filter(Boolean)
+    .some((x) => lineContainsEnergyCopyAvoidWord(x));
+  if (guarded) {
+    const fb = getFallbackFlexSurfaceLines(codeIn, objectFamilyNorm);
+    clamped = clampFlexDbSurfaceLines(
+      fb.headline,
+      fb.fitLine,
+      fb.bullets,
+    );
+    fromDb = false;
+  }
 
   return {
     categoryCode: codeIn,

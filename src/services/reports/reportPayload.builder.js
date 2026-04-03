@@ -338,6 +338,7 @@ export function buildReportPayloadFromScan(opts) {
     seed: rid || scanResultId,
     energyScore,
     compatibilityPercent: compatPct,
+    objectFamily: objectFamilyOpt,
   });
 
   const compatibilityBand =
@@ -380,6 +381,7 @@ export function buildReportPayloadFromScan(opts) {
         : "",
     wordingFamily: wording.wordingFamily,
     seed: rid || String(scanResultId || ""),
+    objectFamily: objectFamilyOpt || "",
   });
 
   const threadedSignalCount = countThreadedReportSignalFields({
