@@ -54,3 +54,17 @@ test("bridge maps package-selected unclear to pp_selected_guidance", () => {
   assert.equal(b.stateOwner, "payment_package_selected");
   assert.equal(b.phaseReplyType, "pp_selected_guidance");
 });
+
+test("bridge maps object_inconclusive to object_gate", () => {
+  const b = legacyReplyTypeToPhaseA("object_inconclusive");
+  assert.ok(b);
+  assert.equal(b.stateOwner, "object_gate");
+  assert.equal(b.phaseReplyType, "og_object_inconclusive");
+});
+
+test("bridge maps image_retake_required to object_gate", () => {
+  const b = legacyReplyTypeToPhaseA("image_retake_required");
+  assert.ok(b);
+  assert.equal(b.stateOwner, "object_gate");
+  assert.equal(b.phaseReplyType, "og_image_retake_required");
+});

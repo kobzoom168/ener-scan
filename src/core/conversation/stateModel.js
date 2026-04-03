@@ -6,6 +6,7 @@ export const PHASE_A_STATE_OWNERS = new Set(
     "payment_package_selected",
     "awaiting_slip",
     "pending_verify",
+    "object_gate",
   ]),
 );
 
@@ -20,6 +21,7 @@ export const STATE_OWNERS = [
   "paid_active_scan_ready",
   "soft_locked",
   "hard_blocked",
+  "object_gate",
 ];
 
 /** @param {number} streak @returns {import("./contracts.types.js").GuidanceTierNumeric} */

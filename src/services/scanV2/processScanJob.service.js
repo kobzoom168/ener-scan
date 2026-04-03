@@ -1,8 +1,9 @@
 import {
   toBase64,
-  getUnsupportedObjectReplyCandidates,
+  getObjectGateReplyCandidatesForRouting,
 } from "../../utils/webhookText.util.js";
-import { checkSingleObject } from "../objectCheck.service.js";
+import { checkSingleObjectGated } from "../objectCheck.service.js";
+import { resolveObjectGateReplyRouting } from "../../utils/objectGateReplyResolve.util.js";
 import { runDeepScan } from "../scan.service.js";
 import { buildScanResultFlexWithFallback } from "../flex/scanFlexReply.builder.js";
 import { env } from "../../config/env.js";
@@ -132,10 +133,21 @@ export async function processScanJob(workerId, jobRow) {
   }
 
   const imageBase64 = toBase64(imageBuffer);
-  const objectCheck = await checkSingleObject(imageBase64, {
+  const gated = await checkSingleObjectGated(imageBase64, {
     messageId: null,
     path: "worker_scan_job",
   });
+  const objectCheck = gated.result;
+  const objectGateRouting = resolveObjectGateReplyRouting(gated);
+  console.log(
+    JSON.stringify({
+      event: "OBJECT_REPLY_TYPE_SELECTED",
+      kind: objectGateRouting.kind,
+      replyType: objectGateRouting.replyType,
+      reason: objectGateRouting.reason,
+      path: "worker_scan_job",
+    }),
+  );
   console.log(
     JSON.stringify({
       event: "SCAN_JOB_OBJECT_VALIDATED",
@@ -144,6 +156,7 @@ export async function processScanJob(workerId, jobRow) {
       jobIdPrefix: idPrefix8(jobId),
       lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
       objectCheckResult: objectCheck,
+      objectGateKind: objectGateRouting.kind,
       timestamp: scanV2TraceTs(),
     }),
   );
@@ -156,7 +169,7 @@ export async function processScanJob(workerId, jobRow) {
       messageId: null,
       objectCheckResult: String(objectCheck),
     });
-    const c = getUnsupportedObjectReplyCandidates();
+    const c = getObjectGateReplyCandidatesForRouting(objectGateRouting);
     await failJob(
       jobId,
       "object_validation_failed",
@@ -173,6 +186,7 @@ export async function processScanJob(workerId, jobRow) {
         error: true,
         rejectReason: "object_validation_failed",
         objectCheckResult: String(objectCheck),
+        objectGateKind: objectGateRouting.kind,
         text: c[0] || "ขออภัยครับ ไม่สามารถอ่านภาพนี้ได้",
         accessSource: job.access_source,
         appUserId,

@@ -221,6 +221,21 @@ const LEGACY_MAP = {
     nextStep: "wait_admin",
     microIntent: "unrelated_same_state",
   },
+
+  /** Object-check: inconclusive / timeout / weak signal — ask for a clearer retake (not hard unsupported). */
+  object_inconclusive: {
+    stateOwner: "object_gate",
+    phaseReplyType: "og_object_inconclusive",
+    nextStep: "send_new_image_same_chat",
+    microIntent: "object_inconclusive_retake",
+  },
+  /** Strict gate said unclear / blurry — retake with same guidance family as inconclusive. */
+  image_retake_required: {
+    stateOwner: "object_gate",
+    phaseReplyType: "og_image_retake_required",
+    nextStep: "send_new_image_same_chat",
+    microIntent: "image_unclear_retake",
+  },
 };
 
 /**

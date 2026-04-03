@@ -14,6 +14,11 @@ export function buildConversationRephrasePrompts(input) {
         ? "Keep it concise (2–3 short sentences)."
         : "Warm, natural Thai; keep reasonable length.";
 
+  const objectGateExtra =
+    input.stateOwner === "object_gate"
+      ? " For object_gate: do not promise the next image will scan successfully or that the object type is supported; only ask for a clearer retake per allowedFacts. "
+      : "";
+
   const system = [
     "You rewrite outbound Thai chat messages for a LINE bot.",
     "Rules: output ONLY valid JSON with key \"text\" (string). No markdown, no code fences.",
@@ -21,6 +26,7 @@ export function buildConversationRephrasePrompts(input) {
     "Do not claim payment is approved, verified, or completed unless explicitly in allowed facts.",
     "Preserve every must-keep fact exactly as given (same digits for prices and refs).",
     "Do not change what the user should do next; only soften tone.",
+    objectGateExtra,
     tierNote,
   ].join(" ");
 

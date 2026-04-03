@@ -50,7 +50,9 @@ import { getUserStats } from "../stores/userStats.store.js";
 
 import { getImageBufferFromLineMessage } from "../services/image.service.js";
 import { isDuplicateImage } from "../services/dedupe.service.js";
-import { checkSingleObject } from "../services/objectCheck.service.js";
+import { checkSingleObjectGated } from "../services/objectCheck.service.js";
+import { resolveObjectGateReplyRouting } from "../utils/objectGateReplyResolve.util.js";
+import { sendObjectGateRoutedNonScanReply } from "../services/lineWebhook/objectGateReplySend.service.js";
 
 import { env } from "../config/env.js";
 import {
@@ -108,7 +110,6 @@ import {
   logMultiImageGroupRejected,
   sendMultiImageRejectionViaGateway,
 } from "../services/lineWebhook/multiImageRejectionReply.service.js";
-import { sendUnsupportedObjectRejectionViaGateway } from "../services/lineWebhook/unsupportedObjectReply.service.js";
 import { sendFreeQuotaExhaustedPaywallViaGateway } from "../services/lineWebhook/freeQuotaPaywallReply.service.js";
 import { serializeLineErrorSafe } from "../utils/lineErrorLog.util.js";
 import {
@@ -197,8 +198,6 @@ import {
   buildUnclearImageText,
   buildDuplicateImageText,
   getDuplicateImageReplyCandidates,
-  getMultipleObjectsReplyCandidates,
-  getUnclearImageReplyCandidates,
   buildNoHistoryText,
   buildNoStatsText,
   buildIdleText,
@@ -2071,82 +2070,37 @@ async function finalizeAcceptedImage({
   }
 
   const imageBase64 = toBase64(imageBuffer);
-  const objectCheck = await checkSingleObject(imageBase64, {
+  const gated = await checkSingleObjectGated(imageBase64, {
     messageId: event?.message?.id ?? null,
     path: "webhook_finalize_image",
   });
+  const objectCheck = gated.result;
+  const objectGateRouting = resolveObjectGateReplyRouting(gated);
   if (turnPerf) {
-    turnPerf.log("OBJECT_CHECK_DONE", { objectCheckResult: objectCheck });
-  }
-
-  console.log("[WEBHOOK] object check result:", objectCheck);
-
-  if (objectCheck === "multiple") {
-    markAcceptedImageEvent(userId, eventTimestamp);
-    clearLatestScanJob(userId);
-    clearSessionIfFlowVersionMatches(userId, flowVersion);
-
-    const c = getMultipleObjectsReplyCandidates();
-    await sendNonScanReply({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      replyType: "multiple_objects",
-      semanticKey: "multiple_objects",
-      text: c[0],
-      alternateTexts: c.slice(1),
+    turnPerf.log("OBJECT_CHECK_DONE", {
+      objectCheckResult: objectCheck,
+      objectGateKind: objectGateRouting.kind,
     });
-    return;
   }
 
-  if (objectCheck === "unclear") {
-    markAcceptedImageEvent(userId, eventTimestamp);
-    clearLatestScanJob(userId);
-    clearSessionIfFlowVersionMatches(userId, flowVersion);
-
-    const c = getUnclearImageReplyCandidates();
-    await sendNonScanReply({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      replyType: "unclear_image",
-      semanticKey: "unclear_image",
-      text: c[0],
-      alternateTexts: c.slice(1),
-    });
-    return;
-  }
-
-  if (objectCheck === "unsupported") {
-    markAcceptedImageEvent(userId, eventTimestamp);
-    clearLatestScanJob(userId);
-    clearSessionIfFlowVersionMatches(userId, flowVersion);
-
-    await sendUnsupportedObjectRejectionViaGateway({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      flowVersion,
-      messageId: event?.message?.id ?? null,
-      objectCheckResult: "unsupported",
-      replyType: "unsupported_object",
-    });
-    return;
-  }
+  console.log("[WEBHOOK] object check result:", objectCheck, objectGateRouting.kind);
 
   if (objectCheck !== "single_supported") {
     markAcceptedImageEvent(userId, eventTimestamp);
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    await sendUnsupportedObjectRejectionViaGateway({
+    const lastUserText = String(event?.message?.caption || "").trim();
+
+    await sendObjectGateRoutedNonScanReply({
       client,
       userId,
       replyToken: event.replyToken,
       flowVersion,
       messageId: event?.message?.id ?? null,
-      objectCheckResult: String(objectCheck),
-      replyType: "unsupported_object_fallback",
+      routing: objectGateRouting,
+      gated,
+      lastUserText,
     });
     return;
   }

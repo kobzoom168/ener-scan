@@ -4,7 +4,7 @@
  */
 
 /**
- * @typedef {'idle'|'waiting_birthdate'|'paywall_selecting_package'|'payment_package_selected'|'awaiting_slip'|'pending_verify'|'paid_active_scan_ready'|'soft_locked'|'hard_blocked'} StateOwner
+ * @typedef {'idle'|'waiting_birthdate'|'paywall_selecting_package'|'payment_package_selected'|'awaiting_slip'|'pending_verify'|'paid_active_scan_ready'|'soft_locked'|'hard_blocked'|'object_gate'} StateOwner
  */
 
 /**

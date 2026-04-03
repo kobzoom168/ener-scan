@@ -9,7 +9,7 @@ import { TelemetryEvents, logTelemetryEvent } from "../telemetry/telemetryEvents
 
 /** @param {"full"|"short"|"micro"|string} tier */
 export function tierStringToGuidanceNumeric(tier) {
-  if (tier === "short") return 2;
+  if (tier === "short" || tier === "medium") return 2;
   if (tier === "micro") return 3;
   return 1;
 }
@@ -21,6 +21,9 @@ export function tierStringToGuidanceNumeric(tier) {
 export function buildAllowedFactsForBridge(bridge, paymentTruth) {
   if (!bridge) return [];
   const st = bridge.stateOwner;
+  if (st === "object_gate") {
+    return [];
+  }
   if (st === "waiting_birthdate") {
     return [];
   }
@@ -82,6 +85,19 @@ export async function preparePhaseAHumanizedSendTexts(input) {
 
   const guidanceTier = tierStringToGuidanceNumeric(input.tierString || "full");
   const paymentTruth = input.paymentTruth || {};
+  if (bridge.stateOwner === "object_gate") {
+    const ogFacts = Array.isArray(input.objectGateAllowedFacts)
+      ? input.objectGateAllowedFacts
+      : [];
+    if (!ogFacts.length) {
+      logTelemetryEvent(TelemetryEvents.CONV_AI_SKIPPED, {
+        userId: input.userId,
+        legacyReplyType: input.legacyReplyType,
+        reason: "missing_object_gate_allowed_facts",
+      });
+      return { ok: false, reason: "missing_object_gate_allowed_facts" };
+    }
+  }
   if (
     bridge.stateOwner === "paywall_selecting_package" ||
     bridge.stateOwner === "payment_package_selected"
@@ -97,7 +113,14 @@ export async function preparePhaseAHumanizedSendTexts(input) {
       return { ok: false, reason: "missing_price_truth_paywall_or_package_selected" };
     }
   }
-  const allowedFacts = buildAllowedFactsForBridge(bridge, paymentTruth);
+  let allowedFacts = buildAllowedFactsForBridge(bridge, paymentTruth);
+  if (
+    bridge.stateOwner === "object_gate" &&
+    Array.isArray(input.objectGateAllowedFacts) &&
+    input.objectGateAllowedFacts.length
+  ) {
+    allowedFacts = input.objectGateAllowedFacts;
+  }
   const contract = buildReplyContract({
     stateOwner: bridge.stateOwner,
     replyType: bridge.phaseReplyType,
@@ -131,13 +154,23 @@ export async function preparePhaseAHumanizedSendTexts(input) {
     llmText = out.text;
     modelUsed = out.model;
   } catch (err) {
+    const fr = err?.message || "conv_ai_error";
     logTelemetryEvent(TelemetryEvents.CONV_AI_FALLBACK, {
       userId: input.userId,
       stateOwner: contract.stateOwner,
       replyType: contract.replyType,
-      fallbackReason: err?.message || "conv_ai_error",
+      fallbackReason: fr,
     });
-    return { ok: false, reason: err?.message || "conv_ai_error" };
+    console.log(
+      JSON.stringify({
+        event: "CONV_AI_FALLBACK",
+        userId: input.userId,
+        stateOwner: contract.stateOwner,
+        replyType: contract.replyType,
+        reason: fr,
+      }),
+    );
+    return { ok: false, reason: fr };
   }
 
   const v = validateConversationOutput(llmText, contract, primary);
@@ -150,6 +183,16 @@ export async function preparePhaseAHumanizedSendTexts(input) {
       fallbackReason: v.fallbackReason,
       modelUsed,
     });
+    console.log(
+      JSON.stringify({
+        event: "CONV_AI_FALLBACK",
+        userId: input.userId,
+        stateOwner: contract.stateOwner,
+        replyType: contract.replyType,
+        reason: v.fallbackReason || "validation_failed",
+        violations: v.violations,
+      }),
+    );
     return { ok: false, reason: v.fallbackReason || "validation_failed" };
   }
 
@@ -159,6 +202,15 @@ export async function preparePhaseAHumanizedSendTexts(input) {
     replyType: contract.replyType,
     modelUsed,
   });
+  console.log(
+    JSON.stringify({
+      event: "CONV_AI_VALIDATED",
+      userId: input.userId,
+      stateOwner: contract.stateOwner,
+      replyType: contract.replyType,
+      modelUsed,
+    }),
+  );
 
   logTelemetryEvent(TelemetryEvents.CONV_COST, {
     userId: input.userId,

@@ -1,5 +1,6 @@
 import { env } from "../config/env.js";
 import { openai, withOpenAi429RetryOnce } from "./openaiDeepScan.api.js";
+import { isTrueUnsupportedEvidence } from "../utils/objectGateReplyResolve.util.js";
 
 const OBJECT_CHECK_PROVIDER = "openai.responses";
 const OBJECT_CHECK_MODEL = "gpt-4.1-mini";
@@ -15,6 +16,7 @@ single_supported = มีวัตถุสายพลังหลัก 1 ช�
 multiple         = มีหลายชิ้น / หลายรูป / คอลลาจ / screenshot รวมหลายภาพ / มีวัตถุเด่นมากกว่า 1 ชิ้น
 unclear          = ภาพไม่ชัด / มืด / เบลอ / ไกลเกินไป / มองไม่แน่ใจ
 unsupported      = มี 1 ชิ้น แต่ไม่ใช่ประเภทที่ Ener Scan รองรับ
+inconclusive     = ยังตัดไม่ได้ / timeout / โมเดลล้ม / สัญญาณไม่ครบ — ไม่เทียบเท่า unsupported จริง
 */
 
 /**
@@ -163,6 +165,7 @@ const LABEL_SET = new Set([
   "multiple",
   "unclear",
   "unsupported",
+  "inconclusive",
 ]);
 
 /**
@@ -358,8 +361,22 @@ async function runStrictObjectCheck(imageBase64) {
     }
   }
 
-  console.error("[OBJECT_CHECK] failed:", lastError?.message || lastError);
-  return "unsupported";
+  const msg = String(lastError?.message || lastError || "");
+  const timeout = /object_check_timeout|timeout/i.test(msg);
+  console.error("[OBJECT_CHECK] failed:", msg);
+  console.log(
+    JSON.stringify({
+      event: timeout
+        ? "OBJECT_GATE_TIMEOUT_RECLASSIFIED"
+        : "OBJECT_GATE_INCONCLUSIVE",
+      provider: OBJECT_CHECK_PROVIDER,
+      model: OBJECT_CHECK_MODEL,
+      pass: "strict",
+      reason: timeout ? "object_check_timeout" : "strict_pass_total_failure",
+      message: msg.slice(0, 200),
+    }),
+  );
+  return "inconclusive";
 }
 
 /**
@@ -425,9 +442,18 @@ async function runPermissiveStructuredObjectCheck(imageBase64) {
  * @param {string} second
  * @returns {string}
  */
-function mergeGateLabels(first, second) {
+export function mergeGateLabels(first, second) {
   if (first === "single_supported" || first === "multiple") {
     return first;
+  }
+
+  if (first === "inconclusive") {
+    if (second === "single_supported") return "single_supported";
+    if (second === "multiple") return "multiple";
+    if (second === "unclear") return "unclear";
+    if (second === "unsupported") return "inconclusive";
+    if (second === "inconclusive") return "inconclusive";
+    return "inconclusive";
   }
 
   if (first === "unsupported" || first === "unclear") {
@@ -439,6 +465,9 @@ function mergeGateLabels(first, second) {
     }
     if (second === "unclear") {
       return first === "unclear" ? "unclear" : "unsupported";
+    }
+    if (second === "inconclusive") {
+      return first === "unclear" ? "unclear" : "inconclusive";
     }
     // second === unsupported
     return first === "unclear" ? "unclear" : "unsupported";
@@ -472,23 +501,26 @@ export async function checkSingleObjectGated(imageBase64, opts = {}) {
     firstPass === "single_supported" ||
     firstPass === "multiple"
   ) {
-    if (firstPass === "unsupported" && OBJECT_CHECK_DISABLE_SECOND_PASS) {
+    let finalEarly = firstPass;
+    if (OBJECT_CHECK_DISABLE_SECOND_PASS && firstPass === "unsupported") {
+      finalEarly = "inconclusive";
       console.log(
         JSON.stringify({
-          event: "OBJECT_GATE_HARD_REJECT",
+          event: "OBJECT_GATE_INCONCLUSIVE",
           messageId,
           path,
-          finalDecision: firstPass,
-          objectGateRejectReason: "strict_only_second_pass_disabled",
+          reason: "strict_only_second_pass_disabled_unsupported_not_hard_reject",
+          firstPass,
         }),
       );
     }
+
     console.log(
       JSON.stringify({
         event: "OBJECT_GATE_FINAL",
         messageId,
         path,
-        finalDecision: firstPass,
+        finalDecision: finalEarly,
         firstPass,
         secondPass: null,
         softAccept: false,
@@ -498,36 +530,18 @@ export async function checkSingleObjectGated(imageBase64, opts = {}) {
         hasCasing: null,
         shapeHint: null,
         objectGateRejectReason:
-          firstPass === "unsupported" && OBJECT_CHECK_DISABLE_SECOND_PASS
+          finalEarly === "unsupported" && OBJECT_CHECK_DISABLE_SECOND_PASS
             ? "strict_only_second_pass_disabled"
             : null,
       }),
     );
-    if (firstPass === "unsupported" && OBJECT_CHECK_DISABLE_SECOND_PASS) {
-      console.log(
-        JSON.stringify({
-          event: "OBJECT_GATE_REJECT_REASON",
-          messageId,
-          path,
-          finalDecision: firstPass,
-          firstPass,
-          secondPass: null,
-          softAccept: false,
-          objectCount: null,
-          supportedFamilyGuess: null,
-          confidence: null,
-          hasCasing: null,
-          shapeHint: null,
-        }),
-      );
-    }
 
     return {
-      result: firstPass,
+      result: finalEarly,
       firstPass,
       secondPass: null,
       softAccept: false,
-      gateMeta: { path, messageId, firstPass, secondPass: null },
+      gateMeta: { path, messageId, firstPass, secondPass: null, finalDecision: finalEarly },
     };
   }
 
@@ -539,15 +553,27 @@ export async function checkSingleObjectGated(imageBase64, opts = {}) {
     structured = await runPermissiveStructuredObjectCheck(imageBase64);
     secondPass = structured.label;
   } catch (e) {
+    const em = String(e?.message || e);
+    const timeout = /object_check_timeout|timeout/i.test(em);
     console.error(
       JSON.stringify({
         event: "OBJECT_GATE_SECOND_PASS_FAIL",
         messageId,
         path,
-        message: String(e?.message || e),
+        message: em,
       }),
     );
-    secondPass = "unsupported";
+    console.log(
+      JSON.stringify({
+        event: timeout
+          ? "OBJECT_GATE_TIMEOUT_RECLASSIFIED"
+          : "OBJECT_GATE_INCONCLUSIVE",
+        messageId,
+        path,
+        reason: timeout ? "permissive_timeout" : "permissive_exception",
+      }),
+    );
+    secondPass = "inconclusive";
   }
 
   console.log(
@@ -567,7 +593,9 @@ export async function checkSingleObjectGated(imageBase64, opts = {}) {
   const merged = mergeGateLabels(firstPass, secondPass);
   softAccept =
     merged === "single_supported" &&
-    (firstPass === "unsupported" || firstPass === "unclear");
+    (firstPass === "unsupported" ||
+      firstPass === "unclear" ||
+      firstPass === "inconclusive");
 
   if (softAccept) {
     console.log(
@@ -582,7 +610,32 @@ export async function checkSingleObjectGated(imageBase64, opts = {}) {
     );
   }
 
-  const finalDecision = merged;
+  let finalDecision = merged;
+  if (finalDecision === "unsupported") {
+    const trueUnsup = isTrueUnsupportedEvidence({
+      firstPass,
+      secondPass,
+      structured,
+      secondPassDisabled: OBJECT_CHECK_DISABLE_SECOND_PASS,
+    });
+    if (!trueUnsup) {
+      finalDecision = "inconclusive";
+      console.log(
+        JSON.stringify({
+          event: "OBJECT_GATE_INCONCLUSIVE",
+          messageId,
+          path,
+          reason: "weak_unsupported_downgrade",
+          firstPass,
+          secondPass,
+          objectCount: structured?.objectCount ?? null,
+          supportedFamilyGuess: structured?.supportedFamilyGuess ?? null,
+          confidence: structured?.confidence ?? null,
+        }),
+      );
+    }
+  }
+
   const hardReject = finalDecision === "unsupported";
 
   if (hardReject) {

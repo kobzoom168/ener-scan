@@ -202,6 +202,92 @@ export function getUnsupportedObjectReplyCandidates() {
   ];
 }
 
+/** Deterministic primary for object_gate / object_inconclusive (timeout, weak signal, inconclusive merge). */
+export function buildObjectInconclusiveText() {
+  return [
+    "ภาพนี้ระบบยังจับวัตถุได้ไม่ชัดพอครับ",
+    "รบกวนส่งรูปใหม่ที่เห็นพระหรือเครื่องราง 1 ชิ้นชัด ๆ อีกครั้งนะครับ",
+    "แนะนำให้ถ่ายใกล้ขึ้น วัตถุอยู่กลางภาพ และพื้นหลังเรียบครับ",
+  ].join("\n");
+}
+
+export function getObjectInconclusiveReplyCandidates() {
+  return [
+    buildObjectInconclusiveText(),
+    "ภาพนี้ระบบยังไม่มั่นใจพอที่จะสแกนครับ รบกวนส่งรูปพระ เครื่องราง หิน หรือวัตถุสายพลังแบบชิ้นเดี่ยว 1 รูปที่ชัดกว่านี้อีกครั้งครับ",
+    "ระบบยังประเมินวัตถุในภาพไม่ชัดพอ ขอส่งรูปใหม่ทีละชิ้น ให้เห็นชิ้นง่าย ๆ กลางเฟรมนะครับ",
+  ];
+}
+
+/** Same family as unclear_image but dedicated replyType `image_retake_required` for observability. */
+export function buildImageRetakeRequiredPrimaryText() {
+  return [
+    "ภาพนี้ยังไม่ชัดพอที่ระบบจะประเมินได้ครับ",
+    "รบกวนส่งรูปพระ เครื่องราง หิน หรือวัตถุสายพลังแบบชิ้นเดี่ยว 1 รูปที่ชัดกว่านี้อีกครั้งนะครับ",
+    "แนะนำให้ถ่ายใกล้ขึ้น วางวัตถุกลางภาพ และใช้พื้นหลังเรียบครับ",
+  ].join("\n");
+}
+
+export function getImageRetakeRequiredReplyCandidates() {
+  return [
+    buildImageRetakeRequiredPrimaryText(),
+    "ภาพยังไม่ชัดพอนะครับ ลองถ่ายใหม่ให้เห็นพระหรือเครื่องรางทีละชิ้นต่อรูป",
+    "ยังอ่านชิ้นในภาพไม่ชัด ลองถ่ายใกล้ ๆ วัตถุกลางเฟรม แล้วส่งมาใหม่ครับ",
+  ];
+}
+
+/**
+ * Safe-rephrase facts for conv surface (object_gate). Do not state future scan success.
+ * @returns {import("../core/conversation/contracts.types.js").AllowedFact[]}
+ */
+export function buildObjectInconclusiveAllowedFacts() {
+  return [
+    { key: "scan_confidence", value: "ระบบยังไม่มั่นใจพอที่จะสแกน" },
+    { key: "needs_new_photo", value: "ตอนนี้ยังต้องการรูปใหม่" },
+    {
+      key: "supported_scope",
+      value:
+        "รองรับเฉพาะพระ เครื่องราง คริสตัล/หิน หรือวัตถุสายพลังแบบชิ้นเดียว",
+    },
+    { key: "one_per_photo", value: "ต้องการ 1 ชิ้นต่อ 1 รูป" },
+    {
+      key: "photo_tips",
+      value: "ถ่ายชัดขึ้น ใกล้ขึ้น พื้นหลังเรียบ วัตถุอยู่กลางภาพ",
+    },
+  ];
+}
+
+/** @returns {import("../core/conversation/contracts.types.js").AllowedFact[]} */
+export function buildImageRetakeRequiredAllowedFacts() {
+  return [
+    { key: "image_quality", value: "ภาพยังไม่ชัดพอให้ประเมิน" },
+    { key: "needs_new_photo", value: "ตอนนี้ยังต้องการรูปใหม่" },
+    {
+      key: "supported_scope",
+      value:
+        "รองรับเฉพาะพระ เครื่องราง คริสตัล/หิน หรือวัตถุสายพลังแบบชิ้นเดียว",
+    },
+    { key: "one_per_photo", value: "ต้องการ 1 ชิ้นต่อ 1 รูป" },
+    {
+      key: "photo_tips",
+      value: "ถ่ายใกล้ขึ้น วัตถุกลางภาพ พื้นหลังเรียบ",
+    },
+  ];
+}
+
+/**
+ * @param {{ kind?: string }} routing — output of `resolveObjectGateReplyRouting`
+ * @returns {string[]}
+ */
+export function getObjectGateReplyCandidatesForRouting(routing) {
+  const k = routing?.kind;
+  if (k === "multiple_objects") return getMultipleObjectsReplyCandidates();
+  if (k === "image_retake_required") return getImageRetakeRequiredReplyCandidates();
+  if (k === "unsupported_object") return getUnsupportedObjectReplyCandidates();
+  if (k === "object_inconclusive") return getObjectInconclusiveReplyCandidates();
+  return getObjectInconclusiveReplyCandidates();
+}
+
 export function getMultiImageInRequestReplyCandidates() {
   const primary = buildMultiImageInRequestText();
   return [
