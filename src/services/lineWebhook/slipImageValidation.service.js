@@ -123,7 +123,11 @@ export async function evaluateAwaitingPaymentSlipImage(ctx, options = {}) {
   const runObjectCheck =
     typeof options.runObjectCheck === "function"
       ? options.runObjectCheck
-      : checkSingleObject;
+      : (b64) =>
+          checkSingleObject(b64, {
+            messageId: messageId ?? null,
+            path: "slip_validation_object_guard",
+          });
   const b64 =
     typeof options.toBase64ForCheck === "function"
       ? options.toBase64ForCheck(imageBuffer)

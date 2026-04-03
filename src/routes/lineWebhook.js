@@ -2071,7 +2071,10 @@ async function finalizeAcceptedImage({
   }
 
   const imageBase64 = toBase64(imageBuffer);
-  const objectCheck = await checkSingleObject(imageBase64);
+  const objectCheck = await checkSingleObject(imageBase64, {
+    messageId: event?.message?.id ?? null,
+    path: "webhook_finalize_image",
+  });
   if (turnPerf) {
     turnPerf.log("OBJECT_CHECK_DONE", { objectCheckResult: objectCheck });
   }

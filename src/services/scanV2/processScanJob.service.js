@@ -132,7 +132,10 @@ export async function processScanJob(workerId, jobRow) {
   }
 
   const imageBase64 = toBase64(imageBuffer);
-  const objectCheck = await checkSingleObject(imageBase64);
+  const objectCheck = await checkSingleObject(imageBase64, {
+    messageId: null,
+    path: "worker_scan_job",
+  });
   console.log(
     JSON.stringify({
       event: "SCAN_JOB_OBJECT_VALIDATED",
