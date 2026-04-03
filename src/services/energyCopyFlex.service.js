@@ -2,7 +2,11 @@
  * Flex-facing adaptor: energy category + copy templates + safe fallbacks.
  * Uses DB when available; warns and falls back on failure.
  */
-import { getEnergyCategory, getEnergyCopySet } from "./energyCopy.service.js";
+import {
+  getEnergyCategory,
+  getEnergyCopySet,
+  getEnergyCopySetCrystalOnly,
+} from "./energyCopy.service.js";
 import {
   inferEnergyCategoryCodeFromMainEnergy,
   normalizeObjectFamilyForEnergyCopy,
@@ -191,7 +195,60 @@ export async function resolveEnergyCopyForFlex(input = {}) {
         copySet.bullets.length > 0,
     );
   }
+
+  let usedOfflineCrystalMaster = false;
+  if (objectFamilyNorm === "crystal") {
+    let crystalOnly = { headline: null, fitLine: null, bullets: [] };
+    try {
+      crystalOnly = await getEnergyCopySetCrystalOnly({
+        categoryCode: codeIn,
+        tone,
+      });
+    } catch (e) {
+      console.warn("[energyCopyFlex] getEnergyCopySetCrystalOnly failed", {
+        categoryCode: codeIn,
+        message: e?.message,
+      });
+    }
+    const crystalDbComplete = Boolean(
+      crystalOnly.headline &&
+        Array.isArray(crystalOnly.bullets) &&
+        crystalOnly.bullets.length > 0,
+    );
+
+    const preferOfflineCrystalWhenNoCrystalRows = new Set([
+      "protection",
+      "balance",
+      "confidence",
+      "luck_fortune",
+      "metta",
+      "money_work",
+      "charm",
+      "spiritual_growth",
+    ]);
+
+    if (crystalDbComplete) {
+      copySet = crystalOnly;
+      hasDbCopy = true;
+    } else if (preferOfflineCrystalWhenNoCrystalRows.has(codeIn)) {
+      const fbCode = effectiveFlexFallbackCategoryCode(
+        codeIn,
+        objectFamilyNorm,
+        crystalModeIn,
+      );
+      const fb = getFallbackFlexSurfaceLines(fbCode, "crystal");
+      copySet = {
+        headline: fb.headline,
+        fitLine: fb.fitLine,
+        bullets: fb.bullets,
+      };
+      hasDbCopy = true;
+      usedOfflineCrystalMaster = true;
+    }
+  }
+
   if (hasDbCopy) fromDb = true;
+  if (usedOfflineCrystalMaster) fromDb = false;
 
   const accent =
     pickAccentColorFromCategoryCode(codeIn) ||

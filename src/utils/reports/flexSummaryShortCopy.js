@@ -123,6 +123,15 @@ const FALLBACK_MASTER_V2 = {
       fit: "เหมาะกับคนที่ต้องเจอคนเยอะหรือไม่อยากรับพลังแย่ ๆ",
       bullets: ["ช่วยกันแรงลบและแรงปะทะที่ไม่จำเป็น", "ช่วยให้ไม่รับอารมณ์คนอื่นเข้าตัวง่ายเกินไป"],
     },
+    /** Rare direct code; usually balance pillar maps to `confidence` for crystal inference. */
+    balance: {
+      headline: "เด่นเรื่องความสมดุลและตั้งหลักในใจ",
+      fit: "เหมาะกับช่วงที่ใจแกว่งหรืออยากให้โทนนิ่งขึ้นแบบไม่ฝืนเกินไป",
+      bullets: [
+        "ช่วยให้ตอบสนองช้าลงและนิ่งขึ้นเมื่อใจเริ่มวอกแวก",
+        "ช่วยประคองจังหวะภายในไม่ให้ไหลตามอารมณ์ง่ายเกินไป",
+      ],
+    },
     confidence: {
       headline: "เด่นเรื่องบารมีและน้ำหนักในตัว",
       fit: "เหมาะกับช่วงที่ต้องพูดให้คนฟังหรือคุมสถานการณ์",
@@ -213,12 +222,16 @@ export function composeFlexWordingTeasers({
   wordingFamily: _wordingFamily,
   seed: _seed,
   objectFamily = "",
+  energyCategoryCode = "",
+  crystalMode = "",
 }) {
   void _wordingFamily;
   void _seed;
   const s = composeFlexShortSurface({
     mainEnergyLabel: energyType,
     objectFamily,
+    energyCategoryCode,
+    crystalMode,
   });
   return {
     flexHeadline: s.headlineShort,

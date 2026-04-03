@@ -6,6 +6,34 @@ import { buildReportPayloadFromScan } from "../src/services/reports/reportPayloa
 import { normalizeReportPayloadForRender } from "../src/utils/reports/reportPayloadNormalize.util.js";
 import { renderMobileReportHtml } from "../src/templates/reports/mobileReport.template.js";
 
+test("deriveReportWordingFromParsed: crystal protection uses stone-flavored hero + flex category", () => {
+  const parsed = {
+    mainEnergy: "พลังปกป้องและความมั่นคง",
+    overview: "-",
+    fitReason: "-",
+    suitable: [],
+    notStrong: "-",
+    supportTopics: [],
+  };
+  const w = deriveReportWordingFromParsed(parsed, {
+    seed: "crystal-protect-test",
+    objectFamily: "crystal",
+  });
+  assert.ok(
+    /หิน|พลังหิน|คริสตัล/.test(w.heroNaming),
+    `expected stone-flavored hero, got: ${w.heroNaming}`,
+  );
+  assert.ok(
+    !w.flexHeadline.includes("กันเรื่องไม่ดี"),
+    "crystal flex teaser should not use generic Thai-amulet protection headline tail",
+  );
+  assert.ok(
+    w.flexHeadline.includes("กันแรงลบ") || w.flexHeadline.includes("คุ้มครอง"),
+    `expected crystal protection teaser, got: ${w.flexHeadline}`,
+  );
+  assert.equal(w.mainEnergy, ENERGY_TYPES.PROTECT);
+});
+
 test("deriveReportWordingFromParsed: protection + scan lines", () => {
   const parsed = {
     mainEnergy: "พลังปกป้องและความมั่นคง",

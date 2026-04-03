@@ -117,6 +117,45 @@ export async function getEnergyCopySet({
 }
 
 /**
+ * Loads templates for category + tone with **only** `object_family = crystal`.
+ * Used to detect whether DB has crystal-specific rows; avoids generic `all` copy winning when crystal rows are missing.
+ *
+ * @param {GetEnergyCopySetParams} p
+ * @returns {Promise<EnergyCopySet>}
+ */
+export async function getEnergyCopySetCrystalOnly({
+  categoryCode,
+  tone = "hard",
+}) {
+  const cat = String(categoryCode || "").trim();
+  if (!cat) {
+    return { headline: null, fitLine: null, bullets: [] };
+  }
+  const toneVal = String(tone || "hard").trim() || "hard";
+
+  const { data, error } = await supabase
+    .from("energy_copy_templates")
+    .select("id,category_code,object_family,copy_type,tone,text_th,weight,is_active")
+    .eq("category_code", cat)
+    .eq("tone", toneVal)
+    .eq("is_active", true)
+    .eq("object_family", "crystal");
+
+  if (error) {
+    console.error("[SUPABASE] getEnergyCopySetCrystalOnly", {
+      categoryCode: cat,
+      tone: toneVal,
+      message: error.message,
+      supabaseCode: error.code,
+    });
+    throw error;
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  return selectEnergyCopyFromTemplates(rows, "crystal");
+}
+
+/**
  * @typedef {object} ObjectFamilyCategoryRow
  * @property {number} priority
  * @property {string} categoryCode

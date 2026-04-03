@@ -5,6 +5,11 @@
 import { ENERGY_TYPES } from "../flex/scanCopy.config.js";
 import { resolveEnergyType } from "../flex/scanCopy.utils.js";
 import { composeFlexWordingTeasers } from "../../utils/reports/flexSummaryShortCopy.js";
+import {
+  inferEnergyCategoryCodeFromMainEnergy,
+  normalizeObjectFamilyForEnergyCopy,
+  resolveCrystalMode,
+} from "../../utils/energyCategoryResolve.util.js";
 
 /**
  * @param {string} text
@@ -171,6 +176,134 @@ const PRACTICAL_FALLBACK = {
   ],
 };
 
+/** Crystal path: stone-forward phrasing (avoid generic “protection” Thai-amulet tone). */
+const CRYSTAL_HERO_NAMING_BY_TYPE = {
+  [ENERGY_TYPES.PROTECT]: [
+    "หินชิ้นนี้เด่นด้านคุ้มครองและกันพลังรบกวน",
+    "พลังหินเน้นเกราะกันและตั้งหลักในใจ",
+    "โทนหินหนุนให้ไม่รับพลังแย่ ๆ เข้าง่าย",
+  ],
+  [ENERGY_TYPES.BALANCE]: [
+    "พลังหินเน้นสมดุลและโฟกัสนิ่งในใจ",
+    "หินชิ้นนี้หนุนให้จังหวะภายในไม่แกว่งง่าย",
+    "โทนหินช่วยตั้งหลักเมื่อบรรยากาศรอบตัววุ่น",
+  ],
+  [ENERGY_TYPES.POWER]: [
+    "พลังหินมีน้ำหนักและความชัดในการยืนของตัวเอง",
+    "หินชิ้นนี้เสริมบารมีแบบตั้งหลัก ไม่ใช่แค่ประคองอย่างเดียว",
+    "โทนหินหนุนให้ตัดสินใจได้หนักแน่นเมื่อถูกท้าทาย",
+  ],
+  [ENERGY_TYPES.KINDNESS]: [
+    "พลังหินอ่อนโยนลดแรงเสียดทานในสัมพันธ์",
+    "หินชิ้นนี้ทำให้บรรยากาศนุ่มลงแม้ประเด็นยังอยู่",
+    "โทนหินเน้นเมตตาและการเปิดรับมากกว่าการกดดัน",
+  ],
+  [ENERGY_TYPES.ATTRACT]: [
+    "พลังหินดึงสายตาและโอกาสแบบเป็นธรรมชาติ",
+    "หินชิ้นนี้เสริมการถูกมองเห็นโดยไม่ต้องขูดรีด",
+    "โทนหินเปิดช่องให้คนเข้าหาง่ายขึ้น",
+  ],
+  [ENERGY_TYPES.LUCK]: [
+    "พลังหินไปทางจังหวะและโอกาสแบบพอดี ๆ",
+    "หินชิ้นนี้หนุนให้เห็นช่องทางที่เคยมองข้าม",
+    "โทนหินช่วยดันจังหวะดีให้เข้ามาไม่ฝืดเกินไป",
+  ],
+  [ENERGY_TYPES.BOOST]: [
+    "พลังหินหนุนแรงใจและความต่อเนื่องในวัน ๆ",
+    "หินชิ้นนี้ช่วยให้ลุกมาทำในวันนั้นได้จริง",
+    "โทนหินเสริมพลังกายใจแบบไม่เร่งจนหมดแรง",
+  ],
+};
+
+const CRYSTAL_CHARACTER_FALLBACK = {
+  [ENERGY_TYPES.PROTECT]:
+    "พลังของหินชิ้นนี้ไปทางเกราะกันพลังรบกวนและตั้งหลักในใจ มากกว่าสายเร่งดึงดูดจากภายนอก",
+  [ENERGY_TYPES.BALANCE]:
+    "พลังของหินชิ้นนี้เน้นความนิ่งและความสมดุลภายใน ไม่ใช่การเร่งให้ตื่นเต้นทันที",
+  [ENERGY_TYPES.POWER]:
+    "พลังของหินชิ้นนี้มีน้ำหนักและความชัดในการยืนของตัวเอง มากกว่าการประคองอย่างเดียว",
+  [ENERGY_TYPES.KINDNESS]:
+    "พลังของหินชิ้นนี้ไปทางความอ่อนโยนและลดแรงปะทะในสัมพันธ์ มากกว่าการแข่งหรือกดดัน",
+  [ENERGY_TYPES.ATTRACT]:
+    "พลังของหินชิ้นนี้เน้นการถูกมองเห็นและดึงดูดแบบเป็นธรรมชาติ ไม่ใช่แค่ความนิ่งอย่างเดียว",
+  [ENERGY_TYPES.LUCK]:
+    "พลังของหินชิ้นนี้ไปทางจังหวะและโอกาส มากกว่าการคุมสภาวะอย่างหนัก",
+  [ENERGY_TYPES.BOOST]:
+    "พลังของหินชิ้นนี้หนุนแรงใจและความต่อเนื่องในวัน ๆ ไม่ใช่แค่ช่วงเดียว",
+};
+
+const CRYSTAL_LIFE_FALLBACK = {
+  [ENERGY_TYPES.PROTECT]:
+    "เหมาะกับช่วงที่ต้องเจอคนเยอะ แรงกดดัน หรืออยากให้โฟกัสนิ่งขึ้นโดยไม่รับพลังแย่ ๆ เข้าตัวง่าย",
+  [ENERGY_TYPES.BALANCE]:
+    "เหมาะกับช่วงที่ใจแกว่งง่ายหรืออยากให้โทนในวันนิ่งขึ้นโดยไม่ดิ้นรนเกินเหตุ",
+  [ENERGY_TYPES.POWER]:
+    "เหมาะกับช่วงที่ต้องยืนข้อเท็จจริงของตัวเอง นำจังหวะ หรือตัดสินใจเรื่องสำคัญ",
+  [ENERGY_TYPES.KINDNESS]:
+    "เหมาะกับช่วงที่ต้องคุยกับคน ทำงานร่วมกัน หรือลดความตึงในสัมพันธ์",
+  [ENERGY_TYPES.ATTRACT]:
+    "เหมาะกับช่วงที่อยากให้โอกาสหรือความสนใจเข้ามาแบบเป็นธรรมชาติมากขึ้น",
+  [ENERGY_TYPES.LUCK]:
+    "เหมาะกับช่วงที่กำลังมองหาจังหวะหรือช่องทางใหม่ ๆ",
+  [ENERGY_TYPES.BOOST]:
+    "เหมาะกับช่วงที่ต้องการแรงหนุนในแต่ละวันให้ไหลต่อได้",
+};
+
+const CRYSTAL_NOT_BEST_FALLBACK = {
+  [ENERGY_TYPES.PROTECT]:
+    "ไม่ใช่สายดึงดูดหรือเมตตาที่นำ — ถ้าต้องการโดดเด่นเรื่องเสน่ห์เป็นหลัก อาจไม่ใช่จุดแข็งของหินชิ้นนี้",
+  [ENERGY_TYPES.BALANCE]:
+    "ไม่ใช่สายอำนาจกดเกมหรือดึงความสนใจแบบฉับพลันเป็นหลัก",
+  [ENERGY_TYPES.POWER]:
+    "ไม่ใช่สายอ่อนโยนประคองอย่างเดียว — ถ้าต้องการแต่ความนุ่มนวลโดยไม่ต้องตั้งหลัก อาจไม่ตรงจุดที่สุด",
+  [ENERGY_TYPES.KINDNESS]:
+    "ไม่ใช่สายคุ้มกันแบบหนักหนาหรืออำนาจกดสนามเป็นหลัก",
+  [ENERGY_TYPES.ATTRACT]:
+    "ไม่ใช่สายนิ่งกันภายในหรือคุมแรงกดแบบเน้นป้องกันเป็นหลัก",
+  [ENERGY_TYPES.LUCK]:
+    "ไม่ใช่สายตั้งหลักหนักหรือคุมอารมณ์แบบเน้นเกราะในใจเป็นหลัก",
+  [ENERGY_TYPES.BOOST]:
+    "ไม่ใช่สายบารมีหนักหรือดึงดูดเด่นเป็นหลัก — เน้นหนุนทั่วไปมากกว่าโชว์จุดเด่นเฉพาะทาง",
+};
+
+const CRYSTAL_PRACTICAL_FALLBACK = {
+  [ENERGY_TYPES.PROTECT]: [
+    "ช่วยให้ใจไม่แกว่งง่ายเวลาเจอแรงกดดันหรือสนามพลังรบกวน",
+    "เหมาะกับช่วงที่ต้องตัดสินใจเรื่องสำคัญโดยไม่รับพลังแย่ ๆ เข้าตัวง่าย",
+    "ช่วยประคองสติเมื่อบรรยากาศรอบตัววุ่นหรือมีคนเยอะ",
+  ],
+  [ENERGY_TYPES.BALANCE]: [
+    "ช่วยให้ตอบสนองช้าลงและนิ่งขึ้นเมื่อใจเริ่มวอกแวก",
+    "เหมาะกับช่วงที่ต้องรักษาจังหวะภายในให้เท่ากันทั้งวัน",
+    "ช่วยลดการไหลตามอารมณ์รอบตัวโดยไม่ต้องฝืนเกินไป",
+  ],
+  [ENERGY_TYPES.POWER]: [
+    "ช่วยให้ยืนข้อความของตัวเองได้ชัดขึ้นเวลาถูกท้าทาย",
+    "เหมาะกับช่วงเจรจาหรือต้องนำทีมให้เห็นทิศ",
+    "ช่วยให้ตัดสินใจได้หนักแน่นขึ้นโดยไม่พึ่งคำพูดเกินจริง",
+  ],
+  [ENERGY_TYPES.KINDNESS]: [
+    "ช่วยให้บทสนทนานุ่มลงแม้ประเด็นจะยังอยู่",
+    "เหมาะกับช่วงที่ต้องคุมโทนกับคนรอบข้าง",
+    "ช่วยลดแรงเสียดทานในที่ทำงานหรือบ้านเล็กน้อย",
+  ],
+  [ENERGY_TYPES.ATTRACT]: [
+    "ช่วยให้ถูกมองหรือเข้าถึงโอกาสได้ง่ายขึ้นในแบบเป็นธรรมชาติ",
+    "เหมาะกับช่วงเปิดตัวงานหรืออยากให้คนจำได้มากขึ้น",
+    "ช่วยเสริมความโดดเด่นโดยไม่ต้องพยายามเกินจริง",
+  ],
+  [ENERGY_TYPES.LUCK]: [
+    "ช่วยให้จับจังหวะหรือเห็นช่องทางที่เคยมองข้าม",
+    "เหมาะกับช่วงลองสิ่งใหม่หรือขยายโอกาส",
+    "ช่วยให้รู้สึกว่ามี “ช่อง” ให้เดินต่อแม้ยังไม่ชัดทุกอย่าง",
+  ],
+  [ENERGY_TYPES.BOOST]: [
+    "ช่วยหนุนให้ลุกมาทำในวันนั้นได้จริง",
+    "เหมาะกับช่วงที่แรงใจต่ำหรือเหนื่อยสะสม",
+    "ช่วยให้รู้สึกมีแรงพอดี ๆ ไม่เร่งจนหมดแรง",
+  ],
+};
+
 function wordingFamilyFromType(energyType) {
   const map = {
     [ENERGY_TYPES.PROTECT]: "protection",
@@ -208,6 +341,15 @@ export function deriveReportWordingFromParsed(parsed, opts = {}) {
   const energyType = resolveEnergyType(mainRaw);
   const mainEnergy = energyType;
 
+  const objectFamilyRaw = String(opts.objectFamily || "").trim();
+  const famNorm = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw);
+  const useCrystalWording = famNorm === "crystal";
+  const energyCategoryCode = inferEnergyCategoryCodeFromMainEnergy(
+    mainRaw,
+    objectFamilyRaw,
+  );
+  const crystalModeResolved = resolveCrystalMode(objectFamilyRaw, mainRaw);
+
   const overview =
     parsed.overview && parsed.overview !== "-"
       ? String(parsed.overview).trim()
@@ -219,11 +361,19 @@ export function deriveReportWordingFromParsed(parsed, opts = {}) {
 
   const energyCharacter = overview
     ? firstSentence(overview)
-    : CHARACTER_FALLBACK[energyType] || CHARACTER_FALLBACK[ENERGY_TYPES.BOOST];
+    : useCrystalWording
+      ? CRYSTAL_CHARACTER_FALLBACK[energyType] ||
+        CHARACTER_FALLBACK[energyType] ||
+        CHARACTER_FALLBACK[ENERGY_TYPES.BOOST]
+      : CHARACTER_FALLBACK[energyType] || CHARACTER_FALLBACK[ENERGY_TYPES.BOOST];
 
   const lifeTranslation = fitReason
     ? firstSentence(fitReason)
-    : LIFE_FALLBACK[energyType] || LIFE_FALLBACK[ENERGY_TYPES.BOOST];
+    : useCrystalWording
+      ? CRYSTAL_LIFE_FALLBACK[energyType] ||
+        LIFE_FALLBACK[energyType] ||
+        LIFE_FALLBACK[ENERGY_TYPES.BOOST]
+      : LIFE_FALLBACK[energyType] || LIFE_FALLBACK[ENERGY_TYPES.BOOST];
 
   const suitable = Array.isArray(parsed.suitable) ? parsed.suitable : [];
   const suitableClean = suitable
@@ -233,7 +383,9 @@ export function deriveReportWordingFromParsed(parsed, opts = {}) {
   const bestFor =
     suitableClean[0] ||
     (() => {
-      const b = LIFE_FALLBACK[energyType];
+      const b = useCrystalWording
+        ? CRYSTAL_LIFE_FALLBACK[energyType] || LIFE_FALLBACK[energyType]
+        : LIFE_FALLBACK[energyType];
       return b ? firstSentence(b) : "";
     })();
 
@@ -241,30 +393,47 @@ export function deriveReportWordingFromParsed(parsed, opts = {}) {
     parsed.notStrong && parsed.notStrong !== "-"
       ? String(parsed.notStrong).trim()
       : "";
-  const notTheBestFor = ns || NOT_BEST_FALLBACK[energyType] || "";
+  const notTheBestFor =
+    ns ||
+    (useCrystalWording
+      ? CRYSTAL_NOT_BEST_FALLBACK[energyType] || NOT_BEST_FALLBACK[energyType]
+      : NOT_BEST_FALLBACK[energyType]) ||
+    "";
 
   const support = Array.isArray(parsed.supportTopics) ? parsed.supportTopics : [];
   const strippedSupport = support
     .map((x) => String(x || "").replace(/^•\s*/, "").trim())
     .filter(Boolean);
 
-  const fbPractical = PRACTICAL_FALLBACK[energyType] || PRACTICAL_FALLBACK[ENERGY_TYPES.BOOST];
+  const fbPractical = useCrystalWording
+    ? CRYSTAL_PRACTICAL_FALLBACK[energyType] || PRACTICAL_FALLBACK[energyType]
+    : PRACTICAL_FALLBACK[energyType] || PRACTICAL_FALLBACK[ENERGY_TYPES.BOOST];
   const practicalEffects = [0, 1, 2].map((i) => {
     const fromScan = strippedSupport[i];
     return fromScan && fromScan.length > 8 ? fromScan : fbPractical[i] || fbPractical[0];
   });
 
   const heroNaming = stablePick(
-    HERO_NAMING_BY_TYPE[energyType] || HERO_NAMING_BY_TYPE[ENERGY_TYPES.BOOST],
+    useCrystalWording
+      ? CRYSTAL_HERO_NAMING_BY_TYPE[energyType] ||
+          HERO_NAMING_BY_TYPE[energyType] ||
+          HERO_NAMING_BY_TYPE[ENERGY_TYPES.BOOST]
+      : HERO_NAMING_BY_TYPE[energyType] || HERO_NAMING_BY_TYPE[ENERGY_TYPES.BOOST],
     `${seed}:hero`,
   );
 
   const wfKey = wordingFamilyFromType(energyType);
+  const crystalModeForFlex =
+    crystalModeResolved === null || crystalModeResolved === undefined
+      ? ""
+      : crystalModeResolved;
   const { flexHeadline, flexBullets } = composeFlexWordingTeasers({
     energyType,
     wordingFamily: wfKey,
     seed,
-    objectFamily: opts.objectFamily != null ? String(opts.objectFamily) : "",
+    objectFamily: objectFamilyRaw,
+    energyCategoryCode,
+    crystalMode: crystalModeForFlex,
   });
 
   const htmlOpeningLine = (() => {
