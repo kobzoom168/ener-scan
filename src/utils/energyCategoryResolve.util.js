@@ -2,7 +2,7 @@
  * Maps scan "main energy" wording → energy_categories.code (sync, no DB).
  * Master labels (v2):
  * - Thai amulet / talisman: โชคลาภ, เมตตา, คุ้มครอง, บารมี
- * - Crystal: เงินงาน, เสน่ห์, คุ้มครอง, บารมี, โชคลาภ
+ * - Crystal: เงินงาน, เสน่ห์, คุ้มครอง, บารมี, โชคลาภ, พลังงานสูง (spiritual_growth)
  * Keep in sync with Supabase seed / migrations.
  */
 import { ENERGY_TYPES } from "../services/flex/scanCopy.config.js";
@@ -42,6 +42,11 @@ export const ENERGY_CATEGORY_DISPLAY_SYNC = {
     short_name_th: "เมตตา",
     description_th: "เด่นเรื่องเมตตาและคนเปิดรับ",
   },
+  spiritual_growth: {
+    display_name_th: "พลังงานสูง",
+    short_name_th: "พลังงานสูง",
+    description_th: "เด่นเรื่องพลังงานสูงและการยกระดับตัวเอง",
+  },
 };
 
 /**
@@ -54,7 +59,43 @@ export const ACCENT_COLOR_BY_CATEGORY_CODE = {
   protection: "#D4AF37",
   luck_fortune: "#2E7D32",
   metta: "#8E24AA",
+  /** Indigo — spiritual / upper chakra; distinct from metta purple & luck green */
+  spiritual_growth: "#3949AB",
 };
+
+/**
+ * Crystal-only: Moldavite / quartz / chakra 6–7 / spiritual transformation signals.
+ * Must not be used for thai_amulet / thai_talisman (non-crystal families never hit this).
+ *
+ * @param {string} raw — normalized main energy text
+ * @returns {boolean}
+ */
+export function matchesCrystalSpiritualGrowthSignals(raw) {
+  const s = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!s) return false;
+  const lower = s.toLowerCase();
+
+  if (lower.includes("moldavite") || /โมลดา|มอลดา|moldav/i.test(s)) return true;
+  if (lower.includes("quartz") || s.includes("ควอตซ์")) return true;
+
+  if (/third\s*eye|crown\s*chakra|chakra\s*[67]/i.test(lower)) return true;
+  if (/จักระ(ที่)?\s*[67]|จักระ\s*(หก|เจ็ด)/.test(s)) return true;
+
+  if (lower.includes("spiritual") || lower.includes("intuition")) return true;
+
+  if (s.includes("หยั่งรู้")) return true;
+  if (s.includes("จิตวิญญาณ")) return true;
+  if (s.includes("ญาณทัสนะ") || s.includes("สัมผัสที่หก") || s.includes("สัมผัสที่เจ็ด"))
+    return true;
+
+  if (s.includes("ยกระดับตัวเอง")) return true;
+  if (s.includes("เร่งการเปลี่ยนแปลง") || s.includes("เปลี่ยนแปลงครั้งใหญ่")) return true;
+
+  if (s.includes("พลังงานสูง") && /หิน|คริสตัล|crystal|quartz|จักระ|หยั่ง|จิตวิญญาณ/i.test(s))
+    return true;
+
+  return false;
+}
 
 /**
  * @param {string} mainEnergy
@@ -65,6 +106,10 @@ export function inferEnergyCategoryCodeFromMainEnergy(mainEnergy, objectFamilyRa
   const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw || "");
   const isCrystal = fam === "crystal";
   const raw = String(mainEnergy || "").replace(/\s+/g, " ").trim();
+
+  if (isCrystal && matchesCrystalSpiritualGrowthSignals(raw)) {
+    return "spiritual_growth";
+  }
 
   if (isCrystal) {
     const hasLuckWord = raw.includes("โชคลาภ") || raw.includes("โชค");

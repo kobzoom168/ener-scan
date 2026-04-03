@@ -6,6 +6,7 @@ import {
   pickAccentColorFromCategoryCode,
   ACCENT_COLOR_BY_CATEGORY_CODE,
 } from "../src/utils/energyCategoryResolve.util.js";
+import { getFallbackFlexSurfaceLines } from "../src/utils/reports/flexSummaryShortCopy.js";
 import { pickMainEnergyColor } from "../src/services/flex/flex.utils.js";
 
 test("crystal + protection", () => {
@@ -71,6 +72,51 @@ test("thai_amulet + luck_fortune", () => {
     inferEnergyCategoryCodeFromMainEnergy("พลังโชคลาภ", "thai_amulet"),
     "luck_fortune",
   );
+});
+
+test("crystal + spiritual_growth (Moldavite / chakra / หยั่งรู้)", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "Moldavite high vibration third eye",
+      "crystal",
+    ),
+    "spiritual_growth",
+  );
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "Clear quartz จักระที่ 6 และ 7 หยั่งรู้",
+      "crystal",
+    ),
+    "spiritual_growth",
+  );
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "เด่นเรื่องจิตวิญญาณ ยกระดับตัวเอง",
+      "crystal",
+    ),
+    "spiritual_growth",
+  );
+  assert.equal(pickAccentColorFromCategoryCode("spiritual_growth"), "#3949AB");
+});
+
+test("thai_amulet must not resolve to spiritual_growth", () => {
+  assert.notEqual(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "Moldavite quartz หยั่งรู้",
+      "thai_amulet",
+    ),
+    "spiritual_growth",
+  );
+});
+
+test("getFallbackFlexSurfaceLines: spiritual_growth + crystal matches DB seed", () => {
+  const x = getFallbackFlexSurfaceLines("spiritual_growth", "crystal");
+  assert.equal(
+    x.headline,
+    "เด่นเรื่องพลังงานสูงและการยกระดับตัวเอง",
+  );
+  assert.ok(x.fitLine.includes("เร่งการเปลี่ยนแปลง"));
+  assert.equal(x.bullets.length, 2);
 });
 
 test("pickMainEnergyColor uses category hint then legacy", () => {

@@ -10,6 +10,19 @@ import {
 } from "../src/utils/reports/flexSummaryShortCopy.js";
 import { ENERGY_CATEGORY_DISPLAY_SYNC } from "../src/utils/energyCategoryResolve.util.js";
 
+test("spiritual_growth copy lines: chakra / หยั่งรู้ not flagged as avoid words", () => {
+  assert.equal(
+    lineContainsEnergyCopyAvoidWord(
+      "ช่วยกระตุ้นจักระที่ 6 และ 7 และเพิ่มการหยั่งรู้",
+    ),
+    false,
+  );
+  assert.equal(
+    lineContainsEnergyCopyAvoidWord("ช่วยเร่งการเปลี่ยนแปลงให้ขยับชัดขึ้น"),
+    false,
+  );
+});
+
 test("avoid list: substring hits for Thai phrases", () => {
   assert.equal(lineContainsEnergyCopyAvoidWord("อยากให้ใจนิ่งขึ้น"), true);
   assert.equal(lineContainsEnergyCopyAvoidWord("วันนี้มั่นใจเต็มที่"), true);
@@ -26,6 +39,7 @@ test("fallback master v2 surfaces contain no avoid words", () => {
     "protection",
     "confidence",
     "luck_fortune",
+    "spiritual_growth",
   ];
   for (const c of thaiCodes) {
     const x = getFallbackFlexSurfaceLines(c, "thai_amulet");
