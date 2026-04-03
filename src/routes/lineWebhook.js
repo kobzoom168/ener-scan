@@ -261,6 +261,11 @@ import {
   shouldEmitPayNotNeededForPaymentIntent,
   shouldRouteObjectImageToScanBeforeSlipPipeline,
 } from "../utils/paymentConversationRouting.util.js";
+import {
+  pollAwaitingPaymentForSlipGrace,
+  recordSlipGracePayIntentFromUserText,
+  shouldOfferSlipPaymentGraceHold,
+} from "../utils/paymentSlipGrace.util.js";
 
 import { ingestScanImageAsyncV2 } from "../services/scanV2/webhookImageIngestion.service.js";
 
@@ -1579,9 +1584,9 @@ async function finalizeAcceptedImage({
     }
   }
 
-  const paymentOwnsImage = paymentRowOwnsImageRouting(pendingPayment);
+  let paymentOwnsImage = paymentRowOwnsImageRouting(pendingPayment);
 
-  const slipPipelineNeeded =
+  let slipPipelineNeeded =
     paymentOwnsImage && pendingPayment && !routeObjectToScanFirst;
 
   if (
@@ -1606,7 +1611,7 @@ async function finalizeAcceptedImage({
     );
   }
 
-  const chosenPath =
+  let chosenPath =
     slipPipelineNeeded
       ? "slip"
       : !accessDecision?.allowed &&
@@ -1635,6 +1640,88 @@ async function finalizeAcceptedImage({
       chosenPath,
       accessReason: accessDecision?.reason ?? null,
     });
+  }
+
+  if (chosenPath === "payment_gate") {
+    const graceWhy = shouldOfferSlipPaymentGraceHold({
+      accessReason: accessDecision?.reason ?? null,
+      routeObjectToScanFirst,
+      pendingPaymentRow: pendingPayment,
+      userId,
+      imageBuffer,
+    });
+    if (graceWhy) {
+      console.log(
+        JSON.stringify({
+          event: "SLIP_GRACE_WINDOW_ENTERED",
+          lineUserIdPrefix: lineUserIdPrefix8(userId),
+          messageId: event?.message?.id ?? null,
+          graceReason: graceWhy.reason,
+        }),
+      );
+      console.log(
+        JSON.stringify({
+          event: "SLIP_IMAGE_DEFERRED_FOR_PAYMENT_BIND",
+          lineUserIdPrefix: lineUserIdPrefix8(userId),
+          messageId: event?.message?.id ?? null,
+          graceReason: graceWhy.reason,
+        }),
+      );
+      const rebound = await pollAwaitingPaymentForSlipGrace(userId, () =>
+        getLatestAwaitingPaymentForLineUserId(userId),
+      );
+      if (rebound) {
+        console.log(
+          JSON.stringify({
+            event: "SLIP_IMAGE_REBOUND_TO_PAYMENT",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
+            paymentId: rebound?.id ?? null,
+            status: rebound?.status ?? null,
+            graceReason: graceWhy.reason,
+          }),
+        );
+        pendingPayment = rebound;
+        if (turnCache) turnCache.pendingPaymentRow = rebound;
+        paymentOwnsImage = paymentRowOwnsImageRouting(pendingPayment);
+        slipPipelineNeeded =
+          paymentOwnsImage && pendingPayment && !routeObjectToScanFirst;
+        chosenPath = slipPipelineNeeded
+          ? "slip"
+          : !accessDecision?.allowed &&
+              accessDecision?.reason === "payment_required" &&
+              !paymentOwnsImage
+            ? "payment_gate"
+            : "scan";
+        console.log(
+          JSON.stringify({
+            event: "IMAGE_ROUTING_DECISION_AFTER_SLIP_GRACE",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
+            hasAwaitingPayment: Boolean(pendingPayment),
+            paymentOwnsImage,
+            slipPipelineNeeded,
+            chosenPath,
+            graceReason: graceWhy.reason,
+          }),
+        );
+        if (turnPerf) {
+          turnPerf.log("ROUTE_DECIDED_AFTER_SLIP_GRACE", {
+            chosenPath,
+            graceReason: graceWhy.reason,
+          });
+        }
+      } else {
+        console.log(
+          JSON.stringify({
+            event: "SLIP_IMAGE_GRACE_WINDOW_EXPIRED",
+            lineUserIdPrefix: lineUserIdPrefix8(userId),
+            messageId: event?.message?.id ?? null,
+            graceReason: graceWhy.reason,
+          }),
+        );
+      }
+    }
   }
 
   const imgPhase1Invoke = async () =>
@@ -2718,6 +2805,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   });
 
   const textSpam = registerTextEvent(userId, text, now);
+  recordSlipGracePayIntentFromUserText(userId, text, lowerText);
 
   if (textSpam.state.isHardBlocked) {
     console.warn("[ABUSE_GUARD_HARD_BLOCK]", { userId, source: "text_register" });

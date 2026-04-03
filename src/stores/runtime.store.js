@@ -1,3 +1,5 @@
+import { clearSlipGracePayIntentForUser } from "../utils/paymentSlipGrace.util.js";
+
 const activeImageUsers = new Set();
 const lastAcceptedImageEventAtMap = new Map();
 const latestScanJobMap = new Map();
@@ -266,4 +268,5 @@ export function clearUserRuntime(userId) {
   userFlowVersionMap.delete(normalizedUserId);
   requestBlockedUsersMap.delete(normalizedUserId);
   pendingImageCandidateMap.delete(normalizedUserId);
+  clearSlipGracePayIntentForUser(normalizedUserId);
 }
