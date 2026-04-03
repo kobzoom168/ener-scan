@@ -64,19 +64,23 @@ export const ACCENT_COLOR_BY_CATEGORY_CODE = {
 };
 
 /**
- * Crystal-only: Moldavite / quartz / chakra 6–7 / spiritual transformation signals.
+ * Crystal-only: Moldavite / quartz (strict) / chakra 6–7 / spiritual transformation signals.
  * Must not be used for thai_amulet / thai_talisman (non-crystal families never hit this).
  *
+ * When `strictQuartz` is true (default), plain "quartz" without clear/spiritual context does **not** match
+ * (avoids dragging rose quartz / shop stones into spiritual_growth).
+ *
  * @param {string} raw — normalized main energy text
+ * @param {{ strictQuartz?: boolean }} [options]
  * @returns {boolean}
  */
-export function matchesCrystalSpiritualGrowthSignals(raw) {
+export function matchesCrystalSpiritualGrowthSignals(raw, options = {}) {
+  const strictQuartz = options.strictQuartz !== false;
   const s = String(raw || "").replace(/\s+/g, " ").trim();
   if (!s) return false;
   const lower = s.toLowerCase();
 
   if (lower.includes("moldavite") || /โมลดา|มอลดา|moldav/i.test(s)) return true;
-  if (lower.includes("quartz") || s.includes("ควอตซ์")) return true;
 
   if (/third\s*eye|crown\s*chakra|chakra\s*[67]/i.test(lower)) return true;
   if (/จักระ(ที่)?\s*[67]|จักระ\s*(หก|เจ็ด)/.test(s)) return true;
@@ -96,10 +100,53 @@ export function matchesCrystalSpiritualGrowthSignals(raw) {
   if (s.includes("ยกระดับตัวเอง")) return true;
   if (s.includes("เร่งการเปลี่ยนแปลง") || s.includes("เปลี่ยนแปลงครั้งใหญ่")) return true;
 
-  if (s.includes("พลังงานสูง") && /หิน|คริสตัล|crystal|quartz|จักระ|หยั่ง|จิตวิญญาณ/i.test(s))
+  if (
+    s.includes("พลังงานสูง") &&
+    /หิน|คริสตัล|crystal|quartz|จักระ|หยั่ง|จิตวิญญาณ/i.test(s)
+  )
     return true;
 
+  if (lower.includes("quartz") || s.includes("ควอตซ์")) {
+    if (!strictQuartz) return true;
+    if (/clear\s*quartz|ควอตซ์\s*ใส|ควอตซ์ขาว|clear\s*crystal/i.test(s)) return true;
+    if (
+      /chakra|จักระ|third\s*eye|crown|หยั่ง|จิตวิญญาณ|spiritual|intuition|ญาณ|ยกระดับ|เปลี่ยนแปลง|พลังงานสูง|โมลดา|moldav/i.test(
+        s,
+      )
+    )
+      return true;
+    return false;
+  }
+
   return false;
+}
+
+/**
+ * Tags for crystal-path debug logs (which signals fired).
+ *
+ * @param {string} raw
+ * @returns {string[]}
+ */
+export function extractCrystalSpiritualSignalTags(raw) {
+  const s = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!s) return [];
+  const lower = s.toLowerCase();
+  /** @type {string[]} */
+  const tags = [];
+  if (lower.includes("moldavite") || /โมลดา|มอลดา|moldav/i.test(s)) tags.push("moldavite");
+  if (/clear\s*quartz|ควอตซ์\s*ใส|ควอตซ์ขาว/i.test(s)) tags.push("quartz_clear");
+  else if (/quartz|ควอตซ์/i.test(s)) tags.push("quartz");
+  if (/third\s*eye|crown\s*chakra|chakra\s*[67]/i.test(lower)) tags.push("chakra_en");
+  if (/จักระ(ที่)?\s*[67]|จักระ\s*(หก|เจ็ด)/.test(s)) tags.push("chakra_th");
+  if (s.includes("หยั่งรู้")) tags.push("intuition_th");
+  if (s.includes("จิตวิญญาณ")) tags.push("spirit_th");
+  if (lower.includes("spiritual")) tags.push("spiritual_en");
+  if (lower.includes("intuition")) tags.push("intuition_en");
+  if (s.includes("ยกระดับตัวเอง")) tags.push("self_elevation");
+  if (s.includes("เร่งการเปลี่ยนแปลง") || s.includes("เปลี่ยนแปลงครั้งใหญ่"))
+    tags.push("transformation");
+  if (s.includes("พลังงานสูง")) tags.push("high_energy_phrase");
+  return [...new Set(tags)];
 }
 
 /**
@@ -113,7 +160,8 @@ export function resolveCrystalMode(objectFamilyRaw, mainEnergyText) {
   const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw || "");
   if (fam !== "crystal") return null;
   const raw = String(mainEnergyText || "").replace(/\s+/g, " ").trim();
-  if (matchesCrystalSpiritualGrowthSignals(raw)) return "spiritual_growth";
+  if (matchesCrystalSpiritualGrowthSignals(raw, { strictQuartz: true }))
+    return "spiritual_growth";
   return "general";
 }
 
@@ -127,7 +175,7 @@ export function inferEnergyCategoryCodeFromMainEnergy(mainEnergy, objectFamilyRa
   const isCrystal = fam === "crystal";
   const raw = String(mainEnergy || "").replace(/\s+/g, " ").trim();
 
-  if (isCrystal && matchesCrystalSpiritualGrowthSignals(raw)) {
+  if (isCrystal && matchesCrystalSpiritualGrowthSignals(raw, { strictQuartz: true })) {
     return "spiritual_growth";
   }
 

@@ -98,6 +98,11 @@ test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / s
   });
   assert.equal(pSpirit.summary.crystalMode, "spiritual_growth");
   assert.equal(pSpirit.parsed?.crystal_mode, "spiritual_growth");
+  assert.equal(
+    pSpirit.summary.energyCategoryCode,
+    "spiritual_growth",
+    "raw Moldavite line must drive category (not canonical protection)",
+  );
 
   const pThai = buildReportPayloadFromScan({
     ...base,
@@ -106,6 +111,35 @@ test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / s
   });
   assert.equal(pThai.summary.crystalMode, null);
   assert.equal(pThai.parsed?.crystal_mode, null);
+});
+
+test("buildReportPayloadFromScan: crystal fills empty whatItGives / bestUse from category fallback", () => {
+  const textThin = `
+ระดับพลัง: 8
+พลังหลัก: Moldavite หยั่งรู้ crown
+ความสอดคล้อง: 80%
+
+ภาพรวม
+สั้น
+
+เหตุผลที่เข้ากับเจ้าของ
+สั้น
+
+อาจไม่เด่นเมื่อ: ไม่ใช่สายดึงดูด
+`;
+  const payload = buildReportPayloadFromScan({
+    resultText: textThin,
+    scanResultId: "00000000-0000-4000-8000-0000000000aa",
+    scanRequestId: "req-thin",
+    lineUserId: "U1",
+    publicToken: "tok",
+    objectFamily: "crystal",
+  });
+  assert.ok(payload.sections.whatItGives.length >= 1);
+  assert.ok(payload.sections.bestUseCases.length >= 1);
+  assert.ok(payload.summary.headlineShort?.length > 3);
+  assert.ok(payload.summary.fitReasonShort?.length > 3);
+  assert.equal(payload.summary.bulletsShort?.length, 2);
 });
 
 test("buildReportPayloadFromScan attaches wording and canonical main energy", () => {

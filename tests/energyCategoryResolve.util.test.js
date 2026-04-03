@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   inferEnergyCategoryCodeFromMainEnergy,
+  extractCrystalSpiritualSignalTags,
   normalizeObjectFamilyForEnergyCopy,
   pickAccentColorFromCategoryCode,
   ACCENT_COLOR_BY_CATEGORY_CODE,
@@ -131,6 +132,45 @@ test("resolveCrystalMode: crystal default → general", () => {
     "general",
   );
   assert.equal(resolveCrystalMode("crystal", "พลังปกป้องและคุ้มครอง"), "general");
+});
+
+test("crystal: generic quartz without spiritual context stays general / not spiritual_growth", () => {
+  assert.equal(
+    resolveCrystalMode("crystal", "rose quartz เน้นโชคลาภและเสน่ห์"),
+    "general",
+  );
+  assert.notEqual(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "rose quartz เน้นโชคลาภ",
+      "crystal",
+    ),
+    "spiritual_growth",
+  );
+});
+
+test("extractCrystalSpiritualSignalTags lists moldavite / chakra tags", () => {
+  const t = extractCrystalSpiritualSignalTags(
+    "Moldavite จักระที่ 6 หยั่งรู้",
+  );
+  assert.ok(t.includes("moldavite"));
+  assert.ok(t.includes("chakra_th") || t.includes("intuition_th"));
+});
+
+test("inferEnergyCategoryCode: crystal uses raw Moldavite text → spiritual_growth (not protection)", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "Moldavite พลังสูง third eye",
+      "crystal",
+    ),
+    "spiritual_growth",
+  );
+  assert.notEqual(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "Moldavite พลังสูง third eye",
+      "crystal",
+    ),
+    "protection",
+  );
 });
 
 test("resolveCrystalMode: crystal high-vibration signals → spiritual_growth", () => {

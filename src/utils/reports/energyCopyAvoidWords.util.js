@@ -3,6 +3,20 @@
  * Keep aligned with product copy policy — not a general profanity filter.
  */
 
+/**
+ * Lines containing these phrases must not be rejected by the avoid-word guard
+ * (spiritual_growth / chakra copy uses them by design).
+ * @type {readonly string[]}
+ */
+export const ENERGY_COPY_SPIRITUAL_ALLOW_SUBSTRINGS = Object.freeze([
+  "จักระที่ 6",
+  "จักระที่ 7",
+  "หยั่งรู้",
+  "จิตวิญญาณ",
+  "เร่งการเปลี่ยนแปลง",
+  "พลังงานสูง",
+]);
+
 /** @type {readonly string[]} */
 export const ENERGY_COPY_AVOID_WORDS = Object.freeze([
   "ใจนิ่ง",
@@ -28,6 +42,11 @@ export const ENERGY_COPY_AVOID_WORDS = Object.freeze([
 export function lineContainsEnergyCopyAvoidWord(line) {
   const s = String(line || "");
   if (!s) return false;
+  if (
+    ENERGY_COPY_SPIRITUAL_ALLOW_SUBSTRINGS.some((frag) => s.includes(frag))
+  ) {
+    return false;
+  }
   for (const w of ENERGY_COPY_AVOID_WORDS) {
     if (/^[a-z]+$/i.test(w)) {
       const re = new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");

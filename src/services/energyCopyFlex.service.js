@@ -114,6 +114,22 @@ async function loadCopyWithFallback(categoryCode, objectFamilyNormalized, tone) 
 }
 
 /**
+ * @param {string} codeIn
+ * @param {string} objectFamilyNorm
+ * @param {string} crystalMode
+ * @returns {string}
+ */
+function effectiveFlexFallbackCategoryCode(codeIn, objectFamilyNorm, crystalMode) {
+  if (
+    objectFamilyNorm === "crystal" &&
+    String(crystalMode || "").trim() === "spiritual_growth"
+  ) {
+    return "spiritual_growth";
+  }
+  return String(codeIn || "").trim() || "luck_fortune";
+}
+
+/**
  * @param {ResolveEnergyCopyForFlexInput} input
  * @returns {Promise<ResolveEnergyCopyForFlexResult>}
  */
@@ -121,6 +137,7 @@ export async function resolveEnergyCopyForFlex(input = {}) {
   const mainEnergy = String(input.mainEnergy || "").trim();
   const hidden = String(input.hidden || "").trim();
   const famRaw = String(input.objectFamily || "").trim();
+  const crystalModeIn = String(input.crystalMode ?? "").trim();
   const codeIn =
     String(input.categoryCode || "").trim() ||
     inferEnergyCategoryCodeFromMainEnergy(mainEnergy, famRaw);
@@ -197,6 +214,7 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     copySet.bullets,
   );
 
+  let usedGuardFallback = false;
   const guarded = [
     clamped.headline,
     clamped.fitLine,
@@ -205,6 +223,7 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     .filter(Boolean)
     .some((x) => lineContainsEnergyCopyAvoidWord(x));
   if (guarded) {
+    usedGuardFallback = true;
     const fbCode = effectiveFlexFallbackCategoryCode(
       codeIn,
       objectFamilyNorm,
@@ -217,6 +236,18 @@ export async function resolveEnergyCopyForFlex(input = {}) {
       fb.bullets,
     );
     fromDb = false;
+  }
+
+  if (objectFamilyNorm === "crystal" && (!fromDb || usedGuardFallback)) {
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_FALLBACK_USED",
+        categoryCode: codeIn,
+        crystalMode: crystalModeIn || null,
+        fromDb,
+        usedGuardFallback,
+      }),
+    );
   }
 
   return {

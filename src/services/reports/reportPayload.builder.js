@@ -13,7 +13,9 @@ import {
   resolveDominantColorPipelineSource,
 } from "../../utils/reports/reportPipelineVisualSignals.util.js";
 import { buildFlexSummarySurfaceFields } from "../../utils/reports/flexSummarySurface.util.js";
+import { getFallbackFlexSurfaceLines } from "../../utils/reports/flexSummaryShortCopy.js";
 import {
+  extractCrystalSpiritualSignalTags,
   inferEnergyCategoryCodeFromMainEnergy,
   normalizeObjectFamilyForEnergyCopy,
   resolveCrystalMode,
@@ -70,6 +72,57 @@ function linesFromText(text, max = 6) {
     .map((l) => l.trim())
     .filter((l) => l && l !== "-")
     .slice(0, max);
+}
+
+/**
+ * Crystal reports: never ship empty support / suitable sections when we can compose from category sync.
+ *
+ * @param {object} p
+ * @param {string[]} p.whatItGives
+ * @param {string[]} p.bestUseCases
+ * @param {string} p.energyCategoryCode
+ * @param {"general"|"spiritual_growth"|null} p.crystalMode
+ * @param {string} p.objectFamilyRaw
+ * @returns {{ whatItGives: string[], bestUseCases: string[], applied: boolean }}
+ */
+function applyCrystalMinimumSections({
+  whatItGives,
+  bestUseCases,
+  energyCategoryCode,
+  crystalMode,
+  objectFamilyRaw,
+}) {
+  const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw || "");
+  if (fam !== "crystal") {
+    return { whatItGives, bestUseCases, applied: false };
+  }
+  const codeForFill =
+    crystalMode === "spiritual_growth" ? "spiritual_growth" : energyCategoryCode;
+  const fb = getFallbackFlexSurfaceLines(codeForFill, "crystal");
+  let w = [...whatItGives];
+  let b = [...bestUseCases];
+  let applied = false;
+  if (w.length === 0) {
+    const first =
+      (fb.bullets?.length && String(fb.bullets[0]).trim()) ||
+      String(fb.headline || "").trim();
+    if (first) {
+      w.push(first);
+      applied = true;
+    } else if (fb.fitLine) {
+      w.push(String(fb.fitLine).trim());
+      applied = true;
+    }
+  }
+  if (b.length === 0) {
+    const second =
+      (fb.bullets?.length > 1 && String(fb.bullets[1]).trim()) ||
+      String(fb.fitLine || "").trim() ||
+      "เหมาะใช้เมื่ออยากให้โทนพลังชัดขึ้นและใช้งานได้จริงในชีวิตประจำวัน";
+    b.push(second);
+    applied = true;
+  }
+  return { whatItGives: w, bestUseCases: b, applied };
 }
 
 /**
@@ -299,7 +352,7 @@ export function buildReportPayloadFromScan(opts) {
     summaryLine = "สรุปผลการสแกนพลังวัตถุ — ดูรายละเอียดด้านล่าง";
   }
 
-  const whatItGives = mapStripBullets(parsed.supportTopics);
+  let whatItGives = mapStripBullets(parsed.supportTopics);
   const messagePoints = linesFromText(overview, 5);
   const ownerMatchReason = linesFromText(fitReason, 6);
 
@@ -312,7 +365,7 @@ export function buildReportPayloadFromScan(opts) {
   if (pers && tone) roleDescription = `${pers} · ${tone}`;
   else roleDescription = pers || tone || "";
 
-  const bestUseCases = mapStripBullets(parsed.suitable);
+  let bestUseCases = mapStripBullets(parsed.suitable);
 
   const weakMoments = [];
   const ns =
@@ -355,21 +408,74 @@ export function buildReportPayloadFromScan(opts) {
         ? String(parsed.mainEnergy)
         : "";
 
-  const energyCategoryCode = inferEnergyCategoryCodeFromMainEnergy(
-    mainEnergyLabelForCategory,
-    String(objectFamilyOpt || ""),
-  );
-
   const mainEnergyRawForCrystalMode =
     parsed.mainEnergy && parsed.mainEnergy !== "-"
       ? String(parsed.mainEnergy).replace(/\s+/g, " ").trim()
       : mainEnergyLabelForCategory;
+
+  const famNorm = normalizeObjectFamilyForEnergyCopy(
+    String(objectFamilyOpt || ""),
+  );
+  const mainEnergyForCategoryInference =
+    famNorm === "crystal" && mainEnergyRawForCrystalMode
+      ? mainEnergyRawForCrystalMode
+      : mainEnergyLabelForCategory;
+
+  const energyCategoryCode = inferEnergyCategoryCodeFromMainEnergy(
+    mainEnergyForCategoryInference,
+    String(objectFamilyOpt || ""),
+  );
 
   const crystalMode = resolveCrystalMode(
     String(objectFamilyOpt || ""),
     mainEnergyRawForCrystalMode,
   );
   parsed.crystal_mode = crystalMode;
+
+  const crystalSignalTags =
+    extractCrystalSpiritualSignalTags(mainEnergyRawForCrystalMode);
+
+  const minSectionResult = applyCrystalMinimumSections({
+    whatItGives,
+    bestUseCases,
+    energyCategoryCode,
+    crystalMode,
+    objectFamilyRaw: objectFamilyOpt,
+  });
+  whatItGives = minSectionResult.whatItGives;
+  bestUseCases = minSectionResult.bestUseCases;
+
+  if (famNorm === "crystal") {
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_MODE_RESOLVED",
+        scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+        objectFamily: String(objectFamilyOpt || ""),
+        crystalMode,
+        energyCategoryCode,
+        matchedSignals: crystalSignalTags,
+      }),
+    );
+    if (crystalMode === "spiritual_growth") {
+      console.log(
+        JSON.stringify({
+          event: "CRYSTAL_SPIRITUAL_GROWTH_MATCHED",
+          scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+          matchedSignals: crystalSignalTags,
+        }),
+      );
+    }
+    if (minSectionResult.applied) {
+      console.log(
+        JSON.stringify({
+          event: "CRYSTAL_MIN_SECTION_FILL_APPLIED",
+          scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+          energyCategoryCode,
+          crystalMode,
+        }),
+      );
+    }
+  }
 
   const energyCopyObjectFamily = normalizeObjectFamilyForEnergyCopy(
     String(objectFamilyOpt || ""),
@@ -454,6 +560,23 @@ export function buildReportPayloadFromScan(opts) {
       pipelineObjectCategorySource: pipelineObjectCategorySourceOpt,
     }),
   );
+
+  if (famNorm === "crystal") {
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_PAYLOAD_SECTION_COUNTS",
+        scanResultIdPrefix: rid ? `${rid.slice(0, 8)}` : "",
+        objectFamily: String(objectFamilyOpt || ""),
+        crystalMode,
+        energyCategoryCode,
+        matchedSignals: crystalSignalTags,
+        sectionCounts: {
+          whatItGives: whatItGives.length,
+          bestUse: bestUseCases.length,
+        },
+      }),
+    );
+  }
 
   return {
     reportId: rid,
