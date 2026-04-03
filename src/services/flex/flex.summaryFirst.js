@@ -554,6 +554,7 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
       categoryCode: s?.energyCategoryCode,
       objectFamily: s?.energyCopyObjectFamily,
       mainEnergy: mainEnergyLabelForCopy,
+      crystalMode: s?.crystalMode ?? null,
       hidden:
         parsed.hidden && parsed.hidden !== "-"
           ? String(parsed.hidden)

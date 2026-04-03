@@ -63,6 +63,7 @@ export function mapHiddenToShortText(hidden, _categoryCode) {
  * @property {string} [objectFamily] — raw pipeline slug
  * @property {string} [mainEnergy] — parsed พลังหลัก
  * @property {string} [hidden] — parsed hidden line
+ * @property {"general"|"spiritual_growth"|null} [crystalMode] — when DB copy misses, prefer spiritual_growth crystal fallback
  */
 
 /**
@@ -146,16 +147,33 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     });
   }
 
-  const copySet = await loadCopyWithFallback(
+  let copySet = await loadCopyWithFallback(
     codeIn,
     objectFamilyNorm,
     tone,
   );
-  const hasDbCopy = Boolean(
+  let hasDbCopy = Boolean(
     copySet.headline &&
       Array.isArray(copySet.bullets) &&
       copySet.bullets.length > 0,
   );
+  if (
+    !hasDbCopy &&
+    objectFamilyNorm === "crystal" &&
+    crystalModeIn === "spiritual_growth" &&
+    codeIn !== "spiritual_growth"
+  ) {
+    copySet = await loadCopyWithFallback(
+      "spiritual_growth",
+      objectFamilyNorm,
+      tone,
+    );
+    hasDbCopy = Boolean(
+      copySet.headline &&
+        Array.isArray(copySet.bullets) &&
+        copySet.bullets.length > 0,
+    );
+  }
   if (hasDbCopy) fromDb = true;
 
   const accent =
@@ -187,7 +205,12 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     .filter(Boolean)
     .some((x) => lineContainsEnergyCopyAvoidWord(x));
   if (guarded) {
-    const fb = getFallbackFlexSurfaceLines(codeIn, objectFamilyNorm);
+    const fbCode = effectiveFlexFallbackCategoryCode(
+      codeIn,
+      objectFamilyNorm,
+      crystalModeIn,
+    );
+    const fb = getFallbackFlexSurfaceLines(fbCode, objectFamilyNorm);
     clamped = clampFlexDbSurfaceLines(
       fb.headline,
       fb.fitLine,

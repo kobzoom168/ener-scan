@@ -84,6 +84,11 @@ export function matchesCrystalSpiritualGrowthSignals(raw) {
   if (lower.includes("spiritual") || lower.includes("intuition")) return true;
 
   if (s.includes("หยั่งรู้")) return true;
+  if (
+    s.includes("ญาณ") &&
+    (s.includes("หยั่ง") || s.includes("ทัสนะ") || s.includes("สัมผัส"))
+  )
+    return true;
   if (s.includes("จิตวิญญาณ")) return true;
   if (s.includes("ญาณทัสนะ") || s.includes("สัมผัสที่หก") || s.includes("สัมผัสที่เจ็ด"))
     return true;
@@ -95,6 +100,21 @@ export function matchesCrystalSpiritualGrowthSignals(raw) {
     return true;
 
   return false;
+}
+
+/**
+ * Crystal sub-mode for telemetry / copy hints (orthogonal to {@link inferEnergyCategoryCodeFromMainEnergy}).
+ *
+ * @param {string} objectFamilyRaw — pipeline slug
+ * @param {string} mainEnergyText — wording / parsed main energy line
+ * @returns {"general"|"spiritual_growth"|null}
+ */
+export function resolveCrystalMode(objectFamilyRaw, mainEnergyText) {
+  const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw || "");
+  if (fam !== "crystal") return null;
+  const raw = String(mainEnergyText || "").replace(/\s+/g, " ").trim();
+  if (matchesCrystalSpiritualGrowthSignals(raw)) return "spiritual_growth";
+  return "general";
 }
 
 /**

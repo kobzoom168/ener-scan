@@ -5,6 +5,7 @@ import {
   normalizeObjectFamilyForEnergyCopy,
   pickAccentColorFromCategoryCode,
   ACCENT_COLOR_BY_CATEGORY_CODE,
+  resolveCrystalMode,
 } from "../src/utils/energyCategoryResolve.util.js";
 import { getFallbackFlexSurfaceLines } from "../src/utils/reports/flexSummaryShortCopy.js";
 import { pickMainEnergyColor } from "../src/services/flex/flex.utils.js";
@@ -117,6 +118,34 @@ test("getFallbackFlexSurfaceLines: spiritual_growth + crystal matches DB seed", 
   );
   assert.ok(x.fitLine.includes("เร่งการเปลี่ยนแปลง"));
   assert.equal(x.bullets.length, 2);
+});
+
+test("resolveCrystalMode: non-crystal → null", () => {
+  assert.equal(resolveCrystalMode("thai_amulet", "Moldavite third eye"), null);
+  assert.equal(resolveCrystalMode("generic", "Clear quartz"), null);
+});
+
+test("resolveCrystalMode: crystal default → general", () => {
+  assert.equal(
+    resolveCrystalMode("crystal", "เด่นเรื่องเงินและงาน"),
+    "general",
+  );
+  assert.equal(resolveCrystalMode("crystal", "พลังปกป้องและคุ้มครอง"), "general");
+});
+
+test("resolveCrystalMode: crystal high-vibration signals → spiritual_growth", () => {
+  assert.equal(
+    resolveCrystalMode("crystal", "Moldavite crown chakra"),
+    "spiritual_growth",
+  );
+  assert.equal(
+    resolveCrystalMode("crystal", "Clear quartz จักระที่ 7 หยั่งรู้"),
+    "spiritual_growth",
+  );
+  assert.equal(
+    resolveCrystalMode("crystal", "เด่นเรื่องจิตวิญญาณ ยกระดับตัวเอง"),
+    "spiritual_growth",
+  );
 });
 
 test("pickMainEnergyColor uses category hint then legacy", () => {

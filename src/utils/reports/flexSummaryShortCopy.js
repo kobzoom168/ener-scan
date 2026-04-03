@@ -168,6 +168,8 @@ export function getFallbackFlexSurfaceLines(categoryCode, objectFamilyRaw) {
  * @param {string} [p.wordingFamily] — unused (kept for call-site compatibility)
  * @param {string} [p.seed] — unused (kept for stable API)
  * @param {string} [p.objectFamily] — pipeline slug; drives Thai vs crystal master set
+ * @param {string} [p.energyCategoryCode] — when set, used instead of inferring from label
+ * @param {"general"|"spiritual_growth"|null|""} [p.crystalMode] — crystal high-vibration hint for offline fallback rows
  * @returns {{ headlineShort: string, fitReasonShort: string, bulletsShort: string[] }}
  */
 export function composeFlexShortSurface({
@@ -175,11 +177,20 @@ export function composeFlexShortSurface({
   wordingFamily: _wordingFamily,
   seed: _seed,
   objectFamily = "",
+  energyCategoryCode = "",
+  crystalMode = "",
 }) {
   void _wordingFamily;
   void _seed;
   const label = String(mainEnergyLabel || "").trim() || "เสริมพลัง";
-  const code = inferEnergyCategoryCodeFromMainEnergy(label, objectFamily);
+  const fam = normalizeObjectFamilyForEnergyCopy(objectFamily);
+  let code = String(energyCategoryCode || "").trim();
+  if (!code) {
+    code = inferEnergyCategoryCodeFromMainEnergy(label, objectFamily);
+  }
+  if (fam === "crystal" && String(crystalMode || "").trim() === "spiritual_growth") {
+    code = "spiritual_growth";
+  }
   const fb = getFallbackFlexSurfaceLines(code, objectFamily);
   return {
     headlineShort: fb.headline,

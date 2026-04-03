@@ -28,6 +28,8 @@
  * @property {ReportCompatibility} [compatibility] — deterministic v1 slice (HTML detail + Flex band via summary)
  *
  * @property {ReportObjectEnergy} [objectEnergy] — Object Energy Engine v1 + star mapping (HTML + Flex stars)
+ *
+ * @property {ReportParsedTruth} [parsed] — minimal snake_case truth fields (e.g. crystal_mode); mirrors summary where applicable
  */
 
 /**
@@ -109,6 +111,12 @@
  * @property {string} [ctaLabel] — primary button label for Flex handoff
  * @property {string} [energyCategoryCode] — energy_categories.code (sync-inferred for Flex DB resolver)
  * @property {string} [energyCopyObjectFamily] — normalized slug for energy_copy_templates.object_family
+ * @property {"general"|"spiritual_growth"|null} [crystalMode] — crystal subgroup; null when not crystal
+ */
+
+/**
+ * @typedef {Object} ReportParsedTruth
+ * @property {"general"|"spiritual_growth"|null} crystal_mode
  */
 
 /**
@@ -140,4 +148,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.0";
+export const REPORT_PAYLOAD_VERSION = "1.2.1";

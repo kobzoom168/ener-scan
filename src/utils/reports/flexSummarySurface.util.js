@@ -26,6 +26,8 @@ export const FLEX_SUMMARY_BULLET_MAX = FLEX_SHORT_BULLET_MAX;
  * @param {string} [p.wordingFamily] — protection | shielding | authority | attraction
  * @param {string} [p.seed] — stable id for rotating variants
  * @param {string} [p.objectFamily] — pipeline slug; Thai vs crystal master fallback
+ * @param {string} [p.energyCategoryCode] — stored summary code for offline fallback
+ * @param {"general"|"spiritual_growth"|null|""} [p.crystalMode] — crystal subgroup for offline fallback
  * @param {string} [p.compatibilityReason] — unused for Flex short copy (HTML / full report)
  * @param {string} [p.summaryLine] — unused for Flex short copy
  * @param {string[]} [p.scanTips] — unused for Flex short copy (avoid truncating long tips)
@@ -36,6 +38,8 @@ export function buildFlexSummarySurfaceFields({
   wordingFamily,
   seed,
   objectFamily = "",
+  energyCategoryCode = "",
+  crystalMode = "",
   compatibilityReason: _compatibilityReason,
   summaryLine: _summaryLine,
   scanTips: _scanTips,
@@ -51,6 +55,8 @@ export function buildFlexSummarySurfaceFields({
     wordingFamily: wf,
     seed: seedFinal,
     objectFamily,
+    energyCategoryCode,
+    crystalMode,
   });
 
   return {
@@ -95,6 +101,8 @@ export function resolveFlexSummarySurfaceForLine(reportPayload, _parsed) {
     wordingFamily: s?.wordingFamily || reportPayload?.wording?.wordingFamily,
     seed: reportPayload?.reportId || reportPayload?.scanId || "flex",
     objectFamily: s?.energyCopyObjectFamily || "",
+    energyCategoryCode: s?.energyCategoryCode || "",
+    crystalMode: s?.crystalMode ?? "",
     compatibilityReason: s?.compatibilityReason,
     summaryLine: s?.summaryLine,
     scanTips: s?.scanTips,

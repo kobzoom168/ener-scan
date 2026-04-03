@@ -36,6 +36,78 @@ test("deriveReportWordingFromParsed: protection + scan lines", () => {
   assert.equal(w.clarityLevel, "l2");
 });
 
+test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / spiritual / null)", () => {
+  const base = {
+    scanResultId: "00000000-0000-4000-8000-000000000099",
+    scanRequestId: "req-1",
+    lineUserId: "U1",
+    publicToken: "tok",
+  };
+  const textGeneral = `
+ระดับพลัง: 7
+พลังหลัก: เด่นเรื่องเงินและงาน
+ความสอดคล้อง: 72%
+
+ภาพรวม
+โทนนิ่ง
+
+เหตุผลที่เข้ากับเจ้าของ
+เหมาะกับช่วงกดดัน
+
+ชิ้นนี้หนุนเรื่อง
+• หนุนเรื่องแรก
+• หนุนเรื่องสอง
+
+เหมาะใช้เมื่อ
+• เหมาะบรรทัดหนึ่ง
+
+อาจไม่เด่นเมื่อ: ไม่ใช่สายดึงดูด
+`;
+  const textSpiritual = `
+ระดับพลัง: 8
+พลังหลัก: Moldavite third eye crown chakra หยั่งรู้
+ความสอดคล้อง: 80%
+
+ภาพรวม
+โทนสูง
+
+เหตุผลที่เข้ากับเจ้าของ
+เหมาะกับช่วงเปลี่ยนแปลง
+
+ชิ้นนี้หนุนเรื่อง
+• หนุนเรื่องแรก
+• หนุนเรื่องสอง
+
+เหมาะใช้เมื่อ
+• เหมาะบรรทัดหนึ่ง
+
+อาจไม่เด่นเมื่อ: ไม่ใช่สายดึงดูด
+`;
+  const pGeneral = buildReportPayloadFromScan({
+    ...base,
+    resultText: textGeneral,
+    objectFamily: "crystal",
+  });
+  assert.equal(pGeneral.summary.crystalMode, "general");
+  assert.equal(pGeneral.parsed?.crystal_mode, "general");
+
+  const pSpirit = buildReportPayloadFromScan({
+    ...base,
+    resultText: textSpiritual,
+    objectFamily: "crystal",
+  });
+  assert.equal(pSpirit.summary.crystalMode, "spiritual_growth");
+  assert.equal(pSpirit.parsed?.crystal_mode, "spiritual_growth");
+
+  const pThai = buildReportPayloadFromScan({
+    ...base,
+    resultText: textGeneral,
+    objectFamily: "thai_amulet",
+  });
+  assert.equal(pThai.summary.crystalMode, null);
+  assert.equal(pThai.parsed?.crystal_mode, null);
+});
+
 test("buildReportPayloadFromScan attaches wording and canonical main energy", () => {
   const text = `
 ระดับพลัง: 7.8

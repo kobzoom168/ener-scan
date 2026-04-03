@@ -180,6 +180,13 @@ export function normalizeReportPayloadForRender(input) {
       fitReasonShort: str(summaryIn?.fitReasonShort).trim() || undefined,
       bulletsShort: strArr(summaryIn?.bulletsShort).slice(0, 2),
       ctaLabel: str(summaryIn?.ctaLabel).trim() || undefined,
+      energyCategoryCode: str(summaryIn?.energyCategoryCode).trim() || undefined,
+      energyCopyObjectFamily: str(summaryIn?.energyCopyObjectFamily).trim() || undefined,
+      crystalMode: (() => {
+        const v = summaryIn?.crystalMode;
+        if (v === "general" || v === "spiritual_growth") return v;
+        return null;
+      })(),
     },
     sections: {
       whatItGives: strArr(sectionsIn?.whatItGives),
@@ -257,6 +264,18 @@ export function normalizeReportPayloadForRender(input) {
           : undefined,
       explain: strArr(c.explain),
     };
+  }
+
+  const parsedIn =
+    raw.parsed && typeof raw.parsed === "object" && !Array.isArray(raw.parsed)
+      ? /** @type {Record<string, unknown>} */ (raw.parsed)
+      : null;
+  if (parsedIn) {
+    const cm = parsedIn.crystal_mode;
+    /** @type {"general"|"spiritual_growth"|null} */
+    let crystal_mode = null;
+    if (cm === "general" || cm === "spiritual_growth") crystal_mode = cm;
+    payload.parsed = { crystal_mode };
   }
 
   const oeRaw = raw.objectEnergy;

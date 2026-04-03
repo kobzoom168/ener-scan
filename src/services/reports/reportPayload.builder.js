@@ -16,6 +16,7 @@ import { buildFlexSummarySurfaceFields } from "../../utils/reports/flexSummarySu
 import {
   inferEnergyCategoryCodeFromMainEnergy,
   normalizeObjectFamilyForEnergyCopy,
+  resolveCrystalMode,
 } from "../../utils/energyCategoryResolve.util.js";
 
 /**
@@ -99,6 +100,7 @@ function emptyParsedShape() {
     notStrong: "-",
     usageGuide: "-",
     closing: "-",
+    crystal_mode: null,
   };
 }
 
@@ -358,6 +360,17 @@ export function buildReportPayloadFromScan(opts) {
     String(objectFamilyOpt || ""),
   );
 
+  const mainEnergyRawForCrystalMode =
+    parsed.mainEnergy && parsed.mainEnergy !== "-"
+      ? String(parsed.mainEnergy).replace(/\s+/g, " ").trim()
+      : mainEnergyLabelForCategory;
+
+  const crystalMode = resolveCrystalMode(
+    String(objectFamilyOpt || ""),
+    mainEnergyRawForCrystalMode,
+  );
+  parsed.crystal_mode = crystalMode;
+
   const energyCopyObjectFamily = normalizeObjectFamilyForEnergyCopy(
     String(objectFamilyOpt || ""),
   );
@@ -382,6 +395,8 @@ export function buildReportPayloadFromScan(opts) {
     wordingFamily: wording.wordingFamily,
     seed: rid || String(scanResultId || ""),
     objectFamily: objectFamilyOpt || "",
+    energyCategoryCode,
+    crystalMode: crystalMode ?? "",
   });
 
   const threadedSignalCount = countThreadedReportSignalFields({
@@ -484,6 +499,7 @@ export function buildReportPayloadFromScan(opts) {
       ctaLabel: flexSurface.ctaLabel,
       energyCategoryCode,
       energyCopyObjectFamily,
+      crystalMode,
     },
     sections: {
       whatItGives,
@@ -533,5 +549,8 @@ export function buildReportPayloadFromScan(opts) {
           explain: objectEnergyPayload.explain,
         }
       : undefined,
+    parsed: {
+      crystal_mode: crystalMode,
+    },
   };
 }
