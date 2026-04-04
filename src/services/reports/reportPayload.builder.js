@@ -17,6 +17,7 @@ import { getFallbackFlexSurfaceLines } from "../../utils/reports/flexSummaryShor
 import {
   extractCrystalSpiritualSignalTags,
   inferEnergyCategoryCodeFromMainEnergy,
+  inferEnergyCategoryInferenceTrace,
   normalizeObjectFamilyForEnergyCopy,
   resolveCrystalMode,
 } from "../../utils/energyCategoryResolve.util.js";
@@ -148,6 +149,7 @@ function emptyParsedShape() {
   return {
     energyScore: "-",
     mainEnergy: "-",
+    mainEnergyResolution: { source: "missing", raw: "" },
     compatibility: "-",
     personality: "-",
     tone: "-",
@@ -430,6 +432,32 @@ export async function buildReportPayloadFromScan(opts) {
   const energyCategoryCode = inferEnergyCategoryCodeFromMainEnergy(
     mainEnergyForCategoryInference,
     String(objectFamilyOpt || ""),
+  );
+
+  const energyCategoryInferenceTrace = inferEnergyCategoryInferenceTrace(
+    mainEnergyForCategoryInference,
+    String(objectFamilyOpt || ""),
+  );
+
+  console.log(
+    JSON.stringify({
+      event: "REPORT_PAYLOAD_MAIN_ENERGY_INFERENCE",
+      scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+      objectFamily: String(objectFamilyOpt || "").slice(0, 48),
+      parsedMainEnergyRaw: String(mainEnergyForCategoryInference || "").slice(
+        0,
+        160,
+      ),
+      mainEnergySource:
+        parsed.mainEnergyResolution?.source ?? "missing",
+      resolveEnergyTypeResult:
+        energyCategoryInferenceTrace.resolveEnergyTypeResult,
+      protectKeywordMatched:
+        energyCategoryInferenceTrace.protectKeywordMatched,
+      energyCategoryInferenceBranch:
+        energyCategoryInferenceTrace.inferenceBranch,
+      energyCategoryCode,
+    }),
   );
 
   const crystalMode = resolveCrystalMode(
@@ -772,6 +800,17 @@ export async function buildReportPayloadFromScan(opts) {
       flexPresentationAngleId: flexSurface.wordingMeta?.presentationAngleId,
       crystalMode: crystalMode ?? undefined,
       matchedSignalsCount: crystalSignalTags.length,
+      parsedMainEnergyRaw: String(mainEnergyForCategoryInference || "").slice(
+        0,
+        240,
+      ),
+      mainEnergySource: parsed.mainEnergyResolution?.source ?? "missing",
+      resolveEnergyTypeResult:
+        energyCategoryInferenceTrace.resolveEnergyTypeResult,
+      protectKeywordMatched:
+        energyCategoryInferenceTrace.protectKeywordMatched ?? undefined,
+      energyCategoryInferenceBranch:
+        energyCategoryInferenceTrace.inferenceBranch,
       ...(dbSurfaceOk && dbBundleResolved
         ? {
             ...logFieldsFromDbBundle(dbBundleResolved),

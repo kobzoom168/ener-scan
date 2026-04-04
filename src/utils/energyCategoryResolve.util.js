@@ -6,7 +6,10 @@
  * Keep in sync with Supabase seed / migrations.
  */
 import { ENERGY_TYPES } from "../services/flex/scanCopy.config.js";
-import { resolveEnergyType } from "../services/flex/scanCopy.utils.js";
+import {
+  resolveEnergyType,
+  resolveEnergyTypeMeta,
+} from "../services/flex/scanCopy.utils.js";
 
 /**
  * Mirror of `energy_categories` display fields (fallback when DB unreadable).
@@ -228,6 +231,52 @@ export function inferEnergyCategoryCodeFromMainEnergy(mainEnergy, objectFamilyRa
     default:
       return "luck_fortune";
   }
+}
+
+/**
+ * Telemetry: branch labels + keyword that drove PROTECT (if any).
+ *
+ * @param {string} mainEnergy
+ * @param {string} [objectFamilyRaw]
+ * @returns {{
+ *   code: string,
+ *   inferenceBranch: string,
+ *   resolveEnergyTypeResult: string,
+ *   protectKeywordMatched: string | null,
+ * }}
+ */
+export function inferEnergyCategoryInferenceTrace(mainEnergy, objectFamilyRaw) {
+  const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw || "");
+  const isCrystal = fam === "crystal";
+  const raw = String(mainEnergy || "").replace(/\s+/g, " ").trim();
+  const meta = resolveEnergyTypeMeta(raw);
+  const code = inferEnergyCategoryCodeFromMainEnergy(mainEnergy, objectFamilyRaw);
+
+  let inferenceBranch = "resolve_energy_type_map";
+  if (isCrystal && matchesCrystalSpiritualGrowthSignals(raw, { strictQuartz: true })) {
+    inferenceBranch = "crystal_spiritual_growth";
+  } else if (isCrystal) {
+    const hasLuckWord = raw.includes("โชคลาภ") || raw.includes("โชค");
+    const hasMoneyWorkWord =
+      /เงิน|งาน|ทรัพย์|รายได้|ดูดเงิน|การงาน/.test(raw);
+    if (hasMoneyWorkWord && !hasLuckWord) {
+      inferenceBranch = "crystal_money_work";
+    } else if (hasLuckWord) {
+      inferenceBranch = "crystal_luck_word";
+    } else {
+      inferenceBranch = `crystal_type_${meta.energyType}`;
+    }
+  } else {
+    inferenceBranch = `thai_type_${meta.energyType}`;
+  }
+
+  return {
+    code,
+    inferenceBranch,
+    resolveEnergyTypeResult: meta.energyType,
+    protectKeywordMatched:
+      meta.energyType === ENERGY_TYPES.PROTECT ? meta.matchedKeyword : null,
+  };
 }
 
 /**

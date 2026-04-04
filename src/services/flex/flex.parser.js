@@ -201,31 +201,83 @@ function extractSingleLineAfterTitle(
   return extractedLines.join(" ");
 }
 
-function findFallbackMainEnergy(rawText) {
-  const text = normalizeText(rawText);
-
-  if (text.includes("พลังปกป้อง") || text.includes("ปกป้อง") || text.includes("คุ้มครอง")) {
-    return "พลังปกป้อง";
+/**
+ * When `พลังหลัก:` is missing, only scan the header (before body sections) so
+ * words like "คุ้มครอง" in ภาพรวม do not false-trigger protect.
+ *
+ * @param {string} rawText
+ * @returns {string}
+ */
+export function getScanHeaderSliceForMainEnergyFallback(rawText) {
+  const t = normalizeText(rawText);
+  const markers = [
+    "ลักษณะพลัง",
+    "ภาพรวม",
+    "เหตุผลที่เข้ากับเจ้าของ",
+    "ชิ้นนี้หนุนเรื่อง",
+  ];
+  let end = t.length;
+  for (const m of markers) {
+    const i = t.indexOf(m);
+    if (i !== -1 && i < end) end = i;
   }
+  return t.slice(0, Math.min(end, 1400));
+}
 
-  if (text.includes("พลังอำนาจ") || text.includes("อำนาจ") || text.includes("บารมี")) {
+/**
+ * Last resort when no `พลังหลัก:` line. Uses header slice only; non-protect
+ * keywords are checked before protect; standalone "คุ้มครอง" is not used (too common in prose).
+ *
+ * @param {string} rawText
+ * @returns {string}
+ */
+export function findFallbackMainEnergy(rawText) {
+  const header = getScanHeaderSliceForMainEnergyFallback(rawText);
+
+  if (
+    header.includes("พลังอำนาจ") ||
+    header.includes("อำนาจ") ||
+    header.includes("บารมี")
+  ) {
     return "พลังอำนาจ";
   }
 
-  if (text.includes("พลังโชคลาภ") || text.includes("โชคลาภ") || text.includes("โชค")) {
+  if (
+    header.includes("พลังโชคลาภ") ||
+    header.includes("โชคลาภ") ||
+    header.includes("โชค")
+  ) {
     return "พลังโชคลาภ";
   }
 
-  if (text.includes("พลังสมดุล") || text.includes("สมดุล") || text.includes("นิ่ง")) {
+  if (
+    header.includes("พลังสมดุล") ||
+    header.includes("สมดุล") ||
+    header.includes("นิ่ง")
+  ) {
     return "พลังสมดุล";
   }
 
-  if (text.includes("พลังเมตตา") || text.includes("เมตตา")) {
+  if (header.includes("พลังเมตตา") || header.includes("เมตตา")) {
     return "พลังเมตตา";
   }
 
-  if (text.includes("พลังดึงดูด") || text.includes("ดึงดูด") || text.includes("เสน่ห์")) {
+  if (
+    header.includes("พลังดึงดูด") ||
+    header.includes("ดึงดูด") ||
+    header.includes("เสน่ห์")
+  ) {
     return "พลังดึงดูด";
+  }
+
+  if (header.includes("พลังปกป้อง")) {
+    return "พลังปกป้อง";
+  }
+  if (header.includes("ปกป้อง")) {
+    return "พลังปกป้อง";
+  }
+  if (header.includes("ป้องกัน")) {
+    return "พลังปกป้อง";
   }
 
   return "-";
@@ -248,10 +300,21 @@ export function parseScanText(rawText) {
     "ประเภทพลัง :",
   ]);
 
-  const mainEnergy =
-    parsedMainEnergy && parsedMainEnergy !== "-"
-      ? parsedMainEnergy
-      : findFallbackMainEnergy(rawText);
+  /** @type {{ source: "line_value"|"fallback_body_match"|"missing", raw: string }} */
+  let mainEnergyResolution;
+  let mainEnergy;
+  if (parsedMainEnergy && parsedMainEnergy !== "-") {
+    mainEnergy = parsedMainEnergy;
+    mainEnergyResolution = { source: "line_value", raw: mainEnergy };
+  } else {
+    const fb = findFallbackMainEnergy(rawText);
+    mainEnergy = fb;
+    if (fb && fb !== "-") {
+      mainEnergyResolution = { source: "fallback_body_match", raw: fb };
+    } else {
+      mainEnergyResolution = { source: "missing", raw: "" };
+    }
+  }
 
   const compatibility = getLineValue(lines, [
     "ความสอดคล้องกับเจ้าของ:",
@@ -393,6 +456,7 @@ export function parseScanText(rawText) {
   return {
     energyScore: energyScore || "-",
     mainEnergy: mainEnergy || "-",
+    mainEnergyResolution,
     compatibility: compatibility || "-",
     personality: personality || "-",
     tone: tone || "-",

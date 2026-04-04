@@ -59,6 +59,11 @@
  * @property {number|null} [dbWordingFallbackLevel]
  * @property {"db"|"truth_or_absent"|"truth_or_composed"} [visibleMainLabelSource]
  * @property {boolean} [visibleCopyUsedCodeFallback]
+ * @property {string} [parsedMainEnergyRaw] — truncated raw string used for category inference
+ * @property {"line_value"|"fallback_body_match"|"missing"} [mainEnergySource]
+ * @property {string} [resolveEnergyTypeResult] — Thai label from resolveEnergyTypeMeta
+ * @property {string|null} [protectKeywordMatched]
+ * @property {string} [energyCategoryInferenceBranch]
  */
 
 /**
@@ -189,4 +194,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.3";
+export const REPORT_PAYLOAD_VERSION = "1.2.4";

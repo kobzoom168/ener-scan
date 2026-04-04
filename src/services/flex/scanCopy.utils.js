@@ -28,21 +28,44 @@ import {
  * @returns {string} One of `ENERGY_TYPES` values (Thai key).
  */
 export function resolveEnergyType(mainEnergy) {
+  return resolveEnergyTypeMeta(mainEnergy).energyType;
+}
+
+/**
+ * Same ordering as {@link resolveEnergyType}; exposes which token matched (telemetry / QA).
+ * @param {string} mainEnergy
+ * @returns {{ energyType: string, matchedKeyword: string|null }}
+ */
+export function resolveEnergyTypeMeta(mainEnergy) {
   const s = cleanLine(mainEnergy);
-  if (!s || s === "-") return ENERGY_TYPES.BOOST;
-  if (
-    s.includes("ปกป้อง") ||
-    s.includes("คุ้มครอง") ||
-    s.includes("ป้องกัน")
-  ) {
-    return ENERGY_TYPES.PROTECT;
+  if (!s || s === "-") {
+    return { energyType: ENERGY_TYPES.BOOST, matchedKeyword: null };
   }
-  if (s.includes("อำนาจ") || s.includes("บารมี")) return ENERGY_TYPES.POWER;
-  if (s.includes("โชคลาภ") || s.includes("โชค")) return ENERGY_TYPES.LUCK;
-  if (s.includes("สมดุล") || s.includes("นิ่ง")) return ENERGY_TYPES.BALANCE;
-  if (s.includes("เมตตา")) return ENERGY_TYPES.KINDNESS;
-  if (s.includes("ดึงดูด") || s.includes("เสน่ห์")) return ENERGY_TYPES.ATTRACT;
-  return ENERGY_TYPES.BOOST;
+  if (s.includes("ปกป้อง")) {
+    return { energyType: ENERGY_TYPES.PROTECT, matchedKeyword: "ปกป้อง" };
+  }
+  if (s.includes("คุ้มครอง")) {
+    return { energyType: ENERGY_TYPES.PROTECT, matchedKeyword: "คุ้มครอง" };
+  }
+  if (s.includes("ป้องกัน")) {
+    return { energyType: ENERGY_TYPES.PROTECT, matchedKeyword: "ป้องกัน" };
+  }
+  if (s.includes("อำนาจ") || s.includes("บารมี")) {
+    return { energyType: ENERGY_TYPES.POWER, matchedKeyword: null };
+  }
+  if (s.includes("โชคลาภ") || s.includes("โชค")) {
+    return { energyType: ENERGY_TYPES.LUCK, matchedKeyword: null };
+  }
+  if (s.includes("สมดุล") || s.includes("นิ่ง")) {
+    return { energyType: ENERGY_TYPES.BALANCE, matchedKeyword: null };
+  }
+  if (s.includes("เมตตา")) {
+    return { energyType: ENERGY_TYPES.KINDNESS, matchedKeyword: null };
+  }
+  if (s.includes("ดึงดูด") || s.includes("เสน่ห์")) {
+    return { energyType: ENERGY_TYPES.ATTRACT, matchedKeyword: null };
+  }
+  return { energyType: ENERGY_TYPES.BOOST, matchedKeyword: null };
 }
 
 /**
