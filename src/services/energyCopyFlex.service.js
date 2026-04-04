@@ -5,8 +5,18 @@
 import {
   getEnergyCategory,
   getEnergyCopySet,
-  getEnergyCopySetCrystalOnly,
+  getEnergyCopyTemplateRowsBundle,
+  getEnergyCopyTemplateRowsCrystalOnly,
 } from "./energyCopy.service.js";
+import { selectEnergyCopyFromTemplates } from "../utils/energyCopySelect.util.js";
+import {
+  filterRowsForLegacyEnergyCopy,
+  isUsableVisibleSurface,
+} from "../utils/visibleWordingSelect.util.js";
+import {
+  resolveVisibleWordingBundleFromDb,
+  logFieldsFromDbBundle,
+} from "./dbWordingBundle.service.js";
 import {
   inferEnergyCategoryCodeFromMainEnergy,
   normalizeObjectFamilyForEnergyCopy,
@@ -32,8 +42,11 @@ import {
 
 /**
  * Keeps DB strings inside the same summary-shell caps as composed pools (V4.1 teaser; avoids bubble bloat).
+ * @param {string|null|undefined} headline
+ * @param {string|null|undefined} fitLine
+ * @param {readonly string[]|null|undefined} bullets
  */
-function clampFlexDbSurfaceLines(headline, fitLine, bullets) {
+export function clampFlexDbSurfaceLines(headline, fitLine, bullets) {
   const h = headline
     ? truncateAtWordBoundary(String(headline).trim(), FLEX_SHORT_HEADLINE_MAX)
     : null;
@@ -68,6 +81,7 @@ export function mapHiddenToShortText(hidden, _categoryCode) {
  * @property {string} [mainEnergy] — parsed พลังหลัก
  * @property {string} [hidden] — parsed hidden line
  * @property {"general"|"spiritual_growth"|null} [crystalMode] — when DB copy misses, prefer spiritual_growth crystal fallback
+ * @property {string} [presentationAngleId] — Flex/report angle (e.g. shield); DB-first visible wording
  */
 
 /**
@@ -80,6 +94,12 @@ export function mapHiddenToShortText(hidden, _categoryCode) {
  * @property {string[]} bullets
  * @property {string} hiddenShortText
  * @property {boolean} fromDb
+ * @property {string} [wordingPrimarySource]
+ * @property {string|null} [visibleMainLabelSource]
+ * @property {boolean} [visibleCopyUsedCodeFallback]
+ * @property {object} [dbWordingDiagnostics]
+ * @property {string|null} [opening]
+ * @property {string|null} [teaser]
  */
 
 async function loadCopyWithFallback(categoryCode, objectFamilyNormalized, tone) {
@@ -154,27 +174,89 @@ function isUsableEnergyCopySet(set) {
  * @param {string} p.categoryCode
  * @param {string} p.tone
  * @param {string} p.crystalModeIn
+ * @param {string} [p.presentationAngleId]
  */
-async function resolveCrystalFlexSurfaceCopy({ categoryCode, tone, crystalModeIn }) {
+async function resolveCrystalFlexSurfaceCopy({
+  categoryCode,
+  tone,
+  crystalModeIn,
+  presentationAngleId = "",
+}) {
   const code = String(categoryCode || "").trim();
   const fallbackCode = effectiveFlexFallbackCategoryCode(
     code,
     "crystal",
     crystalModeIn,
   );
+  const angle = String(presentationAngleId || "").trim();
 
-  let crystalOnly = { headline: null, fitLine: null, bullets: [] };
+  const dbTry = await resolveVisibleWordingBundleFromDb({
+    categoryCode: code,
+    objectFamilyRaw: "crystal",
+    presentationAngleId: angle,
+    crystalMode: crystalModeIn,
+  });
+  if (dbTry && isUsableVisibleSurface(dbTry.bundle)) {
+    const visibleSurface = dbTry.bundle;
+    console.log(
+      JSON.stringify({
+        event: "VISIBLE_DB_SURFACE_SELECTED",
+        objectFamilyNorm: "crystal",
+        categoryCode: dbTry.categoryUsed,
+        fallbackCode,
+        presentationAngle: angle || null,
+        wordingPrimarySource: "db",
+        dbWordingSlots: visibleSurface.diagnostics?.dbWordingSlots,
+        rowSource: dbTry.rowSource,
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_DB_COPY_SELECTED",
+        objectFamilyNorm: "crystal",
+        categoryCode: dbTry.categoryUsed,
+        fallbackCode,
+        selectedSource: "crystal_db_visible",
+        hadCrystalDbRow: true,
+        hadGenericAllRow: false,
+        reason: "visible_surface_angle_aware",
+      }),
+    );
+    return {
+      copySet: {
+        headline: visibleSurface.headline,
+        fitLine: visibleSurface.fitLine,
+        bullets: visibleSurface.bullets,
+        opening: visibleSurface.opening ?? null,
+        teaser: visibleSurface.teaser ?? null,
+      },
+      mainLabelFromDb: visibleSurface.mainLabel,
+      visibleWordingDiagnostics: visibleSurface.diagnostics,
+      fromDb: true,
+      templateFromDb: true,
+      usedOfflineCrystalMaster: false,
+      usedGenericAllLastResort: false,
+    };
+  }
+
+  /** @type {unknown[]} */
+  let rawCrystalRows = [];
   try {
-    crystalOnly = await getEnergyCopySetCrystalOnly({
+    rawCrystalRows = await getEnergyCopyTemplateRowsCrystalOnly({
       categoryCode: code,
       tone,
     });
   } catch (e) {
-    console.warn("[energyCopyFlex] getEnergyCopySetCrystalOnly failed", {
+    console.warn("[energyCopyFlex] getEnergyCopyTemplateRowsCrystalOnly failed", {
       categoryCode: code,
       message: e?.message,
     });
   }
+
+  let crystalOnly = selectEnergyCopyFromTemplates(
+    filterRowsForLegacyEnergyCopy(rawCrystalRows),
+    "crystal",
+  );
 
   const hadPartialCrystalRow =
     Boolean(crystalOnly?.headline) ||
@@ -196,6 +278,8 @@ async function resolveCrystalFlexSurfaceCopy({ categoryCode, tone, crystalModeIn
     );
     return {
       copySet: crystalOnly,
+      mainLabelFromDb: null,
+      visibleWordingDiagnostics: null,
       fromDb: true,
       templateFromDb: true,
       usedOfflineCrystalMaster: false,
@@ -222,15 +306,20 @@ async function resolveCrystalFlexSurfaceCopy({ categoryCode, tone, crystalModeIn
     String(crystalModeIn || "").trim() === "spiritual_growth" &&
     code !== "spiritual_growth"
   ) {
-    let sgCrystal = { headline: null, fitLine: null, bullets: [] };
+    /** @type {unknown[]} */
+    let rawSg = [];
     try {
-      sgCrystal = await getEnergyCopySetCrystalOnly({
+      rawSg = await getEnergyCopyTemplateRowsCrystalOnly({
         categoryCode: "spiritual_growth",
         tone,
       });
     } catch {
       /* logged below if still miss */
     }
+    const sgCrystal = selectEnergyCopyFromTemplates(
+      filterRowsForLegacyEnergyCopy(rawSg),
+      "crystal",
+    );
     if (isUsableEnergyCopySet(sgCrystal)) {
       console.log(
         JSON.stringify({
@@ -246,6 +335,8 @@ async function resolveCrystalFlexSurfaceCopy({ categoryCode, tone, crystalModeIn
       );
       return {
         copySet: sgCrystal,
+        mainLabelFromDb: null,
+        visibleWordingDiagnostics: null,
         fromDb: true,
         templateFromDb: true,
         usedOfflineCrystalMaster: false,
@@ -287,6 +378,8 @@ async function resolveCrystalFlexSurfaceCopy({ categoryCode, tone, crystalModeIn
     );
     return {
       copySet: fbSet,
+      mainLabelFromDb: null,
+      visibleWordingDiagnostics: null,
       fromDb: false,
       templateFromDb: false,
       usedOfflineCrystalMaster: true,
@@ -323,6 +416,8 @@ async function resolveCrystalFlexSurfaceCopy({ categoryCode, tone, crystalModeIn
     );
     return {
       copySet: genericAllOnly,
+      mainLabelFromDb: null,
+      visibleWordingDiagnostics: null,
       fromDb: true,
       templateFromDb: true,
       usedOfflineCrystalMaster: false,
@@ -346,6 +441,8 @@ async function resolveCrystalFlexSurfaceCopy({ categoryCode, tone, crystalModeIn
     );
     return {
       copySet: merged,
+      mainLabelFromDb: null,
+      visibleWordingDiagnostics: null,
       fromDb: true,
       templateFromDb: true,
       usedOfflineCrystalMaster: false,
@@ -355,6 +452,8 @@ async function resolveCrystalFlexSurfaceCopy({ categoryCode, tone, crystalModeIn
 
   return {
     copySet: { headline: null, fitLine: null, bullets: [] },
+    mainLabelFromDb: null,
+    visibleWordingDiagnostics: null,
     fromDb: false,
     templateFromDb: false,
     usedOfflineCrystalMaster: false,
@@ -371,6 +470,7 @@ export async function resolveEnergyCopyForFlex(input = {}) {
   const hidden = String(input.hidden || "").trim();
   const famRaw = String(input.objectFamily || "").trim();
   const crystalModeIn = String(input.crystalMode ?? "").trim();
+  const presentationAngleId = String(input.presentationAngleId || "").trim();
   const codeIn =
     String(input.categoryCode || "").trim() ||
     inferEnergyCategoryCodeFromMainEnergy(mainEnergy, famRaw);
@@ -399,27 +499,62 @@ export async function resolveEnergyCopyForFlex(input = {}) {
 
   let copySet = { headline: null, fitLine: null, bullets: [] };
   let usedOfflineCrystalMaster = false;
+  /** @type {object | null} */
+  let visibleWordingDiagnostics = null;
+  let mainLabelFromVisibleDb = null;
+  let wordingPrimarySource = "fallback";
 
   if (objectFamilyNorm === "crystal") {
     const crystalRes = await resolveCrystalFlexSurfaceCopy({
       categoryCode: codeIn,
       tone,
       crystalModeIn,
+      presentationAngleId,
     });
     copySet = crystalRes.copySet;
     usedOfflineCrystalMaster = crystalRes.usedOfflineCrystalMaster;
+    mainLabelFromVisibleDb = crystalRes.mainLabelFromDb ?? null;
+    visibleWordingDiagnostics = crystalRes.visibleWordingDiagnostics ?? null;
+    if (visibleWordingDiagnostics) wordingPrimarySource = "db";
+    else if (isUsableEnergyCopySet(crystalRes.copySet) && crystalRes.templateFromDb) {
+      wordingPrimarySource = "db_legacy";
+    }
     if (isUsableEnergyCopySet(crystalRes.copySet)) {
       fromDb = crystalRes.templateFromDb === true;
     } else {
       fromDb = false;
     }
   } else {
-    copySet = await loadCopyWithFallback(
-      codeIn,
-      objectFamilyNorm,
-      tone,
-    );
-    if (isUsableEnergyCopySet(copySet)) fromDb = true;
+    const dbNonCrystal = await resolveVisibleWordingBundleFromDb({
+      categoryCode: codeIn,
+      objectFamilyRaw: famRaw,
+      presentationAngleId,
+      crystalMode: null,
+    });
+    if (dbNonCrystal && isUsableVisibleSurface(dbNonCrystal.bundle)) {
+      const vis = dbNonCrystal.bundle;
+      copySet = {
+        headline: vis.headline,
+        fitLine: vis.fitLine,
+        bullets: vis.bullets,
+        opening: vis.opening ?? null,
+        teaser: vis.teaser ?? null,
+      };
+      mainLabelFromVisibleDb = vis.mainLabel;
+      visibleWordingDiagnostics = vis.diagnostics;
+      wordingPrimarySource = "db";
+      fromDb = true;
+    } else {
+      copySet = await loadCopyWithFallback(
+        codeIn,
+        objectFamilyNorm,
+        tone,
+      );
+      if (isUsableEnergyCopySet(copySet)) {
+        fromDb = true;
+        wordingPrimarySource = "db_legacy";
+      }
+    }
   }
 
   const accent =
@@ -435,6 +570,15 @@ export async function resolveEnergyCopyForFlex(input = {}) {
       ENERGY_CATEGORY_DISPLAY_SYNC[codeIn]?.short_name_th ||
       ENERGY_CATEGORY_DISPLAY_SYNC[codeIn]?.display_name_th ||
       getEnergyShortLabelLegacy(mainEnergy || "-", famRaw);
+  }
+
+  let visibleMainLabelSource = "category_short";
+  if (
+    mainLabelFromVisibleDb &&
+    !lineContainsEnergyCopyAvoidWord(mainLabelFromVisibleDb)
+  ) {
+    label = String(mainLabelFromVisibleDb).trim();
+    visibleMainLabelSource = "db_main_label";
   }
 
   let clamped = clampFlexDbSurfaceLines(
@@ -467,6 +611,8 @@ export async function resolveEnergyCopyForFlex(input = {}) {
       fb.bullets,
     );
     fromDb = false;
+    wordingPrimarySource = "fallback";
+    visibleWordingDiagnostics = null;
   }
 
   if (objectFamilyNorm === "crystal" && (!fromDb || usedGuardFallback)) {
@@ -481,6 +627,39 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     );
   }
 
+  const visibleCopyUsedCodeFallback = wordingPrimarySource === "fallback";
+
+  const dbLog =
+    wordingPrimarySource === "db" && visibleWordingDiagnostics
+      ? logFieldsFromDbBundle({
+          bundle: { diagnostics: visibleWordingDiagnostics },
+        })
+      : {};
+
+  console.log(
+    JSON.stringify({
+      event: "ENERGY_COPY_FLEX_RESOLVED",
+      categoryCode: codeIn,
+      wordingPrimarySource,
+      visibleMainLabelSource,
+      visibleCopyUsedCodeFallback,
+      dbWordingSelected: Boolean(visibleWordingDiagnostics?.dbWordingSelected),
+      dbWordingFallbackLevel:
+        visibleWordingDiagnostics?.dbWordingFallbackLevel ?? null,
+      presentationAngleId: presentationAngleId || null,
+      ...dbLog,
+    }),
+  );
+
+  const openingOut =
+    copySet && "opening" in copySet && copySet.opening != null
+      ? String(copySet.opening).trim() || null
+      : null;
+  const teaserOut =
+    copySet && "teaser" in copySet && copySet.teaser != null
+      ? String(copySet.teaser).trim() || null
+      : null;
+
   return {
     categoryCode: codeIn,
     accentColor: accent,
@@ -488,7 +667,13 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     headline: clamped.headline,
     fitLine: clamped.fitLine,
     bullets: clamped.bullets,
+    opening: openingOut,
+    teaser: teaserOut,
     hiddenShortText: mapHiddenToShortText(hidden, codeIn),
     fromDb,
+    wordingPrimarySource,
+    visibleMainLabelSource,
+    visibleCopyUsedCodeFallback,
+    dbWordingDiagnostics: visibleWordingDiagnostics || undefined,
   };
 }

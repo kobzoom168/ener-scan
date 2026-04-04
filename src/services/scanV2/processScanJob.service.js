@@ -420,7 +420,7 @@ export async function processScanJob(workerId, jobRow) {
       );
     }
 
-    const reportPayloadBuilt = buildReportPayloadFromScan({
+    const reportPayloadBuilt = await buildReportPayloadFromScan({
       resultText,
       scanResultId: legacyScanResultId,
       scanRequestId,
@@ -672,7 +672,7 @@ export async function processScanJob(workerId, jobRow) {
     let flexFallbackReason = null;
     if (reportPayloadForReply) {
       /** @type {import("../../utils/lineSummaryWording.util.js").LineSummaryWordingResolved | null} */
-      const lineWordingResolved = resolveLineSummaryWording(
+      const lineWordingResolved = await resolveLineSummaryWording(
         reportPayloadForReply,
         lineUserId,
         jobId,

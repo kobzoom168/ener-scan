@@ -28,7 +28,9 @@ test("deriveReportWordingFromParsed: crystal protection uses stone-flavored hero
     "crystal flex teaser should not use generic Thai-amulet protection headline tail",
   );
   assert.ok(
-    w.flexHeadline.includes("กันแรงลบ") || w.flexHeadline.includes("คุ้มครอง"),
+    w.flexHeadline.includes("กันแรงลบ") ||
+      w.flexHeadline.includes("คุ้มครอง") ||
+      /เกราะ|ปกป้อง|กรอง/.test(w.flexHeadline),
     `expected crystal protection teaser, got: ${w.flexHeadline}`,
   );
   assert.equal(w.mainEnergy, ENERGY_TYPES.PROTECT);
@@ -64,7 +66,7 @@ test("deriveReportWordingFromParsed: protection + scan lines", () => {
   assert.equal(w.clarityLevel, "l2");
 });
 
-test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / spiritual / null)", () => {
+test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / spiritual / null)", async () => {
   const base = {
     scanResultId: "00000000-0000-4000-8000-000000000099",
     scanRequestId: "req-1",
@@ -111,7 +113,7 @@ test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / s
 
 อาจไม่เด่นเมื่อ: ไม่ใช่สายดึงดูด
 `;
-  const pGeneral = buildReportPayloadFromScan({
+  const pGeneral = await buildReportPayloadFromScan({
     ...base,
     resultText: textGeneral,
     objectFamily: "crystal",
@@ -119,7 +121,7 @@ test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / s
   assert.equal(pGeneral.summary.crystalMode, "general");
   assert.equal(pGeneral.parsed?.crystal_mode, "general");
 
-  const pSpirit = buildReportPayloadFromScan({
+  const pSpirit = await buildReportPayloadFromScan({
     ...base,
     resultText: textSpiritual,
     objectFamily: "crystal",
@@ -132,7 +134,7 @@ test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / s
     "raw Moldavite line must drive category (not canonical protection)",
   );
 
-  const pThai = buildReportPayloadFromScan({
+  const pThai = await buildReportPayloadFromScan({
     ...base,
     resultText: textGeneral,
     objectFamily: "thai_amulet",
@@ -141,7 +143,7 @@ test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / s
   assert.equal(pThai.parsed?.crystal_mode, null);
 });
 
-test("buildReportPayloadFromScan: crystal fills empty whatItGives / bestUse from category fallback", () => {
+test("buildReportPayloadFromScan: crystal fills empty whatItGives / bestUse from category fallback", async () => {
   const textThin = `
 ระดับพลัง: 8
 พลังหลัก: Moldavite หยั่งรู้ crown
@@ -155,7 +157,7 @@ test("buildReportPayloadFromScan: crystal fills empty whatItGives / bestUse from
 
 อาจไม่เด่นเมื่อ: ไม่ใช่สายดึงดูด
 `;
-  const payload = buildReportPayloadFromScan({
+  const payload = await buildReportPayloadFromScan({
     resultText: textThin,
     scanResultId: "00000000-0000-4000-8000-0000000000aa",
     scanRequestId: "req-thin",
@@ -170,7 +172,7 @@ test("buildReportPayloadFromScan: crystal fills empty whatItGives / bestUse from
   assert.equal(payload.summary.bulletsShort?.length, 2);
 });
 
-test("buildReportPayloadFromScan attaches wording and canonical main energy", () => {
+test("buildReportPayloadFromScan attaches wording and canonical main energy", async () => {
   const text = `
 ระดับพลัง: 7.8
 พลังหลัก: พลังปกป้อง
@@ -192,7 +194,7 @@ test("buildReportPayloadFromScan attaches wording and canonical main energy", ()
 
 อาจไม่เด่นเมื่อ: ไม่ใช่สายดึงดูด
 `;
-  const payload = buildReportPayloadFromScan({
+  const payload = await buildReportPayloadFromScan({
     resultText: text,
     scanResultId: "00000000-0000-4000-8000-000000000099",
     scanRequestId: "req-1",

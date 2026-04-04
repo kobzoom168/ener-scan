@@ -5,6 +5,13 @@
 import { supabase } from "../config/supabase.js";
 import { selectEnergyCopyFromTemplates } from "../utils/energyCopySelect.util.js";
 
+/** Supabase row shape including optional angle/slot metadata (ignored by legacy selector). */
+export const ENERGY_COPY_TEMPLATE_SELECT =
+  "id,category_code,object_family,copy_type,tone,text_th,weight,is_active,presentation_angle,cluster_tag,fallback_level,visible_tone";
+
+const ENERGY_COPY_TEMPLATE_SELECT_LEGACY =
+  "id,category_code,object_family,copy_type,tone,text_th,weight,is_active";
+
 export const ENERGY_OBJECT_FAMILIES = Object.freeze([
   "all",
   "thai_amulet",
@@ -93,16 +100,60 @@ export async function getEnergyCopySet({
   const families =
     fam === "all" ? ["all"] : [fam, "all"];
 
-  const { data, error } = await supabase
+  const rows = await getEnergyCopyTemplateRowsBundle({
+    categoryCode: cat,
+    objectFamily: fam,
+    tone: toneVal,
+  });
+  return selectEnergyCopyFromTemplates(rows, fam);
+}
+
+/**
+ * Raw template rows for visible wording selector (angle / cluster / main_label).
+ *
+ * @param {GetEnergyCopySetParams} p
+ * @returns {Promise<object[]>}
+ */
+export async function getEnergyCopyTemplateRowsBundle({
+  categoryCode,
+  objectFamily = "all",
+  tone = "hard",
+}) {
+  const cat = String(categoryCode || "").trim();
+  if (!cat) {
+    return [];
+  }
+  const fam = String(objectFamily || "all").trim() || "all";
+  const toneVal = String(tone || "hard").trim() || "hard";
+
+  const families = fam === "all" ? ["all"] : [fam, "all"];
+
+  let { data, error } = await supabase
     .from("energy_copy_templates")
-    .select("id,category_code,object_family,copy_type,tone,text_th,weight,is_active")
+    .select(ENERGY_COPY_TEMPLATE_SELECT)
     .eq("category_code", cat)
     .eq("tone", toneVal)
     .eq("is_active", true)
     .in("object_family", families);
 
+  if (
+    error &&
+    (error.code === "42703" ||
+      String(error.message || "").includes("presentation_angle"))
+  ) {
+    const retry = await supabase
+      .from("energy_copy_templates")
+      .select(ENERGY_COPY_TEMPLATE_SELECT_LEGACY)
+      .eq("category_code", cat)
+      .eq("tone", toneVal)
+      .eq("is_active", true)
+      .in("object_family", families);
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) {
-    console.error("[SUPABASE] getEnergyCopySet", {
+    console.error("[SUPABASE] getEnergyCopyTemplateRowsBundle", {
       categoryCode: cat,
       objectFamily: fam,
       tone: toneVal,
@@ -112,8 +163,7 @@ export async function getEnergyCopySet({
     throw error;
   }
 
-  const rows = Array.isArray(data) ? data : [];
-  return selectEnergyCopyFromTemplates(rows, fam);
+  return Array.isArray(data) ? data : [];
 }
 
 /**
@@ -133,16 +183,53 @@ export async function getEnergyCopySetCrystalOnly({
   }
   const toneVal = String(tone || "hard").trim() || "hard";
 
-  const { data, error } = await supabase
+  const rows = await getEnergyCopyTemplateRowsCrystalOnly({
+    categoryCode: cat,
+    tone: toneVal,
+  });
+  return selectEnergyCopyFromTemplates(rows, "crystal");
+}
+
+/**
+ * @param {{ categoryCode: string, tone?: string }} p
+ * @returns {Promise<object[]>}
+ */
+export async function getEnergyCopyTemplateRowsCrystalOnly({
+  categoryCode,
+  tone = "hard",
+}) {
+  const cat = String(categoryCode || "").trim();
+  if (!cat) {
+    return [];
+  }
+  const toneVal = String(tone || "hard").trim() || "hard";
+
+  let { data, error } = await supabase
     .from("energy_copy_templates")
-    .select("id,category_code,object_family,copy_type,tone,text_th,weight,is_active")
+    .select(ENERGY_COPY_TEMPLATE_SELECT)
     .eq("category_code", cat)
     .eq("tone", toneVal)
     .eq("is_active", true)
     .eq("object_family", "crystal");
 
+  if (
+    error &&
+    (error.code === "42703" ||
+      String(error.message || "").includes("presentation_angle"))
+  ) {
+    const retry = await supabase
+      .from("energy_copy_templates")
+      .select(ENERGY_COPY_TEMPLATE_SELECT_LEGACY)
+      .eq("category_code", cat)
+      .eq("tone", toneVal)
+      .eq("is_active", true)
+      .eq("object_family", "crystal");
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) {
-    console.error("[SUPABASE] getEnergyCopySetCrystalOnly", {
+    console.error("[SUPABASE] getEnergyCopyTemplateRowsCrystalOnly", {
       categoryCode: cat,
       tone: toneVal,
       message: error.message,
@@ -151,8 +238,7 @@ export async function getEnergyCopySetCrystalOnly({
     throw error;
   }
 
-  const rows = Array.isArray(data) ? data : [];
-  return selectEnergyCopyFromTemplates(rows, "crystal");
+  return Array.isArray(data) ? data : [];
 }
 
 /**

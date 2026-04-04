@@ -102,8 +102,8 @@ test("buildObjectEnergyPayload: explain length", () => {
   assert.equal(p.formulaVersion, "object_energy_v1");
 });
 
-test("buildReportPayloadFromScan: wires objectEnergy and summary.scanDimensions", () => {
-  const payload = buildReportPayloadFromScan({
+test("buildReportPayloadFromScan: wires objectEnergy and summary.scanDimensions", async () => {
+  const payload = await buildReportPayloadFromScan({
     resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nทดสอบ\nเหตุผลที่เข้ากับเจ้าของ\nทดสอบ`,
     scanResultId: "00000000-0000-4000-8000-000000000099",
     scanRequestId: "req-1",
@@ -119,8 +119,8 @@ test("buildReportPayloadFromScan: wires objectEnergy and summary.scanDimensions"
   assert.equal(typeof payload.summary.scanDimensions?.["สมดุล"], "number");
 });
 
-test("buildReportPayloadFromScan: threads objectCheckResult into objectEnergy inputs (no fabricated confidence)", () => {
-  const payload = buildReportPayloadFromScan({
+test("buildReportPayloadFromScan: threads objectCheckResult into objectEnergy inputs (no fabricated confidence)", async () => {
+  const payload = await buildReportPayloadFromScan({
     resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
     scanResultId: "00000000-0000-4000-8000-000000000099",
     scanRequestId: "req-1",
@@ -136,8 +136,8 @@ test("buildReportPayloadFromScan: threads objectCheckResult into objectEnergy in
   assert.equal(payload.objectEnergy?.inputs?.objectCheckConfidence, null);
 });
 
-test("buildReportPayloadFromScan: dominantColor vision_v1 threads to objectEnergy inputs", () => {
-  const payload = buildReportPayloadFromScan({
+test("buildReportPayloadFromScan: dominantColor vision_v1 threads to objectEnergy inputs", async () => {
+  const payload = await buildReportPayloadFromScan({
     resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
     scanResultId: "00000000-0000-4000-8000-000000000200",
     scanRequestId: "req-1",
@@ -150,8 +150,8 @@ test("buildReportPayloadFromScan: dominantColor vision_v1 threads to objectEnerg
   assert.equal(payload.objectEnergy?.inputs?.dominantColor, "blue");
 });
 
-test("buildReportPayloadFromScan: dominantColor cache_persisted threads like vision (deterministic slug)", () => {
-  const payload = buildReportPayloadFromScan({
+test("buildReportPayloadFromScan: dominantColor cache_persisted threads like vision (deterministic slug)", async () => {
+  const payload = await buildReportPayloadFromScan({
     resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
     scanResultId: "00000000-0000-4000-8000-000000000201",
     scanRequestId: "req-1",
@@ -166,8 +166,8 @@ test("buildReportPayloadFromScan: dominantColor cache_persisted threads like vis
   assert.equal(payload.objectEnergy?.inputs?.dominantColor, "gold");
 });
 
-test("buildReportPayloadFromScan: preserves numeric objectCheckConfidence when provided (not fabricated)", () => {
-  const payload = buildReportPayloadFromScan({
+test("buildReportPayloadFromScan: preserves numeric objectCheckConfidence when provided (not fabricated)", async () => {
+  const payload = await buildReportPayloadFromScan({
     resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
     scanResultId: "00000000-0000-4000-8000-000000000100",
     scanRequestId: "req-1",
@@ -182,8 +182,8 @@ test("buildReportPayloadFromScan: preserves numeric objectCheckConfidence when p
   assert.equal(payload.objectEnergy?.inputs?.objectCheckConfidence, 0.82);
 });
 
-test("buildReportPayloadFromScan: missing dominantColor/conditionClass still builds objectEnergy", () => {
-  const payload = buildReportPayloadFromScan({
+test("buildReportPayloadFromScan: missing dominantColor/conditionClass still builds objectEnergy", async () => {
+  const payload = await buildReportPayloadFromScan({
     resultText: `ระดับพลัง: 8\nพลังหลัก: สมดุล\nความสอดคล้อง: 50%\nภาพรวม\nx\nเหตุผลที่เข้ากับเจ้าของ\ny`,
     scanResultId: "00000000-0000-4000-8000-000000000101",
     scanRequestId: "req-1",

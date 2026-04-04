@@ -3,6 +3,8 @@
  * Prefer object_family match over `all`, then weight asc, then id asc.
  */
 
+import { filterRowsForLegacyEnergyCopy } from "./visibleWordingSelect.util.js";
+
 /** @typedef {{ id?: string|number, object_family: string, copy_type: string, text_th: string, weight: number }} EnergyCopyTemplateRow */
 
 /**
@@ -61,7 +63,7 @@ function sortedByType(rows, copyType, preferredFamily) {
  */
 export function selectEnergyCopyFromTemplates(rows, preferredFamily) {
   const fam = String(preferredFamily || "all").trim() || "all";
-  const list = Array.isArray(rows) ? rows : [];
+  const list = filterRowsForLegacyEnergyCopy(Array.isArray(rows) ? rows : []);
   const headline = sortedByType(list, "headline", fam)[0];
   const fitLine = sortedByType(list, "fit_line", fam)[0];
   const bulletRows = sortedByType(list, "bullet", fam).slice(0, 2);

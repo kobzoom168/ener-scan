@@ -20,6 +20,12 @@ import {
   normalizeObjectFamilyForEnergyCopy,
   resolveCrystalMode,
 } from "../../utils/energyCategoryResolve.util.js";
+import {
+  resolveVisibleWordingBundleFromDb,
+  logFieldsFromDbBundle,
+} from "../dbWordingBundle.service.js";
+import { isUsableVisibleSurface } from "../../utils/visibleWordingSelect.util.js";
+import { clampFlexDbSurfaceLines } from "../energyCopyFlex.service.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -186,9 +192,9 @@ function emptyParsedShape() {
  * @param {string|null} [opts.pipelineObjectCategory] — Thai classifier label when known (telemetry only)
  * @param {"deep_scan"|"cache_classify"|"cache_persisted"|"missing"|"unspecified"} [opts.pipelineObjectCategorySource] — how category was obtained
  * @param {"vision_v1"|"cache_persisted"|"pipeline_opts"|"none"|undefined} [opts.pipelineDominantColorSource]
- * @returns {import("./reportPayload.types.js").ReportPayload}
+ * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
  */
-export function buildReportPayloadFromScan(opts) {
+export async function buildReportPayloadFromScan(opts) {
   const {
     resultText,
     scanResultId,
@@ -389,7 +395,7 @@ export function buildReportPayloadFromScan(opts) {
   const rid = String(scanResultId || "").trim();
   const tok = String(publicToken || "").trim();
 
-  const wording = deriveReportWordingFromParsed(parsed, {
+  let wording = deriveReportWordingFromParsed(parsed, {
     seed: rid || scanResultId,
     energyScore,
     compatibilityPercent: compatPct,
@@ -482,13 +488,11 @@ export function buildReportPayloadFromScan(opts) {
   );
 
   /**
-   * Stored summary.headlineShort / fitReasonShort / bulletsShort: composed pools (fallback path).
-   * LINE summary-first may replace teaser copy at send time via energy_copy_templates — tone can differ
-   * from HTML until both paths read the same resolver or stored payload is unified after DB hydrate.
+   * Stored summary.headlineShort / fitReasonShort / bulletsShort: DB-first via
+   * {@link resolveVisibleWordingBundleFromDb}; composed pools only when DB surface incomplete.
    */
 
-  /** Stored payload Flex teaser (fallback for web); LINE summary-first Flex prefers DB via reportPayload fields + async resolver. */
-  const flexSurface = buildFlexSummarySurfaceFields({
+  const flexSurfaceFallback = buildFlexSummarySurfaceFields({
     wording,
     compatibilityReason,
     summaryLine,
@@ -505,6 +509,76 @@ export function buildReportPayloadFromScan(opts) {
     crystalMode: crystalMode ?? "",
     lineUserId: String(lineUserId || "").trim(),
   });
+
+  let flexSurface = flexSurfaceFallback;
+  /** @type {Awaited<ReturnType<typeof resolveVisibleWordingBundleFromDb>> | null} */
+  let dbBundleResolved = null;
+  try {
+    dbBundleResolved = await resolveVisibleWordingBundleFromDb({
+      categoryCode: energyCategoryCode,
+      objectFamilyRaw: objectFamilyOpt || "",
+      presentationAngleId: "",
+      crystalMode: crystalMode ?? "",
+    });
+    if (dbBundleResolved && isUsableVisibleSurface(dbBundleResolved.bundle)) {
+      const b = dbBundleResolved.bundle;
+      const clamped = clampFlexDbSurfaceLines(b.headline, b.fitLine, b.bullets);
+      const headlineSlot = b.diagnostics?.dbWordingSlots?.find(
+        (s) => s.slot === "headline",
+      );
+      const angleFromDb = headlineSlot?.presentationAngle ?? null;
+      flexSurface = {
+        headlineShort: String(clamped.headline || "").trim(),
+        fitReasonShort: String(clamped.fitLine || "").trim(),
+        bulletsShort: clamped.bullets,
+        ctaLabel: "เปิดรายงานฉบับเต็ม",
+        wordingMeta: {
+          wordingVariantId: `db:${dbBundleResolved.categoryUsed}`,
+          wordingBankUsed: "db:energy_copy_templates",
+          presentationAngleId: angleFromDb,
+          diversificationApplied: Boolean(
+            b.diagnostics?.usedClusterTags?.size &&
+              b.diagnostics.usedClusterTags.size > 1,
+          ),
+          avoidedRepeat: Boolean(b.diagnostics?.usedClusterTags?.size),
+        },
+      };
+      if (String(b.opening || "").trim()) {
+        wording = {
+          ...wording,
+          htmlOpeningLine: String(b.opening).trim(),
+        };
+      }
+      console.log(
+        JSON.stringify({
+          event: "REPORT_PAYLOAD_DB_WORDING_HYDRATE",
+          scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+          categoryUsed: dbBundleResolved.categoryUsed,
+          rowSource: dbBundleResolved.rowSource,
+          ...logFieldsFromDbBundle(dbBundleResolved),
+          visibleMainLabelSource: String(b.mainLabel || "").trim()
+            ? "db"
+            : "truth_or_absent",
+          visibleCopyUsedCodeFallback: false,
+        }),
+      );
+    }
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "REPORT_PAYLOAD_DB_WORDING_HYDRATE_FAIL",
+        scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+        message: String(e?.message || e),
+      }),
+    );
+  }
+
+  const dbSurfaceOk =
+    Boolean(
+      dbBundleResolved &&
+        isUsableVisibleSurface(dbBundleResolved.bundle),
+    );
+  const dbSurfBundle = dbSurfaceOk ? dbBundleResolved.bundle : null;
 
   const threadedSignalCount = countThreadedReportSignalFields({
     dominantColor: dominantColorResolved.normalized,
@@ -559,6 +633,8 @@ export function buildReportPayloadFromScan(opts) {
       threadedSignalCount,
       hasObjectEnergy: Boolean(objectEnergyPayload),
       pipelineObjectCategorySource: pipelineObjectCategorySourceOpt,
+      dbSurfaceOk,
+      wordingPrimarySource: dbSurfaceOk ? "db" : "code_bank",
     }),
   );
 
@@ -626,6 +702,15 @@ export function buildReportPayloadFromScan(opts) {
       energyCategoryCode,
       energyCopyObjectFamily,
       crystalMode,
+      openingShort: dbSurfBundle?.opening
+        ? String(dbSurfBundle.opening).trim()
+        : undefined,
+      teaserShort: dbSurfBundle?.teaser
+        ? String(dbSurfBundle.teaser).trim()
+        : undefined,
+      visibleMainLabel: dbSurfBundle?.mainLabel
+        ? String(dbSurfBundle.mainLabel).trim()
+        : undefined,
     },
     sections: {
       whatItGives,
@@ -687,6 +772,25 @@ export function buildReportPayloadFromScan(opts) {
       flexPresentationAngleId: flexSurface.wordingMeta?.presentationAngleId,
       crystalMode: crystalMode ?? undefined,
       matchedSignalsCount: crystalSignalTags.length,
+      ...(dbSurfaceOk && dbBundleResolved
+        ? {
+            ...logFieldsFromDbBundle(dbBundleResolved),
+            visibleMainLabelSource: String(dbSurfBundle?.mainLabel || "").trim()
+              ? "db"
+              : "truth_or_absent",
+            visibleCopyUsedCodeFallback: false,
+          }
+        : {
+            wordingPrimarySource: "code_bank",
+            visibleMainLabelSource: "truth_or_composed",
+            visibleCopyUsedCodeFallback: true,
+            dbWordingSelected: false,
+            dbWordingRowId: null,
+            dbWordingSlot: null,
+            dbWordingPresentationAngle: null,
+            dbWordingClusterTag: null,
+            dbWordingFallbackLevel: null,
+          }),
       enrichmentEligible: undefined,
       enrichmentUsed: undefined,
       enrichmentProvider: undefined,

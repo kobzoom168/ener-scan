@@ -576,56 +576,7 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
 
   let heroResolved = false;
 
-  // Priority 1: bind visible hero to selected presentation angle (same VARIANT_BANKS row as report teaser compose).
-  if (presentationAngleIdRaw && truthCatHero) {
-    const branch =
-      famNormHero === "crystal"
-        ? "crystal"
-        : famNormHero === "thai_talisman"
-          ? "talisman"
-          : "thai";
-    const angled = getFlexHeroVariantByPresentationAngle(
-      branch,
-      truthCatHero,
-      presentationAngleIdRaw,
-    );
-    if (angled && String(angled.headline || "").trim()) {
-      headlineText = angled.headline;
-      fitLine = angled.fitLine;
-      bulletLines = angled.bullets.slice(0, 2);
-      flexHeroCopySource = "angle_bank";
-      flexHeroAngleId = presentationAngleIdRaw;
-      flexHeroUsedGenericFallback = false;
-      flexHeadlineVariantId = angled.wordingVariantId;
-      heroResolved = true;
-      ctaLabel = "เปิดรายงานฉบับเต็ม";
-    }
-  }
-
-  // Priority 2: stored payload teaser (already angle-aware from reportPayload.builder).
-  if (
-    !heroResolved &&
-    storedFlexSummaryLooksComplete({
-      headlineShort: s?.headlineShort,
-      fitReasonShort: s?.fitReasonShort,
-      bulletsShort: s?.bulletsShort,
-    })
-  ) {
-    headlineText =
-      cleanLine(String(s?.headlineShort || "").trim()) || headlineText;
-    fitLine = cleanLine(String(s?.fitReasonShort || "").trim());
-    bulletLines = (Array.isArray(s?.bulletsShort) ? s.bulletsShort : [])
-      .map((x) => cleanLine(String(x || "")))
-      .filter(Boolean)
-      .slice(0, 2);
-    flexHeroCopySource = "payload_teaser_stored";
-    flexHeroAngleId = presentationAngleIdRaw || null;
-    flexHeadlineVariantId =
-      String(s?.wordingVariantId || "").trim() || flexHeadlineVariantId;
-    heroResolved = true;
-    ctaLabel = "เปิดรายงานฉบับเต็ม";
-  }
-
+  // Priority 1: DB-first visible wording (angle + slot + cluster-aware templates).
   if (!heroResolved) {
     try {
       const ec = await resolveEnergyCopyForFlex({
@@ -633,6 +584,7 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
         objectFamily: s?.energyCopyObjectFamily,
         mainEnergy: mainEnergyLabelForCopy,
         crystalMode: s?.crystalMode ?? null,
+        presentationAngleId: presentationAngleIdRaw,
         hidden:
           parsed.hidden && parsed.hidden !== "-"
             ? String(parsed.hidden)
@@ -667,10 +619,19 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
           String(s?.mainEnergyLabel || "").trim() ||
           "พลังหลัก";
         ctaLabel = "เปิดรายงานฉบับเต็ม";
-        flexHeroCopySource = "db_energy_copy";
+        flexHeroCopySource =
+          ec.wordingPrimarySource === "db"
+            ? "db_visible_wording"
+            : "db_energy_copy";
         flexHeroAngleId = presentationAngleIdRaw || null;
-        flexHeroUsedGenericFallback = !presentationAngleIdRaw;
-        flexHeadlineVariantId = `db:${String(s?.energyCategoryCode || "")}`;
+        flexHeroUsedGenericFallback =
+          ec.visibleCopyUsedCodeFallback === true ||
+          ec.wordingPrimarySource === "db_legacy";
+        const diag = ec.dbWordingDiagnostics;
+        const firstSlot = diag?.dbWordingSlots?.[0];
+        flexHeadlineVariantId = firstSlot?.rowId
+          ? `db:${firstSlot.rowId}`
+          : `db:${String(s?.energyCategoryCode || "")}`;
         heroResolved = true;
       }
     } catch (err) {
@@ -683,12 +644,56 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
         message: err?.message,
       });
     }
-  } else {
-    const tSkip =
-      typeof globalThis.performance?.now === "function"
-        ? globalThis.performance.now()
-        : Date.now();
-    energyCopyFlexMs = Math.round(tSkip - tFlex0);
+  }
+
+  // Priority 2: stored payload teaser (from report build; may predate DB angle rows).
+  if (
+    !heroResolved &&
+    storedFlexSummaryLooksComplete({
+      headlineShort: s?.headlineShort,
+      fitReasonShort: s?.fitReasonShort,
+      bulletsShort: s?.bulletsShort,
+    })
+  ) {
+    headlineText =
+      cleanLine(String(s?.headlineShort || "").trim()) || headlineText;
+    fitLine = cleanLine(String(s?.fitReasonShort || "").trim());
+    bulletLines = (Array.isArray(s?.bulletsShort) ? s.bulletsShort : [])
+      .map((x) => cleanLine(String(x || "")))
+      .filter(Boolean)
+      .slice(0, 2);
+    flexHeroCopySource = "payload_teaser_stored";
+    flexHeroAngleId = presentationAngleIdRaw || null;
+    flexHeadlineVariantId =
+      String(s?.wordingVariantId || "").trim() || flexHeadlineVariantId;
+    heroResolved = true;
+    ctaLabel = "เปิดรายงานฉบับเต็ม";
+  }
+
+  // Priority 3: hardcoded angle bank (emergency / rollout safety net).
+  if (!heroResolved && presentationAngleIdRaw && truthCatHero) {
+    const branch =
+      famNormHero === "crystal"
+        ? "crystal"
+        : famNormHero === "thai_talisman"
+          ? "talisman"
+          : "thai";
+    const angled = getFlexHeroVariantByPresentationAngle(
+      branch,
+      truthCatHero,
+      presentationAngleIdRaw,
+    );
+    if (angled && String(angled.headline || "").trim()) {
+      headlineText = angled.headline;
+      fitLine = angled.fitLine;
+      bulletLines = angled.bullets.slice(0, 2);
+      flexHeroCopySource = "angle_bank";
+      flexHeroAngleId = presentationAngleIdRaw;
+      flexHeroUsedGenericFallback = false;
+      flexHeadlineVariantId = angled.wordingVariantId;
+      heroResolved = true;
+      ctaLabel = "เปิดรายงานฉบับเต็ม";
+    }
   }
 
   if (!heroResolved && !usedDbSurface) {

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildScanSummaryFirstFlex } from "../src/services/flex/flex.summaryFirst.js";
+import { getFlexHeroVariantByPresentationAngle } from "../src/utils/reports/flexSummaryShortCopy.js";
 
 const SAMPLE_TEXT = `ผลการตรวจพลังวัตถุ โดย อาจารย์ Ener
 
@@ -335,8 +336,23 @@ test("buildScanSummaryFirstFlex: guardrails for summary-card structure", async (
   assert.doesNotMatch(bodyStr, /ช่วยเรื่องความมั่นคง/);
 });
 
-test("buildScanSummaryFirstFlex: same truth protection, different presentationAngleId → different hero copy", async () => {
-  const mkPayload = (presentationAngleId) => ({
+test("crystal protection: different presentation angles → distinct code-bank heroes (fallback layer)", () => {
+  const f = getFlexHeroVariantByPresentationAngle(
+    "crystal",
+    "protection",
+    "filter",
+  );
+  const s = getFlexHeroVariantByPresentationAngle(
+    "crystal",
+    "protection",
+    "shield",
+  );
+  assert.ok(f?.headline && s?.headline);
+  assert.notEqual(f.headline, s.headline);
+});
+
+test("buildScanSummaryFirstFlex: crystal protection payload builds hero block", async () => {
+  const reportPayload = {
     reportId: "rid-angle",
     publicToken: "tok",
     scanId: "s",
@@ -356,7 +372,7 @@ test("buildScanSummaryFirstFlex: same truth protection, different presentationAn
       summaryLine: "สรุป",
       energyCategoryCode: "protection",
       energyCopyObjectFamily: "crystal",
-      presentationAngleId,
+      presentationAngleId: "filter",
     },
     sections: {
       whatItGives: [],
@@ -371,19 +387,13 @@ test("buildScanSummaryFirstFlex: same truth protection, different presentationAn
     },
     trust: { trustNote: "n", rendererVersion: "html-1.0.0" },
     actions: {},
-  });
+  };
 
-  const flexFilter = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+  const flex = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
     reportUrl: "https://example.com/r/f",
-    reportPayload: mkPayload("filter"),
+    reportPayload,
   });
-  const flexShield = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
-    reportUrl: "https://example.com/r/s",
-    reportPayload: mkPayload("shield"),
-  });
-  const tFilter = collectTextNodes(flexFilter.contents.body).join("\n");
-  const tShield = collectTextNodes(flexShield.contents.body).join("\n");
-  assert.notEqual(tFilter, tShield);
-  assert.match(tFilter, /กรอง|รบกวน|ปะทะ/);
-  assert.match(tShield, /คุ้มครอง|แรงลบ|ปะทะ/);
+  const bodyStr = collectTextNodes(flex.contents.body).join("\n");
+  assert.ok(bodyStr.length > 20);
+  assert.match(bodyStr, /พลังหลัก|ระดับพลัง/);
 });

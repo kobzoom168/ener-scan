@@ -1,11 +1,13 @@
 /**
- * LINE-only summary copy banks (short, conversational) — separate from HTML/report wording.
- * Does not change scores, categories, or deterministic fields.
+ * LINE-only summary copy — DB-first via `energy_copy_templates` + shared resolver;
+ * `LINE_BANKS` remains fallback when DB is missing or incomplete.
+ * Does not change scores, categories, or deterministic truth fields.
  * @module
  */
 
 import { normalizeObjectFamilyForEnergyCopy } from "./energyCategoryResolve.util.js";
 import { pickVariantAvoidingRepeatWithAngles } from "./wordingVariantGuard.util.js";
+import { resolveVisibleWordingBundleFromDb } from "../services/dbWordingBundle.service.js";
 
 /**
  * @typedef {Object} LineSummaryWordingResolved
@@ -17,6 +19,15 @@ import { pickVariantAvoidingRepeatWithAngles } from "./wordingVariantGuard.util.
  * @property {boolean} summaryDiversified
  * @property {boolean} summaryAvoidedRepeat
  * @property {boolean} summaryAvoidedAngleCluster
+ * @property {"stored_db_payload"|"db_resolver"|"line_bank"|"hard_fallback"} [lineSummaryPrimarySource]
+ * @property {boolean} [lineSummaryDbSelected]
+ * @property {string|number|null} [lineSummaryDbRowId]
+ * @property {string|null} [lineSummarySlot]
+ * @property {string|null} [lineSummaryPresentationAngle]
+ * @property {string|null} [lineSummaryClusterTag]
+ * @property {number|null} [lineSummaryFallbackLevel]
+ * @property {boolean} [lineSummaryUsedBankFallback]
+ * @property {boolean} [lineSummaryUsedHardFallback]
  */
 
 /** @type {Record<string, Record<string, Array<{ opening: string, fit: string, presentationAngle: string }>>>} */
@@ -287,20 +298,208 @@ function getLineVariantList(bankKey) {
 }
 
 /**
+ * Prefer opening / teaser slots; then headline. Fit from fit_line or first bullet.
+ * @param {null|{ opening?: string|null, teaser?: string|null, headline?: string|null, fitLine?: string|null, bullets?: string[] }} bundle
+ * @returns {{ opening: string, fitLine: string } | null}
+ */
+export function pickLineOpeningFitFromVisibleBundle(bundle) {
+  if (!bundle) return null;
+  const opening = String(
+    bundle.opening || bundle.teaser || bundle.headline || "",
+  ).trim();
+  const fitLine = String(
+    bundle.fitLine || (Array.isArray(bundle.bullets) ? bundle.bullets[0] : "") ||
+      "",
+  ).trim();
+  if (opening && fitLine) return { opening, fitLine };
+  return null;
+}
+
+/**
+ * Angle for LINE diagnostics: prefer opening → fit_line → headline row.
+ * @param {null|{ diagnostics?: { dbWordingSlots?: Array<{ slot?: string, presentationAngle?: string|null }> } }} bundle
+ * @returns {string|null}
+ */
+function presentationAngleFromBundleSlots(bundle) {
+  const slots = bundle?.diagnostics?.dbWordingSlots || [];
+  const order = ["opening", "teaser", "fit_line", "headline", "bullet"];
+  for (const slot of order) {
+    const row = slots.find((s) => s.slot === slot);
+    const pa = row?.presentationAngle;
+    if (pa != null && String(pa).trim()) return String(pa).trim();
+  }
+  return null;
+}
+
+/**
+ * Reuse report payload summary when it was already hydrated from DB (no drift vs Flex/stored teaser).
+ * @param {import("../services/reports/reportPayload.types.js").ReportPayload | null | undefined} reportPayload
+ * @returns {Omit<LineSummaryWordingResolved, "summaryDiversified"|"summaryAvoidedRepeat"|"summaryAvoidedAngleCluster"> | null}
+ */
+export function tryLineSummaryFromStoredDbPayload(reportPayload) {
+  const s = reportPayload?.summary;
+  const d = reportPayload?.diagnostics;
+  if (!s || !d || typeof d !== "object") return null;
+
+  const dbWon =
+    d.visibleCopyUsedCodeFallback === false && d.wordingPrimarySource === "db";
+  const variantHintsDb = String(s.wordingVariantId || "").startsWith("db:");
+  if (!dbWon && !variantHintsDb) return null;
+
+  const opening = String(
+    s.openingShort ||
+      s.teaserShort ||
+      s.headlineShort ||
+      reportPayload?.wording?.htmlOpeningLine ||
+      "",
+  ).trim();
+  const fitLine = String(
+    s.fitReasonShort ||
+      (Array.isArray(s.bulletsShort) ? s.bulletsShort[0] : "") ||
+      "",
+  ).trim();
+  if (!opening || !fitLine) return null;
+
+  const presentationAngleId =
+    String(s.presentationAngleId || "").trim() ||
+    String(d.flexPresentationAngleId || "").trim() ||
+    "neutral";
+
+  return {
+    opening,
+    fitLine,
+    summaryBankUsed: `aligned:${String(s.wordingVariantId || "db").slice(0, 64)}`,
+    summaryVariantId: String(s.wordingVariantId || "db:aligned"),
+    presentationAngleId,
+    lineSummaryPrimarySource: "stored_db_payload",
+    lineSummaryDbSelected: true,
+    lineSummaryDbRowId: d.dbWordingRowId ?? null,
+    lineSummarySlot: "report_summary_surface",
+    lineSummaryPresentationAngle:
+      s.presentationAngleId != null && String(s.presentationAngleId).trim()
+        ? String(s.presentationAngleId).trim()
+        : d.flexPresentationAngleId ?? null,
+    lineSummaryClusterTag: d.dbWordingClusterTag ?? null,
+    lineSummaryFallbackLevel:
+      typeof d.dbWordingFallbackLevel === "number"
+        ? d.dbWordingFallbackLevel
+        : null,
+    lineSummaryUsedBankFallback: false,
+    lineSummaryUsedHardFallback: false,
+  };
+}
+
+/**
+ * @param {Awaited<ReturnType<typeof import("../services/dbWordingBundle.service.js").resolveVisibleWordingBundleFromDb>>} resolved
+ */
+function lineDiagnosticsFromDbResolver(resolved) {
+  const b = resolved?.bundle;
+  const slots = b?.diagnostics?.dbWordingSlots || [];
+  const openingSlot = slots.find((x) => x.slot === "opening");
+  const fitSlot = slots.find((x) => x.slot === "fit_line");
+  const headlineSlot = slots.find((x) => x.slot === "headline");
+  const ref = openingSlot || fitSlot || headlineSlot || slots[0];
+  return {
+    lineSummaryPrimarySource: /** @type {const} */ ("db_resolver"),
+    lineSummaryDbSelected: Boolean(b?.diagnostics?.dbWordingSelected),
+    lineSummaryDbRowId: ref?.rowId ?? null,
+    lineSummarySlot: ref?.slot ?? null,
+    lineSummaryPresentationAngle:
+      presentationAngleFromBundleSlots(b) ||
+      (ref?.presentationAngle != null ? String(ref.presentationAngle) : null),
+    lineSummaryClusterTag: ref?.clusterTag ?? null,
+    lineSummaryFallbackLevel:
+      typeof b?.diagnostics?.dbWordingFallbackLevel === "number"
+        ? b.diagnostics.dbWordingFallbackLevel
+        : null,
+    lineSummaryUsedBankFallback: false,
+    lineSummaryUsedHardFallback: false,
+  };
+}
+
+/**
  * @param {import("../services/reports/reportPayload.types.js").ReportPayload | null | undefined} reportPayload
  * @param {string} [lineUserId]
  * @param {string} [seed]
- * @returns {LineSummaryWordingResolved}
+ * @returns {Promise<LineSummaryWordingResolved>}
  */
-export function resolveLineSummaryWording(reportPayload, lineUserId = "", seed = "") {
-  const s = reportPayload?.summary && typeof reportPayload.summary === "object"
-    ? reportPayload.summary
-    : {};
+export async function resolveLineSummaryWording(
+  reportPayload,
+  lineUserId = "",
+  seed = "",
+) {
+  const s =
+    reportPayload?.summary && typeof reportPayload.summary === "object"
+      ? reportPayload.summary
+      : {};
   const objectFamily =
-    typeof s.energyCopyObjectFamily === "string" && s.energyCopyObjectFamily.trim()
+    typeof s.energyCopyObjectFamily === "string" &&
+    s.energyCopyObjectFamily.trim()
       ? s.energyCopyObjectFamily
       : "";
-  const categoryCode = String(s.energyCategoryCode || "").trim() || "luck_fortune";
+  const categoryCode =
+    String(s.energyCategoryCode || "").trim() || "luck_fortune";
+
+  const stored = tryLineSummaryFromStoredDbPayload(reportPayload);
+  if (stored) {
+    const out = {
+      ...stored,
+      summaryDiversified: false,
+      summaryAvoidedRepeat: false,
+      summaryAvoidedAngleCluster: false,
+    };
+    logLineSummarySelected(out);
+    return out;
+  }
+
+  let dbResolved = null;
+  try {
+    dbResolved = await resolveVisibleWordingBundleFromDb({
+      categoryCode,
+      objectFamilyRaw: objectFamily,
+      presentationAngleId: String(s.presentationAngleId || "").trim(),
+      crystalMode: s.crystalMode ?? "",
+    });
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "LINE_SUMMARY_DB_WORDING_RESOLVE_FAIL",
+        message: String(e?.message || e),
+      }),
+    );
+  }
+
+  const bundle = dbResolved?.bundle;
+  const picked =
+    bundle && pickLineOpeningFitFromVisibleBundle(bundle);
+
+  if (picked && dbResolved) {
+    const angleRaw =
+      presentationAngleFromBundleSlots(bundle) ||
+      String(s.presentationAngleId || "").trim();
+    const presentationAngleId = angleRaw || "neutral";
+    const diag = lineDiagnosticsFromDbResolver(dbResolved);
+    const out = {
+      opening: picked.opening,
+      fitLine: picked.fitLine,
+      summaryBankUsed: `db:energy_copy_templates:${dbResolved.categoryUsed}`,
+      summaryVariantId: `db:${dbResolved.rowSource}:${dbResolved.categoryUsed}`,
+      presentationAngleId,
+      summaryDiversified: Boolean(
+        bundle?.diagnostics?.usedClusterTags?.size &&
+          bundle.diagnostics.usedClusterTags.size > 1,
+      ),
+      summaryAvoidedRepeat: Boolean(
+        bundle?.diagnostics?.usedClusterTags?.size,
+      ),
+      summaryAvoidedAngleCluster: Boolean(
+        bundle?.diagnostics?.usedClusterTags?.size,
+      ),
+      ...diag,
+    };
+    logLineSummarySelected(out);
+    return out;
+  }
 
   const bankKey = lineSummaryBankKey(objectFamily, categoryCode);
   const list = getLineVariantList(bankKey) || [
@@ -316,39 +515,47 @@ export function resolveLineSummaryWording(reportPayload, lineUserId = "", seed =
     list,
     String(seed || reportPayload?.reportId || "line"),
   );
-  const picked = list[variantIndex] || list[0];
+  const pickedBank = list[variantIndex] || list[0];
   const summaryDiversified = list.length > 1 && variantIndex !== 0;
-  const presentationAngleId = String(picked.presentationAngle || `v${variantIndex}`).trim();
+  const presentationAngleId = String(
+    pickedBank.presentationAngle || `v${variantIndex}`,
+  ).trim();
 
-  const resolved = {
-    opening: String(picked.opening || "").trim(),
-    fit: String(picked.fit || "").trim(),
+  let opening = String(pickedBank.opening || "").trim();
+  let fitLine = String(pickedBank.fit || "").trim();
+  const hardEmpty = !opening && !fitLine;
+  if (hardEmpty) {
+    opening = "โทนนี้เข้ากับการใช้ในชีวิตประจำวัน";
+    fitLine = "เปิดรายงานเพื่อดูจุดเด่นและคำแนะนำเพิ่มเติม";
+  }
+
+  const out = {
+    opening,
+    fitLine,
     summaryBankUsed: bankKey,
     summaryVariantId: `${bankKey}:v${variantIndex}`,
     presentationAngleId,
     summaryDiversified,
     summaryAvoidedRepeat: avoidedRepeat || avoidedAngleCluster,
     summaryAvoidedAngleCluster: avoidedAngleCluster,
+    lineSummaryPrimarySource: hardEmpty ? "hard_fallback" : "line_bank",
+    lineSummaryDbSelected: false,
+    lineSummaryDbRowId: null,
+    lineSummarySlot: null,
+    lineSummaryPresentationAngle: null,
+    lineSummaryClusterTag: null,
+    lineSummaryFallbackLevel: null,
+    lineSummaryUsedBankFallback: !hardEmpty,
+    lineSummaryUsedHardFallback: hardEmpty,
   };
 
-  console.log(
-    JSON.stringify({
-      event: "LINE_SUMMARY_WORDING_SELECTED",
-      summaryBankUsed: resolved.summaryBankUsed,
-      summaryVariantId: resolved.summaryVariantId,
-      presentationAngleId: resolved.presentationAngleId,
-      summaryDiversified: resolved.summaryDiversified,
-      summaryAvoidedRepeat: resolved.summaryAvoidedRepeat,
-      summaryAvoidedAngleCluster: resolved.summaryAvoidedAngleCluster,
-    }),
-  );
-
+  logLineSummarySelected(out);
   if (avoidedRepeat) {
     console.log(
       JSON.stringify({
         event: "LINE_SUMMARY_WORDING_AVOIDED_REPEAT",
         summaryBankUsed: bankKey,
-        summaryVariantId: resolved.summaryVariantId,
+        summaryVariantId: out.summaryVariantId,
       }),
     );
   }
@@ -362,14 +569,31 @@ export function resolveLineSummaryWording(reportPayload, lineUserId = "", seed =
     );
   }
 
-  return {
-    opening: resolved.opening,
-    fitLine: resolved.fit,
-    summaryBankUsed: resolved.summaryBankUsed,
-    summaryVariantId: resolved.summaryVariantId,
-    presentationAngleId: resolved.presentationAngleId,
-    summaryDiversified: resolved.summaryDiversified,
-    summaryAvoidedRepeat: resolved.summaryAvoidedRepeat,
-    summaryAvoidedAngleCluster: resolved.summaryAvoidedAngleCluster,
-  };
+  return out;
+}
+
+/**
+ * @param {LineSummaryWordingResolved} resolved
+ */
+function logLineSummarySelected(resolved) {
+  console.log(
+    JSON.stringify({
+      event: "LINE_SUMMARY_WORDING_SELECTED",
+      summaryBankUsed: resolved.summaryBankUsed,
+      summaryVariantId: resolved.summaryVariantId,
+      presentationAngleId: resolved.presentationAngleId,
+      summaryDiversified: resolved.summaryDiversified,
+      summaryAvoidedRepeat: resolved.summaryAvoidedRepeat,
+      summaryAvoidedAngleCluster: resolved.summaryAvoidedAngleCluster,
+      lineSummaryPrimarySource: resolved.lineSummaryPrimarySource,
+      lineSummaryDbSelected: resolved.lineSummaryDbSelected,
+      lineSummaryDbRowId: resolved.lineSummaryDbRowId,
+      lineSummarySlot: resolved.lineSummarySlot,
+      lineSummaryPresentationAngle: resolved.lineSummaryPresentationAngle,
+      lineSummaryClusterTag: resolved.lineSummaryClusterTag,
+      lineSummaryFallbackLevel: resolved.lineSummaryFallbackLevel,
+      lineSummaryUsedBankFallback: resolved.lineSummaryUsedBankFallback,
+      lineSummaryUsedHardFallback: resolved.lineSummaryUsedHardFallback,
+    }),
+  );
 }

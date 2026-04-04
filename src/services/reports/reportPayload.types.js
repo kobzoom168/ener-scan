@@ -50,6 +50,15 @@
  * @property {string|null} [enrichmentProvider]
  * @property {string} [deliveryStrategy]
  * @property {boolean} [lineSummaryPresent]
+ * @property {"db"|"code_bank"} [wordingPrimarySource]
+ * @property {boolean} [dbWordingSelected]
+ * @property {string|number|null} [dbWordingRowId]
+ * @property {string|null} [dbWordingSlot]
+ * @property {string|null} [dbWordingPresentationAngle]
+ * @property {string|null} [dbWordingClusterTag]
+ * @property {number|null} [dbWordingFallbackLevel]
+ * @property {"db"|"truth_or_absent"|"truth_or_composed"} [visibleMainLabelSource]
+ * @property {boolean} [visibleCopyUsedCodeFallback]
  */
 
 /**
@@ -141,6 +150,9 @@
  * @property {"general"|"spiritual_growth"|null} [crystalMode] — crystal subgroup; null when not crystal
  * @property {string} [presentationAngleId] — Flex wording surface angle (e.g. filter, shield); truth category unchanged
  * @property {string} [wordingVariantId] — composed pool variant id for Flex teaser lines
+ * @property {string} [openingShort] — DB `opening` slot when hydrated
+ * @property {string} [teaserShort] — DB `teaser` slot when hydrated
+ * @property {string} [visibleMainLabel] — effect-first visible label from DB `main_label` (truth stays in mainEnergyLabel)
  */
 
 /**
@@ -177,4 +189,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.2";
+export const REPORT_PAYLOAD_VERSION = "1.2.3";

@@ -157,7 +157,7 @@ test("buildCompatibilityPayload: explain array length", () => {
   assert.ok(p.inputs.ownerElement);
 });
 
-test("buildReportPayloadFromScan: overrides AI compatibility with deterministic score when birthdate set", () => {
+test("buildReportPayloadFromScan: overrides AI compatibility with deterministic score when birthdate set", async () => {
   const text = `
 ระดับพลัง: 8.5
 พลังหลัก: สมดุล
@@ -169,7 +169,7 @@ test("buildReportPayloadFromScan: overrides AI compatibility with deterministic 
 เหตุผลที่เข้ากับเจ้าของ
 ทดสอบ
 `;
-  const payload = buildReportPayloadFromScan({
+  const payload = await buildReportPayloadFromScan({
     resultText: text,
     scanResultId: "00000000-0000-4000-8000-000000000099",
     scanRequestId: "req-1",
