@@ -69,6 +69,194 @@ export function resolveEnergyTypeMeta(mainEnergy) {
 }
 
 /**
+ * Crystal/stone: require strong protect cues before PROTECT; weak คุ้มครอง/คุ้มกัน/กันเรื่องไม่ดี
+ * do not alone map to PROTECT (non-protect signals win first).
+ *
+ * Thai amulet / talisman / takrud: unchanged {@link resolveEnergyTypeMeta} + telemetry wrapper.
+ *
+ * @param {string} mainEnergy
+ * @param {string} [objectFamilyRaw] — pipeline slug e.g. crystal, thai_amulet, generic
+ * @returns {{
+ *   energyType: string,
+ *   matchedKeyword: string|null,
+ *   protectSignalStrength: "strong"|"weak"|"none",
+ *   energyTypeResolverMode: "thai_legacy"|"crystal_conservative",
+ *   energyTypeResolverFamily: string,
+ *   resolvedEnergyTypeBeforeCategoryMap: string,
+ * }}
+ */
+export function resolveEnergyTypeMetaForFamily(mainEnergy, objectFamilyRaw = "") {
+  const famRaw = String(objectFamilyRaw || "").trim().toLowerCase();
+  const isCrystal = famRaw === "crystal";
+  const familyLabel = famRaw || "generic";
+
+  if (!isCrystal) {
+    const legacy = resolveEnergyTypeMeta(mainEnergy);
+    return {
+      ...legacy,
+      protectSignalStrength:
+        legacy.energyType === ENERGY_TYPES.PROTECT ? "strong" : "none",
+      energyTypeResolverMode: "thai_legacy",
+      energyTypeResolverFamily: familyLabel,
+      resolvedEnergyTypeBeforeCategoryMap: legacy.energyType,
+    };
+  }
+
+  const crystal = resolveCrystalEnergyTypeMeta(mainEnergy);
+  return {
+    ...crystal,
+    energyTypeResolverFamily: "crystal",
+    resolvedEnergyTypeBeforeCategoryMap: crystal.energyType,
+  };
+}
+
+/**
+ * @param {string} mainEnergy
+ * @returns {Omit<ReturnType<typeof resolveEnergyTypeMetaForFamily>, "energyTypeResolverFamily"|"resolvedEnergyTypeBeforeCategoryMap">}
+ */
+function resolveCrystalEnergyTypeMeta(mainEnergy) {
+  const s = cleanLine(mainEnergy);
+  if (!s || s === "-") {
+    return {
+      energyType: ENERGY_TYPES.BOOST,
+      matchedKeyword: null,
+      protectSignalStrength: "none",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  const lower = s.toLowerCase();
+
+  /** Strong protect — explicit shelter / ward language */
+  if (s.includes("พลังปกป้อง")) {
+    return {
+      energyType: ENERGY_TYPES.PROTECT,
+      matchedKeyword: "พลังปกป้อง",
+      protectSignalStrength: "strong",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (/กันสิ่งรบกวน|ป้องกันสิ่งรบกวน/.test(s)) {
+    return {
+      energyType: ENERGY_TYPES.PROTECT,
+      matchedKeyword: "กันสิ่งรบกวน",
+      protectSignalStrength: "strong",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (s.includes("กันแรงลบ")) {
+    return {
+      energyType: ENERGY_TYPES.PROTECT,
+      matchedKeyword: "กันแรงลบ",
+      protectSignalStrength: "strong",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (s.includes("เกราะพลัง")) {
+    return {
+      energyType: ENERGY_TYPES.PROTECT,
+      matchedKeyword: "เกราะพลัง",
+      protectSignalStrength: "strong",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (/shield/i.test(lower)) {
+    return {
+      energyType: ENERGY_TYPES.PROTECT,
+      matchedKeyword: "shield",
+      protectSignalStrength: "strong",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (/guard/i.test(lower)) {
+    return {
+      energyType: ENERGY_TYPES.PROTECT,
+      matchedKeyword: "guard",
+      protectSignalStrength: "strong",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (s.includes("ปกป้อง")) {
+    return {
+      energyType: ENERGY_TYPES.PROTECT,
+      matchedKeyword: "ปกป้อง",
+      protectSignalStrength: "strong",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (s.includes("ป้องกัน")) {
+    return {
+      energyType: ENERGY_TYPES.PROTECT,
+      matchedKeyword: "ป้องกัน",
+      protectSignalStrength: "strong",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+
+  /** Non-protect first — beats ambiguous คุ้มครอง / คุ้มกัน */
+  if (s.includes("เสน่ห์") || s.includes("ดึงดูด")) {
+    return {
+      energyType: ENERGY_TYPES.ATTRACT,
+      matchedKeyword: null,
+      protectSignalStrength: "none",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (s.includes("อำนาจ") || s.includes("บารมี")) {
+    return {
+      energyType: ENERGY_TYPES.POWER,
+      matchedKeyword: null,
+      protectSignalStrength: "none",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (s.includes("สมดุล") || s.includes("นิ่ง")) {
+    return {
+      energyType: ENERGY_TYPES.BALANCE,
+      matchedKeyword: null,
+      protectSignalStrength: "none",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (s.includes("เมตตา")) {
+    return {
+      energyType: ENERGY_TYPES.KINDNESS,
+      matchedKeyword: null,
+      protectSignalStrength: "none",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+  if (s.includes("โชคลาภ") || s.includes("โชค")) {
+    return {
+      energyType: ENERGY_TYPES.LUCK,
+      matchedKeyword: null,
+      protectSignalStrength: "none",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+
+  const weakKw =
+    s.includes("คุ้มครอง") ? "คุ้มครอง"
+    : s.includes("คุ้มกัน") ? "คุ้มกัน"
+    : s.includes("กันเรื่องไม่ดี") ? "กันเรื่องไม่ดี"
+    : null;
+  if (weakKw) {
+    return {
+      energyType: ENERGY_TYPES.BOOST,
+      matchedKeyword: weakKw,
+      protectSignalStrength: "weak",
+      energyTypeResolverMode: "crystal_conservative",
+    };
+  }
+
+  return {
+    energyType: ENERGY_TYPES.BOOST,
+    matchedKeyword: null,
+    protectSignalStrength: "none",
+    energyTypeResolverMode: "crystal_conservative",
+  };
+}
+
+/**
  * @param {number|null|undefined} numeric
  * @returns {string} One of `SCORE_TIERS` values.
  */

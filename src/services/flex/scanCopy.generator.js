@@ -17,7 +17,7 @@ import {
   pickEffect,
   pickFeel,
   pickUseCase,
-  resolveEnergyType,
+  resolveEnergyTypeMetaForFamily,
   resolveScoreTier,
 } from "./scanCopy.utils.js";
 import {
@@ -35,7 +35,11 @@ import { deriveGoalMapping } from "./scanCopy.goalMapping.js";
 import { resolveScanToneLevel } from "./scanCopy.toneLevel.js";
 
 export { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.config.js";
-export { resolveEnergyType, resolveScoreTier } from "./scanCopy.utils.js";
+export {
+  resolveEnergyType,
+  resolveEnergyTypeMetaForFamily,
+  resolveScoreTier,
+} from "./scanCopy.utils.js";
 
 function capMainLabel(s, maxLen) {
   const t = cleanLine(s);
@@ -59,11 +63,15 @@ function capMainLabel(s, maxLen) {
  *   birthdateSignals?: unknown,
  *   objectSignals?: unknown,
  *   display?: Record<string, unknown>,
+ *   objectFamily?: string,
  * }} input
  */
 export function generateScanCopy(input) {
   const mainEnergy = input.mainEnergy ?? "-";
-  const energyType = resolveEnergyType(mainEnergy);
+  const energyType = resolveEnergyTypeMetaForFamily(
+    mainEnergy,
+    input.objectFamily ?? "",
+  ).energyType;
   const tier = resolveScoreTier(input.scoreNumeric);
 
   const scanToneLevel = resolveScanToneLevel(input);

@@ -7,8 +7,7 @@
  */
 import { ENERGY_TYPES } from "../services/flex/scanCopy.config.js";
 import {
-  resolveEnergyType,
-  resolveEnergyTypeMeta,
+  resolveEnergyTypeMetaForFamily,
 } from "../services/flex/scanCopy.utils.js";
 
 /**
@@ -194,7 +193,7 @@ export function inferEnergyCategoryCodeFromMainEnergy(mainEnergy, objectFamilyRa
     }
   }
 
-  const t = resolveEnergyType(raw);
+  const t = resolveEnergyTypeMetaForFamily(raw, objectFamilyRaw).energyType;
 
   if (isCrystal) {
     switch (t) {
@@ -243,13 +242,18 @@ export function inferEnergyCategoryCodeFromMainEnergy(mainEnergy, objectFamilyRa
  *   inferenceBranch: string,
  *   resolveEnergyTypeResult: string,
  *   protectKeywordMatched: string | null,
+ *   protectWeakKeywordMatched: string | null,
+ *   protectSignalStrength: string,
+ *   energyTypeResolverMode: string,
+ *   energyTypeResolverFamily: string,
+ *   resolvedEnergyTypeBeforeCategoryMap: string,
  * }}
  */
 export function inferEnergyCategoryInferenceTrace(mainEnergy, objectFamilyRaw) {
   const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw || "");
   const isCrystal = fam === "crystal";
   const raw = String(mainEnergy || "").replace(/\s+/g, " ").trim();
-  const meta = resolveEnergyTypeMeta(raw);
+  let meta = resolveEnergyTypeMetaForFamily(raw, objectFamilyRaw);
   const code = inferEnergyCategoryCodeFromMainEnergy(mainEnergy, objectFamilyRaw);
 
   let inferenceBranch = "resolve_energy_type_map";
@@ -263,6 +267,13 @@ export function inferEnergyCategoryInferenceTrace(mainEnergy, objectFamilyRaw) {
       inferenceBranch = "crystal_money_work";
     } else if (hasLuckWord) {
       inferenceBranch = "crystal_luck_word";
+      meta = {
+        ...meta,
+        energyType: ENERGY_TYPES.LUCK,
+        matchedKeyword: null,
+        protectSignalStrength: "none",
+        resolvedEnergyTypeBeforeCategoryMap: ENERGY_TYPES.LUCK,
+      };
     } else {
       inferenceBranch = `crystal_type_${meta.energyType}`;
     }
@@ -270,12 +281,22 @@ export function inferEnergyCategoryInferenceTrace(mainEnergy, objectFamilyRaw) {
     inferenceBranch = `thai_type_${meta.energyType}`;
   }
 
+  const protectWeakKeywordMatched =
+    isCrystal && meta.protectSignalStrength === "weak"
+      ? meta.matchedKeyword
+      : null;
+
   return {
     code,
     inferenceBranch,
     resolveEnergyTypeResult: meta.energyType,
     protectKeywordMatched:
       meta.energyType === ENERGY_TYPES.PROTECT ? meta.matchedKeyword : null,
+    protectWeakKeywordMatched,
+    protectSignalStrength: meta.protectSignalStrength ?? "none",
+    energyTypeResolverMode: meta.energyTypeResolverMode,
+    energyTypeResolverFamily: meta.energyTypeResolverFamily,
+    resolvedEnergyTypeBeforeCategoryMap: meta.resolvedEnergyTypeBeforeCategoryMap,
   };
 }
 

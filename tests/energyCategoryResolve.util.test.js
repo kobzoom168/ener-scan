@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   inferEnergyCategoryCodeFromMainEnergy,
+  inferEnergyCategoryInferenceTrace,
   extractCrystalSpiritualSignalTags,
   normalizeObjectFamilyForEnergyCopy,
   pickAccentColorFromCategoryCode,
@@ -18,6 +19,89 @@ test("crystal + protection", () => {
   );
   assert.equal(normalizeObjectFamilyForEnergyCopy("crystal"), "crystal");
   assert.equal(pickAccentColorFromCategoryCode("protection"), "#D4AF37");
+});
+
+test("crystal: weak คุ้มครอง alone → luck_fortune (not protection)", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("คุ้มครอง", "crystal"),
+    "luck_fortune",
+  );
+  const tr = inferEnergyCategoryInferenceTrace("คุ้มครอง", "crystal");
+  assert.equal(tr.protectSignalStrength, "weak");
+  assert.equal(tr.protectWeakKeywordMatched, "คุ้มครอง");
+  assert.equal(tr.protectKeywordMatched, null);
+  assert.equal(tr.energyTypeResolverMode, "crystal_conservative");
+});
+
+test("crystal: พลังปกป้อง → protection + strong signal", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("พลังปกป้อง (กันแรงลบ)", "crystal"),
+    "protection",
+  );
+  const tr = inferEnergyCategoryInferenceTrace("พลังปกป้อง (กันแรงลบ)", "crystal");
+  assert.equal(tr.protectSignalStrength, "strong");
+  assert.equal(tr.protectKeywordMatched, "พลังปกป้อง");
+});
+
+test("crystal: ป้องกันสิ่งรบกวน → protection", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("ป้องกันสิ่งรบกวนรอบตัว", "crystal"),
+    "protection",
+  );
+});
+
+test("crystal: สมดุลและคุ้มครองเบา ๆ → confidence", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("สมดุลและคุ้มครองเบา ๆ", "crystal"),
+    "confidence",
+  );
+});
+
+test("crystal: โชคและคุ้มครอง → luck_fortune (luck word branch)", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("โชคและคุ้มครอง", "crystal"),
+    "luck_fortune",
+  );
+  const tr = inferEnergyCategoryInferenceTrace("โชคและคุ้มครอง", "crystal");
+  assert.equal(tr.inferenceBranch, "crystal_luck_word");
+});
+
+test("crystal: เสน่ห์และคุ้มครอง → charm", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("เสน่ห์และคุ้มครอง", "crystal"),
+    "charm",
+  );
+});
+
+test("thai_amulet: บารมี → confidence", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("บารมีนิ่ง", "thai_amulet"),
+    "confidence",
+  );
+});
+
+test("thai_amulet: อำนาจ → confidence", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("อำนาจในการตัดสินใจ", "thai_amulet"),
+    "confidence",
+  );
+});
+
+test("thai_amulet: คุ้มครอง → protection (legacy)", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("เน้นคุ้มครอง", "thai_amulet"),
+    "protection",
+  );
+  const tr = inferEnergyCategoryInferenceTrace("เน้นคุ้มครอง", "thai_amulet");
+  assert.equal(tr.protectSignalStrength, "strong");
+  assert.equal(tr.energyTypeResolverMode, "thai_legacy");
+});
+
+test("thai_talisman: คุ้มครอง → protection", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("คุ้มครอง", "thai_talisman"),
+    "protection",
+  );
 });
 
 test("crystal + confidence (อำนาจ / บารมี)", () => {

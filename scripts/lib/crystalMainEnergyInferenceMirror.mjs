@@ -76,6 +76,11 @@ export function mirrorMainEnergyInferenceLikeBuilder(resultText, objectFamilyOpt
     mainEnergySource: parsed.mainEnergyResolution?.source ?? "missing",
     resolveEnergyTypeResult: trace.resolveEnergyTypeResult,
     protectKeywordMatched: trace.protectKeywordMatched,
+    protectWeakKeywordMatched: trace.protectWeakKeywordMatched,
+    protectSignalStrength: trace.protectSignalStrength,
+    energyTypeResolverMode: trace.energyTypeResolverMode,
+    energyTypeResolverFamily: trace.energyTypeResolverFamily,
+    resolvedEnergyTypeBeforeCategoryMap: trace.resolvedEnergyTypeBeforeCategoryMap,
     energyCategoryInferenceBranch: trace.inferenceBranch,
     energyCategoryCode,
   };

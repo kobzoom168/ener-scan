@@ -16,7 +16,7 @@ import { resolveEnergyCopyForFlex } from "../energyCopyFlex.service.js";
 import { buildScanFlexAltText, FLEX_SPLIT_WARN_THRESHOLD, splitSentencesForFlex } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import { ENERGY_TYPES } from "./scanCopy.config.js";
-import { resolveEnergyType } from "./scanCopy.utils.js";
+import { resolveEnergyTypeMetaForFamily } from "./scanCopy.utils.js";
 
 const FLEX_CARD_BG = "#000000";
 const FLEX_BOX_BG = "#111111";
@@ -512,9 +512,10 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
   const overviewRaw =
     parsed.overview === "-" ? "" : String(parsed.overview || "");
   const splitOverview = splitSentencesForFlex(overviewRaw).length;
-  const resolvedType = resolveEnergyType(
+  const resolvedType = resolveEnergyTypeMetaForFamily(
     String(reportPayload?.summary?.mainEnergyLabel || mainEnergy || "").trim(),
-  );
+    String(s?.energyCopyObjectFamily || reportPayload?.diagnostics?.objectFamily || ""),
+  ).energyType;
   const familyPattern = resolveFamilyPattern(reportPayload, resolvedType);
   const familyPatternUsed = Object.entries(SUMMARY_CARD_FAMILY_PATTERNS).find(
     ([, v]) => v === familyPattern,

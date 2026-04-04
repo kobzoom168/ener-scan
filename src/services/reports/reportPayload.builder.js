@@ -454,6 +454,16 @@ export async function buildReportPayloadFromScan(opts) {
         energyCategoryInferenceTrace.resolveEnergyTypeResult,
       protectKeywordMatched:
         energyCategoryInferenceTrace.protectKeywordMatched,
+      protectWeakKeywordMatched:
+        energyCategoryInferenceTrace.protectWeakKeywordMatched,
+      protectSignalStrength:
+        energyCategoryInferenceTrace.protectSignalStrength,
+      energyTypeResolverMode:
+        energyCategoryInferenceTrace.energyTypeResolverMode,
+      energyTypeResolverFamily:
+        energyCategoryInferenceTrace.energyTypeResolverFamily,
+      resolvedEnergyTypeBeforeCategoryMap:
+        energyCategoryInferenceTrace.resolvedEnergyTypeBeforeCategoryMap,
       energyCategoryInferenceBranch:
         energyCategoryInferenceTrace.inferenceBranch,
       energyCategoryCode,
@@ -809,6 +819,16 @@ export async function buildReportPayloadFromScan(opts) {
         energyCategoryInferenceTrace.resolveEnergyTypeResult,
       protectKeywordMatched:
         energyCategoryInferenceTrace.protectKeywordMatched ?? undefined,
+      protectWeakKeywordMatched:
+        energyCategoryInferenceTrace.protectWeakKeywordMatched ?? undefined,
+      protectSignalStrength:
+        energyCategoryInferenceTrace.protectSignalStrength,
+      energyTypeResolverMode:
+        energyCategoryInferenceTrace.energyTypeResolverMode,
+      energyTypeResolverFamily:
+        energyCategoryInferenceTrace.energyTypeResolverFamily,
+      resolvedEnergyTypeBeforeCategoryMap:
+        energyCategoryInferenceTrace.resolvedEnergyTypeBeforeCategoryMap,
       energyCategoryInferenceBranch:
         energyCategoryInferenceTrace.inferenceBranch,
       ...(dbSurfaceOk && dbBundleResolved

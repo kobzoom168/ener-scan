@@ -3,7 +3,7 @@
  * Does not change scan core or scoring — display-layer only.
  */
 import { ENERGY_TYPES } from "../flex/scanCopy.config.js";
-import { resolveEnergyType } from "../flex/scanCopy.utils.js";
+import { resolveEnergyTypeMetaForFamily } from "../flex/scanCopy.utils.js";
 import { composeFlexWordingTeasers } from "../../utils/reports/flexSummaryShortCopy.js";
 import {
   inferEnergyCategoryCodeFromMainEnergy,
@@ -338,10 +338,12 @@ export function deriveReportWordingFromParsed(parsed, opts = {}) {
     parsed.mainEnergy && parsed.mainEnergy !== "-"
       ? String(parsed.mainEnergy)
       : "";
-  const energyType = resolveEnergyType(mainRaw);
-  const mainEnergy = energyType;
-
   const objectFamilyRaw = String(opts.objectFamily || "").trim();
+  const energyType = resolveEnergyTypeMetaForFamily(
+    mainRaw,
+    objectFamilyRaw,
+  ).energyType;
+  const mainEnergy = energyType;
   const famNorm = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw);
   const useCrystalWording = famNorm === "crystal";
   const energyCategoryCode = inferEnergyCategoryCodeFromMainEnergy(

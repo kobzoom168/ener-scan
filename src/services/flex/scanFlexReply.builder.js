@@ -2,6 +2,22 @@ import { buildScanFlex } from "./flex.service.js";
 import { buildScanSummaryFirstFlex } from "./flex.summaryFirst.js";
 
 /**
+ * Prefer `summary.energyCopyObjectFamily` (normalized slug) then diagnostics.
+ * @param {import("../reports/reportPayload.types.js").ReportPayload | null | undefined} reportPayload
+ * @returns {string}
+ */
+function objectFamilyFromReportPayload(reportPayload) {
+  if (!reportPayload || typeof reportPayload !== "object") return "";
+  const s = reportPayload.summary;
+  const fromSummary =
+    s && typeof s === "object" && "energyCopyObjectFamily" in s
+      ? String(s.energyCopyObjectFamily || "").trim()
+      : "";
+  const fromDx = String(reportPayload.diagnostics?.objectFamily || "").trim();
+  return fromSummary || fromDx || "";
+}
+
+/**
  * Builds scan-result Flex: summary-first when enabled, legacy {@link buildScanFlex} on disable or on throw.
  * Extracted for unit tests (fallback path) without changing scan pipeline behavior.
  *
@@ -29,9 +45,11 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
     appendReportBubble,
   } = options;
 
+  const objectFamily = objectFamilyFromReportPayload(reportPayload);
+
   if (!summaryFirstEnabled) {
     return {
-      flex: buildLegacy(resultText, { birthdate, reportUrl }),
+      flex: buildLegacy(resultText, { birthdate, reportUrl, objectFamily }),
       summaryFirstBuildFailed: false,
     };
   }
@@ -48,7 +66,7 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
     };
   } catch (err) {
     return {
-      flex: buildLegacy(resultText, { birthdate, reportUrl }),
+      flex: buildLegacy(resultText, { birthdate, reportUrl, objectFamily }),
       summaryFirstBuildFailed: true,
       error: err,
     };

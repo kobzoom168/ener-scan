@@ -61,9 +61,14 @@
  * @property {boolean} [visibleCopyUsedCodeFallback]
  * @property {string} [parsedMainEnergyRaw] — truncated raw string used for category inference
  * @property {"line_value"|"fallback_body_match"|"missing"} [mainEnergySource]
- * @property {string} [resolveEnergyTypeResult] — Thai label from resolveEnergyTypeMeta
+ * @property {string} [resolveEnergyTypeResult] — Thai label from resolveEnergyTypeMetaForFamily
  * @property {string|null} [protectKeywordMatched]
  * @property {string} [energyCategoryInferenceBranch]
+ * @property {string|null} [protectWeakKeywordMatched] — crystal weak protect cue (not mapped to PROTECT)
+ * @property {"strong"|"weak"|"none"} [protectSignalStrength]
+ * @property {"thai_legacy"|"crystal_conservative"} [energyTypeResolverMode]
+ * @property {string} [energyTypeResolverFamily]
+ * @property {string} [resolvedEnergyTypeBeforeCategoryMap]
  */
 
 /**
@@ -194,4 +199,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.4";
+export const REPORT_PAYLOAD_VERSION = "1.2.5";

@@ -85,3 +85,54 @@ test("buildScanResultFlexWithFallback: summary-first throws → legacy + flag", 
   assert.match(String(out.error?.message), /flex_build_boom/);
   assert.equal(out.flex.altText, "legacy");
 });
+
+test("buildScanResultFlexWithFallback: passes objectFamily from reportPayload to legacy buildScanFlex", async () => {
+  /** @type {Record<string, unknown>|null} */
+  let capturedOpts = null;
+  await buildScanResultFlexWithFallback(
+    {
+      summaryFirstEnabled: false,
+      resultText: SAMPLE_TEXT,
+      birthdate: null,
+      reportUrl: null,
+      reportPayload: {
+        summary: { energyCopyObjectFamily: "crystal" },
+      },
+      appendReportBubble: false,
+    },
+    {
+      buildScanFlex: (_text, opts) => {
+        capturedOpts = opts;
+        return fakeLegacyFlex();
+      },
+      buildScanSummaryFirstFlex: async () => fakeSummaryFlex(),
+    },
+  );
+  assert.equal(capturedOpts?.objectFamily, "crystal");
+});
+
+test("buildScanResultFlexWithFallback: diagnostics.objectFamily when summary slug missing", async () => {
+  /** @type {Record<string, unknown>|null} */
+  let capturedOpts = null;
+  await buildScanResultFlexWithFallback(
+    {
+      summaryFirstEnabled: false,
+      resultText: SAMPLE_TEXT,
+      birthdate: null,
+      reportUrl: null,
+      reportPayload: {
+        summary: {},
+        diagnostics: { objectFamily: "crystal" },
+      },
+      appendReportBubble: false,
+    },
+    {
+      buildScanFlex: (_text, opts) => {
+        capturedOpts = opts;
+        return fakeLegacyFlex();
+      },
+      buildScanSummaryFirstFlex: async () => fakeSummaryFlex(),
+    },
+  );
+  assert.equal(capturedOpts?.objectFamily, "crystal");
+});

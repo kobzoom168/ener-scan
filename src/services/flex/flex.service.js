@@ -24,7 +24,8 @@ import {
 
 /**
  * @param {string} rawText
- * @param {{ birthdate?: string|null, reportUrl?: string|null }} [options]
+ * @param {{ birthdate?: string|null, reportUrl?: string|null, objectFamily?: string }} [options]
+ * — `objectFamily` pipeline slug (e.g. crystal) for {@link resolveEnergyTypeMetaForFamily} in scan copy
  */
 export function buildScanFlex(rawText, options = {}) {
   const birthdate = options.birthdate ?? null;
@@ -61,6 +62,7 @@ export function buildScanFlex(rawText, options = {}) {
     birthdate,
     display,
     scanToneLevel: options.scanToneLevel,
+    objectFamily: options.objectFamily ?? "",
   });
 
   const altText = buildScanFlexAltText({
