@@ -440,6 +440,43 @@ export const env = {
   ENABLE_SCAN_WORKER: process.env.ENABLE_SCAN_WORKER === "true",
   ENABLE_DELIVERY_WORKER: process.env.ENABLE_DELIVERY_WORKER === "true",
   ENABLE_MAINTENANCE_WORKER: process.env.ENABLE_MAINTENANCE_WORKER === "true",
+  /**
+   * Worker-scan only: optional Wikipedia (th) hints for wording — never overrides deterministic truth.
+   * Default off. Set `WEB_ENRICHMENT_ENABLED=true` to enable.
+   */
+  WEB_ENRICHMENT_ENABLED:
+    String(process.env.WEB_ENRICHMENT_ENABLED || "").trim().toLowerCase() ===
+    "true",
+  /** `wikipedia_th` — opensearch + extract; no extra API keys. */
+  WEB_ENRICHMENT_PROVIDER: (() => {
+    const p = String(process.env.WEB_ENRICHMENT_PROVIDER || "wikipedia_th")
+      .trim()
+      .toLowerCase();
+    return p === "wikipedia_th" ? "wikipedia_th" : "wikipedia_th";
+  })(),
+  WEB_ENRICHMENT_TIMEOUT_MS: (() => {
+    const raw = process.env.WEB_ENRICHMENT_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 3500 : Number(raw);
+    return Number.isFinite(n) ? Math.max(800, Math.floor(n)) : 3500;
+  })(),
+  /** In-process LRU-ish cache TTL for duplicate image+fingerprint (default 14 days). */
+  WEB_ENRICHMENT_CACHE_TTL_MS: (() => {
+    const raw = process.env.WEB_ENRICHMENT_CACHE_TTL_DAYS;
+    const days = raw === undefined || raw === "" ? 14 : Number(raw);
+    const d = Number.isFinite(days) ? Math.max(1, Math.min(30, Math.floor(days))) : 14;
+    return d * 86_400_000;
+  })(),
+  /** Skip enrichment when deep scan came from persistent cache (reduces optional load). */
+  WEB_ENRICHMENT_SKIP_WHEN_SCAN_FROM_CACHE:
+    String(process.env.WEB_ENRICHMENT_SKIP_WHEN_SCAN_FROM_CACHE || "")
+      .trim()
+      .toLowerCase() === "true",
+  /** If worker turn already took this long, skip enrichment (fail-soft). */
+  WEB_ENRICHMENT_MAX_WORKER_ELAPSED_MS: (() => {
+    const raw = process.env.WEB_ENRICHMENT_MAX_WORKER_ELAPSED_MS;
+    const n = raw === undefined || raw === "" ? 35_000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(5000, Math.floor(n)) : 35_000;
+  })(),
   SCAN_WORKER_CONCURRENCY: Math.max(
     1,
     Number(process.env.SCAN_WORKER_CONCURRENCY || 2) || 2,

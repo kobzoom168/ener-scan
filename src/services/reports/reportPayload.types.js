@@ -30,6 +30,15 @@
  * @property {ReportObjectEnergy} [objectEnergy] — Object Energy Engine v1 + star mapping (HTML + Flex stars)
  *
  * @property {ReportParsedTruth} [parsed] — minimal snake_case truth fields (e.g. crystal_mode); mirrors summary where applicable
+ *
+ * @property {ReportEnrichmentMeta} [enrichment] — optional web hint merge (wording-only); never payment/access/scores
+ */
+
+/**
+ * @typedef {Object} ReportEnrichmentMeta
+ * @property {import("../webEnrichment/webEnrichment.types.js").ExternalObjectHints} hints
+ * @property {string} mergeMode
+ * @property {string[]} appliedFields
  */
 
 /**

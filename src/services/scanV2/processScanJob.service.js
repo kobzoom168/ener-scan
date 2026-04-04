@@ -25,6 +25,8 @@ import {
   deleteScanResultForAppUser,
 } from "../../stores/scanResults.db.js";
 import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js";
+import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
+import { mergeExternalHintsIntoWordingContext } from "../../utils/webEnrichmentMerge.util.js";
 import { mapObjectCategoryToPipelineSignals } from "../../utils/reports/scanPipelineReportSignals.util.js";
 import { buildPublicReportUrl } from "../reports/reportLink.service.js";
 import { generatePublicToken } from "../../utils/reports/reportToken.util.js";
@@ -358,7 +360,51 @@ export async function processScanJob(workerId, jobRow) {
     const catSig = mapObjectCategoryToPipelineSignals(
       scanOut?.objectCategory ?? null,
     );
-    const reportPayload = buildReportPayloadFromScan({
+    const mainEnergyLine =
+      parsed?.mainEnergy && parsed.mainEnergy !== "-"
+        ? String(parsed.mainEnergy).trim()
+        : "";
+    const supportedFamilyGuess =
+      gated?.gateMeta?.supportedFamilyGuess != null
+        ? String(gated.gateMeta.supportedFamilyGuess)
+        : null;
+
+    /** @type {import("../webEnrichment/webEnrichment.types.js").ExternalObjectHints | null} */
+    let externalObjectHints = null;
+    try {
+      externalObjectHints = await maybeRunWebEnrichment({
+        lineUserId,
+        jobId,
+        scanResultId: legacyScanResultId,
+        imageBuffer,
+        objectFamily: catSig.objectFamily,
+        objectCheckResult: objectCheck,
+        supportedFamilyGuess,
+        pipelineObjectCategory: scanOut?.objectCategory ?? null,
+        mainEnergyLine,
+        resultText,
+        scanFromCache,
+        workerElapsedMs: Date.now() - workerTurnStartMs,
+      });
+    } catch (enrichErr) {
+      console.log(
+        JSON.stringify({
+          event: "WEB_ENRICHMENT_FETCH_FAIL",
+          path: "worker-scan",
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          jobIdPrefix: idPrefix8(jobId),
+          scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+          reason: String(enrichErr?.message || enrichErr),
+          provider: env.WEB_ENRICHMENT_PROVIDER,
+          cacheHit: false,
+          durationMs: null,
+          hintCount: 0,
+          mergeMode: "n/a",
+        }),
+      );
+    }
+
+    const reportPayloadBuilt = buildReportPayloadFromScan({
       resultText,
       scanResultId: legacyScanResultId,
       scanRequestId,
@@ -383,6 +429,71 @@ export async function processScanJob(workerId, jobRow) {
       pipelineObjectCategorySource:
         scanOut?.objectCategorySource ?? "unspecified",
     });
+
+    let reportPayload = reportPayloadBuilt;
+    try {
+      const merged = mergeExternalHintsIntoWordingContext(
+        reportPayloadBuilt,
+        externalObjectHints,
+      );
+      reportPayload = merged.payload;
+      if (externalObjectHints) {
+        const hintCount =
+          (merged.payload.enrichment?.hints?.sourceUrls?.length ? 1 : 0) +
+          (merged.payload.enrichment?.hints?.spiritualContextHints?.length || 0) +
+          (merged.payload.enrichment?.hints?.marketNames?.length || 0);
+        if (merged.ignoredConflict) {
+          console.log(
+            JSON.stringify({
+              event: "WEB_ENRICHMENT_IGNORED_CONFLICT",
+              path: "worker-scan",
+              lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+              jobIdPrefix: idPrefix8(jobId),
+              scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+              objectFamily: catSig.objectFamily,
+              supportedFamilyGuess,
+              reason: "hint_object_family_mismatch",
+              provider:
+                externalObjectHints.provider || env.WEB_ENRICHMENT_PROVIDER,
+              cacheHit: false,
+              durationMs: null,
+              hintCount,
+              mergeMode: merged.mergeMode,
+            }),
+          );
+        }
+        if (merged.appliedFields.length > 0) {
+          console.log(
+            JSON.stringify({
+              event: "WEB_ENRICHMENT_MERGED",
+              path: "worker-scan",
+              lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+              jobIdPrefix: idPrefix8(jobId),
+              scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+              objectFamily: catSig.objectFamily,
+              supportedFamilyGuess,
+              reason: "wording_merge",
+              provider:
+                externalObjectHints.provider || env.WEB_ENRICHMENT_PROVIDER,
+              cacheHit: false,
+              durationMs: null,
+              hintCount,
+              mergeMode: merged.mergeMode,
+            }),
+          );
+        }
+      }
+    } catch (mergeErr) {
+      console.log(
+        JSON.stringify({
+          event: "WEB_ENRICHMENT_MERGE_EXCEPTION",
+          path: "worker-scan",
+          outcome: "ignored",
+          message: String(mergeErr?.message || mergeErr),
+        }),
+      );
+      reportPayload = reportPayloadBuilt;
+    }
 
     await insertScanPublicReport({
       scanResultId: legacyScanResultId,
