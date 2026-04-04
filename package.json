@@ -15,7 +15,9 @@
     "payment:verify": "node scripts/verify-payment.js",
     "analyze:style": "node scripts/analyze-top-quality.mjs",
     "report:style-effectiveness": "node scripts/report-style-reference-effectiveness.mjs",
-    "conv-cost:readout": "node scripts/conv-cost-readout.mjs"
+    "conv-cost:readout": "node scripts/conv-cost-readout.mjs",
+    "verify:crystal-synthetic": "node scripts/staging-crystal-synthetic-inference-demos.mjs",
+    "verify:crystal-fresh": "node scripts/staging-crystal-fresh-verify.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
