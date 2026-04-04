@@ -7,13 +7,21 @@
 import { createHash } from "crypto";
 import { env } from "../../config/env.js";
 import {
-  evaluateEnrichmentBudget,
   getWebEnrichmentEligibility,
-  shouldRunWebEnrichment,
+  decideWebEnrichmentFetch,
+  mapEligibilityToDecisiveReason,
 } from "../../utils/webEnrichmentPolicy.util.js";
 
 /**
  * @typedef {import("./webEnrichment.types.js").ExternalObjectHints} ExternalObjectHints
+ */
+
+/**
+ * @typedef {{
+ *   hints: ExternalObjectHints | null,
+ *   skipReason: string | null,
+ *   decisiveReason: string | null,
+ * }} WebEnrichmentMaybeResult
  */
 
 /** @type {Map<string, { hints: ExternalObjectHints, expiresAt: number }>} */
@@ -148,7 +156,7 @@ async function fetchWikipediaThHints(query, timeoutMs) {
  * @param {string} [ctx.resultText]
  * @param {boolean} [ctx.scanFromCache]
  * @param {number} [ctx.workerElapsedMs]
- * @returns {Promise<ExternalObjectHints|null>}
+ * @returns {Promise<WebEnrichmentMaybeResult>}
  */
 export async function maybeRunWebEnrichment(ctx) {
   const started = Date.now();
@@ -167,10 +175,12 @@ export async function maybeRunWebEnrichment(ctx) {
 
   const elig = getWebEnrichmentEligibility(ctx);
   if (!elig.ok) {
+    const decisiveReason = mapEligibilityToDecisiveReason(elig.reason);
     console.log(
       JSON.stringify({
         event: "WEB_ENRICHMENT_SKIPPED",
         reason: elig.reason,
+        decisiveReason,
         ...baseLog,
         cacheHit: false,
         durationMs: Date.now() - started,
@@ -178,7 +188,11 @@ export async function maybeRunWebEnrichment(ctx) {
         mergeMode: "n/a",
       }),
     );
-    return null;
+    return {
+      hints: null,
+      skipReason: elig.reason,
+      decisiveReason,
+    };
   }
 
   console.log(
@@ -189,13 +203,14 @@ export async function maybeRunWebEnrichment(ctx) {
     }),
   );
 
+  const decision = decideWebEnrichmentFetch(ctx);
+  const budget = decision.budget;
   const elapsed =
     ctx.workerElapsedMs != null && Number.isFinite(ctx.workerElapsedMs)
       ? ctx.workerElapsedMs
       : 0;
-  const budget = evaluateEnrichmentBudget(elapsed);
   const maxElapsed = env.WEB_ENRICHMENT_MAX_WORKER_ELAPSED_MS;
-  const allowFetch = elapsed <= maxElapsed && budget.sufficient;
+  const overrideMinRem = env.WEB_ENRICHMENT_ELAPSED_CAP_OVERRIDE_MIN_REMAINING_MS;
 
   console.log(
     JSON.stringify({
@@ -206,16 +221,19 @@ export async function maybeRunWebEnrichment(ctx) {
       remainingMs: budget.remainingMs,
       minRemainingMs: budget.minRemainingMs,
       maxWorkerElapsedMs: maxElapsed,
-      allowFetch,
+      elapsedCapOverrideMinRemainingMs: overrideMinRem,
+      allowFetch: decision.allowFetch,
+      decisiveReason: decision.decisiveReason,
+      elapsedCapOverridden: Boolean(decision.elapsedCapOverridden),
     }),
   );
 
-  const decision = shouldRunWebEnrichment(ctx);
-  if (!decision.ok) {
+  if (!decision.allowFetch) {
     console.log(
       JSON.stringify({
         event: "WEB_ENRICHMENT_SKIPPED",
         reason: decision.reason,
+        decisiveReason: decision.decisiveReason,
         ...baseLog,
         cacheHit: false,
         durationMs: Date.now() - started,
@@ -224,7 +242,11 @@ export async function maybeRunWebEnrichment(ctx) {
         budgetRemainingMs: budget.remainingMs,
       }),
     );
-    return null;
+    return {
+      hints: null,
+      skipReason: decision.reason,
+      decisiveReason: decision.decisiveReason,
+    };
   }
 
   console.log(
@@ -232,6 +254,7 @@ export async function maybeRunWebEnrichment(ctx) {
       event: "WEB_ENRICHMENT_REQUESTED",
       ...baseLog,
       reason: decision.reason,
+      decisiveReason: decision.decisiveReason,
     }),
   );
 
@@ -241,6 +264,7 @@ export async function maybeRunWebEnrichment(ctx) {
       JSON.stringify({
         event: "WEB_ENRICHMENT_SKIPPED",
         reason: "missing_image_buffer",
+        decisiveReason: "missing_image_buffer",
         ...baseLog,
         cacheHit: false,
         durationMs: Date.now() - started,
@@ -248,7 +272,11 @@ export async function maybeRunWebEnrichment(ctx) {
         mergeMode: "n/a",
       }),
     );
-    return null;
+    return {
+      hints: null,
+      skipReason: "missing_image_buffer",
+      decisiveReason: "missing_image_buffer",
+    };
   }
 
   const key = cacheKeyParts(
@@ -269,7 +297,11 @@ export async function maybeRunWebEnrichment(ctx) {
         mergeMode: "pending_merge",
       }),
     );
-    return cached;
+    return {
+      hints: cached,
+      skipReason: null,
+      decisiveReason: "cache_hit",
+    };
   }
 
   const timeoutMs = env.WEB_ENRICHMENT_TIMEOUT_MS;
@@ -297,13 +329,18 @@ export async function maybeRunWebEnrichment(ctx) {
         event: "WEB_ENRICHMENT_FETCH_FAIL",
         ...baseLog,
         reason: String(err?.message || err),
+        decisiveReason: "fetch_exception",
         cacheHit: false,
         durationMs: Date.now() - started,
         hintCount: 0,
         mergeMode: "n/a",
       }),
     );
-    return null;
+    return {
+      hints: null,
+      skipReason: "fetch_exception",
+      decisiveReason: "fetch_exception",
+    };
   }
 
   const durationMs = Date.now() - started;
@@ -313,13 +350,18 @@ export async function maybeRunWebEnrichment(ctx) {
         event: "WEB_ENRICHMENT_FETCH_FAIL",
         ...baseLog,
         reason: "empty_or_abort",
+        decisiveReason: "fetch_empty",
         cacheHit: false,
         durationMs,
         hintCount: 0,
         mergeMode: "n/a",
       }),
     );
-    return null;
+    return {
+      hints: null,
+      skipReason: "empty_or_abort",
+      decisiveReason: "fetch_empty",
+    };
   }
 
   const hintCount = countHints(hints);
@@ -337,10 +379,14 @@ export async function maybeRunWebEnrichment(ctx) {
     }),
   );
 
-  return hints;
+  return {
+    hints,
+    skipReason: null,
+    decisiveReason: "fetch_ok",
+  };
 }
 
-export { shouldRunWebEnrichment } from "../../utils/webEnrichmentPolicy.util.js";
+export { shouldRunWebEnrichment, decideWebEnrichmentFetch } from "../../utils/webEnrichmentPolicy.util.js";
 export {
   evaluateEnrichmentBudget,
   getWebEnrichmentEligibility,

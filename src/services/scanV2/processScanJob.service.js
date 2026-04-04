@@ -288,8 +288,12 @@ export async function processScanJob(workerId, jobRow) {
 
   /** @type {import("../webEnrichment/webEnrichment.types.js").ExternalObjectHints | null} */
   let externalObjectHints = null;
+  /** @type {string | null} */
+  let webEnrichmentSkipReason = null;
+  /** @type {string | null} */
+  let webEnrichmentDecisiveReason = null;
   try {
-    externalObjectHints = await maybeRunWebEnrichment({
+    const enrichRes = await maybeRunWebEnrichment({
       lineUserId,
       jobId,
       scanResultId: null,
@@ -303,7 +307,12 @@ export async function processScanJob(workerId, jobRow) {
       scanFromCache,
       workerElapsedMs: Date.now() - workerTurnStartMs,
     });
+    externalObjectHints = enrichRes?.hints ?? null;
+    webEnrichmentSkipReason = enrichRes?.skipReason ?? null;
+    webEnrichmentDecisiveReason = enrichRes?.decisiveReason ?? null;
   } catch (enrichErr) {
+    webEnrichmentSkipReason = String(enrichErr?.message || enrichErr).slice(0, 240);
+    webEnrichmentDecisiveReason = "fetch_exception";
     console.log(
       JSON.stringify({
         event: "WEB_ENRICHMENT_FETCH_FAIL",
@@ -311,7 +320,8 @@ export async function processScanJob(workerId, jobRow) {
         lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
         jobIdPrefix: idPrefix8(jobId),
         scanResultIdPrefix: "00000000",
-        reason: String(enrichErr?.message || enrichErr),
+        reason: webEnrichmentSkipReason,
+        decisiveReason: webEnrichmentDecisiveReason,
         provider: env.WEB_ENRICHMENT_PROVIDER,
         cacheHit: false,
         durationMs: null,
@@ -518,6 +528,11 @@ export async function processScanJob(workerId, jobRow) {
       reportPayload.diagnostics.enrichmentUsed = Boolean(externalObjectHints);
       reportPayload.diagnostics.enrichmentProvider =
         externalObjectHints?.provider ?? null;
+      reportPayload.diagnostics.enrichmentSkipReason = webEnrichmentSkipReason;
+      reportPayload.diagnostics.enrichmentDecisiveReason =
+        webEnrichmentDecisiveReason;
+      reportPayload.diagnostics.truthCategoryCode =
+        reportPayload.summary?.energyCategoryCode ?? null;
       reportPayload.diagnostics.deliveryStrategy = lineFinalMode;
     }
 
@@ -630,6 +645,8 @@ export async function processScanJob(workerId, jobRow) {
   let lineDeliveryText = resultText;
   /** @type {ReturnType<typeof extractLineSummaryFields> | null} */
   let lineSummaryForOutbound = null;
+  /** @type {import("../../utils/lineSummaryWording.util.js").LineSummaryWordingResolved | null} */
+  let lineSummaryWordingSnapshot = null;
 
   console.log(
     JSON.stringify({
@@ -660,6 +677,7 @@ export async function processScanJob(workerId, jobRow) {
         lineUserId,
         jobId,
       );
+      lineSummaryWordingSnapshot = lineWordingResolved;
       lineSummaryForOutbound = extractLineSummaryFields(
         reportPayloadForReply,
         parsed,
@@ -725,6 +743,8 @@ export async function processScanJob(workerId, jobRow) {
           summaryVariantId: lineWordingResolved?.summaryVariantId ?? null,
           summaryDiversified: lineWordingResolved?.summaryDiversified ?? false,
           summaryAvoidedRepeat: lineWordingResolved?.summaryAvoidedRepeat ?? false,
+          summaryAvoidedAngleCluster:
+            lineWordingResolved?.summaryAvoidedAngleCluster ?? false,
           rolloutFlagState: {
             LINE_SUMMARY_LINK_USE_FLEX_SHELL: env.LINE_SUMMARY_LINK_USE_FLEX_SHELL,
             FLEX_SCAN_SUMMARY_FIRST: env.FLEX_SCAN_SUMMARY_FIRST,
@@ -950,6 +970,14 @@ export async function processScanJob(workerId, jobRow) {
       enrichmentEligible: Boolean(dx?.enrichmentEligible),
       enrichmentUsed: Boolean(dx?.enrichmentUsed),
       enrichmentProvider: dx?.enrichmentProvider ?? null,
+      enrichmentSkipReason: webEnrichmentSkipReason,
+      enrichmentDecisiveReason: webEnrichmentDecisiveReason,
+      truthCategoryCode: dx?.truthCategoryCode ?? null,
+      lineSummaryBankUsed: lineSummaryWordingSnapshot?.summaryBankUsed ?? null,
+      lineSummaryVariantId: lineSummaryWordingSnapshot?.summaryVariantId ?? null,
+      presentationAngleId: lineSummaryWordingSnapshot?.presentationAngleId ?? null,
+      avoidedRepeatLineSummary:
+        lineSummaryWordingSnapshot?.summaryAvoidedRepeat ?? false,
       deliveryStrategy: lineFinalMode,
       lineSummaryPresent: Boolean(lineSummaryForOutbound),
     }),

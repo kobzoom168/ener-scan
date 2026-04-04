@@ -7,7 +7,10 @@ import {
   normalizeObjectFamilyForEnergyCopy,
 } from "../energyCategoryResolve.util.js";
 import { lineContainsEnergyCopyAvoidWord } from "./energyCopyAvoidWords.util.js";
-import { pickVariantAvoidingRepeat } from "../wordingVariantGuard.util.js";
+import {
+  pickVariantAvoidingRepeat,
+  pickVariantAvoidingRepeatWithAngles,
+} from "../wordingVariantGuard.util.js";
 
 /** Aligned with {@link ../flexSummarySurface.util.js FLEX_SUMMARY_HEADLINE_MAX} (guardrail only). */
 export const FLEX_SHORT_HEADLINE_MAX = 42;
@@ -163,6 +166,7 @@ const VARIANT_BANKS = {
   crystal: {
     protection: [
       {
+        presentationAngle: "shield",
         headline: "เด่นเรื่องคุ้มครองและกันแรงลบ",
         fit: "เหมาะกับคนที่ต้องเจอคนเยอะหรือไม่อยากรับพลังแย่ ๆ",
         bullets: [
@@ -171,6 +175,7 @@ const VARIANT_BANKS = {
         ],
       },
       {
+        presentationAngle: "sanctuary",
         headline: "เด่นเรื่องพื้นที่ปลอดภัยและตั้งหลัก",
         fit: "เหมาะกับช่วงที่อยากให้โทนนิ่งและไม่รับพลังรบกวนง่าย",
         bullets: [
@@ -179,11 +184,21 @@ const VARIANT_BANKS = {
         ],
       },
       {
+        presentationAngle: "ground",
         headline: "เด่นเรื่องเกราะพลังและลดการส่งต่ออารมณ์",
         fit: "เหมาะกับคนที่สัมผัสคนเยอะและอยากให้โทนนิ่งขึ้น",
         bullets: [
           "ช่วยลดการรับพลังหนักโดยไม่รู้ตัว",
           "ช่วยตอบสนองช้าลงเมื่อโดนจี้หรือกดดัน",
+        ],
+      },
+      {
+        presentationAngle: "filter",
+        headline: "เด่นเรื่องกรองแรงปะทะและเสียงในบรรยากาศ",
+        fit: "เหมาะกับช่วงที่ต้องอยู่กับคนเยอะแต่ไม่อยากถูกดึงไปตาม",
+        bullets: [
+          "ช่วยให้สมาธิกลับมาที่ตัวเองได้เร็วขึ้น",
+          "ช่วยลดความรู้สึกถูกแหย่งจากคนรอบข้าง",
         ],
       },
     ],
@@ -235,6 +250,7 @@ const VARIANT_BANKS = {
   thai: {
     protection: [
       {
+        presentationAngle: "relic_shield",
         headline: "เด่นเรื่องคุ้มครองและกันเรื่องไม่ดี",
         fit: "เหมาะกับคนที่อยากมีของติดตัวไว้กันแรงลบ",
         bullets: [
@@ -243,6 +259,7 @@ const VARIANT_BANKS = {
         ],
       },
       {
+        presentationAngle: "travel_shell",
         headline: "เด่นเรื่องเกราะพลังและเขตแดนส่วนตัว",
         fit: "เหมาะกับช่วงเดินทางหรือเจอคนหมุนเวียนหลากหลาย",
         bullets: [
@@ -251,11 +268,21 @@ const VARIANT_BANKS = {
         ],
       },
       {
+        presentationAngle: "day_end_calm",
         headline: "เด่นเรื่องกันพลังรบกวนและคืนสงบในแต่ละวัน",
         fit: "เหมาะกับคนรับรู้ไวและเหนื่อยเพราะคนรอบตัวเยอะ",
         bullets: [
           "ช่วยตัดสินใจเย็นลงเมื่อบรรยากาศวุ่น",
           "ช่วยให้หลับสบายขึ้นหลังวันยาว",
+        ],
+      },
+      {
+        presentationAngle: "noise_cut",
+        headline: "เด่นเรื่องตัดสิ่งรบกวนและคืนสมาธิสั้น ๆ",
+        fit: "เหมาะกับช่วงที่ต้องสลับบทบาทบ่อยหรือโดนเร่งงาน",
+        bullets: [
+          "ช่วยให้หายใจลึกขึ้นเวลาโดนกระตุ้นรัว ๆ",
+          "ช่วยไม่ให้โทนวันปั่นป่วนจากคนรอบข้าง",
         ],
       },
     ],
@@ -286,12 +313,55 @@ const VARIANT_BANKS = {
       },
     ],
   },
+  talisman: {
+    protection: [
+      {
+        presentationAngle: "bracelet_barrier",
+        headline: "เด่นเรื่องคุ้มครองและกันแรงปะทะรอบตัว",
+        fit: "เหมาะกับวันที่ต้องเดินผ่านคนเยอะหรือสถานการณ์ไม่นิ่ง",
+        bullets: [
+          "ช่วยให้รู้สึกมีของยึดจุดยืนเวลาใจเริ่มกระเซ็น",
+          "ช่วยลดความรู้สึกถูกแหย่งจากคนแปลกหน้า",
+        ],
+      },
+      {
+        presentationAngle: "wrist_reset",
+        headline: "เด่นเรื่องพกความสงบแบบพกง่ายไปทุกที่",
+        fit: "เหมาะกับงานนอกสถานที่หรือต้องพูดกับหลายฝ่ายในวันเดียว",
+        bullets: [
+          "ช่วยคืนจังหวะให้ตัวเองระหว่างวัน",
+          "ช่วยไม่ให้โทนวันสั่นจากเหตุเล็กน้อย",
+        ],
+      },
+      {
+        presentationAngle: "soft_armor",
+        headline: "เด่นเรื่องเกราะเบา ๆ ที่ไม่ต้องฝืนยิ้ม",
+        fit: "เหมาะกับคนที่อยากนิ่งขึ้นโดยไม่ต้องแข็งเกินไป",
+        bullets: [
+          "ช่วยให้พูดช้าลงและชัดขึ้นเวลาโดนกดดัน",
+          "ช่วยให้รับรู้แรงกดโดยไม่ดูดซับเข้าอารมณ์",
+        ],
+      },
+    ],
+    presence: [
+      {
+        presentationAngle: "bracelet_spotlight",
+        headline: "เด่นเรื่องออร่าและการปรากฏตัวที่จำได้ง่าย",
+        fit: "เหมาะกับงานหน้าคน นำเสนอ หรือเจอคนใหม่บ่อย",
+        bullets: [
+          "ช่วยให้ประโยคเปิดการสนทนาดูมีแกนชัดขึ้น",
+          "ช่วยให้คนรับรู้ตัวตนของคุณโดยไม่ต้องพูดยาว",
+        ],
+      },
+    ],
+  },
 };
 
 function getVariantList(branch, code) {
   const vb = VARIANT_BANKS[branch]?.[code];
   if (Array.isArray(vb) && vb.length > 0) return vb;
-  const famBranch = FALLBACK_MASTER_V2[branch];
+  const famBranch =
+    FALLBACK_MASTER_V2[branch] || FALLBACK_MASTER_V2.thai;
   const surf = famBranch?.[code] || famBranch?.luck_fortune;
   return [
     {
@@ -317,18 +387,40 @@ export function resolveFlexSurfaceVariant(
   seed = "",
 ) {
   const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw);
-  const branch = fam === "crystal" ? "crystal" : "thai";
+  /** @type {"crystal"|"thai"|"talisman"} */
+  let branch = "thai";
+  if (fam === "crystal") branch = "crystal";
+  else if (fam === "thai_talisman") branch = "talisman";
   const code = String(categoryCode || "").trim() || "luck_fortune";
   const list = getVariantList(branch, code);
   const bankKey = `${branch}.${code}`;
-  const { variantIndex, avoidedRepeat } = pickVariantAvoidingRepeat(
-    lineUserId,
-    bankKey,
-    list.length,
-    seed,
-  );
+  const useAngles =
+    Array.isArray(list) &&
+    list.some((row) => row && typeof row.presentationAngle === "string");
+  /** @type {{ variantIndex: number, avoidedRepeat: boolean }} */
+  let pick;
+  if (useAngles) {
+    const ap = pickVariantAvoidingRepeatWithAngles(
+      lineUserId,
+      bankKey,
+      list,
+      seed,
+    );
+    pick = { variantIndex: ap.variantIndex, avoidedRepeat: ap.avoidedRepeat };
+  } else {
+    pick = pickVariantAvoidingRepeat(
+      lineUserId,
+      bankKey,
+      list.length,
+      seed,
+    );
+  }
+  const { variantIndex, avoidedRepeat } = pick;
   const picked = list[variantIndex];
   const diversificationApplied = list.length > 1 && variantIndex !== 0;
+  const presentationAngleId = picked?.presentationAngle
+    ? String(picked.presentationAngle)
+    : null;
 
   if (avoidedRepeat) {
     console.log(
@@ -355,6 +447,7 @@ export function resolveFlexSurfaceVariant(
       event: "WORDING_VARIANT_SELECTED",
       wordingBankUsed: bankKey,
       wordingVariantId: `${bankKey}:v${variantIndex}`,
+      presentationAngleId,
       diversificationApplied,
       avoidedRepeat,
     }),
@@ -365,6 +458,8 @@ export function resolveFlexSurfaceVariant(
       wordingBankUsed: bankKey,
       branch,
       energyCategoryCode: code,
+      truthCategoryCode: code,
+      presentationAngleId,
     }),
   );
 
@@ -374,6 +469,7 @@ export function resolveFlexSurfaceVariant(
     bullets: [...picked.bullets],
     wordingVariantId: `${bankKey}:v${variantIndex}`,
     wordingBankUsed: bankKey,
+    presentationAngleId,
     diversificationApplied,
     avoidedRepeat,
   };
@@ -436,6 +532,7 @@ export function composeFlexShortSurface({
     wordingMeta: {
       wordingVariantId: resolved.wordingVariantId,
       wordingBankUsed: resolved.wordingBankUsed,
+      presentationAngleId: resolved.presentationAngleId ?? null,
       diversificationApplied: resolved.diversificationApplied,
       avoidedRepeat: resolved.avoidedRepeat,
     },

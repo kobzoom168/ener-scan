@@ -486,13 +486,23 @@ export const env = {
       .trim()
       .toLowerCase() === "true",
   /**
-   * Hard cap: if worker turn already took this long, skip enrichment (fail-soft).
-   * Default 120s so enrichment can run after deep scan when optional phases are heavy.
+   * Hard cap on worker elapsed (ms) before optional enrichment fetch.
+   * Default 120s. When soft remaining budget is still large,
+   * {@link WEB_ENRICHMENT_ELAPSED_CAP_OVERRIDE_MIN_REMAINING_MS} can override this cap (fixes post–deep-scan wall clock).
    */
   WEB_ENRICHMENT_MAX_WORKER_ELAPSED_MS: (() => {
     const raw = process.env.WEB_ENRICHMENT_MAX_WORKER_ELAPSED_MS;
     const n = raw === undefined || raw === "" ? 120_000 : Number(raw);
     return Number.isFinite(n) ? Math.max(5000, Math.floor(n)) : 120_000;
+  })(),
+  /**
+   * If (estimated job budget − elapsed) ≥ this, allow enrichment even when elapsed > max worker elapsed.
+   * Prevents “remainingMs huge but elapsed cap kills fetch” after heavy AI.
+   */
+  WEB_ENRICHMENT_ELAPSED_CAP_OVERRIDE_MIN_REMAINING_MS: (() => {
+    const raw = process.env.WEB_ENRICHMENT_ELAPSED_CAP_OVERRIDE_MIN_REMAINING_MS;
+    const n = raw === undefined || raw === "" ? 45_000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(5000, Math.floor(n)) : 45_000;
   })(),
   /**
    * Soft budget for the whole scan job (ms). Remaining = budget − elapsed.
