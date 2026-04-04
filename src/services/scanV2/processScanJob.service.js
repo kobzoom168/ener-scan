@@ -53,6 +53,8 @@ import {
   buildSummaryLinkLineText,
   buildSummaryLinkFallbackText,
 } from "./lineFinalScanDelivery.builder.js";
+import { buildScanSummaryFirstFlex } from "../flex/flex.summaryFirst.js";
+import { resolveLineSummaryWording } from "../../utils/lineSummaryWording.util.js";
 import { logUnsupportedObjectRejected } from "../lineWebhook/unsupportedObjectReply.service.js";
 import {
   buildFinalDeliveryCorrelation,
@@ -649,7 +651,15 @@ export async function processScanJob(workerId, jobRow) {
   );
 
   if (lineFinalMode === "summary_link") {
+    /** @type {string | null} */
+    let flexFallbackReason = null;
     if (reportPayloadForReply) {
+      /** @type {import("../../utils/lineSummaryWording.util.js").LineSummaryWordingResolved | null} */
+      const lineWordingResolved = resolveLineSummaryWording(
+        reportPayloadForReply,
+        lineUserId,
+        jobId,
+      );
       lineSummaryForOutbound = extractLineSummaryFields(
         reportPayloadForReply,
         parsed,
@@ -665,11 +675,81 @@ export async function processScanJob(workerId, jobRow) {
       lineDeliveryText = buildSummaryLinkLineText({
         ...lineSummaryForOutbound,
         reportUrl: reportUrl || "",
+        lineWording: lineWordingResolved,
       });
+
+      if (env.LINE_SUMMARY_LINK_USE_FLEX_SHELL) {
+        try {
+          const built = await buildScanSummaryFirstFlex(resultText, {
+            birthdate,
+            reportUrl,
+            reportPayload: reportPayloadForReply,
+            appendReportBubble: false,
+          });
+          if (
+            built &&
+            typeof built === "object" &&
+            built.type === "flex"
+          ) {
+            flex = built;
+          } else {
+            flexFallbackReason = "flex_shape_invalid";
+          }
+        } catch (flexErr) {
+          flexFallbackReason = String(flexErr?.message || flexErr).slice(
+            0,
+            240,
+          );
+        }
+      } else {
+        flexFallbackReason = "disabled_by_env_LINE_SUMMARY_LINK_USE_FLEX_SHELL";
+      }
+
+      const flexOk = Boolean(flex && typeof flex === "object");
+      console.log(
+        JSON.stringify({
+          event: "LINE_SUMMARY_SURFACE_DECIDED",
+          path: "worker-scan",
+          jobIdPrefix: idPrefix8(jobId),
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          requestedSurface: env.LINE_SUMMARY_LINK_USE_FLEX_SHELL
+            ? "flex"
+            : "text",
+          intendedSurface: flexOk ? "flex" : "text",
+          actualSurfaceEnqueue: flexOk ? "flex" : "text",
+          fallbackReason: flexOk ? null : flexFallbackReason,
+          flexValidationPassed: flexOk,
+          templateAvailable: flexOk,
+          flexShellEnabled: env.LINE_SUMMARY_LINK_USE_FLEX_SHELL,
+          summaryBankUsed: lineWordingResolved?.summaryBankUsed ?? null,
+          summaryVariantId: lineWordingResolved?.summaryVariantId ?? null,
+          summaryDiversified: lineWordingResolved?.summaryDiversified ?? false,
+          summaryAvoidedRepeat: lineWordingResolved?.summaryAvoidedRepeat ?? false,
+          rolloutFlagState: {
+            LINE_SUMMARY_LINK_USE_FLEX_SHELL: env.LINE_SUMMARY_LINK_USE_FLEX_SHELL,
+            FLEX_SCAN_SUMMARY_FIRST: env.FLEX_SCAN_SUMMARY_FIRST,
+          },
+        }),
+      );
     } else {
       lineDeliveryText = buildSummaryLinkFallbackText(
         resultText,
         reportUrl || "",
+      );
+      flexFallbackReason = "no_report_payload";
+      console.log(
+        JSON.stringify({
+          event: "LINE_SUMMARY_SURFACE_DECIDED",
+          path: "worker-scan",
+          jobIdPrefix: idPrefix8(jobId),
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          requestedSurface: "text",
+          intendedSurface: "text",
+          actualSurfaceEnqueue: "text",
+          fallbackReason: flexFallbackReason,
+          flexValidationPassed: false,
+          templateAvailable: false,
+        }),
       );
     }
     console.log(
@@ -686,7 +766,7 @@ export async function processScanJob(workerId, jobRow) {
         hasReportUrl: Boolean(String(reportUrl || "").trim()),
         hasReportPayload: Boolean(reportPayloadForReply),
         lineSummaryPresent: Boolean(lineSummaryForOutbound),
-        hasFlex: false,
+        hasFlex: Boolean(flex),
         hasLegacyReportPayload: false,
       }),
     );

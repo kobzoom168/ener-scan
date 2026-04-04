@@ -79,36 +79,84 @@ export function extractLineSummaryFields(reportPayload, parsed) {
 }
 
 /**
- * @param {LineFinalSummaryFields & { reportUrl: string }} fields
+ * CTA block: label line + URL on next line (LINE text cannot hide URL, only structure).
+ * @param {string} reportUrl
+ * @returns {string}
+ */
+export function buildLineSummaryCtaText(reportUrl) {
+  const url = String(reportUrl || "").trim();
+  if (!url) {
+    return "เปิดรายงานฉบับเต็ม — ลิงก์ยังไม่พร้อม";
+  }
+  return `เปิดรายงานฉบับเต็ม\n${url}`;
+}
+
+/**
+ * Compact plain-text summary for push fallback (not the HTML report body).
+ *
+ * @param {object} p
+ * @param {number|null} [p.energyScore]
+ * @param {string} [p.mainEnergy]
+ * @param {number|null} [p.compatibility]
+ * @param {string} [p.reportUrl]
+ * @param {{ opening?: string, fitLine?: string } | null} [p.lineWording] — LINE-only bank; preferred over raw headline
+ * @param {string} [p.headline] — fallback one-liner when lineWording missing
+ * @returns {string}
+ */
+export function buildLineSummaryText(p) {
+  const {
+    energyScore,
+    mainEnergy,
+    compatibility,
+    reportUrl,
+    lineWording,
+    headline,
+  } = p;
+  const scoreStr = energyScore != null ? `${energyScore}/10` : "—";
+  const mainShort = String(mainEnergy || "—")
+    .replace(/\s+/g, " ")
+    .trim();
+  const lines = [];
+  lines.push("สรุปผลสแกน — พร้อมอ่านรายงานฉบับเต็มแล้ว");
+  lines.push("");
+  lines.push(`• พลังหลัก: ${mainShort} · ${scoreStr}`);
+  if (compatibility != null && Number.isFinite(compatibility)) {
+    lines.push(`• เข้ากัน: ${Math.round(compatibility)}%`);
+  }
+
+  const opening = lineWording?.opening ? String(lineWording.opening).trim() : "";
+  const fit = lineWording?.fitLine ? String(lineWording.fitLine).trim() : "";
+  if (opening || fit) {
+    lines.push("");
+    if (opening) lines.push(opening);
+    if (fit) lines.push(fit);
+  } else {
+    const h = String(headline || "").trim();
+    if (h) {
+      lines.push("");
+      lines.push(h.length > 140 ? `${h.slice(0, 137)}…` : h);
+    }
+  }
+
+  lines.push("");
+  lines.push("────────");
+  lines.push(buildLineSummaryCtaText(reportUrl || ""));
+  return lines.join("\n").slice(0, 4900);
+}
+
+/**
+ * @param {LineFinalSummaryFields & { reportUrl: string, lineWording?: { opening?: string, fitLine?: string } | null }} fields
  * @returns {string}
  */
 export function buildSummaryLinkLineText(fields) {
-  const { energyScore, mainEnergy, compatibility, headline, reportUrl } = fields;
-  const lines = [];
-  lines.push("สรุปผลสแกน");
-
-  const scoreStr = energyScore != null ? `${energyScore}/10` : "—";
-  const mainStr = mainEnergy || "—";
-  lines.push(`• พลังหลัก: ${mainStr} (${scoreStr})`);
-
-  if (compatibility != null && Number.isFinite(compatibility)) {
-    lines.push(`• ความเข้ากัน: ${Math.round(compatibility)}%`);
-  }
-
-  if (headline) {
-    lines.push("");
-    lines.push(headline);
-  }
-
-  const url = String(reportUrl || "").trim();
-  lines.push("");
-  if (url) {
-    lines.push(`เปิดรายงานเต็ม: ${url}`);
-  } else {
-    lines.push("เปิดรายงานเต็ม: (ลิงก์ยังไม่พร้อม)");
-  }
-
-  return lines.join("\n").slice(0, 4900);
+  return buildLineSummaryText({
+    energyScore: fields.energyScore,
+    mainEnergy: fields.mainEnergy,
+    compatibility: fields.compatibility,
+    reportUrl: fields.reportUrl,
+    lineWording: fields.lineWording ?? null,
+    headline: fields.headline,
+  });
 }
 
 /**
@@ -126,14 +174,15 @@ export function buildSummaryLinkFallbackText(resultText, reportUrl) {
         .filter(Boolean)
         .slice(0, 2)
         .join("\n")
-        .slice(0, 400)
+        .slice(0, 320)
     : "";
   const url = String(reportUrl || "").trim();
-  const parts = ["สรุปผลสแกน", ""];
+  const parts = ["สรุปผลสแกน — ฉบับย่อ", ""];
   if (snippet) {
-    parts.push(snippet.length >= 400 ? `${snippet}…` : snippet);
+    parts.push(snippet.length >= 320 ? `${snippet}…` : snippet);
     parts.push("");
   }
-  parts.push(url ? `เปิดรายงานเต็ม: ${url}` : "เปิดรายงานเต็ม: (ลิงก์ยังไม่พร้อม)");
+  parts.push("────────");
+  parts.push(buildLineSummaryCtaText(url));
   return parts.join("\n").slice(0, 4900);
 }

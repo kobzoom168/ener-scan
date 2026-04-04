@@ -38,6 +38,25 @@ test("buildSummaryLinkLineText: includes scores and URL", () => {
   assert.ok(t.includes("https://example.com/r/tok"));
 });
 
+test("buildSummaryLinkLineText: LINE wording overrides long headline", () => {
+  const t = buildSummaryLinkLineText({
+    energyScore: 8.5,
+    mainEnergy: "ปกป้อง",
+    compatibility: 76,
+    headline:
+      "เด่นเรื่องคุ้มครองและกันแรงลบ — เหมาะกับคนที่ต้องเจอคนเยอะหรือไม่อยากรับพลังแย่ ๆ",
+    reportUrl: "https://example.com/r/tok",
+    lineWording: {
+      opening: "โทนนี้เน้นพื้นที่ปลอดภัยรอบตัว",
+      fitLine: "เหมาะเวลาต้องเจอคนหลากหลายหรืออยากกันแรงลบ",
+    },
+  });
+  assert.ok(t.includes("โทนนี้เน้นพื้นที่ปลอดภัยรอบตัว"));
+  assert.ok(t.includes("เหมาะเวลาต้องเจอคนหลากหลาย"));
+  assert.ok(!t.includes("เด่นเรื่องคุ้มครอง"));
+  assert.ok(t.includes("เปิดรายงานฉบับเต็ม"));
+});
+
 test("buildSummaryLinkFallbackText: snippet + URL", () => {
   const long = "บรรทัดแรก\nบรรทัดสอง\nบรรทัดสาม";
   const t = buildSummaryLinkFallbackText(long, "https://x/r/a");

@@ -292,6 +292,13 @@ export const env = {
       .trim()
       .toLowerCase() !== "false",
   /**
+   * `summary_link` delivery: build summary-first Flex (handoff card) when possible; polished text if build off or disabled.
+   */
+  LINE_SUMMARY_LINK_USE_FLEX_SHELL:
+    String(process.env.LINE_SUMMARY_LINK_USE_FLEX_SHELL ?? "true")
+      .trim()
+      .toLowerCase() !== "false",
+  /**
    * Layer 0: drop duplicate LINE `message.id` redeliveries + suppress identical text bursts (no LLM).
    * @type {boolean}
    */
