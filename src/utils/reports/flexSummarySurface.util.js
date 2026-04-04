@@ -31,6 +31,7 @@ export const FLEX_SUMMARY_BULLET_MAX = FLEX_SHORT_BULLET_MAX;
  * @param {string} [p.compatibilityReason] — unused for Flex short copy (HTML / full report)
  * @param {string} [p.summaryLine] — unused for Flex short copy
  * @param {string[]} [p.scanTips] — unused for Flex short copy (avoid truncating long tips)
+ * @param {string} [p.lineUserId] — anti-repeat / variant selection
  */
 export function buildFlexSummarySurfaceFields({
   wording,
@@ -43,6 +44,7 @@ export function buildFlexSummarySurfaceFields({
   compatibilityReason: _compatibilityReason,
   summaryLine: _summaryLine,
   scanTips: _scanTips,
+  lineUserId = "",
 }) {
   const label =
     String(mainEnergyLabel || wording?.mainEnergy || "").trim() ||
@@ -57,6 +59,7 @@ export function buildFlexSummarySurfaceFields({
     objectFamily,
     energyCategoryCode,
     crystalMode,
+    lineUserId,
   });
 
   return {
@@ -64,6 +67,7 @@ export function buildFlexSummarySurfaceFields({
     fitReasonShort: composed.fitReasonShort,
     bulletsShort: composed.bulletsShort.slice(0, 2),
     ctaLabel: "เปิดรายงานฉบับเต็ม",
+    wordingMeta: composed.wordingMeta,
   };
 }
 
@@ -106,5 +110,6 @@ export function resolveFlexSummarySurfaceForLine(reportPayload, _parsed) {
     compatibilityReason: s?.compatibilityReason,
     summaryLine: s?.summaryLine,
     scanTips: s?.scanTips,
+    lineUserId: reportPayload?.userId || "",
   });
 }

@@ -7,6 +7,7 @@ import {
   normalizeObjectFamilyForEnergyCopy,
 } from "../energyCategoryResolve.util.js";
 import { lineContainsEnergyCopyAvoidWord } from "./energyCopyAvoidWords.util.js";
+import { pickVariantAvoidingRepeat } from "../wordingVariantGuard.util.js";
 
 /** Aligned with {@link ../flexSummarySurface.util.js FLEX_SUMMARY_HEADLINE_MAX} (guardrail only). */
 export const FLEX_SHORT_HEADLINE_MAX = 42;
@@ -154,6 +155,231 @@ const FALLBACK_MASTER_V2 = {
 };
 
 /**
+ * Multi-variant banks for categories that over-collapsed to one tone in production.
+ * Keys mirror {@link FALLBACK_MASTER_V2} paths (crystal | thai + energy category code).
+ * @type {Record<string, Record<string, Array<{ headline: string, fit: string, bullets: [string, string] }>>>}
+ */
+const VARIANT_BANKS = {
+  crystal: {
+    protection: [
+      {
+        headline: "เด่นเรื่องคุ้มครองและกันแรงลบ",
+        fit: "เหมาะกับคนที่ต้องเจอคนเยอะหรือไม่อยากรับพลังแย่ ๆ",
+        bullets: [
+          "ช่วยกันแรงลบและแรงปะทะที่ไม่จำเป็น",
+          "ช่วยให้ไม่รับอารมณ์คนอื่นเข้าตัวง่ายเกินไป",
+        ],
+      },
+      {
+        headline: "เด่นเรื่องพื้นที่ปลอดภัยและตั้งหลัก",
+        fit: "เหมาะกับช่วงที่อยากให้โทนนิ่งและไม่รับพลังรบกวนง่าย",
+        bullets: [
+          "ช่วยให้รู้สึกมีเขตแดนรอบตัวชัดขึ้น",
+          "ช่วยไม่ให้ถูกกระแสรอบข้างดึงไปบ่อย",
+        ],
+      },
+      {
+        headline: "เด่นเรื่องเกราะพลังและลดการส่งต่ออารมณ์",
+        fit: "เหมาะกับคนที่สัมผัสคนเยอะและอยากให้โทนนิ่งขึ้น",
+        bullets: [
+          "ช่วยลดการรับพลังหนักโดยไม่รู้ตัว",
+          "ช่วยตอบสนองช้าลงเมื่อโดนจี้หรือกดดัน",
+        ],
+      },
+    ],
+    balance: [
+      {
+        headline: "เด่นเรื่องความสมดุลและตั้งหลักในใจ",
+        fit: "เหมาะกับช่วงที่ใจแกว่งหรืออยากให้โทนนิ่งขึ้นแบบไม่ฝืนเกินไป",
+        bullets: [
+          "ช่วยให้ตอบสนองช้าลงและนิ่งขึ้นเมื่อใจเริ่มวอกแวก",
+          "ช่วยประคองจังหวะภายในไม่ให้ไหลตามอารมณ์ง่ายเกินไป",
+        ],
+      },
+      {
+        headline: "เด่นเรื่องถ่วงโทนและคืนจังหวะให้ร่างกายใจ",
+        fit: "เหมาะกับช่วงเหนื่อยแต่ยังต้องลุยต่อแบบไม่พังกลางทาง",
+        bullets: [
+          "ช่วยให้รู้จักพักจังหวะระหว่างวันมากขึ้น",
+          "ช่วยตัดสินได้เย็นลงเมื่อแรงกดสูง",
+        ],
+      },
+    ],
+    confidence: [
+      {
+        headline: "เด่นเรื่องบารมีและน้ำหนักในตัว",
+        fit: "เหมาะกับช่วงที่ต้องพูดให้คนฟังหรือคุมสถานการณ์",
+        bullets: [
+          "ช่วยให้พูดแล้วมีน้ำหนักขึ้น",
+          "ช่วยให้ยืนชัดขึ้นเวลาเจอสถานการณ์กดดัน",
+        ],
+      },
+      {
+        headline: "เด่นเรื่องความน่าเชื่อถือและภาพลักษณ์หนักแน่น",
+        fit: "เหมาะกับงานที่ต้องให้คนรับรู้ว่าคุณจริงจัง",
+        bullets: [
+          "ช่วยให้การนำเสนอดูมีแกนชัดขึ้น",
+          "ช่วยให้คนรับรู้ความตั้งใจง่ายขึ้น",
+        ],
+      },
+      {
+        headline: "เด่นเรื่องน้ำหนักสังคมและยืนหยัดในที่ประชุม",
+        fit: "เหมาะกับช่วงเจรจา นำทีม หรือถูกจับจ้องหลายฝ่าย",
+        bullets: [
+          "ช่วยให้พูดแล้วไม่ถูกมองข้ามง่าย",
+          "ช่วยรักษาบทบาทกลางแรงกดได้ดีขึ้น",
+        ],
+      },
+    ],
+  },
+  thai: {
+    protection: [
+      {
+        headline: "เด่นเรื่องคุ้มครองและกันเรื่องไม่ดี",
+        fit: "เหมาะกับคนที่อยากมีของติดตัวไว้กันแรงลบ",
+        bullets: [
+          "ช่วยกันแรงลบและแรงปะทะรอบตัว",
+          "ช่วยให้ฟีลเหมือนมีเกราะคอยกันอยู่",
+        ],
+      },
+      {
+        headline: "เด่นเรื่องเกราะพลังและเขตแดนส่วนตัว",
+        fit: "เหมาะกับช่วงเดินทางหรือเจอคนหมุนเวียนหลากหลาย",
+        bullets: [
+          "ช่วยกันรับพลังแปลกปลอมเข้าตัวน้อยลง",
+          "ช่วยลดความรู้สึกถูกแทรกซึมจากคนรอบข้าง",
+        ],
+      },
+      {
+        headline: "เด่นเรื่องกันพลังรบกวนและคืนสงบในแต่ละวัน",
+        fit: "เหมาะกับคนรับรู้ไวและเหนื่อยเพราะคนรอบตัวเยอะ",
+        bullets: [
+          "ช่วยตัดสินใจเย็นลงเมื่อบรรยากาศวุ่น",
+          "ช่วยให้หลับสบายขึ้นหลังวันยาว",
+        ],
+      },
+    ],
+    confidence: [
+      {
+        headline: "เด่นเรื่องบารมีและน้ำหนักในตัว",
+        fit: "เหมาะกับช่วงที่ต้องยืนให้ชัดและพูดให้คนฟัง",
+        bullets: [
+          "ช่วยให้พูดแล้วมีน้ำหนักขึ้น",
+          "ช่วยให้คนมองข้ามได้ยากขึ้น",
+        ],
+      },
+      {
+        headline: "เด่นเรื่องตัวตนและออร่าที่หนักแน่น",
+        fit: "เหมาะกับงานหน้าคนและจังหวะถูกจับจ้อง",
+        bullets: [
+          "ช่วยปรากฏตัวดูน่าเชื่อถือโดยไม่ต้องดัง",
+          "ช่วยพูดสั้นแล้วจบง่ายขึ้น",
+        ],
+      },
+      {
+        headline: "เด่นเรื่องบารมีในที่ประชุมและการเจรจา",
+        fit: "เหมาะกับช่วงคุยหลายฝ่ายหรือโดนคำถามกดดัน",
+        bullets: [
+          "ช่วยรักษาบทบาทกลางความขัดแย้งได้ดีขึ้น",
+          "ช่วยให้ประโยคมีแกนไม่ถูกพรากบทบาทง่าย",
+        ],
+      },
+    ],
+  },
+};
+
+function getVariantList(branch, code) {
+  const vb = VARIANT_BANKS[branch]?.[code];
+  if (Array.isArray(vb) && vb.length > 0) return vb;
+  const famBranch = FALLBACK_MASTER_V2[branch];
+  const surf = famBranch?.[code] || famBranch?.luck_fortune;
+  return [
+    {
+      headline: surf.headline,
+      fit: surf.fit,
+      bullets: [...surf.bullets],
+    },
+  ];
+}
+
+/**
+ * Picks a surface variant (anti-repeat per user) — wording only; category code unchanged.
+ * @param {string} categoryCode
+ * @param {string} objectFamilyRaw
+ * @param {string} [lineUserId]
+ * @param {string} [seed]
+ * @returns {{ headline: string, fitLine: string, bullets: string[], wordingVariantId: string, wordingBankUsed: string, diversificationApplied: boolean, avoidedRepeat: boolean }}
+ */
+export function resolveFlexSurfaceVariant(
+  categoryCode,
+  objectFamilyRaw,
+  lineUserId = "",
+  seed = "",
+) {
+  const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw);
+  const branch = fam === "crystal" ? "crystal" : "thai";
+  const code = String(categoryCode || "").trim() || "luck_fortune";
+  const list = getVariantList(branch, code);
+  const bankKey = `${branch}.${code}`;
+  const { variantIndex, avoidedRepeat } = pickVariantAvoidingRepeat(
+    lineUserId,
+    bankKey,
+    list.length,
+    seed,
+  );
+  const picked = list[variantIndex];
+  const diversificationApplied = list.length > 1 && variantIndex !== 0;
+
+  if (avoidedRepeat) {
+    console.log(
+      JSON.stringify({
+        event: "WORDING_VARIANT_AVOIDED_REPEAT",
+        wordingBankUsed: bankKey,
+        wordingVariantId: `${bankKey}:v${variantIndex}`,
+        variantIndex,
+      }),
+    );
+  }
+  if (diversificationApplied) {
+    console.log(
+      JSON.stringify({
+        event: "CATEGORY_DIVERSIFIED",
+        wordingBankUsed: bankKey,
+        wordingVariantId: `${bankKey}:v${variantIndex}`,
+        note: "alternate_sub_angle_same_category",
+      }),
+    );
+  }
+  console.log(
+    JSON.stringify({
+      event: "WORDING_VARIANT_SELECTED",
+      wordingBankUsed: bankKey,
+      wordingVariantId: `${bankKey}:v${variantIndex}`,
+      diversificationApplied,
+      avoidedRepeat,
+    }),
+  );
+  console.log(
+    JSON.stringify({
+      event: "FAMILY_SPECIFIC_COPY_USED",
+      wordingBankUsed: bankKey,
+      branch,
+      energyCategoryCode: code,
+    }),
+  );
+
+  return {
+    headline: picked.headline,
+    fitLine: picked.fit,
+    bullets: [...picked.bullets],
+    wordingVariantId: `${bankKey}:v${variantIndex}`,
+    wordingBankUsed: bankKey,
+    diversificationApplied,
+    avoidedRepeat,
+  };
+}
+
+/**
  * @param {string} categoryCode
  * @param {string} objectFamilyRaw
  * @returns {{ headline: string, fitLine: string, bullets: string[] }}
@@ -179,7 +405,8 @@ export function getFallbackFlexSurfaceLines(categoryCode, objectFamilyRaw) {
  * @param {string} [p.objectFamily] — pipeline slug; drives Thai vs crystal master set
  * @param {string} [p.energyCategoryCode] — when set, used instead of inferring from label
  * @param {"general"|"spiritual_growth"|null|""} [p.crystalMode] — crystal high-vibration hint for offline fallback rows
- * @returns {{ headlineShort: string, fitReasonShort: string, bulletsShort: string[] }}
+ * @param {string} [p.lineUserId] — anti-repeat key (per user)
+ * @returns {{ headlineShort: string, fitReasonShort: string, bulletsShort: string[], wordingMeta?: object }}
  */
 export function composeFlexShortSurface({
   mainEnergyLabel,
@@ -188,9 +415,9 @@ export function composeFlexShortSurface({
   objectFamily = "",
   energyCategoryCode = "",
   crystalMode = "",
+  lineUserId = "",
 }) {
   void _wordingFamily;
-  void _seed;
   const label = String(mainEnergyLabel || "").trim() || "เสริมพลัง";
   const fam = normalizeObjectFamilyForEnergyCopy(objectFamily);
   let code = String(energyCategoryCode || "").trim();
@@ -200,11 +427,18 @@ export function composeFlexShortSurface({
   if (fam === "crystal" && String(crystalMode || "").trim() === "spiritual_growth") {
     code = "spiritual_growth";
   }
-  const fb = getFallbackFlexSurfaceLines(code, objectFamily);
+  const seedFinal = String(_seed || label || "flex");
+  const resolved = resolveFlexSurfaceVariant(code, objectFamily, lineUserId, seedFinal);
   return {
-    headlineShort: fb.headline,
-    fitReasonShort: fb.fitLine,
-    bulletsShort: fb.bullets.slice(0, 2),
+    headlineShort: resolved.headline,
+    fitReasonShort: resolved.fitLine,
+    bulletsShort: resolved.bullets.slice(0, 2),
+    wordingMeta: {
+      wordingVariantId: resolved.wordingVariantId,
+      wordingBankUsed: resolved.wordingBankUsed,
+      diversificationApplied: resolved.diversificationApplied,
+      avoidedRepeat: resolved.avoidedRepeat,
+    },
   };
 }
 

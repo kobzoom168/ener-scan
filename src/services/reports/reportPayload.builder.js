@@ -503,6 +503,7 @@ export function buildReportPayloadFromScan(opts) {
     objectFamily: objectFamilyOpt || "",
     energyCategoryCode,
     crystalMode: crystalMode ?? "",
+    lineUserId: String(lineUserId || "").trim(),
   });
 
   const threadedSignalCount = countThreadedReportSignalFields({
@@ -674,6 +675,20 @@ export function buildReportPayloadFromScan(opts) {
       : undefined,
     parsed: {
       crystal_mode: crystalMode,
+    },
+    diagnostics: {
+      objectFamily: String(objectFamilyOpt || "").trim() || undefined,
+      resolvedCategoryCode: energyCategoryCode,
+      diversificationApplied: Boolean(flexSurface.wordingMeta?.diversificationApplied),
+      wordingBankUsed: flexSurface.wordingMeta?.wordingBankUsed,
+      wordingVariantId: flexSurface.wordingMeta?.wordingVariantId,
+      crystalMode: crystalMode ?? undefined,
+      matchedSignalsCount: crystalSignalTags.length,
+      enrichmentEligible: undefined,
+      enrichmentUsed: undefined,
+      enrichmentProvider: undefined,
+      deliveryStrategy: undefined,
+      lineSummaryPresent: undefined,
     },
   };
 }

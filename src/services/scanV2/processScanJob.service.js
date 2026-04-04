@@ -26,6 +26,7 @@ import {
 } from "../../stores/scanResults.db.js";
 import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js";
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
+import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
 import { mergeExternalHintsIntoWordingContext } from "../../utils/webEnrichmentMerge.util.js";
 import { mapObjectCategoryToPipelineSignals } from "../../utils/reports/scanPipelineReportSignals.util.js";
 import { buildPublicReportUrl } from "../reports/reportLink.service.js";
@@ -86,6 +87,9 @@ export async function processScanJob(workerId, jobRow) {
   const jobId = jobRow.id;
   const lineUserId = jobRow.line_user_id;
   const appUserId = jobRow.app_user_id;
+  /** Async Scan V2 may default to summary handoff; see LINE_FINAL_DELIVERY_MODE_SCAN_V2. */
+  const lineFinalMode =
+    env.LINE_FINAL_DELIVERY_MODE_SCAN_V2 ?? env.LINE_FINAL_DELIVERY_MODE;
 
   /** Set after `upsertReportPublicationForScanResult` (must exist for whole job to avoid ReferenceError). */
   /** @type {string | null} */
@@ -268,6 +272,53 @@ export async function processScanJob(workerId, jobRow) {
     };
   }
 
+  const catSig = mapObjectCategoryToPipelineSignals(
+    scanOut?.objectCategory ?? null,
+  );
+  const mainEnergyLine =
+    parsed?.mainEnergy && parsed.mainEnergy !== "-"
+      ? String(parsed.mainEnergy).trim()
+      : "";
+  const supportedFamilyGuess =
+    gated?.gateMeta?.supportedFamilyGuess != null
+      ? String(gated.gateMeta.supportedFamilyGuess)
+      : null;
+
+  /** @type {import("../webEnrichment/webEnrichment.types.js").ExternalObjectHints | null} */
+  let externalObjectHints = null;
+  try {
+    externalObjectHints = await maybeRunWebEnrichment({
+      lineUserId,
+      jobId,
+      scanResultId: null,
+      imageBuffer,
+      objectFamily: catSig.objectFamily,
+      objectCheckResult: objectCheck,
+      supportedFamilyGuess,
+      pipelineObjectCategory: scanOut?.objectCategory ?? null,
+      mainEnergyLine,
+      resultText,
+      scanFromCache,
+      workerElapsedMs: Date.now() - workerTurnStartMs,
+    });
+  } catch (enrichErr) {
+    console.log(
+      JSON.stringify({
+        event: "WEB_ENRICHMENT_FETCH_FAIL",
+        path: "worker-scan",
+        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+        jobIdPrefix: idPrefix8(jobId),
+        scanResultIdPrefix: "00000000",
+        reason: String(enrichErr?.message || enrichErr),
+        provider: env.WEB_ENRICHMENT_PROVIDER,
+        cacheHit: false,
+        durationMs: null,
+        hintCount: 0,
+        mergeMode: "n/a",
+      }),
+    );
+  }
+
   /** @type {string | null} */
   let scanRequestId = null;
   try {
@@ -353,53 +404,6 @@ export async function processScanJob(workerId, jobRow) {
           outcome: "upload_exception_ignored",
           jobIdPrefix: String(jobId).slice(0, 8),
           message: imgErr?.message,
-        }),
-      );
-    }
-
-    const catSig = mapObjectCategoryToPipelineSignals(
-      scanOut?.objectCategory ?? null,
-    );
-    const mainEnergyLine =
-      parsed?.mainEnergy && parsed.mainEnergy !== "-"
-        ? String(parsed.mainEnergy).trim()
-        : "";
-    const supportedFamilyGuess =
-      gated?.gateMeta?.supportedFamilyGuess != null
-        ? String(gated.gateMeta.supportedFamilyGuess)
-        : null;
-
-    /** @type {import("../webEnrichment/webEnrichment.types.js").ExternalObjectHints | null} */
-    let externalObjectHints = null;
-    try {
-      externalObjectHints = await maybeRunWebEnrichment({
-        lineUserId,
-        jobId,
-        scanResultId: legacyScanResultId,
-        imageBuffer,
-        objectFamily: catSig.objectFamily,
-        objectCheckResult: objectCheck,
-        supportedFamilyGuess,
-        pipelineObjectCategory: scanOut?.objectCategory ?? null,
-        mainEnergyLine,
-        resultText,
-        scanFromCache,
-        workerElapsedMs: Date.now() - workerTurnStartMs,
-      });
-    } catch (enrichErr) {
-      console.log(
-        JSON.stringify({
-          event: "WEB_ENRICHMENT_FETCH_FAIL",
-          path: "worker-scan",
-          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
-          jobIdPrefix: idPrefix8(jobId),
-          scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
-          reason: String(enrichErr?.message || enrichErr),
-          provider: env.WEB_ENRICHMENT_PROVIDER,
-          cacheHit: false,
-          durationMs: null,
-          hintCount: 0,
-          mergeMode: "n/a",
         }),
       );
     }
@@ -493,6 +497,26 @@ export async function processScanJob(workerId, jobRow) {
         }),
       );
       reportPayload = reportPayloadBuilt;
+    }
+
+    const enrichElig = getWebEnrichmentEligibility({
+      objectCheckResult: objectCheck,
+      objectFamily: catSig.objectFamily,
+      supportedFamilyGuess,
+      pipelineObjectCategory: scanOut?.objectCategory ?? null,
+      mainEnergyLine,
+      resultText,
+      scanFromCache,
+    });
+    if (
+      reportPayload.diagnostics &&
+      typeof reportPayload.diagnostics === "object"
+    ) {
+      reportPayload.diagnostics.enrichmentEligible = enrichElig.ok;
+      reportPayload.diagnostics.enrichmentUsed = Boolean(externalObjectHints);
+      reportPayload.diagnostics.enrichmentProvider =
+        externalObjectHints?.provider ?? null;
+      reportPayload.diagnostics.deliveryStrategy = lineFinalMode;
     }
 
     await insertScanPublicReport({
@@ -599,7 +623,6 @@ export async function processScanJob(workerId, jobRow) {
     );
   }
 
-  const lineFinalMode = env.LINE_FINAL_DELIVERY_MODE;
   /** @type {Record<string, unknown> | null} */
   let flex = null;
   let lineDeliveryText = resultText;
@@ -631,6 +654,14 @@ export async function processScanJob(workerId, jobRow) {
         reportPayloadForReply,
         parsed,
       );
+      if (
+        reportPayloadForReply.diagnostics &&
+        typeof reportPayloadForReply.diagnostics === "object"
+      ) {
+        reportPayloadForReply.diagnostics.lineSummaryPresent = Boolean(
+          lineSummaryForOutbound,
+        );
+      }
       lineDeliveryText = buildSummaryLinkLineText({
         ...lineSummaryForOutbound,
         reportUrl: reportUrl || "",
@@ -678,6 +709,20 @@ export async function processScanJob(workerId, jobRow) {
     } catch (e) {
       console.error("[SCAN_V2] flex build failed", e?.message);
     }
+    if (reportPayloadForReply) {
+      lineSummaryForOutbound = extractLineSummaryFields(
+        reportPayloadForReply,
+        parsed,
+      );
+      if (
+        reportPayloadForReply.diagnostics &&
+        typeof reportPayloadForReply.diagnostics === "object"
+      ) {
+        reportPayloadForReply.diagnostics.lineSummaryPresent = Boolean(
+          lineSummaryForOutbound,
+        );
+      }
+    }
     console.log(
       JSON.stringify({
         event: "SCAN_JOB_LINE_DELIVERY_BUILT",
@@ -691,7 +736,8 @@ export async function processScanJob(workerId, jobRow) {
         hasFlex: Boolean(flex),
         hasReportUrl: Boolean(String(reportUrl || "").trim()),
         hasLegacyReportPayload: Boolean(reportPayloadForReply),
-        lineSummaryPresent: false,
+        lineSummaryPresent: Boolean(lineSummaryForOutbound),
+        lineSummaryShell: true,
       }),
     );
   }
@@ -799,6 +845,33 @@ export async function processScanJob(workerId, jobRow) {
       publicationIdPrefix: idPrefix8(reportPublicationId),
       publicTokenPrefix: publicTokenPrefix12(publicToken),
       timestamp: scanV2TraceTs(),
+    }),
+  );
+
+  const dx = reportPayloadForReply?.diagnostics;
+  console.log(
+    JSON.stringify({
+      event: "SCAN_EXPLAIN_SUMMARY",
+      path: "worker-scan",
+      jobIdPrefix: idPrefix8(jobId),
+      lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+      scanResultV2IdPrefix: String(scanResultV2Id || "").slice(0, 8),
+      objectFamily: catSig.objectFamily,
+      pipelineObjectCategory: scanOut?.objectCategory ?? null,
+      resolvedCategoryCode: dx?.resolvedCategoryCode ?? null,
+      diversificationApplied: Boolean(dx?.diversificationApplied),
+      wordingBankUsed: dx?.wordingBankUsed ?? null,
+      wordingVariantId: dx?.wordingVariantId ?? null,
+      crystalMode: reportPayloadForReply?.summary?.crystalMode ?? null,
+      matchedSignalsCount:
+        typeof dx?.matchedSignalsCount === "number"
+          ? dx.matchedSignalsCount
+          : null,
+      enrichmentEligible: Boolean(dx?.enrichmentEligible),
+      enrichmentUsed: Boolean(dx?.enrichmentUsed),
+      enrichmentProvider: dx?.enrichmentProvider ?? null,
+      deliveryStrategy: lineFinalMode,
+      lineSummaryPresent: Boolean(lineSummaryForOutbound),
     }),
   );
 

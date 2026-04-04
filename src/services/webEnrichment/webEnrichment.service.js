@@ -7,6 +7,8 @@
 import { createHash } from "crypto";
 import { env } from "../../config/env.js";
 import {
+  evaluateEnrichmentBudget,
+  getWebEnrichmentEligibility,
   shouldRunWebEnrichment,
 } from "../../utils/webEnrichmentPolicy.util.js";
 
@@ -154,18 +156,22 @@ export async function maybeRunWebEnrichment(ctx) {
   const jobIdPrefix = String(ctx.jobId || "").slice(0, 8);
   const scanResultIdPrefix = String(ctx.scanResultId || "").slice(0, 8);
 
-  const policy = shouldRunWebEnrichment(ctx);
-  if (!policy.ok) {
+  const baseLog = {
+    lineUserIdPrefix,
+    jobIdPrefix,
+    scanResultIdPrefix,
+    objectFamily: ctx.objectFamily ?? null,
+    supportedFamilyGuess: ctx.supportedFamilyGuess ?? null,
+    provider: env.WEB_ENRICHMENT_PROVIDER,
+  };
+
+  const elig = getWebEnrichmentEligibility(ctx);
+  if (!elig.ok) {
     console.log(
       JSON.stringify({
         event: "WEB_ENRICHMENT_SKIPPED",
-        reason: policy.reason,
-        lineUserIdPrefix,
-        jobIdPrefix,
-        scanResultIdPrefix,
-        objectFamily: ctx.objectFamily ?? null,
-        supportedFamilyGuess: ctx.supportedFamilyGuess ?? null,
-        provider: env.WEB_ENRICHMENT_PROVIDER,
+        reason: elig.reason,
+        ...baseLog,
         cacheHit: false,
         durationMs: Date.now() - started,
         hintCount: 0,
@@ -177,14 +183,55 @@ export async function maybeRunWebEnrichment(ctx) {
 
   console.log(
     JSON.stringify({
+      event: "WEB_ENRICHMENT_ELIGIBLE",
+      ...baseLog,
+      reason: elig.reason,
+    }),
+  );
+
+  const elapsed =
+    ctx.workerElapsedMs != null && Number.isFinite(ctx.workerElapsedMs)
+      ? ctx.workerElapsedMs
+      : 0;
+  const budget = evaluateEnrichmentBudget(elapsed);
+  const maxElapsed = env.WEB_ENRICHMENT_MAX_WORKER_ELAPSED_MS;
+  const allowFetch = elapsed <= maxElapsed && budget.sufficient;
+
+  console.log(
+    JSON.stringify({
+      event: "WEB_ENRICHMENT_BUDGET_DECISION",
+      ...baseLog,
+      elapsedMs: elapsed,
+      budgetMs: budget.budgetMs,
+      remainingMs: budget.remainingMs,
+      minRemainingMs: budget.minRemainingMs,
+      maxWorkerElapsedMs: maxElapsed,
+      allowFetch,
+    }),
+  );
+
+  const decision = shouldRunWebEnrichment(ctx);
+  if (!decision.ok) {
+    console.log(
+      JSON.stringify({
+        event: "WEB_ENRICHMENT_SKIPPED",
+        reason: decision.reason,
+        ...baseLog,
+        cacheHit: false,
+        durationMs: Date.now() - started,
+        hintCount: 0,
+        mergeMode: "n/a",
+        budgetRemainingMs: budget.remainingMs,
+      }),
+    );
+    return null;
+  }
+
+  console.log(
+    JSON.stringify({
       event: "WEB_ENRICHMENT_REQUESTED",
-      lineUserIdPrefix,
-      jobIdPrefix,
-      scanResultIdPrefix,
-      objectFamily: ctx.objectFamily ?? null,
-      supportedFamilyGuess: ctx.supportedFamilyGuess ?? null,
-      reason: policy.reason,
-      provider: env.WEB_ENRICHMENT_PROVIDER,
+      ...baseLog,
+      reason: decision.reason,
     }),
   );
 
@@ -194,12 +241,7 @@ export async function maybeRunWebEnrichment(ctx) {
       JSON.stringify({
         event: "WEB_ENRICHMENT_SKIPPED",
         reason: "missing_image_buffer",
-        lineUserIdPrefix,
-        jobIdPrefix,
-        scanResultIdPrefix,
-        objectFamily: ctx.objectFamily ?? null,
-        supportedFamilyGuess: ctx.supportedFamilyGuess ?? null,
-        provider: env.WEB_ENRICHMENT_PROVIDER,
+        ...baseLog,
         cacheHit: false,
         durationMs: Date.now() - started,
         hintCount: 0,
@@ -220,13 +262,7 @@ export async function maybeRunWebEnrichment(ctx) {
     console.log(
       JSON.stringify({
         event: "WEB_ENRICHMENT_CACHE_HIT",
-        lineUserIdPrefix,
-        jobIdPrefix,
-        scanResultIdPrefix,
-        objectFamily: ctx.objectFamily ?? null,
-        supportedFamilyGuess: ctx.supportedFamilyGuess ?? null,
-        reason: policy.reason,
-        provider: cached.provider || env.WEB_ENRICHMENT_PROVIDER,
+        ...baseLog,
         cacheHit: true,
         durationMs: Date.now() - started,
         hintCount,
@@ -237,26 +273,30 @@ export async function maybeRunWebEnrichment(ctx) {
   }
 
   const timeoutMs = env.WEB_ENRICHMENT_TIMEOUT_MS;
+  const q = buildWikipediaSearchQuery({
+    pipelineObjectCategory: ctx.pipelineObjectCategory,
+    mainEnergyLine: ctx.mainEnergyLine,
+  });
+
+  console.log(
+    JSON.stringify({
+      event: "WEB_ENRICHMENT_FETCH_START",
+      ...baseLog,
+      queryLen: q.length,
+    }),
+  );
+
   let hints = null;
   try {
     if (env.WEB_ENRICHMENT_PROVIDER === "wikipedia_th") {
-      const q = buildWikipediaSearchQuery({
-        pipelineObjectCategory: ctx.pipelineObjectCategory,
-        mainEnergyLine: ctx.mainEnergyLine,
-      });
       hints = await fetchWikipediaThHints(q, timeoutMs);
     }
   } catch (err) {
     console.log(
       JSON.stringify({
         event: "WEB_ENRICHMENT_FETCH_FAIL",
-        lineUserIdPrefix,
-        jobIdPrefix,
-        scanResultIdPrefix,
-        objectFamily: ctx.objectFamily ?? null,
-        supportedFamilyGuess: ctx.supportedFamilyGuess ?? null,
+        ...baseLog,
         reason: String(err?.message || err),
-        provider: env.WEB_ENRICHMENT_PROVIDER,
         cacheHit: false,
         durationMs: Date.now() - started,
         hintCount: 0,
@@ -271,13 +311,8 @@ export async function maybeRunWebEnrichment(ctx) {
     console.log(
       JSON.stringify({
         event: "WEB_ENRICHMENT_FETCH_FAIL",
-        lineUserIdPrefix,
-        jobIdPrefix,
-        scanResultIdPrefix,
-        objectFamily: ctx.objectFamily ?? null,
-        supportedFamilyGuess: ctx.supportedFamilyGuess ?? null,
+        ...baseLog,
         reason: "empty_or_abort",
-        provider: env.WEB_ENRICHMENT_PROVIDER,
         cacheHit: false,
         durationMs,
         hintCount: 0,
@@ -293,12 +328,7 @@ export async function maybeRunWebEnrichment(ctx) {
   console.log(
     JSON.stringify({
       event: "WEB_ENRICHMENT_FETCH_OK",
-      lineUserIdPrefix,
-      jobIdPrefix,
-      scanResultIdPrefix,
-      objectFamily: ctx.objectFamily ?? null,
-      supportedFamilyGuess: ctx.supportedFamilyGuess ?? null,
-      reason: policy.reason,
+      ...baseLog,
       provider: hints.provider || env.WEB_ENRICHMENT_PROVIDER,
       cacheHit: false,
       durationMs,
@@ -311,6 +341,10 @@ export async function maybeRunWebEnrichment(ctx) {
 }
 
 export { shouldRunWebEnrichment } from "../../utils/webEnrichmentPolicy.util.js";
+export {
+  evaluateEnrichmentBudget,
+  getWebEnrichmentEligibility,
+} from "../../utils/webEnrichmentPolicy.util.js";
 
 /**
  * @param {ExternalObjectHints} h

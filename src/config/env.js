@@ -285,6 +285,13 @@ export const env = {
     return "legacy_full";
   })(),
   /**
+   * When true, use headlineShort/fitReasonShort for LINE summary-link teaser (shorter than full summaryLine).
+   */
+  LINE_SUMMARY_USE_FLEX_TEASER_FIELDS:
+    String(process.env.LINE_SUMMARY_USE_FLEX_TEASER_FIELDS ?? "true")
+      .trim()
+      .toLowerCase() !== "false",
+  /**
    * Layer 0: drop duplicate LINE `message.id` redeliveries + suppress identical text bursts (no LLM).
    * @type {boolean}
    */
@@ -471,11 +478,45 @@ export const env = {
     String(process.env.WEB_ENRICHMENT_SKIP_WHEN_SCAN_FROM_CACHE || "")
       .trim()
       .toLowerCase() === "true",
-  /** If worker turn already took this long, skip enrichment (fail-soft). */
+  /**
+   * Hard cap: if worker turn already took this long, skip enrichment (fail-soft).
+   * Default 120s so enrichment can run after deep scan when optional phases are heavy.
+   */
   WEB_ENRICHMENT_MAX_WORKER_ELAPSED_MS: (() => {
     const raw = process.env.WEB_ENRICHMENT_MAX_WORKER_ELAPSED_MS;
-    const n = raw === undefined || raw === "" ? 35_000 : Number(raw);
-    return Number.isFinite(n) ? Math.max(5000, Math.floor(n)) : 35_000;
+    const n = raw === undefined || raw === "" ? 120_000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(5000, Math.floor(n)) : 120_000;
+  })(),
+  /**
+   * Soft budget for the whole scan job (ms). Remaining = budget − elapsed.
+   * Used with WEB_ENRICHMENT_MIN_REMAINING_MS to avoid starting a fetch with little time left.
+   */
+  WEB_ENRICHMENT_ESTIMATED_JOB_BUDGET_MS: (() => {
+    const raw = process.env.WEB_ENRICHMENT_ESTIMATED_JOB_BUDGET_MS;
+    const n = raw === undefined || raw === "" ? 180_000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(30_000, Math.floor(n)) : 180_000;
+  })(),
+  /** Do not start Wikipedia fetch unless (budget − elapsed) ≥ this (ms). */
+  WEB_ENRICHMENT_MIN_REMAINING_MS: (() => {
+    const raw = process.env.WEB_ENRICHMENT_MIN_REMAINING_MS;
+    const n = raw === undefined || raw === "" ? 2500 : Number(raw);
+    return Number.isFinite(n) ? Math.max(500, Math.floor(n)) : 2500;
+  })(),
+  /**
+   * Async Scan V2 worker: override LINE final mode when set.
+   * `summary_link` = short handoff + URL (recommended for HTML-as-primary).
+   * When unset and ENABLE_ASYNC_SCAN_V2 is true, defaults to summary_link.
+   * @type {"summary_link" | "legacy_full" | null}
+   */
+  LINE_FINAL_DELIVERY_MODE_SCAN_V2: (() => {
+    const raw = String(process.env.LINE_FINAL_DELIVERY_MODE_SCAN_V2 || "")
+      .trim()
+      .toLowerCase();
+    if (raw === "summary_link" || raw === "legacy_full") return raw;
+    if (String(process.env.ENABLE_ASYNC_SCAN_V2 || "").trim() === "true") {
+      return "summary_link";
+    }
+    return null;
   })(),
   SCAN_WORKER_CONCURRENCY: Math.max(
     1,

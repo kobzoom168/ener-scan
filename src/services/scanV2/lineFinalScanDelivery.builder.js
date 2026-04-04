@@ -1,4 +1,5 @@
 import { parseCompatibilityPercent } from "../reports/reportPayload.builder.js";
+import { env } from "../../config/env.js";
 
 /**
  * Batch 3: minimal LINE final-result copy (summary + report URL), without full model output.
@@ -48,10 +49,26 @@ export function extractLineSummaryFields(reportPayload, parsed) {
     }
   }
 
-  const headline =
-    typeof s.summaryLine === "string" && s.summaryLine.trim()
-      ? s.summaryLine.trim().slice(0, 500)
-      : "";
+  let headline = "";
+  if (
+    env.LINE_SUMMARY_USE_FLEX_TEASER_FIELDS &&
+    typeof s.headlineShort === "string" &&
+    String(s.headlineShort).trim()
+  ) {
+    const hs = String(s.headlineShort).trim();
+    const fr =
+      typeof s.fitReasonShort === "string" && String(s.fitReasonShort).trim()
+        ? String(s.fitReasonShort).trim().slice(0, 120)
+        : "";
+    headline = fr ? `${hs} — ${fr}` : hs;
+    headline = headline.slice(0, 500);
+  }
+  if (!headline) {
+    headline =
+      typeof s.summaryLine === "string" && s.summaryLine.trim()
+        ? s.summaryLine.trim().slice(0, 500)
+        : "";
+  }
 
   if (energyScore == null && parsed?.energyScore != null) {
     const n = Number(parsed.energyScore);

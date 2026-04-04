@@ -32,6 +32,24 @@
  * @property {ReportParsedTruth} [parsed] — minimal snake_case truth fields (e.g. crystal_mode); mirrors summary where applicable
  *
  * @property {ReportEnrichmentMeta} [enrichment] — optional web hint merge (wording-only); never payment/access/scores
+ *
+ * @property {ReportDiagnostics} [diagnostics] — internal QA / explain (not public-report contract)
+ */
+
+/**
+ * @typedef {Object} ReportDiagnostics
+ * @property {string} [objectFamily]
+ * @property {string} [resolvedCategoryCode]
+ * @property {boolean} [diversificationApplied]
+ * @property {string} [wordingBankUsed]
+ * @property {string} [wordingVariantId]
+ * @property {string} [crystalMode]
+ * @property {number} [matchedSignalsCount]
+ * @property {boolean} [enrichmentEligible]
+ * @property {boolean} [enrichmentUsed]
+ * @property {string|null} [enrichmentProvider]
+ * @property {string} [deliveryStrategy]
+ * @property {boolean} [lineSummaryPresent]
  */
 
 /**

@@ -31,6 +31,48 @@ export function isEnrichableObjectFamily(raw) {
 }
 
 /**
+ * Non–time-based gates (eligible for enrichment if all pass).
+ * @param {object} ctx
+ * @returns {{ ok: boolean, reason: string }}
+ */
+export function getWebEnrichmentEligibility(ctx) {
+  if (!env.WEB_ENRICHMENT_ENABLED) {
+    return { ok: false, reason: "disabled" };
+  }
+  if (String(ctx.objectCheckResult || "").trim() !== "single_supported") {
+    return { ok: false, reason: "object_gate_not_single_supported" };
+  }
+  if (!isEnrichableObjectFamily(ctx.objectFamily)) {
+    return { ok: false, reason: "object_family_not_enrichable" };
+  }
+  if (env.WEB_ENRICHMENT_SKIP_WHEN_SCAN_FROM_CACHE && ctx.scanFromCache) {
+    return { ok: false, reason: "scan_from_cache_skipped" };
+  }
+  if (shouldSkipEnrichmentDueToStrongSignals(ctx)) {
+    return { ok: false, reason: "strong_internal_signals" };
+  }
+  return { ok: true, reason: "eligible" };
+}
+
+/**
+ * Soft budget: estimated remaining time in the worker turn for optional enrichment fetch.
+ * @param {number} workerElapsedMs
+ * @returns {{ remainingMs: number, budgetMs: number, minRemainingMs: number, sufficient: boolean }}
+ */
+export function evaluateEnrichmentBudget(workerElapsedMs) {
+  const elapsed = Number.isFinite(workerElapsedMs) ? Math.max(0, workerElapsedMs) : 0;
+  const budgetMs = env.WEB_ENRICHMENT_ESTIMATED_JOB_BUDGET_MS;
+  const minRemainingMs = env.WEB_ENRICHMENT_MIN_REMAINING_MS;
+  const remainingMs = budgetMs - elapsed;
+  return {
+    remainingMs,
+    budgetMs,
+    minRemainingMs,
+    sufficient: remainingMs >= minRemainingMs,
+  };
+}
+
+/**
  * When true, enrichment is unlikely to add value — skip network/cache work.
  * Conservative: only skip when signals are already strong across gate + pipeline + scan text.
  *
@@ -75,40 +117,38 @@ export function shouldSkipEnrichmentDueToStrongSignals(ctx) {
 }
 
 /**
+ * Full decision including time/budget gates.
+ *
  * @param {object} ctx
- * @param {string} [ctx.objectCheckResult] — must be `single_supported` for caller
+ * @param {string} [ctx.objectCheckResult]
  * @param {string} [ctx.objectFamily]
  * @param {string|null} [ctx.supportedFamilyGuess]
  * @param {string|null} [ctx.pipelineObjectCategory]
  * @param {string} [ctx.mainEnergyLine]
  * @param {string} [ctx.resultText]
- * @param {boolean} [ctx.scanFromCache] — deep scan from persistent cache
+ * @param {boolean} [ctx.scanFromCache]
  * @param {number} [ctx.workerElapsedMs]
- * @returns {{ ok: boolean, reason: string }}
+ * @returns {{ ok: boolean, reason: string, budget?: ReturnType<typeof evaluateEnrichmentBudget> }}
  */
 export function shouldRunWebEnrichment(ctx) {
-  if (!env.WEB_ENRICHMENT_ENABLED) {
-    return { ok: false, reason: "disabled" };
+  const elig = getWebEnrichmentEligibility(ctx);
+  if (!elig.ok) {
+    return { ok: false, reason: elig.reason };
   }
-  if (String(ctx.objectCheckResult || "").trim() !== "single_supported") {
-    return { ok: false, reason: "object_gate_not_single_supported" };
-  }
-  if (!isEnrichableObjectFamily(ctx.objectFamily)) {
-    return { ok: false, reason: "object_family_not_enrichable" };
-  }
-  if (env.WEB_ENRICHMENT_SKIP_WHEN_SCAN_FROM_CACHE && ctx.scanFromCache) {
-    return { ok: false, reason: "scan_from_cache_skipped" };
-  }
+
+  const elapsed =
+    ctx.workerElapsedMs != null && Number.isFinite(ctx.workerElapsedMs)
+      ? ctx.workerElapsedMs
+      : 0;
   const maxElapsed = env.WEB_ENRICHMENT_MAX_WORKER_ELAPSED_MS;
-  if (
-    ctx.workerElapsedMs != null &&
-    Number.isFinite(ctx.workerElapsedMs) &&
-    ctx.workerElapsedMs > maxElapsed
-  ) {
+  if (elapsed > maxElapsed) {
     return { ok: false, reason: "worker_near_timeout" };
   }
-  if (shouldSkipEnrichmentDueToStrongSignals(ctx)) {
-    return { ok: false, reason: "strong_internal_signals" };
+
+  const budget = evaluateEnrichmentBudget(elapsed);
+  if (!budget.sufficient) {
+    return { ok: false, reason: "no_worker_budget", budget };
   }
-  return { ok: true, reason: "policy_pass" };
+
+  return { ok: true, reason: "policy_pass", budget };
 }
