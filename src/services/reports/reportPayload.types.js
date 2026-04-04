@@ -69,6 +69,9 @@
  * @property {"thai_legacy"|"crystal_conservative"} [energyTypeResolverMode]
  * @property {string} [energyTypeResolverFamily]
  * @property {string} [resolvedEnergyTypeBeforeCategoryMap]
+ * @property {string|null} [crystalWeakProtectOutcome] — category code chosen for crystal weak-protect BOOST routing
+ * @property {string} [crystalNonProtectRoutingReason] — e.g. weak_protect_confidence, generic_boost_luck_fortune
+ * @property {string} [crystalPostResolverCategoryDecision] — final category after crystal heuristics (mirrors code when set)
  */
 
 /**
@@ -199,4 +202,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.5";
+export const REPORT_PAYLOAD_VERSION = "1.2.6";

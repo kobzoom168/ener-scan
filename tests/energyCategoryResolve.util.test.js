@@ -21,16 +21,68 @@ test("crystal + protection", () => {
   assert.equal(pickAccentColorFromCategoryCode("protection"), "#D4AF37");
 });
 
-test("crystal: weak คุ้มครอง alone → luck_fortune (not protection)", () => {
+test("crystal: weak คุ้มครอง alone → confidence (not protection, not default luck)", () => {
   assert.equal(
     inferEnergyCategoryCodeFromMainEnergy("คุ้มครอง", "crystal"),
-    "luck_fortune",
+    "confidence",
   );
   const tr = inferEnergyCategoryInferenceTrace("คุ้มครอง", "crystal");
   assert.equal(tr.protectSignalStrength, "weak");
   assert.equal(tr.protectWeakKeywordMatched, "คุ้มครอง");
   assert.equal(tr.protectKeywordMatched, null);
   assert.equal(tr.energyTypeResolverMode, "crystal_conservative");
+  assert.equal(tr.crystalWeakProtectOutcome, "confidence");
+  assert.equal(tr.crystalNonProtectRoutingReason, "weak_protect_confidence");
+  assert.equal(tr.inferenceBranch, "crystal_weak_protect_confidence");
+});
+
+test("crystal: พลังคุ้มครอง (weak) with safety/boundary wording → confidence", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "พลังคุ้มครอง (เน้นเกราะใจและความปลอดภัยเชิงสัญลักษณ์)",
+      "crystal",
+    ),
+    "confidence",
+  );
+  assert.notEqual(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "พลังคุ้มครอง (เน้นเกราะใจและความปลอดภัยเชิงสัญลักษณ์)",
+      "crystal",
+    ),
+    "protection",
+  );
+});
+
+test("crystal: พลังคุ้มครองแบบนิ่งและตั้งหลัก → confidence", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "พลังคุ้มครองแบบนิ่งและตั้งหลัก",
+      "crystal",
+    ),
+    "confidence",
+  );
+});
+
+test("crystal: พลังคุ้มครองแบบดึงดูดคนดีเข้าหา → charm", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy(
+      "พลังคุ้มครองแบบดึงดูดคนดีเข้าหา",
+      "crystal",
+    ),
+    "charm",
+  );
+});
+
+test("crystal: พลังโชคลาภและคุ้มครอง → luck_fortune (explicit luck)", () => {
+  assert.equal(
+    inferEnergyCategoryCodeFromMainEnergy("พลังโชคลาภและคุ้มครอง", "crystal"),
+    "luck_fortune",
+  );
+  const tr = inferEnergyCategoryInferenceTrace(
+    "พลังโชคลาภและคุ้มครอง",
+    "crystal",
+  );
+  assert.equal(tr.inferenceBranch, "crystal_luck_word");
 });
 
 test("crystal: พลังปกป้อง → protection + strong signal", () => {

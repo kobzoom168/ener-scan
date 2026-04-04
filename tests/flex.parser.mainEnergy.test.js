@@ -32,7 +32,7 @@ test("findFallbackMainEnergy: คุ้มครอง only in ภาพรว�
   assert.equal(p.mainEnergy, "-");
   assert.equal(
     inferEnergyCategoryCodeFromMainEnergy(p.mainEnergy, CRYSTAL),
-    "luck_fortune",
+    "confidence",
   );
 });
 

@@ -464,6 +464,12 @@ export async function buildReportPayloadFromScan(opts) {
         energyCategoryInferenceTrace.energyTypeResolverFamily,
       resolvedEnergyTypeBeforeCategoryMap:
         energyCategoryInferenceTrace.resolvedEnergyTypeBeforeCategoryMap,
+      crystalWeakProtectOutcome:
+        energyCategoryInferenceTrace.crystalWeakProtectOutcome,
+      crystalNonProtectRoutingReason:
+        energyCategoryInferenceTrace.crystalNonProtectRoutingReason,
+      crystalPostResolverCategoryDecision:
+        energyCategoryInferenceTrace.crystalPostResolverCategoryDecision,
       energyCategoryInferenceBranch:
         energyCategoryInferenceTrace.inferenceBranch,
       energyCategoryCode,
@@ -829,6 +835,12 @@ export async function buildReportPayloadFromScan(opts) {
         energyCategoryInferenceTrace.energyTypeResolverFamily,
       resolvedEnergyTypeBeforeCategoryMap:
         energyCategoryInferenceTrace.resolvedEnergyTypeBeforeCategoryMap,
+      crystalWeakProtectOutcome:
+        energyCategoryInferenceTrace.crystalWeakProtectOutcome ?? undefined,
+      crystalNonProtectRoutingReason:
+        energyCategoryInferenceTrace.crystalNonProtectRoutingReason,
+      crystalPostResolverCategoryDecision:
+        energyCategoryInferenceTrace.crystalPostResolverCategoryDecision,
       energyCategoryInferenceBranch:
         energyCategoryInferenceTrace.inferenceBranch,
       ...(dbSurfaceOk && dbBundleResolved
