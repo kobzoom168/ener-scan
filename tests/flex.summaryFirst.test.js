@@ -334,3 +334,56 @@ test("buildScanSummaryFirstFlex: guardrails for summary-card structure", async (
   assert.doesNotMatch(bodyStr, /เหมาะใช้เมื่อ/);
   assert.doesNotMatch(bodyStr, /ช่วยเรื่องความมั่นคง/);
 });
+
+test("buildScanSummaryFirstFlex: same truth protection, different presentationAngleId → different hero copy", async () => {
+  const mkPayload = (presentationAngleId) => ({
+    reportId: "rid-angle",
+    publicToken: "tok",
+    scanId: "s",
+    userId: "u-line",
+    birthdateUsed: "19/08/1985",
+    generatedAt: new Date().toISOString(),
+    reportVersion: "1.0.0",
+    object: {
+      objectImageUrl: "https://cdn.example.com/c.jpg",
+      objectLabel: "คริสตัล",
+      objectType: "",
+    },
+    summary: {
+      energyScore: 8.5,
+      mainEnergyLabel: "คุ้มครอง",
+      compatibilityPercent: 76,
+      summaryLine: "สรุป",
+      energyCategoryCode: "protection",
+      energyCopyObjectFamily: "crystal",
+      presentationAngleId,
+    },
+    sections: {
+      whatItGives: [],
+      messagePoints: [],
+      ownerMatchReason: [],
+      roleDescription: "",
+      bestUseCases: [],
+      weakMoments: [],
+      guidanceTips: [],
+      careNotes: [],
+      miniRitual: [],
+    },
+    trust: { trustNote: "n", rendererVersion: "html-1.0.0" },
+    actions: {},
+  });
+
+  const flexFilter = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+    reportUrl: "https://example.com/r/f",
+    reportPayload: mkPayload("filter"),
+  });
+  const flexShield = await buildScanSummaryFirstFlex(SAMPLE_TEXT, {
+    reportUrl: "https://example.com/r/s",
+    reportPayload: mkPayload("shield"),
+  });
+  const tFilter = collectTextNodes(flexFilter.contents.body).join("\n");
+  const tShield = collectTextNodes(flexShield.contents.body).join("\n");
+  assert.notEqual(tFilter, tShield);
+  assert.match(tFilter, /กรอง|รบกวน|ปะทะ/);
+  assert.match(tShield, /คุ้มครอง|แรงลบ|ปะทะ/);
+});

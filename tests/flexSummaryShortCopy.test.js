@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   composeFlexShortSurface,
+  getFlexHeroVariantByPresentationAngle,
   lineLooksLikeThaiTruncationArtifact,
   storedFlexSummaryLooksComplete,
   TRUNCATION_ARTIFACT_SUFFIXES,
@@ -151,4 +152,20 @@ test("ten sample composed lines (documentation-style)", () => {
     assert.ok(s.headlineShort.length > 5);
     assert.ok(s.fitReasonShort.length > 8);
   }
+});
+
+test("getFlexHeroVariantByPresentationAngle: same truth protection, different angles", () => {
+  const filter = getFlexHeroVariantByPresentationAngle(
+    "crystal",
+    "protection",
+    "filter",
+  );
+  const shield = getFlexHeroVariantByPresentationAngle(
+    "crystal",
+    "protection",
+    "shield",
+  );
+  assert.ok(filter?.headline && shield?.headline);
+  assert.notEqual(filter.headline, shield.headline);
+  assert.match(filter.headline, /กรอง|รบกวน/);
 });

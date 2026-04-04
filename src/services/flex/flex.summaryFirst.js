@@ -4,9 +4,14 @@
  */
 import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
 import { parseScanText } from "./flex.parser.js";
-import { normalizeScore, getEnergyShortLabel } from "./flex.utils.js";
+import { cleanLine, normalizeScore, getEnergyShortLabel } from "./flex.utils.js";
 import { resolveFlexSummarySurfaceForLine } from "../../utils/reports/flexSummarySurface.util.js";
-import { composeFlexShortSurface } from "../../utils/reports/flexSummaryShortCopy.js";
+import {
+  composeFlexShortSurface,
+  getFlexHeroVariantByPresentationAngle,
+  storedFlexSummaryLooksComplete,
+} from "../../utils/reports/flexSummaryShortCopy.js";
+import { normalizeObjectFamilyForEnergyCopy } from "../../utils/energyCategoryResolve.util.js";
 import { resolveEnergyCopyForFlex } from "../energyCopyFlex.service.js";
 import { buildScanFlexAltText, FLEX_SPLIT_WARN_THRESHOLD, splitSentencesForFlex } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
@@ -543,63 +548,150 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
     "พลังหลัก";
 
   let usedDbSurface = false;
+  /** @type {string | null} */
+  let flexHeroCopySource = null;
+  /** @type {string | null} */
+  let flexHeroAngleId = null;
+  let flexHeroUsedGenericFallback = false;
+  /** @type {string | null} */
+  let flexHeadlineVariantId = null;
+
+  const famNormHero = normalizeObjectFamilyForEnergyCopy(
+    s?.energyCopyObjectFamily || "",
+  );
+  const truthCatHero = String(s?.energyCategoryCode || "").trim();
+  const presentationAngleIdRaw = String(
+    s?.presentationAngleId ||
+      /** @type {{ flexPresentationAngleId?: string }} */ (reportPayload?.diagnostics)
+        ?.flexPresentationAngleId ||
+      "",
+  ).trim();
+
   /** Wall time for Supabase round-trip inside resolveEnergyCopyForFlex (telemetry; outbound latency). */
   let energyCopyFlexMs = null;
   const tFlex0 =
     typeof globalThis.performance?.now === "function"
       ? globalThis.performance.now()
       : Date.now();
-  try {
-    const ec = await resolveEnergyCopyForFlex({
-      categoryCode: s?.energyCategoryCode,
-      objectFamily: s?.energyCopyObjectFamily,
-      mainEnergy: mainEnergyLabelForCopy,
-      crystalMode: s?.crystalMode ?? null,
-      hidden:
-        parsed.hidden && parsed.hidden !== "-"
-          ? String(parsed.hidden)
-          : "",
-    });
-    const tFlex1 =
-      typeof globalThis.performance?.now === "function"
-        ? globalThis.performance.now()
-        : Date.now();
-    energyCopyFlexMs = Math.round(tFlex1 - tFlex0);
-    if (ec.headline && ec.bullets?.length >= 1) {
-      usedDbSurface = true;
-      headlineText = ec.headline;
-      fitLine = ec.fitLine || "";
-      bulletLines = ec.bullets.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 2);
-      if (bulletLines.length === 1) {
-        const fb = composeFlexShortSurface({
-          mainEnergyLabel: mainEnergyLabelForCopy,
-          wordingFamily: wordingFam,
-          seed: seedFlex,
-          objectFamily: s?.energyCopyObjectFamily || "",
-        });
-        const second =
-          fb.bulletsShort[1] || fb.bulletsShort[0] || "";
-        if (second) bulletLines = [bulletLines[0], second];
-      }
-      mainPill =
-        ec.energyShortLabel ||
-        energyNameForPill(mainEnergy) ||
-        String(s?.mainEnergyLabel || "").trim() ||
-        "พลังหลัก";
+
+  let heroResolved = false;
+
+  // Priority 1: bind visible hero to selected presentation angle (same VARIANT_BANKS row as report teaser compose).
+  if (presentationAngleIdRaw && truthCatHero) {
+    const branch =
+      famNormHero === "crystal"
+        ? "crystal"
+        : famNormHero === "thai_talisman"
+          ? "talisman"
+          : "thai";
+    const angled = getFlexHeroVariantByPresentationAngle(
+      branch,
+      truthCatHero,
+      presentationAngleIdRaw,
+    );
+    if (angled && String(angled.headline || "").trim()) {
+      headlineText = angled.headline;
+      fitLine = angled.fitLine;
+      bulletLines = angled.bullets.slice(0, 2);
+      flexHeroCopySource = "angle_bank";
+      flexHeroAngleId = presentationAngleIdRaw;
+      flexHeroUsedGenericFallback = false;
+      flexHeadlineVariantId = angled.wordingVariantId;
+      heroResolved = true;
       ctaLabel = "เปิดรายงานฉบับเต็ม";
     }
-  } catch (err) {
-    const tFlexErr =
+  }
+
+  // Priority 2: stored payload teaser (already angle-aware from reportPayload.builder).
+  if (
+    !heroResolved &&
+    storedFlexSummaryLooksComplete({
+      headlineShort: s?.headlineShort,
+      fitReasonShort: s?.fitReasonShort,
+      bulletsShort: s?.bulletsShort,
+    })
+  ) {
+    headlineText =
+      cleanLine(String(s?.headlineShort || "").trim()) || headlineText;
+    fitLine = cleanLine(String(s?.fitReasonShort || "").trim());
+    bulletLines = (Array.isArray(s?.bulletsShort) ? s.bulletsShort : [])
+      .map((x) => cleanLine(String(x || "")))
+      .filter(Boolean)
+      .slice(0, 2);
+    flexHeroCopySource = "payload_teaser_stored";
+    flexHeroAngleId = presentationAngleIdRaw || null;
+    flexHeadlineVariantId =
+      String(s?.wordingVariantId || "").trim() || flexHeadlineVariantId;
+    heroResolved = true;
+    ctaLabel = "เปิดรายงานฉบับเต็ม";
+  }
+
+  if (!heroResolved) {
+    try {
+      const ec = await resolveEnergyCopyForFlex({
+        categoryCode: s?.energyCategoryCode,
+        objectFamily: s?.energyCopyObjectFamily,
+        mainEnergy: mainEnergyLabelForCopy,
+        crystalMode: s?.crystalMode ?? null,
+        hidden:
+          parsed.hidden && parsed.hidden !== "-"
+            ? String(parsed.hidden)
+            : "",
+      });
+      const tFlex1 =
+        typeof globalThis.performance?.now === "function"
+          ? globalThis.performance.now()
+          : Date.now();
+      energyCopyFlexMs = Math.round(tFlex1 - tFlex0);
+      if (ec.headline && ec.bullets?.length >= 1) {
+        usedDbSurface = true;
+        headlineText = ec.headline;
+        fitLine = ec.fitLine || "";
+        bulletLines = ec.bullets
+          .map((x) => String(x || "").trim())
+          .filter(Boolean)
+          .slice(0, 2);
+        if (bulletLines.length === 1) {
+          const fb = composeFlexShortSurface({
+            mainEnergyLabel: mainEnergyLabelForCopy,
+            wordingFamily: wordingFam,
+            seed: seedFlex,
+            objectFamily: s?.energyCopyObjectFamily || "",
+          });
+          const second = fb.bulletsShort[1] || fb.bulletsShort[0] || "";
+          if (second) bulletLines = [bulletLines[0], second];
+        }
+        mainPill =
+          ec.energyShortLabel ||
+          energyNameForPill(mainEnergy) ||
+          String(s?.mainEnergyLabel || "").trim() ||
+          "พลังหลัก";
+        ctaLabel = "เปิดรายงานฉบับเต็ม";
+        flexHeroCopySource = "db_energy_copy";
+        flexHeroAngleId = presentationAngleIdRaw || null;
+        flexHeroUsedGenericFallback = !presentationAngleIdRaw;
+        flexHeadlineVariantId = `db:${String(s?.energyCategoryCode || "")}`;
+        heroResolved = true;
+      }
+    } catch (err) {
+      const tFlexErr =
+        typeof globalThis.performance?.now === "function"
+          ? globalThis.performance.now()
+          : Date.now();
+      energyCopyFlexMs = Math.round(tFlexErr - tFlex0);
+      console.warn("[FLEX_SUMMARY_FIRST] resolveEnergyCopyForFlex failed", {
+        message: err?.message,
+      });
+    }
+  } else {
+    const tSkip =
       typeof globalThis.performance?.now === "function"
         ? globalThis.performance.now()
         : Date.now();
-    energyCopyFlexMs = Math.round(tFlexErr - tFlex0);
-    console.warn("[FLEX_SUMMARY_FIRST] resolveEnergyCopyForFlex failed", {
-      message: err?.message,
-    });
+    energyCopyFlexMs = Math.round(tSkip - tFlex0);
   }
 
-  if (!usedDbSurface) {
+  if (!heroResolved && !usedDbSurface) {
     const surface = resolveFlexSummarySurfaceForLine(reportPayload, parsed);
     headlineText =
       String(surface.headlineShort || "").trim() || "สรุปผลการสแกน";
@@ -609,6 +701,28 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
       : [];
     ctaLabel =
       String(surface.ctaLabel || "").trim() || summaryCardCopy.ctaText;
+    mainPill =
+      getEnergyShortLabel(mainEnergy || "-", {
+        categoryCode: s?.energyCategoryCode,
+        objectFamily: s?.energyCopyObjectFamily,
+      }) ||
+      energyNameForPill(mainEnergy) ||
+      String(s?.mainEnergyLabel || "").trim() ||
+      "พลังหลัก";
+    flexHeroCopySource = flexHeroCopySource || "offline_compose";
+    flexHeroAngleId = presentationAngleIdRaw || null;
+    flexHeroUsedGenericFallback = true;
+    flexHeadlineVariantId =
+      String(
+        /** @type {{ wordingMeta?: { wordingVariantId?: string } }} */ (
+          surface
+        )?.wordingMeta?.wordingVariantId ||
+          s?.wordingVariantId ||
+          "",
+      ).trim() || flexHeadlineVariantId;
+  }
+
+  if (!usedDbSurface) {
     mainPill =
       getEnergyShortLabel(mainEnergy || "-", {
         categoryCode: s?.energyCategoryCode,
@@ -645,8 +759,18 @@ export async function buildScanSummaryFirstFlex(rawText, options = {}) {
       summaryCardCopyVariant: summaryCardCopy.variantKey,
       familyPatternUsed,
       copyShapingActive,
-      energyCopySurface: usedDbSurface ? "db" : "fallback",
+      energyCopySurface: usedDbSurface
+        ? "db"
+        : flexHeroCopySource === "angle_bank"
+          ? "angle_bank"
+          : "fallback",
       energyCopyFlexMs,
+      flexHeroAngleId,
+      flexHeroCopySource,
+      flexHeroUsedGenericFallback,
+      flexMainLabelSurface: mainPill,
+      flexHeadlineVariantId,
+      truthCategoryCode: s?.energyCategoryCode ?? null,
       flexSplitCounts: {
         overview: splitOverview,
         warnThreshold: FLEX_SPLIT_WARN_THRESHOLD,

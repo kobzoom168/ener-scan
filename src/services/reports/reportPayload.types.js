@@ -139,6 +139,8 @@
  * @property {string} [energyCategoryCode] — energy_categories.code (sync-inferred for Flex DB resolver)
  * @property {string} [energyCopyObjectFamily] — normalized slug for energy_copy_templates.object_family
  * @property {"general"|"spiritual_growth"|null} [crystalMode] — crystal subgroup; null when not crystal
+ * @property {string} [presentationAngleId] — Flex wording surface angle (e.g. filter, shield); truth category unchanged
+ * @property {string} [wordingVariantId] — composed pool variant id for Flex teaser lines
  */
 
 /**

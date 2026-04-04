@@ -125,7 +125,10 @@ const FALLBACK_MASTER_V2 = {
     protection: {
       headline: "เด่นเรื่องคุ้มครองและกันแรงลบ",
       fit: "เหมาะกับคนที่ต้องเจอคนเยอะหรือไม่อยากรับพลังแย่ ๆ",
-      bullets: ["ช่วยกันแรงลบและแรงปะทะที่ไม่จำเป็น", "ช่วยให้ไม่รับอารมณ์คนอื่นเข้าตัวง่ายเกินไป"],
+      bullets: [
+        "ช่วยกันแรงลบและแรงปะทะที่ไม่จำเป็น",
+        "ช่วยกรองอารมณ์คนรอบข้างไม่ให้เข้าตัวเร็ว",
+      ],
     },
     /** Rare direct code; usually balance pillar maps to `confidence` for crystal inference. */
     balance: {
@@ -171,7 +174,7 @@ const VARIANT_BANKS = {
         fit: "เหมาะกับคนที่ต้องเจอคนเยอะหรือไม่อยากรับพลังแย่ ๆ",
         bullets: [
           "ช่วยกันแรงลบและแรงปะทะที่ไม่จำเป็น",
-          "ช่วยให้ไม่รับอารมณ์คนอื่นเข้าตัวง่ายเกินไป",
+          "ช่วยกรองอารมณ์คนรอบข้างไม่ให้เข้าตัวเร็ว",
         ],
       },
       {
@@ -356,6 +359,42 @@ const VARIANT_BANKS = {
     ],
   },
 };
+
+/**
+ * Flex visible hero slots by truth branch + category + selected presentation angle (wording only; truth code unchanged).
+ * @param {"crystal"|"thai"|"talisman"} branch
+ * @param {string} categoryCode
+ * @param {string} presentationAngleId
+ * @returns {{ headline: string, fitLine: string, bullets: string[], wordingVariantId: string, wordingBankUsed: string } | null}
+ */
+export function getFlexHeroVariantByPresentationAngle(
+  branch,
+  categoryCode,
+  presentationAngleId,
+) {
+  const code = String(categoryCode || "").trim();
+  const id = String(presentationAngleId || "").trim();
+  const list = VARIANT_BANKS[branch]?.[code];
+  if (!id || !Array.isArray(list) || !list.length) return null;
+  const row = list.find(
+    (v) =>
+      v &&
+      typeof v.presentationAngle === "string" &&
+      v.presentationAngle === id,
+  );
+  if (!row || !row.headline) return null;
+  const bankKey = `${branch}.${code}`;
+  const bullets = Array.isArray(row.bullets)
+    ? row.bullets.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 2)
+    : [];
+  return {
+    headline: String(row.headline || "").trim(),
+    fitLine: String(row.fit || "").trim(),
+    bullets,
+    wordingVariantId: `${bankKey}:angle:${id}`,
+    wordingBankUsed: bankKey,
+  };
+}
 
 function getVariantList(branch, code) {
   const vb = VARIANT_BANKS[branch]?.[code];
