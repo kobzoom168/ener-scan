@@ -1,0 +1,25 @@
+{
+  "ownershipModelVersion": "1.0",
+  "reviewPackVersion": "1",
+  "unownedArtifacts": [
+    "multi_year_history_external"
+  ],
+  "ownerCoverageStatus": "weak",
+  "recommendedOwnershipFixes": [
+    "Name a single DRI for telemetry_diagnostics_inputs outside repo (wiki/on-call) and link from PR template.",
+    "Keep multi_year_history_external unowned until a util exists — do not fake ownership.",
+    "For Phase 17 meta artifacts, use platform owner + engineering backup as default RACI-lite.",
+    "On drift, follow escalationPaths — do not change routing/wording semantics in this util."
+  ],
+  "responsibilityIds": [
+    "contract_ownership",
+    "schema_linter_ownership",
+    "compatibility_ownership",
+    "lifecycle_deprecation_ownership",
+    "ci_validation_ownership",
+    "telemetry_diagnostics_ownership",
+    "annual_review_pack_ownership",
+    "capability_roadmap_ownership",
+    "operating_system_pack_ownership"
+  ]
+}

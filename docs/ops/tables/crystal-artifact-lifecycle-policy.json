@@ -1,0 +1,26 @@
+{
+  "lifecyclePolicyVersion": "1.0",
+  "reviewPackVersion": "1",
+  "artifactLifecycleStates": [
+    "active",
+    "legacy",
+    "transitional",
+    "deprecated",
+    "retired"
+  ],
+  "artifactIds": [
+    "telemetry_diagnostics_inputs",
+    "artifact_manifest_pack",
+    "artifact_ci_spec",
+    "artifact_contract_linter",
+    "artifact_compatibility_matrix",
+    "artifact_lifecycle_policy",
+    "multi_year_history_external"
+  ],
+  "recommendedLifecycleActions": [
+    "Keep `docs/ops/tables/*.json` regenerated when pack versions change.",
+    "Treat `multi_year_history_external` as not-governed-in-repo until a util lands.",
+    "Migrate new code from `layers` to `reviewLayers` on OS pack consumers.",
+    "Use promotionRules before declaring meta artifacts (CI spec, matrix, lifecycle) as fully active."
+  ]
+}

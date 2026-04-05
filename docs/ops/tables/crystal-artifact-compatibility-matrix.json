@@ -1,0 +1,23 @@
+{
+  "matrixVersion": "1.0",
+  "reviewPackVersion": "1",
+  "requiredVersionHints": {
+    "annual_operating_review_pack": "reviewPackVersion 1",
+    "capability_maturity_roadmap_pack": "reviewPackVersion 1",
+    "operating_system_pack": "reviewPackVersion 1.1",
+    "review_automation_pack": "reviewPackVersion 1",
+    "artifact_manifest_pack": "1.0 / 1",
+    "artifact_ci_spec": "1.0 / 1",
+    "artifact_contract_linter": "1.0 / 1"
+  },
+  "recommendedUpgradeSequence": [
+    "telemetry_monthly_rollups",
+    "annual_operating_review_pack",
+    "capability_maturity_roadmap_pack",
+    "operating_system_pack",
+    "review_automation_pack",
+    "artifact_manifest_pack",
+    "artifact_ci_spec",
+    "artifact_contract_linter"
+  ]
+}
