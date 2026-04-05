@@ -27,6 +27,12 @@ import {
 } from "../dbWordingBundle.service.js";
 import { isUsableVisibleSurface } from "../../utils/visibleWordingSelect.util.js";
 import { clampFlexDbSurfaceLines } from "../energyCopyFlex.service.js";
+import { resolveCrystalVisibleWordingPriority } from "../../utils/crystalVisibleWordingPriority.util.js";
+import {
+  buildVisibleWordingTelemetryCorrelation,
+  buildVisibleWordingTelemetryFields,
+} from "../../utils/visibleWordingTelemetry.util.js";
+import { buildCrystalRoutingWordingMetrics } from "../../utils/crystalRoutingWordingMetrics.util.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -630,6 +636,60 @@ export async function buildReportPayloadFromScan(opts) {
     );
   const dbSurfBundle = dbSurfaceOk ? dbBundleResolved.bundle : null;
 
+  const visibleWordingPriorityDiag = resolveCrystalVisibleWordingPriority({
+    objectFamilyNormalized: famNorm,
+    energyCategoryCode,
+    dbSurfaceOk,
+    dbRowSource: dbBundleResolved?.rowSource ?? null,
+    categoryUsedForSurface:
+      dbBundleResolved?.categoryUsed ?? energyCategoryCode,
+    presentationAngleId: flexSurface.wordingMeta?.presentationAngleId ?? null,
+    dbWordingFallbackLevel: dbSurfBundle?.diagnostics?.dbWordingFallbackLevel ?? null,
+  });
+
+  const visibleWordingTelemetryFields =
+    buildVisibleWordingTelemetryFields(visibleWordingPriorityDiag);
+  const visibleWordingTelemetryCorrelation =
+    buildVisibleWordingTelemetryCorrelation({
+      energyCategoryCode,
+      visibleWordingDiag: visibleWordingPriorityDiag,
+      crystalRoutingRuleId: energyCategoryInferenceTrace.crystalRoutingRuleId,
+      objectFamilyNormalized: famNorm,
+    });
+
+  const routingWordingMetrics = buildCrystalRoutingWordingMetrics({
+    objectFamily: famNorm,
+    energyCategoryCode,
+    crystalRoutingRuleId: energyCategoryInferenceTrace.crystalRoutingRuleId,
+    crystalRoutingStrategy: energyCategoryInferenceTrace.crystalRoutingStrategy,
+    crystalRoutingReason: energyCategoryInferenceTrace.crystalRoutingReason,
+    protectSignalStrength: energyCategoryInferenceTrace.protectSignalStrength,
+    visibleWordingDecisionSource: visibleWordingPriorityDiag.visibleWordingDecisionSource,
+    visibleWordingObjectFamilyUsed: visibleWordingPriorityDiag.visibleWordingObjectFamilyUsed,
+    visibleWordingCrystalSpecific: visibleWordingPriorityDiag.visibleWordingCrystalSpecific,
+    visibleWordingCategoryUsed: visibleWordingPriorityDiag.visibleWordingCategoryUsed,
+    visibleWordingPresentationAngle: visibleWordingPriorityDiag.visibleWordingPresentationAngle,
+    visibleWordingFallbackLevel: visibleWordingPriorityDiag.visibleWordingFallbackLevel,
+    visibleWordingReason: visibleWordingPriorityDiag.visibleWordingReason,
+  });
+
+  console.log(
+    JSON.stringify({
+      event: "REPORT_PAYLOAD_VISIBLE_WORDING_TELEMETRY",
+      scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+      objectFamily: String(objectFamilyOpt || "").slice(0, 48),
+      energyCategoryCode,
+      crystalRoutingRuleId:
+        energyCategoryInferenceTrace.crystalRoutingRuleId ?? null,
+      energyCategoryInferenceBranch: energyCategoryInferenceTrace.inferenceBranch,
+      dbSurfaceOk,
+      wordingPrimarySource: dbSurfaceOk ? "db" : "code_bank",
+      ...visibleWordingTelemetryFields,
+      ...visibleWordingTelemetryCorrelation,
+      routingWordingMetrics,
+    }),
+  );
+
   const threadedSignalCount = countThreadedReportSignalFields({
     dominantColor: dominantColorResolved.normalized,
     conditionClass: conditionClassResolved.normalized,
@@ -685,6 +745,9 @@ export async function buildReportPayloadFromScan(opts) {
       pipelineObjectCategorySource: pipelineObjectCategorySourceOpt,
       dbSurfaceOk,
       wordingPrimarySource: dbSurfaceOk ? "db" : "code_bank",
+      ...visibleWordingTelemetryFields,
+      ...visibleWordingTelemetryCorrelation,
+      routingWordingMetrics,
     }),
   );
 
@@ -874,6 +937,20 @@ export async function buildReportPayloadFromScan(opts) {
             dbWordingClusterTag: null,
             dbWordingFallbackLevel: null,
           }),
+      visibleWordingDecisionSource:
+        visibleWordingPriorityDiag.visibleWordingDecisionSource,
+      visibleWordingObjectFamilyUsed:
+        visibleWordingPriorityDiag.visibleWordingObjectFamilyUsed,
+      visibleWordingCrystalSpecific:
+        visibleWordingPriorityDiag.visibleWordingCrystalSpecific,
+      visibleWordingCategoryUsed:
+        visibleWordingPriorityDiag.visibleWordingCategoryUsed,
+      visibleWordingPresentationAngle:
+        visibleWordingPriorityDiag.visibleWordingPresentationAngle ?? undefined,
+      visibleWordingFallbackLevel:
+        visibleWordingPriorityDiag.visibleWordingFallbackLevel ?? undefined,
+      visibleWordingReason: visibleWordingPriorityDiag.visibleWordingReason,
+      routingWordingMetrics,
       enrichmentEligible: undefined,
       enrichmentUsed: undefined,
       enrichmentProvider: undefined,

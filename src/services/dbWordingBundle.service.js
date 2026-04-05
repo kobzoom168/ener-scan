@@ -74,6 +74,8 @@ export async function resolveVisibleWordingBundleFromDb(p) {
     visibleTone,
   };
 
+  /* Crystal: fetch only `object_family = crystal` rows first; retry spiritual_growth if mode matches.
+   * Code fallback for incomplete surfaces uses composeFlexShortSurface with objectFamily → crystal branch. */
   if (famNorm === "crystal") {
     const primaryCode = String(codeIn || "").trim() || "luck_fortune";
     let raw = await fetchCrystalRowsForCategory(primaryCode, tone);

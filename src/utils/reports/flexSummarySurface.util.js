@@ -5,6 +5,13 @@
  * LINE summary-first bubble prefers DB copy in `buildScanSummaryFirstFlex` → `resolveEnergyCopyForFlex`;
  * this module remains the fallback when DB is unavailable or incomplete, and for stored report payload
  * teaser fields built in `reportPayload.builder`.
+ *
+ * **Crystal wording priority (when `objectFamily` normalizes to `crystal`):**
+ * 1. DB crystal-only templates (`resolveVisibleWordingBundleFromDb` → crystal rows) when surface is usable.
+ * 2. Composed fallback here via `composeFlexShortSurface` — must receive real `objectFamily` so the
+ *    **crystal** master pools in `flexSummaryShortCopy.js` win over generic Thai-amulet phrasing.
+ * 3. Never substitute a generic family label for crystal when building the fallback; that would defeat
+ *    crystal-first copy. See `resolveCrystalVisibleWordingPriority` for diagnostics of which path ran.
  */
 import { cleanLine } from "../../services/flex/flex.utils.js";
 import {

@@ -75,6 +75,14 @@
  * @property {string} [crystalRoutingRuleId] — stable rule id from crystalCategoryRouting.util
  * @property {string} [crystalRoutingReason] — rule-specific reason (finer than legacy non-protect key)
  * @property {string} [crystalRoutingStrategy] — early_exit | resolver_direct | weak_protect | generic_boost | fallback
+ * @property {"db_crystal"|"db_family"|"code_bank_crystal_first"|"code_bank_family"} [visibleWordingDecisionSource] — traceable wording source (see crystalVisibleWordingPriority.util.js)
+ * @property {string} [visibleWordingObjectFamilyUsed] — normalized family used for wording branch
+ * @property {boolean} [visibleWordingCrystalSpecific] — true when DB crystal rows or code crystal-first pools applied
+ * @property {string} [visibleWordingCategoryUsed] — category driving template selection for visible surface
+ * @property {string} [visibleWordingPresentationAngle] — angle id on headline/surface when known
+ * @property {number|null} [visibleWordingFallbackLevel] — DB fallback level when DB path (else often undefined)
+ * @property {string} [visibleWordingReason] — short machine reason for wording decision
+ * @property {Object} [routingWordingMetrics] — Phase 4: crystal routing vs visible wording alignment (`buildCrystalRoutingWordingMetrics`); see `docs/crystal-routing-wording-mismatch-metrics.md`
  */
 
 /**
@@ -205,4 +213,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.7";
+export const REPORT_PAYLOAD_VERSION = "1.2.9";

@@ -1,0 +1,21 @@
+[
+  {"routingRuleId":"crystal_rg_spiritual_growth","routingStrategy":"early_exit","finalCategoryCode":"spiritual_growth","routingReason":"spiritual_growth_signals","phase":"early"},
+  {"routingRuleId":"crystal_rg_money_work","routingStrategy":"early_exit","finalCategoryCode":"money_work","routingReason":"early_money_work","phase":"early"},
+  {"routingRuleId":"crystal_rg_explicit_luck_word","routingStrategy":"early_exit","finalCategoryCode":"luck_fortune","routingReason":"early_luck_word","phase":"early"},
+  {"routingRuleId":"crystal_rg_resolver_protect","routingStrategy":"resolver_direct","finalCategoryCode":"protection","routingReason":"resolver_protect","phase":"resolver"},
+  {"routingRuleId":"crystal_rg_resolver_power_balance","routingStrategy":"resolver_direct","finalCategoryCode":"confidence","routingReason":"resolver_power_balance","phase":"resolver"},
+  {"routingRuleId":"crystal_rg_resolver_kindness_attract","routingStrategy":"resolver_direct","finalCategoryCode":"charm","routingReason":"resolver_kindness_attract","phase":"resolver"},
+  {"routingRuleId":"crystal_rg_resolver_luck","routingStrategy":"resolver_direct","finalCategoryCode":"luck_fortune","routingReason":"resolver_luck","phase":"resolver"},
+  {"routingRuleId":"crystal_rg_weak_protect_charm_social","routingStrategy":"weak_protect","finalCategoryCode":"charm","routingReason":"weak_protect_charm_cues","phase":"weak_cue"},
+  {"routingRuleId":"crystal_rg_weak_protect_charm_metta","routingStrategy":"weak_protect","finalCategoryCode":"charm","routingReason":"weak_protect_charm_metta","phase":"weak_cue"},
+  {"routingRuleId":"crystal_rg_weak_protect_luck","routingStrategy":"weak_protect","finalCategoryCode":"luck_fortune","routingReason":"weak_protect_luck_cues","phase":"weak_cue"},
+  {"routingRuleId":"crystal_rg_weak_protect_confidence_boundary","routingStrategy":"weak_protect","finalCategoryCode":"confidence","routingReason":"weak_protect_confidence_cues","phase":"weak_cue"},
+  {"routingRuleId":"crystal_rg_weak_protect_default","routingStrategy":"weak_protect","finalCategoryCode":"confidence","routingReason":"weak_protect_default_confidence","phase":"weak_default"},
+  {"routingRuleId":"crystal_rg_generic_boost_empty","routingStrategy":"generic_boost","finalCategoryCode":"confidence","routingReason":"generic_boost_empty_or_dash","phase":"generic_cue"},
+  {"routingRuleId":"crystal_rg_generic_boost_luck","routingStrategy":"generic_boost","finalCategoryCode":"luck_fortune","routingReason":"generic_boost_luck_cues","phase":"generic_cue"},
+  {"routingRuleId":"crystal_rg_generic_boost_charm","routingStrategy":"generic_boost","finalCategoryCode":"charm","routingReason":"generic_boost_charm_cues","phase":"generic_cue"},
+  {"routingRuleId":"crystal_rg_generic_boost_confidence","routingStrategy":"generic_boost","finalCategoryCode":"confidence","routingReason":"generic_boost_confidence_cues","phase":"generic_cue"},
+  {"routingRuleId":"crystal_rg_generic_boost_energy","routingStrategy":"generic_boost","finalCategoryCode":"luck_fortune","routingReason":"generic_boost_energy_mood","phase":"generic_cue"},
+  {"routingRuleId":"crystal_rg_default_confidence","routingStrategy":"fallback","finalCategoryCode":"confidence","routingReason":"crystal_default_confidence","phase":"fallback"},
+  {"routingRuleId":"crystal_rg_fallback_confidence","routingStrategy":"fallback","finalCategoryCode":"confidence","routingReason":"crystal_default_confidence","phase":"fallback"}
+]

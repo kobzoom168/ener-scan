@@ -65,3 +65,8 @@ Thai amulet / talisman paths **do not** call `resolveCrystalCategoryRouting`. Th
 ## Regression fixtures
 
 Frozen cases live in `tests/fixtures/crystalRoutingCases.fixture.js`. Changing rule order or regexes should update expectations deliberately and run the full test suite.
+
+## Related docs
+
+- **[crystal-routing-telemetry-mapping.md](./crystal-routing-telemetry-mapping.md)** — `routingRuleId` / trace / diagnostics / dashboard mapping.
+- **`src/utils/crystalVisibleWordingPriority.util.js`** — traceable crystal-first **wording** source (DB vs code), orthogonal to category routing.
