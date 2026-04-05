@@ -114,6 +114,33 @@ export const CRYSTAL_GENERIC_BOOST_CUE_RULES = [
   },
 ];
 
+/*
+ * ---------------------------------------------------------------------------
+ * CRYSTAL_ROUTING_RULES — freeze / telemetry contract
+ * ---------------------------------------------------------------------------
+ * `routingRuleId` values (here and in cue tables below) are part of the **telemetry
+ * and QA contract**. Dashboards, log parsers, and regression fixtures may key on them.
+ *
+ *   **Do not rename rule ids casually.** If a rename is required, add a migration note
+ *   in docs/changelog or docs/crystal-routing-spec.md and update fixtures + consumers.
+ *
+ * Semantics:
+ *   • **priority / array order** — Determines which rule matches first; changing order
+ *     changes product behavior for overlapping conditions.
+ *   • **routingReason** (on each result row) — Human-oriented / machine-readable
+ *     diagnostics; safe to tune copy for logs without breaking id contract if ids stable.
+ *   • **routingStrategy** (`CRYSTAL_ROUTING_STRATEGY`) — Coarse behavioral bucket:
+ *       `early_exit`      — spiritual / money-work / explicit luck word (before resolver lanes)
+ *       `resolver_direct` — outcome driven by resolver energy type (PROTECT, POWER, …)
+ *       `weak_protect`    — BOOST + weak protect signal; cue tables apply
+ *       `generic_boost`   — BOOST without weak protect; cue tables apply
+ *       `fallback`        — default confidence when nothing else matched
+ *
+ * Structured routing output is the single source of truth for category inference,
+ * inference trace, and payload diagnostics for the crystal family.
+ * ---------------------------------------------------------------------------
+ */
+
 /**
  * Top-level crystal rules (priority order). Only the first matching phase runs for early exits.
  * Resolver-direct rules apply when no early exit matched.
