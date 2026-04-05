@@ -9,10 +9,8 @@ import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 /** Moldavite-only palette — green accent (distinct from Thai/gold cards). */
 const FLEX_CARD_BG = "#000000";
 const FLEX_BOX_BG = "#111111";
-const FLEX_BOX_BG_ELEVATED = "#0c1210";
 const MOLDAVITE_ACCENT = "#4ADE80";
 const MOLDAVITE_ACCENT_DIM = "#5ee0a0";
-const MOLDAVITE_BORDER_SUBTLE = "#243528";
 const MOLDAVITE_PILL_BORDER = "#3d5248";
 const MOLDAVITE_PILL_BG = "#0a1410";
 /** CTA: slightly deeper green for contrast on mobile tap targets. */
@@ -40,7 +38,10 @@ function truncateEnergyBadgeLabel(text, maxLen = 14) {
 const MAIN_ENERGY_PILL_MAX_LEN = 22;
 
 /**
- * Life-area scores (งาน / การเงิน / ความสัมพันธ์), ranked high → low for quick scan.
+ * Life-area scores — vertical text only (same semantics as old ranked rows).
+ * Matches generic summary-first patterns: no horizontal text+flex rows, no justifyContent/alignItems
+ * (those differ from the known-good Thai/generic card and have triggered LINE 400 in prod).
+ *
  * @param {Record<string, { score?: number, labelThai?: string }>|null|undefined} lifeAreas
  */
 function createLifeAreasRankingBlock(lifeAreas) {
@@ -59,76 +60,42 @@ function createLifeAreasRankingBlock(lifeAreas) {
   if (rows.length === 0) return null;
   rows.sort((a, b) => b.score - a.score);
 
-  const headerBlock = {
-    type: "box",
-    layout: "vertical",
-    spacing: "none",
-    margin: "none",
-    contents: [
-      {
-        type: "text",
-        text: "มิติที่โทนไปออกแรงสุด",
-        size: "xs",
-        color: MOLDAVITE_ACCENT_DIM,
-        wrap: true,
-        margin: "none",
-      },
-      {
-        type: "text",
-        text: "เรียงจากมากไปน้อย",
-        size: "xs",
-        color: FLEX_TEXT_CAPTION,
-        wrap: true,
-        margin: "xs",
-      },
-    ],
-  };
-
   /** @type {object[]} */
-  const rowBoxes = [];
+  const lines = [
+    {
+      type: "text",
+      text: "มิติที่โทนไปออกแรงสุด",
+      size: "xs",
+      color: MOLDAVITE_ACCENT_DIM,
+      wrap: true,
+      margin: "sm",
+    },
+    {
+      type: "text",
+      text: "เรียงจากมากไปน้อย",
+      size: "xs",
+      color: FLEX_TEXT_CAPTION,
+      wrap: true,
+      margin: "xs",
+    },
+  ];
   for (const r of rows) {
-    rowBoxes.push({
-      type: "box",
-      layout: "horizontal",
-      spacing: "md",
-      margin: "md",
-      justifyContent: "space-between",
-      alignItems: "center",
-      contents: [
-        {
-          type: "text",
-          text: r.label,
-          size: "sm",
-          color: FLEX_TEXT_SECONDARY,
-          // LINE Flex: flex must be 0–3 on text/box children (values >3 → pushMessage 400).
-          flex: 3,
-          wrap: true,
-        },
-        {
-          type: "text",
-          text: String(Math.round(r.score)),
-          size: "xxl",
-          weight: "bold",
-          color: MOLDAVITE_ACCENT,
-          flex: 1,
-          align: "end",
-          wrap: false,
-        },
-      ],
+    lines.push({
+      type: "text",
+      text: `${r.label} · ${String(Math.round(r.score))}`,
+      size: "sm",
+      color: FLEX_TEXT_SECONDARY,
+      wrap: true,
+      margin: "xs",
     });
   }
 
   return {
     type: "box",
     layout: "vertical",
-    spacing: "md",
     margin: "md",
-    paddingAll: "18px",
-    borderWidth: "1px",
-    borderColor: MOLDAVITE_BORDER_SUBTLE,
-    cornerRadius: "md",
-    backgroundColor: FLEX_BOX_BG_ELEVATED,
-    contents: [headerBlock, ...rowBoxes],
+    spacing: "xs",
+    contents: lines,
   };
 }
 
@@ -217,7 +184,7 @@ function createEnergyBadgePill(mainLabel) {
   return {
     type: "box",
     layout: "vertical",
-    spacing: "xs",
+    spacing: "sm",
     margin: "md",
     contents: [
       {
@@ -236,13 +203,12 @@ function createEnergyBadgePill(mainLabel) {
             layout: "horizontal",
             flex: 1,
             justifyContent: "center",
-            paddingTop: "12px",
-            paddingBottom: "12px",
-            paddingStart: "20px",
-            paddingEnd: "20px",
+            paddingTop: "10px",
+            paddingBottom: "10px",
+            paddingStart: "14px",
+            paddingEnd: "14px",
             borderWidth: "1px",
             borderColor: MOLDAVITE_PILL_BORDER,
-            cornerRadius: "md",
             backgroundColor: MOLDAVITE_PILL_BG,
             contents: [
               {
@@ -251,7 +217,7 @@ function createEnergyBadgePill(mainLabel) {
                   String(mainLabel || "-").trim(),
                   MAIN_ENERGY_PILL_MAX_LEN,
                 ),
-                size: "md",
+                size: "sm",
                 weight: "bold",
                 color: MOLDAVITE_ACCENT,
                 align: "center",
@@ -354,31 +320,25 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
     }),
   );
 
-  const titleSection = {
-    type: "box",
-    layout: "vertical",
-    spacing: "xs",
-    margin: "none",
-    contents: [
-      {
-        type: "text",
-        text: headlineText,
-        size: "lg",
-        weight: "bold",
-        color: FLEX_TEXT_PRIMARY,
-        wrap: true,
-        maxLines: 2,
-        lineSpacing: "2px",
-      },
-      {
-        type: "text",
-        text: taglineText,
-        size: "xs",
-        color: MOLDAVITE_TITLE_TAGLINE_COLOR,
-        wrap: true,
-        lineSpacing: "2px",
-      },
-    ],
+  /** Match generic summary-first headline shape (known-good LINE path). */
+  const headlineBlock = {
+    type: "text",
+    text: headlineText,
+    size: "md",
+    weight: "bold",
+    color: FLEX_TEXT_PRIMARY,
+    wrap: true,
+    maxLines: 2,
+    lineSpacing: "4px",
+    margin: "sm",
+  };
+  const taglineBlock = {
+    type: "text",
+    text: taglineText,
+    size: "xs",
+    color: MOLDAVITE_TITLE_TAGLINE_COLOR,
+    wrap: true,
+    margin: "xs",
   };
 
   const fitBlock =
@@ -407,7 +367,8 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
   }));
 
   const bodyContents = [
-    titleSection,
+    headlineBlock,
+    taglineBlock,
     createScoreRowTwoUp(
       score.display || "-",
       compatPctStr,
@@ -442,8 +403,8 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       type: "button",
       style: "primary",
       color: FLEX_ACCENT,
-      height: "lg",
-      margin: "xl",
+      height: "md",
+      margin: "lg",
       action: {
         type: "uri",
         label: "เปิดรายงานฉบับเต็ม",
@@ -458,11 +419,8 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
     body: {
       type: "box",
       layout: "vertical",
-      paddingTop: heroOk ? "28px" : "22px",
-      paddingBottom: "26px",
-      paddingStart: "22px",
-      paddingEnd: "22px",
-      spacing: "xl",
+      paddingAll: "20px",
+      spacing: "md",
       backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },
