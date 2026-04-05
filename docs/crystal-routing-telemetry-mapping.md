@@ -1,6 +1,6 @@
 # Crystal routing — telemetry & dashboard mapping
 
-Companion docs: [`crystal-routing-spec.md`](./crystal-routing-spec.md) (routing semantics), [`crystal-routing-rule-map.csv`](./tables/crystal-routing-rule-map.csv) (machine-readable rule ids).
+Companion docs: [`crystal-routing-spec.md`](./crystal-routing-spec.md) (routing semantics), [`crystal-routing-rule-map.csv`](./tables/crystal-routing-rule-map.csv) (machine-readable rule ids). Ops: [`ops/crystal-routing-wording-playbook.md`](./ops/crystal-routing-wording-playbook.md), [`ops/crystal-dashboard-query-examples.md`](./ops/crystal-dashboard-query-examples.md).
 
 ## 1) Purpose
 

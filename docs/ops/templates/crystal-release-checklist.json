@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ener-scan.local/docs/ops/templates/crystal-release-checklist.json",
+  "title": "Crystal routing + wording release checklist (machine-readable template)",
+  "description": "Optional structure for automation / release bots. Human checklist: docs/ops/crystal-release-gate-checklist.md",
+  "version": "1",
+  "preMergeChecks": [
+    "npm_test_or_ci_green",
+    "crystal_frozen_fixtures_regression",
+    "thai_path_regression_no_false_crystal_noise",
+    "routing_intent_matches_pr",
+    "visible_wording_diagnostics_populated",
+    "routingWordingMetrics_shape_complete",
+    "docs_and_rule_map_updated_if_contract_changed"
+  ],
+  "preDeployChecks": [
+    "branch_commit_tagged",
+    "report_payload_version_bumped_if_diagnostics_changed",
+    "env_flags_consistent_staging_prod",
+    "dashboard_query_docs_match_log_fields",
+    "no_unknown_routing_rule_id_in_fixtures_without_doc_update",
+    "sample_payload_spot_check_staging_1_to_3",
+    "post_deploy_owner_assigned"
+  ],
+  "postDeployChecks": [
+    "first_15m_health_and_field_presence",
+    "first_hour_mismatch_and_crystal_specific_rates",
+    "same_day_top_rule_and_decision_source_distribution",
+    "next_day_baseline_reconciliation"
+  ],
+  "rollbackSignals": [
+    "hard_mismatch_rate_above_critical_calibrated",
+    "object_family_mismatch_sustained",
+    "category_mismatch_sustained",
+    "crystal_specific_surface_rate_below_critical_floor",
+    "fallback_heavy_rate_above_critical_ceiling",
+    "top_rule_distribution_shift_unexplained_by_changelog"
+  ],
+  "requiredQueries": [
+    "group_by_routingWordingMismatchType_crystal_only",
+    "crystal_specific_rate",
+    "generic_fallback_and_fallback_heavy_rates",
+    "group_by_crystalRoutingRuleId_with_alignment_status",
+    "thai_exclusion_or_not_applicable_filter"
+  ],
+  "requiredTests": [
+    "tests/crystalCategoryRouting.util.test.js",
+    "tests/crystalRouting.fixture-regression.test.js",
+    "tests/crystalRoutingWordingMetrics.util.test.js",
+    "tests/crystalRoutingDashboardSummary.util.test.js",
+    "tests/crystalReleaseReviewSummary.util.test.js",
+    "tests/crystalVisibleWordingPriority.util.test.js",
+    "tests/visibleWordingTelemetry.util.test.js",
+    "tests/reportWording.derive.test.js"
+  ],
+  "helpers": {
+    "aggregateCrystalRoutingDashboardSummary": "src/utils/crystalRoutingDashboardSummary.util.js",
+    "buildCrystalReleaseReviewSummary": "src/utils/crystalReleaseReviewSummary.util.js"
+  }
+}

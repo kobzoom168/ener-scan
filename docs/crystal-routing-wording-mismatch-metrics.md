@@ -115,3 +115,10 @@
 
 - **Change classification rules** only in `crystalRoutingWordingMetrics.util.js` (single place).
 - Bump `dashboardMetricVersion` when output shape or semantics change for downstream dashboards.
+
+## See also (ops)
+
+- **[Ops triage playbook](./ops/crystal-routing-wording-playbook.md)** — severity ladder, scenarios, escalation.
+- **[Dashboard query examples](./ops/crystal-dashboard-query-examples.md)** — pseudo-queries and log filters.
+- **[Release gate checklist](./ops/crystal-release-gate-checklist.md)** — pre-merge / deploy discipline.
+- **[Post-deploy review](./ops/crystal-post-deploy-review.md)** — time windows and rollback signals.
