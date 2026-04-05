@@ -41,6 +41,7 @@ import {
 } from "../../moldavite/moldaviteDetect.util.js";
 import { resolveMoldaviteDetectionWithGeminiCrystalSubtype } from "../../moldavite/geminiCrystalSubtypeBranch.util.js";
 import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
+import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayNaming.util.js";
 import { buildCrystalGenericSafeV1Slice } from "../../crystal/crystalGenericSafePayload.build.js";
 
 /**
@@ -826,6 +827,17 @@ export async function buildReportPayloadFromScan(opts) {
     );
   }
 
+  const moldaviteDisplayNaming = moldaviteDetection.isMoldavite
+    ? resolveMoldaviteDisplayNaming({
+        geminiSubtypeConfidence:
+          geminiCrystalSubtypeResultOpt?.mode === "ok"
+            ? geminiCrystalSubtypeResultOpt.subtypeConfidence
+            : null,
+        moldaviteDecisionSource,
+        detectionReason: moldaviteDetection.reason,
+      })
+    : null;
+
   const moldaviteV1 = moldaviteDetection.isMoldavite
     ? buildMoldaviteV1Slice({
         scanResultId: rid,
@@ -837,6 +849,7 @@ export async function buildReportPayloadFromScan(opts) {
           : parsed.mainEnergy && parsed.mainEnergy !== "-"
             ? String(parsed.mainEnergy)
             : "",
+        displayNaming: moldaviteDisplayNaming,
       })
     : undefined;
 
@@ -867,7 +880,8 @@ export async function buildReportPayloadFromScan(opts) {
   const summaryMainEnergyLabel = crystalGenericSafeV1
     ? crystalGenericSafeV1.display.mainEnergyLabelNeutral
     : moldaviteV1
-      ? "มอลดาไวต์"
+      ? String(moldaviteV1.flexSurface.mainEnergyShort || "").trim() ||
+        baseMainEnergyLabel
       : baseMainEnergyLabel;
 
   const summaryHeadlineShort = crystalGenericSafeV1
@@ -903,7 +917,7 @@ export async function buildReportPayloadFromScan(opts) {
   const summaryVisibleMainLabel = crystalGenericSafeV1
     ? crystalGenericSafeV1.display.visibleMainLabelNeutral
     : moldaviteV1
-      ? "มอลดาไวต์"
+      ? String(moldaviteV1.flexSurface.headline || "").trim() || undefined
       : dbSurfBundle?.mainLabel
         ? String(dbSurfBundle.mainLabel).trim()
         : undefined;

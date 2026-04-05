@@ -340,6 +340,9 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
 
   const lifeAreasBlock = createLifeAreasRankingBlock(mv.lifeAreas);
 
+  const taglineText =
+    String(mv.flexSurface?.tagline || "").trim() || MOLDAVITE_TITLE_TAGLINE;
+
   const altMain = headlineText.split("\n")[0].trim() || "มอลดาไวต์";
   const altText = buildScanFlexAltText({
     mainEnergyLabel: altMain,
@@ -376,7 +379,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       },
       {
         type: "text",
-        text: MOLDAVITE_TITLE_TAGLINE,
+        text: taglineText,
         size: "xs",
         color: MOLDAVITE_TITLE_TAGLINE_COLOR,
         wrap: true,

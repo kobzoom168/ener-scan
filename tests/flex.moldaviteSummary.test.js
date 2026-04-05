@@ -40,6 +40,7 @@ const basePayload = {
       fitLine: "บรรทัดรอง",
       bullets: [],
       mainEnergyShort: "เร่งการเปลี่ยนแปลง",
+      tagline: "หินเทคไทต์ · โทนเขียว",
     },
   },
 };

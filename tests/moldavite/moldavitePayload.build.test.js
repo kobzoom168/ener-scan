@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildMoldaviteV1Slice } from "../../src/moldavite/moldavitePayload.build.js";
+import { resolveMoldaviteDisplayNaming } from "../../src/moldavite/moldaviteDisplayNaming.util.js";
+
+const namingHigh = resolveMoldaviteDisplayNaming({
+  geminiSubtypeConfidence: 0.9,
+  moldaviteDecisionSource: "gemini",
+  detectionReason: "gemini_crystal_subtype",
+});
 
 test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", () => {
   const slice = buildMoldaviteV1Slice({
@@ -9,6 +16,7 @@ test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", 
     seedKey: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
     energyScore: 7,
     mainEnergyLabel: "พลังสมดุล",
+    displayNaming: namingHigh,
   });
   assert.equal(slice.version, "1");
   assert.equal(slice.scoringMode, "deterministic_v1");
@@ -21,12 +29,14 @@ test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", 
   assert.equal(String(slice.flexSurface.headline).trim(), "มอลดาไวต์");
   assert.equal(slice.flexSurface.bullets.length, 0);
   assert.equal(slice.flexSurface.mainEnergyShort, "เร่งการเปลี่ยนแปลง");
+  assert.equal(slice.displayNaming?.displayNamingConfidenceLevel, "high");
   assert.ok(
     String(slice.flexSurface.heroNamingLine || "").includes("มอลดาไวต์"),
   );
   assert.ok(
     String(slice.flexSurface.heroNamingLine || "").includes("เร่งการเปลี่ยนแปลง"),
   );
+  assert.ok(String(slice.flexSurface.tagline || "").includes("เทคไทต์"));
   assert.ok(
     String(slice.flexSurface.fitLine || "").startsWith("โฟกัสช่วงนี้:"),
     "fit line should be a short focus hint (not repeat ranking prose)",

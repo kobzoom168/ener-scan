@@ -60,7 +60,8 @@
  * @property {Record<string, { key: string, score: number, labelThai: string }>} lifeAreas — work / money / relationship
  * @property {string} primaryLifeArea
  * @property {string} secondaryLifeArea
- * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string, heroNamingLine?: string, mainEnergyWordingLine?: string, htmlOpeningLine?: string }} flexSurface
+ * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string, heroNamingLine?: string, mainEnergyWordingLine?: string, htmlOpeningLine?: string, tagline?: string }} flexSurface
+ * @property {{ displayNamingConfidenceLevel: "high"|"medium"|"low", effectiveSubtypeConfidenceForNaming: number }} [displayNaming] — internal naming tier + effective confidence (not shown as % to users)
  * @property {{ scanResultIdPrefix: string, energyScoreSnapshot: number|null, mainEnergyLabelSnapshot: string|null }} [context]
  */
 
