@@ -22,6 +22,8 @@ import {
   normalizeObjectFamilyForEnergyCopy,
   pickAccentColorFromCategoryCode,
   ENERGY_CATEGORY_DISPLAY_SYNC,
+  CRYSTAL_CONFIDENCE_DISPLAY,
+  getCategoryDisplaySyncForFamily,
 } from "../utils/energyCategoryResolve.util.js";
 import {
   FLEX_TRAIT_HIDDEN_MAX,
@@ -497,6 +499,11 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     });
   }
 
+  if (objectFamilyNorm === "crystal" && codeIn === "confidence") {
+    displayNameTh = CRYSTAL_CONFIDENCE_DISPLAY.display_name_th;
+    shortNameTh = CRYSTAL_CONFIDENCE_DISPLAY.short_name_th;
+  }
+
   let copySet = { headline: null, fitLine: null, bullets: [] };
   let usedOfflineCrystalMaster = false;
   /** @type {object | null} */
@@ -566,9 +573,10 @@ export async function resolveEnergyCopyForFlex(input = {}) {
     getEnergyShortLabelLegacy(mainEnergy || "-", famRaw);
 
   if (lineContainsEnergyCopyAvoidWord(label)) {
+    const syncFb = getCategoryDisplaySyncForFamily(codeIn, famRaw);
     label =
-      ENERGY_CATEGORY_DISPLAY_SYNC[codeIn]?.short_name_th ||
-      ENERGY_CATEGORY_DISPLAY_SYNC[codeIn]?.display_name_th ||
+      syncFb?.short_name_th ||
+      syncFb?.display_name_th ||
       getEnergyShortLabelLegacy(mainEnergy || "-", famRaw);
   }
 

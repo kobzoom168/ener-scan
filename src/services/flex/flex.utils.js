@@ -2,6 +2,7 @@ import {
   inferEnergyCategoryCodeFromMainEnergy,
   pickAccentColorFromCategoryCode,
   ENERGY_CATEGORY_DISPLAY_SYNC,
+  getCategoryDisplaySyncForFamily,
 } from "../../utils/energyCategoryResolve.util.js";
 
 export function cleanLine(line) {
@@ -491,7 +492,7 @@ export function getEnergyShortLabelLegacy(mainEnergy, objectFamily = "") {
     );
   }
   const code = inferEnergyCategoryCodeFromMainEnergy(value, objectFamily);
-  const sync = ENERGY_CATEGORY_DISPLAY_SYNC[code];
+  const sync = getCategoryDisplaySyncForFamily(code, objectFamily);
   const th = sync?.short_name_th || sync?.display_name_th;
   if (th) return sanitizeFlexDisplayText(safeWrapText(th, 28));
   return ENERGY_CATEGORY_DISPLAY_SYNC.luck_fortune.short_name_th || "โชคลาภ";
@@ -514,7 +515,8 @@ export function getEnergyShortLabel(mainEnergy, options = {}) {
       mainEnergy,
       String(options.objectFamily || "").trim(),
     );
-  const sync = ENERGY_CATEGORY_DISPLAY_SYNC[code];
+  const fam = String(options.objectFamily || "").trim();
+  const sync = getCategoryDisplaySyncForFamily(code, fam);
   if (sync?.display_name_th) return sync.display_name_th;
   if (sync?.short_name_th) return sync.short_name_th;
   return getEnergyShortLabelLegacy(mainEnergy);

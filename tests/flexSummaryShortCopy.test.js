@@ -94,6 +94,16 @@ test("artifact suffix list is documented for regression snapshots", () => {
   assert.ok(TRUNCATION_ARTIFACT_SUFFIXES.length >= 5);
 });
 
+test("crystal + confidence surface: headline not default บารมี", () => {
+  const s = composeFlexShortSurface({
+    mainEnergyLabel: "คุ้มครอง",
+    objectFamily: "crystal",
+    energyCategoryCode: "confidence",
+    seed: "crystal-conf-unit",
+  });
+  assert.ok(!s.headlineShort.includes("บารมี"));
+});
+
 test("ten sample composed lines (documentation-style)", () => {
   const samples = [
     composeFlexShortSurface({

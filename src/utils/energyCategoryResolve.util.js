@@ -57,6 +57,31 @@ export const ENERGY_CATEGORY_DISPLAY_SYNC = {
 };
 
 /**
+ * Crystal-only presentation for `confidence` — same `energyCategoryCode` as Thai path; wording only.
+ * Thai / เครื่องราง keep {@link ENERGY_CATEGORY_DISPLAY_SYNC.confidence} (บารมี).
+ */
+export const CRYSTAL_CONFIDENCE_DISPLAY = {
+  display_name_th: "ความมั่นใจ",
+  short_name_th: "ความมั่นใจ",
+  description_th: "เด่นเรื่องความมั่นใจและน้ำหนักในตัว",
+};
+
+/**
+ * Visible label sync: Thai uses master `confidence` row; crystal uses {@link CRYSTAL_CONFIDENCE_DISPLAY}.
+ * @param {string} categoryCode
+ * @param {string} [objectFamilyRaw]
+ * @returns {typeof ENERGY_CATEGORY_DISPLAY_SYNC[string]}
+ */
+export function getCategoryDisplaySyncForFamily(categoryCode, objectFamilyRaw) {
+  const code = String(categoryCode || "").trim();
+  const fam = normalizeObjectFamilyForEnergyCopy(objectFamilyRaw || "");
+  if (code === "confidence" && fam === "crystal") {
+    return { ...ENERGY_CATEGORY_DISPLAY_SYNC.confidence, ...CRYSTAL_CONFIDENCE_DISPLAY };
+  }
+  return ENERGY_CATEGORY_DISPLAY_SYNC[code] || ENERGY_CATEGORY_DISPLAY_SYNC.luck_fortune;
+}
+
+/**
  * Accent hex for Flex / legacy carousel.
  */
 export const ACCENT_COLOR_BY_CATEGORY_CODE = {

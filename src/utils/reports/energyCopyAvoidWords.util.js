@@ -47,11 +47,12 @@ export function lineContainsEnergyCopyAvoidWord(line) {
   ) {
     return false;
   }
+  const masked = s.replace(/ความมั่นใจ/g, "\uE000");
   for (const w of ENERGY_COPY_AVOID_WORDS) {
     if (/^[a-z]+$/i.test(w)) {
       const re = new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-      if (re.test(s)) return true;
-    } else if (s.includes(w)) return true;
+      if (re.test(masked)) return true;
+    } else if (masked.includes(w)) return true;
   }
   return false;
 }

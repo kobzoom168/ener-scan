@@ -8,9 +8,14 @@ import {
   pickAccentColorFromCategoryCode,
   ACCENT_COLOR_BY_CATEGORY_CODE,
   resolveCrystalMode,
+  getCategoryDisplaySyncForFamily,
+  CRYSTAL_CONFIDENCE_DISPLAY,
 } from "../src/utils/energyCategoryResolve.util.js";
 import { getFallbackFlexSurfaceLines } from "../src/utils/reports/flexSummaryShortCopy.js";
-import { pickMainEnergyColor } from "../src/services/flex/flex.utils.js";
+import {
+  pickMainEnergyColor,
+  getEnergyShortLabelLegacy,
+} from "../src/services/flex/flex.utils.js";
 
 test("crystal + protection", () => {
   assert.equal(
@@ -330,4 +335,28 @@ test("pickMainEnergyColor uses category hint then legacy", () => {
     pickMainEnergyColor("พลังโชคลาภ", undefined),
     pickAccentColorFromCategoryCode("luck_fortune"),
   );
+});
+
+test("presentation: crystal confidence display sync ≠ thai บารมี", () => {
+  const cr = getCategoryDisplaySyncForFamily("confidence", "crystal");
+  assert.equal(cr.short_name_th, CRYSTAL_CONFIDENCE_DISPLAY.short_name_th);
+  assert.ok(!String(cr.description_th || "").includes("บารมี"));
+  const th = getCategoryDisplaySyncForFamily("confidence", "thai_amulet");
+  assert.equal(th.short_name_th, "บารมี");
+});
+
+test("getFallbackFlexSurfaceLines: crystal + confidence headline not barami-default", () => {
+  const x = getFallbackFlexSurfaceLines("confidence", "crystal");
+  assert.ok(!x.headline.includes("บารมี"));
+  assert.ok(x.headline.includes("ความมั่นใจ"));
+});
+
+test("getEnergyShortLabelLegacy: crystal weak-protect → confidence label ความมั่นใจ", () => {
+  const lab = getEnergyShortLabelLegacy("คุ้มครอง", "crystal");
+  assert.equal(lab, "ความมั่นใจ");
+});
+
+test("getEnergyShortLabelLegacy: thai บารมี path still uses บารมี label", () => {
+  const lab = getEnergyShortLabelLegacy("บารมีนิ่ง", "thai_amulet");
+  assert.equal(lab, "บารมี");
 });
