@@ -84,6 +84,9 @@ export function mirrorMainEnergyInferenceLikeBuilder(resultText, objectFamilyOpt
     crystalWeakProtectOutcome: trace.crystalWeakProtectOutcome ?? undefined,
     crystalNonProtectRoutingReason: trace.crystalNonProtectRoutingReason,
     crystalPostResolverCategoryDecision: trace.crystalPostResolverCategoryDecision,
+    crystalRoutingRuleId: trace.crystalRoutingRuleId,
+    crystalRoutingReason: trace.crystalRoutingReason,
+    crystalRoutingStrategy: trace.crystalRoutingStrategy,
     energyCategoryInferenceBranch: trace.inferenceBranch,
     energyCategoryCode,
   };

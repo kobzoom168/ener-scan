@@ -9,6 +9,11 @@ import { ENERGY_TYPES } from "../services/flex/scanCopy.config.js";
 import {
   resolveEnergyTypeMetaForFamily,
 } from "../services/flex/scanCopy.utils.js";
+import {
+  buildCrystalRoutingInput,
+  crystalLegacyNonProtectRoutingReason,
+  resolveCrystalCategoryRouting,
+} from "./crystalCategoryRouting.util.js";
 
 /**
  * Mirror of `energy_categories` display fields (fallback when DB unreadable).
@@ -168,128 +173,6 @@ export function resolveCrystalMode(objectFamilyRaw, mainEnergyText) {
 }
 
 /**
- * Weak-protect crystal: route by co-occurring cues — avoid collapsing to luck_fortune by default.
- *
- * @param {string} raw
- * @returns {"confidence"|"charm"|"luck_fortune"}
- */
-function routeCrystalWeakProtectToCategoryCode(raw) {
-  const s = String(raw || "").replace(/\s+/g, " ").trim();
-
-  if (/เสน่ห์|ดึงดูด|เข้าหา|ดึงคน|รับสังคม|น่าเข้าหา/.test(s)) {
-    return "charm";
-  }
-  if (/เมตตา|อ่อนโยน|เปิดรับ/.test(s)) {
-    return "charm";
-  }
-  if (
-    /โชคลาภ|โชค|จังหวะ|เปิดทาง|ลาภ|โอกาส|จังหวะดี|flow/i.test(s)
-  ) {
-    return "luck_fortune";
-  }
-  if (
-    /เกราะ|ปลอดภัย|มั่นคง|นิ่ง|ตั้งหลัก|สมดุล|บารมี|อำนาจ|ตัดสินใจ|หลักแน่น|สัญลักษณ์|เขตแดน|boundary|safe/i.test(
-      s,
-    )
-  ) {
-    return "confidence";
-  }
-  return "confidence";
-}
-
-/**
- * Generic BOOST crystal (no weak protect): default toward confidence; luck/charm only with clear wording.
- *
- * @param {string} raw
- * @returns {"confidence"|"charm"|"luck_fortune"}
- */
-function routeCrystalGenericBoostToCategoryCode(raw) {
-  const s = String(raw || "").replace(/\s+/g, " ").trim();
-  if (!s || s === "-") {
-    return "confidence";
-  }
-  if (/โชคลาภ|โชค|จังหวะ|ลาภ|เปิดทาง|โอกาส|จังหวะดี|flow/i.test(s)) {
-    return "luck_fortune";
-  }
-  if (/เสน่ห์|ดึงดูด|เมตตา/.test(s)) {
-    return "charm";
-  }
-  if (/สมดุล|นิ่ง|บารมี|อำนาจ|ตั้งหลัก|มั่นใจ/.test(s)) {
-    return "confidence";
-  }
-  if (/กำลังใจ|ฮึด|ลุย|พลังบวก|สดใส|เติมพลัง|โอกาสดี/.test(s)) {
-    return "luck_fortune";
-  }
-  return "confidence";
-}
-
-/**
- * @param {string} raw
- * @param {{ energyType: string, protectSignalStrength?: string }} meta
- * @param {string} t
- */
-function inferCrystalCategoryFromResolverMeta(raw, meta, t) {
-  switch (t) {
-    case ENERGY_TYPES.PROTECT:
-      return {
-        code: "protection",
-        crystalNonProtectRoutingReason: "resolver_protect",
-        crystalWeakProtectOutcome: null,
-        inferenceBranchSuffix: `type_${t}`,
-      };
-    case ENERGY_TYPES.POWER:
-    case ENERGY_TYPES.BALANCE:
-      return {
-        code: "confidence",
-        crystalNonProtectRoutingReason: "resolver_power_balance",
-        crystalWeakProtectOutcome: null,
-        inferenceBranchSuffix: `type_${t}`,
-      };
-    case ENERGY_TYPES.KINDNESS:
-    case ENERGY_TYPES.ATTRACT:
-      return {
-        code: "charm",
-        crystalNonProtectRoutingReason: "resolver_kindness_attract",
-        crystalWeakProtectOutcome: null,
-        inferenceBranchSuffix: `type_${t}`,
-      };
-    case ENERGY_TYPES.LUCK:
-      return {
-        code: "luck_fortune",
-        crystalNonProtectRoutingReason: "resolver_luck",
-        crystalWeakProtectOutcome: null,
-        inferenceBranchSuffix: `type_${t}`,
-      };
-    case ENERGY_TYPES.BOOST:
-      if (meta.protectSignalStrength === "weak") {
-        const code = routeCrystalWeakProtectToCategoryCode(raw);
-        return {
-          code,
-          crystalNonProtectRoutingReason: `weak_protect_${code}`,
-          crystalWeakProtectOutcome: code,
-          inferenceBranchSuffix: `weak_protect_${code}`,
-        };
-      }
-      {
-        const code = routeCrystalGenericBoostToCategoryCode(raw);
-        return {
-          code,
-          crystalNonProtectRoutingReason: `generic_boost_${code}`,
-          crystalWeakProtectOutcome: null,
-          inferenceBranchSuffix: `generic_boost_${code}`,
-        };
-      }
-    default:
-      return {
-        code: "confidence",
-        crystalNonProtectRoutingReason: "crystal_default_confidence",
-        crystalWeakProtectOutcome: null,
-        inferenceBranchSuffix: "default_confidence",
-      };
-  }
-}
-
-/**
  * @param {string} mainEnergy
  * @param {string} [objectFamilyRaw]
  * @returns {string}
@@ -310,6 +193,9 @@ export function inferEnergyCategoryCodeFromMainEnergy(mainEnergy, objectFamilyRa
  *   crystalWeakProtectOutcome: string | null,
  *   crystalNonProtectRoutingReason: string | undefined,
  *   crystalPostResolverCategoryDecision: string | undefined,
+ *   crystalRoutingRuleId: string | undefined,
+ *   crystalRoutingReason: string | undefined,
+ *   crystalRoutingStrategy: string | undefined,
  * }}
  */
 function inferEnergyCategoryFull(mainEnergy, objectFamilyRaw) {
@@ -319,56 +205,42 @@ function inferEnergyCategoryFull(mainEnergy, objectFamilyRaw) {
   const meta = resolveEnergyTypeMetaForFamily(raw, objectFamilyRaw);
   const t = meta.energyType;
 
-  if (isCrystal && matchesCrystalSpiritualGrowthSignals(raw, { strictQuartz: true })) {
-    return {
-      code: "spiritual_growth",
-      meta,
-      inferenceBranch: "crystal_spiritual_growth",
-      crystalWeakProtectOutcome: null,
-      crystalNonProtectRoutingReason: "spiritual_growth_signals",
-      crystalPostResolverCategoryDecision: "spiritual_growth",
-    };
-  }
-
   if (isCrystal) {
     const hasLuckWord = raw.includes("โชคลาภ") || raw.includes("โชค");
     const hasMoneyWorkWord =
       /เงิน|งาน|ทรัพย์|รายได้|ดูดเงิน|การงาน/.test(raw);
-    if (hasMoneyWorkWord && !hasLuckWord) {
-      return {
-        code: "money_work",
-        meta,
-        inferenceBranch: "crystal_money_work",
-        crystalWeakProtectOutcome: null,
-        crystalNonProtectRoutingReason: "early_money_work",
-        crystalPostResolverCategoryDecision: "money_work",
-      };
-    }
-    if (hasLuckWord) {
-      return {
-        code: "luck_fortune",
-        meta: {
-          ...meta,
-          energyType: ENERGY_TYPES.LUCK,
-          matchedKeyword: null,
-          protectSignalStrength: "none",
-          resolvedEnergyTypeBeforeCategoryMap: ENERGY_TYPES.LUCK,
-        },
-        inferenceBranch: "crystal_luck_word",
-        crystalWeakProtectOutcome: null,
-        crystalNonProtectRoutingReason: "early_luck_word",
-        crystalPostResolverCategoryDecision: "luck_fortune",
+    const hasSpiritualGrowthSignal = matchesCrystalSpiritualGrowthSignals(raw, {
+      strictQuartz: true,
+    });
+
+    const routingInput = buildCrystalRoutingInput(raw, meta, {
+      hasSpiritualGrowthSignal,
+      hasLuckWord,
+      hasMoneyWorkWord,
+    });
+    const routed = resolveCrystalCategoryRouting(routingInput);
+
+    let outMeta = meta;
+    if (routed.needsLuckWordMetaOverride) {
+      outMeta = {
+        ...meta,
+        energyType: ENERGY_TYPES.LUCK,
+        matchedKeyword: null,
+        protectSignalStrength: "none",
+        resolvedEnergyTypeBeforeCategoryMap: ENERGY_TYPES.LUCK,
       };
     }
 
-    const routed = inferCrystalCategoryFromResolverMeta(raw, meta, t);
     return {
-      code: routed.code,
-      meta,
+      code: routed.categoryCode,
+      meta: outMeta,
       inferenceBranch: `crystal_${routed.inferenceBranchSuffix}`,
       crystalWeakProtectOutcome: routed.crystalWeakProtectOutcome,
-      crystalNonProtectRoutingReason: routed.crystalNonProtectRoutingReason,
-      crystalPostResolverCategoryDecision: routed.code,
+      crystalNonProtectRoutingReason: crystalLegacyNonProtectRoutingReason(routed),
+      crystalPostResolverCategoryDecision: routed.categoryCode,
+      crystalRoutingRuleId: routed.routingRuleId,
+      crystalRoutingReason: routed.routingReason,
+      crystalRoutingStrategy: routed.routingStrategy,
     };
   }
 
@@ -381,6 +253,9 @@ function inferEnergyCategoryFull(mainEnergy, objectFamilyRaw) {
         crystalWeakProtectOutcome: null,
         crystalNonProtectRoutingReason: undefined,
         crystalPostResolverCategoryDecision: undefined,
+        crystalRoutingRuleId: undefined,
+        crystalRoutingReason: undefined,
+        crystalRoutingStrategy: undefined,
       };
     case ENERGY_TYPES.POWER:
     case ENERGY_TYPES.BALANCE:
@@ -391,6 +266,9 @@ function inferEnergyCategoryFull(mainEnergy, objectFamilyRaw) {
         crystalWeakProtectOutcome: null,
         crystalNonProtectRoutingReason: undefined,
         crystalPostResolverCategoryDecision: undefined,
+        crystalRoutingRuleId: undefined,
+        crystalRoutingReason: undefined,
+        crystalRoutingStrategy: undefined,
       };
     case ENERGY_TYPES.KINDNESS:
     case ENERGY_TYPES.ATTRACT:
@@ -401,6 +279,9 @@ function inferEnergyCategoryFull(mainEnergy, objectFamilyRaw) {
         crystalWeakProtectOutcome: null,
         crystalNonProtectRoutingReason: undefined,
         crystalPostResolverCategoryDecision: undefined,
+        crystalRoutingRuleId: undefined,
+        crystalRoutingReason: undefined,
+        crystalRoutingStrategy: undefined,
       };
     case ENERGY_TYPES.LUCK:
       return {
@@ -410,6 +291,9 @@ function inferEnergyCategoryFull(mainEnergy, objectFamilyRaw) {
         crystalWeakProtectOutcome: null,
         crystalNonProtectRoutingReason: undefined,
         crystalPostResolverCategoryDecision: undefined,
+        crystalRoutingRuleId: undefined,
+        crystalRoutingReason: undefined,
+        crystalRoutingStrategy: undefined,
       };
     case ENERGY_TYPES.BOOST:
       return {
@@ -419,6 +303,9 @@ function inferEnergyCategoryFull(mainEnergy, objectFamilyRaw) {
         crystalWeakProtectOutcome: null,
         crystalNonProtectRoutingReason: undefined,
         crystalPostResolverCategoryDecision: undefined,
+        crystalRoutingRuleId: undefined,
+        crystalRoutingReason: undefined,
+        crystalRoutingStrategy: undefined,
       };
     default:
       return {
@@ -428,6 +315,9 @@ function inferEnergyCategoryFull(mainEnergy, objectFamilyRaw) {
         crystalWeakProtectOutcome: null,
         crystalNonProtectRoutingReason: undefined,
         crystalPostResolverCategoryDecision: undefined,
+        crystalRoutingRuleId: undefined,
+        crystalRoutingReason: undefined,
+        crystalRoutingStrategy: undefined,
       };
   }
 }
@@ -450,6 +340,9 @@ function inferEnergyCategoryFull(mainEnergy, objectFamilyRaw) {
  *   crystalWeakProtectOutcome: string | null,
  *   crystalNonProtectRoutingReason: string | undefined,
  *   crystalPostResolverCategoryDecision: string | undefined,
+ *   crystalRoutingRuleId: string | undefined,
+ *   crystalRoutingReason: string | undefined,
+ *   crystalRoutingStrategy: string | undefined,
  * }}
  */
 export function inferEnergyCategoryInferenceTrace(mainEnergy, objectFamilyRaw) {
@@ -481,6 +374,9 @@ export function inferEnergyCategoryInferenceTrace(mainEnergy, objectFamilyRaw) {
     crystalWeakProtectOutcome: full.crystalWeakProtectOutcome ?? null,
     crystalNonProtectRoutingReason: full.crystalNonProtectRoutingReason,
     crystalPostResolverCategoryDecision: full.crystalPostResolverCategoryDecision,
+    crystalRoutingRuleId: full.crystalRoutingRuleId,
+    crystalRoutingReason: full.crystalRoutingReason,
+    crystalRoutingStrategy: full.crystalRoutingStrategy,
   };
 }
 

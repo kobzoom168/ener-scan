@@ -72,6 +72,9 @@
  * @property {string|null} [crystalWeakProtectOutcome] — category code chosen for crystal weak-protect BOOST routing
  * @property {string} [crystalNonProtectRoutingReason] — e.g. weak_protect_confidence, generic_boost_luck_fortune
  * @property {string} [crystalPostResolverCategoryDecision] — final category after crystal heuristics (mirrors code when set)
+ * @property {string} [crystalRoutingRuleId] — stable rule id from crystalCategoryRouting.util
+ * @property {string} [crystalRoutingReason] — rule-specific reason (finer than legacy non-protect key)
+ * @property {string} [crystalRoutingStrategy] — early_exit | resolver_direct | weak_protect | generic_boost | fallback
  */
 
 /**
@@ -202,4 +205,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.6";
+export const REPORT_PAYLOAD_VERSION = "1.2.7";
