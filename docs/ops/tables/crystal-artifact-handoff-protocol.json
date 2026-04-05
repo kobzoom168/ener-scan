@@ -1,0 +1,24 @@
+{
+  "handoffProtocolVersion": "1.0",
+  "reviewPackVersion": "1",
+  "changeTypes": [
+    "contract_change",
+    "schema_change",
+    "compatibility_change",
+    "lifecycle_change",
+    "ownership_change",
+    "ci_change",
+    "doc_only_change"
+  ],
+  "rowIds": [
+    "monthly_scorecard__doc_only_change",
+    "monthly_scorecard__contract_change",
+    "annual_operating_review_pack__compatibility_change",
+    "multi_year_history_external__ownership_change",
+    "artifact_contract_linter__schema_change",
+    "artifact_ci_spec__ci_change",
+    "artifact_lifecycle_policy__lifecycle_change",
+    "telemetry_diagnostics_inputs__missing_owner_case"
+  ],
+  "handoffReadinessStatus": "weak"
+}

@@ -1,0 +1,23 @@
+{
+  "masterIndexVersion": "1.0",
+  "reviewPackVersion": "1",
+  "currentSystemStatus": "ci_ready",
+  "governanceDocPaths": [
+    "docs/ops/crystal-artifact-manifest.md",
+    "docs/ops/crystal-artifact-ci-spec.md",
+    "docs/ops/crystal-artifact-contract-linter.md",
+    "docs/ops/crystal-artifact-compatibility-matrix.md",
+    "docs/ops/crystal-artifact-lifecycle-policy.md",
+    "docs/ops/crystal-artifact-ownership-model.md",
+    "docs/ops/crystal-artifact-handoff-protocol.md",
+    "docs/ops/crystal-release-governance-runbook.md"
+  ],
+  "onboardingReadOrder": [
+    "docs/ops/crystal-artifact-manifest.md",
+    "docs/ops/crystal-artifact-compatibility-matrix.md",
+    "docs/ops/crystal-artifact-ownership-model.md",
+    "docs/ops/crystal-artifact-handoff-protocol.md",
+    "docs/ops/crystal-release-governance-runbook.md",
+    "docs/ops/crystal-review-system-master-index.md"
+  ]
+}

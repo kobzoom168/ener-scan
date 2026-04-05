@@ -1,0 +1,17 @@
+{
+  "runbookVersion": "1.0",
+  "reviewPackVersion": "1",
+  "runbookReadinessStatus": "partial",
+  "preReleaseCheckIds": [
+    "regen_ops_tables",
+    "node_test_crystal_subset",
+    "diff_committed_json",
+    "handoff_row_review"
+  ],
+  "driftRuleIds": [
+    "mismatch_spike",
+    "contract_schema_drift",
+    "artifact_incompatibility",
+    "missing_owner"
+  ]
+}
