@@ -60,7 +60,7 @@
  * @property {Record<string, { key: string, score: number, labelThai: string }>} lifeAreas — work / money / relationship
  * @property {string} primaryLifeArea
  * @property {string} secondaryLifeArea
- * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string }} flexSurface
+ * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string, heroNamingLine?: string, mainEnergyWordingLine?: string }} flexSurface
  * @property {{ scanResultIdPrefix: string, energyScoreSnapshot: number|null, mainEnergyLabelSnapshot: string|null }} [context]
  */
 
@@ -245,4 +245,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.12";
+export const REPORT_PAYLOAD_VERSION = "1.2.13";

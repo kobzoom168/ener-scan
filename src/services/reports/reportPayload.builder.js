@@ -866,49 +866,69 @@ export async function buildReportPayloadFromScan(opts) {
 
   const summaryMainEnergyLabel = crystalGenericSafeV1
     ? crystalGenericSafeV1.display.mainEnergyLabelNeutral
-    : baseMainEnergyLabel;
+    : moldaviteV1
+      ? "มอลดาไวต์"
+      : baseMainEnergyLabel;
 
   const summaryHeadlineShort = crystalGenericSafeV1
     ? crystalGenericSafeV1.flexSurface.headline
-    : flexSurface.headlineShort;
+    : moldaviteV1
+      ? moldaviteV1.flexSurface.headline
+      : flexSurface.headlineShort;
 
   const summaryFitReasonShort = crystalGenericSafeV1
     ? crystalGenericSafeV1.flexSurface.fitLine
-    : flexSurface.fitReasonShort;
+    : moldaviteV1
+      ? moldaviteV1.flexSurface.fitLine
+      : flexSurface.fitReasonShort;
 
   const summaryBulletsShort = crystalGenericSafeV1
     ? crystalGenericSafeV1.flexSurface.bullets
-    : flexSurface.bulletsShort;
+    : moldaviteV1
+      ? moldaviteV1.flexSurface.bullets
+      : flexSurface.bulletsShort;
 
   const summaryPresentationAngleId = crystalGenericSafeV1
     ? "crystal_generic_safe_v1"
-    : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
+    : moldaviteV1
+      ? "moldavite_v1_native_energy"
+      : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
 
   const summaryWordingVariantId = crystalGenericSafeV1
     ? "crystal_generic_safe_v1"
-    : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
+    : moldaviteV1
+      ? "moldavite_v1_native_energy"
+      : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
 
   const summaryVisibleMainLabel = crystalGenericSafeV1
     ? crystalGenericSafeV1.display.visibleMainLabelNeutral
-    : dbSurfBundle?.mainLabel
-      ? String(dbSurfBundle.mainLabel).trim()
-      : undefined;
+    : moldaviteV1
+      ? "มอลดาไวต์"
+      : dbSurfBundle?.mainLabel
+        ? String(dbSurfBundle.mainLabel).trim()
+        : undefined;
 
   const summaryOpeningShort = crystalGenericSafeV1
     ? undefined
-    : dbSurfBundle?.opening
-      ? String(dbSurfBundle.opening).trim()
-      : undefined;
+    : moldaviteV1
+      ? undefined
+      : dbSurfBundle?.opening
+        ? String(dbSurfBundle.opening).trim()
+        : undefined;
 
   const summaryTeaserShort = crystalGenericSafeV1
     ? undefined
-    : dbSurfBundle?.teaser
-      ? String(dbSurfBundle.teaser).trim()
-      : undefined;
+    : moldaviteV1
+      ? undefined
+      : dbSurfBundle?.teaser
+        ? String(dbSurfBundle.teaser).trim()
+        : undefined;
 
   const summaryCtaLabel = crystalGenericSafeV1
     ? "เปิดรายงานฉบับเต็ม"
-    : flexSurface.ctaLabel;
+    : moldaviteV1
+      ? "เปิดรายงานฉบับเต็ม"
+      : flexSurface.ctaLabel;
 
   return {
     reportId: rid,
@@ -988,6 +1008,19 @@ export async function buildReportPayloadFromScan(opts) {
             heroNaming: crystalGenericSafeV1.display.heroNaming,
             mainEnergy: crystalGenericSafeV1.display.mainEnergyWordingLine,
             htmlOpeningLine: crystalGenericSafeV1.display.htmlOpeningNeutral,
+          }
+        : {}),
+      ...(moldaviteV1 && !crystalGenericSafeV1
+        ? {
+            heroNaming: String(
+              moldaviteV1.flexSurface.heroNamingLine ||
+                "หินที่เด่นเรื่องการเร่งการเปลี่ยนแปลง",
+            ).trim(),
+            mainEnergy: String(
+              moldaviteV1.flexSurface.mainEnergyWordingLine ||
+                "มอลดาไวต์ — หินเทคไทต์โทนเร่งการเปลี่ยนแปลง",
+            ).trim(),
+            htmlOpeningLine: String(moldaviteV1.flexSurface.fitLine || "").trim(),
           }
         : {}),
     },
