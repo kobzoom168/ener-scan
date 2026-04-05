@@ -6,6 +6,7 @@ import {
   inferEnergyCategoryCodeFromMainEnergy,
   normalizeObjectFamilyForEnergyCopy,
 } from "../energyCategoryResolve.util.js";
+import { CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES } from "./deriveVisiblePresentationAngle.util.js";
 import { lineContainsEnergyCopyAvoidWord } from "./energyCopyAvoidWords.util.js";
 import {
   pickVariantAvoidingRepeat,
@@ -225,6 +226,7 @@ const VARIANT_BANKS = {
     ],
     confidence: [
       {
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[0],
         headline: "เด่นเรื่องความมั่นใจและน้ำหนักในตัว",
         fit: "เหมาะกับช่วงที่ต้องพูดให้คนฟังหรือคุมสถานการณ์",
         bullets: [
@@ -233,19 +235,39 @@ const VARIANT_BANKS = {
         ],
       },
       {
-        headline: "เด่นเรื่องความน่าเชื่อถือและภาพลักษณ์หนักแน่น",
-        fit: "เหมาะกับงานที่ต้องให้คนรับรู้ว่าคุณจริงจัง",
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[1],
+        headline: "เด่นเรื่องความน่าเชื่อถือและการปรากฏตัวที่นิ่ง",
+        fit: "เหมาะกับช่วงถูกจับจ้องหรือต้องให้คำพูดมีน้ำหนักโดยไม่ต้องเสียงดัง",
         bullets: [
           "ช่วยให้การนำเสนอดูมีแกนชัดขึ้น",
           "ช่วยให้คนรับรู้ความตั้งใจง่ายขึ้น",
         ],
       },
       {
-        headline: "เด่นเรื่องน้ำหนักสังคมและยืนหยัดในที่ประชุม",
-        fit: "เหมาะกับช่วงเจรจา นำทีม หรือถูกจับจ้องหลายฝ่าย",
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[2],
+        headline: "เด่นเรื่องการยืนหยัดในบทบาทเวลาโดนท้าทาย",
+        fit: "เหมาะกับเจรจาหลายฝ่ายหรือต้องสรุปซ้ำโดยไม่ลดคุณภาพ",
         bullets: [
           "ช่วยให้พูดแล้วไม่ถูกมองข้ามง่าย",
           "ช่วยรักษาบทบาทกลางแรงกดได้ดีขึ้น",
+        ],
+      },
+      {
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[3],
+        headline: "เด่นเรื่องความนิ่งและออร่าหนักแน่นแบบไม่เร่งเกินจริง",
+        fit: "เหมาะกับงานที่ต้องให้คนรับรู้ว่าคุณจริงจังและไว้ใจได้",
+        bullets: [
+          "ช่วยให้โทนสื่อสารดูน่าเชื่อถือขึ้น",
+          "ช่วยให้ตัดสินใจเย็นลงเมื่อถูกเร่งหรือถามซ้ำ",
+        ],
+      },
+      {
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[4],
+        headline: "เด่นเรื่องน้ำหนักในที่ประชุมและการเจรจาหลายฝ่าย",
+        fit: "เหมาะกับช่วงต้องคุยกับหลายฝ่ายหรือสรุปให้ทุกคนเห็นภาพเดียวกัน",
+        bullets: [
+          "ช่วยให้ประเด็นสำคัญไม่ถูกพรากบทบาทง่าย",
+          "ช่วยให้คำตอบสั้นลงแต่ยังครบความหมาย",
         ],
       },
     ],

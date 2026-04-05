@@ -33,6 +33,7 @@ import {
   buildVisibleWordingTelemetryFields,
 } from "../../utils/visibleWordingTelemetry.util.js";
 import { buildCrystalRoutingWordingMetrics } from "../../utils/crystalRoutingWordingMetrics.util.js";
+import { deriveVisiblePresentationAngleForDbHydrate } from "../../utils/reports/deriveVisiblePresentationAngle.util.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -547,6 +548,11 @@ export async function buildReportPayloadFromScan(opts) {
    * Stored summary.headlineShort / fitReasonShort / bulletsShort: DB-first via
    * {@link resolveVisibleWordingBundleFromDb}; composed pools only when DB surface incomplete.
    */
+  const dbPresentationAngleForHydrate = deriveVisiblePresentationAngleForDbHydrate({
+    categoryCode: energyCategoryCode,
+    objectFamilyRaw: objectFamilyOpt || "",
+    seed: rid || String(scanResultId || ""),
+  });
 
   const flexSurfaceFallback = buildFlexSummarySurfaceFields({
     wording,
@@ -573,7 +579,7 @@ export async function buildReportPayloadFromScan(opts) {
     dbBundleResolved = await resolveVisibleWordingBundleFromDb({
       categoryCode: energyCategoryCode,
       objectFamilyRaw: objectFamilyOpt || "",
-      presentationAngleId: "",
+      presentationAngleId: dbPresentationAngleForHydrate,
       crystalMode: crystalMode ?? "",
     });
     if (dbBundleResolved && isUsableVisibleSurface(dbBundleResolved.bundle)) {
@@ -583,6 +589,10 @@ export async function buildReportPayloadFromScan(opts) {
         (s) => s.slot === "headline",
       );
       const angleFromDb = headlineSlot?.presentationAngle ?? null;
+      const presentationAngleResolved =
+        angleFromDb != null && String(angleFromDb).trim()
+          ? String(angleFromDb).trim()
+          : dbPresentationAngleForHydrate || null;
       flexSurface = {
         headlineShort: String(clamped.headline || "").trim(),
         fitReasonShort: String(clamped.fitLine || "").trim(),
@@ -591,7 +601,7 @@ export async function buildReportPayloadFromScan(opts) {
         wordingMeta: {
           wordingVariantId: `db:${dbBundleResolved.categoryUsed}`,
           wordingBankUsed: "db:energy_copy_templates",
-          presentationAngleId: angleFromDb,
+          presentationAngleId: presentationAngleResolved,
           diversificationApplied: Boolean(
             b.diagnostics?.usedClusterTags?.size &&
               b.diagnostics.usedClusterTags.size > 1,

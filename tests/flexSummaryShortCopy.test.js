@@ -15,6 +15,7 @@ import {
 } from "../src/utils/reports/flexSummarySurface.util.js";
 import { buildFlexSummarySurfaceFields } from "../src/utils/reports/flexSummarySurface.util.js";
 import { ENERGY_TYPES } from "../src/services/flex/scanCopy.config.js";
+import { CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES } from "../src/utils/reports/deriveVisiblePresentationAngle.util.js";
 
 const FORBIDDEN_SNAPSHOT_FRAGMENTS = ["ต้องการคว", "เสริมควา", "ทำงานห"];
 
@@ -102,6 +103,47 @@ test("crystal + confidence surface: headline not default บารมี", () =>
     seed: "crystal-conf-unit",
   });
   assert.ok(!s.headlineShort.includes("บารมี"));
+});
+
+test("crystal + confidence: different seeds do not collapse to one headline pattern", () => {
+  const headlines = new Set();
+  const angles = new Set();
+  for (let i = 0; i < 24; i++) {
+    const s = composeFlexShortSurface({
+      mainEnergyLabel: "สมดุล",
+      objectFamily: "crystal",
+      energyCategoryCode: "confidence",
+      seed: `crystal-conf-div-${i}`,
+      lineUserId: "",
+    });
+    headlines.add(s.headlineShort);
+    if (s.wordingMeta?.presentationAngleId) {
+      angles.add(s.wordingMeta.presentationAngleId);
+    }
+  }
+  assert.ok(headlines.size >= 3, `expected >=3 distinct headlines, got ${headlines.size}`);
+  assert.ok(
+    angles.size >= 2,
+    `expected >=2 presentation angles from variants, got ${angles.size}`,
+  );
+  for (const a of angles) {
+    assert.ok(CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES.includes(a));
+  }
+});
+
+test("getFlexHeroVariantByPresentationAngle: crystal confidence angles differ", () => {
+  const v = getFlexHeroVariantByPresentationAngle(
+    "crystal",
+    "confidence",
+    CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[0],
+  );
+  const f = getFlexHeroVariantByPresentationAngle(
+    "crystal",
+    "confidence",
+    CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[4],
+  );
+  assert.ok(v?.headline && f?.headline);
+  assert.notEqual(v.headline, f.headline);
 });
 
 test("ten sample composed lines (documentation-style)", () => {

@@ -8,6 +8,7 @@
 import { normalizeObjectFamilyForEnergyCopy } from "./energyCategoryResolve.util.js";
 import { pickVariantAvoidingRepeatWithAngles } from "./wordingVariantGuard.util.js";
 import { resolveVisibleWordingBundleFromDb } from "../services/dbWordingBundle.service.js";
+import { CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES } from "./reports/deriveVisiblePresentationAngle.util.js";
 
 /**
  * @typedef {Object} LineSummaryWordingResolved
@@ -84,19 +85,29 @@ const LINE_BANKS = {
     ],
     confidence: [
       {
-        presentationAngle: "voice",
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[0],
         opening: "เน้นน้ำหนักในตัวเวลาต้องพูดให้คนฟัง",
         fit: "เหมาะงานหน้าคนหรือเจรจาให้โปรเจ็กต์เดิน",
       },
       {
-        presentationAngle: "presence",
-        opening: "เน้นความน่าเชื่อถือแบบไม่ต้องเสียงดัง",
-        fit: "เหมาะช่วงถูกจับจ้องหรือต้องยืนหยัดในที่ประชุม",
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[1],
+        opening: "เน้นความน่าเชื่อถือและการปรากฏตัวที่นิ่ง",
+        fit: "เหมาะช่วงถูกจับจ้องหรือต้องให้คำพูดมีน้ำหนักโดยไม่ต้องเสียงดัง",
       },
       {
-        presentationAngle: "stance",
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[2],
         opening: "เน้นยืนชัดในบทบาทเวลาโดนท้าทาย",
         fit: "เหมาะเจรจาหลายฝ่ายหรือต้องอธิบายซ้ำโดยไม่ลดคุณภาพ",
+      },
+      {
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[3],
+        opening: "เน้นออร่าหนักแน่นแบบไม่เร่งเกินจริง",
+        fit: "เหมาะงานที่ต้องให้คนรับรู้ว่าคุณจริงจังและไว้ใจได้",
+      },
+      {
+        presentationAngle: CRYSTAL_CONFIDENCE_PRESENTATION_ANGLES[4],
+        opening: "เน้นน้ำหนักในที่ประชุมและการสรุปให้หลายฝ่ายเห็นภาพเดียวกัน",
+        fit: "เหมาะช่วงต้องคุยกับหลายฝ่ายหรือโดนคำถามกดดัน",
       },
     ],
     luck_fortune: [
