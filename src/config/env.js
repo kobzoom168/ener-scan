@@ -377,6 +377,28 @@ export const env = {
     return Number.isFinite(n) ? Math.max(400, Math.floor(n)) : 3200;
   })(),
   /**
+   * Scan report: optional Gemini vision pass for crystal subtype (Moldavite routing).
+   * Default on; set `false` to use legacy text/heuristic Moldavite detection only.
+   */
+  GEMINI_CRYSTAL_SUBTYPE_ENABLED:
+    String(process.env.GEMINI_CRYSTAL_SUBTYPE_ENABLED ?? "true").trim().toLowerCase() !==
+    "false",
+  /** Overrides GEMINI_FRONT_MODEL for crystal subtype classifier when set. */
+  GEMINI_CRYSTAL_SUBTYPE_MODEL: String(
+    process.env.GEMINI_CRYSTAL_SUBTYPE_MODEL || "",
+  ).trim(),
+  GEMINI_CRYSTAL_SUBTYPE_TIMEOUT_MS: (() => {
+    const raw = process.env.GEMINI_CRYSTAL_SUBTYPE_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 12000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(2000, Math.floor(n)) : 12000;
+  })(),
+  /** Min Gemini subtypeConfidence (0–1) to activate Moldavite v1 when Gemini says likely Moldavite. */
+  GEMINI_CRYSTAL_SUBTYPE_MIN_CONFIDENCE: (() => {
+    const raw = process.env.GEMINI_CRYSTAL_SUBTYPE_MIN_CONFIDENCE;
+    const n = raw === undefined || raw === "" ? 0.72 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.72;
+  })(),
+  /**
    * When `true`: pre-scan path may use push-only ack and lineWebhook may skip
    * `before_scan_sequence` on birthdate→scan. Default on. Set
    * `SEND_PRE_SCAN_ACK_PUSH_ONLY=false` to disable push-only ack and show `before_scan_sequence` again.

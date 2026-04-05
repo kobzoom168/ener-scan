@@ -29,6 +29,8 @@ import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
 import { mergeExternalHintsIntoWordingContext } from "../../utils/webEnrichmentMerge.util.js";
 import { mapObjectCategoryToPipelineSignals } from "../../utils/reports/scanPipelineReportSignals.util.js";
+import { normalizeObjectFamilyForEnergyCopy } from "../../utils/energyCategoryResolve.util.js";
+import { classifyCrystalSubtypeWithGemini } from "../../integrations/gemini/crystalSubtypeClassifier.service.js";
 import { buildPublicReportUrl } from "../reports/reportLink.service.js";
 import { generatePublicToken } from "../../utils/reports/reportToken.util.js";
 import { insertScanPublicReport } from "../../stores/scanPublicReports.db.js";
@@ -422,6 +424,16 @@ export async function processScanJob(workerId, jobRow) {
       );
     }
 
+    /** @type {object|null} */
+    let geminiCrystalSubtypeResult = null;
+    if (normalizeObjectFamilyForEnergyCopy(catSig.objectFamily) === "crystal") {
+      geminiCrystalSubtypeResult = await classifyCrystalSubtypeWithGemini({
+        imageBuffer,
+        mimeType: "image/jpeg",
+        scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+      });
+    }
+
     const reportPayloadBuilt = await buildReportPayloadFromScan({
       resultText,
       scanResultId: legacyScanResultId,
@@ -446,6 +458,7 @@ export async function processScanJob(workerId, jobRow) {
       pipelineObjectCategory: scanOut?.objectCategory ?? null,
       pipelineObjectCategorySource:
         scanOut?.objectCategorySource ?? "unspecified",
+      geminiCrystalSubtypeResult,
     });
 
     let reportPayload = reportPayloadBuilt;

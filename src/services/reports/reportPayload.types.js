@@ -112,6 +112,9 @@
  * @property {string} [visibleWordingReason] — short machine reason for wording decision
  * @property {Object} [routingWordingMetrics] — Phase 4: crystal routing vs visible wording alignment (`buildCrystalRoutingWordingMetrics`); see `docs/crystal-routing-wording-mismatch-metrics.md`
  * @property {boolean} [crystalGenericSafeActive] — true when crystalGenericSafeV1 slice attached (non-Moldavite crystal)
+ * @property {"gemini"|"gemini_error"|"gemini_not_moldavite"|"heuristic"} [moldaviteDecisionSource] — crystal Moldavite routing only
+ * @property {string} [geminiCrystalSubtypeMode] — Gemini classifier outcome when crystal scan ran subtype pass
+ * @property {{ crystalSubtype?: string, subtypeConfidence?: number, moldaviteLikely?: boolean, durationMs?: number }} [geminiCrystalSubtypeSummary]
  */
 
 /**
@@ -242,4 +245,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.11";
+export const REPORT_PAYLOAD_VERSION = "1.2.12";

@@ -1,3 +1,4 @@
+import { env } from "../../config/env.js";
 import { parseScanText } from "../flex/flex.parser.js";
 import { normalizeScore, stripBullet } from "../flex/flex.utils.js";
 import { REPORT_PAYLOAD_VERSION } from "./reportPayload.types.js";
@@ -38,6 +39,7 @@ import {
   buildGptCrystalSubtypeInferenceText,
   detectMoldaviteV1,
 } from "../../moldavite/moldaviteDetect.util.js";
+import { resolveMoldaviteDetectionWithGeminiCrystalSubtype } from "../../moldavite/geminiCrystalSubtypeBranch.util.js";
 import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
 import { buildCrystalGenericSafeV1Slice } from "../../crystal/crystalGenericSafePayload.build.js";
 
@@ -207,6 +209,7 @@ function emptyParsedShape() {
  * @param {string|null} [opts.pipelineObjectCategory] — Thai classifier label when known (telemetry only)
  * @param {"deep_scan"|"cache_classify"|"cache_persisted"|"missing"|"unspecified"} [opts.pipelineObjectCategorySource] — how category was obtained
  * @param {"vision_v1"|"cache_persisted"|"pipeline_opts"|"none"|undefined} [opts.pipelineDominantColorSource]
+ * @param {object|null} [opts.geminiCrystalSubtypeResult] — optional Gemini crystal subtype pass (crystal scans only)
  * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
  */
 export async function buildReportPayloadFromScan(opts) {
@@ -230,6 +233,7 @@ export async function buildReportPayloadFromScan(opts) {
     pipelineObjectCategory: pipelineObjectCategoryOpt = null,
     pipelineObjectCategorySource: pipelineObjectCategorySourceOpt = "unspecified",
     pipelineDominantColorSource: pipelineDominantColorSourceOpt,
+    geminiCrystalSubtypeResult: geminiCrystalSubtypeResultOpt = null,
   } = opts;
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
@@ -791,15 +795,37 @@ export async function buildReportPayloadFromScan(opts) {
     pipelineObjectCategory: pipelineObjectCategoryOpt,
   });
 
-  const moldaviteDetection = detectMoldaviteV1({
-    objectFamily: objectFamilyOpt,
-    pipelineObjectCategory: pipelineObjectCategoryOpt,
-    resultText: String(resultText || ""),
-    dominantColorNormalized: dominantColorResolved.normalized ?? null,
-    scanResultIdPrefix: rid ? String(rid).slice(0, 8) : "",
-    gptSubtypeInferenceText,
-    pipelineObjectCategorySource: pipelineObjectCategorySourceOpt,
-  });
+  const runMoldaviteHeuristic = () =>
+    detectMoldaviteV1({
+      objectFamily: objectFamilyOpt,
+      pipelineObjectCategory: pipelineObjectCategoryOpt,
+      resultText: String(resultText || ""),
+      dominantColorNormalized: dominantColorResolved.normalized ?? null,
+      scanResultIdPrefix: rid ? String(rid).slice(0, 8) : "",
+      gptSubtypeInferenceText,
+      pipelineObjectCategorySource: pipelineObjectCategorySourceOpt,
+    });
+
+  const { detection: moldaviteDetection, moldaviteDecisionSource } =
+    resolveMoldaviteDetectionWithGeminiCrystalSubtype({
+      famNorm,
+      geminiCrystalSubtypeResult: geminiCrystalSubtypeResultOpt,
+      minConfidence: env.GEMINI_CRYSTAL_SUBTYPE_MIN_CONFIDENCE,
+      runHeuristic: runMoldaviteHeuristic,
+    });
+
+  if (famNorm === "crystal" && geminiCrystalSubtypeResultOpt) {
+    console.log(
+      JSON.stringify({
+        event: "REPORT_PAYLOAD_MOLDAVITE_BRANCH",
+        scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+        moldaviteDecisionSource,
+        geminiMode: geminiCrystalSubtypeResultOpt.mode ?? null,
+        moldaviteActive: Boolean(moldaviteDetection.isMoldavite),
+      }),
+    );
+  }
+
   const moldaviteV1 = moldaviteDetection.isMoldavite
     ? buildMoldaviteV1Slice({
         scanResultId: rid,
@@ -1070,6 +1096,20 @@ export async function buildReportPayloadFromScan(opts) {
       deliveryStrategy: undefined,
       lineSummaryPresent: undefined,
       crystalGenericSafeActive: Boolean(crystalGenericSafeV1),
+      moldaviteDecisionSource:
+        famNorm === "crystal" ? moldaviteDecisionSource : undefined,
+      geminiCrystalSubtypeMode:
+        geminiCrystalSubtypeResultOpt?.mode ?? undefined,
+      geminiCrystalSubtypeSummary:
+        geminiCrystalSubtypeResultOpt &&
+        geminiCrystalSubtypeResultOpt.mode === "ok"
+          ? {
+              crystalSubtype: geminiCrystalSubtypeResultOpt.crystalSubtype,
+              subtypeConfidence: geminiCrystalSubtypeResultOpt.subtypeConfidence,
+              moldaviteLikely: geminiCrystalSubtypeResultOpt.moldaviteLikely,
+              durationMs: geminiCrystalSubtypeResultOpt.durationMs,
+            }
+          : undefined,
     },
     ...(moldaviteV1 ? { moldaviteV1 } : {}),
     ...(crystalGenericSafeV1 ? { crystalGenericSafeV1 } : {}),
