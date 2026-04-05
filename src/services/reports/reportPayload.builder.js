@@ -784,6 +784,8 @@ export async function buildReportPayloadFromScan(opts) {
     objectFamily: objectFamilyOpt,
     pipelineObjectCategory: pipelineObjectCategoryOpt,
     resultText: String(resultText || ""),
+    dominantColorNormalized: dominantColorResolved.normalized ?? null,
+    scanResultIdPrefix: rid ? String(rid).slice(0, 8) : "",
   });
   const moldaviteV1 = moldaviteDetection.isMoldavite
     ? buildMoldaviteV1Slice({
