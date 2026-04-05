@@ -18,7 +18,7 @@ function buildFlexSurfaceCopy(primary, secondary, lifeAreas) {
   const primaryLabel = String(lifeAreas[primary]?.labelThai || "").trim() || "งาน";
   const secondaryLabel = String(lifeAreas[secondary]?.labelThai || "").trim() || "การเงิน";
 
-  const fitLine = `ช่วงนี้ไปออกกับเรื่อง${primaryLabel}มากสุดก่อน ตามด้วย${secondaryLabel}`;
+  const fitLine = `โฟกัสช่วงนี้: ${primaryLabel} → ${secondaryLabel}`;
 
   const mainEnergyWordingLine =
     "มอลดาไวต์ — หินเทคไทต์โทนเร่งการเปลี่ยนแปลง ช่วยดันให้สิ่งที่ค้างขยับ เข้ารอบใหม่ได้เร็วขึ้นเมื่อพร้อมปล่อยของเก่า พลังนี้เน้นการเคลื่อนไหวและแปลงสภาพ มากกว่าการนิ่งหรือปลอบใจอย่างเดียว";

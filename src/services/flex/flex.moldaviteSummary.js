@@ -6,12 +6,19 @@ import { normalizeScore } from "./flex.utils.js";
 import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 
+/** Moldavite-only palette — green accent (distinct from Thai/gold cards). */
 const FLEX_CARD_BG = "#000000";
 const FLEX_BOX_BG = "#111111";
-const FLEX_ACCENT = "#D4AF37";
-const FLEX_BADGE_AND_SCORE_GOLD = "#D4AF37";
+const FLEX_BOX_BG_ELEVATED = "#0f1412";
+const MOLDAVITE_ACCENT = "#4ADE80";
+const MOLDAVITE_ACCENT_SOFT = "#86EFAC";
+const MOLDAVITE_BORDER_SUBTLE = "#1e3d2e";
+const FLEX_ACCENT = MOLDAVITE_ACCENT;
 const FLEX_TEXT_PRIMARY = "#ffffff";
-const FLEX_TEXT_SECONDARY = "#888888";
+const FLEX_TEXT_SECONDARY = "#9ca3af";
+const FLEX_TEXT_MUTED = "#6b7280";
+/** Static identity line under title (Flex-only; not detection logic). */
+const MOLDAVITE_TITLE_TAGLINE = "หินเทคไทต์ · โทนเขียว";
 
 /**
  * @param {string} text
@@ -45,34 +52,74 @@ function createLifeAreasRankingBlock(lifeAreas) {
   if (rows.length === 0) return null;
   rows.sort((a, b) => b.score - a.score);
 
-  const contents = [
-    {
-      type: "text",
-      text: "มิติที่โทนนี้ไปออกแรงสุด (เรียงจากมากไปน้อย)",
-      size: "xs",
-      color: FLEX_TEXT_SECONDARY,
-      wrap: true,
-      margin: "none",
-    },
-  ];
+  const headerBlock = {
+    type: "box",
+    layout: "vertical",
+    spacing: "xs",
+    margin: "none",
+    contents: [
+      {
+        type: "text",
+        text: "มิติที่โทนไปออกแรงสุด",
+        size: "xs",
+        weight: "bold",
+        color: MOLDAVITE_ACCENT_SOFT,
+        wrap: true,
+      },
+      {
+        type: "text",
+        text: "เรียงจากมากไปน้อย",
+        size: "xs",
+        color: FLEX_TEXT_MUTED,
+        wrap: true,
+      },
+    ],
+  };
+
+  /** @type {object[]} */
+  const rowBoxes = [];
   for (const r of rows) {
-    contents.push({
-      type: "text",
-      text: `${r.label} · ${Math.round(r.score)}`,
-      size: "sm",
-      color: "#cccccc",
-      wrap: true,
-      margin: "xs",
+    rowBoxes.push({
+      type: "box",
+      layout: "horizontal",
+      spacing: "md",
+      margin: "sm",
+      justifyContent: "space-between",
+      alignItems: "center",
+      contents: [
+        {
+          type: "text",
+          text: r.label,
+          size: "sm",
+          color: FLEX_TEXT_PRIMARY,
+          flex: 4,
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: String(Math.round(r.score)),
+          size: "xl",
+          weight: "bold",
+          color: MOLDAVITE_ACCENT,
+          flex: 1,
+          align: "end",
+          wrap: false,
+        },
+      ],
     });
   }
+
   return {
     type: "box",
     layout: "vertical",
-    spacing: "none",
+    spacing: "sm",
     margin: "md",
-    paddingAll: "12px",
-    backgroundColor: FLEX_BOX_BG,
-    contents,
+    paddingAll: "16px",
+    borderWidth: "1px",
+    borderColor: MOLDAVITE_BORDER_SUBTLE,
+    cornerRadius: "8px",
+    backgroundColor: FLEX_BOX_BG_ELEVATED,
+    contents: [headerBlock, ...rowBoxes],
   };
 }
 
@@ -98,7 +145,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
       text: pct,
       size: "xxl",
       weight: "bold",
-      color: FLEX_BADGE_AND_SCORE_GOLD,
+      color: MOLDAVITE_ACCENT,
       margin: "xs",
       wrap: false,
     },
@@ -118,7 +165,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
     type: "box",
     layout: "horizontal",
     spacing: "sm",
-    margin: "md",
+    margin: "lg",
     contents: [
       {
         type: "box",
@@ -139,7 +186,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
             text: levelValue,
             size: "xl",
             weight: "bold",
-            color: FLEX_BADGE_AND_SCORE_GOLD,
+            color: MOLDAVITE_ACCENT,
             margin: "sm",
             wrap: true,
           },
@@ -162,7 +209,7 @@ function createEnergyBadgePill(mainLabel) {
     type: "box",
     layout: "vertical",
     spacing: "sm",
-    margin: "md",
+    margin: "lg",
     contents: [
       {
         type: "text",
@@ -185,7 +232,7 @@ function createEnergyBadgePill(mainLabel) {
             paddingStart: "14px",
             paddingEnd: "14px",
             borderWidth: "1px",
-            borderColor: FLEX_BADGE_AND_SCORE_GOLD,
+            borderColor: MOLDAVITE_ACCENT,
             backgroundColor: FLEX_BOX_BG,
             contents: [
               {
@@ -196,7 +243,7 @@ function createEnergyBadgePill(mainLabel) {
                 ),
                 size: "sm",
                 weight: "bold",
-                color: FLEX_BADGE_AND_SCORE_GOLD,
+                color: MOLDAVITE_ACCENT,
                 align: "center",
                 wrap: true,
               },
@@ -294,16 +341,31 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
     }),
   );
 
-  const headlineBlock = {
-    type: "text",
-    text: headlineText,
-    size: "md",
-    weight: "bold",
-    color: FLEX_TEXT_PRIMARY,
-    wrap: true,
-    maxLines: 2,
-    lineSpacing: "4px",
-    margin: "sm",
+  const titleSection = {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    margin: "lg",
+    contents: [
+      {
+        type: "text",
+        text: headlineText,
+        size: "lg",
+        weight: "bold",
+        color: FLEX_TEXT_PRIMARY,
+        wrap: true,
+        maxLines: 2,
+        lineSpacing: "4px",
+      },
+      {
+        type: "text",
+        text: MOLDAVITE_TITLE_TAGLINE,
+        size: "xs",
+        color: MOLDAVITE_ACCENT_SOFT,
+        wrap: true,
+        lineSpacing: "3px",
+      },
+    ],
   };
 
   const fitBlock =
@@ -315,8 +377,8 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
           color: FLEX_TEXT_SECONDARY,
           wrap: true,
           maxLines: 2,
-          lineSpacing: "3px",
-          margin: "md",
+          lineSpacing: "4px",
+          margin: "lg",
         }
       : null;
 
@@ -332,7 +394,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
   }));
 
   const bodyContents = [
-    headlineBlock,
+    titleSection,
     createScoreRowTwoUp(
       score.display || "-",
       compatPctStr,
@@ -384,7 +446,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       type: "box",
       layout: "vertical",
       paddingAll: "20px",
-      spacing: "md",
+      spacing: "lg",
       backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },

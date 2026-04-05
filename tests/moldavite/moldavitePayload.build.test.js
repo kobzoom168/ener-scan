@@ -28,10 +28,14 @@ test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", 
     String(slice.flexSurface.heroNamingLine || "").includes("เร่งการเปลี่ยนแปลง"),
   );
   assert.ok(
+    String(slice.flexSurface.fitLine || "").startsWith("โฟกัสช่วงนี้:"),
+    "fit line should be a short focus hint (not repeat ranking prose)",
+  );
+  assert.ok(
     String(slice.flexSurface.fitLine || "").includes(
       slice.lifeAreas[slice.primaryLifeArea].labelThai,
     ),
-    "fit line should name primary life area directly",
+    "fit line should still name primary/secondary life areas",
   );
   assert.ok(
     String(slice.flexSurface.htmlOpeningLine || "").length > 40,

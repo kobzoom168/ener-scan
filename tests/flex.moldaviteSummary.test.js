@@ -68,7 +68,9 @@ test("buildMoldaviteSummaryFirstFlex: returns flex bubble without calling generi
   assert.ok(bubble.hero);
   const bodyText = JSON.stringify(bubble.body);
   assert.ok(bodyText.includes("มอลดาไวต์"));
+  assert.ok(bodyText.includes("หินเทคไทต์ · โทนเขียว"));
   assert.ok(bodyText.includes("เร่งการเปลี่ยนแปลง"));
-  assert.ok(bodyText.includes("มิติที่โทนนี้ไปออกแรงสุด"));
-  assert.ok(bodyText.includes("งาน · 88"));
+  assert.ok(bodyText.includes("มิติที่โทนไปออกแรงสุด"));
+  assert.ok(bodyText.includes("งาน"));
+  assert.ok(bodyText.includes("88"));
 });
