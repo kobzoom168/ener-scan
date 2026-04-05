@@ -55,6 +55,7 @@ import {
 } from "./lineFinalScanDelivery.builder.js";
 import { buildScanSummaryFirstFlex } from "../flex/flex.summaryFirst.js";
 import { buildMoldaviteSummaryFirstFlex } from "../flex/flex.moldaviteSummary.js";
+import { buildCrystalGenericSafeSummaryFirstFlex } from "../flex/flex.crystalGenericSafe.js";
 import { resolveLineSummaryWording } from "../../utils/lineSummaryWording.util.js";
 import { logUnsupportedObjectRejected } from "../lineWebhook/unsupportedObjectReply.service.js";
 import {
@@ -709,12 +710,19 @@ export async function processScanJob(workerId, jobRow) {
                   reportPayload: reportPayloadForReply,
                   appendReportBubble: false,
                 })
-              : await buildScanSummaryFirstFlex(resultText, {
-                  birthdate,
-                  reportUrl,
-                  reportPayload: reportPayloadForReply,
-                  appendReportBubble: false,
-                });
+              : reportPayloadForReply.crystalGenericSafeV1
+                ? await buildCrystalGenericSafeSummaryFirstFlex(resultText, {
+                    birthdate,
+                    reportUrl,
+                    reportPayload: reportPayloadForReply,
+                    appendReportBubble: false,
+                  })
+                : await buildScanSummaryFirstFlex(resultText, {
+                    birthdate,
+                    reportUrl,
+                    reportPayload: reportPayloadForReply,
+                    appendReportBubble: false,
+                  });
           if (
             built &&
             typeof built === "object" &&

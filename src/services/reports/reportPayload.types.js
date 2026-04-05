@@ -36,6 +36,18 @@
  * @property {ReportDiagnostics} [diagnostics] — internal QA / explain (not public-report contract)
  *
  * @property {ReportMoldaviteV1} [moldaviteV1] — isolated Moldavite v1 slice (Flex + public); not generic crystal confidence
+ * @property {ReportCrystalGenericSafeV1} [crystalGenericSafeV1] — neutral crystal fallback when Moldavite not detected; avoids DB confidence hero
+ */
+
+/**
+ * Crystal generic-safe v1 — neutral wording + dedicated Flex when family is crystal but Moldavite v1 did not attach.
+ *
+ * @typedef {Object} ReportCrystalGenericSafeV1
+ * @property {string} version — e.g. "1"
+ * @property {"generic_safe_v1"} mode
+ * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string }} flexSurface
+ * @property {{ heroNaming: string, mainEnergyLabelNeutral: string, visibleMainLabelNeutral: string, mainEnergyWordingLine: string, htmlOpeningNeutral: string }} display
+ * @property {{ scanResultIdPrefix: string }} [context]
  */
 
 /**
@@ -99,6 +111,7 @@
  * @property {number|null} [visibleWordingFallbackLevel] — DB fallback level when DB path (else often undefined)
  * @property {string} [visibleWordingReason] — short machine reason for wording decision
  * @property {Object} [routingWordingMetrics] — Phase 4: crystal routing vs visible wording alignment (`buildCrystalRoutingWordingMetrics`); see `docs/crystal-routing-wording-mismatch-metrics.md`
+ * @property {boolean} [crystalGenericSafeActive] — true when crystalGenericSafeV1 slice attached (non-Moldavite crystal)
  */
 
 /**
@@ -229,4 +242,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.10";
+export const REPORT_PAYLOAD_VERSION = "1.2.11";

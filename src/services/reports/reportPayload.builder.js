@@ -36,6 +36,7 @@ import { buildCrystalRoutingWordingMetrics } from "../../utils/crystalRoutingWor
 import { deriveVisiblePresentationAngleForDbHydrate } from "../../utils/reports/deriveVisiblePresentationAngle.util.js";
 import { detectMoldaviteV1 } from "../../moldavite/moldaviteDetect.util.js";
 import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
+import { buildCrystalGenericSafeV1Slice } from "../../crystal/crystalGenericSafePayload.build.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -801,6 +802,76 @@ export async function buildReportPayloadFromScan(opts) {
       })
     : undefined;
 
+  const crystalGenericSafeV1 =
+    famNorm === "crystal" && !moldaviteV1
+      ? buildCrystalGenericSafeV1Slice({
+          scanResultId: rid,
+          seedKey: rid || String(scanResultId || ""),
+        })
+      : undefined;
+
+  if (crystalGenericSafeV1) {
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_GENERIC_SAFE_V1_ATTACHED",
+        scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+        mode: crystalGenericSafeV1.mode,
+      }),
+    );
+  }
+
+  const baseMainEnergyLabel = wording.mainEnergy
+    ? String(wording.mainEnergy)
+    : parsed.mainEnergy && parsed.mainEnergy !== "-"
+      ? String(parsed.mainEnergy)
+      : "";
+
+  const summaryMainEnergyLabel = crystalGenericSafeV1
+    ? crystalGenericSafeV1.display.mainEnergyLabelNeutral
+    : baseMainEnergyLabel;
+
+  const summaryHeadlineShort = crystalGenericSafeV1
+    ? crystalGenericSafeV1.flexSurface.headline
+    : flexSurface.headlineShort;
+
+  const summaryFitReasonShort = crystalGenericSafeV1
+    ? crystalGenericSafeV1.flexSurface.fitLine
+    : flexSurface.fitReasonShort;
+
+  const summaryBulletsShort = crystalGenericSafeV1
+    ? crystalGenericSafeV1.flexSurface.bullets
+    : flexSurface.bulletsShort;
+
+  const summaryPresentationAngleId = crystalGenericSafeV1
+    ? "crystal_generic_safe_v1"
+    : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
+
+  const summaryWordingVariantId = crystalGenericSafeV1
+    ? "crystal_generic_safe_v1"
+    : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
+
+  const summaryVisibleMainLabel = crystalGenericSafeV1
+    ? crystalGenericSafeV1.display.visibleMainLabelNeutral
+    : dbSurfBundle?.mainLabel
+      ? String(dbSurfBundle.mainLabel).trim()
+      : undefined;
+
+  const summaryOpeningShort = crystalGenericSafeV1
+    ? undefined
+    : dbSurfBundle?.opening
+      ? String(dbSurfBundle.opening).trim()
+      : undefined;
+
+  const summaryTeaserShort = crystalGenericSafeV1
+    ? undefined
+    : dbSurfBundle?.teaser
+      ? String(dbSurfBundle.teaser).trim()
+      : undefined;
+
+  const summaryCtaLabel = crystalGenericSafeV1
+    ? "เปิดรายงานฉบับเต็ม"
+    : flexSurface.ctaLabel;
+
   return {
     reportId: rid,
     publicToken: tok,
@@ -817,11 +888,7 @@ export async function buildReportPayloadFromScan(opts) {
     summary: {
       energyScore,
       energyLevelLabel: energyLevelLabelFromScore(energyScore),
-      mainEnergyLabel: wording.mainEnergy
-        ? String(wording.mainEnergy)
-        : parsed.mainEnergy && parsed.mainEnergy !== "-"
-          ? String(parsed.mainEnergy)
-          : "",
+      mainEnergyLabel: summaryMainEnergyLabel,
       compatibilityPercent: compatPct,
       compatibilityBand: compatibilityBand || undefined,
       summaryLine,
@@ -839,24 +906,18 @@ export async function buildReportPayloadFromScan(opts) {
           : undefined;
       })(),
       scanTips: whatItGives.length > 0 ? whatItGives.slice(0, 2) : undefined,
-      headlineShort: flexSurface.headlineShort,
-      fitReasonShort: flexSurface.fitReasonShort,
-      bulletsShort: flexSurface.bulletsShort,
-      ctaLabel: flexSurface.ctaLabel,
-      presentationAngleId: flexSurface.wordingMeta?.presentationAngleId ?? undefined,
-      wordingVariantId: flexSurface.wordingMeta?.wordingVariantId ?? undefined,
+      headlineShort: summaryHeadlineShort,
+      fitReasonShort: summaryFitReasonShort,
+      bulletsShort: summaryBulletsShort,
+      ctaLabel: summaryCtaLabel,
+      presentationAngleId: summaryPresentationAngleId,
+      wordingVariantId: summaryWordingVariantId,
       energyCategoryCode,
       energyCopyObjectFamily,
       crystalMode,
-      openingShort: dbSurfBundle?.opening
-        ? String(dbSurfBundle.opening).trim()
-        : undefined,
-      teaserShort: dbSurfBundle?.teaser
-        ? String(dbSurfBundle.teaser).trim()
-        : undefined,
-      visibleMainLabel: dbSurfBundle?.mainLabel
-        ? String(dbSurfBundle.mainLabel).trim()
-        : undefined,
+      openingShort: summaryOpeningShort,
+      teaserShort: summaryTeaserShort,
+      visibleMainLabel: summaryVisibleMainLabel,
     },
     sections: {
       whatItGives,
@@ -884,6 +945,13 @@ export async function buildReportPayloadFromScan(opts) {
     wording: {
       ...wording,
       objectLabel: "วัตถุจากการสแกน",
+      ...(crystalGenericSafeV1
+        ? {
+            heroNaming: crystalGenericSafeV1.display.heroNaming,
+            mainEnergy: crystalGenericSafeV1.display.mainEnergyWordingLine,
+            htmlOpeningLine: crystalGenericSafeV1.display.htmlOpeningNeutral,
+          }
+        : {}),
     },
     compatibility: compatibilityPayload
       ? {
@@ -989,7 +1057,9 @@ export async function buildReportPayloadFromScan(opts) {
       enrichmentProvider: undefined,
       deliveryStrategy: undefined,
       lineSummaryPresent: undefined,
+      crystalGenericSafeActive: Boolean(crystalGenericSafeV1),
     },
     ...(moldaviteV1 ? { moldaviteV1 } : {}),
+    ...(crystalGenericSafeV1 ? { crystalGenericSafeV1 } : {}),
   };
 }

@@ -87,5 +87,11 @@ export function mapLegacyReportPayloadToPublicReportView({
       !Array.isArray(payload.moldaviteV1)
         ? payload.moldaviteV1
         : undefined,
+    crystalGenericSafeV1:
+      payload?.crystalGenericSafeV1 &&
+      typeof payload.crystalGenericSafeV1 === "object" &&
+      !Array.isArray(payload.crystalGenericSafeV1)
+        ? payload.crystalGenericSafeV1
+        : undefined,
   };
 }
