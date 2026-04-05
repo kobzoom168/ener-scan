@@ -24,17 +24,19 @@ test("resolveMoldaviteDisplayNaming: medium from Gemini confidence", () => {
   });
   assert.equal(r.displayNamingConfidenceLevel, "medium");
   assert.equal(r.displaySubtypeLabel, "หิน/คริสตัลโทนเขียว");
+  assert.equal(r.displayMainEnergyLabel, "เร่งการเปลี่ยนแปลง");
 });
 
-test("resolveMoldaviteDisplayNaming: low from Gemini confidence", () => {
+test("resolveMoldaviteDisplayNaming: low uses same visible labels as medium (no Moldavite name)", () => {
   const r = resolveMoldaviteDisplayNaming({
     geminiSubtypeConfidence: 0.4,
     moldaviteDecisionSource: "gemini",
     detectionReason: "gemini_crystal_subtype",
   });
   assert.equal(r.displayNamingConfidenceLevel, "low");
-  assert.ok(r.displaySubtypeLabel.includes("คริสตัล"));
-  assert.ok(r.displayMainEnergyLabel.includes("ขยับ"));
+  assert.equal(r.displaySubtypeLabel, "หิน/คริสตัลโทนเขียว");
+  assert.equal(r.displayMainEnergyLabel, "เร่งการเปลี่ยนแปลง");
+  assert.ok(!String(r.displaySubtypeLabel).includes("มอลดาไวต์"));
 });
 
 test("resolveEffectiveSubtypeConfidenceForNaming: heuristic literal → high tier", () => {

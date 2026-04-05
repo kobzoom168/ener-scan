@@ -2,6 +2,7 @@
  * Moldavite-only summary-first Flex — does not call resolveEnergyCopyForFlex (isolated hero copy).
  */
 import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
+import { MOLDAVITE_VISIBLE_LABEL_FALLBACK } from "../../moldavite/moldaviteDisplayNaming.util.js";
 import { normalizeScore } from "./flex.utils.js";
 import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
@@ -281,7 +282,9 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
     "-",
   );
 
-  const headlineText = String(mv.flexSurface?.headline || "").trim() || "มอลดาไวต์";
+  const headlineText =
+    String(mv.flexSurface?.headline || "").trim() ||
+    MOLDAVITE_VISIBLE_LABEL_FALLBACK;
   const fitLine = String(mv.flexSurface?.fitLine || "").trim();
   const bulletLines = Array.isArray(mv.flexSurface?.bullets)
     ? mv.flexSurface.bullets
@@ -302,7 +305,8 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
   const taglineText =
     String(mv.flexSurface?.tagline || "").trim() || MOLDAVITE_TITLE_TAGLINE;
 
-  const altMain = headlineText.split("\n")[0].trim() || "มอลดาไวต์";
+  const altMain =
+    headlineText.split("\n")[0].trim() || MOLDAVITE_VISIBLE_LABEL_FALLBACK;
   const altText = buildScanFlexAltText({
     mainEnergyLabel: altMain,
     scoreDisplay: score.display || "-",

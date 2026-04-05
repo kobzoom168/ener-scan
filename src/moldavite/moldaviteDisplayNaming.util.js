@@ -16,12 +16,18 @@ const HIGH_MIN = 0.8;
 const MEDIUM_MIN = 0.55;
 
 const LABEL_HIGH = "มอลดาไวต์";
-const LABEL_MEDIUM = "หิน/คริสตัลโทนเขียว";
-const LABEL_LOW = "วัตถุชิ้นนี้อยู่ในกลุ่มหินและคริสตัล";
+/** Visible subtype when confidence is not high — do not claim Moldavite by name. */
+const LABEL_NON_HIGH = "หิน/คริสตัลโทนเขียว";
 
 const MAIN_HIGH = "เร่งการเปลี่ยนแปลง";
-const MAIN_MEDIUM = "เร่งการเปลี่ยนแปลง";
-const MAIN_LOW = "เด่นในทางการขยับและเปลี่ยนแปลง";
+/** Same transformation lane for medium + low display naming (Flex / hero short labels). */
+const MAIN_NON_HIGH = "เร่งการเปลี่ยนแปลง";
+
+/**
+ * Defensive default for Flex/report when `flexSurface.headline` is missing.
+ * Must match non-high visible naming (never assume Moldavite).
+ */
+export const MOLDAVITE_VISIBLE_LABEL_FALLBACK = LABEL_NON_HIGH;
 
 /**
  * When Gemini did not supply a numeric confidence, infer a conservative effective
@@ -95,15 +101,13 @@ export function resolveMoldaviteDisplayNaming({
     displayNamingConfidenceLevel = "low";
   }
 
-  let displaySubtypeLabel = LABEL_MEDIUM;
-  let displayMainEnergyLabel = MAIN_MEDIUM;
+  /** Flex headline + pill short label: only high tier may show “มอลดาไวต์”. */
+  let displaySubtypeLabel = LABEL_NON_HIGH;
+  let displayMainEnergyLabel = MAIN_NON_HIGH;
 
   if (displayNamingConfidenceLevel === "high") {
     displaySubtypeLabel = LABEL_HIGH;
     displayMainEnergyLabel = MAIN_HIGH;
-  } else if (displayNamingConfidenceLevel === "low") {
-    displaySubtypeLabel = LABEL_LOW;
-    displayMainEnergyLabel = MAIN_LOW;
   }
 
   return {

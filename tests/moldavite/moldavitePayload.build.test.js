@@ -9,6 +9,12 @@ const namingHigh = resolveMoldaviteDisplayNaming({
   detectionReason: "gemini_crystal_subtype",
 });
 
+const namingNonHigh = resolveMoldaviteDisplayNaming({
+  geminiSubtypeConfidence: 0.65,
+  moldaviteDecisionSource: "gemini",
+  detectionReason: "gemini_crystal_subtype",
+});
+
 test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", () => {
   const slice = buildMoldaviteV1Slice({
     scanResultId: "rid-uuid-here",
@@ -57,4 +63,20 @@ test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", 
     ),
     "mainEnergyWordingLine should expand native-energy nuance for report body",
   );
+});
+
+test("buildMoldaviteV1Slice: non-high confidence — green visible name, no Moldavite in flexSurface", () => {
+  const slice = buildMoldaviteV1Slice({
+    scanResultId: "rid-2",
+    detection: { reason: "keyword_match", matchedSignals: ["x"] },
+    seedKey: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    energyScore: 7,
+    mainEnergyLabel: "x",
+    displayNaming: namingNonHigh,
+  });
+  assert.equal(slice.flexSurface.headline, "หิน/คริสตัลโทนเขียว");
+  assert.equal(slice.flexSurface.mainEnergyShort, "เร่งการเปลี่ยนแปลง");
+  assert.ok(!String(slice.flexSurface.headline || "").includes("มอลดาไวต์"));
+  assert.ok(!String(slice.flexSurface.heroNamingLine || "").includes("มอลดาไวต์"));
+  assert.equal(slice.displayNaming?.displayNamingConfidenceLevel, "medium");
 });
