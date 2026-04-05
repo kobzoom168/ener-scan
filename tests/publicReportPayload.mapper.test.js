@@ -29,6 +29,36 @@ test("mapLegacyReportPayloadToPublicReportView passes objectEnergy through", () 
   assert.equal(v.objectEnergy?.stars?.balance, 3);
 });
 
+test("mapLegacyReportPayloadToPublicReportView passes moldaviteV1 through", () => {
+  const mv = {
+    version: "1",
+    scoringMode: "deterministic_v1",
+    detection: { reason: "keyword_match", matchedSignals: [] },
+    primaryLifeArea: "work",
+    secondaryLifeArea: "money",
+    flexSurface: { headline: "h", fitLine: "f", bullets: ["a", "b"], mainEnergyShort: "มอลดาไวต์" },
+  };
+  const v = mapLegacyReportPayloadToPublicReportView({
+    scanResultId: "sr",
+    payload: {
+      reportId: "r",
+      publicToken: "t",
+      scanId: "s",
+      userId: "u",
+      generatedAt: new Date().toISOString(),
+      reportVersion: "1.2.10",
+      summary: { summaryLine: "x" },
+      sections: {},
+      trust: {},
+      actions: {},
+      object: {},
+      moldaviteV1: mv,
+    },
+  });
+  assert.equal(v.moldaviteV1?.version, "1");
+  assert.equal(v.moldaviteV1?.scoringMode, "deterministic_v1");
+});
+
 test("mapLegacyReportPayloadToPublicReportView: missing objectEnergy is undefined", () => {
   const v = mapLegacyReportPayloadToPublicReportView({
     scanResultId: "sr",

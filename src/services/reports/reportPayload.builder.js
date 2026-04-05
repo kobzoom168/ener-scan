@@ -34,6 +34,8 @@ import {
 } from "../../utils/visibleWordingTelemetry.util.js";
 import { buildCrystalRoutingWordingMetrics } from "../../utils/crystalRoutingWordingMetrics.util.js";
 import { deriveVisiblePresentationAngleForDbHydrate } from "../../utils/reports/deriveVisiblePresentationAngle.util.js";
+import { detectMoldaviteV1 } from "../../moldavite/moldaviteDetect.util.js";
+import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -778,6 +780,25 @@ export async function buildReportPayloadFromScan(opts) {
     );
   }
 
+  const moldaviteDetection = detectMoldaviteV1({
+    objectFamily: objectFamilyOpt,
+    pipelineObjectCategory: pipelineObjectCategoryOpt,
+    resultText: String(resultText || ""),
+  });
+  const moldaviteV1 = moldaviteDetection.isMoldavite
+    ? buildMoldaviteV1Slice({
+        scanResultId: rid,
+        detection: moldaviteDetection,
+        seedKey: rid || String(scanResultId || ""),
+        energyScore,
+        mainEnergyLabel: wording.mainEnergy
+          ? String(wording.mainEnergy)
+          : parsed.mainEnergy && parsed.mainEnergy !== "-"
+            ? String(parsed.mainEnergy)
+            : "",
+      })
+    : undefined;
+
   return {
     reportId: rid,
     publicToken: tok,
@@ -967,5 +988,6 @@ export async function buildReportPayloadFromScan(opts) {
       deliveryStrategy: undefined,
       lineSummaryPresent: undefined,
     },
+    ...(moldaviteV1 ? { moldaviteV1 } : {}),
   };
 }

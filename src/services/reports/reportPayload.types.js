@@ -34,6 +34,22 @@
  * @property {ReportEnrichmentMeta} [enrichment] — optional web hint merge (wording-only); never payment/access/scores
  *
  * @property {ReportDiagnostics} [diagnostics] — internal QA / explain (not public-report contract)
+ *
+ * @property {ReportMoldaviteV1} [moldaviteV1] — isolated Moldavite v1 slice (Flex + public); not generic crystal confidence
+ */
+
+/**
+ * Moldavite vertical slice v1 — deterministic life-area scores + dedicated Flex copy path.
+ *
+ * @typedef {Object} ReportMoldaviteV1
+ * @property {string} version — e.g. "1"
+ * @property {"deterministic_v1"} scoringMode — temporary until model-backed scores
+ * @property {{ reason: string, matchedSignals: string[] }} detection
+ * @property {Record<string, { key: string, score: number, labelThai: string }>} lifeAreas — work / money / relationship
+ * @property {string} primaryLifeArea
+ * @property {string} secondaryLifeArea
+ * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string }} flexSurface
+ * @property {{ scanResultIdPrefix: string, energyScoreSnapshot: number|null, mainEnergyLabelSnapshot: string|null }} [context]
  */
 
 /**
@@ -213,4 +229,4 @@
  */
 
 /** @type {string} */
-export const REPORT_PAYLOAD_VERSION = "1.2.9";
+export const REPORT_PAYLOAD_VERSION = "1.2.10";

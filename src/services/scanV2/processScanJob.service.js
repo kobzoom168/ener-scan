@@ -54,6 +54,7 @@ import {
   buildSummaryLinkFallbackText,
 } from "./lineFinalScanDelivery.builder.js";
 import { buildScanSummaryFirstFlex } from "../flex/flex.summaryFirst.js";
+import { buildMoldaviteSummaryFirstFlex } from "../flex/flex.moldaviteSummary.js";
 import { resolveLineSummaryWording } from "../../utils/lineSummaryWording.util.js";
 import { logUnsupportedObjectRejected } from "../lineWebhook/unsupportedObjectReply.service.js";
 import {
@@ -698,12 +699,22 @@ export async function processScanJob(workerId, jobRow) {
 
       if (env.LINE_SUMMARY_LINK_USE_FLEX_SHELL) {
         try {
-          const built = await buildScanSummaryFirstFlex(resultText, {
-            birthdate,
-            reportUrl,
-            reportPayload: reportPayloadForReply,
-            appendReportBubble: false,
-          });
+          const built =
+            reportPayloadForReply &&
+            typeof reportPayloadForReply === "object" &&
+            reportPayloadForReply.moldaviteV1
+              ? await buildMoldaviteSummaryFirstFlex(resultText, {
+                  birthdate,
+                  reportUrl,
+                  reportPayload: reportPayloadForReply,
+                  appendReportBubble: false,
+                })
+              : await buildScanSummaryFirstFlex(resultText, {
+                  birthdate,
+                  reportUrl,
+                  reportPayload: reportPayloadForReply,
+                  appendReportBubble: false,
+                });
           if (
             built &&
             typeof built === "object" &&

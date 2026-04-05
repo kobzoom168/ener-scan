@@ -81,5 +81,11 @@ export function mapLegacyReportPayloadToPublicReportView({
       !Array.isArray(payload.objectEnergy)
         ? payload.objectEnergy
         : undefined,
+    moldaviteV1:
+      payload?.moldaviteV1 &&
+      typeof payload.moldaviteV1 === "object" &&
+      !Array.isArray(payload.moldaviteV1)
+        ? payload.moldaviteV1
+        : undefined,
   };
 }
