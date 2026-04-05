@@ -9,14 +9,21 @@ import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 /** Moldavite-only palette — green accent (distinct from Thai/gold cards). */
 const FLEX_CARD_BG = "#000000";
 const FLEX_BOX_BG = "#111111";
-const FLEX_BOX_BG_ELEVATED = "#0f1412";
+const FLEX_BOX_BG_ELEVATED = "#0c1210";
 const MOLDAVITE_ACCENT = "#4ADE80";
-const MOLDAVITE_ACCENT_SOFT = "#86EFAC";
-const MOLDAVITE_BORDER_SUBTLE = "#1e3d2e";
-const FLEX_ACCENT = MOLDAVITE_ACCENT;
+const MOLDAVITE_ACCENT_DIM = "#5ee0a0";
+const MOLDAVITE_BORDER_SUBTLE = "#243528";
+const MOLDAVITE_PILL_BORDER = "#3d5248";
+const MOLDAVITE_PILL_BG = "#0a1410";
+/** CTA: slightly deeper green for contrast on mobile tap targets. */
+const MOLDAVITE_CTA_BG = "#22C55E";
+const FLEX_ACCENT = MOLDAVITE_CTA_BG;
 const FLEX_TEXT_PRIMARY = "#ffffff";
-const FLEX_TEXT_SECONDARY = "#9ca3af";
+const FLEX_TEXT_SECONDARY = "#a1a8b3";
 const FLEX_TEXT_MUTED = "#6b7280";
+const FLEX_TEXT_CAPTION = "#5c6468";
+/** Tagline under title — intentionally quiet vs headline. */
+const MOLDAVITE_TITLE_TAGLINE_COLOR = "#6d7a74";
 /** Static identity line under title (Flex-only; not detection logic). */
 const MOLDAVITE_TITLE_TAGLINE = "หินเทคไทต์ · โทนเขียว";
 
@@ -55,23 +62,24 @@ function createLifeAreasRankingBlock(lifeAreas) {
   const headerBlock = {
     type: "box",
     layout: "vertical",
-    spacing: "xs",
+    spacing: "none",
     margin: "none",
     contents: [
       {
         type: "text",
         text: "มิติที่โทนไปออกแรงสุด",
         size: "xs",
-        weight: "bold",
-        color: MOLDAVITE_ACCENT_SOFT,
+        color: MOLDAVITE_ACCENT_DIM,
         wrap: true,
+        margin: "none",
       },
       {
         type: "text",
         text: "เรียงจากมากไปน้อย",
         size: "xs",
-        color: FLEX_TEXT_MUTED,
+        color: FLEX_TEXT_CAPTION,
         wrap: true,
+        margin: "xs",
       },
     ],
   };
@@ -83,7 +91,7 @@ function createLifeAreasRankingBlock(lifeAreas) {
       type: "box",
       layout: "horizontal",
       spacing: "md",
-      margin: "sm",
+      margin: "md",
       justifyContent: "space-between",
       alignItems: "center",
       contents: [
@@ -91,17 +99,17 @@ function createLifeAreasRankingBlock(lifeAreas) {
           type: "text",
           text: r.label,
           size: "sm",
-          color: FLEX_TEXT_PRIMARY,
-          flex: 4,
+          color: FLEX_TEXT_SECONDARY,
+          flex: 5,
           wrap: true,
         },
         {
           type: "text",
           text: String(Math.round(r.score)),
-          size: "xl",
+          size: "3xl",
           weight: "bold",
           color: MOLDAVITE_ACCENT,
-          flex: 1,
+          flex: 2,
           align: "end",
           wrap: false,
         },
@@ -112,14 +120,22 @@ function createLifeAreasRankingBlock(lifeAreas) {
   return {
     type: "box",
     layout: "vertical",
-    spacing: "sm",
+    spacing: "none",
     margin: "md",
-    paddingAll: "16px",
+    paddingAll: "18px",
     borderWidth: "1px",
     borderColor: MOLDAVITE_BORDER_SUBTLE,
-    cornerRadius: "8px",
+    cornerRadius: "10px",
     backgroundColor: FLEX_BOX_BG_ELEVATED,
-    contents: [headerBlock, ...rowBoxes],
+    contents: [
+      headerBlock,
+      {
+        type: "separator",
+        margin: "md",
+        color: MOLDAVITE_BORDER_SUBTLE,
+      },
+      ...rowBoxes,
+    ],
   };
 }
 
@@ -165,7 +181,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
     type: "box",
     layout: "horizontal",
     spacing: "sm",
-    margin: "lg",
+    margin: "md",
     contents: [
       {
         type: "box",
@@ -208,14 +224,14 @@ function createEnergyBadgePill(mainLabel) {
   return {
     type: "box",
     layout: "vertical",
-    spacing: "sm",
-    margin: "lg",
+    spacing: "xs",
+    margin: "md",
     contents: [
       {
         type: "text",
         text: "พลังหลัก",
         size: "xs",
-        color: FLEX_TEXT_SECONDARY,
+        color: FLEX_TEXT_CAPTION,
         wrap: true,
       },
       {
@@ -227,13 +243,14 @@ function createEnergyBadgePill(mainLabel) {
             layout: "horizontal",
             flex: 1,
             justifyContent: "center",
-            paddingTop: "10px",
-            paddingBottom: "10px",
-            paddingStart: "14px",
-            paddingEnd: "14px",
+            paddingTop: "12px",
+            paddingBottom: "12px",
+            paddingStart: "20px",
+            paddingEnd: "20px",
             borderWidth: "1px",
-            borderColor: MOLDAVITE_ACCENT,
-            backgroundColor: FLEX_BOX_BG,
+            borderColor: MOLDAVITE_PILL_BORDER,
+            cornerRadius: "8px",
+            backgroundColor: MOLDAVITE_PILL_BG,
             contents: [
               {
                 type: "text",
@@ -241,7 +258,7 @@ function createEnergyBadgePill(mainLabel) {
                   String(mainLabel || "-").trim(),
                   MAIN_ENERGY_PILL_MAX_LEN,
                 ),
-                size: "sm",
+                size: "md",
                 weight: "bold",
                 color: MOLDAVITE_ACCENT,
                 align: "center",
@@ -344,8 +361,8 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
   const titleSection = {
     type: "box",
     layout: "vertical",
-    spacing: "sm",
-    margin: "lg",
+    spacing: "xs",
+    margin: "none",
     contents: [
       {
         type: "text",
@@ -355,15 +372,15 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
         color: FLEX_TEXT_PRIMARY,
         wrap: true,
         maxLines: 2,
-        lineSpacing: "4px",
+        lineSpacing: "2px",
       },
       {
         type: "text",
         text: MOLDAVITE_TITLE_TAGLINE,
         size: "xs",
-        color: MOLDAVITE_ACCENT_SOFT,
+        color: MOLDAVITE_TITLE_TAGLINE_COLOR,
         wrap: true,
-        lineSpacing: "3px",
+        lineSpacing: "2px",
       },
     ],
   };
@@ -374,11 +391,11 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
           type: "text",
           text: fitLine,
           size: "xs",
-          color: FLEX_TEXT_SECONDARY,
+          color: FLEX_TEXT_CAPTION,
           wrap: true,
           maxLines: 2,
-          lineSpacing: "4px",
-          margin: "lg",
+          lineSpacing: "3px",
+          margin: "md",
         }
       : null;
 
@@ -429,8 +446,8 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       type: "button",
       style: "primary",
       color: FLEX_ACCENT,
-      height: "md",
-      margin: "lg",
+      height: "lg",
+      margin: "xl",
       action: {
         type: "uri",
         label: "เปิดรายงานฉบับเต็ม",
@@ -445,8 +462,11 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
     body: {
       type: "box",
       layout: "vertical",
-      paddingAll: "20px",
-      spacing: "lg",
+      paddingTop: heroOk ? "28px" : "22px",
+      paddingBottom: "26px",
+      paddingStart: "22px",
+      paddingEnd: "22px",
+      spacing: "xl",
       backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },
