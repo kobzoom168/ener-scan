@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectMoldaviteV1 } from "../../src/moldavite/moldaviteDetect.util.js";
+import {
+  buildGptCrystalSubtypeInferenceText,
+  detectMoldaviteV1,
+} from "../../src/moldavite/moldaviteDetect.util.js";
 
 test("detectMoldaviteV1: non-crystal family rejects", () => {
   const r = detectMoldaviteV1({
@@ -124,6 +127,83 @@ test("detectMoldaviteV1: tektite mention without green or mixed slug stays false
     pipelineObjectCategory: "คริสตัล",
     resultText: "กล่าวถึง tektite ทั่วไป",
     dominantColorNormalized: null,
+  });
+  assert.equal(r.isMoldavite, false);
+  assert.equal(r.reason, "no_moldavite_signal");
+});
+
+test("buildGptCrystalSubtypeInferenceText: joins vision category, main energy, overview", () => {
+  const t = buildGptCrystalSubtypeInferenceText({
+    pipelineObjectCategory: "คริสตัล โทนเขียว",
+    mainEnergy: "พลังสมดุล",
+    overview: "หินแก้วจากอุกกาบาต",
+    fitReason: "เหมาะกับช่วงปรับจังหวะ",
+  });
+  assert.ok(t.includes("คริสตัล โทนเขียว"));
+  assert.ok(t.includes("พลังสมดุล"));
+  assert.ok(t.includes("หินแก้วจากอุกกาบาต"));
+});
+
+test("detectMoldaviteV1: crystal + GPT inference descriptive prose (no tektite token in full text)", () => {
+  const r = detectMoldaviteV1({
+    objectFamily: "crystal",
+    pipelineObjectCategory: "คริสตัล",
+    resultText: "พลังหลัก: ความมั่นใจ\nปิดท้าย: ขอบคุณที่ใช้บริการ",
+    dominantColorNormalized: "mixed",
+    gptSubtypeInferenceText:
+      "คริสตัล\nหินแก้วจากอุกกาบาต โทนสีเขียวอมเขียว",
+    pipelineObjectCategorySource: "deep_scan",
+  });
+  assert.equal(r.isMoldavite, true);
+  assert.equal(r.reason, "gpt_subtype_inference_descriptive_prose");
+  assert.ok(r.matchedSignals.includes("gpt_inference_descriptive_prose"));
+  assert.ok(r.matchedSignals.includes("gpt_inference_category_source_deep_scan"));
+});
+
+test("detectMoldaviteV1: crystal + GPT strong subtype line (green tektite) in inference only", () => {
+  const r = detectMoldaviteV1({
+    objectFamily: "crystal",
+    pipelineObjectCategory: "crystal_scan",
+    resultText: "พลังหลัก: ความมั่นใจ",
+    dominantColorNormalized: "green",
+    gptSubtypeInferenceText: "เทคไทต์สีเขียว เนื้อแก้วใส",
+  });
+  assert.equal(r.isMoldavite, true);
+  assert.equal(r.reason, "gpt_subtype_inference_strong_line");
+  assert.ok(r.matchedSignals.includes("gpt_inference_strong_subtype_line"));
+});
+
+test("detectMoldaviteV1: non-crystal + Moldavite-like GPT inference => false", () => {
+  const r = detectMoldaviteV1({
+    objectFamily: "thai_amulet",
+    pipelineObjectCategory: "พระเครื่อง",
+    resultText: "x",
+    dominantColorNormalized: "green",
+    gptSubtypeInferenceText: "หินแก้วจากอุกกาบาต สีเขียว",
+  });
+  assert.equal(r.isMoldavite, false);
+  assert.equal(r.reason, "not_crystal_family");
+});
+
+test("detectMoldaviteV1: descriptive Moldavite-like prose without color support => false", () => {
+  const r = detectMoldaviteV1({
+    objectFamily: "crystal",
+    pipelineObjectCategory: "คริสตัล",
+    resultText: "สั้น",
+    dominantColorNormalized: null,
+    gptSubtypeInferenceText: "หินแก้วจากอุกกาบาต ไม่ระบุโทนสี",
+  });
+  assert.equal(r.isMoldavite, false);
+  assert.equal(r.reason, "no_moldavite_signal");
+});
+
+test("detectMoldaviteV1: weak hint only in inference (no color, no slug) => false", () => {
+  const r = detectMoldaviteV1({
+    objectFamily: "crystal",
+    pipelineObjectCategory: "คริสตัล",
+    resultText: "ยาว",
+    dominantColorNormalized: null,
+    gptSubtypeInferenceText: "คริสตัลทั่วไป",
   });
   assert.equal(r.isMoldavite, false);
   assert.equal(r.reason, "no_moldavite_signal");

@@ -34,7 +34,10 @@ import {
 } from "../../utils/visibleWordingTelemetry.util.js";
 import { buildCrystalRoutingWordingMetrics } from "../../utils/crystalRoutingWordingMetrics.util.js";
 import { deriveVisiblePresentationAngleForDbHydrate } from "../../utils/reports/deriveVisiblePresentationAngle.util.js";
-import { detectMoldaviteV1 } from "../../moldavite/moldaviteDetect.util.js";
+import {
+  buildGptCrystalSubtypeInferenceText,
+  detectMoldaviteV1,
+} from "../../moldavite/moldaviteDetect.util.js";
 import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
 import { buildCrystalGenericSafeV1Slice } from "../../crystal/crystalGenericSafePayload.build.js";
 
@@ -781,12 +784,21 @@ export async function buildReportPayloadFromScan(opts) {
     );
   }
 
+  const gptSubtypeInferenceText = buildGptCrystalSubtypeInferenceText({
+    overview: parsed.overview,
+    mainEnergy: parsed.mainEnergy,
+    fitReason: parsed.fitReason,
+    pipelineObjectCategory: pipelineObjectCategoryOpt,
+  });
+
   const moldaviteDetection = detectMoldaviteV1({
     objectFamily: objectFamilyOpt,
     pipelineObjectCategory: pipelineObjectCategoryOpt,
     resultText: String(resultText || ""),
     dominantColorNormalized: dominantColorResolved.normalized ?? null,
     scanResultIdPrefix: rid ? String(rid).slice(0, 8) : "",
+    gptSubtypeInferenceText,
+    pipelineObjectCategorySource: pipelineObjectCategorySourceOpt,
   });
   const moldaviteV1 = moldaviteDetection.isMoldavite
     ? buildMoldaviteV1Slice({
