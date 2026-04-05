@@ -6,7 +6,7 @@ import { normalizeObjectFamilyForEnergyCopy } from "../utils/energyCategoryResol
 const MOLDAVITE_LITERAL_RE =
   /moldavite|moldavites|moldervite|มอลดา|มอลดาไวต์|มอลดาไวท์|มอลดาไวต์\s*ไทย|หินมอลดา|มอลดาวี|มอลดา\s*ไวต์|มอลดา\s*ไวท์/i;
 
-/** Tektite class — Moldavite is the common green tektite in scans; combo with green is conservative. */
+/** Tektite class — Moldavite is the common green tektite in scans. */
 const TEKTITE_RE = /tektites?|เทคไทต์|แทคไทต์|เทคไทท์|ตัวเทคไทต์/i;
 
 /**
@@ -18,11 +18,20 @@ function categoryHintsGreen(cat) {
 }
 
 /**
+ * Vision v1 / cache often emits `mixed` for green-heavy specimens (skin/background).
+ * Never sufficient alone — must pair with tektite or category green hint (see detect).
+ * @param {string} colorSlug
+ */
+function slugSupportsTektiteColorCombo(colorSlug) {
+  return colorSlug === "green" || colorSlug === "mixed";
+}
+
+/**
  * @param {object} p
  * @param {string} [p.objectFamily]
  * @param {string|null} [p.pipelineObjectCategory]
  * @param {string} [p.resultText]
- * @param {string|null|undefined} [p.dominantColorNormalized] — slug from vision/cache, e.g. "green"
+ * @param {string|null|undefined} [p.dominantColorNormalized] — slug from vision/cache, e.g. "green", "mixed"
  * @param {string} [p.scanResultIdPrefix] — for telemetry only
  * @returns {{ isMoldavite: false, reason: string } | { isMoldavite: true, reason: string, matchedSignals: string[] }}
  */
@@ -63,15 +72,18 @@ export function detectMoldaviteV1({
   const tektiteInCategory = hasTektite(cat);
   const tektiteInResult = hasTektite(rt);
   const greenFromSlug = colorSlug === "green";
+  const mixedFromSlug = colorSlug === "mixed";
+  const slugSupportsCombo = slugSupportsTektiteColorCombo(colorSlug);
   const greenFromCategory = categoryHintsGreen(cat);
 
   if (
     (tektiteInCategory || tektiteInResult) &&
-    (greenFromSlug || greenFromCategory)
+    (slugSupportsCombo || greenFromCategory)
   ) {
     if (tektiteInCategory) matchedSignals.push("pipeline_object_category_tektite");
     if (tektiteInResult) matchedSignals.push("result_text_tektite");
     if (greenFromSlug) matchedSignals.push("dominant_color_green");
+    if (mixedFromSlug) matchedSignals.push("dominant_color_mixed");
     if (greenFromCategory) matchedSignals.push("category_green_hint");
   }
 
@@ -82,15 +94,16 @@ export function detectMoldaviteV1({
     matchedSignals.includes("pipeline_object_category_literal") ||
     matchedSignals.includes("result_text_literal");
 
+  const tektiteColorHit =
+    (tektiteInCategory || tektiteInResult) &&
+    (slugSupportsCombo || greenFromCategory);
+
   if (literalHit) {
     isMoldavite = true;
     reason = "literal_moldavite_label";
-  } else if (
-    (tektiteInCategory || tektiteInResult) &&
-    (greenFromSlug || greenFromCategory)
-  ) {
+  } else if (tektiteColorHit) {
     isMoldavite = true;
-    reason = "tektite_with_green_signal";
+    reason = "tektite_with_color_signal";
   }
 
   const out = isMoldavite
@@ -109,6 +122,8 @@ export function detectMoldaviteV1({
     tektiteInCategory,
     tektiteInResult,
     greenFromSlug,
+    mixedFromSlug,
+    slugSupportsTektiteCombo: slugSupportsCombo,
     greenFromCategory,
   });
 

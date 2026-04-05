@@ -54,12 +54,12 @@ test("detectMoldaviteV1: tektite + green in category, confidence prose only in t
     dominantColorNormalized: null,
   });
   assert.equal(r.isMoldavite, true);
-  assert.equal(r.reason, "tektite_with_green_signal");
+  assert.equal(r.reason, "tektite_with_color_signal");
   assert.ok(r.matchedSignals.includes("pipeline_object_category_tektite"));
   assert.ok(r.matchedSignals.includes("category_green_hint"));
 });
 
-test("detectMoldaviteV1: tektite in text + vision green slug, no moldavite name", () => {
+test("detectMoldaviteV1: green + tektite in text (no moldavite name)", () => {
   const r = detectMoldaviteV1({
     objectFamily: "crystal",
     pipelineObjectCategory: "crystal",
@@ -67,12 +67,47 @@ test("detectMoldaviteV1: tektite in text + vision green slug, no moldavite name"
     dominantColorNormalized: "green",
   });
   assert.equal(r.isMoldavite, true);
-  assert.equal(r.reason, "tektite_with_green_signal");
+  assert.equal(r.reason, "tektite_with_color_signal");
   assert.ok(r.matchedSignals.includes("result_text_tektite"));
   assert.ok(r.matchedSignals.includes("dominant_color_green"));
 });
 
-test("detectMoldaviteV1: non-Moldavite crystal (quartz) stays false", () => {
+test("detectMoldaviteV1: mixed + tektite in text as strong signal (production-style color slug)", () => {
+  const r = detectMoldaviteV1({
+    objectFamily: "crystal",
+    pipelineObjectCategory: "crystal_scan",
+    resultText: "พลังหลัก: ความมั่นใจ (specimen: tektite)",
+    dominantColorNormalized: "mixed",
+  });
+  assert.equal(r.isMoldavite, true);
+  assert.equal(r.reason, "tektite_with_color_signal");
+  assert.ok(r.matchedSignals.includes("dominant_color_mixed"));
+  assert.ok(r.matchedSignals.includes("result_text_tektite"));
+});
+
+test("detectMoldaviteV1: mixed dominant alone — no tektite, no literal, no category green", () => {
+  const r = detectMoldaviteV1({
+    objectFamily: "crystal",
+    pipelineObjectCategory: "คริสตัล",
+    resultText: "พลังหลัก: ความมั่นใจ\nบทสรุปยาว",
+    dominantColorNormalized: "mixed",
+  });
+  assert.equal(r.isMoldavite, false);
+  assert.equal(r.reason, "no_moldavite_signal");
+});
+
+test("detectMoldaviteV1: quartz + mixed without moldavite/tektite signals", () => {
+  const r = detectMoldaviteV1({
+    objectFamily: "crystal",
+    pipelineObjectCategory: "quartz",
+    resultText: "พลังหลัก: ควอตซ์ใส",
+    dominantColorNormalized: "mixed",
+  });
+  assert.equal(r.isMoldavite, false);
+  assert.equal(r.reason, "no_moldavite_signal");
+});
+
+test("detectMoldaviteV1: non-Moldavite crystal (quartz) stays false with green slug", () => {
   const r = detectMoldaviteV1({
     objectFamily: "crystal",
     pipelineObjectCategory: "quartz",
@@ -83,7 +118,7 @@ test("detectMoldaviteV1: non-Moldavite crystal (quartz) stays false", () => {
   assert.equal(r.reason, "no_moldavite_signal");
 });
 
-test("detectMoldaviteV1: tektite mention without green signal stays false", () => {
+test("detectMoldaviteV1: tektite mention without green or mixed slug stays false", () => {
   const r = detectMoldaviteV1({
     objectFamily: "crystal",
     pipelineObjectCategory: "คริสตัล",
