@@ -713,33 +713,53 @@ export async function processScanJob(workerId, jobRow) {
 
       if (env.LINE_SUMMARY_LINK_USE_FLEX_SHELL) {
         try {
-          const built =
+          const summaryShellOpts = {
+            birthdate,
+            reportUrl,
+            reportPayload: reportPayloadForReply,
+            appendReportBubble: false,
+          };
+          /** @type {unknown} */
+          let built = null;
+          if (
             reportPayloadForReply &&
             typeof reportPayloadForReply === "object" &&
             reportPayloadForReply.moldaviteV1
-              ? await buildMoldaviteSummaryFirstFlex(resultText, {
-                  birthdate,
-                  reportUrl,
-                  reportPayload: reportPayloadForReply,
-                  appendReportBubble: false,
-                })
-              : reportPayloadForReply.crystalGenericSafeV1
-                ? await buildCrystalGenericSafeSummaryFirstFlex(resultText, {
-                    birthdate,
-                    reportUrl,
-                    reportPayload: reportPayloadForReply,
-                    appendReportBubble: false,
-                  })
-                : await buildScanSummaryFirstFlex(resultText, {
-                    birthdate,
-                    reportUrl,
-                    reportPayload: reportPayloadForReply,
-                    appendReportBubble: false,
-                  });
+          ) {
+            try {
+              built = await buildMoldaviteSummaryFirstFlex(
+                resultText,
+                summaryShellOpts,
+              );
+            } catch (mvErr) {
+              console.log(
+                JSON.stringify({
+                  event: "MOLDAVITE_FLEX_BUILD_FAILED_FALLBACK_SUMMARY_FIRST",
+                  path: "worker-scan",
+                  jobIdPrefix: idPrefix8(jobId),
+                  message: String(mvErr?.message || mvErr).slice(0, 200),
+                }),
+              );
+              built = await buildScanSummaryFirstFlex(
+                resultText,
+                summaryShellOpts,
+              );
+            }
+          } else if (reportPayloadForReply?.crystalGenericSafeV1) {
+            built = await buildCrystalGenericSafeSummaryFirstFlex(
+              resultText,
+              summaryShellOpts,
+            );
+          } else {
+            built = await buildScanSummaryFirstFlex(
+              resultText,
+              summaryShellOpts,
+            );
+          }
           if (
             built &&
             typeof built === "object" &&
-            built.type === "flex"
+            /** @type {{ type?: string }} */ (built).type === "flex"
           ) {
             flex = built;
           } else {

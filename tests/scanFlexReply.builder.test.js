@@ -63,6 +63,32 @@ test("buildScanResultFlexWithFallback: summaryFirst on → summary builder", asy
   assert.equal(out.flex.contents.type, "bubble");
 });
 
+test("buildScanResultFlexWithFallback: moldaviteV1 → moldavite builder (not generic summary-first)", async () => {
+  const out = await buildScanResultFlexWithFallback(
+    {
+      summaryFirstEnabled: true,
+      resultText: SAMPLE_TEXT,
+      birthdate: null,
+      reportUrl: null,
+      reportPayload: { moldaviteV1: { version: "1" } },
+      appendReportBubble: false,
+    },
+    {
+      buildMoldaviteSummaryFirstFlex: async () => ({
+        type: "flex",
+        altText: "moldavite_shell",
+        contents: { type: "bubble" },
+      }),
+      buildScanSummaryFirstFlex: async () => {
+        throw new Error("should_not_call_summary_first_when_moldavite");
+      },
+      buildScanFlex: () => fakeLegacyFlex(),
+    },
+  );
+  assert.equal(out.summaryFirstBuildFailed, false);
+  assert.equal(out.flex.altText, "moldavite_shell");
+});
+
 test("buildScanResultFlexWithFallback: summary-first throws → legacy + flag", async () => {
   const out = await buildScanResultFlexWithFallback(
     {

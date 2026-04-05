@@ -106,7 +106,7 @@ function createLifeAreasRankingBlock(lifeAreas) {
         {
           type: "text",
           text: String(Math.round(r.score)),
-          size: "3xl",
+          size: "xxl",
           weight: "bold",
           color: MOLDAVITE_ACCENT,
           flex: 2,
@@ -120,22 +120,14 @@ function createLifeAreasRankingBlock(lifeAreas) {
   return {
     type: "box",
     layout: "vertical",
-    spacing: "none",
+    spacing: "md",
     margin: "md",
     paddingAll: "18px",
     borderWidth: "1px",
     borderColor: MOLDAVITE_BORDER_SUBTLE,
-    cornerRadius: "10px",
+    cornerRadius: "md",
     backgroundColor: FLEX_BOX_BG_ELEVATED,
-    contents: [
-      headerBlock,
-      {
-        type: "separator",
-        margin: "md",
-        color: MOLDAVITE_BORDER_SUBTLE,
-      },
-      ...rowBoxes,
-    ],
+    contents: [headerBlock, ...rowBoxes],
   };
 }
 
@@ -249,7 +241,7 @@ function createEnergyBadgePill(mainLabel) {
             paddingEnd: "20px",
             borderWidth: "1px",
             borderColor: MOLDAVITE_PILL_BORDER,
-            cornerRadius: "8px",
+            cornerRadius: "md",
             backgroundColor: MOLDAVITE_PILL_BG,
             contents: [
               {

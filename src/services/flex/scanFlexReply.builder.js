@@ -1,5 +1,7 @@
 import { buildScanFlex } from "./flex.service.js";
 import { buildScanSummaryFirstFlex } from "./flex.summaryFirst.js";
+import { buildMoldaviteSummaryFirstFlex } from "./flex.moldaviteSummary.js";
+import { buildCrystalGenericSafeSummaryFirstFlex } from "./flex.crystalGenericSafe.js";
 
 /**
  * Prefer `summary.energyCopyObjectFamily` (normalized slug) then diagnostics.
@@ -28,12 +30,22 @@ function objectFamilyFromReportPayload(reportPayload) {
  * @param {string|null} [options.reportUrl]
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} [options.reportPayload]
  * @param {boolean} [options.appendReportBubble]
- * @param {{ buildScanSummaryFirstFlex?: typeof buildScanSummaryFirstFlex, buildScanFlex?: typeof buildScanFlex }} [impl] test doubles
+ * @param {{
+ *   buildScanSummaryFirstFlex?: typeof buildScanSummaryFirstFlex,
+ *   buildMoldaviteSummaryFirstFlex?: typeof buildMoldaviteSummaryFirstFlex,
+ *   buildCrystalGenericSafeSummaryFirstFlex?: typeof buildCrystalGenericSafeSummaryFirstFlex,
+ *   buildScanFlex?: typeof buildScanFlex,
+ * }} [impl] test doubles
  * @returns {Promise<{ flex: Record<string, unknown>, summaryFirstBuildFailed: boolean, error?: unknown }>}
  */
 export async function buildScanResultFlexWithFallback(options, impl = {}) {
   const buildSummary =
     impl.buildScanSummaryFirstFlex ?? buildScanSummaryFirstFlex;
+  const buildMoldavite =
+    impl.buildMoldaviteSummaryFirstFlex ?? buildMoldaviteSummaryFirstFlex;
+  const buildCrystalSafe =
+    impl.buildCrystalGenericSafeSummaryFirstFlex ??
+    buildCrystalGenericSafeSummaryFirstFlex;
   const buildLegacy = impl.buildScanFlex ?? buildScanFlex;
 
   const {
@@ -47,6 +59,13 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
 
   const objectFamily = objectFamilyFromReportPayload(reportPayload);
 
+  const summaryOpts = {
+    birthdate,
+    reportUrl,
+    reportPayload,
+    appendReportBubble,
+  };
+
   if (!summaryFirstEnabled) {
     return {
       flex: buildLegacy(resultText, { birthdate, reportUrl, objectFamily }),
@@ -55,13 +74,16 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
   }
 
   try {
+    let flex;
+    if (reportPayload?.moldaviteV1) {
+      flex = await buildMoldavite(resultText, summaryOpts);
+    } else if (reportPayload?.crystalGenericSafeV1) {
+      flex = await buildCrystalSafe(resultText, summaryOpts);
+    } else {
+      flex = await buildSummary(resultText, summaryOpts);
+    }
     return {
-      flex: await buildSummary(resultText, {
-        birthdate,
-        reportUrl,
-        reportPayload,
-        appendReportBubble,
-      }),
+      flex,
       summaryFirstBuildFailed: false,
     };
   } catch (err) {
