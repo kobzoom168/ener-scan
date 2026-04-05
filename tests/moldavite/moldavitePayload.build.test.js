@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildMoldaviteV1Slice } from "../../src/moldavite/moldavitePayload.build.js";
 
-test("buildMoldaviteV1Slice: shape + deterministic_v1", () => {
+test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", () => {
   const slice = buildMoldaviteV1Slice({
     scanResultId: "rid-uuid-here",
     detection: { reason: "keyword_match", matchedSignals: ["result_text"] },
@@ -18,22 +18,29 @@ test("buildMoldaviteV1Slice: shape + deterministic_v1", () => {
   assert.ok(["work", "money", "relationship"].includes(slice.secondaryLifeArea));
   assert.notEqual(slice.primaryLifeArea, slice.secondaryLifeArea);
   assert.equal(slice.context?.energyScoreSnapshot, 7);
-  assert.ok(String(slice.flexSurface.headline).includes("มอลดาไวต์"));
+  assert.equal(String(slice.flexSurface.headline).trim(), "มอลดาไวต์");
+  assert.equal(slice.flexSurface.bullets.length, 0);
+  assert.equal(slice.flexSurface.mainEnergyShort, "เร่งการเปลี่ยนแปลง");
   assert.ok(
-    /เร่งการเปลี่ยนแปลง|เร่งรอบ|ปล่อยของเก่า|รอบใหม่/.test(
-      String(slice.flexSurface.headline),
+    String(slice.flexSurface.heroNamingLine || "").includes("มอลดาไวต์"),
+  );
+  assert.ok(
+    String(slice.flexSurface.heroNamingLine || "").includes("เร่งการเปลี่ยนแปลง"),
+  );
+  assert.ok(
+    String(slice.flexSurface.fitLine || "").includes(
+      slice.lifeAreas[slice.primaryLifeArea].labelThai,
     ),
-    "headline should be native-energy-first",
-  );
-  assert.equal(slice.flexSurface.bullets.length, 2);
-  assert.ok(
-    /เปลี่ยนแปลง|ขยับ|แปลงสภาพ|เริ่มใหม่/.test(slice.flexSurface.bullets[0]),
-    "first bullet should describe native energy",
+    "fit line should name primary life area directly",
   );
   assert.ok(
-    String(slice.flexSurface.bullets[1]).includes("มุมรอง"),
-    "second bullet should frame life-area as secondary",
+    String(slice.flexSurface.htmlOpeningLine || "").length > 40,
+    "htmlOpeningLine should carry deeper copy for HTML/report",
   );
-  assert.equal(slice.flexSurface.mainEnergyShort, "มอลดาไวต์");
-  assert.ok(String(slice.flexSurface.heroNamingLine || "").length > 0);
+  assert.ok(
+    /แปลงสภาพ|เคลื่อนไหว|เร่งการเปลี่ยนแปลง/.test(
+      String(slice.flexSurface.mainEnergyWordingLine || ""),
+    ),
+    "mainEnergyWordingLine should expand native-energy nuance for report body",
+  );
 });

@@ -1,71 +1,39 @@
-import { fnv1a32, computeMoldaviteLifeAreaScoresDeterministicV1 } from "./moldaviteScores.util.js";
+import { computeMoldaviteLifeAreaScoresDeterministicV1 } from "./moldaviteScores.util.js";
 
 /** @typedef {import("./moldaviteScores.util.js").MoldaviteLifeAreaKey} MoldaviteLifeAreaKey */
 
-const LIFE_AREA_THAI_SHORT = {
-  work: "งาน",
-  money: "การเงิน",
-  relationship: "ความสัมพันธ์",
-};
-
 /**
- * Native-energy-first Flex copy (transition / acceleration / movement).
- * Life-area lines are secondary — used only in the second bullet.
+ * Moldavite Flex v1 — summary-first: identity, main-energy label, life-area scores on Flex;
+ * deeper native-energy copy lives in htmlOpeningLine / mainEnergyWordingLine for HTML/report.
  *
  * @param {MoldaviteLifeAreaKey} primary
  * @param {MoldaviteLifeAreaKey} secondary
+ * @param {Record<MoldaviteLifeAreaKey, { key: MoldaviteLifeAreaKey, score: number, labelThai: string }>} lifeAreas
  */
-function buildFlexSurfaceCopy(primary, secondary) {
-  const pairKey = [primary, secondary].slice().sort().join("|");
-  const h = fnv1a32(`${pairKey}|moldavite_native_v2`);
+function buildFlexSurfaceCopy(primary, secondary, lifeAreas) {
+  const headline = "มอลดาไวต์";
+  const mainEnergyShort = "เร่งการเปลี่ยนแปลง";
+  const heroNamingLine = "มอลดาไวต์ — เร่งการเปลี่ยนแปลง";
 
-  const headlines = [
-    "มอลดาไวต์ — หินที่เด่นเรื่องการเร่งการเปลี่ยนแปลง",
-    "มอลดาไวต์ — พลังโทนเร่งรอบ ดันให้ของเดิมขยับ",
-    "มอลดาไวต์ — เข้ารอบใหม่ได้ไวขึ้นเมื่อพร้อมปล่อยของเก่า",
-  ];
-  const fitLines = [
-    "ช่วยดันให้สิ่งที่ค้างอยู่ขยับ — ไม่ใช่แค่พลังสงบ แต่เป็นการขยับต่อ",
-    "เหมาะกับช่วงที่ต้องตัดสินใจ ปล่อยของเดิม หรือเริ่มรอบใหม่",
-    "โทนเร่งจังหวะเปลี่ยน — จบของเดิมได้ไวขึ้นเมื่อใจพร้อม",
-  ];
-  const nativeBullets = [
-    "เด่นเรื่องการเร่งการเปลี่ยนแปลง — ดันให้เกิดการเคลื่อนไหวแทนการนิ่งเกินไป",
-    "ช่วยให้จุดที่ติดขัดขยับ — อ่านเป็นพลังแปลงสภาพ ไม่ใช่แค่คำปลอบใจทั่วไป",
-    "เหมาะใช้ในช่วงที่ต้องการเริ่มใหม่จริง ๆ ไม่ใช่แค่รอสิ่งดี ๆ มาเอง",
-  ];
+  const primaryLabel = String(lifeAreas[primary]?.labelThai || "").trim() || "งาน";
+  const secondaryLabel = String(lifeAreas[secondary]?.labelThai || "").trim() || "การเงิน";
 
-  const headline = headlines[h % headlines.length];
-  const fitLine = fitLines[(h >> 3) % fitLines.length];
-  const nativeBullet = nativeBullets[(h >> 6) % nativeBullets.length];
-
-  const projectionByPair = {
-    "money|relationship":
-      "ตอนนี้โทนนี้อาจสะท้อนไปที่เรื่องการเงินและความสัมพันธ์ได้ชัดในช่วงนี้ — เป็นมุมรอง ไม่ใช่ใจกลางของพลังชิ้นนี้",
-    "money|work":
-      "ตอนนี้โทนนี้อาจสะท้อนไปที่เรื่องงานและการเงินได้ชัดในช่วงนี้ — เป็นมุมรอง ไม่ใช่ใจกลางของพลังชิ้นนี้",
-    "relationship|work":
-      "ตอนนี้โทนนี้อาจสะท้อนไปที่เรื่องงานและความสัมพันธ์ได้ชัดในช่วงนี้ — เป็นมุมรอง ไม่ใช่ใจกลางของพลังชิ้นนี้",
-  };
-
-  const projectionLine =
-    projectionByPair[pairKey] ||
-    `ตอนนี้โทนนี้อาจไปแตะเรื่อง${LIFE_AREA_THAI_SHORT[primary]}และ${LIFE_AREA_THAI_SHORT[secondary]}มากเป็นพิเศษ — เป็นมุมรอง ไม่ใช่ใจกลางของพลังชิ้นนี้`;
-
-  const heroNamingLine = headline.includes(" — ")
-    ? headline.split(" — ").slice(1).join(" — ").trim()
-    : "หินที่เด่นเรื่องการเร่งการเปลี่ยนแปลง";
+  const fitLine = `ช่วงนี้ไปออกกับเรื่อง${primaryLabel}มากสุดก่อน ตามด้วย${secondaryLabel}`;
 
   const mainEnergyWordingLine =
-    "มอลดาไวต์ — หินเทคไทต์โทนเร่งการเปลี่ยนแปลง ดันให้สิ่งที่ค้างขยับและเข้ารอบใหม่ได้เร็วขึ้นเมื่อพร้อม";
+    "มอลดาไวต์ — หินเทคไทต์โทนเร่งการเปลี่ยนแปลง ช่วยดันให้สิ่งที่ค้างขยับ เข้ารอบใหม่ได้เร็วขึ้นเมื่อพร้อมปล่อยของเก่า พลังนี้เน้นการเคลื่อนไหวและแปลงสภาพ มากกว่าการนิ่งหรือปลอบใจอย่างเดียว";
+
+  const htmlOpeningLine =
+    "มอลดาไวต์เป็นหินเทคไทต์ที่มักถูกอ่านในมุมเร่งการเปลี่ยนแปลง — ช่วยให้จุดที่ติดขัดขยับ ปล่อยของเก่าได้ตรงจังหวะ และเริ่มรอบใหม่ได้เร็วขึ้นเมื่อใจพร้อม รายละเอียดการใช้ การอ่านเชิงลึก และข้อควรระวังอยู่ในรายงานฉบับเต็ม";
 
   return {
     headline,
     fitLine,
-    bullets: [nativeBullet, projectionLine],
-    mainEnergyShort: "มอลดาไวต์",
+    bullets: [],
+    mainEnergyShort,
     heroNamingLine,
     mainEnergyWordingLine,
+    htmlOpeningLine,
   };
 }
 
@@ -89,6 +57,7 @@ export function buildMoldaviteV1Slice({
   const flexSurface = buildFlexSurfaceCopy(
     scores.primaryLifeArea,
     scores.secondaryLifeArea,
+    scores.lifeAreas,
   );
 
   return {

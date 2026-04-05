@@ -24,14 +24,22 @@ const basePayload = {
     version: "1",
     scoringMode: "deterministic_v1",
     detection: { reason: "keyword_match", matchedSignals: ["result_text"] },
-    lifeAreas: {},
+    lifeAreas: {
+      work: { key: "work", score: 88, labelThai: "งาน" },
+      money: { key: "money", score: 76, labelThai: "การเงิน" },
+      relationship: {
+        key: "relationship",
+        score: 70,
+        labelThai: "ความสัมพันธ์",
+      },
+    },
     primaryLifeArea: "work",
     secondaryLifeArea: "money",
     flexSurface: {
-      headline: "มอลดาไวต์ — ทดสอบ",
+      headline: "มอลดาไวต์",
       fitLine: "บรรทัดรอง",
-      bullets: ["bullet 1", "bullet 2"],
-      mainEnergyShort: "มอลดาไวต์",
+      bullets: [],
+      mainEnergyShort: "เร่งการเปลี่ยนแปลง",
     },
   },
 };
@@ -59,6 +67,8 @@ test("buildMoldaviteSummaryFirstFlex: returns flex bubble without calling generi
   assert.equal(bubble.type, "bubble");
   assert.ok(bubble.hero);
   const bodyText = JSON.stringify(bubble.body);
-  assert.ok(bodyText.includes("มอลดาไวต์ — ทดสอบ"));
-  assert.ok(bodyText.includes("bullet 1"));
+  assert.ok(bodyText.includes("มอลดาไวต์"));
+  assert.ok(bodyText.includes("เร่งการเปลี่ยนแปลง"));
+  assert.ok(bodyText.includes("มิติที่โทนนี้ไปออกแรงสุด"));
+  assert.ok(bodyText.includes("งาน · 88"));
 });

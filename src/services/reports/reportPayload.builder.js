@@ -891,13 +891,13 @@ export async function buildReportPayloadFromScan(opts) {
   const summaryPresentationAngleId = crystalGenericSafeV1
     ? "crystal_generic_safe_v1"
     : moldaviteV1
-      ? "moldavite_v1_native_energy"
+      ? "moldavite_v1_summary_first"
       : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
 
   const summaryWordingVariantId = crystalGenericSafeV1
     ? "crystal_generic_safe_v1"
     : moldaviteV1
-      ? "moldavite_v1_native_energy"
+      ? "moldavite_v1_summary_first"
       : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
 
   const summaryVisibleMainLabel = crystalGenericSafeV1
@@ -1014,13 +1014,17 @@ export async function buildReportPayloadFromScan(opts) {
         ? {
             heroNaming: String(
               moldaviteV1.flexSurface.heroNamingLine ||
-                "หินที่เด่นเรื่องการเร่งการเปลี่ยนแปลง",
+                "มอลดาไวต์ — เร่งการเปลี่ยนแปลง",
             ).trim(),
             mainEnergy: String(
               moldaviteV1.flexSurface.mainEnergyWordingLine ||
                 "มอลดาไวต์ — หินเทคไทต์โทนเร่งการเปลี่ยนแปลง",
             ).trim(),
-            htmlOpeningLine: String(moldaviteV1.flexSurface.fitLine || "").trim(),
+            htmlOpeningLine: String(
+              moldaviteV1.flexSurface.htmlOpeningLine ||
+                moldaviteV1.flexSurface.mainEnergyWordingLine ||
+                "",
+            ).trim(),
           }
         : {}),
     },

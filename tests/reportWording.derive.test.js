@@ -174,7 +174,15 @@ test("buildReportPayloadFromScan: crystal fills empty whatItGives / bestUse from
   assert.ok(payload.sections.bestUseCases.length >= 1);
   assert.ok(payload.summary.headlineShort?.length > 3);
   assert.ok(payload.summary.fitReasonShort?.length > 3);
-  assert.equal(payload.summary.bulletsShort?.length, 2);
+  if (payload.moldaviteV1) {
+    assert.equal(
+      payload.summary.bulletsShort?.length,
+      0,
+      "Moldavite Flex v1 uses life-area score block instead of summary bullets",
+    );
+  } else {
+    assert.equal(payload.summary.bulletsShort?.length, 2);
+  }
 });
 
 test("buildReportPayloadFromScan attaches wording and canonical main energy", async () => {

@@ -23,6 +23,59 @@ function truncateEnergyBadgeLabel(text, maxLen = 14) {
   return s.length > maxLen ? s.slice(0, maxLen) : s;
 }
 
+const MAIN_ENERGY_PILL_MAX_LEN = 22;
+
+/**
+ * Life-area scores (งาน / การเงิน / ความสัมพันธ์), ranked high → low for quick scan.
+ * @param {Record<string, { score?: number, labelThai?: string }>|null|undefined} lifeAreas
+ */
+function createLifeAreasRankingBlock(lifeAreas) {
+  if (!lifeAreas || typeof lifeAreas !== "object") return null;
+  const orderKeys = /** @type {const} */ (["work", "money", "relationship"]);
+  /** @type {{ label: string, score: number }[]} */
+  const rows = [];
+  for (const k of orderKeys) {
+    const entry = lifeAreas[k];
+    if (!entry || typeof entry !== "object") continue;
+    const label = String(entry.labelThai || "").trim();
+    const score = entry.score;
+    if (!label || score == null || !Number.isFinite(Number(score))) continue;
+    rows.push({ label, score: Number(score) });
+  }
+  if (rows.length === 0) return null;
+  rows.sort((a, b) => b.score - a.score);
+
+  const contents = [
+    {
+      type: "text",
+      text: "มิติที่โทนนี้ไปออกแรงสุด (เรียงจากมากไปน้อย)",
+      size: "xs",
+      color: FLEX_TEXT_SECONDARY,
+      wrap: true,
+      margin: "none",
+    },
+  ];
+  for (const r of rows) {
+    contents.push({
+      type: "text",
+      text: `${r.label} · ${Math.round(r.score)}`,
+      size: "sm",
+      color: "#cccccc",
+      wrap: true,
+      margin: "xs",
+    });
+  }
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "none",
+    margin: "md",
+    paddingAll: "12px",
+    backgroundColor: FLEX_BOX_BG,
+    contents,
+  };
+}
+
 /**
  * @param {string} scoreDisplay
  * @param {string} compatPctStr
@@ -137,7 +190,10 @@ function createEnergyBadgePill(mainLabel) {
             contents: [
               {
                 type: "text",
-                text: truncateEnergyBadgeLabel(String(mainLabel || "-").trim()),
+                text: truncateEnergyBadgeLabel(
+                  String(mainLabel || "-").trim(),
+                  MAIN_ENERGY_PILL_MAX_LEN,
+                ),
                 size: "sm",
                 weight: "bold",
                 color: FLEX_BADGE_AND_SCORE_GOLD,
@@ -211,13 +267,16 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
         .slice(0, 2)
     : [];
   const mainPill =
-    String(mv.flexSurface?.mainEnergyShort || "").trim() || "มอลดาไวต์";
+    String(mv.flexSurface?.mainEnergyShort || "").trim() ||
+    "เร่งการเปลี่ยนแปลง";
 
   const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
   const heroOk = /^https:\/\//i.test(imgUrl);
   const url = String(reportUrl || "").trim();
 
-  const altMain = mainPill;
+  const lifeAreasBlock = createLifeAreasRankingBlock(mv.lifeAreas);
+
+  const altMain = headlineText.split("\n")[0].trim() || "มอลดาไวต์";
   const altText = buildScanFlexAltText({
     mainEnergyLabel: altMain,
     scoreDisplay: score.display || "-",
@@ -230,7 +289,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       scanCopyConfigVersion: SCAN_COPY_CONFIG_VERSION,
       scoringMode: mv.scoringMode,
       moldaviteVersion: mv.version,
-      flexHeroCopySource: "moldavite_v1_slice",
+      flexHeroCopySource: "moldavite_v1_summary_first",
       appendReportBubbleLegacyIgnored: Boolean(options.appendReportBubble),
     }),
   );
@@ -280,6 +339,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       compatBandStr,
     ),
     createEnergyBadgePill(mainPill),
+    ...(lifeAreasBlock ? [lifeAreasBlock] : []),
     ...(fitBlock ? [fitBlock] : []),
     ...(bulletRows.length > 0
       ? [
