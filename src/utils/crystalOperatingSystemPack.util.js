@@ -1,7 +1,7 @@
 /**
  * Crystal quality operating system pack — unified review stack (offline).
  * **Maps** existing annual + capability packs; does not replace them.
- * See `docs/ops/crystal-operating-system-pack.md`.
+ * Phase 16.1 — repo-reality layers only (see `docs/ops/crystal-operating-system-pack.md`).
  *
  * @module crystalOperatingSystemPack.util
  */
@@ -12,7 +12,8 @@ import {
   buildCrystalCapabilityMaturityRoadmapPack,
 } from "./crystalCapabilityMaturityRoadmapPack.util.js";
 
-export const OS_REVIEW_PACK_VERSION = "1";
+/** @type {const} Repo-reality pack semver for OS map output. */
+export const OS_REVIEW_PACK_VERSION = "1.1";
 
 /** @typedef {"missing"|"partial"|"working"|"strong"} ControlStatus */
 
@@ -86,7 +87,11 @@ function resolveCapabilityPack(inputs, annual, options) {
  * @param {object} capability
  * @param {object} inputs
  */
-function buildLayers(annual, capability, inputs) {
+/**
+ * Repo-reality stack: telemetry → diagnostics → mismatch → annual → capability; optional historical **only** if input has a ref.
+ * Release/playbook docs and weekly/monthly generators are **not** separate layers here — they are referenced in continuity breakpoints and `docReferences`.
+ */
+function buildReviewLayers(annual, capability, inputs) {
   const hasAnnual = !!(annual && Object.keys(annual).length);
   const hasCap = !!(capability && Object.keys(capability).length);
   const rel = (annual?.releaseSignalsInput || []).length;
@@ -95,17 +100,9 @@ function buildLayers(annual, capability, inputs) {
   const mismatchCount = (annual?.topRecurringMismatchTypes || []).length;
   const anomalyCount = (annual?.topRecurringAnomalies || []).length;
 
-  const optWeekly = inputs.weeklyReviewSummaryRefs;
-  const optMonthly = inputs.monthlyScorecardSummaryRefs;
-  const optQuarterly = inputs.quarterlyReviewSummaryRefs;
   const optMulti = inputs.multiYearHistoryPackReference ?? inputs.multiYearHistoryPack;
 
-  const optionalHistoricalNote =
-    optMulti != null
-      ? "Optional multi-year reference present in input."
-      : "No multi-year history pack in repo util yet — pass `multiYearHistoryPackReference` for narrative only.";
-
-  return [
+  const core = [
     {
       layerId: "telemetry_layer",
       layerTitle: "Telemetry layer (report payload)",
@@ -134,8 +131,8 @@ function buildLayers(annual, capability, inputs) {
       primaryQuestionsAnswered: ["Why was this copy chosen?", "Where might wording drift appear?"],
       consumers: ["Mismatch metrics layer", "Review playbooks"],
       currentStatus:
-        "Code + tests exist (`visibleWording*` / flex surfaces); this OS pack references docs only unless annual encodes wording KPIs.",
-      knownGaps: ["Automated wording QA is not fully represented in a single JSON artifact without monthly inputs."],
+        "Code + tests exist (`visibleWording*` / flex); OS pack references docs unless annual encodes wording KPIs.",
+      knownGaps: ["Single JSON artifact for wording QA still depends on monthly rollups in practice."],
     },
     {
       layerId: "mismatch_metrics_layer",
@@ -148,50 +145,24 @@ function buildLayers(annual, capability, inputs) {
       currentStatus: hasAnnual
         ? `Annual lists ${mismatchCount} recurring mismatch type rows and ${anomalyCount} anomaly groupings (submitted window).`
         : "Mismatch metrics not anchored to an annual export in this run.",
-      knownGaps: ["Taxonomy semantics are defined in product docs — this pack does not alter them."],
-    },
-    {
-      layerId: "release_review_docs_layer",
-      layerTitle: "Release / review documentation",
-      role: "Human gate checklists and post-deploy review templates.",
-      primaryInputs: ["`docs/ops/crystal-release-gate-checklist.md`", "`docs/ops/crystal-post-deploy-review.md`"],
-      primaryOutputs: ["Checklist artifacts", "Manual review notes"],
-      primaryQuestionsAnswered: ["Did release process cover crystal surfaces?", "What to verify after deploy?"],
-      consumers: ["Release managers", "Annual `releaseSignalsInput` when provided"],
-      currentStatus:
-        rel > 0
-          ? `Annual pack includes ${rel} release signal row(s) — linkage to cadence is explicit in JSON.`
-          : "No `releaseSignals` in annual input — release-to-review linkage is documentation-only unless you attach signals.",
-      knownGaps: ["Automated deploy-to-metric correlation is not in this offline pack."],
-    },
-    {
-      layerId: "weekly_monthly_review_layer",
-      layerTitle: "Weekly / monthly / quarterly review generators",
-      role: "Rolling digest layers feeding half-year and annual aggregates.",
-      primaryInputs: ["Monthly rollups", "Weekly review JSON", "Quarterly pack inputs"],
-      primaryOutputs: ["`buildCrystalMonthlyScorecard`", "`buildCrystalQuarterlyReviewPack`", "Weekly review packs"],
-      primaryQuestionsAnswered: ["How did this month trend?", "What escalations appeared before year-end?"],
-      consumers: ["Half-year business review", "Annual operating review"],
-      currentStatus:
-        Array.isArray(optMonthly) || Array.isArray(optQuarterly) || Array.isArray(optWeekly)
-          ? "Optional summary refs provided — treat as pointers to external files."
-          : "No weekly/monthly/quarterly summary refs in input — continuity assumes repo generators were run elsewhere.",
-      knownGaps: [
-        "Stitching lower layers is manual unless you attach refs or embed packs in future versions.",
-      ],
+      knownGaps: ["Taxonomy semantics are fixed in product docs — this pack does not alter them."],
     },
     {
       layerId: "annual_operating_review_layer",
       layerTitle: "Annual operating review pack",
-      role: "Year narrative, KPI pack, recurring anomalies, ops status.",
+      role: "Year narrative, KPI pack, recurring anomalies, ops status; optional `releaseSignals` → `releaseSignalsInput`.",
       primaryInputs: ["Two half-years or 12 months", "Optional `releaseSignals`"],
       primaryOutputs: ["`buildCrystalAnnualOperatingReviewPack` JSON", "Executive / operating summaries"],
-      primaryQuestionsAnswered: ["Was the year healthy?", "What patterns recurred?"],
+      primaryQuestionsAnswered: ["Was the year healthy?", "What patterns recurred?", "What release cadence notes exist?"],
       consumers: ["Leadership readout", "Capability maturity pack (source)"],
       currentStatus: hasAnnual
-        ? `Present (annual v${ANNUAL_REVIEW_PACK_VERSION}). Status: ${str(annual?.annualStatus)}; band: ${str(annual?.annualScoreBand)}.`
+        ? `Present (annual v${ANNUAL_REVIEW_PACK_VERSION}). Status: ${str(annual?.annualStatus)}; band: ${str(annual?.annualScoreBand)}. Release signals in JSON: ${rel}.`
         : "Missing — provide `annualOperatingReviewPack` or `halfYears`/`months`.",
-      knownGaps: hasAnnual ? [] : ["Without annual JSON, upper layers lack authoritative KPI anchors."],
+      knownGaps: hasAnnual
+        ? rel === 0
+          ? ["No `releaseSignals` in annual input — use `docs/ops/crystal-release-gate-checklist.md` manually."]
+          : []
+        : ["Without annual JSON, upper layers lack authoritative KPI anchors."],
     },
     {
       layerId: "capability_maturity_roadmap_layer",
@@ -200,7 +171,7 @@ function buildLayers(annual, capability, inputs) {
       primaryInputs: ["Annual operating review pack (preferred)", "Optional evidence snapshot"],
       primaryOutputs: ["`buildCrystalCapabilityMaturityRoadmapPack` JSON"],
       primaryQuestionsAnswered: ["Where are we fragile?", "What should we fund next?"],
-      consumers: ["Operating planning", "This unified OS pack"],
+      consumers: ["Operating planning", "Operating system pack"],
       currentStatus: hasCap
         ? `Present (maturity v${MATURITY_REVIEW_PACK_VERSION}). Overall ${str(capability?.overallMaturityLevel)} (${str(capability?.overallMaturityBand)}). ${capNote}`
         : "Not available — capability builder returned empty.",
@@ -209,16 +180,22 @@ function buildLayers(annual, capability, inputs) {
         hasAnnual ? "" : "Capability without full annual relies on snapshot heuristics.",
       ].filter(Boolean),
     },
+  ];
+
+  if (optMulti == null) return core;
+
+  return [
+    ...core,
     {
       layerId: "optional_historical_layers",
-      layerTitle: "Optional historical / multi-year references",
-      role: "Long-horizon context when a multi-year pack exists or is referenced.",
-      primaryInputs: ["`multiYearHistoryPackReference` (optional passthrough)"],
-      primaryOutputs: ["Narrative comparison — not generated here"],
+      layerTitle: "Optional historical / external input",
+      role: "Passthrough only — **no** `buildCrystalMultiYearHistoryPack` in this repo.",
+      primaryInputs: ["`multiYearHistoryPackReference` (optional)"],
+      primaryOutputs: ["Narrative pointer — not generated here"],
       primaryQuestionsAnswered: ["How does this year compare to prior eras?"],
-      consumers: ["Strategic reviews"],
-      currentStatus: optionalHistoricalNote,
-      knownGaps: ["No `buildCrystalMultiYearHistoryPack` in repo — reference-only."],
+      consumers: ["Strategic reviews (manual)"],
+      currentStatus: "Optional external reference present in input — treat as documentation-only.",
+      knownGaps: ["Not implemented as a util in-repo; do not assume automated history pack."],
     },
   ];
 }
@@ -242,7 +219,6 @@ function buildControls(annual, capability, inputs) {
   const capReuse = hasCap && capabilityReusesAnnualEmbedded(capability);
   const routing = capability?.domainAssessments?.find((d) => d.domainId === "routing_stability");
   const wording = capability?.domainAssessments?.find((d) => d.domainId === "wording_quality");
-  const releaseDom = capability?.domainAssessments?.find((d) => d.domainId === "release_change_safety");
 
   /** @param {ControlStatus} st */
   function ctl(controlId, controlTitle, status, summary, evidence, gaps, nextUpgrade) {
@@ -476,7 +452,7 @@ function buildExecSummary(pack, ctx) {
       "Manual stitching of weekly/monthly exports if refs omitted.",
     ),
     top3RecommendedMoves: pad3(
-      pack.recommendedLinkageUpgrades || [],
+      pack.recommendedSystemImprovements || [],
       "Import annual + capability JSON together each cycle.",
     ),
     methodNote: "Summaries derive from annual/capability fields and control map — not independent audits.",
@@ -505,7 +481,7 @@ function buildOpSummary(pack, ctx) {
       "Attach lower-layer refs when running a formal ops review.",
     ),
     topOperationalNextActions: pad3(
-      pack.evidenceUpgradeSuggestions || [],
+      pack.recommendedSystemImprovements || [],
       "Version-control JSON exports alongside this markdown.",
     ),
     methodNote: "Operational lines mirror breakpoints and control statuses — same evidence as continuity section.",
@@ -513,12 +489,12 @@ function buildOpSummary(pack, ctx) {
 }
 
 function buildSystemSummary(pack) {
-  const layers = pack.unifiedReviewStack?.layers || [];
-  const high = layers.filter((l) => /present|Optional multi-year|carry KPI|includes .* release signal/i.test(l.currentStatus)).slice(0, 3);
+  const layers = pack.reviewLayers || [];
+  const high = layers.filter((l) => /Present|carry KPI|release signals|external reference|maturity v/i.test(l.currentStatus)).slice(0, 3);
   return {
     systemSummaryHeadline: "System view: layered review stack (telemetry → diagnostics → metrics → docs → rolling reviews → annual → capability).",
     systemSummaryBody: [
-      `Unified stack lists **${layers.length}** conceptual layers; optional historical is reference-only until a multi-year util lands.`,
+      `Review layer list has **${layers.length}** entries (optional historical appears only when \`multiYearHistoryPackReference\` is set).`,
       `Control map covers telemetry, traceability, mismatch, annual, capability, release, and continuity.`,
     ].join(" "),
     top3UnifiedStackHighlights: pad3(
@@ -529,7 +505,7 @@ function buildSystemSummary(pack) {
       (pack.operatingControlMap || []).filter((c) => c.status === "partial" || c.status === "missing").map((c) => `${c.controlTitle}: ${c.status}`),
       "Partial controls are expected when annual JSON is incomplete.",
     ),
-    top3LinkageUpgrades: pad3(pack.recommendedLinkageUpgrades || [], "None — linkage acceptable."),
+    top3LinkageUpgrades: pad3(pack.recommendedSystemImprovements || [], "None — linkage acceptable."),
     methodNote: "System summary is structural — it does not certify production SLOs.",
   };
 }
@@ -538,7 +514,8 @@ function buildSystemSummary(pack) {
  * @param {object} pack
  */
 export function buildCrystalUnifiedReviewStack(pack) {
-  return pack.unifiedReviewStack || { layers: [] };
+  const layers = pack.reviewLayers || pack.unifiedReviewStack?.layers || [];
+  return { layers };
 }
 
 /**
@@ -562,11 +539,15 @@ export function buildCrystalOperatingSystemPack(inputs, options = {}) {
   const assessmentWindowStart = str(raw.assessmentWindowStart || annual?.yearWindowStart || capability?.assessmentWindowStart);
   const assessmentWindowEnd = str(raw.assessmentWindowEnd || annual?.yearWindowEnd || capability?.assessmentWindowEnd);
 
-  const layers = buildLayers(annual, capability, raw);
+  const reviewLayers = buildReviewLayers(annual, capability, raw);
   const operatingControlMap = buildControls(annual, capability, raw);
 
   const cont = assessEvidenceContinuity(annual, capability, raw);
   const link = assessLinkage(annual, capability, raw);
+
+  const recommendedSystemImprovements = [
+    ...new Set([...(cont.evidenceUpgradeSuggestions || []), ...(link.recommendedLinkageUpgrades || [])]),
+  ];
 
   const pack = {
     reviewPackVersion: OS_REVIEW_PACK_VERSION,
@@ -577,8 +558,11 @@ export function buildCrystalOperatingSystemPack(inputs, options = {}) {
     capabilityMaturityRoadmapPackVersion: capability ? MATURITY_REVIEW_PACK_VERSION : null,
     annualPackPresent: !!annual,
     capabilityPackPresent: !!capability,
-    unifiedReviewStack: { layers },
+    reviewLayers,
+    /** @deprecated Prefer `reviewLayers`; kept for callers expecting `{ layers }`. */
+    unifiedReviewStack: { layers: reviewLayers },
     operatingControlMap,
+    recommendedSystemImprovements,
     evidenceContinuityStatus: cont.evidenceContinuityStatus,
     evidenceContinuitySummary: cont.evidenceContinuitySummary,
     evidenceBreakpoints: cont.evidenceBreakpoints,
@@ -654,11 +638,11 @@ export function renderCrystalOperatingSystemPackMarkdown(pack) {
   lines.push(`> ${w(ex.methodNote)}`);
   lines.push("");
 
-  lines.push("## Unified review stack overview");
+  lines.push("## Review layers");
   lines.push("");
   lines.push("| Layer | Role | Status (this export) |");
   lines.push("|-------|------|----------------------|");
-  for (const l of pack.unifiedReviewStack?.layers || []) {
+  for (const l of pack.reviewLayers || []) {
     lines.push(`| ${l.layerTitle} | ${l.role} | ${l.currentStatus.replace(/\|/g, "\\|")} |`);
   }
   lines.push("");
@@ -728,8 +712,7 @@ export function renderCrystalOperatingSystemPackMarkdown(pack) {
 
   lines.push("## Recommended system improvements");
   lines.push("");
-  for (const b of pack.evidenceUpgradeSuggestions || []) lines.push(`- ${b}`);
-  for (const b of pack.recommendedLinkageUpgrades || []) lines.push(`- ${b}`);
+  for (const b of pack.recommendedSystemImprovements || []) lines.push(`- ${b}`);
   lines.push("");
 
   lines.push("## Appendix");
@@ -745,7 +728,7 @@ export function renderCrystalOperatingSystemPackMarkdown(pack) {
   lines.push("```");
   lines.push("");
   lines.push("### Layer detail (primary questions)");
-  for (const l of pack.unifiedReviewStack?.layers || []) {
+  for (const l of pack.reviewLayers || []) {
     lines.push(`#### ${l.layerTitle}`);
     lines.push("");
     lines.push(`- **Consumers:** ${l.consumers.join("; ")}`);

@@ -68,7 +68,7 @@ test("layer map shape stable", () => {
   const p = buildCrystalOperatingSystemPack(OS_INPUT_STRONG_STACK());
   const stack = buildCrystalUnifiedReviewStack(p);
   assert.ok(Array.isArray(stack.layers));
-  assert.equal(stack.layers.length, 8);
+  assert.equal(stack.layers.length, 5);
   for (const l of stack.layers) {
     for (const k of [
       "layerId",
@@ -115,7 +115,7 @@ test("markdown: required sections", () => {
   for (const s of [
     "## Header",
     "## Executive summary",
-    "## Unified review stack overview",
+    "## Review layers",
     "## Operating control map",
     "## Evidence continuity",
     "## Release / review / roadmap linkage",
@@ -128,6 +128,18 @@ test("markdown: required sections", () => {
 
 test("table-driven: capability helpers mirror pack fields", () => {
   const p = buildCrystalOperatingSystemPack(OS_INPUT_STRONG_STACK());
-  assert.deepEqual(buildCrystalUnifiedReviewStack(p), p.unifiedReviewStack);
+  assert.deepEqual(buildCrystalUnifiedReviewStack(p), { layers: p.reviewLayers });
+  assert.deepEqual(p.unifiedReviewStack.layers, p.reviewLayers);
   assert.deepEqual(buildCrystalOperatingControlMap(p).controls, p.operatingControlMap);
+  assert.ok(Array.isArray(p.recommendedSystemImprovements));
+});
+
+test("optional historical layer only when multiYear reference present", () => {
+  const base = OS_INPUT_STRONG_STACK();
+  const p = buildCrystalOperatingSystemPack({
+    ...base,
+    multiYearHistoryPackReference: { note: "external digest only", yearSpan: "2024-2026" },
+  });
+  assert.equal(p.reviewLayers.length, 6);
+  assert.ok(p.reviewLayers.some((l) => l.layerId === "optional_historical_layers"));
 });

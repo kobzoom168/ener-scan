@@ -1,0 +1,262 @@
+{
+  "linterVersion": "1.0",
+  "reviewPackVersion": "1",
+  "requiredFieldsByArtifact": {
+    "artifact_manifest": [
+      "manifestVersion",
+      "reviewPackVersion",
+      "artifacts",
+      "generationOrder",
+      "dependencyGraph"
+    ],
+    "annual_operating_review_pack": [
+      "reviewPackVersion",
+      "yearWindowStart",
+      "yearWindowEnd",
+      "annualStatus",
+      "annualKpis",
+      "executiveSummary",
+      "operatingSummary"
+    ],
+    "capability_maturity_roadmap_pack": [
+      "reviewPackVersion",
+      "overallMaturityLevel",
+      "domainAssessments",
+      "executiveSummary",
+      "operatingRoadmap"
+    ],
+    "operating_system_pack": [
+      "reviewPackVersion",
+      "reviewLayers",
+      "operatingControlMap",
+      "executiveSummary",
+      "evidenceContinuityStatus"
+    ],
+    "review_automation_pack": [
+      "reviewPackVersion",
+      "artifactPipelineStages",
+      "generationOrder",
+      "executiveSummary"
+    ],
+    "artifact_ci_spec": [
+      "ciSpecVersion",
+      "reviewPackVersion",
+      "validationChecks",
+      "jobs",
+      "jobOrder"
+    ]
+  },
+  "versionFields": {
+    "artifact_manifest": [
+      "manifestVersion",
+      "reviewPackVersion"
+    ],
+    "annual_operating_review_pack": [
+      "reviewPackVersion"
+    ],
+    "capability_maturity_roadmap_pack": [
+      "reviewPackVersion"
+    ],
+    "operating_system_pack": [
+      "reviewPackVersion"
+    ],
+    "review_automation_pack": [
+      "reviewPackVersion"
+    ],
+    "artifact_ci_spec": [
+      "ciSpecVersion",
+      "reviewPackVersion"
+    ],
+    "multi_year_history_external": []
+  },
+  "artifactSchemas": [
+    {
+      "artifactId": "artifact_manifest",
+      "title": "Artifact manifest",
+      "contractKind": "machine_json",
+      "notes": "Output of buildCrystalArtifactManifest; lists artifacts and dependency graph."
+    },
+    {
+      "artifactId": "annual_operating_review_pack",
+      "title": "Annual operating review pack",
+      "contractKind": "machine_json",
+      "notes": "Output of buildCrystalAnnualOperatingReviewPack."
+    },
+    {
+      "artifactId": "capability_maturity_roadmap_pack",
+      "title": "Capability maturity roadmap pack",
+      "contractKind": "machine_json",
+      "notes": "Output of buildCrystalCapabilityMaturityRoadmapPack."
+    },
+    {
+      "artifactId": "operating_system_pack",
+      "title": "Operating system pack",
+      "contractKind": "machine_json",
+      "notes": "Output of buildCrystalOperatingSystemPack."
+    },
+    {
+      "artifactId": "review_automation_pack",
+      "title": "Review automation pack",
+      "contractKind": "machine_json",
+      "notes": "Output of buildCrystalReviewAutomationPack."
+    },
+    {
+      "artifactId": "artifact_ci_spec",
+      "title": "Artifact CI validation spec",
+      "contractKind": "machine_json",
+      "notes": "Output of buildCrystalArtifactCiSpec."
+    },
+    {
+      "artifactId": "multi_year_history_external",
+      "title": "Multi-year history",
+      "contractKind": "external_or_future",
+      "notes": "No in-repo util — do not lint object shape; listed for coverage only."
+    }
+  ],
+  "knownKeySets": {
+    "artifact_manifest": [
+      "manifestVersion",
+      "reviewPackVersion",
+      "generatedAt",
+      "artifacts",
+      "generationOrder",
+      "dependencyGraph",
+      "artifactContracts",
+      "artifactStatuses",
+      "ciReadinessStatus",
+      "ciReadinessSummary",
+      "manualArtifactsRemaining",
+      "recommendedManifestUpgrades",
+      "automationPackRef",
+      "methodNote"
+    ],
+    "annual_operating_review_pack": [
+      "reviewPackVersion",
+      "yearWindowStart",
+      "yearWindowEnd",
+      "generatedAt",
+      "monthsIncluded",
+      "quartersIncluded",
+      "halfYearsIncluded",
+      "annualStatus",
+      "overallAnnualQualityScore",
+      "annualScoreBand",
+      "annualKpis",
+      "monthlyStatusDistribution",
+      "quarterlyStatusDistribution",
+      "halfYearStatusDistribution",
+      "monthlyScoreDistribution",
+      "quarterlyScoreDistribution",
+      "halfYearScoreDistribution",
+      "topRecurringAnomalies",
+      "topRecurringMismatchTypes",
+      "topRecurringRoutingRuleIds",
+      "topRecurringDecisionSources",
+      "topOperatingRiskAreas",
+      "usageDropMonths",
+      "multiPeriodFallbackHeavy",
+      "watchEscalateHalfYearPattern",
+      "halfYearRecaps",
+      "quarterRecaps",
+      "monthByMonthRecap",
+      "releaseSignalsInput",
+      "focusAreasNextYear",
+      "executiveSummary",
+      "operatingSummary",
+      "recommendations",
+      "annualKpiPack",
+      "methodNote"
+    ],
+    "capability_maturity_roadmap_pack": [
+      "reviewPackVersion",
+      "assessmentWindowStart",
+      "assessmentWindowEnd",
+      "generatedAt",
+      "overallMaturityLevel",
+      "overallMaturityBand",
+      "domainAssessments",
+      "strengths",
+      "gaps",
+      "evidenceBackedRisks",
+      "operatingRoadmap",
+      "roadmapPriorities",
+      "quickWins",
+      "foundationInvestments",
+      "scaleUpInvestments",
+      "executiveSummary",
+      "operatingSummary",
+      "roadmapSummary",
+      "recommendations",
+      "evidenceSourceNote",
+      "multiYearHistoryPackReference",
+      "methodNote"
+    ],
+    "operating_system_pack": [
+      "reviewPackVersion",
+      "generatedAt",
+      "assessmentWindowStart",
+      "assessmentWindowEnd",
+      "annualOperatingReviewPackVersion",
+      "capabilityMaturityRoadmapPackVersion",
+      "annualPackPresent",
+      "capabilityPackPresent",
+      "reviewLayers",
+      "unifiedReviewStack",
+      "operatingControlMap",
+      "recommendedSystemImprovements",
+      "evidenceContinuityStatus",
+      "evidenceContinuitySummary",
+      "evidenceBreakpoints",
+      "evidenceStrengths",
+      "evidenceUpgradeSuggestions",
+      "releaseReviewLinkageStatus",
+      "roadmapLinkageStatus",
+      "linkageStrengths",
+      "linkageGaps",
+      "recommendedLinkageUpgrades",
+      "optionalLayerReferences",
+      "docReferences",
+      "executiveSummary",
+      "operatingSummary",
+      "systemSummary",
+      "methodNote"
+    ],
+    "review_automation_pack": [
+      "reviewPackVersion",
+      "generatedAt",
+      "assessmentWindowStart",
+      "assessmentWindowEnd",
+      "operatingSystemPackVersion",
+      "artifactPipelineStages",
+      "artifactDependencies",
+      "artifactContracts",
+      "generationOrder",
+      "automationReadinessStatus",
+      "automationReadinessSummary",
+      "manualStepsRemaining",
+      "automationGaps",
+      "recommendedPipelineUpgrades",
+      "executiveSummary",
+      "operatingSummary",
+      "pipelineSummary",
+      "methodNote"
+    ],
+    "artifact_ci_spec": [
+      "ciSpecVersion",
+      "reviewPackVersion",
+      "generatedAt",
+      "jobs",
+      "jobOrder",
+      "validationChecks",
+      "failHardChecks",
+      "failSoftChecks",
+      "manualFollowups",
+      "artifactCoverageSummary",
+      "ciReadinessStatus",
+      "ciReadinessSummary",
+      "recommendedNextCiUpgrades",
+      "manifestRef",
+      "methodNote"
+    ]
+  }
+}

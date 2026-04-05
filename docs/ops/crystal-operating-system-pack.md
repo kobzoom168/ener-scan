@@ -1,71 +1,60 @@
-# Crystal quality operating system pack (unified review stack)
+# Crystal quality operating system pack (Phase 16.1 — repo reality)
 
 ## Purpose
 
-Phase 16 adds a **mapping layer** on top of artifacts that already exist in the repo. It answers:
+This is a **mapping layer only** on top of what exists in `main` today:
 
-- Which **review artifacts** exist (telemetry → rolling reviews → annual → capability).
-- Which **layer** is diagnostics vs metrics vs annual vs capability roadmap.
-- How strong **evidence continuity** and **linkage** are between annual JSON, capability output, and optional lower-layer references.
-- Where **control gaps** remain (manual stitching, missing `releaseSignals`, snapshot-only capability).
+- `buildCrystalAnnualOperatingReviewPack`
+- `buildCrystalCapabilityMaturityRoadmapPack`
+- Routing/wording telemetry + mismatch metrics (docs + KPI fields that flow into monthly → annual)
 
-This pack **does not** replace `buildCrystalAnnualOperatingReviewPack` or `buildCrystalCapabilityMaturityRoadmapPack`, and **does not** change routing, visible wording, or mismatch taxonomy semantics.
+It does **not** replace those utilities, does **not** query production, and does **not** change routing, visible wording, or mismatch taxonomy semantics.
 
-## Expected inputs (code reality)
+## Review layers (canonical)
 
-Provide a JSON object. Typical shapes:
+The pack exposes **`reviewLayers`** — **five** core layers in all runs:
 
-1. **Full chain (recommended)**  
-   - `annualOperatingReviewPack`: output of `buildCrystalAnnualOperatingReviewPack`  
-   - `capabilityMaturityRoadmapPack`: output of `buildCrystalCapabilityMaturityRoadmapPack` (usually generated with the same annual embedded), **or** omit and let this util call the capability builder using the same annual.
+1. **Telemetry layer** — report-payload / routing telemetry contract (`docs/crystal-routing-telemetry-mapping.md`).
+2. **Diagnostics layer** — visible wording diagnostics (code + tests in-repo).
+3. **Mismatch metrics layer** — routing vs wording mismatch (`docs/crystal-routing-wording-mismatch-metrics.md` → annual rollups).
+4. **Annual operating review layer** — `buildCrystalAnnualOperatingReviewPack` JSON (optional `releaseSignals` → `releaseSignalsInput`).
+5. **Capability maturity / roadmap layer** — `buildCrystalCapabilityMaturityRoadmapPack` JSON.
 
-2. **Generators only**  
-   - `halfYears` or `months` + `yearWindowStart` / `yearWindowEnd` + optional `releaseSignals` — annual is built first; capability is built with `annualOperatingReviewPack` set internally.
+A **sixth** layer, **optional historical / external input**, appears **only** when `multiYearHistoryPackReference` (or `multiYearHistoryPack`) is present in the input. There is **no** multi-year generator util in-repo — the layer is explicitly **external / passthrough**.
 
-3. **Snapshot-only capability path** (weaker evidence)  
-   - `evidenceSnapshot` per capability util — annual may be absent; continuity is marked **partial** or **weak**.
+Release checklists and weekly/monthly/quarterly generators are **not** separate layers here; they are referenced in `docReferences`, continuity breakpoints, and annual release-signal fields.
 
-Optional passthrough (not validated):
+`unifiedReviewStack.layers` is **deprecated** but still populated as an alias of `reviewLayers` for older callers.
 
-- `weeklyReviewSummaryRefs`, `monthlyScorecardSummaryRefs`, `quarterlyReviewSummaryRefs` — file paths or labels for human traceability.
-- `multiYearHistoryPackReference` — narrative only; there is **no** `buildCrystalMultiYearHistoryPack` in-repo yet.
+## Expected inputs
 
-## How annual and capability feed the system pack
+1. **Full chain:** `annualOperatingReviewPack` + `capabilityMaturityRoadmapPack`, or omit capability and pass the same inputs the capability util accepts so it can be built from the annual.
+2. **Generators only:** `halfYears` or `months` + year window + optional `releaseSignals`.
+3. **Snapshot-only capability:** `evidenceSnapshot` without full annual — weaker continuity.
 
-- **Annual** is the KPI and recurring-pattern anchor (`annualKpis`, `topRecurringAnomalies`, `topRecurringMismatchTypes`, `releaseSignalsInput`).
-- **Capability** reuses annual when `evidenceSourceNote` matches the string produced by `buildCrystalCapabilityMaturityRoadmapPack` for embedded annual (`Built from embedded or generated annual operating review pack.`).
-- The operating system pack **reads** both objects and fills the unified stack + control map + linkage sections. It performs **no** extra aggregation of monthly data beyond what those builders already did.
+Optional: `weeklyReviewSummaryRefs`, `monthlyScorecardSummaryRefs`, `quarterlyReviewSummaryRefs`, `multiYearHistoryPackReference`.
 
-## Output fields (summary)
+## Must-have output fields
 
-| Area | Fields |
-|------|--------|
-| Meta | `reviewPackVersion`, `generatedAt`, `assessmentWindowStart` / `End`, `annualPackPresent`, `capabilityPackPresent` |
-| Stack | `unifiedReviewStack.layers[]` — layer id, title, role, inputs/outputs, questions, consumers, `currentStatus`, `knownGaps` |
-| Controls | `operatingControlMap[]` — `controlId`, `status` (`missing` / `partial` / `working` / `strong`), evidence, gaps, `nextUpgrade` |
-| Continuity | `evidenceContinuityStatus`, `evidenceContinuitySummary`, `evidenceBreakpoints`, `evidenceStrengths`, `evidenceUpgradeSuggestions` |
-| Linkage | `releaseReviewLinkageStatus`, `roadmapLinkageStatus`, `linkageStrengths`, `linkageGaps`, `recommendedLinkageUpgrades` |
-| Summaries | `executiveSummary` (`top3Strengths`, `top3Risks`, `top3RecommendedMoves`), `operatingSummary` (ops strengths/gaps/next actions), `systemSummary` (`top3UnifiedStackHighlights`, `top3ControlGaps`, `top3LinkageUpgrades`) |
-| Pointers | `docReferences`, `optionalLayerReferences` |
+| Field | Role |
+|-------|------|
+| `reviewPackVersion` | OS map version (e.g. `1.1`) |
+| `reviewLayers` | Layer list (see above) |
+| `operatingControlMap` | Eight controls (telemetry contract, routing traceability, wording traceability, mismatch detection, annual review, capability roadmap, release–review linkage, evidence continuity) |
+| `evidenceContinuityStatus` / `evidenceContinuitySummary` / `evidenceBreakpoints` | Continuity assessment |
+| `releaseReviewLinkageStatus` / `roadmapLinkageStatus` / `linkageStrengths` / `linkageGaps` | Linkage |
+| `recommendedSystemImprovements` | De-duplicated merge of continuity upgrades + linkage upgrades |
+| `recommendedLinkageUpgrades` | Still present for detail (subset source for merge) |
+| `executiveSummary` / `operatingSummary` / `systemSummary` | Three narrative blocks |
 
-## What this pack does **not** prove
+## Controls
 
-- Live production queries or SLO certification.
-- Automatic multi-year trends (unless you attach external history references).
-- That every weekly/monthly job actually ran — only what you embed or reference in JSON.
+Each control includes: `controlId`, `controlTitle`, `status` (`missing` / `partial` / `working` / `strong`), `summary`, `evidence`, `gaps`, `nextUpgrade`.
 
-## How to use for quarterly / half-year operating review
+## What this pack does not prove
 
-1. Export **annual** JSON after monthly/quarterly generators have been run for the window.
-2. Run **capability** pack from the same annual (or pass both JSON blobs into the OS pack input).
-3. Optionally attach **refs** to monthly/quarterly/weekly files for continuity.
-4. Generate **markdown** for leadership; keep **json** under version control.
-
-## Cadence suggestions
-
-- **Half-year roadmap review:** use OS pack + capability pack together.
-- **Annual operating planning:** lead with annual JSON, then OS pack for control and linkage narrative.
-- **Pre-major routing/wording reset:** compare `evidenceBreakpoints` + control map `partial` rows before locking semantics.
+- Live SLOs, CI runs, or that every monthly job executed — only JSON you pass in.
+- Multi-year trends unless you attach an external reference.
 
 ## Related docs
 
@@ -73,3 +62,4 @@ Optional passthrough (not validated):
 - `docs/ops/crystal-capability-maturity-roadmap-pack.md`
 - `docs/crystal-routing-telemetry-mapping.md`
 - `docs/crystal-routing-wording-mismatch-metrics.md`
+- `docs/ops/crystal-review-automation-pack.md` (pipeline spec on top of this pack)

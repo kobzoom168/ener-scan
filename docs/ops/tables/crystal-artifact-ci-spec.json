@@ -1,0 +1,318 @@
+{
+  "ciSpecVersion": "1.0",
+  "reviewPackVersion": "1",
+  "generatedAt": "2026-04-03T12:00:00.000Z",
+  "jobs": [
+    {
+      "jobId": "validate_artifact_manifest",
+      "title": "Validate artifact manifest structure",
+      "description": "Runs structural checks on `buildCrystalArtifactManifest` output (or pre-supplied manifest).",
+      "checkIds": [
+        "manifest_utils_export_present",
+        "manifest_generation_non_empty"
+      ]
+    },
+    {
+      "jobId": "validate_required_artifacts_present",
+      "title": "Validate required artifact rows",
+      "description": "Ensures core pack rows declare util paths and annual readiness is coherent.",
+      "checkIds": [
+        "core_util_paths_declared",
+        "annual_pack_ready_when_inputs_exist"
+      ]
+    },
+    {
+      "jobId": "validate_generation_order",
+      "title": "Validate generation order consistency",
+      "description": "Ensures generation order covers all node ids.",
+      "checkIds": [
+        "generation_order_covers_all_nodes"
+      ]
+    },
+    {
+      "jobId": "validate_dependency_graph",
+      "title": "Validate dependency graph shape",
+      "description": "Ensures DAG (no cycles).",
+      "checkIds": [
+        "dependency_graph_acyclic"
+      ]
+    },
+    {
+      "jobId": "validate_machine_readable_contracts",
+      "title": "Validate machine-readable contracts list",
+      "description": "Ensures contract table lists key packs for doc/util drift tooling.",
+      "checkIds": [
+        "contracts_list_core_packs"
+      ]
+    },
+    {
+      "jobId": "validate_pack_renderability",
+      "title": "Validate pack markdown render smoke",
+      "description": "Optional smoke: render markdown for manifest, OS, automation packs.",
+      "checkIds": [
+        "markdown_render_smoke"
+      ]
+    },
+    {
+      "jobId": "report_manual_followups",
+      "title": "Report manual follow-ups",
+      "description": "Surfaces manual artifacts and external rows — never fail-hard by default.",
+      "checkIds": [
+        "manual_external_multi_year_acknowledged"
+      ]
+    }
+  ],
+  "jobOrder": [
+    "validate_artifact_manifest",
+    "validate_required_artifacts_present",
+    "validate_generation_order",
+    "validate_dependency_graph",
+    "validate_machine_readable_contracts",
+    "validate_pack_renderability",
+    "report_manual_followups"
+  ],
+  "validationChecks": [
+    {
+      "jobId": "validate_artifact_manifest",
+      "checkId": "manifest_utils_export_present",
+      "title": "Artifact manifest util + table path documented",
+      "scope": "artifact_manifest_pack",
+      "severity": "hard",
+      "summary": "Repo contains `crystalArtifactManifest.util.js` and docs describe `docs/ops/tables/crystal-artifact-manifest.json`.",
+      "expectedCondition": "CI can run `node scripts/ops/generateCrystalArtifactManifest.mjs --format json`.",
+      "failureMeaning": "Manifest layer missing or broken — downstream CI cannot name artifacts.",
+      "recommendedAction": "Restore util, script, and committed table JSON.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_artifact_manifest",
+      "checkId": "manifest_generation_non_empty",
+      "title": "buildCrystalArtifactManifest returns structured manifest",
+      "scope": "artifact_manifest_pack",
+      "severity": "hard",
+      "summary": "Manifest builder yields artifacts, generationOrder, dependencyGraph.",
+      "expectedCondition": "`artifacts.length` > 0 and `generationOrder` is non-empty.",
+      "failureMeaning": "Manifest builder failed or returned empty — CI has nothing to validate.",
+      "recommendedAction": "Fix inputs or manifest util regression.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_required_artifacts_present",
+      "checkId": "core_util_paths_declared",
+      "title": "Core pack utils declared on manifest rows",
+      "scope": "annual_capability_os_automation",
+      "severity": "soft",
+      "summary": "Annual, capability, OS, automation artifacts list utilPath / scriptPath where applicable.",
+      "expectedCondition": "Rows for annual, capability, OS, automation have non-null utilPath.",
+      "failureMeaning": "Cannot locate generator entrypoints from manifest alone.",
+      "recommendedAction": "Patch manifest rows in `crystalArtifactManifest.util.js`.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_required_artifacts_present",
+      "checkId": "annual_pack_ready_when_inputs_exist",
+      "title": "Annual artifact status reflects inputs",
+      "scope": "annual_operating_review_pack",
+      "severity": "soft",
+      "summary": "When year inputs exist, annual row should be `ready` not stuck `manual` in assessment.",
+      "expectedCondition": "If `annualPackPresent` in underlying OS context, annual artifact status is `ready`.",
+      "failureMeaning": "Annual export missing — OS/capability chain is incomplete.",
+      "recommendedAction": "Run `generateCrystalAnnualOperatingReviewPack.mjs` with complete months/half-years.",
+      "assessment": "warn"
+    },
+    {
+      "jobId": "validate_generation_order",
+      "checkId": "generation_order_covers_all_nodes",
+      "title": "Generation order lists every artifact id",
+      "scope": "artifact_manifest_pack",
+      "severity": "hard",
+      "summary": "generationOrder includes all dependencyGraph.nodeIds.",
+      "expectedCondition": "No orphan artifact id outside generation order list.",
+      "failureMeaning": "CI cannot enforce a total order for tooling.",
+      "recommendedAction": "Align `CRYSTAL_ARTIFACT_GENERATION_ORDER` with `nodeIds`.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_dependency_graph",
+      "checkId": "dependency_graph_acyclic",
+      "title": "Dependency graph has no cycles",
+      "scope": "artifact_manifest_pack",
+      "severity": "hard",
+      "summary": "Directed edges among artifacts must be acyclic.",
+      "expectedCondition": "DFS finds no cycle.",
+      "failureMeaning": "Artifact dependencies contradict — cannot run generators safely.",
+      "recommendedAction": "Fix dependsOn edges in manifest util.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_machine_readable_contracts",
+      "checkId": "contracts_list_core_packs",
+      "title": "Machine-readable contracts cover key packs",
+      "scope": "docs_and_utils",
+      "severity": "soft",
+      "summary": "artifactContracts includes monthly, annual, capability, OS, automation, manifest entries.",
+      "expectedCondition": "At least 6 contract rows.",
+      "failureMeaning": "Docs/util linkage not enumerated for CI drift checks.",
+      "recommendedAction": "Extend `artifactContracts` in manifest util.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_pack_renderability",
+      "checkId": "markdown_render_smoke",
+      "title": "Pack markdown render smoke (OS + automation + manifest)",
+      "scope": "render_functions",
+      "severity": "hard",
+      "summary": "Public render* functions succeed on current inputs (optional smoke).",
+      "expectedCondition": "No throw from renderCrystal*Markdown when smoke enabled.",
+      "failureMeaning": "Pack output broken — CI markdown artifact job would fail.",
+      "recommendedAction": "Fix throw in util or pass valid fixture inputs in CI.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "report_manual_followups",
+      "checkId": "manual_external_multi_year_acknowledged",
+      "title": "External / future artifacts flagged",
+      "scope": "external_or_future",
+      "severity": "soft",
+      "summary": "multi_year history remains external — not treated as automated.",
+      "expectedCondition": "Category `external_or_future` row exists with manual status.",
+      "failureMeaning": "Team might assume history pack exists in-repo.",
+      "recommendedAction": "Keep manifest row until a util ships.",
+      "assessment": "pass"
+    }
+  ],
+  "failHardChecks": [
+    {
+      "jobId": "validate_artifact_manifest",
+      "checkId": "manifest_utils_export_present",
+      "title": "Artifact manifest util + table path documented",
+      "scope": "artifact_manifest_pack",
+      "severity": "hard",
+      "summary": "Repo contains `crystalArtifactManifest.util.js` and docs describe `docs/ops/tables/crystal-artifact-manifest.json`.",
+      "expectedCondition": "CI can run `node scripts/ops/generateCrystalArtifactManifest.mjs --format json`.",
+      "failureMeaning": "Manifest layer missing or broken — downstream CI cannot name artifacts.",
+      "recommendedAction": "Restore util, script, and committed table JSON.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_artifact_manifest",
+      "checkId": "manifest_generation_non_empty",
+      "title": "buildCrystalArtifactManifest returns structured manifest",
+      "scope": "artifact_manifest_pack",
+      "severity": "hard",
+      "summary": "Manifest builder yields artifacts, generationOrder, dependencyGraph.",
+      "expectedCondition": "`artifacts.length` > 0 and `generationOrder` is non-empty.",
+      "failureMeaning": "Manifest builder failed or returned empty — CI has nothing to validate.",
+      "recommendedAction": "Fix inputs or manifest util regression.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_generation_order",
+      "checkId": "generation_order_covers_all_nodes",
+      "title": "Generation order lists every artifact id",
+      "scope": "artifact_manifest_pack",
+      "severity": "hard",
+      "summary": "generationOrder includes all dependencyGraph.nodeIds.",
+      "expectedCondition": "No orphan artifact id outside generation order list.",
+      "failureMeaning": "CI cannot enforce a total order for tooling.",
+      "recommendedAction": "Align `CRYSTAL_ARTIFACT_GENERATION_ORDER` with `nodeIds`.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_dependency_graph",
+      "checkId": "dependency_graph_acyclic",
+      "title": "Dependency graph has no cycles",
+      "scope": "artifact_manifest_pack",
+      "severity": "hard",
+      "summary": "Directed edges among artifacts must be acyclic.",
+      "expectedCondition": "DFS finds no cycle.",
+      "failureMeaning": "Artifact dependencies contradict — cannot run generators safely.",
+      "recommendedAction": "Fix dependsOn edges in manifest util.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_pack_renderability",
+      "checkId": "markdown_render_smoke",
+      "title": "Pack markdown render smoke (OS + automation + manifest)",
+      "scope": "render_functions",
+      "severity": "hard",
+      "summary": "Public render* functions succeed on current inputs (optional smoke).",
+      "expectedCondition": "No throw from renderCrystal*Markdown when smoke enabled.",
+      "failureMeaning": "Pack output broken — CI markdown artifact job would fail.",
+      "recommendedAction": "Fix throw in util or pass valid fixture inputs in CI.",
+      "assessment": "pass"
+    }
+  ],
+  "failSoftChecks": [
+    {
+      "jobId": "validate_required_artifacts_present",
+      "checkId": "core_util_paths_declared",
+      "title": "Core pack utils declared on manifest rows",
+      "scope": "annual_capability_os_automation",
+      "severity": "soft",
+      "summary": "Annual, capability, OS, automation artifacts list utilPath / scriptPath where applicable.",
+      "expectedCondition": "Rows for annual, capability, OS, automation have non-null utilPath.",
+      "failureMeaning": "Cannot locate generator entrypoints from manifest alone.",
+      "recommendedAction": "Patch manifest rows in `crystalArtifactManifest.util.js`.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "validate_required_artifacts_present",
+      "checkId": "annual_pack_ready_when_inputs_exist",
+      "title": "Annual artifact status reflects inputs",
+      "scope": "annual_operating_review_pack",
+      "severity": "soft",
+      "summary": "When year inputs exist, annual row should be `ready` not stuck `manual` in assessment.",
+      "expectedCondition": "If `annualPackPresent` in underlying OS context, annual artifact status is `ready`.",
+      "failureMeaning": "Annual export missing — OS/capability chain is incomplete.",
+      "recommendedAction": "Run `generateCrystalAnnualOperatingReviewPack.mjs` with complete months/half-years.",
+      "assessment": "warn"
+    },
+    {
+      "jobId": "validate_machine_readable_contracts",
+      "checkId": "contracts_list_core_packs",
+      "title": "Machine-readable contracts cover key packs",
+      "scope": "docs_and_utils",
+      "severity": "soft",
+      "summary": "artifactContracts includes monthly, annual, capability, OS, automation, manifest entries.",
+      "expectedCondition": "At least 6 contract rows.",
+      "failureMeaning": "Docs/util linkage not enumerated for CI drift checks.",
+      "recommendedAction": "Extend `artifactContracts` in manifest util.",
+      "assessment": "pass"
+    },
+    {
+      "jobId": "report_manual_followups",
+      "checkId": "manual_external_multi_year_acknowledged",
+      "title": "External / future artifacts flagged",
+      "scope": "external_or_future",
+      "severity": "soft",
+      "summary": "multi_year history remains external — not treated as automated.",
+      "expectedCondition": "Category `external_or_future` row exists with manual status.",
+      "failureMeaning": "Team might assume history pack exists in-repo.",
+      "recommendedAction": "Keep manifest row until a util ships.",
+      "assessment": "pass"
+    }
+  ],
+  "manualFollowups": [
+    "Manual artifact: annual_operating_review_pack: Annual operating review pack",
+    "Manual artifact: multi_year_history_external: Multi-year / long-horizon history",
+    "Rolling inputs (weekly/monthly/quarterly JSON) are still assembled outside this spec unless refs are attached.",
+    "Release `releaseSignals` on annual JSON remains an ops discipline — not enforced here."
+  ],
+  "artifactCoverageSummary": "Manifest enumerates 13 artifacts; CI spec attaches 9 validation checks across 7 jobs.",
+  "ciReadinessStatus": "partial",
+  "ciReadinessSummary": "1 soft check(s) warn — pipeline usable with manual follow-ups.",
+  "recommendedNextCiUpgrades": [
+    "Attach file paths or digests for monthly/quarterly generators when running OS review.",
+    "Include releaseSignals in annual input for release linkage.",
+    "Pass `annualOperatingReviewPack` into capability input explicitly.",
+    "Add a CI step: `node --test tests/crystalArtifactCiValidation.util.test.js` (or full ops subset).",
+    "Diff `docs/ops/tables/crystal-artifact-manifest.json` against `generateCrystalArtifactManifest` in PRs.",
+    "Gate merge on zero hard-check failures only — allow soft warnings with label `artifact-review-stack:soft-fail-ok`."
+  ],
+  "manifestRef": {
+    "manifestVersion": "1.0",
+    "reviewPackVersion": "1"
+  },
+  "methodNote": "CI spec is a minimal validation catalog — it does not start servers, run production queries, or change routing/wording/mismatch semantics."
+}
