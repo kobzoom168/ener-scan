@@ -1,5 +1,6 @@
 import { randomBetween } from "./timing.util.js";
 import { isLine429Error } from "./lineNotify429Retry.util.js";
+import { serializeLineErrorSafe } from "./lineErrorLog.util.js";
 import { replyFlex } from "../services/lineReply.service.js";
 import {
   invokeLinePushMessage,
@@ -152,9 +153,8 @@ export async function sendScanResultPushWith429Retry({
             attempt: i + 1,
             method,
             is429,
-            status: lineErrorStatus(err),
-            message: lineErrorMessage(err),
             lineUserIdPrefix: uid.slice(0, 8),
+            ...serializeLineErrorSafe(err),
           }),
         );
         if (!is429 || i >= 2) {
@@ -325,9 +325,8 @@ export async function sendScanResultReplyWith429Retry({
             attempt: i + 1,
             method,
             is429,
-            status: lineErrorStatus(err),
-            message: lineErrorMessage(err),
             lineUserIdPrefix: uid.slice(0, 8),
+            ...serializeLineErrorSafe(err),
           }),
         );
         if (!is429 || i >= 2) {

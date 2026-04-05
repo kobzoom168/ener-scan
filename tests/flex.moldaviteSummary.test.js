@@ -74,4 +74,13 @@ test("buildMoldaviteSummaryFirstFlex: returns flex bubble without calling generi
   assert.ok(bodyText.includes("มิติที่โทนไปออกแรงสุด"));
   assert.ok(bodyText.includes("งาน"));
   assert.ok(bodyText.includes("88"));
+
+  const flat = JSON.stringify(flex);
+  for (const m of flat.matchAll(/"flex"\s*:\s*(\d+)/g)) {
+    const n = Number(m[1]);
+    assert.ok(
+      n >= 0 && n <= 3,
+      `LINE Flex flex must be 0–3; found flex:${n}`,
+    );
+  }
 });

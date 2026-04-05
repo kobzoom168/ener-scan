@@ -100,7 +100,8 @@ function createLifeAreasRankingBlock(lifeAreas) {
           text: r.label,
           size: "sm",
           color: FLEX_TEXT_SECONDARY,
-          flex: 5,
+          // LINE Flex: flex must be 0–3 on text/box children (values >3 → pushMessage 400).
+          flex: 3,
           wrap: true,
         },
         {
@@ -109,7 +110,7 @@ function createLifeAreasRankingBlock(lifeAreas) {
           size: "xxl",
           weight: "bold",
           color: MOLDAVITE_ACCENT,
-          flex: 2,
+          flex: 1,
           align: "end",
           wrap: false,
         },
