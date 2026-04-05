@@ -111,6 +111,7 @@ Align with `docs/ops/crystal-post-deploy-review.md`. Summary:
 
 ## Related
 
+- Weekly quality report: **`crystal-weekly-quality-review.md`** (offline export + `generateCrystalWeeklyQualityReview.mjs`)
 - Post-deploy steps: **`crystal-post-deploy-review.md`**  
 - Thresholds template: **`crystal-release-thresholds-template.md`**  
 - Machine-readable checklist: **`templates/crystal-release-checklist.json`**  

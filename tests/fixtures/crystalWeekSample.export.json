@@ -1,0 +1,41 @@
+{
+  "windowStart": "2026-03-24T00:00:00.000Z",
+  "windowEnd": "2026-03-31T00:00:00.000Z",
+  "generatedAt": "2026-03-31T12:00:00.000Z",
+  "rows": [
+    {
+      "timestamp": "2026-03-25T10:00:00.000Z",
+      "objectFamily": "crystal",
+      "energyCategoryCode": "money_work",
+      "crystalRoutingRuleId": "crystal_rg_money_work",
+      "crystalRoutingStrategy": "early_exit",
+      "protectSignalStrength": "none",
+      "visibleWordingDecisionSource": "db_crystal",
+      "visibleWordingCrystalSpecific": true,
+      "visibleWordingCategoryUsed": "money_work",
+      "visibleWordingFallbackLevel": 0,
+      "routingWordingAlignmentStatus": "aligned",
+      "routingWordingMismatchType": "none",
+      "routingWordingMismatchSeverity": "none",
+      "routingWordingDashboardGroup": "crystal_aligned",
+      "isCrystalRoutingCase": true
+    },
+    {
+      "timestamp": "2026-03-26T10:00:00.000Z",
+      "objectFamily": "crystal",
+      "energyCategoryCode": "money_work",
+      "crystalRoutingRuleId": "crystal_rg_money_work",
+      "crystalRoutingStrategy": "early_exit",
+      "protectSignalStrength": "none",
+      "visibleWordingDecisionSource": "db_crystal",
+      "visibleWordingCrystalSpecific": true,
+      "visibleWordingCategoryUsed": "money_work",
+      "visibleWordingFallbackLevel": 0,
+      "routingWordingAlignmentStatus": "aligned",
+      "routingWordingMismatchType": "none",
+      "routingWordingMismatchSeverity": "none",
+      "routingWordingDashboardGroup": "crystal_aligned",
+      "isCrystalRoutingCase": true
+    }
+  ]
+}
