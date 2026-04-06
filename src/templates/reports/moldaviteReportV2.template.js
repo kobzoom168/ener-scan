@@ -420,21 +420,22 @@ export function renderMoldaviteReportV2Html(payload) {
     }
     @media (prefers-reduced-motion: no-preference) {
       .mv2-radar-svg--animate .mv2-radar-layer--owner {
-        animation: mv2RdrPoly 0.72s cubic-bezier(0.22, 1, 0.36, 1) 0.15s forwards;
+        animation: mv2RdrPoly 1.6s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
       }
       .mv2-radar-svg--animate .mv2-radar-layer--crystal {
-        animation: mv2RdrPoly 0.68s cubic-bezier(0.22, 1, 0.36, 1) 0.35s forwards;
+        animation: mv2RdrPoly 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.6s forwards;
       }
       .mv2-radar-svg--animate .mv2-radar-layer--peak {
-        animation: mv2RdrFade 0.5s ease-out 0.7s forwards;
+        animation: mv2RdrFade 0.6s ease-out 1.5s forwards;
       }
       .mv2-radar-labels {
-        animation: mv2RdrFade 0.5s ease-out 0.85s forwards;
+        animation: mv2RdrFade 0.6s ease-out 1.8s forwards;
       }
     }
     @keyframes mv2RdrPoly {
       0% { opacity: 0; transform: scale(0); }
-      50% { opacity: 0.7; transform: scale(1.06); }
+      40% { opacity: 0.6; transform: scale(1.08); }
+      70% { opacity: 0.9; transform: scale(0.97); }
       100% { opacity: 1; transform: scale(1); }
     }
     @keyframes mv2RdrFade {
@@ -442,8 +443,8 @@ export function renderMoldaviteReportV2Html(payload) {
       to { opacity: 1; transform: translateY(0); }
     }
     @keyframes mv2LblPulse {
-      0%, 100% { opacity: 1; text-shadow: 0 0 6px rgba(251,191,36,0.3); }
-      50% { opacity: 0.72; text-shadow: 0 0 12px rgba(251,191,36,0.55); }
+      0%, 100% { opacity: 1; text-shadow: 0 0 4px rgba(251,191,36,0.25); }
+      50% { opacity: 0.45; text-shadow: 0 0 16px rgba(251,191,36,0.7); }
     }
     @media (prefers-reduced-motion: reduce) {
       .mv2-radar-svg--animate .mv2-radar-layer,
@@ -483,7 +484,7 @@ export function renderMoldaviteReportV2Html(payload) {
     }
     .mv2-radar-lbl--peak {
       text-shadow: 0 0 8px rgba(251,191,36,0.35);
-      animation: mv2LblPulse 2.4s ease-in-out 1.6s infinite;
+      animation: mv2LblPulse 1.2s ease-in-out 2.6s infinite;
     }
     .mv2-radar-axis-cmp {
       display: block;
