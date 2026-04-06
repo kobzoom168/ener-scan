@@ -15,6 +15,9 @@ const AXIS_TITLE_TH = {
   money: "การเงิน",
 };
 
+/** ต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" (คุณ vs หิน ต่อแกน) */
+const RADAR_AXIS_COMPARE_EPS = 6;
+
 /**
  * Footer render/meta line: off in production unless explicitly enabled (support/debug).
  * `REPORT_HTML_RENDER_META=true|1|yes` → show; `false|0|no` → hide;
@@ -82,33 +85,36 @@ function axisRankByCrystalStrength(crystal) {
 function radarAxisLabelEmphasis(rank) {
   if (rank === 1) {
     return {
-      fill: "#ecfdf5",
-      fontSize: "3.38",
+      fill: "#f0fdf4",
+      fontSize: "3.22",
       fontWeight: "700",
     };
   }
   if (rank === 2) {
     return {
-      fill: "rgba(226,232,240,0.92)",
-      fontSize: "3.12",
+      fill: "rgba(220,230,240,0.9)",
+      fontSize: "3.02",
       fontWeight: "600",
     };
   }
   return {
-    fill: "rgba(100,116,139,0.78)",
-    fontSize: "2.98",
+    fill: "rgba(94,110,130,0.74)",
+    fontSize: "2.88",
     fontWeight: "500",
   };
 }
 
 /**
- * ลูกศรเล็ก ๆ บอกลำดับแรงของแกน (ไม่บังคับอ่าน แต่ช่วยสแกนเร็ว)
- * @param {number} rank 1 | 2 | 3
+ * เปรียบเทียบคะแนนคุณกับหินต่อแกน (ข้อความสั้น ไม่ใช้สัญลักษณ์)
+ * @param {number} owner01
+ * @param {number} crystal01
  */
-function radarAxisArrowSuffix(rank) {
-  if (rank === 1) return " ↑";
-  if (rank === 2) return " →";
-  return " ↓";
+function radarAxisCompareSuffix(owner01, crystal01) {
+  const o = Math.round(Number(owner01) || 0);
+  const c = Math.round(Number(crystal01) || 0);
+  if (Math.abs(o - c) <= RADAR_AXIS_COMPARE_EPS) return " ใกล้เคียง";
+  if (o > c) return " คุณนำ";
+  return " หินนำ";
 }
 
 /**
@@ -127,6 +133,9 @@ function radarBlock(vm) {
   const cw = Math.round(Number(g.crystal.work) || 0);
   const cr = Math.round(Number(g.crystal.relationship) || 0);
   const cm = Math.round(Number(g.crystal.money) || 0);
+  const ow = Math.round(Number(g.owner.work) || 0);
+  const or_ = Math.round(Number(g.owner.relationship) || 0);
+  const om = Math.round(Number(g.owner.money) || 0);
 
   const rankOf = axisRankByCrystalStrength(g.crystal);
 
@@ -138,6 +147,8 @@ function radarBlock(vm) {
       ay: 5,
       text: `${AXIS_TITLE_TH.work} ${cw}`,
       ta: "middle",
+      owner: ow,
+      crystal: cw,
     },
     {
       key: "relationship",
@@ -145,6 +156,8 @@ function radarBlock(vm) {
       ay: 76,
       text: `${AXIS_TITLE_TH.relationship} ${cr}`,
       ta: "end",
+      owner: or_,
+      crystal: cr,
     },
     {
       key: "money",
@@ -152,13 +165,15 @@ function radarBlock(vm) {
       ay: 76,
       text: `${AXIS_TITLE_TH.money} ${cm}`,
       ta: "start",
+      owner: om,
+      crystal: cm,
     },
   ];
   const labelSvg = labels
     .map((L) => {
       const rk = rankOf[L.key] ?? 2;
       const em = radarAxisLabelEmphasis(rk);
-      const labelText = `${L.text}${radarAxisArrowSuffix(rk)}`;
+      const labelText = `${L.text}${radarAxisCompareSuffix(L.owner, L.crystal)}`;
       return `<text x="${L.ax}" y="${L.ay}" fill="${em.fill}" font-size="${em.fontSize}" font-weight="${em.fontWeight}" text-anchor="${L.ta}" font-family="inherit">${escapeHtml(labelText)}</text>`;
     })
     .join("");
@@ -176,12 +191,12 @@ function radarBlock(vm) {
         <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-        <polygon points="${ownerPts}" fill="rgba(96,165,250,0.2)" stroke="rgba(147,197,253,0.98)" stroke-width="0.78" stroke-linejoin="round" opacity="0.95"/>
-        <polygon points="${crystalPts}" fill="rgba(22,163,74,0.22)" stroke="rgba(52,211,153,0.98)" stroke-width="0.88" stroke-linejoin="round"/>
+        <polygon points="${ownerPts}" fill="rgba(96,165,250,0.17)" stroke="rgba(147,197,253,0.94)" stroke-width="0.78" stroke-linejoin="round" opacity="0.95"/>
+        <polygon points="${crystalPts}" fill="rgba(22,163,74,0.19)" stroke="rgba(52,211,153,0.94)" stroke-width="0.88" stroke-linejoin="round"/>
         ${crystalMarker}
         ${labelSvg}
       </svg>
-      <div class="mv2-radar-key" id="mv2-radar-key"><span class="mv2-radar-key-line">สีฟ้า = ตัวคุณ</span><span class="mv2-radar-key-line">สีเขียว = พลังหิน</span></div>
+      <div class="mv2-radar-key" id="mv2-radar-key"><span class="mv2-radar-key-line">คุณ (สีฟ้า)</span><span class="mv2-radar-key-line">หิน (สีเขียว)</span></div>
     </div>
   </section>`;
 }
