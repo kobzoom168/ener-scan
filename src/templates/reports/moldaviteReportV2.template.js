@@ -131,6 +131,7 @@ function radarAxisComparePhrase(owner01, crystal01) {
  */
 function radarAxisLabelSvg(L, rank) {
   const fs = radarAxisFontSize(rank);
+  const fsN = Number(fs);
   const ax = L.anchorX;
   const y = L.ay;
   const title = AXIS_TITLE_TH[L.key];
@@ -142,15 +143,28 @@ function radarAxisLabelSvg(L, rank) {
   const ta = L.ta;
   const textAnchor = ta === "middle" ? "middle" : ta === "end" ? "end" : "start";
 
-  // Sibling <tspan>s directly under <text> (no nested wrapper tspan). WebKit/Safari
-  // mis-measures inline progression for nested tspans with Thai + digits, causing overlap.
+  const textAttrs = `class="mv2-radar-axis" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-rendering="optimizeLegibility"`;
+
+  // iOS Safari: Thai + Latin digits in one line still gets wrong glyph advance after
+  // marks (สระ/วรรณยุกต์) — sibling tspans overlap. For text-anchor "end", split into
+  // two <text> nodes and reserve width for the score so nothing relies on inline measure.
+  if (ta === "end") {
+    const gap = 2.85;
+    const perDigit = (fsN / 3.5) * 2.55;
+    const numReserve = Math.max(5.1, scoreStr.length * perDigit + 0.85);
+    const thaiEndX = ax - numReserve - gap;
+    const thaiText = `<text ${textAttrs} text-anchor="end" x="${thaiEndX.toFixed(2)}" y="${y.toFixed(2)}" fill="${catFill}" font-weight="${titleFw}">${escapeHtml(title)}</text>`;
+    const numText = `<text ${textAttrs} text-anchor="end" x="${ax.toFixed(2)}" y="${y.toFixed(2)}" fill="${numFill}" font-weight="700">${escapeHtml(scoreStr)}</text>`;
+    return `<g class="mv2-radar-axis-pair">${thaiText}${numText}</g>`;
+  }
+
   const tspans = [
     `<tspan x="${ax.toFixed(2)}" y="${y.toFixed(2)}" fill="${catFill}" font-weight="${titleFw}">${escapeHtml(title)}</tspan>`,
     `<tspan fill="${catFill}" font-weight="500">${gapTitleScore}</tspan>`,
     `<tspan fill="${numFill}" font-weight="700">${escapeHtml(scoreStr)}</tspan>`,
   ];
 
-  return `<text class="mv2-radar-axis" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="${textAnchor}" text-rendering="optimizeLegibility">${tspans.join("")}</text>`;
+  return `<text ${textAttrs} text-anchor="${textAnchor}">${tspans.join("")}</text>`;
 }
 
 /**
