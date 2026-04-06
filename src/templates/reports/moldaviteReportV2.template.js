@@ -24,12 +24,31 @@ function radarPolygonPoints(values01to100) {
 }
 
 /**
+ * Vertex for one axis on the radar (viewBox coords).
+ * @param {Record<string, number>} values01to100
+ * @param {string} axisKey
+ */
+function radarVertexForAxis(values01to100, axisKey) {
+  const i = AXIS_KEYS.indexOf(axisKey);
+  if (i < 0) return { x: RADAR_CX, y: RADAR_CY };
+  const ang = RADAR_ANGLES[i];
+  const v = Math.max(0, Math.min(100, Number(values01to100[axisKey]) || 0)) / 100;
+  return {
+    x: RADAR_CX + RADAR_R * v * Math.cos(ang),
+    y: RADAR_CY + RADAR_R * v * Math.sin(ang),
+  };
+}
+
+/**
  * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
  */
 function radarBlock(vm) {
   const g = vm.graph;
   const ownerPts = radarPolygonPoints(g.owner);
   const crystalPts = radarPolygonPoints(g.crystal);
+  const peak = radarVertexForAxis(g.crystal, g.crystalPeakAxisKey);
+  const peakLabel = String(g.crystalPeakLabelThai || "").trim() || "หิน";
+  const crystalMarker = `<circle class="mv2-radar-peak" cx="${peak.x.toFixed(2)}" cy="${peak.y.toFixed(2)}" r="2.5" fill="#4ade80" stroke="rgba(255,255,255,0.9)" stroke-width="0.55" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
   /** Bottom-right = ความสัมพันธ์, bottom-left = การเงิน (matches axis math). */
   const labels = [
     { ax: RADAR_CX, ay: 8, text: "งาน", ta: "middle" },
@@ -46,16 +65,18 @@ function radarBlock(vm) {
   <section class="mv2-radar-card" aria-labelledby="mv2-radar-h">
     <h2 class="mv2-radar-title" id="mv2-radar-h">ภาพรวมการจับคู่</h2>
     <p class="mv2-radar-sub">${escapeHtml(g.scaleNote)}</p>
-    <div class="mv2-radar-svg-wrap" role="img" aria-label="เรดาร์สามแกน: เจ้าของและหิน">
-      <svg class="mv2-radar-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    <div class="mv2-radar-svg-wrap">
+      <svg class="mv2-radar-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เจ้าของและโทนหิน" aria-describedby="mv2-radar-peak-note">
         <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
         <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-        <polygon points="${ownerPts}" fill="rgba(147,197,253,0.12)" stroke="rgba(147,197,253,0.85)" stroke-width="0.65" stroke-linejoin="round"/>
-        <polygon points="${crystalPts}" fill="rgba(74,222,128,0.14)" stroke="rgba(34,197,94,0.95)" stroke-width="0.75" stroke-linejoin="round"/>
+        <polygon points="${ownerPts}" fill="rgba(96,165,250,0.2)" stroke="rgba(147,197,253,0.98)" stroke-width="0.78" stroke-linejoin="round" opacity="0.95"/>
+        <polygon points="${crystalPts}" fill="rgba(22,163,74,0.22)" stroke="rgba(52,211,153,0.98)" stroke-width="0.88" stroke-linejoin="round"/>
+        ${crystalMarker}
         ${labelSvg}
       </svg>
+      <p class="mv2-radar-peak-note" id="mv2-radar-peak-note">จุดสว่างบนกราฟ = แรงเน้นสูงสุดของโทนหิน · ${escapeHtml(peakLabel)}</p>
     </div>
     <ul class="mv2-legend" role="list">
       <li><span class="mv2-dot mv2-dot--owner"></span> คุณ (จากวันเกิด / รหัสรายงาน)</li>
@@ -89,16 +110,20 @@ export function renderMoldaviteReportV2Html(payload) {
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
       : "—";
 
-  const graphSummaryHtml = vm.graphSummary.lines
-    .map((line) => `<p class="mv2-graph-sum-line">${escapeHtml(line)}</p>`)
-    .join("");
+  const gs = vm.graphSummary;
+  const graphSummaryHtml = `
+    <p class="mv2-graph-sum-compact"><span class="mv2-graph-sum-k">แรงสอดคล้องสุด</span><span class="mv2-graph-sum-arrow"> → </span><span class="mv2-graph-sum-v">${escapeHtml(gs.alignmentTargetThai)}</span></p>
+    <p class="mv2-graph-sum-compact"><span class="mv2-graph-sum-k">จุดที่ควรบาลานซ์</span><span class="mv2-graph-sum-arrow"> → </span><span class="mv2-graph-sum-v">${escapeHtml(gs.tensionTargetThai)}</span></p>`;
 
   const traitsHtml = vm.ownerProfile.traits
     .map((t) => `<li>${escapeHtml(t)}</li>`)
     .join("");
 
-  const interactionHtml = vm.interactionSummary.bullets
-    .map((b) => `<li>${escapeHtml(b)}</li>`)
+  const interactionHtml = vm.interactionSummary.rows
+    .map(
+      (row) =>
+        `<li class="mv2-int-row"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-body">${escapeHtml(row.body)}</span></li>`,
+    )
     .join("");
 
   const meaningHtml =
@@ -165,9 +190,8 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .mv2-h1 { font-size: 1.45rem; font-weight: 700; margin: 0.6rem 0 0.2rem; line-height: 1.25; }
     .mv2-tag { color: var(--mv2-green-dim); font-size: 0.92rem; margin: 0.25rem 0; }
-    .mv2-main { color: var(--mv2-green); font-weight: 600; font-size: 0.95rem; margin: 0.35rem 0; border-left: 3px solid rgba(34,197,94,0.5); padding-left: 0.6rem; }
-    .mv2-hook { color: var(--mv2-muted); font-size: 0.88rem; margin: 0.6rem 0 0; }
-    .mv2-date { font-size: 0.72rem; color: var(--mv2-muted); margin-top: 0.5rem; }
+    .mv2-main { color: var(--mv2-green); font-weight: 600; font-size: 0.95rem; margin: 0.35rem 0 0.5rem; border-left: 3px solid rgba(34,197,94,0.5); padding-left: 0.6rem; }
+    .mv2-date { font-size: 0.72rem; color: var(--mv2-muted); margin-top: 0.35rem; }
     .mv2-strip {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -190,6 +214,7 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
     .mv2-radar-sub { margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; }
+    .mv2-radar-peak-note { margin: 0.5rem 0 0; font-size: 0.7rem; color: #86efac; line-height: 1.35; text-align: center; }
     .mv2-radar-svg-wrap { width: 100%; max-width: 18rem; margin: 0 auto; }
     .mv2-radar-svg { width: 100%; height: auto; display: block; }
     .mv2-legend { list-style: none; padding: 0.6rem 0 0; margin: 0; font-size: 0.78rem; color: var(--mv2-muted); }
@@ -197,9 +222,17 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-dot { width: 0.55rem; height: 0.55rem; border-radius: 999px; display: inline-block; }
     .mv2-dot--owner { background: rgba(147,197,253,0.9); }
     .mv2-dot--crystal { background: rgba(34,197,94,0.95); }
-    .mv2-graph-sum-line { margin: 0.35rem 0; font-size: 0.86rem; color: rgba(220,220,215,0.95); }
+    .mv2-graph-sum-compact { margin: 0.25rem 0; font-size: 0.92rem; line-height: 1.35; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.35rem; }
+    .mv2-graph-sum-k { color: var(--mv2-muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; }
+    .mv2-graph-sum-arrow { color: #6b7280; font-weight: 500; }
+    .mv2-graph-sum-v { color: #ecfdf5; font-weight: 700; }
+    .mv2-owner-id { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 700; color: #a7f3d0; letter-spacing: 0.02em; }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }
+    .mv2-int-row { list-style: none; margin-bottom: 0.55rem; padding-left: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+    .mv2-int-kicker { display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6ee7b7; margin-bottom: 0.05rem; }
+    .mv2-int-body { font-size: 0.82rem; line-height: 1.45; color: rgba(215,213,208,0.95); }
+    .mv2-int-list { list-style: none; padding: 0.35rem 0 0; margin: 0; }
     .mv2-note { font-size: 0.72rem; color: #6b7280; margin-top: 0.6rem; }
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
     .mv2-life-card { border-top: 1px solid var(--mv2-edge); padding: 0.75rem 0 0; margin-top: 0.75rem; }
@@ -218,7 +251,6 @@ export function renderMoldaviteReportV2Html(payload) {
       <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "—")}</h1>
       ${h.tagline ? `<p class="mv2-tag">${escapeHtml(h.tagline)}</p>` : ""}
       <p class="mv2-main">พลังหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
-      ${h.openingHook ? `<p class="mv2-hook">${escapeHtml(h.openingHook)}</p>` : ""}
       ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
     </header>
 
@@ -237,6 +269,7 @@ export function renderMoldaviteReportV2Html(payload) {
 
     <section class="mv2-card" aria-labelledby="mv2-owner-h">
       <h2 id="mv2-owner-h">โปรไฟล์เจ้าของ</h2>
+      <p class="mv2-owner-id">${escapeHtml(vm.ownerProfile.identityLabel)}</p>
       <p class="mv2-para">${escapeHtml(vm.ownerProfile.summaryLine)}</p>
       <ul class="mv2-owner-traits">${traitsHtml}</ul>
       <p class="mv2-note">${escapeHtml(vm.ownerProfile.derivationNote)}</p>
@@ -244,7 +277,7 @@ export function renderMoldaviteReportV2Html(payload) {
 
     <section class="mv2-card" aria-labelledby="mv2-int-h">
       <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
-      <ul class="mv2-owner-traits">${interactionHtml}</ul>
+      <ul class="mv2-int-list">${interactionHtml}</ul>
     </section>
 
     ${meaningHtml ? `<section class="mv2-card" aria-labelledby="mv2-mean-h"><h2 id="mv2-mean-h">แรงโทนเปลี่ยนแปลง</h2>${meaningHtml}</section>` : ""}

@@ -78,19 +78,41 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
     }
   }
 
+  /** Strongest crystal emphasis (single vertex highlight on radar). */
+  /** @type {AxisKey} */
+  let crystalPeakKey = "work";
+  let crystalPeakVal = -1;
+  for (const k of AXIS_ORDER) {
+    const v = crystal[k];
+    if (v > crystalPeakVal) {
+      crystalPeakVal = v;
+      crystalPeakKey = k;
+    }
+  }
+
   const alignLabel = AXIS_LABEL_TH[alignKey];
   const tensionLabel = AXIS_LABEL_TH[tensionKey];
 
-  const graphSummaryLines = [
-    `สอดคล้องแรงสุดที่มิติ “${alignLabel}” — แนวโน้มของคุณกับแรงเน้นของหินใกล้เคียงกันในด้านนี้`,
-    `จุดที่ควรจัดจังหวะ: “${tensionLabel}” — เมื่อระยะห่างมาก ให้ลดจังหวะและสังเกตความรู้สึก ไม่ใช่คำเตือนเชิงลบ`,
-  ];
+  const graphSummary = {
+    alignmentTargetThai: alignLabel,
+    tensionTargetThai: tensionLabel,
+  };
 
   const interactionHeadline = "หินทำงานกับคุณอย่างไร";
-  const interactionBullets = [
-    `มิติที่ไปในทิศเดียวกัน: ${alignLabel} — ลองสังเกตว่าช่วงนี้เรื่องนี้ “ลื่น” หรือตัดสินใจง่ายขึ้นหรือไม่`,
-    `มิติที่ควรไม่เร่งเกิน: ${tensionLabel} — แยกแยะระหว่างการเปลี่ยนจริงกับแรงกดดันชั่วคราว`,
-    "โทนหินเน้นการเปลี่ยนแปลง — ไม่ได้สัญญาผลลัพธ์ แต่ชี้จังหวะที่ปล่อยของเก่าและเริ่มรอบใหม่",
+  /** @type {{ kicker: string, body: string }[]} */
+  const interactionRows = [
+    {
+      kicker: "เสริมแรง",
+      body: `มิติ ${alignLabel} — ลื่นไหม ตัดสินใจง่ายขึ้นหรือไม่`,
+    },
+    {
+      kicker: "ระวังจังหวะ",
+      body: `มิติ ${tensionLabel} — แยก “เปลี่ยนจริง” กับแรงกดดันชั่วคราว`,
+    },
+    {
+      kicker: "โทนหิน",
+      body: "เร่งเปลี่ยนแปลง — ชี้จังหวะปล่อยของเก่า ไม่สัญญาผล",
+    },
   ];
 
   const hr = mv.htmlReport;
@@ -132,7 +154,6 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       subtypeLabel: String(fs.headline || "").trim(),
       tagline: String(fs.tagline || "").trim(),
       mainEnergyLabel: String(fs.mainEnergyShort || "").trim() || "เร่งการเปลี่ยนแปลง",
-      openingHook: String(payload.wording?.htmlOpeningLine || fs.htmlOpeningLine || "").trim(),
       objectImageUrl: String(payload.object?.objectImageUrl || "").trim(),
       reportGeneratedAt: String(payload.generatedAt || ""),
     },
@@ -149,19 +170,22 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       })),
       owner: ownerAxes,
       crystal,
-      scaleNote: "สเกล 0–100 ต่อแกน — เปรียบเทียบแนวโน้มเจ้าของกับแรงเน้นของหิน",
+      crystalPeakAxisKey: crystalPeakKey,
+      crystalPeakLabelThai: AXIS_LABEL_TH[crystalPeakKey],
+      scaleNote: "สเกล 0–100 ต่อแกน — จุดสว่าง = แรงเน้นสูงสุดของโทนหิน",
       alignment: { axisKey: alignKey, labelThai: alignLabel },
       tension: { axisKey: tensionKey, labelThai: tensionLabel },
     },
-    graphSummary: { lines: graphSummaryLines },
+    graphSummary,
     ownerProfile: {
+      identityLabel: ownerAxes.identityLabel,
       summaryLine: ownerAxes.summaryLine,
       traits: ownerAxes.traits,
       derivationNote: ownerAxes.derivationNote,
     },
     interactionSummary: {
       headline: interactionHeadline,
-      bullets: interactionBullets,
+      rows: interactionRows,
     },
     meaningParagraphs,
     lifeAreaDetail: { rows: lifeAreaRows },

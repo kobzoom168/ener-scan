@@ -12,6 +12,8 @@ const namingHigh = resolveMoldaviteDisplayNaming({
   detectionReason: "gemini_crystal_subtype",
 });
 
+const UNIQUE_HERO_PROSE = "UNIQUE_V2_HERO_OPENING_SHOULD_NOT_RENDER_9921";
+
 test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, graph data)", () => {
   const mv = buildMoldaviteV1Slice({
     scanResultId: "rid-html",
@@ -68,7 +70,7 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
     wording: {
       heroNaming: mv.flexSurface.heroNamingLine || "",
       mainEnergy: mv.flexSurface.mainEnergyWordingLine || "",
-      htmlOpeningLine: mv.flexSurface.htmlOpeningLine || "",
+      htmlOpeningLine: `${UNIQUE_HERO_PROSE} ${mv.flexSurface.htmlOpeningLine || ""}`,
     },
     moldaviteV1: mv,
   };
@@ -80,8 +82,15 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("moldavite-html-v2"));
   assert.ok(html.includes("ภาพรวมการจับคู่"));
   assert.ok(html.includes("สรุปจากกราฟ"));
+  assert.ok(html.includes("แรงสอดคล้องสุด"));
+  assert.ok(html.includes("จุดที่ควรบาลานซ์"));
+  assert.ok(!html.includes(UNIQUE_HERO_PROSE));
+  assert.ok(html.includes('<circle class="mv2-radar-peak"'));
   assert.ok(html.includes("โปรไฟล์เจ้าของ"));
+  assert.ok(html.includes('class="mv2-owner-id"'));
   assert.ok(html.includes("หินทำงานกับคุณอย่างไร"));
+  assert.ok(html.includes("เสริมแรง"));
+  assert.ok(html.includes("ระวังจังหวะ"));
   assert.ok(html.includes("มิติชีวิตละเอียด"));
   assert.ok(html.includes("การใช้และข้อควรระวัง"));
   assert.ok(html.includes("มอลดาไวต์"));

@@ -12,6 +12,7 @@ import { fnv1a32 } from "./moldaviteScores.util.js";
  *   work: number,
  *   relationship: number,
  *   money: number,
+ *   identityLabel: string,
  *   summaryLine: string,
  *   traits: string[],
  *   derivationNote: string,
@@ -44,6 +45,18 @@ export function deriveMoldaviteOwnerAxisProfile(birthdateUsed, fallbackSeed) {
     traitBank[(hT >> 7) % traitBank.length],
   ].filter((t, i, a) => a.indexOf(t) === i).slice(0, 3);
 
+  const hId = fnv1a32(`${seed}|owner_identity`);
+  /** @type {readonly string[]} */
+  const identityBank = [
+    "คนอ่านจังหวะก่อนขยับ",
+    "คนตั้งหลักก่อนเปลี่ยน",
+    "คนที่ต้องเห็นภาพชัดก่อนตัดสินใจ",
+    "คนใส่ใจขอบเขตก่อนปรับใหญ่",
+    "คนวางโครงสร้างก่อนเร่งเกียร์",
+    "คนรับรู้ความไม่แน่นอนแต่ต้องการจังหวะพัก",
+  ];
+  const identityLabel = identityBank[hId % identityBank.length];
+
   const hs = fnv1a32(`${seed}|owner_summary`);
   const summaries = [
     "แนวโน้มโดยรวม: เน้นโครงสร้างและจังหวะการขยับมากกว่าการเร่งแบบไม่มีจุดยืน",
@@ -61,6 +74,7 @@ export function deriveMoldaviteOwnerAxisProfile(birthdateUsed, fallbackSeed) {
     work,
     relationship,
     money,
+    identityLabel,
     summaryLine,
     traits,
     derivationNote,
