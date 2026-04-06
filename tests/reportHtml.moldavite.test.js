@@ -113,6 +113,8 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes('class="mv2-int-main"'));
   assert.ok(html.includes('class="mv2-int-sub"'));
   assert.ok(!html.includes('class="mv2-int-body"'));
+  assert.ok(!html.includes("แรงโทนเปลี่ยนแปลง"));
+  assert.ok(!html.includes("mv2-mean-h"));
   assert.ok(html.includes("มิติชีวิตละเอียด"));
   assert.ok(html.includes("การใช้และข้อควรระวัง"));
   assert.ok(html.includes("มอลดาไวต์"));

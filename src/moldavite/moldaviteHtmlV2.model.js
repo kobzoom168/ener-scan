@@ -195,11 +195,6 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
   ];
 
   const subtypeShort = String(fs.headline || "มอลดาไวต์").trim() || "มอลดาไวต์";
-  const meaningParagraphs = [
-    `${subtypeShort} เป็นหินที่มักถูกอ่านว่าเด่นเรื่องการเปลี่ยนแปลง`,
-    "พลังของหินนี้มักไปแตะเรื่องที่ค้างอยู่ ให้เริ่มขยับหรือเริ่มใหม่ได้ง่ายขึ้นเมื่อเจ้าของพร้อม",
-    "มันไม่ได้การันตีผลลัพธ์ แต่ช่วยให้เห็นว่าช่วงนี้ชีวิตอาจต้องขยับมากกว่านิ่งอยู่กับที่",
-  ];
 
   /** @type {{ key: AxisKey, label: string, score: number, blurb: string }[]} */
   const lifeAreaRows = AXIS_ORDER.map((k) => {
@@ -264,7 +259,6 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       headline: interactionHeadline,
       rows: interactionRows,
     },
-    meaningParagraphs,
     lifeAreaDetail: { rows: lifeAreaRows },
     usageCaution: { lines: usageLines },
     trustNote: String(payload.trust?.trustNote || "").trim(),

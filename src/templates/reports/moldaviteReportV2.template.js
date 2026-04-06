@@ -289,12 +289,6 @@ export function renderMoldaviteReportV2Html(payload) {
     )
     .join("");
 
-  const meaningHtml =
-    vm.meaningParagraphs.length > 0
-      ? vm.meaningParagraphs
-          .map((p) => `<p class="mv2-para">${escapeHtml(String(p))}</p>`)
-          .join("")
-      : "";
 
   const lifeRowsHtml = vm.lifeAreaDetail.rows
     .map(
@@ -377,7 +371,6 @@ export function renderMoldaviteReportV2Html(payload) {
       margin-bottom: 1.08rem;
     }
     .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2-green-dim); font-weight: 600; }
-    section.mv2-card:has(#mv2-mean-h) { margin-bottom: 1.42rem; }
     .mv2-card--life > h2 { margin: 0 0 0.72rem; }
     .mv2-life-hint { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: rgb(148, 163, 184); opacity: 0.47; font-weight: 400; }
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
@@ -699,8 +692,6 @@ export function renderMoldaviteReportV2Html(payload) {
       <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
       <div class="mv2-int-rows">${interactionHtml}</div>
     </section>
-
-    ${meaningHtml ? `<section class="mv2-card" aria-labelledby="mv2-mean-h"><h2 id="mv2-mean-h">แรงโทนเปลี่ยนแปลง</h2>${meaningHtml}</section>` : ""}
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
       <h2 id="mv2-life-h">มิติชีวิตละเอียด</h2>
