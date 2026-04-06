@@ -88,8 +88,8 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("ช่วงนี้พลังหินไปโฟกัสที่งานชัดที่สุด"));
   assert.ok(html.includes("รองลงมาเป็นเรื่องความสัมพันธ์"));
   assert.ok(html.includes("เรื่องการเงินค่อย ๆ ไปทีละก้าวก็พอ ไม่ต้องเร่ง"));
-  assert.ok(html.includes('class="mv2-radar-key-swatch mv2-radar-key-swatch--owner"'));
-  assert.ok(html.includes('class="mv2-radar-key-swatch mv2-radar-key-swatch--stone"'));
+  assert.ok(html.includes('class="mv2-radar-key-dot mv2-radar-key-dot--owner"'));
+  assert.ok(html.includes('class="mv2-radar-key-dot mv2-radar-key-dot--stone"'));
   assert.ok(html.includes('class="mv2-radar-key-label">คุณ</span>'));
   assert.ok(html.includes('class="mv2-radar-key-label">หิน</span>'));
   assert.ok(!html.includes(UNIQUE_HERO_PROSE));
@@ -106,6 +106,8 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes('mv2-strip-cell--level'));
   assert.ok(html.includes("เร่งการเปลี่ยนแปลง"));
   assert.ok(html.includes("<polygon"));
+  assert.ok(html.includes('class="mv2-radar-svg mv2-radar-svg--animate"'));
+  assert.ok(html.includes('class="mv2-radar-layer mv2-radar-layer--owner"'));
   assert.ok(html.includes("แนวโน้มโดยรวม:"));
   assert.ok(
     html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),

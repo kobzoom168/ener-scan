@@ -86,26 +86,26 @@ function radarAxisLabelEmphasis(rank) {
   if (rank === 1) {
     return {
       fill: "#f0fdf4",
-      fontSize: "3.22",
+      fontSize: "3.6",
       fontWeight: "700",
     };
   }
   if (rank === 2) {
     return {
-      fill: "rgba(220,230,240,0.9)",
-      fontSize: "3.02",
+      fill: "rgba(220,230,240,0.92)",
+      fontSize: "3.38",
       fontWeight: "600",
     };
   }
   return {
-    fill: "rgba(94,110,130,0.74)",
-    fontSize: "2.88",
+    fill: "rgba(94,110,130,0.78)",
+    fontSize: "3.22",
     fontWeight: "500",
   };
 }
 
 /**
- * เปรียบเทียบคะแนนคุณกับหินต่อแกน (ข้อความสั้น ไม่ใช้สัญลักษณ์)
+ * คุณ vs หิน ต่อแกน: |คุณ−หิน| ≤ 6 → ใกล้เคียง มิฉะนั้นใครคะแนนสูงกว่า = นำ
  * @param {number} owner01
  * @param {number} crystal01
  */
@@ -186,19 +186,23 @@ function radarBlock(vm) {
     ${radarHelperHtml}
     <p class="mv2-radar-sub"><span class="mv2-radar-sub-line">สเกล 0–100 ต่อแกน</span><span class="mv2-radar-sub-line">จุดสว่าง = มิติที่เด่นสุด</span></p>
     <div class="mv2-radar-svg-wrap">
-      <svg class="mv2-radar-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key">
+      <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key">
         <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
         <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-        <polygon points="${ownerPts}" fill="rgba(96,165,250,0.17)" stroke="rgba(147,197,253,0.94)" stroke-width="0.78" stroke-linejoin="round" opacity="0.95"/>
-        <polygon points="${crystalPts}" fill="rgba(22,163,74,0.19)" stroke="rgba(52,211,153,0.94)" stroke-width="0.88" stroke-linejoin="round"/>
-        ${crystalMarker}
-        ${labelSvg}
+        <g class="mv2-radar-layer mv2-radar-layer--owner">
+          <polygon points="${ownerPts}" fill="rgba(96,165,250,0.155)" stroke="rgba(147,197,253,0.92)" stroke-width="0.78" stroke-linejoin="round"/>
+        </g>
+        <g class="mv2-radar-layer mv2-radar-layer--crystal">
+          <polygon points="${crystalPts}" fill="rgba(22,163,74,0.175)" stroke="rgba(52,211,153,0.92)" stroke-width="0.88" stroke-linejoin="round"/>
+        </g>
+        <g class="mv2-radar-layer mv2-radar-layer--peak">${crystalMarker}</g>
+        <g class="mv2-radar-layer mv2-radar-layer--labels">${labelSvg}</g>
       </svg>
       <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
-        <div class="mv2-radar-key-row"><span class="mv2-radar-key-label">คุณ</span><span class="mv2-radar-key-swatch mv2-radar-key-swatch--owner" aria-hidden="true"></span></div>
-        <div class="mv2-radar-key-row"><span class="mv2-radar-key-label">หิน</span><span class="mv2-radar-key-swatch mv2-radar-key-swatch--stone" aria-hidden="true"></span></div>
+        <div class="mv2-radar-key-row"><span class="mv2-radar-key-label">คุณ</span><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span></div>
+        <div class="mv2-radar-key-row"><span class="mv2-radar-key-label">หิน</span><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span></div>
       </div>
     </div>
   </section>`;
@@ -359,7 +363,47 @@ export function renderMoldaviteReportV2Html(payload) {
       padding: 0.35rem 0.65rem 0.15rem;
       box-sizing: border-box;
     }
-    .mv2-radar-svg { width: 100%; height: auto; display: block; }
+    .mv2-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
+    .mv2-radar-svg--animate .mv2-radar-layer--owner,
+    .mv2-radar-svg--animate .mv2-radar-layer--crystal {
+      transform-box: view-box;
+      transform-origin: 50% 50%;
+      opacity: 1;
+      transform: scale(1);
+    }
+    .mv2-radar-svg--animate .mv2-radar-layer--peak,
+    .mv2-radar-svg--animate .mv2-radar-layer--labels {
+      opacity: 1;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .mv2-radar-svg--animate .mv2-radar-layer--owner {
+        animation: mv2RdrPoly 0.58s cubic-bezier(0.22, 1, 0.36, 1) 0.02s forwards;
+      }
+      .mv2-radar-svg--animate .mv2-radar-layer--crystal {
+        animation: mv2RdrPoly 0.54s cubic-bezier(0.22, 1, 0.36, 1) 0.14s forwards;
+      }
+      .mv2-radar-svg--animate .mv2-radar-layer--peak {
+        animation: mv2RdrFade 0.42s ease-out 0.28s forwards;
+      }
+      .mv2-radar-svg--animate .mv2-radar-layer--labels {
+        animation: mv2RdrFade 0.44s ease-out 0.44s forwards;
+      }
+    }
+    @keyframes mv2RdrPoly {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes mv2RdrFade {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mv2-radar-svg--animate .mv2-radar-layer {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+      }
+    }
     .mv2-radar-svg .mv2-radar-peak {
       filter: drop-shadow(0 0 1.2px rgba(52, 211, 153, 0.5)) drop-shadow(0 0 3px rgba(34, 197, 94, 0.28));
     }
@@ -369,8 +413,8 @@ export function renderMoldaviteReportV2Html(payload) {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.28rem;
-      font-size: 0.68rem;
+      gap: 0.26rem;
+      font-size: 0.72rem;
       line-height: 1.35;
       letter-spacing: 0.02em;
       font-weight: 500;
@@ -380,28 +424,28 @@ export function renderMoldaviteReportV2Html(payload) {
       flex-direction: row;
       align-items: center;
       justify-content: flex-start;
-      gap: 0.42rem;
-      min-width: 5.5rem;
+      gap: 0.38rem;
+      min-width: 5.2rem;
     }
     .mv2-radar-key-label {
       flex: 0 0 1.65rem;
       text-align: right;
       color: rgba(226, 232, 240, 0.92);
     }
-    .mv2-radar-key-swatch {
-      width: 1.2rem;
-      height: 0.58rem;
-      border-radius: 2px;
+    .mv2-radar-key-dot {
+      width: 0.48rem;
+      height: 0.48rem;
+      border-radius: 50%;
       flex-shrink: 0;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.14);
     }
-    .mv2-radar-key-swatch--owner {
-      background: linear-gradient(180deg, rgba(186, 230, 253, 0.95), rgba(96, 165, 250, 0.88));
-      box-shadow: 0 0 10px rgba(96, 165, 250, 0.28);
+    .mv2-radar-key-dot--owner {
+      background: radial-gradient(circle at 32% 28%, rgba(224,242,254,0.98), rgba(96, 165, 250, 0.9));
+      box-shadow: 0 0 8px rgba(96, 165, 250, 0.32);
     }
-    .mv2-radar-key-swatch--stone {
-      background: linear-gradient(180deg, rgba(134, 239, 172, 0.95), rgba(34, 197, 94, 0.85));
-      box-shadow: 0 0 10px rgba(34, 197, 94, 0.28);
+    .mv2-radar-key-dot--stone {
+      background: radial-gradient(circle at 32% 28%, rgba(220,252,231,0.96), rgba(34, 197, 94, 0.88));
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
     }
     .mv2-graph-sum-highlight {
       margin: 0.35rem 0 0.5rem;
