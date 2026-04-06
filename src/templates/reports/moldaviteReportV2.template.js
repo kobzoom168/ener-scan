@@ -285,7 +285,7 @@ export function renderMoldaviteReportV2Html(payload) {
   const interactionHtml = vm.interactionSummary.rows
     .map(
       (row) =>
-        `<li class="mv2-int-row"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-body">${escapeHtml(row.body)}</span></li>`,
+        `<div class="mv2-int-row"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-main">${escapeHtml(row.main)}</span>${row.sub ? `<span class="mv2-int-sub">${escapeHtml(row.sub)}</span>` : ""}</div>`,
     )
     .join("");
 
@@ -616,10 +616,43 @@ export function renderMoldaviteReportV2Html(payload) {
       color: rgba(148,163,184,0.7);
       font-size: 0.81em;
     }
-    .mv2-int-row { list-style: none; margin: 0; padding-left: 0; display: flex; flex-direction: column; gap: 0.2rem; }
-    .mv2-int-kicker { display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6ee7b7; margin-bottom: 0.05rem; }
-    .mv2-int-body { font-size: 0.82rem; line-height: 1.45; color: rgba(215,213,208,0.95); }
-    .mv2-int-list { list-style: none; padding: 0.35rem 0 0; margin: 0; display: flex; flex-direction: column; gap: 1.15rem; }
+    .mv2-int-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.42rem;
+      padding: 0.15rem 0 0;
+    }
+    .mv2-int-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.12rem;
+      padding: 0.32rem 0.5rem;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.028);
+      border: 1px solid rgba(255,255,255,0.055);
+    }
+    .mv2-int-row + .mv2-int-row {
+      padding: 0.22rem 0.5rem;
+    }
+    .mv2-int-kicker {
+      font-size: 0.64rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(110,231,183,0.78);
+    }
+    .mv2-int-main {
+      font-size: 0.88rem;
+      font-weight: 700;
+      line-height: 1.3;
+      color: rgba(236,240,246,0.96);
+    }
+    .mv2-int-sub {
+      font-size: 0.74rem;
+      font-weight: 400;
+      line-height: 1.35;
+      color: rgba(148,163,184,0.62);
+    }
     .mv2-note { font-size: 0.72rem; color: #6b7280; margin-top: 0.6rem; }
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
     .mv2-life-card { border-top: 1px solid rgba(255,255,255,0.032); padding: 0.85rem 0 0; margin-top: 0.82rem; }
@@ -664,7 +697,7 @@ export function renderMoldaviteReportV2Html(payload) {
 
     <section class="mv2-card" aria-labelledby="mv2-int-h">
       <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
-      <ul class="mv2-int-list">${interactionHtml}</ul>
+      <div class="mv2-int-rows">${interactionHtml}</div>
     </section>
 
     ${meaningHtml ? `<section class="mv2-card" aria-labelledby="mv2-mean-h"><h2 id="mv2-mean-h">แรงโทนเปลี่ยนแปลง</h2>${meaningHtml}</section>` : ""}

@@ -106,8 +106,13 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes('class="mv2-owner-note"'));
   assert.ok(!html.includes('class="mv2-owner-id"'));
   assert.ok(html.includes("หินทำงานกับคุณอย่างไร"));
-  assert.ok(html.includes("เสริมแรง"));
-  assert.ok(html.includes("ระวังจังหวะ"));
+  assert.ok(html.includes('class="mv2-int-rows"'));
+  assert.ok(html.includes('class="mv2-int-kicker">เสริมแรง</span>'));
+  assert.ok(html.includes('class="mv2-int-kicker">ระวังจังหวะ</span>'));
+  assert.ok(html.includes('class="mv2-int-kicker">โทนหิน</span>'));
+  assert.ok(html.includes('class="mv2-int-main"'));
+  assert.ok(html.includes('class="mv2-int-sub"'));
+  assert.ok(!html.includes('class="mv2-int-body"'));
   assert.ok(html.includes("มิติชีวิตละเอียด"));
   assert.ok(html.includes("การใช้และข้อควรระวัง"));
   assert.ok(html.includes("มอลดาไวต์"));
@@ -137,7 +142,7 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(!html.includes("mv2-radar-series-lbl"));
   assert.ok(html.includes('class="mv2-radar-key"'));
   assert.ok(!html.includes("โทนหิน (มิติชีวิต)"));
-  assert.ok(html.includes("ไม่ได้การันตีผลลัพธ์"));
+  assert.ok(html.includes("ไม่ได้การันตีผลทันที"));
   assert.ok(!html.includes("\u2014"));
 });
 
