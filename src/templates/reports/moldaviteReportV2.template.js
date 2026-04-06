@@ -650,8 +650,8 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
     .mv2-life-card { border-top: 1px solid rgba(255,255,255,0.032); padding: 0.85rem 0 0; margin-top: 0.82rem; }
     .mv2-life-card:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
-    .mv2-life-head { display: flex; justify-content: space-between; font-weight: 600; font-size: 0.9rem; }
-    .mv2-life-score { color: #15803d; font-weight: 500; opacity: 0.82; font-variant-numeric: tabular-nums; }
+    .mv2-life-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; font-weight: 600; font-size: 0.9rem; }
+    .mv2-life-score { color: #15803d; font-weight: 600; font-size: 0.82rem; opacity: 0.78; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
     .mv2-life-blurb { margin-top: 0.35rem; }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
