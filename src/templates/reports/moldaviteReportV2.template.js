@@ -142,13 +142,15 @@ function radarAxisLabelSvg(L, rank) {
   const ta = L.ta;
   const textAnchor = ta === "middle" ? "middle" : ta === "end" ? "end" : "start";
 
-  const inner = [
-    `<tspan fill="${catFill}" font-weight="${titleFw}">${escapeHtml(title)}</tspan>`,
+  // Sibling <tspan>s directly under <text> (no nested wrapper tspan). WebKit/Safari
+  // mis-measures inline progression for nested tspans with Thai + digits, causing overlap.
+  const tspans = [
+    `<tspan x="${ax.toFixed(2)}" y="${y.toFixed(2)}" fill="${catFill}" font-weight="${titleFw}">${escapeHtml(title)}</tspan>`,
     `<tspan fill="${catFill}" font-weight="500">${gapTitleScore}</tspan>`,
     `<tspan fill="${numFill}" font-weight="700">${escapeHtml(scoreStr)}</tspan>`,
-  ].join("");
+  ];
 
-  return `<text class="mv2-radar-axis" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="${textAnchor}" text-rendering="optimizeLegibility"><tspan x="${ax.toFixed(2)}" y="${y.toFixed(2)}">${inner}</tspan></text>`;
+  return `<text class="mv2-radar-axis" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="${textAnchor}" text-rendering="optimizeLegibility">${tspans.join("")}</text>`;
 }
 
 /**
