@@ -566,8 +566,9 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-graph-sum-lines { margin: 0; display: flex; flex-direction: column; gap: 0.36rem; }
     .mv2-graph-sum-line { margin: 0; font-size: 0.88rem; line-height: 1.38; color: rgba(215,213,208,0.96); font-weight: 400; }
     .mv2-graph-sum-line--lead { font-weight: 600; color: rgba(240,253,244,0.96); font-size: 0.9rem; }
+    .mv2-card--owner > h2 { margin-bottom: 0.22rem; }
     .mv2-owner-zodiac {
-      margin: 0 0 0.55rem;
+      margin: 0 0 0.5rem;
       font-size: 1.15rem;
       font-weight: 700;
       color: #e2e8f0;
@@ -576,8 +577,8 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-owner-chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.38rem;
-      margin: 0 0 0.55rem;
+      gap: 0.42rem 0.55rem;
+      margin: 0 0 0.5rem;
     }
     .mv2-owner-chip {
       display: inline-block;
@@ -593,8 +594,8 @@ export function renderMoldaviteReportV2Html(payload) {
     }
     .mv2-owner-note {
       margin: 0;
-      font-size: 0.68rem;
-      color: rgba(148,163,184,0.55);
+      font-size: 0.62rem;
+      color: rgba(148,163,184,0.42);
       font-weight: 400;
     }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
