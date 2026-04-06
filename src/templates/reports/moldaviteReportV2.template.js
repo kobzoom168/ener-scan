@@ -229,7 +229,7 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2-green-dim); font-weight: 600; }
     section.mv2-card:has(#mv2-mean-h) { margin-bottom: 1.42rem; }
     .mv2-card--life > h2 { margin: 0 0 0.72rem; }
-    .mv2-life-hint { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: rgba(100,116,139,0.75); opacity: 0.78; font-weight: 400; }
+    .mv2-life-hint { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: rgb(148, 163, 184); opacity: 0.47; font-weight: 400; }
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
     .mv2-radar-sub { margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; display: flex; flex-direction: column; gap: 0.2rem; }
@@ -249,6 +249,10 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-owner-id { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 700; color: #a7f3d0; letter-spacing: 0.02em; }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }
+    section[aria-labelledby="mv2-use-h"] .mv2-owner-traits li::marker {
+      color: rgba(148,163,184,0.7);
+      font-size: 0.81em;
+    }
     .mv2-int-row { list-style: none; margin: 0; padding-left: 0; display: flex; flex-direction: column; gap: 0.2rem; }
     .mv2-int-kicker { display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6ee7b7; margin-bottom: 0.05rem; }
     .mv2-int-body { font-size: 0.82rem; line-height: 1.45; color: rgba(215,213,208,0.95); }
