@@ -68,6 +68,40 @@ function clamp0100(v) {
 }
 
 /**
+ * เรียงแกนตามคะแนนโทนหิน (สูงสุดก่อน) — เสมอกันใช้ลำดับ work → relationship → money
+ * @param {Record<AxisKey, number>} crystal
+ * @returns {AxisKey[]}
+ */
+export function sortAxisKeysByCrystalDesc(crystal) {
+  return [...AXIS_ORDER].sort((a, b) => {
+    const db = Number(crystal[b]) || 0;
+    const da = Number(crystal[a]) || 0;
+    if (db !== da) return db - da;
+    return AXIS_ORDER.indexOf(a) - AXIS_ORDER.indexOf(b);
+  });
+}
+
+/**
+ * สรุปจากกราฟ (Moldavite V2): หินเด่นที่ไหน / รอง / ควรค่อย ๆ ไป
+ * @param {Record<AxisKey, number>} crystal
+ * @returns {string[]}
+ */
+export function buildGraphSummaryLinesFromCrystal(crystal) {
+  const [first, second, third] = sortAxisKeysByCrystalDesc(crystal);
+  /** @type {Record<AxisKey, string>} */
+  const topLine = {
+    work: "หินก้อนนี้เด่นสุดที่งาน",
+    relationship: "หินก้อนนี้ช่วยเรื่องความสัมพันธ์มากที่สุด",
+    money: "หินก้อนนี้เด่นสุดที่การเงิน",
+  };
+  return [
+    topLine[first],
+    `รองลงมาคือ${AXIS_LABEL_TH[second]}`,
+    `เรื่อง${AXIS_LABEL_TH[third]}ควรค่อย ๆ ดูจังหวะ`,
+  ];
+}
+
+/**
  * @param {import("../services/reports/reportPayload.types.js").ReportPayload} payload
  */
 export function buildMoldaviteHtmlV2ViewModel(payload) {
@@ -138,8 +172,7 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
   const tensionLabel = AXIS_LABEL_TH[tensionKey];
 
   const graphSummary = {
-    alignmentTargetThai: alignLabel,
-    tensionTargetThai: tensionLabel,
+    lines: buildGraphSummaryLinesFromCrystal(crystal),
   };
 
   const interactionHeadline = "หินทำงานกับคุณอย่างไร";
