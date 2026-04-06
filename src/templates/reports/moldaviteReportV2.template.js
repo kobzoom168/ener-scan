@@ -112,31 +112,6 @@ function radarNumberFill(rank) {
 }
 
 /**
- * ประมาณความกว้างข้อความ (viewBox) — ค่าสูงกว่าเล็กน้อยเพื่อกันหน้าไอโฟน/ Safari วาดกว้างกว่าเดสก์ท็อป
- * @param {string} str
- * @param {string} fs
- * @param {string} [axisKey]
- */
-function estimateRadarTextWidth(str, fs, axisKey) {
-  const n = Array.from(String(str)).length;
-  let per = Number(fs) * 0.53;
-  if (axisKey === "relationship") per *= 1.06;
-  else if (axisKey === "money") per *= 1.03;
-  return n * per;
-}
-
-/**
- * เผื่อความกว้างเพิ่มเมื่อคำนวณจุดยึด — ลดการชนระหว่างซ้ายล่าง/ขวาล่างบนมือถือ
- * @param {string} axisKey
- */
-function radarLayoutWidthPad(axisKey) {
-  if (axisKey === "relationship") return 2.4;
-  if (axisKey === "money") return 1.8;
-  if (axisKey === "work") return 0.85;
-  return 1;
-}
-
-/**
  * คุณ vs หิน ต่อแกน: |คุณ−หิน| ≤ 6 → ใกล้เคียง มิฉะนั้นใครคะแนนสูงกว่า = นำ
  * @param {number} owner01
  * @param {number} crystal01
@@ -150,55 +125,44 @@ function radarAxisCompareStatus(owner01, crystal01) {
 }
 
 /**
- * หินแรงกว่า → ↑ คุณแรงกว่า → ↓ ใกล้เคียง → →
- * @param {number} owner01
- * @param {number} crystal01
+ * บรรทัด 2 เล็กกว่าเล็กน้อย — อ่านง่ายบนมือถือ ไม่แย่งความกว้างแนวนอนกับบรรทัด 1
+ * @param {string} line1Fs
  */
-function radarAxisImpactArrow(owner01, crystal01) {
-  const o = Math.round(Number(owner01) || 0);
-  const c = Math.round(Number(crystal01) || 0);
-  if (Math.abs(o - c) <= RADAR_AXIS_COMPARE_EPS) return "→";
-  if (c > o) return "↑";
-  return "↓";
+function radarAxisLine2FontSize(line1Fs) {
+  return (Number(line1Fs) * 0.86).toFixed(2);
 }
 
 /**
- * @param {{ key: string, anchorX: number, ay: number, ta: "middle"|"start"|"end", owner: number, crystal: number }} L
+ * ป้ายแกน 2 บรรทัด: (1) ชื่อ + คะแนน (2) สถานะเทียบ — จัดกลาง/ซ้าย/ขวาตามแกน ไม่ใช้ลูกศรบนกราฟ
+ * @param {{ key: string, anchorX: number, ayLine1: number, lineDy: number, ta: "middle"|"start"|"end", owner: number, crystal: number }} L
  * @param {number} rank
  */
 function radarAxisLabelSvg(L, rank) {
   const fs = radarAxisFontSize(rank);
+  const fs2 = radarAxisLine2FontSize(fs);
+  const ax = L.anchorX;
+  const y1 = L.ayLine1;
+  const lineDy = L.lineDy;
   const title = AXIS_TITLE_TH[L.key];
   const scoreStr = String(Math.round(Number(L.crystal) || 0));
   const statusStr = radarAxisCompareStatus(L.owner, L.crystal);
-  const arrowStr = radarAxisImpactArrow(L.owner, L.crystal);
   const catFill = radarCategoryFill(rank);
   const numFill = radarNumberFill(rank);
   const titleFw = rank === 1 ? "600" : "500";
-  const gapAfterTitle = "\u00A0\u00A0\u00A0\u00A0";
-  const gapBeforeStatus = "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0";
-  const parts = [
-    { ch: title, fill: catFill, fw: titleFw, op: "1" },
-    { ch: gapAfterTitle, fill: catFill, fw: "500", op: "1" },
-    { ch: scoreStr, fill: numFill, fw: "700", op: "1" },
-    { ch: gapBeforeStatus, fill: numFill, fw: "500", op: "1" },
-    { ch: statusStr, fill: catFill, fw: "500", op: "0.68" },
-    { ch: "\u00A0", fill: catFill, fw: "500", op: "0.68" },
-    { ch: arrowStr, fill: catFill, fw: "500", op: "0.68" },
-  ];
-  const totalW =
-    parts.reduce((s, p) => s + estimateRadarTextWidth(p.ch, fs, L.key), 0) +
-    radarLayoutWidthPad(L.key);
-  let startX = L.anchorX;
-  if (L.ta === "middle") startX = L.anchorX - totalW / 2;
-  else if (L.ta === "end") startX = L.anchorX - totalW;
-  const inner = parts
-    .map(
-      (p) =>
-        `<tspan fill="${p.fill}" font-weight="${p.fw}" opacity="${p.op}">${escapeHtml(p.ch)}</tspan>`,
-    )
-    .join("");
-  return `<text class="mv2-radar-axis" x="${startX.toFixed(2)}" y="${L.ay}" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="start" dominant-baseline="middle" text-rendering="optimizeLegibility">${inner}</text>`;
+  const gapTitleScore = "\u00A0\u00A0\u00A0";
+  const ta = L.ta;
+  const textAnchor = ta === "middle" ? "middle" : ta === "end" ? "end" : "start";
+
+  const line1Spans = [
+    `<tspan fill="${catFill}" font-weight="${titleFw}">${escapeHtml(title)}</tspan>`,
+    `<tspan fill="${catFill}" font-weight="500">${gapTitleScore}</tspan>`,
+    `<tspan fill="${numFill}" font-weight="700">${escapeHtml(scoreStr)}</tspan>`,
+  ].join("");
+
+  return `<text class="mv2-radar-axis mv2-radar-axis--2l" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="${textAnchor}" text-rendering="optimizeLegibility">
+    <tspan x="${ax.toFixed(2)}" y="${y1.toFixed(2)}">${line1Spans}</tspan>
+    <tspan x="${ax.toFixed(2)}" dy="${lineDy.toFixed(2)}" font-size="${fs2}" fill="${catFill}" font-weight="500" opacity="0.62">${escapeHtml(statusStr)}</tspan>
+  </text>`;
 }
 
 /**
@@ -223,28 +187,31 @@ function radarBlock(vm) {
 
   const rankOf = axisRankByCrystalStrength(g.crystal);
 
-  /** Bottom-right = ความสัมพันธ์, bottom-left = การเงิน (matches axis math). */
+  /** Bottom-right = ความสัมพันธ์, bottom-left = การเงิน — ป้าย 2 บรรทัด ลดการชนแนวนอนบน iPhone/Safari */
   const labels = [
     {
       key: "work",
       anchorX: RADAR_CX,
-      ay: 6.1,
+      ayLine1: 6.0,
+      lineDy: 4.1,
       ta: /** @type {"middle"} */ ("middle"),
       owner: ow,
       crystal: cw,
     },
     {
       key: "relationship",
-      anchorX: 93.75,
-      ay: 74.45,
+      anchorX: 93.5,
+      ayLine1: 73.75,
+      lineDy: 4.05,
       ta: /** @type {"end"} */ ("end"),
       owner: or_,
       crystal: cr,
     },
     {
       key: "money",
-      anchorX: 5.5,
-      ay: 77.85,
+      anchorX: 5.75,
+      ayLine1: 76.55,
+      lineDy: 4.05,
       ta: /** @type {"start"} */ ("start"),
       owner: om,
       crystal: cm,
@@ -484,6 +451,7 @@ export function renderMoldaviteReportV2Html(payload) {
       letter-spacing: 0.01em;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Noto Sans Thai", "Sarabun", sans-serif;
     }
+    .mv2-radar-svg text.mv2-radar-axis--2l { dominant-baseline: alphabetic; }
     .mv2-radar-svg .mv2-radar-peak {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
     }
