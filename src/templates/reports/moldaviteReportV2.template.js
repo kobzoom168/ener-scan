@@ -89,7 +89,7 @@ function radarBlock(vm) {
         ${crystalMarker}
         ${labelSvg}
       </svg>
-      <p class="mv2-radar-peak-note" id="mv2-radar-peak-note">เด่นสุดตอนนี้: ${escapeHtml(peakLabel)}</p>
+      <p class="mv2-radar-peak-note" id="mv2-radar-peak-note">เด่นสุด: ${escapeHtml(peakLabel)}</p>
     </div>
     <ul class="mv2-legend" role="list">
       <li><span class="mv2-dot mv2-dot--owner"></span> คุณ (จากวันเกิด / รหัสรายงาน)</li>
@@ -205,7 +205,7 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-tag { color: var(--mv2-green-dim); font-size: 0.92rem; margin: 0.25rem 0 1.05rem; line-height: 1.4; }
     .mv2-main { color: var(--mv2-green); font-weight: 600; font-size: 0.95rem; margin: 0 0 0.5rem; border-left: 3px solid rgba(34,197,94,0.5); padding-left: 0.6rem; }
     .mv2-h1 + .mv2-main { margin-top: 0.35rem; }
-    .mv2-date { font-size: 0.72rem; color: var(--mv2-muted); margin-top: 0.35rem; }
+    .mv2-date { font-size: 0.66rem; color: rgba(113,118,128,0.78); margin-top: 0.35rem; font-weight: 400; letter-spacing: 0.02em; opacity: 0.88; }
     .mv2-strip {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
