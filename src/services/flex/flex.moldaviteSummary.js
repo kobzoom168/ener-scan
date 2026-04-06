@@ -26,8 +26,10 @@ const FLEX_ACCENT = MOLDAVITE_CTA_BG;
 const FLEX_TEXT_PRIMARY = "#f3f4f6";
 const FLEX_TEXT_SECONDARY = "#9ca3af";
 const FLEX_TEXT_CAPTION = "#9ca3af";
-/** Tagline under title — muted on dark. */
-const MOLDAVITE_TITLE_TAGLINE_COLOR = "#a1a1aa";
+/** Tagline under title — softer than body so headline stays primary. */
+const MOLDAVITE_TITLE_TAGLINE_COLOR = "#71717a";
+/** Life-area helper line — dimmer than captions; metadata only. */
+const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
 /** Static identity line under title (Flex-only; not detection logic). */
 const MOLDAVITE_TITLE_TAGLINE = "หินเทคไทต์ · โทนเขียว";
 
@@ -211,7 +213,7 @@ function createLifeAreasBarBlock(lifeAreas) {
         type: "text",
         text: "เรียงจากคะแนนสูงไปต่ำ",
         size: "xs",
-        color: FLEX_TEXT_CAPTION,
+        color: LIFE_AREA_HELPER_TEXT_COLOR,
         wrap: true,
         margin: "xs",
       },
@@ -481,7 +483,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
           wrap: true,
           maxLines: 2,
           lineSpacing: "3px",
-          margin: "md",
+          margin: "xl",
         }
       : null;
 
