@@ -32,42 +32,6 @@ function radarComparePhrase(owner01, crystal01) {
 }
 
 /**
- * Centroid of radar polygon in viewBox coords (for inline series labels).
- * @param {Record<string, number>} values01to100
- */
-function radarPolygonCentroid(values01to100) {
-  let sx = 0;
-  let sy = 0;
-  for (let i = 0; i < 3; i++) {
-    const ang = RADAR_ANGLES[i];
-    const k = AXIS_KEYS[i];
-    const v = Math.max(0, Math.min(100, Number(values01to100[k]) || 0)) / 100;
-    sx += RADAR_CX + RADAR_R * v * Math.cos(ang);
-    sy += RADAR_CY + RADAR_R * v * Math.sin(ang);
-  }
-  return { x: sx / 3, y: sy / 3 };
-}
-
-/**
- * @param {{ x: number, y: number }} a
- * @param {{ x: number, y: number }} b
- * @param {number} minDist
- */
-function nudgeApart(a, b, minDist) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const dist = Math.hypot(dx, dy) || 1;
-  if (dist >= minDist) return { a: { ...a }, b: { ...b } };
-  const push = (minDist - dist) / 2 + 0.6;
-  const ux = dx / dist;
-  const uy = dy / dist;
-  return {
-    a: { x: a.x - ux * push, y: a.y - uy * push },
-    b: { x: b.x + ux * push, y: b.y + uy * push },
-  };
-}
-
-/**
  * Footer render/meta line: off in production unless explicitly enabled (support/debug).
  * `REPORT_HTML_RENDER_META=true|1|yes` → show; `false|0|no` → hide;
  * unset → show only when `NODE_ENV !== "production"`.
@@ -113,23 +77,6 @@ function radarVertexForAxis(values01to100, axisKey) {
 /**
  * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
  */
-/**
- * @param {object} p
- * @param {number} p.x
- * @param {number} p.y0
- * @param {"middle"|"start"|"end"} p.anchor
- * @param {string} p.title
- * @param {number} p.cScore
- * @param {number} p.oScore
- */
-function radarAxisThreeLine(p) {
-  const { x, y0, anchor, title, cScore, oScore } = p;
-  const l1 = escapeHtml(title);
-  const l2 = escapeHtml(`หิน ${cScore}`);
-  const l3 = escapeHtml(`คุณ ${oScore}`);
-  return `<text x="${x}" y="${y0}" text-anchor="${anchor}" fill="rgba(200,210,205,0.88)" font-size="2.45" font-family="inherit"><tspan x="${x}" dy="0">${l1}</tspan><tspan x="${x}" dy="2.65">${l2}</tspan><tspan x="${x}" dy="2.65">${l3}</tspan></text>`;
-}
-
 function radarBlock(vm) {
   const g = vm.graph;
   const ownerPts = radarPolygonPoints(g.owner);
@@ -141,45 +88,35 @@ function radarBlock(vm) {
   const cw = Math.round(Number(g.crystal.work) || 0);
   const cr = Math.round(Number(g.crystal.relationship) || 0);
   const cm = Math.round(Number(g.crystal.money) || 0);
-  const ow = Math.round(Number(g.owner.work) || 0);
-  const or_ = Math.round(Number(g.owner.relationship) || 0);
-  const om = Math.round(Number(g.owner.money) || 0);
 
-  const cOwn = radarPolygonCentroid(g.crystal);
-  const oOwn = radarPolygonCentroid(g.owner);
-  const { a: posCrystal, b: posOwner } = nudgeApart(cOwn, oOwn, 7);
-
-  const seriesLabels = `
-        <text class="mv2-radar-series-lbl" x="${posCrystal.x.toFixed(2)}" y="${posCrystal.y.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" fill="rgba(52,211,153,0.7)" font-size="2.35" font-family="inherit" font-weight="600">${escapeHtml("หิน")}</text>
-        <text class="mv2-radar-series-lbl" x="${posOwner.x.toFixed(2)}" y="${posOwner.y.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" fill="rgba(147,197,253,0.7)" font-size="2.35" font-family="inherit" font-weight="600">${escapeHtml("คุณ")}</text>`;
-
+  /** ชื่อแกน + คะแนนโทนหินเท่านั้น (คะแนน “คุณ” อยู่ที่รายการเปรียบเทียบใต้กราฟ) */
   /** Bottom-right = ความสัมพันธ์, bottom-left = การเงิน (matches axis math). */
-  const labelSvg = [
-    radarAxisThreeLine({
-      x: RADAR_CX,
-      y0: 4.2,
-      anchor: "middle",
-      title: AXIS_TITLE_TH.work,
-      cScore: cw,
-      oScore: ow,
-    }),
-    radarAxisThreeLine({
-      x: 88,
-      y0: 65.5,
-      anchor: "end",
-      title: AXIS_TITLE_TH.relationship,
-      cScore: cr,
-      oScore: or_,
-    }),
-    radarAxisThreeLine({
-      x: 12,
-      y0: 65.5,
-      anchor: "start",
-      title: AXIS_TITLE_TH.money,
-      cScore: cm,
-      oScore: om,
-    }),
-  ].join("");
+  const labels = [
+    {
+      ax: RADAR_CX,
+      ay: 8,
+      text: `${AXIS_TITLE_TH.work} ${cw}`,
+      ta: "middle",
+    },
+    {
+      ax: 88,
+      ay: 72,
+      text: `${AXIS_TITLE_TH.relationship} ${cr}`,
+      ta: "end",
+    },
+    {
+      ax: 12,
+      ay: 72,
+      text: `${AXIS_TITLE_TH.money} ${cm}`,
+      ta: "start",
+    },
+  ];
+  const labelSvg = labels
+    .map(
+      (L) =>
+        `<text x="${L.ax}" y="${L.ay}" fill="rgba(200,210,205,0.9)" font-size="2.85" text-anchor="${L.ta}" font-family="inherit">${escapeHtml(L.text)}</text>`,
+    )
+    .join("");
 
   const compareRows = AXIS_KEYS.map((key) => {
     const k = AXIS_TITLE_TH[key];
@@ -199,7 +136,6 @@ function radarBlock(vm) {
         <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <polygon points="${ownerPts}" fill="rgba(96,165,250,0.2)" stroke="rgba(147,197,253,0.98)" stroke-width="0.78" stroke-linejoin="round" opacity="0.95"/>
         <polygon points="${crystalPts}" fill="rgba(22,163,74,0.22)" stroke="rgba(52,211,153,0.98)" stroke-width="0.88" stroke-linejoin="round"/>
-        ${seriesLabels}
         ${crystalMarker}
         ${labelSvg}
       </svg>
