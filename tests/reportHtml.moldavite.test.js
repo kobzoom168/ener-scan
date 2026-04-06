@@ -124,10 +124,10 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes('class="mv2-radar-axis-t"'));
   assert.ok(html.includes(">งาน</span>"));
   assert.ok(html.includes(">82</span>"));
-  assert.ok(html.includes('class="mv2-radar-compare"'));
-  assert.ok(html.includes("งาน: หินสูงกว่า"));
-  assert.ok(html.includes("ความสัมพันธ์: หินสูงกว่า"));
-  assert.ok(html.includes("การเงิน: ใกล้เคียง"));
+  assert.ok(html.includes('class="mv2-radar-axis-cmp"'));
+  assert.ok(html.includes(">หินสูงกว่า</span>"));
+  assert.ok(html.includes(">ใกล้เคียง</span>"));
+  assert.ok(!html.includes('class="mv2-radar-compare"'));
   assert.ok(!html.includes("mv2-radar-series-lbl"));
   assert.ok(html.includes('class="mv2-radar-key"'));
   assert.ok(!html.includes("โทนหิน (มิติชีวิต)"));

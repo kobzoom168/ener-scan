@@ -121,11 +121,10 @@ function radarAxisComparePhrase(owner01, crystal01) {
 }
 
 /**
- * ป้ายบนกราฟ: ชื่อแกน + คะแนนโทนหินเท่านั้น
+ * ป้ายบนกราฟ: ชื่อแกน + คะแนนหิน + ข้อความเทียบ (บรรทัดที่สอง)
  * Rendered as plain HTML (absolutely positioned over the SVG) so iOS Safari's
- * body text shaper handles Thai clusters correctly; SVG <text> and foreignObject
- * both fail on WebKit mobile due to mark/digit advance miscalculation.
- * @param {{ key: string, crystal: number }} L
+ * body text shaper handles Thai clusters correctly.
+ * @param {{ key: string, owner: number, crystal: number }} L
  * @param {number} rank
  */
 function radarAxisLabelHtml(L, rank) {
@@ -135,11 +134,12 @@ function radarAxisLabelHtml(L, rank) {
   const catFill = radarCategoryFill(rank);
   const numFill = radarNumberFill(rank);
   const titleFw = rank === 1 ? "600" : "500";
+  const compare = radarAxisComparePhrase(L.owner, L.crystal);
 
   const titleStyle = `font-weight:${titleFw};color:${catFill}`;
   const numStyle = `font-weight:700;color:${numFill}`;
 
-  return `<span class="mv2-radar-lbl mv2-radar-lbl--${L.key}" style="--mv2-rfs:${fs}"><span class="mv2-radar-axis-t" style="${titleStyle}">${escapeHtml(title)}</span> <span class="mv2-radar-axis-n" style="${numStyle}">${escapeHtml(scoreStr)}</span></span>`;
+  return `<span class="mv2-radar-lbl mv2-radar-lbl--${L.key}" style="--mv2-rfs:${fs}"><span class="mv2-radar-axis-t" style="${titleStyle}">${escapeHtml(title)}</span> <span class="mv2-radar-axis-n" style="${numStyle}">${escapeHtml(scoreStr)}</span><br/><span class="mv2-radar-axis-cmp">${escapeHtml(compare)}</span></span>`;
 }
 
 /**
@@ -237,7 +237,6 @@ function radarBlock(vm) {
         </svg>
         <div class="mv2-radar-labels" aria-hidden="true">${labelHtml}</div>
       </div>
-      ${radarCompareBlockHtml(g)}
       <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
         <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span><span class="mv2-radar-key-label">คุณ</span></span>
         <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span><span class="mv2-radar-key-label">หิน</span></span>
@@ -474,6 +473,14 @@ export function renderMoldaviteReportV2Html(payload) {
       top: 73%;
       left: 0;
       text-align: left;
+    }
+    .mv2-radar-axis-cmp {
+      display: block;
+      font-size: 0.82em;
+      font-weight: 400;
+      color: rgba(203, 213, 225, 0.78);
+      margin-top: 0.08em;
+      letter-spacing: 0.005em;
     }
     .mv2-radar-svg .mv2-radar-peak {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
