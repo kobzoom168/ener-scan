@@ -103,6 +103,11 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(
     html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
   );
+  assert.ok(html.includes("งาน 82"));
+  assert.ok(html.includes("ความสัมพันธ์ 75"));
+  assert.ok(html.includes("การเงิน 69"));
+  assert.ok(html.includes("ไม่ได้การันตีผลลัพธ์"));
+  assert.ok(!html.includes("\u2014"));
 });
 
 test("Moldavite V2: footer render-meta line omitted when NODE_ENV=production", () => {

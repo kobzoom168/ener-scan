@@ -14,6 +14,29 @@ const AXIS_LABEL_TH = {
   money: "การเงิน",
 };
 
+/** Moldavite HTML V2 only: avoid em dash (U+2014) in visible copy. */
+function thaiNoEmDash(s) {
+  return String(s || "")
+    .replace(/\u2014/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+const V2_LIFE_BLURBS = {
+  work:
+    "ช่วงนี้พลังไปแตะเรื่องงานก่อน เช่น บทบาท เป้าหมาย หรือสิ่งที่ค้างอยู่ ทำให้ต้องคิดใหม่ ปรับใหม่ หรือเริ่มบางอย่างเมื่อพร้อม",
+  relationship:
+    "พลังไปแตะเรื่องความสัมพันธ์ในมุมของการสื่อสารและความชัดเจน อาจทำให้ต้องคุยตรงขึ้นหรือเคลียร์ขอบเขตให้ชัด",
+  money:
+    "พลังไปแตะเรื่องการเงินในมุมของการจัดระบบและการตัดสินใจ ช่วยให้เห็นว่าจุดไหนควรปรับก่อน ไม่ใช่คำแนะนำการลงทุน",
+};
+
+const V2_USAGE_LINES = [
+  "เหมาะเมื่ออยากให้เรื่องที่ค้างเริ่มขยับ หรืออยากเปลี่ยนกรอบเดิมในจังหวะที่พร้อมรับความไม่แน่นอน",
+  "ถ้ารู้สึกเข้มหรือเร่งเกินไปในขณะที่ใจยังไม่พร้อมปล่อย ให้ลดจังหวะ แยกความรู้สึกให้ชัด ใช้เป็นกรอบอ่าน ไม่ใช่คำสั่ง",
+  "นี่ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน ถ้ามีปัญหาสุขภาพหรือหนี้สินรุนแรง ควรปรึกษาผู้เชี่ยวชาญ",
+];
+
 /**
  * @param {number} v
  * @returns {number}
@@ -103,31 +126,25 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
   const interactionRows = [
     {
       kicker: "เสริมแรง",
-      body: `มิติ ${alignLabel} — ลื่นไหม ตัดสินใจง่ายขึ้นหรือไม่`,
+      body: `เรื่อง${alignLabel}อาจขยับง่ายขึ้นในช่วงนี้ ทั้งการคุย การตัดสินใจ หรือการทำให้บางเรื่องชัดขึ้น`,
     },
     {
       kicker: "ระวังจังหวะ",
-      body: `มิติ ${tensionLabel} — แยก “เปลี่ยนจริง” กับแรงกดดันชั่วคราว`,
+      body: `เรื่อง${tensionLabel}ควรแยกให้ออกว่าอะไรคือการเปลี่ยนจริง และอะไรคือแรงกดดันชั่วคราว`,
     },
     {
       kicker: "โทนหิน",
-      body: "เร่งเปลี่ยนแปลง — ชี้จังหวะปล่อยของเก่า ไม่สัญญาผล",
+      body:
+        "หินก้อนนี้เด่นเรื่องการขยับและเริ่มใหม่ ไม่ได้บอกว่าทุกอย่างจะดีทันที แต่ชี้ว่าช่วงนี้ไม่เหมาะกับการค้างอยู่ที่เดิม",
     },
   ];
 
-  const hr = mv.htmlReport;
-  const meaningParagraphs =
-    hr && Array.isArray(hr.meaningParagraphs) ? hr.meaningParagraphs : [];
-  const lifeBlurbs =
-    hr && hr.lifeAreaBlurbs && typeof hr.lifeAreaBlurbs === "object"
-      ? hr.lifeAreaBlurbs
-      : {};
-  const usageLines =
-    hr && Array.isArray(hr.usageCautionLines) ? hr.usageCautionLines : [
-      "เหมาะเมื่อต้องการเร่งให้เรื่องที่ค้างขยับหรือเปลี่ยนกรอบเดิมในจังหวะที่พร้อม",
-      "อาจรู้สึกเข้มเมื่อใจยังไม่พร้อมปล่อย — ใช้เป็นกรอบอ่าน ไม่ใช่คำสั่ง",
-      "ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
-    ];
+  const subtypeShort = String(fs.headline || "มอลดาไวต์").trim() || "มอลดาไวต์";
+  const meaningParagraphs = [
+    `${subtypeShort} เป็นหินที่มักถูกอ่านว่าเด่นเรื่องการเปลี่ยนแปลง`,
+    "พลังของหินนี้มักไปแตะเรื่องที่ค้างอยู่ ให้เริ่มขยับหรือเริ่มใหม่ได้ง่ายขึ้นเมื่อเจ้าของพร้อม",
+    "มันไม่ได้การันตีผลลัพธ์ แต่ช่วยให้เห็นว่าช่วงนี้ชีวิตอาจต้องขยับมากกว่านิ่งอยู่กับที่",
+  ];
 
   /** @type {{ key: AxisKey, label: string, score: number, blurb: string }[]} */
   const lifeAreaRows = AXIS_ORDER.map((k) => {
@@ -136,17 +153,16 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       e && typeof e === "object" && e.score != null
         ? clamp0100(Number(e.score))
         : 0;
-    const blurb = String(lifeBlurbs[k] || "").trim();
     return {
       key: k,
       label: AXIS_LABEL_TH[k],
       score,
-      blurb:
-        blurb ||
-        "โทนเร่งการเปลี่ยนแปลงอาจปรากฏเป็นการปรับกรอบหรือเริ่มขั้นตอนใหม่ในมิตินี้เมื่อพร้อม",
+      blurb: V2_LIFE_BLURBS[k],
     };
   });
   lifeAreaRows.sort((a, b) => b.score - a.score);
+
+  const usageLines = V2_USAGE_LINES;
 
   return {
     rendererId: "moldavite-html-v2",
@@ -177,10 +193,10 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
     },
     graphSummary,
     ownerProfile: {
-      identityLabel: ownerAxes.identityLabel,
-      summaryLine: ownerAxes.summaryLine,
-      traits: ownerAxes.traits,
-      derivationNote: ownerAxes.derivationNote,
+      identityLabel: thaiNoEmDash(ownerAxes.identityLabel),
+      summaryLine: thaiNoEmDash(ownerAxes.summaryLine),
+      traits: ownerAxes.traits.map((t) => thaiNoEmDash(t)),
+      derivationNote: thaiNoEmDash(ownerAxes.derivationNote),
     },
     interactionSummary: {
       headline: interactionHeadline,

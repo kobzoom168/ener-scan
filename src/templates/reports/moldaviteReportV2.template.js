@@ -5,7 +5,7 @@ import { buildMoldaviteHtmlV2ViewModel } from "../../moldavite/moldaviteHtmlV2.m
 const RADAR_R = 38;
 const RADAR_CX = 50;
 const RADAR_CY = 50;
-/** Radians: top, bottom-right, bottom-left — งาน, ความสัมพันธ์, การเงิน */
+/** Radians: top, bottom-right, bottom-left (งาน, ความสัมพันธ์, การเงิน) */
 const RADAR_ANGLES = [-Math.PI / 2, -Math.PI / 2 + (2 * Math.PI) / 3, -Math.PI / 2 + (4 * Math.PI) / 3];
 const AXIS_KEYS = /** @type {const} */ (["work", "relationship", "money"]);
 
@@ -62,16 +62,19 @@ function radarBlock(vm) {
   const peak = radarVertexForAxis(g.crystal, g.crystalPeakAxisKey);
   const peakLabel = String(g.crystalPeakLabelThai || "").trim() || "หิน";
   const crystalMarker = `<circle class="mv2-radar-peak" cx="${peak.x.toFixed(2)}" cy="${peak.y.toFixed(2)}" r="2.5" fill="#4ade80" stroke="rgba(255,255,255,0.9)" stroke-width="0.55" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
+  const cw = Math.round(Number(g.crystal.work) || 0);
+  const cr = Math.round(Number(g.crystal.relationship) || 0);
+  const cm = Math.round(Number(g.crystal.money) || 0);
   /** Bottom-right = ความสัมพันธ์, bottom-left = การเงิน (matches axis math). */
   const labels = [
-    { ax: RADAR_CX, ay: 8, text: "งาน", ta: "middle" },
-    { ax: 88, ay: 72, text: "ความสัมพันธ์", ta: "end" },
-    { ax: 12, ay: 72, text: "การเงิน", ta: "start" },
+    { ax: RADAR_CX, ay: 8, text: `งาน ${cw}`, ta: "middle" },
+    { ax: 88, ay: 72, text: `ความสัมพันธ์ ${cr}`, ta: "end" },
+    { ax: 12, ay: 72, text: `การเงิน ${cm}`, ta: "start" },
   ];
   const labelSvg = labels
     .map(
       (L) =>
-        `<text x="${L.ax}" y="${L.ay}" fill="rgba(200,210,205,0.9)" font-size="3.2" text-anchor="${L.ta}" font-family="inherit">${escapeHtml(L.text)}</text>`,
+        `<text x="${L.ax}" y="${L.ay}" fill="rgba(200,210,205,0.9)" font-size="2.95" text-anchor="${L.ta}" font-family="inherit">${escapeHtml(L.text)}</text>`,
     )
     .join("");
   return `
@@ -116,12 +119,12 @@ export function renderMoldaviteReportV2Html(payload) {
     vm.metrics.energyScore != null &&
     Number.isFinite(Number(vm.metrics.energyScore))
       ? Number(vm.metrics.energyScore).toFixed(1)
-      : "—";
+      : "ไม่มี";
   const compat =
     vm.metrics.compatibilityPercent != null &&
     Number.isFinite(Number(vm.metrics.compatibilityPercent))
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
-      : "—";
+      : "ไม่มี";
 
   const gs = vm.graphSummary;
   const graphSummaryHtml = `
@@ -171,7 +174,7 @@ export function renderMoldaviteReportV2Html(payload) {
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="color-scheme" content="dark"/>
   <!-- moldavite-html-v2 -->
-  <title>${title} — Ener Scan</title>
+  <title>${title} | Ener Scan</title>
   <style>
     :root {
       --mv2-bg: #0a0c0f;
@@ -273,7 +276,7 @@ export function renderMoldaviteReportV2Html(payload) {
     <header class="mv2-hero">
       <div class="mv2-badge">Ener Scan · Moldavite · รายงานฉบับเต็ม</div>
       ${media}
-      <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "—")}</h1>
+      <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "ไม่มีชื่อ")}</h1>
       ${h.tagline ? `<p class="mv2-tag">${escapeHtml(h.tagline)}</p>` : ""}
       <p class="mv2-main">พลังหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
       ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
@@ -282,7 +285,7 @@ export function renderMoldaviteReportV2Html(payload) {
     <div class="mv2-strip" role="group" aria-label="สรุปตัวเลข">
       <div><div class="mv2-strip-k">คะแนนพลัง</div><div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
-      <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "—")}</div></div>
+      <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
     </div>
 
     ${radarBlock(vm)}
