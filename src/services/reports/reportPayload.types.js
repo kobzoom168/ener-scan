@@ -36,6 +36,7 @@
  * @property {ReportDiagnostics} [diagnostics] — internal QA / explain (not public-report contract)
  *
  * @property {ReportMoldaviteV1} [moldaviteV1] — isolated Moldavite v1 slice (Flex + public); not generic crystal confidence
+ * @property {ReportAmuletV1} [amuletV1] — sacred amulet lane v1 (Flex + HTML); separate from legacy thai_amulet mobile report
  * @property {ReportCrystalGenericSafeV1} [crystalGenericSafeV1] — neutral crystal fallback when Moldavite not detected; avoids DB confidence hero
  */
 
@@ -63,6 +64,21 @@
  * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string, heroNamingLine?: string, mainEnergyWordingLine?: string, htmlOpeningLine?: string, tagline?: string }} flexSurface
  * @property {{ meaningParagraphs: string[], lifeAreaBlurbs: { work: string, relationship: string, money: string }, usageCautionLines: string[] }} [htmlReport] — public HTML-only blocks (not Flex)
  * @property {{ displayNamingConfidenceLevel: "high"|"medium"|"low", effectiveSubtypeConfidenceForNaming: number }} [displayNaming] — internal naming tier + effective confidence (not shown as % to users)
+ * @property {{ scanResultIdPrefix: string, energyScoreSnapshot: number|null, mainEnergyLabelSnapshot: string|null }} [context]
+ */
+
+/**
+ * Sacred amulet lane v1 — six power categories; summary-first Flex + HTML shell (parallel structure to Moldavite, different semantics).
+ *
+ * @typedef {Object} ReportAmuletV1
+ * @property {string} version — e.g. "1"
+ * @property {"deterministic_v1"} scoringMode
+ * @property {{ reason: string, matchedSignals: string[] }} detection
+ * @property {Record<string, { key: string, score: number, labelThai: string }>} powerCategories
+ * @property {string} primaryPower
+ * @property {string} secondaryPower
+ * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string, ctaLabel?: string, heroNamingLine?: string, mainEnergyWordingLine?: string, htmlOpeningLine?: string, tagline?: string }} flexSurface
+ * @property {{ lifeAreaBlurbs: Record<string, string>, usageCautionLines: string[] }} htmlReport
  * @property {{ scanResultIdPrefix: string, energyScoreSnapshot: number|null, mainEnergyLabelSnapshot: string|null }} [context]
  */
 

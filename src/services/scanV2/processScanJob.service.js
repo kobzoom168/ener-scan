@@ -57,6 +57,7 @@ import {
 } from "./lineFinalScanDelivery.builder.js";
 import { buildScanSummaryFirstFlex } from "../flex/flex.summaryFirst.js";
 import { buildMoldaviteSummaryFirstFlex } from "../flex/flex.moldaviteSummary.js";
+import { buildAmuletSummaryFirstFlex } from "../flex/flex.amuletSummary.js";
 import { buildCrystalGenericSafeSummaryFirstFlex } from "../flex/flex.crystalGenericSafe.js";
 import { resolveLineSummaryWording } from "../../utils/lineSummaryWording.util.js";
 import { logUnsupportedObjectRejected } from "../lineWebhook/unsupportedObjectReply.service.js";
@@ -738,6 +739,26 @@ export async function processScanJob(workerId, jobRow) {
                   path: "worker-scan",
                   jobIdPrefix: idPrefix8(jobId),
                   message: String(mvErr?.message || mvErr).slice(0, 200),
+                }),
+              );
+              built = await buildScanSummaryFirstFlex(
+                resultText,
+                summaryShellOpts,
+              );
+            }
+          } else if (reportPayloadForReply?.amuletV1) {
+            try {
+              built = await buildAmuletSummaryFirstFlex(
+                resultText,
+                summaryShellOpts,
+              );
+            } catch (amErr) {
+              console.log(
+                JSON.stringify({
+                  event: "AMULET_FLEX_BUILD_FAILED_FALLBACK_SUMMARY_FIRST",
+                  path: "worker-scan",
+                  jobIdPrefix: idPrefix8(jobId),
+                  message: String(amErr?.message || amErr).slice(0, 200),
                 }),
               );
               built = await buildScanSummaryFirstFlex(

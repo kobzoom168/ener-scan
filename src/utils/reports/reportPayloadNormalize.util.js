@@ -331,5 +331,17 @@ export function normalizeReportPayloadForRender(input) {
     payload.crystalGenericSafeV1 = cgsRaw;
   }
 
+  const amuletRaw = raw.amuletV1;
+  if (
+    amuletRaw &&
+    typeof amuletRaw === "object" &&
+    !Array.isArray(amuletRaw)
+  ) {
+    payload.amuletV1 =
+      /** @type {import("../../services/reports/reportPayload.types.js").ReportAmuletV1} */ (
+        amuletRaw
+      );
+  }
+
   return { payload, warnings };
 }

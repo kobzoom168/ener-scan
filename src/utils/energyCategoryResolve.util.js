@@ -422,6 +422,7 @@ export function normalizeObjectFamilyForEnergyCopy(raw) {
   if (s === "thai_talisman" || s === "takrud") return "thai_talisman";
   if (s === "global_symbol") return "global_symbol";
   if (s === "somdej") return "thai_amulet";
+  if (s === "sacred_amulet") return "sacred_amulet";
   return "thai_amulet";
 }
 

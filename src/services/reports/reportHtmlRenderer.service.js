@@ -1,5 +1,6 @@
 import { renderMobileReportHtml } from "../../templates/reports/mobileReport.template.js";
 import { renderMoldaviteReportV2Html } from "../../templates/reports/moldaviteReportV2.template.js";
+import { renderAmuletReportV2Html } from "../../templates/reports/amuletReportV2.template.js";
 import { normalizeReportPayloadForRender } from "../../utils/reports/reportPayloadNormalize.util.js";
 import {
   BANGKOK_TIME_ZONE,
@@ -34,6 +35,13 @@ export function renderReportHtmlPage(payload) {
       generatedAtBangkok: formattedAt,
     }),
   );
+  if (
+    normalized.amuletV1 &&
+    typeof normalized.amuletV1 === "object" &&
+    !Array.isArray(normalized.amuletV1)
+  ) {
+    return renderAmuletReportV2Html(normalized);
+  }
   if (
     normalized.moldaviteV1 &&
     typeof normalized.moldaviteV1 === "object" &&

@@ -93,5 +93,11 @@ export function mapLegacyReportPayloadToPublicReportView({
       !Array.isArray(payload.crystalGenericSafeV1)
         ? payload.crystalGenericSafeV1
         : undefined,
+    amuletV1:
+      payload?.amuletV1 &&
+      typeof payload.amuletV1 === "object" &&
+      !Array.isArray(payload.amuletV1)
+        ? payload.amuletV1
+        : undefined,
   };
 }

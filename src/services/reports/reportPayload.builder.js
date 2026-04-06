@@ -43,6 +43,7 @@ import { resolveMoldaviteDetectionWithGeminiCrystalSubtype } from "../../moldavi
 import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
 import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayNaming.util.js";
 import { buildCrystalGenericSafeV1Slice } from "../../crystal/crystalGenericSafePayload.build.js";
+import { buildAmuletV1Slice } from "../../amulet/amuletPayload.build.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -861,6 +862,22 @@ export async function buildReportPayloadFromScan(opts) {
         })
       : undefined;
 
+  const baseMainEnergyLabel = wording.mainEnergy
+    ? String(wording.mainEnergy)
+    : parsed.mainEnergy && parsed.mainEnergy !== "-"
+      ? String(parsed.mainEnergy)
+      : "";
+
+  const amuletV1 =
+    famNorm === "sacred_amulet"
+      ? buildAmuletV1Slice({
+          scanResultId: rid,
+          seedKey: rid || String(scanResultId || ""),
+          energyScore,
+          mainEnergyLabel: baseMainEnergyLabel,
+        })
+      : undefined;
+
   if (crystalGenericSafeV1) {
     console.log(
       JSON.stringify({
@@ -871,60 +888,69 @@ export async function buildReportPayloadFromScan(opts) {
     );
   }
 
-  const baseMainEnergyLabel = wording.mainEnergy
-    ? String(wording.mainEnergy)
-    : parsed.mainEnergy && parsed.mainEnergy !== "-"
-      ? String(parsed.mainEnergy)
-      : "";
-
   const summaryMainEnergyLabel = crystalGenericSafeV1
     ? crystalGenericSafeV1.display.mainEnergyLabelNeutral
     : moldaviteV1
       ? String(moldaviteV1.flexSurface.mainEnergyShort || "").trim() ||
         baseMainEnergyLabel
-      : baseMainEnergyLabel;
+      : amuletV1
+        ? String(amuletV1.flexSurface.mainEnergyShort || "").trim() ||
+          baseMainEnergyLabel
+        : baseMainEnergyLabel;
 
   const summaryHeadlineShort = crystalGenericSafeV1
     ? crystalGenericSafeV1.flexSurface.headline
     : moldaviteV1
       ? moldaviteV1.flexSurface.headline
-      : flexSurface.headlineShort;
+      : amuletV1
+        ? amuletV1.flexSurface.headline
+        : flexSurface.headlineShort;
 
   const summaryFitReasonShort = crystalGenericSafeV1
     ? crystalGenericSafeV1.flexSurface.fitLine
     : moldaviteV1
       ? moldaviteV1.flexSurface.fitLine
-      : flexSurface.fitReasonShort;
+      : amuletV1
+        ? amuletV1.flexSurface.fitLine
+        : flexSurface.fitReasonShort;
 
   const summaryBulletsShort = crystalGenericSafeV1
     ? crystalGenericSafeV1.flexSurface.bullets
     : moldaviteV1
       ? moldaviteV1.flexSurface.bullets
-      : flexSurface.bulletsShort;
+      : amuletV1
+        ? amuletV1.flexSurface.bullets
+        : flexSurface.bulletsShort;
 
   const summaryPresentationAngleId = crystalGenericSafeV1
     ? "crystal_generic_safe_v1"
     : moldaviteV1
       ? "moldavite_v1_summary_first"
-      : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
+      : amuletV1
+        ? "sacred_amulet_v1_summary_first"
+        : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
 
   const summaryWordingVariantId = crystalGenericSafeV1
     ? "crystal_generic_safe_v1"
     : moldaviteV1
       ? "moldavite_v1_summary_first"
-      : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
+      : amuletV1
+        ? "sacred_amulet_v1_summary_first"
+        : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
 
   const summaryVisibleMainLabel = crystalGenericSafeV1
     ? crystalGenericSafeV1.display.visibleMainLabelNeutral
     : moldaviteV1
       ? String(moldaviteV1.flexSurface.headline || "").trim() || undefined
-      : dbSurfBundle?.mainLabel
-        ? String(dbSurfBundle.mainLabel).trim()
-        : undefined;
+      : amuletV1
+        ? String(amuletV1.flexSurface.headline || "").trim() || undefined
+        : dbSurfBundle?.mainLabel
+          ? String(dbSurfBundle.mainLabel).trim()
+          : undefined;
 
   const summaryOpeningShort = crystalGenericSafeV1
     ? undefined
-    : moldaviteV1
+    : moldaviteV1 || amuletV1
       ? undefined
       : dbSurfBundle?.opening
         ? String(dbSurfBundle.opening).trim()
@@ -932,7 +958,7 @@ export async function buildReportPayloadFromScan(opts) {
 
   const summaryTeaserShort = crystalGenericSafeV1
     ? undefined
-    : moldaviteV1
+    : moldaviteV1 || amuletV1
       ? undefined
       : dbSurfBundle?.teaser
         ? String(dbSurfBundle.teaser).trim()
@@ -942,7 +968,10 @@ export async function buildReportPayloadFromScan(opts) {
     ? "เปิดรายงานฉบับเต็ม"
     : moldaviteV1
       ? "เปิดรายงานฉบับเต็ม"
-      : flexSurface.ctaLabel;
+      : amuletV1
+        ? String(amuletV1.flexSurface.ctaLabel || "").trim() ||
+          "เปิดรายงานฉบับเต็ม"
+        : flexSurface.ctaLabel;
 
   return {
     reportId: rid,
@@ -1038,6 +1067,19 @@ export async function buildReportPayloadFromScan(opts) {
               moldaviteV1.flexSurface.htmlOpeningLine ||
                 moldaviteV1.flexSurface.mainEnergyWordingLine ||
                 "",
+            ).trim(),
+          }
+        : {}),
+      ...(amuletV1 && !crystalGenericSafeV1 && !moldaviteV1
+        ? {
+            heroNaming: String(
+              amuletV1.flexSurface.heroNamingLine || "พระเครื่อง",
+            ).trim(),
+            mainEnergy: String(
+              amuletV1.flexSurface.mainEnergyWordingLine || "",
+            ).trim(),
+            htmlOpeningLine: String(
+              amuletV1.flexSurface.htmlOpeningLine || "",
             ).trim(),
           }
         : {}),
@@ -1163,6 +1205,7 @@ export async function buildReportPayloadFromScan(opts) {
           : undefined,
     },
     ...(moldaviteV1 ? { moldaviteV1 } : {}),
+    ...(amuletV1 ? { amuletV1 } : {}),
     ...(crystalGenericSafeV1 ? { crystalGenericSafeV1 } : {}),
   };
 }

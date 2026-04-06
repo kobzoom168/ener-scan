@@ -1,6 +1,7 @@
 import { buildScanFlex } from "./flex.service.js";
 import { buildScanSummaryFirstFlex } from "./flex.summaryFirst.js";
 import { buildMoldaviteSummaryFirstFlex } from "./flex.moldaviteSummary.js";
+import { buildAmuletSummaryFirstFlex } from "./flex.amuletSummary.js";
 import { buildCrystalGenericSafeSummaryFirstFlex } from "./flex.crystalGenericSafe.js";
 
 /**
@@ -33,6 +34,7 @@ function objectFamilyFromReportPayload(reportPayload) {
  * @param {{
  *   buildScanSummaryFirstFlex?: typeof buildScanSummaryFirstFlex,
  *   buildMoldaviteSummaryFirstFlex?: typeof buildMoldaviteSummaryFirstFlex,
+ *   buildAmuletSummaryFirstFlex?: typeof buildAmuletSummaryFirstFlex,
  *   buildCrystalGenericSafeSummaryFirstFlex?: typeof buildCrystalGenericSafeSummaryFirstFlex,
  *   buildScanFlex?: typeof buildScanFlex,
  * }} [impl] test doubles
@@ -43,6 +45,8 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
     impl.buildScanSummaryFirstFlex ?? buildScanSummaryFirstFlex;
   const buildMoldavite =
     impl.buildMoldaviteSummaryFirstFlex ?? buildMoldaviteSummaryFirstFlex;
+  const buildAmulet =
+    impl.buildAmuletSummaryFirstFlex ?? buildAmuletSummaryFirstFlex;
   const buildCrystalSafe =
     impl.buildCrystalGenericSafeSummaryFirstFlex ??
     buildCrystalGenericSafeSummaryFirstFlex;
@@ -77,6 +81,8 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
     let flex;
     if (reportPayload?.moldaviteV1) {
       flex = await buildMoldavite(resultText, summaryOpts);
+    } else if (reportPayload?.amuletV1) {
+      flex = await buildAmulet(resultText, summaryOpts);
     } else if (reportPayload?.crystalGenericSafeV1) {
       flex = await buildCrystalSafe(resultText, summaryOpts);
     } else {
