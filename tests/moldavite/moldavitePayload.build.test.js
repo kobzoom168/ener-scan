@@ -63,6 +63,15 @@ test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", 
     ),
     "mainEnergyWordingLine should expand native-energy nuance for report body",
   );
+  assert.ok(slice.htmlReport && typeof slice.htmlReport === "object");
+  assert.ok(Array.isArray(slice.htmlReport.meaningParagraphs));
+  assert.ok(slice.htmlReport.meaningParagraphs.length >= 2);
+  assert.ok(
+    typeof slice.htmlReport.lifeAreaBlurbs?.work === "string" &&
+      slice.htmlReport.lifeAreaBlurbs.work.length > 20,
+  );
+  assert.ok(Array.isArray(slice.htmlReport.usageCautionLines));
+  assert.ok(slice.htmlReport.usageCautionLines.length >= 2);
 });
 
 test("buildMoldaviteV1Slice: non-high confidence — green visible name, no Moldavite in flexSurface", () => {

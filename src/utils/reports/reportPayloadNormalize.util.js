@@ -314,5 +314,22 @@ export function normalizeReportPayloadForRender(input) {
     warnings.push("summary_line_empty_or_short");
   }
 
+  const moldaviteRaw = raw.moldaviteV1;
+  if (
+    moldaviteRaw &&
+    typeof moldaviteRaw === "object" &&
+    !Array.isArray(moldaviteRaw)
+  ) {
+    payload.moldaviteV1 =
+      /** @type {import("../../services/reports/reportPayload.types.js").ReportMoldaviteV1} */ (
+        moldaviteRaw
+      );
+  }
+
+  const cgsRaw = raw.crystalGenericSafeV1;
+  if (cgsRaw && typeof cgsRaw === "object" && !Array.isArray(cgsRaw)) {
+    payload.crystalGenericSafeV1 = cgsRaw;
+  }
+
   return { payload, warnings };
 }

@@ -38,6 +38,7 @@ function heroOpeningLine(p) {
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
  */
 function wordingInterpretationSection(p) {
+  if (p.moldaviteV1 && typeof p.moldaviteV1 === "object") return "";
   const w = p.wording;
   if (!w || typeof w !== "object") return "";
   const heroNaming = String(w.heroNaming || "").trim();
@@ -165,8 +166,15 @@ function hero(p) {
   const level = String(p.summary?.energyLevelLabel ?? "").trim();
   const genericLabels = new Set(["วัตถุของคุณ", "วัตถุจากการสแกน"]);
   const evocativeLead = "ชิ้นในรายงานนี้";
+  const mv = p.moldaviteV1;
+  const fs =
+    mv && typeof mv === "object" && mv.flexSurface && typeof mv.flexSurface === "object"
+      ? mv.flexSurface
+      : null;
   let label;
-  if (labelRaw && !genericLabels.has(labelRaw)) {
+  if (fs && String(fs.headline || "").trim()) {
+    label = String(fs.headline).trim();
+  } else if (labelRaw && !genericLabels.has(labelRaw)) {
     label = labelRaw;
   } else if (main) {
     label = `${evocativeLead} · ${main}`;
@@ -193,8 +201,28 @@ function hero(p) {
   const date = dateRaw !== "-" ? dateRaw : "";
   const opening = heroOpeningLine(p);
   const heroModifier = imageUrl ? " hero--with-image" : " hero--no-image";
+
+  let titleBlock;
+  if (fs && String(fs.headline || "").trim()) {
+    const h = escapeHtml(String(fs.headline).trim());
+    const tag = String(fs.tagline || "").trim();
+    const tagHtml = tag
+      ? `<p class="hero-moldavite-tagline">${escapeHtml(tag)}</p>`
+      : "";
+    const mes = String(fs.mainEnergyShort || "").trim();
+    const mesHtml = mes
+      ? `<p class="hero-energy-style hero-energy-style--moldavite">พลังหลัก · ${escapeHtml(mes)}</p>`
+      : "";
+    titleBlock = `<h1 class="hero-object-name"><span class="hero-object-name__text">${h}</span></h1>${tagHtml}${mesHtml}`;
+  } else {
+    const style = String(p.wording?.heroNaming || "").trim()
+      ? `<p class="hero-energy-style">${escapeHtml(String(p.wording.heroNaming).trim())}</p>`
+      : "";
+    titleBlock = `${style}<h1 class="hero-object-name"><span class="hero-object-name__text">${escapeHtml(label)}</span></h1>`;
+  }
+
   return `
-  <header class="hero${heroModifier}">
+  <header class="hero${heroModifier}${fs ? " hero--moldavite" : ""}">
     <div class="hero-stage">
       <div class="hero-frame">
         ${media}
@@ -203,8 +231,7 @@ function hero(p) {
         <span class="badge"><span class="badge-inner">Ener Scan</span><span class="badge-sep" aria-hidden="true"></span><span class="badge-sub">รายงานเฉพาะชิ้น</span></span>
         <p class="hero-reading">การอ่านวัตถุชิ้นนี้</p>
         ${typeLabel ? `<p class="hero-object-kind">${escapeHtml(typeLabel)}</p>` : ""}
-        ${String(p.wording?.heroNaming || "").trim() ? `<p class="hero-energy-style">${escapeHtml(String(p.wording.heroNaming).trim())}</p>` : ""}
-        <h1 class="hero-object-name"><span class="hero-object-name__text">${escapeHtml(label)}</span></h1>
+        ${titleBlock}
         ${opening ? `<p class="hero-hook">${escapeHtml(opening)}</p>` : ""}
         <p class="hero-doc-title">รายงานพลังวัตถุ</p>
         ${date ? `<p class="hero-date"><span class="hero-date-inner">${escapeHtml(date)}</span></p>` : ""}
@@ -234,6 +261,7 @@ function confidenceReadableForObjectEnergy(conf) {
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
  */
 function objectEnergySection(p) {
+  if (p.moldaviteV1 && typeof p.moldaviteV1 === "object") return "";
   const oe = p.objectEnergy;
   if (!oe || typeof oe !== "object") return "";
   const stars = oe.stars;
@@ -387,6 +415,116 @@ function trustBlock(p) {
     <p class="meta tiny">เวอร์ชันรายงาน ${escapeHtml(p.reportVersion)} · render ${escapeHtml(t.rendererVersion || "")}${t.modelLabel ? ` · ${escapeHtml(t.modelLabel)}` : ""}</p>
     <p class="report-outro-hint">ดำเนินการต่อจากแชท LINE ได้เมื่อต้องการ</p>
   </div>`;
+}
+
+const MOLDAVITE_LIFE_AREA_ORDER = /** @type {const} */ ([
+  "work",
+  "relationship",
+  "money",
+]);
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ */
+function moldaviteLifeAreaRowsSorted(p) {
+  const mv = p.moldaviteV1;
+  const la = mv && typeof mv === "object" ? mv.lifeAreas : null;
+  if (!la || typeof la !== "object") return [];
+  /** @type {{ label: string, score: number|null }[]} */
+  const rows = [];
+  for (const k of MOLDAVITE_LIFE_AREA_ORDER) {
+    const e = la[k];
+    if (!e || typeof e !== "object") continue;
+    const scoreRaw = e.score;
+    const scoreOk =
+      scoreRaw != null && Number.isFinite(Number(scoreRaw))
+        ? Math.round(Number(scoreRaw))
+        : null;
+    rows.push({
+      label: String(e.labelThai || "").trim() || "—",
+      score: scoreOk,
+    });
+  }
+  rows.sort((a, b) => {
+    if (a.score == null && b.score == null) return 0;
+    if (a.score == null) return 1;
+    if (b.score == null) return -1;
+    return b.score - a.score;
+  });
+  return rows;
+}
+
+/**
+ * Moldavite-only HTML blocks (aligned with Flex lane; deeper than Flex).
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} p
+ */
+function moldaviteReportSections(p) {
+  const mv = p.moldaviteV1;
+  if (!mv || typeof mv !== "object") return "";
+  const fs = mv.flexSurface;
+  if (!fs || typeof fs !== "object") return "";
+  const hr = mv.htmlReport;
+
+  const rows = moldaviteLifeAreaRowsSorted(p);
+  const rowsHtml = rows
+    .map((r) => {
+      const sc = r.score == null ? "—" : String(r.score);
+      return `<div class="mv-life-row"><span class="mv-life-label">${escapeHtml(r.label)}</span><span class="mv-life-score">${escapeHtml(sc)}</span></div>`;
+    })
+    .join("");
+
+  const fit = String(fs.fitLine || "").trim();
+  const lifeInner = `${rowsHtml ? `<p class="mv-helper">เรียงจากคะแนนสูงไปต่ำ</p><div class="mv-life-grid" role="list">${rowsHtml}</div>` : ""}${fit ? `<p class="mv-focus">${escapeHtml(fit)}</p>` : ""}`;
+  const lifeCard = sectionCard(
+    "พลังไปออกกับเรื่องไหน",
+    lifeInner || `<p class="empty-hint" role="status">ยังไม่มีข้อมูลมิติชีวิต</p>`,
+    lifeInner ? "" : " card--empty",
+    "card--moldavite card--moldavite-life",
+  );
+
+  let meaningCard = "";
+  if (hr && Array.isArray(hr.meaningParagraphs) && hr.meaningParagraphs.length) {
+    const paras = hr.meaningParagraphs
+      .map((t) => `<p class="para">${escapeHtml(String(t))}</p>`)
+      .join("");
+    meaningCard = sectionCard(
+      "แรงโทนเปลี่ยนแปลง",
+      paras,
+      "",
+      "card--moldavite card--moldavite-meaning",
+    );
+  }
+
+  let perAreaCard = "";
+  if (hr?.lifeAreaBlurbs && typeof hr.lifeAreaBlurbs === "object") {
+    const b = hr.lifeAreaBlurbs;
+    const parts = MOLDAVITE_LIFE_AREA_ORDER.map((k) => {
+      const txt = String(b[k] || "").trim();
+      return txt ? `<p class="para">${escapeHtml(txt)}</p>` : "";
+    })
+      .filter(Boolean)
+      .join("");
+    if (parts) {
+      perAreaCard = sectionCard(
+        "มุมชีวิตละเอียด",
+        parts,
+        "",
+        "card--moldavite card--moldavite-areas",
+      );
+    }
+  }
+
+  let usageCard = "";
+  if (hr && Array.isArray(hr.usageCautionLines) && hr.usageCautionLines.length) {
+    usageCard = sectionCard(
+      "การใช้และข้อควรระวัง",
+      ulList(hr.usageCautionLines),
+      "",
+      "card--moldavite card--moldavite-usage",
+    );
+  }
+
+  return `${lifeCard}${meaningCard}${perAreaCard}${usageCard}`;
 }
 
 /**
@@ -1161,12 +1299,72 @@ export function renderMobileReportHtml(payload) {
     .card--object-energy .oe-confidence-pct {
       opacity: 0.88;
     }
+    /* —— Moldavite lane (matches Flex: dark + green accent; no amulet semantics) —— */
+    .hero--moldavite .hero-moldavite-tagline {
+      margin: 0.35rem 0 0;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      color: rgba(180, 220, 190, 0.82);
+      font-weight: 500;
+    }
+    .hero-energy-style--moldavite {
+      margin-top: 0.65rem;
+      color: rgba(74, 222, 128, 0.92) !important;
+      border-left: 2px solid rgba(34, 197, 94, 0.45);
+      padding-left: 0.65rem;
+    }
+    .card--moldavite {
+      border-left-color: rgba(34, 197, 94, 0.55);
+      background: linear-gradient(168deg, rgba(34, 197, 94, 0.05) 0%, rgba(16, 18, 24, 0.99) 48%, var(--card) 100%);
+    }
+    .card--moldavite .card-title {
+      color: rgba(190, 240, 200, 0.95);
+      font-size: 1rem;
+    }
+    .mv-helper {
+      margin: 0 0 0.5rem;
+      font-size: 0.72rem;
+      color: rgba(130, 140, 135, 0.9);
+    }
+    .mv-life-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin: 0.35rem 0 0.65rem;
+    }
+    .mv-life-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.75rem;
+      font-size: 0.88rem;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .mv-life-row:last-child {
+      border-bottom: none;
+    }
+    .mv-life-label {
+      color: rgba(200, 198, 192, 0.92);
+    }
+    .mv-life-score {
+      font-weight: 700;
+      color: rgba(74, 222, 128, 0.95);
+      font-variant-numeric: tabular-nums;
+    }
+    .mv-focus {
+      margin: 0.75rem 0 0;
+      font-size: 0.86rem;
+      line-height: 1.55;
+      color: rgba(210, 208, 202, 0.92);
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     ${hero(p)}
     ${summary(p)}
+    ${moldaviteReportSections(p)}
     ${objectEnergySection(p)}
     ${wordingInterpretationSection(p)}
     ${what}

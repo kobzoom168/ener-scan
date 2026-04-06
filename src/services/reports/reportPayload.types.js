@@ -61,6 +61,7 @@
  * @property {string} primaryLifeArea
  * @property {string} secondaryLifeArea
  * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string, heroNamingLine?: string, mainEnergyWordingLine?: string, htmlOpeningLine?: string, tagline?: string }} flexSurface
+ * @property {{ meaningParagraphs: string[], lifeAreaBlurbs: { work: string, relationship: string, money: string }, usageCautionLines: string[] }} [htmlReport] — public HTML-only blocks (not Flex)
  * @property {{ displayNamingConfidenceLevel: "high"|"medium"|"low", effectiveSubtypeConfidenceForNaming: number }} [displayNaming] — internal naming tier + effective confidence (not shown as % to users)
  * @property {{ scanResultIdPrefix: string, energyScoreSnapshot: number|null, mainEnergyLabelSnapshot: string|null }} [context]
  */
