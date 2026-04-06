@@ -131,7 +131,6 @@ function radarAxisComparePhrase(owner01, crystal01) {
  */
 function radarAxisLabelSvg(L, rank) {
   const fs = radarAxisFontSize(rank);
-  const fsN = Number(fs);
   const ax = L.anchorX;
   const y = L.ay;
   const title = AXIS_TITLE_TH[L.key];
@@ -145,17 +144,17 @@ function radarAxisLabelSvg(L, rank) {
 
   const textAttrs = `class="mv2-radar-axis" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-rendering="optimizeLegibility"`;
 
-  // iOS Safari: Thai + Latin digits in one line still gets wrong glyph advance after
-  // marks (สระ/วรรณยุกต์) — sibling tspans overlap. For text-anchor "end", split into
-  // two <text> nodes and reserve width for the score so nothing relies on inline measure.
+  // iOS Safari SVG <text> mis-measures Thai clusters (marks / สระ) vs Latin digits — even
+  // two sibling <text> nodes can overlap. HTML outside SVG does not; use foreignObject
+  // so this label uses the same layout path as body text (e.g. พลังเด่น / compare lines).
   if (ta === "end") {
-    const gap = 2.85;
-    const perDigit = (fsN / 3.5) * 2.55;
-    const numReserve = Math.max(5.1, scoreStr.length * perDigit + 0.85);
-    const thaiEndX = ax - numReserve - gap;
-    const thaiText = `<text ${textAttrs} text-anchor="end" x="${thaiEndX.toFixed(2)}" y="${y.toFixed(2)}" fill="${catFill}" font-weight="${titleFw}">${escapeHtml(title)}</text>`;
-    const numText = `<text ${textAttrs} text-anchor="end" x="${ax.toFixed(2)}" y="${y.toFixed(2)}" fill="${numFill}" font-weight="700">${escapeHtml(scoreStr)}</text>`;
-    return `<g class="mv2-radar-axis-pair">${thaiText}${numText}</g>`;
+    const foW = 48;
+    const foH = 7;
+    const foX = ax - foW;
+    const foY = y - 6.15;
+    const titleStyle = `font-weight:${titleFw};color:${catFill}`;
+    const numStyle = `font-weight:700;color:${numFill}`;
+    return `<foreignObject class="mv2-radar-axis mv2-radar-rel-fo" x="${foX.toFixed(2)}" y="${foY.toFixed(2)}" width="${foW}" height="${foH}"><div xmlns="http://www.w3.org/1999/xhtml" class="mv2-radar-rel-html"><span class="mv2-radar-rel-part" style="${titleStyle}">${escapeHtml(title)}</span><span class="mv2-radar-rel-part mv2-radar-rel-part--num" style="${numStyle}">${escapeHtml(scoreStr)}</span></div></foreignObject>`;
   }
 
   const tspans = [
@@ -466,6 +465,26 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-radar-svg text.mv2-radar-axis {
       letter-spacing: 0.01em;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Noto Sans Thai", "Sarabun", sans-serif;
+    }
+    /* Relationship axis: HTML inside foreignObject: same shaping as body copy (fixes iOS SVG <text> vs Thai marks). */
+    .mv2-radar-svg foreignObject.mv2-radar-rel-fo {
+      overflow: visible;
+    }
+    .mv2-radar-svg foreignObject.mv2-radar-rel-fo .mv2-radar-rel-html {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      display: flex;
+      align-items: baseline;
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+      gap: 0.35em;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Noto Sans Thai", "Sarabun", sans-serif;
+      font-size: 0.62rem;
+      line-height: 1.12;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
     }
     .mv2-radar-svg .mv2-radar-peak {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
