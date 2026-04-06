@@ -93,18 +93,18 @@ function radarAxisFontSize(rank) {
  * @param {number} rank
  */
 function radarCategoryFill(rank) {
-  if (rank === 1) return "#86efac";
-  if (rank === 2) return "rgba(240,253,244,0.94)";
-  return "rgba(148,163,184,0.6)";
+  if (rank === 1) return "#a7f3d0";
+  if (rank === 2) return "rgba(226,232,240,0.93)";
+  return "rgba(100,116,139,0.72)";
 }
 
 /**
  * @param {number} rank
  */
 function radarNumberFill(rank) {
-  if (rank === 1) return "rgba(236,253,245,0.98)";
-  if (rank === 2) return "rgba(248,250,252,0.96)";
-  return "rgba(226,232,240,0.88)";
+  if (rank === 1) return "#ecfdf5";
+  if (rank === 2) return "rgba(241,245,249,0.97)";
+  return "rgba(203,213,225,0.9)";
 }
 
 /**
@@ -154,14 +154,17 @@ function radarAxisLabelSvg(L, rank) {
   const arrowStr = radarAxisImpactArrow(L.owner, L.crystal);
   const catFill = radarCategoryFill(rank);
   const numFill = radarNumberFill(rank);
+  const titleFw = rank === 1 ? "600" : "500";
+  const gapAfterTitle = "\u00A0\u00A0\u00A0";
+  const gapBeforeStatus = "\u00A0\u00A0\u00A0\u00A0\u00A0";
   const parts = [
-    { ch: title, fill: catFill, fw: "500", op: "1" },
-    { ch: "\u00A0\u00A0", fill: catFill, fw: "500", op: "1" },
+    { ch: title, fill: catFill, fw: titleFw, op: "1" },
+    { ch: gapAfterTitle, fill: catFill, fw: "500", op: "1" },
     { ch: scoreStr, fill: numFill, fw: "700", op: "1" },
-    { ch: "\u00A0\u00A0\u00A0", fill: numFill, fw: "500", op: "1" },
-    { ch: statusStr, fill: catFill, fw: "500", op: "0.7" },
-    { ch: "\u00A0", fill: catFill, fw: "500", op: "0.7" },
-    { ch: arrowStr, fill: catFill, fw: "500", op: "0.7" },
+    { ch: gapBeforeStatus, fill: numFill, fw: "500", op: "1" },
+    { ch: statusStr, fill: catFill, fw: "500", op: "0.68" },
+    { ch: "\u00A0", fill: catFill, fw: "500", op: "0.68" },
+    { ch: arrowStr, fill: catFill, fw: "500", op: "0.68" },
   ];
   const totalW = parts.reduce((s, p) => s + estimateRadarTextWidth(p.ch, fs), 0);
   let startX = L.anchorX;
@@ -187,7 +190,7 @@ function radarBlock(vm) {
   const peakLabel = String(g.crystalPeakLabelThai || "").trim() || "หิน";
   const px = peak.x.toFixed(2);
   const py = peak.y.toFixed(2);
-  const crystalMarker = `<circle cx="${px}" cy="${py}" r="2.05" fill="rgba(74,222,128,0.18)" stroke="none" aria-hidden="true"/><circle class="mv2-radar-peak" cx="${px}" cy="${py}" r="1.52" fill="#4ade80" stroke="rgba(255,255,255,0.34)" stroke-width="0.3" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
+  const crystalMarker = `<circle cx="${px}" cy="${py}" r="1.72" fill="rgba(74,222,128,0.11)" stroke="none" aria-hidden="true"/><circle class="mv2-radar-peak" cx="${px}" cy="${py}" r="1.28" fill="rgba(74,222,128,0.86)" stroke="rgba(255,255,255,0.26)" stroke-width="0.24" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
 
   const cw = Math.round(Number(g.crystal.work) || 0);
   const cr = Math.round(Number(g.crystal.relationship) || 0);
@@ -203,23 +206,23 @@ function radarBlock(vm) {
     {
       key: "work",
       anchorX: RADAR_CX,
-      ay: 6.35,
+      ay: 6.25,
       ta: /** @type {"middle"} */ ("middle"),
       owner: ow,
       crystal: cw,
     },
     {
       key: "relationship",
-      anchorX: 89.25,
-      ay: 76.35,
+      anchorX: 92,
+      ay: 75.55,
       ta: /** @type {"end"} */ ("end"),
       owner: or_,
       crystal: cr,
     },
     {
       key: "money",
-      anchorX: 10.75,
-      ay: 76.35,
+      anchorX: 8,
+      ay: 77.15,
       ta: /** @type {"start"} */ ("start"),
       owner: om,
       crystal: cm,
@@ -457,7 +460,7 @@ export function renderMoldaviteReportV2Html(payload) {
     }
     .mv2-radar-svg text.mv2-radar-axis { letter-spacing: 0.01em; }
     .mv2-radar-svg .mv2-radar-peak {
-      filter: drop-shadow(0 0 0.9px rgba(52, 211, 153, 0.42)) drop-shadow(0 0 2.2px rgba(34, 197, 94, 0.22));
+      filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
     }
     .mv2-radar-key {
       margin: 0.28rem 0 0;
