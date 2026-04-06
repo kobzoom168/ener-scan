@@ -82,23 +82,33 @@ function axisRankByCrystalStrength(crystal) {
 function radarAxisLabelEmphasis(rank) {
   if (rank === 1) {
     return {
-      fill: "#f0fdf4",
-      fontSize: "3.35",
+      fill: "#ecfdf5",
+      fontSize: "3.38",
       fontWeight: "700",
     };
   }
   if (rank === 2) {
     return {
-      fill: "rgba(226,232,240,0.93)",
+      fill: "rgba(226,232,240,0.92)",
       fontSize: "3.12",
       fontWeight: "600",
     };
   }
   return {
-    fill: "rgba(148,163,184,0.88)",
-    fontSize: "3.0",
+    fill: "rgba(100,116,139,0.78)",
+    fontSize: "2.98",
     fontWeight: "500",
   };
+}
+
+/**
+ * ลูกศรเล็ก ๆ บอกลำดับแรงของแกน (ไม่บังคับอ่าน แต่ช่วยสแกนเร็ว)
+ * @param {number} rank 1 | 2 | 3
+ */
+function radarAxisArrowSuffix(rank) {
+  if (rank === 1) return " ↑";
+  if (rank === 2) return " →";
+  return " ↓";
 }
 
 /**
@@ -110,7 +120,9 @@ function radarBlock(vm) {
   const crystalPts = radarPolygonPoints(g.crystal);
   const peak = radarVertexForAxis(g.crystal, g.crystalPeakAxisKey);
   const peakLabel = String(g.crystalPeakLabelThai || "").trim() || "หิน";
-  const crystalMarker = `<circle class="mv2-radar-peak" cx="${peak.x.toFixed(2)}" cy="${peak.y.toFixed(2)}" r="1.85" fill="#4ade80" stroke="rgba(255,255,255,0.88)" stroke-width="0.42" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
+  const px = peak.x.toFixed(2);
+  const py = peak.y.toFixed(2);
+  const crystalMarker = `<circle cx="${px}" cy="${py}" r="2.45" fill="rgba(74,222,128,0.22)" stroke="none" aria-hidden="true"/><circle class="mv2-radar-peak" cx="${px}" cy="${py}" r="1.85" fill="#4ade80" stroke="rgba(255,255,255,0.36)" stroke-width="0.34" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
 
   const cw = Math.round(Number(g.crystal.work) || 0);
   const cr = Math.round(Number(g.crystal.relationship) || 0);
@@ -144,8 +156,10 @@ function radarBlock(vm) {
   ];
   const labelSvg = labels
     .map((L) => {
-      const em = radarAxisLabelEmphasis(rankOf[L.key] ?? 2);
-      return `<text x="${L.ax}" y="${L.ay}" fill="${em.fill}" font-size="${em.fontSize}" font-weight="${em.fontWeight}" text-anchor="${L.ta}" font-family="inherit">${escapeHtml(L.text)}</text>`;
+      const rk = rankOf[L.key] ?? 2;
+      const em = radarAxisLabelEmphasis(rk);
+      const labelText = `${L.text}${radarAxisArrowSuffix(rk)}`;
+      return `<text x="${L.ax}" y="${L.ay}" fill="${em.fill}" font-size="${em.fontSize}" font-weight="${em.fontWeight}" text-anchor="${L.ta}" font-family="inherit">${escapeHtml(labelText)}</text>`;
     })
     .join("");
 
@@ -167,7 +181,7 @@ function radarBlock(vm) {
         ${crystalMarker}
         ${labelSvg}
       </svg>
-      <p class="mv2-radar-key" id="mv2-radar-key"><span class="mv2-radar-key-part"><span class="mv2-radar-dot mv2-radar-dot--owner" aria-hidden="true"></span> คุณ</span><span class="mv2-radar-key-sep" aria-hidden="true"> </span><span class="mv2-radar-key-part"><span class="mv2-radar-dot mv2-radar-dot--stone" aria-hidden="true"></span> หิน</span></p>
+      <div class="mv2-radar-key" id="mv2-radar-key"><span class="mv2-radar-key-line">สีฟ้า = ตัวคุณ</span><span class="mv2-radar-key-line">สีเขียว = พลังหิน</span></div>
     </div>
   </section>`;
 }
@@ -198,7 +212,11 @@ export function renderMoldaviteReportV2Html(payload) {
       : "ไม่มี";
 
   const gs = vm.graphSummary;
-  const graphSummaryHtml =
+  const highlightLine = String(gs.highlightLine || "").trim();
+  const highlightHtml = highlightLine
+    ? `<p class="mv2-graph-sum-highlight">${escapeHtml(highlightLine)}</p>`
+    : "";
+  const graphSummaryLinesHtml =
     Array.isArray(gs.lines) && gs.lines.length > 0
       ? `<div class="mv2-graph-sum-lines">${gs.lines
           .map(
@@ -207,6 +225,7 @@ export function renderMoldaviteReportV2Html(payload) {
           )
           .join("")}</div>`
       : "";
+  const graphSummaryHtml = `${highlightHtml}${graphSummaryLinesHtml}`;
 
   const traitsHtml = vm.ownerProfile.traits
     .map((t) => `<li>${escapeHtml(t)}</li>`)
@@ -323,22 +342,36 @@ export function renderMoldaviteReportV2Html(payload) {
       box-sizing: border-box;
     }
     .mv2-radar-svg { width: 100%; height: auto; display: block; }
+    .mv2-radar-svg .mv2-radar-peak {
+      filter: drop-shadow(0 0 1.2px rgba(52, 211, 153, 0.5)) drop-shadow(0 0 3px rgba(34, 197, 94, 0.28));
+    }
     .mv2-radar-key {
-      margin: 0.4rem 0 0;
+      margin: 0.45rem 0 0;
       padding: 0;
-      font-size: 0.65rem;
-      line-height: 1.35;
-      color: rgba(148,163,184,0.78);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.22rem;
+      font-size: 0.66rem;
+      line-height: 1.38;
+      color: rgba(186, 198, 214, 0.88);
       text-align: center;
       letter-spacing: 0.02em;
       font-weight: 500;
     }
-    .mv2-radar-key-part { display: inline-flex; align-items: center; gap: 0.28rem; white-space: nowrap; }
-    .mv2-radar-key-sep { display: inline-block; width: 0.65rem; }
-    .mv2-radar-dot { width: 0.38rem; height: 0.38rem; border-radius: 999px; display: inline-block; flex-shrink: 0; }
-    .mv2-radar-dot--owner { background: rgba(147,197,253,0.92); box-shadow: 0 0 6px rgba(96,165,250,0.35); }
-    .mv2-radar-dot--stone { background: rgba(52,211,153,0.95); box-shadow: 0 0 6px rgba(34,197,94,0.35); }
-    .mv2-graph-sum-lines { margin: 0.3rem 0 0; display: flex; flex-direction: column; gap: 0.42rem; }
+    .mv2-radar-key-line { display: block; white-space: nowrap; }
+    .mv2-graph-sum-highlight {
+      margin: 0.35rem 0 0.5rem;
+      padding: 0.38rem 0.45rem;
+      border-radius: 10px;
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(52, 211, 153, 0.14);
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: rgba(209, 250, 229, 0.95);
+      letter-spacing: 0.02em;
+    }
+    .mv2-graph-sum-lines { margin: 0; display: flex; flex-direction: column; gap: 0.42rem; }
     .mv2-graph-sum-line { margin: 0; font-size: 0.88rem; line-height: 1.48; color: rgba(215,213,208,0.96); font-weight: 400; }
     .mv2-graph-sum-line--lead { font-weight: 600; color: rgba(240,253,244,0.96); font-size: 0.9rem; }
     .mv2-owner-id { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 700; color: #a7f3d0; letter-spacing: 0.02em; }

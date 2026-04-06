@@ -82,7 +82,7 @@ export function sortAxisKeysByCrystalDesc(crystal) {
 }
 
 /**
- * สรุปจากกราฟ (Moldavite V2): หินเด่นที่ไหน / รอง / ควรค่อย ๆ ไป
+ * สรุปจากกราฟ (Moldavite V2): โทนเป็นมิตร อ่านง่าย ไม่เหมือนรายงานทางการ
  * @param {Record<AxisKey, number>} crystal
  * @returns {string[]}
  */
@@ -90,14 +90,14 @@ export function buildGraphSummaryLinesFromCrystal(crystal) {
   const [first, second, third] = sortAxisKeysByCrystalDesc(crystal);
   /** @type {Record<AxisKey, string>} */
   const topLine = {
-    work: "หินก้อนนี้เด่นสุดที่งาน",
-    relationship: "หินก้อนนี้ช่วยเรื่องความสัมพันธ์มากที่สุด",
-    money: "หินก้อนนี้เด่นสุดที่การเงิน",
+    work: "ช่วงนี้พลังหินไปโฟกัสที่งานชัดที่สุด",
+    relationship: "ช่วงนี้พลังหินไปโฟกัสที่ความสัมพันธ์ชัดที่สุด",
+    money: "ช่วงนี้พลังหินไปโฟกัสที่การเงินชัดที่สุด",
   };
   return [
     topLine[first],
-    `รองลงมาคือ${AXIS_LABEL_TH[second]}`,
-    `เรื่อง${AXIS_LABEL_TH[third]}ควรค่อย ๆ ดูจังหวะ`,
+    `รองลงมาเป็นเรื่อง${AXIS_LABEL_TH[second]}`,
+    `เรื่อง${AXIS_LABEL_TH[third]}ค่อย ๆ ไปทีละก้าวก็พอ ไม่ต้องเร่ง`,
   ];
 }
 
@@ -171,7 +171,9 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
   const alignLabel = AXIS_LABEL_TH[alignKey];
   const tensionLabel = AXIS_LABEL_TH[tensionKey];
 
+  const crystalOrder = sortAxisKeysByCrystalDesc(crystal);
   const graphSummary = {
+    highlightLine: `พลังเด่น: ${AXIS_LABEL_TH[crystalOrder[0]]}`,
     lines: buildGraphSummaryLinesFromCrystal(crystal),
   };
 

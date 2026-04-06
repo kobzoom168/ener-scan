@@ -32,9 +32,9 @@ test("buildGraphSummaryLinesFromCrystal: order by score, tie-break work first", 
     money: 69,
   });
   assert.deepEqual(lines, [
-    "หินก้อนนี้เด่นสุดที่งาน",
-    "รองลงมาคือความสัมพันธ์",
-    "เรื่องการเงินควรค่อย ๆ ดูจังหวะ",
+    "ช่วงนี้พลังหินไปโฟกัสที่งานชัดที่สุด",
+    "รองลงมาเป็นเรื่องความสัมพันธ์",
+    "เรื่องการเงินค่อย ๆ ไปทีละก้าวก็พอ ไม่ต้องเร่ง",
   ]);
 });
 
@@ -44,5 +44,8 @@ test("buildGraphSummaryLinesFromCrystal: relationship lead copy", () => {
     relationship: 90,
     money: 55,
   });
-  assert.equal(lines[0], "หินก้อนนี้ช่วยเรื่องความสัมพันธ์มากที่สุด");
+  assert.equal(
+    lines[0],
+    "ช่วงนี้พลังหินไปโฟกัสที่ความสัมพันธ์ชัดที่สุด",
+  );
 });

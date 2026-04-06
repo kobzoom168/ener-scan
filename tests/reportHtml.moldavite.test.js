@@ -84,9 +84,12 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("ภาพรวมการจับคู่"));
   assert.ok(html.includes("เปรียบเทียบคุณกับพลังของหิน"));
   assert.ok(html.includes("สรุปจากกราฟ"));
-  assert.ok(html.includes("หินก้อนนี้เด่นสุดที่งาน"));
-  assert.ok(html.includes("รองลงมาคือความสัมพันธ์"));
-  assert.ok(html.includes("เรื่องการเงินควรค่อย ๆ ดูจังหวะ"));
+  assert.ok(html.includes("พลังเด่น: งาน"));
+  assert.ok(html.includes("ช่วงนี้พลังหินไปโฟกัสที่งานชัดที่สุด"));
+  assert.ok(html.includes("รองลงมาเป็นเรื่องความสัมพันธ์"));
+  assert.ok(html.includes("เรื่องการเงินค่อย ๆ ไปทีละก้าวก็พอ ไม่ต้องเร่ง"));
+  assert.ok(html.includes("สีฟ้า = ตัวคุณ"));
+  assert.ok(html.includes("สีเขียว = พลังหิน"));
   assert.ok(!html.includes(UNIQUE_HERO_PROSE));
   assert.ok(html.includes('<circle class="mv2-radar-peak"'));
   assert.ok(html.includes("โปรไฟล์เจ้าของ"));
@@ -105,9 +108,9 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(
     html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
   );
-  assert.ok(html.includes("งาน 82"));
-  assert.ok(html.includes("ความสัมพันธ์ 75"));
-  assert.ok(html.includes("การเงิน 69"));
+  assert.ok(html.includes("งาน 82 ↑"));
+  assert.ok(html.includes("ความสัมพันธ์ 75 →"));
+  assert.ok(html.includes("การเงิน 69 ↓"));
   assert.ok(!html.includes("mv2-radar-series-lbl"));
   assert.ok(html.includes('class="mv2-radar-key"'));
   assert.ok(!html.includes("mv2-radar-compare"));
