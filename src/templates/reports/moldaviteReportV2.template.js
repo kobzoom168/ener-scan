@@ -557,23 +557,26 @@ export function renderMoldaviteReportV2Html(payload) {
       background: rgba(255,255,255,0.028);
       border: 1px solid rgba(255,255,255,0.055);
     }
+    .mv2-gsum-row:not(.mv2-gsum-row--lead) {
+      padding: 0.18rem 0.5rem;
+    }
     .mv2-gsum-row--lead {
       background: rgba(16,185,129,0.07);
       border-color: rgba(52,211,153,0.14);
     }
     .mv2-gsum-k {
-      font-size: 0.74rem;
-      font-weight: 500;
-      color: rgba(148,163,184,0.82);
+      font-size: 0.72rem;
+      font-weight: 400;
+      color: rgba(148,163,184,0.58);
       white-space: nowrap;
     }
     .mv2-gsum-v {
-      font-size: 0.88rem;
-      font-weight: 700;
-      color: rgba(226,232,240,0.95);
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: rgba(236,240,246,0.97);
     }
     .mv2-gsum-row--lead .mv2-gsum-v {
-      color: rgba(209,250,229,0.97);
+      color: rgba(209,250,229,0.98);
     }
     .mv2-card--owner > h2 { margin-bottom: 0.22rem; }
     .mv2-owner-zodiac {
