@@ -40,6 +40,13 @@ export function renderReportHtmlPage(payload) {
     typeof normalized.amuletV1 === "object" &&
     !Array.isArray(normalized.amuletV1)
   ) {
+    console.log(
+      JSON.stringify({
+        event: "REPORT_HTML_RENDERER_SELECTED",
+        lane: "amulet_html_v2",
+        reportIdPrefix: String(normalized.reportId || "").slice(0, 8),
+      }),
+    );
     return renderAmuletReportV2Html(normalized);
   }
   if (
@@ -47,7 +54,21 @@ export function renderReportHtmlPage(payload) {
     typeof normalized.moldaviteV1 === "object" &&
     !Array.isArray(normalized.moldaviteV1)
   ) {
+    console.log(
+      JSON.stringify({
+        event: "REPORT_HTML_RENDERER_SELECTED",
+        lane: "moldavite_html_v2",
+        reportIdPrefix: String(normalized.reportId || "").slice(0, 8),
+      }),
+    );
     return renderMoldaviteReportV2Html(normalized);
   }
+  console.log(
+    JSON.stringify({
+      event: "REPORT_HTML_RENDERER_SELECTED",
+      lane: "mobile_report_legacy",
+      reportIdPrefix: String(normalized.reportId || "").slice(0, 8),
+    }),
+  );
   return renderMobileReportHtml(normalized);
 }

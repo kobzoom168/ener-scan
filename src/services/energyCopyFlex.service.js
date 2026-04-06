@@ -119,23 +119,7 @@ async function loadCopyWithFallback(categoryCode, objectFamilyNormalized, tone) 
       message: e?.message,
     });
   }
-  if (
-    (!set.headline || !set.bullets?.length) &&
-    objectFamilyNormalized === "thai_talisman"
-  ) {
-    try {
-      const alt = await getEnergyCopySet({
-        categoryCode,
-        objectFamily: "thai_amulet",
-        tone,
-      });
-      if (alt.headline && alt.bullets?.length) return alt;
-    } catch (e) {
-      console.warn("[energyCopyFlex] thai_amulet fallback failed", {
-        message: e?.message,
-      });
-    }
-  }
+  /* thai_talisman normalizes to sacred_amulet; getEnergyCopyTemplateRowsBundle already unions legacy thai_amulet rows. */
   return set;
 }
 

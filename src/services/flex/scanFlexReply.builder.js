@@ -79,15 +79,29 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
 
   try {
     let flex;
+    /** @type {string} */
+    let flexLane = "summary_first_generic";
     if (reportPayload?.moldaviteV1) {
+      flexLane = "moldavite_flex_v1";
       flex = await buildMoldavite(resultText, summaryOpts);
     } else if (reportPayload?.amuletV1) {
+      flexLane = "sacred_amulet_flex_v1";
       flex = await buildAmulet(resultText, summaryOpts);
     } else if (reportPayload?.crystalGenericSafeV1) {
+      flexLane = "crystal_generic_safe_flex_v1";
       flex = await buildCrystalSafe(resultText, summaryOpts);
     } else {
       flex = await buildSummary(resultText, summaryOpts);
     }
+    console.log(
+      JSON.stringify({
+        event: "FLEX_LANE_SELECTED",
+        flexLane,
+        hasMoldaviteV1: Boolean(reportPayload?.moldaviteV1),
+        hasAmuletV1: Boolean(reportPayload?.amuletV1),
+        hasCrystalGenericSafeV1: Boolean(reportPayload?.crystalGenericSafeV1),
+      }),
+    );
     return {
       flex,
       summaryFirstBuildFailed: false,

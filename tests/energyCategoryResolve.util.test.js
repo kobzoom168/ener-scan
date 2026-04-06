@@ -189,7 +189,7 @@ test("thai_amulet + protection", () => {
     inferEnergyCategoryCodeFromMainEnergy("เน้นป้องกันและคุ้มครอง", "generic"),
     "protection",
   );
-  assert.equal(normalizeObjectFamilyForEnergyCopy("somdej"), "thai_amulet");
+  assert.equal(normalizeObjectFamilyForEnergyCopy("somdej"), "sacred_amulet");
 });
 
 test("thai_amulet + confidence (บารมี)", () => {

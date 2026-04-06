@@ -443,6 +443,14 @@ export async function buildReportPayloadFromScan(opts) {
   const famNorm = normalizeObjectFamilyForEnergyCopy(
     String(objectFamilyOpt || ""),
   );
+  console.log(
+    JSON.stringify({
+      event: "OBJECT_FAMILY_NORMALIZED",
+      scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+      objectFamilyRaw: String(objectFamilyOpt || "").slice(0, 96),
+      objectFamilyNormalized: famNorm,
+    }),
+  );
   const mainEnergyForCategoryInference =
     famNorm === "crystal" && mainEnergyRawForCrystalMode
       ? mainEnergyRawForCrystalMode
@@ -877,6 +885,22 @@ export async function buildReportPayloadFromScan(opts) {
           mainEnergyLabel: baseMainEnergyLabel,
         })
       : undefined;
+
+  /** @type {"moldavite_v1"|"sacred_amulet_v1"|"crystal_generic_safe_v1"|"summary_first_default"} */
+  let reportLane = "summary_first_default";
+  if (moldaviteV1) reportLane = "moldavite_v1";
+  else if (amuletV1) reportLane = "sacred_amulet_v1";
+  else if (crystalGenericSafeV1) reportLane = "crystal_generic_safe_v1";
+  console.log(
+    JSON.stringify({
+      event: "REPORT_LANE_SELECTED",
+      scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+      objectFamilyRaw: String(objectFamilyOpt || "").slice(0, 96),
+      objectFamilyNormalized: famNorm,
+      reportLane,
+      energyCopyObjectFamilyWillBe: famNorm,
+    }),
+  );
 
   if (crystalGenericSafeV1) {
     console.log(

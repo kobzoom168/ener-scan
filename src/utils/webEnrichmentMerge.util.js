@@ -29,7 +29,11 @@ export function classifyHintVsObjectFamily(label, energyCopyFamily) {
     if (AMULET_HINT.test(s) && !CRYSTAL_HINT.test(s)) return "hard_conflict";
     return "ok";
   }
-  if (fam === "thai_amulet" || fam === "thai_talisman") {
+  if (
+    fam === "sacred_amulet" ||
+    fam === "thai_amulet" ||
+    fam === "thai_talisman"
+  ) {
     if (CRYSTAL_HINT.test(s) && !AMULET_HINT.test(s)) return "hard_conflict";
     if (CRYSTAL_HINT.test(s) && AMULET_HINT.test(s)) return "weak_conflict";
     return "ok";
@@ -53,7 +57,7 @@ export function mergeExternalHintsIntoWordingContext(payload, hints) {
   }
 
   const famForConflict = String(
-    payload.summary?.energyCopyObjectFamily || "thai_amulet",
+    payload.summary?.energyCopyObjectFamily || "sacred_amulet",
   ).trim();
 
   let ignoredConflict = false;

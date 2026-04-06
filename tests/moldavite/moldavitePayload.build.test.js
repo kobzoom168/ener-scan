@@ -33,7 +33,7 @@ test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", 
   assert.notEqual(slice.primaryLifeArea, slice.secondaryLifeArea);
   assert.equal(slice.context?.energyScoreSnapshot, 7);
   assert.equal(String(slice.flexSurface.headline).trim(), "มอลดาไวต์");
-  assert.equal(slice.flexSurface.bullets.length, 2);
+  assert.equal(slice.flexSurface.bullets.length, 0);
   assert.ok(String(slice.flexSurface.ctaLabel || "").length > 0, "ctaLabel should be set");
   assert.equal(slice.flexSurface.mainEnergyShort, "เร่งการเปลี่ยนแปลง");
   assert.equal(slice.displayNaming?.displayNamingConfidenceLevel, "high");

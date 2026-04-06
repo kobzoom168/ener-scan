@@ -406,8 +406,12 @@ export function inferEnergyCategoryInferenceTrace(mainEnergy, objectFamilyRaw) {
 }
 
 /**
- * Maps pipeline objectFamily slugs → energy_copy_templates.object_family values.
- * Unknown / generic defaults to thai_amulet (seed has copy rows).
+ * Maps pipeline objectFamily slugs → canonical family for energy copy + report routing.
+ *
+ * **Primary lanes (2025):** `crystal` → Moldavite / crystal paths; everything Thai-amulet-class
+ * routes to `sacred_amulet` (HTML/Flex amulet v1). Legacy slug `thai_amulet` normalizes here to
+ * `sacred_amulet` so runtime does not select the old mobile-report primary path for new scans.
+ * DB rows may still use `object_family = thai_amulet`; {@link getEnergyCopyTemplateRowsBundle} expands queries.
  *
  * @param {string} raw
  * @returns {string}
@@ -416,14 +420,16 @@ export function normalizeObjectFamilyForEnergyCopy(raw) {
   const s = String(raw || "")
     .trim()
     .toLowerCase();
-  if (!s || s === "generic") return "thai_amulet";
   if (s === "crystal") return "crystal";
-  if (s === "thai_amulet") return "thai_amulet";
-  if (s === "thai_talisman" || s === "takrud") return "thai_talisman";
   if (s === "global_symbol") return "global_symbol";
-  if (s === "somdej") return "thai_amulet";
+  /** @deprecated Legacy pipeline slug; maps to sacred_amulet primary lane (not old thai_amulet report path). */
+  if (s === "thai_amulet") return "sacred_amulet";
+  if (s === "somdej") return "sacred_amulet";
   if (s === "sacred_amulet") return "sacred_amulet";
-  return "thai_amulet";
+  /** เครื่องราง / ตะกรุด — same primary lane as พระเครื่อง for Ener Scan routing. */
+  if (s === "thai_talisman" || s === "takrud") return "sacred_amulet";
+  if (!s || s === "generic") return "sacred_amulet";
+  return "sacred_amulet";
 }
 
 /**

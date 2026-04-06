@@ -97,9 +97,6 @@ export async function getEnergyCopySet({
   const fam = String(objectFamily || "all").trim() || "all";
   const toneVal = String(tone || "hard").trim() || "hard";
 
-  const families =
-    fam === "all" ? ["all"] : [fam, "all"];
-
   const rows = await getEnergyCopyTemplateRowsBundle({
     categoryCode: cat,
     objectFamily: fam,
@@ -126,7 +123,13 @@ export async function getEnergyCopyTemplateRowsBundle({
   const fam = String(objectFamily || "all").trim() || "all";
   const toneVal = String(tone || "hard").trim() || "hard";
 
-  const families = fam === "all" ? ["all"] : [fam, "all"];
+  /** `sacred_amulet` is the routing key; legacy seeds/rows may still use `thai_amulet`. */
+  const families =
+    fam === "all"
+      ? ["all"]
+      : fam === "sacred_amulet"
+        ? ["sacred_amulet", "thai_amulet", "all"]
+        : [fam, "all"];
 
   let { data, error } = await supabase
     .from("energy_copy_templates")
