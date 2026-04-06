@@ -15,13 +15,6 @@ const AXIS_TITLE_TH = {
   money: "การเงิน",
 };
 
-/** ชื่อแกนสั้นบนเรดาร์เท่านั้น — ลดความกว้างแนวนอน (เฉพาะกราฟ ไม่เปลี่ยนคำเต็มใน summary/ที่อื่น) */
-const RADAR_GRAPH_AXIS_TITLE_TH = {
-  work: "งาน",
-  relationship: "สัมพันธ์",
-  money: "การเงิน",
-};
-
 /** ต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" (คุณ vs หิน ต่อแกน) */
 const RADAR_AXIS_COMPARE_EPS = 6;
 
@@ -40,18 +33,6 @@ function moldaviteHtmlShowRenderMetaLine() {
   if (raw === "1" || raw === "true" || raw === "yes") return true;
   if (raw === "0" || raw === "false" || raw === "no") return false;
   return process.env.NODE_ENV !== "production";
-}
-
-/**
- * แกนความสัมพันธ์: แสดงแค่บรรทัด 1 บนกราฟ แล้วย้ายสถานะเทียบไปบล็อกสรุป (กัน Safari/iPhone)
- * `MOLDAVITE_V2_RADAR_REL_STATUS_IN_SUMMARY=true|1|yes`
- * @returns {boolean}
- */
-function moldaviteRadarRelStatusInSummaryOnly() {
-  const raw = String(process.env.MOLDAVITE_V2_RADAR_REL_STATUS_IN_SUMMARY ?? "")
-    .trim()
-    .toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
 }
 
 /**
@@ -131,67 +112,59 @@ function radarNumberFill(rank) {
 }
 
 /**
- * คุณ vs หิน ต่อแกน: |คุณ−หิน| ≤ 6 → ใกล้เคียง มิฉะนั้นใครคะแนนสูงกว่า = นำ
+ * ข้อความเทียบคุณกับหิน (แสดงนอก SVG เท่านั้น)
  * @param {number} owner01
  * @param {number} crystal01
  */
-function radarAxisCompareStatus(owner01, crystal01) {
+function radarAxisComparePhrase(owner01, crystal01) {
   const o = Math.round(Number(owner01) || 0);
   const c = Math.round(Number(crystal01) || 0);
   if (Math.abs(o - c) <= RADAR_AXIS_COMPARE_EPS) return "ใกล้เคียง";
-  if (o > c) return "คุณนำ";
-  return "หินนำ";
+  if (o > c) return "คุณสูงกว่า";
+  return "หินสูงกว่า";
 }
 
 /**
- * บรรทัด 2 — relationship แคบกว่า (Safari ไทยกว้าง) เลยลดสัดส่วนเทียบบรรทัด 1
- * @param {string} line1Fs
- * @param {string} axisKey
- */
-function radarAxisLine2FontSize(line1Fs, axisKey) {
-  const ratio = axisKey === "relationship" ? 0.79 : 0.86;
-  return (Number(line1Fs) * ratio).toFixed(2);
-}
-
-/**
- * ป้ายแกน 2 บรรทัด: (1) ชื่อ + คะแนน (2) สถานะเทียบ — จัดกลาง/ซ้าย/ขวาตามแกน ไม่ใช้ลูกศรบนกราฟ
- * @param {{ key: string, anchorX: number, ayLine1: number, lineDy: number, ta: "middle"|"start"|"end", owner: number, crystal: number, omitLine2?: boolean }} L
+ * ป้ายบนกราฟ: ชื่อแกน + คะแนนโทนหินเท่านั้น (รูปแบบเสถียร — ไม่ใส่สถานะเทียบใน SVG)
+ * @param {{ key: string, anchorX: number, ay: number, ta: "middle"|"start"|"end", owner: number, crystal: number }} L
  * @param {number} rank
  */
 function radarAxisLabelSvg(L, rank) {
   const fs = radarAxisFontSize(rank);
-  const fs2 = radarAxisLine2FontSize(fs, L.key);
   const ax = L.anchorX;
-  const y1 = L.ayLine1;
-  const lineDy = L.lineDy;
-  const title =
-    RADAR_GRAPH_AXIS_TITLE_TH[L.key] ?? AXIS_TITLE_TH[L.key];
+  const y = L.ay;
+  const title = AXIS_TITLE_TH[L.key];
   const scoreStr = String(Math.round(Number(L.crystal) || 0));
-  const statusStr = radarAxisCompareStatus(L.owner, L.crystal);
   const catFill = radarCategoryFill(rank);
   const numFill = radarNumberFill(rank);
   const titleFw = rank === 1 ? "600" : "500";
-  const gapTitleScore = "\u00A0\u00A0\u00A0";
+  const gapTitleScore = "\u00A0\u00A0";
   const ta = L.ta;
   const textAnchor = ta === "middle" ? "middle" : ta === "end" ? "end" : "start";
-  const line2Opacity = L.key === "relationship" ? "0.55" : "0.62";
 
-  const line1Spans = [
+  const inner = [
     `<tspan fill="${catFill}" font-weight="${titleFw}">${escapeHtml(title)}</tspan>`,
     `<tspan fill="${catFill}" font-weight="500">${gapTitleScore}</tspan>`,
     `<tspan fill="${numFill}" font-weight="700">${escapeHtml(scoreStr)}</tspan>`,
   ].join("");
 
-  if (L.omitLine2) {
-    return `<text class="mv2-radar-axis mv2-radar-axis--1l" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="${textAnchor}" text-rendering="optimizeLegibility">
-    <tspan x="${ax.toFixed(2)}" y="${y1.toFixed(2)}">${line1Spans}</tspan>
-  </text>`;
-  }
+  return `<text class="mv2-radar-axis" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="${textAnchor}" text-rendering="optimizeLegibility"><tspan x="${ax.toFixed(2)}" y="${y.toFixed(2)}">${inner}</tspan></text>`;
+}
 
-  return `<text class="mv2-radar-axis mv2-radar-axis--2l" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="${textAnchor}" text-rendering="optimizeLegibility">
-    <tspan x="${ax.toFixed(2)}" y="${y1.toFixed(2)}">${line1Spans}</tspan>
-    <tspan x="${ax.toFixed(2)}" dy="${lineDy.toFixed(2)}" font-size="${fs2}" fill="${catFill}" font-weight="500" opacity="${line2Opacity}">${escapeHtml(statusStr)}</tspan>
-  </text>`;
+/**
+ * บล็อกเทียบคุณกับหิน (HTML ใต้กราฟ ไม่ใช่ใน SVG)
+ * @param {{ owner: Record<string, number>, crystal: Record<string, number> }} g
+ */
+function radarCompareBlockHtml(g) {
+  const rows = AXIS_KEYS.map((k) => {
+    const label = AXIS_TITLE_TH[k];
+    const phrase = radarAxisComparePhrase(
+      Number(g.owner[k]) || 0,
+      Number(g.crystal[k]) || 0,
+    );
+    return `<p class="mv2-radar-compare-line">${escapeHtml(label)}: ${escapeHtml(phrase)}</p>`;
+  }).join("");
+  return `<div class="mv2-radar-compare" role="group" aria-label="เทียบคุณกับโทนหินต่อแกน">${rows}</div>`;
 }
 
 /**
@@ -216,32 +189,28 @@ function radarBlock(vm) {
 
   const rankOf = axisRankByCrystalStrength(g.crystal);
 
-  /** Bottom-right = ความสัมพันธ์, bottom-left = การเงิน — ป้าย 2 บรรทัด ลดการชนแนวนอนบน iPhone/Safari */
+  /** Bottom-right = ความสัมพันธ์, bottom-left = การเงิน — ป้ายบนกราฟ: ชื่อแกน + คะแนนหินเท่านั้น */
   const labels = [
     {
       key: "work",
       anchorX: RADAR_CX,
-      ayLine1: 6.0,
-      lineDy: 4.1,
+      ay: 6.1,
       ta: /** @type {"middle"} */ ("middle"),
       owner: ow,
       crystal: cw,
     },
     {
       key: "relationship",
-      anchorX: 92.0,
-      ayLine1: 73.25,
-      lineDy: 3.55,
+      anchorX: 92,
+      ay: 75.5,
       ta: /** @type {"end"} */ ("end"),
       owner: or_,
       crystal: cr,
-      omitLine2: moldaviteRadarRelStatusInSummaryOnly(),
     },
     {
       key: "money",
-      anchorX: 5.75,
-      ayLine1: 76.55,
-      lineDy: 4.05,
+      anchorX: 8,
+      ay: 76.8,
       ta: /** @type {"start"} */ ("start"),
       owner: om,
       crystal: cm,
@@ -279,6 +248,7 @@ function radarBlock(vm) {
         <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span><span class="mv2-radar-key-label">คุณ</span></span>
         <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span><span class="mv2-radar-key-label">หิน</span></span>
       </div>
+      ${radarCompareBlockHtml(g)}
     </div>
   </section>`;
 }
@@ -313,15 +283,6 @@ export function renderMoldaviteReportV2Html(payload) {
   const highlightHtml = highlightLine
     ? `<p class="mv2-graph-sum-highlight">${escapeHtml(highlightLine)}</p>`
     : "";
-  const graphRelStatusFootnote =
-    moldaviteRadarRelStatusInSummaryOnly() && vm.graph
-      ? `<p class="mv2-graph-sum-line mv2-graph-sum-line--radar-rel-note">${escapeHtml(
-          `ความสัมพันธ์ (เทียบคุณกับหิน): ${radarAxisCompareStatus(
-            Number(vm.graph.owner?.relationship) || 0,
-            Number(vm.graph.crystal?.relationship) || 0,
-          )}`,
-        )}</p>`
-      : "";
   const graphSummaryLinesHtml =
     Array.isArray(gs.lines) && gs.lines.length > 0
       ? `<div class="mv2-graph-sum-lines">${gs.lines
@@ -331,7 +292,7 @@ export function renderMoldaviteReportV2Html(payload) {
           )
           .join("")}</div>`
       : "";
-  const graphSummaryHtml = `${highlightHtml}${graphRelStatusFootnote}${graphSummaryLinesHtml}`;
+  const graphSummaryHtml = `${highlightHtml}${graphSummaryLinesHtml}`;
 
   const traitsHtml = vm.ownerProfile.traits
     .map((t) => `<li>${escapeHtml(t)}</li>`)
@@ -490,7 +451,6 @@ export function renderMoldaviteReportV2Html(payload) {
       letter-spacing: 0.01em;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Noto Sans Thai", "Sarabun", sans-serif;
     }
-    .mv2-radar-svg text.mv2-radar-axis--2l { dominant-baseline: alphabetic; }
     .mv2-radar-svg .mv2-radar-peak {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
     }
@@ -533,6 +493,22 @@ export function renderMoldaviteReportV2Html(payload) {
       background: radial-gradient(circle at 32% 28%, rgba(220,252,231,0.96), rgba(34, 197, 94, 0.88));
       box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
     }
+    .mv2-radar-compare {
+      margin: 0.5rem 0 0;
+      padding: 0.42rem 0.45rem 0.38rem;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.028);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .mv2-radar-compare-line {
+      margin: 0;
+      padding: 0.18rem 0;
+      font-size: 0.76rem;
+      line-height: 1.42;
+      color: rgba(203, 213, 225, 0.92);
+      font-weight: 400;
+      letter-spacing: 0.01em;
+    }
     .mv2-graph-sum-highlight {
       margin: 0.35rem 0 0.5rem;
       padding: 0.38rem 0.45rem;
@@ -547,13 +523,6 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-graph-sum-lines { margin: 0; display: flex; flex-direction: column; gap: 0.36rem; }
     .mv2-graph-sum-line { margin: 0; font-size: 0.88rem; line-height: 1.38; color: rgba(215,213,208,0.96); font-weight: 400; }
     .mv2-graph-sum-line--lead { font-weight: 600; color: rgba(240,253,244,0.96); font-size: 0.9rem; }
-    .mv2-graph-sum-line--radar-rel-note {
-      margin: 0 0 0.38rem;
-      font-size: 0.8rem;
-      line-height: 1.36;
-      color: rgba(186, 200, 214, 0.9);
-      font-weight: 400;
-    }
     .mv2-owner-id { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 700; color: #a7f3d0; letter-spacing: 0.02em; }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }

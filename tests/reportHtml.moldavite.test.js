@@ -113,18 +113,18 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(
     html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
   );
-  assert.ok(html.includes('class="mv2-radar-axis mv2-radar-axis--2l"'));
+  assert.ok(html.includes('class="mv2-radar-axis"'));
+  assert.ok(!html.includes("mv2-radar-axis--2l"));
   assert.ok(html.includes("text-rendering=\"optimizeLegibility\""));
   assert.ok(html.includes("-apple-system"));
   assert.ok(html.includes(">งาน</tspan>"));
   assert.ok(html.includes(">82</tspan>"));
-  assert.ok(html.includes(">หินนำ</tspan>"));
-  assert.ok(html.includes(">ใกล้เคียง</tspan>"));
-  assert.ok(html.includes('dy="3.') || html.includes('dy="4.'));
-  assert.ok(html.includes(">สัมพันธ์</tspan>"));
+  assert.ok(html.includes('class="mv2-radar-compare"'));
+  assert.ok(html.includes("งาน: หินสูงกว่า"));
+  assert.ok(html.includes("ความสัมพันธ์: หินสูงกว่า"));
+  assert.ok(html.includes("การเงิน: ใกล้เคียง"));
   assert.ok(!html.includes("mv2-radar-series-lbl"));
   assert.ok(html.includes('class="mv2-radar-key"'));
-  assert.ok(!html.includes("mv2-radar-compare"));
   assert.ok(!html.includes("โทนหิน (มิติชีวิต)"));
   assert.ok(html.includes("ไม่ได้การันตีผลลัพธ์"));
   assert.ok(!html.includes("\u2014"));
