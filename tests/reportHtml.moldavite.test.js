@@ -84,10 +84,12 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("ภาพรวมการจับคู่"));
   assert.ok(html.includes("เปรียบเทียบคุณกับพลังของหิน"));
   assert.ok(html.includes("สรุปจากกราฟ"));
-  assert.ok(html.includes("พลังเด่น: งาน"));
-  assert.ok(html.includes("หินช่วยเรื่องงานให้ชัดที่สุดตอนนี้"));
-  assert.ok(html.includes("รองลงมาเป็นความสัมพันธ์"));
-  assert.ok(html.includes("เรื่องการเงินค่อย ๆ ไปก็พอ ไม่ต้องเร่ง"));
+  assert.ok(html.includes('class="mv2-gsum-rows"'));
+  assert.ok(html.includes('class="mv2-gsum-k">พลังเด่น</span>'));
+  assert.ok(html.includes('class="mv2-gsum-v">งาน</span>'));
+  assert.ok(html.includes(">รองลงมา</span>"));
+  assert.ok(html.includes(">ควรค่อย ๆ ไป</span>"));
+  assert.ok(!html.includes("หินช่วยเรื่อง"));
   assert.ok(html.includes('class="mv2-radar-key-dot mv2-radar-key-dot--owner"'));
   assert.ok(html.includes('class="mv2-radar-key-dot mv2-radar-key-dot--stone"'));
   assert.ok(html.includes('class="mv2-radar-key-chip"'));

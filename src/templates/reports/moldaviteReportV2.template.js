@@ -271,21 +271,12 @@ export function renderMoldaviteReportV2Html(payload) {
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
       : "ไม่มี";
 
-  const gs = vm.graphSummary;
-  const highlightLine = String(gs.highlightLine || "").trim();
-  const highlightHtml = highlightLine
-    ? `<p class="mv2-graph-sum-highlight">${escapeHtml(highlightLine)}</p>`
-    : "";
-  const graphSummaryLinesHtml =
-    Array.isArray(gs.lines) && gs.lines.length > 0
-      ? `<div class="mv2-graph-sum-lines">${gs.lines
-          .map(
-            (line, i) =>
-              `<p class="mv2-graph-sum-line${i === 0 ? " mv2-graph-sum-line--lead" : ""}">${escapeHtml(String(line))}</p>`,
-          )
-          .join("")}</div>`
-      : "";
-  const graphSummaryHtml = `${highlightHtml}${graphSummaryLinesHtml}`;
+  const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
+    .map(
+      (r, i) =>
+        `<div class="mv2-gsum-row${i === 0 ? " mv2-gsum-row--lead" : ""}"><span class="mv2-gsum-k">${escapeHtml(r.label)}</span><span class="mv2-gsum-v">${escapeHtml(r.value)}</span></div>`,
+    )
+    .join("")}</div>`;
 
   const traitChipsHtml = vm.ownerProfile.traitScores
     .map((t) => `<span class="mv2-owner-chip">${escapeHtml(t.label)} ${t.score}/10</span>`)
@@ -552,20 +543,38 @@ export function renderMoldaviteReportV2Html(payload) {
       font-weight: 400;
       letter-spacing: 0.01em;
     }
-    .mv2-graph-sum-highlight {
-      margin: 0.35rem 0 0.5rem;
-      padding: 0.38rem 0.45rem;
-      border-radius: 10px;
-      background: rgba(16, 185, 129, 0.08);
-      border: 1px solid rgba(52, 211, 153, 0.14);
-      font-size: 0.84rem;
-      font-weight: 600;
-      color: rgba(209, 250, 229, 0.95);
-      letter-spacing: 0.02em;
+    .mv2-gsum-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.32rem;
     }
-    .mv2-graph-sum-lines { margin: 0; display: flex; flex-direction: column; gap: 0.36rem; }
-    .mv2-graph-sum-line { margin: 0; font-size: 0.88rem; line-height: 1.38; color: rgba(215,213,208,0.96); font-weight: 400; }
-    .mv2-graph-sum-line--lead { font-weight: 600; color: rgba(240,253,244,0.96); font-size: 0.9rem; }
+    .mv2-gsum-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.45rem;
+      padding: 0.28rem 0.5rem;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.028);
+      border: 1px solid rgba(255,255,255,0.055);
+    }
+    .mv2-gsum-row--lead {
+      background: rgba(16,185,129,0.07);
+      border-color: rgba(52,211,153,0.14);
+    }
+    .mv2-gsum-k {
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: rgba(148,163,184,0.82);
+      white-space: nowrap;
+    }
+    .mv2-gsum-v {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: rgba(226,232,240,0.95);
+    }
+    .mv2-gsum-row--lead .mv2-gsum-v {
+      color: rgba(209,250,229,0.97);
+    }
     .mv2-card--owner > h2 { margin-bottom: 0.22rem; }
     .mv2-owner-zodiac {
       margin: 0 0 0.5rem;

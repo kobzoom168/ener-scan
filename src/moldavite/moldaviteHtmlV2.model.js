@@ -167,8 +167,11 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
 
   const crystalOrder = sortAxisKeysByCrystalDesc(crystal);
   const graphSummary = {
-    highlightLine: `พลังเด่น: ${AXIS_LABEL_TH[crystalOrder[0]]}`,
-    lines: buildGraphSummaryLinesFromCrystal(crystal),
+    rows: [
+      { label: "พลังเด่น", value: AXIS_LABEL_TH[crystalOrder[0]] },
+      { label: "รองลงมา", value: AXIS_LABEL_TH[crystalOrder[1]] },
+      { label: "ควรค่อย ๆ ไป", value: AXIS_LABEL_TH[crystalOrder[2]] },
+    ],
   };
 
   const interactionHeadline = "หินทำงานกับคุณอย่างไร";
