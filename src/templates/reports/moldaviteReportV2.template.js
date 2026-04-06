@@ -82,26 +82,38 @@ function axisRankByCrystalStrength(crystal) {
 /**
  * @param {number} rank 1 | 2 | 3
  */
-function radarAxisLabelEmphasis(rank) {
-  if (rank === 1) {
-    return {
-      fill: "#f0fdf4",
-      fontSize: "3.6",
-      fontWeight: "700",
-    };
-  }
-  if (rank === 2) {
-    return {
-      fill: "rgba(220,230,240,0.92)",
-      fontSize: "3.38",
-      fontWeight: "600",
-    };
-  }
-  return {
-    fill: "rgba(94,110,130,0.78)",
-    fontSize: "3.22",
-    fontWeight: "500",
-  };
+function radarAxisFontSize(rank) {
+  if (rank === 1) return "4.05";
+  if (rank === 2) return "3.82";
+  return "3.62";
+}
+
+/**
+ * ลำดับความเด่นของแกน (โทนหิน): 1 = เด่นสุด
+ * @param {number} rank
+ */
+function radarCategoryFill(rank) {
+  if (rank === 1) return "#86efac";
+  if (rank === 2) return "rgba(240,253,244,0.94)";
+  return "rgba(148,163,184,0.6)";
+}
+
+/**
+ * @param {number} rank
+ */
+function radarNumberFill(rank) {
+  if (rank === 1) return "rgba(236,253,245,0.98)";
+  if (rank === 2) return "rgba(248,250,252,0.96)";
+  return "rgba(226,232,240,0.88)";
+}
+
+/**
+ * @param {string} str
+ * @param {string} fs
+ */
+function estimateRadarTextWidth(str, fs) {
+  const n = Array.from(String(str)).length;
+  return n * Number(fs) * 0.48;
 }
 
 /**
@@ -109,12 +121,59 @@ function radarAxisLabelEmphasis(rank) {
  * @param {number} owner01
  * @param {number} crystal01
  */
-function radarAxisCompareSuffix(owner01, crystal01) {
+function radarAxisCompareStatus(owner01, crystal01) {
   const o = Math.round(Number(owner01) || 0);
   const c = Math.round(Number(crystal01) || 0);
-  if (Math.abs(o - c) <= RADAR_AXIS_COMPARE_EPS) return " ใกล้เคียง";
-  if (o > c) return " คุณนำ";
-  return " หินนำ";
+  if (Math.abs(o - c) <= RADAR_AXIS_COMPARE_EPS) return "ใกล้เคียง";
+  if (o > c) return "คุณนำ";
+  return "หินนำ";
+}
+
+/**
+ * หินแรงกว่า → ↑ คุณแรงกว่า → ↓ ใกล้เคียง → →
+ * @param {number} owner01
+ * @param {number} crystal01
+ */
+function radarAxisImpactArrow(owner01, crystal01) {
+  const o = Math.round(Number(owner01) || 0);
+  const c = Math.round(Number(crystal01) || 0);
+  if (Math.abs(o - c) <= RADAR_AXIS_COMPARE_EPS) return "→";
+  if (c > o) return "↑";
+  return "↓";
+}
+
+/**
+ * @param {{ key: string, anchorX: number, ay: number, ta: "middle"|"start"|"end", owner: number, crystal: number }} L
+ * @param {number} rank
+ */
+function radarAxisLabelSvg(L, rank) {
+  const fs = radarAxisFontSize(rank);
+  const title = AXIS_TITLE_TH[L.key];
+  const scoreStr = String(Math.round(Number(L.crystal) || 0));
+  const statusStr = radarAxisCompareStatus(L.owner, L.crystal);
+  const arrowStr = radarAxisImpactArrow(L.owner, L.crystal);
+  const catFill = radarCategoryFill(rank);
+  const numFill = radarNumberFill(rank);
+  const parts = [
+    { ch: title, fill: catFill, fw: "500", op: "1" },
+    { ch: "\u00A0\u00A0", fill: catFill, fw: "500", op: "1" },
+    { ch: scoreStr, fill: numFill, fw: "700", op: "1" },
+    { ch: "\u00A0\u00A0\u00A0", fill: numFill, fw: "500", op: "1" },
+    { ch: statusStr, fill: catFill, fw: "500", op: "0.7" },
+    { ch: "\u00A0", fill: catFill, fw: "500", op: "0.7" },
+    { ch: arrowStr, fill: catFill, fw: "500", op: "0.7" },
+  ];
+  const totalW = parts.reduce((s, p) => s + estimateRadarTextWidth(p.ch, fs), 0);
+  let startX = L.anchorX;
+  if (L.ta === "middle") startX = L.anchorX - totalW / 2;
+  else if (L.ta === "end") startX = L.anchorX - totalW;
+  const inner = parts
+    .map(
+      (p) =>
+        `<tspan fill="${p.fill}" font-weight="${p.fw}" opacity="${p.op}">${escapeHtml(p.ch)}</tspan>`,
+    )
+    .join("");
+  return `<text class="mv2-radar-axis" x="${startX.toFixed(2)}" y="${L.ay}" font-size="${fs}" font-family="inherit" text-anchor="start" dominant-baseline="middle">${inner}</text>`;
 }
 
 /**
@@ -128,7 +187,7 @@ function radarBlock(vm) {
   const peakLabel = String(g.crystalPeakLabelThai || "").trim() || "หิน";
   const px = peak.x.toFixed(2);
   const py = peak.y.toFixed(2);
-  const crystalMarker = `<circle cx="${px}" cy="${py}" r="2.45" fill="rgba(74,222,128,0.22)" stroke="none" aria-hidden="true"/><circle class="mv2-radar-peak" cx="${px}" cy="${py}" r="1.85" fill="#4ade80" stroke="rgba(255,255,255,0.36)" stroke-width="0.34" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
+  const crystalMarker = `<circle cx="${px}" cy="${py}" r="2.05" fill="rgba(74,222,128,0.18)" stroke="none" aria-hidden="true"/><circle class="mv2-radar-peak" cx="${px}" cy="${py}" r="1.52" fill="#4ade80" stroke="rgba(255,255,255,0.34)" stroke-width="0.3" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
 
   const cw = Math.round(Number(g.crystal.work) || 0);
   const cr = Math.round(Number(g.crystal.relationship) || 0);
@@ -143,28 +202,25 @@ function radarBlock(vm) {
   const labels = [
     {
       key: "work",
-      ax: RADAR_CX,
-      ay: 5,
-      text: `${AXIS_TITLE_TH.work} ${cw}`,
-      ta: "middle",
+      anchorX: RADAR_CX,
+      ay: 6.35,
+      ta: /** @type {"middle"} */ ("middle"),
       owner: ow,
       crystal: cw,
     },
     {
       key: "relationship",
-      ax: 91,
-      ay: 76,
-      text: `${AXIS_TITLE_TH.relationship} ${cr}`,
-      ta: "end",
+      anchorX: 89.25,
+      ay: 76.35,
+      ta: /** @type {"end"} */ ("end"),
       owner: or_,
       crystal: cr,
     },
     {
       key: "money",
-      ax: 9,
-      ay: 76,
-      text: `${AXIS_TITLE_TH.money} ${cm}`,
-      ta: "start",
+      anchorX: 10.75,
+      ay: 76.35,
+      ta: /** @type {"start"} */ ("start"),
       owner: om,
       crystal: cm,
     },
@@ -172,9 +228,7 @@ function radarBlock(vm) {
   const labelSvg = labels
     .map((L) => {
       const rk = rankOf[L.key] ?? 2;
-      const em = radarAxisLabelEmphasis(rk);
-      const labelText = `${L.text}${radarAxisCompareSuffix(L.owner, L.crystal)}`;
-      return `<text x="${L.ax}" y="${L.ay}" fill="${em.fill}" font-size="${em.fontSize}" font-weight="${em.fontWeight}" text-anchor="${L.ta}" font-family="inherit">${escapeHtml(labelText)}</text>`;
+      return radarAxisLabelSvg(L, rk);
     })
     .join("");
 
@@ -184,7 +238,6 @@ function radarBlock(vm) {
   <section class="mv2-radar-card" aria-labelledby="mv2-radar-h">
     <h2 class="mv2-radar-title" id="mv2-radar-h">ภาพรวมการจับคู่</h2>
     ${radarHelperHtml}
-    <p class="mv2-radar-sub"><span class="mv2-radar-sub-line">สเกล 0–100 ต่อแกน</span><span class="mv2-radar-sub-line">จุดสว่าง = มิติที่เด่นสุด</span></p>
     <div class="mv2-radar-svg-wrap">
       <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key">
         <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
@@ -201,8 +254,8 @@ function radarBlock(vm) {
         <g class="mv2-radar-layer mv2-radar-layer--labels">${labelSvg}</g>
       </svg>
       <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
-        <div class="mv2-radar-key-row"><span class="mv2-radar-key-label">คุณ</span><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span></div>
-        <div class="mv2-radar-key-row"><span class="mv2-radar-key-label">หิน</span><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span></div>
+        <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span><span class="mv2-radar-key-label">คุณ</span></span>
+        <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span><span class="mv2-radar-key-label">หิน</span></span>
       </div>
     </div>
   </section>`;
@@ -354,13 +407,11 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
     .mv2-radar-context { margin: 0 0 0.5rem; font-size: 0.8rem; line-height: 1.42; color: rgba(186, 230, 253, 0.88); font-weight: 500; letter-spacing: 0.01em; }
-    .mv2-radar-sub { margin: 0 0 0.85rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; display: flex; flex-direction: column; gap: 0.2rem; }
-    .mv2-radar-sub-line { display: block; }
     .mv2-radar-svg-wrap {
       width: 100%;
       max-width: 17.5rem;
       margin: 0 auto;
-      padding: 0.35rem 0.65rem 0.15rem;
+      padding: 0.55rem 0.85rem 0.2rem;
       box-sizing: border-box;
     }
     .mv2-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
@@ -404,33 +455,33 @@ export function renderMoldaviteReportV2Html(payload) {
         transform: none !important;
       }
     }
+    .mv2-radar-svg text.mv2-radar-axis { letter-spacing: 0.01em; }
     .mv2-radar-svg .mv2-radar-peak {
-      filter: drop-shadow(0 0 1.2px rgba(52, 211, 153, 0.5)) drop-shadow(0 0 3px rgba(34, 197, 94, 0.28));
+      filter: drop-shadow(0 0 0.9px rgba(52, 211, 153, 0.42)) drop-shadow(0 0 2.2px rgba(34, 197, 94, 0.22));
     }
     .mv2-radar-key {
-      margin: 0.45rem 0 0;
+      margin: 0.28rem 0 0;
       padding: 0;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 0.26rem;
-      font-size: 0.72rem;
-      line-height: 1.35;
+      justify-content: center;
+      gap: 0.75rem;
+      font-size: 0.8125rem;
+      line-height: 1.2;
       letter-spacing: 0.02em;
       font-weight: 500;
+      opacity: 0.85;
     }
-    .mv2-radar-key-row {
-      display: flex;
+    .mv2-radar-key-chip {
+      display: inline-flex;
       flex-direction: row;
       align-items: center;
-      justify-content: flex-start;
-      gap: 0.38rem;
-      min-width: 5.2rem;
+      gap: 0.32rem;
     }
     .mv2-radar-key-label {
-      flex: 0 0 1.65rem;
-      text-align: right;
-      color: rgba(226, 232, 240, 0.92);
+      color: rgba(226, 232, 240, 0.95);
     }
     .mv2-radar-key-dot {
       width: 0.48rem;
@@ -458,8 +509,8 @@ export function renderMoldaviteReportV2Html(payload) {
       color: rgba(209, 250, 229, 0.95);
       letter-spacing: 0.02em;
     }
-    .mv2-graph-sum-lines { margin: 0; display: flex; flex-direction: column; gap: 0.42rem; }
-    .mv2-graph-sum-line { margin: 0; font-size: 0.88rem; line-height: 1.48; color: rgba(215,213,208,0.96); font-weight: 400; }
+    .mv2-graph-sum-lines { margin: 0; display: flex; flex-direction: column; gap: 0.36rem; }
+    .mv2-graph-sum-line { margin: 0; font-size: 0.88rem; line-height: 1.38; color: rgba(215,213,208,0.96); font-weight: 400; }
     .mv2-graph-sum-line--lead { font-weight: 600; color: rgba(240,253,244,0.96); font-size: 0.9rem; }
     .mv2-owner-id { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 700; color: #a7f3d0; letter-spacing: 0.02em; }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }

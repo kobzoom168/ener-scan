@@ -85,11 +85,12 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("เปรียบเทียบคุณกับพลังของหิน"));
   assert.ok(html.includes("สรุปจากกราฟ"));
   assert.ok(html.includes("พลังเด่น: งาน"));
-  assert.ok(html.includes("ช่วงนี้พลังหินไปโฟกัสที่งานชัดที่สุด"));
-  assert.ok(html.includes("รองลงมาเป็นเรื่องความสัมพันธ์"));
-  assert.ok(html.includes("เรื่องการเงินค่อย ๆ ไปทีละก้าวก็พอ ไม่ต้องเร่ง"));
+  assert.ok(html.includes("หินช่วยเรื่องงานให้ชัดที่สุดตอนนี้"));
+  assert.ok(html.includes("รองลงมาเป็นความสัมพันธ์"));
+  assert.ok(html.includes("เรื่องการเงินค่อย ๆ ไปก็พอ ไม่ต้องเร่ง"));
   assert.ok(html.includes('class="mv2-radar-key-dot mv2-radar-key-dot--owner"'));
   assert.ok(html.includes('class="mv2-radar-key-dot mv2-radar-key-dot--stone"'));
+  assert.ok(html.includes('class="mv2-radar-key-chip"'));
   assert.ok(html.includes('class="mv2-radar-key-label">คุณ</span>'));
   assert.ok(html.includes('class="mv2-radar-key-label">หิน</span>'));
   assert.ok(!html.includes(UNIQUE_HERO_PROSE));
@@ -112,9 +113,13 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(
     html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
   );
-  assert.ok(html.includes("งาน 82 หินนำ"));
-  assert.ok(html.includes("ความสัมพันธ์ 75 หินนำ"));
-  assert.ok(html.includes("การเงิน 69 ใกล้เคียง"));
+  assert.ok(html.includes('class="mv2-radar-axis"'));
+  assert.ok(html.includes(">งาน</tspan>"));
+  assert.ok(html.includes(">82</tspan>"));
+  assert.ok(html.includes(">หินนำ</tspan>"));
+  assert.ok(html.includes(">↑</tspan>"));
+  assert.ok(html.includes(">ใกล้เคียง</tspan>"));
+  assert.ok(html.includes(">→</tspan>"));
   assert.ok(!html.includes("mv2-radar-series-lbl"));
   assert.ok(html.includes('class="mv2-radar-key"'));
   assert.ok(!html.includes("mv2-radar-compare"));

@@ -88,16 +88,10 @@ export function sortAxisKeysByCrystalDesc(crystal) {
  */
 export function buildGraphSummaryLinesFromCrystal(crystal) {
   const [first, second, third] = sortAxisKeysByCrystalDesc(crystal);
-  /** @type {Record<AxisKey, string>} */
-  const topLine = {
-    work: "ช่วงนี้พลังหินไปโฟกัสที่งานชัดที่สุด",
-    relationship: "ช่วงนี้พลังหินไปโฟกัสที่ความสัมพันธ์ชัดที่สุด",
-    money: "ช่วงนี้พลังหินไปโฟกัสที่การเงินชัดที่สุด",
-  };
   return [
-    topLine[first],
-    `รองลงมาเป็นเรื่อง${AXIS_LABEL_TH[second]}`,
-    `เรื่อง${AXIS_LABEL_TH[third]}ค่อย ๆ ไปทีละก้าวก็พอ ไม่ต้องเร่ง`,
+    `หินช่วยเรื่อง${AXIS_LABEL_TH[first]}ให้ชัดที่สุดตอนนี้`,
+    `รองลงมาเป็น${AXIS_LABEL_TH[second]}`,
+    `เรื่อง${AXIS_LABEL_TH[third]}ค่อย ๆ ไปก็พอ ไม่ต้องเร่ง`,
   ];
 }
 
