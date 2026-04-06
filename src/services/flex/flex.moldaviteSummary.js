@@ -7,22 +7,27 @@ import { normalizeScore } from "./flex.utils.js";
 import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 
-/** Moldavite-only palette — green accent (distinct from Thai/gold cards). */
-const FLEX_CARD_BG = "#000000";
-const FLEX_BOX_BG = "#111111";
-const MOLDAVITE_ACCENT = "#4ADE80";
-const MOLDAVITE_ACCENT_DIM = "#5ee0a0";
-const MOLDAVITE_PILL_BORDER = "#3d5248";
-const MOLDAVITE_PILL_BG = "#0a1410";
-/** CTA: slightly deeper green for contrast on mobile tap targets. */
-const MOLDAVITE_CTA_BG = "#22C55E";
+/**
+ * Moldavite-only palette — light / white card + green accents (LINE-safe hex).
+ * Distinct from Thai/gold cards; avoids dark-theme-only tokens.
+ */
+const FLEX_CARD_BG = "#ffffff";
+const FLEX_BOX_BG = "#f3f4f6";
+/** Segmented “tab” cells — light mint panels + green border. */
+const FLEX_SEGMENT_BG = "#f0fdf4";
+const FLEX_SEGMENT_BORDER = "#bbf7d0";
+const MOLDAVITE_ACCENT = "#16a34a";
+const MOLDAVITE_ACCENT_DIM = "#22c55e";
+const MOLDAVITE_PILL_BORDER = "#86efac";
+const MOLDAVITE_PILL_BG = "#f0fdf4";
+/** CTA: deeper green on white for tap contrast. */
+const MOLDAVITE_CTA_BG = "#16a34a";
 const FLEX_ACCENT = MOLDAVITE_CTA_BG;
-const FLEX_TEXT_PRIMARY = "#ffffff";
-const FLEX_TEXT_SECONDARY = "#a1a8b3";
-const FLEX_TEXT_MUTED = "#6b7280";
-const FLEX_TEXT_CAPTION = "#5c6468";
-/** Tagline under title — intentionally quiet vs headline. */
-const MOLDAVITE_TITLE_TAGLINE_COLOR = "#6d7a74";
+const FLEX_TEXT_PRIMARY = "#111827";
+const FLEX_TEXT_SECONDARY = "#6b7280";
+const FLEX_TEXT_CAPTION = "#6b7280";
+/** Tagline under title — muted green-gray on white. */
+const MOLDAVITE_TITLE_TAGLINE_COLOR = "#4b5563";
 /** Static identity line under title (Flex-only; not detection logic). */
 const MOLDAVITE_TITLE_TAGLINE = "หินเทคไทต์ · โทนเขียว";
 
@@ -38,56 +43,65 @@ function truncateEnergyBadgeLabel(text, maxLen = 14) {
 
 const MAIN_ENERGY_PILL_MAX_LEN = 22;
 
+/** Fixed column order for segmented row (งาน → ความสัมพันธ์ → การเงิน). Not score math — display only. */
+const LIFE_AREA_SEGMENT_KEYS = /** @type {const} */ ([
+  "work",
+  "relationship",
+  "money",
+]);
+
 /**
- * Life-area scores — vertical text only (same semantics as old ranked rows).
- * Matches generic summary-first patterns: no horizontal text+flex rows, no justifyContent/alignItems
- * (those differ from the known-good Thai/generic card and have triggered LINE 400 in prod).
+ * Segmented 3-up “tab” row: horizontal `box` + three `box` children with `flex:1` only (LINE-safe).
+ * True tabs are not available in Flex; this approximates segmented controls.
  *
  * @param {Record<string, { score?: number, labelThai?: string }>|null|undefined} lifeAreas
  */
-function createLifeAreasRankingBlock(lifeAreas) {
+function createLifeAreasSegmentedBlock(lifeAreas) {
   if (!lifeAreas || typeof lifeAreas !== "object") return null;
-  const orderKeys = /** @type {const} */ (["work", "money", "relationship"]);
-  /** @type {{ label: string, score: number }[]} */
-  const rows = [];
-  for (const k of orderKeys) {
-    const entry = lifeAreas[k];
-    if (!entry || typeof entry !== "object") continue;
-    const label = String(entry.labelThai || "").trim();
-    const score = entry.score;
-    if (!label || score == null || !Number.isFinite(Number(score))) continue;
-    rows.push({ label, score: Number(score) });
-  }
-  if (rows.length === 0) return null;
-  rows.sort((a, b) => b.score - a.score);
 
   /** @type {object[]} */
-  const lines = [
-    {
-      type: "text",
-      text: "มิติที่โทนไปออกแรงสุด",
-      size: "xs",
-      color: MOLDAVITE_ACCENT_DIM,
-      wrap: true,
-      margin: "sm",
-    },
-    {
-      type: "text",
-      text: "เรียงจากมากไปน้อย",
-      size: "xs",
-      color: FLEX_TEXT_CAPTION,
-      wrap: true,
-      margin: "xs",
-    },
-  ];
-  for (const r of rows) {
-    lines.push({
-      type: "text",
-      text: `${r.label} · ${String(Math.round(r.score))}`,
-      size: "sm",
-      color: FLEX_TEXT_SECONDARY,
-      wrap: true,
-      margin: "xs",
+  const segments = [];
+  for (const k of LIFE_AREA_SEGMENT_KEYS) {
+    const entry = lifeAreas[k];
+    const label =
+      entry && typeof entry === "object"
+        ? String(entry.labelThai || "").trim()
+        : "";
+    const scoreRaw =
+      entry && typeof entry === "object" ? entry.score : undefined;
+    const scoreOk =
+      scoreRaw != null && Number.isFinite(Number(scoreRaw))
+        ? Math.round(Number(scoreRaw))
+        : null;
+
+    segments.push({
+      type: "box",
+      layout: "vertical",
+      flex: 1,
+      paddingAll: "10px",
+      spacing: "xs",
+      borderWidth: "1px",
+      borderColor: FLEX_SEGMENT_BORDER,
+      cornerRadius: "md",
+      backgroundColor: FLEX_SEGMENT_BG,
+      contents: [
+        {
+          type: "text",
+          text: label || "—",
+          size: "xs",
+          color: FLEX_TEXT_SECONDARY,
+          wrap: true,
+          maxLines: 2,
+        },
+        {
+          type: "text",
+          text: scoreOk == null ? "—" : String(scoreOk),
+          size: "lg",
+          weight: "bold",
+          color: MOLDAVITE_ACCENT,
+          wrap: false,
+        },
+      ],
     });
   }
 
@@ -95,8 +109,32 @@ function createLifeAreasRankingBlock(lifeAreas) {
     type: "box",
     layout: "vertical",
     margin: "md",
-    spacing: "xs",
-    contents: lines,
+    spacing: "sm",
+    contents: [
+      {
+        type: "text",
+        text: "มิติเชิงโฟกัส",
+        size: "xs",
+        color: MOLDAVITE_ACCENT_DIM,
+        weight: "bold",
+        wrap: true,
+        margin: "none",
+      },
+      {
+        type: "text",
+        text: "งาน · ความสัมพันธ์ · การเงิน",
+        size: "xs",
+        color: FLEX_TEXT_CAPTION,
+        wrap: true,
+        margin: "xs",
+      },
+      {
+        type: "box",
+        layout: "horizontal",
+        spacing: "sm",
+        contents: segments,
+      },
+    ],
   };
 }
 
@@ -300,7 +338,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
   const heroOk = /^https:\/\//i.test(imgUrl);
   const url = String(reportUrl || "").trim();
 
-  const lifeAreasBlock = createLifeAreasRankingBlock(mv.lifeAreas);
+  const lifeAreasBlock = createLifeAreasSegmentedBlock(mv.lifeAreas);
 
   const taglineText =
     String(mv.flexSurface?.tagline || "").trim() || MOLDAVITE_TITLE_TAGLINE;
@@ -363,7 +401,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
     type: "text",
     text: `› ${line}`,
     size: "sm",
-    color: "#cccccc",
+    color: "#4b5563",
     wrap: true,
     maxLines: 2,
     lineSpacing: "3px",

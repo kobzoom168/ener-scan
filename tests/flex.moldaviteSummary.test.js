@@ -71,8 +71,10 @@ test("buildMoldaviteSummaryFirstFlex: returns flex bubble without calling generi
   assert.ok(bodyText.includes("มอลดาไวต์"));
   assert.ok(bodyText.includes("หินเทคไทต์ · โทนเขียว"));
   assert.ok(bodyText.includes("เร่งการเปลี่ยนแปลง"));
-  assert.ok(bodyText.includes("มิติที่โทนไปออกแรงสุด"));
+  assert.ok(bodyText.includes("มิติเชิงโฟกัส"));
   assert.ok(bodyText.includes("งาน"));
+  assert.ok(bodyText.includes("ความสัมพันธ์"));
+  assert.ok(bodyText.includes("การเงิน"));
   assert.ok(bodyText.includes("88"));
 
   const flat = JSON.stringify(flex);
