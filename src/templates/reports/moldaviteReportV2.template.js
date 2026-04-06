@@ -18,6 +18,10 @@ const AXIS_TITLE_TH = {
 /** ต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" (คุณ vs หิน ต่อแกน) */
 const RADAR_AXIS_COMPARE_EPS = 6;
 
+/** iOS/Safari + ไทย: ใช้สแตกที่คาดเมตริกได้ใกล้เคียงระบบ ไม่สืบทอดจาก body */
+const RADAR_AXIS_FONT_FAMILY =
+  "-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Noto Sans Thai','Sarabun',sans-serif";
+
 /**
  * Footer render/meta line: off in production unless explicitly enabled (support/debug).
  * `REPORT_HTML_RENDER_META=true|1|yes` → show; `false|0|no` → hide;
@@ -83,9 +87,9 @@ function axisRankByCrystalStrength(crystal) {
  * @param {number} rank 1 | 2 | 3
  */
 function radarAxisFontSize(rank) {
-  if (rank === 1) return "4.05";
-  if (rank === 2) return "3.82";
-  return "3.62";
+  if (rank === 1) return "3.78";
+  if (rank === 2) return "3.57";
+  return "3.38";
 }
 
 /**
@@ -108,12 +112,28 @@ function radarNumberFill(rank) {
 }
 
 /**
+ * ประมาณความกว้างข้อความ (viewBox) — ค่าสูงกว่าเล็กน้อยเพื่อกันหน้าไอโฟน/ Safari วาดกว้างกว่าเดสก์ท็อป
  * @param {string} str
  * @param {string} fs
+ * @param {string} [axisKey]
  */
-function estimateRadarTextWidth(str, fs) {
+function estimateRadarTextWidth(str, fs, axisKey) {
   const n = Array.from(String(str)).length;
-  return n * Number(fs) * 0.48;
+  let per = Number(fs) * 0.53;
+  if (axisKey === "relationship") per *= 1.06;
+  else if (axisKey === "money") per *= 1.03;
+  return n * per;
+}
+
+/**
+ * เผื่อความกว้างเพิ่มเมื่อคำนวณจุดยึด — ลดการชนระหว่างซ้ายล่าง/ขวาล่างบนมือถือ
+ * @param {string} axisKey
+ */
+function radarLayoutWidthPad(axisKey) {
+  if (axisKey === "relationship") return 2.4;
+  if (axisKey === "money") return 1.8;
+  if (axisKey === "work") return 0.85;
+  return 1;
 }
 
 /**
@@ -155,8 +175,8 @@ function radarAxisLabelSvg(L, rank) {
   const catFill = radarCategoryFill(rank);
   const numFill = radarNumberFill(rank);
   const titleFw = rank === 1 ? "600" : "500";
-  const gapAfterTitle = "\u00A0\u00A0\u00A0";
-  const gapBeforeStatus = "\u00A0\u00A0\u00A0\u00A0\u00A0";
+  const gapAfterTitle = "\u00A0\u00A0\u00A0\u00A0";
+  const gapBeforeStatus = "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0";
   const parts = [
     { ch: title, fill: catFill, fw: titleFw, op: "1" },
     { ch: gapAfterTitle, fill: catFill, fw: "500", op: "1" },
@@ -166,7 +186,9 @@ function radarAxisLabelSvg(L, rank) {
     { ch: "\u00A0", fill: catFill, fw: "500", op: "0.68" },
     { ch: arrowStr, fill: catFill, fw: "500", op: "0.68" },
   ];
-  const totalW = parts.reduce((s, p) => s + estimateRadarTextWidth(p.ch, fs), 0);
+  const totalW =
+    parts.reduce((s, p) => s + estimateRadarTextWidth(p.ch, fs, L.key), 0) +
+    radarLayoutWidthPad(L.key);
   let startX = L.anchorX;
   if (L.ta === "middle") startX = L.anchorX - totalW / 2;
   else if (L.ta === "end") startX = L.anchorX - totalW;
@@ -176,7 +198,7 @@ function radarAxisLabelSvg(L, rank) {
         `<tspan fill="${p.fill}" font-weight="${p.fw}" opacity="${p.op}">${escapeHtml(p.ch)}</tspan>`,
     )
     .join("");
-  return `<text class="mv2-radar-axis" x="${startX.toFixed(2)}" y="${L.ay}" font-size="${fs}" font-family="inherit" text-anchor="start" dominant-baseline="middle">${inner}</text>`;
+  return `<text class="mv2-radar-axis" x="${startX.toFixed(2)}" y="${L.ay}" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="start" dominant-baseline="middle" text-rendering="optimizeLegibility">${inner}</text>`;
 }
 
 /**
@@ -206,23 +228,23 @@ function radarBlock(vm) {
     {
       key: "work",
       anchorX: RADAR_CX,
-      ay: 6.25,
+      ay: 6.1,
       ta: /** @type {"middle"} */ ("middle"),
       owner: ow,
       crystal: cw,
     },
     {
       key: "relationship",
-      anchorX: 92,
-      ay: 75.55,
+      anchorX: 93.75,
+      ay: 74.45,
       ta: /** @type {"end"} */ ("end"),
       owner: or_,
       crystal: cr,
     },
     {
       key: "money",
-      anchorX: 8,
-      ay: 77.15,
+      anchorX: 5.5,
+      ay: 77.85,
       ta: /** @type {"start"} */ ("start"),
       owner: om,
       crystal: cm,
@@ -458,7 +480,10 @@ export function renderMoldaviteReportV2Html(payload) {
         transform: none !important;
       }
     }
-    .mv2-radar-svg text.mv2-radar-axis { letter-spacing: 0.01em; }
+    .mv2-radar-svg text.mv2-radar-axis {
+      letter-spacing: 0.01em;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Noto Sans Thai", "Sarabun", sans-serif;
+    }
     .mv2-radar-svg .mv2-radar-peak {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
     }

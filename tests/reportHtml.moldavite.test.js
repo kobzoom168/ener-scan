@@ -114,6 +114,8 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
     html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
   );
   assert.ok(html.includes('class="mv2-radar-axis"'));
+  assert.ok(html.includes("text-rendering=\"optimizeLegibility\""));
+  assert.ok(html.includes("-apple-system"));
   assert.ok(html.includes(">งาน</tspan>"));
   assert.ok(html.includes(">82</tspan>"));
   assert.ok(html.includes(">หินนำ</tspan>"));
