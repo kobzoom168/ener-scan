@@ -64,7 +64,7 @@ function radarBlock(vm) {
   return `
   <section class="mv2-radar-card" aria-labelledby="mv2-radar-h">
     <h2 class="mv2-radar-title" id="mv2-radar-h">ภาพรวมการจับคู่</h2>
-    <p class="mv2-radar-sub">${escapeHtml(g.scaleNote)}</p>
+    <p class="mv2-radar-sub"><span class="mv2-radar-sub-line">สเกล 0–100 ต่อแกน</span><span class="mv2-radar-sub-line">จุดสว่าง = มิติที่เด่นสุด</span></p>
     <div class="mv2-radar-svg-wrap">
       <svg class="mv2-radar-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เจ้าของและโทนหิน" aria-describedby="mv2-radar-peak-note">
         <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
@@ -76,7 +76,7 @@ function radarBlock(vm) {
         ${crystalMarker}
         ${labelSvg}
       </svg>
-      <p class="mv2-radar-peak-note" id="mv2-radar-peak-note">จุดสว่างบนกราฟ = แรงเน้นสูงสุดของโทนหิน · ${escapeHtml(peakLabel)}</p>
+      <p class="mv2-radar-peak-note" id="mv2-radar-peak-note">เด่นสุดตอนนี้: ${escapeHtml(peakLabel)}</p>
     </div>
     <ul class="mv2-legend" role="list">
       <li><span class="mv2-dot mv2-dot--owner"></span> คุณ (จากวันเกิด / รหัสรายงาน)</li>
@@ -189,8 +189,9 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-hero-media--empty { display:flex; align-items:center; justify-content:center; color: var(--mv2-muted); font-size: 0.85rem; }
     .mv2-hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .mv2-h1 { font-size: 1.45rem; font-weight: 700; margin: 0.6rem 0 0.2rem; line-height: 1.25; }
-    .mv2-tag { color: var(--mv2-green-dim); font-size: 0.92rem; margin: 0.25rem 0; }
-    .mv2-main { color: var(--mv2-green); font-weight: 600; font-size: 0.95rem; margin: 0.35rem 0 0.5rem; border-left: 3px solid rgba(34,197,94,0.5); padding-left: 0.6rem; }
+    .mv2-tag { color: var(--mv2-green-dim); font-size: 0.92rem; margin: 0.25rem 0 1.05rem; line-height: 1.4; }
+    .mv2-main { color: var(--mv2-green); font-weight: 600; font-size: 0.95rem; margin: 0 0 0.5rem; border-left: 3px solid rgba(34,197,94,0.5); padding-left: 0.6rem; }
+    .mv2-h1 + .mv2-main { margin-top: 0.35rem; }
     .mv2-date { font-size: 0.72rem; color: var(--mv2-muted); margin-top: 0.35rem; }
     .mv2-strip {
       display: grid;
@@ -213,26 +214,27 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2-green-dim); font-weight: 600; }
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
-    .mv2-radar-sub { margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; }
-    .mv2-radar-peak-note { margin: 0.5rem 0 0; font-size: 0.7rem; color: #86efac; line-height: 1.35; text-align: center; }
+    .mv2-radar-sub { margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; display: flex; flex-direction: column; gap: 0.2rem; }
+    .mv2-radar-sub-line { display: block; }
+    .mv2-radar-peak-note { margin: 0.5rem 0 0; font-size: 0.68rem; color: rgba(134,239,172,0.82); line-height: 1.35; text-align: center; }
     .mv2-radar-svg-wrap { width: 100%; max-width: 18rem; margin: 0 auto; }
     .mv2-radar-svg { width: 100%; height: auto; display: block; }
-    .mv2-legend { list-style: none; padding: 0.6rem 0 0; margin: 0; font-size: 0.78rem; color: var(--mv2-muted); }
-    .mv2-legend li { display: flex; align-items: center; gap: 0.45rem; margin-bottom: 0.35rem; }
-    .mv2-dot { width: 0.55rem; height: 0.55rem; border-radius: 999px; display: inline-block; }
-    .mv2-dot--owner { background: rgba(147,197,253,0.9); }
-    .mv2-dot--crystal { background: rgba(34,197,94,0.95); }
-    .mv2-graph-sum-compact { margin: 0.25rem 0; font-size: 0.92rem; line-height: 1.35; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.35rem; }
-    .mv2-graph-sum-k { color: var(--mv2-muted); font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; }
-    .mv2-graph-sum-arrow { color: #6b7280; font-weight: 500; }
-    .mv2-graph-sum-v { color: #ecfdf5; font-weight: 700; }
+    .mv2-legend { list-style: none; padding: 0.35rem 0 0; margin: 0; font-size: 0.64rem; color: rgba(156,163,175,0.58); letter-spacing: 0.01em; }
+    .mv2-legend li { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.22rem; }
+    .mv2-dot { width: 0.4rem; height: 0.4rem; border-radius: 999px; display: inline-block; opacity: 0.72; }
+    .mv2-dot--owner { background: rgba(147,197,253,0.65); }
+    .mv2-dot--crystal { background: rgba(34,197,94,0.68); }
+    .mv2-graph-sum-compact { margin: 0.35rem 0; font-size: 0.92rem; line-height: 1.45; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.35rem; }
+    .mv2-graph-sum-k { color: rgba(148,163,184,0.78); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.02em; }
+    .mv2-graph-sum-arrow { color: #64748b; font-weight: 500; opacity: 0.85; }
+    .mv2-graph-sum-v { color: #f0fdf4; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.04em; text-shadow: 0 0 24px rgba(52,211,153,0.2), 0 1px 0 rgba(0,0,0,0.35); }
     .mv2-owner-id { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 700; color: #a7f3d0; letter-spacing: 0.02em; }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }
-    .mv2-int-row { list-style: none; margin-bottom: 0.55rem; padding-left: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+    .mv2-int-row { list-style: none; margin: 0; padding-left: 0; display: flex; flex-direction: column; gap: 0.2rem; }
     .mv2-int-kicker { display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6ee7b7; margin-bottom: 0.05rem; }
     .mv2-int-body { font-size: 0.82rem; line-height: 1.45; color: rgba(215,213,208,0.95); }
-    .mv2-int-list { list-style: none; padding: 0.35rem 0 0; margin: 0; }
+    .mv2-int-list { list-style: none; padding: 0.35rem 0 0; margin: 0; display: flex; flex-direction: column; gap: 1.15rem; }
     .mv2-note { font-size: 0.72rem; color: #6b7280; margin-top: 0.6rem; }
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
     .mv2-life-card { border-top: 1px solid var(--mv2-edge); padding: 0.75rem 0 0; margin-top: 0.75rem; }

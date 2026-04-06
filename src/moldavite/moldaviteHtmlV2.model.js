@@ -172,7 +172,6 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       crystal,
       crystalPeakAxisKey: crystalPeakKey,
       crystalPeakLabelThai: AXIS_LABEL_TH[crystalPeakKey],
-      scaleNote: "สเกล 0–100 ต่อแกน — จุดสว่าง = แรงเน้นสูงสุดของโทนหิน",
       alignment: { axisKey: alignKey, labelThai: alignLabel },
       tension: { axisKey: tensionKey, labelThai: tensionLabel },
     },
