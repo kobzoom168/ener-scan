@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildMoldaviteV1Slice } from "../src/moldavite/moldavitePayload.build.js";
 import { resolveMoldaviteDisplayNaming } from "../src/moldavite/moldaviteDisplayNaming.util.js";
 import { normalizeReportPayloadForRender } from "../src/utils/reports/reportPayloadNormalize.util.js";
+import { renderReportHtmlPage } from "../src/services/reports/reportHtmlRenderer.service.js";
 import { renderMobileReportHtml } from "../src/templates/reports/mobileReport.template.js";
 
 const namingHigh = resolveMoldaviteDisplayNaming({
@@ -11,7 +12,7 @@ const namingHigh = resolveMoldaviteDisplayNaming({
   detectionReason: "gemini_crystal_subtype",
 });
 
-test("normalize preserves moldaviteV1; HTML includes Moldavite lane sections", () => {
+test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, graph data)", () => {
   const mv = buildMoldaviteV1Slice({
     scanResultId: "rid-html",
     detection: { reason: "keyword_match", matchedSignals: ["x"] },
@@ -26,7 +27,7 @@ test("normalize preserves moldaviteV1; HTML includes Moldavite lane sections", (
     publicToken: "tok1",
     scanId: "s1",
     userId: "u1",
-    birthdateUsed: null,
+    birthdateUsed: "15/03/1990",
     generatedAt: new Date().toISOString(),
     reportVersion: "1.0.0",
     object: {
@@ -74,11 +75,62 @@ test("normalize preserves moldaviteV1; HTML includes Moldavite lane sections", (
 
   const { payload } = normalizeReportPayloadForRender(raw);
   assert.ok(payload.moldaviteV1?.htmlReport);
-  const html = renderMobileReportHtml(payload);
-  assert.ok(html.includes("พลังไปออกกับเรื่องไหน"));
-  assert.ok(html.includes("แรงโทนเปลี่ยนแปลง"));
-  assert.ok(html.includes("มุมชีวิตละเอียด"));
+  const html = renderReportHtmlPage(payload);
+  assert.ok(html.includes("<!-- moldavite-html-v2 -->"));
+  assert.ok(html.includes("moldavite-html-v2"));
+  assert.ok(html.includes("ภาพรวมการจับคู่"));
+  assert.ok(html.includes("สรุปจากกราฟ"));
+  assert.ok(html.includes("โปรไฟล์เจ้าของ"));
+  assert.ok(html.includes("หินทำงานกับคุณอย่างไร"));
+  assert.ok(html.includes("มิติชีวิตละเอียด"));
   assert.ok(html.includes("การใช้และข้อควรระวัง"));
   assert.ok(html.includes("มอลดาไวต์"));
-  assert.ok(!html.includes("ความหมายเชิงลึก"));
+  assert.ok(html.includes("พลังหลัก ·"));
+  assert.ok(html.includes("เร่งการเปลี่ยนแปลง"));
+  assert.ok(html.includes("<polygon"));
+  assert.ok(html.includes("แนวโน้มโดยรวม:"));
+  assert.ok(
+    html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
+  );
+});
+
+test("non-Moldavite crystal HTML still uses legacy mobile template (no V2 marker)", () => {
+  const raw = {
+    reportId: "r2",
+    generatedAt: new Date().toISOString(),
+    reportVersion: "1.0.0",
+    object: { objectLabel: "ทดสอบ", objectImageUrl: "" },
+    summary: {
+      energyScore: 6,
+      energyLevelLabel: "ปานกลาง",
+      mainEnergyLabel: "สมดุล",
+      summaryLine: "บรรทัดสรุป",
+    },
+    sections: {},
+    trust: {},
+    actions: {},
+  };
+  const { payload } = normalizeReportPayloadForRender(raw);
+  assert.equal(payload.moldaviteV1, undefined);
+  const html = renderReportHtmlPage(payload);
+  assert.ok(!html.includes("<!-- moldavite-html-v2 -->"));
+  assert.ok(html.includes("สรุปภาพรวม"));
+});
+
+test("renderMobileReportHtml unchanged for non-Moldavite payloads (wording section)", () => {
+  const html = renderMobileReportHtml({
+    reportVersion: "1",
+    generatedAt: new Date().toISOString(),
+    object: {},
+    summary: { summaryLine: "x", mainEnergyLabel: "y" },
+    wording: {
+      mainEnergy: "พลังหลักทดสอบ",
+      energyCharacter: "ลักษณะ",
+    },
+    sections: {},
+    trust: {},
+    actions: {},
+  });
+  assert.ok(html.includes("ความหมายเชิงลึก"));
+  assert.ok(html.includes("พลังหลักทดสอบ"));
 });
