@@ -96,7 +96,13 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(!html.includes(UNIQUE_HERO_PROSE));
   assert.ok(html.includes('<circle class="mv2-radar-peak"'));
   assert.ok(html.includes("โปรไฟล์เจ้าของ"));
-  assert.ok(html.includes('class="mv2-owner-id"'));
+  assert.ok(html.includes('class="mv2-owner-zodiac"'));
+  assert.ok(html.includes("คุณเกิดราศี"));
+  assert.ok(html.includes('class="mv2-owner-chip"'));
+  assert.ok(html.includes("/10</span>"));
+  assert.ok(html.includes("ใจนำ"));
+  assert.ok(html.includes('class="mv2-owner-note"'));
+  assert.ok(!html.includes('class="mv2-owner-id"'));
   assert.ok(html.includes("หินทำงานกับคุณอย่างไร"));
   assert.ok(html.includes("เสริมแรง"));
   assert.ok(html.includes("ระวังจังหวะ"));
@@ -109,10 +115,8 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("<polygon"));
   assert.ok(html.includes('class="mv2-radar-svg mv2-radar-svg--animate"'));
   assert.ok(html.includes('class="mv2-radar-layer mv2-radar-layer--owner"'));
-  assert.ok(html.includes("แนวโน้มโดยรวม:"));
-  assert.ok(
-    html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
-  );
+  assert.ok(!html.includes("แนวโน้มโดยรวม:"));
+  assert.ok(html.includes("โปรไฟล์นี้สรุปจากวันเดือนปีเกิด"));
   assert.ok(html.includes('class="mv2-radar-labels"'));
   assert.ok(html.includes('mv2-radar-lbl--work'));
   assert.ok(html.includes('mv2-radar-lbl--relationship'));

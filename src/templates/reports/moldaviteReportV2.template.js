@@ -287,8 +287,8 @@ export function renderMoldaviteReportV2Html(payload) {
       : "";
   const graphSummaryHtml = `${highlightHtml}${graphSummaryLinesHtml}`;
 
-  const traitsHtml = vm.ownerProfile.traits
-    .map((t) => `<li>${escapeHtml(t)}</li>`)
+  const traitChipsHtml = vm.ownerProfile.traitScores
+    .map((t) => `<span class="mv2-owner-chip">${escapeHtml(t.label)} ${t.score}/10</span>`)
     .join("");
 
   const interactionHtml = vm.interactionSummary.rows
@@ -566,7 +566,37 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-graph-sum-lines { margin: 0; display: flex; flex-direction: column; gap: 0.36rem; }
     .mv2-graph-sum-line { margin: 0; font-size: 0.88rem; line-height: 1.38; color: rgba(215,213,208,0.96); font-weight: 400; }
     .mv2-graph-sum-line--lead { font-weight: 600; color: rgba(240,253,244,0.96); font-size: 0.9rem; }
-    .mv2-owner-id { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 700; color: #a7f3d0; letter-spacing: 0.02em; }
+    .mv2-owner-zodiac {
+      margin: 0 0 0.55rem;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      letter-spacing: 0.02em;
+    }
+    .mv2-owner-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.38rem;
+      margin: 0 0 0.55rem;
+    }
+    .mv2-owner-chip {
+      display: inline-block;
+      padding: 0.22rem 0.55rem;
+      border-radius: 1rem;
+      background: rgba(255,255,255,0.055);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: rgba(226,232,240,0.92);
+      white-space: nowrap;
+      letter-spacing: 0.01em;
+    }
+    .mv2-owner-note {
+      margin: 0;
+      font-size: 0.68rem;
+      color: rgba(148,163,184,0.55);
+      font-weight: 400;
+    }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }
     section[aria-labelledby="mv2-use-h"] .mv2-owner-traits li::marker {
@@ -612,12 +642,11 @@ export function renderMoldaviteReportV2Html(payload) {
       ${graphSummaryHtml}
     </section>
 
-    <section class="mv2-card" aria-labelledby="mv2-owner-h">
+    <section class="mv2-card mv2-card--owner" aria-labelledby="mv2-owner-h">
       <h2 id="mv2-owner-h">โปรไฟล์เจ้าของ</h2>
-      <p class="mv2-owner-id">${escapeHtml(vm.ownerProfile.identityLabel)}</p>
-      <p class="mv2-para">${escapeHtml(vm.ownerProfile.summaryLine)}</p>
-      <ul class="mv2-owner-traits">${traitsHtml}</ul>
-      <p class="mv2-note">${escapeHtml(vm.ownerProfile.derivationNote)}</p>
+      <p class="mv2-owner-zodiac">${escapeHtml(vm.ownerProfile.zodiacLabel)}</p>
+      <div class="mv2-owner-chips">${traitChipsHtml}</div>
+      <p class="mv2-owner-note">${escapeHtml(vm.ownerProfile.note)}</p>
     </section>
 
     <section class="mv2-card" aria-labelledby="mv2-int-h">

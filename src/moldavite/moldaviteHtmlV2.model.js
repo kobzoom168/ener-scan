@@ -251,10 +251,9 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
     graphSummary,
     radarSectionContext,
     ownerProfile: {
-      identityLabel: thaiNoEmDash(ownerAxes.identityLabel),
-      summaryLine: thaiNoEmDash(ownerAxes.summaryLine),
-      traits: ownerAxes.traits.map((t) => thaiNoEmDash(t)),
-      derivationNote: thaiNoEmDash(ownerAxes.derivationNote),
+      zodiacLabel: `คุณเกิดราศี${ownerAxes.zodiacLabel}`,
+      traitScores: ownerAxes.traitScores,
+      note: ownerAxes.note,
     },
     interactionSummary: {
       headline: interactionHeadline,
