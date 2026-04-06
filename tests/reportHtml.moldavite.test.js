@@ -88,8 +88,10 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("ช่วงนี้พลังหินไปโฟกัสที่งานชัดที่สุด"));
   assert.ok(html.includes("รองลงมาเป็นเรื่องความสัมพันธ์"));
   assert.ok(html.includes("เรื่องการเงินค่อย ๆ ไปทีละก้าวก็พอ ไม่ต้องเร่ง"));
-  assert.ok(html.includes("คุณ (สีฟ้า)"));
-  assert.ok(html.includes("หิน (สีเขียว)"));
+  assert.ok(html.includes('class="mv2-radar-key-swatch mv2-radar-key-swatch--owner"'));
+  assert.ok(html.includes('class="mv2-radar-key-swatch mv2-radar-key-swatch--stone"'));
+  assert.ok(html.includes('class="mv2-radar-key-label">คุณ</span>'));
+  assert.ok(html.includes('class="mv2-radar-key-label">หิน</span>'));
   assert.ok(!html.includes(UNIQUE_HERO_PROSE));
   assert.ok(html.includes('<circle class="mv2-radar-peak"'));
   assert.ok(html.includes("โปรไฟล์เจ้าของ"));

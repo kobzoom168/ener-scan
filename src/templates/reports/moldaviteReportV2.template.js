@@ -196,7 +196,10 @@ function radarBlock(vm) {
         ${crystalMarker}
         ${labelSvg}
       </svg>
-      <div class="mv2-radar-key" id="mv2-radar-key"><span class="mv2-radar-key-line">คุณ (สีฟ้า)</span><span class="mv2-radar-key-line">หิน (สีเขียว)</span></div>
+      <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
+        <div class="mv2-radar-key-row"><span class="mv2-radar-key-label">คุณ</span><span class="mv2-radar-key-swatch mv2-radar-key-swatch--owner" aria-hidden="true"></span></div>
+        <div class="mv2-radar-key-row"><span class="mv2-radar-key-label">หิน</span><span class="mv2-radar-key-swatch mv2-radar-key-swatch--stone" aria-hidden="true"></span></div>
+      </div>
     </div>
   </section>`;
 }
@@ -366,15 +369,40 @@ export function renderMoldaviteReportV2Html(payload) {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.22rem;
-      font-size: 0.66rem;
-      line-height: 1.38;
-      color: rgba(186, 198, 214, 0.88);
-      text-align: center;
+      gap: 0.28rem;
+      font-size: 0.68rem;
+      line-height: 1.35;
       letter-spacing: 0.02em;
       font-weight: 500;
     }
-    .mv2-radar-key-line { display: block; white-space: nowrap; }
+    .mv2-radar-key-row {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0.42rem;
+      min-width: 5.5rem;
+    }
+    .mv2-radar-key-label {
+      flex: 0 0 1.65rem;
+      text-align: right;
+      color: rgba(226, 232, 240, 0.92);
+    }
+    .mv2-radar-key-swatch {
+      width: 1.2rem;
+      height: 0.58rem;
+      border-radius: 2px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .mv2-radar-key-swatch--owner {
+      background: linear-gradient(180deg, rgba(186, 230, 253, 0.95), rgba(96, 165, 250, 0.88));
+      box-shadow: 0 0 10px rgba(96, 165, 250, 0.28);
+    }
+    .mv2-radar-key-swatch--stone {
+      background: linear-gradient(180deg, rgba(134, 239, 172, 0.95), rgba(34, 197, 94, 0.85));
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.28);
+    }
     .mv2-graph-sum-highlight {
       margin: 0.35rem 0 0.5rem;
       padding: 0.38rem 0.45rem;
