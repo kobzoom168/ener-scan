@@ -51,6 +51,10 @@ const LIFE_AREA_ROW_KEYS = /** @type {const} */ ([
 ]);
 
 const LIFE_AREA_BAR_HEIGHT = "8px";
+/** Fixed label column so bar tracks share the same x-range (LINE `width` on box; px is supported). */
+const LIFE_AREA_LABEL_COL_WIDTH = "120px";
+/** Fixed score column so numbers align; long scores still fit. */
+const LIFE_AREA_SCORE_COL_WIDTH = "48px";
 
 /**
  * LINE Flex allows `flex` on box only in 0–3 (project + API guardrail).
@@ -127,7 +131,7 @@ function createLifeAreasBarBlock(lifeAreas) {
         {
           type: "box",
           layout: "vertical",
-          flex: 0,
+          width: LIFE_AREA_LABEL_COL_WIDTH,
           justifyContent: "center",
           contents: [
             {
@@ -170,7 +174,7 @@ function createLifeAreasBarBlock(lifeAreas) {
         {
           type: "box",
           layout: "vertical",
-          flex: 0,
+          width: LIFE_AREA_SCORE_COL_WIDTH,
           justifyContent: "center",
           contents: [
             {
@@ -180,6 +184,7 @@ function createLifeAreasBarBlock(lifeAreas) {
               weight: "bold",
               color: MOLDAVITE_ACCENT,
               wrap: false,
+              align: "end",
             },
           ],
         },
