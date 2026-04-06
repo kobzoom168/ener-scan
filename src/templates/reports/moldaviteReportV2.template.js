@@ -93,7 +93,7 @@ function radarAxisFontSize(rank) {
  * @param {number} rank
  */
 function radarCategoryFill(rank) {
-  if (rank === 1) return "#a7f3d0";
+  if (rank === 1) return "#fbbf24";
   if (rank === 2) return "rgba(226,232,240,0.93)";
   return "rgba(100,116,139,0.72)";
 }
@@ -102,7 +102,7 @@ function radarCategoryFill(rank) {
  * @param {number} rank
  */
 function radarNumberFill(rank) {
-  if (rank === 1) return "#ecfdf5";
+  if (rank === 1) return "#fde68a";
   if (rank === 2) return "rgba(241,245,249,0.97)";
   return "rgba(203,213,225,0.9)";
 }
@@ -139,7 +139,8 @@ function radarAxisLabelHtml(L, rank) {
   const titleStyle = `font-weight:${titleFw};color:${catFill}`;
   const numStyle = `font-weight:700;color:${numFill}`;
 
-  return `<span class="mv2-radar-lbl mv2-radar-lbl--${L.key}" style="--mv2-rfs:${fs}"><span class="mv2-radar-axis-t" style="${titleStyle}">${escapeHtml(title)}</span> <span class="mv2-radar-axis-n" style="${numStyle}">${escapeHtml(scoreStr)}</span><br/><span class="mv2-radar-axis-cmp">${escapeHtml(compare)}</span></span>`;
+  const peakCls = rank === 1 ? " mv2-radar-lbl--peak" : "";
+  return `<span class="mv2-radar-lbl mv2-radar-lbl--${L.key}${peakCls}" style="--mv2-rfs:${fs}"><span class="mv2-radar-axis-t" style="${titleStyle}">${escapeHtml(title)}</span> <span class="mv2-radar-axis-n" style="${numStyle}">${escapeHtml(scoreStr)}</span><br/><span class="mv2-radar-axis-cmp">${escapeHtml(compare)}</span></span>`;
 }
 
 /**
@@ -407,37 +408,42 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-radar-svg--animate .mv2-radar-layer--crystal {
       transform-box: view-box;
       transform-origin: 50% 50%;
-      opacity: 1;
-      transform: scale(1);
+      opacity: 0;
+      transform: scale(0);
     }
-    .mv2-radar-svg--animate .mv2-radar-layer--peak { opacity: 1; }
+    .mv2-radar-svg--animate .mv2-radar-layer--peak { opacity: 0; }
     .mv2-radar-labels {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
       pointer-events: none;
-      opacity: 1;
+      opacity: 0;
     }
     @media (prefers-reduced-motion: no-preference) {
       .mv2-radar-svg--animate .mv2-radar-layer--owner {
-        animation: mv2RdrPoly 0.58s cubic-bezier(0.22, 1, 0.36, 1) 0.02s forwards;
+        animation: mv2RdrPoly 0.72s cubic-bezier(0.22, 1, 0.36, 1) 0.15s forwards;
       }
       .mv2-radar-svg--animate .mv2-radar-layer--crystal {
-        animation: mv2RdrPoly 0.54s cubic-bezier(0.22, 1, 0.36, 1) 0.14s forwards;
+        animation: mv2RdrPoly 0.68s cubic-bezier(0.22, 1, 0.36, 1) 0.35s forwards;
       }
       .mv2-radar-svg--animate .mv2-radar-layer--peak {
-        animation: mv2RdrFade 0.42s ease-out 0.28s forwards;
+        animation: mv2RdrFade 0.5s ease-out 0.7s forwards;
       }
       .mv2-radar-labels {
-        animation: mv2RdrFade 0.44s ease-out 0.44s forwards;
+        animation: mv2RdrFade 0.5s ease-out 0.85s forwards;
       }
     }
     @keyframes mv2RdrPoly {
-      from { opacity: 0; transform: scale(0.96); }
-      to { opacity: 1; transform: scale(1); }
+      0% { opacity: 0; transform: scale(0); }
+      50% { opacity: 0.7; transform: scale(1.06); }
+      100% { opacity: 1; transform: scale(1); }
     }
     @keyframes mv2RdrFade {
-      from { opacity: 0; }
-      to { opacity: 1; }
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes mv2LblPulse {
+      0%, 100% { opacity: 1; text-shadow: 0 0 6px rgba(251,191,36,0.3); }
+      50% { opacity: 0.72; text-shadow: 0 0 12px rgba(251,191,36,0.55); }
     }
     @media (prefers-reduced-motion: reduce) {
       .mv2-radar-svg--animate .mv2-radar-layer,
@@ -446,6 +452,7 @@ export function renderMoldaviteReportV2Html(payload) {
         opacity: 1 !important;
         transform: none !important;
       }
+      .mv2-radar-lbl--peak { animation: none !important; }
     }
     .mv2-radar-lbl {
       position: absolute;
@@ -473,6 +480,10 @@ export function renderMoldaviteReportV2Html(payload) {
       top: 73%;
       left: 0;
       text-align: left;
+    }
+    .mv2-radar-lbl--peak {
+      text-shadow: 0 0 8px rgba(251,191,36,0.35);
+      animation: mv2LblPulse 2.4s ease-in-out 1.6s infinite;
     }
     .mv2-radar-axis-cmp {
       display: block;
