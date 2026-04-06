@@ -13,9 +13,9 @@ import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
  */
 const FLEX_CARD_BG = "#ffffff";
 const FLEX_BOX_BG = "#f3f4f6";
-/** Segmented “tab” cells — light mint panels + green border. */
-const FLEX_SEGMENT_BG = "#f0fdf4";
-const FLEX_SEGMENT_BORDER = "#bbf7d0";
+/** Simulated progress track / fill (LINE has no real bar — nested box + flex 0–3 only). */
+const LIFE_AREA_BAR_TRACK_BG = "#e5e7eb";
+const LIFE_AREA_BAR_FILL = "#22c55e";
 const MOLDAVITE_ACCENT = "#16a34a";
 const MOLDAVITE_ACCENT_DIM = "#22c55e";
 const MOLDAVITE_PILL_BORDER = "#86efac";
@@ -43,25 +43,57 @@ function truncateEnergyBadgeLabel(text, maxLen = 14) {
 
 const MAIN_ENERGY_PILL_MAX_LEN = 22;
 
-/** Fixed column order for segmented row (งาน → ความสัมพันธ์ → การเงิน). Not score math — display only. */
-const LIFE_AREA_SEGMENT_KEYS = /** @type {const} */ ([
+/** Known keys for moldavite life areas (display-only sort; not score math). */
+const LIFE_AREA_ROW_KEYS = /** @type {const} */ ([
   "work",
   "relationship",
   "money",
 ]);
 
+const LIFE_AREA_BAR_HEIGHT = "8px";
+
 /**
- * Segmented 3-up “tab” row: horizontal `box` + three `box` children with `flex:1` only (LINE-safe).
- * True tabs are not available in Flex; this approximates segmented controls.
+ * LINE Flex allows `flex` on box only in 0–3 (project + API guardrail).
+ * Approximate fill ratio ≈ score/100 with two horizontal segments (green | track).
+ *
+ * @param {number|null|undefined} score0to100
+ * @returns {{ greenFlex: number, emptyFlex: number }}
+ */
+function lifeAreaBarFlexPair(score0to100) {
+  if (score0to100 == null || !Number.isFinite(Number(score0to100))) {
+    return { greenFlex: 0, emptyFlex: 3 };
+  }
+  const r = Math.max(0, Math.min(100, Number(score0to100))) / 100;
+  let bestG = 0;
+  let bestE = 3;
+  let bestErr = 1;
+  for (let g = 0; g <= 3; g++) {
+    for (let e = 0; e <= 3; e++) {
+      if (g === 0 && e === 0) continue;
+      const ratio = g / (g + e);
+      const err = Math.abs(ratio - r);
+      if (err < bestErr - 1e-9) {
+        bestErr = err;
+        bestG = g;
+        bestE = e;
+      }
+    }
+  }
+  return { greenFlex: bestG, emptyFlex: bestE };
+}
+
+/**
+ * Horizontal bar-style rows: [label] [track with green|empty flex] [score].
+ * `flex` only on box nodes; text has no flex.
  *
  * @param {Record<string, { score?: number, labelThai?: string }>|null|undefined} lifeAreas
  */
-function createLifeAreasSegmentedBlock(lifeAreas) {
+function createLifeAreasBarBlock(lifeAreas) {
   if (!lifeAreas || typeof lifeAreas !== "object") return null;
 
-  /** @type {object[]} */
-  const segments = [];
-  for (const k of LIFE_AREA_SEGMENT_KEYS) {
+  /** @type {{ label: string, score: number|null }[]} */
+  const rows = [];
+  for (const k of LIFE_AREA_ROW_KEYS) {
     const entry = lifeAreas[k];
     const label =
       entry && typeof entry === "object"
@@ -73,37 +105,87 @@ function createLifeAreasSegmentedBlock(lifeAreas) {
       scoreRaw != null && Number.isFinite(Number(scoreRaw))
         ? Math.round(Number(scoreRaw))
         : null;
+    rows.push({ label: label || "—", score: scoreOk });
+  }
+  rows.sort((a, b) => {
+    if (a.score == null && b.score == null) return 0;
+    if (a.score == null) return 1;
+    if (b.score == null) return -1;
+    return b.score - a.score;
+  });
 
-    segments.push({
+  /** @type {object[]} */
+  const rowBoxes = rows.map(({ label, score }) => {
+    const { greenFlex, emptyFlex } = lifeAreaBarFlexPair(score);
+    const scoreText = score == null ? "—" : String(score);
+    return {
       type: "box",
-      layout: "vertical",
-      flex: 1,
-      paddingAll: "10px",
-      spacing: "xs",
-      borderWidth: "1px",
-      borderColor: FLEX_SEGMENT_BORDER,
-      cornerRadius: "md",
-      backgroundColor: FLEX_SEGMENT_BG,
+      layout: "horizontal",
+      spacing: "sm",
+      margin: "xs",
       contents: [
         {
-          type: "text",
-          text: label || "—",
-          size: "xs",
-          color: FLEX_TEXT_SECONDARY,
-          wrap: true,
-          maxLines: 2,
+          type: "box",
+          layout: "vertical",
+          flex: 0,
+          justifyContent: "center",
+          contents: [
+            {
+              type: "text",
+              text: label,
+              size: "xs",
+              color: FLEX_TEXT_SECONDARY,
+              wrap: true,
+              maxLines: 2,
+            },
+          ],
         },
         {
-          type: "text",
-          text: scoreOk == null ? "—" : String(scoreOk),
-          size: "lg",
-          weight: "bold",
-          color: MOLDAVITE_ACCENT,
-          wrap: false,
+          type: "box",
+          layout: "horizontal",
+          flex: 1,
+          spacing: "none",
+          paddingAll: "2px",
+          cornerRadius: "sm",
+          backgroundColor: LIFE_AREA_BAR_TRACK_BG,
+          contents: [
+            {
+              type: "box",
+              layout: "horizontal",
+              flex: greenFlex,
+              height: LIFE_AREA_BAR_HEIGHT,
+              backgroundColor: LIFE_AREA_BAR_FILL,
+              cornerRadius: "sm",
+              contents: [],
+            },
+            {
+              type: "box",
+              layout: "horizontal",
+              flex: emptyFlex,
+              height: LIFE_AREA_BAR_HEIGHT,
+              contents: [],
+            },
+          ],
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 0,
+          justifyContent: "center",
+          contents: [
+            {
+              type: "text",
+              text: scoreText,
+              size: "sm",
+              weight: "bold",
+              color: MOLDAVITE_ACCENT,
+              wrap: false,
+            },
+          ],
         },
       ],
-    });
-  }
+    };
+  });
 
   return {
     type: "box",
@@ -122,7 +204,7 @@ function createLifeAreasSegmentedBlock(lifeAreas) {
       },
       {
         type: "text",
-        text: "งาน · ความสัมพันธ์ · การเงิน",
+        text: "เรียงจากคะแนนสูงไปต่ำ",
         size: "xs",
         color: FLEX_TEXT_CAPTION,
         wrap: true,
@@ -130,9 +212,10 @@ function createLifeAreasSegmentedBlock(lifeAreas) {
       },
       {
         type: "box",
-        layout: "horizontal",
-        spacing: "sm",
-        contents: segments,
+        layout: "vertical",
+        spacing: "none",
+        margin: "none",
+        contents: rowBoxes,
       },
     ],
   };
@@ -338,7 +421,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
   const heroOk = /^https:\/\//i.test(imgUrl);
   const url = String(reportUrl || "").trim();
 
-  const lifeAreasBlock = createLifeAreasSegmentedBlock(mv.lifeAreas);
+  const lifeAreasBlock = createLifeAreasBarBlock(mv.lifeAreas);
 
   const taglineText =
     String(mv.flexSurface?.tagline || "").trim() || MOLDAVITE_TITLE_TAGLINE;
