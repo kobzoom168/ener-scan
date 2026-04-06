@@ -18,10 +18,6 @@ const AXIS_TITLE_TH = {
 /** ต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" (คุณ vs หิน ต่อแกน) */
 const RADAR_AXIS_COMPARE_EPS = 6;
 
-/** iOS/Safari + ไทย: ใช้สแตกที่คาดเมตริกได้ใกล้เคียงระบบ ไม่สืบทอดจาก body */
-const RADAR_AXIS_FONT_FAMILY =
-  "-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Noto Sans Thai','Sarabun',sans-serif";
-
 /**
  * Footer render/meta line: off in production unless explicitly enabled (support/debug).
  * `REPORT_HTML_RENDER_META=true|1|yes` → show; `false|0|no` → hide;
@@ -138,32 +134,37 @@ function radarAxisLabelSvg(L, rank) {
   const catFill = radarCategoryFill(rank);
   const numFill = radarNumberFill(rank);
   const titleFw = rank === 1 ? "600" : "500";
-  const gapTitleScore = "\u00A0\u00A0";
   const ta = L.ta;
-  const textAnchor = ta === "middle" ? "middle" : ta === "end" ? "end" : "start";
 
-  const textAttrs = `class="mv2-radar-axis" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-rendering="optimizeLegibility"`;
+  const titleStyle = `font-weight:${titleFw};color:${catFill}`;
+  const numStyle = `font-weight:700;color:${numFill}`;
 
-  // iOS Safari SVG <text> mis-measures Thai clusters (marks / สระ) vs Latin digits — even
-  // two sibling <text> nodes can overlap. HTML outside SVG does not; use foreignObject
-  // so this label uses the same layout path as body text (e.g. พลังเด่น / compare lines).
-  if (ta === "end") {
-    const foW = 48;
-    const foH = 7;
-    const foX = ax - foW;
-    const foY = y - 6.15;
-    const titleStyle = `font-weight:${titleFw};color:${catFill}`;
-    const numStyle = `font-weight:700;color:${numFill}`;
-    return `<foreignObject class="mv2-radar-axis mv2-radar-rel-fo" x="${foX.toFixed(2)}" y="${foY.toFixed(2)}" width="${foW}" height="${foH}"><div xmlns="http://www.w3.org/1999/xhtml" class="mv2-radar-rel-html"><span class="mv2-radar-rel-part" style="${titleStyle}">${escapeHtml(title)}</span><span class="mv2-radar-rel-part mv2-radar-rel-part--num" style="${numStyle}">${escapeHtml(scoreStr)}</span></div></foreignObject>`;
+  // All axes: foreignObject + HTML. iOS Safari SVG <text>/<tspan> mis-shapes Thai (สระ, marks)
+  // and mis-measures vs Latin digits; rem-only sizing also blew up one label vs SVG text.
+  // Font size tracks chart width via container query (same idea as viewBox font-size units).
+  const foH = 7.2;
+  const foY = y - 5.95;
+
+  let foW;
+  let foX;
+  /** @type {"mid"|"end"|"start"} */
+  let align;
+  if (ta === "middle") {
+    foW = 28;
+    foX = ax - foW / 2;
+    align = "mid";
+  } else if (ta === "end") {
+    foW = 42;
+    foX = ax - foW;
+    align = "end";
+  } else {
+    foW = 48;
+    foX = Math.max(2.5, ax - 1.2);
+    align = "start";
   }
 
-  const tspans = [
-    `<tspan x="${ax.toFixed(2)}" y="${y.toFixed(2)}" fill="${catFill}" font-weight="${titleFw}">${escapeHtml(title)}</tspan>`,
-    `<tspan fill="${catFill}" font-weight="500">${gapTitleScore}</tspan>`,
-    `<tspan fill="${numFill}" font-weight="700">${escapeHtml(scoreStr)}</tspan>`,
-  ];
-
-  return `<text ${textAttrs} text-anchor="${textAnchor}">${tspans.join("")}</text>`;
+  const inner = `<div xmlns="http://www.w3.org/1999/xhtml" class="mv2-radar-axis-html mv2-radar-axis-html--${align}" style="--mv2-rfs:${fs}"><span class="mv2-radar-axis-t" style="${titleStyle}">${escapeHtml(title)}</span><span class="mv2-radar-axis-n" style="${numStyle}">${escapeHtml(scoreStr)}</span></div>`;
+  return `<foreignObject class="mv2-radar-axis mv2-radar-axis-fo" x="${foX.toFixed(2)}" y="${foY.toFixed(2)}" width="${foW}" height="${foH}">${inner}</foreignObject>`;
 }
 
 /**
@@ -245,7 +246,7 @@ function radarBlock(vm) {
     <h2 class="mv2-radar-title" id="mv2-radar-h">ภาพรวมการจับคู่</h2>
     ${radarHelperHtml}
     <div class="mv2-radar-svg-wrap">
-      <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key">
+      <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key" text-rendering="optimizeLegibility">
         <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
         <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
@@ -420,6 +421,8 @@ export function renderMoldaviteReportV2Html(payload) {
       margin: 0 auto;
       padding: 0.55rem 0.85rem 0.2rem;
       box-sizing: border-box;
+      container-type: inline-size;
+      container-name: mv2-radar;
     }
     .mv2-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
     .mv2-radar-svg--animate .mv2-radar-layer--owner,
@@ -462,30 +465,28 @@ export function renderMoldaviteReportV2Html(payload) {
         transform: none !important;
       }
     }
-    .mv2-radar-svg text.mv2-radar-axis {
-      letter-spacing: 0.01em;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Noto Sans Thai", "Sarabun", sans-serif;
-    }
-    /* Relationship axis: HTML inside foreignObject: same shaping as body copy (fixes iOS SVG <text> vs Thai marks). */
-    .mv2-radar-svg foreignObject.mv2-radar-rel-fo {
+    .mv2-radar-svg foreignObject.mv2-radar-axis-fo {
       overflow: visible;
     }
-    .mv2-radar-svg foreignObject.mv2-radar-rel-fo .mv2-radar-rel-html {
+    .mv2-radar-svg foreignObject.mv2-radar-axis-fo .mv2-radar-axis-html {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
       height: 100%;
       display: flex;
       align-items: baseline;
-      justify-content: flex-end;
       flex-wrap: nowrap;
       gap: 0.35em;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Noto Sans Thai", "Sarabun", sans-serif;
-      font-size: 0.62rem;
       line-height: 1.12;
       letter-spacing: 0.01em;
       white-space: nowrap;
+      font-size: clamp(7px, 2.35vmin, 10.5px);
+      font-size: calc(var(--mv2-rfs, 3.57) * 1cqw);
     }
+    .mv2-radar-svg foreignObject.mv2-radar-axis-fo .mv2-radar-axis-html--mid { justify-content: center; }
+    .mv2-radar-svg foreignObject.mv2-radar-axis-fo .mv2-radar-axis-html--end { justify-content: flex-end; }
+    .mv2-radar-svg foreignObject.mv2-radar-axis-fo .mv2-radar-axis-html--start { justify-content: flex-start; }
     .mv2-radar-svg .mv2-radar-peak {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
     }
