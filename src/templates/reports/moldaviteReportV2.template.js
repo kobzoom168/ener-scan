@@ -237,11 +237,11 @@ function radarBlock(vm) {
         </svg>
         <div class="mv2-radar-labels" aria-hidden="true">${labelHtml}</div>
       </div>
+      ${radarCompareBlockHtml(g)}
       <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
         <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span><span class="mv2-radar-key-label">คุณ</span></span>
         <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span><span class="mv2-radar-key-label">หิน</span></span>
       </div>
-      ${radarCompareBlockHtml(g)}
     </div>
   </section>`;
 }
