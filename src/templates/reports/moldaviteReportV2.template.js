@@ -9,6 +9,64 @@ const RADAR_CY = 50;
 const RADAR_ANGLES = [-Math.PI / 2, -Math.PI / 2 + (2 * Math.PI) / 3, -Math.PI / 2 + (4 * Math.PI) / 3];
 const AXIS_KEYS = /** @type {const} */ (["work", "relationship", "money"]);
 
+const AXIS_TITLE_TH = {
+  work: "งาน",
+  relationship: "ความสัมพันธ์",
+  money: "การเงิน",
+};
+
+/** คะแนนต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" */
+const RADAR_COMPARE_EPS = 6;
+
+/**
+ * @param {number} owner01
+ * @param {number} crystal01
+ */
+function radarComparePhrase(owner01, crystal01) {
+  const o = Math.round(Number(owner01) || 0);
+  const c = Math.round(Number(crystal01) || 0);
+  const d = c - o;
+  if (Math.abs(d) <= RADAR_COMPARE_EPS) return "ใกล้เคียง";
+  if (d > RADAR_COMPARE_EPS) return "หินสูงกว่า";
+  return "คุณสูงกว่า";
+}
+
+/**
+ * Centroid of radar polygon in viewBox coords (for inline series labels).
+ * @param {Record<string, number>} values01to100
+ */
+function radarPolygonCentroid(values01to100) {
+  let sx = 0;
+  let sy = 0;
+  for (let i = 0; i < 3; i++) {
+    const ang = RADAR_ANGLES[i];
+    const k = AXIS_KEYS[i];
+    const v = Math.max(0, Math.min(100, Number(values01to100[k]) || 0)) / 100;
+    sx += RADAR_CX + RADAR_R * v * Math.cos(ang);
+    sy += RADAR_CY + RADAR_R * v * Math.sin(ang);
+  }
+  return { x: sx / 3, y: sy / 3 };
+}
+
+/**
+ * @param {{ x: number, y: number }} a
+ * @param {{ x: number, y: number }} b
+ * @param {number} minDist
+ */
+function nudgeApart(a, b, minDist) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  if (dist >= minDist) return { a: { ...a }, b: { ...b } };
+  const push = (minDist - dist) / 2 + 0.6;
+  const ux = dx / dist;
+  const uy = dy / dist;
+  return {
+    a: { x: a.x - ux * push, y: a.y - uy * push },
+    b: { x: b.x + ux * push, y: b.y + uy * push },
+  };
+}
+
 /**
  * Footer render/meta line: off in production unless explicitly enabled (support/debug).
  * `REPORT_HTML_RENDER_META=true|1|yes` → show; `false|0|no` → hide;
@@ -55,6 +113,23 @@ function radarVertexForAxis(values01to100, axisKey) {
 /**
  * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
  */
+/**
+ * @param {object} p
+ * @param {number} p.x
+ * @param {number} p.y0
+ * @param {"middle"|"start"|"end"} p.anchor
+ * @param {string} p.title
+ * @param {number} p.cScore
+ * @param {number} p.oScore
+ */
+function radarAxisThreeLine(p) {
+  const { x, y0, anchor, title, cScore, oScore } = p;
+  const l1 = escapeHtml(title);
+  const l2 = escapeHtml(`หิน ${cScore}`);
+  const l3 = escapeHtml(`คุณ ${oScore}`);
+  return `<text x="${x}" y="${y0}" text-anchor="${anchor}" fill="rgba(200,210,205,0.88)" font-size="2.45" font-family="inherit"><tspan x="${x}" dy="0">${l1}</tspan><tspan x="${x}" dy="2.65">${l2}</tspan><tspan x="${x}" dy="2.65">${l3}</tspan></text>`;
+}
+
 function radarBlock(vm) {
   const g = vm.graph;
   const ownerPts = radarPolygonPoints(g.owner);
@@ -62,42 +137,74 @@ function radarBlock(vm) {
   const peak = radarVertexForAxis(g.crystal, g.crystalPeakAxisKey);
   const peakLabel = String(g.crystalPeakLabelThai || "").trim() || "หิน";
   const crystalMarker = `<circle class="mv2-radar-peak" cx="${peak.x.toFixed(2)}" cy="${peak.y.toFixed(2)}" r="2.5" fill="#4ade80" stroke="rgba(255,255,255,0.9)" stroke-width="0.55" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
+
   const cw = Math.round(Number(g.crystal.work) || 0);
   const cr = Math.round(Number(g.crystal.relationship) || 0);
   const cm = Math.round(Number(g.crystal.money) || 0);
+  const ow = Math.round(Number(g.owner.work) || 0);
+  const or_ = Math.round(Number(g.owner.relationship) || 0);
+  const om = Math.round(Number(g.owner.money) || 0);
+
+  const cOwn = radarPolygonCentroid(g.crystal);
+  const oOwn = radarPolygonCentroid(g.owner);
+  const { a: posCrystal, b: posOwner } = nudgeApart(cOwn, oOwn, 7);
+
+  const seriesLabels = `
+        <text class="mv2-radar-series-lbl" x="${posCrystal.x.toFixed(2)}" y="${posCrystal.y.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" fill="rgba(52,211,153,0.7)" font-size="2.35" font-family="inherit" font-weight="600">${escapeHtml("หิน")}</text>
+        <text class="mv2-radar-series-lbl" x="${posOwner.x.toFixed(2)}" y="${posOwner.y.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" fill="rgba(147,197,253,0.7)" font-size="2.35" font-family="inherit" font-weight="600">${escapeHtml("คุณ")}</text>`;
+
   /** Bottom-right = ความสัมพันธ์, bottom-left = การเงิน (matches axis math). */
-  const labels = [
-    { ax: RADAR_CX, ay: 8, text: `งาน ${cw}`, ta: "middle" },
-    { ax: 88, ay: 72, text: `ความสัมพันธ์ ${cr}`, ta: "end" },
-    { ax: 12, ay: 72, text: `การเงิน ${cm}`, ta: "start" },
-  ];
-  const labelSvg = labels
-    .map(
-      (L) =>
-        `<text x="${L.ax}" y="${L.ay}" fill="rgba(200,210,205,0.9)" font-size="2.95" text-anchor="${L.ta}" font-family="inherit">${escapeHtml(L.text)}</text>`,
-    )
-    .join("");
+  const labelSvg = [
+    radarAxisThreeLine({
+      x: RADAR_CX,
+      y0: 4.2,
+      anchor: "middle",
+      title: AXIS_TITLE_TH.work,
+      cScore: cw,
+      oScore: ow,
+    }),
+    radarAxisThreeLine({
+      x: 88,
+      y0: 65.5,
+      anchor: "end",
+      title: AXIS_TITLE_TH.relationship,
+      cScore: cr,
+      oScore: or_,
+    }),
+    radarAxisThreeLine({
+      x: 12,
+      y0: 65.5,
+      anchor: "start",
+      title: AXIS_TITLE_TH.money,
+      cScore: cm,
+      oScore: om,
+    }),
+  ].join("");
+
+  const compareRows = AXIS_KEYS.map((key) => {
+    const k = AXIS_TITLE_TH[key];
+    const phrase = radarComparePhrase(g.owner[key], g.crystal[key]);
+    return `<li><span class="mv2-radar-compare-k">${escapeHtml(k)}</span><span class="mv2-radar-compare-v">${escapeHtml(phrase)}</span></li>`;
+  }).join("");
+
   return `
   <section class="mv2-radar-card" aria-labelledby="mv2-radar-h">
     <h2 class="mv2-radar-title" id="mv2-radar-h">ภาพรวมการจับคู่</h2>
     <p class="mv2-radar-sub"><span class="mv2-radar-sub-line">สเกล 0–100 ต่อแกน</span><span class="mv2-radar-sub-line">จุดสว่าง = มิติที่เด่นสุด</span></p>
     <div class="mv2-radar-svg-wrap">
-      <svg class="mv2-radar-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เจ้าของและโทนหิน" aria-describedby="mv2-radar-peak-note">
+      <svg class="mv2-radar-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-compare">
         <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
         <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
         <polygon points="${ownerPts}" fill="rgba(96,165,250,0.2)" stroke="rgba(147,197,253,0.98)" stroke-width="0.78" stroke-linejoin="round" opacity="0.95"/>
         <polygon points="${crystalPts}" fill="rgba(22,163,74,0.22)" stroke="rgba(52,211,153,0.98)" stroke-width="0.88" stroke-linejoin="round"/>
+        ${seriesLabels}
         ${crystalMarker}
         ${labelSvg}
       </svg>
-      <p class="mv2-radar-peak-note" id="mv2-radar-peak-note">เด่นสุด: ${escapeHtml(peakLabel)}</p>
+      <ul class="mv2-radar-compare" id="mv2-radar-compare" role="list">${compareRows}</ul>
     </div>
-    <ul class="mv2-legend" role="list">
-      <li><span class="mv2-dot mv2-dot--owner"></span> คุณ (จากวันเกิด / รหัสรายงาน)</li>
-      <li><span class="mv2-dot mv2-dot--crystal"></span> โทนหิน (มิติชีวิต)</li>
-    </ul>
   </section>`;
 }
 
@@ -237,14 +344,30 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
     .mv2-radar-sub { margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; display: flex; flex-direction: column; gap: 0.2rem; }
     .mv2-radar-sub-line { display: block; }
-    .mv2-radar-peak-note { margin: 0.35rem 0 0; font-size: 0.58rem; color: rgba(100,116,139,0.78); line-height: 1.3; text-align: center; font-weight: 400; letter-spacing: 0.02em; }
     .mv2-radar-svg-wrap { width: 100%; max-width: 18rem; margin: 0 auto; }
     .mv2-radar-svg { width: 100%; height: auto; display: block; }
-    .mv2-legend { list-style: none; padding: 0.3rem 0 0; margin: 0; font-size: 0.58rem; color: rgba(100,116,139,0.52); letter-spacing: 0.01em; line-height: 1.35; }
-    .mv2-legend li { display: flex; align-items: center; gap: 0.32rem; margin-bottom: 0.18rem; }
-    .mv2-dot { width: 0.34rem; height: 0.34rem; border-radius: 999px; display: inline-block; opacity: 0.58; }
-    .mv2-dot--owner { background: rgba(147,197,253,0.5); }
-    .mv2-dot--crystal { background: rgba(34,197,94,0.52); }
+    .mv2-radar-compare {
+      list-style: none;
+      padding: 0.45rem 0 0;
+      margin: 0.35rem 0 0;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      display: flex;
+      flex-direction: column;
+      gap: 0.28rem;
+    }
+    .mv2-radar-compare li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.55rem;
+      padding: 0.28rem 0.4rem;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.028);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .mv2-radar-compare-k { color: rgba(148,163,184,0.92); font-weight: 600; flex-shrink: 0; }
+    .mv2-radar-compare-v { color: rgba(241,245,249,0.95); font-weight: 600; text-align: right; }
     .mv2-graph-sum-compact { margin: 0.35rem 0; font-size: 0.92rem; line-height: 1.45; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.35rem; }
     .mv2-graph-sum-k { color: rgba(148,163,184,0.78); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.02em; }
     .mv2-graph-sum-arrow { color: #64748b; font-weight: 500; opacity: 0.85; }

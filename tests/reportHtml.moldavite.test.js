@@ -103,9 +103,14 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(
     html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
   );
-  assert.ok(html.includes("งาน 82"));
-  assert.ok(html.includes("ความสัมพันธ์ 75"));
-  assert.ok(html.includes("การเงิน 69"));
+  assert.ok(html.includes("หิน 82"));
+  assert.ok(html.includes("คุณ 45"));
+  assert.ok(html.includes("หิน 75"));
+  assert.ok(html.includes("หิน 69"));
+  assert.ok(html.includes('class="mv2-radar-compare"'));
+  assert.ok(html.includes("หินสูงกว่า"));
+  assert.ok(html.includes("ใกล้เคียง"));
+  assert.ok(!html.includes("โทนหิน (มิติชีวิต)"));
   assert.ok(html.includes("ไม่ได้การันตีผลลัพธ์"));
   assert.ok(!html.includes("\u2014"));
 });
