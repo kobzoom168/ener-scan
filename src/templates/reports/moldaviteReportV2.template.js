@@ -15,6 +15,13 @@ const AXIS_TITLE_TH = {
   money: "การเงิน",
 };
 
+/** ชื่อแกนสั้นบนเรดาร์เท่านั้น — ลดความกว้างแนวนอน (เฉพาะกราฟ ไม่เปลี่ยนคำเต็มใน summary/ที่อื่น) */
+const RADAR_GRAPH_AXIS_TITLE_TH = {
+  work: "งาน",
+  relationship: "สัมพันธ์",
+  money: "การเงิน",
+};
+
 /** ต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" (คุณ vs หิน ต่อแกน) */
 const RADAR_AXIS_COMPARE_EPS = 6;
 
@@ -33,6 +40,18 @@ function moldaviteHtmlShowRenderMetaLine() {
   if (raw === "1" || raw === "true" || raw === "yes") return true;
   if (raw === "0" || raw === "false" || raw === "no") return false;
   return process.env.NODE_ENV !== "production";
+}
+
+/**
+ * แกนความสัมพันธ์: แสดงแค่บรรทัด 1 บนกราฟ แล้วย้ายสถานะเทียบไปบล็อกสรุป (กัน Safari/iPhone)
+ * `MOLDAVITE_V2_RADAR_REL_STATUS_IN_SUMMARY=true|1|yes`
+ * @returns {boolean}
+ */
+function moldaviteRadarRelStatusInSummaryOnly() {
+  const raw = String(process.env.MOLDAVITE_V2_RADAR_REL_STATUS_IN_SUMMARY ?? "")
+    .trim()
+    .toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
 }
 
 /**
@@ -125,25 +144,28 @@ function radarAxisCompareStatus(owner01, crystal01) {
 }
 
 /**
- * บรรทัด 2 เล็กกว่าเล็กน้อย — อ่านง่ายบนมือถือ ไม่แย่งความกว้างแนวนอนกับบรรทัด 1
+ * บรรทัด 2 — relationship แคบกว่า (Safari ไทยกว้าง) เลยลดสัดส่วนเทียบบรรทัด 1
  * @param {string} line1Fs
+ * @param {string} axisKey
  */
-function radarAxisLine2FontSize(line1Fs) {
-  return (Number(line1Fs) * 0.86).toFixed(2);
+function radarAxisLine2FontSize(line1Fs, axisKey) {
+  const ratio = axisKey === "relationship" ? 0.79 : 0.86;
+  return (Number(line1Fs) * ratio).toFixed(2);
 }
 
 /**
  * ป้ายแกน 2 บรรทัด: (1) ชื่อ + คะแนน (2) สถานะเทียบ — จัดกลาง/ซ้าย/ขวาตามแกน ไม่ใช้ลูกศรบนกราฟ
- * @param {{ key: string, anchorX: number, ayLine1: number, lineDy: number, ta: "middle"|"start"|"end", owner: number, crystal: number }} L
+ * @param {{ key: string, anchorX: number, ayLine1: number, lineDy: number, ta: "middle"|"start"|"end", owner: number, crystal: number, omitLine2?: boolean }} L
  * @param {number} rank
  */
 function radarAxisLabelSvg(L, rank) {
   const fs = radarAxisFontSize(rank);
-  const fs2 = radarAxisLine2FontSize(fs);
+  const fs2 = radarAxisLine2FontSize(fs, L.key);
   const ax = L.anchorX;
   const y1 = L.ayLine1;
   const lineDy = L.lineDy;
-  const title = AXIS_TITLE_TH[L.key];
+  const title =
+    RADAR_GRAPH_AXIS_TITLE_TH[L.key] ?? AXIS_TITLE_TH[L.key];
   const scoreStr = String(Math.round(Number(L.crystal) || 0));
   const statusStr = radarAxisCompareStatus(L.owner, L.crystal);
   const catFill = radarCategoryFill(rank);
@@ -152,6 +174,7 @@ function radarAxisLabelSvg(L, rank) {
   const gapTitleScore = "\u00A0\u00A0\u00A0";
   const ta = L.ta;
   const textAnchor = ta === "middle" ? "middle" : ta === "end" ? "end" : "start";
+  const line2Opacity = L.key === "relationship" ? "0.55" : "0.62";
 
   const line1Spans = [
     `<tspan fill="${catFill}" font-weight="${titleFw}">${escapeHtml(title)}</tspan>`,
@@ -159,9 +182,15 @@ function radarAxisLabelSvg(L, rank) {
     `<tspan fill="${numFill}" font-weight="700">${escapeHtml(scoreStr)}</tspan>`,
   ].join("");
 
+  if (L.omitLine2) {
+    return `<text class="mv2-radar-axis mv2-radar-axis--1l" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="${textAnchor}" text-rendering="optimizeLegibility">
+    <tspan x="${ax.toFixed(2)}" y="${y1.toFixed(2)}">${line1Spans}</tspan>
+  </text>`;
+  }
+
   return `<text class="mv2-radar-axis mv2-radar-axis--2l" font-size="${fs}" font-family="${RADAR_AXIS_FONT_FAMILY}" text-anchor="${textAnchor}" text-rendering="optimizeLegibility">
     <tspan x="${ax.toFixed(2)}" y="${y1.toFixed(2)}">${line1Spans}</tspan>
-    <tspan x="${ax.toFixed(2)}" dy="${lineDy.toFixed(2)}" font-size="${fs2}" fill="${catFill}" font-weight="500" opacity="0.62">${escapeHtml(statusStr)}</tspan>
+    <tspan x="${ax.toFixed(2)}" dy="${lineDy.toFixed(2)}" font-size="${fs2}" fill="${catFill}" font-weight="500" opacity="${line2Opacity}">${escapeHtml(statusStr)}</tspan>
   </text>`;
 }
 
@@ -200,12 +229,13 @@ function radarBlock(vm) {
     },
     {
       key: "relationship",
-      anchorX: 93.5,
-      ayLine1: 73.75,
-      lineDy: 4.05,
+      anchorX: 92.0,
+      ayLine1: 73.25,
+      lineDy: 3.55,
       ta: /** @type {"end"} */ ("end"),
       owner: or_,
       crystal: cr,
+      omitLine2: moldaviteRadarRelStatusInSummaryOnly(),
     },
     {
       key: "money",
@@ -283,6 +313,15 @@ export function renderMoldaviteReportV2Html(payload) {
   const highlightHtml = highlightLine
     ? `<p class="mv2-graph-sum-highlight">${escapeHtml(highlightLine)}</p>`
     : "";
+  const graphRelStatusFootnote =
+    moldaviteRadarRelStatusInSummaryOnly() && vm.graph
+      ? `<p class="mv2-graph-sum-line mv2-graph-sum-line--radar-rel-note">${escapeHtml(
+          `ความสัมพันธ์ (เทียบคุณกับหิน): ${radarAxisCompareStatus(
+            Number(vm.graph.owner?.relationship) || 0,
+            Number(vm.graph.crystal?.relationship) || 0,
+          )}`,
+        )}</p>`
+      : "";
   const graphSummaryLinesHtml =
     Array.isArray(gs.lines) && gs.lines.length > 0
       ? `<div class="mv2-graph-sum-lines">${gs.lines
@@ -292,7 +331,7 @@ export function renderMoldaviteReportV2Html(payload) {
           )
           .join("")}</div>`
       : "";
-  const graphSummaryHtml = `${highlightHtml}${graphSummaryLinesHtml}`;
+  const graphSummaryHtml = `${highlightHtml}${graphRelStatusFootnote}${graphSummaryLinesHtml}`;
 
   const traitsHtml = vm.ownerProfile.traits
     .map((t) => `<li>${escapeHtml(t)}</li>`)
@@ -508,6 +547,13 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-graph-sum-lines { margin: 0; display: flex; flex-direction: column; gap: 0.36rem; }
     .mv2-graph-sum-line { margin: 0; font-size: 0.88rem; line-height: 1.38; color: rgba(215,213,208,0.96); font-weight: 400; }
     .mv2-graph-sum-line--lead { font-weight: 600; color: rgba(240,253,244,0.96); font-size: 0.9rem; }
+    .mv2-graph-sum-line--radar-rel-note {
+      margin: 0 0 0.38rem;
+      font-size: 0.8rem;
+      line-height: 1.36;
+      color: rgba(186, 200, 214, 0.9);
+      font-weight: 400;
+    }
     .mv2-owner-id { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 700; color: #a7f3d0; letter-spacing: 0.02em; }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }

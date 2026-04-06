@@ -120,7 +120,8 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes(">82</tspan>"));
   assert.ok(html.includes(">หินนำ</tspan>"));
   assert.ok(html.includes(">ใกล้เคียง</tspan>"));
-  assert.ok(html.includes('dy="4.'));
+  assert.ok(html.includes('dy="3.') || html.includes('dy="4.'));
+  assert.ok(html.includes(">สัมพันธ์</tspan>"));
   assert.ok(!html.includes("mv2-radar-series-lbl"));
   assert.ok(html.includes('class="mv2-radar-key"'));
   assert.ok(!html.includes("mv2-radar-compare"));
