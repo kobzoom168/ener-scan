@@ -14,6 +14,27 @@ const AXIS_LABEL_TH = {
   money: "การเงิน",
 };
 
+/**
+ * คำนำหน้าบรรทัดช่วยใต้หัวเรดาร์ (ใช้คู่กับ compare target ด้านล่าง)
+ * — pattern เดียวกันจะใช้กับรายงานประเภทอื่นได้ (พระ / เครื่องราง / วัตถุ)
+ */
+export const RADAR_SECTION_COMPARE_HELPER_PREFIX = "เปรียบเทียบคุณกับ";
+
+/** Moldavite / หิน·คริสตัล: ค่าเริ่มต้นสำหรับข้อความ “พลังของ…” */
+export const DEFAULT_RADAR_COMPARE_TARGET_ENERGY_LABEL_MOLDAVITE =
+  "พลังของหิน";
+
+/**
+ * @param {string} [compareTargetEnergyLabel] เช่น `พลังของหิน`, `พลังของวัตถุ`, `พลังของพระ`
+ * @returns {string}
+ */
+export function buildRadarSectionCompareHelperLine(compareTargetEnergyLabel) {
+  const t =
+    String(compareTargetEnergyLabel || "").trim() ||
+    DEFAULT_RADAR_COMPARE_TARGET_ENERGY_LABEL_MOLDAVITE;
+  return `${RADAR_SECTION_COMPARE_HELPER_PREFIX}${t}`;
+}
+
 /** Moldavite HTML V2 only: avoid em dash (U+2014) in visible copy. */
 function thaiNoEmDash(s) {
   return String(s || "")
@@ -164,6 +185,13 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
 
   const usageLines = V2_USAGE_LINES;
 
+  const compareTargetEnergyLabel = DEFAULT_RADAR_COMPARE_TARGET_ENERGY_LABEL_MOLDAVITE;
+  const radarSectionContext = {
+    compareTargetEnergyLabel,
+    compareHelperLine:
+      buildRadarSectionCompareHelperLine(compareTargetEnergyLabel),
+  };
+
   return {
     rendererId: "moldavite-html-v2",
     hero: {
@@ -192,6 +220,7 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       tension: { axisKey: tensionKey, labelThai: tensionLabel },
     },
     graphSummary,
+    radarSectionContext,
     ownerProfile: {
       identityLabel: thaiNoEmDash(ownerAxes.identityLabel),
       summaryLine: thaiNoEmDash(ownerAxes.summaryLine),

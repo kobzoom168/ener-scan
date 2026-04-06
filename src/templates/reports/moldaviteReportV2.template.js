@@ -124,9 +124,12 @@ function radarBlock(vm) {
     return `<li><span class="mv2-radar-compare-k">${escapeHtml(k)}</span><span class="mv2-radar-compare-v">${escapeHtml(phrase)}</span></li>`;
   }).join("");
 
+  const radarHelperHtml = `<p class="mv2-radar-context">${escapeHtml(vm.radarSectionContext.compareHelperLine)}</p>`;
+
   return `
   <section class="mv2-radar-card" aria-labelledby="mv2-radar-h">
     <h2 class="mv2-radar-title" id="mv2-radar-h">ภาพรวมการจับคู่</h2>
+    ${radarHelperHtml}
     <p class="mv2-radar-sub"><span class="mv2-radar-sub-line">สเกล 0–100 ต่อแกน</span><span class="mv2-radar-sub-line">จุดสว่าง = มิติที่เด่นสุด</span></p>
     <div class="mv2-radar-svg-wrap">
       <svg class="mv2-radar-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-compare">
@@ -278,6 +281,7 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-life-hint { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: rgb(148, 163, 184); opacity: 0.47; font-weight: 400; }
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
+    .mv2-radar-context { margin: 0 0 0.5rem; font-size: 0.8rem; line-height: 1.42; color: rgba(186, 230, 253, 0.88); font-weight: 500; letter-spacing: 0.01em; }
     .mv2-radar-sub { margin: 0 0 0.85rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; display: flex; flex-direction: column; gap: 0.2rem; }
     .mv2-radar-sub-line { display: block; }
     .mv2-radar-svg-wrap {

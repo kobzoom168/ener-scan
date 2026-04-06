@@ -82,6 +82,7 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("<!-- moldavite-html-v2 -->"));
   assert.ok(html.includes("moldavite-html-v2"));
   assert.ok(html.includes("ภาพรวมการจับคู่"));
+  assert.ok(html.includes("เปรียบเทียบคุณกับพลังของหิน"));
   assert.ok(html.includes("สรุปจากกราฟ"));
   assert.ok(html.includes("แรงสอดคล้องสุด"));
   assert.ok(html.includes("จุดที่ควรบาลานซ์"));
