@@ -83,7 +83,7 @@ function radarBlock(vm) {
   const crystalPts = radarPolygonPoints(g.crystal);
   const peak = radarVertexForAxis(g.crystal, g.crystalPeakAxisKey);
   const peakLabel = String(g.crystalPeakLabelThai || "").trim() || "หิน";
-  const crystalMarker = `<circle class="mv2-radar-peak" cx="${peak.x.toFixed(2)}" cy="${peak.y.toFixed(2)}" r="2.5" fill="#4ade80" stroke="rgba(255,255,255,0.9)" stroke-width="0.55" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
+  const crystalMarker = `<circle class="mv2-radar-peak" cx="${peak.x.toFixed(2)}" cy="${peak.y.toFixed(2)}" r="1.85" fill="#4ade80" stroke="rgba(255,255,255,0.88)" stroke-width="0.42" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
 
   const cw = Math.round(Number(g.crystal.work) || 0);
   const cr = Math.round(Number(g.crystal.relationship) || 0);
@@ -94,19 +94,19 @@ function radarBlock(vm) {
   const labels = [
     {
       ax: RADAR_CX,
-      ay: 8,
+      ay: 5,
       text: `${AXIS_TITLE_TH.work} ${cw}`,
       ta: "middle",
     },
     {
-      ax: 88,
-      ay: 72,
+      ax: 91,
+      ay: 76,
       text: `${AXIS_TITLE_TH.relationship} ${cr}`,
       ta: "end",
     },
     {
-      ax: 12,
-      ay: 72,
+      ax: 9,
+      ay: 76,
       text: `${AXIS_TITLE_TH.money} ${cm}`,
       ta: "start",
     },
@@ -278,9 +278,15 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-life-hint { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: rgb(148, 163, 184); opacity: 0.47; font-weight: 400; }
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
-    .mv2-radar-sub { margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; display: flex; flex-direction: column; gap: 0.2rem; }
+    .mv2-radar-sub { margin: 0 0 0.85rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; display: flex; flex-direction: column; gap: 0.2rem; }
     .mv2-radar-sub-line { display: block; }
-    .mv2-radar-svg-wrap { width: 100%; max-width: 18rem; margin: 0 auto; }
+    .mv2-radar-svg-wrap {
+      width: 100%;
+      max-width: 17.5rem;
+      margin: 0 auto;
+      padding: 0.35rem 0.65rem 0.15rem;
+      box-sizing: border-box;
+    }
     .mv2-radar-svg { width: 100%; height: auto; display: block; }
     .mv2-radar-compare {
       list-style: none;
