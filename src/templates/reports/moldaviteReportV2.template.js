@@ -176,7 +176,7 @@ export function renderMoldaviteReportV2Html(payload) {
     :root {
       --mv2-bg: #0a0c0f;
       --mv2-card: #111418;
-      --mv2-edge: rgba(255,255,255,0.06);
+      --mv2-edge: rgba(255,255,255,0.042);
       --mv2-text: #f3f4f6;
       --mv2-muted: #9ca3af;
       --mv2-green: #22c55e;
@@ -205,7 +205,7 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-tag { color: var(--mv2-green-dim); font-size: 0.92rem; margin: 0.25rem 0 1.05rem; line-height: 1.4; }
     .mv2-main { color: var(--mv2-green); font-weight: 600; font-size: 0.95rem; margin: 0 0 0.5rem; border-left: 3px solid rgba(34,197,94,0.5); padding-left: 0.6rem; }
     .mv2-h1 + .mv2-main { margin-top: 0.35rem; }
-    .mv2-date { font-size: 0.66rem; color: rgba(113,118,128,0.78); margin-top: 0.35rem; font-weight: 400; letter-spacing: 0.02em; opacity: 0.88; }
+    .mv2-date { font-size: 0.63rem; color: rgba(90,95,105,0.68); margin-top: 0.35rem; font-weight: 400; letter-spacing: 0.02em; opacity: 0.78; }
     .mv2-strip {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -224,7 +224,7 @@ export function renderMoldaviteReportV2Html(payload) {
       border: 1px solid var(--mv2-edge);
       border-radius: var(--mv2-r);
       padding: 1rem 1.05rem;
-      margin-bottom: 1rem;
+      margin-bottom: 1.08rem;
     }
     .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2-green-dim); font-weight: 600; }
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
@@ -252,12 +252,12 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-int-list { list-style: none; padding: 0.35rem 0 0; margin: 0; display: flex; flex-direction: column; gap: 1.15rem; }
     .mv2-note { font-size: 0.72rem; color: #6b7280; margin-top: 0.6rem; }
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
-    .mv2-life-card { border-top: 1px solid var(--mv2-edge); padding: 0.75rem 0 0; margin-top: 0.75rem; }
+    .mv2-life-card { border-top: 1px solid rgba(255,255,255,0.032); padding: 0.85rem 0 0; margin-top: 0.82rem; }
     .mv2-life-card:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
     .mv2-life-head { display: flex; justify-content: space-between; font-weight: 600; font-size: 0.9rem; }
-    .mv2-life-score { color: var(--mv2-green); font-variant-numeric: tabular-nums; }
+    .mv2-life-score { color: #15803d; font-weight: 500; opacity: 0.82; font-variant-numeric: tabular-nums; }
     .mv2-life-blurb { margin-top: 0.35rem; }
-    .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--mv2-edge); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
+    .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
   </style>
 </head>
