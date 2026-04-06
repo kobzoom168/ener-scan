@@ -44,7 +44,7 @@ test("buildMoldaviteV1Slice: shape + deterministic_v1 + Flex v1 summary-first", 
   );
   assert.ok(String(slice.flexSurface.tagline || "").includes("เทคไทต์"));
   assert.ok(
-    String(slice.flexSurface.fitLine || "").startsWith("โฟกัสช่วงนี้:"),
+    String(slice.flexSurface.fitLine || "").startsWith("ตอนนี้แรงสุดที่:"),
     "fit line should be a short focus hint (not repeat ranking prose)",
   );
   assert.ok(

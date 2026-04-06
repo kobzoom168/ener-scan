@@ -71,7 +71,7 @@ test("buildMoldaviteSummaryFirstFlex: returns flex bubble without calling generi
   assert.ok(bodyText.includes("มอลดาไวต์"));
   assert.ok(bodyText.includes("หินเทคไทต์ · โทนเขียว"));
   assert.ok(bodyText.includes("เร่งการเปลี่ยนแปลง"));
-  assert.ok(bodyText.includes("มิติเชิงโฟกัส"));
+  assert.ok(bodyText.includes("พลังไปออกกับเรื่องไหน"));
   assert.ok(bodyText.includes("เรียงจากคะแนนสูงไปต่ำ"));
   assert.ok(bodyText.includes("งาน"));
   assert.ok(bodyText.includes("ความสัมพันธ์"));

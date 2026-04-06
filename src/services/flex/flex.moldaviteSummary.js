@@ -8,26 +8,26 @@ import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 
 /**
- * Moldavite-only palette — light / white card + green accents (LINE-safe hex).
- * Distinct from Thai/gold cards; avoids dark-theme-only tokens.
+ * Moldavite-only palette — dark card + green accents (LINE-safe hex).
+ * Strong mood; keep contrast for body copy and bar track vs fill.
  */
-const FLEX_CARD_BG = "#ffffff";
-const FLEX_BOX_BG = "#f3f4f6";
+const FLEX_CARD_BG = "#0f1115";
+const FLEX_BOX_BG = "#1a1f26";
 /** Simulated progress track / fill (LINE has no real bar — nested box + flex 0–3 only). */
-const LIFE_AREA_BAR_TRACK_BG = "#e5e7eb";
+const LIFE_AREA_BAR_TRACK_BG = "#374151";
 const LIFE_AREA_BAR_FILL = "#22c55e";
-const MOLDAVITE_ACCENT = "#16a34a";
-const MOLDAVITE_ACCENT_DIM = "#22c55e";
-const MOLDAVITE_PILL_BORDER = "#86efac";
-const MOLDAVITE_PILL_BG = "#f0fdf4";
-/** CTA: deeper green on white for tap contrast. */
+const MOLDAVITE_ACCENT = "#4ade80";
+const MOLDAVITE_ACCENT_DIM = "#86efac";
+const MOLDAVITE_PILL_BORDER = "#166534";
+const MOLDAVITE_PILL_BG = "#052e16";
+/** CTA — saturated green on dark for tap contrast. */
 const MOLDAVITE_CTA_BG = "#16a34a";
 const FLEX_ACCENT = MOLDAVITE_CTA_BG;
-const FLEX_TEXT_PRIMARY = "#111827";
-const FLEX_TEXT_SECONDARY = "#6b7280";
-const FLEX_TEXT_CAPTION = "#6b7280";
-/** Tagline under title — muted green-gray on white. */
-const MOLDAVITE_TITLE_TAGLINE_COLOR = "#4b5563";
+const FLEX_TEXT_PRIMARY = "#f3f4f6";
+const FLEX_TEXT_SECONDARY = "#9ca3af";
+const FLEX_TEXT_CAPTION = "#9ca3af";
+/** Tagline under title — muted on dark. */
+const MOLDAVITE_TITLE_TAGLINE_COLOR = "#a1a1aa";
 /** Static identity line under title (Flex-only; not detection logic). */
 const MOLDAVITE_TITLE_TAGLINE = "หินเทคไทต์ · โทนเขียว";
 
@@ -195,7 +195,7 @@ function createLifeAreasBarBlock(lifeAreas) {
     contents: [
       {
         type: "text",
-        text: "มิติเชิงโฟกัส",
+        text: "พลังไปออกกับเรื่องไหน",
         size: "xs",
         color: MOLDAVITE_ACCENT_DIM,
         weight: "bold",
@@ -484,7 +484,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
     type: "text",
     text: `› ${line}`,
     size: "sm",
-    color: "#4b5563",
+    color: FLEX_TEXT_SECONDARY,
     wrap: true,
     maxLines: 2,
     lineSpacing: "3px",

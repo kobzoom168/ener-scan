@@ -53,7 +53,7 @@ function buildFlexSurfaceCopy(primary, secondary, lifeAreas, naming) {
   const primaryLabel = String(lifeAreas[primary]?.labelThai || "").trim() || "งาน";
   const secondaryLabel = String(lifeAreas[secondary]?.labelThai || "").trim() || "การเงิน";
 
-  const fitLine = `โฟกัสช่วงนี้: ${primaryLabel} → ${secondaryLabel}`;
+  const fitLine = `ตอนนี้แรงสุดที่: ${primaryLabel} → ${secondaryLabel}`;
 
   const tierWording = buildMoldaviteWordingByLevel(
     level,
