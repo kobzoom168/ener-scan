@@ -121,50 +121,25 @@ function radarAxisComparePhrase(owner01, crystal01) {
 }
 
 /**
- * ป้ายบนกราฟ: ชื่อแกน + คะแนนโทนหินเท่านั้น (รูปแบบเสถียร — ไม่ใส่สถานะเทียบใน SVG)
- * @param {{ key: string, anchorX: number, ay: number, ta: "middle"|"start"|"end", owner: number, crystal: number }} L
+ * ป้ายบนกราฟ: ชื่อแกน + คะแนนโทนหินเท่านั้น
+ * Rendered as plain HTML (absolutely positioned over the SVG) so iOS Safari's
+ * body text shaper handles Thai clusters correctly; SVG <text> and foreignObject
+ * both fail on WebKit mobile due to mark/digit advance miscalculation.
+ * @param {{ key: string, crystal: number }} L
  * @param {number} rank
  */
-function radarAxisLabelSvg(L, rank) {
+function radarAxisLabelHtml(L, rank) {
   const fs = radarAxisFontSize(rank);
-  const ax = L.anchorX;
-  const y = L.ay;
   const title = AXIS_TITLE_TH[L.key];
   const scoreStr = String(Math.round(Number(L.crystal) || 0));
   const catFill = radarCategoryFill(rank);
   const numFill = radarNumberFill(rank);
   const titleFw = rank === 1 ? "600" : "500";
-  const ta = L.ta;
 
   const titleStyle = `font-weight:${titleFw};color:${catFill}`;
   const numStyle = `font-weight:700;color:${numFill}`;
 
-  // All axes: foreignObject + HTML. iOS Safari SVG <text>/<tspan> mis-shapes Thai (สระ, marks)
-  // and mis-measures vs Latin digits; rem-only sizing also blew up one label vs SVG text.
-  // Font size tracks chart width via container query (same idea as viewBox font-size units).
-  const foH = 7.2;
-  const foY = y - 5.95;
-
-  let foW;
-  let foX;
-  /** @type {"mid"|"end"|"start"} */
-  let align;
-  if (ta === "middle") {
-    foW = 28;
-    foX = ax - foW / 2;
-    align = "mid";
-  } else if (ta === "end") {
-    foW = 42;
-    foX = ax - foW;
-    align = "end";
-  } else {
-    foW = 48;
-    foX = Math.max(2.5, ax - 1.2);
-    align = "start";
-  }
-
-  const inner = `<div xmlns="http://www.w3.org/1999/xhtml" class="mv2-radar-axis-html mv2-radar-axis-html--${align}" style="--mv2-rfs:${fs}"><span class="mv2-radar-axis-t" style="${titleStyle}">${escapeHtml(title)}</span><span class="mv2-radar-axis-n" style="${numStyle}">${escapeHtml(scoreStr)}</span></div>`;
-  return `<foreignObject class="mv2-radar-axis mv2-radar-axis-fo" x="${foX.toFixed(2)}" y="${foY.toFixed(2)}" width="${foW}" height="${foH}">${inner}</foreignObject>`;
+  return `<span class="mv2-radar-lbl mv2-radar-lbl--${L.key}" style="--mv2-rfs:${fs}"><span class="mv2-radar-axis-t" style="${titleStyle}">${escapeHtml(title)}</span> <span class="mv2-radar-axis-n" style="${numStyle}">${escapeHtml(scoreStr)}</span></span>`;
 }
 
 /**
@@ -232,10 +207,10 @@ function radarBlock(vm) {
       crystal: cm,
     },
   ];
-  const labelSvg = labels
+  const labelHtml = labels
     .map((L) => {
       const rk = rankOf[L.key] ?? 2;
-      return radarAxisLabelSvg(L, rk);
+      return radarAxisLabelHtml(L, rk);
     })
     .join("");
 
@@ -246,20 +221,22 @@ function radarBlock(vm) {
     <h2 class="mv2-radar-title" id="mv2-radar-h">ภาพรวมการจับคู่</h2>
     ${radarHelperHtml}
     <div class="mv2-radar-svg-wrap">
-      <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key" text-rendering="optimizeLegibility">
-        <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
-        <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-        <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-        <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-        <g class="mv2-radar-layer mv2-radar-layer--owner">
-          <polygon points="${ownerPts}" fill="rgba(96,165,250,0.155)" stroke="rgba(147,197,253,0.92)" stroke-width="0.78" stroke-linejoin="round"/>
-        </g>
-        <g class="mv2-radar-layer mv2-radar-layer--crystal">
-          <polygon points="${crystalPts}" fill="rgba(22,163,74,0.175)" stroke="rgba(52,211,153,0.92)" stroke-width="0.88" stroke-linejoin="round"/>
-        </g>
-        <g class="mv2-radar-layer mv2-radar-layer--peak">${crystalMarker}</g>
-        <g class="mv2-radar-layer mv2-radar-layer--labels">${labelSvg}</g>
-      </svg>
+      <div class="mv2-radar-plot">
+        <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key" text-rendering="optimizeLegibility">
+          <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
+          <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
+          <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
+          <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
+          <g class="mv2-radar-layer mv2-radar-layer--owner">
+            <polygon points="${ownerPts}" fill="rgba(96,165,250,0.155)" stroke="rgba(147,197,253,0.92)" stroke-width="0.78" stroke-linejoin="round"/>
+          </g>
+          <g class="mv2-radar-layer mv2-radar-layer--crystal">
+            <polygon points="${crystalPts}" fill="rgba(22,163,74,0.175)" stroke="rgba(52,211,153,0.92)" stroke-width="0.88" stroke-linejoin="round"/>
+          </g>
+          <g class="mv2-radar-layer mv2-radar-layer--peak">${crystalMarker}</g>
+        </svg>
+        <div class="mv2-radar-labels" aria-hidden="true">${labelHtml}</div>
+      </div>
       <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
         <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span><span class="mv2-radar-key-label">คุณ</span></span>
         <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span><span class="mv2-radar-key-label">หิน</span></span>
@@ -421,8 +398,10 @@ export function renderMoldaviteReportV2Html(payload) {
       margin: 0 auto;
       padding: 0.55rem 0.85rem 0.2rem;
       box-sizing: border-box;
+    }
+    .mv2-radar-plot {
+      position: relative;
       container-type: inline-size;
-      container-name: mv2-radar;
     }
     .mv2-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
     .mv2-radar-svg--animate .mv2-radar-layer--owner,
@@ -432,8 +411,11 @@ export function renderMoldaviteReportV2Html(payload) {
       opacity: 1;
       transform: scale(1);
     }
-    .mv2-radar-svg--animate .mv2-radar-layer--peak,
-    .mv2-radar-svg--animate .mv2-radar-layer--labels {
+    .mv2-radar-svg--animate .mv2-radar-layer--peak { opacity: 1; }
+    .mv2-radar-labels {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
       opacity: 1;
     }
     @media (prefers-reduced-motion: no-preference) {
@@ -446,7 +428,7 @@ export function renderMoldaviteReportV2Html(payload) {
       .mv2-radar-svg--animate .mv2-radar-layer--peak {
         animation: mv2RdrFade 0.42s ease-out 0.28s forwards;
       }
-      .mv2-radar-svg--animate .mv2-radar-layer--labels {
+      .mv2-radar-labels {
         animation: mv2RdrFade 0.44s ease-out 0.44s forwards;
       }
     }
@@ -459,34 +441,40 @@ export function renderMoldaviteReportV2Html(payload) {
       to { opacity: 1; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .mv2-radar-svg--animate .mv2-radar-layer {
+      .mv2-radar-svg--animate .mv2-radar-layer,
+      .mv2-radar-labels {
         animation: none !important;
         opacity: 1 !important;
         transform: none !important;
       }
     }
-    .mv2-radar-svg foreignObject.mv2-radar-axis-fo {
-      overflow: visible;
-    }
-    .mv2-radar-svg foreignObject.mv2-radar-axis-fo .mv2-radar-axis-html {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      display: flex;
-      align-items: baseline;
-      flex-wrap: nowrap;
-      gap: 0.35em;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Noto Sans Thai", "Sarabun", sans-serif;
-      line-height: 1.12;
-      letter-spacing: 0.01em;
+    .mv2-radar-lbl {
+      position: absolute;
       white-space: nowrap;
-      font-size: clamp(7px, 2.35vmin, 10.5px);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Noto Sans Thai", "Sarabun", sans-serif;
       font-size: calc(var(--mv2-rfs, 3.57) * 1cqw);
+      line-height: 1.2;
+      letter-spacing: 0.01em;
     }
-    .mv2-radar-svg foreignObject.mv2-radar-axis-fo .mv2-radar-axis-html--mid { justify-content: center; }
-    .mv2-radar-svg foreignObject.mv2-radar-axis-fo .mv2-radar-axis-html--end { justify-content: flex-end; }
-    .mv2-radar-svg foreignObject.mv2-radar-axis-fo .mv2-radar-axis-html--start { justify-content: flex-start; }
+    @supports not (font-size: 1cqw) {
+      .mv2-radar-lbl { font-size: clamp(7px, 2.35vmin, 10.5px); }
+    }
+    .mv2-radar-lbl--work {
+      top: 1.5%;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+    }
+    .mv2-radar-lbl--relationship {
+      top: 72%;
+      right: 0;
+      text-align: right;
+    }
+    .mv2-radar-lbl--money {
+      top: 73%;
+      left: 0;
+      text-align: left;
+    }
     .mv2-radar-svg .mv2-radar-peak {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
     }

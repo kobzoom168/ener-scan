@@ -113,8 +113,12 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(
     html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
   );
-  assert.ok(html.includes('mv2-radar-axis-fo'));
+  assert.ok(html.includes('class="mv2-radar-labels"'));
+  assert.ok(html.includes('mv2-radar-lbl--work'));
+  assert.ok(html.includes('mv2-radar-lbl--relationship'));
+  assert.ok(html.includes('mv2-radar-lbl--money'));
   assert.ok(!html.includes("mv2-radar-axis--2l"));
+  assert.ok(!html.includes("foreignObject"));
   assert.ok(html.includes("text-rendering=\"optimizeLegibility\""));
   assert.ok(html.includes("-apple-system"));
   assert.ok(html.includes('class="mv2-radar-axis-t"'));
