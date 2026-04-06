@@ -104,8 +104,8 @@ function buildFlexSurfaceCopy(primary, secondary, lifeAreas, naming) {
   const fitLine = `ตอนนี้เด่นสุด: ${primaryLabel} → ${secondaryLabel}`;
 
   const bullets = [
-    `เด่นเรื่อง${primaryLabel} ช่วยให้ขยับชัดขึ้นก่อน`,
-    "เหมาะเมื่ออยากเริ่มขยับจากเรื่องที่ค้างอยู่",
+    `เด่นเรื่อง${primaryLabel} ช่วยให้เรื่องที่ค้างเริ่มชัดขึ้น`,
+    "เหมาะเมื่อพร้อมเริ่มใหม่ แต่ยังไม่อยากเร่งเกินไป",
   ];
 
   const ctaLabel = "ดูว่าชิ้นนี้ช่วยคุณยังไง";

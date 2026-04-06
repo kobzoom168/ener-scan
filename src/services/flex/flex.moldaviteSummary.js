@@ -212,8 +212,8 @@ function createLifeAreasBarBlock(lifeAreas) {
       {
         type: "text",
         text: "เรียงจากคะแนนสูงไปต่ำ",
-        size: "xs",
-        color: LIFE_AREA_HELPER_TEXT_COLOR,
+        size: "xxs",
+        color: "#3f3f46",
         wrap: true,
         margin: "xs",
       },

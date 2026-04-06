@@ -38,7 +38,7 @@ const basePayload = {
     flexSurface: {
       headline: "มอลดาไวต์",
       fitLine: "ตอนนี้เด่นสุด: งาน → การเงิน",
-      bullets: ["เด่นเรื่องงาน ช่วยให้ขยับชัดขึ้นก่อน", "เหมาะเมื่ออยากเริ่มขยับจากเรื่องที่ค้างอยู่"],
+      bullets: ["เด่นเรื่องงาน ช่วยให้เรื่องที่ค้างเริ่มชัดขึ้น", "เหมาะเมื่อพร้อมเริ่มใหม่ แต่ยังไม่อยากเร่งเกินไป"],
       ctaLabel: "ดูว่าชิ้นนี้ช่วยคุณยังไง",
       mainEnergyShort: "เร่งการเปลี่ยนแปลง",
       tagline: "หินเทคไทต์ · โทนเขียว",
@@ -79,8 +79,8 @@ test("buildMoldaviteSummaryFirstFlex: returns flex bubble without calling generi
   assert.ok(bodyText.includes("การเงิน"));
   assert.ok(bodyText.includes("88"));
   assert.ok(bodyText.includes("ตอนนี้เด่นสุด:"));
-  assert.ok(bodyText.includes("ขยับชัดขึ้นก่อน"));
-  assert.ok(bodyText.includes("เริ่มขยับจากเรื่องที่ค้างอยู่"));
+  assert.ok(bodyText.includes("เรื่องที่ค้างเริ่มชัดขึ้น"));
+  assert.ok(bodyText.includes("พร้อมเริ่มใหม่"));
   assert.ok(bodyText.includes("ดูว่าชิ้นนี้ช่วยคุณยังไง"));
 
   const flat = JSON.stringify(flex);
