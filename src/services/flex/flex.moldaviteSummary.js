@@ -539,7 +539,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       margin: "lg",
       action: {
         type: "uri",
-        label: "เปิดรายงานฉบับเต็ม",
+        label: String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",
         uri: url,
       },
     });

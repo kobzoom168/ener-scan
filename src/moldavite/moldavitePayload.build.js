@@ -101,7 +101,14 @@ function buildFlexSurfaceCopy(primary, secondary, lifeAreas, naming) {
   const primaryLabel = String(lifeAreas[primary]?.labelThai || "").trim() || "งาน";
   const secondaryLabel = String(lifeAreas[secondary]?.labelThai || "").trim() || "การเงิน";
 
-  const fitLine = `ตอนนี้แรงสุดที่: ${primaryLabel} → ${secondaryLabel}`;
+  const fitLine = `ตอนนี้เด่นสุด: ${primaryLabel} → ${secondaryLabel}`;
+
+  const bullets = [
+    `เด่นเรื่อง${primaryLabel} ช่วยให้ขยับชัดขึ้นก่อน`,
+    "เหมาะเมื่ออยากเริ่มขยับจากเรื่องที่ค้างอยู่",
+  ];
+
+  const ctaLabel = "ดูว่าชิ้นนี้ช่วยคุณยังไง";
 
   const tierWording = buildMoldaviteWordingByLevel(
     level,
@@ -112,7 +119,8 @@ function buildFlexSurfaceCopy(primary, secondary, lifeAreas, naming) {
   return {
     headline,
     fitLine,
-    bullets: [],
+    bullets,
+    ctaLabel,
     mainEnergyShort,
     heroNamingLine,
     mainEnergyWordingLine: tierWording.mainEnergyWordingLine,
