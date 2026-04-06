@@ -5,6 +5,7 @@ import { resolveMoldaviteDisplayNaming } from "../src/moldavite/moldaviteDisplay
 import { normalizeReportPayloadForRender } from "../src/utils/reports/reportPayloadNormalize.util.js";
 import { renderReportHtmlPage } from "../src/services/reports/reportHtmlRenderer.service.js";
 import { renderMobileReportHtml } from "../src/templates/reports/mobileReport.template.js";
+import { renderMoldaviteReportV2Html } from "../src/templates/reports/moldaviteReportV2.template.js";
 
 const namingHigh = resolveMoldaviteDisplayNaming({
   geminiSubtypeConfidence: 0.9,
@@ -95,12 +96,104 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("การใช้และข้อควรระวัง"));
   assert.ok(html.includes("มอลดาไวต์"));
   assert.ok(html.includes("พลังหลัก ·"));
+  assert.ok(html.includes('mv2-strip-cell--level'));
   assert.ok(html.includes("เร่งการเปลี่ยนแปลง"));
   assert.ok(html.includes("<polygon"));
   assert.ok(html.includes("แนวโน้มโดยรวม:"));
   assert.ok(
     html.includes("โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์"),
   );
+});
+
+test("Moldavite V2: footer render-meta line omitted when NODE_ENV=production", () => {
+  const mv = buildMoldaviteV1Slice({
+    scanResultId: "rid-meta",
+    detection: { reason: "keyword_match", matchedSignals: ["x"] },
+    seedKey: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    energyScore: 7.5,
+    mainEnergyLabel: "เร่งการเปลี่ยนแปลง",
+    displayNaming: namingHigh,
+  });
+  const raw = {
+    reportId: "r-meta",
+    scanId: "s-meta",
+    birthdateUsed: null,
+    generatedAt: new Date().toISOString(),
+    reportVersion: "1.0.0",
+    object: {},
+    summary: {
+      energyScore: 7,
+      energyLevelLabel: "สูง",
+      mainEnergyLabel: mv.flexSurface.mainEnergyShort,
+      compatibilityPercent: 70,
+      summaryLine: "x",
+    },
+    sections: {},
+    trust: { modelLabel: "m" },
+    actions: {},
+    wording: {},
+    moldaviteV1: mv,
+  };
+  const { payload } = normalizeReportPayloadForRender(raw);
+  const prevNode = process.env.NODE_ENV;
+  const prevMeta = process.env.REPORT_HTML_RENDER_META;
+  process.env.NODE_ENV = "production";
+  delete process.env.REPORT_HTML_RENDER_META;
+  try {
+    const html = renderMoldaviteReportV2Html(payload);
+    assert.ok(!html.includes("render moldavite-html-v2"));
+    assert.ok(!html.includes('<p class="mv2-render-meta">'));
+  } finally {
+    process.env.NODE_ENV = prevNode;
+    if (prevMeta === undefined) delete process.env.REPORT_HTML_RENDER_META;
+    else process.env.REPORT_HTML_RENDER_META = prevMeta;
+  }
+});
+
+test("Moldavite V2: REPORT_HTML_RENDER_META=true shows footer meta in production", () => {
+  const mv = buildMoldaviteV1Slice({
+    scanResultId: "rid-meta2",
+    detection: { reason: "keyword_match", matchedSignals: ["x"] },
+    seedKey: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    energyScore: 7.5,
+    mainEnergyLabel: "เร่งการเปลี่ยนแปลง",
+    displayNaming: namingHigh,
+  });
+  const raw = {
+    reportId: "r-meta2",
+    scanId: "s-meta2",
+    birthdateUsed: null,
+    generatedAt: new Date().toISOString(),
+    reportVersion: "9.9.9",
+    object: {},
+    summary: {
+      energyScore: 7,
+      energyLevelLabel: "สูง",
+      mainEnergyLabel: mv.flexSurface.mainEnergyShort,
+      compatibilityPercent: 70,
+      summaryLine: "x",
+    },
+    sections: {},
+    trust: {},
+    actions: {},
+    wording: {},
+    moldaviteV1: mv,
+  };
+  const { payload } = normalizeReportPayloadForRender(raw);
+  const prevNode = process.env.NODE_ENV;
+  const prevMeta = process.env.REPORT_HTML_RENDER_META;
+  process.env.NODE_ENV = "production";
+  process.env.REPORT_HTML_RENDER_META = "true";
+  try {
+    const html = renderMoldaviteReportV2Html(payload);
+    assert.ok(html.includes('<p class="mv2-render-meta">'));
+    assert.ok(html.includes("render moldavite-html-v2"));
+    assert.ok(html.includes("9.9.9"));
+  } finally {
+    process.env.NODE_ENV = prevNode;
+    if (prevMeta === undefined) delete process.env.REPORT_HTML_RENDER_META;
+    else process.env.REPORT_HTML_RENDER_META = prevMeta;
+  }
 });
 
 test("non-Moldavite crystal HTML still uses legacy mobile template (no V2 marker)", () => {

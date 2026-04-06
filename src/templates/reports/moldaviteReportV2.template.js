@@ -10,6 +10,19 @@ const RADAR_ANGLES = [-Math.PI / 2, -Math.PI / 2 + (2 * Math.PI) / 3, -Math.PI /
 const AXIS_KEYS = /** @type {const} */ (["work", "relationship", "money"]);
 
 /**
+ * Footer render/meta line: off in production unless explicitly enabled (support/debug).
+ * `REPORT_HTML_RENDER_META=true|1|yes` → show; `false|0|no` → hide;
+ * unset → show only when `NODE_ENV !== "production"`.
+ * @returns {boolean}
+ */
+function moldaviteHtmlShowRenderMetaLine() {
+  const raw = String(process.env.REPORT_HTML_RENDER_META ?? "").trim().toLowerCase();
+  if (raw === "1" || raw === "true" || raw === "yes") return true;
+  if (raw === "0" || raw === "false" || raw === "no") return false;
+  return process.env.NODE_ENV !== "production";
+}
+
+/**
  * @param {Record<string, number>} values01to100
  */
 function radarPolygonPoints(values01to100) {
@@ -204,6 +217,8 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-strip-k { font-size: 0.65rem; color: var(--mv2-muted); text-transform: uppercase; letter-spacing: 0.06em; }
     .mv2-strip-v { font-size: 1.05rem; font-weight: 700; color: var(--mv2-green-dim); margin-top: 0.2rem; }
     .mv2-strip-v small { font-size: 0.75rem; font-weight: 500; color: var(--mv2-muted); }
+    .mv2-strip-cell--level .mv2-strip-k { font-size: 0.6rem; opacity: 0.72; letter-spacing: 0.05em; }
+    .mv2-strip-cell--level .mv2-strip-v { font-size: 0.82rem !important; font-weight: 600; color: rgba(134,239,172,0.78); margin-top: 0.22rem; }
     .mv2-card {
       background: var(--mv2-card);
       border: 1px solid var(--mv2-edge);
@@ -216,14 +231,14 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
     .mv2-radar-sub { margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; display: flex; flex-direction: column; gap: 0.2rem; }
     .mv2-radar-sub-line { display: block; }
-    .mv2-radar-peak-note { margin: 0.5rem 0 0; font-size: 0.68rem; color: rgba(134,239,172,0.82); line-height: 1.35; text-align: center; }
+    .mv2-radar-peak-note { margin: 0.35rem 0 0; font-size: 0.58rem; color: rgba(100,116,139,0.78); line-height: 1.3; text-align: center; font-weight: 400; letter-spacing: 0.02em; }
     .mv2-radar-svg-wrap { width: 100%; max-width: 18rem; margin: 0 auto; }
     .mv2-radar-svg { width: 100%; height: auto; display: block; }
-    .mv2-legend { list-style: none; padding: 0.35rem 0 0; margin: 0; font-size: 0.64rem; color: rgba(156,163,175,0.58); letter-spacing: 0.01em; }
-    .mv2-legend li { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.22rem; }
-    .mv2-dot { width: 0.4rem; height: 0.4rem; border-radius: 999px; display: inline-block; opacity: 0.72; }
-    .mv2-dot--owner { background: rgba(147,197,253,0.65); }
-    .mv2-dot--crystal { background: rgba(34,197,94,0.68); }
+    .mv2-legend { list-style: none; padding: 0.3rem 0 0; margin: 0; font-size: 0.58rem; color: rgba(100,116,139,0.52); letter-spacing: 0.01em; line-height: 1.35; }
+    .mv2-legend li { display: flex; align-items: center; gap: 0.32rem; margin-bottom: 0.18rem; }
+    .mv2-dot { width: 0.34rem; height: 0.34rem; border-radius: 999px; display: inline-block; opacity: 0.58; }
+    .mv2-dot--owner { background: rgba(147,197,253,0.5); }
+    .mv2-dot--crystal { background: rgba(34,197,94,0.52); }
     .mv2-graph-sum-compact { margin: 0.35rem 0; font-size: 0.92rem; line-height: 1.45; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.35rem; }
     .mv2-graph-sum-k { color: rgba(148,163,184,0.78); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.02em; }
     .mv2-graph-sum-arrow { color: #64748b; font-weight: 500; opacity: 0.85; }
@@ -243,6 +258,7 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-life-score { color: var(--mv2-green); font-variant-numeric: tabular-nums; }
     .mv2-life-blurb { margin-top: 0.35rem; }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--mv2-edge); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
+    .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
   </style>
 </head>
 <body>
@@ -259,7 +275,7 @@ export function renderMoldaviteReportV2Html(payload) {
     <div class="mv2-strip" role="group" aria-label="สรุปตัวเลข">
       <div><div class="mv2-strip-k">คะแนนพลัง</div><div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
-      <div><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v" style="font-size:0.85rem">${escapeHtml(vm.metrics.energyLevelLabel || "—")}</div></div>
+      <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "—")}</div></div>
     </div>
 
     ${radarBlock(vm)}
@@ -297,7 +313,7 @@ export function renderMoldaviteReportV2Html(payload) {
 
     <footer class="mv2-trust">
       ${vm.trustNote ? `<p>${escapeHtml(vm.trustNote)}</p>` : ""}
-      <p>render ${escapeHtml(vm.rendererId)} · เวอร์ชัน ${escapeHtml(vm.reportVersion)}${vm.modelLabel ? ` · ${escapeHtml(vm.modelLabel)}` : ""}</p>
+      ${moldaviteHtmlShowRenderMetaLine() ? `<p class="mv2-render-meta">render ${escapeHtml(vm.rendererId)} · เวอร์ชัน ${escapeHtml(vm.reportVersion)}${vm.modelLabel ? ` · ${escapeHtml(vm.modelLabel)}` : ""}</p>` : ""}
     </footer>
   </div>
 </body>
