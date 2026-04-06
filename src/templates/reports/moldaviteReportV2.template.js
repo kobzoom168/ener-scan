@@ -227,6 +227,9 @@ export function renderMoldaviteReportV2Html(payload) {
       margin-bottom: 1.08rem;
     }
     .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2-green-dim); font-weight: 600; }
+    section.mv2-card:has(#mv2-mean-h) { margin-bottom: 1.42rem; }
+    .mv2-card--life > h2 { margin: 0 0 0.72rem; }
+    .mv2-life-hint { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: rgba(100,116,139,0.75); opacity: 0.78; font-weight: 400; }
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
     .mv2-radar-sub { margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--mv2-muted); line-height: 1.45; display: flex; flex-direction: column; gap: 0.2rem; }
@@ -300,9 +303,9 @@ export function renderMoldaviteReportV2Html(payload) {
 
     ${meaningHtml ? `<section class="mv2-card" aria-labelledby="mv2-mean-h"><h2 id="mv2-mean-h">แรงโทนเปลี่ยนแปลง</h2>${meaningHtml}</section>` : ""}
 
-    <section class="mv2-card" aria-labelledby="mv2-life-h">
+    <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
       <h2 id="mv2-life-h">มิติชีวิตละเอียด</h2>
-      <p class="mv2-note" style="margin-bottom:0.5rem">เรียงจากคะแนนสูงไปต่ำ</p>
+      <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
       ${lifeRowsHtml}
     </section>
 
