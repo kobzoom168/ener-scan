@@ -47,4 +47,9 @@ test("buildAmuletSummaryFirstFlex: flex bubble + gold-path body", async () => {
   assert.ok(bodyText.includes("ตอนนี้เด่นสุด:"));
   assert.ok(bodyText.includes("ดูว่าชิ้นนี้ช่วยคุณยังไง"));
   assert.ok(bodyText.includes("พลังไปออกกับมิติไหน"));
+  assert.ok(
+    !bodyText.includes("พลังหลัก"),
+    "sacred amulet flex: no main-energy pill section",
+  );
+  assert.ok(bodyText.includes("เรียงจากคะแนนสูงไปต่ำ"));
 });

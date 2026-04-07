@@ -14,8 +14,6 @@ const LIFE_AREA_BAR_TRACK_BG = "#3f3a32";
 const LIFE_AREA_BAR_FILL = "#c9a227";
 const AMULET_ACCENT = "#e8c547";
 const AMULET_ACCENT_DIM = "#d4af37";
-const AMULET_PILL_BORDER = "#8a7030";
-const AMULET_PILL_BG = "#2a2215";
 const AMULET_CTA_BG = "#b8860b";
 const FLEX_ACCENT = AMULET_CTA_BG;
 const FLEX_TEXT_PRIMARY = "#f3f4f6";
@@ -26,18 +24,6 @@ const AMULET_TITLE_TAGLINE_COLOR = "#a8a29e";
 /** Life-area helper line — dimmer than captions; metadata only. */
 const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
 const AMULET_TITLE_TAGLINE = "พระเครื่อง · โทนทอง";
-
-/**
- * @param {string} text
- * @param {number} [maxLen]
- */
-function truncateEnergyBadgeLabel(text, maxLen = 14) {
-  const s = String(text || "").trim();
-  if (!s) return "-";
-  return s.length > maxLen ? s.slice(0, maxLen) : s;
-}
-
-const MAIN_ENERGY_PILL_MAX_LEN = 22;
 
 /** Six power categories — display order for bar row iteration; sort is by score. */
 const AMULET_POWER_ROW_KEYS = /** @type {const} */ ([
@@ -306,57 +292,6 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
   };
 }
 
-function createEnergyBadgePill(mainLabel) {
-  return {
-    type: "box",
-    layout: "vertical",
-    spacing: "sm",
-    margin: "md",
-    contents: [
-      {
-        type: "text",
-        text: "พลังหลัก",
-        size: "xs",
-        color: FLEX_TEXT_CAPTION,
-        wrap: true,
-      },
-      {
-        type: "box",
-        layout: "horizontal",
-        contents: [
-          {
-            type: "box",
-            layout: "horizontal",
-            flex: 1,
-            justifyContent: "center",
-            paddingTop: "10px",
-            paddingBottom: "10px",
-            paddingStart: "14px",
-            paddingEnd: "14px",
-            borderWidth: "1px",
-            borderColor: AMULET_PILL_BORDER,
-            backgroundColor: AMULET_PILL_BG,
-            contents: [
-              {
-                type: "text",
-                text: truncateEnergyBadgeLabel(
-                  String(mainLabel || "-").trim(),
-                  MAIN_ENERGY_PILL_MAX_LEN,
-                ),
-                size: "sm",
-                weight: "bold",
-                color: AMULET_ACCENT,
-                align: "center",
-                wrap: true,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-}
-
 /**
  * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
  * @param {string} fallbackCompat
@@ -417,8 +352,6 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
         .filter(Boolean)
         .slice(0, 2)
     : [];
-  const mainPill =
-    String(mv.flexSurface?.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม";
 
   const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
   const heroOk = /^https:\/\//i.test(imgUrl);
@@ -502,7 +435,6 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       compatPctStr,
       compatBandStr,
     ),
-    createEnergyBadgePill(mainPill),
     ...(lifeAreasBlock ? [lifeAreasBlock] : []),
     ...(fitBlock ? [fitBlock] : []),
     ...(bulletRows.length > 0
