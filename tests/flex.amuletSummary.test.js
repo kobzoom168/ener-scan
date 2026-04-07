@@ -16,7 +16,12 @@ const basePayload = {
       protection: { key: "protection", score: 90, labelThai: "คุ้มครองป้องกัน" },
       metta: { key: "metta", score: 80, labelThai: "เมตตาและคนเอ็นดู" },
       baramee: { key: "baramee", score: 70, labelThai: "บารมีและอำนาจนำ" },
-      luck: { key: "luck", score: 60, labelThai: "โชคลาภและการเปิดทาง" },
+      luck: {
+        key: "luck",
+        score: 60,
+        labelThai:
+          "โชคลาภและการเปิดทาง (ข้อความยาวเพื่อทดสอบว่า label ไม่ชน bar ในแถวเดียว)",
+      },
       fortune_anchor: {
         key: "fortune_anchor",
         score: 55,
@@ -81,4 +86,32 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   assert.ok(bodyText.includes("เด่นเมตตา "));
   const bulletMarks = bodyText.split("› ").length - 1;
   assert.equal(bulletMarks, 2, "two bullet rows");
+
+  /** Bars block: each category is label row then [meter | score], not 3-column single row. */
+  const lifeBlock = flex.contents.body.contents.find(
+    (c) =>
+      c.type === "box" &&
+      Array.isArray(c.contents) &&
+      c.contents[0]?.type === "text" &&
+      c.contents[0]?.text === "พลังไปออกกับมิติไหน",
+  );
+  assert.ok(lifeBlock, "bars section present");
+  const categoryRows = lifeBlock.contents[2].contents;
+  assert.equal(categoryRows.length, 4);
+  const first = categoryRows[0];
+  assert.equal(first.layout, "vertical");
+  assert.equal(first.contents.length, 2);
+  assert.equal(first.contents[0].type, "text");
+  assert.equal(first.contents[1].layout, "horizontal");
+  assert.equal(
+    first.contents[1].contents.length,
+    2,
+    "meter row: track + score only (label on line above)",
+  );
+  assert.ok(
+    bodyText.includes(
+      "โชคลาภและการเปิดทาง (ข้อความยาวเพื่อทดสอบว่า label ไม่ชน bar ในแถวเดียว)",
+    ),
+    "long Thai label still rendered",
+  );
 });

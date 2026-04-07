@@ -44,9 +44,7 @@ const AMULET_POWER_ROW_KEYS = /** @type {const} */ ([
 ]);
 
 const LIFE_AREA_BAR_HEIGHT = "10px";
-/** Fixed label column so bar tracks share the same x-range (LINE `width` on box; px is supported). */
-const LIFE_AREA_LABEL_COL_WIDTH = "120px";
-/** Fixed score column so numbers align; long scores still fit. */
+/** Fixed score column on the meter row (label is full-width on its own line above). */
 const LIFE_AREA_SCORE_COL_WIDTH = "44px";
 
 /**
@@ -110,8 +108,8 @@ function compactAmuletBulletForFlex(raw) {
 }
 
 /**
- * Horizontal bar-style rows: [label] [track with green|empty flex] [score].
- * `flex` only on box nodes; text has no flex.
+ * Power category meters: each item is two rows — (1) full-width Thai label,
+ * (2) horizontal pill track + fixed-width score. Sort/top-N/flex ratio unchanged.
  *
  * @param {Record<string, { score?: number, labelThai?: string }>|null|undefined} powerCategories
  */
@@ -147,68 +145,70 @@ function createPowerCategoryBarBlock(powerCategories) {
   const rowBoxes = topRows.map(({ label, score }) => {
     const { greenFlex, emptyFlex } = lifeAreaBarFlexPair(score);
     const scoreText = score == null ? "—" : String(score);
-    return {
+    const meterTrack = {
       type: "box",
       layout: "horizontal",
-      spacing: "xs",
-      margin: "xs",
+      flex: 1,
+      spacing: "none",
+      paddingAll: "4px",
+      cornerRadius: "xl",
+      backgroundColor: LIFE_AREA_BAR_TRACK_BG,
       contents: [
         {
           type: "box",
-          layout: "vertical",
-          width: LIFE_AREA_LABEL_COL_WIDTH,
-          justifyContent: "center",
-          contents: [
-            {
-              type: "text",
-              text: label,
-              size: "xs",
-              color: FLEX_TEXT_PRIMARY,
-              wrap: true,
-              maxLines: 2,
-            },
-          ],
+          layout: "horizontal",
+          flex: greenFlex,
+          height: LIFE_AREA_BAR_HEIGHT,
+          backgroundColor: LIFE_AREA_BAR_FILL,
+          cornerRadius: "lg",
+          contents: [],
         },
         {
           type: "box",
           layout: "horizontal",
-          flex: 1,
-          spacing: "none",
-          paddingAll: "4px",
-          cornerRadius: "xl",
-          backgroundColor: LIFE_AREA_BAR_TRACK_BG,
-          contents: [
-            {
-              type: "box",
-              layout: "horizontal",
-              flex: greenFlex,
-              height: LIFE_AREA_BAR_HEIGHT,
-              backgroundColor: LIFE_AREA_BAR_FILL,
-              cornerRadius: "lg",
-              contents: [],
-            },
-            {
-              type: "box",
-              layout: "horizontal",
-              flex: emptyFlex,
-              height: LIFE_AREA_BAR_HEIGHT,
-              contents: [],
-            },
-          ],
+          flex: emptyFlex,
+          height: LIFE_AREA_BAR_HEIGHT,
+          contents: [],
+        },
+      ],
+    };
+    return {
+      type: "box",
+      layout: "vertical",
+      spacing: "xs",
+      margin: "xs",
+      contents: [
+        {
+          type: "text",
+          text: label,
+          size: "xs",
+          color: FLEX_TEXT_PRIMARY,
+          wrap: true,
+          maxLines: 3,
+          margin: "none",
         },
         {
           type: "box",
-          layout: "vertical",
-          width: LIFE_AREA_SCORE_COL_WIDTH,
-          justifyContent: "center",
+          layout: "horizontal",
+          spacing: "xs",
+          margin: "none",
           contents: [
+            meterTrack,
             {
-              type: "text",
-              text: scoreText,
-              size: "xs",
-              color: LIFE_AREA_BAR_SCORE_COLOR,
-              wrap: false,
-              align: "end",
+              type: "box",
+              layout: "vertical",
+              width: LIFE_AREA_SCORE_COL_WIDTH,
+              justifyContent: "center",
+              contents: [
+                {
+                  type: "text",
+                  text: scoreText,
+                  size: "xs",
+                  color: LIFE_AREA_BAR_SCORE_COLOR,
+                  wrap: false,
+                  align: "end",
+                },
+              ],
             },
           ],
         },
