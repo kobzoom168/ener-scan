@@ -67,6 +67,12 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     4,
     "flex shows exactly 4 bar fills (top 4 dimensions)",
   );
+  const barScoreMuted = bodyText.match(/#8f8265/g);
+  assert.equal(
+    barScoreMuted?.length,
+    4,
+    "bar scores use muted gold (skin only)",
+  );
 
   // Summary block: label + value (not single-line "ตอนนี้เด่นสุด: …")
   assert.ok(bodyText.includes('"text":"ตอนนี้เด่นสุด"'));

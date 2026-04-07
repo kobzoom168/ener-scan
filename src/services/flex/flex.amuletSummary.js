@@ -10,7 +10,8 @@ import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 /** Dark + gold — sacred amulet lane (LINE-safe hex). */
 const FLEX_CARD_BG = "#0c0a08";
 const FLEX_BOX_BG = "#1a1510";
-const LIFE_AREA_BAR_TRACK_BG = "#3f3a32";
+/** Pill meter track — inset, rounded; pair with LIFE_AREA_BAR_FILL (distinct from header accent hex). */
+const LIFE_AREA_BAR_TRACK_BG = "#1c1812";
 const LIFE_AREA_BAR_FILL = "#c9a227";
 const AMULET_ACCENT = "#e8c547";
 const AMULET_ACCENT_DIM = "#d4af37";
@@ -23,6 +24,9 @@ const AMULET_TITLE_TAGLINE_COLOR = "#a8a29e";
 /** Life-area helper line — dimmer than captions; metadata only. */
 const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
 const AMULET_TITLE_TAGLINE = "พระเครื่อง · โทนทอง";
+
+/** Muted gold for bar scores — less visual competition vs category labels. */
+const LIFE_AREA_BAR_SCORE_COLOR = "#8f8265";
 
 /** Flex summary: show only top N dimensions after score sort (full data stays in HTML). */
 const AMULET_FLEX_BARS_TOP_N = 4;
@@ -39,11 +43,11 @@ const AMULET_POWER_ROW_KEYS = /** @type {const} */ ([
   "specialty",
 ]);
 
-const LIFE_AREA_BAR_HEIGHT = "8px";
+const LIFE_AREA_BAR_HEIGHT = "10px";
 /** Fixed label column so bar tracks share the same x-range (LINE `width` on box; px is supported). */
-const LIFE_AREA_LABEL_COL_WIDTH = "128px";
+const LIFE_AREA_LABEL_COL_WIDTH = "120px";
 /** Fixed score column so numbers align; long scores still fit. */
-const LIFE_AREA_SCORE_COL_WIDTH = "48px";
+const LIFE_AREA_SCORE_COL_WIDTH = "44px";
 
 /**
  * LINE Flex allows `flex` on box only in 0–3 (project + API guardrail).
@@ -146,8 +150,8 @@ function createPowerCategoryBarBlock(powerCategories) {
     return {
       type: "box",
       layout: "horizontal",
-      spacing: "sm",
-      margin: "none",
+      spacing: "xs",
+      margin: "xs",
       contents: [
         {
           type: "box",
@@ -159,7 +163,7 @@ function createPowerCategoryBarBlock(powerCategories) {
               type: "text",
               text: label,
               size: "xs",
-              color: FLEX_TEXT_SECONDARY,
+              color: FLEX_TEXT_PRIMARY,
               wrap: true,
               maxLines: 2,
             },
@@ -170,8 +174,8 @@ function createPowerCategoryBarBlock(powerCategories) {
           layout: "horizontal",
           flex: 1,
           spacing: "none",
-          paddingAll: "2px",
-          cornerRadius: "sm",
+          paddingAll: "4px",
+          cornerRadius: "xl",
           backgroundColor: LIFE_AREA_BAR_TRACK_BG,
           contents: [
             {
@@ -180,7 +184,7 @@ function createPowerCategoryBarBlock(powerCategories) {
               flex: greenFlex,
               height: LIFE_AREA_BAR_HEIGHT,
               backgroundColor: LIFE_AREA_BAR_FILL,
-              cornerRadius: "sm",
+              cornerRadius: "lg",
               contents: [],
             },
             {
@@ -201,9 +205,8 @@ function createPowerCategoryBarBlock(powerCategories) {
             {
               type: "text",
               text: scoreText,
-              size: "sm",
-              weight: "bold",
-              color: AMULET_ACCENT,
+              size: "xs",
+              color: LIFE_AREA_BAR_SCORE_COLOR,
               wrap: false,
               align: "end",
             },
@@ -240,7 +243,7 @@ function createPowerCategoryBarBlock(powerCategories) {
       {
         type: "box",
         layout: "vertical",
-        spacing: "xs",
+        spacing: "none",
         margin: "none",
         contents: rowBoxes,
       },
