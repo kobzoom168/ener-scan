@@ -18,12 +18,16 @@ const AMULET_CTA_BG = "#b8860b";
 const FLEX_ACCENT = AMULET_CTA_BG;
 const FLEX_TEXT_PRIMARY = "#f3f4f6";
 const FLEX_TEXT_SECONDARY = "#9ca3af";
-const FLEX_TEXT_CAPTION = "#9ca3af";
 /** Tagline under title — softer than body so headline stays primary. */
 const AMULET_TITLE_TAGLINE_COLOR = "#a8a29e";
 /** Life-area helper line — dimmer than captions; metadata only. */
 const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
 const AMULET_TITLE_TAGLINE = "พระเครื่อง · โทนทอง";
+
+/** Flex summary: show only top N dimensions after score sort (full data stays in HTML). */
+const AMULET_FLEX_BARS_TOP_N = 4;
+/** Per-bullet cap so Flex stays scannable (report has full prose). */
+const AMULET_FLEX_BULLET_MAX_CHARS = 54;
 
 /** Six power categories — display order for bar row iteration; sort is by score. */
 const AMULET_POWER_ROW_KEYS = /** @type {const} */ ([
@@ -72,6 +76,36 @@ function lifeAreaBarFlexPair(score0to100) {
 }
 
 /**
+ * @param {string} raw
+ * @returns {{ label: string, value: string }|null}
+ */
+function parseFitLineToSummaryBlock(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  const m = s.match(/^ตอนนี้เด่นสุด\s*:\s*(.+)$/s);
+  if (m) {
+    const value = String(m[1] || "").trim();
+    return { label: "ตอนนี้เด่นสุด", value: value || "—" };
+  }
+  return { label: "ตอนนี้เด่นสุด", value: s };
+}
+
+/**
+ * Shorten flex bullets: tight spacing, light phrasing trim, hard char cap.
+ * @param {string} raw
+ */
+function compactAmuletBulletForFlex(raw) {
+  let t = String(raw || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) return "";
+  t = t.replace(/^เด่นเมตตาและคนเอ็นดู\s+/u, "เด่นเมตตา ");
+  const max = AMULET_FLEX_BULLET_MAX_CHARS;
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+/**
  * Horizontal bar-style rows: [label] [track with green|empty flex] [score].
  * `flex` only on box nodes; text has no flex.
  *
@@ -103,15 +137,17 @@ function createPowerCategoryBarBlock(powerCategories) {
     return b.score - a.score;
   });
 
+  const topRows = rows.slice(0, AMULET_FLEX_BARS_TOP_N);
+
   /** @type {object[]} */
-  const rowBoxes = rows.map(({ label, score }) => {
+  const rowBoxes = topRows.map(({ label, score }) => {
     const { greenFlex, emptyFlex } = lifeAreaBarFlexPair(score);
     const scoreText = score == null ? "—" : String(score);
     return {
       type: "box",
       layout: "horizontal",
       spacing: "sm",
-      margin: "xs",
+      margin: "none",
       contents: [
         {
           type: "box",
@@ -180,8 +216,9 @@ function createPowerCategoryBarBlock(powerCategories) {
   return {
     type: "box",
     layout: "vertical",
-    margin: "md",
-    spacing: "sm",
+    margin: "sm",
+    spacing: "xs",
+    paddingBottom: "lg",
     contents: [
       {
         type: "text",
@@ -196,14 +233,14 @@ function createPowerCategoryBarBlock(powerCategories) {
         type: "text",
         text: "เรียงจากคะแนนสูงไปต่ำ",
         size: "xxs",
-        color: "#3f3f46",
+        color: LIFE_AREA_HELPER_TEXT_COLOR,
         wrap: true,
-        margin: "xs",
+        margin: "none",
       },
       {
         type: "box",
         layout: "vertical",
-        spacing: "none",
+        spacing: "xs",
         margin: "none",
         contents: rowBoxes,
       },
@@ -348,7 +385,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
   const fitLine = String(mv.flexSurface?.fitLine || "").trim();
   const bulletLines = Array.isArray(mv.flexSurface?.bullets)
     ? mv.flexSurface.bullets
-        .map((x) => String(x || "").trim())
+        .map((x) => compactAmuletBulletForFlex(String(x || "")))
         .filter(Boolean)
         .slice(0, 2)
     : [];
@@ -402,24 +439,43 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     margin: "xs",
   };
 
+  const fitParsed = parseFitLineToSummaryBlock(fitLine);
   const fitBlock =
-    fitLine.length > 0
+    fitParsed != null
       ? {
-          type: "text",
-          text: fitLine,
-          size: "xs",
-          color: FLEX_TEXT_CAPTION,
-          wrap: true,
-          maxLines: 2,
-          lineSpacing: "3px",
-          margin: "xl",
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          margin: "md",
+          paddingAll: "12px",
+          backgroundColor: FLEX_BOX_BG,
+          cornerRadius: "md",
+          contents: [
+            {
+              type: "text",
+              text: fitParsed.label,
+              size: "xxs",
+              color: AMULET_ACCENT_DIM,
+              weight: "bold",
+              wrap: true,
+            },
+            {
+              type: "text",
+              text: fitParsed.value,
+              size: "sm",
+              color: FLEX_TEXT_PRIMARY,
+              wrap: true,
+              maxLines: 4,
+              lineSpacing: "4px",
+            },
+          ],
         }
       : null;
 
   const bulletRows = bulletLines.map((line) => ({
     type: "text",
     text: `› ${line}`,
-    size: "sm",
+    size: "xs",
     color: FLEX_TEXT_SECONDARY,
     wrap: true,
     maxLines: 2,
@@ -464,7 +520,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       style: "primary",
       color: FLEX_ACCENT,
       height: "md",
-      margin: "lg",
+      margin: "md",
       action: {
         type: "uri",
         label: String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",

@@ -27,7 +27,10 @@ const basePayload = {
     flexSurface: {
       headline: "พระเครื่อง",
       fitLine: "ตอนนี้เด่นสุด: คุ้มครองป้องกัน → เมตตาและคนเอ็นดู",
-      bullets: ["ข้อ 1", "ข้อ 2"],
+      bullets: [
+        "เด่นเมตตาและคนเอ็นดู ช่วยให้จังหวะชีวิตเริ่มขยับขึ้น",
+        "ข้อสองสั้น ๆ",
+      ],
       ctaLabel: "ดูว่าชิ้นนี้ช่วยคุณยังไง",
       mainEnergyShort: "คุ้มครอง",
       tagline: "พระเครื่อง · โทนทอง",
@@ -35,7 +38,7 @@ const basePayload = {
   },
 };
 
-test("buildAmuletSummaryFirstFlex: flex bubble + gold-path body", async () => {
+test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", async () => {
   const flex = await buildAmuletSummaryFirstFlex("ignored", {
     reportPayload: basePayload,
     reportUrl: "https://report.example/x",
@@ -44,7 +47,8 @@ test("buildAmuletSummaryFirstFlex: flex bubble + gold-path body", async () => {
   assert.equal(flex.type, "flex");
   const bodyText = JSON.stringify(flex.contents);
   assert.ok(bodyText.includes("พระเครื่อง"));
-  assert.ok(bodyText.includes("ตอนนี้เด่นสุด:"));
+  assert.ok(bodyText.includes("ตอนนี้เด่นสุด"));
+  assert.ok(bodyText.includes("คุ้มครองป้องกัน → เมตตาและคนเอ็นดู"));
   assert.ok(bodyText.includes("ดูว่าชิ้นนี้ช่วยคุณยังไง"));
   assert.ok(bodyText.includes("พลังไปออกกับมิติไหน"));
   assert.ok(
@@ -52,4 +56,23 @@ test("buildAmuletSummaryFirstFlex: flex bubble + gold-path body", async () => {
     "sacred amulet flex: no main-energy pill section",
   );
   assert.ok(bodyText.includes("เรียงจากคะแนนสูงไปต่ำ"));
+
+  // Top 4 only: 5th / 6th dimension labels must not appear
+  assert.ok(!bodyText.includes("หนุนดวงและการตั้งหลัก"));
+  assert.ok(!bodyText.includes("งานเฉพาะทาง"));
+
+  const barFillMatches = bodyText.match(/#c9a227/g);
+  assert.equal(
+    barFillMatches?.length,
+    4,
+    "flex shows exactly 4 bar fills (top 4 dimensions)",
+  );
+
+  // Summary block: label + value (not single-line "ตอนนี้เด่นสุด: …")
+  assert.ok(bodyText.includes('"text":"ตอนนี้เด่นสุด"'));
+
+  // Two bullet lines (compact prefix on first)
+  assert.ok(bodyText.includes("เด่นเมตตา "));
+  const bulletMarks = bodyText.split("› ").length - 1;
+  assert.equal(bulletMarks, 2, "two bullet rows");
 });
