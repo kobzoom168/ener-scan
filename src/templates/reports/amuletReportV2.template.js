@@ -84,13 +84,13 @@ function mainGraphBlock(vm) {
     const objectV = Math.round(Number(vm.power.object[k]) || 0);
     return `<div class="mv2a-ax-row">
       <span class="mv2a-ax-l">${escapeHtml(ax.labelThai)}</span>
-      <span class="mv2a-ax-v">เจ้าของ ${ownerV} · วัตถุ ${objectV}</span>
+      <span class="mv2a-ax-v">คุณ ${ownerV} · พระเครื่อง ${objectV}</span>
     </div>`;
   });
 
   return `<section class="mv2a-card mv2a-graph-card" aria-labelledby="mv2a-graph-h">
     <h2 id="mv2a-graph-h">Main Graph · หกมิติพลังพระเครื่อง</h2>
-    <p class="mv2a-hint">Layer 1 = โปรไฟล์เจ้าของ · Layer 2 = พลังพระเครื่อง</p>
+    <p class="mv2a-hint">Layer 1 = คุณ · Layer 2 = พลังพระเครื่อง</p>
     <div class="mv2a-radar-wrap" role="img" aria-label="กราฟหกมิติ เปรียบเทียบโปรไฟล์เจ้าของและพลังพระเครื่อง">
       <svg class="mv2a-radar-svg mv2a-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility">
         <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100 })}" fill="rgba(255,255,255,0.02)" stroke="rgba(212,175,55,0.26)" stroke-width="0.28"/>
@@ -112,7 +112,7 @@ function mainGraphBlock(vm) {
       </svg>
     </div>
     <div class="mv2a-radar-key" role="group" aria-label="เลเยอร์กราฟ">
-      <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--owner"></span>โปรไฟล์เจ้าของ</span>
+      <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--owner"></span>คุณ</span>
       <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--amulet"></span>พลังพระเครื่อง</span>
     </div>
     <div class="mv2a-ax-list">${axisRows.join("")}</div>
@@ -225,7 +225,7 @@ export function renderAmuletReportV2Html(payload) {
         animation: mv2aRdrFade 0.6s ease-out 1.38s forwards;
       }
       .mv2a-radar-peak {
-        animation: mv2aLblPulse 1.2s ease-in-out 2.1s infinite;
+        animation: mv2aLblPulse 2.3s ease-in-out 2.1s infinite;
       }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -247,12 +247,12 @@ export function renderAmuletReportV2Html(payload) {
       to { opacity: 1; transform: translateY(0); }
     }
     @keyframes mv2aLblPulse {
-      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1px rgba(232,197,71,0.22)); }
-      50% { opacity: 0.5; filter: drop-shadow(0 0 5px rgba(232,197,71,0.6)); }
+      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px rgba(232,197,71,0.18)); }
+      50% { opacity: 0.62; filter: drop-shadow(0 0 4px rgba(232,197,71,0.42)); }
     }
     .mv2a-radar-axis { font-size: 2.45px; fill: rgba(245,245,244,0.76); font-weight: 500; }
-    .mv2a-radar-axis--top1 { fill: #f4df9a; font-weight: 700; }
-    .mv2a-radar-axis--top2 { fill: rgba(238,222,170,0.92); font-weight: 600; }
+    .mv2a-radar-axis--top1 { font-size: 2.65px; fill: #f4df9a; font-weight: 700; }
+    .mv2a-radar-axis--top2 { fill: rgba(244,230,180,0.94); font-weight: 600; }
     .mv2a-radar-key {
       margin: 0.42rem 0 0;
       display: flex;
