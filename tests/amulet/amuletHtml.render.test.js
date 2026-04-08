@@ -85,6 +85,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
   assert.ok(html.includes("มิติชีวิตละเอียด"));
   assert.ok(html.includes("สรุปจากกราฟ"));
+  assert.ok(!html.includes("ควรค่อย ๆ ไป"), "graph summary is reduced to 2 rows");
   assert.ok(html.includes("โทนหลัก ·"));
   assert.ok(!html.includes("พลังหลัก ·"), "hero uses โทนหลัก, not พลังหลัก");
   assert.ok(html.includes("render amulet-html-v2"));

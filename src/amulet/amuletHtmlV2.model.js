@@ -88,7 +88,6 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     rows: [
       { label: "พลังเด่น", value: POWER_LABEL_THAI[ord[0]] },
       { label: "รองลงมา", value: POWER_LABEL_THAI[ord[1]] },
-      { label: "ควรค่อย ๆ ไป", value: POWER_LABEL_THAI[ord[2]] },
     ],
   };
 
