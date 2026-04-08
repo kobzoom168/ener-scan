@@ -1,6 +1,34 @@
-import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
+﻿import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
 import { buildAmuletHtmlV2ViewModel } from "../../amulet/amuletHtmlV2.model.js";
+
+const AMULET_RADAR_R = 38;
+const AMULET_RADAR_CX = 50;
+const AMULET_RADAR_CY = 50;
+const AMULET_AXIS_KEYS = /** @type {const} */ ([
+  "protection",
+  "metta",
+  "baramee",
+  "luck",
+  "fortune_anchor",
+  "specialty",
+]);
+const AMULET_RADAR_ANGLES = AMULET_AXIS_KEYS.map(
+  (_, i) => -Math.PI / 2 + (i * 2 * Math.PI) / AMULET_AXIS_KEYS.length,
+);
+
+/**
+ * @param {Record<string, number>} values01to100
+ */
+function amuletRadarPolygonPoints(values01to100) {
+  return AMULET_RADAR_ANGLES.map((ang, i) => {
+    const k = AMULET_AXIS_KEYS[i];
+    const v = Math.max(0, Math.min(100, Number(values01to100[k]) || 0)) / 100;
+    const x = AMULET_RADAR_CX + AMULET_RADAR_R * v * Math.cos(ang);
+    const y = AMULET_RADAR_CY + AMULET_RADAR_R * v * Math.sin(ang);
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(" ");
+}
 
 function amuletHtmlShowRenderMetaLine() {
   const raw = String(process.env.REPORT_HTML_RENDER_META ?? "").trim().toLowerCase();
@@ -12,23 +40,51 @@ function amuletHtmlShowRenderMetaLine() {
 /**
  * @param {ReturnType<typeof buildAmuletHtmlV2ViewModel>} vm
  */
-function powerBarsBlock(vm) {
-  const rows = vm.power.axes.map((ax) => {
+function mainGraphBlock(vm) {
+  const ownerPts = amuletRadarPolygonPoints(vm.power.owner);
+  const objectPts = amuletRadarPolygonPoints(vm.power.object);
+  const axisLabels = vm.power.axes
+    .map((ax, i) => {
+      const angle = AMULET_RADAR_ANGLES[i];
+      const x = AMULET_RADAR_CX + (AMULET_RADAR_R + 8) * Math.cos(angle);
+      const y = AMULET_RADAR_CY + (AMULET_RADAR_R + 8) * Math.sin(angle);
+      return `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" class="mv2a-radar-axis" text-anchor="middle" dominant-baseline="middle">${escapeHtml(ax.labelThai)}</text>`;
+    })
+    .join("");
+
+  const axisRows = vm.power.axes.map((ax) => {
     const k = ax.id;
-    const ov = Math.round(Number(vm.power.owner[k]) || 0);
-    const pv = Math.round(Number(vm.power.object[k]) || 0);
-    return `<div class="mv2a-pow-row">
-      <div class="mv2a-pow-head"><span>${escapeHtml(ax.labelThai)}</span><span class="mv2a-pow-sc">${escapeHtml(String(pv))}</span></div>
-      <div class="mv2a-bar-track" role="img" aria-label="${escapeHtml(ax.labelThai)} วัตถุ ${pv} จาก 100">
-        <div class="mv2a-bar-fill" style="width:${pv}%"></div>
-      </div>
-      <div class="mv2a-pow-legend"><span>เจ้าของ ${ov}</span><span>วัตถุ ${pv}</span></div>
+    const ownerV = Math.round(Number(vm.power.owner[k]) || 0);
+    const objectV = Math.round(Number(vm.power.object[k]) || 0);
+    return `<div class="mv2a-ax-row">
+      <span class="mv2a-ax-l">${escapeHtml(ax.labelThai)}</span>
+      <span class="mv2a-ax-v">เจ้าของ ${ownerV} · วัตถุ ${objectV}</span>
     </div>`;
   });
-  return `<section class="mv2a-card" aria-labelledby="mv2a-pow-h">
-    <h2 id="mv2a-pow-h">หกมิติพลัง (โทนวัตถุ)</h2>
-    <p class="mv2a-hint">เรียงตามมิติ · ตัวเลข = โทนวัตถุ (สัญลักษณ์) · เลขเจ้าของเปรียบเทียบ</p>
-    ${rows.join("")}
+
+  return `<section class="mv2a-card mv2a-graph-card" aria-labelledby="mv2a-graph-h">
+    <h2 id="mv2a-graph-h">Main Graph · หกมิติพลังพระเครื่อง</h2>
+    <p class="mv2a-hint">Layer 1 = โปรไฟล์เจ้าของ · Layer 2 = พลังพระเครื่อง</p>
+    <div class="mv2a-radar-wrap" role="img" aria-label="กราฟหกมิติ เปรียบเทียบโปรไฟล์เจ้าของและพลังพระเครื่อง">
+      <svg class="mv2a-radar-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+        <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100 })}" fill="rgba(255,255,255,0.02)" stroke="rgba(212,175,55,0.26)" stroke-width="0.28"/>
+        <polygon points="${amuletRadarPolygonPoints({ protection: 66, metta: 66, baramee: 66, luck: 66, fortune_anchor: 66, specialty: 66 })}" fill="none" stroke="rgba(212,175,55,0.16)" stroke-width="0.22"/>
+        <polygon points="${amuletRadarPolygonPoints({ protection: 33, metta: 33, baramee: 33, luck: 33, fortune_anchor: 33, specialty: 33 })}" fill="none" stroke="rgba(212,175,55,0.1)" stroke-width="0.2"/>
+        ${AMULET_RADAR_ANGLES.map((ang) => {
+          const x = AMULET_RADAR_CX + AMULET_RADAR_R * Math.cos(ang);
+          const y = AMULET_RADAR_CY + AMULET_RADAR_R * Math.sin(ang);
+          return `<line x1="${AMULET_RADAR_CX}" y1="${AMULET_RADAR_CY}" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(212,175,55,0.12)" stroke-width="0.2"/>`;
+        }).join("")}
+        <polygon points="${ownerPts}" fill="rgba(148,163,184,0.18)" stroke="rgba(203,213,225,0.9)" stroke-width="0.45" stroke-linejoin="round"/>
+        <polygon points="${objectPts}" fill="rgba(212,175,55,0.18)" stroke="rgba(232,197,71,0.92)" stroke-width="0.55" stroke-linejoin="round"/>
+        ${axisLabels}
+      </svg>
+    </div>
+    <div class="mv2a-radar-key" role="group" aria-label="เลเยอร์กราฟ">
+      <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--owner"></span>โปรไฟล์เจ้าของ</span>
+      <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--amulet"></span>พลังพระเครื่อง</span>
+    </div>
+    <div class="mv2a-ax-list">${axisRows.join("")}</div>
   </section>`;
 }
 
@@ -116,12 +172,45 @@ export function renderAmuletReportV2Html(payload) {
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid rgba(212,175,55,0.12); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; }
     .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; }
     .mv2a-hint { font-size: 0.68rem; color: var(--mv2a-muted); margin: 0 0 0.6rem; }
-    .mv2a-pow-row { margin-bottom: 0.75rem; }
-    .mv2a-pow-head { display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; }
-    .mv2a-pow-sc { color: var(--mv2a-gold); font-variant-numeric: tabular-nums; }
-    .mv2a-bar-track { height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; margin-top: 0.25rem; overflow: hidden; }
-    .mv2a-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #8a6a1c, #d4af37); max-width: 100%; }
-    .mv2a-pow-legend { display: flex; justify-content: space-between; font-size: 0.62rem; color: var(--mv2a-muted); margin-top: 0.2rem; }
+    .mv2a-graph-card { border-left: 3px solid rgba(212,175,55,0.38); }
+    .mv2a-radar-wrap { max-width: 19rem; margin: 0.3rem auto 0; }
+    .mv2a-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
+    .mv2a-radar-axis { font-size: 2.45px; fill: rgba(245,245,244,0.76); font-weight: 500; }
+    .mv2a-radar-key {
+      margin: 0.42rem 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.65rem;
+      font-size: 0.72rem;
+      color: rgba(231,229,228,0.88);
+    }
+    .mv2a-radar-key-chip { display: inline-flex; align-items: center; gap: 0.3rem; }
+    .mv2a-radar-dot {
+      width: 0.44rem;
+      height: 0.44rem;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.2);
+      display: inline-block;
+    }
+    .mv2a-radar-dot--owner { background: rgba(203,213,225,0.85); }
+    .mv2a-radar-dot--amulet { background: rgba(232,197,71,0.9); }
+    .mv2a-ax-list {
+      margin-top: 0.52rem;
+      padding-top: 0.42rem;
+      border-top: 1px solid rgba(212,175,55,0.12);
+      display: grid;
+      gap: 0.28rem;
+    }
+    .mv2a-ax-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.72rem;
+      line-height: 1.35;
+    }
+    .mv2a-ax-l { color: rgba(245,245,244,0.95); }
+    .mv2a-ax-v { color: rgba(168,162,158,0.92); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .mv2-gsum-rows { display: flex; flex-direction: column; gap: 0.32rem; }
     .mv2-gsum-row { display: flex; align-items: baseline; gap: 0.45rem; padding: 0.28rem 0.5rem; border-radius: 8px; background: rgba(255,255,255,0.028); border: 1px solid rgba(212,175,55,0.1); }
     .mv2-gsum-row:not(.mv2-gsum-row--lead) { padding: 0.18rem 0.5rem; }
@@ -168,7 +257,7 @@ export function renderAmuletReportV2Html(payload) {
       <div><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
     </div>
 
-    ${powerBarsBlock(vm)}
+    ${mainGraphBlock(vm)}
 
     <section class="mv2-card" aria-labelledby="mv2-gsum-h">
       <h2 id="mv2-gsum-h">สรุปจากกราฟ</h2>
