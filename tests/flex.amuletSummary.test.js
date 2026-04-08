@@ -81,8 +81,15 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   const bodyText = JSON.stringify(flex.contents);
   assert.ok(bodyText.includes("พระเครื่อง"));
   assert.ok(bodyText.includes("พระเครื่อง · เด่น"), "lane-specific tagline from top power row");
-  assert.ok(bodyText.includes("คุ้มครองป้องกัน"), "top-1 dimension in tagline");
+  assert.ok(
+    bodyText.includes("พระเครื่อง · เด่นคุ้มครอง"),
+    "tagline uses Flex-only short alias for top dimension",
+  );
   assert.ok(bodyText.includes("ตอนนี้เด่นสุด"));
+  assert.ok(
+    bodyText.includes("เด่นคุ้มครอง รองเมตตา"),
+    "summary uses Flex-only aliases (not full labelThai phrases)",
+  );
   assert.ok(
     bodyText.includes("เด่น") && bodyText.includes("รอง"),
     "summary value sharpened (เด่น/รอง), not raw arrow prose",
@@ -146,7 +153,11 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     bodyText.includes(
       "โชคลาภและการเปิดทาง (ข้อความยาวเพื่อทดสอบว่า label ไม่ชน bar ในแถวเดียว)",
     ),
-    "long Thai label still rendered",
+    "long Thai label still rendered on bars (Flex aliases do not apply to bar labels)",
+  );
+  assert.ok(
+    bodyText.includes("คุ้มครองป้องกัน"),
+    "bars still show full labelThai for category rows",
   );
 });
 

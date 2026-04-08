@@ -38,6 +38,53 @@ const AMULET_FLEX_SUMMARY_ARROW_PART_MAX = 22;
 /** Flex tagline: max Thai chars for “เด่น{มิติ}” segment after `พระเครื่อง · `. */
 const AMULET_FLEX_TAGLINE_DIM_MAX_CHARS = 18;
 
+/**
+ * Flex-only: shorter display strings for tagline + summary (not bars/HTML/payload).
+ * Long canonical `labelThai` → alias; unknown labels pass through.
+ */
+const AMULET_FLEX_POWER_LABEL_ALIAS = /** @type {const} */ ({
+  คุ้มครองป้องกัน: "คุ้มครอง",
+  เมตตาและคนเอ็นดู: "เมตตา",
+  บารมีและอำนาจนำ: "บารมี",
+  โชคลาภและการเปิดทาง: "โชคลาภ",
+  หนุนดวงและการตั้งหลัก: "หนุนดวง",
+  งานเฉพาะทาง: "งานเฉพาะ",
+});
+
+/** @type {string[]} longest first — prefix match after exact tries */
+const AMULET_FLEX_ALIAS_KEYS_SORTED = Object.keys(AMULET_FLEX_POWER_LABEL_ALIAS).sort(
+  (a, b) => b.length - a.length,
+);
+
+/**
+ * @param {string} raw
+ * @returns {string}
+ */
+function applyAmuletFlexLabelAlias(raw) {
+  const t = String(raw || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) return "";
+  const withoutParen = t.replace(/\s*\([^)]*\)\s*$/u, "").trim();
+  const tryKeys = [t, withoutParen];
+  for (const c of tryKeys) {
+    if (Object.prototype.hasOwnProperty.call(AMULET_FLEX_POWER_LABEL_ALIAS, c)) {
+      return AMULET_FLEX_POWER_LABEL_ALIAS[/** @type {keyof typeof AMULET_FLEX_POWER_LABEL_ALIAS} */ (c)];
+    }
+  }
+  for (const key of AMULET_FLEX_ALIAS_KEYS_SORTED) {
+    for (const c of tryKeys) {
+      if (c === key) {
+        return AMULET_FLEX_POWER_LABEL_ALIAS[/** @type {keyof typeof AMULET_FLEX_POWER_LABEL_ALIAS} */ (key)];
+      }
+      if (c.startsWith(key) && (c.length === key.length || /[\s(]/.test(c[key.length]))) {
+        return AMULET_FLEX_POWER_LABEL_ALIAS[/** @type {keyof typeof AMULET_FLEX_POWER_LABEL_ALIAS} */ (key)];
+      }
+    }
+  }
+  return t;
+}
+
 /** Six power categories — display order for bar row iteration; sort is by score. */
 const AMULET_POWER_ROW_KEYS = /** @type {const} */ ([
   "protection",
@@ -167,7 +214,8 @@ function buildAmuletFlexTaglineDisplay(mv) {
   const top = rows[0];
   const lab = top ? String(top.label || "").trim() : "";
   if (!lab || lab === "—") return AMULET_TITLE_TAGLINE;
-  const dim = shortenThaiSnippet(lab, AMULET_FLEX_TAGLINE_DIM_MAX_CHARS);
+  const dimRaw = applyAmuletFlexLabelAlias(lab);
+  const dim = shortenThaiSnippet(dimRaw || lab, AMULET_FLEX_TAGLINE_DIM_MAX_CHARS);
   return `พระเครื่อง · เด่น${dim}`;
 }
 
@@ -186,11 +234,14 @@ function formatFlexSummaryValueForDisplay(raw) {
     .map((p) => p.trim())
     .filter(Boolean);
   if (parts.length >= 2) {
-    const a = shortenThaiSnippet(parts[0], AMULET_FLEX_SUMMARY_ARROW_PART_MAX);
-    const b = shortenThaiSnippet(parts[1], AMULET_FLEX_SUMMARY_ARROW_PART_MAX);
+    const a0 = applyAmuletFlexLabelAlias(parts[0]) || parts[0];
+    const b0 = applyAmuletFlexLabelAlias(parts[1]) || parts[1];
+    const a = shortenThaiSnippet(a0, AMULET_FLEX_SUMMARY_ARROW_PART_MAX);
+    const b = shortenThaiSnippet(b0, AMULET_FLEX_SUMMARY_ARROW_PART_MAX);
     return `เด่น${a} รอง${b}`;
   }
-  return v;
+  const single = applyAmuletFlexLabelAlias(v);
+  return single !== v ? single : v;
 }
 
 /**
