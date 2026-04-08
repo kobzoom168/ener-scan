@@ -78,19 +78,9 @@ function mainGraphBlock(vm) {
   const peakY = peak.y.toFixed(2);
   const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="rgba(248,232,168,0.1)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="rgba(248,232,168,0.98)" stroke="rgba(255,252,240,0.5)" stroke-width="0.26" aria-hidden="true"><title>แกนเด่นสุดของพลังพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
 
-  const axisRows = vm.power.axes.map((ax) => {
-    const k = ax.id;
-    const ownerV = Math.round(Number(vm.power.owner[k]) || 0);
-    const objectV = Math.round(Number(vm.power.object[k]) || 0);
-    return `<div class="mv2a-ax-row">
-      <span class="mv2a-ax-l">${escapeHtml(ax.labelThai)}</span>
-      <span class="mv2a-ax-v">คุณ ${ownerV} · พระเครื่อง ${objectV}</span>
-    </div>`;
-  });
-
   return `<section class="mv2a-card mv2a-graph-card" aria-labelledby="mv2a-graph-h">
     <h2 id="mv2a-graph-h">กราฟหกมิติพลังพระเครื่อง</h2>
-    <p class="mv2a-hint">Layer 1 = คุณ · Layer 2 = พลังพระเครื่อง</p>
+    <p class="mv2a-hint">ชั้น 1 = คุณ · ชั้น 2 = พลังพระเครื่อง</p>
     <div class="mv2a-radar-wrap" role="img" aria-label="กราฟหกมิติ เปรียบเทียบโปรไฟล์เจ้าของและพลังพระเครื่อง">
       <svg class="mv2a-radar-svg mv2a-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility">
         <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100 })}" fill="rgba(255,255,255,0.02)" stroke="rgba(212,175,55,0.26)" stroke-width="0.28"/>
@@ -115,7 +105,6 @@ function mainGraphBlock(vm) {
       <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--owner"></span>คุณ</span>
       <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--amulet"></span>พลังพระเครื่อง</span>
     </div>
-    <div class="mv2a-ax-list">${axisRows.join("")}</div>
   </section>`;
 }
 
@@ -197,7 +186,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-tag { color: var(--mv2a-muted); font-size: 0.8rem; margin: 0; }
     .mv2-main { font-size: 0.95rem; margin: 0.4rem 0 0; color: rgba(250,250,249,0.95); }
     .mv2-date { font-size: 0.72rem; color: var(--mv2a-muted); margin: 0.35rem 0 0; }
-    .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin: 1rem 0; }
+    .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0.85rem 0; text-align: center; }
     .mv2-strip-k { font-size: 0.65rem; color: var(--mv2a-muted); }
     .mv2-strip-v { font-size: 1.1rem; font-weight: 700; color: var(--mv2a-gold); }
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid rgba(212,175,55,0.12); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; }
@@ -274,22 +263,6 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2a-radar-dot--owner { background: rgba(203,213,225,0.85); }
     .mv2a-radar-dot--amulet { background: rgba(232,197,71,0.9); }
-    .mv2a-ax-list {
-      margin-top: 0.52rem;
-      padding-top: 0.42rem;
-      border-top: 1px solid rgba(212,175,55,0.12);
-      display: grid;
-      gap: 0.28rem;
-    }
-    .mv2a-ax-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 0.5rem;
-      font-size: 0.72rem;
-      line-height: 1.35;
-    }
-    .mv2a-ax-l { color: rgba(245,245,244,0.95); }
-    .mv2a-ax-v { color: rgba(168,162,158,0.92); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .mv2-gsum-rows { display: flex; flex-direction: column; gap: 0.32rem; }
     .mv2-gsum-row { display: flex; align-items: baseline; gap: 0.45rem; padding: 0.28rem 0.5rem; border-radius: 8px; background: rgba(255,255,255,0.028); border: 1px solid rgba(212,175,55,0.1); }
     .mv2-gsum-row:not(.mv2-gsum-row--lead) { padding: 0.18rem 0.5rem; }
