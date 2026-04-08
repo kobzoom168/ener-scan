@@ -88,6 +88,10 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     "summary value sharpened (เด่น/รอง), not raw arrow prose",
   );
   assert.ok(
+    !bodyText.includes("→"),
+    "summary display drops raw arrow (Flex-only เด่น/รอง takeaway)",
+  );
+  assert.ok(
     !bodyText.includes("› "),
     "no bullet prose — Flex is teaser only",
   );
@@ -165,6 +169,25 @@ test("buildAmuletSummaryFirstFlex: long fitLine value truncates in Flex teaser o
   const bodyText = JSON.stringify(flex.contents);
   assert.ok(bodyText.includes("…"), "long summary value gets ellipsis in Flex");
   assert.ok(!bodyText.includes(longValue), "full long value not in Flex JSON");
+});
+
+test("buildAmuletSummaryFirstFlex: empty ctaLabel uses default full-report wording", async () => {
+  const flex = await buildAmuletSummaryFirstFlex("ignored", {
+    reportPayload: {
+      ...basePayload,
+      amuletV1: {
+        ...basePayload.amuletV1,
+        flexSurface: {
+          ...basePayload.amuletV1.flexSurface,
+          ctaLabel: "   ",
+        },
+      },
+    },
+    reportUrl: "https://report.example/x",
+    appendReportBubble: false,
+  });
+  const bodyText = JSON.stringify(flex.contents);
+  assert.ok(bodyText.includes("เปิดรายงานฉบับเต็ม"));
 });
 
 test("buildAmuletSummaryFirstFlex: no image — headline in body, no bubble.hero", async () => {

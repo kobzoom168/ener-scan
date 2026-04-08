@@ -33,6 +33,8 @@ const LIFE_AREA_BAR_SCORE_COLOR = "#8f8265";
 const AMULET_FLEX_BARS_TOP_N = 4;
 /** Flex-only: cap formatted `ตอนนี้เด่นสุด` value (payload/HTML unchanged). */
 const AMULET_FLEX_SUMMARY_VALUE_MAX_CHARS = 52;
+/** Flex-only: max chars per side when fitLine uses `A → B` (teaser sharpen; payload unchanged). */
+const AMULET_FLEX_SUMMARY_ARROW_PART_MAX = 22;
 /** Flex tagline: max Thai chars for “เด่น{มิติ}” segment after `พระเครื่อง · `. */
 const AMULET_FLEX_TAGLINE_DIM_MAX_CHARS = 18;
 
@@ -184,8 +186,8 @@ function formatFlexSummaryValueForDisplay(raw) {
     .map((p) => p.trim())
     .filter(Boolean);
   if (parts.length >= 2) {
-    const a = shortenThaiSnippet(parts[0], 16);
-    const b = shortenThaiSnippet(parts[1], 16);
+    const a = shortenThaiSnippet(parts[0], AMULET_FLEX_SUMMARY_ARROW_PART_MAX);
+    const b = shortenThaiSnippet(parts[1], AMULET_FLEX_SUMMARY_ARROW_PART_MAX);
     return `เด่น${a} รอง${b}`;
   }
   return v;
@@ -282,7 +284,7 @@ function createPowerCategoryBarBlock(powerCategories) {
     type: "box",
     layout: "vertical",
     margin: "sm",
-    spacing: "sm",
+    spacing: "xs",
     paddingBottom: "lg",
     contents: [
       {
@@ -504,6 +506,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     size: "xs",
     color: AMULET_TITLE_TAGLINE_COLOR,
     wrap: true,
+    maxLines: 1,
     margin: "xs",
   };
 
@@ -578,7 +581,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       margin: "md",
       action: {
         type: "uri",
-        label: String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานเต็ม",
+        label: String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",
         uri: url,
       },
     });
