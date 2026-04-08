@@ -69,14 +69,8 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     appendReportBubble: false,
   });
   assert.equal(flex.type, "flex");
-  assert.equal(
-    flex.contents.hero,
-    undefined,
-    "hero is in-body image overlay, not bubble.hero",
-  );
+  assert.equal(flex.contents.hero?.type, "image", "bubble.hero image when URL");
   const bodyText = JSON.stringify(flex.contents);
-  assert.ok(bodyText.includes("linearGradient"), "hero gradient overlay");
-  assert.ok(bodyText.includes("คุ้มครองเด่น"), "badge from mainEnergyShort");
   assert.ok(bodyText.includes("พระเครื่อง"));
   assert.ok(bodyText.includes("ตอนนี้เด่นสุด"));
   assert.ok(bodyText.includes("คุ้มครองป้องกัน → เมตตาและคนเอ็นดู"));
@@ -136,14 +130,14 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   );
 });
 
-test("buildAmuletSummaryFirstFlex: no image — headline in body, no hero overlay", async () => {
+test("buildAmuletSummaryFirstFlex: no image — headline in body, no bubble.hero", async () => {
   const flex = await buildAmuletSummaryFirstFlex("ignored", {
     reportPayload: { ...basePayload, object: { objectImageUrl: "" } },
     reportUrl: "https://report.example/x",
     appendReportBubble: false,
   });
+  assert.equal(flex.contents.hero, undefined);
   const bodyText = JSON.stringify(flex.contents);
-  assert.ok(!bodyText.includes("linearGradient"));
   assert.ok(bodyText.includes("พระเครื่อง"));
   assert.ok(findBarLifeBlockDeep(flex.contents.body), "bars still present");
 });
