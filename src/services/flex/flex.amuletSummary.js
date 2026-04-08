@@ -25,6 +25,12 @@ const AMULET_TITLE_TAGLINE_COLOR = "#a8a29e";
 const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
 const AMULET_TITLE_TAGLINE = "พระเครื่อง · โทนทอง";
 
+/** Hero overlay text (readable on dark gradient). */
+const HERO_OVERLAY_TITLE_COLOR = "#faf8f5";
+const HERO_OVERLAY_SUBTITLE_COLOR = "#c9b896";
+const HERO_BADGE_BORDER = "#7a6a45";
+const HERO_BADGE_BG = "#2a2215";
+
 /** Muted gold for bar scores — less visual competition vs category labels. */
 const LIFE_AREA_BAR_SCORE_COLOR = "#8f8265";
 
@@ -96,6 +102,17 @@ function parseFitLineToSummaryBlock(raw) {
  * Shorten flex bullets: tight spacing, light phrasing trim, hard char cap.
  * @param {string} raw
  */
+/**
+ * Small hero badge from existing flexSurface.mainEnergyShort (payload unchanged).
+ * @param {string} mainEnergyShort
+ */
+function formatAmuletHeroBadgeText(mainEnergyShort) {
+  const s = String(mainEnergyShort || "").trim();
+  if (!s) return "";
+  if (/เด่น\s*$/.test(s)) return s;
+  return `${s}เด่น`;
+}
+
 function compactAmuletBulletForFlex(raw) {
   let t = String(raw || "")
     .replace(/\s+/g, " ")
@@ -300,6 +317,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
         layout: "vertical",
         flex: 1,
         paddingAll: "14px",
+        cornerRadius: "md",
         backgroundColor: FLEX_BOX_BG,
         contents: [
           {
@@ -325,9 +343,119 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
         layout: "vertical",
         flex: 1,
         paddingAll: "14px",
+        cornerRadius: "md",
         backgroundColor: FLEX_BOX_BG,
         contents: compatContents,
       },
+    ],
+  };
+}
+
+/**
+ * Image-first hero: full-bleed image + bottom gradient + title/tagline/badge (payload fields only).
+ * First child must not be `absolute` (LINE rule). Uses linearGradient overlay + text stack.
+ *
+ * @param {string} imgUrl
+ * @param {{ title: string, subtitle: string, badgeText: string }} copy
+ */
+function buildAmuletHeroImageOverlayBlock(imgUrl, copy) {
+  const { title, subtitle, badgeText } = copy;
+  const gradientOverlay = {
+    type: "box",
+    layout: "vertical",
+    position: "absolute",
+    offsetBottom: "0px",
+    offsetStart: "0px",
+    offsetEnd: "0px",
+    height: "58%",
+    background: {
+      type: "linearGradient",
+      angle: "180deg",
+      startColor: "#00000000",
+      endColor: "#CC0c0a08",
+    },
+    contents: [],
+  };
+
+  /** @type {object[]} */
+  const overlayTextContents = [];
+  if (badgeText) {
+    overlayTextContents.push({
+      type: "box",
+      layout: "horizontal",
+      borderWidth: "1px",
+      borderColor: HERO_BADGE_BORDER,
+      backgroundColor: HERO_BADGE_BG,
+      cornerRadius: "md",
+      paddingAll: "4px",
+      paddingStart: "10px",
+      paddingEnd: "10px",
+      margin: "none",
+      contents: [
+        {
+          type: "text",
+          text: badgeText,
+          size: "xxs",
+          color: AMULET_ACCENT_DIM,
+          weight: "bold",
+          wrap: false,
+        },
+      ],
+    });
+  }
+  overlayTextContents.push(
+    {
+      type: "text",
+      text: title,
+      size: "lg",
+      weight: "bold",
+      color: HERO_OVERLAY_TITLE_COLOR,
+      wrap: true,
+      maxLines: 2,
+      lineSpacing: "2px",
+      margin: "none",
+    },
+    {
+      type: "text",
+      text: subtitle,
+      size: "xs",
+      color: HERO_OVERLAY_SUBTITLE_COLOR,
+      wrap: true,
+      maxLines: 2,
+      margin: "xs",
+    },
+  );
+
+  const textOverlay = {
+    type: "box",
+    layout: "vertical",
+    position: "absolute",
+    offsetBottom: "0px",
+    offsetStart: "0px",
+    offsetEnd: "0px",
+    paddingAll: "16px",
+    paddingTop: "28px",
+    spacing: "xs",
+    contents: overlayTextContents,
+  };
+
+  return {
+    type: "box",
+    layout: "vertical",
+    position: "relative",
+    paddingAll: "0px",
+    cornerRadius: "xxl",
+    contents: [
+      {
+        type: "image",
+        url: imgUrl,
+        size: "full",
+        aspectRatio: "20:13",
+        aspectMode: "cover",
+        gravity: "center",
+      },
+      gradientOverlay,
+      textOverlay,
     ],
   };
 }
@@ -486,14 +614,14 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     margin: "xs",
   }));
 
-  const bodyContents = [
-    headlineBlock,
-    taglineBlock,
-    createScoreRowTwoUp(
-      score.display || "-",
-      compatPctStr,
-      compatBandStr,
-    ),
+  const scoreRowBlock = createScoreRowTwoUp(
+    score.display || "-",
+    compatPctStr,
+    compatBandStr,
+  );
+
+  /** @type {object[]} */
+  const mainStack = [
     ...(lifeAreasBlock ? [lifeAreasBlock] : []),
     ...(fitBlock ? [fitBlock] : []),
     ...(bulletRows.length > 0
@@ -501,7 +629,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
           {
             type: "box",
             layout: "vertical",
-            margin: "md",
+            margin: "sm",
             contents: bulletRows,
           },
         ]
@@ -509,7 +637,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
   ];
 
   if (!url) {
-    bodyContents.push({
+    mainStack.push({
       type: "text",
       text: "ลิงก์รายงานยังไม่พร้อม — กลับไปที่แชทแล้วลองอีกครั้งเมื่อสะดวก",
       size: "xs",
@@ -518,7 +646,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       margin: "lg",
     });
   } else {
-    bodyContents.push({
+    mainStack.push({
       type: "button",
       style: "primary",
       color: FLEX_ACCENT,
@@ -532,29 +660,50 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     });
   }
 
+  const badgeText = formatAmuletHeroBadgeText(
+    String(mv.flexSurface?.mainEnergyShort || ""),
+  );
+
+  /** @type {object[]} */
+  let bodyContents;
+  if (heroOk) {
+    const heroBlock = buildAmuletHeroImageOverlayBlock(imgUrl, {
+      title: headlineText,
+      subtitle: taglineText,
+      badgeText,
+    });
+    const paddedMain = {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "20px",
+      spacing: "md",
+      backgroundColor: FLEX_CARD_BG,
+      cornerRadius: "xl",
+      contents: [scoreRowBlock, ...mainStack],
+    };
+    bodyContents = [heroBlock, paddedMain];
+  } else {
+    bodyContents = [
+      headlineBlock,
+      taglineBlock,
+      scoreRowBlock,
+      ...mainStack,
+    ];
+  }
+
   const bubble = {
     type: "bubble",
     size: "mega",
     body: {
       type: "box",
       layout: "vertical",
-      paddingAll: "20px",
-      spacing: "md",
+      paddingAll: heroOk ? "0px" : "20px",
+      spacing: heroOk ? "none" : "md",
       backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },
     styles: { body: { backgroundColor: FLEX_CARD_BG } },
   };
-  if (heroOk) {
-    bubble.hero = {
-      type: "image",
-      url: imgUrl,
-      size: "full",
-      aspectRatio: "20:13",
-      aspectMode: "cover",
-      backgroundColor: FLEX_CARD_BG,
-    };
-  }
 
   return {
     type: "flex",

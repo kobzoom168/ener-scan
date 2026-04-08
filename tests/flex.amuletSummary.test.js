@@ -43,6 +43,25 @@ const basePayload = {
   },
 };
 
+/**
+ * @param {object|null|undefined} node
+ * @returns {object|null}
+ */
+function findBarLifeBlockDeep(node) {
+  if (!node || typeof node !== "object") return null;
+  if (node.type === "box" && Array.isArray(node.contents)) {
+    const t0 = node.contents[0];
+    if (t0?.type === "text" && t0.text === "พลังไปออกกับมิติไหน") {
+      return node;
+    }
+    for (const c of node.contents) {
+      const found = findBarLifeBlockDeep(c);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", async () => {
   const flex = await buildAmuletSummaryFirstFlex("ignored", {
     reportPayload: basePayload,
@@ -50,7 +69,14 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     appendReportBubble: false,
   });
   assert.equal(flex.type, "flex");
+  assert.equal(
+    flex.contents.hero,
+    undefined,
+    "hero is in-body image overlay, not bubble.hero",
+  );
   const bodyText = JSON.stringify(flex.contents);
+  assert.ok(bodyText.includes("linearGradient"), "hero gradient overlay");
+  assert.ok(bodyText.includes("คุ้มครองเด่น"), "badge from mainEnergyShort");
   assert.ok(bodyText.includes("พระเครื่อง"));
   assert.ok(bodyText.includes("ตอนนี้เด่นสุด"));
   assert.ok(bodyText.includes("คุ้มครองป้องกัน → เมตตาและคนเอ็นดู"));
@@ -88,13 +114,7 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   assert.equal(bulletMarks, 2, "two bullet rows");
 
   /** Bars block: each category is label row then [meter | score], not 3-column single row. */
-  const lifeBlock = flex.contents.body.contents.find(
-    (c) =>
-      c.type === "box" &&
-      Array.isArray(c.contents) &&
-      c.contents[0]?.type === "text" &&
-      c.contents[0]?.text === "พลังไปออกกับมิติไหน",
-  );
+  const lifeBlock = findBarLifeBlockDeep(flex.contents.body);
   assert.ok(lifeBlock, "bars section present");
   const categoryRows = lifeBlock.contents[2].contents;
   assert.equal(categoryRows.length, 4);
@@ -114,4 +134,16 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     ),
     "long Thai label still rendered",
   );
+});
+
+test("buildAmuletSummaryFirstFlex: no image — headline in body, no hero overlay", async () => {
+  const flex = await buildAmuletSummaryFirstFlex("ignored", {
+    reportPayload: { ...basePayload, object: { objectImageUrl: "" } },
+    reportUrl: "https://report.example/x",
+    appendReportBubble: false,
+  });
+  const bodyText = JSON.stringify(flex.contents);
+  assert.ok(!bodyText.includes("linearGradient"));
+  assert.ok(bodyText.includes("พระเครื่อง"));
+  assert.ok(findBarLifeBlockDeep(flex.contents.body), "bars still present");
 });
