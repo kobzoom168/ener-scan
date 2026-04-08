@@ -157,6 +157,8 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       object: objectP,
       objectPeakKey: peakKey,
       objectPeakLabelThai: POWER_LABEL_THAI[peakKey],
+      objectSecondKey: ord[1],
+      objectSecondLabelThai: POWER_LABEL_THAI[ord[1]],
       alignment: { axisKey: alignKey, labelThai: POWER_LABEL_THAI[alignKey] },
       tension: { axisKey: tensionKey, labelThai: POWER_LABEL_THAI[tensionKey] },
     },

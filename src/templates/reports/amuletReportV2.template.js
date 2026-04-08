@@ -30,6 +30,21 @@ function amuletRadarPolygonPoints(values01to100) {
   }).join(" ");
 }
 
+/**
+ * @param {Record<string, number>} values01to100
+ * @param {string} axisKey
+ */
+function amuletRadarVertexForAxis(values01to100, axisKey) {
+  const i = AMULET_AXIS_KEYS.indexOf(axisKey);
+  if (i < 0) return { x: AMULET_RADAR_CX, y: AMULET_RADAR_CY };
+  const ang = AMULET_RADAR_ANGLES[i];
+  const v = Math.max(0, Math.min(100, Number(values01to100[axisKey]) || 0)) / 100;
+  return {
+    x: AMULET_RADAR_CX + AMULET_RADAR_R * v * Math.cos(ang),
+    y: AMULET_RADAR_CY + AMULET_RADAR_R * v * Math.sin(ang),
+  };
+}
+
 function amuletHtmlShowRenderMetaLine() {
   const raw = String(process.env.REPORT_HTML_RENDER_META ?? "").trim().toLowerCase();
   if (raw === "1" || raw === "true" || raw === "yes") return true;
@@ -48,9 +63,20 @@ function mainGraphBlock(vm) {
       const angle = AMULET_RADAR_ANGLES[i];
       const x = AMULET_RADAR_CX + (AMULET_RADAR_R + 8) * Math.cos(angle);
       const y = AMULET_RADAR_CY + (AMULET_RADAR_R + 8) * Math.sin(angle);
-      return `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" class="mv2a-radar-axis" text-anchor="middle" dominant-baseline="middle">${escapeHtml(ax.labelThai)}</text>`;
+      const isPeak = vm.power.objectPeakKey === ax.id;
+      const isSecond = vm.power.objectSecondKey === ax.id;
+      const rankCls = isPeak
+        ? " mv2a-radar-axis--top1"
+        : isSecond
+          ? " mv2a-radar-axis--top2"
+          : "";
+      return `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" class="mv2a-radar-axis${rankCls}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(ax.labelThai)}</text>`;
     })
     .join("");
+  const peak = amuletRadarVertexForAxis(vm.power.object, vm.power.objectPeakKey);
+  const peakX = peak.x.toFixed(2);
+  const peakY = peak.y.toFixed(2);
+  const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.4" fill="rgba(232,197,71,0.12)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.32" fill="rgba(232,197,71,0.96)" stroke="rgba(255,250,228,0.4)" stroke-width="0.22" aria-hidden="true"><title>แกนเด่นสุดของพลังพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
 
   const axisRows = vm.power.axes.map((ax) => {
     const k = ax.id;
@@ -66,7 +92,7 @@ function mainGraphBlock(vm) {
     <h2 id="mv2a-graph-h">Main Graph · หกมิติพลังพระเครื่อง</h2>
     <p class="mv2a-hint">Layer 1 = โปรไฟล์เจ้าของ · Layer 2 = พลังพระเครื่อง</p>
     <div class="mv2a-radar-wrap" role="img" aria-label="กราฟหกมิติ เปรียบเทียบโปรไฟล์เจ้าของและพลังพระเครื่อง">
-      <svg class="mv2a-radar-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+      <svg class="mv2a-radar-svg mv2a-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility">
         <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100 })}" fill="rgba(255,255,255,0.02)" stroke="rgba(212,175,55,0.26)" stroke-width="0.28"/>
         <polygon points="${amuletRadarPolygonPoints({ protection: 66, metta: 66, baramee: 66, luck: 66, fortune_anchor: 66, specialty: 66 })}" fill="none" stroke="rgba(212,175,55,0.16)" stroke-width="0.22"/>
         <polygon points="${amuletRadarPolygonPoints({ protection: 33, metta: 33, baramee: 33, luck: 33, fortune_anchor: 33, specialty: 33 })}" fill="none" stroke="rgba(212,175,55,0.1)" stroke-width="0.2"/>
@@ -75,8 +101,13 @@ function mainGraphBlock(vm) {
           const y = AMULET_RADAR_CY + AMULET_RADAR_R * Math.sin(ang);
           return `<line x1="${AMULET_RADAR_CX}" y1="${AMULET_RADAR_CY}" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(212,175,55,0.12)" stroke-width="0.2"/>`;
         }).join("")}
-        <polygon points="${ownerPts}" fill="rgba(148,163,184,0.18)" stroke="rgba(203,213,225,0.9)" stroke-width="0.45" stroke-linejoin="round"/>
-        <polygon points="${objectPts}" fill="rgba(212,175,55,0.18)" stroke="rgba(232,197,71,0.92)" stroke-width="0.55" stroke-linejoin="round"/>
+        <g class="mv2a-radar-layer mv2a-radar-layer--owner">
+          <polygon points="${ownerPts}" fill="rgba(143,126,95,0.12)" stroke="rgba(182,163,128,0.74)" stroke-width="0.44" stroke-linejoin="round"/>
+        </g>
+        <g class="mv2a-radar-layer mv2a-radar-layer--amulet">
+          <polygon points="${objectPts}" fill="rgba(212,175,55,0.22)" stroke="rgba(232,197,71,0.96)" stroke-width="0.58" stroke-linejoin="round"/>
+        </g>
+        <g class="mv2a-radar-layer mv2a-radar-layer--peak">${peakMarker}</g>
         ${axisLabels}
       </svg>
     </div>
@@ -175,7 +206,53 @@ export function renderAmuletReportV2Html(payload) {
     .mv2a-graph-card { border-left: 3px solid rgba(212,175,55,0.38); }
     .mv2a-radar-wrap { max-width: 19rem; margin: 0.3rem auto 0; }
     .mv2a-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
+    .mv2a-radar-svg--animate .mv2a-radar-layer--owner,
+    .mv2a-radar-svg--animate .mv2a-radar-layer--amulet {
+      transform-box: view-box;
+      transform-origin: 50% 50%;
+      opacity: 0;
+      transform: scale(0);
+    }
+    .mv2a-radar-svg--animate .mv2a-radar-layer--peak { opacity: 0; }
+    @media (prefers-reduced-motion: no-preference) {
+      .mv2a-radar-svg--animate .mv2a-radar-layer--owner {
+        animation: mv2aRdrPoly 1.55s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
+      }
+      .mv2a-radar-svg--animate .mv2a-radar-layer--amulet {
+        animation: mv2aRdrPoly 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.58s forwards;
+      }
+      .mv2a-radar-svg--animate .mv2a-radar-layer--peak {
+        animation: mv2aRdrFade 0.6s ease-out 1.38s forwards;
+      }
+      .mv2a-radar-peak {
+        animation: mv2aLblPulse 1.2s ease-in-out 2.1s infinite;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mv2a-radar-svg--animate .mv2a-radar-layer,
+      .mv2a-radar-peak {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+      }
+    }
+    @keyframes mv2aRdrPoly {
+      0% { opacity: 0; transform: scale(0); }
+      40% { opacity: 0.6; transform: scale(1.08); }
+      70% { opacity: 0.9; transform: scale(0.97); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes mv2aRdrFade {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes mv2aLblPulse {
+      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1px rgba(232,197,71,0.22)); }
+      50% { opacity: 0.5; filter: drop-shadow(0 0 5px rgba(232,197,71,0.6)); }
+    }
     .mv2a-radar-axis { font-size: 2.45px; fill: rgba(245,245,244,0.76); font-weight: 500; }
+    .mv2a-radar-axis--top1 { fill: #f4df9a; font-weight: 700; }
+    .mv2a-radar-axis--top2 { fill: rgba(238,222,170,0.92); font-weight: 600; }
     .mv2a-radar-key {
       margin: 0.42rem 0 0;
       display: flex;

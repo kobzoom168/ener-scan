@@ -72,6 +72,13 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("พระเครื่อง"));
   assert.ok(html.includes("Main Graph · หกมิติพลังพระเครื่อง"));
   assert.ok(html.includes("Layer 1 = โปรไฟล์เจ้าของ · Layer 2 = พลังพระเครื่อง"));
+  assert.ok(html.includes('class="mv2a-radar-svg mv2a-radar-svg--animate"'));
+  assert.ok(html.includes('class="mv2a-radar-layer mv2a-radar-layer--owner"'));
+  assert.ok(html.includes('class="mv2a-radar-layer mv2a-radar-layer--amulet"'));
+  assert.ok(html.includes('<circle class="mv2a-radar-peak"'));
+  assert.ok(html.includes("แกนเด่นสุดของพลังพระเครื่อง: คุ้มครองป้องกัน"));
+  assert.ok(html.includes("class=\"mv2a-radar-axis mv2a-radar-axis--top1\""));
+  assert.ok(html.includes("class=\"mv2a-radar-axis mv2a-radar-axis--top2\""));
   assert.ok(html.includes("คุ้มครองป้องกัน"));
   assert.ok(html.includes("งานเฉพาะทาง"));
   assert.ok(html.includes("มิติชีวิตละเอียด"));
