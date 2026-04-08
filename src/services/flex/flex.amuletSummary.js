@@ -30,8 +30,8 @@ const LIFE_AREA_BAR_SCORE_COLOR = "#8f8265";
 
 /** Flex summary: show only top N dimensions after score sort (full data stays in HTML). */
 const AMULET_FLEX_BARS_TOP_N = 4;
-/** Per-bullet cap so Flex stays scannable (report has full prose). */
-const AMULET_FLEX_BULLET_MAX_CHARS = 54;
+/** Flex-only: cap `ตอนนี้เด่นสุด` value line (full string remains in report payload / HTML). */
+const AMULET_FLEX_SUMMARY_VALUE_MAX_CHARS = 72;
 
 /** Six power categories — display order for bar row iteration; sort is by score. */
 const AMULET_POWER_ROW_KEYS = /** @type {const} */ ([
@@ -93,16 +93,15 @@ function parseFitLineToSummaryBlock(raw) {
 }
 
 /**
- * Shorten flex bullets: tight spacing, light phrasing trim, hard char cap.
+ * Teaser-only truncation for summary value (Moldavite-style: Flex shell, HTML = artifact).
  * @param {string} raw
  */
-function compactAmuletBulletForFlex(raw) {
-  let t = String(raw || "")
+function truncateFlexSummaryValueForTeaser(raw) {
+  const t = String(raw || "")
     .replace(/\s+/g, " ")
     .trim();
-  if (!t) return "";
-  t = t.replace(/^เด่นเมตตาและคนเอ็นดู\s+/u, "เด่นเมตตา ");
-  const max = AMULET_FLEX_BULLET_MAX_CHARS;
+  if (!t) return "—";
+  const max = AMULET_FLEX_SUMMARY_VALUE_MAX_CHARS;
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1)}…`;
 }
@@ -388,12 +387,6 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     String(mv.flexSurface?.headline || "").trim() ||
     AMULET_VISIBLE_LABEL_FALLBACK;
   const fitLine = String(mv.flexSurface?.fitLine || "").trim();
-  const bulletLines = Array.isArray(mv.flexSurface?.bullets)
-    ? mv.flexSurface.bullets
-        .map((x) => compactAmuletBulletForFlex(String(x || "")))
-        .filter(Boolean)
-        .slice(0, 2)
-    : [];
 
   const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
   const heroOk = /^https:\/\//i.test(imgUrl);
@@ -445,6 +438,9 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
   };
 
   const fitParsed = parseFitLineToSummaryBlock(fitLine);
+  const summaryValueDisplay = fitParsed
+    ? truncateFlexSummaryValueForTeaser(fitParsed.value)
+    : "";
   const fitBlock =
     fitParsed != null
       ? {
@@ -466,27 +462,16 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
             },
             {
               type: "text",
-              text: fitParsed.value,
+              text: summaryValueDisplay,
               size: "sm",
               color: FLEX_TEXT_PRIMARY,
               wrap: true,
-              maxLines: 4,
+              maxLines: 2,
               lineSpacing: "4px",
             },
           ],
         }
       : null;
-
-  const bulletRows = bulletLines.map((line) => ({
-    type: "text",
-    text: `› ${line}`,
-    size: "xs",
-    color: FLEX_TEXT_SECONDARY,
-    wrap: true,
-    maxLines: 2,
-    lineSpacing: "3px",
-    margin: "xs",
-  }));
 
   const scoreRowBlock = createScoreRowTwoUp(
     score.display || "-",
@@ -501,16 +486,6 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     scoreRowBlock,
     ...(lifeAreasBlock ? [lifeAreasBlock] : []),
     ...(fitBlock ? [fitBlock] : []),
-    ...(bulletRows.length > 0
-      ? [
-          {
-            type: "box",
-            layout: "vertical",
-            margin: "sm",
-            contents: bulletRows,
-          },
-        ]
-      : []),
   ];
 
   if (!url) {

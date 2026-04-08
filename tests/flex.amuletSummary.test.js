@@ -74,6 +74,14 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   assert.ok(bodyText.includes("พระเครื่อง"));
   assert.ok(bodyText.includes("ตอนนี้เด่นสุด"));
   assert.ok(bodyText.includes("คุ้มครองป้องกัน → เมตตาและคนเอ็นดู"));
+  assert.ok(
+    !bodyText.includes("› "),
+    "no bullet prose — Flex is teaser only",
+  );
+  assert.ok(
+    !bodyText.includes("ช่วยให้จังหวะชีวิต"),
+    "flexSurface.bullets not rendered in Flex",
+  );
   assert.ok(bodyText.includes("ดูว่าชิ้นนี้ช่วยคุณยังไง"));
   assert.ok(bodyText.includes("พลังไปออกกับมิติไหน"));
   assert.ok(
@@ -102,11 +110,6 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   // Summary block: label + value (not single-line "ตอนนี้เด่นสุด: …")
   assert.ok(bodyText.includes('"text":"ตอนนี้เด่นสุด"'));
 
-  // Two bullet lines (compact prefix on first)
-  assert.ok(bodyText.includes("เด่นเมตตา "));
-  const bulletMarks = bodyText.split("› ").length - 1;
-  assert.equal(bulletMarks, 2, "two bullet rows");
-
   /** Bars block: each category is label row then [meter | score], not 3-column single row. */
   const lifeBlock = findBarLifeBlockDeep(flex.contents.body);
   assert.ok(lifeBlock, "bars section present");
@@ -128,6 +131,27 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     ),
     "long Thai label still rendered",
   );
+});
+
+test("buildAmuletSummaryFirstFlex: long fitLine value truncates in Flex teaser only", async () => {
+  const longValue = `${"ก".repeat(85)} → ${"ข".repeat(85)}`;
+  const flex = await buildAmuletSummaryFirstFlex("ignored", {
+    reportPayload: {
+      ...basePayload,
+      amuletV1: {
+        ...basePayload.amuletV1,
+        flexSurface: {
+          ...basePayload.amuletV1.flexSurface,
+          fitLine: `ตอนนี้เด่นสุด: ${longValue}`,
+        },
+      },
+    },
+    reportUrl: "https://report.example/x",
+    appendReportBubble: false,
+  });
+  const bodyText = JSON.stringify(flex.contents);
+  assert.ok(bodyText.includes("…"), "long summary value gets ellipsis in Flex");
+  assert.ok(!bodyText.includes(longValue), "full long value not in Flex JSON");
 });
 
 test("buildAmuletSummaryFirstFlex: no image — headline in body, no bubble.hero", async () => {
