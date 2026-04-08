@@ -348,7 +348,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-gsum-v { font-size: 0.92rem; font-weight: 800; color: rgba(250,250,249,0.97); }
     .mv2-gsum-row--lead .mv2-gsum-v { color: #fde68a; }
     .mv2-card--owner > h2 { margin-bottom: 0.22rem; }
-    .mv2-owner-zodiac { font-size: 1.05rem; font-weight: 700; margin: 0 0 0.4rem; color: rgba(250,250,249,0.96); }
+    .mv2-owner-summary { font-size: 1.05rem; font-weight: 700; margin: 0 0 0.4rem; color: rgba(250,250,249,0.96); }
     .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.35rem; }
     .mv2-owner-chip { font-size: 0.72rem; padding: 0.2rem 0.45rem; border-radius: 999px; background: rgba(212,175,55,0.1); border: 1px solid rgba(212,175,55,0.22); color: rgba(254,243,199,0.9); }
     .mv2-owner-note { margin: 0; font-size: 0.62rem; color: rgba(148,163,184,0.42); }
@@ -394,7 +394,7 @@ export function renderAmuletReportV2Html(payload) {
 
     <section class="mv2-card mv2-card--owner" aria-labelledby="mv2-owner-h">
       <h2 id="mv2-owner-h">โปรไฟล์เจ้าของ</h2>
-      <p class="mv2-owner-zodiac">${escapeHtml(vm.ownerProfile.zodiacLabel)}</p>
+      <p class="mv2-owner-summary">${escapeHtml(vm.ownerProfile.summaryLine)}</p>
       <div class="mv2-owner-chips">${traitChipsHtml}</div>
       <p class="mv2-owner-note">${escapeHtml(vm.ownerProfile.note)}</p>
     </section>

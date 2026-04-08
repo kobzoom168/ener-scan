@@ -1,5 +1,14 @@
 import { fnv1a32, POWER_ORDER } from "./amuletScores.util.js";
 
+const OWNER_PROFILE_SUMMARY_BY_POWER = {
+  protection: "เจ้าของรับพลังแบบค่อย ๆ ดูทิศทาง และเด่นเมื่อได้ตั้งหลักก่อน",
+  metta: "เจ้าของรับพลังผ่านบรรยากาศรอบตัวได้ดี และเด่นเมื่ออยู่ในจังหวะที่คนเปิดรับ",
+  baramee: "เจ้าของรับพลังแบบนิ่งแต่ชัด และเด่นเมื่อวางตัวมั่นคงก่อนขยับ",
+  luck: "เจ้าของรับพลังเมื่อเห็นช่องทางชัด และเด่นเมื่อค่อย ๆ เปิดจังหวะให้ตัวเอง",
+  fortune_anchor: "เจ้าของรับพลังแบบค่อยเป็นค่อยไป และเด่นเมื่อได้ตั้งหลักให้แน่นก่อน",
+  specialty: "เจ้าของรับพลังแบบเลือกจังหวะเฉพาะตัว และเด่นเมื่อรู้ว่าควรขยับตอนไหน",
+};
+
 /**
  * Deterministic owner-side power profile for HTML (placeholder; not ground truth).
  * @param {string|null|undefined} birthdateUsed
@@ -15,38 +24,24 @@ export function deriveAmuletOwnerPowerProfile(birthdateUsed, seedKey) {
     const h = fnv1a32(`${base}|${k}|${i}`);
     owner[k] = 38 + (h % 52);
   });
-
-  const monthHint = (() => {
-    const m = String(birthdateUsed || "").match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-    if (m) return Number(m[2]) || 1;
-    return 1 + (h0 % 12);
-  })();
-
-  const zodiacShort = [
-    "มกราคม",
-    "กุมภาพันธ์",
-    "มีนาคม",
-    "เมษายน",
-    "พฤษภาคม",
-    "มิถุนายน",
-    "กรกฎาคม",
-    "สิงหาคม",
-    "กันยายน",
-    "ตุลาคม",
-    "พฤศจิกายน",
-    "ธันวาคม",
-  ][(monthHint - 1) % 12];
+  const leadPower = [...POWER_ORDER].sort((a, b) => {
+    const db = (Number(owner[b]) || 0) - (Number(owner[a]) || 0);
+    if (db !== 0) return db;
+    return POWER_ORDER.indexOf(a) - POWER_ORDER.indexOf(b);
+  })[0];
 
   return {
     ownerPower: owner,
-    zodiacLabel: `จังหวะเกิดเดือน${zodiacShort} (สรุปสัญลักษณ์)`,
+    summaryLine:
+      OWNER_PROFILE_SUMMARY_BY_POWER[leadPower] ||
+      "เจ้าของรับพลังแบบค่อย ๆ ดูจังหวะ และเด่นเมื่อได้ตั้งหลักก่อน",
     traitScores: [
-      { label: "สงบ", score: 5 + (h0 % 5) },
-      { label: "มุ่งมั่น", score: 5 + (fnv1a32(`${base}|t1`) % 5) },
-      { label: "เปิดรับ", score: 4 + (fnv1a32(`${base}|t2`) % 5) },
-      { label: "ระมัดระวัง", score: 4 + (fnv1a32(`${base}|t3`) % 5) },
+      { label: "ตั้งหลักดี", score: 5 + (h0 % 5) },
+      { label: "รับพลังเป็นจังหวะ", score: 5 + (fnv1a32(`${base}|t1`) % 5) },
+      { label: "ใจนิ่งเวลาเลือก", score: 4 + (fnv1a32(`${base}|t2`) % 5) },
+      { label: "ระวังแรงรอบตัว", score: 4 + (fnv1a32(`${base}|t3`) % 5) },
     ],
-    note: "โปรไฟล์นี้สรุปจากวันเดือนปีเกิดเพื่อใช้เทียบกับมิติพลัง",
+    note: "โปรไฟล์นี้สรุปจากวันเดือนปีเกิดเพื่อใช้เทียบกับมิติพลังของวัตถุ",
   };
 }
 

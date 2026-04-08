@@ -86,6 +86,13 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("มิติชีวิตละเอียด"));
   assert.ok(html.includes("สรุปจากกราฟ"));
   assert.ok(!html.includes("ควรค่อย ๆ ไป"), "graph summary is reduced to 2 rows");
+  assert.ok(!html.includes("จังหวะเกิดเดือน"), "owner profile no longer uses zodiac framing");
+  assert.ok(html.includes("เจ้าของรับพลังแบบนิ่งแต่ชัด และเด่นเมื่อวางตัวมั่นคงก่อนขยับ"));
+  assert.ok(html.includes("ตั้งหลักดี 7/10"));
+  assert.ok(html.includes("รับพลังเป็นจังหวะ 6/10"));
+  assert.ok(html.includes("ใจนิ่งเวลาเลือก 8/10"));
+  assert.ok(html.includes("ระวังแรงรอบตัว 7/10"));
+  assert.ok(html.includes("โปรไฟล์นี้สรุปจากวันเดือนปีเกิดเพื่อใช้เทียบกับมิติพลังของวัตถุ"));
   assert.ok(html.includes("โทนหลัก ·"));
   assert.ok(!html.includes("โทนทอง"), "hero subtitle fallback is removed from HTML");
   assert.ok(!html.includes('class="mv2-tag"'), "hero subtitle is not rendered");

@@ -163,7 +163,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     },
     graphSummary,
     ownerProfile: {
-      zodiacLabel: ownerProf.zodiacLabel,
+      summaryLine: ownerProf.summaryLine,
       traitScores: ownerProf.traitScores,
       note: ownerProf.note,
     },
