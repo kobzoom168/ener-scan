@@ -70,7 +70,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
     },
   });
   assert.ok(html.includes("พระเครื่อง"));
-  assert.ok(html.includes("Main Graph · หกมิติพลังพระเครื่อง"));
+  assert.ok(html.includes("กราฟหกมิติพลังพระเครื่อง"));
   assert.ok(html.includes("Layer 1 = คุณ · Layer 2 = พลังพระเครื่อง"));
   assert.ok(html.includes('class="mv2a-radar-svg mv2a-radar-svg--animate"'));
   assert.ok(html.includes('class="mv2a-radar-layer mv2a-radar-layer--owner"'));

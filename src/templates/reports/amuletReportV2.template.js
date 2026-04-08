@@ -76,7 +76,7 @@ function mainGraphBlock(vm) {
   const peak = amuletRadarVertexForAxis(vm.power.object, vm.power.objectPeakKey);
   const peakX = peak.x.toFixed(2);
   const peakY = peak.y.toFixed(2);
-  const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.4" fill="rgba(232,197,71,0.12)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.32" fill="rgba(232,197,71,0.96)" stroke="rgba(255,250,228,0.4)" stroke-width="0.22" aria-hidden="true"><title>แกนเด่นสุดของพลังพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
+  const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="rgba(248,232,168,0.1)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="rgba(248,232,168,0.98)" stroke="rgba(255,252,240,0.5)" stroke-width="0.26" aria-hidden="true"><title>แกนเด่นสุดของพลังพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
 
   const axisRows = vm.power.axes.map((ax) => {
     const k = ax.id;
@@ -89,7 +89,7 @@ function mainGraphBlock(vm) {
   });
 
   return `<section class="mv2a-card mv2a-graph-card" aria-labelledby="mv2a-graph-h">
-    <h2 id="mv2a-graph-h">Main Graph · หกมิติพลังพระเครื่อง</h2>
+    <h2 id="mv2a-graph-h">กราฟหกมิติพลังพระเครื่อง</h2>
     <p class="mv2a-hint">Layer 1 = คุณ · Layer 2 = พลังพระเครื่อง</p>
     <div class="mv2a-radar-wrap" role="img" aria-label="กราฟหกมิติ เปรียบเทียบโปรไฟล์เจ้าของและพลังพระเครื่อง">
       <svg class="mv2a-radar-svg mv2a-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility">
@@ -203,8 +203,10 @@ export function renderAmuletReportV2Html(payload) {
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid rgba(212,175,55,0.12); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; }
     .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; }
     .mv2a-hint { font-size: 0.68rem; color: var(--mv2a-muted); margin: 0 0 0.6rem; }
-    .mv2a-graph-card { border-left: 3px solid rgba(212,175,55,0.38); }
-    .mv2a-radar-wrap { max-width: 19rem; margin: 0.3rem auto 0; }
+    .mv2a-graph-card { border-left: 3px solid rgba(212,175,55,0.38); padding: 0.85rem 0.85rem; }
+    .mv2a-graph-card > h2 { font-size: 1.02rem; color: var(--mv2a-gold); margin: 0 0 0.28rem; }
+    .mv2a-graph-card > .mv2a-hint { margin: 0 0 0.35rem; }
+    .mv2a-radar-wrap { max-width: 18rem; margin: 0 auto; }
     .mv2a-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
     .mv2a-radar-svg--animate .mv2a-radar-layer--owner,
     .mv2a-radar-svg--animate .mv2a-radar-layer--amulet {
@@ -247,20 +249,20 @@ export function renderAmuletReportV2Html(payload) {
       to { opacity: 1; transform: translateY(0); }
     }
     @keyframes mv2aLblPulse {
-      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px rgba(232,197,71,0.18)); }
-      50% { opacity: 0.62; filter: drop-shadow(0 0 4px rgba(232,197,71,0.42)); }
+      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px rgba(248,232,168,0.2)); }
+      50% { opacity: 0.6; filter: drop-shadow(0 0 5px rgba(248,232,168,0.45)); }
     }
-    .mv2a-radar-axis { font-size: 2.45px; fill: rgba(245,245,244,0.76); font-weight: 500; }
-    .mv2a-radar-axis--top1 { font-size: 2.65px; fill: #f4df9a; font-weight: 700; }
-    .mv2a-radar-axis--top2 { fill: rgba(244,230,180,0.94); font-weight: 600; }
+    .mv2a-radar-axis { font-size: 2.6px; fill: rgba(245,245,244,0.82); font-weight: 500; }
+    .mv2a-radar-axis--top1 { font-size: 2.85px; fill: #f8e8a8; font-weight: 700; }
+    .mv2a-radar-axis--top2 { font-size: 2.7px; fill: rgba(244,232,186,0.94); font-weight: 600; }
     .mv2a-radar-key {
-      margin: 0.42rem 0 0;
+      margin: 0.38rem 0 0;
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 0.65rem;
-      font-size: 0.72rem;
-      color: rgba(231,229,228,0.88);
+      gap: 0.55rem;
+      font-size: 0.65rem;
+      color: rgba(200,196,190,0.72);
     }
     .mv2a-radar-key-chip { display: inline-flex; align-items: center; gap: 0.3rem; }
     .mv2a-radar-dot {
