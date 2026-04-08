@@ -77,10 +77,12 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2a-radar-layer mv2a-radar-layer--amulet"'));
   assert.ok(html.includes('<circle class="mv2a-radar-peak"'));
   assert.ok(html.includes("แกนเด่นสุดของพลังพระเครื่อง: คุ้มครองป้องกัน"));
-  assert.ok(html.includes("class=\"mv2a-radar-axis mv2a-radar-axis--top1\""));
-  assert.ok(html.includes("class=\"mv2a-radar-axis mv2a-radar-axis--top2\""));
-  assert.ok(html.includes("คุ้มครองป้องกัน"));
-  assert.ok(html.includes("งานเฉพาะทาง"));
+  assert.ok(html.includes('class="mv2a-radar-labels"'));
+  assert.ok(html.includes("class=\"mv2a-radar-lbl mv2a-radar-lbl--protection mv2a-radar-lbl--top1\""));
+  assert.ok(html.includes("class=\"mv2a-radar-lbl mv2a-radar-lbl--metta mv2a-radar-lbl--top2\""));
+  assert.ok(html.includes("คุ้มครอง</span> <span class=\"mv2a-radar-axis-n\">88"));
+  assert.ok(html.includes("เมตตา</span> <span class=\"mv2a-radar-axis-n\">70"));
+  assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
   assert.ok(html.includes("มิติชีวิตละเอียด"));
   assert.ok(html.includes("สรุปจากกราฟ"));
   assert.ok(html.includes("โทนหลัก ·"));
