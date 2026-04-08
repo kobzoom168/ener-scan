@@ -324,7 +324,7 @@ export function renderAmuletReportV2Html(payload) {
       ${media}
       <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "พระเครื่อง")}</h1>
       ${h.tagline ? `<p class="mv2-tag">${escapeHtml(h.tagline)}</p>` : ""}
-      <p class="mv2-main">พลังหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
+      <p class="mv2-main">โทนหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
       ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
     </header>
 
