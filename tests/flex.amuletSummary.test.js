@@ -54,6 +54,14 @@ function findBarLifeBlockDeep(node) {
     if (t0?.type === "text" && t0.text === "พลังไปออกกับมิติไหน") {
       return node;
     }
+    const wrap = node.contents[0];
+    if (
+      wrap?.type === "box" &&
+      wrap.contents?.[0]?.type === "text" &&
+      wrap.contents[0].text === "พลังไปออกกับมิติไหน"
+    ) {
+      return node;
+    }
     for (const c of node.contents) {
       const found = findBarLifeBlockDeep(c);
       if (found) return found;
@@ -72,8 +80,13 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   assert.equal(flex.contents.hero?.type, "image", "bubble.hero image when URL");
   const bodyText = JSON.stringify(flex.contents);
   assert.ok(bodyText.includes("พระเครื่อง"));
+  assert.ok(bodyText.includes("พระเครื่อง · เด่น"), "lane-specific tagline from top power row");
+  assert.ok(bodyText.includes("คุ้มครองป้องกัน"), "top-1 dimension in tagline");
   assert.ok(bodyText.includes("ตอนนี้เด่นสุด"));
-  assert.ok(bodyText.includes("คุ้มครองป้องกัน → เมตตาและคนเอ็นดู"));
+  assert.ok(
+    bodyText.includes("เด่น") && bodyText.includes("รอง"),
+    "summary value sharpened (เด่น/รอง), not raw arrow prose",
+  );
   assert.ok(
     !bodyText.includes("› "),
     "no bullet prose — Flex is teaser only",
@@ -113,7 +126,7 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   /** Bars block: each category is label row then [meter | score], not 3-column single row. */
   const lifeBlock = findBarLifeBlockDeep(flex.contents.body);
   assert.ok(lifeBlock, "bars section present");
-  const categoryRows = lifeBlock.contents[2].contents;
+  const categoryRows = lifeBlock.contents[1].contents;
   assert.equal(categoryRows.length, 4);
   const first = categoryRows[0];
   assert.equal(first.layout, "vertical");

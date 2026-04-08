@@ -23,6 +23,7 @@ const FLEX_TEXT_SECONDARY = "#9ca3af";
 const AMULET_TITLE_TAGLINE_COLOR = "#a8a29e";
 /** Life-area helper line — dimmer than captions; metadata only. */
 const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
+/** Fallback when power rows are missing (Flex display only). */
 const AMULET_TITLE_TAGLINE = "พระเครื่อง · โทนทอง";
 
 /** Muted gold for bar scores — less visual competition vs category labels. */
@@ -30,8 +31,10 @@ const LIFE_AREA_BAR_SCORE_COLOR = "#8f8265";
 
 /** Flex summary: show only top N dimensions after score sort (full data stays in HTML). */
 const AMULET_FLEX_BARS_TOP_N = 4;
-/** Flex-only: cap `ตอนนี้เด่นสุด` value line (full string remains in report payload / HTML). */
-const AMULET_FLEX_SUMMARY_VALUE_MAX_CHARS = 72;
+/** Flex-only: cap formatted `ตอนนี้เด่นสุด` value (payload/HTML unchanged). */
+const AMULET_FLEX_SUMMARY_VALUE_MAX_CHARS = 52;
+/** Flex tagline: max Thai chars for “เด่น{มิติ}” segment after `พระเครื่อง · `. */
+const AMULET_FLEX_TAGLINE_DIM_MAX_CHARS = 18;
 
 /** Six power categories — display order for bar row iteration; sort is by score. */
 const AMULET_POWER_ROW_KEYS = /** @type {const} */ ([
@@ -107,14 +110,26 @@ function truncateFlexSummaryValueForTeaser(raw) {
 }
 
 /**
- * Power category meters: each item is two rows — (1) full-width Thai label,
- * (2) horizontal pill track + fixed-width score. Sort/top-N/flex ratio unchanged.
+ * @param {string} s
+ * @param {number} maxLen
+ */
+function shortenThaiSnippet(s, maxLen) {
+  const t = String(s || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) return "";
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, maxLen - 1)}…`;
+}
+
+/**
+ * Same ordering as bars: score desc, all six keys, then slice for top-N in bar block only.
  *
  * @param {Record<string, { score?: number, labelThai?: string }>|null|undefined} powerCategories
+ * @returns {{ label: string, score: number|null }[]}
  */
-function createPowerCategoryBarBlock(powerCategories) {
-  if (!powerCategories || typeof powerCategories !== "object") return null;
-
+function sortAmuletPowerCategoryRows(powerCategories) {
+  if (!powerCategories || typeof powerCategories !== "object") return [];
   /** @type {{ label: string, score: number|null }[]} */
   const rows = [];
   for (const k of AMULET_POWER_ROW_KEYS) {
@@ -137,7 +152,55 @@ function createPowerCategoryBarBlock(powerCategories) {
     if (b.score == null) return -1;
     return b.score - a.score;
   });
+  return rows;
+}
 
+/**
+ * Flex-only tagline from #1 power dimension label (payload.tagline not used for Flex body).
+ *
+ * @param {{ powerCategories?: Record<string, { labelThai?: string, score?: number }> } | null | undefined} mv
+ */
+function buildAmuletFlexTaglineDisplay(mv) {
+  const rows = sortAmuletPowerCategoryRows(mv?.powerCategories);
+  const top = rows[0];
+  const lab = top ? String(top.label || "").trim() : "";
+  if (!lab || lab === "—") return AMULET_TITLE_TAGLINE;
+  const dim = shortenThaiSnippet(lab, AMULET_FLEX_TAGLINE_DIM_MAX_CHARS);
+  return `พระเครื่อง · เด่น${dim}`;
+}
+
+/**
+ * Flex-only: sharpen fitLine value (arrow → เด่น/รอง); does not change payload.
+ *
+ * @param {string} raw
+ */
+function formatFlexSummaryValueForDisplay(raw) {
+  const v = String(raw || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!v || v === "—") return "—";
+  const parts = v
+    .split(/\s*→\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    const a = shortenThaiSnippet(parts[0], 16);
+    const b = shortenThaiSnippet(parts[1], 16);
+    return `เด่น${a} รอง${b}`;
+  }
+  return v;
+}
+
+/**
+ * Power category meters: each item is two rows — (1) full-width Thai label,
+ * (2) horizontal pill track + fixed-width score. Sort/top-N/flex ratio unchanged.
+ *
+ * @param {Record<string, { score?: number, labelThai?: string }>|null|undefined} powerCategories
+ */
+function createPowerCategoryBarBlock(powerCategories) {
+  if (!powerCategories || typeof powerCategories !== "object") return null;
+
+  const rows = sortAmuletPowerCategoryRows(powerCategories);
   const topRows = rows.slice(0, AMULET_FLEX_BARS_TOP_N);
 
   /** @type {object[]} */
@@ -219,25 +282,33 @@ function createPowerCategoryBarBlock(powerCategories) {
     type: "box",
     layout: "vertical",
     margin: "sm",
-    spacing: "xs",
+    spacing: "sm",
     paddingBottom: "lg",
     contents: [
       {
-        type: "text",
-        text: "พลังไปออกกับมิติไหน",
-        size: "xs",
-        color: AMULET_ACCENT_DIM,
-        weight: "bold",
-        wrap: true,
+        type: "box",
+        layout: "vertical",
+        spacing: "none",
         margin: "none",
-      },
-      {
-        type: "text",
-        text: "เรียงจากคะแนนสูงไปต่ำ",
-        size: "xxs",
-        color: LIFE_AREA_HELPER_TEXT_COLOR,
-        wrap: true,
-        margin: "none",
+        contents: [
+          {
+            type: "text",
+            text: "พลังไปออกกับมิติไหน",
+            size: "xs",
+            color: AMULET_ACCENT_DIM,
+            weight: "bold",
+            wrap: true,
+            margin: "none",
+          },
+          {
+            type: "text",
+            text: "เรียงจากคะแนนสูงไปต่ำ",
+            size: "xxs",
+            color: LIFE_AREA_HELPER_TEXT_COLOR,
+            wrap: true,
+            margin: "none",
+          },
+        ],
       },
       {
         type: "box",
@@ -394,8 +465,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
 
   const lifeAreasBlock = createPowerCategoryBarBlock(mv.powerCategories);
 
-  const taglineText =
-    String(mv.flexSurface?.tagline || "").trim() || AMULET_TITLE_TAGLINE;
+  const taglineText = buildAmuletFlexTaglineDisplay(mv);
 
   const altMain =
     headlineText.split("\n")[0].trim() || AMULET_VISIBLE_LABEL_FALLBACK;
@@ -439,7 +509,9 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
 
   const fitParsed = parseFitLineToSummaryBlock(fitLine);
   const summaryValueDisplay = fitParsed
-    ? truncateFlexSummaryValueForTeaser(fitParsed.value)
+    ? truncateFlexSummaryValueForTeaser(
+        formatFlexSummaryValueForDisplay(fitParsed.value),
+      )
     : "";
   const fitBlock =
     fitParsed != null
@@ -506,7 +578,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       margin: "md",
       action: {
         type: "uri",
-        label: String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",
+        label: String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานเต็ม",
         uri: url,
       },
     });
