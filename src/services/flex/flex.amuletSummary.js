@@ -26,8 +26,10 @@ const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
 /** Fallback when power rows are missing (Flex display only). */
 const AMULET_TITLE_TAGLINE = "พระเครื่อง · โทนทอง";
 
-/** Muted gold for bar scores — less visual competition vs category labels. */
-const LIFE_AREA_BAR_SCORE_COLOR = "#8f8265";
+/** Bar score numerals — quieter than labels (read dimension + bar first). */
+const LIFE_AREA_BAR_SCORE_COLOR = "#5f5a4f";
+/** Summary body line under `ตอนนี้เด่นสุด` — subordinate to label, still readable. */
+const AMULET_SUMMARY_VALUE_COLOR = "#b4aea3";
 
 /** Flex summary: show only top N dimensions after score sort (full data stays in HTML). */
 const AMULET_FLEX_BARS_TOP_N = 4;
@@ -318,8 +320,9 @@ function createPowerCategoryBarBlock(powerCategories) {
                 {
                   type: "text",
                   text: scoreText,
-                  size: "xs",
+                  size: "xxs",
                   color: LIFE_AREA_BAR_SCORE_COLOR,
+                  weight: "regular",
                   wrap: false,
                   align: "end",
                 },
@@ -335,7 +338,7 @@ function createPowerCategoryBarBlock(powerCategories) {
     type: "box",
     layout: "vertical",
     margin: "sm",
-    spacing: "xs",
+    spacing: "none",
     paddingBottom: "lg",
     contents: [
       {
@@ -589,8 +592,9 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
             {
               type: "text",
               text: summaryValueDisplay,
-              size: "sm",
-              color: FLEX_TEXT_PRIMARY,
+              size: "xs",
+              color: AMULET_SUMMARY_VALUE_COLOR,
+              weight: "regular",
               wrap: true,
               maxLines: 2,
               lineSpacing: "4px",
