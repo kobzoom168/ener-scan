@@ -87,6 +87,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("สรุปจากกราฟ"));
   assert.ok(!html.includes("ควรค่อย ๆ ไป"), "graph summary is reduced to 2 rows");
   assert.ok(html.includes("โทนหลัก ·"));
+  assert.ok(!html.includes("โทนทอง"), "hero subtitle fallback is removed from HTML");
+  assert.ok(!html.includes('class="mv2-tag"'), "hero subtitle is not rendered");
   assert.ok(!html.includes("พลังหลัก ·"), "hero uses โทนหลัก, not พลังหลัก");
   assert.ok(html.includes("render amulet-html-v2"));
 });

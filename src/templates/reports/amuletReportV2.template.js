@@ -210,7 +210,6 @@ export function renderAmuletReportV2Html(payload) {
     .mv2a-badge { display: inline-block; font-size: 0.65rem; color: var(--mv2a-gold); border: 1px solid rgba(212,175,55,0.35); padding: 0.2rem 0.5rem; border-radius: 999px; margin-bottom: 0.5rem; }
     .mv2a-media img { max-width: 100%; border-radius: 12px; border: 1px solid rgba(212,175,55,0.2); }
     .mv2-h1 { font-size: 1.35rem; margin: 0.5rem 0; color: var(--mv2a-gold); }
-    .mv2-tag { color: var(--mv2a-muted); font-size: 0.8rem; margin: 0; }
     .mv2-main { font-size: 0.95rem; margin: 0.4rem 0 0; color: rgba(250,250,249,0.95); }
     .mv2-date { font-size: 0.72rem; color: var(--mv2a-muted); margin: 0.35rem 0 0; }
     .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0.85rem 0; text-align: center; }
@@ -376,7 +375,6 @@ export function renderAmuletReportV2Html(payload) {
       <div class="mv2a-badge">Ener Scan · พระเครื่อง · รายงานฉบับเต็ม</div>
       ${media}
       <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "พระเครื่อง")}</h1>
-      ${h.tagline ? `<p class="mv2-tag">${escapeHtml(h.tagline)}</p>` : ""}
       <p class="mv2-main">โทนหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
       ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
     </header>
