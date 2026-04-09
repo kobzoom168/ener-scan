@@ -1,18 +1,14 @@
 import { deriveAmuletOwnerPowerProfile } from "./amuletOwnerProfile.util.js";
 import { POWER_ORDER, POWER_LABEL_THAI } from "./amuletScores.util.js";
 
-/** Default life-area blurbs when payload omits `htmlReport.lifeAreaBlurbs` (plain sentences, no em dash). */
+/** Default life-area blurbs when payload omits `htmlReport.lifeAreaBlurbs` (one tight line each). */
 const AMULET_DEFAULT_LIFE_BLURBS = {
-  protection:
-    "เด่นเรื่องกันแรงปะทะ ตั้งขอบเขต และพยุงตัวเวลาเจอเรื่องหนัก",
-  metta: "ช่วยให้คนรอบตัวเปิดใจ คุยง่าย และรับพลังจากคุณมากขึ้น",
-  baramee:
-    "ส่งเรื่องภาพลักษณ์ ความน่าเชื่อถือ และแรงนำในบทบาทที่รับอยู่",
-  luck: "หนุนโอกาสใหม่ จังหวะใหม่ และทางเลือกที่เริ่มเปิดเข้ามา",
-  fortune_anchor:
-    "ช่วยประคองใจ ตั้งหลักไว และไม่ไหลตามสถานการณ์ง่าย",
-  specialty:
-    "เด่นกับงานที่ต้องใช้ฝีมือ ความถนัด หรือบทบาทเฉพาะตัว",
+  protection: "กันแรงปะทะ ตั้งขอบเขต พยุงตัวเวลาเรื่องหนัก",
+  metta: "คนรอบตัวเปิดใจ คุยง่าย รับพลังคุณได้มากขึ้น",
+  baramee: "ภาพลักษณ์ ความน่าเชื่อถือ แรงนำในบทบาทที่รับอยู่",
+  luck: "โอกาสใหม่ จังหวะใหม่ ทางเลือกเริ่มเปิด",
+  fortune_anchor: "ประคองใจ ตั้งหลัก ไม่ไหลตามสถานการณ์ง่าย",
+  specialty: "งานใช้ฝีมือ ถนัด หรือบทบาทเฉพาะตัว",
 };
 
 /**
@@ -100,8 +96,8 @@ export function buildAmuletHtmlV2ViewModel(payload) {
   const ord = sortPowerKeysByObjectDesc(objectP);
   const graphSummary = {
     rows: [
-      { label: "พลังเด่น", value: POWER_LABEL_THAI[ord[0]] },
-      { label: "รองลงมา", value: POWER_LABEL_THAI[ord[1]] },
+      { label: "แกนสูงสุดบนกราฟ", value: POWER_LABEL_THAI[ord[0]] },
+      { label: "แกนรอง (ลำดับถัดไป)", value: POWER_LABEL_THAI[ord[1]] },
     ],
   };
 
@@ -109,33 +105,31 @@ export function buildAmuletHtmlV2ViewModel(payload) {
   const tensionLabel = POWER_LABEL_THAI[tensionKey];
   const peakLabel = POWER_LABEL_THAI[peakKey];
 
-  /** ช่องว่างน้อย = คะแนนคุณกับวัตถุใกล้กันบนแกนนั้น */
   const alignMain =
     minD <= 12
-      ? `${alignLabel} เด่นกับคุณที่สุดตอนนี้`
-      : `${alignLabel} ขึ้นกับคุณง่ายในช่วงนี้`;
+      ? `${alignLabel} ตรงกับคุณที่สุด — เอาแกนนี้นำ`
+      : `${alignLabel} เข้ากับคุณเร็วในช่วงนี้ — เริ่มจากนี้`;
 
-  /** ช่องว่างมาก = คะแนนคุณกับวัตถุห่างกันบนแกนนั้น */
   const tensionMain =
     maxD >= 28
-      ? `${tensionLabel} ยังตีกับจังหวะคุณอยู่`
-      : `${tensionLabel} ยังไม่ขึ้นกับคุณเต็มที่`;
+      ? `${tensionLabel} ยังไม่ส่งกับจังหวะคุณ — อย่าเร่งด้านนี้`
+      : `${tensionLabel} ต้องปรับจังหวะ — อย่าบังคับใช้หนัก`;
 
   const interactionRows = [
     {
-      kicker: "ส่งเสริม",
+      kicker: "จุดเข้าคู่",
       main: alignMain,
-      sub: "ใช้ด้านนี้นำก่อน",
+      sub: "ตรงกับแกนที่คุณกับวัตถุใกล้กันที่สุดบนกราฟ",
     },
     {
-      kicker: "ระวังจังหวะ",
+      kicker: "จุดตึง",
       main: tensionMain,
-      sub: "อย่าเร่งด้านนี้มาก",
+      sub: "แกนที่ห่างกันที่สุด — ระวังใช้เกินจังหวะ",
     },
     {
       kicker: "โทนวัตถุ",
-      main: `วัตถุชิ้นนี้เด่นที่${peakLabel}`,
-      sub: "แรงหลักของชิ้นนี้ออกทางด้านนี้",
+      main: `ชิ้นนี้ส่งพลังหลักที่${peakLabel}`,
+      sub: "สอดคล้องกับป้ายแกนสูงสุดบนกราฟ",
     },
   ];
 
@@ -151,10 +145,11 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       e && typeof e === "object" && e.score != null
         ? clamp0100(Number(e.score))
         : 0;
-    const blurb =
+    const rawBlurb =
       String(blurbs[k] || "").trim() ||
       AMULET_DEFAULT_LIFE_BLURBS[k] ||
       "พลังด้านนี้ยังไม่เด่นชัด";
+    const blurb = rawBlurb.replace(/\s+/g, " ").trim().slice(0, 96);
     return {
       key: k,
       label: POWER_LABEL_THAI[k],
@@ -167,6 +162,10 @@ export function buildAmuletHtmlV2ViewModel(payload) {
   const usageLines = Array.isArray(hr?.usageCautionLines)
     ? hr.usageCautionLines.map((x) => String(x || "").trim()).filter(Boolean)
     : [];
+  const usageDisclaimer =
+    usageLines.length > 0
+      ? usageLines.join(" ").replace(/\s+/g, " ").trim().slice(0, 320)
+      : "ผลลัพธ์ขึ้นกับบริบทการใช้งานของคุณ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน";
 
   return {
     rendererId: "amulet-html-v2",
@@ -199,13 +198,23 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       zodiacLabel: ownerProf.zodiacLabel,
       traitScores: ownerProf.traitScores,
       note: ownerProf.note,
+      miniCards: [
+        {
+          title: "จังหวะเจ้าของ",
+          text: ownerProf.zodiacLabel,
+        },
+        {
+          title: "แกนที่สอดคล้องสุด",
+          text: `${alignLabel} ตรงกับโปรไฟล์คุณมากที่สุดบนกราฟ`,
+        },
+      ],
     },
     interactionSummary: {
-      headline: "วัตถุทำงานกับคุณอย่างไร",
+      headline: "สรุปเข้าคู่แบบตรง ๆ",
       rows: interactionRows,
     },
     lifeAreaDetail: { rows: lifeRows },
-    usageCaution: { lines: usageLines },
+    usageCaution: { disclaimer: usageDisclaimer },
     trustNote: String(payload.trust?.trustNote || "").trim(),
     reportVersion: String(payload.reportVersion || ""),
     modelLabel: payload.trust?.modelLabel

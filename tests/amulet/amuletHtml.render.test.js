@@ -65,7 +65,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
       },
       htmlReport: {
         lifeAreaBlurbs: {},
-        usageCautionLines: ["บรรทัด 1"],
+        usageCautionLines: ["ข้อความจำกัดความรับผิดชอบ บรรทัดเดียว"],
       },
     },
   });
@@ -83,17 +83,24 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("คุ้มครอง</span> <span class=\"mv2a-radar-axis-n\">88"));
   assert.ok(html.includes("เมตตา</span> <span class=\"mv2a-radar-axis-n\">70"));
   assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
-  assert.ok(html.includes("มิติชีวิตละเอียด"));
-  assert.ok(html.includes("ดูจากมิติที่เด่นที่สุดก่อน"));
-  assert.ok(html.includes("เด่นเรื่องกันแรงปะทะ ตั้งขอบเขต"));
+  assert.ok(html.includes("มิติชีวิต (หกแถวสรุป)"));
+  assert.ok(html.includes("เรียงตามคะแนนจากกราฟ"));
+  assert.ok(html.includes('class="mv2-life-row"'));
+  assert.ok(html.includes("กันแรงปะทะ ตั้งขอบเขต"));
   assert.ok(html.includes("สรุปจากกราฟ"));
+  assert.ok(html.includes("แกนสูงสุดบนกราฟ"));
+  assert.ok(html.includes('class="mv2-owner-mini"'));
+  assert.ok(html.includes('class="mv2-int-card"'));
+  assert.ok(html.includes('class="mv2-disclaimer"'));
+  assert.ok(html.includes("ข้อความจำกัดความรับผิดชอบ บรรทัดเดียว"));
+  assert.ok(html.includes("สรุปเข้าคู่แบบตรง ๆ"));
   assert.ok(!html.includes("ควรค่อย ๆ ไป"), "graph summary is reduced to 2 rows");
   assert.ok(html.includes("จังหวะเกิดเดือนมิถุนายน (สรุปสัญลักษณ์)"));
   assert.ok(html.includes("สงบ 7/10"));
   assert.ok(html.includes("มุ่งมั่น 6/10"));
   assert.ok(html.includes("เปิดรับ 8/10"));
   assert.ok(html.includes("ระมัดระวัง 7/10"));
-  assert.ok(html.includes("โปรไฟล์นี้สรุปจากวันเดือนปีเกิดเพื่อใช้เทียบกับมิติพลัง"));
+  assert.ok(html.includes("สรุปจากวันเกิดเพื่อเทียบกับหกมิติบนกราฟ"));
   assert.ok(html.includes("โทนหลัก ·"));
   assert.ok(!html.includes("โทนทอง"), "hero subtitle fallback is removed from HTML");
   assert.ok(!html.includes('class="mv2-tag"'), "hero subtitle is not rendered");

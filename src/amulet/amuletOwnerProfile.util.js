@@ -46,6 +46,6 @@ export function deriveAmuletOwnerPowerProfile(birthdateUsed, seedKey) {
       { label: "เปิดรับ", score: 4 + (fnv1a32(`${base}|t2`) % 5) },
       { label: "ระมัดระวัง", score: 4 + (fnv1a32(`${base}|t3`) % 5) },
     ],
-    note: "โปรไฟล์นี้สรุปจากวันเดือนปีเกิดเพื่อใช้เทียบกับมิติพลัง",
+    note: "สรุปจากวันเกิดเพื่อเทียบกับหกมิติบนกราฟ",
   };
 }

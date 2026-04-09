@@ -56,8 +56,7 @@ function buildAmuletHtmlReportPlaceholder() {
   };
 
   const usageCautionLines = [
-    "ผลลัพธ์จริงขึ้นกับการใช้งานและบริบทของคุณ",
-    "ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
+    "ผลลัพธ์ขึ้นกับบริบทคุณ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
   ];
 
   return { lifeAreaBlurbs, usageCautionLines };

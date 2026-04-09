@@ -164,26 +164,35 @@ export function renderAmuletReportV2Html(payload) {
     .map((t) => `<span class="mv2-owner-chip">${escapeHtml(t.label)} ${t.score}/10</span>`)
     .join("");
 
+  const ownerMiniCardsHtml = (vm.ownerProfile.miniCards || [])
+    .map(
+      (c) => `
+    <div class="mv2-owner-mini">
+      <div class="mv2-owner-mini-t">${escapeHtml(c.title)}</div>
+      <p class="mv2-owner-mini-b">${escapeHtml(c.text)}</p>
+    </div>`,
+    )
+    .join("");
+
   const interactionHtml = vm.interactionSummary.rows
     .map(
       (row) =>
-        `<div class="mv2-int-row"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-main">${escapeHtml(row.main)}</span><span class="mv2-int-sub">${escapeHtml(row.sub)}</span></div>`,
+        `<div class="mv2-int-card"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-main">${escapeHtml(row.main)}</span><span class="mv2-int-sub">${escapeHtml(row.sub)}</span></div>`,
     )
     .join("");
 
   const lifeRowsHtml = vm.lifeAreaDetail.rows
     .map(
       (row) => `
-    <div class="mv2-life-card">
-      <div class="mv2-life-head"><span>${escapeHtml(row.label)}</span><span class="mv2-life-score">${escapeHtml(String(row.score))}</span></div>
-      <p class="mv2-para mv2-life-blurb">${escapeHtml(row.blurb)}</p>
+    <div class="mv2-life-row" data-axis="${escapeHtml(row.key)}">
+      <span class="mv2-life-name">${escapeHtml(row.label)}</span>
+      <span class="mv2-life-score">${escapeHtml(String(row.score))}</span>
+      <span class="mv2-life-blurb">${escapeHtml(row.blurb)}</span>
     </div>`,
     )
     .join("");
 
-  const usageHtml = vm.usageCaution.lines
-    .map((line) => `<li>${escapeHtml(line)}</li>`)
-    .join("");
+  const usageDisclaimer = escapeHtml(vm.usageCaution.disclaimer || "");
 
   const media = h.objectImageUrl
     ? `<div class="mv2a-media"><img src="${escapeHtml(h.objectImageUrl)}" alt="" loading="lazy" /></div>`
@@ -349,22 +358,29 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-gsum-row--lead .mv2-gsum-v { color: #fde68a; }
     .mv2-card--owner > h2 { margin-bottom: 0.22rem; }
     .mv2-owner-zodiac { font-size: 1.05rem; font-weight: 700; margin: 0 0 0.4rem; color: rgba(250,250,249,0.96); }
-    .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.35rem; }
+    .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.5rem; }
     .mv2-owner-chip { font-size: 0.72rem; padding: 0.2rem 0.45rem; border-radius: 999px; background: rgba(212,175,55,0.1); border: 1px solid rgba(212,175,55,0.22); color: rgba(254,243,199,0.9); }
-    .mv2-owner-note { margin: 0; font-size: 0.62rem; color: rgba(148,163,184,0.42); }
-    .mv2-int-rows { display: flex; flex-direction: column; gap: 0.42rem; padding: 0.15rem 0 0; }
-    .mv2-int-row { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.32rem 0.5rem; border-radius: 8px; background: rgba(255,255,255,0.028); border: 1px solid rgba(212,175,55,0.08); }
-    .mv2-int-row + .mv2-int-row { padding: 0.22rem 0.5rem; }
-    .mv2-int-kicker { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(212,175,55,0.85); }
-    .mv2-int-main { font-size: 0.88rem; font-weight: 700; line-height: 1.3; color: rgba(250,250,249,0.96); }
-    .mv2-int-sub { font-size: 0.74rem; color: rgba(148,163,184,0.62); }
+    .mv2-owner-minis { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin: 0.35rem 0 0; }
+    @media (max-width: 420px) { .mv2-owner-minis { grid-template-columns: 1fr; } }
+    .mv2-owner-mini { padding: 0.45rem 0.55rem; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(212,175,55,0.12); }
+    .mv2-owner-mini-t { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(212,175,55,0.78); margin: 0 0 0.22rem; }
+    .mv2-owner-mini-b { margin: 0; font-size: 0.78rem; line-height: 1.35; color: rgba(226,224,218,0.95); }
+    .mv2-owner-note { margin: 0.45rem 0 0; font-size: 0.62rem; color: rgba(148,163,184,0.42); }
+    .mv2-int-cards { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.15rem 0 0; }
+    .mv2-int-card { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.48rem 0.55rem; border-radius: 10px; background: rgba(255,255,255,0.035); border: 1px solid rgba(212,175,55,0.14); }
+    .mv2-int-kicker { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; color: rgba(212,175,55,0.88); }
+    .mv2-int-main { font-size: 0.88rem; font-weight: 700; line-height: 1.28; color: rgba(250,250,249,0.97); }
+    .mv2-int-sub { font-size: 0.72rem; color: rgba(148,163,184,0.68); line-height: 1.35; }
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
-    .mv2-life-card { border-top: 1px solid rgba(212,175,55,0.08); padding: 0.85rem 0 0; margin-top: 0.82rem; }
-    .mv2-life-card:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
-    .mv2-life-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; font-weight: 600; font-size: 0.9rem; }
-    .mv2-life-score { color: #b8860b; font-weight: 600; font-size: 0.82rem; }
-    .mv2-life-hint { margin: 0 0 0.55rem; font-size: 0.68rem; color: var(--mv2a-muted); opacity: 0.75; }
-    .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2a-muted); }
+    .mv2-life-rows { display: flex; flex-direction: column; gap: 0; margin: 0.35rem 0 0; border-radius: 10px; overflow: hidden; border: 1px solid rgba(212,175,55,0.1); }
+    .mv2-life-row { display: grid; grid-template-columns: minmax(4.2rem, 5.2rem) 2.1rem 1fr; gap: 0.45rem; align-items: start; padding: 0.42rem 0.5rem; font-size: 0.78rem; border-top: 1px solid rgba(212,175,55,0.07); }
+    .mv2-life-row:first-child { border-top: none; }
+    .mv2-life-row:nth-child(odd) { background: rgba(255,255,255,0.02); }
+    .mv2-life-name { font-weight: 600; color: rgba(245,245,244,0.92); }
+    .mv2-life-score { color: #c9a227; font-weight: 700; font-size: 0.76rem; text-align: right; }
+    .mv2-life-blurb { color: rgba(186,184,178,0.95); line-height: 1.35; }
+    .mv2-life-hint { margin: 0 0 0.45rem; font-size: 0.65rem; color: var(--mv2a-muted); opacity: 0.8; }
+    .mv2-disclaimer { margin: 0; font-size: 0.76rem; line-height: 1.45; color: rgba(148,163,184,0.78); }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); text-align: center; font-size: 0.78rem; color: var(--mv2a-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); }
   </style>
@@ -396,23 +412,24 @@ export function renderAmuletReportV2Html(payload) {
       <h2 id="mv2-owner-h">โปรไฟล์เจ้าของ</h2>
       <p class="mv2-owner-zodiac">${escapeHtml(vm.ownerProfile.zodiacLabel)}</p>
       <div class="mv2-owner-chips">${traitChipsHtml}</div>
+      <div class="mv2-owner-minis">${ownerMiniCardsHtml}</div>
       <p class="mv2-owner-note">${escapeHtml(vm.ownerProfile.note)}</p>
     </section>
 
     <section class="mv2-card" aria-labelledby="mv2-int-h">
       <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
-      <div class="mv2-int-rows">${interactionHtml}</div>
+      <div class="mv2-int-cards">${interactionHtml}</div>
     </section>
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
-      <h2 id="mv2-life-h">มิติชีวิตละเอียด</h2>
-      <p class="mv2-life-hint">ดูจากมิติที่เด่นที่สุดก่อน</p>
-      ${lifeRowsHtml}
+      <h2 id="mv2-life-h">มิติชีวิต (หกแถวสรุป)</h2>
+      <p class="mv2-life-hint">เรียงตามคะแนนจากกราฟ — อ่านแถวบนก่อน</p>
+      <div class="mv2-life-rows">${lifeRowsHtml}</div>
     </section>
 
-    <section class="mv2-card" aria-labelledby="mv2-use-h">
-      <h2 id="mv2-use-h">การใช้และข้อควรระวัง</h2>
-      <ul class="mv2-owner-traits">${usageHtml}</ul>
+    <section class="mv2-card mv2-card--caution" aria-labelledby="mv2-use-h">
+      <h2 id="mv2-use-h">ข้อจำกัด</h2>
+      <p class="mv2-disclaimer">${usageDisclaimer}</p>
     </section>
 
     <footer class="mv2-trust">
