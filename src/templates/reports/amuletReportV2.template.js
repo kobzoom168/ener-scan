@@ -212,20 +212,24 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-card: #141210;
       --mv2a-muted: #78716c;
       --mv2a-text: #f5f5f4;
+      /* Unified Thai + system stack (report + radar labels + cards; LINE Flex uses client fonts). */
+      --mv2-font-th: "Noto Sans Thai", "Sarabun", "Kanit", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", system-ui, sans-serif;
     }
-    body { margin: 0; background: var(--mv2a-bg); color: var(--mv2a-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+    body { margin: 0; background: var(--mv2a-bg); color: var(--mv2a-text); font-family: var(--mv2-font-th); }
     .mv2a-wrap { max-width: 520px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
     .mv2-hero { text-align: center; margin-bottom: 1rem; }
     .mv2a-badge { display: inline-block; font-size: 0.65rem; color: var(--mv2a-gold); border: 1px solid rgba(212,175,55,0.35); padding: 0.2rem 0.5rem; border-radius: 999px; margin-bottom: 0.5rem; }
     .mv2a-media img { max-width: 100%; border-radius: 12px; border: 1px solid rgba(212,175,55,0.2); }
-    .mv2-h1 { font-size: 1.35rem; margin: 0.5rem 0; color: var(--mv2a-gold); }
-    .mv2-main { font-size: 0.95rem; margin: 0.4rem 0 0; color: rgba(250,250,249,0.95); }
+    .mv2-h1 { font-size: 1.35rem; margin: 0.5rem 0; color: var(--mv2a-gold); font-weight: 700; }
+    .mv2-main { font-size: 0.95rem; margin: 0.4rem 0 0; color: rgba(250,250,249,0.95); font-weight: 500; }
+    .mv2-hero-clarifier { font-size: 0.78rem; margin: 0.35rem 0 0; color: rgba(180,175,168,0.88); line-height: 1.4; }
     .mv2-date { font-size: 0.72rem; color: var(--mv2a-muted); margin: 0.35rem 0 0; }
     .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0.85rem 0; text-align: center; }
     .mv2-strip-k { font-size: 0.65rem; color: var(--mv2a-muted); }
     .mv2-strip-v { font-size: 1.1rem; font-weight: 700; color: var(--mv2a-gold); }
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid rgba(212,175,55,0.12); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; }
-    .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; }
+    .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; font-family: inherit; }
     .mv2a-hint { font-size: 0.68rem; color: var(--mv2a-muted); margin: 0 0 0.6rem; }
     .mv2a-graph-card { border-left: 3px solid rgba(212,175,55,0.38); padding: 0.85rem 0.85rem; }
     .mv2a-graph-card > h2 { font-size: 1.02rem; color: var(--mv2a-gold); margin: 0 0 0.28rem; }
@@ -285,7 +289,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2a-radar-lbl {
       position: absolute;
       white-space: nowrap;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai", "Sarabun", sans-serif;
+      font-family: inherit;
       font-size: clamp(10px, 4.2cqw, 12px);
       line-height: 1.18;
       letter-spacing: 0.01em;
@@ -391,7 +395,8 @@ export function renderAmuletReportV2Html(payload) {
       <div class="mv2a-badge">Ener Scan · พระเครื่อง · รายงานฉบับเต็ม</div>
       ${media}
       <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "พระเครื่อง")}</h1>
-      <p class="mv2-main">โทนหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
+      <p class="mv2-main">${escapeHtml(h.displayLine || `โทนหลัก · ${h.mainEnergyLabel}`)}</p>
+      ${h.clarifierLine ? `<p class="mv2-hero-clarifier">${escapeHtml(h.clarifierLine)}</p>` : ""}
       ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
     </header>
 
@@ -404,7 +409,7 @@ export function renderAmuletReportV2Html(payload) {
     ${mainGraphBlock(vm)}
 
     <section class="mv2-card" aria-labelledby="mv2-gsum-h">
-      <h2 id="mv2-gsum-h">สรุปจากกราฟ</h2>
+      <h2 id="mv2-gsum-h">อ่านเบื้องต้นจากกราฟ</h2>
       ${graphSummaryHtml}
     </section>
 
@@ -422,8 +427,8 @@ export function renderAmuletReportV2Html(payload) {
     </section>
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
-      <h2 id="mv2-life-h">มิติชีวิต (หกแถวสรุป)</h2>
-      <p class="mv2-life-hint">เรียงตามคะแนนจากกราฟ — อ่านแถวบนก่อน</p>
+      <h2 id="mv2-life-h">มิติชีวิตทั้งหกด้าน</h2>
+      <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ — อ่านด้านบนก่อน</p>
       <div class="mv2-life-rows">${lifeRowsHtml}</div>
     </section>
 

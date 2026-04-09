@@ -1,6 +1,37 @@
 import { deriveAmuletOwnerPowerProfile } from "./amuletOwnerProfile.util.js";
 import { POWER_ORDER, POWER_LABEL_THAI } from "./amuletScores.util.js";
 
+/** Short labels for hero/clarifier (match radar alias tone; human-facing). */
+const PEAK_SHORT_THAI = {
+  protection: "คุ้มครอง",
+  metta: "เมตตา",
+  baramee: "บารมี",
+  luck: "โชคลาภ",
+  fortune_anchor: "หนุนดวง",
+  specialty: "งานเฉพาะ",
+};
+
+/**
+ * True when hero โทนหลัก text matches the graph’s highest-scoring axis (no extra clarifier).
+ * @param {string} mainShort
+ * @param {string} peakKey
+ */
+function mainToneMatchesGraphPeak(mainShort, peakKey) {
+  const m = String(mainShort || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!m) return true;
+  const short = PEAK_SHORT_THAI[/** @type {keyof typeof PEAK_SHORT_THAI} */ (peakKey)];
+  const full = POWER_LABEL_THAI[/** @type {keyof typeof POWER_LABEL_THAI} */ (peakKey)];
+  if (short && (m.includes(short) || short.includes(m.slice(0, Math.min(m.length, 4))))) {
+    return true;
+  }
+  if (full && (m.includes(full.slice(0, 4)) || full.includes(m))) {
+    return true;
+  }
+  return false;
+}
+
 /** Default life-area blurbs when payload omits `htmlReport.lifeAreaBlurbs` (one tight line each). */
 const AMULET_DEFAULT_LIFE_BLURBS = {
   protection: "กันแรงปะทะ ตั้งขอบเขต พยุงตัวเวลาเรื่องหนัก",
@@ -96,19 +127,20 @@ export function buildAmuletHtmlV2ViewModel(payload) {
   const ord = sortPowerKeysByObjectDesc(objectP);
   const graphSummary = {
     rows: [
-      { label: "แกนสูงสุดบนกราฟ", value: POWER_LABEL_THAI[ord[0]] },
-      { label: "แกนรอง (ลำดับถัดไป)", value: POWER_LABEL_THAI[ord[1]] },
+      { label: "ด้านที่โค้งสูงสุด", value: POWER_LABEL_THAI[ord[0]] },
+      { label: "ด้านรองลงมา", value: POWER_LABEL_THAI[ord[1]] },
     ],
   };
 
   const alignLabel = POWER_LABEL_THAI[alignKey];
   const tensionLabel = POWER_LABEL_THAI[tensionKey];
   const peakLabel = POWER_LABEL_THAI[peakKey];
+  const peakShort = PEAK_SHORT_THAI[peakKey] || peakLabel;
 
   const alignMain =
     minD <= 12
-      ? `${alignLabel} ตรงกับคุณที่สุด — เอาแกนนี้นำ`
-      : `${alignLabel} เข้ากับคุณเร็วในช่วงนี้ — เริ่มจากนี้`;
+      ? `${alignLabel} ส่งเสริมคุณได้ชัดที่สุดในตอนนี้`
+      : `${alignLabel} เริ่มเข้ากับคุณได้เร็ว — ลองใช้เป็นจุดเริ่ม`;
 
   const tensionMain =
     maxD >= 28
@@ -119,17 +151,17 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     {
       kicker: "จุดเข้าคู่",
       main: alignMain,
-      sub: "ตรงกับแกนที่คุณกับวัตถุใกล้กันที่สุดบนกราฟ",
+      sub: "มุมที่คุณกับวัตถุใกล้เคียงกันที่สุด",
     },
     {
       kicker: "จุดตึง",
       main: tensionMain,
-      sub: "แกนที่ห่างกันที่สุด — ระวังใช้เกินจังหวะ",
+      sub: "มุมที่ยังห่างกัน — ใช้แบบค่อยเป็นค่อยไป",
     },
     {
-      kicker: "โทนวัตถุ",
-      main: `ชิ้นนี้ส่งพลังหลักที่${peakLabel}`,
-      sub: "สอดคล้องกับป้ายแกนสูงสุดบนกราฟ",
+      kicker: "พลังของชิ้นนี้",
+      main: `เน้นด้าน${peakShort} มากที่สุด`,
+      sub: "ตรงกับด้านที่เห็นโค้งสูงสุดในกราฟ",
     },
   ];
 
@@ -167,12 +199,22 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       ? usageLines.join(" ").replace(/\s+/g, " ").trim().slice(0, 320)
       : "ผลลัพธ์ขึ้นกับบริบทการใช้งานของคุณ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน";
 
+  const mainShort =
+    String(fs.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม";
+  const clarifierLine = mainToneMatchesGraphPeak(mainShort, ord[0])
+    ? ""
+    : `กราฟด้านบนชี้ว่าเด่นที่ ${peakShort} ชัดที่สุด`;
+
   return {
     rendererId: "amulet-html-v2",
     hero: {
       subtypeLabel: String(fs.headline || "").trim(),
       tagline: String(fs.tagline || "").trim(),
-      mainEnergyLabel: String(fs.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม",
+      mainEnergyLabel: mainShort,
+      /** Full hero line (frozen: โทนหลัก). */
+      displayLine: `โทนหลัก · ${mainShort}`,
+      /** Second line when โทนหลัก ไม่ตรงแกนสูงสุดบนกราฟ */
+      clarifierLine,
       objectImageUrl: String(payload.object?.objectImageUrl || "").trim(),
       reportGeneratedAt: String(payload.generatedAt || ""),
     },
@@ -204,13 +246,13 @@ export function buildAmuletHtmlV2ViewModel(payload) {
           text: ownerProf.zodiacLabel,
         },
         {
-          title: "แกนที่สอดคล้องสุด",
-          text: `${alignLabel} ตรงกับโปรไฟล์คุณมากที่สุดบนกราฟ`,
+          title: "มุมที่เข้ากับคุณมากที่สุด",
+          text: `${alignLabel} ใกล้เคียงกับคุณที่สุด`,
         },
       ],
     },
     interactionSummary: {
-      headline: "สรุปเข้าคู่แบบตรง ๆ",
+      headline: "วัตถุกับคุณ: สรุปสั้น ๆ",
       rows: interactionRows,
     },
     lifeAreaDetail: { rows: lifeRows },

@@ -83,17 +83,19 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("คุ้มครอง</span> <span class=\"mv2a-radar-axis-n\">88"));
   assert.ok(html.includes("เมตตา</span> <span class=\"mv2a-radar-axis-n\">70"));
   assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
-  assert.ok(html.includes("มิติชีวิต (หกแถวสรุป)"));
-  assert.ok(html.includes("เรียงตามคะแนนจากกราฟ"));
+  assert.ok(html.includes("มิติชีวิตทั้งหกด้าน"));
+  assert.ok(html.includes("เรียงจากคะแนนสูงไปต่ำ"));
   assert.ok(html.includes('class="mv2-life-row"'));
   assert.ok(html.includes("กันแรงปะทะ ตั้งขอบเขต"));
-  assert.ok(html.includes("สรุปจากกราฟ"));
-  assert.ok(html.includes("แกนสูงสุดบนกราฟ"));
+  assert.ok(html.includes("อ่านเบื้องต้นจากกราฟ"));
+  assert.ok(html.includes("ด้านที่โค้งสูงสุด"));
   assert.ok(html.includes('class="mv2-owner-mini"'));
   assert.ok(html.includes('class="mv2-int-card"'));
   assert.ok(html.includes('class="mv2-disclaimer"'));
   assert.ok(html.includes("ข้อความจำกัดความรับผิดชอบ บรรทัดเดียว"));
-  assert.ok(html.includes("สรุปเข้าคู่แบบตรง ๆ"));
+  assert.ok(html.includes("วัตถุกับคุณ: สรุปสั้น ๆ"));
+  assert.ok(html.includes("--mv2-font-th"));
+  assert.ok(html.includes("Noto Sans Thai"));
   assert.ok(!html.includes("ควรค่อย ๆ ไป"), "graph summary is reduced to 2 rows");
   assert.ok(html.includes("จังหวะเกิดเดือนมิถุนายน (สรุปสัญลักษณ์)"));
   assert.ok(html.includes("สงบ 7/10"));
@@ -106,4 +108,72 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(!html.includes('class="mv2-tag"'), "hero subtitle is not rendered");
   assert.ok(!html.includes("พลังหลัก ·"), "hero uses โทนหลัก, not พลังหลัก");
   assert.ok(html.includes("render amulet-html-v2"));
+});
+
+test("renderAmuletReportV2Html: hero clarifier when โทนหลักไม่ตรงแกนสูงสุดบนกราฟ", () => {
+  const html = renderAmuletReportV2Html({
+    reportId: "r2",
+    publicToken: "t",
+    scanId: "s1",
+    userId: "u",
+    birthdateUsed: "15/06/1990",
+    generatedAt: new Date().toISOString(),
+    reportVersion: "1",
+    object: { objectImageUrl: "" },
+    summary: {
+      energyScore: 7,
+      energyLevelLabel: "ปานกลาง",
+      mainEnergyLabel: "เมตตา",
+      compatibilityPercent: 80,
+      compatibilityBand: "เข้ากันได้ดี",
+      summaryLine: "",
+    },
+    sections: {
+      whatItGives: [],
+      messagePoints: [],
+      ownerMatchReason: [],
+      roleDescription: [],
+      bestUseCases: [],
+      weakMoments: [],
+      guidanceTips: [],
+      careNotes: [],
+      miniRitual: [],
+    },
+    trust: {},
+    actions: {},
+    wording: {},
+    amuletV1: {
+      version: "1",
+      scoringMode: "deterministic_v1",
+      detection: { reason: "sacred_amulet_lane_v1", matchedSignals: [] },
+      powerCategories: {
+        protection: { key: "protection", score: 88, labelThai: "คุ้มครองป้องกัน" },
+        metta: { key: "metta", score: 70, labelThai: "เมตตาและคนเอ็นดู" },
+        baramee: { key: "baramee", score: 65, labelThai: "บารมีและอำนาจนำ" },
+        luck: { key: "luck", score: 60, labelThai: "โชคลาภและการเปิดทาง" },
+        fortune_anchor: {
+          key: "fortune_anchor",
+          score: 55,
+          labelThai: "หนุนดวงและการตั้งหลัก",
+        },
+        specialty: { key: "specialty", score: 50, labelThai: "งานเฉพาะทาง" },
+      },
+      primaryPower: "protection",
+      secondaryPower: "metta",
+      flexSurface: {
+        headline: "พระเครื่อง",
+        fitLine: "เด่นสุด คุ้มครองป้องกัน · รอง เมตตาและคนเอ็นดู",
+        bullets: [],
+        ctaLabel: "เปิด",
+        mainEnergyShort: "เมตตา",
+        tagline: "พระเครื่อง · หกมิติพลัง",
+        mainEnergyWordingLine: "",
+        htmlOpeningLine: "",
+        heroNamingLine: "",
+      },
+      htmlReport: { lifeAreaBlurbs: {}, usageCautionLines: [] },
+    },
+  });
+  assert.ok(html.includes('class="mv2-hero-clarifier"'));
+  assert.ok(html.includes("กราฟด้านบนชี้ว่าเด่นที่ คุ้มครอง ชัดที่สุด"));
 });
