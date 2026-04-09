@@ -360,11 +360,10 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-gsum-k { font-size: 0.72rem; font-weight: 400; color: rgba(148,163,184,0.58); white-space: nowrap; }
     .mv2-gsum-v { font-size: 0.92rem; font-weight: 800; color: rgba(250,250,249,0.97); }
     .mv2-gsum-row--lead .mv2-gsum-v { color: #fde68a; }
-    .mv2-card--owner > h2 { margin-bottom: 0.22rem; }
-    .mv2-owner-zodiac { font-size: 1.05rem; font-weight: 700; margin: 0 0 0.4rem; color: rgba(250,250,249,0.96); }
-    .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.5rem; }
+    .mv2-card--owner > h2 { margin-bottom: 0.28rem; }
+    .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.42rem; }
     .mv2-owner-chip { font-size: 0.72rem; padding: 0.2rem 0.45rem; border-radius: 999px; background: rgba(212,175,55,0.1); border: 1px solid rgba(212,175,55,0.22); color: rgba(254,243,199,0.9); }
-    .mv2-owner-minis { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin: 0.35rem 0 0; }
+    .mv2-owner-minis { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin: 0 0 0.42rem; }
     @media (max-width: 420px) { .mv2-owner-minis { grid-template-columns: 1fr; } }
     .mv2-owner-mini { padding: 0.45rem 0.55rem; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(212,175,55,0.12); }
     .mv2-owner-mini-t { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(212,175,55,0.78); margin: 0 0 0.22rem; }
@@ -415,9 +414,9 @@ export function renderAmuletReportV2Html(payload) {
 
     <section class="mv2-card mv2-card--owner" aria-labelledby="mv2-owner-h">
       <h2 id="mv2-owner-h">โปรไฟล์เจ้าของ</h2>
-      <p class="mv2-owner-zodiac">${escapeHtml(vm.ownerProfile.zodiacLabel)}</p>
-      <div class="mv2-owner-chips">${traitChipsHtml}</div>
       <div class="mv2-owner-minis">${ownerMiniCardsHtml}</div>
+      <div class="mv2-owner-chips">${traitChipsHtml}</div>
+      <!-- Optional future: subtle text link e.g. เปลี่ยนวันเกิดเพื่อดูผลใหม่ (no primary button in this pass) -->
       <p class="mv2-owner-note">${escapeHtml(vm.ownerProfile.note)}</p>
     </section>
 

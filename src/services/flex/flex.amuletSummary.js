@@ -40,8 +40,10 @@ const AMULET_FLEX_EMPTY_MARK = "-";
 
 /** Flex summary: show only top N dimensions after score sort (full data stays in HTML). */
 const AMULET_FLEX_BARS_TOP_N = 4;
-/** Flex-only: cap formatted `เด่นสุด` value (payload/HTML unchanged). */
+/** Flex-only: cap formatted `เด่นสุด` value when falling back to single-line fitLine parse (payload/HTML unchanged). */
 const AMULET_FLEX_SUMMARY_VALUE_MAX_CHARS = 52;
+/** Per-line cap for two-line เด่น/รอง teaser (each line completes independently). */
+const AMULET_FLEX_SUMMARY_LINE_MAX_CHARS = 26;
 /** Flex-only: max chars per side when fitLine uses `A → B` (teaser sharpen; payload unchanged). */
 const AMULET_FLEX_SUMMARY_ARROW_PART_MAX = 22;
 /** Flex tagline: max Thai chars for “เด่น{มิติ}” segment after `พระเครื่อง · `. */
@@ -212,6 +214,31 @@ function sortAmuletPowerCategoryRows(powerCategories) {
     return b.score - a.score;
   });
   return rows;
+}
+
+/**
+ * Compact 2-line takeaway from sorted power rows (teaser-only; no mid-sentence chop of one long string).
+ *
+ * @param {Record<string, { score?: number, labelThai?: string }>|null|undefined} powerCategories
+ * @returns {{ line1: string, line2: string }|null}
+ */
+function buildAmuletFlexSummaryTwoLines(powerCategories) {
+  const rows = sortAmuletPowerCategoryRows(powerCategories);
+  const r0 = rows[0];
+  const r1 = rows[1];
+  if (!r0 || !r1) return null;
+  const l0 = String(r0.label || "").trim();
+  const l1 = String(r1.label || "").trim();
+  if (!l0 || l0 === AMULET_FLEX_EMPTY_MARK) return null;
+  if (!l1 || l1 === AMULET_FLEX_EMPTY_MARK) return null;
+  const a0 = applyAmuletFlexLabelAlias(l0) || l0;
+  const b0 = applyAmuletFlexLabelAlias(l1) || l1;
+  const a = shortenThaiSnippet(a0, AMULET_FLEX_SUMMARY_LINE_MAX_CHARS);
+  const b = shortenThaiSnippet(b0, AMULET_FLEX_SUMMARY_LINE_MAX_CHARS);
+  return {
+    line1: `เด่น${a}`,
+    line2: `รอง${b}`,
+  };
 }
 
 /**
@@ -576,42 +603,77 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     margin: "xs",
   };
 
+  const summaryTwo = buildAmuletFlexSummaryTwoLines(mv.powerCategories);
   const fitParsed = parseFitLineToSummaryBlock(fitLine);
-  const summaryValueDisplay = fitParsed
-    ? truncateFlexSummaryValueForTeaser(
-        formatFlexSummaryValueForDisplay(fitParsed.value),
-      )
-    : "";
+
+  /** @type {object[]|null} */
+  let fitBlockContents = null;
+  if (summaryTwo != null) {
+    fitBlockContents = [
+      {
+        type: "text",
+        text: "เด่นสุด",
+        size: "xxs",
+        color: AMULET_ACCENT_DIM,
+        weight: "bold",
+        wrap: true,
+      },
+      {
+        type: "text",
+        text: summaryTwo.line1,
+        size: "xs",
+        color: AMULET_SUMMARY_VALUE_COLOR,
+        weight: "regular",
+        wrap: true,
+        maxLines: 1,
+      },
+      {
+        type: "text",
+        text: summaryTwo.line2,
+        size: "xs",
+        color: AMULET_SUMMARY_VALUE_COLOR,
+        weight: "regular",
+        wrap: true,
+        maxLines: 1,
+      },
+    ];
+  } else if (fitParsed != null) {
+    const summaryValueDisplay = truncateFlexSummaryValueForTeaser(
+      formatFlexSummaryValueForDisplay(fitParsed.value),
+    );
+    fitBlockContents = [
+      {
+        type: "text",
+        text: fitParsed.label,
+        size: "xxs",
+        color: AMULET_ACCENT_DIM,
+        weight: "bold",
+        wrap: true,
+      },
+      {
+        type: "text",
+        text: summaryValueDisplay,
+        size: "xs",
+        color: AMULET_SUMMARY_VALUE_COLOR,
+        weight: "regular",
+        wrap: true,
+        maxLines: 2,
+        lineSpacing: "4px",
+      },
+    ];
+  }
+
   const fitBlock =
-    fitParsed != null
+    fitBlockContents != null
       ? {
           type: "box",
           layout: "vertical",
-          spacing: "sm",
+          spacing: "xs",
           margin: "md",
           paddingAll: "12px",
           backgroundColor: FLEX_BOX_BG,
           cornerRadius: "md",
-          contents: [
-            {
-              type: "text",
-              text: fitParsed.label,
-              size: "xxs",
-              color: AMULET_ACCENT_DIM,
-              weight: "bold",
-              wrap: true,
-            },
-            {
-              type: "text",
-              text: summaryValueDisplay,
-              size: "xs",
-              color: AMULET_SUMMARY_VALUE_COLOR,
-              weight: "regular",
-              wrap: true,
-              maxLines: 2,
-              lineSpacing: "4px",
-            },
-          ],
+          contents: fitBlockContents,
         }
       : null;
 

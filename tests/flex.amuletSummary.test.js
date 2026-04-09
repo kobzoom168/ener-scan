@@ -87,8 +87,8 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   );
   assert.ok(bodyText.includes("เด่นสุด"));
   assert.ok(
-    bodyText.includes("เด่นคุ้มครอง รองเมตตา"),
-    "summary uses Flex-only aliases (not full labelThai phrases)",
+    bodyText.includes("เด่นคุ้มครอง") && bodyText.includes("รองเมตตา"),
+    "summary is two compact lines (เด่น/รอง) with Flex aliases",
   );
   assert.ok(
     bodyText.includes("เด่น") && bodyText.includes("รอง"),
@@ -161,7 +161,7 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   );
 });
 
-test("buildAmuletSummaryFirstFlex: long fitLine value truncates in Flex teaser only", async () => {
+test("buildAmuletSummaryFirstFlex: absurd fitLine does not flood Flex (summary from power rows)", async () => {
   const longValue = `${"ก".repeat(85)} → ${"ข".repeat(85)}`;
   const flex = await buildAmuletSummaryFirstFlex("ignored", {
     reportPayload: {
@@ -178,8 +178,14 @@ test("buildAmuletSummaryFirstFlex: long fitLine value truncates in Flex teaser o
     appendReportBubble: false,
   });
   const bodyText = JSON.stringify(flex.contents);
-  assert.ok(bodyText.includes("…"), "long summary value gets ellipsis in Flex");
-  assert.ok(!bodyText.includes(longValue), "full long value not in Flex JSON");
+  assert.ok(
+    !bodyText.includes(longValue),
+    "long fitLine not dumped into Flex JSON (two-line summary from powerCategories)",
+  );
+  assert.ok(
+    bodyText.includes("เด่นคุ้มครอง") && bodyText.includes("รองเมตตา"),
+    "summary takeaway stays short and complete from sorted dimensions",
+  );
 });
 
 test("buildAmuletSummaryFirstFlex: empty ctaLabel uses default full-report wording", async () => {
