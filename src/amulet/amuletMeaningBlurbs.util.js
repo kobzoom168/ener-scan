@@ -1,5 +1,5 @@
 /**
- * Sacred amulet lane — verdict-style life blurbs per axis (short Thai, no hedging).
+ * Sacred amulet lane: verdict-style life blurbs per axis (short Thai, no hedging).
  * Used when payload omits custom `htmlReport.lifeAreaBlurbs`.
  */
 import { POWER_LABEL_THAI } from "./amuletScores.util.js";
@@ -20,7 +20,7 @@ function variant(seed, key, rank0to5) {
   return h;
 }
 
-/** Two short lines per axis — picked by variant; keeps rows distinct. */
+/** Two short lines per axis: picked by variant; keeps rows distinct. */
 const AXIS_VERDICT = {
   protection: [
     "กันแรงปะทะได้ตรง ๆ คุมจังหวะเมื่อเรื่องหนักเข้ามา",
@@ -56,8 +56,8 @@ const AXIS_VERDICT = {
 export function buildAxisLifeBlurb(seed, axisKey, rank0to5) {
   const k = /** @type {AmuletPowerKey} */ (axisKey);
   const lines = AXIS_VERDICT[k] || [
-    `เด่น ${POWER_LABEL_THAI[k]} — ใช้ได้ตรงจุด`,
-    `หนุน ${POWER_LABEL_THAI[k]} — ส่งผลชัดเมื่อใช้ซ้ำ`,
+    `เด่น ${POWER_LABEL_THAI[k]} · ใช้ได้ตรงจุด`,
+    `หนุน ${POWER_LABEL_THAI[k]} · ส่งผลชัดเมื่อใช้ซ้ำ`,
   ];
   const i = variant(seed, k, rank0to5) % lines.length;
   return lines[i].replace(/\s+/g, " ").trim().slice(0, 96);

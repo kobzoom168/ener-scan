@@ -47,8 +47,12 @@ function minimalPayload(overrides = {}) {
   return { ...base, ...overrides };
 }
 
-test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows — พลังเด่น / รองลงมา", () => {
+test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด่น / รองลงมา)", () => {
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
+  assert.ok(
+    !JSON.stringify(vm).includes("\u2014"),
+    "sacred_amulet VM copy avoids em dash (cleaner Thai)",
+  );
   assert.equal(vm.graphSummary.rows.length, 2);
   assert.equal(vm.graphSummary.rows[0].label, "พลังเด่น");
   assert.equal(vm.graphSummary.rows[1].label, "รองลงมา");

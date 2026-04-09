@@ -100,7 +100,7 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
   );
   assert.ok(
     !bodyText.includes("› "),
-    "no bullet prose — Flex is teaser only",
+    "no bullet prose (Flex is teaser only)",
   );
   assert.ok(
     !bodyText.includes("ช่วยให้จังหวะชีวิต"),
@@ -201,7 +201,7 @@ test("buildAmuletSummaryFirstFlex: empty ctaLabel uses default full-report wordi
   assert.ok(bodyText.includes("เปิดรายงานฉบับเต็ม"));
 });
 
-test("buildAmuletSummaryFirstFlex: no image — headline in body, no bubble.hero", async () => {
+test("buildAmuletSummaryFirstFlex: no image: headline in body, no bubble.hero", async () => {
   const flex = await buildAmuletSummaryFirstFlex("ignored", {
     reportPayload: { ...basePayload, object: { objectImageUrl: "" } },
     reportUrl: "https://report.example/x",
@@ -209,6 +209,10 @@ test("buildAmuletSummaryFirstFlex: no image — headline in body, no bubble.hero
   });
   assert.equal(flex.contents.hero, undefined);
   const bodyText = JSON.stringify(flex.contents);
+  assert.ok(
+    !bodyText.includes("\u2014"),
+    "sacred_amulet Flex JSON has no em dash in user-visible strings",
+  );
   assert.ok(bodyText.includes("พระเครื่อง"));
   assert.ok(findBarLifeBlockDeep(flex.contents.body), "bars still present");
 });

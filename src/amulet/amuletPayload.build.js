@@ -19,7 +19,7 @@ function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, surface
 
   const fitLine = `เด่นสุด ${primaryLabel} · รอง ${secondaryLabel}`;
   const bullets = [
-    "เด่นสุด รองลงมา — ดูจากคะแนน",
+    "เด่นสุด รองลงมา · ดูจากคะแนน",
     "ด้านล่างเรียงตามคะแนน สูงไปต่ำ",
   ];
   const ctaLabel = "เปิดรายงานฉบับเต็ม";

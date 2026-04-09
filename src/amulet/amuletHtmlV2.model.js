@@ -48,7 +48,7 @@ function sortPowerKeysByObjectDesc(objectP) {
 }
 
 /**
- * เข้ากัน: เลือกระหว่าง top1/top2 เท่านั้น — ให้สอดคล้องกับพลังเด่นบนวัตถุ
+ * เข้ากัน: เลือกระหว่าง top1/top2 เท่านั้น · ให้สอดคล้องกับพลังเด่นบนวัตถุ
  * @param {Record<string, number>} ownerP
  * @param {Record<string, number>} objectP
  * @param {string[]} ord
@@ -141,13 +141,13 @@ export function buildAmuletHtmlV2ViewModel(payload) {
 
   const alignMain =
     minD <= 14
-      ? `${alignLabel} เข้ากับคุณชัด — ใช้ได้ดี`
-      : `${alignLabel} เริ่มส่งกับคุณ — ใช้ได้ดี`;
+      ? `${alignLabel} เข้ากับคุณชัด · ใช้ได้ดี`
+      : `${alignLabel} เริ่มส่งกับคุณ · ใช้ได้ดี`;
 
   const tensionMain =
     maxD >= 26
-      ? `${tensionLabel} ยังไม่ส่งกับจังหวะคุณ — อย่าเร่ง`
-      : `${tensionLabel} ยังไม่ส่งกัน — อย่าเร่ง`;
+      ? `${tensionLabel} ยังไม่ส่งกับจังหวะคุณ · อย่าเร่ง`
+      : `${tensionLabel} ยังไม่ส่งกัน · อย่าเร่ง`;
 
   const interactionRows = [
     {
@@ -156,12 +156,12 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       sub:
         alignKey === ord[0]
           ? "ตรงกับพลังเด่นบนวัตถุ"
-          : "ตรงกับรองลงมา — ยังเสริมคู่กันได้",
+          : "ตรงกับรองลงมา · ยังเสริมคู่กันได้",
     },
     {
       kicker: "ยังไม่ส่งกัน",
       main: tensionMain,
-      sub: "คะแนนห่างกันที่สุด — คุมจังหวะ",
+      sub: "คะแนนห่างกันที่สุด · คุมจังหวะ",
     },
     {
       kicker: "พลังเด่น",
@@ -251,7 +251,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
         },
         {
           title: "เข้ากันมากที่สุด",
-          text: `${alignLabel} ส่งกับคุณตรงสุด — ใช้คู่กันได้ดี`,
+          text: `${alignLabel} ส่งกับคุณตรงสุด · ใช้คู่กันได้ดี`,
         },
       ],
     },

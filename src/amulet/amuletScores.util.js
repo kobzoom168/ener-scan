@@ -1,5 +1,5 @@
 /**
- * Sacred amulet lane — six-axis power scores (deterministic_v2: object-stable + session drift).
+ * Sacred amulet lane: six-axis power scores (deterministic_v2: object-stable + session drift).
  */
 /** @typedef {"protection"|"metta"|"baramee"|"luck"|"fortune_anchor"|"specialty"} AmuletPowerKey */
 
@@ -14,7 +14,7 @@ const POWER_LABEL_THAI = {
   specialty: "งานเฉพาะทาง",
 };
 
-/** Short labels — shared HTML / owner / Flex display. */
+/** Short labels: shared HTML / owner / Flex display. */
 export const AMULET_PEAK_SHORT_THAI = {
   protection: "คุ้มครอง",
   metta: "เมตตา",

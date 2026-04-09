@@ -1,9 +1,9 @@
 /**
- * Sacred amulet lane — summary-first Flex (gold/dark theme). Parallel to Moldavite Flex; does not use legacy thai_amulet pools.
+ * Sacred amulet lane: summary-first Flex (gold/dark theme). Parallel to Moldavite Flex; does not use legacy thai_amulet pools.
  *
  * Typography: LINE renders Flex with the client’s system fonts (no @font-face). The HTML report uses
  * `--mv2-font-th` in `amuletReportV2.template.js` for a unified Thai stack; visual parity with Flex is
- * approximate — keep the same size/weight *roles* (headline md bold, tagline xs, body xs) here.
+ * approximate: keep the same size/weight *roles* (headline md bold, tagline xs, body xs) here.
  */
 import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
 const AMULET_VISIBLE_LABEL_FALLBACK = "พระเครื่อง";
@@ -11,10 +11,10 @@ import { normalizeScore } from "./flex.utils.js";
 import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 
-/** Dark + gold — sacred amulet lane (LINE-safe hex). */
+/** Dark + gold: sacred amulet lane (LINE-safe hex). */
 const FLEX_CARD_BG = "#0c0a08";
 const FLEX_BOX_BG = "#1a1510";
-/** Pill meter track — inset, rounded; pair with LIFE_AREA_BAR_FILL (distinct from header accent hex). */
+/** Pill meter track: inset, rounded; pair with LIFE_AREA_BAR_FILL (distinct from header accent hex). */
 const LIFE_AREA_BAR_TRACK_BG = "#1c1812";
 const LIFE_AREA_BAR_FILL = "#c9a227";
 const AMULET_ACCENT = "#e8c547";
@@ -23,17 +23,20 @@ const AMULET_CTA_BG = "#b8860b";
 const FLEX_ACCENT = AMULET_CTA_BG;
 const FLEX_TEXT_PRIMARY = "#f3f4f6";
 const FLEX_TEXT_SECONDARY = "#9ca3af";
-/** Tagline under title — softer than body so headline stays primary. */
+/** Tagline under title: softer than body so headline stays primary. */
 const AMULET_TITLE_TAGLINE_COLOR = "#a8a29e";
-/** Life-area helper line — dimmer than captions; metadata only. */
+/** Life-area helper line: dimmer than captions; metadata only. */
 const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
 /** Fallback when power rows are missing (Flex display only). */
 const AMULET_TITLE_TAGLINE = "พระเครื่อง · หกมิติพลัง";
 
-/** Bar score numerals — quieter than labels (read dimension + bar first). */
+/** Bar score numerals: quieter than labels (read dimension + bar first). */
 const LIFE_AREA_BAR_SCORE_COLOR = "#5f5a4f";
-/** Summary body line under `เด่นสุด` — subordinate to label, still readable. */
+/** Summary body line under `เด่นสุด`: subordinate to label, still readable. */
 const AMULET_SUMMARY_VALUE_COLOR = "#b4aea3";
+
+/** User-visible empty slot in Flex teaser (avoid em dash). */
+const AMULET_FLEX_EMPTY_MARK = "-";
 
 /** Flex summary: show only top N dimensions after score sort (full data stays in HTML). */
 const AMULET_FLEX_BARS_TOP_N = 4;
@@ -57,7 +60,7 @@ const AMULET_FLEX_POWER_LABEL_ALIAS = /** @type {const} */ ({
   งานเฉพาะทาง: "งานเฉพาะ",
 });
 
-/** @type {string[]} longest first — prefix match after exact tries */
+/** @type {string[]} longest first: prefix match after exact tries */
 const AMULET_FLEX_ALIAS_KEYS_SORTED = Object.keys(AMULET_FLEX_POWER_LABEL_ALIAS).sort(
   (a, b) => b.length - a.length,
 );
@@ -91,7 +94,7 @@ function applyAmuletFlexLabelAlias(raw) {
   return t;
 }
 
-/** Six power categories — display order for bar row iteration; sort is by score. */
+/** Six power categories: display order for bar row iteration; sort is by score. */
 const AMULET_POWER_ROW_KEYS = /** @type {const} */ ([
   "protection",
   "metta",
@@ -146,7 +149,7 @@ function parseFitLineToSummaryBlock(raw) {
   if (!m) m = s.match(/^เด่นสุด\s*:\s*(.+)$/s);
   if (m) {
     const value = String(m[1] || "").trim();
-    return { label: "เด่นสุด", value: value || "—" };
+    return { label: "เด่นสุด", value: value || AMULET_FLEX_EMPTY_MARK };
   }
   return { label: "เด่นสุด", value: s };
 }
@@ -159,7 +162,7 @@ function truncateFlexSummaryValueForTeaser(raw) {
   const t = String(raw || "")
     .replace(/\s+/g, " ")
     .trim();
-  if (!t) return "—";
+  if (!t) return AMULET_FLEX_EMPTY_MARK;
   const max = AMULET_FLEX_SUMMARY_VALUE_MAX_CHARS;
   if (t.length <= max) return t;
   return `${t.slice(0, max - 1)}…`;
@@ -200,7 +203,7 @@ function sortAmuletPowerCategoryRows(powerCategories) {
       scoreRaw != null && Number.isFinite(Number(scoreRaw))
         ? Math.round(Number(scoreRaw))
         : null;
-    rows.push({ label: label || "—", score: scoreOk });
+    rows.push({ label: label || AMULET_FLEX_EMPTY_MARK, score: scoreOk });
   }
   rows.sort((a, b) => {
     if (a.score == null && b.score == null) return 0;
@@ -220,7 +223,9 @@ function buildAmuletFlexTaglineDisplay(mv) {
   const rows = sortAmuletPowerCategoryRows(mv?.powerCategories);
   const top = rows[0];
   const lab = top ? String(top.label || "").trim() : "";
-  if (!lab || lab === "—") return AMULET_TITLE_TAGLINE;
+  if (!lab || lab === AMULET_FLEX_EMPTY_MARK || lab === "\u2014") {
+    return AMULET_TITLE_TAGLINE;
+  }
   const dimRaw = applyAmuletFlexLabelAlias(lab);
   const dim = shortenThaiSnippet(dimRaw || lab, AMULET_FLEX_TAGLINE_DIM_MAX_CHARS);
   return `พระเครื่อง · เด่น${dim}`;
@@ -235,7 +240,9 @@ function formatFlexSummaryValueForDisplay(raw) {
   const v = String(raw || "")
     .replace(/\s+/g, " ")
     .trim();
-  if (!v || v === "—") return "—";
+  if (!v || v === AMULET_FLEX_EMPTY_MARK || v === "\u2014") {
+    return AMULET_FLEX_EMPTY_MARK;
+  }
   const parts = v
     .split(/\s*→\s*/)
     .map((p) => p.trim())
@@ -252,7 +259,7 @@ function formatFlexSummaryValueForDisplay(raw) {
 }
 
 /**
- * Power category meters: each item is two rows — (1) full-width Thai label,
+ * Power category meters: each item is two rows: (1) full-width Thai label,
  * (2) horizontal pill track + fixed-width score. Sort/top-N/flex ratio unchanged.
  *
  * @param {Record<string, { score?: number, labelThai?: string }>|null|undefined} powerCategories
@@ -266,7 +273,7 @@ function createPowerCategoryBarBlock(powerCategories) {
   /** @type {object[]} */
   const rowBoxes = topRows.map(({ label, score }) => {
     const { greenFlex, emptyFlex } = lifeAreaBarFlexPair(score);
-    const scoreText = score == null ? "—" : String(score);
+    const scoreText = score == null ? AMULET_FLEX_EMPTY_MARK : String(score);
     const meterTrack = {
       type: "box",
       layout: "horizontal",
@@ -486,7 +493,7 @@ function compatPercentAndBand(reportPayload, fallbackCompat) {
 }
 
 /**
- * @param {string} rawText unused — kept for signature parity with summary-first
+ * @param {string} rawText unused: kept for signature parity with summary-first
  * @param {{
  *   birthdate?: string|null,
  *   reportUrl?: string|null,
@@ -626,7 +633,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
   if (!url) {
     bodyContents.push({
       type: "text",
-      text: "ลิงก์รายงานยังไม่พร้อม — กลับไปที่แชทแล้วลองอีกครั้งเมื่อสะดวก",
+      text: "ลิงก์รายงานยังไม่พร้อม · กลับไปที่แชทแล้วลองอีกครั้งเมื่อสะดวก",
       size: "xs",
       color: FLEX_TEXT_SECONDARY,
       wrap: true,

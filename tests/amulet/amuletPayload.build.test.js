@@ -22,4 +22,10 @@ test("buildAmuletV1Slice: six power categories + flex surface + deterministic v2
   assert.ok(String(slice.flexSurface.tagline || "").includes("หกมิติ"));
   assert.ok(String(slice.flexSurface.ctaLabel || "").length > 0);
   assert.ok(slice.htmlReport.usageCautionLines.length >= 1);
+  const flexJson = JSON.stringify(slice.flexSurface);
+  assert.ok(!flexJson.includes("\u2014"), "flex surface copy has no em dash");
+  assert.ok(
+    slice.flexSurface.bullets.some((b) => String(b).includes("·")),
+    "compact bullets use middle dot, not long dash phrasing",
+  );
 });
