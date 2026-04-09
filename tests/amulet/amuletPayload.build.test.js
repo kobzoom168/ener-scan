@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildAmuletV1Slice } from "../../src/amulet/amuletPayload.build.js";
 
-test("buildAmuletV1Slice: six power categories + flex surface + deterministic v1", () => {
+test("buildAmuletV1Slice: six power categories + flex surface + deterministic v2", () => {
   const slice = buildAmuletV1Slice({
     scanResultId: "scan-amulet-1",
     seedKey: "seed-amulet-1",
@@ -10,7 +10,7 @@ test("buildAmuletV1Slice: six power categories + flex surface + deterministic v1
     mainEnergyLabel: "คุ้มครอง · เปิดทาง",
   });
   assert.equal(slice.version, "1");
-  assert.equal(slice.scoringMode, "deterministic_v1");
+  assert.equal(slice.scoringMode, "deterministic_v2");
   assert.equal(slice.detection.reason, "sacred_amulet_lane_v1");
   assert.equal(Object.keys(slice.powerCategories).length, 6);
   assert.ok(slice.primaryPower);

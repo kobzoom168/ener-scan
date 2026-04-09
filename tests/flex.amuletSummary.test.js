@@ -11,7 +11,7 @@ const basePayload = {
   object: { objectImageUrl: "https://example.com/x.jpg" },
   amuletV1: {
     version: "1",
-    scoringMode: "deterministic_v1",
+    scoringMode: "deterministic_v2",
     powerCategories: {
       protection: { key: "protection", score: 90, labelThai: "คุ้มครองป้องกัน" },
       metta: { key: "metta", score: 80, labelThai: "เมตตาและคนเอ็นดู" },
@@ -31,7 +31,7 @@ const basePayload = {
     },
     flexSurface: {
       headline: "พระเครื่อง",
-      fitLine: "ตอนนี้เด่นสุด: คุ้มครองป้องกัน → เมตตาและคนเอ็นดู",
+      fitLine: "เด่นสุด: คุ้มครองป้องกัน → เมตตาและคนเอ็นดู",
       bullets: [
         "เด่นเมตตาและคนเอ็นดู ช่วยให้จังหวะชีวิตเริ่มขยับขึ้น",
         "ข้อสองสั้น ๆ",
@@ -51,14 +51,14 @@ function findBarLifeBlockDeep(node) {
   if (!node || typeof node !== "object") return null;
   if (node.type === "box" && Array.isArray(node.contents)) {
     const t0 = node.contents[0];
-    if (t0?.type === "text" && t0.text === "พลังไปออกกับมิติไหน") {
+    if (t0?.type === "text" && t0.text === "พลังเด่น") {
       return node;
     }
     const wrap = node.contents[0];
     if (
       wrap?.type === "box" &&
       wrap.contents?.[0]?.type === "text" &&
-      wrap.contents[0].text === "พลังไปออกกับมิติไหน"
+      wrap.contents[0].text === "พลังเด่น"
     ) {
       return node;
     }
@@ -85,7 +85,7 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     bodyText.includes("พระเครื่อง · เด่นคุ้มครอง"),
     "tagline uses Flex-only short alias for top dimension",
   );
-  assert.ok(bodyText.includes("ตอนนี้เด่นสุด"));
+  assert.ok(bodyText.includes("เด่นสุด"));
   assert.ok(
     bodyText.includes("เด่นคุ้มครอง รองเมตตา"),
     "summary uses Flex-only aliases (not full labelThai phrases)",
@@ -107,7 +107,7 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     "flexSurface.bullets not rendered in Flex",
   );
   assert.ok(bodyText.includes("ดูว่าชิ้นนี้ช่วยคุณยังไง"));
-  assert.ok(bodyText.includes("พลังไปออกกับมิติไหน"));
+  assert.ok(bodyText.includes("พลังเด่น"));
   assert.ok(
     !bodyText.includes("พลังหลัก"),
     "sacred amulet flex: no main-energy pill section",
@@ -131,8 +131,8 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     "bar scores stay visually subordinate to labels (skin only)",
   );
 
-  // Summary block: label + value (not single-line "ตอนนี้เด่นสุด: …")
-  assert.ok(bodyText.includes('"text":"ตอนนี้เด่นสุด"'));
+  // Summary block: label + value (not single-line raw fitLine)
+  assert.ok(bodyText.includes('"text":"เด่นสุด"'));
 
   /** Bars block: each category is label row then [meter | score], not 3-column single row. */
   const lifeBlock = findBarLifeBlockDeep(flex.contents.body);
@@ -170,7 +170,7 @@ test("buildAmuletSummaryFirstFlex: long fitLine value truncates in Flex teaser o
         ...basePayload.amuletV1,
         flexSurface: {
           ...basePayload.amuletV1.flexSurface,
-          fitLine: `ตอนนี้เด่นสุด: ${longValue}`,
+          fitLine: `เด่นสุด: ${longValue}`,
         },
       },
     },

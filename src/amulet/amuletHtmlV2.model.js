@@ -1,18 +1,13 @@
 import { deriveAmuletOwnerPowerProfile } from "./amuletOwnerProfile.util.js";
-import { POWER_ORDER, POWER_LABEL_THAI } from "./amuletScores.util.js";
-
-/** Short labels for hero/clarifier (match radar alias tone; human-facing). */
-const PEAK_SHORT_THAI = {
-  protection: "คุ้มครอง",
-  metta: "เมตตา",
-  baramee: "บารมี",
-  luck: "โชคลาภ",
-  fortune_anchor: "หนุนดวง",
-  specialty: "งานเฉพาะ",
-};
+import {
+  POWER_ORDER,
+  POWER_LABEL_THAI,
+  AMULET_PEAK_SHORT_THAI,
+} from "./amuletScores.util.js";
+import { buildAxisLifeBlurb } from "./amuletMeaningBlurbs.util.js";
 
 /**
- * True when hero โทนหลัก text matches the graph’s highest-scoring axis (no extra clarifier).
+ * True when hero โทนหลัก text matches the dominant score axis (no extra clarifier).
  * @param {string} mainShort
  * @param {string} peakKey
  */
@@ -21,7 +16,8 @@ function mainToneMatchesGraphPeak(mainShort, peakKey) {
     .replace(/\s+/g, " ")
     .trim();
   if (!m) return true;
-  const short = PEAK_SHORT_THAI[/** @type {keyof typeof PEAK_SHORT_THAI} */ (peakKey)];
+  const short =
+    AMULET_PEAK_SHORT_THAI[/** @type {keyof typeof AMULET_PEAK_SHORT_THAI} */ (peakKey)];
   const full = POWER_LABEL_THAI[/** @type {keyof typeof POWER_LABEL_THAI} */ (peakKey)];
   if (short && (m.includes(short) || short.includes(m.slice(0, Math.min(m.length, 4))))) {
     return true;
@@ -31,16 +27,6 @@ function mainToneMatchesGraphPeak(mainShort, peakKey) {
   }
   return false;
 }
-
-/** Default life-area blurbs when payload omits `htmlReport.lifeAreaBlurbs` (one tight line each). */
-const AMULET_DEFAULT_LIFE_BLURBS = {
-  protection: "กันแรงปะทะ ตั้งขอบเขต พยุงตัวเวลาเรื่องหนัก",
-  metta: "คนรอบตัวเปิดใจ คุยง่าย รับพลังคุณได้มากขึ้น",
-  baramee: "ภาพลักษณ์ ความน่าเชื่อถือ แรงนำในบทบาทที่รับอยู่",
-  luck: "โอกาสใหม่ จังหวะใหม่ ทางเลือกเริ่มเปิด",
-  fortune_anchor: "ประคองใจ ตั้งหลัก ไม่ไหลตามสถานการณ์ง่าย",
-  specialty: "งานใช้ฝีมือ ถนัด หรือบทบาทเฉพาะตัว",
-};
 
 /**
  * @param {number} v
@@ -59,6 +45,20 @@ function sortPowerKeysByObjectDesc(objectP) {
     if (db !== 0) return db;
     return POWER_ORDER.indexOf(a) - POWER_ORDER.indexOf(b);
   });
+}
+
+/**
+ * เข้ากัน: เลือกระหว่าง top1/top2 เท่านั้น — ให้สอดคล้องกับพลังเด่นบนวัตถุ
+ * @param {Record<string, number>} ownerP
+ * @param {Record<string, number>} objectP
+ * @param {string[]} ord
+ */
+function pickAlignKeyAmongTopTwo(ownerP, objectP, ord) {
+  const a = ord[0];
+  const b = ord[1];
+  const da = Math.abs(ownerP[a] - objectP[a]);
+  const db = Math.abs(ownerP[b] - objectP[b]);
+  return da <= db ? a : b;
 }
 
 /**
@@ -98,70 +98,75 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     ownerP[k] = clamp0100(Number(ownerProf.ownerPower[k]) || 50);
   }
 
-  let alignKey = POWER_ORDER[0];
+  const ord = sortPowerKeysByObjectDesc(objectP);
+  const alignKey = pickAlignKeyAmongTopTwo(ownerP, objectP, ord);
+
   let tensionKey = POWER_ORDER[0];
-  let minD = Infinity;
   let maxD = -1;
   for (const k of POWER_ORDER) {
     const d = Math.abs(ownerP[k] - objectP[k]);
-    if (d < minD) {
-      minD = d;
-      alignKey = k;
-    }
     if (d > maxD) {
       maxD = d;
       tensionKey = k;
     }
   }
+  const minD = Math.abs(ownerP[alignKey] - objectP[alignKey]);
 
-  let peakKey = POWER_ORDER[0];
-  let peakVal = -1;
-  for (const k of POWER_ORDER) {
-    const v = objectP[k];
-    if (v > peakVal) {
-      peakVal = v;
-      peakKey = k;
-    }
-  }
-
-  const ord = sortPowerKeysByObjectDesc(objectP);
+  const gapTop12 = objectP[ord[0]] - objectP[ord[1]];
+  const topLabel = POWER_LABEL_THAI[ord[0]];
+  const secondLabel = POWER_LABEL_THAI[ord[1]];
   const graphSummary = {
     rows: [
-      { label: "ด้านที่โค้งสูงสุด", value: POWER_LABEL_THAI[ord[0]] },
-      { label: "ด้านรองลงมา", value: POWER_LABEL_THAI[ord[1]] },
+      {
+        label: "พลังเด่น",
+        value:
+          gapTop12 <= 4
+            ? `${topLabel} · สูสีรอง`
+            : topLabel,
+      },
+      {
+        label: "รองลงมา",
+        value: secondLabel,
+      },
     ],
   };
 
   const alignLabel = POWER_LABEL_THAI[alignKey];
   const tensionLabel = POWER_LABEL_THAI[tensionKey];
-  const peakLabel = POWER_LABEL_THAI[peakKey];
-  const peakShort = PEAK_SHORT_THAI[peakKey] || peakLabel;
+  const peakKey = ord[0];
+  const peakShort =
+    AMULET_PEAK_SHORT_THAI[peakKey] || POWER_LABEL_THAI[peakKey];
+  const s0 = AMULET_PEAK_SHORT_THAI[ord[0]] || POWER_LABEL_THAI[ord[0]];
+  const s1 = AMULET_PEAK_SHORT_THAI[ord[1]] || POWER_LABEL_THAI[ord[1]];
 
   const alignMain =
-    minD <= 12
-      ? `${alignLabel} ส่งเสริมคุณได้ชัดที่สุดในตอนนี้`
-      : `${alignLabel} เริ่มเข้ากับคุณได้เร็ว — ลองใช้เป็นจุดเริ่ม`;
+    minD <= 14
+      ? `${alignLabel} เข้ากับคุณชัด — ใช้ได้ดี`
+      : `${alignLabel} เริ่มส่งกับคุณ — ใช้ได้ดี`;
 
   const tensionMain =
-    maxD >= 28
-      ? `${tensionLabel} ยังไม่ส่งกับจังหวะคุณ — อย่าเร่งด้านนี้`
-      : `${tensionLabel} ต้องปรับจังหวะ — อย่าบังคับใช้หนัก`;
+    maxD >= 26
+      ? `${tensionLabel} ยังไม่ส่งกับจังหวะคุณ — อย่าเร่ง`
+      : `${tensionLabel} ยังไม่ส่งกัน — อย่าเร่ง`;
 
   const interactionRows = [
     {
-      kicker: "จุดเข้าคู่",
+      kicker: "เข้ากัน",
       main: alignMain,
-      sub: "มุมที่คุณกับวัตถุใกล้เคียงกันที่สุด",
+      sub:
+        alignKey === ord[0]
+          ? "ตรงกับพลังเด่นบนวัตถุ"
+          : "ตรงกับรองลงมา — ยังเสริมคู่กันได้",
     },
     {
-      kicker: "จุดตึง",
+      kicker: "ยังไม่ส่งกัน",
       main: tensionMain,
-      sub: "มุมที่ยังห่างกัน — ใช้แบบค่อยเป็นค่อยไป",
+      sub: "คะแนนห่างกันที่สุด — คุมจังหวะ",
     },
     {
-      kicker: "พลังของชิ้นนี้",
-      main: `เน้นด้าน${peakShort} มากที่สุด`,
-      sub: "ตรงกับด้านที่เห็นโค้งสูงสุดในกราฟ",
+      kicker: "พลังเด่น",
+      main: `เด่นสุดที่${peakShort}`,
+      sub: `ส่ง ${s0} นำ · ${s1} รอง`,
     },
   ];
 
@@ -177,19 +182,20 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       e && typeof e === "object" && e.score != null
         ? clamp0100(Number(e.score))
         : 0;
-    const rawBlurb =
-      String(blurbs[k] || "").trim() ||
-      AMULET_DEFAULT_LIFE_BLURBS[k] ||
-      "พลังด้านนี้ยังไม่เด่นชัด";
-    const blurb = rawBlurb.replace(/\s+/g, " ").trim().slice(0, 96);
     return {
       key: k,
       label: POWER_LABEL_THAI[k],
       score,
-      blurb,
+      blurb: "",
     };
   });
   lifeRows.sort((a, b) => b.score - a.score);
+  lifeRows.forEach((row, idx) => {
+    const custom = String(blurbs[row.key] || "").trim();
+    row.blurb = custom
+      ? custom.replace(/\s+/g, " ").trim().slice(0, 96)
+      : buildAxisLifeBlurb(seed, row.key, idx);
+  });
 
   const usageLines = Array.isArray(hr?.usageCautionLines)
     ? hr.usageCautionLines.map((x) => String(x || "").trim()).filter(Boolean)
@@ -203,7 +209,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     String(fs.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม";
   const clarifierLine = mainToneMatchesGraphPeak(mainShort, ord[0])
     ? ""
-    : `กราฟด้านบนชี้ว่าเด่นที่ ${peakShort} ชัดที่สุด`;
+    : `โทนหลักเป็นภาพรวม · ตอนนี้เด่นสุดที่ ${AMULET_PEAK_SHORT_THAI[ord[0]] || topLabel}`;
 
   return {
     rendererId: "amulet-html-v2",
@@ -211,9 +217,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       subtypeLabel: String(fs.headline || "").trim(),
       tagline: String(fs.tagline || "").trim(),
       mainEnergyLabel: mainShort,
-      /** Full hero line (frozen: โทนหลัก). */
       displayLine: `โทนหลัก · ${mainShort}`,
-      /** Second line when โทนหลัก ไม่ตรงแกนสูงสุดบนกราฟ */
       clarifierLine,
       objectImageUrl: String(payload.object?.objectImageUrl || "").trim(),
       reportGeneratedAt: String(payload.generatedAt || ""),
@@ -246,13 +250,13 @@ export function buildAmuletHtmlV2ViewModel(payload) {
           text: ownerProf.zodiacLabel,
         },
         {
-          title: "มุมที่เข้ากับคุณมากที่สุด",
-          text: `${alignLabel} ใกล้เคียงกับคุณที่สุด`,
+          title: "เข้ากันมากที่สุด",
+          text: `${alignLabel} ส่งกับคุณตรงสุด — ใช้คู่กันได้ดี`,
         },
       ],
     },
     interactionSummary: {
-      headline: "วัตถุกับคุณ: สรุปสั้น ๆ",
+      headline: "ชิ้นนี้ทำงานกับคุณอย่างไร",
       rows: interactionRows,
     },
     lifeAreaDetail: { rows: lifeRows },

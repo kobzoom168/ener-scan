@@ -72,7 +72,7 @@
  *
  * @typedef {Object} ReportAmuletV1
  * @property {string} version — e.g. "1"
- * @property {"deterministic_v1"} scoringMode
+ * @property {"deterministic_v1"|"deterministic_v2"} scoringMode
  * @property {{ reason: string, matchedSignals: string[] }} detection
  * @property {Record<string, { key: string, score: number, labelThai: string }>} powerCategories
  * @property {string} primaryPower

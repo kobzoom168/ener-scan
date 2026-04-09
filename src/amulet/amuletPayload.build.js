@@ -19,8 +19,8 @@ function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, surface
 
   const fitLine = `เด่นสุด ${primaryLabel} · รอง ${secondaryLabel}`;
   const bullets = [
-    "กราฟหกมิติชี้จุดแรงของชิ้นนี้ชัด",
-    "อ่านคะแนนก่อน แล้วค่อยไล่รายละเอียดด้านล่าง",
+    "เด่นสุด รองลงมา — ดูจากคะแนน",
+    "ด้านล่างเรียงตามคะแนน สูงไปต่ำ",
   ];
   const ctaLabel = "เปิดรายงานฉบับเต็ม";
 
@@ -33,33 +33,19 @@ function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, surface
     ctaLabel,
     mainEnergyShort: surface.mainEnergyShort,
     heroNamingLine: `${surface.headline} · ${mainShort}`,
-    mainEnergyWordingLine: `โทนหลัก: ${mainShort} · สรุปจากหกมิติพลัง`,
-    htmlOpeningLine:
-      "รายงานนี้เริ่มจากกราฟหกมิติ แล้วสรุปเป็นข้อความสั้นให้อ่านเร็ว",
+    mainEnergyWordingLine: `โทนหลัก: ${mainShort} · หกมิติพลัง`,
+    htmlOpeningLine: "เปิดจากคะแนน แล้วไล่รายละเอียดตามลำดับ",
     tagline: surface.tagline,
   };
 }
 
 function buildAmuletHtmlReportPlaceholder() {
-  const lifeAreaBlurbs = {
-    protection:
-      "เด่นเรื่องกันแรงปะทะ ตั้งขอบเขต และพยุงตัวเวลาเจอเรื่องหนัก",
-    metta:
-      "ช่วยให้คนรอบตัวเปิดใจ คุยง่าย และรับพลังจากคุณมากขึ้น",
-    baramee:
-      "ส่งเรื่องภาพลักษณ์ ความน่าเชื่อถือ และแรงนำในบทบาทที่รับอยู่",
-    luck: "หนุนโอกาสใหม่ จังหวะใหม่ และทางเลือกที่เริ่มเปิดเข้ามา",
-    fortune_anchor:
-      "ช่วยประคองใจ ตั้งหลักไว และไม่ไหลตามสถานการณ์ง่าย",
-    specialty:
-      "เด่นกับงานที่ต้องใช้ฝีมือ ความถนัด หรือบทบาทเฉพาะตัว",
-  };
-
   const usageCautionLines = [
     "ผลลัพธ์ขึ้นกับบริบทคุณ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
   ];
 
-  return { lifeAreaBlurbs, usageCautionLines };
+  /** Blurbs generated in `amuletHtmlV2.model` + `amuletMeaningBlurbs.util` when empty. */
+  return { lifeAreaBlurbs: {}, usageCautionLines };
 }
 
 /**
@@ -76,7 +62,10 @@ export function buildAmuletV1Slice({
   energyScore = null,
   mainEnergyLabel = "",
 }) {
-  const scores = computeAmuletPowerScoresDeterministicV1(seedKey);
+  const scores = computeAmuletPowerScoresDeterministicV1(seedKey, {
+    sessionKey: scanResultId,
+    mainEnergyLabel,
+  });
   const headline = "พระเครื่อง";
   const mainShort =
     String(mainEnergyLabel || "").trim().slice(0, 22) || "พลังมุ่งเน้นรวม";

@@ -101,12 +101,12 @@ function mainGraphBlock(vm) {
   const peak = amuletRadarVertexForAxis(vm.power.object, vm.power.objectPeakKey);
   const peakX = peak.x.toFixed(2);
   const peakY = peak.y.toFixed(2);
-  const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="rgba(248,232,168,0.1)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="rgba(248,232,168,0.98)" stroke="rgba(255,252,240,0.5)" stroke-width="0.26" aria-hidden="true"><title>แกนเด่นสุดของพลังพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
+  const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="rgba(248,232,168,0.1)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="rgba(248,232,168,0.98)" stroke="rgba(255,252,240,0.5)" stroke-width="0.26" aria-hidden="true"><title>พลังเด่นสุดของพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
 
   return `<section class="mv2a-card mv2a-graph-card" aria-labelledby="mv2a-graph-h">
     <h2 id="mv2a-graph-h">กราฟหกมิติพลังพระเครื่อง</h2>
-    <p class="mv2a-hint">ชั้น 1 = คุณ · ชั้น 2 = พลังพระเครื่อง</p>
-    <div class="mv2a-radar-wrap" role="img" aria-label="กราฟหกมิติ เปรียบเทียบโปรไฟล์เจ้าของและพลังพระเครื่อง">
+    <p class="mv2a-hint">เทียบโปรไฟล์คุณกับพลังพระเครื่อง</p>
+    <div class="mv2a-radar-wrap" role="img" aria-label="เปรียบเทียบพลังคุณกับพลังพระเครื่อง">
       <div class="mv2a-radar-plot">
         <svg class="mv2a-radar-svg mv2a-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility">
           <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100 })}" fill="rgba(255,255,255,0.02)" stroke="rgba(212,175,55,0.26)" stroke-width="0.28"/>
@@ -128,7 +128,7 @@ function mainGraphBlock(vm) {
         <div class="mv2a-radar-labels" aria-hidden="true">${axisLabelsHtml}</div>
       </div>
     </div>
-    <div class="mv2a-radar-key" role="group" aria-label="เลเยอร์กราฟ">
+    <div class="mv2a-radar-key" role="group" aria-label="คุณและพลังพระเครื่อง">
       <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--owner"></span>คุณ</span>
       <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--amulet"></span>พลังพระเครื่อง</span>
     </div>
@@ -409,7 +409,7 @@ export function renderAmuletReportV2Html(payload) {
     ${mainGraphBlock(vm)}
 
     <section class="mv2-card" aria-labelledby="mv2-gsum-h">
-      <h2 id="mv2-gsum-h">อ่านเบื้องต้นจากกราฟ</h2>
+      <h2 id="mv2-gsum-h">สรุปผล</h2>
       ${graphSummaryHtml}
     </section>
 
@@ -427,8 +427,8 @@ export function renderAmuletReportV2Html(payload) {
     </section>
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
-      <h2 id="mv2-life-h">มิติชีวิตทั้งหกด้าน</h2>
-      <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ — อ่านด้านบนก่อน</p>
+      <h2 id="mv2-life-h">พลังทั้ง 6 ด้าน</h2>
+      <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
       <div class="mv2-life-rows">${lifeRowsHtml}</div>
     </section>
 
