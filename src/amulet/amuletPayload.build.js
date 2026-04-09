@@ -17,12 +17,14 @@ function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, surface
     String(powerCategories[secondary]?.labelThai || "").trim() ||
     POWER_LABEL_THAI.metta;
 
-  const fitLine = `ตอนนี้เด่นสุด: ${primaryLabel} → ${secondaryLabel}`;
+  const fitLine = `เด่นสุด ${primaryLabel} · รอง ${secondaryLabel}`;
   const bullets = [
-    `เด่น${primaryLabel} ช่วยให้จังหวะชีวิตเริ่มชัดขึ้น`,
-    "เหมาะเมื่ออยากตั้งหลักใหม่แบบค่อยเป็นค่อยไป",
+    "กราฟหกมิติชี้จุดแรงของชิ้นนี้ชัด",
+    "อ่านคะแนนก่อน แล้วค่อยไล่รายละเอียดด้านล่าง",
   ];
-  const ctaLabel = "ดูว่าชิ้นนี้ช่วยคุณยังไง";
+  const ctaLabel = "เปิดรายงานฉบับเต็ม";
+
+  const mainShort = String(surface.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม";
 
   return {
     headline: surface.headline,
@@ -30,9 +32,10 @@ function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, surface
     bullets,
     ctaLabel,
     mainEnergyShort: surface.mainEnergyShort,
-    heroNamingLine: `${surface.headline} — ${surface.mainEnergyShort}`,
-    mainEnergyWordingLine: `${surface.headline} — ${surface.mainEnergyShort} (สรุปเชิงสัญลักษณ์)`,
-    htmlOpeningLine: `พระเครื่อง — อ่านมิติพลังเป็นกรอบสัญลักษณ์ รายละเอียดเพิ่มเติมอยู่ในรายงานฉบับเต็ม`,
+    heroNamingLine: `${surface.headline} · ${mainShort}`,
+    mainEnergyWordingLine: `โทนหลัก: ${mainShort} · สรุปจากหกมิติพลัง`,
+    htmlOpeningLine:
+      "รายงานนี้เริ่มจากกราฟหกมิติ แล้วสรุปเป็นข้อความสั้นให้อ่านเร็ว",
     tagline: surface.tagline,
   };
 }
@@ -53,7 +56,7 @@ function buildAmuletHtmlReportPlaceholder() {
   };
 
   const usageCautionLines = [
-    "ใช้เป็นกรอบอ่านชีวิตและมิติพลัง ไม่ใช่คำทำนายแน่นอน",
+    "ผลลัพธ์จริงขึ้นกับการใช้งานและบริบทของคุณ",
     "ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
   ];
 
@@ -78,7 +81,7 @@ export function buildAmuletV1Slice({
   const headline = "พระเครื่อง";
   const mainShort =
     String(mainEnergyLabel || "").trim().slice(0, 22) || "พลังมุ่งเน้นรวม";
-  const tagline = "พระเครื่อง · โทนทอง";
+  const tagline = "พระเครื่อง · หกมิติพลัง";
 
   const flexSurface = buildAmuletFlexSurfaceCopy(
     scores.primaryPower,

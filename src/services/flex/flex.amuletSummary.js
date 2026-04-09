@@ -24,7 +24,7 @@ const AMULET_TITLE_TAGLINE_COLOR = "#a8a29e";
 /** Life-area helper line — dimmer than captions; metadata only. */
 const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
 /** Fallback when power rows are missing (Flex display only). */
-const AMULET_TITLE_TAGLINE = "พระเครื่อง · โทนทอง";
+const AMULET_TITLE_TAGLINE = "พระเครื่อง · หกมิติพลัง";
 
 /** Bar score numerals — quieter than labels (read dimension + bar first). */
 const LIFE_AREA_BAR_SCORE_COLOR = "#5f5a4f";

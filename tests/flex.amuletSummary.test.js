@@ -38,7 +38,7 @@ const basePayload = {
       ],
       ctaLabel: "ดูว่าชิ้นนี้ช่วยคุณยังไง",
       mainEnergyShort: "คุ้มครอง",
-      tagline: "พระเครื่อง · โทนทอง",
+      tagline: "พระเครื่อง · หกมิติพลัง",
     },
   },
 };

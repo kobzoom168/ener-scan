@@ -42,7 +42,6 @@ import {
 import { resolveMoldaviteDetectionWithGeminiCrystalSubtype } from "../../moldavite/geminiCrystalSubtypeBranch.util.js";
 import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
 import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayNaming.util.js";
-import { buildCrystalGenericSafeV1Slice } from "../../crystal/crystalGenericSafePayload.build.js";
 import { buildAmuletV1Slice } from "../../amulet/amuletPayload.build.js";
 
 /**
@@ -862,14 +861,6 @@ export async function buildReportPayloadFromScan(opts) {
       })
     : undefined;
 
-  const crystalGenericSafeV1 =
-    famNorm === "crystal" && !moldaviteV1
-      ? buildCrystalGenericSafeV1Slice({
-          scanResultId: rid,
-          seedKey: rid || String(scanResultId || ""),
-        })
-      : undefined;
-
   const baseMainEnergyLabel = wording.mainEnergy
     ? String(wording.mainEnergy)
     : parsed.mainEnergy && parsed.mainEnergy !== "-"
@@ -886,11 +877,10 @@ export async function buildReportPayloadFromScan(opts) {
         })
       : undefined;
 
-  /** @type {"moldavite_v1"|"sacred_amulet_v1"|"crystal_generic_safe_v1"|"summary_first_default"} */
+  /** @type {"moldavite_v1"|"sacred_amulet_v1"|"summary_first_default"} */
   let reportLane = "summary_first_default";
   if (moldaviteV1) reportLane = "moldavite_v1";
   else if (amuletV1) reportLane = "sacred_amulet_v1";
-  else if (crystalGenericSafeV1) reportLane = "crystal_generic_safe_v1";
   console.log(
     JSON.stringify({
       event: "REPORT_LANE_SELECTED",
@@ -902,100 +892,72 @@ export async function buildReportPayloadFromScan(opts) {
     }),
   );
 
-  if (crystalGenericSafeV1) {
-    console.log(
-      JSON.stringify({
-        event: "CRYSTAL_GENERIC_SAFE_V1_ATTACHED",
-        scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
-        mode: crystalGenericSafeV1.mode,
-      }),
-    );
-  }
-
-  const summaryMainEnergyLabel = crystalGenericSafeV1
-    ? crystalGenericSafeV1.display.mainEnergyLabelNeutral
-    : moldaviteV1
-      ? String(moldaviteV1.flexSurface.mainEnergyShort || "").trim() ||
+  const summaryMainEnergyLabel = moldaviteV1
+    ? String(moldaviteV1.flexSurface.mainEnergyShort || "").trim() ||
+      baseMainEnergyLabel
+    : amuletV1
+      ? String(amuletV1.flexSurface.mainEnergyShort || "").trim() ||
         baseMainEnergyLabel
-      : amuletV1
-        ? String(amuletV1.flexSurface.mainEnergyShort || "").trim() ||
-          baseMainEnergyLabel
-        : baseMainEnergyLabel;
+      : baseMainEnergyLabel;
 
-  const summaryHeadlineShort = crystalGenericSafeV1
-    ? crystalGenericSafeV1.flexSurface.headline
-    : moldaviteV1
-      ? moldaviteV1.flexSurface.headline
-      : amuletV1
-        ? amuletV1.flexSurface.headline
-        : flexSurface.headlineShort;
+  const summaryHeadlineShort = moldaviteV1
+    ? moldaviteV1.flexSurface.headline
+    : amuletV1
+      ? amuletV1.flexSurface.headline
+      : flexSurface.headlineShort;
 
-  const summaryFitReasonShort = crystalGenericSafeV1
-    ? crystalGenericSafeV1.flexSurface.fitLine
-    : moldaviteV1
-      ? moldaviteV1.flexSurface.fitLine
-      : amuletV1
-        ? amuletV1.flexSurface.fitLine
-        : flexSurface.fitReasonShort;
+  const summaryFitReasonShort = moldaviteV1
+    ? moldaviteV1.flexSurface.fitLine
+    : amuletV1
+      ? amuletV1.flexSurface.fitLine
+      : flexSurface.fitReasonShort;
 
-  const summaryBulletsShort = crystalGenericSafeV1
-    ? crystalGenericSafeV1.flexSurface.bullets
-    : moldaviteV1
-      ? moldaviteV1.flexSurface.bullets
-      : amuletV1
-        ? amuletV1.flexSurface.bullets
-        : flexSurface.bulletsShort;
+  const summaryBulletsShort = moldaviteV1
+    ? moldaviteV1.flexSurface.bullets
+    : amuletV1
+      ? amuletV1.flexSurface.bullets
+      : flexSurface.bulletsShort;
 
-  const summaryPresentationAngleId = crystalGenericSafeV1
-    ? "crystal_generic_safe_v1"
-    : moldaviteV1
-      ? "moldavite_v1_summary_first"
-      : amuletV1
-        ? "sacred_amulet_v1_summary_first"
-        : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
+  const summaryPresentationAngleId = moldaviteV1
+    ? "moldavite_v1_summary_first"
+    : amuletV1
+      ? "sacred_amulet_v1_summary_first"
+      : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
 
-  const summaryWordingVariantId = crystalGenericSafeV1
-    ? "crystal_generic_safe_v1"
-    : moldaviteV1
-      ? "moldavite_v1_summary_first"
-      : amuletV1
-        ? "sacred_amulet_v1_summary_first"
-        : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
+  const summaryWordingVariantId = moldaviteV1
+    ? "moldavite_v1_summary_first"
+    : amuletV1
+      ? "sacred_amulet_v1_summary_first"
+      : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
 
-  const summaryVisibleMainLabel = crystalGenericSafeV1
-    ? crystalGenericSafeV1.display.visibleMainLabelNeutral
-    : moldaviteV1
-      ? String(moldaviteV1.flexSurface.headline || "").trim() || undefined
-      : amuletV1
-        ? String(amuletV1.flexSurface.headline || "").trim() || undefined
-        : dbSurfBundle?.mainLabel
-          ? String(dbSurfBundle.mainLabel).trim()
-          : undefined;
+  const summaryVisibleMainLabel = moldaviteV1
+    ? String(moldaviteV1.flexSurface.headline || "").trim() || undefined
+    : amuletV1
+      ? String(amuletV1.flexSurface.headline || "").trim() || undefined
+      : dbSurfBundle?.mainLabel
+        ? String(dbSurfBundle.mainLabel).trim()
+        : undefined;
 
-  const summaryOpeningShort = crystalGenericSafeV1
-    ? undefined
-    : moldaviteV1 || amuletV1
+  const summaryOpeningShort =
+    moldaviteV1 || amuletV1
       ? undefined
       : dbSurfBundle?.opening
         ? String(dbSurfBundle.opening).trim()
         : undefined;
 
-  const summaryTeaserShort = crystalGenericSafeV1
-    ? undefined
-    : moldaviteV1 || amuletV1
+  const summaryTeaserShort =
+    moldaviteV1 || amuletV1
       ? undefined
       : dbSurfBundle?.teaser
         ? String(dbSurfBundle.teaser).trim()
         : undefined;
 
-  const summaryCtaLabel = crystalGenericSafeV1
+  const summaryCtaLabel = moldaviteV1
     ? "เปิดรายงานฉบับเต็ม"
-    : moldaviteV1
-      ? "เปิดรายงานฉบับเต็ม"
-      : amuletV1
-        ? String(amuletV1.flexSurface.ctaLabel || "").trim() ||
-          "เปิดรายงานฉบับเต็ม"
-        : flexSurface.ctaLabel;
+    : amuletV1
+      ? String(amuletV1.flexSurface.ctaLabel || "").trim() ||
+        "เปิดรายงานฉบับเต็ม"
+      : flexSurface.ctaLabel;
 
   return {
     reportId: rid,
@@ -1070,14 +1032,7 @@ export async function buildReportPayloadFromScan(opts) {
     wording: {
       ...wording,
       objectLabel: "วัตถุจากการสแกน",
-      ...(crystalGenericSafeV1
-        ? {
-            heroNaming: crystalGenericSafeV1.display.heroNaming,
-            mainEnergy: crystalGenericSafeV1.display.mainEnergyWordingLine,
-            htmlOpeningLine: crystalGenericSafeV1.display.htmlOpeningNeutral,
-          }
-        : {}),
-      ...(moldaviteV1 && !crystalGenericSafeV1
+      ...(moldaviteV1
         ? {
             heroNaming: String(
               moldaviteV1.flexSurface.heroNamingLine ||
@@ -1094,7 +1049,7 @@ export async function buildReportPayloadFromScan(opts) {
             ).trim(),
           }
         : {}),
-      ...(amuletV1 && !crystalGenericSafeV1 && !moldaviteV1
+      ...(amuletV1 && !moldaviteV1
         ? {
             heroNaming: String(
               amuletV1.flexSurface.heroNamingLine || "พระเครื่อง",
@@ -1212,7 +1167,7 @@ export async function buildReportPayloadFromScan(opts) {
       enrichmentProvider: undefined,
       deliveryStrategy: undefined,
       lineSummaryPresent: undefined,
-      crystalGenericSafeActive: Boolean(crystalGenericSafeV1),
+      crystalGenericSafeActive: false,
       moldaviteDecisionSource:
         famNorm === "crystal" ? moldaviteDecisionSource : undefined,
       geminiCrystalSubtypeMode:
@@ -1230,6 +1185,5 @@ export async function buildReportPayloadFromScan(opts) {
     },
     ...(moldaviteV1 ? { moldaviteV1 } : {}),
     ...(amuletV1 ? { amuletV1 } : {}),
-    ...(crystalGenericSafeV1 ? { crystalGenericSafeV1 } : {}),
   };
 }

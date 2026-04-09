@@ -58,7 +58,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
         bullets: ["a", "b"],
         ctaLabel: "ดูว่าชิ้นนี้ช่วยคุณยังไง",
         mainEnergyShort: "คุ้มครอง",
-        tagline: "พระเครื่อง · โทนทอง",
+        tagline: "พระเครื่อง · หกมิติพลัง",
         mainEnergyWordingLine: "x",
         htmlOpeningLine: "y",
         heroNamingLine: "z",

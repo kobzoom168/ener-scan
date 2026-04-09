@@ -123,6 +123,8 @@ test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / s
   assert.equal(pGeneral.diagnostics?.visibleWordingDecisionSource, "db_crystal");
   assert.equal(pGeneral.diagnostics?.visibleWordingCrystalSpecific, true);
   assert.equal(pGeneral.diagnostics?.visibleWordingObjectFamilyUsed, "crystal");
+  assert.equal(pGeneral.crystalGenericSafeV1, undefined);
+  assert.equal(pGeneral.diagnostics?.crystalGenericSafeActive, false);
 
   const pSpirit = await buildReportPayloadFromScan({
     ...base,
@@ -146,6 +148,9 @@ test("buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / s
   assert.equal(pThai.parsed?.crystal_mode, null);
   assert.equal(pThai.diagnostics?.visibleWordingDecisionSource, "db_family");
   assert.equal(pThai.diagnostics?.visibleWordingCrystalSpecific, false);
+  assert.ok(pThai.amuletV1);
+  assert.ok(!String(pThai.amuletV1.flexSurface.tagline || "").includes("โทนทอง"));
+  assert.ok(String(pThai.amuletV1.flexSurface.tagline || "").includes("หกมิติ"));
 });
 
 test("buildReportPayloadFromScan: crystal fills empty whatItGives / bestUse from category fallback", async () => {
