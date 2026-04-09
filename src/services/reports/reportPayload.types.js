@@ -184,7 +184,7 @@
  * @property {string} [htmlOpeningLine] — deeper HTML hero hook
  * @property {string} [wordingFamily] — hints Flex family patterns (e.g. protection, authority)
  * @property {string} [clarityLevel] — e.g. l2
- * @property {"light"|"dark"} [amuletReportV2Theme] — optional sacred_amulet HTML shell only (`amuletReportV2.template.js`); default light ivory; use `"dark"` for legacy dark-gold comparison
+ * @property {"light"|"dark"} [amuletReportV2Theme] — optional sacred_amulet HTML shell only (`amuletReportV2.template.js`); default dark-gold dashboard; use `"light"` for ivory experiment
  */
 
 /**
