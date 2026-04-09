@@ -89,6 +89,51 @@ test("buildScanResultFlexWithFallback: moldaviteV1 → moldavite builder (not ge
   assert.equal(out.flex.altText, "moldavite_shell");
 });
 
+test("buildScanResultFlexWithFallback: amuletV1 → sacred amulet builder (not generic summary-first)", async () => {
+  const out = await buildScanResultFlexWithFallback(
+    {
+      summaryFirstEnabled: true,
+      resultText: SAMPLE_TEXT,
+      birthdate: null,
+      reportUrl: null,
+      reportPayload: { amuletV1: { version: "1" } },
+      appendReportBubble: false,
+    },
+    {
+      buildAmuletSummaryFirstFlex: async () => ({
+        type: "flex",
+        altText: "amulet_shell",
+        contents: { type: "bubble" },
+      }),
+      buildScanSummaryFirstFlex: async () => {
+        throw new Error("should_not_call_summary_first_when_amulet");
+      },
+      buildScanFlex: () => fakeLegacyFlex(),
+    },
+  );
+  assert.equal(out.summaryFirstBuildFailed, false);
+  assert.equal(out.flex.altText, "amulet_shell");
+});
+
+test("buildScanResultFlexWithFallback: crystalGenericSafeV1 alone → generic summary-first (third lane removed)", async () => {
+  const out = await buildScanResultFlexWithFallback(
+    {
+      summaryFirstEnabled: true,
+      resultText: SAMPLE_TEXT,
+      birthdate: null,
+      reportUrl: null,
+      reportPayload: { crystalGenericSafeV1: { version: "1", mode: "generic_safe_v1" } },
+      appendReportBubble: false,
+    },
+    {
+      buildScanSummaryFirstFlex: async () => fakeSummaryFlex(),
+      buildScanFlex: () => fakeLegacyFlex(),
+    },
+  );
+  assert.equal(out.summaryFirstBuildFailed, false);
+  assert.equal(out.flex.altText, "summary");
+});
+
 test("buildScanResultFlexWithFallback: summary-first throws → legacy + flag", async () => {
   const out = await buildScanResultFlexWithFallback(
     {

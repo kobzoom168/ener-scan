@@ -2,7 +2,6 @@ import { buildScanFlex } from "./flex.service.js";
 import { buildScanSummaryFirstFlex } from "./flex.summaryFirst.js";
 import { buildMoldaviteSummaryFirstFlex } from "./flex.moldaviteSummary.js";
 import { buildAmuletSummaryFirstFlex } from "./flex.amuletSummary.js";
-import { buildCrystalGenericSafeSummaryFirstFlex } from "./flex.crystalGenericSafe.js";
 
 /**
  * Prefer `summary.energyCopyObjectFamily` (normalized slug) then diagnostics.
@@ -24,6 +23,8 @@ function objectFamilyFromReportPayload(reportPayload) {
  * Builds scan-result Flex: summary-first when enabled, legacy {@link buildScanFlex} on disable or on throw.
  * Extracted for unit tests (fallback path) without changing scan pipeline behavior.
  *
+ * Normal summary-first lane selection (no crystal generic safe): `moldavite_flex_v1` | `sacred_amulet_flex_v1` | `summary_first_generic`.
+ *
  * @param {object} options
  * @param {boolean} options.summaryFirstEnabled
  * @param {string} options.resultText
@@ -35,7 +36,6 @@ function objectFamilyFromReportPayload(reportPayload) {
  *   buildScanSummaryFirstFlex?: typeof buildScanSummaryFirstFlex,
  *   buildMoldaviteSummaryFirstFlex?: typeof buildMoldaviteSummaryFirstFlex,
  *   buildAmuletSummaryFirstFlex?: typeof buildAmuletSummaryFirstFlex,
- *   buildCrystalGenericSafeSummaryFirstFlex?: typeof buildCrystalGenericSafeSummaryFirstFlex,
  *   buildScanFlex?: typeof buildScanFlex,
  * }} [impl] test doubles
  * @returns {Promise<{ flex: Record<string, unknown>, summaryFirstBuildFailed: boolean, error?: unknown }>}
@@ -47,9 +47,6 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
     impl.buildMoldaviteSummaryFirstFlex ?? buildMoldaviteSummaryFirstFlex;
   const buildAmulet =
     impl.buildAmuletSummaryFirstFlex ?? buildAmuletSummaryFirstFlex;
-  const buildCrystalSafe =
-    impl.buildCrystalGenericSafeSummaryFirstFlex ??
-    buildCrystalGenericSafeSummaryFirstFlex;
   const buildLegacy = impl.buildScanFlex ?? buildScanFlex;
 
   const {
@@ -79,7 +76,7 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
 
   try {
     let flex;
-    /** @type {string} */
+    /** @type {"moldavite_flex_v1"|"sacred_amulet_flex_v1"|"summary_first_generic"} */
     let flexLane = "summary_first_generic";
     if (reportPayload?.moldaviteV1) {
       flexLane = "moldavite_flex_v1";
@@ -87,9 +84,6 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
     } else if (reportPayload?.amuletV1) {
       flexLane = "sacred_amulet_flex_v1";
       flex = await buildAmulet(resultText, summaryOpts);
-    } else if (reportPayload?.crystalGenericSafeV1) {
-      flexLane = "crystal_generic_safe_flex_v1";
-      flex = await buildCrystalSafe(resultText, summaryOpts);
     } else {
       flex = await buildSummary(resultText, summaryOpts);
     }
@@ -99,7 +93,6 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
         flexLane,
         hasMoldaviteV1: Boolean(reportPayload?.moldaviteV1),
         hasAmuletV1: Boolean(reportPayload?.amuletV1),
-        hasCrystalGenericSafeV1: Boolean(reportPayload?.crystalGenericSafeV1),
       }),
     );
     return {

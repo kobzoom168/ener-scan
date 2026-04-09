@@ -58,7 +58,6 @@ import {
 import { buildScanSummaryFirstFlex } from "../flex/flex.summaryFirst.js";
 import { buildMoldaviteSummaryFirstFlex } from "../flex/flex.moldaviteSummary.js";
 import { buildAmuletSummaryFirstFlex } from "../flex/flex.amuletSummary.js";
-import { buildCrystalGenericSafeSummaryFirstFlex } from "../flex/flex.crystalGenericSafe.js";
 import { resolveLineSummaryWording } from "../../utils/lineSummaryWording.util.js";
 import { logUnsupportedObjectRejected } from "../lineWebhook/unsupportedObjectReply.service.js";
 import {
@@ -766,11 +765,6 @@ export async function processScanJob(workerId, jobRow) {
                 summaryShellOpts,
               );
             }
-          } else if (reportPayloadForReply?.crystalGenericSafeV1) {
-            built = await buildCrystalGenericSafeSummaryFirstFlex(
-              resultText,
-              summaryShellOpts,
-            );
           } else {
             built = await buildScanSummaryFirstFlex(
               resultText,
