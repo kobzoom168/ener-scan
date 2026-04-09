@@ -85,8 +85,8 @@ function amuletHtmlShowRenderMetaLine() {
 }
 
 /**
- * Warm light vs dark-gold HTML shell only; same layout/DOM. Default remains dark.
- * Enable via `wording.amuletReportV2Theme: "light"` or env `AMULET_HTML_THEME=light`.
+ * Premium light-gold / ivory shell by default; legacy dark-gold for comparison only.
+ * Force dark via `wording.amuletReportV2Theme: "dark"` or env `AMULET_HTML_THEME=dark`.
  *
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
  * @returns {"dark"|"light"}
@@ -97,6 +97,7 @@ function resolveAmuletHtmlTheme(payload) {
   )
     .trim()
     .toLowerCase();
+  if (env === "dark") return "dark";
   if (env === "light") return "light";
   const w = payload?.wording && typeof payload.wording === "object" ? payload.wording : null;
   const fromPayload = String(
@@ -104,8 +105,9 @@ function resolveAmuletHtmlTheme(payload) {
   )
     .trim()
     .toLowerCase();
+  if (fromPayload === "dark") return "dark";
   if (fromPayload === "light") return "light";
-  return "dark";
+  return "light";
 }
 
 /**
@@ -224,13 +226,89 @@ export function renderAmuletReportV2Html(payload) {
     : "";
 
   return `<!DOCTYPE html>
-<html lang="th"${htmlTheme === "light" ? ' class="mv2a-theme-light"' : ""}>
+<html lang="th"${htmlTheme === "dark" ? ' class="mv2a-theme-dark"' : ""}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(h.subtypeLabel || "พระเครื่อง")} · Ener Scan</title>
   <style>
     :root {
+      color-scheme: light;
+      /* Sacred amulet default: premium light-gold / ivory (184,135,27 ≈ #b8871b) */
+      --mv2a-gold: #b8871b;
+      --mv2a-gold-dim: #8f6710;
+      --mv2a-bg: #f7f3ea;
+      --mv2a-card: #fffdf9;
+      --mv2a-muted: #7a6a58;
+      --mv2a-text: #241c12;
+      --mv2a-text-body: rgba(36, 28, 18, 0.92);
+      --mv2a-badge-border: rgba(184, 135, 27, 0.28);
+      --mv2a-media-border: rgba(184, 135, 27, 0.22);
+      --mv2a-hero-clarifier: rgba(90, 78, 65, 0.88);
+      --mv2a-card-border: rgba(184, 135, 27, 0.24);
+      --mv2a-card-elev: 0 1px 2px rgba(36, 28, 18, 0.05), 0 5px 16px rgba(36, 28, 18, 0.06);
+      --mv2a-graph-accent: rgba(184, 135, 27, 0.45);
+      --mv2a-radar-ring-outer-fill: rgba(184, 135, 27, 0.07);
+      --mv2a-radar-ring-outer-stroke: rgba(143, 103, 16, 0.32);
+      --mv2a-radar-ring-mid-stroke: rgba(143, 103, 16, 0.22);
+      --mv2a-radar-ring-inner-stroke: rgba(143, 103, 16, 0.14);
+      --mv2a-radar-spoke: rgba(120, 88, 28, 0.2);
+      --mv2a-radar-owner-fill: rgba(105, 92, 78, 0.13);
+      --mv2a-radar-owner-stroke: rgba(88, 76, 64, 0.48);
+      --mv2a-radar-amulet-fill: rgba(184, 135, 27, 0.2);
+      --mv2a-radar-amulet-stroke: rgba(160, 115, 18, 0.9);
+      --mv2a-radar-peak-halo: rgba(184, 135, 27, 0.22);
+      --mv2a-radar-peak-fill: #c9a132;
+      --mv2a-radar-peak-stroke: rgba(255, 250, 235, 0.95);
+      --mv2a-radar-lbl-axis: rgba(36, 28, 18, 0.88);
+      --mv2a-radar-lbl-num: rgba(110, 78, 22, 0.92);
+      --mv2a-radar-lbl-top1-glow: rgba(184, 135, 27, 0.28);
+      --mv2a-radar-lbl-top1-t: #7a5a12;
+      --mv2a-radar-lbl-top1-n: #5c420a;
+      --mv2a-radar-lbl-top2-t: rgba(95, 72, 32, 0.95);
+      --mv2a-radar-lbl-top2-n: rgba(120, 88, 28, 0.95);
+      --mv2a-radar-key: rgba(100, 88, 76, 0.78);
+      --mv2a-radar-dot-border: rgba(36, 28, 18, 0.12);
+      --mv2a-radar-dot-owner: rgba(115, 125, 138, 0.88);
+      --mv2a-radar-dot-amulet: rgba(184, 135, 27, 0.95);
+      --mv2a-anim-peak-glow1: rgba(184, 135, 27, 0.3);
+      --mv2a-anim-peak-glow2: rgba(184, 135, 27, 0.52);
+      --mv2a-gsum-bg: rgba(184, 135, 27, 0.08);
+      --mv2a-gsum-border: rgba(184, 135, 27, 0.18);
+      --mv2a-gsum-lead-bg: rgba(184, 135, 27, 0.1);
+      --mv2a-gsum-lead-border: rgba(184, 135, 27, 0.28);
+      --mv2a-gsum-k: rgba(122, 106, 88, 0.88);
+      --mv2a-gsum-v: rgba(36, 28, 18, 0.95);
+      --mv2a-gsum-v-lead: #b8871b;
+      --mv2a-owner-chip-bg: rgba(184, 135, 27, 0.1);
+      --mv2a-owner-chip-border: rgba(184, 135, 27, 0.26);
+      --mv2a-owner-chip-text: rgba(50, 40, 26, 0.92);
+      --mv2a-owner-mini-bg: #fffefb;
+      --mv2a-owner-mini-border: rgba(184, 135, 27, 0.2);
+      --mv2a-owner-mini-t: rgba(143, 103, 16, 0.88);
+      --mv2a-owner-mini-b: rgba(36, 28, 18, 0.9);
+      --mv2a-owner-note: rgba(100, 88, 74, 0.72);
+      --mv2a-int-bg: rgba(255, 253, 249, 0.95);
+      --mv2a-int-border: rgba(184, 135, 27, 0.2);
+      --mv2a-int-kicker: rgba(143, 103, 16, 0.92);
+      --mv2a-int-main: rgba(36, 28, 18, 0.95);
+      --mv2a-int-sub: rgba(100, 88, 76, 0.82);
+      --mv2a-para: rgba(48, 40, 30, 0.92);
+      --mv2a-life-border: rgba(184, 135, 27, 0.18);
+      --mv2a-life-row-border: rgba(184, 135, 27, 0.1);
+      --mv2a-life-row-alt: rgba(184, 135, 27, 0.05);
+      --mv2a-life-name: rgba(36, 28, 18, 0.92);
+      --mv2a-life-score: #b8871b;
+      --mv2a-life-blurb: rgba(72, 62, 50, 0.9);
+      --mv2a-disclaimer: rgba(78, 68, 56, 0.88);
+      --mv2a-trust-border: rgba(184, 135, 27, 0.15);
+      --mv2a-render-meta: rgba(100, 90, 78, 0.72);
+      /* Unified Thai + system stack (report + radar labels + cards; LINE Flex uses client fonts). */
+      --mv2-font-th: "Noto Sans Thai", "Sarabun", "Kanit", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", system-ui, sans-serif;
+    }
+    html.mv2a-theme-dark {
+      color-scheme: dark;
       --mv2a-gold: #d4af37;
       --mv2a-gold-dim: #a67c00;
       --mv2a-bg: #0c0a08;
@@ -299,80 +377,6 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-disclaimer: rgba(148, 163, 184, 0.78);
       --mv2a-trust-border: rgba(255, 255, 255, 0.05);
       --mv2a-render-meta: rgba(100, 116, 139, 0.85);
-      /* Unified Thai + system stack (report + radar labels + cards; LINE Flex uses client fonts). */
-      --mv2-font-th: "Noto Sans Thai", "Sarabun", "Kanit", ui-sans-serif, -apple-system, BlinkMacSystemFont,
-        "Segoe UI", system-ui, sans-serif;
-    }
-    html.mv2a-theme-light {
-      color-scheme: light;
-      --mv2a-gold: #a67c00;
-      --mv2a-gold-dim: #8b6914;
-      --mv2a-bg: #f5f0e6;
-      --mv2a-card: #fffdf8;
-      --mv2a-muted: #7a6f63;
-      --mv2a-text: #2c2419;
-      --mv2a-text-body: rgba(44, 36, 25, 0.92);
-      --mv2a-badge-border: rgba(160, 110, 30, 0.38);
-      --mv2a-media-border: rgba(160, 110, 30, 0.24);
-      --mv2a-hero-clarifier: rgba(90, 78, 65, 0.85);
-      --mv2a-card-border: rgba(180, 140, 55, 0.22);
-      --mv2a-card-elev: 0 1px 2px rgba(44, 36, 25, 0.05), 0 4px 14px rgba(44, 36, 25, 0.06);
-      --mv2a-graph-accent: rgba(180, 140, 55, 0.48);
-      --mv2a-radar-ring-outer-fill: rgba(180, 140, 55, 0.07);
-      --mv2a-radar-ring-outer-stroke: rgba(130, 95, 35, 0.34);
-      --mv2a-radar-ring-mid-stroke: rgba(130, 95, 35, 0.22);
-      --mv2a-radar-ring-inner-stroke: rgba(130, 95, 35, 0.14);
-      --mv2a-radar-spoke: rgba(120, 90, 35, 0.2);
-      --mv2a-radar-owner-fill: rgba(100, 85, 70, 0.14);
-      --mv2a-radar-owner-stroke: rgba(85, 72, 58, 0.52);
-      --mv2a-radar-amulet-fill: rgba(200, 160, 45, 0.22);
-      --mv2a-radar-amulet-stroke: rgba(170, 120, 25, 0.88);
-      --mv2a-radar-peak-halo: rgba(200, 160, 45, 0.2);
-      --mv2a-radar-peak-fill: rgba(180, 130, 25, 0.95);
-      --mv2a-radar-peak-stroke: rgba(255, 248, 230, 0.9);
-      --mv2a-radar-lbl-axis: rgba(44, 36, 25, 0.88);
-      --mv2a-radar-lbl-num: rgba(110, 80, 28, 0.92);
-      --mv2a-radar-lbl-top1-glow: rgba(200, 160, 45, 0.28);
-      --mv2a-radar-lbl-top1-t: #7a5a10;
-      --mv2a-radar-lbl-top1-n: #5c4408;
-      --mv2a-radar-lbl-top2-t: rgba(90, 70, 35, 0.95);
-      --mv2a-radar-lbl-top2-n: rgba(120, 90, 30, 0.95);
-      --mv2a-radar-key: rgba(100, 90, 80, 0.75);
-      --mv2a-radar-dot-border: rgba(44, 36, 25, 0.14);
-      --mv2a-radar-dot-owner: rgba(120, 130, 145, 0.88);
-      --mv2a-radar-dot-amulet: rgba(200, 160, 45, 0.95);
-      --mv2a-anim-peak-glow1: rgba(200, 160, 45, 0.28);
-      --mv2a-anim-peak-glow2: rgba(200, 160, 45, 0.52);
-      --mv2a-gsum-bg: rgba(180, 140, 55, 0.07);
-      --mv2a-gsum-border: rgba(180, 140, 55, 0.16);
-      --mv2a-gsum-lead-bg: rgba(200, 170, 80, 0.14);
-      --mv2a-gsum-lead-border: rgba(180, 140, 55, 0.3);
-      --mv2a-gsum-k: rgba(110, 100, 90, 0.75);
-      --mv2a-gsum-v: rgba(44, 36, 25, 0.95);
-      --mv2a-gsum-v-lead: #a67c00;
-      --mv2a-owner-chip-bg: rgba(200, 170, 90, 0.14);
-      --mv2a-owner-chip-border: rgba(180, 140, 55, 0.3);
-      --mv2a-owner-chip-text: rgba(60, 48, 28, 0.9);
-      --mv2a-owner-mini-bg: rgba(255, 252, 248, 0.96);
-      --mv2a-owner-mini-border: rgba(180, 140, 55, 0.22);
-      --mv2a-owner-mini-t: rgba(140, 100, 30, 0.85);
-      --mv2a-owner-mini-b: rgba(44, 36, 25, 0.9);
-      --mv2a-owner-note: rgba(110, 100, 90, 0.65);
-      --mv2a-int-bg: rgba(255, 252, 248, 0.92);
-      --mv2a-int-border: rgba(180, 140, 55, 0.2);
-      --mv2a-int-kicker: rgba(140, 100, 30, 0.9);
-      --mv2a-int-main: rgba(44, 36, 25, 0.95);
-      --mv2a-int-sub: rgba(100, 90, 82, 0.78);
-      --mv2a-para: rgba(55, 48, 40, 0.92);
-      --mv2a-life-border: rgba(180, 140, 55, 0.18);
-      --mv2a-life-row-border: rgba(180, 140, 55, 0.1);
-      --mv2a-life-row-alt: rgba(180, 140, 55, 0.05);
-      --mv2a-life-name: rgba(44, 36, 25, 0.92);
-      --mv2a-life-score: #a67c00;
-      --mv2a-life-blurb: rgba(75, 68, 58, 0.9);
-      --mv2a-disclaimer: rgba(100, 90, 82, 0.82);
-      --mv2a-trust-border: rgba(180, 140, 55, 0.14);
-      --mv2a-render-meta: rgba(110, 100, 90, 0.72);
     }
     body { margin: 0; background: var(--mv2a-bg); color: var(--mv2a-text); font-family: var(--mv2-font-th); }
     .mv2a-wrap { max-width: 520px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
