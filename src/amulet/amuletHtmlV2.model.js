@@ -91,21 +91,37 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     ],
   };
 
+  const alignLabel = POWER_LABEL_THAI[alignKey];
+  const tensionLabel = POWER_LABEL_THAI[tensionKey];
+  const peakLabel = POWER_LABEL_THAI[peakKey];
+
+  /** ช่องว่างน้อย = คะแนนคุณกับวัตถุใกล้กันบนแกนนั้น */
+  const alignMain =
+    minD <= 12
+      ? `${alignLabel} เด่นกับคุณที่สุดตอนนี้`
+      : `${alignLabel} ขึ้นกับคุณง่ายในช่วงนี้`;
+
+  /** ช่องว่างมาก = คะแนนคุณกับวัตถุห่างกันบนแกนนั้น */
+  const tensionMain =
+    maxD >= 28
+      ? `${tensionLabel} ยังตีกับจังหวะคุณอยู่`
+      : `${tensionLabel} ยังไม่ขึ้นกับคุณเต็มที่`;
+
   const interactionRows = [
     {
       kicker: "ส่งเสริม",
-      main: `มิติ${POWER_LABEL_THAI[alignKey]}สอดคล้องกับจังหวะคุณในช่วงนี้`,
-      sub: "ใช้เป็นแนวทางปรับจังหวะ ไม่ใช่คำสั่ง",
+      main: alignMain,
+      sub: "ใช้ด้านนี้นำก่อน",
     },
     {
       kicker: "ระวังจังหวะ",
-      main: `มิติ${POWER_LABEL_THAI[tensionKey]}อาจต้องใช้เวลาปรับกรอบ`,
-      sub: "แยกความรู้สึกกับแรงกดดันรอบตัวให้ชัด",
+      main: tensionMain,
+      sub: "อย่าเร่งด้านนี้มาก",
     },
     {
       kicker: "โทนวัตถุ",
-      main: "เน้นมิติพลังรวมและการตั้งหลัก",
-      sub: "อ่านเป็นสัญลักษณ์ ไม่การันตีผลทันที",
+      main: `วัตถุชิ้นนี้เด่นที่${peakLabel}`,
+      sub: "แรงหลักของชิ้นนี้ออกทางด้านนี้",
     },
   ];
 
@@ -163,7 +179,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     },
     graphSummary,
     ownerProfile: {
-      summaryLine: ownerProf.summaryLine,
+      zodiacLabel: ownerProf.zodiacLabel,
       traitScores: ownerProf.traitScores,
       note: ownerProf.note,
     },
