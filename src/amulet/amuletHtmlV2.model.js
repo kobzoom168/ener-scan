@@ -1,6 +1,20 @@
 import { deriveAmuletOwnerPowerProfile } from "./amuletOwnerProfile.util.js";
 import { POWER_ORDER, POWER_LABEL_THAI } from "./amuletScores.util.js";
 
+/** Default life-area blurbs when payload omits `htmlReport.lifeAreaBlurbs` (plain sentences, no em dash). */
+const AMULET_DEFAULT_LIFE_BLURBS = {
+  protection:
+    "เด่นเรื่องกันแรงปะทะ ตั้งขอบเขต และพยุงตัวเวลาเจอเรื่องหนัก",
+  metta: "ช่วยให้คนรอบตัวเปิดใจ คุยง่าย และรับพลังจากคุณมากขึ้น",
+  baramee:
+    "ส่งเรื่องภาพลักษณ์ ความน่าเชื่อถือ และแรงนำในบทบาทที่รับอยู่",
+  luck: "หนุนโอกาสใหม่ จังหวะใหม่ และทางเลือกที่เริ่มเปิดเข้ามา",
+  fortune_anchor:
+    "ช่วยประคองใจ ตั้งหลักไว และไม่ไหลตามสถานการณ์ง่าย",
+  specialty:
+    "เด่นกับงานที่ต้องใช้ฝีมือ ความถนัด หรือบทบาทเฉพาะตัว",
+};
+
 /**
  * @param {number} v
  */
@@ -137,7 +151,10 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       e && typeof e === "object" && e.score != null
         ? clamp0100(Number(e.score))
         : 0;
-    const blurb = String(blurbs[k] || "").trim() || "—";
+    const blurb =
+      String(blurbs[k] || "").trim() ||
+      AMULET_DEFAULT_LIFE_BLURBS[k] ||
+      "พลังด้านนี้ยังไม่เด่นชัด";
     return {
       key: k,
       label: POWER_LABEL_THAI[k],

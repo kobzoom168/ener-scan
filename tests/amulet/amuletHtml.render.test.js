@@ -84,6 +84,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("เมตตา</span> <span class=\"mv2a-radar-axis-n\">70"));
   assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
   assert.ok(html.includes("มิติชีวิตละเอียด"));
+  assert.ok(html.includes("ดูจากมิติที่เด่นที่สุดก่อน"));
+  assert.ok(html.includes("เด่นเรื่องกันแรงปะทะ ตั้งขอบเขต"));
   assert.ok(html.includes("สรุปจากกราฟ"));
   assert.ok(!html.includes("ควรค่อย ๆ ไป"), "graph summary is reduced to 2 rows");
   assert.ok(html.includes("จังหวะเกิดเดือนมิถุนายน (สรุปสัญลักษณ์)"));

@@ -406,7 +406,7 @@ export function renderAmuletReportV2Html(payload) {
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
       <h2 id="mv2-life-h">มิติชีวิตละเอียด</h2>
-      <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
+      <p class="mv2-life-hint">ดูจากมิติที่เด่นที่สุดก่อน</p>
       ${lifeRowsHtml}
     </section>
 
