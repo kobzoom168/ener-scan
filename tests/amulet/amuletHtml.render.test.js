@@ -110,6 +110,80 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(!html.includes('class="mv2-tag"'), "hero subtitle is not rendered");
   assert.ok(!html.includes("พลังหลัก ·"), "hero uses โทนหลัก, not พลังหลัก");
   assert.ok(html.includes("render amulet-html-v2"));
+  assert.ok(
+    html.startsWith(`<!DOCTYPE html>
+<html lang="th">
+<head>`),
+    "default shell: dark theme has no html class (stylesheet still defines light tokens)",
+  );
+});
+
+test("renderAmuletReportV2Html: optional light ivory theme via wording.amuletReportV2Theme", () => {
+  const base = {
+    reportId: "r1",
+    publicToken: "t",
+    scanId: "s1",
+    userId: "u",
+    birthdateUsed: "15/06/1990",
+    generatedAt: new Date().toISOString(),
+    reportVersion: "1",
+    object: { objectImageUrl: "" },
+    summary: {
+      energyScore: 7,
+      energyLevelLabel: "ปานกลาง",
+      mainEnergyLabel: "คุ้มครอง",
+      compatibilityPercent: 80,
+      compatibilityBand: "เข้ากันได้ดี",
+      summaryLine: "",
+    },
+    sections: {
+      whatItGives: [],
+      messagePoints: [],
+      ownerMatchReason: [],
+      roleDescription: [],
+      bestUseCases: [],
+      weakMoments: [],
+      guidanceTips: [],
+      careNotes: [],
+      miniRitual: [],
+    },
+    trust: {},
+    actions: {},
+    wording: { amuletReportV2Theme: "light" },
+    amuletV1: {
+      version: "1",
+      scoringMode: "deterministic_v2",
+      detection: { reason: "sacred_amulet_lane_v1", matchedSignals: [] },
+      powerCategories: {
+        protection: { key: "protection", score: 88, labelThai: "คุ้มครองป้องกัน" },
+        metta: { key: "metta", score: 70, labelThai: "เมตตาและคนเอ็นดู" },
+        baramee: { key: "baramee", score: 65, labelThai: "บารมีและอำนาจนำ" },
+        luck: { key: "luck", score: 60, labelThai: "โชคลาภและการเปิดทาง" },
+        fortune_anchor: {
+          key: "fortune_anchor",
+          score: 55,
+          labelThai: "หนุนดวงและการตั้งหลัก",
+        },
+        specialty: { key: "specialty", score: 50, labelThai: "งานเฉพาะทาง" },
+      },
+      primaryPower: "protection",
+      secondaryPower: "metta",
+      flexSurface: {
+        headline: "พระเครื่อง",
+        fitLine: "x",
+        bullets: [],
+        ctaLabel: "c",
+        mainEnergyShort: "คุ้มครอง",
+        tagline: "t",
+      },
+      htmlReport: { lifeAreaBlurbs: {}, usageCautionLines: [] },
+    },
+  };
+  const html = renderAmuletReportV2Html(base);
+  assert.ok(html.includes('class="mv2a-theme-light"'));
+  assert.ok(html.includes("--mv2a-bg: #f5f0e6"));
+  assert.ok(html.includes("var(--mv2a-radar-spoke)"));
+  assert.ok(html.includes("กราฟหกมิติพลังพระเครื่อง"));
 });
 
 test("renderAmuletReportV2Html: hero clarifier when โทนหลักไม่ตรงพลังเด่นสุด", () => {

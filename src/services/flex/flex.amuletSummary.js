@@ -1,5 +1,6 @@
 /**
  * Sacred amulet lane: summary-first Flex (gold/dark theme). Parallel to Moldavite Flex; does not use legacy thai_amulet pools.
+ * Light HTML variant lives in `amuletReportV2.template.js` only; Flex stays this dark baseline unless we add an opt-in later.
  *
  * Typography: LINE renders Flex with the client’s system fonts (no @font-face). The HTML report uses
  * `--mv2-font-th` in `amuletReportV2.template.js` for a unified Thai stack; visual parity with Flex is

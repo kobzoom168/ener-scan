@@ -85,6 +85,30 @@ function amuletHtmlShowRenderMetaLine() {
 }
 
 /**
+ * Warm light vs dark-gold HTML shell only; same layout/DOM. Default remains dark.
+ * Enable via `wording.amuletReportV2Theme: "light"` or env `AMULET_HTML_THEME=light`.
+ *
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
+ * @returns {"dark"|"light"}
+ */
+function resolveAmuletHtmlTheme(payload) {
+  const env = String(
+    process.env.AMULET_HTML_THEME ?? process.env.REPORT_AMULET_HTML_THEME ?? "",
+  )
+    .trim()
+    .toLowerCase();
+  if (env === "light") return "light";
+  const w = payload?.wording && typeof payload.wording === "object" ? payload.wording : null;
+  const fromPayload = String(
+    /** @type {{ amuletReportV2Theme?: string }} */ (w)?.amuletReportV2Theme ?? "",
+  )
+    .trim()
+    .toLowerCase();
+  if (fromPayload === "light") return "light";
+  return "dark";
+}
+
+/**
  * @param {ReturnType<typeof buildAmuletHtmlV2ViewModel>} vm
  */
 function mainGraphBlock(vm) {
@@ -101,7 +125,7 @@ function mainGraphBlock(vm) {
   const peak = amuletRadarVertexForAxis(vm.power.object, vm.power.objectPeakKey);
   const peakX = peak.x.toFixed(2);
   const peakY = peak.y.toFixed(2);
-  const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="rgba(248,232,168,0.1)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="rgba(248,232,168,0.98)" stroke="rgba(255,252,240,0.5)" stroke-width="0.26" aria-hidden="true"><title>พลังเด่นสุดของพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
+  const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="var(--mv2a-radar-peak-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="var(--mv2a-radar-peak-fill)" stroke="var(--mv2a-radar-peak-stroke)" stroke-width="0.26" aria-hidden="true"><title>พลังเด่นสุดของพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
 
   return `<section class="mv2a-card mv2a-graph-card" aria-labelledby="mv2a-graph-h">
     <h2 id="mv2a-graph-h">กราฟหกมิติพลังพระเครื่อง</h2>
@@ -109,19 +133,19 @@ function mainGraphBlock(vm) {
     <div class="mv2a-radar-wrap" role="img" aria-label="เปรียบเทียบพลังคุณกับพลังพระเครื่อง">
       <div class="mv2a-radar-plot">
         <svg class="mv2a-radar-svg mv2a-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility">
-          <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100 })}" fill="rgba(255,255,255,0.02)" stroke="rgba(212,175,55,0.26)" stroke-width="0.28"/>
-          <polygon points="${amuletRadarPolygonPoints({ protection: 66, metta: 66, baramee: 66, luck: 66, fortune_anchor: 66, specialty: 66 })}" fill="none" stroke="rgba(212,175,55,0.16)" stroke-width="0.22"/>
-          <polygon points="${amuletRadarPolygonPoints({ protection: 33, metta: 33, baramee: 33, luck: 33, fortune_anchor: 33, specialty: 33 })}" fill="none" stroke="rgba(212,175,55,0.1)" stroke-width="0.2"/>
+          <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100 })}" fill="var(--mv2a-radar-ring-outer-fill)" stroke="var(--mv2a-radar-ring-outer-stroke)" stroke-width="0.28"/>
+          <polygon points="${amuletRadarPolygonPoints({ protection: 66, metta: 66, baramee: 66, luck: 66, fortune_anchor: 66, specialty: 66 })}" fill="none" stroke="var(--mv2a-radar-ring-mid-stroke)" stroke-width="0.22"/>
+          <polygon points="${amuletRadarPolygonPoints({ protection: 33, metta: 33, baramee: 33, luck: 33, fortune_anchor: 33, specialty: 33 })}" fill="none" stroke="var(--mv2a-radar-ring-inner-stroke)" stroke-width="0.2"/>
           ${AMULET_RADAR_ANGLES.map((ang) => {
             const x = AMULET_RADAR_CX + AMULET_RADAR_R * Math.cos(ang);
             const y = AMULET_RADAR_CY + AMULET_RADAR_R * Math.sin(ang);
-            return `<line x1="${AMULET_RADAR_CX}" y1="${AMULET_RADAR_CY}" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(212,175,55,0.12)" stroke-width="0.2"/>`;
+            return `<line x1="${AMULET_RADAR_CX}" y1="${AMULET_RADAR_CY}" x2="${x.toFixed(2)}" y2="${y.toFixed(2)}" stroke="var(--mv2a-radar-spoke)" stroke-width="0.2"/>`;
           }).join("")}
           <g class="mv2a-radar-layer mv2a-radar-layer--owner">
-            <polygon points="${ownerPts}" fill="rgba(143,126,95,0.12)" stroke="rgba(182,163,128,0.74)" stroke-width="0.44" stroke-linejoin="round"/>
+            <polygon points="${ownerPts}" fill="var(--mv2a-radar-owner-fill)" stroke="var(--mv2a-radar-owner-stroke)" stroke-width="0.44" stroke-linejoin="round"/>
           </g>
           <g class="mv2a-radar-layer mv2a-radar-layer--amulet">
-            <polygon points="${objectPts}" fill="rgba(212,175,55,0.22)" stroke="rgba(232,197,71,0.96)" stroke-width="0.58" stroke-linejoin="round"/>
+            <polygon points="${objectPts}" fill="var(--mv2a-radar-amulet-fill)" stroke="var(--mv2a-radar-amulet-stroke)" stroke-width="0.58" stroke-linejoin="round"/>
           </g>
           <g class="mv2a-radar-layer mv2a-radar-layer--peak">${peakMarker}</g>
         </svg>
@@ -140,6 +164,7 @@ function mainGraphBlock(vm) {
  */
 export function renderAmuletReportV2Html(payload) {
   const vm = buildAmuletHtmlV2ViewModel(payload);
+  const htmlTheme = resolveAmuletHtmlTheme(payload);
   const h = vm.hero;
   const date = h.reportGeneratedAt
     ? formatBangkokDateTime(h.reportGeneratedAt)
@@ -199,7 +224,7 @@ export function renderAmuletReportV2Html(payload) {
     : "";
 
   return `<!DOCTYPE html>
-<html lang="th">
+<html lang="th"${htmlTheme === "light" ? ' class="mv2a-theme-light"' : ""}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -212,26 +237,159 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-card: #141210;
       --mv2a-muted: #78716c;
       --mv2a-text: #f5f5f4;
+      --mv2a-text-body: rgba(250, 250, 249, 0.95);
+      --mv2a-badge-border: rgba(212, 175, 55, 0.35);
+      --mv2a-media-border: rgba(212, 175, 55, 0.2);
+      --mv2a-hero-clarifier: rgba(180, 175, 168, 0.88);
+      --mv2a-card-border: rgba(212, 175, 55, 0.12);
+      --mv2a-card-elev: none;
+      --mv2a-graph-accent: rgba(212, 175, 55, 0.38);
+      --mv2a-radar-ring-outer-fill: rgba(255, 255, 255, 0.02);
+      --mv2a-radar-ring-outer-stroke: rgba(212, 175, 55, 0.26);
+      --mv2a-radar-ring-mid-stroke: rgba(212, 175, 55, 0.16);
+      --mv2a-radar-ring-inner-stroke: rgba(212, 175, 55, 0.1);
+      --mv2a-radar-spoke: rgba(212, 175, 55, 0.12);
+      --mv2a-radar-owner-fill: rgba(143, 126, 95, 0.12);
+      --mv2a-radar-owner-stroke: rgba(182, 163, 128, 0.74);
+      --mv2a-radar-amulet-fill: rgba(212, 175, 55, 0.22);
+      --mv2a-radar-amulet-stroke: rgba(232, 197, 71, 0.96);
+      --mv2a-radar-peak-halo: rgba(248, 232, 168, 0.1);
+      --mv2a-radar-peak-fill: rgba(248, 232, 168, 0.98);
+      --mv2a-radar-peak-stroke: rgba(255, 252, 240, 0.5);
+      --mv2a-radar-lbl-axis: rgba(245, 245, 244, 0.86);
+      --mv2a-radar-lbl-num: rgba(238, 223, 170, 0.92);
+      --mv2a-radar-lbl-top1-glow: rgba(248, 232, 168, 0.22);
+      --mv2a-radar-lbl-top1-t: #f8e8a8;
+      --mv2a-radar-lbl-top1-n: #fff3c3;
+      --mv2a-radar-lbl-top2-t: rgba(248, 233, 177, 0.96);
+      --mv2a-radar-lbl-top2-n: rgba(255, 240, 190, 0.96);
+      --mv2a-radar-key: rgba(200, 196, 190, 0.72);
+      --mv2a-radar-dot-border: rgba(255, 255, 255, 0.2);
+      --mv2a-radar-dot-owner: rgba(203, 213, 225, 0.85);
+      --mv2a-radar-dot-amulet: rgba(232, 197, 71, 0.9);
+      --mv2a-anim-peak-glow1: rgba(248, 232, 168, 0.2);
+      --mv2a-anim-peak-glow2: rgba(248, 232, 168, 0.45);
+      --mv2a-gsum-bg: rgba(255, 255, 255, 0.028);
+      --mv2a-gsum-border: rgba(212, 175, 55, 0.1);
+      --mv2a-gsum-lead-bg: rgba(212, 175, 55, 0.08);
+      --mv2a-gsum-lead-border: rgba(212, 175, 55, 0.2);
+      --mv2a-gsum-k: rgba(148, 163, 184, 0.58);
+      --mv2a-gsum-v: rgba(250, 250, 249, 0.97);
+      --mv2a-gsum-v-lead: #fde68a;
+      --mv2a-owner-chip-bg: rgba(212, 175, 55, 0.1);
+      --mv2a-owner-chip-border: rgba(212, 175, 55, 0.22);
+      --mv2a-owner-chip-text: rgba(254, 243, 199, 0.9);
+      --mv2a-owner-mini-bg: rgba(255, 255, 255, 0.03);
+      --mv2a-owner-mini-border: rgba(212, 175, 55, 0.12);
+      --mv2a-owner-mini-t: rgba(212, 175, 55, 0.78);
+      --mv2a-owner-mini-b: rgba(226, 224, 218, 0.95);
+      --mv2a-owner-note: rgba(148, 163, 184, 0.42);
+      --mv2a-int-bg: rgba(255, 255, 255, 0.035);
+      --mv2a-int-border: rgba(212, 175, 55, 0.14);
+      --mv2a-int-kicker: rgba(212, 175, 55, 0.88);
+      --mv2a-int-main: rgba(250, 250, 249, 0.97);
+      --mv2a-int-sub: rgba(148, 163, 184, 0.68);
+      --mv2a-para: rgba(210, 208, 202, 0.95);
+      --mv2a-life-border: rgba(212, 175, 55, 0.1);
+      --mv2a-life-row-border: rgba(212, 175, 55, 0.07);
+      --mv2a-life-row-alt: rgba(255, 255, 255, 0.02);
+      --mv2a-life-name: rgba(245, 245, 244, 0.92);
+      --mv2a-life-score: #c9a227;
+      --mv2a-life-blurb: rgba(186, 184, 178, 0.95);
+      --mv2a-disclaimer: rgba(148, 163, 184, 0.78);
+      --mv2a-trust-border: rgba(255, 255, 255, 0.05);
+      --mv2a-render-meta: rgba(100, 116, 139, 0.85);
       /* Unified Thai + system stack (report + radar labels + cards; LINE Flex uses client fonts). */
       --mv2-font-th: "Noto Sans Thai", "Sarabun", "Kanit", ui-sans-serif, -apple-system, BlinkMacSystemFont,
         "Segoe UI", system-ui, sans-serif;
     }
+    html.mv2a-theme-light {
+      color-scheme: light;
+      --mv2a-gold: #a67c00;
+      --mv2a-gold-dim: #8b6914;
+      --mv2a-bg: #f5f0e6;
+      --mv2a-card: #fffdf8;
+      --mv2a-muted: #7a6f63;
+      --mv2a-text: #2c2419;
+      --mv2a-text-body: rgba(44, 36, 25, 0.92);
+      --mv2a-badge-border: rgba(160, 110, 30, 0.38);
+      --mv2a-media-border: rgba(160, 110, 30, 0.24);
+      --mv2a-hero-clarifier: rgba(90, 78, 65, 0.85);
+      --mv2a-card-border: rgba(180, 140, 55, 0.22);
+      --mv2a-card-elev: 0 1px 2px rgba(44, 36, 25, 0.05), 0 4px 14px rgba(44, 36, 25, 0.06);
+      --mv2a-graph-accent: rgba(180, 140, 55, 0.48);
+      --mv2a-radar-ring-outer-fill: rgba(180, 140, 55, 0.07);
+      --mv2a-radar-ring-outer-stroke: rgba(130, 95, 35, 0.34);
+      --mv2a-radar-ring-mid-stroke: rgba(130, 95, 35, 0.22);
+      --mv2a-radar-ring-inner-stroke: rgba(130, 95, 35, 0.14);
+      --mv2a-radar-spoke: rgba(120, 90, 35, 0.2);
+      --mv2a-radar-owner-fill: rgba(100, 85, 70, 0.14);
+      --mv2a-radar-owner-stroke: rgba(85, 72, 58, 0.52);
+      --mv2a-radar-amulet-fill: rgba(200, 160, 45, 0.22);
+      --mv2a-radar-amulet-stroke: rgba(170, 120, 25, 0.88);
+      --mv2a-radar-peak-halo: rgba(200, 160, 45, 0.2);
+      --mv2a-radar-peak-fill: rgba(180, 130, 25, 0.95);
+      --mv2a-radar-peak-stroke: rgba(255, 248, 230, 0.9);
+      --mv2a-radar-lbl-axis: rgba(44, 36, 25, 0.88);
+      --mv2a-radar-lbl-num: rgba(110, 80, 28, 0.92);
+      --mv2a-radar-lbl-top1-glow: rgba(200, 160, 45, 0.28);
+      --mv2a-radar-lbl-top1-t: #7a5a10;
+      --mv2a-radar-lbl-top1-n: #5c4408;
+      --mv2a-radar-lbl-top2-t: rgba(90, 70, 35, 0.95);
+      --mv2a-radar-lbl-top2-n: rgba(120, 90, 30, 0.95);
+      --mv2a-radar-key: rgba(100, 90, 80, 0.75);
+      --mv2a-radar-dot-border: rgba(44, 36, 25, 0.14);
+      --mv2a-radar-dot-owner: rgba(120, 130, 145, 0.88);
+      --mv2a-radar-dot-amulet: rgba(200, 160, 45, 0.95);
+      --mv2a-anim-peak-glow1: rgba(200, 160, 45, 0.28);
+      --mv2a-anim-peak-glow2: rgba(200, 160, 45, 0.52);
+      --mv2a-gsum-bg: rgba(180, 140, 55, 0.07);
+      --mv2a-gsum-border: rgba(180, 140, 55, 0.16);
+      --mv2a-gsum-lead-bg: rgba(200, 170, 80, 0.14);
+      --mv2a-gsum-lead-border: rgba(180, 140, 55, 0.3);
+      --mv2a-gsum-k: rgba(110, 100, 90, 0.75);
+      --mv2a-gsum-v: rgba(44, 36, 25, 0.95);
+      --mv2a-gsum-v-lead: #a67c00;
+      --mv2a-owner-chip-bg: rgba(200, 170, 90, 0.14);
+      --mv2a-owner-chip-border: rgba(180, 140, 55, 0.3);
+      --mv2a-owner-chip-text: rgba(60, 48, 28, 0.9);
+      --mv2a-owner-mini-bg: rgba(255, 252, 248, 0.96);
+      --mv2a-owner-mini-border: rgba(180, 140, 55, 0.22);
+      --mv2a-owner-mini-t: rgba(140, 100, 30, 0.85);
+      --mv2a-owner-mini-b: rgba(44, 36, 25, 0.9);
+      --mv2a-owner-note: rgba(110, 100, 90, 0.65);
+      --mv2a-int-bg: rgba(255, 252, 248, 0.92);
+      --mv2a-int-border: rgba(180, 140, 55, 0.2);
+      --mv2a-int-kicker: rgba(140, 100, 30, 0.9);
+      --mv2a-int-main: rgba(44, 36, 25, 0.95);
+      --mv2a-int-sub: rgba(100, 90, 82, 0.78);
+      --mv2a-para: rgba(55, 48, 40, 0.92);
+      --mv2a-life-border: rgba(180, 140, 55, 0.18);
+      --mv2a-life-row-border: rgba(180, 140, 55, 0.1);
+      --mv2a-life-row-alt: rgba(180, 140, 55, 0.05);
+      --mv2a-life-name: rgba(44, 36, 25, 0.92);
+      --mv2a-life-score: #a67c00;
+      --mv2a-life-blurb: rgba(75, 68, 58, 0.9);
+      --mv2a-disclaimer: rgba(100, 90, 82, 0.82);
+      --mv2a-trust-border: rgba(180, 140, 55, 0.14);
+      --mv2a-render-meta: rgba(110, 100, 90, 0.72);
+    }
     body { margin: 0; background: var(--mv2a-bg); color: var(--mv2a-text); font-family: var(--mv2-font-th); }
     .mv2a-wrap { max-width: 520px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
     .mv2-hero { text-align: center; margin-bottom: 1rem; }
-    .mv2a-badge { display: inline-block; font-size: 0.65rem; color: var(--mv2a-gold); border: 1px solid rgba(212,175,55,0.35); padding: 0.2rem 0.5rem; border-radius: 999px; margin-bottom: 0.5rem; }
-    .mv2a-media img { max-width: 100%; border-radius: 12px; border: 1px solid rgba(212,175,55,0.2); }
+    .mv2a-badge { display: inline-block; font-size: 0.65rem; color: var(--mv2a-gold); border: 1px solid var(--mv2a-badge-border); padding: 0.2rem 0.5rem; border-radius: 999px; margin-bottom: 0.5rem; }
+    .mv2a-media img { max-width: 100%; border-radius: 12px; border: 1px solid var(--mv2a-media-border); }
     .mv2-h1 { font-size: 1.35rem; margin: 0.5rem 0; color: var(--mv2a-gold); font-weight: 700; }
-    .mv2-main { font-size: 0.95rem; margin: 0.4rem 0 0; color: rgba(250,250,249,0.95); font-weight: 500; }
-    .mv2-hero-clarifier { font-size: 0.78rem; margin: 0.35rem 0 0; color: rgba(180,175,168,0.88); line-height: 1.4; }
+    .mv2-main { font-size: 0.95rem; margin: 0.4rem 0 0; color: var(--mv2a-text-body); font-weight: 500; }
+    .mv2-hero-clarifier { font-size: 0.78rem; margin: 0.35rem 0 0; color: var(--mv2a-hero-clarifier); line-height: 1.4; }
     .mv2-date { font-size: 0.72rem; color: var(--mv2a-muted); margin: 0.35rem 0 0; }
     .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0.85rem 0; text-align: center; }
     .mv2-strip-k { font-size: 0.65rem; color: var(--mv2a-muted); }
     .mv2-strip-v { font-size: 1.1rem; font-weight: 700; color: var(--mv2a-gold); }
-    .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid rgba(212,175,55,0.12); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; }
+    .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid var(--mv2a-card-border); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; box-shadow: var(--mv2a-card-elev); }
     .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; font-family: inherit; }
     .mv2a-hint { font-size: 0.68rem; color: var(--mv2a-muted); margin: 0 0 0.6rem; }
-    .mv2a-graph-card { border-left: 3px solid rgba(212,175,55,0.38); padding: 0.85rem 0.85rem; }
+    .mv2a-graph-card { border-left: 3px solid var(--mv2a-graph-accent); padding: 0.85rem 0.85rem; }
     .mv2a-graph-card > h2 { font-size: 1.02rem; color: var(--mv2a-gold); margin: 0 0 0.28rem; }
     .mv2a-graph-card > .mv2a-hint { margin: 0 0 0.35rem; }
     .mv2a-radar-wrap { max-width: 18rem; margin: 0 auto; }
@@ -283,8 +441,8 @@ export function renderAmuletReportV2Html(payload) {
       to { opacity: 1; transform: translateY(0); }
     }
     @keyframes mv2aLblPulse {
-      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px rgba(248,232,168,0.2)); }
-      50% { opacity: 0.6; filter: drop-shadow(0 0 5px rgba(248,232,168,0.45)); }
+      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px var(--mv2a-anim-peak-glow1)); }
+      50% { opacity: 0.6; filter: drop-shadow(0 0 5px var(--mv2a-anim-peak-glow2)); }
     }
     .mv2a-radar-lbl {
       position: absolute;
@@ -326,14 +484,14 @@ export function renderAmuletReportV2Html(payload) {
       left: -1%;
       text-align: left;
     }
-    .mv2a-radar-axis-t { color: rgba(245,245,244,0.86); font-weight: 600; }
-    .mv2a-radar-axis-n { color: rgba(238,223,170,0.92); font-weight: 700; }
-    .mv2a-radar-lbl--top1 { font-size: clamp(11px, 4.65cqw, 13px); text-shadow: 0 0 10px rgba(248,232,168,0.22); }
-    .mv2a-radar-lbl--top1 .mv2a-radar-axis-t { color: #f8e8a8; font-weight: 700; }
-    .mv2a-radar-lbl--top1 .mv2a-radar-axis-n { color: #fff3c3; font-weight: 800; }
+    .mv2a-radar-axis-t { color: var(--mv2a-radar-lbl-axis); font-weight: 600; }
+    .mv2a-radar-axis-n { color: var(--mv2a-radar-lbl-num); font-weight: 700; }
+    .mv2a-radar-lbl--top1 { font-size: clamp(11px, 4.65cqw, 13px); text-shadow: 0 0 10px var(--mv2a-radar-lbl-top1-glow); }
+    .mv2a-radar-lbl--top1 .mv2a-radar-axis-t { color: var(--mv2a-radar-lbl-top1-t); font-weight: 700; }
+    .mv2a-radar-lbl--top1 .mv2a-radar-axis-n { color: var(--mv2a-radar-lbl-top1-n); font-weight: 800; }
     .mv2a-radar-lbl--top2 { font-size: clamp(10.5px, 4.35cqw, 12.5px); }
-    .mv2a-radar-lbl--top2 .mv2a-radar-axis-t { color: rgba(248,233,177,0.96); font-weight: 650; }
-    .mv2a-radar-lbl--top2 .mv2a-radar-axis-n { color: rgba(255,240,190,0.96); }
+    .mv2a-radar-lbl--top2 .mv2a-radar-axis-t { color: var(--mv2a-radar-lbl-top2-t); font-weight: 650; }
+    .mv2a-radar-lbl--top2 .mv2a-radar-axis-n { color: var(--mv2a-radar-lbl-top2-n); }
     .mv2a-radar-key {
       margin: 0.38rem 0 0;
       display: flex;
@@ -341,51 +499,51 @@ export function renderAmuletReportV2Html(payload) {
       justify-content: center;
       gap: 0.55rem;
       font-size: 0.65rem;
-      color: rgba(200,196,190,0.72);
+      color: var(--mv2a-radar-key);
     }
     .mv2a-radar-key-chip { display: inline-flex; align-items: center; gap: 0.3rem; }
     .mv2a-radar-dot {
       width: 0.44rem;
       height: 0.44rem;
       border-radius: 50%;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid var(--mv2a-radar-dot-border);
       display: inline-block;
     }
-    .mv2a-radar-dot--owner { background: rgba(203,213,225,0.85); }
-    .mv2a-radar-dot--amulet { background: rgba(232,197,71,0.9); }
+    .mv2a-radar-dot--owner { background: var(--mv2a-radar-dot-owner); }
+    .mv2a-radar-dot--amulet { background: var(--mv2a-radar-dot-amulet); }
     .mv2-gsum-rows { display: flex; flex-direction: column; gap: 0.32rem; }
-    .mv2-gsum-row { display: flex; align-items: baseline; gap: 0.45rem; padding: 0.28rem 0.5rem; border-radius: 8px; background: rgba(255,255,255,0.028); border: 1px solid rgba(212,175,55,0.1); }
+    .mv2-gsum-row { display: flex; align-items: baseline; gap: 0.45rem; padding: 0.28rem 0.5rem; border-radius: 8px; background: var(--mv2a-gsum-bg); border: 1px solid var(--mv2a-gsum-border); }
     .mv2-gsum-row:not(.mv2-gsum-row--lead) { padding: 0.18rem 0.5rem; }
-    .mv2-gsum-row--lead { background: rgba(212,175,55,0.08); border-color: rgba(212,175,55,0.2); }
-    .mv2-gsum-k { font-size: 0.72rem; font-weight: 400; color: rgba(148,163,184,0.58); white-space: nowrap; }
-    .mv2-gsum-v { font-size: 0.92rem; font-weight: 800; color: rgba(250,250,249,0.97); }
-    .mv2-gsum-row--lead .mv2-gsum-v { color: #fde68a; }
+    .mv2-gsum-row--lead { background: var(--mv2a-gsum-lead-bg); border-color: var(--mv2a-gsum-lead-border); }
+    .mv2-gsum-k { font-size: 0.72rem; font-weight: 400; color: var(--mv2a-gsum-k); white-space: nowrap; }
+    .mv2-gsum-v { font-size: 0.92rem; font-weight: 800; color: var(--mv2a-gsum-v); }
+    .mv2-gsum-row--lead .mv2-gsum-v { color: var(--mv2a-gsum-v-lead); }
     .mv2-card--owner > h2 { margin-bottom: 0.28rem; }
     .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.42rem; }
-    .mv2-owner-chip { font-size: 0.72rem; padding: 0.2rem 0.45rem; border-radius: 999px; background: rgba(212,175,55,0.1); border: 1px solid rgba(212,175,55,0.22); color: rgba(254,243,199,0.9); }
+    .mv2-owner-chip { font-size: 0.72rem; padding: 0.2rem 0.45rem; border-radius: 999px; background: var(--mv2a-owner-chip-bg); border: 1px solid var(--mv2a-owner-chip-border); color: var(--mv2a-owner-chip-text); }
     .mv2-owner-minis { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin: 0 0 0.42rem; }
     @media (max-width: 420px) { .mv2-owner-minis { grid-template-columns: 1fr; } }
-    .mv2-owner-mini { padding: 0.45rem 0.55rem; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(212,175,55,0.12); }
-    .mv2-owner-mini-t { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(212,175,55,0.78); margin: 0 0 0.22rem; }
-    .mv2-owner-mini-b { margin: 0; font-size: 0.78rem; line-height: 1.35; color: rgba(226,224,218,0.95); }
-    .mv2-owner-note { margin: 0.45rem 0 0; font-size: 0.62rem; color: rgba(148,163,184,0.42); }
+    .mv2-owner-mini { padding: 0.45rem 0.55rem; border-radius: 10px; background: var(--mv2a-owner-mini-bg); border: 1px solid var(--mv2a-owner-mini-border); }
+    .mv2-owner-mini-t { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mv2a-owner-mini-t); margin: 0 0 0.22rem; }
+    .mv2-owner-mini-b { margin: 0; font-size: 0.78rem; line-height: 1.35; color: var(--mv2a-owner-mini-b); }
+    .mv2-owner-note { margin: 0.45rem 0 0; font-size: 0.62rem; color: var(--mv2a-owner-note); }
     .mv2-int-cards { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.15rem 0 0; }
-    .mv2-int-card { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.48rem 0.55rem; border-radius: 10px; background: rgba(255,255,255,0.035); border: 1px solid rgba(212,175,55,0.14); }
-    .mv2-int-kicker { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; color: rgba(212,175,55,0.88); }
-    .mv2-int-main { font-size: 0.88rem; font-weight: 700; line-height: 1.28; color: rgba(250,250,249,0.97); }
-    .mv2-int-sub { font-size: 0.72rem; color: rgba(148,163,184,0.68); line-height: 1.35; }
-    .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
-    .mv2-life-rows { display: flex; flex-direction: column; gap: 0; margin: 0.35rem 0 0; border-radius: 10px; overflow: hidden; border: 1px solid rgba(212,175,55,0.1); }
-    .mv2-life-row { display: grid; grid-template-columns: minmax(4.2rem, 5.2rem) 2.1rem 1fr; gap: 0.45rem; align-items: start; padding: 0.42rem 0.5rem; font-size: 0.78rem; border-top: 1px solid rgba(212,175,55,0.07); }
+    .mv2-int-card { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.48rem 0.55rem; border-radius: 10px; background: var(--mv2a-int-bg); border: 1px solid var(--mv2a-int-border); }
+    .mv2-int-kicker { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; color: var(--mv2a-int-kicker); }
+    .mv2-int-main { font-size: 0.88rem; font-weight: 700; line-height: 1.28; color: var(--mv2a-int-main); }
+    .mv2-int-sub { font-size: 0.72rem; color: var(--mv2a-int-sub); line-height: 1.35; }
+    .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: var(--mv2a-para); }
+    .mv2-life-rows { display: flex; flex-direction: column; gap: 0; margin: 0.35rem 0 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--mv2a-life-border); }
+    .mv2-life-row { display: grid; grid-template-columns: minmax(4.2rem, 5.2rem) 2.1rem 1fr; gap: 0.45rem; align-items: start; padding: 0.42rem 0.5rem; font-size: 0.78rem; border-top: 1px solid var(--mv2a-life-row-border); }
     .mv2-life-row:first-child { border-top: none; }
-    .mv2-life-row:nth-child(odd) { background: rgba(255,255,255,0.02); }
-    .mv2-life-name { font-weight: 600; color: rgba(245,245,244,0.92); }
-    .mv2-life-score { color: #c9a227; font-weight: 700; font-size: 0.76rem; text-align: right; }
-    .mv2-life-blurb { color: rgba(186,184,178,0.95); line-height: 1.35; }
+    .mv2-life-row:nth-child(odd) { background: var(--mv2a-life-row-alt); }
+    .mv2-life-name { font-weight: 600; color: var(--mv2a-life-name); }
+    .mv2-life-score { color: var(--mv2a-life-score); font-weight: 700; font-size: 0.76rem; text-align: right; }
+    .mv2-life-blurb { color: var(--mv2a-life-blurb); line-height: 1.35; }
     .mv2-life-hint { margin: 0 0 0.45rem; font-size: 0.65rem; color: var(--mv2a-muted); opacity: 0.8; }
-    .mv2-disclaimer { margin: 0; font-size: 0.76rem; line-height: 1.45; color: rgba(148,163,184,0.78); }
-    .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); text-align: center; font-size: 0.78rem; color: var(--mv2a-muted); }
-    .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); }
+    .mv2-disclaimer { margin: 0; font-size: 0.76rem; line-height: 1.45; color: var(--mv2a-disclaimer); }
+    .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--mv2a-trust-border); text-align: center; font-size: 0.78rem; color: var(--mv2a-muted); }
+    .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: var(--mv2a-render-meta); }
   </style>
 </head>
 <body>
