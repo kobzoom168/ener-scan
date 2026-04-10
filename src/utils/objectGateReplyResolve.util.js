@@ -4,8 +4,7 @@
  */
 
 /**
- * True "unsupported" (hard reject): both passes agree unsupported with structured evidence
- * matching production pattern (e.g. vehicle/food) — not timeout/null/inconclusive.
+ * Hard reject (unsupported reply): both strict and permissive passes returned `unsupported`.
  *
  * @param {object} p
  * @param {string} p.firstPass

@@ -101,6 +101,8 @@ function outputSuggestsNonAmuletSubject(outputLower) {
     "หน้าจอ",
     "กระดาษ",
     "receipt",
+    "bank slip",
+    "payment slip",
     "สลิป",
     "tarot",
     "oracle",
@@ -109,6 +111,7 @@ function outputSuggestsNonAmuletSubject(outputLower) {
     "card game",
     "trading card",
     "collectible card",
+    "card",
     "ไพ่",
     "ไพ่ทาโรต์",
     "ทาโรต์",
@@ -168,6 +171,10 @@ export function normalizeObjectCheckOutput(outputText) {
     output.includes("มืด")
   ) {
     return "unclear";
+  }
+
+  if (output.includes("inconclusive")) {
+    return "inconclusive";
   }
 
   if (
@@ -230,6 +237,17 @@ function normalizePermissiveLabel(v) {
 }
 
 /**
+ * Label from permissive JSON parse. If JSON missing/invalid → `inconclusive` (avoid accidental hard reject).
+ * @param {object|null} parsed
+ * @returns {string}
+ */
+export function permissiveLabelFromParsedJson(parsed) {
+  return parsed
+    ? normalizePermissiveLabel(parsed?.label)
+    : "inconclusive";
+}
+
+/**
  * @param {string} instructionText
  * @param {string} imageBase64
  */
@@ -289,6 +307,7 @@ Ener Scan รองรับเฉพาะวัตถุมงคล/พลั
 - ถ้าไม่มั่นใจระหว่าง single_supported กับ multiple ให้ตอบ multiple
 - ถ้าเห็นวัตถุมงคล/เหรียญ/พระ/หิน ชิ้นเดียวชัด แม้มุมถ่ายหรือกรอบแปลก ให้ตอบ single_supported ก่อน (อย่าตอบ unsupported เพียงเพราะทรงกลมหรือมีกรอบพลาสติก)
 - ถ้าไม่มั่นใจระหว่าง single_supported กับ unsupported ให้ตอบ unsupported หรือ unclear (อย่าตอบ single_supported ถ้าสัญญาณอ่อน — ระบบอาจตรวจซ้ำอัตโนมัติ)
+- ไพ่ การ์ด เอกสาร screenshot สลิป หรือภาพนอกบริการชัดเจน → unsupported; ถ้าสัญญาณอ่อนมากจนเดาไม่ได้ → unclear (ห้ามเดาเป็น single_supported)
 
 ห้ามอธิบาย ห้ามใส่ประโยค ตอบเพียงหนึ่งคำจากรายการเท่านั้น
 
@@ -324,6 +343,7 @@ const PERMISSIVE_PROMPT = `
 - reject (unsupported) เมื่อมั่นใจว่าไม่ใช่พระ/เครื่องราง/หินสายพลัง หรือเป็นไพ่/การ์ด/เอกสาร/สลิป/คน/อาหาร/หลายชิ้นชัด
 - ถ้าภาพเป็นไพ่ทาโรต์ ไพ่เล่น หรือการ์ดเกม ให้ label=unsupported และ confidence สูง — ห้าม upgrade เป็น single_supported
 - ถ้ายังไม่แน่ใจระหว่างวัตถุมงคลกับของอื่น ให้ label=unclear หรือ unsupported และ confidence ต่ำ — อย่าตอบ single_supported แบบเดา
+- ไพ่/การ์ด (tarot, oracle, playing card, trading card, card ทั่วไป) เอกสาร screenshot สลิป → unsupported; ถ้าไม่แน่ใจจริง ๆ ให้ unclear ไม่ใช่ single_supported
 `;
 
 /**
@@ -448,9 +468,7 @@ async function runPermissiveStructuredObjectCheck(imageBase64) {
 
   const rawText = String(response?.output_text || "").trim();
   const parsed = extractJsonObject(rawText);
-  const label = parsed
-    ? normalizePermissiveLabel(parsed?.label)
-    : "inconclusive";
+  const label = permissiveLabelFromParsedJson(parsed);
   const objectCount =
     parsed?.objectCount != null && Number.isFinite(Number(parsed.objectCount))
       ? Number(parsed.objectCount)

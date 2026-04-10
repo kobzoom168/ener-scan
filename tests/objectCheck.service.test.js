@@ -4,6 +4,7 @@ import {
   mergeGateLabels,
   normalizeObjectCheckOutput,
   permissiveAllowsSingleSupportedUpgrade,
+  permissiveLabelFromParsedJson,
 } from "../src/services/objectCheck.service.js";
 
 const strongAmulet = {
@@ -13,7 +14,7 @@ const strongAmulet = {
   supportedFamilyGuess: "thai_amulet",
 };
 
-test("normalizeObjectCheckOutput: tarot / oracle / playing card -> unsupported", () => {
+test("normalizeObjectCheckOutput: tarot / oracle / playing card / trading card -> unsupported", () => {
   assert.equal(normalizeObjectCheckOutput("unsupported"), "unsupported");
   assert.equal(
     normalizeObjectCheckOutput("single_supported — tarot card visible"),
@@ -28,17 +29,33 @@ test("normalizeObjectCheckOutput: tarot / oracle / playing card -> unsupported",
     "unsupported",
   );
   assert.equal(
+    normalizeObjectCheckOutput("trading card holographic"),
+    "unsupported",
+  );
+  assert.equal(
     normalizeObjectCheckOutput("ภาพไพ่ทาโรต์ nine of pentacles"),
+    "unsupported",
+  );
+  assert.equal(
+    normalizeObjectCheckOutput("this is a card not an amulet"),
     "unsupported",
   );
 });
 
-test("normalizeObjectCheckOutput: obvious document / screenshot wording -> unsupported", () => {
+test("normalizeObjectCheckOutput: document / screenshot / slip -> unsupported", () => {
   assert.equal(
     normalizeObjectCheckOutput("screenshot of a bank app"),
     "unsupported",
   );
   assert.equal(normalizeObjectCheckOutput("เอกสาร a4"), "unsupported");
+  assert.equal(
+    normalizeObjectCheckOutput("bank slip transfer proof"),
+    "unsupported",
+  );
+  assert.equal(
+    normalizeObjectCheckOutput("payment slip photo"),
+    "unsupported",
+  );
 });
 
 test("normalizeObjectCheckOutput: blurry / unclear -> unclear", () => {
@@ -46,8 +63,37 @@ test("normalizeObjectCheckOutput: blurry / unclear -> unclear", () => {
   assert.equal(normalizeObjectCheckOutput("too blurry"), "unclear");
 });
 
+test("normalizeObjectCheckOutput: blurry / weak signal must not be single_supported", () => {
+  assert.notEqual(normalizeObjectCheckOutput("too blurry"), "single_supported");
+  assert.notEqual(normalizeObjectCheckOutput("very blur image"), "single_supported");
+  assert.notEqual(normalizeObjectCheckOutput("unclear object"), "single_supported");
+});
+
+test("normalizeObjectCheckOutput: inconclusive echo -> inconclusive", () => {
+  assert.equal(
+    normalizeObjectCheckOutput("inconclusive — cannot decide"),
+    "inconclusive",
+  );
+});
+
 test("normalizeObjectCheckOutput: clear amulet wording stays single_supported", () => {
   assert.equal(normalizeObjectCheckOutput("single_supported"), "single_supported");
+});
+
+test("permissiveLabelFromParsedJson: parse error / null -> inconclusive", () => {
+  assert.equal(permissiveLabelFromParsedJson(null), "inconclusive");
+  assert.equal(permissiveLabelFromParsedJson(undefined), "inconclusive");
+});
+
+test("permissiveLabelFromParsedJson: valid JSON uses label", () => {
+  assert.equal(
+    permissiveLabelFromParsedJson({ label: "unsupported" }),
+    "unsupported",
+  );
+  assert.equal(
+    permissiveLabelFromParsedJson({ label: "single_supported" }),
+    "single_supported",
+  );
 });
 
 test("permissiveAllowsSingleSupportedUpgrade: requires family + confidence + objectCount 1", () => {
@@ -74,6 +120,20 @@ test("permissiveAllowsSingleSupportedUpgrade: requires family + confidence + obj
     false,
   );
   assert.equal(permissiveAllowsSingleSupportedUpgrade(null), false);
+  assert.equal(
+    permissiveAllowsSingleSupportedUpgrade({
+      ...strongAmulet,
+      confidence: 0.71,
+    }),
+    false,
+  );
+  assert.equal(
+    permissiveAllowsSingleSupportedUpgrade({
+      ...strongAmulet,
+      confidence: 0.72,
+    }),
+    true,
+  );
 });
 
 test("mergeGateLabels: unsupported + permissive single_supported without strong evidence -> inconclusive", () => {
