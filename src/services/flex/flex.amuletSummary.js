@@ -22,8 +22,9 @@ const LIFE_AREA_BAR_TRACK_BG = "#d8dee6";
 const LIFE_AREA_BAR_FILL = "#c9a227";
 const AMULET_ACCENT = "#b8860b";
 const AMULET_ACCENT_DIM = "#a16207";
-const AMULET_CTA_BG = "#b8860b";
-const FLEX_ACCENT = AMULET_CTA_BG;
+/** ปุ่ม CTA แบบ outline โมเดิร์น (พื้นอ่อน + ขอบทอง — LINE Flex ไม่มีปุ่มใสแท้) */
+const FLEX_CTA_OUTLINE_BG = "#ffffff";
+const FLEX_CTA_OUTLINE_BORDER = "#ca8a04";
 const FLEX_TEXT_PRIMARY = "#1c1917";
 const FLEX_TEXT_SECONDARY = "#57534e";
 /** Tagline under title: softer than body so headline stays primary. */
@@ -723,17 +724,35 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       margin: "lg",
     });
   } else {
+    const ctaLabel =
+      String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม";
     bodyContents.push({
-      type: "button",
-      style: "primary",
-      color: FLEX_ACCENT,
-      height: "md",
+      type: "box",
+      layout: "vertical",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingAll: "14px",
       margin: "md",
+      cornerRadius: "lg",
+      backgroundColor: FLEX_CTA_OUTLINE_BG,
+      borderWidth: "2px",
+      borderColor: FLEX_CTA_OUTLINE_BORDER,
       action: {
         type: "uri",
-        label: String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",
+        label: ctaLabel,
         uri: url,
       },
+      contents: [
+        {
+          type: "text",
+          text: ctaLabel,
+          align: "center",
+          weight: "bold",
+          size: "md",
+          color: AMULET_ACCENT_DIM,
+          wrap: true,
+        },
+      ],
     });
   }
 
