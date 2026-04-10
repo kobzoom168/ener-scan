@@ -426,6 +426,10 @@ export function renderAmuletReportV2Html(payload) {
       .mv2a-radar-peak {
         animation: mv2aLblPulse 2.3s ease-in-out 2.1s infinite;
       }
+      /* พลังเด่นสุด: จังหวะเดียวกับ moldaviteReportV2 (.mv2-radar-lbl--peak + mv2LblPulse) */
+      .mv2a-radar-lbl--top1 {
+        animation: mv2aRadarTop1Pulse 1.2s ease-in-out 2.6s infinite;
+      }
     }
     @media (prefers-reduced-motion: reduce) {
       .mv2a-radar-svg--animate .mv2a-radar-layer,
@@ -453,15 +457,15 @@ export function renderAmuletReportV2Html(payload) {
       0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px var(--mv2a-anim-peak-glow1)); }
       50% { opacity: 0.6; filter: drop-shadow(0 0 5px var(--mv2a-anim-peak-glow2)); }
     }
-    /* พลังเด่นสุด (top1): กระพริบชัด — ใช้ opacity เท่านั้น ไม่แตะ transform ของตำแหน่งป้าย */
-    @keyframes mv2aRadarTop1Blink {
-      0%, 45% { opacity: 1; }
-      50%, 55% { opacity: 0.12; }
-      60%, 100% { opacity: 1; }
-    }
-    @media (prefers-reduced-motion: no-preference) {
-      .mv2a-radar-lbl--top1 {
-        animation: mv2aRadarTop1Blink 1.15s ease-in-out infinite;
+    /* พลังเด่นสุด (top1): ค่อย ๆ กระพริบ — opacity + text-shadow เท่านั้น (เทียบ moldavite mv2LblPulse) */
+    @keyframes mv2aRadarTop1Pulse {
+      0%, 100% {
+        opacity: 1;
+        text-shadow: 0 0 4px var(--mv2a-radar-lbl-top1-glow);
+      }
+      50% {
+        opacity: 0.45;
+        text-shadow: 0 0 16px var(--mv2a-radar-lbl-top1-glow);
       }
     }
     .mv2a-radar-lbl {
