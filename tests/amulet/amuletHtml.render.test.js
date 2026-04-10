@@ -110,17 +110,17 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(!html.includes('class="mv2-tag"'), "hero subtitle is not rendered");
   assert.ok(!html.includes("พลังหลัก ·"), "hero uses โทนหลัก, not พลังหลัก");
   assert.ok(html.includes("render amulet-html-v2"));
-  assert.ok(html.includes("--mv2a-bg: #090a0d"), "default tech-spiritual dark dashboard");
-  assert.ok(html.includes("--mv2a-gold: #e8c547"));
+  assert.ok(html.includes("--mv2a-bg: #ffffff"), "default white shell");
+  assert.ok(html.includes("--mv2a-gold: #b8871b"));
   assert.ok(
     html.startsWith(`<!DOCTYPE html>
 <html lang="th">
 <head>`),
-    "default: no html theme class (dark tokens in :root)",
+    "default: no html theme class (light tokens in :root)",
   );
 });
 
-test("renderAmuletReportV2Html: optional ivory experiment via wording.amuletReportV2Theme light", () => {
+test("renderAmuletReportV2Html: optional dark-gold dashboard via wording.amuletReportV2Theme dark", () => {
   const base = {
     reportId: "r1",
     publicToken: "t",
@@ -151,7 +151,7 @@ test("renderAmuletReportV2Html: optional ivory experiment via wording.amuletRepo
     },
     trust: {},
     actions: {},
-    wording: { amuletReportV2Theme: "light" },
+    wording: { amuletReportV2Theme: "dark" },
     amuletV1: {
       version: "1",
       scoringMode: "deterministic_v2",
@@ -182,8 +182,9 @@ test("renderAmuletReportV2Html: optional ivory experiment via wording.amuletRepo
     },
   };
   const html = renderAmuletReportV2Html(base);
-  assert.ok(html.includes('class="mv2a-theme-light"'));
-  assert.ok(html.includes("--mv2a-bg: #f7f3ea"));
+  assert.ok(html.includes('class="mv2a-theme-dark"'));
+  assert.ok(html.includes("--mv2a-bg: #090a0d"));
+  assert.ok(html.includes("--mv2a-gold: #e8c547"));
   assert.ok(html.includes("var(--mv2a-radar-spoke)"));
   assert.ok(html.includes("กราฟหกมิติพลังพระเครื่อง"));
 });

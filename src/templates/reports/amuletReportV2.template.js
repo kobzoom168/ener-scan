@@ -85,8 +85,8 @@ function amuletHtmlShowRenderMetaLine() {
 }
 
 /**
- * Default: tech-spiritual dark-gold dashboard. Optional ivory experiment via
- * `wording.amuletReportV2Theme: "light"` or env `AMULET_HTML_THEME=light`.
+ * Default: white shell + dark text + gold accents. Dark dashboard via
+ * `wording.amuletReportV2Theme: "dark"` or env `AMULET_HTML_THEME=dark`.
  *
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
  * @returns {"dark"|"light"}
@@ -97,17 +97,17 @@ function resolveAmuletHtmlTheme(payload) {
   )
     .trim()
     .toLowerCase();
-  if (env === "light") return "light";
   if (env === "dark") return "dark";
+  if (env === "light") return "light";
   const w = payload?.wording && typeof payload.wording === "object" ? payload.wording : null;
   const fromPayload = String(
     /** @type {{ amuletReportV2Theme?: string }} */ (w)?.amuletReportV2Theme ?? "",
   )
     .trim()
     .toLowerCase();
-  if (fromPayload === "light") return "light";
   if (fromPayload === "dark") return "dark";
-  return "dark";
+  if (fromPayload === "light") return "light";
+  return "light";
 }
 
 /**
@@ -226,15 +226,90 @@ export function renderAmuletReportV2Html(payload) {
     : "";
 
   return `<!DOCTYPE html>
-<html lang="th"${htmlTheme === "light" ? ' class="mv2a-theme-light"' : ""}>
+<html lang="th"${htmlTheme === "dark" ? ' class="mv2a-theme-dark"' : ""}>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(h.subtypeLabel || "พระเครื่อง")} · Ener Scan</title>
   <style>
     :root {
+      color-scheme: light;
+      /* Default: ขาวทั้งหน้า — พื้นหลัง + การ์ด #fff; ตัวอักษรเข้ม + ทอง sacred_amulet */
+      --mv2a-gold: #b8871b;
+      --mv2a-gold-dim: #8f6710;
+      --mv2a-bg: #ffffff;
+      --mv2a-card: #ffffff;
+      --mv2a-muted: #7a6a58;
+      --mv2a-text: #241c12;
+      --mv2a-text-body: rgba(36, 28, 18, 0.92);
+      --mv2a-badge-border: rgba(184, 135, 27, 0.28);
+      --mv2a-media-border: rgba(184, 135, 27, 0.22);
+      --mv2a-hero-clarifier: rgba(90, 78, 65, 0.88);
+      --mv2a-card-border: rgba(184, 135, 27, 0.2);
+      --mv2a-card-elev: 0 1px 3px rgba(0, 0, 0, 0.06);
+      --mv2a-graph-accent: rgba(184, 135, 27, 0.45);
+      --mv2a-radar-ring-outer-fill: rgba(184, 135, 27, 0.06);
+      --mv2a-radar-ring-outer-stroke: rgba(143, 103, 16, 0.3);
+      --mv2a-radar-ring-mid-stroke: rgba(143, 103, 16, 0.2);
+      --mv2a-radar-ring-inner-stroke: rgba(143, 103, 16, 0.12);
+      --mv2a-radar-spoke: rgba(120, 88, 28, 0.18);
+      --mv2a-radar-owner-fill: rgba(105, 92, 78, 0.12);
+      --mv2a-radar-owner-stroke: rgba(88, 76, 64, 0.45);
+      --mv2a-radar-amulet-fill: rgba(184, 135, 27, 0.18);
+      --mv2a-radar-amulet-stroke: rgba(160, 115, 18, 0.88);
+      --mv2a-radar-peak-halo: rgba(184, 135, 27, 0.2);
+      --mv2a-radar-peak-fill: #c9a132;
+      --mv2a-radar-peak-stroke: rgba(255, 250, 235, 0.95);
+      --mv2a-radar-lbl-axis: rgba(36, 28, 18, 0.88);
+      --mv2a-radar-lbl-num: rgba(110, 78, 22, 0.92);
+      --mv2a-radar-lbl-top1-glow: rgba(184, 135, 27, 0.26);
+      --mv2a-radar-lbl-top1-t: #7a5a12;
+      --mv2a-radar-lbl-top1-n: #5c420a;
+      --mv2a-radar-lbl-top2-t: rgba(95, 72, 32, 0.95);
+      --mv2a-radar-lbl-top2-n: rgba(120, 88, 28, 0.95);
+      --mv2a-radar-key: rgba(100, 88, 76, 0.78);
+      --mv2a-radar-dot-border: rgba(36, 28, 18, 0.1);
+      --mv2a-radar-dot-owner: rgba(115, 125, 138, 0.88);
+      --mv2a-radar-dot-amulet: rgba(184, 135, 27, 0.95);
+      --mv2a-anim-peak-glow1: rgba(184, 135, 27, 0.28);
+      --mv2a-anim-peak-glow2: rgba(184, 135, 27, 0.5);
+      --mv2a-gsum-bg: rgba(184, 135, 27, 0.07);
+      --mv2a-gsum-border: rgba(184, 135, 27, 0.16);
+      --mv2a-gsum-lead-bg: rgba(184, 135, 27, 0.09);
+      --mv2a-gsum-lead-border: rgba(184, 135, 27, 0.26);
+      --mv2a-gsum-k: rgba(122, 106, 88, 0.88);
+      --mv2a-gsum-v: rgba(36, 28, 18, 0.95);
+      --mv2a-gsum-v-lead: #b8871b;
+      --mv2a-owner-chip-bg: rgba(184, 135, 27, 0.09);
+      --mv2a-owner-chip-border: rgba(184, 135, 27, 0.24);
+      --mv2a-owner-chip-text: rgba(50, 40, 26, 0.92);
+      --mv2a-owner-mini-bg: #ffffff;
+      --mv2a-owner-mini-border: rgba(184, 135, 27, 0.18);
+      --mv2a-owner-mini-t: rgba(143, 103, 16, 0.88);
+      --mv2a-owner-mini-b: rgba(36, 28, 18, 0.9);
+      --mv2a-owner-note: rgba(100, 88, 74, 0.72);
+      --mv2a-int-bg: #ffffff;
+      --mv2a-int-border: rgba(184, 135, 27, 0.18);
+      --mv2a-int-kicker: rgba(143, 103, 16, 0.92);
+      --mv2a-int-main: rgba(36, 28, 18, 0.95);
+      --mv2a-int-sub: rgba(100, 88, 76, 0.82);
+      --mv2a-para: rgba(48, 40, 30, 0.92);
+      --mv2a-life-border: rgba(184, 135, 27, 0.16);
+      --mv2a-life-row-border: rgba(0, 0, 0, 0.06);
+      --mv2a-life-row-alt: rgba(0, 0, 0, 0.02);
+      --mv2a-life-name: rgba(36, 28, 18, 0.92);
+      --mv2a-life-score: #b8871b;
+      --mv2a-life-blurb: rgba(72, 62, 50, 0.9);
+      --mv2a-disclaimer: rgba(78, 68, 56, 0.88);
+      --mv2a-trust-border: rgba(0, 0, 0, 0.08);
+      --mv2a-render-meta: rgba(100, 90, 78, 0.72);
+      /* Unified Thai + system stack (report + radar labels + cards; LINE Flex uses client fonts). */
+      --mv2-font-th: "Noto Sans Thai", "Sarabun", "Kanit", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", system-ui, sans-serif;
+    }
+    html.mv2a-theme-dark {
       color-scheme: dark;
-      /* Default: graph-first dark dashboard — sharp gold, cool panels, slate UI (not vintage parchment) */
+      /* Optional: tech-spiritual dark-gold dashboard */
       --mv2a-gold: #e8c547;
       --mv2a-gold-dim: #b8860b;
       --mv2a-bg: #090a0d;
@@ -303,81 +378,6 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-disclaimer: rgba(148, 163, 184, 0.88);
       --mv2a-trust-border: rgba(148, 163, 184, 0.16);
       --mv2a-render-meta: rgba(100, 116, 139, 0.85);
-      /* Unified Thai + system stack (report + radar labels + cards; LINE Flex uses client fonts). */
-      --mv2-font-th: "Noto Sans Thai", "Sarabun", "Kanit", ui-sans-serif, -apple-system, BlinkMacSystemFont,
-        "Segoe UI", system-ui, sans-serif;
-    }
-    html.mv2a-theme-light {
-      color-scheme: light;
-      /* Optional ivory experiment — warmer paper, not the default product shell */
-      --mv2a-gold: #b8871b;
-      --mv2a-gold-dim: #8f6710;
-      --mv2a-bg: #f7f3ea;
-      --mv2a-card: #fffdf9;
-      --mv2a-muted: #7a6a58;
-      --mv2a-text: #241c12;
-      --mv2a-text-body: rgba(36, 28, 18, 0.92);
-      --mv2a-badge-border: rgba(184, 135, 27, 0.28);
-      --mv2a-media-border: rgba(184, 135, 27, 0.22);
-      --mv2a-hero-clarifier: rgba(90, 78, 65, 0.88);
-      --mv2a-card-border: rgba(184, 135, 27, 0.24);
-      --mv2a-card-elev: 0 1px 2px rgba(36, 28, 18, 0.05), 0 5px 16px rgba(36, 28, 18, 0.06);
-      --mv2a-graph-accent: rgba(184, 135, 27, 0.45);
-      --mv2a-radar-ring-outer-fill: rgba(184, 135, 27, 0.07);
-      --mv2a-radar-ring-outer-stroke: rgba(143, 103, 16, 0.32);
-      --mv2a-radar-ring-mid-stroke: rgba(143, 103, 16, 0.22);
-      --mv2a-radar-ring-inner-stroke: rgba(143, 103, 16, 0.14);
-      --mv2a-radar-spoke: rgba(120, 88, 28, 0.2);
-      --mv2a-radar-owner-fill: rgba(105, 92, 78, 0.13);
-      --mv2a-radar-owner-stroke: rgba(88, 76, 64, 0.48);
-      --mv2a-radar-amulet-fill: rgba(184, 135, 27, 0.2);
-      --mv2a-radar-amulet-stroke: rgba(160, 115, 18, 0.9);
-      --mv2a-radar-peak-halo: rgba(184, 135, 27, 0.22);
-      --mv2a-radar-peak-fill: #c9a132;
-      --mv2a-radar-peak-stroke: rgba(255, 250, 235, 0.95);
-      --mv2a-radar-lbl-axis: rgba(36, 28, 18, 0.88);
-      --mv2a-radar-lbl-num: rgba(110, 78, 22, 0.92);
-      --mv2a-radar-lbl-top1-glow: rgba(184, 135, 27, 0.28);
-      --mv2a-radar-lbl-top1-t: #7a5a12;
-      --mv2a-radar-lbl-top1-n: #5c420a;
-      --mv2a-radar-lbl-top2-t: rgba(95, 72, 32, 0.95);
-      --mv2a-radar-lbl-top2-n: rgba(120, 88, 28, 0.95);
-      --mv2a-radar-key: rgba(100, 88, 76, 0.78);
-      --mv2a-radar-dot-border: rgba(36, 28, 18, 0.12);
-      --mv2a-radar-dot-owner: rgba(115, 125, 138, 0.88);
-      --mv2a-radar-dot-amulet: rgba(184, 135, 27, 0.95);
-      --mv2a-anim-peak-glow1: rgba(184, 135, 27, 0.3);
-      --mv2a-anim-peak-glow2: rgba(184, 135, 27, 0.52);
-      --mv2a-gsum-bg: rgba(184, 135, 27, 0.08);
-      --mv2a-gsum-border: rgba(184, 135, 27, 0.18);
-      --mv2a-gsum-lead-bg: rgba(184, 135, 27, 0.1);
-      --mv2a-gsum-lead-border: rgba(184, 135, 27, 0.28);
-      --mv2a-gsum-k: rgba(122, 106, 88, 0.88);
-      --mv2a-gsum-v: rgba(36, 28, 18, 0.95);
-      --mv2a-gsum-v-lead: #b8871b;
-      --mv2a-owner-chip-bg: rgba(184, 135, 27, 0.1);
-      --mv2a-owner-chip-border: rgba(184, 135, 27, 0.26);
-      --mv2a-owner-chip-text: rgba(50, 40, 26, 0.92);
-      --mv2a-owner-mini-bg: #fffefb;
-      --mv2a-owner-mini-border: rgba(184, 135, 27, 0.2);
-      --mv2a-owner-mini-t: rgba(143, 103, 16, 0.88);
-      --mv2a-owner-mini-b: rgba(36, 28, 18, 0.9);
-      --mv2a-owner-note: rgba(100, 88, 74, 0.72);
-      --mv2a-int-bg: rgba(255, 253, 249, 0.95);
-      --mv2a-int-border: rgba(184, 135, 27, 0.2);
-      --mv2a-int-kicker: rgba(143, 103, 16, 0.92);
-      --mv2a-int-main: rgba(36, 28, 18, 0.95);
-      --mv2a-int-sub: rgba(100, 88, 76, 0.82);
-      --mv2a-para: rgba(48, 40, 30, 0.92);
-      --mv2a-life-border: rgba(184, 135, 27, 0.18);
-      --mv2a-life-row-border: rgba(184, 135, 27, 0.1);
-      --mv2a-life-row-alt: rgba(184, 135, 27, 0.05);
-      --mv2a-life-name: rgba(36, 28, 18, 0.92);
-      --mv2a-life-score: #b8871b;
-      --mv2a-life-blurb: rgba(72, 62, 50, 0.9);
-      --mv2a-disclaimer: rgba(78, 68, 56, 0.88);
-      --mv2a-trust-border: rgba(184, 135, 27, 0.15);
-      --mv2a-render-meta: rgba(100, 90, 78, 0.72);
     }
     body { margin: 0; background: var(--mv2a-bg); color: var(--mv2a-text); font-family: var(--mv2-font-th); }
     .mv2a-wrap { max-width: 520px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
