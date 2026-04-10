@@ -1,6 +1,5 @@
 /**
- * Sacred amulet lane: summary-first Flex (gold/dark theme). Parallel to Moldavite Flex; does not use legacy thai_amulet pools.
- * Light HTML variant lives in `amuletReportV2.template.js` only; Flex stays this dark baseline unless we add an opt-in later.
+ * Sacred amulet lane: summary-first Flex (white shell + gold accents). Parallel to Moldavite Flex; does not use legacy thai_amulet pools.
  *
  * Typography: LINE renders Flex with the client’s system fonts (no @font-face). The HTML report uses
  * `--mv2-font-th` in `amuletReportV2.template.js` for a unified Thai stack; visual parity with Flex is
@@ -12,29 +11,29 @@ import { normalizeScore } from "./flex.utils.js";
 import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 
-/** Dark + gold: sacred amulet lane (LINE-safe hex). */
-const FLEX_CARD_BG = "#0c0a08";
-const FLEX_BOX_BG = "#1a1510";
-/** Pill meter track: inset, rounded; pair with LIFE_AREA_BAR_FILL (distinct from header accent hex). */
-const LIFE_AREA_BAR_TRACK_BG = "#1c1812";
+/** White + gold: sacred amulet lane (LINE-safe hex). */
+const FLEX_CARD_BG = "#ffffff";
+const FLEX_BOX_BG = "#ffffff";
+/** Pill meter track on white (distinct from LIFE_AREA_BAR_FILL). */
+const LIFE_AREA_BAR_TRACK_BG = "#e5e7eb";
 const LIFE_AREA_BAR_FILL = "#c9a227";
-const AMULET_ACCENT = "#e8c547";
-const AMULET_ACCENT_DIM = "#d4af37";
+const AMULET_ACCENT = "#b8860b";
+const AMULET_ACCENT_DIM = "#a16207";
 const AMULET_CTA_BG = "#b8860b";
 const FLEX_ACCENT = AMULET_CTA_BG;
-const FLEX_TEXT_PRIMARY = "#f3f4f6";
-const FLEX_TEXT_SECONDARY = "#9ca3af";
+const FLEX_TEXT_PRIMARY = "#1c1917";
+const FLEX_TEXT_SECONDARY = "#57534e";
 /** Tagline under title: softer than body so headline stays primary. */
-const AMULET_TITLE_TAGLINE_COLOR = "#a8a29e";
+const AMULET_TITLE_TAGLINE_COLOR = "#78716c";
 /** Life-area helper line: dimmer than captions; metadata only. */
-const LIFE_AREA_HELPER_TEXT_COLOR = "#52525b";
+const LIFE_AREA_HELPER_TEXT_COLOR = "#a8a29e";
 /** Fallback when power rows are missing (Flex display only). */
 const AMULET_TITLE_TAGLINE = "พระเครื่อง · หกมิติพลัง";
 
 /** Bar score numerals: quieter than labels (read dimension + bar first). */
-const LIFE_AREA_BAR_SCORE_COLOR = "#5f5a4f";
+const LIFE_AREA_BAR_SCORE_COLOR = "#6b7280";
 /** Summary body line under `เด่นสุด`: subordinate to label, still readable. */
-const AMULET_SUMMARY_VALUE_COLOR = "#b4aea3";
+const AMULET_SUMMARY_VALUE_COLOR = "#44403c";
 
 /** User-visible empty slot in Flex teaser (avoid em dash). */
 const AMULET_FLEX_EMPTY_MARK = "-";

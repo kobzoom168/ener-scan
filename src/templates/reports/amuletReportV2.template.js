@@ -434,6 +434,10 @@ export function renderAmuletReportV2Html(payload) {
         opacity: 1 !important;
         transform: none !important;
       }
+      .mv2a-radar-lbl--top1 {
+        animation: none !important;
+        opacity: 1 !important;
+      }
     }
     @keyframes mv2aRdrPoly {
       0% { opacity: 0; transform: scale(0); }
@@ -448,6 +452,17 @@ export function renderAmuletReportV2Html(payload) {
     @keyframes mv2aLblPulse {
       0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px var(--mv2a-anim-peak-glow1)); }
       50% { opacity: 0.6; filter: drop-shadow(0 0 5px var(--mv2a-anim-peak-glow2)); }
+    }
+    /* พลังเด่นสุด (top1): กระพริบชัด — ใช้ opacity เท่านั้น ไม่แตะ transform ของตำแหน่งป้าย */
+    @keyframes mv2aRadarTop1Blink {
+      0%, 45% { opacity: 1; }
+      50%, 55% { opacity: 0.12; }
+      60%, 100% { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .mv2a-radar-lbl--top1 {
+        animation: mv2aRadarTop1Blink 1.15s ease-in-out infinite;
+      }
     }
     .mv2a-radar-lbl {
       position: absolute;

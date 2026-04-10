@@ -99,7 +99,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(!html.includes("ควรค่อย ๆ ไป"));
   assert.ok(!html.includes("แกน"));
   assert.ok(!html.includes("โค้ง"));
-  assert.ok(html.includes("จังหวะเกิดเดือนมิถุนายน (สรุปสัญลักษณ์)"));
+  assert.ok(html.includes("จังหวะเกิดเดือนมิถุนายน"));
   assert.ok(html.includes("สงบ 7/10"));
   assert.ok(html.includes("มุ่งมั่น 6/10"));
   assert.ok(html.includes("เปิดรับ 8/10"));

@@ -124,7 +124,7 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     4,
     "flex shows exactly 4 bar fills (top 4 dimensions)",
   );
-  const barScoreMuted = bodyText.match(/#5f5a4f/g);
+  const barScoreMuted = bodyText.match(/#6b7280/g);
   assert.equal(
     barScoreMuted?.length,
     4,

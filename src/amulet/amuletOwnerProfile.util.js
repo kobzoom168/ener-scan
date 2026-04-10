@@ -57,7 +57,7 @@ export function deriveAmuletOwnerPowerProfile(birthdateUsed, seedKey) {
 
   return {
     ownerPower: owner,
-    zodiacLabel: `จังหวะเกิดเดือน${zodiacShort} (สรุปสัญลักษณ์)`,
+    zodiacLabel: `จังหวะเกิดเดือน${zodiacShort}`,
     ownerPeakKey,
     traitScores: [
       { label: "สงบ", score: 5 + (h0 % 5) },
