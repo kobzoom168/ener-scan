@@ -176,6 +176,17 @@ function mainGraphBlock(vm) {
   const peakX = peak.x.toFixed(2);
   const peakY = peak.y.toFixed(2);
   const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="var(--mv2a-radar-peak-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="var(--mv2a-radar-peak-fill)" stroke="var(--mv2a-radar-peak-stroke)" stroke-width="0.26" aria-hidden="true"><title>พลังเด่นสุดของพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
+  const secondKey = vm.power.objectSecondKey;
+  const secondMarker =
+    secondKey && secondKey !== vm.power.objectPeakKey
+      ? (() => {
+          const p2 = amuletRadarVertexForAxis(vm.power.object, secondKey);
+          const x2 = p2.x.toFixed(2);
+          const y2 = p2.y.toFixed(2);
+          const lab = escapeHtml(vm.power.objectSecondLabelThai || "");
+          return `<circle cx="${x2}" cy="${y2}" r="2.6" fill="var(--mv2a-radar-peak2-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak-secondary" cx="${x2}" cy="${y2}" r="1.4" fill="var(--mv2a-radar-peak2-fill)" stroke="var(--mv2a-radar-peak2-stroke)" stroke-width="0.26" aria-hidden="true"><title>รองจากพลังเด่น: ${lab}</title></circle>`;
+        })()
+      : "";
 
   return `<section class="mv2a-card mv2a-graph-card" aria-labelledby="mv2a-graph-h">
     <h2 id="mv2a-graph-h">กราฟหกมิติพลังพระเครื่อง</h2>
@@ -197,7 +208,7 @@ function mainGraphBlock(vm) {
           <g class="mv2a-radar-layer mv2a-radar-layer--amulet">
             <polygon points="${objectPts}" fill="var(--mv2a-radar-amulet-fill)" stroke="var(--mv2a-radar-amulet-stroke)" stroke-width="0.58" stroke-linejoin="round"/>
           </g>
-          <g class="mv2a-radar-layer mv2a-radar-layer--peak">${peakMarker}</g>
+          <g class="mv2a-radar-layer mv2a-radar-layer--peak">${peakMarker}${secondMarker}</g>
         </svg>
         <div class="mv2a-radar-labels" aria-hidden="true">${axisLabelsHtml}</div>
       </div>
@@ -382,6 +393,12 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-radar-dot-amulet: rgba(184, 135, 27, 0.95);
       --mv2a-anim-peak-glow1: rgba(184, 135, 27, 0.28);
       --mv2a-anim-peak-glow2: rgba(184, 135, 27, 0.5);
+      --mv2a-radar-peak2-halo: rgba(220, 38, 38, 0.22);
+      --mv2a-radar-peak2-fill: #dc2626;
+      --mv2a-radar-peak2-stroke: rgba(254, 226, 226, 0.95);
+      --mv2a-anim-peak2-glow1: rgba(220, 38, 38, 0.32);
+      --mv2a-anim-peak2-glow2: rgba(248, 113, 113, 0.52);
+      --mv2a-radar-lbl-top2-pulse-glow: rgba(185, 28, 28, 0.38);
       /* สรุปผลแถวเดียว: ปิลล์ครีม (label ซ้าย / ค่าขวา) — ใกล้ตัวอย่าง UI */
       --mv2a-gsum-bg: #f2f2ef;
       --mv2a-gsum-border: #d8d6d1;
@@ -460,6 +477,12 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-radar-dot-amulet: rgba(232, 197, 71, 0.95);
       --mv2a-anim-peak-glow1: rgba(250, 220, 120, 0.26);
       --mv2a-anim-peak-glow2: rgba(250, 220, 120, 0.52);
+      --mv2a-radar-peak2-halo: rgba(248, 113, 113, 0.2);
+      --mv2a-radar-peak2-fill: #f87171;
+      --mv2a-radar-peak2-stroke: rgba(254, 202, 202, 0.78);
+      --mv2a-anim-peak2-glow1: rgba(248, 113, 113, 0.38);
+      --mv2a-anim-peak2-glow2: rgba(252, 165, 165, 0.58);
+      --mv2a-radar-lbl-top2-pulse-glow: rgba(248, 113, 113, 0.45);
       --mv2a-gsum-bg: rgba(255, 252, 245, 0.09);
       --mv2a-gsum-border: rgba(232, 197, 71, 0.28);
       --mv2a-gsum-lead-bg: rgba(232, 197, 71, 0.14);
@@ -561,19 +584,27 @@ export function renderAmuletReportV2Html(payload) {
       .mv2a-radar-peak {
         animation: mv2aLblPulse 2.3s ease-in-out 2.1s infinite;
       }
+      .mv2a-radar-peak-secondary {
+        animation: mv2aLblPulseRed 2.3s ease-in-out 2.22s infinite;
+      }
       /* พลังเด่นสุด: จังหวะเดียวกับ moldaviteReportV2 (.mv2-radar-lbl--peak + mv2LblPulse) */
       .mv2a-radar-lbl--top1 {
         animation: mv2aRadarTop1Pulse 1.2s ease-in-out 2.6s infinite;
       }
+      .mv2a-radar-lbl--top2 {
+        animation: mv2aRadarTop2Pulse 1.2s ease-in-out 2.72s infinite;
+      }
     }
     @media (prefers-reduced-motion: reduce) {
       .mv2a-radar-svg--animate .mv2a-radar-layer,
-      .mv2a-radar-peak {
+      .mv2a-radar-peak,
+      .mv2a-radar-peak-secondary {
         animation: none !important;
         opacity: 1 !important;
         transform: none !important;
       }
-      .mv2a-radar-lbl--top1 {
+      .mv2a-radar-lbl--top1,
+      .mv2a-radar-lbl--top2 {
         animation: none !important;
         opacity: 1 !important;
       }
@@ -592,6 +623,10 @@ export function renderAmuletReportV2Html(payload) {
       0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px var(--mv2a-anim-peak-glow1)); }
       50% { opacity: 0.6; filter: drop-shadow(0 0 5px var(--mv2a-anim-peak-glow2)); }
     }
+    @keyframes mv2aLblPulseRed {
+      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px var(--mv2a-anim-peak2-glow1)); }
+      50% { opacity: 0.52; filter: drop-shadow(0 0 5px var(--mv2a-anim-peak2-glow2)); }
+    }
     /* พลังเด่นสุด (top1): ค่อย ๆ กระพริบ — opacity + text-shadow เท่านั้น (เทียบ moldavite mv2LblPulse) */
     @keyframes mv2aRadarTop1Pulse {
       0%, 100% {
@@ -601,6 +636,16 @@ export function renderAmuletReportV2Html(payload) {
       50% {
         opacity: 0.45;
         text-shadow: 0 0 16px var(--mv2a-radar-lbl-top1-glow);
+      }
+    }
+    @keyframes mv2aRadarTop2Pulse {
+      0%, 100% {
+        opacity: 1;
+        text-shadow: 0 0 4px var(--mv2a-radar-lbl-top2-pulse-glow);
+      }
+      50% {
+        opacity: 0.48;
+        text-shadow: 0 0 15px var(--mv2a-radar-lbl-top2-pulse-glow);
       }
     }
     .mv2a-radar-lbl {
