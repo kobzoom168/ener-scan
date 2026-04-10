@@ -347,5 +347,59 @@ export function normalizeReportPayloadForRender(input) {
       );
   }
 
+  const timingRaw = raw.timingV1;
+  if (timingRaw && typeof timingRaw === "object" && !Array.isArray(timingRaw)) {
+    /** @type {Record<string, unknown>} */
+    const t = /** @type {Record<string, unknown>} */ (timingRaw);
+    /** @param {unknown} v */
+    function timingSlotList(v) {
+      if (!Array.isArray(v)) return [];
+      return v.map((x) => {
+        const o =
+          x && typeof x === "object"
+            ? /** @type {Record<string, unknown>} */ (x)
+            : {};
+        const sc = Math.round(Number(o.score));
+        const score = Number.isFinite(sc) ? Math.min(100, Math.max(0, sc)) : 0;
+        return {
+          key: str(o.key),
+          score,
+          reasonCode: str(o.reasonCode),
+          reasonText: str(o.reasonText).replace(/\s+/g, " ").trim().slice(0, 280),
+        };
+      });
+    }
+    const sum =
+      t.summary && typeof t.summary === "object"
+        ? /** @type {Record<string, unknown>} */ (t.summary)
+        : {};
+    const op =
+      t.ownerProfile && typeof t.ownerProfile === "object"
+        ? /** @type {Record<string, unknown>} */ (t.ownerProfile)
+        : {};
+    /** @type {import("../../services/reports/reportPayload.types.js").ReportTimingV1} */
+    payload.timingV1 = {
+      engineVersion: "timing_v1",
+      lane: t.lane === "moldavite" ? "moldavite" : "sacred_amulet",
+      ritualMode: str(t.ritualMode).slice(0, 32),
+      confidence:
+        t.confidence === "high" || t.confidence === "low" ? t.confidence : "medium",
+      ownerProfile: {
+        lifePath: numOrZero(op.lifePath),
+        birthDayRoot: numOrZero(op.birthDayRoot),
+        weekday: numOrZero(op.weekday),
+      },
+      bestHours: timingSlotList(t.bestHours),
+      bestWeekdays: timingSlotList(t.bestWeekdays),
+      bestDateRoots: timingSlotList(t.bestDateRoots),
+      avoidHours: timingSlotList(t.avoidHours),
+      summary: {
+        topWindowLabel: str(sum.topWindowLabel).slice(0, 120),
+        topWeekdayLabel: str(sum.topWeekdayLabel).slice(0, 120),
+        practicalHint: str(sum.practicalHint).replace(/\s+/g, " ").trim().slice(0, 400),
+      },
+    };
+  }
+
   return { payload, warnings };
 }

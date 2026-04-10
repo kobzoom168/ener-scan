@@ -259,6 +259,26 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     },
     lifeAreaDetail: { rows: lifeRows },
     usageCaution: { disclaimer: usageDisclaimer },
+    timingSection: (() => {
+      const tv = payload.timingV1;
+      if (
+        !tv ||
+        tv.engineVersion !== "timing_v1" ||
+        !tv.summary ||
+        !Array.isArray(tv.bestHours) ||
+        tv.bestHours.length === 0
+      ) {
+        return null;
+      }
+      return {
+        heading: "จังหวะที่เหมาะกับการอธิษฐาน",
+        hourLine: String(tv.summary.topWindowLabel || "").trim(),
+        weekdayLine: String(tv.summary.topWeekdayLabel || "").trim(),
+        ritualLine: String(tv.ritualMode || "").trim(),
+        hint: String(tv.summary.practicalHint || "").trim(),
+        confidence: tv.confidence === "high" || tv.confidence === "low" ? tv.confidence : "medium",
+      };
+    })(),
     trustNote: String(payload.trust?.trustNote || "").trim(),
     reportVersion: String(payload.reportVersion || ""),
     modelLabel: payload.trust?.modelLabel

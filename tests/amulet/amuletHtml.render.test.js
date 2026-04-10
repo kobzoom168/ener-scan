@@ -70,6 +70,40 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
         usageCautionLines: [],
       },
     },
+    timingV1: {
+      engineVersion: "timing_v1",
+      lane: "sacred_amulet",
+      ritualMode: "ตั้งจิต",
+      confidence: "medium",
+      ownerProfile: { lifePath: 9, birthDayRoot: 6, weekday: 5 },
+      bestHours: [
+        {
+          key: "morning_07_10",
+          score: 82,
+          reasonCode: "LANE_POWER_SUPPORT",
+          reasonText: "ช่วงเช้าส่งกับแกนพลัง",
+        },
+      ],
+      bestWeekdays: [
+        { key: "weekday_4", score: 80, reasonCode: "BALANCED", reasonText: "ทดสอบ" },
+      ],
+      bestDateRoots: [
+        { key: "6", score: 75, reasonCode: "BALANCED", reasonText: "ทดสอบ" },
+      ],
+      avoidHours: [
+        {
+          key: "late_night_23_04",
+          score: 35,
+          reasonCode: "LOW_RESONANCE",
+          reasonText: "ทดสอบ",
+        },
+      ],
+      summary: {
+        topWindowLabel: "ช่วงเช้า 07:00–10:59",
+        topWeekdayLabel: "วันพฤหัสบดี",
+        practicalHint: "ตั้งจิต: เน้นช่วงที่ส่งกับจังหวะของคุณ — ทดสอบ",
+      },
+    },
   });
   assert.ok(html.includes("พระเครื่อง"));
   assert.ok(html.includes("กราฟหกมิติพลังพระเครื่อง"));
@@ -94,6 +128,9 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2-owner-mini"'));
   assert.ok(html.includes('class="mv2-int-card"'));
   assert.ok(html.includes('class="mv2-disclaimer"'));
+  assert.ok(html.includes("จังหวะที่เหมาะกับการอธิษฐาน"));
+  assert.ok(html.includes('class="mv2-card mv2-timing-card"'));
+  assert.ok(html.includes("ช่วงเช้า 07:00–10:59"));
   assert.ok(html.includes("แชร์รายงาน"));
   assert.ok(html.includes('id="mv2-share-native"'));
   assert.ok(html.includes("https://lin.ee/6YZeFZ1"));

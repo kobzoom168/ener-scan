@@ -38,6 +38,7 @@
  * @property {ReportMoldaviteV1} [moldaviteV1] — isolated Moldavite v1 slice (Flex + public); not generic crystal confidence
  * @property {ReportAmuletV1} [amuletV1] — sacred amulet lane v1 (Flex + HTML); separate from legacy thai_amulet mobile report
  * @property {ReportCrystalGenericSafeV1} [crystalGenericSafeV1] — neutral crystal fallback when Moldavite not detected; avoids DB confidence hero
+ * @property {ReportTimingV1} [timingV1] — deterministic Timing Engine v1 truth (HTML/Flex read-only)
  */
 
 /**
@@ -49,6 +50,28 @@
  * @property {{ headline: string, fitLine: string, bullets: string[], mainEnergyShort: string }} flexSurface
  * @property {{ heroNaming: string, mainEnergyLabelNeutral: string, visibleMainLabelNeutral: string, mainEnergyWordingLine: string, htmlOpeningNeutral: string }} display
  * @property {{ scanResultIdPrefix: string }} [context]
+ */
+
+/**
+ * Timing Engine v1 slice — computed once at payload build; templates must not re-derive.
+ *
+ * @typedef {Object} ReportTimingSlot
+ * @property {string} key
+ * @property {number} score
+ * @property {string} reasonCode
+ * @property {string} reasonText
+ *
+ * @typedef {Object} ReportTimingV1
+ * @property {"timing_v1"} engineVersion
+ * @property {"sacred_amulet"|"moldavite"} lane
+ * @property {string} ritualMode
+ * @property {"high"|"medium"|"low"} confidence
+ * @property {{ lifePath: number, birthDayRoot: number, weekday: number }} ownerProfile
+ * @property {ReportTimingSlot[]} bestHours
+ * @property {ReportTimingSlot[]} bestWeekdays
+ * @property {ReportTimingSlot[]} bestDateRoots
+ * @property {ReportTimingSlot[]} avoidHours
+ * @property {{ topWindowLabel: string, topWeekdayLabel: string, practicalHint: string }} summary
  */
 
 /**

@@ -269,6 +269,18 @@ export function renderAmuletReportV2Html(payload) {
 
   const usageDisclaimer = escapeHtml(vm.usageCaution.disclaimer || "");
 
+  const ts = vm.timingSection;
+  const timingCardHtml = ts
+    ? `
+    <section class="mv2-card mv2-timing-card" aria-labelledby="mv2-timing-h">
+      <h2 id="mv2-timing-h">${escapeHtml(ts.heading)}</h2>
+      <p class="mv2-timing-line"><span class="mv2-timing-k">เวลา</span> ${escapeHtml(ts.hourLine)}</p>
+      <p class="mv2-timing-line"><span class="mv2-timing-k">วัน</span> ${escapeHtml(ts.weekdayLine)}</p>
+      <p class="mv2-timing-line"><span class="mv2-timing-k">โหมดแนะนำ</span> ${escapeHtml(ts.ritualLine)}</p>
+      <p class="mv2-timing-hint">${escapeHtml(ts.hint)}</p>
+    </section>`
+    : "";
+
   const subtypeLabel = h.subtypeLabel || "พระเครื่อง";
   const ogTitle = `${subtypeLabel} · Ener Scan`;
   const ogDescription =
@@ -705,6 +717,10 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-life-blurb { color: var(--mv2a-life-blurb); line-height: 1.35; }
     .mv2-life-hint { margin: 0 0 0.45rem; font-size: 0.65rem; color: var(--mv2a-muted); opacity: 0.8; }
     .mv2-disclaimer { margin: 0; font-size: 0.76rem; line-height: 1.45; color: var(--mv2a-disclaimer); }
+    .mv2-timing-card h2 { font-size: 0.95rem; }
+    .mv2-timing-line { margin: 0.35rem 0 0; font-size: 0.8rem; color: var(--mv2a-text-body); line-height: 1.35; }
+    .mv2-timing-k { font-weight: 700; color: var(--mv2a-gold-dim); margin-right: 0.35rem; }
+    .mv2-timing-hint { margin: 0.5rem 0 0; font-size: 0.72rem; line-height: 1.4; color: var(--mv2a-muted); }
     .mv2-share-card h2 { font-size: 0.92rem; }
     .mv2-share-note { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: var(--mv2a-muted); }
     .mv2-share-actions {
@@ -804,6 +820,7 @@ export function renderAmuletReportV2Html(payload) {
       <h2 id="mv2-use-h">ข้อจำกัด</h2>
       <p class="mv2-disclaimer">${usageDisclaimer}</p>
     </section>
+    ${timingCardHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์รายงาน</h2>

@@ -43,6 +43,11 @@ import { resolveMoldaviteDetectionWithGeminiCrystalSubtype } from "../../moldavi
 import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
 import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayNaming.util.js";
 import { buildAmuletV1Slice } from "../../amulet/amuletPayload.build.js";
+import { computeTimingV1 } from "../timing/timingEngine.service.js";
+import {
+  normalizeBirthdateIso,
+  parseIsoYmd,
+} from "../../utils/compatibilityFormula.util.js";
 
 /**
  * Compatibility line may be "78%", "78 %", "7.8" (0–10 scale), or Thai prose with a number.
@@ -959,6 +964,32 @@ export async function buildReportPayloadFromScan(opts) {
         "เปิดรายงานฉบับเต็ม"
       : flexSurface.ctaLabel;
 
+  /** @type {import("./reportPayload.types.js").ReportTimingV1 | undefined} */
+  let timingV1 = undefined;
+  if (amuletV1 && birthdateUsed) {
+    const bdIso = normalizeBirthdateIso(String(birthdateUsed));
+    if (bdIso && parseIsoYmd(bdIso)) {
+      const fit =
+        compatPct != null && Number.isFinite(Number(compatPct))
+          ? Math.round(Number(compatPct))
+          : Math.round(
+              Math.min(100, Math.max(0, (Number(energyScore) || 5) * 10)),
+            );
+      timingV1 = computeTimingV1({
+        birthdateIso: bdIso,
+        lane: "sacred_amulet",
+        primaryKey: String(amuletV1.primaryPower || "").trim() || "protection",
+        secondaryKey: String(amuletV1.secondaryPower || "").trim() || undefined,
+        scannedAtIso: new Date().toISOString(),
+        compatibilityScore:
+          compatPct != null && Number.isFinite(Number(compatPct))
+            ? Math.round(Number(compatPct))
+            : undefined,
+        ownerFitScore: fit,
+      });
+    }
+  }
+
   return {
     reportId: rid,
     publicToken: tok,
@@ -1185,5 +1216,6 @@ export async function buildReportPayloadFromScan(opts) {
     },
     ...(moldaviteV1 ? { moldaviteV1 } : {}),
     ...(amuletV1 ? { amuletV1 } : {}),
+    ...(timingV1 ? { timingV1 } : {}),
   };
 }
