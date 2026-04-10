@@ -6,7 +6,7 @@ import {
 } from "../src/utils/objectGateReplyResolve.util.js";
 import { mergeGateLabels } from "../src/services/objectCheck.service.js";
 
-test("isTrueUnsupportedEvidence: both passes + structured evidence", () => {
+test("isTrueUnsupportedEvidence: both passes agree unsupported -> hard reject", () => {
   assert.equal(
     isTrueUnsupportedEvidence({
       firstPass: "unsupported",
@@ -16,9 +16,18 @@ test("isTrueUnsupportedEvidence: both passes + structured evidence", () => {
     }),
     true,
   );
+  assert.equal(
+    isTrueUnsupportedEvidence({
+      firstPass: "unsupported",
+      secondPass: "unsupported",
+      structured: { objectCount: 1, supportedFamilyGuess: "other_unknown" },
+      secondPassDisabled: false,
+    }),
+    true,
+  );
 });
 
-test("isTrueUnsupportedEvidence: null structured -> false", () => {
+test("isTrueUnsupportedEvidence: both unsupported without structured row still hard reject", () => {
   assert.equal(
     isTrueUnsupportedEvidence({
       firstPass: "unsupported",
@@ -26,7 +35,7 @@ test("isTrueUnsupportedEvidence: null structured -> false", () => {
       structured: null,
       secondPassDisabled: false,
     }),
-    false,
+    true,
   );
 });
 

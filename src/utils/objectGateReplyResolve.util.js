@@ -17,16 +17,12 @@
 export function isTrueUnsupportedEvidence({
   firstPass,
   secondPass,
-  structured,
+  structured: _structured,
   secondPassDisabled,
 }) {
   if (secondPassDisabled) return false;
   if (firstPass !== "unsupported" || secondPass !== "unsupported") return false;
-  if (!structured || typeof structured !== "object") return false;
-  const oc = structured.objectCount;
-  if (oc !== 0) return false;
-  const fam = String(structured.supportedFamilyGuess || "").trim();
-  if (fam !== "other_unknown") return false;
+  // Both vision passes agreed out-of-domain → hard reject (scope message).
   return true;
 }
 

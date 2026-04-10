@@ -23,6 +23,36 @@ inconclusive     = ยังตัดไม่ได้ / timeout / โมเด
  * If the model echoes a reason that clearly names a non-amulet subject,
  * treat as unsupported even when it also mentions single_supported.
  */
+/** @type {readonly string[]} */
+const TRUSTED_PERMISSIVE_FAMILY = Object.freeze([
+  "thai_amulet",
+  "talisman",
+  "crystal",
+]);
+
+const PERMISSIVE_UPGRADE_MIN_CONFIDENCE = 0.72;
+
+/**
+ * Second pass may only upgrade to allow_scan when family + confidence + objectCount are explicit.
+ * @param {object|null|undefined} structured
+ * @returns {boolean}
+ */
+export function permissiveAllowsSingleSupportedUpgrade(structured) {
+  if (!structured || typeof structured !== "object") return false;
+  const conf = structured.confidence;
+  if (conf == null || !Number.isFinite(Number(conf))) return false;
+  if (Number(conf) < PERMISSIVE_UPGRADE_MIN_CONFIDENCE) return false;
+  const fam = String(structured.supportedFamilyGuess || "")
+    .trim()
+    .toLowerCase();
+  if (!TRUSTED_PERMISSIVE_FAMILY.includes(fam)) return false;
+  const oc = structured.objectCount;
+  if (oc == null || !Number.isFinite(Number(oc)) || Number(oc) !== 1) {
+    return false;
+  }
+  return true;
+}
+
 function outputSuggestsNonAmuletSubject(outputLower) {
   const hints = [
     "อาหาร",
@@ -72,6 +102,25 @@ function outputSuggestsNonAmuletSubject(outputLower) {
     "กระดาษ",
     "receipt",
     "สลิป",
+    "tarot",
+    "oracle",
+    "playing card",
+    "playing cards",
+    "card game",
+    "trading card",
+    "collectible card",
+    "ไพ่",
+    "ไพ่ทาโรต์",
+    "ทาโรต์",
+    "ไพ่ยิปซี",
+    "การ์ด",
+    "การ์ดทาโรต์",
+    "การ์ดเล่น",
+    "board game",
+    "เกมกระดาน",
+    "mtg",
+    "pokemon card",
+    "magic: the gathering",
     "landscape",
     "scenery",
     "ทิวทัศน์",
@@ -89,7 +138,7 @@ function outputSuggestsNonAmuletSubject(outputLower) {
   return hints.some((h) => outputLower.includes(h));
 }
 
-function normalizeObjectCheckOutput(outputText) {
+export function normalizeObjectCheckOutput(outputText) {
   const output = String(outputText || "").trim().toLowerCase();
 
   console.log("[OBJECT_CHECK] raw result:", output);
@@ -222,6 +271,7 @@ Ener Scan รองรับเฉพาะวัตถุมงคล/พลั
 - คน ใบหน้า ร่างกาย เซลฟี่ ภาพถ่ายบุคคล หรือคนเป็นจุดเด่นของภาพ
 - สัตว์ (เลี้ยงหรือป่า) เป็นหลักของภาพ
 - เอกสาร กระดาษ หนังสือ บัตร สลิป หรือภาพ screenshot/แคปหน้าจอ ข้อความแชท แอป
+- ไพ่ทาโรต์ ไพ่ oracle ไพ่เล่น playing card การ์ดเกม trading card หรือภาพลักษณะการ์ด/เอกสารแบนแบบมีขอบสี่เหลี่ยมและข้อความภาษาอังกฤษตามขอบ (เช่น ชื่อไพ่) ที่ชัดว่าไม่ใช่วัตถุมงคลไทย
 - ทิวทัศน์ วิวธรรมชาติ ทะเล ภูเขา ท้องฟ้า ถนน ฉากกว้างที่ไม่มีวัตถุมงคลชิ้นเดียวเป็นจุดเด่น
 - ของใช้ทั่วไป ของเล่น อุปกรณ์ ยานพาหนะ ของตกแต่งบ้าน ที่ไม่ใช่วัตถุมงคลตามรายการรองรับด้านบน
 
@@ -229,7 +279,7 @@ Ener Scan รองรับเฉพาะวัตถุมงคล/พลั
 - single_supported = วัตถุมงคล/พลังหลัก 1 ชิ้น (ประเภทที่รองรับ) และภาพพอมองประเมินได้
 - multiple = วัตถุมงคลแยกกันมากกว่า 1 ชิ้น / หลายรูปในภาพเดียว / คอลลาจ / screenshot รวมหลายภาพ
 - unclear = ภาพมืด เบลอ ไกลเกินไป หรือมองไม่ชัดว่ามีวัตถุอะไร
-- unsupported = ไม่ใช่วัตถุที่รองรับ (รวมทั้งกรณีด้านบน: อาหาร คน สัตว์ เอกสาร ทิวทัศน์ ฯลฯ)
+- unsupported = ไม่ใช่วัตถุที่รองรับ (รวมทั้งกรณีด้านบน: อาหาร คน สัตว์ เอกสาร ไพ่/การ์ด ทิวทัศน์ ฯลฯ)
 
 สำคัญ:
 - ถ้าหลักของภาพเป็นอาหารหรือเครื่องดื่ม ให้ตอบ unsupported เสมอ (ไม่ใช่ single_supported)
@@ -238,7 +288,7 @@ Ener Scan รองรับเฉพาะวัตถุมงคล/พลั
 - multiple เฉพาะเมื่อมีวัตถุแยกกันหลายชิ้นจริง ๆ หรือคอลลาจ/screenshot หลายภาพ
 - ถ้าไม่มั่นใจระหว่าง single_supported กับ multiple ให้ตอบ multiple
 - ถ้าเห็นวัตถุมงคล/เหรียญ/พระ/หิน ชิ้นเดียวชัด แม้มุมถ่ายหรือกรอบแปลก ให้ตอบ single_supported ก่อน (อย่าตอบ unsupported เพียงเพราะทรงกลมหรือมีกรอบพลาสติก)
-- ถ้าไม่มั่นใจระหว่าง single_supported กับ unsupported ให้ตอบ unsupported (ระบบอาจตรวจซ้ำอัตโนมัติ)
+- ถ้าไม่มั่นใจระหว่าง single_supported กับ unsupported ให้ตอบ unsupported หรือ unclear (อย่าตอบ single_supported ถ้าสัญญาณอ่อน — ระบบอาจตรวจซ้ำอัตโนมัติ)
 
 ห้ามอธิบาย ห้ามใส่ประโยค ตอบเพียงหนึ่งคำจากรายการเท่านั้น
 
@@ -261,7 +311,7 @@ const PERMISSIVE_PROMPT = `
 - label: single_supported = วัตถุมงคล/พลังที่รองรับ 1 ชิ้นเป็นหลัก (พระ เครื่องราง หิน/คริสตัลชิ้นเดียว)
 - multiple = หลายชิ้นแยกกัน / คอลลาจ / หลายรูปในภาพเดียว
 - unclear = มองไม่เห็นวัตถุชัด / เบลอมาก / มืดมาก
-- unsupported = มั่นใจว่าไม่ใช่วัตถุมงคล (อาหาร คน สัตว์ เอกสาร สลิป meme ทิวทัศน์ ของใช้ทั่วไป ฯลฯ)
+- unsupported = มั่นใจว่าไม่ใช่วัตถุมงคล (อาหาร คน สัตว์ เอกสาร สลิป ไพ่ทาโรต์/ไพ่ oracle/playing card/การ์ดเกม screenshot meme ทิวทัศน์ ของใช้ทั่วไป ฯลฯ)
 - objectCount: จำนวนวัตถุแยกกันที่เด่น (ประมาณการ)
 - confidence: 0–1 ความมั่นใจของ label
 - hasCasing: true ถ้ามีกรอบพลาสติก/เลี่ยม/อะคริลิกห่อวัตถุ
@@ -271,7 +321,9 @@ const PERMISSIVE_PROMPT = `
 กติกา:
 - ถ้ามีวัตถุมงคลชิ้นเดียวที่พอเชื่อได้ แม้มุมแปลกหรือมีกรอบ — ให้ label เป็น single_supported และ confidence สะท้อนความไม่แน่นอนได้
 - ห้าม reject เพียงเพราะทรงกลมหรือสี่เหลี่ยมหรือมีกรอบ
-- reject (unsupported) เฉพาะเมื่อมั่นใจว่าไม่ใช่พระ/เครื่องราง/หินสายพลัง หรือเป็นสลิป/เอกสาร/คน/อาหาร/หลายชิ้นชัด
+- reject (unsupported) เมื่อมั่นใจว่าไม่ใช่พระ/เครื่องราง/หินสายพลัง หรือเป็นไพ่/การ์ด/เอกสาร/สลิป/คน/อาหาร/หลายชิ้นชัด
+- ถ้าภาพเป็นไพ่ทาโรต์ ไพ่เล่น หรือการ์ดเกม ให้ label=unsupported และ confidence สูง — ห้าม upgrade เป็น single_supported
+- ถ้ายังไม่แน่ใจระหว่างวัตถุมงคลกับของอื่น ให้ label=unclear หรือ unsupported และ confidence ต่ำ — อย่าตอบ single_supported แบบเดา
 `;
 
 /**
@@ -396,7 +448,9 @@ async function runPermissiveStructuredObjectCheck(imageBase64) {
 
   const rawText = String(response?.output_text || "").trim();
   const parsed = extractJsonObject(rawText);
-  const label = normalizePermissiveLabel(parsed?.label);
+  const label = parsed
+    ? normalizePermissiveLabel(parsed?.label)
+    : "inconclusive";
   const objectCount =
     parsed?.objectCount != null && Number.isFinite(Number(parsed.objectCount))
       ? Number(parsed.objectCount)
@@ -438,17 +492,23 @@ async function runPermissiveStructuredObjectCheck(imageBase64) {
 
 /**
  * Merge first (strict) and second (permissive) labels.
+ * Soft-accept (strict unsure/unsupported + permissive single_supported) requires structured evidence.
  * @param {string} first
  * @param {string} second
+ * @param {object|null} [structured] — permissive JSON row; required for upgrades to single_supported
  * @returns {string}
  */
-export function mergeGateLabels(first, second) {
+export function mergeGateLabels(first, second, structured = null) {
   if (first === "single_supported" || first === "multiple") {
     return first;
   }
 
   if (first === "inconclusive") {
-    if (second === "single_supported") return "single_supported";
+    if (second === "single_supported") {
+      return permissiveAllowsSingleSupportedUpgrade(structured)
+        ? "single_supported"
+        : "inconclusive";
+    }
     if (second === "multiple") return "multiple";
     if (second === "unclear") return "unclear";
     if (second === "unsupported") return "inconclusive";
@@ -458,7 +518,10 @@ export function mergeGateLabels(first, second) {
 
   if (first === "unsupported" || first === "unclear") {
     if (second === "single_supported") {
-      return "single_supported";
+      if (permissiveAllowsSingleSupportedUpgrade(structured)) {
+        return "single_supported";
+      }
+      return first === "unclear" ? "unclear" : "inconclusive";
     }
     if (second === "multiple") {
       return "multiple";
@@ -590,7 +653,7 @@ export async function checkSingleObjectGated(imageBase64, opts = {}) {
     }),
   );
 
-  const merged = mergeGateLabels(firstPass, secondPass);
+  const merged = mergeGateLabels(firstPass, secondPass, structured);
   softAccept =
     merged === "single_supported" &&
     (firstPass === "unsupported" ||
