@@ -85,7 +85,7 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     bodyText.includes("พระเครื่อง · เด่นคุ้มครอง"),
     "tagline uses Flex-only short alias for top dimension",
   );
-  assert.ok(bodyText.includes("พลังเด่น") && bodyText.includes("รองลงมา"));
+  assert.ok(bodyText.includes("พลังเด่น") && bodyText.includes("เข้ากับคุณที่สุด"));
   assert.ok(
     bodyText.includes("คุ้มครอง") && bodyText.includes("เมตตา"),
     "summary pills show top-two Flex alias values",

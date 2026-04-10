@@ -7,6 +7,8 @@
  * approximate: keep the same size/weight *roles* (headline md bold, tagline xs, body xs) here.
  */
 import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
+import { computeAmuletOrdAndAlignFromPayload } from "../../amulet/amuletOrdAlign.util.js";
+import { POWER_LABEL_THAI } from "../../amulet/amuletScores.util.js";
 const AMULET_VISIBLE_LABEL_FALLBACK = "พระเครื่อง";
 import { normalizeScore } from "./flex.utils.js";
 import { buildScanFlexAltText } from "./flex.display.js";
@@ -223,10 +225,11 @@ function sortAmuletPowerCategoryRows(powerCategories) {
 }
 
 /**
- * ค่าสำหรับปิลล์คู่ “พลังเด่น / รองลงมา” (เทียบ HTML graph summary).
+ * ค่าสำหรับปิลล์คู่ “พลังเด่น / เข้ากับคุณที่สุด” (เทียบ HTML graph summary).
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload | null | undefined} reportPayload
  * @returns {{ top: string, second: string } | null}
  */
-function buildAmuletFlexGsumPillData(powerCategories) {
+function buildAmuletFlexGsumPillData(powerCategories, reportPayload) {
   const rows = sortAmuletPowerCategoryRows(powerCategories);
   const r0 = rows[0];
   const r1 = rows[1];
@@ -236,10 +239,25 @@ function buildAmuletFlexGsumPillData(powerCategories) {
   if (!l0 || l0 === AMULET_FLEX_EMPTY_MARK) return null;
   if (!l1 || l1 === AMULET_FLEX_EMPTY_MARK) return null;
   const a0 = applyAmuletFlexLabelAlias(l0) || l0;
-  const b0 = applyAmuletFlexLabelAlias(l1) || l1;
+  const metrics = reportPayload ? computeAmuletOrdAndAlignFromPayload(reportPayload) : null;
+  let secondRaw = l1;
+  if (metrics?.alignKey) {
+    const ak = metrics.alignKey;
+    const e =
+      powerCategories && typeof powerCategories === "object"
+        ? powerCategories[ak]
+        : undefined;
+    const lab =
+      e && typeof e === "object" ? String(e.labelThai || "").trim() : "";
+    secondRaw =
+      lab ||
+      POWER_LABEL_THAI[/** @type {keyof typeof POWER_LABEL_THAI} */ (ak)] ||
+      l1;
+  }
+  const bAlign = applyAmuletFlexLabelAlias(secondRaw) || secondRaw;
   return {
     top: shortenThaiSnippet(a0, AMULET_FLEX_SUMMARY_LINE_MAX_CHARS),
-    second: shortenThaiSnippet(b0, AMULET_FLEX_SUMMARY_LINE_MAX_CHARS),
+    second: shortenThaiSnippet(bAlign, AMULET_FLEX_SUMMARY_LINE_MAX_CHARS),
   };
 }
 
@@ -656,7 +674,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     margin: "xs",
   };
 
-  const gsumPillData = buildAmuletFlexGsumPillData(mv.powerCategories);
+  const gsumPillData = buildAmuletFlexGsumPillData(mv.powerCategories, reportPayload);
   const fitParsed = parseFitLineToSummaryBlock(fitLine);
 
   /** บล็อกล่างของ bubble เท่านั้น: ปิลล์คู่สรุป (เทียบ HTML) หรือปิลล์เดียวเมื่อ fallback fitLine */
@@ -670,7 +688,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       margin: "md",
       contents: [
         createGsumPillRow("พลังเด่น", gsumPillData.top, true),
-        createGsumPillRow("รองลงมา", gsumPillData.second, false),
+        createGsumPillRow("เข้ากับคุณที่สุด", gsumPillData.second, false),
       ],
     };
   } else if (fitParsed != null) {

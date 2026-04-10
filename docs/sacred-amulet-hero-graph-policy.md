@@ -2,25 +2,26 @@
 
 ## Decision
 
-- **`โทนหลัก` (hero)** = **baseline identity** for the piece — truth from `amuletV1.flexSurface.mainEnergyShort` (and related summary-first wiring). It is **not** the graph’s top axis.
-- **Graph peak** = **current dominant activation** on the object — from **object** six-dimension scores only (`ord[0]`, `ord[1]`, … after `sortPowerKeysByObjectDesc` in `buildAmuletHtmlV2ViewModel`).
-- These two **may differ by design**. Do not merge them into one meaning in the hero.
+- **`โทนหลัก` (hero `displayLine`)** = **graph peak** — short label from **object** scores for `ord[0]` (same “เด่นสุด” as the radar), not from `flexSurface.mainEnergyShort`.
+- **Scan baseline** — `flexSurface.mainEnergyShort` stays on `mainEnergyLabel` and may differ from the measured graph; when it does, a **short** `clarifierLine` explains the scan summary line.
+- **Graph summary row 2** — Label **เข้ากับคุณที่สุด**; value = the axis among the object’s top-two scores that best matches the owner profile (`pickAlignKeyAmongTopTwo` in `amuletOrdAlign.util.js`).
 
 ## Implementation (source of truth)
 
 | Layer | Source | User-facing |
 |--------|--------|-------------|
-| Baseline tone | `fs.mainEnergyShort` | `displayLine`: `โทนหลัก · {mainShort}` |
-| Graph ordering | `objectP` scores → `ord` | Radar labels, graph summary rows, interaction copy tied to `ord` |
-| Bridge | Only when baseline label ≠ graph peak axis (heuristic) | `clarifierLine`: `ภาพรวม {mainShort} · เด่นสุด {peakShort}` |
+| Hero headline | `ord[0]` → `AMULET_PEAK_SHORT_THAI` | `displayLine`: `โทนหลัก · {peakShort}` |
+| Baseline from flex | `fs.mainEnergyShort` | `mainEnergyLabel` + optional clarifier |
+| Bridge | When baseline ≠ graph peak (heuristic) | `clarifierLine`: `สรุปจากสแกน · {mainShort}` |
+| Graph summary | `objectP` → `ord`, owner alignment | Row 1: พลังเด่น; row 2: เข้ากับคุณที่สุด |
 
 ## Rules
 
-1. **Do not** set hero / `displayLine` from `ord[0]` directly.
-2. **Do not** require `โทนหลัก` to equal the graph top axis.
-3. **Do** keep clarifiers **short** (dashboard-style), not long descriptive sentences.
-4. **Layout** changes are out of scope for this policy; wording lives in the view model (`amuletHtmlV2.model.js`).
+1. **Do** keep hero wording aligned with the radar’s dominant axis (`ord[0]`).
+2. **Do** keep clarifiers **short** (dashboard-style), not long prose.
+3. **Layout** changes are out of scope for this policy; wording lives in the view model (`amuletHtmlV2.model.js`) and shared metrics (`amuletOrdAlign.util.js`).
 
 ## Code
 
-- `src/amulet/amuletHtmlV2.model.js` — policy comment block + `mainToneMatchesGraphPeak` + hero fields.
+- `src/amulet/amuletOrdAlign.util.js` — `ord`, `alignKey`, owner/object vectors.
+- `src/amulet/amuletHtmlV2.model.js` — `mainToneMatchesGraphPeak`, hero + graph summary.

@@ -47,7 +47,7 @@ function minimalPayload(overrides = {}) {
   return { ...base, ...overrides };
 }
 
-test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด่น / รองลงมา)", () => {
+test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด่น / เข้ากับคุณที่สุด)", () => {
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
   assert.ok(
     vm.usageCaution.disclaimer.includes("วันเดือนปีเกิด") &&
@@ -60,12 +60,13 @@ test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด
   );
   assert.equal(vm.graphSummary.rows.length, 2);
   assert.equal(vm.graphSummary.rows[0].label, "พลังเด่น");
-  assert.equal(vm.graphSummary.rows[1].label, "รองลงมา");
+  assert.equal(vm.graphSummary.rows[1].label, "เข้ากับคุณที่สุด");
   assert.ok(
     String(vm.graphSummary.rows[0].value || "").includes("คุ้มครองป้องกัน"),
   );
-  assert.ok(
-    String(vm.graphSummary.rows[1].value || "").includes("เมตตาและคนเอ็นดู"),
+  assert.equal(
+    String(vm.graphSummary.rows[1].value || ""),
+    vm.power.alignment.labelThai,
   );
 });
 

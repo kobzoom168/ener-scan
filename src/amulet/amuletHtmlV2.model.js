@@ -1,9 +1,12 @@
-import { deriveAmuletOwnerPowerProfile } from "./amuletOwnerProfile.util.js";
 import {
   POWER_ORDER,
   POWER_LABEL_THAI,
   AMULET_PEAK_SHORT_THAI,
 } from "./amuletScores.util.js";
+import {
+  computeAmuletOrdAndAlignFromPayload,
+  clamp0100,
+} from "./amuletOrdAlign.util.js";
 import { buildAxisLifeBlurb } from "./amuletMeaningBlurbs.util.js";
 import { SACRED_AXIS_HINT_TH } from "../services/timing/timingEngine.copy.th.js";
 
@@ -14,11 +17,12 @@ export const AMULET_HTML_V2_USAGE_DISCLAIMER =
 /**
  * Policy — sacred_amulet hero vs radar graph (HTML v2):
  *
- * 1. **Baseline tone (identity)** — Hero `displayLine` = `โทนหลัก · {mainEnergyShort}` from `amuletV1.flexSurface`
- *    (summary-first / product baseline). This is **not** derived from graph top axis `ord[0]`.
- * 2. **Current activation (graph truth)** — Radar peak / ordering come from **object** scores only (`ord[0]`, `ord[1]`, …).
- * 3. **Bridge** — When (1) and (2) disagree on the same semantic axis, show a **short** `clarifierLine`
- *    (dashboard-style, not prose). Never force hero to equal `ord[0]`.
+ * 1. **Graph peak (hero headline)** — `displayLine` = `โทนหลัก · {peakShort}` where `peakShort` follows **object**
+ *    scores (`ord[0]` after `sortPowerKeysByObjectDesc`), matching the radar “เด่นสุด”.
+ * 2. **Baseline from scan** — `flexSurface.mainEnergyShort` stays on `mainEnergyLabel` and may differ from the graph;
+ *    when it does, a short `clarifierLine` bridges the two.
+ * 3. **Graph summary row 2** — Label “เข้ากับคุณที่สุด”; value = axis among top-two object scores that best matches
+ *    the owner profile (`pickAlignKeyAmongTopTwo`).
  */
 
 /**
@@ -42,14 +46,6 @@ function mainToneMatchesGraphPeak(mainShort, peakKey) {
     return true;
   }
   return false;
-}
-
-/**
- * @param {number} v
- */
-function clamp0100(v) {
-  if (!Number.isFinite(v)) return 50;
-  return Math.min(100, Math.max(0, Math.round(v)));
 }
 
 /**
@@ -96,31 +92,6 @@ export function buildSacredAmuletTimingCardDisplay(tv, peakKey, secondKey) {
 }
 
 /**
- * @param {Record<string, number>} objectP
- */
-function sortPowerKeysByObjectDesc(objectP) {
-  return [...POWER_ORDER].sort((a, b) => {
-    const db = (Number(objectP[b]) || 0) - (Number(objectP[a]) || 0);
-    if (db !== 0) return db;
-    return POWER_ORDER.indexOf(a) - POWER_ORDER.indexOf(b);
-  });
-}
-
-/**
- * เข้ากัน: เลือกระหว่าง top1/top2 เท่านั้น · ให้สอดคล้องกับพลังเด่นบนวัตถุ
- * @param {Record<string, number>} ownerP
- * @param {Record<string, number>} objectP
- * @param {string[]} ord
- */
-function pickAlignKeyAmongTopTwo(ownerP, objectP, ord) {
-  const a = ord[0];
-  const b = ord[1];
-  const da = Math.abs(ownerP[a] - objectP[a]);
-  const db = Math.abs(ownerP[b] - objectP[b]);
-  return da <= db ? a : b;
-}
-
-/**
  * @param {import("../services/reports/reportPayload.types.js").ReportPayload} payload
  */
 export function buildAmuletHtmlV2ViewModel(payload) {
@@ -135,30 +106,17 @@ export function buildAmuletHtmlV2ViewModel(payload) {
 
   const seed =
     String(payload.scanId || payload.reportId || "seed").trim() || "seed";
-  const ownerProf = deriveAmuletOwnerPowerProfile(payload.birthdateUsed, seed);
+
+  const metrics = computeAmuletOrdAndAlignFromPayload(payload);
+  if (!metrics) {
+    throw new Error("AMULET_HTML_V2_BAD_METRICS");
+  }
+  const { ord, alignKey, objectP, ownerP, ownerProf } = metrics;
 
   const pc =
     av.powerCategories && typeof av.powerCategories === "object"
       ? av.powerCategories
       : {};
-
-  /** @type {Record<string, number>} */
-  const objectP = {};
-  for (const k of POWER_ORDER) {
-    const e = pc[k];
-    const sc =
-      e && typeof e === "object" && e.score != null ? Number(e.score) : NaN;
-    objectP[k] = clamp0100(sc);
-  }
-
-  /** @type {Record<string, number>} */
-  const ownerP = {};
-  for (const k of POWER_ORDER) {
-    ownerP[k] = clamp0100(Number(ownerProf.ownerPower[k]) || 50);
-  }
-
-  const ord = sortPowerKeysByObjectDesc(objectP);
-  const alignKey = pickAlignKeyAmongTopTwo(ownerP, objectP, ord);
 
   let tensionKey = POWER_ORDER[0];
   let maxD = -1;
@@ -173,7 +131,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
 
   const gapTop12 = objectP[ord[0]] - objectP[ord[1]];
   const topLabel = POWER_LABEL_THAI[ord[0]];
-  const secondLabel = POWER_LABEL_THAI[ord[1]];
+  const alignLabel = POWER_LABEL_THAI[alignKey];
   const graphSummary = {
     rows: [
       {
@@ -184,13 +142,11 @@ export function buildAmuletHtmlV2ViewModel(payload) {
             : topLabel,
       },
       {
-        label: "รองลงมา",
-        value: secondLabel,
+        label: "เข้ากับคุณที่สุด",
+        value: alignLabel,
       },
     ],
   };
-
-  const alignLabel = POWER_LABEL_THAI[alignKey];
   const tensionLabel = POWER_LABEL_THAI[tensionKey];
   const peakKey = ord[0];
   const peakShort =
@@ -215,7 +171,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       sub:
         alignKey === ord[0]
           ? "ตรงกับพลังเด่นบนวัตถุ"
-          : "ตรงกับรองลงมา · ยังเสริมคู่กันได้",
+          : "ตรงกับด้านรองจากเด่น · ยังเสริมคู่กันได้",
     },
     {
       kicker: "ยังไม่ส่งกัน",
@@ -260,10 +216,10 @@ export function buildAmuletHtmlV2ViewModel(payload) {
 
   const mainShort =
     String(fs.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม";
-  /** Short bridge when baseline tone ≠ graph peak; pattern: `ภาพรวม {baseline} · เด่นสุด {activation}` */
+  /** When flex baseline ≠ graph peak: short note on scan summary (hero already shows peak). */
   const clarifierLine = mainToneMatchesGraphPeak(mainShort, ord[0])
     ? ""
-    : `ภาพรวม ${mainShort} · เด่นสุด ${AMULET_PEAK_SHORT_THAI[ord[0]] || topLabel}`;
+    : `สรุปจากสแกน · ${mainShort}`;
 
   return {
     rendererId: "amulet-html-v2",
@@ -271,7 +227,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       subtypeLabel: String(fs.headline || "").trim(),
       tagline: String(fs.tagline || "").trim(),
       mainEnergyLabel: mainShort,
-      displayLine: `โทนหลัก · ${mainShort}`,
+      displayLine: `โทนหลัก · ${peakShort}`,
       clarifierLine,
       objectImageUrl: String(payload.object?.objectImageUrl || "").trim(),
       reportGeneratedAt: String(payload.generatedAt || ""),
