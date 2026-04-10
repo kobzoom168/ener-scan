@@ -85,6 +85,54 @@ function amuletHtmlShowRenderMetaLine() {
 }
 
 /**
+ * Public report URL for GET /r/:publicToken. Mirrors `buildPublicReportUrl` but
+ * avoids importing app `env` (so unit tests can render HTML without full .env).
+ * @param {string} publicToken
+ */
+function buildPublicReportUrlForMeta(publicToken) {
+  const tok = String(publicToken || "").trim();
+  if (!tok) return "";
+  const explicit = String(process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  if (explicit) return `${explicit}/r/${encodeURIComponent(tok)}`;
+  const railway = process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (railway) {
+    const host = String(railway)
+      .replace(/^https?:\/\//i, "")
+      .replace(/\/$/, "");
+    if (host) return `https://${host}/r/${encodeURIComponent(tok)}`;
+  }
+  const vercel = process.env.VERCEL_URL;
+  if (vercel) {
+    const host = String(vercel)
+      .replace(/^https?:\/\//i, "")
+      .replace(/\/$/, "");
+    if (host) return `https://${host}/r/${encodeURIComponent(tok)}`;
+  }
+  const port = process.env.PORT || "3000";
+  return `http://localhost:${port}/r/${encodeURIComponent(tok)}`;
+}
+
+/**
+ * @param {string} canonicalPageUrl
+ * @param {string} rawImage
+ */
+function absoluteUrlForMeta(canonicalPageUrl, rawImage) {
+  const u = String(rawImage || "").trim();
+  if (!u) return "";
+  if (/^https?:\/\//i.test(u)) return u;
+  if (u.startsWith("//")) return `https:${u}`;
+  const base = String(canonicalPageUrl || "").trim();
+  if (!base || !/^https?:\/\//i.test(base)) return u;
+  try {
+    return new URL(u, base).href;
+  } catch {
+    return u;
+  }
+}
+
+/**
  * Default: white shell + dark text + gold accents. Dark dashboard via
  * `wording.amuletReportV2Theme: "dark"` or env `AMULET_HTML_THEME=dark`.
  *
@@ -221,7 +269,45 @@ export function renderAmuletReportV2Html(payload) {
 
   const usageDisclaimer = escapeHtml(vm.usageCaution.disclaimer || "");
 
-  const shareTitleJson = JSON.stringify(`${h.subtypeLabel || "พระเครื่อง"} · Ener Scan`);
+  const subtypeLabel = h.subtypeLabel || "พระเครื่อง";
+  const ogTitle = `${subtypeLabel} · Ener Scan`;
+  const ogDescription =
+    "ดูรายงานพลังพระเครื่องจาก Ener Scan พร้อมพลังเด่น ความเข้ากัน และพลังทั้ง 6 ด้าน";
+  const ogImageAlt = ogTitle;
+
+  const canonicalFromWording = String(
+    payload.wording && typeof payload.wording === "object"
+      ? /** @type {{ publicReportUrl?: string }} */ (payload.wording).publicReportUrl ?? ""
+      : "",
+  ).trim();
+  let canonicalUrl = "";
+  if (/^https?:\/\//i.test(canonicalFromWording)) {
+    try {
+      const cu = new URL(canonicalFromWording);
+      if (cu.protocol === "https:" || cu.protocol === "http:") canonicalUrl = cu.href;
+    } catch {
+      canonicalUrl = "";
+    }
+  }
+  if (!canonicalUrl) {
+    canonicalUrl = buildPublicReportUrlForMeta(String(payload.publicToken || "").trim());
+  }
+
+  const rawSocialImage = String(payload.object?.socialImageUrl || "").trim();
+  const rawObjectImage = String(payload.object?.objectImageUrl || "").trim();
+  const ogImageUrl = absoluteUrlForMeta(
+    /^https?:\/\//i.test(canonicalUrl) ? canonicalUrl : "",
+    rawSocialImage || rawObjectImage,
+  );
+  const ogImageTags =
+    ogImageUrl !== ""
+      ? `
+  <meta property="og:image" content="${escapeHtml(ogImageUrl)}" />
+  <meta property="og:image:alt" content="${escapeHtml(ogImageAlt)}" />
+  <meta name="twitter:image" content="${escapeHtml(ogImageUrl)}" />`
+      : "";
+
+  const shareTitleJson = JSON.stringify(ogTitle);
   const shareTextJson = JSON.stringify("ดูรายงานพลังจาก Ener Scan ได้ที่ลิงก์นี้");
 
   const heroMediaCol = h.objectImageUrl
@@ -233,7 +319,15 @@ export function renderAmuletReportV2Html(payload) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(h.subtypeLabel || "พระเครื่อง")} · Ener Scan</title>
+  <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${escapeHtml(ogTitle)}" />
+  <meta property="og:description" content="${escapeHtml(ogDescription)}" />
+  <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />${ogImageTags}
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${escapeHtml(ogTitle)}" />
+  <meta name="twitter:description" content="${escapeHtml(ogDescription)}" />
+  <title>${escapeHtml(ogTitle)}</title>
   <style>
     :root {
       color-scheme: light;

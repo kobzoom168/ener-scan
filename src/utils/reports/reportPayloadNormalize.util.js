@@ -161,6 +161,9 @@ export function normalizeReportPayloadForRender(input) {
     reportVersion: str(raw.reportVersion).trim() || "unknown",
     object: {
       objectImageUrl: sanitizeHttpsPublicImageUrl(objectIn?.objectImageUrl),
+      socialImageUrl: sanitizeHttpsPublicImageUrl(
+        objectIn?.socialImageUrl ?? objectIn?.shareImageUrl,
+      ),
       objectLabel: str(objectIn?.objectLabel).trim() || "วัตถุของคุณ",
       objectType: str(objectIn?.objectType),
     },
@@ -243,6 +246,7 @@ export function normalizeReportPayloadForRender(input) {
       htmlOpeningLine: str(wordingIn?.htmlOpeningLine),
       wordingFamily: str(wordingIn?.wordingFamily),
       clarityLevel: str(wordingIn?.clarityLevel),
+      publicReportUrl: str(wordingIn?.publicReportUrl).trim() || undefined,
     },
   };
 

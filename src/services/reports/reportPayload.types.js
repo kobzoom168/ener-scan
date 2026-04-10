@@ -185,6 +185,7 @@
  * @property {string} [wordingFamily] — hints Flex family patterns (e.g. protection, authority)
  * @property {string} [clarityLevel] — e.g. l2
  * @property {"light"|"dark"} [amuletReportV2Theme] — optional sacred_amulet HTML shell only (`amuletReportV2.template.js`); default white shell + gold accents; use `"dark"` for tech dark-gold dashboard
+ * @property {string} [publicReportUrl] — optional absolute public report URL for canonical / Open Graph (https preferred)
  */
 
 /**
@@ -199,6 +200,7 @@
 /**
  * @typedef {Object} ReportObject
  * @property {string} [objectImageUrl]
+ * @property {string} [socialImageUrl] — optional Open Graph / share image (https); when set, preferred over objectImageUrl for previews
  * @property {string} [objectLabel]
  * @property {string} [objectType]
  */
