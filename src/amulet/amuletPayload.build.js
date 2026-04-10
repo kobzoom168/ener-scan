@@ -41,7 +41,7 @@ function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, surface
 }
 
 function buildAmuletHtmlReportPlaceholder() {
-  /** Same line as HTML ข้อจำกัด (`AMULET_HTML_V2_USAGE_DISCLAIMER` in view model). */
+  /** Same line as HTML footer disclaimer (`AMULET_HTML_V2_USAGE_DISCLAIMER` / `usageCaution.disclaimer`). */
   const usageCautionLines = [AMULET_HTML_V2_USAGE_DISCLAIMER];
 
   /** Blurbs generated in `amuletHtmlV2.model` + `amuletMeaningBlurbs.util` when empty. */

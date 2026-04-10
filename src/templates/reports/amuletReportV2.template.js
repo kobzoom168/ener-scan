@@ -412,6 +412,7 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-life-score: #b8871b;
       --mv2a-life-blurb: rgba(72, 62, 50, 0.9);
       --mv2a-disclaimer: rgba(78, 68, 56, 0.88);
+      --mv2a-footer-note: rgba(62, 54, 44, 0.9);
       --mv2a-trust-border: rgba(0, 0, 0, 0.08);
       --mv2a-render-meta: rgba(100, 90, 78, 0.72);
       /* Unified Thai + system stack (report + radar labels + cards; LINE Flex uses client fonts). */
@@ -488,6 +489,7 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-life-score: #fde68a;
       --mv2a-life-blurb: rgba(203, 213, 225, 0.92);
       --mv2a-disclaimer: rgba(148, 163, 184, 0.88);
+      --mv2a-footer-note: rgba(203, 213, 225, 0.92);
       --mv2a-trust-border: rgba(148, 163, 184, 0.16);
       --mv2a-render-meta: rgba(100, 116, 139, 0.85);
     }
@@ -717,7 +719,16 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-life-score { color: var(--mv2a-life-score); font-weight: 700; font-size: 0.76rem; text-align: right; }
     .mv2-life-blurb { color: var(--mv2a-life-blurb); line-height: 1.35; }
     .mv2-life-hint { margin: 0 0 0.45rem; font-size: 0.65rem; color: var(--mv2a-muted); opacity: 0.8; }
-    .mv2-disclaimer { margin: 0; font-size: 0.76rem; line-height: 1.45; color: var(--mv2a-disclaimer); }
+    /* Footer disclaimer: after main report flow, above trust strip — no card; clearer than muted, lighter than body */
+    .mv2a-footer-note {
+      margin: 1.35rem 0 0;
+      padding: 0 0.2rem;
+      font-size: 0.8rem;
+      line-height: 1.55;
+      color: var(--mv2a-footer-note);
+      text-align: center;
+      font-weight: 400;
+    }
     .mv2-timing-card h2 { font-size: 0.95rem; }
     .mv2-timing-line { margin: 0.35rem 0 0; font-size: 0.8rem; color: var(--mv2a-text-body); line-height: 1.35; }
     .mv2-timing-k { font-weight: 700; color: var(--mv2a-gold-dim); margin-right: 0.35rem; }
@@ -816,11 +827,6 @@ export function renderAmuletReportV2Html(payload) {
       <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
       <div class="mv2-life-rows">${lifeRowsHtml}</div>
     </section>
-
-    <section class="mv2-card mv2-card--caution" aria-labelledby="mv2-use-h">
-      <h2 id="mv2-use-h">ข้อจำกัด</h2>
-      <p class="mv2-disclaimer">${usageDisclaimer}</p>
-    </section>
     ${timingCardHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
@@ -831,6 +837,8 @@ export function renderAmuletReportV2Html(payload) {
         <a class="mv2-share-btn mv2-share-btn--line" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer">Add เข้า LINE OA</a>
       </div>
     </section>
+
+    <p class="mv2a-footer-note" role="note">${usageDisclaimer}</p>
 
     <footer class="mv2-trust">
       ${vm.trustNote ? `<p>${escapeHtml(vm.trustNote)}</p>` : ""}

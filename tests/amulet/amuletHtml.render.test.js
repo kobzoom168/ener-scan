@@ -127,10 +127,19 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("รองลงมา"));
   assert.ok(html.includes('class="mv2-owner-mini"'));
   assert.ok(html.includes('class="mv2-int-card"'));
-  assert.ok(html.includes('class="mv2-disclaimer"'));
-  assert.ok(html.includes("จังหวะที่เหมาะกับการอธิษฐาน"));
+  assert.ok(html.includes('class="mv2a-footer-note"'));
+  assert.ok(html.includes("จังหวะเสริมพลัง"));
   assert.ok(html.includes('class="mv2-card mv2-timing-card"'));
   assert.ok(html.includes("ช่วงเช้า 07:00–10:59"));
+  assert.ok(html.includes("ส่งกับพลัง"));
+  assert.ok(html.includes("หนุนพลัง"));
+  assert.ok(
+    html.includes("เสริมดวงได้ชัดขึ้น"),
+    "timing hint is product-like, not engine disclaimer",
+  );
+  assert.ok(!html.includes("เป็นกรอบอ่าน"));
+  assert.ok(!html.includes("ไม่การันตี"));
+  assert.ok(!html.includes("ข้อจำกัด"));
   assert.ok(html.includes("แชร์รายงาน"));
   assert.ok(html.includes('id="mv2-share-native"'));
   assert.ok(html.includes("https://lin.ee/6YZeFZ1"));

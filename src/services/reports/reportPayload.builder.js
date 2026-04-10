@@ -43,6 +43,10 @@ import { resolveMoldaviteDetectionWithGeminiCrystalSubtype } from "../../moldavi
 import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
 import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayNaming.util.js";
 import { buildAmuletV1Slice } from "../../amulet/amuletPayload.build.js";
+import {
+  deriveSacredAmuletEnergyScore10FromPowerCategories,
+  sacredAmuletEnergyLevelLabelFromScore10,
+} from "../../amulet/amuletScores.util.js";
 import { computeTimingV1 } from "../timing/timingEngine.service.js";
 import {
   normalizeBirthdateIso,
@@ -964,6 +968,16 @@ export async function buildReportPayloadFromScan(opts) {
         "เปิดรายงานฉบับเต็ม"
       : flexSurface.ctaLabel;
 
+  /** Hero `คะแนนพลัง` / `ระดับ` for sacred_amulet: derived from six axis scores (same as graph), not parsed scan text. */
+  const summaryEnergyScore =
+    amuletV1 != null
+      ? deriveSacredAmuletEnergyScore10FromPowerCategories(amuletV1.powerCategories)
+      : energyScore;
+  const summaryEnergyLevelLabel =
+    amuletV1 != null
+      ? sacredAmuletEnergyLevelLabelFromScore10(Number(summaryEnergyScore))
+      : energyLevelLabelFromScore(energyScore);
+
   /** @type {import("./reportPayload.types.js").ReportTimingV1 | undefined} */
   let timingV1 = undefined;
   if (amuletV1 && birthdateUsed) {
@@ -973,7 +987,10 @@ export async function buildReportPayloadFromScan(opts) {
         compatPct != null && Number.isFinite(Number(compatPct))
           ? Math.round(Number(compatPct))
           : Math.round(
-              Math.min(100, Math.max(0, (Number(energyScore) || 5) * 10)),
+              Math.min(
+                100,
+                Math.max(0, (Number(summaryEnergyScore) || 5) * 10),
+              ),
             );
       timingV1 = computeTimingV1({
         birthdateIso: bdIso,
@@ -1004,8 +1021,8 @@ export async function buildReportPayloadFromScan(opts) {
       objectType: "",
     },
     summary: {
-      energyScore,
-      energyLevelLabel: energyLevelLabelFromScore(energyScore),
+      energyScore: summaryEnergyScore,
+      energyLevelLabel: summaryEnergyLevelLabel,
       mainEnergyLabel: summaryMainEnergyLabel,
       compatibilityPercent: compatPct,
       compatibilityBand: compatibilityBand || undefined,

@@ -5,15 +5,27 @@ import {
   AMULET_PEAK_SHORT_THAI,
 } from "./amuletScores.util.js";
 import { buildAxisLifeBlurb } from "./amuletMeaningBlurbs.util.js";
+import { SACRED_AXIS_HINT_TH } from "../services/timing/timingEngine.copy.th.js";
 
-/** Sacred_amulet full-report disclaimer (ข้อจำกัด) — concise, owner- and birthdate-aware. */
+/** Sacred_amulet HTML footer disclaimer (ท้ายรายงาน; source: `usageCaution.disclaimer`). */
 export const AMULET_HTML_V2_USAGE_DISCLAIMER =
   "พระหรือเครื่องรางจะเด่นด้านไหน ไม่ได้ขึ้นอยู่กับวัตถุอย่างเดียว แต่ขึ้นอยู่กับวันเดือนปีเกิด พื้นฐานดวง และการปฏิบัติตัวของเจ้าของด้วย แต่ละคนจึงมีประสบการณ์ต่างกัน — Ener Scan";
 
 /**
- * True when hero โทนหลัก text matches the dominant score axis (no extra clarifier).
- * @param {string} mainShort
- * @param {string} peakKey
+ * Policy — sacred_amulet hero vs radar graph (HTML v2):
+ *
+ * 1. **Baseline tone (identity)** — Hero `displayLine` = `โทนหลัก · {mainEnergyShort}` from `amuletV1.flexSurface`
+ *    (summary-first / product baseline). This is **not** derived from graph top axis `ord[0]`.
+ * 2. **Current activation (graph truth)** — Radar peak / ordering come from **object** scores only (`ord[0]`, `ord[1]`, …).
+ * 3. **Bridge** — When (1) and (2) disagree on the same semantic axis, show a **short** `clarifierLine`
+ *    (dashboard-style, not prose). Never force hero to equal `ord[0]`.
+ */
+
+/**
+ * True when baseline `mainEnergyShort` already aligns with the **graph peak axis** (`peakKey` = `ord[0]`),
+ * so no clarifier is needed.
+ * @param {string} mainShort — from flexSurface (baseline identity label)
+ * @param {string} peakKey — dominant object axis key from score ordering
  */
 function mainToneMatchesGraphPeak(mainShort, peakKey) {
   const m = String(mainShort || "")
@@ -38,6 +50,49 @@ function mainToneMatchesGraphPeak(mainShort, peakKey) {
 function clamp0100(v) {
   if (!Number.isFinite(v)) return 50;
   return Math.min(100, Math.max(0, Math.round(v)));
+}
+
+/**
+ * Sacred_amulet timing card — confident product copy for HTML only.
+ * Uses `timingV1` selections (truth) + graph top axes; does not replace engine math or payload strings.
+ *
+ * @param {object} tv — `timingV1` from engine (unchanged truth)
+ * @param {string} peakKey
+ * @param {string} secondKey
+ */
+export function buildSacredAmuletTimingCardDisplay(tv, peakKey, secondKey) {
+  const topWindowLabel = String(tv.summary?.topWindowLabel || "").trim();
+  const topWeekdayLabel = String(tv.summary?.topWeekdayLabel || "").trim();
+  const ritualMode = String(tv.ritualMode || "ตั้งจิต").trim();
+  const axisFull =
+    SACRED_AXIS_HINT_TH[/** @type {keyof typeof SACRED_AXIS_HINT_TH} */ (peakKey)] ||
+    SACRED_AXIS_HINT_TH.protection;
+  const s0 =
+    AMULET_PEAK_SHORT_THAI[/** @type {keyof typeof AMULET_PEAK_SHORT_THAI} */ (peakKey)] || "";
+  const s1 =
+    AMULET_PEAK_SHORT_THAI[/** @type {keyof typeof AMULET_PEAK_SHORT_THAI} */ (secondKey)] || "";
+
+  const hourLine =
+    topWindowLabel && topWindowLabel !== "—"
+      ? `${topWindowLabel} ส่งกับพลัง${axisFull}`
+      : topWindowLabel;
+
+  const weekdayLine =
+    s0 && s1 && topWeekdayLabel && topWeekdayLabel !== "—"
+      ? `${topWeekdayLabel} หนุนพลัง${s0}และ${s1}ได้ดี`
+      : topWeekdayLabel;
+
+  const hint = `ใช้${ritualMode}คู่กับช่วงเวลาและวันที่แนะนำ พลังจะส่งตัวง่ายและเสริมดวงได้ชัดขึ้น`;
+
+  return {
+    heading: "จังหวะเสริมพลัง",
+    hourLine,
+    weekdayLine,
+    ritualLine: ritualMode,
+    hint,
+    confidence:
+      tv.confidence === "high" || tv.confidence === "low" ? tv.confidence : "medium",
+  };
 }
 
 /**
@@ -205,6 +260,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
 
   const mainShort =
     String(fs.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม";
+  /** Short bridge when baseline tone ≠ graph peak; pattern: `ภาพรวม {baseline} · เด่นสุด {activation}` */
   const clarifierLine = mainToneMatchesGraphPeak(mainShort, ord[0])
     ? ""
     : `ภาพรวม ${mainShort} · เด่นสุด ${AMULET_PEAK_SHORT_THAI[ord[0]] || topLabel}`;
@@ -270,14 +326,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       ) {
         return null;
       }
-      return {
-        heading: "จังหวะที่เหมาะกับการอธิษฐาน",
-        hourLine: String(tv.summary.topWindowLabel || "").trim(),
-        weekdayLine: String(tv.summary.topWeekdayLabel || "").trim(),
-        ritualLine: String(tv.ritualMode || "").trim(),
-        hint: String(tv.summary.practicalHint || "").trim(),
-        confidence: tv.confidence === "high" || tv.confidence === "low" ? tv.confidence : "medium",
-      };
+      return buildSacredAmuletTimingCardDisplay(tv, ord[0], ord[1]);
     })(),
     trustNote: String(payload.trust?.trustNote || "").trim(),
     reportVersion: String(payload.reportVersion || ""),

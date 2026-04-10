@@ -88,44 +88,68 @@ export function computeAmuletPowerScoresDeterministicV1(seedKey, opts = {}) {
   const affinityA = POWER_ORDER[ia];
   const affinityB = POWER_ORDER[ib];
 
-  /** @type {Record<AmuletPowerKey, number>} */
-  const raw = /** @type {Record<AmuletPowerKey, number>} */ ({});
+  /** Wider per-axis spread than legacy 50–96: typical items ~mid, strong items high, weak tails possible. */
+  const AXIS_MIN = 34;
+  const AXIS_MAX = 99;
 
-  for (const k of POWER_ORDER) {
-    let s = 58 + (fnv1a32(`${identity}|v2|base|${k}`) % 20);
+  /**
+   * Identity-only scores (no session / no per-scan jitter): stable primary/secondary across rescans.
+   * @param {boolean} withSessionJitter
+   */
+  const buildAxisScores = (withSessionJitter) => {
+    /** @type {Record<AmuletPowerKey, number>} */
+    const out = /** @type {Record<AmuletPowerKey, number>} */ ({});
+    for (const k of POWER_ORDER) {
+      let s = 38 + (fnv1a32(`${identity}|v2|base|${k}`) % 34);
 
     if (k === affinityA) {
-      s += 10 + (fnv1a32(`${identity}|v2|b1|${k}`) % 9);
+      s += 10 + (fnv1a32(`${identity}|v2|b1|${k}`) % 15);
     } else if (k === affinityB) {
-      s += 5 + (fnv1a32(`${identity}|v2|b2|${k}`) % 8);
+      s += 6 + (fnv1a32(`${identity}|v2|b2|${k}`) % 12);
     }
 
-    if (session) {
-      s += (fnv1a32(`${session}|v2|sess|${k}`) % 9) - 4;
+      if (withSessionJitter && session) {
+        s += (fnv1a32(`${session}|v2|sess|${k}`) % 9) - 4;
+        s += (fnv1a32(`${identity}|${session}|jit|${k}`) % 3);
+      }
+
+      out[k] = Math.min(AXIS_MAX, Math.max(AXIS_MIN, Math.round(s)));
     }
 
-    s += (fnv1a32(`${identity}|${session}|jit|${k}`) % 3);
+    /** ~2.5% of identities: all axes lift together (rare strong pieces; still graph-consistent). */
+    if ((fnv1a32(`${identity}|v2|elite`) % 40) === 0) {
+      const bump = 6 + (fnv1a32(`${identity}|v2|eliteAmp`) % 5);
+      for (const k of POWER_ORDER) {
+        out[k] = Math.min(AXIS_MAX, out[k] + bump);
+      }
+    }
 
-    raw[k] = Math.min(96, Math.max(50, Math.round(s)));
-  }
+    const hint = inferAmuletAxisFromMainEnergyLabel(opts.mainEnergyLabel);
+    if (hint && POWER_ORDER.includes(hint)) {
+      out[hint] = Math.min(
+        AXIS_MAX,
+        out[hint] + 5 + (fnv1a32(`${identity}|nudge|${hint}`) % 6),
+      );
+    }
 
-  const hint = inferAmuletAxisFromMainEnergyLabel(opts.mainEnergyLabel);
-  if (hint && POWER_ORDER.includes(hint)) {
-    raw[hint] = Math.min(
-      96,
-      raw[hint] + 6 + (fnv1a32(`${identity}|nudge|${hint}`) % 5),
-    );
-  }
+    const sortedKeys = [...POWER_ORDER].sort((a, b) => {
+      const ds = out[b] - out[a];
+      if (ds !== 0) return ds;
+      return POWER_ORDER.indexOf(a) - POWER_ORDER.indexOf(b);
+    });
 
-  const sorted = [...POWER_ORDER].sort((a, b) => {
-    const ds = raw[b] - raw[a];
-    if (ds !== 0) return ds;
-    return POWER_ORDER.indexOf(a) - POWER_ORDER.indexOf(b);
-  });
+    if (out[sortedKeys[0]] - out[sortedKeys[1]] < 4) {
+      out[sortedKeys[0]] = Math.min(AXIS_MAX, out[sortedKeys[0]] + 3);
+    }
 
-  if (raw[sorted[0]] - raw[sorted[1]] < 4) {
-    raw[sorted[0]] = Math.min(96, raw[sorted[0]] + 3);
-  }
+    return { out, sortedKeys };
+  };
+
+  const { out: identityRaw, sortedKeys: sortedIdentity } = buildAxisScores(false);
+  const primaryPower = sortedIdentity[0];
+  const secondaryPower = sortedIdentity[1];
+
+  const { out: raw } = buildAxisScores(true);
 
   /** @type {Record<AmuletPowerKey, { key: AmuletPowerKey, score: number, labelThai: string }>} */
   const powerCategories = {};
@@ -140,9 +164,47 @@ export function computeAmuletPowerScoresDeterministicV1(seedKey, opts = {}) {
   return {
     scoringMode: AMULET_SCORING_MODE,
     powerCategories,
-    primaryPower: sorted[0],
-    secondaryPower: sorted[1],
+    primaryPower,
+    secondaryPower,
   };
+}
+
+/**
+ * Single 0–10 display score for sacred_amulet hero strip — derived only from the six axis scores
+ * (same numbers as the radar graph). Equal-weight mean, plus a small bonus when the top axis
+ * clearly leads (does not replace axis math elsewhere).
+ *
+ * @param {Record<string, { score?: number }>} powerCategories
+ * @returns {number}
+ */
+export function deriveSacredAmuletEnergyScore10FromPowerCategories(powerCategories) {
+  const scores = POWER_ORDER.map((k) => {
+    const e = powerCategories[k];
+    const sc = e && typeof e === "object" && e.score != null ? Number(e.score) : NaN;
+    return Number.isFinite(sc) ? Math.min(100, Math.max(0, sc)) : 0;
+  });
+  const mean = scores.reduce((a, b) => a + b, 0) / 6;
+  const sorted = [...scores].sort((a, b) => b - a);
+  const gap = sorted[0] - sorted[1];
+  const m = Math.min(99, Math.max(34, mean));
+  /** Reference band: empirical axis means rarely fill 34–99; stretch so strong real graphs reach 9.x without inflating noise at the bottom. */
+  const t = Math.min(1, Math.max(0, (m - 34) / (88 - 34)));
+  let out = 4.7 + t * 5.0;
+  out += Math.min(0.45, gap / 110);
+  out = Math.min(9.95, Math.max(4.5, out));
+  return Math.round(out * 10) / 10;
+}
+
+/**
+ * Four-tier level label for sacred_amulet summary (tied to {@link deriveSacredAmuletEnergyScore10FromPowerCategories}).
+ * @param {number} n — 0–10 scale
+ */
+export function sacredAmuletEnergyLevelLabelFromScore10(n) {
+  if (n == null || !Number.isFinite(n)) return "";
+  if (n >= 8.9) return "สูงมาก";
+  if (n >= 7.8) return "สูง";
+  if (n >= 6.5) return "กลาง";
+  return "ต่ำ";
 }
 
 export { POWER_LABEL_THAI, POWER_ORDER };
