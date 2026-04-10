@@ -100,7 +100,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("navigator.share"));
   assert.ok(
     html.includes("วันเดือนปีเกิด") &&
-      html.includes("@Ener Scan") &&
+      html.includes("\u2014 Ener Scan") &&
       html.includes("การปฏิบัติตัวของเจ้าของ"),
     "sacred_amulet concise usage disclaimer",
   );

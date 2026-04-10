@@ -8,7 +8,7 @@ import { buildAxisLifeBlurb } from "./amuletMeaningBlurbs.util.js";
 
 /** Sacred_amulet full-report disclaimer (ข้อจำกัด) — concise, owner- and birthdate-aware. */
 export const AMULET_HTML_V2_USAGE_DISCLAIMER =
-  "พระหรือเครื่องรางจะเด่นด้านไหน ไม่ได้ขึ้นอยู่กับวัตถุอย่างเดียว แต่ขึ้นอยู่กับวันเดือนปีเกิด พื้นฐานดวง และการปฏิบัติตัวของเจ้าของด้วย แต่ละคนจึงมีประสบการณ์ต่างกัน @Ener Scan";
+  "พระหรือเครื่องรางจะเด่นด้านไหน ไม่ได้ขึ้นอยู่กับวัตถุอย่างเดียว แต่ขึ้นอยู่กับวันเดือนปีเกิด พื้นฐานดวง และการปฏิบัติตัวของเจ้าของด้วย แต่ละคนจึงมีประสบการณ์ต่างกัน — Ener Scan";
 
 /**
  * True when hero โทนหลัก text matches the dominant score axis (no extra clarifier).
