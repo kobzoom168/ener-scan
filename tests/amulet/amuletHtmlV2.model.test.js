@@ -51,7 +51,7 @@ test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
   assert.ok(
     vm.usageCaution.disclaimer.includes("วันเดือนปีเกิด") &&
-      vm.usageCaution.disclaimer.includes("\u2014 Ener Scan"),
+      vm.usageCaution.disclaimer.includes("Ener Scan"),
     "fixed sacred_amulet usage disclaimer (not payload lines)",
   );
   assert.ok(

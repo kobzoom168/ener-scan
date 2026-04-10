@@ -12,7 +12,7 @@
 |--------|--------|-------------|
 | Hero headline | `ord[0]` → `AMULET_PEAK_SHORT_THAI` | `displayLine`: `โทนหลัก · {peakShort}` |
 | Baseline from flex | `fs.mainEnergyShort` | `mainEnergyLabel` + optional clarifier |
-| Bridge | When baseline ≠ graph peak (heuristic) | `clarifierLine`: `สรุปจากสแกน · {mainShort}` |
+| Bridge | When baseline ≠ graph peak (heuristic) | `clarifierLine`: `สรุปจากสแกน` |
 | Graph summary | `objectP` → `ord`, owner alignment | Row 1: พลังเด่น; row 2: เข้ากับคุณที่สุด |
 
 ## Rules

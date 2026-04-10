@@ -808,10 +808,19 @@ export function renderAmuletReportV2Html(payload) {
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
+    /* ปุ่มแชร์ระบบ: โทนน้ำเงินแบรนด์ Facebook */
     .mv2-share-btn--primary {
-      background: rgba(184, 135, 27, 0.1);
-      border-color: var(--mv2a-badge-border);
-      color: var(--mv2a-gold-dim);
+      background: #1877f2;
+      border-color: #1877f2;
+      color: #ffffff;
+    }
+    .mv2-share-btn--primary:hover {
+      background: #166fe5;
+      border-color: #166fe5;
+    }
+    .mv2-share-btn--primary:active {
+      background: #1464d4;
+      border-color: #1464d4;
     }
     .mv2-share-btn--line {
       background: #06c755;
@@ -819,9 +828,13 @@ export function renderAmuletReportV2Html(payload) {
       color: #ffffff;
     }
     html.mv2a-theme-dark .mv2-share-btn--primary {
-      background: rgba(232, 197, 71, 0.1);
-      border-color: var(--mv2a-badge-border);
-      color: var(--mv2a-gold);
+      background: #1877f2;
+      border-color: #1877f2;
+      color: #ffffff;
+    }
+    html.mv2a-theme-dark .mv2-share-btn--primary:hover {
+      background: #166fe5;
+      border-color: #166fe5;
     }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--mv2a-trust-border); text-align: center; font-size: 0.78rem; color: var(--mv2a-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: var(--mv2a-render-meta); }

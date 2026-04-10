@@ -335,8 +335,8 @@ export function computeTimingV1(input) {
       bestDateRoots: [],
       avoidHours: [],
       summary: {
-        topWindowLabel: "—",
-        topWeekdayLabel: "—",
+        topWindowLabel: "",
+        topWeekdayLabel: "",
         practicalHint: TIMING_INVALID_BIRTH_PRACTICAL,
       },
       debug: {
@@ -516,12 +516,12 @@ export function computeTimingV1(input) {
   const bestDateRoots = rootScores.slice(0, 3);
 
   const topWin = TIMING_HOUR_WINDOWS.find((w) => w.key === bestHours[0]?.key);
-  const topWindowLabel = topWin?.labelTh ?? "—";
+  const topWindowLabel = topWin?.labelTh ?? "";
   const topWdKey = bestWeekdays[0]?.key ?? "";
   const topWdNum = Number(String(topWdKey).replace("weekday_", ""));
   const topWeekdayLabel = Number.isFinite(topWdNum)
-    ? TIMING_WEEKDAY_LABEL_TH[((topWdNum % 7) + 7) % 7] ?? "—"
-    : "—";
+    ? TIMING_WEEKDAY_LABEL_TH[((topWdNum % 7) + 7) % 7] ?? ""
+    : "";
 
   const spread = (bestHours[0]?.score ?? 0) - (hourScores[hourScores.length - 1]?.score ?? 0);
   let confidence = "medium";

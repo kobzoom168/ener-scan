@@ -12,7 +12,7 @@ import { SACRED_AXIS_HINT_TH } from "../services/timing/timingEngine.copy.th.js"
 
 /** Sacred_amulet HTML footer disclaimer (ท้ายรายงาน; source: `usageCaution.disclaimer`). */
 export const AMULET_HTML_V2_USAGE_DISCLAIMER =
-  "พระหรือเครื่องรางจะเด่นด้านไหน ไม่ได้ขึ้นอยู่กับวัตถุอย่างเดียว แต่ขึ้นอยู่กับวันเดือนปีเกิด พื้นฐานดวง และการปฏิบัติตัวของเจ้าของด้วย แต่ละคนจึงมีประสบการณ์ต่างกัน — Ener Scan";
+  "พระหรือเครื่องรางจะเด่นด้านไหน ไม่ได้ขึ้นอยู่กับวัตถุอย่างเดียว แต่ขึ้นอยู่กับวันเดือนปีเกิด พื้นฐานดวง และการปฏิบัติตัวของเจ้าของด้วย แต่ละคนจึงมีประสบการณ์ต่างกัน Ener Scan";
 
 /**
  * Policy — sacred_amulet hero vs radar graph (HTML v2):
@@ -20,7 +20,7 @@ export const AMULET_HTML_V2_USAGE_DISCLAIMER =
  * 1. **Graph peak (hero headline)** — `displayLine` = `โทนหลัก · {peakShort}` where `peakShort` follows **object**
  *    scores (`ord[0]` after `sortPowerKeysByObjectDesc`), matching the radar “เด่นสุด”.
  * 2. **Baseline from scan** — `flexSurface.mainEnergyShort` stays on `mainEnergyLabel` and may differ from the graph;
- *    when it does, a short `clarifierLine` bridges the two.
+ *    when it does, show short `clarifierLine` `สรุปจากสแกน` only (no duplicate of mainShort; headline already shows peak).
  * 3. **Graph summary row 2** — Label “เข้ากับคุณที่สุด”; value = axis among top-two object scores that best matches
  *    the owner profile (`pickAlignKeyAmongTopTwo`).
  */
@@ -68,13 +68,12 @@ export function buildSacredAmuletTimingCardDisplay(tv, peakKey, secondKey) {
   const s1 =
     AMULET_PEAK_SHORT_THAI[/** @type {keyof typeof AMULET_PEAK_SHORT_THAI} */ (secondKey)] || "";
 
-  const hourLine =
-    topWindowLabel && topWindowLabel !== "—"
-      ? `${topWindowLabel} ส่งกับพลัง${axisFull}`
-      : topWindowLabel;
+  const hourLine = topWindowLabel
+    ? `${topWindowLabel} ส่งกับพลัง${axisFull}`
+    : topWindowLabel;
 
   const weekdayLine =
-    s0 && s1 && topWeekdayLabel && topWeekdayLabel !== "—"
+    s0 && s1 && topWeekdayLabel
       ? `${topWeekdayLabel} หนุนพลัง${s0}และ${s1}ได้ดี`
       : topWeekdayLabel;
 
@@ -216,10 +215,8 @@ export function buildAmuletHtmlV2ViewModel(payload) {
 
   const mainShort =
     String(fs.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม";
-  /** When flex baseline ≠ graph peak: short note on scan summary (hero already shows peak). */
-  const clarifierLine = mainToneMatchesGraphPeak(mainShort, ord[0])
-    ? ""
-    : `สรุปจากสแกน · ${mainShort}`;
+  /** When flex baseline ≠ graph peak: one line; โทนมาจากสแกนอยู่ที่ `mainEnergyLabel` แล้ว ไม่ซ้ำใน clarifier */
+  const clarifierLine = mainToneMatchesGraphPeak(mainShort, ord[0]) ? "" : "สรุปจากสแกน";
 
   return {
     rendererId: "amulet-html-v2",

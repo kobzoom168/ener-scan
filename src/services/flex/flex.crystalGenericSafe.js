@@ -300,7 +300,7 @@ export async function buildCrystalGenericSafeSummaryFirstFlex(
   if (!url) {
     bodyContents.push({
       type: "text",
-      text: "ลิงก์รายงานยังไม่พร้อม — กลับไปที่แชทแล้วลองอีกครั้งเมื่อสะดวก",
+      text: "ลิงก์รายงานยังไม่พร้อม กลับไปที่แชทแล้วลองอีกครั้งเมื่อสะดวก",
       size: "xs",
       color: FLEX_TEXT_SECONDARY,
       wrap: true,
