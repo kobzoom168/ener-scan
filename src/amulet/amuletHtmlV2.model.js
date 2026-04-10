@@ -263,7 +263,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       const tv = payload.timingV1;
       if (
         !tv ||
-        tv.engineVersion !== "timing_v1" ||
+        (tv.engineVersion !== "timing_v1" && tv.engineVersion !== "timing_v1_1") ||
         !tv.summary ||
         !Array.isArray(tv.bestHours) ||
         tv.bestHours.length === 0

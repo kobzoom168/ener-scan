@@ -71,7 +71,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
       },
     },
     timingV1: {
-      engineVersion: "timing_v1",
+      engineVersion: "timing_v1_1",
       lane: "sacred_amulet",
       ritualMode: "ตั้งจิต",
       confidence: "medium",

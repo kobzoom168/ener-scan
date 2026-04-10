@@ -1,8 +1,12 @@
 /**
- * Timing Engine v1 — deterministic timing truth (separate from templates / LLM).
+ * Timing Engine v1.1 — deterministic timing truth (separate from templates / LLM).
  */
 
-import { TIMING_ENGINE_VERSION, TIMING_WEIGHTS } from "../../config/timing/timingEngine.config.js";
+import {
+  TIMING_CALIBRATION_TOTAL_CAP,
+  TIMING_ENGINE_VERSION,
+  TIMING_WEIGHTS,
+} from "../../config/timing/timingEngine.config.js";
 import { TIMING_HOUR_WINDOWS, TIMING_WINDOW_OWNER_ANCHOR } from "../../config/timing/timingWindows.config.js";
 import { resolveRitualMode } from "../../config/timing/timingRitualMode.config.js";
 import {
@@ -20,21 +24,26 @@ import {
   MOLDAVITE_DATE_ROOT_WEIGHT,
 } from "../../config/timing/timingLaneRules.moldavite.js";
 import {
+  applyCompatibilityCalibration,
+  applyOwnerFitCalibration,
+  applyPrimaryAxisStrengthCalibration,
+} from "./timingCalibration.util.js";
+import {
   birthDayRootFromBirthdate,
   lifePathFromBirthdate,
   normalizeBirthdateIso,
   parseIsoYmd,
 } from "../../utils/compatibilityFormula.util.js";
+import {
+  SACRED_AXIS_HINT_TH,
+  MOLDAVITE_AXIS_HINT_TH,
+  buildPracticalHintTh,
+  reasonTextFromCode,
+  TIMING_INVALID_BIRTH_PRACTICAL,
+} from "./timingEngine.copy.th.js";
+
 
 const [W_OWNER, W_LANE, W_WD, W_COMPAT, W_FIT] = TIMING_WEIGHTS;
-
-const REASON_TEXT = {
-  OWNER_ROOT_MATCH: "ช่วงนี้สอดคล้องกับจังหวะตัวเลขวันเกิดของคุณมากกว่าช่วงอื่น",
-  LANE_POWER_SUPPORT: "ช่วงนี้ส่งกับพลังเด่นของวัตถุในมุมนี้ได้ดี",
-  POWER_AXIS_RESONANCE: "จังหวะนี้หนุนแกนพลังที่อ่านจากรายงานได้พอดี",
-  LOW_RESONANCE: "ช่วงนี้จังหวะตอบกับเจ้าของได้น้อยกว่าเมื่อเทียบกับช่วงอื่น",
-  BALANCED: "สมดุลระหว่างจังหวะเจ้าของกับแกนพลังของวัตถุ",
-};
 
 /**
  * @param {number} n
@@ -81,6 +90,41 @@ function ringDistWeek(birthWd, wd) {
 }
 
 /**
+ * @param {string} s
+ */
+function timingFingerprintV11(s) {
+  let h = 2166136261;
+  const str = String(s);
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `t${(h >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+/**
+ * @param {number} base
+ * @param {number} compat01
+ * @param {number} fit01
+ * @param {number} primaryWeight01
+ * @returns {{ final: number, dCompat: number, dFit: number, dAxis: number }}
+ */
+function calibrationBreakdown(base, compat01, fit01, primaryWeight01) {
+  const b = clamp(Math.round(base), 0, 100);
+  const afterC = applyCompatibilityCalibration(b, compat01, 6);
+  const dCompat = afterC - b;
+  const afterF = applyOwnerFitCalibration(afterC, fit01, 6);
+  const dFit = afterF - afterC;
+  const afterP = applyPrimaryAxisStrengthCalibration(afterF, primaryWeight01, 6);
+  const dAxis = afterP - afterF;
+  let final = afterP;
+  const total = final - b;
+  if (total > TIMING_CALIBRATION_TOTAL_CAP) final = b + TIMING_CALIBRATION_TOTAL_CAP;
+  else if (total < -TIMING_CALIBRATION_TOTAL_CAP) final = b - TIMING_CALIBRATION_TOTAL_CAP;
+  return { final: clamp(Math.round(final), 0, 100), dCompat, dFit, dAxis };
+}
+
+/**
  * @param {number} ownerAff
  * @param {number} laneAff
  * @param {number} weekdayAff
@@ -100,18 +144,6 @@ function combineTimingScore(ownerAff, laneAff, weekdayAff, compat01, fit01) {
 }
 
 /**
- * @param {number} score
- * @param {"hour"|"weekday"|"root"} kind
- */
-function reasonForScore(score, kind) {
-  if (score >= 86) return { code: "OWNER_ROOT_MATCH", text: REASON_TEXT.OWNER_ROOT_MATCH };
-  if (score >= 80) return { code: "LANE_POWER_SUPPORT", text: REASON_TEXT.LANE_POWER_SUPPORT };
-  if (score < 42) return { code: "LOW_RESONANCE", text: REASON_TEXT.LOW_RESONANCE };
-  if (score >= 72) return { code: "POWER_AXIS_RESONANCE", text: REASON_TEXT.POWER_AXIS_RESONANCE };
-  return { code: "BALANCED", text: REASON_TEXT.BALANCED };
-}
-
-/**
  * @param {"sacred_amulet"|"moldavite"} lane
  * @param {string} primaryKey
  */
@@ -127,11 +159,29 @@ function hourPowerTable(lane, primaryKey) {
 
 /**
  * @param {"sacred_amulet"|"moldavite"} lane
+ * @param {string} primaryKey
+ * @param {string|undefined} secondaryKey
+ */
+function blendedHourPower(lane, primaryKey, secondaryKey) {
+  const primary = hourPowerTable(lane, primaryKey);
+  const sk = String(secondaryKey || "").trim();
+  const pk = String(primaryKey || "").trim();
+  if (!sk || sk === pk) return { blend: primary, secondary: null, secondaryWeightFor: null };
+  const sec = hourPowerTable(lane, sk);
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const w of TIMING_HOUR_WINDOWS) {
+    const k = w.key;
+    out[k] = primary[k] * 0.74 + sec[k] * 0.26;
+  }
+  return { blend: out, secondary: sec, secondaryWeightFor: sk };
+}
+
+/**
+ * @param {"sacred_amulet"|"moldavite"} lane
  */
 function hourBirthTable(lane) {
-  return lane === "moldavite"
-    ? MOLDAVITE_HOUR_BIRTH_SYNERGY
-    : SACRED_AMULET_HOUR_BIRTH_SYNERGY;
+  return lane === "moldavite" ? MOLDAVITE_HOUR_BIRTH_SYNERGY : SACRED_AMULET_HOUR_BIRTH_SYNERGY;
 }
 
 /**
@@ -153,12 +203,106 @@ function dateRootLaneWeight(lane, primaryKey, root1to9) {
 }
 
 /**
+ * @param {object} p
+ * @param {"hour"|"weekday"|"root"} p.kind
+ * @param {number} p.ownerAff
+ * @param {number} p.laneAff
+ * @param {number} p.weekdayAff
+ * @param {number} p.score
+ * @param {number} p.baseScore
+ * @param {number} p.dCompat
+ * @param {number} p.dFit
+ * @param {number} p.compat01
+ * @param {number} p.fit01
+ * @param {boolean} p.laneSecondaryLean
+ * @param {boolean} p.isAvoid
+ * @param {string} [p.slotLabelTh]
+ */
+function deriveReasonCode(p) {
+  if (p.isAvoid || p.score < 48) {
+    return {
+      code: "LOW_RESONANCE",
+      text: reasonTextFor("LOW_RESONANCE", p),
+    };
+  }
+
+  const wo = W_OWNER * p.ownerAff;
+  const wl = W_LANE * p.laneAff;
+  const ww = W_WD * p.weekdayAff;
+  const spread = Math.max(wo, wl, ww) - Math.min(wo, wl, ww);
+
+  const calibStory =
+    p.dCompat >= 4 && p.compat01 >= 0.62 && p.dCompat >= p.dFit
+      ? "COMPATIBILITY_BOOST"
+      : p.dFit >= 4 && p.fit01 >= 0.62 && p.dFit > p.dCompat
+        ? "OWNER_FIT_BOOST"
+        : null;
+
+  if (calibStory && spread < 8 && (p.compat01 >= 0.58 || p.fit01 >= 0.58)) {
+    return { code: calibStory, text: reasonTextFor(calibStory, p) };
+  }
+
+  if (p.laneSecondaryLean && p.kind === "hour") {
+    return { code: "LANE_SECONDARY_SUPPORT", text: reasonTextFor("LANE_SECONDARY_SUPPORT", p) };
+  }
+
+  if (p.kind === "root" && wl >= wo - 0.5 && p.laneAff >= 72) {
+    return { code: "DATE_ROOT_RESONANCE", text: reasonTextFor("DATE_ROOT_RESONANCE", p) };
+  }
+
+  const max = Math.max(wo, wl, ww);
+  if (spread < 2.2) {
+    return { code: "STABILITY_ANCHOR", text: reasonTextFor("STABILITY_ANCHOR", p) };
+  }
+
+  if (max === wo) {
+    if (p.ownerAff >= 88) {
+      return { code: "OWNER_ROOT_MATCH", text: reasonTextFor("OWNER_ROOT_MATCH", p) };
+    }
+    if (p.ownerAff >= 74) {
+      return { code: "OWNER_ROOT_NEAR_MATCH", text: reasonTextFor("OWNER_ROOT_NEAR_MATCH", p) };
+    }
+  }
+  if (max === wl) {
+    return { code: "LANE_PRIMARY_SUPPORT", text: reasonTextFor("LANE_PRIMARY_SUPPORT", p) };
+  }
+  if (max === ww) {
+    return { code: "WEEKDAY_AFFINITY", text: reasonTextFor("WEEKDAY_AFFINITY", p) };
+  }
+
+  return { code: "STABILITY_ANCHOR", text: reasonTextFor("STABILITY_ANCHOR", p) };
+}
+
+/**
+ * @param {string} code
+ * @param {object} ctx
+ */
+function reasonTextFor(code, ctx) {
+  const slot = ctx.slotLabelTh ? String(ctx.slotLabelTh) : "";
+  const pre = slot ? `${slot}: ` : "";
+  return reasonTextFromCode(code, pre);
+}
+
+/**
+ * @param {string} birthdateIso
+ */
+function birthWeekdayFromIso(birthdateIso) {
+  const p = parseIsoYmd(birthdateIso);
+  if (!p) return 0;
+  const d = new Date(Date.UTC(p.y, p.m - 1, p.d));
+  return d.getUTCDay();
+}
+
+/**
  * @param {TimingRequest} input
  * @returns {TimingResponse}
  */
 export function computeTimingV1(input) {
   const lane = input.lane === "moldavite" ? "moldavite" : "sacred_amulet";
-  const primaryKey = String(input.primaryKey || "").trim() || "protection";
+  const primaryKey =
+    String(input.primaryKey || "").trim() || (lane === "moldavite" ? "work" : "protection");
+  const secondaryKeyRaw = input.secondaryKey != null ? String(input.secondaryKey).trim() : "";
+  const secondaryKey = secondaryKeyRaw || undefined;
   const iso = normalizeBirthdateIso(String(input.birthdateIso || ""));
   const parsed = parseIsoYmd(iso);
 
@@ -172,6 +316,12 @@ export function computeTimingV1(input) {
       : compat01;
 
   const ritualMode = resolveRitualMode(lane, primaryKey);
+  const primaryOnlyPow = hourPowerTable(lane, primaryKey);
+  const { blend: powerHour, secondary: powerSecondary } = blendedHourPower(
+    lane,
+    primaryKey,
+    secondaryKey,
+  );
 
   if (!parsed) {
     return {
@@ -187,8 +337,19 @@ export function computeTimingV1(input) {
       summary: {
         topWindowLabel: "—",
         topWeekdayLabel: "—",
-        practicalHint:
-          "ระบุวันเดือนปีเกิดให้ครบเพื่อคำนวณจังหวะที่เหมาะแบบเฉพาะบุคคล — ผลลัพธ์เป็นกรอบอ่าน ไม่การันตีฤกษ์",
+        practicalHint: TIMING_INVALID_BIRTH_PRACTICAL,
+      },
+      debug: {
+        ownerRoot: 0,
+        lifePath: 0,
+        lanePrimaryWeight: null,
+        laneSecondaryWeight: null,
+        compatibilityBoostApplied: 0,
+        ownerFitBoostApplied: 0,
+        primaryAxisDeltaApplied: 0,
+        timingFingerprint: null,
+        timingStableKey: "",
+        version: TIMING_ENGINE_VERSION,
       },
     };
   }
@@ -198,8 +359,21 @@ export function computeTimingV1(input) {
   const birthWeekday = birthWeekdayFromIso(iso);
   const lp9 = lifePathRing9(lifePath);
 
-  const powerHour = hourPowerTable(lane, primaryKey);
   const birthSyn = hourBirthTable(lane);
+
+  const stableKey = [
+    iso,
+    lane,
+    primaryKey,
+    secondaryKey || "",
+    Math.round(compat01 * 100),
+    Math.round(fit01 * 100),
+    lifePath,
+    birthDayRoot,
+    birthWeekday,
+  ].join("|");
+
+  const timingFingerprint = timingFingerprintV11(stableKey);
 
   /** @type {TimingSlot[]} */
   const hourScores = [];
@@ -211,14 +385,32 @@ export function computeTimingV1(input) {
     const laneAff = Math.round((powerHour[win.key] ?? 0.65) * 100);
     const syn = birthSyn[birthWeekday]?.[colIdx] ?? 0.65;
     const weekdayAff = Math.round(clamp(syn, 0.35, 1) * 100);
-    const score = combineTimingScore(
+    const baseScore = combineTimingScore(ownerAff, laneAff, weekdayAff, compat01, fit01);
+    const pw = powerHour[win.key] ?? 0.65;
+    const { final: score, dCompat, dFit } = calibrationBreakdown(baseScore, compat01, fit01, pw);
+    let laneSecondaryLean = false;
+    if (powerSecondary) {
+      const prim = primaryOnlyPow[win.key] ?? 0.65;
+      const sec = powerSecondary[win.key] ?? 0.65;
+      const blendV = powerHour[win.key] ?? 0.65;
+      laneSecondaryLean = sec > prim + 0.04 && blendV > prim + 0.01;
+    }
+    const winLabel = win.labelTh;
+    const r = deriveReasonCode({
+      kind: "hour",
       ownerAff,
       laneAff,
       weekdayAff,
+      score,
+      baseScore,
+      dCompat,
+      dFit,
       compat01,
       fit01,
-    );
-    const r = reasonForScore(score, "hour");
+      laneSecondaryLean,
+      isAvoid: false,
+      slotLabelTh: winLabel,
+    });
     hourScores.push({
       key: win.key,
       score,
@@ -229,10 +421,30 @@ export function computeTimingV1(input) {
 
   hourScores.sort((a, b) => b.score - a.score);
   const bestHours = hourScores.slice(0, 3);
+  const bestKeys = new Set(bestHours.map((h) => h.key));
   const avoidHours = [...hourScores]
     .sort((a, b) => a.score - b.score)
-    .filter((s) => s.score < 48)
-    .slice(0, 2);
+    .filter((s) => s.score < 48 && !bestKeys.has(s.key))
+    .slice(0, 2)
+    .map((s) => {
+      const win = TIMING_HOUR_WINDOWS.find((w) => w.key === s.key);
+      const r = deriveReasonCode({
+        kind: "hour",
+        ownerAff: 50,
+        laneAff: 50,
+        weekdayAff: 50,
+        score: s.score,
+        baseScore: s.score,
+        dCompat: 0,
+        dFit: 0,
+        compat01,
+        fit01,
+        laneSecondaryLean: false,
+        isAvoid: true,
+        slotLabelTh: win?.labelTh,
+      });
+      return { ...s, reasonCode: r.code, reasonText: r.text };
+    });
 
   /** @type {TimingSlot[]} */
   const wdScores = [];
@@ -240,14 +452,25 @@ export function computeTimingV1(input) {
     const ownerAff = clamp(100 - ringDistWeek(birthWeekday, wd) * 10, 40, 98);
     const laneAff = weekdayAffinityScore(lane, primaryKey, wd);
     const weekdayAff = 68 + ((wd * 5 + birthDayRoot * 3) % 28);
-    const score = combineTimingScore(
+    const baseScore = combineTimingScore(ownerAff, laneAff, weekdayAff, compat01, fit01);
+    const pw = dateRootLaneWeight(lane, primaryKey, birthDayRoot);
+    const { final: score, dCompat, dFit } = calibrationBreakdown(baseScore, compat01, fit01, pw);
+    const wdLabel = TIMING_WEEKDAY_LABEL_TH[((wd % 7) + 7) % 7];
+    const r = deriveReasonCode({
+      kind: "weekday",
       ownerAff,
       laneAff,
       weekdayAff,
+      score,
+      baseScore,
+      dCompat,
+      dFit,
       compat01,
       fit01,
-    );
-    const r = reasonForScore(score, "weekday");
+      laneSecondaryLean: false,
+      isAvoid: false,
+      slotLabelTh: wdLabel,
+    });
     wdScores.push({
       key: `weekday_${wd}`,
       score,
@@ -264,14 +487,24 @@ export function computeTimingV1(input) {
     const ownerAff = clamp(100 - ringDist9(birthDayRoot, r) * 9 - ringDist9(lp9, r) * 6, 38, 98);
     const laneAff = Math.round(dateRootLaneWeight(lane, primaryKey, r) * 100);
     const weekdayAff = weekdayAffinityScore(lane, primaryKey, birthWeekday);
-    const score = combineTimingScore(
+    const baseScore = combineTimingScore(ownerAff, laneAff, weekdayAff, compat01, fit01);
+    const pw = dateRootLaneWeight(lane, primaryKey, r);
+    const { final: score, dCompat, dFit } = calibrationBreakdown(baseScore, compat01, fit01, pw);
+    const rs = deriveReasonCode({
+      kind: "root",
       ownerAff,
       laneAff,
       weekdayAff,
+      score,
+      baseScore,
+      dCompat,
+      dFit,
       compat01,
       fit01,
-    );
-    const rs = reasonForScore(score, "root");
+      laneSecondaryLean: false,
+      isAvoid: false,
+      slotLabelTh: `ราก ${r}`,
+    });
     rootScores.push({
       key: String(r),
       score,
@@ -294,8 +527,42 @@ export function computeTimingV1(input) {
   let confidence = "medium";
   if (spread >= 28 && compat01 >= 0.68) confidence = "high";
   if (!bestHours.length || spread < 12) confidence = "low";
+  if (fit01 >= 0.72 && spread >= 22) confidence = confidence === "low" ? "medium" : confidence;
 
-  const practicalHint = `${ritualMode}: เน้น${topWindowLabel} และ${topWeekdayLabel} เมื่อต้องการหนุนด้านที่เด่นของวัตถุ — เป็นกรอบอ่าน ไม่การันตีฤกษ์`;
+  const axisHintSacred = SACRED_AXIS_HINT_TH[primaryKey] || SACRED_AXIS_HINT_TH.protection;
+  const axisHintMold = MOLDAVITE_AXIS_HINT_TH[primaryKey] || MOLDAVITE_AXIS_HINT_TH.work;
+
+  const practicalHint = buildPracticalHintTh(
+    lane,
+    ritualMode,
+    topWindowLabel,
+    topWeekdayLabel,
+    lane === "moldavite" ? axisHintMold : axisHintSacred,
+  );
+
+  const topHourKey = bestHours[0]?.key;
+  const topPw = topHourKey ? powerHour[topHourKey] ?? null : null;
+  const topSecW =
+    topHourKey && powerSecondary ? powerSecondary[topHourKey] ?? null : null;
+
+  let topHourBase = 0;
+  if (topHourKey) {
+    const win = TIMING_HOUR_WINDOWS.find((w) => w.key === topHourKey);
+    const colIdx = TIMING_HOUR_WINDOWS.findIndex((w) => w.key === topHourKey);
+    if (win && colIdx >= 0) {
+      const anchor = TIMING_WINDOW_OWNER_ANCHOR[win.key] ?? 5;
+      const d1 = ringDist9(birthDayRoot, anchor);
+      const d2 = ringDist9(lp9, anchor);
+      const ownerAff = clamp(100 - d1 * 11 - d2 * 7, 35, 98);
+      const laneAff = Math.round((powerHour[win.key] ?? 0.65) * 100);
+      const syn = birthSyn[birthWeekday]?.[colIdx] ?? 0.65;
+      const weekdayAff = Math.round(clamp(syn, 0.35, 1) * 100);
+      topHourBase = combineTimingScore(ownerAff, laneAff, weekdayAff, compat01, fit01);
+    }
+  }
+  const topCalib = topHourKey
+    ? calibrationBreakdown(topHourBase, compat01, fit01, powerHour[topHourKey] ?? 0.65)
+    : { dCompat: 0, dFit: 0, dAxis: 0 };
 
   return {
     engineVersion: TIMING_ENGINE_VERSION,
@@ -316,15 +583,19 @@ export function computeTimingV1(input) {
       topWeekdayLabel,
       practicalHint,
     },
+    debug: {
+      ownerRoot: birthDayRoot,
+      lifePath,
+      lanePrimaryWeight: topPw != null ? Math.round(topPw * 1000) / 1000 : null,
+      laneSecondaryWeight: topSecW != null ? Math.round(topSecW * 1000) / 1000 : null,
+      lanePrimaryKey: primaryKey,
+      laneSecondaryKey: secondaryKey || null,
+      compatibilityBoostApplied: topCalib.dCompat,
+      ownerFitBoostApplied: topCalib.dFit,
+      primaryAxisDeltaApplied: topCalib.dAxis,
+      timingFingerprint,
+      timingStableKey: stableKey,
+      version: TIMING_ENGINE_VERSION,
+    },
   };
-}
-
-/**
- * @param {string} birthdateIso
- */
-function birthWeekdayFromIso(birthdateIso) {
-  const p = parseIsoYmd(birthdateIso);
-  if (!p) return 0;
-  const d = new Date(Date.UTC(p.y, p.m - 1, p.d));
-  return d.getUTCDay();
 }

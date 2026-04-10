@@ -377,9 +377,44 @@ export function normalizeReportPayloadForRender(input) {
       t.ownerProfile && typeof t.ownerProfile === "object"
         ? /** @type {Record<string, unknown>} */ (t.ownerProfile)
         : {};
+    const engRaw = str(t.engineVersion);
+    const engineVersion =
+      engRaw === "timing_v1_1" || engRaw === "timing_v1" ? engRaw : "timing_v1";
+    const dbgIn =
+      t.debug && typeof t.debug === "object"
+        ? /** @type {Record<string, unknown>} */ (t.debug)
+        : null;
+    /** @type {import("../../services/reports/reportPayload.types.js").ReportTimingDebugV11 | undefined} */
+    let debug;
+    if (dbgIn) {
+      const lp = dbgIn.lanePrimaryWeight;
+      const ls = dbgIn.laneSecondaryWeight;
+      debug = {
+        ownerRoot: numOrZero(dbgIn.ownerRoot),
+        lifePath: numOrZero(dbgIn.lifePath),
+        lanePrimaryWeight:
+          lp == null || lp === "" || !Number.isFinite(Number(lp))
+            ? null
+            : Math.round(Number(lp) * 1000) / 1000,
+        laneSecondaryWeight:
+          ls == null || ls === "" || !Number.isFinite(Number(ls))
+            ? null
+            : Math.round(Number(ls) * 1000) / 1000,
+        lanePrimaryKey: dbgIn.lanePrimaryKey == null ? null : str(dbgIn.lanePrimaryKey).slice(0, 48),
+        laneSecondaryKey:
+          dbgIn.laneSecondaryKey == null ? null : str(dbgIn.laneSecondaryKey).slice(0, 48),
+        compatibilityBoostApplied: numOrZero(dbgIn.compatibilityBoostApplied),
+        ownerFitBoostApplied: numOrZero(dbgIn.ownerFitBoostApplied),
+        primaryAxisDeltaApplied: numOrZero(dbgIn.primaryAxisDeltaApplied),
+        timingFingerprint:
+          dbgIn.timingFingerprint == null ? null : str(dbgIn.timingFingerprint).slice(0, 24),
+        timingStableKey: str(dbgIn.timingStableKey).replace(/\s+/g, " ").trim().slice(0, 240),
+        version: str(dbgIn.version).slice(0, 32),
+      };
+    }
     /** @type {import("../../services/reports/reportPayload.types.js").ReportTimingV1} */
     payload.timingV1 = {
-      engineVersion: "timing_v1",
+      engineVersion: engineVersion === "timing_v1_1" ? "timing_v1_1" : "timing_v1",
       lane: t.lane === "moldavite" ? "moldavite" : "sacred_amulet",
       ritualMode: str(t.ritualMode).slice(0, 32),
       confidence:
@@ -398,6 +433,7 @@ export function normalizeReportPayloadForRender(input) {
         topWeekdayLabel: str(sum.topWeekdayLabel).slice(0, 120),
         practicalHint: str(sum.practicalHint).replace(/\s+/g, " ").trim().slice(0, 400),
       },
+      ...(debug ? { debug } : {}),
     };
   }
 

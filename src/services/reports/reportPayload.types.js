@@ -61,8 +61,22 @@
  * @property {string} reasonCode
  * @property {string} reasonText
  *
+ * @typedef {Object} ReportTimingDebugV11
+ * @property {number} ownerRoot
+ * @property {number} lifePath
+ * @property {number|null} lanePrimaryWeight
+ * @property {number|null} laneSecondaryWeight
+ * @property {string|null} lanePrimaryKey
+ * @property {string|null} laneSecondaryKey
+ * @property {number} compatibilityBoostApplied
+ * @property {number} ownerFitBoostApplied
+ * @property {number} primaryAxisDeltaApplied
+ * @property {string|null} timingFingerprint
+ * @property {string} timingStableKey
+ * @property {string} version
+ *
  * @typedef {Object} ReportTimingV1
- * @property {"timing_v1"} engineVersion
+ * @property {"timing_v1"|"timing_v1_1"} engineVersion
  * @property {"sacred_amulet"|"moldavite"} lane
  * @property {string} ritualMode
  * @property {"high"|"medium"|"low"} confidence
@@ -72,6 +86,7 @@
  * @property {ReportTimingSlot[]} bestDateRoots
  * @property {ReportTimingSlot[]} avoidHours
  * @property {{ topWindowLabel: string, topWeekdayLabel: string, practicalHint: string }} summary
+ * @property {ReportTimingDebugV11} [debug] — introspection only; do not render to users
  */
 
 /**

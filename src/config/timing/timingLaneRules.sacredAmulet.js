@@ -12,7 +12,7 @@ export const SACRED_AMULET_HOUR_POWER_WEIGHT = Object.freeze({
   protection: Object.freeze(
     Object.fromEntries(
       W.map((k, i) => {
-        const v = [0.62, 0.9, 0.72, 0.68, 0.75, 0.7, 0.48][i];
+        const v = [0.64, 0.86, 0.72, 0.72, 0.78, 0.74, 0.52][i];
         return [k, v];
       }),
     ),
@@ -36,7 +36,7 @@ export const SACRED_AMULET_HOUR_POWER_WEIGHT = Object.freeze({
   luck: Object.freeze(
     Object.fromEntries(
       W.map((k, i) => {
-        const v = [0.55, 0.92, 0.7, 0.68, 0.88, 0.65, 0.5][i];
+        const v = [0.52, 0.94, 0.74, 0.66, 0.9, 0.62, 0.44][i];
         return [k, v];
       }),
     ),

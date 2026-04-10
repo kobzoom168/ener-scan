@@ -1,7 +1,7 @@
 /**
  * Timing Engine v1 — JSDoc contracts (truth layer; not wording).
  *
- * @typedef {"timing_v1"} TimingEngineVersion
+ * @typedef {"timing_v1"|"timing_v1_1"} TimingEngineVersion
  * @typedef {"sacred_amulet"|"moldavite"} TimingLaneId
  * @typedef {"high"|"medium"|"low"} TimingConfidence
  * @typedef {"ตั้งจิต"|"สวดภาวนา"|"ขอพรสั้น"|"เสริมบารมี"} TimingRitualModeTh
@@ -36,6 +36,20 @@
  * @property {string} topWeekdayLabel
  * @property {string} practicalHint
  *
+ * @typedef {Object} TimingDebugV11
+ * @property {number} ownerRoot
+ * @property {number} lifePath
+ * @property {number|null} lanePrimaryWeight
+ * @property {number|null} laneSecondaryWeight
+ * @property {string|null} lanePrimaryKey
+ * @property {string|null} laneSecondaryKey
+ * @property {number} compatibilityBoostApplied
+ * @property {number} ownerFitBoostApplied
+ * @property {number} primaryAxisDeltaApplied
+ * @property {string|null} timingFingerprint
+ * @property {string} timingStableKey
+ * @property {string} version
+ *
  * @typedef {Object} TimingResponse
  * @property {TimingEngineVersion} engineVersion
  * @property {TimingLaneId} lane
@@ -47,6 +61,7 @@
  * @property {TimingSlot[]} bestDateRoots
  * @property {TimingSlot[]} avoidHours
  * @property {TimingSummary} summary
+ * @property {TimingDebugV11} [debug]
  */
 
 export {};
