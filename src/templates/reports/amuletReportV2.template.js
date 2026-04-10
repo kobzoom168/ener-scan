@@ -719,9 +719,9 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-life-score { color: var(--mv2a-life-score); font-weight: 700; font-size: 0.76rem; text-align: right; }
     .mv2-life-blurb { color: var(--mv2a-life-blurb); line-height: 1.35; }
     .mv2-life-hint { margin: 0 0 0.45rem; font-size: 0.65rem; color: var(--mv2a-muted); opacity: 0.8; }
-    /* Footer disclaimer: after main report flow, above trust strip — no card; clearer than muted, lighter than body */
-    .mv2a-footer-note {
-      margin: 1.35rem 0 0;
+    /* Footer disclaimer: inside .mv2-trust (replaces former trustNote slot) — no card */
+    .mv2-trust .mv2a-footer-note {
+      margin: 0 0 0.85rem;
       padding: 0 0.2rem;
       font-size: 0.8rem;
       line-height: 1.55;
@@ -838,10 +838,8 @@ export function renderAmuletReportV2Html(payload) {
       </div>
     </section>
 
-    <p class="mv2a-footer-note" role="note">${usageDisclaimer}</p>
-
     <footer class="mv2-trust">
-      ${vm.trustNote ? `<p>${escapeHtml(vm.trustNote)}</p>` : ""}
+      <p class="mv2a-footer-note" role="note">${usageDisclaimer}</p>
       ${amuletHtmlShowRenderMetaLine() ? `<p class="mv2-render-meta">render ${escapeHtml(vm.rendererId)} · เวอร์ชัน ${escapeHtml(vm.reportVersion)}${vm.modelLabel ? ` · ${escapeHtml(vm.modelLabel)}` : ""}</p>` : ""}
     </footer>
   </div>
