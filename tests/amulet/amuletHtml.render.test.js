@@ -92,6 +92,10 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2-owner-mini"'));
   assert.ok(html.includes('class="mv2-int-card"'));
   assert.ok(html.includes('class="mv2-disclaimer"'));
+  assert.ok(html.includes("แชร์รายงาน"));
+  assert.ok(html.includes('id="mv2-share-native"'));
+  assert.ok(html.includes("https://lin.ee/6YZeFZ1"));
+  assert.ok(html.includes("navigator.share"));
   assert.ok(html.includes("ข้อความจำกัดความรับผิดชอบ บรรทัดเดียว"));
   assert.ok(html.includes("ชิ้นนี้ทำงานกับคุณอย่างไร"));
   assert.ok(html.includes("--mv2-font-th"));

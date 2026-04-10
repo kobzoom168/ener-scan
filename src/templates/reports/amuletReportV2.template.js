@@ -221,6 +221,9 @@ export function renderAmuletReportV2Html(payload) {
 
   const usageDisclaimer = escapeHtml(vm.usageCaution.disclaimer || "");
 
+  const shareTitleJson = JSON.stringify(`${h.subtypeLabel || "พระเครื่อง"} · Ener Scan`);
+  const shareTextJson = JSON.stringify("ดูรายงานพลังจาก Ener Scan ได้ที่ลิงก์นี้");
+
   const heroMediaCol = h.objectImageUrl
     ? `<div class="mv2a-media"><img src="${escapeHtml(h.objectImageUrl)}" alt="" loading="lazy" /></div>`
     : "";
@@ -608,6 +611,50 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-life-blurb { color: var(--mv2a-life-blurb); line-height: 1.35; }
     .mv2-life-hint { margin: 0 0 0.45rem; font-size: 0.65rem; color: var(--mv2a-muted); opacity: 0.8; }
     .mv2-disclaimer { margin: 0; font-size: 0.76rem; line-height: 1.45; color: var(--mv2a-disclaimer); }
+    .mv2-share-card h2 { font-size: 0.92rem; }
+    .mv2-share-note { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: var(--mv2a-muted); }
+    .mv2-share-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.55rem;
+    }
+    @media (max-width: 480px) {
+      .mv2-share-actions { grid-template-columns: 1fr; }
+    }
+    .mv2-share-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 2.55rem;
+      padding: 0.5rem 0.65rem;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      line-height: 1.28;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mv2-share-btn--primary {
+      background: rgba(184, 135, 27, 0.1);
+      border-color: var(--mv2a-badge-border);
+      color: var(--mv2a-gold-dim);
+    }
+    .mv2-share-btn--line {
+      background: #06c755;
+      border-color: #05b34c;
+      color: #ffffff;
+    }
+    html.mv2a-theme-dark .mv2-share-btn--primary {
+      background: rgba(232, 197, 71, 0.1);
+      border-color: var(--mv2a-badge-border);
+      color: var(--mv2a-gold);
+    }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--mv2a-trust-border); text-align: center; font-size: 0.78rem; color: var(--mv2a-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: var(--mv2a-render-meta); }
   </style>
@@ -664,11 +711,55 @@ export function renderAmuletReportV2Html(payload) {
       <p class="mv2-disclaimer">${usageDisclaimer}</p>
     </section>
 
+    <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
+      <h2 id="mv2-share-h">แชร์รายงาน</h2>
+      <p class="mv2-share-note">แชร์ลิงก์หน้านี้หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูรายงานได้สะดวก</p>
+      <div class="mv2-share-actions">
+        <button type="button" class="mv2-share-btn mv2-share-btn--primary" id="mv2-share-native">แชร์ไปยัง Facebook / IG / X / อื่น ๆ</button>
+        <a class="mv2-share-btn mv2-share-btn--line" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer">Add เข้า LINE OA</a>
+      </div>
+    </section>
+
     <footer class="mv2-trust">
       ${vm.trustNote ? `<p>${escapeHtml(vm.trustNote)}</p>` : ""}
       ${amuletHtmlShowRenderMetaLine() ? `<p class="mv2-render-meta">render ${escapeHtml(vm.rendererId)} · เวอร์ชัน ${escapeHtml(vm.reportVersion)}${vm.modelLabel ? ` · ${escapeHtml(vm.modelLabel)}` : ""}</p>` : ""}
     </footer>
   </div>
+  <script>
+(function () {
+  var shareTitle = ${shareTitleJson};
+  var shareText = ${shareTextJson};
+  var btn = document.getElementById("mv2-share-native");
+  if (!btn) return;
+  function fallbackCopy(url) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        function () {
+          window.alert("คัดลอกลิงก์แล้ว");
+        },
+        function () {
+          window.prompt("คัดลอกลิงก์:", url);
+        },
+      );
+    } else {
+      window.prompt("คัดลอกลิงก์:", url);
+    }
+  }
+  btn.addEventListener("click", function () {
+    var url = String(window.location.href || "");
+    if (navigator.share) {
+      navigator
+        .share({ title: shareTitle, text: shareText, url: url })
+        .catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          fallbackCopy(url);
+        });
+    } else {
+      fallbackCopy(url);
+    }
+  });
+})();
+  </script>
 </body>
 </html>`;
 }
