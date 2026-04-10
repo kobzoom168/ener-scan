@@ -343,19 +343,19 @@ export function renderAmuletReportV2Html(payload) {
   <style>
     :root {
       color-scheme: light;
-      /* Default: ขาวทั้งหน้า — พื้นหลัง + การ์ด #fff; ตัวอักษรเข้ม + ทอง sacred_amulet */
+      /* Light neutral shell — เทา-ขาวนุ่ม + การ์ดแยกชั้น; ตัวอักษรเข้ม + ทอง sacred_amulet */
       --mv2a-gold: #b8871b;
       --mv2a-gold-dim: #8f6710;
-      --mv2a-bg: #ffffff;
-      --mv2a-card: #ffffff;
+      --mv2a-bg: #f6f6f4;
+      --mv2a-card: #fcfcfa;
       --mv2a-muted: #7a6a58;
       --mv2a-text: #241c12;
       --mv2a-text-body: rgba(36, 28, 18, 0.92);
       --mv2a-badge-border: rgba(184, 135, 27, 0.28);
       --mv2a-media-border: rgba(184, 135, 27, 0.22);
       --mv2a-hero-clarifier: rgba(90, 78, 65, 0.88);
-      --mv2a-card-border: rgba(184, 135, 27, 0.2);
-      --mv2a-card-elev: 0 1px 3px rgba(0, 0, 0, 0.06);
+      --mv2a-card-border: rgba(100, 92, 82, 0.18);
+      --mv2a-card-elev: 0 1px 2px rgba(0, 0, 0, 0.05);
       --mv2a-graph-accent: rgba(184, 135, 27, 0.45);
       --mv2a-radar-ring-outer-fill: rgba(184, 135, 27, 0.06);
       --mv2a-radar-ring-outer-stroke: rgba(143, 103, 16, 0.3);
@@ -376,38 +376,38 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-radar-lbl-top1-n: #5c420a;
       --mv2a-radar-lbl-top2-t: rgba(95, 72, 32, 0.95);
       --mv2a-radar-lbl-top2-n: rgba(120, 88, 28, 0.95);
-      --mv2a-radar-key: rgba(100, 88, 76, 0.78);
+      --mv2a-radar-key: rgba(95, 90, 84, 0.52);
       --mv2a-radar-dot-border: rgba(36, 28, 18, 0.1);
       --mv2a-radar-dot-owner: rgba(115, 125, 138, 0.88);
       --mv2a-radar-dot-amulet: rgba(184, 135, 27, 0.95);
       --mv2a-anim-peak-glow1: rgba(184, 135, 27, 0.28);
       --mv2a-anim-peak-glow2: rgba(184, 135, 27, 0.5);
       /* สรุปผลแถวเดียว: ปิลล์ครีม (label ซ้าย / ค่าขวา) — ใกล้ตัวอย่าง UI */
-      --mv2a-gsum-bg: #fdfbf7;
-      --mv2a-gsum-border: #e8dcc4;
-      --mv2a-gsum-lead-bg: #fcf8f3;
-      --mv2a-gsum-lead-border: #e0d4bc;
-      --mv2a-gsum-shadow: 0 1px 2px rgba(55, 40, 20, 0.05), 0 2px 10px rgba(55, 40, 20, 0.04);
+      --mv2a-gsum-bg: #f2f2ef;
+      --mv2a-gsum-border: #d8d6d1;
+      --mv2a-gsum-lead-bg: #eae9e5;
+      --mv2a-gsum-lead-border: #cbc8c0;
+      --mv2a-gsum-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 5px rgba(0, 0, 0, 0.03);
       --mv2a-gsum-k: #78716c;
       --mv2a-gsum-v: #1c1917;
       --mv2a-gsum-v-lead: #b8860b;
       --mv2a-owner-chip-bg: rgba(184, 135, 27, 0.09);
       --mv2a-owner-chip-border: rgba(184, 135, 27, 0.24);
       --mv2a-owner-chip-text: rgba(50, 40, 26, 0.92);
-      --mv2a-owner-mini-bg: #ffffff;
-      --mv2a-owner-mini-border: rgba(184, 135, 27, 0.18);
+      --mv2a-owner-mini-bg: #f8f8f6;
+      --mv2a-owner-mini-border: rgba(100, 92, 82, 0.2);
       --mv2a-owner-mini-t: rgba(143, 103, 16, 0.88);
       --mv2a-owner-mini-b: rgba(36, 28, 18, 0.9);
       --mv2a-owner-note: rgba(100, 88, 74, 0.72);
-      --mv2a-int-bg: #ffffff;
-      --mv2a-int-border: rgba(184, 135, 27, 0.18);
+      --mv2a-int-bg: #f8f8f6;
+      --mv2a-int-border: rgba(100, 92, 82, 0.18);
       --mv2a-int-kicker: rgba(143, 103, 16, 0.92);
       --mv2a-int-main: rgba(36, 28, 18, 0.95);
       --mv2a-int-sub: rgba(100, 88, 76, 0.82);
       --mv2a-para: rgba(48, 40, 30, 0.92);
-      --mv2a-life-border: rgba(184, 135, 27, 0.16);
-      --mv2a-life-row-border: rgba(0, 0, 0, 0.06);
-      --mv2a-life-row-alt: rgba(0, 0, 0, 0.02);
+      --mv2a-life-border: rgba(100, 92, 82, 0.16);
+      --mv2a-life-row-border: rgba(0, 0, 0, 0.07);
+      --mv2a-life-row-alt: rgba(20, 22, 26, 0.028);
       --mv2a-life-name: rgba(36, 28, 18, 0.92);
       --mv2a-life-score: #b8871b;
       --mv2a-life-blurb: rgba(72, 62, 50, 0.9);
@@ -650,12 +650,13 @@ export function renderAmuletReportV2Html(payload) {
     .mv2a-radar-lbl--top2 .mv2a-radar-axis-t { color: var(--mv2a-radar-lbl-top2-t); font-weight: 650; }
     .mv2a-radar-lbl--top2 .mv2a-radar-axis-n { color: var(--mv2a-radar-lbl-top2-n); }
     .mv2a-radar-key {
-      margin: 0.38rem 0 0;
+      margin: 0.3rem 0 0;
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 0.55rem;
-      font-size: 0.65rem;
+      gap: 0.48rem;
+      font-size: 0.58rem;
+      font-weight: 500;
       color: var(--mv2a-radar-key);
     }
     .mv2a-radar-key-chip { display: inline-flex; align-items: center; gap: 0.3rem; }

@@ -207,7 +207,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     String(fs.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม";
   const clarifierLine = mainToneMatchesGraphPeak(mainShort, ord[0])
     ? ""
-    : `โทนหลักเป็นภาพรวม · ตอนนี้เด่นสุดที่ ${AMULET_PEAK_SHORT_THAI[ord[0]] || topLabel}`;
+    : `ภาพรวม ${mainShort} · เด่นสุด ${AMULET_PEAK_SHORT_THAI[ord[0]] || topLabel}`;
 
   return {
     rendererId: "amulet-html-v2",
