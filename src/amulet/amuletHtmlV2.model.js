@@ -53,8 +53,8 @@ function clamp0100(v) {
 }
 
 /**
- * Sacred_amulet timing card — confident product copy for HTML only.
- * Uses `timingV1` selections (truth) + graph top axes; does not replace engine math or payload strings.
+ * Sacred_amulet timing card — HTML surface only.
+ * Hour/weekday lines compose engine labels + graph axes; `hint` uses `timingV1.summary.practicalHint` (see `buildPracticalHintTh` in timing copy).
  *
  * @param {object} tv — `timingV1` from engine (unchanged truth)
  * @param {string} peakKey
@@ -82,7 +82,7 @@ export function buildSacredAmuletTimingCardDisplay(tv, peakKey, secondKey) {
       ? `${topWeekdayLabel} หนุนพลัง${s0}และ${s1}ได้ดี`
       : topWeekdayLabel;
 
-  const hint = `ใช้${ritualMode}คู่กับช่วงเวลาและวันที่แนะนำ พลังจะส่งตัวง่ายและเสริมดวงได้ชัดขึ้น`;
+  const hint = String(tv.summary?.practicalHint || "").trim();
 
   return {
     heading: "จังหวะเสริมพลัง",

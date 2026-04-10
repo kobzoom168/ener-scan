@@ -101,7 +101,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
       summary: {
         topWindowLabel: "ช่วงเช้า 07:00–10:59",
         topWeekdayLabel: "วันพฤหัสบดี",
-        practicalHint: "ตั้งจิต: เน้นช่วงที่ส่งกับจังหวะของคุณ — ทดสอบ",
+        practicalHint:
+          "ใช้ตั้งจิตคู่กับ ช่วงเช้า 07:00–10:59 และ วันพฤหัสบดี หนุนพลังคุ้มครองและเสริมบารมีภายในได้ดี เสริมดวงให้ขึ้นง่าย",
       },
     },
   });
@@ -134,10 +135,11 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("ส่งกับพลัง"));
   assert.ok(html.includes("หนุนพลัง"));
   assert.ok(
-    html.includes("เสริมดวงได้ชัดขึ้น"),
-    "timing hint is product-like, not engine disclaimer",
+    html.includes("เสริมดวงให้ขึ้นง่าย"),
+    "timing hint follows engine practicalHint (confident, no disclaimer)",
   );
   assert.ok(!html.includes("เป็นกรอบอ่าน"));
+  assert.ok(!html.includes("ไม่การันตีฤกษ์"));
   assert.ok(!html.includes("ไม่การันตี"));
   assert.ok(!html.includes("ข้อจำกัด"));
   assert.ok(html.includes("แชร์รายงาน"));

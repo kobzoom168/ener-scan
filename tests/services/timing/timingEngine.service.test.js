@@ -173,7 +173,8 @@ test("computeTimingV1: same birthdate — sacred_amulet vs moldavite not identic
     mv.bestHours.map((h) => h.key),
   );
   assert.notEqual(sa.debug.timingFingerprint, mv.debug.timingFingerprint);
-  assert.ok(sa.summary.practicalHint.includes("หมุดพลัง"));
+  assert.ok(sa.summary.practicalHint.includes("หนุนพลัง"));
+  assert.ok(!sa.summary.practicalHint.includes("เป็นกรอบ"));
   assert.ok(mv.summary.practicalHint.includes("โฟกัส"));
 });
 
