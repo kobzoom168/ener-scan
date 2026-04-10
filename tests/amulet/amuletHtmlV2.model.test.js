@@ -50,6 +50,11 @@ function minimalPayload(overrides = {}) {
 test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด่น / รองลงมา)", () => {
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
   assert.ok(
+    vm.usageCaution.disclaimer.includes("วันเดือนปีเกิด") &&
+      vm.usageCaution.disclaimer.includes("@Ener Scan"),
+    "fixed sacred_amulet usage disclaimer (not payload lines)",
+  );
+  assert.ok(
     !JSON.stringify(vm).includes("\u2014"),
     "sacred_amulet VM copy avoids em dash (cleaner Thai)",
   );

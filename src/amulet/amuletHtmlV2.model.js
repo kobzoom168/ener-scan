@@ -6,6 +6,10 @@ import {
 } from "./amuletScores.util.js";
 import { buildAxisLifeBlurb } from "./amuletMeaningBlurbs.util.js";
 
+/** Sacred_amulet full-report disclaimer (ข้อจำกัด) — concise, owner- and birthdate-aware. */
+export const AMULET_HTML_V2_USAGE_DISCLAIMER =
+  "พระหรือเครื่องรางจะเด่นด้านไหน ไม่ได้ขึ้นอยู่กับวัตถุอย่างเดียว แต่ขึ้นอยู่กับวันเดือนปีเกิด พื้นฐานดวง และการปฏิบัติตัวของเจ้าของด้วย แต่ละคนจึงมีประสบการณ์ต่างกัน @Ener Scan";
+
 /**
  * True when hero โทนหลัก text matches the dominant score axis (no extra clarifier).
  * @param {string} mainShort
@@ -197,13 +201,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       : buildAxisLifeBlurb(seed, row.key, idx);
   });
 
-  const usageLines = Array.isArray(hr?.usageCautionLines)
-    ? hr.usageCautionLines.map((x) => String(x || "").trim()).filter(Boolean)
-    : [];
-  const usageDisclaimer =
-    usageLines.length > 0
-      ? usageLines.join(" ").replace(/\s+/g, " ").trim().slice(0, 320)
-      : "ผลลัพธ์ขึ้นกับบริบทการใช้งานของคุณ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน";
+  const usageDisclaimer = AMULET_HTML_V2_USAGE_DISCLAIMER;
 
   const mainShort =
     String(fs.mainEnergyShort || "").trim() || "พลังมุ่งเน้นรวม";

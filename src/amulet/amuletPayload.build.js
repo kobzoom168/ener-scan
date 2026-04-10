@@ -2,6 +2,7 @@ import {
   computeAmuletPowerScoresDeterministicV1,
   POWER_LABEL_THAI,
 } from "./amuletScores.util.js";
+import { AMULET_HTML_V2_USAGE_DISCLAIMER } from "./amuletHtmlV2.model.js";
 
 /**
  * @param {import("./amuletScores.util.js").AmuletPowerKey} primary
@@ -40,9 +41,8 @@ function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, surface
 }
 
 function buildAmuletHtmlReportPlaceholder() {
-  const usageCautionLines = [
-    "ผลลัพธ์ขึ้นกับบริบทคุณ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
-  ];
+  /** Same line as HTML ข้อจำกัด (`AMULET_HTML_V2_USAGE_DISCLAIMER` in view model). */
+  const usageCautionLines = [AMULET_HTML_V2_USAGE_DISCLAIMER];
 
   /** Blurbs generated in `amuletHtmlV2.model` + `amuletMeaningBlurbs.util` when empty. */
   return { lifeAreaBlurbs: {}, usageCautionLines };
