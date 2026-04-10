@@ -393,12 +393,13 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-radar-dot-amulet: rgba(184, 135, 27, 0.95);
       --mv2a-anim-peak-glow1: rgba(184, 135, 27, 0.28);
       --mv2a-anim-peak-glow2: rgba(184, 135, 27, 0.5);
-      --mv2a-radar-peak2-halo: rgba(220, 38, 38, 0.22);
-      --mv2a-radar-peak2-fill: #dc2626;
-      --mv2a-radar-peak2-stroke: rgba(254, 226, 226, 0.95);
-      --mv2a-anim-peak2-glow1: rgba(220, 38, 38, 0.32);
-      --mv2a-anim-peak2-glow2: rgba(248, 113, 113, 0.52);
-      --mv2a-radar-lbl-top2-pulse-glow: rgba(185, 28, 28, 0.38);
+      /* จุดรอง: โทนเดียวกับ legend “คุณ” (--mv2a-radar-dot-owner) */
+      --mv2a-radar-peak2-halo: rgba(115, 125, 138, 0.22);
+      --mv2a-radar-peak2-fill: rgb(115, 125, 138);
+      --mv2a-radar-peak2-stroke: rgba(248, 250, 252, 0.92);
+      --mv2a-anim-peak2-glow1: rgba(115, 125, 138, 0.3);
+      --mv2a-anim-peak2-glow2: rgba(148, 163, 184, 0.48);
+      --mv2a-radar-lbl-top2-pulse-glow: rgba(115, 125, 138, 0.34);
       /* สรุปผลแถวเดียว: ปิลล์ครีม (label ซ้าย / ค่าขวา) — ใกล้ตัวอย่าง UI */
       --mv2a-gsum-bg: #f2f2ef;
       --mv2a-gsum-border: #d8d6d1;
@@ -477,12 +478,12 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-radar-dot-amulet: rgba(232, 197, 71, 0.95);
       --mv2a-anim-peak-glow1: rgba(250, 220, 120, 0.26);
       --mv2a-anim-peak-glow2: rgba(250, 220, 120, 0.52);
-      --mv2a-radar-peak2-halo: rgba(248, 113, 113, 0.2);
-      --mv2a-radar-peak2-fill: #f87171;
-      --mv2a-radar-peak2-stroke: rgba(254, 202, 202, 0.78);
-      --mv2a-anim-peak2-glow1: rgba(248, 113, 113, 0.38);
-      --mv2a-anim-peak2-glow2: rgba(252, 165, 165, 0.58);
-      --mv2a-radar-lbl-top2-pulse-glow: rgba(248, 113, 113, 0.45);
+      --mv2a-radar-peak2-halo: rgba(148, 163, 184, 0.22);
+      --mv2a-radar-peak2-fill: rgb(148, 163, 184);
+      --mv2a-radar-peak2-stroke: rgba(241, 245, 249, 0.72);
+      --mv2a-anim-peak2-glow1: rgba(148, 163, 184, 0.34);
+      --mv2a-anim-peak2-glow2: rgba(186, 198, 214, 0.52);
+      --mv2a-radar-lbl-top2-pulse-glow: rgba(148, 163, 184, 0.4);
       --mv2a-gsum-bg: rgba(255, 252, 245, 0.09);
       --mv2a-gsum-border: rgba(232, 197, 71, 0.28);
       --mv2a-gsum-lead-bg: rgba(232, 197, 71, 0.14);
