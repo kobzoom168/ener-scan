@@ -85,10 +85,10 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     bodyText.includes("พระเครื่อง · เด่นคุ้มครอง"),
     "tagline uses Flex-only short alias for top dimension",
   );
-  assert.ok(bodyText.includes("เด่นสุด"));
+  assert.ok(bodyText.includes("พลังเด่น") && bodyText.includes("รองลงมา"));
   assert.ok(
-    bodyText.includes("เด่นคุ้มครอง") && bodyText.includes("รองเมตตา"),
-    "summary is two compact lines (เด่น/รอง) with Flex aliases",
+    bodyText.includes("คุ้มครอง") && bodyText.includes("เมตตา"),
+    "summary pills show top-two Flex alias values",
   );
   assert.ok(
     bodyText.includes("เด่น") && bodyText.includes("รอง"),
@@ -131,8 +131,8 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     "bar scores stay visually subordinate to labels (skin only)",
   );
 
-  // Summary block: label + value (not single-line raw fitLine)
-  assert.ok(bodyText.includes('"text":"เด่นสุด"'));
+  // Summary block: pill rows (not single-line raw fitLine)
+  assert.ok(bodyText.includes('"text":"พลังเด่น"'));
 
   /** Bars block: each category is label row then [meter | score], not 3-column single row. */
   const lifeBlock = findBarLifeBlockDeep(flex.contents.body);
@@ -183,7 +183,7 @@ test("buildAmuletSummaryFirstFlex: absurd fitLine does not flood Flex (summary f
     "long fitLine not dumped into Flex JSON (two-line summary from powerCategories)",
   );
   assert.ok(
-    bodyText.includes("เด่นคุ้มครอง") && bodyText.includes("รองเมตตา"),
+    bodyText.includes("คุ้มครอง") && bodyText.includes("เมตตา"),
     "summary takeaway stays short and complete from sorted dimensions",
   );
 });

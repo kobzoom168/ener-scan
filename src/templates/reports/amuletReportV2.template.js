@@ -221,7 +221,7 @@ export function renderAmuletReportV2Html(payload) {
 
   const usageDisclaimer = escapeHtml(vm.usageCaution.disclaimer || "");
 
-  const media = h.objectImageUrl
+  const heroMediaCol = h.objectImageUrl
     ? `<div class="mv2a-media"><img src="${escapeHtml(h.objectImageUrl)}" alt="" loading="lazy" /></div>`
     : "";
 
@@ -273,13 +273,15 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-radar-dot-amulet: rgba(184, 135, 27, 0.95);
       --mv2a-anim-peak-glow1: rgba(184, 135, 27, 0.28);
       --mv2a-anim-peak-glow2: rgba(184, 135, 27, 0.5);
-      --mv2a-gsum-bg: rgba(184, 135, 27, 0.07);
-      --mv2a-gsum-border: rgba(184, 135, 27, 0.16);
-      --mv2a-gsum-lead-bg: rgba(184, 135, 27, 0.09);
-      --mv2a-gsum-lead-border: rgba(184, 135, 27, 0.26);
-      --mv2a-gsum-k: rgba(122, 106, 88, 0.88);
-      --mv2a-gsum-v: rgba(36, 28, 18, 0.95);
-      --mv2a-gsum-v-lead: #b8871b;
+      /* สรุปผลแถวเดียว: ปิลล์ครีม (label ซ้าย / ค่าขวา) — ใกล้ตัวอย่าง UI */
+      --mv2a-gsum-bg: #fdfbf7;
+      --mv2a-gsum-border: #e8dcc4;
+      --mv2a-gsum-lead-bg: #fcf8f3;
+      --mv2a-gsum-lead-border: #e0d4bc;
+      --mv2a-gsum-shadow: 0 1px 2px rgba(55, 40, 20, 0.05), 0 2px 10px rgba(55, 40, 20, 0.04);
+      --mv2a-gsum-k: #78716c;
+      --mv2a-gsum-v: #1c1917;
+      --mv2a-gsum-v-lead: #b8860b;
       --mv2a-owner-chip-bg: rgba(184, 135, 27, 0.09);
       --mv2a-owner-chip-border: rgba(184, 135, 27, 0.24);
       --mv2a-owner-chip-text: rgba(50, 40, 26, 0.92);
@@ -348,11 +350,12 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-radar-dot-amulet: rgba(232, 197, 71, 0.95);
       --mv2a-anim-peak-glow1: rgba(250, 220, 120, 0.26);
       --mv2a-anim-peak-glow2: rgba(250, 220, 120, 0.52);
-      --mv2a-gsum-bg: rgba(148, 163, 184, 0.07);
-      --mv2a-gsum-border: rgba(232, 197, 71, 0.15);
-      --mv2a-gsum-lead-bg: rgba(232, 197, 71, 0.11);
-      --mv2a-gsum-lead-border: rgba(232, 197, 71, 0.3);
-      --mv2a-gsum-k: rgba(148, 163, 184, 0.78);
+      --mv2a-gsum-bg: rgba(255, 252, 245, 0.09);
+      --mv2a-gsum-border: rgba(232, 197, 71, 0.28);
+      --mv2a-gsum-lead-bg: rgba(232, 197, 71, 0.14);
+      --mv2a-gsum-lead-border: rgba(250, 220, 120, 0.38);
+      --mv2a-gsum-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+      --mv2a-gsum-k: rgba(203, 213, 225, 0.82);
       --mv2a-gsum-v: rgba(248, 250, 252, 0.98);
       --mv2a-gsum-v-lead: #fde68a;
       --mv2a-owner-chip-bg: rgba(232, 197, 71, 0.11);
@@ -381,11 +384,32 @@ export function renderAmuletReportV2Html(payload) {
     }
     body { margin: 0; background: var(--mv2a-bg); color: var(--mv2a-text); font-family: var(--mv2-font-th); }
     .mv2a-wrap { max-width: 520px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
-    .mv2-hero { text-align: center; margin-bottom: 1rem; }
-    .mv2a-badge { display: inline-block; font-size: 0.65rem; color: var(--mv2a-gold); border: 1px solid var(--mv2a-badge-border); padding: 0.2rem 0.5rem; border-radius: 999px; margin-bottom: 0.5rem; }
-    .mv2a-media img { max-width: 100%; border-radius: 12px; border: 1px solid var(--mv2a-media-border); }
-    .mv2-h1 { font-size: 1.35rem; margin: 0.5rem 0; color: var(--mv2a-gold); font-weight: 700; }
-    .mv2-main { font-size: 0.95rem; margin: 0.4rem 0 0; color: var(--mv2a-text-body); font-weight: 500; }
+    .mv2-hero { margin-bottom: 1rem; }
+    .mv2a-badge { display: inline-block; font-size: 0.65rem; color: var(--mv2a-gold); border: 1px solid var(--mv2a-badge-border); padding: 0.2rem 0.5rem; border-radius: 999px; margin-bottom: 0.65rem; }
+    .mv2-hero-main {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem 1rem;
+    }
+    .mv2-hero-text { flex: 1; min-width: 0; text-align: left; }
+    .mv2a-media {
+      flex-shrink: 0;
+      width: 6.75rem;
+      max-width: 38%;
+    }
+    .mv2a-media img {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid var(--mv2a-media-border);
+    }
+    .mv2-h1 { font-size: 1.35rem; margin: 0 0 0.25rem; color: var(--mv2a-gold); font-weight: 700; }
+    .mv2-main { font-size: 0.95rem; margin: 0.35rem 0 0; color: var(--mv2a-text-body); font-weight: 500; }
     .mv2-hero-clarifier { font-size: 0.78rem; margin: 0.35rem 0 0; color: var(--mv2a-hero-clarifier); line-height: 1.4; }
     .mv2-date { font-size: 0.72rem; color: var(--mv2a-muted); margin: 0.35rem 0 0; }
     .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0.85rem 0; text-align: center; }
@@ -535,12 +559,30 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2a-radar-dot--owner { background: var(--mv2a-radar-dot-owner); }
     .mv2a-radar-dot--amulet { background: var(--mv2a-radar-dot-amulet); }
-    .mv2-gsum-rows { display: flex; flex-direction: column; gap: 0.32rem; }
-    .mv2-gsum-row { display: flex; align-items: baseline; gap: 0.45rem; padding: 0.28rem 0.5rem; border-radius: 8px; background: var(--mv2a-gsum-bg); border: 1px solid var(--mv2a-gsum-border); }
-    .mv2-gsum-row:not(.mv2-gsum-row--lead) { padding: 0.18rem 0.5rem; }
+    .mv2-gsum-rows { display: flex; flex-direction: column; gap: 0.5rem; }
+    .mv2-gsum-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      background: var(--mv2a-gsum-bg);
+      border: 1px solid var(--mv2a-gsum-border);
+      box-shadow: var(--mv2a-gsum-shadow);
+    }
+    .mv2-gsum-row:not(.mv2-gsum-row--lead) { padding: 0.42rem 1rem; }
     .mv2-gsum-row--lead { background: var(--mv2a-gsum-lead-bg); border-color: var(--mv2a-gsum-lead-border); }
-    .mv2-gsum-k { font-size: 0.72rem; font-weight: 400; color: var(--mv2a-gsum-k); white-space: nowrap; }
-    .mv2-gsum-v { font-size: 0.92rem; font-weight: 800; color: var(--mv2a-gsum-v); }
+    .mv2-gsum-k { font-size: 0.72rem; font-weight: 500; color: var(--mv2a-gsum-k); white-space: nowrap; flex-shrink: 0; }
+    .mv2-gsum-v {
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: var(--mv2a-gsum-v);
+      text-align: right;
+      flex: 1;
+      min-width: 0;
+      line-height: 1.25;
+    }
     .mv2-gsum-row--lead .mv2-gsum-v { color: var(--mv2a-gsum-v-lead); }
     .mv2-card--owner > h2 { margin-bottom: 0.28rem; }
     .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.42rem; }
@@ -574,11 +616,15 @@ export function renderAmuletReportV2Html(payload) {
   <div class="mv2a-wrap">
     <header class="mv2-hero">
       <div class="mv2a-badge">Ener Scan · พระเครื่อง · รายงานฉบับเต็ม</div>
-      ${media}
-      <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "พระเครื่อง")}</h1>
-      <p class="mv2-main">${escapeHtml(h.displayLine || `โทนหลัก · ${h.mainEnergyLabel}`)}</p>
-      ${h.clarifierLine ? `<p class="mv2-hero-clarifier">${escapeHtml(h.clarifierLine)}</p>` : ""}
-      ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
+      <div class="mv2-hero-main">
+        <div class="mv2-hero-text">
+          <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "พระเครื่อง")}</h1>
+          <p class="mv2-main">${escapeHtml(h.displayLine || `โทนหลัก · ${h.mainEnergyLabel}`)}</p>
+          ${h.clarifierLine ? `<p class="mv2-hero-clarifier">${escapeHtml(h.clarifierLine)}</p>` : ""}
+          ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
+        </div>
+        ${heroMediaCol}
+      </div>
     </header>
 
     <div class="mv2-strip" role="group" aria-label="สรุปตัวเลข">
