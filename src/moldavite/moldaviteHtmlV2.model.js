@@ -173,6 +173,26 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
   };
 
   const interactionHeadline = "โทนกับคุณ";
+
+  /** ใกล้กันบนแกน align → เสริมแรงสูง */
+  const alignGap = Math.abs(
+    (Number(ownerAxes[alignKey]) || 0) - (Number(crystal[alignKey]) || 0),
+  );
+  const boostScore = clamp0100(100 - alignGap);
+
+  /** ช่องว่างบนแกน tension → ต้องระวังจังหวะมากขึ้น */
+  const tensionGap = Math.abs(
+    (Number(ownerAxes[tensionKey]) || 0) - (Number(crystal[tensionKey]) || 0),
+  );
+  const cautionScore = clamp0100(tensionGap);
+
+  const energyNum = Number(payload.summary?.energyScore);
+  const toneScore = Number.isFinite(energyNum)
+    ? clamp0100(energyNum * 10)
+    : clamp0100(
+        (crystal.work + crystal.relationship + crystal.money) / 3,
+      );
+
   /** @type {{ kicker: string, main: string, sub: string }[]} */
   const interactionRows = [
     {
@@ -189,6 +209,31 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       kicker: "โทนหิน",
       main: "เน้นขยับ เริ่มใหม่",
       sub: "",
+    },
+  ];
+
+  /** @type {{ key: string, label: string, score: number, main: string, sub: string }[]} */
+  const interactionGauges = [
+    {
+      key: "boost",
+      label: "เสริมแรง",
+      score: boostScore,
+      main: interactionRows[0].main,
+      sub: interactionRows[0].sub,
+    },
+    {
+      key: "caution",
+      label: "ระวังจังหวะ",
+      score: cautionScore,
+      main: interactionRows[1].main,
+      sub: interactionRows[1].sub,
+    },
+    {
+      key: "tone",
+      label: "โทนหิน",
+      score: toneScore,
+      main: interactionRows[2].main,
+      sub: interactionRows[2].sub,
     },
   ];
 
@@ -210,6 +255,14 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
     };
   });
   lifeAreaRows.sort((a, b) => b.score - a.score);
+
+  /** ชุดเดียวกับ lifeAreaDetail.rows (เรียงสูง→ต่ำ) — ใช้ render แถบแนวนอน */
+  const lifeAreaBars = lifeAreaRows.map((r) => ({
+    key: r.key,
+    label: r.label,
+    score: r.score,
+    blurb: r.blurb,
+  }));
 
   const usageLines = V2_USAGE_LINES;
 
@@ -267,7 +320,9 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       headline: interactionHeadline,
       rows: interactionRows,
     },
+    interactionGauges,
     lifeAreaDetail: { rows: lifeAreaRows },
+    lifeAreaBars,
     usageCaution: { lines: usageLines },
     trustNote: String(payload.trust?.trustNote || "").trim(),
     reportVersion: String(payload.reportVersion || ""),

@@ -15,6 +15,9 @@ const AXIS_TITLE_TH = {
   money: "การเงิน",
 };
 
+/** Half-donut arc (opens upward); paired paths use pathLength=100 for stroke-dash */
+const MV2_GAUGE_ARC_D = "M 8 34 A 28 28 0 0 0 64 34";
+
 /** ต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" (คุณ vs หิน ต่อแกน) */
 const RADAR_AXIS_COMPARE_EPS = 6;
 
@@ -228,6 +231,73 @@ function radarBlock(vm) {
 }
 
 /**
+ * @param {number} score0to100
+ */
+function semiDonutGaugeSvg(score0to100) {
+  const s = Math.max(
+    0,
+    Math.min(100, Math.round(Number(score0to100) || 0)),
+  );
+  const off = 100 - s;
+  return `<svg class="mv2-gauge-svg" viewBox="0 0 72 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <path class="mv2-gauge-track" d="${MV2_GAUGE_ARC_D}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="5" stroke-linecap="round" pathLength="100" vector-effect="non-scaling-stroke"/>
+  <path class="mv2-gauge-fill" d="${MV2_GAUGE_ARC_D}" fill="none" stroke="rgba(52,211,153,0.93)" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${off}" vector-effect="non-scaling-stroke"/>
+</svg>`;
+}
+
+/**
+ * @param {{ key: string, label: string, score: number, main: string, sub: string }} item
+ */
+function semiDonutGaugeCard(item) {
+  const sub =
+    item.sub && String(item.sub).trim()
+      ? `<span class="mv2-gauge-sub">${escapeHtml(String(item.sub).trim())}</span>`
+      : "";
+  return `<div class="mv2-gauge-card" data-mv2-gauge="${escapeHtml(item.key)}">
+    ${semiDonutGaugeSvg(item.score)}
+    <div class="mv2-gauge-meta">
+      <span class="mv2-gauge-kicker">${escapeHtml(item.label)}</span>
+      <span class="mv2-gauge-score">${escapeHtml(String(item.score))}</span>
+      <span class="mv2-gauge-main">${escapeHtml(item.main)}</span>
+      ${sub}
+    </div>
+  </div>`;
+}
+
+/**
+ * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
+ */
+function interactionGaugeBlock(vm) {
+  const gauges = vm.interactionGauges;
+  if (!gauges || !gauges.length) return "";
+  return `<div class="mv2-gauge-grid" role="group" aria-label="${escapeHtml(vm.interactionSummary.headline)}">${gauges.map(semiDonutGaugeCard).join("")}</div>`;
+}
+
+/**
+ * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
+ */
+function lifeAreaBarsBlock(vm) {
+  const rows =
+    vm.lifeAreaBars && vm.lifeAreaBars.length
+      ? vm.lifeAreaBars
+      : vm.lifeAreaDetail.rows;
+  const inner = rows
+    .map(
+      (r) => `
+    <div class="mv2-bar-row" data-mv2-life="${escapeHtml(r.key)}">
+      <div class="mv2-bar-top">
+        <span class="mv2-bar-label">${escapeHtml(r.label)}</span>
+        <span class="mv2-bar-score">${escapeHtml(String(r.score))}</span>
+      </div>
+      <div class="mv2-bar-track" aria-hidden="true"><div class="mv2-bar-fill" style="width:${Math.max(0, Math.min(100, Number(r.score) || 0))}%"></div></div>
+      <p class="mv2-bar-blurb">${escapeHtml(r.blurb)}</p>
+    </div>`,
+    )
+    .join("");
+  return `<div class="mv2-bars">${inner}</div>`;
+}
+
+/**
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
  * @returns {string}
  */
@@ -263,23 +333,8 @@ export function renderMoldaviteReportV2Html(payload) {
     .map((t) => `<span class="mv2-owner-chip">${escapeHtml(t.label)} ${t.score}/10</span>`)
     .join("");
 
-  const interactionHtml = vm.interactionSummary.rows
-    .map(
-      (row) =>
-        `<div class="mv2-int-row"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-main">${escapeHtml(row.main)}</span>${row.sub ? `<span class="mv2-int-sub">${escapeHtml(row.sub)}</span>` : ""}</div>`,
-    )
-    .join("");
-
-
-  const lifeRowsHtml = vm.lifeAreaDetail.rows
-    .map(
-      (row) => `
-    <div class="mv2-life-card">
-      <div class="mv2-life-head"><span>${escapeHtml(row.label)}</span><span class="mv2-life-score">${escapeHtml(String(row.score))}</span></div>
-      <p class="mv2-para mv2-life-blurb">${escapeHtml(row.blurb)}</p>
-    </div>`,
-    )
-    .join("");
+  const interactionGaugeHtml = interactionGaugeBlock(vm);
+  const lifeBarsHtml = lifeAreaBarsBlock(vm);
 
   const usageHtml = vm.usageCaution.lines
     .map((u) => `<p class="mv2-usage-line">${escapeHtml(u)}</p>`)
@@ -594,66 +649,113 @@ export function renderMoldaviteReportV2Html(payload) {
       color: rgba(148,163,184,0.7);
       font-size: 0.81em;
     }
-    .mv2-card--int { padding: 0.78rem 0.9rem; }
-    .mv2-int-rows {
+    .mv2-card--int { padding: 0.78rem 0.85rem; }
+    .mv2-gauge-grid {
       display: flex;
       flex-direction: column;
-      gap: 0.38rem;
-      padding: 0.1rem 0 0;
+      gap: 0.5rem;
+      margin-top: 0.15rem;
     }
-    .mv2-int-row {
+    .mv2-gauge-card {
+      display: grid;
+      grid-template-columns: minmax(4.25rem, 4.75rem) 1fr;
+      gap: 0.45rem 0.6rem;
+      align-items: center;
+      padding: 0.42rem 0.45rem;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.028);
+      border: 1px solid rgba(52,211,153,0.1);
+    }
+    .mv2-gauge-svg {
+      width: 100%;
+      max-width: 4.75rem;
+      height: auto;
+      display: block;
+    }
+    .mv2-gauge-meta {
       display: flex;
       flex-direction: column;
-      gap: 0.08rem;
-      padding: 0.28rem 0.45rem;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(52,211,153,0.09);
+      gap: 0.1rem;
+      min-width: 0;
     }
-    .mv2-int-row + .mv2-int-row {
-      padding: 0.26rem 0.45rem;
-    }
-    .mv2-int-kicker {
-      font-size: 0.64rem;
+    .mv2-gauge-kicker {
+      font-size: 0.62rem;
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: rgba(110,231,183,0.78);
+      color: rgba(110,231,183,0.82);
     }
-    .mv2-int-main {
-      font-size: 0.84rem;
+    .mv2-gauge-score {
+      font-size: 1.12rem;
+      font-weight: 800;
+      color: var(--mv2-green-dim);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+    .mv2-gauge-main {
+      font-size: 0.8rem;
       font-weight: 600;
       line-height: 1.28;
       color: rgba(236,240,246,0.96);
     }
-    .mv2-int-sub {
-      font-size: 0.74rem;
-      font-weight: 400;
-      line-height: 1.35;
+    .mv2-gauge-sub {
+      font-size: 0.7rem;
+      line-height: 1.3;
       color: rgba(148,163,184,0.62);
     }
-    .mv2-note { font-size: 0.72rem; color: #6b7280; margin-top: 0.6rem; }
-    .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
-    .mv2-life-grid { display: flex; flex-direction: column; gap: 0.45rem; }
-    .mv2-life-grid .mv2-life-card {
-      margin: 0;
-      padding: 0.5rem 0.55rem;
-      border: 1px solid rgba(52,211,153,0.08);
-      border-radius: 12px;
-      background: rgba(255,255,255,0.022);
+    .mv2-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      margin-top: 0.08rem;
     }
-    .mv2-life-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; font-weight: 600; font-size: 0.86rem; }
-    .mv2-life-score { color: #22c55e; font-weight: 600; font-size: 0.78rem; opacity: 0.88; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
-    .mv2-life-blurb {
-      margin: 0.22rem 0 0;
-      font-size: 0.78rem;
-      line-height: 1.32;
-      color: rgba(203,213,225,0.88);
+    .mv2-bar-row {
+      padding: 0 0 0.02rem;
+    }
+    .mv2-bar-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+    .mv2-bar-label {
+      font-weight: 600;
+      font-size: 0.86rem;
+      color: rgba(241,245,249,0.96);
+    }
+    .mv2-bar-score {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #4ade80;
+      font-variant-numeric: tabular-nums;
+      opacity: 0.95;
+    }
+    .mv2-bar-track {
+      margin-top: 0.32rem;
+      height: 7px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .mv2-bar-fill {
+      height: 100%;
+      border-radius: 8px;
+      background: linear-gradient(90deg, rgba(22,163,74,0.55), rgba(52,211,153,0.95));
+      min-width: 0;
+      transition: width 0.5s ease-out;
+    }
+    .mv2-bar-blurb {
+      margin: 0.28rem 0 0;
+      font-size: 0.74rem;
+      line-height: 1.3;
+      color: rgba(148,163,184,0.88);
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
+    .mv2-note { font-size: 0.72rem; color: #6b7280; margin-top: 0.6rem; }
+    .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
     .mv2-usage-tight { margin: 0; }
     .mv2-usage-tight .mv2-usage-line {
       margin: 0 0 0.32rem;
@@ -700,13 +802,13 @@ export function renderMoldaviteReportV2Html(payload) {
 
     <section class="mv2-card mv2-card--int" aria-labelledby="mv2-int-h">
       <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
-      <div class="mv2-int-rows">${interactionHtml}</div>
+      ${interactionGaugeHtml}
     </section>
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
       <h2 id="mv2-life-h">มิติชีวิต</h2>
       <p class="mv2-life-hint">สูง → ต่ำ</p>
-      <div class="mv2-life-grid">${lifeRowsHtml}</div>
+      ${lifeBarsHtml}
     </section>
 
     <section class="mv2-card mv2-card--usage" aria-labelledby="mv2-use-h">
