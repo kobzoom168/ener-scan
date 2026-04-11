@@ -85,14 +85,14 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes('class="mv2-hero-grid"'));
   assert.ok(html.includes("mv2-hero-pill"));
   assert.ok(html.includes("คะแนนพลัง"));
-  assert.ok(html.includes("เข้ากับคุณ"));
+  assert.ok(html.includes("เข้ากันกับคุณ"));
   assert.ok(html.includes("กราฟโทนหิน"));
   assert.ok(!html.includes("เปรียบเทียบคุณกับพลังของหิน"));
   assert.ok(html.includes("สรุปกราฟ"));
   assert.ok(html.includes('class="mv2-gsum-rows"'));
-  assert.ok(html.includes('class="mv2-gsum-k">พลังเด่น</span>'));
+  assert.ok(html.includes('class="mv2-gsum-k">พลังเด่น:</span>'));
   assert.ok(html.includes('class="mv2-gsum-v">งาน</span>'));
-  assert.ok(html.includes(">รองลงมา</span>"));
+  assert.ok(html.includes(">รองลงมา:</span>"));
   assert.ok(!html.includes(">ควรค่อย ๆ ไป</span>"));
   assert.ok(!html.includes("หินช่วยเรื่อง"));
   assert.ok(html.includes('class="mv2-radar-key-dot mv2-radar-key-dot--owner"'));

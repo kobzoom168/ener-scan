@@ -372,13 +372,13 @@ export function renderMoldaviteReportV2Html(payload) {
   const pillCompatHero =
     vm.metrics.compatibilityPercent != null &&
     Number.isFinite(Number(vm.metrics.compatibilityPercent))
-      ? `เข้ากับคุณ ${Math.round(Number(vm.metrics.compatibilityPercent))}%`
-      : "เข้ากับคุณ —";
+      ? `เข้ากันกับคุณ ${Math.round(Number(vm.metrics.compatibilityPercent))}%`
+      : "เข้ากันกับคุณ —";
 
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
     .map(
       (r, i) =>
-        `<div class="mv2-gsum-row${i === 0 ? " mv2-gsum-row--lead" : ""}"><span class="mv2-gsum-k">${escapeHtml(r.label)}</span><span class="mv2-gsum-v">${escapeHtml(r.value)}</span></div>`,
+        `<div class="mv2-gsum-row${i === 0 ? " mv2-gsum-row--lead" : ""}"><span class="mv2-gsum-k">${escapeHtml(r.label)}:</span><span class="mv2-gsum-v">${escapeHtml(r.value)}</span></div>`,
     )
     .join("")}</div>`;
 
@@ -428,130 +428,133 @@ export function renderMoldaviteReportV2Html(payload) {
       line-height: 1.55;
       -webkit-font-smoothing: antialiased;
     }
-    .mv2-wrap { max-width: 26.5rem; margin: 0 auto; padding: 1.15rem 1rem 3rem; }
-    .mv2-hero { margin-bottom: 0.62rem; }
-    .mv2-badge { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mv2-muted); margin-bottom: 0.42rem; }
+    .mv2-wrap { max-width: 26.5rem; margin: 0 auto; padding: 1.2rem 1rem 3rem; }
+    .mv2-hero { margin-bottom: 0.85rem; }
+    .mv2-badge { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(148,163,184,0.72); margin-bottom: 0.48rem; }
     .mv2-hero-card {
-      background: linear-gradient(168deg, rgba(20,24,30,0.97) 0%, rgba(11,13,17,0.99) 100%);
-      border: 1px solid rgba(52,211,153,0.11);
-      border-radius: 16px;
-      padding: 0.62rem 0.72rem;
-      box-shadow: 0 10px 36px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.035);
+      background: linear-gradient(165deg, rgba(22,27,34,0.98) 0%, rgba(10,12,16,0.995) 100%);
+      border: 1px solid rgba(52,211,153,0.13);
+      border-radius: 18px;
+      padding: 0.85rem 0.95rem;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.28), 0 4px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.042);
     }
     .mv2-hero-grid {
       display: grid;
-      grid-template-columns: 5.25rem 1fr;
-      gap: 0.85rem;
+      grid-template-columns: 6rem 1fr;
+      gap: 0.95rem;
       align-items: center;
     }
     .mv2-hero-copy { min-width: 0; }
     .mv2-hero-card .mv2-hero-media {
       margin-top: 0;
-      border-radius: 12px;
+      border-radius: 14px;
       aspect-ratio: 1 / 1;
       overflow: hidden;
-      background: #151a21;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+      background: linear-gradient(145deg, #1a222c 0%, #12161c 100%);
+      box-shadow: inset 0 0 0 1px rgba(52,211,153,0.08), 0 4px 16px rgba(0,0,0,0.35);
     }
     .mv2-hero-media--empty { display:flex; align-items:center; justify-content:center; color: var(--mv2-muted); font-size: 0.72rem; text-align: center; padding: 0.25rem; }
     .mv2-hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .mv2-hero-copy .mv2-h1 {
-      font-size: 1.38rem;
+      font-size: 1.52rem;
       font-weight: 700;
-      margin: 0 0 0.12rem;
-      line-height: 1.18;
-      letter-spacing: -0.02em;
+      margin: 0 0 0.18rem;
+      line-height: 1.15;
+      letter-spacing: -0.025em;
+      color: #f8fafc;
     }
     .mv2-hero-copy .mv2-tag {
-      color: rgba(167,243,208,0.88);
-      font-size: 0.78rem;
-      margin: 0 0 0.32rem;
-      line-height: 1.35;
+      color: rgba(110,231,183,0.95);
+      font-size: 0.82rem;
+      margin: 0 0 0.38rem;
+      line-height: 1.38;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
     .mv2-hero-copy .mv2-main {
-      color: var(--mv2-green);
+      color: #6ee7b7;
       font-weight: 600;
-      font-size: 0.8rem;
-      margin: 0 0 0.38rem;
-      border-left: 2px solid rgba(52,211,153,0.45);
-      padding-left: 0.45rem;
-      line-height: 1.3;
+      font-size: 0.82rem;
+      margin: 0 0 0.42rem;
+      border-left: 1px solid rgba(52,211,153,0.35);
+      padding-left: 0.5rem;
+      line-height: 1.32;
     }
     .mv2-hero-pills {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.32rem;
-      margin: 0 0 0.32rem;
+      gap: 0.38rem;
+      margin: 0 0 0.38rem;
     }
     .mv2-hero-pill {
       display: inline-block;
-      font-size: 0.62rem;
+      font-size: 0.65rem;
       font-weight: 600;
       letter-spacing: 0.02em;
-      padding: 0.18rem 0.42rem;
+      padding: 0.24rem 0.5rem;
       border-radius: 999px;
-      color: rgba(204,251,241,0.92);
-      background: rgba(6,78,59,0.35);
-      border: 1px solid rgba(52,211,153,0.32);
+      color: rgba(248,250,252,0.96);
+      background: rgba(6,78,59,0.42);
+      border: 1px solid rgba(52,211,153,0.38);
       white-space: nowrap;
     }
     .mv2-hero-copy .mv2-date {
-      font-size: 0.55rem;
-      color: rgba(100,116,139,0.65);
+      font-size: 0.52rem;
+      color: rgba(100,116,139,0.55);
       margin: 0;
       font-weight: 400;
-      letter-spacing: 0.03em;
-      opacity: 0.55;
+      letter-spacing: 0.04em;
+      opacity: 0.42;
     }
     .mv2-strip {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 0.4rem;
-      margin: 0.55rem 0 0.85rem;
+      gap: 0.38rem;
+      margin: 0.42rem 0 0.72rem;
       text-align: center;
     }
     .mv2-strip > div {
-      background: rgba(17,20,24,0.85);
-      border: 1px solid rgba(255,255,255,0.045);
-      border-radius: 11px;
-      padding: 0.48rem 0.3rem;
+      background: rgba(12,14,18,0.72);
+      border: 1px solid rgba(255,255,255,0.038);
+      border-radius: 13px;
+      padding: 0.52rem 0.28rem 0.48rem;
     }
-    .mv2-strip-k { font-size: 0.58rem; color: rgba(148,163,184,0.75); text-transform: uppercase; letter-spacing: 0.07em; }
-    .mv2-strip-v { font-size: 1.02rem; font-weight: 800; color: #a7f3d0; margin-top: 0.15rem; letter-spacing: -0.02em; }
-    .mv2-strip-v small { font-size: 0.7rem; font-weight: 500; color: rgba(148,163,184,0.65); }
-    .mv2-strip-cell--level { opacity: 0.88; }
-    .mv2-strip-cell--level .mv2-strip-k { font-size: 0.54rem; opacity: 0.65; letter-spacing: 0.06em; }
-    .mv2-strip-cell--level .mv2-strip-v { font-size: 0.76rem !important; font-weight: 600; color: rgba(134,239,172,0.65); margin-top: 0.18rem; }
+    .mv2-strip-k { font-size: 0.54rem; color: rgba(148,163,184,0.68); text-transform: uppercase; letter-spacing: 0.08em; }
+    .mv2-strip-v { font-size: 1.05rem; font-weight: 800; color: #a7f3d0; margin-top: 0.12rem; letter-spacing: -0.02em; }
+    .mv2-strip-v small { font-size: 0.68rem; font-weight: 500; color: rgba(148,163,184,0.58); }
+    .mv2-strip-cell--level { opacity: 0.72; }
+    .mv2-strip-cell--level .mv2-strip-k { font-size: 0.5rem; opacity: 0.55; letter-spacing: 0.07em; }
+    .mv2-strip-cell--level .mv2-strip-v { font-size: 0.72rem !important; font-weight: 600; color: rgba(110,231,183,0.55); margin-top: 0.15rem; }
     .mv2-card {
-      background: var(--mv2-card);
-      border: 1px solid var(--mv2-edge);
-      border-radius: var(--mv2-r);
+      background: rgba(17,20,24,0.92);
+      border: 1px solid rgba(255,255,255,0.045);
+      border-radius: 15px;
       padding: 0.85rem 0.95rem;
-      margin-bottom: 0.95rem;
+      margin-bottom: 1.05rem;
     }
     .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2-green-dim); font-weight: 600; }
     .mv2-life-hint { font-size: 0.65rem; line-height: 1.35; color: rgb(148, 163, 184); opacity: 0.44; font-weight: 400; }
-    .mv2-radar-card { border-left: 2px solid rgba(52,211,153,0.38); }
+    .mv2-radar-card { border-left: 1px solid rgba(45,212,191,0.22); }
     .mv2-radar-card--feature {
-      margin: 0 0 1rem;
-      padding: 1.12rem 0.95rem 1.05rem;
-      background: linear-gradient(168deg, rgba(16,185,129,0.095) 0%, rgba(15,23,42,0.58) 50%, rgba(10,12,15,0.94) 100%);
-      border: 1px solid rgba(52,211,153,0.16);
+      margin: 0 0 1.05rem;
+      padding: 1.25rem 1rem 1.2rem;
+      background: linear-gradient(175deg, rgba(16,185,129,0.08) 0%, rgba(17,24,32,0.55) 42%, rgba(8,10,14,0.96) 100%);
+      border: 1px solid rgba(52,211,153,0.12);
       border-radius: 20px;
-      border-left: 2px solid rgba(45,212,191,0.42);
-      box-shadow: 0 14px 48px rgba(0,0,0,0.44), inset 0 1px 0 rgba(255,255,255,0.045);
+      border-left: 1px solid rgba(45,212,191,0.28);
+      box-shadow: 0 18px 56px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.05);
     }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
     .mv2-radar-card--feature .mv2-radar-title {
-      margin: 0 0 0.5rem;
-      font-size: 1.06rem;
-      font-weight: 600;
+      margin: 0 0 0.55rem;
+      font-size: 1.12rem;
+      font-weight: 700;
       text-align: center;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.04em;
+      color: #6ee7b7;
+      text-shadow: 0 0 24px rgba(52,211,153,0.15);
     }
     .mv2-radar-svg-wrap {
       width: 100%;
@@ -561,8 +564,8 @@ export function renderMoldaviteReportV2Html(payload) {
       box-sizing: border-box;
     }
     .mv2-radar-card--feature .mv2-radar-svg-wrap {
-      max-width: 19.75rem;
-      padding: 0.68rem 0.92rem 0.42rem;
+      max-width: 20rem;
+      padding: 0.75rem 1rem 0.55rem;
     }
     .mv2-radar-plot {
       position: relative;
@@ -663,7 +666,7 @@ export function renderMoldaviteReportV2Html(payload) {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
     }
     .mv2-radar-key {
-      margin: 0.32rem 0 0;
+      margin: 0.38rem 0 0;
       padding: 0;
       display: flex;
       flex-direction: row;
@@ -671,11 +674,11 @@ export function renderMoldaviteReportV2Html(payload) {
       align-items: center;
       justify-content: center;
       gap: 0.75rem;
-      font-size: 0.8125rem;
+      font-size: 0.75rem;
       line-height: 1.2;
       letter-spacing: 0.02em;
       font-weight: 500;
-      opacity: 0.72;
+      opacity: 0.58;
     }
     .mv2-radar-key-chip {
       display: inline-flex;
@@ -704,72 +707,81 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-gsum-rows {
       display: flex;
       flex-direction: column;
-      gap: 0.28rem;
+      gap: 0.32rem;
     }
     .mv2-gsum-row {
       display: flex;
       align-items: baseline;
-      gap: 0.45rem;
-      padding: 0.32rem 0.55rem;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.035);
-      border: 1px solid rgba(255,255,255,0.07);
+      flex-wrap: wrap;
+      gap: 0.35rem 0.5rem;
+      padding: 0.38rem 0.58rem;
+      border-radius: 11px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
     }
     .mv2-gsum-row:not(.mv2-gsum-row--lead) {
-      padding: 0.22rem 0.55rem;
+      padding: 0.28rem 0.58rem;
     }
     .mv2-gsum-row--lead {
-      background: rgba(16,185,129,0.1);
-      border-color: rgba(52,211,153,0.22);
-      box-shadow: 0 0 0 1px rgba(52,211,153,0.06);
+      background: rgba(16,185,129,0.09);
+      border-color: rgba(52,211,153,0.2);
+      box-shadow: 0 0 0 1px rgba(52,211,153,0.08);
     }
     .mv2-gsum-k {
-      font-size: 0.72rem;
-      font-weight: 400;
-      color: rgba(148,163,184,0.58);
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: rgba(148,163,184,0.65);
       white-space: nowrap;
     }
     .mv2-gsum-v {
-      font-size: 0.92rem;
+      font-size: 0.98rem;
       font-weight: 800;
-      color: rgba(236,240,246,0.97);
+      color: #f1f5f9;
+      letter-spacing: -0.01em;
     }
     .mv2-gsum-row--lead .mv2-gsum-v {
-      color: rgba(209,250,229,0.98);
+      color: #ecfdf5;
     }
-    .mv2-card--gsum { padding: 0.72rem 0.85rem; }
-    .mv2-card--owner { padding: 0.62rem 0.8rem 0.68rem; }
-    .mv2-card--owner > h2 { margin-bottom: 0.18rem; font-size: 0.9rem; }
+    .mv2-card--gsum { padding: 0.68rem 0.82rem; }
+    .mv2-card--gsum > h2 { font-size: 0.92rem; margin-bottom: 0.42rem; }
+    .mv2-card--owner {
+      padding: 0.52rem 0.72rem 0.58rem;
+      background: rgba(12,14,18,0.65);
+      border-color: rgba(255,255,255,0.032);
+      margin-bottom: 0.88rem;
+    }
+    .mv2-card--owner > h2 { margin-bottom: 0.14rem; font-size: 0.82rem; font-weight: 600; opacity: 0.88; }
     .mv2-owner-zodiac {
-      margin: 0 0 0.32rem;
-      font-size: 0.94rem;
-      font-weight: 700;
-      color: rgba(226,232,240,0.94);
+      margin: 0 0 0.26rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: rgba(226,232,240,0.88);
       letter-spacing: 0.02em;
     }
     .mv2-owner-chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.32rem 0.4rem;
-      margin: 0 0 0.38rem;
+      gap: 0.28rem 0.35rem;
+      margin: 0 0 0.3rem;
     }
     .mv2-owner-chip {
       display: inline-block;
-      padding: 0.16rem 0.45rem;
+      padding: 0.12rem 0.38rem;
       border-radius: 999px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.07);
-      font-size: 0.72rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.66rem;
       font-weight: 500;
-      color: rgba(226,232,240,0.88);
+      color: rgba(203,213,225,0.78);
       white-space: nowrap;
       letter-spacing: 0.01em;
     }
     .mv2-owner-note {
       margin: 0;
-      font-size: 0.6rem;
-      color: rgba(100,116,139,0.55);
+      font-size: 0.55rem;
+      color: rgba(71,85,105,0.65);
       font-weight: 400;
+      opacity: 0.85;
     }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }
@@ -778,26 +790,27 @@ export function renderMoldaviteReportV2Html(payload) {
       font-size: 0.81em;
     }
     .mv2-card--int {
-      padding: 0.52rem 0.68rem 0.58rem;
-      border-color: rgba(255,255,255,0.034);
+      padding: 0.58rem 0.72rem 0.65rem;
+      border-color: rgba(255,255,255,0.04);
     }
-    .mv2-card--int > h2 { margin-bottom: 0.32rem; }
+    .mv2-card--int > h2 { margin-bottom: 0.38rem; font-size: 0.95rem; }
     .mv2-gauge-grid {
       display: flex;
       flex-direction: column;
-      gap: 0.42rem;
-      margin-top: 0.02rem;
+      gap: 0.48rem;
+      margin-top: 0.05rem;
     }
     .mv2-gauge-card {
       display: grid;
-      grid-template-columns: 5.25rem minmax(0, 1fr);
-      gap: 0.42rem 0.48rem;
+      grid-template-columns: 5.5rem minmax(0, 1fr);
+      gap: 0.45rem 0.52rem;
       align-items: center;
-      padding: 0.24rem 0.32rem;
-      border-radius: 11px;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.06);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+      min-height: 4.35rem;
+      padding: 0.3rem 0.38rem 0.32rem;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.022);
+      border: 1px solid rgba(255,255,255,0.065);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
     }
     .mv2-gauge-card--boost {
       border-color: rgba(52,211,153,0.14);
@@ -820,12 +833,12 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-gauge-chart {
       position: relative;
       width: 100%;
-      max-width: 5.4rem;
+      max-width: 5.55rem;
       justify-self: start;
     }
     .mv2-gauge-svg {
       width: 100%;
-      max-width: 5.4rem;
+      max-width: 5.55rem;
       height: auto;
       display: block;
     }
@@ -841,14 +854,14 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-gauge-score--overlay {
       position: absolute;
       left: 50%;
-      bottom: 0.02rem;
+      bottom: 0.14rem;
       transform: translateX(-50%);
-      font-size: 1.48rem;
+      font-size: 1.56rem;
       font-weight: 800;
       font-variant-numeric: tabular-nums;
       line-height: 1;
-      letter-spacing: -0.03em;
-      text-shadow: 0 2px 14px rgba(0,0,0,0.65);
+      letter-spacing: -0.035em;
+      text-shadow: 0 2px 16px rgba(0,0,0,0.7);
       pointer-events: none;
     }
     .mv2-gauge-card--boost .mv2-gauge-score--overlay { color: #a7f3d0; }
@@ -862,53 +875,54 @@ export function renderMoldaviteReportV2Html(payload) {
       padding-top: 0;
     }
     .mv2-gauge-kicker {
-      font-size: 0.52rem;
+      font-size: 0.5rem;
       font-weight: 700;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
-      opacity: 0.92;
+      opacity: 0.78;
     }
     .mv2-gauge-card--boost .mv2-gauge-kicker { color: rgba(110,231,183,0.82); }
     .mv2-gauge-card--caution .mv2-gauge-kicker { color: rgba(252,211,77,0.82); }
     .mv2-gauge-card--tone .mv2-gauge-kicker { color: rgba(94,234,212,0.82); }
     .mv2-gauge-main {
-      font-size: 0.74rem;
-      font-weight: 600;
-      line-height: 1.18;
-      color: rgba(226,232,240,0.86);
+      font-size: 0.76rem;
+      font-weight: 700;
+      line-height: 1.2;
+      color: rgba(241,245,249,0.94);
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
     .mv2-gauge-sub {
-      font-size: 0.58rem;
-      line-height: 1.2;
-      color: rgba(71,85,105,0.75);
-      margin-top: 0.04rem;
+      font-size: 0.54rem;
+      line-height: 1.18;
+      color: rgba(51,65,85,0.72);
+      margin-top: 0.03rem;
+      opacity: 0.85;
     }
     .mv2-card--life {
-      padding: 0.55rem 0.72rem 0.62rem;
-      border-color: rgba(255,255,255,0.034);
+      padding: 0.58rem 0.75rem 0.65rem;
+      border-color: rgba(255,255,255,0.038);
     }
-    .mv2-card--life > h2 { margin-bottom: 0.22rem; }
-    .mv2-life-hint { margin: 0 0 0.32rem; opacity: 0.38; }
+    .mv2-card--life > h2 { margin-bottom: 0.2rem; }
+    .mv2-life-hint { margin: 0 0 0.34rem; opacity: 0.36; }
     .mv2-bars {
       display: flex;
       flex-direction: column;
-      gap: 0.48rem;
-      margin-top: 0;
+      gap: 0.52rem;
+      margin-top: 0.02rem;
     }
     .mv2-bar-row {
-      padding: 0.34rem 0.42rem 0.36rem;
-      border-radius: 11px;
-      border: 1px solid rgba(255,255,255,0.04);
-      background: rgba(255,255,255,0.012);
+      padding: 0.4rem 0.45rem 0.42rem;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.035);
+      background: rgba(255,255,255,0.01);
     }
     .mv2-bar-row--lead {
-      border-color: rgba(52,211,153,0.12);
-      background: linear-gradient(165deg, rgba(52,211,153,0.07) 0%, rgba(255,255,255,0.02) 100%);
-      box-shadow: 0 0 0 1px rgba(52,211,153,0.06);
+      border-color: rgba(52,211,153,0.14);
+      background: linear-gradient(168deg, rgba(52,211,153,0.06) 0%, rgba(255,255,255,0.015) 100%);
+      box-shadow: 0 0 0 1px rgba(52,211,153,0.05);
     }
     .mv2-bar-row:not(.mv2-bar-row--lead) {
       opacity: 0.94;
@@ -927,19 +941,19 @@ export function renderMoldaviteReportV2Html(payload) {
     }
     .mv2-bar-badge {
       flex-shrink: 0;
-      font-size: 0.52rem;
+      font-size: 0.5rem;
       font-weight: 700;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      padding: 0.12rem 0.38rem;
+      padding: 0.1rem 0.34rem;
       border-radius: 999px;
-      color: rgba(209,250,229,0.95);
-      background: rgba(52,211,153,0.14);
-      border: 1px solid rgba(52,211,153,0.22);
+      color: rgba(209,250,229,0.92);
+      background: rgba(52,211,153,0.12);
+      border: 1px solid rgba(52,211,153,0.2);
     }
     .mv2-bar-label {
       font-weight: 600;
-      font-size: 0.85rem;
+      font-size: 0.88rem;
       color: rgba(248,250,252,0.96);
       letter-spacing: 0.01em;
     }
@@ -948,28 +962,28 @@ export function renderMoldaviteReportV2Html(payload) {
       color: #fff;
     }
     .mv2-bar-score {
-      font-size: 1.05rem;
+      font-size: 1.12rem;
       font-weight: 800;
       color: #4ade80;
       font-variant-numeric: tabular-nums;
-      letter-spacing: -0.03em;
-      text-shadow: 0 0 22px rgba(74,222,128,0.35);
+      letter-spacing: -0.035em;
+      text-shadow: 0 0 24px rgba(74,222,128,0.38);
     }
     .mv2-bar-row--lead .mv2-bar-score {
-      font-size: 1.12rem;
+      font-size: 1.2rem;
       color: #86efac;
-      text-shadow: 0 0 26px rgba(52,211,153,0.4);
+      text-shadow: 0 0 28px rgba(52,211,153,0.42);
     }
     .mv2-bar-track {
-      margin-top: 0.4rem;
-      height: 10px;
+      margin-top: 0.42rem;
+      height: 11px;
       border-radius: 999px;
-      background: rgba(0,0,0,0.28);
+      background: rgba(0,0,0,0.38);
       overflow: hidden;
-      box-shadow: inset 0 1px 3px rgba(0,0,0,0.45);
+      box-shadow: inset 0 1px 4px rgba(0,0,0,0.5);
     }
     .mv2-bar-row--lead .mv2-bar-track {
-      height: 11px;
+      height: 12px;
     }
     .mv2-bar-fill {
       height: 100%;
@@ -984,10 +998,11 @@ export function renderMoldaviteReportV2Html(payload) {
       box-shadow: 0 0 12px rgba(52,211,153,0.38), 0 0 24px rgba(34,197,94,0.15);
     }
     .mv2-bar-blurb {
-      margin: 0.2rem 0 0;
-      font-size: 0.65rem;
-      line-height: 1.26;
-      color: rgba(71,85,105,0.72);
+      margin: 0.18rem 0 0;
+      font-size: 0.62rem;
+      line-height: 1.25;
+      color: rgba(51,65,85,0.62);
+      opacity: 0.88;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -997,15 +1012,20 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
     .mv2-usage-tight { margin: 0; }
     .mv2-usage-tight .mv2-usage-line {
-      margin: 0 0 0.26rem;
-      font-size: 0.68rem;
-      line-height: 1.32;
-      color: rgba(100,116,139,0.72);
-      opacity: 0.88;
+      margin: 0 0 0.22rem;
+      font-size: 0.62rem;
+      line-height: 1.28;
+      color: rgba(71,85,105,0.75);
+      opacity: 0.72;
     }
     .mv2-usage-tight .mv2-usage-line:last-child { margin-bottom: 0; }
-    .mv2-card--usage { padding: 0.58rem 0.75rem 0.62rem; border-color: rgba(255,255,255,0.032); }
-    .mv2-card--usage > h2 { font-size: 0.88rem; margin-bottom: 0.35rem; opacity: 0.92; }
+    .mv2-card--usage {
+      padding: 0.48rem 0.68rem 0.52rem;
+      border-color: rgba(255,255,255,0.028);
+      background: rgba(10,12,15,0.5);
+      margin-bottom: 0.75rem;
+    }
+    .mv2-card--usage > h2 { font-size: 0.78rem; margin-bottom: 0.28rem; opacity: 0.65; font-weight: 600; }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
   </style>

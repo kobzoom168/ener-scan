@@ -45,9 +45,9 @@ function thaiNoEmDash(s) {
 
 /** One short line per axis (mobile). */
 const V2_LIFE_BLURBS = {
-  work: "บทบาท เป้าหมาย งานที่ค้าง",
-  relationship: "สื่อสาร ขอบเขต ความชัด",
-  money: "จัดระบบเงิน ตัดสินใจช้า ๆ",
+  work: "เร่งจังหวะเรื่องงาน งานค้างเริ่มขยับ",
+  relationship: "เร่งความชัด ลดความค้างคา",
+  money: "ดันเรื่องเงินให้เริ่มเป็นระบบ",
 };
 
 const V2_USAGE_LINES = [
