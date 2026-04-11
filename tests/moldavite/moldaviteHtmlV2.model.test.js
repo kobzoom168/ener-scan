@@ -31,11 +31,7 @@ test("buildGraphSummaryLinesFromCrystal: order by score, tie-break work first", 
     relationship: 75,
     money: 69,
   });
-  assert.deepEqual(lines, [
-    "หินช่วยเรื่องงานให้ชัดที่สุดตอนนี้",
-    "รองลงมาเป็นความสัมพันธ์",
-    "เรื่องการเงินค่อย ๆ ไปก็พอ ไม่ต้องเร่ง",
-  ]);
+  assert.deepEqual(lines, ["เด่น: งาน", "รอง: ความสัมพันธ์"]);
 });
 
 test("buildGraphSummaryLinesFromCrystal: relationship lead copy", () => {
@@ -44,8 +40,6 @@ test("buildGraphSummaryLinesFromCrystal: relationship lead copy", () => {
     relationship: 90,
     money: 55,
   });
-  assert.equal(
-    lines[0],
-    "หินช่วยเรื่องความสัมพันธ์ให้ชัดที่สุดตอนนี้",
-  );
+  assert.equal(lines[0], "เด่น: ความสัมพันธ์");
+  assert.equal(lines[1], "รอง: งาน");
 });

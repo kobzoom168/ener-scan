@@ -43,20 +43,20 @@ function thaiNoEmDash(s) {
     .trim();
 }
 
+/** One short line per axis (mobile). */
 const V2_LIFE_BLURBS = {
-  work:
-    "ช่วงนี้พลังไปแตะเรื่องงานก่อน เช่น บทบาท เป้าหมาย หรือสิ่งที่ค้างอยู่ ทำให้ต้องคิดใหม่ ปรับใหม่ หรือเริ่มบางอย่างเมื่อพร้อม",
-  relationship:
-    "พลังไปแตะเรื่องความสัมพันธ์ในมุมของการสื่อสารและความชัดเจน อาจทำให้ต้องคุยตรงขึ้นหรือเคลียร์ขอบเขตให้ชัด",
-  money:
-    "พลังไปแตะเรื่องการเงินในมุมของการจัดระบบและการตัดสินใจ ช่วยให้เห็นว่าจุดไหนควรปรับก่อน ไม่ใช่คำแนะนำการลงทุน",
+  work: "บทบาท เป้าหมาย งานที่ค้าง",
+  relationship: "สื่อสาร ขอบเขต ความชัด",
+  money: "จัดระบบเงิน ตัดสินใจช้า ๆ",
 };
 
 const V2_USAGE_LINES = [
-  "เหมาะเมื่ออยากให้เรื่องที่ค้างเริ่มขยับ หรืออยากเปลี่ยนกรอบเดิมในจังหวะที่พร้อมรับความไม่แน่นอน",
-  "ถ้ารู้สึกเข้มหรือเร่งเกินไปในขณะที่ใจยังไม่พร้อมปล่อย ให้ลดจังหวะ แยกความรู้สึกให้ชัด ใช้เป็นกรอบอ่าน ไม่ใช่คำสั่ง",
-  "นี่ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน ถ้ามีปัญหาสุขภาพหรือหนี้สินรุนแรง ควรปรึกษาผู้เชี่ยวชาญ",
+  "กรอบอ่าน ไม่ใช่คำสั่ง",
+  "ไม่แทนคำแนะนำการแพทย์หรือการเงิน",
 ];
+
+const OWNER_NOTE_SHORT_WITH_DOB = "เทียบจากวันเกิด ↔ กราฟ";
+const OWNER_NOTE_SHORT_NO_DOB = "โปรไฟล์จำลองจากรายงาน";
 
 /**
  * @param {number} v
@@ -87,11 +87,10 @@ export function sortAxisKeysByCrystalDesc(crystal) {
  * @returns {string[]}
  */
 export function buildGraphSummaryLinesFromCrystal(crystal) {
-  const [first, second, third] = sortAxisKeysByCrystalDesc(crystal);
+  const [first, second] = sortAxisKeysByCrystalDesc(crystal);
   return [
-    `หินช่วยเรื่อง${AXIS_LABEL_TH[first]}ให้ชัดที่สุดตอนนี้`,
-    `รองลงมาเป็น${AXIS_LABEL_TH[second]}`,
-    `เรื่อง${AXIS_LABEL_TH[third]}ค่อย ๆ ไปก็พอ ไม่ต้องเร่ง`,
+    `เด่น: ${AXIS_LABEL_TH[first]}`,
+    `รอง: ${AXIS_LABEL_TH[second]}`,
   ];
 }
 
@@ -170,27 +169,26 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
     rows: [
       { label: "พลังเด่น", value: AXIS_LABEL_TH[crystalOrder[0]] },
       { label: "รองลงมา", value: AXIS_LABEL_TH[crystalOrder[1]] },
-      { label: "ควรค่อย ๆ ไป", value: AXIS_LABEL_TH[crystalOrder[2]] },
     ],
   };
 
-  const interactionHeadline = "หินทำงานกับคุณอย่างไร";
+  const interactionHeadline = "โทนกับคุณ";
   /** @type {{ kicker: string, main: string, sub: string }[]} */
   const interactionRows = [
     {
       kicker: "เสริมแรง",
-      main: `เรื่อง${alignLabel}ขยับง่ายขึ้นในช่วงนี้`,
-      sub: "การคุย การตัดสินใจ หรือการทำให้บางเรื่องชัดขึ้น",
+      main: `${alignLabel} · ขยับง่ายขึ้น`,
+      sub: "",
     },
     {
       kicker: "ระวังจังหวะ",
-      main: `เรื่อง${tensionLabel}อย่าเพิ่งเร่ง`,
-      sub: "แยกให้ออกว่าอะไรคือการเปลี่ยนจริง และอะไรคือแรงกดดันชั่วคราว",
+      main: `${tensionLabel} · อย่าเร่ง`,
+      sub: "",
     },
     {
       kicker: "โทนหิน",
-      main: "เด่นเรื่องการขยับและเริ่มใหม่",
-      sub: "ไม่ได้การันตีผลทันที แต่ไม่เหมาะกับการค้างอยู่ที่เดิม",
+      main: "เน้นขยับ เริ่มใหม่",
+      sub: "",
     },
   ];
 
@@ -203,16 +201,24 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       e && typeof e === "object" && e.score != null
         ? clamp0100(Number(e.score))
         : 0;
+    const blurb = thaiNoEmDash(V2_LIFE_BLURBS[k]).slice(0, 56);
     return {
       key: k,
       label: AXIS_LABEL_TH[k],
       score,
-      blurb: V2_LIFE_BLURBS[k],
+      blurb,
     };
   });
   lifeAreaRows.sort((a, b) => b.score - a.score);
 
   const usageLines = V2_USAGE_LINES;
+
+  const dobPresent = Boolean(
+    String(payload.birthdateUsed || "").trim().match(/\d/),
+  );
+  const ownerNoteShort = dobPresent
+    ? OWNER_NOTE_SHORT_WITH_DOB
+    : OWNER_NOTE_SHORT_NO_DOB;
 
   const compareTargetEnergyLabel = DEFAULT_RADAR_COMPARE_TARGET_ENERGY_LABEL_MOLDAVITE;
   const radarSectionContext = {
@@ -249,11 +255,13 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       tension: { axisKey: tensionKey, labelThai: tensionLabel },
     },
     graphSummary,
+    primaryAxis: crystalOrder[0],
+    secondaryAxis: crystalOrder[1],
     radarSectionContext,
     ownerProfile: {
-      zodiacLabel: `คุณเกิดราศี${ownerAxes.zodiacLabel}`,
+      zodiacLabel: `ราศี${ownerAxes.zodiacLabel}`,
       traitScores: ownerAxes.traitScores,
-      note: ownerAxes.note,
+      note: ownerNoteShort,
     },
     interactionSummary: {
       headline: interactionHeadline,
