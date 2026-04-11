@@ -16,7 +16,34 @@ const AXIS_TITLE_TH = {
 };
 
 /** Half-donut arc (opens upward); paired paths use pathLength=100 for stroke-dash */
-const MV2_GAUGE_ARC_D = "M 8 34 A 28 28 0 0 0 64 34";
+const MV2_GAUGE_ARC_D = "M 12 44 A 36 36 0 0 0 84 44";
+
+/** @type {Record<string, { fill: string, track: string }>} */
+const MV2_GAUGE_STROKE = {
+  boost: {
+    fill: "rgba(52,211,153,0.97)",
+    track: "rgba(52,211,153,0.14)",
+  },
+  caution: {
+    fill: "rgba(251,191,36,0.97)",
+    track: "rgba(251,191,36,0.16)",
+  },
+  tone: {
+    fill: "rgba(45,212,191,0.97)",
+    track: "rgba(45,212,191,0.16)",
+  },
+};
+
+/**
+ * @param {string} key
+ * @returns {"boost"|"caution"|"tone"}
+ */
+function gaugeVariantFromKey(key) {
+  const k = String(key || "").trim();
+  if (k === "caution") return "caution";
+  if (k === "tone") return "tone";
+  return "boost";
+}
 
 /** ต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" (คุณ vs หิน ต่อแกน) */
 const RADAR_AXIS_COMPARE_EPS = 6;
@@ -232,16 +259,18 @@ function radarBlock(vm) {
 
 /**
  * @param {number} score0to100
+ * @param {"boost"|"caution"|"tone"} variant
  */
-function semiDonutGaugeSvg(score0to100) {
+function semiDonutGaugeSvg(score0to100, variant) {
   const s = Math.max(
     0,
     Math.min(100, Math.round(Number(score0to100) || 0)),
   );
   const off = 100 - s;
-  return `<svg class="mv2-gauge-svg" viewBox="0 0 72 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-  <path class="mv2-gauge-track" d="${MV2_GAUGE_ARC_D}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="5" stroke-linecap="round" pathLength="100" vector-effect="non-scaling-stroke"/>
-  <path class="mv2-gauge-fill" d="${MV2_GAUGE_ARC_D}" fill="none" stroke="rgba(52,211,153,0.93)" stroke-width="5" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${off}" vector-effect="non-scaling-stroke"/>
+  const st = MV2_GAUGE_STROKE[variant] || MV2_GAUGE_STROKE.boost;
+  return `<svg class="mv2-gauge-svg" viewBox="0 0 96 46" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <path class="mv2-gauge-track" d="${MV2_GAUGE_ARC_D}" fill="none" stroke="${st.track}" stroke-width="6.5" stroke-linecap="round" pathLength="100" vector-effect="non-scaling-stroke"/>
+  <path class="mv2-gauge-fill" d="${MV2_GAUGE_ARC_D}" fill="none" stroke="${st.fill}" stroke-width="6.5" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${off}" vector-effect="non-scaling-stroke"/>
 </svg>`;
 }
 
@@ -249,15 +278,19 @@ function semiDonutGaugeSvg(score0to100) {
  * @param {{ key: string, label: string, score: number, main: string, sub: string }} item
  */
 function semiDonutGaugeCard(item) {
+  const variant = gaugeVariantFromKey(item.key);
   const sub =
     item.sub && String(item.sub).trim()
       ? `<span class="mv2-gauge-sub">${escapeHtml(String(item.sub).trim())}</span>`
       : "";
-  return `<div class="mv2-gauge-card" data-mv2-gauge="${escapeHtml(item.key)}">
-    ${semiDonutGaugeSvg(item.score)}
+  const scoreStr = escapeHtml(String(item.score));
+  return `<div class="mv2-gauge-card mv2-gauge-card--${variant}" data-mv2-gauge="${escapeHtml(item.key)}" aria-label="${escapeHtml(item.label)} ${scoreStr}">
+    <div class="mv2-gauge-chart">
+      ${semiDonutGaugeSvg(item.score, variant)}
+      <span class="mv2-gauge-score mv2-gauge-score--overlay">${scoreStr}</span>
+    </div>
     <div class="mv2-gauge-meta">
       <span class="mv2-gauge-kicker">${escapeHtml(item.label)}</span>
-      <span class="mv2-gauge-score">${escapeHtml(String(item.score))}</span>
       <span class="mv2-gauge-main">${escapeHtml(item.main)}</span>
       ${sub}
     </div>
@@ -283,15 +316,24 @@ function lifeAreaBarsBlock(vm) {
       : vm.lifeAreaDetail.rows;
   const inner = rows
     .map(
-      (r) => `
-    <div class="mv2-bar-row" data-mv2-life="${escapeHtml(r.key)}">
+      (r, i) => {
+        const isLead = i === 0;
+        const leadCls = isLead ? " mv2-bar-row--lead" : "";
+        const fillCls = isLead ? " mv2-bar-fill--lead" : "";
+        const w = Math.max(0, Math.min(100, Number(r.score) || 0));
+        const badge = isLead
+          ? `<span class="mv2-bar-badge">เด่นสุด</span>`
+          : "";
+        return `
+    <div class="mv2-bar-row${leadCls}" data-mv2-life="${escapeHtml(r.key)}">
       <div class="mv2-bar-top">
-        <span class="mv2-bar-label">${escapeHtml(r.label)}</span>
+        <span class="mv2-bar-label-wrap">${badge}<span class="mv2-bar-label">${escapeHtml(r.label)}</span></span>
         <span class="mv2-bar-score">${escapeHtml(String(r.score))}</span>
       </div>
-      <div class="mv2-bar-track" aria-hidden="true"><div class="mv2-bar-fill" style="width:${Math.max(0, Math.min(100, Number(r.score) || 0))}%"></div></div>
+      <div class="mv2-bar-track" aria-hidden="true"><div class="mv2-bar-fill${fillCls}" style="width:${w}%"></div></div>
       <p class="mv2-bar-blurb">${escapeHtml(r.blurb)}</p>
-    </div>`,
+    </div>`;
+      },
     )
     .join("");
   return `<div class="mv2-bars">${inner}</div>`;
@@ -407,8 +449,7 @@ export function renderMoldaviteReportV2Html(payload) {
       margin-bottom: 0.95rem;
     }
     .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2-green-dim); font-weight: 600; }
-    .mv2-card--life > h2 { margin: 0 0 0.72rem; }
-    .mv2-life-hint { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: rgb(148, 163, 184); opacity: 0.47; font-weight: 400; }
+    .mv2-life-hint { font-size: 0.65rem; line-height: 1.35; color: rgb(148, 163, 184); opacity: 0.44; font-weight: 400; }
     .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
     .mv2-radar-card--feature {
       margin: 0 0 1.1rem;
@@ -649,106 +690,206 @@ export function renderMoldaviteReportV2Html(payload) {
       color: rgba(148,163,184,0.7);
       font-size: 0.81em;
     }
-    .mv2-card--int { padding: 0.78rem 0.85rem; }
+    .mv2-card--int {
+      padding: 0.58rem 0.72rem 0.62rem;
+      border-color: rgba(255,255,255,0.038);
+    }
+    .mv2-card--int > h2 { margin-bottom: 0.38rem; }
     .mv2-gauge-grid {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      margin-top: 0.15rem;
+      gap: 0.36rem;
+      margin-top: 0.05rem;
     }
     .mv2-gauge-card {
       display: grid;
-      grid-template-columns: minmax(4.25rem, 4.75rem) 1fr;
-      gap: 0.45rem 0.6rem;
+      grid-template-columns: minmax(6.75rem, 7.35rem) minmax(0, 1fr);
+      gap: 0.38rem 0.5rem;
       align-items: center;
-      padding: 0.42rem 0.45rem;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.028);
-      border: 1px solid rgba(52,211,153,0.1);
+      padding: 0.3rem 0.38rem;
+      border-radius: 11px;
+      background: rgba(255,255,255,0.022);
+      border: 1px solid rgba(255,255,255,0.055);
+    }
+    .mv2-gauge-card--boost {
+      border-color: rgba(52,211,153,0.12);
+      background: linear-gradient(135deg, rgba(52,211,153,0.06) 0%, rgba(255,255,255,0.02) 55%);
+    }
+    .mv2-gauge-card--caution {
+      border-color: rgba(251,191,36,0.14);
+      background: linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(255,255,255,0.02) 55%);
+    }
+    .mv2-gauge-card--tone {
+      border-color: rgba(45,212,191,0.14);
+      background: linear-gradient(135deg, rgba(45,212,191,0.06) 0%, rgba(255,255,255,0.02) 55%);
+    }
+    .mv2-gauge-chart {
+      position: relative;
+      width: 100%;
+      max-width: 7.35rem;
+      justify-self: start;
     }
     .mv2-gauge-svg {
       width: 100%;
-      max-width: 4.75rem;
       height: auto;
       display: block;
     }
+    .mv2-gauge-card--boost .mv2-gauge-fill {
+      filter: drop-shadow(0 0 5px rgba(52,211,153,0.42));
+    }
+    .mv2-gauge-card--caution .mv2-gauge-fill {
+      filter: drop-shadow(0 0 5px rgba(251,191,36,0.38));
+    }
+    .mv2-gauge-card--tone .mv2-gauge-fill {
+      filter: drop-shadow(0 0 5px rgba(45,212,191,0.4));
+    }
+    .mv2-gauge-score--overlay {
+      position: absolute;
+      left: 50%;
+      bottom: 0.05rem;
+      transform: translateX(-50%);
+      font-size: 1.38rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      text-shadow: 0 1px 12px rgba(0,0,0,0.55);
+      pointer-events: none;
+    }
+    .mv2-gauge-card--boost .mv2-gauge-score--overlay { color: #a7f3d0; }
+    .mv2-gauge-card--caution .mv2-gauge-score--overlay { color: #fde68a; }
+    .mv2-gauge-card--tone .mv2-gauge-score--overlay { color: #99f6e4; }
     .mv2-gauge-meta {
       display: flex;
       flex-direction: column;
-      gap: 0.1rem;
+      gap: 0.06rem;
       min-width: 0;
+      padding-top: 0.06rem;
     }
     .mv2-gauge-kicker {
-      font-size: 0.62rem;
+      font-size: 0.58rem;
       font-weight: 700;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.07em;
       text-transform: uppercase;
-      color: rgba(110,231,183,0.82);
     }
-    .mv2-gauge-score {
-      font-size: 1.12rem;
-      font-weight: 800;
-      color: var(--mv2-green-dim);
-      font-variant-numeric: tabular-nums;
-      line-height: 1.1;
-    }
+    .mv2-gauge-card--boost .mv2-gauge-kicker { color: rgba(110,231,183,0.88); }
+    .mv2-gauge-card--caution .mv2-gauge-kicker { color: rgba(252,211,77,0.9); }
+    .mv2-gauge-card--tone .mv2-gauge-kicker { color: rgba(94,234,212,0.9); }
     .mv2-gauge-main {
-      font-size: 0.8rem;
+      font-size: 0.76rem;
       font-weight: 600;
-      line-height: 1.28;
-      color: rgba(236,240,246,0.96);
+      line-height: 1.22;
+      color: rgba(226,232,240,0.88);
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
     .mv2-gauge-sub {
-      font-size: 0.7rem;
-      line-height: 1.3;
-      color: rgba(148,163,184,0.62);
+      font-size: 0.62rem;
+      line-height: 1.25;
+      color: rgba(100,116,139,0.72);
+      margin-top: 0.06rem;
     }
+    .mv2-card--life {
+      padding: 0.62rem 0.78rem 0.68rem;
+      border-color: rgba(255,255,255,0.038);
+    }
+    .mv2-card--life > h2 { margin-bottom: 0.28rem; }
+    .mv2-life-hint { margin: 0 0 0.38rem; opacity: 0.42; }
     .mv2-bars {
       display: flex;
       flex-direction: column;
-      gap: 0.55rem;
-      margin-top: 0.08rem;
+      gap: 0.4rem;
+      margin-top: 0.02rem;
     }
     .mv2-bar-row {
-      padding: 0 0 0.02rem;
+      padding: 0.28rem 0.4rem 0.32rem;
+      border-radius: 11px;
+      border: 1px solid rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.015);
+    }
+    .mv2-bar-row--lead {
+      border-color: rgba(52,211,153,0.12);
+      background: linear-gradient(165deg, rgba(52,211,153,0.07) 0%, rgba(255,255,255,0.02) 100%);
+      box-shadow: 0 0 0 1px rgba(52,211,153,0.06);
+    }
+    .mv2-bar-row:not(.mv2-bar-row--lead) {
+      opacity: 0.94;
     }
     .mv2-bar-top {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      gap: 0.5rem;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .mv2-bar-label-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      min-width: 0;
+    }
+    .mv2-bar-badge {
+      flex-shrink: 0;
+      font-size: 0.52rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.12rem 0.38rem;
+      border-radius: 999px;
+      color: rgba(209,250,229,0.95);
+      background: rgba(52,211,153,0.14);
+      border: 1px solid rgba(52,211,153,0.22);
     }
     .mv2-bar-label {
       font-weight: 600;
-      font-size: 0.86rem;
-      color: rgba(241,245,249,0.96);
+      font-size: 0.84rem;
+      color: rgba(241,245,249,0.94);
+    }
+    .mv2-bar-row--lead .mv2-bar-label {
+      font-weight: 700;
+      color: #f8fafc;
     }
     .mv2-bar-score {
-      font-size: 0.82rem;
-      font-weight: 700;
-      color: #4ade80;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #86efac;
       font-variant-numeric: tabular-nums;
-      opacity: 0.95;
+      letter-spacing: -0.02em;
+      text-shadow: 0 0 18px rgba(52,211,153,0.22);
+    }
+    .mv2-bar-row--lead .mv2-bar-score {
+      font-size: 1.02rem;
+      color: #bbf7d0;
     }
     .mv2-bar-track {
-      margin-top: 0.32rem;
-      height: 7px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.06);
+      margin-top: 0.38rem;
+      height: 11px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.055);
       overflow: hidden;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.35);
+    }
+    .mv2-bar-row--lead .mv2-bar-track {
+      height: 12px;
     }
     .mv2-bar-fill {
       height: 100%;
-      border-radius: 8px;
-      background: linear-gradient(90deg, rgba(22,163,74,0.55), rgba(52,211,153,0.95));
+      border-radius: 999px;
       min-width: 0;
+      background: linear-gradient(90deg, rgba(21,128,61,0.75) 0%, rgba(34,197,94,0.92) 45%, rgba(52,211,153,1) 100%);
+      box-shadow: 0 0 10px rgba(52,211,153,0.35), 0 0 20px rgba(34,197,94,0.12);
       transition: width 0.5s ease-out;
     }
+    .mv2-bar-fill--lead {
+      background: linear-gradient(90deg, rgba(34,197,94,0.88) 0%, rgba(52,211,153,1) 55%, rgba(110,231,183,0.98) 100%);
+      box-shadow: 0 0 14px rgba(52,211,153,0.45), 0 0 28px rgba(34,197,94,0.18);
+    }
     .mv2-bar-blurb {
-      margin: 0.28rem 0 0;
-      font-size: 0.74rem;
-      line-height: 1.3;
-      color: rgba(148,163,184,0.88);
+      margin: 0.22rem 0 0;
+      font-size: 0.68rem;
+      line-height: 1.28;
+      color: rgba(100,116,139,0.78);
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;

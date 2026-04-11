@@ -108,11 +108,11 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(!html.includes('class="mv2-owner-id"'));
   assert.ok(html.includes("โทนกับคุณ"));
   assert.ok(html.includes('class="mv2-gauge-grid"'));
-  assert.ok(html.includes('class="mv2-gauge-card"'));
+  assert.ok(html.includes("mv2-gauge-card"));
   assert.ok(html.includes('class="mv2-gauge-svg"'));
   assert.ok(html.includes('class="mv2-gauge-track"'));
   assert.ok(html.includes('class="mv2-gauge-fill"'));
-  assert.ok(html.includes('class="mv2-gauge-score"'));
+  assert.ok(html.includes("mv2-gauge-score"));
   assert.ok(html.includes('data-mv2-gauge="boost"'));
   assert.ok(html.includes('data-mv2-gauge="caution"'));
   assert.ok(html.includes('data-mv2-gauge="tone"'));
