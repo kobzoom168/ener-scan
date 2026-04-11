@@ -81,6 +81,11 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   const html = renderReportHtmlPage(payload);
   assert.ok(html.includes("<!-- moldavite-html-v2 -->"));
   assert.ok(html.includes("moldavite-html-v2"));
+  assert.ok(html.includes('class="mv2-hero-card"'));
+  assert.ok(html.includes('class="mv2-hero-grid"'));
+  assert.ok(html.includes("mv2-hero-pill"));
+  assert.ok(html.includes("คะแนนพลัง"));
+  assert.ok(html.includes("เข้ากับคุณ"));
   assert.ok(html.includes("กราฟโทนหิน"));
   assert.ok(!html.includes("เปรียบเทียบคุณกับพลังของหิน"));
   assert.ok(html.includes("สรุปกราฟ"));
@@ -128,6 +133,7 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes('class="mv2-bar-row"'));
   assert.ok(html.includes('class="mv2-bar-track"'));
   assert.ok(html.includes('class="mv2-bar-fill"'));
+  assert.ok(html.includes("mv2-bar-row--lead"));
   assert.ok(html.includes('class="mv2-bar-label">งาน</span>'));
   assert.ok(html.includes('class="mv2-bar-label">การเงิน</span>'));
   assert.ok(html.includes('class="mv2-bar-label">ความสัมพันธ์</span>'));

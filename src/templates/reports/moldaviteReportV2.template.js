@@ -364,6 +364,17 @@ export function renderMoldaviteReportV2Html(payload) {
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
       : "ไม่มี";
 
+  const pillEnergy =
+    vm.metrics.energyScore != null &&
+    Number.isFinite(Number(vm.metrics.energyScore))
+      ? `คะแนนพลัง ${Number(vm.metrics.energyScore).toFixed(1)}`
+      : "คะแนนพลัง —";
+  const pillCompatHero =
+    vm.metrics.compatibilityPercent != null &&
+    Number.isFinite(Number(vm.metrics.compatibilityPercent))
+      ? `เข้ากับคุณ ${Math.round(Number(vm.metrics.compatibilityPercent))}%`
+      : "เข้ากับคุณ —";
+
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
     .map(
       (r, i) =>
@@ -417,30 +428,104 @@ export function renderMoldaviteReportV2Html(payload) {
       line-height: 1.55;
       -webkit-font-smoothing: antialiased;
     }
-    .mv2-wrap { max-width: 26.5rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
-    .mv2-hero { margin-bottom: 1rem; }
-    .mv2-badge { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mv2-muted); }
-    .mv2-hero-media { border-radius: var(--mv2-r); overflow: hidden; background: #1a1f26; aspect-ratio: 20/13; margin-top: 0.5rem; }
-    .mv2-hero-media--empty { display:flex; align-items:center; justify-content:center; color: var(--mv2-muted); font-size: 0.85rem; }
+    .mv2-wrap { max-width: 26.5rem; margin: 0 auto; padding: 1.15rem 1rem 3rem; }
+    .mv2-hero { margin-bottom: 0.62rem; }
+    .mv2-badge { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mv2-muted); margin-bottom: 0.42rem; }
+    .mv2-hero-card {
+      background: linear-gradient(168deg, rgba(20,24,30,0.97) 0%, rgba(11,13,17,0.99) 100%);
+      border: 1px solid rgba(52,211,153,0.11);
+      border-radius: 16px;
+      padding: 0.62rem 0.72rem;
+      box-shadow: 0 10px 36px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.035);
+    }
+    .mv2-hero-grid {
+      display: grid;
+      grid-template-columns: 5.25rem 1fr;
+      gap: 0.85rem;
+      align-items: center;
+    }
+    .mv2-hero-copy { min-width: 0; }
+    .mv2-hero-card .mv2-hero-media {
+      margin-top: 0;
+      border-radius: 12px;
+      aspect-ratio: 1 / 1;
+      overflow: hidden;
+      background: #151a21;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+    }
+    .mv2-hero-media--empty { display:flex; align-items:center; justify-content:center; color: var(--mv2-muted); font-size: 0.72rem; text-align: center; padding: 0.25rem; }
     .mv2-hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .mv2-h1 { font-size: 1.45rem; font-weight: 700; margin: 0.6rem 0 0.2rem; line-height: 1.25; }
-    .mv2-tag { color: var(--mv2-green-dim); font-size: 0.92rem; margin: 0.25rem 0 1.05rem; line-height: 1.4; }
-    .mv2-main { color: var(--mv2-green); font-weight: 600; font-size: 0.95rem; margin: 0 0 0.5rem; border-left: 3px solid rgba(34,197,94,0.5); padding-left: 0.6rem; }
-    .mv2-h1 + .mv2-main { margin-top: 0.35rem; }
-    .mv2-date { font-size: 0.63rem; color: rgba(90,95,105,0.68); margin-top: 0.35rem; font-weight: 400; letter-spacing: 0.02em; opacity: 0.78; }
+    .mv2-hero-copy .mv2-h1 {
+      font-size: 1.38rem;
+      font-weight: 700;
+      margin: 0 0 0.12rem;
+      line-height: 1.18;
+      letter-spacing: -0.02em;
+    }
+    .mv2-hero-copy .mv2-tag {
+      color: rgba(167,243,208,0.88);
+      font-size: 0.78rem;
+      margin: 0 0 0.32rem;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .mv2-hero-copy .mv2-main {
+      color: var(--mv2-green);
+      font-weight: 600;
+      font-size: 0.8rem;
+      margin: 0 0 0.38rem;
+      border-left: 2px solid rgba(52,211,153,0.45);
+      padding-left: 0.45rem;
+      line-height: 1.3;
+    }
+    .mv2-hero-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.32rem;
+      margin: 0 0 0.32rem;
+    }
+    .mv2-hero-pill {
+      display: inline-block;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      padding: 0.18rem 0.42rem;
+      border-radius: 999px;
+      color: rgba(204,251,241,0.92);
+      background: rgba(6,78,59,0.35);
+      border: 1px solid rgba(52,211,153,0.32);
+      white-space: nowrap;
+    }
+    .mv2-hero-copy .mv2-date {
+      font-size: 0.55rem;
+      color: rgba(100,116,139,0.65);
+      margin: 0;
+      font-weight: 400;
+      letter-spacing: 0.03em;
+      opacity: 0.55;
+    }
     .mv2-strip {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 0.5rem;
-      margin: 0.85rem 0 1.1rem;
+      gap: 0.4rem;
+      margin: 0.55rem 0 0.85rem;
       text-align: center;
     }
-    .mv2-strip > div { background: var(--mv2-card); border: 1px solid var(--mv2-edge); border-radius: 12px; padding: 0.55rem 0.35rem; }
-    .mv2-strip-k { font-size: 0.65rem; color: var(--mv2-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-    .mv2-strip-v { font-size: 1.05rem; font-weight: 700; color: var(--mv2-green-dim); margin-top: 0.2rem; }
-    .mv2-strip-v small { font-size: 0.75rem; font-weight: 500; color: var(--mv2-muted); }
-    .mv2-strip-cell--level .mv2-strip-k { font-size: 0.6rem; opacity: 0.72; letter-spacing: 0.05em; }
-    .mv2-strip-cell--level .mv2-strip-v { font-size: 0.82rem !important; font-weight: 600; color: rgba(134,239,172,0.78); margin-top: 0.22rem; }
+    .mv2-strip > div {
+      background: rgba(17,20,24,0.85);
+      border: 1px solid rgba(255,255,255,0.045);
+      border-radius: 11px;
+      padding: 0.48rem 0.3rem;
+    }
+    .mv2-strip-k { font-size: 0.58rem; color: rgba(148,163,184,0.75); text-transform: uppercase; letter-spacing: 0.07em; }
+    .mv2-strip-v { font-size: 1.02rem; font-weight: 800; color: #a7f3d0; margin-top: 0.15rem; letter-spacing: -0.02em; }
+    .mv2-strip-v small { font-size: 0.7rem; font-weight: 500; color: rgba(148,163,184,0.65); }
+    .mv2-strip-cell--level { opacity: 0.88; }
+    .mv2-strip-cell--level .mv2-strip-k { font-size: 0.54rem; opacity: 0.65; letter-spacing: 0.06em; }
+    .mv2-strip-cell--level .mv2-strip-v { font-size: 0.76rem !important; font-weight: 600; color: rgba(134,239,172,0.65); margin-top: 0.18rem; }
     .mv2-card {
       background: var(--mv2-card);
       border: 1px solid var(--mv2-edge);
@@ -450,15 +535,15 @@ export function renderMoldaviteReportV2Html(payload) {
     }
     .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2-green-dim); font-weight: 600; }
     .mv2-life-hint { font-size: 0.65rem; line-height: 1.35; color: rgb(148, 163, 184); opacity: 0.44; font-weight: 400; }
-    .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
+    .mv2-radar-card { border-left: 2px solid rgba(52,211,153,0.38); }
     .mv2-radar-card--feature {
-      margin: 0 0 1.1rem;
-      padding: 1.05rem 0.9rem 1rem;
-      background: linear-gradient(168deg, rgba(16,185,129,0.09) 0%, rgba(15,23,42,0.62) 55%, rgba(10,12,15,0.92) 100%);
-      border: 1px solid rgba(52,211,153,0.18);
+      margin: 0 0 1rem;
+      padding: 1.12rem 0.95rem 1.05rem;
+      background: linear-gradient(168deg, rgba(16,185,129,0.095) 0%, rgba(15,23,42,0.58) 50%, rgba(10,12,15,0.94) 100%);
+      border: 1px solid rgba(52,211,153,0.16);
       border-radius: 20px;
-      border-left: 3px solid rgba(52,211,153,0.65);
-      box-shadow: 0 12px 44px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.04);
+      border-left: 2px solid rgba(45,212,191,0.42);
+      box-shadow: 0 14px 48px rgba(0,0,0,0.44), inset 0 1px 0 rgba(255,255,255,0.045);
     }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
     .mv2-radar-card--feature .mv2-radar-title {
@@ -476,8 +561,8 @@ export function renderMoldaviteReportV2Html(payload) {
       box-sizing: border-box;
     }
     .mv2-radar-card--feature .mv2-radar-svg-wrap {
-      max-width: 19.35rem;
-      padding: 0.65rem 0.9rem 0.28rem;
+      max-width: 19.75rem;
+      padding: 0.68rem 0.92rem 0.42rem;
     }
     .mv2-radar-plot {
       position: relative;
@@ -578,7 +663,7 @@ export function renderMoldaviteReportV2Html(payload) {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
     }
     .mv2-radar-key {
-      margin: 0.28rem 0 0;
+      margin: 0.32rem 0 0;
       padding: 0;
       display: flex;
       flex-direction: row;
@@ -590,7 +675,7 @@ export function renderMoldaviteReportV2Html(payload) {
       line-height: 1.2;
       letter-spacing: 0.02em;
       font-weight: 500;
-      opacity: 0.85;
+      opacity: 0.72;
     }
     .mv2-radar-key-chip {
       display: inline-flex;
@@ -619,23 +704,24 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-gsum-rows {
       display: flex;
       flex-direction: column;
-      gap: 0.32rem;
+      gap: 0.28rem;
     }
     .mv2-gsum-row {
       display: flex;
       align-items: baseline;
       gap: 0.45rem;
-      padding: 0.28rem 0.5rem;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.028);
-      border: 1px solid rgba(255,255,255,0.055);
+      padding: 0.32rem 0.55rem;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.07);
     }
     .mv2-gsum-row:not(.mv2-gsum-row--lead) {
-      padding: 0.18rem 0.5rem;
+      padding: 0.22rem 0.55rem;
     }
     .mv2-gsum-row--lead {
-      background: rgba(16,185,129,0.07);
-      border-color: rgba(52,211,153,0.14);
+      background: rgba(16,185,129,0.1);
+      border-color: rgba(52,211,153,0.22);
+      box-shadow: 0 0 0 1px rgba(52,211,153,0.06);
     }
     .mv2-gsum-k {
       font-size: 0.72rem;
@@ -651,37 +737,38 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-gsum-row--lead .mv2-gsum-v {
       color: rgba(209,250,229,0.98);
     }
-    .mv2-card--gsum { padding: 0.78rem 0.9rem; }
-    .mv2-card--owner > h2 { margin-bottom: 0.22rem; }
+    .mv2-card--gsum { padding: 0.72rem 0.85rem; }
+    .mv2-card--owner { padding: 0.62rem 0.8rem 0.68rem; }
+    .mv2-card--owner > h2 { margin-bottom: 0.18rem; font-size: 0.9rem; }
     .mv2-owner-zodiac {
-      margin: 0 0 0.42rem;
-      font-size: 1.02rem;
+      margin: 0 0 0.32rem;
+      font-size: 0.94rem;
       font-weight: 700;
-      color: #e2e8f0;
+      color: rgba(226,232,240,0.94);
       letter-spacing: 0.02em;
     }
     .mv2-owner-chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.42rem 0.55rem;
-      margin: 0 0 0.5rem;
+      gap: 0.32rem 0.4rem;
+      margin: 0 0 0.38rem;
     }
     .mv2-owner-chip {
       display: inline-block;
-      padding: 0.22rem 0.55rem;
-      border-radius: 1rem;
-      background: rgba(255,255,255,0.055);
-      border: 1px solid rgba(255,255,255,0.1);
-      font-size: 0.78rem;
+      padding: 0.16rem 0.45rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      font-size: 0.72rem;
       font-weight: 500;
-      color: rgba(226,232,240,0.92);
+      color: rgba(226,232,240,0.88);
       white-space: nowrap;
       letter-spacing: 0.01em;
     }
     .mv2-owner-note {
       margin: 0;
-      font-size: 0.65rem;
-      color: rgba(148,163,184,0.48);
+      font-size: 0.6rem;
+      color: rgba(100,116,139,0.55);
       font-weight: 400;
     }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
@@ -691,69 +778,77 @@ export function renderMoldaviteReportV2Html(payload) {
       font-size: 0.81em;
     }
     .mv2-card--int {
-      padding: 0.58rem 0.72rem 0.62rem;
-      border-color: rgba(255,255,255,0.038);
+      padding: 0.52rem 0.68rem 0.58rem;
+      border-color: rgba(255,255,255,0.034);
     }
-    .mv2-card--int > h2 { margin-bottom: 0.38rem; }
+    .mv2-card--int > h2 { margin-bottom: 0.32rem; }
     .mv2-gauge-grid {
       display: flex;
       flex-direction: column;
-      gap: 0.36rem;
-      margin-top: 0.05rem;
+      gap: 0.42rem;
+      margin-top: 0.02rem;
     }
     .mv2-gauge-card {
       display: grid;
-      grid-template-columns: minmax(6.75rem, 7.35rem) minmax(0, 1fr);
-      gap: 0.38rem 0.5rem;
+      grid-template-columns: 5.25rem minmax(0, 1fr);
+      gap: 0.42rem 0.48rem;
       align-items: center;
-      padding: 0.3rem 0.38rem;
+      padding: 0.24rem 0.32rem;
       border-radius: 11px;
-      background: rgba(255,255,255,0.022);
-      border: 1px solid rgba(255,255,255,0.055);
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
     }
     .mv2-gauge-card--boost {
-      border-color: rgba(52,211,153,0.12);
-      background: linear-gradient(135deg, rgba(52,211,153,0.06) 0%, rgba(255,255,255,0.02) 55%);
+      border-color: rgba(52,211,153,0.14);
+      background: linear-gradient(142deg, rgba(52,211,153,0.07) 0%, rgba(255,255,255,0.018) 60%);
     }
     .mv2-gauge-card--caution {
-      border-color: rgba(251,191,36,0.14);
-      background: linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(255,255,255,0.02) 55%);
+      border-color: rgba(251,191,36,0.16);
+      background: linear-gradient(142deg, rgba(251,191,36,0.07) 0%, rgba(255,255,255,0.018) 60%);
     }
     .mv2-gauge-card--tone {
-      border-color: rgba(45,212,191,0.14);
-      background: linear-gradient(135deg, rgba(45,212,191,0.06) 0%, rgba(255,255,255,0.02) 55%);
+      border-color: rgba(45,212,191,0.15);
+      background: linear-gradient(142deg, rgba(45,212,191,0.07) 0%, rgba(255,255,255,0.018) 60%);
     }
+    .mv2-gauge-card[data-mv2-gauge="boost"] .mv2-gauge-track { stroke: rgba(52,211,153,0.22) !important; }
+    .mv2-gauge-card[data-mv2-gauge="boost"] .mv2-gauge-fill { stroke: rgba(52,211,153,0.98) !important; }
+    .mv2-gauge-card[data-mv2-gauge="caution"] .mv2-gauge-track { stroke: rgba(251,191,36,0.24) !important; }
+    .mv2-gauge-card[data-mv2-gauge="caution"] .mv2-gauge-fill { stroke: rgba(251,191,36,0.96) !important; }
+    .mv2-gauge-card[data-mv2-gauge="tone"] .mv2-gauge-track { stroke: rgba(45,212,191,0.24) !important; }
+    .mv2-gauge-card[data-mv2-gauge="tone"] .mv2-gauge-fill { stroke: rgba(45,212,191,0.97) !important; }
     .mv2-gauge-chart {
       position: relative;
       width: 100%;
-      max-width: 7.35rem;
+      max-width: 5.4rem;
       justify-self: start;
     }
     .mv2-gauge-svg {
       width: 100%;
+      max-width: 5.4rem;
       height: auto;
       display: block;
     }
     .mv2-gauge-card--boost .mv2-gauge-fill {
-      filter: drop-shadow(0 0 5px rgba(52,211,153,0.42));
+      filter: drop-shadow(0 0 6px rgba(52,211,153,0.48));
     }
     .mv2-gauge-card--caution .mv2-gauge-fill {
-      filter: drop-shadow(0 0 5px rgba(251,191,36,0.38));
+      filter: drop-shadow(0 0 6px rgba(251,191,36,0.42));
     }
     .mv2-gauge-card--tone .mv2-gauge-fill {
-      filter: drop-shadow(0 0 5px rgba(45,212,191,0.4));
+      filter: drop-shadow(0 0 6px rgba(45,212,191,0.45));
     }
     .mv2-gauge-score--overlay {
       position: absolute;
       left: 50%;
-      bottom: 0.05rem;
+      bottom: 0.02rem;
       transform: translateX(-50%);
-      font-size: 1.38rem;
+      font-size: 1.48rem;
       font-weight: 800;
       font-variant-numeric: tabular-nums;
       line-height: 1;
-      letter-spacing: -0.02em;
-      text-shadow: 0 1px 12px rgba(0,0,0,0.55);
+      letter-spacing: -0.03em;
+      text-shadow: 0 2px 14px rgba(0,0,0,0.65);
       pointer-events: none;
     }
     .mv2-gauge-card--boost .mv2-gauge-score--overlay { color: #a7f3d0; }
@@ -762,52 +857,53 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-gauge-meta {
       display: flex;
       flex-direction: column;
-      gap: 0.06rem;
+      gap: 0.04rem;
       min-width: 0;
-      padding-top: 0.06rem;
+      padding-top: 0;
     }
     .mv2-gauge-kicker {
-      font-size: 0.58rem;
+      font-size: 0.52rem;
       font-weight: 700;
-      letter-spacing: 0.07em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
+      opacity: 0.92;
     }
-    .mv2-gauge-card--boost .mv2-gauge-kicker { color: rgba(110,231,183,0.88); }
-    .mv2-gauge-card--caution .mv2-gauge-kicker { color: rgba(252,211,77,0.9); }
-    .mv2-gauge-card--tone .mv2-gauge-kicker { color: rgba(94,234,212,0.9); }
+    .mv2-gauge-card--boost .mv2-gauge-kicker { color: rgba(110,231,183,0.82); }
+    .mv2-gauge-card--caution .mv2-gauge-kicker { color: rgba(252,211,77,0.82); }
+    .mv2-gauge-card--tone .mv2-gauge-kicker { color: rgba(94,234,212,0.82); }
     .mv2-gauge-main {
-      font-size: 0.76rem;
+      font-size: 0.74rem;
       font-weight: 600;
-      line-height: 1.22;
-      color: rgba(226,232,240,0.88);
+      line-height: 1.18;
+      color: rgba(226,232,240,0.86);
       display: -webkit-box;
-      -webkit-line-clamp: 1;
+      -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
     .mv2-gauge-sub {
-      font-size: 0.62rem;
-      line-height: 1.25;
-      color: rgba(100,116,139,0.72);
-      margin-top: 0.06rem;
+      font-size: 0.58rem;
+      line-height: 1.2;
+      color: rgba(71,85,105,0.75);
+      margin-top: 0.04rem;
     }
     .mv2-card--life {
-      padding: 0.62rem 0.78rem 0.68rem;
-      border-color: rgba(255,255,255,0.038);
+      padding: 0.55rem 0.72rem 0.62rem;
+      border-color: rgba(255,255,255,0.034);
     }
-    .mv2-card--life > h2 { margin-bottom: 0.28rem; }
-    .mv2-life-hint { margin: 0 0 0.38rem; opacity: 0.42; }
+    .mv2-card--life > h2 { margin-bottom: 0.22rem; }
+    .mv2-life-hint { margin: 0 0 0.32rem; opacity: 0.38; }
     .mv2-bars {
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
-      margin-top: 0.02rem;
+      gap: 0.48rem;
+      margin-top: 0;
     }
     .mv2-bar-row {
-      padding: 0.28rem 0.4rem 0.32rem;
+      padding: 0.34rem 0.42rem 0.36rem;
       border-radius: 11px;
       border: 1px solid rgba(255,255,255,0.04);
-      background: rgba(255,255,255,0.015);
+      background: rgba(255,255,255,0.012);
     }
     .mv2-bar-row--lead {
       border-color: rgba(52,211,153,0.12);
@@ -821,7 +917,7 @@ export function renderMoldaviteReportV2Html(payload) {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 0.45rem;
+      gap: 0.55rem;
     }
     .mv2-bar-label-wrap {
       display: inline-flex;
@@ -843,53 +939,55 @@ export function renderMoldaviteReportV2Html(payload) {
     }
     .mv2-bar-label {
       font-weight: 600;
-      font-size: 0.84rem;
-      color: rgba(241,245,249,0.94);
+      font-size: 0.85rem;
+      color: rgba(248,250,252,0.96);
+      letter-spacing: 0.01em;
     }
     .mv2-bar-row--lead .mv2-bar-label {
       font-weight: 700;
-      color: #f8fafc;
+      color: #fff;
     }
     .mv2-bar-score {
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       font-weight: 800;
-      color: #86efac;
+      color: #4ade80;
       font-variant-numeric: tabular-nums;
-      letter-spacing: -0.02em;
-      text-shadow: 0 0 18px rgba(52,211,153,0.22);
+      letter-spacing: -0.03em;
+      text-shadow: 0 0 22px rgba(74,222,128,0.35);
     }
     .mv2-bar-row--lead .mv2-bar-score {
-      font-size: 1.02rem;
-      color: #bbf7d0;
+      font-size: 1.12rem;
+      color: #86efac;
+      text-shadow: 0 0 26px rgba(52,211,153,0.4);
     }
     .mv2-bar-track {
-      margin-top: 0.38rem;
-      height: 11px;
+      margin-top: 0.4rem;
+      height: 10px;
       border-radius: 999px;
-      background: rgba(255,255,255,0.055);
+      background: rgba(0,0,0,0.28);
       overflow: hidden;
-      box-shadow: inset 0 1px 2px rgba(0,0,0,0.35);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.45);
     }
     .mv2-bar-row--lead .mv2-bar-track {
-      height: 12px;
+      height: 11px;
     }
     .mv2-bar-fill {
       height: 100%;
       border-radius: 999px;
       min-width: 0;
-      background: linear-gradient(90deg, rgba(21,128,61,0.75) 0%, rgba(34,197,94,0.92) 45%, rgba(52,211,153,1) 100%);
-      box-shadow: 0 0 10px rgba(52,211,153,0.35), 0 0 20px rgba(34,197,94,0.12);
+      background: linear-gradient(90deg, rgba(21,128,61,0.8) 0%, rgba(34,197,94,0.95) 42%, rgba(52,211,153,1) 100%);
+      box-shadow: 0 0 8px rgba(52,211,153,0.28), 0 0 16px rgba(34,197,94,0.1);
       transition: width 0.5s ease-out;
     }
     .mv2-bar-fill--lead {
-      background: linear-gradient(90deg, rgba(34,197,94,0.88) 0%, rgba(52,211,153,1) 55%, rgba(110,231,183,0.98) 100%);
-      box-shadow: 0 0 14px rgba(52,211,153,0.45), 0 0 28px rgba(34,197,94,0.18);
+      background: linear-gradient(90deg, rgba(34,197,94,0.9) 0%, rgba(52,211,153,1) 50%, rgba(110,231,183,1) 100%);
+      box-shadow: 0 0 12px rgba(52,211,153,0.38), 0 0 24px rgba(34,197,94,0.15);
     }
     .mv2-bar-blurb {
-      margin: 0.22rem 0 0;
-      font-size: 0.68rem;
-      line-height: 1.28;
-      color: rgba(100,116,139,0.78);
+      margin: 0.2rem 0 0;
+      font-size: 0.65rem;
+      line-height: 1.26;
+      color: rgba(71,85,105,0.72);
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -899,13 +997,15 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
     .mv2-usage-tight { margin: 0; }
     .mv2-usage-tight .mv2-usage-line {
-      margin: 0 0 0.32rem;
-      font-size: 0.76rem;
-      line-height: 1.38;
-      color: rgba(148,163,184,0.88);
+      margin: 0 0 0.26rem;
+      font-size: 0.68rem;
+      line-height: 1.32;
+      color: rgba(100,116,139,0.72);
+      opacity: 0.88;
     }
     .mv2-usage-tight .mv2-usage-line:last-child { margin-bottom: 0; }
-    .mv2-card--usage { padding: 0.78rem 0.9rem; }
+    .mv2-card--usage { padding: 0.58rem 0.75rem 0.62rem; border-color: rgba(255,255,255,0.032); }
+    .mv2-card--usage > h2 { font-size: 0.88rem; margin-bottom: 0.35rem; opacity: 0.92; }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
   </style>
@@ -914,11 +1014,21 @@ export function renderMoldaviteReportV2Html(payload) {
   <div class="mv2-wrap">
     <header class="mv2-hero">
       <div class="mv2-badge">Ener Scan · Moldavite</div>
-      ${media}
-      <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "ไม่มีชื่อ")}</h1>
-      ${h.tagline ? `<p class="mv2-tag">${escapeHtml(String(h.tagline).slice(0, 96))}</p>` : ""}
-      <p class="mv2-main">พลังหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
-      ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
+      <section class="mv2-hero-card">
+        <div class="mv2-hero-grid">
+          ${media}
+          <div class="mv2-hero-copy">
+            <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "ไม่มีชื่อ")}</h1>
+            ${h.tagline ? `<p class="mv2-tag">${escapeHtml(String(h.tagline).slice(0, 96))}</p>` : ""}
+            <p class="mv2-main">พลังหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
+            <div class="mv2-hero-pills">
+              <span class="mv2-hero-pill">${escapeHtml(pillEnergy)}</span>
+              <span class="mv2-hero-pill">${escapeHtml(pillCompatHero)}</span>
+            </div>
+            ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
+          </div>
+        </div>
+      </section>
     </header>
 
     ${radarBlock(vm)}
