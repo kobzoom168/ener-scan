@@ -1,6 +1,7 @@
 ﻿import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
 import { buildAmuletHtmlV2ViewModel } from "../../amulet/amuletHtmlV2.model.js";
+import { env } from "../../config/env.js";
 
 const AMULET_RADAR_R = 38;
 const AMULET_RADAR_CX = 50;
@@ -322,10 +323,26 @@ export function renderAmuletReportV2Html(payload) {
 
   const rawSocialImage = String(payload.object?.socialImageUrl || "").trim();
   const rawObjectImage = String(payload.object?.objectImageUrl || "").trim();
-  const ogImageUrl = absoluteUrlForMeta(
-    /^https?:\/\//i.test(canonicalUrl) ? canonicalUrl : "",
-    rawSocialImage || rawObjectImage,
-  );
+  const publicTok = String(payload.publicToken || "").trim();
+  let ogImageUrl = "";
+  if (
+    env.PUBLIC_REPORT_OG_CHART_ENABLED &&
+    publicTok &&
+    /^https?:\/\//i.test(canonicalUrl)
+  ) {
+    try {
+      const base = new URL(canonicalUrl);
+      ogImageUrl = `${base.origin}/r/${encodeURIComponent(publicTok)}/og.png`;
+    } catch {
+      ogImageUrl = "";
+    }
+  }
+  if (!ogImageUrl) {
+    ogImageUrl = absoluteUrlForMeta(
+      /^https?:\/\//i.test(canonicalUrl) ? canonicalUrl : "",
+      rawSocialImage || rawObjectImage,
+    );
+  }
   const ogImageTags =
     ogImageUrl !== ""
       ? `

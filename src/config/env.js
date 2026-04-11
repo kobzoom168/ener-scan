@@ -61,6 +61,14 @@ export const env = {
   ADMIN_PASSWORD_HASH: process.env.ADMIN_PASSWORD_HASH || "",
   /** Public base URL for PromptPay QR and LINE image URLs (set APP_BASE_URL on deploy). */
   APP_BASE_URL: resolvePublicAppBaseUrl(),
+  /**
+   * When `true`: sacred amulet public HTML uses `/r/:token/og.png` as `og:image` (radar preview PNG).
+   * Default off so existing share previews stay unchanged until you opt in + redeploy.
+   */
+  PUBLIC_REPORT_OG_CHART_ENABLED:
+    String(process.env.PUBLIC_REPORT_OG_CHART_ENABLED || "")
+      .trim()
+      .toLowerCase() === "true",
   /** Amount in THB for 24h unlock (manual PromptPay). Optional; 0 = "ตามที่แอดมินแจ้ง" */
   PAYMENT_UNLOCK_AMOUNT_THB: Number(process.env.PAYMENT_UNLOCK_AMOUNT_THB) || 0,
   PAYMENT_UNLOCK_CURRENCY: process.env.PAYMENT_UNLOCK_CURRENCY || "THB",
