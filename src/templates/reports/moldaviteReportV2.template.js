@@ -439,45 +439,61 @@ export function renderMoldaviteReportV2Html(payload) {
       -webkit-font-smoothing: antialiased;
     }
     .mv2-wrap { max-width: 26.5rem; margin: 0 auto; padding: 1.2rem 1rem 3rem; }
-    .mv2-hero { margin-bottom: 0.85rem; }
-    .mv2-badge { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(148,163,184,0.72); margin-bottom: 0.48rem; }
+    .mv2-hero { margin-bottom: 0.68rem; }
+    .mv2-badge {
+      font-size: 0.58rem;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(100,116,139,0.55);
+      margin-bottom: 0.4rem;
+      opacity: 0.88;
+    }
     .mv2-hero-card {
-      background: linear-gradient(165deg, rgba(22,27,34,0.98) 0%, rgba(10,12,16,0.995) 100%);
-      border: 1px solid rgba(52,211,153,0.13);
-      border-radius: 18px;
-      padding: 0.85rem 0.95rem;
-      box-shadow: 0 16px 48px rgba(0,0,0,0.28), 0 4px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.042);
+      background:
+        linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 38%),
+        linear-gradient(165deg, rgba(22,27,34,0.98) 0%, rgba(10,12,16,0.995) 100%);
+      border: 1px solid rgba(52,211,153,0.09);
+      border-radius: 20px;
+      padding: 0.88rem 1rem;
+      box-shadow:
+        0 14px 44px rgba(0,0,0,0.2),
+        0 4px 18px rgba(0,0,0,0.12),
+        inset 0 1px 0 rgba(255,255,255,0.055);
     }
     .mv2-hero-grid {
       display: grid;
-      grid-template-columns: 6rem 1fr;
-      gap: 0.95rem;
+      grid-template-columns: 6.25rem 1fr;
+      gap: 1rem;
       align-items: center;
     }
     .mv2-hero-copy { min-width: 0; }
     .mv2-hero-card .mv2-hero-media {
       margin-top: 0;
-      border-radius: 14px;
+      border-radius: 15px;
       aspect-ratio: 1 / 1;
       overflow: hidden;
       background: linear-gradient(145deg, #1a222c 0%, #12161c 100%);
-      box-shadow: inset 0 0 0 1px rgba(52,211,153,0.08), 0 4px 16px rgba(0,0,0,0.35);
+      box-shadow:
+        inset 0 0 0 1px rgba(52,211,153,0.065),
+        inset 0 0 20px rgba(0,0,0,0.22),
+        0 3px 14px rgba(0,0,0,0.28);
     }
     .mv2-hero-media--empty { display:flex; align-items:center; justify-content:center; color: var(--mv2-muted); font-size: 0.72rem; text-align: center; padding: 0.25rem; }
     .mv2-hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .mv2-hero-copy .mv2-h1 {
-      font-size: 1.52rem;
-      font-weight: 700;
-      margin: 0 0 0.18rem;
-      line-height: 1.15;
-      letter-spacing: -0.025em;
+      font-size: 1.62rem;
+      font-weight: 800;
+      margin: 0 0 0.16rem;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
       color: #f8fafc;
     }
     .mv2-hero-copy .mv2-tag {
-      color: rgba(110,231,183,0.95);
-      font-size: 0.82rem;
-      margin: 0 0 0.38rem;
-      line-height: 1.38;
+      color: rgba(110,231,183,0.98);
+      font-size: 0.84rem;
+      margin: 0 0 0.36rem;
+      line-height: 1.35;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -487,10 +503,10 @@ export function renderMoldaviteReportV2Html(payload) {
       color: #6ee7b7;
       font-weight: 600;
       font-size: 0.82rem;
-      margin: 0 0 0.42rem;
-      border-left: 1px solid rgba(52,211,153,0.35);
-      padding-left: 0.5rem;
-      line-height: 1.32;
+      margin: 0 0 0.4rem;
+      border-left: 2px solid rgba(52,211,153,0.22);
+      padding-left: 0.48rem;
+      line-height: 1.3;
     }
     .mv2-hero-pills {
       display: flex;
@@ -503,36 +519,36 @@ export function renderMoldaviteReportV2Html(payload) {
       font-size: 0.65rem;
       font-weight: 600;
       letter-spacing: 0.02em;
-      padding: 0.24rem 0.5rem;
+      padding: 0.28rem 0.55rem;
       border-radius: 999px;
-      color: rgba(248,250,252,0.96);
-      background: rgba(6,78,59,0.42);
-      border: 1px solid rgba(52,211,153,0.38);
+      color: rgba(248,250,252,0.98);
+      background: rgba(6,78,59,0.38);
+      border: 1px solid rgba(52,211,153,0.32);
       white-space: nowrap;
     }
     .mv2-hero-copy .mv2-date {
-      font-size: 0.52rem;
-      color: rgba(100,116,139,0.55);
+      font-size: 0.5rem;
+      color: rgba(71,85,105,0.55);
       margin: 0;
       font-weight: 400;
-      letter-spacing: 0.04em;
-      opacity: 0.42;
+      letter-spacing: 0.05em;
+      opacity: 0.32;
     }
     .mv2-strip {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 0.38rem;
-      margin: 0.42rem 0 0.72rem;
+      gap: 0.35rem;
+      margin: 0.22rem 0 0.62rem;
       text-align: center;
     }
     .mv2-strip > div {
-      background: rgba(12,14,18,0.72);
-      border: 1px solid rgba(255,255,255,0.038);
-      border-radius: 13px;
-      padding: 0.52rem 0.28rem 0.48rem;
+      background: rgba(12,14,18,0.48);
+      border: 1px solid rgba(255,255,255,0.028);
+      border-radius: 15px;
+      padding: 0.46rem 0.26rem 0.42rem;
     }
-    .mv2-strip-k { font-size: 0.54rem; color: rgba(148,163,184,0.68); text-transform: uppercase; letter-spacing: 0.08em; }
-    .mv2-strip-v { font-size: 1.05rem; font-weight: 800; color: #a7f3d0; margin-top: 0.12rem; letter-spacing: -0.02em; }
+    .mv2-strip-k { font-size: 0.5rem; color: rgba(148,163,184,0.58); text-transform: uppercase; letter-spacing: 0.08em; }
+    .mv2-strip-v { font-size: 1rem; font-weight: 800; color: rgba(167,243,208,0.92); margin-top: 0.1rem; letter-spacing: -0.02em; }
     .mv2-strip-v small { font-size: 0.68rem; font-weight: 500; color: rgba(148,163,184,0.58); }
     .mv2-strip-cell--level { opacity: 0.72; }
     .mv2-strip-cell--level .mv2-strip-k { font-size: 0.5rem; opacity: 0.55; letter-spacing: 0.07em; }
@@ -548,28 +564,32 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-life-hint { font-size: 0.65rem; line-height: 1.35; color: rgb(148, 163, 184); opacity: 0.44; font-weight: 400; }
     .mv2-radar-card { border-left: 1px solid rgba(45,212,191,0.22); }
     .mv2-radar-card--feature {
-      margin: 0 0 1.05rem;
-      padding: 1.25rem 1rem 1.2rem;
-      background: linear-gradient(175deg, rgba(16,185,129,0.08) 0%, rgba(17,24,32,0.55) 42%, rgba(8,10,14,0.96) 100%);
-      border: 1px solid rgba(52,211,153,0.12);
+      margin: 0 0 0.88rem;
+      padding: 1.38rem 1.05rem 1.32rem;
+      background:
+        linear-gradient(180deg, rgba(16,185,129,0.1) 0%, rgba(16,185,129,0.03) 28%, transparent 52%),
+        linear-gradient(175deg, rgba(17,26,36,0.72) 0%, rgba(10,14,20,0.88) 48%, rgba(6,8,12,0.98) 100%);
+      border: 1px solid rgba(52,211,153,0.1);
       border-radius: 20px;
-      border-left: 1px solid rgba(45,212,191,0.28);
-      box-shadow: 0 18px 56px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.05);
+      border-left: 1px solid rgba(45,212,191,0.18);
+      box-shadow:
+        0 16px 48px rgba(0,0,0,0.26),
+        inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
     .mv2-radar-card--feature .mv2-radar-title {
-      margin: 0 0 0.55rem;
-      font-size: 1.12rem;
-      font-weight: 700;
+      margin: 0 0 0.58rem;
+      font-size: 1.14rem;
+      font-weight: 800;
       text-align: center;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.035em;
       color: #6ee7b7;
-      text-shadow: 0 0 24px rgba(52,211,153,0.15);
+      text-shadow: 0 0 28px rgba(52,211,153,0.18);
     }
     .mv2-radar-feature-grid {
       display: grid;
       grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.92fr);
-      gap: 0.55rem 0.65rem;
+      gap: 0.5rem 0.58rem;
       align-items: start;
     }
     @media (max-width: 18.5rem) {
@@ -583,16 +603,22 @@ export function renderMoldaviteReportV2Html(payload) {
       min-width: 0;
     }
     .mv2-radar-feature-right {
-      padding: 0.08rem 0 0;
+      padding: 0.02rem 0 0;
+      border-radius: 14px;
+      background: rgba(0,0,0,0.12);
+      border: 1px solid rgba(255,255,255,0.04);
+      padding: 0.42rem 0.48rem 0.48rem;
     }
     .mv2-radar-gsum-h {
-      font-size: 0.92rem;
-      margin: 0 0 0.38rem;
-      color: var(--mv2-green-dim);
+      font-size: 0.86rem;
+      margin: 0 0 0.32rem;
+      color: rgba(134,239,172,0.88);
       font-weight: 600;
+      letter-spacing: 0.02em;
+      opacity: 0.92;
     }
     .mv2-radar-feature-right .mv2-gsum-rows {
-      gap: 0.28rem;
+      gap: 0.24rem;
     }
     .mv2-radar-svg-wrap {
       width: 100%;
@@ -602,18 +628,19 @@ export function renderMoldaviteReportV2Html(payload) {
       box-sizing: border-box;
     }
     .mv2-radar-card--feature .mv2-radar-svg-wrap {
-      max-width: 20rem;
-      padding: 0.75rem 1rem 0.55rem;
+      max-width: 21rem;
+      padding: 0.82rem 1rem 0.58rem;
     }
     .mv2-radar-card--feature .mv2-radar-feature-left .mv2-radar-svg-wrap {
       margin-left: 0;
       margin-right: 0;
       max-width: 100%;
-      padding: 0.65rem 0.45rem 0.45rem;
+      padding: 0.72rem 0.4rem 0.52rem;
     }
     .mv2-radar-plot {
       position: relative;
       container-type: inline-size;
+      filter: drop-shadow(0 8px 28px rgba(0,0,0,0.35));
     }
     .mv2-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
     .mv2-radar-svg--animate .mv2-radar-layer--owner,
@@ -722,7 +749,7 @@ export function renderMoldaviteReportV2Html(payload) {
       line-height: 1.2;
       letter-spacing: 0.02em;
       font-weight: 500;
-      opacity: 0.58;
+      opacity: 0.48;
     }
     .mv2-radar-key-chip {
       display: inline-flex;
@@ -751,79 +778,89 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-gsum-rows {
       display: flex;
       flex-direction: column;
-      gap: 0.32rem;
+      gap: 0.28rem;
     }
     .mv2-gsum-row {
       display: flex;
       align-items: baseline;
       flex-wrap: wrap;
-      gap: 0.35rem 0.5rem;
-      padding: 0.38rem 0.58rem;
-      border-radius: 11px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.06);
+      gap: 0.32rem 0.45rem;
+      padding: 0.34rem 0.52rem;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.075);
     }
     .mv2-gsum-row:not(.mv2-gsum-row--lead) {
-      padding: 0.28rem 0.58rem;
+      padding: 0.26rem 0.52rem;
     }
     .mv2-gsum-row--lead {
-      background: rgba(16,185,129,0.09);
-      border-color: rgba(52,211,153,0.2);
-      box-shadow: 0 0 0 1px rgba(52,211,153,0.08);
+      background: rgba(16,185,129,0.11);
+      border-color: rgba(52,211,153,0.26);
+      box-shadow: 0 0 0 1px rgba(52,211,153,0.1), inset 0 1px 0 rgba(255,255,255,0.04);
     }
     .mv2-gsum-k {
-      font-size: 0.7rem;
+      font-size: 0.66rem;
       font-weight: 500;
-      color: rgba(148,163,184,0.65);
+      color: rgba(148,163,184,0.58);
       white-space: nowrap;
     }
     .mv2-gsum-v {
-      font-size: 0.98rem;
+      font-size: 1rem;
       font-weight: 800;
-      color: #f1f5f9;
-      letter-spacing: -0.01em;
+      color: #f8fafc;
+      letter-spacing: -0.015em;
     }
     .mv2-gsum-row--lead .mv2-gsum-v {
       color: #ecfdf5;
     }
-    .mv2-card--owner {
-      padding: 0.52rem 0.72rem 0.58rem;
-      background: rgba(12,14,18,0.65);
-      border-color: rgba(255,255,255,0.032);
-      margin-bottom: 0.88rem;
+    .mv2-radar-feature-right .mv2-gsum-row:not(.mv2-gsum-row--lead) {
+      background: rgba(255,255,255,0.022);
+      border-color: rgba(255,255,255,0.055);
+      opacity: 0.94;
     }
-    .mv2-card--owner > h2 { margin-bottom: 0.14rem; font-size: 0.82rem; font-weight: 600; opacity: 0.88; }
+    .mv2-radar-feature-right .mv2-gsum-row:not(.mv2-gsum-row--lead) .mv2-gsum-v {
+      font-size: 0.94rem;
+      font-weight: 700;
+      color: rgba(226,232,240,0.94);
+    }
+    .mv2-card--owner {
+      padding: 0.44rem 0.62rem 0.5rem;
+      background: rgba(12,14,18,0.52);
+      border-color: rgba(255,255,255,0.028);
+      margin-bottom: 0.82rem;
+    }
+    .mv2-card--owner > h2 { margin-bottom: 0.12rem; font-size: 0.78rem; font-weight: 600; opacity: 0.78; }
     .mv2-owner-zodiac {
-      margin: 0 0 0.26rem;
-      font-size: 0.88rem;
+      margin: 0 0 0.22rem;
+      font-size: 0.84rem;
       font-weight: 600;
-      color: rgba(226,232,240,0.88);
-      letter-spacing: 0.02em;
+      color: rgba(226,232,240,0.82);
+      letter-spacing: 0.015em;
     }
     .mv2-owner-chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.28rem 0.35rem;
-      margin: 0 0 0.3rem;
+      gap: 0.24rem 0.3rem;
+      margin: 0 0 0.26rem;
     }
     .mv2-owner-chip {
       display: inline-block;
-      padding: 0.12rem 0.38rem;
+      padding: 0.1rem 0.32rem;
       border-radius: 999px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.05);
-      font-size: 0.66rem;
+      background: rgba(255,255,255,0.022);
+      border: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.62rem;
       font-weight: 500;
-      color: rgba(203,213,225,0.78);
+      color: rgba(203,213,225,0.72);
       white-space: nowrap;
       letter-spacing: 0.01em;
     }
     .mv2-owner-note {
       margin: 0;
-      font-size: 0.55rem;
-      color: rgba(71,85,105,0.65);
+      font-size: 0.52rem;
+      color: rgba(71,85,105,0.55);
       font-weight: 400;
-      opacity: 0.85;
+      opacity: 0.55;
     }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }
@@ -832,15 +869,15 @@ export function renderMoldaviteReportV2Html(payload) {
       font-size: 0.81em;
     }
     .mv2-card--int {
-      padding: 0.58rem 0.72rem 0.65rem;
+      padding: 0.54rem 0.68rem 0.62rem;
       border-color: rgba(255,255,255,0.04);
     }
-    .mv2-card--int > h2 { margin-bottom: 0.38rem; font-size: 0.95rem; }
+    .mv2-card--int > h2 { margin-bottom: 0.36rem; font-size: 0.95rem; }
     .mv2-gauge-grid {
       display: flex;
       flex-direction: column;
-      gap: 0.48rem;
-      margin-top: 0.05rem;
+      gap: 0.44rem;
+      margin-top: 0.04rem;
     }
     .mv2-gauge-card {
       display: grid;
@@ -944,15 +981,15 @@ export function renderMoldaviteReportV2Html(payload) {
       opacity: 0.85;
     }
     .mv2-card--life {
-      padding: 0.58rem 0.75rem 0.65rem;
+      padding: 0.54rem 0.72rem 0.62rem;
       border-color: rgba(255,255,255,0.038);
     }
     .mv2-card--life > h2 { margin-bottom: 0.2rem; }
-    .mv2-life-hint { margin: 0 0 0.34rem; opacity: 0.36; }
+    .mv2-life-hint { margin: 0 0 0.32rem; opacity: 0.36; }
     .mv2-bars {
       display: flex;
       flex-direction: column;
-      gap: 0.52rem;
+      gap: 0.48rem;
       margin-top: 0.02rem;
     }
     .mv2-bar-row {
