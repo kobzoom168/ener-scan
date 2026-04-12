@@ -336,7 +336,7 @@ export function renderMoldaviteReportV2Html(payload) {
           </div>
           <div class="mv2-et-panel">
             <span class="mv2-et-k">เวลา</span>
-            <span class="mv2-et-v mv2-et-v--fact">${escapeHtml(et.recommendedTimeBand)}</span>
+            <span class="mv2-et-v mv2-et-v--fact mv2-et-v--time">${escapeHtml(et.recommendedTimeBand)}</span>
           </div>
         </div>
         <div class="mv2-et-panel mv2-et-panel--wide">
@@ -769,6 +769,18 @@ export function renderMoldaviteReportV2Html(payload) {
       font-weight: 700;
       color: rgba(241, 245, 249, 0.98);
       letter-spacing: 0.01em;
+    }
+    @keyframes mv2EtTimeSoftBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.42; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .mv2-card--et .mv2-et-v--time {
+        animation: mv2EtTimeSoftBlink 2.6s ease-in-out infinite;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mv2-card--et .mv2-et-v--time { animation: none !important; opacity: 1 !important; }
     }
     .mv2-card--et .mv2-et-v--mode {
       font-size: 0.88rem;
