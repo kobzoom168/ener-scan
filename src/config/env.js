@@ -615,6 +615,18 @@ export const env = {
     1,
     Number(process.env.DELIVERY_WORKER_CONCURRENCY || 1) || 1,
   ),
+  /** SIGTERM/SIGINT: max wait (ms) for in-flight scan jobs before exit. */
+  SCAN_WORKER_GRACEFUL_TIMEOUT_MS: (() => {
+    const raw = process.env.SCAN_WORKER_GRACEFUL_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 90_000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(1000, Math.floor(n)) : 90_000;
+  })(),
+  /** SIGTERM/SIGINT: max wait (ms) for in-flight outbound deliveries before exit. */
+  DELIVERY_WORKER_GRACEFUL_TIMEOUT_MS: (() => {
+    const raw = process.env.DELIVERY_WORKER_GRACEFUL_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 30_000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(1000, Math.floor(n)) : 30_000;
+  })(),
 };
 
 console.log("[ENV_CHECK]", {

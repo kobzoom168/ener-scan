@@ -2,6 +2,8 @@
  * ener-worker-delivery: claims outbound_messages, sends LINE push, retries on 429.
  * Run: ENABLE_DELIVERY_WORKER=true node src/workers/deliveryWorker.js
  */
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import line from "@line/bot-sdk";
 import { env } from "../config/env.js";
 import { claimNextOutboundMessage } from "../stores/scanV2/outboundMessages.db.js";
@@ -16,6 +18,7 @@ import {
   idPrefix8,
   workerIdPrefix16,
 } from "../utils/scanV2Trace.util.js";
+import { waitForGracefulDrain } from "./workerGracefulShutdown.util.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -28,11 +31,16 @@ const lineClient = new line.Client({
   channelSecret: env.CHANNEL_SECRET,
 });
 
+let isShuttingDown = false;
+let activeDeliveries = 0;
+
 async function loop() {
   while (true) {
+    if (isShuttingDown) break;
     try {
       const msg = await claimNextOutboundMessage(workerId);
       if (!msg) {
+        if (isShuttingDown) break;
         await sleep(500);
         continue;
       }
@@ -69,14 +77,29 @@ async function loop() {
         }),
       );
 
-      const result = await deliverOutboundMessage(lineClient, msg, traceCtx);
-      if (!result.sent) {
-        await finalizeOutboundAttempt(msg.id, msg, result, traceCtx);
+      activeDeliveries++;
+      try {
+        const result = await deliverOutboundMessage(lineClient, msg, traceCtx);
+        if (!result.sent) {
+          await finalizeOutboundAttempt(msg.id, msg, result, traceCtx);
+        }
+      } finally {
+        activeDeliveries--;
       }
     } catch (e) {
       console.error("[DELIVERY_WORKER] loop error:", e?.message || e);
       await sleep(1500);
     }
+  }
+}
+
+function isWorkerEntrypoint() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return path.resolve(entry) === path.resolve(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
   }
 }
 
@@ -105,15 +128,63 @@ async function main() {
   );
 
   const stopHb = startWorkerHeartbeatLoop("delivery", workerId, 45, 15_000);
-  const onStop = () => {
+
+  const onStop = async () => {
+    isShuttingDown = true;
     stopHb();
+    console.log(
+      JSON.stringify({
+        event: "DELIVERY_WORKER_SHUTTING_DOWN",
+        workerId,
+        activeDeliveries,
+      }),
+    );
+    const outcome = await waitForGracefulDrain({
+      getActiveCount: () => activeDeliveries,
+      timeoutMs: env.DELIVERY_WORKER_GRACEFUL_TIMEOUT_MS,
+      pollMs: 500,
+    });
+    if (outcome === "clean") {
+      console.log(
+        JSON.stringify({
+          event: "DELIVERY_WORKER_SHUTDOWN_CLEAN",
+          workerId,
+        }),
+      );
+    } else {
+      console.log(
+        JSON.stringify({
+          event: "DELIVERY_WORKER_SHUTDOWN_TIMEOUT",
+          workerId,
+          activeDeliveries,
+        }),
+      );
+    }
     process.exit(0);
   };
-  process.on("SIGTERM", onStop);
-  process.on("SIGINT", onStop);
+
+  process.on("SIGTERM", () => {
+    onStop().catch(() => process.exit(1));
+  });
+  process.on("SIGINT", () => {
+    onStop().catch(() => process.exit(1));
+  });
 
   const n = Math.max(1, env.DELIVERY_WORKER_CONCURRENCY || 1);
   await Promise.all(Array.from({ length: n }, () => loop()));
 }
 
-void main();
+if (isWorkerEntrypoint()) {
+  void main();
+}
+
+/** @internal tests */
+export function getDeliveryWorkerShutdownSnapshot() {
+  return { isShuttingDown, activeDeliveries };
+}
+
+/** @internal tests */
+export function resetDeliveryWorkerShutdownStateForTests() {
+  isShuttingDown = false;
+  activeDeliveries = 0;
+}
