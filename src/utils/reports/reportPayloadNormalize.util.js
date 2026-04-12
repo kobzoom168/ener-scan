@@ -355,6 +355,18 @@ export function normalizeReportPayloadForRender(input) {
       );
   }
 
+  const crystalBraceletRaw = raw.crystalBraceletV1;
+  if (
+    crystalBraceletRaw &&
+    typeof crystalBraceletRaw === "object" &&
+    !Array.isArray(crystalBraceletRaw)
+  ) {
+    payload.crystalBraceletV1 =
+      /** @type {import("../../services/reports/reportPayload.types.js").ReportCrystalBraceletV1} */ (
+        crystalBraceletRaw
+      );
+  }
+
   const timingRaw = raw.timingV1;
   if (timingRaw && typeof timingRaw === "object" && !Array.isArray(timingRaw)) {
     /** @type {Record<string, unknown>} */

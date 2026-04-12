@@ -46,6 +46,7 @@ import {
 } from "../../moldavite/moldavitePayload.build.js";
 import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayNaming.util.js";
 import { buildAmuletV1Slice } from "../../amulet/amuletPayload.build.js";
+import { buildCrystalBraceletV1Slice } from "../../crystalBracelet/crystalBraceletPayload.build.js";
 import { deriveSacredAmuletEnergyScore10FromPowerCategories } from "../../amulet/amuletScores.util.js";
 import { score10ToEnergyGrade } from "../../utils/reports/energyLevelGrade.util.js";
 import { computeTimingV1 } from "../timing/timingEngine.service.js";
@@ -876,10 +877,34 @@ export async function buildReportPayloadFromScan(opts) {
         })
       : undefined;
 
-  /** @type {"moldavite_v1"|"sacred_amulet_v1"|"summary_first_default"} */
+  const shapeFamilyNorm = String(shapeFamilyOpt || "")
+    .trim()
+    .toLowerCase();
+  const crystalBraceletV1 =
+    famNorm === "crystal" &&
+    shapeFamilyNorm === "bracelet" &&
+    !moldaviteDetection.isMoldavite
+      ? buildCrystalBraceletV1Slice({
+          scanResultId: rid,
+          seedKey: rid || String(scanResultId || ""),
+          detection: {
+            reason: "crystal_bracelet_lane_v1",
+            matchedSignals: [],
+          },
+          energyScore,
+          mainEnergyLabel: baseMainEnergyLabel,
+          ownerFitScore:
+            compatPct != null && Number.isFinite(Number(compatPct))
+              ? Math.round(Number(compatPct))
+              : null,
+        })
+      : undefined;
+
+  /** @type {"moldavite_v1"|"sacred_amulet_v1"|"crystal_bracelet_v1"|"summary_first_default"} */
   let reportLane = "summary_first_default";
   if (moldaviteV1) reportLane = "moldavite_v1";
   else if (amuletV1) reportLane = "sacred_amulet_v1";
+  else if (crystalBraceletV1) reportLane = "crystal_bracelet_v1";
   console.log(
     JSON.stringify({
       event: "REPORT_LANE_SELECTED",
@@ -897,55 +922,71 @@ export async function buildReportPayloadFromScan(opts) {
     : amuletV1
       ? String(amuletV1.flexSurface.mainEnergyShort || "").trim() ||
         baseMainEnergyLabel
-      : baseMainEnergyLabel;
+      : crystalBraceletV1
+        ? String(crystalBraceletV1.flexSurface.mainEnergyShort || "").trim() ||
+          baseMainEnergyLabel
+        : baseMainEnergyLabel;
 
   const summaryHeadlineShort = moldaviteV1
     ? moldaviteV1.flexSurface.headline
     : amuletV1
       ? amuletV1.flexSurface.headline
-      : flexSurface.headlineShort;
+      : crystalBraceletV1
+        ? crystalBraceletV1.flexSurface.headline
+        : flexSurface.headlineShort;
 
   const summaryFitReasonShort = moldaviteV1
     ? moldaviteV1.flexSurface.fitLine
     : amuletV1
       ? amuletV1.flexSurface.fitLine
-      : flexSurface.fitReasonShort;
+      : crystalBraceletV1
+        ? crystalBraceletV1.flexSurface.fitLine
+        : flexSurface.fitReasonShort;
 
   const summaryBulletsShort = moldaviteV1
     ? moldaviteV1.flexSurface.bullets
     : amuletV1
       ? amuletV1.flexSurface.bullets
-      : flexSurface.bulletsShort;
+      : crystalBraceletV1
+        ? crystalBraceletV1.flexSurface.bullets
+        : flexSurface.bulletsShort;
 
   const summaryPresentationAngleId = moldaviteV1
     ? "moldavite_v1_summary_first"
     : amuletV1
       ? "sacred_amulet_v1_summary_first"
-      : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
+      : crystalBraceletV1
+        ? "crystal_bracelet_v1_summary_first"
+        : flexSurface.wordingMeta?.presentationAngleId ?? undefined;
 
   const summaryWordingVariantId = moldaviteV1
     ? "moldavite_v1_summary_first"
     : amuletV1
       ? "sacred_amulet_v1_summary_first"
-      : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
+      : crystalBraceletV1
+        ? "crystal_bracelet_v1_summary_first"
+        : flexSurface.wordingMeta?.wordingVariantId ?? undefined;
 
   const summaryVisibleMainLabel = moldaviteV1
     ? String(moldaviteV1.flexSurface.headline || "").trim() || undefined
     : amuletV1
       ? String(amuletV1.flexSurface.headline || "").trim() || undefined
-      : dbSurfBundle?.mainLabel
-        ? String(dbSurfBundle.mainLabel).trim()
-        : undefined;
+      : crystalBraceletV1
+        ? String(crystalBraceletV1.flexSurface.headline || "").trim() ||
+          undefined
+        : dbSurfBundle?.mainLabel
+          ? String(dbSurfBundle.mainLabel).trim()
+          : undefined;
 
   const summaryOpeningShort =
-    moldaviteV1 || amuletV1
+    moldaviteV1 || amuletV1 || crystalBraceletV1
       ? undefined
       : dbSurfBundle?.opening
         ? String(dbSurfBundle.opening).trim()
         : undefined;
 
   const summaryTeaserShort =
-    moldaviteV1 || amuletV1
+    moldaviteV1 || amuletV1 || crystalBraceletV1
       ? undefined
       : dbSurfBundle?.teaser
         ? String(dbSurfBundle.teaser).trim()
@@ -956,7 +997,10 @@ export async function buildReportPayloadFromScan(opts) {
     : amuletV1
       ? String(amuletV1.flexSurface.ctaLabel || "").trim() ||
         "เปิดรายงานฉบับเต็ม"
-      : flexSurface.ctaLabel;
+      : crystalBraceletV1
+        ? String(crystalBraceletV1.flexSurface.ctaLabel || "").trim() ||
+          "เปิดรายงานฉบับเต็ม"
+        : flexSurface.ctaLabel;
 
   /** Hero `คะแนนพลัง` / `ระดับ` for sacred_amulet: derived from six axis scores (same as graph), not parsed scan text. */
   const summaryEnergyScore =
@@ -1101,6 +1145,19 @@ export async function buildReportPayloadFromScan(opts) {
             ).trim(),
           }
         : {}),
+      ...(crystalBraceletV1 && !moldaviteV1 && !amuletV1
+        ? {
+            heroNaming: String(
+              crystalBraceletV1.flexSurface.heroNamingLine || "",
+            ).trim(),
+            mainEnergy: String(
+              crystalBraceletV1.flexSurface.mainEnergyWordingLine || "",
+            ).trim(),
+            htmlOpeningLine: String(
+              crystalBraceletV1.flexSurface.htmlOpeningLine || "",
+            ).trim(),
+          }
+        : {}),
     },
     compatibility: compatibilityPayload
       ? {
@@ -1224,6 +1281,7 @@ export async function buildReportPayloadFromScan(opts) {
     },
     ...(moldaviteV1 ? { moldaviteV1 } : {}),
     ...(amuletV1 ? { amuletV1 } : {}),
+    ...(crystalBraceletV1 ? { crystalBraceletV1 } : {}),
     ...(timingV1 ? { timingV1 } : {}),
   };
 }

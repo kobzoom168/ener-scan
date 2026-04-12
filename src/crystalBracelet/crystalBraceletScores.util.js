@@ -1,0 +1,120 @@
+import { fnv1a32 } from "../moldavite/moldaviteScores.util.js";
+
+export const CRYSTAL_BRACELET_SCORING_MODE = "deterministic_v1";
+
+/** @type {const} */
+export const CRYSTAL_BRACELET_AXIS_ORDER = [
+  "money",
+  "work",
+  "relationship",
+  "balance",
+  "drive",
+  "owner_fit",
+];
+
+export const CRYSTAL_BRACELET_AXIS_LABEL_THAI = {
+  money: "การเงินและโอกาส",
+  work: "งานและเป้าหมาย",
+  relationship: "ความสัมพันธ์",
+  balance: "สมดุลใจ",
+  drive: "พลังขับเคลื่อน",
+  owner_fit: "ความเข้ากันกับผู้สวม",
+};
+
+/**
+ * @param {number} score
+ */
+function ownerFitBandFromScore(score) {
+  if (score >= 86) {
+    return {
+      band: "เข้ากันดีมาก",
+      reason:
+        "พลังของกำไลเส้นนี้สอดคล้องกับจังหวะชีวิตของผู้สวมในช่วงนี้ค่อนข้างชัด",
+    };
+  }
+  if (score >= 72) {
+    return {
+      band: "เข้ากันค่อนข้างดี",
+      reason:
+        "พลังของกำไลเส้นนี้เข้ากับจังหวะการขยับของผู้สวมในช่วงนี้",
+    };
+  }
+  if (score >= 58) {
+    return {
+      band: "เข้ากันในระดับพอดี",
+      reason:
+        "พลังของกำไลยังปรับเข้ากับผู้สวมได้ในระดับที่พอไปต่อได้",
+    };
+  }
+  return {
+    band: "เข้ากันเบา ๆ",
+    reason:
+      "ช่วงนี้พลังของกำไลกับจังหวะผู้สวมอาจยังไม่ล็อกตรงทุกมิติ — อ่านแบบค่อยเป็นค่อยไป",
+  };
+}
+
+/**
+ * Deterministic six-axis scores for mixed-stone crystal bracelet lane.
+ *
+ * @param {string} seedKey
+ * @param {{
+ *   sessionKey?: string,
+ *   mainEnergyLabel?: string,
+ *   ownerFitScore?: number|null,
+ * }} [opts]
+ */
+export function computeCrystalBraceletScoresDeterministicV1(seedKey, opts = {}) {
+  const seed = String(seedKey || "").trim() || "bracelet_seed";
+  const session = String(opts.sessionKey ?? "").trim();
+
+  /** @type {Record<string, { key: string, score: number, labelThai: string }>} */
+  const axes = {};
+
+  for (const key of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const h = fnv1a32(`${seed}|cb_axis|${key}|${session}`);
+    let s = 34 + (h % 46);
+    if (key === "owner_fit" && opts.ownerFitScore != null) {
+      const oc = Number(opts.ownerFitScore);
+      if (Number.isFinite(oc)) {
+        s = Math.round(s * 0.55 + oc * 0.45);
+        s = Math.min(99, Math.max(34, s));
+      }
+    }
+    const hint = String(opts.mainEnergyLabel || "").trim();
+    if (hint && (h % 5) === 0) {
+      s = Math.min(99, s + 2);
+    }
+    axes[key] = {
+      key,
+      score: s,
+      labelThai: CRYSTAL_BRACELET_AXIS_LABEL_THAI[key],
+    };
+  }
+
+  const sorted = [...CRYSTAL_BRACELET_AXIS_ORDER].sort((a, b) => {
+    const ds = axes[b].score - axes[a].score;
+    if (ds !== 0) return ds;
+    return CRYSTAL_BRACELET_AXIS_ORDER.indexOf(a) -
+      CRYSTAL_BRACELET_AXIS_ORDER.indexOf(b);
+  });
+  const primaryAxis = sorted[0];
+  let secondaryAxis = sorted[1];
+  if (secondaryAxis === primaryAxis) {
+    secondaryAxis = sorted[2] || sorted[1];
+  }
+
+  const ofScore = axes.owner_fit.score;
+  const { band, reason } = ownerFitBandFromScore(ofScore);
+
+  return {
+    scoringMode: CRYSTAL_BRACELET_SCORING_MODE,
+    axes,
+    primaryAxis,
+    secondaryAxis,
+    ownerFit: {
+      score: ofScore,
+      band,
+      reason,
+    },
+  };
+}

@@ -38,7 +38,62 @@
  * @property {ReportMoldaviteV1} [moldaviteV1] — isolated Moldavite v1 slice (Flex + public); not generic crystal confidence
  * @property {ReportAmuletV1} [amuletV1] — sacred amulet lane v1 (Flex + HTML); separate from legacy thai_amulet mobile report
  * @property {ReportCrystalGenericSafeV1} [crystalGenericSafeV1] — neutral crystal fallback when Moldavite not detected; avoids DB confidence hero
+ * @property {ReportCrystalBraceletV1} [crystalBraceletV1] — mixed-stone crystal bracelet lane; summary-first Flex + graph-first HTML; not Moldavite semantics
  * @property {ReportTimingV1} [timingV1] — deterministic Timing Engine v1 truth (HTML/Flex read-only)
+ */
+
+/**
+ * Crystal bracelet lane v1 — mixed-stone crystal bracelet, summary-first Flex + graph-first HTML.
+ * Uses crystal-generic semantics, not subtype-assertive naming.
+ *
+ * @typedef {Object} ReportCrystalBraceletV1
+ * @property {string} version — e.g. "1"
+ * @property {"deterministic_v1"} scoringMode
+ * @property {{ reason: string, matchedSignals: string[] }} detection
+ * @property {"crystal_bracelet"} lane
+ * @property {{ objectFamily: "crystal", formFactor: "bracelet", compositionMode: "mixed"|"single_unknown"|"unknown" }} identity
+ * @property {Record<string, { key: string, score: number, labelThai: string }>} axes
+ * @property {string} primaryAxis
+ * @property {string} secondaryAxis
+ * @property {{ score: number|null, band: string|null, reason?: string|null }} [ownerFit]
+ * @property {{
+ *   headline: string,
+ *   fitLine: string,
+ *   bullets: string[],
+ *   ctaLabel?: string,
+ *   mainEnergyShort: string,
+ *   heroNamingLine?: string,
+ *   mainEnergyWordingLine?: string,
+ *   htmlOpeningLine?: string,
+ *   tagline?: string
+ * }} flexSurface
+ * @property {{
+ *   meaningParagraphs: string[],
+ *   graphSummaryRows: string[],
+ *   axisBlurbs: Record<string, string>,
+ *   usageCautionLines: string[],
+ *   ownerProfile?: {
+ *     summaryLabel?: string,
+ *     traits?: string[],
+ *     sensitiveAxes?: string[],
+ *   },
+ *   interactionSummary?: string[],
+ * }} htmlReport
+ * @property {{
+ *   displayLabel: string,
+ *   visibleMainEnergyLabel: string,
+ *   namingPolicy: "generic_crystal_bracelet"
+ * }} display
+ * @property {{
+ *   scanResultIdPrefix: string,
+ *   energyScoreSnapshot: number|null,
+ *   mainEnergyLabelSnapshot: string|null
+ * }} [context]
+ * @property {{
+ *   internalStoneHints?: string[],
+ *   internalToneSignals?: string[],
+ *   subtypeConfidenceHidden?: number|null
+ * }} [internalHints] — introspection only; never render to users
  */
 
 /**
