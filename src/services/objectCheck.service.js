@@ -508,6 +508,656 @@ async function runPermissiveStructuredObjectCheck(imageBase64) {
   };
 }
 
+const STRICT_CRYSTAL_FAMILY_PROMPT = `ตรวจภาพนี้แล้วตอบ JSON เท่านั้น (ห้าม markdown ห้ามข้อความอื่น)
+
+{
+  "familyLabel": "crystal|sacred_amulet|unknown",
+  "familyConfidence": 0.0,
+  "primaryObjectOwner": "bracelet|amulet_like|unknown",
+  "hasCharmAttachment": false,
+  "reason": "short"
+}
+
+กติกา:
+- crystal = วัตถุหลักของภาพเป็นหิน/คริสตัล/ลูกปัดหินสายพลัง หรือเครื่องประดับหินที่รวมกันเป็นชิ้นเดียว
+- sacred_amulet = วัตถุหลักของภาพเป็นพระ/ตะกรุด/เครื่องราง/amulet-like object
+- ถ้ามีท่อ ตะกรุด charm หรือชิ้นแทรก แต่โครงหลักเป็นกำไลลูกปัดเป็นวง ให้ primaryObjectOwner = bracelet
+- ถ้าไม่มั่นใจ ห้ามเดาเป็น crystal
+- beads ในกำไลเส้นเดียวไม่ถือเป็นหลายชิ้น`;
+
+const STRICT_BRACELET_FORM_PROMPT = `ตรวจภาพนี้แล้วตอบ JSON เท่านั้น (ห้าม markdown ห้ามข้อความอื่น)
+
+{
+  "formFactor": "bracelet|necklace|pendant|loose_stone|unknown",
+  "formConfidence": 0.0,
+  "isSingleWearableObject": true,
+  "hasBeadLoop": true,
+  "isClosedLoop": true,
+  "primaryOwner": "bracelet|attachment|unknown",
+  "reason": "short"
+}
+
+กติกา:
+- bracelet = วัตถุหลักเป็นวงกำไล/ลูกปัดร้อยเป็นวงสวมข้อมือ
+- ห้ามนับลูกปัดในกำไลเส้นเดียวเป็นหลายชิ้น
+- ถ้ามีชาร์มหรือท่อแทรก แต่โครงรวมยังเป็นกำไล ให้ primaryOwner = bracelet
+- ถ้าไม่มั่นใจ ให้ตอบ unknown
+- อย่าเดาจากชิ้นเล็กที่ห้อยอยู่ ถ้าโครงสร้างหลักของภาพคือวงกำไล`;
+
+/**
+ * @param {unknown} v
+ * @returns {"crystal"|"sacred_amulet"|"unknown"}
+ */
+function normalizeStrictFamilyLabel(v) {
+  const s = String(v || "")
+    .trim()
+    .toLowerCase();
+  if (s === "crystal" || s === "sacred_amulet" || s === "unknown") return s;
+  return "unknown";
+}
+
+/**
+ * @param {unknown} v
+ * @returns {"bracelet"|"amulet_like"|"unknown"}
+ */
+function normalizePrimaryObjectOwner(v) {
+  const s = String(v || "")
+    .trim()
+    .toLowerCase();
+  if (s === "bracelet" || s === "amulet_like" || s === "unknown") return s;
+  return "unknown";
+}
+
+/**
+ * @param {unknown} v
+ * @returns {"bracelet"|"necklace"|"pendant"|"loose_stone"|"unknown"}
+ */
+function normalizeFormFactor(v) {
+  const s = String(v || "")
+    .trim()
+    .toLowerCase();
+  if (
+    s === "bracelet" ||
+    s === "necklace" ||
+    s === "pendant" ||
+    s === "loose_stone" ||
+    s === "unknown"
+  )
+    return s;
+  return "unknown";
+}
+
+/**
+ * @param {unknown} v
+ * @returns {"bracelet"|"attachment"|"unknown"}
+ */
+function normalizeFormPrimaryOwner(v) {
+  const s = String(v || "")
+    .trim()
+    .toLowerCase();
+  if (s === "bracelet" || s === "attachment" || s === "unknown") return s;
+  return "unknown";
+}
+
+/**
+ * @param {object|null} parsed
+ * @returns {{
+ *   familyLabel: "crystal"|"sacred_amulet"|"unknown",
+ *   familyConfidence: number,
+ *   primaryObjectOwner: "bracelet"|"amulet_like"|"unknown",
+ *   hasCharmAttachment: boolean,
+ *   reason: string,
+ * }}
+ */
+function crystalFamilyFromParsed(parsed) {
+  const familyLabel = normalizeStrictFamilyLabel(parsed?.familyLabel);
+  const fc = parsed?.familyConfidence;
+  const familyConfidence =
+    fc != null && Number.isFinite(Number(fc))
+      ? Math.min(1, Math.max(0, Number(fc)))
+      : 0;
+  return {
+    familyLabel,
+    familyConfidence,
+    primaryObjectOwner: normalizePrimaryObjectOwner(parsed?.primaryObjectOwner),
+    hasCharmAttachment: Boolean(parsed?.hasCharmAttachment),
+    reason:
+      parsed?.reason != null ? String(parsed.reason).slice(0, 240) : "",
+  };
+}
+
+/**
+ * @param {object|null} parsed
+ * @returns {{
+ *   formFactor: ReturnType<typeof normalizeFormFactor>,
+ *   formConfidence: number,
+ *   isSingleWearableObject: boolean,
+ *   hasBeadLoop: boolean,
+ *   isClosedLoop: boolean,
+ *   primaryOwner: ReturnType<typeof normalizeFormPrimaryOwner>,
+ *   reason: string,
+ * }}
+ */
+function braceletFormFromParsed(parsed) {
+  const formFactor = normalizeFormFactor(parsed?.formFactor);
+  const fc = parsed?.formConfidence;
+  const formConfidence =
+    fc != null && Number.isFinite(Number(fc))
+      ? Math.min(1, Math.max(0, Number(fc)))
+      : 0;
+  return {
+    formFactor,
+    formConfidence,
+    isSingleWearableObject:
+      typeof parsed?.isSingleWearableObject === "boolean"
+        ? parsed.isSingleWearableObject
+        : false,
+    hasBeadLoop:
+      typeof parsed?.hasBeadLoop === "boolean" ? parsed.hasBeadLoop : false,
+    isClosedLoop:
+      typeof parsed?.isClosedLoop === "boolean" ? parsed.isClosedLoop : false,
+    primaryOwner: normalizeFormPrimaryOwner(parsed?.primaryOwner),
+    reason:
+      parsed?.reason != null ? String(parsed.reason).slice(0, 240) : "",
+  };
+}
+
+/**
+ * Strict structured pass: crystal vs sacred amulet vs unknown.
+ * @param {string} imageBase64
+ */
+export async function runStrictCrystalFamilyCheck(imageBase64) {
+  const startedAt = Date.now();
+  const response = await Promise.race([
+    withOpenAi429RetryOnce(() =>
+      callObjectCheckModel(STRICT_CRYSTAL_FAMILY_PROMPT, imageBase64),
+    ),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("object_check_timeout")), OBJECT_CHECK_TIMEOUT_MS),
+    ),
+  ]);
+  const rawText = String(response?.output_text || "").trim();
+  const parsed = extractJsonObject(rawText);
+  const row = crystalFamilyFromParsed(parsed);
+  console.log(
+    JSON.stringify({
+      event: "CRYSTAL_BRACELET_FAMILY_CHECK",
+      pass: "strict_crystal_family",
+      model: OBJECT_CHECK_MODEL,
+      elapsedMs: Date.now() - startedAt,
+      familyLabel: row.familyLabel,
+      familyConfidence: row.familyConfidence,
+      primaryObjectOwner: row.primaryObjectOwner,
+      parseOk: Boolean(parsed),
+    }),
+  );
+  return row;
+}
+
+/**
+ * Strict structured pass: bracelet form vs other / unknown.
+ * @param {string} imageBase64
+ */
+export async function runStrictBraceletFormCheck(imageBase64) {
+  const startedAt = Date.now();
+  const response = await Promise.race([
+    withOpenAi429RetryOnce(() =>
+      callObjectCheckModel(STRICT_BRACELET_FORM_PROMPT, imageBase64),
+    ),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("object_check_timeout")), OBJECT_CHECK_TIMEOUT_MS),
+    ),
+  ]);
+  const rawText = String(response?.output_text || "").trim();
+  const parsed = extractJsonObject(rawText);
+  const row = braceletFormFromParsed(parsed);
+  console.log(
+    JSON.stringify({
+      event: "CRYSTAL_BRACELET_FORM_CHECK",
+      pass: "strict_bracelet_form",
+      model: OBJECT_CHECK_MODEL,
+      elapsedMs: Date.now() - startedAt,
+      formFactor: row.formFactor,
+      formConfidence: row.formConfidence,
+      primaryOwner: row.primaryOwner,
+      parseOk: Boolean(parsed),
+    }),
+  );
+  return row;
+}
+
+/**
+ * Pure eligibility decision for tests and reuse.
+ * @param {{
+ *   baseGateResult: string,
+ *   familyCheck: object | null,
+ *   formCheck: object | null,
+ *   familyMin: number,
+ *   formMin: number,
+ *   strictPassEnabled: boolean,
+ * }} p
+ */
+export function evaluateCrystalBraceletEligibilityFromStructuredChecks(p) {
+  const baseGateResult = String(p.baseGateResult || "").trim();
+  if (!p.strictPassEnabled) {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("inconclusive"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: p.familyCheck,
+      formCheck: p.formCheck,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+  if (baseGateResult !== "single_supported") {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("global_reject"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: p.familyCheck,
+      formCheck: p.formCheck,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+  const fam = p.familyCheck;
+  const form = p.formCheck;
+  if (!fam || !form) {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("inconclusive"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: fam,
+      formCheck: form,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+
+  if (fam.familyLabel !== "crystal") {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("not_crystal"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: fam,
+      formCheck: form,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+  if (fam.familyConfidence < p.familyMin) {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("inconclusive"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: fam,
+      formCheck: form,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+  if (fam.primaryObjectOwner === "amulet_like") {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("not_crystal"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: fam,
+      formCheck: form,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+
+  if (form.formFactor !== "bracelet") {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("not_bracelet"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: fam,
+      formCheck: form,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+  if (form.formConfidence < p.formMin) {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("inconclusive"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: fam,
+      formCheck: form,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+  if (!form.isSingleWearableObject) {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("not_bracelet"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: fam,
+      formCheck: form,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+  if (form.primaryOwner !== "bracelet") {
+    return {
+      eligible: false,
+      status: /** @type {const} */ ("not_bracelet"),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: fam,
+      formCheck: form,
+      shapeFamilyForcedToBracelet: false,
+    };
+  }
+
+  return {
+    eligible: true,
+    status: /** @type {const} */ ("allowed"),
+    objectFamilyTruth: /** @type {const} */ ("crystal"),
+    shapeFamilyTruth: /** @type {const} */ ("bracelet"),
+    familyCheck: fam,
+    formCheck: form,
+    shapeFamilyForcedToBracelet: true,
+  };
+}
+
+/**
+ * Multi-pass proof for crystal bracelet lane. Does not weaken global object gate.
+ * @param {string} imageBase64
+ * @param {{ result: string, firstPass?: string, gateMeta?: object }} gated
+ * @param {{ scanResultIdPrefix?: string, jobIdPrefix?: string }} [opts]
+ */
+export async function checkCrystalBraceletEligibility(imageBase64, gated, opts = {}) {
+  const scanResultIdPrefix = String(opts.scanResultIdPrefix || "").slice(0, 8);
+  const jobIdPrefix = String(opts.jobIdPrefix || "").slice(0, 8);
+  const baseGateResult = String(gated?.result ?? "unsupported");
+  const strictPassEnabled = Boolean(env.CRYSTAL_BRACELET_ENABLE_STRICT_PASS);
+  const familyMin = Number(env.CRYSTAL_BRACELET_FAMILY_MIN_CONFIDENCE);
+  const formMin = Number(env.CRYSTAL_BRACELET_FORM_MIN_CONFIDENCE);
+
+  console.log(
+    JSON.stringify({
+      event: "CRYSTAL_BRACELET_ELIGIBILITY_START",
+      scanResultIdPrefix: scanResultIdPrefix || null,
+      jobIdPrefix: jobIdPrefix || null,
+      baseGateResult,
+      strictPassEnabled,
+      familyMin,
+      formMin,
+    }),
+  );
+
+  if (!strictPassEnabled) {
+    const out = evaluateCrystalBraceletEligibilityFromStructuredChecks({
+      baseGateResult,
+      familyCheck: null,
+      formCheck: null,
+      familyMin,
+      formMin,
+      strictPassEnabled,
+    });
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ELIGIBILITY_RESULT",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        finalStatus: out.status,
+        eligible: out.eligible,
+        shapeFamilyForcedToBracelet: false,
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ROUTE_BLOCKED",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        reason: "strict_pass_disabled",
+        finalStatus: out.status,
+      }),
+    );
+    return {
+      ...out,
+      baseGateResult,
+    };
+  }
+
+  if (baseGateResult !== "single_supported") {
+    const out = evaluateCrystalBraceletEligibilityFromStructuredChecks({
+      baseGateResult,
+      familyCheck: null,
+      formCheck: null,
+      familyMin,
+      formMin,
+      strictPassEnabled,
+    });
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ELIGIBILITY_RESULT",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        finalStatus: out.status,
+        eligible: false,
+        shapeFamilyForcedToBracelet: false,
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ROUTE_BLOCKED",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        reason: "global_gate_not_single_supported",
+        finalStatus: out.status,
+      }),
+    );
+    return {
+      ...out,
+      baseGateResult,
+    };
+  }
+
+  /** @type {ReturnType<typeof crystalFamilyFromParsed> | null} */
+  let familyCheck = null;
+  /** @type {ReturnType<typeof braceletFormFromParsed> | null} */
+  let formCheck = null;
+
+  try {
+    familyCheck = await runStrictCrystalFamilyCheck(imageBase64);
+  } catch (e) {
+    const msg = String(e?.message || e);
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ELIGIBILITY_RESULT",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        finalStatus: "inconclusive",
+        eligible: false,
+        familyLabel: null,
+        familyConfidence: null,
+        formFactor: null,
+        formConfidence: null,
+        error: msg.slice(0, 160),
+        shapeFamilyForcedToBracelet: false,
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ROUTE_BLOCKED",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        reason: "family_pass_failed",
+        finalStatus: "inconclusive",
+      }),
+    );
+    return {
+      eligible: false,
+      status: "inconclusive",
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck: null,
+      formCheck: null,
+      shapeFamilyForcedToBracelet: false,
+      baseGateResult,
+    };
+  }
+
+  if (
+    familyCheck.familyLabel !== "crystal" ||
+    familyCheck.familyConfidence < familyMin ||
+    familyCheck.primaryObjectOwner === "amulet_like"
+  ) {
+    const st =
+      familyCheck.familyLabel !== "crystal"
+        ? "not_crystal"
+        : familyCheck.primaryObjectOwner === "amulet_like"
+          ? "not_crystal"
+          : "inconclusive";
+    const out = {
+      eligible: false,
+      status: /** @type {"not_crystal"|"inconclusive"} */ (st),
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck,
+      formCheck: null,
+      shapeFamilyForcedToBracelet: false,
+      baseGateResult,
+    };
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ELIGIBILITY_RESULT",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        familyLabel: familyCheck.familyLabel,
+        familyConfidence: familyCheck.familyConfidence,
+        formFactor: null,
+        formConfidence: null,
+        finalStatus: out.status,
+        eligible: false,
+        shapeFamilyForcedToBracelet: false,
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ROUTE_BLOCKED",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        reason: "family_gate_failed",
+        familyLabel: familyCheck.familyLabel,
+        familyConfidence: familyCheck.familyConfidence,
+        finalStatus: out.status,
+      }),
+    );
+    return out;
+  }
+
+  try {
+    formCheck = await runStrictBraceletFormCheck(imageBase64);
+  } catch (e) {
+    const msg = String(e?.message || e);
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ELIGIBILITY_RESULT",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        familyLabel: familyCheck.familyLabel,
+        familyConfidence: familyCheck.familyConfidence,
+        formFactor: null,
+        formConfidence: null,
+        finalStatus: "inconclusive",
+        eligible: false,
+        error: msg.slice(0, 160),
+        shapeFamilyForcedToBracelet: false,
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ROUTE_BLOCKED",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        reason: "form_pass_failed",
+        finalStatus: "inconclusive",
+      }),
+    );
+    return {
+      eligible: false,
+      status: "inconclusive",
+      objectFamilyTruth: null,
+      shapeFamilyTruth: null,
+      familyCheck,
+      formCheck: null,
+      shapeFamilyForcedToBracelet: false,
+      baseGateResult,
+    };
+  }
+
+  const finalEval = evaluateCrystalBraceletEligibilityFromStructuredChecks({
+    baseGateResult,
+    familyCheck,
+    formCheck,
+    familyMin,
+    formMin,
+    strictPassEnabled,
+  });
+
+  console.log(
+    JSON.stringify({
+      event: "CRYSTAL_BRACELET_ELIGIBILITY_RESULT",
+      scanResultIdPrefix: scanResultIdPrefix || null,
+      baseGateResult,
+      familyLabel: familyCheck.familyLabel,
+      familyConfidence: familyCheck.familyConfidence,
+      formFactor: formCheck.formFactor,
+      formConfidence: formCheck.formConfidence,
+      finalStatus: finalEval.status,
+      eligible: finalEval.eligible,
+      shapeFamilyForcedToBracelet: finalEval.shapeFamilyForcedToBracelet,
+    }),
+  );
+
+  if (finalEval.eligible) {
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ROUTE_FORCED",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        familyLabel: familyCheck.familyLabel,
+        familyConfidence: familyCheck.familyConfidence,
+        formFactor: formCheck.formFactor,
+        formConfidence: formCheck.formConfidence,
+        finalStatus: "allowed",
+        shapeFamilyForcedToBracelet: true,
+      }),
+    );
+  } else {
+    console.log(
+      JSON.stringify({
+        event: "CRYSTAL_BRACELET_ROUTE_BLOCKED",
+        scanResultIdPrefix: scanResultIdPrefix || null,
+        baseGateResult,
+        familyLabel: familyCheck.familyLabel,
+        familyConfidence: familyCheck.familyConfidence,
+        formFactor: formCheck.formFactor,
+        formConfidence: formCheck.formConfidence,
+        finalStatus: finalEval.status,
+      }),
+    );
+  }
+
+  return {
+    eligible: finalEval.eligible,
+    status: finalEval.status,
+    objectFamilyTruth: finalEval.objectFamilyTruth,
+    shapeFamilyTruth: finalEval.shapeFamilyTruth,
+    familyCheck,
+    formCheck,
+    shapeFamilyForcedToBracelet: finalEval.shapeFamilyForcedToBracelet,
+    baseGateResult,
+  };
+}
+
 /**
  * Merge first (strict) and second (permissive) labels.
  * Soft-accept (strict unsure/unsupported + permissive single_supported) requires structured evidence.

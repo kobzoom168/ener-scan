@@ -2,7 +2,10 @@ import {
   toBase64,
   getObjectGateReplyCandidatesForRouting,
 } from "../../utils/webhookText.util.js";
-import { checkSingleObjectGated } from "../objectCheck.service.js";
+import {
+  checkCrystalBraceletEligibility,
+  checkSingleObjectGated,
+} from "../objectCheck.service.js";
 import { resolveObjectGateReplyRouting } from "../../utils/objectGateReplyResolve.util.js";
 import { runDeepScan } from "../scan.service.js";
 import { buildScanResultFlexWithFallback } from "../flex/scanFlexReply.builder.js";
@@ -386,6 +389,27 @@ export async function processScanJob(workerId, jobRow) {
     return;
   }
 
+  const scanResultIdPrefix = String(legacyScanResultId || "").slice(0, 8);
+  const braceletEligibility = await checkCrystalBraceletEligibility(
+    imageBase64,
+    gated,
+    {
+      scanResultIdPrefix,
+      jobIdPrefix: idPrefix8(jobId),
+    },
+  );
+
+  let reportObjectFamily = catSig.objectFamily;
+  let reportShapeFamily = catSig.shapeFamily;
+  if (braceletEligibility.eligible) {
+    reportObjectFamily = "crystal";
+    reportShapeFamily = "bracelet";
+  } else if (
+    String(catSig.shapeFamily || "").trim().toLowerCase() === "bracelet"
+  ) {
+    reportShapeFamily = undefined;
+  }
+
   let reportUrl = null;
   /** @type {Record<string, unknown> | null} */
   let reportPayloadForReply = null;
@@ -426,11 +450,11 @@ export async function processScanJob(workerId, jobRow) {
 
     /** @type {object|null} */
     let geminiCrystalSubtypeResult = null;
-    if (normalizeObjectFamilyForEnergyCopy(catSig.objectFamily) === "crystal") {
+    if (normalizeObjectFamilyForEnergyCopy(reportObjectFamily) === "crystal") {
       geminiCrystalSubtypeResult = await classifyCrystalSubtypeWithGemini({
         imageBuffer,
         mimeType: "image/jpeg",
-        scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+        scanResultIdPrefix,
       });
     }
 
@@ -444,9 +468,9 @@ export async function processScanJob(workerId, jobRow) {
       modelLabel: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
       objectImageUrl,
       scannedAt: new Date().toISOString(),
-      objectFamily: catSig.objectFamily,
+      objectFamily: reportObjectFamily,
       materialFamily: catSig.materialFamily,
-      shapeFamily: catSig.shapeFamily,
+      shapeFamily: reportShapeFamily,
       objectCheckResult: objectCheck,
       dominantColor: scanOut?.dominantColorSlug,
       pipelineDominantColorSource:
@@ -481,7 +505,7 @@ export async function processScanJob(workerId, jobRow) {
               lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
               jobIdPrefix: idPrefix8(jobId),
               scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
-              objectFamily: catSig.objectFamily,
+              objectFamily: reportObjectFamily,
               supportedFamilyGuess,
               reason: "hint_object_family_mismatch",
               provider:
@@ -501,7 +525,7 @@ export async function processScanJob(workerId, jobRow) {
               lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
               jobIdPrefix: idPrefix8(jobId),
               scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
-              objectFamily: catSig.objectFamily,
+              objectFamily: reportObjectFamily,
               supportedFamilyGuess,
               reason: "wording_merge",
               provider:
@@ -528,7 +552,7 @@ export async function processScanJob(workerId, jobRow) {
 
     const enrichElig = getWebEnrichmentEligibility({
       objectCheckResult: objectCheck,
-      objectFamily: catSig.objectFamily,
+      objectFamily: reportObjectFamily,
       supportedFamilyGuess,
       pipelineObjectCategory: scanOut?.objectCategory ?? null,
       mainEnergyLine,
@@ -1023,7 +1047,7 @@ export async function processScanJob(workerId, jobRow) {
       jobIdPrefix: idPrefix8(jobId),
       lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
       scanResultV2IdPrefix: String(scanResultV2Id || "").slice(0, 8),
-      objectFamily: catSig.objectFamily,
+      objectFamily: reportObjectFamily,
       pipelineObjectCategory: scanOut?.objectCategory ?? null,
       resolvedCategoryCode: dx?.resolvedCategoryCode ?? null,
       diversificationApplied: Boolean(dx?.diversificationApplied),

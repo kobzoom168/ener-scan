@@ -103,3 +103,30 @@ test("buildReportPayloadFromScan: crystal + bracelet + non-Moldavite → crystal
   assert.equal(payload.crystalBraceletV1.identity.formFactor, "bracelet");
   assert.equal(payload.moldaviteV1, undefined);
 });
+
+test("buildReportPayloadFromScan: crystal without proven bracelet shape => no crystalBraceletV1", async () => {
+  const text = `
+ระดับพลัง: 7.5
+พลังหลัก: พลังสมดุล
+ความสอดคล้อง: 72%
+
+ภาพรวม
+โทนนิ่ง
+`;
+  const payload = await buildReportPayloadFromScan({
+    resultText: text,
+    scanResultId: "00000000-0000-4000-8000-00000000cb03",
+    scanRequestId: "req-cb-2",
+    lineUserId: "U1",
+    publicToken: "tok-cb-2",
+    objectFamily: "crystal",
+    shapeFamily: "unknown",
+    geminiCrystalSubtypeResult: {
+      mode: "ok",
+      moldaviteLikely: false,
+      subtypeConfidence: 0.45,
+      crystalSubtype: "mixed_generic",
+    },
+  });
+  assert.equal(payload.crystalBraceletV1, undefined);
+});

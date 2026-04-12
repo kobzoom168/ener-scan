@@ -399,6 +399,23 @@ export const env = {
     return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.72;
   })(),
   /**
+   * Crystal bracelet lane: strict vision passes + confidence floors before `shapeFamily="bracelet"`.
+   * Default on; set `false` to skip extra OpenAI calls (never forces bracelet from hints alone).
+   */
+  CRYSTAL_BRACELET_ENABLE_STRICT_PASS:
+    String(process.env.CRYSTAL_BRACELET_ENABLE_STRICT_PASS ?? "true").trim().toLowerCase() !==
+    "false",
+  CRYSTAL_BRACELET_FAMILY_MIN_CONFIDENCE: (() => {
+    const raw = process.env.CRYSTAL_BRACELET_FAMILY_MIN_CONFIDENCE;
+    const n = raw === undefined || raw === "" ? 0.8 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.8;
+  })(),
+  CRYSTAL_BRACELET_FORM_MIN_CONFIDENCE: (() => {
+    const raw = process.env.CRYSTAL_BRACELET_FORM_MIN_CONFIDENCE;
+    const n = raw === undefined || raw === "" ? 0.8 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.8;
+  })(),
+  /**
    * When `true`: pre-scan path may use push-only ack and lineWebhook may skip
    * `before_scan_sequence` on birthdate→scan. Default on. Set
    * `SEND_PRE_SCAN_ACK_PUSH_ONLY=false` to disable push-only ack and show `before_scan_sequence` again.
