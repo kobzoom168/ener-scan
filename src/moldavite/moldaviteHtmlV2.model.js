@@ -232,12 +232,11 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
   const alignLabel = AXIS_LABEL_TH[alignKey];
   const tensionLabel = AXIS_LABEL_TH[tensionKey];
 
-  const crystalOrder = sortAxisKeysByCrystalDesc(crystal);
   const graphSummary = {
     rows: [
-      { label: "พลังเด่น", value: AXIS_LABEL_TH[crystalOrder[0]] },
-      { label: "รองลงมา", value: AXIS_LABEL_TH[crystalOrder[1]] },
-      { label: "ควรค่อย ๆ ไป", value: AXIS_LABEL_TH[crystalOrder[2]] },
+      { label: "พลังเด่น", value: AXIS_LABEL_TH[crystalPeakKey] },
+      { label: "เข้ากับคุณที่สุด", value: AXIS_LABEL_TH[alignKey] },
+      { label: "มุมที่ควรค่อย ๆ ไป", value: AXIS_LABEL_TH[tensionKey] },
     ],
   };
 
