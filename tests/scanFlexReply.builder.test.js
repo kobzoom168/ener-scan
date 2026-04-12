@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildScanResultFlexWithFallback } from "../src/services/flex/scanFlexReply.builder.js";
+import {
+  buildScanResultFlexWithFallback,
+  buildSummaryLinkFlexShell,
+} from "../src/services/flex/scanFlexReply.builder.js";
 
 const SAMPLE_TEXT = `คะแนนพลัง: 8.2/10
 พลังหลัก: ป้องกัน
@@ -113,6 +116,31 @@ test("buildScanResultFlexWithFallback: amuletV1 → sacred amulet builder (not g
   );
   assert.equal(out.summaryFirstBuildFailed, false);
   assert.equal(out.flex.altText, "amulet_shell");
+});
+
+test("buildSummaryLinkFlexShell: crystalBraceletV1 → crystal bracelet builder (worker-scan path)", async () => {
+  const out = await buildSummaryLinkFlexShell(
+    SAMPLE_TEXT,
+    {
+      birthdate: null,
+      reportUrl: null,
+      reportPayload: { crystalBraceletV1: { version: "1" } },
+      appendReportBubble: false,
+    },
+    { path: "worker-scan", jobIdPrefix: "job12345" },
+    {
+      buildCrystalBraceletSummaryFirstFlex: async () => ({
+        type: "flex",
+        altText: "crystal_bracelet_shell",
+        contents: { type: "bubble" },
+      }),
+      buildScanSummaryFirstFlex: async () => {
+        throw new Error("should_not_call_generic_summary_in_worker_cb_lane");
+      },
+    },
+  );
+  assert.ok(out && typeof out === "object");
+  assert.equal(/** @type {{ altText?: string }} */ (out).altText, "crystal_bracelet_shell");
 });
 
 test("buildScanResultFlexWithFallback: crystalBraceletV1 → crystal bracelet builder (not generic summary-first)", async () => {

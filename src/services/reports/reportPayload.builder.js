@@ -182,6 +182,313 @@ function emptyParsedShape() {
 }
 
 /**
+ * Strict `crystal_bracelet` lane: build only {@link buildCrystalBraceletV1Slice} — no generic crystal
+ * energy-copy inference, DB wording hydrate, or `applyCrystalMinimumSections`.
+ *
+ * @param {object} opts — same options object as {@link buildReportPayloadFromScan}
+ * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
+ */
+async function buildCrystalBraceletStrictLaneReportPayload(opts) {
+  const {
+    resultText,
+    scanResultId,
+    scanRequestId,
+    lineUserId,
+    birthdateUsed = null,
+    publicToken,
+    modelLabel = "",
+    objectImageUrl: objectImageUrlRaw = "",
+    scannedAt: scannedAtOpt = "",
+    objectFamily: objectFamilyOpt = "",
+    materialFamily: materialFamilyOpt = "",
+    shapeFamily: shapeFamilyOpt = "",
+    dominantColor: dominantColorOpt = "",
+    conditionClass: conditionClassOpt = "",
+    objectCheckResult: objectCheckResultOpt = "",
+    objectCheckConfidence: objectCheckConfidenceOpt,
+    pipelineObjectCategory: pipelineObjectCategoryOpt = null,
+    pipelineObjectCategorySource: pipelineObjectCategorySourceOpt = "unspecified",
+    pipelineDominantColorSource: pipelineDominantColorSourceOpt,
+  } = opts;
+
+  const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
+  const rid = String(scanResultId || "").trim();
+  const tok = String(publicToken || "").trim();
+
+  let parsed;
+  let parseException = false;
+  try {
+    parsed = parseScanText(String(resultText || ""));
+  } catch (err) {
+    parseException = true;
+    console.warn(
+      JSON.stringify({
+        event: "REPORT_PAYLOAD_PARSE_EXCEPTION",
+        scanResultId: String(scanResultId || "").slice(0, 8),
+        message: err?.message,
+      }),
+    );
+    parsed = null;
+  }
+  if (!parsed) {
+    parsed = emptyParsedShape();
+  }
+
+  const scoreInfo = normalizeScore(parsed.energyScore);
+  const energyScore =
+    scoreInfo.numeric != null && Number.isFinite(scoreInfo.numeric)
+      ? scoreInfo.numeric
+      : null;
+
+  const scannedAtEffective =
+    String(scannedAtOpt || "").trim() || new Date().toISOString();
+
+  const dominantColorResolved = resolveDominantColorPipelineSource(
+    dominantColorOpt,
+    pipelineDominantColorSourceOpt === "vision_v1"
+      ? "vision_v1"
+      : pipelineDominantColorSourceOpt === "cache_persisted"
+        ? "cache_persisted"
+        : undefined,
+  );
+  const conditionClassResolved = resolveConditionClassPipelineSource(
+    conditionClassOpt,
+  );
+
+  /** @type {ReturnType<typeof buildCompatibilityPayload> | null} */
+  let compatibilityPayload = null;
+  if (birthdateUsed) {
+    try {
+      compatibilityPayload = buildCompatibilityPayload({
+        birthdate: String(birthdateUsed),
+        scannedAt: scannedAtEffective,
+        objectFamily: String(objectFamilyOpt || "generic").trim() || "generic",
+        materialFamily: String(materialFamilyOpt || "").trim() || undefined,
+        shapeFamily: String(shapeFamilyOpt || "unknown").trim() || "unknown",
+        mainEnergy:
+          (parsed.mainEnergy && parsed.mainEnergy !== "-"
+            ? String(parsed.mainEnergy)
+            : "") || "",
+        energyScore: energyScore ?? 0,
+        dominantColor: dominantColorResolved.normalized || undefined,
+        objectCategory:
+          pipelineObjectCategoryOpt &&
+          String(pipelineObjectCategoryOpt).trim()
+            ? String(pipelineObjectCategoryOpt).trim()
+            : undefined,
+        conditionClass: conditionClassResolved.normalized || undefined,
+      });
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "COMPATIBILITY_V1_BUILD_FAILED",
+          message: err?.message,
+        }),
+      );
+    }
+  }
+
+  let compatPct = parseCompatibilityPercent(parsed.compatibility);
+  if (compatibilityPayload != null) {
+    compatPct = compatibilityPayload.score;
+  }
+
+  const mainEnergyLabel =
+    parsed.mainEnergy && parsed.mainEnergy !== "-"
+      ? String(parsed.mainEnergy).trim()
+      : "";
+
+  const crystalBraceletV1 = buildCrystalBraceletV1Slice({
+    scanResultId: rid,
+    seedKey: rid || String(scanResultId || ""),
+    detection: {
+      reason: "crystal_bracelet_strict_lane_v1",
+      matchedSignals: [],
+    },
+    energyScore,
+    mainEnergyLabel,
+    ownerFitScore:
+      compatPct != null && Number.isFinite(Number(compatPct))
+        ? Math.round(Number(compatPct))
+        : null,
+  });
+
+  const fs = crystalBraceletV1.flexSurface;
+  const hr = crystalBraceletV1.htmlReport;
+
+  console.log(
+    JSON.stringify({
+      event: "REPORT_PAYLOAD_CRYSTAL_BRACELET_EARLY_EXIT",
+      scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+      lane: "crystal_bracelet",
+      reportLane: "crystal_bracelet_v1",
+      parseException,
+    }),
+  );
+
+  const overview =
+    parsed.overview && parsed.overview !== "-"
+      ? String(parsed.overview)
+      : "";
+  const fitReason =
+    parsed.fitReason && parsed.fitReason !== "-"
+      ? String(parsed.fitReason)
+      : "";
+
+  let summaryLine = "";
+  if (overview) {
+    const firstLine = overview.split(/\n/)[0]?.trim() || overview;
+    summaryLine =
+      firstLine.length > 220 ? `${firstLine.slice(0, 217)}…` : firstLine;
+  } else if (fitReason) {
+    const fl = fitReason.split(/\n/)[0]?.trim() || fitReason;
+    summaryLine = fl.length > 220 ? `${fl.slice(0, 217)}…` : fl;
+  } else {
+    const mp0 = hr?.meaningParagraphs?.[0];
+    summaryLine = mp0
+      ? String(mp0).trim().slice(0, 220)
+      : String(fs.tagline || "").trim() || "สรุปผลการสแกนพลังวัตถุ — ดูรายละเอียดด้านล่าง";
+  }
+
+  const birthdayLabel = birthdateUsed
+    ? formatScanBirthdayLabelThai(birthdateUsed)
+    : "";
+  const compatibilityReason = fitReason;
+  const compatibilityBand =
+    compatibilityPayload?.band != null
+      ? String(compatibilityPayload.band)
+      : "";
+
+  const secondaryEnergyLabel =
+    parsed.secondaryEnergy && parsed.secondaryEnergy !== "-"
+      ? String(parsed.secondaryEnergy).trim()
+      : "";
+
+  const messagePoints = Array.isArray(hr?.meaningParagraphs)
+    ? hr.meaningParagraphs.map((p) => String(p || "").trim()).filter(Boolean)
+    : [];
+
+  const summaryEnergyScore = energyScore;
+  const summaryEnergyLevelLabel =
+    summaryEnergyScore != null &&
+    Number.isFinite(Number(summaryEnergyScore))
+      ? score10ToEnergyGrade(Number(summaryEnergyScore))
+      : "";
+
+  return {
+    reportId: rid,
+    publicToken: tok,
+    scanId: String(scanRequestId || "").trim(),
+    userId: String(lineUserId || "").trim(),
+    birthdateUsed: birthdateUsed ? String(birthdateUsed) : null,
+    generatedAt: new Date().toISOString(),
+    reportVersion: REPORT_PAYLOAD_VERSION,
+    object: {
+      objectImageUrl,
+      objectLabel: "วัตถุจากการสแกน",
+      objectType: "",
+    },
+    summary: {
+      energyScore: summaryEnergyScore,
+      energyLevelLabel: summaryEnergyLevelLabel,
+      mainEnergyLabel: String(fs.mainEnergyShort || "").trim() || mainEnergyLabel,
+      compatibilityPercent: compatPct,
+      compatibilityBand: compatibilityBand || undefined,
+      summaryLine,
+      wordingFamily: undefined,
+      clarityLevel: undefined,
+      birthdayLabel: birthdayLabel || undefined,
+      compatibilityReason: compatibilityReason || undefined,
+      secondaryEnergyLabel: secondaryEnergyLabel || undefined,
+      scanDimensions: undefined,
+      scanTips:
+        Array.isArray(fs.bullets) && fs.bullets.length > 0
+          ? fs.bullets.slice(0, 2)
+          : undefined,
+      headlineShort: fs.headline,
+      fitReasonShort: fs.fitLine,
+      bulletsShort: fs.bullets,
+      ctaLabel: String(fs.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",
+      presentationAngleId: "crystal_bracelet_v1_summary_first",
+      wordingVariantId: "crystal_bracelet_v1_summary_first",
+      energyCategoryCode: undefined,
+      energyCopyObjectFamily: "crystal",
+      crystalMode: undefined,
+      openingShort: undefined,
+      teaserShort: undefined,
+      visibleMainLabel: String(fs.headline || "").trim() || undefined,
+    },
+    sections: {
+      whatItGives: [],
+      messagePoints,
+      ownerMatchReason: [],
+      roleDescription: "",
+      bestUseCases: [],
+      weakMoments: [],
+      guidanceTips: [],
+      careNotes: [],
+      miniRitual: [],
+    },
+    trust: {
+      modelLabel: modelLabel || undefined,
+      trustNote:
+        "รายงานนี้จัดทำจากข้อความวิเคราะห์ที่สร้างจากภาพและข้อมูลที่คุณให้ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
+      rendererVersion: "html-1.0.0",
+    },
+    actions: {
+      historyUrl: "",
+      rescanUrl: "",
+      changeBirthdateUrl: "",
+      lineHomeUrl: "",
+    },
+    wording: {
+      heroNaming: String(fs.heroNamingLine || "").trim(),
+      mainEnergy: String(fs.mainEnergyWordingLine || "").trim(),
+      htmlOpeningLine: String(fs.htmlOpeningLine || "").trim(),
+      objectLabel: "วัตถุจากการสแกน",
+    },
+    compatibility: compatibilityPayload
+      ? {
+          score: compatibilityPayload.score,
+          band: compatibilityPayload.band,
+          formulaVersion: compatibilityPayload.formulaVersion,
+          factors: compatibilityPayload.factors,
+          inputs: compatibilityPayload.inputs,
+          explain: compatibilityPayload.explain,
+        }
+      : undefined,
+    objectEnergy: undefined,
+    parsed: {
+      crystal_mode: null,
+    },
+    diagnostics: {
+      objectFamily: String(objectFamilyOpt || "").trim() || undefined,
+      crystalBraceletStrictLaneEarlyExit: true,
+      reportLane: "crystal_bracelet_v1",
+      wordingPrimarySource: "crystal_bracelet_lane",
+      dbWordingSelected: false,
+      resolvedCategoryCode: undefined,
+      diversificationApplied: false,
+      wordingBankUsed: undefined,
+      wordingVariantId: undefined,
+      flexPresentationAngleId: undefined,
+      crystalMode: undefined,
+      matchedSignalsCount: 0,
+      parsedMainEnergyRaw: mainEnergyLabel.slice(0, 240),
+      mainEnergySource: parsed.mainEnergyResolution?.source ?? "missing",
+      crystalGenericSafeActive: false,
+      pipelineObjectCategorySource: pipelineObjectCategorySourceOpt,
+      enrichmentEligible: undefined,
+      enrichmentUsed: undefined,
+      enrichmentProvider: undefined,
+      deliveryStrategy: undefined,
+      lineSummaryPresent: undefined,
+    },
+    crystalBraceletV1,
+  };
+}
+
+/**
  * Build canonical ReportPayload from scan output + context.
  * Uses {@link parseScanText} (same source as Flex) for section mapping.
  *
@@ -238,6 +545,10 @@ export async function buildReportPayloadFromScan(opts) {
     geminiCrystalSubtypeResult: geminiCrystalSubtypeResultOpt = null,
     strictSupportedLane: strictSupportedLaneOpt = null,
   } = opts;
+
+  if (strictSupportedLaneOpt === "crystal_bracelet") {
+    return buildCrystalBraceletStrictLaneReportPayload(opts);
+  }
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
 

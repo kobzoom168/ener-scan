@@ -116,3 +116,95 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
     };
   }
 }
+
+/**
+ * Summary-link Flex shell for worker / LINE: lane-specific summary-first builders with
+ * per-lane fallback to generic {@link buildScanSummaryFirstFlex} (not legacy bubble).
+ *
+ * @param {string} resultText
+ * @param {{
+ *   birthdate?: string|null,
+ *   reportUrl?: string|null,
+ *   reportPayload?: import("../reports/reportPayload.types.js").ReportPayload|null,
+ *   appendReportBubble?: boolean,
+ * }} summaryShellOpts
+ * @param {{ path: string, jobIdPrefix: string }} ctx
+ * @param {{
+ *   buildScanSummaryFirstFlex?: typeof buildScanSummaryFirstFlex,
+ *   buildMoldaviteSummaryFirstFlex?: typeof buildMoldaviteSummaryFirstFlex,
+ *   buildAmuletSummaryFirstFlex?: typeof buildAmuletSummaryFirstFlex,
+ *   buildCrystalBraceletSummaryFirstFlex?: typeof buildCrystalBraceletSummaryFirstFlex,
+ * }} [impl]
+ * @returns {Promise<unknown>}
+ */
+export async function buildSummaryLinkFlexShell(
+  resultText,
+  summaryShellOpts,
+  ctx,
+  impl = {},
+) {
+  const buildSummary =
+    impl.buildScanSummaryFirstFlex ?? buildScanSummaryFirstFlex;
+  const buildMoldavite =
+    impl.buildMoldaviteSummaryFirstFlex ?? buildMoldaviteSummaryFirstFlex;
+  const buildAmulet =
+    impl.buildAmuletSummaryFirstFlex ?? buildAmuletSummaryFirstFlex;
+  const buildCrystalBracelet =
+    impl.buildCrystalBraceletSummaryFirstFlex ??
+    buildCrystalBraceletSummaryFirstFlex;
+
+  const reportPayload = summaryShellOpts?.reportPayload;
+  /** @type {unknown} */
+  let built = null;
+
+  if (
+    reportPayload &&
+    typeof reportPayload === "object" &&
+    reportPayload.moldaviteV1
+  ) {
+    try {
+      built = await buildMoldavite(resultText, summaryShellOpts);
+    } catch (mvErr) {
+      console.log(
+        JSON.stringify({
+          event: "MOLDAVITE_FLEX_BUILD_FAILED_FALLBACK_SUMMARY_FIRST",
+          path: ctx.path,
+          jobIdPrefix: ctx.jobIdPrefix,
+          message: String(mvErr?.message || mvErr).slice(0, 200),
+        }),
+      );
+      built = await buildSummary(resultText, summaryShellOpts);
+    }
+  } else if (reportPayload?.amuletV1) {
+    try {
+      built = await buildAmulet(resultText, summaryShellOpts);
+    } catch (amErr) {
+      console.log(
+        JSON.stringify({
+          event: "AMULET_FLEX_BUILD_FAILED_FALLBACK_SUMMARY_FIRST",
+          path: ctx.path,
+          jobIdPrefix: ctx.jobIdPrefix,
+          message: String(amErr?.message || amErr).slice(0, 200),
+        }),
+      );
+      built = await buildSummary(resultText, summaryShellOpts);
+    }
+  } else if (reportPayload?.crystalBraceletV1) {
+    try {
+      built = await buildCrystalBracelet(resultText, summaryShellOpts);
+    } catch (cbErr) {
+      console.log(
+        JSON.stringify({
+          event: "CRYSTAL_BRACELET_FLEX_BUILD_FAILED_FALLBACK_SUMMARY_FIRST",
+          path: ctx.path,
+          jobIdPrefix: ctx.jobIdPrefix,
+          message: String(cbErr?.message || cbErr).slice(0, 200),
+        }),
+      );
+      built = await buildSummary(resultText, summaryShellOpts);
+    }
+  } else {
+    built = await buildSummary(resultText, summaryShellOpts);
+  }
+  return built;
+}

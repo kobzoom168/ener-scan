@@ -103,6 +103,33 @@ test("buildReportPayloadFromScan: crystal + bracelet + non-Moldavite → crystal
   assert.equal(payload.crystalBraceletV1.lane, "crystal_bracelet");
   assert.equal(payload.crystalBraceletV1.identity.formFactor, "bracelet");
   assert.equal(payload.moldaviteV1, undefined);
+  assert.equal(payload.diagnostics?.crystalBraceletStrictLaneEarlyExit, true);
+  assert.equal(payload.diagnostics?.dbWordingSelected, false);
+  assert.equal(payload.diagnostics?.wordingPrimarySource, "crystal_bracelet_lane");
+  assert.equal(payload.crystalBraceletV1.detection.reason, "crystal_bracelet_strict_lane_v1");
+});
+
+test("buildReportPayloadFromScan: strict crystal_bracelet lane skips DB wording hydrate path", async () => {
+  const text = `
+ระดับพลัง: 7.5
+พลังหลัก: พลังสมดุล
+ความสอดคล้อง: 72%
+ภาพรวม
+โทนนิ่ง
+`;
+  const payload = await buildReportPayloadFromScan({
+    resultText: text,
+    scanResultId: "00000000-0000-4000-8000-00000000cb99",
+    scanRequestId: "req-cb-early",
+    lineUserId: "U1",
+    publicToken: "tok-cb-early",
+    objectFamily: "crystal",
+    shapeFamily: "bracelet",
+    strictSupportedLane: "crystal_bracelet",
+  });
+  assert.equal(payload.diagnostics?.crystalBraceletStrictLaneEarlyExit, true);
+  assert.equal(payload.diagnostics?.dbWordingSelected, false);
+  assert.ok(payload.crystalBraceletV1);
 });
 
 test("buildReportPayloadFromScan: crystal without proven bracelet shape => no crystalBraceletV1", async () => {
