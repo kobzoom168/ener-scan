@@ -318,6 +318,17 @@ export function renderMoldaviteReportV2Html(payload) {
     .map((u) => `<li>${escapeHtml(u)}</li>`)
     .join("");
 
+  const et = vm.energyTiming;
+  const energyTimingHtml = `<section class="mv2-card mv2-card--et" aria-labelledby="mv2-et-h">
+      <h2 id="mv2-et-h">จังหวะเสริมพลัง</h2>
+      <div class="mv2-et-rows">
+        <div class="mv2-et-row"><span class="mv2-et-k">เวลา</span><span class="mv2-et-v">${escapeHtml(et.bestTimeText)}</span></div>
+        <div class="mv2-et-row"><span class="mv2-et-k">วัน</span><span class="mv2-et-v">${escapeHtml(et.bestDayText)}</span></div>
+        <div class="mv2-et-row"><span class="mv2-et-k">โหมดแนะนำ</span><span class="mv2-et-v">${escapeHtml(et.recommendedModeText)}</span></div>
+      </div>
+      <p class="mv2-et-note">${escapeHtml(et.focusAmplifierNote)}</p>
+    </section>`;
+
   const title = escapeHtml(
     (h.subtypeLabel || "รายงาน").slice(0, 48),
   );
@@ -670,6 +681,29 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-life-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; font-weight: 600; font-size: 0.9rem; }
     .mv2-life-score { color: #15803d; font-weight: 600; font-size: 0.82rem; opacity: 0.78; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
     .mv2-life-blurb { margin-top: 0.35rem; }
+    .mv2-card--et .mv2-et-rows { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.2rem; }
+    .mv2-card--et .mv2-et-row { display: flex; flex-direction: column; gap: 0.15rem; }
+    .mv2-card--et .mv2-et-k {
+      font-size: 0.65rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: rgba(110, 231, 183, 0.52);
+      font-weight: 600;
+    }
+    .mv2-card--et .mv2-et-v {
+      font-size: 0.84rem;
+      line-height: 1.38;
+      font-weight: 500;
+      color: rgba(226, 232, 240, 0.9);
+    }
+    .mv2-card--et .mv2-et-note {
+      margin: 0.72rem 0 0;
+      padding-top: 0.62rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.045);
+      font-size: 0.8rem;
+      line-height: 1.45;
+      color: rgba(203, 213, 225, 0.78);
+    }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
   </style>
@@ -715,6 +749,8 @@ export function renderMoldaviteReportV2Html(payload) {
       <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
       ${lifeRowsHtml}
     </section>
+
+    ${energyTimingHtml}
 
     <section class="mv2-card" aria-labelledby="mv2-use-h">
       <h2 id="mv2-use-h">การใช้และข้อควรระวัง</h2>

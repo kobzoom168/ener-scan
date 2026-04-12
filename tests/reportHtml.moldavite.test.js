@@ -6,6 +6,7 @@ import { normalizeReportPayloadForRender } from "../src/utils/reports/reportPayl
 import { renderReportHtmlPage } from "../src/services/reports/reportHtmlRenderer.service.js";
 import { renderMobileReportHtml } from "../src/templates/reports/mobileReport.template.js";
 import { renderMoldaviteReportV2Html } from "../src/templates/reports/moldaviteReportV2.template.js";
+import { MOLDAVITE_ENERGY_TIMING_DEFAULTS } from "../src/moldavite/moldaviteHtmlV2.model.js";
 
 const namingHigh = resolveMoldaviteDisplayNaming({
   geminiSubtypeConfidence: 0.9,
@@ -120,7 +121,18 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(!html.includes("แรงโทนเปลี่ยนแปลง"));
   assert.ok(!html.includes("mv2-mean-h"));
   assert.ok(html.includes("มิติชีวิตละเอียด"));
+  assert.ok(html.includes("จังหวะเสริมพลัง"));
   assert.ok(html.includes("การใช้และข้อควรระวัง"));
+  {
+    const lifeIdx = html.indexOf('id="mv2-life-h"');
+    const etIdx = html.indexOf('id="mv2-et-h"');
+    const useIdx = html.indexOf('id="mv2-use-h"');
+    assert.ok(
+      lifeIdx > 0 && etIdx > lifeIdx && useIdx > etIdx,
+      "จังหวะเสริมพลังอยู่หลังมิติชีวิตละเอียดและก่อนการใช้และข้อควรระวัง",
+    );
+  }
+  assert.ok(html.includes(MOLDAVITE_ENERGY_TIMING_DEFAULTS.bestTimeText.slice(0, 24)));
   assert.ok(html.includes("มอลดาไวต์"));
   assert.ok(html.includes("พลังหลัก ·"));
   assert.ok(html.includes('mv2-strip-cell--level'));

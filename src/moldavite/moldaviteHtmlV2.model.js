@@ -58,6 +58,41 @@ const V2_USAGE_LINES = [
   "นี่ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน ถ้ามีปัญหาสุขภาพหรือหนี้สินรุนแรง ควรปรึกษาผู้เชี่ยวชาญ",
 ];
 
+/** Default Moldavite-only copy for HTML “จังหวะเสริมพลัง” (overridable via `moldaviteV1.htmlReport.energyTiming`). */
+export const MOLDAVITE_ENERGY_TIMING_DEFAULTS = {
+  bestTimeText:
+    "ช่วงที่ต้องการขยับจากจุดเดิม หรือตัดสินใจเริ่มสิ่งใหม่",
+  bestDayText:
+    "วันที่ต้องการความชัดในการเปลี่ยนแปลง หรือพร้อมเปิดรอบใหม่ให้ชีวิต",
+  recommendedModeText:
+    "ตั้งจิตหรืออธิษฐานสั้น ๆ ก่อนใช้ เพื่อรวมเจตนาให้ชัด",
+  focusAmplifierNote:
+    "Moldavite จะตอบกับเจตนาที่ชัดและแรงพร้อมขยับของเจ้าของ การอธิษฐานหรือตั้งจิตก่อนใช้ จะช่วยให้พลังของหินชิ้นนี้ทำงานได้ชัดขึ้น",
+};
+
+/**
+ * @param {object | null | undefined} mv — `moldaviteV1` slice
+ */
+function resolveMoldaviteEnergyTiming(mv) {
+  const raw =
+    mv?.htmlReport &&
+    typeof mv.htmlReport === "object" &&
+    mv.htmlReport.energyTiming &&
+    typeof mv.htmlReport.energyTiming === "object"
+      ? mv.htmlReport.energyTiming
+      : {};
+  const pick = (k) => {
+    const v = String(raw[k] ?? "").trim();
+    return v || MOLDAVITE_ENERGY_TIMING_DEFAULTS[k];
+  };
+  return {
+    bestTimeText: pick("bestTimeText"),
+    bestDayText: pick("bestDayText"),
+    recommendedModeText: pick("recommendedModeText"),
+    focusAmplifierNote: pick("focusAmplifierNote"),
+  };
+}
+
 /**
  * @param {number} v
  * @returns {number}
@@ -260,6 +295,7 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       rows: interactionRows,
     },
     lifeAreaDetail: { rows: lifeAreaRows },
+    energyTiming: resolveMoldaviteEnergyTiming(mv),
     usageCaution: { lines: usageLines },
     trustNote: String(payload.trust?.trustNote || "").trim(),
     reportVersion: String(payload.reportVersion || ""),
