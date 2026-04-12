@@ -328,12 +328,24 @@ export function renderMoldaviteReportV2Html(payload) {
   const et = vm.energyTiming;
   const energyTimingHtml = `<section class="mv2-card mv2-card--et" aria-labelledby="mv2-et-h">
       <h2 id="mv2-et-h">จังหวะเสริมพลัง</h2>
-      <div class="mv2-et-rows">
-        <div class="mv2-et-row"><span class="mv2-et-k">วัน</span><span class="mv2-et-v">${escapeHtml(et.recommendedWeekday)}</span></div>
-        <div class="mv2-et-row"><span class="mv2-et-k">เวลา</span><span class="mv2-et-v">${escapeHtml(et.recommendedTimeBand)}</span></div>
-        <div class="mv2-et-row"><span class="mv2-et-k">โหมดแนะนำ</span><span class="mv2-et-v">${escapeHtml(et.ritualMode)}</span></div>
+      <div class="mv2-et-body">
+        <div class="mv2-et-grid">
+          <div class="mv2-et-panel">
+            <span class="mv2-et-k">วัน</span>
+            <span class="mv2-et-v mv2-et-v--fact">${escapeHtml(et.recommendedWeekday)}</span>
+          </div>
+          <div class="mv2-et-panel">
+            <span class="mv2-et-k">เวลา</span>
+            <span class="mv2-et-v mv2-et-v--fact">${escapeHtml(et.recommendedTimeBand)}</span>
+          </div>
+        </div>
+        <div class="mv2-et-panel mv2-et-panel--wide">
+          <span class="mv2-et-k">โหมดแนะนำ</span>
+          <span class="mv2-et-v mv2-et-v--mode">${escapeHtml(et.ritualMode)}</span>
+        </div>
+        <div class="mv2-et-divider" aria-hidden="true"></div>
+        <p class="mv2-et-note">${escapeHtml(et.timingReason)}</p>
       </div>
-      <p class="mv2-et-note">${escapeHtml(et.timingReason)}</p>
     </section>`;
 
   const title = escapeHtml(
@@ -715,28 +727,69 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-life-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; font-weight: 600; font-size: 0.9rem; }
     .mv2-life-score { color: #15803d; font-weight: 600; font-size: 0.82rem; opacity: 0.78; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
     .mv2-life-blurb { margin-top: 0.35rem; }
-    .mv2-card--et .mv2-et-rows { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.2rem; }
-    .mv2-card--et .mv2-et-row { display: flex; flex-direction: column; gap: 0.15rem; }
+    .mv2-card--et {
+      padding: 1.35rem 1.4rem;
+      border-radius: 20px;
+    }
+    .mv2-card--et > h2 {
+      margin: 0 0 1rem;
+      font-size: 0.95rem;
+    }
+    .mv2-et-body { margin: 0; }
+    .mv2-et-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.875rem;
+      align-items: stretch;
+    }
+    .mv2-et-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 0.8rem 0.85rem;
+      border-radius: 13px;
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-sizing: border-box;
+    }
+    .mv2-et-panel--wide {
+      margin-top: 0.875rem;
+      width: 100%;
+    }
     .mv2-card--et .mv2-et-k {
-      font-size: 0.65rem;
-      letter-spacing: 0.07em;
+      font-size: 0.62rem;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: rgba(110, 231, 183, 0.52);
+      color: rgba(110, 231, 183, 0.42);
       font-weight: 600;
     }
-    .mv2-card--et .mv2-et-v {
-      font-size: 0.84rem;
-      line-height: 1.38;
-      font-weight: 500;
-      color: rgba(226, 232, 240, 0.9);
+    .mv2-card--et .mv2-et-v--fact {
+      font-size: 1rem;
+      line-height: 1.35;
+      font-weight: 700;
+      color: rgba(241, 245, 249, 0.98);
+      letter-spacing: 0.01em;
+    }
+    .mv2-card--et .mv2-et-v--mode {
+      font-size: 0.88rem;
+      line-height: 1.45;
+      font-weight: 600;
+      color: rgba(226, 232, 240, 0.94);
+    }
+    .mv2-et-divider {
+      height: 0;
+      margin: 1rem 0;
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.055);
     }
     .mv2-card--et .mv2-et-note {
-      margin: 0.72rem 0 0;
-      padding-top: 0.62rem;
-      border-top: 1px solid rgba(255, 255, 255, 0.045);
+      margin: 0;
+      padding: 0;
+      border: none;
       font-size: 0.8rem;
-      line-height: 1.45;
-      color: rgba(203, 213, 225, 0.78);
+      line-height: 1.75;
+      color: rgba(186, 198, 214, 0.72);
+      font-weight: 400;
     }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
