@@ -126,8 +126,10 @@ function radarAxisComparePhrase(owner01, crystal01) {
  * body text shaper handles Thai clusters correctly.
  * @param {{ key: string, owner: number, crystal: number }} L
  * @param {number} rank
+ * @param {string} crystalPeakKey
+ * @param {string} alignAxisKey — แกนเข้ากับคุณที่สุด (min |owner−หิน|)
  */
-function radarAxisLabelHtml(L, rank) {
+function radarAxisLabelHtml(L, rank, crystalPeakKey, alignAxisKey) {
   const fs = radarAxisFontSize(rank);
   const title = AXIS_TITLE_TH[L.key];
   const scoreStr = String(Math.round(Number(L.crystal) || 0));
@@ -139,8 +141,13 @@ function radarAxisLabelHtml(L, rank) {
   const titleStyle = `font-weight:${titleFw};color:${catFill}`;
   const numStyle = `font-weight:700;color:${numFill}`;
 
-  const peakCls = rank === 1 ? " mv2-radar-lbl--peak" : "";
-  return `<span class="mv2-radar-lbl mv2-radar-lbl--${L.key}${peakCls}" style="--mv2-rfs:${fs}"><span class="mv2-radar-axis-t" style="${titleStyle}">${escapeHtml(title)}</span> <span class="mv2-radar-axis-n" style="${numStyle}">${escapeHtml(scoreStr)}</span><br/><span class="mv2-radar-axis-cmp">${escapeHtml(compare)}</span></span>`;
+  const isPeak = L.key === crystalPeakKey;
+  const isAlign =
+    Boolean(alignAxisKey) && L.key === alignAxisKey && L.key !== crystalPeakKey;
+  let pulseCls = "";
+  if (isPeak) pulseCls = " mv2-radar-lbl--peak";
+  else if (isAlign) pulseCls = " mv2-radar-lbl--align";
+  return `<span class="mv2-radar-lbl mv2-radar-lbl--${L.key}${pulseCls}" style="--mv2-rfs:${fs}"><span class="mv2-radar-axis-t" style="${titleStyle}">${escapeHtml(title)}</span> <span class="mv2-radar-axis-n" style="${numStyle}">${escapeHtml(scoreStr)}</span><br/><span class="mv2-radar-axis-cmp">${escapeHtml(compare)}</span></span>`;
 }
 
 /**
@@ -225,7 +232,7 @@ function radarBlock(vm) {
   const labelHtml = labels
     .map((L) => {
       const rk = rankOf[L.key] ?? 2;
-      return radarAxisLabelHtml(L, rk);
+      return radarAxisLabelHtml(L, rk, g.crystalPeakAxisKey, alignAxisKey);
     })
     .join("");
 
@@ -455,6 +462,18 @@ export function renderMoldaviteReportV2Html(payload) {
       0%, 100% { opacity: 1; text-shadow: 0 0 4px rgba(251,191,36,0.25); }
       50% { opacity: 0.45; text-shadow: 0 0 16px rgba(251,191,36,0.7); }
     }
+    @keyframes mv2LblAlignPulse {
+      0%, 100% { opacity: 1; text-shadow: 0 0 4px rgba(186, 230, 253, 0.35); }
+      50% { opacity: 0.48; text-shadow: 0 0 15px rgba(186, 230, 253, 0.72); }
+    }
+    @keyframes mv2RadarDotPulseGreen {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    @keyframes mv2RadarDotPulseSlate {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.42; }
+    }
     @media (prefers-reduced-motion: reduce) {
       .mv2-radar-svg--animate .mv2-radar-layer,
       .mv2-radar-labels {
@@ -462,7 +481,10 @@ export function renderMoldaviteReportV2Html(payload) {
         opacity: 1 !important;
         transform: none !important;
       }
-      .mv2-radar-lbl--peak { animation: none !important; }
+      .mv2-radar-lbl--peak,
+      .mv2-radar-lbl--align { animation: none !important; }
+      .mv2-radar-svg .mv2-radar-peak,
+      .mv2-radar-svg .mv2-radar-peak-compatibility { animation: none !important; opacity: 1 !important; }
     }
     .mv2-radar-lbl {
       position: absolute;
@@ -495,6 +517,10 @@ export function renderMoldaviteReportV2Html(payload) {
       text-shadow: 0 0 8px rgba(251,191,36,0.35);
       animation: mv2LblPulse 1.2s ease-in-out 2.6s infinite;
     }
+    .mv2-radar-lbl--align {
+      text-shadow: 0 0 7px rgba(186, 230, 253, 0.4);
+      animation: mv2LblAlignPulse 1.2s ease-in-out 2.6s infinite;
+    }
     .mv2-radar-axis-cmp {
       display: block;
       font-size: 0.82em;
@@ -508,6 +534,14 @@ export function renderMoldaviteReportV2Html(payload) {
     }
     .mv2-radar-svg .mv2-radar-peak-compatibility {
       filter: drop-shadow(0 0 0.55px rgba(148, 163, 184, 0.35)) drop-shadow(0 0 1.2px rgba(100, 116, 139, 0.2));
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .mv2-radar-svg--animate .mv2-radar-peak {
+        animation: mv2RadarDotPulseGreen 1.15s ease-in-out 2.65s infinite;
+      }
+      .mv2-radar-svg--animate .mv2-radar-peak-compatibility {
+        animation: mv2RadarDotPulseSlate 1.15s ease-in-out 2.65s infinite;
+      }
     }
     .mv2-radar-key {
       margin: 0.28rem 0 0;

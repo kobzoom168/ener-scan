@@ -40,7 +40,10 @@ import {
   detectMoldaviteV1,
 } from "../../moldavite/moldaviteDetect.util.js";
 import { resolveMoldaviteDetectionWithGeminiCrystalSubtype } from "../../moldavite/geminiCrystalSubtypeBranch.util.js";
-import { buildMoldaviteV1Slice } from "../../moldavite/moldavitePayload.build.js";
+import {
+  buildMoldaviteV1Slice,
+  MOLDAVITE_DEFAULT_TRUST_NOTE,
+} from "../../moldavite/moldavitePayload.build.js";
 import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayNaming.util.js";
 import { buildAmuletV1Slice } from "../../amulet/amuletPayload.build.js";
 import {
@@ -1067,8 +1070,9 @@ export async function buildReportPayloadFromScan(opts) {
     },
     trust: {
       modelLabel: modelLabel || undefined,
-      trustNote:
-        "รายงานนี้จัดทำจากข้อความวิเคราะห์ที่สร้างจากภาพและข้อมูลที่คุณให้ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
+      trustNote: moldaviteV1
+        ? MOLDAVITE_DEFAULT_TRUST_NOTE
+        : "รายงานนี้จัดทำจากข้อความวิเคราะห์ที่สร้างจากภาพและข้อมูลที่คุณให้ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
       rendererVersion: "html-1.0.0",
     },
     actions: {

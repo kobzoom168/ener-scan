@@ -191,3 +191,7 @@ export function buildMoldaviteV1Slice({
     },
   };
 }
+
+/** Default `payload.trust.trustNote` for Moldavite lane (HTML report footer). */
+export const MOLDAVITE_DEFAULT_TRUST_NOTE =
+  "Moldavite ไม่ได้ทำงานกับทุกคนเหมือนกัน หินจะไปเร่งในจุดที่เจ้าของพร้อมเปลี่ยนจริง และจะดันแรงขึ้นในเรื่องที่ตรงกับจังหวะชีวิตของคนนั้น Ener scan";

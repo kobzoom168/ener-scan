@@ -1,4 +1,5 @@
 import { sanitizeHttpsPublicImageUrl } from "./reportImageUrl.util.js";
+import { MOLDAVITE_DEFAULT_TRUST_NOTE } from "../../moldavite/moldavitePayload.build.js";
 
 /**
  * Hardening for HTML render: DB JSON or legacy rows may omit nested objects.
@@ -71,6 +72,11 @@ export function normalizeReportPayloadForRender(input) {
     raw.wording && typeof raw.wording === "object"
       ? /** @type {Record<string, unknown>} */ (raw.wording)
       : null;
+
+  const hasMoldaviteSlice =
+    raw.moldaviteV1 &&
+    typeof raw.moldaviteV1 === "object" &&
+    !Array.isArray(raw.moldaviteV1);
 
   /** @param {unknown} v */
   function numOrZero(v) {
@@ -206,7 +212,9 @@ export function normalizeReportPayloadForRender(input) {
       modelLabel: trustIn?.modelLabel ? str(trustIn.modelLabel) : undefined,
       trustNote:
         str(trustIn?.trustNote).trim() ||
-        "รายงานนี้จัดทำจากข้อมูลที่คุณให้ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน",
+        (hasMoldaviteSlice
+          ? MOLDAVITE_DEFAULT_TRUST_NOTE
+          : "รายงานนี้จัดทำจากข้อมูลที่คุณให้ ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน"),
       rendererVersion: str(trustIn?.rendererVersion).trim() || "html-1.0.0",
     },
     actions: {

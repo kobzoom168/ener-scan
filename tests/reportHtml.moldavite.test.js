@@ -160,6 +160,11 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes('mv2-radar-lbl--work'));
   assert.ok(html.includes('mv2-radar-lbl--relationship'));
   assert.ok(html.includes('mv2-radar-lbl--money'));
+  assert.ok(
+    html.includes("mv2-radar-lbl--peak") && html.includes("mv2-radar-lbl--align"),
+    "ป้ายพลังเด่น + ป้ายแกนเข้ากับคุณที่สุด (เมื่อไม่ใช่แกนเดียวกัน) มีคลาสกระพริบ",
+  );
+  assert.ok(html.includes("mv2RadarDotPulseGreen") && html.includes("mv2RadarDotPulseSlate"));
   assert.ok(!html.includes("mv2-radar-axis--2l"));
   assert.ok(!html.includes("foreignObject"));
   assert.ok(html.includes("text-rendering=\"optimizeLegibility\""));

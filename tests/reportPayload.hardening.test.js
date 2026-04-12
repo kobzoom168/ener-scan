@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseCompatibilityPercent } from "../src/services/reports/reportPayload.builder.js";
+import { MOLDAVITE_DEFAULT_TRUST_NOTE } from "../src/moldavite/moldavitePayload.build.js";
 import { normalizeReportPayloadForRender } from "../src/utils/reports/reportPayloadNormalize.util.js";
 
 test("parseCompatibilityPercent: percent and 0–10 scale", () => {
@@ -40,6 +41,20 @@ test("normalizeReportPayloadForRender: string energyScore", () => {
     object: {},
   });
   assert.equal(payload.summary.energyScore, 8.5);
+});
+
+test("normalizeReportPayloadForRender: moldavite slice uses Moldavite trustNote default", () => {
+  const { payload } = normalizeReportPayloadForRender({
+    reportId: "r",
+    generatedAt: new Date().toISOString(),
+    summary: { summaryLine: "ok" },
+    sections: {},
+    trust: { rendererVersion: "html-1.0.0" },
+    actions: {},
+    object: {},
+    moldaviteV1: { version: "1" },
+  });
+  assert.equal(payload.trust.trustNote, MOLDAVITE_DEFAULT_TRUST_NOTE);
 });
 
 test("normalizeReportPayloadForRender: objectEnergy nested optional fields", () => {
