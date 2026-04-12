@@ -232,7 +232,7 @@ function radarBlock(vm) {
   const radarHelperHtml = `<p class="mv2-radar-context">${escapeHtml(vm.radarSectionContext.compareHelperLine)}</p>`;
 
   return `
-  <section class="mv2-radar-card" aria-labelledby="mv2-radar-h">
+  <section class="mv2-radar-card mv2-radar-card--feature" aria-labelledby="mv2-radar-h">
     <h2 class="mv2-radar-title" id="mv2-radar-h">ภาพรวมการจับคู่</h2>
     ${radarHelperHtml}
     <div class="mv2-radar-svg-wrap">
@@ -365,7 +365,7 @@ export function renderMoldaviteReportV2Html(payload) {
       -webkit-font-smoothing: antialiased;
     }
     .mv2-wrap { max-width: 26rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
-    .mv2-hero { margin-bottom: 1.25rem; }
+    .mv2-hero { margin-bottom: 0.55rem; }
     .mv2-badge { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mv2-muted); }
     .mv2-hero-media { border-radius: var(--mv2-r); overflow: hidden; background: #1a1f26; aspect-ratio: 20/13; margin-top: 0.5rem; }
     .mv2-hero-media--empty { display:flex; align-items:center; justify-content:center; color: var(--mv2-muted); font-size: 0.85rem; }
@@ -379,7 +379,7 @@ export function renderMoldaviteReportV2Html(payload) {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 0.5rem;
-      margin: 1rem 0 1.25rem;
+      margin: 0.45rem 0 0.72rem;
       text-align: center;
     }
     .mv2-strip > div { background: var(--mv2-card); border: 1px solid var(--mv2-edge); border-radius: 12px; padding: 0.55rem 0.35rem; }
@@ -719,11 +719,11 @@ export function renderMoldaviteReportV2Html(payload) {
       ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
     </header>
 
-    <div class="mv2-strip" role="group" aria-label="สรุปตัวเลข">
+    <section class="mv2-strip" aria-label="คะแนนสรุป">
       <div><div class="mv2-strip-k">คะแนนพลัง</div><div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
       <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
-    </div>
+    </section>
 
     ${radarBlock(vm)}
 

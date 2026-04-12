@@ -135,7 +135,19 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes(MOLDAVITE_ENERGY_TIMING_DEFAULTS.bestTimeText.slice(0, 24)));
   assert.ok(html.includes("มอลดาไวต์"));
   assert.ok(html.includes("พลังหลัก ·"));
+  assert.ok(html.includes('class="mv2-strip"'));
   assert.ok(html.includes('mv2-strip-cell--level'));
+  assert.ok(html.includes("คะแนนพลัง"));
+  assert.ok(html.includes('class="mv2-strip-k">เข้ากัน</div>'));
+  assert.ok(html.includes('class="mv2-strip-k">ระดับ</div>'));
+  {
+    const stripIdx = html.indexOf('class="mv2-strip"');
+    const radarFeatureIdx = html.indexOf("mv2-radar-card--feature");
+    assert.ok(
+      stripIdx > 0 && radarFeatureIdx > stripIdx,
+      "score strip อยู่ก่อนเรดาร์ (mv2-radar-card--feature)",
+    );
+  }
   assert.ok(html.includes("เร่งการเปลี่ยนแปลง"));
   assert.ok(html.includes("<polygon"));
   assert.ok(html.includes('class="mv2-radar-svg mv2-radar-svg--animate"'));
