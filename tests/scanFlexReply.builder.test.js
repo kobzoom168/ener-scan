@@ -115,6 +115,32 @@ test("buildScanResultFlexWithFallback: amuletV1 → sacred amulet builder (not g
   assert.equal(out.flex.altText, "amulet_shell");
 });
 
+test("buildScanResultFlexWithFallback: crystalBraceletV1 → crystal bracelet builder (not generic summary-first)", async () => {
+  const out = await buildScanResultFlexWithFallback(
+    {
+      summaryFirstEnabled: true,
+      resultText: SAMPLE_TEXT,
+      birthdate: null,
+      reportUrl: null,
+      reportPayload: { crystalBraceletV1: { version: "1" } },
+      appendReportBubble: false,
+    },
+    {
+      buildCrystalBraceletSummaryFirstFlex: async () => ({
+        type: "flex",
+        altText: "crystal_bracelet_shell",
+        contents: { type: "bubble" },
+      }),
+      buildScanSummaryFirstFlex: async () => {
+        throw new Error("should_not_call_summary_first_when_crystal_bracelet");
+      },
+      buildScanFlex: () => fakeLegacyFlex(),
+    },
+  );
+  assert.equal(out.summaryFirstBuildFailed, false);
+  assert.equal(out.flex.altText, "crystal_bracelet_shell");
+});
+
 test("buildScanResultFlexWithFallback: crystalGenericSafeV1 alone → generic summary-first (third lane removed)", async () => {
   const out = await buildScanResultFlexWithFallback(
     {

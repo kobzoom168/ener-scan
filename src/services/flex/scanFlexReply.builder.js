@@ -2,6 +2,7 @@ import { buildScanFlex } from "./flex.service.js";
 import { buildScanSummaryFirstFlex } from "./flex.summaryFirst.js";
 import { buildMoldaviteSummaryFirstFlex } from "./flex.moldaviteSummary.js";
 import { buildAmuletSummaryFirstFlex } from "./flex.amuletSummary.js";
+import { buildCrystalBraceletSummaryFirstFlex } from "./flex.crystalBraceletSummary.js";
 
 /**
  * Prefer `summary.energyCopyObjectFamily` (normalized slug) then diagnostics.
@@ -23,7 +24,7 @@ function objectFamilyFromReportPayload(reportPayload) {
  * Builds scan-result Flex: summary-first when enabled, legacy {@link buildScanFlex} on disable or on throw.
  * Extracted for unit tests (fallback path) without changing scan pipeline behavior.
  *
- * Normal summary-first lane selection (no crystal generic safe): `moldavite_flex_v1` | `sacred_amulet_flex_v1` | `summary_first_generic`.
+ * Normal summary-first lane selection: `moldavite_flex_v1` | `sacred_amulet_flex_v1` | `crystal_bracelet_flex_v1` | `summary_first_generic`.
  *
  * @param {object} options
  * @param {boolean} options.summaryFirstEnabled
@@ -36,6 +37,7 @@ function objectFamilyFromReportPayload(reportPayload) {
  *   buildScanSummaryFirstFlex?: typeof buildScanSummaryFirstFlex,
  *   buildMoldaviteSummaryFirstFlex?: typeof buildMoldaviteSummaryFirstFlex,
  *   buildAmuletSummaryFirstFlex?: typeof buildAmuletSummaryFirstFlex,
+ *   buildCrystalBraceletSummaryFirstFlex?: typeof buildCrystalBraceletSummaryFirstFlex,
  *   buildScanFlex?: typeof buildScanFlex,
  * }} [impl] test doubles
  * @returns {Promise<{ flex: Record<string, unknown>, summaryFirstBuildFailed: boolean, error?: unknown }>}
@@ -47,6 +49,9 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
     impl.buildMoldaviteSummaryFirstFlex ?? buildMoldaviteSummaryFirstFlex;
   const buildAmulet =
     impl.buildAmuletSummaryFirstFlex ?? buildAmuletSummaryFirstFlex;
+  const buildCrystalBracelet =
+    impl.buildCrystalBraceletSummaryFirstFlex ??
+    buildCrystalBraceletSummaryFirstFlex;
   const buildLegacy = impl.buildScanFlex ?? buildScanFlex;
 
   const {
@@ -86,7 +91,7 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
       flex = await buildAmulet(resultText, summaryOpts);
     } else if (reportPayload?.crystalBraceletV1) {
       flexLane = "crystal_bracelet_flex_v1";
-      flex = await buildSummary(resultText, summaryOpts);
+      flex = await buildCrystalBracelet(resultText, summaryOpts);
     } else {
       flex = await buildSummary(resultText, summaryOpts);
     }

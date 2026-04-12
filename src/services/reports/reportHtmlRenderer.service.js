@@ -1,6 +1,7 @@
 import { renderMobileReportHtml } from "../../templates/reports/mobileReport.template.js";
 import { renderMoldaviteReportV2Html } from "../../templates/reports/moldaviteReportV2.template.js";
 import { renderAmuletReportV2Html } from "../../templates/reports/amuletReportV2.template.js";
+import { renderCrystalBraceletReportV2Html } from "../../templates/reports/crystalBraceletReportV2.template.js";
 import { normalizeReportPayloadForRender } from "../../utils/reports/reportPayloadNormalize.util.js";
 import {
   BANGKOK_TIME_ZONE,
@@ -62,6 +63,20 @@ export function renderReportHtmlPage(payload) {
       }),
     );
     return renderMoldaviteReportV2Html(normalized);
+  }
+  if (
+    normalized.crystalBraceletV1 &&
+    typeof normalized.crystalBraceletV1 === "object" &&
+    !Array.isArray(normalized.crystalBraceletV1)
+  ) {
+    console.log(
+      JSON.stringify({
+        event: "REPORT_HTML_RENDERER_SELECTED",
+        lane: "crystal_bracelet_html_v2",
+        reportIdPrefix: String(normalized.reportId || "").slice(0, 8),
+      }),
+    );
+    return renderCrystalBraceletReportV2Html(normalized);
   }
   console.log(
     JSON.stringify({
