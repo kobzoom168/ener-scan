@@ -113,7 +113,11 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2a-radar-layer mv2a-radar-layer--owner"'));
   assert.ok(html.includes('class="mv2a-radar-layer mv2a-radar-layer--amulet"'));
   assert.ok(html.includes('<circle class="mv2a-radar-peak"'));
-  assert.ok(html.includes('class="mv2a-radar-peak-secondary"'), "รองจากเด่น: จุดรอง + pulse");
+  assert.ok(html.includes('class="mv2a-radar-peak-secondary"'), "เข้ากับคุณที่สุด: จุดรองบนกราฟ + pulse");
+  assert.ok(
+    html.includes("เข้ากับคุณที่สุด (จุดพลังรองบนกราฟ)"),
+    "จุดรองตรงแกนเดียวกับสรุป เข้ากับคุณที่สุด",
+  );
   assert.ok(html.includes("พลังเด่นสุดของพระเครื่อง: คุ้มครองป้องกัน"));
   assert.ok(html.includes('class="mv2a-radar-labels"'));
   assert.ok(html.includes("class=\"mv2a-radar-lbl mv2a-radar-lbl--protection mv2a-radar-lbl--top1\""));

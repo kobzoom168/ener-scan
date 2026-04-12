@@ -65,12 +65,12 @@ function amuletRadarAxisAlias(axisKey, fallbackLabel) {
  * @param {{ id: string, labelThai: string }} axis
  * @param {number} score
  * @param {boolean} isPeak
- * @param {boolean} isSecond
+ * @param {boolean} isAlignHighlight — แกน “เข้ากับคุณที่สุด” (`alignment.axisKey`) เมื่อไม่ใช่แกนพลังเด่น
  */
-function amuletRadarAxisLabelHtml(axis, score, isPeak, isSecond) {
+function amuletRadarAxisLabelHtml(axis, score, isPeak, isAlignHighlight) {
   const rankCls = isPeak
     ? " mv2a-radar-lbl--top1"
-    : isSecond
+    : isAlignHighlight
       ? " mv2a-radar-lbl--top2"
       : "";
   const alias = amuletRadarAxisAlias(axis.id, axis.labelThai);
@@ -164,27 +164,31 @@ function resolveAmuletHtmlTheme(payload) {
 function mainGraphBlock(vm) {
   const ownerPts = amuletRadarPolygonPoints(vm.power.owner);
   const objectPts = amuletRadarPolygonPoints(vm.power.object);
+  const alignKey = String(vm.power.alignment?.axisKey || "").trim();
   const axisLabelsHtml = vm.power.axes
     .map((ax) => {
       const isPeak = vm.power.objectPeakKey === ax.id;
-      const isSecond = vm.power.objectSecondKey === ax.id;
+      const isAlignHighlight =
+        alignKey.length > 0 &&
+        alignKey === ax.id &&
+        alignKey !== vm.power.objectPeakKey;
       const score = Math.round(Number(vm.power.object[ax.id]) || 0);
-      return amuletRadarAxisLabelHtml(ax, score, isPeak, isSecond);
+      return amuletRadarAxisLabelHtml(ax, score, isPeak, isAlignHighlight);
     })
     .join("");
   const peak = amuletRadarVertexForAxis(vm.power.object, vm.power.objectPeakKey);
   const peakX = peak.x.toFixed(2);
   const peakY = peak.y.toFixed(2);
   const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="var(--mv2a-radar-peak-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="var(--mv2a-radar-peak-fill)" stroke="var(--mv2a-radar-peak-stroke)" stroke-width="0.26" aria-hidden="true"><title>พลังเด่นสุดของพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
-  const secondKey = vm.power.objectSecondKey;
-  const secondMarker =
-    secondKey && secondKey !== vm.power.objectPeakKey
+  const alignLabelThai = String(vm.power.alignment?.labelThai || "").trim();
+  const alignMarker =
+    alignKey && alignKey !== vm.power.objectPeakKey
       ? (() => {
-          const p2 = amuletRadarVertexForAxis(vm.power.object, secondKey);
+          const p2 = amuletRadarVertexForAxis(vm.power.object, alignKey);
           const x2 = p2.x.toFixed(2);
           const y2 = p2.y.toFixed(2);
-          const lab = escapeHtml(vm.power.objectSecondLabelThai || "");
-          return `<circle cx="${x2}" cy="${y2}" r="2.6" fill="var(--mv2a-radar-peak2-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak-secondary" cx="${x2}" cy="${y2}" r="1.4" fill="var(--mv2a-radar-peak2-fill)" stroke="var(--mv2a-radar-peak2-stroke)" stroke-width="0.26" aria-hidden="true"><title>รองจากพลังเด่น: ${lab}</title></circle>`;
+          const lab = escapeHtml(alignLabelThai);
+          return `<circle cx="${x2}" cy="${y2}" r="2.6" fill="var(--mv2a-radar-peak2-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak-secondary" cx="${x2}" cy="${y2}" r="1.4" fill="var(--mv2a-radar-peak2-fill)" stroke="var(--mv2a-radar-peak2-stroke)" stroke-width="0.26" aria-hidden="true"><title>เข้ากับคุณที่สุด (จุดพลังรองบนกราฟ): ${lab}</title></circle>`;
         })()
       : "";
 
@@ -208,7 +212,7 @@ function mainGraphBlock(vm) {
           <g class="mv2a-radar-layer mv2a-radar-layer--amulet">
             <polygon points="${objectPts}" fill="var(--mv2a-radar-amulet-fill)" stroke="var(--mv2a-radar-amulet-stroke)" stroke-width="0.58" stroke-linejoin="round"/>
           </g>
-          <g class="mv2a-radar-layer mv2a-radar-layer--peak">${peakMarker}${secondMarker}</g>
+          <g class="mv2a-radar-layer mv2a-radar-layer--peak">${peakMarker}${alignMarker}</g>
         </svg>
         <div class="mv2a-radar-labels" aria-hidden="true">${axisLabelsHtml}</div>
       </div>
