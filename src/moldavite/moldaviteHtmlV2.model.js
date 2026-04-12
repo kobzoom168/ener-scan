@@ -4,6 +4,7 @@ import {
   energyGradeToLevelGradeClass,
   resolveEnergyLevelDisplayGrade,
 } from "../utils/reports/energyLevelGrade.util.js";
+import { buildMoldaviteOwnerIdentityCard } from "./moldaviteOwnerIdentityCard.util.js";
 
 /** @typedef {"work"|"relationship"|"money"} AxisKey */
 
@@ -327,11 +328,22 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
     },
     graphSummary,
     radarSectionContext,
-    ownerProfile: {
-      zodiacLabel: `คุณเกิดราศี${ownerAxes.zodiacLabel}`,
-      traitScores: ownerAxes.traitScores,
-      note: ownerAxes.note,
-    },
+    ownerProfile: (() => {
+      const identity = buildMoldaviteOwnerIdentityCard({
+        traitScores: ownerAxes.traitScores,
+        zodiacShortLabel: ownerAxes.zodiacLabel,
+        seed: `${seed}|${String(payload.reportId || payload.scanId || "").trim()}`,
+      });
+      return {
+        zodiacLabel: `คุณเกิดราศี${ownerAxes.zodiacLabel}`,
+        traitScores: ownerAxes.traitScores,
+        note: ownerAxes.note,
+        identityChips: identity.chips,
+        identitySummary: identity.summary,
+        identitySummarySecond: identity.summarySecond,
+        zodiacGlyphSvg: identity.glyphSvg,
+      };
+    })(),
     interactionSummary: {
       headline: interactionHeadline,
       rows: interactionRows,

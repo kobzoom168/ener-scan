@@ -103,11 +103,16 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
     "จุดเทา: แกนเข้ากับคุณตามสูตร (min |owner−หิน|) แยกจากจุดเขียวพลังเด่นหิน",
   );
   assert.ok(html.includes("โปรไฟล์เจ้าของ"));
+  assert.ok(html.includes('class="mv2-owner-card"'));
   assert.ok(html.includes('class="mv2-owner-zodiac"'));
   assert.ok(html.includes("คุณเกิดราศี"));
   assert.ok(html.includes('class="mv2-owner-chip"'));
-  assert.ok(html.includes("/10</span>"));
-  assert.ok(html.includes("ใจนำ"));
+  assert.ok(html.includes('class="mv2-owner-identity"'));
+  assert.ok(html.includes("mv2-owner-glyph"));
+  assert.ok(
+    !/class="mv2-owner-chip"[^>]*>[^<]*\/10/.test(html),
+    "โปรไฟล์เจ้าของ: ไม่แสดงคะแนน trait ใน chip",
+  );
   assert.ok(html.includes('class="mv2-owner-note"'));
   assert.ok(!html.includes('class="mv2-owner-id"'));
   assert.ok(html.includes("หินทำงานกับคุณอย่างไร"));

@@ -299,9 +299,24 @@ export function renderMoldaviteReportV2Html(payload) {
     )
     .join("")}</div>`;
 
-  const traitChipsHtml = vm.ownerProfile.traitScores
-    .map((t) => `<span class="mv2-owner-chip">${escapeHtml(t.label)} ${t.score}/10</span>`)
+  const identityChipsHtml = (vm.ownerProfile.identityChips || [])
+    .map((c) => `<span class="mv2-owner-chip">${escapeHtml(c)}</span>`)
     .join("");
+
+  const ownerCardHtml = `<div class="mv2-owner-card">
+    <div class="mv2-owner-card__glyph">${vm.ownerProfile.zodiacGlyphSvg || ""}</div>
+    <div class="mv2-owner-card__main">
+      <p class="mv2-owner-zodiac">${escapeHtml(vm.ownerProfile.zodiacLabel)}</p>
+      <div class="mv2-owner-chips">${identityChipsHtml}</div>
+      <p class="mv2-owner-identity">${escapeHtml(vm.ownerProfile.identitySummary || "")}</p>
+      ${
+        vm.ownerProfile.identitySummarySecond
+          ? `<p class="mv2-owner-identity mv2-owner-identity--second">${escapeHtml(vm.ownerProfile.identitySummarySecond)}</p>`
+          : ""
+      }
+      <p class="mv2-owner-note">${escapeHtml(vm.ownerProfile.note)}</p>
+    </div>
+  </div>`;
 
   const interactionHtml = vm.interactionSummary.rows
     .map(
@@ -650,37 +665,69 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-gsum-row--lead .mv2-gsum-v {
       color: rgba(209,250,229,0.98);
     }
-    .mv2-card--owner > h2 { margin-bottom: 0.22rem; }
+    .mv2-card--owner > h2 { margin-bottom: 0.55rem; }
+    .mv2-owner-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.85rem 1rem;
+      padding: 0.15rem 0 0;
+    }
+    .mv2-owner-card__glyph {
+      flex-shrink: 0;
+      filter: drop-shadow(0 0 14px rgba(34, 197, 94, 0.12));
+    }
+    .mv2-owner-card__glyph .mv2-owner-glyph { display: block; }
+    .mv2-owner-card__main { flex: 1; min-width: 0; }
     .mv2-owner-zodiac {
-      margin: 0 0 0.5rem;
-      font-size: 1.15rem;
+      margin: 0 0 0.45rem;
+      font-size: 1.05rem;
       font-weight: 700;
-      color: #e2e8f0;
+      color: #f1f5f9;
       letter-spacing: 0.02em;
+      line-height: 1.3;
     }
     .mv2-owner-chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.42rem 0.55rem;
-      margin: 0 0 0.5rem;
+      gap: 0.35rem 0.45rem;
+      margin: 0 0 0.55rem;
     }
     .mv2-owner-chip {
       display: inline-block;
-      padding: 0.22rem 0.55rem;
-      border-radius: 1rem;
-      background: rgba(255,255,255,0.055);
-      border: 1px solid rgba(255,255,255,0.1);
-      font-size: 0.78rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      font-size: 0.72rem;
       font-weight: 500;
-      color: rgba(226,232,240,0.92);
+      color: rgba(186, 230, 253, 0.78);
       white-space: nowrap;
+      letter-spacing: 0.02em;
+    }
+    .mv2-owner-identity {
+      margin: 0 0 0.45rem;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      font-weight: 400;
+      color: rgba(226, 232, 240, 0.88);
       letter-spacing: 0.01em;
     }
+    .mv2-owner-identity--second {
+      margin-top: -0.25rem;
+      opacity: 0.92;
+      font-size: 0.84rem;
+    }
     .mv2-owner-note {
-      margin: 0;
+      margin: 0.35rem 0 0;
       font-size: 0.62rem;
-      color: rgba(148,163,184,0.42);
+      color: rgba(148,163,184,0.45);
       font-weight: 400;
+      line-height: 1.4;
+    }
+    @media (max-width: 22rem) {
+      .mv2-owner-card { flex-direction: column; align-items: center; text-align: center; }
+      .mv2-owner-card__main { width: 100%; }
+      .mv2-owner-chips { justify-content: center; }
     }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }
@@ -838,9 +885,7 @@ export function renderMoldaviteReportV2Html(payload) {
 
     <section class="mv2-card mv2-card--owner" aria-labelledby="mv2-owner-h">
       <h2 id="mv2-owner-h">โปรไฟล์เจ้าของ</h2>
-      <p class="mv2-owner-zodiac">${escapeHtml(vm.ownerProfile.zodiacLabel)}</p>
-      <div class="mv2-owner-chips">${traitChipsHtml}</div>
-      <p class="mv2-owner-note">${escapeHtml(vm.ownerProfile.note)}</p>
+      ${ownerCardHtml}
     </section>
 
     <section class="mv2-card" aria-labelledby="mv2-int-h">
