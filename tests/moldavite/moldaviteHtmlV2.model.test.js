@@ -5,7 +5,6 @@ import {
   buildMoldaviteHtmlV2ViewModel,
   buildRadarSectionCompareHelperLine,
   DEFAULT_RADAR_COMPARE_TARGET_ENERGY_LABEL_MOLDAVITE,
-  MOLDAVITE_ENERGY_TIMING_DEFAULTS,
   RADAR_SECTION_COMPARE_HELPER_PREFIX,
 } from "../../src/moldavite/moldaviteHtmlV2.model.js";
 import { buildMoldaviteV1Slice } from "../../src/moldavite/moldavitePayload.build.js";
@@ -60,7 +59,7 @@ const namingHigh = resolveMoldaviteDisplayNaming({
   detectionReason: "gemini_crystal_subtype",
 });
 
-test("buildMoldaviteHtmlV2ViewModel: energyTiming defaults", () => {
+test("buildMoldaviteHtmlV2ViewModel: energyTiming deterministic v1 (Moldavite)", () => {
   const mv = buildMoldaviteV1Slice({
     scanResultId: "rid-et",
     detection: { reason: "keyword_match", matchedSignals: ["x"] },
@@ -75,11 +74,13 @@ test("buildMoldaviteHtmlV2ViewModel: energyTiming defaults", () => {
     reportId: "r-et",
     birthdateUsed: "15/03/1990",
     generatedAt: new Date().toISOString(),
-    summary: {},
+    summary: { compatibilityPercent: 76 },
     object: {},
   });
-  assert.equal(vm.energyTiming.bestTimeText, MOLDAVITE_ENERGY_TIMING_DEFAULTS.bestTimeText);
-  assert.equal(vm.energyTiming.focusAmplifierNote, MOLDAVITE_ENERGY_TIMING_DEFAULTS.focusAmplifierNote);
+  assert.equal(vm.energyTiming.recommendedWeekday, "วันจันทร์");
+  assert.ok(vm.energyTiming.timingReason.includes("เปิดรอบใหม่ทางงาน"));
+  assert.equal(vm.energyTiming.nativeIdentity, "change_acceleration");
+  assert.ok(vm.energyTiming.ritualMode.includes("ตั้งเจตนา"));
 });
 
 test("buildMoldaviteHtmlV2ViewModel: energyTiming partial override from htmlReport", () => {
@@ -94,7 +95,7 @@ test("buildMoldaviteHtmlV2ViewModel: energyTiming partial override from htmlRepo
   mv.htmlReport = {
     ...mv.htmlReport,
     energyTiming: {
-      bestTimeText: "ช่วงทดสอบเฉพาะเวลา",
+      recommendedTimeBand: "ช่วงทดสอบเฉพาะเวลา",
     },
   };
   const vm = buildMoldaviteHtmlV2ViewModel({
@@ -106,6 +107,33 @@ test("buildMoldaviteHtmlV2ViewModel: energyTiming partial override from htmlRepo
     summary: {},
     object: {},
   });
-  assert.equal(vm.energyTiming.bestTimeText, "ช่วงทดสอบเฉพาะเวลา");
-  assert.equal(vm.energyTiming.bestDayText, MOLDAVITE_ENERGY_TIMING_DEFAULTS.bestDayText);
+  assert.equal(vm.energyTiming.recommendedTimeBand, "ช่วงทดสอบเฉพาะเวลา");
+  assert.equal(vm.energyTiming.recommendedWeekday, "วันจันทร์");
+});
+
+test("buildMoldaviteHtmlV2ViewModel: legacy bestTimeText overrides recommendedTimeBand", () => {
+  const mv = buildMoldaviteV1Slice({
+    scanResultId: "rid-et3",
+    detection: { reason: "keyword_match", matchedSignals: ["x"] },
+    seedKey: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    energyScore: 7.5,
+    mainEnergyLabel: "เร่งการเปลี่ยนแปลง",
+    displayNaming: namingHigh,
+  });
+  mv.htmlReport = {
+    ...mv.htmlReport,
+    energyTiming: {
+      bestTimeText: "legacy เวลา override",
+    },
+  };
+  const vm = buildMoldaviteHtmlV2ViewModel({
+    moldaviteV1: mv,
+    scanId: "s-et3",
+    reportId: "r-et3",
+    birthdateUsed: "15/03/1990",
+    generatedAt: new Date().toISOString(),
+    summary: {},
+    object: {},
+  });
+  assert.equal(vm.energyTiming.recommendedTimeBand, "legacy เวลา override");
 });

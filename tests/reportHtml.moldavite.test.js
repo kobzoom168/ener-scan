@@ -6,7 +6,6 @@ import { normalizeReportPayloadForRender } from "../src/utils/reports/reportPayl
 import { renderReportHtmlPage } from "../src/services/reports/reportHtmlRenderer.service.js";
 import { renderMobileReportHtml } from "../src/templates/reports/mobileReport.template.js";
 import { renderMoldaviteReportV2Html } from "../src/templates/reports/moldaviteReportV2.template.js";
-import { MOLDAVITE_ENERGY_TIMING_DEFAULTS } from "../src/moldavite/moldaviteHtmlV2.model.js";
 
 const namingHigh = resolveMoldaviteDisplayNaming({
   geminiSubtypeConfidence: 0.9,
@@ -132,7 +131,9 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
       "จังหวะเสริมพลังอยู่หลังมิติชีวิตละเอียดและก่อนการใช้และข้อควรระวัง",
     );
   }
-  assert.ok(html.includes(MOLDAVITE_ENERGY_TIMING_DEFAULTS.bestTimeText.slice(0, 24)));
+  assert.ok(html.includes("วันจันทร์"));
+  assert.ok(html.includes("จังหวะนี้เหมาะกับการเปิดรอบใหม่ทางงาน"));
+  assert.ok(html.includes("ตั้งเจตนา 1 ประโยคก่อนใช้"));
   assert.ok(html.includes("มอลดาไวต์"));
   assert.ok(html.includes("พลังหลัก ·"));
   assert.ok(html.includes('class="mv2-strip"'));

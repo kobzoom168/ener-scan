@@ -322,11 +322,11 @@ export function renderMoldaviteReportV2Html(payload) {
   const energyTimingHtml = `<section class="mv2-card mv2-card--et" aria-labelledby="mv2-et-h">
       <h2 id="mv2-et-h">จังหวะเสริมพลัง</h2>
       <div class="mv2-et-rows">
-        <div class="mv2-et-row"><span class="mv2-et-k">เวลา</span><span class="mv2-et-v">${escapeHtml(et.bestTimeText)}</span></div>
-        <div class="mv2-et-row"><span class="mv2-et-k">วัน</span><span class="mv2-et-v">${escapeHtml(et.bestDayText)}</span></div>
-        <div class="mv2-et-row"><span class="mv2-et-k">โหมดแนะนำ</span><span class="mv2-et-v">${escapeHtml(et.recommendedModeText)}</span></div>
+        <div class="mv2-et-row"><span class="mv2-et-k">วัน</span><span class="mv2-et-v">${escapeHtml(et.recommendedWeekday)}</span></div>
+        <div class="mv2-et-row"><span class="mv2-et-k">เวลา</span><span class="mv2-et-v">${escapeHtml(et.recommendedTimeBand)}</span></div>
+        <div class="mv2-et-row"><span class="mv2-et-k">โหมดแนะนำ</span><span class="mv2-et-v">${escapeHtml(et.ritualMode)}</span></div>
       </div>
-      <p class="mv2-et-note">${escapeHtml(et.focusAmplifierNote)}</p>
+      <p class="mv2-et-note">${escapeHtml(et.timingReason)}</p>
     </section>`;
 
   const title = escapeHtml(

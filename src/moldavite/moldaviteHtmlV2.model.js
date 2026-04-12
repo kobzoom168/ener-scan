@@ -1,4 +1,5 @@
 import { deriveMoldaviteOwnerAxisProfile } from "./moldaviteOwnerProfileFromBirthdate.util.js";
+import { deriveMoldaviteEnergyTimingV1 } from "./moldaviteEnergyTimingDerive.util.js";
 
 /** @typedef {"work"|"relationship"|"money"} AxisKey */
 
@@ -58,7 +59,11 @@ const V2_USAGE_LINES = [
   "นี่ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน ถ้ามีปัญหาสุขภาพหรือหนี้สินรุนแรง ควรปรึกษาผู้เชี่ยวชาญ",
 ];
 
-/** Default Moldavite-only copy for HTML “จังหวะเสริมพลัง” (overridable via `moldaviteV1.htmlReport.energyTiming`). */
+/**
+ * Legacy static defaults (pre–deterministic v1). Prefer `deriveMoldaviteEnergyTimingV1`;
+ * kept for tests / migration references only.
+ * @deprecated Use `moldaviteV1.htmlReport.energyTiming` overrides or derived v1 fields.
+ */
 export const MOLDAVITE_ENERGY_TIMING_DEFAULTS = {
   bestTimeText:
     "ช่วงที่ต้องการขยับจากจุดเดิม หรือตัดสินใจเริ่มสิ่งใหม่",
@@ -71,9 +76,29 @@ export const MOLDAVITE_ENERGY_TIMING_DEFAULTS = {
 };
 
 /**
- * @param {object | null | undefined} mv — `moldaviteV1` slice
+ * Deterministic Moldavite “จังหวะเสริมพลัง” + optional `htmlReport.energyTiming` overrides.
+ * New keys: `recommendedWeekday`, `recommendedTimeBand`, `ritualMode`, `timingReason`.
+ * Legacy override keys still supported: `bestDayText`, `bestTimeText`, `recommendedModeText`, `focusAmplifierNote`.
+ *
+ * @param {object | null | undefined} mv
+ * @param {import("../services/reports/reportPayload.types.js").ReportPayload} payload
+ * @param {ReturnType<typeof deriveMoldaviteOwnerAxisProfile>} ownerAxes
+ * @param {"work"|"relationship"|"money"} [strongestAlignmentAxis] — radar alignment axis (min |owner−หิน|)
  */
-function resolveMoldaviteEnergyTiming(mv) {
+function resolveMoldaviteEnergyTiming(mv, payload, ownerAxes, strongestAlignmentAxis) {
+  const ownerFit =
+    payload?.summary?.compatibilityPercent != null &&
+    Number.isFinite(Number(payload.summary.compatibilityPercent))
+      ? Number(payload.summary.compatibilityPercent)
+      : null;
+
+  const derived = deriveMoldaviteEnergyTimingV1({
+    mv,
+    ownerAxes,
+    ownerFitScore: ownerFit ?? 70,
+    strongestAlignmentAxis,
+  });
+
   const raw =
     mv?.htmlReport &&
     typeof mv.htmlReport === "object" &&
@@ -81,15 +106,22 @@ function resolveMoldaviteEnergyTiming(mv) {
     typeof mv.htmlReport.energyTiming === "object"
       ? mv.htmlReport.energyTiming
       : {};
-  const pick = (k) => {
-    const v = String(raw[k] ?? "").trim();
-    return v || MOLDAVITE_ENERGY_TIMING_DEFAULTS[k];
+
+  const str = (x) => String(x ?? "").trim();
+  const pick = (newKey, legacyKey) => {
+    const a = str(raw[newKey]);
+    if (a) return a;
+    const b = str(raw[legacyKey]);
+    if (b) return b;
+    return derived[newKey];
   };
+
   return {
-    bestTimeText: pick("bestTimeText"),
-    bestDayText: pick("bestDayText"),
-    recommendedModeText: pick("recommendedModeText"),
-    focusAmplifierNote: pick("focusAmplifierNote"),
+    recommendedWeekday: pick("recommendedWeekday", "bestDayText"),
+    recommendedTimeBand: pick("recommendedTimeBand", "bestTimeText"),
+    ritualMode: pick("ritualMode", "recommendedModeText"),
+    timingReason: pick("timingReason", "focusAmplifierNote"),
+    nativeIdentity: derived.nativeIdentity,
   };
 }
 
@@ -295,7 +327,7 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       rows: interactionRows,
     },
     lifeAreaDetail: { rows: lifeAreaRows },
-    energyTiming: resolveMoldaviteEnergyTiming(mv),
+    energyTiming: resolveMoldaviteEnergyTiming(mv, payload, ownerAxes, alignKey),
     usageCaution: { lines: usageLines },
     trustNote: String(payload.trust?.trustNote || "").trim(),
     reportVersion: String(payload.reportVersion || ""),
