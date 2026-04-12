@@ -5,6 +5,7 @@
  */
 import { env } from "../config/env.js";
 import { supabase } from "../config/supabase.js";
+import { maybeSendDlqAlert } from "../services/maintenanceDlqAlert.service.js";
 import {
   getLine429CanaryCountHour,
   startWorkerHeartbeatLoop,
@@ -161,6 +162,7 @@ async function logQueueHealthAndDlq() {
           : null,
     }),
   );
+  await maybeSendDlqAlert({ outDead, outFailed });
 }
 
 async function runOnce() {

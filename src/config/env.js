@@ -54,6 +54,8 @@ export const env = {
     (process.env.NODE_ENV === "production"
       ? ""
       : "ener-scan-dev-session-insecure"),
+  /** LINE userId to receive DLQ dead-letter push alerts from maintenance worker (optional). */
+  ADMIN_LINE_USER_ID: String(process.env.ADMIN_LINE_USER_ID || "").trim(),
   /** Admin dashboard login (username/password). Optional when using only ADMIN_TOKEN. */
   ADMIN_USERNAME: process.env.ADMIN_USERNAME || "",
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "",
@@ -514,6 +516,10 @@ export const env = {
   CANARY_LINE_429_RATE_MAX_PER_HOUR: Math.max(
     0,
     Number(process.env.CANARY_LINE_429_RATE_MAX_PER_HOUR || 120) || 120,
+  ),
+  /** Min `outbound_messages.dead` count before LINE push to ADMIN_LINE_USER_ID. Default 1. */
+  CANARY_DLQ_DEAD_ALERT_THRESHOLD: Number(
+    process.env.CANARY_DLQ_DEAD_ALERT_THRESHOLD || 1,
   ),
   CANARY_DELIVERY_SUCCESS_RATE_MIN: (() => {
     const n = Number(process.env.CANARY_DELIVERY_SUCCESS_RATE_MIN || 0.95);

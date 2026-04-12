@@ -57,48 +57,62 @@ function normalizeClassifierCategoryLabel(text) {
 }
 
 /**
- * Lightweight vision step before deep scan: single Thai category label.
- * On any failure returns "พระเครื่อง".
- * @param {string} imageBase64
- * @returns {Promise<string>}
+ * @param {string} cleanBase64
+ * @returns {Promise<{ output_text?: string }>}
  */
-export async function classifyObjectCategory(imageBase64) {
-  const clean = String(imageBase64 || "").trim();
-  if (!clean) return OBJECT_CLASSIFIER_DEFAULT;
-
-  try {
-    const response = await withOpenAi429RetryOnce(() => {
-      const model = "gpt-4.1-mini";
-      console.log("[OPENAI_MODEL]", model);
-      return openai.responses.create({
-        model,
-        temperature: 0,
-        input: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: `You MUST decide from the actual pixels in the image (not from assumptions). Classify the object into exactly one category:
+async function defaultInvokeClassifier(cleanBase64) {
+  return await withOpenAi429RetryOnce(() => {
+    const model = "gpt-4.1-mini";
+    console.log("[OPENAI_MODEL]", model);
+    return openai.responses.create({
+      model,
+      temperature: 0,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `You MUST decide from the actual pixels in the image (not from assumptions). Classify the object into exactly one category:
 พระเครื่อง | คริสตัล/หิน | เครื่องรางของขลัง | พระบูชา | อื่นๆ
 Reply with only the category name in Thai. Nothing else.`,
-              },
-              {
-                type: "input_image",
-                image_url: `data:image/jpeg;base64,${clean}`,
-              },
-            ],
-          },
-        ],
-      });
+            },
+            {
+              type: "input_image",
+              image_url: `data:image/jpeg;base64,${cleanBase64}`,
+            },
+          ],
+        },
+      ],
     });
+  });
+}
+
+/**
+ * Lightweight vision step before deep scan: single Thai category label.
+ * Empty input or OpenAI failure returns "อื่นๆ" (unknown / error path).
+ * @param {string} imageBase64
+ * @param {{ invokeClassifier?: (cleanBase64: string) => Promise<{ output_text?: string }> }} [deps]
+ * @returns {Promise<string>}
+ */
+export async function classifyObjectCategory(imageBase64, deps = {}) {
+  const clean = String(imageBase64 || "").trim();
+  if (!clean) return "อื่นๆ";
+
+  try {
+    const invoke = deps.invokeClassifier ?? defaultInvokeClassifier;
+    const response = await invoke(clean);
     const raw = String(response.output_text || "").trim();
     return normalizeClassifierCategoryLabel(raw);
   } catch (err) {
-    console.error("[OBJECT_CLASSIFY] failed, using default category:", {
-      message: err?.message,
-    });
-    return OBJECT_CLASSIFIER_DEFAULT;
+    console.log(
+      JSON.stringify({
+        event: "OBJECT_CLASSIFY_ERROR_DEFAULT_USED",
+        fallback: "อื่นๆ",
+        message: String(err?.message || "").slice(0, 200),
+      }),
+    );
+    return "อื่นๆ";
   }
 }
 
