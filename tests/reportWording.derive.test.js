@@ -261,7 +261,7 @@ test("renderMobileReportHtml includes structured hook when wording present", () 
     object: { objectLabel: "ทดสอบ", objectImageUrl: "", objectType: "" },
     summary: {
       energyScore: 8,
-      energyLevelLabel: "สูง",
+      energyLevelLabel: "A",
       mainEnergyLabel: "ปกป้อง",
       compatibilityPercent: 80,
       summaryLine: "สรุป",

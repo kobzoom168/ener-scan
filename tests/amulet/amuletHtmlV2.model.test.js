@@ -49,6 +49,8 @@ function minimalPayload(overrides = {}) {
 
 test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด่น / เข้ากับคุณที่สุด)", () => {
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
+  assert.equal(vm.metrics.energyLevelLabel, "B");
+  assert.equal(vm.metrics.energyLevelGradeClass, "level-grade--B");
   assert.ok(
     vm.usageCaution.disclaimer.includes("วันเดือนปีเกิด") &&
       vm.usageCaution.disclaimer.includes("Ener Scan"),

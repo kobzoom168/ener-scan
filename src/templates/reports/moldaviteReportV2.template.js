@@ -406,7 +406,12 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-strip-v { font-size: 1.05rem; font-weight: 700; color: var(--mv2-green-dim); margin-top: 0.2rem; }
     .mv2-strip-v small { font-size: 0.75rem; font-weight: 500; color: var(--mv2-muted); }
     .mv2-strip-cell--level .mv2-strip-k { font-size: 0.6rem; opacity: 0.72; letter-spacing: 0.05em; }
-    .mv2-strip-cell--level .mv2-strip-v { font-size: 0.82rem !important; font-weight: 600; color: rgba(134,239,172,0.78); margin-top: 0.22rem; }
+    .mv2-strip-cell--level .mv2-strip-v { font-size: 0.82rem !important; font-weight: 600; margin-top: 0.22rem; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: #86efac; text-shadow: 0 0 12px rgba(134, 239, 172, 0.38); }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--A { color: #22c55e; text-shadow: 0 0 10px rgba(34, 197, 94, 0.3); }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--B { color: #fbbf24; text-shadow: 0 0 6px rgba(251, 191, 36, 0.2); }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--D { color: #94a3b8; text-shadow: none; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--none { color: rgba(148, 163, 184, 0.78); text-shadow: none; }
     .mv2-card {
       background: var(--mv2-card);
       border: 1px solid var(--mv2-edge);
@@ -821,7 +826,7 @@ export function renderMoldaviteReportV2Html(payload) {
     <section class="mv2-strip" aria-label="คะแนนสรุป">
       <div><div class="mv2-strip-k">คะแนนพลัง</div><div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
-      <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
+      <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v ${vm.metrics.energyLevelGradeClass}">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
     </section>
 
     ${radarBlock(vm)}

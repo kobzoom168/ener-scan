@@ -46,10 +46,8 @@ import {
 } from "../../moldavite/moldavitePayload.build.js";
 import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayNaming.util.js";
 import { buildAmuletV1Slice } from "../../amulet/amuletPayload.build.js";
-import {
-  deriveSacredAmuletEnergyScore10FromPowerCategories,
-  sacredAmuletEnergyLevelLabelFromScore10,
-} from "../../amulet/amuletScores.util.js";
+import { deriveSacredAmuletEnergyScore10FromPowerCategories } from "../../amulet/amuletScores.util.js";
+import { score10ToEnergyGrade } from "../../utils/reports/energyLevelGrade.util.js";
 import { computeTimingV1 } from "../timing/timingEngine.service.js";
 import {
   normalizeBirthdateIso,
@@ -81,17 +79,6 @@ export function parseCompatibilityPercent(raw) {
   if (n >= 0 && n <= 10) return Math.round(n * 10);
   if (n <= 100) return Math.round(n);
   return null;
-}
-
-/**
- * @param {number|null} n
- * @returns {string}
- */
-function energyLevelLabelFromScore(n) {
-  if (n == null || !Number.isFinite(n)) return "";
-  if (n >= 7.5) return "สูง";
-  if (n >= 5) return "ปานกลาง";
-  return "อ่อน";
 }
 
 /**
@@ -977,9 +964,9 @@ export async function buildReportPayloadFromScan(opts) {
       ? deriveSacredAmuletEnergyScore10FromPowerCategories(amuletV1.powerCategories)
       : energyScore;
   const summaryEnergyLevelLabel =
-    amuletV1 != null
-      ? sacredAmuletEnergyLevelLabelFromScore10(Number(summaryEnergyScore))
-      : energyLevelLabelFromScore(energyScore);
+    summaryEnergyScore != null && Number.isFinite(Number(summaryEnergyScore))
+      ? score10ToEnergyGrade(Number(summaryEnergyScore))
+      : "";
 
   /** @type {import("./reportPayload.types.js").ReportTimingV1 | undefined} */
   let timingV1 = undefined;

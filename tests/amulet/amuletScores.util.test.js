@@ -62,7 +62,7 @@ test("hero energyScore10 is derived from the six axis scores (matches graph)", (
   );
 });
 
-test("deterministic_v2 sample distribution: wide spread, สูง not trivial", () => {
+test("deterministic_v2 sample distribution: wide spread, A/S not trivial", () => {
   const n = 8000;
   /** @type {number[]} */
   const scores = [];
@@ -85,8 +85,8 @@ test("deterministic_v2 sample distribution: wide spread, สูง not trivial",
   const pctBelow7 = pct((x) => x < 7);
   const pct8p = pct((x) => x >= 8);
   const pct9p = pct((x) => x >= 9);
-  const pctLabelSung =
-    labels.filter((l) => l === "สูง" || l === "สูงมาก").length / n;
+  const pctLabelHigh =
+    labels.filter((l) => l === "A" || l === "S").length / n;
 
   const knownTop = deriveSacredAmuletEnergyScore10FromPowerCategories(
     computeAmuletPowerScoresDeterministicV1("dist-sample-23988", {
@@ -101,5 +101,5 @@ test("deterministic_v2 sample distribution: wide spread, สูง not trivial",
   assert.ok(pctBelow7 >= 0.02, `% below 7 = ${(pctBelow7 * 100).toFixed(1)}`);
   assert.ok(pct8p <= 0.85, `% 8+ = ${(pct8p * 100).toFixed(1)}`);
   assert.ok(pct9p <= 0.35, `% 9+ = ${(pct9p * 100).toFixed(1)}`);
-  assert.ok(pctLabelSung <= 0.75, `% สูง/สูงมาก = ${(pctLabelSung * 100).toFixed(1)}`);
+  assert.ok(pctLabelHigh <= 0.75, `% A/S = ${(pctLabelHigh * 100).toFixed(1)}`);
 });

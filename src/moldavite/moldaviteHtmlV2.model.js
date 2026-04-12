@@ -1,5 +1,9 @@
 import { deriveMoldaviteOwnerAxisProfile } from "./moldaviteOwnerProfileFromBirthdate.util.js";
 import { deriveMoldaviteEnergyTimingV1 } from "./moldaviteEnergyTimingDerive.util.js";
+import {
+  energyGradeToLevelGradeClass,
+  resolveEnergyLevelDisplayGrade,
+} from "../utils/reports/energyLevelGrade.util.js";
 
 /** @typedef {"work"|"relationship"|"money"} AxisKey */
 
@@ -296,12 +300,19 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       objectImageUrl: String(payload.object?.objectImageUrl || "").trim(),
       reportGeneratedAt: String(payload.generatedAt || ""),
     },
-    metrics: {
-      energyScore: payload.summary?.energyScore,
-      energyLevelLabel: String(payload.summary?.energyLevelLabel || "").trim(),
-      compatibilityPercent: payload.summary?.compatibilityPercent,
-      compatibilityBand: String(payload.summary?.compatibilityBand || "").trim(),
-    },
+    metrics: (() => {
+      const g = resolveEnergyLevelDisplayGrade(
+        payload.summary?.energyLevelLabel,
+        payload.summary?.energyScore,
+      );
+      return {
+        energyScore: payload.summary?.energyScore,
+        energyLevelLabel: g,
+        energyLevelGradeClass: g ? energyGradeToLevelGradeClass(g) : "level-grade--none",
+        compatibilityPercent: payload.summary?.compatibilityPercent,
+        compatibilityBand: String(payload.summary?.compatibilityBand || "").trim(),
+      };
+    })(),
     graph: {
       axes: AXIS_ORDER.map((id) => ({
         id,

@@ -1,6 +1,8 @@
 /**
  * Sacred amulet lane: six-axis power scores (deterministic_v2: object-stable + session drift).
  */
+import { score10ToEnergyGrade } from "../utils/reports/energyLevelGrade.util.js";
+
 /** @typedef {"protection"|"metta"|"baramee"|"luck"|"fortune_anchor"|"specialty"} AmuletPowerKey */
 
 export const AMULET_SCORING_MODE = "deterministic_v2";
@@ -196,15 +198,11 @@ export function deriveSacredAmuletEnergyScore10FromPowerCategories(powerCategori
 }
 
 /**
- * Four-tier level label for sacred_amulet summary (tied to {@link deriveSacredAmuletEnergyScore10FromPowerCategories}).
+ * Letter grade for sacred_amulet summary (same thresholds as Moldavite/generic; tied to {@link deriveSacredAmuletEnergyScore10FromPowerCategories}).
  * @param {number} n — 0–10 scale
  */
 export function sacredAmuletEnergyLevelLabelFromScore10(n) {
-  if (n == null || !Number.isFinite(n)) return "";
-  if (n >= 8.9) return "สูงมาก";
-  if (n >= 7.8) return "สูง";
-  if (n >= 6.5) return "กลาง";
-  return "ต่ำ";
+  return score10ToEnergyGrade(n);
 }
 
 export { POWER_LABEL_THAI, POWER_ORDER };

@@ -23,7 +23,7 @@ export function createPhase1MockReportPayload() {
     },
     summary: {
       energyScore: 8.2,
-      energyLevelLabel: "สูง",
+      energyLevelLabel: "A",
       mainEnergyLabel: "ปกป้อง",
       compatibilityPercent: 78,
       summaryLine:

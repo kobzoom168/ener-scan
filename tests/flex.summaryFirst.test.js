@@ -73,7 +73,7 @@ test("buildScanSummaryFirstFlex: single bubble with hero + one report CTA", asyn
       },
       summary: {
         energyScore: 8.2,
-        energyLevelLabel: "สูง",
+        energyLevelLabel: "A",
         mainEnergyLabel: "ป้องกัน",
         compatibilityPercent: 78,
         summaryLine: "สรุปสั้นจาก payload",
@@ -148,7 +148,7 @@ test("buildScanSummaryFirstFlex: no reportUrl → fallback copy, no primary CTA"
       object: { objectLabel: "วัตถุ", objectType: "" },
       summary: {
         energyScore: 8,
-        energyLevelLabel: "สูง",
+        energyLevelLabel: "A",
         mainEnergyLabel: "ป้องกัน",
         compatibilityPercent: 70,
         summaryLine: "สรุป",

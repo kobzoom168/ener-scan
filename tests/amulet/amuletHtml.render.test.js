@@ -107,6 +107,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
     },
   });
   assert.ok(html.includes("พระเครื่อง"));
+  assert.ok(html.includes("level-grade--B"), "ระดับ strip: score 7 → B + sacred_amulet gold lane class");
   assert.ok(html.includes("กราฟหกมิติพลังพระเครื่อง"));
   assert.ok(html.includes("เทียบโปรไฟล์คุณกับพลังพระเครื่อง"));
   assert.ok(html.includes('class="mv2a-radar-svg mv2a-radar-svg--animate"'));

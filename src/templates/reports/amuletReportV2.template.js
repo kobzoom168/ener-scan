@@ -554,6 +554,11 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0.85rem 0; text-align: center; }
     .mv2-strip-k { font-size: 0.65rem; color: var(--mv2a-muted); }
     .mv2-strip-v { font-size: 1.1rem; font-weight: 700; color: var(--mv2a-gold); }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: #c9a132; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--A { color: #b8871b; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--B { color: #9a6f12; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--D { color: #8a7a67; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--none { color: var(--mv2a-muted); }
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid var(--mv2a-card-border); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; box-shadow: var(--mv2a-card-elev); }
     .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; font-family: inherit; }
     .mv2a-hint { font-size: 0.68rem; color: var(--mv2a-muted); margin: 0 0 0.6rem; }
@@ -862,7 +867,7 @@ export function renderAmuletReportV2Html(payload) {
     <div class="mv2-strip" role="group" aria-label="สรุปตัวเลข">
       <div><div class="mv2-strip-k">คะแนนพลัง</div><div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
-      <div><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
+      <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v ${vm.metrics.energyLevelGradeClass}">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
     </div>
 
     ${mainGraphBlock(vm)}

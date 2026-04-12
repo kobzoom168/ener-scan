@@ -142,6 +142,12 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes("คะแนนพลัง"));
   assert.ok(html.includes('class="mv2-strip-k">เข้ากัน</div>'));
   assert.ok(html.includes('class="mv2-strip-k">ระดับ</div>'));
+  assert.ok(
+    html.includes('mv2-strip-v level-grade--A"') ||
+      html.includes("mv2-strip-v level-grade--A"),
+    "ระดับ strip uses letter grade + lane color class (7.5 → A)",
+  );
+  assert.ok(html.includes(">A</div>"), "ระดับ value is letter grade A");
   {
     const stripIdx = html.indexOf('class="mv2-strip"');
     const radarFeatureIdx = html.indexOf("mv2-radar-card--feature");
@@ -221,6 +227,10 @@ test("Moldavite V2: footer render-meta line omitted when NODE_ENV=production", (
     const html = renderMoldaviteReportV2Html(payload);
     assert.ok(!html.includes("render moldavite-html-v2"));
     assert.ok(!html.includes('<p class="mv2-render-meta">'));
+    assert.ok(
+      html.includes("level-grade--B"),
+      "score 7 → B tier color class",
+    );
   } finally {
     process.env.NODE_ENV = prevNode;
     if (prevMeta === undefined) delete process.env.REPORT_HTML_RENDER_META;
@@ -267,6 +277,7 @@ test("Moldavite V2: REPORT_HTML_RENDER_META=true shows footer meta in production
     assert.ok(html.includes('<p class="mv2-render-meta">'));
     assert.ok(html.includes("render moldavite-html-v2"));
     assert.ok(html.includes("9.9.9"));
+    assert.ok(html.includes("level-grade--B"));
   } finally {
     process.env.NODE_ENV = prevNode;
     if (prevMeta === undefined) delete process.env.REPORT_HTML_RENDER_META;

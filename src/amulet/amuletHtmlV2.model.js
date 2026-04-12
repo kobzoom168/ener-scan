@@ -9,6 +9,10 @@ import {
 } from "./amuletOrdAlign.util.js";
 import { buildAxisLifeBlurb } from "./amuletMeaningBlurbs.util.js";
 import { SACRED_AXIS_HINT_TH } from "../services/timing/timingEngine.copy.th.js";
+import {
+  energyGradeToLevelGradeClass,
+  resolveEnergyLevelDisplayGrade,
+} from "../utils/reports/energyLevelGrade.util.js";
 
 /** Sacred_amulet HTML footer disclaimer (ท้ายรายงาน; source: `usageCaution.disclaimer`). */
 export const AMULET_HTML_V2_USAGE_DISCLAIMER =
@@ -231,12 +235,19 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       objectImageUrl: String(payload.object?.objectImageUrl || "").trim(),
       reportGeneratedAt: String(payload.generatedAt || ""),
     },
-    metrics: {
-      energyScore: payload.summary?.energyScore,
-      energyLevelLabel: String(payload.summary?.energyLevelLabel || "").trim(),
-      compatibilityPercent: payload.summary?.compatibilityPercent,
-      compatibilityBand: String(payload.summary?.compatibilityBand || "").trim(),
-    },
+    metrics: (() => {
+      const g = resolveEnergyLevelDisplayGrade(
+        payload.summary?.energyLevelLabel,
+        payload.summary?.energyScore,
+      );
+      return {
+        energyScore: payload.summary?.energyScore,
+        energyLevelLabel: g,
+        energyLevelGradeClass: g ? energyGradeToLevelGradeClass(g) : "level-grade--none",
+        compatibilityPercent: payload.summary?.compatibilityPercent,
+        compatibilityBand: String(payload.summary?.compatibilityBand || "").trim(),
+      };
+    })(),
     power: {
       axes: POWER_ORDER.map((id) => ({ id, labelThai: POWER_LABEL_THAI[id] })),
       owner: ownerP,
