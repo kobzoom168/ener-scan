@@ -161,6 +161,18 @@ function mapStripBullets(bulletLines) {
 }
 
 /** Same shape as parseScanText output when everything is missing. */
+/**
+ * Prefer vision-stable hash seed for deterministic scores; fallback to scan result id.
+ * @param {string|null|undefined} stableFeatureSeed
+ * @param {string} scanResultId
+ * @returns {string}
+ */
+function resolveScoreSeedKey(stableFeatureSeed, scanResultId) {
+  const s = String(stableFeatureSeed ?? "").trim();
+  if (s) return s;
+  return String(scanResultId || "").trim();
+}
+
 function emptyParsedShape() {
   return {
     energyScore: "-",
@@ -209,10 +221,12 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts) {
     pipelineObjectCategory: pipelineObjectCategoryOpt = null,
     pipelineObjectCategorySource: pipelineObjectCategorySourceOpt = "unspecified",
     pipelineDominantColorSource: pipelineDominantColorSourceOpt,
+    stableFeatureSeed: stableFeatureSeedOpt,
   } = opts;
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
   const rid = String(scanResultId || "").trim();
+  const scoreSeedKey = resolveScoreSeedKey(stableFeatureSeedOpt, rid);
   const tok = String(publicToken || "").trim();
 
   let parsed;
@@ -300,7 +314,7 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts) {
 
   const crystalBraceletV1 = buildCrystalBraceletV1Slice({
     scanResultId: rid,
-    seedKey: rid || String(scanResultId || ""),
+    seedKey: scoreSeedKey || rid || String(scanResultId || ""),
     detection: {
       reason: "crystal_bracelet_strict_lane_v1",
       matchedSignals: [],
@@ -519,6 +533,7 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts) {
  * @param {"vision_v1"|"cache_persisted"|"pipeline_opts"|"none"|undefined} [opts.pipelineDominantColorSource]
  * @param {object|null} [opts.geminiCrystalSubtypeResult] — optional Gemini crystal subtype pass (crystal scans only)
  * @param {"moldavite"|"sacred_amulet"|"crystal_bracelet"|null} [opts.strictSupportedLane] — when set (Scan V2 worker), only this lane slice may attach (3-lane closed world)
+ * @param {string|null|undefined} [opts.stableFeatureSeed] — vision-stable seed for Moldavite/crystal-bracelet deterministic scores (falls back to scanResultId)
  * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
  */
 export async function buildReportPayloadFromScan(opts) {
@@ -544,6 +559,7 @@ export async function buildReportPayloadFromScan(opts) {
     pipelineDominantColorSource: pipelineDominantColorSourceOpt,
     geminiCrystalSubtypeResult: geminiCrystalSubtypeResultOpt = null,
     strictSupportedLane: strictSupportedLaneOpt = null,
+    stableFeatureSeed: stableFeatureSeedOpt,
   } = opts;
 
   if (strictSupportedLaneOpt === "crystal_bracelet") {
@@ -727,6 +743,7 @@ export async function buildReportPayloadFromScan(opts) {
 
   const rid = String(scanResultId || "").trim();
   const tok = String(publicToken || "").trim();
+  const scoreSeedKey = resolveScoreSeedKey(stableFeatureSeedOpt, rid);
 
   let wording = deriveReportWordingFromParsed(parsed, {
     seed: rid || scanResultId,
@@ -1163,7 +1180,7 @@ export async function buildReportPayloadFromScan(opts) {
     ? buildMoldaviteV1Slice({
         scanResultId: rid,
         detection: moldaviteDetection,
-        seedKey: rid || String(scanResultId || ""),
+        seedKey: scoreSeedKey || rid || String(scanResultId || ""),
         energyScore,
         mainEnergyLabel: wording.mainEnergy
           ? String(wording.mainEnergy)
@@ -1199,7 +1216,7 @@ export async function buildReportPayloadFromScan(opts) {
     !moldaviteDetection.isMoldavite
       ? buildCrystalBraceletV1Slice({
           scanResultId: rid,
-          seedKey: rid || String(scanResultId || ""),
+          seedKey: scoreSeedKey || rid || String(scanResultId || ""),
           detection: {
             reason: "crystal_bracelet_lane_v1",
             matchedSignals: [],

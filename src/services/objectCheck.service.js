@@ -1,4 +1,9 @@
 import { env } from "../config/env.js";
+import {
+  classifyBraceletFormWithGemini,
+  readGeminiBraceletRescueEnabled,
+  readGeminiBraceletRescueMinConfidence,
+} from "../integrations/gemini/braceletFormRescue.service.js";
 import { openai, withOpenAi429RetryOnce } from "./openaiDeepScan.api.js";
 import { isTrueUnsupportedEvidence } from "../utils/objectGateReplyResolve.util.js";
 
@@ -1144,6 +1149,104 @@ export async function checkCrystalBraceletEligibility(imageBase64, gated, opts =
         finalStatus: finalEval.status,
       }),
     );
+  }
+
+  if (
+    !finalEval.eligible &&
+    formCheck &&
+    formCheck.formFactor !== "bracelet" &&
+    readGeminiBraceletRescueEnabled()
+  ) {
+    try {
+      const raw = String(imageBase64 || "").trim();
+      const b64 = raw.replace(/^data:[^;]+;base64,/i, "");
+      const imageBuffer = Buffer.from(b64, "base64");
+      const rescue = await classifyBraceletFormWithGemini({
+        imageBuffer,
+        mimeType: "image/jpeg",
+        scanResultIdPrefix,
+      });
+      const minConf = readGeminiBraceletRescueMinConfidence();
+      if (
+        rescue.mode === "ok" &&
+        rescue.formFactor === "bracelet" &&
+        rescue.confidence != null &&
+        Number.isFinite(Number(rescue.confidence)) &&
+        Number(rescue.confidence) >= minConf
+      ) {
+        console.log(
+          JSON.stringify({
+            event: "CRYSTAL_BRACELET_GEMINI_RESCUE_UPGRADED",
+            scanResultIdPrefix: scanResultIdPrefix || null,
+            geminiFormFactor: rescue.formFactor,
+            geminiConfidence: rescue.confidence,
+            durationMs: rescue.durationMs ?? null,
+            modelId: rescue.modelId ?? null,
+          }),
+        );
+        console.log(
+          JSON.stringify({
+            event: "CRYSTAL_BRACELET_ELIGIBILITY_RESULT",
+            scanResultIdPrefix: scanResultIdPrefix || null,
+            baseGateResult,
+            familyLabel: familyCheck.familyLabel,
+            familyConfidence: familyCheck.familyConfidence,
+            formFactor: formCheck.formFactor,
+            formConfidence: formCheck.formConfidence,
+            finalStatus: "bracelet",
+            eligible: true,
+            shapeFamilyForcedToBracelet: true,
+            geminiRescueUpgrade: true,
+          }),
+        );
+        console.log(
+          JSON.stringify({
+            event: "CRYSTAL_BRACELET_ROUTE_FORCED",
+            scanResultIdPrefix: scanResultIdPrefix || null,
+            baseGateResult,
+            familyLabel: familyCheck.familyLabel,
+            familyConfidence: familyCheck.familyConfidence,
+            formFactor: formCheck.formFactor,
+            formConfidence: formCheck.formConfidence,
+            finalStatus: "bracelet",
+            shapeFamilyForcedToBracelet: true,
+            geminiRescueUpgrade: true,
+          }),
+        );
+        return {
+          eligible: true,
+          status: /** @type {const} */ ("bracelet"),
+          objectFamilyTruth: /** @type {const} */ ("crystal"),
+          shapeFamilyTruth: /** @type {const} */ ("bracelet"),
+          familyCheck,
+          formCheck,
+          geminiRescue: rescue,
+          shapeFamilyForcedToBracelet: true,
+          baseGateResult,
+        };
+      }
+      console.log(
+        JSON.stringify({
+          event: "CRYSTAL_BRACELET_GEMINI_RESCUE_NO_UPGRADE",
+          scanResultIdPrefix: scanResultIdPrefix || null,
+          rescueMode: rescue.mode,
+          geminiFormFactor:
+            rescue.mode === "ok" ? rescue.formFactor : undefined,
+          geminiConfidence:
+            rescue.mode === "ok" ? rescue.confidence : undefined,
+          durationMs: rescue.durationMs ?? null,
+          minConfidenceRequired: minConf,
+        }),
+      );
+    } catch (rescueErr) {
+      console.log(
+        JSON.stringify({
+          event: "CRYSTAL_BRACELET_GEMINI_RESCUE_EXCEPTION",
+          scanResultIdPrefix: scanResultIdPrefix || null,
+          message: String(rescueErr?.message || rescueErr).slice(0, 200),
+        }),
+      );
+    }
   }
 
   return {

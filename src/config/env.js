@@ -416,6 +416,39 @@ export const env = {
     return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.8;
   })(),
   /**
+   * When strict bracelet form pass rejects (non-bracelet factor), optional Gemini rescue.
+   * Default off — set `true` to enable.
+   */
+  GEMINI_BRACELET_RESCUE_ENABLED:
+    String(process.env.GEMINI_BRACELET_RESCUE_ENABLED ?? "false").trim().toLowerCase() ===
+    "true",
+  GEMINI_BRACELET_RESCUE_MIN_CONFIDENCE: (() => {
+    const raw = process.env.GEMINI_BRACELET_RESCUE_MIN_CONFIDENCE;
+    const n = raw === undefined || raw === "" ? 0.65 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.65;
+  })(),
+  GEMINI_BRACELET_RESCUE_TIMEOUT_MS: (() => {
+    const raw = process.env.GEMINI_BRACELET_RESCUE_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 14000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(50, Math.floor(n)) : 14000;
+  })(),
+  /** Empty → gemini-2.5-flash-lite */
+  GEMINI_BRACELET_RESCUE_MODEL: String(
+    process.env.GEMINI_BRACELET_RESCUE_MODEL || "",
+  ).trim(),
+  /**
+   * Deterministic score seeds from vision-extracted slugs (Moldavite + crystal bracelet lanes).
+   * Default off.
+   */
+  STABLE_FEATURE_SEED_ENABLED:
+    String(process.env.STABLE_FEATURE_SEED_ENABLED ?? "false").trim().toLowerCase() ===
+    "true",
+  STABLE_FEATURE_EXTRACT_TIMEOUT_MS: (() => {
+    const raw = process.env.STABLE_FEATURE_EXTRACT_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 12000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(1000, Math.floor(n)) : 12000;
+  })(),
+  /**
    * When `true`: pre-scan path may use push-only ack and lineWebhook may skip
    * `before_scan_sequence` on birthdate→scan. Default on. Set
    * `SEND_PRE_SCAN_ACK_PUSH_ONLY=false` to disable push-only ack and show `before_scan_sequence` again.

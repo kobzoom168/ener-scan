@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(git -C c:/Users/ta168023/Desktop/ener-scan log --oneline -10)",
+      "Bash(git -C c:/Users/ta168023/Desktop/ener-scan show 8a65295 --stat)",
+      "Bash(node --test tests/braceletFormRescue.service.test.js)"
     ]
   }
 }

@@ -32,6 +32,7 @@ import {
   deleteScanResultForAppUser,
 } from "../../stores/scanResults.db.js";
 import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js";
+import { extractStableVisualFeatures } from "../stableFeatureExtract.service.js";
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
 import { mergeExternalHintsIntoWordingContext } from "../../utils/webEnrichmentMerge.util.js";
@@ -532,6 +533,30 @@ export async function processScanJob(workerId, jobRow) {
       );
     }
 
+    /** @type {string | null} */
+    let stableFeatureSeed = null;
+    if (env.STABLE_FEATURE_SEED_ENABLED && objectCheck === "single_supported") {
+      try {
+        const stableEx = await extractStableVisualFeatures({
+          imageBase64,
+          mimeType: "image/jpeg",
+          objectFamily: reportObjectFamily,
+          scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+        });
+        stableFeatureSeed = stableEx.seed;
+      } catch (stableErr) {
+        console.log(
+          JSON.stringify({
+            event: "STABLE_FEATURE_EXTRACT_WORKER_EXCEPTION",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(jobId),
+            scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+            message: String(stableErr?.message || stableErr).slice(0, 200),
+          }),
+        );
+      }
+    }
+
     const reportPayloadBuilt = await buildReportPayloadFromScan({
       resultText,
       scanResultId: legacyScanResultId,
@@ -558,6 +583,7 @@ export async function processScanJob(workerId, jobRow) {
         scanOut?.objectCategorySource ?? "unspecified",
       geminiCrystalSubtypeResult,
       strictSupportedLane,
+      stableFeatureSeed,
     });
 
     let reportPayload = reportPayloadBuilt;
