@@ -476,7 +476,6 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
     headlineBlock,
     taglineBlock,
     createScoreRowTwoUp(score.display || "-", compatPctStr, compatBandStr),
-    createEnergyBadgePill(mainPill),
     ...(axesBlock ? [axesBlock] : []),
     ...(fitBlock ? [fitBlock] : []),
     ...(bulletRows.length > 0
@@ -533,7 +532,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
       type: "image",
       url: imgUrl,
       size: "full",
-      aspectRatio: "20:13",
+      aspectRatio: "20:9",
       aspectMode: "cover",
       backgroundColor: FLEX_CARD_BG,
     };
