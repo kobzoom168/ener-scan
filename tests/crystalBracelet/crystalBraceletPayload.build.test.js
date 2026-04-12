@@ -26,6 +26,9 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
   assert.ok(CRYSTAL_BRACELET_AXIS_ORDER.includes(slice.primaryAxis));
   assert.ok(CRYSTAL_BRACELET_AXIS_ORDER.includes(slice.secondaryAxis));
   assert.notEqual(slice.primaryAxis, slice.secondaryAxis);
+  assert.equal(Object.keys(slice.axes).length, 7);
+  assert.ok(slice.axes.third_eye);
+  assert.equal(String(slice.axes.third_eye.labelThai || "").trim(), "ตาที่ 3");
   assert.equal(slice.context?.energyScoreSnapshot, 7.2);
   assert.equal(String(slice.flexSurface.headline).trim(), "กำไลหินคริสตัล");
   assert.equal(Array.isArray(slice.flexSurface.bullets), true);
@@ -46,7 +49,8 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
   assert.ok(Array.isArray(slice.htmlReport.meaningParagraphs));
   assert.ok(slice.htmlReport.meaningParagraphs.length >= 2);
   assert.ok(Array.isArray(slice.htmlReport.graphSummaryRows));
-  assert.ok(slice.htmlReport.axisBlurbs?.money?.length > 20);
+  assert.ok(slice.htmlReport.axisBlurbs?.protection?.length > 20);
+  assert.ok(slice.htmlReport.axisBlurbs?.third_eye?.length > 20);
   assert.ok(Array.isArray(slice.htmlReport.usageCautionLines));
   assert.ok(slice.htmlReport.usageCautionLines.length >= 2);
   assert.ok(Array.isArray(slice.internalHints?.internalStoneHints));

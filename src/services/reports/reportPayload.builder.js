@@ -3,6 +3,7 @@ import { parseScanText } from "../flex/flex.parser.js";
 import { normalizeScore, stripBullet } from "../flex/flex.utils.js";
 import { REPORT_PAYLOAD_VERSION } from "./reportPayload.types.js";
 import { sanitizeHttpsPublicImageUrl } from "../../utils/reports/reportImageUrl.util.js";
+import { resolveConfidenceDampMultiplier } from "../../utils/reports/confidenceDamp.util.js";
 import { formatScanBirthdayLabelThai } from "../../utils/scanBirthdayLabel.util.js";
 import { deriveReportWordingFromParsed } from "./reportWording.derive.js";
 import { buildCompatibilityPayload } from "../reportPayload/buildCompatibilityPayload.js";
@@ -198,9 +199,10 @@ function emptyParsedShape() {
  * energy-copy inference, DB wording hydrate, or `applyCrystalMinimumSections`.
  *
  * @param {object} opts — same options object as {@link buildReportPayloadFromScan}
+ * @param {number} confidenceDamp — from {@link resolveConfidenceDampMultiplier}
  * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
  */
-async function buildCrystalBraceletStrictLaneReportPayload(opts) {
+async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp) {
   const {
     resultText,
     scanResultId,
@@ -325,6 +327,7 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts) {
       compatPct != null && Number.isFinite(Number(compatPct))
         ? Math.round(Number(compatPct))
         : null,
+    confidenceDamp,
   });
 
   const fs = crystalBraceletV1.flexSurface;
@@ -562,8 +565,15 @@ export async function buildReportPayloadFromScan(opts) {
     stableFeatureSeed: stableFeatureSeedOpt,
   } = opts;
 
+  const confidenceDamp = resolveConfidenceDampMultiplier(
+    objectCheckConfidenceOpt != null &&
+      Number.isFinite(Number(objectCheckConfidenceOpt))
+      ? Number(objectCheckConfidenceOpt)
+      : undefined,
+  );
+
   if (strictSupportedLaneOpt === "crystal_bracelet") {
-    return buildCrystalBraceletStrictLaneReportPayload(opts);
+    return buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp);
   }
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
@@ -1188,6 +1198,7 @@ export async function buildReportPayloadFromScan(opts) {
             ? String(parsed.mainEnergy)
             : "",
         displayNaming: moldaviteDisplayNaming,
+        confidenceDamp,
       })
     : undefined;
 
@@ -1227,6 +1238,7 @@ export async function buildReportPayloadFromScan(opts) {
             compatPct != null && Number.isFinite(Number(compatPct))
               ? Math.round(Number(compatPct))
               : null,
+          confidenceDamp,
         })
       : undefined;
 

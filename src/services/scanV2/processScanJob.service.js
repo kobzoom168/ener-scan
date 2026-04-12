@@ -21,6 +21,7 @@ import {
 } from "../../stores/scanV2/scanJobs.db.js";
 import { insertScanResultV2 } from "../../stores/scanV2/scanResultsV2.db.js";
 import { insertOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
+import { notifyUserScanJobFailed } from "./scanJobFailureNotify.service.js";
 import {
   OUTBOUND_PRIORITY,
 } from "../../stores/scanV2/outboundPriority.js";
@@ -557,6 +558,12 @@ export async function processScanJob(workerId, jobRow) {
       }
     }
 
+    const objectCheckConfidence =
+      gated.gateMeta?.confidence != null &&
+      Number.isFinite(Number(gated.gateMeta.confidence))
+        ? Number(gated.gateMeta.confidence)
+        : undefined;
+
     const reportPayloadBuilt = await buildReportPayloadFromScan({
       resultText,
       scanResultId: legacyScanResultId,
@@ -571,6 +578,7 @@ export async function processScanJob(workerId, jobRow) {
       materialFamily: catSig.materialFamily,
       shapeFamily: reportShapeFamily,
       objectCheckResult: objectCheck,
+      objectCheckConfidence,
       dominantColor: scanOut?.dominantColorSlug,
       pipelineDominantColorSource:
         scanOut?.dominantColorSource === "vision_v1"
@@ -1258,4 +1266,7 @@ async function failJob(jobId, code, message, lineUserId, workerId) {
       timestamp: scanV2TraceTs(),
     }),
   );
+  if (lineUserId) {
+    await notifyUserScanJobFailed({ lineUserId, jobId, reason: code });
+  }
 }

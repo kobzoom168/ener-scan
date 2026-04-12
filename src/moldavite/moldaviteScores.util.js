@@ -40,6 +40,7 @@ function spread(h, min, max) {
 
 /**
  * @param {string} seedKey — prefer scan result id (UUID)
+ * @param {{ confidenceDamp?: number }} [opts]
  * @returns {{
  *   scoringMode: typeof MOLDAVITE_SCORING_MODE,
  *   lifeAreas: Record<MoldaviteLifeAreaKey, { key: MoldaviteLifeAreaKey, score: number, labelThai: string }>,
@@ -47,8 +48,12 @@ function spread(h, min, max) {
  *   secondaryLifeArea: MoldaviteLifeAreaKey,
  * }}
  */
-export function computeMoldaviteLifeAreaScoresDeterministicV1(seedKey) {
+export function computeMoldaviteLifeAreaScoresDeterministicV1(seedKey, opts = {}) {
   const base = String(seedKey || "").trim() || "moldavite_seed_missing";
+  const damp =
+    opts.confidenceDamp != null && Number.isFinite(Number(opts.confidenceDamp))
+      ? Math.min(1, Math.max(0, Number(opts.confidenceDamp)))
+      : 1;
   const keys = /** @type {const} */ ([
     "work",
     "money",
@@ -59,7 +64,8 @@ export function computeMoldaviteLifeAreaScoresDeterministicV1(seedKey) {
   const raw = {};
   for (const k of keys) {
     const h = fnv1a32(`${base}|moldavite_v1|life_area|${k}`);
-    raw[k] = spread(h, 55, 94);
+    const rawScore = spread(h, 55, 94);
+    raw[k] = Math.min(99, Math.max(20, Math.round(rawScore * damp)));
   }
 
   const lifeAreas = {

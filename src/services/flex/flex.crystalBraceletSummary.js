@@ -93,8 +93,10 @@ function createCrystalBraceletAxesBarBlock(axes) {
     return b.score - a.score;
   });
 
+  const topRows = rows.slice(0, 4);
+
   /** @type {object[]} */
-  const rowBoxes = rows.map(({ label, score }) => {
+  const rowBoxes = topRows.map(({ label, score }) => {
     const { greenFlex, emptyFlex } = axisBarFlexPair(score);
     const scoreText = score == null ? "—" : String(score);
     return {
@@ -175,7 +177,7 @@ function createCrystalBraceletAxesBarBlock(axes) {
     contents: [
       {
         type: "text",
-        text: "พลังไปออกกับเรื่องไหน",
+        text: "พลังเด่นของกำไล",
         size: "xs",
         color: CB_ACCENT_DIM,
         weight: "bold",
@@ -184,7 +186,7 @@ function createCrystalBraceletAxesBarBlock(axes) {
       },
       {
         type: "text",
-        text: "เรียงจากคะแนนสูงไปต่ำ",
+        text: "แสดง 4 พลังที่เด่นสุด",
         size: "xxs",
         color: "#475569",
         wrap: true,
@@ -291,7 +293,7 @@ function createEnergyBadgePill(mainLabel) {
     contents: [
       {
         type: "text",
-        text: "พลังหลัก",
+        text: "โทนหลัก",
         size: "xs",
         color: FLEX_TEXT_CAPTION,
         wrap: true,

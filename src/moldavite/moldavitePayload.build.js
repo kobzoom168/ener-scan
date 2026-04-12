@@ -134,6 +134,7 @@ function buildFlexSurfaceCopy(primary, secondary, lifeAreas, naming) {
  * @param {number|null} [p.energyScore]
  * @param {string} [p.mainEnergyLabel]
  * @param {ReturnType<import("./moldaviteDisplayNaming.util.js").resolveMoldaviteDisplayNaming>} p.displayNaming
+ * @param {number} [p.confidenceDamp]
  * @returns {import("../services/reports/reportPayload.types.js").ReportMoldaviteV1}
  */
 export function buildMoldaviteV1Slice({
@@ -147,8 +148,11 @@ export function buildMoldaviteV1Slice({
     moldaviteDecisionSource: "heuristic",
     detectionReason: detection?.reason || "",
   }),
+  confidenceDamp,
 }) {
-  const scores = computeMoldaviteLifeAreaScoresDeterministicV1(seedKey);
+  const scores = computeMoldaviteLifeAreaScoresDeterministicV1(seedKey, {
+    confidenceDamp,
+  });
   const flexSurface = buildFlexSurfaceCopy(
     scores.primaryLifeArea,
     scores.secondaryLifeArea,

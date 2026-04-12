@@ -13,9 +13,9 @@ import { computeCrystalBraceletScoresDeterministicV1 } from "./crystalBraceletSc
  */
 function buildCrystalBraceletFlexSurfaceCopy(primary, secondary, axes, surface) {
   const primaryLabel =
-    String(axes[primary]?.labelThai || "").trim() || "งานและเป้าหมาย";
+    String(axes[primary]?.labelThai || "").trim() || "งาน";
   const secondaryLabel =
-    String(axes[secondary]?.labelThai || "").trim() || "การเงินและโอกาส";
+    String(axes[secondary]?.labelThai || "").trim() || "โอกาส";
 
   const fitLine = `ตอนนี้เด่นสุด: ${primaryLabel} → ${secondaryLabel}`;
   const bullets = [];
@@ -43,9 +43,9 @@ function buildCrystalBraceletFlexSurfaceCopy(primary, secondary, axes, surface) 
  */
 function buildCrystalBraceletHtmlReport(axes, primary, secondary) {
   const primaryLabel =
-    String(axes[primary]?.labelThai || "").trim() || "งานและเป้าหมาย";
+    String(axes[primary]?.labelThai || "").trim() || "งาน";
   const secondaryLabel =
-    String(axes[secondary]?.labelThai || "").trim() || "การเงินและโอกาส";
+    String(axes[secondary]?.labelThai || "").trim() || "โอกาส";
 
   return {
     meaningParagraphs: [
@@ -57,18 +57,20 @@ function buildCrystalBraceletHtmlReport(axes, primary, secondary) {
       `รองลงมาคือ ${secondaryLabel}`,
     ],
     axisBlurbs: {
-      money:
-        "ด้านการเงินและโอกาส — หนุนการเปิดทาง การมองเห็นช่องทางใหม่ และการขยับเรื่องผลลัพธ์ให้ชัดขึ้น",
+      protection:
+        "ด้านคุ้มกัน — ช่วยให้รู้สึกมีเกราะ ปลอดโปร่ง และรับพลังรบกวนได้น้อยลง",
+      charm:
+        "ด้านเสน่ห์ — หนุนความน่าดึงดูด ความอ่อนโยน และการเข้าหาผู้อื่น",
+      aura:
+        "ด้านออร่า — เสริมภาพรวมของพลัง การเปล่งประกาย และความรู้สึกเด่นขึ้น",
+      opportunity:
+        "ด้านโอกาส — หนุนจังหวะดี การเปิดทาง และการเห็นช่องทางใหม่",
       work:
-        "ด้านงานและเป้าหมาย — ช่วยให้มีแรงจัดระเบียบ เป้าหมายชัด และเดินหน้าได้ต่อเนื่องขึ้น",
-      relationship:
-        "ด้านความสัมพันธ์ — ช่วยให้การสื่อสารนุ่มขึ้น เปิดใจง่ายขึ้น และลดแรงตึงในความสัมพันธ์",
-      balance:
-        "ด้านสมดุลใจ — เน้นการประคองอารมณ์ ลดความฟุ้ง และทำให้ใจกลับมาตั้งหลักได้ง่ายขึ้น",
-      drive:
-        "ด้านพลังขับเคลื่อน — หนุนแรงลงมือ ความมั่นใจ และความต่อเนื่องในการขยับสิ่งที่ตั้งใจไว้",
-      owner_fit:
-        "ด้านความเข้ากันกับผู้สวม — ดูว่าพลังของกำไลเข้ากับจังหวะชีวิตและสภาพใจของเจ้าของมากน้อยแค่ไหน",
+        "ด้านงาน — ช่วยให้จัดการงาน เดินหน้า และโฟกัสสิ่งที่ต้องทำ",
+      grounding:
+        "ด้านตั้งหลัก — ประคองใจและชีวิตให้มั่นคงขึ้นเมื่อมีเรื่องกดดัน",
+      third_eye:
+        "ด้านตาที่ 3 — หนุนการรับสัญญาณ ความรู้สึกไว และการมองเห็นบางอย่างได้เร็วขึ้น",
     },
     usageCautionLines: [
       "ผลนี้ใช้เป็นกรอบอ่านพลังโดยรวมของวัตถุ ไม่ใช่การยืนยันชนิดแร่เชิงวิทยาศาสตร์",
@@ -95,6 +97,7 @@ function buildCrystalBraceletHtmlReport(axes, primary, secondary) {
  * @param {number|null} [p.energyScore]
  * @param {string} [p.mainEnergyLabel]
  * @param {number|null} [p.ownerFitScore]
+ * @param {number} [p.confidenceDamp]
  * @returns {import("../services/reports/reportPayload.types.js").ReportCrystalBraceletV1}
  */
 export function buildCrystalBraceletV1Slice({
@@ -104,16 +107,22 @@ export function buildCrystalBraceletV1Slice({
   energyScore = null,
   mainEnergyLabel = "",
   ownerFitScore = null,
+  confidenceDamp,
 }) {
   const scores = computeCrystalBraceletScoresDeterministicV1(seedKey, {
     sessionKey: scanResultId,
     mainEnergyLabel,
     ownerFitScore,
+    confidenceDamp,
   });
 
   const headline = "กำไลหินคริสตัล";
+  const primaryAxisLabel =
+    String(scores.axes[scores.primaryAxis]?.labelThai || "").trim();
   const mainEnergyShort =
-    String(mainEnergyLabel || "").trim().slice(0, 24) || "พลังรวมของกำไล";
+    String(mainEnergyLabel || "").trim().slice(0, 24) ||
+    primaryAxisLabel ||
+    "พลังรวมของกำไล";
   const tagline = "กำไลหินคริสตัล · อ่านจากพลังรวม";
 
   const flexSurface = buildCrystalBraceletFlexSurfaceCopy(

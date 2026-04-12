@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   mergeGateLabels,
   normalizeObjectCheckOutput,
+  outputSuggestsNonAmuletSubject,
   permissiveAllowsSingleSupportedUpgrade,
   permissiveLabelFromParsedJson,
 } from "../src/services/objectCheck.service.js";
@@ -13,6 +14,20 @@ const strongAmulet = {
   confidence: 0.9,
   supportedFamilyGuess: "thai_amulet",
 };
+
+test("outputSuggestsNonAmuletSubject: Buddha statue / sculpture phrases -> true", () => {
+  assert.equal(outputSuggestsNonAmuletSubject("พระพุทธรูปทองคำ"), true);
+  assert.equal(outputSuggestsNonAmuletSubject("รูปปั้นพระพรหม"), true);
+  assert.equal(outputSuggestsNonAmuletSubject("buddha statue ceramic"), true);
+});
+
+test("outputSuggestsNonAmuletSubject: coin / amulet wording -> false", () => {
+  assert.equal(outputSuggestsNonAmuletSubject("เหรียญพระสมเด็จ"), false);
+  assert.equal(
+    outputSuggestsNonAmuletSubject("amulet coin buddha image"),
+    false,
+  );
+});
 
 test("normalizeObjectCheckOutput: tarot / oracle / playing card / trading card -> unsupported", () => {
   assert.equal(normalizeObjectCheckOutput("unsupported"), "unsupported");

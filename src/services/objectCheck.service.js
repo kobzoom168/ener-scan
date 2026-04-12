@@ -58,7 +58,14 @@ export function permissiveAllowsSingleSupportedUpgrade(structured) {
   return true;
 }
 
-function outputSuggestsNonAmuletSubject(outputLower) {
+/**
+ * Substring hints: if GPT echoes these (incl. with single_supported), treat as non‑amulet / reject path.
+ * Do not add bare "statue" — collides with "amulet statue style" on coins.
+ * @param {string} outputText raw or lowercased model output
+ * @returns {boolean}
+ */
+export function outputSuggestsNonAmuletSubject(outputText) {
+  const outputLower = String(outputText || "").trim().toLowerCase();
   const hints = [
     "อาหาร",
     "ก๋วยเตี๋ยว",
@@ -142,6 +149,18 @@ function outputSuggestsNonAmuletSubject(outputLower) {
     "ไม่ใช่พระ",
     "not an amulet",
     "not sacred",
+    "พระพุทธรูป",
+    "รูปปั้น",
+    "buddha statue",
+    "buddhist statue",
+    "figurine",
+    "sculpture",
+    "deity statue",
+    "standing buddha",
+    "sitting buddha",
+    "พระประธาน",
+    "พระบูชา",
+    "three-dimensional figure",
   ];
   return hints.some((h) => outputLower.includes(h));
 }
@@ -296,7 +315,10 @@ Ener Scan รองรับเฉพาะวัตถุมงคล/พลั
 - เอกสาร กระดาษ หนังสือ บัตร สลิป หรือภาพ screenshot/แคปหน้าจอ ข้อความแชท แอป
 - ไพ่ทาโรต์ ไพ่ oracle ไพ่เล่น playing card การ์ดเกม trading card หรือภาพลักษณะการ์ด/เอกสารแบนแบบมีขอบสี่เหลี่ยมและข้อความภาษาอังกฤษตามขอบ (เช่น ชื่อไพ่) ที่ชัดว่าไม่ใช่วัตถุมงคลไทย
 - ทิวทัศน์ วิวธรรมชาติ ทะเล ภูเขา ท้องฟ้า ถนน ฉากกว้างที่ไม่มีวัตถุมงคลชิ้นเดียวเป็นจุดเด่น
+- พระพุทธรูปตั้ง, รูปปั้น, เทวรูป → unsupported
 - ของใช้ทั่วไป ของเล่น อุปกรณ์ ยานพาหนะ ของตกแต่งบ้าน ที่ไม่ใช่วัตถุมงคลตามรายการรองรับด้านบน
+
+สำคัญ: เหรียญพระ, พระเครื่อง, ตะกรุด = supported
 
 กติกาตัดสิน:
 - single_supported = วัตถุมงคล/พลังหลัก 1 ชิ้น (ประเภทที่รองรับ) และภาพพอมองประเมินได้
@@ -335,7 +357,9 @@ const PERMISSIVE_PROMPT = `
 - label: single_supported = วัตถุมงคล/พลังที่รองรับ 1 ชิ้นเป็นหลัก (พระ เครื่องราง หิน/คริสตัลชิ้นเดียว)
 - multiple = หลายชิ้นแยกกัน / คอลลาจ / หลายรูปในภาพเดียว
 - unclear = มองไม่เห็นวัตถุชัด / เบลอมาก / มืดมาก
-- unsupported = มั่นใจว่าไม่ใช่วัตถุมงคล (อาหาร คน สัตว์ เอกสาร สลิป ไพ่ทาโรต์/ไพ่ oracle/playing card/การ์ดเกม screenshot meme ทิวทัศน์ ของใช้ทั่วไป ฯลฯ)
+- unsupported = มั่นใจว่าไม่ใช่วัตถุมงคล (อาหาร คน สัตว์ เอกสาร สลิป ไพ่ทาโรต์/ไพ่ oracle/playing card/การ์ดเกม screenshot meme ทิวทัศน์ พระพุทธรูปตั้ง/รูปปั้น/เทวรูป ของใช้ทั่วไป ฯลฯ)
+- พระพุทธรูปตั้ง, รูปปั้น, เทวรูป → unsupported
+- เหรียญพระ, พระเครื่อง, ตะกรุด = supported
 - objectCount: จำนวนวัตถุแยกกันที่เด่น (ประมาณการ)
 - confidence: 0–1 ความมั่นใจของ label
 - hasCasing: true ถ้ามีกรอบพลาสติก/เลี่ยม/อะคริลิกห่อวัตถุ
