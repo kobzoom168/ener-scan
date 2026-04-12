@@ -175,8 +175,10 @@ function radarAxisLabelHtml(L, rank) {
 
 /**
  * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
+ * @param {string} graphSummaryHtml rows only (`.mv2-gsum-rows`); placed in right column of feature grid
  */
-function radarBlock(vm) {
+function radarBlock(vm, graphSummaryHtml) {
+  const gSum = String(graphSummaryHtml || "").trim();
   const g = vm.graph;
   const ownerPts = radarPolygonPoints(g.owner);
   const crystalPts = radarPolygonPoints(g.crystal);
@@ -232,26 +234,34 @@ function radarBlock(vm) {
   return `
   <section class="mv2-radar-card mv2-radar-card--feature" aria-labelledby="mv2-radar-h">
     <h2 class="mv2-radar-title" id="mv2-radar-h">กราฟโทนหิน</h2>
-    <div class="mv2-radar-svg-wrap">
-      <div class="mv2-radar-plot">
-        <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key" text-rendering="optimizeLegibility">
-          <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
-          <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-          <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-          <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-          <g class="mv2-radar-layer mv2-radar-layer--owner">
-            <polygon points="${ownerPts}" fill="rgba(96,165,250,0.155)" stroke="rgba(147,197,253,0.92)" stroke-width="0.78" stroke-linejoin="round"/>
-          </g>
-          <g class="mv2-radar-layer mv2-radar-layer--crystal">
-            <polygon points="${crystalPts}" fill="rgba(22,163,74,0.175)" stroke="rgba(52,211,153,0.92)" stroke-width="0.88" stroke-linejoin="round"/>
-          </g>
-          <g class="mv2-radar-layer mv2-radar-layer--peak">${crystalMarker}</g>
-        </svg>
-        <div class="mv2-radar-labels" aria-hidden="true">${labelHtml}</div>
+    <div class="mv2-radar-feature-grid">
+      <div class="mv2-radar-feature-left">
+        <div class="mv2-radar-svg-wrap">
+          <div class="mv2-radar-plot">
+            <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key" text-rendering="optimizeLegibility">
+              <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
+              <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
+              <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
+              <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
+              <g class="mv2-radar-layer mv2-radar-layer--owner">
+                <polygon points="${ownerPts}" fill="rgba(96,165,250,0.155)" stroke="rgba(147,197,253,0.92)" stroke-width="0.78" stroke-linejoin="round"/>
+              </g>
+              <g class="mv2-radar-layer mv2-radar-layer--crystal">
+                <polygon points="${crystalPts}" fill="rgba(22,163,74,0.175)" stroke="rgba(52,211,153,0.92)" stroke-width="0.88" stroke-linejoin="round"/>
+              </g>
+              <g class="mv2-radar-layer mv2-radar-layer--peak">${crystalMarker}</g>
+            </svg>
+            <div class="mv2-radar-labels" aria-hidden="true">${labelHtml}</div>
+          </div>
+          <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
+            <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span><span class="mv2-radar-key-label">คุณ</span></span>
+            <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span><span class="mv2-radar-key-label">หิน</span></span>
+          </div>
+        </div>
       </div>
-      <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
-        <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span><span class="mv2-radar-key-label">คุณ</span></span>
-        <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span><span class="mv2-radar-key-label">หิน</span></span>
+      <div class="mv2-radar-feature-right" aria-labelledby="mv2-gsum-h">
+        <h3 class="mv2-radar-gsum-h" id="mv2-gsum-h">สรุปกราฟ</h3>
+        ${gSum}
       </div>
     </div>
   </section>`;
@@ -556,6 +566,34 @@ export function renderMoldaviteReportV2Html(payload) {
       color: #6ee7b7;
       text-shadow: 0 0 24px rgba(52,211,153,0.15);
     }
+    .mv2-radar-feature-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.92fr);
+      gap: 0.55rem 0.65rem;
+      align-items: start;
+    }
+    @media (max-width: 18.5rem) {
+      .mv2-radar-feature-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+    }
+    .mv2-radar-feature-left,
+    .mv2-radar-feature-right {
+      min-width: 0;
+    }
+    .mv2-radar-feature-right {
+      padding: 0.08rem 0 0;
+    }
+    .mv2-radar-gsum-h {
+      font-size: 0.92rem;
+      margin: 0 0 0.38rem;
+      color: var(--mv2-green-dim);
+      font-weight: 600;
+    }
+    .mv2-radar-feature-right .mv2-gsum-rows {
+      gap: 0.28rem;
+    }
     .mv2-radar-svg-wrap {
       width: 100%;
       max-width: 17.5rem;
@@ -566,6 +604,12 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-radar-card--feature .mv2-radar-svg-wrap {
       max-width: 20rem;
       padding: 0.75rem 1rem 0.55rem;
+    }
+    .mv2-radar-card--feature .mv2-radar-feature-left .mv2-radar-svg-wrap {
+      margin-left: 0;
+      margin-right: 0;
+      max-width: 100%;
+      padding: 0.65rem 0.45rem 0.45rem;
     }
     .mv2-radar-plot {
       position: relative;
@@ -742,8 +786,6 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-gsum-row--lead .mv2-gsum-v {
       color: #ecfdf5;
     }
-    .mv2-card--gsum { padding: 0.68rem 0.82rem; }
-    .mv2-card--gsum > h2 { font-size: 0.92rem; margin-bottom: 0.42rem; }
     .mv2-card--owner {
       padding: 0.52rem 0.72rem 0.58rem;
       background: rgba(12,14,18,0.65);
@@ -1051,18 +1093,13 @@ export function renderMoldaviteReportV2Html(payload) {
       </section>
     </header>
 
-    ${radarBlock(vm)}
+    ${radarBlock(vm, graphSummaryHtml)}
 
     <div class="mv2-strip" role="group" aria-label="สรุปตัวเลข">
       <div><div class="mv2-strip-k">คะแนนพลัง</div><div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
       <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
     </div>
-
-    <section class="mv2-card mv2-card--gsum" aria-labelledby="mv2-gsum-h">
-      <h2 id="mv2-gsum-h">สรุปกราฟ</h2>
-      ${graphSummaryHtml}
-    </section>
 
     <section class="mv2-card mv2-card--owner" aria-labelledby="mv2-owner-h">
       <h2 id="mv2-owner-h">คุณ</h2>
