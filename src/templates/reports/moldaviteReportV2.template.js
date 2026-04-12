@@ -15,36 +15,6 @@ const AXIS_TITLE_TH = {
   money: "การเงิน",
 };
 
-/** Half-donut arc (opens upward); paired paths use pathLength=100 for stroke-dash */
-const MV2_GAUGE_ARC_D = "M 12 44 A 36 36 0 0 0 84 44";
-
-/** @type {Record<string, { fill: string, track: string }>} */
-const MV2_GAUGE_STROKE = {
-  boost: {
-    fill: "rgba(52,211,153,0.97)",
-    track: "rgba(52,211,153,0.14)",
-  },
-  caution: {
-    fill: "rgba(251,191,36,0.97)",
-    track: "rgba(251,191,36,0.16)",
-  },
-  tone: {
-    fill: "rgba(45,212,191,0.97)",
-    track: "rgba(45,212,191,0.16)",
-  },
-};
-
-/**
- * @param {string} key
- * @returns {"boost"|"caution"|"tone"}
- */
-function gaugeVariantFromKey(key) {
-  const k = String(key || "").trim();
-  if (k === "caution") return "caution";
-  if (k === "tone") return "tone";
-  return "boost";
-}
-
 /** ต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" (คุณ vs หิน ต่อแกน) */
 const RADAR_AXIS_COMPARE_EPS = 6;
 
@@ -174,11 +144,25 @@ function radarAxisLabelHtml(L, rank) {
 }
 
 /**
- * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
- * @param {string} graphSummaryHtml rows only (`.mv2-gsum-rows`); placed in right column of feature grid
+ * บล็อกเทียบคุณกับหิน (HTML ใต้กราฟ ไม่ใช่ใน SVG)
+ * @param {{ owner: Record<string, number>, crystal: Record<string, number> }} g
  */
-function radarBlock(vm, graphSummaryHtml) {
-  const gSum = String(graphSummaryHtml || "").trim();
+function radarCompareBlockHtml(g) {
+  const rows = AXIS_KEYS.map((k) => {
+    const label = AXIS_TITLE_TH[k];
+    const phrase = radarAxisComparePhrase(
+      Number(g.owner[k]) || 0,
+      Number(g.crystal[k]) || 0,
+    );
+    return `<p class="mv2-radar-compare-line">${escapeHtml(label)}: ${escapeHtml(phrase)}</p>`;
+  }).join("");
+  return `<div class="mv2-radar-compare" role="group" aria-label="เทียบคุณกับโทนหินต่อแกน">${rows}</div>`;
+}
+
+/**
+ * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
+ */
+function radarBlock(vm) {
   const g = vm.graph;
   const ownerPts = radarPolygonPoints(g.owner);
   const crystalPts = radarPolygonPoints(g.crystal);
@@ -187,6 +171,20 @@ function radarBlock(vm, graphSummaryHtml) {
   const px = peak.x.toFixed(2);
   const py = peak.y.toFixed(2);
   const crystalMarker = `<circle cx="${px}" cy="${py}" r="1.72" fill="rgba(74,222,128,0.11)" stroke="none" aria-hidden="true"/><circle class="mv2-radar-peak" cx="${px}" cy="${py}" r="1.28" fill="rgba(74,222,128,0.86)" stroke="rgba(255,255,255,0.26)" stroke-width="0.24" aria-hidden="true"><title>แรงเน้นสูงสุดของโทนหิน: ${escapeHtml(peakLabel)}</title></circle>`;
+
+  const alignAxisKey = String(g.alignment?.axisKey || "").trim();
+  const alignThai = String(g.alignment?.labelThai || "").trim();
+  const compatMarker =
+    alignAxisKey &&
+    alignAxisKey !== g.crystalPeakAxisKey
+      ? (() => {
+          const p3 = radarVertexForAxis(g.crystal, alignAxisKey);
+          const x3 = p3.x.toFixed(2);
+          const y3 = p3.y.toFixed(2);
+          const lab = escapeHtml(alignThai || alignAxisKey);
+          return `<circle cx="${x3}" cy="${y3}" r="1.55" fill="rgba(148,163,184,0.14)" stroke="none" aria-hidden="true"/><circle class="mv2-radar-peak-compatibility" cx="${x3}" cy="${y3}" r="1.05" fill="rgba(148,163,184,0.9)" stroke="rgba(255,255,255,0.32)" stroke-width="0.22" aria-hidden="true"><title>เข้ากับคุณที่สุด (จุดบนกราฟตามสูตร | ระยะห่างคุณ–หินน้อยสุด): ${lab}</title></circle>`;
+        })()
+      : "";
 
   const cw = Math.round(Number(g.crystal.work) || 0);
   const cr = Math.round(Number(g.crystal.relationship) || 0);
@@ -231,122 +229,35 @@ function radarBlock(vm, graphSummaryHtml) {
     })
     .join("");
 
+  const radarHelperHtml = `<p class="mv2-radar-context">${escapeHtml(vm.radarSectionContext.compareHelperLine)}</p>`;
+
   return `
-  <section class="mv2-radar-card mv2-radar-card--feature" aria-labelledby="mv2-radar-h">
-    <h2 class="mv2-radar-title" id="mv2-radar-h">กราฟโทนหิน</h2>
-    <div class="mv2-radar-feature-grid">
-      <div class="mv2-radar-feature-left">
-        <div class="mv2-radar-svg-wrap">
-          <div class="mv2-radar-plot">
-            <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key" text-rendering="optimizeLegibility">
-              <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
-              <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-              <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-              <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
-              <g class="mv2-radar-layer mv2-radar-layer--owner">
-                <polygon points="${ownerPts}" fill="rgba(96,165,250,0.155)" stroke="rgba(147,197,253,0.92)" stroke-width="0.78" stroke-linejoin="round"/>
-              </g>
-              <g class="mv2-radar-layer mv2-radar-layer--crystal">
-                <polygon points="${crystalPts}" fill="rgba(22,163,74,0.175)" stroke="rgba(52,211,153,0.92)" stroke-width="0.88" stroke-linejoin="round"/>
-              </g>
-              <g class="mv2-radar-layer mv2-radar-layer--peak">${crystalMarker}</g>
-            </svg>
-            <div class="mv2-radar-labels" aria-hidden="true">${labelHtml}</div>
-          </div>
-          <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
-            <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span><span class="mv2-radar-key-label">คุณ</span></span>
-            <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span><span class="mv2-radar-key-label">หิน</span></span>
-          </div>
-        </div>
+  <section class="mv2-radar-card" aria-labelledby="mv2-radar-h">
+    <h2 class="mv2-radar-title" id="mv2-radar-h">ภาพรวมการจับคู่</h2>
+    ${radarHelperHtml}
+    <div class="mv2-radar-svg-wrap">
+      <div class="mv2-radar-plot">
+        <svg class="mv2-radar-svg mv2-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="เรดาร์สามแกน เปรียบเทียบคุณกับโทนหิน" aria-describedby="mv2-radar-key" text-rendering="optimizeLegibility">
+          <polygon points="${radarPolygonPoints({ work: 100, relationship: 100, money: 100 })}" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" stroke-width="0.4"/>
+          <line x1="50" y1="50" x2="50" y2="12" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
+          <line x1="50" y1="50" x2="83" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
+          <line x1="50" y1="50" x2="17" y2="67" stroke="rgba(255,255,255,0.08)" stroke-width="0.25"/>
+          <g class="mv2-radar-layer mv2-radar-layer--owner">
+            <polygon points="${ownerPts}" fill="rgba(96,165,250,0.155)" stroke="rgba(147,197,253,0.92)" stroke-width="0.78" stroke-linejoin="round"/>
+          </g>
+          <g class="mv2-radar-layer mv2-radar-layer--crystal">
+            <polygon points="${crystalPts}" fill="rgba(22,163,74,0.175)" stroke="rgba(52,211,153,0.92)" stroke-width="0.88" stroke-linejoin="round"/>
+          </g>
+          <g class="mv2-radar-layer mv2-radar-layer--peak">${crystalMarker}${compatMarker}</g>
+        </svg>
+        <div class="mv2-radar-labels" aria-hidden="true">${labelHtml}</div>
       </div>
-      <div class="mv2-radar-feature-right" aria-labelledby="mv2-gsum-h">
-        <h3 class="mv2-radar-gsum-h" id="mv2-gsum-h">สรุปกราฟ</h3>
-        ${gSum}
+      <div class="mv2-radar-key" id="mv2-radar-key" role="group" aria-label="คุณ สีฟ้า หิน สีเขียว">
+        <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--owner" aria-hidden="true"></span><span class="mv2-radar-key-label">คุณ</span></span>
+        <span class="mv2-radar-key-chip"><span class="mv2-radar-key-dot mv2-radar-key-dot--stone" aria-hidden="true"></span><span class="mv2-radar-key-label">หิน</span></span>
       </div>
     </div>
   </section>`;
-}
-
-/**
- * @param {number} score0to100
- * @param {"boost"|"caution"|"tone"} variant
- */
-function semiDonutGaugeSvg(score0to100, variant) {
-  const s = Math.max(
-    0,
-    Math.min(100, Math.round(Number(score0to100) || 0)),
-  );
-  const off = 100 - s;
-  const st = MV2_GAUGE_STROKE[variant] || MV2_GAUGE_STROKE.boost;
-  return `<svg class="mv2-gauge-svg" viewBox="0 0 96 46" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-  <path class="mv2-gauge-track" d="${MV2_GAUGE_ARC_D}" fill="none" stroke="${st.track}" stroke-width="6.5" stroke-linecap="round" pathLength="100" vector-effect="non-scaling-stroke"/>
-  <path class="mv2-gauge-fill" d="${MV2_GAUGE_ARC_D}" fill="none" stroke="${st.fill}" stroke-width="6.5" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${off}" vector-effect="non-scaling-stroke"/>
-</svg>`;
-}
-
-/**
- * @param {{ key: string, label: string, score: number, main: string, sub: string }} item
- */
-function semiDonutGaugeCard(item) {
-  const variant = gaugeVariantFromKey(item.key);
-  const sub =
-    item.sub && String(item.sub).trim()
-      ? `<span class="mv2-gauge-sub">${escapeHtml(String(item.sub).trim())}</span>`
-      : "";
-  const scoreStr = escapeHtml(String(item.score));
-  return `<div class="mv2-gauge-card mv2-gauge-card--${variant}" data-mv2-gauge="${escapeHtml(item.key)}" aria-label="${escapeHtml(item.label)} ${scoreStr}">
-    <div class="mv2-gauge-chart">
-      ${semiDonutGaugeSvg(item.score, variant)}
-      <span class="mv2-gauge-score mv2-gauge-score--overlay">${scoreStr}</span>
-    </div>
-    <div class="mv2-gauge-meta">
-      <span class="mv2-gauge-kicker">${escapeHtml(item.label)}</span>
-      <span class="mv2-gauge-main">${escapeHtml(item.main)}</span>
-      ${sub}
-    </div>
-  </div>`;
-}
-
-/**
- * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
- */
-function interactionGaugeBlock(vm) {
-  const gauges = vm.interactionGauges;
-  if (!gauges || !gauges.length) return "";
-  return `<div class="mv2-gauge-grid" role="group" aria-label="${escapeHtml(vm.interactionSummary.headline)}">${gauges.map(semiDonutGaugeCard).join("")}</div>`;
-}
-
-/**
- * @param {ReturnType<typeof buildMoldaviteHtmlV2ViewModel>} vm
- */
-function lifeAreaBarsBlock(vm) {
-  const rows =
-    vm.lifeAreaBars && vm.lifeAreaBars.length
-      ? vm.lifeAreaBars
-      : vm.lifeAreaDetail.rows;
-  const inner = rows
-    .map(
-      (r, i) => {
-        const isLead = i === 0;
-        const leadCls = isLead ? " mv2-bar-row--lead" : "";
-        const fillCls = isLead ? " mv2-bar-fill--lead" : "";
-        const w = Math.max(0, Math.min(100, Number(r.score) || 0));
-        const badge = isLead
-          ? `<span class="mv2-bar-badge">เด่นสุด</span>`
-          : "";
-        return `
-    <div class="mv2-bar-row${leadCls}" data-mv2-life="${escapeHtml(r.key)}">
-      <div class="mv2-bar-top">
-        <span class="mv2-bar-label-wrap">${badge}<span class="mv2-bar-label">${escapeHtml(r.label)}</span></span>
-        <span class="mv2-bar-score">${escapeHtml(String(r.score))}</span>
-      </div>
-      <div class="mv2-bar-track" aria-hidden="true"><div class="mv2-bar-fill${fillCls}" style="width:${w}%"></div></div>
-      <p class="mv2-bar-blurb">${escapeHtml(r.blurb)}</p>
-    </div>`;
-      },
-    )
-    .join("");
-  return `<div class="mv2-bars">${inner}</div>`;
 }
 
 /**
@@ -374,21 +285,10 @@ export function renderMoldaviteReportV2Html(payload) {
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
       : "ไม่มี";
 
-  const pillEnergy =
-    vm.metrics.energyScore != null &&
-    Number.isFinite(Number(vm.metrics.energyScore))
-      ? `คะแนนพลัง ${Number(vm.metrics.energyScore).toFixed(1)}`
-      : "คะแนนพลัง —";
-  const pillCompatHero =
-    vm.metrics.compatibilityPercent != null &&
-    Number.isFinite(Number(vm.metrics.compatibilityPercent))
-      ? `เข้ากันกับคุณ ${Math.round(Number(vm.metrics.compatibilityPercent))}%`
-      : "เข้ากันกับคุณ —";
-
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
     .map(
       (r, i) =>
-        `<div class="mv2-gsum-row${i === 0 ? " mv2-gsum-row--lead" : ""}"><span class="mv2-gsum-k">${escapeHtml(r.label)}:</span><span class="mv2-gsum-v">${escapeHtml(r.value)}</span></div>`,
+        `<div class="mv2-gsum-row${i === 0 ? " mv2-gsum-row--lead" : ""}"><span class="mv2-gsum-k">${escapeHtml(r.label)}</span><span class="mv2-gsum-v">${escapeHtml(r.value)}</span></div>`,
     )
     .join("")}</div>`;
 
@@ -396,11 +296,26 @@ export function renderMoldaviteReportV2Html(payload) {
     .map((t) => `<span class="mv2-owner-chip">${escapeHtml(t.label)} ${t.score}/10</span>`)
     .join("");
 
-  const interactionGaugeHtml = interactionGaugeBlock(vm);
-  const lifeBarsHtml = lifeAreaBarsBlock(vm);
+  const interactionHtml = vm.interactionSummary.rows
+    .map(
+      (row) =>
+        `<div class="mv2-int-row"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-main">${escapeHtml(row.main)}</span>${row.sub ? `<span class="mv2-int-sub">${escapeHtml(row.sub)}</span>` : ""}</div>`,
+    )
+    .join("");
+
+
+  const lifeRowsHtml = vm.lifeAreaDetail.rows
+    .map(
+      (row) => `
+    <div class="mv2-life-card">
+      <div class="mv2-life-head"><span>${escapeHtml(row.label)}</span><span class="mv2-life-score">${escapeHtml(String(row.score))}</span></div>
+      <p class="mv2-para mv2-life-blurb">${escapeHtml(row.blurb)}</p>
+    </div>`,
+    )
+    .join("");
 
   const usageHtml = vm.usageCaution.lines
-    .map((u) => `<p class="mv2-usage-line">${escapeHtml(u)}</p>`)
+    .map((u) => `<li>${escapeHtml(u)}</li>`)
     .join("");
 
   const title = escapeHtml(
@@ -438,188 +353,43 @@ export function renderMoldaviteReportV2Html(payload) {
       line-height: 1.55;
       -webkit-font-smoothing: antialiased;
     }
-    .mv2-wrap { max-width: 26.5rem; margin: 0 auto; padding: 1.2rem 1rem 3rem; }
-    .mv2-hero { margin-bottom: 0.2rem; }
-    .mv2-badge {
-      font-size: 0.58rem;
-      font-weight: 500;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: rgba(100,116,139,0.55);
-      margin-bottom: 0.4rem;
-      opacity: 0.88;
-    }
-    .mv2-hero-card {
-      background:
-        linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 38%),
-        linear-gradient(165deg, rgba(22,27,34,0.98) 0%, rgba(10,12,16,0.995) 100%);
-      border: 1px solid rgba(52,211,153,0.09);
-      border-radius: 20px;
-      padding: 0.88rem 1rem;
-      box-shadow:
-        0 14px 44px rgba(0,0,0,0.2),
-        0 4px 18px rgba(0,0,0,0.12),
-        inset 0 1px 0 rgba(255,255,255,0.055);
-    }
-    .mv2-hero-grid {
-      display: grid;
-      grid-template-columns: 6.25rem 1fr;
-      gap: 1rem;
-      align-items: center;
-    }
-    .mv2-hero-copy { min-width: 0; }
-    .mv2-hero-card .mv2-hero-media {
-      margin-top: 0;
-      border-radius: 15px;
-      aspect-ratio: 1 / 1;
-      overflow: hidden;
-      background: linear-gradient(145deg, #1a222c 0%, #12161c 100%);
-      box-shadow:
-        inset 0 0 0 1px rgba(52,211,153,0.065),
-        inset 0 0 20px rgba(0,0,0,0.22),
-        0 3px 14px rgba(0,0,0,0.28);
-    }
-    .mv2-hero-media--empty { display:flex; align-items:center; justify-content:center; color: var(--mv2-muted); font-size: 0.72rem; text-align: center; padding: 0.25rem; }
+    .mv2-wrap { max-width: 26rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .mv2-hero { margin-bottom: 1.25rem; }
+    .mv2-badge { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mv2-muted); }
+    .mv2-hero-media { border-radius: var(--mv2-r); overflow: hidden; background: #1a1f26; aspect-ratio: 20/13; margin-top: 0.5rem; }
+    .mv2-hero-media--empty { display:flex; align-items:center; justify-content:center; color: var(--mv2-muted); font-size: 0.85rem; }
     .mv2-hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .mv2-hero-copy .mv2-h1 {
-      font-size: 1.62rem;
-      font-weight: 800;
-      margin: 0 0 0.16rem;
-      line-height: 1.08;
-      letter-spacing: -0.03em;
-      color: #f8fafc;
-    }
-    .mv2-hero-copy .mv2-tag {
-      color: rgba(110,231,183,0.98);
-      font-size: 0.84rem;
-      margin: 0 0 0.36rem;
-      line-height: 1.35;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .mv2-hero-copy .mv2-main {
-      color: #6ee7b7;
-      font-weight: 600;
-      font-size: 0.82rem;
-      margin: 0 0 0.4rem;
-      border-left: 2px solid rgba(52,211,153,0.22);
-      padding-left: 0.48rem;
-      line-height: 1.3;
-    }
-    .mv2-hero-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.38rem;
-      margin: 0 0 0.38rem;
-    }
-    .mv2-hero-pill {
-      display: inline-block;
-      font-size: 0.65rem;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      padding: 0.28rem 0.55rem;
-      border-radius: 999px;
-      color: rgba(248,250,252,0.98);
-      background: rgba(6,78,59,0.38);
-      border: 1px solid rgba(52,211,153,0.32);
-      white-space: nowrap;
-    }
-    .mv2-hero-copy .mv2-date {
-      font-size: 0.5rem;
-      color: rgba(71,85,105,0.55);
-      margin: 0;
-      font-weight: 400;
-      letter-spacing: 0.05em;
-      opacity: 0.32;
-    }
+    .mv2-h1 { font-size: 1.45rem; font-weight: 700; margin: 0.6rem 0 0.2rem; line-height: 1.25; }
+    .mv2-tag { color: var(--mv2-green-dim); font-size: 0.92rem; margin: 0.25rem 0 1.05rem; line-height: 1.4; }
+    .mv2-main { color: var(--mv2-green); font-weight: 600; font-size: 0.95rem; margin: 0 0 0.5rem; border-left: 3px solid rgba(34,197,94,0.5); padding-left: 0.6rem; }
+    .mv2-h1 + .mv2-main { margin-top: 0.35rem; }
+    .mv2-date { font-size: 0.63rem; color: rgba(90,95,105,0.68); margin-top: 0.35rem; font-weight: 400; letter-spacing: 0.02em; opacity: 0.78; }
     .mv2-strip {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 0.35rem;
-      margin: 0.45rem 0 0.72rem;
+      gap: 0.5rem;
+      margin: 1rem 0 1.25rem;
       text-align: center;
     }
-    .mv2-strip > div {
-      background: rgba(12,14,18,0.48);
-      border: 1px solid rgba(255,255,255,0.028);
-      border-radius: 15px;
-      padding: 0.46rem 0.26rem 0.42rem;
-    }
-    .mv2-strip-k { font-size: 0.5rem; color: rgba(148,163,184,0.58); text-transform: uppercase; letter-spacing: 0.08em; }
-    .mv2-strip-v { font-size: 1rem; font-weight: 800; color: rgba(167,243,208,0.92); margin-top: 0.1rem; letter-spacing: -0.02em; }
-    .mv2-strip-v small { font-size: 0.68rem; font-weight: 500; color: rgba(148,163,184,0.58); }
-    .mv2-strip-cell--level { opacity: 0.72; }
-    .mv2-strip-cell--level .mv2-strip-k { font-size: 0.5rem; opacity: 0.55; letter-spacing: 0.07em; }
-    .mv2-strip-cell--level .mv2-strip-v { font-size: 0.72rem !important; font-weight: 600; color: rgba(110,231,183,0.55); margin-top: 0.15rem; }
+    .mv2-strip > div { background: var(--mv2-card); border: 1px solid var(--mv2-edge); border-radius: 12px; padding: 0.55rem 0.35rem; }
+    .mv2-strip-k { font-size: 0.65rem; color: var(--mv2-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .mv2-strip-v { font-size: 1.05rem; font-weight: 700; color: var(--mv2-green-dim); margin-top: 0.2rem; }
+    .mv2-strip-v small { font-size: 0.75rem; font-weight: 500; color: var(--mv2-muted); }
+    .mv2-strip-cell--level .mv2-strip-k { font-size: 0.6rem; opacity: 0.72; letter-spacing: 0.05em; }
+    .mv2-strip-cell--level .mv2-strip-v { font-size: 0.82rem !important; font-weight: 600; color: rgba(134,239,172,0.78); margin-top: 0.22rem; }
     .mv2-card {
-      background: rgba(17,20,24,0.92);
-      border: 1px solid rgba(255,255,255,0.045);
-      border-radius: 15px;
-      padding: 0.85rem 0.95rem;
-      margin-bottom: 1.05rem;
+      background: var(--mv2-card);
+      border: 1px solid var(--mv2-edge);
+      border-radius: var(--mv2-r);
+      padding: 1rem 1.05rem;
+      margin-bottom: 1.08rem;
     }
     .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2-green-dim); font-weight: 600; }
-    .mv2-life-hint { font-size: 0.65rem; line-height: 1.35; color: rgb(148, 163, 184); opacity: 0.44; font-weight: 400; }
-    .mv2-radar-card { border-left: 1px solid rgba(45,212,191,0.22); }
-    .mv2-radar-card--feature {
-      margin: 0 0 0.88rem;
-      padding: 1.38rem 1.05rem 1.32rem;
-      background:
-        linear-gradient(180deg, rgba(16,185,129,0.1) 0%, rgba(16,185,129,0.03) 28%, transparent 52%),
-        linear-gradient(175deg, rgba(17,26,36,0.72) 0%, rgba(10,14,20,0.88) 48%, rgba(6,8,12,0.98) 100%);
-      border: 1px solid rgba(52,211,153,0.1);
-      border-radius: 20px;
-      border-left: 1px solid rgba(45,212,191,0.18);
-      box-shadow:
-        0 16px 48px rgba(0,0,0,0.26),
-        inset 0 1px 0 rgba(255,255,255,0.06);
-    }
+    .mv2-card--life > h2 { margin: 0 0 0.72rem; }
+    .mv2-life-hint { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: rgb(148, 163, 184); opacity: 0.47; font-weight: 400; }
+    .mv2-radar-card { border-left: 3px solid rgba(34,197,94,0.55); }
     .mv2-radar-title { margin: 0 0 0.35rem; font-size: 1rem; color: var(--mv2-green-dim); }
-    .mv2-radar-card--feature .mv2-radar-title {
-      margin: 0 0 0.58rem;
-      font-size: 1.14rem;
-      font-weight: 800;
-      text-align: center;
-      letter-spacing: 0.035em;
-      color: #6ee7b7;
-      text-shadow: 0 0 28px rgba(52,211,153,0.18);
-    }
-    .mv2-radar-feature-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.92fr);
-      gap: 0.5rem 0.58rem;
-      align-items: start;
-    }
-    @media (max-width: 18.5rem) {
-      .mv2-radar-feature-grid {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-      }
-    }
-    .mv2-radar-feature-left,
-    .mv2-radar-feature-right {
-      min-width: 0;
-    }
-    .mv2-radar-feature-right {
-      padding: 0.02rem 0 0;
-      border-radius: 14px;
-      background: rgba(0,0,0,0.12);
-      border: 1px solid rgba(255,255,255,0.04);
-      padding: 0.42rem 0.48rem 0.48rem;
-    }
-    .mv2-radar-gsum-h {
-      font-size: 0.86rem;
-      margin: 0 0 0.32rem;
-      color: rgba(134,239,172,0.88);
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      opacity: 0.92;
-    }
-    .mv2-radar-feature-right .mv2-gsum-rows {
-      gap: 0.24rem;
-    }
+    .mv2-radar-context { margin: 0 0 0.5rem; font-size: 0.8rem; line-height: 1.42; color: rgba(186, 230, 253, 0.88); font-weight: 500; letter-spacing: 0.01em; }
     .mv2-radar-svg-wrap {
       width: 100%;
       max-width: 17.5rem;
@@ -627,20 +397,9 @@ export function renderMoldaviteReportV2Html(payload) {
       padding: 0.55rem 0.85rem 0.2rem;
       box-sizing: border-box;
     }
-    .mv2-radar-card--feature .mv2-radar-svg-wrap {
-      max-width: 21rem;
-      padding: 0.82rem 1rem 0.58rem;
-    }
-    .mv2-radar-card--feature .mv2-radar-feature-left .mv2-radar-svg-wrap {
-      margin-left: 0;
-      margin-right: 0;
-      max-width: 100%;
-      padding: 0.72rem 0.4rem 0.52rem;
-    }
     .mv2-radar-plot {
       position: relative;
       container-type: inline-size;
-      filter: drop-shadow(0 8px 28px rgba(0,0,0,0.35));
     }
     .mv2-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
     .mv2-radar-svg--animate .mv2-radar-layer--owner,
@@ -736,8 +495,11 @@ export function renderMoldaviteReportV2Html(payload) {
     .mv2-radar-svg .mv2-radar-peak {
       filter: drop-shadow(0 0 0.65px rgba(52, 211, 153, 0.3)) drop-shadow(0 0 1.5px rgba(34, 197, 94, 0.14));
     }
+    .mv2-radar-svg .mv2-radar-peak-compatibility {
+      filter: drop-shadow(0 0 0.55px rgba(148, 163, 184, 0.35)) drop-shadow(0 0 1.2px rgba(100, 116, 139, 0.2));
+    }
     .mv2-radar-key {
-      margin: 0.38rem 0 0;
+      margin: 0.28rem 0 0;
       padding: 0;
       display: flex;
       flex-direction: row;
@@ -745,11 +507,11 @@ export function renderMoldaviteReportV2Html(payload) {
       align-items: center;
       justify-content: center;
       gap: 0.75rem;
-      font-size: 0.75rem;
+      font-size: 0.8125rem;
       line-height: 1.2;
       letter-spacing: 0.02em;
       font-weight: 500;
-      opacity: 0.48;
+      opacity: 0.85;
     }
     .mv2-radar-key-chip {
       display: inline-flex;
@@ -775,92 +537,88 @@ export function renderMoldaviteReportV2Html(payload) {
       background: radial-gradient(circle at 32% 28%, rgba(220,252,231,0.96), rgba(34, 197, 94, 0.88));
       box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
     }
+    .mv2-radar-compare {
+      margin: 0.5rem 0 0;
+      padding: 0.42rem 0.45rem 0.38rem;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.028);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .mv2-radar-compare-line {
+      margin: 0;
+      padding: 0.18rem 0;
+      font-size: 0.76rem;
+      line-height: 1.42;
+      color: rgba(203, 213, 225, 0.92);
+      font-weight: 400;
+      letter-spacing: 0.01em;
+    }
     .mv2-gsum-rows {
       display: flex;
       flex-direction: column;
-      gap: 0.28rem;
+      gap: 0.32rem;
     }
     .mv2-gsum-row {
       display: flex;
       align-items: baseline;
-      flex-wrap: wrap;
-      gap: 0.32rem 0.45rem;
-      padding: 0.34rem 0.52rem;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.035);
-      border: 1px solid rgba(255,255,255,0.075);
+      gap: 0.45rem;
+      padding: 0.28rem 0.5rem;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.028);
+      border: 1px solid rgba(255,255,255,0.055);
     }
     .mv2-gsum-row:not(.mv2-gsum-row--lead) {
-      padding: 0.26rem 0.52rem;
+      padding: 0.18rem 0.5rem;
     }
     .mv2-gsum-row--lead {
-      background: rgba(16,185,129,0.11);
-      border-color: rgba(52,211,153,0.26);
-      box-shadow: 0 0 0 1px rgba(52,211,153,0.1), inset 0 1px 0 rgba(255,255,255,0.04);
+      background: rgba(16,185,129,0.07);
+      border-color: rgba(52,211,153,0.14);
     }
     .mv2-gsum-k {
-      font-size: 0.66rem;
-      font-weight: 500;
+      font-size: 0.72rem;
+      font-weight: 400;
       color: rgba(148,163,184,0.58);
       white-space: nowrap;
     }
     .mv2-gsum-v {
-      font-size: 1rem;
+      font-size: 0.92rem;
       font-weight: 800;
-      color: #f8fafc;
-      letter-spacing: -0.015em;
+      color: rgba(236,240,246,0.97);
     }
     .mv2-gsum-row--lead .mv2-gsum-v {
-      color: #ecfdf5;
+      color: rgba(209,250,229,0.98);
     }
-    .mv2-radar-feature-right .mv2-gsum-row:not(.mv2-gsum-row--lead) {
-      background: rgba(255,255,255,0.022);
-      border-color: rgba(255,255,255,0.055);
-      opacity: 0.94;
-    }
-    .mv2-radar-feature-right .mv2-gsum-row:not(.mv2-gsum-row--lead) .mv2-gsum-v {
-      font-size: 0.94rem;
-      font-weight: 700;
-      color: rgba(226,232,240,0.94);
-    }
-    .mv2-card--owner {
-      padding: 0.44rem 0.62rem 0.5rem;
-      background: rgba(12,14,18,0.52);
-      border-color: rgba(255,255,255,0.028);
-      margin-bottom: 0.82rem;
-    }
-    .mv2-card--owner > h2 { margin-bottom: 0.12rem; font-size: 0.78rem; font-weight: 600; opacity: 0.78; }
+    .mv2-card--owner > h2 { margin-bottom: 0.22rem; }
     .mv2-owner-zodiac {
-      margin: 0 0 0.22rem;
-      font-size: 0.84rem;
-      font-weight: 600;
-      color: rgba(226,232,240,0.82);
-      letter-spacing: 0.015em;
+      margin: 0 0 0.5rem;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      letter-spacing: 0.02em;
     }
     .mv2-owner-chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.24rem 0.3rem;
-      margin: 0 0 0.26rem;
+      gap: 0.42rem 0.55rem;
+      margin: 0 0 0.5rem;
     }
     .mv2-owner-chip {
       display: inline-block;
-      padding: 0.1rem 0.32rem;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.022);
-      border: 1px solid rgba(255,255,255,0.04);
-      font-size: 0.62rem;
+      padding: 0.22rem 0.55rem;
+      border-radius: 1rem;
+      background: rgba(255,255,255,0.055);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 0.78rem;
       font-weight: 500;
-      color: rgba(203,213,225,0.72);
+      color: rgba(226,232,240,0.92);
       white-space: nowrap;
       letter-spacing: 0.01em;
     }
     .mv2-owner-note {
       margin: 0;
-      font-size: 0.52rem;
-      color: rgba(71,85,105,0.55);
+      font-size: 0.62rem;
+      color: rgba(148,163,184,0.42);
       font-weight: 400;
-      opacity: 0.55;
     }
     .mv2-owner-traits { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.84rem; color: var(--mv2-muted); }
     .mv2-owner-traits li { margin-bottom: 0.35rem; }
@@ -868,243 +626,50 @@ export function renderMoldaviteReportV2Html(payload) {
       color: rgba(148,163,184,0.7);
       font-size: 0.81em;
     }
-    .mv2-card--int {
-      padding: 0.54rem 0.68rem 0.62rem;
-      border-color: rgba(255,255,255,0.04);
-    }
-    .mv2-card--int > h2 { margin-bottom: 0.36rem; font-size: 0.95rem; }
-    .mv2-gauge-grid {
+    .mv2-int-rows {
       display: flex;
       flex-direction: column;
-      gap: 0.44rem;
-      margin-top: 0.04rem;
+      gap: 0.42rem;
+      padding: 0.15rem 0 0;
     }
-    .mv2-gauge-card {
-      display: grid;
-      grid-template-columns: 5.5rem minmax(0, 1fr);
-      gap: 0.45rem 0.52rem;
-      align-items: center;
-      min-height: 4.35rem;
-      padding: 0.3rem 0.38rem 0.32rem;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.022);
-      border: 1px solid rgba(255,255,255,0.065);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-    }
-    .mv2-gauge-card--boost {
-      border-color: rgba(52,211,153,0.14);
-      background: linear-gradient(142deg, rgba(52,211,153,0.07) 0%, rgba(255,255,255,0.018) 60%);
-    }
-    .mv2-gauge-card--caution {
-      border-color: rgba(251,191,36,0.16);
-      background: linear-gradient(142deg, rgba(251,191,36,0.07) 0%, rgba(255,255,255,0.018) 60%);
-    }
-    .mv2-gauge-card--tone {
-      border-color: rgba(45,212,191,0.15);
-      background: linear-gradient(142deg, rgba(45,212,191,0.07) 0%, rgba(255,255,255,0.018) 60%);
-    }
-    .mv2-gauge-card[data-mv2-gauge="boost"] .mv2-gauge-track { stroke: rgba(52,211,153,0.22) !important; }
-    .mv2-gauge-card[data-mv2-gauge="boost"] .mv2-gauge-fill { stroke: rgba(52,211,153,0.98) !important; }
-    .mv2-gauge-card[data-mv2-gauge="caution"] .mv2-gauge-track { stroke: rgba(251,191,36,0.24) !important; }
-    .mv2-gauge-card[data-mv2-gauge="caution"] .mv2-gauge-fill { stroke: rgba(251,191,36,0.96) !important; }
-    .mv2-gauge-card[data-mv2-gauge="tone"] .mv2-gauge-track { stroke: rgba(45,212,191,0.24) !important; }
-    .mv2-gauge-card[data-mv2-gauge="tone"] .mv2-gauge-fill { stroke: rgba(45,212,191,0.97) !important; }
-    .mv2-gauge-chart {
-      position: relative;
-      width: 100%;
-      max-width: 5.55rem;
-      justify-self: start;
-    }
-    .mv2-gauge-svg {
-      width: 100%;
-      max-width: 5.55rem;
-      height: auto;
-      display: block;
-    }
-    .mv2-gauge-card--boost .mv2-gauge-fill {
-      filter: drop-shadow(0 0 6px rgba(52,211,153,0.48));
-    }
-    .mv2-gauge-card--caution .mv2-gauge-fill {
-      filter: drop-shadow(0 0 6px rgba(251,191,36,0.42));
-    }
-    .mv2-gauge-card--tone .mv2-gauge-fill {
-      filter: drop-shadow(0 0 6px rgba(45,212,191,0.45));
-    }
-    .mv2-gauge-score--overlay {
-      position: absolute;
-      left: 50%;
-      bottom: 0.14rem;
-      transform: translateX(-50%);
-      font-size: 1.56rem;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      line-height: 1;
-      letter-spacing: -0.035em;
-      text-shadow: 0 2px 16px rgba(0,0,0,0.7);
-      pointer-events: none;
-    }
-    .mv2-gauge-card--boost .mv2-gauge-score--overlay { color: #a7f3d0; }
-    .mv2-gauge-card--caution .mv2-gauge-score--overlay { color: #fde68a; }
-    .mv2-gauge-card--tone .mv2-gauge-score--overlay { color: #99f6e4; }
-    .mv2-gauge-meta {
+    .mv2-int-row {
       display: flex;
       flex-direction: column;
-      gap: 0.04rem;
-      min-width: 0;
-      padding-top: 0;
+      gap: 0.12rem;
+      padding: 0.32rem 0.5rem;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.028);
+      border: 1px solid rgba(255,255,255,0.055);
     }
-    .mv2-gauge-kicker {
-      font-size: 0.5rem;
+    .mv2-int-row + .mv2-int-row {
+      padding: 0.22rem 0.5rem;
+    }
+    .mv2-int-kicker {
+      font-size: 0.64rem;
       font-weight: 700;
-      letter-spacing: 0.09em;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
-      opacity: 0.78;
+      color: rgba(110,231,183,0.78);
     }
-    .mv2-gauge-card--boost .mv2-gauge-kicker { color: rgba(110,231,183,0.82); }
-    .mv2-gauge-card--caution .mv2-gauge-kicker { color: rgba(252,211,77,0.82); }
-    .mv2-gauge-card--tone .mv2-gauge-kicker { color: rgba(94,234,212,0.82); }
-    .mv2-gauge-main {
-      font-size: 0.76rem;
-      font-weight: 700;
-      line-height: 1.2;
-      color: rgba(241,245,249,0.94);
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .mv2-gauge-sub {
-      font-size: 0.54rem;
-      line-height: 1.18;
-      color: rgba(51,65,85,0.72);
-      margin-top: 0.03rem;
-      opacity: 0.85;
-    }
-    .mv2-card--life {
-      padding: 0.54rem 0.72rem 0.62rem;
-      border-color: rgba(255,255,255,0.038);
-    }
-    .mv2-card--life > h2 { margin-bottom: 0.2rem; }
-    .mv2-life-hint { margin: 0 0 0.32rem; opacity: 0.36; }
-    .mv2-bars {
-      display: flex;
-      flex-direction: column;
-      gap: 0.48rem;
-      margin-top: 0.02rem;
-    }
-    .mv2-bar-row {
-      padding: 0.4rem 0.45rem 0.42rem;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.035);
-      background: rgba(255,255,255,0.01);
-    }
-    .mv2-bar-row--lead {
-      border-color: rgba(52,211,153,0.14);
-      background: linear-gradient(168deg, rgba(52,211,153,0.06) 0%, rgba(255,255,255,0.015) 100%);
-      box-shadow: 0 0 0 1px rgba(52,211,153,0.05);
-    }
-    .mv2-bar-row:not(.mv2-bar-row--lead) {
-      opacity: 0.94;
-    }
-    .mv2-bar-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 0.55rem;
-    }
-    .mv2-bar-label-wrap {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      min-width: 0;
-    }
-    .mv2-bar-badge {
-      flex-shrink: 0;
-      font-size: 0.5rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      padding: 0.1rem 0.34rem;
-      border-radius: 999px;
-      color: rgba(209,250,229,0.92);
-      background: rgba(52,211,153,0.12);
-      border: 1px solid rgba(52,211,153,0.2);
-    }
-    .mv2-bar-label {
-      font-weight: 600;
+    .mv2-int-main {
       font-size: 0.88rem;
-      color: rgba(248,250,252,0.96);
-      letter-spacing: 0.01em;
-    }
-    .mv2-bar-row--lead .mv2-bar-label {
       font-weight: 700;
-      color: #fff;
+      line-height: 1.3;
+      color: rgba(236,240,246,0.96);
     }
-    .mv2-bar-score {
-      font-size: 1.12rem;
-      font-weight: 800;
-      color: #4ade80;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: -0.035em;
-      text-shadow: 0 0 24px rgba(74,222,128,0.38);
-    }
-    .mv2-bar-row--lead .mv2-bar-score {
-      font-size: 1.2rem;
-      color: #86efac;
-      text-shadow: 0 0 28px rgba(52,211,153,0.42);
-    }
-    .mv2-bar-track {
-      margin-top: 0.42rem;
-      height: 11px;
-      border-radius: 999px;
-      background: rgba(0,0,0,0.38);
-      overflow: hidden;
-      box-shadow: inset 0 1px 4px rgba(0,0,0,0.5);
-    }
-    .mv2-bar-row--lead .mv2-bar-track {
-      height: 12px;
-    }
-    .mv2-bar-fill {
-      height: 100%;
-      border-radius: 999px;
-      min-width: 0;
-      background: linear-gradient(90deg, rgba(21,128,61,0.8) 0%, rgba(34,197,94,0.95) 42%, rgba(52,211,153,1) 100%);
-      box-shadow: 0 0 8px rgba(52,211,153,0.28), 0 0 16px rgba(34,197,94,0.1);
-      transition: width 0.5s ease-out;
-    }
-    .mv2-bar-fill--lead {
-      background: linear-gradient(90deg, rgba(34,197,94,0.9) 0%, rgba(52,211,153,1) 50%, rgba(110,231,183,1) 100%);
-      box-shadow: 0 0 12px rgba(52,211,153,0.38), 0 0 24px rgba(34,197,94,0.15);
-    }
-    .mv2-bar-blurb {
-      margin: 0.18rem 0 0;
-      font-size: 0.62rem;
-      line-height: 1.25;
-      color: rgba(51,65,85,0.62);
-      opacity: 0.88;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
+    .mv2-int-sub {
+      font-size: 0.74rem;
+      font-weight: 400;
+      line-height: 1.35;
+      color: rgba(148,163,184,0.62);
     }
     .mv2-note { font-size: 0.72rem; color: #6b7280; margin-top: 0.6rem; }
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: rgba(210,208,202,0.95); }
-    .mv2-usage-tight { margin: 0; }
-    .mv2-usage-tight .mv2-usage-line {
-      margin: 0 0 0.22rem;
-      font-size: 0.62rem;
-      line-height: 1.28;
-      color: rgba(71,85,105,0.75);
-      opacity: 0.72;
-    }
-    .mv2-usage-tight .mv2-usage-line:last-child { margin-bottom: 0; }
-    .mv2-card--usage {
-      padding: 0.48rem 0.68rem 0.52rem;
-      border-color: rgba(255,255,255,0.028);
-      background: rgba(10,12,15,0.5);
-      margin-bottom: 0.75rem;
-    }
-    .mv2-card--usage > h2 { font-size: 0.78rem; margin-bottom: 0.28rem; opacity: 0.65; font-weight: 600; }
+    .mv2-life-card { border-top: 1px solid rgba(255,255,255,0.032); padding: 0.85rem 0 0; margin-top: 0.82rem; }
+    .mv2-life-card:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+    .mv2-life-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; font-weight: 600; font-size: 0.9rem; }
+    .mv2-life-score { color: #15803d; font-weight: 600; font-size: 0.82rem; opacity: 0.78; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+    .mv2-life-blurb { margin-top: 0.35rem; }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
   </style>
@@ -1112,53 +677,48 @@ export function renderMoldaviteReportV2Html(payload) {
 <body>
   <div class="mv2-wrap">
     <header class="mv2-hero">
-      <div class="mv2-badge">Ener Scan · Moldavite</div>
-      <section class="mv2-hero-card">
-        <div class="mv2-hero-grid">
-          ${media}
-          <div class="mv2-hero-copy">
-            <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "ไม่มีชื่อ")}</h1>
-            ${h.tagline ? `<p class="mv2-tag">${escapeHtml(String(h.tagline).slice(0, 96))}</p>` : ""}
-            <p class="mv2-main">พลังหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
-            <div class="mv2-hero-pills">
-              <span class="mv2-hero-pill">${escapeHtml(pillEnergy)}</span>
-              <span class="mv2-hero-pill">${escapeHtml(pillCompatHero)}</span>
-            </div>
-            ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
-          </div>
-        </div>
-      </section>
+      <div class="mv2-badge">Ener Scan · Moldavite · รายงานฉบับเต็ม</div>
+      ${media}
+      <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "ไม่มีชื่อ")}</h1>
+      ${h.tagline ? `<p class="mv2-tag">${escapeHtml(h.tagline)}</p>` : ""}
+      <p class="mv2-main">พลังหลัก · ${escapeHtml(h.mainEnergyLabel)}</p>
+      ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
     </header>
 
-    <section class="mv2-strip" aria-label="คะแนนสรุป">
+    <div class="mv2-strip" role="group" aria-label="สรุปตัวเลข">
       <div><div class="mv2-strip-k">คะแนนพลัง</div><div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
       <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
+    </div>
+
+    ${radarBlock(vm)}
+
+    <section class="mv2-card" aria-labelledby="mv2-gsum-h">
+      <h2 id="mv2-gsum-h">สรุปจากกราฟ</h2>
+      ${graphSummaryHtml}
     </section>
 
-    ${radarBlock(vm, graphSummaryHtml)}
-
     <section class="mv2-card mv2-card--owner" aria-labelledby="mv2-owner-h">
-      <h2 id="mv2-owner-h">คุณ</h2>
+      <h2 id="mv2-owner-h">โปรไฟล์เจ้าของ</h2>
       <p class="mv2-owner-zodiac">${escapeHtml(vm.ownerProfile.zodiacLabel)}</p>
       <div class="mv2-owner-chips">${traitChipsHtml}</div>
       <p class="mv2-owner-note">${escapeHtml(vm.ownerProfile.note)}</p>
     </section>
 
-    <section class="mv2-card mv2-card--int" aria-labelledby="mv2-int-h">
+    <section class="mv2-card" aria-labelledby="mv2-int-h">
       <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
-      ${interactionGaugeHtml}
+      <div class="mv2-int-rows">${interactionHtml}</div>
     </section>
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
-      <h2 id="mv2-life-h">มิติชีวิต</h2>
-      <p class="mv2-life-hint">สูง → ต่ำ</p>
-      ${lifeBarsHtml}
+      <h2 id="mv2-life-h">มิติชีวิตละเอียด</h2>
+      <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
+      ${lifeRowsHtml}
     </section>
 
-    <section class="mv2-card mv2-card--usage" aria-labelledby="mv2-use-h">
-      <h2 id="mv2-use-h">หมายเหตุ</h2>
-      <div class="mv2-usage-tight">${usageHtml}</div>
+    <section class="mv2-card" aria-labelledby="mv2-use-h">
+      <h2 id="mv2-use-h">การใช้และข้อควรระวัง</h2>
+      <ul class="mv2-owner-traits">${usageHtml}</ul>
     </section>
 
     <footer class="mv2-trust">

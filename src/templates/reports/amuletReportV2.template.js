@@ -1,7 +1,6 @@
 ﻿import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
 import { buildAmuletHtmlV2ViewModel } from "../../amulet/amuletHtmlV2.model.js";
-import { env } from "../../config/env.js";
 
 const AMULET_RADAR_R = 38;
 const AMULET_RADAR_CX = 50;
@@ -66,12 +65,12 @@ function amuletRadarAxisAlias(axisKey, fallbackLabel) {
  * @param {{ id: string, labelThai: string }} axis
  * @param {number} score
  * @param {boolean} isPeak
- * @param {boolean} isCompatAxis — “เข้ากับคุณ” axis (`alignKey`) when it differs from object peak (not 2nd object rank).
+ * @param {boolean} isSecond
  */
-function amuletRadarAxisLabelHtml(axis, score, isPeak, isCompatAxis) {
+function amuletRadarAxisLabelHtml(axis, score, isPeak, isSecond) {
   const rankCls = isPeak
     ? " mv2a-radar-lbl--top1"
-    : isCompatAxis
+    : isSecond
       ? " mv2a-radar-lbl--top2"
       : "";
   const alias = amuletRadarAxisAlias(axis.id, axis.labelThai);
@@ -165,31 +164,27 @@ function resolveAmuletHtmlTheme(payload) {
 function mainGraphBlock(vm) {
   const ownerPts = amuletRadarPolygonPoints(vm.power.owner);
   const objectPts = amuletRadarPolygonPoints(vm.power.object);
-  const alignKey = String(vm.power.alignment?.axisKey || "").trim();
   const axisLabelsHtml = vm.power.axes
     .map((ax) => {
       const isPeak = vm.power.objectPeakKey === ax.id;
-      const isCompatAxis =
-        alignKey.length > 0 &&
-        alignKey === ax.id &&
-        alignKey !== vm.power.objectPeakKey;
+      const isSecond = vm.power.objectSecondKey === ax.id;
       const score = Math.round(Number(vm.power.object[ax.id]) || 0);
-      return amuletRadarAxisLabelHtml(ax, score, isPeak, isCompatAxis);
+      return amuletRadarAxisLabelHtml(ax, score, isPeak, isSecond);
     })
     .join("");
   const peak = amuletRadarVertexForAxis(vm.power.object, vm.power.objectPeakKey);
   const peakX = peak.x.toFixed(2);
   const peakY = peak.y.toFixed(2);
   const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="var(--mv2a-radar-peak-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="var(--mv2a-radar-peak-fill)" stroke="var(--mv2a-radar-peak-stroke)" stroke-width="0.26" aria-hidden="true"><title>พลังเด่นสุดของพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
-  const alignLabelThai = String(vm.power.alignment?.labelThai || "").trim();
-  const compatMarker =
-    alignKey && alignKey !== vm.power.objectPeakKey
+  const secondKey = vm.power.objectSecondKey;
+  const secondMarker =
+    secondKey && secondKey !== vm.power.objectPeakKey
       ? (() => {
-          const p2 = amuletRadarVertexForAxis(vm.power.object, alignKey);
+          const p2 = amuletRadarVertexForAxis(vm.power.object, secondKey);
           const x2 = p2.x.toFixed(2);
           const y2 = p2.y.toFixed(2);
-          const lab = escapeHtml(alignLabelThai);
-          return `<circle cx="${x2}" cy="${y2}" r="2.6" fill="var(--mv2a-radar-peak2-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak-secondary" cx="${x2}" cy="${y2}" r="1.4" fill="var(--mv2a-radar-peak2-fill)" stroke="var(--mv2a-radar-peak2-stroke)" stroke-width="0.26" aria-hidden="true"><title>เข้ากับคุณที่สุด (จุดบนกราฟตามสูตร): ${lab}</title></circle>`;
+          const lab = escapeHtml(vm.power.objectSecondLabelThai || "");
+          return `<circle cx="${x2}" cy="${y2}" r="2.6" fill="var(--mv2a-radar-peak2-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak-secondary" cx="${x2}" cy="${y2}" r="1.4" fill="var(--mv2a-radar-peak2-fill)" stroke="var(--mv2a-radar-peak2-stroke)" stroke-width="0.26" aria-hidden="true"><title>รองจากพลังเด่น: ${lab}</title></circle>`;
         })()
       : "";
 
@@ -213,7 +208,7 @@ function mainGraphBlock(vm) {
           <g class="mv2a-radar-layer mv2a-radar-layer--amulet">
             <polygon points="${objectPts}" fill="var(--mv2a-radar-amulet-fill)" stroke="var(--mv2a-radar-amulet-stroke)" stroke-width="0.58" stroke-linejoin="round"/>
           </g>
-          <g class="mv2a-radar-layer mv2a-radar-layer--peak">${peakMarker}${compatMarker}</g>
+          <g class="mv2a-radar-layer mv2a-radar-layer--peak">${peakMarker}${secondMarker}</g>
         </svg>
         <div class="mv2a-radar-labels" aria-hidden="true">${axisLabelsHtml}</div>
       </div>
@@ -323,26 +318,10 @@ export function renderAmuletReportV2Html(payload) {
 
   const rawSocialImage = String(payload.object?.socialImageUrl || "").trim();
   const rawObjectImage = String(payload.object?.objectImageUrl || "").trim();
-  const publicTok = String(payload.publicToken || "").trim();
-  let ogImageUrl = "";
-  if (
-    env.PUBLIC_REPORT_OG_CHART_ENABLED &&
-    publicTok &&
-    /^https?:\/\//i.test(canonicalUrl)
-  ) {
-    try {
-      const base = new URL(canonicalUrl);
-      ogImageUrl = `${base.origin}/r/${encodeURIComponent(publicTok)}/og.png`;
-    } catch {
-      ogImageUrl = "";
-    }
-  }
-  if (!ogImageUrl) {
-    ogImageUrl = absoluteUrlForMeta(
-      /^https?:\/\//i.test(canonicalUrl) ? canonicalUrl : "",
-      rawSocialImage || rawObjectImage,
-    );
-  }
+  const ogImageUrl = absoluteUrlForMeta(
+    /^https?:\/\//i.test(canonicalUrl) ? canonicalUrl : "",
+    rawSocialImage || rawObjectImage,
+  );
   const ogImageTags =
     ogImageUrl !== ""
       ? `

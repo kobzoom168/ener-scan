@@ -23,8 +23,6 @@ export const AMULET_HTML_V2_USAGE_DISCLAIMER =
  *    when it does, show short `clarifierLine` `สรุปจากสแกน` only (no duplicate of mainShort; headline already shows peak).
  * 3. **Graph summary row 2** — Label “เข้ากับคุณที่สุด”; value = axis among top-two object scores that best matches
  *    the owner profile (`pickAlignKeyAmongTopTwo`).
- * 4. **Radar secondary marker (HTML)** — Vertex on the **object** polygon at `alignment.axisKey` when that axis ≠ peak;
- *    not `ord[1]` “พลังรอง” (second-highest object score). Tooltip: เข้ากับคุณตามสูตรจัดแนว ไม่ใช่แค่แกนรองจากเด่น.
  */
 
 /**

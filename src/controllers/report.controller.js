@@ -3,9 +3,6 @@ import {
   PHASE1_DEMO_PUBLIC_TOKEN,
 } from "../services/reports/reportQuery.service.js";
 import { renderReportHtmlPage } from "../services/reports/reportHtmlRenderer.service.js";
-import { normalizeReportPayloadForRender } from "../utils/reports/reportPayloadNormalize.util.js";
-import { renderAmuletOgRadarPngBuffer } from "../utils/reports/amuletOgRadarImage.util.js";
-import { env } from "../config/env.js";
 import {
   logReportPageOpen,
   safeTokenPrefix,
@@ -35,51 +32,6 @@ const UNAVAILABLE_HTML = `<!DOCTYPE html>
  */
 export function getReportDemo(req, res) {
   res.redirect(302, `/r/${PHASE1_DEMO_PUBLIC_TOKEN}`);
-}
-
-/**
- * GET /r/:publicToken/og.png — Open Graph radar preview (sacred amulet only). Gated by env.
- */
-export async function getReportOgPngByToken(req, res) {
-  if (!env.PUBLIC_REPORT_OG_CHART_ENABLED) {
-    res.status(404).type("text/plain").send("Not found");
-    return;
-  }
-  const publicToken = String(req.params?.publicToken || "").trim();
-  const { payload, accessError } = await getReportByPublicToken(publicToken);
-  if (!payload || accessError) {
-    res.status(404).type("text/plain").send("Not found");
-    return;
-  }
-  if (!payload.amuletV1 || typeof payload.amuletV1 !== "object") {
-    res.status(404).type("text/plain").send("Not found");
-    return;
-  }
-  let normalized;
-  try {
-    normalized = normalizeReportPayloadForRender(payload).payload;
-  } catch {
-    res.status(404).type("text/plain").send("Not found");
-    return;
-  }
-  try {
-    const buf = await renderAmuletOgRadarPngBuffer(normalized);
-    res
-      .status(200)
-      .type("png")
-      .set("Cache-Control", "public, max-age=86400")
-      .send(buf);
-  } catch (err) {
-    console.error(
-      JSON.stringify({
-        event: "REPORT_OG_RADAR_PNG_FAIL",
-        path: "getReportOgPngByToken",
-        publicTokenPrefix: publicToken ? `${publicToken.slice(0, 12)}…` : "",
-        message: String(err?.message || err).slice(0, 200),
-      }),
-    );
-    res.status(500).type("text/plain").send("Unavailable");
-  }
 }
 
 /**

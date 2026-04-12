@@ -43,20 +43,20 @@ function thaiNoEmDash(s) {
     .trim();
 }
 
-/** One short line per axis (mobile). */
 const V2_LIFE_BLURBS = {
-  work: "เร่งจังหวะเรื่องงาน งานค้างเริ่มขยับ",
-  relationship: "เร่งความชัด ลดความค้างคา",
-  money: "ดันเรื่องเงินให้เริ่มเป็นระบบ",
+  work:
+    "ช่วงนี้พลังไปแตะเรื่องงานก่อน เช่น บทบาท เป้าหมาย หรือสิ่งที่ค้างอยู่ ทำให้ต้องคิดใหม่ ปรับใหม่ หรือเริ่มบางอย่างเมื่อพร้อม",
+  relationship:
+    "พลังไปแตะเรื่องความสัมพันธ์ในมุมของการสื่อสารและความชัดเจน อาจทำให้ต้องคุยตรงขึ้นหรือเคลียร์ขอบเขตให้ชัด",
+  money:
+    "พลังไปแตะเรื่องการเงินในมุมของการจัดระบบและการตัดสินใจ ช่วยให้เห็นว่าจุดไหนควรปรับก่อน ไม่ใช่คำแนะนำการลงทุน",
 };
 
 const V2_USAGE_LINES = [
-  "กรอบอ่าน ไม่ใช่คำสั่ง",
-  "ไม่แทนคำแนะนำการแพทย์หรือการเงิน",
+  "เหมาะเมื่ออยากให้เรื่องที่ค้างเริ่มขยับ หรืออยากเปลี่ยนกรอบเดิมในจังหวะที่พร้อมรับความไม่แน่นอน",
+  "ถ้ารู้สึกเข้มหรือเร่งเกินไปในขณะที่ใจยังไม่พร้อมปล่อย ให้ลดจังหวะ แยกความรู้สึกให้ชัด ใช้เป็นกรอบอ่าน ไม่ใช่คำสั่ง",
+  "นี่ไม่ใช่คำแนะนำทางการแพทย์หรือการเงิน ถ้ามีปัญหาสุขภาพหรือหนี้สินรุนแรง ควรปรึกษาผู้เชี่ยวชาญ",
 ];
-
-const OWNER_NOTE_SHORT_WITH_DOB = "เทียบจากวันเกิด ↔ กราฟ";
-const OWNER_NOTE_SHORT_NO_DOB = "โปรไฟล์จำลองจากรายงาน";
 
 /**
  * @param {number} v
@@ -87,10 +87,11 @@ export function sortAxisKeysByCrystalDesc(crystal) {
  * @returns {string[]}
  */
 export function buildGraphSummaryLinesFromCrystal(crystal) {
-  const [first, second] = sortAxisKeysByCrystalDesc(crystal);
+  const [first, second, third] = sortAxisKeysByCrystalDesc(crystal);
   return [
-    `เด่น: ${AXIS_LABEL_TH[first]}`,
-    `รอง: ${AXIS_LABEL_TH[second]}`,
+    `หินช่วยเรื่อง${AXIS_LABEL_TH[first]}ให้ชัดที่สุดตอนนี้`,
+    `รองลงมาเป็น${AXIS_LABEL_TH[second]}`,
+    `เรื่อง${AXIS_LABEL_TH[third]}ค่อย ๆ ไปก็พอ ไม่ต้องเร่ง`,
   ];
 }
 
@@ -149,7 +150,7 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
     }
   }
 
-  /** Strongest crystal emphasis (single vertex highlight on radar). */
+  /** Strongest crystal emphasis (green vertex on radar). “เข้ากับคุณตามสูตร” = separate slate dot at `alignKey` in template when alignKey ≠ peak. */
   /** @type {AxisKey} */
   let crystalPeakKey = "work";
   let crystalPeakVal = -1;
@@ -169,71 +170,27 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
     rows: [
       { label: "พลังเด่น", value: AXIS_LABEL_TH[crystalOrder[0]] },
       { label: "รองลงมา", value: AXIS_LABEL_TH[crystalOrder[1]] },
+      { label: "ควรค่อย ๆ ไป", value: AXIS_LABEL_TH[crystalOrder[2]] },
     ],
   };
 
-  const interactionHeadline = "โทนกับคุณ";
-
-  /** ใกล้กันบนแกน align → เสริมแรงสูง */
-  const alignGap = Math.abs(
-    (Number(ownerAxes[alignKey]) || 0) - (Number(crystal[alignKey]) || 0),
-  );
-  const boostScore = clamp0100(100 - alignGap);
-
-  /** ช่องว่างบนแกน tension → ต้องระวังจังหวะมากขึ้น */
-  const tensionGap = Math.abs(
-    (Number(ownerAxes[tensionKey]) || 0) - (Number(crystal[tensionKey]) || 0),
-  );
-  const cautionScore = clamp0100(tensionGap);
-
-  const energyNum = Number(payload.summary?.energyScore);
-  const toneScore = Number.isFinite(energyNum)
-    ? clamp0100(energyNum * 10)
-    : clamp0100(
-        (crystal.work + crystal.relationship + crystal.money) / 3,
-      );
-
+  const interactionHeadline = "หินทำงานกับคุณอย่างไร";
   /** @type {{ kicker: string, main: string, sub: string }[]} */
   const interactionRows = [
     {
       kicker: "เสริมแรง",
-      main: `${alignLabel} · ขยับง่ายขึ้น`,
-      sub: "",
+      main: `เรื่อง${alignLabel}ขยับง่ายขึ้นในช่วงนี้`,
+      sub: "การคุย การตัดสินใจ หรือการทำให้บางเรื่องชัดขึ้น",
     },
     {
       kicker: "ระวังจังหวะ",
-      main: `${tensionLabel} · อย่าเร่ง`,
-      sub: "",
+      main: `เรื่อง${tensionLabel}อย่าเพิ่งเร่ง`,
+      sub: "แยกให้ออกว่าอะไรคือการเปลี่ยนจริง และอะไรคือแรงกดดันชั่วคราว",
     },
     {
       kicker: "โทนหิน",
-      main: "เน้นขยับ เริ่มใหม่",
-      sub: "",
-    },
-  ];
-
-  /** @type {{ key: string, label: string, score: number, main: string, sub: string }[]} */
-  const interactionGauges = [
-    {
-      key: "boost",
-      label: "เสริมแรง",
-      score: boostScore,
-      main: interactionRows[0].main,
-      sub: interactionRows[0].sub,
-    },
-    {
-      key: "caution",
-      label: "ระวังจังหวะ",
-      score: cautionScore,
-      main: interactionRows[1].main,
-      sub: interactionRows[1].sub,
-    },
-    {
-      key: "tone",
-      label: "โทนหิน",
-      score: toneScore,
-      main: interactionRows[2].main,
-      sub: interactionRows[2].sub,
+      main: "เด่นเรื่องการขยับและเริ่มใหม่",
+      sub: "ไม่ได้การันตีผลทันที แต่ไม่เหมาะกับการค้างอยู่ที่เดิม",
     },
   ];
 
@@ -246,32 +203,16 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       e && typeof e === "object" && e.score != null
         ? clamp0100(Number(e.score))
         : 0;
-    const blurb = thaiNoEmDash(V2_LIFE_BLURBS[k]).slice(0, 56);
     return {
       key: k,
       label: AXIS_LABEL_TH[k],
       score,
-      blurb,
+      blurb: V2_LIFE_BLURBS[k],
     };
   });
   lifeAreaRows.sort((a, b) => b.score - a.score);
 
-  /** ชุดเดียวกับ lifeAreaDetail.rows (เรียงสูง→ต่ำ) — ใช้ render แถบแนวนอน */
-  const lifeAreaBars = lifeAreaRows.map((r) => ({
-    key: r.key,
-    label: r.label,
-    score: r.score,
-    blurb: r.blurb,
-  }));
-
   const usageLines = V2_USAGE_LINES;
-
-  const dobPresent = Boolean(
-    String(payload.birthdateUsed || "").trim().match(/\d/),
-  );
-  const ownerNoteShort = dobPresent
-    ? OWNER_NOTE_SHORT_WITH_DOB
-    : OWNER_NOTE_SHORT_NO_DOB;
 
   const compareTargetEnergyLabel = DEFAULT_RADAR_COMPARE_TARGET_ENERGY_LABEL_MOLDAVITE;
   const radarSectionContext = {
@@ -308,21 +249,17 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
       tension: { axisKey: tensionKey, labelThai: tensionLabel },
     },
     graphSummary,
-    primaryAxis: crystalOrder[0],
-    secondaryAxis: crystalOrder[1],
     radarSectionContext,
     ownerProfile: {
-      zodiacLabel: `ราศี${ownerAxes.zodiacLabel}`,
+      zodiacLabel: `คุณเกิดราศี${ownerAxes.zodiacLabel}`,
       traitScores: ownerAxes.traitScores,
-      note: ownerNoteShort,
+      note: ownerAxes.note,
     },
     interactionSummary: {
       headline: interactionHeadline,
       rows: interactionRows,
     },
-    interactionGauges,
     lifeAreaDetail: { rows: lifeAreaRows },
-    lifeAreaBars,
     usageCaution: { lines: usageLines },
     trustNote: String(payload.trust?.trustNote || "").trim(),
     reportVersion: String(payload.reportVersion || ""),
