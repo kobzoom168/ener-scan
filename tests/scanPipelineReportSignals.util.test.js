@@ -16,6 +16,11 @@ test("mapObjectCategoryToPipelineSignals: empty -> generic", () => {
   assert.equal(s.objectFamily, "generic");
 });
 
+test("mapObjectCategoryToPipelineSignals: พระเครื่อง -> sacred_amulet (strict lane signal)", () => {
+  const s = mapObjectCategoryToPipelineSignals("พระเครื่อง");
+  assert.equal(s.objectFamily, "sacred_amulet");
+});
+
 test("countThreadedReportSignalFields: counts category + check", () => {
   const n = countThreadedReportSignalFields({
     objectCategory: "พระเครื่อง",

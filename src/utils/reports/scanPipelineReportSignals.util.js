@@ -55,7 +55,7 @@ export function mapObjectCategoryToPipelineSignals(objectCategoryThai) {
 
   if (t.includes("พระเครื่อง")) {
     return {
-      objectFamily: "generic",
+      objectFamily: "sacred_amulet",
       materialFamily: undefined,
       shapeFamily: undefined,
     };

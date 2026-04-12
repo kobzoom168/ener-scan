@@ -211,6 +211,7 @@ function emptyParsedShape() {
  * @param {"deep_scan"|"cache_classify"|"cache_persisted"|"missing"|"unspecified"} [opts.pipelineObjectCategorySource] — how category was obtained
  * @param {"vision_v1"|"cache_persisted"|"pipeline_opts"|"none"|undefined} [opts.pipelineDominantColorSource]
  * @param {object|null} [opts.geminiCrystalSubtypeResult] — optional Gemini crystal subtype pass (crystal scans only)
+ * @param {"moldavite"|"sacred_amulet"|"crystal_bracelet"|null} [opts.strictSupportedLane] — when set (Scan V2 worker), only this lane slice may attach (3-lane closed world)
  * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
  */
 export async function buildReportPayloadFromScan(opts) {
@@ -235,6 +236,7 @@ export async function buildReportPayloadFromScan(opts) {
     pipelineObjectCategorySource: pipelineObjectCategorySourceOpt = "unspecified",
     pipelineDominantColorSource: pipelineDominantColorSourceOpt,
     geminiCrystalSubtypeResult: geminiCrystalSubtypeResultOpt = null,
+    strictSupportedLane: strictSupportedLaneOpt = null,
   } = opts;
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
@@ -846,7 +848,7 @@ export async function buildReportPayloadFromScan(opts) {
       })
     : null;
 
-  const moldaviteV1 = moldaviteDetection.isMoldavite
+  let moldaviteV1 = moldaviteDetection.isMoldavite
     ? buildMoldaviteV1Slice({
         scanResultId: rid,
         detection: moldaviteDetection,
@@ -867,7 +869,7 @@ export async function buildReportPayloadFromScan(opts) {
       ? String(parsed.mainEnergy)
       : "";
 
-  const amuletV1 =
+  let amuletV1 =
     famNorm === "sacred_amulet"
       ? buildAmuletV1Slice({
           scanResultId: rid,
@@ -880,7 +882,7 @@ export async function buildReportPayloadFromScan(opts) {
   const shapeFamilyNorm = String(shapeFamilyOpt || "")
     .trim()
     .toLowerCase();
-  const crystalBraceletV1 =
+  let crystalBraceletV1 =
     famNorm === "crystal" &&
     shapeFamilyNorm === "bracelet" &&
     !moldaviteDetection.isMoldavite
@@ -900,6 +902,34 @@ export async function buildReportPayloadFromScan(opts) {
         })
       : undefined;
 
+  const strictThreeLane =
+    strictSupportedLaneOpt === "moldavite" ||
+    strictSupportedLaneOpt === "sacred_amulet" ||
+    strictSupportedLaneOpt === "crystal_bracelet";
+
+  if (strictThreeLane) {
+    if (strictSupportedLaneOpt === "moldavite") {
+      amuletV1 = undefined;
+      crystalBraceletV1 = undefined;
+    } else if (strictSupportedLaneOpt === "sacred_amulet") {
+      moldaviteV1 = undefined;
+      crystalBraceletV1 = undefined;
+    } else if (strictSupportedLaneOpt === "crystal_bracelet") {
+      moldaviteV1 = undefined;
+      amuletV1 = undefined;
+    }
+    if (!moldaviteV1 && !amuletV1 && !crystalBraceletV1) {
+      console.log(
+        JSON.stringify({
+          event: "SUPPORTED_LANE_LEGACY_PATH_BLOCKED",
+          scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+          reason: "strict_lane_payload_missing",
+          strictSupportedLane: strictSupportedLaneOpt,
+        }),
+      );
+    }
+  }
+
   /** @type {"moldavite_v1"|"sacred_amulet_v1"|"crystal_bracelet_v1"|"summary_first_default"} */
   let reportLane = "summary_first_default";
   if (moldaviteV1) reportLane = "moldavite_v1";
@@ -912,6 +942,7 @@ export async function buildReportPayloadFromScan(opts) {
       objectFamilyRaw: String(objectFamilyOpt || "").slice(0, 96),
       objectFamilyNormalized: famNorm,
       reportLane,
+      strictSupportedLane: strictSupportedLaneOpt,
       energyCopyObjectFamilyWillBe: famNorm,
     }),
   );

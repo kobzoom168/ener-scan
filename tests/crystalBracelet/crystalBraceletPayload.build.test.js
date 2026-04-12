@@ -91,6 +91,7 @@ test("buildReportPayloadFromScan: crystal + bracelet + non-Moldavite → crystal
     publicToken: "tok-cb-1",
     objectFamily: "crystal",
     shapeFamily: "bracelet",
+    strictSupportedLane: "crystal_bracelet",
     geminiCrystalSubtypeResult: {
       mode: "ok",
       moldaviteLikely: false,

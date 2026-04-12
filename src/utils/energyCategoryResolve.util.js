@@ -413,6 +413,10 @@ export function inferEnergyCategoryInferenceTrace(mainEnergy, objectFamilyRaw) {
  * `sacred_amulet` so runtime does not select the old mobile-report primary path for new scans.
  * DB rows may still use `object_family = thai_amulet`; {@link getEnergyCopyTemplateRowsBundle} expands queries.
  *
+ * **Scan V2 worker:** `generic`/unknown must not imply a user-facing lane — `resolveSupportedLaneStrict`
+ * runs before report build and rejects when no Moldavite / sacred_amulet / crystal_bracelet proof exists.
+ * This function may still map `generic` → `sacred_amulet` for DB energy-copy lookups; lane truth is enforced upstream.
+ *
  * @param {string} raw
  * @returns {string}
  */

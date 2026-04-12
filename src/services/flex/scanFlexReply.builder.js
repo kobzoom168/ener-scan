@@ -76,7 +76,7 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
 
   try {
     let flex;
-    /** @type {"moldavite_flex_v1"|"sacred_amulet_flex_v1"|"summary_first_generic"} */
+    /** @type {"moldavite_flex_v1"|"sacred_amulet_flex_v1"|"crystal_bracelet_flex_v1"|"summary_first_generic"} */
     let flexLane = "summary_first_generic";
     if (reportPayload?.moldaviteV1) {
       flexLane = "moldavite_flex_v1";
@@ -84,6 +84,9 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
     } else if (reportPayload?.amuletV1) {
       flexLane = "sacred_amulet_flex_v1";
       flex = await buildAmulet(resultText, summaryOpts);
+    } else if (reportPayload?.crystalBraceletV1) {
+      flexLane = "crystal_bracelet_flex_v1";
+      flex = await buildSummary(resultText, summaryOpts);
     } else {
       flex = await buildSummary(resultText, summaryOpts);
     }
@@ -93,6 +96,7 @@ export async function buildScanResultFlexWithFallback(options, impl = {}) {
         flexLane,
         hasMoldaviteV1: Boolean(reportPayload?.moldaviteV1),
         hasAmuletV1: Boolean(reportPayload?.amuletV1),
+        hasCrystalBraceletV1: Boolean(reportPayload?.crystalBraceletV1),
       }),
     );
     return {

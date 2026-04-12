@@ -1,6 +1,7 @@
 import {
   toBase64,
   getObjectGateReplyCandidatesForRouting,
+  getUnsupportedObjectReplyCandidates,
 } from "../../utils/webhookText.util.js";
 import {
   checkCrystalBraceletEligibility,
@@ -32,8 +33,9 @@ import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
 import { mergeExternalHintsIntoWordingContext } from "../../utils/webEnrichmentMerge.util.js";
 import { mapObjectCategoryToPipelineSignals } from "../../utils/reports/scanPipelineReportSignals.util.js";
-import { normalizeObjectFamilyForEnergyCopy } from "../../utils/energyCategoryResolve.util.js";
 import { classifyCrystalSubtypeWithGemini } from "../../integrations/gemini/crystalSubtypeClassifier.service.js";
+import { buildGptCrystalSubtypeInferenceText } from "../../moldavite/moldaviteDetect.util.js";
+import { resolveSupportedLaneStrict } from "../../utils/reports/supportedLaneStrict.util.js";
 import { buildPublicReportUrl } from "../reports/reportLink.service.js";
 import { generatePublicToken } from "../../utils/reports/reportToken.util.js";
 import { insertScanPublicReport } from "../../stores/scanPublicReports.db.js";
@@ -399,12 +401,94 @@ export async function processScanJob(workerId, jobRow) {
     },
   );
 
+  const gptSubtypeInferenceText = buildGptCrystalSubtypeInferenceText({
+    overview: "",
+    mainEnergy:
+      parsed?.mainEnergy && parsed.mainEnergy !== "-"
+        ? String(parsed.mainEnergy).trim()
+        : "",
+    fitReason: "",
+    pipelineObjectCategory: scanOut?.objectCategory ?? null,
+  });
+
+  /** @type {object|null} */
+  let geminiCrystalSubtypeResult = null;
+  const crystalContextForGemini =
+    String(catSig.objectFamily || "").trim().toLowerCase() === "crystal" ||
+    braceletEligibility.eligible;
+  if (crystalContextForGemini) {
+    geminiCrystalSubtypeResult = await classifyCrystalSubtypeWithGemini({
+      imageBuffer,
+      mimeType: "image/jpeg",
+      scanResultIdPrefix,
+    });
+  }
+
+  const strictLaneRes = resolveSupportedLaneStrict({
+    baseGateResult: objectCheck,
+    catSig,
+    braceletEligibility,
+    geminiCrystalSubtypeResult,
+    resultText,
+    dominantColorNormalized: scanOut?.dominantColorSlug ?? null,
+    pipelineObjectCategory: scanOut?.objectCategory ?? null,
+    pipelineObjectCategorySource: scanOut?.objectCategorySource ?? "unspecified",
+    gptSubtypeInferenceText,
+    scanResultIdPrefix,
+  });
+
+  if (strictLaneRes.lane === "unsupported") {
+    logUnsupportedObjectRejected({
+      path: "worker_scan",
+      userId: lineUserId,
+      flowVersion: null,
+      messageId: null,
+      objectCheckResult: `supported_lane_unresolved:${strictLaneRes.reason}`,
+    });
+    const c = getUnsupportedObjectReplyCandidates();
+    await failJob(
+      jobId,
+      "supported_lane_unresolved",
+      String(strictLaneRes.reason),
+      lineUserId,
+      workerId,
+    );
+    await insertOutboundMessage({
+      line_user_id: lineUserId,
+      kind: "scan_result",
+      priority: OUTBOUND_PRIORITY.scan_result,
+      related_job_id: jobId,
+      payload_json: {
+        error: true,
+        rejectReason: "supported_lane_unresolved",
+        objectCheckResult: `supported_lane_unresolved:${strictLaneRes.reason}`,
+        text: c[0] || "ขออภัยครับ ไม่สามารถอ่านภาพนี้ได้",
+        accessSource: job.access_source,
+        appUserId,
+      },
+      status: "queued",
+    });
+    await updateScanRequestStatus(scanRequestId, "failed");
+    return;
+  }
+
+  /** @type {"moldavite"|"sacred_amulet"|"crystal_bracelet"} */
+  const strictSupportedLane = strictLaneRes.lane;
+
   let reportObjectFamily = catSig.objectFamily;
   let reportShapeFamily = catSig.shapeFamily;
-  if (braceletEligibility.eligible) {
+  if (strictSupportedLane === "moldavite") {
+    reportObjectFamily = "crystal";
+    reportShapeFamily = undefined;
+  } else if (strictSupportedLane === "sacred_amulet") {
+    reportObjectFamily = "sacred_amulet";
+  } else if (strictSupportedLane === "crystal_bracelet") {
     reportObjectFamily = "crystal";
     reportShapeFamily = "bracelet";
-  } else if (
+  }
+
+  if (
+    strictSupportedLane !== "crystal_bracelet" &&
     String(catSig.shapeFamily || "").trim().toLowerCase() === "bracelet"
   ) {
     reportShapeFamily = undefined;
@@ -448,16 +532,6 @@ export async function processScanJob(workerId, jobRow) {
       );
     }
 
-    /** @type {object|null} */
-    let geminiCrystalSubtypeResult = null;
-    if (normalizeObjectFamilyForEnergyCopy(reportObjectFamily) === "crystal") {
-      geminiCrystalSubtypeResult = await classifyCrystalSubtypeWithGemini({
-        imageBuffer,
-        mimeType: "image/jpeg",
-        scanResultIdPrefix,
-      });
-    }
-
     const reportPayloadBuilt = await buildReportPayloadFromScan({
       resultText,
       scanResultId: legacyScanResultId,
@@ -483,6 +557,7 @@ export async function processScanJob(workerId, jobRow) {
       pipelineObjectCategorySource:
         scanOut?.objectCategorySource ?? "unspecified",
       geminiCrystalSubtypeResult,
+      strictSupportedLane,
     });
 
     let reportPayload = reportPayloadBuilt;
