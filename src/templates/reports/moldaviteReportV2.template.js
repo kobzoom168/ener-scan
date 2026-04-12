@@ -439,7 +439,7 @@ export function renderMoldaviteReportV2Html(payload) {
       -webkit-font-smoothing: antialiased;
     }
     .mv2-wrap { max-width: 26.5rem; margin: 0 auto; padding: 1.2rem 1rem 3rem; }
-    .mv2-hero { margin-bottom: 0.68rem; }
+    .mv2-hero { margin-bottom: 0.2rem; }
     .mv2-badge {
       font-size: 0.58rem;
       font-weight: 500;
@@ -538,7 +538,7 @@ export function renderMoldaviteReportV2Html(payload) {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 0.35rem;
-      margin: 0.22rem 0 0.62rem;
+      margin: 0.45rem 0 0.72rem;
       text-align: center;
     }
     .mv2-strip > div {
@@ -1130,13 +1130,13 @@ export function renderMoldaviteReportV2Html(payload) {
       </section>
     </header>
 
-    ${radarBlock(vm, graphSummaryHtml)}
-
-    <div class="mv2-strip" role="group" aria-label="สรุปตัวเลข">
+    <section class="mv2-strip" aria-label="คะแนนสรุป">
       <div><div class="mv2-strip-k">คะแนนพลัง</div><div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
       <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
-    </div>
+    </section>
+
+    ${radarBlock(vm, graphSummaryHtml)}
 
     <section class="mv2-card mv2-card--owner" aria-labelledby="mv2-owner-h">
       <h2 id="mv2-owner-h">คุณ</h2>
