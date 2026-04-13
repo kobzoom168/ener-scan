@@ -36,16 +36,53 @@ function cbAxisLabelThai(axes, key) {
 }
 
 /**
- * Radar (spider) chart — มิติพลัง 7 แกน สเกล 0–100
+ * Legend rows sorted by score DESC (same ordering as former ring chart).
+ * @param {Record<string, unknown>} axes
+ */
+function buildCbRadarLegendHtml(axes) {
+  /** @type {Record<string, number>} */
+  const axisScores = {};
+  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const e = axes[k];
+    const sc =
+      e && typeof e === "object" && e.score != null && Number.isFinite(Number(e.score))
+        ? Math.max(0, Math.min(100, Math.round(Number(e.score))))
+        : 0;
+    axisScores[k] = sc;
+  }
+  const sorted = [...CRYSTAL_BRACELET_AXIS_ORDER].sort((a, b) => {
+    const d = axisScores[b] - axisScores[a];
+    if (d !== 0) return d;
+    return CRYSTAL_BRACELET_AXIS_ORDER.indexOf(a) - CRYSTAL_BRACELET_AXIS_ORDER.indexOf(b);
+  });
+  return sorted
+    .map((key) => {
+      const color = CB_RING_COLORS[key] || "#0284c7";
+      const lab = escapeHtml(cbAxisLabelThai(axes, key));
+      const sc = axisScores[key];
+      return `<div class="cb2-radar-leg-row">
+  <span class="cb2-radar-dot" style="background:${color}" aria-hidden="true"></span>
+  <span class="cb2-radar-leg-label">${lab}</span>
+  <span class="cb2-radar-leg-score" style="color:${color}">${sc}%</span>
+</div>`;
+    })
+    .join("");
+}
+
+/**
+ * Radar (spider) heptagon — มิติพลัง 7 แกน สเกล 0–100
  * @param {Record<string, unknown>} axes
  */
 function createCbRadarSection(axes) {
   const radarSvg = buildCrystalBraceletRadarChartSvg(axes);
+  const legendHtml = buildCbRadarLegendHtml(axes);
   return `<section class="cb2-card cb2-radar-card" aria-labelledby="cb2-radar-h">
     <h2 id="cb2-radar-h">มิติพลังกำไล</h2>
-    <p class="cb2-radar-scale-hint">สเกล 0–100</p>
     <div class="cb2-radar-wrap" role="img" aria-label="มิติพลังกำไล แผนภูมิเรดาร์">
       ${radarSvg}
+    </div>
+    <div class="cb2-radar-legend">
+      ${legendHtml}
     </div>
   </section>`;
 }
@@ -262,9 +299,12 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
     /* ── Radar chart ── */
     .cb2-radar-card { }
-    .cb2-radar-scale-hint { font-size: 0.65rem; color: var(--cb2-muted); margin: -0.35rem 0 0.5rem 0.5rem; }
-    .cb2-radar-wrap { width: 100%; max-width: 19rem; margin: 0 auto; }
-    .cb2-radar-svg { width: 100%; height: auto; display: block; }
+    .cb2-radar-wrap { display: flex; justify-content: center; margin-bottom: 0.75rem; }
+    .cb2-radar-legend { display: flex; flex-direction: column; gap: 0.45rem; }
+    .cb2-radar-leg-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; }
+    .cb2-radar-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .cb2-radar-leg-label { flex: 1; color: #8b949e; font-size: 0.76rem; }
+    .cb2-radar-leg-score { font-weight: 700; font-variant-numeric: tabular-nums; }
 
     /* ── Axis bars ── */
     .cb2-axis-row { display: flex; align-items: center; gap: 0.45rem; margin: 0.4rem 0; font-size: 0.78rem; }
