@@ -277,7 +277,10 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
     /* ── Header ── */
     .cb2-badge { font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cb2-accent); margin-bottom: 0.6rem; font-weight: 600; }
+    .cb2-header-row { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.25rem; }
+    .cb2-header-text { flex: 1; min-width: 0; }
     .cb2-hero-img { width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: #21262d; margin-bottom: 0.85rem; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    .cb2-header-row .cb2-hero-img { width: 88px; height: 88px; aspect-ratio: 1 / 1; border-radius: 12px; flex-shrink: 0; margin-bottom: 0; }
     .cb2-hero-img img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
     .cb2-h1 { font-size: 1.4rem; font-weight: 800; margin: 0 0 0.2rem; line-height: 1.3; color: #f0f6fc; letter-spacing: -0.01em; }
     .cb2-tag { font-size: 0.78rem; color: var(--cb2-muted); margin: 0 0 0.3rem; }
@@ -371,11 +374,15 @@ export function renderCrystalBraceletReportV2Html(payload) {
   <div class="cb2-wrap">
     <header>
       <div class="cb2-badge">Ener Scan · กำไลหินคริสตัล · รายงานฉบับเต็ม</div>
-      ${heroImg}
-      <h1 class="cb2-h1">${escapeHtml(headline)}</h1>
-      <p class="cb2-tag">${escapeHtml(tagline)}</p>
-      <p class="cb2-main">พลังหลัก · ${escapeHtml(mainShort)}</p>
-      ${generatedAt ? `<p class="cb2-date">${escapeHtml(generatedAt)}</p>` : ""}
+      <div class="cb2-header-row">
+        <div class="cb2-header-text">
+          <h1 class="cb2-h1">${escapeHtml(headline)}</h1>
+          <p class="cb2-tag">${escapeHtml(tagline)}</p>
+          <p class="cb2-main">พลังหลัก · ${escapeHtml(mainShort)}</p>
+          ${generatedAt ? `<p class="cb2-date">${escapeHtml(generatedAt)}</p>` : ""}
+        </div>
+        ${heroImg}
+      </div>
     </header>
 
     <section class="cb2-strip" aria-label="คะแนนสรุป">
