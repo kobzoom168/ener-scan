@@ -165,21 +165,6 @@ function resolveCrystalBraceletGraphAlignAxisKey(cb, stoneScores, ownerScores) {
 }
 
 /**
- * @param {Record<string, number>} stoneScores
- * @param {Record<string, number>} ownerScores
- * @param {string} alignAxisKey
- */
-function computeCrystalBraceletAlignPct(
-  stoneScores,
-  ownerScores,
-  alignAxisKey,
-) {
-  const s = Math.max(0, Math.min(100, Math.round(Number(stoneScores[alignAxisKey]) || 0)));
-  const o = Math.max(0, Math.min(100, Math.round(Number(ownerScores[alignAxisKey]) || 0)));
-  return Math.max(0, Math.min(100, Math.round(100 - Math.abs(s - o))));
-}
-
-/**
  * @param {Record<string, unknown>} axes
  * @param {string} key
  */
@@ -303,7 +288,7 @@ function createCbRadarSection(axes, ownerScores) {
 }
 
 /**
- * สรุปจากกราฟ — แถว 1 พลังเด่น (คะแนนกำไลแกนหลัก) · แถว 2 เข้ากับคุณ (ความใกล้เคียงแกน align)
+ * สรุปจากกราฟ — แถว 1 พลังเด่น (คะแนนกำไลแกนหลัก) · แถว 2 เข้ากับคุณ (คะแนนกำไลที่แกน align ตามป้ายเรดาร์)
  * @param {Record<string, unknown>} axes
  * @param {string} primaryAxis
  * @param {Record<string, number>} stoneScores
@@ -317,11 +302,12 @@ function buildCrystalBraceletGraphSummaryBarsHtml(
   ownerScores,
   alignAxisKey,
 ) {
+  void ownerScores;
   const peakPct = Math.max(0, Math.min(100, stoneScores[primaryAxis] ?? 0));
-  const alignPct = computeCrystalBraceletAlignPct(
-    stoneScores,
-    ownerScores,
-    alignAxisKey,
+  /* Bar value = bracelet score on align axis (matches radar label on that spoke) */
+  const alignDisplayPct = Math.max(
+    0,
+    Math.min(100, Math.round(Number(stoneScores[alignAxisKey]) || 0)),
   );
   const peakName = cbAxisLabelThai(axes, primaryAxis);
   const alignName = cbAxisLabelThai(axes, alignAxisKey);
@@ -361,7 +347,7 @@ ${row(
     "เข้ากับคุณ",
     `เข้ากับคุณที่สุด ${alignName}`,
     cbGraphSummarySubText(alignAxisKey, "align"),
-    alignPct,
+    alignDisplayPct,
     alignColor,
     "",
   )}
@@ -430,7 +416,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
   const imgRaw = String(payload?.object?.objectImageUrl || "").trim();
   const heroImg =
     /^https:\/\//i.test(imgRaw)
-      ? `<div class="cb2-hero-stack"><div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div><span class="cb2-hero-cap">${escapeHtml(peakLabelThai)}</span></div>`
+      ? `<div class="cb2-hero-stack"><div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div></div>`
       : "";
 
   const blurbs = hr.axisBlurbs && typeof hr.axisBlurbs === "object" ? hr.axisBlurbs : {};
@@ -501,7 +487,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-header-row { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.25rem; }
     .cb2-header-text { flex: 1; min-width: 0; }
     .cb2-hero-stack { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex-shrink: 0; }
-    .cb2-hero-cap { font-size: 0.65rem; font-weight: 700; color: rgba(255,255,255,0.92); letter-spacing: 0.02em; }
     .cb2-hero-img { width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: #21262d; margin-bottom: 0.85rem; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
     .cb2-header-row .cb2-hero-img { width: 88px; height: 88px; aspect-ratio: 1 / 1; border-radius: 12px; flex-shrink: 0; margin-bottom: 0; }
     .cb2-hero-img img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
@@ -678,15 +663,27 @@ export function renderCrystalBraceletReportV2Html(payload) {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.38; }
     }
+    @keyframes cb2-radar-align-pulse {
+      0%, 100% { opacity: 1; filter: brightness(1.15); }
+      50% { opacity: 0.5; filter: brightness(0.85); }
+    }
     .cb2-radar-lbl--blink {
       animation: cb2-radar-blink 1.1s ease-in-out infinite;
+    }
+    .cb2-radar-lbl--align-pulse {
+      animation: cb2-radar-align-pulse 0.95s ease-in-out infinite;
     }
     .cb2-radar-svg .cb2-radar-blink {
       animation: cb2-radar-blink 1.1s ease-in-out infinite;
     }
+    .cb2-radar-svg .cb2-radar-align-marker {
+      animation: cb2-radar-align-pulse 0.95s ease-in-out infinite;
+    }
     @media (prefers-reduced-motion: reduce) {
       .cb2-radar-lbl--blink,
-      .cb2-radar-svg .cb2-radar-blink { animation: none; opacity: 1; }
+      .cb2-radar-lbl--align-pulse,
+      .cb2-radar-svg .cb2-radar-blink,
+      .cb2-radar-svg .cb2-radar-align-marker { animation: none !important; opacity: 1 !important; filter: none !important; }
     }
     .cb2-radar-key {
       font-size: 0.62rem;
