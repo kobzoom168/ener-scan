@@ -366,6 +366,20 @@ export function renderCrystalBraceletReportV2Html(payload) {
     /* แกน “เข้ากับคุณที่สุด” (min |owner−stone|) — เทียบจุดเทาใน SVG */
     .cb2-radar-lbl--align { color: #94a3b8; }
     .cb2-radar-lbl--align .cb2-radar-lbl-n { color: #cbd5e1; }
+    @keyframes cb2-radar-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.38; }
+    }
+    .cb2-radar-lbl--blink {
+      animation: cb2-radar-blink 1.1s ease-in-out infinite;
+    }
+    .cb2-radar-svg .cb2-radar-blink {
+      animation: cb2-radar-blink 1.1s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cb2-radar-lbl--blink,
+      .cb2-radar-svg .cb2-radar-blink { animation: none; opacity: 1; }
+    }
     .cb2-radar-key {
       font-size: 0.62rem;
       color: var(--cb2-muted);

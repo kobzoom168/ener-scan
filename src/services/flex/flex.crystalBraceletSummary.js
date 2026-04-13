@@ -343,7 +343,8 @@ function compatPercentAndBand(reportPayload, fallbackCompat) {
   const p = reportPayload?.summary?.compatibilityPercent;
   const band =
     String(reportPayload?.summary?.compatibilityBand || "").trim() ||
-    String(reportPayload?.compatibility?.band || "").trim();
+    String(reportPayload?.compatibility?.band || "").trim() ||
+    String(reportPayload?.crystalBraceletV1?.ownerFit?.band || "").trim();
   if (p != null && Number.isFinite(Number(p))) {
     return { pctStr: `${Math.round(Number(p))}%`, bandStr: band };
   }

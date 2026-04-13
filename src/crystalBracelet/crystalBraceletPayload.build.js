@@ -6,8 +6,8 @@ import {
 } from "./crystalBraceletScores.util.js";
 
 /**
- * @param {string} primary
- * @param {string} secondary
+ * @param {string} primary — พีคพลังกำไล (เดียวกับเรดาร์/HTML)
+ * @param {string} alignAxis — แกนเข้ากันสุด (min |จังหวะผู้สวม − พลังกำไล|)
  * @param {Record<string, { key: string, score: number, labelThai: string }>} axes
  * @param {{
  *   headline: string,
@@ -16,13 +16,16 @@ import {
  *   ownerFitBand?: string|null,
  * }} surface
  */
-function buildCrystalBraceletFlexSurfaceCopy(primary, secondary, axes, surface) {
+function buildCrystalBraceletFlexSurfaceCopy(primary, alignAxis, axes, surface) {
   const primaryLabel =
     String(axes[primary]?.labelThai || "").trim() || "งาน";
-  const secondaryLabel =
-    String(axes[secondary]?.labelThai || "").trim() || "โอกาส";
+  const alignLabel =
+    String(axes[alignAxis]?.labelThai || "").trim() || "งาน";
 
-  const fitLine = `ตอนนี้เด่นสุด: ${primaryLabel} → ${secondaryLabel}`;
+  const fitLine =
+    primary === alignAxis
+      ? `ตอนนี้เด่นสุดที่ ${primaryLabel}`
+      : `ตอนนี้เด่นสุดที่ ${primaryLabel} · เข้ากันสุดที่ ${alignLabel}`;
   const bullets = [];
   const ctaLabel = "ดูรายงานพลังของกำไลเส้นนี้";
 
@@ -130,18 +133,6 @@ export function buildCrystalBraceletV1Slice({
     "พลังรวมของกำไล";
   const tagline = "กำไลหินคริสตัล · อ่านจากพลังรวม";
 
-  const flexSurface = buildCrystalBraceletFlexSurfaceCopy(
-    scores.primaryAxis,
-    scores.secondaryAxis,
-    scores.axes,
-    {
-      headline,
-      mainEnergyShort,
-      tagline,
-      ownerFitBand: scores.ownerFit?.band ?? null,
-    },
-  );
-
   /** @type {Record<string, number>} */
   const stoneScoresMap = {};
   for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
@@ -158,6 +149,18 @@ export function buildCrystalBraceletV1Slice({
   const alignAxis = computeCrystalBraceletAlignmentAxisKey(
     stoneScoresMap,
     ownerAxisForAlign,
+  );
+
+  const flexSurface = buildCrystalBraceletFlexSurfaceCopy(
+    scores.primaryAxis,
+    alignAxis,
+    scores.axes,
+    {
+      headline,
+      mainEnergyShort,
+      tagline,
+      ownerFitBand: scores.ownerFit?.band ?? null,
+    },
   );
 
   const htmlReport = buildCrystalBraceletHtmlReport(

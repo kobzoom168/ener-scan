@@ -118,8 +118,10 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
   const peakV = axisScores[peakKey] / 100;
   const pxf = (SVG_CX + Math.cos(peakAng) * peakV * SVG_R).toFixed(2);
   const pyf = (SVG_CY + Math.sin(peakAng) * peakV * SVG_R).toFixed(2);
-  const stonePeakMarker = `<circle cx="${pxf}" cy="${pyf}" r="3.2" fill="none" stroke="rgba(96,165,250,0.45)" stroke-width="0.8"/>
-  <circle cx="${pxf}" cy="${pyf}" r="1.6" fill="${STONE_DOT_FILL}"/>`;
+  const stonePeakMarker = `<g class="cb2-radar-blink">
+  <circle cx="${pxf}" cy="${pyf}" r="3.2" fill="none" stroke="rgba(96,165,250,0.45)" stroke-width="0.8"/>
+  <circle cx="${pxf}" cy="${pyf}" r="1.6" fill="${STONE_DOT_FILL}"/>
+</g>`;
 
   let stoneAlignMarker = "";
   if (alignKey !== peakKey) {
@@ -128,8 +130,10 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
     const aV = axisScores[alignKey] / 100;
     const axf = (SVG_CX + Math.cos(aAng) * aV * SVG_R).toFixed(2);
     const ayf = (SVG_CY + Math.sin(aAng) * aV * SVG_R).toFixed(2);
-    stoneAlignMarker = `<circle cx="${axf}" cy="${ayf}" r="2.2" fill="none" stroke="${ALIGN_DOT_RING}" stroke-width="0.7"/>
-  <circle class="cb2-radar-align-dot" cx="${axf}" cy="${ayf}" r="1.05" fill="${ALIGN_DOT_FILL}"/>`;
+    stoneAlignMarker = `<g class="cb2-radar-blink">
+  <circle cx="${axf}" cy="${ayf}" r="2.2" fill="none" stroke="${ALIGN_DOT_RING}" stroke-width="0.7"/>
+  <circle cx="${axf}" cy="${ayf}" r="1.05" fill="${ALIGN_DOT_FILL}"/>
+</g>`;
   }
 
   /* จุดบนกราฟเฉพาะบนเส้นพลังกำไล (เทียบพระเครื่อง: พีควัตถุ + จุดเข้ากัน — ไม่มีจุดพีคเจ้าของบน SVG) */
@@ -154,7 +158,8 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
         })
         .join(";");
       const isAlign = k === alignKey && alignKey !== peakKey;
-      const cls = `cb2-radar-lbl cb2-radar-lbl--${k}${isPeak ? " cb2-radar-lbl--peak" : ""}${isAlign ? " cb2-radar-lbl--align" : ""}`;
+      const blinkLbl = k === peakKey || k === alignKey;
+      const cls = `cb2-radar-lbl cb2-radar-lbl--${k}${isPeak ? " cb2-radar-lbl--peak" : ""}${isAlign ? " cb2-radar-lbl--align" : ""}${blinkLbl ? " cb2-radar-lbl--blink" : ""}`;
       const label = esc(String(CRYSTAL_BRACELET_AXIS_LABEL_THAI[k] || k));
       const score = esc(String(axisScores[k]));
       return `<span class="${cls}" style="${styleStr}"><span class="cb2-radar-lbl-t">${label}</span><span class="cb2-radar-lbl-n">${score}%</span></span>`;
