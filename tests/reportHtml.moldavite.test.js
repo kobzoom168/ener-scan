@@ -87,7 +87,6 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes('class="mv2-gsum-rows"'));
   assert.ok(html.includes('class="mv2-gsum-k">พลังเด่น</span>'));
   assert.ok(html.includes('class="mv2-gsum-k">เข้ากับคุณที่สุด</span>'));
-  assert.ok(html.includes('class="mv2-gsum-k">มุมที่ควรค่อย ๆ ไป</span>'));
   assert.ok(html.includes('class="mv2-gsum-v">งาน</span>'));
   assert.ok(html.includes('class="mv2-gsum-v">การเงิน</span>'));
   assert.ok(!html.includes("หินช่วยเรื่อง"));

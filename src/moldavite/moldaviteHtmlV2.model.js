@@ -241,7 +241,6 @@ export function buildMoldaviteHtmlV2ViewModel(payload) {
     rows: [
       { label: "พลังเด่น", value: AXIS_LABEL_TH[crystalPeakKey] },
       { label: "เข้ากับคุณที่สุด", value: AXIS_LABEL_TH[alignKey] },
-      { label: "มุมที่ควรค่อย ๆ ไป", value: AXIS_LABEL_TH[tensionKey] },
     ],
   };
 

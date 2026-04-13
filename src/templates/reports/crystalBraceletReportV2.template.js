@@ -89,24 +89,42 @@ function createCbRadarSection(axes, payload) {
   </section>`;
 }
 
-const GRAPH_SUMMARY_ROW_LABELS = ["พลังเด่น", "เข้ากับคุณที่สุด", "มุมที่ควรค่อยๆ ไป"];
-
 /**
- * @param {unknown[]} graphSummaryRows
+ * สรุปจากกราฟ — หลอดพลังตามค่าเดียวกับแกนบนเรดาร์ (พีค / เข้ากันสุด)
+ * @param {Record<string, unknown>} axes
+ * @param {string} primaryAxis
+ * @param {string} alignAxisKey
+ * @param {Record<string, number>} stoneScores
  */
-function buildGraphSummaryRowsHtml(graphSummaryRows) {
-  const lines = Array.isArray(graphSummaryRows)
-    ? graphSummaryRows.map((t) => String(t || "").trim()).filter(Boolean)
-    : [];
-  if (!lines.length) return `<p class="cb2-para">—</p>`;
-  const rowsHtml = lines
-    .map((value, i) => {
-      const label = GRAPH_SUMMARY_ROW_LABELS[i] ?? `สรุป ${i + 1}`;
-      const lead = i === 0 ? " cb2-gsum-row--lead" : "";
-      return `<div class="cb2-gsum-row${lead}"><span class="cb2-gsum-k">${escapeHtml(label)}</span><span class="cb2-gsum-v">${escapeHtml(value)}</span></div>`;
-    })
-    .join("");
-  return `<div class="cb2-gsum-rows">${rowsHtml}</div>`;
+function buildCrystalBraceletGraphSummaryBarsHtml(
+  axes,
+  primaryAxis,
+  alignAxisKey,
+  stoneScores,
+) {
+  const peakPct = Math.max(0, Math.min(100, stoneScores[primaryAxis] ?? 0));
+  const alignPct = Math.max(0, Math.min(100, stoneScores[alignAxisKey] ?? 0));
+  const peakName = cbAxisLabelThai(axes, primaryAxis);
+  const alignName = cbAxisLabelThai(axes, alignAxisKey);
+  const peakColor = CB_RING_COLORS[primaryAxis] || "#38bdf8";
+  const alignColor = CB_RING_COLORS[alignAxisKey] || "#f97316";
+
+  const row = (rowLabel, descText, pct, axisColor, leadClass) =>
+    `<div class="cb2-gsum-bar-row${leadClass}">
+  <span class="cb2-gsum-bar-k">${escapeHtml(rowLabel)}</span>
+  <div class="cb2-gsum-bar-main">
+    <p class="cb2-gsum-bar-desc" style="color:${axisColor}">${escapeHtml(descText)}</p>
+    <div class="cb2-gsum-bar-line">
+      <div class="cb2-gsum-bar-track" role="presentation"><span class="cb2-gsum-bar-fill" style="width:${pct}%;background:${axisColor}"></span></div>
+      <span class="cb2-gsum-bar-num">${escapeHtml(String(pct))}</span>
+    </div>
+  </div>
+</div>`;
+
+  return `<div class="cb2-gsum-bars">
+${row("พลังเด่น", `เด่นสุดที่ ${peakName}`, peakPct, peakColor, " cb2-gsum-bar-row--lead")}
+${row("เข้ากับคุณที่สุด", `เข้ากันสุดที่ ${alignName}`, alignPct, alignColor, "")}
+</div>`;
 }
 
 /**
@@ -189,11 +207,12 @@ export function renderCrystalBraceletReportV2Html(payload) {
     ownerScoresForGraph,
   );
 
-  const graphSummaryLines = [
-    `เด่นสุดที่ ${cbAxisLabelThai(axes, primaryAxis)}`,
-    `เข้ากันสุดที่ ${cbAxisLabelThai(axes, alignAxisKey)}`,
-  ];
-  const graphSummaryHtml = buildGraphSummaryRowsHtml(graphSummaryLines);
+  const graphSummaryHtml = buildCrystalBraceletGraphSummaryBarsHtml(
+    axes,
+    primaryAxis,
+    alignAxisKey,
+    stoneScores,
+  );
 
   const imgRaw = String(payload?.object?.objectImageUrl || "").trim();
   const heroImg =
@@ -395,24 +414,50 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-axis-fill { display: block; height: 100%; border-radius: 6px; transition: width 0.3s; }
     .cb2-axis-s { flex: 0 0 2.2rem; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.78rem; }
 
-    /* ── Graph summary rows ── */
-    .cb2-gsum-rows { display: flex; flex-direction: column; gap: 0.45rem; }
-    .cb2-gsum-row {
+    /* ── Graph summary: หลอดพลัง (ค่าตามแกนพีค / แกนเข้ากัน) ── */
+    .cb2-gsum-bars { display: flex; flex-direction: column; gap: 0.75rem; }
+    .cb2-gsum-bar-row {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.75rem;
-      padding: 0.35rem 0;
-      border-radius: 0;
-      background: transparent;
-      border: none;
+      align-items: flex-start;
+      gap: 0.65rem;
+      padding: 0.35rem 0 0.5rem;
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .cb2-gsum-row:last-child { border-bottom: none; }
-    .cb2-gsum-row--lead { padding: 0.4rem 0; border-bottom-color: rgba(56,189,248,0.22); }
-    .cb2-gsum-k { font-size: 0.7rem; font-weight: 500; color: var(--cb2-gsum-k); white-space: nowrap; flex-shrink: 0; }
-    .cb2-gsum-v { font-size: 0.88rem; font-weight: 800; color: var(--cb2-gsum-v); text-align: right; flex: 1; min-width: 0; line-height: 1.25; }
-    .cb2-gsum-row--lead .cb2-gsum-v { color: var(--cb2-gsum-v-lead); }
+    .cb2-gsum-bar-row:last-child { border-bottom: none; }
+    .cb2-gsum-bar-row--lead { border-bottom-color: rgba(56,189,248,0.18); }
+    .cb2-gsum-bar-k {
+      flex: 0 0 5.5rem;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--cb2-gsum-k);
+      line-height: 1.35;
+      padding-top: 0.1rem;
+    }
+    .cb2-gsum-bar-main { flex: 1; min-width: 0; }
+    .cb2-gsum-bar-desc {
+      margin: 0 0 0.38rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .cb2-gsum-bar-line { display: flex; align-items: center; gap: 0.45rem; }
+    .cb2-gsum-bar-track {
+      flex: 1;
+      height: 8px;
+      border-radius: 9999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+      min-width: 0;
+    }
+    .cb2-gsum-bar-fill { display: block; height: 100%; border-radius: 9999px; transition: width 0.25s ease; }
+    .cb2-gsum-bar-num {
+      flex: 0 0 1.6rem;
+      font-size: 0.82rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #e6edf3;
+      text-align: end;
+    }
 
     /* ── Life area cards ── */
     .cb2-life-card { border-top: 1px solid rgba(255,255,255,0.06); padding: 0.8rem 0 0; margin-top: 0.7rem; }
