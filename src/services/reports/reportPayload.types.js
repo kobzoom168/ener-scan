@@ -48,6 +48,7 @@
  *
  * @typedef {Object} ReportCrystalBraceletV1
  * @property {string} version — e.g. "1"
+ * @property {number|null} [displayCompatibilityPercent] — same as `summary.compatibilityPercent` from builder; SSOT for user-facing fit % (never show `ownerFit.score` as compatibility)
  * @property {"deterministic_v1"} scoringMode
  * @property {{ reason: string, matchedSignals: string[] }} detection
  * @property {"crystal_bracelet"} lane
@@ -55,7 +56,7 @@
  * @property {Record<string, { key: string, score: number, labelThai: string }>} axes
  * @property {string} primaryAxis
  * @property {string} secondaryAxis
- * @property {{ score: number|null, band: string|null, reason?: string|null }} [ownerFit]
+ * @property {{ score: number|null, band: string|null, reason?: string|null }} [ownerFit] — internal rhythm weight from deterministic blend; **not** the displayed compatibility % (use `displayCompatibilityPercent` / `summary.compatibilityPercent`)
  * @property {{
  *   version?: "1",
  *   identityPhrase: string,

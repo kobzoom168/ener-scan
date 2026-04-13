@@ -2,6 +2,7 @@ import { fnv1a32 } from "../moldavite/moldaviteScores.util.js";
 import {
   CRYSTAL_BRACELET_AXIS_ORDER,
   CRYSTAL_BRACELET_AXIS_LABEL_THAI,
+  crystalBraceletCompatibilityBandFromPercent,
 } from "./crystalBraceletScores.util.js";
 
 /**
@@ -11,13 +12,13 @@ import {
  *
  * @param {{
  *   birthdateUsed?: string|null,
- *   ownerFitScore?: number|null,
+ *   displayCompatibilityPercent?: number|null,
  *   stableSeed?: string,
  *   stoneScores: Record<string, number>,
  *   ownerAxisScores: Record<string, number>,
  *   primaryAxis: string,
  *   alignAxisKey: string,
- * }} input
+ * }} input — `displayCompatibilityPercent` must match `summary.compatibilityPercent` (SSOT); do not pass internal `ownerFit.score`
  * @returns {{
  *   version: "1",
  *   identityPhrase: string,
@@ -101,15 +102,19 @@ export function deriveCrystalBraceletOwnerProfile(input) {
     );
   }
 
-  const fit =
-    input.ownerFitScore != null &&
-    Number.isFinite(Number(input.ownerFitScore))
-      ? Math.round(Number(input.ownerFitScore))
+  const compatPct =
+    input.displayCompatibilityPercent != null &&
+    Number.isFinite(Number(input.displayCompatibilityPercent))
+      ? Math.round(Number(input.displayCompatibilityPercent))
       : null;
+  const compatBand =
+    compatPct != null
+      ? crystalBraceletCompatibilityBandFromPercent(compatPct)
+      : "";
 
   const profileSummaryShort = dobStr
     ? `ใกล้มิติ${alignLabel} · ช่องต่างมากสุดที่${tensionLabel}${
-        fit != null ? ` · เข้ากัน ${fit}` : ""
+        compatBand ? ` · โดยรวมถือว่า${compatBand}` : ""
       }`
     : `ใกล้มิติ${alignLabel} · ช่องต่างมากสุดที่${tensionLabel} · อ้างอิงรหัสรายงาน`;
 

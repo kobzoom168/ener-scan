@@ -23,6 +23,19 @@ export const CRYSTAL_BRACELET_AXIS_LABEL_THAI = {
 };
 
 /**
+ * Thai band label for user-facing “เข้ากัน” copy — derive from the same 0–100
+ * value as `ReportPayload.summary.compatibilityPercent` (bracelet lane SSOT).
+ *
+ * @param {number|null|undefined} percent
+ * @returns {string} e.g. "เข้ากันค่อนข้างดี"
+ */
+export function crystalBraceletCompatibilityBandFromPercent(percent) {
+  if (percent == null || !Number.isFinite(Number(percent))) return "";
+  const score = Math.round(Number(percent));
+  return ownerFitBandFromScore(score).band;
+}
+
+/**
  * @param {number} score
  */
 function ownerFitBandFromScore(score) {
@@ -55,12 +68,14 @@ function ownerFitBandFromScore(score) {
 }
 
 /**
- * Owner-fit score for the “เข้ากับคุณ” row — not a radar axis.
+ * Internal rhythm weight (0–100) blended from seed + optional compat hint.
+ * Used only for deterministic bracelet scoring metadata — **not** the displayed
+ * “เข้ากับคุณ” percentage (that is always `summary.compatibilityPercent`).
  *
  * @param {string} seed
  * @param {string} session
  * @param {string} [mainEnergyLabel]
- * @param {number|null|undefined} [ownerFitScoreOpt]
+ * @param {number|null|undefined} [ownerFitScoreOpt] — compat hint from parse; does not equal UI percent after blend
  * @returns {number}
  */
 function computeOwnerFitScoreValue(seed, session, mainEnergyLabel, ownerFitScoreOpt) {
@@ -126,6 +141,7 @@ export function computeCrystalBraceletScoresDeterministicV1(seedKey, opts = {}) 
     ownerFitScoreOpt,
   );
   ofScore = Math.min(99, Math.max(20, Math.round(ofScore * damp)));
+  /** Internal-only; band/reason here must not drive Flex/HTML fit labels (use summary + {@link crystalBraceletCompatibilityBandFromPercent}). */
   const { band, reason } = ownerFitBandFromScore(ofScore);
 
   const sorted = [...CRYSTAL_BRACELET_AXIS_ORDER].sort((a, b) => {
@@ -186,7 +202,7 @@ export function computeCrystalBraceletAlignmentAxisKey(
  * @param {string} seedKey
  * @param {string} sessionKey
  * @param {Record<string, number>} stoneAxisScores — 0–100 per axis key
- * @param {number|null|undefined} ownerFitScore — 0–100, from ownerFit or compatibility
+ * @param {number|null|undefined} ownerFitScore — 0–100 follow strength (use display compatibility % for bracelet SSOT when available)
  * @returns {Record<string, number>}
  */
 export function computeCrystalBraceletOwnerAxisScoresV1(

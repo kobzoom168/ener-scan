@@ -215,7 +215,8 @@ function createCbRadarSection(axes, payload) {
     Number.isFinite(Number(payload.summary.compatibilityPercent))
       ? Number(payload.summary.compatibilityPercent)
       : null;
-  const ownerFit = ownerFitFromCb ?? ownerFitFromSummary;
+  /* SSOT: same % as score strip / Flex — summary first, internal rhythm only if missing */
+  const ownerFit = ownerFitFromSummary ?? ownerFitFromCb;
   const ownerScores = computeCrystalBraceletOwnerAxisScoresV1(
     seedKey,
     sessionKey,

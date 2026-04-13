@@ -5,8 +5,10 @@ import { buildCrystalBraceletV1Slice } from "../../src/crystalBracelet/crystalBr
 import {
   CRYSTAL_BRACELET_AXIS_ORDER,
   computeCrystalBraceletScoresDeterministicV1,
+  crystalBraceletCompatibilityBandFromPercent,
 } from "../../src/crystalBracelet/crystalBraceletScores.util.js";
 import { renderCrystalBraceletReportV2Html } from "../../src/templates/reports/crystalBraceletReportV2.template.js";
+import { buildCrystalBraceletSummaryFirstFlex } from "../../src/services/flex/flex.crystalBraceletSummary.js";
 
 test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contract", () => {
   const slice = buildCrystalBraceletV1Slice({
@@ -18,6 +20,7 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
     ownerFitScore: 78,
   });
   assert.equal(slice.version, "1");
+  assert.equal(slice.displayCompatibilityPercent, 78);
   assert.equal(slice.scoringMode, "deterministic_v1");
   assert.equal(slice.lane, "crystal_bracelet");
   assert.equal(slice.identity.formFactor, "bracelet");
@@ -205,6 +208,64 @@ test("buildReportPayloadFromScan: strict crystal_bracelet lane skips DB wording 
   assert.equal(payload.diagnostics?.crystalBraceletStrictLaneEarlyExit, true);
   assert.equal(payload.diagnostics?.dbWordingSelected, false);
   assert.ok(payload.crystalBraceletV1);
+});
+
+test("crystalBraceletCompatibilityBandFromPercent: tiers", () => {
+  assert.equal(crystalBraceletCompatibilityBandFromPercent(86), "เข้ากันดีมาก");
+  assert.equal(crystalBraceletCompatibilityBandFromPercent(72), "เข้ากันค่อนข้างดี");
+  assert.equal(crystalBraceletCompatibilityBandFromPercent(58), "เข้ากันในระดับพอดี");
+  assert.equal(crystalBraceletCompatibilityBandFromPercent(40), "เข้ากันเบา ๆ");
+});
+
+test("SSOT: summary 66 vs internal ownerFit.score 63 — HTML + Flex + owner profile", async () => {
+  const slice = buildCrystalBraceletV1Slice({
+    scanResultId: "rid-ssot-compat",
+    seedKey: "seed-ssot-compat-bracelet-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    detection: { reason: "crystal_bracelet_lane_v1", matchedSignals: [] },
+    energyScore: 7.5,
+    mainEnergyLabel: "พลังสมดุล",
+    ownerFitScore: 66,
+    birthdateUsed: "10/04/1995",
+  });
+  assert.equal(slice.displayCompatibilityPercent, 66);
+  slice.ownerFit = {
+    score: 63,
+    band: "เข้ากันเบา ๆ",
+    reason: "internal_only_fixture",
+  };
+  assert.ok(
+    String(slice.ownerProfile.profileSummaryShort || "").includes(
+      "โดยรวมถือว่าเข้ากันในระดับพอดี",
+    ),
+  );
+  assert.equal(String(slice.ownerProfile.profileSummaryShort || "").includes("63"), false);
+
+  const html = renderCrystalBraceletReportV2Html({
+    generatedAt: new Date().toISOString(),
+    summary: {
+      energyScore: 7.5,
+      compatibilityPercent: 66,
+      energyLevelLabel: "A",
+    },
+    object: {},
+    crystalBraceletV1: slice,
+  });
+  assert.ok(html.includes("66%"));
+  assert.equal(html.includes("เข้ากัน 63"), false);
+
+  const flex = await buildCrystalBraceletSummaryFirstFlex("", {
+    reportPayload: {
+      summary: {
+        energyScore: 7.5,
+        compatibilityPercent: 66,
+      },
+      crystalBraceletV1: slice,
+    },
+    reportUrl: "https://example.com/report",
+  });
+  const flexJson = JSON.stringify(flex);
+  assert.ok(/เข้ากับคุณ[\s\S]{0,1200}?"text":"66%"/.test(flexJson));
+  assert.ok(flexJson.includes("เข้ากันในระดับพอดี"));
 });
 
 test("buildReportPayloadFromScan: crystal without proven bracelet shape => no crystalBraceletV1", async () => {

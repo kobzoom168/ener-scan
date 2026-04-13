@@ -104,7 +104,7 @@ function buildCrystalBraceletHtmlReport(axes, primary, secondary, _alignAxis) {
  * @param {{ reason: string, matchedSignals?: string[] }} p.detection
  * @param {number|null} [p.energyScore]
  * @param {string} [p.mainEnergyLabel]
- * @param {number|null} [p.ownerFitScore]
+ * @param {number|null} [p.ownerFitScore] — same value as `summary.compatibilityPercent` when built by reportPayload.builder (display SSOT)
  * @param {string|null} [p.birthdateUsed]
  * @param {number} [p.confidenceDamp]
  * @returns {import("../services/reports/reportPayload.types.js").ReportCrystalBraceletV1}
@@ -119,6 +119,11 @@ export function buildCrystalBraceletV1Slice({
   birthdateUsed = null,
   confidenceDamp,
 }) {
+  const displayCompatibilityPercent =
+    ownerFitScore != null && Number.isFinite(Number(ownerFitScore))
+      ? Math.round(Number(ownerFitScore))
+      : null;
+
   const scores = computeCrystalBraceletScoresDeterministicV1(seedKey, {
     sessionKey: scanResultId,
     mainEnergyLabel,
@@ -142,11 +147,17 @@ export function buildCrystalBraceletV1Slice({
     stoneScoresMap[k] =
       sc != null && Number.isFinite(Number(sc)) ? Number(sc) : 0;
   }
+  const ownerAxisFollowInput =
+    displayCompatibilityPercent ??
+    (scores.ownerFit?.score != null &&
+    Number.isFinite(Number(scores.ownerFit.score))
+      ? Number(scores.ownerFit.score)
+      : null);
   const ownerAxisForAlign = computeCrystalBraceletOwnerAxisScoresV1(
     seedKey,
     scanResultId,
     stoneScoresMap,
-    scores.ownerFit?.score ?? null,
+    ownerAxisFollowInput,
   );
   const alignAxis = computeCrystalBraceletAlignmentAxisKey(
     stoneScoresMap,
@@ -155,7 +166,7 @@ export function buildCrystalBraceletV1Slice({
 
   const ownerProfile = deriveCrystalBraceletOwnerProfile({
     birthdateUsed,
-    ownerFitScore: scores.ownerFit?.score ?? ownerFitScore ?? null,
+    displayCompatibilityPercent,
     stableSeed: String(scanResultId || seedKey || "").trim(),
     stoneScores: stoneScoresMap,
     ownerAxisScores: ownerAxisForAlign,
@@ -187,7 +198,12 @@ export function buildCrystalBraceletV1Slice({
   const energyTiming = deriveCrystalBraceletEnergyTimingV1({
     bracelet: { stoneScores: stoneScoresMap },
     ownerProfile,
-    ownerFitScore: scores.ownerFit?.score ?? ownerFitScore ?? null,
+    ownerFitScore:
+      displayCompatibilityPercent ??
+      (scores.ownerFit?.score != null &&
+      Number.isFinite(Number(scores.ownerFit.score))
+        ? Number(scores.ownerFit.score)
+        : null),
     primaryAxis: scores.primaryAxis,
     secondaryAxis: scores.secondaryAxis,
     alignmentAxisKey: alignAxis,
@@ -196,6 +212,7 @@ export function buildCrystalBraceletV1Slice({
 
   return {
     version: "1",
+    displayCompatibilityPercent,
     scoringMode: scores.scoringMode,
     detection: {
       reason: detection?.reason || "crystal_bracelet_lane_v1",

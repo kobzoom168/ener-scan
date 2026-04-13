@@ -48,6 +48,7 @@ import {
 import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayNaming.util.js";
 import { buildAmuletV1Slice } from "../../amulet/amuletPayload.build.js";
 import { buildCrystalBraceletV1Slice } from "../../crystalBracelet/crystalBraceletPayload.build.js";
+import { crystalBraceletCompatibilityBandFromPercent } from "../../crystalBracelet/crystalBraceletScores.util.js";
 import { deriveSacredAmuletEnergyScore10FromPowerCategories } from "../../amulet/amuletScores.util.js";
 import { score10ToEnergyGrade } from "../../utils/reports/energyLevelGrade.util.js";
 import { computeTimingV1 } from "../timing/timingEngine.service.js";
@@ -314,6 +315,7 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp)
       ? String(parsed.mainEnergy).trim()
       : "";
 
+  /* `compatPct` is the display SSOT for “เข้ากับคุณ”; slice.ownerFit.score stays internal-only (blended rhythm weight). */
   const crystalBraceletV1 = buildCrystalBraceletV1Slice({
     scanResultId: rid,
     seedKey: scoreSeedKey || rid || String(scanResultId || ""),
@@ -372,10 +374,18 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp)
     ? formatScanBirthdayLabelThai(birthdateUsed)
     : "";
   const compatibilityReason = fitReason;
-  const compatibilityBand =
+  const compatibilityBandFromPayload =
     compatibilityPayload?.band != null
-      ? String(compatibilityPayload.band)
+      ? String(compatibilityPayload.band).trim()
       : "";
+  const compatibilityBandFromPct =
+    compatPct != null && Number.isFinite(Number(compatPct))
+      ? crystalBraceletCompatibilityBandFromPercent(
+          Math.round(Number(compatPct)),
+        )
+      : "";
+  const compatibilityBand =
+    compatibilityBandFromPayload || compatibilityBandFromPct || "";
 
   const secondaryEnergyLabel =
     parsed.secondaryEnergy && parsed.secondaryEnergy !== "-"

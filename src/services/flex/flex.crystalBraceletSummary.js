@@ -5,7 +5,10 @@ import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRollout
 import { normalizeScore } from "./flex.utils.js";
 import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
-import { CRYSTAL_BRACELET_AXIS_ORDER } from "../../crystalBracelet/crystalBraceletScores.util.js";
+import {
+  CRYSTAL_BRACELET_AXIS_ORDER,
+  crystalBraceletCompatibilityBandFromPercent,
+} from "../../crystalBracelet/crystalBraceletScores.util.js";
 
 const FLEX_CARD_BG = "#0f1415";
 const FLEX_BOX_BG = "#1a2330";
@@ -341,19 +344,24 @@ function createEnergyBadgePill(mainLabel) {
  */
 function compatPercentAndBand(reportPayload, fallbackCompat) {
   const p = reportPayload?.summary?.compatibilityPercent;
-  const band =
-    String(reportPayload?.summary?.compatibilityBand || "").trim() ||
-    String(reportPayload?.compatibility?.band || "").trim() ||
-    String(reportPayload?.crystalBraceletV1?.ownerFit?.band || "").trim();
   if (p != null && Number.isFinite(Number(p))) {
-    return { pctStr: `${Math.round(Number(p))}%`, bandStr: band };
+    const pctRounded = Math.round(Number(p));
+    const bandExplicit = String(
+      reportPayload?.summary?.compatibilityBand || "",
+    ).trim();
+    const bandStr =
+      bandExplicit ||
+      crystalBraceletCompatibilityBandFromPercent(pctRounded);
+    return { pctStr: `${pctRounded}%`, bandStr };
   }
   const fb = String(fallbackCompat || "-").trim();
   const m = fb.match(/(\d+(?:\.\d+)?)/);
   if (m && Number.isFinite(Number(m[1]))) {
-    return { pctStr: `${Math.round(Number(m[1]))}%`, bandStr: band };
+    const pctRounded = Math.round(Number(m[1]));
+    const bandStr = crystalBraceletCompatibilityBandFromPercent(pctRounded);
+    return { pctStr: `${pctRounded}%`, bandStr };
   }
-  return { pctStr: "-", bandStr: band };
+  return { pctStr: "-", bandStr: "" };
 }
 
 /** Default identity under headline — matches crystal bracelet payload tagline. */

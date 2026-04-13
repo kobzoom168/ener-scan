@@ -22,7 +22,7 @@ test("deriveCrystalBraceletOwnerProfile: stable + shape + tension = max gap", ()
 
   const a = deriveCrystalBraceletOwnerProfile({
     birthdateUsed: "15/03/1990",
-    ownerFitScore: 72,
+    displayCompatibilityPercent: 72,
     stableSeed: "seed-x",
     stoneScores: stone,
     ownerAxisScores: owner,
@@ -31,7 +31,7 @@ test("deriveCrystalBraceletOwnerProfile: stable + shape + tension = max gap", ()
   });
   const b = deriveCrystalBraceletOwnerProfile({
     birthdateUsed: "15/03/1990",
-    ownerFitScore: 72,
+    displayCompatibilityPercent: 72,
     stableSeed: "seed-x",
     stoneScores: stone,
     ownerAxisScores: owner,
@@ -46,7 +46,13 @@ test("deriveCrystalBraceletOwnerProfile: stable + shape + tension = max gap", ()
   assert.ok(a.ownerChips.length >= 2 && a.ownerChips.length <= 4);
   assert.ok(a.glyphSeed > 0);
   assert.equal(a.hasBirthdate, true);
-  assert.ok(String(a.profileSummaryShort || "").includes("เข้ากัน"));
+  assert.ok(
+    String(a.profileSummaryShort || "").includes("โดยรวมถือว่า"),
+  );
+  assert.ok(
+    String(a.profileSummaryShort || "").includes("เข้ากันค่อนข้างดี"),
+  );
+  assert.equal(/\d{2}/.test(String(a.profileSummaryShort || "")), false);
   assert.ok(String(a.profileSummaryShort || "").length > 8);
 });
 
@@ -61,7 +67,7 @@ test("deriveCrystalBraceletOwnerProfile: no DOB uses fallback seed", () => {
   }
   const p = deriveCrystalBraceletOwnerProfile({
     birthdateUsed: null,
-    ownerFitScore: 66,
+    displayCompatibilityPercent: 66,
     stableSeed: "abc-def-0001",
     stoneScores: stone,
     ownerAxisScores: owner,
