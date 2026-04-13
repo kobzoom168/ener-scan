@@ -162,7 +162,7 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
       const cls = `cb2-radar-lbl cb2-radar-lbl--${k}${isPeak ? " cb2-radar-lbl--peak" : ""}${isAlign ? " cb2-radar-lbl--align" : ""}${blinkLbl ? " cb2-radar-lbl--blink" : ""}`;
       const label = esc(String(CRYSTAL_BRACELET_AXIS_LABEL_THAI[k] || k));
       const score = esc(String(axisScores[k]));
-      return `<span class="${cls}" style="${styleStr}"><span class="cb2-radar-lbl-t">${label}</span><span class="cb2-radar-lbl-n">${score}%</span></span>`;
+      return `<span class="${cls}" style="${styleStr}"><span class="cb2-radar-lbl-t">${label}</span><span class="cb2-radar-lbl-n">${score}</span></span>`;
     })
     .join("");
 
