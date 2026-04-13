@@ -164,8 +164,11 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   assert.ok(html.includes("จังหวะเสริมพลัง"));
   assert.ok(html.includes("cb2-card--et"));
   assert.ok(html.includes("cb2-et-trends"));
-  assert.ok(html.includes("cb2-et-strip--week"));
+  assert.ok(html.includes("cb2-et-strip--weekday"));
   assert.ok(html.includes("cb2-et-strip--time"));
+  assert.ok(html.includes("cb2-et-pill-shape"));
+  assert.ok(html.includes("cb2-et-slot"));
+  assert.ok(html.includes("cb2-et-slot-bar"));
   assert.ok(html.includes("cb2-et-insight"));
   assert.ok(html.includes("วันเด่น"));
   assert.ok(html.includes("เวลาเด่น"));

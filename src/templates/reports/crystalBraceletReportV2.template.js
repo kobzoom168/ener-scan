@@ -304,8 +304,9 @@ const CB2_TIMING_WEEKDAYS = [
 
 const CB2_TIMING_WEEKDAY_SHORT = ["จ", "อ", "พ", "พฤ", "ศ", "ส", "อา"];
 
-/** ความสูงแท่งรายวัน (px) — active โดด ที่เหลือเป็น wave เบา ๆ */
-const CB2_WEEKDAY_BAR_HEIGHTS = [32, 38, 28, 42, 34, 30, 36];
+/** ความสูงเม็ดรายวัน (px) — rhythm เบา ๆ; active ใช้ค่าแยก */
+const CB2_WEEKDAY_SHAPE_HEIGHTS = [22, 26, 20, 28, 32, 22, 24];
+const CB2_WEEKDAY_ACTIVE_SHAPE_PX = 40;
 
 const CB2_TIME_BUCKETS = [
   { key: "dawn", label: "เช้าตรู่", range: "05:00-07:59" },
@@ -330,7 +331,9 @@ const CB2_TIME_BAND_TO_BUCKET = {
   "17:00-19:59": "night",
 };
 
-const CB2_TIME_BUCKET_BAR_HEIGHTS = [30, 34, 28, 36, 32, 40, 26];
+/** ความสูงแท่งช่วงเวลา (px) — trend ชัดกว่าวัน; active แยก */
+const CB2_TIME_SLOT_HEIGHTS = [18, 24, 28, 22, 20, 26, 32];
+const CB2_TIME_ACTIVE_SLOT_PX = 40;
 
 /**
  * @param {string} recommendedTimeBand
@@ -353,18 +356,20 @@ function buildCrystalBraceletTimingWeekdayStrip(et) {
   const activeIdx = CB2_TIMING_WEEKDAYS.indexOf(w);
   const pills = CB2_TIMING_WEEKDAYS.map((full, i) => {
     const isActive = i === activeIdx && activeIdx >= 0;
-    const h = isActive ? 56 : CB2_WEEKDAY_BAR_HEIGHTS[i % CB2_WEEKDAY_BAR_HEIGHTS.length];
+    const h = isActive
+      ? CB2_WEEKDAY_ACTIVE_SHAPE_PX
+      : CB2_WEEKDAY_SHAPE_HEIGHTS[i % CB2_WEEKDAY_SHAPE_HEIGHTS.length];
     const cls = `cb2-et-pill${isActive ? " is-active" : ""}`;
     const short = CB2_TIMING_WEEKDAY_SHORT[i] || "?";
     return `<div class="${cls}" role="listitem" ${
       isActive ? 'aria-current="true"' : ""
     }>
-      <div class="cb2-et-bar" style="height:${h}px" aria-hidden="true"></div>
+      <span class="cb2-et-pill-shape" style="height:${h}px" aria-hidden="true"></span>
       <span class="cb2-et-pill-label">${escapeHtml(short)}</span>
       <span class="cb2-et-pill-sr">${escapeHtml(full)}</span>
     </div>`;
   });
-  return `<div class="cb2-et-strip cb2-et-strip--week" role="list" aria-label="วันในสัปดาห์">${pills.join("")}</div>`;
+  return `<div class="cb2-et-strip cb2-et-strip--weekday" role="list" aria-label="วันในสัปดาห์">${pills.join("")}</div>`;
 }
 
 /**
@@ -373,22 +378,22 @@ function buildCrystalBraceletTimingWeekdayStrip(et) {
 function buildCrystalBraceletTimingBandStrip(et) {
   const bandStr = String(et.recommendedTimeBand || "").trim();
   const activeKey = resolveTimingBucketKey(bandStr);
-  const pills = CB2_TIME_BUCKETS.map((b, i) => {
+  const slots = CB2_TIME_BUCKETS.map((b, i) => {
     const isActive = activeKey != null && b.key === activeKey;
     const h = isActive
-      ? 44
-      : CB2_TIME_BUCKET_BAR_HEIGHTS[i % CB2_TIME_BUCKET_BAR_HEIGHTS.length];
-    const cls = `cb2-et-pill cb2-et-pill--time${isActive ? " is-active" : ""}`;
+      ? CB2_TIME_ACTIVE_SLOT_PX
+      : CB2_TIME_SLOT_HEIGHTS[i % CB2_TIME_SLOT_HEIGHTS.length];
+    const cls = `cb2-et-slot${isActive ? " is-active" : ""}`;
     return `<div class="${cls}" role="listitem" ${
       isActive ? 'aria-current="true"' : ""
     }>
-      <div class="cb2-et-bar" style="height:${h}px" aria-hidden="true"></div>
-      <span class="cb2-et-pill-label" title="${escapeHtml(b.range)}">${escapeHtml(
+      <span class="cb2-et-slot-bar" style="height:${h}px" aria-hidden="true"></span>
+      <span class="cb2-et-slot-label" title="${escapeHtml(b.range)}">${escapeHtml(
         b.label,
       )}</span>
     </div>`;
   });
-  return `<div class="cb2-et-strip cb2-et-strip--time" role="list" aria-label="ช่วงเวลา">${pills.join("")}</div>`;
+  return `<div class="cb2-et-strip cb2-et-strip--time" role="list" aria-label="ช่วงเวลา">${slots.join("")}</div>`;
 }
 
 const CB2_ET_SUBTITLE = "ช่วงที่พลังของกำไลตอบกับคุณได้ดีที่สุด";
@@ -785,75 +790,85 @@ export function renderCrystalBraceletReportV2Html(payload) {
       font-weight: 800;
       font-variant-numeric: tabular-nums;
     }
-    .cb2-et-strip {
-      display: grid;
-      grid-auto-flow: column;
-      grid-auto-columns: 1fr;
-      gap: 0.4rem;
-      align-items: end;
+    /* ── Weekday = เม็ด / capsule (เลือกวัน) ── */
+    .cb2-et-strip--weekday {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.28rem;
+      align-items: flex-end;
+      justify-content: space-between;
     }
-    .cb2-et-pill {
+    .cb2-et-strip--weekday .cb2-et-pill {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.3rem;
+      gap: 0.32rem;
+      flex: 1;
       min-width: 0;
       position: relative;
       transition: opacity 0.15s ease;
     }
-    /* Inactive — ถอยเป็นพื้นหลัง ไม่แย่ง radar */
-    .cb2-et-pill:not(.is-active) {
-      opacity: 0.58;
-    }
-    .cb2-et-pill:not(.is-active) .cb2-et-bar {
-      background: rgba(22, 36, 48, 0.85);
-      box-shadow: inset 0 1px 2px rgba(0,0,0,0.35);
-    }
-    .cb2-et-pill:not(.is-active) .cb2-et-pill-label {
-      color: #5c6b7a;
-      font-weight: 500;
-    }
-    .cb2-et-bar {
+    .cb2-et-pill-shape {
+      display: block;
       width: 100%;
+      max-width: 2.05rem;
+      min-width: 1.32rem;
+      margin: 0 auto;
       border-radius: 999px;
-      min-height: 1.25rem;
       position: relative;
       overflow: hidden;
       flex-shrink: 0;
+      box-sizing: border-box;
     }
-    .cb2-et-bar::after {
+    .cb2-et-pill-shape::after {
       content: "";
       position: absolute;
       inset: 0;
       border-radius: inherit;
-      background: linear-gradient(180deg, rgba(255,255,255,0.22), transparent 55%);
+      background: radial-gradient(
+        80% 70% at 50% 28%,
+        rgba(255,255,255,0.2),
+        transparent 55%
+      );
       opacity: 0;
       pointer-events: none;
     }
-    .cb2-et-pill.is-active {
+    .cb2-et-strip--weekday .cb2-et-pill:not(.is-active) {
+      opacity: 0.52;
+    }
+    .cb2-et-strip--weekday .cb2-et-pill:not(.is-active) .cb2-et-pill-shape {
+      background: rgba(26, 38, 52, 0.92);
+      border: 1px solid rgba(255,255,255,0.05);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+    }
+    .cb2-et-strip--weekday .cb2-et-pill:not(.is-active) .cb2-et-pill-label {
+      color: #4f5d6a;
+      font-weight: 500;
+    }
+    .cb2-et-strip--weekday .cb2-et-pill.is-active {
       opacity: 1;
     }
-    .cb2-et-pill.is-active .cb2-et-bar {
-      background: linear-gradient(180deg, #6ec9fc 0%, #38bdf8 42%, #0ea5e9 100%);
+    .cb2-et-strip--weekday .cb2-et-pill.is-active .cb2-et-pill-shape {
+      background: linear-gradient(165deg, #7ad4fc 0%, #38bdf8 45%, #0ea5e9 100%);
+      border: 1px solid rgba(186, 230, 253, 0.55);
       box-shadow:
-        0 0 0 1px rgba(186, 230, 253, 0.5),
-        0 0 18px rgba(56, 189, 248, 0.28),
-        0 6px 14px rgba(14, 165, 233, 0.2);
+        0 0 0 1px rgba(125, 211, 252, 0.35),
+        0 0 16px rgba(56, 189, 248, 0.22),
+        0 5px 12px rgba(14, 165, 233, 0.18);
     }
-    .cb2-et-pill.is-active .cb2-et-bar::after {
-      opacity: 0.45;
+    .cb2-et-strip--weekday .cb2-et-pill.is-active .cb2-et-pill-shape::after {
+      opacity: 0.55;
     }
-    .cb2-et-pill-label {
+    .cb2-et-strip--weekday .cb2-et-pill-label {
       font-size: 0.58rem;
       text-align: center;
-      line-height: 1.2;
+      line-height: 1.15;
       max-width: 100%;
     }
-    .cb2-et-pill--time .cb2-et-pill-label { font-size: 0.52rem; }
-    .cb2-et-pill.is-active .cb2-et-pill-label {
-      color: #f6f8fa;
+    .cb2-et-strip--weekday .cb2-et-pill.is-active .cb2-et-pill-label {
+      color: #fafbfc;
       font-weight: 800;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.03em;
     }
     .cb2-et-pill-sr {
       position: absolute;
@@ -866,7 +881,83 @@ export function renderCrystalBraceletReportV2Html(payload) {
       white-space: nowrap;
       border: 0;
     }
-    .cb2-et-strip--time .cb2-et-bar { min-height: 1.45rem; }
+    /* ── Time = แท่งแคบ / segment (อ่านเป็นช่วง) ── */
+    .cb2-et-strip--time {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.3rem;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+    .cb2-et-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.28rem;
+      flex: 1;
+      min-width: 0;
+      transition: opacity 0.15s ease;
+    }
+    .cb2-et-slot-bar {
+      display: block;
+      width: 0.44rem;
+      max-width: 42%;
+      min-width: 5px;
+      margin: 0 auto;
+      border-radius: 7px;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+    .cb2-et-slot-bar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(180deg, rgba(255,255,255,0.18), transparent 60%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .cb2-et-slot:not(.is-active) {
+      opacity: 0.5;
+    }
+    .cb2-et-slot:not(.is-active) .cb2-et-slot-bar {
+      background: rgba(18, 32, 44, 0.95);
+      border: 1px solid rgba(255,255,255,0.04);
+      box-shadow: inset 0 2px 3px rgba(0,0,0,0.45);
+    }
+    .cb2-et-slot:not(.is-active) .cb2-et-slot-label {
+      color: #4a5864;
+      font-weight: 500;
+    }
+    .cb2-et-slot.is-active {
+      opacity: 1;
+    }
+    .cb2-et-slot.is-active .cb2-et-slot-bar {
+      width: 0.52rem;
+      max-width: 48%;
+      background: linear-gradient(180deg, #5ec8fc 0%, #22b8f0 38%, #0284c7 100%);
+      border: 1px solid rgba(165, 220, 252, 0.5);
+      box-shadow:
+        0 0 0 1px rgba(56, 189, 248, 0.25),
+        0 0 14px rgba(56, 189, 248, 0.2),
+        0 4px 10px rgba(8, 80, 120, 0.25);
+    }
+    .cb2-et-slot.is-active .cb2-et-slot-bar::after {
+      opacity: 0.4;
+    }
+    .cb2-et-slot-label {
+      font-size: 0.5rem;
+      text-align: center;
+      line-height: 1.15;
+      max-width: 100%;
+    }
+    .cb2-et-slot.is-active .cb2-et-slot-label {
+      color: #e8f4fc;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
     .cb2-et-insight {
       margin-top: 0.8rem;
       background: rgba(15, 23, 32, 0.65);
@@ -879,27 +970,28 @@ export function renderCrystalBraceletReportV2Html(payload) {
     }
     .cb2-card--et .cb2-et-k--mode {
       display: block;
-      font-size: 0.62rem;
+      font-size: 0.65rem;
       font-weight: 800;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
-      color: #93d9fd;
-      margin: 0 0 0.5rem;
+      color: #a5e6ff;
+      margin: 0 0 0.68rem;
     }
     .cb2-et-mode-body {
       margin: 0;
-      font-size: 0.9rem;
-      line-height: 1.58;
-      font-weight: 700;
-      color: #f0f7fc;
+      font-size: 0.94rem;
+      line-height: 1.6;
+      font-weight: 800;
+      color: #f6fafc;
+      letter-spacing: 0.01em;
     }
     .cb2-et-note {
-      margin: 0.8rem 0 0;
-      padding-top: 0.7rem;
-      border-top: 1px solid rgba(255,255,255,0.07);
-      font-size: 0.72rem;
-      line-height: 1.68;
-      color: var(--cb2-muted);
+      margin: 0.88rem 0 0;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.67rem;
+      line-height: 1.7;
+      color: #5c6b78;
       font-weight: 400;
     }
 
