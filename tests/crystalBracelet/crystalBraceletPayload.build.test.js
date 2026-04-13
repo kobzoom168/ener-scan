@@ -87,6 +87,7 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
   assert.equal(slice.ownerProfile.version, "1");
   assert.ok(Array.isArray(slice.ownerProfile.ownerChips));
   assert.ok(slice.ownerProfile.ownerChips.length >= 2);
+  assert.ok(slice.ownerProfile.ownerChips.length <= 3);
   assert.ok(
     CRYSTAL_BRACELET_AXIS_ORDER.includes(slice.ownerProfile.alignAxisKey),
   );
@@ -94,6 +95,34 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
     CRYSTAL_BRACELET_AXIS_ORDER.includes(slice.ownerProfile.tensionAxisKey),
   );
   assert.ok(String(slice.flexSurface.ownerProfileTeaser || "").length > 0);
+});
+
+test("buildCrystalBraceletSummaryFirstFlex: axes block shows all 6 dimensions + new section copy", async () => {
+  const slice = buildCrystalBraceletV1Slice({
+    scanResultId: "rid-flex-6axes",
+    seedKey: "seed-flex-6axes-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    detection: { reason: "crystal_bracelet_lane_v1", matchedSignals: [] },
+    energyScore: 7.2,
+    mainEnergyLabel: "พลังสมดุล",
+    ownerFitScore: 70,
+  });
+  const flex = await buildCrystalBraceletSummaryFirstFlex("", {
+    reportPayload: {
+      summary: { energyScore: 7.2, compatibilityPercent: 70 },
+      crystalBraceletV1: slice,
+    },
+    reportUrl: "https://example.com/r",
+  });
+  const j = JSON.stringify(flex);
+  assert.ok(j.includes("มิติพลังของกำไล"));
+  assert.ok(j.includes("เรียงจากพลังเด่นไปเบา"));
+  assert.equal(j.includes("แสดง 4 พลังที่เด่นสุด"), false);
+  assert.equal(j.includes("พลังเด่นของกำไล"), false);
+  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const label = String(slice.axes[k]?.labelThai || "").trim();
+    assert.ok(label.length > 0, k);
+    assert.ok(j.includes(label), `flex should include axis label ${k}`);
+  }
 });
 
 test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", () => {
@@ -131,6 +160,8 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   assert.ok(html.includes("cb2-gsum-bar-sub"));
   assert.ok(html.includes("cb2-owner-card--below-summary"));
   assert.ok(html.includes(">เข้ากับคุณ</span>"));
+  assert.equal(html.includes("\u201c"), false);
+  assert.equal(html.includes("\u201d"), false);
   assert.equal(html.includes("รองลงมา"), false);
 });
 

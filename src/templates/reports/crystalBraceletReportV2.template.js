@@ -283,7 +283,29 @@ function createCbRadarSection(axes, ownerScores) {
     <div role="img" aria-label="พลังกำไลและจังหวะผู้สวม แผนภูมิเรดาร์">
       ${radarSvg}
     </div>
-    <p class="cb2-radar-key">เส้นทึบ = พลังกำไล · เส้นประ = จังหวะผู้สวม · จุดเทา = แกนที่จังหวะคุณใกล้เคียงโทนกำไลมากที่สุด</p>
+    <div class="cb2-radar-legend" aria-label="คำอธิบายกราฟ">
+      <div class="cb2-radar-legend-card">
+        <span class="cb2-radar-legend-swatch cb2-radar-legend-swatch--solid" aria-hidden="true"></span>
+        <div class="cb2-radar-legend-copy">
+          <span class="cb2-radar-legend-k">เส้นทึบ</span>
+          <span class="cb2-radar-legend-v">พลังกำไล</span>
+        </div>
+      </div>
+      <div class="cb2-radar-legend-card">
+        <span class="cb2-radar-legend-swatch cb2-radar-legend-swatch--dashed" aria-hidden="true"></span>
+        <div class="cb2-radar-legend-copy">
+          <span class="cb2-radar-legend-k">เส้นประ</span>
+          <span class="cb2-radar-legend-v">จังหวะผู้สวม</span>
+        </div>
+      </div>
+      <div class="cb2-radar-legend-card">
+        <span class="cb2-radar-legend-swatch cb2-radar-legend-swatch--dot" aria-hidden="true"></span>
+        <div class="cb2-radar-legend-copy">
+          <span class="cb2-radar-legend-k">จุดเทา</span>
+          <span class="cb2-radar-legend-v">แกนที่จังหวะคุณใกล้เคียงโทนกำไลมากที่สุด</span>
+        </div>
+      </div>
+    </div>
   </section>`;
 }
 
@@ -655,7 +677,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-radar-lbl-t { font-size: 0.62rem; }
     .cb2-radar-lbl-n { font-size: 0.67rem; font-weight: 700; font-variant-numeric: tabular-nums; }
     .cb2-radar-lbl--peak .cb2-radar-lbl-n { color: rgba(255,255,255,0.92); }
-    /* แกน “เข้ากับคุณที่สุด” (min |owner−stone|) — เทียบจุดเทาใน SVG */
+    /* แกนเข้ากับคุณที่สุด (min |owner−stone|) — เทียบจุดเทาใน SVG */
     .cb2-radar-lbl--align { color: #94a3b8; }
     .cb2-radar-lbl--align .cb2-radar-lbl-n { color: #cbd5e1; }
     @keyframes cb2-radar-blink {
@@ -684,12 +706,62 @@ export function renderCrystalBraceletReportV2Html(payload) {
       .cb2-radar-svg .cb2-radar-blink,
       .cb2-radar-svg .cb2-radar-align-marker { animation: none !important; opacity: 1 !important; filter: none !important; }
     }
-    .cb2-radar-key {
-      font-size: 0.62rem;
-      color: var(--cb2-muted);
-      text-align: center;
-      margin: 0.5rem 0 0;
+    .cb2-radar-legend {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.45rem;
+      margin-top: 0.65rem;
+    }
+    .cb2-radar-legend-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 0.45rem 0.5rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.42rem;
+      min-height: 54px;
+    }
+    .cb2-radar-legend-copy { min-width: 0; flex: 1; }
+    .cb2-radar-legend-k {
+      display: block;
+      font-size: 0.58rem;
+      font-weight: 700;
+      color: #c9d1d9;
+      line-height: 1.25;
+    }
+    .cb2-radar-legend-v {
+      display: block;
+      font-size: 0.56rem;
       line-height: 1.35;
+      color: var(--cb2-muted);
+      margin-top: 0.12rem;
+    }
+    .cb2-radar-legend-swatch {
+      flex-shrink: 0;
+      margin-top: 0.22rem;
+    }
+    .cb2-radar-legend-swatch--solid {
+      width: 18px;
+      height: 2px;
+      border-radius: 999px;
+      background: #60a5fa;
+    }
+    .cb2-radar-legend-swatch--dashed {
+      width: 18px;
+      height: 0;
+      border-top: 2px dashed #fb7185;
+    }
+    .cb2-radar-legend-swatch--dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.42);
+      border: 2px solid rgba(96, 165, 250, 0.7);
+      box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.16);
+    }
+    @media (max-width: 380px) {
+      .cb2-radar-legend { grid-template-columns: 1fr; }
     }
 
     /* ── Graph summary: headline → หลอด → คำอธิบายใต้หลอด ── */

@@ -25,9 +25,9 @@ const FLEX_TEXT_SECONDARY = "#94a3b8";
 const FLEX_TEXT_CAPTION = "#94a3b8";
 const CB_TITLE_TAGLINE_COLOR = "#64748b";
 
-const LIFE_AREA_BAR_HEIGHT = "8px";
-const LIFE_AREA_LABEL_COL_WIDTH = "120px";
-const LIFE_AREA_SCORE_COL_WIDTH = "48px";
+const LIFE_AREA_BAR_HEIGHT = "7px";
+const LIFE_AREA_LABEL_COL_WIDTH = "112px";
+const LIFE_AREA_SCORE_COL_WIDTH = "44px";
 const MAIN_ENERGY_PILL_MAX_LEN = 22;
 
 /**
@@ -96,17 +96,17 @@ function createCrystalBraceletAxesBarBlock(axes) {
     return b.score - a.score;
   });
 
-  const topRows = rows.slice(0, 4);
+  const visibleRows = rows;
 
   /** @type {object[]} */
-  const rowBoxes = topRows.map(({ label, score }) => {
+  const rowBoxes = visibleRows.map(({ label, score }) => {
     const { greenFlex, emptyFlex } = axisBarFlexPair(score);
     const scoreText = score == null ? "—" : String(score);
     return {
       type: "box",
       layout: "horizontal",
-      spacing: "sm",
-      margin: "xs",
+      spacing: "xs",
+      margin: "none",
       contents: [
         {
           type: "box",
@@ -160,7 +160,7 @@ function createCrystalBraceletAxesBarBlock(axes) {
             {
               type: "text",
               text: scoreText,
-              size: "sm",
+              size: "xs",
               weight: "bold",
               color: CB_ACCENT,
               wrap: false,
@@ -175,12 +175,12 @@ function createCrystalBraceletAxesBarBlock(axes) {
   return {
     type: "box",
     layout: "vertical",
-    margin: "md",
-    spacing: "sm",
+    margin: "sm",
+    spacing: "xs",
     contents: [
       {
         type: "text",
-        text: "พลังเด่นของกำไล",
+        text: "มิติพลังของกำไล",
         size: "xs",
         color: CB_ACCENT_DIM,
         weight: "bold",
@@ -189,7 +189,7 @@ function createCrystalBraceletAxesBarBlock(axes) {
       },
       {
         type: "text",
-        text: "แสดง 4 พลังที่เด่นสุด",
+        text: "เรียงจากพลังเด่นไปเบา",
         size: "xxs",
         color: "#475569",
         wrap: true,
@@ -198,7 +198,7 @@ function createCrystalBraceletAxesBarBlock(axes) {
       {
         type: "box",
         layout: "vertical",
-        spacing: "none",
+        spacing: "xs",
         margin: "none",
         contents: rowBoxes,
       },

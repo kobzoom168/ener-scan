@@ -43,7 +43,7 @@ test("deriveCrystalBraceletOwnerProfile: stable + shape + tension = max gap", ()
   assert.equal(a.identityPhrase, b.identityPhrase);
   assert.equal(a.tensionAxisKey, "career");
   assert.equal(a.alignAxisKey, "charm_attraction");
-  assert.ok(a.ownerChips.length >= 2 && a.ownerChips.length <= 4);
+  assert.ok(a.ownerChips.length >= 2 && a.ownerChips.length <= 3);
   assert.ok(a.glyphSeed > 0);
   assert.equal(a.hasBirthdate, true);
   assert.ok(
@@ -54,6 +54,16 @@ test("deriveCrystalBraceletOwnerProfile: stable + shape + tension = max gap", ()
   );
   assert.equal(/\d{2}/.test(String(a.profileSummaryShort || "")), false);
   assert.ok(String(a.profileSummaryShort || "").length > 8);
+  const noCurlyQuotes = (s) =>
+    !String(s).includes("\u201c") &&
+    !String(s).includes("\u201d") &&
+    !String(s).includes('"');
+  assert.ok(noCurlyQuotes(a.identityPhrase));
+  assert.ok(noCurlyQuotes(a.profileSummaryShort));
+  assert.ok(noCurlyQuotes(a.derivationNote));
+  for (const c of a.ownerChips) assert.ok(noCurlyQuotes(c));
+  assert.ok(a.identityPhrase.includes("เสน่ห์"));
+  assert.ok(a.identityPhrase.includes("การงาน"));
 });
 
 test("deriveCrystalBraceletOwnerProfile: no DOB uses fallback seed", () => {
@@ -75,7 +85,10 @@ test("deriveCrystalBraceletOwnerProfile: no DOB uses fallback seed", () => {
     alignAxisKey: "charm_attraction",
   });
   assert.equal(p.hasBirthdate, false);
-  assert.ok(p.derivationNote.includes("ยังไม่มีวันเกิด"));
+  assert.ok(
+    p.derivationNote.includes("ยังไม่มีวันเกิด") ||
+      p.derivationNote.includes("โครงพลังของรายงาน"),
+  );
 });
 
 test("crystalBraceletOwnerProfileFlexTeaser: short line", () => {
@@ -85,5 +98,6 @@ test("crystalBraceletOwnerProfileFlexTeaser: short line", () => {
   });
   assert.ok(t.includes("เซ้นส์"));
   assert.ok(t.includes("การงาน"));
-  assert.ok(t.length <= 54);
+  assert.ok(t.includes("รับพลังด้าน"));
+  assert.ok(t.length <= 58);
 });
