@@ -176,7 +176,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .map((p) => `<li class="cb2-caution-li">${escapeHtml(p)}</li>`)
     .join("");
 
-  const ringsSectionHtml = createCbRingsSection(axes);
+  const radarSectionHtml = createCbRadarSection(axes);
 
   console.log(
     JSON.stringify({
