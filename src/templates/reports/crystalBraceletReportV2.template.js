@@ -81,7 +81,7 @@ function createCbRadarSection(axes, payload) {
   const radarSvg = buildCrystalBraceletRadarChartSvg(axes, ownerScores);
   return `<section class="cb2-card cb2-radar-card" aria-labelledby="cb2-radar-h">
     <h2 id="cb2-radar-h">มิติพลังกำไล</h2>
-    <div class="cb2-radar-wrap" role="img" aria-label="พลังกำไลและจังหวะผู้สวม แผนภูมิเรดาร์">
+    <div role="img" aria-label="พลังกำไลและจังหวะผู้สวม แผนภูมิเรดาร์">
       ${radarSvg}
     </div>
     <p class="cb2-radar-key">เส้นทึบ = พลังกำไล · เส้นประ = จังหวะผู้สวม</p>
@@ -301,11 +301,26 @@ export function renderCrystalBraceletReportV2Html(payload) {
     /* ── Radar chart ── */
     .cb2-radar-card { }
     .cb2-radar-wrap { }
+    .cb2-radar-plot { position: relative; max-width: 17rem; margin: 0 auto; }
+    .cb2-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
+    .cb2-radar-labels { position: absolute; inset: 0; pointer-events: none; }
+    .cb2-radar-lbl {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      font-size: 0.62rem;
+      line-height: 1.3;
+      color: rgba(255,255,255,0.50);
+    }
+    .cb2-radar-lbl--peak { color: #ffffff; }
+    .cb2-radar-lbl-t { font-size: 0.62rem; }
+    .cb2-radar-lbl-n { font-size: 0.67rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cb2-radar-lbl--peak .cb2-radar-lbl-n { color: rgba(255,255,255,0.92); }
     .cb2-radar-key {
       font-size: 0.62rem;
       color: var(--cb2-muted);
       text-align: center;
-      margin: 0 0 0.35rem 0;
+      margin: 0.5rem 0 0;
       line-height: 1.35;
     }
 
