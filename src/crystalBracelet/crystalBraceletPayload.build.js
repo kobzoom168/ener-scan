@@ -58,8 +58,8 @@ function buildCrystalBraceletHtmlReport(axes, primary, alignAxis) {
       "การแปลผลจึงเน้นว่าในช่วงนี้พลังของกำไลไปหนุนมิติไหนของชีวิตมากที่สุด และเข้ากับจังหวะของผู้สวมอย่างไร",
     ],
     graphSummaryRows: [
-      `พลังของกำไลเส้นนี้ไปเด่นสุดที่ ${primaryLabel}`,
-      `ช่วงนี้จังหวะผู้สวมใกล้เคียงพลังกำไลมากที่สุดที่มิติ ${alignLabel}`,
+      `เด่นสุดที่ ${primaryLabel}`,
+      `เข้ากันสุดที่ ${alignLabel}`,
     ],
     axisBlurbs: {
       protection:

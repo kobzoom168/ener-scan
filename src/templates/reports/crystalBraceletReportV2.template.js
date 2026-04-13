@@ -190,8 +190,8 @@ export function renderCrystalBraceletReportV2Html(payload) {
   );
 
   const graphSummaryLines = [
-    `พลังของกำไลเส้นนี้ไปเด่นสุดที่ ${cbAxisLabelThai(axes, primaryAxis)}`,
-    `ช่วงนี้จังหวะผู้สวมใกล้เคียงพลังกำไลมากที่สุดที่มิติ ${cbAxisLabelThai(axes, alignAxisKey)}`,
+    `เด่นสุดที่ ${cbAxisLabelThai(axes, primaryAxis)}`,
+    `เข้ากันสุดที่ ${cbAxisLabelThai(axes, alignAxisKey)}`,
   ];
   const graphSummaryHtml = buildGraphSummaryRowsHtml(graphSummaryLines);
 
