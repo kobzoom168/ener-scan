@@ -163,6 +163,25 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   assert.equal(html.includes("ออร่า"), false);
   assert.ok(html.includes("จังหวะเสริมพลัง"));
   assert.ok(html.includes("cb2-card--et"));
+  assert.ok(html.includes("cb2-et-trends"));
+  assert.ok(html.includes("cb2-et-strip--week"));
+  assert.ok(html.includes("cb2-et-strip--time"));
+  assert.ok(html.includes("cb2-et-insight"));
+  assert.ok(html.includes("วันเด่น"));
+  assert.ok(html.includes("เวลาเด่น"));
+  assert.ok(html.includes("cb2-et-sub"));
+  assert.equal(html.includes("cb2-et-grid"), false);
+  const et = slice.htmlReport?.energyTiming;
+  assert.ok(
+    et &&
+      String(et.ritualMode || "").length > 5 &&
+      html.includes(String(et.ritualMode).slice(0, 24)),
+  );
+  assert.ok(
+    et &&
+      String(et.timingReason || "").length > 10 &&
+      html.includes(String(et.timingReason).slice(0, 28)),
+  );
   assert.ok(html.includes("แชร์รายงาน"));
   assert.ok(html.includes("cb2-share-native"));
   assert.ok(html.includes("cb2-share-btn--line"));
