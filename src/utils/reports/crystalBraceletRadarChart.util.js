@@ -4,10 +4,10 @@ import {
 } from "../../crystalBracelet/crystalBraceletScores.util.js";
 
 const VB_W = 340;
-const VB_H = 320;
+const VB_H = 370;
 const CX = 170;
-const CY = 168;
-const RADIUS = 118;
+const CY = 148;
+const RADIUS = 112;
 const RING_RADII = [24, 48, 72, 96, 118];
 const RING_LABELS = ["20", "40", "60", "80", "100"];
 
@@ -132,12 +132,14 @@ export function buildCrystalBraceletRadarChartSvg(
         String(CRYSTAL_BRACELET_AXIS_LABEL_THAI[k] || k),
       );
       const pct = axisScores[k];
-      const lyScore = ly + 13;
       const scoreFill = isPeak
         ? "rgba(255,255,255,0.88)"
         : "rgba(255,255,255,0.55)";
+      // score position: below label text regardless of dominant-baseline direction
+      const scoreOffset = baseline === "auto" ? 14 : baseline === "hanging" ? 15 : 13;
+      const lyScoreAdj = ly + scoreOffset;
       const nameEl = `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-size="${fs}" font-weight="${weight}" fill="${fill}" font-family="system-ui,sans-serif">${lab}</text>`;
-      const scoreEl = `<text x="${lx.toFixed(2)}" y="${lyScore.toFixed(2)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10" font-weight="600" fill="${scoreFill}" font-family="system-ui,sans-serif">${pct}%</text>`;
+      const scoreEl = `<text x="${lx.toFixed(2)}" y="${lyScoreAdj.toFixed(2)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10" font-weight="600" fill="${scoreFill}" font-family="system-ui,sans-serif">${pct}%</text>`;
       return `${nameEl}${scoreEl}`;
     })
     .join("");
@@ -164,7 +166,7 @@ export function buildCrystalBraceletRadarChartSvg(
   const ownerPeakMarker = `<circle cx="${oxf}" cy="${oyf}" r="6" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2" aria-hidden="true"/>
   <circle cx="${oxf}" cy="${oyf}" r="3" fill="rgba(255,255,255,0.78)" aria-hidden="true"/>`;
 
-  return `<svg class="cb2-radar-svg" viewBox="0 0 ${VB_W} ${VB_H}" width="100%" style="max-width:320px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility" aria-hidden="true">
+  return `<svg class="cb2-radar-svg" viewBox="0 0 ${VB_W} ${VB_H}" width="100%" style="max-width:340px;display:block;margin:0 auto;overflow:visible" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility" aria-hidden="true">
   ${gridRings}
   ${spokes}
   <polygon points="${ownerPoints}" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="1.4" stroke-dasharray="5 4" stroke-linejoin="round"/>
