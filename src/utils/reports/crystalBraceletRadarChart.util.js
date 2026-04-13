@@ -107,10 +107,17 @@ export function buildCrystalBraceletRadarChartSvg(
   const stonePoints = polygonPointsFromScores(axisScores, angles, axisOrder);
   const ownerPoints = polygonPointsFromScores(ownerAxisScores, angles, axisOrder);
 
-  const labelR = RADIUS + 17;
+  /** Extra radial padding on E/W (and a bit N/S) so two-line labels clear the outer ring. */
+  const labelRadiusForAngle = (ang) =>
+    RADIUS +
+    22 +
+    14 * Math.abs(Math.cos(ang)) +
+    5 * Math.abs(Math.sin(ang));
+
   const axisLabelsHtml = angles
     .map((ang, i) => {
       const k = axisOrder[i];
+      const labelR = labelRadiusForAngle(ang);
       const lx = CX + labelR * Math.cos(ang);
       const ly = CY + labelR * Math.sin(ang);
       let anchor = "middle";

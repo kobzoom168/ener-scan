@@ -37,38 +37,6 @@ function cbAxisLabelThai(axes, key) {
 }
 
 /**
- * Legend rows sorted by score DESC (same ordering as former ring chart).
- * @param {Record<string, unknown>} axes
- */
-function buildCbRadarLegendHtml(axes) {
-  /** @type {Record<string, number>} */
-  const axisScores = {};
-  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
-    const e = axes[k];
-    const sc =
-      e && typeof e === "object" && e.score != null && Number.isFinite(Number(e.score))
-        ? Math.max(0, Math.min(100, Math.round(Number(e.score))))
-        : 0;
-    axisScores[k] = sc;
-  }
-  const sorted = [...CRYSTAL_BRACELET_AXIS_ORDER].sort((a, b) => {
-    const d = axisScores[b] - axisScores[a];
-    if (d !== 0) return d;
-    return CRYSTAL_BRACELET_AXIS_ORDER.indexOf(a) - CRYSTAL_BRACELET_AXIS_ORDER.indexOf(b);
-  });
-  return sorted
-    .map((key) => {
-      const color = CB_RING_COLORS[key] || "#0284c7";
-      const lab = escapeHtml(cbAxisLabelThai(axes, key));
-      return `<div class="cb2-radar-leg-row">
-  <span class="cb2-radar-dot" style="background:${color}" aria-hidden="true"></span>
-  <span class="cb2-radar-leg-label" style="color:${color}">${lab}</span>
-</div>`;
-    })
-    .join("");
-}
-
-/**
  * Radar (spider) heptagon — พลังกำไล (เส้นทึบ) + จังหวะผู้สวม (เส้นประ)
  * @param {Record<string, unknown>} axes
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
@@ -111,16 +79,12 @@ function createCbRadarSection(axes, payload) {
     ownerFit,
   );
   const radarSvg = buildCrystalBraceletRadarChartSvg(axes, ownerScores);
-  const legendHtml = buildCbRadarLegendHtml(axes);
   return `<section class="cb2-card cb2-radar-card" aria-labelledby="cb2-radar-h">
     <h2 id="cb2-radar-h">มิติพลังกำไล</h2>
     <div class="cb2-radar-wrap" role="img" aria-label="พลังกำไลและจังหวะผู้สวม แผนภูมิเรดาร์">
       ${radarSvg}
     </div>
     <p class="cb2-radar-key">เส้นทึบ = พลังกำไล · เส้นประ = จังหวะผู้สวม</p>
-    <div class="cb2-radar-legend">
-      ${legendHtml}
-    </div>
   </section>`;
 }
 
@@ -344,20 +308,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
       margin: 0 0 0.35rem 0;
       line-height: 1.35;
     }
-    .cb2-radar-legend {
-      display: flex;
-      flex-direction: column;
-      gap: 0.45rem;
-      margin-top: 0.85rem;
-    }
-    .cb2-radar-leg-row {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.78rem;
-    }
-    .cb2-radar-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-    .cb2-radar-leg-label { flex: 1; font-size: 0.76rem; }
 
     /* ── Axis bars ── */
     .cb2-axis-row { display: flex; align-items: center; gap: 0.45rem; margin: 0.4rem 0; font-size: 0.78rem; }
