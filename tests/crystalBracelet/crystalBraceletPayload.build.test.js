@@ -160,6 +160,20 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   assert.equal(html.includes("ออร่า"), false);
   assert.ok(html.includes("จังหวะเสริมพลัง"));
   assert.ok(html.includes("cb2-card--et"));
+  assert.ok(html.includes("cb2-bubble-cluster"));
+  assert.ok(html.includes("cb2-bubble-detail"));
+  assert.ok(html.includes("มิติชีวิตละเอียด"));
+  assert.equal(html.includes("cb2-life-card"), false);
+  assert.ok(html.includes("data-cb-bubbles"));
+  assert.ok(html.includes("data-cb-detail"));
+  assert.ok(html.includes("setActive"));
+  const pk = String(slice.primaryAxis || "").trim();
+  assert.ok(
+    new RegExp(
+      `<button[\\s\\S]*?data-axis-key="${pk.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}"[\\s\\S]*?is-active`,
+    ).test(html),
+    "default active bubble should match primaryAxis",
+  );
   assert.equal(html.includes("ตาที่ 3"), false);
   assert.equal(html.includes("คะแนนแต่ละมิติ"), false);
   assert.ok(html.includes("cb2-gsum-bar-sub"));

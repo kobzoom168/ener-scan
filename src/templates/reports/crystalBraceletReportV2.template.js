@@ -22,6 +22,16 @@ const CB_RING_COLORS = {
   love: "#fb7185",
 };
 
+/** keyword สั้น 1 บรรทัดต่อแกน — มิติชีวิตละเอียด (bubble cluster) */
+const CB_AXIS_SHORT_HINT = {
+  charm_attraction: "ดึงดูด น่าเข้าหา",
+  money: "รายรับ ผลตอบแทน",
+  career: "ลงมือ ต่อเนื่อง",
+  luck: "เปิดทาง โอกาส",
+  intuition: "รับสัญญาณ ตัดสินใจ",
+  love: "เชื่อมโยง อ่อนโยน",
+};
+
 /** คำอธิบายใต้หลอด — สรุปจากกราฟ (ไม่ซ้ำโทนกับมิติชีวิตละเอียดแบบยาว) */
 const CB_GRAPH_SUMMARY_SUB = {
   charm_attraction: {
@@ -381,6 +391,158 @@ ${row(
 }
 
 /**
+ * @param {Record<string, unknown>} axes
+ * @param {string} key
+ */
+function cbAxisStoneScoreForLife(axes, key) {
+  const e = axes[key];
+  const sc =
+    e && typeof e === "object" && e.score != null && Number.isFinite(Number(e.score))
+      ? Math.max(0, Math.min(100, Math.round(Number(e.score))))
+      : 0;
+  return sc;
+}
+
+/**
+ * @param {Record<string, unknown>} axes
+ * @param {Record<string, unknown>} blurbs
+ * @param {string} primaryAxis
+ * @param {string} alignAxisKey
+ */
+function buildCrystalBraceletLifeBubbleItems(axes, blurbs, primaryAxis, alignAxisKey) {
+  const blurbsObj = blurbs && typeof blurbs === "object" ? blurbs : {};
+  const primary = String(primaryAxis || "").trim();
+  const align = String(alignAxisKey || "").trim();
+  const base = CRYSTAL_BRACELET_AXIS_ORDER.map((key) => {
+    const score = cbAxisStoneScoreForLife(axes, key);
+    const blurb = String(blurbsObj[key] ?? "").trim();
+    const label = cbAxisLabelThai(axes, key);
+    const shortHint = CB_AXIS_SHORT_HINT[key] || "";
+    const color = CB_RING_COLORS[key] || "#38bdf8";
+    return {
+      key,
+      label,
+      score,
+      shortHint,
+      blurb,
+      color,
+      isPrimary: key === primary,
+      isAlign: key === align,
+    };
+  });
+  const orderIdx = (k) => CRYSTAL_BRACELET_AXIS_ORDER.indexOf(k);
+  const sorted = [...base].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return orderIdx(a.key) - orderIdx(b.key);
+  });
+  /** @type {Map<string, number>} */
+  const rankByKey = new Map();
+  sorted.forEach((it, i) => rankByKey.set(it.key, i + 1));
+  return base.map((it) => {
+    const rank = rankByKey.get(it.key) ?? 1;
+    const sizeClass = rank === 1 ? "lg" : rank <= 3 ? "md" : "sm";
+    return {
+      ...it,
+      rank,
+      sizeClass,
+      posClass: `cb2-bubble--pos${rank}`,
+    };
+  });
+}
+
+/**
+ * @param {Record<string, unknown>} axes
+ * @param {Record<string, unknown>|null|undefined} hr
+ * @param {string} primaryAxis
+ * @param {string} alignAxisKey
+ */
+function buildCrystalBraceletLifeBubbleSection(axes, hr, primaryAxis, alignAxisKey) {
+  const blurbs =
+    hr?.axisBlurbs && typeof hr.axisBlurbs === "object" ? hr.axisBlurbs : {};
+  const items = buildCrystalBraceletLifeBubbleItems(
+    axes,
+    blurbs,
+    primaryAxis,
+    alignAxisKey,
+  );
+  const orderIdx = (k) => CRYSTAL_BRACELET_AXIS_ORDER.indexOf(k);
+  const sortedForActive = [...items].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return orderIdx(a.key) - orderIdx(b.key);
+  });
+  const primary = String(primaryAxis || "").trim();
+  const active =
+    items.find((it) => it.key === primary) || sortedForActive[0] || items[0];
+  const hasAnyBlurb = items.some((it) => it.blurb.length > 0);
+  if (!hasAnyBlurb) {
+    return `<section class="cb2-card" aria-labelledby="cb2-life-h">
+  <h2 id="cb2-life-h">มิติชีวิตละเอียด</h2>
+  <p class="cb2-para">—</p>
+</section>`;
+  }
+
+  const bubblesOrder = [...items].sort((a, b) => a.rank - b.rank);
+  const bubblesHtml = bubblesOrder
+    .map((it) => {
+      const isActive = active && it.key === active.key;
+      const activeClass = isActive ? " is-active" : "";
+      return `<button
+  type="button"
+  class="cb2-bubble cb2-bubble--${it.sizeClass} ${it.posClass}${activeClass}"
+  style="--cb2-bubble-accent:${it.color}"
+  data-axis-key="${escapeHtml(it.key)}"
+  data-axis-label="${escapeHtml(it.label)}"
+  data-axis-score="${escapeHtml(String(it.score))}"
+  data-axis-blurb="${escapeHtml(it.blurb)}"
+  data-axis-hint="${escapeHtml(it.shortHint)}"
+  aria-pressed="${isActive ? "true" : "false"}"
+>
+  <span class="cb2-bubble-label">${escapeHtml(it.label)}</span>
+  <span class="cb2-bubble-score">${escapeHtml(String(it.score))}</span>
+  <span class="cb2-bubble-hint">${escapeHtml(it.shortHint)}</span>
+</button>`;
+    })
+    .join("\n");
+
+  const detailTitle = active ? active.label : "—";
+  const detailScore = active ? String(active.score) : "—";
+  const detailHint = active ? active.shortHint : "";
+  const detailBlurb = active ? active.blurb : "";
+
+  const noscriptItems = [...items].sort(
+    (a, b) => orderIdx(a.key) - orderIdx(b.key),
+  );
+  const noscriptHtml = `<noscript>
+  <div class="cb2-bubble-noscript" aria-label="รายละเอียดมิติชีวิตทั้งหมด">
+    ${noscriptItems
+      .map(
+        (it) =>
+          `<article class="cb2-bubble-noscript-item"><h3 class="cb2-bubble-noscript-h">${escapeHtml(it.label)}</h3><p class="cb2-bubble-noscript-p">${escapeHtml(it.blurb || "—")}</p></article>`,
+      )
+      .join("")}
+  </div>
+</noscript>`;
+
+  return `<section class="cb2-card" aria-labelledby="cb2-life-h">
+  <h2 id="cb2-life-h">มิติชีวิตละเอียด</h2>
+
+  <div class="cb2-bubble-cluster" data-cb-bubbles>
+${bubblesHtml}
+  </div>
+
+  <div class="cb2-bubble-detail" data-cb-detail>
+    <div class="cb2-bubble-detail-head">
+      <span class="cb2-bubble-detail-title" data-detail-title>${escapeHtml(detailTitle)}</span>
+      <span class="cb2-bubble-detail-score" data-detail-score>${escapeHtml(detailScore)}</span>
+    </div>
+    <p class="cb2-bubble-detail-hint" data-detail-hint>${escapeHtml(detailHint)}</p>
+    <p class="cb2-bubble-detail-blurb" data-detail-blurb>${escapeHtml(detailBlurb)}</p>
+  </div>
+${noscriptHtml}
+</section>`;
+}
+
+/**
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
  */
 export function renderCrystalBraceletReportV2Html(payload) {
@@ -445,20 +607,12 @@ export function renderCrystalBraceletReportV2Html(payload) {
       ? `<div class="cb2-hero-stack"><div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div></div>`
       : "";
 
-  const blurbs = hr.axisBlurbs && typeof hr.axisBlurbs === "object" ? hr.axisBlurbs : {};
-  const blurbSections = CRYSTAL_BRACELET_AXIS_ORDER.map((k) => {
-    const txt = String(blurbs[k] || "").trim();
-    if (!txt) return "";
-    const ax = axes[k];
-    const title =
-      ax && typeof ax === "object"
-        ? String(ax.labelThai || "").trim()
-        : k;
-    return `<article class="cb2-life-card">
-  <div class="cb2-life-head"><span class="cb2-life-title">${escapeHtml(title)}</span></div>
-  <p class="cb2-life-blurb">${escapeHtml(txt)}</p>
-</article>`;
-  }).join("");
+  const lifeBubbleSectionHtml = buildCrystalBraceletLifeBubbleSection(
+    axes,
+    hr,
+    primaryAxis,
+    alignAxisKey,
+  );
 
   const meaningParas = Array.isArray(hr.meaningParagraphs)
     ? hr.meaningParagraphs.map((p) => String(p || "").trim()).filter(Boolean)
@@ -820,12 +974,126 @@ export function renderCrystalBraceletReportV2Html(payload) {
       font-weight: 400;
     }
 
-    /* ── Life area cards ── */
-    .cb2-life-card { border-top: 1px solid rgba(255,255,255,0.06); padding: 0.8rem 0 0; margin-top: 0.7rem; }
-    .cb2-life-card:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
-    .cb2-life-head { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; }
-    .cb2-life-title { font-weight: 700; font-size: 0.84rem; color: var(--cb2-accent); }
-    .cb2-life-blurb { margin: 0; font-size: 0.82rem; line-height: 1.6; color: var(--cb2-sub); }
+    /* ── มิติชีวิตละเอียด: bubble cluster + detail ── */
+    .cb2-bubble-cluster {
+      position: relative;
+      min-height: 15rem;
+      margin-top: 0.2rem;
+    }
+    .cb2-bubble-detail {
+      margin-top: 0.9rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px;
+      padding: 0.8rem 0.85rem;
+    }
+    .cb2-bubble {
+      position: absolute;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 999px;
+      color: #f0f6fc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.12rem;
+      text-align: center;
+      padding: 0.35rem;
+      cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      font: inherit;
+      border-color: color-mix(in srgb, var(--cb2-bubble-accent) 28%, rgba(255,255,255,0.08));
+      background:
+        radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--cb2-bubble-accent) 16%, transparent), transparent 62%),
+        rgba(255,255,255,0.04);
+    }
+    .cb2-bubble:hover,
+    .cb2-bubble.is-active {
+      transform: translateY(-1px);
+      border-color: rgba(125,211,252,0.35);
+      box-shadow: 0 0 0 3px rgba(56,189,248,0.10);
+    }
+    .cb2-bubble--lg { width: 7rem; height: 7rem; }
+    .cb2-bubble--md { width: 5.8rem; height: 5.8rem; }
+    .cb2-bubble--sm { width: 4.8rem; height: 4.8rem; }
+    .cb2-bubble-label { font-size: 0.7rem; font-weight: 700; line-height: 1.2; }
+    .cb2-bubble-score {
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--cb2-bubble-accent);
+    }
+    .cb2-bubble-hint { font-size: 0.52rem; color: var(--cb2-muted); line-height: 1.25; max-width: 80%; }
+    .cb2-bubble--pos1 { left: 0.4rem; top: 3.2rem; }
+    .cb2-bubble--pos2 { right: 1.2rem; top: 1.1rem; }
+    .cb2-bubble--pos3 { right: 0.7rem; top: 7.3rem; }
+    .cb2-bubble--pos4 { left: 1.5rem; top: 9.1rem; }
+    .cb2-bubble--pos5 { left: 7.5rem; top: 0.4rem; }
+    .cb2-bubble--pos6 { left: 8.2rem; top: 8.9rem; }
+    .cb2-bubble-detail-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.6rem;
+      margin-bottom: 0.18rem;
+    }
+    .cb2-bubble-detail-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #e6edf3;
+    }
+    .cb2-bubble-detail-score {
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: #7dd3fc;
+    }
+    .cb2-bubble-detail-hint {
+      margin: 0 0 0.28rem;
+      font-size: 0.66rem;
+      color: var(--cb2-muted);
+    }
+    .cb2-bubble-detail-blurb {
+      margin: 0;
+      font-size: 0.78rem;
+      line-height: 1.58;
+      color: var(--cb2-sub);
+    }
+    .cb2-bubble-noscript {
+      margin-top: 0.75rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .cb2-bubble-noscript-item { margin-top: 0.55rem; }
+    .cb2-bubble-noscript-item:first-child { margin-top: 0; }
+    .cb2-bubble-noscript-h {
+      margin: 0 0 0.2rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--cb2-accent2);
+    }
+    .cb2-bubble-noscript-p {
+      margin: 0;
+      font-size: 0.76rem;
+      line-height: 1.55;
+      color: var(--cb2-sub);
+    }
+    @media (max-width: 380px) {
+      .cb2-bubble-cluster {
+        min-height: auto;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.6rem;
+      }
+      .cb2-bubble {
+        position: relative;
+        left: auto;
+        right: auto;
+        top: auto;
+        width: 100%;
+        height: 5.4rem;
+      }
+    }
 
     /* ── Misc text ── */
     .cb2-para { margin: 0.45rem 0 0; font-size: 0.85rem; line-height: 1.65; color: #c9d1d9; }
@@ -869,10 +1137,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
     ${energyTimingHtml}
 
-    <section class="cb2-card" aria-labelledby="cb2-life-h">
-      <h2 id="cb2-life-h">มิติชีวิตละเอียด</h2>
-      ${blurbSections || `<p class="cb2-para">—</p>`}
-    </section>
+    ${lifeBubbleSectionHtml}
 
     <section class="cb2-card" aria-labelledby="cb2-mean-h">
       <h2 id="cb2-mean-h">ความหมายโดยรวม</h2>
@@ -890,6 +1155,39 @@ export function renderCrystalBraceletReportV2Html(payload) {
       <p>Ener Scan · กำไลหินคริสตัล</p>
     </footer>
   </div>
+<script>
+(() => {
+  const root = document.querySelector("[data-cb-bubbles]");
+  const detail = document.querySelector("[data-cb-detail]");
+  if (!root || !detail) return;
+
+  const buttons = Array.from(root.querySelectorAll(".cb2-bubble"));
+  const titleEl = detail.querySelector("[data-detail-title]");
+  const scoreEl = detail.querySelector("[data-detail-score]");
+  const hintEl = detail.querySelector("[data-detail-hint]");
+  const blurbEl = detail.querySelector("[data-detail-blurb]");
+
+  const setActive = (btn) => {
+    buttons.forEach((b) => {
+      const on = b === btn;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    if (titleEl) titleEl.textContent = btn.dataset.axisLabel || "";
+    if (scoreEl) scoreEl.textContent = btn.dataset.axisScore || "";
+    if (hintEl) hintEl.textContent = btn.dataset.axisHint || "";
+    if (blurbEl) blurbEl.textContent = btn.dataset.axisBlurb || "";
+  };
+
+  buttons.forEach((btn) => {
+    btn.addEventListener("click", () => setActive(btn));
+  });
+
+  const initial =
+    buttons.find((b) => b.classList.contains("is-active")) || buttons[0];
+  if (initial) setActive(initial);
+})();
+</script>
 </body>
 </html>`;
 }
