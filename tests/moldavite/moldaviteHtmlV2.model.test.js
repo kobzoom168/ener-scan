@@ -9,6 +9,8 @@ import {
 } from "../../src/moldavite/moldaviteHtmlV2.model.js";
 import { buildMoldaviteV1Slice } from "../../src/moldavite/moldavitePayload.build.js";
 import { resolveMoldaviteDisplayNaming } from "../../src/moldavite/moldaviteDisplayNaming.util.js";
+import { normalizeReportPayloadForRender } from "../../src/utils/reports/reportPayloadNormalize.util.js";
+import { renderMoldaviteReportV2Html } from "../../src/templates/reports/moldaviteReportV2.template.js";
 
 test("buildRadarSectionCompareHelperLine: Moldavite default", () => {
   assert.equal(
@@ -136,4 +138,100 @@ test("buildMoldaviteHtmlV2ViewModel: legacy bestTimeText overrides recommendedTi
     object: {},
   });
   assert.equal(vm.energyTiming.recommendedTimeBand, "legacy เวลา override");
+});
+
+test("renderMoldaviteReportV2Html: timing section reads vm.energyTiming only (visual shell, no re-derive)", () => {
+  const mv = buildMoldaviteV1Slice({
+    scanResultId: "rid-et-html",
+    detection: { reason: "keyword_match", matchedSignals: ["x"] },
+    seedKey: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    energyScore: 7.5,
+    mainEnergyLabel: "เร่งการเปลี่ยนแปลง",
+    displayNaming: namingHigh,
+  });
+  const raw = {
+    reportId: "r-et-html",
+    scanId: "s-et-html",
+    birthdateUsed: "15/03/1990",
+    generatedAt: new Date().toISOString(),
+    reportVersion: "1.0.0",
+    object: {},
+    summary: {
+      energyScore: 7.5,
+      energyLevelLabel: "สูง",
+      mainEnergyLabel: mv.flexSurface.mainEnergyShort,
+      compatibilityPercent: 76,
+      summaryLine: "x",
+    },
+    sections: {},
+    trust: {},
+    actions: {},
+    wording: {},
+    moldaviteV1: mv,
+  };
+  const { payload } = normalizeReportPayloadForRender(raw);
+  const vm = buildMoldaviteHtmlV2ViewModel({
+    moldaviteV1: payload.moldaviteV1,
+    scanId: payload.scanId,
+    reportId: payload.reportId,
+    birthdateUsed: payload.birthdateUsed,
+    generatedAt: payload.generatedAt,
+    summary: payload.summary || {},
+    object: payload.object || {},
+  });
+  const html = renderMoldaviteReportV2Html(payload);
+  assert.ok(html.includes("จังหวะเสริมพลัง"));
+  assert.ok(
+    html.includes("ช่วงที่ Moldavite ตอบกับจังหวะของคุณได้ดีที่สุด"),
+  );
+  assert.ok(html.includes('class="mv2-et-sub"'));
+  assert.ok(html.includes('class="mv2-et-strip mv2-et-strip--weekday"'));
+  assert.ok(html.includes('class="mv2-et-strip mv2-et-strip--time"'));
+  assert.ok(html.includes('class="mv2-et-insight"'));
+  assert.ok(html.includes('class="mv2-et-mode-body"'));
+  assert.ok(html.includes(vm.energyTiming.recommendedWeekday));
+  assert.ok(html.includes(vm.energyTiming.recommendedTimeBand));
+  assert.ok(html.includes(vm.energyTiming.ritualMode));
+  assert.ok(html.includes(vm.energyTiming.timingReason));
+});
+
+test("renderMoldaviteReportV2Html: htmlReport energyTiming override still drives strips (presentation only)", () => {
+  const mv = buildMoldaviteV1Slice({
+    scanResultId: "rid-et-ov",
+    detection: { reason: "keyword_match", matchedSignals: ["x"] },
+    seedKey: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    energyScore: 7.5,
+    mainEnergyLabel: "เร่งการเปลี่ยนแปลง",
+    displayNaming: namingHigh,
+  });
+  mv.htmlReport = {
+    ...mv.htmlReport,
+    energyTiming: {
+      recommendedTimeBand: "ช่วงทดสอบเฉพาะเวลา",
+    },
+  };
+  const raw = {
+    reportId: "r-et-ov",
+    scanId: "s-et-ov",
+    birthdateUsed: "15/03/1990",
+    generatedAt: new Date().toISOString(),
+    reportVersion: "1.0.0",
+    object: {},
+    summary: {
+      energyScore: 7.5,
+      energyLevelLabel: "สูง",
+      mainEnergyLabel: mv.flexSurface.mainEnergyShort,
+      compatibilityPercent: 76,
+      summaryLine: "x",
+    },
+    sections: {},
+    trust: {},
+    actions: {},
+    wording: {},
+    moldaviteV1: mv,
+  };
+  const { payload } = normalizeReportPayloadForRender(raw);
+  const html = renderMoldaviteReportV2Html(payload);
+  assert.ok(html.includes("ช่วงทดสอบเฉพาะเวลา"));
+  assert.ok(html.includes('aria-label="เวลาเด่น ช่วงทดสอบเฉพาะเวลา"'));
 });

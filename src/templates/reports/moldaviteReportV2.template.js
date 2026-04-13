@@ -15,6 +15,122 @@ const AXIS_TITLE_TH = {
   money: "การเงิน",
 };
 
+/** Moldavite timing section: presentation only — values come from `vm.energyTiming` (derive + htmlReport overrides). */
+const MV2_ET_DEFAULT_SUBTITLE =
+  "ช่วงที่ Moldavite ตอบกับจังหวะของคุณได้ดีที่สุด";
+
+/** Monday-first, aligned with derive output (`วันจันทร์`, …). */
+const MV2_ET_WEEKDAY_FULL = /** @type {const} */ ([
+  "วันจันทร์",
+  "วันอังคาร",
+  "วันพุธ",
+  "วันพฤหัสบดี",
+  "วันศุกร์",
+  "วันเสาร์",
+  "วันอาทิตย์",
+]);
+const MV2_ET_WEEKDAY_SHORT = /** @type {const} */ ([
+  "จ",
+  "อ",
+  "พ",
+  "พฤ",
+  "ศ",
+  "ส",
+  "อา",
+]);
+const MV2_ET_WD_PILL_H = [22, 26, 20, 28, 32, 22, 24];
+
+/** Buckets for strip UI; active slot matches `recommendedTimeBand` string only (no re-derive). */
+const MV2_ET_TIME_BUCKETS = /** @type {const} */ ([
+  { key: "dawn", label: "เช้าตรู่", range: "05:00-07:59" },
+  { key: "morning", label: "เช้า", range: "08:00-10:59" },
+  { key: "afternoon", label: "บ่าย", range: "14:00-16:59" },
+  { key: "evening", label: "ค่ำ", range: "19:00-21:59" },
+]);
+const MV2_ET_TIME_SLOT_H = [22, 30, 26, 34];
+
+/**
+ * Normalize time band for equality with derive strings (hyphens, spaces).
+ * @param {unknown} s
+ */
+function normalizeMoldaviteTimeBandKey(s) {
+  return String(s || "")
+    .trim()
+    .replace(/\u2013|\u2014|–/g, "-")
+    .replace(/\s+/g, "");
+}
+
+/** @param {{ recommendedWeekday?: string }} et */
+function buildMoldaviteTimingWeekdayStrip(et) {
+  const rec = String(et?.recommendedWeekday || "").trim();
+  const activeH = 40;
+  const stripAria = escapeHtml(rec ? `วันเด่น ${rec}` : "วันเด่น");
+  const pills = MV2_ET_WEEKDAY_FULL.map((full, i) => {
+    const active = full === rec;
+    const h = active ? activeH : MV2_ET_WD_PILL_H[i] ?? 24;
+    const cls = active ? "mv2-et-pill mv2-et-pill--active" : "mv2-et-pill";
+    const aria = active ? ' aria-current="date"' : "";
+    return `<span class="${cls}" style="--mv2-et-pill-h:${h}px"${aria}><span class="mv2-et-pill-lbl">${MV2_ET_WEEKDAY_SHORT[i]}</span></span>`;
+  }).join("");
+  return `<div class="mv2-et-strip mv2-et-strip--weekday" role="group" aria-label="${stripAria}">${pills}</div>`;
+}
+
+/**
+ * @param {{ recommendedTimeBand?: string }} et
+ */
+function buildMoldaviteTimingBandStrip(et) {
+  const recBand = String(et?.recommendedTimeBand || "").trim();
+  const bandNorm = normalizeMoldaviteTimeBandKey(recBand);
+  /** @type {string | null} */
+  let activeKey = null;
+  for (const b of MV2_ET_TIME_BUCKETS) {
+    if (normalizeMoldaviteTimeBandKey(b.range) === bandNorm) {
+      activeKey = b.key;
+      break;
+    }
+  }
+  const stripAria = escapeHtml(recBand ? `เวลาเด่น ${recBand}` : "เวลาเด่น");
+  const activeBarH = 42;
+  const slots = MV2_ET_TIME_BUCKETS.map((b, i) => {
+    const active = b.key === activeKey;
+    const h = active ? activeBarH : MV2_ET_TIME_SLOT_H[i] ?? 26;
+    const cls = active ? "mv2-et-slot mv2-et-slot--active" : "mv2-et-slot";
+    return `<div class="${cls}" style="--mv2-et-slot-h:${h}px" title="${escapeHtml(b.range)}"><div class="mv2-et-slot-bar" aria-hidden="true"></div><span class="mv2-et-slot-label">${escapeHtml(b.label)}</span><span class="mv2-et-slot-range">${escapeHtml(b.range)}</span></div>`;
+  }).join("");
+  return `<div class="mv2-et-strip mv2-et-strip--time" role="group" aria-label="${stripAria}">${slots}</div>`;
+}
+
+/**
+ * @param {{
+ *   recommendedWeekday: string,
+ *   recommendedTimeBand: string,
+ *   ritualMode: string,
+ *   timingReason: string,
+ * }} et
+ */
+function buildMoldaviteEnergyTimingSectionHtml(et) {
+  return `<section class="mv2-card mv2-card--et" aria-labelledby="mv2-et-h">
+    <h2 id="mv2-et-h" class="mv2-et-head">จังหวะเสริมพลัง</h2>
+    <p class="mv2-et-sub">${escapeHtml(MV2_ET_DEFAULT_SUBTITLE)}</p>
+    <div class="mv2-et-trends">
+      <div class="mv2-et-trend">
+        <span class="mv2-et-trend-k">วันเด่น</span>
+        ${buildMoldaviteTimingWeekdayStrip(et)}
+      </div>
+      <div class="mv2-et-trend">
+        <span class="mv2-et-trend-k">เวลาเด่น</span>
+        ${buildMoldaviteTimingBandStrip(et)}
+      </div>
+    </div>
+    <div class="mv2-et-insight">
+      <span class="mv2-et-trend-k">แนวใช้ที่แนะนำ</span>
+      <p class="mv2-et-mode-lead">ช่วงนี้เหมาะกับการตั้งจิตก่อนใช้แบบนี้</p>
+      <p class="mv2-et-mode-body">${escapeHtml(et.ritualMode)}</p>
+      <p class="mv2-et-reason">${escapeHtml(et.timingReason)}</p>
+    </div>
+  </section>`;
+}
+
 /** ต่างกันไม่เกินนี้ถือว่า "ใกล้เคียง" (คุณ vs หิน ต่อแกน) */
 const RADAR_AXIS_COMPARE_EPS = 6;
 
@@ -341,27 +457,7 @@ export function renderMoldaviteReportV2Html(payload) {
     .join("");
 
   const et = vm.energyTiming;
-  const energyTimingHtml = `<section class="mv2-card mv2-card--et" aria-labelledby="mv2-et-h">
-      <h2 id="mv2-et-h">จังหวะเสริมพลัง</h2>
-      <div class="mv2-et-body">
-        <div class="mv2-et-grid">
-          <div class="mv2-et-panel">
-            <span class="mv2-et-k">วัน</span>
-            <span class="mv2-et-v mv2-et-v--fact">${escapeHtml(et.recommendedWeekday)}</span>
-          </div>
-          <div class="mv2-et-panel">
-            <span class="mv2-et-k">เวลา</span>
-            <span class="mv2-et-v mv2-et-v--fact mv2-et-v--time">${escapeHtml(et.recommendedTimeBand)}</span>
-          </div>
-        </div>
-        <div class="mv2-et-panel mv2-et-panel--wide">
-          <span class="mv2-et-k">โหมดแนะนำ</span>
-          <span class="mv2-et-v mv2-et-v--mode">${escapeHtml(et.ritualMode)}</span>
-        </div>
-        <div class="mv2-et-divider" aria-hidden="true"></div>
-        <p class="mv2-et-note">${escapeHtml(et.timingReason)}</p>
-      </div>
-    </section>`;
+  const energyTimingHtml = buildMoldaviteEnergyTimingSectionHtml(et);
 
   const title = escapeHtml(
     (h.subtypeLabel || "รายงาน").slice(0, 48),
@@ -783,76 +879,152 @@ export function renderMoldaviteReportV2Html(payload) {
       padding: 1.35rem 1.4rem;
       border-radius: 20px;
     }
-    .mv2-card--et > h2 {
-      margin: 0 0 1rem;
+    .mv2-et-head {
+      margin: 0 0 0.35rem;
       font-size: 0.95rem;
+      color: var(--mv2-green-dim);
+      font-weight: 600;
     }
-    .mv2-et-body { margin: 0; }
-    .mv2-et-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.875rem;
-      align-items: stretch;
+    .mv2-et-sub {
+      margin: 0;
+      font-size: 0.76rem;
+      line-height: 1.45;
+      color: rgba(148, 163, 184, 0.82);
+      font-weight: 400;
     }
-    .mv2-et-panel {
+    .mv2-et-trends {
       display: flex;
       flex-direction: column;
-      gap: 0.35rem;
-      padding: 0.8rem 0.85rem;
-      border-radius: 13px;
-      background: rgba(255, 255, 255, 0.045);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      box-sizing: border-box;
+      gap: 1.05rem;
+      margin: 0.85rem 0 0;
     }
-    .mv2-et-panel--wide {
-      margin-top: 0.875rem;
-      width: 100%;
-    }
-    .mv2-card--et .mv2-et-k {
+    .mv2-et-trend { margin: 0; }
+    .mv2-et-trend-k {
+      display: block;
       font-size: 0.62rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: rgba(110, 231, 183, 0.42);
+      color: rgba(110, 231, 183, 0.5);
       font-weight: 600;
     }
-    .mv2-card--et .mv2-et-v--fact {
-      font-size: 1rem;
-      line-height: 1.35;
+    .mv2-et-strip--weekday {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 0.32rem;
+      margin-top: 0.42rem;
+    }
+    .mv2-et-pill {
+      flex: 1;
+      min-width: 0;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      min-height: var(--mv2-et-pill-h, 26px);
+      padding: 0.28rem 0.12rem 0.38rem;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.07);
+      border: 1px solid rgba(34, 197, 94, 0.11);
+      transition: opacity 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .mv2-et-pill:not(.mv2-et-pill--active) {
+      opacity: 0.36;
+    }
+    .mv2-et-pill--active {
+      opacity: 1;
+      background: rgba(34, 197, 94, 0.2);
+      border-color: rgba(52, 211, 153, 0.42);
+      box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.12), 0 4px 14px rgba(22, 163, 74, 0.12);
+    }
+    .mv2-et-pill-lbl {
+      font-size: 0.7rem;
       font-weight: 700;
-      color: rgba(241, 245, 249, 0.98);
-      letter-spacing: 0.01em;
+      line-height: 1;
+      color: rgba(187, 247, 208, 0.88);
+      letter-spacing: 0.02em;
     }
-    @keyframes mv2EtTimeSoftBlink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.42; }
+    .mv2-et-pill:not(.mv2-et-pill--active) .mv2-et-pill-lbl {
+      color: rgba(100, 116, 139, 0.75);
     }
-    @media (prefers-reduced-motion: no-preference) {
-      .mv2-card--et .mv2-et-v--time {
-        animation: mv2EtTimeSoftBlink 2.6s ease-in-out infinite;
-      }
+    .mv2-et-strip--time {
+      display: flex;
+      gap: 0.4rem;
+      margin-top: 0.42rem;
+      align-items: stretch;
     }
-    @media (prefers-reduced-motion: reduce) {
-      .mv2-card--et .mv2-et-v--time { animation: none !important; opacity: 1 !important; }
+    .mv2-et-slot {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.26rem;
+      transition: opacity 0.15s ease;
     }
-    .mv2-card--et .mv2-et-v--mode {
-      font-size: 0.88rem;
-      line-height: 1.45;
+    .mv2-et-slot:not(.mv2-et-slot--active) {
+      opacity: 0.38;
+    }
+    .mv2-et-slot--active {
+      opacity: 1;
+    }
+    .mv2-et-slot-bar {
+      width: 100%;
+      max-width: 2.15rem;
+      height: var(--mv2-et-slot-h, 26px);
+      border-radius: 7px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.14);
+    }
+    .mv2-et-slot--active .mv2-et-slot-bar {
+      background: linear-gradient(180deg, rgba(52, 211, 153, 0.52), rgba(22, 163, 74, 0.32));
+      border-color: rgba(52, 211, 153, 0.48);
+      box-shadow: 0 0 14px rgba(34, 197, 94, 0.22);
+    }
+    .mv2-et-slot-label {
+      font-size: 0.62rem;
       font-weight: 600;
-      color: rgba(226, 232, 240, 0.94);
+      line-height: 1.15;
+      color: rgba(110, 231, 183, 0.78);
+      text-align: center;
     }
-    .mv2-et-divider {
-      height: 0;
-      margin: 1rem 0;
-      border: none;
-      border-top: 1px solid rgba(255, 255, 255, 0.055);
+    .mv2-et-slot-range {
+      font-size: 0.56rem;
+      line-height: 1.2;
+      color: rgba(100, 116, 139, 0.72);
+      font-variant-numeric: tabular-nums;
+      text-align: center;
     }
-    .mv2-card--et .mv2-et-note {
+    .mv2-et-insight {
+      margin-top: 1.12rem;
+      padding: 0.88rem 0.92rem;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.038);
+      border: 1px solid rgba(255, 255, 255, 0.055);
+    }
+    .mv2-et-insight .mv2-et-trend-k {
+      margin-bottom: 0.15rem;
+    }
+    .mv2-et-mode-lead {
+      margin: 0.32rem 0 0.42rem;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: rgba(148, 163, 184, 0.72);
+      font-weight: 400;
+    }
+    .mv2-et-mode-body {
       margin: 0;
-      padding: 0;
-      border: none;
-      font-size: 0.8rem;
-      line-height: 1.75;
-      color: rgba(186, 198, 214, 0.72);
+      font-size: 0.9rem;
+      line-height: 1.52;
+      font-weight: 600;
+      color: rgba(241, 245, 249, 0.96);
+    }
+    .mv2-et-reason {
+      margin: 0.62rem 0 0;
+      font-size: 0.78rem;
+      line-height: 1.65;
+      color: rgba(148, 163, 184, 0.68);
       font-weight: 400;
     }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
