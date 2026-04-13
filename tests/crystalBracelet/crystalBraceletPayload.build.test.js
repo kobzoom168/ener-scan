@@ -150,6 +150,8 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
     object: {},
     crystalBraceletV1: slice,
   });
+  assert.ok(html.includes("cb2-intro"));
+  assert.ok(html.includes("อ่านผลแบบเฉพาะบุคคล"));
   assert.ok(html.includes("โปรไฟล์เจ้าของ"));
   assert.ok(
     html.includes(
@@ -160,23 +162,15 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   assert.equal(html.includes("ออร่า"), false);
   assert.ok(html.includes("จังหวะเสริมพลัง"));
   assert.ok(html.includes("cb2-card--et"));
-  assert.ok(html.includes("cb2-bubble-cluster"));
-  assert.ok(html.includes("cb2-bubble-detail"));
-  assert.ok(html.includes("มิติชีวิตละเอียด"));
-  assert.ok(html.includes("ความหมายโดยรวม"));
-  assert.ok(html.includes("การใช้และข้อควรระวัง"));
-  assert.ok(html.includes("cb2-life-bubbles"));
-  assert.ok(html.includes("data-cb-bubbles"));
-  assert.ok(html.includes("data-cb-detail"));
-  assert.ok(html.includes("setActive"));
-  assert.equal(html.includes("cb2-life-card"), false);
-  const pk = String(slice.primaryAxis || "").trim();
-  assert.ok(
-    new RegExp(
-      `<button[\\s\\S]*?data-axis-key="${pk.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}"[\\s\\S]*?is-active`,
-    ).test(html),
-    "default active bubble should match primaryAxis",
-  );
+  assert.ok(html.includes("แชร์รายงาน"));
+  assert.ok(html.includes("cb2-share-native"));
+  assert.ok(html.includes("cb2-share-btn--line"));
+  assert.ok(html.includes("lin.ee/6YZeFZ1"));
+  assert.equal(html.includes("มิติชีวิตละเอียด"), false);
+  assert.equal(html.includes("ความหมายโดยรวม"), false);
+  assert.equal(html.includes("การใช้และข้อควรระวัง"), false);
+  assert.equal(html.includes("cb2-bubble-cluster"), false);
+  assert.equal(html.includes("setActive"), false);
   assert.equal(html.includes("ตาที่ 3"), false);
   assert.equal(html.includes("คะแนนแต่ละมิติ"), false);
   assert.ok(html.includes("cb2-gsum-bar-sub"));

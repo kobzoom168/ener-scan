@@ -10,8 +10,59 @@ import {
 } from "../../crystalBracelet/crystalBraceletScores.util.js";
 import { buildCrystalBraceletRadarChartSvg } from "../../utils/reports/crystalBraceletRadarChart.util.js";
 
+/**
+ * Public report URL for GET /r/:publicToken (standalone — ไม่ import เทมเพลตพระเครื่อง)
+ * @param {string} publicToken
+ */
+function buildPublicReportUrlForMeta(publicToken) {
+  const tok = String(publicToken || "").trim();
+  if (!tok) return "";
+  const explicit = String(process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  if (explicit) return `${explicit}/r/${encodeURIComponent(tok)}`;
+  const railway = process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (railway) {
+    const host = String(railway)
+      .replace(/^https?:\/\//i, "")
+      .replace(/\/$/, "");
+    if (host) return `https://${host}/r/${encodeURIComponent(tok)}`;
+  }
+  const vercel = process.env.VERCEL_URL;
+  if (vercel) {
+    const host = String(vercel)
+      .replace(/^https?:\/\//i, "")
+      .replace(/\/$/, "");
+    if (host) return `https://${host}/r/${encodeURIComponent(tok)}`;
+  }
+  const port = process.env.PORT || "3000";
+  return `http://localhost:${port}/r/${encodeURIComponent(tok)}`;
+}
+
+/**
+ * @param {string} canonicalPageUrl
+ * @param {string} rawImage
+ */
+function absoluteUrlForMeta(canonicalPageUrl, rawImage) {
+  const u = String(rawImage || "").trim();
+  if (!u) return "";
+  if (/^https?:\/\//i.test(u)) return u;
+  if (u.startsWith("//")) return `https:${u}`;
+  const base = String(canonicalPageUrl || "").trim();
+  if (!base || !/^https?:\/\//i.test(base)) return u;
+  try {
+    return new URL(u, base).href;
+  } catch {
+    return u;
+  }
+}
+
 const DISCLAIMER_FIXED =
   "ผลนี้อ่านจากพลังรวมของกำไลทั้งเส้น ไม่ยืนยันชนิดหินรายเม็ด";
+
+/** ข้อความนำด้านบนรายงาน (แทนแถบสั้น Ener Scan · กำไลหินคริสตัล) */
+const CB2_HEADER_INTRO =
+  "กำไลหินคริสตัลจะเด่นด้านไหน ไม่ได้ขึ้นอยู่กับกำไลเพียงอย่างเดียว แต่ยังขึ้นอยู่กับวันเดือนปีเกิด พื้นฐานจังหวะชีวิต และการใช้ของผู้สวมด้วย แต่ละคนจึงรับพลังได้ต่างกัน Ener Scan จึงอ่านผลแบบเฉพาะบุคคล เพื่อดูว่าช่วงนี้พลังของกำไลเส้นนี้เด่นกับคุณด้านใดมากที่สุด";
 
 const CB_RING_COLORS = {
   charm_attraction: "#f472b6",
@@ -20,16 +71,6 @@ const CB_RING_COLORS = {
   luck: "#eab308",
   intuition: "#a855f7",
   love: "#fb7185",
-};
-
-/** hint สั้นต่อแกน — แสดงใน detail panel (ฟองเหลือแค่ label + score) */
-const CB_AXIS_SHORT_HINT = {
-  charm_attraction: "ดึงดูด น่าเข้าหา",
-  money: "รายรับ ผลตอบแทน",
-  career: "ลงมือ ต่อเนื่อง",
-  luck: "เปิดทาง โอกาส",
-  intuition: "รับสัญญาณ ตัดสินใจ",
-  love: "เชื่อมโยง อ่อนโยน",
 };
 
 /** คำอธิบายใต้หลอด — สรุปจากกราฟ */
@@ -391,144 +432,6 @@ ${row(
 }
 
 /**
- * @param {Record<string, unknown>} axes
- * @param {string} key
- */
-function cbAxisStoneScoreForLife(axes, key) {
-  const e = axes[key];
-  const sc =
-    e && typeof e === "object" && e.score != null && Number.isFinite(Number(e.score))
-      ? Math.max(0, Math.min(100, Math.round(Number(e.score))))
-      : 0;
-  return sc;
-}
-
-/**
- * @param {Record<string, unknown>} axes
- * @param {Record<string, unknown>} blurbs
- * @param {string} primaryAxis
- * @param {string} alignAxisKey
- */
-function buildCrystalBraceletLifeBubbleItems(axes, blurbs, primaryAxis, alignAxisKey) {
-  const blurbsObj = blurbs && typeof blurbs === "object" ? blurbs : {};
-  const primary = String(primaryAxis || "").trim();
-  const align = String(alignAxisKey || "").trim();
-  const base = CRYSTAL_BRACELET_AXIS_ORDER.map((key) => {
-    const score = cbAxisStoneScoreForLife(axes, key);
-    const blurb = String(blurbsObj[key] ?? "").trim();
-    const label = cbAxisLabelThai(axes, key);
-    const shortHint = CB_AXIS_SHORT_HINT[key] || "";
-    const color = CB_RING_COLORS[key] || "#38bdf8";
-    return {
-      key,
-      label,
-      score,
-      shortHint,
-      blurb,
-      color,
-      isPrimary: key === primary,
-      isAlign: key === align,
-    };
-  });
-  const orderIdx = (k) => CRYSTAL_BRACELET_AXIS_ORDER.indexOf(k);
-  const sorted = [...base].sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return orderIdx(a.key) - orderIdx(b.key);
-  });
-  /** @type {Map<string, number>} */
-  const rankByKey = new Map();
-  sorted.forEach((it, i) => rankByKey.set(it.key, i + 1));
-  return base.map((it) => {
-    const rank = rankByKey.get(it.key) ?? 1;
-    const sizeClass = rank === 1 ? "lg" : rank <= 3 ? "md" : "sm";
-    return {
-      ...it,
-      rank,
-      sizeClass,
-      posClass: `cb2-bubble--pos${rank}`,
-    };
-  });
-}
-
-/**
- * @param {Record<string, unknown>} axes
- * @param {Record<string, unknown>|null|undefined} hr
- * @param {string} primaryAxis
- * @param {string} alignAxisKey
- */
-function buildCrystalBraceletLifeBubbleSection(axes, hr, primaryAxis, alignAxisKey) {
-  const blurbs =
-    hr?.axisBlurbs && typeof hr.axisBlurbs === "object" ? hr.axisBlurbs : {};
-  const items = buildCrystalBraceletLifeBubbleItems(
-    axes,
-    blurbs,
-    primaryAxis,
-    alignAxisKey,
-  );
-  const orderIdx = (k) => CRYSTAL_BRACELET_AXIS_ORDER.indexOf(k);
-  const sortedForActive = [...items].sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return orderIdx(a.key) - orderIdx(b.key);
-  });
-  const primary = String(primaryAxis || "").trim();
-  const active =
-    items.find((it) => it.key === primary) || sortedForActive[0] || items[0];
-  const hasAnyBlurb = items.some((it) => it.blurb.length > 0);
-  if (!hasAnyBlurb) {
-    return `<section class="cb2-card cb2-life-bubbles" aria-labelledby="cb2-life-h">
-  <h2 id="cb2-life-h">มิติชีวิตละเอียด</h2>
-  <p class="cb2-para">—</p>
-</section>`;
-  }
-
-  const bubblesOrder = [...items].sort((a, b) => a.rank - b.rank);
-  const bubblesHtml = bubblesOrder
-    .map((it) => {
-      const isActive = active && it.key === active.key;
-      const activeClass = isActive ? " is-active" : "";
-      const ariaHint = it.shortHint ? ` · ${it.shortHint}` : "";
-      return `<button
-  type="button"
-  class="cb2-bubble cb2-bubble--${it.sizeClass} ${it.posClass}${activeClass}"
-  style="--cb2-bubble-accent:${it.color}"
-  data-axis-key="${escapeHtml(it.key)}"
-  data-axis-label="${escapeHtml(it.label)}"
-  data-axis-score="${escapeHtml(String(it.score))}"
-  data-axis-blurb="${escapeHtml(it.blurb)}"
-  data-axis-hint="${escapeHtml(it.shortHint)}"
-  aria-pressed="${isActive ? "true" : "false"}"
-  aria-label="${escapeHtml(`${it.label} ${it.score}${ariaHint}`)}"
->
-  <span class="cb2-bubble-label">${escapeHtml(it.label)}</span>
-  <span class="cb2-bubble-score">${escapeHtml(String(it.score))}</span>
-</button>`;
-    })
-    .join("\n");
-
-  const detailTitle = active ? active.label : "—";
-  const detailScore = active ? String(active.score) : "—";
-  const detailHint = active ? active.shortHint : "";
-  const detailBlurb = active ? active.blurb : "";
-
-  return `<section class="cb2-card cb2-life-bubbles" aria-labelledby="cb2-life-h">
-  <h2 id="cb2-life-h">มิติชีวิตละเอียด</h2>
-
-  <div class="cb2-bubble-cluster" data-cb-bubbles>
-${bubblesHtml}
-  </div>
-
-  <div class="cb2-bubble-detail" data-cb-detail>
-    <div class="cb2-bubble-detail-head">
-      <span class="cb2-bubble-detail-title" data-detail-title>${escapeHtml(detailTitle)}</span>
-      <span class="cb2-bubble-detail-score" data-detail-score>${escapeHtml(detailScore)}</span>
-    </div>
-    <p class="cb2-bubble-detail-hint" data-detail-hint>${escapeHtml(detailHint)}</p>
-    <p class="cb2-bubble-detail-blurb" data-detail-blurb>${escapeHtml(detailBlurb)}</p>
-  </div>
-</section>`;
-}
-
-/**
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
  */
 export function renderCrystalBraceletReportV2Html(payload) {
@@ -593,37 +496,65 @@ export function renderCrystalBraceletReportV2Html(payload) {
       ? `<div class="cb2-hero-stack"><div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div></div>`
       : "";
 
-  const lifeBubbleSectionHtml = buildCrystalBraceletLifeBubbleSection(
-    axes,
-    hr,
-    primaryAxis,
-    alignAxisKey,
+  const ogTitle = `${headline} · Ener Scan`;
+  const ogDescription =
+    "ดูรายงานพลังกำไลหินคริสตัลจาก Ener Scan พร้อมเรดาร์ สรุปจากกราฟ และจังหวะเสริมพลัง";
+  const ogImageAlt = ogTitle;
+  const canonicalFromWording = String(
+    payload.wording && typeof payload.wording === "object"
+      ? /** @type {{ publicReportUrl?: string }} */ (payload.wording).publicReportUrl ?? ""
+      : "",
+  ).trim();
+  let canonicalUrl = "";
+  if (/^https?:\/\//i.test(canonicalFromWording)) {
+    try {
+      const cu = new URL(canonicalFromWording);
+      if (cu.protocol === "https:" || cu.protocol === "http:") canonicalUrl = cu.href;
+    } catch {
+      canonicalUrl = "";
+    }
+  }
+  if (!canonicalUrl) {
+    canonicalUrl = buildPublicReportUrlForMeta(String(payload.publicToken || "").trim());
+  }
+  const rawSocialImage = String(payload.object?.socialImageUrl || "").trim();
+  const ogImageUrl = absoluteUrlForMeta(
+    /^https?:\/\//i.test(canonicalUrl) ? canonicalUrl : "",
+    rawSocialImage || imgRaw,
   );
+  const ogImageTags =
+    ogImageUrl !== ""
+      ? `
+  <meta property="og:image" content="${escapeHtml(ogImageUrl)}" />
+  <meta property="og:image:alt" content="${escapeHtml(ogImageAlt)}" />
+  <meta name="twitter:image" content="${escapeHtml(ogImageUrl)}" />`
+      : "";
 
-  const meaningParas = Array.isArray(hr.meaningParagraphs)
-    ? hr.meaningParagraphs.map((p) => String(p || "").trim()).filter(Boolean)
-    : [];
-  const meaningHtml = meaningParas
-    .map((p) => `<p class="cb2-para">${escapeHtml(p)}</p>`)
-    .join("");
-
-  const cautionLines = Array.isArray(hr.usageCautionLines)
-    ? hr.usageCautionLines.map((p) => String(p || "").trim()).filter(Boolean)
-    : [];
-  const cautionHtml = cautionLines
-    .map((p) => `<li class="cb2-caution-li">${escapeHtml(p)}</li>`)
-    .join("");
+  const shareTitleJson = JSON.stringify(ogTitle);
+  const shareTextJson = JSON.stringify("ดูรายงานพลังจาก Ener Scan ได้ที่ลิงก์นี้");
 
   const radarSectionHtml = createCbRadarSection(axes, ownerScores);
   const ownerProfileHtml = buildCrystalBraceletOwnerProfileHtml(cb);
   const energyTimingHtml = buildCrystalBraceletEnergyTimingHtml(hr);
+
+  const canonicalLinkTag = canonicalUrl
+    ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${escapeHtml(ogTitle)}" />
+  <meta property="og:description" content="${escapeHtml(ogDescription)}" />
+  <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />${ogImageTags}
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${escapeHtml(ogTitle)}" />
+  <meta name="twitter:description" content="${escapeHtml(ogDescription)}" />
+`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>${escapeHtml(headline)} · Ener Scan</title>
+  ${canonicalLinkTag}  <title>${escapeHtml(ogTitle)}</title>
   <style>
     :root {
       --cb2-bg: #0d1117;
@@ -649,7 +580,14 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-wrap { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2.5rem; }
 
     /* ── Header ── */
-    .cb2-badge { font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cb2-accent); margin-bottom: 0.6rem; font-weight: 600; }
+    .cb2-intro {
+      margin: 0 0 0.85rem;
+      font-size: 0.72rem;
+      line-height: 1.55;
+      color: var(--cb2-sub);
+      font-weight: 400;
+      letter-spacing: 0.01em;
+    }
     .cb2-header-row { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.25rem; }
     .cb2-header-text { flex: 1; min-width: 0; }
     .cb2-hero-stack { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex-shrink: 0; }
@@ -761,6 +699,67 @@ export function renderCrystalBraceletReportV2Html(payload) {
       font-size: 0.74rem;
       line-height: 1.58;
       color: var(--cb2-sub);
+    }
+
+    /* ── แชร์รายงาน (เทียบพระเครื่อง: Web Share + LINE OA) ── */
+    .cb2-share-card {
+      border-left-color: rgba(56, 189, 248, 0.45);
+      margin-top: 1rem;
+    }
+    .cb2-share-card h2 {
+      color: #7dd3fc;
+      font-size: 0.88rem;
+    }
+    .cb2-share-note {
+      margin: 0 0 0.55rem;
+      font-size: 0.68rem;
+      line-height: 1.45;
+      color: var(--cb2-muted);
+    }
+    .cb2-share-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.55rem;
+    }
+    @media (max-width: 480px) {
+      .cb2-share-actions { grid-template-columns: 1fr; }
+    }
+    .cb2-share-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 2.55rem;
+      padding: 0.5rem 0.65rem;
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      line-height: 1.28;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .cb2-share-btn--primary {
+      background: #1877f2;
+      border-color: #1877f2;
+      color: #ffffff;
+    }
+    .cb2-share-btn--primary:hover {
+      background: #166fe5;
+      border-color: #166fe5;
+    }
+    .cb2-share-btn--primary:active {
+      background: #1464d4;
+      border-color: #1464d4;
+    }
+    .cb2-share-btn--line {
+      background: #06c755;
+      border-color: #05b34c;
+      color: #ffffff;
     }
 
     /* ── Score strip ── */
@@ -960,137 +959,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
       font-weight: 400;
     }
 
-    /* ── มิติชีวิตละเอียด: premium bubble cluster (รองกราฟ — โทนม่วงอ่อน) ── */
-    .cb2-life-bubbles {
-      border-left-color: rgba(167, 139, 250, 0.28);
-      margin-top: 1rem;
-    }
-    .cb2-life-bubbles h2 {
-      color: #a1a1aa;
-      font-weight: 600;
-      font-size: 0.82rem;
-      margin-bottom: 0.55rem;
-    }
-    .cb2-bubble-cluster {
-      position: relative;
-      min-height: 14.5rem;
-      margin-top: 0.15rem;
-    }
-    .cb2-bubble-detail {
-      margin-top: 0.85rem;
-      background: linear-gradient(145deg, rgba(139, 92, 246, 0.06), rgba(255,255,255,0.02));
-      border: 1px solid rgba(167, 139, 250, 0.12);
-      border-radius: 16px;
-      padding: 0.85rem 0.9rem;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-    }
-    .cb2-bubble {
-      position: absolute;
-      border-radius: 999px;
-      color: #f4f4f5;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0.2rem;
-      text-align: center;
-      padding: 0.4rem;
-      cursor: pointer;
-      font: inherit;
-      border: 1px solid color-mix(in srgb, var(--cb2-bubble-accent) 22%, rgba(255,255,255,0.06));
-      background:
-        radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--cb2-bubble-accent) 14%, transparent), transparent 58%),
-        rgba(24, 24, 27, 0.55);
-      box-shadow:
-        inset 0 0 0 1px rgba(255,255,255,0.03),
-        0 2px 12px rgba(0,0,0,0.25);
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-    .cb2-bubble:hover {
-      transform: translateY(-2px);
-      border-color: color-mix(in srgb, var(--cb2-bubble-accent) 38%, rgba(255,255,255,0.1));
-      box-shadow:
-        inset 0 0 0 1px rgba(255,255,255,0.05),
-        0 4px 16px rgba(0,0,0,0.3),
-        0 0 0 1px color-mix(in srgb, var(--cb2-bubble-accent) 20%, transparent);
-    }
-    .cb2-bubble.is-active {
-      transform: translateY(-2px);
-      border-color: color-mix(in srgb, var(--cb2-bubble-accent) 45%, rgba(244,244,245,0.15));
-      box-shadow:
-        inset 0 0 0 1px rgba(255,255,255,0.06),
-        0 0 0 2px color-mix(in srgb, var(--cb2-bubble-accent) 25%, transparent),
-        0 4px 18px rgba(0,0,0,0.32);
-    }
-    .cb2-bubble--lg { width: 6.75rem; height: 6.75rem; }
-    .cb2-bubble--md { width: 5.5rem; height: 5.5rem; }
-    .cb2-bubble--sm { width: 4.65rem; height: 4.65rem; }
-    .cb2-bubble-label { font-size: 0.68rem; font-weight: 700; line-height: 1.15; color: rgba(244,244,245,0.92); }
-    .cb2-bubble-score {
-      font-size: 1.05rem;
-      font-weight: 800;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-      color: var(--cb2-bubble-accent);
-    }
-    .cb2-bubble--pos1 { left: 0.35rem; top: 3rem; }
-    .cb2-bubble--pos2 { right: 1rem; top: 0.95rem; }
-    .cb2-bubble--pos3 { right: 0.65rem; top: 7.1rem; }
-    .cb2-bubble--pos4 { left: 1.35rem; top: 8.85rem; }
-    .cb2-bubble--pos5 { left: 7.35rem; top: 0.35rem; }
-    .cb2-bubble--pos6 { left: 8rem; top: 8.65rem; }
-    .cb2-bubble-detail-head {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 0.6rem;
-      margin-bottom: 0.2rem;
-    }
-    .cb2-bubble-detail-title {
-      font-size: 0.88rem;
-      font-weight: 700;
-      color: #e4e4e7;
-    }
-    .cb2-bubble-detail-score {
-      font-size: 0.8rem;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      color: color-mix(in srgb, var(--cb2-accent2) 55%, #a78bfa);
-    }
-    .cb2-bubble-detail-hint {
-      margin: 0 0 0.32rem;
-      font-size: 0.65rem;
-      color: var(--cb2-muted);
-      letter-spacing: 0.01em;
-    }
-    .cb2-bubble-detail-blurb {
-      margin: 0;
-      font-size: 0.76rem;
-      line-height: 1.58;
-      color: var(--cb2-sub);
-    }
-    @media (max-width: 380px) {
-      .cb2-bubble-cluster {
-        min-height: auto;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.55rem;
-      }
-      .cb2-bubble {
-        position: relative;
-        left: auto;
-        right: auto;
-        top: auto;
-        width: 100%;
-        height: 5rem;
-      }
-    }
-
-    /* ── Misc text (ความหมาย / ข้อควรระวัง) ── */
-    .cb2-para { margin: 0.45rem 0 0; font-size: 0.85rem; line-height: 1.65; color: #c9d1d9; }
-    .cb2-caution { margin: 0.25rem 0 0; padding-left: 1.1rem; font-size: 0.82rem; color: var(--cb2-sub); line-height: 1.6; }
-    .cb2-caution-li { margin-bottom: 0.4rem; }
-
     /* ── Disclaimer ── */
     .cb2-disclaimer { margin-top: 1.25rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(56,189,248,0.07); border: 1px solid rgba(56,189,248,0.20); font-size: 0.76rem; line-height: 1.55; color: #7dd3fc; }
 
@@ -1101,7 +969,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
 <body>
   <div class="cb2-wrap">
     <header>
-      <div class="cb2-badge">Ener Scan · กำไลหินคริสตัล · รายงานฉบับเต็ม</div>
+      <p class="cb2-intro" role="note">${escapeHtml(CB2_HEADER_INTRO)}</p>
       <div class="cb2-header-row">
         <div class="cb2-header-text">
           <h1 class="cb2-h1">${escapeHtml(headline)}</h1>
@@ -1130,57 +998,56 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
     ${energyTimingHtml}
 
-    ${lifeBubbleSectionHtml}
-
-    <section class="cb2-card" aria-labelledby="cb2-mean-h">
-      <h2 id="cb2-mean-h">ความหมายโดยรวม</h2>
-      ${meaningHtml || `<p class="cb2-para">—</p>`}
-    </section>
-
-    <section class="cb2-card" aria-labelledby="cb2-use-h">
-      <h2 id="cb2-use-h">การใช้และข้อควรระวัง</h2>
-      <ul class="cb2-caution">${cautionHtml || `<li class="cb2-caution-li">—</li>`}</ul>
+    <section class="cb2-card cb2-share-card" aria-labelledby="cb2-share-h">
+      <h2 id="cb2-share-h">แชร์รายงาน</h2>
+      <p class="cb2-share-note">แชร์ลิงก์หน้านี้หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูรายงานได้สะดวก</p>
+      <div class="cb2-share-actions">
+        <button type="button" class="cb2-share-btn cb2-share-btn--primary" id="cb2-share-native">แชร์ไปยัง Facebook / IG / X / อื่น ๆ</button>
+        <a class="cb2-share-btn cb2-share-btn--line" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer">Add เข้า LINE OA</a>
+      </div>
     </section>
 
     <p class="cb2-disclaimer" role="note">${escapeHtml(DISCLAIMER_FIXED)}</p>
 
     <footer class="cb2-foot">
-      <p>Ener Scan · กำไลหินคริสตัล</p>
+      <p>Ener Scan</p>
     </footer>
   </div>
-<script>
-(() => {
-  const root = document.querySelector("[data-cb-bubbles]");
-  const detail = document.querySelector("[data-cb-detail]");
-  if (!root || !detail) return;
-
-  const buttons = Array.from(root.querySelectorAll(".cb2-bubble"));
-  const titleEl = detail.querySelector("[data-detail-title]");
-  const scoreEl = detail.querySelector("[data-detail-score]");
-  const hintEl = detail.querySelector("[data-detail-hint]");
-  const blurbEl = detail.querySelector("[data-detail-blurb]");
-
-  const setActive = (btn) => {
-    buttons.forEach((b) => {
-      const on = b === btn;
-      b.classList.toggle("is-active", on);
-      b.setAttribute("aria-pressed", on ? "true" : "false");
-    });
-    if (titleEl) titleEl.textContent = btn.dataset.axisLabel || "";
-    if (scoreEl) scoreEl.textContent = btn.dataset.axisScore || "";
-    if (hintEl) hintEl.textContent = btn.dataset.axisHint || "";
-    if (blurbEl) blurbEl.textContent = btn.dataset.axisBlurb || "";
-  };
-
-  buttons.forEach((btn) => {
-    btn.addEventListener("click", () => setActive(btn));
+  <script>
+(function () {
+  var shareTitle = ${shareTitleJson};
+  var shareText = ${shareTextJson};
+  var btn = document.getElementById("cb2-share-native");
+  if (!btn) return;
+  function fallbackCopy(url) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        function () {
+          window.alert("คัดลอกลิงก์แล้ว");
+        },
+        function () {
+          window.prompt("คัดลอกลิงก์:", url);
+        },
+      );
+    } else {
+      window.prompt("คัดลอกลิงก์:", url);
+    }
+  }
+  btn.addEventListener("click", function () {
+    var url = String(window.location.href || "");
+    if (navigator.share) {
+      navigator
+        .share({ title: shareTitle, text: shareText, url: url })
+        .catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          fallbackCopy(url);
+        });
+    } else {
+      fallbackCopy(url);
+    }
   });
-
-  const initial =
-    buttons.find((b) => b.classList.contains("is-active")) || buttons[0];
-  if (initial) setActive(initial);
 })();
-</script>
+  </script>
 </body>
 </html>`;
 }
