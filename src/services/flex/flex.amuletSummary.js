@@ -546,7 +546,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
         contents: [
           {
             type: "text",
-            text: "ระดับพลัง",
+            text: "คะแนนพลัง",
             size: "xs",
             color: FLEX_TEXT_SECONDARY,
             wrap: true,

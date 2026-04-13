@@ -107,6 +107,10 @@ test("buildAmuletSummaryFirstFlex: compact flex + top-4 bars + summary block", a
     "flexSurface.bullets not rendered in Flex",
   );
   assert.ok(bodyText.includes("ดูว่าชิ้นนี้ช่วยคุณยังไง"));
+  assert.ok(
+    bodyText.includes('"text":"คะแนนพลัง"'),
+    "score row left label matches HTML strip (คะแนนพลัง /10; not authenticity grade)",
+  );
   assert.ok(bodyText.includes("พลังเด่น"));
   assert.ok(
     !bodyText.includes("พลังหลัก"),
