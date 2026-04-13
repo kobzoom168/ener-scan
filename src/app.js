@@ -30,6 +30,21 @@ const app = express();
 
 app.set("trust proxy", 1);
 
+let activeRequests = 0;
+app.use((req, res, next) => {
+  activeRequests++;
+  let done = false;
+  const dec = () => {
+    if (!done) {
+      done = true;
+      activeRequests--;
+    }
+  };
+  res.on("finish", dec);
+  res.on("close", dec);
+  next();
+});
+
 // Needed for admin approve/reject POST from basic HTML forms.
 app.use(express.urlencoded({ extended: false }));
 
@@ -183,7 +198,53 @@ app.use((err, req, res, next) => {
 
 const port = process.env.PORT || 3000;
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Ener Scan API listening on port ${port}`);
   schedulePersonaAbRecompute();
+});
+
+const WEB_GRACEFUL_TIMEOUT_MS =
+  Number(process.env.WEB_GRACEFUL_TIMEOUT_MS) > 0
+    ? Number(process.env.WEB_GRACEFUL_TIMEOUT_MS)
+    : 15_000;
+
+async function onWebStop(signal) {
+  console.log(
+    JSON.stringify({
+      event: "WEB_SERVER_SHUTTING_DOWN",
+      signal,
+      activeRequests,
+      timeoutMs: WEB_GRACEFUL_TIMEOUT_MS,
+    }),
+  );
+
+  server.close();
+
+  const { waitForGracefulDrain } = await import(
+    "./workers/workerGracefulShutdown.util.js",
+  );
+  const outcome = await waitForGracefulDrain({
+    getActiveCount: () => activeRequests,
+    timeoutMs: WEB_GRACEFUL_TIMEOUT_MS,
+    pollMs: 200,
+  });
+
+  if (outcome === "clean") {
+    console.log(JSON.stringify({ event: "WEB_SERVER_SHUTDOWN_CLEAN" }));
+  } else {
+    console.log(
+      JSON.stringify({
+        event: "WEB_SERVER_SHUTDOWN_TIMEOUT",
+        activeRequests,
+      }),
+    );
+  }
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => {
+  onWebStop("SIGTERM").catch(() => process.exit(1));
+});
+process.on("SIGINT", () => {
+  onWebStop("SIGINT").catch(() => process.exit(1));
 });
