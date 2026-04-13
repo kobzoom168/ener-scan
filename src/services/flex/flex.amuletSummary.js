@@ -114,7 +114,11 @@ const AMULET_POWER_ROW_KEYS = /** @type {const} */ ([
   "specialty",
 ]);
 
-const LIFE_AREA_BAR_HEIGHT = "10px";
+/**
+ * Layout baseline aligned with `flex.crystalBraceletSummary.js` (bubble giga, body 24px/lg, hero 20:9,
+ * score row lg, bar row rhythm). Sacred amulet keeps gold palette + two-row bar layout + top-4 bars.
+ */
+const LIFE_AREA_BAR_HEIGHT = "6px";
 /** Fixed score column on the meter row (label is full-width on its own line above). */
 const LIFE_AREA_SCORE_COL_WIDTH = "44px";
 
@@ -272,7 +276,7 @@ function createGsumPillRow(label, value, isLead) {
     justifyContent: "space-between",
     alignItems: "center",
     spacing: "md",
-    paddingAll: "10px",
+    paddingAll: "12px",
     paddingStart: "14px",
     paddingEnd: "14px",
     cornerRadius: "xxl",
@@ -368,7 +372,7 @@ function createPowerCategoryBarBlock(powerCategories) {
       layout: "horizontal",
       flex: 1,
       spacing: "none",
-      paddingAll: "4px",
+      paddingAll: "3px",
       cornerRadius: "xl",
       backgroundColor: LIFE_AREA_BAR_TRACK_BG,
       contents: [
@@ -393,8 +397,10 @@ function createPowerCategoryBarBlock(powerCategories) {
     return {
       type: "box",
       layout: "vertical",
-      spacing: "xs",
-      margin: "xs",
+      spacing: "sm",
+      margin: "none",
+      paddingTop: "3px",
+      paddingBottom: "3px",
       contents: [
         {
           type: "text",
@@ -408,7 +414,7 @@ function createPowerCategoryBarBlock(powerCategories) {
         {
           type: "box",
           layout: "horizontal",
-          spacing: "xs",
+          spacing: "sm",
           margin: "none",
           contents: [
             meterTrack,
@@ -421,7 +427,7 @@ function createPowerCategoryBarBlock(powerCategories) {
                 {
                   type: "text",
                   text: scoreText,
-                  size: "xxs",
+                  size: "xs",
                   color: LIFE_AREA_BAR_SCORE_COLOR,
                   weight: "regular",
                   wrap: false,
@@ -438,10 +444,9 @@ function createPowerCategoryBarBlock(powerCategories) {
   return {
     type: "box",
     layout: "vertical",
-    margin: "sm",
-    spacing: "none",
-    paddingAll: "12px",
-    paddingBottom: "lg",
+    margin: "md",
+    spacing: "sm",
+    paddingAll: "16px",
     cornerRadius: "md",
     backgroundColor: FLEX_BOX_BG,
     borderWidth: "1px",
@@ -468,15 +473,17 @@ function createPowerCategoryBarBlock(powerCategories) {
             size: "xxs",
             color: LIFE_AREA_HELPER_TEXT_COLOR,
             wrap: true,
-            margin: "none",
+            margin: "sm",
           },
         ],
       },
       {
         type: "box",
         layout: "vertical",
-        spacing: "none",
+        spacing: "sm",
         margin: "none",
+        paddingTop: "sm",
+        paddingBottom: "md",
         contents: rowBoxes,
       },
     ],
@@ -525,7 +532,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
     type: "box",
     layout: "horizontal",
     spacing: "sm",
-    margin: "md",
+    margin: "lg",
     contents: [
       {
         type: "box",
@@ -684,8 +691,8 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     fitBlock = {
       type: "box",
       layout: "vertical",
-      spacing: "sm",
-      margin: "md",
+      spacing: "md",
+      margin: "lg",
       contents: [
         createGsumPillRow("พลังเด่น", gsumPillData.top, true),
         createGsumPillRow("เข้ากับคุณที่สุด", gsumPillData.second, false),
@@ -698,8 +705,8 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     fitBlock = {
       type: "box",
       layout: "vertical",
-      spacing: "sm",
-      margin: "md",
+      spacing: "md",
+      margin: "lg",
       contents: [createGsumPillRow(fitParsed.label, summaryValueDisplay, true)],
     };
   }
@@ -726,7 +733,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       size: "xs",
       color: FLEX_TEXT_SECONDARY,
       wrap: true,
-      margin: "lg",
+      margin: "xl",
     });
   } else {
     bodyContents.push({
@@ -734,7 +741,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       style: "primary",
       color: AMULET_ACCENT,
       height: "md",
-      margin: "md",
+      margin: "xl",
       action: {
         type: "uri",
         label: String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",
@@ -745,12 +752,13 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
 
   const bubble = {
     type: "bubble",
-    size: "mega",
+    /** Same family token as crystal_bracelet summary-first (room for bars + summary + CTA). */
+    size: "giga",
     body: {
       type: "box",
       layout: "vertical",
-      paddingAll: "20px",
-      spacing: "md",
+      paddingAll: "24px",
+      spacing: "lg",
       backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },
@@ -762,7 +770,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
       type: "image",
       url: imgUrl,
       size: "full",
-      aspectRatio: "20:13",
+      aspectRatio: "20:9",
       aspectMode: "cover",
       gravity: "center",
       backgroundColor: FLEX_CARD_BG,

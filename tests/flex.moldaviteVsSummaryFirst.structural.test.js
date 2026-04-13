@@ -59,12 +59,13 @@ test("Moldavite bubble.body uses same top-level box keys as generic summary-firs
     reportUrl: "https://report.example/x",
   });
 
+  assert.equal(mv.contents.size, "giga");
   const b = mv.contents.body;
   assert.equal(b.type, "box");
   assert.deepEqual(Object.keys(b).sort(), [...SUMMARY_FIRST_BODY_KEYS].sort());
 
-  assert.equal(b.paddingAll, "20px");
-  assert.equal(b.spacing, "md");
+  assert.equal(b.paddingAll, "24px");
+  assert.equal(b.spacing, "lg");
   assert.equal(b.layout, "vertical");
 
   assert.ok(!("paddingTop" in b));

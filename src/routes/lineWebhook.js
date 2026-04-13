@@ -89,6 +89,7 @@ import {
 } from "../stores/payments.db.js";
 
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
+import { maybeNotifyAdminSlipPendingVerify } from "../services/adminPaymentSlipNotify.service.js";
 import {
   evaluateAwaitingPaymentSlipImage,
   buildSlipNotTransferReceiptText,
@@ -1978,6 +1979,17 @@ async function finalizeAcceptedImage({
           ? String(pendingPayment.package_code).trim()
           : undefined,
         reason: "slip_uploaded_set_pending_verify",
+      });
+
+      void maybeNotifyAdminSlipPendingVerify({
+        client,
+        lineUserId: userId,
+        paymentId,
+        paymentRef: slipPaymentRef,
+        packageKey: pendingPayment?.package_code
+          ? String(pendingPayment.package_code).trim()
+          : undefined,
+        slipUrl,
       });
 
       clearPaymentState(userId);

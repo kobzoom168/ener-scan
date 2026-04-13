@@ -56,6 +56,18 @@ export const env = {
       : "ener-scan-dev-session-insecure"),
   /** LINE userId to receive DLQ dead-letter push alerts from maintenance worker (optional). */
   ADMIN_LINE_USER_ID: String(process.env.ADMIN_LINE_USER_ID || "").trim(),
+  /**
+   * Push to `ADMIN_LINE_USER_ID` when a user uploads a payment slip (`pending_verify`).
+   * Set `false`, `0`, or `no` to disable (e.g. keep admin id for DLQ only).
+   * @type {boolean}
+   */
+  ADMIN_PAYMENT_SLIP_NOTIFY: (() => {
+    const v = String(process.env.ADMIN_PAYMENT_SLIP_NOTIFY ?? "")
+      .trim()
+      .toLowerCase();
+    if (v === "false" || v === "0" || v === "no") return false;
+    return true;
+  })(),
   /** Admin dashboard login (username/password). Optional when using only ADMIN_TOKEN. */
   ADMIN_USERNAME: process.env.ADMIN_USERNAME || "",
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "",

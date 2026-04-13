@@ -45,6 +45,10 @@ function truncateEnergyBadgeLabel(text, maxLen = 14) {
 
 const MAIN_ENERGY_PILL_MAX_LEN = 22;
 
+/**
+ * Layout baseline mirrors `flex.crystalBraceletSummary.js` (card family: bubble size, body padding,
+ * spacing, hero aspect, life-area row rhythm). Moldavite keeps green palette + 3-axis copy.
+ */
 /** Known keys for moldavite life areas (display-only sort; not score math). */
 const LIFE_AREA_ROW_KEYS = /** @type {const} */ ([
   "work",
@@ -52,11 +56,11 @@ const LIFE_AREA_ROW_KEYS = /** @type {const} */ ([
   "money",
 ]);
 
-const LIFE_AREA_BAR_HEIGHT = "8px";
-/** Fixed label column so bar tracks share the same x-range (LINE `width` on box; px is supported). */
-const LIFE_AREA_LABEL_COL_WIDTH = "120px";
-/** Fixed score column so numbers align; long scores still fit. */
-const LIFE_AREA_SCORE_COL_WIDTH = "48px";
+const LIFE_AREA_BAR_HEIGHT = "6px";
+/** Fixed label column — same width token as crystal_bracelet Flex. */
+const LIFE_AREA_LABEL_COL_WIDTH = "112px";
+/** Fixed score column — same as crystal_bracelet Flex. */
+const LIFE_AREA_SCORE_COL_WIDTH = "44px";
 
 /**
  * LINE Flex allows `flex` on box only in 0–3 (project + API guardrail).
@@ -128,7 +132,9 @@ function createLifeAreasBarBlock(lifeAreas) {
       type: "box",
       layout: "horizontal",
       spacing: "sm",
-      margin: "xs",
+      margin: "none",
+      paddingTop: "3px",
+      paddingBottom: "3px",
       contents: [
         {
           type: "box",
@@ -151,7 +157,7 @@ function createLifeAreasBarBlock(lifeAreas) {
           layout: "horizontal",
           flex: 1,
           spacing: "none",
-          paddingAll: "2px",
+          paddingAll: "3px",
           cornerRadius: "sm",
           backgroundColor: LIFE_AREA_BAR_TRACK_BG,
           contents: [
@@ -182,7 +188,7 @@ function createLifeAreasBarBlock(lifeAreas) {
             {
               type: "text",
               text: scoreText,
-              size: "sm",
+              size: "xs",
               weight: "bold",
               color: MOLDAVITE_ACCENT,
               wrap: false,
@@ -215,13 +221,15 @@ function createLifeAreasBarBlock(lifeAreas) {
         size: "xxs",
         color: "#3f3f46",
         wrap: true,
-        margin: "xs",
+        margin: "sm",
       },
       {
         type: "box",
         layout: "vertical",
-        spacing: "none",
+        spacing: "sm",
         margin: "none",
+        paddingTop: "sm",
+        paddingBottom: "md",
         contents: rowBoxes,
       },
     ],
@@ -270,7 +278,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
     type: "box",
     layout: "horizontal",
     spacing: "sm",
-    margin: "md",
+    margin: "lg",
     contents: [
       {
         type: "box",
@@ -481,9 +489,9 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
           size: "xs",
           color: FLEX_TEXT_CAPTION,
           wrap: true,
-          maxLines: 2,
+          maxLines: 3,
           lineSpacing: "3px",
-          margin: "xl",
+          margin: "xxl",
         }
       : null;
 
@@ -528,7 +536,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       size: "xs",
       color: FLEX_TEXT_SECONDARY,
       wrap: true,
-      margin: "lg",
+      margin: "xl",
     });
   } else {
     bodyContents.push({
@@ -536,7 +544,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       style: "primary",
       color: FLEX_ACCENT,
       height: "md",
-      margin: "lg",
+      margin: "xl",
       action: {
         type: "uri",
         label: String(mv.flexSurface?.ctaLabel || "").trim() || "เปิดรายงานฉบับเต็ม",
@@ -547,12 +555,13 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
 
   const bubble = {
     type: "bubble",
-    size: "mega",
+    /** Same as crystal_bracelet summary-first — room for multi-section body + CTA. */
+    size: "giga",
     body: {
       type: "box",
       layout: "vertical",
-      paddingAll: "20px",
-      spacing: "md",
+      paddingAll: "24px",
+      spacing: "lg",
       backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },
@@ -563,7 +572,7 @@ export async function buildMoldaviteSummaryFirstFlex(rawText, options = {}) {
       type: "image",
       url: imgUrl,
       size: "full",
-      aspectRatio: "20:13",
+      aspectRatio: "20:9",
       aspectMode: "cover",
       backgroundColor: FLEX_CARD_BG,
     };

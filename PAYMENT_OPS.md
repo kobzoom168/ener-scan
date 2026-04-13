@@ -6,7 +6,8 @@
 2. **Gate** – After free quota, the user must have an active paid entitlement to scan again.
 3. **Entitlement** – Stored in `app_users.paid_until`. If `paid_until` is in the future, the user can scan.
 4. **User flow** – User pays via PromptPay (static QR), sends a **slip image** in LINE, and waits for admin. The bot keeps a payment row in `awaiting_payment` / `pending_verify` as appropriate.
-5. **Manual verification** – An admin approves the slip (admin UI or `npm run payment:verify`). The app marks the payment **paid**, grants entitlement by package (default promo: **99 THB / 10 scans / 24h**), and sets `app_users.paid_until` / `paid_remaining_scans` accordingly.
+5. **Admin LINE ping (optional)** – When a slip is accepted into `pending_verify`, the webhook can **push a short text** to `ADMIN_LINE_USER_ID` (same userId as DLQ alerts) so you get a mobile alert. The admin account must **have added the OA as a friend**. Set `ADMIN_PAYMENT_SLIP_NOTIFY=false` to turn this off while keeping `ADMIN_LINE_USER_ID` for other alerts.
+6. **Manual verification** – An admin approves the slip (admin UI or `npm run payment:verify`). The app marks the payment **paid**, grants entitlement by package (default promo: **99 THB / 10 scans / 24h**), and sets `app_users.paid_until` / `paid_remaining_scans` accordingly.
 
 ## Admin Dashboard (v2)
 
@@ -53,6 +54,12 @@ For **payment amount** (optional):
 - `PAYMENT_UNLOCK_CURRENCY` – default `THB`.
 
 For the **verify script**, the same Supabase env vars are required (script loads `.env` via the app config).
+
+For **LINE admin slip alerts** (push when a slip hits `pending_verify`):
+
+- `ADMIN_LINE_USER_ID` – LINE userId (`U…`) that receives the push (same as DLQ worker alerts).
+- `ADMIN_PAYMENT_SLIP_NOTIFY` – optional; `false` / `0` / `no` disables slip alerts only.
+- `APP_BASE_URL` – optional; when set to `https://…`, the alert includes a link to `/admin/payments/<paymentId>`.
 
 For **public HTML report hero images** (Phase 2.2), **Flex migration** (Phase 2.3+), and **rollout execution** (runbook, optional `ROLLOUT_WINDOW_LABEL`), see **`docs/REPORT_OPS.md`** and **`docs/REPORT_ROLLOUT_RUNBOOK.md`**.
 

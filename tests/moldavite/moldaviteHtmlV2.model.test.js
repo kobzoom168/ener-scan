@@ -189,6 +189,9 @@ test("renderMoldaviteReportV2Html: timing section reads vm.energyTiming only (vi
   assert.ok(html.includes('class="mv2-et-strip mv2-et-strip--time"'));
   assert.ok(html.includes('class="mv2-et-insight"'));
   assert.ok(html.includes('class="mv2-et-mode-body"'));
+  assert.ok(html.includes("แชร์รายงาน"));
+  assert.ok(html.includes('id="mv2-share-native"'));
+  assert.ok(html.includes("navigator.share"));
   assert.ok(html.includes(vm.energyTiming.recommendedWeekday));
   assert.ok(html.includes(vm.energyTiming.recommendedTimeBand));
   assert.ok(html.includes(vm.energyTiming.ritualMode));

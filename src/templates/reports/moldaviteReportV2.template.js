@@ -462,6 +462,12 @@ export function renderMoldaviteReportV2Html(payload) {
   const title = escapeHtml(
     (h.subtypeLabel || "รายงาน").slice(0, 48),
   );
+  const shareTitleJson = JSON.stringify(
+    `${String(h.subtypeLabel || "รายงาน").trim().slice(0, 48)} · Ener Scan`,
+  );
+  const shareTextJson = JSON.stringify(
+    "ดูรายงานพลังจาก Ener Scan ได้ที่ลิงก์นี้",
+  );
 
   return `<!DOCTYPE html>
 <html lang="th">
@@ -1027,6 +1033,61 @@ export function renderMoldaviteReportV2Html(payload) {
       color: rgba(148, 163, 184, 0.68);
       font-weight: 400;
     }
+    .mv2-share-card {
+      border-left: 3px solid rgba(34, 197, 94, 0.45);
+    }
+    .mv2-share-card h2 { font-size: 0.92rem; }
+    .mv2-share-note {
+      margin: 0 0 0.55rem;
+      font-size: 0.68rem;
+      line-height: 1.4;
+      color: var(--mv2-muted);
+    }
+    .mv2-share-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.55rem;
+    }
+    @media (max-width: 480px) {
+      .mv2-share-actions { grid-template-columns: 1fr; }
+    }
+    .mv2-share-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 2.55rem;
+      padding: 0.5rem 0.65rem;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      line-height: 1.28;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mv2-share-btn--primary {
+      background: #1877f2;
+      border-color: #1877f2;
+      color: #ffffff;
+    }
+    .mv2-share-btn--primary:hover {
+      background: #166fe5;
+      border-color: #166fe5;
+    }
+    .mv2-share-btn--primary:active {
+      background: #1464d4;
+      border-color: #1464d4;
+    }
+    .mv2-share-btn--line {
+      background: #06c755;
+      border-color: #05b34c;
+      color: #ffffff;
+    }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
   </style>
@@ -1078,11 +1139,55 @@ export function renderMoldaviteReportV2Html(payload) {
       <ul class="mv2-owner-traits">${usageHtml}</ul>
     </section>
 
+    <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
+      <h2 id="mv2-share-h">แชร์รายงาน</h2>
+      <p class="mv2-share-note">แชร์ลิงก์หน้านี้หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูรายงานได้สะดวก</p>
+      <div class="mv2-share-actions">
+        <button type="button" class="mv2-share-btn mv2-share-btn--primary" id="mv2-share-native">แชร์ไปยัง Facebook / IG / X / อื่น ๆ</button>
+        <a class="mv2-share-btn mv2-share-btn--line" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer">Add เข้า LINE OA</a>
+      </div>
+    </section>
+
     <footer class="mv2-trust">
       ${vm.trustNote ? `<p>${escapeHtml(vm.trustNote)}</p>` : ""}
       ${moldaviteHtmlShowRenderMetaLine() ? `<p class="mv2-render-meta">render ${escapeHtml(vm.rendererId)} · เวอร์ชัน ${escapeHtml(vm.reportVersion)}${vm.modelLabel ? ` · ${escapeHtml(vm.modelLabel)}` : ""}</p>` : ""}
     </footer>
   </div>
+  <script>
+(function () {
+  var shareTitle = ${shareTitleJson};
+  var shareText = ${shareTextJson};
+  var btn = document.getElementById("mv2-share-native");
+  if (!btn) return;
+  function fallbackCopy(url) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        function () {
+          window.alert("คัดลอกลิงก์แล้ว");
+        },
+        function () {
+          window.prompt("คัดลอกลิงก์:", url);
+        },
+      );
+    } else {
+      window.prompt("คัดลอกลิงก์:", url);
+    }
+  }
+  btn.addEventListener("click", function () {
+    var url = String(window.location.href || "");
+    if (navigator.share) {
+      navigator
+        .share({ title: shareTitle, text: shareText, url: url })
+        .catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          fallbackCopy(url);
+        });
+    } else {
+      fallbackCopy(url);
+    }
+  });
+})();
+  </script>
 </body>
 </html>`;
 }
