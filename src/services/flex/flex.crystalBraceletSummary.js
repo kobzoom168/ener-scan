@@ -27,7 +27,8 @@ const FLEX_TEXT_SECONDARY = "#94a3b8";
 const FLEX_TEXT_CAPTION = "#94a3b8";
 const CB_TITLE_TAGLINE_COLOR = "#64748b";
 
-const LIFE_AREA_BAR_HEIGHT = "7px";
+/** Slightly slim bar + looser row gaps keeps 6 rows readable without crowding labels. */
+const LIFE_AREA_BAR_HEIGHT = "6px";
 const LIFE_AREA_LABEL_COL_WIDTH = "112px";
 const LIFE_AREA_SCORE_COL_WIDTH = "44px";
 const MAIN_ENERGY_PILL_MAX_LEN = 22;
@@ -107,8 +108,10 @@ function createCrystalBraceletAxesBarBlock(axes) {
     return {
       type: "box",
       layout: "horizontal",
-      spacing: "xs",
+      spacing: "sm",
       margin: "none",
+      paddingTop: "3px",
+      paddingBottom: "3px",
       contents: [
         {
           type: "box",
@@ -131,7 +134,7 @@ function createCrystalBraceletAxesBarBlock(axes) {
           layout: "horizontal",
           flex: 1,
           spacing: "none",
-          paddingAll: "2px",
+          paddingAll: "3px",
           cornerRadius: "sm",
           backgroundColor: LIFE_AREA_BAR_TRACK_BG,
           contents: [
@@ -177,8 +180,8 @@ function createCrystalBraceletAxesBarBlock(axes) {
   return {
     type: "box",
     layout: "vertical",
-    margin: "sm",
-    spacing: "xs",
+    margin: "md",
+    spacing: "sm",
     contents: [
       {
         type: "text",
@@ -195,13 +198,15 @@ function createCrystalBraceletAxesBarBlock(axes) {
         size: "xxs",
         color: "#475569",
         wrap: true,
-        margin: "xs",
+        margin: "sm",
       },
       {
         type: "box",
         layout: "vertical",
-        spacing: "xs",
+        spacing: "sm",
         margin: "none",
+        paddingTop: "sm",
+        paddingBottom: "md",
         contents: rowBoxes,
       },
     ],
@@ -279,7 +284,7 @@ function createScoreRowTwoUp(
     type: "box",
     layout: "horizontal",
     spacing: "sm",
-    margin: "md",
+    margin: "lg",
     contents: [
       {
         type: "box",
@@ -572,7 +577,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
           wrap: true,
           maxLines: 3,
           lineSpacing: "3px",
-          margin: "xl",
+          margin: "xxl",
         }
       : null;
 
@@ -618,7 +623,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
       size: "xs",
       color: FLEX_TEXT_SECONDARY,
       wrap: true,
-      margin: "lg",
+      margin: "xl",
     });
   } else {
     bodyContents.push({
@@ -626,7 +631,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
       style: "primary",
       color: FLEX_ACCENT,
       height: "md",
-      margin: "lg",
+      margin: "xl",
       action: {
         type: "uri",
         label: String(fs?.ctaLabel || "").trim() || "ดูรายงานพลังของกำไลเส้นนี้",
@@ -637,12 +642,13 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
 
   const bubble = {
     type: "bubble",
-    size: "mega",
+    /** Taller than `mega` so 6 axis rows + summary + CTA breathe on phones. */
+    size: "giga",
     body: {
       type: "box",
       layout: "vertical",
-      paddingAll: "20px",
-      spacing: "md",
+      paddingAll: "24px",
+      spacing: "lg",
       backgroundColor: FLEX_CARD_BG,
       contents: bodyContents,
     },

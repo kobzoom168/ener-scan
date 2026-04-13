@@ -119,6 +119,7 @@ test("buildCrystalBraceletSummaryFirstFlex: axes block shows all 6 dimensions + 
     reportUrl: "https://example.com/r",
   });
   const j = JSON.stringify(flex);
+  assert.equal(flex.contents?.size, "giga", "bracelet flex uses taller bubble");
   assert.ok(j.includes("มิติพลังของกำไล"));
   assert.ok(j.includes("เรียงจากพลังเด่นไปเบา"));
   assert.equal(j.includes("แสดง 4 พลังที่เด่นสุด"), false);
@@ -150,7 +151,7 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
     object: {},
     crystalBraceletV1: slice,
   });
-  assert.ok(html.includes("cb2-intro"));
+  assert.ok(html.includes("cb2-foot-intro"));
   assert.ok(html.includes("อ่านผลแบบเฉพาะบุคคล"));
   assert.ok(html.includes("โปรไฟล์เจ้าของ"));
   assert.ok(

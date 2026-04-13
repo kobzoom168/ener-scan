@@ -60,8 +60,8 @@ function absoluteUrlForMeta(canonicalPageUrl, rawImage) {
 const DISCLAIMER_FIXED =
   "ผลนี้อ่านจากพลังรวมของกำไลทั้งเส้น ไม่ยืนยันชนิดหินรายเม็ด";
 
-/** ข้อความนำด้านบนรายงาน (แทนแถบสั้น Ener Scan · กำไลหินคริสตัล) */
-const CB2_HEADER_INTRO =
+/** ข้อความท้ายรายงาน (footer) — อธิบายการอ่านแบบเฉพาะบุคคล */
+const CB2_FOOTER_EXPLAINER =
   "กำไลหินคริสตัลจะเด่นด้านไหน ไม่ได้ขึ้นอยู่กับกำไลเพียงอย่างเดียว แต่ยังขึ้นอยู่กับวันเดือนปีเกิด พื้นฐานจังหวะชีวิต และการใช้ของผู้สวมด้วย แต่ละคนจึงรับพลังได้ต่างกัน Ener Scan จึงอ่านผลแบบเฉพาะบุคคล เพื่อดูว่าช่วงนี้พลังของกำไลเส้นนี้เด่นกับคุณด้านใดมากที่สุด";
 
 const CB_RING_COLORS = {
@@ -580,14 +580,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-wrap { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2.5rem; }
 
     /* ── Header ── */
-    .cb2-intro {
-      margin: 0 0 0.85rem;
-      font-size: 0.72rem;
-      line-height: 1.55;
-      color: var(--cb2-sub);
-      font-weight: 400;
-      letter-spacing: 0.01em;
-    }
     .cb2-header-row { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.25rem; }
     .cb2-header-text { flex: 1; min-width: 0; }
     .cb2-hero-stack { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex-shrink: 0; }
@@ -963,13 +955,32 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-disclaimer { margin-top: 1.25rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(56,189,248,0.07); border: 1px solid rgba(56,189,248,0.20); font-size: 0.76rem; line-height: 1.55; color: #7dd3fc; }
 
     /* ── Footer ── */
-    .cb2-foot { margin-top: 1.75rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.06); text-align: center; font-size: 0.7rem; color: var(--cb2-muted); letter-spacing: 0.04em; }
+    .cb2-foot {
+      margin-top: 1.75rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      text-align: center;
+    }
+    .cb2-foot-intro {
+      margin: 0 0 0.85rem;
+      font-size: 0.72rem;
+      line-height: 1.55;
+      color: var(--cb2-sub);
+      font-weight: 400;
+      letter-spacing: 0.01em;
+      text-align: center;
+    }
+    .cb2-foot-brand {
+      margin: 0;
+      font-size: 0.68rem;
+      color: var(--cb2-muted);
+      letter-spacing: 0.04em;
+    }
   </style>
 </head>
 <body>
   <div class="cb2-wrap">
     <header>
-      <p class="cb2-intro" role="note">${escapeHtml(CB2_HEADER_INTRO)}</p>
       <div class="cb2-header-row">
         <div class="cb2-header-text">
           <h1 class="cb2-h1">${escapeHtml(headline)}</h1>
@@ -1010,7 +1021,8 @@ export function renderCrystalBraceletReportV2Html(payload) {
     <p class="cb2-disclaimer" role="note">${escapeHtml(DISCLAIMER_FIXED)}</p>
 
     <footer class="cb2-foot">
-      <p>Ener Scan</p>
+      <p class="cb2-foot-intro" role="note">${escapeHtml(CB2_FOOTER_EXPLAINER)}</p>
+      <p class="cb2-foot-brand">Ener Scan</p>
     </footer>
   </div>
   <script>
