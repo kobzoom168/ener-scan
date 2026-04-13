@@ -475,7 +475,7 @@ function buildCrystalBraceletLifeBubbleSection(axes, hr, primaryAxis, alignAxisK
     items.find((it) => it.key === primary) || sortedForActive[0] || items[0];
   const hasAnyBlurb = items.some((it) => it.blurb.length > 0);
   if (!hasAnyBlurb) {
-    return `<section class="cb2-card" aria-labelledby="cb2-life-h">
+    return `<section class="cb2-card cb2-life-bubbles" aria-labelledby="cb2-life-h">
   <h2 id="cb2-life-h">มิติชีวิตละเอียด</h2>
   <p class="cb2-para">—</p>
 </section>`;
@@ -509,21 +509,8 @@ function buildCrystalBraceletLifeBubbleSection(axes, hr, primaryAxis, alignAxisK
   const detailHint = active ? active.shortHint : "";
   const detailBlurb = active ? active.blurb : "";
 
-  const noscriptItems = [...items].sort(
-    (a, b) => orderIdx(a.key) - orderIdx(b.key),
-  );
-  const noscriptHtml = `<noscript>
-  <div class="cb2-bubble-noscript" aria-label="รายละเอียดมิติชีวิตทั้งหมด">
-    ${noscriptItems
-      .map(
-        (it) =>
-          `<article class="cb2-bubble-noscript-item"><h3 class="cb2-bubble-noscript-h">${escapeHtml(it.label)}</h3><p class="cb2-bubble-noscript-p">${escapeHtml(it.blurb || "—")}</p></article>`,
-      )
-      .join("")}
-  </div>
-</noscript>`;
-
-  return `<section class="cb2-card" aria-labelledby="cb2-life-h">
+  /* Option B: ไม่มี text list ยาวคู่กับ cluster — กรณีไม่มี JS ยังเห็น detail ของ primary ใน panel ด้านล่าง */
+  return `<section class="cb2-card cb2-life-bubbles" aria-labelledby="cb2-life-h">
   <h2 id="cb2-life-h">มิติชีวิตละเอียด</h2>
 
   <div class="cb2-bubble-cluster" data-cb-bubbles>
@@ -538,7 +525,6 @@ ${bubblesHtml}
     <p class="cb2-bubble-detail-hint" data-detail-hint>${escapeHtml(detailHint)}</p>
     <p class="cb2-bubble-detail-blurb" data-detail-blurb>${escapeHtml(detailBlurb)}</p>
   </div>
-${noscriptHtml}
 </section>`;
 }
 
@@ -974,16 +960,18 @@ export function renderCrystalBraceletReportV2Html(payload) {
       font-weight: 400;
     }
 
-    /* ── มิติชีวิตละเอียด: bubble cluster + detail ── */
+    /* ── มิติชีวิตละเอียด: bubble cluster + detail (รองกราฟ — โทนเบากว่า radar/summary) ── */
+    .cb2-life-bubbles h2 { color: #9ca3af; font-weight: 600; font-size: 0.82rem; }
     .cb2-bubble-cluster {
       position: relative;
       min-height: 15rem;
       margin-top: 0.2rem;
+      opacity: 0.97;
     }
     .cb2-bubble-detail {
       margin-top: 0.9rem;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.025);
+      border: 1px solid rgba(255,255,255,0.06);
       border-radius: 14px;
       padding: 0.8rem 0.85rem;
     }
@@ -1008,11 +996,15 @@ export function renderCrystalBraceletReportV2Html(payload) {
         radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--cb2-bubble-accent) 16%, transparent), transparent 62%),
         rgba(255,255,255,0.04);
     }
-    .cb2-bubble:hover,
+    .cb2-bubble:hover {
+      transform: translateY(-1px);
+      border-color: rgba(125,211,252,0.22);
+      box-shadow: 0 0 0 2px rgba(56,189,248,0.05);
+    }
     .cb2-bubble.is-active {
       transform: translateY(-1px);
-      border-color: rgba(125,211,252,0.35);
-      box-shadow: 0 0 0 3px rgba(56,189,248,0.10);
+      border-color: rgba(125,211,252,0.28);
+      box-shadow: 0 0 0 2px rgba(56,189,248,0.07);
     }
     .cb2-bubble--lg { width: 7rem; height: 7rem; }
     .cb2-bubble--md { width: 5.8rem; height: 5.8rem; }
@@ -1046,7 +1038,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-bubble-detail-score {
       font-size: 0.82rem;
       font-weight: 800;
-      color: #7dd3fc;
+      color: color-mix(in srgb, var(--cb2-accent2) 75%, #94a3b8);
     }
     .cb2-bubble-detail-hint {
       margin: 0 0 0.28rem;
@@ -1057,25 +1049,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
       margin: 0;
       font-size: 0.78rem;
       line-height: 1.58;
-      color: var(--cb2-sub);
-    }
-    .cb2-bubble-noscript {
-      margin-top: 0.75rem;
-      padding-top: 0.65rem;
-      border-top: 1px solid rgba(255,255,255,0.06);
-    }
-    .cb2-bubble-noscript-item { margin-top: 0.55rem; }
-    .cb2-bubble-noscript-item:first-child { margin-top: 0; }
-    .cb2-bubble-noscript-h {
-      margin: 0 0 0.2rem;
-      font-size: 0.78rem;
-      font-weight: 700;
-      color: var(--cb2-accent2);
-    }
-    .cb2-bubble-noscript-p {
-      margin: 0;
-      font-size: 0.76rem;
-      line-height: 1.55;
       color: var(--cb2-sub);
     }
     @media (max-width: 380px) {
