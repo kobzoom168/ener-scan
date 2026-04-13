@@ -91,7 +91,7 @@ function createCbRingsSection(axes) {
       return `<div class="cb2-ring-leg-row">
   <span class="cb2-ring-dot" style="background:${color}" aria-hidden="true"></span>
   <span class="cb2-ring-leg-label">${lab}</span>
-  <span class="cb2-ring-leg-score">${sc}%</span>
+  <span class="cb2-ring-leg-score" style="color:${color}">${sc}%</span>
 </div>`;
     })
     .join("");
@@ -165,7 +165,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
   const heroImg =
     /^https:\/\//i.test(imgRaw) ? `<div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div>` : "";
 
-  /** @type {{ label: string, score: number|null }[]} */
+  /** @type {{ key: string, label: string, score: number|null }[]} */
   const axisRows = [];
   const axes = cb.axes && typeof cb.axes === "object" ? cb.axes : {};
   const primaryAxis = CRYSTAL_BRACELET_AXIS_ORDER.reduce((best, k) => {
@@ -182,7 +182,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
       e && typeof e === "object" && e.score != null && Number.isFinite(Number(e.score))
         ? Math.round(Number(e.score))
         : null;
-    axisRows.push({ label: label || "—", score: sc });
+    axisRows.push({ key: k, label: label || "—", score: sc });
   }
   axisRows.sort((a, b) => {
     if (a.score == null && b.score == null) return 0;
@@ -192,13 +192,14 @@ export function renderCrystalBraceletReportV2Html(payload) {
   });
 
   const axisBarsHtml = axisRows
-    .map(({ label, score: sc }) => {
+    .map(({ key, label, score: sc }) => {
       const pct = sc == null ? 0 : Math.max(0, Math.min(100, sc));
       const w = `${pct}%`;
+      const axisColor = CB_RING_COLORS[key] || "#0284c7";
       return `<div class="cb2-axis-row">
   <span class="cb2-axis-l">${escapeHtml(label)}</span>
-  <div class="cb2-axis-track" role="presentation"><span class="cb2-axis-fill" style="width:${w}"></span></div>
-  <span class="cb2-axis-s">${sc == null ? "—" : escapeHtml(String(sc))}</span>
+  <div class="cb2-axis-track" role="presentation"><span class="cb2-axis-fill" style="width:${w};background:${axisColor}"></span></div>
+  <span class="cb2-axis-s" style="color:${axisColor}">${sc == null ? "—" : escapeHtml(String(sc))}</span>
 </div>`;
     })
     .join("");
@@ -253,130 +254,114 @@ export function renderCrystalBraceletReportV2Html(payload) {
   <style>
     :root {
       --cb2-bg: #ffffff;
-      --cb2-card: #f8fafc;
+      --cb2-card: #ffffff;
       --cb2-muted: #64748b;
+      --cb2-sub: #475569;
       --cb2-text: #0f172a;
       --cb2-accent: #0284c7;
-      --cb2-accent2: #0ea5e9;
-      --cb2-strip: #f1f5f9;
-      --cb2-gsum-bg: #f1f5f9;
-      --cb2-gsum-border: rgba(0, 0, 0, 0.08);
-      --cb2-gsum-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-      --cb2-gsum-lead-bg: rgba(14, 165, 233, 0.08);
-      --cb2-gsum-lead-border: rgba(14, 165, 233, 0.25);
+      --cb2-accent2: #38bdf8;
+      --cb2-card-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04);
+      --cb2-gsum-bg: #f8fafc;
+      --cb2-gsum-border: rgba(0,0,0,0.07);
+      --cb2-gsum-lead-bg: #eff6ff;
+      --cb2-gsum-lead-border: #bfdbfe;
       --cb2-gsum-k: #64748b;
       --cb2-gsum-v: #1e293b;
       --cb2-gsum-v-lead: #0284c7;
     }
-    body { margin:0; font-family: system-ui, "Segoe UI", sans-serif; background: #ffffff; color: var(--cb2-text); }
-    .cb2-wrap { max-width: 28rem; margin: 0 auto; padding: 1rem 1rem 2rem; }
-    .cb2-badge { font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cb2-accent); margin-bottom: 0.5rem; }
-    .cb2-hero-img {
-      width: 100%;
-      aspect-ratio: 4 / 3;
-      border-radius: 14px;
-      overflow: hidden;
-      background: #e2e8f0;
-    }
-    .cb2-hero-img img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      object-position: center;
-      display: block;
-    }
-    .cb2-h1 { font-size: 1.35rem; font-weight: 700; margin: 0.75rem 0 0.25rem; line-height: 1.35; }
-    .cb2-tag { font-size: 0.8rem; color: var(--cb2-muted); margin: 0 0 0.35rem; }
-    .cb2-main { font-size: 0.95rem; font-weight: 600; color: var(--cb2-accent); margin: 0.25rem 0 0; }
-    .cb2-date { font-size: 0.72rem; color: var(--cb2-muted); margin: 0.5rem 0 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, "Segoe UI", sans-serif; background: #ffffff; color: var(--cb2-text); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    .cb2-wrap { max-width: 28rem; margin: 0 auto; padding: 1.25rem 1rem 2.5rem; }
+
+    /* ── Header ── */
+    .cb2-badge { font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cb2-accent); margin-bottom: 0.6rem; font-weight: 600; }
+    .cb2-hero-img { width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: #e2e8f0; margin-bottom: 0.85rem; box-shadow: 0 2px 10px rgba(0,0,0,0.10); }
+    .cb2-hero-img img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+    .cb2-h1 { font-size: 1.4rem; font-weight: 800; margin: 0 0 0.2rem; line-height: 1.3; color: #0f172a; letter-spacing: -0.01em; }
+    .cb2-tag { font-size: 0.78rem; color: var(--cb2-muted); margin: 0 0 0.3rem; }
+    .cb2-main { font-size: 0.88rem; font-weight: 600; color: var(--cb2-accent); margin: 0.15rem 0 0; }
+    .cb2-date { font-size: 0.7rem; color: #94a3b8; margin: 0.45rem 0 0; }
+
+    /* ── Score strip ── */
     .cb2-strip {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 0.5rem;
       margin: 1rem 0;
-      padding: 0.75rem;
+    }
+    .cb2-strip > div {
+      background: #ffffff;
       border-radius: 12px;
-      background: var(--cb2-strip);
-      border: 1px solid rgba(0, 0, 0, 0.08);
+      padding: 0.65rem 0.75rem;
+      box-shadow: var(--cb2-card-shadow);
     }
-    .cb2-strip-k { font-size: 0.62rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
-    .cb2-strip-v { font-size: 1.05rem; font-weight: 700; color: #0284c7; margin-top: 0.2rem; }
-    .cb2-strip-v small { font-size: 0.65em; font-weight: 600; color: var(--cb2-muted); }
-    .cb2-card { background: var(--cb2-card); border-radius: 16px; padding: 1rem 1.1rem; margin-top: 0.85rem; border: 1px solid rgba(0, 0, 0, 0.08); }
-    .cb2-rings-card { border-left: 3px solid rgba(14, 165, 233, 0.45); }
-    .cb2-card h2 { font-size: 0.92rem; margin: 0 0 0.5rem; color: var(--cb2-accent); }
-    .cb2-hint { font-size: 0.68rem; color: var(--cb2-muted); margin: 0 0 0.5rem; }
-    .cb2-rings-wrap {
+    .cb2-strip-k { font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+    .cb2-strip-v { font-size: 1.1rem; font-weight: 800; color: #0f172a; margin-top: 0.25rem; line-height: 1; }
+    .cb2-strip-v small { font-size: 0.6em; font-weight: 600; color: var(--cb2-muted); }
+
+    /* ── Cards ── */
+    .cb2-card { background: #ffffff; border-radius: 16px; padding: 1.1rem 1.15rem; margin-top: 0.75rem; box-shadow: var(--cb2-card-shadow); }
+    .cb2-card h2 {
+      font-size: 0.88rem;
+      font-weight: 700;
+      margin: 0 0 0.8rem;
+      color: #1e293b;
       display: flex;
       align-items: center;
-      gap: 1rem;
+      gap: 0.45rem;
     }
-    .cb2-rings-svg {
-      width: 180px;
-      flex-shrink: 0;
-      height: auto;
-      display: block;
-    }
-    .cb2-rings-legend {
-      display: flex;
-      flex-direction: column;
-      gap: 0.55rem;
-      flex: 1;
-      min-width: 0;
-    }
-    .cb2-ring-leg-row {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.8rem;
-    }
-    .cb2-ring-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .cb2-ring-leg-label { flex: 1; color: #334155; min-width: 0; }
-    .cb2-ring-leg-score { font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
-    .cb2-axis-row { display: flex; align-items: center; gap: 0.45rem; margin: 0.35rem 0; font-size: 0.78rem; }
-    .cb2-axis-l { flex: 0 0 42%; color: var(--cb2-muted); line-height: 1.25; }
-    .cb2-axis-track { flex: 1; height: 7px; background: #e2e8f0; border-radius: 6px; overflow: hidden; }
-    .cb2-axis-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--cb2-accent2), var(--cb2-accent)); border-radius: 6px; }
-    .cb2-axis-s { flex: 0 0 2.2rem; text-align: right; font-weight: 700; color: var(--cb2-accent); font-variant-numeric: tabular-nums; }
-    .cb2-gsum-rows { display: flex; flex-direction: column; gap: 0.5rem; }
+    .cb2-card h2::before { content: ""; display: block; width: 3px; height: 0.9em; background: var(--cb2-accent); border-radius: 2px; flex-shrink: 0; }
+    .cb2-hint { font-size: 0.67rem; color: #94a3b8; margin: -0.4rem 0 0.65rem 0.5rem; }
+
+    /* ── Ring chart ── */
+    .cb2-rings-card { }
+    .cb2-rings-wrap { display: flex; align-items: center; gap: 1rem; }
+    .cb2-rings-svg { width: 170px; flex-shrink: 0; height: auto; display: block; }
+    .cb2-rings-legend { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; min-width: 0; }
+    .cb2-ring-leg-row { display: flex; align-items: center; gap: 0.45rem; font-size: 0.78rem; }
+    .cb2-ring-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .cb2-ring-leg-label { flex: 1; color: #475569; min-width: 0; font-size: 0.76rem; }
+    .cb2-ring-leg-score { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.78rem; }
+
+    /* ── Axis bars ── */
+    .cb2-axis-row { display: flex; align-items: center; gap: 0.45rem; margin: 0.4rem 0; font-size: 0.78rem; }
+    .cb2-axis-l { flex: 0 0 40%; color: var(--cb2-sub); line-height: 1.25; }
+    .cb2-axis-track { flex: 1; height: 6px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+    .cb2-axis-fill { display: block; height: 100%; border-radius: 6px; transition: width 0.3s; }
+    .cb2-axis-s { flex: 0 0 2.2rem; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.78rem; }
+
+    /* ── Graph summary rows ── */
+    .cb2-gsum-rows { display: flex; flex-direction: column; gap: 0.45rem; }
     .cb2-gsum-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 0.75rem;
-      padding: 0.5rem 1rem;
+      padding: 0.45rem 0.9rem;
       border-radius: 9999px;
       background: var(--cb2-gsum-bg);
       border: 1px solid var(--cb2-gsum-border);
-      box-shadow: var(--cb2-gsum-shadow);
     }
-    .cb2-gsum-row:not(.cb2-gsum-row--lead) { padding: 0.42rem 1rem; }
-    .cb2-gsum-row--lead { background: var(--cb2-gsum-lead-bg); border-color: var(--cb2-gsum-lead-border); }
-    .cb2-gsum-k { font-size: 0.72rem; font-weight: 500; color: var(--cb2-gsum-k); white-space: nowrap; flex-shrink: 0; }
-    .cb2-gsum-v {
-      font-size: 0.92rem;
-      font-weight: 800;
-      color: var(--cb2-gsum-v);
-      text-align: right;
-      flex: 1;
-      min-width: 0;
-      line-height: 1.25;
-    }
+    .cb2-gsum-row--lead { background: var(--cb2-gsum-lead-bg); border-color: var(--cb2-gsum-lead-border); padding: 0.55rem 0.9rem; }
+    .cb2-gsum-k { font-size: 0.7rem; font-weight: 500; color: var(--cb2-gsum-k); white-space: nowrap; flex-shrink: 0; }
+    .cb2-gsum-v { font-size: 0.88rem; font-weight: 800; color: var(--cb2-gsum-v); text-align: right; flex: 1; min-width: 0; line-height: 1.25; }
     .cb2-gsum-row--lead .cb2-gsum-v { color: var(--cb2-gsum-v-lead); }
-    .cb2-life-card { border-top: 1px solid rgba(0,0,0,0.08); padding: 0.75rem 0 0; margin-top: 0.65rem; }
+
+    /* ── Life area cards ── */
+    .cb2-life-card { border-top: 1px solid #f1f5f9; padding: 0.8rem 0 0; margin-top: 0.7rem; }
     .cb2-life-card:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
-    .cb2-life-title { font-weight: 600; font-size: 0.86rem; color: #0f172a; }
-    .cb2-life-blurb { margin: 0.35rem 0 0; font-size: 0.82rem; line-height: 1.5; color: #334155; }
-    .cb2-para { margin: 0.45rem 0 0; font-size: 0.88rem; line-height: 1.55; color: #1e293b; }
-    .cb2-caution { margin: 0.35rem 0 0; padding-left: 1.1rem; font-size: 0.82rem; color: #334155; }
-    .cb2-caution-li { margin-bottom: 0.35rem; }
-    .cb2-disclaimer { margin-top: 1rem; padding: 0.75rem; border-radius: 10px; background: rgba(14, 165, 233, 0.06); border: 1px solid rgba(14, 165, 233, 0.25); font-size: 0.78rem; line-height: 1.45; color: #0369a1; }
-    .cb2-foot { margin-top: 1.25rem; text-align: center; font-size: 0.72rem; color: #94a3b8; }
+    .cb2-life-head { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; }
+    .cb2-life-title { font-weight: 700; font-size: 0.84rem; color: var(--cb2-accent); }
+    .cb2-life-blurb { margin: 0; font-size: 0.82rem; line-height: 1.6; color: #475569; }
+
+    /* ── Misc text ── */
+    .cb2-para { margin: 0.45rem 0 0; font-size: 0.85rem; line-height: 1.65; color: #334155; }
+    .cb2-caution { margin: 0.25rem 0 0; padding-left: 1.1rem; font-size: 0.82rem; color: #475569; line-height: 1.6; }
+    .cb2-caution-li { margin-bottom: 0.4rem; }
+    .cb2-disclaimer { margin-top: 1.25rem; padding: 0.8rem 1rem; border-radius: 12px; background: #f0f9ff; border: 1px solid #bae6fd; font-size: 0.76rem; line-height: 1.55; color: #0369a1; }
+
+    /* ── Footer ── */
+    .cb2-foot { margin-top: 1.75rem; padding-top: 1rem; border-top: 1px solid #f1f5f9; text-align: center; font-size: 0.7rem; color: #cbd5e1; letter-spacing: 0.04em; }
   </style>
 </head>
 <body>
