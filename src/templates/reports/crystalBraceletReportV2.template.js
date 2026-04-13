@@ -1297,7 +1297,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
     <section class="cb2-strip" aria-label="คะแนนสรุป">
       <div><div class="cb2-strip-k">คะแนนพลัง</div><div class="cb2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="cb2-strip-k">เข้ากัน</div><div class="cb2-strip-v">${escapeHtml(compat)}</div></div>
-      <div><div class="cb2-strip-k">ระดับ</div><div class="cb2-strip-v">${escapeHtml(levelLabel)}</div></div>
+      <div><div class="cb2-strip-k">ระดับพลังงาน</div><div class="cb2-strip-v">${escapeHtml(levelLabel)}</div></div>
     </section>
 
     ${radarSectionHtml}

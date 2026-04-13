@@ -145,13 +145,13 @@ test("Moldavite: renderReportHtmlPage uses Moldavite HTML V2 (radar, owner, grap
   assert.ok(html.includes('mv2-strip-cell--level'));
   assert.ok(html.includes("คะแนนพลัง"));
   assert.ok(html.includes('class="mv2-strip-k">เข้ากัน</div>'));
-  assert.ok(html.includes('class="mv2-strip-k">ระดับ</div>'));
+  assert.ok(html.includes('class="mv2-strip-k">ระดับพลัง</div>'));
   assert.ok(
     html.includes('mv2-strip-v level-grade--A"') ||
       html.includes("mv2-strip-v level-grade--A"),
-    "ระดับ strip uses letter grade + lane color class (7.5 → A)",
+    "ระดับพลัง strip uses letter grade + lane color class (7.5 → A)",
   );
-  assert.ok(html.includes(">A</div>"), "ระดับ value is letter grade A");
+  assert.ok(html.includes(">A</div>"), "ระดับพลัง value is letter grade A");
   {
     const stripIdx = html.indexOf('class="mv2-strip"');
     const radarFeatureIdx = html.indexOf("mv2-radar-card--feature");

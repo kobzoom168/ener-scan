@@ -202,6 +202,10 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   assert.equal(html.includes("คะแนนแต่ละมิติ"), false);
   assert.ok(html.includes("cb2-gsum-bar-sub"));
   assert.ok(html.includes("cb2-owner-card--below-summary"));
+  assert.ok(
+    html.includes('class="cb2-strip-k">ระดับพลังงาน</div>'),
+    "score strip grade column label",
+  );
   assert.ok(html.includes(">เข้ากับคุณ</span>"));
   assert.equal(html.includes("\u201c"), false);
   assert.equal(html.includes("\u201d"), false);

@@ -1106,7 +1106,7 @@ export function renderMoldaviteReportV2Html(payload) {
     <section class="mv2-strip" aria-label="คะแนนสรุป">
       <div><div class="mv2-strip-k">คะแนนพลัง</div><div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
-      <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับ</div><div class="mv2-strip-v ${vm.metrics.energyLevelGradeClass}">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
+      <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ระดับพลัง</div><div class="mv2-strip-v ${vm.metrics.energyLevelGradeClass}">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
     </section>
 
     ${radarBlock(vm)}
