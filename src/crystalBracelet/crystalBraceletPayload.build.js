@@ -241,6 +241,9 @@ export function buildCrystalBraceletV1Slice({
     },
     context: {
       scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+      /** Same args passed to {@link computeCrystalBraceletOwnerAxisScoresV1} — HTML/Flex must reuse for radar/graph/Flex align to match. */
+      ownerAxisSeedKey: String(seedKey || "").trim(),
+      ownerAxisSessionKey: String(scanResultId || "").trim(),
       energyScoreSnapshot:
         energyScore != null && Number.isFinite(Number(energyScore))
           ? Number(energyScore)

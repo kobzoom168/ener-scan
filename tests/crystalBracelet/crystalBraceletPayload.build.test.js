@@ -95,6 +95,11 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
     CRYSTAL_BRACELET_AXIS_ORDER.includes(slice.ownerProfile.tensionAxisKey),
   );
   assert.ok(String(slice.flexSurface.ownerProfileTeaser || "").length > 0);
+  assert.equal(slice.context?.ownerAxisSessionKey, "rid-bracelet-1");
+  assert.equal(
+    slice.context?.ownerAxisSeedKey,
+    "seed-bracelet-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  );
 });
 
 test("buildCrystalBraceletSummaryFirstFlex: axes block shows all 6 dimensions + new section copy", async () => {

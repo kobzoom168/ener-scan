@@ -103,12 +103,19 @@ function resolveCrystalBraceletHtmlOwnerContext(axes, payload, cb) {
         : 0;
     stoneScores[k] = sc;
   }
+  const reportId = String(payload?.reportId || "").trim();
+  const scanReqId = String(payload?.scanId || "").trim();
   const seedKey =
-    String(payload?.reportId || payload?.scanId || "").trim() ||
+    String(cb?.context?.ownerAxisSeedKey || "").trim() ||
+    reportId ||
+    scanReqId ||
     String(cb?.context?.scanResultIdPrefix || "cb");
-  const sessionKey = String(
-    payload?.scanId || payload?.reportId || cb?.context?.scanResultIdPrefix || "session",
-  );
+  /** Must match slice: second arg to owner-axis util is scan result id (report id), not scan request id first. */
+  const sessionKey =
+    String(cb?.context?.ownerAxisSessionKey || "").trim() ||
+    reportId ||
+    scanReqId ||
+    String(cb?.context?.scanResultIdPrefix || "session");
   const ownerFitFromCb =
     cb?.ownerFit &&
     typeof cb.ownerFit === "object" &&
@@ -157,10 +164,7 @@ function pickCrystalBraceletAlignAxisKey(stoneScores, ownerScores) {
  * @param {Record<string, number>} ownerScores
  */
 function resolveCrystalBraceletGraphAlignAxisKey(cb, stoneScores, ownerScores) {
-  const key = cb?.ownerProfile?.alignAxisKey;
-  if (typeof key === "string" && CRYSTAL_BRACELET_AXIS_ORDER.includes(key)) {
-    return key;
-  }
+  void cb;
   return pickCrystalBraceletAlignAxisKey(stoneScores, ownerScores);
 }
 

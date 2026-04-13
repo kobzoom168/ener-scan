@@ -102,6 +102,8 @@
  * }} display
  * @property {{
  *   scanResultIdPrefix: string,
+ *   ownerAxisSeedKey?: string,
+ *   ownerAxisSessionKey?: string,
  *   energyScoreSnapshot: number|null,
  *   mainEnergyLabelSnapshot: string|null
  * }} [context]

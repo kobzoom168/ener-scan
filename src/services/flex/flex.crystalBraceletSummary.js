@@ -7,6 +7,8 @@ import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import {
   CRYSTAL_BRACELET_AXIS_ORDER,
+  computeCrystalBraceletAlignmentAxisKey,
+  computeCrystalBraceletOwnerAxisScoresV1,
   crystalBraceletCompatibilityBandFromPercent,
 } from "../../crystalBracelet/crystalBraceletScores.util.js";
 
@@ -368,17 +370,64 @@ function createEnergyBadgePill(mainLabel) {
 }
 
 /**
- * Bracelet score on the align axis — matches graph summary bar + radar label on that spoke.
- * @param {import("../reports/reportPayload.types.js").ReportCrystalBraceletV1 | null | undefined} cb
+ * Bracelet score on the align axis — same seed/session/compat + min-|stone−owner| as HTML radar/graph.
+ * @param {import("../reports/reportPayload.types.js").ReportPayload | null | undefined} reportPayload
  * @returns {number|null}
  */
-function crystalBraceletAlignBarScoreFromCb(cb) {
+function crystalBraceletAlignBarScoreFromPayload(reportPayload) {
+  const cb = reportPayload?.crystalBraceletV1;
   if (!cb || typeof cb !== "object") return null;
-  const key = String(cb.ownerProfile?.alignAxisKey || "").trim();
-  if (!key) return null;
-  const entry = cb.axes?.[key];
-  if (!entry || typeof entry !== "object") return null;
-  const sc = entry.score;
+  const axes = cb.axes;
+  if (!axes || typeof axes !== "object") return null;
+
+  /** @type {Record<string, number>} */
+  const stoneScores = {};
+  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const sc = axes[k]?.score;
+    stoneScores[k] =
+      sc != null && Number.isFinite(Number(sc))
+        ? Math.max(0, Math.min(100, Math.round(Number(sc))))
+        : 0;
+  }
+
+  const reportId = String(reportPayload?.reportId || "").trim();
+  const scanReqId = String(reportPayload?.scanId || "").trim();
+  const seedKey =
+    String(cb.context?.ownerAxisSeedKey || "").trim() ||
+    reportId ||
+    scanReqId ||
+    String(cb.context?.scanResultIdPrefix || "cb");
+  const sessionKey =
+    String(cb.context?.ownerAxisSessionKey || "").trim() ||
+    reportId ||
+    scanReqId ||
+    String(cb.context?.scanResultIdPrefix || "session");
+
+  const ownerFitFromCb =
+    cb.ownerFit &&
+    typeof cb.ownerFit === "object" &&
+    cb.ownerFit.score != null &&
+    Number.isFinite(Number(cb.ownerFit.score))
+      ? Number(cb.ownerFit.score)
+      : null;
+  const ownerFitFromSummary =
+    reportPayload?.summary?.compatibilityPercent != null &&
+    Number.isFinite(Number(reportPayload.summary.compatibilityPercent))
+      ? Math.round(Number(reportPayload.summary.compatibilityPercent))
+      : null;
+  const ownerFitInput = ownerFitFromSummary ?? ownerFitFromCb ?? 66;
+
+  const ownerScores = computeCrystalBraceletOwnerAxisScoresV1(
+    seedKey,
+    sessionKey,
+    stoneScores,
+    ownerFitInput,
+  );
+  const alignKey = computeCrystalBraceletAlignmentAxisKey(
+    stoneScores,
+    ownerScores,
+  );
+  const sc = axes[alignKey]?.score;
   if (sc == null || !Number.isFinite(Number(sc))) return null;
   return Math.max(0, Math.min(100, Math.round(Number(sc))));
 }
@@ -457,7 +506,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
   const url = String(reportUrl || "").trim();
 
   const axesBlock = createCrystalBraceletAxesBarBlock(cb.axes);
-  const alignBarScore = crystalBraceletAlignBarScoreFromCb(cb);
+  const alignBarScore = crystalBraceletAlignBarScoreFromPayload(reportPayload);
 
   const altMain = headlineText.split("\n")[0].trim() || "กำไลหินคริสตัล";
   const altText = buildScanFlexAltText({
