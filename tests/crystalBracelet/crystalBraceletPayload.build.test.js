@@ -63,11 +63,13 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
   const pLabel = String(
     slice.axes[slice.primaryAxis]?.labelThai || "",
   ).trim();
-  const sLabel = String(
-    slice.axes[slice.secondaryAxis]?.labelThai || "",
+  const alignKey = String(slice.ownerProfile?.alignAxisKey || "").trim();
+  const alignLabel = String(
+    slice.axes[alignKey]?.labelThai || "",
   ).trim();
   assert.ok(slice.htmlReport.graphSummaryRows[0].includes(pLabel));
-  assert.ok(slice.htmlReport.graphSummaryRows[1].includes(sLabel));
+  assert.ok(slice.htmlReport.graphSummaryRows[1].includes("เข้ากับคุณที่สุด"));
+  assert.ok(slice.htmlReport.graphSummaryRows[1].includes(alignLabel));
   assert.ok(slice.htmlReport.axisBlurbs?.charm_attraction?.length > 15);
   assert.ok(slice.htmlReport.axisBlurbs?.career?.length > 15);
   assert.ok(slice.htmlReport.axisBlurbs?.love?.length > 15);
@@ -128,6 +130,8 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   assert.equal(html.includes("คะแนนแต่ละมิติ"), false);
   assert.ok(html.includes("cb2-gsum-bar-sub"));
   assert.ok(html.includes("cb2-owner-card--below-summary"));
+  assert.ok(html.includes(">เข้ากับคุณ</span>"));
+  assert.equal(html.includes("รองลงมา"), false);
 });
 
 test("computeCrystalBraceletScoresDeterministicV1: stable seed → stable axes", () => {

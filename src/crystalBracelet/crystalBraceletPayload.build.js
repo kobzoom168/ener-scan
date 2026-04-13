@@ -52,15 +52,15 @@ function buildCrystalBraceletFlexSurfaceCopy(primary, alignAxis, axes, surface) 
 /**
  * @param {Record<string, { key: string, score: number, labelThai: string }>} axes
  * @param {string} primary — พีคพลังกำไล (คะแนนสูงสุด)
- * @param {string} secondary — มิติรองจากคะแนน
- * @param {string} _alignAxis — แกน alignment (ใช้บนเรดาร์ ไม่ใส่ใน graphSummaryRows)
+ * @param {string} secondary — มิติรองจากคะแนน (metadata; ไม่ใช้ใน graphSummaryRows แถวสองอีกต่อไป)
+ * @param {string} alignAxis — แกนเข้ากับจังหวะผู้สวมมากที่สุด (min |พลังกำไล − จังหวะผู้สวม|)
  */
-function buildCrystalBraceletHtmlReport(axes, primary, secondary, _alignAxis) {
-  void _alignAxis;
+function buildCrystalBraceletHtmlReport(axes, primary, secondary, alignAxis) {
+  void secondary;
   const primaryLabel =
     String(axes[primary]?.labelThai || "").trim() || "การงาน";
-  const secondaryLabel =
-    String(axes[secondary]?.labelThai || "").trim() || "การงาน";
+  const alignLabel =
+    String(axes[alignAxis]?.labelThai || "").trim() || "การงาน";
 
   return {
     meaningParagraphs: [
@@ -69,7 +69,7 @@ function buildCrystalBraceletHtmlReport(axes, primary, secondary, _alignAxis) {
     ],
     graphSummaryRows: [
       `เด่นสุดที่ ${primaryLabel}`,
-      `รองลงมาที่ ${secondaryLabel}`,
+      `เข้ากับคุณที่สุด ${alignLabel}`,
     ],
     axisBlurbs: {
       charm_attraction:
