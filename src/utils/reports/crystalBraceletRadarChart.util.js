@@ -7,8 +7,8 @@ const VB_W = 340;
 const VB_H = 320;
 const CX = 170;
 const CY = 168;
-const RADIUS = 120;
-const RING_RADII = [24, 48, 72, 96, 120];
+const RADIUS = 118;
+const RING_RADII = [24, 48, 72, 96, 118];
 const RING_LABELS = ["20", "40", "60", "80", "100"];
 
 /** @param {string} s */
@@ -21,20 +21,16 @@ function escapeSvgText(s) {
 }
 
 /**
- * @param {Record<string, unknown>} axes
- * @param {string} key
+ * @param {number} ly
  */
-function axisLabelThai(axes, key) {
-  const e = axes[key];
-  if (e && typeof e === "object") {
-    const t = String(e.labelThai || "").trim();
-    if (t) return t;
-  }
-  return CRYSTAL_BRACELET_AXIS_LABEL_THAI[key] || key;
+function axisLabelDominantBaseline(ly) {
+  if (ly < CY - 8) return "auto";
+  if (ly > CY + 8) return "hanging";
+  return "middle";
 }
 
 /**
- * 7-axis heptagon radar SVG (viewBox 340×320) for crystal bracelet report.
+ * 7-axis heptagon radar SVG — white-on-dark, no blue on chart geometry.
  * @param {Record<string, unknown>} axes
  * @returns {string}
  */
@@ -73,20 +69,21 @@ export function buildCrystalBraceletRadarChartSvg(axes) {
 
   const gridRings = RING_RADII.map(
     (r) =>
-      `<polygon points="${heptagonPoints(r)}" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>`,
+      `<polygon points="${heptagonPoints(r)}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>`,
   ).join("");
 
   const ringLabelTexts = RING_RADII.map((r, idx) => {
-    const y = CY - r - 5;
+    const x = CX + 4;
+    const y = CY - r + 3;
     const lab = escapeSvgText(RING_LABELS[idx] ?? "");
-    return `<text x="${CX}" y="${y.toFixed(2)}" font-size="9" fill="#6e7681" text-anchor="middle" dominant-baseline="middle" font-family="system-ui,sans-serif">${lab}</text>`;
+    return `<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-size="8" fill="rgba(255,255,255,0.30)" text-anchor="start" dominant-baseline="middle" font-family="system-ui,sans-serif">${lab}</text>`;
   }).join("");
 
   const spokes = angles
     .map((ang) => {
       const x2 = CX + RADIUS * Math.cos(ang);
       const y2 = CY + RADIUS * Math.sin(ang);
-      return `<line x1="${CX}" y1="${CY}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+      return `<line x1="${CX}" y1="${CY}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>`;
     })
     .join("");
 
@@ -100,7 +97,7 @@ export function buildCrystalBraceletRadarChartSvg(axes) {
     })
     .join(" ");
 
-  const labelR = RADIUS + 18;
+  const labelR = RADIUS + 17;
   const axisLabelsHtml = angles
     .map((ang, i) => {
       const k = axisOrder[i];
@@ -110,10 +107,14 @@ export function buildCrystalBraceletRadarChartSvg(axes) {
       if (lx > CX + 8) anchor = "start";
       else if (lx < CX - 8) anchor = "end";
       const isPeak = k === peakKey;
-      const fill = isPeak ? "#38bdf8" : "#8b949e";
+      const fill = isPeak ? "#ffffff" : "rgba(255,255,255,0.50)";
       const weight = isPeak ? "700" : "400";
-      const lab = escapeSvgText(axisLabelThai(axes, k));
-      return `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="12" font-weight="${weight}" fill="${fill}" font-family="system-ui,sans-serif">${lab}</text>`;
+      const fs = isPeak ? "12" : "11";
+      const baseline = axisLabelDominantBaseline(ly);
+      const lab = escapeSvgText(
+        String(CRYSTAL_BRACELET_AXIS_LABEL_THAI[k] || k),
+      );
+      return `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-size="${fs}" font-weight="${weight}" fill="${fill}" font-family="system-ui,sans-serif">${lab}</text>`;
     })
     .join("");
 
@@ -125,13 +126,13 @@ export function buildCrystalBraceletRadarChartSvg(axes) {
   const pxf = peakX.toFixed(2);
   const pyf = peakY.toFixed(2);
 
-  const peakMarker = `<circle cx="${pxf}" cy="${pyf}" r="9" fill="none" stroke="#38bdf8" stroke-width="1.5" opacity="0.45" aria-hidden="true"/>
-  <circle cx="${pxf}" cy="${pyf}" r="5" fill="#38bdf8" aria-hidden="true"/>`;
+  const peakMarker = `<circle cx="${pxf}" cy="${pyf}" r="8" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" aria-hidden="true"/>
+  <circle cx="${pxf}" cy="${pyf}" r="4.5" fill="#ffffff" aria-hidden="true"/>`;
 
-  return `<svg class="cb2-radar-svg" viewBox="0 0 ${VB_W} ${VB_H}" width="100%" style="max-width:340px" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility" aria-hidden="true">
+  return `<svg class="cb2-radar-svg" viewBox="0 0 ${VB_W} ${VB_H}" width="100%" style="max-width:320px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility" aria-hidden="true">
   ${gridRings}
   ${spokes}
-  <polygon points="${dataPoints}" fill="rgba(56,189,248,0.18)" stroke="#38bdf8" stroke-width="2" stroke-linejoin="round"/>
+  <polygon points="${dataPoints}" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.85)" stroke-width="1.8" stroke-linejoin="round"/>
   ${peakMarker}
   ${axisLabelsHtml}
   ${ringLabelTexts}

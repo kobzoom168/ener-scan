@@ -299,9 +299,19 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
     /* ── Radar chart ── */
     .cb2-radar-card { }
-    .cb2-radar-wrap { display: flex; justify-content: center; margin-bottom: 0.75rem; }
-    .cb2-radar-legend { display: flex; flex-direction: column; gap: 0.45rem; }
-    .cb2-radar-leg-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; }
+    .cb2-radar-wrap { }
+    .cb2-radar-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      margin-top: 0.85rem;
+    }
+    .cb2-radar-leg-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.78rem;
+    }
     .cb2-radar-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
     .cb2-radar-leg-label { flex: 1; color: #8b949e; font-size: 0.76rem; }
     .cb2-radar-leg-score { font-weight: 700; font-variant-numeric: tabular-nums; }
