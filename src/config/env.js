@@ -486,6 +486,24 @@ export const env = {
   })(),
 
   /**
+   * Perceptual image deduplication (dHash). When `true`, scan worker checks if the uploaded
+   * image is visually similar to a previous scan by the same user and re-delivers the cached
+   * report instead of running the full AI pipeline.
+   * Default off. Set `IMAGE_DEDUP_ENABLED=true` to enable.
+   */
+  IMAGE_DEDUP_ENABLED:
+    String(process.env.IMAGE_DEDUP_ENABLED || "").trim() === "true",
+  /**
+   * Hamming distance threshold for pHash duplicate detection (0–64, default 10).
+   * Lower = stricter match. 10 allows minor angle/lighting differences.
+   */
+  IMAGE_DEDUP_HAMMING_THRESHOLD: (() => {
+    const raw = process.env.IMAGE_DEDUP_HAMMING_THRESHOLD;
+    const n = raw === undefined || raw === "" ? 10 : Number(raw);
+    return Number.isFinite(n) ? Math.min(64, Math.max(0, Math.floor(n))) : 10;
+  })(),
+
+  /**
    * Ener Scan V2: async webhook → storage → DB queue → workers (see docs/ENER_SCAN_V2_ROLLOUT.md).
    * When `true`, web attempts `ingestScanImageAsyncV2` for scan image flows (requires literal trimmed `true`).
    */

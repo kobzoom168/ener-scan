@@ -73,6 +73,11 @@ import {
   FinalDeliveryErrorCode,
   publicTokenPrefix12,
 } from "../../utils/scanV2/finalDeliveryTelemetry.util.js";
+import { computeImageDHash } from "../imageDedup/imagePhash.util.js";
+import {
+  findDuplicateScanByPhash,
+  insertScanPhash,
+} from "../../stores/scanV2/imageDedupCache.db.js";
 
 /**
  * @param {string} workerId
@@ -150,6 +155,66 @@ export async function processScanJob(workerId, jobRow) {
     );
     return;
   }
+
+  // ── Perceptual image dedup ──────────────────────────────────────────────
+  // If IMAGE_DEDUP_ENABLED, compute dHash of the image and check if the same
+  // user has scanned a visually identical object before. On match, re-deliver
+  // the cached report URL instead of running the full AI pipeline.
+  /** @type {string | null} */
+  let imageDHash = null;
+  if (env.IMAGE_DEDUP_ENABLED) {
+    try {
+      imageDHash = await computeImageDHash(imageBuffer);
+      const dupMatch = await findDuplicateScanByPhash(
+        imageDHash,
+        lineUserId,
+        env.IMAGE_DEDUP_HAMMING_THRESHOLD,
+      );
+      if (dupMatch) {
+        console.log(
+          JSON.stringify({
+            event: "SCAN_IMAGE_DEDUP_HIT",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+            cachedScanResultIdPrefix: String(dupMatch.scan_result_id || "").slice(0, 8),
+            hasReportUrl: Boolean(dupMatch.report_url),
+            threshold: env.IMAGE_DEDUP_HAMMING_THRESHOLD,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        // Mark job complete and re-deliver cached report URL as outbound message
+        await updateScanJob(jobId, { status: "completed", completed_at: new Date().toISOString() });
+        if (dupMatch.report_url) {
+          await insertOutboundMessage({
+            scan_job_id: jobId,
+            line_user_id: lineUserId,
+            app_user_id: appUserId,
+            message_type: "flex",
+            payload_json: JSON.stringify({
+              type: "text",
+              text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${dupMatch.report_url}`,
+            }),
+            priority: OUTBOUND_PRIORITY.SCAN_RESULT,
+            status: "pending",
+          });
+        }
+        return;
+      }
+    } catch (dedupErr) {
+      // Non-fatal: if dedup check fails, proceed with normal scan
+      console.error(
+        JSON.stringify({
+          event: "SCAN_IMAGE_DEDUP_ERROR",
+          path: "worker-scan",
+          jobIdPrefix: idPrefix8(jobId),
+          message: dedupErr?.message,
+          timestamp: scanV2TraceTs(),
+        }),
+      );
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   const imageBase64 = toBase64(imageBuffer);
   const gated = await checkSingleObjectGated(imageBase64, {
@@ -1039,6 +1104,25 @@ export async function processScanJob(workerId, jobRow) {
       workerId,
     );
     return;
+  }
+
+  // Store pHash for future dedup lookups (non-fatal)
+  if (env.IMAGE_DEDUP_ENABLED && imageDHash && scanResultV2Id) {
+    insertScanPhash({
+      image_phash: imageDHash,
+      scan_result_id: scanResultV2Id,
+      report_url: reportUrl ?? null,
+      line_user_id: lineUserId,
+    }).catch((e) => {
+      console.error(
+        JSON.stringify({
+          event: "SCAN_PHASH_INSERT_ERROR",
+          path: "worker-scan",
+          jobIdPrefix: idPrefix8(jobId),
+          message: e?.message,
+        }),
+      );
+    });
   }
 
   if (publicToken && reportUrl && scanResultV2Id) {
