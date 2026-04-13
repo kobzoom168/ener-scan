@@ -47,7 +47,7 @@ function polygonPointsFromScores(scores, angles, axisOrder) {
 }
 
 /**
- * 7-axis heptagon radar — stone (bracelet) + owner overlay.
+ * 7-axis radar with circular grid — stone (bracelet) + owner overlay.
  * @param {Record<string, unknown>} axes — stone/bracelet axis payload
  * @param {Record<string, number>} ownerAxisScores — 0–100 per key (เจ้าของ / จังหวะผู้สวม)
  * @returns {string}
@@ -84,19 +84,9 @@ export function buildCrystalBraceletRadarChartSvg(
     axisOrder[0],
   );
 
-  /** @param {number} r */
-  const heptagonPoints = (r) =>
-    angles
-      .map((ang) => {
-        const x = CX + r * Math.cos(ang);
-        const y = CY + r * Math.sin(ang);
-        return `${x.toFixed(2)},${y.toFixed(2)}`;
-      })
-      .join(" ");
-
   const gridRings = RING_RADII.map(
     (r) =>
-      `<polygon points="${heptagonPoints(r)}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>`,
+      `<circle cx="${CX}" cy="${CY}" r="${r}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>`,
   ).join("");
 
   const ringLabelTexts = RING_RADII.map((r, idx) => {
@@ -134,7 +124,14 @@ export function buildCrystalBraceletRadarChartSvg(
       const lab = escapeSvgText(
         String(CRYSTAL_BRACELET_AXIS_LABEL_THAI[k] || k),
       );
-      return `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-size="${fs}" font-weight="${weight}" fill="${fill}" font-family="system-ui,sans-serif">${lab}</text>`;
+      const pct = axisScores[k];
+      const lyScore = ly + 13;
+      const scoreFill = isPeak
+        ? "rgba(255,255,255,0.88)"
+        : "rgba(255,255,255,0.55)";
+      const nameEl = `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-size="${fs}" font-weight="${weight}" fill="${fill}" font-family="system-ui,sans-serif">${lab}</text>`;
+      const scoreEl = `<text x="${lx.toFixed(2)}" y="${lyScore.toFixed(2)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10" font-weight="600" fill="${scoreFill}" font-family="system-ui,sans-serif">${pct}%</text>`;
+      return `${nameEl}${scoreEl}`;
     })
     .join("");
 

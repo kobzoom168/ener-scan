@@ -60,11 +60,9 @@ function buildCbRadarLegendHtml(axes) {
     .map((key) => {
       const color = CB_RING_COLORS[key] || "#0284c7";
       const lab = escapeHtml(cbAxisLabelThai(axes, key));
-      const sc = axisScores[key];
       return `<div class="cb2-radar-leg-row">
   <span class="cb2-radar-dot" style="background:${color}" aria-hidden="true"></span>
-  <span class="cb2-radar-leg-label">${lab}</span>
-  <span class="cb2-radar-leg-score" style="color:${color}">${sc}%</span>
+  <span class="cb2-radar-leg-label" style="color:${color}">${lab}</span>
 </div>`;
     })
     .join("");
@@ -359,8 +357,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
       font-size: 0.78rem;
     }
     .cb2-radar-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-    .cb2-radar-leg-label { flex: 1; color: #8b949e; font-size: 0.76rem; }
-    .cb2-radar-leg-score { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cb2-radar-leg-label { flex: 1; font-size: 0.76rem; }
 
     /* ── Axis bars ── */
     .cb2-axis-row { display: flex; align-items: center; gap: 0.45rem; margin: 0.4rem 0; font-size: 0.78rem; }
