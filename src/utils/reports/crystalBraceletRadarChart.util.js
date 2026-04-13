@@ -79,9 +79,16 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
     CRYSTAL_BRACELET_AXIS_ORDER[0],
   );
 
-  // Grid rings (3 rings at 33%, 66%, 100%)
-  const gridRings = [SVG_R * 0.33, SVG_R * 0.66, SVG_R]
-    .map((r) => `<circle cx="${SVG_CX}" cy="${SVG_CY}" r="${r.toFixed(2)}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5"/>`)
+  // Grid rings as heptagon polygons (straight lines between axis points)
+  const heptPoints = (r) =>
+    angles
+      .map((ang) => `${(SVG_CX + Math.cos(ang) * r).toFixed(2)},${(SVG_CY + Math.sin(ang) * r).toFixed(2)}`)
+      .join(" ");
+  const gridRings = [SVG_R * 0.25, SVG_R * 0.5, SVG_R * 0.75, SVG_R]
+    .map((r, i) => {
+      const stroke = i === 3 ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.10)";
+      return `<polygon points="${heptPoints(r)}" fill="none" stroke="${stroke}" stroke-width="0.5"/>`;
+    })
     .join("");
 
   // Spokes
