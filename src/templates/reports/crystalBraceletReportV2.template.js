@@ -7,16 +7,10 @@ import {
   CRYSTAL_BRACELET_AXIS_ORDER,
   CRYSTAL_BRACELET_AXIS_LABEL_THAI,
 } from "../../crystalBracelet/crystalBraceletScores.util.js";
+import { buildCrystalBraceletRadarChartSvg } from "../../utils/reports/crystalBraceletRadarChart.util.js";
 
 const DISCLAIMER_FIXED =
   "ผลนี้อ่านจากพลังรวมของกำไลทั้งเส้น ไม่ยืนยันชนิดหินรายเม็ด";
-
-const CB_RING_CX = 160;
-const CB_RING_CY = 160;
-const CB_RING_VB = 320;
-const RING_R_START = 140;
-const RING_STEP = 16;
-const CB_RING_STROKE = 11;
 
 const CB_RING_COLORS = {
   protection: "#06b6d4",
@@ -42,69 +36,16 @@ function cbAxisLabelThai(axes, key) {
 }
 
 /**
- * Concentric ring chart — วงนอก = คะแนนสูงสุด (เรียงตามคะแนน DESC)
+ * Radar (spider) chart — มิติพลัง 7 แกน สเกล 0–100
  * @param {Record<string, unknown>} axes
  */
-function createCbRingsSection(axes) {
-  /** @type {Record<string, number>} */
-  const axisScores = {};
-  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
-    const e = axes[k];
-    const sc =
-      e && typeof e === "object" && e.score != null && Number.isFinite(Number(e.score))
-        ? Math.max(0, Math.min(100, Math.round(Number(e.score))))
-        : 0;
-    axisScores[k] = sc;
-  }
-
-  const sorted = [...CRYSTAL_BRACELET_AXIS_ORDER].sort((a, b) => {
-    const d = axisScores[b] - axisScores[a];
-    if (d !== 0) return d;
-    return CRYSTAL_BRACELET_AXIS_ORDER.indexOf(a) - CRYSTAL_BRACELET_AXIS_ORDER.indexOf(b);
-  });
-
-  const topKey = sorted[0];
-  const primaryAxisLabel = escapeHtml(cbAxisLabelThai(axes, topKey));
-
-  const circlesHtml = [];
-  for (let i = 0; i < 7; i++) {
-    const key = sorted[i];
-    const r = RING_R_START - i * RING_STEP;
-    const circumference = 2 * Math.PI * r;
-    const score = axisScores[key];
-    const fillLen = (score / 100) * circumference;
-    const gapLen = Math.max(0, circumference - fillLen);
-    const color = CB_RING_COLORS[key] || "#0284c7";
-    circlesHtml.push(
-      `<circle cx="${CB_RING_CX}" cy="${CB_RING_CY}" r="${r}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="${CB_RING_STROKE}"/>`,
-    );
-    circlesHtml.push(
-      `<circle cx="${CB_RING_CX}" cy="${CB_RING_CY}" r="${r}" fill="none" stroke="${color}" stroke-width="${CB_RING_STROKE}" stroke-linecap="round" stroke-dasharray="${fillLen.toFixed(2)} ${gapLen.toFixed(2)}" transform="rotate(-90 ${CB_RING_CX} ${CB_RING_CY})"/>`,
-    );
-  }
-
-  const legendHtml = sorted
-    .map((key) => {
-      const color = CB_RING_COLORS[key] || "#0284c7";
-      const lab = escapeHtml(cbAxisLabelThai(axes, key));
-      const sc = axisScores[key];
-      return `<div class="cb2-ring-leg-row">
-  <span class="cb2-ring-dot" style="background:${color}" aria-hidden="true"></span>
-  <span class="cb2-ring-leg-label">${lab}</span>
-  <span class="cb2-ring-leg-score" style="color:${color}">${sc}%</span>
-</div>`;
-    })
-    .join("");
-
-  return `<section class="cb2-card cb2-rings-card" aria-labelledby="cb2-rings-h">
-    <h2 id="cb2-rings-h">มิติพลังกำไล</h2>
-    <div class="cb2-rings-wrap" role="img" aria-label="มิติพลังกำไล แผนภูมิวงแหวน">
-      <svg class="cb2-rings-svg" viewBox="0 0 ${CB_RING_VB} ${CB_RING_VB}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility">
-        ${circlesHtml.join("")}
-        <text x="${CB_RING_CX}" y="154" text-anchor="middle" font-size="13" fill="#6e7681" font-family="system-ui,sans-serif">พลังหลัก</text>
-        <text x="${CB_RING_CX}" y="174" text-anchor="middle" font-size="15" font-weight="700" fill="#f0f6fc" font-family="system-ui,sans-serif">${primaryAxisLabel}</text>
-      </svg>
-      <div class="cb2-rings-legend">${legendHtml}</div>
+function createCbRadarSection(axes) {
+  const radarSvg = buildCrystalBraceletRadarChartSvg(axes);
+  return `<section class="cb2-card cb2-radar-card" aria-labelledby="cb2-radar-h">
+    <h2 id="cb2-radar-h">มิติพลังกำไล</h2>
+    <p class="cb2-radar-scale-hint">สเกล 0–100</p>
+    <div class="cb2-radar-wrap" role="img" aria-label="มิติพลังกำไล แผนภูมิเรดาร์">
+      ${radarSvg}
     </div>
   </section>`;
 }
@@ -319,15 +260,11 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-card h2::before { content: ""; display: block; width: 3px; height: 0.9em; background: var(--cb2-accent); border-radius: 2px; flex-shrink: 0; }
     .cb2-hint { font-size: 0.67rem; color: var(--cb2-muted); margin: -0.4rem 0 0.65rem 0.5rem; }
 
-    /* ── Ring chart ── */
-    .cb2-rings-card { }
-    .cb2-rings-wrap { display: flex; align-items: center; gap: 1rem; }
-    .cb2-rings-svg { width: 170px; flex-shrink: 0; height: auto; display: block; }
-    .cb2-rings-legend { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; min-width: 0; }
-    .cb2-ring-leg-row { display: flex; align-items: center; gap: 0.45rem; font-size: 0.78rem; }
-    .cb2-ring-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-    .cb2-ring-leg-label { flex: 1; color: var(--cb2-sub); min-width: 0; font-size: 0.76rem; }
-    .cb2-ring-leg-score { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.78rem; }
+    /* ── Radar chart ── */
+    .cb2-radar-card { }
+    .cb2-radar-scale-hint { font-size: 0.65rem; color: var(--cb2-muted); margin: -0.35rem 0 0.5rem 0.5rem; }
+    .cb2-radar-wrap { width: 100%; max-width: 19rem; margin: 0 auto; }
+    .cb2-radar-svg { width: 100%; height: auto; display: block; }
 
     /* ── Axis bars ── */
     .cb2-axis-row { display: flex; align-items: center; gap: 0.45rem; margin: 0.4rem 0; font-size: 0.78rem; }
@@ -391,7 +328,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
       <div><div class="cb2-strip-k">ระดับ</div><div class="cb2-strip-v">${escapeHtml(levelLabel)}</div></div>
     </section>
 
-    ${ringsSectionHtml}
+    ${radarSectionHtml}
 
     <section class="cb2-card" aria-labelledby="cb2-gsum-h">
       <h2 id="cb2-gsum-h">สรุปจากกราฟ</h2>
