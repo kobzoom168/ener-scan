@@ -320,22 +320,9 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-radar-lbl-t { font-size: 0.62rem; }
     .cb2-radar-lbl-n { font-size: 0.67rem; font-weight: 700; font-variant-numeric: tabular-nums; }
     .cb2-radar-lbl--peak .cb2-radar-lbl-n { color: rgba(255,255,255,0.92); }
-    @keyframes cb2-radar-flash {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.38; }
-    }
-    .cb2-radar-lbl--grounding-flash {
-      animation: cb2-radar-flash 1.1s ease-in-out infinite;
-      color: #93c5fd;
-    }
-    .cb2-radar-lbl--grounding-flash .cb2-radar-lbl-n { color: #bfdbfe; }
-    .cb2-radar-svg .cb2-radar-flash-vertex {
-      animation: cb2-radar-flash 1.1s ease-in-out infinite;
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .cb2-radar-lbl--grounding-flash,
-      .cb2-radar-svg .cb2-radar-flash-vertex { animation: none; opacity: 1; }
-    }
+    /* แกน “เข้ากับคุณที่สุด” (min |owner−stone|) — เทียบจุดเทาใน SVG */
+    .cb2-radar-lbl--align { color: #94a3b8; }
+    .cb2-radar-lbl--align .cb2-radar-lbl-n { color: #cbd5e1; }
     .cb2-radar-key {
       font-size: 0.62rem;
       color: var(--cb2-muted);

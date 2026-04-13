@@ -1,6 +1,7 @@
 import {
   CRYSTAL_BRACELET_AXIS_ORDER,
   CRYSTAL_BRACELET_AXIS_LABEL_THAI,
+  computeCrystalBraceletAlignmentAxisKey,
 } from "../../crystalBracelet/crystalBraceletScores.util.js";
 
 // SVG viewBox: 100×100 coordinate system (same pattern as amulet radar)
@@ -14,6 +15,9 @@ const STONE_FILL = "rgba(96,165,250,0.12)";
 const OWNER_STROKE = "#f87171";
 const STONE_DOT_FILL = "#93c5fd";
 const OWNER_DOT_FILL = "#fca5a5";
+/** จุดรอง “เข้ากับคุณที่สุด” บนเส้นพลังกำไล — เทียบ moldavite mv2-radar-peak-compatibility */
+const ALIGN_DOT_FILL = "rgba(148,163,184,0.9)";
+const ALIGN_DOT_RING = "rgba(148,163,184,0.42)";
 
 // CSS % positions for each axis label (top/bottom/left/right from the plot container)
 // Computed for 7-axis heptagon, label radius ~52% from center (50%,50%)
@@ -85,6 +89,10 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
     (best, k) => ((ownerAxisScores[k] || 0) > (ownerAxisScores[best] || 0) ? k : best),
     CRYSTAL_BRACELET_AXIS_ORDER[0],
   );
+  const alignKey = computeCrystalBraceletAlignmentAxisKey(
+    axisScores,
+    ownerAxisScores,
+  );
 
   // Grid rings as heptagon polygons — omit outermost ring (100% edge) per design
   const heptPoints = (r) =>
@@ -109,29 +117,25 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
   const stonePoints = polygonPoints(axisScores, angles);
   const ownerPoints = polygonPoints(ownerAxisScores, angles);
 
-  // Peak dot (stone)
+  // พลังกำไล — พีค (สูงสุด) + จุดรองที่แกน alignment เมื่อไม่ซ้ำพีค (สูตรเดียวกับมอลดาไวต์: min |owner−stone|)
   const peakIdx = CRYSTAL_BRACELET_AXIS_ORDER.indexOf(peakKey);
   const peakAng = angles[peakIdx];
   const peakV = axisScores[peakKey] / 100;
   const pxf = (SVG_CX + Math.cos(peakAng) * peakV * SVG_R).toFixed(2);
   const pyf = (SVG_CY + Math.sin(peakAng) * peakV * SVG_R).toFixed(2);
-  /** Peak marker when peak ≠ ตั้งหลัก (grounding vertex uses flashing dot instead when same). */
-  const stonePeakNonGrounding =
-    peakKey === "grounding"
-      ? ""
-      : `<circle cx="${pxf}" cy="${pyf}" r="3.2" fill="none" stroke="rgba(96,165,250,0.45)" stroke-width="0.8"/>
+  const stonePeakMarker = `<circle cx="${pxf}" cy="${pyf}" r="3.2" fill="none" stroke="rgba(96,165,250,0.45)" stroke-width="0.8"/>
   <circle cx="${pxf}" cy="${pyf}" r="1.6" fill="${STONE_DOT_FILL}"/>`;
 
-  // ตั้งหลัก — flashing vertex on พลังกำไล (same position as peak when grounding is max)
-  const gIdx = CRYSTAL_BRACELET_AXIS_ORDER.indexOf("grounding");
-  const gAng = angles[gIdx];
-  const gV = axisScores.grounding / 100;
-  const gxf = (SVG_CX + Math.cos(gAng) * gV * SVG_R).toFixed(2);
-  const gyf = (SVG_CY + Math.sin(gAng) * gV * SVG_R).toFixed(2);
-  const groundingFlashVertex = `<g class="cb2-radar-flash-vertex">
-  <circle cx="${gxf}" cy="${gyf}" r="3.2" fill="none" stroke="rgba(96,165,250,0.55)" stroke-width="0.85"/>
-  <circle cx="${gxf}" cy="${gyf}" r="1.7" fill="${STONE_DOT_FILL}"/>
-</g>`;
+  let stoneAlignMarker = "";
+  if (alignKey !== peakKey) {
+    const ai = CRYSTAL_BRACELET_AXIS_ORDER.indexOf(alignKey);
+    const aAng = angles[ai];
+    const aV = axisScores[alignKey] / 100;
+    const axf = (SVG_CX + Math.cos(aAng) * aV * SVG_R).toFixed(2);
+    const ayf = (SVG_CY + Math.sin(aAng) * aV * SVG_R).toFixed(2);
+    stoneAlignMarker = `<circle cx="${axf}" cy="${ayf}" r="2.2" fill="none" stroke="${ALIGN_DOT_RING}" stroke-width="0.7"/>
+  <circle class="cb2-radar-align-dot" cx="${axf}" cy="${ayf}" r="1.05" fill="${ALIGN_DOT_FILL}"/>`;
+  }
 
   // Owner peak dot
   const oIdx = CRYSTAL_BRACELET_AXIS_ORDER.indexOf(ownerPeakKey);
@@ -148,8 +152,8 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
   <polygon points="${ownerPoints}" fill="none" stroke="${OWNER_STROKE}" stroke-width="0.6" stroke-dasharray="2 2" stroke-linejoin="round"/>
   <polygon points="${stonePoints}" fill="${STONE_FILL}" stroke="${STONE_STROKE}" stroke-width="0.75" stroke-linejoin="round"/>
   ${ownerPeak}
-  ${stonePeakNonGrounding}
-  ${groundingFlashVertex}
+  ${stoneAlignMarker}
+  ${stonePeakMarker}
 </svg>`;
 
   // HTML labels (positioned with CSS — no SVG text overflow issues)
@@ -163,7 +167,8 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
           return `${prop}:${v}`;
         })
         .join(";");
-      const cls = `cb2-radar-lbl cb2-radar-lbl--${k}${isPeak ? " cb2-radar-lbl--peak" : ""}${k === "grounding" ? " cb2-radar-lbl--grounding-flash" : ""}`;
+      const isAlign = k === alignKey && alignKey !== peakKey;
+      const cls = `cb2-radar-lbl cb2-radar-lbl--${k}${isPeak ? " cb2-radar-lbl--peak" : ""}${isAlign ? " cb2-radar-lbl--align" : ""}`;
       const label = esc(String(CRYSTAL_BRACELET_AXIS_LABEL_THAI[k] || k));
       const score = esc(String(axisScores[k]));
       return `<span class="${cls}" style="${styleStr}"><span class="cb2-radar-lbl-t">${label}</span><span class="cb2-radar-lbl-n">${score}%</span></span>`;

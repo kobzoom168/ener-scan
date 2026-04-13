@@ -166,6 +166,32 @@ export function computeCrystalBraceletScoresDeterministicV1(seedKey, opts = {}) 
  * @param {number|null|undefined} ownerFitScore — 0–100, from ownerFit or compatibility
  * @returns {Record<string, number>}
  */
+/**
+ * Same rule as moldavite `graph.alignment`: axis where |จังหวะผู้สวม − พลังกำไล| is minimal
+ * (จุดรองบนกราฟพลังกำไล — “เข้ากับคุณที่สุด” เมื่อไม่ซ้ำกับพีค).
+ *
+ * @param {Record<string, number>} stoneAxisScores — 0–100 per axis
+ * @param {Record<string, number>} ownerAxisScores — 0–100 per axis
+ * @returns {string} axis key in {@link CRYSTAL_BRACELET_AXIS_ORDER}
+ */
+export function computeCrystalBraceletAlignmentAxisKey(
+  stoneAxisScores,
+  ownerAxisScores,
+) {
+  let alignKey = CRYSTAL_BRACELET_AXIS_ORDER[0];
+  let minD = Infinity;
+  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const d = Math.abs(
+      (Number(ownerAxisScores[k]) || 0) - (Number(stoneAxisScores[k]) || 0),
+    );
+    if (d < minD) {
+      minD = d;
+      alignKey = k;
+    }
+  }
+  return alignKey;
+}
+
 export function computeCrystalBraceletOwnerAxisScoresV1(
   seedKey,
   sessionKey,

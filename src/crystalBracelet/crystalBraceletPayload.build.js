@@ -1,4 +1,9 @@
-import { computeCrystalBraceletScoresDeterministicV1 } from "./crystalBraceletScores.util.js";
+import {
+  CRYSTAL_BRACELET_AXIS_ORDER,
+  computeCrystalBraceletAlignmentAxisKey,
+  computeCrystalBraceletOwnerAxisScoresV1,
+  computeCrystalBraceletScoresDeterministicV1,
+} from "./crystalBraceletScores.util.js";
 
 /**
  * @param {string} primary
@@ -38,14 +43,14 @@ function buildCrystalBraceletFlexSurfaceCopy(primary, secondary, axes, surface) 
 
 /**
  * @param {Record<string, { key: string, score: number, labelThai: string }>} axes
- * @param {string} primary
- * @param {string} secondary
+ * @param {string} primary — พีคพลังกำไล (คะแนนสูงสุด)
+ * @param {string} alignAxis — แกนที่ |จังหวะผู้สวม − พลังกำไล| น้อยสุด (เทียบสูตรมอลดาไวต์/เรดาร์)
  */
-function buildCrystalBraceletHtmlReport(axes, primary, secondary) {
+function buildCrystalBraceletHtmlReport(axes, primary, alignAxis) {
   const primaryLabel =
     String(axes[primary]?.labelThai || "").trim() || "งาน";
-  const secondaryLabel =
-    String(axes[secondary]?.labelThai || "").trim() || "โอกาส";
+  const alignLabel =
+    String(axes[alignAxis]?.labelThai || "").trim() || "งาน";
 
   return {
     meaningParagraphs: [
@@ -54,7 +59,7 @@ function buildCrystalBraceletHtmlReport(axes, primary, secondary) {
     ],
     graphSummaryRows: [
       `พลังของกำไลเส้นนี้ไปเด่นสุดที่ ${primaryLabel}`,
-      `รองลงมาคือ ${secondaryLabel}`,
+      `ช่วงนี้จังหวะผู้สวมใกล้เคียงพลังกำไลมากที่สุดที่มิติ ${alignLabel}`,
     ],
     axisBlurbs: {
       protection:
@@ -137,10 +142,28 @@ export function buildCrystalBraceletV1Slice({
     },
   );
 
+  /** @type {Record<string, number>} */
+  const stoneScoresMap = {};
+  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const sc = scores.axes[k]?.score;
+    stoneScoresMap[k] =
+      sc != null && Number.isFinite(Number(sc)) ? Number(sc) : 0;
+  }
+  const ownerAxisForAlign = computeCrystalBraceletOwnerAxisScoresV1(
+    seedKey,
+    scanResultId,
+    stoneScoresMap,
+    scores.ownerFit?.score ?? null,
+  );
+  const alignAxis = computeCrystalBraceletAlignmentAxisKey(
+    stoneScoresMap,
+    ownerAxisForAlign,
+  );
+
   const htmlReport = buildCrystalBraceletHtmlReport(
     scores.axes,
     scores.primaryAxis,
-    scores.secondaryAxis,
+    alignAxis,
   );
 
   return {
