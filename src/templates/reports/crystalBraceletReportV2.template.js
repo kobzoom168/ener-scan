@@ -6,7 +6,6 @@ import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
 import {
   CRYSTAL_BRACELET_AXIS_ORDER,
   CRYSTAL_BRACELET_AXIS_LABEL_THAI,
-  computeCrystalBraceletAlignmentAxisKey,
   computeCrystalBraceletOwnerAxisScoresV1,
 } from "../../crystalBracelet/crystalBraceletScores.util.js";
 import { buildCrystalBraceletRadarChartSvg } from "../../utils/reports/crystalBraceletRadarChart.util.js";
@@ -15,13 +14,12 @@ const DISCLAIMER_FIXED =
   "ผลนี้อ่านจากพลังรวมของกำไลทั้งเส้น ไม่ยืนยันชนิดหินรายเม็ด";
 
 const CB_RING_COLORS = {
-  protection: "#06b6d4",
-  charm: "#f97316",
-  aura: "#a855f7",
-  opportunity: "#22c55e",
-  work: "#ef4444",
-  grounding: "#eab308",
-  third_eye: "#3b82f6",
+  charm_attraction: "#f472b6",
+  money: "#22c55e",
+  career: "#38bdf8",
+  luck: "#eab308",
+  intuition: "#a855f7",
+  love: "#fb7185",
 };
 
 /**
@@ -144,29 +142,29 @@ function createCbRadarSection(axes, payload) {
     <div role="img" aria-label="พลังกำไลและจังหวะผู้สวม แผนภูมิเรดาร์">
       ${radarSvg}
     </div>
-    <p class="cb2-radar-key">เส้นทึบ = พลังกำไล · เส้นประ = จังหวะผู้สวม</p>
+    <p class="cb2-radar-key">เส้นทึบ = พลังกำไล · เส้นประ = จังหวะผู้สวม · จุดเทา = แกนที่จังหวะคุณใกล้เคียงโทนกำไลมากที่สุด</p>
   </section>`;
 }
 
 /**
- * สรุปจากกราฟ — หลอดพลังตามค่าเดียวกับแกนบนเรดาร์ (พีค / เข้ากันสุด)
+ * สรุปจากกราฟ — หลอดพลังพีค + มิติรอง (สอดคล้อง graphSummaryRows ใน payload)
  * @param {Record<string, unknown>} axes
  * @param {string} primaryAxis
- * @param {string} alignAxisKey
+ * @param {string} secondaryAxis
  * @param {Record<string, number>} stoneScores
  */
 function buildCrystalBraceletGraphSummaryBarsHtml(
   axes,
   primaryAxis,
-  alignAxisKey,
+  secondaryAxis,
   stoneScores,
 ) {
   const peakPct = Math.max(0, Math.min(100, stoneScores[primaryAxis] ?? 0));
-  const alignPct = Math.max(0, Math.min(100, stoneScores[alignAxisKey] ?? 0));
+  const secPct = Math.max(0, Math.min(100, stoneScores[secondaryAxis] ?? 0));
   const peakName = cbAxisLabelThai(axes, primaryAxis);
-  const alignName = cbAxisLabelThai(axes, alignAxisKey);
+  const secondaryName = cbAxisLabelThai(axes, secondaryAxis);
   const peakColor = CB_RING_COLORS[primaryAxis] || "#38bdf8";
-  const alignColor = CB_RING_COLORS[alignAxisKey] || "#f97316";
+  const secondaryColor = CB_RING_COLORS[secondaryAxis] || "#7dd3fc";
 
   const row = (rowLabel, descText, pct, axisColor, leadClass) =>
     `<div class="cb2-gsum-bar-row${leadClass}">
@@ -182,7 +180,7 @@ function buildCrystalBraceletGraphSummaryBarsHtml(
 
   return `<div class="cb2-gsum-bars">
 ${row("พลังเด่น", `เด่นสุดที่ ${peakName}`, peakPct, peakColor, " cb2-gsum-bar-row--lead")}
-${row("เข้ากับคุณที่สุด", `เข้ากันสุดที่ ${alignName}`, alignPct, alignColor, "")}
+${row("รองลงมา", `รองลงมาที่ ${secondaryName}`, secPct, secondaryColor, "")}
 </div>`;
 }
 
@@ -230,46 +228,20 @@ export function renderCrystalBraceletReportV2Html(payload) {
         : 0;
     stoneScores[k] = sc;
   }
-  const primaryAxis = CRYSTAL_BRACELET_AXIS_ORDER.reduce(
-    (best, k) => (stoneScores[k] > stoneScores[best] ? k : best),
-    CRYSTAL_BRACELET_AXIS_ORDER[0],
-  );
+  const primaryAxis =
+    String(cb.primaryAxis || "").trim() ||
+    CRYSTAL_BRACELET_AXIS_ORDER.reduce(
+      (best, k) => (stoneScores[k] > stoneScores[best] ? k : best),
+      CRYSTAL_BRACELET_AXIS_ORDER[0],
+    );
+  const secondaryAxis =
+    String(cb.secondaryAxis || "").trim() || primaryAxis;
   const peakLabelThai = cbAxisLabelThai(axes, primaryAxis);
-
-  const seedKey =
-    String(payload?.reportId || payload?.scanId || "").trim() ||
-    String(cb?.context?.scanResultIdPrefix || "cb");
-  const sessionKey = String(
-    payload?.scanId || payload?.reportId || cb?.context?.scanResultIdPrefix || "session",
-  );
-  const ownerFitFromCb =
-    cb?.ownerFit &&
-    typeof cb.ownerFit === "object" &&
-    cb.ownerFit.score != null &&
-    Number.isFinite(Number(cb.ownerFit.score))
-      ? Number(cb.ownerFit.score)
-      : null;
-  const ownerFitFromSummary =
-    payload?.summary?.compatibilityPercent != null &&
-    Number.isFinite(Number(payload.summary.compatibilityPercent))
-      ? Number(payload.summary.compatibilityPercent)
-      : null;
-  const ownerFitForGraph = ownerFitFromCb ?? ownerFitFromSummary;
-  const ownerScoresForGraph = computeCrystalBraceletOwnerAxisScoresV1(
-    seedKey,
-    sessionKey,
-    stoneScores,
-    ownerFitForGraph,
-  );
-  const alignAxisKey = computeCrystalBraceletAlignmentAxisKey(
-    stoneScores,
-    ownerScoresForGraph,
-  );
 
   const graphSummaryHtml = buildCrystalBraceletGraphSummaryBarsHtml(
     axes,
     primaryAxis,
-    alignAxisKey,
+    secondaryAxis,
     stoneScores,
   );
 

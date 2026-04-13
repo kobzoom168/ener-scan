@@ -15,10 +15,10 @@ test("deriveCrystalBraceletOwnerProfile: stable + shape + tension = max gap", ()
     stone[k] = 50;
     owner[k] = 50;
   }
-  stone.work = 80;
-  owner.work = 20;
-  stone.protection = 40;
-  owner.protection = 85;
+  stone.career = 80;
+  owner.career = 20;
+  stone.charm_attraction = 40;
+  owner.charm_attraction = 85;
 
   const a = deriveCrystalBraceletOwnerProfile({
     birthdateUsed: "15/03/1990",
@@ -26,8 +26,8 @@ test("deriveCrystalBraceletOwnerProfile: stable + shape + tension = max gap", ()
     stableSeed: "seed-x",
     stoneScores: stone,
     ownerAxisScores: owner,
-    primaryAxis: "work",
-    alignAxisKey: "protection",
+    primaryAxis: "career",
+    alignAxisKey: "charm_attraction",
   });
   const b = deriveCrystalBraceletOwnerProfile({
     birthdateUsed: "15/03/1990",
@@ -35,14 +35,14 @@ test("deriveCrystalBraceletOwnerProfile: stable + shape + tension = max gap", ()
     stableSeed: "seed-x",
     stoneScores: stone,
     ownerAxisScores: owner,
-    primaryAxis: "work",
-    alignAxisKey: "protection",
+    primaryAxis: "career",
+    alignAxisKey: "charm_attraction",
   });
 
   assert.equal(a.version, "1");
   assert.equal(a.identityPhrase, b.identityPhrase);
-  assert.equal(a.tensionAxisKey, "work");
-  assert.equal(a.alignAxisKey, "protection");
+  assert.equal(a.tensionAxisKey, "career");
+  assert.equal(a.alignAxisKey, "charm_attraction");
   assert.ok(a.ownerChips.length >= 2 && a.ownerChips.length <= 4);
   assert.ok(a.glyphSeed > 0);
   assert.equal(a.hasBirthdate, true);
@@ -52,17 +52,21 @@ test("deriveCrystalBraceletOwnerProfile: stable + shape + tension = max gap", ()
 
 test("deriveCrystalBraceletOwnerProfile: no DOB uses fallback seed", () => {
   /** @type {Record<string, number>} */
-  const stone = { protection: 60, charm: 55, aura: 55, opportunity: 55, work: 55, grounding: 55, third_eye: 55 };
+  const stone = {};
   /** @type {Record<string, number>} */
-  const owner = { protection: 62, charm: 58, aura: 58, opportunity: 58, work: 58, grounding: 58, third_eye: 58 };
+  const owner = {};
+  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
+    stone[k] = 55;
+    owner[k] = 58;
+  }
   const p = deriveCrystalBraceletOwnerProfile({
     birthdateUsed: null,
     ownerFitScore: 66,
     stableSeed: "abc-def-0001",
     stoneScores: stone,
     ownerAxisScores: owner,
-    primaryAxis: "protection",
-    alignAxisKey: "protection",
+    primaryAxis: "charm_attraction",
+    alignAxisKey: "charm_attraction",
   });
   assert.equal(p.hasBirthdate, false);
   assert.ok(p.derivationNote.includes("ยังไม่มีวันเกิด"));
@@ -70,10 +74,10 @@ test("deriveCrystalBraceletOwnerProfile: no DOB uses fallback seed", () => {
 
 test("crystalBraceletOwnerProfileFlexTeaser: short line", () => {
   const t = crystalBraceletOwnerProfileFlexTeaser({
-    alignAxisKey: "aura",
-    tensionAxisKey: "work",
+    alignAxisKey: "intuition",
+    tensionAxisKey: "career",
   });
-  assert.ok(t.includes("ออร่า"));
-  assert.ok(t.includes("งาน"));
+  assert.ok(t.includes("เซ้นส์"));
+  assert.ok(t.includes("การงาน"));
   assert.ok(t.length <= 54);
 });

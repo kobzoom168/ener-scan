@@ -32,13 +32,12 @@ test("buildRadarOgImagePng: crystal_bracelet produces PNG buffer", async () => {
   const buf = await buildRadarOgImagePng("crystal_bracelet", {
     crystalBraceletV1: {
       axes: {
-        protection: { score: 72 },
-        charm: { score: 81 },
-        aura: { score: 60 },
-        opportunity: { score: 55 },
-        work: { score: 48 },
-        grounding: { score: 63 },
-        third_eye: { score: 58 },
+        charm_attraction: { score: 81 },
+        money: { score: 72 },
+        career: { score: 48 },
+        luck: { score: 55 },
+        intuition: { score: 63 },
+        love: { score: 58 },
       },
     },
   });

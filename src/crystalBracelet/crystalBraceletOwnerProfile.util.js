@@ -52,8 +52,10 @@ export function deriveCrystalBraceletOwnerProfile(input) {
     }
   }
 
-  const alignAxisKey = String(input.alignAxisKey || "").trim() || "protection";
-  const primaryAxis = String(input.primaryAxis || "").trim() || "protection";
+  const alignAxisKey =
+    String(input.alignAxisKey || "").trim() || "charm_attraction";
+  const primaryAxis =
+    String(input.primaryAxis || "").trim() || "charm_attraction";
 
   const alignLabel =
     CRYSTAL_BRACELET_AXIS_LABEL_THAI[alignAxisKey] || alignAxisKey;

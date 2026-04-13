@@ -22,9 +22,9 @@ import {
  */
 function buildCrystalBraceletFlexSurfaceCopy(primary, alignAxis, axes, surface) {
   const primaryLabel =
-    String(axes[primary]?.labelThai || "").trim() || "งาน";
+    String(axes[primary]?.labelThai || "").trim() || "การงาน";
   const alignLabel =
-    String(axes[alignAxis]?.labelThai || "").trim() || "งาน";
+    String(axes[alignAxis]?.labelThai || "").trim() || "การงาน";
 
   const fitLine =
     primary === alignAxis
@@ -51,38 +51,38 @@ function buildCrystalBraceletFlexSurfaceCopy(primary, alignAxis, axes, surface) 
 /**
  * @param {Record<string, { key: string, score: number, labelThai: string }>} axes
  * @param {string} primary — พีคพลังกำไล (คะแนนสูงสุด)
- * @param {string} alignAxis — แกนที่ |จังหวะผู้สวม − พลังกำไล| น้อยสุด (เทียบสูตรมอลดาไวต์/เรดาร์)
+ * @param {string} secondary — มิติรองจากคะแนน
+ * @param {string} _alignAxis — แกน alignment (ใช้บนเรดาร์ ไม่ใส่ใน graphSummaryRows)
  */
-function buildCrystalBraceletHtmlReport(axes, primary, alignAxis) {
+function buildCrystalBraceletHtmlReport(axes, primary, secondary, _alignAxis) {
+  void _alignAxis;
   const primaryLabel =
-    String(axes[primary]?.labelThai || "").trim() || "งาน";
-  const alignLabel =
-    String(axes[alignAxis]?.labelThai || "").trim() || "งาน";
+    String(axes[primary]?.labelThai || "").trim() || "การงาน";
+  const secondaryLabel =
+    String(axes[secondary]?.labelThai || "").trim() || "การงาน";
 
   return {
     meaningParagraphs: [
       "กำไลหินคริสตัลเส้นนี้อ่านจากพลังรวมของวัตถุทั้งเส้น ไม่ได้ฟันธงชนิดหินรายเม็ดจากภาพเพียงอย่างเดียว",
-      "การแปลผลจึงเน้นว่าในช่วงนี้พลังของกำไลไปหนุนมิติไหนของชีวิตมากที่สุด และเข้ากับจังหวะของผู้สวมอย่างไร",
+      "การแปลผลใช้มิติพลังงานชุดใหม่หกด้าน (เสน่ห์ การเงิน การงาน โชคลาภ เซ้นส์ ความรัก) เพื่อดูว่าช่วงนี้โทนรวมของกำไลเอียงไปทางด้านใดมากที่สุด และด้านใดมาถัดไป",
     ],
     graphSummaryRows: [
       `เด่นสุดที่ ${primaryLabel}`,
-      `เข้ากันสุดที่ ${alignLabel}`,
+      `รองลงมาที่ ${secondaryLabel}`,
     ],
     axisBlurbs: {
-      protection:
-        "ด้านคุ้มกัน — ช่วยให้รู้สึกมีเกราะ ปลอดโปร่ง และรับพลังรบกวนได้น้อยลง",
-      charm:
-        "ด้านเสน่ห์ — หนุนความน่าดึงดูด ความอ่อนโยน และการเข้าหาผู้อื่น",
-      aura:
-        "ด้านออร่า — เสริมภาพรวมของพลัง การเปล่งประกาย และความรู้สึกเด่นขึ้น",
-      opportunity:
-        "ด้านโอกาส — หนุนจังหวะดี การเปิดทาง และการเห็นช่องทางใหม่",
-      work:
-        "ด้านงาน — ช่วยให้จัดการงาน เดินหน้า และโฟกัสสิ่งที่ต้องทำ",
-      grounding:
-        "ด้านตั้งหลัก — ประคองใจและชีวิตให้มั่นคงขึ้นเมื่อมีเรื่องกดดัน",
-      third_eye:
-        "ด้านตาที่ 3 — หนุนการรับสัญญาณ ความรู้สึกไว และการมองเห็นบางอย่างได้เร็วขึ้น",
+      charm_attraction:
+        "เสน่ห์(ดึงดูด) — หนุนแรงดึงดูด ภาพลักษณ์ และความรู้สึกน่าเข้าหา",
+      money:
+        "การเงิน — หนุนการจัดการเงิน ช่องทางรายรับ และจังหวะเรื่องผลตอบแทน",
+      career:
+        "การงาน — หนุนการลงมือ ความต่อเนื่อง และความชัดในงาน",
+      luck:
+        "โชคลาภ — หนุนจังหวะเปิดทาง เรื่องฟลุค หรือเหตุการณ์ดี ๆ ที่เข้ามาแบบไม่คาดฝัน",
+      intuition:
+        "เซ้นส์ — หนุนการรับสัญญาณ ความไวต่อจังหวะ และการตัดสินใจจากความรู้สึก",
+      love:
+        "ความรัก — หนุนเรื่องความสัมพันธ์ ความอ่อนโยน และความรู้สึกเชื่อมโยง",
     },
     usageCautionLines: [
       "ผลนี้ใช้เป็นกรอบอ่านพลังโดยรวมของวัตถุ ไม่ใช่การยืนยันชนิดแร่เชิงวิทยาศาสตร์",
@@ -90,8 +90,8 @@ function buildCrystalBraceletHtmlReport(axes, primary, alignAxis) {
       "การอ่านนี้ไม่ใช่คำแนะนำทางการแพทย์ การเงิน หรือกฎหมาย",
     ],
     interactionSummary: [
-      "กำไลเส้นนี้ไม่ได้ทำงานกับทุกคนเหมือนกัน",
-      "พลังจะเด่นขึ้นในมิติที่ตรงกับจังหวะชีวิตของผู้สวมช่วงนี้",
+      "การอ่านค่าจากกำไลขึ้นกับบริบทการใช้งาน — ใช้เป็นแนวสังเกต ไม่ใช่คำฟันธง",
+      "หากอยากเจาะลึกแต่ละด้าน ให้ดูคำอธิบายสั้น ๆ ใต้หัวข้อมิติด้านล่าง",
     ],
   };
 }
@@ -180,6 +180,7 @@ export function buildCrystalBraceletV1Slice({
   const htmlReport = buildCrystalBraceletHtmlReport(
     scores.axes,
     scores.primaryAxis,
+    scores.secondaryAxis,
     alignAxis,
   );
 

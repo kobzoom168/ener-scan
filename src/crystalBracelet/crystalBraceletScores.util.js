@@ -2,25 +2,24 @@ import { fnv1a32 } from "../moldavite/moldaviteScores.util.js";
 
 export const CRYSTAL_BRACELET_SCORING_MODE = "deterministic_v1";
 
+/** พลังงานชุดใหม่ 6 มิติ — crystal_bracelet lane only */
 /** @type {const} */
 export const CRYSTAL_BRACELET_AXIS_ORDER = [
-  "protection",
-  "charm",
-  "aura",
-  "opportunity",
-  "work",
-  "grounding",
-  "third_eye",
+  "charm_attraction",
+  "money",
+  "career",
+  "luck",
+  "intuition",
+  "love",
 ];
 
 export const CRYSTAL_BRACELET_AXIS_LABEL_THAI = {
-  protection: "คุ้มกัน",
-  charm: "เสน่ห์",
-  aura: "ออร่า",
-  opportunity: "โอกาส",
-  work: "งาน",
-  grounding: "ตั้งหลัก",
-  third_eye: "ตาที่ 3",
+  charm_attraction: "เสน่ห์",
+  money: "การเงิน",
+  career: "การงาน",
+  luck: "โชคลาภ",
+  intuition: "เซ้นส์",
+  love: "ความรัก",
 };
 
 /**
@@ -82,7 +81,7 @@ function computeOwnerFitScoreValue(seed, session, mainEnergyLabel, ownerFitScore
 }
 
 /**
- * Deterministic seven-axis scores for mixed-stone crystal bracelet lane.
+ * Deterministic six-axis scores for mixed-stone crystal bracelet lane.
  *
  * @param {string} seedKey
  * @param {{
@@ -157,16 +156,6 @@ export function computeCrystalBraceletScoresDeterministicV1(seedKey, opts = {}) 
 }
 
 /**
- * Per-axis owner rhythm scores for HTML radar overlay (not stored on payload).
- * Deterministic from seed + stone scores + ownerFit so the line differs from "stone" but stays stable.
- *
- * @param {string} seedKey
- * @param {string} sessionKey
- * @param {Record<string, number>} stoneAxisScores — 0–100 per axis key
- * @param {number|null|undefined} ownerFitScore — 0–100, from ownerFit or compatibility
- * @returns {Record<string, number>}
- */
-/**
  * Same rule as moldavite `graph.alignment`: axis where |จังหวะผู้สวม − พลังกำไล| is minimal
  * (จุดรองบนกราฟพลังกำไล — “เข้ากับคุณที่สุด” เมื่อไม่ซ้ำกับพีค).
  *
@@ -192,6 +181,14 @@ export function computeCrystalBraceletAlignmentAxisKey(
   return alignKey;
 }
 
+/**
+ * Per-axis owner rhythm scores for HTML radar overlay (not stored on payload).
+ * @param {string} seedKey
+ * @param {string} sessionKey
+ * @param {Record<string, number>} stoneAxisScores — 0–100 per axis key
+ * @param {number|null|undefined} ownerFitScore — 0–100, from ownerFit or compatibility
+ * @returns {Record<string, number>}
+ */
 export function computeCrystalBraceletOwnerAxisScoresV1(
   seedKey,
   sessionKey,
@@ -204,7 +201,6 @@ export function computeCrystalBraceletOwnerAxisScoresV1(
     ownerFitScore != null && Number.isFinite(Number(ownerFitScore))
       ? Math.min(100, Math.max(0, Math.round(Number(ownerFitScore))))
       : 66;
-  /** How much owner shape follows stone vs independent draw (higher fit → closer). */
   const follow = 0.28 + (fit / 100) * 0.42;
 
   /** @type {Record<string, number>} */

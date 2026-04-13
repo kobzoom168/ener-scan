@@ -27,9 +27,15 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
   assert.ok(CRYSTAL_BRACELET_AXIS_ORDER.includes(slice.primaryAxis));
   assert.ok(CRYSTAL_BRACELET_AXIS_ORDER.includes(slice.secondaryAxis));
   assert.notEqual(slice.primaryAxis, slice.secondaryAxis);
-  assert.equal(Object.keys(slice.axes).length, 7);
-  assert.ok(slice.axes.third_eye);
-  assert.equal(String(slice.axes.third_eye.labelThai || "").trim(), "ตาที่ 3");
+  assert.equal(Object.keys(slice.axes).length, 6);
+  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
+    assert.ok(slice.axes[k], `missing axis ${k}`);
+  }
+  assert.equal(
+    String(slice.axes.charm_attraction.labelThai || "").trim(),
+    "เสน่ห์",
+  );
+  assert.equal(String(slice.axes.career.labelThai || "").trim(), "การงาน");
   assert.equal(slice.context?.energyScoreSnapshot, 7.2);
   assert.equal(String(slice.flexSurface.headline).trim(), "กำไลหินคริสตัล");
   assert.equal(Array.isArray(slice.flexSurface.bullets), true);
@@ -50,8 +56,18 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
   assert.ok(Array.isArray(slice.htmlReport.meaningParagraphs));
   assert.ok(slice.htmlReport.meaningParagraphs.length >= 2);
   assert.ok(Array.isArray(slice.htmlReport.graphSummaryRows));
-  assert.ok(slice.htmlReport.axisBlurbs?.protection?.length > 20);
-  assert.ok(slice.htmlReport.axisBlurbs?.third_eye?.length > 20);
+  assert.equal(slice.htmlReport.graphSummaryRows.length, 2);
+  const pLabel = String(
+    slice.axes[slice.primaryAxis]?.labelThai || "",
+  ).trim();
+  const sLabel = String(
+    slice.axes[slice.secondaryAxis]?.labelThai || "",
+  ).trim();
+  assert.ok(slice.htmlReport.graphSummaryRows[0].includes(pLabel));
+  assert.ok(slice.htmlReport.graphSummaryRows[1].includes(sLabel));
+  assert.ok(slice.htmlReport.axisBlurbs?.charm_attraction?.length > 15);
+  assert.ok(slice.htmlReport.axisBlurbs?.career?.length > 15);
+  assert.ok(slice.htmlReport.axisBlurbs?.love?.length > 15);
   assert.ok(Array.isArray(slice.htmlReport.usageCautionLines));
   assert.ok(slice.htmlReport.usageCautionLines.length >= 2);
   assert.ok(Array.isArray(slice.internalHints?.internalStoneHints));
@@ -94,6 +110,10 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
       "ผลนี้อ่านจากพลังรวมของกำไลทั้งเส้น ไม่ยืนยันชนิดหินรายเม็ด",
     ),
   );
+  assert.equal(html.includes("คุ้มกัน"), false);
+  assert.equal(html.includes("ออร่า"), false);
+  assert.equal(html.includes("ตั้งหลัก"), false);
+  assert.equal(html.includes("ตาที่ 3"), false);
 });
 
 test("computeCrystalBraceletScoresDeterministicV1: stable seed → stable axes", () => {
@@ -104,7 +124,7 @@ test("computeCrystalBraceletScoresDeterministicV1: stable seed → stable axes",
     sessionKey: "sess-1",
   });
   assert.equal(a.primaryAxis, b.primaryAxis);
-  assert.equal(a.axes.work.score, b.axes.work.score);
+  assert.equal(a.axes.career.score, b.axes.career.score);
 });
 
 test("buildReportPayloadFromScan: crystal + bracelet + non-Moldavite → crystalBraceletV1", async () => {

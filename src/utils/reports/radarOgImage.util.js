@@ -3,7 +3,10 @@
  */
 import sharp from "sharp";
 import { POWER_ORDER } from "../../amulet/amuletScores.util.js";
-import { CRYSTAL_BRACELET_AXIS_ORDER } from "../../crystalBracelet/crystalBraceletScores.util.js";
+import {
+  CRYSTAL_BRACELET_AXIS_LABEL_THAI,
+  CRYSTAL_BRACELET_AXIS_ORDER,
+} from "../../crystalBracelet/crystalBraceletScores.util.js";
 
 const W = 1200;
 const H = 630;
@@ -27,16 +30,6 @@ const SACRED_AMULET_AXIS_LABELS = {
   luck: "โชคลาภ",
   fortune_anchor: "หนุนดวง",
   specialty: "งานเฉพาะ",
-};
-
-const CRYSTAL_BRACELET_AXIS_LABELS = {
-  protection: "คุ้มกัน",
-  charm: "เสน่ห์",
-  aura: "ออร่า",
-  opportunity: "โอกาส",
-  work: "งาน",
-  grounding: "ตั้งหลัก",
-  third_eye: "ตาที่ 3",
 };
 
 /**
@@ -257,7 +250,7 @@ export async function buildRadarOgImagePng(lane, payload) {
     const axisScores = extractCrystalBraceletAxisScores(payload);
     svgStr = buildRadarStandaloneSvg({
       axisOrder: [...CRYSTAL_BRACELET_AXIS_ORDER],
-      axisLabels: CRYSTAL_BRACELET_AXIS_LABELS,
+      axisLabels: CRYSTAL_BRACELET_AXIS_LABEL_THAI,
       axisScores,
       colors: {
         bg: "#0c1220",

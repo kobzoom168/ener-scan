@@ -18,17 +18,24 @@ const STONE_DOT_FILL = "#93c5fd";
 const ALIGN_DOT_FILL = "rgba(148,163,184,0.9)";
 const ALIGN_DOT_RING = "rgba(148,163,184,0.42)";
 
-// CSS % positions for each axis label (top/bottom/left/right from the plot container)
-// Computed for 7-axis heptagon, label radius ~52% from center (50%,50%)
-// angles: -90°, -38.6°, 12.9°, 64.3°, 115.7°, 167.1°, 218.6°
+// CSS % positions — 6-axis hex (order: top → clockwise from charm_attraction)
 const AXIS_LABEL_CSS = {
-  protection:  { top: "1%",   left: "50%",  transform: "translateX(-50%)", textAlign: "center" },
-  charm:       { top: "18%",  right: "8%",  textAlign: "right" },
-  aura:        { top: "56%",  right: "2%",  textAlign: "right" },
-  opportunity: { bottom: "5%",right: "22%", textAlign: "right" },
-  work:        { bottom: "5%",left: "22%",  textAlign: "left" },
-  grounding:   { top: "56%",  left: "2%",   textAlign: "left" },
-  third_eye:   { top: "18%",  left: "8%",   textAlign: "left" },
+  charm_attraction: {
+    top: "1%",
+    left: "50%",
+    transform: "translateX(-50%)",
+    textAlign: "center",
+  },
+  money: { top: "14%", right: "4%", textAlign: "right" },
+  career: { bottom: "12%", right: "6%", textAlign: "right" },
+  luck: {
+    bottom: "2%",
+    left: "50%",
+    transform: "translateX(-50%)",
+    textAlign: "center",
+  },
+  intuition: { bottom: "12%", left: "6%", textAlign: "left" },
+  love: { top: "14%", left: "4%", textAlign: "left" },
 };
 
 /** @param {string} s */
@@ -56,7 +63,7 @@ function polygonPoints(scores, angles) {
 }
 
 /**
- * 7-axis radar — stone polygon (solid) + owner overlay (dashed).
+ * 6-axis radar — stone polygon (solid) + owner overlay (dashed).
  * Labels are HTML elements positioned outside the SVG (avoids SVG text overflow).
  *
  * @param {Record<string, unknown>} axes
@@ -89,7 +96,7 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
     ownerAxisScores,
   );
 
-  // Grid rings as heptagon polygons — omit outermost ring (100% edge) per design
+  // Grid rings as hexagon polygons — omit outermost ring (100% edge) per design
   const heptPoints = (r) =>
     angles
       .map((ang) => `${(SVG_CX + Math.cos(ang) * r).toFixed(2)},${(SVG_CY + Math.sin(ang) * r).toFixed(2)}`)
