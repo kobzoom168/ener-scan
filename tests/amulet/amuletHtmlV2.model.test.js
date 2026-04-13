@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildAmuletHtmlV2ViewModel } from "../../src/amulet/amuletHtmlV2.model.js";
+import {
+  buildAmuletHtmlV2ViewModel,
+  buildSacredAmuletWeekdayItems,
+  buildSacredAmuletTimeItems,
+} from "../../src/amulet/amuletHtmlV2.model.js";
 
 function minimalPayload(overrides = {}) {
   const base = {
@@ -85,4 +89,34 @@ test("buildAmuletHtmlV2ViewModel: no weak hedging tokens in default blurbs", () 
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
   const text = vm.lifeAreaDetail.rows.map((r) => r.blurb).join(" ");
   assert.ok(!/ค่อนข้าง|มีแนวโน้ม|อาจ |พอมี|ดูเหมือน/.test(text));
+});
+
+test("buildSacredAmuletWeekdayItems / TimeItems: active จาก summary + bestHours[0] เท่านั้น", () => {
+  /** @type {import("../../src/services/reports/reportPayload.types.js").ReportTimingV1} */
+  const tv = {
+    engineVersion: "timing_v1_1",
+    lane: "sacred_amulet",
+    ritualMode: "ตั้งจิต",
+    confidence: "medium",
+    ownerProfile: { lifePath: 1, birthDayRoot: 6, weekday: 5 },
+    bestHours: [
+      { key: "morning_07_10", score: 82, reasonCode: "LANE_POWER_SUPPORT", reasonText: "x" },
+    ],
+    bestWeekdays: [],
+    bestDateRoots: [],
+    avoidHours: [],
+    summary: {
+      topWindowLabel: "ช่วงเช้า 07:00–10:59",
+      topWeekdayLabel: "วันพฤหัสบดี",
+      practicalHint: "hint",
+    },
+  };
+  const wd = buildSacredAmuletWeekdayItems(tv);
+  assert.equal(wd.length, 7);
+  assert.ok(wd.find((x) => x.fullLabel === "วันพฤหัสบดี")?.active);
+  assert.equal(wd.filter((x) => x.active).length, 1);
+  const ti = buildSacredAmuletTimeItems(tv);
+  assert.equal(ti.length, 7);
+  assert.ok(ti.find((x) => x.key === "morning_07_10")?.active);
+  assert.equal(ti.filter((x) => x.active).length, 1);
 });

@@ -9,6 +9,8 @@ import {
 } from "./amuletOrdAlign.util.js";
 import { buildAxisLifeBlurb } from "./amuletMeaningBlurbs.util.js";
 import { SACRED_AXIS_HINT_TH } from "../services/timing/timingEngine.copy.th.js";
+import { TIMING_HOUR_WINDOWS } from "../config/timing/timingWindows.config.js";
+import { TIMING_WEEKDAY_LABEL_TH } from "../config/timing/timingWeekdayAffinity.config.js";
 import {
   energyGradeToLevelGradeClass,
   resolveEnergyLevelDisplayGrade,
@@ -54,9 +56,62 @@ function mainToneMatchesGraphPeak(mainShort, peakKey) {
   return false;
 }
 
+/** Sunday-first — ตรง `TIMING_WEEKDAY_LABEL_TH` / `summary.topWeekdayLabel` */
+const AMULET_WEEKDAY_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+
+/** Copy สำหรับ sacred_amulet timing section — display เท่านั้น ไม่แตะ timing truth */
+const AMULET_TIMING_SUBTITLE =
+  "ช่วงที่พระเครื่องตอบกับจังหวะของคุณได้ดีที่สุด";
+const AMULET_TIMING_WEEKDAY_KICKER = "วันส่งดี";
+const AMULET_TIMING_TIME_KICKER = "ช่วงเวลาที่ส่งดี";
+const AMULET_TIMING_MODE_KICKER = "แนวใช้ที่แนะนำ";
+
+/** ป้ายสั้นต่อ `key` ของ `TIMING_HOUR_WINDOWS` — visual เท่านั้น */
+const AMULET_TIME_STRIP_SHORT_BY_KEY = {
+  dawn_05_06: "รุ่ง",
+  morning_07_10: "เช้า",
+  noon_11_13: "กลางวัน",
+  afternoon_14_16: "บ่าย",
+  evening_17_19: "เย็น",
+  night_20_22: "ค่ำ",
+  late_night_23_04: "ดึก",
+};
+
+/**
+ * รายวันสำหรับ strip — active จาก `tv.summary.topWeekdayLabel` เท่านั้น (ไม่คำนวณใหม่)
+ *
+ * @param {import("../services/reports/reportPayload.types.js").ReportTimingV1} tv
+ */
+export function buildSacredAmuletWeekdayItems(tv) {
+  const top = String(tv.summary?.topWeekdayLabel || "").trim();
+  return TIMING_WEEKDAY_LABEL_TH.map((fullLabel, i) => ({
+    fullLabel,
+    shortLabel: AMULET_WEEKDAY_SHORT[i] || "?",
+    active: Boolean(top && fullLabel === top),
+  }));
+}
+
+/**
+ * รายช่วงเวลาสำหรับ strip — active จาก `tv.bestHours[0].key` ตรงกับหน้าต่างใน `TIMING_HOUR_WINDOWS`
+ *
+ * @param {import("../services/reports/reportPayload.types.js").ReportTimingV1} tv
+ */
+export function buildSacredAmuletTimeItems(tv) {
+  const topKey = String(tv.bestHours?.[0]?.key || "").trim();
+  return TIMING_HOUR_WINDOWS.map((w) => ({
+    key: w.key,
+    shortLabel:
+      AMULET_TIME_STRIP_SHORT_BY_KEY[w.key] ||
+      String(w.labelTh || "").split(/\s/)[0] ||
+      w.key,
+    labelFull: w.labelTh,
+    active: Boolean(topKey && w.key === topKey),
+  }));
+}
+
 /**
  * Sacred_amulet timing card — HTML surface only.
- * Hour/weekday lines compose engine labels + graph axes; `hint` uses `timingV1.summary.practicalHint` (see `buildPracticalHintTh` in timing copy).
+ * Composed lines + strips ใช้ข้อมูลจาก `timingV1` เท่านั้น — ไม่ derive สูตร timing ในเลเยอร์นี้
  *
  * @param {object} tv — `timingV1` from engine (unchanged truth)
  * @param {string} peakKey
@@ -85,14 +140,25 @@ export function buildSacredAmuletTimingCardDisplay(tv, peakKey, secondKey) {
 
   const hint = String(tv.summary?.practicalHint || "").trim();
 
+  const weekdayItems = buildSacredAmuletWeekdayItems(tv);
+  const timeItems = buildSacredAmuletTimeItems(tv);
+
   return {
     heading: "จังหวะเสริมพลัง",
-    hourLine,
-    weekdayLine,
+    subtitle: AMULET_TIMING_SUBTITLE,
+    topWindowLabel,
+    topWeekdayLabel,
+    weekdayKicker: AMULET_TIMING_WEEKDAY_KICKER,
+    timeKicker: AMULET_TIMING_TIME_KICKER,
+    modeKicker: AMULET_TIMING_MODE_KICKER,
     ritualLine: ritualMode,
     hint,
     confidence:
       tv.confidence === "high" || tv.confidence === "low" ? tv.confidence : "medium",
+    weekdayItems,
+    timeItems,
+    hourLine,
+    weekdayLine,
   };
 }
 

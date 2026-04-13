@@ -137,8 +137,19 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2a-footer-note"'));
   assert.ok(html.includes("จังหวะเสริมพลัง"));
   assert.ok(html.includes('class="mv2-card mv2-timing-card"'));
+  assert.ok(html.includes("mv2-et-strip--weekday"));
+  assert.ok(html.includes("mv2-et-strip--time"));
+  assert.ok(html.includes("mv2-et-pill-shape"));
+  assert.ok(html.includes("mv2-et-slot-bar"));
+  assert.ok(
+    html.includes("ช่วงที่พระเครื่องตอบกับจังหวะของคุณได้ดีที่สุด"),
+  );
   assert.ok(html.includes("ช่วงเช้า 07:00–10:59"));
-  assert.ok(html.includes("ส่งกับพลัง"));
+  assert.ok(html.includes("วันพฤหัสบดี"));
+  assert.ok(html.includes("วันส่งดี"));
+  assert.ok(html.includes("ช่วงเวลาที่ส่งดี"));
+  assert.ok(html.includes("แนวใช้ที่แนะนำ"));
+  assert.ok(html.includes("mv2-timing-mode-body"));
   assert.ok(html.includes("หนุนพลัง"));
   assert.ok(
     html.includes("เสริมดวงให้ขึ้นง่าย"),

@@ -158,6 +158,73 @@ function resolveAmuletHtmlTheme(payload) {
   return "light";
 }
 
+/** Visual rhythm (px) — ไม่ derive จาก timing formula */
+const MV2_ET_WD_H = [22, 26, 20, 28, 32, 22, 24];
+const MV2_ET_WD_ACTIVE = 40;
+const MV2_ET_TIME_H = [18, 24, 28, 22, 20, 26, 32];
+const MV2_ET_TIME_ACTIVE = 40;
+
+/**
+ * Sacred amulet timing section — strips จาก `weekdayItems` / `timeItems` ใน model (อ่านจาก timingV1)
+ * @param {object} ts — return ของ `buildSacredAmuletTimingCardDisplay`
+ */
+function buildAmuletTimingVisualHtml(ts) {
+  const wdItems = ts.weekdayItems || [];
+  const wdStrip = wdItems
+    .map((it, i) => {
+      const h = it.active ? MV2_ET_WD_ACTIVE : MV2_ET_WD_H[i % MV2_ET_WD_H.length];
+      const cls = `mv2-et-pill${it.active ? " is-active" : ""}`;
+      return `<div class="${cls}" role="listitem"${it.active ? ' aria-current="true"' : ""}>
+      <span class="mv2-et-pill-shape" style="height:${h}px" aria-hidden="true"></span>
+      <span class="mv2-et-pill-label">${escapeHtml(it.shortLabel)}</span>
+      <span class="mv2-et-pill-sr">${escapeHtml(it.fullLabel)}</span>
+    </div>`;
+    })
+    .join("");
+
+  const tItems = ts.timeItems || [];
+  const timeStrip = tItems
+    .map((it, i) => {
+      const h = it.active ? MV2_ET_TIME_ACTIVE : MV2_ET_TIME_H[i % MV2_ET_TIME_H.length];
+      const cls = `mv2-et-slot${it.active ? " is-active" : ""}`;
+      return `<div class="${cls}" role="listitem"${it.active ? ' aria-current="true"' : ""}>
+      <span class="mv2-et-slot-bar" style="height:${h}px" aria-hidden="true"></span>
+      <span class="mv2-et-slot-label" title="${escapeHtml(it.labelFull)}">${escapeHtml(it.shortLabel)}</span>
+    </div>`;
+    })
+    .join("");
+
+  const sub = String(ts.subtitle || "").trim();
+  return `
+    <section class="mv2-card mv2-timing-card" aria-labelledby="mv2-timing-h">
+      <div class="mv2-timing-head">
+        <h2 id="mv2-timing-h">${escapeHtml(ts.heading)}</h2>
+        ${sub ? `<p class="mv2-timing-sub">${escapeHtml(sub)}</p>` : ""}
+      </div>
+      <div class="mv2-timing-trends">
+        <div class="mv2-timing-trend">
+          <div class="mv2-timing-trend-top">
+            <span class="mv2-timing-trend-k">${escapeHtml(String(ts.weekdayKicker || "").trim() || "วันส่งดี")}</span>
+            <span class="mv2-timing-trend-v">${escapeHtml(ts.topWeekdayLabel || "—")}</span>
+          </div>
+          <div class="mv2-et-strip mv2-et-strip--weekday" role="list" aria-label="วันในสัปดาห์">${wdStrip}</div>
+        </div>
+        <div class="mv2-timing-trend">
+          <div class="mv2-timing-trend-top">
+            <span class="mv2-timing-trend-k">${escapeHtml(String(ts.timeKicker || "").trim() || "ช่วงเวลาที่ส่งดี")}</span>
+            <span class="mv2-timing-trend-v">${escapeHtml(ts.topWindowLabel || "—")}</span>
+          </div>
+          <div class="mv2-et-strip mv2-et-strip--time" role="list" aria-label="ช่วงเวลา">${timeStrip}</div>
+        </div>
+      </div>
+      <div class="mv2-timing-insight">
+        <span class="mv2-timing-k mv2-timing-k--mode">${escapeHtml(String(ts.modeKicker || "").trim() || "แนวใช้ที่แนะนำ")}</span>
+        <p class="mv2-timing-mode-body">${escapeHtml(ts.ritualLine)}</p>
+        <p class="mv2-timing-hint">${escapeHtml(ts.hint)}</p>
+      </div>
+    </section>`;
+}
+
 /**
  * @param {ReturnType<typeof buildAmuletHtmlV2ViewModel>} vm
  */
@@ -285,16 +352,7 @@ export function renderAmuletReportV2Html(payload) {
   const usageDisclaimer = escapeHtml(vm.usageCaution.disclaimer || "");
 
   const ts = vm.timingSection;
-  const timingCardHtml = ts
-    ? `
-    <section class="mv2-card mv2-timing-card" aria-labelledby="mv2-timing-h">
-      <h2 id="mv2-timing-h">${escapeHtml(ts.heading)}</h2>
-      <p class="mv2-timing-line"><span class="mv2-timing-k">เวลา</span> ${escapeHtml(ts.hourLine)}</p>
-      <p class="mv2-timing-line"><span class="mv2-timing-k">วัน</span> ${escapeHtml(ts.weekdayLine)}</p>
-      <p class="mv2-timing-line"><span class="mv2-timing-k">โหมดแนะนำ</span> ${escapeHtml(ts.ritualLine)}</p>
-      <p class="mv2-timing-hint">${escapeHtml(ts.hint)}</p>
-    </section>`
-    : "";
+  const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
 
   const subtypeLabel = h.subtypeLabel || "พระเครื่อง";
   const ogTitle = `${subtypeLabel} · Ener Scan`;
@@ -784,10 +842,250 @@ export function renderAmuletReportV2Html(payload) {
       text-align: center;
       font-weight: 400;
     }
-    .mv2-timing-card h2 { font-size: 0.95rem; }
-    .mv2-timing-line { margin: 0.35rem 0 0; font-size: 0.8rem; color: var(--mv2a-text-body); line-height: 1.35; }
-    .mv2-timing-k { font-weight: 700; color: var(--mv2a-gold-dim); margin-right: 0.35rem; }
-    .mv2-timing-hint { margin: 0.5rem 0 0; font-size: 0.72rem; line-height: 1.4; color: var(--mv2a-muted); }
+    .mv2-timing-card {
+      border-left: 3px solid rgba(184, 135, 27, 0.45);
+    }
+    .mv2-timing-card h2 { font-size: 0.95rem; margin: 0; color: var(--mv2a-gold-dim); }
+    .mv2-timing-head { margin-bottom: 0.65rem; }
+    .mv2-timing-sub {
+      margin: 0.22rem 0 0;
+      font-size: 0.7rem;
+      line-height: 1.4;
+      color: var(--mv2a-muted);
+      font-weight: 500;
+    }
+    .mv2-timing-trends { display: grid; gap: 0.75rem; }
+    .mv2-timing-trend {
+      background: rgba(184, 135, 27, 0.04);
+      border: 1px solid rgba(184, 135, 27, 0.14);
+      border-radius: 12px;
+      padding: 0.65rem 0.72rem;
+    }
+    .mv2-timing-trend-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.45rem;
+    }
+    .mv2-timing-trend-k {
+      font-size: 0.66rem;
+      font-weight: 600;
+      color: var(--mv2a-muted);
+    }
+    .mv2-timing-trend-v {
+      font-size: 0.78rem;
+      font-weight: 800;
+      color: var(--mv2a-gold);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    /* Weekday = เม็ดทอง / bronze */
+    .mv2-et-strip--weekday {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.26rem;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+    .mv2-et-strip--weekday .mv2-et-pill {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.28rem;
+      flex: 1;
+      min-width: 0;
+      position: relative;
+      transition: opacity 0.15s ease;
+    }
+    .mv2-et-pill-shape {
+      display: block;
+      width: 100%;
+      max-width: 1.95rem;
+      min-width: 1.22rem;
+      margin: 0 auto;
+      border-radius: 999px;
+      position: relative;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .mv2-et-pill-shape::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(80% 70% at 50% 28%, rgba(255,248,220,0.35), transparent 55%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) { opacity: 0.5; }
+    .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) .mv2-et-pill-shape {
+      background: rgba(62, 54, 40, 0.2);
+      border: 1px solid rgba(100, 88, 72, 0.22);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.12);
+    }
+    .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) .mv2-et-pill-label {
+      color: rgba(100, 90, 78, 0.85);
+      font-weight: 500;
+    }
+    .mv2-et-strip--weekday .mv2-et-pill.is-active { opacity: 1; }
+    .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-shape {
+      background: linear-gradient(165deg, #e8c86a 0%, #c9a227 42%, #8f6710 100%);
+      border: 1px solid rgba(212, 175, 55, 0.65);
+      box-shadow:
+        0 0 0 1px rgba(232, 197, 71, 0.25),
+        0 0 12px rgba(184, 135, 27, 0.22),
+        0 4px 10px rgba(100, 72, 18, 0.15);
+    }
+    .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-shape::after { opacity: 0.5; }
+    .mv2-et-pill-label {
+      font-size: 0.56rem;
+      text-align: center;
+      line-height: 1.15;
+      max-width: 100%;
+    }
+    .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-label {
+      color: var(--mv2a-text);
+      font-weight: 800;
+    }
+    .mv2-et-pill-sr {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }
+    /* Time = แท่งแคบ bronze */
+    .mv2-et-strip--time {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.28rem;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+    .mv2-et-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.26rem;
+      flex: 1;
+      min-width: 0;
+      transition: opacity 0.15s ease;
+    }
+    .mv2-et-slot-bar {
+      display: block;
+      width: 0.42rem;
+      max-width: 40%;
+      min-width: 5px;
+      margin: 0 auto;
+      border-radius: 6px;
+      position: relative;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .mv2-et-slot-bar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(180deg, rgba(255,248,220,0.2), transparent 60%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .mv2-et-slot:not(.is-active) { opacity: 0.48; }
+    .mv2-et-slot:not(.is-active) .mv2-et-slot-bar {
+      background: rgba(55, 48, 38, 0.35);
+      border: 1px solid rgba(120, 106, 88, 0.2);
+      box-shadow: inset 0 2px 3px rgba(0,0,0,0.15);
+    }
+    .mv2-et-slot:not(.is-active) .mv2-et-slot-label {
+      color: rgba(100, 90, 78, 0.82);
+      font-weight: 500;
+    }
+    .mv2-et-slot.is-active { opacity: 1; }
+    .mv2-et-slot.is-active .mv2-et-slot-bar {
+      width: 0.5rem;
+      max-width: 46%;
+      background: linear-gradient(180deg, #ddb84a 0%, #b8871b 45%, #7a5c10 100%);
+      border: 1px solid rgba(212, 175, 55, 0.55);
+      box-shadow:
+        0 0 0 1px rgba(184, 135, 27, 0.2),
+        0 0 10px rgba(184, 135, 27, 0.18),
+        0 3px 8px rgba(80, 58, 16, 0.18);
+    }
+    .mv2-et-slot.is-active .mv2-et-slot-bar::after { opacity: 0.42; }
+    .mv2-et-slot-label {
+      font-size: 0.48rem;
+      text-align: center;
+      line-height: 1.12;
+      max-width: 100%;
+    }
+    .mv2-et-slot.is-active .mv2-et-slot-label {
+      color: var(--mv2a-gold-dim);
+      font-weight: 800;
+    }
+    .mv2-timing-insight {
+      margin-top: 0.75rem;
+      padding: 0.82rem 0.88rem;
+      border-radius: 12px;
+      background: rgba(184, 135, 27, 0.06);
+      border: 1px solid rgba(184, 135, 27, 0.2);
+    }
+    .mv2-timing-k--mode {
+      display: block;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--mv2a-gold);
+      margin: 0 0 0.55rem;
+    }
+    .mv2-timing-mode-body {
+      margin: 0;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      font-weight: 800;
+      color: var(--mv2a-text-body);
+    }
+    .mv2-timing-hint {
+      margin: 0.72rem 0 0;
+      padding-top: 0.62rem;
+      border-top: 1px solid rgba(184, 135, 27, 0.12);
+      font-size: 0.68rem;
+      line-height: 1.62;
+      color: var(--mv2a-muted);
+      font-weight: 400;
+    }
+    html.mv2a-theme-dark .mv2-timing-trend {
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) .mv2-et-pill-shape {
+      background: rgba(15, 18, 26, 0.92);
+      border-color: rgba(148, 163, 184, 0.12);
+    }
+    html.mv2a-theme-dark .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) .mv2-et-pill-label {
+      color: rgba(148, 163, 184, 0.72);
+    }
+    html.mv2a-theme-dark .mv2-et-slot:not(.is-active) .mv2-et-slot-bar {
+      background: rgba(12, 14, 20, 0.95);
+      border-color: rgba(148, 163, 184, 0.1);
+    }
+    html.mv2a-theme-dark .mv2-et-slot:not(.is-active) .mv2-et-slot-label {
+      color: rgba(148, 163, 184, 0.7);
+    }
+    html.mv2a-theme-dark .mv2-timing-insight {
+      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(232, 197, 71, 0.2);
+    }
+    html.mv2a-theme-dark .mv2-timing-hint {
+      border-top-color: rgba(232, 197, 71, 0.12);
+      color: rgba(148, 163, 184, 0.88);
+    }
     .mv2-share-card h2 { font-size: 0.92rem; }
     .mv2-share-note { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: var(--mv2a-muted); }
     .mv2-share-actions {
