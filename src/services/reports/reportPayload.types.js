@@ -57,6 +57,18 @@
  * @property {string} secondaryAxis
  * @property {{ score: number|null, band: string|null, reason?: string|null }} [ownerFit]
  * @property {{
+ *   version?: "1",
+ *   identityPhrase: string,
+ *   ownerChips: string[],
+ *   ownerAxes: Record<string, number>,
+ *   alignAxisKey: string,
+ *   tensionAxisKey: string,
+ *   glyphSeed: number,
+ *   profileSummaryShort: string,
+ *   derivationNote: string,
+ *   hasBirthdate: boolean,
+ * }} [ownerProfile] — lane-local; derived from DOB + fit + axis geometry (not Moldavite copy)
+ * @property {{
  *   headline: string,
  *   fitLine: string,
  *   bullets: string[],
@@ -65,18 +77,14 @@
  *   heroNamingLine?: string,
  *   mainEnergyWordingLine?: string,
  *   htmlOpeningLine?: string,
- *   tagline?: string
+ *   tagline?: string,
+ *   ownerProfileTeaser?: string,
  * }} flexSurface
  * @property {{
  *   meaningParagraphs: string[],
  *   graphSummaryRows: string[],
  *   axisBlurbs: Record<string, string>,
  *   usageCautionLines: string[],
- *   ownerProfile?: {
- *     summaryLabel?: string,
- *     traits?: string[],
- *     sensitiveAxes?: string[],
- *   },
  *   interactionSummary?: string[],
  * }} htmlReport
  * @property {{

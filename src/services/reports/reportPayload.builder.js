@@ -327,6 +327,7 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp)
       compatPct != null && Number.isFinite(Number(compatPct))
         ? Math.round(Number(compatPct))
         : null,
+    birthdateUsed: birthdateUsed ? String(birthdateUsed) : null,
     confidenceDamp,
   });
 
@@ -1238,6 +1239,7 @@ export async function buildReportPayloadFromScan(opts) {
             compatPct != null && Number.isFinite(Number(compatPct))
               ? Math.round(Number(compatPct))
               : null,
+          birthdateUsed: birthdateUsed ? String(birthdateUsed) : null,
           confidenceDamp,
         })
       : undefined;

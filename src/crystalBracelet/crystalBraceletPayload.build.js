@@ -4,6 +4,10 @@ import {
   computeCrystalBraceletOwnerAxisScoresV1,
   computeCrystalBraceletScoresDeterministicV1,
 } from "./crystalBraceletScores.util.js";
+import {
+  crystalBraceletOwnerProfileFlexTeaser,
+  deriveCrystalBraceletOwnerProfile,
+} from "./crystalBraceletOwnerProfile.util.js";
 
 /**
  * @param {string} primary — พีคพลังกำไล (เดียวกับเรดาร์/HTML)
@@ -85,11 +89,6 @@ function buildCrystalBraceletHtmlReport(axes, primary, alignAxis) {
       "หากช่วงนี้ใจล้าหรือมีเรื่องกดดันมาก ควรอ่านผลแบบค่อยเป็นค่อยไปและดูร่วมกับสภาพชีวิตจริง",
       "การอ่านนี้ไม่ใช่คำแนะนำทางการแพทย์ การเงิน หรือกฎหมาย",
     ],
-    ownerProfile: {
-      summaryLabel: "โปรไฟล์ผู้สวม",
-      traits: [],
-      sensitiveAxes: [],
-    },
     interactionSummary: [
       "กำไลเส้นนี้ไม่ได้ทำงานกับทุกคนเหมือนกัน",
       "พลังจะเด่นขึ้นในมิติที่ตรงกับจังหวะชีวิตของผู้สวมช่วงนี้",
@@ -105,6 +104,7 @@ function buildCrystalBraceletHtmlReport(axes, primary, alignAxis) {
  * @param {number|null} [p.energyScore]
  * @param {string} [p.mainEnergyLabel]
  * @param {number|null} [p.ownerFitScore]
+ * @param {string|null} [p.birthdateUsed]
  * @param {number} [p.confidenceDamp]
  * @returns {import("../services/reports/reportPayload.types.js").ReportCrystalBraceletV1}
  */
@@ -115,6 +115,7 @@ export function buildCrystalBraceletV1Slice({
   energyScore = null,
   mainEnergyLabel = "",
   ownerFitScore = null,
+  birthdateUsed = null,
   confidenceDamp,
 }) {
   const scores = computeCrystalBraceletScoresDeterministicV1(seedKey, {
@@ -151,17 +152,30 @@ export function buildCrystalBraceletV1Slice({
     ownerAxisForAlign,
   );
 
-  const flexSurface = buildCrystalBraceletFlexSurfaceCopy(
-    scores.primaryAxis,
-    alignAxis,
-    scores.axes,
-    {
-      headline,
-      mainEnergyShort,
-      tagline,
-      ownerFitBand: scores.ownerFit?.band ?? null,
-    },
-  );
+  const ownerProfile = deriveCrystalBraceletOwnerProfile({
+    birthdateUsed,
+    ownerFitScore: scores.ownerFit?.score ?? ownerFitScore ?? null,
+    stableSeed: String(scanResultId || seedKey || "").trim(),
+    stoneScores: stoneScoresMap,
+    ownerAxisScores: ownerAxisForAlign,
+    primaryAxis: scores.primaryAxis,
+    alignAxisKey: alignAxis,
+  });
+
+  const flexSurface = {
+    ...buildCrystalBraceletFlexSurfaceCopy(
+      scores.primaryAxis,
+      alignAxis,
+      scores.axes,
+      {
+        headline,
+        mainEnergyShort,
+        tagline,
+        ownerFitBand: scores.ownerFit?.band ?? null,
+      },
+    ),
+    ownerProfileTeaser: crystalBraceletOwnerProfileFlexTeaser(ownerProfile),
+  };
 
   const htmlReport = buildCrystalBraceletHtmlReport(
     scores.axes,
@@ -189,6 +203,7 @@ export function buildCrystalBraceletV1Slice({
     primaryAxis: scores.primaryAxis,
     secondaryAxis: scores.secondaryAxis,
     ownerFit: scores.ownerFit,
+    ownerProfile,
     flexSurface,
     htmlReport,
     display: {

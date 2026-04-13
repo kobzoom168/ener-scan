@@ -6,6 +6,7 @@ import {
   CRYSTAL_BRACELET_AXIS_ORDER,
   computeCrystalBraceletScoresDeterministicV1,
 } from "../../src/crystalBracelet/crystalBraceletScores.util.js";
+import { renderCrystalBraceletReportV2Html } from "../../src/templates/reports/crystalBraceletReportV2.template.js";
 
 test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contract", () => {
   const slice = buildCrystalBraceletV1Slice({
@@ -54,6 +55,45 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
   assert.ok(Array.isArray(slice.htmlReport.usageCautionLines));
   assert.ok(slice.htmlReport.usageCautionLines.length >= 2);
   assert.ok(Array.isArray(slice.internalHints?.internalStoneHints));
+  assert.ok(slice.ownerProfile && typeof slice.ownerProfile === "object");
+  assert.equal(slice.ownerProfile.version, "1");
+  assert.ok(Array.isArray(slice.ownerProfile.ownerChips));
+  assert.ok(slice.ownerProfile.ownerChips.length >= 2);
+  assert.ok(
+    CRYSTAL_BRACELET_AXIS_ORDER.includes(slice.ownerProfile.alignAxisKey),
+  );
+  assert.ok(
+    CRYSTAL_BRACELET_AXIS_ORDER.includes(slice.ownerProfile.tensionAxisKey),
+  );
+  assert.ok(String(slice.flexSurface.ownerProfileTeaser || "").length > 0);
+});
+
+test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", () => {
+  const slice = buildCrystalBraceletV1Slice({
+    scanResultId: "rid-html-1",
+    seedKey: "seed-html-bracelet",
+    detection: { reason: "crystal_bracelet_lane_v1", matchedSignals: [] },
+    energyScore: 7.5,
+    mainEnergyLabel: "พลังสมดุล",
+    ownerFitScore: 67,
+    birthdateUsed: "10/04/1995",
+  });
+  const html = renderCrystalBraceletReportV2Html({
+    generatedAt: new Date().toISOString(),
+    summary: {
+      energyScore: 7.5,
+      compatibilityPercent: 67,
+      energyLevelLabel: "A",
+    },
+    object: {},
+    crystalBraceletV1: slice,
+  });
+  assert.ok(html.includes("โปรไฟล์เจ้าของ"));
+  assert.ok(
+    html.includes(
+      "ผลนี้อ่านจากพลังรวมของกำไลทั้งเส้น ไม่ยืนยันชนิดหินรายเม็ด",
+    ),
+  );
 });
 
 test("computeCrystalBraceletScoresDeterministicV1: stable seed → stable axes", () => {

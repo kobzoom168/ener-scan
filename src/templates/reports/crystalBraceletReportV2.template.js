@@ -38,6 +38,65 @@ function cbAxisLabelThai(axes, key) {
 }
 
 /**
+ * Deterministic mini-glyph (bracelet lane — not Moldavite assets).
+ * @param {number} glyphSeed
+ */
+function buildCbOwnerGlyphSvg(glyphSeed) {
+  const g = Number(glyphSeed) >>> 0;
+  const cx = 16;
+  const cy = 16;
+  const parts = [];
+  for (let i = 0; i < 4; i++) {
+    const ang = ((g + i * 97) % 360) * (Math.PI / 180);
+    const rr = 6 + ((g >> (i * 4)) & 7);
+    const x = cx + Math.cos(ang) * rr;
+    const y = cy + Math.sin(ang) * rr;
+    const rDot = 1.8 + ((g >> (i * 2)) & 3) * 0.35;
+    const op = 0.35 + ((g >> (i * 3)) & 0xf) / 28;
+    parts.push(
+      `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${rDot.toFixed(2)}" fill="rgba(125,211,252,${op.toFixed(2)})"/>`,
+    );
+  }
+  return `<svg class="cb2-owner-glyph" viewBox="0 0 32 32" width="44" height="44" aria-hidden="true">${parts.join("")}</svg>`;
+}
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportCrystalBraceletV1} cb
+ */
+function buildCrystalBraceletOwnerProfileHtml(cb) {
+  const op = cb?.ownerProfile;
+  if (!op || typeof op !== "object") return "";
+  const chips = Array.isArray(op.ownerChips)
+    ? op.ownerChips.map((c) => String(c || "").trim()).filter(Boolean)
+    : [];
+  const identity = String(op.identityPhrase || "").trim();
+  const short = String(op.profileSummaryShort || "").trim();
+  const note = String(op.derivationNote || "").trim();
+  const glyph = buildCbOwnerGlyphSvg(op.glyphSeed ?? 0);
+
+  const chipsHtml = chips
+    .slice(0, 6)
+    .map(
+      (c) =>
+        `<span class="cb2-owner-chip">${escapeHtml(c)}</span>`,
+    )
+    .join("");
+
+  return `<section class="cb2-owner-card" aria-labelledby="cb2-owner-h">
+  <h2 id="cb2-owner-h">โปรไฟล์เจ้าของ</h2>
+  <div class="cb2-owner-inner">
+    <div class="cb2-owner-glyph-wrap" aria-hidden="true">${glyph}</div>
+    <div class="cb2-owner-body">
+      ${identity ? `<p class="cb2-owner-id">${escapeHtml(identity)}</p>` : ""}
+      ${chipsHtml ? `<div class="cb2-owner-chips">${chipsHtml}</div>` : ""}
+      ${short ? `<p class="cb2-owner-sum">${escapeHtml(short)}</p>` : ""}
+      ${note ? `<p class="cb2-owner-note">${escapeHtml(note)}</p>` : ""}
+    </div>
+  </div>
+</section>`;
+}
+
+/**
  * Radar (spider) heptagon — พลังกำไล (เส้นทึบ) + จังหวะผู้สวม (เส้นประ)
  * @param {Record<string, unknown>} axes
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
@@ -279,6 +338,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .join("");
 
   const radarSectionHtml = createCbRadarSection(axes, payload);
+  const ownerProfileHtml = buildCrystalBraceletOwnerProfileHtml(cb);
 
   return `<!DOCTYPE html>
 <html lang="th">
@@ -323,6 +383,32 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-tag { font-size: 0.78rem; color: var(--cb2-muted); margin: 0 0 0.3rem; }
     .cb2-main { font-size: 0.88rem; font-weight: 600; color: var(--cb2-accent); margin: 0.15rem 0 0; }
     .cb2-date { font-size: 0.7rem; color: var(--cb2-muted); margin: 0.45rem 0 0; }
+
+    /* ── Owner profile (lane-local; not Moldavite) ── */
+    .cb2-owner-card {
+      margin-top: 0.75rem;
+      padding: 0.75rem 0 0.75rem 0.95rem;
+      border-left: 3px solid rgba(125, 211, 252, 0.55);
+    }
+    .cb2-owner-card h2 { font-size: 0.88rem; font-weight: 700; margin: 0 0 0.55rem; color: #c9d1d9; }
+    .cb2-owner-inner { display: flex; align-items: flex-start; gap: 0.65rem; }
+    .cb2-owner-glyph-wrap { flex-shrink: 0; opacity: 0.95; }
+    .cb2-owner-glyph { display: block; }
+    .cb2-owner-body { flex: 1; min-width: 0; }
+    .cb2-owner-id { margin: 0; font-size: 0.8rem; font-weight: 600; line-height: 1.45; color: #e6edf3; }
+    .cb2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.45rem 0 0; }
+    .cb2-owner-chip {
+      font-size: 0.6rem;
+      font-weight: 600;
+      padding: 0.18rem 0.42rem;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.10);
+      border: 1px solid rgba(56, 189, 248, 0.28);
+      color: #7dd3fc;
+      letter-spacing: 0.01em;
+    }
+    .cb2-owner-sum { margin: 0.45rem 0 0; font-size: 0.72rem; line-height: 1.45; color: var(--cb2-sub); }
+    .cb2-owner-note { margin: 0.35rem 0 0; font-size: 0.6rem; line-height: 1.4; color: var(--cb2-muted); }
 
     /* ── Score strip ── */
     .cb2-strip {
@@ -490,6 +576,8 @@ export function renderCrystalBraceletReportV2Html(payload) {
         ${heroImg}
       </div>
     </header>
+
+    ${ownerProfileHtml}
 
     <section class="cb2-strip" aria-label="คะแนนสรุป">
       <div><div class="cb2-strip-k">คะแนนพลัง</div><div class="cb2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>

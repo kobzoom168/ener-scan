@@ -448,6 +448,21 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
     margin: "xs",
   };
 
+  const teaserText = String(fs?.ownerProfileTeaser || "").trim();
+  const ownerTeaserBlock =
+    teaserText.length > 0
+      ? {
+          type: "text",
+          text: teaserText,
+          size: "xxs",
+          color: FLEX_TEXT_CAPTION,
+          wrap: true,
+          maxLines: 2,
+          lineSpacing: "2px",
+          margin: "xs",
+        }
+      : null;
+
   const fitBlock =
     fitLine.length > 0
       ? {
@@ -476,6 +491,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
   const bodyContents = [
     headlineBlock,
     taglineBlock,
+    ...(ownerTeaserBlock ? [ownerTeaserBlock] : []),
     createScoreRowTwoUp(score.display || "-", compatPctStr, compatBandStr),
     ...(axesBlock ? [axesBlock] : []),
     ...(fitBlock ? [fitBlock] : []),
