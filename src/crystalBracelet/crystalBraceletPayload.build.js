@@ -8,6 +8,7 @@ import {
   crystalBraceletOwnerProfileFlexTeaser,
   deriveCrystalBraceletOwnerProfile,
 } from "./crystalBraceletOwnerProfile.util.js";
+import { deriveCrystalBraceletEnergyTimingV1 } from "./crystalBraceletEnergyTimingDerive.util.js";
 
 /**
  * @param {string} primary — พีคพลังกำไล (เดียวกับเรดาร์/HTML)
@@ -177,12 +178,21 @@ export function buildCrystalBraceletV1Slice({
     ownerProfileTeaser: crystalBraceletOwnerProfileFlexTeaser(ownerProfile),
   };
 
-  const htmlReport = buildCrystalBraceletHtmlReport(
+  const htmlReportBase = buildCrystalBraceletHtmlReport(
     scores.axes,
     scores.primaryAxis,
     scores.secondaryAxis,
     alignAxis,
   );
+  const energyTiming = deriveCrystalBraceletEnergyTimingV1({
+    bracelet: { stoneScores: stoneScoresMap },
+    ownerProfile,
+    ownerFitScore: scores.ownerFit?.score ?? ownerFitScore ?? null,
+    primaryAxis: scores.primaryAxis,
+    secondaryAxis: scores.secondaryAxis,
+    alignmentAxisKey: alignAxis,
+  });
+  const htmlReport = { ...htmlReportBase, energyTiming };
 
   return {
     version: "1",

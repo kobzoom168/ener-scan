@@ -22,6 +22,57 @@ const CB_RING_COLORS = {
   love: "#fb7185",
 };
 
+/** คำอธิบายใต้หลอด — สรุปจากกราฟ (ไม่ซ้ำโทนกับมิติชีวิตละเอียดแบบยาว) */
+const CB_GRAPH_SUMMARY_SUB = {
+  charm_attraction: {
+    primary:
+      "พลังรวมของกำไลเส้นนี้ไปออกกับแรงดึงดูด ภาพลักษณ์ และความรู้สึกน่าเข้าหาเด่นที่สุดในช่วงนี้",
+    secondary:
+      "รองลงมาคือเรื่องเสน่ห์ จึงช่วยพยุงภาพลักษณ์ ความรู้สึกน่าเข้าหา และแรงดึงดูดต่อคนรอบตัว",
+  },
+  money: {
+    primary:
+      "พลังรวมของกำไลเส้นนี้ไปออกกับการเงิน การจัดการรายรับ และจังหวะเรื่องผลตอบแทนเด่นที่สุดในช่วงนี้",
+    secondary:
+      "รองลงมาคือเรื่องการเงิน จึงช่วยพยุงการจัดการรายรับ ความคล่องตัว และจังหวะผลตอบแทน",
+  },
+  career: {
+    primary:
+      "พลังรวมของกำไลเส้นนี้ไปออกกับการลงมือ ความต่อเนื่อง และความชัดในเรื่องงานเด่นที่สุดในช่วงนี้",
+    secondary:
+      "รองลงมาคือเรื่องการงาน จึงช่วยพยุงการลงมือ ความต่อเนื่อง และความชัดในสิ่งที่ทำ",
+  },
+  luck: {
+    primary:
+      "พลังรวมของกำไลเส้นนี้ไปออกกับจังหวะเปิดทาง โอกาส และเรื่องที่เข้ามาแบบไม่คาดคิดเด่นที่สุดในช่วงนี้",
+    secondary:
+      "รองลงมาคือเรื่องโชคลาภ จึงช่วยพยุงจังหวะเปิดทาง โอกาสใหม่ และเรื่องฟลุคที่เข้ามาได้ง่ายขึ้น",
+  },
+  intuition: {
+    primary:
+      "พลังรวมของกำไลเส้นนี้ไปออกกับเซ้นส์ การรับสัญญาณ และการตัดสินใจจากความรู้สึกเด่นที่สุดในช่วงนี้",
+    secondary:
+      "รองลงมาคือเรื่องเซ้นส์ จึงช่วยพยุงความไวต่อจังหวะ การรับสัญญาณ และการตัดสินใจจากความรู้สึก",
+  },
+  love: {
+    primary:
+      "พลังรวมของกำไลเส้นนี้ไปออกกับความรัก ความสัมพันธ์ และความรู้สึกเชื่อมโยงกับคนรอบตัวเด่นที่สุดในช่วงนี้",
+    secondary:
+      "รองลงมาคือเรื่องความรัก จึงช่วยพยุงความสัมพันธ์ ความอ่อนโยน และความรู้สึกเชื่อมโยงกับคนสำคัญ",
+  },
+};
+
+/**
+ * @param {string} axisKey
+ * @param {"primary"|"secondary"} rowType
+ */
+function cbGraphSummarySubText(axisKey, rowType) {
+  const row =
+    CB_GRAPH_SUMMARY_SUB[axisKey] ||
+    CB_GRAPH_SUMMARY_SUB[CRYSTAL_BRACELET_AXIS_ORDER[0]];
+  return rowType === "secondary" ? row.secondary : row.primary;
+}
+
 /**
  * @param {Record<string, unknown>} axes
  * @param {string} key
@@ -80,7 +131,7 @@ function buildCrystalBraceletOwnerProfileHtml(cb) {
     )
     .join("");
 
-  return `<section class="cb2-owner-card" aria-labelledby="cb2-owner-h">
+  return `<section class="cb2-owner-card cb2-owner-card--below-summary" aria-labelledby="cb2-owner-h">
   <h2 id="cb2-owner-h">โปรไฟล์เจ้าของ</h2>
   <div class="cb2-owner-inner">
     <div class="cb2-owner-glyph-wrap" aria-hidden="true">${glyph}</div>
@@ -90,6 +141,41 @@ function buildCrystalBraceletOwnerProfileHtml(cb) {
       ${short ? `<p class="cb2-owner-sum">${escapeHtml(short)}</p>` : ""}
       ${note ? `<p class="cb2-owner-note">${escapeHtml(note)}</p>` : ""}
     </div>
+  </div>
+</section>`;
+}
+
+/**
+ * จังหวะเสริมพลัง — contract คล้าย Moldavite แต่สไตล์กำไล (ไม่ import เทมเพลต Moldavite)
+ * @param {Record<string, unknown>|null|undefined} hr
+ */
+function buildCrystalBraceletEnergyTimingHtml(hr) {
+  const et = hr?.energyTiming;
+  if (!et || typeof et !== "object") return "";
+  const w = String(et.recommendedWeekday || "").trim();
+  const t = String(et.recommendedTimeBand || "").trim();
+  const m = String(et.ritualMode || "").trim();
+  const r = String(et.timingReason || "").trim();
+  if (!w && !t && !m && !r) return "";
+  return `<section class="cb2-card cb2-card--et" aria-labelledby="cb2-et-h">
+  <h2 id="cb2-et-h">จังหวะเสริมพลัง</h2>
+  <div class="cb2-et-body">
+    <div class="cb2-et-grid">
+      <div class="cb2-et-panel">
+        <span class="cb2-et-k">วัน</span>
+        <span class="cb2-et-v cb2-et-v--fact">${escapeHtml(w || "—")}</span>
+      </div>
+      <div class="cb2-et-panel">
+        <span class="cb2-et-k">เวลา</span>
+        <span class="cb2-et-v cb2-et-v--fact cb2-et-v--time">${escapeHtml(t || "—")}</span>
+      </div>
+    </div>
+    <div class="cb2-et-panel cb2-et-panel--wide">
+      <span class="cb2-et-k">โหมดแนะนำ</span>
+      <span class="cb2-et-v cb2-et-v--mode">${escapeHtml(m || "—")}</span>
+    </div>
+    <div class="cb2-et-divider" aria-hidden="true"></div>
+    <p class="cb2-et-note">${escapeHtml(r || "—")}</p>
   </div>
 </section>`;
 }
@@ -147,7 +233,7 @@ function createCbRadarSection(axes, payload) {
 }
 
 /**
- * สรุปจากกราฟ — หลอดพลังพีค + มิติรอง (สอดคล้อง graphSummaryRows ใน payload)
+ * สรุปจากกราฟ — พลังเด่น + รองลงมา (headline → หลอด → คำอธิบายใต้หลอด)
  * @param {Record<string, unknown>} axes
  * @param {string} primaryAxis
  * @param {string} secondaryAxis
@@ -166,21 +252,43 @@ function buildCrystalBraceletGraphSummaryBarsHtml(
   const peakColor = CB_RING_COLORS[primaryAxis] || "#38bdf8";
   const secondaryColor = CB_RING_COLORS[secondaryAxis] || "#7dd3fc";
 
-  const row = (rowLabel, descText, pct, axisColor, leadClass) =>
+  const row = (
+    rowLabel,
+    headline,
+    subText,
+    pct,
+    axisColor,
+    leadClass,
+  ) =>
     `<div class="cb2-gsum-bar-row${leadClass}">
   <span class="cb2-gsum-bar-k">${escapeHtml(rowLabel)}</span>
   <div class="cb2-gsum-bar-main">
-    <p class="cb2-gsum-bar-desc" style="color:${axisColor}">${escapeHtml(descText)}</p>
+    <p class="cb2-gsum-bar-headline" style="color:${axisColor}">${escapeHtml(headline)}</p>
     <div class="cb2-gsum-bar-line">
       <div class="cb2-gsum-bar-track" role="presentation"><span class="cb2-gsum-bar-fill" style="width:${pct}%;background:${axisColor}"></span></div>
       <span class="cb2-gsum-bar-num">${escapeHtml(String(pct))}</span>
     </div>
+    <p class="cb2-gsum-bar-sub">${escapeHtml(subText)}</p>
   </div>
 </div>`;
 
   return `<div class="cb2-gsum-bars">
-${row("พลังเด่น", `เด่นสุดที่ ${peakName}`, peakPct, peakColor, " cb2-gsum-bar-row--lead")}
-${row("รองลงมา", `รองลงมาที่ ${secondaryName}`, secPct, secondaryColor, "")}
+${row(
+    "พลังเด่น",
+    `เด่นสุดที่ ${peakName}`,
+    cbGraphSummarySubText(primaryAxis, "primary"),
+    peakPct,
+    peakColor,
+    " cb2-gsum-bar-row--lead",
+  )}
+${row(
+    "รองลงมา",
+    `รองลงมาที่ ${secondaryName}`,
+    cbGraphSummarySubText(secondaryAxis, "secondary"),
+    secPct,
+    secondaryColor,
+    "",
+  )}
 </div>`;
 }
 
@@ -251,35 +359,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
       ? `<div class="cb2-hero-stack"><div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div><span class="cb2-hero-cap">${escapeHtml(peakLabelThai)}</span></div>`
       : "";
 
-  /** @type {{ key: string, label: string, score: number|null }[]} */
-  const axisRows = [];
-  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
-    const e = axes[k];
-    const label =
-      e && typeof e === "object" ? String(e.labelThai || "").trim() : "";
-    const sc = stoneScores[k];
-    axisRows.push({ key: k, label: label || "—", score: sc });
-  }
-  axisRows.sort((a, b) => {
-    if (a.score == null && b.score == null) return 0;
-    if (a.score == null) return 1;
-    if (b.score == null) return -1;
-    return b.score - a.score;
-  });
-
-  const axisBarsHtml = axisRows
-    .map(({ key, label, score: sc }) => {
-      const pct = sc == null ? 0 : Math.max(0, Math.min(100, sc));
-      const w = `${pct}%`;
-      const axisColor = CB_RING_COLORS[key] || "#0284c7";
-      return `<div class="cb2-axis-row">
-  <span class="cb2-axis-l">${escapeHtml(label)}</span>
-  <div class="cb2-axis-track" role="presentation"><span class="cb2-axis-fill" style="width:${w};background:${axisColor}"></span></div>
-  <span class="cb2-axis-s" style="color:${axisColor}">${sc == null ? "—" : escapeHtml(String(sc))}</span>
-</div>`;
-    })
-    .join("");
-
   const blurbs = hr.axisBlurbs && typeof hr.axisBlurbs === "object" ? hr.axisBlurbs : {};
   const blurbSections = CRYSTAL_BRACELET_AXIS_ORDER.map((k) => {
     const txt = String(blurbs[k] || "").trim();
@@ -311,6 +390,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
   const radarSectionHtml = createCbRadarSection(axes, payload);
   const ownerProfileHtml = buildCrystalBraceletOwnerProfileHtml(cb);
+  const energyTimingHtml = buildCrystalBraceletEnergyTimingHtml(hr);
 
   return `<!DOCTYPE html>
 <html lang="th">
@@ -356,13 +436,23 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-main { font-size: 0.88rem; font-weight: 600; color: var(--cb2-accent); margin: 0.15rem 0 0; }
     .cb2-date { font-size: 0.7rem; color: var(--cb2-muted); margin: 0.45rem 0 0; }
 
-    /* ── Owner profile (lane-local; not Moldavite) ── */
+    /* ── Owner profile (secondary หลังสรุปกราฟ) ── */
     .cb2-owner-card {
       margin-top: 0.75rem;
       padding: 0.75rem 0 0.75rem 0.95rem;
       border-left: 3px solid rgba(125, 211, 252, 0.55);
     }
+    .cb2-owner-card--below-summary {
+      margin-top: 1.15rem;
+      padding-top: 0.65rem;
+      border-left-color: rgba(125, 211, 252, 0.38);
+    }
     .cb2-owner-card h2 { font-size: 0.88rem; font-weight: 700; margin: 0 0 0.55rem; color: #c9d1d9; }
+    .cb2-owner-card--below-summary h2 {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #9ca3af;
+    }
     .cb2-owner-inner { display: flex; align-items: flex-start; gap: 0.65rem; }
     .cb2-owner-glyph-wrap { flex-shrink: 0; opacity: 0.95; }
     .cb2-owner-glyph { display: block; }
@@ -381,6 +471,73 @@ export function renderCrystalBraceletReportV2Html(payload) {
     }
     .cb2-owner-sum { margin: 0.45rem 0 0; font-size: 0.72rem; line-height: 1.45; color: var(--cb2-sub); }
     .cb2-owner-note { margin: 0.35rem 0 0; font-size: 0.6rem; line-height: 1.4; color: var(--cb2-muted); }
+
+    /* ── Energy timing (bracelet cyan theme, Moldavite-like layout) ── */
+    .cb2-card--et {
+      border-left-color: rgba(56, 189, 248, 0.55);
+      margin-top: 1rem;
+    }
+    .cb2-card--et h2 { color: #7dd3fc; }
+    .cb2-et-body { margin: 0; }
+    .cb2-et-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      margin-bottom: 0.55rem;
+    }
+    .cb2-et-panel {
+      background: rgba(56, 189, 248, 0.06);
+      border: 1px solid rgba(56, 189, 248, 0.22);
+      border-radius: 10px;
+      padding: 0.55rem 0.65rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    .cb2-et-panel--wide {
+      grid-column: 1 / -1;
+    }
+    .cb2-card--et .cb2-et-k {
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--cb2-muted);
+    }
+    .cb2-card--et .cb2-et-v--fact {
+      font-size: 0.88rem;
+      font-weight: 800;
+      color: #e6edf3;
+      line-height: 1.25;
+    }
+    @keyframes cb2-et-time-pulse {
+      0%, 100% { opacity: 1; color: #7dd3fc; }
+      50% { opacity: 0.72; color: #38bdf8; }
+    }
+    .cb2-card--et .cb2-et-v--time {
+      font-variant-numeric: tabular-nums;
+      animation: cb2-et-time-pulse 2.4s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cb2-card--et .cb2-et-v--time { animation: none !important; opacity: 1 !important; color: #7dd3fc !important; }
+    }
+    .cb2-card--et .cb2-et-v--mode {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #c9d1d9;
+      line-height: 1.45;
+    }
+    .cb2-et-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(56,189,248,0.35), transparent);
+      margin: 0.5rem 0 0.55rem;
+    }
+    .cb2-card--et .cb2-et-note {
+      margin: 0;
+      font-size: 0.74rem;
+      line-height: 1.58;
+      color: var(--cb2-sub);
+    }
 
     /* ── Score strip ── */
     .cb2-strip {
@@ -465,20 +622,13 @@ export function renderCrystalBraceletReportV2Html(payload) {
       line-height: 1.35;
     }
 
-    /* ── Axis bars ── */
-    .cb2-axis-row { display: flex; align-items: center; gap: 0.45rem; margin: 0.4rem 0; font-size: 0.78rem; }
-    .cb2-axis-l { flex: 0 0 40%; color: var(--cb2-sub); line-height: 1.25; }
-    .cb2-axis-track { flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 6px; overflow: hidden; }
-    .cb2-axis-fill { display: block; height: 100%; border-radius: 6px; transition: width 0.3s; }
-    .cb2-axis-s { flex: 0 0 2.2rem; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.78rem; }
-
-    /* ── Graph summary: หลอดพลัง (ค่าตามแกนพีค / แกนเข้ากัน) ── */
-    .cb2-gsum-bars { display: flex; flex-direction: column; gap: 0.75rem; }
+    /* ── Graph summary: headline → หลอด → คำอธิบายใต้หลอด ── */
+    .cb2-gsum-bars { display: flex; flex-direction: column; gap: 0.95rem; }
     .cb2-gsum-bar-row {
       display: flex;
       align-items: flex-start;
       gap: 0.65rem;
-      padding: 0.35rem 0 0.5rem;
+      padding: 0.35rem 0 0.55rem;
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
     .cb2-gsum-bar-row:last-child { border-bottom: none; }
@@ -489,14 +639,14 @@ export function renderCrystalBraceletReportV2Html(payload) {
       font-weight: 600;
       color: var(--cb2-gsum-k);
       line-height: 1.35;
-      padding-top: 0.1rem;
+      padding-top: 0.12rem;
     }
     .cb2-gsum-bar-main { flex: 1; min-width: 0; }
-    .cb2-gsum-bar-desc {
-      margin: 0 0 0.38rem;
+    .cb2-gsum-bar-headline {
+      margin: 0 0 0.32rem;
       font-size: 0.8rem;
       font-weight: 700;
-      line-height: 1.3;
+      line-height: 1.32;
     }
     .cb2-gsum-bar-line { display: flex; align-items: center; gap: 0.45rem; }
     .cb2-gsum-bar-track {
@@ -515,6 +665,13 @@ export function renderCrystalBraceletReportV2Html(payload) {
       font-variant-numeric: tabular-nums;
       color: #e6edf3;
       text-align: end;
+    }
+    .cb2-gsum-bar-sub {
+      margin: 0.42rem 0 0;
+      font-size: 0.68rem;
+      line-height: 1.52;
+      color: var(--cb2-muted);
+      font-weight: 400;
     }
 
     /* ── Life area cards ── */
@@ -549,8 +706,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
       </div>
     </header>
 
-    ${ownerProfileHtml}
-
     <section class="cb2-strip" aria-label="คะแนนสรุป">
       <div><div class="cb2-strip-k">คะแนนพลัง</div><div class="cb2-strip-v">${escapeHtml(score)}<small> /10</small></div></div>
       <div><div class="cb2-strip-k">เข้ากัน</div><div class="cb2-strip-v">${escapeHtml(compat)}</div></div>
@@ -564,11 +719,9 @@ export function renderCrystalBraceletReportV2Html(payload) {
       ${graphSummaryHtml}
     </section>
 
-    <section class="cb2-card" aria-labelledby="cb2-axes-h">
-      <h2 id="cb2-axes-h">คะแนนแต่ละมิติ</h2>
-      <p class="cb2-hint">เรียงจากคะแนนสูงไปต่ำ</p>
-      ${axisBarsHtml}
-    </section>
+    ${ownerProfileHtml}
+
+    ${energyTimingHtml}
 
     <section class="cb2-card" aria-labelledby="cb2-life-h">
       <h2 id="cb2-life-h">มิติชีวิตละเอียด</h2>

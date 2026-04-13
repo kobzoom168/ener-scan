@@ -70,6 +70,13 @@ test("buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contra
   assert.ok(slice.htmlReport.axisBlurbs?.love?.length > 15);
   assert.ok(Array.isArray(slice.htmlReport.usageCautionLines));
   assert.ok(slice.htmlReport.usageCautionLines.length >= 2);
+  const et = slice.htmlReport.energyTiming;
+  assert.ok(et && typeof et === "object");
+  assert.ok(String(et.recommendedWeekday || "").length > 2);
+  assert.ok(/\d{2}:\d{2}-\d{2}:\d{2}/.test(String(et.recommendedTimeBand || "")));
+  assert.ok(String(et.ritualMode || "").length > 10);
+  assert.ok(String(et.timingReason || "").length > 20);
+  assert.ok(String(et.timingModeKey || "").startsWith("bracelet_v1_"));
   assert.ok(Array.isArray(slice.internalHints?.internalStoneHints));
   assert.ok(slice.ownerProfile && typeof slice.ownerProfile === "object");
   assert.equal(slice.ownerProfile.version, "1");
@@ -112,8 +119,12 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   );
   assert.equal(html.includes("คุ้มกัน"), false);
   assert.equal(html.includes("ออร่า"), false);
-  assert.equal(html.includes("ตั้งหลัก"), false);
+  assert.ok(html.includes("จังหวะเสริมพลัง"));
+  assert.ok(html.includes("cb2-card--et"));
   assert.equal(html.includes("ตาที่ 3"), false);
+  assert.equal(html.includes("คะแนนแต่ละมิติ"), false);
+  assert.ok(html.includes("cb2-gsum-bar-sub"));
+  assert.ok(html.includes("cb2-owner-card--below-summary"));
 });
 
 test("computeCrystalBraceletScoresDeterministicV1: stable seed → stable axes", () => {

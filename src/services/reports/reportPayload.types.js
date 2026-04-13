@@ -86,6 +86,13 @@
  *   axisBlurbs: Record<string, string>,
  *   usageCautionLines: string[],
  *   interactionSummary?: string[],
+ *   energyTiming?: {
+ *     recommendedWeekday: string,
+ *     recommendedTimeBand: string,
+ *     ritualMode: string,
+ *     timingReason: string,
+ *     timingModeKey?: string,
+ *   },
  * }} htmlReport
  * @property {{
  *   displayLabel: string,
