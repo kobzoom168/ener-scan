@@ -22,7 +22,7 @@ const CB_RING_COLORS = {
   love: "#fb7185",
 };
 
-/** keyword สั้น 1 บรรทัดต่อแกน — มิติชีวิตละเอียด (bubble cluster) */
+/** hint สั้นต่อแกน — แสดงใน detail panel (ฟองเหลือแค่ label + score) */
 const CB_AXIS_SHORT_HINT = {
   charm_attraction: "ดึงดูด น่าเข้าหา",
   money: "รายรับ ผลตอบแทน",
@@ -32,7 +32,7 @@ const CB_AXIS_SHORT_HINT = {
   love: "เชื่อมโยง อ่อนโยน",
 };
 
-/** คำอธิบายใต้หลอด — สรุปจากกราฟ (ไม่ซ้ำโทนกับมิติชีวิตละเอียดแบบยาว) */
+/** คำอธิบายใต้หลอด — สรุปจากกราฟ */
 const CB_GRAPH_SUMMARY_SUB = {
   charm_attraction: {
     primary:
@@ -486,6 +486,7 @@ function buildCrystalBraceletLifeBubbleSection(axes, hr, primaryAxis, alignAxisK
     .map((it) => {
       const isActive = active && it.key === active.key;
       const activeClass = isActive ? " is-active" : "";
+      const ariaHint = it.shortHint ? ` · ${it.shortHint}` : "";
       return `<button
   type="button"
   class="cb2-bubble cb2-bubble--${it.sizeClass} ${it.posClass}${activeClass}"
@@ -496,10 +497,10 @@ function buildCrystalBraceletLifeBubbleSection(axes, hr, primaryAxis, alignAxisK
   data-axis-blurb="${escapeHtml(it.blurb)}"
   data-axis-hint="${escapeHtml(it.shortHint)}"
   aria-pressed="${isActive ? "true" : "false"}"
+  aria-label="${escapeHtml(`${it.label} ${it.score}${ariaHint}`)}"
 >
   <span class="cb2-bubble-label">${escapeHtml(it.label)}</span>
   <span class="cb2-bubble-score">${escapeHtml(String(it.score))}</span>
-  <span class="cb2-bubble-hint">${escapeHtml(it.shortHint)}</span>
 </button>`;
     })
     .join("\n");
@@ -509,7 +510,6 @@ function buildCrystalBraceletLifeBubbleSection(axes, hr, primaryAxis, alignAxisK
   const detailHint = active ? active.shortHint : "";
   const detailBlurb = active ? active.blurb : "";
 
-  /* Option B: ไม่มี text list ยาวคู่กับ cluster — กรณีไม่มี JS ยังเห็น detail ของ primary ใน panel ด้านล่าง */
   return `<section class="cb2-card cb2-life-bubbles" aria-labelledby="cb2-life-h">
   <h2 id="cb2-life-h">มิติชีวิตละเอียด</h2>
 
@@ -960,94 +960,112 @@ export function renderCrystalBraceletReportV2Html(payload) {
       font-weight: 400;
     }
 
-    /* ── มิติชีวิตละเอียด: bubble cluster + detail (รองกราฟ — โทนเบากว่า radar/summary) ── */
-    .cb2-life-bubbles h2 { color: #9ca3af; font-weight: 600; font-size: 0.82rem; }
+    /* ── มิติชีวิตละเอียด: premium bubble cluster (รองกราฟ — โทนม่วงอ่อน) ── */
+    .cb2-life-bubbles {
+      border-left-color: rgba(167, 139, 250, 0.28);
+      margin-top: 1rem;
+    }
+    .cb2-life-bubbles h2 {
+      color: #a1a1aa;
+      font-weight: 600;
+      font-size: 0.82rem;
+      margin-bottom: 0.55rem;
+    }
     .cb2-bubble-cluster {
       position: relative;
-      min-height: 15rem;
-      margin-top: 0.2rem;
-      opacity: 0.97;
+      min-height: 14.5rem;
+      margin-top: 0.15rem;
     }
     .cb2-bubble-detail {
-      margin-top: 0.9rem;
-      background: rgba(255,255,255,0.025);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 14px;
-      padding: 0.8rem 0.85rem;
+      margin-top: 0.85rem;
+      background: linear-gradient(145deg, rgba(139, 92, 246, 0.06), rgba(255,255,255,0.02));
+      border: 1px solid rgba(167, 139, 250, 0.12);
+      border-radius: 16px;
+      padding: 0.85rem 0.9rem;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
     .cb2-bubble {
       position: absolute;
-      border: 1px solid rgba(255,255,255,0.08);
       border-radius: 999px;
-      color: #f0f6fc;
+      color: #f4f4f5;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.12rem;
+      gap: 0.2rem;
       text-align: center;
-      padding: 0.35rem;
+      padding: 0.4rem;
       cursor: pointer;
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
-      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
       font: inherit;
-      border-color: color-mix(in srgb, var(--cb2-bubble-accent) 28%, rgba(255,255,255,0.08));
+      border: 1px solid color-mix(in srgb, var(--cb2-bubble-accent) 22%, rgba(255,255,255,0.06));
       background:
-        radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--cb2-bubble-accent) 16%, transparent), transparent 62%),
-        rgba(255,255,255,0.04);
+        radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--cb2-bubble-accent) 14%, transparent), transparent 58%),
+        rgba(24, 24, 27, 0.55);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.03),
+        0 2px 12px rgba(0,0,0,0.25);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     }
     .cb2-bubble:hover {
-      transform: translateY(-1px);
-      border-color: rgba(125,211,252,0.22);
-      box-shadow: 0 0 0 2px rgba(56,189,248,0.05);
+      transform: translateY(-2px);
+      border-color: color-mix(in srgb, var(--cb2-bubble-accent) 38%, rgba(255,255,255,0.1));
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.05),
+        0 4px 16px rgba(0,0,0,0.3),
+        0 0 0 1px color-mix(in srgb, var(--cb2-bubble-accent) 20%, transparent);
     }
     .cb2-bubble.is-active {
-      transform: translateY(-1px);
-      border-color: rgba(125,211,252,0.28);
-      box-shadow: 0 0 0 2px rgba(56,189,248,0.07);
+      transform: translateY(-2px);
+      border-color: color-mix(in srgb, var(--cb2-bubble-accent) 45%, rgba(244,244,245,0.15));
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.06),
+        0 0 0 2px color-mix(in srgb, var(--cb2-bubble-accent) 25%, transparent),
+        0 4px 18px rgba(0,0,0,0.32);
     }
-    .cb2-bubble--lg { width: 7rem; height: 7rem; }
-    .cb2-bubble--md { width: 5.8rem; height: 5.8rem; }
-    .cb2-bubble--sm { width: 4.8rem; height: 4.8rem; }
-    .cb2-bubble-label { font-size: 0.7rem; font-weight: 700; line-height: 1.2; }
+    .cb2-bubble--lg { width: 6.75rem; height: 6.75rem; }
+    .cb2-bubble--md { width: 5.5rem; height: 5.5rem; }
+    .cb2-bubble--sm { width: 4.65rem; height: 4.65rem; }
+    .cb2-bubble-label { font-size: 0.68rem; font-weight: 700; line-height: 1.15; color: rgba(244,244,245,0.92); }
     .cb2-bubble-score {
-      font-size: 1rem;
+      font-size: 1.05rem;
       font-weight: 800;
       line-height: 1;
+      font-variant-numeric: tabular-nums;
       color: var(--cb2-bubble-accent);
     }
-    .cb2-bubble-hint { font-size: 0.52rem; color: var(--cb2-muted); line-height: 1.25; max-width: 80%; }
-    .cb2-bubble--pos1 { left: 0.4rem; top: 3.2rem; }
-    .cb2-bubble--pos2 { right: 1.2rem; top: 1.1rem; }
-    .cb2-bubble--pos3 { right: 0.7rem; top: 7.3rem; }
-    .cb2-bubble--pos4 { left: 1.5rem; top: 9.1rem; }
-    .cb2-bubble--pos5 { left: 7.5rem; top: 0.4rem; }
-    .cb2-bubble--pos6 { left: 8.2rem; top: 8.9rem; }
+    .cb2-bubble--pos1 { left: 0.35rem; top: 3rem; }
+    .cb2-bubble--pos2 { right: 1rem; top: 0.95rem; }
+    .cb2-bubble--pos3 { right: 0.65rem; top: 7.1rem; }
+    .cb2-bubble--pos4 { left: 1.35rem; top: 8.85rem; }
+    .cb2-bubble--pos5 { left: 7.35rem; top: 0.35rem; }
+    .cb2-bubble--pos6 { left: 8rem; top: 8.65rem; }
     .cb2-bubble-detail-head {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
       gap: 0.6rem;
-      margin-bottom: 0.18rem;
+      margin-bottom: 0.2rem;
     }
     .cb2-bubble-detail-title {
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 700;
-      color: #e6edf3;
+      color: #e4e4e7;
     }
     .cb2-bubble-detail-score {
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       font-weight: 800;
-      color: color-mix(in srgb, var(--cb2-accent2) 75%, #94a3b8);
+      font-variant-numeric: tabular-nums;
+      color: color-mix(in srgb, var(--cb2-accent2) 55%, #a78bfa);
     }
     .cb2-bubble-detail-hint {
-      margin: 0 0 0.28rem;
-      font-size: 0.66rem;
+      margin: 0 0 0.32rem;
+      font-size: 0.65rem;
       color: var(--cb2-muted);
+      letter-spacing: 0.01em;
     }
     .cb2-bubble-detail-blurb {
       margin: 0;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       line-height: 1.58;
       color: var(--cb2-sub);
     }
@@ -1056,7 +1074,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
         min-height: auto;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.6rem;
+        gap: 0.55rem;
       }
       .cb2-bubble {
         position: relative;
@@ -1064,14 +1082,16 @@ export function renderCrystalBraceletReportV2Html(payload) {
         right: auto;
         top: auto;
         width: 100%;
-        height: 5.4rem;
+        height: 5rem;
       }
     }
 
-    /* ── Misc text ── */
+    /* ── Misc text (ความหมาย / ข้อควรระวัง) ── */
     .cb2-para { margin: 0.45rem 0 0; font-size: 0.85rem; line-height: 1.65; color: #c9d1d9; }
     .cb2-caution { margin: 0.25rem 0 0; padding-left: 1.1rem; font-size: 0.82rem; color: var(--cb2-sub); line-height: 1.6; }
     .cb2-caution-li { margin-bottom: 0.4rem; }
+
+    /* ── Disclaimer ── */
     .cb2-disclaimer { margin-top: 1.25rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(56,189,248,0.07); border: 1px solid rgba(56,189,248,0.20); font-size: 0.76rem; line-height: 1.55; color: #7dd3fc; }
 
     /* ── Footer ── */

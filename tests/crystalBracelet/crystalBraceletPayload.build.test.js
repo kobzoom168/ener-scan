@@ -163,12 +163,13 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   assert.ok(html.includes("cb2-bubble-cluster"));
   assert.ok(html.includes("cb2-bubble-detail"));
   assert.ok(html.includes("มิติชีวิตละเอียด"));
-  assert.equal(html.includes("cb2-life-card"), false);
-  assert.equal(html.includes("cb2-bubble-noscript"), false);
+  assert.ok(html.includes("ความหมายโดยรวม"));
+  assert.ok(html.includes("การใช้และข้อควรระวัง"));
   assert.ok(html.includes("cb2-life-bubbles"));
   assert.ok(html.includes("data-cb-bubbles"));
   assert.ok(html.includes("data-cb-detail"));
   assert.ok(html.includes("setActive"));
+  assert.equal(html.includes("cb2-life-card"), false);
   const pk = String(slice.primaryAxis || "").trim();
   assert.ok(
     new RegExp(
