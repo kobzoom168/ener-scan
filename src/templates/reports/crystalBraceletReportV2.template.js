@@ -142,7 +142,9 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
   const imgRaw = String(payload?.object?.objectImageUrl || "").trim();
   const heroImg =
-    /^https:\/\//i.test(imgRaw) ? `<div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div>` : "";
+    /^https:\/\//i.test(imgRaw)
+      ? `<div class="cb2-hero-stack"><div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div><span class="cb2-hero-cap">พลังเด่น</span></div>`
+      : "";
 
   /** @type {{ key: string, label: string, score: number|null }[]} */
   const axisRows = [];
@@ -216,14 +218,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
   const radarSectionHtml = createCbRadarSection(axes, payload);
 
-  console.log(
-    JSON.stringify({
-      event: "CRYSTAL_BRACELET_HTML_V2_RENDER",
-      scanResultIdPrefix: String(cb.context?.scanResultIdPrefix || "").slice(0, 8),
-      primaryAxis: String(cb.primaryAxis || ""),
-    }),
-  );
-
   return `<!DOCTYPE html>
 <html lang="th">
 <head>
@@ -258,6 +252,8 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-badge { font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cb2-accent); margin-bottom: 0.6rem; font-weight: 600; }
     .cb2-header-row { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.25rem; }
     .cb2-header-text { flex: 1; min-width: 0; }
+    .cb2-hero-stack { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex-shrink: 0; }
+    .cb2-hero-cap { font-size: 0.65rem; font-weight: 700; color: rgba(255,255,255,0.92); letter-spacing: 0.02em; }
     .cb2-hero-img { width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: #21262d; margin-bottom: 0.85rem; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
     .cb2-header-row .cb2-hero-img { width: 88px; height: 88px; aspect-ratio: 1 / 1; border-radius: 12px; flex-shrink: 0; margin-bottom: 0; }
     .cb2-hero-img img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
@@ -274,18 +270,26 @@ export function renderCrystalBraceletReportV2Html(payload) {
       margin: 1rem 0;
     }
     .cb2-strip > div {
-      background: var(--cb2-card);
-      border-radius: 12px;
-      padding: 0.65rem 0.75rem;
-      box-shadow: var(--cb2-card-shadow);
-      border: 1px solid var(--cb2-border);
+      background: transparent;
+      border-radius: 0;
+      padding: 0.35rem 0.15rem;
+      box-shadow: none;
+      border: none;
     }
     .cb2-strip-k { font-size: 0.6rem; color: var(--cb2-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
     .cb2-strip-v { font-size: 1.1rem; font-weight: 800; color: #f0f6fc; margin-top: 0.25rem; line-height: 1; }
     .cb2-strip-v small { font-size: 0.6em; font-weight: 600; color: var(--cb2-sub); }
 
-    /* ── Cards ── */
-    .cb2-card { background: var(--cb2-card); border-radius: 16px; padding: 1.1rem 1.15rem; margin-top: 0.75rem; box-shadow: var(--cb2-card-shadow); border: 1px solid var(--cb2-border); }
+    /* ── Sections: white left rule แทนกล่องพื้นหลัง ── */
+    .cb2-card {
+      background: transparent;
+      border-radius: 0;
+      padding: 0.85rem 0 0.85rem 0.95rem;
+      margin-top: 0.85rem;
+      box-shadow: none;
+      border: none;
+      border-left: 3px solid rgba(255,255,255,0.88);
+    }
     .cb2-card h2 {
       font-size: 0.88rem;
       font-weight: 700;
@@ -295,7 +299,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
       align-items: center;
       gap: 0.45rem;
     }
-    .cb2-card h2::before { content: ""; display: block; width: 3px; height: 0.9em; background: var(--cb2-accent); border-radius: 2px; flex-shrink: 0; }
+    .cb2-card h2::before { content: none; }
     .cb2-hint { font-size: 0.67rem; color: var(--cb2-muted); margin: -0.4rem 0 0.65rem 0.5rem; }
 
     /* ── Radar chart ── */
@@ -316,6 +320,22 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-radar-lbl-t { font-size: 0.62rem; }
     .cb2-radar-lbl-n { font-size: 0.67rem; font-weight: 700; font-variant-numeric: tabular-nums; }
     .cb2-radar-lbl--peak .cb2-radar-lbl-n { color: rgba(255,255,255,0.92); }
+    @keyframes cb2-radar-flash {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.38; }
+    }
+    .cb2-radar-lbl--grounding-flash {
+      animation: cb2-radar-flash 1.1s ease-in-out infinite;
+      color: #93c5fd;
+    }
+    .cb2-radar-lbl--grounding-flash .cb2-radar-lbl-n { color: #bfdbfe; }
+    .cb2-radar-svg .cb2-radar-flash-vertex {
+      animation: cb2-radar-flash 1.1s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cb2-radar-lbl--grounding-flash,
+      .cb2-radar-svg .cb2-radar-flash-vertex { animation: none; opacity: 1; }
+    }
     .cb2-radar-key {
       font-size: 0.62rem;
       color: var(--cb2-muted);
@@ -338,12 +358,14 @@ export function renderCrystalBraceletReportV2Html(payload) {
       align-items: center;
       justify-content: space-between;
       gap: 0.75rem;
-      padding: 0.45rem 0.9rem;
-      border-radius: 9999px;
-      background: var(--cb2-gsum-bg);
-      border: 1px solid var(--cb2-gsum-border);
+      padding: 0.35rem 0;
+      border-radius: 0;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .cb2-gsum-row--lead { background: var(--cb2-gsum-lead-bg); border-color: var(--cb2-gsum-lead-border); padding: 0.55rem 0.9rem; }
+    .cb2-gsum-row:last-child { border-bottom: none; }
+    .cb2-gsum-row--lead { padding: 0.4rem 0; border-bottom-color: rgba(56,189,248,0.22); }
     .cb2-gsum-k { font-size: 0.7rem; font-weight: 500; color: var(--cb2-gsum-k); white-space: nowrap; flex-shrink: 0; }
     .cb2-gsum-v { font-size: 0.88rem; font-weight: 800; color: var(--cb2-gsum-v); text-align: right; flex: 1; min-width: 0; line-height: 1.25; }
     .cb2-gsum-row--lead .cb2-gsum-v { color: var(--cb2-gsum-v-lead); }

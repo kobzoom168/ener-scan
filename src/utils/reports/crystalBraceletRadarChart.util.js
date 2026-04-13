@@ -8,6 +8,13 @@ const SVG_CX = 50;
 const SVG_CY = 50;
 const SVG_R = 38;
 
+/** พลังกำไล (solid) — blue; จังหวะผู้สวม (dashed) — red */
+const STONE_STROKE = "#60a5fa";
+const STONE_FILL = "rgba(96,165,250,0.12)";
+const OWNER_STROKE = "#f87171";
+const STONE_DOT_FILL = "#93c5fd";
+const OWNER_DOT_FILL = "#fca5a5";
+
 // CSS % positions for each axis label (top/bottom/left/right from the plot container)
 // Computed for 7-axis heptagon, label radius ~52% from center (50%,50%)
 // angles: -90°, -38.6°, 12.9°, 64.3°, 115.7°, 167.1°, 218.6°
@@ -79,15 +86,14 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
     CRYSTAL_BRACELET_AXIS_ORDER[0],
   );
 
-  // Grid rings as heptagon polygons (straight lines between axis points)
+  // Grid rings as heptagon polygons — omit outermost ring (100% edge) per design
   const heptPoints = (r) =>
     angles
       .map((ang) => `${(SVG_CX + Math.cos(ang) * r).toFixed(2)},${(SVG_CY + Math.sin(ang) * r).toFixed(2)}`)
       .join(" ");
-  const gridRings = [SVG_R * 0.25, SVG_R * 0.5, SVG_R * 0.75, SVG_R]
-    .map((r, i) => {
-      const stroke = i === 3 ? "rgba(255,255,255,0.20)" : "rgba(255,255,255,0.10)";
-      return `<polygon points="${heptPoints(r)}" fill="none" stroke="${stroke}" stroke-width="0.5"/>`;
+  const gridRings = [SVG_R * 0.25, SVG_R * 0.5, SVG_R * 0.75]
+    .map((r) => {
+      return `<polygon points="${heptPoints(r)}" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="0.5"/>`;
     })
     .join("");
 
@@ -109,8 +115,23 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
   const peakV = axisScores[peakKey] / 100;
   const pxf = (SVG_CX + Math.cos(peakAng) * peakV * SVG_R).toFixed(2);
   const pyf = (SVG_CY + Math.sin(peakAng) * peakV * SVG_R).toFixed(2);
-  const stonePeak = `<circle cx="${pxf}" cy="${pyf}" r="3.2" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
-  <circle cx="${pxf}" cy="${pyf}" r="1.6" fill="#ffffff"/>`;
+  /** Peak marker when peak ≠ ตั้งหลัก (grounding vertex uses flashing dot instead when same). */
+  const stonePeakNonGrounding =
+    peakKey === "grounding"
+      ? ""
+      : `<circle cx="${pxf}" cy="${pyf}" r="3.2" fill="none" stroke="rgba(96,165,250,0.45)" stroke-width="0.8"/>
+  <circle cx="${pxf}" cy="${pyf}" r="1.6" fill="${STONE_DOT_FILL}"/>`;
+
+  // ตั้งหลัก — flashing vertex on พลังกำไล (same position as peak when grounding is max)
+  const gIdx = CRYSTAL_BRACELET_AXIS_ORDER.indexOf("grounding");
+  const gAng = angles[gIdx];
+  const gV = axisScores.grounding / 100;
+  const gxf = (SVG_CX + Math.cos(gAng) * gV * SVG_R).toFixed(2);
+  const gyf = (SVG_CY + Math.sin(gAng) * gV * SVG_R).toFixed(2);
+  const groundingFlashVertex = `<g class="cb2-radar-flash-vertex">
+  <circle cx="${gxf}" cy="${gyf}" r="3.2" fill="none" stroke="rgba(96,165,250,0.55)" stroke-width="0.85"/>
+  <circle cx="${gxf}" cy="${gyf}" r="1.7" fill="${STONE_DOT_FILL}"/>
+</g>`;
 
   // Owner peak dot
   const oIdx = CRYSTAL_BRACELET_AXIS_ORDER.indexOf(ownerPeakKey);
@@ -118,16 +139,17 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
   const oV = Math.max(0, Math.min(100, ownerAxisScores[ownerPeakKey] || 0)) / 100;
   const oxf = (SVG_CX + Math.cos(oAng) * oV * SVG_R).toFixed(2);
   const oyf = (SVG_CY + Math.sin(oAng) * oV * SVG_R).toFixed(2);
-  const ownerPeak = `<circle cx="${oxf}" cy="${oyf}" r="2.2" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="0.7"/>
-  <circle cx="${oxf}" cy="${oyf}" r="1.1" fill="rgba(255,255,255,0.75)"/>`;
+  const ownerPeak = `<circle cx="${oxf}" cy="${oyf}" r="2.2" fill="none" stroke="rgba(248,113,113,0.45)" stroke-width="0.7"/>
+  <circle cx="${oxf}" cy="${oyf}" r="1.1" fill="${OWNER_DOT_FILL}"/>`;
 
   const svgHtml = `<svg class="cb2-radar-svg" viewBox="0 0 100 100" width="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility" aria-hidden="true">
   ${gridRings}
   ${spokes}
-  <polygon points="${ownerPoints}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="0.6" stroke-dasharray="2 2" stroke-linejoin="round"/>
-  <polygon points="${stonePoints}" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.85)" stroke-width="0.75" stroke-linejoin="round"/>
+  <polygon points="${ownerPoints}" fill="none" stroke="${OWNER_STROKE}" stroke-width="0.6" stroke-dasharray="2 2" stroke-linejoin="round"/>
+  <polygon points="${stonePoints}" fill="${STONE_FILL}" stroke="${STONE_STROKE}" stroke-width="0.75" stroke-linejoin="round"/>
   ${ownerPeak}
-  ${stonePeak}
+  ${stonePeakNonGrounding}
+  ${groundingFlashVertex}
 </svg>`;
 
   // HTML labels (positioned with CSS — no SVG text overflow issues)
@@ -141,7 +163,7 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
           return `${prop}:${v}`;
         })
         .join(";");
-      const cls = `cb2-radar-lbl cb2-radar-lbl--${k}${isPeak ? " cb2-radar-lbl--peak" : ""}`;
+      const cls = `cb2-radar-lbl cb2-radar-lbl--${k}${isPeak ? " cb2-radar-lbl--peak" : ""}${k === "grounding" ? " cb2-radar-lbl--grounding-flash" : ""}`;
       const label = esc(String(CRYSTAL_BRACELET_AXIS_LABEL_THAI[k] || k));
       const score = esc(String(axisScores[k]));
       return `<span class="${cls}" style="${styleStr}"><span class="cb2-radar-lbl-t">${label}</span><span class="cb2-radar-lbl-n">${score}%</span></span>`;
