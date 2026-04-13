@@ -391,8 +391,7 @@ function buildCrystalBraceletTimingBandStrip(et) {
   return `<div class="cb2-et-strip cb2-et-strip--time" role="list" aria-label="ช่วงเวลา">${pills.join("")}</div>`;
 }
 
-const CB2_ET_SUBTITLE =
-  "ช่วงที่กำไลเส้นนี้ตอบกับคุณได้ดีที่สุดในตอนนี้";
+const CB2_ET_SUBTITLE = "ช่วงที่พลังของกำไลตอบกับคุณได้ดีที่สุด";
 
 /**
  * จังหวะเสริมพลัง — mini trend / productivity-style; ข้อมูลจาก `hr.energyTiming` เท่านั้น
@@ -430,9 +429,9 @@ function buildCrystalBraceletEnergyTimingHtml(hr) {
     </div>
   </div>
   <div class="cb2-et-insight">
-    <div class="cb2-et-insight-row">
-      <span class="cb2-et-k">โหมดแนะนำ</span>
-      <span class="cb2-et-v cb2-et-v--mode">${escapeHtml(m || "—")}</span>
+    <div class="cb2-et-mode-block">
+      <span class="cb2-et-k cb2-et-k--mode">โหมดแนะนำ</span>
+      <p class="cb2-et-mode-body">${escapeHtml(m || "—")}</p>
     </div>
     <p class="cb2-et-note">${escapeHtml(r || "—")}</p>
   </div>
@@ -753,9 +752,10 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-et-head { margin-bottom: 0.7rem; }
     .cb2-et-sub {
       margin: 0.2rem 0 0;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       color: var(--cb2-muted);
-      line-height: 1.45;
+      line-height: 1.4;
+      font-weight: 500;
     }
     .cb2-et-trends {
       display: grid;
@@ -799,11 +799,23 @@ export function renderCrystalBraceletReportV2Html(payload) {
       gap: 0.3rem;
       min-width: 0;
       position: relative;
+      transition: opacity 0.15s ease;
+    }
+    /* Inactive — ถอยเป็นพื้นหลัง ไม่แย่ง radar */
+    .cb2-et-pill:not(.is-active) {
+      opacity: 0.58;
+    }
+    .cb2-et-pill:not(.is-active) .cb2-et-bar {
+      background: rgba(22, 36, 48, 0.85);
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.35);
+    }
+    .cb2-et-pill:not(.is-active) .cb2-et-pill-label {
+      color: #5c6b7a;
+      font-weight: 500;
     }
     .cb2-et-bar {
       width: 100%;
       border-radius: 999px;
-      background: rgba(255,255,255,0.08);
       min-height: 1.25rem;
       position: relative;
       overflow: hidden;
@@ -814,28 +826,34 @@ export function renderCrystalBraceletReportV2Html(payload) {
       position: absolute;
       inset: 0;
       border-radius: inherit;
-      background: rgba(125,211,252,0.16);
+      background: linear-gradient(180deg, rgba(255,255,255,0.22), transparent 55%);
       opacity: 0;
-      transition: opacity 0.2s ease;
+      pointer-events: none;
     }
-    .cb2-et-pill.is-active .cb2-et-bar::after {
+    .cb2-et-pill.is-active {
       opacity: 1;
     }
     .cb2-et-pill.is-active .cb2-et-bar {
-      background: linear-gradient(180deg, rgba(56,189,248,0.92), rgba(14,165,233,0.76));
-      box-shadow: 0 0 0 1px rgba(125,211,252,0.16), 0 8px 18px rgba(56,189,248,0.12);
+      background: linear-gradient(180deg, #6ec9fc 0%, #38bdf8 42%, #0ea5e9 100%);
+      box-shadow:
+        0 0 0 1px rgba(186, 230, 253, 0.5),
+        0 0 18px rgba(56, 189, 248, 0.28),
+        0 6px 14px rgba(14, 165, 233, 0.2);
+    }
+    .cb2-et-pill.is-active .cb2-et-bar::after {
+      opacity: 0.45;
     }
     .cb2-et-pill-label {
       font-size: 0.58rem;
-      color: var(--cb2-sub);
       text-align: center;
       line-height: 1.2;
       max-width: 100%;
     }
     .cb2-et-pill--time .cb2-et-pill-label { font-size: 0.52rem; }
     .cb2-et-pill.is-active .cb2-et-pill-label {
-      color: #e6edf3;
-      font-weight: 700;
+      color: #f6f8fa;
+      font-weight: 800;
+      letter-spacing: 0.02em;
     }
     .cb2-et-pill-sr {
       position: absolute;
@@ -851,34 +869,38 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-et-strip--time .cb2-et-bar { min-height: 1.45rem; }
     .cb2-et-insight {
       margin-top: 0.8rem;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(15, 23, 32, 0.65);
+      border: 1px solid rgba(56, 189, 248, 0.12);
       border-radius: 14px;
-      padding: 0.8rem 0.85rem;
+      padding: 0.9rem 0.95rem;
     }
-    .cb2-et-insight-row {
-      display: grid;
-      gap: 0.2rem;
-      margin-bottom: 0.55rem;
+    .cb2-et-mode-block {
+      display: block;
     }
-    .cb2-card--et .cb2-et-k {
-      font-size: 0.58rem;
-      font-weight: 700;
-      letter-spacing: 0.06em;
+    .cb2-card--et .cb2-et-k--mode {
+      display: block;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--cb2-muted);
+      color: #93d9fd;
+      margin: 0 0 0.5rem;
     }
-    .cb2-et-v--mode {
-      font-size: 0.86rem;
-      line-height: 1.5;
-      color: #e6edf3;
+    .cb2-et-mode-body {
+      margin: 0;
+      font-size: 0.9rem;
+      line-height: 1.58;
       font-weight: 700;
+      color: #f0f7fc;
     }
     .cb2-et-note {
-      margin: 0;
-      font-size: 0.76rem;
-      line-height: 1.65;
-      color: var(--cb2-sub);
+      margin: 0.8rem 0 0;
+      padding-top: 0.7rem;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      font-size: 0.72rem;
+      line-height: 1.68;
+      color: var(--cb2-muted);
+      font-weight: 400;
     }
 
     /* ── แชร์รายงาน (เทียบพระเครื่อง: Web Share + LINE OA) ── */

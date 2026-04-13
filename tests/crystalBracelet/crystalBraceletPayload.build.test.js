@@ -170,6 +170,10 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
   assert.ok(html.includes("วันเด่น"));
   assert.ok(html.includes("เวลาเด่น"));
   assert.ok(html.includes("cb2-et-sub"));
+  assert.ok(
+    html.includes("ช่วงที่พลังของกำไลตอบกับคุณได้ดีที่สุด"),
+  );
+  assert.ok(html.includes("cb2-et-mode-body"));
   assert.equal(html.includes("cb2-et-grid"), false);
   const et = slice.htmlReport?.energyTiming;
   assert.ok(
