@@ -14,7 +14,6 @@ const STONE_STROKE = "#60a5fa";
 const STONE_FILL = "rgba(96,165,250,0.12)";
 const OWNER_STROKE = "#f87171";
 const STONE_DOT_FILL = "#93c5fd";
-const OWNER_DOT_FILL = "#fca5a5";
 /** จุดรอง “เข้ากับคุณที่สุด” บนเส้นพลังกำไล — เทียบ moldavite mv2-radar-peak-compatibility */
 const ALIGN_DOT_FILL = "rgba(148,163,184,0.9)";
 const ALIGN_DOT_RING = "rgba(148,163,184,0.42)";
@@ -85,10 +84,6 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
     (best, k) => (axisScores[k] > axisScores[best] ? k : best),
     CRYSTAL_BRACELET_AXIS_ORDER[0],
   );
-  const ownerPeakKey = CRYSTAL_BRACELET_AXIS_ORDER.reduce(
-    (best, k) => ((ownerAxisScores[k] || 0) > (ownerAxisScores[best] || 0) ? k : best),
-    CRYSTAL_BRACELET_AXIS_ORDER[0],
-  );
   const alignKey = computeCrystalBraceletAlignmentAxisKey(
     axisScores,
     ownerAxisScores,
@@ -137,21 +132,12 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
   <circle class="cb2-radar-align-dot" cx="${axf}" cy="${ayf}" r="1.05" fill="${ALIGN_DOT_FILL}"/>`;
   }
 
-  // Owner peak dot
-  const oIdx = CRYSTAL_BRACELET_AXIS_ORDER.indexOf(ownerPeakKey);
-  const oAng = angles[oIdx];
-  const oV = Math.max(0, Math.min(100, ownerAxisScores[ownerPeakKey] || 0)) / 100;
-  const oxf = (SVG_CX + Math.cos(oAng) * oV * SVG_R).toFixed(2);
-  const oyf = (SVG_CY + Math.sin(oAng) * oV * SVG_R).toFixed(2);
-  const ownerPeak = `<circle cx="${oxf}" cy="${oyf}" r="2.2" fill="none" stroke="rgba(248,113,113,0.45)" stroke-width="0.7"/>
-  <circle cx="${oxf}" cy="${oyf}" r="1.1" fill="${OWNER_DOT_FILL}"/>`;
-
+  /* จุดบนกราฟเฉพาะบนเส้นพลังกำไล (เทียบพระเครื่อง: พีควัตถุ + จุดเข้ากัน — ไม่มีจุดพีคเจ้าของบน SVG) */
   const svgHtml = `<svg class="cb2-radar-svg" viewBox="0 0 100 100" width="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility" aria-hidden="true">
   ${gridRings}
   ${spokes}
   <polygon points="${ownerPoints}" fill="none" stroke="${OWNER_STROKE}" stroke-width="0.6" stroke-dasharray="2 2" stroke-linejoin="round"/>
   <polygon points="${stonePoints}" fill="${STONE_FILL}" stroke="${STONE_STROKE}" stroke-width="0.75" stroke-linejoin="round"/>
-  ${ownerPeak}
   ${stoneAlignMarker}
   ${stonePeakMarker}
 </svg>`;

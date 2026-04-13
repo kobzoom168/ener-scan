@@ -1,4 +1,4 @@
-﻿import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
+import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
 import { buildAmuletHtmlV2ViewModel } from "../../amulet/amuletHtmlV2.model.js";
 
