@@ -155,3 +155,44 @@ export function computeCrystalBraceletScoresDeterministicV1(seedKey, opts = {}) 
     },
   };
 }
+
+/**
+ * Per-axis owner rhythm scores for HTML radar overlay (not stored on payload).
+ * Deterministic from seed + stone scores + ownerFit so the line differs from "stone" but stays stable.
+ *
+ * @param {string} seedKey
+ * @param {string} sessionKey
+ * @param {Record<string, number>} stoneAxisScores — 0–100 per axis key
+ * @param {number|null|undefined} ownerFitScore — 0–100, from ownerFit or compatibility
+ * @returns {Record<string, number>}
+ */
+export function computeCrystalBraceletOwnerAxisScoresV1(
+  seedKey,
+  sessionKey,
+  stoneAxisScores,
+  ownerFitScore,
+) {
+  const seed = String(seedKey || "").trim() || "cb";
+  const session = String(sessionKey || "").trim() || "sess";
+  const fit =
+    ownerFitScore != null && Number.isFinite(Number(ownerFitScore))
+      ? Math.min(100, Math.max(0, Math.round(Number(ownerFitScore))))
+      : 66;
+  /** How much owner shape follows stone vs independent draw (higher fit → closer). */
+  const follow = 0.28 + (fit / 100) * 0.42;
+
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const key of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const h = fnv1a32(`${seed}|cb_owner_axis|${key}|${session}`);
+    const stone = Math.max(
+      0,
+      Math.min(100, Math.round(Number(stoneAxisScores[key]) || 0)),
+    );
+    const indie = 28 + (h % 52);
+    let s = Math.round(indie * (1 - follow) + stone * follow + ((h % 7) - 3));
+    s = Math.min(99, Math.max(20, s));
+    out[key] = s;
+  }
+  return out;
+}

@@ -6,6 +6,7 @@ import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
 import {
   CRYSTAL_BRACELET_AXIS_ORDER,
   CRYSTAL_BRACELET_AXIS_LABEL_THAI,
+  computeCrystalBraceletOwnerAxisScoresV1,
 } from "../../crystalBracelet/crystalBraceletScores.util.js";
 import { buildCrystalBraceletRadarChartSvg } from "../../utils/reports/crystalBraceletRadarChart.util.js";
 
@@ -70,17 +71,55 @@ function buildCbRadarLegendHtml(axes) {
 }
 
 /**
- * Radar (spider) heptagon — มิติพลัง 7 แกน สเกล 0–100
+ * Radar (spider) heptagon — พลังกำไล (เส้นทึบ) + จังหวะผู้สวม (เส้นประ)
  * @param {Record<string, unknown>} axes
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
  */
-function createCbRadarSection(axes) {
-  const radarSvg = buildCrystalBraceletRadarChartSvg(axes);
+function createCbRadarSection(axes, payload) {
+  /** @type {Record<string, number>} */
+  const stoneScores = {};
+  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const e = axes[k];
+    const sc =
+      e && typeof e === "object" && e.score != null && Number.isFinite(Number(e.score))
+        ? Math.max(0, Math.min(100, Math.round(Number(e.score))))
+        : 0;
+    stoneScores[k] = sc;
+  }
+  const cb = payload?.crystalBraceletV1;
+  const seedKey =
+    String(payload?.reportId || payload?.scanId || "").trim() ||
+    String(cb?.context?.scanResultIdPrefix || "cb");
+  const sessionKey = String(
+    payload?.scanId || payload?.reportId || cb?.context?.scanResultIdPrefix || "session",
+  );
+  const ownerFitFromCb =
+    cb?.ownerFit &&
+    typeof cb.ownerFit === "object" &&
+    cb.ownerFit.score != null &&
+    Number.isFinite(Number(cb.ownerFit.score))
+      ? Number(cb.ownerFit.score)
+      : null;
+  const ownerFitFromSummary =
+    payload?.summary?.compatibilityPercent != null &&
+    Number.isFinite(Number(payload.summary.compatibilityPercent))
+      ? Number(payload.summary.compatibilityPercent)
+      : null;
+  const ownerFit = ownerFitFromCb ?? ownerFitFromSummary;
+  const ownerScores = computeCrystalBraceletOwnerAxisScoresV1(
+    seedKey,
+    sessionKey,
+    stoneScores,
+    ownerFit,
+  );
+  const radarSvg = buildCrystalBraceletRadarChartSvg(axes, ownerScores);
   const legendHtml = buildCbRadarLegendHtml(axes);
   return `<section class="cb2-card cb2-radar-card" aria-labelledby="cb2-radar-h">
     <h2 id="cb2-radar-h">มิติพลังกำไล</h2>
-    <div class="cb2-radar-wrap" role="img" aria-label="มิติพลังกำไล แผนภูมิเรดาร์">
+    <div class="cb2-radar-wrap" role="img" aria-label="พลังกำไลและจังหวะผู้สวม แผนภูมิเรดาร์">
       ${radarSvg}
     </div>
+    <p class="cb2-radar-key">เส้นทึบ = พลังกำไล · เส้นประ = จังหวะผู้สวม</p>
     <div class="cb2-radar-legend">
       ${legendHtml}
     </div>
@@ -213,7 +252,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .map((p) => `<li class="cb2-caution-li">${escapeHtml(p)}</li>`)
     .join("");
 
-  const radarSectionHtml = createCbRadarSection(axes);
+  const radarSectionHtml = createCbRadarSection(axes, payload);
 
   console.log(
     JSON.stringify({
@@ -300,6 +339,13 @@ export function renderCrystalBraceletReportV2Html(payload) {
     /* ── Radar chart ── */
     .cb2-radar-card { }
     .cb2-radar-wrap { }
+    .cb2-radar-key {
+      font-size: 0.62rem;
+      color: var(--cb2-muted);
+      text-align: center;
+      margin: 0 0 0.35rem 0;
+      line-height: 1.35;
+    }
     .cb2-radar-legend {
       display: flex;
       flex-direction: column;

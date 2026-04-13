@@ -30,11 +30,32 @@ function axisLabelDominantBaseline(ly) {
 }
 
 /**
- * 7-axis heptagon radar SVG — white-on-dark, no blue on chart geometry.
- * @param {Record<string, unknown>} axes
+ * @param {Record<string, number>} scores
+ * @param {number[]} angles
+ * @param {string[]} axisOrder
+ */
+function polygonPointsFromScores(scores, angles, axisOrder) {
+  return angles
+    .map((ang, i) => {
+      const k = axisOrder[i];
+      const v = Math.max(0, Math.min(100, Number(scores[k]) || 0)) / 100;
+      const x = CX + Math.cos(ang) * v * RADIUS;
+      const y = CY + Math.sin(ang) * v * RADIUS;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+/**
+ * 7-axis heptagon radar — stone (bracelet) + owner overlay.
+ * @param {Record<string, unknown>} axes — stone/bracelet axis payload
+ * @param {Record<string, number>} ownerAxisScores — 0–100 per key (เจ้าของ / จังหวะผู้สวม)
  * @returns {string}
  */
-export function buildCrystalBraceletRadarChartSvg(axes) {
+export function buildCrystalBraceletRadarChartSvg(
+  axes,
+  ownerAxisScores,
+) {
   const axisOrder = CRYSTAL_BRACELET_AXIS_ORDER;
   const n = axisOrder.length;
   const angles = axisOrder.map(
@@ -54,6 +75,12 @@ export function buildCrystalBraceletRadarChartSvg(axes) {
 
   const peakKey = axisOrder.reduce(
     (best, k) => (axisScores[k] > axisScores[best] ? k : best),
+    axisOrder[0],
+  );
+
+  const ownerPeakKey = axisOrder.reduce(
+    (best, k) =>
+      (ownerAxisScores[k] || 0) > (ownerAxisScores[best] || 0) ? k : best,
     axisOrder[0],
   );
 
@@ -87,15 +114,8 @@ export function buildCrystalBraceletRadarChartSvg(axes) {
     })
     .join("");
 
-  const dataPoints = angles
-    .map((ang, i) => {
-      const k = axisOrder[i];
-      const v = axisScores[k] / 100;
-      const x = CX + Math.cos(ang) * v * RADIUS;
-      const y = CY + Math.sin(ang) * v * RADIUS;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
+  const stonePoints = polygonPointsFromScores(axisScores, angles, axisOrder);
+  const ownerPoints = polygonPointsFromScores(ownerAxisScores, angles, axisOrder);
 
   const labelR = RADIUS + 17;
   const axisLabelsHtml = angles
@@ -126,14 +146,27 @@ export function buildCrystalBraceletRadarChartSvg(axes) {
   const pxf = peakX.toFixed(2);
   const pyf = peakY.toFixed(2);
 
-  const peakMarker = `<circle cx="${pxf}" cy="${pyf}" r="8" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" aria-hidden="true"/>
+  const stonePeakMarker = `<circle cx="${pxf}" cy="${pyf}" r="8" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" aria-hidden="true"/>
   <circle cx="${pxf}" cy="${pyf}" r="4.5" fill="#ffffff" aria-hidden="true"/>`;
+
+  const oIdx = axisOrder.indexOf(ownerPeakKey);
+  const oAng = angles[oIdx];
+  const oV = Math.max(0, Math.min(100, ownerAxisScores[ownerPeakKey] || 0)) / 100;
+  const oX = CX + Math.cos(oAng) * oV * RADIUS;
+  const oY = CY + Math.sin(oAng) * oV * RADIUS;
+  const oxf = oX.toFixed(2);
+  const oyf = oY.toFixed(2);
+
+  const ownerPeakMarker = `<circle cx="${oxf}" cy="${oyf}" r="6" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2" aria-hidden="true"/>
+  <circle cx="${oxf}" cy="${oyf}" r="3" fill="rgba(255,255,255,0.78)" aria-hidden="true"/>`;
 
   return `<svg class="cb2-radar-svg" viewBox="0 0 ${VB_W} ${VB_H}" width="100%" style="max-width:320px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility" aria-hidden="true">
   ${gridRings}
   ${spokes}
-  <polygon points="${dataPoints}" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.85)" stroke-width="1.8" stroke-linejoin="round"/>
-  ${peakMarker}
+  <polygon points="${ownerPoints}" fill="none" stroke="rgba(255,255,255,0.48)" stroke-width="1.4" stroke-dasharray="5 4" stroke-linejoin="round"/>
+  <polygon points="${stonePoints}" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.85)" stroke-width="1.8" stroke-linejoin="round"/>
+  ${ownerPeakMarker}
+  ${stonePeakMarker}
   ${axisLabelsHtml}
   ${ringLabelTexts}
 </svg>`;
