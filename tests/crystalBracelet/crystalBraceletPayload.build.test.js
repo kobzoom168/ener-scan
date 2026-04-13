@@ -268,7 +268,19 @@ test("SSOT: summary 66 vs internal ownerFit.score 63 — HTML + Flex + owner pro
     reportUrl: "https://example.com/report",
   });
   const flexJson = JSON.stringify(flex);
-  assert.ok(/เข้ากับคุณ[\s\S]{0,1200}?"text":"66%"/.test(flexJson));
+  const alignK = slice.ownerProfile.alignAxisKey;
+  const alignBar = Math.max(
+    0,
+    Math.min(100, Math.round(Number(slice.axes[alignK].score))),
+  );
+  assert.ok(
+    flexJson.includes(`"text":"${String(alignBar)}"`),
+    "flex main figure = bracelet score on align axis (matches graph summary)",
+  );
+  assert.ok(
+    flexJson.includes("โดยรวม") && flexJson.includes("66%"),
+    "overall compatibility still shown under align bar score",
+  );
   assert.ok(flexJson.includes("เข้ากันในระดับพอดี"));
 });
 

@@ -499,12 +499,11 @@ export function renderCrystalBraceletReportV2Html(payload) {
     .cb2-owner-card {
       margin-top: 0.75rem;
       padding: 0.75rem 0 0.75rem 0.95rem;
-      border-left: 3px solid rgba(125, 211, 252, 0.55);
+      border-left: 3px solid rgba(255, 255, 255, 0.9);
     }
     .cb2-owner-card--below-summary {
       margin-top: 1.15rem;
       padding-top: 0.65rem;
-      border-left-color: rgba(125, 211, 252, 0.38);
     }
     .cb2-owner-card h2 { font-size: 0.88rem; font-weight: 700; margin: 0 0 0.55rem; color: #c9d1d9; }
     .cb2-owner-card--below-summary h2 {

@@ -210,11 +210,29 @@ function createCrystalBraceletAxesBarBlock(axes) {
  * @param {string} scoreDisplay
  * @param {string} compatPctStr
  * @param {string} [compatBandStr]
+ * @param {number|null} [alignBarScore0to100] — bracelet score on the align axis (0–100), same as graph summary / HTML; when set, main figure is this value and overall % is shown below
  */
-function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
+function createScoreRowTwoUp(
+  scoreDisplay,
+  compatPctStr,
+  compatBandStr = "",
+  alignBarScore0to100 = null,
+) {
   const levelValue = `${String(scoreDisplay || "-").trim() || "-"} / 10`;
   const pct = String(compatPctStr || "-").trim().replace(/\s+/g, "");
   const band = String(compatBandStr || "").trim();
+  const useAlignBar =
+    alignBarScore0to100 != null &&
+    Number.isFinite(Number(alignBarScore0to100));
+  const barStr = useAlignBar
+    ? String(
+        Math.max(
+          0,
+          Math.min(100, Math.round(Number(alignBarScore0to100))),
+        ),
+      )
+    : "";
+  /** @type {object[]} */
   const compatContents = [
     {
       type: "text",
@@ -225,7 +243,7 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
     },
     {
       type: "text",
-      text: pct,
+      text: useAlignBar ? barStr : pct,
       size: "xxl",
       weight: "bold",
       color: CB_ACCENT,
@@ -233,6 +251,17 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
       wrap: false,
     },
   ];
+  if (useAlignBar && pct && pct !== "-") {
+    compatContents.push({
+      type: "text",
+      text: `โดยรวม ${pct}`,
+      size: "sm",
+      color: FLEX_TEXT_SECONDARY,
+      wrap: true,
+      maxLines: 2,
+      margin: "xs",
+    });
+  }
   if (band) {
     compatContents.push({
       type: "text",
@@ -339,9 +368,21 @@ function createEnergyBadgePill(mainLabel) {
 }
 
 /**
- * @param {import("../reports/reportPayload.types.js").ReportPayload | null} reportPayload
- * @param {string} fallbackCompat
+ * Bracelet score on the align axis — matches graph summary bar + radar label on that spoke.
+ * @param {import("../reports/reportPayload.types.js").ReportCrystalBraceletV1 | null | undefined} cb
+ * @returns {number|null}
  */
+function crystalBraceletAlignBarScoreFromCb(cb) {
+  if (!cb || typeof cb !== "object") return null;
+  const key = String(cb.ownerProfile?.alignAxisKey || "").trim();
+  if (!key) return null;
+  const entry = cb.axes?.[key];
+  if (!entry || typeof entry !== "object") return null;
+  const sc = entry.score;
+  if (sc == null || !Number.isFinite(Number(sc))) return null;
+  return Math.max(0, Math.min(100, Math.round(Number(sc))));
+}
+
 function compatPercentAndBand(reportPayload, fallbackCompat) {
   const p = reportPayload?.summary?.compatibilityPercent;
   if (p != null && Number.isFinite(Number(p))) {
@@ -416,6 +457,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
   const url = String(reportUrl || "").trim();
 
   const axesBlock = createCrystalBraceletAxesBarBlock(cb.axes);
+  const alignBarScore = crystalBraceletAlignBarScoreFromCb(cb);
 
   const altMain = headlineText.split("\n")[0].trim() || "กำไลหินคริสตัล";
   const altText = buildScanFlexAltText({
@@ -500,7 +542,12 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
     headlineBlock,
     taglineBlock,
     ...(ownerTeaserBlock ? [ownerTeaserBlock] : []),
-    createScoreRowTwoUp(score.display || "-", compatPctStr, compatBandStr),
+    createScoreRowTwoUp(
+      score.display || "-",
+      compatPctStr,
+      compatBandStr,
+      alignBarScore,
+    ),
     ...(axesBlock ? [axesBlock] : []),
     ...(fitBlock ? [fitBlock] : []),
     ...(bulletRows.length > 0

@@ -71,7 +71,6 @@ export function deriveCrystalBraceletOwnerProfile(input) {
     `ตอนนี้จังหวะของคุณใกล้เคียงมิติ “${alignLabel}” ของกำไลมากที่สุดเมื่อเทียบทุกแกน`,
     `ภาพรวม: พลังกำไลเน้น “${primaryLabel}” · จังหวะคุณไปในทาง “${alignLabel}” มากที่สุด`,
     `เมื่อเทียบทุกมิติ จังหวะคุณไปในทาง “${alignLabel}” · จุดที่ห่างจากโทนกำไลมากสุดคือ “${tensionLabel}”`,
-    `โฟกัสช่วงนี้: ใกล้เคียง “${alignLabel}” มากที่สุด · ส่วนที่ต้องดูเป็นพิเศษคือ “${tensionLabel}”`,
     `สรุปสั้น ๆ: ใกล้ “${alignLabel}” · ช่องว่างใหญ่สุดอยู่ที่มิติ “${tensionLabel}”`,
   ];
   const identityPhrase = identityBank[hId % identityBank.length];
