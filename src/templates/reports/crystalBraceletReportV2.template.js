@@ -6,6 +6,7 @@ import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
 import {
   CRYSTAL_BRACELET_AXIS_ORDER,
   CRYSTAL_BRACELET_AXIS_LABEL_THAI,
+  computeCrystalBraceletAlignmentAxisKey,
   computeCrystalBraceletOwnerAxisScoresV1,
 } from "../../crystalBracelet/crystalBraceletScores.util.js";
 import { buildCrystalBraceletRadarChartSvg } from "../../utils/reports/crystalBraceletRadarChart.util.js";
@@ -125,7 +126,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
   const headline = String(fs?.headline || "").trim() || "กำไลหินคริสตัล";
   const tagline = String(fs?.tagline || "").trim() || "กำไลหินคริสตัล · อ่านจากพลังรวม";
-  const mainShort = String(fs?.mainEnergyShort || "").trim() || "พลังรวมของกำไล";
 
   const generatedAt = payload?.generatedAt ? formatBangkokDateTime(payload.generatedAt) : "";
   const score =
@@ -140,29 +140,74 @@ export function renderCrystalBraceletReportV2Html(payload) {
       : "ไม่มี";
   const levelLabel = String(payload?.summary?.energyLevelLabel || "").trim() || "ไม่มี";
 
+  const axes = cb.axes && typeof cb.axes === "object" ? cb.axes : {};
+
+  /** คะแนนกำไลต่อแกน — ใช้ชุดเดียวกับเรดาร์ / พีค / alignment */
+  /** @type {Record<string, number>} */
+  const stoneScores = {};
+  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const e = axes[k];
+    const sc =
+      e && typeof e === "object" && e.score != null && Number.isFinite(Number(e.score))
+        ? Math.max(0, Math.min(100, Math.round(Number(e.score))))
+        : 0;
+    stoneScores[k] = sc;
+  }
+  const primaryAxis = CRYSTAL_BRACELET_AXIS_ORDER.reduce(
+    (best, k) => (stoneScores[k] > stoneScores[best] ? k : best),
+    CRYSTAL_BRACELET_AXIS_ORDER[0],
+  );
+  const peakLabelThai = cbAxisLabelThai(axes, primaryAxis);
+
+  const seedKey =
+    String(payload?.reportId || payload?.scanId || "").trim() ||
+    String(cb?.context?.scanResultIdPrefix || "cb");
+  const sessionKey = String(
+    payload?.scanId || payload?.reportId || cb?.context?.scanResultIdPrefix || "session",
+  );
+  const ownerFitFromCb =
+    cb?.ownerFit &&
+    typeof cb.ownerFit === "object" &&
+    cb.ownerFit.score != null &&
+    Number.isFinite(Number(cb.ownerFit.score))
+      ? Number(cb.ownerFit.score)
+      : null;
+  const ownerFitFromSummary =
+    payload?.summary?.compatibilityPercent != null &&
+    Number.isFinite(Number(payload.summary.compatibilityPercent))
+      ? Number(payload.summary.compatibilityPercent)
+      : null;
+  const ownerFitForGraph = ownerFitFromCb ?? ownerFitFromSummary;
+  const ownerScoresForGraph = computeCrystalBraceletOwnerAxisScoresV1(
+    seedKey,
+    sessionKey,
+    stoneScores,
+    ownerFitForGraph,
+  );
+  const alignAxisKey = computeCrystalBraceletAlignmentAxisKey(
+    stoneScores,
+    ownerScoresForGraph,
+  );
+
+  const graphSummaryLines = [
+    `พลังของกำไลเส้นนี้ไปเด่นสุดที่ ${cbAxisLabelThai(axes, primaryAxis)}`,
+    `ช่วงนี้จังหวะผู้สวมใกล้เคียงพลังกำไลมากที่สุดที่มิติ ${cbAxisLabelThai(axes, alignAxisKey)}`,
+  ];
+  const graphSummaryHtml = buildGraphSummaryRowsHtml(graphSummaryLines);
+
   const imgRaw = String(payload?.object?.objectImageUrl || "").trim();
   const heroImg =
     /^https:\/\//i.test(imgRaw)
-      ? `<div class="cb2-hero-stack"><div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div><span class="cb2-hero-cap">พลังเด่น</span></div>`
+      ? `<div class="cb2-hero-stack"><div class="cb2-hero-img"><img src="${escapeHtml(imgRaw)}" alt="" loading="lazy" decoding="async"/></div><span class="cb2-hero-cap">${escapeHtml(peakLabelThai)}</span></div>`
       : "";
 
   /** @type {{ key: string, label: string, score: number|null }[]} */
   const axisRows = [];
-  const axes = cb.axes && typeof cb.axes === "object" ? cb.axes : {};
-  const primaryAxis = CRYSTAL_BRACELET_AXIS_ORDER.reduce((best, k) => {
-    const sc = typeof axes[k]?.score === "number" ? axes[k].score : -1;
-    const bestSc = typeof axes[best]?.score === "number" ? axes[best].score : -1;
-    return sc > bestSc ? k : best;
-  }, CRYSTAL_BRACELET_AXIS_ORDER[0]);
-
   for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
     const e = axes[k];
     const label =
       e && typeof e === "object" ? String(e.labelThai || "").trim() : "";
-    const sc =
-      e && typeof e === "object" && e.score != null && Number.isFinite(Number(e.score))
-        ? Math.round(Number(e.score))
-        : null;
+    const sc = stoneScores[k];
     axisRows.push({ key: k, label: label || "—", score: sc });
   }
   axisRows.sort((a, b) => {
@@ -184,8 +229,6 @@ export function renderCrystalBraceletReportV2Html(payload) {
 </div>`;
     })
     .join("");
-
-  const graphSummaryHtml = buildGraphSummaryRowsHtml(hr.graphSummaryRows);
 
   const blurbs = hr.axisBlurbs && typeof hr.axisBlurbs === "object" ? hr.axisBlurbs : {};
   const blurbSections = CRYSTAL_BRACELET_AXIS_ORDER.map((k) => {
@@ -382,7 +425,7 @@ export function renderCrystalBraceletReportV2Html(payload) {
         <div class="cb2-header-text">
           <h1 class="cb2-h1">${escapeHtml(headline)}</h1>
           <p class="cb2-tag">${escapeHtml(tagline)}</p>
-          <p class="cb2-main">พลังหลัก · ${escapeHtml(mainShort)}</p>
+          <p class="cb2-main">พลังเด่น · ${escapeHtml(peakLabelThai)}</p>
           ${generatedAt ? `<p class="cb2-date">${escapeHtml(generatedAt)}</p>` : ""}
         </div>
         ${heroImg}
