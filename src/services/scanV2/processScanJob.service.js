@@ -192,16 +192,16 @@ export async function processScanJob(workerId, jobRow) {
         });
         if (shaDup.report_url) {
           await insertOutboundMessage({
-            scan_job_id: jobId,
             line_user_id: lineUserId,
-            app_user_id: appUserId,
-            message_type: "flex",
-            payload_json: JSON.stringify({
+            kind: "scan_result",
+            priority: OUTBOUND_PRIORITY.scan_result,
+            related_job_id: jobId,
+            payload_json: {
               type: "text",
               text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${shaDup.report_url}`,
-            }),
-            priority: OUTBOUND_PRIORITY.SCAN_RESULT,
-            status: "pending",
+              appUserId,
+            },
+            status: "queued",
           });
         }
         return;
@@ -242,16 +242,16 @@ export async function processScanJob(workerId, jobRow) {
         await updateScanJob(jobId, { status: "completed", completed_at: new Date().toISOString() });
         if (dupMatch.report_url) {
           await insertOutboundMessage({
-            scan_job_id: jobId,
             line_user_id: lineUserId,
-            app_user_id: appUserId,
-            message_type: "flex",
-            payload_json: JSON.stringify({
+            kind: "scan_result",
+            priority: OUTBOUND_PRIORITY.scan_result,
+            related_job_id: jobId,
+            payload_json: {
               type: "text",
               text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${dupMatch.report_url}`,
-            }),
-            priority: OUTBOUND_PRIORITY.SCAN_RESULT,
-            status: "pending",
+              appUserId,
+            },
+            status: "queued",
           });
         }
         return;
