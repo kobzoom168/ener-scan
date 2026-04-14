@@ -359,6 +359,15 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
 }
 
 /**
+ * Re-delivered duplicate scan (SHA / perceptual hash match): do not consume paid quota.
+ * @param {object} [payload] outbound scan_result payload_json
+ * @returns {boolean}
+ */
+export function shouldSkipPaidQuotaDecrementAfterDelivery(payload) {
+  return payload?.skipQuotaDecrement === true;
+}
+
+/**
  * @param {string} id
  * @param {object} msg full row
  * @param {object} payload
@@ -374,6 +383,18 @@ async function handleScanResultPostDelivery(msg, payload) {
     status: "delivered",
     updated_at: new Date().toISOString(),
   });
+
+  if (shouldSkipPaidQuotaDecrementAfterDelivery(payload)) {
+    console.log(
+      JSON.stringify({
+        event: "QUOTA_DECREMENT_SKIPPED_DUPLICATE",
+        jobIdPrefix: String(jobId).slice(0, 8),
+        dedupHit: Boolean(payload?.dedupHit),
+        dedupType: payload?.dedupType ?? null,
+      }),
+    );
+    return;
+  }
 
   if (job.access_source === "paid" && job.app_user_id) {
     try {

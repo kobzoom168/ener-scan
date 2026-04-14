@@ -200,6 +200,9 @@ export async function processScanJob(workerId, jobRow) {
               type: "text",
               text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${shaDup.report_url}`,
               appUserId,
+              skipQuotaDecrement: true,
+              dedupHit: true,
+              dedupType: "sha256",
             },
             status: "queued",
           });
@@ -250,6 +253,9 @@ export async function processScanJob(workerId, jobRow) {
               type: "text",
               text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${dupMatch.report_url}`,
               appUserId,
+              skipQuotaDecrement: true,
+              dedupHit: true,
+              dedupType: "phash",
             },
             status: "queued",
           });

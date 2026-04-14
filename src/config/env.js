@@ -68,6 +68,24 @@ export const env = {
     if (v === "false" || v === "0" || v === "no") return false;
     return true;
   })(),
+  /**
+   * Push critical server errors to `ADMIN_LINE_USER_ID`.
+   * Set `false`, `0`, or `no` to disable.
+   * @type {boolean}
+   */
+  ADMIN_ERROR_NOTIFY: (() => {
+    const v = String(process.env.ADMIN_ERROR_NOTIFY ?? "")
+      .trim()
+      .toLowerCase();
+    if (v === "false" || v === "0" || v === "no") return false;
+    return true;
+  })(),
+  /**
+   * Minimum seconds between LINE pushes for the same error event type.
+   * Prevents flood if the same error fires in a tight loop. Default: 300 (5 min).
+   */
+  ADMIN_ERROR_NOTIFY_COOLDOWN_SEC:
+    Number(process.env.ADMIN_ERROR_NOTIFY_COOLDOWN_SEC) || 300,
   /** Admin dashboard login (username/password). Optional when using only ADMIN_TOKEN. */
   ADMIN_USERNAME: process.env.ADMIN_USERNAME || "",
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "",
