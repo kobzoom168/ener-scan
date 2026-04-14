@@ -13,8 +13,12 @@ import {
   buildScanResultFlexWithFallback,
   buildSummaryLinkFlexShell,
 } from "../flex/scanFlexReply.builder.js";
+import crypto from "crypto";
 import { env } from "../../config/env.js";
-import { getScanUploadById } from "../../stores/scanV2/scanUploads.db.js";
+import {
+  getScanUploadById,
+  findScanUploadBySha256AndUser,
+} from "../../stores/scanV2/scanUploads.db.js";
 import {
   getScanJobById,
   updateScanJob,
@@ -163,6 +167,57 @@ export async function processScanJob(workerId, jobRow) {
   /** @type {string | null} */
   let imageDHash = null;
   if (env.IMAGE_DEDUP_ENABLED) {
+    try {
+      const shaHex = crypto.createHash("sha256").update(imageBuffer).digest("hex");
+      const shaDup = await findScanUploadBySha256AndUser(
+        shaHex,
+        lineUserId,
+        upload.id,
+      );
+      if (shaDup) {
+        console.log(
+          JSON.stringify({
+            event: "SCAN_SHA256_DEDUP_HIT",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+            cachedScanResultIdPrefix: String(shaDup.scan_result_id || "").slice(0, 8),
+            hasReportUrl: Boolean(shaDup.report_url),
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        await updateScanJob(jobId, {
+          status: "completed",
+          completed_at: new Date().toISOString(),
+        });
+        if (shaDup.report_url) {
+          await insertOutboundMessage({
+            scan_job_id: jobId,
+            line_user_id: lineUserId,
+            app_user_id: appUserId,
+            message_type: "flex",
+            payload_json: JSON.stringify({
+              type: "text",
+              text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${shaDup.report_url}`,
+            }),
+            priority: OUTBOUND_PRIORITY.SCAN_RESULT,
+            status: "pending",
+          });
+        }
+        return;
+      }
+    } catch (shaErr) {
+      console.error(
+        JSON.stringify({
+          event: "SCAN_SHA256_DEDUP_ERROR",
+          path: "worker-scan",
+          jobIdPrefix: idPrefix8(jobId),
+          message: shaErr?.message,
+          timestamp: scanV2TraceTs(),
+        }),
+      );
+    }
+
     try {
       imageDHash = await computeImageDHash(imageBuffer);
       const dupMatch = await findDuplicateScanByPhash(

@@ -44,3 +44,77 @@ export async function getScanUploadById(id) {
   if (error) throw error;
   return data;
 }
+
+/**
+ * Exact image match (SHA-256 of stored bytes) for the same LINE user, prior completed scans.
+ * Joins: scan_uploads ← scan_jobs (upload_id) → scan_results_v2 (via result_id).
+ * If `scan_uploads.sha256` is absent in DB or query fails, returns null (caller continues without crashing).
+ *
+ * @param {string} sha256Hex Lowercase hex digest (64 chars)
+ * @param {string} lineUserId
+ * @param {string} [excludeUploadId] Exclude current upload (same bytes re-ingested as new row)
+ * @returns {Promise<{ scan_result_id: string, report_url: string | null } | null>}
+ */
+export async function findScanUploadBySha256AndUser(
+  sha256Hex,
+  lineUserId,
+  excludeUploadId = null,
+) {
+  const hash = String(sha256Hex || "").trim().toLowerCase();
+  const uid = String(lineUserId || "").trim();
+  if (!hash || !uid) return null;
+
+  try {
+    let uploadQuery = supabase
+      .from("scan_uploads")
+      .select("id")
+      .eq("line_user_id", uid)
+      .eq("sha256", hash);
+
+    if (excludeUploadId) {
+      uploadQuery = uploadQuery.neq("id", excludeUploadId);
+    }
+
+    const { data: uploads, error: upErr } = await uploadQuery;
+    if (upErr) throw upErr;
+    if (!uploads || uploads.length === 0) return null;
+
+    const uploadIds = uploads.map((u) => u.id).filter(Boolean);
+    if (uploadIds.length === 0) return null;
+
+    const { data: job, error: jobErr } = await supabase
+      .from("scan_jobs")
+      .select("id, result_id, created_at")
+      .eq("line_user_id", uid)
+      .in("upload_id", uploadIds)
+      .in("status", ["completed", "delivery_queued", "delivered"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (jobErr) throw jobErr;
+    if (!job?.result_id) return null;
+
+    const { data: resV2, error: rErr } = await supabase
+      .from("scan_results_v2")
+      .select("id, report_url")
+      .eq("id", job.result_id)
+      .maybeSingle();
+
+    if (rErr) throw rErr;
+    if (!resV2?.id) return null;
+
+    return {
+      scan_result_id: resV2.id,
+      report_url: resV2.report_url ?? null,
+    };
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: "SCAN_UPLOAD_SHA256_LOOKUP_SKIP",
+        reason: String(e?.message || e).slice(0, 300),
+      }),
+    );
+    return null;
+  }
+}

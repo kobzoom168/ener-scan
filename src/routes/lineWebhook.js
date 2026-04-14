@@ -2061,24 +2061,28 @@ async function finalizeAcceptedImage({
     return;
   }
 
-  const isDuplicate = await isDuplicateImage(imageBuffer);
+  // V1 in-memory dedupe (session-only). When persistent V2 IMAGE_DEDUP is enabled,
+  // rely on worker-side phash/SHA dedup instead so behavior survives reboot/deploy.
+  if (!env.IMAGE_DEDUP_ENABLED) {
+    const isDuplicate = await isDuplicateImage(imageBuffer);
 
-  if (isDuplicate) {
-    markAcceptedImageEvent(userId, eventTimestamp);
-    clearLatestScanJob(userId);
-    clearSessionIfFlowVersionMatches(userId, flowVersion);
+    if (isDuplicate) {
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+      clearSessionIfFlowVersionMatches(userId, flowVersion);
 
-    const dupCand = getDuplicateImageReplyCandidates();
-    await sendNonScanReply({
-      client,
-      userId,
-      replyToken: event.replyToken,
-      replyType: "duplicate_image",
-      semanticKey: "duplicate_image",
-      text: dupCand[0],
-      alternateTexts: dupCand.slice(1),
-    });
-    return;
+      const dupCand = getDuplicateImageReplyCandidates();
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "duplicate_image",
+        semanticKey: "duplicate_image",
+        text: dupCand[0],
+        alternateTexts: dupCand.slice(1),
+      });
+      return;
+    }
   }
 
   const imageBase64 = toBase64(imageBuffer);
