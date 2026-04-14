@@ -8,6 +8,7 @@ import {
   matchesDeterministicPaywallPurchaseIntent,
   matchesDeterministicPaywallSoftDeclineIntent,
 } from "../src/utils/webhookText.util.js";
+import { __resetReplyVariantPickTestState } from "../src/utils/replyVariantPick.util.js";
 
 const testOffer = () =>
   normalizeScanOffer({
@@ -34,8 +35,11 @@ const testOffer = () =>
   });
 
 test("buildDeterministicFreeQuotaExhaustedPaywallText: short natural copy + offer numbers", () => {
+  __resetReplyVariantPickTestState();
   const o = testOffer();
-  const t = buildDeterministicFreeQuotaExhaustedPaywallText(o);
+  const t = buildDeterministicFreeQuotaExhaustedPaywallText(o, {
+    lineUserId: "U_test_free_quota_paywall",
+  });
   assert.ok(t.includes("วันนี้สิทธิ์สแกนฟรีครบแล้วครับ"));
   assert.ok(t.includes("แพ็ก 49 บาท"));
   assert.ok(t.includes("4 ครั้ง"));
@@ -92,7 +96,10 @@ test("resolveScanOfferAccessContext: free quota exhausted needs freeUsedToday no
 });
 
 test("deterministic paywall primary is stable (phase1 must not replace before send)", () => {
-  const t = buildDeterministicFreeQuotaExhaustedPaywallText(testOffer());
+  __resetReplyVariantPickTestState();
+  const t = buildDeterministicFreeQuotaExhaustedPaywallText(testOffer(), {
+    lineUserId: "U_test_stable_paywall",
+  });
   assert.ok(t.length > 120);
-  assert.ok(t.startsWith("วันนี้สิทธิ์สแกนฟรีครบแล้วครับ"));
+  assert.ok(t.includes("วันนี้สิทธิ์สแกนฟรีครบแล้วครับ"));
 });

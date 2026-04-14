@@ -39,8 +39,14 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
   const uid = String(userId || "").trim();
   const offer = loadActiveScanOffer();
   const pkg = getDefaultPackage(offer);
-  const primary = buildDeterministicFreeQuotaExhaustedPaywallText(offer);
-  const alternates = getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(offer);
+  const primary = buildDeterministicFreeQuotaExhaustedPaywallText(offer, {
+    lineUserId: uid,
+  });
+  const primaryFirstLine = primary.split("\n")[0] || "";
+  const alternates = getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(offer, {
+    lineUserId: uid,
+    primaryFirstLine,
+  });
 
   const replyType = "free_quota_exhausted_deterministic";
   const semanticKey = `scan_offer:${replyType}:v${offer.configVersion}`;

@@ -27,6 +27,14 @@ import {
   parsePackageSelectionFromText,
 } from "../services/scanOffer.packages.js";
 import {
+  paymentApprovedBlessingVariants,
+  paymentSupportVariants,
+} from "../config/paymentWordingPools.th.js";
+import {
+  pickReplyVariant,
+  pickReplyVariantExcluding,
+} from "./replyVariantPick.util.js";
+import {
   isLoosePayIntentExact,
   matchesPaywallInstantQrPhrase,
 } from "./stateMicroIntent.util.js";
@@ -345,10 +353,10 @@ function appendPaymentRefLine(bodyText, paymentRef) {
 }
 
 /**
- * ข้อความหลักสำหรับชำระเงิน (ไม่ใส่ URL — QR ส่งแยกเป็น image message)
+ * Deterministic payment QR body (prices / counts / hours) — no curated soft line.
  * @param {{ paymentRef?: string|null, paidPackage?: { priceThb: number, scanCount: number, windowHours: number }|null }} [opts]
  */
-export function buildPaymentQrIntroText({ paymentRef, paidPackage = null } = {}) {
+export function buildPaymentQrIntroFactsText({ paymentRef, paidPackage = null } = {}) {
   const offer = loadActiveScanOffer();
   const pkg = paidPackage || getDefaultPackage(offer);
   const priceThb = pkg?.priceThb ?? offer.paidPriceThb;
@@ -366,6 +374,30 @@ export function buildPaymentQrIntroText({ paymentRef, paidPackage = null } = {})
     "พออนุมัติแล้ว เดี๋ยวอาจารย์แจ้งต่อในแชตนี้เลยครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
+}
+
+/**
+ * ข้อความหลักสำหรับชำระเงิน (ไม่ใส่ URL — QR ส่งแยกเป็น image message)
+ * Curated soft line + deterministic facts.
+ * @param {{ paymentRef?: string|null, paidPackage?: object|null, lineUserId?: string|null }} [opts]
+ */
+export function buildPaymentQrIntroText({
+  paymentRef,
+  paidPackage = null,
+  lineUserId = null,
+} = {}) {
+  const facts = buildPaymentQrIntroFactsText({ paymentRef, paidPackage });
+  const uid =
+    lineUserId != null && String(lineUserId).trim()
+      ? String(lineUserId).trim()
+      : "anonymous";
+  const soft = pickReplyVariant(
+    uid,
+    "payment_support_soft",
+    paymentSupportVariants,
+    3,
+  );
+  return [soft, "", facts].join("\n");
 }
 
 /** Single paid offer — short alternate (no multi-package menu). */
@@ -752,12 +784,13 @@ export function buildPaymentInstructionText({
   currency = "THB",
   paymentRef = null,
   paidPackage = null,
+  lineUserId = null,
 } = {}) {
   const offer = loadActiveScanOffer();
   const pkg = paidPackage || getDefaultPackage(offer);
   const thb = displayAmountThb(amount, pkg?.priceThb ?? offer.paidPriceThb);
   return [
-    buildPaymentQrIntroText({ paymentRef, paidPackage: pkg }),
+    buildPaymentQrIntroText({ paymentRef, paidPackage: pkg, lineUserId }),
     "",
     "ตอนนี้ยังโหลดรูปคิวอาร์ในแชตไม่ได้ชั่วคราว ลองแจ้งว่าจ่ายเงินอีกครั้งภายหลัง หรือติดต่อเราได้ครับ",
   ].join("\n");
@@ -987,10 +1020,23 @@ export async function buildPaymentApprovedText({
   ];
   const refLine = formatPaymentRefLine(paymentRef);
   if (refLine) lines.push("", refLine);
+  const uidBless =
+    lineUserId != null && String(lineUserId).trim()
+      ? String(lineUserId).trim()
+      : "anonymous";
+  const blessing = pickReplyVariant(
+    uidBless,
+    "payment_approved_blessing",
+    paymentApprovedBlessingVariants,
+    3,
+  );
+
   lines.push(
     "",
     scanLine,
     untilLine,
+    "",
+    blessing,
     "",
     "ส่งรูปมาสแกนต่อได้เลยครับ",
   );
@@ -1295,36 +1341,69 @@ export function buildWaitingBirthdatePaymentDeferredRedirectText() {
 
 /**
  * Deterministic paywall when free daily quota is exhausted (prices from active offer / default package).
+ * @param {import("../services/scanOffer.loader.js").NormalizedScanOffer} [offer]
+ * @param {{ lineUserId?: string | null }} [opts]
  */
-export function buildDeterministicFreeQuotaExhaustedPaywallText(offer) {
+export function buildDeterministicFreeQuotaExhaustedPaywallText(offer, opts = {}) {
+  const { lineUserId = null } = opts;
   const o = offer || loadActiveScanOffer();
   const pkg = getDefaultPackage(o);
   const price = pkg?.priceThb ?? o.paidPriceThb;
   const count = pkg?.scanCount ?? o.paidScanCount;
   const hours = pkg?.windowHours ?? o.paidWindowHours;
-  return [
+  const facts = [
     "วันนี้สิทธิ์สแกนฟรีครบแล้วครับ",
     "",
     `ถ้าจะเปิดเพิ่มวันนี้ แพ็ก ${price} บาท ใช้ได้ ${count} ครั้งภายใน ${hours} ชม.`,
     "",
     'ถ้าพร้อม พิมพ์ "จ่าย" ได้เลยครับ เดี๋ยวผมส่งรายละเอียดให้',
   ].join("\n");
+  const uid =
+    lineUserId != null && String(lineUserId).trim()
+      ? String(lineUserId).trim()
+      : "anonymous";
+  const soft = pickReplyVariant(
+    uid,
+    "payment_support_soft",
+    paymentSupportVariants,
+    3,
+  );
+  return [soft, "", facts].join("\n");
 }
 
-/** Gateway alternates (dedupe / semantic window) — same facts, different wording. */
-export function getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(offer) {
+/**
+ * Gateway alternates (dedupe / semantic window) — same facts, different soft line + alt wording.
+ * @param {import("../services/scanOffer.loader.js").NormalizedScanOffer} [offer]
+ * @param {{ lineUserId?: string | null, primaryFirstLine?: string | null }} [opts]
+ */
+export function getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(
+  offer,
+  opts = {},
+) {
+  const { lineUserId = null, primaryFirstLine = null } = opts;
   const o = offer || loadActiveScanOffer();
   const pkg = getDefaultPackage(o);
   const price = pkg?.priceThb ?? o.paidPriceThb;
   const count = pkg?.scanCount ?? o.paidScanCount;
   const hours = pkg?.windowHours ?? o.paidWindowHours;
-  return [
-    [
-      "ฟรีวันนี้หมดแล้วครับ",
-      "",
-      `ถ้าอยากใช้ต่อวันนี้ เปิดแพ็ก ${price} บาท ได้ ${count} ครั้ง ภายใน ${hours} ชม. พิมพ์ว่าจ่ายมาได้เลยครับ`,
-    ].join("\n"),
-  ];
+  const uid =
+    lineUserId != null && String(lineUserId).trim()
+      ? String(lineUserId).trim()
+      : "anonymous";
+  const ex = primaryFirstLine ? [primaryFirstLine] : [];
+  const softAlt = pickReplyVariantExcluding(
+    uid,
+    "payment_support_soft",
+    paymentSupportVariants,
+    ex,
+    3,
+  );
+  const factsAlt = [
+    "ฟรีวันนี้หมดแล้วครับ",
+    "",
+    `ถ้าอยากใช้ต่อวันนี้ เปิดแพ็ก ${price} บาท ได้ ${count} ครั้ง ภายใน ${hours} ชม. พิมพ์ว่าจ่ายมาได้เลยครับ`,
+  ].join("\n");
+  return [[softAlt, "", factsAlt].join("\n")];
 }
 
 export function buildDeterministicPaywallSoftCloseText() {

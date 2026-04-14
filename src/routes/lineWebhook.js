@@ -1146,6 +1146,7 @@ async function handlePaymentCommandTextRoute({
       const introInflight = buildPaymentQrIntroText({
         paymentRef: paymentRefInflight,
         paidPackage: paidPackageInflight,
+        lineUserId: userId,
       });
       const slipTextInflight = buildPaymentQrSlipText();
       if (isPromptPayQrUrlHttpsForLine(qrUrlInflight)) {
@@ -1178,6 +1179,7 @@ async function handlePaymentCommandTextRoute({
         currency: env.PAYMENT_UNLOCK_CURRENCY || "THB",
         paymentRef: paymentRefInflight,
         paidPackage: paidPackageInflight,
+        lineUserId: userId,
       });
       if ((await invokePhase1PaymentRoute()).handled) return true;
       await sendNonScanReply({
@@ -1297,6 +1299,7 @@ async function handlePaymentCommandTextRoute({
   const intro = buildPaymentQrIntroText({
     paymentRef: cmdPaymentRef,
     paidPackage,
+    lineUserId: userId,
   });
   const slipText = buildPaymentQrSlipText();
 
@@ -1344,6 +1347,7 @@ async function handlePaymentCommandTextRoute({
     currency,
     paymentRef: cmdPaymentRef,
     paidPackage,
+    lineUserId: userId,
   });
   if ((await invokePhase1PaymentRoute()).handled) return true;
   await sendNonScanReply({
