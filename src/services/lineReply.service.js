@@ -4,6 +4,7 @@ import {
   invokeLinePushMessage,
   invokeLineReplyMessage,
 } from "../utils/lineClientTransport.util.js";
+import { lineStickerPaymentSupportMessage } from "../utils/lineStickerMessage.util.js";
 
 export async function replyText(client, replyToken, text) {
   if (
@@ -25,6 +26,44 @@ export async function replyText(client, replyToken, text) {
     type: "text",
     text: safeText,
   });
+}
+
+/**
+ * Reply with text then a sticker (one reply token, max 5 messages).
+ * @param {*} client
+ * @param {string} replyToken
+ * @param {string} text
+ * @param {{ type: "sticker", packageId: string, stickerId: string }} stickerMessage
+ */
+export async function replyTextWithTrailingSticker(
+  client,
+  replyToken,
+  text,
+  stickerMessage,
+) {
+  if (
+    env.NONSCAN_REPLY_AUDIT === "warn" &&
+    isAuditNonScanBypassSuspect()
+  ) {
+    console.warn(
+      JSON.stringify({
+        event: "NONSCAN_REPLY_BYPASS_SUSPECT",
+        channel: "replyTextWithTrailingSticker",
+        replyTokenExists: Boolean(replyToken),
+        textLen: String(text || "").length,
+      }),
+    );
+  }
+  const safeText = String(text || "").slice(0, 4900);
+  return invokeLineReplyMessage(
+    client,
+    "lineReply.replyTextWithTrailingSticker",
+    replyToken,
+    [
+      { type: "text", text: safeText },
+      stickerMessage,
+    ],
+  );
 }
 
 export async function replyFlex(client, replyToken, flexMessage) {
@@ -88,6 +127,7 @@ export async function replyPaymentInstructionWithQr(client, replyToken, opts) {
 
   const messages = [
     { type: "text", text: introText },
+    lineStickerPaymentSupportMessage(),
     {
       type: "image",
       originalContentUrl: qrImageUrl,

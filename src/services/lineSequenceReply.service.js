@@ -37,6 +37,49 @@ export async function pushText(client, userId, text) {
 }
 
 /**
+ * Push text then sticker (same user, one push call).
+ * @param {*} client
+ * @param {string} userId
+ * @param {string} text
+ * @param {{ type: "sticker", packageId: string, stickerId: string }} stickerMessage
+ */
+export async function pushTextWithTrailingSticker(
+  client,
+  userId,
+  text,
+  stickerMessage,
+) {
+  const uid = String(userId || "").trim();
+  if (
+    uid &&
+    env.NONSCAN_REPLY_AUDIT === "warn" &&
+    isAuditNonScanBypassSuspect()
+  ) {
+    console.warn(
+      JSON.stringify({
+        event: "NONSCAN_PUSH_BYPASS_SUSPECT",
+        channel: "pushTextWithTrailingSticker",
+        userIdPrefix: uid.slice(0, 8),
+        textLen: String(text || "").length,
+      }),
+    );
+  }
+  if (!uid) {
+    throw new Error("pushTextWithTrailingSticker_missing_userId");
+  }
+  const safeText = String(text || "").slice(0, 4900);
+  await invokeLinePushMessage(
+    client,
+    "lineSequence.pushTextWithTrailingSticker",
+    uid,
+    [
+      { type: "text", text: safeText },
+      stickerMessage,
+    ],
+  );
+}
+
+/**
  * Delay after message index `i` (0-based) before sending message `i + 1`.
  * Matches product spec: 1→2: 500–900ms, 2→3+: 800–1400ms.
  * @param {number} messageIndexJustSent

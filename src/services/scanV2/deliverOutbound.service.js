@@ -27,6 +27,10 @@ import {
   buildScanResultOutboundTrace,
   FinalDeliveryErrorCode,
 } from "../../utils/scanV2/finalDeliveryTelemetry.util.js";
+import {
+  buildLineStickerMessage,
+  lineStickerPaymentApprovedBlessingMessage,
+} from "../../utils/lineStickerMessage.util.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -221,6 +225,21 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           : kind === "reject_notify"
             ? "OUTBOUND_REJECT_NOTIFY"
             : "OUTBOUND_PENDING_INTRO";
+      /** @type {{ type: "sticker", packageId: string, stickerId: string } | null} */
+      let approveSticker = null;
+      if (kind === "approve_notify") {
+        const st = payload.stickerAfterText;
+        approveSticker =
+          st &&
+          typeof st === "object" &&
+          String(st.packageId ?? "").trim() &&
+          String(st.stickerId ?? "").trim()
+            ? buildLineStickerMessage({
+                packageId: String(st.packageId),
+                stickerId: String(st.stickerId),
+              })
+            : lineStickerPaymentApprovedBlessingMessage();
+      }
       const r = await notifyLineUserTextAfterAdminAction({
         client,
         lineUserId,
@@ -228,6 +247,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         replyToken: replyToken || null,
         eventTag: tag,
         logPrefix: "[OUTBOUND_ADMIN_TEXT]",
+        stickerMessage: approveSticker,
       });
       if (r.userNotified) {
         await markSent(id);

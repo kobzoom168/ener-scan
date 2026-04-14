@@ -5,6 +5,10 @@ import {
 import {
   OUTBOUND_PRIORITY,
 } from "../../stores/scanV2/outboundPriority.js";
+import {
+  LINE_STICKER_ID_PAYMENT_APPROVED_BLESSING,
+  LINE_STICKER_PACKAGE_BROWN_CONY_SALLY_ANIMATED,
+} from "../../utils/lineStickerMessage.util.js";
 
 /**
  * @param {object} opts
@@ -46,6 +50,10 @@ export async function enqueueApproveNotify({
       replyToken: replyToken ? String(replyToken).trim() : null,
       paymentId: String(paymentId),
       source: "admin_approve",
+      stickerAfterText: {
+        packageId: LINE_STICKER_PACKAGE_BROWN_CONY_SALLY_ANIMATED,
+        stickerId: LINE_STICKER_ID_PAYMENT_APPROVED_BLESSING,
+      },
     },
     status: "queued",
   });

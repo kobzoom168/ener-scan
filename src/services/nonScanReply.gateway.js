@@ -1,5 +1,13 @@
-import { replyText, replyPaymentInstructions } from "./lineReply.service.js";
-import { replyTextSequenceOrSingle, pushText } from "./lineSequenceReply.service.js";
+import {
+  replyText,
+  replyTextWithTrailingSticker,
+  replyPaymentInstructions,
+} from "./lineReply.service.js";
+import {
+  replyTextSequenceOrSingle,
+  pushText,
+  pushTextWithTrailingSticker,
+} from "./lineSequenceReply.service.js";
 import { isScanFlowReplyTokenSpent } from "../stores/session.store.js";
 import { preparePhaseAHumanizedSendTexts } from "../core/conversation/conversationPipeline.service.js";
 import { TelemetryEvents, logTelemetryEvent } from "../core/telemetry/telemetryEvents.js";
@@ -88,6 +96,23 @@ function logGateway(payload) {
 }
 
 /**
+ * Optional sticker after text (delivery layer). Must be official LINE sticker payload.
+ * @param {unknown} m
+ * @returns {m is { type: "sticker", packageId: string, stickerId: string }}
+ */
+function isStickerMessage(m) {
+  return (
+    m != null &&
+    typeof m === "object" &&
+    /** @type {{ type?: unknown }} */ (m).type === "sticker" &&
+    String(/** @type {{ packageId?: unknown }} */ (m).packageId ?? "").trim()
+      .length > 0 &&
+    String(/** @type {{ stickerId?: unknown }} */ (m).stickerId ?? "").trim()
+      .length > 0
+  );
+}
+
+/**
  * Global outbound gateway for non-scan text replies (single bubble).
  *
  * @param {object} opts
@@ -165,6 +190,8 @@ export async function sendNonScanReply(opts) {
     alternateTexts = [],
     scanOfferMeta,
     turnPerf = undefined,
+    /** @type {{ type: "sticker", packageId: string, stickerId: string } | null | undefined} */
+    trailingStickerMessage = null,
   } = opts;
 
   const uid = String(userId || "").trim();
@@ -235,6 +262,9 @@ export async function sendNonScanReply(opts) {
       }
       const tokenStr = String(replyToken || "").trim();
       const tokenSpent = isScanFlowReplyTokenSpent(uid);
+      const sticker = isStickerMessage(trailingStickerMessage)
+        ? trailingStickerMessage
+        : null;
       if (!tokenStr || tokenSpent) {
         if (tokenSpent && tokenStr) {
           console.log(
@@ -246,7 +276,11 @@ export async function sendNonScanReply(opts) {
             }),
           );
         }
-        await pushText(client, uid, body);
+        if (sticker) {
+          await pushTextWithTrailingSticker(client, uid, body, sticker);
+        } else {
+          await pushText(client, uid, body);
+        }
         logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
           userId: uid,
           replyType: rt,
@@ -257,6 +291,13 @@ export async function sendNonScanReply(opts) {
             ? "scan_flow_reply_token_spent"
             : "missing_reply_token",
         });
+      } else if (sticker) {
+        await replyTextWithTrailingSticker(
+          client,
+          replyToken,
+          body,
+          sticker,
+        );
       } else {
         await replyText(client, replyToken, body);
       }
@@ -559,12 +600,17 @@ export async function sendNonScanPushMessage(opts) {
       semanticKey,
       text,
       alternateTexts = [],
+      /** @type {{ type: "sticker", packageId: string, stickerId: string } | null | undefined} */
+      trailingStickerMessage = null,
     } = opts;
 
     const uid = String(userId || "").trim();
     const dedupeKey = resolveDedupeKey(replyType, semanticKey);
     const rt = String(replyType || "").trim() || "unknown";
     const skLog = String(semanticKey || "").trim() || dedupeKey;
+    const stickerPush = isStickerMessage(trailingStickerMessage)
+      ? trailingStickerMessage
+      : null;
 
     if (!uid) {
       logGateway({
@@ -620,7 +666,11 @@ export async function sendNonScanPushMessage(opts) {
       const body = candidates[i];
       lastEval = evaluateDuplicate(uid, dedupeKey, body);
       if (!lastEval.blocked) {
-        await pushText(client, uid, body);
+        if (stickerPush) {
+          await pushTextWithTrailingSticker(client, uid, body, stickerPush);
+        } else {
+          await pushText(client, uid, body);
+        }
         recordSent(uid, dedupeKey, body);
         void insertLineConversationMessage(uid, "bot", body);
         logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {

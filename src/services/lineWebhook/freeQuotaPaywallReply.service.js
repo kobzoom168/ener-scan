@@ -8,6 +8,7 @@
 import { loadActiveScanOffer } from "../scanOffer.loader.js";
 import { getDefaultPackage } from "../scanOffer.packages.js";
 import { sendNonScanReply } from "../nonScanReply.gateway.js";
+import { lineStickerPaymentSupportMessage } from "../../utils/lineStickerMessage.util.js";
 import {
   buildDeterministicFreeQuotaExhaustedPaywallText,
   getDeterministicFreeQuotaExhaustedPaywallAlternateTexts,
@@ -78,6 +79,7 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
     alternateTexts: alternates,
     scanOfferMeta,
     turnPerf,
+    trailingStickerMessage: lineStickerPaymentSupportMessage(),
   });
 
   if (res.suppressed) {

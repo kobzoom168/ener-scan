@@ -78,6 +78,7 @@ function finalizeNotifyResult({ userNotified, channel, attempts, notifyError, la
  * @param {string | null | undefined} opts.replyToken
  * @param {string} [opts.logPrefix]
  * @param {string | null} [opts.eventTag] e.g. "ADMIN_APPROVE_NOTIFY" — emits *_RETRY / *_SUCCESS / *_FAILED and safe transport errors
+ * @param {{ type: "sticker", packageId: string, stickerId: string } | null | undefined} [opts.stickerMessage] — sent immediately after text (same reply/push)
  * @returns {Promise<{
  *   userNotified: boolean,
  *   channel: 'reply' | 'push',
@@ -98,6 +99,7 @@ export async function notifyLineUserTextAfterAdminAction({
   replyToken = null,
   logPrefix = "[ADMIN_LINE_NOTIFY]",
   eventTag = null,
+  stickerMessage = null,
 }) {
   const uid = String(lineUserId || "").trim();
   const safeText = String(text || "").slice(0, 4900);
@@ -111,7 +113,17 @@ export async function notifyLineUserTextAfterAdminAction({
     });
   }
 
-  const payload = { type: "text", text: safeText };
+  const textMsg = { type: "text", text: safeText };
+  const sticker =
+    stickerMessage &&
+    typeof stickerMessage === "object" &&
+    stickerMessage.type === "sticker"
+      ? stickerMessage
+      : null;
+  const payload =
+    sticker && sticker.packageId && sticker.stickerId
+      ? [textMsg, sticker]
+      : textMsg;
   const rt = String(replyToken || "").trim();
 
   async function pushWith429Retries() {
@@ -133,7 +145,7 @@ export async function notifyLineUserTextAfterAdminAction({
           client,
           "lineNotify.afterAdmin.pushRetry",
           uid,
-          payload,
+          /** @type {unknown} */ (payload),
         );
         if (tag) {
           console.log(
