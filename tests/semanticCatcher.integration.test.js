@@ -84,6 +84,14 @@ test("paywall_offer_single mapping", async () => {
   assert.equal(a.intent, "package_ack");
   assert.equal(a.safe_to_consume, true);
 
+  const a2 = await runCase("paywall_offer_single", "49 บาทได้อะไรบ้าง");
+  assert.equal(a2.intent, "explain_offer_value");
+  assert.equal(a2.safe_to_consume, true);
+
+  const a3 = await runCase("paywall_offer_single", "แอปใช้งานยังไง");
+  assert.equal(a3.intent, "explain_how_scan_works");
+  assert.equal(a3.safe_to_consume, true);
+
   const b = await runCase("paywall_offer_single", "โอเคเอาเลย");
   assert.equal(b.intent, "pay_intent");
   assert.equal(b.safe_to_consume, true);
@@ -117,8 +125,9 @@ test("awaiting_slip mapping", async () => {
   assert.equal(d.intent, "generic_ack");
   assert.equal(d.safe_to_consume, true);
 
-  const e = await runCase("awaiting_slip", "คำถามนอกเรื่อง");
-  assert.equal(e.safe_to_consume, false);
+  const e = await runCase("awaiting_slip", "ต้องทำยังไงต่อ");
+  assert.equal(e.intent, "explain_next_step");
+  assert.equal(e.safe_to_consume, true);
 });
 
 test("pending_verify mapping", async () => {
@@ -135,7 +144,8 @@ test("pending_verify mapping", async () => {
   assert.equal(c.safe_to_consume, true);
 
   const d = await runCase("pending_verify", "เรื่องอื่น");
-  assert.equal(d.safe_to_consume, false);
+  assert.equal(d.intent, "off_topic_recoverable");
+  assert.equal(d.safe_to_consume, true);
 });
 
 test("lineWebhook integrates semantic catcher and telemetry events", () => {

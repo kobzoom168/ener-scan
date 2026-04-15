@@ -103,6 +103,10 @@ import {
   SEMANTIC_CATCHER_CONSUME_THRESHOLD_RELAXED,
   SEMANTIC_CATCHER_CONSUME_THRESHOLD_STRICT,
 } from "../core/conversation/semanticCatcher/semanticCatcher.service.js";
+import {
+  composeStateSafeClarifierText,
+  runStateSafeClarifier,
+} from "../core/conversation/stateSafeClarifier/stateSafeClarifier.service.js";
 
 import { replyText } from "../services/lineReply.service.js";
 import {
@@ -212,6 +216,7 @@ import {
   isPaymentCommand,
   buildPaymentInstructionText,
   buildPaymentQrIntroText,
+  buildPaymentQrIntroFactsText,
   buildPaymentQrSlipText,
   buildSingleOfferPaywallAltText,
   buildPackageSelectionPromptFromOffer,
@@ -382,6 +387,76 @@ async function runSemanticCatchWithTelemetry({ userId, activeState, text }) {
     console.log(
       JSON.stringify({
         event: "SEMANTIC_CATCHER_FALLBACK",
+        userIdPrefix: lineUserIdPrefix8(userId),
+        activeState,
+        inputPreview: textPreview,
+        rejectReason: String(e?.message || e).slice(0, 120),
+        fallbackDeterministic: true,
+      }),
+    );
+    return null;
+  }
+}
+
+/**
+ * State-safe clarifier (answer briefly + bridge back), fail-closed.
+ * @param {{
+ *   userId: string,
+ *   activeState: "paywall_offer_single"|"waiting_birthdate"|"awaiting_slip"|"pending_verify",
+ *   text: string,
+ *   facts?: Record<string, unknown>,
+ * }} p
+ */
+async function runStateSafeClarifierWithTelemetry({ userId, activeState, text, facts = {} }) {
+  const textPreview = String(text || "").slice(0, 120);
+  console.log(
+    JSON.stringify({
+      event: "STATE_SAFE_CLARIFIER_REQUESTED",
+      userIdPrefix: lineUserIdPrefix8(userId),
+      activeState,
+      inputPreview: textPreview,
+    }),
+  );
+  try {
+    const out = await runStateSafeClarifier({
+      userId,
+      activeState,
+      text,
+      facts,
+    });
+    console.log(
+      JSON.stringify({
+        event: "STATE_SAFE_CLARIFIER_PARSED",
+        userIdPrefix: lineUserIdPrefix8(userId),
+        activeState,
+        inputPreview: textPreview,
+        normalizedIntent: out.intent,
+        confidence: out.confidence,
+        safe_to_answer: out.safe_to_answer,
+        bridge_back_to: out.bridge_back_to,
+        source: out.meta?.source || null,
+        reason: out.reason_short || null,
+      }),
+    );
+    if (!out.safe_to_answer) {
+      console.log(
+        JSON.stringify({
+          event: "STATE_SAFE_CLARIFIER_REJECTED",
+          userIdPrefix: lineUserIdPrefix8(userId),
+          activeState,
+          normalizedIntent: out.intent,
+          confidence: out.confidence,
+          safe_to_answer: out.safe_to_answer,
+          rejectReason: out.meta?.rejected_reason || out.reason_short || "not_safe_to_answer",
+          fallbackDeterministic: true,
+        }),
+      );
+    }
+    return out;
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "STATE_SAFE_CLARIFIER_FALLBACK",
         userIdPrefix: lineUserIdPrefix8(userId),
         activeState,
         inputPreview: textPreview,
@@ -2368,6 +2443,16 @@ async function finalizeAcceptedImage({
           outboundIdPrefix: idPrefix8(ing.outboundId ?? null),
           duplicate: Boolean(ing.duplicate),
         });
+        clearSessionIfFlowVersionMatches(userId, flowVersion);
+        console.log(
+          JSON.stringify({
+            event: "PENDING_IMAGE_CLEARED_AFTER_SCAN_SUCCESS",
+            userId,
+            flowVersion,
+            path: "saved_birthdate_ingest_ok",
+            messageId: event?.message?.id ?? null,
+          }),
+        );
         return;
       }
       ingestFailed = true;
@@ -3458,6 +3543,13 @@ async function handleTextMessage({ client, event, userId, session }) {
     const semanticPaywallIntent = semanticPaywall?.safe_to_consume
       ? semanticPaywall.intent
       : null;
+    const isPaywallSideQuestionIntent =
+      semanticPaywallIntent === "explain_offer_value" ||
+      semanticPaywallIntent === "explain_next_step" ||
+      semanticPaywallIntent === "explain_how_scan_works" ||
+      semanticPaywallIntent === "explain_single_image_rule" ||
+      semanticPaywallIntent === "recommendation_question" ||
+      semanticPaywallIntent === "off_topic_recoverable";
     if (semanticPaywallIntent) {
       console.log(
         JSON.stringify({
@@ -3652,6 +3744,63 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
+    if (isPaywallSideQuestionIntent) {
+      const clarifier = await runStateSafeClarifierWithTelemetry({
+        userId,
+        activeState: "paywall_offer_single",
+        text,
+        facts: {
+          priceThb: defaultPkg?.priceThb ?? null,
+          scanCount: defaultPkg?.scanCount ?? null,
+          windowHours: defaultPkg?.windowHours ?? null,
+          one_image_rule: true,
+          offerFactsText: buildPaymentQrIntroFactsText({
+            paidPackage: defaultPkg || null,
+            paymentRef: null,
+          }),
+        },
+      });
+      if (clarifier?.safe_to_answer) {
+        const clarifierText = composeStateSafeClarifierText(clarifier);
+        if (clarifierText) {
+          resetGuidanceNoProgress(userId, "paywall_offer_single");
+          resetSameStateAckStreak(userId, "paywall_offer_single");
+          emitActiveStateRouting({
+            userId,
+            flowState,
+            paymentState,
+            accessState,
+            canonicalStateOwner,
+            stateOwner: canonicalStateOwner,
+            replyFamily: "paywall_single_offer",
+            expectedInputType: "payment_or_wait_or_ack",
+            text,
+            chosenReplyType: "paywall_side_question_bridge_back",
+            routeReason: "state_safe_clarifier",
+          });
+          if ((await invokePhase1GeminiOrchestrator()).handled) return;
+          await sendNonScanReplyWithOptionalConvSurface({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: "paywall_side_question_bridge_back",
+            semanticKey: "paywall_side_question_bridge_back",
+            text: clarifierText,
+            alternateTexts: [buildSingleOfferPaywallAltText(offer)],
+            convSurface: buildConvSurfacePaywall(
+              userId,
+              text,
+              "single_offer_paywall_unclear_short",
+              clarifierText,
+              "short",
+              defaultPkg,
+            ),
+          });
+          return;
+        }
+      }
+    }
+
     const priceOrPackAck =
       defaultPkg &&
       (isSingleOfferPriceToken(text, offer) ||
@@ -3659,7 +3808,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           thaiRelativeAliases: true,
           allowEoaPricePhrase: true,
         }) ||
-        semanticPaywallIntent === "package_ack");
+        (semanticPaywallIntent === "package_ack" && !isPaywallSideQuestionIntent));
 
     if (priceOrPackAck) {
       const pkg = defaultPkg;
@@ -4181,6 +4330,9 @@ async function handleTextMessage({ client, event, userId, session }) {
     const semanticAwaitingSlipIntent = semanticAwaitingSlip?.safe_to_consume
       ? semanticAwaitingSlip.intent
       : null;
+    const isAwaitingSlipSideQuestionIntent =
+      semanticAwaitingSlipIntent === "explain_next_step" ||
+      semanticAwaitingSlipIntent === "off_topic_recoverable";
     if (semanticAwaitingSlipIntent) {
       console.log(
         JSON.stringify({
@@ -4375,7 +4527,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isGenericAckText(text) || semanticPaywallIntent === "generic_ack") {
+    if (isGenericAckText(text) || semanticAwaitingSlipIntent === "generic_ack") {
       const ackStreak = bumpSameStateAckStreak(userId, "awaiting_slip");
       logHumanConversationMemory({
         event: "STATE_ACK_CONTINUE",
@@ -4448,6 +4600,48 @@ async function handleTextMessage({ client, event, userId, session }) {
         ),
       });
       return;
+    }
+
+    if (isAwaitingSlipSideQuestionIntent) {
+      const clarifier = await runStateSafeClarifierWithTelemetry({
+        userId,
+        activeState: "awaiting_slip",
+        text,
+        facts: {
+          expected_input: "slip_image_or_resend_qr",
+          payment_ref: paymentRef || null,
+        },
+      });
+      if (clarifier?.safe_to_answer) {
+        const clarifierText = composeStateSafeClarifierText(clarifier);
+        if (clarifierText) {
+          resetSameStateAckStreak(userId, "awaiting_slip");
+          const clarifierStreak = bumpGuidanceNoProgress(userId, "awaiting_slip");
+          const clarifierTier = guidanceTierFromStreak(clarifierStreak);
+          if ((await invokePhase1GeminiOrchestrator()).handled) return;
+          await sendNonScanReplyWithOptionalConvSurface({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: "awaiting_slip_side_question_bridge_back",
+            semanticKey: "awaiting_slip_side_question_bridge_back",
+            text: clarifierText,
+            alternateTexts: [
+              "โอนแล้วแนบสลิปในแชตนี้ได้เลยครับ",
+              'ถ้าต้องการคิวอาร์อีกครั้ง บอกว่า "ขอ QR อีกที" ได้เลยครับ',
+            ],
+            convSurface: buildConvSurfaceAwaitingSlip(
+              userId,
+              text,
+              "awaiting_slip_side_question_bridge_back",
+              clarifierText,
+              clarifierTier,
+              paymentRef,
+            ),
+          });
+          return;
+        }
+      }
     }
 
     const phase1KeyAwaitingSlip = resolveGeminiPhase1StateKey({
@@ -4556,6 +4750,30 @@ async function handleTextMessage({ client, event, userId, session }) {
     logSafeIntentResolved(userId, "pending_verify", text, lowerText, {
       routeReason: "pending_verify_text_guard",
     });
+    const semanticPendingVerify = await runSemanticCatchWithTelemetry({
+      userId,
+      activeState: "pending_verify",
+      text,
+    });
+    const semanticPendingVerifyIntent = semanticPendingVerify?.safe_to_consume
+      ? semanticPendingVerify.intent
+      : null;
+    if (semanticPendingVerifyIntent) {
+      console.log(
+        JSON.stringify({
+          event: "SEMANTIC_CATCHER_CONSUMED",
+          userIdPrefix: lineUserIdPrefix8(userId),
+          activeState: "pending_verify",
+          normalizedIntent: semanticPendingVerifyIntent,
+          confidence: semanticPendingVerify?.confidence ?? null,
+          safe_to_consume: true,
+          fallbackDeterministic: false,
+        }),
+      );
+    }
+    const isPendingVerifySideQuestionIntent =
+      semanticPendingVerifyIntent === "explain_next_step" ||
+      semanticPendingVerifyIntent === "off_topic_recoverable";
 
     if (isBirthdateChangeCandidateText(text)) {
       console.log(
@@ -4719,7 +4937,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         return;
       }
 
-    if (isGenericAckText(text) || semanticAwaitingSlipIntent === "generic_ack") {
+    if (isGenericAckText(text) || semanticPendingVerifyIntent === "generic_ack") {
       const ackStreak = bumpSameStateAckStreak(userId, "pending_verify");
       logHumanConversationMemory({
         event: "STATE_ACK_CONTINUE",
@@ -4812,6 +5030,47 @@ async function handleTextMessage({ client, event, userId, session }) {
         ),
       });
       return;
+    }
+
+    if (isPendingVerifySideQuestionIntent) {
+      const clarifier = await runStateSafeClarifierWithTelemetry({
+        userId,
+        activeState: "pending_verify",
+        text,
+        facts: {
+          expected_input: "wait_for_verification",
+          payment_ref: paymentRef || null,
+        },
+      });
+      if (clarifier?.safe_to_answer) {
+        const clarifierText = composeStateSafeClarifierText(clarifier);
+        if (clarifierText) {
+          resetSameStateAckStreak(userId, "pending_verify");
+          const streakClarifier = bumpGuidanceNoProgress(userId, "pending_verify");
+          const tierClarifier = guidanceTierFromStreak(streakClarifier);
+          if ((await invokePhase1GeminiOrchestrator()).handled) return;
+          await sendNonScanReplyWithOptionalConvSurface({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: "pending_verify_side_question_bridge_back",
+            semanticKey: "pending_verify_side_question_bridge_back",
+            text: clarifierText,
+            alternateTexts: [
+              "ตอนนี้รอแอดมินตรวจสลิปก่อนครับ รอแจ้งผลในแชตนี้ได้เลยครับ",
+            ],
+            convSurface: buildConvSurfacePendingVerify(
+              userId,
+              text,
+              "pending_verify_side_question_bridge_back",
+              clarifierText,
+              tierClarifier,
+              paymentRef,
+            ),
+          });
+          return;
+        }
+      }
     }
 
     const phase1KeyPendingVerify = resolveGeminiPhase1StateKey({
@@ -5010,6 +5269,54 @@ async function handleTextMessage({ client, event, userId, session }) {
           messages: [errLine],
         });
         return;
+      }
+
+      const semanticWaitingBirthdate = await runSemanticCatchWithTelemetry({
+        userId,
+        activeState: "waiting_birthdate",
+        text,
+      });
+      const semanticWaitingBirthdateIntent = semanticWaitingBirthdate?.safe_to_consume
+        ? semanticWaitingBirthdate.intent
+        : null;
+      const isWaitingBirthdateSideQuestionIntent =
+        semanticWaitingBirthdateIntent === "explain_next_step" ||
+        semanticWaitingBirthdateIntent === "explain_how_scan_works" ||
+        semanticWaitingBirthdateIntent === "explain_single_image_rule" ||
+        semanticWaitingBirthdateIntent === "recommendation_question" ||
+        semanticWaitingBirthdateIntent === "off_topic_recoverable";
+      if (isWaitingBirthdateSideQuestionIntent) {
+        const clarifier = await runStateSafeClarifierWithTelemetry({
+          userId,
+          activeState: "waiting_birthdate",
+          text,
+          facts: {
+            expected_input: "birthdate_dd_mm_yyyy",
+          },
+        });
+        if (clarifier?.safe_to_answer) {
+          const clarifierText = composeStateSafeClarifierText(clarifier);
+          if (clarifierText) {
+            if ((await invokePhase1GeminiOrchestrator()).handled) return;
+            await sendNonScanReplyWithOptionalConvSurface({
+              client,
+              userId,
+              replyToken: event.replyToken,
+              replyType: "waiting_birthdate_side_question_bridge_back",
+              semanticKey: "waiting_birthdate_side_question_bridge_back",
+              text: clarifierText,
+              alternateTexts: ["ตอนนี้ขอวันเกิดก่อนครับ เช่น 19/08/2528"],
+              convSurface: buildConvSurfaceBirthdate(
+                userId,
+                text,
+                "waiting_birthdate_side_question_bridge_back",
+                clarifierText,
+                "short",
+              ),
+            });
+            return;
+          }
+        }
       }
 
       if (isWaitingBirthdatePackageOrPaymentWords(text)) {

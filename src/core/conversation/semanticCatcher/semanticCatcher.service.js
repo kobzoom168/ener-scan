@@ -15,22 +15,18 @@ export const SEMANTIC_CATCHER_CONSUME_THRESHOLD_STRICT = 0.82;
 export const SEMANTIC_CATCHER_CONSUME_THRESHOLD_RELAXED = 0.78;
 
 const ALLOWLIST = {
-  waiting_birthdate: new Set([
-    "provide_birthdate",
-    "generic_ack",
-    "birthdate_change_intent",
-  ]),
-  birthdate_change_waiting_date: new Set([
-    "provide_birthdate",
-    "confirm_no",
-    "generic_ack",
-  ]),
   paywall_offer_single: new Set([
     "pay_intent",
     "package_ack",
     "wait_tomorrow",
     "generic_ack",
     "status_check",
+    "explain_offer_value",
+    "explain_next_step",
+    "explain_how_scan_works",
+    "explain_single_image_rule",
+    "recommendation_question",
+    "off_topic_recoverable",
   ]),
   awaiting_slip: new Set([
     "resend_qr",
@@ -38,12 +34,27 @@ const ALLOWLIST = {
     "slip_claim_without_image",
     "status_check",
     "generic_ack",
+    "explain_next_step",
+    "off_topic_recoverable",
   ]),
   pending_verify: new Set([
     "status_check",
     "generic_ack",
     "pay_intent",
+    "explain_next_step",
+    "off_topic_recoverable",
   ]),
+  waiting_birthdate: new Set([
+    "provide_birthdate",
+    "generic_ack",
+    "birthdate_change_intent",
+    "explain_next_step",
+    "explain_how_scan_works",
+    "explain_single_image_rule",
+    "recommendation_question",
+    "off_topic_recoverable",
+  ]),
+  birthdate_change_waiting_date: new Set(["provide_birthdate", "confirm_no", "generic_ack"]),
 };
 
 const RELAXED_INTENTS = new Set([
@@ -148,6 +159,42 @@ function hasPackageAck(text) {
   );
 }
 
+function hasOfferValueQuestion(text) {
+  return /(ได้อะไร|คุ้มไหม|49\s*บาท.*อะไร|แพ็ก.*อะไร|ราคา.*อะไร)/i.test(
+    String(text || ""),
+  );
+}
+
+function hasNextStepQuestion(text) {
+  return /(ต้อง.*ทำ|ต้อง.*โอน|ทำยังไง|ยังไงต่อ|ขั้นตอน|ทำอะไรต่อ|โอนตรงไหน)/i.test(
+    String(text || ""),
+  );
+}
+
+function hasHowScanWorks(text) {
+  return /(แอป.*ยังไง|วิธีใช้|ใช้งานยังไง|สแกนยังไง|ทำงานยังไง)/i.test(
+    String(text || ""),
+  );
+}
+
+function hasSingleImageRuleQuestion(text) {
+  return /(หลายชิ้น|หลายองค์|หลายรูป|ส่งหลาย|ทีละกี่รูป|รูปเดียว)/i.test(
+    String(text || ""),
+  );
+}
+
+function hasRecommendationQuestion(text) {
+  return /(เหมาะกับ|แนะนำ|ควรใช้|ดวง.*แบบไหน|เครื่องรางแบบไหน)/i.test(
+    String(text || ""),
+  );
+}
+
+function hasRecoverableOffTopic(text) {
+  return /(ยังงง|งง|เรื่องอื่น|ไม่ค่อยเข้าใจ|สรุปสั้น|สรุปให้หน่อย)/i.test(
+    String(text || ""),
+  );
+}
+
 function hasBirthdateChangeIntent(text) {
   return /(เปลี่ยน.*วันเกิด|แก้.*วันเกิด|อัปเดต.*วันเกิด)/i.test(String(text || ""));
 }
@@ -195,6 +242,30 @@ export function heuristicSemanticCatcher({ activeState, text, extractedBirthdate
     out.intent = "resend_qr";
     out.confidence = 0.86;
     out.reason_short = "resend_qr_phrase";
+  } else if (hasOfferValueQuestion(trimmed)) {
+    out.intent = "explain_offer_value";
+    out.confidence = 0.85;
+    out.reason_short = "offer_value_question";
+  } else if (hasNextStepQuestion(trimmed)) {
+    out.intent = "explain_next_step";
+    out.confidence = 0.85;
+    out.reason_short = "next_step_question";
+  } else if (hasHowScanWorks(trimmed)) {
+    out.intent = "explain_how_scan_works";
+    out.confidence = 0.84;
+    out.reason_short = "how_scan_works_question";
+  } else if (hasSingleImageRuleQuestion(trimmed)) {
+    out.intent = "explain_single_image_rule";
+    out.confidence = 0.84;
+    out.reason_short = "single_image_rule_question";
+  } else if (hasRecommendationQuestion(trimmed)) {
+    out.intent = "recommendation_question";
+    out.confidence = 0.83;
+    out.reason_short = "recommendation_question";
+  } else if (hasRecoverableOffTopic(trimmed)) {
+    out.intent = "off_topic_recoverable";
+    out.confidence = 0.83;
+    out.reason_short = "off_topic_recoverable";
   } else if (hasStatusIntent(trimmed)) {
     out.intent = "status_check";
     out.confidence = 0.84;
