@@ -98,6 +98,11 @@ import {
 import { runGeminiFrontOrchestrator } from "../core/conversation/geminiFront/geminiFrontOrchestrator.service.js";
 import { resolveGeminiPhase1StateKey } from "../core/conversation/geminiFront/geminiFront.featureFlags.js";
 import { invokePhase1GeminiShadow } from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
+import {
+  runSemanticCatcher,
+  SEMANTIC_CATCHER_CONSUME_THRESHOLD_RELAXED,
+  SEMANTIC_CATCHER_CONSUME_THRESHOLD_STRICT,
+} from "../core/conversation/semanticCatcher/semanticCatcher.service.js";
 
 import { replyText } from "../services/lineReply.service.js";
 import {
@@ -314,6 +319,78 @@ function logSafeIntentResolved(userId, stateOwner, text, lowerText, extra = {}) 
 
 function logHumanConversationMemory(payload) {
   console.log(JSON.stringify(payload));
+}
+
+/**
+ * Fail-closed semantic catcher (interpret only; no direct mutation/send).
+ * @param {{
+ *   userId: string,
+ *   activeState: "waiting_birthdate"|"birthdate_change_waiting_date"|"paywall_offer_single"|"awaiting_slip"|"pending_verify",
+ *   text: string,
+ * }} p
+ */
+async function runSemanticCatchWithTelemetry({ userId, activeState, text }) {
+  const textPreview = String(text || "").slice(0, 120);
+  console.log(
+    JSON.stringify({
+      event: "SEMANTIC_CATCHER_REQUESTED",
+      userIdPrefix: lineUserIdPrefix8(userId),
+      activeState,
+      inputPreview: textPreview,
+      thresholds: {
+        strict: SEMANTIC_CATCHER_CONSUME_THRESHOLD_STRICT,
+        relaxed: SEMANTIC_CATCHER_CONSUME_THRESHOLD_RELAXED,
+      },
+    }),
+  );
+  try {
+    const out = await runSemanticCatcher({
+      userId,
+      activeState,
+      text,
+    });
+    console.log(
+      JSON.stringify({
+        event: "SEMANTIC_CATCHER_PARSED",
+        userIdPrefix: lineUserIdPrefix8(userId),
+        activeState,
+        inputPreview: textPreview,
+        normalizedIntent: out.intent,
+        confidence: out.confidence,
+        safe_to_consume: out.safe_to_consume,
+        source: out.meta?.source || null,
+        reason: out.reason_short || null,
+      }),
+    );
+    if (!out.safe_to_consume) {
+      console.log(
+        JSON.stringify({
+          event: "SEMANTIC_CATCHER_REJECTED",
+          userIdPrefix: lineUserIdPrefix8(userId),
+          activeState,
+          normalizedIntent: out.intent,
+          confidence: out.confidence,
+          safe_to_consume: out.safe_to_consume,
+          rejectReason:
+            out.meta?.rejected_reason || out.reason_short || "not_safe_to_consume",
+          fallbackDeterministic: true,
+        }),
+      );
+    }
+    return out;
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "SEMANTIC_CATCHER_FALLBACK",
+        userIdPrefix: lineUserIdPrefix8(userId),
+        activeState,
+        inputPreview: textPreview,
+        rejectReason: String(e?.message || e).slice(0, 120),
+        fallbackDeterministic: true,
+      }),
+    );
+    return null;
+  }
 }
 
 function mapPaywallSurfaceReplyType(legacyReplyType, userId) {
@@ -697,7 +774,55 @@ async function handleBirthdateChangeFlowTurn({
 
   if (flowState === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
     const trimmed = String(text || "").trim();
-    const parsedBd = parseBirthdateInput(text);
+    let parseInputText = text;
+    const semantic = await runSemanticCatchWithTelemetry({
+      userId,
+      activeState: "birthdate_change_waiting_date",
+      text,
+    });
+    if (semantic?.safe_to_consume && semantic.intent === "provide_birthdate") {
+      const candidate = String(semantic.extracted?.birthdate_candidate || "").trim();
+      if (candidate) {
+        parseInputText = candidate;
+        console.log(
+          JSON.stringify({
+            event: "SEMANTIC_CATCHER_CONSUMED",
+            userIdPrefix: lineUserIdPrefix8(userId),
+            activeState: "birthdate_change_waiting_date",
+            normalizedIntent: semantic.intent,
+            confidence: semantic.confidence,
+            safe_to_consume: semantic.safe_to_consume,
+            fallbackDeterministic: false,
+          }),
+        );
+      }
+    } else if (
+      semantic?.safe_to_consume &&
+      (semantic.intent === "confirm_no" || semantic.intent === "generic_ack")
+    ) {
+      const ask = pickBirthdateAskDateLine(userId);
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_remind_date",
+        semanticKey: "waiting_birthdate_change",
+        text: ask,
+      });
+      return true;
+    } else if (semantic?.reason_short === "multiple_birthdate_candidates") {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "birthdate_change_remind_date",
+        semanticKey: "waiting_birthdate_change",
+        text: "ขอวันเกิดเพียง 1 วันนะครับ เช่น 19/08/2528",
+      });
+      return true;
+    }
+
+    const parsedBd = parseBirthdateInput(parseInputText);
     if (parsedBd.ok) {
       const echo = buildBirthdateEchoForUser(parsedBd);
       const pending = {
@@ -3325,6 +3450,60 @@ async function handleTextMessage({ client, event, userId, session }) {
         ? findPackageByKey(offer, selectedKeyPaywall)
         : null;
 
+    const semanticPaywall = await runSemanticCatchWithTelemetry({
+      userId,
+      activeState: "paywall_offer_single",
+      text,
+    });
+    const semanticPaywallIntent = semanticPaywall?.safe_to_consume
+      ? semanticPaywall.intent
+      : null;
+    if (semanticPaywallIntent) {
+      console.log(
+        JSON.stringify({
+          event: "SEMANTIC_CATCHER_CONSUMED",
+          userIdPrefix: lineUserIdPrefix8(userId),
+          activeState: "paywall_offer_single",
+          normalizedIntent: semanticPaywallIntent,
+          confidence: semanticPaywall?.confidence ?? null,
+          safe_to_consume: true,
+          fallbackDeterministic: false,
+        }),
+      );
+    }
+    if (semanticPaywallIntent === "status_check") {
+      const defaultPkg = getDefaultPackage(offer);
+      const selectedKey = getSelectedPaymentPackageKey(userId);
+      const selectedPkg =
+        selectedKey && offer
+          ? findPackageByKey(offer, selectedKey)
+          : null;
+      const primary = selectedPkg
+        ? buildPaymentPackageSelectedGentleRemindText()
+        : buildSingleOfferPaywallAltText(offer);
+      const menuAlt = defaultPkg
+        ? buildSingleOfferPaywallAltText(offer)
+        : primary;
+      await sendNonScanReplyWithOptionalConvSurface({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "paywall_payment_status_delegate",
+        semanticKey: "paywall_payment_status_delegate",
+        text: primary,
+        alternateTexts: [menuAlt],
+        convSurface: buildConvSurfacePaywall(
+          userId,
+          text,
+          "paywall_payment_status_delegate",
+          primary,
+          "short",
+          defaultPkg,
+        ),
+      });
+      return;
+    }
+
     if (selectedPkgPaywall && shouldPackageSelectedShortcutToQr(text, selectedPkgPaywall, offer)) {
       let normalizedIntent = "package_selected_proceed";
       if (isPaymentCommand(text, lowerText)) {
@@ -3396,7 +3575,11 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (matchesDeterministicPaywallPurchaseIntent(text, lowerText)) {
+    if (
+      matchesDeterministicPaywallPurchaseIntent(text, lowerText) ||
+      semanticPaywallIntent === "pay_intent" ||
+      semanticPaywallIntent === "package_ack"
+    ) {
       resetGuidanceNoProgress(userId, "paywall_offer_single");
       resetSameStateAckStreak(userId, "paywall_offer_single");
       console.log(
@@ -3475,7 +3658,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         parsePackageSelectionFromText(text, offer, {
           thaiRelativeAliases: true,
           allowEoaPricePhrase: true,
-        }));
+        }) ||
+        semanticPaywallIntent === "package_ack");
 
     if (priceOrPackAck) {
       const pkg = defaultPkg;
@@ -3565,7 +3749,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isWaitForTomorrowIntent(text)) {
+    if (isWaitForTomorrowIntent(text) || semanticPaywallIntent === "wait_tomorrow") {
       resetSameStateAckStreak(userId, "paywall_offer_single");
       const streak = bumpGuidanceNoProgress(userId, "paywall_offer_single");
       const tier = guidanceTierFromStreak(streak);
@@ -3989,6 +4173,28 @@ async function handleTextMessage({ client, event, userId, session }) {
       routeReason: "awaiting_slip_text_guard",
     });
 
+    const semanticAwaitingSlip = await runSemanticCatchWithTelemetry({
+      userId,
+      activeState: "awaiting_slip",
+      text,
+    });
+    const semanticAwaitingSlipIntent = semanticAwaitingSlip?.safe_to_consume
+      ? semanticAwaitingSlip.intent
+      : null;
+    if (semanticAwaitingSlipIntent) {
+      console.log(
+        JSON.stringify({
+          event: "SEMANTIC_CATCHER_CONSUMED",
+          userIdPrefix: lineUserIdPrefix8(userId),
+          activeState: "awaiting_slip",
+          normalizedIntent: semanticAwaitingSlipIntent,
+          confidence: semanticAwaitingSlip?.confidence ?? null,
+          safe_to_consume: true,
+          fallbackDeterministic: false,
+        }),
+      );
+    }
+
     if (isBirthdateChangeCandidateText(text)) {
       console.log(
         JSON.stringify({
@@ -4015,8 +4221,14 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isPaymentCommand(text, lowerText) || isResendQrIntentText(text)) {
-      const isResend = isResendQrIntentText(text);
+    if (
+      isPaymentCommand(text, lowerText) ||
+      isResendQrIntentText(text) ||
+      semanticAwaitingSlipIntent === "pay_intent" ||
+      semanticAwaitingSlipIntent === "resend_qr"
+    ) {
+      const isResend =
+        isResendQrIntentText(text) || semanticAwaitingSlipIntent === "resend_qr";
       logSafeIntentConsumed({
         userId,
         activeState: "awaiting_slip",
@@ -4048,7 +4260,10 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isSlipClaimWithoutImageIntent(text)) {
+    if (
+      isSlipClaimWithoutImageIntent(text) ||
+      semanticAwaitingSlipIntent === "slip_claim_without_image"
+    ) {
       resetSameStateAckStreak(userId, "awaiting_slip");
       const streakClaim = bumpGuidanceNoProgress(userId, "awaiting_slip");
       const tierClaim = guidanceTierFromStreak(streakClaim);
@@ -4098,7 +4313,10 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isAwaitingSlipStatusLikeText(text)) {
+    if (
+      isAwaitingSlipStatusLikeText(text) ||
+      semanticAwaitingSlipIntent === "status_check"
+    ) {
       resetSameStateAckStreak(userId, "awaiting_slip");
       const streak = bumpGuidanceNoProgress(userId, "awaiting_slip");
       const tier = guidanceTierFromStreak(streak);
@@ -4157,7 +4375,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
 
-    if (isGenericAckText(text)) {
+    if (isGenericAckText(text) || semanticPaywallIntent === "generic_ack") {
       const ackStreak = bumpSameStateAckStreak(userId, "awaiting_slip");
       logHumanConversationMemory({
         event: "STATE_ACK_CONTINUE",
@@ -4501,7 +4719,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         return;
       }
 
-    if (isGenericAckText(text)) {
+    if (isGenericAckText(text) || semanticAwaitingSlipIntent === "generic_ack") {
       const ackStreak = bumpSameStateAckStreak(userId, "pending_verify");
       logHumanConversationMemory({
         event: "STATE_ACK_CONTINUE",
@@ -4943,7 +5161,32 @@ async function handleTextMessage({ client, event, userId, session }) {
       } catch (_) {
         paymentRef = null;
       }
-      if (isPaymentCommand(text, lowerText)) {
+      const semanticPendingVerify = await runSemanticCatchWithTelemetry({
+        userId,
+        activeState: "pending_verify",
+        text,
+      });
+      const semanticPendingVerifyIntent = semanticPendingVerify?.safe_to_consume
+        ? semanticPendingVerify.intent
+        : null;
+      if (semanticPendingVerifyIntent) {
+        console.log(
+          JSON.stringify({
+            event: "SEMANTIC_CATCHER_CONSUMED",
+            userIdPrefix: lineUserIdPrefix8(userId),
+            activeState: "pending_verify",
+            normalizedIntent: semanticPendingVerifyIntent,
+            confidence: semanticPendingVerify?.confidence ?? null,
+            safe_to_consume: true,
+            fallbackDeterministic: false,
+          }),
+        );
+      }
+
+      if (
+        isPaymentCommand(text, lowerText) ||
+        semanticPendingVerifyIntent === "pay_intent"
+      ) {
         if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanReply({
           client,
@@ -4955,6 +5198,42 @@ async function handleTextMessage({ client, event, userId, session }) {
           alternateTexts: [
             "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้เลยครับ",
           ],
+        });
+        return;
+      }
+      if (
+        semanticPendingVerifyIntent === "status_check" ||
+        semanticPendingVerifyIntent === "generic_ack" ||
+        isPendingVerifyStatusLikeText(text) ||
+        isPendingVerifyReassuranceIntent(text)
+      ) {
+        resetSameStateAckStreak(userId, "pending_verify");
+        const streak = bumpGuidanceNoProgress(userId, "pending_verify");
+        const tier = guidanceTierFromStreak(streak);
+        const pendingText =
+          tier === "full"
+            ? buildPendingVerifyHumanGuidanceText({ paymentRef })
+            : buildPendingVerifyStatusShortText({ paymentRef });
+        if ((await invokePhase1GeminiOrchestrator()).handled) return;
+        await sendNonScanReplyWithOptionalConvSurface({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "pending_verify_status",
+          semanticKey: "pending_verify_status",
+          text: pendingText,
+          alternateTexts: [
+            "รอแจ้งผลในแชตนี้ได้เลยครับ",
+            buildPendingVerifyReminderText({ paymentRef }),
+          ],
+          convSurface: buildConvSurfacePendingVerify(
+            userId,
+            text,
+            "pending_verify_status",
+            pendingText,
+            tier,
+            paymentRef,
+          ),
         });
         return;
       }
@@ -5181,7 +5460,49 @@ async function handleTextMessage({ client, event, userId, session }) {
       }
 
       const trimmedLock = String(text || "").trim();
-      const parsedLock = parseBirthdateInput(text);
+      let birthdateInputText = text;
+      const semanticWaitingBd = await runSemanticCatchWithTelemetry({
+        userId,
+        activeState: "waiting_birthdate",
+        text,
+      });
+      if (
+        semanticWaitingBd?.safe_to_consume &&
+        semanticWaitingBd.intent === "provide_birthdate"
+      ) {
+        const candidate = String(
+          semanticWaitingBd.extracted?.birthdate_candidate || "",
+        ).trim();
+        if (candidate) {
+          birthdateInputText = candidate;
+          console.log(
+            JSON.stringify({
+              event: "SEMANTIC_CATCHER_CONSUMED",
+              userIdPrefix: lineUserIdPrefix8(userId),
+              activeState: "waiting_birthdate",
+              normalizedIntent: semanticWaitingBd.intent,
+              confidence: semanticWaitingBd.confidence,
+              safe_to_consume: semanticWaitingBd.safe_to_consume,
+              fallbackDeterministic: false,
+            }),
+          );
+        }
+      } else if (
+        semanticWaitingBd?.reason_short === "multiple_birthdate_candidates"
+      ) {
+        const oneDateText = "ขอวันเกิดเพียง 1 วันนะครับ เช่น 19/08/2528";
+        await sendNonScanSequenceReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "waiting_birthdate_guidance",
+          semanticKey: "waiting_birthdate_guidance",
+          messages: [oneDateText],
+        });
+        return;
+      }
+
+      const parsedLock = parseBirthdateInput(birthdateInputText);
       if (parsedLock.ok) {
         const flowVersion = session.flowVersion || 0;
         const normalizedBirthdate = parsedLock.normalizedDisplay;
@@ -5288,7 +5609,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
         try {
           await saveBirthdate(userId, normalizedBirthdate, {
-            rawBirthdateInput: trimmedLock,
+            rawBirthdateInput: String(birthdateInputText || "").trim() || trimmedLock,
           });
         } catch (bdErr) {
           console.error(

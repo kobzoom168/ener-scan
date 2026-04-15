@@ -5,6 +5,8 @@
  * BE (พ.ศ.): 4-digit years ≥ 2400 are converted to CE with −543 (e.g. 2538 → 1995).
  */
 
+import { extractBirthdateCandidate } from "./extractBirthdateCandidate.util.js";
+
 const MIN_CE_YEAR = 1900;
 /** BE year corresponding to MIN_CE_YEAR (1900 + 543). */
 const MIN_BE_YEAR = 2443;
@@ -56,8 +58,13 @@ function pad2(n) {
 export function looksLikeBirthdateInput(text) {
   const raw = String(text ?? "").trim();
   if (!raw) return false;
-  // Unrelated Thai prose / keywords — not treated as a date attempt.
-  if (/[\u0E00-\u0E7F]/.test(raw)) return false;
+  const hasThai = /[\u0E00-\u0E7F]/.test(raw);
+  // Thai mixed text is allowed when an extractable date candidate exists.
+  if (hasThai) {
+    const ext = extractBirthdateCandidate(raw);
+    if (ext.candidate || ext.ambiguous) return true;
+    return false;
+  }
 
   const digits = (raw.match(/\d/g) || []).length;
   if (digits < 4) return false;
