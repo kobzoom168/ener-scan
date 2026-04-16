@@ -18,7 +18,7 @@ import {
 } from "../../utils/scanV2Trace.util.js";
 
 const PRE_SCAN_ACK_TEXT =
-  "รับภาพแล้วครับ\nกำลังตรวจวัตถุให้ครับ\nกำลังวิเคราะห์และสร้างรายงาน";
+  "รับภาพแล้วครับ\nกำลังตรวจวัตถุให้ครับ\nกำลังสรุปผลและสร้างรายงาน";
 
 /**
  * Webhook-side ingestion: storage + scan_uploads + scan_jobs + pre_scan_ack outbound.
