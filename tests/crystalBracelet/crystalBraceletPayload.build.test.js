@@ -189,8 +189,8 @@ test("renderCrystalBraceletReportV2Html: includes owner profile + disclaimer", (
       String(et.timingReason || "").length > 10 &&
       html.includes(String(et.timingReason).slice(0, 28)),
   );
-  assert.ok(html.includes("แชร์รายงาน"));
-  assert.ok(html.includes("cb2-share-native"));
+  assert.ok(html.includes("แชร์และบันทึก"));
+  assert.ok(html.includes("cb2-btn-share"));
   assert.ok(html.includes("cb2-share-btn--line"));
   assert.ok(html.includes("lin.ee/6YZeFZ1"));
   assert.equal(html.includes("มิติชีวิตละเอียด"), false);

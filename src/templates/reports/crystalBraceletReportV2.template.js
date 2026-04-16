@@ -2,7 +2,12 @@
  * Crystal bracelet lane HTML — standalone renderer (does not import Moldavite/amulet templates).
  */
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
-import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
+import {
+  resolveScannedAtIsoForReportMeta,
+  formatEsDisplayReportId,
+  formatReportVersionDisplayLine,
+  scannedAtLabelThai,
+} from "../../utils/reports/reportHtmlTrust.util.js";
 import {
   CRYSTAL_BRACELET_AXIS_ORDER,
   CRYSTAL_BRACELET_AXIS_LABEL_THAI,
@@ -566,7 +571,10 @@ export function renderCrystalBraceletReportV2Html(payload) {
   const headline = String(fs?.headline || "").trim() || "กำไลหินคริสตัล";
   const tagline = String(fs?.tagline || "").trim() || "กำไลหินคริสตัล · อ่านจากพลังรวม";
 
-  const generatedAt = payload?.generatedAt ? formatBangkokDateTime(payload.generatedAt) : "";
+  const scannedIso = resolveScannedAtIsoForReportMeta(payload);
+  const metaScannedLabel = scannedAtLabelThai(scannedIso);
+  const metaReportId = formatEsDisplayReportId(payload.publicToken, payload.reportId);
+  const metaVersionLine = formatReportVersionDisplayLine(payload.reportVersion);
   const score =
     payload?.summary?.energyScore != null &&
     Number.isFinite(Number(payload.summary.energyScore))
@@ -649,6 +657,23 @@ export function renderCrystalBraceletReportV2Html(payload) {
 
   const shareTitleJson = JSON.stringify(ogTitle);
   const shareTextJson = JSON.stringify("ดูรายงานพลังจาก Ener Scan ได้ที่ลิงก์นี้");
+
+  const metaBlockHtml = `
+    <div class="cb2-meta-block" role="group" aria-label="ข้อมูลรายงาน">
+      <div class="cb2-meta-row"><span class="cb2-meta-k">วันเวลาที่วิเคราะห์</span><span class="cb2-meta-v">${escapeHtml(metaScannedLabel)}</span></div>
+      <div class="cb2-meta-row"><span class="cb2-meta-k">รหัสรายงาน</span><span class="cb2-meta-v cb2-meta-id">${escapeHtml(metaReportId)}</span></div>
+      <div class="cb2-meta-row"><span class="cb2-meta-k">เวอร์ชันรายงาน</span><span class="cb2-meta-v">${escapeHtml(metaVersionLine)}</span></div>
+    </div>`;
+
+  const trustSourcesHtml = `
+    <section class="cb2-trust-sources" aria-labelledby="cb2-trust-src-h">
+      <h2 id="cb2-trust-src-h" class="cb2-trust-sources-h">ผลนี้คำนวณจากอะไร</h2>
+      <ul class="cb2-trust-sources-list">
+        <li>ภาพวัตถุที่ส่งเข้าระบบ</li>
+        <li>วันเดือนปีเกิดของเจ้าของ</li>
+        <li>โมเดลการอ่านพลังงานของ Ener Scan</li>
+      </ul>
+    </section>`;
 
   const radarSectionHtml = createCbRadarSection(axes, ownerScores);
   const ownerProfileHtml = buildCrystalBraceletOwnerProfileHtml(cb);
@@ -1012,10 +1037,10 @@ export function renderCrystalBraceletReportV2Html(payload) {
     }
     .cb2-share-actions {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 0.55rem;
     }
-    @media (max-width: 480px) {
+    @media (max-width: 520px) {
       .cb2-share-actions { grid-template-columns: 1fr; }
     }
     .cb2-share-btn {
@@ -1278,6 +1303,72 @@ export function renderCrystalBraceletReportV2Html(payload) {
       color: var(--cb2-muted);
       letter-spacing: 0.04em;
     }
+    .cb2-meta-block {
+      margin: 0.5rem 0 0.65rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: 10px;
+      background: rgba(56, 189, 248, 0.06);
+      border: 1px solid rgba(56, 189, 248, 0.16);
+      font-size: 0.68rem;
+      line-height: 1.45;
+      color: var(--cb2-muted);
+    }
+    .cb2-meta-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin: 0.1rem 0;
+    }
+    .cb2-meta-k { font-weight: 700; color: #e6edf3; opacity: 0.92; }
+    .cb2-meta-v { text-align: right; font-variant-numeric: tabular-nums; max-width: 68%; }
+    .cb2-meta-id { font-weight: 700; letter-spacing: 0.04em; color: #7dd3fc; }
+    .cb2-trust-sources {
+      margin: 0.85rem 0 0;
+      padding: 0.65rem 0.75rem;
+      border-radius: 12px;
+      background: rgba(56, 189, 248, 0.05);
+      border: 1px solid rgba(56, 189, 248, 0.12);
+    }
+    .cb2-trust-sources-h {
+      font-size: 0.72rem;
+      margin: 0 0 0.45rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: #7dd3fc;
+    }
+    .cb2-trust-sources-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      font-size: 0.72rem;
+      line-height: 1.52;
+      color: var(--cb2-muted);
+    }
+    .cb2-toast {
+      position: fixed;
+      bottom: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      padding: 0.45rem 0.95rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.94);
+      color: #f1f5f9;
+      font-size: 0.75rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    }
+    .cb2-share-btn--secondary {
+      background: transparent;
+      border-color: rgba(56, 189, 248, 0.45);
+      color: #7dd3fc;
+    }
+    .cb2-share-btn--secondary:hover { background: rgba(56, 189, 248, 0.1); }
+    .cb2-share-btn--ghost {
+      background: rgba(148, 163, 184, 0.1);
+      border-color: rgba(148, 163, 184, 0.25);
+      color: #e2e8f0;
+    }
+    .cb2-share-btn--ghost:hover { background: rgba(148, 163, 184, 0.16); }
   </style>
 </head>
 <body>
@@ -1286,9 +1377,9 @@ export function renderCrystalBraceletReportV2Html(payload) {
       <div class="cb2-header-row">
         <div class="cb2-header-text">
           <h1 class="cb2-h1">${escapeHtml(headline)}</h1>
+          ${metaBlockHtml}
           <p class="cb2-tag">${escapeHtml(tagline)}</p>
           <p class="cb2-main">พลังเด่น · ${escapeHtml(peakLabelThai)}</p>
-          ${generatedAt ? `<p class="cb2-date">${escapeHtml(generatedAt)}</p>` : ""}
         </div>
         ${heroImg}
       </div>
@@ -1299,6 +1390,8 @@ export function renderCrystalBraceletReportV2Html(payload) {
       <div><div class="cb2-strip-k">เข้ากัน</div><div class="cb2-strip-v">${escapeHtml(compat)}</div></div>
       <div><div class="cb2-strip-k">ระดับพลังงาน</div><div class="cb2-strip-v">${escapeHtml(levelLabel)}</div></div>
     </section>
+
+    ${trustSourcesHtml}
 
     ${radarSectionHtml}
 
@@ -1312,12 +1405,14 @@ export function renderCrystalBraceletReportV2Html(payload) {
     ${energyTimingHtml}
 
     <section class="cb2-card cb2-share-card" aria-labelledby="cb2-share-h">
-      <h2 id="cb2-share-h">แชร์รายงาน</h2>
-      <p class="cb2-share-note">แชร์ลิงก์หน้านี้หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูรายงานได้สะดวก</p>
+      <h2 id="cb2-share-h">แชร์และบันทึก</h2>
+      <p class="cb2-share-note">แชร์ลิงก์รายงานนี้ หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูได้อีกครั้ง</p>
       <div class="cb2-share-actions">
-        <button type="button" class="cb2-share-btn cb2-share-btn--primary" id="cb2-share-native">แชร์ไปยัง Facebook / IG / X / อื่น ๆ</button>
-        <a class="cb2-share-btn cb2-share-btn--line" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer">Add เข้า LINE OA</a>
+        <button type="button" class="cb2-share-btn cb2-share-btn--primary" id="cb2-btn-share">แชร์รายงาน</button>
+        <button type="button" class="cb2-share-btn cb2-share-btn--secondary" id="cb2-btn-copy">คัดลอกลิงก์</button>
+        <button type="button" class="cb2-share-btn cb2-share-btn--ghost" id="cb2-btn-save">บันทึกผลลัพธ์</button>
       </div>
+      <a class="cb2-share-btn cb2-share-btn--line" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer" style="margin-top:0.55rem;display:inline-flex;width:100%;box-sizing:border-box;">เพิ่มเพื่อน LINE OA</a>
     </section>
 
     <p class="cb2-disclaimer" role="note">${escapeHtml(DISCLAIMER_FIXED)}</p>
@@ -1327,39 +1422,48 @@ export function renderCrystalBraceletReportV2Html(payload) {
       <p class="cb2-foot-brand">Ener Scan</p>
     </footer>
   </div>
+  <div id="cb2-copy-toast" class="cb2-toast" role="status" hidden>คัดลอกลิงก์รายงานแล้ว</div>
   <script>
 (function () {
   var shareTitle = ${shareTitleJson};
   var shareText = ${shareTextJson};
-  var btn = document.getElementById("cb2-share-native");
-  if (!btn) return;
-  function fallbackCopy(url) {
+  var shareBtn = document.getElementById("cb2-btn-share");
+  var copyBtn = document.getElementById("cb2-btn-copy");
+  var saveBtn = document.getElementById("cb2-btn-save");
+  var toast = document.getElementById("cb2-copy-toast");
+  function showToast() {
+    if (!toast) return;
+    toast.hidden = false;
+    clearTimeout(window.__cb2CopyToastTimer);
+    window.__cb2CopyToastTimer = setTimeout(function () { toast.hidden = true; }, 2600);
+  }
+  function copyUrl() {
+    var url = String(window.location.href || "");
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(
-        function () {
-          window.alert("คัดลอกลิงก์แล้ว");
-        },
-        function () {
-          window.prompt("คัดลอกลิงก์:", url);
-        },
+        function () { showToast(); },
+        function () { window.prompt("คัดลอกลิงก์:", url); },
       );
     } else {
       window.prompt("คัดลอกลิงก์:", url);
     }
   }
-  btn.addEventListener("click", function () {
+  function doShare() {
     var url = String(window.location.href || "");
     if (navigator.share) {
       navigator
         .share({ title: shareTitle, text: shareText, url: url })
         .catch(function (err) {
           if (err && err.name === "AbortError") return;
-          fallbackCopy(url);
+          copyUrl();
         });
     } else {
-      fallbackCopy(url);
+      copyUrl();
     }
-  });
+  }
+  if (shareBtn) shareBtn.addEventListener("click", doShare);
+  if (copyBtn) copyBtn.addEventListener("click", copyUrl);
+  if (saveBtn) saveBtn.addEventListener("click", function () { window.print(); });
 })();
   </script>
 </body>

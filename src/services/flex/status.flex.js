@@ -269,8 +269,8 @@ export function buildDuplicateImageFlex() {
 export function buildWaitingBirthdateFlex() {
   return createBaseBubble({
     accentColor: "#D4AF37",
-    title: "ระบบกำลังรอวันเกิดของเจ้าของวัตถุ",
-    subtitle: "ส่งวันเกิดเพื่อให้ Ener Scan อ่านความสอดคล้องกับเจ้าของได้",
+    title: "ขอวันเกิดของเจ้าของวัตถุ",
+    subtitle: "รับภาพแล้วครับ · ส่งวันเกิดเพื่อสรุปผลและสร้างรายงาน",
     bodyContents: [
       createCard(
         "ขั้นตอนถัดไป",
