@@ -67,3 +67,58 @@ export function formatBangkokTime(value) {
     minute: "2-digit",
   }).format(d);
 }
+
+/** Gregorian month labels (Bangkok calendar month), 1–12 → Thai abbrev. */
+const TH_MONTH_ABBREV = [
+  "ม.ค.",
+  "ก.พ.",
+  "มี.ค.",
+  "เม.ย.",
+  "พ.ค.",
+  "มิ.ย.",
+  "ก.ค.",
+  "ส.ค.",
+  "ก.ย.",
+  "ต.ค.",
+  "พ.ย.",
+  "ธ.ค.",
+];
+
+/**
+ * Readable report-meta line: Bangkok wall time, Gregorian year, Thai month abbrev.
+ * Example: `16 เม.ย. 2026 15:25` (not slash-numeric or Buddhist-era year).
+ * @param {unknown} value ISO string, timestamp, or Date
+ * @returns {string}
+ */
+export function formatBangkokReportMetaDateTime(value) {
+  const d = parseInstant(value);
+  if (!d) return "-";
+  const dateFmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BANGKOK_TIME_ZONE,
+    calendar: "gregory",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  });
+  const timeFmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BANGKOK_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  let day = "";
+  let monthNum = 0;
+  let year = "";
+  for (const p of dateFmt.formatToParts(d)) {
+    if (p.type === "day") day = p.value;
+    if (p.type === "month") monthNum = Number.parseInt(p.value, 10);
+    if (p.type === "year") year = p.value;
+  }
+  if (!day || !Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12 || !year) {
+    return "-";
+  }
+  const mon = TH_MONTH_ABBREV[monthNum - 1] || "";
+  if (!mon) return "-";
+  const time = timeFmt.format(d).replace(/\s/g, "");
+  return `${day} ${mon} ${year} ${time}`;
+}

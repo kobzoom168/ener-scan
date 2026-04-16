@@ -3,10 +3,11 @@
  * Keeps templates thin — no backend changes.
  */
 
-import { formatBangkokDateTime } from "../dateTime.util.js";
+import { formatBangkokReportMetaDateTime } from "../dateTime.util.js";
 
 /**
- * Prefer wall-clock scan instant from compatibility inputs; fallback to payload build time, then hero.
+ * Report “วันเวลาที่วิเคราะห์” should reflect when the report was produced, not formula/debug scan input.
+ * Order: `generatedAt` → hero timestamp → `compatibility.inputs.scannedAt` (last resort).
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload | null | undefined} payload
  * @param {string} [heroReportGeneratedAt] — e.g. `vm.hero.reportGeneratedAt` when payload omits `generatedAt`
  * @returns {string} ISO-ish string or ""
@@ -15,7 +16,11 @@ export function resolveScannedAtIsoForReportMeta(payload, heroReportGeneratedAt)
   if (!payload || typeof payload !== "object") {
     return String(heroReportGeneratedAt || "").trim();
   }
-  const fromCompat = String(
+  const gen = String(payload.generatedAt || "").trim();
+  if (gen) return gen;
+  const hero = String(heroReportGeneratedAt || "").trim();
+  if (hero) return hero;
+  return String(
     payload.compatibility &&
       typeof payload.compatibility === "object" &&
       payload.compatibility.inputs &&
@@ -23,10 +28,6 @@ export function resolveScannedAtIsoForReportMeta(payload, heroReportGeneratedAt)
       ? /** @type {{ scannedAt?: string }} */ (payload.compatibility.inputs).scannedAt ?? ""
       : "",
   ).trim();
-  if (fromCompat) return fromCompat;
-  const gen = String(payload.generatedAt || "").trim();
-  if (gen) return gen;
-  return String(heroReportGeneratedAt || "").trim();
 }
 
 /**
@@ -65,7 +66,7 @@ export function formatReportVersionDisplayLine(reportVersion) {
 export function scannedAtLabelThai(iso) {
   const s = String(iso || "").trim();
   if (!s) return "—";
-  const formatted = formatBangkokDateTime(s);
+  const formatted = formatBangkokReportMetaDateTime(s);
   return formatted === "-" ? "—" : formatted;
 }
 
@@ -79,6 +80,6 @@ export function formatReportMetaDatetimeOrEmpty(iso) {
   if (!s) return "";
   const t = Date.parse(s);
   if (!Number.isFinite(t)) return "";
-  const formatted = formatBangkokDateTime(s);
+  const formatted = formatBangkokReportMetaDateTime(s);
   return formatted === "-" ? "" : formatted;
 }
