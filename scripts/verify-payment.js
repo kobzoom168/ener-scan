@@ -5,7 +5,11 @@
  * - approvedBy: optional label (e.g. admin name or "manual")
  * Loads env from .env (via config); requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
  */
-import "../src/config/env.js";
+import {
+  assertDangerousScriptEnvGuard,
+  env,
+  envRuntimeMeta,
+} from "../src/config/env.js";
 import { markPaymentApprovedAndUnlock } from "../src/stores/payments.db.js";
 
 const paymentId = process.argv[2];
@@ -16,7 +20,33 @@ if (!paymentId) {
   process.exit(1);
 }
 
+function maskHost(host) {
+  const s = String(host || "").trim().toLowerCase();
+  if (!s) return "unknown";
+  if (s.length <= 6) return "***";
+  return `${s.slice(0, 3)}***${s.slice(-3)}`;
+}
+
+function getSupabaseHostMasked() {
+  try {
+    const u = new URL(String(env.SUPABASE_URL || ""));
+    return maskHost(u.host || "");
+  } catch {
+    return maskHost(String(env.SUPABASE_URL || ""));
+  }
+}
+
 try {
+  assertDangerousScriptEnvGuard({ scriptName: "verify-payment" });
+  console.log(
+    JSON.stringify({
+      event: "VERIFY_PAYMENT_TARGET_ENV",
+      appEnv: envRuntimeMeta.appEnv,
+      runningEnvSource: envRuntimeMeta.runningEnvSource,
+      envFileUsed: envRuntimeMeta.envFileUsed,
+      supabaseHostMasked: getSupabaseHostMasked(),
+    }),
+  );
   const result = await markPaymentApprovedAndUnlock({
     paymentId: paymentId.trim(),
     approvedBy: approvedBy.trim() || null,

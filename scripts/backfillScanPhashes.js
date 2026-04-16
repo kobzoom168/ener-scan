@@ -8,7 +8,11 @@
  *   BACKFILL_LIMIT — max jobs to scan (default 500)
  *   Same Supabase/storage env as the app (load via config/env).
  */
-import "../src/config/env.js";
+import {
+  assertDangerousScriptEnvGuard,
+  env,
+  envRuntimeMeta,
+} from "../src/config/env.js";
 import { supabase } from "../src/config/supabase.js";
 import { computeImageDHash } from "../src/services/imageDedup/imagePhash.util.js";
 import { insertScanPhash } from "../src/stores/scanV2/imageDedupCache.db.js";
@@ -26,7 +30,33 @@ let inserted = 0;
 let skipped = 0;
 let errors = 0;
 
+function maskHost(host) {
+  const s = String(host || "").trim().toLowerCase();
+  if (!s) return "unknown";
+  if (s.length <= 6) return "***";
+  return `${s.slice(0, 3)}***${s.slice(-3)}`;
+}
+
+function getSupabaseHostMasked() {
+  try {
+    const u = new URL(String(env.SUPABASE_URL || ""));
+    return maskHost(u.host || "");
+  } catch {
+    return maskHost(String(env.SUPABASE_URL || ""));
+  }
+}
+
 async function main() {
+  assertDangerousScriptEnvGuard({ scriptName: "backfillScanPhashes" });
+  console.log(
+    JSON.stringify({
+      event: "BACKFILL_TARGET_ENV",
+      appEnv: envRuntimeMeta.appEnv,
+      runningEnvSource: envRuntimeMeta.runningEnvSource,
+      envFileUsed: envRuntimeMeta.envFileUsed,
+      supabaseHostMasked: getSupabaseHostMasked(),
+    }),
+  );
   const { data: jobs, error: jobErr } = await supabase
     .from("scan_jobs")
     .select("id, upload_id, line_user_id, result_id, status")
