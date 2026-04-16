@@ -1,7 +1,7 @@
 export function buildStartInstructionFlex() {
   return {
     type: "flex",
-    altText: "ได้รับภาพแล้ว กรุณาส่งวันเกิดของเจ้าของวัตถุ",
+    altText: "รับภาพแล้วครับ ขอวันเกิดของเจ้าของวัตถุเพื่อสร้างรายงาน",
     contents: {
       type: "bubble",
       size: "mega",
@@ -29,7 +29,7 @@ export function buildStartInstructionFlex() {
             contents: [
               {
                 type: "text",
-                text: "ได้รับภาพแล้ว ✨",
+                text: "รับภาพเรียบร้อยแล้วครับ",
                 weight: "bold",
                 size: "xl",
                 color: "#F8F8F8",
@@ -37,7 +37,7 @@ export function buildStartInstructionFlex() {
               },
               {
                 type: "text",
-                text: "Ener Scan พร้อมอ่านพลังของวัตถุชิ้นนี้แล้ว",
+                text: "กำลังตรวจประเภทวัตถุและความชัดของภาพ จากนั้นจะสรุปผลและสร้างรายงานให้ครับ",
                 size: "sm",
                 color: "#A4A4A8",
                 wrap: true,

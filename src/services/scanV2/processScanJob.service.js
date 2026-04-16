@@ -662,6 +662,8 @@ export async function processScanJob(workerId, jobRow) {
 
     /** @type {string | null} */
     let stableFeatureSeed = null;
+    // TODO(sacred_amulet rollout): keep STABLE_FEATURE_SEED_ENABLED off-by-default; validate seed stability
+    // before enabling globally — do not remove the fallback path when seed is null.
     if (env.STABLE_FEATURE_SEED_ENABLED && objectCheck === "single_supported") {
       try {
         const stableEx = await extractStableVisualFeatures({

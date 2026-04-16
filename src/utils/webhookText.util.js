@@ -363,15 +363,13 @@ export function buildPaymentQrIntroFactsText({ paymentRef, paidPackage = null } 
   const scanCount = pkg?.scanCount ?? offer.paidScanCount;
   const windowHours = pkg?.windowHours ?? offer.paidWindowHours;
   const base = [
-    "สิทธิ์สแกนฟรีของคุณครบแล้วครับ",
+    "วันนี้สิทธิ์สแกนฟรีครบแล้วครับ",
     "",
-    "ถ้าจะสแกนต่อในรอบนี้",
-    `แพ็กนี้ ${priceThb} บาท ใช้ได้ ${scanCount} ครั้ง ภายใน ${windowHours} ชม. หลังอนุมัติ`,
+    `ถ้าต้องการเปิดเพิ่มวันนี้ มีค่าเปิดระบบ ${priceThb} บาท`,
+    `ใช้สแกนเพิ่มได้ ${scanCount} ครั้ง ภายใน ${windowHours} ชั่วโมง`,
     "",
-    "สแกนคิวอาร์ด้านล่าง โอนแล้วแนบสลิปไว้ในแชตนี้ได้เลยครับ",
-    "เดี๋ยวมีคนตรวจแล้วเปิดสิทธิ์ให้ครับ",
-    "",
-    "พออนุมัติแล้ว เดี๋ยวอาจารย์แจ้งต่อในแชตนี้เลยครับ",
+    "ถ้าพร้อม ตอบว่า 'จ่าย' ได้เลยครับ",
+    "เดี๋ยวผมส่งรายละเอียดให้",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -407,8 +405,10 @@ export function buildSingleOfferPaywallAltText(offer = loadActiveScanOffer()) {
     return "ตอนนี้ยังไม่เปิดแพ็กชำระเงิน กรุณาลองใหม่ภายหลังครับ";
   }
   return [
-    `เปิดสิทธิ์เพิ่ม ${pkg.priceThb} บาท สแกนได้ ${pkg.scanCount} ครั้ง ภายใน ${pkg.windowHours} ชม. หลังอนุมัติ`,
-    "พร้อมเมื่อไหร่ บอกว่าจ่ายเงิน หรือ ปลดล็อก มาก็ได้ครับ",
+    `ค่าเปิดระบบวันนี้ ${pkg.priceThb} บาท`,
+    `ใช้สแกนเพิ่มได้ ${pkg.scanCount} ครั้ง ภายใน ${pkg.windowHours} ชั่วโมง`,
+    "ส่งรูปทีละ 1 รูปเพื่อให้วิเคราะห์ได้แม่นขึ้นครับ",
+    "ถ้าพร้อม พิมพ์ว่าจ่ายเงิน หรือ ตอบว่า 'จ่าย' ได้เลยครับ",
   ].join("\n");
 }
 
@@ -436,9 +436,10 @@ export function buildPaymentPackageSelectedAck(paidPackage) {
   const p = paidPackage || getDefaultPackage(loadActiveScanOffer());
   if (!p) return buildSingleOfferPaywallAltText();
   return [
-    `โอเคครับ ยึดแพ็กนี้นะครับ ${p.priceThb} บาท ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`,
+    `โอเคครับ แพ็กนี้ค่าเปิดระบบ ${p.priceThb} บาท`,
+    `ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
     "",
-    "เดี๋ยวอาจารย์ส่งรายละเอียดกับคิวอาร์ให้ครับ ขอคิวชำระบอกอาจารย์ได้เลยครับ",
+    "ถ้าพร้อม ตอบว่า 'จ่าย' ได้เลยครับ เดี๋ยวผมส่งรายละเอียดกับคิวอาร์ให้ครับ",
   ].join("\n");
 }
 

@@ -1,6 +1,11 @@
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
-import { formatBangkokDateTime } from "../../utils/dateTime.util.js";
 import { buildAmuletHtmlV2ViewModel } from "../../amulet/amuletHtmlV2.model.js";
+import {
+  resolveScannedAtIsoForReportMeta,
+  formatEsDisplayReportId,
+  formatReportVersionDisplayLine,
+  scannedAtLabelThai,
+} from "../../utils/reports/reportHtmlTrust.util.js";
 
 const AMULET_RADAR_R = 38;
 const AMULET_RADAR_CX = 50;
@@ -298,9 +303,10 @@ export function renderAmuletReportV2Html(payload) {
   const vm = buildAmuletHtmlV2ViewModel(payload);
   const htmlTheme = resolveAmuletHtmlTheme(payload);
   const h = vm.hero;
-  const date = h.reportGeneratedAt
-    ? formatBangkokDateTime(h.reportGeneratedAt)
-    : "";
+  const scannedIso = resolveScannedAtIsoForReportMeta(payload);
+  const metaScannedLabel = scannedAtLabelThai(scannedIso);
+  const metaReportId = formatEsDisplayReportId(payload.publicToken, payload.reportId);
+  const metaVersionLine = formatReportVersionDisplayLine(payload.reportVersion);
   const score =
     vm.metrics.energyScore != null && Number.isFinite(Number(vm.metrics.energyScore))
       ? String(vm.metrics.energyScore)
@@ -398,6 +404,23 @@ export function renderAmuletReportV2Html(payload) {
   const heroMediaCol = h.objectImageUrl
     ? `<div class="mv2a-media"><img src="${escapeHtml(h.objectImageUrl)}" alt="" loading="lazy" /></div>`
     : "";
+
+  const metaBlockHtml = `
+    <div class="mv2-meta-block" role="group" aria-label="ข้อมูลรายงาน">
+      <div class="mv2-meta-row"><span class="mv2-meta-k">วันเวลาที่วิเคราะห์</span><span class="mv2-meta-v">${escapeHtml(metaScannedLabel)}</span></div>
+      <div class="mv2-meta-row"><span class="mv2-meta-k">รหัสรายงาน</span><span class="mv2-meta-v mv2-meta-id">${escapeHtml(metaReportId)}</span></div>
+      <div class="mv2-meta-row"><span class="mv2-meta-k">เวอร์ชันรายงาน</span><span class="mv2-meta-v">${escapeHtml(metaVersionLine)}</span></div>
+    </div>`;
+
+  const trustSourcesHtml = `
+    <section class="mv2-trust-sources" aria-labelledby="mv2-trust-src-h">
+      <h2 id="mv2-trust-src-h" class="mv2-trust-sources-h">ผลนี้คำนวณจากอะไร</h2>
+      <ul class="mv2-trust-sources-list">
+        <li>ภาพวัตถุที่ส่งเข้าระบบ</li>
+        <li>วันเดือนปีเกิดของเจ้าของ</li>
+        <li>โมเดลการอ่านพลังงานของ Ener Scan</li>
+      </ul>
+    </section>`;
 
   return `<!DOCTYPE html>
 <html lang="th"${htmlTheme === "dark" ? ' class="mv2a-theme-dark"' : ""}>
@@ -1086,14 +1109,105 @@ export function renderAmuletReportV2Html(payload) {
       border-top-color: rgba(232, 197, 71, 0.12);
       color: rgba(148, 163, 184, 0.88);
     }
+    .mv2-meta-block {
+      margin: 0.55rem 0 0.6rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: 10px;
+      background: rgba(184, 135, 27, 0.06);
+      border: 1px solid rgba(184, 135, 27, 0.15);
+      font-size: 0.68rem;
+      line-height: 1.45;
+      color: var(--mv2a-muted);
+    }
+    .mv2-meta-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin: 0.12rem 0;
+    }
+    .mv2-meta-k { font-weight: 700; color: var(--mv2a-text); opacity: 0.82; }
+    .mv2-meta-v { text-align: right; font-variant-numeric: tabular-nums; max-width: 68%; }
+    .mv2-meta-id { font-weight: 700; letter-spacing: 0.04em; color: var(--mv2a-gold-dim); }
+    .mv2-trust-sources {
+      margin: 0.85rem 0 0;
+      padding: 0.65rem 0.75rem;
+      border-radius: 12px;
+      background: rgba(184, 135, 27, 0.05);
+      border: 1px solid rgba(184, 135, 27, 0.12);
+    }
+    .mv2-trust-sources-h {
+      font-size: 0.72rem;
+      margin: 0 0 0.45rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: var(--mv2a-gold-dim);
+    }
+    .mv2-trust-sources-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      font-size: 0.72rem;
+      line-height: 1.52;
+      color: var(--mv2a-muted);
+    }
+    html.mv2a-theme-dark .mv2-meta-block {
+      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(232, 197, 71, 0.18);
+    }
+    html.mv2a-theme-dark .mv2-trust-sources {
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.14);
+    }
+    .mv2-toast {
+      position: fixed;
+      bottom: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      padding: 0.45rem 0.95rem;
+      border-radius: 999px;
+      background: rgba(36, 28, 18, 0.92);
+      color: #faf8f4;
+      font-size: 0.75rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    }
+    html.mv2a-theme-dark .mv2-toast {
+      background: rgba(15, 18, 26, 0.94);
+      color: #e2e8f0;
+    }
+    .mv2-share-btn--secondary {
+      background: transparent;
+      border-color: rgba(184, 135, 27, 0.45);
+      color: var(--mv2a-gold-dim);
+    }
+    .mv2-share-btn--secondary:hover {
+      background: rgba(184, 135, 27, 0.08);
+    }
+    .mv2-share-btn--ghost {
+      background: rgba(100, 92, 82, 0.08);
+      border-color: rgba(100, 92, 82, 0.22);
+      color: var(--mv2a-text-body);
+    }
+    .mv2-share-btn--ghost:hover {
+      background: rgba(100, 92, 82, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-share-btn--secondary {
+      border-color: rgba(232, 197, 71, 0.35);
+      color: #e8d89a;
+    }
+    html.mv2a-theme-dark .mv2-share-btn--ghost {
+      background: rgba(148, 163, 184, 0.08);
+      border-color: rgba(148, 163, 184, 0.2);
+      color: #e2e8f0;
+    }
     .mv2-share-card h2 { font-size: 0.92rem; }
     .mv2-share-note { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: var(--mv2a-muted); }
     .mv2-share-actions {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 0.55rem;
     }
-    @media (max-width: 480px) {
+    @media (max-width: 520px) {
       .mv2-share-actions { grid-template-columns: 1fr; }
     }
     .mv2-share-btn {
@@ -1154,9 +1268,9 @@ export function renderAmuletReportV2Html(payload) {
       <div class="mv2-hero-main">
         <div class="mv2-hero-text">
           <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "พระเครื่อง")}</h1>
+          ${metaBlockHtml}
           <p class="mv2-main">${escapeHtml(h.displayLine || `โทนหลัก · ${h.mainEnergyLabel}`)}</p>
           ${h.clarifierLine ? `<p class="mv2-hero-clarifier">${escapeHtml(h.clarifierLine)}</p>` : ""}
-          ${date ? `<p class="mv2-date">${escapeHtml(date)}</p>` : ""}
         </div>
         ${heroMediaCol}
       </div>
@@ -1167,6 +1281,8 @@ export function renderAmuletReportV2Html(payload) {
       <div><div class="mv2-strip-k">เข้ากัน</div><div class="mv2-strip-v">${escapeHtml(compat)}</div></div>
       <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ความเด่นพลังงาน</div><div class="mv2-strip-v ${vm.metrics.energyLevelGradeClass}">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
     </div>
+
+    ${trustSourcesHtml}
 
     ${mainGraphBlock(vm)}
 
@@ -1196,12 +1312,14 @@ export function renderAmuletReportV2Html(payload) {
     ${timingCardHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
-      <h2 id="mv2-share-h">แชร์รายงาน</h2>
-      <p class="mv2-share-note">แชร์ลิงก์หน้านี้หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูรายงานได้สะดวก</p>
+      <h2 id="mv2-share-h">แชร์และบันทึก</h2>
+      <p class="mv2-share-note">แชร์ลิงก์รายงานนี้ หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูได้อีกครั้ง</p>
       <div class="mv2-share-actions">
-        <button type="button" class="mv2-share-btn mv2-share-btn--primary" id="mv2-share-native">แชร์ไปยัง Facebook / IG / X / อื่น ๆ</button>
-        <a class="mv2-share-btn mv2-share-btn--line" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer">Add เข้า LINE OA</a>
+        <button type="button" class="mv2-share-btn mv2-share-btn--primary" id="mv2-btn-share">แชร์รายงาน</button>
+        <button type="button" class="mv2-share-btn mv2-share-btn--secondary" id="mv2-btn-copy">คัดลอกลิงก์</button>
+        <button type="button" class="mv2-share-btn mv2-share-btn--ghost" id="mv2-btn-save">บันทึกผลลัพธ์</button>
       </div>
+      <a class="mv2-share-btn mv2-share-btn--line" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer" style="margin-top:0.55rem;display:inline-flex;width:100%;box-sizing:border-box;">เพิ่มเพื่อน LINE OA</a>
     </section>
 
     <footer class="mv2-trust">
@@ -1209,39 +1327,48 @@ export function renderAmuletReportV2Html(payload) {
       ${amuletHtmlShowRenderMetaLine() ? `<p class="mv2-render-meta">render ${escapeHtml(vm.rendererId)} · เวอร์ชัน ${escapeHtml(vm.reportVersion)}${vm.modelLabel ? ` · ${escapeHtml(vm.modelLabel)}` : ""}</p>` : ""}
     </footer>
   </div>
+  <div id="mv2-copy-toast" class="mv2-toast" role="status" hidden>คัดลอกลิงก์รายงานแล้ว</div>
   <script>
 (function () {
   var shareTitle = ${shareTitleJson};
   var shareText = ${shareTextJson};
-  var btn = document.getElementById("mv2-share-native");
-  if (!btn) return;
-  function fallbackCopy(url) {
+  var shareBtn = document.getElementById("mv2-btn-share");
+  var copyBtn = document.getElementById("mv2-btn-copy");
+  var saveBtn = document.getElementById("mv2-btn-save");
+  var toast = document.getElementById("mv2-copy-toast");
+  function showToast() {
+    if (!toast) return;
+    toast.hidden = false;
+    clearTimeout(window.__mv2CopyToastTimer);
+    window.__mv2CopyToastTimer = setTimeout(function () { toast.hidden = true; }, 2600);
+  }
+  function copyUrl() {
+    var url = String(window.location.href || "");
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(
-        function () {
-          window.alert("คัดลอกลิงก์แล้ว");
-        },
-        function () {
-          window.prompt("คัดลอกลิงก์:", url);
-        },
+        function () { showToast(); },
+        function () { window.prompt("คัดลอกลิงก์:", url); },
       );
     } else {
       window.prompt("คัดลอกลิงก์:", url);
     }
   }
-  btn.addEventListener("click", function () {
+  function doShare() {
     var url = String(window.location.href || "");
     if (navigator.share) {
       navigator
         .share({ title: shareTitle, text: shareText, url: url })
         .catch(function (err) {
           if (err && err.name === "AbortError") return;
-          fallbackCopy(url);
+          copyUrl();
         });
     } else {
-      fallbackCopy(url);
+      copyUrl();
     }
-  });
+  }
+  if (shareBtn) shareBtn.addEventListener("click", doShare);
+  if (copyBtn) copyBtn.addEventListener("click", copyUrl);
+  if (saveBtn) saveBtn.addEventListener("click", function () { window.print(); });
 })();
   </script>
 </body>

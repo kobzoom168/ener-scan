@@ -1,5 +1,6 @@
 import { getPaymentState } from "../stores/manualPaymentAccess.store.js";
 import { getBirthdateChangeFlowState } from "../stores/session.store.js";
+import { getSavedBirthdate } from "../stores/userProfile.db.js";
 import {
   ensurePaymentRefForPaymentId,
   getLatestAwaitingPaymentForLineUserId,
@@ -48,6 +49,19 @@ function pickIdleStickerLine(userId) {
   let h = 0;
   for (let i = 0; i < uid.length; i += 1) h = (h * 31 + uid.charCodeAt(i)) >>> 0;
   return IDLE_STICKER_LINES[h % IDLE_STICKER_LINES.length];
+}
+
+/**
+ * @param {{ hasPendingImage: boolean, paymentState: string, hasSavedBirthdate: boolean }} p
+ */
+export function shouldRemindWaitingBirthdateOnSticker(p) {
+  const hasPendingImage = Boolean(p?.hasPendingImage);
+  const paymentState = String(p?.paymentState || "");
+  const hasSavedBirthdate = Boolean(p?.hasSavedBirthdate);
+  if (!hasPendingImage) return false;
+  if (paymentState === "awaiting_slip") return false;
+  if (hasSavedBirthdate) return false;
+  return true;
 }
 
 /**
@@ -154,7 +168,42 @@ export async function handleStickerLikeInput(opts) {
   }
 
   // waiting_birthdate (pending scan image, not slip path)
-  if (session?.pendingImage && getPaymentState(uid).state !== "awaiting_slip") {
+  const paymentStateNow = getPaymentState(uid).state;
+  if (session?.pendingImage) {
+    let savedBirthdate = null;
+    try {
+      savedBirthdate = await getSavedBirthdate(uid);
+    } catch (_) {
+      savedBirthdate = null;
+    }
+    const shouldRemindWaitingBirthdate = shouldRemindWaitingBirthdateOnSticker({
+      hasPendingImage: true,
+      paymentState: paymentStateNow,
+      hasSavedBirthdate: Boolean(savedBirthdate),
+    });
+    if (!shouldRemindWaitingBirthdate && savedBirthdate) {
+      console.log(
+        JSON.stringify({
+          event: "STICKER_WAITING_BIRTHDATE_SKIPPED_SAVED_BIRTHDATE",
+          userId: uid,
+          paymentState: paymentStateNow,
+          hasPendingImage: true,
+        }),
+      );
+    }
+    if (!shouldRemindWaitingBirthdate) {
+      const idle = pickIdleStickerLine(uid);
+      await sendNonScanReply({
+        client,
+        userId: uid,
+        replyToken,
+        replyType,
+        semanticKey: "sticker_idle",
+        text: idle,
+        alternateTexts: IDLE_STICKER_LINES.filter((l) => l !== idle),
+      });
+      return;
+    }
     const text = await buildWaitingBirthdateGuidanceText(uid);
     await sendNonScanReply({
       client,
