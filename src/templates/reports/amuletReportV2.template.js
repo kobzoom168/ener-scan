@@ -225,7 +225,7 @@ function buildAmuletTimingVisualHtml(ts) {
       <div class="mv2-timing-insight">
         <span class="mv2-timing-k mv2-timing-k--mode">${escapeHtml(String(ts.modeKicker || "").trim() || "แนวใช้ที่แนะนำ")}</span>
         <p class="mv2-timing-mode-body">${escapeHtml(ts.ritualLine)}</p>
-        <p class="mv2-timing-hint">${escapeHtml(ts.hint)}</p>
+        <p class="mv2-timing-hint mv2-timing-hint--compact">${escapeHtml(ts.hint)}</p>
       </div>
     </section>`;
 }
@@ -361,7 +361,9 @@ export function renderAmuletReportV2Html(payload) {
   const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
 
   const subtypeLabel = h.subtypeLabel || "พระเครื่อง";
-  const ogTitle = `${subtypeLabel} · Ener Scan`;
+  /** Shorter tab / share title — big `<h1>` stays the main on-page anchor */
+  const docTitle = `รายงาน · ${subtypeLabel} · Ener Scan`;
+  const ogTitle = docTitle;
   const ogDescription =
     "ดูรายงานพลังพระเครื่องจาก Ener Scan พร้อมพลังเด่น ความเข้ากัน และพลังทั้ง 6 ด้าน";
   const ogImageAlt = ogTitle;
@@ -419,7 +421,12 @@ export function renderAmuletReportV2Html(payload) {
   const trustSourcesHtml = `
     <section class="mv2-trust-sources mv2-trust-sources--compact" aria-labelledby="mv2-trust-src-h">
       <h2 id="mv2-trust-src-h" class="mv2-trust-sources-h">ผลนี้คำนวณจากอะไร</h2>
-      <p class="mv2-trust-sources-line">ผลนี้อ้างอิงจากภาพวัตถุ วันเดือนปีเกิด และโมเดลการอ่านพลังงานของ Ener Scan</p>
+      <p class="mv2-trust-sources-line mv2-trust-sources-line--mobile">ผลนี้อ้างอิงจากภาพวัตถุ วันเดือนปีเกิด และโมเดลการอ่านพลังงานของ Ener Scan</p>
+      <ul class="mv2-trust-sources-list mv2-trust-sources-list--desktop" aria-label="รายละเอียด">
+        <li>ภาพวัตถุที่ส่งเข้าระบบ</li>
+        <li>วันเดือนปีเกิดของเจ้าของ</li>
+        <li>โมเดลการอ่านพลังงานของ Ener Scan</li>
+      </ul>
     </section>`;
 
   return `<!DOCTYPE html>
@@ -604,8 +611,11 @@ export function renderAmuletReportV2Html(payload) {
     }
     body { margin: 0; background: var(--mv2a-bg); color: var(--mv2a-text); font-family: var(--mv2-font-th); }
     .mv2a-wrap { max-width: 520px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
-    .mv2-hero { margin-bottom: 1rem; }
-    .mv2a-badge { display: inline-block; font-size: 0.65rem; color: var(--mv2a-gold); border: 1px solid var(--mv2a-badge-border); padding: 0.2rem 0.5rem; border-radius: 999px; margin-bottom: 0.65rem; }
+    @media (max-width: 520px) {
+      .mv2a-wrap { padding: 0.75rem 0.85rem 2rem; }
+    }
+    .mv2-hero { margin-bottom: 0.75rem; }
+    .mv2a-badge { display: inline-block; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.02em; color: var(--mv2a-gold-dim); border: 1px solid var(--mv2a-badge-border); padding: 0.18rem 0.48rem; border-radius: 999px; margin-bottom: 0.45rem; }
     .mv2-hero-main {
       display: flex;
       flex-direction: row;
@@ -628,11 +638,14 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: 12px;
       border: 1px solid var(--mv2a-media-border);
     }
-    .mv2-h1 { font-size: 1.35rem; margin: 0 0 0.25rem; color: var(--mv2a-gold); font-weight: 700; }
-    .mv2-main { font-size: 0.95rem; margin: 0.35rem 0 0; color: var(--mv2a-text-body); font-weight: 500; }
-    .mv2-hero-clarifier { font-size: 0.78rem; margin: 0.35rem 0 0; color: var(--mv2a-hero-clarifier); line-height: 1.4; }
+    .mv2-h1 { font-size: 1.32rem; margin: 0 0 0.2rem; color: var(--mv2a-gold); font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+    .mv2-main { font-size: 0.93rem; margin: 0.28rem 0 0; color: var(--mv2a-text-body); font-weight: 500; line-height: 1.38; }
+    @media (max-width: 520px) {
+      .mv2-main { font-size: 0.88rem; line-height: 1.36; }
+    }
+    .mv2-hero-clarifier { font-size: 0.76rem; margin: 0.28rem 0 0; color: var(--mv2a-hero-clarifier); line-height: 1.38; }
     .mv2-date { font-size: 0.72rem; color: var(--mv2a-muted); margin: 0.35rem 0 0; }
-    .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0.85rem 0; text-align: center; }
+    .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0 0 0.55rem; text-align: center; }
     .mv2-strip-k { font-size: 0.65rem; color: var(--mv2a-muted); }
     .mv2-strip-v { font-size: 1.1rem; font-weight: 700; color: var(--mv2a-gold); }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: #c9a132; }
@@ -641,9 +654,16 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-strip-cell--level .mv2-strip-v.level-grade--D { color: #8a7a67; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--none { color: var(--mv2a-muted); }
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid var(--mv2a-card-border); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; box-shadow: var(--mv2a-card-elev); }
+    .mv2-card--gsum-follow { margin-top: 0.35rem; padding-top: 0.75rem; padding-bottom: 0.78rem; }
+    .mv2-card--gsum-follow > h2 { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.92; }
     .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; font-family: inherit; }
     .mv2a-hint { font-size: 0.68rem; color: var(--mv2a-muted); margin: 0 0 0.6rem; }
-    .mv2a-graph-card { border-left: 3px solid var(--mv2a-graph-accent); padding: 0.85rem 0.85rem; }
+    .mv2a-graph-card {
+      margin-top: 0;
+      margin-bottom: 0.35rem;
+      border-left: 3px solid var(--mv2a-graph-accent);
+      padding: 0.85rem 0.85rem;
+    }
     .mv2a-graph-card > h2 { font-size: 1.02rem; color: var(--mv2a-gold); margin: 0 0 0.28rem; }
     .mv2a-graph-card > .mv2a-hint { margin: 0 0 0.35rem; }
     .mv2a-radar-wrap { max-width: 18rem; margin: 0 auto; }
@@ -807,7 +827,7 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2a-radar-dot--owner { background: var(--mv2a-radar-dot-owner); }
     .mv2a-radar-dot--amulet { background: var(--mv2a-radar-dot-amulet); }
-    .mv2-gsum-rows { display: flex; flex-direction: column; gap: 0.5rem; }
+    .mv2-gsum-rows { display: flex; flex-direction: column; gap: 0.42rem; }
     .mv2-gsum-row {
       display: flex;
       align-items: center;
@@ -832,6 +852,7 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.25;
     }
     .mv2-gsum-row--lead .mv2-gsum-v { color: var(--mv2a-gsum-v-lead); }
+    .mv2-card--gsum-follow .mv2-gsum-row--lead { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .mv2-card--owner > h2 { margin-bottom: 0.28rem; }
     .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.42rem; }
     .mv2-owner-chip { font-size: 0.72rem; padding: 0.2rem 0.45rem; border-radius: 999px; background: var(--mv2a-owner-chip-bg); border: 1px solid var(--mv2a-owner-chip-border); color: var(--mv2a-owner-chip-text); }
@@ -869,7 +890,7 @@ export function renderAmuletReportV2Html(payload) {
       border-left: 3px solid rgba(184, 135, 27, 0.45);
     }
     .mv2-timing-card h2 { font-size: 0.95rem; margin: 0; color: var(--mv2a-gold-dim); }
-    .mv2-timing-head { margin-bottom: 0.65rem; }
+    .mv2-timing-head { margin-bottom: 0.48rem; }
     .mv2-timing-sub {
       margin: 0.22rem 0 0;
       font-size: 0.7rem;
@@ -877,12 +898,12 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-muted);
       font-weight: 500;
     }
-    .mv2-timing-trends { display: grid; gap: 0.75rem; }
+    .mv2-timing-trends { display: grid; gap: 0.55rem; }
     .mv2-timing-trend {
       background: rgba(184, 135, 27, 0.04);
       border: 1px solid rgba(184, 135, 27, 0.14);
       border-radius: 12px;
-      padding: 0.65rem 0.72rem;
+      padding: 0.52rem 0.6rem;
     }
     .mv2-timing-trend-top {
       display: flex;
@@ -1052,8 +1073,8 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 800;
     }
     .mv2-timing-insight {
-      margin-top: 0.75rem;
-      padding: 0.82rem 0.88rem;
+      margin-top: 0.58rem;
+      padding: 0.62rem 0.72rem;
       border-radius: 12px;
       background: rgba(184, 135, 27, 0.06);
       border: 1px solid rgba(184, 135, 27, 0.2);
@@ -1083,6 +1104,20 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-muted);
       font-weight: 400;
     }
+    .mv2-timing-hint--compact {
+      margin: 0.45rem 0 0;
+      padding-top: 0.4rem;
+      font-size: 0.63rem;
+      line-height: 1.42;
+    }
+    @media (max-width: 520px) {
+      .mv2-timing-hint--compact {
+        margin-top: 0.38rem;
+        padding-top: 0.35rem;
+        font-size: 0.58rem;
+        line-height: 1.36;
+      }
+    }
     html.mv2a-theme-dark .mv2-timing-trend {
       background: rgba(232, 197, 71, 0.05);
       border-color: rgba(232, 197, 71, 0.14);
@@ -1110,13 +1145,13 @@ export function renderAmuletReportV2Html(payload) {
       color: rgba(148, 163, 184, 0.88);
     }
     .mv2-meta-block {
-      margin: 0.55rem 0 0.6rem;
-      padding: 0.55rem 0.65rem;
+      margin: 0.38rem 0 0.42rem;
+      padding: 0.45rem 0.55rem;
       border-radius: 10px;
-      background: rgba(184, 135, 27, 0.06);
-      border: 1px solid rgba(184, 135, 27, 0.15);
-      font-size: 0.68rem;
-      line-height: 1.45;
+      background: rgba(184, 135, 27, 0.05);
+      border: 1px solid rgba(184, 135, 27, 0.13);
+      font-size: 0.64rem;
+      line-height: 1.4;
       color: var(--mv2a-muted);
     }
     .mv2-meta-row {
@@ -1135,6 +1170,18 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: 12px;
       background: rgba(184, 135, 27, 0.05);
       border: 1px solid rgba(184, 135, 27, 0.12);
+    }
+    .mv2-trust-sources-list--desktop {
+      display: none;
+      margin: 0.15rem 0 0;
+      padding: 0 0 0 1rem;
+      font-size: 0.7rem;
+      line-height: 1.42;
+      color: var(--mv2a-muted);
+    }
+    @media (min-width: 521px) {
+      .mv2-trust-sources-line--mobile { display: none; }
+      .mv2-trust-sources-list--desktop { display: block; }
     }
     .mv2-trust-sources--compact {
       margin: 0.5rem 0 0;
@@ -1162,12 +1209,15 @@ export function renderAmuletReportV2Html(payload) {
     }
     @media (max-width: 520px) {
       .mv2-trust-sources--compact {
-        margin-top: 0.42rem;
-        padding: 0.32rem 0.42rem 0.38rem;
+        margin-top: 0.38rem;
+        padding: 0.26rem 0.38rem 0.32rem;
       }
-      .mv2-trust-sources--compact .mv2-trust-sources-line {
-        font-size: 0.64rem;
-        line-height: 1.34;
+      .mv2-trust-sources--compact .mv2-trust-sources-line--mobile {
+        font-size: 0.62rem;
+        line-height: 1.3;
+      }
+      .mv2-trust-sources--compact .mv2-trust-sources-h {
+        margin-bottom: 0.18rem;
       }
     }
     .mv2-trust-sources-list {
@@ -1269,6 +1319,39 @@ export function renderAmuletReportV2Html(payload) {
       background: #1464d4;
       border-color: #1464d4;
     }
+    .mv2-share-stack { display: flex; flex-direction: column; gap: 0.5rem; }
+    .mv2-share-line-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 2.48rem;
+      padding: 0.48rem 0.65rem;
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 0.77rem;
+      font-weight: 600;
+      line-height: 1.25;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 10px;
+      border: 1.5px solid rgba(5, 150, 105, 0.65);
+      background: rgba(5, 150, 105, 0.06);
+      color: #047857;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mv2-share-line-cta:hover {
+      background: rgba(5, 150, 105, 0.11);
+      border-color: rgba(5, 150, 105, 0.85);
+    }
+    html.mv2a-theme-dark .mv2-share-line-cta {
+      border-color: rgba(52, 211, 153, 0.55);
+      background: rgba(16, 185, 129, 0.08);
+      color: #a7f3d0;
+    }
+    html.mv2a-theme-dark .mv2-share-line-cta:hover {
+      background: rgba(16, 185, 129, 0.14);
+    }
     .mv2-share-btn--line {
       background: #06c755;
       border-color: #05b34c;
@@ -1312,7 +1395,7 @@ export function renderAmuletReportV2Html(payload) {
 
     ${mainGraphBlock(vm)}
 
-    <section class="mv2-card" aria-labelledby="mv2-gsum-h">
+    <section class="mv2-card mv2-card--gsum-follow" aria-labelledby="mv2-gsum-h">
       <h2 id="mv2-gsum-h">สรุปผล</h2>
       ${graphSummaryHtml}
     </section>
@@ -1340,11 +1423,13 @@ export function renderAmuletReportV2Html(payload) {
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์รายงาน</h2>
       <p class="mv2-share-note">แชร์ลิงก์รายงานนี้ หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูได้อีกครั้ง</p>
-      <div class="mv2-share-actions">
-        <button type="button" class="mv2-share-btn mv2-share-btn--primary" id="mv2-btn-share">แชร์รายงาน</button>
-        <button type="button" class="mv2-share-btn mv2-share-btn--secondary" id="mv2-btn-copy">คัดลอกลิงก์</button>
+      <div class="mv2-share-stack">
+        <div class="mv2-share-actions">
+          <button type="button" class="mv2-share-btn mv2-share-btn--primary" id="mv2-btn-share">แชร์รายงาน</button>
+          <button type="button" class="mv2-share-btn mv2-share-btn--secondary" id="mv2-btn-copy">คัดลอกลิงก์</button>
+        </div>
+        <a class="mv2-share-line-cta" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer">เพิ่มเพื่อน LINE OA</a>
       </div>
-      <a class="mv2-share-btn mv2-share-btn--line" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer" style="margin-top:0.55rem;display:inline-flex;width:100%;box-sizing:border-box;">เพิ่มเพื่อน LINE OA</a>
     </section>
 
     <footer class="mv2-trust">
