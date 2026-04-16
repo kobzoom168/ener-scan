@@ -4,3 +4,4 @@ node_modules
 !.env.example
 .tmp.driveupload
 .DS_Store
+supabase/.temp/
