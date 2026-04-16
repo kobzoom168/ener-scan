@@ -163,11 +163,13 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(!html.includes("ไม่การันตีฤกษ์"));
   assert.ok(!html.includes("ไม่การันตี"));
   assert.ok(!html.includes("ข้อจำกัด"));
-  assert.ok(html.includes("แชร์และบันทึก"));
+  assert.ok(html.includes("แชร์รายงาน"));
   assert.ok(html.includes('id="mv2-btn-share"'));
   assert.ok(html.includes("วันเวลาที่วิเคราะห์"));
   assert.ok(html.includes("รหัสรายงาน"));
   assert.ok(html.includes("ผลนี้คำนวณจากอะไร"));
+  assert.ok(html.includes("ผลนี้อ้างอิงจากภาพวัตถุ"));
+  assert.ok(!html.includes("mv2-btn-save"));
   assert.ok(html.includes("https://lin.ee/6YZeFZ1"));
   assert.ok(html.includes("navigator.share"));
   assert.ok(

@@ -6,12 +6,15 @@
 import { formatBangkokDateTime } from "../dateTime.util.js";
 
 /**
- * Prefer wall-clock scan instant from compatibility inputs; fallback to payload build time.
+ * Prefer wall-clock scan instant from compatibility inputs; fallback to payload build time, then hero.
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload | null | undefined} payload
+ * @param {string} [heroReportGeneratedAt] — e.g. `vm.hero.reportGeneratedAt` when payload omits `generatedAt`
  * @returns {string} ISO-ish string or ""
  */
-export function resolveScannedAtIsoForReportMeta(payload) {
-  if (!payload || typeof payload !== "object") return "";
+export function resolveScannedAtIsoForReportMeta(payload, heroReportGeneratedAt) {
+  if (!payload || typeof payload !== "object") {
+    return String(heroReportGeneratedAt || "").trim();
+  }
   const fromCompat = String(
     payload.compatibility &&
       typeof payload.compatibility === "object" &&
@@ -21,7 +24,9 @@ export function resolveScannedAtIsoForReportMeta(payload) {
       : "",
   ).trim();
   if (fromCompat) return fromCompat;
-  return String(payload.generatedAt || "").trim();
+  const gen = String(payload.generatedAt || "").trim();
+  if (gen) return gen;
+  return String(heroReportGeneratedAt || "").trim();
 }
 
 /**
@@ -62,4 +67,18 @@ export function scannedAtLabelThai(iso) {
   if (!s) return "—";
   const formatted = formatBangkokDateTime(s);
   return formatted === "-" ? "—" : formatted;
+}
+
+/**
+ * User-visible meta datetime, or empty string if missing/invalid (caller should omit the row).
+ * @param {string} iso
+ * @returns {string}
+ */
+export function formatReportMetaDatetimeOrEmpty(iso) {
+  const s = String(iso || "").trim();
+  if (!s) return "";
+  const t = Date.parse(s);
+  if (!Number.isFinite(t)) return "";
+  const formatted = formatBangkokDateTime(s);
+  return formatted === "-" ? "" : formatted;
 }
