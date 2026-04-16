@@ -1,7 +1,115 @@
 import dotenv from "dotenv";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { scanV2TraceTs } from "../utils/scanV2Trace.util.js";
 
-dotenv.config();
+function normalizeAppEnv(raw) {
+  const s = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (s === "prod" || s === "production") return "production";
+  if (s === "staging" || s === "stage") return "staging";
+  return "local";
+}
+
+function detectRailwayRuntime() {
+  return Boolean(
+    process.env.RAILWAY_ENVIRONMENT_NAME ||
+      process.env.RAILWAY_PROJECT_ID ||
+      process.env.RAILWAY_PUBLIC_DOMAIN,
+  );
+}
+
+function chooseEnvCandidates() {
+  const envFileRaw = String(process.env.ENV_FILE || "").trim();
+  if (envFileRaw) {
+    return [envFileRaw, ".env"];
+  }
+  const appEnv = normalizeAppEnv(process.env.APP_ENV);
+  if (appEnv === "staging") {
+    return [".env.staging", ".env"];
+  }
+  if (appEnv === "production") {
+    return [".env.prod", ".env"];
+  }
+  return [".env"];
+}
+
+function loadEnvForLocalRuntime() {
+  const candidates = chooseEnvCandidates();
+  const requestedEnvFile = String(process.env.ENV_FILE || "").trim() || null;
+  const chosenRelative = candidates.find((f) => existsSync(resolve(process.cwd(), f))) || null;
+  if (!chosenRelative) {
+    return {
+      runningEnvSource: "process",
+      envFileUsed: "none",
+      appEnv: normalizeAppEnv(process.env.APP_ENV),
+      fallbackUsed: true,
+      requestedEnvFile,
+      candidates,
+    };
+  }
+  dotenv.config({ path: resolve(process.cwd(), chosenRelative), override: false });
+  return {
+    runningEnvSource: "file",
+    envFileUsed: chosenRelative,
+    appEnv: normalizeAppEnv(process.env.APP_ENV),
+    fallbackUsed: chosenRelative !== candidates[0],
+    requestedEnvFile,
+    candidates,
+  };
+}
+
+const envBoot = detectRailwayRuntime()
+  ? {
+      runningEnvSource: "railway",
+      envFileUsed: "none",
+      appEnv: normalizeAppEnv(process.env.APP_ENV || "production"),
+      fallbackUsed: false,
+      requestedEnvFile: null,
+      candidates: [],
+    }
+  : loadEnvForLocalRuntime();
+
+export const envRuntimeMeta = Object.freeze({
+  runningEnvSource: envBoot.runningEnvSource,
+  envFileUsed: envBoot.envFileUsed,
+  appEnv: envBoot.appEnv,
+  fallbackUsed: envBoot.fallbackUsed,
+  requestedEnvFile: envBoot.requestedEnvFile,
+  envFileCandidates: envBoot.candidates,
+});
+
+/**
+ * Hard guard for destructive/local scripts to prevent unintended target mixups.
+ * Railway runtime is exempt and keeps current behavior (process.env source only).
+ * @param {{ scriptName?: string }} [opts]
+ */
+export function assertDangerousScriptEnvGuard(opts = {}) {
+  if (envRuntimeMeta.runningEnvSource === "railway") return;
+  const scriptName = String(opts?.scriptName || "dangerous_script").trim();
+  if (envRuntimeMeta.appEnv === "staging" && envRuntimeMeta.envFileUsed !== ".env.staging") {
+    throw new Error(
+      `[ENV_GUARD_BLOCKED] ${scriptName}: APP_ENV=staging requires envFileUsed=.env.staging (current: ${envRuntimeMeta.envFileUsed})`,
+    );
+  }
+  if (envRuntimeMeta.appEnv === "production" && envRuntimeMeta.envFileUsed !== ".env.prod") {
+    throw new Error(
+      `[ENV_GUARD_BLOCKED] ${scriptName}: APP_ENV=production requires envFileUsed=.env.prod (current: ${envRuntimeMeta.envFileUsed})`,
+    );
+  }
+}
+
+if (envBoot.runningEnvSource !== "railway" && envBoot.fallbackUsed) {
+  console.warn(
+    JSON.stringify({
+      event: "ENV_FILE_FALLBACK_USED",
+      requestedEnvFile: envBoot.requestedEnvFile,
+      envFileUsed: envBoot.envFileUsed,
+      envFileCandidates: envBoot.candidates,
+    }),
+  );
+}
 
 const requiredEnv = [
   "OPENAI_API_KEY",
@@ -688,6 +796,17 @@ console.log("[ENV_CHECK]", {
   GEMINI_FRONT_ORCHESTRATOR_MODE: env.GEMINI_FRONT_ORCHESTRATOR_MODE,
   GEMINI_FRONT_PHASE1_ONLY: env.GEMINI_FRONT_PHASE1_ONLY,
 });
+console.log(
+  JSON.stringify({
+    event: "ENV_SOURCE_SELECTED",
+    runningEnvSource: envRuntimeMeta.runningEnvSource,
+    envFileUsed: envRuntimeMeta.envFileUsed,
+    appEnv: envRuntimeMeta.appEnv,
+    fallbackUsed: envRuntimeMeta.fallbackUsed,
+    requestedEnvFile: envRuntimeMeta.requestedEnvFile,
+    envFileCandidates: envRuntimeMeta.envFileCandidates,
+  }),
+);
 console.log(
   JSON.stringify({
     event: "ENV_SCAN_V2_FLAGS",

@@ -7,12 +7,19 @@
     "test:release": "node --test tests/releaseQa.invariants.test.js tests/conversationHardening.stabilization.test.js tests/paymentAccess.service.test.js tests/scanOffer.loader.test.js tests/scanOfferAccess.resolver.test.js",
     "start": "node src/app.js",
     "dev": "node src/app.js",
+    "dev:local": "cross-env APP_ENV=local node src/app.js",
+    "dev:staging": "cross-env APP_ENV=staging node src/app.js",
+    "dev:prod": "cross-env APP_ENV=production node src/app.js",
     "worker:scan": "node src/workers/scanWorker.js",
     "worker:delivery": "node src/workers/deliveryWorker.js",
     "worker:maintenance": "node src/workers/maintenanceWorker.js",
     "scanV2:queue-health": "node scripts/scanV2-queue-health.mjs",
     "scanV2:replay-outbound": "node scripts/scanV2-replay-outbound.mjs",
     "payment:verify": "node scripts/verify-payment.js",
+    "payment:verify:staging": "cross-env APP_ENV=staging node scripts/verify-payment.js",
+    "payment:verify:prod": "cross-env APP_ENV=production node scripts/verify-payment.js",
+    "backfill:phash:staging": "cross-env APP_ENV=staging node scripts/backfillScanPhashes.js",
+    "backfill:phash:prod": "cross-env APP_ENV=production node scripts/backfillScanPhashes.js",
     "analyze:style": "node scripts/analyze-top-quality.mjs",
     "report:style-effectiveness": "node scripts/report-style-reference-effectiveness.mjs",
     "conv-cost:readout": "node scripts/conv-cost-readout.mjs",
@@ -31,5 +38,8 @@
     "ioredis": "^5.4.2",
     "openai": "^6.27.0",
     "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0"
   }
 }
