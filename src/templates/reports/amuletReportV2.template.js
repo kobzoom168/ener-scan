@@ -385,6 +385,32 @@ export function renderAmuletReportV2Html(payload) {
     })
     .join("")}</div>`;
 
+  const decisionCardHtml = (() => {
+    const dc = /** @type {{ title?: string; keepGrade?: string; verdict?: string; reason?: string; nextHint?: string } | null} */ (
+      vm.decisionCard
+    );
+    if (!dc || !dc.keepGrade) return "";
+    const badgeMod =
+      dc.keepGrade === "S"
+        ? "mv2-decision-badge--s"
+        : dc.keepGrade === "A"
+          ? "mv2-decision-badge--a"
+          : dc.keepGrade === "B"
+            ? "mv2-decision-badge--b"
+            : "mv2-decision-badge--c";
+    return `<section class="mv2-card mv2-card--decision" aria-labelledby="mv2-decision-h">
+      <div class="mv2-decision-top">
+        <div class="mv2-decision-badge ${badgeMod}" aria-hidden="true">${escapeHtml(dc.keepGrade)}</div>
+        <div class="mv2-decision-copy">
+          <h2 id="mv2-decision-h">${escapeHtml(dc.title || "ควรเก็บไหม")}</h2>
+          <p class="mv2-decision-verdict">${escapeHtml(String(dc.verdict || "").trim())}</p>
+        </div>
+      </div>
+      <p class="mv2-decision-reason">${escapeHtml(String(dc.reason || "").trim())}</p>
+      <p class="mv2-decision-next">${escapeHtml(String(dc.nextHint || "").trim())}</p>
+    </section>`;
+  })();
+
   const ownerReactionCardHtml = (() => {
     const c = /** @type {{ title?: string; ownerRhythmLine?: string; rows?: { kicker: string; main: string; sub: string }[] }} */ (
       vm.ownerReactionCard
@@ -774,6 +800,81 @@ export function renderAmuletReportV2Html(payload) {
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid var(--mv2a-card-border); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; box-shadow: var(--mv2a-card-elev); }
     .mv2-card--gsum-follow { margin-top: 0.35rem; padding-top: 0.75rem; padding-bottom: 0.78rem; }
     .mv2-card--gsum-follow > h2 { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.92; }
+    .mv2-card--decision {
+      margin-top: 0.4rem;
+      padding: 0.72rem 0.9rem 0.8rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.38);
+    }
+    .mv2-decision-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      margin-bottom: 0.42rem;
+    }
+    .mv2-decision-badge {
+      flex-shrink: 0;
+      width: 2.35rem;
+      height: 2.35rem;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0.02em;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .mv2-decision-badge--s {
+      color: #5c4308;
+      background: linear-gradient(165deg, #f0d78a 0%, #d4a82a 45%, #b8871b 100%);
+      border-color: rgba(184, 135, 27, 0.45);
+      box-shadow: 0 1px 3px rgba(184, 135, 27, 0.25);
+    }
+    .mv2-decision-badge--a {
+      color: #4a3810;
+      background: linear-gradient(165deg, #e8cf7a 0%, #c9a132 100%);
+      border-color: rgba(184, 135, 27, 0.38);
+    }
+    .mv2-decision-badge--b {
+      color: #4a3d22;
+      background: linear-gradient(165deg, rgba(201, 161, 50, 0.55) 0%, rgba(154, 111, 18, 0.45) 100%);
+      border-color: rgba(154, 111, 18, 0.35);
+    }
+    .mv2-decision-badge--c {
+      color: var(--mv2a-muted);
+      background: rgba(100, 92, 82, 0.1);
+      border-color: rgba(100, 92, 82, 0.18);
+    }
+    .mv2-decision-copy { min-width: 0; flex: 1; }
+    .mv2-card--decision .mv2-decision-copy h2 {
+      margin: 0 0 0.18rem;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--mv2a-gold-dim);
+      line-height: 1.2;
+    }
+    .mv2-decision-verdict {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 750;
+      color: var(--mv2a-text-body);
+      line-height: 1.25;
+    }
+    .mv2-decision-reason {
+      margin: 0 0 0.38rem;
+      font-size: 0.74rem;
+      line-height: 1.45;
+      color: var(--mv2a-text-body);
+      font-weight: 480;
+    }
+    .mv2-decision-next {
+      margin: 0;
+      font-size: 0.68rem;
+      line-height: 1.42;
+      color: var(--mv2a-muted);
+      font-weight: 450;
+    }
     .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; font-family: inherit; }
     .mv2a-hint { font-size: 0.68rem; color: var(--mv2a-muted); margin: 0 0 0.6rem; }
     .mv2a-graph-card {
@@ -1785,6 +1886,21 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-card--int-near-graph {
       border-left-color: rgba(232, 197, 71, 0.42);
     }
+    html.mv2a-theme-dark .mv2-card--decision {
+      border-left-color: rgba(232, 197, 71, 0.42);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    }
+    html.mv2a-theme-dark .mv2-decision-verdict {
+      color: rgba(241, 245, 249, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-decision-reason {
+      color: rgba(226, 232, 240, 0.9);
+    }
+    html.mv2a-theme-dark .mv2-decision-badge--c {
+      color: rgba(148, 163, 184, 0.95);
+      background: rgba(148, 163, 184, 0.1);
+      border-color: rgba(148, 163, 184, 0.22);
+    }
     html.mv2a-theme-dark .mv2-card--owner-react {
       border-left-color: rgba(232, 197, 71, 0.4);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.32);
@@ -1843,6 +1959,8 @@ export function renderAmuletReportV2Html(payload) {
       <h2 id="mv2-gsum-h">สรุปผล</h2>
       ${graphSummaryHtml}
     </section>
+
+    ${decisionCardHtml}
 
     <section class="mv2-card mv2-card--int-near-graph" aria-labelledby="mv2-int-h">
       <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildAmuletHtmlV2ViewModel,
+  buildSacredAmuletDecisionCard,
   buildSacredAmuletWeekdayItems,
   buildSacredAmuletTimeItems,
 } from "../../src/amulet/amuletHtmlV2.model.js";
@@ -97,6 +98,34 @@ test("buildAmuletHtmlV2ViewModel: ownerReactionCard is object-reactive (no trait
   assert.equal(vm.ownerReactionCard.rows[1].kicker, "เวลาใช้ชิ้นนี้");
   assert.equal(vm.ownerReactionCard.rows[2].kicker, "มุมที่ควรค่อย ๆ ไป");
   assert.ok(String(vm.ownerReactionCard.ownerRhythmLine || "").includes("จังหวะเกิด"));
+});
+
+test("buildAmuletHtmlV2ViewModel: decisionCard keep grade separate from system energy level", () => {
+  const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
+  assert.ok(vm.decisionCard && typeof vm.decisionCard === "object");
+  assert.ok(["S", "A", "B", "C"].includes(vm.decisionCard.keepGrade));
+  assert.ok(vm.decisionCard.keepScore >= 0 && vm.decisionCard.keepScore <= 100);
+  assert.equal(vm.decisionCard.title, "ควรเก็บไหม");
+  assert.ok(String(vm.decisionCard.verdict || "").length > 0);
+  assert.ok(String(vm.decisionCard.nextHint || "").includes("เทียบ"));
+});
+
+test("buildSacredAmuletDecisionCard: deterministic keepScore formula", () => {
+  const a = buildSacredAmuletDecisionCard({
+    compatibilityPercent: 80,
+    energyScore: 7,
+    alignKey: "protection",
+    ord: ["protection", "metta"],
+    maxD: 20,
+    alignLabel: "คุ้มครองป้องกัน",
+    tensionLabel: "โชคลาภและการเปิดทาง",
+  });
+  const compat = 80;
+  const energyN = 7;
+  let bonus = 50 + 12 - 5 + 4;
+  bonus = Math.min(100, Math.max(0, bonus));
+  const expected = Math.round(Math.min(100, Math.max(0, 0.55 * compat + 0.25 * (energyN * 10) + 0.2 * bonus)) * 10) / 10;
+  assert.equal(a.keepScore, expected);
 });
 
 test("buildAmuletHtmlV2ViewModel: no weak hedging tokens in default blurbs", () => {
