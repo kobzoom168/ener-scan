@@ -257,11 +257,26 @@ function buildAmuletTimingVisualHtml(ts) {
     .join("");
 
   const sub = String(ts.subtitle || "").trim();
+  const tb = /** @type {{ percent?: number; label?: string; hint?: string } | undefined} */ (
+    ts.timingBoost
+  );
+  const boostHtml =
+    tb &&
+    typeof tb.percent === "number" &&
+    Number.isFinite(tb.percent) &&
+    String(tb.label || "").trim() &&
+    String(tb.hint || "").trim()
+      ? `<div class="mv2-timing-boost" aria-label="โบนัสจังหวะ">
+      <span class="mv2-timing-boost-badge">${escapeHtml(String(tb.label).trim())}</span>
+      <span class="mv2-timing-boost-hint">${escapeHtml(String(tb.hint).trim())}</span>
+    </div>`
+      : "";
   return `
     <section class="mv2-card mv2-timing-card" aria-labelledby="mv2-timing-h">
       <div class="mv2-timing-head">
         <h2 id="mv2-timing-h">${escapeHtml(ts.heading)}</h2>
         ${sub ? `<p class="mv2-timing-sub">${escapeHtml(sub)}</p>` : ""}
+        ${boostHtml}
       </div>
       <div class="mv2-timing-trends">
         <div class="mv2-timing-trend">
@@ -1399,6 +1414,36 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-muted);
       font-weight: 500;
     }
+    .mv2-timing-boost {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.28rem;
+      margin: 0.42rem 0 0;
+      padding: 0.4rem 0.55rem;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(255, 250, 235, 0.55) 0%, rgba(184, 135, 27, 0.09) 100%);
+      border: 1px solid rgba(184, 135, 27, 0.28);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+    .mv2-timing-boost-badge {
+      display: inline-block;
+      padding: 0.18rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: #5c420a;
+      background: linear-gradient(165deg, #f0e0a8 0%, #d4a82a 38%, #b8871b 100%);
+      border: 1px solid rgba(143, 103, 16, 0.45);
+      box-shadow: 0 1px 2px rgba(80, 58, 16, 0.12);
+    }
+    .mv2-timing-boost-hint {
+      font-size: 0.65rem;
+      line-height: 1.38;
+      color: var(--mv2a-muted);
+      font-weight: 500;
+    }
     .mv2-timing-trends { display: grid; gap: 0.55rem; }
     .mv2-timing-trend {
       background: rgba(184, 135, 27, 0.04);
@@ -1644,6 +1689,19 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-timing-hint {
       border-top-color: rgba(232, 197, 71, 0.12);
       color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-timing-boost {
+      background: linear-gradient(135deg, rgba(232, 197, 71, 0.08) 0%, rgba(15, 18, 26, 0.5) 100%);
+      border-color: rgba(232, 197, 71, 0.22);
+      box-shadow: none;
+    }
+    html.mv2a-theme-dark .mv2-timing-boost-badge {
+      color: rgba(15, 18, 26, 0.92);
+      background: linear-gradient(165deg, #f5e6a8 0%, #e8c547 45%, #c9a132 100%);
+      border-color: rgba(232, 197, 71, 0.4);
+    }
+    html.mv2a-theme-dark .mv2-timing-boost-hint {
+      color: rgba(203, 213, 225, 0.88);
     }
     .mv2-meta-block {
       margin: 0.38rem 0 0.42rem;

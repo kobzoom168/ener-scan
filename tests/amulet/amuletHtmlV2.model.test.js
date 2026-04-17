@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildAmuletHtmlV2ViewModel,
   buildSacredAmuletDecisionCard,
+  buildSacredAmuletTimingCardDisplay,
   buildSacredAmuletWeekdayItems,
   buildSacredAmuletTimeItems,
 } from "../../src/amulet/amuletHtmlV2.model.js";
@@ -132,6 +133,36 @@ test("buildAmuletHtmlV2ViewModel: no weak hedging tokens in default blurbs", () 
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
   const text = vm.lifeAreaDetail.rows.map((r) => r.blurb).join(" ");
   assert.ok(!/ค่อนข้าง|มีแนวโน้ม|อาจ |พอมี|ดูเหมือน/.test(text));
+});
+
+test("buildSacredAmuletTimingCardDisplay: timingBoost is display-only and clamped 4–12", () => {
+  /** @type {import("../../src/services/reports/reportPayload.types.js").ReportTimingV1} */
+  const tv = {
+    engineVersion: "timing_v1_1",
+    lane: "sacred_amulet",
+    ritualMode: "ตั้งจิต",
+    confidence: "medium",
+    ownerProfile: { lifePath: 1, birthDayRoot: 6, weekday: 5 },
+    bestHours: [{ key: "morning_07_10", score: 82, reasonCode: "x", reasonText: "x" }],
+    bestWeekdays: [],
+    bestDateRoots: [],
+    avoidHours: [],
+    summary: {
+      topWindowLabel: "ช่วงเช้า",
+      topWeekdayLabel: "วันพฤหัสบดี",
+      practicalHint: "hint",
+    },
+  };
+  const d = buildSacredAmuletTimingCardDisplay(tv, "protection", "metta", {
+    alignKey: "protection",
+    ord: ["protection", "metta"],
+    gapTop12: 8,
+  });
+  assert.ok(d.timingBoost);
+  assert.equal(typeof d.timingBoost.percent, "number");
+  assert.ok(d.timingBoost.percent >= 4 && d.timingBoost.percent <= 12);
+  assert.ok(String(d.timingBoost.label).includes("โบนัสจังหวะ"));
+  assert.ok(String(d.timingBoost.hint).includes("ประมาณ"));
 });
 
 test("buildSacredAmuletWeekdayItems / TimeItems: active จาก summary + bestHours[0] เท่านั้น", () => {
