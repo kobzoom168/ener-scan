@@ -516,10 +516,6 @@ export function renderAmuletReportV2Html(payload) {
       : null;
   const fmt10 = (n) =>
     n != null && Number.isFinite(Number(n)) ? Number(n).toFixed(2) : "—";
-  const estDays =
-    fp && Number.isFinite(Number(fp.estimatedDaysToNextTier))
-      ? ` · ประมาณ ${Math.max(1, Math.round(Number(fp.estimatedDaysToNextTier)))} วัน`
-      : "";
   const projectedFillPct =
     fp && Number.isFinite(Number(fp.projectedScore10))
       ? Math.max(0, Math.min(100, (Number(fp.projectedScore10) / 10) * 100))
@@ -528,36 +524,6 @@ export function renderAmuletReportV2Html(payload) {
     ? String(fp.scanNextHint || "").trim() ||
       "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด"
     : "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด";
-  const guideWeekdaySeries = tac?.scores
-    ? normalizeUseDayScoresForBars(tac.scores).map((it) => {
-        const key = String(it.key || "").trim();
-        const score = Math.max(0, Math.min(100, Number(it.score) || 0));
-        return {
-          key,
-          label: String(it.label || "").trim() || "?",
-          score,
-          isPrimary: key !== "" && key === String(tac?.recommendedWeekdayKey || "").trim(),
-          isSecondary:
-            key !== "" &&
-            key === String(tac?.secondaryWeekdayKey || "").trim() &&
-            key !== String(tac?.recommendedWeekdayKey || "").trim(),
-        };
-      })
-    : [];
-  const guideWeekdayDotsHtml =
-    guideWeekdaySeries.length > 0
-      ? `<div class="mv2-guide-weekday-chart" role="list" aria-label="สัญญาณวันทั้งสัปดาห์">${guideWeekdaySeries
-          .map((it) => {
-            const dotSize = (0.42 + (it.score / 100) * 0.58).toFixed(3);
-            const rowCls = it.isPrimary
-              ? "mv2-guide-weekday is-primary"
-              : it.isSecondary
-                ? "mv2-guide-weekday is-secondary"
-                : "mv2-guide-weekday";
-            return `<div class="${rowCls}" role="listitem"><span class="mv2-guide-weekday-dot" style="width:${dotSize}rem;height:${dotSize}rem"></span><span class="mv2-guide-weekday-lbl">${escapeHtml(it.label)}</span></div>`;
-          })
-          .join("")}</div>`
-      : "";
   const buildGuideBoostBreakdown = (totalPercent) => {
     const labels = [
       "ใช้ตามวันและเวลาแนะนำ",
@@ -583,15 +549,6 @@ export function renderAmuletReportV2Html(payload) {
   const guideBoostTotal = boostPercent != null ? Math.max(0, Math.round(boostPercent)) : 12;
   const guideBoostBreakdown = buildGuideBoostBreakdown(guideBoostTotal);
   const baseGrade = String(fp?.baseGrade || "").trim().toUpperCase();
-  const guideTopAnswer = (() => {
-    if (baseGrade === "B") return "B → A · ประมาณ 7–9 วัน";
-    if (baseGrade === "A") return "A → S · ยังมีลุ้น";
-    if (baseGrade === "S") return "S · ใช้ต่อได้เลย";
-    if (baseGrade === "C") return "C · ควรหาต่อ";
-    return fp
-      ? `${String(fp.baseGrade || "—").trim()} → ${String(fp.projectedGrade || "—").trim()}${estDays}`
-      : "—";
-  })();
   const guideTopExplain = (() => {
     if (baseGrade === "B") {
       return "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด";
@@ -607,63 +564,91 @@ export function renderAmuletReportV2Html(payload) {
     }
     return guideScanExplain;
   })();
-  const progressCurrentLabel = fp ? `คะแนนปัจจุบัน ${fmt10(fp.baseScore10)}` : "คะแนนปัจจุบัน —";
   const progressTargetGrade = String(fp?.projectedGrade || "—").trim() || "—";
   const progressTargetScore = fp ? fmt10(fp.projectedScore10) : "—";
-  const progressTargetLabel = `คะแนนคาดการณ์ / เป้าหมาย ${progressTargetGrade} · ${progressTargetScore}`;
+  const progressCurrentScore = fp ? fmt10(fp.baseScore10) : "—";
+  const progressTargetLabel = `คะแนนคาดการณ์ ${progressTargetScore} · ${progressTargetGrade}`;
+  const scoreGap = (() => {
+    const base = Number(fp?.baseScore10);
+    const projected = Number(fp?.projectedScore10);
+    if (Number.isFinite(base) && Number.isFinite(projected)) {
+      return Math.max(0, projected - base);
+    }
+    return null;
+  })();
+  const headerNeedLine = `ต้องเพิ่มอีก ${scoreGap != null ? scoreGap.toFixed(2) : "—"} คะแนน`;
+  const headerDaysLine =
+    baseGrade === "B" && progressTargetGrade === "A"
+      ? "คาดว่าใช้ประมาณ 7–9 วัน"
+      : fp && Number.isFinite(Number(fp.estimatedDaysToNextTier))
+        ? `คาดว่าใช้ประมาณ ${Math.max(1, Math.round(Number(fp.estimatedDaysToNextTier)))} วัน`
+        : "คาดว่าใช้ประมาณ — วัน";
+  const pipelineFromGrade = String(fp?.baseGrade || baseGrade || "B").trim() || "B";
+  const stepOneAnswer = `${useDayLabel} · ${useTimeLabel}`;
   const guideCardHtml = `<section class="mv2-card mv2-card--guide" aria-labelledby="mv2-guide-h">
       <h2 id="mv2-guide-h">คู่มือใช้ชิ้นนี้</h2>
-      <div class="mv2-guide-top" role="list" aria-label="สรุปคู่มือ">
-        <span class="mv2-guide-chip" role="listitem">${escapeHtml(useDayLabel || "—")}</span>
-        <span class="mv2-guide-chip" role="listitem">${escapeHtml(useTimeLabel || "—")}</span>
-        <span class="mv2-guide-chip mv2-guide-chip--boost" role="listitem">${escapeHtml(
-          boostPercent != null ? `โบนัสจังหวะ +${Math.round(boostPercent)}%` : "โบนัสจังหวะ —",
-        )}</span>
+      <div class="mv2-guide-header">
+        <p class="mv2-guide-hl mv2-guide-hl--title">${escapeHtml(
+          `จาก ${pipelineFromGrade} → ${progressTargetGrade} ต้องทำอะไร`,
+        )}</p>
+        <p class="mv2-guide-hl">${escapeHtml(headerNeedLine)}</p>
+        <p class="mv2-guide-hl">${escapeHtml(`เป้าหมาย ${progressTargetGrade} = ${progressTargetScore}`)}</p>
+        <p class="mv2-guide-hl">${escapeHtml(headerDaysLine)}</p>
       </div>
       ${useModeLabel ? `<p class="mv2-guide-mode">${escapeHtml(useModeLabel)}</p>` : ""}
-      <div class="mv2-guide-table" aria-label="คู่มือการใช้ชิ้นนี้">
-        <div class="mv2-guide-row">
-          <div class="mv2-guide-col-k">ใช้วันไหน</div>
-          <div class="mv2-guide-col-v mv2-guide-col-v--usage">${escapeHtml(`${useDayLabel} · ${useTimeLabel}`)}</div>
-          <div class="mv2-guide-col-d">เหมาะกับการเสริมด้านที่ชิ้นนี้เด่น ใช้แล้วพลังของชิ้นนี้ตอบกับคุณได้ชัดขึ้น</div>
-          ${guideWeekdayDotsHtml}
+      <div class="mv2-guide-pipeline" aria-label="เส้นทางจาก B ไป A ไป S">
+        <div class="mv2-guide-node is-current"><span class="mv2-guide-node-dot">${escapeHtml(pipelineFromGrade)}</span><span class="mv2-guide-node-text">${escapeHtml(
+          `${pipelineFromGrade} ตอนนี้`,
+        )}</span></div>
+        <div class="mv2-guide-step">
+          <div class="mv2-guide-step-k"><span aria-hidden="true">◷</span> Step 1 · ใช้วันไหน</div>
+          <div class="mv2-guide-step-v">${escapeHtml(stepOneAnswer)}</div>
+          <div class="mv2-guide-step-d">ใช้ในช่วงที่ชิ้นนี้ตอบกับคุณได้ดีที่สุด</div>
         </div>
-        <div class="mv2-guide-row">
-          <div class="mv2-guide-col-k">ทางไปสู่ตัว top</div>
-          <div class="mv2-guide-col-v">${escapeHtml(guideTopAnswer)}</div>
-          <div class="mv2-guide-col-d">${escapeHtml(guideTopExplain)}</div>
-          <div class="mv2-guide-progress">
-            <div class="mv2-guide-progress-head">
-              <span class="mv2-guide-progress-meta">${escapeHtml(progressCurrentLabel)}</span>
-              <span class="mv2-guide-progress-meta mv2-guide-progress-meta--target">${escapeHtml(progressTargetLabel)}</span>
-            </div>
-            <div class="mv2-guide-progress-bar" role="presentation">
-              <span class="mv2-guide-progress-fill" style="width:${projectedFillPct != null ? projectedFillPct.toFixed(1) : "0"}%"></span>
-            </div>
+        <div class="mv2-guide-step">
+          <div class="mv2-guide-step-k"><span aria-hidden="true">✦</span> Step 2 · ถ้าใช้ถูกจังหวะ</div>
+          <div class="mv2-guide-step-v">สวด/ภาวนาก่อนใช้ 3–5 นาที</div>
+          <div class="mv2-guide-step-d">ตั้งจิตก่อนใช้ หนุนเพิ่มประมาณ +2% ถึง +3%</div>
+        </div>
+        <div class="mv2-guide-step">
+          <div class="mv2-guide-step-k"><span aria-hidden="true">⟡</span> Step 3 · ทางไปสู่ตัว top</div>
+          <div class="mv2-guide-step-v">ใช้ต่อเนื่องและอย่าขาดช่วง</div>
+          <div class="mv2-guide-step-d">${escapeHtml(guideTopExplain)}</div>
+        </div>
+        <div class="mv2-guide-node is-target"><span class="mv2-guide-node-dot">${escapeHtml(progressTargetGrade)}</span><span class="mv2-guide-node-text">${escapeHtml(
+          `${progressTargetGrade} เป้าหมายถัดไป`,
+        )}</span></div>
+        <div class="mv2-guide-node is-ghost"><span class="mv2-guide-node-dot">S</span><span class="mv2-guide-node-text">S เป้าสูงสุด</span></div>
+      </div>
+      <div class="mv2-guide-bottom">
+        <p class="mv2-guide-bonus-total">${escapeHtml(
+          boostPercent != null ? `โบนัสรวมประมาณ +${Math.round(boostPercent)}%` : "โบนัสรวมประมาณ —",
+        )}</p>
+        <div class="mv2-guide-boost-wrap">
+          <div class="mv2-guide-gauge" style="--mv2-guide-gauge-pct:${Math.max(0, Math.min(100, guideBoostTotal)).toFixed(1)}">
+            <div class="mv2-guide-gauge-core">+${escapeHtml(String(guideBoostTotal))}%<span>โบนัสจังหวะ</span></div>
+          </div>
+          <div class="mv2-guide-buff-table" role="list" aria-label="วิธีบวกเพิ่ม">
+            <div class="mv2-guide-buff-title">วิธีบวกเพิ่ม</div>
+            ${guideBoostBreakdown
+              .map(
+                (it) =>
+                  `<div class="mv2-guide-buff-row" role="listitem"><span>${escapeHtml(it.label)}</span><span>+${escapeHtml(String(it.value))}%</span></div>`,
+              )
+              .join("")}
           </div>
         </div>
-        <div class="mv2-guide-row">
-          <div class="mv2-guide-col-k">ถ้าใช้ถูกจังหวะ</div>
-          <div class="mv2-guide-col-v">${escapeHtml(
-            boostPercent != null ? `โบนัสประมาณ +${Math.round(boostPercent)}%` : "โบนัสประมาณ —",
-          )}</div>
-          <div class="mv2-guide-col-d">ใช้ตามวันเวลาแนะนำ พร้อมตั้งจิตก่อนใช้ จะช่วยหนุนพลังได้อีกเล็กน้อย</div>
-          <div class="mv2-guide-boost-wrap">
-            <div class="mv2-guide-gauge" style="--mv2-guide-gauge-pct:${Math.max(0, Math.min(100, guideBoostTotal)).toFixed(1)}">
-              <div class="mv2-guide-gauge-core">+${escapeHtml(String(guideBoostTotal))}%<span>โบนัสจังหวะ</span></div>
-            </div>
-            <div class="mv2-guide-buff-table" role="list" aria-label="วิธีบวกเพิ่ม">
-              <div class="mv2-guide-buff-title">วิธีบวกเพิ่ม</div>
-              ${guideBoostBreakdown
-                .map(
-                  (it) =>
-                    `<div class="mv2-guide-buff-row" role="listitem"><span>${escapeHtml(it.label)}</span><span>+${escapeHtml(String(it.value))}%</span></div>`,
-                )
-                .join("")}
-            </div>
+        <div class="mv2-guide-progress">
+          <div class="mv2-guide-progress-head">
+            <span class="mv2-guide-progress-meta">${escapeHtml(`คะแนนปัจจุบัน ${progressCurrentScore}`)}</span>
+            <span class="mv2-guide-progress-meta mv2-guide-progress-meta--target">${escapeHtml(progressTargetLabel)}</span>
           </div>
-          <p class="mv2-guide-progress-note">เป็นค่าประมาณการจากการใช้งานตามจังหวะและความเชื่อ ไม่ได้เปลี่ยนคะแนนหลักของรายงาน</p>
+          <div class="mv2-guide-progress-bar" role="presentation">
+            <span class="mv2-guide-progress-fill" style="width:${projectedFillPct != null ? projectedFillPct.toFixed(1) : "0"}%"></span>
+          </div>
+          <p class="mv2-guide-progress-inline">${escapeHtml(`${progressCurrentScore} → ${progressTargetScore} ${progressTargetGrade}`)}</p>
         </div>
+        <p class="mv2-guide-progress-note">เป็นค่าประมาณการจากการใช้งานตามจังหวะและความเชื่อ ไม่ได้เปลี่ยนคะแนนหลักของรายงาน</p>
       </div>
     </section>`;
 
@@ -989,24 +974,161 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 750;
       color: var(--mv2a-gold-dim);
     }
+    .mv2-guide-header {
+      display: grid;
+      gap: 0.14rem;
+      padding: 0.4rem 0.46rem;
+      border-radius: 10px;
+      border: 1px solid rgba(184, 135, 27, 0.16);
+      background: linear-gradient(165deg, rgba(184, 135, 27, 0.08) 0%, rgba(184, 135, 27, 0.03) 100%);
+      margin-bottom: 0.28rem;
+    }
+    .mv2-guide-hl {
+      margin: 0;
+      font-size: 0.66rem;
+      line-height: 1.33;
+      color: var(--mv2a-muted);
+      font-weight: 560;
+    }
+    .mv2-guide-hl--title {
+      font-size: 0.8rem;
+      line-height: 1.26;
+      color: var(--mv2a-gold-dim);
+      font-weight: 780;
+      letter-spacing: 0.006em;
+      margin-bottom: 0.04rem;
+    }
+    .mv2-guide-pipeline {
+      position: relative;
+      display: grid;
+      gap: 0.26rem;
+      padding-left: 0.18rem;
+      margin-bottom: 0.34rem;
+    }
+    .mv2-guide-pipeline::before {
+      content: "";
+      position: absolute;
+      left: 0.53rem;
+      top: 0.3rem;
+      bottom: 0.3rem;
+      width: 2px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(184, 135, 27, 0.32) 0%, rgba(184, 135, 27, 0.08) 100%);
+      transform-origin: top;
+      animation: mv2GuideRailReveal 900ms ease-out both;
+    }
+    .mv2-guide-node {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-left: 0.06rem;
+    }
+    .mv2-guide-node-dot {
+      width: 0.86rem;
+      height: 0.86rem;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.5rem;
+      font-weight: 780;
+      color: #61470d;
+      background: linear-gradient(165deg, #efdd9f 0%, #d8b045 62%, #b8871b 100%);
+      border: 1px solid rgba(184, 135, 27, 0.44);
+      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.11);
+    }
+    .mv2-guide-node-text {
+      font-size: 0.62rem;
+      line-height: 1.28;
+      color: var(--mv2a-text-body);
+      font-weight: 660;
+    }
+    .mv2-guide-node.is-current .mv2-guide-node-dot {
+      animation: mv2GuidePulse 2.4s ease-in-out infinite;
+    }
+    .mv2-guide-node.is-target .mv2-guide-node-dot {
+      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.16), 0 0 10px rgba(184, 135, 27, 0.23);
+    }
+    .mv2-guide-node.is-ghost .mv2-guide-node-dot {
+      color: rgba(100, 92, 82, 0.72);
+      background: linear-gradient(165deg, rgba(210, 210, 210, 0.74) 0%, rgba(170, 170, 170, 0.68) 100%);
+      border-color: rgba(140, 140, 140, 0.24);
+      box-shadow: none;
+    }
+    .mv2-guide-node.is-ghost .mv2-guide-node-text {
+      color: var(--mv2a-muted);
+      opacity: 0.78;
+    }
+    .mv2-guide-step {
+      position: relative;
+      z-index: 1;
+      margin-left: 1.06rem;
+      padding: 0.34rem 0.4rem;
+      border-radius: 9px;
+      border: 1px solid rgba(184, 135, 27, 0.12);
+      background: rgba(184, 135, 27, 0.045);
+    }
+    .mv2-guide-step-k {
+      margin: 0 0 0.08rem;
+      font-size: 0.59rem;
+      line-height: 1.25;
+      color: var(--mv2a-muted);
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .mv2-guide-step-v {
+      margin: 0 0 0.06rem;
+      font-size: 0.79rem;
+      line-height: 1.28;
+      color: var(--mv2a-text-body);
+      font-weight: 760;
+    }
+    .mv2-guide-step-d {
+      margin: 0;
+      font-size: 0.61rem;
+      line-height: 1.32;
+      color: var(--mv2a-muted);
+      font-weight: 500;
+    }
+    .mv2-guide-bottom {
+      border-top: 1px solid rgba(184, 135, 27, 0.12);
+      padding-top: 0.34rem;
+    }
+    .mv2-guide-bonus-total {
+      margin: 0 0 0.18rem;
+      font-size: 0.66rem;
+      line-height: 1.28;
+      color: var(--mv2a-gold-dim);
+      font-weight: 700;
+    }
     .mv2-guide-top {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.34rem;
-      margin-bottom: 0.22rem;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.24rem;
+      margin-bottom: 0.2rem;
+      padding: 0.1rem;
+      border-radius: 9px;
+      background: rgba(184, 135, 27, 0.04);
+      border: 1px solid rgba(184, 135, 27, 0.1);
     }
     .mv2-guide-chip {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       padding: 0.19rem 0.5rem;
-      border-radius: 999px;
+      border-radius: 8px;
       border: 1px solid rgba(184, 135, 27, 0.2);
       background: rgba(184, 135, 27, 0.065);
-      font-size: 0.61rem;
+      font-size: 0.59rem;
       font-weight: 650;
       color: var(--mv2a-text-body);
-      line-height: 1.25;
-      opacity: 0.9;
+      line-height: 1.2;
+      opacity: 0.88;
+      text-align: center;
+      min-height: 1.58rem;
     }
     .mv2-guide-chip--boost {
       color: var(--mv2a-gold-dim);
@@ -1048,11 +1170,19 @@ export function renderAmuletReportV2Html(payload) {
       margin-bottom: 0.08rem;
     }
     .mv2-guide-col-v--usage {
-      font-size: 0.96rem;
-      line-height: 1.24;
-      letter-spacing: 0.005em;
+      font-size: 0.86rem;
+      line-height: 1.26;
       margin-bottom: 0.1rem;
+      color: var(--mv2a-text-body);
+      font-weight: 740;
+    }
+    .mv2-guide-col-v--path {
+      font-size: 1rem;
+      line-height: 1.2;
+      margin-bottom: 0.11rem;
       color: var(--mv2a-gold-dim);
+      font-weight: 810;
+      letter-spacing: 0.006em;
     }
     .mv2-guide-col-d {
       font-size: 0.62rem;
@@ -1102,13 +1232,13 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 750;
     }
     .mv2-guide-boost-wrap {
-      margin-top: 0.34rem;
+      margin-top: 0.24rem;
     }
     .mv2-guide-gauge {
       position: relative;
       width: 100%;
       max-width: 11rem;
-      margin: 0 auto 0.22rem;
+      margin: 0 auto 0.1rem;
       aspect-ratio: 2 / 1;
       border-radius: 999px 999px 0 0;
       overflow: hidden;
@@ -1153,7 +1283,7 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: 9px;
       background: rgba(100, 92, 82, 0.04);
       border: 1px solid rgba(100, 92, 82, 0.12);
-      padding: 0.24rem 0.4rem 0.18rem;
+      padding: 0.2rem 0.36rem 0.16rem;
     }
     .mv2-guide-buff-title {
       font-size: 0.56rem;
@@ -1225,13 +1355,42 @@ export function renderAmuletReportV2Html(payload) {
       background: linear-gradient(90deg, #c9a132 0%, #e8c547 55%, #f0e0a8 100%);
       box-shadow: 0 0 6px rgba(184, 135, 27, 0.25);
       min-width: 4%;
+      transform-origin: left center;
+      animation: mv2GuideProgressGrow 850ms ease-out both;
+    }
+    .mv2-guide-progress-inline {
+      margin: 0.12rem 0 0;
+      font-size: 0.59rem;
+      line-height: 1.3;
+      color: var(--mv2a-muted);
+      font-weight: 580;
     }
     .mv2-guide-progress-note {
-      margin: 0.28rem 0 0;
-      font-size: 0.58rem;
-      line-height: 1.34;
+      margin: 0.22rem 0 0;
+      font-size: 0.54rem;
+      line-height: 1.3;
       color: var(--mv2a-muted);
-      opacity: 0.9;
+      opacity: 0.72;
+      font-weight: 450;
+    }
+    @keyframes mv2GuidePulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.11); }
+      50% { transform: scale(1.06); box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.16), 0 0 9px rgba(184, 135, 27, 0.22); }
+    }
+    @keyframes mv2GuideRailReveal {
+      from { transform: scaleY(0); opacity: 0.55; }
+      to { transform: scaleY(1); opacity: 1; }
+    }
+    @keyframes mv2GuideProgressGrow {
+      from { transform: scaleX(0.08); opacity: 0.6; }
+      to { transform: scaleX(1); opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mv2-guide-pipeline::before,
+      .mv2-guide-node.is-current .mv2-guide-node-dot,
+      .mv2-guide-progress-fill {
+        animation: none;
+      }
     }
     .mv2-card--top-finder {
       background: linear-gradient(
@@ -2484,6 +2643,38 @@ export function renderAmuletReportV2Html(payload) {
       border-left-color: rgba(232, 197, 71, 0.42);
       background: rgba(20, 22, 28, 0.92);
     }
+    html.mv2a-theme-dark .mv2-guide-header {
+      border-color: rgba(232, 197, 71, 0.2);
+      background: linear-gradient(165deg, rgba(232, 197, 71, 0.12) 0%, rgba(232, 197, 71, 0.04) 100%);
+    }
+    html.mv2a-theme-dark .mv2-guide-hl {
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-guide-hl--title {
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-guide-pipeline::before {
+      background: linear-gradient(180deg, rgba(232, 197, 71, 0.36) 0%, rgba(148, 163, 184, 0.2) 100%);
+    }
+    html.mv2a-theme-dark .mv2-guide-step {
+      border-color: rgba(232, 197, 71, 0.16);
+      background: rgba(232, 197, 71, 0.06);
+    }
+    html.mv2a-theme-dark .mv2-guide-node-dot {
+      color: #33250a;
+    }
+    html.mv2a-theme-dark .mv2-guide-node-text {
+      color: rgba(241, 245, 249, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-guide-step-v {
+      color: rgba(241, 245, 249, 0.96);
+    }
+    html.mv2a-theme-dark .mv2-guide-bottom {
+      border-top-color: rgba(232, 197, 71, 0.16);
+    }
+    html.mv2a-theme-dark .mv2-guide-bonus-total {
+      color: #fde68a;
+    }
     html.mv2a-theme-dark .mv2-guide-chip {
       background: rgba(232, 197, 71, 0.085);
       border-color: rgba(232, 197, 71, 0.2);
@@ -2520,6 +2711,9 @@ export function renderAmuletReportV2Html(payload) {
       color: rgba(241, 245, 249, 0.94);
     }
     html.mv2a-theme-dark .mv2-guide-col-v--usage {
+      color: rgba(241, 245, 249, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-guide-col-v--path {
       color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-guide-buff-table,
@@ -2544,7 +2738,10 @@ export function renderAmuletReportV2Html(payload) {
       border-left-color: rgba(232, 197, 71, 0.62);
     }
     html.mv2a-theme-dark .mv2-guide-progress-note {
-      color: rgba(148, 163, 184, 0.86);
+      color: rgba(148, 163, 184, 0.72);
+    }
+    html.mv2a-theme-dark .mv2-guide-progress-inline {
+      color: rgba(148, 163, 184, 0.84);
     }
     html.mv2a-theme-dark .mv2-decision-verdict {
       color: rgba(241, 245, 249, 0.94);
