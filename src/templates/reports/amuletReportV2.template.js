@@ -594,19 +594,23 @@ export function renderAmuletReportV2Html(payload) {
   })();
   const guideTopExplain = (() => {
     if (baseGrade === "B") {
-      return "ชิ้นนี้มีพื้นให้ดันขึ้นได้ แต่ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด เพื่อหาตัวที่ขึ้นเร็วกว่า";
+      return "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด";
     }
     if (baseGrade === "A") {
-      return "ถ้าทำครบชุดและใช้ต่อเนื่อง ชิ้นนี้ยังมีโอกาสขึ้นได้อีก ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายเดียวกันเพื่อหาตัว top";
+      return "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายเดียวกันเพื่อหาตัว top";
     }
     if (baseGrade === "S") {
-      return "ชิ้นนี้ขึ้นดีอยู่แล้ว ถ้าจะสแกนต่อ ให้ใช้ชิ้นนี้เป็นตัวตั้ง แล้วเทียบว่ามีองค์ไหนแซงได้จริงไหม";
+      return "ถ้าจะสแกนต่อ ให้ใช้ชิ้นนี้เป็นตัวตั้ง แล้วเทียบว่ามีองค์ไหนแซงได้จริงไหม";
     }
     if (baseGrade === "C") {
-      return "ชิ้นนี้ยังไม่ใช่ตัวที่เด่นสุดของรอบนี้ ถ้าจะสแกนต่อ ให้เน้นชิ้นที่เด่นทาง “เข้ากับคุณที่สุด” และเลี่ยงชิ้นที่ไปหนักทาง “ควรค่อย ๆ ไป” มากเกินไป";
+      return "ถ้าจะสแกนต่อ ให้เน้นชิ้นที่เด่นทางเข้ากับคุณที่สุด แล้วเทียบอีก 2–3 ชิ้น";
     }
     return guideScanExplain;
   })();
+  const progressCurrentLabel = fp ? `คะแนนปัจจุบัน ${fmt10(fp.baseScore10)}` : "คะแนนปัจจุบัน —";
+  const progressTargetGrade = String(fp?.projectedGrade || "—").trim() || "—";
+  const progressTargetScore = fp ? fmt10(fp.projectedScore10) : "—";
+  const progressTargetLabel = `คะแนนคาดการณ์ / เป้าหมาย ${progressTargetGrade} · ${progressTargetScore}`;
   const guideCardHtml = `<section class="mv2-card mv2-card--guide" aria-labelledby="mv2-guide-h">
       <h2 id="mv2-guide-h">คู่มือใช้ชิ้นนี้</h2>
       <div class="mv2-guide-top" role="list" aria-label="สรุปคู่มือ">
@@ -620,7 +624,7 @@ export function renderAmuletReportV2Html(payload) {
       <div class="mv2-guide-table" aria-label="คู่มือการใช้ชิ้นนี้">
         <div class="mv2-guide-row">
           <div class="mv2-guide-col-k">ใช้วันไหน</div>
-          <div class="mv2-guide-col-v">${escapeHtml(`${useDayLabel} · ${useTimeLabel}`)}</div>
+          <div class="mv2-guide-col-v mv2-guide-col-v--usage">${escapeHtml(`${useDayLabel} · ${useTimeLabel}`)}</div>
           <div class="mv2-guide-col-d">เหมาะกับการเสริมด้านที่ชิ้นนี้เด่น ใช้แล้วพลังของชิ้นนี้ตอบกับคุณได้ชัดขึ้น</div>
           ${guideWeekdayDotsHtml}
         </div>
@@ -629,12 +633,10 @@ export function renderAmuletReportV2Html(payload) {
           <div class="mv2-guide-col-v">${escapeHtml(guideTopAnswer)}</div>
           <div class="mv2-guide-col-d">${escapeHtml(guideTopExplain)}</div>
           <div class="mv2-guide-progress">
-            <div class="mv2-guide-progress-meta">${escapeHtml(
-              fp ? `คะแนนปัจจุบัน ${fmt10(fp.baseScore10)} / 10` : "คะแนนปัจจุบัน — / 10",
-            )}</div>
-            <div class="mv2-guide-progress-meta">${escapeHtml(
-              fp ? `คะแนนคาดการณ์ ${fmt10(fp.projectedScore10)} / 10` : "คะแนนคาดการณ์ — / 10",
-            )}</div>
+            <div class="mv2-guide-progress-head">
+              <span class="mv2-guide-progress-meta">${escapeHtml(progressCurrentLabel)}</span>
+              <span class="mv2-guide-progress-meta mv2-guide-progress-meta--target">${escapeHtml(progressTargetLabel)}</span>
+            </div>
             <div class="mv2-guide-progress-bar" role="presentation">
               <span class="mv2-guide-progress-fill" style="width:${projectedFillPct != null ? projectedFillPct.toFixed(1) : "0"}%"></span>
             </div>
@@ -996,20 +998,21 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-guide-chip {
       display: inline-flex;
       align-items: center;
-      padding: 0.22rem 0.56rem;
+      padding: 0.19rem 0.5rem;
       border-radius: 999px;
-      border: 1px solid rgba(184, 135, 27, 0.24);
-      background: rgba(184, 135, 27, 0.08);
-      font-size: 0.64rem;
-      font-weight: 700;
+      border: 1px solid rgba(184, 135, 27, 0.2);
+      background: rgba(184, 135, 27, 0.065);
+      font-size: 0.61rem;
+      font-weight: 650;
       color: var(--mv2a-text-body);
       line-height: 1.25;
+      opacity: 0.9;
     }
     .mv2-guide-chip--boost {
       color: var(--mv2a-gold-dim);
-      border-color: rgba(184, 135, 27, 0.34);
-      background: rgba(184, 135, 27, 0.12);
-      font-weight: 750;
+      border-color: rgba(184, 135, 27, 0.3);
+      background: rgba(184, 135, 27, 0.1);
+      font-weight: 700;
     }
     .mv2-guide-mode {
       margin: 0 0 0.34rem;
@@ -1043,6 +1046,13 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-text-body);
       font-weight: 780;
       margin-bottom: 0.08rem;
+    }
+    .mv2-guide-col-v--usage {
+      font-size: 0.96rem;
+      line-height: 1.24;
+      letter-spacing: 0.005em;
+      margin-bottom: 0.1rem;
+      color: var(--mv2a-gold-dim);
     }
     .mv2-guide-col-d {
       font-size: 0.62rem;
@@ -1097,11 +1107,12 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-guide-gauge {
       position: relative;
       width: 100%;
-      max-width: 12rem;
-      margin: 0 auto 0.3rem;
+      max-width: 11rem;
+      margin: 0 auto 0.22rem;
       aspect-ratio: 2 / 1;
       border-radius: 999px 999px 0 0;
       overflow: hidden;
+      opacity: 0.88;
     }
     .mv2-guide-gauge::before {
       content: "";
@@ -1110,10 +1121,10 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: inherit;
       background: conic-gradient(
         from 180deg,
-        rgba(184, 135, 27, 0.95) 0deg,
-        rgba(224, 188, 85, 0.92) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
-        rgba(100, 92, 82, 0.18) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
-        rgba(100, 92, 82, 0.18) 180deg
+        rgba(184, 135, 27, 0.84) 0deg,
+        rgba(224, 188, 85, 0.82) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
+        rgba(100, 92, 82, 0.14) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
+        rgba(100, 92, 82, 0.14) 180deg
       );
       mask: radial-gradient(circle at 50% 100%, transparent 58%, #000 59%);
       -webkit-mask: radial-gradient(circle at 50% 100%, transparent 58%, #000 59%);
@@ -1122,11 +1133,11 @@ export function renderAmuletReportV2Html(payload) {
       position: absolute;
       inset: auto 0 0;
       text-align: center;
-      font-size: 1.06rem;
+      font-size: 0.98rem;
       line-height: 1;
-      font-weight: 800;
+      font-weight: 760;
       color: var(--mv2a-gold-dim);
-      padding-bottom: 0.18rem;
+      padding-bottom: 0.14rem;
     }
     .mv2-guide-gauge-core > span {
       display: block;
@@ -1142,7 +1153,7 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: 9px;
       background: rgba(100, 92, 82, 0.04);
       border: 1px solid rgba(100, 92, 82, 0.12);
-      padding: 0.28rem 0.42rem 0.2rem;
+      padding: 0.24rem 0.4rem 0.18rem;
     }
     .mv2-guide-buff-title {
       font-size: 0.56rem;
@@ -1169,18 +1180,43 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-guide-progress {
       margin-top: 0.34rem;
     }
+    .mv2-guide-progress-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.4rem;
+      align-items: baseline;
+      margin-bottom: 0.12rem;
+    }
     .mv2-guide-progress-meta {
-      margin: 0 0 0.12rem;
-      font-size: 0.62rem;
+      margin: 0;
+      font-size: 0.61rem;
       line-height: 1.34;
       color: var(--mv2a-muted);
-      font-weight: 550;
+      font-weight: 560;
+    }
+    .mv2-guide-progress-meta--target {
+      text-align: right;
+      color: var(--mv2a-gold-dim);
+      font-weight: 700;
     }
     .mv2-guide-progress-bar {
       height: 6px;
       border-radius: 999px;
       overflow: hidden;
       background: rgba(184, 135, 27, 0.11);
+      position: relative;
+    }
+    .mv2-guide-progress-bar::after {
+      content: "";
+      position: absolute;
+      right: 0.16rem;
+      top: 50%;
+      width: 0;
+      height: 0;
+      border-top: 3px solid transparent;
+      border-bottom: 3px solid transparent;
+      border-left: 4px solid rgba(184, 135, 27, 0.5);
+      transform: translateY(-50%);
     }
     .mv2-guide-progress-fill {
       display: block;
@@ -2449,8 +2485,8 @@ export function renderAmuletReportV2Html(payload) {
       background: rgba(20, 22, 28, 0.92);
     }
     html.mv2a-theme-dark .mv2-guide-chip {
-      background: rgba(232, 197, 71, 0.1);
-      border-color: rgba(232, 197, 71, 0.24);
+      background: rgba(232, 197, 71, 0.085);
+      border-color: rgba(232, 197, 71, 0.2);
       color: rgba(241, 245, 249, 0.94);
     }
     html.mv2a-theme-dark .mv2-guide-chip--boost {
@@ -2483,6 +2519,9 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-guide-buff-row > :nth-child(2) {
       color: rgba(241, 245, 249, 0.94);
     }
+    html.mv2a-theme-dark .mv2-guide-col-v--usage {
+      color: #fde68a;
+    }
     html.mv2a-theme-dark .mv2-guide-buff-table,
     html.mv2a-theme-dark .mv2-guide-buff-row {
       border-color: rgba(148, 163, 184, 0.18);
@@ -2500,6 +2539,9 @@ export function renderAmuletReportV2Html(payload) {
     }
     html.mv2a-theme-dark .mv2-guide-progress-bar {
       background: rgba(232, 197, 71, 0.15);
+    }
+    html.mv2a-theme-dark .mv2-guide-progress-bar::after {
+      border-left-color: rgba(232, 197, 71, 0.62);
     }
     html.mv2a-theme-dark .mv2-guide-progress-note {
       color: rgba(148, 163, 184, 0.86);
