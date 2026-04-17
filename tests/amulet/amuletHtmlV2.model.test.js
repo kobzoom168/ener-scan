@@ -90,7 +90,7 @@ test("buildAmuletHtmlV2ViewModel: interaction + graph align to same top axes", (
   assert.ok(String(third.sub || "").includes("คุ้มครอง"));
 });
 
-test("buildAmuletHtmlV2ViewModel: ownerReactionCard is object-reactive (no traitScores)", () => {
+test("buildAmuletHtmlV2ViewModel: ownerReactionCard kept for parity (not rendered in HTML v2)", () => {
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
   assert.ok(vm.ownerReactionCard && typeof vm.ownerReactionCard === "object");
   assert.equal(vm.ownerReactionCard.rows.length, 3);
@@ -205,7 +205,7 @@ test("buildAmuletHtmlV2ViewModel: dailyOwnerCard stable across scans same Bangko
     minimalPayload({ scanId: "scan-b", reportId: "r-other", generatedAt: iso }),
   );
   assert.deepEqual(vmA.dailyOwnerCard, vmB.dailyOwnerCard);
-  assert.equal(vmA.dailyOwnerCard.title, "จังหวะวันนี้ของคุณ");
+  assert.equal(vmA.dailyOwnerCard.title, "วันนี้มีแรงของคุณ");
   assert.ok(String(vmA.dailyOwnerCard.dailyTone || "").length > 5);
 });
 
