@@ -563,40 +563,31 @@ export function renderAmuletReportV2Html(payload) {
         )}</span>
       </div>
       ${useModeLabel ? `<p class="mv2-guide-mode">${escapeHtml(useModeLabel)}</p>` : ""}
-      <div class="mv2-guide-table" role="table" aria-label="คู่มือการใช้ชิ้นนี้">
-        <div class="mv2-guide-row mv2-guide-row--head" role="row">
-          <div class="mv2-guide-col-k" role="columnheader">หัวข้อ</div>
-          <div class="mv2-guide-col-v" role="columnheader">คำตอบ</div>
-          <div class="mv2-guide-col-d" role="columnheader">คำอธิบาย</div>
+      <div class="mv2-guide-table" aria-label="คู่มือการใช้ชิ้นนี้">
+        <div class="mv2-guide-row">
+          <div class="mv2-guide-col-k">ใช้วันไหน</div>
+          <div class="mv2-guide-col-v">${escapeHtml(`${useDayLabel} · ${useTimeLabel}`)}</div>
+          <div class="mv2-guide-col-d">เหมาะกับการเสริมด้านที่ชิ้นนี้เด่น ใช้แล้วพลังของชิ้นนี้ตอบกับคุณได้ชัดขึ้น</div>
         </div>
-        <div class="mv2-guide-row" role="row">
-          <div class="mv2-guide-col-k" role="cell">ใช้วันไหน</div>
-          <div class="mv2-guide-col-v" role="cell">${escapeHtml(`${useDayLabel} · ${useTimeLabel}`)}</div>
-          <div class="mv2-guide-col-d" role="cell">เหมาะกับการเสริมด้านที่ชิ้นนี้เด่น ใช้แล้วพลังของชิ้นนี้ตอบกับคุณได้ชัดขึ้น</div>
-        </div>
-        <div class="mv2-guide-row" role="row">
-          <div class="mv2-guide-col-k" role="cell">ถ้าใช้ถูกจังหวะ</div>
-          <div class="mv2-guide-col-v" role="cell">${escapeHtml(
+        <div class="mv2-guide-row">
+          <div class="mv2-guide-col-k">ถ้าใช้ถูกจังหวะ</div>
+          <div class="mv2-guide-col-v">${escapeHtml(
             boostPercent != null ? `โบนัสประมาณ +${Math.round(boostPercent)}%` : "โบนัสประมาณ —",
           )}</div>
-          <div class="mv2-guide-col-d" role="cell">ใช้ตามวันเวลาแนะนำ พร้อมตั้งจิตก่อนใช้ จะช่วยหนุนพลังได้อีกเล็กน้อย</div>
+          <div class="mv2-guide-col-d">ใช้ตามวันเวลาแนะนำ พร้อมตั้งจิตก่อนใช้ จะช่วยหนุนพลังได้อีกเล็กน้อย</div>
         </div>
-        <div class="mv2-guide-row" role="row">
-          <div class="mv2-guide-col-k" role="cell">ทางไปสู่ตัว top</div>
-          <div class="mv2-guide-col-v" role="cell">${escapeHtml(guideTopAnswer)}</div>
-          <div class="mv2-guide-col-d" role="cell">${escapeHtml(guideTopExplain)}</div>
+        <div class="mv2-guide-row">
+          <div class="mv2-guide-col-k">ทางไปสู่ตัว top</div>
+          <div class="mv2-guide-col-v">${escapeHtml(guideTopAnswer)}</div>
+          <div class="mv2-guide-col-d">${escapeHtml(guideTopExplain)}</div>
         </div>
       </div>
-      <div class="mv2-guide-buff-table" role="table" aria-label="องค์ประกอบที่ช่วยหนุน">
-        <div class="mv2-guide-buff-row mv2-guide-buff-row--head" role="row">
-          <div role="columnheader">สิ่งที่ทำ</div>
-          <div role="columnheader">โบนัส</div>
-          <div role="columnheader">คำอธิบาย</div>
-        </div>
-        <div class="mv2-guide-buff-row" role="row"><div role="cell">ใช้ตามวันและเวลาแนะนำ</div><div role="cell">+4%</div><div role="cell">ช่วยให้จังหวะของชิ้นนี้ตอบกับคุณได้ง่ายขึ้น</div></div>
-        <div class="mv2-guide-buff-row" role="row"><div role="cell">ตั้งจิตก่อนใช้</div><div role="cell">+3%</div><div role="cell">ทำให้พลังรวมตัวและนิ่งขึ้นก่อนใช้งาน</div></div>
-        <div class="mv2-guide-buff-row" role="row"><div role="cell">สวดหรือทำสมาธิสั้น</div><div role="cell">+2%</div><div role="cell">ช่วยเสริมความนิ่งและการรับพลังของเจ้าของ</div></div>
-        <div class="mv2-guide-buff-row" role="row"><div role="cell">บูชาต่อเนื่อง / ผ่านพิธี</div><div role="cell">+2% ถึง +4%</div><div role="cell">เสริมแรงของชิ้นนี้ในระยะต่อเนื่อง</div></div>
+      <div class="mv2-guide-buff-table" role="list" aria-label="วิธีบวกเพิ่ม">
+        <div class="mv2-guide-buff-title">วิธีบวกเพิ่ม</div>
+        <div class="mv2-guide-buff-row" role="listitem"><span>ใช้ตามวันและเวลาแนะนำ</span><span>+4%</span></div>
+        <div class="mv2-guide-buff-row" role="listitem"><span>ตั้งจิตก่อนใช้</span><span>+3%</span></div>
+        <div class="mv2-guide-buff-row" role="listitem"><span>สวดหรือทำสมาธิสั้น</span><span>+2%</span></div>
+        <div class="mv2-guide-buff-row" role="listitem"><span>บูชาต่อเนื่อง / ผ่านพิธี</span><span>+2% ถึง +4%</span></div>
       </div>
       <div class="mv2-guide-progress">
         <div class="mv2-guide-progress-meta">${escapeHtml(
@@ -938,17 +929,17 @@ export function renderAmuletReportV2Html(payload) {
       display: flex;
       flex-wrap: wrap;
       gap: 0.32rem;
-      margin-bottom: 0.28rem;
+      margin-bottom: 0.22rem;
     }
     .mv2-guide-chip {
       display: inline-flex;
       align-items: center;
-      padding: 0.16rem 0.46rem;
+      padding: 0.2rem 0.54rem;
       border-radius: 999px;
       border: 1px solid rgba(184, 135, 27, 0.24);
       background: rgba(184, 135, 27, 0.08);
-      font-size: 0.62rem;
-      font-weight: 650;
+      font-size: 0.64rem;
+      font-weight: 700;
       color: var(--mv2a-text-body);
       line-height: 1.25;
     }
@@ -959,46 +950,38 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 700;
     }
     .mv2-guide-mode {
-      margin: 0 0 0.42rem;
-      font-size: 0.66rem;
+      margin: 0 0 0.36rem;
+      font-size: 0.68rem;
       line-height: 1.34;
       color: var(--mv2a-muted);
-      font-weight: 550;
+      font-weight: 600;
     }
     .mv2-guide-table {
-      border: 1px solid rgba(184, 135, 27, 0.16);
-      border-radius: 10px;
-      overflow: hidden;
+      display: grid;
+      gap: 0.3rem;
       margin-bottom: 0.42rem;
     }
     .mv2-guide-row {
-      display: grid;
-      grid-template-columns: 4.5rem minmax(5.5rem, 0.9fr) minmax(0, 1.2fr);
-      gap: 0.34rem;
-      padding: 0.34rem 0.44rem;
-      border-top: 1px solid rgba(184, 135, 27, 0.1);
-      background: rgba(184, 135, 27, 0.04);
-    }
-    .mv2-guide-row:first-child { border-top: none; }
-    .mv2-guide-row--head {
-      background: rgba(184, 135, 27, 0.1);
-      border-top: none;
-      padding-top: 0.28rem;
-      padding-bottom: 0.28rem;
+      padding: 0.38rem 0.44rem 0.4rem;
+      border-radius: 10px;
+      background: rgba(184, 135, 27, 0.055);
+      border: 1px solid rgba(184, 135, 27, 0.12);
     }
     .mv2-guide-col-k {
-      font-size: 0.58rem;
+      font-size: 0.61rem;
       font-weight: 700;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.04em;
       color: var(--mv2a-muted);
       text-transform: uppercase;
       line-height: 1.28;
+      margin-bottom: 0.12rem;
     }
     .mv2-guide-col-v {
-      font-size: 0.67rem;
-      line-height: 1.34;
+      font-size: 0.82rem;
+      line-height: 1.3;
       color: var(--mv2a-text-body);
-      font-weight: 700;
+      font-weight: 780;
+      margin-bottom: 0.1rem;
     }
     .mv2-guide-col-d {
       font-size: 0.62rem;
@@ -1006,50 +989,34 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-muted);
       font-weight: 500;
     }
-    .mv2-guide-row--head .mv2-guide-col-k,
-    .mv2-guide-row--head .mv2-guide-col-v,
-    .mv2-guide-row--head .mv2-guide-col-d {
-      text-transform: none;
-      letter-spacing: 0.02em;
-      font-size: 0.56rem;
-      font-weight: 700;
-      color: var(--mv2a-gold-dim);
-      opacity: 0.9;
-    }
     .mv2-guide-buff-table {
-      border: 1px solid rgba(100, 92, 82, 0.14);
-      border-radius: 10px;
-      overflow: hidden;
+      border-radius: 9px;
+      background: rgba(100, 92, 82, 0.04);
+      border: 1px solid rgba(100, 92, 82, 0.12);
+      padding: 0.3rem 0.42rem 0.22rem;
       margin-bottom: 0.38rem;
+    }
+    .mv2-guide-buff-title {
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--mv2a-gold-dim);
+      margin-bottom: 0.14rem;
     }
     .mv2-guide-buff-row {
       display: grid;
-      grid-template-columns: minmax(5.6rem, 0.95fr) 2.9rem minmax(0, 1.25fr);
+      grid-template-columns: 1fr auto;
       gap: 0.42rem;
-      padding: 0.28rem 0.44rem;
-      border-top: 1px solid rgba(100, 92, 82, 0.1);
-      background: rgba(100, 92, 82, 0.04);
+      padding: 0.18rem 0;
       font-size: 0.61rem;
       line-height: 1.32;
       color: var(--mv2a-muted);
-    }
-    .mv2-guide-buff-row:first-child { border-top: none; }
-    .mv2-guide-buff-row--head {
-      background: rgba(100, 92, 82, 0.08);
-      font-size: 0.56rem;
-      letter-spacing: 0.02em;
-      font-weight: 700;
-      color: var(--mv2a-gold-dim);
-      text-transform: uppercase;
     }
     .mv2-guide-buff-row > :nth-child(2) {
       text-align: right;
       font-weight: 700;
       color: var(--mv2a-text-body);
-    }
-    .mv2-guide-buff-row > :nth-child(3) {
-      color: var(--mv2a-muted);
-      line-height: 1.33;
     }
     .mv2-guide-progress-meta {
       margin: 0 0 0.12rem;
@@ -2347,11 +2314,8 @@ export function renderAmuletReportV2Html(payload) {
     }
     html.mv2a-theme-dark .mv2-guide-table,
     html.mv2a-theme-dark .mv2-guide-row {
-      border-color: rgba(232, 197, 71, 0.18);
-      background: rgba(232, 197, 71, 0.06);
-    }
-    html.mv2a-theme-dark .mv2-guide-row--head {
-      background: rgba(232, 197, 71, 0.12);
+      border-color: rgba(232, 197, 71, 0.15);
+      background: rgba(232, 197, 71, 0.055);
     }
     html.mv2a-theme-dark .mv2-guide-col-v,
     html.mv2a-theme-dark .mv2-guide-buff-row > :nth-child(2) {
@@ -2366,8 +2330,7 @@ export function renderAmuletReportV2Html(payload) {
       background: rgba(148, 163, 184, 0.08);
       color: rgba(203, 213, 225, 0.86);
     }
-    html.mv2a-theme-dark .mv2-guide-buff-row--head {
-      background: rgba(148, 163, 184, 0.14);
+    html.mv2a-theme-dark .mv2-guide-buff-title {
       color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-guide-progress-bar {
