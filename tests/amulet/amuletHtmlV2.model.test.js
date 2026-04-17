@@ -206,7 +206,8 @@ test("buildAmuletHtmlV2ViewModel: dailyOwnerCard stable across scans same Bangko
   );
   assert.deepEqual(vmA.dailyOwnerCard, vmB.dailyOwnerCard);
   assert.equal(vmA.dailyOwnerCard.title, "วันนี้มีแรงของคุณ");
-  assert.ok(String(vmA.dailyOwnerCard.dailyTone || "").length > 5);
+  assert.ok(String(vmA.dailyOwnerCard.line1 || "").length > 5);
+  assert.ok(String(vmA.dailyOwnerCard.line2 || "").length > 5);
 });
 
 test("buildAmuletHtmlV2ViewModel: todayObjectBoostLine varies with compatibilityPercent", () => {
