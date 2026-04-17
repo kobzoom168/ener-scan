@@ -67,6 +67,78 @@ const AMULET_TIMING_WEEKDAY_KICKER = "วันส่งดี";
 const AMULET_TIMING_TIME_KICKER = "ช่วงเวลาที่ส่งดี";
 const AMULET_TIMING_MODE_KICKER = "แนวใช้ที่แนะนำ";
 
+/**
+ * บรรทัดหลักแถว “เวลาใช้ชิ้นนี้” — ผูกกับพลังเด่นบนวัตถุ (ไม่ใช่บุคลิกถาวร)
+ * @type {Record<string, string>}
+ */
+const OWNER_REACT_USE_OBJECT_MAIN_TH = {
+  baramee: "ภาพลักษณ์และคำพูดจะมีน้ำหนักขึ้น",
+  metta: "บรรยากาศรอบตัวจะนุ่มนวลและเปิดรับมากขึ้น",
+  protection: "ความมั่นคงและการตั้งขอบเขตจะชัดขึ้น",
+  specialty: "สมาธิและงานละเอียดจะไปได้ดีขึ้น",
+  fortune_anchor: "การตั้งหลักและเรื่องสำคัญจะนิ่งขึ้น",
+  luck: "โอกาสและทางเลือกใหม่จะเปิดง่ายขึ้น",
+};
+
+/**
+ * การ์ด “ชิ้นนี้ทำให้คุณเด่นแบบไหน” — สรุปปฏิสัมพันธ์กับวัตถุที่สแกน (ไม่ใช่คะแนนบุคลิก)
+ *
+ * @param {object} p
+ * @param {string} p.alignKey
+ * @param {string} p.alignLabel
+ * @param {string[]} p.ord
+ * @param {string} p.peakKey
+ * @param {string} p.peakShort
+ * @param {string} p.s0
+ * @param {string} p.s1
+ * @param {string} p.tensionGsumValue
+ * @param {number} p.maxD
+ * @param {string} p.ownerRhythmLine — e.g. birth month rhythm (soft, stable)
+ * @param {string} p.tensionPaceSub — sub line aligned with interaction “ยังไม่ส่งกัน”
+ */
+function buildOwnerReactionCard(p) {
+  const {
+    alignKey,
+    alignLabel,
+    ord,
+    peakKey,
+    peakShort,
+    s0,
+    s1,
+    tensionGsumValue,
+    maxD,
+    ownerRhythmLine,
+    tensionPaceSub,
+  } = p;
+
+  const row1Sub =
+    alignKey === ord[0]
+      ? "ตรงกับพลังเด่นบนวัตถุ · ใช้คู่กันได้ดี"
+      : "ตรงกับด้านรองจากเด่น · ใช้คู่กันได้ดี";
+
+  const useMain =
+    OWNER_REACT_USE_OBJECT_MAIN_TH[
+      /** @type {keyof typeof OWNER_REACT_USE_OBJECT_MAIN_TH} */ (peakKey)
+    ] || `พลัง${peakShort}บนวัตถุจะหนุนจังหวะที่คุณใช้ชิ้นนี้`;
+
+  const useSub = `ส่ง ${s0} นำ · ${s1} รอง · เชื่อมกับแกนที่เข้ากับคุณ`;
+
+  const row3Sub =
+    maxD >= 26
+      ? String(tensionPaceSub || "").trim() || "ค่อย ๆ สะสมจะเข้าจังหวะกว่า"
+      : "ใช้แบบค่อย ๆ สะสมจะเข้าจังหวะกว่า";
+
+  return {
+    title: "ชิ้นนี้ทำให้คุณเด่นแบบไหน",
+    ownerRhythmLine: String(ownerRhythmLine || "").trim(),
+    rows: [
+      { kicker: "ส่งกับคุณตรงสุด", main: alignLabel, sub: row1Sub },
+      { kicker: "เวลาใช้ชิ้นนี้", main: useMain, sub: useSub },
+      { kicker: "มุมที่ควรค่อย ๆ ไป", main: tensionGsumValue, sub: row3Sub },
+    ],
+  };
+}
+
 /** ป้ายสั้นต่อ `key` ของ `TIMING_HOUR_WINDOWS` — visual เท่านั้น */
 const AMULET_TIME_STRIP_SHORT_BY_KEY = {
   dawn_05_06: "รุ่ง",
@@ -266,6 +338,20 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     },
   ];
 
+  const ownerReactionCard = buildOwnerReactionCard({
+    alignKey,
+    alignLabel,
+    ord,
+    peakKey,
+    peakShort,
+    s0,
+    s1,
+    tensionGsumValue,
+    maxD,
+    ownerRhythmLine: ownerProf.zodiacLabel,
+    tensionPaceSub: interactionRows[1].sub,
+  });
+
   const hr = av.htmlReport;
   const blurbs =
     hr?.lifeAreaBlurbs && typeof hr.lifeAreaBlurbs === "object"
@@ -336,21 +422,8 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       tension: { axisKey: tensionKey, labelThai: POWER_LABEL_THAI[tensionKey] },
     },
     graphSummary,
-    ownerProfile: {
-      zodiacLabel: ownerProf.zodiacLabel,
-      traitScores: ownerProf.traitScores,
-      note: ownerProf.note,
-      miniCards: [
-        {
-          title: "จังหวะเจ้าของ",
-          text: ownerProf.zodiacLabel,
-        },
-        {
-          title: "เข้ากันมากที่สุด",
-          text: `${alignLabel} ส่งกับคุณตรงสุด · ใช้คู่กันได้ดี`,
-        },
-      ],
-    },
+    /** Object-reactive copy (สแกนต่อชิ้น) — ไม่ใช่คะแนนบุคลิกถาวร */
+    ownerReactionCard,
     interactionSummary: {
       headline: "ชิ้นนี้ทำงานกับคุณอย่างไร",
       rows: interactionRows,

@@ -385,19 +385,31 @@ export function renderAmuletReportV2Html(payload) {
     })
     .join("")}</div>`;
 
-  const traitChipsHtml = vm.ownerProfile.traitScores
-    .map((t) => `<span class="mv2-owner-chip">${escapeHtml(t.label)} ${t.score}/10</span>`)
-    .join("");
-
-  const ownerMiniCardsHtml = (vm.ownerProfile.miniCards || [])
-    .map(
-      (c) => `
-    <div class="mv2-owner-mini">
-      <div class="mv2-owner-mini-t">${escapeHtml(c.title)}</div>
-      <p class="mv2-owner-mini-b">${escapeHtml(c.text)}</p>
+  const ownerReactionCardHtml = (() => {
+    const c = /** @type {{ title?: string; ownerRhythmLine?: string; rows?: { kicker: string; main: string; sub: string }[] }} */ (
+      vm.ownerReactionCard
+    );
+    if (!c || !Array.isArray(c.rows) || c.rows.length === 0) return "";
+    const rows = c.rows
+      .map(
+        (row) => `
+    <div class="mv2-owner-react-row">
+      <span class="mv2-owner-react-kicker">${escapeHtml(row.kicker)}</span>
+      <span class="mv2-owner-react-main">${escapeHtml(row.main)}</span>
+      <span class="mv2-owner-react-sub">${escapeHtml(row.sub)}</span>
     </div>`,
-    )
-    .join("");
+      )
+      .join("");
+    const rhythm =
+      c.ownerRhythmLine && String(c.ownerRhythmLine).trim()
+        ? `<p class="mv2-owner-react-rhythm">${escapeHtml(String(c.ownerRhythmLine).trim())}</p>`
+        : "";
+    return `<section class="mv2-card mv2-card--owner-react" aria-labelledby="mv2-owner-react-h">
+      <h2 id="mv2-owner-react-h">${escapeHtml(c.title || "ชิ้นนี้ทำให้คุณเด่นแบบไหน")}</h2>
+      ${rhythm}
+      <div class="mv2-owner-react-rows">${rows}</div>
+    </section>`;
+  })();
 
   const interactionHtml = vm.interactionSummary.rows
     .map(
@@ -1168,15 +1180,60 @@ export function renderAmuletReportV2Html(payload) {
         font-size: 0.52rem;
       }
     }
-    .mv2-card--owner > h2 { margin-bottom: 0.28rem; }
-    .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.42rem; }
-    .mv2-owner-chip { font-size: 0.72rem; padding: 0.2rem 0.45rem; border-radius: 999px; background: var(--mv2a-owner-chip-bg); border: 1px solid var(--mv2a-owner-chip-border); color: var(--mv2a-owner-chip-text); }
-    .mv2-owner-minis { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin: 0 0 0.42rem; }
-    @media (max-width: 420px) { .mv2-owner-minis { grid-template-columns: 1fr; } }
-    .mv2-owner-mini { padding: 0.45rem 0.55rem; border-radius: 10px; background: var(--mv2a-owner-mini-bg); border: 1px solid var(--mv2a-owner-mini-border); }
-    .mv2-owner-mini-t { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mv2a-owner-mini-t); margin: 0 0 0.22rem; }
-    .mv2-owner-mini-b { margin: 0; font-size: 0.78rem; line-height: 1.35; color: var(--mv2a-owner-mini-b); }
-    .mv2-owner-note { margin: 0.45rem 0 0; font-size: 0.62rem; color: var(--mv2a-owner-note); }
+    .mv2-card--owner-react {
+      margin: 0.48rem 0 0.42rem;
+      padding: 0.72rem 0.9rem 0.78rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.32);
+      background: var(--mv2a-card);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .mv2-card--owner-react > h2 {
+      margin: 0 0 0.42rem;
+      font-size: 0.92rem;
+      font-weight: 650;
+      line-height: 1.25;
+      color: var(--mv2a-gold-dim);
+    }
+    .mv2-owner-react-rhythm {
+      margin: -0.15rem 0 0.48rem;
+      font-size: 0.65rem;
+      line-height: 1.35;
+      color: var(--mv2a-muted);
+      font-weight: 500;
+    }
+    .mv2-owner-react-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.48rem;
+    }
+    .mv2-owner-react-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      padding: 0.4rem 0.5rem;
+      border-radius: 10px;
+      background: rgba(184, 135, 27, 0.04);
+      border: 1px solid rgba(100, 92, 82, 0.12);
+    }
+    .mv2-owner-react-kicker {
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mv2a-muted);
+    }
+    .mv2-owner-react-main {
+      font-size: 0.82rem;
+      font-weight: 650;
+      line-height: 1.32;
+      color: var(--mv2a-text-body);
+    }
+    .mv2-owner-react-sub {
+      font-size: 0.7rem;
+      line-height: 1.38;
+      color: var(--mv2a-muted);
+      font-weight: 450;
+    }
     .mv2-int-cards { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.15rem 0 0; }
     .mv2-int-card { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.48rem 0.55rem; border-radius: 10px; background: var(--mv2a-int-bg); border: 1px solid var(--mv2a-int-border); }
     .mv2-int-kicker { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; color: var(--mv2a-int-kicker); }
@@ -1728,6 +1785,17 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-card--int-near-graph {
       border-left-color: rgba(232, 197, 71, 0.42);
     }
+    html.mv2a-theme-dark .mv2-card--owner-react {
+      border-left-color: rgba(232, 197, 71, 0.4);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.32);
+    }
+    html.mv2a-theme-dark .mv2-owner-react-row {
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-owner-react-main {
+      color: rgba(241, 245, 249, 0.94);
+    }
     .mv2-share-btn--line {
       background: #06c755;
       border-color: #05b34c;
@@ -1781,13 +1849,7 @@ export function renderAmuletReportV2Html(payload) {
       <div class="mv2-int-cards">${interactionHtml}</div>
     </section>
 
-    <section class="mv2-card mv2-card--owner" aria-labelledby="mv2-owner-h">
-      <h2 id="mv2-owner-h">โปรไฟล์เจ้าของ</h2>
-      <div class="mv2-owner-minis">${ownerMiniCardsHtml}</div>
-      <div class="mv2-owner-chips">${traitChipsHtml}</div>
-      <!-- Optional future: subtle text link e.g. เปลี่ยนวันเกิดเพื่อดูผลใหม่ (no primary button in this pass) -->
-      <p class="mv2-owner-note">${escapeHtml(vm.ownerProfile.note)}</p>
-    </section>
+    ${ownerReactionCardHtml}
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
       <h2 id="mv2-life-h">พลังทั้ง 6 ด้าน</h2>
