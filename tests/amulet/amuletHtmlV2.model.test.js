@@ -205,7 +205,7 @@ test("buildAmuletHtmlV2ViewModel: dailyOwnerCard stable across scans same Bangko
     minimalPayload({ scanId: "scan-b", reportId: "r-other", generatedAt: iso }),
   );
   assert.deepEqual(vmA.dailyOwnerCard, vmB.dailyOwnerCard);
-  assert.equal(vmA.dailyOwnerCard.title, "วันนี้มีแรงของคุณ");
+  assert.equal(vmA.dailyOwnerCard.title, "โทนที่อ่านคู่กับคุณ");
   assert.ok(String(vmA.dailyOwnerCard.line1 || "").length > 5);
   assert.ok(String(vmA.dailyOwnerCard.line2 || "").length > 5);
 });
@@ -233,8 +233,8 @@ test("buildAmuletHtmlV2ViewModel: faithProgressCard B→A projection (display-on
     summary: { ...base.summary, energyScore: 7.2 },
   });
   assert.ok(vm.faithProgressCard);
-  assert.equal(vm.faithProgressCard.title, "ทางไปสู่ตัว top");
-  assert.equal(vm.faithProgressCard.subtitle, "เสริมพลังตามความเชื่อ");
+  assert.equal(vm.faithProgressCard.title, "จังหวะและเพดานของชิ้นนี้");
+  assert.equal(vm.faithProgressCard.subtitle, "เสริมตามความเชื่อ");
   assert.ok(String(vm.faithProgressCard.returnLoopHint || "").includes("เป้าหมายรอบถัดไป"));
   assert.equal(vm.faithProgressCard.baseGrade, "B");
   assert.equal(vm.faithProgressCard.projectedGrade, "A");

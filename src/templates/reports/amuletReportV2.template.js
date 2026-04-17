@@ -517,21 +517,10 @@ export function renderAmuletReportV2Html(payload) {
       : null;
   const fmt10 = (n) =>
     n != null && Number.isFinite(Number(n)) ? Number(n).toFixed(2) : "—";
-  const projectedFillPct =
-    fp && Number.isFinite(Number(fp.projectedScore10))
-      ? Math.max(0, Math.min(100, (Number(fp.projectedScore10) / 10) * 100))
-      : null;
-  const guideScanExplain = fp
-    ? String(fp.scanNextHint || "").trim() ||
-      "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด"
-    : "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด";
-  const guideBoostTotal = boostPercent != null ? Math.max(0, Math.round(boostPercent)) : 12;
   const baseGrade = String(fp?.baseGrade || "").trim().toUpperCase();
   const projectedGrade = String(fp?.projectedGrade || "").trim().toUpperCase() || "—";
   const progressTargetGrade = projectedGrade;
   const progressTargetScore = fp ? fmt10(fp.projectedScore10) : "—";
-  const progressCurrentScore = fp ? fmt10(fp.baseScore10) : "—";
-  const progressTargetLabel = `คะแนนคาดการณ์ ${progressTargetScore} · ${progressTargetGrade}`;
   /** Display-only gap to S threshold (8.9) — same grade boundaries as report energy grades */
   const gapToS10 = (() => {
     const base = Number(fp?.baseScore10);
@@ -559,26 +548,22 @@ export function renderAmuletReportV2Html(payload) {
     return "ควรสแกนเพิ่ม";
   })();
   const heroVerdictLine = (() => {
-    if (progressTargetGrade === "S") {
+    if (pipelineFromGrade === "S") {
+      return "ใช้ต่อได้ เกรดในระบบอยู่ระดับสูงแล้ว";
+    }
+    if (progressTargetGrade === "S" && pipelineFromGrade !== "S") {
       return "ชิ้นนี้ยังมีลุ้นขยับถึง S ได้ในรอบนี้";
     }
     if (pipelineFromGrade === "A" && progressTargetGrade === "A") {
-      return "รอบนี้บูสต์เต็มที่แล้วยังไม่ถึง S";
+      return "ใช้ต่อได้ แต่ถ้าจะลุ้น S การสแกนเพิ่มคุ้มกว่า";
     }
     if (pipelineFromGrade === "B" && progressTargetGrade === "A") {
-      return "รอบนี้บูสต์เต็มที่แล้วยังไปได้แค่ A";
+      return "ชิ้นนี้เหมาะเป็นตัวตั้ง แต่ถ้าจะลุ้น S การสแกนเพิ่มอาจคุ้มกว่า";
     }
     if (pipelineFromGrade === "B" && progressTargetGrade === "B") {
-      return "ชิ้นนี้เหมาะเป็นตัวตั้ง แต่ยังไม่ใช่ตัวที่จะดันถึง S";
+      return "ชิ้นนี้เหมาะเป็นตัวตั้ง แต่ยังไม่ใช่ตัวปั้นสุด";
     }
     return "ถ้าจะลุ้น S การสแกนหาอีก 2–3 ชิ้นในสายเดียวกันอาจคุ้มกว่า";
-  })();
-  const laneFillPct = (() => {
-    if (pipelineFromGrade === "A" && progressTargetGrade === "S") return 100;
-    if (pipelineFromGrade === "B" && progressTargetGrade === "A") return 58;
-    if (pipelineFromGrade === "A" && progressTargetGrade === "A") return 50;
-    if (pipelineFromGrade === "B" && progressTargetGrade === "B") return 34;
-    return 20;
   })();
   const stepOneAnswer = `${useDayLabel} · ${useTimeLabel}`;
   const boostMetricDisplay = (() => {
@@ -610,23 +595,10 @@ export function renderAmuletReportV2Html(payload) {
       ? `${progressTargetGrade}+`
       : progressTargetGrade;
   const continuousHorizonMain = `${fullsetMark} · ${progressTargetScore}/10 · ${durationContinuousBand}`;
-  const lanePosForGrade = (g) => {
-    if (g === "S") return 100;
-    if (g === "A") return 50;
-    return 0;
-  };
-  const todayLanePos = lanePosForGrade(pipelineFromGrade);
-  const fullsetLanePos =
-    pipelineFromGrade === progressTargetGrade && (boostCapScore10 || 0) > 0
-      ? pipelineFromGrade === "A"
-        ? 84
-        : 34
-      : lanePosForGrade(progressTargetGrade);
-  const ceilingLanePos = lanePosForGrade(progressTargetGrade);
   const guideCardHtml = `<section class="mv2-card mv2-card--guide" aria-labelledby="mv2-guide-h">
-      <h2 id="mv2-guide-h">ชิ้นนี้ไปได้ไกลแค่ไหน</h2>
+      <h2 id="mv2-guide-h">จังหวะและเพดานของชิ้นนี้</h2>
       <div class="mv2-guide-hero">
-        <p class="mv2-guide-hero-k">ทางไปสู่ตัว top · จังหวะ · การฝึก · เพดานรอบนี้</p>
+        <p class="mv2-guide-hero-k">เกรดปัจจุบัน · จังหวะซ้ำ · การฝึก · เพดานรอบนี้</p>
         <p class="mv2-guide-hero-grade">${escapeHtml(heroGradeResult)}</p>
         <p class="mv2-guide-hero-verdict">${escapeHtml(heroVerdictLabel)}</p>
       </div>
@@ -644,25 +616,12 @@ export function renderAmuletReportV2Html(payload) {
           <span class="mv2-guide-metric-v">${escapeHtml(durationContinuousBand)}</span>
         </div>
       </div>
-      <div class="mv2-guide-grade-lane" aria-label="เกรดเลน B ไป S">
-        <div class="mv2-guide-grade-line">
-          <span class="mv2-guide-grade-fill" style="width:${laneFillPct.toFixed(1)}%"></span>
-          <span class="mv2-guide-lane-pin is-peak" title="จังหวะที่แนะนำ (ซ้ำได้)" style="left:${todayLanePos.toFixed(1)}%"></span>
-          <span class="mv2-guide-lane-pin is-continuous" title="ถ้าทำต่อเนื่อง" style="left:${fullsetLanePos.toFixed(1)}%"></span>
-          <span class="mv2-guide-lane-pin is-ceiling" title="เพดานรอบนี้" style="left:${ceilingLanePos.toFixed(1)}%"></span>
-        </div>
-        <div class="mv2-guide-grade-stops">
-          <span class="mv2-guide-grade-stop is-active">B</span>
-          <span class="mv2-guide-grade-stop ${progressTargetGrade === "A" || progressTargetGrade === "S" ? "is-active" : ""}">A</span>
-          <span class="mv2-guide-grade-stop ${progressTargetGrade === "S" ? "is-active" : ""}">S</span>
-        </div>
-      </div>
       <div class="mv2-guide-horizon-stack" aria-label="สามขอบเขต">
         <div class="mv2-guide-horizon-card">
           <span class="mv2-guide-horizon-card-k">ใช้เด่นสุด</span>
           <span class="mv2-guide-horizon-card-line">${escapeHtml(stepOneAnswer)}</span>
           ${useModeLabel ? `<span class="mv2-guide-horizon-card-mode">${escapeHtml(useModeLabel)}</span>` : ""}
-          <p class="mv2-guide-horizon-card-hint">จังหวะที่แนะนำซ้ำได้ ไม่ผูกกับวันเดียว</p>
+          <p class="mv2-guide-horizon-card-hint">จังหวะที่แนะนำซ้ำได้ทุกสัปดาห์ · ไม่ใช่แค่ครั้งเดียว</p>
         </div>
         <div class="mv2-guide-horizon-card">
           <span class="mv2-guide-horizon-card-k">ถ้าทำต่อเนื่อง</span>
@@ -683,34 +642,20 @@ export function renderAmuletReportV2Html(payload) {
         </div>
         <div class="mv2-guide-belief-tier" role="listitem">
           <span class="mv2-guide-belief-k">ระยะกลาง</span>
-          <span class="mv2-guide-belief-v">ใช้วันไหน · ใช้ตามวันเวลาแนะนำ + สวดสั้น + ตั้งจิต · ถ้าใช้ถูกจังหวะ ต้องมีวินัย และเห็นผลเป็นช่วง</span>
+          <span class="mv2-guide-belief-v">ใช้ตามวันเวลาแนะนำ + สวดสั้น + ตั้งจิต · ต้องมีวินัย และเห็นผลเป็นช่วง</span>
         </div>
         <div class="mv2-guide-belief-tier" role="listitem">
           <span class="mv2-guide-belief-k">ระยะยาว</span>
           <span class="mv2-guide-belief-v">สวดมนต์ + สมาธิต่อเนื่อง · ใช้เวลาเป็นสัปดาห์ถึงเดือน แต่ให้น้ำหนักสูงสุด</span>
         </div>
-        <p class="mv2-guide-belief-note">ผ่านพิธีปลุกเสก / ผ่านการอธิษฐานต่อเนื่อง · บูชาต่อเนื่อง / ผ่านพิธี · โบนัสพิเศษ ไม่ใช่ base rule ของทุกชิ้น</p>
+        <p class="mv2-guide-belief-note">ผ่านพิธีปลุกเสก / ผ่านการอธิษฐานต่อเนื่อง · เป็นโบนัสพิเศษ ไม่ใช่ base rule ของทุกชิ้น</p>
       </div>
       <div class="mv2-guide-bottom">
-        <p class="mv2-guide-bonus-total">${escapeHtml(
-          boostPercent != null ? `โบนัสรวมประมาณ +${Math.round(boostPercent)}%` : "โบนัสรวมประมาณ —",
+        <p class="mv2-guide-boost-inline">${escapeHtml(
+          boostPercent != null
+            ? `โบนัสจังหวะประมาณ +${Math.round(boostPercent)}% · คะแนนหลักของรายงานไม่เปลี่ยน`
+            : "โบนัสจังหวะประมาณ — · คะแนนหลักของรายงานไม่เปลี่ยน",
         )}</p>
-        <div class="mv2-guide-boost-wrap">
-          <div class="mv2-guide-gauge" style="--mv2-guide-gauge-pct:${Math.max(0, Math.min(100, guideBoostTotal)).toFixed(1)}">
-            <div class="mv2-guide-gauge-core">+${escapeHtml(String(guideBoostTotal))}%<span>โบนัสจังหวะ</span></div>
-          </div>
-        </div>
-        <div class="mv2-guide-progress">
-          <div class="mv2-guide-progress-head">
-            <span class="mv2-guide-progress-meta">${escapeHtml(`คะแนนปัจจุบัน ${progressCurrentScore}`)}</span>
-            <span class="mv2-guide-progress-meta mv2-guide-progress-meta--target">${escapeHtml(progressTargetLabel)}</span>
-          </div>
-          <div class="mv2-guide-progress-bar" role="presentation">
-            <span class="mv2-guide-progress-fill" style="width:${projectedFillPct != null ? projectedFillPct.toFixed(1) : "0"}%"></span>
-          </div>
-          <p class="mv2-guide-progress-inline">${escapeHtml(`${progressCurrentScore} → ${progressTargetScore} ${progressTargetGrade}`)}</p>
-        </div>
-        <p class="mv2-guide-progress-note">เป็นค่าประมาณการจากการใช้งานตามจังหวะและความเชื่อ ไม่ได้เปลี่ยนคะแนนหลักของรายงาน</p>
         <p class="mv2-guide-closing">${escapeHtml(heroVerdictLine)}</p>
       </div>
     </section>`;
@@ -1333,6 +1278,14 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-guide-bottom {
       border-top: 1px solid rgba(184, 135, 27, 0.12);
       padding-top: 0.34rem;
+    }
+    .mv2-guide-boost-inline {
+      margin: 0 0 0.22rem;
+      font-size: 0.6rem;
+      line-height: 1.34;
+      color: var(--mv2a-muted);
+      font-weight: 560;
+      text-align: center;
     }
     .mv2-guide-bonus-total {
       margin: 0 0 0.18rem;
@@ -2836,6 +2789,9 @@ export function renderAmuletReportV2Html(payload) {
     }
     html.mv2a-theme-dark .mv2-guide-bottom {
       border-top-color: rgba(232, 197, 71, 0.16);
+    }
+    html.mv2a-theme-dark .mv2-guide-boost-inline {
+      color: rgba(148, 163, 184, 0.88);
     }
     html.mv2a-theme-dark .mv2-guide-bonus-total {
       color: #fde68a;

@@ -630,9 +630,9 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       tension: { axisKey: tensionKey, labelThai: POWER_LABEL_THAI[tensionKey] },
     },
     graphSummary,
-    /** จังหวะวันนี้ของเจ้าของ — stable ต่อวัน (ไม่ผูกวัตถุ) */
+    /** โทนเจ้าของในรอบสแกน — stable ต่อวัน (ไม่ผูกวัตถุ) */
     dailyOwnerCard,
-    /** บรรทัดสั้น ชิ้นนี้ + วันนี้ — เปลี่ยนตามวัตถุ/เข้ากัน */
+    /** บรรทัดสั้นชิ้นนี้กับจังหวะคุณ — เปลี่ยนตามวัตถุ/เข้ากัน */
     todayObjectBoostLine,
     /** ชิ้นนี้ใช่กับคุณแค่ไหน (top-finder) · เกรดการ์ดแยกจากความเด่นพลังงานระบบ */
     decisionCard,
