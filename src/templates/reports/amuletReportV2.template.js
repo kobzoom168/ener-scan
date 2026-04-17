@@ -385,6 +385,24 @@ export function renderAmuletReportV2Html(payload) {
     })
     .join("")}</div>`;
 
+  const dailyOwnerCardHtml = (() => {
+    const d = /** @type {{ title?: string; dailyTone?: string; dailyAdvice?: string; dailyScanHint?: string } | null} */ (
+      vm.dailyOwnerCard
+    );
+    if (!d || !String(d.title || "").trim()) return "";
+    return `<section class="mv2-card mv2-card--daily-owner" aria-labelledby="mv2-daily-owner-h">
+      <h2 id="mv2-daily-owner-h" class="mv2-daily-owner-h">${escapeHtml(String(d.title).trim())}</h2>
+      <p class="mv2-daily-owner-p">${escapeHtml(String(d.dailyTone || "").trim())}</p>
+      <p class="mv2-daily-owner-p mv2-daily-owner-p--soft">${escapeHtml(String(d.dailyAdvice || "").trim())}</p>
+      <p class="mv2-daily-owner-hint">${escapeHtml(String(d.dailyScanHint || "").trim())}</p>
+    </section>`;
+  })();
+
+  const todayObjectBoostHtml =
+    vm.todayObjectBoostLine && String(vm.todayObjectBoostLine).trim()
+      ? `<p class="mv2-today-object-boost" role="note">${escapeHtml(String(vm.todayObjectBoostLine).trim())}</p>`
+      : "";
+
   const decisionCardHtml = (() => {
     const dc = /** @type {{ title?: string; keepGrade?: string; verdict?: string; reason?: string; nextHint?: string } | null} */ (
       vm.decisionCard
@@ -1710,6 +1728,44 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.52;
       color: var(--mv2a-muted);
     }
+    .mv2-card--daily-owner {
+      margin: 0.45rem 0 0.35rem;
+      padding: 0.65rem 0.85rem 0.72rem;
+      border-left: 2px solid rgba(184, 135, 27, 0.26);
+    }
+    .mv2-card--daily-owner > h2.mv2-daily-owner-h {
+      font-size: 0.72rem;
+      margin: 0 0 0.35rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--mv2a-muted);
+    }
+    .mv2-daily-owner-p {
+      margin: 0 0 0.22rem;
+      font-size: 0.8rem;
+      line-height: 1.42;
+      color: var(--mv2a-text-body);
+    }
+    .mv2-daily-owner-p--soft {
+      font-size: 0.76rem;
+      color: var(--mv2a-muted);
+    }
+    .mv2-daily-owner-hint {
+      margin: 0.28rem 0 0;
+      font-size: 0.72rem;
+      line-height: 1.38;
+      color: var(--mv2a-muted);
+    }
+    .mv2-today-object-boost {
+      margin: 0.35rem 0 0;
+      padding: 0.42rem 0.65rem;
+      font-size: 0.76rem;
+      line-height: 1.4;
+      color: var(--mv2a-muted);
+      background: rgba(184, 135, 27, 0.045);
+      border-radius: 8px;
+      border-left: 2px solid rgba(184, 135, 27, 0.2);
+    }
     html.mv2a-theme-dark .mv2-meta-block {
       background: rgba(232, 197, 71, 0.06);
       border-color: rgba(232, 197, 71, 0.18);
@@ -1717,6 +1773,21 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-trust-sources {
       background: rgba(232, 197, 71, 0.05);
       border-color: rgba(232, 197, 71, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-card--daily-owner {
+      border-left-color: rgba(232, 197, 71, 0.3);
+    }
+    html.mv2a-theme-dark .mv2-daily-owner-p {
+      color: rgba(226, 232, 240, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-daily-owner-hint,
+    html.mv2a-theme-dark .mv2-daily-owner-p--soft {
+      color: rgba(148, 163, 184, 0.9);
+    }
+    html.mv2a-theme-dark .mv2-today-object-boost {
+      background: rgba(232, 197, 71, 0.05);
+      border-left-color: rgba(232, 197, 71, 0.26);
+      color: rgba(203, 213, 225, 0.9);
     }
     .mv2-toast {
       position: fixed;
@@ -1953,6 +2024,8 @@ export function renderAmuletReportV2Html(payload) {
 
     ${trustSourcesHtml}
 
+    ${dailyOwnerCardHtml}
+
     ${mainGraphBlock(vm)}
 
     <section class="mv2-card mv2-card--gsum-follow" aria-labelledby="mv2-gsum-h">
@@ -1961,6 +2034,8 @@ export function renderAmuletReportV2Html(payload) {
     </section>
 
     ${decisionCardHtml}
+
+    ${todayObjectBoostHtml}
 
     <section class="mv2-card mv2-card--int-near-graph" aria-labelledby="mv2-int-h">
       <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
