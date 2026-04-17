@@ -132,7 +132,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
   assert.ok(html.includes("พลังทั้ง 6 ด้าน"));
   assert.ok(html.includes("เรียงจากคะแนนสูงไปต่ำ"));
-  assert.ok(html.includes('class="mv2-life-row"'));
+  assert.ok(html.includes("mv2-life-row"));
   assert.ok(html.includes("พลังเด่น"));
   assert.ok(html.includes("สรุปผล"));
   assert.ok(html.includes("เข้ากับคุณที่สุด"));
@@ -181,7 +181,11 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("ชิ้นนี้ทำงานกับคุณอย่างไร"));
   assert.ok(html.includes("--mv2-font-th"));
   assert.ok(html.includes("Noto Sans Thai"));
-  assert.ok(!html.includes("ควรค่อย ๆ ไป"));
+  assert.ok(html.includes("ควรค่อย ๆ ไป"), "graph summary row 3: tension pace");
+  assert.ok(html.includes("ภาพวัตถุที่ใช้ในการวิเคราะห์"));
+  assert.ok(html.includes("ควรใช้ยังไงตอนนี้"));
+  assert.ok(html.includes('class="mv2-card mv2-card--timing-action"'));
+  assert.ok(html.includes('class="mv2-card mv2-card--int-near-graph"'));
   assert.ok(!html.includes("แกน"));
   assert.ok(!html.includes("โค้ง"));
   assert.ok(html.includes("จังหวะเกิดเดือนมิถุนายน"));

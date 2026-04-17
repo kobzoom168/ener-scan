@@ -203,6 +203,11 @@ export function buildAmuletHtmlV2ViewModel(payload) {
   const gapTop12 = objectP[ord[0]] - objectP[ord[1]];
   const topLabel = POWER_LABEL_THAI[ord[0]];
   const alignLabel = POWER_LABEL_THAI[alignKey];
+  const tensionLabel = POWER_LABEL_THAI[tensionKey];
+  const tensionGsumValue =
+    maxD >= 26
+      ? `${tensionLabel} · อย่าเร่ง`
+      : `${tensionLabel} · ค่อย ๆ สะสม`;
   const graphSummary = {
     rows: [
       {
@@ -216,9 +221,13 @@ export function buildAmuletHtmlV2ViewModel(payload) {
         label: "เข้ากับคุณที่สุด",
         value: alignLabel,
       },
+      {
+        label: "ควรค่อย ๆ ไป",
+        value: tensionGsumValue,
+        rowKind: "tension",
+      },
     ],
   };
-  const tensionLabel = POWER_LABEL_THAI[tensionKey];
   const peakKey = ord[0];
   const peakShort =
     AMULET_PEAK_SHORT_THAI[peakKey] || POWER_LABEL_THAI[peakKey];
@@ -359,6 +368,27 @@ export function buildAmuletHtmlV2ViewModel(payload) {
         return null;
       }
       return buildSacredAmuletTimingCardDisplay(tv, ord[0], ord[1]);
+    })(),
+    /** Compact “ตอนนี้ทำอะไร” — same timing truth as `timingSection`, shortened for scanning. */
+    timingActionCard: (() => {
+      const tv = payload.timingV1;
+      if (
+        !tv ||
+        (tv.engineVersion !== "timing_v1" && tv.engineVersion !== "timing_v1_1") ||
+        !tv.summary ||
+        !Array.isArray(tv.bestHours) ||
+        tv.bestHours.length === 0
+      ) {
+        return null;
+      }
+      const card = buildSacredAmuletTimingCardDisplay(tv, ord[0], ord[1]);
+      return {
+        title: "ควรใช้ยังไงตอนนี้",
+        weekday: card.topWeekdayLabel,
+        window: card.topWindowLabel,
+        ritualLine: card.ritualLine,
+        hint: card.hint,
+      };
     })(),
     trustNote: String(payload.trust?.trustNote || "").trim(),
     reportVersion: String(payload.reportVersion || ""),

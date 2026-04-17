@@ -303,6 +303,7 @@ export function renderAmuletReportV2Html(payload) {
   const vm = buildAmuletHtmlV2ViewModel(payload);
   const htmlTheme = resolveAmuletHtmlTheme(payload);
   const h = vm.hero;
+  /** “วันเวลาที่วิเคราะห์” — SSOT via `resolveScannedAtIsoForReportMeta` (report build time tiers), not raw `compatibility.inputs.scannedAt`. */
   const scannedIso = resolveScannedAtIsoForReportMeta(payload, h.reportGeneratedAt);
   const metaTimeLabel = formatReportMetaDatetimeOrEmpty(scannedIso);
   const metaReportId = formatEsDisplayReportId(payload.publicToken, payload.reportId);
@@ -317,10 +318,14 @@ export function renderAmuletReportV2Html(payload) {
       : "ไม่มี";
 
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
-    .map(
-      (r, i) =>
-        `<div class="mv2-gsum-row${i === 0 ? " mv2-gsum-row--lead" : ""}"><span class="mv2-gsum-k">${escapeHtml(r.label)}</span><span class="mv2-gsum-v">${escapeHtml(r.value)}</span></div>`,
-    )
+    .map((r, i) => {
+      const lead = i === 0 ? " mv2-gsum-row--lead" : "";
+      const tension =
+        /** @type {{ rowKind?: string }} */ (r).rowKind === "tension"
+          ? " mv2-gsum-row--tension"
+          : "";
+      return `<div class="mv2-gsum-row${lead}${tension}"><span class="mv2-gsum-k">${escapeHtml(r.label)}</span><span class="mv2-gsum-v">${escapeHtml(r.value)}</span></div>`;
+    })
     .join("")}</div>`;
 
   const traitChipsHtml = vm.ownerProfile.traitScores
@@ -346,8 +351,8 @@ export function renderAmuletReportV2Html(payload) {
 
   const lifeRowsHtml = vm.lifeAreaDetail.rows
     .map(
-      (row) => `
-    <div class="mv2-life-row" data-axis="${escapeHtml(row.key)}">
+      (row, idx) => `
+    <div class="mv2-life-row mv2-life-row--r${idx + 1}" data-axis="${escapeHtml(row.key)}">
       <span class="mv2-life-name">${escapeHtml(row.label)}</span>
       <span class="mv2-life-score">${escapeHtml(String(row.score))}</span>
       <span class="mv2-life-blurb">${escapeHtml(row.blurb)}</span>
@@ -359,6 +364,21 @@ export function renderAmuletReportV2Html(payload) {
 
   const ts = vm.timingSection;
   const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
+  const tac = /** @type {{ title?: string; weekday?: string; window?: string; ritualLine?: string; hint?: string } | null} */ (
+    vm.timingActionCard
+  );
+  const timingActionCardHtml =
+    tac && (tac.weekday || tac.window || tac.ritualLine || tac.hint)
+      ? `<section class="mv2-card mv2-card--timing-action" aria-labelledby="mv2-ta-h">
+      <h2 id="mv2-ta-h">${escapeHtml(tac.title || "ควรใช้ยังไงตอนนี้")}</h2>
+      <div class="mv2-ta-body" role="group">
+        ${tac.weekday ? `<p class="mv2-ta-line"><span class="mv2-ta-k">วัน</span><span class="mv2-ta-v">${escapeHtml(tac.weekday)}</span></p>` : ""}
+        ${tac.window ? `<p class="mv2-ta-line"><span class="mv2-ta-k">ช่วงเวลา</span><span class="mv2-ta-v">${escapeHtml(tac.window)}</span></p>` : ""}
+        ${tac.ritualLine ? `<p class="mv2-ta-line mv2-ta-line--ritual"><span class="mv2-ta-k">แนวใช้</span><span class="mv2-ta-v">${escapeHtml(tac.ritualLine)}</span></p>` : ""}
+        ${tac.hint ? `<p class="mv2-ta-hint">${escapeHtml(tac.hint)}</p>` : ""}
+      </div>
+    </section>`
+      : "";
 
   const subtypeLabel = h.subtypeLabel || "พระเครื่อง";
   /** Shorter tab / share title — big `<h1>` stays the main on-page anchor */
@@ -404,7 +424,7 @@ export function renderAmuletReportV2Html(payload) {
   const shareTextJson = JSON.stringify("ดูรายงานพลังจาก Ener Scan ได้ที่ลิงก์นี้");
 
   const heroMediaCol = h.objectImageUrl
-    ? `<div class="mv2a-media"><img src="${escapeHtml(h.objectImageUrl)}" alt="" loading="lazy" /></div>`
+    ? `<div class="mv2a-media"><img src="${escapeHtml(h.objectImageUrl)}" alt="" loading="lazy" /><p class="mv2a-media-caption">ภาพวัตถุที่ใช้ในการวิเคราะห์</p></div>`
     : "";
 
   const metaTimeRowHtml = metaTimeLabel
@@ -638,6 +658,15 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: 12px;
       border: 1px solid var(--mv2a-media-border);
     }
+    .mv2a-media-caption {
+      margin: 0.28rem 0 0;
+      font-size: 0.58rem;
+      line-height: 1.3;
+      color: var(--mv2a-muted);
+      text-align: center;
+      opacity: 0.88;
+      letter-spacing: 0.02em;
+    }
     .mv2-h1 { font-size: 1.32rem; margin: 0 0 0.2rem; color: var(--mv2a-gold); font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
     .mv2-main { font-size: 0.93rem; margin: 0.28rem 0 0; color: var(--mv2a-text-body); font-weight: 500; line-height: 1.38; }
     @media (max-width: 520px) {
@@ -853,6 +882,64 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-gsum-row--lead .mv2-gsum-v { color: var(--mv2a-gsum-v-lead); }
     .mv2-card--gsum-follow .mv2-gsum-row--lead { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .mv2-gsum-row--tension {
+      padding: 0.4rem 0.85rem;
+      background: rgba(184, 135, 27, 0.06);
+      border-style: dashed;
+      opacity: 0.96;
+    }
+    .mv2-gsum-row--tension .mv2-gsum-k { font-size: 0.68rem; }
+    .mv2-gsum-row--tension .mv2-gsum-v { font-size: 0.82rem; font-weight: 700; }
+    .mv2-card--int-near-graph {
+      margin-top: 0.42rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.38);
+      padding-top: 0.78rem;
+      padding-bottom: 0.8rem;
+    }
+    .mv2-card--int-near-graph > h2 { font-size: 0.92rem; color: var(--mv2a-gold); margin-bottom: 0.42rem; }
+    .mv2-card--timing-action {
+      margin: 0.55rem 0 0.45rem;
+      padding: 0.72rem 0.85rem;
+      border-left: 3px solid rgba(5, 150, 105, 0.42);
+      background: linear-gradient(180deg, rgba(5, 150, 105, 0.05) 0%, var(--mv2a-card) 72%);
+    }
+    .mv2-card--timing-action > h2 {
+      font-size: 0.82rem;
+      margin: 0 0 0.45rem;
+      color: var(--mv2a-gold-dim);
+      font-weight: 650;
+    }
+    .mv2-ta-body { margin: 0; }
+    .mv2-ta-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.35rem 0.5rem;
+      margin: 0 0 0.32rem;
+      font-size: 0.8rem;
+      line-height: 1.35;
+      color: var(--mv2a-text-body);
+    }
+    .mv2-ta-line:last-of-type { margin-bottom: 0.25rem; }
+    .mv2-ta-k {
+      flex-shrink: 0;
+      min-width: 3.1rem;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--mv2a-muted);
+    }
+    .mv2-ta-v { flex: 1; min-width: 0; font-weight: 600; }
+    .mv2-ta-line--ritual .mv2-ta-v { font-weight: 650; color: var(--mv2a-gold-dim); }
+    .mv2-ta-hint {
+      margin: 0.38rem 0 0;
+      padding-top: 0.38rem;
+      border-top: 1px solid var(--mv2a-card-border);
+      font-size: 0.72rem;
+      line-height: 1.4;
+      color: var(--mv2a-muted);
+    }
     .mv2-card--owner > h2 { margin-bottom: 0.28rem; }
     .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.42rem; }
     .mv2-owner-chip { font-size: 0.72rem; padding: 0.2rem 0.45rem; border-radius: 999px; background: var(--mv2a-owner-chip-bg); border: 1px solid var(--mv2a-owner-chip-border); color: var(--mv2a-owner-chip-text); }
@@ -869,9 +956,19 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-int-sub { font-size: 0.72rem; color: var(--mv2a-int-sub); line-height: 1.35; }
     .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: var(--mv2a-para); }
     .mv2-life-rows { display: flex; flex-direction: column; gap: 0; margin: 0.35rem 0 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--mv2a-life-border); }
-    .mv2-life-row { display: grid; grid-template-columns: minmax(4.2rem, 5.2rem) 2.1rem 1fr; gap: 0.45rem; align-items: start; padding: 0.42rem 0.5rem; font-size: 0.78rem; border-top: 1px solid var(--mv2a-life-row-border); }
+    .mv2-life-row { display: grid; grid-template-columns: minmax(4.2rem, 5.2rem) 2.1rem 1fr; gap: 0.45rem; align-items: start; padding: 0.42rem 0.5rem; font-size: 0.78rem; border-top: 1px solid var(--mv2a-life-row-border); transition: opacity 0.15s ease; }
     .mv2-life-row:first-child { border-top: none; }
     .mv2-life-row:nth-child(odd) { background: var(--mv2a-life-row-alt); }
+    .mv2-life-row--r1,
+    .mv2-life-row--r2 { padding-top: 0.52rem; padding-bottom: 0.52rem; font-size: 0.82rem; }
+    .mv2-life-row--r1 .mv2-life-name { font-weight: 700; font-size: 0.84rem; }
+    .mv2-life-row--r2 .mv2-life-name { font-weight: 650; }
+    .mv2-life-row--r1 .mv2-life-score { font-size: 0.8rem; }
+    .mv2-life-row--r2 .mv2-life-score { font-size: 0.78rem; }
+    .mv2-life-row--r5,
+    .mv2-life-row--r6 { opacity: 0.78; padding-top: 0.36rem; padding-bottom: 0.36rem; font-size: 0.74rem; }
+    .mv2-life-row--r5 .mv2-life-blurb,
+    .mv2-life-row--r6 .mv2-life-blurb { opacity: 0.92; }
     .mv2-life-name { font-weight: 600; color: var(--mv2a-life-name); }
     .mv2-life-score { color: var(--mv2a-life-score); font-weight: 700; font-size: 0.76rem; text-align: right; }
     .mv2-life-blurb { color: var(--mv2a-life-blurb); line-height: 1.35; }
@@ -1352,6 +1449,16 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-share-line-cta:hover {
       background: rgba(16, 185, 129, 0.14);
     }
+    html.mv2a-theme-dark .mv2-card--timing-action {
+      border-left-color: rgba(52, 211, 153, 0.45);
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.07) 0%, var(--mv2a-card) 72%);
+    }
+    html.mv2a-theme-dark .mv2-gsum-row--tension {
+      background: rgba(232, 197, 71, 0.06);
+    }
+    html.mv2a-theme-dark .mv2-card--int-near-graph {
+      border-left-color: rgba(232, 197, 71, 0.42);
+    }
     .mv2-share-btn--line {
       background: #06c755;
       border-color: #05b34c;
@@ -1400,6 +1507,11 @@ export function renderAmuletReportV2Html(payload) {
       ${graphSummaryHtml}
     </section>
 
+    <section class="mv2-card mv2-card--int-near-graph" aria-labelledby="mv2-int-h">
+      <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
+      <div class="mv2-int-cards">${interactionHtml}</div>
+    </section>
+
     <section class="mv2-card mv2-card--owner" aria-labelledby="mv2-owner-h">
       <h2 id="mv2-owner-h">โปรไฟล์เจ้าของ</h2>
       <div class="mv2-owner-minis">${ownerMiniCardsHtml}</div>
@@ -1408,16 +1520,12 @@ export function renderAmuletReportV2Html(payload) {
       <p class="mv2-owner-note">${escapeHtml(vm.ownerProfile.note)}</p>
     </section>
 
-    <section class="mv2-card" aria-labelledby="mv2-int-h">
-      <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
-      <div class="mv2-int-cards">${interactionHtml}</div>
-    </section>
-
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
       <h2 id="mv2-life-h">พลังทั้ง 6 ด้าน</h2>
       <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
       <div class="mv2-life-rows">${lifeRowsHtml}</div>
     </section>
+    ${timingActionCardHtml}
     ${timingCardHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
