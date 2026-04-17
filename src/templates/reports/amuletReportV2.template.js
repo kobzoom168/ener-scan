@@ -6,6 +6,7 @@ import {
   formatReportVersionDisplayLine,
   formatReportMetaDatetimeOrEmpty,
 } from "../../utils/reports/reportHtmlTrust.util.js";
+import { score10ToEnergyGrade } from "../../utils/reports/energyLevelGrade.util.js";
 
 const AMULET_RADAR_R = 38;
 const AMULET_RADAR_CX = 50;
@@ -549,6 +550,7 @@ export function renderAmuletReportV2Html(payload) {
   const guideBoostTotal = boostPercent != null ? Math.max(0, Math.round(boostPercent)) : 12;
   const guideBoostBreakdown = buildGuideBoostBreakdown(guideBoostTotal);
   const baseGrade = String(fp?.baseGrade || "").trim().toUpperCase();
+  const projectedGrade = String(fp?.projectedGrade || "").trim().toUpperCase() || "—";
   const guideTopExplain = (() => {
     if (baseGrade === "B") {
       return "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด";
@@ -564,7 +566,7 @@ export function renderAmuletReportV2Html(payload) {
     }
     return guideScanExplain;
   })();
-  const progressTargetGrade = String(fp?.projectedGrade || "—").trim() || "—";
+  const progressTargetGrade = projectedGrade;
   const progressTargetScore = fp ? fmt10(fp.projectedScore10) : "—";
   const progressCurrentScore = fp ? fmt10(fp.baseScore10) : "—";
   const progressTargetLabel = `คะแนนคาดการณ์ ${progressTargetScore} · ${progressTargetGrade}`;
@@ -584,22 +586,101 @@ export function renderAmuletReportV2Html(payload) {
         ? `คาดว่าใช้ประมาณ ${Math.max(1, Math.round(Number(fp.estimatedDaysToNextTier)))} วัน`
         : "คาดว่าใช้ประมาณ — วัน";
   const pipelineFromGrade = String(fp?.baseGrade || baseGrade || "B").trim() || "B";
+  const nextGradeForBase =
+    pipelineFromGrade === "D"
+      ? "B"
+      : pipelineFromGrade === "B"
+        ? "A"
+        : pipelineFromGrade === "A"
+          ? "S"
+          : null;
+  const nextGradeTargetScore = (() => {
+    if (!nextGradeForBase) return null;
+    for (let s = 0; s <= 10; s += 0.01) {
+      if (score10ToEnergyGrade(Number(s.toFixed(2))) === nextGradeForBase) {
+        return Number(s.toFixed(2));
+      }
+    }
+    return null;
+  })();
+  const gapToNextGrade = (() => {
+    const base = Number(fp?.baseScore10);
+    if (nextGradeTargetScore == null || !Number.isFinite(base)) return null;
+    return Math.max(0, nextGradeTargetScore - base);
+  })();
+  const boostCapScore10 = (() => {
+    const base = Number(fp?.baseScore10);
+    const projected = Number(fp?.projectedScore10);
+    if (!Number.isFinite(base) || !Number.isFinite(projected)) return null;
+    return Math.max(0, projected - base);
+  })();
+  const heroGradeResult = `${pipelineFromGrade} → ${progressTargetGrade}`;
+  const heroVerdictLabel = (() => {
+    if (pipelineFromGrade === "B" && progressTargetGrade === "A") return "คุ้มปั้น";
+    if (pipelineFromGrade === "B" && progressTargetGrade === "B") return "ยังไม่คุ้มปั้น";
+    if (pipelineFromGrade === "A" && progressTargetGrade === "S") return "น่าปั้นต่อ";
+    if (pipelineFromGrade === "A" && progressTargetGrade === "A") return "ยังไม่คุ้มปั้น";
+    if (pipelineFromGrade === "S") return "ใช้ต่อได้เลย";
+    return "ควรสแกนเพิ่ม";
+  })();
+  const heroVerdictLine = (() => {
+    if (pipelineFromGrade === "B" && progressTargetGrade === "B") {
+      return "รอบนี้บูสต์เต็มที่แล้วยังไม่ข้ามเกรด A";
+    }
+    if (pipelineFromGrade === "B" && progressTargetGrade === "A") {
+      return "ถ้าทำครบชุด มีโอกาสข้ามไป A ได้";
+    }
+    if (pipelineFromGrade === "A" && progressTargetGrade === "S") {
+      return "ชิ้นนี้พอใช้ได้ และยังมีลุ้นขยับขึ้นสู่ S";
+    }
+    return "ชิ้นนี้พอใช้ได้ แต่ถ้าจะหาตัว top การสแกนเพิ่มอาจคุ้มกว่า";
+  })();
+  const laneFillPct = (() => {
+    if (pipelineFromGrade === "A" && progressTargetGrade === "S") return 100;
+    if (pipelineFromGrade === "B" && progressTargetGrade === "A") return 58;
+    if (pipelineFromGrade === "A" && progressTargetGrade === "A") return 50;
+    if (pipelineFromGrade === "B" && progressTargetGrade === "B") return 34;
+    return 20;
+  })();
   const stepOneAnswer = `${useDayLabel} · ${useTimeLabel}`;
   const guideCardHtml = `<section class="mv2-card mv2-card--guide" aria-labelledby="mv2-guide-h">
       <h2 id="mv2-guide-h">คู่มือใช้ชิ้นนี้</h2>
-      <div class="mv2-guide-header">
-        <p class="mv2-guide-hl mv2-guide-hl--title">${escapeHtml(
-          `จาก ${pipelineFromGrade} → ${progressTargetGrade} ต้องทำอะไร`,
-        )}</p>
-        <p class="mv2-guide-hl">${escapeHtml(headerNeedLine)}</p>
-        <p class="mv2-guide-hl">${escapeHtml(`เป้าหมาย ${progressTargetGrade} = ${progressTargetScore}`)}</p>
-        <p class="mv2-guide-hl">${escapeHtml(headerDaysLine)}</p>
+      <div class="mv2-guide-hero">
+        <p class="mv2-guide-hero-k">ทางไปสู่ตัว top</p>
+        <p class="mv2-guide-hero-grade">${escapeHtml(heroGradeResult)}</p>
+        <p class="mv2-guide-hero-verdict">${escapeHtml(heroVerdictLabel)}</p>
+      </div>
+      <div class="mv2-guide-metrics" role="list" aria-label="สรุปตัวเลขก่อนตัดสินใจ">
+        <div class="mv2-guide-metric" role="listitem">
+          <span class="mv2-guide-metric-k">ขาดอีก</span>
+          <span class="mv2-guide-metric-v">${escapeHtml(
+            gapToNextGrade != null ? gapToNextGrade.toFixed(2) : "—",
+          )}</span>
+        </div>
+        <div class="mv2-guide-metric" role="listitem">
+          <span class="mv2-guide-metric-k">บูสต์ได้สูงสุด</span>
+          <span class="mv2-guide-metric-v">${escapeHtml(
+            boostCapScore10 != null ? boostCapScore10.toFixed(2) : "—",
+          )}</span>
+        </div>
+        <div class="mv2-guide-metric" role="listitem">
+          <span class="mv2-guide-metric-k">ใช้เวลา</span>
+          <span class="mv2-guide-metric-v">${escapeHtml(headerDaysLine.replace("คาดว่าใช้ประมาณ ", ""))}</span>
+        </div>
+      </div>
+      <p class="mv2-guide-verdict-line">${escapeHtml(heroVerdictLine)}</p>
+      <div class="mv2-guide-grade-lane" aria-label="เกรดเลน B ไป S">
+        <div class="mv2-guide-grade-line">
+          <span class="mv2-guide-grade-fill" style="width:${laneFillPct.toFixed(1)}%"></span>
+        </div>
+        <div class="mv2-guide-grade-stops">
+          <span class="mv2-guide-grade-stop is-active">B</span>
+          <span class="mv2-guide-grade-stop ${progressTargetGrade === "A" || progressTargetGrade === "S" ? "is-active" : ""}">A</span>
+          <span class="mv2-guide-grade-stop ${progressTargetGrade === "S" ? "is-active" : ""}">S</span>
+        </div>
       </div>
       ${useModeLabel ? `<p class="mv2-guide-mode">${escapeHtml(useModeLabel)}</p>` : ""}
-      <div class="mv2-guide-pipeline" aria-label="เส้นทางจาก B ไป A ไป S">
-        <div class="mv2-guide-node is-current"><span class="mv2-guide-node-dot">${escapeHtml(pipelineFromGrade)}</span><span class="mv2-guide-node-text">${escapeHtml(
-          `${pipelineFromGrade} ตอนนี้`,
-        )}</span></div>
+      <div class="mv2-guide-steps" aria-label="ขั้นตอนแนะนำ">
         <div class="mv2-guide-step">
           <div class="mv2-guide-step-k"><span aria-hidden="true">◷</span> Step 1 · ใช้วันไหน</div>
           <div class="mv2-guide-step-v">${escapeHtml(stepOneAnswer)}</div>
@@ -615,10 +696,6 @@ export function renderAmuletReportV2Html(payload) {
           <div class="mv2-guide-step-v">ใช้ต่อเนื่องและอย่าขาดช่วง</div>
           <div class="mv2-guide-step-d">${escapeHtml(guideTopExplain)}</div>
         </div>
-        <div class="mv2-guide-node is-target"><span class="mv2-guide-node-dot">${escapeHtml(progressTargetGrade)}</span><span class="mv2-guide-node-text">${escapeHtml(
-          `${progressTargetGrade} เป้าหมายถัดไป`,
-        )}</span></div>
-        <div class="mv2-guide-node is-ghost"><span class="mv2-guide-node-dot">S</span><span class="mv2-guide-node-text">S เป้าสูงสุด</span></div>
       </div>
       <div class="mv2-guide-bottom">
         <p class="mv2-guide-bonus-total">${escapeHtml(
@@ -974,97 +1051,119 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 750;
       color: var(--mv2a-gold-dim);
     }
-    .mv2-guide-header {
-      display: grid;
-      gap: 0.14rem;
-      padding: 0.4rem 0.46rem;
-      border-radius: 10px;
-      border: 1px solid rgba(184, 135, 27, 0.16);
-      background: linear-gradient(165deg, rgba(184, 135, 27, 0.08) 0%, rgba(184, 135, 27, 0.03) 100%);
+    .mv2-guide-hero {
+      border-radius: 11px;
+      border: 1px solid rgba(184, 135, 27, 0.2);
+      background: linear-gradient(165deg, rgba(184, 135, 27, 0.11) 0%, rgba(184, 135, 27, 0.03) 100%);
+      padding: 0.46rem 0.52rem 0.42rem;
       margin-bottom: 0.28rem;
+      text-align: center;
     }
-    .mv2-guide-hl {
+    .mv2-guide-hero-k {
       margin: 0;
-      font-size: 0.66rem;
-      line-height: 1.33;
+      font-size: 0.58rem;
+      line-height: 1.22;
+      color: var(--mv2a-muted);
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .mv2-guide-hero-grade {
+      margin: 0.1rem 0 0.04rem;
+      font-size: 1.34rem;
+      line-height: 1;
+      font-weight: 840;
+      color: var(--mv2a-gold-dim);
+      letter-spacing: 0.02em;
+    }
+    .mv2-guide-hero-verdict {
+      margin: 0;
+      font-size: 0.8rem;
+      line-height: 1.25;
+      font-weight: 780;
+      color: var(--mv2a-text-body);
+    }
+    .mv2-guide-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.2rem;
+      margin-bottom: 0.24rem;
+    }
+    .mv2-guide-metric {
+      border-radius: 8px;
+      border: 1px solid rgba(184, 135, 27, 0.14);
+      background: rgba(184, 135, 27, 0.04);
+      padding: 0.22rem 0.26rem;
+      text-align: center;
+    }
+    .mv2-guide-metric-k {
+      display: block;
+      margin: 0 0 0.04rem;
+      font-size: 0.55rem;
+      line-height: 1.2;
+      color: var(--mv2a-muted);
+      font-weight: 640;
+    }
+    .mv2-guide-metric-v {
+      display: block;
+      font-size: 0.73rem;
+      line-height: 1.2;
+      color: var(--mv2a-text-body);
+      font-weight: 760;
+    }
+    .mv2-guide-verdict-line {
+      margin: 0 0 0.24rem;
+      font-size: 0.64rem;
+      line-height: 1.34;
+      color: var(--mv2a-text-body);
+      font-weight: 620;
+    }
+    .mv2-guide-grade-lane {
+      margin-bottom: 0.24rem;
+    }
+    .mv2-guide-grade-line {
+      position: relative;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(184, 135, 27, 0.1);
+      overflow: hidden;
+    }
+    .mv2-guide-grade-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #d4a82a 0%, #e8c547 80%, #f0e0a8 100%);
+    }
+    .mv2-guide-grade-stops {
+      margin-top: 0.08rem;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      font-size: 0.58rem;
+      line-height: 1.2;
+      color: var(--mv2a-muted);
+      font-weight: 680;
+    }
+    .mv2-guide-grade-stop {
+      text-align: center;
+      opacity: 0.62;
+    }
+    .mv2-guide-grade-stop.is-active {
+      color: var(--mv2a-gold-dim);
+      opacity: 1;
+    }
+    .mv2-guide-mode {
+      margin: 0 0 0.24rem;
+      font-size: 0.63rem;
+      line-height: 1.34;
       color: var(--mv2a-muted);
       font-weight: 560;
     }
-    .mv2-guide-hl--title {
-      font-size: 0.8rem;
-      line-height: 1.26;
-      color: var(--mv2a-gold-dim);
-      font-weight: 780;
-      letter-spacing: 0.006em;
-      margin-bottom: 0.04rem;
-    }
-    .mv2-guide-pipeline {
-      position: relative;
+    .mv2-guide-steps {
       display: grid;
-      gap: 0.26rem;
-      padding-left: 0.18rem;
-      margin-bottom: 0.34rem;
-    }
-    .mv2-guide-pipeline::before {
-      content: "";
-      position: absolute;
-      left: 0.53rem;
-      top: 0.3rem;
-      bottom: 0.3rem;
-      width: 2px;
-      border-radius: 999px;
-      background: linear-gradient(180deg, rgba(184, 135, 27, 0.32) 0%, rgba(184, 135, 27, 0.08) 100%);
-      transform-origin: top;
-      animation: mv2GuideRailReveal 900ms ease-out both;
-    }
-    .mv2-guide-node {
-      position: relative;
-      z-index: 1;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      margin-left: 0.06rem;
-    }
-    .mv2-guide-node-dot {
-      width: 0.86rem;
-      height: 0.86rem;
-      border-radius: 999px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.5rem;
-      font-weight: 780;
-      color: #61470d;
-      background: linear-gradient(165deg, #efdd9f 0%, #d8b045 62%, #b8871b 100%);
-      border: 1px solid rgba(184, 135, 27, 0.44);
-      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.11);
-    }
-    .mv2-guide-node-text {
-      font-size: 0.62rem;
-      line-height: 1.28;
-      color: var(--mv2a-text-body);
-      font-weight: 660;
-    }
-    .mv2-guide-node.is-current .mv2-guide-node-dot {
-      animation: mv2GuidePulse 2.4s ease-in-out infinite;
-    }
-    .mv2-guide-node.is-target .mv2-guide-node-dot {
-      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.16), 0 0 10px rgba(184, 135, 27, 0.23);
-    }
-    .mv2-guide-node.is-ghost .mv2-guide-node-dot {
-      color: rgba(100, 92, 82, 0.72);
-      background: linear-gradient(165deg, rgba(210, 210, 210, 0.74) 0%, rgba(170, 170, 170, 0.68) 100%);
-      border-color: rgba(140, 140, 140, 0.24);
-      box-shadow: none;
-    }
-    .mv2-guide-node.is-ghost .mv2-guide-node-text {
-      color: var(--mv2a-muted);
-      opacity: 0.78;
+      gap: 0.24rem;
+      margin-bottom: 0.3rem;
     }
     .mv2-guide-step {
-      position: relative;
-      z-index: 1;
-      margin-left: 1.06rem;
       padding: 0.34rem 0.4rem;
       border-radius: 9px;
       border: 1px solid rgba(184, 135, 27, 0.12);
@@ -1103,92 +1202,6 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.28;
       color: var(--mv2a-gold-dim);
       font-weight: 700;
-    }
-    .mv2-guide-top {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.24rem;
-      margin-bottom: 0.2rem;
-      padding: 0.1rem;
-      border-radius: 9px;
-      background: rgba(184, 135, 27, 0.04);
-      border: 1px solid rgba(184, 135, 27, 0.1);
-    }
-    .mv2-guide-chip {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.19rem 0.5rem;
-      border-radius: 8px;
-      border: 1px solid rgba(184, 135, 27, 0.2);
-      background: rgba(184, 135, 27, 0.065);
-      font-size: 0.59rem;
-      font-weight: 650;
-      color: var(--mv2a-text-body);
-      line-height: 1.2;
-      opacity: 0.88;
-      text-align: center;
-      min-height: 1.58rem;
-    }
-    .mv2-guide-chip--boost {
-      color: var(--mv2a-gold-dim);
-      border-color: rgba(184, 135, 27, 0.3);
-      background: rgba(184, 135, 27, 0.1);
-      font-weight: 700;
-    }
-    .mv2-guide-mode {
-      margin: 0 0 0.34rem;
-      font-size: 0.68rem;
-      line-height: 1.34;
-      color: var(--mv2a-muted);
-      font-weight: 600;
-    }
-    .mv2-guide-table {
-      display: grid;
-      gap: 0.28rem;
-    }
-    .mv2-guide-row {
-      padding: 0.4rem 0.46rem;
-      border-radius: 10px;
-      background: rgba(184, 135, 27, 0.055);
-      border: 1px solid rgba(184, 135, 27, 0.12);
-    }
-    .mv2-guide-col-k {
-      font-size: 0.61rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      color: var(--mv2a-muted);
-      text-transform: uppercase;
-      line-height: 1.28;
-      margin-bottom: 0.12rem;
-    }
-    .mv2-guide-col-v {
-      font-size: 0.84rem;
-      line-height: 1.3;
-      color: var(--mv2a-text-body);
-      font-weight: 780;
-      margin-bottom: 0.08rem;
-    }
-    .mv2-guide-col-v--usage {
-      font-size: 0.86rem;
-      line-height: 1.26;
-      margin-bottom: 0.1rem;
-      color: var(--mv2a-text-body);
-      font-weight: 740;
-    }
-    .mv2-guide-col-v--path {
-      font-size: 1rem;
-      line-height: 1.2;
-      margin-bottom: 0.11rem;
-      color: var(--mv2a-gold-dim);
-      font-weight: 810;
-      letter-spacing: 0.006em;
-    }
-    .mv2-guide-col-d {
-      font-size: 0.62rem;
-      line-height: 1.34;
-      color: var(--mv2a-muted);
-      font-weight: 500;
     }
     .mv2-guide-weekday-chart {
       margin-top: 0.28rem;
@@ -1232,17 +1245,17 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 750;
     }
     .mv2-guide-boost-wrap {
-      margin-top: 0.24rem;
+      margin-top: 0.12rem;
     }
     .mv2-guide-gauge {
       position: relative;
       width: 100%;
-      max-width: 11rem;
-      margin: 0 auto 0.1rem;
+      max-width: 8.8rem;
+      margin: 0 auto 0.08rem;
       aspect-ratio: 2 / 1;
       border-radius: 999px 999px 0 0;
       overflow: hidden;
-      opacity: 0.88;
+      opacity: 0.72;
     }
     .mv2-guide-gauge::before {
       content: "";
@@ -1263,19 +1276,19 @@ export function renderAmuletReportV2Html(payload) {
       position: absolute;
       inset: auto 0 0;
       text-align: center;
-      font-size: 0.98rem;
+      font-size: 0.8rem;
       line-height: 1;
-      font-weight: 760;
+      font-weight: 700;
       color: var(--mv2a-gold-dim);
-      padding-bottom: 0.14rem;
+      padding-bottom: 0.12rem;
     }
     .mv2-guide-gauge-core > span {
       display: block;
-      margin-top: 0.14rem;
-      font-size: 0.58rem;
+      margin-top: 0.11rem;
+      font-size: 0.5rem;
       line-height: 1.26;
       color: var(--mv2a-muted);
-      font-weight: 650;
+      font-weight: 620;
       letter-spacing: 0.03em;
       text-transform: uppercase;
     }
@@ -1373,21 +1386,11 @@ export function renderAmuletReportV2Html(payload) {
       opacity: 0.72;
       font-weight: 450;
     }
-    @keyframes mv2GuidePulse {
-      0%, 100% { transform: scale(1); box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.11); }
-      50% { transform: scale(1.06); box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.16), 0 0 9px rgba(184, 135, 27, 0.22); }
-    }
-    @keyframes mv2GuideRailReveal {
-      from { transform: scaleY(0); opacity: 0.55; }
-      to { transform: scaleY(1); opacity: 1; }
-    }
     @keyframes mv2GuideProgressGrow {
       from { transform: scaleX(0.08); opacity: 0.6; }
       to { transform: scaleX(1); opacity: 1; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .mv2-guide-pipeline::before,
-      .mv2-guide-node.is-current .mv2-guide-node-dot,
       .mv2-guide-progress-fill {
         animation: none;
       }
@@ -2643,28 +2646,38 @@ export function renderAmuletReportV2Html(payload) {
       border-left-color: rgba(232, 197, 71, 0.42);
       background: rgba(20, 22, 28, 0.92);
     }
-    html.mv2a-theme-dark .mv2-guide-header {
+    html.mv2a-theme-dark .mv2-guide-hero {
       border-color: rgba(232, 197, 71, 0.2);
       background: linear-gradient(165deg, rgba(232, 197, 71, 0.12) 0%, rgba(232, 197, 71, 0.04) 100%);
     }
-    html.mv2a-theme-dark .mv2-guide-hl {
+    html.mv2a-theme-dark .mv2-guide-hero-k,
+    html.mv2a-theme-dark .mv2-guide-metric-k {
       color: rgba(148, 163, 184, 0.88);
     }
-    html.mv2a-theme-dark .mv2-guide-hl--title {
+    html.mv2a-theme-dark .mv2-guide-hero-grade {
       color: #fde68a;
     }
-    html.mv2a-theme-dark .mv2-guide-pipeline::before {
-      background: linear-gradient(180deg, rgba(232, 197, 71, 0.36) 0%, rgba(148, 163, 184, 0.2) 100%);
+    html.mv2a-theme-dark .mv2-guide-hero-verdict,
+    html.mv2a-theme-dark .mv2-guide-verdict-line,
+    html.mv2a-theme-dark .mv2-guide-metric-v {
+      color: rgba(241, 245, 249, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-guide-metric {
+      border-color: rgba(232, 197, 71, 0.18);
+      background: rgba(232, 197, 71, 0.06);
+    }
+    html.mv2a-theme-dark .mv2-guide-grade-line {
+      background: rgba(232, 197, 71, 0.16);
+    }
+    html.mv2a-theme-dark .mv2-guide-grade-stop {
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-guide-grade-stop.is-active {
+      color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-guide-step {
       border-color: rgba(232, 197, 71, 0.16);
       background: rgba(232, 197, 71, 0.06);
-    }
-    html.mv2a-theme-dark .mv2-guide-node-dot {
-      color: #33250a;
-    }
-    html.mv2a-theme-dark .mv2-guide-node-text {
-      color: rgba(241, 245, 249, 0.94);
     }
     html.mv2a-theme-dark .mv2-guide-step-v {
       color: rgba(241, 245, 249, 0.96);
@@ -2675,25 +2688,9 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-guide-bonus-total {
       color: #fde68a;
     }
-    html.mv2a-theme-dark .mv2-guide-chip {
-      background: rgba(232, 197, 71, 0.085);
-      border-color: rgba(232, 197, 71, 0.2);
-      color: rgba(241, 245, 249, 0.94);
-    }
-    html.mv2a-theme-dark .mv2-guide-chip--boost {
-      background: rgba(232, 197, 71, 0.16);
-      border-color: rgba(232, 197, 71, 0.34);
-      color: #fde68a;
-    }
     html.mv2a-theme-dark .mv2-guide-mode,
-    html.mv2a-theme-dark .mv2-guide-col-d,
     html.mv2a-theme-dark .mv2-guide-progress-meta {
       color: rgba(148, 163, 184, 0.88);
-    }
-    html.mv2a-theme-dark .mv2-guide-table,
-    html.mv2a-theme-dark .mv2-guide-row {
-      border-color: rgba(232, 197, 71, 0.15);
-      background: rgba(232, 197, 71, 0.055);
     }
     html.mv2a-theme-dark .mv2-guide-weekday-dot {
       background: rgba(148, 163, 184, 0.4);
@@ -2706,15 +2703,8 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-guide-weekday-lbl {
       color: rgba(148, 163, 184, 0.88);
     }
-    html.mv2a-theme-dark .mv2-guide-col-v,
     html.mv2a-theme-dark .mv2-guide-buff-row > :nth-child(2) {
       color: rgba(241, 245, 249, 0.94);
-    }
-    html.mv2a-theme-dark .mv2-guide-col-v--usage {
-      color: rgba(241, 245, 249, 0.92);
-    }
-    html.mv2a-theme-dark .mv2-guide-col-v--path {
-      color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-guide-buff-table,
     html.mv2a-theme-dark .mv2-guide-buff-row {
