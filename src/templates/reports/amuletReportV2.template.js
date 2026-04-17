@@ -619,21 +619,24 @@ export function renderAmuletReportV2Html(payload) {
     if (pipelineFromGrade === "B" && progressTargetGrade === "A") return "คุ้มปั้น";
     if (pipelineFromGrade === "B" && progressTargetGrade === "B") return "ยังไม่คุ้มปั้น";
     if (pipelineFromGrade === "A" && progressTargetGrade === "S") return "น่าปั้นต่อ";
-    if (pipelineFromGrade === "A" && progressTargetGrade === "A") return "ยังไม่คุ้มปั้น";
+    if (pipelineFromGrade === "A" && progressTargetGrade === "A") return "ยังไม่ถึง S ในรอบนี้";
     if (pipelineFromGrade === "S") return "ใช้ต่อได้เลย";
     return "ควรสแกนเพิ่ม";
   })();
   const heroVerdictLine = (() => {
-    if (pipelineFromGrade === "B" && progressTargetGrade === "B") {
-      return "รอบนี้บูสต์เต็มที่แล้วยังไม่ข้ามเกรด A";
+    if (progressTargetGrade === "S") {
+      return "ชิ้นนี้ยังมีลุ้นขยับถึง S ได้ในรอบนี้";
+    }
+    if (pipelineFromGrade === "A" && progressTargetGrade === "A") {
+      return "รอบนี้บูสต์เต็มที่แล้วยังไม่ถึง S";
     }
     if (pipelineFromGrade === "B" && progressTargetGrade === "A") {
-      return "ถ้าทำครบชุด มีโอกาสข้ามไป A ได้";
+      return "รอบนี้บูสต์เต็มที่แล้วยังไปได้แค่ A";
     }
-    if (pipelineFromGrade === "A" && progressTargetGrade === "S") {
-      return "ชิ้นนี้พอใช้ได้ และยังมีลุ้นขยับขึ้นสู่ S";
+    if (pipelineFromGrade === "B" && progressTargetGrade === "B") {
+      return "ชิ้นนี้เหมาะเป็นตัวตั้ง แต่ยังไม่ใช่ตัวที่จะดันถึง S";
     }
-    return "ชิ้นนี้พอใช้ได้ แต่ถ้าจะหาตัว top การสแกนเพิ่มอาจคุ้มกว่า";
+    return "ถ้าจะลุ้น S การสแกนหาอีก 2–3 ชิ้นในสายเดียวกันอาจคุ้มกว่า";
   })();
   const laneFillPct = (() => {
     if (pipelineFromGrade === "A" && progressTargetGrade === "S") return 100;
@@ -643,6 +646,28 @@ export function renderAmuletReportV2Html(payload) {
     return 20;
   })();
   const stepOneAnswer = `${useDayLabel} · ${useTimeLabel}`;
+  const todayHorizon = `${pipelineFromGrade} · ${useDayLabel} · ${useTimeLabel}`;
+  const fullsetHorizon = `${progressTargetGrade}${
+    headerDaysLine.includes("ประมาณ") ? ` · ${headerDaysLine.replace("คาดว่าใช้ประมาณ ", "")}` : ""
+  }`;
+  const ceilingHorizon = progressTargetGrade === "S" ? "ถึง S ในรอบนี้" : `สูงสุดรอบนี้อยู่ที่ ${progressTargetGrade}`;
+  const fullsetMark =
+    pipelineFromGrade === progressTargetGrade && (boostCapScore10 || 0) > 0
+      ? `${progressTargetGrade}+`
+      : progressTargetGrade;
+  const lanePosForGrade = (g) => {
+    if (g === "S") return 100;
+    if (g === "A") return 50;
+    return 0;
+  };
+  const todayLanePos = lanePosForGrade(pipelineFromGrade);
+  const fullsetLanePos =
+    pipelineFromGrade === progressTargetGrade && (boostCapScore10 || 0) > 0
+      ? pipelineFromGrade === "A"
+        ? 84
+        : 34
+      : lanePosForGrade(progressTargetGrade);
+  const ceilingLanePos = lanePosForGrade(progressTargetGrade);
   const guideCardHtml = `<section class="mv2-card mv2-card--guide" aria-labelledby="mv2-guide-h">
       <h2 id="mv2-guide-h">คู่มือใช้ชิ้นนี้</h2>
       <div class="mv2-guide-hero">
@@ -672,11 +697,28 @@ export function renderAmuletReportV2Html(payload) {
       <div class="mv2-guide-grade-lane" aria-label="เกรดเลน B ไป S">
         <div class="mv2-guide-grade-line">
           <span class="mv2-guide-grade-fill" style="width:${laneFillPct.toFixed(1)}%"></span>
+          <span class="mv2-guide-lane-pin is-today" style="left:${todayLanePos.toFixed(1)}%"></span>
+          <span class="mv2-guide-lane-pin is-fullset" style="left:${fullsetLanePos.toFixed(1)}%"></span>
+          <span class="mv2-guide-lane-pin is-ceiling" style="left:${ceilingLanePos.toFixed(1)}%"></span>
         </div>
         <div class="mv2-guide-grade-stops">
           <span class="mv2-guide-grade-stop is-active">B</span>
           <span class="mv2-guide-grade-stop ${progressTargetGrade === "A" || progressTargetGrade === "S" ? "is-active" : ""}">A</span>
           <span class="mv2-guide-grade-stop ${progressTargetGrade === "S" ? "is-active" : ""}">S</span>
+        </div>
+        <div class="mv2-guide-horizons">
+          <div class="mv2-guide-horizon">
+            <span class="mv2-guide-horizon-k">วันนี้</span>
+            <span class="mv2-guide-horizon-v">${escapeHtml(todayHorizon)}</span>
+          </div>
+          <div class="mv2-guide-horizon">
+            <span class="mv2-guide-horizon-k">ครบชุด</span>
+            <span class="mv2-guide-horizon-v">${escapeHtml(`${fullsetMark} · ${fullsetHorizon}`)}</span>
+          </div>
+          <div class="mv2-guide-horizon">
+            <span class="mv2-guide-horizon-k">เพดานรอบนี้</span>
+            <span class="mv2-guide-horizon-v">${escapeHtml(ceilingHorizon)}</span>
+          </div>
         </div>
       </div>
       ${useModeLabel ? `<p class="mv2-guide-mode">${escapeHtml(useModeLabel)}</p>` : ""}
@@ -1128,6 +1170,26 @@ export function renderAmuletReportV2Html(payload) {
       background: rgba(184, 135, 27, 0.1);
       overflow: hidden;
     }
+    .mv2-guide-lane-pin {
+      position: absolute;
+      top: 50%;
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      background: rgba(184, 135, 27, 0.88);
+      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.22);
+      z-index: 1;
+    }
+    .mv2-guide-lane-pin.is-fullset {
+      background: #e8c547;
+    }
+    .mv2-guide-lane-pin.is-ceiling {
+      background: #b8871b;
+      width: 8px;
+      height: 8px;
+    }
     .mv2-guide-grade-fill {
       display: block;
       height: 100%;
@@ -1150,6 +1212,35 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-guide-grade-stop.is-active {
       color: var(--mv2a-gold-dim);
       opacity: 1;
+    }
+    .mv2-guide-horizons {
+      margin-top: 0.14rem;
+      display: grid;
+      gap: 0.12rem;
+    }
+    .mv2-guide-horizon {
+      display: grid;
+      grid-template-columns: 3.9rem 1fr;
+      align-items: baseline;
+      gap: 0.28rem;
+      padding: 0.16rem 0.2rem;
+      border-radius: 7px;
+      background: rgba(184, 135, 27, 0.04);
+      border: 1px solid rgba(184, 135, 27, 0.1);
+    }
+    .mv2-guide-horizon-k {
+      font-size: 0.56rem;
+      line-height: 1.2;
+      color: var(--mv2a-muted);
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .mv2-guide-horizon-v {
+      font-size: 0.63rem;
+      line-height: 1.3;
+      color: var(--mv2a-text-body);
+      font-weight: 640;
     }
     .mv2-guide-mode {
       margin: 0 0 0.24rem;
@@ -2669,11 +2760,25 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-guide-grade-line {
       background: rgba(232, 197, 71, 0.16);
     }
+    html.mv2a-theme-dark .mv2-guide-lane-pin {
+      border-color: rgba(15, 23, 42, 0.95);
+      box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.24);
+    }
     html.mv2a-theme-dark .mv2-guide-grade-stop {
       color: rgba(148, 163, 184, 0.88);
     }
     html.mv2a-theme-dark .mv2-guide-grade-stop.is-active {
       color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-guide-horizon {
+      background: rgba(232, 197, 71, 0.07);
+      border-color: rgba(232, 197, 71, 0.16);
+    }
+    html.mv2a-theme-dark .mv2-guide-horizon-k {
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-guide-horizon-v {
+      color: rgba(241, 245, 249, 0.94);
     }
     html.mv2a-theme-dark .mv2-guide-step {
       border-color: rgba(232, 197, 71, 0.16);
