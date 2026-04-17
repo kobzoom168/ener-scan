@@ -51,16 +51,6 @@ const DAILY_TONES = [
   "วันนี้เหมาะสังเกตความต่างระหว่างชิ้นอย่างใจเย็น",
 ];
 
-const DAILY_ADVICE = [
-  "ใจนิ่ง เห็นความต่างแต่ละชิ้นชัดกว่าปกติ",
-  "สแกนหลายครั้งในวันเดียวกัน ใช้เกณฑ์เดียวกันจะยุติธรรมกับตัวเอง",
-  "จดจุดที่ชอบกับจุดที่ลังเลไว้ ตัดสินใจครั้งถัดไปง่ายขึ้น",
-  "อย่ารีบจากชิ้นแรกของวัน — เทียบสักนิดจะชัดขึ้น",
-  "วันนี้เช็กความรู้สึกจริงมากกว่าความตื่นเต้นชั่วคราว",
-  "ถ้าลังเล กลับไปดูคะแนนเข้ากันกับพลังเด่นของชิ้นนั้นก่อน",
-  "วันนี้สนับสนุนตัดสินใจเป็นขั้นตอน ไม่ใช่หยิบตามใจอย่างเดียว",
-];
-
 const DAILY_SCAN_HINTS = [
   "สแกนเพิ่มวันนี้ เทียบสายเมตตาหรือบารมีก่อน",
   "สแกนเพิ่ม ลองเทียบโทนคุ้มครองหรือหนุนดวงใกล้กัน",
@@ -72,6 +62,7 @@ const DAILY_SCAN_HINTS = [
 
 /**
  * Stable daily owner card — same `birthdateUsed` + same Bangkok calendar day from `generatedAtIso` ⇒ same strings (no object/scan id).
+ * Two short lines only (compact HTML surface).
  *
  * @param {{ birthdateUsed?: string|null; generatedAtIso?: string|null }} p
  */
@@ -79,12 +70,12 @@ export function buildSacredAmuletDailyOwnerCard(p) {
   const { dow } = bangkokCalendarParts(p.generatedAtIso);
   const { month, wd0Sun } = birthMonthAndWeekday0Sun(p.birthdateUsed);
   const idxBase = (dow * 17 + month * 5 + wd0Sun * 11) % DAILY_TONES.length;
+  const idxHint = (idxBase + 4) % DAILY_SCAN_HINTS.length;
 
   return {
     title: "วันนี้มีแรงของคุณ",
-    dailyTone: DAILY_TONES[idxBase],
-    dailyAdvice: DAILY_ADVICE[(idxBase + 2) % DAILY_ADVICE.length],
-    dailyScanHint: DAILY_SCAN_HINTS[(idxBase + 4) % DAILY_SCAN_HINTS.length],
+    line1: DAILY_TONES[idxBase],
+    line2: DAILY_SCAN_HINTS[idxHint],
   };
 }
 

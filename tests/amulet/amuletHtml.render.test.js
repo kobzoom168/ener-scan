@@ -143,15 +143,16 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2-decision-scan"'));
   assert.ok(html.includes("เข้ากับคุณที่สุด"));
   assert.ok(!html.includes('class="mv2-card mv2-card--owner-react"'), "owner-reaction card removed from layout");
-  assert.ok(html.includes('class="mv2-int-card"'));
+  assert.ok(!html.includes('class="mv2-int-card"'), "interaction card removed from layout");
   assert.ok(html.includes('class="mv2a-footer-note"'));
   assert.ok(html.includes("จังหวะเสริมพลัง"));
   assert.ok(html.includes('class="mv2-timing-boost-row"'));
   assert.ok(html.includes("โบนัสจังหวะ"));
   assert.ok(html.includes("หนุนพลังได้ประมาณ"));
   assert.ok(html.includes('class="mv2-card mv2-card--faith-progress"'));
-  assert.ok(html.includes("เสริมพลังตามความเชื่อ"));
+  assert.ok(!html.includes("เสริมพลังตามความเชื่อ"), "faith card subtitle hidden on page");
   assert.ok(!html.includes('class="mv2-faith-progress-loop"'), "faith card: return-loop line omitted from HTML to reduce density");
+  assert.ok(!html.includes('class="mv2-faith-progress-item"'), "faith checklist omitted from HTML");
   assert.ok(html.includes("ทางไปสู่ตัว top"));
   assert.ok(html.includes('class="mv2-faith-progress-baseline"'));
   assert.ok(html.includes('class="mv2-faith-progress-scan"'));
@@ -182,12 +183,12 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('id="mv2-btn-share"'));
   assert.ok(html.includes("วันเวลาที่วิเคราะห์"));
   assert.ok(html.includes("รหัสรายงาน"));
-  assert.ok(html.includes("ผลนี้คำนวณจากอะไร"));
-  assert.ok(html.includes("ผลนี้อ้างอิงจากภาพวัตถุ"));
+  assert.ok(html.includes('class="mv2-trust-inline"'));
+  assert.ok(html.includes("โมเดลอ่านพลัง Ener Scan"));
+  assert.ok(!html.includes("ผลนี้คำนวณจากอะไร"));
   assert.ok(html.includes('class="mv2-card mv2-card--daily-owner"'));
   assert.ok(html.includes("วันนี้มีแรงของคุณ"));
-  assert.ok(html.includes('class="mv2-daily-owner-object"'));
-  assert.ok(html.includes("วันนี้ชิ้นนี้"), "object-day line merged into daily owner card");
+  assert.ok(!html.includes('class="mv2-daily-owner-object"'));
   assert.ok(!html.includes("mv2-btn-save"));
   assert.ok(html.includes("https://lin.ee/6YZeFZ1"));
   assert.ok(html.includes("navigator.share"));
@@ -197,7 +198,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
       html.includes("การปฏิบัติตัวของเจ้าของ"),
     "sacred_amulet concise usage disclaimer",
   );
-  assert.ok(html.includes("ชิ้นนี้ทำงานกับคุณอย่างไร"));
+  assert.ok(!html.includes("ชิ้นนี้ทำงานกับคุณอย่างไร"));
   assert.ok(html.includes("--mv2-font-th"));
   assert.ok(html.includes("Noto Sans Thai"));
   assert.ok(html.includes("ควรค่อย ๆ ไป"), "graph summary row 3: tension pace");
@@ -213,7 +214,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("mv2-use-day-bars-row"), "use-day card: mini vertical bars row");
   assert.ok(html.includes("mv2-use-day-bar is-primary"), "use-day card: primary weekday bar");
   assert.ok(html.includes("mv2-use-day-chip-k"), "use-day card: secondary weekday chip");
-  assert.ok(html.includes('class="mv2-card mv2-card--int-near-graph"'));
+  assert.ok(!html.includes('class="mv2-card mv2-card--int-near-graph"'));
   assert.ok(!html.includes("โค้ง"));
   assert.ok(!html.includes("ชิ้นนี้ทำให้คุณเด่นแบบไหน"), "object-reaction card not rendered");
   assert.ok(!html.includes("mv2-owner-chip"), "no numeric trait chips");

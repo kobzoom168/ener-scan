@@ -310,18 +310,8 @@ function buildFaithProgressCardHtml(fp) {
   if (!fp) return "";
   const fmt = (n) =>
     n != null && Number.isFinite(Number(n)) ? Number(n).toFixed(2) : "—";
-  const itemsHtml = (fp.items || [])
-    .map(
-      (it) => `<div class="mv2-faith-progress-item">
-      <span class="mv2-faith-progress-item-label">${escapeHtml(it.label)}</span>
-      <span class="mv2-faith-progress-item-meta">${escapeHtml(String(it.percent))}% · ~+${escapeHtml(Number(it.dailyGain10).toFixed(2))}/วัน</span>
-    </div>`,
-    )
-    .join("");
-  const w = Math.min(100, Math.max(0, Number(fp.barFillPercent) || 0));
   const baseline = String(fp.baselineHint || "").trim();
   const scanNext = String(fp.scanNextHint || "").trim();
-  const sub = String(fp.subtitle || "").trim();
   return `<section class="mv2-card mv2-card--faith-progress" aria-labelledby="mv2-faith-progress-h">
     <div class="mv2-faith-progress-top">
       <div class="mv2-faith-progress-grade" aria-hidden="true">
@@ -331,22 +321,15 @@ function buildFaithProgressCardHtml(fp) {
       </div>
       <div class="mv2-faith-progress-copy">
         <h2 id="mv2-faith-progress-h">${escapeHtml(fp.title)}</h2>
-        ${sub ? `<p class="mv2-faith-progress-subtitle">${escapeHtml(sub)}</p>` : ""}
       </div>
     </div>
     <p class="mv2-faith-progress-lead">${escapeHtml(String(fp.progressHint || "").trim())}</p>
-    <div class="mv2-faith-progress-metrics">
+    <div class="mv2-faith-progress-metrics mv2-faith-progress-metrics--compact">
       <div>คะแนนปัจจุบัน ${escapeHtml(fmt(fp.baseScore10))} / 10</div>
       <div>คะแนนคาดการณ์ ${escapeHtml(fmt(fp.projectedScore10))} / 10</div>
-      <div>โบนัสรวมสูงสุด +${escapeHtml(String(fp.boostCapPercent))}%</div>
-    </div>
-    <div class="mv2-faith-progress-bar" role="presentation">
-      <span class="mv2-faith-progress-bar-fill" style="width:${w.toFixed(1)}%"></span>
     </div>
     ${baseline ? `<p class="mv2-faith-progress-baseline">${escapeHtml(baseline)}</p>` : ""}
     ${scanNext ? `<p class="mv2-faith-progress-scan">${escapeHtml(scanNext)}</p>` : ""}
-    <div class="mv2-faith-progress-items">${itemsHtml}</div>
-    <p class="mv2-faith-progress-note">${escapeHtml(fp.note)}</p>
   </section>`;
 }
 
@@ -449,20 +432,15 @@ export function renderAmuletReportV2Html(payload) {
     .join("")}</div>`;
 
   const dailyOwnerCardHtml = (() => {
-    const d = /** @type {{ title?: string; dailyTone?: string; dailyAdvice?: string; dailyScanHint?: string } | null} */ (
-      vm.dailyOwnerCard
-    );
+    const d = /** @type {{ title?: string; line1?: string; line2?: string } | null} */ (vm.dailyOwnerCard);
     if (!d || !String(d.title || "").trim()) return "";
-    const boost = String(vm.todayObjectBoostLine || "").trim();
-    const boostBlock = boost
-      ? `<p class="mv2-daily-owner-object" role="note">${escapeHtml(boost)}</p>`
-      : "";
+    const l1 = String(d.line1 || "").trim();
+    const l2 = String(d.line2 || "").trim();
+    if (!l1 && !l2) return "";
     return `<section class="mv2-card mv2-card--daily-owner" aria-labelledby="mv2-daily-owner-h">
       <h2 id="mv2-daily-owner-h" class="mv2-daily-owner-h">${escapeHtml(String(d.title).trim())}</h2>
-      <p class="mv2-daily-owner-p">${escapeHtml(String(d.dailyTone || "").trim())}</p>
-      <p class="mv2-daily-owner-p mv2-daily-owner-p--soft">${escapeHtml(String(d.dailyAdvice || "").trim())}</p>
-      <p class="mv2-daily-owner-hint">${escapeHtml(String(d.dailyScanHint || "").trim())}</p>
-      ${boostBlock}
+      ${l1 ? `<p class="mv2-daily-owner-p">${escapeHtml(l1)}</p>` : ""}
+      ${l2 ? `<p class="mv2-daily-owner-p mv2-daily-owner-p--soft">${escapeHtml(l2)}</p>` : ""}
     </section>`;
   })();
 
@@ -503,13 +481,6 @@ export function renderAmuletReportV2Html(payload) {
       }
     </section>`;
   })();
-
-  const interactionHtml = vm.interactionSummary.rows
-    .map(
-      (row) =>
-        `<div class="mv2-int-card"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-main">${escapeHtml(row.main)}</span><span class="mv2-int-sub">${escapeHtml(row.sub)}</span></div>`,
-    )
-    .join("");
 
   const lifeRowsHtml = vm.lifeAreaDetail.rows
     .map(
@@ -621,16 +592,7 @@ export function renderAmuletReportV2Html(payload) {
       <div class="mv2-meta-row"><span class="mv2-meta-k">เวอร์ชันรายงาน</span><span class="mv2-meta-v">${escapeHtml(metaVersionLine)}</span></div>
     </div>`;
 
-  const trustSourcesHtml = `
-    <section class="mv2-trust-sources mv2-trust-sources--compact" aria-labelledby="mv2-trust-src-h">
-      <h2 id="mv2-trust-src-h" class="mv2-trust-sources-h">ผลนี้คำนวณจากอะไร</h2>
-      <p class="mv2-trust-sources-line mv2-trust-sources-line--mobile">ผลนี้อ้างอิงจากภาพวัตถุ วันเดือนปีเกิด และโมเดลการอ่านพลังงานของ Ener Scan</p>
-      <ul class="mv2-trust-sources-list mv2-trust-sources-list--desktop" aria-label="รายละเอียด">
-        <li>ภาพวัตถุที่ส่งเข้าระบบ</li>
-        <li>วันเดือนปีเกิดของเจ้าของ</li>
-        <li>โมเดลการอ่านพลังงานของ Ener Scan</li>
-      </ul>
-    </section>`;
+  const trustInlineHtml = `<p class="mv2-trust-inline" role="note">ผลนี้อ้างอิงจากภาพวัตถุ วันเกิด และโมเดลอ่านพลัง Ener Scan</p>`;
 
   return `<!DOCTYPE html>
 <html lang="th"${htmlTheme === "dark" ? ' class="mv2a-theme-dark"' : ""}>
@@ -704,12 +666,6 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-gsum-k: #78716c;
       --mv2a-gsum-v: #1c1917;
       --mv2a-gsum-v-lead: #b8860b;
-      --mv2a-int-bg: #f8f8f6;
-      --mv2a-int-border: rgba(100, 92, 82, 0.18);
-      --mv2a-int-kicker: rgba(143, 103, 16, 0.92);
-      --mv2a-int-main: rgba(36, 28, 18, 0.95);
-      --mv2a-int-sub: rgba(100, 88, 76, 0.82);
-      --mv2a-para: rgba(48, 40, 30, 0.92);
       --mv2a-life-border: rgba(100, 92, 82, 0.16);
       --mv2a-life-row-border: rgba(0, 0, 0, 0.07);
       --mv2a-life-row-alt: rgba(20, 22, 26, 0.028);
@@ -779,12 +735,6 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-gsum-k: rgba(203, 213, 225, 0.82);
       --mv2a-gsum-v: rgba(248, 250, 252, 0.98);
       --mv2a-gsum-v-lead: #fde68a;
-      --mv2a-int-bg: rgba(255, 255, 255, 0.045);
-      --mv2a-int-border: rgba(232, 197, 71, 0.17);
-      --mv2a-int-kicker: rgba(232, 197, 71, 0.92);
-      --mv2a-int-main: rgba(248, 250, 252, 0.98);
-      --mv2a-int-sub: rgba(148, 163, 184, 0.76);
-      --mv2a-para: rgba(226, 232, 240, 0.95);
       --mv2a-life-border: rgba(232, 197, 71, 0.13);
       --mv2a-life-row-border: rgba(148, 163, 184, 0.12);
       --mv2a-life-row-alt: rgba(255, 255, 255, 0.035);
@@ -849,6 +799,16 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-strip-cell--level .mv2-strip-v.level-grade--B { color: #9a6f12; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--D { color: #8a7a67; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--none { color: var(--mv2a-muted); }
+    .mv2-trust-inline {
+      margin: -0.12rem 0 0.48rem;
+      padding: 0 0.35rem;
+      font-size: 0.6rem;
+      line-height: 1.32;
+      color: var(--mv2a-muted);
+      font-weight: 450;
+      text-align: center;
+      opacity: 0.9;
+    }
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid var(--mv2a-card-border); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; box-shadow: var(--mv2a-card-elev); }
     .mv2-card--gsum-follow { margin-top: 0.32rem; padding-top: 0.7rem; padding-bottom: 0.72rem; }
     .mv2-card--gsum-follow > h2 { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.92; }
@@ -1189,13 +1149,6 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-gsum-row--tension .mv2-gsum-k { font-size: 0.68rem; }
     .mv2-gsum-row--tension .mv2-gsum-v { font-size: 0.82rem; font-weight: 700; }
-    .mv2-card--int-near-graph {
-      margin-top: 0.42rem;
-      border-left: 3px solid rgba(184, 135, 27, 0.38);
-      padding-top: 0.78rem;
-      padding-bottom: 0.8rem;
-    }
-    .mv2-card--int-near-graph > h2 { font-size: 0.92rem; color: var(--mv2a-gold); margin-bottom: 0.42rem; }
     .mv2-card--use-day {
       margin: 0.5rem 0 0.4rem;
       padding: 0.72rem 0.9rem 0.78rem;
@@ -1390,12 +1343,6 @@ export function renderAmuletReportV2Html(payload) {
         font-size: 0.52rem;
       }
     }
-    .mv2-int-cards { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.15rem 0 0; }
-    .mv2-int-card { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.48rem 0.55rem; border-radius: 10px; background: var(--mv2a-int-bg); border: 1px solid var(--mv2a-int-border); }
-    .mv2-int-kicker { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; color: var(--mv2a-int-kicker); }
-    .mv2-int-main { font-size: 0.88rem; font-weight: 700; line-height: 1.28; color: var(--mv2a-int-main); }
-    .mv2-int-sub { font-size: 0.72rem; color: var(--mv2a-int-sub); line-height: 1.35; }
-    .mv2-para { margin: 0.4rem 0 0; font-size: 0.88rem; color: var(--mv2a-para); }
     .mv2-life-rows { display: flex; flex-direction: column; gap: 0; margin: 0.35rem 0 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--mv2a-life-border); }
     .mv2-life-row { display: grid; grid-template-columns: minmax(4.2rem, 5.2rem) 2.1rem 1fr; gap: 0.45rem; align-items: start; padding: 0.42rem 0.5rem; font-size: 0.78rem; border-top: 1px solid var(--mv2a-life-row-border); transition: opacity 0.15s ease; }
     .mv2-life-row:first-child { border-top: none; }
@@ -1762,69 +1709,6 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-meta-k { font-weight: 700; color: var(--mv2a-text); opacity: 0.82; }
     .mv2-meta-v { text-align: right; font-variant-numeric: tabular-nums; max-width: 68%; }
     .mv2-meta-id { font-weight: 700; letter-spacing: 0.04em; color: var(--mv2a-gold-dim); }
-    .mv2-trust-sources {
-      margin: 0.85rem 0 0;
-      padding: 0.65rem 0.75rem;
-      border-radius: 12px;
-      background: rgba(184, 135, 27, 0.05);
-      border: 1px solid rgba(184, 135, 27, 0.12);
-    }
-    .mv2-trust-sources-list--desktop {
-      display: none;
-      margin: 0.15rem 0 0;
-      padding: 0 0 0 1rem;
-      font-size: 0.7rem;
-      line-height: 1.42;
-      color: var(--mv2a-muted);
-    }
-    @media (min-width: 521px) {
-      .mv2-trust-sources-line--mobile { display: none; }
-      .mv2-trust-sources-list--desktop { display: block; }
-    }
-    .mv2-trust-sources--compact {
-      margin: 0.5rem 0 0;
-      padding: 0.38rem 0.5rem 0.45rem;
-    }
-    .mv2-trust-sources-h {
-      font-size: 0.72rem;
-      margin: 0 0 0.45rem;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      color: var(--mv2a-gold-dim);
-    }
-    .mv2-trust-sources--compact .mv2-trust-sources-h {
-      font-size: 0.65rem;
-      margin: 0 0 0.22rem;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-    }
-    .mv2-trust-sources-line {
-      margin: 0;
-      font-size: 0.68rem;
-      line-height: 1.38;
-      color: var(--mv2a-muted);
-      font-weight: 400;
-    }
-    @media (max-width: 520px) {
-      .mv2-trust-sources--compact {
-        margin-top: 0.38rem;
-        padding: 0.26rem 0.38rem 0.32rem;
-      }
-      .mv2-trust-sources--compact .mv2-trust-sources-line--mobile {
-        font-size: 0.62rem;
-        line-height: 1.3;
-      }
-      .mv2-trust-sources--compact .mv2-trust-sources-h {
-        margin-bottom: 0.18rem;
-      }
-    }
-    .mv2-trust-sources-list {
-      margin: 0;
-      padding-left: 1.1rem;
-      font-size: 0.72rem;
-      line-height: 1.52;
-      color: var(--mv2a-muted);
-    }
     .mv2-card--daily-owner {
       margin: 0.4rem 0 0.32rem;
       padding: 0.55rem 0.78rem 0.62rem;
@@ -1848,21 +1732,6 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.34;
       color: var(--mv2a-muted);
     }
-    .mv2-daily-owner-hint {
-      margin: 0.18rem 0 0;
-      font-size: 0.68rem;
-      line-height: 1.34;
-      color: var(--mv2a-muted);
-    }
-    .mv2-daily-owner-object {
-      margin: 0.42rem 0 0;
-      padding-top: 0.38rem;
-      border-top: 1px solid rgba(100, 92, 82, 0.12);
-      font-size: 0.66rem;
-      line-height: 1.36;
-      color: var(--mv2a-muted);
-      font-weight: 450;
-    }
     html.mv2a-theme-dark .mv2-meta-block {
       background: rgba(232, 197, 71, 0.06);
       border-color: rgba(232, 197, 71, 0.18);
@@ -1877,13 +1746,8 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-daily-owner-p {
       color: rgba(226, 232, 240, 0.92);
     }
-    html.mv2a-theme-dark .mv2-daily-owner-hint,
     html.mv2a-theme-dark .mv2-daily-owner-p--soft {
       color: rgba(148, 163, 184, 0.9);
-    }
-    html.mv2a-theme-dark .mv2-daily-owner-object {
-      border-top-color: rgba(148, 163, 184, 0.14);
-      color: rgba(203, 213, 225, 0.82);
     }
     .mv2-card--faith-progress {
       margin: 0.46rem 0 0.36rem;
@@ -1937,15 +1801,6 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.22;
       opacity: 0.92;
     }
-    .mv2-faith-progress-subtitle {
-      margin: 0.12rem 0 0;
-      font-size: 0.62rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      color: var(--mv2a-muted);
-      opacity: 0.95;
-      line-height: 1.32;
-    }
     .mv2-faith-progress-lead {
       margin: 0 0 0.34rem;
       font-size: 0.7rem;
@@ -1989,59 +1844,9 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
-    .mv2-faith-progress-bar {
-      height: 6px;
-      border-radius: 999px;
-      background: rgba(184, 135, 27, 0.09);
-      overflow: hidden;
-      margin-bottom: 0.4rem;
-    }
-    .mv2-faith-progress-bar-fill {
-      display: block;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, #c9a132 0%, #e8c547 55%, #f0e0a8 100%);
-      box-shadow: 0 0 5px rgba(184, 135, 27, 0.22);
-      min-width: 4%;
-    }
-    .mv2-faith-progress-items {
-      display: flex;
-      flex-direction: column;
-      gap: 0.18rem;
-      margin-bottom: 0.3rem;
-    }
-    .mv2-faith-progress-item {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 0.2rem 0.32rem;
-      padding: 0.2rem 0.26rem;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.35);
-      border: 1px solid rgba(184, 135, 27, 0.08);
-    }
-    .mv2-faith-progress-item-label {
-      font-size: 0.62rem;
-      font-weight: 700;
-      color: var(--mv2a-text);
-      flex: 1;
-      min-width: 52%;
-      line-height: 1.24;
-    }
-    .mv2-faith-progress-item-meta {
-      font-size: 0.54rem;
-      line-height: 1.22;
-      color: var(--mv2a-muted);
-      font-weight: 500;
-      text-align: right;
-    }
-    .mv2-faith-progress-note {
-      margin: 0;
-      font-size: 0.54rem;
-      line-height: 1.32;
-      color: var(--mv2a-muted);
-      opacity: 0.84;
+    .mv2-faith-progress-metrics--compact {
+      grid-template-columns: 1fr;
+      gap: 0.1rem;
     }
     html.mv2a-theme-dark .mv2-card--faith-progress {
       background: linear-gradient(
@@ -2068,23 +1873,10 @@ export function renderAmuletReportV2Html(payload) {
       border-color: rgba(232, 197, 71, 0.28);
       color: rgba(232, 197, 71, 0.95);
     }
-    html.mv2a-theme-dark .mv2-faith-progress-subtitle {
-      color: rgba(148, 163, 184, 0.88);
-    }
     html.mv2a-theme-dark .mv2-faith-progress-metrics {
       background: rgba(232, 197, 71, 0.07);
       border-color: rgba(232, 197, 71, 0.2);
       color: rgba(226, 232, 240, 0.92);
-    }
-    html.mv2a-theme-dark .mv2-faith-progress-item {
-      background: rgba(15, 18, 26, 0.55);
-      border-color: rgba(232, 197, 71, 0.12);
-    }
-    html.mv2a-theme-dark .mv2-faith-progress-item-label {
-      color: rgba(241, 245, 249, 0.94);
-    }
-    html.mv2a-theme-dark .mv2-faith-progress-bar {
-      background: rgba(232, 197, 71, 0.12);
     }
     @media (max-width: 520px) {
       .mv2-faith-progress-grade { font-size: 1.34rem; }
@@ -2255,9 +2047,6 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-gsum-row--tension {
       background: rgba(232, 197, 71, 0.06);
     }
-    html.mv2a-theme-dark .mv2-card--int-near-graph {
-      border-left-color: rgba(232, 197, 71, 0.42);
-    }
     html.mv2a-theme-dark .mv2-card--decision {
       border-left-color: rgba(232, 197, 71, 0.42);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
@@ -2328,7 +2117,7 @@ export function renderAmuletReportV2Html(payload) {
       <div class="mv2-strip-cell mv2-strip-cell--level"><div class="mv2-strip-k">ความเด่นพลังงาน</div><div class="mv2-strip-v ${vm.metrics.energyLevelGradeClass}">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div></div>
     </div>
 
-    ${trustSourcesHtml}
+    ${trustInlineHtml}
 
     ${mainGraphBlock(vm)}
 
@@ -2340,11 +2129,6 @@ export function renderAmuletReportV2Html(payload) {
     ${decisionCardHtml}
 
     ${dailyOwnerCardHtml}
-
-    <section class="mv2-card mv2-card--int-near-graph" aria-labelledby="mv2-int-h">
-      <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
-      <div class="mv2-int-cards">${interactionHtml}</div>
-    </section>
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
       <h2 id="mv2-life-h">พลังทั้ง 6 ด้าน</h2>
