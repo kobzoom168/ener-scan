@@ -163,3 +163,32 @@ test("buildSacredAmuletWeekdayItems / TimeItems: active จาก summary + best
   assert.ok(ti.find((x) => x.key === "morning_07_10")?.active);
   assert.equal(ti.filter((x) => x.active).length, 1);
 });
+
+test("buildAmuletHtmlV2ViewModel: dailyOwnerCard stable across scans same Bangkok calendar day", () => {
+  const iso = "2026-04-17T08:30:00.000Z";
+  const vmA = buildAmuletHtmlV2ViewModel(
+    minimalPayload({ scanId: "scan-a", generatedAt: iso }),
+  );
+  const vmB = buildAmuletHtmlV2ViewModel(
+    minimalPayload({ scanId: "scan-b", reportId: "r-other", generatedAt: iso }),
+  );
+  assert.deepEqual(vmA.dailyOwnerCard, vmB.dailyOwnerCard);
+  assert.equal(vmA.dailyOwnerCard.title, "จังหวะวันนี้ของคุณ");
+  assert.ok(String(vmA.dailyOwnerCard.dailyTone || "").length > 5);
+});
+
+test("buildAmuletHtmlV2ViewModel: todayObjectBoostLine varies with compatibilityPercent", () => {
+  const iso = "2026-04-17T10:00:00.000Z";
+  const base = minimalPayload({ generatedAt: iso });
+  const hi = buildAmuletHtmlV2ViewModel({
+    ...base,
+    summary: { ...base.summary, compatibilityPercent: 82 },
+  });
+  const lo = buildAmuletHtmlV2ViewModel({
+    ...base,
+    summary: { ...base.summary, compatibilityPercent: 48 },
+  });
+  assert.notEqual(hi.todayObjectBoostLine, lo.todayObjectBoostLine);
+  assert.ok(String(hi.todayObjectBoostLine).includes("ชิ้นนี้"));
+  assert.ok(String(lo.todayObjectBoostLine).includes("ชิ้นนี้"));
+});

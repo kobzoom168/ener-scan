@@ -16,6 +16,10 @@ import {
   resolveEnergyLevelDisplayGrade,
 } from "../utils/reports/energyLevelGrade.util.js";
 import { buildSacredAmuletUseDayCard } from "./amuletUseDayCard.util.js";
+import {
+  buildSacredAmuletDailyOwnerCard,
+  buildTodayObjectBoostLine,
+} from "./amuletDailyOwnerCard.util.js";
 
 /** Sacred_amulet HTML footer disclaimer (ท้ายรายงาน; source: `usageCaution.disclaimer`). */
 export const AMULET_HTML_V2_USAGE_DISCLAIMER =
@@ -446,6 +450,19 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     tensionLabel,
   });
 
+  /** Same owner + same Bangkok calendar day from `generatedAt` ⇒ same card (no scan/object). */
+  const dailyOwnerCard = buildSacredAmuletDailyOwnerCard({
+    birthdateUsed: payload.birthdateUsed,
+    generatedAtIso: payload.generatedAt,
+  });
+  /** Per object + compat / axes — may change when สแกนชิ้นอื่น. */
+  const todayObjectBoostLine = buildTodayObjectBoostLine({
+    compatibilityPercent: payload.summary?.compatibilityPercent,
+    peakKey,
+    alignKey,
+    tensionKey,
+  });
+
   const hr = av.htmlReport;
   const blurbs =
     hr?.lifeAreaBlurbs && typeof hr.lifeAreaBlurbs === "object"
@@ -516,6 +533,10 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       tension: { axisKey: tensionKey, labelThai: POWER_LABEL_THAI[tensionKey] },
     },
     graphSummary,
+    /** จังหวะวันนี้ของเจ้าของ — stable ต่อวัน (ไม่ผูกวัตถุ) */
+    dailyOwnerCard,
+    /** บรรทัดสั้น ชิ้นนี้ + วันนี้ — เปลี่ยนตามวัตถุ/เข้ากัน */
+    todayObjectBoostLine,
     /** เก็บ/ไม่เก็บ — เกรดตัดสินใจแยกจากความเด่นพลังงานระบบ */
     decisionCard,
     /** Object-reactive copy (สแกนต่อชิ้น) — ไม่ใช่คะแนนบุคลิกถาวร */
