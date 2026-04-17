@@ -88,6 +88,17 @@ test("buildAmuletHtmlV2ViewModel: interaction + graph align to same top axes", (
   assert.ok(String(third.sub || "").includes("คุ้มครอง"));
 });
 
+test("buildAmuletHtmlV2ViewModel: ownerReactionCard is object-reactive (no traitScores)", () => {
+  const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
+  assert.ok(vm.ownerReactionCard && typeof vm.ownerReactionCard === "object");
+  assert.equal(vm.ownerReactionCard.rows.length, 3);
+  assert.ok(String(vm.ownerReactionCard.title || "").includes("ชิ้นนี้"));
+  assert.equal(vm.ownerReactionCard.rows[0].kicker, "ส่งกับคุณตรงสุด");
+  assert.equal(vm.ownerReactionCard.rows[1].kicker, "เวลาใช้ชิ้นนี้");
+  assert.equal(vm.ownerReactionCard.rows[2].kicker, "มุมที่ควรค่อย ๆ ไป");
+  assert.ok(String(vm.ownerReactionCard.ownerRhythmLine || "").includes("จังหวะเกิด"));
+});
+
 test("buildAmuletHtmlV2ViewModel: no weak hedging tokens in default blurbs", () => {
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
   const text = vm.lifeAreaDetail.rows.map((r) => r.blurb).join(" ");
