@@ -186,7 +186,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("ผลนี้อ้างอิงจากภาพวัตถุ"));
   assert.ok(html.includes('class="mv2-card mv2-card--daily-owner"'));
   assert.ok(html.includes("วันนี้มีแรงของคุณ"));
-  assert.ok(html.includes('class="mv2-today-object-boost"'));
+  assert.ok(html.includes('class="mv2-daily-owner-object"'));
+  assert.ok(html.includes("วันนี้ชิ้นนี้"), "object-day line merged into daily owner card");
   assert.ok(!html.includes("mv2-btn-save"));
   assert.ok(html.includes("https://lin.ee/6YZeFZ1"));
   assert.ok(html.includes("navigator.share"));
