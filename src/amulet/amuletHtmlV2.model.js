@@ -636,7 +636,10 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     todayObjectBoostLine,
     /** ชิ้นนี้ใช่กับคุณแค่ไหน (top-finder) · เกรดการ์ดแยกจากความเด่นพลังงานระบบ */
     decisionCard,
-    /** Object-reactive copy (สแกนต่อชิ้น) — ไม่ใช่คะแนนบุคลิกถาวร */
+    /**
+     * Object-reactive copy (สแกนต่อชิ้น) — kept for tests / API parity; not rendered in HTML v2
+     * (interaction + graph summary cover the same axes without a second card).
+     */
     ownerReactionCard,
     interactionSummary: {
       headline: "ชิ้นนี้ทำงานกับคุณอย่างไร",

@@ -81,7 +81,7 @@ export function buildSacredAmuletDailyOwnerCard(p) {
   const idxBase = (dow * 17 + month * 5 + wd0Sun * 11) % DAILY_TONES.length;
 
   return {
-    title: "จังหวะวันนี้ของคุณ",
+    title: "วันนี้มีแรงของคุณ",
     dailyTone: DAILY_TONES[idxBase],
     dailyAdvice: DAILY_ADVICE[(idxBase + 2) % DAILY_ADVICE.length],
     dailyScanHint: DAILY_SCAN_HINTS[(idxBase + 4) % DAILY_SCAN_HINTS.length],
