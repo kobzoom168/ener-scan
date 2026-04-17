@@ -139,6 +139,90 @@ function buildOwnerReactionCard(p) {
   };
 }
 
+/**
+ * การ์ด “ควรเก็บไหม” — เกรดการตัดสินใจเก็บ (ไม่ใช่เกรดความเด่นพลังงานระบบ S/A/B/D)
+ *
+ * `keepScore = 0.55 * compatibilityPercent + 0.25 * (energyScore * 10) + 0.20 * decisionBonus`
+ *
+ * @param {object} p
+ * @param {number|null|undefined} p.compatibilityPercent
+ * @param {number|null|undefined} p.energyScore
+ * @param {string} p.alignKey
+ * @param {string[]} p.ord
+ * @param {number} p.maxD
+ * @param {string} p.alignLabel
+ * @param {string} p.tensionLabel
+ */
+export function buildSacredAmuletDecisionCard(p) {
+  const compat = Number(p.compatibilityPercent);
+  const compatN = Number.isFinite(compat) ? Math.min(100, Math.max(0, compat)) : 70;
+  const es = Number(p.energyScore);
+  const energyN = Number.isFinite(es) ? Math.min(10, Math.max(0, es)) : 7;
+
+  let decisionBonus = 50;
+  if (p.alignKey === p.ord[0]) decisionBonus += 12;
+  else if (p.alignKey === p.ord[1]) decisionBonus += 8;
+  else decisionBonus += 4;
+
+  if (p.maxD >= 26) decisionBonus -= 10;
+  else if (p.maxD >= 15) decisionBonus -= 5;
+  else decisionBonus -= 2;
+
+  if (compatN < 60) decisionBonus -= 4;
+  else if (compatN >= 80) decisionBonus += 4;
+  else if (compatN >= 72) decisionBonus += 2;
+
+  if (energyN >= 8.5) decisionBonus += 3;
+  else if (energyN >= 7.5) decisionBonus += 1;
+  else if (energyN < 6.5) decisionBonus -= 3;
+
+  decisionBonus = Math.min(100, Math.max(0, decisionBonus));
+
+  const rawKeep =
+    0.55 * compatN + 0.25 * (energyN * 10) + 0.2 * decisionBonus;
+  const keepScore = Math.round(Math.min(100, Math.max(0, rawKeep)) * 10) / 10;
+
+  /** @type {"S"|"A"|"B"|"C"} */
+  let keepGrade = "C";
+  let verdict = "หาต่อ";
+  if (keepScore >= 85) {
+    keepGrade = "S";
+    verdict = "จับเก็บเลย";
+  } else if (keepScore >= 75) {
+    keepGrade = "A";
+    verdict = "น่าเก็บ";
+  } else if (keepScore >= 65) {
+    keepGrade = "B";
+    verdict = "ถ้าถูกทางค่อยเก็บ";
+  }
+
+  const reasonByGrade = {
+    S: "เข้ากับคุณสูง พลังเด่นชัด และส่งกับคุณตรงสุด",
+    A: "ใช้ได้ดีและเข้ากับคุณพอสมควร มีมุมที่ควรค่อย ๆ ไป",
+    B: "ยังมีบางด้านที่ไม่ตรงกับจังหวะคุณ ถ้าเจอชิ้นที่ส่งกว่านี้อาจดีกว่า",
+    C: "ชิ้นนี้ยังไม่ตอบกับคุณพอ ลองหาชิ้นที่เด่นด้านอื่นแล้วสแกนเพิ่ม",
+  };
+
+  const al = String(p.alignLabel || "").trim() || "แกนที่เข้ากับคุณ";
+  const tl = String(p.tensionLabel || "").trim() || "แกนที่ยังไม่ส่งกัน";
+
+  let nextHint = "";
+  if (keepGrade === "S" || keepGrade === "A") {
+    nextHint = `ถ้าเจอหลายชิ้น ให้เทียบชิ้นที่เด่นทาง ${al} แล้วเลือกคะแนนสูงสุด · ถ้าจะสแกนเพิ่มลองเทียบโทน ${al} ที่ใกล้กัน`;
+  } else {
+    nextHint = `ถ้าจะหาต่อ ให้เน้นชิ้นที่เด่น ${al} · ลองสแกนหลายชิ้นสายเดียวกันแล้วเทียบคะแนน · อย่าเริ่มจากชิ้นที่หนักทาง ${tl} มากเกินไป`;
+  }
+
+  return {
+    title: "ควรเก็บไหม",
+    keepScore,
+    keepGrade,
+    verdict,
+    reason: reasonByGrade[keepGrade],
+    nextHint,
+  };
+}
+
 /** ป้ายสั้นต่อ `key` ของ `TIMING_HOUR_WINDOWS` — visual เท่านั้น */
 const AMULET_TIME_STRIP_SHORT_BY_KEY = {
   dawn_05_06: "รุ่ง",
@@ -352,6 +436,16 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     tensionPaceSub: interactionRows[1].sub,
   });
 
+  const decisionCard = buildSacredAmuletDecisionCard({
+    compatibilityPercent: payload.summary?.compatibilityPercent,
+    energyScore: payload.summary?.energyScore,
+    alignKey,
+    ord,
+    maxD,
+    alignLabel,
+    tensionLabel,
+  });
+
   const hr = av.htmlReport;
   const blurbs =
     hr?.lifeAreaBlurbs && typeof hr.lifeAreaBlurbs === "object"
@@ -422,6 +516,8 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       tension: { axisKey: tensionKey, labelThai: POWER_LABEL_THAI[tensionKey] },
     },
     graphSummary,
+    /** เก็บ/ไม่เก็บ — เกรดตัดสินใจแยกจากความเด่นพลังงานระบบ */
+    decisionCard,
     /** Object-reactive copy (สแกนต่อชิ้น) — ไม่ใช่คะแนนบุคลิกถาวร */
     ownerReactionCard,
     interactionSummary: {
