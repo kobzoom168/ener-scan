@@ -138,6 +138,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("ชิ้นนี้ใช่กับคุณแค่ไหน"), "decision card: top-finder baseline");
   assert.ok(html.includes('class="mv2-card mv2-card--decision mv2-card--top-finder"'));
   assert.ok(html.includes("mv2-decision-badge"));
+  assert.ok(html.includes('class="mv2-decision-baseline"'));
+  assert.ok(html.includes('class="mv2-decision-scan"'));
   assert.ok(html.includes("เข้ากับคุณที่สุด"));
   assert.ok(html.includes('class="mv2-card mv2-card--owner-react"'));
   assert.ok(html.includes('class="mv2-int-card"'));

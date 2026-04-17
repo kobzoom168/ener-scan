@@ -211,14 +211,10 @@ export function buildSacredAmuletDecisionCard(p) {
   const al = String(p.alignLabel || "").trim() || "แกนที่เข้ากับคุณ";
   const tl = String(p.tensionLabel || "").trim() || "แกนที่ยังไม่ส่งกัน";
 
-  let nextHint = "";
-  if (keepGrade === "S" || keepGrade === "A") {
-    nextHint = `ถ้าเจอหลายชิ้น ให้ใช้ชิ้นนี้เป็นตัวตั้ง แล้วค่อยเทียบว่ามีองค์ไหนขึ้นได้อีกไหม · ถ้าจะสแกนต่อ ให้หาอีก 2–3 ชิ้นในสาย ${al} แล้วดูว่ามีตัว top กว่านี้ไหม`;
-  } else if (keepGrade === "B") {
-    nextHint = `ถ้าเจอหลายชิ้น ให้ใช้ชิ้นนี้เป็นตัวตั้ง แล้วค่อยเทียบคะแนน · ถ้าจะสแกนต่อ ให้หาอีก 2–3 ชิ้นในสาย ${al} · อย่าเริ่มจากชิ้นที่หนักทาง ${tl} มากเกินไป`;
-  } else {
-    nextHint = `ถ้าจะหาต่อ ให้เน้นชิ้นที่เด่น ${al} · ลองสแกน 2–3 ชิ้นสายเดียวกันแล้วเทียบคะแนน · อย่าเริ่มจากชิ้นที่หนักทาง ${tl} มากเกินไป`;
-  }
+  /** Top-finder loop (display-only): baseline + re-scan — ไม่แตะคะแนนจริง */
+  const baselineHint =
+    "ชิ้นนี้คือตัวตั้งของรอบนี้ · ใช้ชิ้นนี้เป็นตัวตั้งก่อน แล้วค่อยเทียบองค์อื่น";
+  const scanNextHint = `ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสาย ${al} · ดูว่ามีองค์ไหนขึ้นได้มากกว่านี้ไหม · อย่าเริ่มจากชิ้นที่หนักทาง ${tl} มากเกินไป`;
 
   return {
     title: "ชิ้นนี้ใช่กับคุณแค่ไหน",
@@ -226,7 +222,8 @@ export function buildSacredAmuletDecisionCard(p) {
     keepGrade,
     verdict,
     reason: reasonByGrade[keepGrade],
-    nextHint,
+    baselineHint,
+    scanNextHint,
   };
 }
 
