@@ -192,7 +192,7 @@ export function buildSacredAmuletFaithProgressCard(p) {
 
   const returnLoopHint =
     bg === "B" || bg === "A"
-      ? "เป้าหมายรอบถัดไปคือหาตัวที่ดันขึ้น A หรือ S ได้เร็วกว่า · ใช้ชิ้นนี้เป็นตัวตั้งเทียบไปก่อน"
+      ? "เป้าหมายรอบถัดไปคือหาตัวที่ขึ้น A หรือ S ได้เร็วกว่า · ถ้าจะหาต่อ ให้เทียบอีก 2–3 ชิ้นในสายเดียวกัน · ใช้ชิ้นนี้เป็นตัวตั้งเทียบไปก่อน"
       : "";
 
   const barFillPercent = Math.min(100, Math.max(0, (projectedScore10 / 10) * 100));

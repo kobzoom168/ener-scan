@@ -469,7 +469,7 @@ export function renderAmuletReportV2Html(payload) {
       : "";
 
   const decisionCardHtml = (() => {
-    const dc = /** @type {{ title?: string; keepGrade?: string; verdict?: string; reason?: string; nextHint?: string } | null} */ (
+    const dc = /** @type {{ title?: string; keepGrade?: string; verdict?: string; reason?: string; baselineHint?: string; scanNextHint?: string } | null} */ (
       vm.decisionCard
     );
     if (!dc || !dc.keepGrade) return "";
@@ -481,6 +481,8 @@ export function renderAmuletReportV2Html(payload) {
           : dc.keepGrade === "B"
             ? "mv2-decision-badge--b"
             : "mv2-decision-badge--c";
+    const baseH = String(dc.baselineHint || "").trim();
+    const scanH = String(dc.scanNextHint || "").trim();
     return `<section class="mv2-card mv2-card--decision mv2-card--top-finder" aria-labelledby="mv2-decision-h">
       <div class="mv2-decision-top">
         <div class="mv2-decision-badge ${badgeMod}" aria-hidden="true">${escapeHtml(dc.keepGrade)}</div>
@@ -490,7 +492,8 @@ export function renderAmuletReportV2Html(payload) {
         </div>
       </div>
       <p class="mv2-decision-reason">${escapeHtml(String(dc.reason || "").trim())}</p>
-      <p class="mv2-decision-next">${escapeHtml(String(dc.nextHint || "").trim())}</p>
+      ${baseH ? `<p class="mv2-decision-baseline">${escapeHtml(baseH)}</p>` : ""}
+      ${scanH ? `<p class="mv2-decision-scan">${escapeHtml(scanH)}</p>` : ""}
     </section>`;
   })();
 
@@ -921,17 +924,19 @@ export function renderAmuletReportV2Html(payload) {
       color: #5c4308;
       background: linear-gradient(165deg, #f0d78a 0%, #d4a82a 45%, #b8871b 100%);
       border-color: rgba(184, 135, 27, 0.45);
-      box-shadow: 0 1px 3px rgba(184, 135, 27, 0.25);
+      box-shadow: 0 2px 5px rgba(184, 135, 27, 0.28), 0 0 0 1px rgba(255, 248, 220, 0.35) inset;
     }
     .mv2-decision-badge--a {
       color: #4a3810;
       background: linear-gradient(165deg, #e8cf7a 0%, #c9a132 100%);
       border-color: rgba(184, 135, 27, 0.38);
+      box-shadow: 0 2px 4px rgba(184, 135, 27, 0.2), 0 0 0 1px rgba(255, 248, 220, 0.28) inset;
     }
     .mv2-decision-badge--b {
       color: #4a3d22;
       background: linear-gradient(165deg, rgba(201, 161, 50, 0.55) 0%, rgba(154, 111, 18, 0.45) 100%);
       border-color: rgba(154, 111, 18, 0.35);
+      box-shadow: 0 1px 3px rgba(120, 88, 28, 0.18);
     }
     .mv2-decision-badge--c {
       color: var(--mv2a-muted);
@@ -954,18 +959,40 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.25;
     }
     .mv2-decision-reason {
-      margin: 0 0 0.38rem;
+      margin: 0 0 0.42rem;
       font-size: 0.74rem;
       line-height: 1.45;
       color: var(--mv2a-text-body);
-      font-weight: 480;
+      font-weight: 500;
+    }
+    .mv2-decision-baseline {
+      margin: 0 0 0.38rem;
+      padding: 0.4rem 0.5rem;
+      font-size: 0.68rem;
+      line-height: 1.42;
+      color: var(--mv2a-muted);
+      font-weight: 500;
+      border-radius: 8px;
+      background: rgba(184, 135, 27, 0.06);
+      border: 1px solid rgba(184, 135, 27, 0.14);
+    }
+    .mv2-decision-scan {
+      margin: 0;
+      padding: 0.42rem 0.5rem;
+      font-size: 0.68rem;
+      line-height: 1.42;
+      color: var(--mv2a-gold-dim);
+      font-weight: 650;
+      border-radius: 8px;
+      background: rgba(184, 135, 27, 0.07);
+      border: 1px dashed rgba(184, 135, 27, 0.32);
     }
     .mv2-decision-next {
       margin: 0;
       font-size: 0.68rem;
       line-height: 1.42;
       color: var(--mv2a-muted);
-      font-weight: 450;
+      font-weight: 500;
     }
     .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; font-family: inherit; }
     .mv2a-hint { font-size: 0.68rem; color: var(--mv2a-muted); margin: 0 0 0.6rem; }
@@ -2303,6 +2330,16 @@ export function renderAmuletReportV2Html(payload) {
     }
     html.mv2a-theme-dark .mv2-decision-reason {
       color: rgba(226, 232, 240, 0.9);
+    }
+    html.mv2a-theme-dark .mv2-decision-baseline {
+      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(232, 197, 71, 0.16);
+      color: rgba(203, 213, 225, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-decision-scan {
+      background: rgba(232, 197, 71, 0.07);
+      border-color: rgba(232, 197, 71, 0.28);
+      color: rgba(253, 230, 138, 0.92);
     }
     html.mv2a-theme-dark .mv2-decision-badge--c {
       color: rgba(148, 163, 184, 0.95);
