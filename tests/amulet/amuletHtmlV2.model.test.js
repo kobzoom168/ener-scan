@@ -109,7 +109,7 @@ test("buildAmuletHtmlV2ViewModel: decisionCard keep grade separate from system e
   assert.equal(vm.decisionCard.title, "ชิ้นนี้ใช่กับคุณแค่ไหน");
   assert.ok(String(vm.decisionCard.verdict || "").length > 0);
   assert.ok(String(vm.decisionCard.baselineHint || "").includes("ตัวตั้ง"));
-  assert.ok(String(vm.decisionCard.scanNextHint || "").includes("เทียบ"));
+  assert.ok(String(vm.decisionCard.scanNextHint || "").includes("สแกนต่อ"));
 });
 
 test("buildSacredAmuletDecisionCard: deterministic keepScore formula", () => {
