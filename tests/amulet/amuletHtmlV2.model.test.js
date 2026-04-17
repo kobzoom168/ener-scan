@@ -51,7 +51,7 @@ function minimalPayload(overrides = {}) {
   return { ...base, ...overrides };
 }
 
-test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด่น / เข้ากับคุณที่สุด)", () => {
+test("buildAmuletHtmlV2ViewModel: graph summary has 3 rows (พลังเด่น / เข้ากับคุณที่สุด / ควรค่อย ๆ ไป)", () => {
   const vm = buildAmuletHtmlV2ViewModel(minimalPayload());
   assert.equal(vm.metrics.energyLevelLabel, "B");
   assert.equal(vm.metrics.energyLevelGradeClass, "level-grade--B");
@@ -64,9 +64,11 @@ test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด
     !JSON.stringify({ ...vm, usageCaution: { disclaimer: "" } }).includes("\u2014"),
     "sacred_amulet VM copy avoids em dash outside fixed disclaimer",
   );
-  assert.equal(vm.graphSummary.rows.length, 2);
+  assert.equal(vm.graphSummary.rows.length, 3);
   assert.equal(vm.graphSummary.rows[0].label, "พลังเด่น");
   assert.equal(vm.graphSummary.rows[1].label, "เข้ากับคุณที่สุด");
+  assert.equal(vm.graphSummary.rows[2].label, "ควรค่อย ๆ ไป");
+  assert.equal(/** @type {{ rowKind?: string }} */ (vm.graphSummary.rows[2]).rowKind, "tension");
   assert.ok(
     String(vm.graphSummary.rows[0].value || "").includes("คุ้มครองป้องกัน"),
   );
@@ -74,6 +76,7 @@ test("buildAmuletHtmlV2ViewModel: graph summary stays 2 rows (พลังเด
     String(vm.graphSummary.rows[1].value || ""),
     vm.power.alignment.labelThai,
   );
+  assert.ok(String(vm.graphSummary.rows[2].value || "").includes(vm.power.tension.labelThai));
 });
 
 test("buildAmuletHtmlV2ViewModel: interaction + graph align to same top axes", () => {

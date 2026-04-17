@@ -97,6 +97,15 @@ export function normalizeReportPayloadForRender(input) {
     generatedAt = new Date().toISOString();
   }
 
+  let scannedAtTop = str(raw.scannedAt).trim();
+  if (scannedAtTop) {
+    const ts = Date.parse(scannedAtTop);
+    if (Number.isNaN(ts)) {
+      warnings.push("invalid_scannedAt");
+      scannedAtTop = "";
+    }
+  }
+
   const energyScore = numOrNull(summaryIn?.energyScore);
   const compatibilityPercent = numOrNull(summaryIn?.compatibilityPercent);
   const compatibilityBand = str(summaryIn?.compatibilityBand).trim();
@@ -164,6 +173,7 @@ export function normalizeReportPayloadForRender(input) {
         ? null
         : str(raw.birthdateUsed),
     generatedAt,
+    ...(scannedAtTop ? { scannedAt: scannedAtTop } : {}),
     reportVersion: str(raw.reportVersion).trim() || "unknown",
     object: {
       objectImageUrl: sanitizeHttpsPublicImageUrl(objectIn?.objectImageUrl),

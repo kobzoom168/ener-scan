@@ -11,6 +11,7 @@
  * @property {string} userId
  * @property {string|null} birthdateUsed
  * @property {string} generatedAt ISO 8601
+ * @property {string} [scannedAt] — optional scan/analysis instant when stored separately from `generatedAt` (HTML meta fallback tier 3)
  * @property {string} reportVersion
  *
  * @property {ReportObject} object

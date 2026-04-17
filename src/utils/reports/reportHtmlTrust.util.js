@@ -5,29 +5,89 @@
 
 import { formatBangkokReportMetaDateTime } from "../dateTime.util.js";
 
+const PRIMARY_META_MIN_MS = Date.parse("2000-01-01T00:00:00.000Z");
+const COMPAT_META_MIN_MS = Date.parse("2018-01-01T00:00:00.000Z");
+const REPORT_META_FUTURE_SLACK_MS = 48 * 60 * 60 * 1000;
+
 /**
- * Report “วันเวลาที่วิเคราะห์” should reflect when the report was produced, not formula/debug scan input.
- * Order: `generatedAt` → hero timestamp → `compatibility.inputs.scannedAt` (last resort).
+ * @param {number} ms
+ * @param {number} minMs
+ * @returns {boolean}
+ */
+function isPlausibleReportMetaMs(ms, minMs) {
+  if (!Number.isFinite(ms)) return false;
+  if (ms < minMs) return false;
+  if (ms > Date.now() + REPORT_META_FUTURE_SLACK_MS) return false;
+  return true;
+}
+
+/**
+ * Tiers 1–3: `generatedAt`, hero mirror, `payload.scannedAt` — allow older real reports.
+ * @param {unknown} v
+ * @returns {string} ISO string or ""
+ */
+function trimToValidReportMetaIso(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  const ms = Date.parse(s);
+  if (!isPlausibleReportMetaMs(ms, PRIMARY_META_MIN_MS)) return "";
+  return s;
+}
+
+/**
+ * `compatibility.inputs.scannedAt` is the compatibility pipeline’s input clock (formula/debug),
+ * not the canonical “report built / analysis shown” instant. Only use when all higher-priority
+ * sources are missing or unusable; stricter floor + min length to avoid stale/junk pipeline stamps.
+ * @param {string} s
+ * @returns {string}
+ */
+function trimCompatInputsScannedAtLastResort(s) {
+  const raw = String(s ?? "").trim();
+  if (raw.length < 12) return "";
+  const ms = Date.parse(raw);
+  if (!isPlausibleReportMetaMs(ms, COMPAT_META_MIN_MS)) return "";
+  return raw;
+}
+
+/**
+ * User-facing “วันเวลาที่วิเคราะห์” on HTML reports: **report build / analysis time** for this artifact,
+ * not the compatibility formula’s internal input timestamp (see tier 4).
+ *
+ * Priority:
+ * 1. `payload.generatedAt` — primary SSOT after normalize (report JSON generation / build)
+ * 2. `heroReportGeneratedAt` — mirror when templates run on a payload that omitted `generatedAt`
+ * 3. `payload.scannedAt` — optional scan/analysis instant when stored at payload top level
+ * 4. `payload.compatibility.inputs.scannedAt` — **last resort only**; may lag or reflect pipeline input
+ *
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload | null | undefined} payload
  * @param {string} [heroReportGeneratedAt] — e.g. `vm.hero.reportGeneratedAt` when payload omits `generatedAt`
  * @returns {string} ISO-ish string or ""
  */
 export function resolveScannedAtIsoForReportMeta(payload, heroReportGeneratedAt) {
   if (!payload || typeof payload !== "object") {
-    return String(heroReportGeneratedAt || "").trim();
+    return trimToValidReportMetaIso(heroReportGeneratedAt);
   }
-  const gen = String(payload.generatedAt || "").trim();
+
+  const gen = trimToValidReportMetaIso(payload.generatedAt);
   if (gen) return gen;
-  const hero = String(heroReportGeneratedAt || "").trim();
+
+  const hero = trimToValidReportMetaIso(heroReportGeneratedAt);
   if (hero) return hero;
-  return String(
+
+  const top = trimToValidReportMetaIso(
+    /** @type {{ scannedAt?: string }} */ (payload).scannedAt,
+  );
+  if (top) return top;
+
+  const rawCompat =
     payload.compatibility &&
-      typeof payload.compatibility === "object" &&
-      payload.compatibility.inputs &&
-      typeof payload.compatibility.inputs === "object"
+    typeof payload.compatibility === "object" &&
+    payload.compatibility.inputs &&
+    typeof payload.compatibility.inputs === "object"
       ? /** @type {{ scannedAt?: string }} */ (payload.compatibility.inputs).scannedAt ?? ""
-      : "",
-  ).trim();
+      : "";
+
+  return trimCompatInputsScannedAtLastResort(String(rawCompat).trim());
 }
 
 /**
@@ -71,7 +131,7 @@ export function scannedAtLabelThai(iso) {
 }
 
 /**
- * User-visible meta datetime, or empty string if missing/invalid (caller should omit the row).
+ * User-visible meta datetime for the report meta row (`formatBangkokReportMetaDateTime`), or empty if missing/invalid (caller omits the row).
  * @param {string} iso
  * @returns {string}
  */

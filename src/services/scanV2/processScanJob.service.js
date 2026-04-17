@@ -626,6 +626,8 @@ export async function processScanJob(workerId, jobRow) {
   /** @type {Record<string, unknown> | null} */
   let reportPayloadForReply = null;
   let publicToken = /** @type {string | null} */ (null);
+  /** Set when `insertScanPublicReport` runs — compare payload at `scan_results_v2` insert (same scan). */
+  let generatedAtPersistedWithScanPublicReports = "";
 
   try {
     console.log(
@@ -722,6 +724,31 @@ export async function processScanJob(workerId, jobRow) {
       stableFeatureSeed,
     });
 
+    const builtGenAt = String(
+      reportPayloadBuilt &&
+        typeof reportPayloadBuilt === "object" &&
+        "generatedAt" in reportPayloadBuilt
+        ? /** @type {{ generatedAt?: unknown }} */ (reportPayloadBuilt).generatedAt ??
+            ""
+        : "",
+    ).trim();
+    const builtGenMs = Date.parse(builtGenAt);
+    console.log(
+      JSON.stringify({
+        event: "REPORT_PAYLOAD_BUILT_META_TIME",
+        path: "worker-scan",
+        worker: "processScanJob",
+        strictSupportedLane,
+        generatedAt: builtGenAt || null,
+        generatedAtFreshMs:
+          Number.isFinite(builtGenMs) && builtGenMs <= Date.now()
+            ? Math.max(0, Date.now() - builtGenMs)
+            : null,
+        scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+        publicTokenPrefix: `${String(token || "").slice(0, 12)}…`,
+      }),
+    );
+
     let reportPayload = reportPayloadBuilt;
     try {
       const merged = mergeExternalHintsIntoWordingContext(
@@ -729,6 +756,25 @@ export async function processScanJob(workerId, jobRow) {
         externalObjectHints,
       );
       reportPayload = merged.payload;
+      const postMergeGen = String(
+        reportPayload &&
+          typeof reportPayload === "object" &&
+          "generatedAt" in reportPayload
+          ? /** @type {{ generatedAt?: unknown }} */ (reportPayload).generatedAt ??
+              ""
+          : "",
+      ).trim();
+      if (postMergeGen && postMergeGen !== builtGenAt) {
+        console.warn(
+          JSON.stringify({
+            event: "REPORT_PAYLOAD_GENERATED_AT_CHANGED_BY_MERGE",
+            path: "worker-scan",
+            mergeMode: merged.mergeMode,
+            before: builtGenAt,
+            after: postMergeGen,
+          }),
+        );
+      }
       if (externalObjectHints) {
         const hintCount =
           (merged.payload.enrichment?.hints?.sourceUrls?.length ? 1 : 0) +
@@ -811,6 +857,27 @@ export async function processScanJob(workerId, jobRow) {
         reportPayload.summary?.energyCategoryCode ?? null;
       reportPayload.diagnostics.deliveryStrategy = lineFinalMode;
     }
+
+    generatedAtPersistedWithScanPublicReports = String(
+      reportPayload &&
+        typeof reportPayload === "object" &&
+        "generatedAt" in reportPayload
+        ? /** @type {{ generatedAt?: unknown }} */ (reportPayload).generatedAt ?? ""
+        : "",
+    ).trim();
+    console.log(
+      JSON.stringify({
+        event: "REPORT_PAYLOAD_PRE_INSERT_SCAN_PUBLIC_REPORTS",
+        path: "worker-scan",
+        generatedAt: generatedAtPersistedWithScanPublicReports || null,
+        sameObjectAsBuilt: reportPayload === reportPayloadBuilt,
+        generatedAtSameAsBuild:
+          Boolean(builtGenAt) &&
+          Boolean(generatedAtPersistedWithScanPublicReports) &&
+          generatedAtPersistedWithScanPublicReports === builtGenAt,
+        scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+      }),
+    );
 
     await insertScanPublicReport({
       scanResultId: legacyScanResultId,
@@ -1126,6 +1193,27 @@ export async function processScanJob(workerId, jobRow) {
   /** @type {string | null} */
   let scanResultV2Id = null;
   try {
+    const v2PayloadGenAt = String(
+      reportPayloadForReply &&
+        typeof reportPayloadForReply === "object" &&
+        "generatedAt" in reportPayloadForReply
+        ? /** @type {{ generatedAt?: unknown }} */ (reportPayloadForReply)
+            .generatedAt ?? ""
+        : "",
+    ).trim();
+    console.log(
+      JSON.stringify({
+        event: "REPORT_PAYLOAD_PRE_INSERT_SCAN_RESULTS_V2",
+        path: "worker-scan",
+        generatedAt: v2PayloadGenAt || null,
+        sameGeneratedAtAsPublicReportsInsert:
+          Boolean(generatedAtPersistedWithScanPublicReports) &&
+          Boolean(v2PayloadGenAt) &&
+          v2PayloadGenAt === generatedAtPersistedWithScanPublicReports,
+        jobIdPrefix: idPrefix8(jobId),
+      }),
+    );
+
     const insertRes = await insertScanResultV2({
       scan_job_id: jobId,
       line_user_id: lineUserId,
