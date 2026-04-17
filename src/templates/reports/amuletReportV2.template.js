@@ -555,10 +555,10 @@ export function renderAmuletReportV2Html(payload) {
       return "ชิ้นนี้ยังมีลุ้นขยับถึง S ได้ในรอบนี้";
     }
     if (pipelineFromGrade === "A" && progressTargetGrade === "A") {
-      return "ใช้ต่อได้ แต่ถ้าจะลุ้น S การสแกนเพิ่มคุ้มกว่า";
+      return "ใช้ต่อได้ แต่ถ้าจะดันถึง S การสแกนหาชิ้นหนุนเพิ่มอาจคุ้มกว่า";
     }
     if (pipelineFromGrade === "B" && progressTargetGrade === "A") {
-      return "ชิ้นนี้เหมาะเป็นตัวตั้ง แต่ถ้าจะลุ้น S การสแกนเพิ่มอาจคุ้มกว่า";
+      return "ชิ้นนี้เหมาะเป็นตัวตั้ง แต่ถ้าจะดันถึง S การสแกนหาชิ้นหนุนเพิ่มอาจคุ้มกว่า";
     }
     if (pipelineFromGrade === "B" && progressTargetGrade === "B") {
       return "ชิ้นนี้เหมาะเป็นตัวตั้ง แต่ยังไม่ใช่ตัวปั้นสุด";
@@ -580,81 +580,84 @@ export function renderAmuletReportV2Html(payload) {
     }
     return "7–30 วัน";
   })();
-  const continuousHorizonSub =
+  const insightPeakSub = "จังหวะนี้เหมาะกับการใช้ต่อเนื่อง มากกว่าพกไว้เฉย ๆ";
+  const insightContinuousSub =
     pipelineFromGrade === progressTargetGrade
-      ? "พลังจะนิ่งขึ้นเมื่อทำต่อเนื่อง แม้ยังอยู่เกรดเดิม"
-      : "พลังจะนิ่งขึ้นและหนุนได้เต็มกว่าเดิมเมื่อทำต่อเนื่อง";
+      ? `พลังจะนิ่งขึ้น แม้เกรดยังอยู่ระดับ ${progressTargetGrade}`
+      : "พลังจะนิ่งขึ้นและหนุนได้เต็มกว่าเดิมเมื่อใช้ต่อเนื่อง";
   const ceilingHorizon =
     progressTargetGrade === "S"
       ? "ถึง S ในรอบนี้"
       : `สูงสุดอยู่ที่ ${progressTargetGrade} · ยังไม่ถึง S ในรอบนี้`;
-  const ceilingHorizonSub =
-    progressTargetGrade === "S" ? "" : `รอบนี้บูสต์เต็มที่แล้วยังไปได้แค่ ${progressTargetGrade}`;
+  const insightCeilingSub =
+    progressTargetGrade === "S"
+      ? "หนุนต่อได้แบบนิ่ง ๆ ไม่ต้องฝืนเร่งเกินจังหวะ"
+      : "รอบนี้เหมาะกับการดันให้แน่น มากกว่าฝืนเร่งเกินจังหวะ";
   const fullsetMark =
     pipelineFromGrade === progressTargetGrade && (boostCapScore10 || 0) > 0
       ? `${progressTargetGrade}+`
       : progressTargetGrade;
   const continuousHorizonMain = `${fullsetMark} · ${progressTargetScore}/10 · ${durationContinuousBand}`;
-  const guideCardHtml = `<section class="mv2-card mv2-card--guide" aria-labelledby="mv2-guide-h">
-      <h2 id="mv2-guide-h">จังหวะและเพดานของชิ้นนี้</h2>
+  const guideCardHtml = `<section class="mv2-card mv2-card--guide mv2-card--guide-soft" aria-labelledby="mv2-guide-h">
+      <h2 id="mv2-guide-h">จังหวะหนุนของชิ้นนี้</h2>
       <div class="mv2-guide-hero">
-        <p class="mv2-guide-hero-k">เกรดปัจจุบัน · จังหวะซ้ำ · การฝึก · เพดานรอบนี้</p>
+        <p class="mv2-guide-hero-k">ระดับตอนนี้ · ช่วงที่ตอบดี · พื้นที่ที่ดันได้</p>
         <p class="mv2-guide-hero-grade">${escapeHtml(heroGradeResult)}</p>
         <p class="mv2-guide-hero-verdict">${escapeHtml(heroVerdictLabel)}</p>
       </div>
-      <div class="mv2-guide-metrics" role="list" aria-label="ตัวเลขตัดสินใจ">
+      <div class="mv2-guide-metrics" role="list" aria-label="สรุปสั้นก่อนอ่านต่อ">
         <div class="mv2-guide-metric" role="listitem">
-          <span class="mv2-guide-metric-k">ขาดถึง S</span>
+          <span class="mv2-guide-metric-k">ขยับถึง S</span>
           <span class="mv2-guide-metric-v">${escapeHtml(gapToS10 != null ? gapToS10.toFixed(2) : "—")}</span>
         </div>
         <div class="mv2-guide-metric" role="listitem">
-          <span class="mv2-guide-metric-k">บูสต์ได้สูงสุด</span>
+          <span class="mv2-guide-metric-k">ดันเพิ่มได้</span>
           <span class="mv2-guide-metric-v">${escapeHtml(boostMetricDisplay)}</span>
         </div>
         <div class="mv2-guide-metric" role="listitem">
-          <span class="mv2-guide-metric-k">ระยะเวลาต่อเนื่อง</span>
+          <span class="mv2-guide-metric-k">ช่วงหนุน</span>
           <span class="mv2-guide-metric-v">${escapeHtml(durationContinuousBand)}</span>
         </div>
       </div>
-      <div class="mv2-guide-horizon-stack" aria-label="สามขอบเขต">
+      <div class="mv2-guide-horizon-stack" aria-label="อ่านต่อทีละมุม">
         <div class="mv2-guide-horizon-card">
-          <span class="mv2-guide-horizon-card-k">ใช้เด่นสุด</span>
+          <span class="mv2-guide-horizon-card-k">ช่วงที่ใช้ได้เด่นสุด</span>
           <span class="mv2-guide-horizon-card-line">${escapeHtml(stepOneAnswer)}</span>
           ${useModeLabel ? `<span class="mv2-guide-horizon-card-mode">${escapeHtml(useModeLabel)}</span>` : ""}
-          <p class="mv2-guide-horizon-card-hint">จังหวะที่แนะนำซ้ำได้ทุกสัปดาห์ · ไม่ใช่แค่ครั้งเดียว</p>
+          <p class="mv2-guide-horizon-card-hint">${escapeHtml(insightPeakSub)}</p>
         </div>
         <div class="mv2-guide-horizon-card">
-          <span class="mv2-guide-horizon-card-k">ถ้าทำต่อเนื่อง</span>
+          <span class="mv2-guide-horizon-card-k">ถ้าใช้ต่อเนื่อง</span>
           <span class="mv2-guide-horizon-card-line">${escapeHtml(continuousHorizonMain)}</span>
-          <p class="mv2-guide-horizon-card-sub">${escapeHtml(continuousHorizonSub)}</p>
+          <p class="mv2-guide-horizon-card-sub">${escapeHtml(insightContinuousSub)}</p>
         </div>
         <div class="mv2-guide-horizon-card mv2-guide-horizon-card--ceiling">
-          <span class="mv2-guide-horizon-card-k">เพดานรอบนี้</span>
+          <span class="mv2-guide-horizon-card-k">ขีดพลังรอบนี้</span>
           <span class="mv2-guide-horizon-card-line">${escapeHtml(ceilingHorizon)}</span>
-          ${ceilingHorizonSub ? `<p class="mv2-guide-horizon-card-sub">${escapeHtml(ceilingHorizonSub)}</p>` : ""}
+          <p class="mv2-guide-horizon-card-sub">${escapeHtml(insightCeilingSub)}</p>
         </div>
       </div>
-      <div class="mv2-guide-buff-table mv2-guide-belief" role="list" aria-label="กติกาเพิ่มพลังงาน">
-        <div class="mv2-guide-buff-title">กติกาเพิ่มพลังงาน</div>
+      <div class="mv2-guide-buff-table mv2-guide-belief" role="list" aria-label="แนวทางหนุนพลัง">
+        <div class="mv2-guide-buff-title">แนวทางหนุนพลัง</div>
         <div class="mv2-guide-belief-tier" role="listitem">
           <span class="mv2-guide-belief-k">ระยะสั้น</span>
-          <span class="mv2-guide-belief-v">อธิษฐาน / ตั้งจิต · ผลเร็ว แต่เพิ่มน้อย</span>
+          <span class="mv2-guide-belief-v">อธิษฐาน / ตั้งจิต / ผลเร็ว แต่เพิ่มได้ไม่มาก</span>
         </div>
         <div class="mv2-guide-belief-tier" role="listitem">
           <span class="mv2-guide-belief-k">ระยะกลาง</span>
-          <span class="mv2-guide-belief-v">ใช้ตามวันเวลาแนะนำ + สวดสั้น + ตั้งจิต · ต้องมีวินัย และเห็นผลเป็นช่วง</span>
+          <span class="mv2-guide-belief-v">ใช้ตามวันเวลาแนะนำ + สวดสั้น + ตั้งจิต / ต้องทำสม่ำเสมอ</span>
         </div>
         <div class="mv2-guide-belief-tier" role="listitem">
           <span class="mv2-guide-belief-k">ระยะยาว</span>
-          <span class="mv2-guide-belief-v">สวดมนต์ + สมาธิต่อเนื่อง · ใช้เวลาเป็นสัปดาห์ถึงเดือน แต่ให้น้ำหนักสูงสุด</span>
+          <span class="mv2-guide-belief-v">สวดมนต์ + สมาธิต่อเนื่อง / เห็นผลช้า แต่หนุนน้ำหนักสุด</span>
         </div>
-        <p class="mv2-guide-belief-note">ผ่านพิธีปลุกเสก / ผ่านการอธิษฐานต่อเนื่อง · บูชาต่อเนื่อง / ผ่านพิธี · เป็นโบนัสพิเศษ ไม่ใช่ base rule ของทุกชิ้น</p>
+        <p class="mv2-guide-belief-note">พิธีหรือการตั้งจิตต่อเนื่อง · อาจเป็นโบนัสพิเศษ ไม่ใช่กติกาพื้นฐานทุกชิ้น</p>
       </div>
       <div class="mv2-guide-bottom">
         <p class="mv2-guide-boost-inline">${escapeHtml(
           boostPercent != null
-            ? `โบนัสจังหวะประมาณ +${Math.round(boostPercent)}% · คะแนนหลักของรายงานไม่เปลี่ยน`
-            : "โบนัสจังหวะประมาณ — · คะแนนหลักของรายงานไม่เปลี่ยน",
+            ? `โบนัสจังหวะประมาณ +${Math.round(boostPercent)}% · คะแนนหลักของรายงานยังไม่เปลี่ยน`
+            : "โบนัสจังหวะประมาณ — · คะแนนหลักของรายงานยังไม่เปลี่ยน",
         )}</p>
         <p class="mv2-guide-closing">${escapeHtml(heroVerdictLine)}</p>
       </div>
@@ -976,6 +979,18 @@ export function renderAmuletReportV2Html(payload) {
       border-left: 3px solid rgba(184, 135, 27, 0.42);
       padding: 0.72rem 0.78rem;
     }
+    .mv2-card--guide-soft {
+      border-radius: 14px;
+      border-left: none;
+      border: 1px solid rgba(184, 135, 27, 0.14);
+      background: linear-gradient(
+        165deg,
+        rgba(184, 135, 27, 0.07) 0%,
+        rgba(255, 255, 255, 0.72) 42%,
+        rgba(246, 246, 244, 0.96) 100%
+      );
+      box-shadow: 0 10px 32px rgba(60, 48, 24, 0.06);
+    }
     .mv2-card--guide > h2 {
       margin: 0 0 0.42rem;
       font-size: 0.92rem;
@@ -990,18 +1005,23 @@ export function renderAmuletReportV2Html(payload) {
       margin-bottom: 0.28rem;
       text-align: center;
     }
+    .mv2-card--guide-soft .mv2-guide-hero {
+      background: linear-gradient(155deg, rgba(184, 135, 27, 0.09) 0%, rgba(255, 255, 255, 0.35) 100%);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
     .mv2-guide-hero-k {
       margin: 0;
       font-size: 0.58rem;
-      line-height: 1.22;
+      line-height: 1.28;
       color: var(--mv2a-muted);
-      font-weight: 650;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: none;
     }
     .mv2-guide-hero-grade {
       margin: 0.1rem 0 0.04rem;
-      font-size: 1.34rem;
+      font-size: 1.52rem;
       line-height: 1;
       font-weight: 840;
       color: var(--mv2a-gold-dim);
@@ -1026,6 +1046,13 @@ export function renderAmuletReportV2Html(payload) {
       background: rgba(184, 135, 27, 0.04);
       padding: 0.22rem 0.26rem;
       text-align: center;
+    }
+    .mv2-card--guide-soft .mv2-guide-metric {
+      background: rgba(255, 255, 255, 0.52);
+      border-color: rgba(184, 135, 27, 0.12);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
     }
     .mv2-guide-metric-k {
       display: block;
@@ -1148,9 +1175,17 @@ export function renderAmuletReportV2Html(payload) {
       background: rgba(184, 135, 27, 0.05);
       padding: 0.28rem 0.34rem 0.24rem;
     }
+    .mv2-card--guide-soft .mv2-guide-horizon-card {
+      background: rgba(255, 255, 255, 0.42);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
     .mv2-guide-horizon-card--ceiling {
       border-color: rgba(184, 135, 27, 0.26);
       background: linear-gradient(165deg, rgba(184, 135, 27, 0.1) 0%, rgba(184, 135, 27, 0.04) 100%);
+    }
+    .mv2-card--guide-soft .mv2-guide-horizon-card--ceiling {
+      background: linear-gradient(165deg, rgba(184, 135, 27, 0.08) 0%, rgba(255, 255, 255, 0.38) 100%);
     }
     .mv2-guide-horizon-card-k {
       display: block;
@@ -1158,9 +1193,9 @@ export function renderAmuletReportV2Html(payload) {
       font-size: 0.58rem;
       line-height: 1.2;
       color: var(--mv2a-muted);
-      font-weight: 750;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: none;
     }
     .mv2-guide-horizon-card-line {
       display: block;
@@ -1180,9 +1215,10 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-guide-horizon-card-hint {
       margin: 0.12rem 0 0;
       font-size: 0.56rem;
-      line-height: 1.32;
+      line-height: 1.36;
       color: var(--mv2a-muted);
       font-weight: 520;
+      font-style: normal;
     }
     .mv2-guide-horizon-card-sub {
       margin: 0.1rem 0 0;
@@ -2736,6 +2772,22 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-card--guide {
       border-left-color: rgba(232, 197, 71, 0.42);
       background: rgba(20, 22, 28, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-card--guide-soft {
+      border: 1px solid rgba(232, 197, 71, 0.22);
+      background: linear-gradient(165deg, rgba(232, 197, 71, 0.07) 0%, rgba(20, 22, 28, 0.94) 100%);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.32);
+    }
+    html.mv2a-theme-dark .mv2-card--guide-soft .mv2-guide-metric {
+      background: rgba(28, 26, 22, 0.58);
+      border-color: rgba(232, 197, 71, 0.2);
+      box-shadow: none;
+    }
+    html.mv2a-theme-dark .mv2-card--guide-soft .mv2-guide-horizon-card {
+      background: rgba(28, 26, 22, 0.48);
+    }
+    html.mv2a-theme-dark .mv2-card--guide-soft .mv2-guide-horizon-card--ceiling {
+      background: linear-gradient(165deg, rgba(232, 197, 71, 0.1) 0%, rgba(20, 22, 28, 0.78) 100%);
     }
     html.mv2a-theme-dark .mv2-guide-hero {
       border-color: rgba(232, 197, 71, 0.2);

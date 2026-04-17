@@ -233,7 +233,7 @@ test("buildAmuletHtmlV2ViewModel: faithProgressCard B→A projection (display-on
     summary: { ...base.summary, energyScore: 7.2 },
   });
   assert.ok(vm.faithProgressCard);
-  assert.equal(vm.faithProgressCard.title, "จังหวะและเพดานของชิ้นนี้");
+  assert.equal(vm.faithProgressCard.title, "จังหวะหนุนของชิ้นนี้");
   assert.equal(vm.faithProgressCard.subtitle, "เสริมตามความเชื่อ");
   assert.ok(String(vm.faithProgressCard.returnLoopHint || "").includes("เป้าหมายรอบถัดไป"));
   assert.equal(vm.faithProgressCard.baseGrade, "B");

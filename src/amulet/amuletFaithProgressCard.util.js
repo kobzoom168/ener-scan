@@ -198,7 +198,7 @@ export function buildSacredAmuletFaithProgressCard(p) {
   const barFillPercent = Math.min(100, Math.max(0, (projectedScore10 / 10) * 100));
 
   return {
-    title: "จังหวะและเพดานของชิ้นนี้",
+    title: "จังหวะหนุนของชิ้นนี้",
     subtitle: "เสริมตามความเชื่อ",
     baseGrade: baseGrade || "D",
     projectedGrade: projectedGrade || "D",
