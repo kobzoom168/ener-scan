@@ -520,32 +520,95 @@ export function renderAmuletReportV2Html(payload) {
     fp && Number.isFinite(Number(fp.estimatedDaysToNextTier))
       ? ` · ประมาณ ${Math.max(1, Math.round(Number(fp.estimatedDaysToNextTier)))} วัน`
       : "";
+  const projectedFillPct =
+    fp && Number.isFinite(Number(fp.projectedScore10))
+      ? Math.max(0, Math.min(100, (Number(fp.projectedScore10) / 10) * 100))
+      : null;
+  const guideScanExplain = fp
+    ? String(fp.scanNextHint || "").trim() ||
+      "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด"
+    : "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด";
+  const baseGrade = String(fp?.baseGrade || "").trim().toUpperCase();
+  const guideTopAnswer = (() => {
+    if (baseGrade === "B") return "B → A · ประมาณ 7–9 วัน";
+    if (baseGrade === "A") return "A → S · ยังมีลุ้น";
+    if (baseGrade === "S") return "S · ใช้ต่อได้เลย";
+    if (baseGrade === "C") return "C · ควรหาต่อ";
+    return fp
+      ? `${String(fp.baseGrade || "—").trim()} → ${String(fp.projectedGrade || "—").trim()}${estDays}`
+      : "—";
+  })();
+  const guideTopExplain = (() => {
+    if (baseGrade === "B") {
+      return "ชิ้นนี้มีพื้นให้ดันขึ้นได้ แต่ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด เพื่อหาตัวที่ขึ้นเร็วกว่า";
+    }
+    if (baseGrade === "A") {
+      return "ถ้าทำครบชุดและใช้ต่อเนื่อง ชิ้นนี้ยังมีโอกาสขึ้นได้อีก ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายเดียวกันเพื่อหาตัว top";
+    }
+    if (baseGrade === "S") {
+      return "ชิ้นนี้ขึ้นดีอยู่แล้ว ถ้าจะสแกนต่อ ให้ใช้ชิ้นนี้เป็นตัวตั้ง แล้วเทียบว่ามีองค์ไหนแซงได้จริงไหม";
+    }
+    if (baseGrade === "C") {
+      return "ชิ้นนี้ยังไม่ใช่ตัวที่เด่นสุดของรอบนี้ ถ้าจะสแกนต่อ ให้เน้นชิ้นที่เด่นทาง “เข้ากับคุณที่สุด” และเลี่ยงชิ้นที่ไปหนักทาง “ควรค่อย ๆ ไป” มากเกินไป";
+    }
+    return guideScanExplain;
+  })();
   const guideCardHtml = `<section class="mv2-card mv2-card--guide" aria-labelledby="mv2-guide-h">
       <h2 id="mv2-guide-h">คู่มือใช้ชิ้นนี้</h2>
-      <div class="mv2-guide-block">
-        <div class="mv2-guide-k">ใช้วันไหน</div>
-        <div class="mv2-guide-main">${escapeHtml(`${useDayLabel} · ${useTimeLabel}`)}</div>
-        <div class="mv2-guide-sub">${escapeHtml(useModeLabel || String(tac?.weekdayTip || "ใช้แบบค่อย ๆ และสม่ำเสมอ").trim())}</div>
+      <div class="mv2-guide-top" role="list" aria-label="สรุปคู่มือ">
+        <span class="mv2-guide-chip" role="listitem">${escapeHtml(useDayLabel || "—")}</span>
+        <span class="mv2-guide-chip" role="listitem">${escapeHtml(useTimeLabel || "—")}</span>
+        <span class="mv2-guide-chip mv2-guide-chip--boost" role="listitem">${escapeHtml(
+          boostPercent != null ? `โบนัสจังหวะ +${Math.round(boostPercent)}%` : "โบนัสจังหวะ —",
+        )}</span>
       </div>
-      <div class="mv2-guide-block">
-        <div class="mv2-guide-k">ถ้าใช้ถูกจังหวะ</div>
-        <div class="mv2-guide-main">${escapeHtml(
-          boostPercent != null ? `โบนัสจังหวะประมาณ +${Math.round(boostPercent)}%` : "ใช้ตามจังหวะที่แนะนำจะช่วยหนุนเพิ่มเล็กน้อย",
-        )}</div>
-        <div class="mv2-guide-sub">ใช้ตามวันและช่วงเวลาแนะนำ พร้อมตั้งจิตก่อนใช้ จะช่วยหนุนพลังได้อีกเล็กน้อย (แสดงผลเท่านั้น)</div>
+      ${useModeLabel ? `<p class="mv2-guide-mode">${escapeHtml(useModeLabel)}</p>` : ""}
+      <div class="mv2-guide-table" role="table" aria-label="คู่มือการใช้ชิ้นนี้">
+        <div class="mv2-guide-row mv2-guide-row--head" role="row">
+          <div class="mv2-guide-col-k" role="columnheader">หัวข้อ</div>
+          <div class="mv2-guide-col-v" role="columnheader">คำตอบ</div>
+          <div class="mv2-guide-col-d" role="columnheader">คำอธิบาย</div>
+        </div>
+        <div class="mv2-guide-row" role="row">
+          <div class="mv2-guide-col-k" role="cell">ใช้วันไหน</div>
+          <div class="mv2-guide-col-v" role="cell">${escapeHtml(`${useDayLabel} · ${useTimeLabel}`)}</div>
+          <div class="mv2-guide-col-d" role="cell">เหมาะกับการเสริมด้านที่ชิ้นนี้เด่น ใช้แล้วพลังของชิ้นนี้ตอบกับคุณได้ชัดขึ้น</div>
+        </div>
+        <div class="mv2-guide-row" role="row">
+          <div class="mv2-guide-col-k" role="cell">ถ้าใช้ถูกจังหวะ</div>
+          <div class="mv2-guide-col-v" role="cell">${escapeHtml(
+            boostPercent != null ? `โบนัสประมาณ +${Math.round(boostPercent)}%` : "โบนัสประมาณ —",
+          )}</div>
+          <div class="mv2-guide-col-d" role="cell">ใช้ตามวันเวลาแนะนำ พร้อมตั้งจิตก่อนใช้ จะช่วยหนุนพลังได้อีกเล็กน้อย</div>
+        </div>
+        <div class="mv2-guide-row" role="row">
+          <div class="mv2-guide-col-k" role="cell">ทางไปสู่ตัว top</div>
+          <div class="mv2-guide-col-v" role="cell">${escapeHtml(guideTopAnswer)}</div>
+          <div class="mv2-guide-col-d" role="cell">${escapeHtml(guideTopExplain)}</div>
+        </div>
       </div>
-      <div class="mv2-guide-block">
-        <div class="mv2-guide-k">ทางไปสู่ตัว top</div>
-        <div class="mv2-guide-main">${escapeHtml(
-          fp
-            ? `${String(fp.baseGrade || "—").trim()} → ${String(fp.projectedGrade || "—").trim()}${estDays}`
-            : "—",
+      <div class="mv2-guide-buff-table" role="table" aria-label="องค์ประกอบที่ช่วยหนุน">
+        <div class="mv2-guide-buff-row mv2-guide-buff-row--head" role="row">
+          <div role="columnheader">สิ่งที่ทำ</div>
+          <div role="columnheader">โบนัส</div>
+          <div role="columnheader">คำอธิบาย</div>
+        </div>
+        <div class="mv2-guide-buff-row" role="row"><div role="cell">ใช้ตามวันและเวลาแนะนำ</div><div role="cell">+4%</div><div role="cell">ช่วยให้จังหวะของชิ้นนี้ตอบกับคุณได้ง่ายขึ้น</div></div>
+        <div class="mv2-guide-buff-row" role="row"><div role="cell">ตั้งจิตก่อนใช้</div><div role="cell">+3%</div><div role="cell">ทำให้พลังรวมตัวและนิ่งขึ้นก่อนใช้งาน</div></div>
+        <div class="mv2-guide-buff-row" role="row"><div role="cell">สวดหรือทำสมาธิสั้น</div><div role="cell">+2%</div><div role="cell">ช่วยเสริมความนิ่งและการรับพลังของเจ้าของ</div></div>
+        <div class="mv2-guide-buff-row" role="row"><div role="cell">บูชาต่อเนื่อง / ผ่านพิธี</div><div role="cell">+2% ถึง +4%</div><div role="cell">เสริมแรงของชิ้นนี้ในระยะต่อเนื่อง</div></div>
+      </div>
+      <div class="mv2-guide-progress">
+        <div class="mv2-guide-progress-meta">${escapeHtml(
+          fp ? `คะแนนปัจจุบัน ${fmt10(fp.baseScore10)} / 10` : "คะแนนปัจจุบัน — / 10",
         )}</div>
-        <div class="mv2-guide-sub">${escapeHtml(
-          fp
-            ? `คะแนน ${fmt10(fp.baseScore10)} → ${fmt10(fp.projectedScore10)} / 10 · ${String(fp.scanNextHint || "").trim()}`
-            : "สแกนเทียบเพิ่มอีก 2–3 ชิ้นเพื่อหาตัวที่ขึ้นได้ไวกว่า",
+        <div class="mv2-guide-progress-meta">${escapeHtml(
+          fp ? `คะแนนคาดการณ์ ${fmt10(fp.projectedScore10)} / 10` : "คะแนนคาดการณ์ — / 10",
         )}</div>
+        <div class="mv2-guide-progress-bar" role="presentation">
+          <span class="mv2-guide-progress-fill" style="width:${projectedFillPct != null ? projectedFillPct.toFixed(1) : "0"}%"></span>
+        </div>
+        <p class="mv2-guide-progress-note">เป็นค่าประมาณการจากการใช้งานตามจังหวะและความเชื่อ ไม่ได้เปลี่ยนคะแนนหลักของรายงาน</p>
       </div>
     </section>`;
 
@@ -863,41 +926,158 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-card--guide {
       margin-top: 0.45rem;
       border-left: 3px solid rgba(184, 135, 27, 0.42);
-      padding: 0.72rem 0.82rem;
+      padding: 0.72rem 0.78rem;
     }
     .mv2-card--guide > h2 {
-      margin: 0 0 0.45rem;
-      font-size: 0.9rem;
-      font-weight: 700;
+      margin: 0 0 0.42rem;
+      font-size: 0.92rem;
+      font-weight: 750;
       color: var(--mv2a-gold-dim);
     }
-    .mv2-guide-block {
-      padding: 0.45rem 0.5rem;
-      border-radius: 10px;
-      border: 1px solid rgba(184, 135, 27, 0.14);
-      background: rgba(184, 135, 27, 0.045);
-      margin-bottom: 0.4rem;
+    .mv2-guide-top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.32rem;
+      margin-bottom: 0.28rem;
     }
-    .mv2-guide-block:last-child { margin-bottom: 0; }
-    .mv2-guide-k {
-      font-size: 0.6rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--mv2a-muted);
-      margin-bottom: 0.16rem;
-    }
-    .mv2-guide-main {
-      font-size: 0.8rem;
-      line-height: 1.3;
-      font-weight: 750;
+    .mv2-guide-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.16rem 0.46rem;
+      border-radius: 999px;
+      border: 1px solid rgba(184, 135, 27, 0.24);
+      background: rgba(184, 135, 27, 0.08);
+      font-size: 0.62rem;
+      font-weight: 650;
       color: var(--mv2a-text-body);
-      margin-bottom: 0.12rem;
+      line-height: 1.25;
     }
-    .mv2-guide-sub {
+    .mv2-guide-chip--boost {
+      color: var(--mv2a-gold-dim);
+      border-color: rgba(184, 135, 27, 0.34);
+      background: rgba(184, 135, 27, 0.12);
+      font-weight: 700;
+    }
+    .mv2-guide-mode {
+      margin: 0 0 0.42rem;
       font-size: 0.66rem;
-      line-height: 1.36;
+      line-height: 1.34;
       color: var(--mv2a-muted);
+      font-weight: 550;
+    }
+    .mv2-guide-table {
+      border: 1px solid rgba(184, 135, 27, 0.16);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 0.42rem;
+    }
+    .mv2-guide-row {
+      display: grid;
+      grid-template-columns: 4.5rem minmax(5.5rem, 0.9fr) minmax(0, 1.2fr);
+      gap: 0.34rem;
+      padding: 0.34rem 0.44rem;
+      border-top: 1px solid rgba(184, 135, 27, 0.1);
+      background: rgba(184, 135, 27, 0.04);
+    }
+    .mv2-guide-row:first-child { border-top: none; }
+    .mv2-guide-row--head {
+      background: rgba(184, 135, 27, 0.1);
+      border-top: none;
+      padding-top: 0.28rem;
+      padding-bottom: 0.28rem;
+    }
+    .mv2-guide-col-k {
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--mv2a-muted);
+      text-transform: uppercase;
+      line-height: 1.28;
+    }
+    .mv2-guide-col-v {
+      font-size: 0.67rem;
+      line-height: 1.34;
+      color: var(--mv2a-text-body);
+      font-weight: 700;
+    }
+    .mv2-guide-col-d {
+      font-size: 0.62rem;
+      line-height: 1.34;
+      color: var(--mv2a-muted);
+      font-weight: 500;
+    }
+    .mv2-guide-row--head .mv2-guide-col-k,
+    .mv2-guide-row--head .mv2-guide-col-v,
+    .mv2-guide-row--head .mv2-guide-col-d {
+      text-transform: none;
+      letter-spacing: 0.02em;
+      font-size: 0.56rem;
+      font-weight: 700;
+      color: var(--mv2a-gold-dim);
+      opacity: 0.9;
+    }
+    .mv2-guide-buff-table {
+      border: 1px solid rgba(100, 92, 82, 0.14);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 0.38rem;
+    }
+    .mv2-guide-buff-row {
+      display: grid;
+      grid-template-columns: minmax(5.6rem, 0.95fr) 2.9rem minmax(0, 1.25fr);
+      gap: 0.42rem;
+      padding: 0.28rem 0.44rem;
+      border-top: 1px solid rgba(100, 92, 82, 0.1);
+      background: rgba(100, 92, 82, 0.04);
+      font-size: 0.61rem;
+      line-height: 1.32;
+      color: var(--mv2a-muted);
+    }
+    .mv2-guide-buff-row:first-child { border-top: none; }
+    .mv2-guide-buff-row--head {
+      background: rgba(100, 92, 82, 0.08);
+      font-size: 0.56rem;
+      letter-spacing: 0.02em;
+      font-weight: 700;
+      color: var(--mv2a-gold-dim);
+      text-transform: uppercase;
+    }
+    .mv2-guide-buff-row > :nth-child(2) {
+      text-align: right;
+      font-weight: 700;
+      color: var(--mv2a-text-body);
+    }
+    .mv2-guide-buff-row > :nth-child(3) {
+      color: var(--mv2a-muted);
+      line-height: 1.33;
+    }
+    .mv2-guide-progress-meta {
+      margin: 0 0 0.12rem;
+      font-size: 0.62rem;
+      line-height: 1.34;
+      color: var(--mv2a-muted);
+      font-weight: 550;
+    }
+    .mv2-guide-progress-bar {
+      height: 6px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(184, 135, 27, 0.11);
+    }
+    .mv2-guide-progress-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #c9a132 0%, #e8c547 55%, #f0e0a8 100%);
+      box-shadow: 0 0 6px rgba(184, 135, 27, 0.25);
+      min-width: 4%;
+    }
+    .mv2-guide-progress-note {
+      margin: 0.28rem 0 0;
+      font-size: 0.58rem;
+      line-height: 1.34;
+      color: var(--mv2a-muted);
+      opacity: 0.9;
     }
     .mv2-card--top-finder {
       background: linear-gradient(
@@ -2150,15 +2330,51 @@ export function renderAmuletReportV2Html(payload) {
       border-left-color: rgba(232, 197, 71, 0.42);
       background: rgba(20, 22, 28, 0.92);
     }
-    html.mv2a-theme-dark .mv2-guide-block {
-      background: rgba(232, 197, 71, 0.06);
-      border-color: rgba(232, 197, 71, 0.18);
-    }
-    html.mv2a-theme-dark .mv2-guide-main {
+    html.mv2a-theme-dark .mv2-guide-chip {
+      background: rgba(232, 197, 71, 0.1);
+      border-color: rgba(232, 197, 71, 0.24);
       color: rgba(241, 245, 249, 0.94);
     }
-    html.mv2a-theme-dark .mv2-guide-sub {
+    html.mv2a-theme-dark .mv2-guide-chip--boost {
+      background: rgba(232, 197, 71, 0.16);
+      border-color: rgba(232, 197, 71, 0.34);
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-guide-mode,
+    html.mv2a-theme-dark .mv2-guide-col-d,
+    html.mv2a-theme-dark .mv2-guide-progress-meta {
       color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-guide-table,
+    html.mv2a-theme-dark .mv2-guide-row {
+      border-color: rgba(232, 197, 71, 0.18);
+      background: rgba(232, 197, 71, 0.06);
+    }
+    html.mv2a-theme-dark .mv2-guide-row--head {
+      background: rgba(232, 197, 71, 0.12);
+    }
+    html.mv2a-theme-dark .mv2-guide-col-v,
+    html.mv2a-theme-dark .mv2-guide-buff-row > :nth-child(2) {
+      color: rgba(241, 245, 249, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-guide-buff-row > :nth-child(3) {
+      color: rgba(148, 163, 184, 0.9);
+    }
+    html.mv2a-theme-dark .mv2-guide-buff-table,
+    html.mv2a-theme-dark .mv2-guide-buff-row {
+      border-color: rgba(148, 163, 184, 0.18);
+      background: rgba(148, 163, 184, 0.08);
+      color: rgba(203, 213, 225, 0.86);
+    }
+    html.mv2a-theme-dark .mv2-guide-buff-row--head {
+      background: rgba(148, 163, 184, 0.14);
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-guide-progress-bar {
+      background: rgba(232, 197, 71, 0.15);
+    }
+    html.mv2a-theme-dark .mv2-guide-progress-note {
+      color: rgba(148, 163, 184, 0.86);
     }
     html.mv2a-theme-dark .mv2-decision-verdict {
       color: rgba(241, 245, 249, 0.94);
