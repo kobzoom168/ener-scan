@@ -143,6 +143,9 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2-int-card"'));
   assert.ok(html.includes('class="mv2a-footer-note"'));
   assert.ok(html.includes("จังหวะเสริมพลัง"));
+  assert.ok(html.includes('class="mv2-timing-boost"'));
+  assert.ok(html.includes("โบนัสจังหวะ"));
+  assert.ok(html.includes("หนุนพลังได้ประมาณ"));
   assert.ok(html.includes('class="mv2-card mv2-timing-card"'));
   assert.ok(html.includes("mv2-et-strip--weekday"));
   assert.ok(html.includes("mv2-et-strip--time"));

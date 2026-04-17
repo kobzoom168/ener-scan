@@ -271,14 +271,55 @@ export function buildSacredAmuletTimeItems(tv) {
 }
 
 /**
+ * Display-only “โบนัสจังหวะ” — UI estimate only; does not change engine scores or stored energy.
+ *
+ * @param {object} tv — `timingV1` (truth fields unchanged)
+ * @param {string} alignKey — object/owner alignment axis
+ * @param {readonly string[]} ord — power order (top two = ord[0], ord[1])
+ * @param {number} gapTop12 — gap between top two object axis scores
+ */
+function computeSacredAmuletTimingBoostDisplay(tv, alignKey, ord, gapTop12) {
+  let p = 4;
+  const conf =
+    tv.confidence === "high" || tv.confidence === "low" ? tv.confidence : "medium";
+  if (conf === "high") p += 3;
+  else if (conf === "medium") p += 1;
+
+  const topWeekdayLabel = String(tv.summary?.topWeekdayLabel || "").trim();
+  const topWindowLabel = String(tv.summary?.topWindowLabel || "").trim();
+  const ritualLine = String(tv.ritualMode || "ตั้งจิต").trim();
+
+  if (topWeekdayLabel) p += 2;
+  if (topWindowLabel) p += 2;
+  if (ritualLine) p += 1;
+
+  const ak = String(alignKey || "").trim();
+  const o0 = String(ord[0] || "").trim();
+  const o1 = String(ord[1] || "").trim();
+  if (ak && o0 && ak === o0) p += 2;
+  else if (ak && o1 && ak === o1) p += 1;
+
+  const gap = Number(gapTop12);
+  if (Number.isFinite(gap) && gap >= 6) p += 1;
+
+  const percent = Math.min(12, Math.max(4, p));
+  return {
+    percent,
+    label: `โบนัสจังหวะ +${percent}%`,
+    hint: `ถ้าใช้ตามวันและช่วงเวลานี้ จะช่วยหนุนพลังได้ประมาณ +${percent}%`,
+  };
+}
+
+/**
  * Sacred_amulet timing card — HTML surface only.
  * Composed lines + strips ใช้ข้อมูลจาก `timingV1` เท่านั้น — ไม่ derive สูตร timing ในเลเยอร์นี้
  *
  * @param {object} tv — `timingV1` from engine (unchanged truth)
  * @param {string} peakKey
  * @param {string} secondKey
+ * @param {{ alignKey: string; ord: readonly string[]; gapTop12: number } | null | undefined} [alignmentContext] — display-only boost (optional; defaults from peak/second)
  */
-export function buildSacredAmuletTimingCardDisplay(tv, peakKey, secondKey) {
+export function buildSacredAmuletTimingCardDisplay(tv, peakKey, secondKey, alignmentContext) {
   const topWindowLabel = String(tv.summary?.topWindowLabel || "").trim();
   const topWeekdayLabel = String(tv.summary?.topWeekdayLabel || "").trim();
   const ritualMode = String(tv.ritualMode || "ตั้งจิต").trim();
@@ -304,6 +345,16 @@ export function buildSacredAmuletTimingCardDisplay(tv, peakKey, secondKey) {
   const weekdayItems = buildSacredAmuletWeekdayItems(tv);
   const timeItems = buildSacredAmuletTimeItems(tv);
 
+  const ordForBoost = alignmentContext?.ord ?? [peakKey, secondKey];
+  const alignForBoost = alignmentContext?.alignKey ?? peakKey;
+  const gapForBoost = alignmentContext?.gapTop12 ?? 0;
+  const timingBoost = computeSacredAmuletTimingBoostDisplay(
+    tv,
+    alignForBoost,
+    ordForBoost,
+    gapForBoost,
+  );
+
   return {
     heading: "จังหวะเสริมพลัง",
     subtitle: AMULET_TIMING_SUBTITLE,
@@ -320,6 +371,8 @@ export function buildSacredAmuletTimingCardDisplay(tv, peakKey, secondKey) {
     timeItems,
     hourLine,
     weekdayLine,
+    /** Display-only: not engine output; soft estimate from timing strength + alignment context */
+    timingBoost,
   };
 }
 
@@ -558,7 +611,11 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       ) {
         return null;
       }
-      return buildSacredAmuletTimingCardDisplay(tv, ord[0], ord[1]);
+      return buildSacredAmuletTimingCardDisplay(tv, ord[0], ord[1], {
+        alignKey,
+        ord,
+        gapTop12,
+      });
     })(),
     /** Action summary “วันไหนหยิบใช้” — axes + birth + compatibility; not `timingV1` (see `timingSection`). */
     timingActionCard: buildSacredAmuletUseDayCard(payload, metrics),
