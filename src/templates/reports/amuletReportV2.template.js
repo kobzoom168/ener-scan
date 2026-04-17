@@ -137,6 +137,63 @@ function absoluteUrlForMeta(canonicalPageUrl, rawImage) {
   }
 }
 
+/** Short labels for use-day mini bars (Sun … Sat) */
+const USE_DAY_SHORT_LABELS = {
+  sunday: "อา",
+  monday: "จ",
+  tuesday: "อ",
+  wednesday: "พ",
+  thursday: "พฤ",
+  friday: "ศ",
+  saturday: "ส",
+};
+
+/**
+ * @param {Record<string, unknown> | null | undefined} scores
+ */
+function normalizeUseDayScoresForBars(scores) {
+  const safe = scores && typeof scores === "object" ? scores : {};
+  return [
+    { key: "sunday", label: USE_DAY_SHORT_LABELS.sunday, score: Math.round(Number(safe.sunday) || 0) },
+    { key: "monday", label: USE_DAY_SHORT_LABELS.monday, score: Math.round(Number(safe.monday) || 0) },
+    { key: "tuesday", label: USE_DAY_SHORT_LABELS.tuesday, score: Math.round(Number(safe.tuesday) || 0) },
+    { key: "wednesday", label: USE_DAY_SHORT_LABELS.wednesday, score: Math.round(Number(safe.wednesday) || 0) },
+    { key: "thursday", label: USE_DAY_SHORT_LABELS.thursday, score: Math.round(Number(safe.thursday) || 0) },
+    { key: "friday", label: USE_DAY_SHORT_LABELS.friday, score: Math.round(Number(safe.friday) || 0) },
+    { key: "saturday", label: USE_DAY_SHORT_LABELS.saturday, score: Math.round(Number(safe.saturday) || 0) },
+  ];
+}
+
+/**
+ * Vertical mini bars (style B) — inner HTML only; uses `tac.scores` + weekday keys from model.
+ *
+ * @param {{ scores?: Record<string, number>; recommendedWeekdayKey?: string; secondaryWeekdayKey?: string }} tac
+ */
+function buildAmuletUseDayBarsInnerHtml(tac) {
+  if (!tac || !tac.scores || typeof tac.scores !== "object") return "";
+  const items = normalizeUseDayScoresForBars(tac.scores);
+  const primaryKey = String(tac.recommendedWeekdayKey || "").trim();
+  const secondaryKey = String(tac.secondaryWeekdayKey || "").trim();
+  return items
+    .map((it) => {
+      const score = Math.max(0, Math.min(100, Number(it.score) || 0));
+      const cls =
+        it.key === primaryKey
+          ? "mv2-use-day-bar is-primary"
+          : secondaryKey && it.key === secondaryKey
+            ? "mv2-use-day-bar is-secondary"
+            : "mv2-use-day-bar";
+      return `<div class="${cls}" role="listitem">
+      <span class="mv2-use-day-bar-label">${escapeHtml(it.label)}</span>
+      <span class="mv2-use-day-bar-col">
+        <span class="mv2-use-day-bar-fill" style="height:${score}%"></span>
+      </span>
+      <span class="mv2-use-day-bar-score">${escapeHtml(String(score))}</span>
+    </div>`;
+    })
+    .join("");
+}
+
 /**
  * Default: white shell + dark text + gold accents. Dark dashboard via
  * `wording.amuletReportV2Theme: "dark"` or env `AMULET_HTML_THEME=dark`.
@@ -364,23 +421,39 @@ export function renderAmuletReportV2Html(payload) {
 
   const ts = vm.timingSection;
   const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
-  const tac = /** @type {{ title?: string; recommendedWeekday?: string; secondaryWeekday?: string; confidence?: string; weekdayTip?: string; reasonShort?: string; actionLine?: string } | null} */ (
+  const tac = /** @type {{ title?: string; recommendedWeekday?: string; recommendedWeekdayKey?: string; secondaryWeekday?: string; secondaryWeekdayKey?: string; confidence?: string; weekdayTip?: string; scores?: Record<string, number>; showSecondaryChip?: boolean; reasonShort?: string; actionLine?: string } | null} */ (
     vm.timingActionCard
   );
-  const showUseDaySecondary =
+  const useDayBarsInnerHtml = tac && tac.scores ? buildAmuletUseDayBarsInnerHtml(tac) : "";
+  const useDayBarsBlockHtml =
+    useDayBarsInnerHtml.trim() !== ""
+      ? `<div class="mv2-use-day-bars" aria-labelledby="mv2-use-day-bars-h">
+      <div id="mv2-use-day-bars-h" class="mv2-use-day-bars-h">คะแนนวันทั้งสัปดาห์</div>
+      <div class="mv2-use-day-bars-row" role="list" aria-label="คะแนนวันทั้งสัปดาห์">
+        ${useDayBarsInnerHtml}
+      </div>
+    </div>`
+      : "";
+  const useDaySecondaryChipHtml =
     tac &&
-    tac.confidence === "medium" &&
+    tac.showSecondaryChip &&
     String(tac.secondaryWeekday || "").trim() &&
-    String(tac.secondaryWeekday).trim() !== String(tac.recommendedWeekday || "").trim();
+    String(tac.secondaryWeekday).trim() !== String(tac.recommendedWeekday || "").trim()
+      ? `<div class="mv2-use-day-chip-row" role="group" aria-label="วันรอง">
+      <span class="mv2-use-day-chip-k">วันรอง</span>
+      <span class="mv2-use-day-chip-v">${escapeHtml(String(tac.secondaryWeekday).trim())}</span>
+    </div>`
+      : "";
   const timingActionCardHtml =
     tac && String(tac.recommendedWeekday || "").trim()
       ? `<section class="mv2-card mv2-card--use-day" aria-labelledby="mv2-use-day-h">
       <h2 id="mv2-use-day-h">${escapeHtml(tac.title || "วันที่ควรใช้")}</h2>
       <p class="mv2-use-day-main">${escapeHtml(String(tac.recommendedWeekday || "").trim())}</p>
-      ${showUseDaySecondary ? `<p class="mv2-use-day-secondary">${escapeHtml(String(tac.secondaryWeekday).trim())} ใช้ได้รองลงมา</p>` : ""}
       ${tac.weekdayTip ? `<p class="mv2-use-day-weekday-tip">${escapeHtml(String(tac.weekdayTip).trim())}</p>` : ""}
       ${tac.reasonShort ? `<p class="mv2-use-day-reason">${escapeHtml(tac.reasonShort)}</p>` : ""}
       ${tac.actionLine ? `<p class="mv2-use-day-action">${escapeHtml(tac.actionLine)}</p>` : ""}
+      ${useDaySecondaryChipHtml}
+      ${useDayBarsBlockHtml}
     </section>`
       : "";
 
@@ -932,24 +1005,168 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 550;
     }
     .mv2-use-day-weekday-tip {
-      margin: 0 0 0.4rem;
+      margin: 0 0 0.32rem;
       font-size: 0.76rem;
-      line-height: 1.42;
+      line-height: 1.4;
       color: var(--mv2a-text-body);
       font-weight: 500;
     }
     .mv2-use-day-reason {
-      margin: 0 0 0.35rem;
+      margin: 0 0 0.28rem;
       font-size: 0.78rem;
-      line-height: 1.42;
+      line-height: 1.38;
       color: var(--mv2a-text-body);
       font-weight: 500;
     }
     .mv2-use-day-action {
-      margin: 0;
+      margin: 0 0 0.02rem;
       font-size: 0.72rem;
-      line-height: 1.4;
+      line-height: 1.38;
       color: var(--mv2a-muted);
+    }
+    .mv2-use-day-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem 0.5rem;
+      margin: 0.42rem 0 0.28rem;
+    }
+    .mv2-use-day-chip-k {
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--mv2a-muted);
+    }
+    .mv2-use-day-chip-v {
+      font-size: 0.74rem;
+      font-weight: 650;
+      padding: 0.18rem 0.52rem;
+      border-radius: 999px;
+      background: rgba(184, 135, 27, 0.1);
+      border: 1px solid rgba(184, 135, 27, 0.28);
+      color: var(--mv2a-text-body);
+      line-height: 1.3;
+    }
+    /* ===== Use-day mini bars (style B) ===== */
+    .mv2-use-day-bars {
+      margin-top: 0.62rem;
+      padding-top: 0.56rem;
+      border-top: 1px solid rgba(184, 135, 27, 0.12);
+    }
+    .mv2-use-day-bars-h {
+      margin: 0 0 0.48rem;
+      font-size: 0.62rem;
+      line-height: 1.25;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--mv2a-muted);
+      text-transform: uppercase;
+    }
+    .mv2-use-day-bars-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 0.34rem;
+    }
+    .mv2-use-day-bar {
+      display: flex;
+      flex: 1 1 0;
+      min-width: 0;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.22rem;
+    }
+    .mv2-use-day-bar-label {
+      font-size: 0.54rem;
+      line-height: 1;
+      color: var(--mv2a-muted);
+      font-weight: 600;
+      text-align: center;
+    }
+    .mv2-use-day-bar-col {
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      width: 100%;
+      max-width: 1.4rem;
+      height: 3.2rem;
+      padding: 0.16rem 0;
+      border-radius: 999px;
+      background: rgba(100, 92, 82, 0.08);
+      border: 1px solid rgba(100, 92, 82, 0.12);
+      overflow: hidden;
+    }
+    .mv2-use-day-bar-fill {
+      display: block;
+      width: 100%;
+      border-radius: 999px;
+      background: rgba(120, 120, 120, 0.45);
+      min-height: 0.36rem;
+    }
+    .mv2-use-day-bar-score {
+      font-size: 0.56rem;
+      line-height: 1;
+      color: var(--mv2a-muted);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+    }
+    .mv2-use-day-bar.is-primary .mv2-use-day-bar-label {
+      color: var(--mv2a-gold-dim);
+      font-weight: 800;
+    }
+    .mv2-use-day-bar.is-primary .mv2-use-day-bar-col {
+      background: rgba(184, 135, 27, 0.08);
+      border-color: rgba(184, 135, 27, 0.22);
+      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.08);
+    }
+    .mv2-use-day-bar.is-primary .mv2-use-day-bar-fill {
+      background: linear-gradient(180deg, #e0bc55 0%, #b8871b 48%, #8f6710 100%);
+    }
+    .mv2-use-day-bar.is-primary .mv2-use-day-bar-score {
+      color: var(--mv2a-gold-dim);
+    }
+    .mv2-use-day-bar.is-secondary .mv2-use-day-bar-label {
+      color: rgba(143, 103, 16, 0.9);
+      font-weight: 700;
+    }
+    .mv2-use-day-bar.is-secondary .mv2-use-day-bar-col {
+      background: rgba(184, 135, 27, 0.05);
+      border-color: rgba(184, 135, 27, 0.16);
+    }
+    .mv2-use-day-bar.is-secondary .mv2-use-day-bar-fill {
+      background: linear-gradient(180deg, rgba(224,188,85,0.78) 0%, rgba(184,135,27,0.72) 60%, rgba(143,103,16,0.68) 100%);
+    }
+    .mv2-use-day-bar.is-secondary .mv2-use-day-bar-score {
+      color: rgba(143, 103, 16, 0.92);
+    }
+    .mv2-use-day-bar:not(.is-primary):not(.is-secondary) .mv2-use-day-bar-fill {
+      background: linear-gradient(180deg, rgba(160,160,160,0.55) 0%, rgba(120,120,120,0.5) 100%);
+    }
+    @media (max-width: 520px) {
+      .mv2-use-day-bars {
+        margin-top: 0.5rem;
+        padding-top: 0.45rem;
+      }
+      .mv2-use-day-bars-h {
+        margin-bottom: 0.38rem;
+        font-size: 0.58rem;
+      }
+      .mv2-use-day-bars-row {
+        gap: 0.24rem;
+      }
+      .mv2-use-day-bar-col {
+        max-width: 1.18rem;
+        height: 2.9rem;
+      }
+      .mv2-use-day-bar-label {
+        font-size: 0.5rem;
+      }
+      .mv2-use-day-bar-score {
+        font-size: 0.52rem;
+      }
     }
     .mv2-card--owner > h2 { margin-bottom: 0.28rem; }
     .mv2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.42rem 0.55rem; margin: 0 0 0.42rem; }
@@ -1463,6 +1680,47 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-card--use-day {
       border-left-color: rgba(232, 197, 71, 0.4);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+    html.mv2a-theme-dark .mv2-use-day-bars {
+      border-top-color: rgba(232, 197, 71, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-use-day-bar-label,
+    html.mv2a-theme-dark .mv2-use-day-bar-score {
+      color: rgba(148, 163, 184, 0.82);
+    }
+    html.mv2a-theme-dark .mv2-use-day-bar-col {
+      background: rgba(148, 163, 184, 0.08);
+      border-color: rgba(148, 163, 184, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-use-day-bar:not(.is-primary):not(.is-secondary) .mv2-use-day-bar-fill {
+      background: linear-gradient(180deg, rgba(148,163,184,0.42) 0%, rgba(100,116,139,0.52) 100%);
+    }
+    html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-label,
+    html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-score {
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-col {
+      background: rgba(232, 197, 71, 0.08);
+      border-color: rgba(232, 197, 71, 0.24);
+      box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.08);
+    }
+    html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-fill {
+      background: linear-gradient(180deg, #f3d67a 0%, #e8c547 44%, #b8860b 100%);
+    }
+    html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-label,
+    html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-score {
+      color: rgba(254, 243, 199, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-col {
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.16);
+    }
+    html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-fill {
+      background: linear-gradient(180deg, rgba(243,214,122,0.76) 0%, rgba(232,197,71,0.68) 60%, rgba(184,134,11,0.62) 100%);
+    }
+    html.mv2a-theme-dark .mv2-use-day-chip-v {
+      background: rgba(232, 197, 71, 0.09);
+      border-color: rgba(232, 197, 71, 0.38);
     }
     html.mv2a-theme-dark .mv2-gsum-row--tension {
       background: rgba(232, 197, 71, 0.06);

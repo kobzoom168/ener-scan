@@ -190,6 +190,10 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
     html.includes('class="mv2-use-day-weekday-tip"') && html.includes("ใช้วันนี้เมื่อ"),
     "use-day card: per-weekday Thai tip line",
   );
+  assert.ok(html.includes("คะแนนวันทั้งสัปดาห์"), "use-day card: weekly scores heading");
+  assert.ok(html.includes("mv2-use-day-bars-row"), "use-day card: mini vertical bars row");
+  assert.ok(html.includes("mv2-use-day-bar is-primary"), "use-day card: primary weekday bar");
+  assert.ok(html.includes("mv2-use-day-chip-k"), "use-day card: secondary weekday chip");
   assert.ok(html.includes('class="mv2-card mv2-card--int-near-graph"'));
   assert.ok(!html.includes("แกน"));
   assert.ok(!html.includes("โค้ง"));

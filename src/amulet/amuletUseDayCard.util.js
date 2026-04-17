@@ -297,10 +297,13 @@ export function buildUseDayCopyLines(p) {
  * @returns {{
  *   title: string,
  *   recommendedWeekday: string,
+ *   recommendedWeekdayKey: string,
  *   secondaryWeekday: string,
+ *   secondaryWeekdayKey: string,
  *   confidence: "high"|"medium",
  *   weekdayTip: string,
  *   scores: Record<string, number>,
+ *   showSecondaryChip: boolean,
  *   reasonShort: string,
  *   actionLine: string,
  * }}
@@ -327,13 +330,23 @@ export function buildSacredAmuletUseDayCard(payload, metrics) {
 
   const weekdayTip = sacredUseDayWeekdayTipTh(computed.recommendedIndex0Sun);
 
+  const recI = ((computed.recommendedIndex0Sun % 7) + 7) % 7;
+  const secI = ((computed.secondaryIndex0Sun % 7) + 7) % 7;
+  const recommendedWeekdayKey = WD_KEY_BY_INDEX[recI];
+  const secondaryWeekdayKey = secI !== recI ? WD_KEY_BY_INDEX[secI] : "";
+
+  const showSecondaryChip = secI !== recI;
+
   return {
     title: "วันที่ควรใช้",
     recommendedWeekday: computed.recommendedWeekday,
+    recommendedWeekdayKey,
     secondaryWeekday: computed.secondaryWeekday,
+    secondaryWeekdayKey,
     confidence: computed.confidence,
     weekdayTip,
     scores: computed.scores,
+    showSecondaryChip,
     reasonShort,
     actionLine,
   };
