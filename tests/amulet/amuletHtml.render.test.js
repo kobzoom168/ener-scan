@@ -186,6 +186,10 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("วันที่ควรใช้"));
   assert.ok(html.includes('class="mv2-card mv2-card--use-day"'));
   assert.ok(html.includes("mv2-use-day-main"));
+  assert.ok(
+    html.includes('class="mv2-use-day-weekday-tip"') && html.includes("ใช้วันนี้เมื่อ"),
+    "use-day card: per-weekday Thai tip line",
+  );
   assert.ok(html.includes('class="mv2-card mv2-card--int-near-graph"'));
   assert.ok(!html.includes("แกน"));
   assert.ok(!html.includes("โค้ง"));

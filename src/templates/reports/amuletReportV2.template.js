@@ -364,14 +364,21 @@ export function renderAmuletReportV2Html(payload) {
 
   const ts = vm.timingSection;
   const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
-  const tac = /** @type {{ title?: string; recommendedWeekday?: string; reasonShort?: string; actionLine?: string } | null} */ (
+  const tac = /** @type {{ title?: string; recommendedWeekday?: string; secondaryWeekday?: string; confidence?: string; weekdayTip?: string; reasonShort?: string; actionLine?: string } | null} */ (
     vm.timingActionCard
   );
+  const showUseDaySecondary =
+    tac &&
+    tac.confidence === "medium" &&
+    String(tac.secondaryWeekday || "").trim() &&
+    String(tac.secondaryWeekday).trim() !== String(tac.recommendedWeekday || "").trim();
   const timingActionCardHtml =
     tac && String(tac.recommendedWeekday || "").trim()
       ? `<section class="mv2-card mv2-card--use-day" aria-labelledby="mv2-use-day-h">
       <h2 id="mv2-use-day-h">${escapeHtml(tac.title || "วันที่ควรใช้")}</h2>
       <p class="mv2-use-day-main">${escapeHtml(String(tac.recommendedWeekday || "").trim())}</p>
+      ${showUseDaySecondary ? `<p class="mv2-use-day-secondary">${escapeHtml(String(tac.secondaryWeekday).trim())} ใช้ได้รองลงมา</p>` : ""}
+      ${tac.weekdayTip ? `<p class="mv2-use-day-weekday-tip">${escapeHtml(String(tac.weekdayTip).trim())}</p>` : ""}
       ${tac.reasonShort ? `<p class="mv2-use-day-reason">${escapeHtml(tac.reasonShort)}</p>` : ""}
       ${tac.actionLine ? `<p class="mv2-use-day-action">${escapeHtml(tac.actionLine)}</p>` : ""}
     </section>`
@@ -916,6 +923,20 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.2;
       color: var(--mv2a-gold);
       letter-spacing: -0.02em;
+    }
+    .mv2-use-day-secondary {
+      margin: -0.2rem 0 0.42rem;
+      font-size: 0.74rem;
+      line-height: 1.35;
+      color: var(--mv2a-muted);
+      font-weight: 550;
+    }
+    .mv2-use-day-weekday-tip {
+      margin: 0 0 0.4rem;
+      font-size: 0.76rem;
+      line-height: 1.42;
+      color: var(--mv2a-text-body);
+      font-weight: 500;
     }
     .mv2-use-day-reason {
       margin: 0 0 0.35rem;
