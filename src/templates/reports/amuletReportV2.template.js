@@ -196,7 +196,7 @@ function buildAmuletUseDayBarsInnerHtml(tac) {
 }
 
 /**
- * Default: white shell + dark text + gold accents. Dark dashboard via
+ * Default: white shell + dark text + grayscale accents. Dark dashboard via
  * `wording.amuletReportV2Theme: "dark"` or env `AMULET_HTML_THEME=dark`.
  *
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
@@ -740,45 +740,45 @@ export function renderAmuletReportV2Html(payload) {
   <style>
     :root {
       color-scheme: light;
-      /* Light neutral shell — เทา-ขาวนุ่ม + การ์ดแยกชั้น; ตัวอักษรเข้ม + ทอง sacred_amulet */
-      --mv2a-gold: #b8871b;
-      --mv2a-gold-dim: #8f6710;
+      /* Light neutral shell — ขาว-ดำ-เทา only (no gold accent) */
+      --mv2a-gold: #2a2a2a;
+      --mv2a-gold-dim: #525252;
       --mv2a-bg: #f6f6f4;
       --mv2a-card: #fcfcfa;
-      --mv2a-muted: #7a6a58;
-      --mv2a-text: #241c12;
-      --mv2a-text-body: rgba(36, 28, 18, 0.92);
-      --mv2a-badge-border: rgba(184, 135, 27, 0.28);
-      --mv2a-media-border: rgba(184, 135, 27, 0.22);
-      --mv2a-hero-clarifier: rgba(90, 78, 65, 0.88);
+      --mv2a-muted: #6b7280;
+      --mv2a-text: #171717;
+      --mv2a-text-body: rgba(23, 23, 23, 0.92);
+      --mv2a-badge-border: rgba(0, 0, 0, 0.1);
+      --mv2a-media-border: rgba(0, 0, 0, 0.08);
+      --mv2a-hero-clarifier: rgba(64, 64, 64, 0.88);
       --mv2a-card-border: rgba(100, 92, 82, 0.18);
       --mv2a-card-elev: 0 1px 2px rgba(0, 0, 0, 0.05);
-      --mv2a-graph-accent: rgba(184, 135, 27, 0.45);
-      --mv2a-radar-ring-outer-fill: rgba(184, 135, 27, 0.06);
-      --mv2a-radar-ring-outer-stroke: rgba(143, 103, 16, 0.3);
-      --mv2a-radar-ring-mid-stroke: rgba(143, 103, 16, 0.2);
-      --mv2a-radar-ring-inner-stroke: rgba(143, 103, 16, 0.12);
-      --mv2a-radar-spoke: rgba(120, 88, 28, 0.18);
-      --mv2a-radar-owner-fill: rgba(105, 92, 78, 0.12);
-      --mv2a-radar-owner-stroke: rgba(88, 76, 64, 0.45);
-      --mv2a-radar-amulet-fill: rgba(184, 135, 27, 0.18);
-      --mv2a-radar-amulet-stroke: rgba(160, 115, 18, 0.88);
-      --mv2a-radar-peak-halo: rgba(184, 135, 27, 0.2);
-      --mv2a-radar-peak-fill: #c9a132;
-      --mv2a-radar-peak-stroke: rgba(255, 250, 235, 0.95);
-      --mv2a-radar-lbl-axis: rgba(36, 28, 18, 0.88);
-      --mv2a-radar-lbl-num: rgba(110, 78, 22, 0.92);
-      --mv2a-radar-lbl-top1-glow: rgba(184, 135, 27, 0.26);
-      --mv2a-radar-lbl-top1-t: #7a5a12;
-      --mv2a-radar-lbl-top1-n: #5c420a;
-      --mv2a-radar-lbl-top2-t: rgba(95, 72, 32, 0.95);
-      --mv2a-radar-lbl-top2-n: rgba(120, 88, 28, 0.95);
+      --mv2a-graph-accent: rgba(0, 0, 0, 0.18);
+      --mv2a-radar-ring-outer-fill: rgba(0, 0, 0, 0.04);
+      --mv2a-radar-ring-outer-stroke: rgba(0, 0, 0, 0.14);
+      --mv2a-radar-ring-mid-stroke: rgba(0, 0, 0, 0.1);
+      --mv2a-radar-ring-inner-stroke: rgba(0, 0, 0, 0.06);
+      --mv2a-radar-spoke: rgba(0, 0, 0, 0.1);
+      --mv2a-radar-owner-fill: rgba(115, 125, 138, 0.12);
+      --mv2a-radar-owner-stroke: rgba(82, 82, 82, 0.45);
+      --mv2a-radar-amulet-fill: rgba(0, 0, 0, 0.08);
+      --mv2a-radar-amulet-stroke: rgba(55, 55, 55, 0.85);
+      --mv2a-radar-peak-halo: rgba(0, 0, 0, 0.12);
+      --mv2a-radar-peak-fill: #525252;
+      --mv2a-radar-peak-stroke: rgba(255, 255, 255, 0.95);
+      --mv2a-radar-lbl-axis: rgba(23, 23, 23, 0.88);
+      --mv2a-radar-lbl-num: rgba(55, 55, 55, 0.92);
+      --mv2a-radar-lbl-top1-glow: rgba(0, 0, 0, 0.12);
+      --mv2a-radar-lbl-top1-t: #404040;
+      --mv2a-radar-lbl-top1-n: #2d2d2d;
+      --mv2a-radar-lbl-top2-t: rgba(64, 64, 64, 0.95);
+      --mv2a-radar-lbl-top2-n: rgba(82, 82, 82, 0.95);
       --mv2a-radar-key: rgba(95, 90, 84, 0.52);
       --mv2a-radar-dot-border: rgba(36, 28, 18, 0.1);
       --mv2a-radar-dot-owner: rgba(115, 125, 138, 0.88);
-      --mv2a-radar-dot-amulet: rgba(184, 135, 27, 0.95);
-      --mv2a-anim-peak-glow1: rgba(184, 135, 27, 0.28);
-      --mv2a-anim-peak-glow2: rgba(184, 135, 27, 0.5);
+      --mv2a-radar-dot-amulet: rgba(45, 45, 45, 0.95);
+      --mv2a-anim-peak-glow1: rgba(0, 0, 0, 0.14);
+      --mv2a-anim-peak-glow2: rgba(0, 0, 0, 0.22);
       /* จุดรอง: โทนเดียวกับ legend “คุณ” (--mv2a-radar-dot-owner) */
       --mv2a-radar-peak2-halo: rgba(115, 125, 138, 0.22);
       --mv2a-radar-peak2-fill: rgb(115, 125, 138);
@@ -794,15 +794,15 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-gsum-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 5px rgba(0, 0, 0, 0.03);
       --mv2a-gsum-k: #78716c;
       --mv2a-gsum-v: #1c1917;
-      --mv2a-gsum-v-lead: #b8860b;
+      --mv2a-gsum-v-lead: #3a3a3a;
       --mv2a-life-border: rgba(100, 92, 82, 0.16);
       --mv2a-life-row-border: rgba(0, 0, 0, 0.07);
       --mv2a-life-row-alt: rgba(20, 22, 26, 0.028);
-      --mv2a-life-name: rgba(36, 28, 18, 0.92);
-      --mv2a-life-score: #b8871b;
-      --mv2a-life-blurb: rgba(72, 62, 50, 0.9);
-      --mv2a-disclaimer: rgba(78, 68, 56, 0.88);
-      --mv2a-footer-note: rgba(62, 54, 44, 0.9);
+      --mv2a-life-name: rgba(23, 23, 23, 0.92);
+      --mv2a-life-score: #2a2a2a;
+      --mv2a-life-blurb: rgba(64, 64, 64, 0.9);
+      --mv2a-disclaimer: rgba(82, 82, 82, 0.88);
+      --mv2a-footer-note: rgba(64, 64, 64, 0.9);
       --mv2a-trust-border: rgba(0, 0, 0, 0.08);
       --mv2a-render-meta: rgba(100, 90, 78, 0.72);
       /* Unified Thai + system stack (report + radar labels + cards; LINE Flex uses client fonts). */
@@ -811,45 +811,45 @@ export function renderAmuletReportV2Html(payload) {
     }
     html.mv2a-theme-dark {
       color-scheme: dark;
-      /* Optional: tech-spiritual dark-gold dashboard */
-      --mv2a-gold: #e8c547;
-      --mv2a-gold-dim: #b8860b;
+      /* Dark dashboard — ขาว-ดำ-เทา only */
+      --mv2a-gold: #f5f5f5;
+      --mv2a-gold-dim: #d4d4d4;
       --mv2a-bg: #090a0d;
       --mv2a-card: #13151c;
       --mv2a-muted: #94a3b8;
       --mv2a-text: #f1f5f9;
       --mv2a-text-body: rgba(241, 245, 249, 0.94);
-      --mv2a-badge-border: rgba(232, 197, 71, 0.38);
-      --mv2a-media-border: rgba(232, 197, 71, 0.28);
+      --mv2a-badge-border: rgba(255, 255, 255, 0.14);
+      --mv2a-media-border: rgba(255, 255, 255, 0.1);
       --mv2a-hero-clarifier: rgba(148, 163, 184, 0.9);
-      --mv2a-card-border: rgba(232, 197, 71, 0.2);
+      --mv2a-card-border: rgba(255, 255, 255, 0.08);
       --mv2a-card-elev: 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 28px rgba(0, 0, 0, 0.52);
-      --mv2a-graph-accent: rgba(232, 197, 71, 0.55);
+      --mv2a-graph-accent: rgba(255, 255, 255, 0.12);
       --mv2a-radar-ring-outer-fill: rgba(148, 163, 184, 0.05);
-      --mv2a-radar-ring-outer-stroke: rgba(232, 197, 71, 0.34);
-      --mv2a-radar-ring-mid-stroke: rgba(232, 197, 71, 0.22);
-      --mv2a-radar-ring-inner-stroke: rgba(232, 197, 71, 0.14);
-      --mv2a-radar-spoke: rgba(232, 197, 71, 0.17);
+      --mv2a-radar-ring-outer-stroke: rgba(255, 255, 255, 0.12);
+      --mv2a-radar-ring-mid-stroke: rgba(255, 255, 255, 0.08);
+      --mv2a-radar-ring-inner-stroke: rgba(255, 255, 255, 0.05);
+      --mv2a-radar-spoke: rgba(255, 255, 255, 0.07);
       --mv2a-radar-owner-fill: rgba(148, 163, 184, 0.12);
       --mv2a-radar-owner-stroke: rgba(186, 198, 214, 0.62);
-      --mv2a-radar-amulet-fill: rgba(232, 197, 71, 0.2);
-      --mv2a-radar-amulet-stroke: rgba(250, 220, 120, 0.96);
-      --mv2a-radar-peak-halo: rgba(250, 220, 120, 0.14);
-      --mv2a-radar-peak-fill: #fde68a;
-      --mv2a-radar-peak-stroke: rgba(255, 251, 235, 0.55);
+      --mv2a-radar-amulet-fill: rgba(255, 255, 255, 0.06);
+      --mv2a-radar-amulet-stroke: rgba(229, 229, 229, 0.92);
+      --mv2a-radar-peak-halo: rgba(255, 255, 255, 0.08);
+      --mv2a-radar-peak-fill: #e5e5e5;
+      --mv2a-radar-peak-stroke: rgba(255, 255, 255, 0.45);
       --mv2a-radar-lbl-axis: rgba(226, 232, 240, 0.9);
-      --mv2a-radar-lbl-num: #fde68a;
-      --mv2a-radar-lbl-top1-glow: rgba(250, 220, 120, 0.3);
-      --mv2a-radar-lbl-top1-t: #fef3c7;
-      --mv2a-radar-lbl-top1-n: #fffbeb;
-      --mv2a-radar-lbl-top2-t: rgba(254, 243, 199, 0.96);
-      --mv2a-radar-lbl-top2-n: #fef9c3;
+      --mv2a-radar-lbl-num: #e5e5e5;
+      --mv2a-radar-lbl-top1-glow: rgba(255, 255, 255, 0.1);
+      --mv2a-radar-lbl-top1-t: #f5f5f5;
+      --mv2a-radar-lbl-top1-n: #fafafa;
+      --mv2a-radar-lbl-top2-t: rgba(245, 245, 245, 0.96);
+      --mv2a-radar-lbl-top2-n: #f5f5f5;
       --mv2a-radar-key: rgba(148, 163, 184, 0.78);
       --mv2a-radar-dot-border: rgba(255, 255, 255, 0.22);
       --mv2a-radar-dot-owner: rgba(148, 163, 184, 0.92);
-      --mv2a-radar-dot-amulet: rgba(232, 197, 71, 0.95);
-      --mv2a-anim-peak-glow1: rgba(250, 220, 120, 0.26);
-      --mv2a-anim-peak-glow2: rgba(250, 220, 120, 0.52);
+      --mv2a-radar-dot-amulet: rgba(245, 245, 245, 0.95);
+      --mv2a-anim-peak-glow1: rgba(255, 255, 255, 0.1);
+      --mv2a-anim-peak-glow2: rgba(255, 255, 255, 0.18);
       --mv2a-radar-peak2-halo: rgba(148, 163, 184, 0.22);
       --mv2a-radar-peak2-fill: rgb(148, 163, 184);
       --mv2a-radar-peak2-stroke: rgba(241, 245, 249, 0.72);
@@ -857,18 +857,18 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-anim-peak2-glow2: rgba(186, 198, 214, 0.52);
       --mv2a-radar-lbl-top2-pulse-glow: rgba(148, 163, 184, 0.4);
       --mv2a-gsum-bg: rgba(255, 252, 245, 0.09);
-      --mv2a-gsum-border: rgba(232, 197, 71, 0.28);
-      --mv2a-gsum-lead-bg: rgba(232, 197, 71, 0.14);
-      --mv2a-gsum-lead-border: rgba(250, 220, 120, 0.38);
+      --mv2a-gsum-border: rgba(255, 255, 255, 0.1);
+      --mv2a-gsum-lead-bg: rgba(255, 255, 255, 0.06);
+      --mv2a-gsum-lead-border: rgba(255, 255, 255, 0.12);
       --mv2a-gsum-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
       --mv2a-gsum-k: rgba(203, 213, 225, 0.82);
       --mv2a-gsum-v: rgba(248, 250, 252, 0.98);
-      --mv2a-gsum-v-lead: #fde68a;
-      --mv2a-life-border: rgba(232, 197, 71, 0.13);
+      --mv2a-gsum-v-lead: #e5e5e5;
+      --mv2a-life-border: rgba(255, 255, 255, 0.08);
       --mv2a-life-row-border: rgba(148, 163, 184, 0.12);
       --mv2a-life-row-alt: rgba(255, 255, 255, 0.035);
       --mv2a-life-name: rgba(241, 245, 249, 0.95);
-      --mv2a-life-score: #fde68a;
+      --mv2a-life-score: #f5f5f5;
       --mv2a-life-blurb: rgba(203, 213, 225, 0.92);
       --mv2a-disclaimer: rgba(148, 163, 184, 0.88);
       --mv2a-footer-note: rgba(203, 213, 225, 0.92);
@@ -923,8 +923,8 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0 0 0.55rem; text-align: center; }
     .mv2-strip-k { font-size: 0.65rem; color: var(--mv2a-muted); }
     .mv2-strip-v { font-size: 1.1rem; font-weight: 700; color: var(--mv2a-gold); }
-    .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: #c9a132; }
-    .mv2-strip-cell--level .mv2-strip-v.level-grade--A { color: #b8871b; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: #404040; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--A { color: #525252; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--B { color: #9a6f12; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--D { color: #8a7a67; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--none { color: var(--mv2a-muted); }
@@ -945,8 +945,8 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-gsumx-item {
       padding: 0.46rem 0.56rem;
       border-radius: 10px;
-      border: 1px solid rgba(184, 135, 27, 0.14);
-      background: rgba(184, 135, 27, 0.04);
+      border: 1px solid rgba(75, 75, 75, 0.14);
+      background: rgba(75, 75, 75, 0.04);
     }
     .mv2-gsumx-k {
       font-size: 0.62rem;
@@ -972,20 +972,20 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-card--decision {
       margin-top: 0.38rem;
       padding: 0.68rem 0.88rem 0.72rem;
-      border-left: 3px solid rgba(184, 135, 27, 0.38);
+      border-left: 3px solid rgba(75, 75, 75, 0.38);
     }
     .mv2-card--guide {
       margin-top: 0.45rem;
-      border-left: 3px solid rgba(184, 135, 27, 0.42);
+      border-left: 3px solid rgba(75, 75, 75, 0.42);
       padding: 0.72rem 0.78rem;
     }
     .mv2-card--guide-soft {
       border-radius: 14px;
       border-left: none;
-      border: 1px solid rgba(184, 135, 27, 0.14);
+      border: 1px solid rgba(75, 75, 75, 0.14);
       background: linear-gradient(
         165deg,
-        rgba(184, 135, 27, 0.07) 0%,
+        rgba(75, 75, 75, 0.07) 0%,
         rgba(255, 255, 255, 0.72) 42%,
         rgba(246, 246, 244, 0.96) 100%
       );
@@ -999,14 +999,14 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-guide-hero {
       border-radius: 11px;
-      border: 1px solid rgba(184, 135, 27, 0.2);
-      background: linear-gradient(165deg, rgba(184, 135, 27, 0.11) 0%, rgba(184, 135, 27, 0.03) 100%);
+      border: 1px solid rgba(75, 75, 75, 0.2);
+      background: linear-gradient(165deg, rgba(75, 75, 75, 0.11) 0%, rgba(75, 75, 75, 0.03) 100%);
       padding: 0.46rem 0.52rem 0.42rem;
       margin-bottom: 0.28rem;
       text-align: center;
     }
     .mv2-card--guide-soft .mv2-guide-hero {
-      background: linear-gradient(155deg, rgba(184, 135, 27, 0.09) 0%, rgba(255, 255, 255, 0.35) 100%);
+      background: linear-gradient(155deg, rgba(75, 75, 75, 0.09) 0%, rgba(255, 255, 255, 0.35) 100%);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
@@ -1042,14 +1042,14 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-guide-metric {
       border-radius: 8px;
-      border: 1px solid rgba(184, 135, 27, 0.14);
-      background: rgba(184, 135, 27, 0.04);
+      border: 1px solid rgba(75, 75, 75, 0.14);
+      background: rgba(75, 75, 75, 0.04);
       padding: 0.22rem 0.26rem;
       text-align: center;
     }
     .mv2-card--guide-soft .mv2-guide-metric {
       background: rgba(255, 255, 255, 0.52);
-      border-color: rgba(184, 135, 27, 0.12);
+      border-color: rgba(75, 75, 75, 0.12);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
@@ -1083,7 +1083,7 @@ export function renderAmuletReportV2Html(payload) {
       position: relative;
       height: 6px;
       border-radius: 999px;
-      background: rgba(184, 135, 27, 0.1);
+      background: rgba(75, 75, 75, 0.1);
       overflow: hidden;
     }
     .mv2-guide-lane-pin {
@@ -1094,15 +1094,15 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: 999px;
       transform: translate(-50%, -50%);
       border: 1px solid rgba(255, 255, 255, 0.95);
-      background: rgba(184, 135, 27, 0.88);
-      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.22);
+      background: rgba(75, 75, 75, 0.88);
+      box-shadow: 0 0 0 1px rgba(75, 75, 75, 0.22);
       z-index: 1;
     }
     .mv2-guide-lane-pin.is-fullset {
-      background: #e8c547;
+      background: #a3a3a3;
     }
     .mv2-guide-lane-pin.is-ceiling {
-      background: #b8871b;
+      background: #525252;
       width: 8px;
       height: 8px;
     }
@@ -1110,7 +1110,7 @@ export function renderAmuletReportV2Html(payload) {
       display: block;
       height: 100%;
       border-radius: inherit;
-      background: linear-gradient(90deg, #d4a82a 0%, #e8c547 80%, #f0e0a8 100%);
+      background: linear-gradient(90deg, #737373 0%, #a3a3a3 80%, #d4d4d4 100%);
     }
     .mv2-guide-grade-stops {
       margin-top: 0.08rem;
@@ -1141,8 +1141,8 @@ export function renderAmuletReportV2Html(payload) {
       gap: 0.28rem;
       padding: 0.16rem 0.2rem;
       border-radius: 7px;
-      background: rgba(184, 135, 27, 0.04);
-      border: 1px solid rgba(184, 135, 27, 0.1);
+      background: rgba(75, 75, 75, 0.04);
+      border: 1px solid rgba(75, 75, 75, 0.1);
     }
     .mv2-guide-horizon-k {
       font-size: 0.56rem;
@@ -1159,10 +1159,10 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 640;
     }
     .mv2-guide-lane-pin.is-peak {
-      background: rgba(184, 135, 27, 0.88);
+      background: rgba(75, 75, 75, 0.88);
     }
     .mv2-guide-lane-pin.is-continuous {
-      background: #e8c547;
+      background: #a3a3a3;
     }
     .mv2-guide-horizon-stack {
       display: grid;
@@ -1171,8 +1171,8 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-guide-horizon-card {
       border-radius: 9px;
-      border: 1px solid rgba(184, 135, 27, 0.16);
-      background: rgba(184, 135, 27, 0.05);
+      border: 1px solid rgba(75, 75, 75, 0.16);
+      background: rgba(75, 75, 75, 0.05);
       padding: 0.28rem 0.34rem 0.24rem;
     }
     .mv2-card--guide-soft .mv2-guide-horizon-card {
@@ -1181,11 +1181,11 @@ export function renderAmuletReportV2Html(payload) {
       -webkit-backdrop-filter: blur(8px);
     }
     .mv2-guide-horizon-card--ceiling {
-      border-color: rgba(184, 135, 27, 0.26);
-      background: linear-gradient(165deg, rgba(184, 135, 27, 0.1) 0%, rgba(184, 135, 27, 0.04) 100%);
+      border-color: rgba(75, 75, 75, 0.26);
+      background: linear-gradient(165deg, rgba(75, 75, 75, 0.1) 0%, rgba(75, 75, 75, 0.04) 100%);
     }
     .mv2-card--guide-soft .mv2-guide-horizon-card--ceiling {
-      background: linear-gradient(165deg, rgba(184, 135, 27, 0.08) 0%, rgba(255, 255, 255, 0.38) 100%);
+      background: linear-gradient(165deg, rgba(75, 75, 75, 0.08) 0%, rgba(255, 255, 255, 0.38) 100%);
     }
     .mv2-guide-horizon-card-k {
       display: block;
@@ -1235,9 +1235,9 @@ export function renderAmuletReportV2Html(payload) {
       gap: 0.06rem;
       padding: 0.2rem 0.24rem;
       border-radius: 8px;
-      border: 1px solid rgba(184, 135, 27, 0.1);
+      border: 1px solid rgba(75, 75, 75, 0.1);
       margin-bottom: 0.12rem;
-      background: rgba(184, 135, 27, 0.03);
+      background: rgba(75, 75, 75, 0.03);
     }
     .mv2-guide-belief-tier:last-of-type {
       margin-bottom: 0.14rem;
@@ -1285,8 +1285,8 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-guide-step {
       padding: 0.34rem 0.4rem;
       border-radius: 9px;
-      border: 1px solid rgba(184, 135, 27, 0.12);
-      background: rgba(184, 135, 27, 0.045);
+      border: 1px solid rgba(75, 75, 75, 0.12);
+      background: rgba(75, 75, 75, 0.045);
     }
     .mv2-guide-step-k {
       margin: 0 0 0.08rem;
@@ -1312,7 +1312,7 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 500;
     }
     .mv2-guide-bottom {
-      border-top: 1px solid rgba(184, 135, 27, 0.12);
+      border-top: 1px solid rgba(75, 75, 75, 0.12);
       padding-top: 0.34rem;
     }
     .mv2-guide-boost-inline {
@@ -1353,13 +1353,13 @@ export function renderAmuletReportV2Html(payload) {
       display: block;
     }
     .mv2-guide-weekday.is-primary .mv2-guide-weekday-dot {
-      background: linear-gradient(165deg, #f0d78a 0%, #d4a82a 45%, #b8871b 100%);
-      border-color: rgba(184, 135, 27, 0.38);
-      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.12), 0 0 8px rgba(184, 135, 27, 0.16);
+      background: linear-gradient(165deg, #d4d4d4 0%, #9ca3af 45%, #525252 100%);
+      border-color: rgba(75, 75, 75, 0.38);
+      box-shadow: 0 0 0 1px rgba(75, 75, 75, 0.12), 0 0 8px rgba(75, 75, 75, 0.16);
     }
     .mv2-guide-weekday.is-secondary .mv2-guide-weekday-dot {
-      background: linear-gradient(165deg, rgba(240,215,138,0.72) 0%, rgba(184,135,27,0.68) 100%);
-      border-color: rgba(184, 135, 27, 0.28);
+      background: linear-gradient(165deg, rgba(212,212,212,0.72) 0%, rgba(115,115,115,0.68) 100%);
+      border-color: rgba(75, 75, 75, 0.28);
     }
     .mv2-guide-weekday-lbl {
       font-size: 0.52rem;
@@ -1391,7 +1391,7 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: inherit;
       background: conic-gradient(
         from 180deg,
-        rgba(184, 135, 27, 0.84) 0deg,
+        rgba(75, 75, 75, 0.84) 0deg,
         rgba(224, 188, 85, 0.82) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
         rgba(100, 92, 82, 0.14) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
         rgba(100, 92, 82, 0.14) 180deg
@@ -1473,7 +1473,7 @@ export function renderAmuletReportV2Html(payload) {
       height: 6px;
       border-radius: 999px;
       overflow: hidden;
-      background: rgba(184, 135, 27, 0.11);
+      background: rgba(75, 75, 75, 0.11);
       position: relative;
     }
     .mv2-guide-progress-bar::after {
@@ -1485,15 +1485,15 @@ export function renderAmuletReportV2Html(payload) {
       height: 0;
       border-top: 3px solid transparent;
       border-bottom: 3px solid transparent;
-      border-left: 4px solid rgba(184, 135, 27, 0.5);
+      border-left: 4px solid rgba(75, 75, 75, 0.5);
       transform: translateY(-50%);
     }
     .mv2-guide-progress-fill {
       display: block;
       height: 100%;
       border-radius: inherit;
-      background: linear-gradient(90deg, #c9a132 0%, #e8c547 55%, #f0e0a8 100%);
-      box-shadow: 0 0 6px rgba(184, 135, 27, 0.25);
+      background: linear-gradient(90deg, #737373 0%, #a3a3a3 55%, #d4d4d4 100%);
+      box-shadow: 0 0 6px rgba(75, 75, 75, 0.25);
       min-width: 4%;
       transform-origin: left center;
       animation: mv2GuideProgressGrow 850ms ease-out both;
@@ -1570,15 +1570,15 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-decision-badge--s {
       color: #5c4308;
-      background: linear-gradient(165deg, #f0d78a 0%, #d4a82a 45%, #b8871b 100%);
-      border-color: rgba(184, 135, 27, 0.45);
-      box-shadow: 0 2px 5px rgba(184, 135, 27, 0.28), 0 0 0 1px rgba(255, 248, 220, 0.35) inset;
+      background: linear-gradient(165deg, #d4d4d4 0%, #9ca3af 45%, #525252 100%);
+      border-color: rgba(75, 75, 75, 0.45);
+      box-shadow: 0 2px 5px rgba(75, 75, 75, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.22) inset;
     }
     .mv2-decision-badge--a {
       color: #4a3810;
-      background: linear-gradient(165deg, #e8cf7a 0%, #c9a132 100%);
-      border-color: rgba(184, 135, 27, 0.38);
-      box-shadow: 0 2px 4px rgba(184, 135, 27, 0.2), 0 0 0 1px rgba(255, 248, 220, 0.28) inset;
+      background: linear-gradient(165deg, #d4d4d4 0%, #737373 100%);
+      border-color: rgba(75, 75, 75, 0.38);
+      box-shadow: 0 2px 4px rgba(75, 75, 75, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
     }
     .mv2-decision-badge--b {
       color: #4a3d22;
@@ -1848,7 +1848,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-card--gsum-follow .mv2-gsum-row--lead { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .mv2-gsum-row--tension {
       padding: 0.4rem 0.85rem;
-      background: rgba(184, 135, 27, 0.06);
+      background: rgba(75, 75, 75, 0.06);
       border-style: dashed;
       opacity: 0.96;
     }
@@ -1857,7 +1857,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-card--use-day {
       margin: 0.5rem 0 0.4rem;
       padding: 0.72rem 0.9rem 0.78rem;
-      border-left: 3px solid rgba(184, 135, 27, 0.35);
+      border-left: 3px solid rgba(75, 75, 75, 0.35);
       background: var(--mv2a-card);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     }
@@ -1923,8 +1923,8 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 650;
       padding: 0.18rem 0.52rem;
       border-radius: 999px;
-      background: rgba(184, 135, 27, 0.1);
-      border: 1px solid rgba(184, 135, 27, 0.28);
+      background: rgba(75, 75, 75, 0.1);
+      border: 1px solid rgba(75, 75, 75, 0.28);
       color: var(--mv2a-text-body);
       line-height: 1.3;
     }
@@ -1932,7 +1932,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-use-day-bars {
       margin-top: 0.62rem;
       padding-top: 0.56rem;
-      border-top: 1px solid rgba(184, 135, 27, 0.12);
+      border-top: 1px solid rgba(75, 75, 75, 0.12);
     }
     .mv2-use-day-bars-h {
       margin: 0 0 0.48rem;
@@ -1998,12 +1998,12 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 800;
     }
     .mv2-use-day-bar.is-primary .mv2-use-day-bar-col {
-      background: rgba(184, 135, 27, 0.08);
-      border-color: rgba(184, 135, 27, 0.22);
-      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.08);
+      background: rgba(75, 75, 75, 0.08);
+      border-color: rgba(75, 75, 75, 0.22);
+      box-shadow: 0 0 0 1px rgba(75, 75, 75, 0.08);
     }
     .mv2-use-day-bar.is-primary .mv2-use-day-bar-fill {
-      background: linear-gradient(180deg, #e0bc55 0%, #b8871b 48%, #8f6710 100%);
+      background: linear-gradient(180deg, #d4d4d4 0%, #737373 48%, #404040 100%);
     }
     .mv2-use-day-bar.is-primary .mv2-use-day-bar-score {
       color: var(--mv2a-gold-dim);
@@ -2013,11 +2013,11 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 700;
     }
     .mv2-use-day-bar.is-secondary .mv2-use-day-bar-col {
-      background: rgba(184, 135, 27, 0.05);
-      border-color: rgba(184, 135, 27, 0.16);
+      background: rgba(75, 75, 75, 0.05);
+      border-color: rgba(75, 75, 75, 0.16);
     }
     .mv2-use-day-bar.is-secondary .mv2-use-day-bar-fill {
-      background: linear-gradient(180deg, rgba(224,188,85,0.78) 0%, rgba(184,135,27,0.72) 60%, rgba(143,103,16,0.68) 100%);
+      background: linear-gradient(180deg, rgba(212,212,212,0.78) 0%, rgba(130,130,130,0.72) 60%, rgba(82,82,82,0.68) 100%);
     }
     .mv2-use-day-bar.is-secondary .mv2-use-day-bar-score {
       color: rgba(143, 103, 16, 0.92);
@@ -2100,7 +2100,7 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 400;
     }
     .mv2-timing-card {
-      border-left: 3px solid rgba(184, 135, 27, 0.45);
+      border-left: 3px solid rgba(75, 75, 75, 0.45);
     }
     .mv2-timing-card h2 { font-size: 0.95rem; margin: 0; color: var(--mv2a-gold-dim); }
     .mv2-timing-head { margin-bottom: 0.48rem; }
@@ -2127,8 +2127,8 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 650;
       letter-spacing: 0.02em;
       color: rgba(92, 66, 10, 0.78);
-      background: rgba(184, 135, 27, 0.07);
-      border: 1px solid rgba(184, 135, 27, 0.14);
+      background: rgba(75, 75, 75, 0.07);
+      border: 1px solid rgba(75, 75, 75, 0.14);
       line-height: 1.18;
     }
     .mv2-timing-boost-micro {
@@ -2142,8 +2142,8 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-timing-trends { display: grid; gap: 0.55rem; }
     .mv2-timing-trend {
-      background: rgba(184, 135, 27, 0.04);
-      border: 1px solid rgba(184, 135, 27, 0.14);
+      background: rgba(75, 75, 75, 0.04);
+      border: 1px solid rgba(75, 75, 75, 0.14);
       border-radius: 12px;
       padding: 0.52rem 0.6rem;
     }
@@ -2166,7 +2166,7 @@ export function renderAmuletReportV2Html(payload) {
       font-variant-numeric: tabular-nums;
       text-align: right;
     }
-    /* Weekday = เม็ดทอง / bronze */
+    /* Weekday = เม็ดเน้น (โทนเทา) */
     .mv2-et-strip--weekday {
       display: flex;
       flex-wrap: nowrap;
@@ -2216,11 +2216,11 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-et-strip--weekday .mv2-et-pill.is-active { opacity: 1; }
     .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-shape {
-      background: linear-gradient(165deg, #e8c86a 0%, #c9a227 42%, #8f6710 100%);
+      background: linear-gradient(165deg, #e5e5e5 0%, #a3a3a3 42%, #525252 100%);
       border: 1px solid rgba(212, 175, 55, 0.65);
       box-shadow:
-        0 0 0 1px rgba(232, 197, 71, 0.25),
-        0 0 12px rgba(184, 135, 27, 0.22),
+        0 0 0 1px rgba(200, 200, 200, 0.25),
+        0 0 12px rgba(75, 75, 75, 0.22),
         0 4px 10px rgba(100, 72, 18, 0.15);
     }
     .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-shape::after { opacity: 0.5; }
@@ -2296,11 +2296,11 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-et-slot.is-active .mv2-et-slot-bar {
       width: 0.5rem;
       max-width: 46%;
-      background: linear-gradient(180deg, #ddb84a 0%, #b8871b 45%, #7a5c10 100%);
+      background: linear-gradient(180deg, #d4d4d4 0%, #737373 45%, #404040 100%);
       border: 1px solid rgba(212, 175, 55, 0.55);
       box-shadow:
-        0 0 0 1px rgba(184, 135, 27, 0.2),
-        0 0 10px rgba(184, 135, 27, 0.18),
+        0 0 0 1px rgba(75, 75, 75, 0.2),
+        0 0 10px rgba(75, 75, 75, 0.18),
         0 3px 8px rgba(80, 58, 16, 0.18);
     }
     .mv2-et-slot.is-active .mv2-et-slot-bar::after { opacity: 0.42; }
@@ -2318,8 +2318,8 @@ export function renderAmuletReportV2Html(payload) {
       margin-top: 0.58rem;
       padding: 0.62rem 0.72rem;
       border-radius: 12px;
-      background: rgba(184, 135, 27, 0.06);
-      border: 1px solid rgba(184, 135, 27, 0.2);
+      background: rgba(75, 75, 75, 0.06);
+      border: 1px solid rgba(75, 75, 75, 0.2);
     }
     .mv2-timing-k--mode {
       display: block;
@@ -2340,7 +2340,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-timing-hint {
       margin: 0.72rem 0 0;
       padding-top: 0.62rem;
-      border-top: 1px solid rgba(184, 135, 27, 0.12);
+      border-top: 1px solid rgba(75, 75, 75, 0.12);
       font-size: 0.68rem;
       line-height: 1.62;
       color: var(--mv2a-muted);
@@ -2361,8 +2361,8 @@ export function renderAmuletReportV2Html(payload) {
       }
     }
     html.mv2a-theme-dark .mv2-timing-trend {
-      background: rgba(232, 197, 71, 0.05);
-      border-color: rgba(232, 197, 71, 0.14);
+      background: rgba(200, 200, 200, 0.05);
+      border-color: rgba(200, 200, 200, 0.14);
     }
     html.mv2a-theme-dark .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) .mv2-et-pill-shape {
       background: rgba(15, 18, 26, 0.92);
@@ -2379,17 +2379,17 @@ export function renderAmuletReportV2Html(payload) {
       color: rgba(148, 163, 184, 0.7);
     }
     html.mv2a-theme-dark .mv2-timing-insight {
-      background: rgba(232, 197, 71, 0.06);
-      border-color: rgba(232, 197, 71, 0.2);
+      background: rgba(200, 200, 200, 0.06);
+      border-color: rgba(200, 200, 200, 0.2);
     }
     html.mv2a-theme-dark .mv2-timing-hint {
-      border-top-color: rgba(232, 197, 71, 0.12);
+      border-top-color: rgba(200, 200, 200, 0.12);
       color: rgba(148, 163, 184, 0.88);
     }
     html.mv2a-theme-dark .mv2-timing-boost-chip {
       color: rgba(254, 249, 220, 0.92);
-      background: rgba(232, 197, 71, 0.1);
-      border-color: rgba(232, 197, 71, 0.22);
+      background: rgba(200, 200, 200, 0.1);
+      border-color: rgba(200, 200, 200, 0.22);
     }
     html.mv2a-theme-dark .mv2-timing-boost-micro {
       color: rgba(148, 163, 184, 0.82);
@@ -2398,8 +2398,8 @@ export function renderAmuletReportV2Html(payload) {
       margin: 0.38rem 0 0.42rem;
       padding: 0.45rem 0.55rem;
       border-radius: 10px;
-      background: rgba(184, 135, 27, 0.05);
-      border: 1px solid rgba(184, 135, 27, 0.13);
+      background: rgba(75, 75, 75, 0.05);
+      border: 1px solid rgba(75, 75, 75, 0.13);
       font-size: 0.64rem;
       line-height: 1.4;
       color: var(--mv2a-muted);
@@ -2417,7 +2417,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-card--daily-owner {
       margin: 0.4rem 0 0.32rem;
       padding: 0.55rem 0.78rem 0.62rem;
-      border-left: 2px solid rgba(184, 135, 27, 0.26);
+      border-left: 2px solid rgba(75, 75, 75, 0.26);
     }
     .mv2-card--daily-owner > h2.mv2-daily-owner-h {
       font-size: 0.7rem;
@@ -2438,15 +2438,15 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-muted);
     }
     html.mv2a-theme-dark .mv2-meta-block {
-      background: rgba(232, 197, 71, 0.06);
-      border-color: rgba(232, 197, 71, 0.18);
+      background: rgba(200, 200, 200, 0.06);
+      border-color: rgba(200, 200, 200, 0.18);
     }
     html.mv2a-theme-dark .mv2-trust-sources {
-      background: rgba(232, 197, 71, 0.05);
-      border-color: rgba(232, 197, 71, 0.14);
+      background: rgba(200, 200, 200, 0.05);
+      border-color: rgba(200, 200, 200, 0.14);
     }
     html.mv2a-theme-dark .mv2-card--daily-owner {
-      border-left-color: rgba(232, 197, 71, 0.3);
+      border-left-color: rgba(200, 200, 200, 0.3);
     }
     html.mv2a-theme-dark .mv2-daily-owner-p {
       color: rgba(226, 232, 240, 0.92);
@@ -2457,7 +2457,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-card--faith-progress {
       margin: 0.46rem 0 0.36rem;
       padding: 0.58rem 0.75rem 0.68rem;
-      border-left: 3px solid rgba(184, 135, 27, 0.48);
+      border-left: 3px solid rgba(75, 75, 75, 0.48);
       background: linear-gradient(
         165deg,
         rgba(255, 252, 245, 0.92) 0%,
@@ -2494,7 +2494,7 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-faith-progress-next {
       color: var(--mv2a-gold-dim);
-      text-shadow: 0 0 14px rgba(184, 135, 27, 0.28);
+      text-shadow: 0 0 14px rgba(75, 75, 75, 0.28);
       font-variant-numeric: tabular-nums;
     }
     .mv2-faith-progress-copy { flex: 1; min-width: 0; }
@@ -2521,8 +2521,8 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 500;
       padding: 0.26rem 0.34rem;
       border-radius: 7px;
-      background: rgba(184, 135, 27, 0.04);
-      border: 1px solid rgba(184, 135, 27, 0.1);
+      background: rgba(75, 75, 75, 0.04);
+      border: 1px solid rgba(75, 75, 75, 0.1);
     }
     .mv2-faith-progress-scan {
       margin: 0 0 0.32rem;
@@ -2532,8 +2532,8 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 600;
       padding: 0.26rem 0.34rem;
       border-radius: 7px;
-      background: rgba(184, 135, 27, 0.045);
-      border: 1px dashed rgba(184, 135, 27, 0.22);
+      background: rgba(75, 75, 75, 0.045);
+      border: 1px dashed rgba(75, 75, 75, 0.22);
     }
     .mv2-faith-progress-metrics {
       display: grid;
@@ -2541,8 +2541,8 @@ export function renderAmuletReportV2Html(payload) {
       margin: 0 0 0.34rem;
       padding: 0.32rem 0.4rem;
       border-radius: 8px;
-      background: rgba(184, 135, 27, 0.045);
-      border: 1px solid rgba(184, 135, 27, 0.12);
+      background: rgba(75, 75, 75, 0.045);
+      border: 1px solid rgba(75, 75, 75, 0.12);
       font-size: 0.64rem;
       line-height: 1.28;
       color: var(--mv2a-text-body);
@@ -2559,7 +2559,7 @@ export function renderAmuletReportV2Html(payload) {
         rgba(28, 26, 22, 0.95) 0%,
         rgba(20, 22, 28, 0.98) 100%
       );
-      border-left-color: rgba(232, 197, 71, 0.45);
+      border-left-color: rgba(200, 200, 200, 0.45);
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
     }
     html.mv2a-theme-dark .mv2-faith-progress-copy h2 {
@@ -2569,18 +2569,18 @@ export function renderAmuletReportV2Html(payload) {
       color: rgba(226, 232, 240, 0.92);
     }
     html.mv2a-theme-dark .mv2-faith-progress-baseline {
-      background: rgba(232, 197, 71, 0.06);
-      border-color: rgba(232, 197, 71, 0.16);
+      background: rgba(200, 200, 200, 0.06);
+      border-color: rgba(200, 200, 200, 0.16);
       color: rgba(203, 213, 225, 0.9);
     }
     html.mv2a-theme-dark .mv2-faith-progress-scan {
-      background: rgba(232, 197, 71, 0.07);
-      border-color: rgba(232, 197, 71, 0.28);
-      color: rgba(232, 197, 71, 0.95);
+      background: rgba(200, 200, 200, 0.07);
+      border-color: rgba(200, 200, 200, 0.28);
+      color: rgba(200, 200, 200, 0.95);
     }
     html.mv2a-theme-dark .mv2-faith-progress-metrics {
-      background: rgba(232, 197, 71, 0.07);
-      border-color: rgba(232, 197, 71, 0.2);
+      background: rgba(200, 200, 200, 0.07);
+      border-color: rgba(200, 200, 200, 0.2);
       color: rgba(226, 232, 240, 0.92);
     }
     @media (max-width: 520px) {
@@ -2605,28 +2605,28 @@ export function renderAmuletReportV2Html(payload) {
       color: #e2e8f0;
     }
     .mv2-share-btn--secondary {
-      background: rgba(184, 135, 27, 0.07);
-      border: 2px solid rgba(184, 135, 27, 0.55);
+      background: rgba(75, 75, 75, 0.07);
+      border: 2px solid rgba(75, 75, 75, 0.55);
       color: var(--mv2a-gold-dim);
       font-weight: 700;
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset;
     }
     .mv2-share-btn--secondary:hover {
-      background: rgba(184, 135, 27, 0.14);
-      border-color: rgba(184, 135, 27, 0.75);
+      background: rgba(75, 75, 75, 0.14);
+      border-color: rgba(75, 75, 75, 0.75);
     }
     .mv2-share-btn--secondary:active {
-      background: rgba(184, 135, 27, 0.2);
+      background: rgba(75, 75, 75, 0.2);
     }
     html.mv2a-theme-dark .mv2-share-btn--secondary {
-      background: rgba(232, 197, 71, 0.08);
-      border: 2px solid rgba(232, 197, 71, 0.45);
+      background: rgba(200, 200, 200, 0.08);
+      border: 2px solid rgba(200, 200, 200, 0.45);
       color: #e8d89a;
       box-shadow: none;
     }
     html.mv2a-theme-dark .mv2-share-btn--secondary:hover {
-      background: rgba(232, 197, 71, 0.14);
-      border-color: rgba(232, 197, 71, 0.65);
+      background: rgba(200, 200, 200, 0.14);
+      border-color: rgba(200, 200, 200, 0.65);
     }
     .mv2-share-card h2 { font-size: 0.92rem; }
     .mv2-share-note { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: var(--mv2a-muted); }
@@ -2705,11 +2705,11 @@ export function renderAmuletReportV2Html(payload) {
       background: rgba(16, 185, 129, 0.14);
     }
     html.mv2a-theme-dark .mv2-card--use-day {
-      border-left-color: rgba(232, 197, 71, 0.4);
+      border-left-color: rgba(200, 200, 200, 0.4);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     }
     html.mv2a-theme-dark .mv2-use-day-bars {
-      border-top-color: rgba(232, 197, 71, 0.14);
+      border-top-color: rgba(200, 200, 200, 0.14);
     }
     html.mv2a-theme-dark .mv2-use-day-bar-label,
     html.mv2a-theme-dark .mv2-use-day-bar-score {
@@ -2727,34 +2727,34 @@ export function renderAmuletReportV2Html(payload) {
       color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-col {
-      background: rgba(232, 197, 71, 0.08);
-      border-color: rgba(232, 197, 71, 0.24);
-      box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.08);
+      background: rgba(200, 200, 200, 0.08);
+      border-color: rgba(200, 200, 200, 0.24);
+      box-shadow: 0 0 0 1px rgba(200, 200, 200, 0.08);
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-fill {
-      background: linear-gradient(180deg, #f3d67a 0%, #e8c547 44%, #b8860b 100%);
+      background: linear-gradient(180deg, #e5e5e5 0%, #d4d4d4 44%, #737373 100%);
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-label,
     html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-score {
       color: rgba(254, 243, 199, 0.92);
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-col {
-      background: rgba(232, 197, 71, 0.05);
-      border-color: rgba(232, 197, 71, 0.16);
+      background: rgba(200, 200, 200, 0.05);
+      border-color: rgba(200, 200, 200, 0.16);
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-fill {
-      background: linear-gradient(180deg, rgba(243,214,122,0.76) 0%, rgba(232,197,71,0.68) 60%, rgba(184,134,11,0.62) 100%);
+      background: linear-gradient(180deg, rgba(230,230,230,0.76) 0%, rgba(180,180,180,0.68) 60%, rgba(115,115,115,0.62) 100%);
     }
     html.mv2a-theme-dark .mv2-use-day-chip-v {
-      background: rgba(232, 197, 71, 0.09);
-      border-color: rgba(232, 197, 71, 0.38);
+      background: rgba(200, 200, 200, 0.09);
+      border-color: rgba(200, 200, 200, 0.38);
     }
     html.mv2a-theme-dark .mv2-gsum-row--tension {
-      background: rgba(232, 197, 71, 0.06);
+      background: rgba(200, 200, 200, 0.06);
     }
     html.mv2a-theme-dark .mv2-gsumx-item {
-      background: rgba(232, 197, 71, 0.05);
-      border-color: rgba(232, 197, 71, 0.16);
+      background: rgba(200, 200, 200, 0.05);
+      border-color: rgba(200, 200, 200, 0.16);
     }
     html.mv2a-theme-dark .mv2-gsumx-v {
       color: rgba(241, 245, 249, 0.94);
@@ -2763,35 +2763,35 @@ export function renderAmuletReportV2Html(payload) {
       color: rgba(148, 163, 184, 0.88);
     }
     html.mv2a-theme-dark .mv2-card--decision {
-      border-left-color: rgba(232, 197, 71, 0.42);
+      border-left-color: rgba(200, 200, 200, 0.42);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
     }
     html.mv2a-theme-dark .mv2-card--top-finder {
       background: linear-gradient(145deg, rgba(28, 26, 22, 0.5) 0%, rgba(20, 22, 28, 0.92) 100%);
     }
     html.mv2a-theme-dark .mv2-card--guide {
-      border-left-color: rgba(232, 197, 71, 0.42);
+      border-left-color: rgba(200, 200, 200, 0.42);
       background: rgba(20, 22, 28, 0.92);
     }
     html.mv2a-theme-dark .mv2-card--guide-soft {
-      border: 1px solid rgba(232, 197, 71, 0.22);
-      background: linear-gradient(165deg, rgba(232, 197, 71, 0.07) 0%, rgba(20, 22, 28, 0.94) 100%);
+      border: 1px solid rgba(200, 200, 200, 0.22);
+      background: linear-gradient(165deg, rgba(200, 200, 200, 0.07) 0%, rgba(20, 22, 28, 0.94) 100%);
       box-shadow: 0 12px 36px rgba(0, 0, 0, 0.32);
     }
     html.mv2a-theme-dark .mv2-card--guide-soft .mv2-guide-metric {
       background: rgba(28, 26, 22, 0.58);
-      border-color: rgba(232, 197, 71, 0.2);
+      border-color: rgba(200, 200, 200, 0.2);
       box-shadow: none;
     }
     html.mv2a-theme-dark .mv2-card--guide-soft .mv2-guide-horizon-card {
       background: rgba(28, 26, 22, 0.48);
     }
     html.mv2a-theme-dark .mv2-card--guide-soft .mv2-guide-horizon-card--ceiling {
-      background: linear-gradient(165deg, rgba(232, 197, 71, 0.1) 0%, rgba(20, 22, 28, 0.78) 100%);
+      background: linear-gradient(165deg, rgba(200, 200, 200, 0.1) 0%, rgba(20, 22, 28, 0.78) 100%);
     }
     html.mv2a-theme-dark .mv2-guide-hero {
-      border-color: rgba(232, 197, 71, 0.2);
-      background: linear-gradient(165deg, rgba(232, 197, 71, 0.12) 0%, rgba(232, 197, 71, 0.04) 100%);
+      border-color: rgba(200, 200, 200, 0.2);
+      background: linear-gradient(165deg, rgba(200, 200, 200, 0.12) 0%, rgba(200, 200, 200, 0.04) 100%);
     }
     html.mv2a-theme-dark .mv2-guide-hero-k,
     html.mv2a-theme-dark .mv2-guide-metric-k {
@@ -2806,15 +2806,15 @@ export function renderAmuletReportV2Html(payload) {
       color: rgba(241, 245, 249, 0.94);
     }
     html.mv2a-theme-dark .mv2-guide-metric {
-      border-color: rgba(232, 197, 71, 0.18);
-      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(200, 200, 200, 0.18);
+      background: rgba(200, 200, 200, 0.06);
     }
     html.mv2a-theme-dark .mv2-guide-grade-line {
-      background: rgba(232, 197, 71, 0.16);
+      background: rgba(200, 200, 200, 0.16);
     }
     html.mv2a-theme-dark .mv2-guide-lane-pin {
       border-color: rgba(15, 23, 42, 0.95);
-      box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.24);
+      box-shadow: 0 0 0 1px rgba(200, 200, 200, 0.24);
     }
     html.mv2a-theme-dark .mv2-guide-grade-stop {
       color: rgba(148, 163, 184, 0.88);
@@ -2823,8 +2823,8 @@ export function renderAmuletReportV2Html(payload) {
       color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-guide-horizon {
-      background: rgba(232, 197, 71, 0.07);
-      border-color: rgba(232, 197, 71, 0.16);
+      background: rgba(200, 200, 200, 0.07);
+      border-color: rgba(200, 200, 200, 0.16);
     }
     html.mv2a-theme-dark .mv2-guide-horizon-k {
       color: rgba(148, 163, 184, 0.88);
@@ -2833,14 +2833,14 @@ export function renderAmuletReportV2Html(payload) {
       color: rgba(241, 245, 249, 0.94);
     }
     html.mv2a-theme-dark .mv2-guide-step {
-      border-color: rgba(232, 197, 71, 0.16);
-      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(200, 200, 200, 0.16);
+      background: rgba(200, 200, 200, 0.06);
     }
     html.mv2a-theme-dark .mv2-guide-step-v {
       color: rgba(241, 245, 249, 0.96);
     }
     html.mv2a-theme-dark .mv2-guide-bottom {
-      border-top-color: rgba(232, 197, 71, 0.16);
+      border-top-color: rgba(200, 200, 200, 0.16);
     }
     html.mv2a-theme-dark .mv2-guide-boost-inline {
       color: rgba(148, 163, 184, 0.88);
@@ -2857,8 +2857,8 @@ export function renderAmuletReportV2Html(payload) {
       border-color: rgba(148, 163, 184, 0.18);
     }
     html.mv2a-theme-dark .mv2-guide-weekday.is-primary .mv2-guide-weekday-dot {
-      border-color: rgba(232, 197, 71, 0.42);
-      box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.2), 0 0 9px rgba(232, 197, 71, 0.22);
+      border-color: rgba(200, 200, 200, 0.42);
+      box-shadow: 0 0 0 1px rgba(200, 200, 200, 0.2), 0 0 9px rgba(200, 200, 200, 0.22);
     }
     html.mv2a-theme-dark .mv2-guide-weekday-lbl {
       color: rgba(148, 163, 184, 0.88);
@@ -2882,10 +2882,10 @@ export function renderAmuletReportV2Html(payload) {
       color: rgba(148, 163, 184, 0.9);
     }
     html.mv2a-theme-dark .mv2-guide-progress-bar {
-      background: rgba(232, 197, 71, 0.15);
+      background: rgba(200, 200, 200, 0.15);
     }
     html.mv2a-theme-dark .mv2-guide-progress-bar::after {
-      border-left-color: rgba(232, 197, 71, 0.62);
+      border-left-color: rgba(200, 200, 200, 0.62);
     }
     html.mv2a-theme-dark .mv2-guide-progress-note {
       color: rgba(148, 163, 184, 0.72);
