@@ -648,7 +648,7 @@ export function renderAmuletReportV2Html(payload) {
           <span class="mv2-guide-belief-k">ระยะยาว</span>
           <span class="mv2-guide-belief-v">สวดมนต์ + สมาธิต่อเนื่อง · ใช้เวลาเป็นสัปดาห์ถึงเดือน แต่ให้น้ำหนักสูงสุด</span>
         </div>
-        <p class="mv2-guide-belief-note">ผ่านพิธีปลุกเสก / ผ่านการอธิษฐานต่อเนื่อง · เป็นโบนัสพิเศษ ไม่ใช่ base rule ของทุกชิ้น</p>
+        <p class="mv2-guide-belief-note">ผ่านพิธีปลุกเสก / ผ่านการอธิษฐานต่อเนื่อง · บูชาต่อเนื่อง / ผ่านพิธี · เป็นโบนัสพิเศษ ไม่ใช่ base rule ของทุกชิ้น</p>
       </div>
       <div class="mv2-guide-bottom">
         <p class="mv2-guide-boost-inline">${escapeHtml(
