@@ -364,19 +364,16 @@ export function renderAmuletReportV2Html(payload) {
 
   const ts = vm.timingSection;
   const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
-  const tac = /** @type {{ title?: string; weekday?: string; window?: string; ritualLine?: string; hint?: string } | null} */ (
+  const tac = /** @type {{ title?: string; recommendedWeekday?: string; reasonShort?: string; actionLine?: string } | null} */ (
     vm.timingActionCard
   );
   const timingActionCardHtml =
-    tac && (tac.weekday || tac.window || tac.ritualLine || tac.hint)
-      ? `<section class="mv2-card mv2-card--timing-action" aria-labelledby="mv2-ta-h">
-      <h2 id="mv2-ta-h">${escapeHtml(tac.title || "ควรใช้ยังไงตอนนี้")}</h2>
-      <div class="mv2-ta-body" role="group">
-        ${tac.weekday ? `<p class="mv2-ta-line"><span class="mv2-ta-k">วัน</span><span class="mv2-ta-v">${escapeHtml(tac.weekday)}</span></p>` : ""}
-        ${tac.window ? `<p class="mv2-ta-line"><span class="mv2-ta-k">ช่วงเวลา</span><span class="mv2-ta-v">${escapeHtml(tac.window)}</span></p>` : ""}
-        ${tac.ritualLine ? `<p class="mv2-ta-line mv2-ta-line--ritual"><span class="mv2-ta-k">แนวใช้</span><span class="mv2-ta-v">${escapeHtml(tac.ritualLine)}</span></p>` : ""}
-        ${tac.hint ? `<p class="mv2-ta-hint">${escapeHtml(tac.hint)}</p>` : ""}
-      </div>
+    tac && String(tac.recommendedWeekday || "").trim()
+      ? `<section class="mv2-card mv2-card--use-day" aria-labelledby="mv2-use-day-h">
+      <h2 id="mv2-use-day-h">${escapeHtml(tac.title || "วันที่ควรใช้")}</h2>
+      <p class="mv2-use-day-main">${escapeHtml(String(tac.recommendedWeekday || "").trim())}</p>
+      ${tac.reasonShort ? `<p class="mv2-use-day-reason">${escapeHtml(tac.reasonShort)}</p>` : ""}
+      ${tac.actionLine ? `<p class="mv2-use-day-action">${escapeHtml(tac.actionLine)}</p>` : ""}
     </section>`
       : "";
 
@@ -897,45 +894,38 @@ export function renderAmuletReportV2Html(payload) {
       padding-bottom: 0.8rem;
     }
     .mv2-card--int-near-graph > h2 { font-size: 0.92rem; color: var(--mv2a-gold); margin-bottom: 0.42rem; }
-    .mv2-card--timing-action {
-      margin: 0.55rem 0 0.45rem;
-      padding: 0.72rem 0.85rem;
-      border-left: 3px solid rgba(5, 150, 105, 0.42);
-      background: linear-gradient(180deg, rgba(5, 150, 105, 0.05) 0%, var(--mv2a-card) 72%);
+    .mv2-card--use-day {
+      margin: 0.5rem 0 0.4rem;
+      padding: 0.72rem 0.9rem 0.78rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.35);
+      background: var(--mv2a-card);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     }
-    .mv2-card--timing-action > h2 {
-      font-size: 0.82rem;
-      margin: 0 0 0.45rem;
-      color: var(--mv2a-gold-dim);
-      font-weight: 650;
-    }
-    .mv2-ta-body { margin: 0; }
-    .mv2-ta-line {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 0.35rem 0.5rem;
-      margin: 0 0 0.32rem;
-      font-size: 0.8rem;
-      line-height: 1.35;
-      color: var(--mv2a-text-body);
-    }
-    .mv2-ta-line:last-of-type { margin-bottom: 0.25rem; }
-    .mv2-ta-k {
-      flex-shrink: 0;
-      min-width: 3.1rem;
-      font-size: 0.62rem;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+    .mv2-card--use-day > h2 {
+      font-size: 0.72rem;
+      margin: 0 0 0.42rem;
       color: var(--mv2a-muted);
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
-    .mv2-ta-v { flex: 1; min-width: 0; font-weight: 600; }
-    .mv2-ta-line--ritual .mv2-ta-v { font-weight: 650; color: var(--mv2a-gold-dim); }
-    .mv2-ta-hint {
-      margin: 0.38rem 0 0;
-      padding-top: 0.38rem;
-      border-top: 1px solid var(--mv2a-card-border);
+    .mv2-use-day-main {
+      margin: 0 0 0.38rem;
+      font-size: 1.18rem;
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--mv2a-gold);
+      letter-spacing: -0.02em;
+    }
+    .mv2-use-day-reason {
+      margin: 0 0 0.35rem;
+      font-size: 0.78rem;
+      line-height: 1.42;
+      color: var(--mv2a-text-body);
+      font-weight: 500;
+    }
+    .mv2-use-day-action {
+      margin: 0;
       font-size: 0.72rem;
       line-height: 1.4;
       color: var(--mv2a-muted);
@@ -1449,9 +1439,9 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-share-line-cta:hover {
       background: rgba(16, 185, 129, 0.14);
     }
-    html.mv2a-theme-dark .mv2-card--timing-action {
-      border-left-color: rgba(52, 211, 153, 0.45);
-      background: linear-gradient(180deg, rgba(16, 185, 129, 0.07) 0%, var(--mv2a-card) 72%);
+    html.mv2a-theme-dark .mv2-card--use-day {
+      border-left-color: rgba(232, 197, 71, 0.4);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     }
     html.mv2a-theme-dark .mv2-gsum-row--tension {
       background: rgba(232, 197, 71, 0.06);

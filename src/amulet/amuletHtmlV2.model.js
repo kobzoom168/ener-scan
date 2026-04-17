@@ -15,6 +15,7 @@ import {
   energyGradeToLevelGradeClass,
   resolveEnergyLevelDisplayGrade,
 } from "../utils/reports/energyLevelGrade.util.js";
+import { buildSacredAmuletUseDayCard } from "./amuletUseDayCard.util.js";
 
 /** Sacred_amulet HTML footer disclaimer (ท้ายรายงาน; source: `usageCaution.disclaimer`). */
 export const AMULET_HTML_V2_USAGE_DISCLAIMER =
@@ -369,27 +370,8 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       }
       return buildSacredAmuletTimingCardDisplay(tv, ord[0], ord[1]);
     })(),
-    /** Compact “ตอนนี้ทำอะไร” — same timing truth as `timingSection`, shortened for scanning. */
-    timingActionCard: (() => {
-      const tv = payload.timingV1;
-      if (
-        !tv ||
-        (tv.engineVersion !== "timing_v1" && tv.engineVersion !== "timing_v1_1") ||
-        !tv.summary ||
-        !Array.isArray(tv.bestHours) ||
-        tv.bestHours.length === 0
-      ) {
-        return null;
-      }
-      const card = buildSacredAmuletTimingCardDisplay(tv, ord[0], ord[1]);
-      return {
-        title: "ควรใช้ยังไงตอนนี้",
-        weekday: card.topWeekdayLabel,
-        window: card.topWindowLabel,
-        ritualLine: card.ritualLine,
-        hint: card.hint,
-      };
-    })(),
+    /** Action summary “วันไหนหยิบใช้” — axes + birth + compatibility; not `timingV1` (see `timingSection`). */
+    timingActionCard: buildSacredAmuletUseDayCard(payload, metrics),
     trustNote: String(payload.trust?.trustNote || "").trim(),
     reportVersion: String(payload.reportVersion || ""),
     modelLabel: payload.trust?.modelLabel

@@ -183,8 +183,9 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("Noto Sans Thai"));
   assert.ok(html.includes("ควรค่อย ๆ ไป"), "graph summary row 3: tension pace");
   assert.ok(html.includes("ภาพวัตถุที่ใช้ในการวิเคราะห์"));
-  assert.ok(html.includes("ควรใช้ยังไงตอนนี้"));
-  assert.ok(html.includes('class="mv2-card mv2-card--timing-action"'));
+  assert.ok(html.includes("วันที่ควรใช้"));
+  assert.ok(html.includes('class="mv2-card mv2-card--use-day"'));
+  assert.ok(html.includes("mv2-use-day-main"));
   assert.ok(html.includes('class="mv2-card mv2-card--int-near-graph"'));
   assert.ok(!html.includes("แกน"));
   assert.ok(!html.includes("โค้ง"));
