@@ -525,89 +525,24 @@ export function renderAmuletReportV2Html(payload) {
     ? String(fp.scanNextHint || "").trim() ||
       "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด"
     : "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด";
-  const buildGuideBoostBreakdown = (totalPercent) => {
-    const labels = [
-      "ใช้ตามวันและเวลาแนะนำ",
-      "ตั้งจิตก่อนใช้",
-      "สวดหรือทำสมาธิสั้น",
-      "บูชาต่อเนื่อง / ผ่านพิธี",
-    ];
-    const base = [4, 3, 2, 3];
-    const safe = Math.max(0, Math.round(Number(totalPercent) || 0));
-    if (safe <= 0) return labels.map((label) => ({ label, value: 0 }));
-    const sum = base.reduce((a, b) => a + b, 0);
-    const raw = base.map((w) => (w / sum) * safe);
-    const floored = raw.map((n) => Math.floor(n));
-    let rem = safe - floored.reduce((a, b) => a + b, 0);
-    const order = raw
-      .map((n, i) => ({ i, frac: n - Math.floor(n) }))
-      .sort((a, b) => b.frac - a.frac);
-    for (let i = 0; i < order.length && rem > 0; i += 1, rem -= 1) {
-      floored[order[i].i] += 1;
-    }
-    return labels.map((label, i) => ({ label, value: floored[i] }));
-  };
   const guideBoostTotal = boostPercent != null ? Math.max(0, Math.round(boostPercent)) : 12;
-  const guideBoostBreakdown = buildGuideBoostBreakdown(guideBoostTotal);
   const baseGrade = String(fp?.baseGrade || "").trim().toUpperCase();
   const projectedGrade = String(fp?.projectedGrade || "").trim().toUpperCase() || "—";
-  const guideTopExplain = (() => {
-    if (baseGrade === "B") {
-      return "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายที่เข้ากับคุณที่สุด";
-    }
-    if (baseGrade === "A") {
-      return "ถ้าจะสแกนต่อ ให้เทียบอีก 2–3 ชิ้นในสายเดียวกันเพื่อหาตัว top";
-    }
-    if (baseGrade === "S") {
-      return "ถ้าจะสแกนต่อ ให้ใช้ชิ้นนี้เป็นตัวตั้ง แล้วเทียบว่ามีองค์ไหนแซงได้จริงไหม";
-    }
-    if (baseGrade === "C") {
-      return "ถ้าจะสแกนต่อ ให้เน้นชิ้นที่เด่นทางเข้ากับคุณที่สุด แล้วเทียบอีก 2–3 ชิ้น";
-    }
-    return guideScanExplain;
-  })();
   const progressTargetGrade = projectedGrade;
   const progressTargetScore = fp ? fmt10(fp.projectedScore10) : "—";
   const progressCurrentScore = fp ? fmt10(fp.baseScore10) : "—";
   const progressTargetLabel = `คะแนนคาดการณ์ ${progressTargetScore} · ${progressTargetGrade}`;
-  const scoreGap = (() => {
+  /** Display-only gap to S threshold (8.9) — same grade boundaries as report energy grades */
+  const gapToS10 = (() => {
     const base = Number(fp?.baseScore10);
-    const projected = Number(fp?.projectedScore10);
-    if (Number.isFinite(base) && Number.isFinite(projected)) {
-      return Math.max(0, projected - base);
-    }
-    return null;
+    if (!Number.isFinite(base)) return null;
+    return Math.max(0, 8.9 - base);
   })();
-  const headerNeedLine = `ต้องเพิ่มอีก ${scoreGap != null ? scoreGap.toFixed(2) : "—"} คะแนน`;
-  const headerDaysLine =
-    baseGrade === "B" && progressTargetGrade === "A"
-      ? "คาดว่าใช้ประมาณ 7–9 วัน"
-      : fp && Number.isFinite(Number(fp.estimatedDaysToNextTier))
-        ? `คาดว่าใช้ประมาณ ${Math.max(1, Math.round(Number(fp.estimatedDaysToNextTier)))} วัน`
-        : "คาดว่าใช้ประมาณ — วัน";
+  const boostCapPercentRounded =
+    fp != null && fp.boostCapPercent != null && Number.isFinite(Number(fp.boostCapPercent))
+      ? Math.max(0, Math.round(Number(fp.boostCapPercent)))
+      : null;
   const pipelineFromGrade = String(fp?.baseGrade || baseGrade || "B").trim() || "B";
-  const nextGradeForBase =
-    pipelineFromGrade === "D"
-      ? "B"
-      : pipelineFromGrade === "B"
-        ? "A"
-        : pipelineFromGrade === "A"
-          ? "S"
-          : null;
-  const nextGradeTargetScore = (() => {
-    if (!nextGradeForBase) return null;
-    for (let s = 0; s <= 10; s += 0.01) {
-      if (score10ToEnergyGrade(Number(s.toFixed(2))) === nextGradeForBase) {
-        return Number(s.toFixed(2));
-      }
-    }
-    return null;
-  })();
-  const gapToNextGrade = (() => {
-    const base = Number(fp?.baseScore10);
-    if (nextGradeTargetScore == null || !Number.isFinite(base)) return null;
-    return Math.max(0, nextGradeTargetScore - base);
-  })();
   const boostCapScore10 = (() => {
     const base = Number(fp?.baseScore10);
     const projected = Number(fp?.projectedScore10);
@@ -646,15 +581,35 @@ export function renderAmuletReportV2Html(payload) {
     return 20;
   })();
   const stepOneAnswer = `${useDayLabel} · ${useTimeLabel}`;
-  const todayHorizon = `${pipelineFromGrade} · ${useDayLabel} · ${useTimeLabel}`;
-  const fullsetHorizon = `${progressTargetGrade}${
-    headerDaysLine.includes("ประมาณ") ? ` · ${headerDaysLine.replace("คาดว่าใช้ประมาณ ", "")}` : ""
-  }`;
-  const ceilingHorizon = progressTargetGrade === "S" ? "ถึง S ในรอบนี้" : `สูงสุดรอบนี้อยู่ที่ ${progressTargetGrade}`;
+  const boostMetricDisplay = (() => {
+    if (boostCapScore10 == null) return "—";
+    const pts = boostCapScore10.toFixed(2);
+    if (boostCapPercentRounded != null) return `${pts} · +${boostCapPercentRounded}%`;
+    return pts;
+  })();
+  const durationContinuousBand = (() => {
+    if (baseGrade === "B" && progressTargetGrade === "A") return "7–9 วัน";
+    if (fp && Number.isFinite(Number(fp.estimatedDaysToNextTier))) {
+      const d = Math.max(1, Math.round(Number(fp.estimatedDaysToNextTier)));
+      return `${d}–30 วัน`;
+    }
+    return "7–30 วัน";
+  })();
+  const continuousHorizonSub =
+    pipelineFromGrade === progressTargetGrade
+      ? "พลังจะนิ่งขึ้นเมื่อทำต่อเนื่อง แม้ยังอยู่เกรดเดิม"
+      : "พลังจะนิ่งขึ้นและหนุนได้เต็มกว่าเดิมเมื่อทำต่อเนื่อง";
+  const ceilingHorizon =
+    progressTargetGrade === "S"
+      ? "ถึง S ในรอบนี้"
+      : `สูงสุดอยู่ที่ ${progressTargetGrade} · ยังไม่ถึง S ในรอบนี้`;
+  const ceilingHorizonSub =
+    progressTargetGrade === "S" ? "" : `รอบนี้บูสต์เต็มที่แล้วยังไปได้แค่ ${progressTargetGrade}`;
   const fullsetMark =
     pipelineFromGrade === progressTargetGrade && (boostCapScore10 || 0) > 0
       ? `${progressTargetGrade}+`
       : progressTargetGrade;
+  const continuousHorizonMain = `${fullsetMark} · ${progressTargetScore}/10 · ${durationContinuousBand}`;
   const lanePosForGrade = (g) => {
     if (g === "S") return 100;
     if (g === "A") return 50;
@@ -669,75 +624,72 @@ export function renderAmuletReportV2Html(payload) {
       : lanePosForGrade(progressTargetGrade);
   const ceilingLanePos = lanePosForGrade(progressTargetGrade);
   const guideCardHtml = `<section class="mv2-card mv2-card--guide" aria-labelledby="mv2-guide-h">
-      <h2 id="mv2-guide-h">คู่มือใช้ชิ้นนี้</h2>
+      <h2 id="mv2-guide-h">ชิ้นนี้ไปได้ไกลแค่ไหน</h2>
       <div class="mv2-guide-hero">
-        <p class="mv2-guide-hero-k">ทางไปสู่ตัว top</p>
+        <p class="mv2-guide-hero-k">ทางไปสู่ตัว top · จังหวะ · การฝึก · เพดานรอบนี้</p>
         <p class="mv2-guide-hero-grade">${escapeHtml(heroGradeResult)}</p>
         <p class="mv2-guide-hero-verdict">${escapeHtml(heroVerdictLabel)}</p>
       </div>
-      <div class="mv2-guide-metrics" role="list" aria-label="สรุปตัวเลขก่อนตัดสินใจ">
+      <div class="mv2-guide-metrics" role="list" aria-label="ตัวเลขตัดสินใจ">
         <div class="mv2-guide-metric" role="listitem">
-          <span class="mv2-guide-metric-k">ขาดอีก</span>
-          <span class="mv2-guide-metric-v">${escapeHtml(
-            gapToNextGrade != null ? gapToNextGrade.toFixed(2) : "—",
-          )}</span>
+          <span class="mv2-guide-metric-k">ขาดถึง S</span>
+          <span class="mv2-guide-metric-v">${escapeHtml(gapToS10 != null ? gapToS10.toFixed(2) : "—")}</span>
         </div>
         <div class="mv2-guide-metric" role="listitem">
           <span class="mv2-guide-metric-k">บูสต์ได้สูงสุด</span>
-          <span class="mv2-guide-metric-v">${escapeHtml(
-            boostCapScore10 != null ? boostCapScore10.toFixed(2) : "—",
-          )}</span>
+          <span class="mv2-guide-metric-v">${escapeHtml(boostMetricDisplay)}</span>
         </div>
         <div class="mv2-guide-metric" role="listitem">
-          <span class="mv2-guide-metric-k">ใช้เวลา</span>
-          <span class="mv2-guide-metric-v">${escapeHtml(headerDaysLine.replace("คาดว่าใช้ประมาณ ", ""))}</span>
+          <span class="mv2-guide-metric-k">ระยะเวลาต่อเนื่อง</span>
+          <span class="mv2-guide-metric-v">${escapeHtml(durationContinuousBand)}</span>
         </div>
       </div>
-      <p class="mv2-guide-verdict-line">${escapeHtml(heroVerdictLine)}</p>
       <div class="mv2-guide-grade-lane" aria-label="เกรดเลน B ไป S">
         <div class="mv2-guide-grade-line">
           <span class="mv2-guide-grade-fill" style="width:${laneFillPct.toFixed(1)}%"></span>
-          <span class="mv2-guide-lane-pin is-today" style="left:${todayLanePos.toFixed(1)}%"></span>
-          <span class="mv2-guide-lane-pin is-fullset" style="left:${fullsetLanePos.toFixed(1)}%"></span>
-          <span class="mv2-guide-lane-pin is-ceiling" style="left:${ceilingLanePos.toFixed(1)}%"></span>
+          <span class="mv2-guide-lane-pin is-peak" title="จังหวะที่แนะนำ (ซ้ำได้)" style="left:${todayLanePos.toFixed(1)}%"></span>
+          <span class="mv2-guide-lane-pin is-continuous" title="ถ้าทำต่อเนื่อง" style="left:${fullsetLanePos.toFixed(1)}%"></span>
+          <span class="mv2-guide-lane-pin is-ceiling" title="เพดานรอบนี้" style="left:${ceilingLanePos.toFixed(1)}%"></span>
         </div>
         <div class="mv2-guide-grade-stops">
           <span class="mv2-guide-grade-stop is-active">B</span>
           <span class="mv2-guide-grade-stop ${progressTargetGrade === "A" || progressTargetGrade === "S" ? "is-active" : ""}">A</span>
           <span class="mv2-guide-grade-stop ${progressTargetGrade === "S" ? "is-active" : ""}">S</span>
         </div>
-        <div class="mv2-guide-horizons">
-          <div class="mv2-guide-horizon">
-            <span class="mv2-guide-horizon-k">วันนี้</span>
-            <span class="mv2-guide-horizon-v">${escapeHtml(todayHorizon)}</span>
-          </div>
-          <div class="mv2-guide-horizon">
-            <span class="mv2-guide-horizon-k">ครบชุด</span>
-            <span class="mv2-guide-horizon-v">${escapeHtml(`${fullsetMark} · ${fullsetHorizon}`)}</span>
-          </div>
-          <div class="mv2-guide-horizon">
-            <span class="mv2-guide-horizon-k">เพดานรอบนี้</span>
-            <span class="mv2-guide-horizon-v">${escapeHtml(ceilingHorizon)}</span>
-          </div>
+      </div>
+      <div class="mv2-guide-horizon-stack" aria-label="สามขอบเขต">
+        <div class="mv2-guide-horizon-card">
+          <span class="mv2-guide-horizon-card-k">ใช้เด่นสุด</span>
+          <span class="mv2-guide-horizon-card-line">${escapeHtml(stepOneAnswer)}</span>
+          ${useModeLabel ? `<span class="mv2-guide-horizon-card-mode">${escapeHtml(useModeLabel)}</span>` : ""}
+          <p class="mv2-guide-horizon-card-hint">จังหวะที่แนะนำซ้ำได้ ไม่ผูกกับวันเดียว</p>
+        </div>
+        <div class="mv2-guide-horizon-card">
+          <span class="mv2-guide-horizon-card-k">ถ้าทำต่อเนื่อง</span>
+          <span class="mv2-guide-horizon-card-line">${escapeHtml(continuousHorizonMain)}</span>
+          <p class="mv2-guide-horizon-card-sub">${escapeHtml(continuousHorizonSub)}</p>
+        </div>
+        <div class="mv2-guide-horizon-card mv2-guide-horizon-card--ceiling">
+          <span class="mv2-guide-horizon-card-k">เพดานรอบนี้</span>
+          <span class="mv2-guide-horizon-card-line">${escapeHtml(ceilingHorizon)}</span>
+          ${ceilingHorizonSub ? `<p class="mv2-guide-horizon-card-sub">${escapeHtml(ceilingHorizonSub)}</p>` : ""}
         </div>
       </div>
-      ${useModeLabel ? `<p class="mv2-guide-mode">${escapeHtml(useModeLabel)}</p>` : ""}
-      <div class="mv2-guide-steps" aria-label="ขั้นตอนแนะนำ">
-        <div class="mv2-guide-step">
-          <div class="mv2-guide-step-k"><span aria-hidden="true">◷</span> Step 1 · ใช้วันไหน</div>
-          <div class="mv2-guide-step-v">${escapeHtml(stepOneAnswer)}</div>
-          <div class="mv2-guide-step-d">ใช้ในช่วงที่ชิ้นนี้ตอบกับคุณได้ดีที่สุด</div>
+      <div class="mv2-guide-buff-table mv2-guide-belief" role="list" aria-label="กติกาเพิ่มพลังงาน">
+        <div class="mv2-guide-buff-title">กติกาเพิ่มพลังงาน</div>
+        <div class="mv2-guide-belief-tier" role="listitem">
+          <span class="mv2-guide-belief-k">ระยะสั้น</span>
+          <span class="mv2-guide-belief-v">อธิษฐาน / ตั้งจิต · ผลเร็ว แต่เพิ่มน้อย</span>
         </div>
-        <div class="mv2-guide-step">
-          <div class="mv2-guide-step-k"><span aria-hidden="true">✦</span> Step 2 · ถ้าใช้ถูกจังหวะ</div>
-          <div class="mv2-guide-step-v">สวด/ภาวนาก่อนใช้ 3–5 นาที</div>
-          <div class="mv2-guide-step-d">ตั้งจิตก่อนใช้ หนุนเพิ่มประมาณ +2% ถึง +3%</div>
+        <div class="mv2-guide-belief-tier" role="listitem">
+          <span class="mv2-guide-belief-k">ระยะกลาง</span>
+          <span class="mv2-guide-belief-v">ใช้วันไหน · ใช้ตามวันเวลาแนะนำ + สวดสั้น + ตั้งจิต · ถ้าใช้ถูกจังหวะ ต้องมีวินัย และเห็นผลเป็นช่วง</span>
         </div>
-        <div class="mv2-guide-step">
-          <div class="mv2-guide-step-k"><span aria-hidden="true">⟡</span> Step 3 · ทางไปสู่ตัว top</div>
-          <div class="mv2-guide-step-v">ใช้ต่อเนื่องและอย่าขาดช่วง</div>
-          <div class="mv2-guide-step-d">${escapeHtml(guideTopExplain)}</div>
+        <div class="mv2-guide-belief-tier" role="listitem">
+          <span class="mv2-guide-belief-k">ระยะยาว</span>
+          <span class="mv2-guide-belief-v">สวดมนต์ + สมาธิต่อเนื่อง · ใช้เวลาเป็นสัปดาห์ถึงเดือน แต่ให้น้ำหนักสูงสุด</span>
         </div>
+        <p class="mv2-guide-belief-note">ผ่านพิธีปลุกเสก / ผ่านการอธิษฐานต่อเนื่อง · บูชาต่อเนื่อง / ผ่านพิธี · โบนัสพิเศษ ไม่ใช่ base rule ของทุกชิ้น</p>
       </div>
       <div class="mv2-guide-bottom">
         <p class="mv2-guide-bonus-total">${escapeHtml(
@@ -746,15 +698,6 @@ export function renderAmuletReportV2Html(payload) {
         <div class="mv2-guide-boost-wrap">
           <div class="mv2-guide-gauge" style="--mv2-guide-gauge-pct:${Math.max(0, Math.min(100, guideBoostTotal)).toFixed(1)}">
             <div class="mv2-guide-gauge-core">+${escapeHtml(String(guideBoostTotal))}%<span>โบนัสจังหวะ</span></div>
-          </div>
-          <div class="mv2-guide-buff-table" role="list" aria-label="วิธีบวกเพิ่ม">
-            <div class="mv2-guide-buff-title">วิธีบวกเพิ่ม</div>
-            ${guideBoostBreakdown
-              .map(
-                (it) =>
-                  `<div class="mv2-guide-buff-row" role="listitem"><span>${escapeHtml(it.label)}</span><span>+${escapeHtml(String(it.value))}%</span></div>`,
-              )
-              .join("")}
           </div>
         </div>
         <div class="mv2-guide-progress">
@@ -768,6 +711,7 @@ export function renderAmuletReportV2Html(payload) {
           <p class="mv2-guide-progress-inline">${escapeHtml(`${progressCurrentScore} → ${progressTargetScore} ${progressTargetGrade}`)}</p>
         </div>
         <p class="mv2-guide-progress-note">เป็นค่าประมาณการจากการใช้งานตามจังหวะและความเชื่อ ไม่ได้เปลี่ยนคะแนนหลักของรายงาน</p>
+        <p class="mv2-guide-closing">${escapeHtml(heroVerdictLine)}</p>
       </div>
     </section>`;
 
@@ -1241,6 +1185,109 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.3;
       color: var(--mv2a-text-body);
       font-weight: 640;
+    }
+    .mv2-guide-lane-pin.is-peak {
+      background: rgba(184, 135, 27, 0.88);
+    }
+    .mv2-guide-lane-pin.is-continuous {
+      background: #e8c547;
+    }
+    .mv2-guide-horizon-stack {
+      display: grid;
+      gap: 0.18rem;
+      margin: 0.22rem 0 0.28rem;
+    }
+    .mv2-guide-horizon-card {
+      border-radius: 9px;
+      border: 1px solid rgba(184, 135, 27, 0.16);
+      background: rgba(184, 135, 27, 0.05);
+      padding: 0.28rem 0.34rem 0.24rem;
+    }
+    .mv2-guide-horizon-card--ceiling {
+      border-color: rgba(184, 135, 27, 0.26);
+      background: linear-gradient(165deg, rgba(184, 135, 27, 0.1) 0%, rgba(184, 135, 27, 0.04) 100%);
+    }
+    .mv2-guide-horizon-card-k {
+      display: block;
+      margin: 0 0 0.1rem;
+      font-size: 0.58rem;
+      line-height: 1.2;
+      color: var(--mv2a-muted);
+      font-weight: 750;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .mv2-guide-horizon-card-line {
+      display: block;
+      font-size: 0.78rem;
+      line-height: 1.28;
+      color: var(--mv2a-text-body);
+      font-weight: 760;
+    }
+    .mv2-guide-horizon-card-mode {
+      display: block;
+      margin-top: 0.08rem;
+      font-size: 0.64rem;
+      line-height: 1.3;
+      color: var(--mv2a-gold-dim);
+      font-weight: 650;
+    }
+    .mv2-guide-horizon-card-hint {
+      margin: 0.12rem 0 0;
+      font-size: 0.56rem;
+      line-height: 1.32;
+      color: var(--mv2a-muted);
+      font-weight: 520;
+    }
+    .mv2-guide-horizon-card-sub {
+      margin: 0.1rem 0 0;
+      font-size: 0.6rem;
+      line-height: 1.34;
+      color: var(--mv2a-muted);
+      font-weight: 560;
+    }
+    .mv2-guide-belief {
+      margin-bottom: 0.28rem;
+    }
+    .mv2-guide-belief-tier {
+      display: grid;
+      gap: 0.06rem;
+      padding: 0.2rem 0.24rem;
+      border-radius: 8px;
+      border: 1px solid rgba(184, 135, 27, 0.1);
+      margin-bottom: 0.12rem;
+      background: rgba(184, 135, 27, 0.03);
+    }
+    .mv2-guide-belief-tier:last-of-type {
+      margin-bottom: 0.14rem;
+    }
+    .mv2-guide-belief-k {
+      font-size: 0.6rem;
+      line-height: 1.2;
+      color: var(--mv2a-gold-dim);
+      font-weight: 750;
+    }
+    .mv2-guide-belief-v {
+      font-size: 0.6rem;
+      line-height: 1.36;
+      color: var(--mv2a-text-body);
+      font-weight: 580;
+    }
+    .mv2-guide-belief-note {
+      margin: 0;
+      font-size: 0.56rem;
+      line-height: 1.38;
+      color: var(--mv2a-muted);
+      font-weight: 520;
+      font-style: italic;
+    }
+    .mv2-guide-closing {
+      margin: 0.28rem 0 0;
+      font-size: 0.72rem;
+      line-height: 1.32;
+      font-weight: 720;
+      text-align: center;
+      color: var(--mv2a-text-body);
     }
     .mv2-guide-mode {
       margin: 0 0 0.24rem;
