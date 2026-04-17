@@ -420,14 +420,32 @@ export function renderAmuletReportV2Html(payload) {
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
       : "ไม่มี";
 
-  const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
-    .map((r, i) => {
-      const lead = i === 0 ? " mv2-gsum-row--lead" : "";
-      const tension =
-        /** @type {{ rowKind?: string }} */ (r).rowKind === "tension"
-          ? " mv2-gsum-row--tension"
-          : "";
-      return `<div class="mv2-gsum-row${lead}${tension}"><span class="mv2-gsum-k">${escapeHtml(r.label)}</span><span class="mv2-gsum-v">${escapeHtml(r.value)}</span></div>`;
+  const lifeRowsByLabel = new Map(
+    (vm.lifeAreaDetail?.rows || []).map((row) => [String(row.label || "").trim(), String(row.blurb || "").trim()]),
+  );
+  const axisFromSummaryValue = (v) => String(v || "").split("·")[0].trim();
+  const compactExplain = (v, max = 84) => {
+    const s = String(v || "").replace(/\s+/g, " ").trim();
+    return s.length > max ? `${s.slice(0, max - 1).trim()}…` : s;
+  };
+  const graphSummaryHtml = `<div class="mv2-gsumx-items">${vm.graphSummary.rows
+    .map((r) => {
+      const value = String(r.value || "").trim();
+      const axisLabel = axisFromSummaryValue(value);
+      const lifeBlurb = String(lifeRowsByLabel.get(axisLabel) || "").trim();
+      let explain = "อ่านคู่กับการ์ดตัดสินใจเพื่อดูภาพรวมการใช้ชิ้นนี้";
+      if (r.label === "พลังเด่น") {
+        explain = lifeBlurb || "เป็นแรงหลักที่ผลักการใช้งานของชิ้นนี้ให้ชัดขึ้น";
+      } else if (r.label === "เข้ากับคุณที่สุด") {
+        explain = lifeBlurb
+          ? `ตรงกับพื้นของคุณมากที่สุด · ${lifeBlurb}`
+          : "ตรงกับพื้นของคุณมากที่สุด ใช้คู่กันได้ดี";
+      } else if (r.label === "ควรค่อย ๆ ไป") {
+        explain = value.includes("อย่าเร่ง")
+          ? "ถ้าใช้แรงเกินไปอาจกลบจังหวะที่เข้ากับคุณ"
+          : "ค่อย ๆ ใช้เพื่อไม่ให้กลบจังหวะหลักที่ส่งกับคุณ";
+      }
+      return `<div class="mv2-gsumx-item"><div class="mv2-gsumx-k">${escapeHtml(String(r.label || "").trim())}</div><div class="mv2-gsumx-v">${escapeHtml(value)}</div><p class="mv2-gsumx-sub">${escapeHtml(compactExplain(explain))}</p></div>`;
     })
     .join("")}</div>`;
 
@@ -482,57 +500,54 @@ export function renderAmuletReportV2Html(payload) {
     </section>`;
   })();
 
-  const lifeRowsHtml = vm.lifeAreaDetail.rows
-    .map(
-      (row, idx) => `
-    <div class="mv2-life-row mv2-life-row--r${idx + 1}" data-axis="${escapeHtml(row.key)}">
-      <span class="mv2-life-name">${escapeHtml(row.label)}</span>
-      <span class="mv2-life-score">${escapeHtml(String(row.score))}</span>
-      <span class="mv2-life-blurb">${escapeHtml(row.blurb)}</span>
-    </div>`,
-    )
-    .join("");
-
   const usageDisclaimer = escapeHtml(vm.usageCaution.disclaimer || "");
 
   const ts = vm.timingSection;
-  const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
-  const faithProgressCardHtml = buildFaithProgressCardHtml(vm.faithProgressCard);
+  const fp = vm.faithProgressCard;
   const tac = /** @type {{ title?: string; recommendedWeekday?: string; recommendedWeekdayKey?: string; secondaryWeekday?: string; secondaryWeekdayKey?: string; confidence?: string; weekdayTip?: string; scores?: Record<string, number>; showSecondaryChip?: boolean; reasonShort?: string; actionLine?: string } | null} */ (
     vm.timingActionCard
   );
-  const useDayBarsInnerHtml = tac && tac.scores ? buildAmuletUseDayBarsInnerHtml(tac) : "";
-  const useDayBarsBlockHtml =
-    useDayBarsInnerHtml.trim() !== ""
-      ? `<div class="mv2-use-day-bars" aria-labelledby="mv2-use-day-bars-h">
-      <div id="mv2-use-day-bars-h" class="mv2-use-day-bars-h">คะแนนวันทั้งสัปดาห์</div>
-      <div class="mv2-use-day-bars-row" role="list" aria-label="คะแนนวันทั้งสัปดาห์">
-        ${useDayBarsInnerHtml}
+  const useDayLabel = String(tac?.recommendedWeekday || ts?.topWeekdayLabel || "—").trim();
+  const useTimeLabel = String(ts?.topWindowLabel || "—").trim();
+  const useModeLabel = String(ts?.ritualLine || "").trim();
+  const boostPercent =
+    ts?.timingBoost && Number.isFinite(Number(ts.timingBoost.percent))
+      ? Number(ts.timingBoost.percent)
+      : null;
+  const fmt10 = (n) =>
+    n != null && Number.isFinite(Number(n)) ? Number(n).toFixed(2) : "—";
+  const estDays =
+    fp && Number.isFinite(Number(fp.estimatedDaysToNextTier))
+      ? ` · ประมาณ ${Math.max(1, Math.round(Number(fp.estimatedDaysToNextTier)))} วัน`
+      : "";
+  const guideCardHtml = `<section class="mv2-card mv2-card--guide" aria-labelledby="mv2-guide-h">
+      <h2 id="mv2-guide-h">คู่มือใช้ชิ้นนี้</h2>
+      <div class="mv2-guide-block">
+        <div class="mv2-guide-k">ใช้วันไหน</div>
+        <div class="mv2-guide-main">${escapeHtml(`${useDayLabel} · ${useTimeLabel}`)}</div>
+        <div class="mv2-guide-sub">${escapeHtml(useModeLabel || String(tac?.weekdayTip || "ใช้แบบค่อย ๆ และสม่ำเสมอ").trim())}</div>
       </div>
-    </div>`
-      : "";
-  const useDaySecondaryChipHtml =
-    tac &&
-    tac.showSecondaryChip &&
-    String(tac.secondaryWeekday || "").trim() &&
-    String(tac.secondaryWeekday).trim() !== String(tac.recommendedWeekday || "").trim()
-      ? `<div class="mv2-use-day-chip-row" role="group" aria-label="วันรอง">
-      <span class="mv2-use-day-chip-k">วันรอง</span>
-      <span class="mv2-use-day-chip-v">${escapeHtml(String(tac.secondaryWeekday).trim())}</span>
-    </div>`
-      : "";
-  const timingActionCardHtml =
-    tac && String(tac.recommendedWeekday || "").trim()
-      ? `<section class="mv2-card mv2-card--use-day" aria-labelledby="mv2-use-day-h">
-      <h2 id="mv2-use-day-h">${escapeHtml(tac.title || "วันที่ควรใช้")}</h2>
-      <p class="mv2-use-day-main">${escapeHtml(String(tac.recommendedWeekday || "").trim())}</p>
-      ${tac.weekdayTip ? `<p class="mv2-use-day-weekday-tip">${escapeHtml(String(tac.weekdayTip).trim())}</p>` : ""}
-      ${tac.reasonShort ? `<p class="mv2-use-day-reason">${escapeHtml(tac.reasonShort)}</p>` : ""}
-      ${tac.actionLine ? `<p class="mv2-use-day-action">${escapeHtml(tac.actionLine)}</p>` : ""}
-      ${useDaySecondaryChipHtml}
-      ${useDayBarsBlockHtml}
-    </section>`
-      : "";
+      <div class="mv2-guide-block">
+        <div class="mv2-guide-k">ถ้าใช้ถูกจังหวะ</div>
+        <div class="mv2-guide-main">${escapeHtml(
+          boostPercent != null ? `โบนัสจังหวะประมาณ +${Math.round(boostPercent)}%` : "ใช้ตามจังหวะที่แนะนำจะช่วยหนุนเพิ่มเล็กน้อย",
+        )}</div>
+        <div class="mv2-guide-sub">ใช้ตามวันและช่วงเวลาแนะนำ พร้อมตั้งจิตก่อนใช้ จะช่วยหนุนพลังได้อีกเล็กน้อย (แสดงผลเท่านั้น)</div>
+      </div>
+      <div class="mv2-guide-block">
+        <div class="mv2-guide-k">ทางไปสู่ตัว top</div>
+        <div class="mv2-guide-main">${escapeHtml(
+          fp
+            ? `${String(fp.baseGrade || "—").trim()} → ${String(fp.projectedGrade || "—").trim()}${estDays}`
+            : "—",
+        )}</div>
+        <div class="mv2-guide-sub">${escapeHtml(
+          fp
+            ? `คะแนน ${fmt10(fp.baseScore10)} → ${fmt10(fp.projectedScore10)} / 10 · ${String(fp.scanNextHint || "").trim()}`
+            : "สแกนเทียบเพิ่มอีก 2–3 ชิ้นเพื่อหาตัวที่ขึ้นได้ไวกว่า",
+        )}</div>
+      </div>
+    </section>`;
 
   const subtypeLabel = h.subtypeLabel || "พระเครื่อง";
   /** Shorter tab / share title — big `<h1>` stays the main on-page anchor */
@@ -812,10 +827,77 @@ export function renderAmuletReportV2Html(payload) {
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid var(--mv2a-card-border); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; box-shadow: var(--mv2a-card-elev); }
     .mv2-card--gsum-follow { margin-top: 0.32rem; padding-top: 0.7rem; padding-bottom: 0.72rem; }
     .mv2-card--gsum-follow > h2 { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.92; }
+    .mv2-gsumx-items { display: grid; gap: 0.45rem; }
+    .mv2-gsumx-item {
+      padding: 0.46rem 0.56rem;
+      border-radius: 10px;
+      border: 1px solid rgba(184, 135, 27, 0.14);
+      background: rgba(184, 135, 27, 0.04);
+    }
+    .mv2-gsumx-k {
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mv2a-muted);
+      margin-bottom: 0.18rem;
+    }
+    .mv2-gsumx-v {
+      font-size: 0.82rem;
+      line-height: 1.3;
+      font-weight: 750;
+      color: var(--mv2a-text-body);
+      margin-bottom: 0.12rem;
+    }
+    .mv2-gsumx-sub {
+      margin: 0;
+      font-size: 0.68rem;
+      line-height: 1.36;
+      color: var(--mv2a-muted);
+    }
     .mv2-card--decision {
       margin-top: 0.38rem;
       padding: 0.68rem 0.88rem 0.72rem;
       border-left: 3px solid rgba(184, 135, 27, 0.38);
+    }
+    .mv2-card--guide {
+      margin-top: 0.45rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.42);
+      padding: 0.72rem 0.82rem;
+    }
+    .mv2-card--guide > h2 {
+      margin: 0 0 0.45rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--mv2a-gold-dim);
+    }
+    .mv2-guide-block {
+      padding: 0.45rem 0.5rem;
+      border-radius: 10px;
+      border: 1px solid rgba(184, 135, 27, 0.14);
+      background: rgba(184, 135, 27, 0.045);
+      margin-bottom: 0.4rem;
+    }
+    .mv2-guide-block:last-child { margin-bottom: 0; }
+    .mv2-guide-k {
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mv2a-muted);
+      margin-bottom: 0.16rem;
+    }
+    .mv2-guide-main {
+      font-size: 0.8rem;
+      line-height: 1.3;
+      font-weight: 750;
+      color: var(--mv2a-text-body);
+      margin-bottom: 0.12rem;
+    }
+    .mv2-guide-sub {
+      font-size: 0.66rem;
+      line-height: 1.36;
+      color: var(--mv2a-muted);
     }
     .mv2-card--top-finder {
       background: linear-gradient(
@@ -2047,12 +2129,36 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-gsum-row--tension {
       background: rgba(232, 197, 71, 0.06);
     }
+    html.mv2a-theme-dark .mv2-gsumx-item {
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.16);
+    }
+    html.mv2a-theme-dark .mv2-gsumx-v {
+      color: rgba(241, 245, 249, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-gsumx-sub {
+      color: rgba(148, 163, 184, 0.88);
+    }
     html.mv2a-theme-dark .mv2-card--decision {
       border-left-color: rgba(232, 197, 71, 0.42);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
     }
     html.mv2a-theme-dark .mv2-card--top-finder {
       background: linear-gradient(145deg, rgba(28, 26, 22, 0.5) 0%, rgba(20, 22, 28, 0.92) 100%);
+    }
+    html.mv2a-theme-dark .mv2-card--guide {
+      border-left-color: rgba(232, 197, 71, 0.42);
+      background: rgba(20, 22, 28, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-guide-block {
+      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(232, 197, 71, 0.18);
+    }
+    html.mv2a-theme-dark .mv2-guide-main {
+      color: rgba(241, 245, 249, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-guide-sub {
+      color: rgba(148, 163, 184, 0.88);
     }
     html.mv2a-theme-dark .mv2-decision-verdict {
       color: rgba(241, 245, 249, 0.94);
@@ -2127,17 +2233,8 @@ export function renderAmuletReportV2Html(payload) {
     </section>
 
     ${decisionCardHtml}
-
-    <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
-      <h2 id="mv2-life-h">พลังทั้ง 6 ด้าน</h2>
-      <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
-      <div class="mv2-life-rows">${lifeRowsHtml}</div>
-    </section>
-
     ${dailyOwnerCardHtml}
-    ${timingActionCardHtml}
-    ${timingCardHtml}
-    ${faithProgressCardHtml}
+    ${guideCardHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์รายงาน</h2>

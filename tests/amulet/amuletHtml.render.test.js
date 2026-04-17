@@ -130,9 +130,9 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("คุ้มครอง</span> <span class=\"mv2a-radar-axis-n\">88"));
   assert.ok(html.includes("เมตตา</span> <span class=\"mv2a-radar-axis-n\">70"));
   assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
-  assert.ok(html.includes("พลังทั้ง 6 ด้าน"));
-  assert.ok(html.includes("เรียงจากคะแนนสูงไปต่ำ"));
-  assert.ok(html.includes("mv2-life-row"));
+  assert.ok(!html.includes('id="mv2-life-h"'));
+  assert.ok(!html.includes("เรียงจากคะแนนสูงไปต่ำ"));
+  assert.ok(!html.includes('class="mv2-life-row'));
   assert.ok(html.includes("พลังเด่น"));
   assert.ok(html.includes("สรุปผล"));
   assert.ok(html.includes("ชิ้นนี้ใช่กับคุณแค่ไหน"), "decision card: top-finder baseline");
@@ -145,36 +145,22 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(!html.includes('class="mv2-card mv2-card--owner-react"'), "owner-reaction card removed from layout");
   assert.ok(!html.includes('class="mv2-int-card"'), "interaction card removed from layout");
   assert.ok(html.includes('class="mv2a-footer-note"'));
-  assert.ok(html.includes("จังหวะเสริมพลัง"));
-  assert.ok(html.includes('class="mv2-timing-boost-row"'));
-  assert.ok(html.includes("โบนัสจังหวะ"));
-  assert.ok(html.includes("หนุนพลังได้ประมาณ"));
-  assert.ok(html.includes('class="mv2-card mv2-card--faith-progress"'));
-  assert.ok(!html.includes("เสริมพลังตามความเชื่อ"), "faith card subtitle hidden on page");
-  assert.ok(!html.includes('class="mv2-faith-progress-loop"'), "faith card: return-loop line omitted from HTML to reduce density");
-  assert.ok(!html.includes('class="mv2-faith-progress-item"'), "faith checklist omitted from HTML");
+  assert.ok(html.includes("คู่มือใช้ชิ้นนี้"));
+  assert.ok(html.includes('class="mv2-card mv2-card--guide"'));
+  assert.ok(html.includes("ใช้วันไหน"));
+  assert.ok(html.includes("ถ้าใช้ถูกจังหวะ"));
   assert.ok(html.includes("ทางไปสู่ตัว top"));
-  assert.ok(html.includes('class="mv2-faith-progress-baseline"'));
-  assert.ok(html.includes('class="mv2-faith-progress-scan"'));
-  assert.ok(html.includes('class="mv2-card mv2-timing-card"'));
-  assert.ok(html.includes("mv2-et-strip--weekday"));
-  assert.ok(html.includes("mv2-et-strip--time"));
-  assert.ok(html.includes("mv2-et-pill-shape"));
-  assert.ok(html.includes("mv2-et-slot-bar"));
-  assert.ok(
-    html.includes("ช่วงที่พระเครื่องตอบกับจังหวะของคุณได้ดีที่สุด"),
-  );
+  assert.ok(html.includes("โบนัสจังหวะ"));
+  assert.ok(html.includes(" / 10 · "));
+  assert.ok(!html.includes('class="mv2-card mv2-card--faith-progress"'));
+  assert.ok(!html.includes('class="mv2-card mv2-timing-card"'));
+  assert.ok(!html.includes('class="mv2-card mv2-card--use-day"'));
+  assert.ok(!html.includes('class="mv2-et-strip mv2-et-strip--weekday"'));
+  assert.ok(!html.includes('class="mv2-et-strip mv2-et-strip--time"'));
   assert.ok(html.includes("ช่วงเช้า 07:00–10:59"));
-  assert.ok(html.includes("วันพฤหัสบดี"));
-  assert.ok(html.includes("วันส่งดี"));
-  assert.ok(html.includes("ช่วงเวลาที่ส่งดี"));
-  assert.ok(html.includes("แนวใช้ที่แนะนำ"));
-  assert.ok(html.includes("mv2-timing-mode-body"));
-  assert.ok(html.includes("หนุนพลัง"));
-  assert.ok(
-    html.includes("เสริมดวงให้ขึ้นง่าย"),
-    "timing hint follows engine practicalHint (confident, no disclaimer)",
-  );
+  assert.ok(html.includes(" · ช่วงเช้า 07:00–10:59"));
+  assert.ok(html.includes("ตั้งจิต"));
+  assert.ok(html.includes("แสดงผลเท่านั้น"));
   assert.ok(!html.includes("เป็นกรอบอ่าน"));
   assert.ok(!html.includes("ไม่การันตีฤกษ์"));
   assert.ok(!html.includes("ไม่การันตี"));
@@ -203,17 +189,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("Noto Sans Thai"));
   assert.ok(html.includes("ควรค่อย ๆ ไป"), "graph summary row 3: tension pace");
   assert.ok(html.includes("ภาพวัตถุที่ใช้ในการวิเคราะห์"));
-  assert.ok(html.includes("วันที่ควรใช้"));
-  assert.ok(html.includes('class="mv2-card mv2-card--use-day"'));
-  assert.ok(html.includes("mv2-use-day-main"));
-  assert.ok(
-    html.includes('class="mv2-use-day-weekday-tip"') && html.includes("ใช้วันนี้เมื่อ"),
-    "use-day card: per-weekday Thai tip line",
-  );
-  assert.ok(html.includes("คะแนนวันทั้งสัปดาห์"), "use-day card: weekly scores heading");
-  assert.ok(html.includes("mv2-use-day-bars-row"), "use-day card: mini vertical bars row");
-  assert.ok(html.includes("mv2-use-day-bar is-primary"), "use-day card: primary weekday bar");
-  assert.ok(html.includes("mv2-use-day-chip-k"), "use-day card: secondary weekday chip");
+  assert.ok(!html.includes("วันที่ควรใช้"));
   assert.ok(!html.includes('class="mv2-card mv2-card--int-near-graph"'));
   assert.ok(!html.includes("โค้ง"));
   assert.ok(!html.includes("ชิ้นนี้ทำให้คุณเด่นแบบไหน"), "object-reaction card not rendered");
