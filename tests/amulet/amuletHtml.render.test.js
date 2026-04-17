@@ -151,7 +151,10 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("ถ้าใช้ถูกจังหวะ"));
   assert.ok(html.includes("ทางไปสู่ตัว top"));
   assert.ok(html.includes("โบนัสจังหวะ"));
-  assert.ok(html.includes(" / 10 · "));
+  assert.ok(html.includes("คะแนนปัจจุบัน"));
+  assert.ok(html.includes("คะแนนคาดการณ์"));
+  assert.ok(html.includes("mv2-guide-buff-table"));
+  assert.ok(html.includes("บูชาต่อเนื่อง / ผ่านพิธี"));
   assert.ok(!html.includes('class="mv2-card mv2-card--faith-progress"'));
   assert.ok(!html.includes('class="mv2-card mv2-timing-card"'));
   assert.ok(!html.includes('class="mv2-card mv2-card--use-day"'));
@@ -160,7 +163,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("ช่วงเช้า 07:00–10:59"));
   assert.ok(html.includes(" · ช่วงเช้า 07:00–10:59"));
   assert.ok(html.includes("ตั้งจิต"));
-  assert.ok(html.includes("แสดงผลเท่านั้น"));
+  assert.ok(html.includes("ไม่ได้เปลี่ยนคะแนนหลักของรายงาน"));
   assert.ok(!html.includes("เป็นกรอบอ่าน"));
   assert.ok(!html.includes("ไม่การันตีฤกษ์"));
   assert.ok(!html.includes("ไม่การันตี"));
