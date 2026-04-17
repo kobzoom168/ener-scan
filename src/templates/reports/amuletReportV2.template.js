@@ -2128,13 +2128,13 @@ export function renderAmuletReportV2Html(payload) {
 
     ${decisionCardHtml}
 
-    ${dailyOwnerCardHtml}
-
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
       <h2 id="mv2-life-h">พลังทั้ง 6 ด้าน</h2>
       <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
       <div class="mv2-life-rows">${lifeRowsHtml}</div>
     </section>
+
+    ${dailyOwnerCardHtml}
     ${timingActionCardHtml}
     ${timingCardHtml}
     ${faithProgressCardHtml}
