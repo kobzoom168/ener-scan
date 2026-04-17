@@ -314,7 +314,7 @@ function buildFaithProgressCardHtml(fp) {
     .map(
       (it) => `<div class="mv2-faith-progress-item">
       <span class="mv2-faith-progress-item-label">${escapeHtml(it.label)}</span>
-      <span class="mv2-faith-progress-item-meta">สัดส่วน ${escapeHtml(String(it.percent))}% · หนุนได้ประมาณ +${escapeHtml(Number(it.dailyGain10).toFixed(3))}/วัน</span>
+      <span class="mv2-faith-progress-item-meta">${escapeHtml(String(it.percent))}% · ~+${escapeHtml(Number(it.dailyGain10).toFixed(2))}/วัน</span>
     </div>`,
     )
     .join("");
@@ -453,18 +453,18 @@ export function renderAmuletReportV2Html(payload) {
       vm.dailyOwnerCard
     );
     if (!d || !String(d.title || "").trim()) return "";
+    const boost = String(vm.todayObjectBoostLine || "").trim();
+    const boostBlock = boost
+      ? `<p class="mv2-daily-owner-object" role="note">${escapeHtml(boost)}</p>`
+      : "";
     return `<section class="mv2-card mv2-card--daily-owner" aria-labelledby="mv2-daily-owner-h">
       <h2 id="mv2-daily-owner-h" class="mv2-daily-owner-h">${escapeHtml(String(d.title).trim())}</h2>
       <p class="mv2-daily-owner-p">${escapeHtml(String(d.dailyTone || "").trim())}</p>
       <p class="mv2-daily-owner-p mv2-daily-owner-p--soft">${escapeHtml(String(d.dailyAdvice || "").trim())}</p>
       <p class="mv2-daily-owner-hint">${escapeHtml(String(d.dailyScanHint || "").trim())}</p>
+      ${boostBlock}
     </section>`;
   })();
-
-  const todayObjectBoostHtml =
-    vm.todayObjectBoostLine && String(vm.todayObjectBoostLine).trim()
-      ? `<p class="mv2-today-object-boost" role="note">${escapeHtml(String(vm.todayObjectBoostLine).trim())}</p>`
-      : "";
 
   const decisionCardHtml = (() => {
     const dc = /** @type {{ title?: string; keepGrade?: string; verdict?: string; reason?: string; baselineHint?: string; scanNextHint?: string } | null} */ (
@@ -493,8 +493,14 @@ export function renderAmuletReportV2Html(payload) {
         </div>
       </div>
       <p class="mv2-decision-reason">${escapeHtml(String(dc.reason || "").trim())}</p>
+      ${
+        baseH || scanH
+          ? `<div class="mv2-decision-secondary" role="group" aria-label="ตัวตั้งรอบนี้และขั้นต่อไป">
       ${baseH ? `<p class="mv2-decision-baseline">${escapeHtml(baseH)}</p>` : ""}
       ${scanH ? `<p class="mv2-decision-scan">${escapeHtml(scanH)}</p>` : ""}
+    </div>`
+          : ""
+      }
     </section>`;
   })();
 
@@ -844,11 +850,11 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-strip-cell--level .mv2-strip-v.level-grade--D { color: #8a7a67; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--none { color: var(--mv2a-muted); }
     .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid var(--mv2a-card-border); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; box-shadow: var(--mv2a-card-elev); }
-    .mv2-card--gsum-follow { margin-top: 0.35rem; padding-top: 0.75rem; padding-bottom: 0.78rem; }
+    .mv2-card--gsum-follow { margin-top: 0.32rem; padding-top: 0.7rem; padding-bottom: 0.72rem; }
     .mv2-card--gsum-follow > h2 { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.92; }
     .mv2-card--decision {
-      margin-top: 0.4rem;
-      padding: 0.72rem 0.9rem 0.8rem;
+      margin-top: 0.38rem;
+      padding: 0.68rem 0.88rem 0.72rem;
       border-left: 3px solid rgba(184, 135, 27, 0.38);
     }
     .mv2-card--top-finder {
@@ -936,33 +942,40 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.25;
     }
     .mv2-decision-reason {
-      margin: 0 0 0.42rem;
+      margin: 0 0 0.36rem;
       font-size: 0.74rem;
       line-height: 1.45;
       color: var(--mv2a-text-body);
       font-weight: 500;
     }
+    .mv2-decision-secondary {
+      margin-top: 0.08rem;
+      padding-top: 0.42rem;
+      border-top: 1px solid rgba(100, 92, 82, 0.1);
+    }
     .mv2-decision-baseline {
-      margin: 0 0 0.38rem;
-      padding: 0.4rem 0.5rem;
-      font-size: 0.68rem;
-      line-height: 1.42;
+      margin: 0 0 0.28rem;
+      padding: 0;
+      font-size: 0.63rem;
+      line-height: 1.38;
       color: var(--mv2a-muted);
       font-weight: 500;
-      border-radius: 8px;
-      background: rgba(184, 135, 27, 0.06);
-      border: 1px solid rgba(184, 135, 27, 0.14);
+      border-radius: 0;
+      background: transparent;
+      border: none;
+      opacity: 0.92;
     }
     .mv2-decision-scan {
       margin: 0;
-      padding: 0.42rem 0.5rem;
-      font-size: 0.68rem;
-      line-height: 1.42;
+      padding: 0;
+      font-size: 0.63rem;
+      line-height: 1.4;
       color: var(--mv2a-gold-dim);
-      font-weight: 650;
-      border-radius: 8px;
-      background: rgba(184, 135, 27, 0.07);
-      border: 1px dashed rgba(184, 135, 27, 0.32);
+      font-weight: 600;
+      border-radius: 0;
+      background: transparent;
+      border: none;
+      opacity: 0.9;
     }
     .mv2-decision-next {
       margin: 0;
@@ -1388,15 +1401,38 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-life-row:first-child { border-top: none; }
     .mv2-life-row:nth-child(odd) { background: var(--mv2a-life-row-alt); }
     .mv2-life-row--r1,
-    .mv2-life-row--r2 { padding-top: 0.52rem; padding-bottom: 0.52rem; font-size: 0.82rem; }
-    .mv2-life-row--r1 .mv2-life-name { font-weight: 700; font-size: 0.84rem; }
-    .mv2-life-row--r2 .mv2-life-name { font-weight: 650; }
-    .mv2-life-row--r1 .mv2-life-score { font-size: 0.8rem; }
-    .mv2-life-row--r2 .mv2-life-score { font-size: 0.78rem; }
+    .mv2-life-row--r2 {
+      padding-top: 0.55rem;
+      padding-bottom: 0.55rem;
+      font-size: 0.84rem;
+      border-top-color: rgba(0, 0, 0, 0.08);
+    }
+    .mv2-life-row--r1 .mv2-life-name { font-weight: 800; font-size: 0.86rem; letter-spacing: -0.01em; }
+    .mv2-life-row--r2 .mv2-life-name { font-weight: 700; font-size: 0.84rem; }
+    .mv2-life-row--r1 .mv2-life-score { font-size: 0.82rem; font-weight: 800; }
+    .mv2-life-row--r2 .mv2-life-score { font-size: 0.8rem; }
+    .mv2-life-row--r1 .mv2-life-blurb,
+    .mv2-life-row--r2 .mv2-life-blurb { opacity: 0.98; }
+    .mv2-life-row--r3,
+    .mv2-life-row--r4 {
+      opacity: 0.94;
+      font-size: 0.77rem;
+      padding-top: 0.4rem;
+      padding-bottom: 0.4rem;
+    }
     .mv2-life-row--r5,
-    .mv2-life-row--r6 { opacity: 0.78; padding-top: 0.36rem; padding-bottom: 0.36rem; font-size: 0.74rem; }
+    .mv2-life-row--r6 {
+      opacity: 0.72;
+      padding-top: 0.34rem;
+      padding-bottom: 0.34rem;
+      font-size: 0.72rem;
+    }
+    .mv2-life-row--r5 .mv2-life-name,
+    .mv2-life-row--r6 .mv2-life-name { font-weight: 550; }
+    .mv2-life-row--r5 .mv2-life-score,
+    .mv2-life-row--r6 .mv2-life-score { font-size: 0.72rem; font-weight: 650; }
     .mv2-life-row--r5 .mv2-life-blurb,
-    .mv2-life-row--r6 .mv2-life-blurb { opacity: 0.92; }
+    .mv2-life-row--r6 .mv2-life-blurb { opacity: 0.88; }
     .mv2-life-name { font-weight: 600; color: var(--mv2a-life-name); }
     .mv2-life-score { color: var(--mv2a-life-score); font-weight: 700; font-size: 0.76rem; text-align: right; }
     .mv2-life-blurb { color: var(--mv2a-life-blurb); line-height: 1.35; }
@@ -1427,29 +1463,30 @@ export function renderAmuletReportV2Html(payload) {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 0.28rem 0.45rem;
-      margin: 0.32rem 0 0;
+      gap: 0.22rem 0.38rem;
+      margin: 0.26rem 0 0;
+      opacity: 0.92;
     }
     .mv2-timing-boost-chip {
       display: inline-block;
-      padding: 0.1rem 0.38rem;
+      padding: 0.06rem 0.32rem;
       border-radius: 999px;
-      font-size: 0.58rem;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      color: rgba(92, 66, 10, 0.92);
-      background: rgba(184, 135, 27, 0.12);
-      border: 1px solid rgba(184, 135, 27, 0.22);
-      line-height: 1.2;
+      font-size: 0.52rem;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      color: rgba(92, 66, 10, 0.78);
+      background: rgba(184, 135, 27, 0.07);
+      border: 1px solid rgba(184, 135, 27, 0.14);
+      line-height: 1.18;
     }
     .mv2-timing-boost-micro {
       flex: 1 1 12rem;
       min-width: 0;
-      font-size: 0.58rem;
-      line-height: 1.32;
+      font-size: 0.54rem;
+      line-height: 1.3;
       color: var(--mv2a-muted);
-      font-weight: 450;
-      opacity: 0.88;
+      font-weight: 400;
+      opacity: 0.82;
     }
     .mv2-timing-trends { display: grid; gap: 0.55rem; }
     .mv2-timing-trend {
@@ -1789,42 +1826,42 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-muted);
     }
     .mv2-card--daily-owner {
-      margin: 0.45rem 0 0.35rem;
-      padding: 0.65rem 0.85rem 0.72rem;
+      margin: 0.4rem 0 0.32rem;
+      padding: 0.55rem 0.78rem 0.62rem;
       border-left: 2px solid rgba(184, 135, 27, 0.26);
     }
     .mv2-card--daily-owner > h2.mv2-daily-owner-h {
-      font-size: 0.72rem;
-      margin: 0 0 0.35rem;
+      font-size: 0.7rem;
+      margin: 0 0 0.28rem;
       font-weight: 700;
       letter-spacing: 0.02em;
       color: var(--mv2a-muted);
     }
     .mv2-daily-owner-p {
-      margin: 0 0 0.22rem;
-      font-size: 0.8rem;
-      line-height: 1.42;
+      margin: 0 0 0.18rem;
+      font-size: 0.77rem;
+      line-height: 1.36;
       color: var(--mv2a-text-body);
     }
     .mv2-daily-owner-p--soft {
-      font-size: 0.76rem;
+      font-size: 0.72rem;
+      line-height: 1.34;
       color: var(--mv2a-muted);
     }
     .mv2-daily-owner-hint {
-      margin: 0.28rem 0 0;
-      font-size: 0.72rem;
-      line-height: 1.38;
+      margin: 0.18rem 0 0;
+      font-size: 0.68rem;
+      line-height: 1.34;
       color: var(--mv2a-muted);
     }
-    .mv2-today-object-boost {
-      margin: 0.35rem 0 0;
-      padding: 0.42rem 0.65rem;
-      font-size: 0.76rem;
-      line-height: 1.4;
+    .mv2-daily-owner-object {
+      margin: 0.42rem 0 0;
+      padding-top: 0.38rem;
+      border-top: 1px solid rgba(100, 92, 82, 0.12);
+      font-size: 0.66rem;
+      line-height: 1.36;
       color: var(--mv2a-muted);
-      background: rgba(184, 135, 27, 0.045);
-      border-radius: 8px;
-      border-left: 2px solid rgba(184, 135, 27, 0.2);
+      font-weight: 450;
     }
     html.mv2a-theme-dark .mv2-meta-block {
       background: rgba(232, 197, 71, 0.06);
@@ -1844,38 +1881,37 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-daily-owner-p--soft {
       color: rgba(148, 163, 184, 0.9);
     }
-    html.mv2a-theme-dark .mv2-today-object-boost {
-      background: rgba(232, 197, 71, 0.05);
-      border-left-color: rgba(232, 197, 71, 0.26);
-      color: rgba(203, 213, 225, 0.9);
+    html.mv2a-theme-dark .mv2-daily-owner-object {
+      border-top-color: rgba(148, 163, 184, 0.14);
+      color: rgba(203, 213, 225, 0.82);
     }
     .mv2-card--faith-progress {
-      margin: 0.5rem 0 0.4rem;
-      padding: 0.68rem 0.82rem 0.78rem;
-      border-left: 3px solid rgba(184, 135, 27, 0.5);
+      margin: 0.46rem 0 0.36rem;
+      padding: 0.58rem 0.75rem 0.68rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.48);
       background: linear-gradient(
         165deg,
-        rgba(255, 252, 245, 0.95) 0%,
-        rgba(252, 250, 246, 1) 40%,
-        rgba(245, 240, 228, 0.9) 100%
+        rgba(255, 252, 245, 0.92) 0%,
+        rgba(252, 250, 246, 0.98) 45%,
+        rgba(245, 240, 228, 0.88) 100%
       );
-      box-shadow: 0 2px 8px rgba(80, 58, 16, 0.08);
+      box-shadow: 0 1px 4px rgba(80, 58, 16, 0.06);
     }
     .mv2-faith-progress-top {
       display: flex;
       align-items: flex-start;
-      gap: 0.62rem;
-      margin-bottom: 0.48rem;
+      gap: 0.55rem;
+      margin-bottom: 0.4rem;
     }
     .mv2-faith-progress-grade {
       flex-shrink: 0;
       display: flex;
       align-items: center;
-      gap: 0.28rem;
-      font-size: 1.35rem;
+      gap: 0.24rem;
+      font-size: 1.52rem;
       font-weight: 800;
       line-height: 1;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.03em;
     }
     .mv2-faith-progress-base {
       color: var(--mv2a-muted);
@@ -1884,21 +1920,22 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-faith-progress-arrow {
       color: var(--mv2a-gold);
       font-weight: 700;
-      font-size: 1.1rem;
-      opacity: 0.9;
+      font-size: 1.18rem;
+      opacity: 0.92;
     }
     .mv2-faith-progress-next {
       color: var(--mv2a-gold-dim);
-      text-shadow: 0 0 12px rgba(184, 135, 27, 0.25);
+      text-shadow: 0 0 14px rgba(184, 135, 27, 0.28);
       font-variant-numeric: tabular-nums;
     }
     .mv2-faith-progress-copy { flex: 1; min-width: 0; }
     .mv2-faith-progress-copy h2 {
       margin: 0;
-      font-size: 0.88rem;
-      font-weight: 800;
+      font-size: 0.82rem;
+      font-weight: 700;
       color: var(--mv2a-text);
-      line-height: 1.25;
+      line-height: 1.22;
+      opacity: 0.92;
     }
     .mv2-faith-progress-subtitle {
       margin: 0.12rem 0 0;
@@ -1910,101 +1947,101 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.32;
     }
     .mv2-faith-progress-lead {
-      margin: 0 0 0.42rem;
-      font-size: 0.72rem;
-      line-height: 1.38;
+      margin: 0 0 0.34rem;
+      font-size: 0.7rem;
+      line-height: 1.34;
       color: var(--mv2a-text-body);
       font-weight: 600;
     }
     .mv2-faith-progress-baseline {
-      margin: 0 0 0.32rem;
-      font-size: 0.68rem;
-      line-height: 1.36;
+      margin: 0 0 0.26rem;
+      font-size: 0.65rem;
+      line-height: 1.32;
       color: var(--mv2a-muted);
       font-weight: 500;
-      padding: 0.32rem 0.42rem;
-      border-radius: 8px;
-      background: rgba(184, 135, 27, 0.05);
-      border: 1px solid rgba(184, 135, 27, 0.12);
+      padding: 0.26rem 0.34rem;
+      border-radius: 7px;
+      background: rgba(184, 135, 27, 0.04);
+      border: 1px solid rgba(184, 135, 27, 0.1);
     }
     .mv2-faith-progress-scan {
-      margin: 0 0 0.4rem;
-      font-size: 0.68rem;
-      line-height: 1.36;
+      margin: 0 0 0.32rem;
+      font-size: 0.65rem;
+      line-height: 1.32;
       color: var(--mv2a-gold-dim);
-      font-weight: 650;
-      padding: 0.34rem 0.42rem;
-      border-radius: 8px;
-      background: rgba(184, 135, 27, 0.06);
-      border: 1px dashed rgba(184, 135, 27, 0.28);
+      font-weight: 600;
+      padding: 0.26rem 0.34rem;
+      border-radius: 7px;
+      background: rgba(184, 135, 27, 0.045);
+      border: 1px dashed rgba(184, 135, 27, 0.22);
     }
     .mv2-faith-progress-metrics {
       display: grid;
-      gap: 0.22rem;
-      margin: 0 0 0.42rem;
-      padding: 0.38rem 0.48rem;
-      border-radius: 9px;
-      background: rgba(184, 135, 27, 0.06);
-      border: 1px solid rgba(184, 135, 27, 0.15);
-      font-size: 0.68rem;
-      line-height: 1.32;
+      gap: 0.18rem;
+      margin: 0 0 0.34rem;
+      padding: 0.32rem 0.4rem;
+      border-radius: 8px;
+      background: rgba(184, 135, 27, 0.045);
+      border: 1px solid rgba(184, 135, 27, 0.12);
+      font-size: 0.64rem;
+      line-height: 1.28;
       color: var(--mv2a-text-body);
       font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
     .mv2-faith-progress-bar {
-      height: 7px;
+      height: 6px;
       border-radius: 999px;
-      background: rgba(184, 135, 27, 0.1);
+      background: rgba(184, 135, 27, 0.09);
       overflow: hidden;
-      margin-bottom: 0.48rem;
+      margin-bottom: 0.4rem;
     }
     .mv2-faith-progress-bar-fill {
       display: block;
       height: 100%;
       border-radius: inherit;
       background: linear-gradient(90deg, #c9a132 0%, #e8c547 55%, #f0e0a8 100%);
-      box-shadow: 0 0 8px rgba(184, 135, 27, 0.35);
+      box-shadow: 0 0 5px rgba(184, 135, 27, 0.22);
       min-width: 4%;
     }
     .mv2-faith-progress-items {
       display: flex;
       flex-direction: column;
-      gap: 0.26rem;
-      margin-bottom: 0.38rem;
+      gap: 0.18rem;
+      margin-bottom: 0.3rem;
     }
     .mv2-faith-progress-item {
       display: flex;
       flex-wrap: wrap;
       align-items: baseline;
       justify-content: space-between;
-      gap: 0.28rem 0.42rem;
-      padding: 0.26rem 0.32rem;
-      border-radius: 7px;
-      background: rgba(255, 255, 255, 0.4);
-      border: 1px solid rgba(184, 135, 27, 0.1);
+      gap: 0.2rem 0.32rem;
+      padding: 0.2rem 0.26rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.35);
+      border: 1px solid rgba(184, 135, 27, 0.08);
     }
     .mv2-faith-progress-item-label {
-      font-size: 0.66rem;
+      font-size: 0.62rem;
       font-weight: 700;
       color: var(--mv2a-text);
       flex: 1;
       min-width: 52%;
-      line-height: 1.28;
+      line-height: 1.24;
     }
     .mv2-faith-progress-item-meta {
-      font-size: 0.58rem;
-      line-height: 1.28;
+      font-size: 0.54rem;
+      line-height: 1.22;
       color: var(--mv2a-muted);
       font-weight: 500;
       text-align: right;
     }
     .mv2-faith-progress-note {
       margin: 0;
-      font-size: 0.58rem;
-      line-height: 1.36;
+      font-size: 0.54rem;
+      line-height: 1.32;
       color: var(--mv2a-muted);
-      opacity: 0.88;
+      opacity: 0.84;
     }
     html.mv2a-theme-dark .mv2-card--faith-progress {
       background: linear-gradient(
@@ -2050,8 +2087,8 @@ export function renderAmuletReportV2Html(payload) {
       background: rgba(232, 197, 71, 0.12);
     }
     @media (max-width: 520px) {
-      .mv2-faith-progress-grade { font-size: 1.2rem; }
-      .mv2-faith-progress-metrics { font-size: 0.68rem; }
+      .mv2-faith-progress-grade { font-size: 1.34rem; }
+      .mv2-faith-progress-metrics { font-size: 0.62rem; }
     }
     .mv2-toast {
       position: fixed;
@@ -2234,15 +2271,18 @@ export function renderAmuletReportV2Html(payload) {
     html.mv2a-theme-dark .mv2-decision-reason {
       color: rgba(226, 232, 240, 0.9);
     }
+    html.mv2a-theme-dark .mv2-decision-secondary {
+      border-top-color: rgba(148, 163, 184, 0.14);
+    }
     html.mv2a-theme-dark .mv2-decision-baseline {
-      background: rgba(232, 197, 71, 0.06);
-      border-color: rgba(232, 197, 71, 0.16);
-      color: rgba(203, 213, 225, 0.88);
+      background: transparent;
+      border: none;
+      color: rgba(148, 163, 184, 0.88);
     }
     html.mv2a-theme-dark .mv2-decision-scan {
-      background: rgba(232, 197, 71, 0.07);
-      border-color: rgba(232, 197, 71, 0.28);
-      color: rgba(253, 230, 138, 0.92);
+      background: transparent;
+      border: none;
+      color: rgba(253, 230, 138, 0.85);
     }
     html.mv2a-theme-dark .mv2-decision-badge--c {
       color: rgba(148, 163, 184, 0.95);
@@ -2300,8 +2340,6 @@ export function renderAmuletReportV2Html(payload) {
     ${decisionCardHtml}
 
     ${dailyOwnerCardHtml}
-
-    ${todayObjectBoostHtml}
 
     <section class="mv2-card mv2-card--int-near-graph" aria-labelledby="mv2-int-h">
       <h2 id="mv2-int-h">${escapeHtml(vm.interactionSummary.headline)}</h2>
