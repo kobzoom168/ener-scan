@@ -20,6 +20,7 @@ import {
   buildSacredAmuletDailyOwnerCard,
   buildTodayObjectBoostLine,
 } from "./amuletDailyOwnerCard.util.js";
+import { buildSacredAmuletFaithProgressCard } from "./amuletFaithProgressCard.util.js";
 
 /** Sacred_amulet HTML footer disclaimer (ท้ายรายงาน; source: `usageCaution.disclaimer`). */
 export const AMULET_HTML_V2_USAGE_DISCLAIMER =
@@ -144,7 +145,7 @@ function buildOwnerReactionCard(p) {
 }
 
 /**
- * การ์ด “ควรเก็บไหม” — เกรดการตัดสินใจเก็บ (ไม่ใช่เกรดความเด่นพลังงานระบบ S/A/B/D)
+ * การ์ด “ชิ้นนี้ใช่กับคุณแค่ไหน” — top-finder / baseline (ไม่ใช่เกรดความเด่นพลังงานระบบ S/A/B/D)
  *
  * `keepScore = 0.55 * compatibilityPercent + 0.25 * (energyScore * 10) + 0.20 * decisionBonus`
  *
@@ -188,23 +189,23 @@ export function buildSacredAmuletDecisionCard(p) {
 
   /** @type {"S"|"A"|"B"|"C"} */
   let keepGrade = "C";
-  let verdict = "หาต่อ";
+  let verdict = "ยังไม่ใช่ตัวที่เด่นสุด";
   if (keepScore >= 85) {
     keepGrade = "S";
-    verdict = "จับเก็บเลย";
+    verdict = "ใช่เลย";
   } else if (keepScore >= 75) {
     keepGrade = "A";
-    verdict = "น่าเก็บ";
+    verdict = "ใช่พอสมควร";
   } else if (keepScore >= 65) {
     keepGrade = "B";
-    verdict = "ถ้าถูกทางค่อยเก็บ";
+    verdict = "ใช้ได้ แต่ยังไม่สุด";
   }
 
   const reasonByGrade = {
-    S: "เข้ากับคุณสูง พลังเด่นชัด และส่งกับคุณตรงสุด",
-    A: "ใช้ได้ดีและเข้ากับคุณพอสมควร มีมุมที่ควรค่อย ๆ ไป",
-    B: "ยังมีบางด้านที่ไม่ตรงกับจังหวะคุณ ถ้าเจอชิ้นที่ส่งกว่านี้อาจดีกว่า",
-    C: "ชิ้นนี้ยังไม่ตอบกับคุณพอ ลองหาชิ้นที่เด่นด้านอื่นแล้วสแกนเพิ่ม",
+    S: "ชิ้นนี้ใช้เป็นตัวตั้งของรอบนี้ได้ดี · เข้ากับคุณสูงและส่งตรงจังหวะ",
+    A: "ชิ้นนี้เป็นตัวตั้งที่ใช้ได้ · ยังมีมุมให้เทียบกับชิ้นอื่นในคลังได้",
+    B: "ชิ้นนี้เป็นตัวตั้งของรอบนี้ได้ · บางมุมยังไม่ส่งกับจังหวะคุณเท่าที่ควร · ลองเทียบชิ้นอื่นในสายเดียวกัน",
+    C: "ชิ้นนี้ยังไม่ใช่ตัวที่เด่นสุดสำหรับคุณตอนนี้ · ใช้เป็นจุดอ้างอิงแล้วสแกนต่อเพื่อหาแนวที่เข้ากว่า",
   };
 
   const al = String(p.alignLabel || "").trim() || "แกนที่เข้ากับคุณ";
@@ -212,13 +213,15 @@ export function buildSacredAmuletDecisionCard(p) {
 
   let nextHint = "";
   if (keepGrade === "S" || keepGrade === "A") {
-    nextHint = `ถ้าเจอหลายชิ้น ให้เทียบชิ้นที่เด่นทาง ${al} แล้วเลือกคะแนนสูงสุด · ถ้าจะสแกนเพิ่มลองเทียบโทน ${al} ที่ใกล้กัน`;
+    nextHint = `ถ้าเจอหลายชิ้น ให้ใช้ชิ้นนี้เป็นตัวตั้ง แล้วค่อยเทียบว่ามีองค์ไหนขึ้นได้อีกไหม · ถ้าจะสแกนต่อ ให้หาอีก 2–3 ชิ้นในสาย ${al} แล้วดูว่ามีตัว top กว่านี้ไหม`;
+  } else if (keepGrade === "B") {
+    nextHint = `ถ้าเจอหลายชิ้น ให้ใช้ชิ้นนี้เป็นตัวตั้ง แล้วค่อยเทียบคะแนน · ถ้าจะสแกนต่อ ให้หาอีก 2–3 ชิ้นในสาย ${al} · อย่าเริ่มจากชิ้นที่หนักทาง ${tl} มากเกินไป`;
   } else {
-    nextHint = `ถ้าจะหาต่อ ให้เน้นชิ้นที่เด่น ${al} · ลองสแกนหลายชิ้นสายเดียวกันแล้วเทียบคะแนน · อย่าเริ่มจากชิ้นที่หนักทาง ${tl} มากเกินไป`;
+    nextHint = `ถ้าจะหาต่อ ให้เน้นชิ้นที่เด่น ${al} · ลองสแกน 2–3 ชิ้นสายเดียวกันแล้วเทียบคะแนน · อย่าเริ่มจากชิ้นที่หนักทาง ${tl} มากเกินไป`;
   }
 
   return {
-    title: "ควรเก็บไหม",
+    title: "ชิ้นนี้ใช่กับคุณแค่ไหน",
     keepScore,
     keepGrade,
     verdict,
@@ -550,6 +553,34 @@ export function buildAmuletHtmlV2ViewModel(payload) {
   /** When flex baseline ≠ graph peak: one line; โทนมาจากสแกนอยู่ที่ `mainEnergyLabel` แล้ว ไม่ซ้ำใน clarifier */
   const clarifierLine = mainToneMatchesGraphPeak(mainShort, ord[0]) ? "" : "สรุปจากสแกน";
 
+  const timingSectionForVm = (() => {
+    const tv = payload.timingV1;
+    if (
+      !tv ||
+      (tv.engineVersion !== "timing_v1" && tv.engineVersion !== "timing_v1_1") ||
+      !tv.summary ||
+      !Array.isArray(tv.bestHours) ||
+      tv.bestHours.length === 0
+    ) {
+      return null;
+    }
+    return buildSacredAmuletTimingCardDisplay(tv, ord[0], ord[1], {
+      alignKey,
+      ord,
+      gapTop12,
+    });
+  })();
+
+  const faithProgressCard = buildSacredAmuletFaithProgressCard({
+    payload,
+    alignKey,
+    ord,
+    gapTop12,
+    timingBoostPercent: timingSectionForVm?.timingBoost?.percent ?? null,
+    alignLabel: POWER_LABEL_THAI[alignKey],
+    tensionLabel: POWER_LABEL_THAI[tensionKey],
+  });
+
   return {
     rendererId: "amulet-html-v2",
     hero: {
@@ -590,7 +621,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     dailyOwnerCard,
     /** บรรทัดสั้น ชิ้นนี้ + วันนี้ — เปลี่ยนตามวัตถุ/เข้ากัน */
     todayObjectBoostLine,
-    /** เก็บ/ไม่เก็บ — เกรดตัดสินใจแยกจากความเด่นพลังงานระบบ */
+    /** ชิ้นนี้ใช่กับคุณแค่ไหน (top-finder) · เกรดการ์ดแยกจากความเด่นพลังงานระบบ */
     decisionCard,
     /** Object-reactive copy (สแกนต่อชิ้น) — ไม่ใช่คะแนนบุคลิกถาวร */
     ownerReactionCard,
@@ -600,23 +631,9 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     },
     lifeAreaDetail: { rows: lifeRows },
     usageCaution: { disclaimer: usageDisclaimer },
-    timingSection: (() => {
-      const tv = payload.timingV1;
-      if (
-        !tv ||
-        (tv.engineVersion !== "timing_v1" && tv.engineVersion !== "timing_v1_1") ||
-        !tv.summary ||
-        !Array.isArray(tv.bestHours) ||
-        tv.bestHours.length === 0
-      ) {
-        return null;
-      }
-      return buildSacredAmuletTimingCardDisplay(tv, ord[0], ord[1], {
-        alignKey,
-        ord,
-        gapTop12,
-      });
-    })(),
+    timingSection: timingSectionForVm,
+    /** Display-only RPG-style projection; does not change energy score or grades in truth */
+    faithProgressCard,
     /** Action summary “วันไหนหยิบใช้” — axes + birth + compatibility; not `timingV1` (see `timingSection`). */
     timingActionCard: buildSacredAmuletUseDayCard(payload, metrics),
     trustNote: String(payload.trust?.trustNote || "").trim(),

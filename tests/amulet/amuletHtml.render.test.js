@@ -135,8 +135,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("mv2-life-row"));
   assert.ok(html.includes("พลังเด่น"));
   assert.ok(html.includes("สรุปผล"));
-  assert.ok(html.includes("ควรเก็บไหม"), "decision card: keep/collect");
-  assert.ok(html.includes('class="mv2-card mv2-card--decision"'));
+  assert.ok(html.includes("ชิ้นนี้ใช่กับคุณแค่ไหน"), "decision card: top-finder baseline");
+  assert.ok(html.includes('class="mv2-card mv2-card--decision mv2-card--top-finder"'));
   assert.ok(html.includes("mv2-decision-badge"));
   assert.ok(html.includes("เข้ากับคุณที่สุด"));
   assert.ok(html.includes('class="mv2-card mv2-card--owner-react"'));
@@ -146,6 +146,12 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2-timing-boost"'));
   assert.ok(html.includes("โบนัสจังหวะ"));
   assert.ok(html.includes("หนุนพลังได้ประมาณ"));
+  assert.ok(html.includes('class="mv2-card mv2-card--faith-progress"'));
+  assert.ok(html.includes("เสริมพลังตามความเชื่อ"));
+  assert.ok(html.includes('class="mv2-faith-progress-loop"'));
+  assert.ok(html.includes("ทางไปสู่ตัว top"));
+  assert.ok(html.includes('class="mv2-faith-progress-baseline"'));
+  assert.ok(html.includes('class="mv2-faith-progress-scan"'));
   assert.ok(html.includes('class="mv2-card mv2-timing-card"'));
   assert.ok(html.includes("mv2-et-strip--weekday"));
   assert.ok(html.includes("mv2-et-strip--time"));

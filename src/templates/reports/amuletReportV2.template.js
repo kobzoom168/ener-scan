@@ -303,6 +303,56 @@ function buildAmuletTimingVisualHtml(ts) {
 }
 
 /**
+ * Display-only faith progression (ไม่เปลี่ยนคะแนนหลักของรายงาน)
+ * @param {object | null | undefined} fp — `vm.faithProgressCard`
+ */
+function buildFaithProgressCardHtml(fp) {
+  if (!fp) return "";
+  const fmt = (n) =>
+    n != null && Number.isFinite(Number(n)) ? Number(n).toFixed(2) : "—";
+  const itemsHtml = (fp.items || [])
+    .map(
+      (it) => `<div class="mv2-faith-progress-item">
+      <span class="mv2-faith-progress-item-label">${escapeHtml(it.label)}</span>
+      <span class="mv2-faith-progress-item-meta">สัดส่วน ${escapeHtml(String(it.percent))}% · หนุนได้ประมาณ +${escapeHtml(Number(it.dailyGain10).toFixed(3))}/วัน</span>
+    </div>`,
+    )
+    .join("");
+  const w = Math.min(100, Math.max(0, Number(fp.barFillPercent) || 0));
+  const baseline = String(fp.baselineHint || "").trim();
+  const scanNext = String(fp.scanNextHint || "").trim();
+  const sub = String(fp.subtitle || "").trim();
+  const loop = String(fp.returnLoopHint || "").trim();
+  return `<section class="mv2-card mv2-card--faith-progress" aria-labelledby="mv2-faith-progress-h">
+    <div class="mv2-faith-progress-top">
+      <div class="mv2-faith-progress-grade" aria-hidden="true">
+        <span class="mv2-faith-progress-base">${escapeHtml(fp.baseGrade)}</span>
+        <span class="mv2-faith-progress-arrow">→</span>
+        <span class="mv2-faith-progress-next">${escapeHtml(fp.projectedGrade)}</span>
+      </div>
+      <div class="mv2-faith-progress-copy">
+        <h2 id="mv2-faith-progress-h">${escapeHtml(fp.title)}</h2>
+        ${sub ? `<p class="mv2-faith-progress-subtitle">${escapeHtml(sub)}</p>` : ""}
+      </div>
+    </div>
+    <p class="mv2-faith-progress-lead">${escapeHtml(String(fp.progressHint || "").trim())}</p>
+    <div class="mv2-faith-progress-metrics">
+      <div>คะแนนปัจจุบัน ${escapeHtml(fmt(fp.baseScore10))} / 10</div>
+      <div>คะแนนคาดการณ์ ${escapeHtml(fmt(fp.projectedScore10))} / 10</div>
+      <div>โบนัสรวมสูงสุด +${escapeHtml(String(fp.boostCapPercent))}%</div>
+    </div>
+    <div class="mv2-faith-progress-bar" role="presentation">
+      <span class="mv2-faith-progress-bar-fill" style="width:${w.toFixed(1)}%"></span>
+    </div>
+    ${baseline ? `<p class="mv2-faith-progress-baseline">${escapeHtml(baseline)}</p>` : ""}
+    ${scanNext ? `<p class="mv2-faith-progress-scan">${escapeHtml(scanNext)}</p>` : ""}
+    ${loop ? `<p class="mv2-faith-progress-loop">${escapeHtml(loop)}</p>` : ""}
+    <div class="mv2-faith-progress-items">${itemsHtml}</div>
+    <p class="mv2-faith-progress-note">${escapeHtml(fp.note)}</p>
+  </section>`;
+}
+
+/**
  * @param {ReturnType<typeof buildAmuletHtmlV2ViewModel>} vm
  */
 function mainGraphBlock(vm) {
@@ -431,11 +481,11 @@ export function renderAmuletReportV2Html(payload) {
           : dc.keepGrade === "B"
             ? "mv2-decision-badge--b"
             : "mv2-decision-badge--c";
-    return `<section class="mv2-card mv2-card--decision" aria-labelledby="mv2-decision-h">
+    return `<section class="mv2-card mv2-card--decision mv2-card--top-finder" aria-labelledby="mv2-decision-h">
       <div class="mv2-decision-top">
         <div class="mv2-decision-badge ${badgeMod}" aria-hidden="true">${escapeHtml(dc.keepGrade)}</div>
         <div class="mv2-decision-copy">
-          <h2 id="mv2-decision-h">${escapeHtml(dc.title || "ควรเก็บไหม")}</h2>
+          <h2 id="mv2-decision-h">${escapeHtml(dc.title || "ชิ้นนี้ใช่กับคุณแค่ไหน")}</h2>
           <p class="mv2-decision-verdict">${escapeHtml(String(dc.verdict || "").trim())}</p>
         </div>
       </div>
@@ -492,6 +542,7 @@ export function renderAmuletReportV2Html(payload) {
 
   const ts = vm.timingSection;
   const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
+  const faithProgressCardHtml = buildFaithProgressCardHtml(vm.faithProgressCard);
   const tac = /** @type {{ title?: string; recommendedWeekday?: string; recommendedWeekdayKey?: string; secondaryWeekday?: string; secondaryWeekdayKey?: string; confidence?: string; weekdayTip?: string; scores?: Record<string, number>; showSecondaryChip?: boolean; reasonShort?: string; actionLine?: string } | null} */ (
     vm.timingActionCard
   );
@@ -837,6 +888,14 @@ export function renderAmuletReportV2Html(payload) {
       margin-top: 0.4rem;
       padding: 0.72rem 0.9rem 0.8rem;
       border-left: 3px solid rgba(184, 135, 27, 0.38);
+    }
+    .mv2-card--top-finder {
+      background: linear-gradient(
+        145deg,
+        rgba(255, 252, 245, 0.65) 0%,
+        rgba(252, 250, 246, 0.98) 55%,
+        rgba(248, 244, 235, 0.95) 100%
+      );
     }
     .mv2-decision-top {
       display: flex;
@@ -1847,6 +1906,223 @@ export function renderAmuletReportV2Html(payload) {
       border-left-color: rgba(232, 197, 71, 0.26);
       color: rgba(203, 213, 225, 0.9);
     }
+    .mv2-card--faith-progress {
+      margin: 0.55rem 0 0.45rem;
+      padding: 0.85rem 1rem 0.95rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.5);
+      background: linear-gradient(
+        165deg,
+        rgba(255, 252, 245, 0.95) 0%,
+        rgba(252, 250, 246, 1) 40%,
+        rgba(245, 240, 228, 0.9) 100%
+      );
+      box-shadow: 0 2px 8px rgba(80, 58, 16, 0.08);
+    }
+    .mv2-faith-progress-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      margin-bottom: 0.65rem;
+    }
+    .mv2-faith-progress-grade {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.28rem;
+      font-size: 1.35rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .mv2-faith-progress-base {
+      color: var(--mv2a-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .mv2-faith-progress-arrow {
+      color: var(--mv2a-gold);
+      font-weight: 700;
+      font-size: 1.1rem;
+      opacity: 0.9;
+    }
+    .mv2-faith-progress-next {
+      color: var(--mv2a-gold-dim);
+      text-shadow: 0 0 12px rgba(184, 135, 27, 0.25);
+      font-variant-numeric: tabular-nums;
+    }
+    .mv2-faith-progress-copy { flex: 1; min-width: 0; }
+    .mv2-faith-progress-copy h2 {
+      margin: 0;
+      font-size: 0.88rem;
+      font-weight: 800;
+      color: var(--mv2a-text);
+      line-height: 1.25;
+    }
+    .mv2-faith-progress-subtitle {
+      margin: 0.18rem 0 0;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--mv2a-muted);
+      opacity: 0.95;
+    }
+    .mv2-faith-progress-loop {
+      margin: 0 0 0.55rem;
+      padding: 0.42rem 0.55rem;
+      font-size: 0.7rem;
+      line-height: 1.42;
+      font-weight: 650;
+      color: var(--mv2a-gold-dim);
+      background: rgba(184, 135, 27, 0.1);
+      border-radius: 8px;
+      border: 1px solid rgba(184, 135, 27, 0.24);
+    }
+    .mv2-faith-progress-lead {
+      margin: 0 0 0.55rem;
+      font-size: 0.76rem;
+      line-height: 1.5;
+      color: var(--mv2a-text-body);
+      font-weight: 600;
+    }
+    .mv2-faith-progress-baseline {
+      margin: 0 0 0.42rem;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: var(--mv2a-muted);
+      font-weight: 500;
+      padding: 0.45rem 0.55rem;
+      border-radius: 8px;
+      background: rgba(184, 135, 27, 0.06);
+      border: 1px solid rgba(184, 135, 27, 0.14);
+    }
+    .mv2-faith-progress-scan {
+      margin: 0 0 0.55rem;
+      font-size: 0.74rem;
+      line-height: 1.48;
+      color: var(--mv2a-gold-dim);
+      font-weight: 700;
+      padding: 0.48rem 0.55rem;
+      border-radius: 8px;
+      background: rgba(184, 135, 27, 0.08);
+      border: 1px dashed rgba(184, 135, 27, 0.35);
+    }
+    .mv2-faith-progress-metrics {
+      display: grid;
+      gap: 0.32rem;
+      margin: 0 0 0.55rem;
+      padding: 0.5rem 0.6rem;
+      border-radius: 10px;
+      background: rgba(184, 135, 27, 0.07);
+      border: 1px solid rgba(184, 135, 27, 0.18);
+      font-size: 0.72rem;
+      line-height: 1.4;
+      color: var(--mv2a-text-body);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .mv2-faith-progress-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(184, 135, 27, 0.12);
+      overflow: hidden;
+      margin-bottom: 0.65rem;
+    }
+    .mv2-faith-progress-bar-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #c9a132 0%, #e8c547 55%, #f0e0a8 100%);
+      box-shadow: 0 0 8px rgba(184, 135, 27, 0.35);
+      min-width: 4%;
+    }
+    .mv2-faith-progress-items {
+      display: flex;
+      flex-direction: column;
+      gap: 0.38rem;
+      margin-bottom: 0.55rem;
+    }
+    .mv2-faith-progress-item {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.35rem 0.5rem;
+      padding: 0.35rem 0.4rem;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.45);
+      border: 1px solid rgba(184, 135, 27, 0.12);
+    }
+    .mv2-faith-progress-item-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--mv2a-text);
+      flex: 1;
+      min-width: 52%;
+    }
+    .mv2-faith-progress-item-meta {
+      font-size: 0.62rem;
+      color: var(--mv2a-muted);
+      font-weight: 500;
+      text-align: right;
+    }
+    .mv2-faith-progress-note {
+      margin: 0;
+      font-size: 0.62rem;
+      line-height: 1.45;
+      color: var(--mv2a-muted);
+      opacity: 0.92;
+    }
+    html.mv2a-theme-dark .mv2-card--faith-progress {
+      background: linear-gradient(
+        165deg,
+        rgba(28, 26, 22, 0.95) 0%,
+        rgba(20, 22, 28, 0.98) 100%
+      );
+      border-left-color: rgba(232, 197, 71, 0.45);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-copy h2 {
+      color: rgba(248, 250, 252, 0.96);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-lead {
+      color: rgba(226, 232, 240, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-baseline {
+      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(232, 197, 71, 0.16);
+      color: rgba(203, 213, 225, 0.9);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-scan {
+      background: rgba(232, 197, 71, 0.07);
+      border-color: rgba(232, 197, 71, 0.28);
+      color: rgba(232, 197, 71, 0.95);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-subtitle {
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-loop {
+      background: rgba(232, 197, 71, 0.08);
+      border-color: rgba(232, 197, 71, 0.22);
+      color: rgba(253, 230, 138, 0.95);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-metrics {
+      background: rgba(232, 197, 71, 0.07);
+      border-color: rgba(232, 197, 71, 0.2);
+      color: rgba(226, 232, 240, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-item {
+      background: rgba(15, 18, 26, 0.55);
+      border-color: rgba(232, 197, 71, 0.12);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-item-label {
+      color: rgba(241, 245, 249, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-faith-progress-bar {
+      background: rgba(232, 197, 71, 0.12);
+    }
+    @media (max-width: 520px) {
+      .mv2-faith-progress-grade { font-size: 1.2rem; }
+      .mv2-faith-progress-metrics { font-size: 0.68rem; }
+    }
     .mv2-toast {
       position: fixed;
       bottom: 1.25rem;
@@ -2019,6 +2295,9 @@ export function renderAmuletReportV2Html(payload) {
       border-left-color: rgba(232, 197, 71, 0.42);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
     }
+    html.mv2a-theme-dark .mv2-card--top-finder {
+      background: linear-gradient(145deg, rgba(28, 26, 22, 0.5) 0%, rgba(20, 22, 28, 0.92) 100%);
+    }
     html.mv2a-theme-dark .mv2-decision-verdict {
       color: rgba(241, 245, 249, 0.94);
     }
@@ -2109,6 +2388,7 @@ export function renderAmuletReportV2Html(payload) {
     </section>
     ${timingActionCardHtml}
     ${timingCardHtml}
+    ${faithProgressCardHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์รายงาน</h2>

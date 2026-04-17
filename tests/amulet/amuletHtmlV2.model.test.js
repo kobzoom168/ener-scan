@@ -106,7 +106,7 @@ test("buildAmuletHtmlV2ViewModel: decisionCard keep grade separate from system e
   assert.ok(vm.decisionCard && typeof vm.decisionCard === "object");
   assert.ok(["S", "A", "B", "C"].includes(vm.decisionCard.keepGrade));
   assert.ok(vm.decisionCard.keepScore >= 0 && vm.decisionCard.keepScore <= 100);
-  assert.equal(vm.decisionCard.title, "ควรเก็บไหม");
+  assert.equal(vm.decisionCard.title, "ชิ้นนี้ใช่กับคุณแค่ไหน");
   assert.ok(String(vm.decisionCard.verdict || "").length > 0);
   assert.ok(String(vm.decisionCard.nextHint || "").includes("เทียบ"));
 });
@@ -222,4 +222,25 @@ test("buildAmuletHtmlV2ViewModel: todayObjectBoostLine varies with compatibility
   assert.notEqual(hi.todayObjectBoostLine, lo.todayObjectBoostLine);
   assert.ok(String(hi.todayObjectBoostLine).includes("ชิ้นนี้"));
   assert.ok(String(lo.todayObjectBoostLine).includes("ชิ้นนี้"));
+});
+
+test("buildAmuletHtmlV2ViewModel: faithProgressCard B→A projection (display-only)", () => {
+  const base = minimalPayload();
+  const vm = buildAmuletHtmlV2ViewModel({
+    ...base,
+    summary: { ...base.summary, energyScore: 7.2 },
+  });
+  assert.ok(vm.faithProgressCard);
+  assert.equal(vm.faithProgressCard.title, "ทางไปสู่ตัว top");
+  assert.equal(vm.faithProgressCard.subtitle, "เสริมพลังตามความเชื่อ");
+  assert.ok(String(vm.faithProgressCard.returnLoopHint || "").includes("เป้าหมายรอบถัดไป"));
+  assert.equal(vm.faithProgressCard.baseGrade, "B");
+  assert.equal(vm.faithProgressCard.projectedGrade, "A");
+  assert.equal(vm.faithProgressCard.estimatedDaysToNextTier, 7);
+  assert.ok(String(vm.faithProgressCard.progressHint).includes("B → A ได้"));
+  assert.ok(String(vm.faithProgressCard.baselineHint).includes("ตัวตั้ง"));
+  assert.ok(String(vm.faithProgressCard.scanNextHint).includes("2–3"));
+  assert.ok(
+    vm.faithProgressCard.boostCapPercent >= 6 && vm.faithProgressCard.boostCapPercent <= 15,
+  );
 });
