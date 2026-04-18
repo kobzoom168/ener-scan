@@ -216,8 +216,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("summary_large_image"));
   assert.ok(html.includes('rel="canonical"'));
   assert.ok(html.includes("render amulet-html-v2"));
-  assert.ok(html.includes("--mv2a-bg: #f6f6f4"), "default light neutral shell");
-  assert.ok(html.includes("--mv2a-gold: #2a2a2a"));
+  assert.ok(html.includes("--mv2a-bg: #ffffff"), "default light minimal monochrome shell");
+  assert.ok(html.includes("--mv2a-gold: #111111"));
   assert.ok(
     html.startsWith(`<!DOCTYPE html>
 <html lang="th">
@@ -226,7 +226,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   );
 });
 
-test("renderAmuletReportV2Html: optional dark-gold dashboard via wording.amuletReportV2Theme dark", () => {
+test("renderAmuletReportV2Html: optional dark monochrome theme via wording.amuletReportV2Theme dark", () => {
   const base = {
     reportId: "r1",
     publicToken: "t",
@@ -291,8 +291,8 @@ test("renderAmuletReportV2Html: optional dark-gold dashboard via wording.amuletR
   };
   const html = renderAmuletReportV2Html(base);
   assert.ok(html.includes('class="mv2a-theme-dark"'));
-  assert.ok(html.includes("--mv2a-bg: #090a0d"));
-  assert.ok(html.includes("--mv2a-gold: #f5f5f5"));
+  assert.ok(html.includes("--mv2a-bg: #0a0a0a"));
+  assert.ok(html.includes("--mv2a-gold: #fafafa"));
   assert.ok(html.includes("var(--mv2a-radar-spoke)"));
   assert.ok(html.includes("กราฟหกมิติพลังพระเครื่อง"));
 });
