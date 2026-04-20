@@ -216,8 +216,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("summary_large_image"));
   assert.ok(html.includes('rel="canonical"'));
   assert.ok(html.includes("render amulet-html-v2"));
-  assert.ok(html.includes("--mv2a-bg: #ffffff"), "default light minimal monochrome shell");
-  assert.ok(html.includes("--mv2a-gold: #111111"));
+  assert.ok(html.includes("--mv2a-bg: #ffffff"), "default light sacred gold shell");
+  assert.ok(html.includes("--mv2a-gold: #c9a227"));
   assert.ok(
     html.startsWith(`<!DOCTYPE html>
 <html lang="th">
