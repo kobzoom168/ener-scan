@@ -130,20 +130,18 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("คุ้มครอง</span> <span class=\"mv2a-radar-axis-n\">88"));
   assert.ok(html.includes("เมตตา</span> <span class=\"mv2a-radar-axis-n\">70"));
   assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
-  assert.ok(!html.includes('id="mv2-life-h"'));
-  assert.ok(!html.includes("เรียงจากคะแนนสูงไปต่ำ"));
-  assert.ok(!html.includes('class="mv2-life-row'));
+  assert.ok(html.includes('id="mv2-life-h"'));
+  assert.ok(html.includes("เรียงจากคะแนนสูงไปต่ำ"));
+  assert.ok(html.includes('class="mv2-life-row'));
   assert.ok(html.includes("พลังเด่น"));
   assert.ok(html.includes("สรุปผล"));
-  assert.ok(html.includes("ชิ้นนี้ใช่กับคุณแค่ไหน"), "decision card: top-finder baseline");
-  assert.ok(html.includes('class="mv2-card mv2-card--decision mv2-card--top-finder"'));
-  assert.ok(html.includes("mv2-decision-badge"));
-  assert.ok(html.includes("เกรดความเข้ากับคุณ"), "decision badge: fit grade kicker vs strip energy grade");
-  assert.ok(html.includes('class="mv2-decision-baseline"'));
-  assert.ok(html.includes('class="mv2-decision-scan"'));
+  assert.ok(html.includes('class="mv2-card mv2-card--int-near-graph"'));
+  assert.ok(html.includes('class="mv2-int-card"'));
+  assert.ok(html.includes("ชิ้นนี้ทำงานกับคุณอย่างไร"));
+  assert.ok(html.includes('id="mv2-owner-h"'));
+  assert.ok(html.includes("mv2-owner-chip"));
   assert.ok(html.includes("เข้ากับคุณที่สุด"));
   assert.ok(!html.includes('class="mv2-card mv2-card--owner-react"'), "owner-reaction card removed from layout");
-  assert.ok(!html.includes('class="mv2-int-card"'), "interaction card removed from layout");
   assert.ok(html.includes('class="mv2a-footer-note"'));
   assert.ok(html.includes("จังหวะหนุนของชิ้นนี้"));
   assert.ok(
@@ -162,7 +160,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("พิธีหรือการตั้งจิตต่อเนื่อง"));
   assert.ok(!html.includes('class="mv2-card mv2-card--faith-progress"'));
   assert.ok(!html.includes('class="mv2-card mv2-timing-card"'));
-  assert.ok(!html.includes('class="mv2-card mv2-card--use-day"'));
+  assert.ok(html.includes('class="mv2-card mv2-card--use-day"'));
   assert.ok(!html.includes('class="mv2-et-strip mv2-et-strip--weekday"'));
   assert.ok(!html.includes('class="mv2-et-strip mv2-et-strip--time"'));
   assert.ok(html.includes("ช่วงเช้า 07:00–10:59"));
@@ -176,12 +174,10 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('id="mv2-btn-share"'));
   assert.ok(html.includes("วันเวลาที่วิเคราะห์"));
   assert.ok(html.includes("รหัสรายงาน"));
-  assert.ok(html.includes('class="mv2-trust-inline"'));
-  assert.ok(html.includes("โมเดลอ่านพลัง Ener Scan"));
-  assert.ok(!html.includes("ผลนี้คำนวณจากอะไร"));
-  assert.ok(html.includes('class="mv2-card mv2-card--daily-owner"'));
-  assert.ok(html.includes("โทนที่อ่านคู่กับคุณ"));
-  assert.ok(!html.includes('class="mv2-daily-owner-object"'));
+  assert.ok(html.includes('class="mv2-trust-sources'));
+  assert.ok(html.includes("ผลนี้คำนวณจากอะไร"));
+  assert.ok(html.includes("โมเดลการอ่านพลังงานของ Ener Scan"));
+  assert.ok(!html.includes('class="mv2-trust-inline"'));
   assert.ok(!html.includes("mv2-btn-save"));
   assert.ok(html.includes("https://lin.ee/6YZeFZ1"));
   assert.ok(html.includes("navigator.share"));
@@ -191,16 +187,13 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
       html.includes("การปฏิบัติตัวของเจ้าของ"),
     "sacred_amulet concise usage disclaimer",
   );
-  assert.ok(!html.includes("ชิ้นนี้ทำงานกับคุณอย่างไร"));
   assert.ok(html.includes("--mv2-font-th"));
   assert.ok(html.includes("Noto Sans Thai"));
   assert.ok(html.includes("ควรค่อย ๆ ไป"), "graph summary row 3: tension pace");
   assert.ok(html.includes("ภาพวัตถุที่ใช้ในการวิเคราะห์"));
-  assert.ok(!html.includes("วันที่ควรใช้"));
-  assert.ok(!html.includes('class="mv2-card mv2-card--int-near-graph"'));
+  assert.ok(html.includes("วันที่ควรใช้"));
   assert.ok(!html.includes("โค้ง"));
   assert.ok(!html.includes("ชิ้นนี้ทำให้คุณเด่นแบบไหน"), "object-reaction card not rendered");
-  assert.ok(!html.includes("mv2-owner-chip"), "no numeric trait chips");
   assert.ok(html.includes("โทนหลัก ·"));
   assert.ok(!html.includes("โทนทอง"), "hero subtitle fallback is removed from HTML");
   assert.ok(!html.includes('class="mv2-tag"'), "hero subtitle is not rendered");

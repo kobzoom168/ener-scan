@@ -641,6 +641,21 @@ export function buildAmuletHtmlV2ViewModel(payload) {
      * (interaction + graph summary cover the same axes without a second card).
      */
     ownerReactionCard,
+    ownerProfile: {
+      zodiacLabel: ownerProf.zodiacLabel,
+      traitScores: ownerProf.traitScores,
+      note: ownerProf.note,
+      miniCards: [
+        {
+          title: "จังหวะเจ้าของ",
+          text: ownerProf.zodiacLabel,
+        },
+        {
+          title: "เข้ากันมากที่สุด",
+          text: `${alignLabel} ส่งกับคุณตรงสุด · ใช้คู่กันได้ดี`,
+        },
+      ],
+    },
     interactionSummary: {
       headline: "ชิ้นนี้ทำงานกับคุณอย่างไร",
       rows: interactionRows,
