@@ -145,21 +145,20 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(!html.includes('class="mv2-card mv2-card--owner-react"'), "owner-reaction card removed from layout");
   assert.ok(!html.includes('class="mv2-int-card"'), "interaction card removed from layout");
   assert.ok(html.includes('class="mv2a-footer-note"'));
-  assert.ok(html.includes("จังหวะหนุนของชิ้นนี้"));
+  assert.ok(html.includes("จังหวะของชิ้นนี้"));
   assert.ok(
     html.includes("mv2-card--guide") &&
       html.includes("mv2-card--guide-soft") &&
       html.includes("mv2-card--guide2"),
   );
-  assert.ok(html.includes("ช่วงที่ใช้ได้เด่นสุด"));
+  assert.ok(html.includes("ช่วงที่ใช้ได้ดีที่สุด"));
   assert.ok(html.includes("ถ้าใช้ต่อเนื่อง"));
-  assert.ok(html.includes("ขีดพลังรอบนี้"));
-  assert.ok(html.includes("ใช้ตามวันเวลาแนะนำ"));
-  assert.ok(html.includes("ระดับตอนนี้ · ช่วงที่ตอบดี"));
-  assert.ok(html.includes("โบนัสจังหวะประมาณ"));
+  assert.ok(html.includes("ระดับที่ไปได้ในรอบนี้"));
+  assert.ok(html.includes("ระดับตอนนี้ · ใช้ช่วงไหนดี"));
+  assert.ok(html.includes("ถ้าใช้ตามวันและเวลาที่แนะนำ"));
   assert.ok(html.includes("คะแนนหลักของรายงานยังไม่เปลี่ยน"));
   assert.ok(html.includes("mv2-guide-buff-table"));
-  assert.ok(html.includes("พิธีหรือการตั้งจิตต่อเนื่อง"));
+  assert.ok(html.includes("เป็นการเสริมพิเศษ"));
   assert.ok(!html.includes('class="mv2-card mv2-card--faith-progress"'));
   assert.ok(!html.includes('class="mv2-card mv2-timing-card"'));
   assert.ok(!html.includes('class="mv2-card mv2-card--use-day"'));
