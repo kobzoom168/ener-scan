@@ -221,38 +221,55 @@ function resolveAmuletHtmlTheme(payload) {
   return "light";
 }
 
-/** Visual rhythm (px) — ไม่ derive จาก timing formula */
+/** Visual rhythm (px) — ไม่ derive จาก timing formula; map เป็น % สูงของแท่งในแทร็ก */
 const MV2_ET_WD_H = [22, 26, 20, 28, 32, 22, 24];
 const MV2_ET_WD_ACTIVE = 40;
 const MV2_ET_TIME_H = [18, 24, 28, 22, 20, 26, 32];
 const MV2_ET_TIME_ACTIVE = 40;
 
 /**
- * Sacred amulet timing section — strips จาก `weekdayItems` / `timeItems` ใน model (อ่านจาก timingV1)
+ * @param {boolean} active
+ * @param {number} i
+ * @param {number[]} heights
+ * @param {number} activePx
+ */
+function mv2TimingBarFillPercent(active, i, heights, activePx) {
+  if (active) return 100;
+  const h = heights[i % heights.length];
+  return Math.max(20, Math.min(90, Math.round((h / activePx) * 100)));
+}
+
+/**
+ * Sacred amulet timing — mini bar charts จาก `weekdayItems` / `timeItems` (อ่านจาก timingV1 เท่านั้น)
+ * Embed ใน guide card — ห้ามใช้ `mv2-timing-card` (invariant รายงาน)
  * @param {object} ts — return ของ `buildSacredAmuletTimingCardDisplay`
  */
 function buildAmuletTimingVisualHtml(ts) {
   const wdItems = ts.weekdayItems || [];
-  const wdStrip = wdItems
+  const wdBars = wdItems
     .map((it, i) => {
-      const h = it.active ? MV2_ET_WD_ACTIVE : MV2_ET_WD_H[i % MV2_ET_WD_H.length];
-      const cls = `mv2-et-pill${it.active ? " is-active" : ""}`;
-      return `<div class="${cls}" role="listitem"${it.active ? ' aria-current="true"' : ""}>
-      <span class="mv2-et-pill-shape" style="height:${h}px" aria-hidden="true"></span>
-      <span class="mv2-et-pill-label">${escapeHtml(it.shortLabel)}</span>
+      const pct = mv2TimingBarFillPercent(it.active, i, MV2_ET_WD_H, MV2_ET_WD_ACTIVE);
+      const activeCls = it.active ? " mv2-timing-bar--active" : "";
+      return `<div class="mv2-timing-bar${activeCls}" role="listitem"${it.active ? ' aria-current="true"' : ""}>
+      <div class="mv2-timing-bar-track" aria-hidden="true">
+        <div class="mv2-timing-bar-fill" style="height:${pct}%"></div>
+      </div>
+      <span class="mv2-timing-bar-label" title="${escapeHtml(it.fullLabel)}">${escapeHtml(it.shortLabel)}</span>
       <span class="mv2-et-pill-sr">${escapeHtml(it.fullLabel)}</span>
     </div>`;
     })
     .join("");
 
   const tItems = ts.timeItems || [];
-  const timeStrip = tItems
+  const timeBars = tItems
     .map((it, i) => {
-      const h = it.active ? MV2_ET_TIME_ACTIVE : MV2_ET_TIME_H[i % MV2_ET_TIME_H.length];
-      const cls = `mv2-et-slot${it.active ? " is-active" : ""}`;
-      return `<div class="${cls}" role="listitem"${it.active ? ' aria-current="true"' : ""}>
-      <span class="mv2-et-slot-bar" style="height:${h}px" aria-hidden="true"></span>
-      <span class="mv2-et-slot-label" title="${escapeHtml(it.labelFull)}">${escapeHtml(it.shortLabel)}</span>
+      const pct = mv2TimingBarFillPercent(it.active, i, MV2_ET_TIME_H, MV2_ET_TIME_ACTIVE);
+      const activeCls = it.active ? " mv2-timing-bar--active" : "";
+      return `<div class="mv2-timing-bar${activeCls}" role="listitem"${it.active ? ' aria-current="true"' : ""}>
+      <div class="mv2-timing-bar-track" aria-hidden="true">
+        <div class="mv2-timing-bar-fill" style="height:${pct}%"></div>
+      </div>
+      <span class="mv2-timing-bar-label" title="${escapeHtml(it.labelFull)}">${escapeHtml(it.shortLabel)}</span>
     </div>`;
     })
     .join("");
@@ -272,35 +289,39 @@ function buildAmuletTimingVisualHtml(ts) {
       <span class="mv2-timing-boost-micro">${escapeHtml(String(tb.hint).trim())}</span>
     </div>`
       : "";
+  const topDay = String(ts.topWeekdayLabel || "").trim() || "—";
+  const topWin = String(ts.topWindowLabel || "").trim() || "—";
+  const summaryLine = `${topDay} · ${topWin}`;
   return `
-    <section class="mv2-card mv2-timing-card" aria-labelledby="mv2-timing-h">
-      <div class="mv2-timing-head">
-        <h2 id="mv2-timing-h">${escapeHtml(ts.heading)}</h2>
+    <div class="mv2-timing-visual" aria-labelledby="mv2-timing-embed-h">
+      <div class="mv2-timing-visual-head">
+        <h4 id="mv2-timing-embed-h" class="mv2-timing-visual-title">${escapeHtml(ts.heading)}</h4>
         ${sub ? `<p class="mv2-timing-sub">${escapeHtml(sub)}</p>` : ""}
         ${boostHtml}
       </div>
-      <div class="mv2-timing-trends">
-        <div class="mv2-timing-trend">
-          <div class="mv2-timing-trend-top">
-            <span class="mv2-timing-trend-k">${escapeHtml(String(ts.weekdayKicker || "").trim() || "วันส่งดี")}</span>
-            <span class="mv2-timing-trend-v">${escapeHtml(ts.topWeekdayLabel || "—")}</span>
+      <p class="mv2-timing-visual-summary">${escapeHtml(summaryLine)}</p>
+      <div class="mv2-timing-grid">
+        <div class="mv2-timing-chart-card">
+          <div class="mv2-timing-chart-head">
+            <span class="mv2-timing-chart-k">${escapeHtml(String(ts.weekdayKicker || "").trim() || "วันส่งดี")}</span>
+            <span class="mv2-timing-chart-value">${escapeHtml(topDay)}</span>
           </div>
-          <div class="mv2-et-strip mv2-et-strip--weekday" role="list" aria-label="วันในสัปดาห์">${wdStrip}</div>
+          <div class="mv2-timing-bars mv2-timing-bars--weekday" role="list" aria-label="วันในสัปดาห์">${wdBars}</div>
         </div>
-        <div class="mv2-timing-trend">
-          <div class="mv2-timing-trend-top">
-            <span class="mv2-timing-trend-k">${escapeHtml(String(ts.timeKicker || "").trim() || "ช่วงเวลาที่ส่งดี")}</span>
-            <span class="mv2-timing-trend-v">${escapeHtml(ts.topWindowLabel || "—")}</span>
+        <div class="mv2-timing-chart-card">
+          <div class="mv2-timing-chart-head">
+            <span class="mv2-timing-chart-k">${escapeHtml(String(ts.timeKicker || "").trim() || "ช่วงเวลาที่ส่งดี")}</span>
+            <span class="mv2-timing-chart-value">${escapeHtml(topWin)}</span>
           </div>
-          <div class="mv2-et-strip mv2-et-strip--time" role="list" aria-label="ช่วงเวลา">${timeStrip}</div>
+          <div class="mv2-timing-bars mv2-timing-bars--time" role="list" aria-label="ช่วงเวลา">${timeBars}</div>
         </div>
       </div>
-      <div class="mv2-timing-insight">
+      <div class="mv2-timing-insight mv2-timing-insight--embed">
         <span class="mv2-timing-k mv2-timing-k--mode">${escapeHtml(String(ts.modeKicker || "").trim() || "แนวใช้ที่แนะนำ")}</span>
         <p class="mv2-timing-mode-body">${escapeHtml(ts.ritualLine)}</p>
         <p class="mv2-timing-hint mv2-timing-hint--compact">${escapeHtml(ts.hint)}</p>
       </div>
-    </section>`;
+    </div>`;
 }
 
 /**
@@ -598,6 +619,18 @@ export function renderAmuletReportV2Html(payload) {
       ? `${progressTargetGrade}+`
       : progressTargetGrade;
   const continuousHorizonMain = `${fullsetMark} · ${progressTargetScore}/10 · ${durationContinuousBand}`;
+  const guidePeakTimingPanelHtml = ts
+    ? `<article class="mv2-guide2-panel mv2-guide2-panel--peak-timing">
+          <h3 class="mv2-guide2-panel-h">ช่วงที่ใช้ได้เด่นสุด</h3>
+          ${buildAmuletTimingVisualHtml(ts)}
+          <p class="mv2-guide2-panel-note">${escapeHtml(insightPeakSub)}</p>
+        </article>`
+    : `<article class="mv2-guide2-panel">
+          <h3 class="mv2-guide2-panel-h">ช่วงที่ใช้ได้เด่นสุด</h3>
+          <p class="mv2-guide2-panel-main">${escapeHtml(stepOneAnswer)}</p>
+          ${useModeLabel ? `<p class="mv2-guide2-panel-mode">${escapeHtml(useModeLabel)}</p>` : ""}
+          <p class="mv2-guide2-panel-note">${escapeHtml(insightPeakSub)}</p>
+        </article>`;
   const guideCardHtml = `<section class="mv2-card mv2-card--guide mv2-card--guide-soft mv2-card--guide2" aria-labelledby="mv2-guide-h">
       <header class="mv2-guide2-top">
         <div class="mv2-guide2-titlewrap">
@@ -624,12 +657,7 @@ export function renderAmuletReportV2Html(payload) {
         </div>
       </div>
       <div class="mv2-guide2-stack" aria-label="อ่านต่อทีละมุม">
-        <article class="mv2-guide2-panel">
-          <h3 class="mv2-guide2-panel-h">ช่วงที่ใช้ได้เด่นสุด</h3>
-          <p class="mv2-guide2-panel-main">${escapeHtml(stepOneAnswer)}</p>
-          ${useModeLabel ? `<p class="mv2-guide2-panel-mode">${escapeHtml(useModeLabel)}</p>` : ""}
-          <p class="mv2-guide2-panel-note">${escapeHtml(insightPeakSub)}</p>
-        </article>
+        ${guidePeakTimingPanelHtml}
         <article class="mv2-guide2-panel">
           <h3 class="mv2-guide2-panel-h">ถ้าใช้ต่อเนื่อง</h3>
           <p class="mv2-guide2-panel-main">${escapeHtml(continuousHorizonMain)}</p>
@@ -880,9 +908,17 @@ export function renderAmuletReportV2Html(payload) {
       --mv2a-render-meta: rgba(100, 116, 139, 0.85);
     }
     body { margin: 0; background: var(--mv2a-bg); color: var(--mv2a-text); font-family: var(--mv2-font-th); }
-    .mv2a-wrap { max-width: 520px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
+    *, *::before, *::after { box-sizing: border-box; }
+    .mv2a-wrap {
+      max-width: 520px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1rem 1rem 2.5rem;
+      min-width: 0;
+      box-sizing: border-box;
+    }
     @media (max-width: 520px) {
-      .mv2a-wrap { padding: 0.75rem 0.85rem 2rem; }
+      .mv2a-wrap { padding: 0.75rem 0.72rem 1.75rem; }
     }
     .mv2-hero { margin-bottom: 0.75rem; }
     .mv2a-badge { display: inline-block; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.02em; color: var(--mv2a-gold-dim); border: 1px solid var(--mv2a-badge-border); padding: 0.18rem 0.48rem; border-radius: 999px; margin-bottom: 0.45rem; }
@@ -924,7 +960,25 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-hero-clarifier { font-size: 0.76rem; margin: 0.28rem 0 0; color: var(--mv2a-hero-clarifier); line-height: 1.38; }
     .mv2-date { font-size: 0.72rem; color: var(--mv2a-muted); margin: 0.35rem 0 0; }
-    .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0 0 0.55rem; text-align: center; }
+    .mv2-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.42rem;
+      margin: 0 0 0.55rem;
+      text-align: center;
+      width: 100%;
+      min-width: 0;
+    }
+    @media (max-width: 520px) {
+      .mv2-strip {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+        text-align: left;
+      }
+      .mv2-strip > div {
+        min-width: 0;
+      }
+    }
     .mv2-strip-k { font-size: 0.65rem; color: var(--mv2a-muted); }
     .mv2-strip-v { font-size: 1.1rem; font-weight: 700; color: var(--mv2a-gold); }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: #c9a132; }
@@ -942,7 +996,17 @@ export function renderAmuletReportV2Html(payload) {
       text-align: center;
       opacity: 0.9;
     }
-    .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid var(--mv2a-card-border); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; box-shadow: var(--mv2a-card-elev); }
+    .mv2a-card, .mv2-card {
+      background: var(--mv2a-card);
+      border: 1px solid var(--mv2a-card-border);
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      margin: 0.75rem 0;
+      box-shadow: var(--mv2a-card-elev);
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
     .mv2-card--gsum-follow { margin-top: 0.32rem; padding-top: 0.7rem; padding-bottom: 0.72rem; }
     .mv2-card--gsum-follow > h2 { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.92; }
     .mv2-gsumx-items { display: grid; gap: 0.45rem; }
@@ -982,6 +1046,9 @@ export function renderAmuletReportV2Html(payload) {
       margin-top: 0.45rem;
       border-left: 3px solid rgba(184, 135, 27, 0.42);
       padding: 0.72rem 0.78rem;
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: clip;
     }
     .mv2-card--guide > h2 {
       margin: 0 0 0.42rem;
@@ -992,6 +1059,8 @@ export function renderAmuletReportV2Html(payload) {
     /* “จังหวะหนุนของชิ้นนี้” — premium mobile-first layout (presentation only) */
     .mv2-card--guide2 {
       padding: 0.85rem 0.82rem 0.95rem;
+      max-width: 100%;
+      min-width: 0;
     }
     .mv2-guide2-top {
       display: flex;
@@ -1002,10 +1071,13 @@ export function renderAmuletReportV2Html(payload) {
       margin-bottom: 0.85rem;
       padding-bottom: 0.75rem;
       border-bottom: 1px solid rgba(184, 135, 27, 0.14);
+      width: 100%;
+      min-width: 0;
     }
     .mv2-guide2-titlewrap {
-      flex: 1 1 12rem;
+      flex: 1 1 0;
       min-width: 0;
+      max-width: 100%;
     }
     .mv2-guide2-titlewrap h2 {
       margin: 0 0 0.32rem;
@@ -1014,6 +1086,7 @@ export function renderAmuletReportV2Html(payload) {
       letter-spacing: -0.02em;
       line-height: 1.22;
       color: var(--mv2a-gold-dim);
+      overflow-wrap: anywhere;
     }
     .mv2-guide2-sub {
       margin: 0;
@@ -1023,8 +1096,8 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 550;
     }
     .mv2-guide2-gradebox {
-      flex: 0 0 auto;
-      min-width: 7.25rem;
+      flex: 0 1 auto;
+      min-width: 0;
       max-width: 100%;
       padding: 0.52rem 0.65rem;
       border-radius: 11px;
@@ -1041,6 +1114,7 @@ export function renderAmuletReportV2Html(payload) {
       letter-spacing: -0.02em;
       color: var(--mv2a-gold-dim);
       font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
     }
     .mv2-guide2-gradebox-verdict {
       display: block;
@@ -1049,12 +1123,15 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 720;
       line-height: 1.28;
       color: var(--mv2a-text-body);
+      overflow-wrap: anywhere;
     }
     .mv2-guide2-metrics {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 0.48rem;
       margin-bottom: 0.85rem;
+      width: 100%;
+      min-width: 0;
     }
     .mv2-guide2-metric {
       padding: 0.48rem 0.5rem 0.44rem;
@@ -1095,6 +1172,8 @@ export function renderAmuletReportV2Html(payload) {
       background: rgba(255, 252, 245, 0.55);
       border: 1px solid rgba(184, 135, 27, 0.14);
       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+      max-width: 100%;
+      min-width: 0;
     }
     .mv2-guide2-panel--ceiling {
       border-color: rgba(184, 135, 27, 0.24);
@@ -1114,6 +1193,7 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 750;
       line-height: 1.38;
       color: var(--mv2a-text-body);
+      overflow-wrap: anywhere;
     }
     .mv2-guide2-panel-mode {
       margin: 0 0 0.32rem;
@@ -1121,6 +1201,7 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.4;
       font-weight: 620;
       color: var(--mv2a-muted);
+      overflow-wrap: anywhere;
     }
     .mv2-guide2-panel-note {
       margin: 0;
@@ -1128,6 +1209,7 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.42;
       color: var(--mv2a-muted);
       font-weight: 500;
+      overflow-wrap: anywhere;
     }
     .mv2-guide2-support {
       padding: 0.52rem 0.58rem 0.48rem;
@@ -1135,6 +1217,8 @@ export function renderAmuletReportV2Html(payload) {
       margin-bottom: 0.75rem;
       background: rgba(100, 92, 82, 0.028);
       border: 1px solid rgba(100, 92, 82, 0.1);
+      max-width: 100%;
+      min-width: 0;
     }
     .mv2-guide2-support-head {
       margin: 0 0 0.42rem;
@@ -1146,11 +1230,12 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-guide2-support-row {
       display: grid;
-      grid-template-columns: 5rem minmax(0, 1fr);
+      grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr);
       gap: 0.35rem 0.65rem;
       padding: 0.42rem 0;
       border-bottom: 1px solid rgba(100, 92, 82, 0.08);
       align-items: baseline;
+      min-width: 0;
     }
     .mv2-guide2-support-row:nth-child(4) {
       border-bottom: none;
@@ -1167,6 +1252,8 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.42;
       color: var(--mv2a-text-body);
       font-weight: 520;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
     .mv2-guide2-support-foot {
       margin: 0.48rem 0 0;
@@ -1189,6 +1276,7 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.45;
       color: var(--mv2a-muted);
       font-weight: 520;
+      overflow-wrap: anywhere;
     }
     .mv2-guide2-footer-close {
       margin: 0;
@@ -1196,32 +1284,53 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.42;
       font-weight: 680;
       color: var(--mv2a-text-body);
+      overflow-wrap: anywhere;
     }
     @media (max-width: 520px) {
       .mv2-card--guide2 {
-        padding: 0.78rem 0.68rem 0.88rem;
+        padding: 0.72rem 0.62rem 0.82rem;
       }
       .mv2-guide2-top {
         flex-direction: column;
         align-items: stretch;
-        gap: 0.55rem;
+        gap: 0.5rem;
+        margin-bottom: 0.65rem;
+        padding-bottom: 0.6rem;
       }
       .mv2-guide2-gradebox {
         width: 100%;
+        max-width: 100%;
         text-align: center;
+        align-self: stretch;
       }
       .mv2-guide2-metrics {
         grid-template-columns: 1fr;
+        gap: 0.4rem;
+        margin-bottom: 0.65rem;
+      }
+      .mv2-guide2-stack {
+        gap: 0.5rem;
+        margin-bottom: 0.65rem;
+      }
+      .mv2-guide2-panel {
+        padding: 0.55rem 0.6rem;
+      }
+      .mv2-guide2-support {
+        padding: 0.48rem 0.5rem 0.42rem;
+        margin-bottom: 0.58rem;
       }
       .mv2-guide2-support-row {
         grid-template-columns: 1fr;
         gap: 0.18rem;
-        padding: 0.48rem 0;
+        padding: 0.4rem 0;
       }
       .mv2-guide2-support-k {
         font-size: 0.6rem;
         letter-spacing: 0.04em;
         text-transform: uppercase;
+      }
+      .mv2-guide2-footer {
+        padding-top: 0.42rem;
       }
     }
     html.mv2a-theme-dark .mv2-guide2-top {
@@ -1648,10 +1757,18 @@ export function renderAmuletReportV2Html(payload) {
       margin-bottom: 0.35rem;
       border-left: 3px solid var(--mv2a-graph-accent);
       padding: 0.85rem 0.85rem;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
     .mv2a-graph-card > h2 { font-size: 1.02rem; color: var(--mv2a-gold); margin: 0 0 0.28rem; }
     .mv2a-graph-card > .mv2a-hint { margin: 0 0 0.35rem; }
-    .mv2a-radar-wrap { max-width: 18rem; margin: 0 auto; }
+    .mv2a-radar-wrap {
+      max-width: min(18rem, 100%);
+      width: 100%;
+      margin: 0 auto;
+      min-width: 0;
+    }
     .mv2a-radar-plot { position: relative; container-type: inline-size; }
     .mv2a-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
     .mv2a-radar-svg--animate .mv2a-radar-layer--owner,
@@ -2093,6 +2210,9 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-timing-card {
       border-left: 3px solid rgba(184, 135, 27, 0.45);
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
     .mv2-timing-card h2 { font-size: 0.95rem; margin: 0; color: var(--mv2a-gold-dim); }
     .mv2-timing-head { margin-bottom: 0.48rem; }
@@ -2132,12 +2252,203 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 400;
       opacity: 0.82;
     }
+    /* Sacred amulet timing — embedded mini bar charts (guide panel) */
+    .mv2-guide2-panel--peak-timing {
+      padding: 0.58rem 0.62rem 0.62rem;
+    }
+    .mv2-timing-visual {
+      margin: 0.35rem 0 0;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .mv2-timing-visual-head {
+      margin: 0 0 0.42rem;
+      padding-bottom: 0.42rem;
+      border-bottom: 1px dashed rgba(184, 135, 27, 0.18);
+      max-width: 100%;
+      min-width: 0;
+    }
+    .mv2-timing-visual-title {
+      margin: 0;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: var(--mv2a-gold-dim);
+      line-height: 1.25;
+    }
+    .mv2-timing-visual-summary {
+      margin: 0 0 0.52rem;
+      font-size: 0.76rem;
+      font-weight: 700;
+      line-height: 1.38;
+      color: var(--mv2a-text-body);
+      overflow-wrap: anywhere;
+    }
+    .mv2-timing-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.62rem;
+      width: 100%;
+      min-width: 0;
+    }
+    @media (min-width: 420px) {
+      .mv2-timing-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.55rem 0.65rem;
+      }
+    }
+    .mv2-timing-chart-card {
+      padding: 0.52rem 0.55rem 0.48rem;
+      border-radius: 12px;
+      background: rgba(255, 252, 245, 0.65);
+      border: 1px solid rgba(184, 135, 27, 0.16);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    .mv2-timing-chart-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.35rem 0.65rem;
+      margin-bottom: 0.48rem;
+      min-width: 0;
+    }
+    .mv2-timing-chart-k {
+      flex: 1 1 6rem;
+      min-width: 0;
+      font-size: 0.58rem;
+      font-weight: 750;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--mv2a-muted);
+      line-height: 1.25;
+    }
+    .mv2-timing-chart-value {
+      flex: 1 1 8rem;
+      min-width: 0;
+      font-size: 0.82rem;
+      font-weight: 850;
+      line-height: 1.22;
+      letter-spacing: -0.015em;
+      color: var(--mv2a-gold);
+      text-align: right;
+      overflow-wrap: anywhere;
+    }
+    .mv2-timing-bars {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 0.2rem 0.28rem;
+      width: 100%;
+      min-width: 0;
+      padding: 0.12rem 0 0;
+    }
+    .mv2-timing-bars--time {
+      gap: 0.14rem 0.18rem;
+    }
+    .mv2-timing-bar {
+      display: flex;
+      flex: 1 1 0;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.28rem;
+      min-width: 0;
+      position: relative;
+    }
+    .mv2-timing-bar-track {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      width: 100%;
+      max-width: 1.42rem;
+      height: clamp(3.75rem, 18vw, 4.85rem);
+      margin: 0 auto;
+      padding: 0.18rem 0.14rem;
+      border-radius: 999px;
+      background: rgba(100, 92, 82, 0.09);
+      border: 1px solid rgba(100, 92, 82, 0.12);
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .mv2-timing-bar-fill {
+      width: 100%;
+      min-height: 14%;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(200, 200, 200, 0.55) 0%, rgba(150, 145, 135, 0.5) 100%);
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.25);
+    }
+    .mv2-timing-bar--active .mv2-timing-bar-track {
+      background: rgba(184, 135, 27, 0.1);
+      border-color: rgba(184, 135, 27, 0.28);
+      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.08), inset 0 1px 2px rgba(255, 250, 235, 0.35);
+    }
+    .mv2-timing-bar--active .mv2-timing-bar-fill {
+      min-height: 22%;
+      background:
+        repeating-linear-gradient(
+          -36deg,
+          rgba(255, 252, 245, 0.22) 0px,
+          rgba(255, 252, 245, 0.22) 3px,
+          transparent 3px,
+          transparent 6px
+        ),
+        linear-gradient(180deg, #f0d78a 0%, #d4a82a 42%, #b8871b 72%, #8f6710 100%);
+      box-shadow:
+        0 0 0 1px rgba(232, 197, 71, 0.15),
+        inset 0 -1px 2px rgba(80, 58, 16, 0.12);
+    }
+    .mv2-timing-bar:not(.mv2-timing-bar--active) {
+      opacity: 0.62;
+    }
+    .mv2-timing-bar-label {
+      font-size: clamp(0.48rem, 2.6vw, 0.58rem);
+      line-height: 1.12;
+      text-align: center;
+      font-weight: 650;
+      color: rgba(100, 90, 78, 0.88);
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+    .mv2-timing-bar--active .mv2-timing-bar-label {
+      color: var(--mv2a-gold-dim);
+      font-weight: 800;
+    }
+    .mv2-timing-insight--embed {
+      margin-top: 0.55rem;
+      padding: 0.52rem 0.58rem;
+      background: rgba(184, 135, 27, 0.045);
+      border: 1px solid rgba(184, 135, 27, 0.14);
+    }
+    .mv2-timing-insight--embed .mv2-timing-k--mode {
+      margin-bottom: 0.38rem;
+      font-size: 0.58rem;
+      opacity: 0.92;
+    }
+    .mv2-timing-insight--embed .mv2-timing-mode-body {
+      font-size: 0.8rem;
+      font-weight: 720;
+      line-height: 1.45;
+    }
+    .mv2-timing-insight--embed .mv2-timing-hint--compact {
+      margin-top: 0.38rem;
+      padding-top: 0.35rem;
+      font-size: 0.6rem;
+      line-height: 1.38;
+      opacity: 0.88;
+    }
     .mv2-timing-trends { display: grid; gap: 0.55rem; }
     .mv2-timing-trend {
       background: rgba(184, 135, 27, 0.04);
       border: 1px solid rgba(184, 135, 27, 0.14);
       border-radius: 12px;
       padding: 0.52rem 0.6rem;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
     .mv2-timing-trend-top {
       display: flex;
@@ -2145,11 +2456,15 @@ export function renderAmuletReportV2Html(payload) {
       justify-content: space-between;
       gap: 0.5rem;
       margin-bottom: 0.45rem;
+      min-width: 0;
     }
     .mv2-timing-trend-k {
       font-size: 0.66rem;
       font-weight: 600;
       color: var(--mv2a-muted);
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
     .mv2-timing-trend-v {
       font-size: 0.78rem;
@@ -2157,6 +2472,9 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-gold);
       font-variant-numeric: tabular-nums;
       text-align: right;
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
     /* Weekday = เม็ดทอง / bronze */
     .mv2-et-strip--weekday {
@@ -2312,6 +2630,9 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: 12px;
       background: rgba(184, 135, 27, 0.06);
       border: 1px solid rgba(184, 135, 27, 0.2);
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
     .mv2-timing-k--mode {
       display: block;
@@ -2328,6 +2649,7 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.55;
       font-weight: 800;
       color: var(--mv2a-text-body);
+      overflow-wrap: anywhere;
     }
     .mv2-timing-hint {
       margin: 0.72rem 0 0;
@@ -2337,6 +2659,7 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.62;
       color: var(--mv2a-muted);
       font-weight: 400;
+      overflow-wrap: anywhere;
     }
     .mv2-timing-hint--compact {
       margin: 0.45rem 0 0;
@@ -2350,6 +2673,23 @@ export function renderAmuletReportV2Html(payload) {
         padding-top: 0.35rem;
         font-size: 0.58rem;
         line-height: 1.36;
+      }
+      .mv2a-card:not(.mv2-card--guide2),
+      .mv2-card:not(.mv2-card--guide2) {
+        padding: 0.78rem 0.72rem;
+        margin: 0.62rem 0;
+      }
+      .mv2-timing-hint {
+        margin-top: 0.48rem;
+        padding-top: 0.48rem;
+        line-height: 1.5;
+      }
+      .mv2-timing-insight {
+        padding: 0.52rem 0.55rem;
+        margin-top: 0.48rem;
+      }
+      .mv2-timing-trends {
+        gap: 0.42rem;
       }
     }
     html.mv2a-theme-dark .mv2-timing-trend {
@@ -2385,6 +2725,66 @@ export function renderAmuletReportV2Html(payload) {
     }
     html.mv2a-theme-dark .mv2-timing-boost-micro {
       color: rgba(148, 163, 184, 0.82);
+    }
+    html.mv2a-theme-dark .mv2-timing-visual-head {
+      border-bottom-color: rgba(232, 197, 71, 0.16);
+    }
+    html.mv2a-theme-dark .mv2-timing-visual-title {
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-timing-visual-summary {
+      color: rgba(226, 232, 240, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-timing-chart-card {
+      background: rgba(255, 252, 245, 0.04);
+      border-color: rgba(232, 197, 71, 0.16);
+      box-shadow: none;
+    }
+    html.mv2a-theme-dark .mv2-timing-chart-k {
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-timing-chart-value {
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-timing-bar-track {
+      background: rgba(148, 163, 184, 0.1);
+      border-color: rgba(148, 163, 184, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-timing-bar-fill {
+      background: linear-gradient(180deg, rgba(148, 163, 184, 0.42) 0%, rgba(100, 116, 139, 0.48) 100%);
+    }
+    html.mv2a-theme-dark .mv2-timing-bar-label {
+      color: rgba(148, 163, 184, 0.82);
+    }
+    html.mv2a-theme-dark .mv2-timing-bar--active .mv2-timing-bar-track {
+      background: rgba(232, 197, 71, 0.08);
+      border-color: rgba(232, 197, 71, 0.26);
+      box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.08);
+    }
+    html.mv2a-theme-dark .mv2-timing-bar--active .mv2-timing-bar-fill {
+      background:
+        repeating-linear-gradient(
+          -36deg,
+          rgba(255, 252, 245, 0.14) 0px,
+          rgba(255, 252, 245, 0.14) 3px,
+          transparent 3px,
+          transparent 6px
+        ),
+        linear-gradient(180deg, #f3d67a 0%, #e8c547 44%, #b8860b 100%);
+    }
+    html.mv2a-theme-dark .mv2-timing-bar--active .mv2-timing-bar-label {
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-timing-insight--embed {
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.16);
+    }
+    html.mv2a-theme-dark .mv2-timing-insight--embed .mv2-timing-mode-body {
+      color: rgba(226, 232, 240, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-timing-insight--embed .mv2-timing-hint--compact {
+      color: rgba(148, 163, 184, 0.85);
+      border-top-color: rgba(232, 197, 71, 0.12);
     }
     .mv2-meta-block {
       margin: 0.38rem 0 0.42rem;
