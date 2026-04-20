@@ -146,7 +146,11 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(!html.includes('class="mv2-int-card"'), "interaction card removed from layout");
   assert.ok(html.includes('class="mv2a-footer-note"'));
   assert.ok(html.includes("จังหวะหนุนของชิ้นนี้"));
-  assert.ok(html.includes('class="mv2-card mv2-card--guide mv2-card--guide-soft"'));
+  assert.ok(
+    html.includes("mv2-card--guide") &&
+      html.includes("mv2-card--guide-soft") &&
+      html.includes("mv2-card--guide2"),
+  );
   assert.ok(html.includes("ช่วงที่ใช้ได้เด่นสุด"));
   assert.ok(html.includes("ถ้าใช้ต่อเนื่อง"));
   assert.ok(html.includes("ขีดพลังรอบนี้"));

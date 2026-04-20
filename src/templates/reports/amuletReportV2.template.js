@@ -598,69 +598,73 @@ export function renderAmuletReportV2Html(payload) {
       ? `${progressTargetGrade}+`
       : progressTargetGrade;
   const continuousHorizonMain = `${fullsetMark} · ${progressTargetScore}/10 · ${durationContinuousBand}`;
-  const guideCardHtml = `<section class="mv2-card mv2-card--guide mv2-card--guide-soft" aria-labelledby="mv2-guide-h">
-      <h2 id="mv2-guide-h">จังหวะหนุนของชิ้นนี้</h2>
-      <div class="mv2-guide-hero">
-        <p class="mv2-guide-hero-k">ระดับตอนนี้ · ช่วงที่ตอบดี · พื้นที่ที่ดันได้</p>
-        <p class="mv2-guide-hero-grade">${escapeHtml(heroGradeResult)}</p>
-        <p class="mv2-guide-hero-verdict">${escapeHtml(heroVerdictLabel)}</p>
-      </div>
-      <div class="mv2-guide-metrics" role="list" aria-label="สรุปสั้นก่อนอ่านต่อ">
-        <div class="mv2-guide-metric" role="listitem">
-          <span class="mv2-guide-metric-k">ขยับถึง S</span>
-          <span class="mv2-guide-metric-v">${escapeHtml(gapToS10 != null ? gapToS10.toFixed(2) : "—")}</span>
+  const guideCardHtml = `<section class="mv2-card mv2-card--guide mv2-card--guide-soft mv2-card--guide2" aria-labelledby="mv2-guide-h">
+      <header class="mv2-guide2-top">
+        <div class="mv2-guide2-titlewrap">
+          <h2 id="mv2-guide-h">จังหวะหนุนของชิ้นนี้</h2>
+          <p class="mv2-guide2-sub">ระดับตอนนี้ · ช่วงที่ตอบดี · พื้นที่ที่ดันได้</p>
         </div>
-        <div class="mv2-guide-metric" role="listitem">
-          <span class="mv2-guide-metric-k">ดันเพิ่มได้</span>
-          <span class="mv2-guide-metric-v">${escapeHtml(boostMetricDisplay)}</span>
+        <div class="mv2-guide2-gradebox">
+          <span class="mv2-guide2-gradebox-grade">${escapeHtml(heroGradeResult)}</span>
+          <span class="mv2-guide2-gradebox-verdict">${escapeHtml(heroVerdictLabel)}</span>
         </div>
-        <div class="mv2-guide-metric" role="listitem">
-          <span class="mv2-guide-metric-k">ช่วงหนุน</span>
-          <span class="mv2-guide-metric-v">${escapeHtml(durationContinuousBand)}</span>
+      </header>
+      <div class="mv2-guide2-metrics" role="list" aria-label="สรุปสั้นก่อนอ่านต่อ">
+        <div class="mv2-guide2-metric" role="listitem">
+          <span class="mv2-guide2-metric-k">ขยับถึง S</span>
+          <span class="mv2-guide2-metric-v">${escapeHtml(gapToS10 != null ? gapToS10.toFixed(2) : "—")}</span>
         </div>
-      </div>
-      <div class="mv2-guide-horizon-stack" aria-label="อ่านต่อทีละมุม">
-        <div class="mv2-guide-horizon-card">
-          <span class="mv2-guide-horizon-card-k">ช่วงที่ใช้ได้เด่นสุด</span>
-          <span class="mv2-guide-horizon-card-line">${escapeHtml(stepOneAnswer)}</span>
-          ${useModeLabel ? `<span class="mv2-guide-horizon-card-mode">${escapeHtml(useModeLabel)}</span>` : ""}
-          <p class="mv2-guide-horizon-card-hint">${escapeHtml(insightPeakSub)}</p>
+        <div class="mv2-guide2-metric" role="listitem">
+          <span class="mv2-guide2-metric-k">ดันเพิ่มได้</span>
+          <span class="mv2-guide2-metric-v">${escapeHtml(boostMetricDisplay)}</span>
         </div>
-        <div class="mv2-guide-horizon-card">
-          <span class="mv2-guide-horizon-card-k">ถ้าใช้ต่อเนื่อง</span>
-          <span class="mv2-guide-horizon-card-line">${escapeHtml(continuousHorizonMain)}</span>
-          <p class="mv2-guide-horizon-card-sub">${escapeHtml(insightContinuousSub)}</p>
-        </div>
-        <div class="mv2-guide-horizon-card mv2-guide-horizon-card--ceiling">
-          <span class="mv2-guide-horizon-card-k">ขีดพลังรอบนี้</span>
-          <span class="mv2-guide-horizon-card-line">${escapeHtml(ceilingHorizon)}</span>
-          <p class="mv2-guide-horizon-card-sub">${escapeHtml(insightCeilingSub)}</p>
+        <div class="mv2-guide2-metric" role="listitem">
+          <span class="mv2-guide2-metric-k">ช่วงหนุน</span>
+          <span class="mv2-guide2-metric-v">${escapeHtml(durationContinuousBand)}</span>
         </div>
       </div>
-      <div class="mv2-guide-buff-table mv2-guide-belief" role="list" aria-label="แนวทางหนุนพลัง">
-        <div class="mv2-guide-buff-title">แนวทางหนุนพลัง</div>
-        <div class="mv2-guide-belief-tier" role="listitem">
-          <span class="mv2-guide-belief-k">ระยะสั้น</span>
-          <span class="mv2-guide-belief-v">อธิษฐาน / ตั้งจิต / ผลเร็ว แต่เพิ่มได้ไม่มาก</span>
-        </div>
-        <div class="mv2-guide-belief-tier" role="listitem">
-          <span class="mv2-guide-belief-k">ระยะกลาง</span>
-          <span class="mv2-guide-belief-v">ใช้ตามวันเวลาแนะนำ + สวดสั้น + ตั้งจิต / ต้องทำสม่ำเสมอ</span>
-        </div>
-        <div class="mv2-guide-belief-tier" role="listitem">
-          <span class="mv2-guide-belief-k">ระยะยาว</span>
-          <span class="mv2-guide-belief-v">สวดมนต์ + สมาธิต่อเนื่อง / เห็นผลช้า แต่หนุนน้ำหนักสุด</span>
-        </div>
-        <p class="mv2-guide-belief-note">พิธีหรือการตั้งจิตต่อเนื่อง · อาจเป็นโบนัสพิเศษ ไม่ใช่กติกาพื้นฐานทุกชิ้น</p>
+      <div class="mv2-guide2-stack" aria-label="อ่านต่อทีละมุม">
+        <article class="mv2-guide2-panel">
+          <h3 class="mv2-guide2-panel-h">ช่วงที่ใช้ได้เด่นสุด</h3>
+          <p class="mv2-guide2-panel-main">${escapeHtml(stepOneAnswer)}</p>
+          ${useModeLabel ? `<p class="mv2-guide2-panel-mode">${escapeHtml(useModeLabel)}</p>` : ""}
+          <p class="mv2-guide2-panel-note">${escapeHtml(insightPeakSub)}</p>
+        </article>
+        <article class="mv2-guide2-panel">
+          <h3 class="mv2-guide2-panel-h">ถ้าใช้ต่อเนื่อง</h3>
+          <p class="mv2-guide2-panel-main">${escapeHtml(continuousHorizonMain)}</p>
+          <p class="mv2-guide2-panel-note">${escapeHtml(insightContinuousSub)}</p>
+        </article>
+        <article class="mv2-guide2-panel mv2-guide2-panel--ceiling">
+          <h3 class="mv2-guide2-panel-h">ขีดพลังรอบนี้</h3>
+          <p class="mv2-guide2-panel-main">${escapeHtml(ceilingHorizon)}</p>
+          <p class="mv2-guide2-panel-note">${escapeHtml(insightCeilingSub)}</p>
+        </article>
       </div>
-      <div class="mv2-guide-bottom">
-        <p class="mv2-guide-boost-inline">${escapeHtml(
+      <div class="mv2-guide2-support mv2-guide-buff-table mv2-guide-belief" role="list" aria-label="แนวทางหนุนพลัง">
+        <div class="mv2-guide2-support-head mv2-guide-buff-title">แนวทางหนุนพลัง</div>
+        <div class="mv2-guide2-support-row" role="listitem">
+          <span class="mv2-guide2-support-k">ระยะสั้น</span>
+          <span class="mv2-guide2-support-v">อธิษฐาน / ตั้งจิต / ผลเร็ว แต่เพิ่มได้ไม่มาก</span>
+        </div>
+        <div class="mv2-guide2-support-row" role="listitem">
+          <span class="mv2-guide2-support-k">ระยะกลาง</span>
+          <span class="mv2-guide2-support-v">ใช้ตามวันเวลาแนะนำ + สวดสั้น + ตั้งจิต / ต้องทำสม่ำเสมอ</span>
+        </div>
+        <div class="mv2-guide2-support-row" role="listitem">
+          <span class="mv2-guide2-support-k">ระยะยาว</span>
+          <span class="mv2-guide2-support-v">สวดมนต์ + สมาธิต่อเนื่อง / เห็นผลช้า แต่หนุนน้ำหนักสุด</span>
+        </div>
+        <p class="mv2-guide2-support-foot mv2-guide-belief-note">พิธีหรือการตั้งจิตต่อเนื่อง · อาจเป็นโบนัสพิเศษ ไม่ใช่กติกาพื้นฐานทุกชิ้น</p>
+      </div>
+      <footer class="mv2-guide2-footer">
+        <p class="mv2-guide2-footer-boost mv2-guide-boost-inline">${escapeHtml(
           boostPercent != null
             ? `โบนัสจังหวะประมาณ +${Math.round(boostPercent)}% · คะแนนหลักของรายงานยังไม่เปลี่ยน`
             : "โบนัสจังหวะประมาณ — · คะแนนหลักของรายงานยังไม่เปลี่ยน",
         )}</p>
-        <p class="mv2-guide-closing">${escapeHtml(heroVerdictLine)}</p>
-      </div>
+        <p class="mv2-guide2-footer-close mv2-guide-closing">${escapeHtml(heroVerdictLine)}</p>
+      </footer>
     </section>`;
 
   const subtypeLabel = h.subtypeLabel || "พระเครื่อง";
@@ -984,6 +988,321 @@ export function renderAmuletReportV2Html(payload) {
       font-size: 0.92rem;
       font-weight: 750;
       color: var(--mv2a-gold-dim);
+    }
+    /* “จังหวะหนุนของชิ้นนี้” — premium mobile-first layout (presentation only) */
+    .mv2-card--guide2 {
+      padding: 0.85rem 0.82rem 0.95rem;
+    }
+    .mv2-guide2-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.65rem 1rem;
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(184, 135, 27, 0.14);
+    }
+    .mv2-guide2-titlewrap {
+      flex: 1 1 12rem;
+      min-width: 0;
+    }
+    .mv2-guide2-titlewrap h2 {
+      margin: 0 0 0.32rem;
+      font-size: 1.02rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.22;
+      color: var(--mv2a-gold-dim);
+    }
+    .mv2-guide2-sub {
+      margin: 0;
+      font-size: 0.68rem;
+      line-height: 1.45;
+      color: var(--mv2a-muted);
+      font-weight: 550;
+    }
+    .mv2-guide2-gradebox {
+      flex: 0 0 auto;
+      min-width: 7.25rem;
+      max-width: 100%;
+      padding: 0.52rem 0.65rem;
+      border-radius: 11px;
+      text-align: right;
+      background: linear-gradient(155deg, rgba(255, 252, 245, 0.95) 0%, rgba(252, 248, 236, 0.98) 100%);
+      border: 1px solid rgba(184, 135, 27, 0.26);
+      box-shadow: 0 1px 3px rgba(80, 58, 16, 0.06);
+    }
+    .mv2-guide2-gradebox-grade {
+      display: block;
+      font-size: 1.12rem;
+      font-weight: 850;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      color: var(--mv2a-gold-dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .mv2-guide2-gradebox-verdict {
+      display: block;
+      margin-top: 0.22rem;
+      font-size: 0.72rem;
+      font-weight: 720;
+      line-height: 1.28;
+      color: var(--mv2a-text-body);
+    }
+    .mv2-guide2-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.48rem;
+      margin-bottom: 0.85rem;
+    }
+    .mv2-guide2-metric {
+      padding: 0.48rem 0.5rem 0.44rem;
+      border-radius: 11px;
+      background: rgba(184, 135, 27, 0.055);
+      border: 1px solid rgba(184, 135, 27, 0.16);
+      box-sizing: border-box;
+    }
+    .mv2-guide2-metric-k {
+      display: block;
+      margin-bottom: 0.28rem;
+      font-size: 0.56rem;
+      font-weight: 750;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--mv2a-muted);
+      line-height: 1.2;
+    }
+    .mv2-guide2-metric-v {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 780;
+      line-height: 1.25;
+      color: var(--mv2a-text-body);
+      font-variant-numeric: tabular-nums;
+      word-break: break-word;
+    }
+    .mv2-guide2-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0.58rem;
+      margin-bottom: 0.85rem;
+    }
+    .mv2-guide2-panel {
+      margin: 0;
+      padding: 0.62rem 0.72rem;
+      border-radius: 12px;
+      background: rgba(255, 252, 245, 0.55);
+      border: 1px solid rgba(184, 135, 27, 0.14);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+    }
+    .mv2-guide2-panel--ceiling {
+      border-color: rgba(184, 135, 27, 0.24);
+      background: linear-gradient(180deg, rgba(255, 252, 245, 0.75) 0%, rgba(252, 248, 238, 0.92) 100%);
+    }
+    .mv2-guide2-panel-h {
+      margin: 0 0 0.38rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      color: var(--mv2a-gold-dim);
+      line-height: 1.25;
+    }
+    .mv2-guide2-panel-main {
+      margin: 0 0 0.32rem;
+      font-size: 0.84rem;
+      font-weight: 750;
+      line-height: 1.38;
+      color: var(--mv2a-text-body);
+    }
+    .mv2-guide2-panel-mode {
+      margin: 0 0 0.32rem;
+      font-size: 0.76rem;
+      line-height: 1.4;
+      font-weight: 620;
+      color: var(--mv2a-muted);
+    }
+    .mv2-guide2-panel-note {
+      margin: 0;
+      font-size: 0.66rem;
+      line-height: 1.42;
+      color: var(--mv2a-muted);
+      font-weight: 500;
+    }
+    .mv2-guide2-support {
+      padding: 0.52rem 0.58rem 0.48rem;
+      border-radius: 12px;
+      margin-bottom: 0.75rem;
+      background: rgba(100, 92, 82, 0.028);
+      border: 1px solid rgba(100, 92, 82, 0.1);
+    }
+    .mv2-guide2-support-head {
+      margin: 0 0 0.42rem;
+      font-size: 0.58rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--mv2a-gold-dim);
+    }
+    .mv2-guide2-support-row {
+      display: grid;
+      grid-template-columns: 5rem minmax(0, 1fr);
+      gap: 0.35rem 0.65rem;
+      padding: 0.42rem 0;
+      border-bottom: 1px solid rgba(100, 92, 82, 0.08);
+      align-items: baseline;
+    }
+    .mv2-guide2-support-row:nth-child(4) {
+      border-bottom: none;
+      padding-bottom: 0.25rem;
+    }
+    .mv2-guide2-support-k {
+      font-size: 0.64rem;
+      font-weight: 750;
+      color: var(--mv2a-muted);
+      line-height: 1.3;
+    }
+    .mv2-guide2-support-v {
+      font-size: 0.72rem;
+      line-height: 1.42;
+      color: var(--mv2a-text-body);
+      font-weight: 520;
+    }
+    .mv2-guide2-support-foot {
+      margin: 0.48rem 0 0;
+      padding-top: 0.38rem;
+      border-top: 1px dashed rgba(184, 135, 27, 0.2);
+      font-size: 0.62rem;
+      line-height: 1.42;
+      color: var(--mv2a-muted);
+      font-style: italic;
+      font-weight: 480;
+    }
+    .mv2-guide2-footer {
+      margin: 0;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(100, 92, 82, 0.1);
+    }
+    .mv2-guide2-footer-boost {
+      margin: 0 0 0.42rem;
+      font-size: 0.63rem;
+      line-height: 1.45;
+      color: var(--mv2a-muted);
+      font-weight: 520;
+    }
+    .mv2-guide2-footer-close {
+      margin: 0;
+      font-size: 0.75rem;
+      line-height: 1.42;
+      font-weight: 680;
+      color: var(--mv2a-text-body);
+    }
+    @media (max-width: 520px) {
+      .mv2-card--guide2 {
+        padding: 0.78rem 0.68rem 0.88rem;
+      }
+      .mv2-guide2-top {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.55rem;
+      }
+      .mv2-guide2-gradebox {
+        width: 100%;
+        text-align: center;
+      }
+      .mv2-guide2-metrics {
+        grid-template-columns: 1fr;
+      }
+      .mv2-guide2-support-row {
+        grid-template-columns: 1fr;
+        gap: 0.18rem;
+        padding: 0.48rem 0;
+      }
+      .mv2-guide2-support-k {
+        font-size: 0.6rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+    }
+    html.mv2a-theme-dark .mv2-guide2-top {
+      border-bottom-color: rgba(232, 197, 71, 0.18);
+    }
+    html.mv2a-theme-dark .mv2-guide2-titlewrap h2 {
+      color: rgba(254, 243, 199, 0.96);
+    }
+    html.mv2a-theme-dark .mv2-guide2-sub {
+      color: rgba(148, 163, 184, 0.9);
+    }
+    html.mv2a-theme-dark .mv2-guide2-gradebox {
+      background: linear-gradient(155deg, rgba(32, 28, 22, 0.95) 0%, rgba(22, 24, 30, 0.98) 100%);
+      border-color: rgba(232, 197, 71, 0.28);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+    html.mv2a-theme-dark .mv2-guide2-gradebox-grade {
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-guide2-gradebox-verdict {
+      color: rgba(226, 232, 240, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-guide2-metric {
+      background: rgba(232, 197, 71, 0.07);
+      border-color: rgba(232, 197, 71, 0.22);
+    }
+    html.mv2a-theme-dark .mv2-guide2-metric-k {
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-guide2-metric-v {
+      color: rgba(248, 250, 252, 0.96);
+    }
+    html.mv2a-theme-dark .mv2-guide2-panel {
+      background: rgba(255, 252, 245, 0.04);
+      border-color: rgba(232, 197, 71, 0.16);
+      box-shadow: none;
+    }
+    html.mv2a-theme-dark .mv2-guide2-panel--ceiling {
+      border-color: rgba(232, 197, 71, 0.26);
+      background: linear-gradient(180deg, rgba(255, 252, 245, 0.06) 0%, rgba(20, 22, 28, 0.55) 100%);
+    }
+    html.mv2a-theme-dark .mv2-guide2-panel-h {
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-guide2-panel-main {
+      color: rgba(226, 232, 240, 0.94);
+    }
+    html.mv2a-theme-dark .mv2-guide2-panel-mode {
+      color: rgba(148, 163, 184, 0.9);
+    }
+    html.mv2a-theme-dark .mv2-guide2-panel-note {
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-guide2-support {
+      background: rgba(232, 197, 71, 0.04);
+      border-color: rgba(232, 197, 71, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-guide2-support-head {
+      color: #fde68a;
+    }
+    html.mv2a-theme-dark .mv2-guide2-support-row {
+      border-bottom-color: rgba(148, 163, 184, 0.12);
+    }
+    html.mv2a-theme-dark .mv2-guide2-support-k {
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-guide2-support-v {
+      color: rgba(226, 232, 240, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-guide2-support-foot {
+      border-top-color: rgba(232, 197, 71, 0.2);
+      color: rgba(148, 163, 184, 0.85);
+    }
+    html.mv2a-theme-dark .mv2-guide2-footer {
+      border-top-color: rgba(148, 163, 184, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-guide2-footer-boost {
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-guide2-footer-close {
+      color: rgba(241, 245, 249, 0.96);
     }
     .mv2-guide-top {
       display: flex;
