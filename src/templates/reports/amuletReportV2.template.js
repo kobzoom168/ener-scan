@@ -293,24 +293,22 @@ function buildAmuletTimingVisualHtml(ts) {
   const topWin = String(ts.topWindowLabel || "").trim() || "—";
   const summaryLine = `${topDay} · ${topWin}`;
   return `
-    <div class="mv2-timing-visual mv2-timing-visual--sacred" aria-labelledby="mv2-timing-embed-h">
-      <div class="mv2-sacred-timing-hero">
-        <p class="mv2-sacred-timing-hero-line">${escapeHtml(summaryLine)}</p>
-      </div>
-      <div class="mv2-timing-visual-head mv2-timing-visual-head--sacred">
+    <div class="mv2-timing-visual" aria-labelledby="mv2-timing-embed-h">
+      <div class="mv2-timing-visual-head">
         <h4 id="mv2-timing-embed-h" class="mv2-timing-visual-title">${escapeHtml(ts.heading)}</h4>
         ${sub ? `<p class="mv2-timing-sub">${escapeHtml(sub)}</p>` : ""}
         ${boostHtml}
       </div>
-      <div class="mv2-timing-grid mv2-timing-grid--sacred">
-        <div class="mv2-timing-chart-card mv2-sacred-chart-card">
+      <p class="mv2-timing-visual-summary">${escapeHtml(summaryLine)}</p>
+      <div class="mv2-timing-grid">
+        <div class="mv2-timing-chart-card">
           <div class="mv2-timing-chart-head">
             <span class="mv2-timing-chart-k">${escapeHtml(String(ts.weekdayKicker || "").trim() || "วันส่งดี")}</span>
             <span class="mv2-timing-chart-value">${escapeHtml(topDay)}</span>
           </div>
           <div class="mv2-timing-bars mv2-timing-bars--weekday" role="list" aria-label="วันในสัปดาห์">${wdBars}</div>
         </div>
-        <div class="mv2-timing-chart-card mv2-sacred-chart-card">
+        <div class="mv2-timing-chart-card">
           <div class="mv2-timing-chart-head">
             <span class="mv2-timing-chart-k">${escapeHtml(String(ts.timeKicker || "").trim() || "ช่วงเวลาที่ส่งดี")}</span>
             <span class="mv2-timing-chart-value">${escapeHtml(topWin)}</span>
@@ -318,7 +316,7 @@ function buildAmuletTimingVisualHtml(ts) {
           <div class="mv2-timing-bars mv2-timing-bars--time" role="list" aria-label="ช่วงเวลา">${timeBars}</div>
         </div>
       </div>
-      <div class="mv2-timing-insight mv2-timing-insight--embed mv2-timing-insight--sacred">
+      <div class="mv2-timing-insight mv2-timing-insight--embed">
         <span class="mv2-timing-k mv2-timing-k--mode">${escapeHtml(String(ts.modeKicker || "").trim() || "แนวใช้ที่แนะนำ")}</span>
         <p class="mv2-timing-mode-body">${escapeHtml(ts.ritualLine)}</p>
         <p class="mv2-timing-hint mv2-timing-hint--compact">${escapeHtml(ts.hint)}</p>
@@ -562,40 +560,31 @@ export function renderAmuletReportV2Html(payload) {
     return Math.max(0, projected - base);
   })();
   const heroGradeResult = `${pipelineFromGrade} → ${progressTargetGrade}`;
-  /** บรรทัดใต้ตัวเลข B → B — ภาษาง่ายสำหรับผู้อ่านทุกวัย */
-  const guideGradeSubtext = (() => {
-    if (pipelineFromGrade === progressTargetGrade) {
-      return `รอบนี้ยังอยู่ระดับ ${pipelineFromGrade}`;
-    }
-    return `รอบนี้จาก ${pipelineFromGrade} ไป ${progressTargetGrade}`;
+  const heroVerdictLabel = (() => {
+    if (pipelineFromGrade === "B" && progressTargetGrade === "A") return "คุ้มปั้น";
+    if (pipelineFromGrade === "B" && progressTargetGrade === "B") return "ยังไม่คุ้มปั้น";
+    if (pipelineFromGrade === "A" && progressTargetGrade === "S") return "น่าปั้นต่อ";
+    if (pipelineFromGrade === "A" && progressTargetGrade === "A") return "ยังไม่ถึง S ในรอบนี้";
+    if (pipelineFromGrade === "S") return "ใช้ต่อได้เลย";
+    return "ควรสแกนเพิ่ม";
   })();
-  /**
-   * บรรทัดปิดท้ายการ์ด — โทนนุ่ม ชัด ไม่ใช้คำวัยรุ่น/คำฟุ้ง
-   *
-   * เวอร์ชันง่ายที่สุด (สำรองคัดลอกไปใช้แทนได้ ถ้าต้องการสั้นลงอีก):
-   * - B→B: บรรทัดเดียว "ใช้ต่อได้ ถ้าอยากได้พลังมากขึ้น ลองหาชิ้นที่เข้ากันมากกว่า"
-   * - ถึง S แล้ว: "ระดับสูงแล้ว ใช้ต่อได้ตามสบาย"
-   * - อื่น ๆ: ย่อจากข้อความหลัก โดยตัดคำซ้ำ ไม่เปลี่ยนความหมาย
-   */
-  const guideClosingLineHtml = (() => {
+  const heroVerdictLine = (() => {
     if (pipelineFromGrade === "S") {
-      return escapeHtml("ใช้ต่อได้ตามสบาย ระดับในระบบสูงแล้ว");
+      return "ใช้ต่อได้ เกรดในระบบอยู่ระดับสูงแล้ว";
     }
     if (progressTargetGrade === "S" && pipelineFromGrade !== "S") {
-      return escapeHtml("ในรอบนี้ยังมีโอกาสไปถึง S ได้");
+      return "ชิ้นนี้ยังมีลุ้นขยับถึง S ได้ในรอบนี้";
     }
     if (pipelineFromGrade === "A" && progressTargetGrade === "A") {
-      return escapeHtml("ใช้ต่อได้ ถ้าอยากไปถึง S อาจลองหาชิ้นอื่นที่เข้ากันมากกว่า");
+      return "ใช้ต่อได้ แต่ถ้าจะดันถึง S การสแกนหาชิ้นหนุนเพิ่มอาจคุ้มกว่า";
     }
     if (pipelineFromGrade === "B" && progressTargetGrade === "A") {
-      return escapeHtml("เหมาะเป็นจุดเริ่ม ถ้าอยากไปถึง S อาจลองหาชิ้นที่เข้ากันมากกว่า");
+      return "ชิ้นนี้เหมาะเป็นตัวตั้ง แต่ถ้าจะดันถึง S การสแกนหาชิ้นหนุนเพิ่มอาจคุ้มกว่า";
     }
     if (pipelineFromGrade === "B" && progressTargetGrade === "B") {
-      return `${escapeHtml("ชิ้นนี้ใช้ต่อได้ และเหมาะเป็นตัวช่วยตั้งต้น")}<br />${escapeHtml(
-        "แต่ถ้าต้องการพลังที่ขึ้นได้มากกว่านี้ อาจต้องหาชิ้นที่เข้ากันมากกว่า",
-      )}`;
+      return "ชิ้นนี้เหมาะเป็นตัวตั้ง แต่ยังไม่ใช่ตัวปั้นสุด";
     }
-    return escapeHtml("ถ้าอยากไปถึง S อาจลองสแกนหาชิ้นอื่นในสายเดียวกันอีกสองสามชิ้น");
+    return "ถ้าจะลุ้น S การสแกนหาอีก 2–3 ชิ้นในสายเดียวกันอาจคุ้มกว่า";
   })();
   const stepOneAnswer = `${useDayLabel} · ${useTimeLabel}`;
   const boostMetricDisplay = (() => {
@@ -612,115 +601,97 @@ export function renderAmuletReportV2Html(payload) {
     }
     return "7–30 วัน";
   })();
-  const insightPeakSub = "ช่วงนี้เหมาะกับการใช้ต่อเนื่อง มากกว่าพกไว้เฉย ๆ";
+  const insightPeakSub = "จังหวะนี้เหมาะกับการใช้ต่อเนื่อง มากกว่าพกไว้เฉย ๆ";
   const insightContinuousSub =
     pipelineFromGrade === progressTargetGrade
-      ? `พลังจะนิ่งขึ้น แม้ระดับยังอยู่ที่ ${progressTargetGrade}`
-      : "พลังจะนิ่งขึ้น และช่วยได้เต็มขึ้นเมื่อใช้ต่อเนื่อง";
-  const ceilingHorizonLine1 =
-    progressTargetGrade === "S" ? "ถึง S ในรอบนี้" : `สูงสุดอยู่ที่ ${progressTargetGrade}`;
-  const ceilingHorizonLine2 = progressTargetGrade === "S" ? "" : "รอบนี้ยังไม่ถึง S";
-  const ceilingHorizonMainHtml =
+      ? `พลังจะนิ่งขึ้น แม้เกรดยังอยู่ระดับ ${progressTargetGrade}`
+      : "พลังจะนิ่งขึ้นและหนุนได้เต็มกว่าเดิมเมื่อใช้ต่อเนื่อง";
+  const ceilingHorizon =
     progressTargetGrade === "S"
-      ? escapeHtml(ceilingHorizonLine1)
-      : `${escapeHtml(ceilingHorizonLine1)}<br />${escapeHtml(ceilingHorizonLine2)}`;
+      ? "ถึง S ในรอบนี้"
+      : `สูงสุดอยู่ที่ ${progressTargetGrade} · ยังไม่ถึง S ในรอบนี้`;
   const insightCeilingSub =
     progressTargetGrade === "S"
-      ? "ใช้ต่อได้แบบสบาย ๆ ไม่ต้องเร่งเกินกำลัง"
-      : "รอบนี้เหมาะกับการค่อย ๆ ใช้ให้พลังนิ่ง มากกว่าฝืนเร่ง";
+      ? "หนุนต่อได้แบบนิ่ง ๆ ไม่ต้องฝืนเร่งเกินจังหวะ"
+      : "รอบนี้เหมาะกับการดันให้แน่น มากกว่าฝืนเร่งเกินจังหวะ";
   const fullsetMark =
     pipelineFromGrade === progressTargetGrade && (boostCapScore10 || 0) > 0
       ? `${progressTargetGrade}+`
       : progressTargetGrade;
   const continuousHorizonMain = `${fullsetMark} · ${progressTargetScore}/10 · ${durationContinuousBand}`;
   const guidePeakTimingPanelHtml = ts
-    ? `<article class="mv2-sacred-card mv2-sacred-card--timing mv2-guide2-panel mv2-guide2-panel--peak-timing">
-          <h3 class="mv2-guide2-panel-h mv2-sacred-card-h">ช่วงที่ใช้ได้ดีที่สุด</h3>
+    ? `<article class="mv2-guide2-panel mv2-guide2-panel--peak-timing">
+          <h3 class="mv2-guide2-panel-h">ช่วงที่ใช้ได้เด่นสุด</h3>
           ${buildAmuletTimingVisualHtml(ts)}
-          <p class="mv2-guide2-panel-note mv2-sacred-card-note">${escapeHtml(insightPeakSub)}</p>
+          <p class="mv2-guide2-panel-note">${escapeHtml(insightPeakSub)}</p>
         </article>`
-    : `<article class="mv2-sacred-card mv2-sacred-card--timing mv2-guide2-panel">
-          <h3 class="mv2-guide2-panel-h mv2-sacred-card-h">ช่วงที่ใช้ได้ดีที่สุด</h3>
-          <p class="mv2-guide2-panel-main mv2-sacred-hero-fallback">${escapeHtml(stepOneAnswer)}</p>
+    : `<article class="mv2-guide2-panel">
+          <h3 class="mv2-guide2-panel-h">ช่วงที่ใช้ได้เด่นสุด</h3>
+          <p class="mv2-guide2-panel-main">${escapeHtml(stepOneAnswer)}</p>
           ${useModeLabel ? `<p class="mv2-guide2-panel-mode">${escapeHtml(useModeLabel)}</p>` : ""}
-          <p class="mv2-guide2-panel-note mv2-sacred-card-note">${escapeHtml(insightPeakSub)}</p>
+          <p class="mv2-guide2-panel-note">${escapeHtml(insightPeakSub)}</p>
         </article>`;
-  const guideFootBoostHtml =
-    boostPercent != null
-      ? `<span class="mv2-guide2-footer-boost-line">${escapeHtml(
-          `ถ้าใช้ตามวันและเวลาที่แนะนำ อาจช่วยหนุนพลังได้ประมาณ +${Math.round(boostPercent)}%`,
-        )}</span><br /><span class="mv2-guide2-footer-boost-line">${escapeHtml(
-          "คะแนนหลักของรายงานยังไม่เปลี่ยน",
-        )}</span>`
-      : `<span class="mv2-guide2-footer-boost-line">${escapeHtml("คะแนนหลักของรายงานยังไม่เปลี่ยน")}</span>`;
-  const guideCardHtml = `<section class="mv2-card mv2-card--guide mv2-card--guide-soft mv2-card--guide2 mv2-sacred-guide" aria-labelledby="mv2-guide-h">
-      <header class="mv2-guide2-top mv2-sacred-guide-header">
+  const guideCardHtml = `<section class="mv2-card mv2-card--guide mv2-card--guide-soft mv2-card--guide2" aria-labelledby="mv2-guide-h">
+      <header class="mv2-guide2-top">
         <div class="mv2-guide2-titlewrap">
-          <h2 id="mv2-guide-h">จังหวะของชิ้นนี้</h2>
-          <p class="mv2-guide2-sub">ระดับตอนนี้ · ใช้ช่วงไหนดี · ใช้ต่อแล้วเป็นอย่างไร</p>
+          <h2 id="mv2-guide-h">จังหวะหนุนของชิ้นนี้</h2>
+          <p class="mv2-guide2-sub">ระดับตอนนี้ · ช่วงที่ตอบดี · พื้นที่ที่ดันได้</p>
         </div>
-        <div class="mv2-guide2-gradebox mv2-sacred-gradebox">
+        <div class="mv2-guide2-gradebox">
           <span class="mv2-guide2-gradebox-grade">${escapeHtml(heroGradeResult)}</span>
-          <span class="mv2-guide2-gradebox-verdict">${escapeHtml(guideGradeSubtext)}</span>
+          <span class="mv2-guide2-gradebox-verdict">${escapeHtml(heroVerdictLabel)}</span>
         </div>
       </header>
-      <div class="mv2-guide2-metrics mv2-sacred-metrics" role="list" aria-label="ตัวเลขสำคัญสั้น ๆ">
-        <div class="mv2-guide2-metric mv2-sacred-metric-card" role="listitem">
-          <span class="mv2-guide2-metric-k">ถ้าจะไปถึง S</span>
+      <div class="mv2-guide2-metrics" role="list" aria-label="สรุปสั้นก่อนอ่านต่อ">
+        <div class="mv2-guide2-metric" role="listitem">
+          <span class="mv2-guide2-metric-k">ขยับถึง S</span>
           <span class="mv2-guide2-metric-v">${escapeHtml(gapToS10 != null ? gapToS10.toFixed(2) : "—")}</span>
         </div>
-        <div class="mv2-guide2-metric mv2-sacred-metric-card" role="listitem">
-          <span class="mv2-guide2-metric-k">เพิ่มได้อีก</span>
+        <div class="mv2-guide2-metric" role="listitem">
+          <span class="mv2-guide2-metric-k">ดันเพิ่มได้</span>
           <span class="mv2-guide2-metric-v">${escapeHtml(boostMetricDisplay)}</span>
         </div>
-        <div class="mv2-guide2-metric mv2-sacred-metric-card" role="listitem">
-          <span class="mv2-guide2-metric-k">ใช้ต่อเนื่องได้</span>
+        <div class="mv2-guide2-metric" role="listitem">
+          <span class="mv2-guide2-metric-k">ช่วงหนุน</span>
           <span class="mv2-guide2-metric-v">${escapeHtml(durationContinuousBand)}</span>
         </div>
       </div>
-      <div class="mv2-guide2-stack mv2-sacred-stack" aria-label="อ่านทีละข้อ">
+      <div class="mv2-guide2-stack" aria-label="อ่านต่อทีละมุม">
         ${guidePeakTimingPanelHtml}
-        <article class="mv2-sacred-card mv2-sacred-card--continuous mv2-guide2-panel">
-          <h3 class="mv2-guide2-panel-h mv2-sacred-card-h">ถ้าใช้ต่อเนื่อง</h3>
-          <p class="mv2-guide2-panel-main mv2-sacred-card-main">${escapeHtml(continuousHorizonMain)}</p>
-          <p class="mv2-guide2-panel-note mv2-sacred-card-note">${escapeHtml(insightContinuousSub)}</p>
+        <article class="mv2-guide2-panel">
+          <h3 class="mv2-guide2-panel-h">ถ้าใช้ต่อเนื่อง</h3>
+          <p class="mv2-guide2-panel-main">${escapeHtml(continuousHorizonMain)}</p>
+          <p class="mv2-guide2-panel-note">${escapeHtml(insightContinuousSub)}</p>
         </article>
-        <article class="mv2-sacred-card mv2-sacred-card--ceiling mv2-guide2-panel mv2-guide2-panel--ceiling">
-          <h3 class="mv2-guide2-panel-h mv2-sacred-card-h">ระดับที่ไปได้ในรอบนี้</h3>
-          <p class="mv2-guide2-panel-main mv2-sacred-card-main mv2-sacred-ceiling-value">${ceilingHorizonMainHtml}</p>
-          <p class="mv2-guide2-panel-note mv2-sacred-card-note">${escapeHtml(insightCeilingSub)}</p>
+        <article class="mv2-guide2-panel mv2-guide2-panel--ceiling">
+          <h3 class="mv2-guide2-panel-h">ขีดพลังรอบนี้</h3>
+          <p class="mv2-guide2-panel-main">${escapeHtml(ceilingHorizon)}</p>
+          <p class="mv2-guide2-panel-note">${escapeHtml(insightCeilingSub)}</p>
         </article>
       </div>
-      <div class="mv2-guide2-ladder mv2-guide-buff-table mv2-guide-belief" role="list" aria-label="แนวทางเสริมพลัง">
-        <h3 class="mv2-guide2-ladder-title">แนวทางเสริมพลัง</h3>
-        <div class="mv2-guide2-ladder-steps">
-          <div class="mv2-guide2-ladder-step" role="listitem">
-            <span class="mv2-guide2-ladder-step-num" aria-hidden="true">1</span>
-            <div class="mv2-guide2-ladder-step-body">
-              <span class="mv2-guide2-ladder-step-k">แบบเร็ว</span>
-              <p class="mv2-guide2-ladder-step-v">อธิษฐาน / ตั้งจิต / เห็นผลเร็ว แต่เพิ่มได้ไม่มาก</p>
-            </div>
-          </div>
-          <div class="mv2-guide2-ladder-step" role="listitem">
-            <span class="mv2-guide2-ladder-step-num" aria-hidden="true">2</span>
-            <div class="mv2-guide2-ladder-step-body">
-              <span class="mv2-guide2-ladder-step-k">แบบสม่ำเสมอ</span>
-              <p class="mv2-guide2-ladder-step-v">ใช้ตามวันและเวลาที่แนะนำ + สวดสั้น + ตั้งจิต / ควรทำต่อเนื่อง</p>
-            </div>
-          </div>
-          <div class="mv2-guide2-ladder-step mv2-guide2-ladder-step--last" role="listitem">
-            <span class="mv2-guide2-ladder-step-num" aria-hidden="true">3</span>
-            <div class="mv2-guide2-ladder-step-body">
-              <span class="mv2-guide2-ladder-step-k">แบบลึก</span>
-              <p class="mv2-guide2-ladder-step-v">สวดมนต์ + สมาธิต่อเนื่อง / เห็นผลช้า แต่ช่วยให้พลังนิ่งที่สุด</p>
-            </div>
-          </div>
+      <div class="mv2-guide2-support mv2-guide-buff-table mv2-guide-belief" role="list" aria-label="แนวทางหนุนพลัง">
+        <div class="mv2-guide2-support-head mv2-guide-buff-title">แนวทางหนุนพลัง</div>
+        <div class="mv2-guide2-support-row" role="listitem">
+          <span class="mv2-guide2-support-k">ระยะสั้น</span>
+          <span class="mv2-guide2-support-v">อธิษฐาน / ตั้งจิต / ผลเร็ว แต่เพิ่มได้ไม่มาก</span>
         </div>
-        <p class="mv2-guide2-ladder-foot mv2-guide-belief-note">การตั้งจิตหรือพิธี เป็นการเสริมพิเศษ ไม่ใช่เงื่อนไขของทุกชิ้น</p>
+        <div class="mv2-guide2-support-row" role="listitem">
+          <span class="mv2-guide2-support-k">ระยะกลาง</span>
+          <span class="mv2-guide2-support-v">ใช้ตามวันเวลาแนะนำ + สวดสั้น + ตั้งจิต / ต้องทำสม่ำเสมอ</span>
+        </div>
+        <div class="mv2-guide2-support-row" role="listitem">
+          <span class="mv2-guide2-support-k">ระยะยาว</span>
+          <span class="mv2-guide2-support-v">สวดมนต์ + สมาธิต่อเนื่อง / เห็นผลช้า แต่หนุนน้ำหนักสุด</span>
+        </div>
+        <p class="mv2-guide2-support-foot mv2-guide-belief-note">พิธีหรือการตั้งจิตต่อเนื่อง · อาจเป็นโบนัสพิเศษ ไม่ใช่กติกาพื้นฐานทุกชิ้น</p>
       </div>
-      <footer class="mv2-guide2-footer mv2-sacred-footer">
-        <p class="mv2-guide2-footer-boost mv2-guide-boost-inline">${guideFootBoostHtml}</p>
-        <p class="mv2-guide2-footer-close mv2-guide-closing">${guideClosingLineHtml}</p>
+      <footer class="mv2-guide2-footer">
+        <p class="mv2-guide2-footer-boost mv2-guide-boost-inline">${escapeHtml(
+          boostPercent != null
+            ? `โบนัสจังหวะประมาณ +${Math.round(boostPercent)}% · คะแนนหลักของรายงานยังไม่เปลี่ยน`
+            : "โบนัสจังหวะประมาณ — · คะแนนหลักของรายงานยังไม่เปลี่ยน",
+        )}</p>
+        <p class="mv2-guide2-footer-close mv2-guide-closing">${escapeHtml(heroVerdictLine)}</p>
       </footer>
     </section>`;
 
@@ -1091,280 +1062,6 @@ export function renderAmuletReportV2Html(payload) {
       max-width: 100%;
       min-width: 0;
     }
-    /* Sacred amulet — card-first, cream/dark + gold (guide section only) */
-    .mv2-sacred-guide {
-      --mv2-sac-bg: rgba(255, 252, 245, 0.92);
-      --mv2-sac-bg-deep: rgba(248, 242, 232, 0.95);
-      --mv2-sac-border: rgba(184, 135, 27, 0.22);
-      --mv2-sac-border-soft: rgba(184, 135, 27, 0.12);
-      --mv2-sac-glow: rgba(184, 135, 27, 0.14);
-      --mv2-sac-text: rgba(36, 28, 18, 0.88);
-      --mv2-sac-muted: rgba(90, 78, 62, 0.82);
-      background: linear-gradient(165deg, var(--mv2-sac-bg) 0%, rgba(252, 249, 240, 0.98) 45%, rgba(245, 238, 224, 0.96) 100%);
-      border: 1px solid var(--mv2-sac-border-soft);
-      box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.65) inset,
-        0 8px 28px rgba(80, 58, 18, 0.06);
-    }
-    .mv2-sacred-guide-header {
-      border-bottom-color: rgba(184, 135, 27, 0.14);
-    }
-    .mv2-sacred-gradebox {
-      background: linear-gradient(155deg, rgba(255, 250, 235, 0.98) 0%, rgba(252, 246, 228, 0.99) 100%);
-      border-color: rgba(184, 135, 27, 0.28);
-      box-shadow: 0 2px 12px rgba(184, 135, 27, 0.1);
-    }
-    .mv2-sacred-metrics {
-      gap: 0.4rem;
-    }
-    .mv2-sacred-metric-card {
-      background: rgba(255, 252, 245, 0.75);
-      border-color: rgba(184, 135, 27, 0.18);
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
-    }
-    .mv2-sacred-stack {
-      gap: 0.55rem;
-    }
-    .mv2-sacred-card {
-      position: relative;
-      border-radius: 14px;
-      padding: 0.62rem 0.72rem;
-      background: var(--mv2-sac-bg);
-      border: 1px solid var(--mv2-sac-border-soft);
-      box-shadow: 0 2px 14px rgba(60, 48, 28, 0.05);
-      max-width: 100%;
-      min-width: 0;
-      overflow: hidden;
-    }
-    .mv2-sacred-card::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, rgba(184, 135, 27, 0.45), transparent);
-      opacity: 0.65;
-      pointer-events: none;
-    }
-    .mv2-sacred-card-h {
-      font-size: 0.68rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      font-weight: 780;
-      color: var(--mv2a-gold-dim);
-      opacity: 0.95;
-    }
-    .mv2-sacred-card-main {
-      color: var(--mv2-sac-text);
-      font-weight: 720;
-    }
-    .mv2-sacred-card-note {
-      color: var(--mv2-sac-muted);
-      font-weight: 500;
-    }
-    .mv2-sacred-card--timing {
-      padding: 0.58rem 0.65rem 0.62rem;
-      background: linear-gradient(180deg, rgba(255, 252, 245, 0.98) 0%, rgba(252, 248, 238, 0.96) 100%);
-      border-color: rgba(184, 135, 27, 0.2);
-      box-shadow:
-        0 2px 18px var(--mv2-sac-glow),
-        0 1px 0 rgba(255, 255, 255, 0.55) inset;
-    }
-    .mv2-sacred-card--continuous {
-      background: rgba(255, 252, 245, 0.72);
-    }
-    .mv2-sacred-card--ceiling {
-      padding: 0.65rem 0.78rem 0.68rem;
-      background: linear-gradient(165deg, rgba(42, 36, 28, 0.04) 0%, rgba(255, 250, 235, 0.55) 100%);
-      border: 1px solid rgba(184, 135, 27, 0.32);
-      box-shadow:
-        0 0 0 1px rgba(255, 248, 220, 0.35) inset,
-        0 6px 22px rgba(80, 58, 18, 0.08);
-    }
-    .mv2-sacred-card--ceiling::before {
-      opacity: 0.9;
-      height: 3px;
-      background: linear-gradient(90deg, rgba(184, 135, 27, 0.15), rgba(212, 175, 85, 0.65), rgba(184, 135, 27, 0.15));
-    }
-    .mv2-sacred-card--ceiling .mv2-sacred-card-h {
-      color: var(--mv2a-gold-dim);
-    }
-    .mv2-sacred-ceiling-value {
-      font-size: 0.92rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: var(--mv2a-gold-dim);
-    }
-    .mv2-sacred-hero-fallback {
-      font-size: 0.88rem;
-      font-weight: 750;
-      color: var(--mv2-sac-text);
-    }
-    /* Timing hero — วัน · เวลา (chart-first, text-light) */
-    .mv2-sacred-timing-hero {
-      margin: 0 0 0.55rem;
-      padding: 0.55rem 0.62rem 0.58rem;
-      border-radius: 12px;
-      text-align: center;
-      background: radial-gradient(120% 80% at 50% 0%, rgba(184, 135, 27, 0.12) 0%, transparent 55%),
-        linear-gradient(180deg, rgba(255, 252, 245, 0.95) 0%, rgba(248, 240, 224, 0.5) 100%);
-      border: 1px solid rgba(184, 135, 27, 0.18);
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
-    }
-    .mv2-sacred-timing-hero-line {
-      margin: 0;
-      font-size: clamp(0.88rem, 3.8vw, 1.05rem);
-      font-weight: 780;
-      line-height: 1.35;
-      letter-spacing: 0.01em;
-      color: var(--mv2a-gold-dim);
-      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
-      overflow-wrap: anywhere;
-    }
-    .mv2-timing-visual--sacred {
-      margin-top: 0.2rem;
-    }
-    .mv2-timing-visual-head--sacred {
-      margin: 0 0 0.48rem;
-      padding: 0 0 0.4rem;
-      border-bottom: 1px solid rgba(184, 135, 27, 0.1);
-      text-align: center;
-    }
-    .mv2-timing-visual-head--sacred .mv2-timing-visual-title {
-      text-transform: none;
-      font-size: 0.66rem;
-      letter-spacing: 0.06em;
-      opacity: 0.82;
-    }
-    .mv2-timing-grid--sacred {
-      gap: 0.52rem;
-    }
-    .mv2-sacred-chart-card {
-      background: rgba(255, 252, 245, 0.85);
-      border: 1px solid rgba(184, 135, 27, 0.16);
-      border-radius: 12px;
-      padding: 0.42rem 0.48rem 0.48rem;
-      box-shadow: 0 2px 10px rgba(80, 58, 24, 0.04);
-    }
-    .mv2-timing-insight--sacred {
-      background: rgba(184, 135, 27, 0.04);
-      border-color: rgba(184, 135, 27, 0.12);
-      border-radius: 11px;
-    }
-    /* 3-step ladder (แทนตาราง) */
-    .mv2-guide2-ladder {
-      margin-bottom: 0.62rem;
-      padding: 0.52rem 0.5rem 0.48rem;
-      border-radius: 14px;
-      background: linear-gradient(180deg, rgba(255, 252, 245, 0.55) 0%, rgba(248, 242, 232, 0.65) 100%);
-      border: 1px solid rgba(184, 135, 27, 0.14);
-      max-width: 100%;
-      min-width: 0;
-    }
-    .mv2-guide2-ladder-title {
-      margin: 0 0 0.48rem;
-      padding: 0 0.08rem;
-      font-size: 0.6rem;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--mv2a-gold-dim);
-      opacity: 0.92;
-    }
-    .mv2-guide2-ladder-steps {
-      display: flex;
-      flex-direction: column;
-      gap: 0.42rem;
-    }
-    .mv2-guide2-ladder-step {
-      display: flex;
-      gap: 0.5rem;
-      align-items: flex-start;
-      padding: 0.5rem 0.55rem 0.52rem 0.48rem;
-      border-radius: 12px;
-      background: rgba(255, 252, 245, 0.7);
-      border: 1px solid rgba(184, 135, 27, 0.14);
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.45) inset;
-      min-width: 0;
-    }
-    .mv2-guide2-ladder-step--last {
-      background: linear-gradient(135deg, rgba(255, 252, 245, 0.9) 0%, rgba(252, 246, 230, 0.88) 100%);
-      border-color: rgba(184, 135, 27, 0.22);
-    }
-    .mv2-guide2-ladder-step-num {
-      flex-shrink: 0;
-      width: 1.5rem;
-      height: 1.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 10px;
-      font-size: 0.72rem;
-      font-weight: 850;
-      line-height: 1;
-      color: rgba(92, 66, 10, 0.9);
-      background: linear-gradient(165deg, rgba(240, 215, 138, 0.5) 0%, rgba(184, 135, 27, 0.28) 100%);
-      border: 1px solid rgba(184, 135, 27, 0.35);
-      box-shadow: 0 1px 3px rgba(80, 58, 16, 0.08);
-    }
-    .mv2-guide2-ladder-step-body {
-      flex: 1 1 0;
-      min-width: 0;
-    }
-    .mv2-guide2-ladder-step-k {
-      display: block;
-      margin-bottom: 0.22rem;
-      font-size: 0.66rem;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      color: var(--mv2a-gold-dim);
-    }
-    .mv2-guide2-ladder-step-v {
-      margin: 0;
-      font-size: 0.68rem;
-      line-height: 1.45;
-      font-weight: 520;
-      color: var(--mv2-sac-muted);
-    }
-    .mv2-guide2-ladder-foot {
-      margin: 0.45rem 0 0;
-      padding-top: 0.38rem;
-      border-top: 1px solid rgba(184, 135, 27, 0.12);
-      font-size: 0.58rem;
-      line-height: 1.42;
-      color: var(--mv2-sac-muted);
-      font-style: italic;
-      font-weight: 480;
-      opacity: 0.9;
-    }
-    .mv2-sacred-footer {
-      border-top-color: rgba(184, 135, 27, 0.12);
-    }
-    .mv2-sacred-card.mv2-guide2-panel {
-      margin: 0;
-      border: none;
-      box-shadow: none;
-    }
-    .mv2-sacred-card.mv2-sacred-card--timing.mv2-guide2-panel {
-      background: linear-gradient(180deg, rgba(255, 252, 245, 0.98) 0%, rgba(252, 248, 238, 0.96) 100%);
-      border: 1px solid rgba(184, 135, 27, 0.2);
-      box-shadow:
-        0 2px 18px rgba(184, 135, 27, 0.12),
-        0 1px 0 rgba(255, 255, 255, 0.55) inset;
-    }
-    .mv2-sacred-card.mv2-sacred-card--continuous.mv2-guide2-panel {
-      background: rgba(255, 252, 245, 0.72);
-      border: 1px solid rgba(184, 135, 27, 0.14);
-      box-shadow: 0 2px 14px rgba(60, 48, 28, 0.05);
-    }
-    .mv2-sacred-card.mv2-sacred-card--ceiling.mv2-guide2-panel {
-      background: linear-gradient(165deg, rgba(42, 36, 28, 0.04) 0%, rgba(255, 250, 235, 0.55) 100%);
-      border: 1px solid rgba(184, 135, 27, 0.32);
-      box-shadow:
-        0 0 0 1px rgba(255, 248, 220, 0.35) inset,
-        0 6px 22px rgba(80, 58, 18, 0.08);
-    }
     .mv2-guide2-top {
       display: flex;
       flex-wrap: wrap;
@@ -1627,12 +1324,6 @@ export function renderAmuletReportV2Html(payload) {
         padding: 0.38rem 0.42rem 0.34rem;
         margin-bottom: 0.5rem;
       }
-      .mv2-guide2-ladder {
-        padding: 0.42rem 0.4rem 0.38rem;
-      }
-      .mv2-sacred-timing-hero {
-        padding: 0.48rem 0.5rem;
-      }
       .mv2-guide2-support-row {
         grid-template-columns: 1fr;
         gap: 0.14rem;
@@ -1726,84 +1417,6 @@ export function renderAmuletReportV2Html(payload) {
     }
     html.mv2a-theme-dark .mv2-guide2-footer-close {
       color: rgba(241, 245, 249, 0.96);
-    }
-    html.mv2a-theme-dark .mv2-sacred-guide {
-      --mv2-sac-text: rgba(226, 232, 240, 0.94);
-      --mv2-sac-muted: rgba(148, 163, 184, 0.88);
-      background: linear-gradient(165deg, rgba(22, 24, 30, 0.98) 0%, rgba(18, 20, 28, 0.96) 50%, rgba(15, 17, 24, 0.98) 100%);
-      border-color: rgba(232, 197, 71, 0.16);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
-    }
-    html.mv2a-theme-dark .mv2-sacred-gradebox {
-      background: linear-gradient(155deg, rgba(36, 32, 26, 0.98) 0%, rgba(22, 24, 30, 0.99) 100%);
-      border-color: rgba(232, 197, 71, 0.28);
-    }
-    html.mv2a-theme-dark .mv2-sacred-metric-card {
-      background: rgba(232, 197, 71, 0.06);
-      border-color: rgba(232, 197, 71, 0.2);
-    }
-    html.mv2a-theme-dark .mv2-sacred-card.mv2-sacred-card--timing.mv2-guide2-panel {
-      background: linear-gradient(180deg, rgba(28, 26, 22, 0.95) 0%, rgba(20, 22, 28, 0.92) 100%);
-      border-color: rgba(232, 197, 71, 0.22);
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
-    }
-    html.mv2a-theme-dark .mv2-sacred-card.mv2-sacred-card--continuous.mv2-guide2-panel {
-      background: rgba(232, 197, 71, 0.05);
-      border-color: rgba(232, 197, 71, 0.16);
-    }
-    html.mv2a-theme-dark .mv2-sacred-card.mv2-sacred-card--ceiling.mv2-guide2-panel {
-      background: linear-gradient(165deg, rgba(32, 28, 22, 0.55) 0%, rgba(18, 20, 28, 0.88) 100%);
-      border-color: rgba(232, 197, 71, 0.35);
-      box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.08) inset, 0 8px 28px rgba(0, 0, 0, 0.4);
-    }
-    html.mv2a-theme-dark .mv2-sacred-ceiling-value {
-      color: #fde68a;
-    }
-    html.mv2a-theme-dark .mv2-sacred-timing-hero {
-      background: radial-gradient(120% 80% at 50% 0%, rgba(232, 197, 71, 0.12) 0%, transparent 55%),
-        linear-gradient(180deg, rgba(28, 26, 22, 0.9) 0%, rgba(20, 22, 28, 0.75) 100%);
-      border-color: rgba(232, 197, 71, 0.22);
-    }
-    html.mv2a-theme-dark .mv2-sacred-timing-hero-line {
-      color: #fde68a;
-      text-shadow: none;
-    }
-    html.mv2a-theme-dark .mv2-sacred-chart-card {
-      background: rgba(232, 197, 71, 0.05);
-      border-color: rgba(232, 197, 71, 0.14);
-    }
-    html.mv2a-theme-dark .mv2-guide2-ladder {
-      background: linear-gradient(180deg, rgba(232, 197, 71, 0.04) 0%, rgba(20, 22, 28, 0.5) 100%);
-      border-color: rgba(232, 197, 71, 0.14);
-    }
-    html.mv2a-theme-dark .mv2-guide2-ladder-title {
-      color: #fde68a;
-    }
-    html.mv2a-theme-dark .mv2-guide2-ladder-step {
-      background: rgba(20, 22, 28, 0.65);
-      border-color: rgba(232, 197, 71, 0.12);
-    }
-    html.mv2a-theme-dark .mv2-guide2-ladder-step--last {
-      background: linear-gradient(135deg, rgba(232, 197, 71, 0.08) 0%, rgba(20, 22, 28, 0.85) 100%);
-      border-color: rgba(232, 197, 71, 0.22);
-    }
-    html.mv2a-theme-dark .mv2-guide2-ladder-step-num {
-      color: rgba(254, 243, 199, 0.95);
-      background: linear-gradient(165deg, rgba(232, 197, 71, 0.35) 0%, rgba(184, 134, 11, 0.25) 100%);
-      border-color: rgba(232, 197, 71, 0.4);
-    }
-    html.mv2a-theme-dark .mv2-guide2-ladder-step-k {
-      color: #fde68a;
-    }
-    html.mv2a-theme-dark .mv2-guide2-ladder-step-v {
-      color: rgba(203, 213, 225, 0.9);
-    }
-    html.mv2a-theme-dark .mv2-guide2-ladder-foot {
-      border-top-color: rgba(232, 197, 71, 0.12);
-      color: rgba(148, 163, 184, 0.85);
-    }
-    html.mv2a-theme-dark .mv2-sacred-footer {
-      border-top-color: rgba(232, 197, 71, 0.14);
     }
     .mv2-guide-top {
       display: flex;
