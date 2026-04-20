@@ -196,7 +196,7 @@ function buildAmuletUseDayBarsInnerHtml(tac) {
 }
 
 /**
- * Default: white shell + dark text + grayscale accents. Dark dashboard via
+ * Default: warm neutral shell + gold accents (tokens aligned with `main`). Dark dashboard via
  * `wording.amuletReportV2Theme: "dark"` or env `AMULET_HTML_THEME=dark`.
  *
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
@@ -740,188 +740,148 @@ export function renderAmuletReportV2Html(payload) {
   <style>
     :root {
       color-scheme: light;
-      /* พื้นการ์ดขาว — ตัวหนังสือทองโทนสว่าง (หัวข้อ/ตัวเลขเด่น) */
-      --mv2a-gold: #f5d24a;
-      --mv2a-gold-dim: #d4af37;
-      --mv2a-gold-deep: #b8860b;
-      --mv2a-bg: #ffffff;
-      --mv2a-card: #ffffff;
-      --mv2a-muted: #5f5f5f;
-      --mv2a-text: #111111;
-      --mv2a-text-body: rgba(17, 17, 17, 0.92);
-      --mv2a-badge-border: #d0d0d0;
-      --mv2a-media-border: #d0d0d0;
-      --mv2a-hero-clarifier: #5f5f5f;
-      --mv2a-card-border: #e8e8e8;
-      --mv2a-card-elev: none;
-      --mv2a-graph-accent: var(--mv2a-gold-deep);
-      --mv2a-radar-ring-outer-fill: transparent;
-      --mv2a-radar-ring-outer-stroke: #bdbdbd;
-      --mv2a-radar-ring-mid-stroke: #d6d6d6;
-      --mv2a-radar-ring-inner-stroke: #e8e8e8;
-      --mv2a-radar-spoke: rgba(0, 0, 0, 0.1);
-      --mv2a-radar-owner-fill: rgba(0, 0, 0, 0.06);
-      --mv2a-radar-owner-stroke: rgba(0, 0, 0, 0.35);
-      --mv2a-radar-amulet-fill: rgba(0, 0, 0, 0.1);
-      --mv2a-radar-amulet-stroke: rgba(0, 0, 0, 0.78);
-      --mv2a-radar-peak-halo: rgba(0, 0, 0, 0.06);
-      --mv2a-radar-peak-fill: var(--mv2a-gold-deep);
-      --mv2a-radar-peak-stroke: #ffffff;
-      --mv2a-radar-lbl-axis: var(--mv2a-gold);
-      --mv2a-radar-lbl-num: var(--mv2a-gold-dim);
-      --mv2a-radar-lbl-top1-glow: transparent;
-      --mv2a-radar-lbl-top1-t: var(--mv2a-gold);
-      --mv2a-radar-lbl-top1-n: var(--mv2a-gold);
-      --mv2a-radar-lbl-top2-t: var(--mv2a-gold);
-      --mv2a-radar-lbl-top2-n: var(--mv2a-gold-dim);
-      --mv2a-radar-key: #5f5f5f;
-      --mv2a-radar-dot-border: rgba(0, 0, 0, 0.2);
-      --mv2a-radar-dot-owner: rgba(0, 0, 0, 0.45);
-      --mv2a-radar-dot-amulet: rgba(0, 0, 0, 0.82);
-      --mv2a-anim-peak-glow1: transparent;
-      --mv2a-anim-peak-glow2: transparent;
-      --mv2a-radar-peak2-halo: rgba(0, 0, 0, 0.06);
-      --mv2a-radar-peak2-fill: var(--mv2a-gold-dim);
-      --mv2a-radar-peak2-stroke: #ffffff;
-      --mv2a-anim-peak2-glow1: transparent;
-      --mv2a-anim-peak2-glow2: transparent;
-      --mv2a-radar-lbl-top2-pulse-glow: transparent;
-      --mv2a-gsum-bg: transparent;
-      --mv2a-gsum-border: #e5e5e5;
-      --mv2a-gsum-lead-bg: transparent;
-      --mv2a-gsum-lead-border: #d0d0d0;
-      --mv2a-gsum-shadow: none;
-      --mv2a-gsum-k: #5f5f5f;
-      --mv2a-gsum-v: var(--mv2a-gold);
-      --mv2a-gsum-v-lead: var(--mv2a-gold);
-      --mv2a-life-border: #e8e8e8;
-      --mv2a-life-row-border: #eeeeee;
-      --mv2a-life-row-alt: transparent;
-      --mv2a-life-name: var(--mv2a-gold);
-      --mv2a-life-score: var(--mv2a-gold-dim);
-      --mv2a-life-blurb: #5f5f5f;
-      --mv2a-disclaimer: #5f5f5f;
-      --mv2a-footer-note: #5f5f5f;
-      --mv2a-trust-border: #e5e5e5;
-      --mv2a-render-meta: #8a8a8a;
-      --mv2a-divider: #e8e8e8;
-      /* กล่องทุกบล็อก — พื้นขาวเท่านั้น */
-      --mv2a-section-bg-a: #ffffff;
-      --mv2a-section-bg-b: #ffffff;
-      --mv2a-section-bg-c: #ffffff;
-      --mv2a-section-inner: #ffffff;
-      --mv2a-section-border: #e8e8e8;
-      --mv2a-section-radius: 12px;
-      --mv2a-section-shadow: none;
+      /* Light neutral shell — เทา-ขาวนุ่ม + การ์ดแยกชั้น; ตัวอักษรเข้ม + ทอง sacred_amulet */
+      --mv2a-gold: #b8871b;
+      --mv2a-gold-dim: #8f6710;
+      --mv2a-bg: #f6f6f4;
+      --mv2a-card: #fcfcfa;
+      --mv2a-muted: #7a6a58;
+      --mv2a-text: #241c12;
+      --mv2a-text-body: rgba(36, 28, 18, 0.92);
+      --mv2a-badge-border: rgba(184, 135, 27, 0.28);
+      --mv2a-media-border: rgba(184, 135, 27, 0.22);
+      --mv2a-hero-clarifier: rgba(90, 78, 65, 0.88);
+      --mv2a-card-border: rgba(100, 92, 82, 0.18);
+      --mv2a-card-elev: 0 1px 2px rgba(0, 0, 0, 0.05);
+      --mv2a-graph-accent: rgba(184, 135, 27, 0.45);
+      --mv2a-radar-ring-outer-fill: rgba(184, 135, 27, 0.06);
+      --mv2a-radar-ring-outer-stroke: rgba(143, 103, 16, 0.3);
+      --mv2a-radar-ring-mid-stroke: rgba(143, 103, 16, 0.2);
+      --mv2a-radar-ring-inner-stroke: rgba(143, 103, 16, 0.12);
+      --mv2a-radar-spoke: rgba(120, 88, 28, 0.18);
+      --mv2a-radar-owner-fill: rgba(105, 92, 78, 0.12);
+      --mv2a-radar-owner-stroke: rgba(88, 76, 64, 0.45);
+      --mv2a-radar-amulet-fill: rgba(184, 135, 27, 0.18);
+      --mv2a-radar-amulet-stroke: rgba(160, 115, 18, 0.88);
+      --mv2a-radar-peak-halo: rgba(184, 135, 27, 0.2);
+      --mv2a-radar-peak-fill: #c9a132;
+      --mv2a-radar-peak-stroke: rgba(255, 250, 235, 0.95);
+      --mv2a-radar-lbl-axis: rgba(36, 28, 18, 0.88);
+      --mv2a-radar-lbl-num: rgba(110, 78, 22, 0.92);
+      --mv2a-radar-lbl-top1-glow: rgba(184, 135, 27, 0.26);
+      --mv2a-radar-lbl-top1-t: #7a5a12;
+      --mv2a-radar-lbl-top1-n: #5c420a;
+      --mv2a-radar-lbl-top2-t: rgba(95, 72, 32, 0.95);
+      --mv2a-radar-lbl-top2-n: rgba(120, 88, 28, 0.95);
+      --mv2a-radar-key: rgba(95, 90, 84, 0.52);
+      --mv2a-radar-dot-border: rgba(36, 28, 18, 0.1);
+      --mv2a-radar-dot-owner: rgba(115, 125, 138, 0.88);
+      --mv2a-radar-dot-amulet: rgba(184, 135, 27, 0.95);
+      --mv2a-anim-peak-glow1: rgba(184, 135, 27, 0.28);
+      --mv2a-anim-peak-glow2: rgba(184, 135, 27, 0.5);
+      /* จุดรอง: โทนเดียวกับ legend “คุณ” (--mv2a-radar-dot-owner) */
+      --mv2a-radar-peak2-halo: rgba(115, 125, 138, 0.22);
+      --mv2a-radar-peak2-fill: rgb(115, 125, 138);
+      --mv2a-radar-peak2-stroke: rgba(248, 250, 252, 0.92);
+      --mv2a-anim-peak2-glow1: rgba(115, 125, 138, 0.3);
+      --mv2a-anim-peak2-glow2: rgba(148, 163, 184, 0.48);
+      --mv2a-radar-lbl-top2-pulse-glow: rgba(115, 125, 138, 0.34);
+      /* สรุปผลแถวเดียว: ปิลล์ครีม (label ซ้าย / ค่าขวา) — ใกล้ตัวอย่าง UI */
+      --mv2a-gsum-bg: #f2f2ef;
+      --mv2a-gsum-border: #d8d6d1;
+      --mv2a-gsum-lead-bg: #eae9e5;
+      --mv2a-gsum-lead-border: #cbc8c0;
+      --mv2a-gsum-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 5px rgba(0, 0, 0, 0.03);
+      --mv2a-gsum-k: #78716c;
+      --mv2a-gsum-v: #1c1917;
+      --mv2a-gsum-v-lead: #b8860b;
+      --mv2a-life-border: rgba(100, 92, 82, 0.16);
+      --mv2a-life-row-border: rgba(0, 0, 0, 0.07);
+      --mv2a-life-row-alt: rgba(20, 22, 26, 0.028);
+      --mv2a-life-name: rgba(36, 28, 18, 0.92);
+      --mv2a-life-score: #b8871b;
+      --mv2a-life-blurb: rgba(72, 62, 50, 0.9);
+      --mv2a-disclaimer: rgba(78, 68, 56, 0.88);
+      --mv2a-footer-note: rgba(62, 54, 44, 0.9);
+      --mv2a-trust-border: rgba(0, 0, 0, 0.08);
+      --mv2a-render-meta: rgba(100, 90, 78, 0.72);
       /* Unified Thai + system stack (report + radar labels + cards; LINE Flex uses client fonts). */
       --mv2-font-th: "Noto Sans Thai", "Sarabun", "Kanit", ui-sans-serif, -apple-system, BlinkMacSystemFont,
         "Segoe UI", system-ui, sans-serif;
     }
     html.mv2a-theme-dark {
       color-scheme: dark;
-      --mv2a-gold: #ffeb7a;
-      --mv2a-gold-dim: #ffe082;
-      --mv2a-gold-deep: #ffd54f;
-      --mv2a-bg: #0a0a0a;
-      --mv2a-card: transparent;
-      --mv2a-muted: #a3a3a3;
-      --mv2a-text: #fafafa;
-      --mv2a-text-body: rgba(250, 250, 250, 0.92);
-      --mv2a-badge-border: #525252;
-      --mv2a-media-border: #525252;
-      --mv2a-hero-clarifier: #a3a3a3;
-      --mv2a-card-border: transparent;
-      --mv2a-card-elev: none;
-      --mv2a-graph-accent: var(--mv2a-gold);
-      --mv2a-radar-ring-outer-fill: transparent;
-      --mv2a-radar-ring-outer-stroke: #525252;
-      --mv2a-radar-ring-mid-stroke: #404040;
-      --mv2a-radar-ring-inner-stroke: #333333;
-      --mv2a-radar-spoke: rgba(255, 255, 255, 0.12);
-      --mv2a-radar-owner-fill: rgba(255, 255, 255, 0.06);
-      --mv2a-radar-owner-stroke: rgba(255, 255, 255, 0.35);
-      --mv2a-radar-amulet-fill: rgba(255, 255, 255, 0.1);
-      --mv2a-radar-amulet-stroke: rgba(250, 250, 250, 0.9);
-      --mv2a-radar-peak-halo: rgba(255, 255, 255, 0.06);
-      --mv2a-radar-peak-fill: var(--mv2a-gold-deep);
-      --mv2a-radar-peak-stroke: #0a0a0a;
-      --mv2a-radar-lbl-axis: var(--mv2a-gold);
-      --mv2a-radar-lbl-num: var(--mv2a-gold-dim);
-      --mv2a-radar-lbl-top1-glow: transparent;
-      --mv2a-radar-lbl-top1-t: var(--mv2a-gold);
-      --mv2a-radar-lbl-top1-n: var(--mv2a-gold);
-      --mv2a-radar-lbl-top2-t: var(--mv2a-gold);
-      --mv2a-radar-lbl-top2-n: var(--mv2a-gold-dim);
-      --mv2a-radar-key: #a3a3a3;
-      --mv2a-radar-dot-border: rgba(255, 255, 255, 0.25);
-      --mv2a-radar-dot-owner: rgba(255, 255, 255, 0.5);
-      --mv2a-radar-dot-amulet: rgba(250, 250, 250, 0.95);
-      --mv2a-anim-peak-glow1: transparent;
-      --mv2a-anim-peak-glow2: transparent;
-      --mv2a-radar-peak2-halo: rgba(255, 255, 255, 0.08);
-      --mv2a-radar-peak2-fill: #a3a3a3;
-      --mv2a-radar-peak2-stroke: #0a0a0a;
-      --mv2a-anim-peak2-glow1: transparent;
-      --mv2a-anim-peak2-glow2: transparent;
-      --mv2a-radar-lbl-top2-pulse-glow: transparent;
-      --mv2a-gsum-bg: transparent;
-      --mv2a-gsum-border: #404040;
-      --mv2a-gsum-lead-bg: transparent;
-      --mv2a-gsum-lead-border: #525252;
-      --mv2a-gsum-shadow: none;
-      --mv2a-gsum-k: #a3a3a3;
-      --mv2a-gsum-v: var(--mv2a-gold);
-      --mv2a-gsum-v-lead: var(--mv2a-gold);
-      --mv2a-life-border: #333333;
-      --mv2a-life-row-border: #333333;
-      --mv2a-life-row-alt: transparent;
-      --mv2a-life-name: var(--mv2a-gold);
-      --mv2a-life-score: var(--mv2a-gold-dim);
-      --mv2a-life-blurb: #a3a3a3;
-      --mv2a-disclaimer: #a3a3a3;
-      --mv2a-footer-note: #a3a3a3;
-      --mv2a-trust-border: #333333;
-      --mv2a-render-meta: #737373;
-      --mv2a-section-bg-a: #161616;
-      --mv2a-section-bg-b: #1a1a1a;
-      --mv2a-section-bg-c: #141414;
-      --mv2a-section-inner: rgba(255, 255, 255, 0.04);
-      --mv2a-section-border: rgba(255, 255, 255, 0.1);
-      --mv2a-section-radius: 14px;
-      --mv2a-section-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+      /* Optional: tech-spiritual dark-gold dashboard */
+      --mv2a-gold: #e8c547;
+      --mv2a-gold-dim: #b8860b;
+      --mv2a-bg: #090a0d;
+      --mv2a-card: #13151c;
+      --mv2a-muted: #94a3b8;
+      --mv2a-text: #f1f5f9;
+      --mv2a-text-body: rgba(241, 245, 249, 0.94);
+      --mv2a-badge-border: rgba(232, 197, 71, 0.38);
+      --mv2a-media-border: rgba(232, 197, 71, 0.28);
+      --mv2a-hero-clarifier: rgba(148, 163, 184, 0.9);
+      --mv2a-card-border: rgba(232, 197, 71, 0.2);
+      --mv2a-card-elev: 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 28px rgba(0, 0, 0, 0.52);
+      --mv2a-graph-accent: rgba(232, 197, 71, 0.55);
+      --mv2a-radar-ring-outer-fill: rgba(148, 163, 184, 0.05);
+      --mv2a-radar-ring-outer-stroke: rgba(232, 197, 71, 0.34);
+      --mv2a-radar-ring-mid-stroke: rgba(232, 197, 71, 0.22);
+      --mv2a-radar-ring-inner-stroke: rgba(232, 197, 71, 0.14);
+      --mv2a-radar-spoke: rgba(232, 197, 71, 0.17);
+      --mv2a-radar-owner-fill: rgba(148, 163, 184, 0.12);
+      --mv2a-radar-owner-stroke: rgba(186, 198, 214, 0.62);
+      --mv2a-radar-amulet-fill: rgba(232, 197, 71, 0.2);
+      --mv2a-radar-amulet-stroke: rgba(250, 220, 120, 0.96);
+      --mv2a-radar-peak-halo: rgba(250, 220, 120, 0.14);
+      --mv2a-radar-peak-fill: #fde68a;
+      --mv2a-radar-peak-stroke: rgba(255, 251, 235, 0.55);
+      --mv2a-radar-lbl-axis: rgba(226, 232, 240, 0.9);
+      --mv2a-radar-lbl-num: #fde68a;
+      --mv2a-radar-lbl-top1-glow: rgba(250, 220, 120, 0.3);
+      --mv2a-radar-lbl-top1-t: #fef3c7;
+      --mv2a-radar-lbl-top1-n: #fffbeb;
+      --mv2a-radar-lbl-top2-t: rgba(254, 243, 199, 0.96);
+      --mv2a-radar-lbl-top2-n: #fef9c3;
+      --mv2a-radar-key: rgba(148, 163, 184, 0.78);
+      --mv2a-radar-dot-border: rgba(255, 255, 255, 0.22);
+      --mv2a-radar-dot-owner: rgba(148, 163, 184, 0.92);
+      --mv2a-radar-dot-amulet: rgba(232, 197, 71, 0.95);
+      --mv2a-anim-peak-glow1: rgba(250, 220, 120, 0.26);
+      --mv2a-anim-peak-glow2: rgba(250, 220, 120, 0.52);
+      --mv2a-radar-peak2-halo: rgba(148, 163, 184, 0.22);
+      --mv2a-radar-peak2-fill: rgb(148, 163, 184);
+      --mv2a-radar-peak2-stroke: rgba(241, 245, 249, 0.72);
+      --mv2a-anim-peak2-glow1: rgba(148, 163, 184, 0.34);
+      --mv2a-anim-peak2-glow2: rgba(186, 198, 214, 0.52);
+      --mv2a-radar-lbl-top2-pulse-glow: rgba(148, 163, 184, 0.4);
+      --mv2a-gsum-bg: rgba(255, 252, 245, 0.09);
+      --mv2a-gsum-border: rgba(232, 197, 71, 0.28);
+      --mv2a-gsum-lead-bg: rgba(232, 197, 71, 0.14);
+      --mv2a-gsum-lead-border: rgba(250, 220, 120, 0.38);
+      --mv2a-gsum-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+      --mv2a-gsum-k: rgba(203, 213, 225, 0.82);
+      --mv2a-gsum-v: rgba(248, 250, 252, 0.98);
+      --mv2a-gsum-v-lead: #fde68a;
+      --mv2a-life-border: rgba(232, 197, 71, 0.13);
+      --mv2a-life-row-border: rgba(148, 163, 184, 0.12);
+      --mv2a-life-row-alt: rgba(255, 255, 255, 0.035);
+      --mv2a-life-name: rgba(241, 245, 249, 0.95);
+      --mv2a-life-score: #fde68a;
+      --mv2a-life-blurb: rgba(203, 213, 225, 0.92);
+      --mv2a-disclaimer: rgba(148, 163, 184, 0.88);
+      --mv2a-footer-note: rgba(203, 213, 225, 0.92);
+      --mv2a-trust-border: rgba(148, 163, 184, 0.16);
+      --mv2a-render-meta: rgba(100, 116, 139, 0.85);
     }
     body { margin: 0; background: var(--mv2a-bg); color: var(--mv2a-text); font-family: var(--mv2-font-th); }
     .mv2a-wrap { max-width: 520px; margin: 0 auto; padding: 1rem 1rem 2.5rem; }
     @media (max-width: 520px) {
       .mv2a-wrap { padding: 0.75rem 0.85rem 2rem; }
     }
-    .mv2-hero {
-      margin-bottom: 0.65rem;
-      padding: 0.9rem 1rem;
-      background: #ffffff;
-      border: 1px solid var(--mv2a-section-border);
-      border-left: 3px solid var(--mv2a-gold-deep);
-      border-radius: var(--mv2a-section-radius);
-      box-shadow: var(--mv2a-section-shadow);
-    }
-    html.mv2a-theme-dark .mv2-hero {
-      border-left-color: var(--mv2a-gold);
-    }
-    html.mv2a-theme-dark .mv2a-card,
-    html.mv2a-theme-dark .mv2-card {
-      border-left-color: var(--mv2a-gold);
-    }
-    .mv2a-badge {
-      display: inline-block;
-      font-size: 0.62rem;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      color: var(--mv2a-muted);
-      border-bottom: 1px solid var(--mv2a-divider);
-      padding: 0 0 0.12rem;
-      margin-bottom: 0.45rem;
-      border-radius: 0;
-    }
+    .mv2-hero { margin-bottom: 0.75rem; }
+    .mv2a-badge { display: inline-block; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.02em; color: var(--mv2a-gold-dim); border: 1px solid var(--mv2a-badge-border); padding: 0.18rem 0.48rem; border-radius: 999px; margin-bottom: 0.45rem; }
     .mv2-hero-main {
       display: flex;
       flex-direction: row;
@@ -941,7 +901,7 @@ export function renderAmuletReportV2Html(payload) {
       height: auto;
       aspect-ratio: 1;
       object-fit: cover;
-      border-radius: 0;
+      border-radius: 12px;
       border: 1px solid var(--mv2a-media-border);
     }
     .mv2a-media-caption {
@@ -953,103 +913,40 @@ export function renderAmuletReportV2Html(payload) {
       opacity: 0.88;
       letter-spacing: 0.02em;
     }
-    .mv2-h1 {
-      font-size: 1.32rem;
-      margin: 0 0 0.2rem;
-      color: var(--mv2a-gold);
-      font-weight: 700;
-      line-height: 1.2;
-      letter-spacing: -0.01em;
-      text-shadow: none;
-    }
+    .mv2-h1 { font-size: 1.32rem; margin: 0 0 0.2rem; color: var(--mv2a-gold); font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
     .mv2-main { font-size: 0.93rem; margin: 0.28rem 0 0; color: var(--mv2a-text-body); font-weight: 500; line-height: 1.38; }
     @media (max-width: 520px) {
       .mv2-main { font-size: 0.88rem; line-height: 1.36; }
     }
     .mv2-hero-clarifier { font-size: 0.76rem; margin: 0.28rem 0 0; color: var(--mv2a-hero-clarifier); line-height: 1.38; }
     .mv2-date { font-size: 0.72rem; color: var(--mv2a-muted); margin: 0.35rem 0 0; }
-    .mv2-strip {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 0.42rem;
-      margin: 0 0 0.65rem;
-      padding: 0.65rem 0.75rem;
-      text-align: center;
-      background: var(--mv2a-section-bg-b);
-      border: 1px solid var(--mv2a-section-border);
-      border-radius: var(--mv2a-section-radius);
-      box-shadow: var(--mv2a-section-shadow);
-    }
+    .mv2-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.42rem; margin: 0 0 0.55rem; text-align: center; }
     .mv2-strip-k { font-size: 0.65rem; color: var(--mv2a-muted); }
     .mv2-strip-v { font-size: 1.1rem; font-weight: 700; color: var(--mv2a-gold); }
-    .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: var(--mv2a-gold); }
-    .mv2-strip-cell--level .mv2-strip-v.level-grade--A { color: var(--mv2a-gold); }
-    .mv2-strip-cell--level .mv2-strip-v.level-grade--B { color: var(--mv2a-gold-dim); }
-    .mv2-strip-cell--level .mv2-strip-v.level-grade--D { color: var(--mv2a-gold-dim); }
-    .mv2-strip-cell--level .mv2-strip-v.level-grade--none { color: var(--mv2a-gold-dim); }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: #c9a132; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--A { color: #b8871b; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--B { color: #9a6f12; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--D { color: #8a7a67; }
+    .mv2-strip-cell--level .mv2-strip-v.level-grade--none { color: var(--mv2a-muted); }
     .mv2-trust-inline {
-      margin: 0 0 0.65rem;
-      padding: 0.5rem 0.65rem;
+      margin: -0.12rem 0 0.48rem;
+      padding: 0 0.35rem;
       font-size: 0.6rem;
       line-height: 1.32;
       color: var(--mv2a-muted);
       font-weight: 450;
       text-align: center;
-      opacity: 0.92;
-      background: var(--mv2a-section-bg-c);
-      border: 1px solid var(--mv2a-section-border);
-      border-radius: var(--mv2a-section-radius);
+      opacity: 0.9;
     }
-    .mv2a-card,
-    .mv2-card {
-      background: #ffffff;
-      border: 1px solid var(--mv2a-section-border);
-      border-radius: var(--mv2a-section-radius);
-      box-shadow: var(--mv2a-section-shadow);
-      padding: 0.9rem 1rem;
-      margin: 0.65rem 0;
-      border-left: 3px solid var(--mv2a-gold-deep);
-    }
-    .mv2-card--decision,
-    .mv2-card--top-finder {
-      background: var(--mv2a-section-bg-b);
-    }
-    .mv2-card--daily-owner {
-      background: var(--mv2a-section-bg-a);
-    }
-    .mv2-card--guide {
-      background: var(--mv2a-section-bg-b);
-    }
-    .mv2-timing-card {
-      background: var(--mv2a-section-bg-a);
-    }
-    .mv2-card--faith-progress {
-      background: var(--mv2a-section-bg-b);
-      margin: 0.46rem 0 0.36rem;
-      padding-top: 0.58rem;
-      padding-bottom: 0.68rem;
-    }
-    .mv2-share-card {
-      background: var(--mv2a-section-bg-a);
-    }
-    .mv2-card--gsum-follow {
-      margin-top: 0.5rem;
-      padding-top: 0.5rem;
-      padding-bottom: 0.5rem;
-      background: var(--mv2a-section-bg-a);
-    }
-    .mv2-card--gsum-follow > h2 { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.95; color: var(--mv2a-gold); }
-    .mv2-gsumx-items { display: grid; gap: 0.55rem; }
+    .mv2a-card, .mv2-card { background: var(--mv2a-card); border: 1px solid var(--mv2a-card-border); border-radius: 12px; padding: 0.85rem 1rem; margin: 0.75rem 0; box-shadow: var(--mv2a-card-elev); }
+    .mv2-card--gsum-follow { margin-top: 0.32rem; padding-top: 0.7rem; padding-bottom: 0.72rem; }
+    .mv2-card--gsum-follow > h2 { font-size: 0.88rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.92; }
+    .mv2-gsumx-items { display: grid; gap: 0.45rem; }
     .mv2-gsumx-item {
-      padding: 0 0 0.55rem;
-      border-radius: 0;
-      border: none;
-      border-bottom: 1px solid var(--mv2a-divider);
-      background: transparent;
-    }
-    .mv2-gsumx-item:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
+      padding: 0.46rem 0.56rem;
+      border-radius: 10px;
+      border: 1px solid rgba(184, 135, 27, 0.14);
+      background: rgba(184, 135, 27, 0.04);
     }
     .mv2-gsumx-k {
       font-size: 0.62rem;
@@ -1073,348 +970,83 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-muted);
     }
     .mv2-card--decision {
-      margin-top: 0.45rem;
+      margin-top: 0.38rem;
+      padding: 0.68rem 0.88rem 0.72rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.38);
     }
     .mv2-card--guide {
-      margin-top: 0.55rem;
+      margin-top: 0.45rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.42);
+      padding: 0.72rem 0.78rem;
     }
     .mv2-card--guide > h2 {
       margin: 0 0 0.42rem;
       font-size: 0.92rem;
       font-weight: 750;
-      color: var(--mv2a-gold);
+      color: var(--mv2a-gold-dim);
     }
-    .mv2-guide-hero {
-      border-radius: 0;
-      border: none;
-      background: transparent;
-      padding: 0.2rem 0 0.35rem;
-      margin-bottom: 0.35rem;
-      text-align: center;
+    .mv2-guide-top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.34rem;
+      margin-bottom: 0.22rem;
     }
-    .mv2-card--guide-soft .mv2-guide-hero {
-      background: transparent;
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-    }
-    .mv2-guide-hero-k {
-      margin: 0;
-      font-size: 0.58rem;
-      line-height: 1.28;
-      color: var(--mv2a-muted);
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      text-transform: none;
-    }
-    .mv2-guide-hero-grade {
-      margin: 0.1rem 0 0.04rem;
-      font-size: 1.52rem;
-      line-height: 1;
-      font-weight: 840;
-      color: var(--mv2a-gold);
-      letter-spacing: 0.02em;
-    }
-    .mv2-guide-hero-verdict {
-      margin: 0;
-      font-size: 0.8rem;
+    .mv2-guide-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.22rem 0.56rem;
+      border-radius: 999px;
+      border: 1px solid rgba(184, 135, 27, 0.24);
+      background: rgba(184, 135, 27, 0.08);
+      font-size: 0.64rem;
+      font-weight: 700;
+      color: var(--mv2a-text-body);
       line-height: 1.25;
-      font-weight: 780;
-      color: var(--mv2a-text-body);
     }
-    .mv2-guide-metrics {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.35rem;
-      margin-bottom: 0.28rem;
-    }
-    .mv2-guide-metric {
-      border-radius: 10px;
-      border: 1px solid #ebebeb;
-      background: var(--mv2a-section-inner);
-      padding: 0.32rem 0.2rem 0.24rem;
-      text-align: center;
-    }
-    .mv2-card--guide-soft .mv2-guide-metric {
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-    }
-    .mv2-guide-metric-k {
-      display: block;
-      margin: 0 0 0.04rem;
-      font-size: 0.55rem;
-      line-height: 1.2;
-      color: var(--mv2a-muted);
-      font-weight: 640;
-    }
-    .mv2-guide-metric-v {
-      display: block;
-      font-size: 0.73rem;
-      line-height: 1.2;
-      color: var(--mv2a-text-body);
-      font-weight: 760;
-    }
-    .mv2-guide-verdict-line {
-      margin: 0 0 0.24rem;
-      font-size: 0.64rem;
-      line-height: 1.34;
-      color: var(--mv2a-text-body);
-      font-weight: 620;
-    }
-    .mv2-guide-grade-lane {
-      margin-bottom: 0.24rem;
-    }
-    .mv2-guide-grade-line {
-      position: relative;
-      height: 6px;
-      border-radius: 999px;
-      background: rgba(75, 75, 75, 0.1);
-      overflow: hidden;
-    }
-    .mv2-guide-lane-pin {
-      position: absolute;
-      top: 50%;
-      width: 7px;
-      height: 7px;
-      border-radius: 999px;
-      transform: translate(-50%, -50%);
-      border: 1px solid #ffffff;
-      background: rgba(75, 75, 75, 0.88);
-      box-shadow: none;
-      z-index: 1;
-    }
-    .mv2-guide-lane-pin.is-fullset {
-      background: #a3a3a3;
-    }
-    .mv2-guide-lane-pin.is-ceiling {
-      background: #525252;
-      width: 8px;
-      height: 8px;
-    }
-    .mv2-guide-grade-fill {
-      display: block;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, #737373 0%, #a3a3a3 80%, #d4d4d4 100%);
-    }
-    .mv2-guide-grade-stops {
-      margin-top: 0.08rem;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      font-size: 0.58rem;
-      line-height: 1.2;
-      color: var(--mv2a-muted);
-      font-weight: 680;
-    }
-    .mv2-guide-grade-stop {
-      text-align: center;
-      opacity: 0.62;
-    }
-    .mv2-guide-grade-stop.is-active {
-      color: var(--mv2a-gold);
-      opacity: 1;
-    }
-    .mv2-guide-horizons {
-      margin-top: 0.14rem;
-      display: grid;
-      gap: 0.12rem;
-    }
-    .mv2-guide-horizon {
-      display: grid;
-      grid-template-columns: 3.9rem 1fr;
-      align-items: baseline;
-      gap: 0.28rem;
-      padding: 0.28rem 0;
-      border-radius: 0;
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--mv2a-divider);
-    }
-    .mv2-guide-horizon-k {
-      font-size: 0.56rem;
-      line-height: 1.2;
-      color: var(--mv2a-muted);
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-    }
-    .mv2-guide-horizon-v {
-      font-size: 0.63rem;
-      line-height: 1.3;
-      color: var(--mv2a-text-body);
-      font-weight: 640;
-    }
-    .mv2-guide-lane-pin.is-peak {
-      background: rgba(75, 75, 75, 0.88);
-    }
-    .mv2-guide-lane-pin.is-continuous {
-      background: #a3a3a3;
-    }
-    .mv2-guide-horizon-stack {
-      display: grid;
-      gap: 0.4rem;
-      margin: 0.22rem 0 0.28rem;
-    }
-    .mv2-guide-horizon-card {
-      border-radius: 10px;
-      border: 1px solid #ebebeb;
-      background: var(--mv2a-section-inner);
-      padding: 0.48rem 0.55rem;
-    }
-    .mv2-card--guide-soft .mv2-guide-horizon-card {
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-    }
-    .mv2-guide-horizon-card--ceiling {
-      border-color: #eaeaea;
-      background: var(--mv2a-section-inner);
-    }
-    .mv2-card--guide-soft .mv2-guide-horizon-card--ceiling {
-      background: var(--mv2a-section-inner);
-    }
-    .mv2-guide-horizon-card-k {
-      display: block;
-      margin: 0 0 0.1rem;
-      font-size: 0.58rem;
-      line-height: 1.2;
-      color: var(--mv2a-muted);
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      text-transform: none;
-    }
-    .mv2-guide-horizon-card-line {
-      display: block;
-      font-size: 0.78rem;
-      line-height: 1.28;
-      color: var(--mv2a-text-body);
-      font-weight: 760;
-    }
-    .mv2-guide-horizon-card-mode {
-      display: block;
-      margin-top: 0.08rem;
-      font-size: 0.64rem;
-      line-height: 1.3;
-      color: var(--mv2a-muted);
-      font-weight: 650;
-    }
-    .mv2-guide-horizon-card-hint {
-      margin: 0.12rem 0 0;
-      font-size: 0.56rem;
-      line-height: 1.36;
-      color: var(--mv2a-muted);
-      font-weight: 520;
-      font-style: normal;
-    }
-    .mv2-guide-horizon-card-sub {
-      margin: 0.1rem 0 0;
-      font-size: 0.6rem;
-      line-height: 1.34;
-      color: var(--mv2a-muted);
-      font-weight: 560;
-    }
-    .mv2-guide-belief {
-      margin-bottom: 0.28rem;
-    }
-    .mv2-guide-belief-tier {
-      display: grid;
-      gap: 0.06rem;
-      padding: 0.35rem 0 0.4rem;
-      border-radius: 0;
-      border: none;
-      border-bottom: 1px solid var(--mv2a-divider);
-      margin-bottom: 0;
-      background: transparent;
-    }
-    .mv2-guide-belief-tier:last-of-type {
-      margin-bottom: 0.14rem;
-    }
-    .mv2-guide-belief-k {
-      font-size: 0.6rem;
-      line-height: 1.2;
-      color: var(--mv2a-gold);
+    .mv2-guide-chip--boost {
+      color: var(--mv2a-gold-dim);
+      border-color: rgba(184, 135, 27, 0.34);
+      background: rgba(184, 135, 27, 0.12);
       font-weight: 750;
     }
-    .mv2-guide-belief-v {
-      font-size: 0.6rem;
-      line-height: 1.36;
-      color: var(--mv2a-text-body);
-      font-weight: 580;
-    }
-    .mv2-guide-belief-note {
-      margin: 0;
-      font-size: 0.56rem;
-      line-height: 1.38;
-      color: var(--mv2a-muted);
-      font-weight: 520;
-      font-style: italic;
-    }
-    .mv2-guide-closing {
-      margin: 0.28rem 0 0;
-      font-size: 0.72rem;
-      line-height: 1.32;
-      font-weight: 720;
-      text-align: center;
-      color: var(--mv2a-text-body);
-    }
     .mv2-guide-mode {
-      margin: 0 0 0.24rem;
-      font-size: 0.63rem;
+      margin: 0 0 0.34rem;
+      font-size: 0.68rem;
       line-height: 1.34;
       color: var(--mv2a-muted);
-      font-weight: 560;
+      font-weight: 600;
     }
-    .mv2-guide-steps {
+    .mv2-guide-table {
       display: grid;
-      gap: 0.24rem;
-      margin-bottom: 0.3rem;
+      gap: 0.28rem;
     }
-    .mv2-guide-step {
-      padding: 0.34rem 0;
-      border-radius: 0;
-      border: none;
-      border-bottom: 1px solid var(--mv2a-divider);
-      background: transparent;
+    .mv2-guide-row {
+      padding: 0.4rem 0.46rem;
+      border-radius: 10px;
+      background: rgba(184, 135, 27, 0.055);
+      border: 1px solid rgba(184, 135, 27, 0.12);
     }
-    .mv2-guide-step-k {
-      margin: 0 0 0.08rem;
-      font-size: 0.59rem;
-      line-height: 1.25;
-      color: var(--mv2a-muted);
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-    }
-    .mv2-guide-step-v {
-      margin: 0 0 0.06rem;
-      font-size: 0.79rem;
-      line-height: 1.28;
-      color: var(--mv2a-text-body);
-      font-weight: 760;
-    }
-    .mv2-guide-step-d {
-      margin: 0;
+    .mv2-guide-col-k {
       font-size: 0.61rem;
-      line-height: 1.32;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--mv2a-muted);
+      text-transform: uppercase;
+      line-height: 1.28;
+      margin-bottom: 0.12rem;
+    }
+    .mv2-guide-col-v {
+      font-size: 0.84rem;
+      line-height: 1.3;
+      color: var(--mv2a-text-body);
+      font-weight: 780;
+      margin-bottom: 0.08rem;
+    }
+    .mv2-guide-col-d {
+      font-size: 0.62rem;
+      line-height: 1.34;
       color: var(--mv2a-muted);
       font-weight: 500;
-    }
-    .mv2-guide-bottom {
-      border-top: 1px solid #e5e5e5;
-      padding-top: 0.4rem;
-    }
-    .mv2-guide-boost-inline {
-      margin: 0 0 0.22rem;
-      font-size: 0.6rem;
-      line-height: 1.34;
-      color: var(--mv2a-muted);
-      font-weight: 560;
-      text-align: center;
-    }
-    .mv2-guide-bonus-total {
-      margin: 0 0 0.18rem;
-      font-size: 0.66rem;
-      line-height: 1.28;
-      color: var(--mv2a-gold);
-      font-weight: 700;
     }
     .mv2-guide-weekday-chart {
       margin-top: 0.28rem;
@@ -1434,18 +1066,18 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-guide-weekday-dot {
       border-radius: 999px;
       background: rgba(120, 120, 120, 0.42);
-      border: 1px solid #bdbdbd;
+      border: 1px solid rgba(100, 92, 82, 0.16);
       box-sizing: border-box;
       display: block;
     }
     .mv2-guide-weekday.is-primary .mv2-guide-weekday-dot {
-      background: linear-gradient(165deg, #d4d4d4 0%, #9ca3af 45%, #525252 100%);
-      border-color: rgba(17, 17, 17, 0.38);
-      box-shadow: none;
+      background: linear-gradient(165deg, #f0d78a 0%, #d4a82a 45%, #b8871b 100%);
+      border-color: rgba(184, 135, 27, 0.38);
+      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.12), 0 0 8px rgba(184, 135, 27, 0.16);
     }
     .mv2-guide-weekday.is-secondary .mv2-guide-weekday-dot {
-      background: linear-gradient(165deg, rgba(212,212,212,0.72) 0%, rgba(115,115,115,0.68) 100%);
-      border-color: rgba(17, 17, 17, 0.28);
+      background: linear-gradient(165deg, rgba(240,215,138,0.72) 0%, rgba(184,135,27,0.68) 100%);
+      border-color: rgba(184, 135, 27, 0.28);
     }
     .mv2-guide-weekday-lbl {
       font-size: 0.52rem;
@@ -1454,21 +1086,20 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 650;
     }
     .mv2-guide-weekday.is-primary .mv2-guide-weekday-lbl {
-      color: var(--mv2a-gold);
+      color: var(--mv2a-gold-dim);
       font-weight: 750;
     }
     .mv2-guide-boost-wrap {
-      margin-top: 0.12rem;
+      margin-top: 0.34rem;
     }
     .mv2-guide-gauge {
       position: relative;
       width: 100%;
-      max-width: 8.8rem;
-      margin: 0 auto 0.08rem;
+      max-width: 12rem;
+      margin: 0 auto 0.3rem;
       aspect-ratio: 2 / 1;
       border-radius: 999px 999px 0 0;
       overflow: hidden;
-      opacity: 0.72;
     }
     .mv2-guide-gauge::before {
       content: "";
@@ -1477,10 +1108,10 @@ export function renderAmuletReportV2Html(payload) {
       border-radius: inherit;
       background: conic-gradient(
         from 180deg,
-        rgba(75, 75, 75, 0.84) 0deg,
-        rgba(17, 17, 17, 0.75) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
-        rgba(0, 0, 0, 0.08) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
-        rgba(0, 0, 0, 0.08) 180deg
+        rgba(184, 135, 27, 0.95) 0deg,
+        rgba(224, 188, 85, 0.92) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
+        rgba(100, 92, 82, 0.18) calc(var(--mv2-guide-gauge-pct, 0) * 1.8deg),
+        rgba(100, 92, 82, 0.18) 180deg
       );
       mask: radial-gradient(circle at 50% 100%, transparent 58%, #000 59%);
       -webkit-mask: radial-gradient(circle at 50% 100%, transparent 58%, #000 59%);
@@ -1489,34 +1120,33 @@ export function renderAmuletReportV2Html(payload) {
       position: absolute;
       inset: auto 0 0;
       text-align: center;
-      font-size: 0.8rem;
+      font-size: 1.06rem;
       line-height: 1;
-      font-weight: 700;
-      color: var(--mv2a-gold);
-      padding-bottom: 0.12rem;
+      font-weight: 800;
+      color: var(--mv2a-gold-dim);
+      padding-bottom: 0.18rem;
     }
     .mv2-guide-gauge-core > span {
       display: block;
-      margin-top: 0.11rem;
-      font-size: 0.5rem;
+      margin-top: 0.14rem;
+      font-size: 0.58rem;
       line-height: 1.26;
       color: var(--mv2a-muted);
-      font-weight: 620;
+      font-weight: 650;
       letter-spacing: 0.03em;
       text-transform: uppercase;
     }
     .mv2-guide-buff-table {
-      border-radius: 0;
-      background: transparent;
-      border: none;
-      border-top: 1px solid #e5e5e5;
-      padding: 0.28rem 0 0.16rem;
+      border-radius: 9px;
+      background: rgba(100, 92, 82, 0.04);
+      border: 1px solid rgba(100, 92, 82, 0.12);
+      padding: 0.28rem 0.42rem 0.2rem;
     }
     .mv2-guide-buff-title {
       font-size: 0.56rem;
       letter-spacing: 0.03em;
       text-transform: uppercase;
-      color: var(--mv2a-gold);
+      color: var(--mv2a-gold-dim);
       font-weight: 700;
       margin: 0 0 0.08rem;
     }
@@ -1537,80 +1167,41 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-guide-progress {
       margin-top: 0.34rem;
     }
-    .mv2-guide-progress-head {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 0.4rem;
-      align-items: baseline;
-      margin-bottom: 0.12rem;
-    }
     .mv2-guide-progress-meta {
-      margin: 0;
-      font-size: 0.61rem;
+      margin: 0 0 0.12rem;
+      font-size: 0.62rem;
       line-height: 1.34;
       color: var(--mv2a-muted);
-      font-weight: 560;
-    }
-    .mv2-guide-progress-meta--target {
-      text-align: right;
-      color: var(--mv2a-gold);
-      font-weight: 700;
+      font-weight: 550;
     }
     .mv2-guide-progress-bar {
       height: 6px;
       border-radius: 999px;
       overflow: hidden;
-      background: #eeeeee;
-      position: relative;
-    }
-    .mv2-guide-progress-bar::after {
-      content: "";
-      position: absolute;
-      right: 0.16rem;
-      top: 50%;
-      width: 0;
-      height: 0;
-      border-top: 3px solid transparent;
-      border-bottom: 3px solid transparent;
-      border-left: 4px solid #c8c8c8;
-      transform: translateY(-50%);
+      background: rgba(184, 135, 27, 0.11);
     }
     .mv2-guide-progress-fill {
       display: block;
       height: 100%;
       border-radius: inherit;
-      background: linear-gradient(90deg, #757575 0%, #9e9e9e 50%, #bdbdbd 100%);
-      box-shadow: none;
+      background: linear-gradient(90deg, #c9a132 0%, #e8c547 55%, #f0e0a8 100%);
+      box-shadow: 0 0 6px rgba(184, 135, 27, 0.25);
       min-width: 4%;
-      transform-origin: left center;
-      animation: mv2GuideProgressGrow 850ms ease-out both;
-    }
-    .mv2-guide-progress-inline {
-      margin: 0.12rem 0 0;
-      font-size: 0.59rem;
-      line-height: 1.3;
-      color: var(--mv2a-muted);
-      font-weight: 580;
     }
     .mv2-guide-progress-note {
-      margin: 0.22rem 0 0;
-      font-size: 0.54rem;
-      line-height: 1.3;
+      margin: 0.28rem 0 0;
+      font-size: 0.58rem;
+      line-height: 1.34;
       color: var(--mv2a-muted);
-      opacity: 0.72;
-      font-weight: 450;
-    }
-    @keyframes mv2GuideProgressGrow {
-      from { transform: scaleX(0.08); opacity: 0.6; }
-      to { transform: scaleX(1); opacity: 1; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .mv2-guide-progress-fill {
-        animation: none;
-      }
+      opacity: 0.9;
     }
     .mv2-card--top-finder {
-      background: #ffffff;
+      background: linear-gradient(
+        145deg,
+        rgba(255, 252, 245, 0.65) 0%,
+        rgba(252, 250, 246, 0.98) 55%,
+        rgba(248, 244, 235, 0.95) 100%
+      );
     }
     .mv2-decision-top {
       display: flex;
@@ -1640,7 +1231,7 @@ export function renderAmuletReportV2Html(payload) {
       flex-shrink: 0;
       width: 2.35rem;
       height: 2.35rem;
-      border-radius: 0;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1648,35 +1239,37 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 800;
       line-height: 1;
       letter-spacing: 0.02em;
-      border: 1px solid var(--mv2a-gold-deep);
-      box-shadow: none;
+      border: 1px solid rgba(0, 0, 0, 0.08);
     }
     .mv2-decision-badge--s {
-      color: #ffffff;
-      background: var(--mv2a-gold-deep);
-      border-color: var(--mv2a-gold-deep);
+      color: #5c4308;
+      background: linear-gradient(165deg, #f0d78a 0%, #d4a82a 45%, #b8871b 100%);
+      border-color: rgba(184, 135, 27, 0.45);
+      box-shadow: 0 2px 5px rgba(184, 135, 27, 0.28), 0 0 0 1px rgba(255, 248, 220, 0.35) inset;
     }
     .mv2-decision-badge--a {
-      color: var(--mv2a-gold-deep);
-      background: #fffbeb;
-      border-color: var(--mv2a-gold-dim);
+      color: #4a3810;
+      background: linear-gradient(165deg, #e8cf7a 0%, #c9a132 100%);
+      border-color: rgba(184, 135, 27, 0.38);
+      box-shadow: 0 2px 4px rgba(184, 135, 27, 0.2), 0 0 0 1px rgba(255, 248, 220, 0.28) inset;
     }
     .mv2-decision-badge--b {
-      color: var(--mv2a-gold-dim);
-      background: #fffef5;
-      border-color: rgba(184, 134, 11, 0.35);
+      color: #4a3d22;
+      background: linear-gradient(165deg, rgba(201, 161, 50, 0.55) 0%, rgba(154, 111, 18, 0.45) 100%);
+      border-color: rgba(154, 111, 18, 0.35);
+      box-shadow: 0 1px 3px rgba(120, 88, 28, 0.18);
     }
     .mv2-decision-badge--c {
       color: var(--mv2a-muted);
-      background: transparent;
-      border-color: #dedede;
+      background: rgba(100, 92, 82, 0.1);
+      border-color: rgba(100, 92, 82, 0.18);
     }
     .mv2-decision-copy { min-width: 0; flex: 1; }
     .mv2-card--decision .mv2-decision-copy h2 {
       margin: 0 0 0.18rem;
       font-size: 0.88rem;
       font-weight: 700;
-      color: var(--mv2a-gold);
+      color: var(--mv2a-gold-dim);
       line-height: 1.2;
     }
     .mv2-decision-verdict {
@@ -1696,7 +1289,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-decision-secondary {
       margin-top: 0.08rem;
       padding-top: 0.42rem;
-      border-top: 1px solid var(--mv2a-divider);
+      border-top: 1px solid rgba(100, 92, 82, 0.1);
     }
     .mv2-decision-baseline {
       margin: 0 0 0.28rem;
@@ -1715,7 +1308,7 @@ export function renderAmuletReportV2Html(payload) {
       padding: 0;
       font-size: 0.63rem;
       line-height: 1.4;
-      color: var(--mv2a-muted);
+      color: var(--mv2a-gold-dim);
       font-weight: 600;
       border-radius: 0;
       background: transparent;
@@ -1729,12 +1322,13 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-muted);
       font-weight: 500;
     }
-    .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold); font-weight: 600; font-family: inherit; }
+    .mv2a-card h2, .mv2-card h2 { font-size: 0.95rem; margin: 0 0 0.5rem; color: var(--mv2a-gold-dim); font-weight: 600; font-family: inherit; }
     .mv2a-hint { font-size: 0.68rem; color: var(--mv2a-muted); margin: 0 0 0.6rem; }
     .mv2a-graph-card {
       margin-top: 0;
       margin-bottom: 0.35rem;
-      background: var(--mv2a-section-bg-b);
+      border-left: 3px solid var(--mv2a-graph-accent);
+      padding: 0.85rem 0.85rem;
     }
     .mv2a-graph-card > h2 { font-size: 1.02rem; color: var(--mv2a-gold); margin: 0 0 0.28rem; }
     .mv2a-graph-card > .mv2a-hint { margin: 0 0 0.35rem; }
@@ -1803,20 +1397,33 @@ export function renderAmuletReportV2Html(payload) {
       to { opacity: 1; transform: translateY(0); }
     }
     @keyframes mv2aLblPulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.55; }
+      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px var(--mv2a-anim-peak-glow1)); }
+      50% { opacity: 0.6; filter: drop-shadow(0 0 5px var(--mv2a-anim-peak-glow2)); }
     }
     @keyframes mv2aLblPulseRed {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+      0%, 100% { opacity: 1; filter: drop-shadow(0 0 1.5px var(--mv2a-anim-peak2-glow1)); }
+      50% { opacity: 0.52; filter: drop-shadow(0 0 5px var(--mv2a-anim-peak2-glow2)); }
     }
+    /* พลังเด่นสุด (top1): ค่อย ๆ กระพริบ — opacity + text-shadow เท่านั้น (เทียบ moldavite mv2LblPulse) */
     @keyframes mv2aRadarTop1Pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.45; }
+      0%, 100% {
+        opacity: 1;
+        text-shadow: 0 0 4px var(--mv2a-radar-lbl-top1-glow);
+      }
+      50% {
+        opacity: 0.45;
+        text-shadow: 0 0 16px var(--mv2a-radar-lbl-top1-glow);
+      }
     }
     @keyframes mv2aRadarTop2Pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.48; }
+      0%, 100% {
+        opacity: 1;
+        text-shadow: 0 0 4px var(--mv2a-radar-lbl-top2-pulse-glow);
+      }
+      50% {
+        opacity: 0.48;
+        text-shadow: 0 0 15px var(--mv2a-radar-lbl-top2-pulse-glow);
+      }
     }
     .mv2a-radar-lbl {
       position: absolute;
@@ -1860,7 +1467,7 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2a-radar-axis-t { color: var(--mv2a-radar-lbl-axis); font-weight: 600; }
     .mv2a-radar-axis-n { color: var(--mv2a-radar-lbl-num); font-weight: 700; }
-    .mv2a-radar-lbl--top1 { font-size: clamp(11px, 4.65cqw, 13px); text-shadow: none; }
+    .mv2a-radar-lbl--top1 { font-size: clamp(11px, 4.65cqw, 13px); text-shadow: 0 0 10px var(--mv2a-radar-lbl-top1-glow); }
     .mv2a-radar-lbl--top1 .mv2a-radar-axis-t { color: var(--mv2a-radar-lbl-top1-t); font-weight: 700; }
     .mv2a-radar-lbl--top1 .mv2a-radar-axis-n { color: var(--mv2a-radar-lbl-top1-n); font-weight: 800; }
     .mv2a-radar-lbl--top2 { font-size: clamp(10.5px, 4.35cqw, 12.5px); }
@@ -1886,27 +1493,20 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2a-radar-dot--owner { background: var(--mv2a-radar-dot-owner); }
     .mv2a-radar-dot--amulet { background: var(--mv2a-radar-dot-amulet); }
-    .mv2-gsum-rows { display: flex; flex-direction: column; gap: 0; }
+    .mv2-gsum-rows { display: flex; flex-direction: column; gap: 0.42rem; }
     .mv2-gsum-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 0.75rem;
-      padding: 0.48rem 0;
-      border-radius: 0;
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--mv2a-gsum-border);
-      box-shadow: none;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      background: var(--mv2a-gsum-bg);
+      border: 1px solid var(--mv2a-gsum-border);
+      box-shadow: var(--mv2a-gsum-shadow);
     }
-    .mv2-gsum-row:last-child { border-bottom: none; }
-    .mv2-gsum-row:not(.mv2-gsum-row--lead) { padding: 0.42rem 0; }
-    .mv2-gsum-row--lead {
-      background: transparent;
-      border-color: var(--mv2a-gsum-lead-border);
-      border-bottom-width: 1px;
-      border-bottom-style: solid;
-    }
+    .mv2-gsum-row:not(.mv2-gsum-row--lead) { padding: 0.42rem 1rem; }
+    .mv2-gsum-row--lead { background: var(--mv2a-gsum-lead-bg); border-color: var(--mv2a-gsum-lead-border); }
     .mv2-gsum-k { font-size: 0.72rem; font-weight: 500; color: var(--mv2a-gsum-k); white-space: nowrap; flex-shrink: 0; }
     .mv2-gsum-v {
       font-size: 0.92rem;
@@ -1918,23 +1518,21 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.25;
     }
     .mv2-gsum-row--lead .mv2-gsum-v { color: var(--mv2a-gsum-v-lead); }
-    .mv2-card--gsum-follow .mv2-gsum-row--lead { box-shadow: none; }
+    .mv2-card--gsum-follow .mv2-gsum-row--lead { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .mv2-gsum-row--tension {
-      padding: 0.4rem 0;
-      background: transparent;
-      border-bottom: 1px dashed #bdbdbd;
-      border-top: none;
-      border-left: none;
-      border-right: none;
+      padding: 0.4rem 0.85rem;
+      background: rgba(184, 135, 27, 0.06);
+      border-style: dashed;
       opacity: 0.96;
     }
     .mv2-gsum-row--tension .mv2-gsum-k { font-size: 0.68rem; }
     .mv2-gsum-row--tension .mv2-gsum-v { font-size: 0.82rem; font-weight: 700; }
     .mv2-card--use-day {
       margin: 0.5rem 0 0.4rem;
-      padding-top: 0.72rem;
-      padding-bottom: 0.78rem;
-      background: var(--mv2a-section-bg-c);
+      padding: 0.72rem 0.9rem 0.78rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.35);
+      background: var(--mv2a-card);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     }
     .mv2-card--use-day > h2 {
       font-size: 0.72rem;
@@ -1996,11 +1594,10 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-use-day-chip-v {
       font-size: 0.74rem;
       font-weight: 650;
-      padding: 0;
-      border-radius: 0;
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--mv2a-divider);
+      padding: 0.18rem 0.52rem;
+      border-radius: 999px;
+      background: rgba(184, 135, 27, 0.1);
+      border: 1px solid rgba(184, 135, 27, 0.28);
       color: var(--mv2a-text-body);
       line-height: 1.3;
     }
@@ -2008,7 +1605,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-use-day-bars {
       margin-top: 0.62rem;
       padding-top: 0.56rem;
-      border-top: 1px solid rgba(75, 75, 75, 0.12);
+      border-top: 1px solid rgba(184, 135, 27, 0.12);
     }
     .mv2-use-day-bars-h {
       margin: 0 0 0.48rem;
@@ -2049,16 +1646,16 @@ export function renderAmuletReportV2Html(payload) {
       max-width: 1.4rem;
       height: 3.2rem;
       padding: 0.16rem 0;
-      border-radius: 0;
-      background: rgba(0, 0, 0, 0.04);
-      border: 1px solid #dedede;
+      border-radius: 999px;
+      background: rgba(100, 92, 82, 0.08);
+      border: 1px solid rgba(100, 92, 82, 0.12);
       overflow: hidden;
     }
     .mv2-use-day-bar-fill {
       display: block;
       width: 100%;
       border-radius: 999px;
-      background: linear-gradient(180deg, #c0c0c0 0%, #9e9e9e 100%);
+      background: rgba(120, 120, 120, 0.45);
       min-height: 0.36rem;
     }
     .mv2-use-day-bar-score {
@@ -2070,33 +1667,33 @@ export function renderAmuletReportV2Html(payload) {
       text-align: center;
     }
     .mv2-use-day-bar.is-primary .mv2-use-day-bar-label {
-      color: var(--mv2a-gold-deep);
+      color: var(--mv2a-gold-dim);
       font-weight: 800;
     }
     .mv2-use-day-bar.is-primary .mv2-use-day-bar-col {
-      background: rgba(245, 210, 74, 0.12);
-      border-color: var(--mv2a-gold-dim);
-      box-shadow: none;
+      background: rgba(184, 135, 27, 0.08);
+      border-color: rgba(184, 135, 27, 0.22);
+      box-shadow: 0 0 0 1px rgba(184, 135, 27, 0.08);
     }
     .mv2-use-day-bar.is-primary .mv2-use-day-bar-fill {
-      background: linear-gradient(180deg, #fff9e6 0%, #f5d24a 48%, #b8860b 100%);
+      background: linear-gradient(180deg, #e0bc55 0%, #b8871b 48%, #8f6710 100%);
     }
     .mv2-use-day-bar.is-primary .mv2-use-day-bar-score {
-      color: var(--mv2a-gold-deep);
+      color: var(--mv2a-gold-dim);
     }
     .mv2-use-day-bar.is-secondary .mv2-use-day-bar-label {
-      color: var(--mv2a-muted);
+      color: rgba(143, 103, 16, 0.9);
       font-weight: 700;
     }
     .mv2-use-day-bar.is-secondary .mv2-use-day-bar-col {
-      background: rgba(0, 0, 0, 0.03);
-      border-color: #e3e3e3;
+      background: rgba(184, 135, 27, 0.05);
+      border-color: rgba(184, 135, 27, 0.16);
     }
     .mv2-use-day-bar.is-secondary .mv2-use-day-bar-fill {
-      background: linear-gradient(180deg, rgba(212,212,212,0.78) 0%, rgba(130,130,130,0.72) 60%, rgba(82,82,82,0.68) 100%);
+      background: linear-gradient(180deg, rgba(224,188,85,0.78) 0%, rgba(184,135,27,0.72) 60%, rgba(143,103,16,0.68) 100%);
     }
     .mv2-use-day-bar.is-secondary .mv2-use-day-bar-score {
-      color: var(--mv2a-muted);
+      color: rgba(143, 103, 16, 0.92);
     }
     .mv2-use-day-bar:not(.is-primary):not(.is-secondary) .mv2-use-day-bar-fill {
       background: linear-gradient(180deg, rgba(160,160,160,0.55) 0%, rgba(120,120,120,0.5) 100%);
@@ -2124,7 +1721,7 @@ export function renderAmuletReportV2Html(payload) {
         font-size: 0.52rem;
       }
     }
-    .mv2-life-rows { display: flex; flex-direction: column; gap: 0; margin: 0.35rem 0 0; border-radius: 0; overflow: visible; border: none; border-top: 1px solid var(--mv2a-life-border); }
+    .mv2-life-rows { display: flex; flex-direction: column; gap: 0; margin: 0.35rem 0 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--mv2a-life-border); }
     .mv2-life-row { display: grid; grid-template-columns: minmax(4.2rem, 5.2rem) 2.1rem 1fr; gap: 0.45rem; align-items: start; padding: 0.42rem 0.5rem; font-size: 0.78rem; border-top: 1px solid var(--mv2a-life-row-border); transition: opacity 0.15s ease; }
     .mv2-life-row:first-child { border-top: none; }
     .mv2-life-row:nth-child(odd) { background: var(--mv2a-life-row-alt); }
@@ -2176,9 +1773,9 @@ export function renderAmuletReportV2Html(payload) {
       font-weight: 400;
     }
     .mv2-timing-card {
-      border-left: none;
+      border-left: 3px solid rgba(184, 135, 27, 0.45);
     }
-    .mv2-timing-card h2 { font-size: 0.95rem; margin: 0; color: var(--mv2a-gold); }
+    .mv2-timing-card h2 { font-size: 0.95rem; margin: 0; color: var(--mv2a-gold-dim); }
     .mv2-timing-head { margin-bottom: 0.48rem; }
     .mv2-timing-sub {
       margin: 0.22rem 0 0;
@@ -2197,15 +1794,14 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-timing-boost-chip {
       display: inline-block;
-      padding: 0;
-      border-radius: 0;
+      padding: 0.06rem 0.32rem;
+      border-radius: 999px;
       font-size: 0.52rem;
       font-weight: 650;
       letter-spacing: 0.02em;
-      color: var(--mv2a-muted);
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--mv2a-divider);
+      color: rgba(92, 66, 10, 0.78);
+      background: rgba(184, 135, 27, 0.07);
+      border: 1px solid rgba(184, 135, 27, 0.14);
       line-height: 1.18;
     }
     .mv2-timing-boost-micro {
@@ -2219,14 +1815,10 @@ export function renderAmuletReportV2Html(payload) {
     }
     .mv2-timing-trends { display: grid; gap: 0.55rem; }
     .mv2-timing-trend {
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--mv2a-divider);
-      border-radius: 0;
-      padding: 0.52rem 0;
-    }
-    .mv2-timing-trend:last-child {
-      border-bottom: none;
+      background: rgba(184, 135, 27, 0.04);
+      border: 1px solid rgba(184, 135, 27, 0.14);
+      border-radius: 12px;
+      padding: 0.52rem 0.6rem;
     }
     .mv2-timing-trend-top {
       display: flex;
@@ -2247,7 +1839,7 @@ export function renderAmuletReportV2Html(payload) {
       font-variant-numeric: tabular-nums;
       text-align: right;
     }
-    /* Weekday = เม็ดเน้น (โทนเทา) */
+    /* Weekday = เม็ดทอง / bronze */
     .mv2-et-strip--weekday {
       display: flex;
       flex-wrap: nowrap;
@@ -2281,27 +1873,30 @@ export function renderAmuletReportV2Html(payload) {
       position: absolute;
       inset: 0;
       border-radius: inherit;
-      background: transparent;
+      background: radial-gradient(80% 70% at 50% 28%, rgba(255,248,220,0.35), transparent 55%);
       opacity: 0;
       pointer-events: none;
     }
     .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) { opacity: 0.5; }
     .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) .mv2-et-pill-shape {
-      background: rgba(0, 0, 0, 0.04);
-      border: 1px solid #e0e0e0;
-      box-shadow: none;
+      background: rgba(62, 54, 40, 0.2);
+      border: 1px solid rgba(100, 88, 72, 0.22);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.12);
     }
     .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) .mv2-et-pill-label {
-      color: var(--mv2a-muted);
+      color: rgba(100, 90, 78, 0.85);
       font-weight: 500;
     }
     .mv2-et-strip--weekday .mv2-et-pill.is-active { opacity: 1; }
     .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-shape {
-      background: linear-gradient(165deg, #fff9e6 0%, #f5d24a 45%, #b8860b 100%);
-      border: 1px solid var(--mv2a-gold-deep);
-      box-shadow: none;
+      background: linear-gradient(165deg, #e8c86a 0%, #c9a227 42%, #8f6710 100%);
+      border: 1px solid rgba(212, 175, 55, 0.65);
+      box-shadow:
+        0 0 0 1px rgba(232, 197, 71, 0.25),
+        0 0 12px rgba(184, 135, 27, 0.22),
+        0 4px 10px rgba(100, 72, 18, 0.15);
     }
-    .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-shape::after { opacity: 0; }
+    .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-shape::after { opacity: 0.5; }
     .mv2-et-pill-label {
       font-size: 0.56rem;
       text-align: center;
@@ -2309,7 +1904,7 @@ export function renderAmuletReportV2Html(payload) {
       max-width: 100%;
     }
     .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-label {
-      color: var(--mv2a-gold-deep);
+      color: var(--mv2a-text);
       font-weight: 800;
     }
     .mv2-et-pill-sr {
@@ -2356,29 +1951,32 @@ export function renderAmuletReportV2Html(payload) {
       position: absolute;
       inset: 0;
       border-radius: inherit;
-      background: transparent;
+      background: linear-gradient(180deg, rgba(255,248,220,0.2), transparent 60%);
       opacity: 0;
       pointer-events: none;
     }
     .mv2-et-slot:not(.is-active) { opacity: 0.48; }
     .mv2-et-slot:not(.is-active) .mv2-et-slot-bar {
-      background: rgba(0, 0, 0, 0.06);
-      border: 1px solid #e0e0e0;
-      box-shadow: none;
+      background: rgba(55, 48, 38, 0.35);
+      border: 1px solid rgba(120, 106, 88, 0.2);
+      box-shadow: inset 0 2px 3px rgba(0,0,0,0.15);
     }
     .mv2-et-slot:not(.is-active) .mv2-et-slot-label {
-      color: var(--mv2a-muted);
+      color: rgba(100, 90, 78, 0.82);
       font-weight: 500;
     }
     .mv2-et-slot.is-active { opacity: 1; }
     .mv2-et-slot.is-active .mv2-et-slot-bar {
       width: 0.5rem;
       max-width: 46%;
-      background: linear-gradient(180deg, #fff9e6 0%, #d4af37 45%, #8b6914 100%);
-      border: 1px solid var(--mv2a-gold-deep);
-      box-shadow: none;
+      background: linear-gradient(180deg, #ddb84a 0%, #b8871b 45%, #7a5c10 100%);
+      border: 1px solid rgba(212, 175, 55, 0.55);
+      box-shadow:
+        0 0 0 1px rgba(184, 135, 27, 0.2),
+        0 0 10px rgba(184, 135, 27, 0.18),
+        0 3px 8px rgba(80, 58, 16, 0.18);
     }
-    .mv2-et-slot.is-active .mv2-et-slot-bar::after { opacity: 0; }
+    .mv2-et-slot.is-active .mv2-et-slot-bar::after { opacity: 0.42; }
     .mv2-et-slot-label {
       font-size: 0.48rem;
       text-align: center;
@@ -2386,16 +1984,15 @@ export function renderAmuletReportV2Html(payload) {
       max-width: 100%;
     }
     .mv2-et-slot.is-active .mv2-et-slot-label {
-      color: var(--mv2a-gold-deep);
+      color: var(--mv2a-gold-dim);
       font-weight: 800;
     }
     .mv2-timing-insight {
       margin-top: 0.58rem;
-      padding: 0.62rem 0;
-      border-radius: 0;
-      background: transparent;
-      border: none;
-      border-top: 1px solid #e5e5e5;
+      padding: 0.62rem 0.72rem;
+      border-radius: 12px;
+      background: rgba(184, 135, 27, 0.06);
+      border: 1px solid rgba(184, 135, 27, 0.2);
     }
     .mv2-timing-k--mode {
       display: block;
@@ -2416,7 +2013,7 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-timing-hint {
       margin: 0.72rem 0 0;
       padding-top: 0.62rem;
-      border-top: 1px solid rgba(75, 75, 75, 0.12);
+      border-top: 1px solid rgba(184, 135, 27, 0.12);
       font-size: 0.68rem;
       line-height: 1.62;
       color: var(--mv2a-muted);
@@ -2437,48 +2034,45 @@ export function renderAmuletReportV2Html(payload) {
       }
     }
     html.mv2a-theme-dark .mv2-timing-trend {
-      border-bottom-color: #333333;
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.14);
     }
     html.mv2a-theme-dark .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) .mv2-et-pill-shape {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: #525252;
+      background: rgba(15, 18, 26, 0.92);
+      border-color: rgba(148, 163, 184, 0.12);
     }
     html.mv2a-theme-dark .mv2-et-strip--weekday .mv2-et-pill:not(.is-active) .mv2-et-pill-label {
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.72);
     }
     html.mv2a-theme-dark .mv2-et-slot:not(.is-active) .mv2-et-slot-bar {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: #525252;
+      background: rgba(12, 14, 20, 0.95);
+      border-color: rgba(148, 163, 184, 0.1);
     }
     html.mv2a-theme-dark .mv2-et-slot:not(.is-active) .mv2-et-slot-label {
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.7);
     }
     html.mv2a-theme-dark .mv2-timing-insight {
-      border-top-color: #333333;
+      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(232, 197, 71, 0.2);
     }
     html.mv2a-theme-dark .mv2-timing-hint {
-      border-top-color: #333333;
-      color: #a3a3a3;
-    }
-    html.mv2a-theme-dark .mv2-et-strip--weekday .mv2-et-pill.is-active .mv2-et-pill-label {
-      color: var(--mv2a-gold);
-    }
-    html.mv2a-theme-dark .mv2-et-slot.is-active .mv2-et-slot-label {
-      color: var(--mv2a-gold);
+      border-top-color: rgba(232, 197, 71, 0.12);
+      color: rgba(148, 163, 184, 0.88);
     }
     html.mv2a-theme-dark .mv2-timing-boost-chip {
-      color: #a3a3a3;
-      border-bottom-color: #333333;
+      color: rgba(254, 249, 220, 0.92);
+      background: rgba(232, 197, 71, 0.1);
+      border-color: rgba(232, 197, 71, 0.22);
     }
     html.mv2a-theme-dark .mv2-timing-boost-micro {
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.82);
     }
     .mv2-meta-block {
       margin: 0.38rem 0 0.42rem;
       padding: 0.45rem 0.55rem;
       border-radius: 10px;
-      background: var(--mv2a-section-inner);
-      border: 1px solid #ebebeb;
+      background: rgba(184, 135, 27, 0.05);
+      border: 1px solid rgba(184, 135, 27, 0.13);
       font-size: 0.64rem;
       line-height: 1.4;
       color: var(--mv2a-muted);
@@ -2490,13 +2084,13 @@ export function renderAmuletReportV2Html(payload) {
       flex-wrap: wrap;
       margin: 0.12rem 0;
     }
-    .mv2-meta-k { font-weight: 700; color: var(--mv2a-gold-dim); opacity: 0.92; }
+    .mv2-meta-k { font-weight: 700; color: var(--mv2a-text); opacity: 0.82; }
     .mv2-meta-v { text-align: right; font-variant-numeric: tabular-nums; max-width: 68%; }
-    .mv2-meta-id { font-weight: 700; letter-spacing: 0.04em; color: var(--mv2a-gold); }
+    .mv2-meta-id { font-weight: 700; letter-spacing: 0.04em; color: var(--mv2a-gold-dim); }
     .mv2-card--daily-owner {
       margin: 0.4rem 0 0.32rem;
-      padding-top: 0.55rem;
-      padding-bottom: 0.62rem;
+      padding: 0.55rem 0.78rem 0.62rem;
+      border-left: 2px solid rgba(184, 135, 27, 0.26);
     }
     .mv2-card--daily-owner > h2.mv2-daily-owner-h {
       font-size: 0.7rem;
@@ -2517,18 +2111,33 @@ export function renderAmuletReportV2Html(payload) {
       color: var(--mv2a-muted);
     }
     html.mv2a-theme-dark .mv2-meta-block {
-      background: var(--mv2a-section-inner);
-      border: 1px solid var(--mv2a-section-border);
+      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(232, 197, 71, 0.18);
     }
     html.mv2a-theme-dark .mv2-trust-sources {
-      background: rgba(200, 200, 200, 0.05);
-      border-color: rgba(200, 200, 200, 0.14);
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-card--daily-owner {
+      border-left-color: rgba(232, 197, 71, 0.3);
     }
     html.mv2a-theme-dark .mv2-daily-owner-p {
-      color: var(--mv2a-text-body);
+      color: rgba(226, 232, 240, 0.92);
     }
     html.mv2a-theme-dark .mv2-daily-owner-p--soft {
-      color: var(--mv2a-muted);
+      color: rgba(148, 163, 184, 0.9);
+    }
+    .mv2-card--faith-progress {
+      margin: 0.46rem 0 0.36rem;
+      padding: 0.58rem 0.75rem 0.68rem;
+      border-left: 3px solid rgba(184, 135, 27, 0.48);
+      background: linear-gradient(
+        165deg,
+        rgba(255, 252, 245, 0.92) 0%,
+        rgba(252, 250, 246, 0.98) 45%,
+        rgba(245, 240, 228, 0.88) 100%
+      );
+      box-shadow: 0 1px 4px rgba(80, 58, 16, 0.06);
     }
     .mv2-faith-progress-top {
       display: flex;
@@ -2551,14 +2160,14 @@ export function renderAmuletReportV2Html(payload) {
       font-variant-numeric: tabular-nums;
     }
     .mv2-faith-progress-arrow {
-      color: var(--mv2a-muted);
+      color: var(--mv2a-gold);
       font-weight: 700;
       font-size: 1.18rem;
       opacity: 0.92;
     }
     .mv2-faith-progress-next {
-      color: var(--mv2a-gold);
-      text-shadow: none;
+      color: var(--mv2a-gold-dim);
+      text-shadow: 0 0 14px rgba(184, 135, 27, 0.28);
       font-variant-numeric: tabular-nums;
     }
     .mv2-faith-progress-copy { flex: 1; min-width: 0; }
@@ -2566,7 +2175,7 @@ export function renderAmuletReportV2Html(payload) {
       margin: 0;
       font-size: 0.82rem;
       font-weight: 700;
-      color: var(--mv2a-gold);
+      color: var(--mv2a-text);
       line-height: 1.22;
       opacity: 0.92;
     }
@@ -2583,34 +2192,30 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.32;
       color: var(--mv2a-muted);
       font-weight: 500;
-      padding: 0;
-      border-radius: 0;
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--mv2a-divider);
-      padding-bottom: 0.26rem;
+      padding: 0.26rem 0.34rem;
+      border-radius: 7px;
+      background: rgba(184, 135, 27, 0.04);
+      border: 1px solid rgba(184, 135, 27, 0.1);
     }
     .mv2-faith-progress-scan {
       margin: 0 0 0.32rem;
       font-size: 0.65rem;
       line-height: 1.32;
-      color: var(--mv2a-muted);
+      color: var(--mv2a-gold-dim);
       font-weight: 600;
-      padding: 0 0 0.26rem;
-      border-radius: 0;
-      background: transparent;
-      border: none;
-      border-bottom: 1px dashed #bdbdbd;
+      padding: 0.26rem 0.34rem;
+      border-radius: 7px;
+      background: rgba(184, 135, 27, 0.045);
+      border: 1px dashed rgba(184, 135, 27, 0.22);
     }
     .mv2-faith-progress-metrics {
       display: grid;
       gap: 0.18rem;
       margin: 0 0 0.34rem;
-      padding: 0.32rem 0;
-      border-radius: 0;
-      background: transparent;
-      border: none;
-      border-top: 1px solid #e5e5e5;
+      padding: 0.32rem 0.4rem;
+      border-radius: 8px;
+      background: rgba(184, 135, 27, 0.045);
+      border: 1px solid rgba(184, 135, 27, 0.12);
       font-size: 0.64rem;
       line-height: 1.28;
       color: var(--mv2a-text-body);
@@ -2622,29 +2227,34 @@ export function renderAmuletReportV2Html(payload) {
       gap: 0.1rem;
     }
     html.mv2a-theme-dark .mv2-card--faith-progress {
-      background: var(--mv2a-section-bg-b);
-      box-shadow: var(--mv2a-section-shadow);
+      background: linear-gradient(
+        165deg,
+        rgba(28, 26, 22, 0.95) 0%,
+        rgba(20, 22, 28, 0.98) 100%
+      );
+      border-left-color: rgba(232, 197, 71, 0.45);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
     }
     html.mv2a-theme-dark .mv2-faith-progress-copy h2 {
-      color: var(--mv2a-gold);
+      color: rgba(248, 250, 252, 0.96);
     }
     html.mv2a-theme-dark .mv2-faith-progress-lead {
-      color: var(--mv2a-text-body);
+      color: rgba(226, 232, 240, 0.92);
     }
     html.mv2a-theme-dark .mv2-faith-progress-baseline {
-      background: transparent;
-      border-bottom-color: #333333;
-      color: var(--mv2a-muted);
+      background: rgba(232, 197, 71, 0.06);
+      border-color: rgba(232, 197, 71, 0.16);
+      color: rgba(203, 213, 225, 0.9);
     }
     html.mv2a-theme-dark .mv2-faith-progress-scan {
-      background: transparent;
-      border-bottom-color: #525252;
-      color: var(--mv2a-muted);
+      background: rgba(232, 197, 71, 0.07);
+      border-color: rgba(232, 197, 71, 0.28);
+      color: rgba(232, 197, 71, 0.95);
     }
     html.mv2a-theme-dark .mv2-faith-progress-metrics {
-      background: transparent;
-      border-top-color: #333333;
-      color: var(--mv2a-text-body);
+      background: rgba(232, 197, 71, 0.07);
+      border-color: rgba(232, 197, 71, 0.2);
+      color: rgba(226, 232, 240, 0.92);
     }
     @media (max-width: 520px) {
       .mv2-faith-progress-grade { font-size: 1.34rem; }
@@ -2657,44 +2267,41 @@ export function renderAmuletReportV2Html(payload) {
       transform: translateX(-50%);
       z-index: 50;
       padding: 0.45rem 0.95rem;
-      border-radius: 0;
-      background: var(--mv2a-gold-deep);
-      color: #ffffff;
+      border-radius: 999px;
+      background: rgba(36, 28, 18, 0.92);
+      color: #faf8f4;
       font-size: 0.75rem;
-      box-shadow: 0 2px 12px rgba(184, 134, 11, 0.22);
-      border: 1px solid var(--mv2a-gold-deep);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
     }
     html.mv2a-theme-dark .mv2-toast {
-      background: var(--mv2a-gold-deep);
-      color: #1a1408;
-      border-color: var(--mv2a-gold);
+      background: rgba(15, 18, 26, 0.94);
+      color: #e2e8f0;
     }
     .mv2-share-btn--secondary {
-      background: transparent;
-      border: 1px solid var(--mv2a-gold-deep);
-      color: var(--mv2a-gold-deep);
+      background: rgba(184, 135, 27, 0.07);
+      border: 2px solid rgba(184, 135, 27, 0.55);
+      color: var(--mv2a-gold-dim);
       font-weight: 700;
-      box-shadow: none;
-      border-radius: 0;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset;
     }
     .mv2-share-btn--secondary:hover {
-      background: rgba(184, 134, 11, 0.06);
-      border-color: var(--mv2a-gold-deep);
+      background: rgba(184, 135, 27, 0.14);
+      border-color: rgba(184, 135, 27, 0.75);
     }
     .mv2-share-btn--secondary:active {
-      background: rgba(0, 0, 0, 0.08);
+      background: rgba(184, 135, 27, 0.2);
     }
     html.mv2a-theme-dark .mv2-share-btn--secondary {
-      background: transparent;
-      border: 1px solid var(--mv2a-gold);
-      color: var(--mv2a-gold);
+      background: rgba(232, 197, 71, 0.08);
+      border: 2px solid rgba(232, 197, 71, 0.45);
+      color: #e8d89a;
       box-shadow: none;
     }
     html.mv2a-theme-dark .mv2-share-btn--secondary:hover {
-      background: rgba(200, 200, 200, 0.14);
-      border-color: rgba(200, 200, 200, 0.65);
+      background: rgba(232, 197, 71, 0.14);
+      border-color: rgba(232, 197, 71, 0.65);
     }
-    .mv2-share-card h2 { font-size: 0.92rem; color: var(--mv2a-gold); }
+    .mv2-share-card h2 { font-size: 0.92rem; }
     .mv2-share-note { margin: 0 0 0.55rem; font-size: 0.68rem; line-height: 1.4; color: var(--mv2a-muted); }
     .mv2-share-actions {
       display: grid;
@@ -2718,23 +2325,24 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.28;
       text-align: center;
       text-decoration: none;
-      border-radius: 0;
+      border-radius: 10px;
       border: 1px solid transparent;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
+    /* ปุ่มแชร์ระบบ: โทนน้ำเงินแบรนด์ Facebook */
     .mv2-share-btn--primary {
-      background: var(--mv2a-gold-deep);
-      border-color: var(--mv2a-gold-deep);
+      background: #1877f2;
+      border-color: #1877f2;
       color: #ffffff;
     }
     .mv2-share-btn--primary:hover {
-      background: #9a7209;
-      border-color: #9a7209;
+      background: #166fe5;
+      border-color: #166fe5;
     }
     .mv2-share-btn--primary:active {
-      background: #7a5a07;
-      border-color: #7a5a07;
+      background: #1464d4;
+      border-color: #1464d4;
     }
     .mv2-share-stack { display: flex; flex-direction: column; gap: 0.5rem; }
     .mv2-share-line-cta {
@@ -2751,234 +2359,186 @@ export function renderAmuletReportV2Html(payload) {
       line-height: 1.25;
       text-align: center;
       text-decoration: none;
-      border-radius: 0;
-      border: 1px solid var(--mv2a-gold-deep);
-      background: transparent;
-      color: var(--mv2a-gold-deep);
+      border-radius: 10px;
+      border: 1.5px solid rgba(5, 150, 105, 0.65);
+      background: rgba(5, 150, 105, 0.06);
+      color: #047857;
       -webkit-tap-highlight-color: transparent;
     }
     .mv2-share-line-cta:hover {
-      background: rgba(184, 134, 11, 0.06);
-      border-color: var(--mv2a-gold-deep);
+      background: rgba(5, 150, 105, 0.11);
+      border-color: rgba(5, 150, 105, 0.85);
     }
     html.mv2a-theme-dark .mv2-share-line-cta {
-      border-color: var(--mv2a-gold);
-      background: transparent;
-      color: var(--mv2a-gold);
+      border-color: rgba(52, 211, 153, 0.55);
+      background: rgba(16, 185, 129, 0.08);
+      color: #a7f3d0;
     }
     html.mv2a-theme-dark .mv2-share-line-cta:hover {
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(16, 185, 129, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-card--use-day {
+      border-left-color: rgba(232, 197, 71, 0.4);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     }
     html.mv2a-theme-dark .mv2-use-day-bars {
-      border-top-color: #333333;
+      border-top-color: rgba(232, 197, 71, 0.14);
     }
     html.mv2a-theme-dark .mv2-use-day-bar-label,
     html.mv2a-theme-dark .mv2-use-day-bar-score {
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.82);
     }
     html.mv2a-theme-dark .mv2-use-day-bar-col {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: #525252;
+      background: rgba(148, 163, 184, 0.08);
+      border-color: rgba(148, 163, 184, 0.14);
     }
     html.mv2a-theme-dark .mv2-use-day-bar:not(.is-primary):not(.is-secondary) .mv2-use-day-bar-fill {
-      background: linear-gradient(180deg, #737373 0%, #525252 100%);
+      background: linear-gradient(180deg, rgba(148,163,184,0.42) 0%, rgba(100,116,139,0.52) 100%);
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-label,
     html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-score {
-      color: var(--mv2a-gold);
+      color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-col {
-      background: rgba(255, 235, 122, 0.1);
-      border-color: var(--mv2a-gold-dim);
-      box-shadow: none;
+      background: rgba(232, 197, 71, 0.08);
+      border-color: rgba(232, 197, 71, 0.24);
+      box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.08);
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-primary .mv2-use-day-bar-fill {
-      background: linear-gradient(180deg, #fff9e6 0%, #ffd54f 44%, #b8860b 100%);
+      background: linear-gradient(180deg, #f3d67a 0%, #e8c547 44%, #b8860b 100%);
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-label,
     html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-score {
-      color: #a3a3a3;
+      color: rgba(254, 243, 199, 0.92);
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-col {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: #525252;
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.16);
     }
     html.mv2a-theme-dark .mv2-use-day-bar.is-secondary .mv2-use-day-bar-fill {
-      background: linear-gradient(180deg, rgba(230,230,230,0.76) 0%, rgba(180,180,180,0.68) 60%, rgba(115,115,115,0.62) 100%);
+      background: linear-gradient(180deg, rgba(243,214,122,0.76) 0%, rgba(232,197,71,0.68) 60%, rgba(184,134,11,0.62) 100%);
     }
     html.mv2a-theme-dark .mv2-use-day-chip-v {
-      background: transparent;
-      border-bottom-color: #333333;
+      background: rgba(232, 197, 71, 0.09);
+      border-color: rgba(232, 197, 71, 0.38);
     }
     html.mv2a-theme-dark .mv2-gsum-row--tension {
-      background: transparent;
-      border-bottom-color: #525252;
+      background: rgba(232, 197, 71, 0.06);
     }
     html.mv2a-theme-dark .mv2-gsumx-item {
-      background: transparent;
-      border-color: #333333;
+      background: rgba(232, 197, 71, 0.05);
+      border-color: rgba(232, 197, 71, 0.16);
     }
     html.mv2a-theme-dark .mv2-gsumx-v {
-      color: var(--mv2a-text-body);
+      color: rgba(241, 245, 249, 0.94);
     }
     html.mv2a-theme-dark .mv2-gsumx-sub {
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-card--decision {
+      border-left-color: rgba(232, 197, 71, 0.42);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
     }
     html.mv2a-theme-dark .mv2-card--top-finder {
-      background: var(--mv2a-section-bg-b);
+      background: linear-gradient(145deg, rgba(28, 26, 22, 0.5) 0%, rgba(20, 22, 28, 0.92) 100%);
     }
     html.mv2a-theme-dark .mv2-card--guide {
-      background: var(--mv2a-section-bg-b);
+      border-left-color: rgba(232, 197, 71, 0.42);
+      background: rgba(20, 22, 28, 0.92);
     }
-    html.mv2a-theme-dark .mv2-card--guide-soft .mv2-guide-metric {
-      background: var(--mv2a-section-inner);
-      border-color: var(--mv2a-section-border);
+    html.mv2a-theme-dark .mv2-guide-chip {
+      background: rgba(232, 197, 71, 0.1);
+      border-color: rgba(232, 197, 71, 0.24);
+      color: rgba(241, 245, 249, 0.94);
     }
-    html.mv2a-theme-dark .mv2-card--guide-soft .mv2-guide-horizon-card {
-      background: var(--mv2a-section-inner);
-    }
-    html.mv2a-theme-dark .mv2-card--guide-soft .mv2-guide-horizon-card--ceiling {
-      background: var(--mv2a-section-inner);
-    }
-    html.mv2a-theme-dark .mv2-guide-hero {
-      border-color: #333333;
-      background: transparent;
-    }
-    html.mv2a-theme-dark .mv2-guide-hero-k,
-    html.mv2a-theme-dark .mv2-guide-metric-k {
-      color: #a3a3a3;
-    }
-    html.mv2a-theme-dark .mv2-guide-hero-grade {
-      color: #fafafa;
-    }
-    html.mv2a-theme-dark .mv2-guide-hero-verdict,
-    html.mv2a-theme-dark .mv2-guide-verdict-line,
-    html.mv2a-theme-dark .mv2-guide-metric-v {
-      color: var(--mv2a-text-body);
-    }
-    html.mv2a-theme-dark .mv2-guide-metric {
-      border-color: #333333;
-      background: transparent;
-    }
-    html.mv2a-theme-dark .mv2-guide-grade-line {
-      background: rgba(255, 255, 255, 0.12);
-    }
-    html.mv2a-theme-dark .mv2-guide-lane-pin {
-      border-color: #0a0a0a;
-      box-shadow: none;
-    }
-    html.mv2a-theme-dark .mv2-guide-grade-stop {
-      color: #a3a3a3;
-    }
-    html.mv2a-theme-dark .mv2-guide-grade-stop.is-active {
-      color: #fafafa;
-    }
-    html.mv2a-theme-dark .mv2-guide-horizon {
-      border-bottom-color: #333333;
-    }
-    html.mv2a-theme-dark .mv2-guide-horizon-k {
-      color: #a3a3a3;
-    }
-    html.mv2a-theme-dark .mv2-guide-horizon-v {
-      color: var(--mv2a-text-body);
-    }
-    html.mv2a-theme-dark .mv2-guide-step {
-      border-bottom-color: #333333;
-    }
-    html.mv2a-theme-dark .mv2-guide-step-v {
-      color: var(--mv2a-text-body);
-    }
-    html.mv2a-theme-dark .mv2-guide-bottom {
-      border-top-color: #333333;
-    }
-    html.mv2a-theme-dark .mv2-guide-boost-inline {
-      color: #a3a3a3;
-    }
-    html.mv2a-theme-dark .mv2-guide-bonus-total {
-      color: #fafafa;
+    html.mv2a-theme-dark .mv2-guide-chip--boost {
+      background: rgba(232, 197, 71, 0.16);
+      border-color: rgba(232, 197, 71, 0.34);
+      color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-guide-mode,
+    html.mv2a-theme-dark .mv2-guide-col-d,
     html.mv2a-theme-dark .mv2-guide-progress-meta {
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-guide-table,
+    html.mv2a-theme-dark .mv2-guide-row {
+      border-color: rgba(232, 197, 71, 0.15);
+      background: rgba(232, 197, 71, 0.055);
     }
     html.mv2a-theme-dark .mv2-guide-weekday-dot {
-      background: rgba(255, 255, 255, 0.2);
-      border-color: #525252;
+      background: rgba(148, 163, 184, 0.4);
+      border-color: rgba(148, 163, 184, 0.18);
     }
     html.mv2a-theme-dark .mv2-guide-weekday.is-primary .mv2-guide-weekday-dot {
-      border-color: #fafafa;
-      box-shadow: none;
+      border-color: rgba(232, 197, 71, 0.42);
+      box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.2), 0 0 9px rgba(232, 197, 71, 0.22);
     }
     html.mv2a-theme-dark .mv2-guide-weekday-lbl {
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.88);
     }
+    html.mv2a-theme-dark .mv2-guide-col-v,
     html.mv2a-theme-dark .mv2-guide-buff-row > :nth-child(2) {
-      color: var(--mv2a-text-body);
+      color: rgba(241, 245, 249, 0.94);
     }
     html.mv2a-theme-dark .mv2-guide-buff-table,
     html.mv2a-theme-dark .mv2-guide-buff-row {
-      border-color: #333333;
-      background: transparent;
-      color: #a3a3a3;
+      border-color: rgba(148, 163, 184, 0.18);
+      background: rgba(148, 163, 184, 0.08);
+      color: rgba(203, 213, 225, 0.86);
     }
     html.mv2a-theme-dark .mv2-guide-buff-title {
-      color: #fafafa;
+      color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-guide-gauge-core {
-      color: #fafafa;
+      color: #fde68a;
     }
     html.mv2a-theme-dark .mv2-guide-gauge-core > span {
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.9);
     }
     html.mv2a-theme-dark .mv2-guide-progress-bar {
-      background: rgba(255, 255, 255, 0.12);
-    }
-    html.mv2a-theme-dark .mv2-guide-progress-bar::after {
-      border-left-color: #a3a3a3;
+      background: rgba(232, 197, 71, 0.15);
     }
     html.mv2a-theme-dark .mv2-guide-progress-note {
-      color: #a3a3a3;
-    }
-    html.mv2a-theme-dark .mv2-guide-progress-inline {
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.86);
     }
     html.mv2a-theme-dark .mv2-decision-verdict {
-      color: var(--mv2a-text-body);
+      color: rgba(241, 245, 249, 0.94);
     }
     html.mv2a-theme-dark .mv2-decision-reason {
-      color: var(--mv2a-text-body);
+      color: rgba(226, 232, 240, 0.9);
     }
     html.mv2a-theme-dark .mv2-decision-secondary {
-      border-top-color: #333333;
+      border-top-color: rgba(148, 163, 184, 0.14);
     }
     html.mv2a-theme-dark .mv2-decision-baseline {
       background: transparent;
       border: none;
-      color: #a3a3a3;
+      color: rgba(148, 163, 184, 0.88);
     }
     html.mv2a-theme-dark .mv2-decision-scan {
       background: transparent;
       border: none;
-      color: #a3a3a3;
+      color: rgba(253, 230, 138, 0.85);
     }
     html.mv2a-theme-dark .mv2-decision-badge--c {
-      color: #a3a3a3;
-      background: transparent;
-      border-color: #525252;
+      color: rgba(148, 163, 184, 0.95);
+      background: rgba(148, 163, 184, 0.1);
+      border-color: rgba(148, 163, 184, 0.22);
     }
     .mv2-share-btn--line {
-      background: var(--mv2a-gold-deep);
-      border-color: var(--mv2a-gold-deep);
+      background: #06c755;
+      border-color: #05b34c;
       color: #ffffff;
     }
     html.mv2a-theme-dark .mv2-share-btn--primary {
-      background: var(--mv2a-gold);
-      border-color: var(--mv2a-gold);
-      color: #1a1408;
+      background: #1877f2;
+      border-color: #1877f2;
+      color: #ffffff;
     }
     html.mv2a-theme-dark .mv2-share-btn--primary:hover {
-      background: var(--mv2a-gold-dim);
-      border-color: var(--mv2a-gold-dim);
+      background: #166fe5;
+      border-color: #166fe5;
     }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--mv2a-trust-border); text-align: center; font-size: 0.78rem; color: var(--mv2a-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: var(--mv2a-render-meta); }
