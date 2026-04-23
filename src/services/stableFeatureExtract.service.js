@@ -5,6 +5,9 @@ import { openai } from "./openaiDeepScan.api.js";
 import { env } from "../config/env.js";
 import { buildStableFeatureSeed } from "../utils/stableFeatureSeed.util.js";
 
+/** Bump when model, SYSTEM_PROMPT, or slug set changes. */
+export const STABLE_FEATURE_EXTRACT_VERSION = "v1";
+
 const STABLE_FEATURE_MODEL = "gpt-4.1-mini";
 
 const SYSTEM_PROMPT = `Extract stable visual features from this object image. These features must be
@@ -54,6 +57,23 @@ function readStableFeatureSeedEnabled() {
 }
 
 /**
+ * @param {{ primaryColor?: string, materialType?: string, formFactor?: string, textureHint?: string } | null | undefined} features
+ * @returns {number}
+ */
+export function countUnknownFields(features) {
+  if (!features || typeof features !== "object") return 4;
+  const keys = ["primaryColor", "materialType", "formFactor", "textureHint"];
+  let n = 0;
+  for (const k of keys) {
+    const v = String(features[k] ?? "unknown")
+      .trim()
+      .toLowerCase();
+    if (!v || v === "unknown") n += 1;
+  }
+  return n;
+}
+
+/**
  * @returns {number}
  */
 function readStableFeatureExtractTimeoutMs() {
@@ -70,7 +90,7 @@ function readStableFeatureExtractTimeoutMs() {
  * @param {string} [p.mimeType]
  * @param {string} [p.objectFamily]
  * @param {string} [p.scanResultIdPrefix]
- * @param {{ createResponses?: (o: object) => Promise<{ output_text?: string }> }} [deps] tests only
+ * @param {{ createResponses?: (o: object) => Promise<{ output_text?: string }>, forceEnabled?: boolean, timeoutMs?: number }} [deps] tests only — forceEnabled skips env gate; timeoutMs overrides default extract timeout
  * @returns {Promise<{
  *   features: { primaryColor: string, materialType: string, formFactor: string, textureHint: string } | null,
  *   seed: string | null,
@@ -89,7 +109,9 @@ export async function extractStableVisualFeatures(
   const prefix = String(scanResultIdPrefix || "").slice(0, 8);
   const started = Date.now();
 
-  if (!readStableFeatureSeedEnabled()) {
+  const forceEnabled = deps.forceEnabled === true;
+  const envEnabled = readStableFeatureSeedEnabled();
+  if (!forceEnabled && !envEnabled) {
     console.log(
       JSON.stringify({
         event: "STABLE_FEATURE_EXTRACT_DISABLED",
@@ -102,7 +124,10 @@ export async function extractStableVisualFeatures(
 
   const rawB64 = String(imageBase64 || "").trim();
   const b64 = rawB64.replace(/^data:[^;]+;base64,/i, "");
-  const timeoutMs = readStableFeatureExtractTimeoutMs();
+  const timeoutOverride = Number(deps.timeoutMs);
+  const timeoutMs = Number.isFinite(timeoutOverride)
+    ? Math.max(100, Math.floor(timeoutOverride))
+    : readStableFeatureExtractTimeoutMs();
 
   const userText = `objectFamily context (pipeline): ${String(objectFamily || "unknown").trim() || "unknown"}. Extract JSON only.`;
   const instructionText = `${SYSTEM_PROMPT}\n\n${userText}`;

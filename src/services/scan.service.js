@@ -9,11 +9,17 @@ import {
   saveCachedScanResult,
   markCachedScanHit,
   getScanCacheVersion,
+  normalizeBirthdateCacheKey,
   updateCachedScanSignals,
   shouldPersistDominantColorForCache,
   cacheRowHasPersistedObjectCategory,
   cacheRowHasPersistedDominantColor,
 } from "../stores/scanResultCache.db.js";
+import {
+  extractStableVisualFeatures,
+  STABLE_FEATURE_EXTRACT_VERSION,
+  countUnknownFields,
+} from "./stableFeatureExtract.service.js";
 
 import {
   hasRepeatedPhrase,
@@ -114,6 +120,38 @@ export async function classifyObjectCategory(imageBase64, deps = {}) {
     );
     return "อื่นๆ";
   }
+}
+
+/**
+ * Secondary cache key: stable feature seed + lane + birthdate + extract version.
+ * @param {{ lane: string, seed: string, birthdate: string, featureExtractVersion: string, promptVersion: string }} p promptVersion reserved for callers / future composite keys
+ */
+function buildSecondaryCacheKey({
+  lane,
+  seed,
+  birthdate,
+  featureExtractVersion,
+  promptVersion: _promptVersion,
+}) {
+  const b = normalizeBirthdateCacheKey(birthdate);
+  return `fs:${String(lane || "").trim()}:${featureExtractVersion}:${b}:${seed}`;
+}
+
+/**
+ * @param {string} categoryLabel Thai classifier label
+ * @returns {"sacred_amulet"|"crystal"|"unknown"}
+ */
+function mapCategoryToFamily(categoryLabel) {
+  const t = String(categoryLabel || "").trim();
+  if (
+    t === "พระเครื่อง" ||
+    t === "เครื่องรางของขลัง" ||
+    t === "พระบูชา"
+  ) {
+    return "sacred_amulet";
+  }
+  if (t === "คริสตัล/หิน") return "crystal";
+  return "unknown";
 }
 
 function isScanCacheBypassEnabled() {
@@ -339,6 +377,7 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
   }
 
   let imageHash = "";
+  let featureSeedCacheKey = null;
   try {
     imageHash = await getImageHash(imageBuffer);
     if (!skipCache) {
@@ -476,6 +515,243 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
       message: cacheErr?.message,
       code: cacheErr?.code,
     });
+  }
+
+  if (!skipCache) {
+    try {
+      const SECONDARY_CACHE_TIMEOUT_MS =
+        Number(process.env.STABLE_FEATURE_CACHE_LOOKUP_TIMEOUT_MS) || 5000;
+
+      console.log(
+        JSON.stringify({
+          event: "SCAN_CACHE_SECONDARY_LOOKUP_START",
+          userId,
+          timeoutMs: SECONDARY_CACHE_TIMEOUT_MS,
+        }),
+      );
+
+      const { seed, features } = await extractStableVisualFeatures(
+        { imageBase64 },
+        { forceEnabled: true, timeoutMs: SECONDARY_CACHE_TIMEOUT_MS },
+      );
+
+      if (!seed || !features || countUnknownFields(features) > 2) {
+        console.log(
+          JSON.stringify({
+            event: "SCAN_CACHE_SECONDARY_SKIPPED_UNKNOWN_THRESHOLD",
+            unknownCount: features ? countUnknownFields(features) : null,
+          }),
+        );
+      } else {
+        const lane = await classifyObjectCategory(imageBase64);
+        featureSeedCacheKey = buildSecondaryCacheKey({
+          lane,
+          seed,
+          birthdate,
+          featureExtractVersion: STABLE_FEATURE_EXTRACT_VERSION,
+          promptVersion: cacheVersion,
+        });
+
+        const fsCached = await getCachedScanResult({
+          imageHash: featureSeedCacheKey,
+          birthdate,
+          promptVersion: cacheVersion,
+        });
+
+        if (fsCached?.result_text) {
+          const cachedFamily = mapCategoryToFamily(fsCached.object_category);
+          const freshFamily = mapCategoryToFamily(lane);
+
+          if (cachedFamily !== freshFamily || freshFamily === "unknown") {
+            console.log(
+              JSON.stringify({
+                event: "SCAN_CACHE_SECONDARY_SKIPPED_CATEGORY_MISMATCH",
+                cachedFamily,
+                freshFamily,
+              }),
+            );
+          } else {
+            try {
+              await markCachedScanHit(fsCached.id);
+            } catch (hitErr) {
+              console.error(
+                "[SCAN_CACHE] markCachedScanHit (secondary) failed (ignored):",
+                hitErr?.message,
+              );
+            }
+            const finalText = String(fsCached.result_text).trim();
+            addRecentOutput(userId, finalText);
+            const scanEndedAt = Date.now();
+
+            console.log(
+              JSON.stringify({
+                event: "SCAN_CACHE_SECONDARY_HIT",
+                cacheId: fsCached.id,
+                featureSeed: String(seed).slice(0, 24),
+                lane,
+              }),
+            );
+            console.log(
+              JSON.stringify({
+                event: "SCAN_CACHE_SECONDARY_REUSED_RESULT_TEXT",
+                cacheId: fsCached.id,
+                userId,
+              }),
+            );
+
+            const hasPersistedCategory =
+              cacheRowHasPersistedObjectCategory(fsCached);
+            const hasPersistedDom = cacheRowHasPersistedDominantColor(fsCached);
+
+            const catP = (async () => {
+              if (hasPersistedCategory) {
+                return {
+                  objectCategory: String(fsCached.object_category).trim(),
+                  objectCategorySource: /** @type {const} */ ("cache_persisted"),
+                };
+              }
+              try {
+                const oc = await classifyObjectCategory(imageBase64);
+                return {
+                  objectCategory: oc,
+                  objectCategorySource: /** @type {const} */ ("cache_classify"),
+                };
+              } catch (clasErr) {
+                console.error(
+                  "[SCAN_CACHE] classifyObjectCategory on secondary hit failed:",
+                  { message: clasErr?.message },
+                );
+                return {
+                  objectCategory: null,
+                  objectCategorySource: /** @type {const} */ ("missing"),
+                };
+              }
+            })();
+
+            const domP = (async () => {
+              if (hasPersistedDom) {
+                return {
+                  dominantColorSlug: String(fsCached.dominant_color)
+                    .trim()
+                    .toLowerCase(),
+                  dominantColorSource: /** @type {const} */ ("cache_persisted"),
+                  domExtract: /** @type {const} */ (null),
+                };
+              }
+              const ex = await extractDominantColorSlugFromBuffer(imageBuffer);
+              return {
+                dominantColorSlug:
+                  ex.source === "vision_v1" ? ex.slug : undefined,
+                dominantColorSource:
+                  ex.source === "vision_v1"
+                    ? /** @type {const} */ ("vision_v1")
+                    : /** @type {const} */ ("none"),
+                domExtract: ex,
+              };
+            })();
+
+            const [cls, domR] = await Promise.all([catP, domP]);
+            const objectCategory = cls.objectCategory;
+            const objectCategorySource = cls.objectCategorySource;
+            const dominantColorSlug = domR.dominantColorSlug;
+            const dominantColorSource = domR.dominantColorSource;
+
+            if (
+              !hasPersistedCategory &&
+              objectCategorySource === "cache_classify" &&
+              objectCategory
+            ) {
+              await updateCachedScanSignals(fsCached.id, {
+                objectCategory,
+                objectCategorySource: "cache_classify",
+              });
+            }
+            if (
+              !hasPersistedDom &&
+              dominantColorSource === "vision_v1" &&
+              shouldPersistDominantColorForCache(
+                dominantColorSlug,
+                "vision_v1",
+              )
+            ) {
+              await updateCachedScanSignals(fsCached.id, {
+                dominantColor: dominantColorSlug,
+                dominantColorSource: "vision_v1",
+              });
+            }
+
+            console.log(
+              JSON.stringify({
+                event: "scan_result_cache",
+                outcome: "hit",
+                userId,
+                cacheId: fsCached.id,
+                elapsedMs: scanEndedAt - scanStartedAt,
+                objectCategorySource,
+                categoryFromCache: hasPersistedCategory,
+                hasObjectCategory: Boolean(
+                  objectCategory && String(objectCategory).trim(),
+                ),
+                dominantColorSource,
+                colorFromCache: hasPersistedDom,
+                dominantColorSlug: dominantColorSlug ?? null,
+              }),
+            );
+            if (domR.domExtract && domR.domExtract.source === "vision_v1") {
+              console.log(
+                JSON.stringify({
+                  event: "SCAN_DOMINANT_COLOR_V1",
+                  path: "cache_hit_reextract",
+                  userId,
+                  slug: domR.domExtract.slug,
+                  confidence: domR.domExtract.confidence,
+                  pixelCount: domR.domExtract.pixelCount ?? null,
+                }),
+              );
+            }
+            return {
+              resultText: finalText,
+              fromCache: true,
+              objectCategory,
+              objectCategorySource,
+              dominantColorSlug,
+              dominantColorSource,
+              qualityAnalytics: enrichQualityAnalyticsForPersist(
+                createEmptyQualityAnalytics({
+                  improve_skipped_reason: QUALITY_SKIP_REASONS.FROM_CACHE,
+                  latency_ms: 0,
+                }),
+                { resultText: finalText },
+              ),
+            };
+          }
+        } else {
+          console.log(
+            JSON.stringify({
+              event: "SCAN_CACHE_SECONDARY_MISS",
+              featureSeed: String(seed).slice(0, 24),
+              lane,
+            }),
+          );
+        }
+      }
+    } catch (err) {
+      const msg = String(err?.message || err);
+      const isTimeout =
+        msg.includes("timeout") ||
+        msg.includes("stable_feature_extract_timeout");
+      if (isTimeout) {
+        console.log(
+          JSON.stringify({
+            event: "SCAN_CACHE_SECONDARY_SKIPPED_TIMEOUT",
+          }),
+        );
+      } else {
+        console.error("[SCAN_CACHE] secondary lookup failed (continuing):", {
+          message: msg.slice(0, 200),
+        });
+      }
+    }
   }
 
   /*
@@ -654,6 +930,35 @@ export async function runDeepScan({ imageBuffer, birthdate, userId }) {
         userId,
       })
     );
+  }
+
+  if (featureSeedCacheKey && !skipCache && !finalValidation.isBad) {
+    try {
+      await saveCachedScanResult({
+        imageHash: featureSeedCacheKey,
+        birthdate,
+        resultText: finalText,
+        objectType: "single_supported",
+        promptVersion: cacheVersion,
+        objectCategory,
+        objectCategorySource: "deep_scan",
+        dominantColor: dominantColorSlug,
+        dominantColorSource:
+          dominantColorSource === "vision_v1" ? "vision_v1" : undefined,
+      });
+      console.log(
+        JSON.stringify({
+          event: "SCAN_CACHE_SECONDARY_SAVED",
+          userId,
+          promptVersion: cacheVersion,
+        }),
+      );
+    } catch (secSaveErr) {
+      console.error(
+        "[SCAN_CACHE] secondary save failed (ignored):",
+        secSaveErr?.message,
+      );
+    }
   }
 
   /*
