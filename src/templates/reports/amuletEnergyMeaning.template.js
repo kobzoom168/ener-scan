@@ -8,7 +8,6 @@ import { POWER_LABEL_THAI, POWER_ORDER } from "../../amulet/amuletScores.util.js
 /** @typedef {import("../../amulet/amuletScores.util.js").AmuletPowerKey} AmuletPowerKey */
 
 /**
- * Long-form copy per axis — plain Thai, no fortune-telling absolutes.
  * @type {Record<AmuletPowerKey, { body: string, useFor: string[], foot: string }>}
  */
 const AXIS_MEANING = {
@@ -83,7 +82,7 @@ const AXIS_MEANING = {
 
 /**
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload normalized (amulet lane)
- * @returns {string} full HTML document
+ * @returns {string}
  */
 export function renderAmuletEnergyMeaningHtml(payload) {
   const vm = buildAmuletHtmlV2ViewModel(payload);
@@ -170,11 +169,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       font-size: 1.05rem;
       -webkit-font-smoothing: antialiased;
     }
-    .aem-wrap {
-      max-width: 34rem;
-      margin: 0 auto;
-      padding: 1.25rem 1rem 2.5rem;
-    }
+    .aem-wrap { max-width: 34rem; margin: 0 auto; padding: 1.25rem 1rem 2.5rem; }
     .aem-back {
       display: inline-block;
       margin-bottom: 1rem;
@@ -273,7 +268,6 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       border: none;
       border-radius: 12px;
       text-decoration: none;
-      cursor: pointer;
       box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
     }
     .aem-cta:hover { filter: brightness(1.06); }

@@ -133,6 +133,10 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("พลังทั้ง 6 ด้าน"));
   assert.ok(html.includes("อ่านคำอธิบายพลังทั้ง 6 ด้าน"));
   assert.ok(html.includes("/r/t/energy-meaning"));
+  assert.ok(html.includes('class="mv2-life-cta-btn"'));
+  assert.ok(
+    html.includes("อธิบายว่าบารมี เมตตา โชคลาภ คุ้มครอง และด้านอื่น ๆ หมายถึงอะไร"),
+  );
   assert.ok(html.includes("เรียงจากคะแนนสูงไปต่ำ"));
   assert.ok(html.includes("mv2-life-row"));
   assert.ok(html.includes("พลังเด่น"));

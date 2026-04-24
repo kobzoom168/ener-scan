@@ -164,7 +164,7 @@ export async function getReportByToken(req, res) {
 }
 
 /**
- * GET /r/:publicToken/energy-meaning — long-form copy for “พลังทั้ง 6 ด้าน” (sacred amulet HTML report only).
+ * GET /r/:publicToken/energy-meaning — ความหมายพลังทั้ง 6 ด้าน (amulet HTML lane เท่านั้น)
  */
 export async function getEnergyMeaningByToken(req, res) {
   const publicToken = String(req.params?.publicToken || "").trim();
