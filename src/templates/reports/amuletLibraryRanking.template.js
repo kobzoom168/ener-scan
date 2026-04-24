@@ -23,6 +23,10 @@ function rankCardHtml(it, rank) {
       ? `<p class="alib-card-line"><span class="alib-k">เข้ากับคุณ</span> <span class="alib-v">${escapeHtml(String(it.compatPercent))}%</span></p>`
       : "";
   const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
+  const dupBadge =
+    it.scanCountInGroup > 1
+      ? `<p class="alib-card-dup"><span class="alib-card-dup-pill">สแกนซ้ำ ${escapeHtml(String(it.scanCountInGroup))} ครั้ง</span></p>`
+      : "";
   return `
   <article class="alib-card" data-rank="${rank}">
     <div class="alib-card-top">
@@ -34,6 +38,7 @@ function rankCardHtml(it, rank) {
         ${compat}
         <p class="alib-card-line"><span class="alib-k">สแกนเมื่อ</span> <span class="alib-v">${escapeHtml(when)}</span></p>
         <p class="alib-card-line alib-card-line--sub"><span class="alib-k">รหัสรายงาน</span> <span class="alib-v">${escapeHtml(it.displayReportId)}</span></p>
+        ${dupBadge}
       </div>
     </div>
     <a class="alib-card-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>
@@ -59,6 +64,15 @@ function panelHtml(list) {
 export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
   const backHref = `/r/${encodeURIComponent(pagePublicToken)}`;
   const n = library.totalCount;
+  const groupedNRaw = library.groupedObjectCount;
+  const groupedN =
+    groupedNRaw == null || !Number.isFinite(Number(groupedNRaw))
+      ? null
+      : Math.max(1, Math.round(Number(groupedNRaw)));
+  const groupedLine =
+    groupedN != null
+      ? `<p class="alib-sub alib-sub--grouped">จัดกลุ่มเป็นวัตถุประมาณ ${escapeHtml(String(groupedN))} ชิ้น</p>`
+      : "";
   const tabs = [
     { id: "overall", label: "แรงสุดโดยรวม", list: library.byOverall },
     { id: "luck", label: "โชคลาภสูงสุด", list: library.byLuck },
@@ -111,6 +125,7 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
     .alib-back:hover { color: var(--alib-gold); text-decoration: underline; }
     .alib-h1 { margin: 0 0 0.35rem; font-size: 1.28rem; font-weight: 700; color: var(--alib-gold); }
     .alib-sub { margin: 0 0 1rem; font-size: 0.95rem; color: var(--alib-muted); }
+    .alib-sub--grouped { margin-top: -0.6rem; }
     .alib-tabs { margin-bottom: 1rem; }
     .alib-tab-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.65rem; }
     .alib-tab {
@@ -144,6 +159,17 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
     .alib-card-main { flex: 1; min-width: 0; }
     .alib-card-line { margin: 0 0 0.25rem; font-size: 0.88rem; }
     .alib-card-line--sub { font-size: 0.8rem; color: var(--alib-muted); }
+    .alib-card-dup { margin: 0.35rem 0 0; }
+    .alib-card-dup-pill {
+      display: inline-block;
+      padding: 0.16rem 0.52rem;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #f7e09a;
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      border-radius: 999px;
+      background: rgba(212, 175, 55, 0.12);
+    }
     .alib-k { color: var(--alib-muted); font-weight: 600; margin-right: 0.2rem; }
     .alib-v { font-weight: 700; color: var(--alib-text); }
     .alib-card-btn {
@@ -208,6 +234,7 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
     <a class="alib-back" href="${escapeHtml(backHref)}">← กลับรายงาน</a>
     <h1 class="alib-h1">คลังพลังของคุณ</h1>
     <p class="alib-sub">รายการสแกนทั้งหมด ${escapeHtml(String(n))} รายการ</p>
+    ${groupedLine}
     <p class="alib-safety" role="note">ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
     <div class="alib-tabs">
       <div class="alib-tab-row" role="tablist" aria-label="หมวดอันดับ">${tabButtons}</div>
