@@ -622,6 +622,39 @@ export const env = {
     const n = raw === undefined || raw === "" ? 3 : Number(raw);
     return Number.isFinite(n) ? Math.min(4, Math.max(1, Math.floor(n))) : 3;
   })(),
+  /**
+   * Internal slip OCR + auto-approval rollout.
+   * Safe defaults: disabled real approval, dry-run enabled.
+   */
+  SLIP_AUTO_APPROVE_ENABLED:
+    String(process.env.SLIP_AUTO_APPROVE_ENABLED || "").trim().toLowerCase() ===
+    "true",
+  SLIP_AUTO_APPROVE_DRY_RUN:
+    String(process.env.SLIP_AUTO_APPROVE_DRY_RUN ?? "true")
+      .trim()
+      .toLowerCase() !== "false",
+  SLIP_OCR_MODEL:
+    String(process.env.SLIP_OCR_MODEL || "").trim() || "gpt-4.1-mini",
+  SLIP_OCR_MIN_CONFIDENCE: (() => {
+    const raw = process.env.SLIP_OCR_MIN_CONFIDENCE;
+    const n = raw === undefined || raw === "" ? 0.85 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.85;
+  })(),
+  SLIP_AUTO_APPROVE_MAX_AGE_HOURS: (() => {
+    const raw = process.env.SLIP_AUTO_APPROVE_MAX_AGE_HOURS;
+    const n = raw === undefined || raw === "" ? 24 : Number(raw);
+    return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 24;
+  })(),
+  SLIP_AMOUNT_TOLERANCE: (() => {
+    const raw = process.env.SLIP_AMOUNT_TOLERANCE;
+    const n = raw === undefined || raw === "" ? 0 : Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  })(),
+  SLIP_RECEIVER_NAME: String(process.env.SLIP_RECEIVER_NAME || "").trim(),
+  SLIP_RECEIVER_ACCOUNT_LAST4: String(
+    process.env.SLIP_RECEIVER_ACCOUNT_LAST4 || "",
+  ).trim(),
+  SLIP_RECEIVER_PROMPTPAY: String(process.env.SLIP_RECEIVER_PROMPTPAY || "").trim(),
 
   /**
    * Perceptual image deduplication (dHash). When `true`, scan worker checks if the uploaded
