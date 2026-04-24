@@ -325,7 +325,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken) {
       <div class="mv2-lib-spot">
         ${imgBlock}
         <div class="mv2-lib-spot-body">
-          <p class="mv2-lib-rankline">อันดับ 1 ตอนนี้ · องค์ที่พลังรวมเด่นสุดในคลังของคุณ</p>
+          <p class="mv2-lib-rankline">อันดับ 1 ตอนนี้ · รายการที่พลังรวมเด่นสุดในคลังของคุณ</p>
           <p class="mv2-lib-scoreline">พลังรวม <strong>${escapeHtml(String(top.powerTotal))}</strong></p>
           <p class="mv2-lib-peakline">เด่นสุด: ${escapeHtml(top.peakPowerLabelTh)}</p>
         </div>

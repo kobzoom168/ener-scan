@@ -4,7 +4,7 @@ import { renderAmuletLibraryRankingHtml } from "../../src/templates/reports/amul
 import { buildSacredAmuletLibraryViewFromPayloadOnly } from "../../src/services/reports/sacredAmuletLibrary.service.js";
 import { normalizeReportPayloadForRender } from "../../src/utils/reports/reportPayloadNormalize.util.js";
 
-test("renderAmuletLibraryRankingHtml: tabs, cards, upsell, noindex", () => {
+test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   const payload = {
     reportId: "r1",
     publicToken: "toklib1",
@@ -62,11 +62,12 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, upsell, noindex", () => {
     pagePublicToken: "toklib1",
     library,
   });
-  assert.ok(html.includes("อันดับวัตถุของคุณ"));
+  assert.ok(html.includes("คลังพลังของคุณ"));
   assert.ok(html.includes('content="noindex,nofollow"'));
   assert.ok(html.includes("แรงสุดโดยรวม"));
   assert.ok(html.includes("โชคลาภสูงสุด"));
-  assert.ok(html.includes("สแกนเพิ่มเพื่อจัดอันดับได้แม่นขึ้น"));
+  assert.ok(html.includes("อยากรู้ว่าองค์อื่นของคุณจะขึ้นอันดับไหน?"));
+  assert.ok(html.includes("สแกนวัตถุเพิ่ม"));
   assert.ok(html.includes("รายการสแกนทั้งหมด 1 รายการ"));
   assert.ok(
     html.includes(
