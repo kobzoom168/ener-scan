@@ -3,6 +3,8 @@
  * Does not generate user-facing wording.
  */
 
+import { computeNextBangkokMidnightAfter } from "../utils/bangkokTime.util.js";
+
 /**
  * @param {string|null|undefined} paidUntil
  * @param {number} paidRemainingScans
@@ -19,15 +21,11 @@ export function computePaidActive(paidUntil, paidRemainingScans, now = new Date(
 }
 
 /**
- * Next local calendar midnight after `now` (same convention as free daily quota).
+ * Next Asia/Bangkok calendar midnight (same convention as free daily quota; not server TZ).
  * @param {Date} now
  */
 export function computeNextLocalMidnightAfter(now = new Date()) {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const next = new Date(start);
-  next.setDate(next.getDate() + 1);
-  return next;
+  return computeNextBangkokMidnightAfter(now);
 }
 
 /**
@@ -37,8 +35,15 @@ export function computeNextLocalMidnightAfter(now = new Date()) {
 export function formatNextResetLabelThai(nextResetAt) {
   const d = nextResetAt instanceof Date ? nextResetAt : new Date(nextResetAt);
   if (!Number.isFinite(d.getTime())) return "";
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = fmt.formatToParts(d);
+  const hh = parts.find((p) => p.type === "hour")?.value ?? "00";
+  const mm = parts.find((p) => p.type === "minute")?.value ?? "00";
   return `พรุ่งนี้เวลา ${hh}:${mm} น. (รีเซ็ตโควตฟรี)`;
 }
 

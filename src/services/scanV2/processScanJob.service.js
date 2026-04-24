@@ -166,6 +166,7 @@ export async function processScanJob(workerId, jobRow) {
   // the cached report URL instead of running the full AI pipeline.
   /** @type {string | null} */
   let imageDHash = null;
+  let wasExactDup = false;
   if (env.IMAGE_DEDUP_ENABLED) {
     try {
       const shaHex = crypto.createHash("sha256").update(imageBuffer).digest("hex");
@@ -186,28 +187,8 @@ export async function processScanJob(workerId, jobRow) {
             timestamp: scanV2TraceTs(),
           }),
         );
-        await updateScanJob(jobId, {
-          status: "completed",
-          completed_at: new Date().toISOString(),
-        });
-        if (shaDup.report_url) {
-          await insertOutboundMessage({
-            line_user_id: lineUserId,
-            kind: "scan_result",
-            priority: OUTBOUND_PRIORITY.scan_result,
-            related_job_id: jobId,
-            payload_json: {
-              type: "text",
-              text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${shaDup.report_url}`,
-              appUserId,
-              skipQuotaDecrement: true,
-              dedupHit: true,
-              dedupType: "sha256",
-            },
-            status: "queued",
-          });
-        }
-        return;
+        wasExactDup = true;
+        // fall through — runDeepScan secondary cache will normalize the result
       }
     } catch (shaErr) {
       console.error(
@@ -1381,6 +1362,7 @@ export async function processScanJob(workerId, jobRow) {
       related_job_id: jobId,
       payload_json: {
         deliveryStrategy: lineFinalMode,
+        skipQuotaDecrement: wasExactDup,
         flex,
         text: lineDeliveryText,
         reportUrl,

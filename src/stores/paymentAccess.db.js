@@ -1,4 +1,8 @@
 import { supabase } from "../config/supabase.js";
+import {
+  getBangkokDateKey,
+  getBangkokDayContainingInstantUtcRange,
+} from "../utils/bangkokTime.util.js";
 
 /**
  * External input is LINE line_user_id string.
@@ -7,13 +11,9 @@ import { supabase } from "../config/supabase.js";
  * Real DB errors remain fail-closed (throw).
  */
 
-/** Calendar day key in server local timezone (matches checkScanAccess "today" window). */
+/** Calendar day key YYYY-MM-DD in Asia/Bangkok (free quota + callers that used "local" date key). */
 export function getLocalDateKey(d = new Date()) {
-  const x = new Date(d);
-  const y = x.getFullYear();
-  const m = String(x.getMonth() + 1).padStart(2, "0");
-  const day = String(x.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return getBangkokDateKey(d);
 }
 
 function normalizeLineUserId(lineUserId) {
@@ -21,26 +21,35 @@ function normalizeLineUserId(lineUserId) {
 }
 
 /**
- * Count scan_results for this app user between local midnight and next midnight.
+ * Count scan_results for this app user in the current Asia/Bangkok calendar day
+ * (Bangkok 00:00 inclusive → next Bangkok midnight exclusive), using UTC bounds on `created_at`.
  */
 export async function countScanResultsTodayForAppUser(appUserId, now = new Date()) {
   const uid = String(appUserId || "").trim();
   if (!uid) return 0;
 
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = new Date(startOfToday);
-  endOfToday.setDate(endOfToday.getDate() + 1);
+  const { dateKey, startIso, endIso } =
+    getBangkokDayContainingInstantUtcRange(now);
 
   const { count, error } = await supabase
     .from("scan_results")
     .select("id", { count: "exact", head: true })
     .eq("user_id", uid)
-    .gte("created_at", startOfToday.toISOString())
-    .lt("created_at", endOfToday.toISOString());
+    .gte("created_at", startIso)
+    .lt("created_at", endIso);
 
   if (error) throw error;
-  return count ?? 0;
+  const n = count ?? 0;
+  console.log(
+    JSON.stringify({
+      event: "FREE_QUOTA_BANGKOK_DAY_COUNT",
+      dateKey,
+      startIso,
+      endIso,
+      count: n,
+    }),
+  );
+  return n;
 }
 
 export async function getUserPaidUntil(lineUserId) {
