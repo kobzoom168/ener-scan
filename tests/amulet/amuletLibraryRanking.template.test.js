@@ -67,6 +67,17 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, upsell, noindex", () => {
   assert.ok(html.includes("แรงสุดโดยรวม"));
   assert.ok(html.includes("โชคลาภสูงสุด"));
   assert.ok(html.includes("สแกนเพิ่มเพื่อจัดอันดับได้แม่นขึ้น"));
+  assert.ok(html.includes("รายการสแกนทั้งหมด 1 รายการ"));
+  assert.ok(
+    html.includes(
+      "ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง",
+    ),
+  );
+  assert.ok(
+    html.includes(
+      "สแกนเพิ่มเพื่อเทียบพลังรวม โชคลาภ คุ้มครอง เมตตา บารมี และความเข้ากัน",
+    ),
+  );
   assert.ok(html.includes("ดูรายงานนี้"));
   assert.ok(html.includes("/r/toklib1"));
   assert.ok(html.includes("[data-alib-tab]"));

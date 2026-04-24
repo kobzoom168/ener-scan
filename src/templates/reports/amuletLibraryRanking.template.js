@@ -166,28 +166,52 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
     .alib-upsell ul { margin: 0; padding-left: 1.15rem; color: var(--alib-muted); font-size: 0.9rem; }
     .alib-upsell li { margin: 0.25rem 0; }
     .alib-note { margin: 1.1rem 0 0; font-size: 0.82rem; color: var(--alib-muted); line-height: 1.55; }
+    .alib-safety {
+      margin: 0 0 0.85rem;
+      padding: 0.55rem 0.65rem;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      color: var(--alib-muted);
+      background: rgba(0,0,0,0.22);
+      border-radius: 10px;
+      border: 1px solid rgba(212, 175, 55, 0.12);
+    }
+    .alib-scan-cta {
+      margin: 1rem 0 0;
+      padding: 0.65rem 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1.5;
+      text-align: center;
+      color: var(--alib-text);
+      background: rgba(184, 135, 27, 0.1);
+      border: 1px solid rgba(212, 175, 55, 0.22);
+      border-radius: 12px;
+    }
   </style>
 </head>
 <body>
   <div class="alib-wrap">
     <a class="alib-back" href="${escapeHtml(backHref)}">← กลับรายงาน</a>
     <h1 class="alib-h1">อันดับวัตถุของคุณ</h1>
-    <p class="alib-sub">จากวัตถุที่เคยสแกนทั้งหมด ${escapeHtml(String(n))} ชิ้น</p>
+    <p class="alib-sub">รายการสแกนทั้งหมด ${escapeHtml(String(n))} รายการ</p>
+    <p class="alib-safety" role="note">ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
     <div class="alib-tabs">
       <div class="alib-tab-row" role="tablist" aria-label="หมวดอันดับ">${tabButtons}</div>
       ${tabPanels}
     </div>
     <section class="alib-upsell" aria-labelledby="alib-up-h">
       <h2 id="alib-up-h">สแกนเพิ่มเพื่อจัดอันดับได้แม่นขึ้น</h2>
-      <p>เมื่อคุณมีวัตถุในคลังมากขึ้น ระบบจะช่วยดูได้ว่า</p>
+      <p>เมื่อคุณมีรายการสแกนมากขึ้น ระบบจะช่วยดูได้ว่า</p>
       <ul>
-        <li>ชิ้นไหนพลังรวมสูงสุด</li>
-        <li>ชิ้นไหนเด่นเรื่องโชคลาภ</li>
-        <li>ชิ้นไหนเด่นเรื่องคุ้มครอง</li>
-        <li>ชิ้นไหนเข้ากับคุณที่สุด</li>
+        <li>รายการไหนพลังรวมสูงสุด</li>
+        <li>รายการไหนเด่นเรื่องโชคลาภ</li>
+        <li>รายการไหนเด่นเรื่องคุ้มครอง</li>
+        <li>รายการไหนเข้ากับคุณที่สุด</li>
       </ul>
     </section>
-    <p class="alib-note" role="note">อันดับและคะแนนเป็นการประเมินจากข้อมูลการสแกน ใช้เป็นแนวทาง ไม่ได้ระบุชนิดหรือชื่อพระจริงขององค์ถ่ายรูป</p>
+    <p class="alib-scan-cta" role="region" aria-label="ชวนสแกนเพิ่ม">สแกนเพิ่มเพื่อเทียบพลังรวม โชคลาภ คุ้มครอง เมตตา บารมี และความเข้ากัน</p>
+    <p class="alib-note" role="note">อันดับและคะแนนเป็นการประเมินจากผลสแกน ใช้เป็นแนวทาง ไม่ได้ระบุชนิดหรือชื่อพระจริงจากภาพ</p>
   </div>
   <script>
 (function () {

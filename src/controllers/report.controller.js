@@ -90,30 +90,33 @@ export async function getReportByToken(req, res) {
   /** @type {string} */
   let html;
   let sacredAmuletLibrary = null;
-  try {
-    const { payload: normPre } = normalizeReportPayloadForRender(payload);
-    if (
-      normPre.amuletV1 &&
-      typeof normPre.amuletV1 === "object" &&
-      !Array.isArray(normPre.amuletV1)
-    ) {
-      const uid = String(normPre.userId || "").trim();
-      if (uid) {
+  const { payload: normPre } = normalizeReportPayloadForRender(payload);
+  if (
+    normPre.amuletV1 &&
+    typeof normPre.amuletV1 === "object" &&
+    !Array.isArray(normPre.amuletV1)
+  ) {
+    const uid = String(normPre.userId || "").trim();
+    if (uid) {
+      try {
         sacredAmuletLibrary = await buildSacredAmuletLibraryForLineUser(uid);
+      } catch (libErr) {
+        console.warn(
+          JSON.stringify({
+            event: "REPORT_LIBRARY_LOOKUP_SKIP",
+            path: "getReportByToken",
+            reason: String(
+              libErr && typeof libErr === "object" && "message" in libErr
+                ? /** @type {{ message?: unknown }} */ (libErr).message
+                : libErr,
+            ).slice(0, 200),
+          }),
+        );
       }
     }
-  } catch (libErr) {
-    console.warn(
-      JSON.stringify({
-        event: "REPORT_LIBRARY_LOOKUP_SKIP",
-        path: "getReportByToken",
-        reason: String(
-          libErr && typeof libErr === "object" && "message" in libErr
-            ? /** @type {{ message?: unknown }} */ (libErr).message
-            : libErr,
-        ).slice(0, 200),
-      }),
-    );
+    if (!sacredAmuletLibrary) {
+      sacredAmuletLibrary = buildSacredAmuletLibraryViewFromPayloadOnly(normPre);
+    }
   }
   try {
     html = renderReportHtmlPage(payload, { sacredAmuletLibrary });
