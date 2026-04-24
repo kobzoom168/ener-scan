@@ -69,3 +69,30 @@ export async function insertScanPhash(row) {
   });
   if (error) throw error;
 }
+
+/**
+ * Read stored pHash rows for specific scan_result ids.
+ *
+ * @param {string[]} scanResultIds
+ * @param {string} lineUserId
+ * @returns {Promise<Array<{ scan_result_id: string, image_phash: string }>>}
+ */
+export async function listScanPhashesByScanResultIds(scanResultIds, lineUserId) {
+  const ids = Array.from(
+    new Set(
+      (Array.isArray(scanResultIds) ? scanResultIds : [])
+        .map((x) => String(x || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const uid = String(lineUserId || "").trim();
+  if (!ids.length || !uid) return [];
+
+  const { data, error } = await supabase
+    .from("scan_image_phashes")
+    .select("scan_result_id, image_phash")
+    .eq("line_user_id", uid)
+    .in("scan_result_id", ids);
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}

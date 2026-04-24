@@ -64,15 +64,7 @@ function panelHtml(list) {
 export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
   const backHref = `/r/${encodeURIComponent(pagePublicToken)}`;
   const n = library.totalCount;
-  const groupedNRaw = library.groupedObjectCount;
-  const groupedN =
-    groupedNRaw == null || !Number.isFinite(Number(groupedNRaw))
-      ? null
-      : Math.max(1, Math.round(Number(groupedNRaw)));
-  const groupedLine =
-    groupedN != null
-      ? `<p class="alib-sub alib-sub--grouped">จัดกลุ่มเป็นวัตถุประมาณ ${escapeHtml(String(groupedN))} ชิ้น</p>`
-      : "";
+  const dedupeExplainLine = `<p class="alib-sub alib-sub--grouped">แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้</p>`;
   const tabs = [
     { id: "overall", label: "แรงสุดโดยรวม", list: library.byOverall },
     { id: "luck", label: "โชคลาภสูงสุด", list: library.byLuck },
@@ -233,8 +225,8 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
   <div class="alib-wrap">
     <a class="alib-back" href="${escapeHtml(backHref)}">← กลับรายงาน</a>
     <h1 class="alib-h1">คลังพลังของคุณ</h1>
-    <p class="alib-sub">รายการสแกนทั้งหมด ${escapeHtml(String(n))} รายการ</p>
-    ${groupedLine}
+    <p class="alib-sub">จากรายการสแกนทั้งหมด ${escapeHtml(String(n))} รายการ</p>
+    ${dedupeExplainLine}
     <p class="alib-safety" role="note">ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
     <div class="alib-tabs">
       <div class="alib-tab-row" role="tablist" aria-label="หมวดอันดับ">${tabButtons}</div>

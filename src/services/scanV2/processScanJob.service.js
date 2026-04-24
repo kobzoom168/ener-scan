@@ -188,7 +188,26 @@ export async function processScanJob(workerId, jobRow) {
           }),
         );
         wasExactDup = true;
-        // fall through — runDeepScan secondary cache will normalize the result
+        if (shaDup.report_url) {
+          await updateScanJob(jobId, { status: "completed", completed_at: new Date().toISOString() });
+          await insertOutboundMessage({
+            line_user_id: lineUserId,
+            kind: "scan_result",
+            priority: OUTBOUND_PRIORITY.scan_result,
+            related_job_id: jobId,
+            payload_json: {
+              type: "text",
+              text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${shaDup.report_url}`,
+              appUserId,
+              skipQuotaDecrement: true,
+              dedupHit: true,
+              dedupType: "sha256",
+            },
+            status: "queued",
+          });
+          return;
+        }
+        // no cached report_url yet: continue pipeline and keep quota-skip hint
       }
     } catch (shaErr) {
       console.error(

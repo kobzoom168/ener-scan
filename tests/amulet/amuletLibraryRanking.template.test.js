@@ -68,8 +68,8 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   assert.ok(html.includes("โชคลาภสูงสุด"));
   assert.ok(html.includes("อยากรู้ว่าองค์อื่นของคุณจะขึ้นอันดับไหน?"));
   assert.ok(html.includes("สแกนวัตถุเพิ่ม"));
-  assert.ok(html.includes("รายการสแกนทั้งหมด 1 รายการ"));
-  assert.ok(!html.includes("จัดกลุ่มเป็นวัตถุประมาณ"));
+  assert.ok(html.includes("จากรายการสแกนทั้งหมด 1 รายการ"));
+  assert.ok(html.includes("แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้"));
   assert.ok(
     html.includes(
       "ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง",
@@ -118,8 +118,8 @@ test("renderAmuletLibraryRankingHtml: grouped header + duplicate badge", () => {
     pagePublicToken: "tok-main",
     library,
   });
-  assert.ok(html.includes("รายการสแกนทั้งหมด 5 รายการ"));
-  assert.ok(html.includes("จัดกลุ่มเป็นวัตถุประมาณ 3 ชิ้น"));
+  assert.ok(html.includes("จากรายการสแกนทั้งหมด 5 รายการ"));
+  assert.ok(html.includes("แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้"));
   assert.ok(html.includes("สแกนซ้ำ 3 ครั้ง"));
   assert.ok(html.includes("/r/tok-newest"));
 });
