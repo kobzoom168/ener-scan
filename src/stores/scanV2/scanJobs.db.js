@@ -82,3 +82,30 @@ export async function updateScanJob(id, patch) {
   const { error } = await supabase.from("scan_jobs").update(patch).eq("id", id);
   if (error) throw error;
 }
+
+/**
+ * Fetch `upload_id` by `scan_jobs.id` for a user.
+ *
+ * @param {string[]} scanJobIds
+ * @param {string} lineUserId
+ * @returns {Promise<Array<{ id: string, upload_id: string | null }>>}
+ */
+export async function listScanJobsUploadIdsByIds(scanJobIds, lineUserId) {
+  const ids = Array.from(
+    new Set(
+      (Array.isArray(scanJobIds) ? scanJobIds : [])
+        .map((x) => String(x || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const uid = String(lineUserId || "").trim();
+  if (!ids.length || !uid) return [];
+
+  const { data, error } = await supabase
+    .from("scan_jobs")
+    .select("id, upload_id")
+    .eq("line_user_id", uid)
+    .in("id", ids);
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}

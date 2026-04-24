@@ -83,6 +83,8 @@ import {
   insertScanPhash,
 } from "../../stores/scanV2/imageDedupCache.db.js";
 
+const NEAR_EXACT_DEDUP_THRESHOLD = 4;
+
 /**
  * @param {string} workerId
  * @param {object} jobRow from claim_next_scan_job
@@ -226,7 +228,7 @@ export async function processScanJob(workerId, jobRow) {
       const dupMatch = await findDuplicateScanByPhash(
         imageDHash,
         lineUserId,
-        env.IMAGE_DEDUP_HAMMING_THRESHOLD,
+        Math.min(env.IMAGE_DEDUP_HAMMING_THRESHOLD, NEAR_EXACT_DEDUP_THRESHOLD),
       );
       if (dupMatch) {
         console.log(

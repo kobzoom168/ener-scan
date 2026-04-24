@@ -61,7 +61,7 @@ function makeRaw({
   };
 }
 
-test("buildSacredAmuletLibraryViewFromItems: groups by trusted key and picks latest representative", () => {
+test("buildSacredAmuletLibraryViewFromItems: exact sha256 groups and picks latest representative", () => {
   const aOld = extractSacredAmuletLibraryItem(
     makeRaw({
       token: "tok-a-old",
@@ -69,7 +69,9 @@ test("buildSacredAmuletLibraryViewFromItems: groups by trusted key and picks lat
       generatedAt: "2026-04-10T08:00:00.000Z",
       energyScore: 7.4,
       compatibilityPercent: 70,
-      extra: { stableFeatureSeed: "seed-obj-a" },
+      extra: {
+        image_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      },
     }),
     { id: "row-a-old", created_at: "2026-04-10T08:00:00.000Z" },
   );
@@ -80,7 +82,9 @@ test("buildSacredAmuletLibraryViewFromItems: groups by trusted key and picks lat
       generatedAt: "2026-04-20T08:00:00.000Z",
       energyScore: 8.6,
       compatibilityPercent: 88,
-      extra: { stableFeatureSeed: "seed-obj-a" },
+      extra: {
+        image_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      },
     }),
     { id: "row-a-new", created_at: "2026-04-20T08:00:00.000Z" },
   );
@@ -104,6 +108,7 @@ test("buildSacredAmuletLibraryViewFromItems: groups by trusted key and picks lat
   assert.equal(view.items.length, 2);
   assert.equal(view.topOverall?.publicToken, "tok-a-new");
   assert.equal(view.topOverall?.scanCountInGroup, 2);
+  assert.equal(view.topOverall?.groupKeySource, "image_sha256");
 });
 
 test("buildSacredAmuletLibraryViewFromItems: fallback publicToken does not merge different scans", () => {
@@ -144,7 +149,7 @@ test("buildSacredAmuletLibraryViewFromItems: groups by pHash distance threshold"
       generatedAt: "2026-04-20T08:00:00.000Z",
       energyScore: 7.3,
       compatibilityPercent: 68,
-      extra: { image_phash: "0123456789abcdee" },
+      extra: { image_phash: "0000000000000000" },
     }),
     { id: "row-ph-a", created_at: "2026-04-20T08:00:00.000Z" },
   );
@@ -155,7 +160,7 @@ test("buildSacredAmuletLibraryViewFromItems: groups by pHash distance threshold"
       generatedAt: "2026-04-22T08:00:00.000Z",
       energyScore: 8.1,
       compatibilityPercent: 79,
-      extra: { image_phash: "0123456789abccef" },
+      extra: { image_phash: "000000000000000f" },
     }),
     { id: "row-ph-b", created_at: "2026-04-22T08:00:00.000Z" },
   );
@@ -167,4 +172,94 @@ test("buildSacredAmuletLibraryViewFromItems: groups by pHash distance threshold"
   assert.equal(view.items[0]?.scanCountInGroup, 2);
   assert.equal(view.items[0]?.publicToken, "tok-ph-b");
   assert.equal(view.items[0]?.groupKeySource, "image_phash");
+});
+
+test("buildSacredAmuletLibraryViewFromItems: possible duplicate is not auto merged", () => {
+  const a = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-pd-a",
+      reportId: "rpd-a",
+      generatedAt: "2026-04-20T08:00:00.000Z",
+      energyScore: 7.3,
+      compatibilityPercent: 68,
+      extra: { image_phash: "0000000000000000" },
+    }),
+    { id: "row-pd-a", created_at: "2026-04-20T08:00:00.000Z" },
+  );
+  const b = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-pd-b",
+      reportId: "rpd-b",
+      generatedAt: "2026-04-22T08:00:00.000Z",
+      energyScore: 8.1,
+      compatibilityPercent: 79,
+      extra: { image_phash: "000000000000001f" },
+    }),
+    { id: "row-pd-b", created_at: "2026-04-22T08:00:00.000Z" },
+  );
+  assert.ok(a && b);
+  const view = buildSacredAmuletLibraryViewFromItems([a, b]);
+  assert.ok(view);
+  assert.equal(view.totalCount, 2);
+  assert.equal(view.items.length, 2);
+  assert.equal(
+    view.items.some((it) => it.duplicateStatus === "possible_duplicate"),
+    true,
+  );
+});
+
+test("buildSacredAmuletLibraryViewFromItems: 3 duplicate scans same pHash collapse to one card", () => {
+  const rows = ["a", "b", "c"].map((s, i) =>
+    extractSacredAmuletLibraryItem(
+      makeRaw({
+        token: `tok-ph3-${s}`,
+        reportId: `rph3-${s}`,
+        generatedAt: `2026-04-2${i}T08:00:00.000Z`,
+        energyScore: 7 + i * 0.2,
+        compatibilityPercent: 65 + i,
+        extra: { image_phash: "aaaaaaaaaaaaaaaa" },
+      }),
+      { id: `row-ph3-${s}`, created_at: `2026-04-2${i}T08:00:00.000Z` },
+    ),
+  );
+  assert.ok(rows.every(Boolean));
+  const view = buildSacredAmuletLibraryViewFromItems(/** @type {any[]} */ (rows));
+  assert.ok(view);
+  assert.equal(view.totalCount, 3);
+  assert.equal(view.items.length, 1);
+  assert.equal(view.items[0]?.scanCountInGroup, 3);
+  assert.equal(view.items[0]?.publicToken, "tok-ph3-c");
+});
+
+test("buildSacredAmuletLibraryViewFromItems: same sha256 groups even when publicToken differs", () => {
+  const x = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-sha-x",
+      reportId: "rsha-x",
+      generatedAt: "2026-04-20T08:00:00.000Z",
+      energyScore: 7.5,
+      compatibilityPercent: 69,
+      extra: { image_sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" },
+    }),
+    { id: "row-sha-x", created_at: "2026-04-20T08:00:00.000Z" },
+  );
+  const y = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-sha-y",
+      reportId: "rsha-y",
+      generatedAt: "2026-04-22T08:00:00.000Z",
+      energyScore: 8.1,
+      compatibilityPercent: 77,
+      extra: { image_sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" },
+    }),
+    { id: "row-sha-y", created_at: "2026-04-22T08:00:00.000Z" },
+  );
+  assert.ok(x && y);
+  const view = buildSacredAmuletLibraryViewFromItems([x, y]);
+  assert.ok(view);
+  assert.equal(view.totalCount, 2);
+  assert.equal(view.items.length, 1);
+  assert.equal(view.items[0]?.scanCountInGroup, 2);
+  assert.equal(view.items[0]?.publicToken, "tok-sha-y");
+  assert.equal(view.items[0]?.groupKeySource, "image_sha256");
 });

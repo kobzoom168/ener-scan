@@ -118,3 +118,30 @@ export async function findScanUploadBySha256AndUser(
     return null;
   }
 }
+
+/**
+ * Fetch `sha256` for uploads by id (same LINE user scope).
+ *
+ * @param {string[]} uploadIds
+ * @param {string} lineUserId
+ * @returns {Promise<Array<{ id: string, sha256: string | null }>>}
+ */
+export async function listScanUploadsSha256ByIds(uploadIds, lineUserId) {
+  const ids = Array.from(
+    new Set(
+      (Array.isArray(uploadIds) ? uploadIds : [])
+        .map((x) => String(x || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const uid = String(lineUserId || "").trim();
+  if (!ids.length || !uid) return [];
+
+  const { data, error } = await supabase
+    .from("scan_uploads")
+    .select("id, sha256")
+    .eq("line_user_id", uid)
+    .in("id", ids);
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}

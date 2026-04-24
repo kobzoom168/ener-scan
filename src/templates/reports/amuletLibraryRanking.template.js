@@ -27,6 +27,11 @@ function rankCardHtml(it, rank) {
     it.scanCountInGroup > 1
       ? `<p class="alib-card-dup"><span class="alib-card-dup-pill">สแกนซ้ำ ${escapeHtml(String(it.scanCountInGroup))} ครั้ง</span></p>`
       : "";
+  const possibleDupBadge =
+    it.duplicateStatus === "possible_duplicate"
+      ? `<p class="alib-card-dup"><span class="alib-card-dup-pill alib-card-dup-pill--possible">อาจซ้ำกับรายการอื่น</span></p>
+        <p class="alib-card-possible-note">ระบบพบว่ารายการนี้อาจเป็นวัตถุเดียวกับรายการอื่น แต่ยังไม่รวมให้อัตโนมัติ เพื่อป้องกันการรวมผิด</p>`
+      : "";
   return `
   <article class="alib-card" data-rank="${rank}">
     <div class="alib-card-top">
@@ -39,6 +44,7 @@ function rankCardHtml(it, rank) {
         <p class="alib-card-line"><span class="alib-k">สแกนเมื่อ</span> <span class="alib-v">${escapeHtml(when)}</span></p>
         <p class="alib-card-line alib-card-line--sub"><span class="alib-k">รหัสรายงาน</span> <span class="alib-v">${escapeHtml(it.displayReportId)}</span></p>
         ${dupBadge}
+        ${possibleDupBadge}
       </div>
     </div>
     <a class="alib-card-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>
@@ -64,7 +70,10 @@ function panelHtml(list) {
 export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
   const backHref = `/r/${encodeURIComponent(pagePublicToken)}`;
   const n = library.totalCount;
-  const dedupeExplainLine = `<p class="alib-sub alib-sub--grouped">แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้</p>`;
+  const dedupeExplainLine =
+    Array.isArray(library.items) && library.items.length < n
+      ? `<p class="alib-sub alib-sub--grouped">แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้</p>`
+      : "";
   const tabs = [
     { id: "overall", label: "แรงสุดโดยรวม", list: library.byOverall },
     { id: "luck", label: "โชคลาภสูงสุด", list: library.byLuck },
@@ -161,6 +170,17 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
       border: 1px solid rgba(212, 175, 55, 0.35);
       border-radius: 999px;
       background: rgba(212, 175, 55, 0.12);
+    }
+    .alib-card-dup-pill--possible {
+      color: #ffe5b3;
+      border-color: rgba(255, 170, 90, 0.42);
+      background: rgba(255, 170, 90, 0.12);
+    }
+    .alib-card-possible-note {
+      margin: 0.28rem 0 0;
+      font-size: 0.76rem;
+      line-height: 1.45;
+      color: var(--alib-muted);
     }
     .alib-k { color: var(--alib-muted); font-weight: 600; margin-right: 0.2rem; }
     .alib-v { font-weight: 700; color: var(--alib-text); }

@@ -36,7 +36,7 @@ export async function getScanResultV2ByJobId(scanJobId) {
  *
  * @param {string} lineUserId
  * @param {number} [limit]
- * @returns {Promise<Array<{ id: string, created_at?: string, report_payload_json?: unknown, html_public_token?: string | null }>>}
+ * @returns {Promise<Array<{ id: string, scan_job_id?: string | null, created_at?: string, report_payload_json?: unknown, html_public_token?: string | null }>>}
  */
 export async function listScanResultsV2PayloadRowsForLineUser(lineUserId, limit = 80) {
   const uid = String(lineUserId || "").trim();
@@ -45,7 +45,7 @@ export async function listScanResultsV2PayloadRowsForLineUser(lineUserId, limit 
   const lim = Math.min(200, Math.max(1, Math.floor(Number(limit)) || 80));
   const { data, error } = await supabase
     .from("scan_results_v2")
-    .select("id, created_at, report_payload_json, html_public_token")
+    .select("id, scan_job_id, created_at, report_payload_json, html_public_token")
     .eq("line_user_id", uid)
     .order("created_at", { ascending: false })
     .limit(lim);

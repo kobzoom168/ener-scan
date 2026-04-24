@@ -69,7 +69,7 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   assert.ok(html.includes("อยากรู้ว่าองค์อื่นของคุณจะขึ้นอันดับไหน?"));
   assert.ok(html.includes("สแกนวัตถุเพิ่ม"));
   assert.ok(html.includes("จากรายการสแกนทั้งหมด 1 รายการ"));
-  assert.ok(html.includes("แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้"));
+  assert.ok(!html.includes("แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้"));
   assert.ok(
     html.includes(
       "ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง",
@@ -89,7 +89,23 @@ test("renderAmuletLibraryRankingHtml: grouped header + duplicate badge", () => {
   const library = {
     totalCount: 5,
     groupedObjectCount: 3,
-    items: [],
+    items: [
+      {
+        scanResultV2Id: "s1",
+        publicToken: "tok-newest",
+        thumbUrl: "https://example.com/x.jpg",
+        powerTotal: 84,
+        peakPowerLabelTh: "โชคลาภและการเปิดทาง",
+        compatPercent: 71,
+        scannedAtIso: "2026-04-16T10:00:00.000Z",
+        displayReportId: "ES-NEWEST",
+        reportId: "rnew",
+        axisScores: { luck: 89, protection: 70, metta: 60, baramee: 55 },
+        scanCountInGroup: 3,
+        groupKey: "image_sha256:abc",
+        groupKeySource: "image_sha256",
+      },
+    ],
     byOverall: [
       {
         scanResultV2Id: "s1",
@@ -103,8 +119,8 @@ test("renderAmuletLibraryRankingHtml: grouped header + duplicate badge", () => {
         reportId: "rnew",
         axisScores: { luck: 89, protection: 70, metta: 60, baramee: 55 },
         scanCountInGroup: 3,
-        groupKey: "stable_feature_seed:aaa",
-        groupKeySource: "stable_feature_seed",
+        groupKey: "image_sha256:abc",
+        groupKeySource: "image_sha256",
       },
     ],
     byLuck: [],
