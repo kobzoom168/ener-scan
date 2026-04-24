@@ -425,6 +425,40 @@ export async function setPaymentSlipPendingVerify({
   return true;
 }
 
+/**
+ * @param {string} paymentId
+ * @returns {Promise<object|null>}
+ */
+export async function getPaymentById(paymentId) {
+  const id = String(paymentId || "").trim();
+  if (!id) return null;
+  const { data, error } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Update additive slip verification fields only.
+ * @param {string} paymentId
+ * @param {Record<string, unknown>} patch
+ */
+export async function updatePaymentSlipVerificationFields(paymentId, patch = {}) {
+  const id = String(paymentId || "").trim();
+  if (!id) throw new Error("payments_missing_payment_id");
+  const nowIso = getNowIso();
+  const safePatch = {
+    ...patch,
+    updated_at: nowIso,
+  };
+  const { error } = await supabase.from("payments").update(safePatch).eq("id", id);
+  if (error) throw error;
+  return true;
+}
+
 export async function getPaymentsPendingVerifyForAdmin({
   limit = 50,
 } = {}) {

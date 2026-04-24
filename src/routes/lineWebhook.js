@@ -80,12 +80,18 @@ import {
   isPromptPayQrUrlHttpsForLine,
 } from "../utils/promptpayQrPublicUrl.util.js";
 import { ensureUserByLineUserId, touchUserLastActive } from "../stores/users.db.js";
+import {
+  getConversationStateByLineUserId,
+  upsertConversationState,
+} from "../stores/conversationState.db.js";
 import { mergeConversationStateFromDbIntoSession } from "../services/conversationStateDualWrite.service.js";
 import {
   createPaymentPending,
   ensurePaymentRefForPaymentId,
   getLatestAwaitingPaymentForLineUserId,
+  markPaymentApprovedAndUnlock,
   setPaymentSlipPendingVerify,
+  updatePaymentSlipVerificationFields,
 } from "../stores/payments.db.js";
 
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
@@ -95,6 +101,7 @@ import {
   buildSlipNotTransferReceiptText,
   logSlipPendingVerifyRouted,
 } from "../services/lineWebhook/slipImageValidation.service.js";
+import { runSlipAutoApprovalAfterGateAccept } from "../core/payments/slipCheck/slipAutoApprovalOrchestrator.service.js";
 import { runGeminiFrontOrchestrator } from "../core/conversation/geminiFront/geminiFrontOrchestrator.service.js";
 import { resolveGeminiPhase1StateKey } from "../core/conversation/geminiFront/geminiFront.featureFlags.js";
 import { invokePhase1GeminiShadow } from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
@@ -2185,6 +2192,84 @@ async function finalizeAcceptedImage({
         reason: "slip_uploaded_set_pending_verify",
       });
 
+      const approvalFlow = await runSlipAutoApprovalAfterGateAccept({
+        userId,
+        paymentId,
+        imageBuffer,
+        payment: {
+          ...(pendingPayment || {}),
+          id: paymentId,
+          status: "pending_verify",
+        },
+        updatePaymentFields: updatePaymentSlipVerificationFields,
+      });
+
+      if (approvalFlow.mode === "auto_approved") {
+        const rowAfter = await getLatestAwaitingPaymentForLineUserId(userId).catch(
+          () => null,
+        );
+        if (String(rowAfter?.status || "").trim().toLowerCase() === "paid") {
+          console.log(
+            JSON.stringify({
+              event: "SLIP_PAYMENT_ALREADY_APPROVED",
+              paymentId,
+              lineUserIdPrefix: String(userId || "").slice(0, 8),
+            }),
+          );
+        } else {
+          await markPaymentApprovedAndUnlock({
+            paymentId,
+            approvedBy: "slip_auto_internal",
+          });
+        }
+        try {
+          const appUser = await ensureUserByLineUserId(userId);
+          const existingCs = await getConversationStateByLineUserId(userId).catch(
+            () => null,
+          );
+          if (appUser?.id) {
+            await upsertConversationState({
+              line_user_id: userId,
+              app_user_id: String(appUser.id),
+              flow_state: existingCs?.flow_state ?? null,
+              payment_state: "paid_active_scan_ready",
+              pending_upload_id: existingCs?.pending_upload_id ?? null,
+              selected_package_key: existingCs?.selected_package_key ?? null,
+              birthdate_change_state: existingCs?.birthdate_change_state ?? null,
+              reply_token_spent: Boolean(existingCs?.reply_token_spent),
+              pending_approved_intro_compensation:
+                existingCs?.pending_approved_intro_compensation ?? null,
+              last_inbound_at: existingCs?.last_inbound_at ?? null,
+              updated_at: new Date().toISOString(),
+            });
+          }
+        } catch (csErr) {
+          console.error(
+            JSON.stringify({
+              event: "SLIP_AUTO_APPROVE_SET_CONVERSATION_STATE_FAILED",
+              lineUserIdPrefix: String(userId || "").slice(0, 8),
+              paymentId,
+              message: String(csErr?.message || csErr).slice(0, 200),
+            }),
+          );
+        }
+        clearPaymentState(userId);
+        markAcceptedImageEvent(userId, eventTimestamp);
+        clearLatestScanJob(userId);
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "slip_auto_approved",
+          semanticKey: "slip_auto_approved",
+          text: "ตรวจสอบสลิปเรียบร้อยแล้วครับ\n\nระบบเปิดสิทธิ์สแกนให้แล้ว\nตอนนี้สามารถส่งรูปวัตถุที่ต้องการสแกนเข้ามาได้เลยครับ",
+          alternateTexts: [
+            "ยืนยันสลิปเรียบร้อยแล้วครับ ส่งรูปวัตถุที่ต้องการสแกนมาได้เลย",
+          ],
+        });
+        return;
+      }
+
       void maybeNotifyAdminSlipPendingVerify({
         client,
         lineUserId: userId,
@@ -2199,6 +2284,21 @@ async function finalizeAcceptedImage({
       clearPaymentState(userId);
       markAcceptedImageEvent(userId, eventTimestamp);
       clearLatestScanJob(userId);
+
+      if (approvalFlow.mode === "manual_review") {
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "slip_manual_review",
+          semanticKey: "slip_manual_review",
+          text: "ได้รับสลิปแล้วครับ\n\nระบบอ่านข้อมูลบางส่วนยังไม่ชัดเจน\nเดี๋ยวอาจารย์ตรวจสอบให้ก่อน แล้วจะแจ้งกลับในแชตนี้ครับ",
+          alternateTexts: [
+            "รับสลิปแล้วครับ ตอนนี้อยู่ระหว่างรอตรวจสอบเพิ่มเติม",
+          ],
+        });
+        return;
+      }
 
       await sendNonScanReply({
         client,
