@@ -11,9 +11,11 @@ import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRollout
 
 /**
  * @param {import("./reportPayload.types.js").ReportPayload} payload
+ * @param {object} [renderOpts]
+ * @param {import("./sacredAmuletLibrary.service.js").SacredAmuletLibraryView | null | undefined} [renderOpts.sacredAmuletLibrary]
  * @returns {string}
  */
-export function renderReportHtmlPage(payload) {
+export function renderReportHtmlPage(payload, renderOpts = {}) {
   const { payload: normalized, warnings } =
     normalizeReportPayloadForRender(payload);
   if (warnings.length) {
@@ -48,7 +50,9 @@ export function renderReportHtmlPage(payload) {
         reportIdPrefix: String(normalized.reportId || "").slice(0, 8),
       }),
     );
-    return renderAmuletReportV2Html(normalized);
+    return renderAmuletReportV2Html(normalized, {
+      sacredAmuletLibrary: renderOpts.sacredAmuletLibrary ?? null,
+    });
   }
   if (
     normalized.moldaviteV1 &&

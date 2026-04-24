@@ -6,6 +6,7 @@ import {
   formatReportVersionDisplayLine,
   formatReportMetaDatetimeOrEmpty,
 } from "../../utils/reports/reportHtmlTrust.util.js";
+import { formatBangkokScanDateThaiBE } from "../../utils/dateTime.util.js";
 
 const AMULET_RADAR_R = 38;
 const AMULET_RADAR_CX = 50;
@@ -297,9 +298,45 @@ function mainGraphBlock(vm) {
 }
 
 /**
- * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
+ * Mini “คลังพลังของคุณ” — ไม่แสดงชื่อพระเดา ใช้รูป + คะแนน + พลังเด่น + วันที่/รหัสรายงาน
+ * @param {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletLibraryView} library
+ * @param {string} pageToken
  */
-export function renderAmuletReportV2Html(payload) {
+function buildSacredAmuletLibraryMiniHtml(library, pageToken) {
+  if (!library || library.totalCount < 1 || !pageToken) return "";
+  const top = library.topOverall;
+  if (!top) return "";
+  const libHref = `/r/${encodeURIComponent(pageToken)}/library`;
+  const imgBlock = top.thumbUrl
+    ? `<div class="mv2-lib-img"><img src="${escapeHtml(top.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async"/></div>`
+    : `<div class="mv2-lib-img mv2-lib-img--empty" aria-hidden="true"></div>`;
+  const scanLine = formatBangkokScanDateThaiBE(top.scannedAtIso);
+  return `
+    <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">
+      <h2 id="mv2-lib-h">คลังพลังของคุณ</h2>
+      <p class="mv2-lib-count">ตอนนี้คุณมีวัตถุที่เคยสแกนแล้ว ${escapeHtml(String(library.totalCount))} ชิ้น</p>
+      <div class="mv2-lib-spot">
+        ${imgBlock}
+        <div class="mv2-lib-spot-body">
+          <p class="mv2-lib-rankline">อันดับ 1 ตอนนี้</p>
+          <p class="mv2-lib-titleline">องค์ที่พลังรวมเด่นสุดในคลังของคุณ</p>
+          <p class="mv2-lib-scoreline">พลังรวม <strong>${escapeHtml(String(top.powerTotal))}</strong></p>
+          <p class="mv2-lib-peakline">เด่นสุด: ${escapeHtml(top.peakPowerLabelTh)}</p>
+          <p class="mv2-lib-meta">สแกนเมื่อ: ${escapeHtml(scanLine)}</p>
+          <p class="mv2-lib-meta">รหัสรายงาน: ${escapeHtml(top.displayReportId)}</p>
+        </div>
+      </div>
+      <a class="mv2-lib-btn" href="${escapeHtml(libHref)}">ดูอันดับทั้งหมด</a>
+      <p class="mv2-lib-foot">ดูว่าแต่ละชิ้นเด่นเรื่องอะไร และชิ้นไหนเหมาะกับคุณที่สุด</p>
+    </section>`;
+}
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
+ * @param {object} [options]
+ * @param {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletLibraryView | null} [options.sacredAmuletLibrary]
+ */
+export function renderAmuletReportV2Html(payload, options = {}) {
   const vm = buildAmuletHtmlV2ViewModel(payload);
   const htmlTheme = resolveAmuletHtmlTheme(payload);
   const h = vm.hero;
@@ -324,6 +361,11 @@ export function renderAmuletReportV2Html(payload) {
   const energyTimingHref = publicTokenForLinks
     ? `/r/${encodeURIComponent(publicTokenForLinks)}/energy-timing`
     : "";
+  const sacredLib = options.sacredAmuletLibrary ?? null;
+  const libraryMiniHtml = buildSacredAmuletLibraryMiniHtml(
+    sacredLib,
+    publicTokenForLinks,
+  );
 
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
     .map((r, i) => {
@@ -1103,6 +1145,112 @@ export function renderAmuletReportV2Html(payload) {
       color: #0c0e12;
       background: linear-gradient(165deg, #f0d060, #c9a227);
     }
+    .mv2-lib-mini {
+      border-left: 3px solid rgba(120, 160, 220, 0.45);
+    }
+    .mv2-lib-mini h2 {
+      font-size: 0.95rem;
+      margin: 0 0 0.35rem;
+      color: var(--mv2a-gold-dim);
+    }
+    .mv2-lib-count {
+      margin: 0 0 0.65rem;
+      font-size: 0.82rem;
+      color: var(--mv2a-muted);
+      line-height: 1.45;
+    }
+    .mv2-lib-spot {
+      display: flex;
+      gap: 0.65rem;
+      align-items: flex-start;
+      margin-bottom: 0.65rem;
+    }
+    .mv2-lib-img {
+      flex-shrink: 0;
+      width: 4.25rem;
+      height: 4.25rem;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(184, 135, 27, 0.2);
+      background: rgba(0, 0, 0, 0.25);
+    }
+    .mv2-lib-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .mv2-lib-img--empty {
+      background: repeating-linear-gradient(
+        -45deg,
+        rgba(120, 160, 220, 0.08),
+        rgba(120, 160, 220, 0.08) 6px,
+        transparent 6px,
+        transparent 12px
+      );
+    }
+    .mv2-lib-spot-body { flex: 1; min-width: 0; }
+    .mv2-lib-rankline {
+      margin: 0 0 0.15rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: var(--mv2a-gold);
+      letter-spacing: 0.03em;
+    }
+    .mv2-lib-titleline {
+      margin: 0 0 0.4rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--mv2a-text);
+      line-height: 1.35;
+    }
+    .mv2-lib-scoreline {
+      margin: 0 0 0.2rem;
+      font-size: 0.88rem;
+      color: var(--mv2a-muted);
+    }
+    .mv2-lib-scoreline strong {
+      color: var(--mv2a-gold);
+      font-weight: 800;
+    }
+    .mv2-lib-peakline {
+      margin: 0 0 0.35rem;
+      font-size: 0.82rem;
+      color: var(--mv2a-muted);
+      line-height: 1.4;
+    }
+    .mv2-lib-meta {
+      margin: 0;
+      font-size: 0.72rem;
+      color: var(--mv2a-muted);
+      line-height: 1.45;
+    }
+    .mv2-lib-btn {
+      display: block;
+      text-align: center;
+      padding: 0.52rem 0.85rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      border-radius: 999px;
+      text-decoration: none;
+      color: #0c0e12;
+      background: linear-gradient(165deg, #e8c547, #c9a227);
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      box-shadow: 0 2px 10px rgba(232, 197, 71, 0.18);
+    }
+    .mv2-lib-btn:hover {
+      filter: brightness(1.05);
+    }
+    .mv2-lib-foot {
+      margin: 0.45rem 0 0;
+      font-size: 0.68rem;
+      line-height: 1.45;
+      color: var(--mv2a-muted);
+      text-align: center;
+    }
+    html.mv2a-theme-dark .mv2-lib-mini {
+      border-left-color: rgba(160, 198, 255, 0.4);
+    }
     /* Footer disclaimer: inside .mv2-trust (replaces former trustNote slot) — no card */
     .mv2-trust .mv2a-footer-note {
       margin: 0 0 0.85rem;
@@ -1666,6 +1814,7 @@ export function renderAmuletReportV2Html(payload) {
     ${timingActionCardHtml}
     ${timingCardHtml}
     ${energyTimingCtaHtml}
+    ${libraryMiniHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์รายงาน</h2>

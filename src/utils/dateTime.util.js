@@ -122,3 +122,38 @@ export function formatBangkokReportMetaDateTime(value) {
   const time = timeFmt.format(d).replace(/\s/g, "");
   return `${day} ${mon} ${year} ${time}`;
 }
+
+/**
+ * Bangkok calendar date for scan library cards: Thai month abbrev + Buddhist era year (พ.ศ.).
+ * Example: `24 เม.ย. 2569`
+ * @param {unknown} value ISO string, timestamp, or Date
+ * @returns {string}
+ */
+export function formatBangkokScanDateThaiBE(value) {
+  const d = parseInstant(value);
+  if (!d) return "-";
+  const dateFmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BANGKOK_TIME_ZONE,
+    calendar: "gregory",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  });
+  let day = "";
+  let monthNum = 0;
+  let year = "";
+  for (const p of dateFmt.formatToParts(d)) {
+    if (p.type === "day") day = p.value;
+    if (p.type === "month") monthNum = Number.parseInt(p.value, 10);
+    if (p.type === "year") year = p.value;
+  }
+  if (!day || !Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12 || !year) {
+    return "-";
+  }
+  const mon = TH_MONTH_ABBREV[monthNum - 1] || "";
+  if (!mon) return "-";
+  const ce = Number.parseInt(year, 10);
+  if (!Number.isFinite(ce)) return "-";
+  const be = ce + 543;
+  return `${day} ${mon} ${be}`;
+}
