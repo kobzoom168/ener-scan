@@ -80,6 +80,16 @@ const AXIS_MEANING = {
   },
 };
 
+/** @type {Record<AmuletPowerKey, string>} */
+const AXIS_SUMMARY = {
+  baramee: "พลังความหนักแน่น ความน่าเชื่อถือ และแรงนำในบทบาทสำคัญ",
+  specialty: "พลังหนุนงานที่ต้องใช้ทักษะเฉพาะ ฝีมือ และความชำนาญ",
+  luck: "พลังโอกาสใหม่ การเปิดทาง และจังหวะที่เรื่องเริ่มขยับ",
+  fortune_anchor: "พลังประคองจังหวะชีวิต ช่วยตั้งหลักให้ใจนิ่งและมั่นคง",
+  metta: "พลังเมตตา เสน่ห์ทางใจ และความราบรื่นในการสื่อสาร",
+  protection: "พลังคุ้มครอง การตั้งขอบเขต และลดแรงกระทบจากรอบตัว",
+};
+
 /**
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload normalized (amulet lane)
  * @returns {string}
@@ -115,22 +125,29 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       if (!block) return "";
       const title = POWER_LABEL_THAI[key] || key;
       const sc = scoreByKey[key];
-      const scoreLine =
-        sc != null
-          ? `<p class="aem-score-line">คะแนนของชิ้นนี้: <strong>${escapeHtml(String(Math.round(sc)))}</strong></p>`
-          : "";
       const useList = block.useFor
-        .map((line) => `<li>${escapeHtml(line)}</li>`)
+        .map((line) => `<span class="aem-chip">${escapeHtml(line)}</span>`)
         .join("");
+      const idx = String(order.indexOf(key) + 1).padStart(2, "0");
+      const scorePill =
+        sc != null
+          ? `<span class="aem-score-pill">${escapeHtml(String(Math.round(sc)))}/100</span>`
+          : `<span class="aem-score-pill is-muted">N/A</span>`;
       return `
     <article class="aem-card" data-axis="${escapeHtml(key)}">
-      <h2 class="aem-card-title">${escapeHtml(title)}</h2>
-      ${scoreLine}
-      <p class="aem-card-body">${escapeHtml(block.body)}</p>
+      <div class="aem-card-head">
+        <div class="aem-title-wrap">
+          <span class="aem-index">${escapeHtml(idx)}</span>
+          <h2 class="aem-card-title">${escapeHtml(title)}</h2>
+        </div>
+        ${scorePill}
+      </div>
+      <p class="aem-card-summary">${escapeHtml(AXIS_SUMMARY[key] || block.body)}</p>
       <div class="aem-use-wrap">
         <p class="aem-use-h">เหมาะกับ</p>
-        <ul class="aem-use-list">${useList}</ul>
+        <div class="aem-chip-list">${useList}</div>
       </div>
+      <p class="aem-card-detail">${escapeHtml(block.body)}</p>
       <p class="aem-card-foot">${escapeHtml(block.foot)}</p>
     </article>`;
     })
@@ -150,14 +167,18 @@ export function renderAmuletEnergyMeaningHtml(payload) {
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --aem-bg: #0a0c10;
-      --aem-surface: #12151c;
-      --aem-border: rgba(212, 175, 55, 0.22);
-      --aem-gold: #d4af37;
-      --aem-gold-soft: #c9a961;
-      --aem-text: #ece8e0;
-      --aem-muted: #9a958c;
-      --aem-subtitle: #b8b3a8;
+      --aem-bg: #07090d;
+      --aem-surface: linear-gradient(180deg, #141923 0%, #0f131b 100%);
+      --aem-border: rgba(218, 176, 65, 0.24);
+      --aem-gold: #f4c542;
+      --aem-gold-soft: #b9922f;
+      --aem-text: #f8fafc;
+      --aem-muted: #a1a1aa;
+      --aem-subtitle: #c6cad3;
+      --aem-chip-bg: rgba(244, 197, 66, 0.08);
+      --aem-chip-border: rgba(244, 197, 66, 0.2);
+      --aem-score-bg: rgba(244, 197, 66, 0.1);
+      --aem-score-border: rgba(244, 197, 66, 0.36);
     }
     * { box-sizing: border-box; }
     body {
@@ -165,11 +186,11 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       font-family: Sarabun, system-ui, -apple-system, "Segoe UI", sans-serif;
       background: var(--aem-bg);
       color: var(--aem-text);
-      line-height: 1.65;
+      line-height: 1.6;
       font-size: 1.05rem;
       -webkit-font-smoothing: antialiased;
     }
-    .aem-wrap { max-width: 34rem; margin: 0 auto; padding: 1.25rem 1rem 2.5rem; }
+    .aem-wrap { max-width: 720px; margin: 0 auto; padding: 1.25rem 1.15rem 2.8rem; }
     .aem-back {
       display: inline-block;
       margin-bottom: 1rem;
@@ -179,71 +200,189 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       font-weight: 600;
     }
     .aem-back:hover { text-decoration: underline; color: var(--aem-gold); }
+    .aem-hero {
+      margin-bottom: 1rem;
+      padding: 1rem 1rem 1.05rem;
+      border-radius: 20px;
+      border: 1px solid var(--aem-border);
+      background:
+        radial-gradient(circle at top right, rgba(244,197,66,0.11), rgba(244,197,66,0) 48%),
+        #0d1118;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+    }
+    .aem-eyebrow {
+      margin: 0 0 0.25rem;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--aem-gold-soft);
+      font-weight: 700;
+    }
     .aem-h1 {
-      margin: 0 0 0.5rem;
-      font-size: 1.35rem;
+      margin: 0 0 0.45rem;
+      font-size: 1.45rem;
       font-weight: 700;
       color: var(--aem-gold);
       letter-spacing: 0.02em;
       line-height: 1.35;
     }
     .aem-sub {
-      margin: 0 0 1.35rem;
-      font-size: 0.98rem;
+      margin: 0 0 0.8rem;
+      font-size: 0.96rem;
       color: var(--aem-subtitle);
-      line-height: 1.62;
+      line-height: 1.65;
+    }
+    .aem-mini-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .aem-mini-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.28rem 0.62rem;
+      border-radius: 999px;
+      border: 1px solid var(--aem-chip-border);
+      background: var(--aem-chip-bg);
+      color: var(--aem-gold);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .aem-guide {
+      margin: 0 0 1rem;
+      border: 1px solid var(--aem-border);
+      border-radius: 18px;
+      padding: 0.95rem;
+      background: #0d1118;
+    }
+    .aem-guide-title {
+      margin: 0 0 0.55rem;
+      color: var(--aem-gold);
+      font-size: 0.94rem;
+      font-weight: 700;
+    }
+    .aem-guide-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem;
+    }
+    .aem-guide-chip {
+      padding: 0.46rem 0.6rem;
+      border: 1px solid var(--aem-chip-border);
+      border-radius: 10px;
+      background: var(--aem-chip-bg);
+      color: var(--aem-subtitle);
+      font-size: 0.83rem;
+      line-height: 1.35;
     }
     .aem-card {
       background: var(--aem-surface);
       border: 1px solid var(--aem-border);
-      border-radius: 14px;
-      padding: 1.05rem 1.1rem 1.15rem;
-      margin-bottom: 1rem;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+      border-radius: 20px;
+      padding: 0.96rem 1rem 1.02rem;
+      margin-bottom: 1.06rem;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+      transition: transform 0.18s ease, border-color 0.18s ease;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .aem-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(244, 197, 66, 0.38);
+      }
+    }
+    .aem-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.45rem;
+    }
+    .aem-title-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      min-width: 0;
+    }
+    .aem-index {
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: var(--aem-gold-soft);
+      padding: 0.2rem 0.28rem 0.15rem;
+      border: 1px solid rgba(244, 197, 66, 0.18);
+      border-radius: 8px;
+      background: rgba(244, 197, 66, 0.04);
+      line-height: 1;
+      flex-shrink: 0;
     }
     .aem-card-title {
-      margin: 0 0 0.45rem;
-      font-size: 1.12rem;
+      margin: 0;
+      font-size: 1.04rem;
       font-weight: 700;
       color: var(--aem-gold);
       line-height: 1.35;
     }
-    .aem-score-line {
-      margin: 0 0 0.65rem;
+    .aem-score-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.24rem 0.56rem;
+      border-radius: 999px;
+      border: 1px solid var(--aem-score-border);
+      background: var(--aem-score-bg);
+      color: var(--aem-gold);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      flex-shrink: 0;
+    }
+    .aem-score-pill.is-muted { color: var(--aem-muted); }
+    .aem-card-summary {
+      margin: 0 0 0.62rem;
       font-size: 0.95rem;
-      color: var(--aem-gold-soft);
-    }
-    .aem-score-line strong { color: var(--aem-gold); font-weight: 700; }
-    .aem-card-body {
-      margin: 0 0 0.85rem;
-      font-size: 1rem;
       color: var(--aem-text);
-      line-height: 1.68;
+      line-height: 1.58;
     }
-    .aem-use-wrap { margin: 0 0 0.85rem; }
+    .aem-use-wrap { margin: 0 0 0.66rem; }
     .aem-use-h {
-      margin: 0 0 0.35rem;
+      margin: 0 0 0.42rem;
       font-size: 0.82rem;
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
       color: var(--aem-muted);
     }
-    .aem-use-list {
-      margin: 0;
-      padding-left: 1.2rem;
-      color: var(--aem-text);
-      font-size: 0.98rem;
-      line-height: 1.62;
+    .aem-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.42rem;
     }
-    .aem-use-list li { margin: 0.25rem 0; }
-    .aem-card-foot {
+    .aem-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.24rem 0.56rem;
+      border-radius: 999px;
+      border: 1px solid var(--aem-chip-border);
+      background: var(--aem-chip-bg);
+      font-size: 0.82rem;
+      color: var(--aem-subtitle);
+    }
+    .aem-card-detail {
       margin: 0;
-      font-size: 0.92rem;
+      font-size: 0.89rem;
+      line-height: 1.58;
+      color: #d6d9e0;
+    }
+    .aem-card-foot {
+      margin: 0.6rem 0 0;
+      font-size: 0.84rem;
       color: var(--aem-muted);
-      line-height: 1.62;
-      padding-top: 0.5rem;
-      border-top: 1px solid rgba(212, 175, 55, 0.12);
+      line-height: 1.56;
+      padding: 0.52rem 0.58rem;
+      border: 1px solid rgba(244, 197, 66, 0.15);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.02);
     }
     .aem-disclaimer {
       margin: 1.5rem 0 1.25rem;
@@ -253,7 +392,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       color: var(--aem-muted);
       background: rgba(0,0,0,0.25);
       border-radius: 10px;
-      border: 1px solid rgba(212, 175, 55, 0.1);
+      border: 1px solid rgba(218, 176, 65, 0.16);
     }
     .aem-cta {
       display: block;
@@ -277,8 +416,25 @@ export function renderAmuletEnergyMeaningHtml(payload) {
 <body>
   <div class="aem-wrap">
     <a class="aem-back" href="${escapeHtml(reportBackHref)}">← รายงาน</a>
-    <h1 class="aem-h1">ความหมายพลังทั้ง 6 ด้าน</h1>
-    <p class="aem-sub">คะแนนแต่ละด้านใช้เพื่อบอกแนวพลังเด่นของวัตถุ ว่าชิ้นนี้ส่งแรงไปทางไหนมากเป็นพิเศษ</p>
+    <section class="aem-hero">
+      <p class="aem-eyebrow">รายงาน</p>
+      <h1 class="aem-h1">ความหมายพลังทั้ง 6 ด้าน</h1>
+      <p class="aem-sub">คะแนนพลังแต่ละด้านใช้เพื่อบอกแนวโน้มว่าแรงของวัตถุเด่นไปทางไหน คะแนนสูงไม่ได้แปลว่าดีที่สุดเสมอไป แต่บอกว่าด้านนั้นส่งแรงชัดกว่าด้านอื่น</p>
+      <div class="aem-mini-stats">
+        <span class="aem-mini-chip">6 มิติพลัง</span>
+        <span class="aem-mini-chip">Score-based</span>
+        <span class="aem-mini-chip">Sacred Amulet Lane</span>
+      </div>
+    </section>
+    <section class="aem-guide" aria-label="วิธีอ่านคะแนน">
+      <p class="aem-guide-title">วิธีอ่านคะแนน</p>
+      <div class="aem-guide-grid">
+        <div class="aem-guide-chip">80–100: เด่นชัด</div>
+        <div class="aem-guide-chip">60–79: มีแรงสนับสนุนดี</div>
+        <div class="aem-guide-chip">40–59: พลังรอง / พอมี</div>
+        <div class="aem-guide-chip">ต่ำกว่า 40: ไม่ใช่แกนหลัก</div>
+      </div>
+    </section>
     ${cardsHtml}
     <p class="aem-disclaimer" role="note">ผลการอ่านพลังเป็นการตีความเชิงความเชื่อและการสะท้อนแนวพลังของวัตถุ ควรใช้ประกอบการพิจารณา ไม่ควรใช้แทนการตัดสินใจสำคัญในชีวิต</p>
     <div class="aem-cta-wrap">

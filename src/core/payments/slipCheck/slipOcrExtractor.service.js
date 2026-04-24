@@ -22,6 +22,11 @@ Return JSON only.
 Do not guess.
 If a field is unclear, return null.
 Extract amount, currency, transaction datetime text, transaction datetime ISO, receiver name, receiver account last 4 digits, receiver PromptPay if visible, sender name, bank name, slip reference / transaction id, confidence, and raw important text.
+Prioritize these labels/keywords when present on Thai slips:
+- เลขอ้างอิง, หมายเลขอ้างอิง, Ref, Reference No., Transaction ID, หมายเลขรายการ, เลขที่รายการ, รายการโอนเงิน
+- วันเวลาโอน, วันที่ทำรายการ
+- ผู้รับเงิน, บัญชีผู้รับ, เลขท้ายบัญชีผู้รับ, PromptPay, พร้อมเพย์ผู้รับ
+Always return transferredAtText if you can see any date/time text, even if transferredAtIso is null.
 Use Asia/Bangkok timezone.
 Convert Buddhist Era years to Common Era.
 If datetime cannot be parsed confidently, set transferredAtIso to null.`;
@@ -113,6 +118,90 @@ function parseThaiDateTextToIso(text) {
 }
 
 /**
+ * @param {string} text
+ * @returns {string}
+ */
+function maskSensitiveForLog(text) {
+  const s = String(text || "");
+  return s
+    .replace(/\b\d{10,16}\b/g, (m) => `${m.slice(0, 2)}***${m.slice(-2)}`)
+    .replace(/\b\d{4,6}\b/g, "***");
+}
+
+/**
+ * @param {string} rawText
+ * @returns {string|null}
+ */
+function extractSlipRefFromRawText(rawText) {
+  const s = String(rawText || "");
+  if (!s) return null;
+  const labeled =
+    s.match(
+      /(เลขอ้างอิง|หมายเลขอ้างอิง|reference(?:\s*no\.?)?|ref|transaction\s*id|หมายเลขรายการ|เลขที่รายการ)\s*[:\-]?\s*([A-Z0-9\-]{8,40})/i,
+    ) || null;
+  if (labeled?.[2]) return String(labeled[2]).trim();
+  const generic = s.match(/\b(?=[A-Z0-9\-]{10,30}\b)(?=.*[A-Z])(?=.*\d)[A-Z0-9\-]+\b/i);
+  if (!generic) return null;
+  const candidate = String(generic[0]).trim();
+  if (/^[xX\*\-0-9]+$/.test(candidate)) return null;
+  return candidate;
+}
+
+/**
+ * @param {string} rawText
+ * @returns {string|null}
+ */
+function extractTransferredAtTextFromRawText(rawText) {
+  const s = String(rawText || "");
+  if (!s) return null;
+  const labeled =
+    s.match(
+      /(วันเวลาโอน|วันที่ทำรายการ|เวลาทำรายการ|transaction\s*(date|time)|date\/time)\s*[:\-]?\s*((\d{1,2}[\/\-\.]\d{1,2}[\/\-\.](?:\d{2}|\d{4}))(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)/i,
+    ) || null;
+  if (labeled?.[3]) return String(labeled[3]).trim();
+  const direct =
+    s.match(
+      /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.](?:\d{2}|\d{4})\s+\d{1,2}:\d{2}(?::\d{2})?)/,
+    ) || null;
+  return direct?.[1] ? String(direct[1]).trim() : null;
+}
+
+/**
+ * @param {string} rawText
+ * @returns {string|null}
+ */
+function extractReceiverAccountLast4FromRawText(rawText) {
+  const s = String(rawText || "");
+  if (!s) return null;
+  const labeled =
+    s.match(
+      /(เลขท้ายบัญชีผู้รับ|บัญชีผู้รับ|to|receiver)\s*[:\-]?\s*([xX\*\d\-]{4,30})/i,
+    ) || null;
+  const source = labeled?.[2];
+  if (!source) return null;
+  const digits = String(source).replace(/\D+/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+}
+
+/**
+ * @param {string} rawText
+ * @returns {string|null}
+ */
+function extractReceiverNameFromRawText(rawText) {
+  const s = String(rawText || "");
+  if (!s) return null;
+  const m =
+    s.match(
+      /(ผู้รับเงิน|ชื่อผู้รับ|receiver|to)\s*[:\-]?\s*([^\n\r]{2,80})/i,
+    ) || null;
+  if (!m?.[2]) return null;
+  return String(m[2])
+    .replace(/(บัญชีผู้รับ|เลขท้ายบัญชี|promptpay|พร้อมเพย์).*/i, "")
+    .replace(/\d+/g, "")
+    .trim();
+}
+
+/**
  * @param {unknown} raw
  * @returns {number}
  */
@@ -147,6 +236,55 @@ export function normalizeSlipOcrResult(parsedRaw) {
     confidence: normalizeConfidence(p.confidence),
     rawText: String(p.rawText || "").trim().slice(0, 4000),
   };
+}
+
+/**
+ * @param {SlipOcrExtractResult} result
+ * @returns {{ result: SlipOcrExtractResult, applied: string[] }}
+ */
+function applyFallbackFromRawText(result) {
+  const r = { ...result };
+  /** @type {string[]} */
+  const applied = [];
+  const raw = String(r.rawText || "");
+  if (!raw) return { result: r, applied };
+
+  if (!r.slipRef) {
+    const v = extractSlipRefFromRawText(raw);
+    if (v) {
+      r.slipRef = v;
+      applied.push("slipRef");
+    }
+  }
+  if (!r.transferredAtText) {
+    const v = extractTransferredAtTextFromRawText(raw);
+    if (v) {
+      r.transferredAtText = v;
+      applied.push("transferredAtText");
+    }
+  }
+  if (!r.transferredAtIso && r.transferredAtText) {
+    const v = parseThaiDateTextToIso(r.transferredAtText);
+    if (v) {
+      r.transferredAtIso = v;
+      applied.push("transferredAtIso");
+    }
+  }
+  if (!r.receiverAccountLast4) {
+    const v = extractReceiverAccountLast4FromRawText(raw);
+    if (v) {
+      r.receiverAccountLast4 = v;
+      applied.push("receiverAccountLast4");
+    }
+  }
+  if (!r.receiverName) {
+    const v = extractReceiverNameFromRawText(raw);
+    if (v) {
+      r.receiverName = v;
+      applied.push("receiverName");
+    }
+  }
+  return { result: r, applied };
 }
 
 /**
@@ -209,8 +347,37 @@ export async function extractSlipOcrFromImage({
       );
       throw e;
     }
-    const out = normalizeSlipOcrResult(parsed);
+    const normalized = normalizeSlipOcrResult(parsed);
+    const fb = applyFallbackFromRawText(normalized);
+    const out = fb.result;
     if (!out.rawText && rawText) out.rawText = rawText.slice(0, 4000);
+    if (fb.applied.length) {
+      console.log(
+        JSON.stringify({
+          event: "SLIP_OCR_FALLBACK_APPLIED",
+          lineUserIdPrefix: String(lineUserId || "").slice(0, 8),
+          paymentId: paymentId != null ? String(paymentId) : null,
+          fields: fb.applied,
+        }),
+      );
+    }
+    console.log(
+      JSON.stringify({
+        event: "SLIP_OCR_RAW_DEBUG",
+        lineUserIdPrefix: String(lineUserId || "").slice(0, 8),
+        paymentId: paymentId != null ? String(paymentId) : null,
+        rawTextMasked: maskSensitiveForLog(out.rawText).slice(0, 900),
+        amount: out.amount,
+        transferredAtText: out.transferredAtText,
+        transferredAtIso: out.transferredAtIso,
+        receiverName: out.receiverName,
+        receiverAccountLast4: out.receiverAccountLast4,
+        receiverPromptPay: out.receiverPromptPay,
+        slipRef: out.slipRef,
+        bankName: out.bankName,
+        confidence: out.confidence,
+      }),
+    );
     console.log(
       JSON.stringify({
         event: "SLIP_OCR_EXTRACT_SUCCESS",
@@ -219,6 +386,20 @@ export async function extractSlipOcrFromImage({
         hasAmount: out.amount != null,
         hasSlipRef: Boolean(out.slipRef),
         confidence: out.confidence,
+      }),
+    );
+    console.log(
+      JSON.stringify({
+        event: "SLIP_OCR_FIELD_COMPLETENESS",
+        lineUserIdPrefix: String(lineUserId || "").slice(0, 8),
+        paymentId: paymentId != null ? String(paymentId) : null,
+        hasAmount: out.amount != null,
+        hasTransferredAtIso: Boolean(out.transferredAtIso),
+        hasReceiver:
+          Boolean(out.receiverName) ||
+          Boolean(out.receiverAccountLast4) ||
+          Boolean(out.receiverPromptPay),
+        hasSlipRef: Boolean(out.slipRef),
       }),
     );
     return out;
