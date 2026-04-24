@@ -135,3 +135,36 @@ test("buildSacredAmuletLibraryViewFromItems: fallback publicToken does not merge
   assert.equal(view.groupedObjectCount, null);
   assert.equal(view.items.every((it) => it.scanCountInGroup === 1), true);
 });
+
+test("buildSacredAmuletLibraryViewFromItems: groups by pHash distance threshold", () => {
+  const a = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-ph-a",
+      reportId: "rph-a",
+      generatedAt: "2026-04-20T08:00:00.000Z",
+      energyScore: 7.3,
+      compatibilityPercent: 68,
+      extra: { image_phash: "0123456789abcdee" },
+    }),
+    { id: "row-ph-a", created_at: "2026-04-20T08:00:00.000Z" },
+  );
+  const b = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-ph-b",
+      reportId: "rph-b",
+      generatedAt: "2026-04-22T08:00:00.000Z",
+      energyScore: 8.1,
+      compatibilityPercent: 79,
+      extra: { image_phash: "0123456789abccef" },
+    }),
+    { id: "row-ph-b", created_at: "2026-04-22T08:00:00.000Z" },
+  );
+  assert.ok(a && b);
+  const view = buildSacredAmuletLibraryViewFromItems([a, b]);
+  assert.ok(view);
+  assert.equal(view.totalCount, 2);
+  assert.equal(view.items.length, 1);
+  assert.equal(view.items[0]?.scanCountInGroup, 2);
+  assert.equal(view.items[0]?.publicToken, "tok-ph-b");
+  assert.equal(view.items[0]?.groupKeySource, "image_phash");
+});

@@ -3,9 +3,14 @@
  * Never invents amulet names; ranking uses scores + thumbnails only.
  */
 import { listScanResultsV2PayloadRowsForLineUser } from "../../stores/scanV2/scanResultsV2.db.js";
+import { listScanPhashesByScanResultIds } from "../../stores/scanV2/imageDedupCache.db.js";
 import { normalizeReportPayloadForRender } from "../../utils/reports/reportPayloadNormalize.util.js";
 import { formatEsDisplayReportId } from "../../utils/reports/reportHtmlTrust.util.js";
+import { env } from "../../config/env.js";
 import { computeAmuletOrdAndAlignFromPayload } from "../../amulet/amuletOrdAlign.util.js";
+import {
+  hammingDistance,
+} from "../imageDedup/imagePhash.util.js";
 import {
   POWER_LABEL_THAI,
   POWER_ORDER,
@@ -28,6 +33,7 @@ import {
  * @property {number} scanCountInGroup
  * @property {string} groupKey
  * @property {"object_fingerprint"|"stable_feature_seed"|"image_phash"|"cache_key"|"public_token_fallback"} groupKeySource
+ * @property {string|null} imagePhash
  */
 
 /**
@@ -135,6 +141,71 @@ function pickLatestRepresentative(list) {
 }
 
 /**
+ * @param {SacredAmuletLibraryItem[]} scans
+ * @param {number} threshold
+ * @returns {SacredAmuletLibraryItem[]}
+ */
+function applyPhashClusterGrouping(scans, threshold) {
+  const withPhash = scans.filter((s) => String(s.imagePhash || "").trim());
+  if (withPhash.length < 2) return scans;
+  const lim = Math.max(0, Math.min(64, Math.floor(Number(threshold)) || 0));
+
+  // Union-find by pHash distance; n is small (library page), O(n^2) is acceptable.
+  const n = withPhash.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (x) => {
+    let p = x;
+    while (parent[p] !== p) p = parent[p];
+    while (parent[x] !== x) {
+      const nx = parent[x];
+      parent[x] = p;
+      x = nx;
+    }
+    return p;
+  };
+  const unite = (a, b) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+
+  for (let i = 0; i < n; i += 1) {
+    for (let j = i + 1; j < n; j += 1) {
+      const pa = String(withPhash[i].imagePhash || "");
+      const pb = String(withPhash[j].imagePhash || "");
+      if (!pa || !pb) continue;
+      if (hammingDistance(pa, pb) <= lim) unite(i, j);
+    }
+  }
+
+  /** @type {Map<number, string>} */
+  const rootKey = new Map();
+  for (let i = 0; i < n; i += 1) {
+    const r = find(i);
+    if (rootKey.has(r)) continue;
+    const keys = [];
+    for (let j = 0; j < n; j += 1) {
+      if (find(j) === r) keys.push(String(withPhash[j].imagePhash || ""));
+    }
+    keys.sort();
+    rootKey.set(r, `image_phash:${keys[0] || "unknown"}`);
+  }
+
+  return scans.map((s) => {
+    const ph = String(s.imagePhash || "");
+    if (!ph) return s;
+    const idx = withPhash.findIndex((x) => x.scanResultV2Id === s.scanResultV2Id);
+    if (idx < 0) return s;
+    const root = find(idx);
+    return {
+      ...s,
+      groupKey: rootKey.get(root) || s.groupKey,
+      groupKeySource: "image_phash",
+    };
+  });
+}
+
+/**
  * @param {unknown} raw
  * @param {{ id?: string, created_at?: string }} meta
  * @returns {SacredAmuletLibraryItem | null}
@@ -195,6 +266,16 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
   }
 
   const identity = resolveGroupIdentity(raw, norm, meta);
+  const rawObj = /** @type {Record<string, unknown>} */ (raw);
+  const imagePhashCandidates = [
+    rawObj.image_phash,
+    rawObj.imagePhash,
+    rawObj.phash,
+    rawObj.pHash,
+  ];
+  const imagePhash =
+    imagePhashCandidates.map((v) => String(v || "").trim().toLowerCase()).find(Boolean) ||
+    null;
 
   return {
     scanResultV2Id: String(meta?.id || "").trim() || "",
@@ -210,6 +291,7 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     scanCountInGroup: 1,
     groupKey: identity.key,
     groupKeySource: identity.source,
+    imagePhash,
   };
 }
 
@@ -259,7 +341,11 @@ export function buildSacredAmuletLibraryViewFromItems(scans) {
   /** @type {Map<string, SacredAmuletLibraryItem[]>} */
   const grouped = new Map();
   let trustedGroupKeySeen = false;
-  for (const it of scans) {
+  const phashGroupedScans = applyPhashClusterGrouping(
+    scans,
+    env.IMAGE_DEDUP_HAMMING_THRESHOLD,
+  );
+  for (const it of phashGroupedScans) {
     if (!it || typeof it !== "object") continue;
     if (it.groupKeySource !== "public_token_fallback") trustedGroupKeySeen = true;
     const curr = grouped.get(it.groupKey);
@@ -281,10 +367,10 @@ export function buildSacredAmuletLibraryViewFromItems(scans) {
   const byOverall = sortByOverall(items);
   const topOverall = byOverall[0] || null;
   const groupedObjectCount =
-    trustedGroupKeySeen && items.length < scans.length ? items.length : null;
+    trustedGroupKeySeen && items.length < phashGroupedScans.length ? items.length : null;
 
   return {
-    totalCount: scans.length,
+    totalCount: phashGroupedScans.length,
     groupedObjectCount,
     items,
     byOverall,
@@ -320,6 +406,29 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
     const merged = { ...fromRow, publicToken: tok };
     merged.displayReportId = formatEsDisplayReportId(tok, merged.reportId);
     scans.push(merged);
+  }
+
+  if (scans.length) {
+    try {
+      const phRows = await listScanPhashesByScanResultIds(
+        scans.map((s) => s.scanResultV2Id),
+        uid,
+      );
+      const byScanId = new Map();
+      for (const r of phRows) {
+        const sid = String(r.scan_result_id || "").trim();
+        const ph = String(r.image_phash || "").trim().toLowerCase();
+        if (!sid || !ph) continue;
+        byScanId.set(sid, ph);
+      }
+      for (const s of scans) {
+        if (s.imagePhash) continue;
+        const ph = byScanId.get(String(s.scanResultV2Id || "").trim());
+        if (ph) s.imagePhash = ph;
+      }
+    } catch {
+      // Non-fatal: keep grouping by existing trusted keys.
+    }
   }
 
   return buildSacredAmuletLibraryViewFromItems(scans);
