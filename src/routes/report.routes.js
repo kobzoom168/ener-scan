@@ -5,6 +5,10 @@ import * as publicReportApiController from "../controllers/publicReportApi.contr
 const router = Router();
 
 router.get("/r/demo", reportController.getReportDemo);
+router.get(
+  "/r/:publicToken/energy-meaning",
+  reportController.getEnergyMeaningByToken,
+);
 router.get("/r/:publicToken", reportController.getReportByToken);
 
 router.get(

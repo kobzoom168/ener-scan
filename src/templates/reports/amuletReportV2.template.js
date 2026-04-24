@@ -317,6 +317,11 @@ export function renderAmuletReportV2Html(payload) {
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
       : "ไม่มี";
 
+  const publicTokenForLinks = String(payload.publicToken || "").trim();
+  const energyMeaningHref = publicTokenForLinks
+    ? `/r/${encodeURIComponent(publicTokenForLinks)}/energy-meaning`
+    : "";
+
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
     .map((r, i) => {
       const lead = i === 0 ? " mv2-gsum-row--lead" : "";
@@ -984,6 +989,70 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-life-score { color: var(--mv2a-life-score); font-weight: 700; font-size: 0.76rem; text-align: right; }
     .mv2-life-blurb { color: var(--mv2a-life-blurb); line-height: 1.35; }
     .mv2-life-hint { margin: 0 0 0.45rem; font-size: 0.65rem; color: var(--mv2a-muted); opacity: 0.8; }
+    .mv2-life-cta {
+      margin: 0.75rem 0 0;
+      padding: 0.7rem 0.6rem 0.75rem;
+      text-align: center;
+      border-radius: 12px;
+      border: 1.5px solid rgba(184, 135, 27, 0.42);
+      background: rgba(184, 135, 27, 0.09);
+    }
+    .mv2-life-cta-hint {
+      margin: 0 0 0.55rem;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: rgba(62, 52, 38, 0.9);
+      padding: 0 0.2rem;
+      font-weight: 500;
+    }
+    .mv2-life-cta-btn {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 2.85rem;
+      padding: 0.65rem 0.9rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: inherit;
+      line-height: 1.35;
+      text-align: center;
+      text-decoration: none;
+      color: #fffdf8;
+      background: linear-gradient(180deg, #c9a132 0%, #9a7012 100%);
+      border: 1px solid rgba(72, 52, 10, 0.45);
+      border-radius: 11px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mv2-life-cta-btn:hover {
+      filter: brightness(1.05);
+      text-decoration: none;
+      color: #fffdf8;
+    }
+    .mv2-life-cta-btn:focus-visible {
+      outline: 2px solid rgba(184, 135, 27, 0.65);
+      outline-offset: 2px;
+    }
+    .mv2-life-cta-btn:active {
+      transform: scale(0.99);
+    }
+    html.mv2a-theme-dark .mv2-life-cta {
+      border-color: rgba(232, 197, 71, 0.4);
+      background: rgba(232, 197, 71, 0.07);
+    }
+    html.mv2a-theme-dark .mv2-life-cta-hint {
+      color: rgba(226, 232, 240, 0.92);
+    }
+    html.mv2a-theme-dark .mv2-life-cta-btn {
+      color: #0c0e12;
+      background: linear-gradient(165deg, #f0d060, #c9a227);
+      border-color: rgba(0, 0, 0, 0.35);
+      box-shadow: 0 2px 14px rgba(232, 197, 71, 0.25);
+    }
+    html.mv2a-theme-dark .mv2-life-cta-btn:hover {
+      color: #0c0e12;
+      filter: brightness(1.06);
+    }
     /* Footer disclaimer: inside .mv2-trust (replaces former trustNote slot) — no card */
     .mv2-trust .mv2a-footer-note {
       margin: 0 0 0.85rem;
@@ -1535,6 +1604,14 @@ export function renderAmuletReportV2Html(payload) {
       <h2 id="mv2-life-h">พลังทั้ง 6 ด้าน</h2>
       <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
       <div class="mv2-life-rows">${lifeRowsHtml}</div>
+      ${
+        energyMeaningHref
+          ? `<div class="mv2-life-cta" role="region" aria-label="อ่านคำอธิบายพลังทั้ง 6 ด้าน">
+      <p class="mv2-life-cta-hint">อธิบายว่าบารมี เมตตา โชคลาภ คุ้มครอง และด้านอื่น ๆ หมายถึงอะไร</p>
+      <a class="mv2-life-cta-btn" href="${escapeHtml(energyMeaningHref)}">อ่านคำอธิบายพลังทั้ง 6 ด้าน</a>
+    </div>`
+          : ""
+      }
     </section>
     ${timingActionCardHtml}
     ${timingCardHtml}
