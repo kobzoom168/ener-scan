@@ -159,6 +159,8 @@
  * @property {ReportTimingSlot[]} bestWeekdays
  * @property {ReportTimingSlot[]} bestDateRoots
  * @property {ReportTimingSlot[]} avoidHours
+ * @property {ReportTimingSlot[]} [allWeekdayScores] — 7 รายการ วันอาทิตย์→วันเสาร์ (ก่อนเรียงคะแนน) สำหรับหน้าอธิบายจังหวะ
+ * @property {ReportTimingSlot[]} [allHourScores] — ครบทุกช่วงใน `TIMING_HOUR_WINDOWS` ตามลำดับ config (ก่อนเรียงคะแนน)
  * @property {{ topWindowLabel: string, topWeekdayLabel: string, practicalHint: string }} summary
  * @property {ReportTimingDebugV11} [debug] — introspection only; do not render to users
  */
