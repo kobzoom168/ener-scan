@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderAmuletReportV2Html } from "../../src/templates/reports/amuletReportV2.template.js";
 import { normalizeReportPayloadForRender } from "../../src/utils/reports/reportPayloadNormalize.util.js";
-import { buildSacredAmuletLibraryViewFromPayloadOnly } from "../../src/services/reports/sacredAmuletLibrary.service.js";
+import {
+  buildSacredAmuletLibraryViewFromPayloadOnly,
+} from "../../src/services/reports/sacredAmuletLibrary.service.js";
+import { renderReportHtmlPage } from "../../src/services/reports/reportHtmlRenderer.service.js";
 
 test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   const html = renderAmuletReportV2Html({
@@ -450,14 +453,216 @@ test("renderAmuletReportV2Html: library mini box when sacredAmuletLibrary provid
   const lib = buildSacredAmuletLibraryViewFromPayloadOnly(norm);
   assert.ok(lib);
   const html = renderAmuletReportV2Html(norm, { sacredAmuletLibrary: lib });
+  assert.ok(html.includes('class="mv2-card mv2-lib-mini"'), "mini box section in main report HTML");
   assert.ok(html.includes("คลังพลังของคุณ"));
-  assert.ok(html.includes("องค์ที่พลังรวมเด่นสุดในคลังของคุณ"));
+  assert.ok(html.includes("คุณมีรายการสแกนแล้ว 1 รายการ"));
   assert.ok(html.includes("อันดับ 1 ตอนนี้"));
+  assert.ok(html.includes("องค์ที่พลังรวมเด่นสุดในคลังของคุณ"));
   assert.ok(html.includes("พลังรวม"));
   assert.ok(html.includes("/r/t/library"));
   assert.ok(html.includes("ดูอันดับทั้งหมด"));
-  assert.ok(
-    html.includes("ดูว่าแต่ละชิ้นเด่นเรื่องอะไร และชิ้นไหนเหมาะกับคุณที่สุด"),
-  );
+  assert.ok(html.includes("สแกนเพิ่มอีกสักรายการ"));
   assert.ok(html.includes("https://example.com/thumb.jpg"));
+});
+
+test("renderAmuletReportV2Html: library mini — no CTA when publicToken missing", () => {
+  const payload = {
+    reportId: "r1",
+    publicToken: "",
+    scanId: "s1",
+    userId: "Utest",
+    birthdateUsed: "15/06/1990",
+    generatedAt: "2026-04-24T10:00:00.000Z",
+    reportVersion: "1",
+    object: {},
+    summary: { energyScore: 7, mainEnergyLabel: "คุ้มครอง" },
+    sections: {
+      whatItGives: [],
+      messagePoints: [],
+      ownerMatchReason: [],
+      roleDescription: [],
+      bestUseCases: [],
+      weakMoments: [],
+      guidanceTips: [],
+      careNotes: [],
+      miniRitual: [],
+    },
+    trust: { trustNote: "" },
+    actions: {},
+    amuletV1: {
+      version: "1",
+      scoringMode: "deterministic_v2",
+      detection: { reason: "x", matchedSignals: [] },
+      powerCategories: {
+        protection: { key: "protection", score: 80, labelThai: "คุ้มครองป้องกัน" },
+        metta: { key: "metta", score: 60, labelThai: "เมตตาและคนเอ็นดู" },
+        baramee: { key: "baramee", score: 50, labelThai: "บารมีและอำนาจนำ" },
+        luck: { key: "luck", score: 50, labelThai: "โชคลาภและการเปิดทาง" },
+        fortune_anchor: { key: "fortune_anchor", score: 50, labelThai: "หนุนดวงและการตั้งหลัก" },
+        specialty: { key: "specialty", score: 50, labelThai: "งานเฉพาะทาง" },
+      },
+      primaryPower: "protection",
+      secondaryPower: "metta",
+      flexSurface: {
+        headline: "พระเครื่อง",
+        fitLine: "",
+        bullets: [],
+        mainEnergyShort: "คุ้มครอง",
+        tagline: "",
+        mainEnergyWordingLine: "",
+        htmlOpeningLine: "",
+        heroNamingLine: "",
+      },
+      htmlReport: { lifeAreaBlurbs: {}, usageCautionLines: [] },
+    },
+  };
+  const { payload: norm } = normalizeReportPayloadForRender(payload);
+  const lib = {
+    totalCount: 1,
+    items: [],
+    byOverall: [],
+    byLuck: [],
+    byProtection: [],
+    byMetta: [],
+    byBaramee: [],
+    byFit: [],
+    topOverall: {
+      scanResultV2Id: "",
+      publicToken: "internal-only",
+      thumbUrl: "",
+      powerTotal: 70,
+      peakPowerLabelTh: "คุ้มครองป้องกัน",
+      compatPercent: null,
+      scannedAtIso: null,
+      displayReportId: "ES-TEST",
+      reportId: "r1",
+      axisScores: {},
+    },
+  };
+  const html = renderAmuletReportV2Html(norm, { sacredAmuletLibrary: lib });
+  assert.ok(html.includes("คลังพลังของคุณ"));
+  assert.ok(!html.includes("ดูอันดับทั้งหมด"));
+  assert.ok(!html.includes('class="mv2-lib-btn"'));
+});
+
+test("renderAmuletReportV2Html: library mini — no nudge when totalCount > 1", () => {
+  const payload = {
+    reportId: "r1",
+    publicToken: "t",
+    scanId: "s1",
+    userId: "Utest",
+    birthdateUsed: "15/06/1990",
+    generatedAt: "2026-04-24T10:00:00.000Z",
+    reportVersion: "1",
+    object: {},
+    summary: { energyScore: 8, mainEnergyLabel: "คุ้มครอง" },
+    sections: {
+      whatItGives: [],
+      messagePoints: [],
+      ownerMatchReason: [],
+      roleDescription: [],
+      bestUseCases: [],
+      weakMoments: [],
+      guidanceTips: [],
+      careNotes: [],
+      miniRitual: [],
+    },
+    trust: { trustNote: "" },
+    actions: {},
+    amuletV1: {
+      version: "1",
+      scoringMode: "deterministic_v2",
+      detection: { reason: "x", matchedSignals: [] },
+      powerCategories: {
+        protection: { key: "protection", score: 80, labelThai: "คุ้มครองป้องกัน" },
+        metta: { key: "metta", score: 60, labelThai: "เมตตาและคนเอ็นดู" },
+        baramee: { key: "baramee", score: 50, labelThai: "บารมีและอำนาจนำ" },
+        luck: { key: "luck", score: 50, labelThai: "โชคลาภและการเปิดทาง" },
+        fortune_anchor: { key: "fortune_anchor", score: 50, labelThai: "หนุนดวงและการตั้งหลัก" },
+        specialty: { key: "specialty", score: 50, labelThai: "งานเฉพาะทาง" },
+      },
+      primaryPower: "protection",
+      secondaryPower: "metta",
+      flexSurface: {
+        headline: "พระเครื่อง",
+        fitLine: "",
+        bullets: [],
+        mainEnergyShort: "คุ้มครอง",
+        tagline: "",
+        mainEnergyWordingLine: "",
+        htmlOpeningLine: "",
+        heroNamingLine: "",
+      },
+      htmlReport: { lifeAreaBlurbs: {}, usageCautionLines: [] },
+    },
+  };
+  const { payload: norm } = normalizeReportPayloadForRender(payload);
+  const base = buildSacredAmuletLibraryViewFromPayloadOnly(norm);
+  assert.ok(base);
+  const lib = { ...base, totalCount: 2 };
+  const html = renderAmuletReportV2Html(norm, { sacredAmuletLibrary: lib });
+  assert.ok(html.includes("คุณมีรายการสแกนแล้ว 2 รายการ"));
+  assert.ok(!html.includes("สแกนเพิ่มอีกสักรายการ"));
+});
+
+test("renderReportHtmlPage: sacred amulet + library shows คลังพลังและลิงก์ /r/t/library", () => {
+  const payload = {
+    reportId: "r1",
+    publicToken: "t",
+    scanId: "s1",
+    userId: "Uline",
+    birthdateUsed: "15/06/1990",
+    generatedAt: "2026-04-24T10:00:00.000Z",
+    reportVersion: "1",
+    object: { objectImageUrl: "https://example.com/x.jpg" },
+    summary: { energyScore: 8.9, mainEnergyLabel: "คุ้มครอง", compatibilityPercent: 84 },
+    sections: {
+      whatItGives: [],
+      messagePoints: [],
+      ownerMatchReason: [],
+      roleDescription: [],
+      bestUseCases: [],
+      weakMoments: [],
+      guidanceTips: [],
+      careNotes: [],
+      miniRitual: [],
+    },
+    trust: { trustNote: "" },
+    actions: {},
+    wording: {},
+    amuletV1: {
+      version: "1",
+      scoringMode: "deterministic_v2",
+      detection: { reason: "x", matchedSignals: [] },
+      powerCategories: {
+        protection: { key: "protection", score: 88, labelThai: "คุ้มครองป้องกัน" },
+        metta: { key: "metta", score: 70, labelThai: "เมตตาและคนเอ็นดู" },
+        baramee: { key: "baramee", score: 65, labelThai: "บารมีและอำนาจนำ" },
+        luck: { key: "luck", score: 89, labelThai: "โชคลาภและการเปิดทาง" },
+        fortune_anchor: { key: "fortune_anchor", score: 55, labelThai: "หนุนดวงและการตั้งหลัก" },
+        specialty: { key: "specialty", score: 50, labelThai: "งานเฉพาะทาง" },
+      },
+      primaryPower: "luck",
+      secondaryPower: "metta",
+      flexSurface: {
+        headline: "พระเครื่อง",
+        fitLine: "",
+        bullets: [],
+        mainEnergyShort: "โชคลาภ",
+        tagline: "",
+        mainEnergyWordingLine: "",
+        htmlOpeningLine: "",
+        heroNamingLine: "",
+      },
+      htmlReport: { lifeAreaBlurbs: {}, usageCautionLines: [] },
+    },
+  };
+  const { payload: norm } = normalizeReportPayloadForRender(payload);
+  const lib = buildSacredAmuletLibraryViewFromPayloadOnly(norm);
+  assert.ok(lib);
+  const html = renderReportHtmlPage(payload, { sacredAmuletLibrary: lib });
+  assert.ok(html.includes('class="mv2-card mv2-lib-mini"'), "renderReportHtmlPage passes library into amulet template");
+  assert.ok(html.includes("คลังพลังของคุณ"));
+  assert.ok(html.includes("/r/t/library"));
+  assert.ok(html.includes("ดูอันดับทั้งหมด"));
 });

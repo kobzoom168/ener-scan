@@ -6,7 +6,6 @@ import {
   formatReportVersionDisplayLine,
   formatReportMetaDatetimeOrEmpty,
 } from "../../utils/reports/reportHtmlTrust.util.js";
-import { formatBangkokScanDateThaiBE } from "../../utils/dateTime.util.js";
 
 const AMULET_RADAR_R = 38;
 const AMULET_RADAR_CX = 50;
@@ -298,43 +297,48 @@ function mainGraphBlock(vm) {
 }
 
 /**
- * Mini “คลังพลังของคุณ” — ไม่แสดงชื่อพระเดา ใช้รูป + คะแนน + พลังเด่น + วันที่/รหัสรายงาน
+ * Mini “คลังพลังของคุณ” — ไม่แสดงชื่อพระเดา; รูป + พลังรวม + พลังเด่นจากแกน
  * @param {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletLibraryView} library
- * @param {string} pageToken
+ * @param {string} pageToken — ถ้าว่าง จะไม่แสดงปุ่มลิงก์
  */
 function buildSacredAmuletLibraryMiniHtml(library, pageToken) {
-  if (!library || library.totalCount < 1 || !pageToken) return "";
+  if (!library || library.totalCount <= 0) return "";
   const top = library.topOverall;
   if (!top) return "";
-  const libHref = `/r/${encodeURIComponent(pageToken)}/library`;
+  const tok = String(pageToken || "").trim();
+  const canLinkLibrary = Boolean(tok && tok !== "unknown");
+  const libHref = canLinkLibrary ? `/r/${encodeURIComponent(tok)}/library` : "";
   const imgBlock = top.thumbUrl
     ? `<div class="mv2-lib-img"><img src="${escapeHtml(top.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async"/></div>`
     : `<div class="mv2-lib-img mv2-lib-img--empty" aria-hidden="true"></div>`;
-  const scanLine = formatBangkokScanDateThaiBE(top.scannedAtIso);
+  const nudge =
+    library.totalCount === 1
+      ? `<p class="mv2-lib-nudge">สแกนเพิ่มอีกสักรายการ ระบบจะช่วยจัดอันดับและเปรียบเทียบให้ชัดขึ้น</p>`
+      : "";
+  const btn = libHref
+    ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">ดูอันดับทั้งหมด</a>`
+    : "";
   return `
     <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">
       <h2 id="mv2-lib-h">คลังพลังของคุณ</h2>
-      <p class="mv2-lib-count">ตอนนี้คุณมีวัตถุที่เคยสแกนแล้ว ${escapeHtml(String(library.totalCount))} ชิ้น</p>
+      <p class="mv2-lib-count">คุณมีรายการสแกนแล้ว ${escapeHtml(String(library.totalCount))} รายการ</p>
       <div class="mv2-lib-spot">
         ${imgBlock}
         <div class="mv2-lib-spot-body">
-          <p class="mv2-lib-rankline">อันดับ 1 ตอนนี้</p>
-          <p class="mv2-lib-titleline">องค์ที่พลังรวมเด่นสุดในคลังของคุณ</p>
+          <p class="mv2-lib-rankline">อันดับ 1 ตอนนี้ · องค์ที่พลังรวมเด่นสุดในคลังของคุณ</p>
           <p class="mv2-lib-scoreline">พลังรวม <strong>${escapeHtml(String(top.powerTotal))}</strong></p>
           <p class="mv2-lib-peakline">เด่นสุด: ${escapeHtml(top.peakPowerLabelTh)}</p>
-          <p class="mv2-lib-meta">สแกนเมื่อ: ${escapeHtml(scanLine)}</p>
-          <p class="mv2-lib-meta">รหัสรายงาน: ${escapeHtml(top.displayReportId)}</p>
         </div>
       </div>
-      <a class="mv2-lib-btn" href="${escapeHtml(libHref)}">ดูอันดับทั้งหมด</a>
-      <p class="mv2-lib-foot">ดูว่าแต่ละชิ้นเด่นเรื่องอะไร และชิ้นไหนเหมาะกับคุณที่สุด</p>
+      ${nudge}
+      ${btn}
     </section>`;
 }
 
 /**
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
  * @param {object} [options]
- * @param {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletLibraryView | null} [options.sacredAmuletLibrary]
+ * @param {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletLibraryView | null} [options.sacredAmuletLibrary] — จาก `getReportByToken` + `sacredAmuletLibrary.service` สำหรับมินิบ็อกซ์ “คลังพลังของคุณ”
  */
 export function renderAmuletReportV2Html(payload, options = {}) {
   const vm = buildAmuletHtmlV2ViewModel(payload);
@@ -361,9 +365,9 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const energyTimingHref = publicTokenForLinks
     ? `/r/${encodeURIComponent(publicTokenForLinks)}/energy-timing`
     : "";
-  const sacredLib = options.sacredAmuletLibrary ?? null;
+  const sacredAmuletLibrary = options.sacredAmuletLibrary ?? null;
   const libraryMiniHtml = buildSacredAmuletLibraryMiniHtml(
-    sacredLib,
+    sacredAmuletLibrary,
     publicTokenForLinks,
   );
 
@@ -1191,18 +1195,11 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     }
     .mv2-lib-spot-body { flex: 1; min-width: 0; }
     .mv2-lib-rankline {
-      margin: 0 0 0.15rem;
-      font-size: 0.72rem;
-      font-weight: 800;
-      color: var(--mv2a-gold);
-      letter-spacing: 0.03em;
-    }
-    .mv2-lib-titleline {
-      margin: 0 0 0.4rem;
-      font-size: 0.8rem;
+      margin: 0 0 0.35rem;
+      font-size: 0.76rem;
       font-weight: 700;
-      color: var(--mv2a-text);
-      line-height: 1.35;
+      color: var(--mv2a-gold-dim);
+      line-height: 1.4;
     }
     .mv2-lib-scoreline {
       margin: 0 0 0.2rem;
@@ -1214,16 +1211,20 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       font-weight: 800;
     }
     .mv2-lib-peakline {
-      margin: 0 0 0.35rem;
+      margin: 0;
       font-size: 0.82rem;
       color: var(--mv2a-muted);
       line-height: 1.4;
     }
-    .mv2-lib-meta {
-      margin: 0;
-      font-size: 0.72rem;
+    .mv2-lib-nudge {
+      margin: 0 0 0.55rem;
+      font-size: 0.74rem;
+      line-height: 1.5;
       color: var(--mv2a-muted);
-      line-height: 1.45;
+      padding: 0.45rem 0.5rem;
+      border-radius: 10px;
+      background: rgba(184, 135, 27, 0.06);
+      border: 1px solid rgba(184, 135, 27, 0.12);
     }
     .mv2-lib-btn {
       display: block;
@@ -1240,13 +1241,6 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     }
     .mv2-lib-btn:hover {
       filter: brightness(1.05);
-    }
-    .mv2-lib-foot {
-      margin: 0.45rem 0 0;
-      font-size: 0.68rem;
-      line-height: 1.45;
-      color: var(--mv2a-muted);
-      text-align: center;
     }
     html.mv2a-theme-dark .mv2-lib-mini {
       border-left-color: rgba(160, 198, 255, 0.4);
