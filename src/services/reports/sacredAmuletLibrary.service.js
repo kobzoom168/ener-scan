@@ -25,11 +25,15 @@ import {
  * @property {string} displayReportId
  * @property {string} reportId
  * @property {Record<string, number>} axisScores — keys ตาม `POWER_ORDER`
+ * @property {number} scanCountInGroup
+ * @property {string} groupKey
+ * @property {"object_fingerprint"|"stable_feature_seed"|"image_phash"|"cache_key"|"public_token_fallback"} groupKeySource
  */
 
 /**
  * @typedef {Object} SacredAmuletLibraryView
  * @property {number} totalCount
+ * @property {number|null} groupedObjectCount
  * @property {SacredAmuletLibraryItem[]} items
  * @property {SacredAmuletLibraryItem[]} byOverall
  * @property {SacredAmuletLibraryItem[]} byLuck
@@ -39,6 +43,96 @@ import {
  * @property {SacredAmuletLibraryItem[]} byFit
  * @property {SacredAmuletLibraryItem|null} topOverall
  */
+
+/**
+ * @param {unknown} v
+ * @returns {string}
+ */
+function normalizeGroupToken(v) {
+  return String(v || "")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * @param {Record<string, unknown>} obj
+ * @param {string[]} path
+ * @returns {unknown}
+ */
+function readPath(obj, path) {
+  /** @type {unknown} */
+  let cur = obj;
+  for (const p of path) {
+    if (!cur || typeof cur !== "object" || Array.isArray(cur)) return undefined;
+    cur = /** @type {Record<string, unknown>} */ (cur)[p];
+  }
+  return cur;
+}
+
+/**
+ * @param {unknown} raw
+ * @param {import("./reportPayload.types.js").ReportPayload} norm
+ * @param {{ id?: string, created_at?: string }} meta
+ * @returns {{ key: string, source: SacredAmuletLibraryItem["groupKeySource"], trusted: boolean }}
+ */
+function resolveGroupIdentity(raw, norm, meta) {
+  const rawObj =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? /** @type {Record<string, unknown>} */ (raw)
+      : {};
+  const tok = String(norm.publicToken || "").trim();
+  const reportId = String(norm.reportId || "").trim();
+  const scanId = String(norm.scanId || "").trim();
+  const rowId = String(meta?.id || "").trim();
+
+  /** @type {Array<{ source: SacredAmuletLibraryItem["groupKeySource"], value: unknown }>} */
+  const candidates = [
+    { source: "object_fingerprint", value: rawObj.objectFingerprint },
+    { source: "object_fingerprint", value: rawObj.object_fingerprint },
+    { source: "stable_feature_seed", value: rawObj.stableFeatureSeed },
+    { source: "stable_feature_seed", value: rawObj.stable_feature_seed },
+    { source: "stable_feature_seed", value: readPath(rawObj, ["compatibility", "inputs", "scoreSeedKey"]) },
+    { source: "stable_feature_seed", value: readPath(rawObj, ["objectEnergy", "inputs", "stableFeatureSeed"]) },
+    { source: "image_phash", value: rawObj.imagePhash },
+    { source: "image_phash", value: rawObj.image_phash },
+    { source: "image_phash", value: rawObj.pHash },
+    { source: "image_phash", value: rawObj.phash },
+    { source: "cache_key", value: rawObj.cacheKey },
+    { source: "cache_key", value: rawObj.cache_key },
+  ];
+
+  const disallow = new Set(
+    [tok, reportId, scanId, rowId].map((x) => normalizeGroupToken(x)).filter(Boolean),
+  );
+  for (const c of candidates) {
+    const rawVal = String(c.value || "").trim();
+    if (!rawVal) continue;
+    const key = normalizeGroupToken(rawVal);
+    if (!key) continue;
+    if (disallow.has(key)) continue;
+    return { key: `${c.source}:${key}`, source: c.source, trusted: true };
+  }
+
+  const tokSafe = tok || "unknown";
+  return {
+    key: `public_token_fallback:${normalizeGroupToken(tokSafe)}`,
+    source: "public_token_fallback",
+    trusted: false,
+  };
+}
+
+/**
+ * @param {SacredAmuletLibraryItem[]} list
+ * @returns {SacredAmuletLibraryItem}
+ */
+function pickLatestRepresentative(list) {
+  return [...list].sort((a, b) => {
+    const ta = Date.parse(String(a.scannedAtIso || "")) || 0;
+    const tb = Date.parse(String(b.scannedAtIso || "")) || 0;
+    if (tb !== ta) return tb - ta;
+    return String(b.scanResultV2Id || "").localeCompare(String(a.scanResultV2Id || ""));
+  })[0];
+}
 
 /**
  * @param {unknown} raw
@@ -100,6 +194,8 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     axisScores[k] = Number.isFinite(sc) ? sc : 0;
   }
 
+  const identity = resolveGroupIdentity(raw, norm, meta);
+
   return {
     scanResultV2Id: String(meta?.id || "").trim() || "",
     publicToken: tok,
@@ -111,6 +207,9 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     displayReportId,
     reportId,
     axisScores,
+    scanCountInGroup: 1,
+    groupKey: identity.key,
+    groupKeySource: identity.source,
   };
 }
 
@@ -150,40 +249,43 @@ function sortByFit(items) {
 }
 
 /**
- * @param {string} lineUserId — LINE `userId` จาก report payload
- * @returns {Promise<SacredAmuletLibraryView|null>}
+ * Build grouped ranking view from raw scan-level items.
+ *
+ * @param {SacredAmuletLibraryItem[]} scans
+ * @returns {SacredAmuletLibraryView|null}
  */
-export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
-  const uid = String(lineUserId || "").trim();
-  if (!uid) return null;
+export function buildSacredAmuletLibraryViewFromItems(scans) {
+  if (!Array.isArray(scans) || scans.length === 0) return null;
+  /** @type {Map<string, SacredAmuletLibraryItem[]>} */
+  const grouped = new Map();
+  let trustedGroupKeySeen = false;
+  for (const it of scans) {
+    if (!it || typeof it !== "object") continue;
+    if (it.groupKeySource !== "public_token_fallback") trustedGroupKeySeen = true;
+    const curr = grouped.get(it.groupKey);
+    if (curr) curr.push(it);
+    else grouped.set(it.groupKey, [it]);
+  }
+  if (grouped.size === 0) return null;
 
-  const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
   /** @type {SacredAmuletLibraryItem[]} */
   const items = [];
-  const seenTok = new Set();
-
-  for (const row of rows) {
-    const raw = row?.report_payload_json;
-    const meta = { id: row?.id, created_at: row?.created_at };
-    const fromRow = extractSacredAmuletLibraryItem(raw, meta);
-    if (!fromRow) continue;
-    let tok = fromRow.publicToken;
-    const alt = String(row?.html_public_token || "").trim();
-    if (alt) tok = alt;
-    if (seenTok.has(tok)) continue;
-    seenTok.add(tok);
-    const merged = { ...fromRow, publicToken: tok };
-    merged.displayReportId = formatEsDisplayReportId(tok, merged.reportId);
-    items.push(merged);
+  for (const list of grouped.values()) {
+    const rep = pickLatestRepresentative(list);
+    items.push({
+      ...rep,
+      scanCountInGroup: list.length,
+    });
   }
-
-  if (items.length === 0) return null;
 
   const byOverall = sortByOverall(items);
   const topOverall = byOverall[0] || null;
+  const groupedObjectCount =
+    trustedGroupKeySeen && items.length < scans.length ? items.length : null;
 
   return {
-    totalCount: items.length,
+    totalCount: scans.length,
+    groupedObjectCount,
     items,
     byOverall,
     byLuck: sortByAxisScore(items, "luck"),
@@ -193,6 +295,34 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
     byFit: sortByFit(items),
     topOverall,
   };
+}
+
+/**
+ * @param {string} lineUserId — LINE `userId` จาก report payload
+ * @returns {Promise<SacredAmuletLibraryView|null>}
+ */
+export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
+  const uid = String(lineUserId || "").trim();
+  if (!uid) return null;
+
+  const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
+  /** @type {SacredAmuletLibraryItem[]} */
+  const scans = [];
+
+  for (const row of rows) {
+    const raw = row?.report_payload_json;
+    const meta = { id: row?.id, created_at: row?.created_at };
+    const fromRow = extractSacredAmuletLibraryItem(raw, meta);
+    if (!fromRow) continue;
+    let tok = fromRow.publicToken;
+    const alt = String(row?.html_public_token || "").trim();
+    if (alt) tok = alt;
+    const merged = { ...fromRow, publicToken: tok };
+    merged.displayReportId = formatEsDisplayReportId(tok, merged.reportId);
+    scans.push(merged);
+  }
+
+  return buildSacredAmuletLibraryViewFromItems(scans);
 }
 
 /**
@@ -209,6 +339,7 @@ export function buildSacredAmuletLibraryViewFromPayloadOnly(payload) {
   const items = [item];
   return {
     totalCount: 1,
+    groupedObjectCount: null,
     items,
     byOverall: items,
     byLuck: items,
