@@ -457,7 +457,7 @@ test("renderAmuletReportV2Html: library mini box when sacredAmuletLibrary provid
   assert.ok(html.includes("คลังพลังของคุณ"));
   assert.ok(html.includes("คุณมีรายการสแกนแล้ว 1 รายการ"));
   assert.ok(html.includes("อันดับ 1 ตอนนี้"));
-  assert.ok(html.includes("องค์ที่พลังรวมเด่นสุดในคลังของคุณ"));
+  assert.ok(html.includes("รายการที่พลังรวมเด่นสุดในคลังของคุณ"));
   assert.ok(html.includes("พลังรวม"));
   assert.ok(html.includes("/r/t/library"));
   assert.ok(html.includes("ดูอันดับทั้งหมด"));

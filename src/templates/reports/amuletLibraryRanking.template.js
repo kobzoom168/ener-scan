@@ -1,5 +1,5 @@
 /**
- * Standalone page: อันดับวัตถุในคลังพลัง (sacred amulet lane; no guessed amulet names).
+ * Standalone page: คลังพลัง / อันดับรายการสแกน (sacred amulet lane; no guessed amulet names).
  */
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { formatBangkokScanDateThaiBE } from "../../utils/dateTime.util.js";
@@ -82,7 +82,7 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
     )
     .join("");
 
-  const docTitle = "อันดับวัตถุของคุณ · Ener Scan";
+  const docTitle = "คลังพลังของคุณ · Ener Scan";
 
   return `<!DOCTYPE html>
 <html lang="th">
@@ -154,17 +154,6 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
     }
     .alib-card-btn:hover { filter: brightness(1.05); }
     .alib-empty { color: var(--alib-muted); font-size: 0.9rem; }
-    .alib-upsell {
-      margin-top: 1.35rem;
-      padding: 0.85rem 0.95rem;
-      border-radius: 12px;
-      border: 1px solid rgba(212, 175, 55, 0.18);
-      background: rgba(184, 135, 27, 0.06);
-    }
-    .alib-upsell h2 { margin: 0 0 0.45rem; font-size: 1rem; color: var(--alib-gold); }
-    .alib-upsell p { margin: 0 0 0.5rem; font-size: 0.92rem; color: var(--alib-text); }
-    .alib-upsell ul { margin: 0; padding-left: 1.15rem; color: var(--alib-muted); font-size: 0.9rem; }
-    .alib-upsell li { margin: 0.25rem 0; }
     .alib-note { margin: 1.1rem 0 0; font-size: 0.82rem; color: var(--alib-muted); line-height: 1.55; }
     .alib-safety {
       margin: 0 0 0.85rem;
@@ -176,41 +165,59 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
       border-radius: 10px;
       border: 1px solid rgba(212, 175, 55, 0.12);
     }
-    .alib-scan-cta {
-      margin: 1rem 0 0;
-      padding: 0.65rem 0.75rem;
-      font-size: 0.95rem;
-      font-weight: 700;
-      line-height: 1.5;
-      text-align: center;
-      color: var(--alib-text);
-      background: rgba(184, 135, 27, 0.1);
+    .alib-scan-footer {
+      margin-top: 1.35rem;
+      padding: 1rem 0.95rem 1.05rem;
+      border-radius: 14px;
       border: 1px solid rgba(212, 175, 55, 0.22);
-      border-radius: 12px;
+      background: rgba(184, 135, 27, 0.08);
+      text-align: center;
+    }
+    .alib-scan-footer-title {
+      margin: 0 0 0.5rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--alib-gold);
+      line-height: 1.35;
+    }
+    .alib-scan-footer-lead {
+      margin: 0 0 0.85rem;
+      font-size: 0.93rem;
+      font-weight: 600;
+      color: var(--alib-text);
+      line-height: 1.55;
+    }
+    .alib-scan-btn {
+      display: inline-block;
+      margin: 0;
+      padding: 0.55rem 1.15rem;
+      font-size: 0.92rem;
+      font-weight: 800;
+      font-family: inherit;
+      line-height: 1.35;
+      color: #0c0e12;
+      background: linear-gradient(165deg, #e8c547, #c9a227);
+      border: none;
+      border-radius: 999px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
     }
   </style>
 </head>
 <body>
   <div class="alib-wrap">
     <a class="alib-back" href="${escapeHtml(backHref)}">← กลับรายงาน</a>
-    <h1 class="alib-h1">อันดับวัตถุของคุณ</h1>
+    <h1 class="alib-h1">คลังพลังของคุณ</h1>
     <p class="alib-sub">รายการสแกนทั้งหมด ${escapeHtml(String(n))} รายการ</p>
     <p class="alib-safety" role="note">ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
     <div class="alib-tabs">
       <div class="alib-tab-row" role="tablist" aria-label="หมวดอันดับ">${tabButtons}</div>
       ${tabPanels}
     </div>
-    <section class="alib-upsell" aria-labelledby="alib-up-h">
-      <h2 id="alib-up-h">สแกนเพิ่มเพื่อจัดอันดับได้แม่นขึ้น</h2>
-      <p>เมื่อคุณมีรายการสแกนมากขึ้น ระบบจะช่วยดูได้ว่า</p>
-      <ul>
-        <li>รายการไหนพลังรวมสูงสุด</li>
-        <li>รายการไหนเด่นเรื่องโชคลาภ</li>
-        <li>รายการไหนเด่นเรื่องคุ้มครอง</li>
-        <li>รายการไหนเข้ากับคุณที่สุด</li>
-      </ul>
+    <section class="alib-scan-footer" aria-labelledby="alib-scan-footer-h">
+      <h2 id="alib-scan-footer-h" class="alib-scan-footer-title">อยากรู้ว่าองค์อื่นของคุณจะขึ้นอันดับไหน?</h2>
+      <p class="alib-scan-footer-lead">สแกนเพิ่มเพื่อเทียบพลังรวม โชคลาภ คุ้มครอง เมตตา บารมี และความเข้ากัน</p>
+      <p class="alib-scan-btn" role="status" aria-label="ชวนสแกนวัตถุเพิ่ม">สแกนวัตถุเพิ่ม</p>
     </section>
-    <p class="alib-scan-cta" role="region" aria-label="ชวนสแกนเพิ่ม">สแกนเพิ่มเพื่อเทียบพลังรวม โชคลาภ คุ้มครอง เมตตา บารมี และความเข้ากัน</p>
     <p class="alib-note" role="note">อันดับและคะแนนเป็นการประเมินจากผลสแกน ใช้เป็นแนวทาง ไม่ได้ระบุชนิดหรือชื่อพระจริงจากภาพ</p>
   </div>
   <script>
