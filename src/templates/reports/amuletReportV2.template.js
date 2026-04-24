@@ -317,6 +317,11 @@ export function renderAmuletReportV2Html(payload) {
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
       : "ไม่มี";
 
+  const publicTokenForLinks = String(payload.publicToken || "").trim();
+  const energyMeaningHref = publicTokenForLinks
+    ? `/r/${encodeURIComponent(publicTokenForLinks)}/energy-meaning`
+    : "";
+
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
     .map((r, i) => {
       const lead = i === 0 ? " mv2-gsum-row--lead" : "";
@@ -984,6 +989,19 @@ export function renderAmuletReportV2Html(payload) {
     .mv2-life-score { color: var(--mv2a-life-score); font-weight: 700; font-size: 0.76rem; text-align: right; }
     .mv2-life-blurb { color: var(--mv2a-life-blurb); line-height: 1.35; }
     .mv2-life-hint { margin: 0 0 0.45rem; font-size: 0.65rem; color: var(--mv2a-muted); opacity: 0.8; }
+    .mv2-life-meaning-wrap { margin: 0.65rem 0 0; text-align: center; }
+    .mv2-life-meaning-link {
+      display: inline-block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--mv2a-gold);
+      text-decoration: none;
+      padding: 0.35rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid rgba(184, 135, 27, 0.35);
+      background: rgba(184, 135, 27, 0.06);
+    }
+    .mv2-life-meaning-link:hover { background: rgba(184, 135, 27, 0.12); text-decoration: underline; }
     /* Footer disclaimer: inside .mv2-trust (replaces former trustNote slot) — no card */
     .mv2-trust .mv2a-footer-note {
       margin: 0 0 0.85rem;
@@ -1535,6 +1553,11 @@ export function renderAmuletReportV2Html(payload) {
       <h2 id="mv2-life-h">พลังทั้ง 6 ด้าน</h2>
       <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
       <div class="mv2-life-rows">${lifeRowsHtml}</div>
+      ${
+        energyMeaningHref
+          ? `<p class="mv2-life-meaning-wrap"><a class="mv2-life-meaning-link" href="${escapeHtml(energyMeaningHref)}">อ่านคำอธิบายพลังทั้ง 6 ด้าน</a></p>`
+          : ""
+      }
     </section>
     ${timingActionCardHtml}
     ${timingCardHtml}

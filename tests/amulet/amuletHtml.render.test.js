@@ -131,6 +131,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("เมตตา</span> <span class=\"mv2a-radar-axis-n\">70"));
   assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
   assert.ok(html.includes("พลังทั้ง 6 ด้าน"));
+  assert.ok(html.includes("อ่านคำอธิบายพลังทั้ง 6 ด้าน"));
+  assert.ok(html.includes("/r/t/energy-meaning"));
   assert.ok(html.includes("เรียงจากคะแนนสูงไปต่ำ"));
   assert.ok(html.includes("mv2-life-row"));
   assert.ok(html.includes("พลังเด่น"));
