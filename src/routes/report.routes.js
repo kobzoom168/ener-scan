@@ -9,6 +9,10 @@ router.get(
   "/r/:publicToken/energy-meaning",
   reportController.getEnergyMeaningByToken,
 );
+router.get(
+  "/r/:publicToken/energy-timing",
+  reportController.getEnergyTimingByToken,
+);
 router.get("/r/:publicToken", reportController.getReportByToken);
 
 router.get(

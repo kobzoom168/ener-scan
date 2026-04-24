@@ -32,6 +32,19 @@ function assertSlotInvariants(r) {
   assert.ok(r.debug);
   assert.equal(r.debug.version, "timing_v1_1");
   assert.ok(r.debug.timingFingerprint && String(r.debug.timingFingerprint).startsWith("t"));
+  if (r.summary?.topWindowLabel) {
+    assert.equal(r.allWeekdayScores?.length, 7, "allWeekdayScores: 7 days when birth valid");
+    assert.ok(
+      r.allHourScores?.length >= 1,
+      "allHourScores present when birth valid",
+    );
+    for (const s of r.allWeekdayScores || []) {
+      assertKnownReason(s.reasonCode);
+    }
+    for (const s of r.allHourScores || []) {
+      assertKnownReason(s.reasonCode);
+    }
+  }
 }
 
 test("computeTimingV1: stable output for same inputs (sacred_amulet)", () => {

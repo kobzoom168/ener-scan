@@ -321,6 +321,9 @@ export function renderAmuletReportV2Html(payload) {
   const energyMeaningHref = publicTokenForLinks
     ? `/r/${encodeURIComponent(publicTokenForLinks)}/energy-meaning`
     : "";
+  const energyTimingHref = publicTokenForLinks
+    ? `/r/${encodeURIComponent(publicTokenForLinks)}/energy-timing`
+    : "";
 
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
     .map((r, i) => {
@@ -369,6 +372,13 @@ export function renderAmuletReportV2Html(payload) {
 
   const ts = vm.timingSection;
   const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
+  const energyTimingCtaHtml =
+    ts && energyTimingHref
+      ? `<div class="mv2-timing-cta" role="region" aria-label="อธิบายจังหวะเสริมพลัง">
+      <p class="mv2-timing-cta-hint">อธิบายว่าทำไมระบบถึงแนะนำวันนี้และช่วงเวลานี้</p>
+      <a class="mv2-timing-cta-btn" href="${escapeHtml(energyTimingHref)}">ดูวิธีคำนวณจังหวะเสริมพลัง</a>
+    </div>`
+      : "";
   const tac = /** @type {{ title?: string; recommendedWeekday?: string; secondaryWeekday?: string; confidence?: string; weekdayTip?: string; reasonShort?: string; actionLine?: string } | null} */ (
     vm.timingActionCard
   );
@@ -1053,6 +1063,46 @@ export function renderAmuletReportV2Html(payload) {
       color: #0c0e12;
       filter: brightness(1.06);
     }
+    .mv2-timing-cta {
+      margin: 0.55rem 0 0;
+      padding: 0.55rem 0.65rem 0.62rem;
+      border-radius: 12px;
+      border: 1px solid rgba(184, 135, 27, 0.22);
+      background: rgba(184, 135, 27, 0.06);
+      text-align: center;
+    }
+    .mv2-timing-cta-hint {
+      margin: 0 0 0.45rem;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: var(--mv2a-muted);
+    }
+    .mv2-timing-cta-btn {
+      display: inline-block;
+      padding: 0.48rem 0.85rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      border-radius: 999px;
+      text-decoration: none;
+      color: #0c0e12;
+      background: linear-gradient(165deg, #f0d060, #c9a227);
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      box-shadow: 0 2px 10px rgba(232, 197, 71, 0.22);
+    }
+    .mv2-timing-cta-btn:hover {
+      filter: brightness(1.05);
+    }
+    html.mv2a-theme-dark .mv2-timing-cta {
+      border-color: rgba(232, 197, 71, 0.35);
+      background: rgba(232, 197, 71, 0.07);
+    }
+    html.mv2a-theme-dark .mv2-timing-cta-hint {
+      color: rgba(226, 232, 240, 0.88);
+    }
+    html.mv2a-theme-dark .mv2-timing-cta-btn {
+      color: #0c0e12;
+      background: linear-gradient(165deg, #f0d060, #c9a227);
+    }
     /* Footer disclaimer: inside .mv2-trust (replaces former trustNote slot) — no card */
     .mv2-trust .mv2a-footer-note {
       margin: 0 0 0.85rem;
@@ -1615,6 +1665,7 @@ export function renderAmuletReportV2Html(payload) {
     </section>
     ${timingActionCardHtml}
     ${timingCardHtml}
+    ${energyTimingCtaHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์รายงาน</h2>

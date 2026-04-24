@@ -5,6 +5,7 @@ import {
 import { renderReportHtmlPage } from "../services/reports/reportHtmlRenderer.service.js";
 import { normalizeReportPayloadForRender } from "../utils/reports/reportPayloadNormalize.util.js";
 import { renderAmuletEnergyMeaningHtml } from "../templates/reports/amuletEnergyMeaning.template.js";
+import { renderAmuletEnergyTimingHtml } from "../templates/reports/amuletEnergyTiming.template.js";
 import {
   logReportPageOpen,
   safeTokenPrefix,
@@ -256,6 +257,113 @@ export async function getEnergyMeaningByToken(req, res) {
     JSON.stringify({
       event: "REPORT_HTTP",
       path: "getEnergyMeaningByToken",
+      status: 200,
+      tokenPrefix: tokenPrefix || "",
+      publicTokenPrefix: publicTokenPrefix12(publicToken),
+      loadSource: loadSource ?? null,
+    }),
+  );
+
+  return res
+    .status(200)
+    .type("html")
+    .set("Cache-Control", "private, no-store")
+    .send(html);
+}
+
+/**
+ * GET /r/:publicToken/energy-timing — อธิบายจังหวะเสริมพลัง (amulet HTML lane เท่านั้น)
+ */
+export async function getEnergyTimingByToken(req, res) {
+  const publicToken = String(req.params?.publicToken || "").trim();
+  const { payload, loadSource, accessError } =
+    await getReportByPublicToken(publicToken);
+  const tokenPrefix = safeTokenPrefix(publicToken, 8);
+
+  if (!payload) {
+    const status = accessError?.httpStatus ?? 404;
+    const html =
+      accessError?.code === "REPORT_EXPIRED"
+        ? EXPIRED_HTML
+        : accessError?.code === "REPORT_UNAVAILABLE"
+          ? UNAVAILABLE_HTML
+          : NOT_FOUND_HTML;
+    console.log(
+      JSON.stringify({
+        event: "REPORT_HTTP",
+        path: "getEnergyTimingByToken",
+        status,
+        tokenPrefix: publicToken ? `${publicToken.slice(0, 12)}…` : "",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        loadSource: loadSource ?? null,
+        payloadPresent: false,
+      }),
+    );
+    return res
+      .status(status)
+      .type("html")
+      .set("Cache-Control", "no-store")
+      .send(html);
+  }
+
+  const { payload: normalized, warnings } =
+    normalizeReportPayloadForRender(payload);
+  if (warnings.length) {
+    console.warn(
+      JSON.stringify({
+        event: "REPORT_RENDER_NORMALIZE",
+        path: "getEnergyTimingByToken",
+        warningsCount: warnings.length,
+      }),
+    );
+  }
+
+  const hasAmulet =
+    normalized.amuletV1 &&
+    typeof normalized.amuletV1 === "object" &&
+    !Array.isArray(normalized.amuletV1);
+
+  if (!hasAmulet) {
+    console.log(
+      JSON.stringify({
+        event: "REPORT_HTTP",
+        path: "getEnergyTimingByToken",
+        status: 302,
+        reason: "not_amulet_lane",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+      }),
+    );
+    return res.redirect(302, `/r/${encodeURIComponent(publicToken)}`);
+  }
+
+  let html;
+  try {
+    html = renderAmuletEnergyTimingHtml(normalized);
+  } catch (renderErr) {
+    console.error(
+      JSON.stringify({
+        event: "REPORT_PUBLIC_RENDER_FAIL",
+        path: "getEnergyTimingByToken",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        httpStatus: 503,
+        reason: String(
+          renderErr && typeof renderErr === "object" && "message" in renderErr
+            ? /** @type {{ message?: unknown }} */ (renderErr).message
+            : renderErr,
+        ).slice(0, 240),
+      }),
+    );
+    return res
+      .status(503)
+      .type("html")
+      .set("Cache-Control", "no-store")
+      .send(UNAVAILABLE_HTML);
+  }
+
+  console.log(
+    JSON.stringify({
+      event: "REPORT_HTTP",
+      path: "getEnergyTimingByToken",
       status: 200,
       tokenPrefix: tokenPrefix || "",
       publicTokenPrefix: publicTokenPrefix12(publicToken),

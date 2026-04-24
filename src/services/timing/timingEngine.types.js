@@ -60,6 +60,8 @@
  * @property {TimingSlot[]} bestWeekdays
  * @property {TimingSlot[]} bestDateRoots
  * @property {TimingSlot[]} avoidHours
+ * @property {TimingSlot[]} [allWeekdayScores] — Sunday-first weekday_0..6, pre-sort
+ * @property {TimingSlot[]} [allHourScores] — TIMING_HOUR_WINDOWS order, pre-sort
  * @property {TimingSummary} summary
  * @property {TimingDebugV11} [debug]
  */

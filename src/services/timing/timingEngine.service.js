@@ -334,6 +334,8 @@ export function computeTimingV1(input) {
       bestWeekdays: [],
       bestDateRoots: [],
       avoidHours: [],
+      allWeekdayScores: [],
+      allHourScores: [],
       summary: {
         topWindowLabel: "",
         topWeekdayLabel: "",
@@ -419,6 +421,9 @@ export function computeTimingV1(input) {
     });
   });
 
+  /** Full list in `TIMING_HOUR_WINDOWS` order (before ranking) — public explain page */
+  const allHourScores = hourScores.map((s) => ({ ...s }));
+
   hourScores.sort((a, b) => b.score - a.score);
   const bestHours = hourScores.slice(0, 3);
   const bestKeys = new Set(bestHours.map((h) => h.key));
@@ -478,6 +483,9 @@ export function computeTimingV1(input) {
       reasonText: r.text,
     });
   }
+  /** Sunday-first weekday_0 … weekday_6 (before ranking) — public explain page */
+  const allWeekdayScores = wdScores.map((s) => ({ ...s }));
+
   wdScores.sort((a, b) => b.score - a.score);
   const bestWeekdays = wdScores.slice(0, 2);
 
@@ -578,6 +586,8 @@ export function computeTimingV1(input) {
     bestWeekdays,
     bestDateRoots,
     avoidHours,
+    allWeekdayScores,
+    allHourScores,
     summary: {
       topWindowLabel,
       topWeekdayLabel,
