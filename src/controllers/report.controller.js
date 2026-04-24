@@ -6,6 +6,11 @@ import { renderReportHtmlPage } from "../services/reports/reportHtmlRenderer.ser
 import { normalizeReportPayloadForRender } from "../utils/reports/reportPayloadNormalize.util.js";
 import { renderAmuletEnergyMeaningHtml } from "../templates/reports/amuletEnergyMeaning.template.js";
 import { renderAmuletEnergyTimingHtml } from "../templates/reports/amuletEnergyTiming.template.js";
+import { renderAmuletLibraryRankingHtml } from "../templates/reports/amuletLibraryRanking.template.js";
+import {
+  buildSacredAmuletLibraryForLineUser,
+  buildSacredAmuletLibraryViewFromPayloadOnly,
+} from "../services/reports/sacredAmuletLibrary.service.js";
 import {
   logReportPageOpen,
   safeTokenPrefix,
@@ -84,8 +89,34 @@ export async function getReportByToken(req, res) {
   }
   /** @type {string} */
   let html;
+  let sacredAmuletLibrary = null;
   try {
-    html = renderReportHtmlPage(payload);
+    const { payload: normPre } = normalizeReportPayloadForRender(payload);
+    if (
+      normPre.amuletV1 &&
+      typeof normPre.amuletV1 === "object" &&
+      !Array.isArray(normPre.amuletV1)
+    ) {
+      const uid = String(normPre.userId || "").trim();
+      if (uid) {
+        sacredAmuletLibrary = await buildSacredAmuletLibraryForLineUser(uid);
+      }
+    }
+  } catch (libErr) {
+    console.warn(
+      JSON.stringify({
+        event: "REPORT_LIBRARY_LOOKUP_SKIP",
+        path: "getReportByToken",
+        reason: String(
+          libErr && typeof libErr === "object" && "message" in libErr
+            ? /** @type {{ message?: unknown }} */ (libErr).message
+            : libErr,
+        ).slice(0, 200),
+      }),
+    );
+  }
+  try {
+    html = renderReportHtmlPage(payload, { sacredAmuletLibrary });
   } catch (renderErr) {
     console.error(
       JSON.stringify({
@@ -364,6 +395,143 @@ export async function getEnergyTimingByToken(req, res) {
     JSON.stringify({
       event: "REPORT_HTTP",
       path: "getEnergyTimingByToken",
+      status: 200,
+      tokenPrefix: tokenPrefix || "",
+      publicTokenPrefix: publicTokenPrefix12(publicToken),
+      loadSource: loadSource ?? null,
+    }),
+  );
+
+  return res
+    .status(200)
+    .type("html")
+    .set("Cache-Control", "private, no-store")
+    .send(html);
+}
+
+/**
+ * GET /r/:publicToken/library — อันดับวัตถุในคลังพลัง (amulet lane เท่านั้น)
+ */
+export async function getLibraryRankingByToken(req, res) {
+  const publicToken = String(req.params?.publicToken || "").trim();
+  const { payload, loadSource, accessError } =
+    await getReportByPublicToken(publicToken);
+  const tokenPrefix = safeTokenPrefix(publicToken, 8);
+
+  if (!payload) {
+    const status = accessError?.httpStatus ?? 404;
+    const html =
+      accessError?.code === "REPORT_EXPIRED"
+        ? EXPIRED_HTML
+        : accessError?.code === "REPORT_UNAVAILABLE"
+          ? UNAVAILABLE_HTML
+          : NOT_FOUND_HTML;
+    console.log(
+      JSON.stringify({
+        event: "REPORT_HTTP",
+        path: "getLibraryRankingByToken",
+        status,
+        tokenPrefix: publicToken ? `${publicToken.slice(0, 12)}…` : "",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        loadSource: loadSource ?? null,
+        payloadPresent: false,
+      }),
+    );
+    return res
+      .status(status)
+      .type("html")
+      .set("Cache-Control", "no-store")
+      .send(html);
+  }
+
+  const { payload: normalized, warnings } =
+    normalizeReportPayloadForRender(payload);
+  if (warnings.length) {
+    console.warn(
+      JSON.stringify({
+        event: "REPORT_RENDER_NORMALIZE",
+        path: "getLibraryRankingByToken",
+        warningsCount: warnings.length,
+      }),
+    );
+  }
+
+  const hasAmulet =
+    normalized.amuletV1 &&
+    typeof normalized.amuletV1 === "object" &&
+    !Array.isArray(normalized.amuletV1);
+
+  if (!hasAmulet) {
+    console.log(
+      JSON.stringify({
+        event: "REPORT_HTTP",
+        path: "getLibraryRankingByToken",
+        status: 302,
+        reason: "not_amulet_lane",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+      }),
+    );
+    return res.redirect(302, `/r/${encodeURIComponent(publicToken)}`);
+  }
+
+  let library = null;
+  const uid = String(normalized.userId || "").trim();
+  if (uid) {
+    try {
+      library = await buildSacredAmuletLibraryForLineUser(uid);
+    } catch (e) {
+      console.warn(
+        JSON.stringify({
+          event: "REPORT_LIBRARY_PAGE_BUILD_FAIL",
+          path: "getLibraryRankingByToken",
+          publicTokenPrefix: publicTokenPrefix12(publicToken),
+          reason: String(
+            e && typeof e === "object" && "message" in e
+              ? /** @type {{ message?: unknown }} */ (e).message
+              : e,
+          ).slice(0, 200),
+        }),
+      );
+    }
+  }
+  if (!library) {
+    library = buildSacredAmuletLibraryViewFromPayloadOnly(normalized);
+  }
+  if (!library) {
+    return res.redirect(302, `/r/${encodeURIComponent(publicToken)}`);
+  }
+
+  let html;
+  try {
+    html = renderAmuletLibraryRankingHtml({
+      pagePublicToken: publicToken,
+      library,
+    });
+  } catch (renderErr) {
+    console.error(
+      JSON.stringify({
+        event: "REPORT_PUBLIC_RENDER_FAIL",
+        path: "getLibraryRankingByToken",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        httpStatus: 503,
+        reason: String(
+          renderErr && typeof renderErr === "object" && "message" in renderErr
+            ? /** @type {{ message?: unknown }} */ (renderErr).message
+            : renderErr,
+        ).slice(0, 240),
+      }),
+    );
+    return res
+      .status(503)
+      .type("html")
+      .set("Cache-Control", "no-store")
+      .send(UNAVAILABLE_HTML);
+  }
+
+  console.log(
+    JSON.stringify({
+      event: "REPORT_HTTP",
+      path: "getLibraryRankingByToken",
       status: 200,
       tokenPrefix: tokenPrefix || "",
       publicTokenPrefix: publicTokenPrefix12(publicToken),
