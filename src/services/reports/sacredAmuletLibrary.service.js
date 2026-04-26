@@ -382,10 +382,10 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     meta && "uploadThumbnailPath" in meta && meta.uploadThumbnailPath != null
       ? String(meta.uploadThumbnailPath).trim()
       : "";
-  const thumbUrl = resolveSacredAmuletLibraryThumbUrl(
-    metaThumb || null,
-    objectThumb,
-  );
+  let thumbUrl = objectThumb;
+  if (metaThumb && /^https?:\/\//i.test(metaThumb)) {
+    thumbUrl = metaThumb;
+  }
 
   const scannedAtIso =
     String(meta?.created_at || "").trim() ||
@@ -480,6 +480,8 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     duplicateConfidence,
     uploadId: String(meta?.uploadId || "").trim() || null,
     uploadThumbnailPath: metaThumb || null,
+    /** @internal payload object image for signed-URL fallback after DB enrich */
+    _objectImageUrlForThumb: objectThumb,
   };
 }
 
@@ -601,6 +603,9 @@ export function buildSacredAmuletLibraryViewFromItems(scans) {
   }
 
   const itemsMarked = markPossibleDuplicates(items);
+  for (const it of itemsMarked) {
+    if (it && typeof it === "object") delete it._objectImageUrlForThumb;
+  }
   const groupedObjectCount =
     itemsMarked.length < nearExactGroupedScans.length
       ? itemsMarked.length
@@ -756,8 +761,13 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
   }
 
   for (const s of scans) {
-    const objectOnlyThumb = String(s.thumbUrl || "").trim();
-    s.thumbUrl = resolveSacredAmuletLibraryThumbUrl(s.uploadThumbnailPath, objectOnlyThumb);
+    const objFallback = String(s._objectImageUrlForThumb ?? "").trim();
+    const objHttps = /^https?:\/\//i.test(objFallback) ? objFallback : "";
+    s.thumbUrl = await resolveSacredAmuletLibraryThumbUrl(
+      s.uploadThumbnailPath,
+      objHttps,
+    );
+    delete s._objectImageUrlForThumb;
   }
 
   const view = buildSacredAmuletLibraryViewFromItems(scans);
@@ -790,6 +800,7 @@ export function buildSacredAmuletLibraryViewFromPayloadOnly(payload) {
     created_at: String(payload.generatedAt || ""),
   });
   if (!item) return null;
+  delete item._objectImageUrlForThumb;
   const items = [item];
   return {
     totalCount: 1,

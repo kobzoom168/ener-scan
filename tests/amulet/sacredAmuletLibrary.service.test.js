@@ -333,7 +333,7 @@ test("extractSacredAmuletLibraryItem: uploadThumbnailPath in meta wins over obje
   assert.equal(it.thumbUrl, "https://thumb.example/t.webp");
 });
 
-test("library thumb priority pass: thumbnail_path before object thumbUrl (simulated enrich)", () => {
+test("library thumb priority pass: thumbnail_path + signed URL before object (simulated enrich)", async () => {
   const it = extractSacredAmuletLibraryItem(
     makeRaw({
       token: "tok-enrich",
@@ -348,15 +348,15 @@ test("library thumb priority pass: thumbnail_path before object thumbUrl (simula
   assert.ok(it);
   assert.equal(it.thumbUrl, "https://object.example/o.jpg");
   it.uploadThumbnailPath = "U1/upload-uuid/thumb.webp";
-  it.thumbUrl = resolveSacredAmuletLibraryThumbUrl(
-    it.uploadThumbnailPath,
-    it.thumbUrl,
-    (p) => `https://sb.example/${p}`,
-  );
-  assert.equal(it.thumbUrl, "https://sb.example/U1/upload-uuid/thumb.webp");
+  const fallback = String(it._objectImageUrlForThumb || it.thumbUrl);
+  it.thumbUrl = await resolveSacredAmuletLibraryThumbUrl(it.uploadThumbnailPath, fallback, {
+    createSignedUrlForPath: async () => "https://signed.example/thumb",
+  });
+  delete it._objectImageUrlForThumb;
+  assert.equal(it.thumbUrl, "https://signed.example/thumb");
 });
 
-test("library thumb after enrich: no thumbnail_path keeps object URL", () => {
+test("library thumb after enrich: no thumbnail_path keeps object URL", async () => {
   const it = extractSacredAmuletLibraryItem(
     makeRaw({
       token: "tok-no-thumb",
@@ -370,8 +370,32 @@ test("library thumb after enrich: no thumbnail_path keeps object URL", () => {
   );
   assert.ok(it);
   it.uploadThumbnailPath = null;
-  it.thumbUrl = resolveSacredAmuletLibraryThumbUrl(it.uploadThumbnailPath, it.thumbUrl, () => "");
+  const fallback = String(it._objectImageUrlForThumb || it.thumbUrl);
+  it.thumbUrl = await resolveSacredAmuletLibraryThumbUrl(it.uploadThumbnailPath, fallback, {});
+  delete it._objectImageUrlForThumb;
   assert.equal(it.thumbUrl, "https://object.example/only.jpg");
+});
+
+test("library thumb: signed URL fail falls back to payload objectImageUrl", async () => {
+  const it = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-sign-fail",
+      reportId: "rsf",
+      generatedAt: "2026-04-20T08:00:00.000Z",
+      energyScore: 7.0,
+      compatibilityPercent: 70,
+      imageUrl: "https://object.example/fallback.jpg",
+    }),
+    { id: "row-sf", created_at: "2026-04-20T08:00:00.000Z" },
+  );
+  assert.ok(it);
+  it.uploadThumbnailPath = "U1/bad/thumb.webp";
+  const fallback = String(it._objectImageUrlForThumb || it.thumbUrl);
+  it.thumbUrl = await resolveSacredAmuletLibraryThumbUrl(it.uploadThumbnailPath, fallback, {
+    createSignedUrlForPath: async () => "",
+  });
+  delete it._objectImageUrlForThumb;
+  assert.equal(it.thumbUrl, "https://object.example/fallback.jpg");
 });
 
 test("buildSacredAmuletLibraryViewFromItems: axisHighlights tie-break uses compat when score and date equal", () => {
