@@ -324,7 +324,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken) {
       ? `<p class="mv2-lib-nudge">สแกนเพิ่มอีกสักรายการ ระบบจะช่วยจัดอันดับและเปรียบเทียบให้ชัดขึ้น</p>`
       : "";
   const btn = libHref
-    ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">ดูอันดับทั้งหมด</a>`
+    ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">ดูอันดับทั้งหมดในคลัง</a>`
     : "";
   return `
     <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">

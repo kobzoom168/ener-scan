@@ -88,6 +88,9 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   assert.ok(html.includes("ดูรายงานนี้"));
   assert.ok(html.includes("/r/toklib1"));
   assert.ok(html.includes("[data-alib-tab]"));
+  assert.ok(html.includes("เลื่อนดูพลังด้านอื่น ๆ"));
+  assert.ok(html.includes("ดูอันดับทั้งหมดในคลัง"));
+  assert.ok(html.includes("เด่นสุดในด้านนี้"));
 });
 
 test("renderAmuletLibraryRankingHtml: grouped header + duplicate badge", () => {
