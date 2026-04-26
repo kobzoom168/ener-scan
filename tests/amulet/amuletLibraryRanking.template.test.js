@@ -68,7 +68,12 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   assert.ok(html.includes("โชคลาภสูงสุด"));
   assert.ok(html.includes("อยากรู้ว่าองค์อื่นของคุณจะขึ้นอันดับไหน?"));
   assert.ok(html.includes("สแกนวัตถุเพิ่ม"));
-  assert.ok(html.includes("จากรายการสแกนทั้งหมด 1 รายการ"));
+  assert.ok(html.includes("คุณมีรายการสแกนแล้ว 1 รายการ"));
+  assert.ok(html.includes("พระเด่นประจำพลังของคุณ"));
+  assert.ok(html.includes("alib-axis-track"));
+  assert.ok(html.includes('id="alib-full-rankings"'));
+  assert.ok(html.includes('id="alib-btn-show-rankings"'));
+  assert.ok(html.includes("อันดับ 1 โดยรวมตอนนี้"));
   assert.ok(!html.includes("แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้"));
   assert.ok(
     html.includes(
@@ -129,13 +134,15 @@ test("renderAmuletLibraryRankingHtml: grouped header + duplicate badge", () => {
     byBaramee: [],
     byFit: [],
     topOverall: null,
+    axisHighlights: [],
   };
   const html = renderAmuletLibraryRankingHtml({
     pagePublicToken: "tok-main",
     library,
   });
-  assert.ok(html.includes("จากรายการสแกนทั้งหมด 5 รายการ"));
+  assert.ok(html.includes("คุณมีรายการสแกนแล้ว 5 รายการ"));
   assert.ok(html.includes("แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้"));
   assert.ok(html.includes("สแกนซ้ำ 3 ครั้ง"));
   assert.ok(html.includes("/r/tok-newest"));
+  assert.ok(!html.includes("พระเด่นประจำพลังของคุณ"));
 });

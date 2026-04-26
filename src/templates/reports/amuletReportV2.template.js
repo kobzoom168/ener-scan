@@ -172,8 +172,9 @@ const MV2_ET_TIME_ACTIVE = 40;
 /**
  * Sacred amulet timing section — strips จาก `weekdayItems` / `timeItems` ใน model (อ่านจาก timingV1)
  * @param {object} ts — return ของ `buildSacredAmuletTimingCardDisplay`
+ * @param {string} [energyTimingHref] — ลิงก์หน้าอธิบายวิธีคำนวณ (ถ้ามี จะแสดง CTA ท้ายการ์ดเดียวกัน)
  */
-function buildAmuletTimingVisualHtml(ts) {
+function buildAmuletTimingVisualHtml(ts, energyTimingHref = "") {
   const wdItems = ts.weekdayItems || [];
   const wdStrip = wdItems
     .map((it, i) => {
@@ -226,7 +227,14 @@ function buildAmuletTimingVisualHtml(ts) {
         <span class="mv2-timing-k mv2-timing-k--mode">${escapeHtml(String(ts.modeKicker || "").trim() || "แนวใช้ที่แนะนำ")}</span>
         <p class="mv2-timing-mode-body">${escapeHtml(ts.ritualLine)}</p>
         <p class="mv2-timing-hint mv2-timing-hint--compact">${escapeHtml(ts.hint)}</p>
-      </div>
+      </div>${
+        String(energyTimingHref || "").trim()
+          ? `<div class="mv2-timing-cta mv2-timing-cta--inline" role="region" aria-label="อธิบายจังหวะเสริมพลัง">
+        <p class="mv2-timing-cta-hint">อธิบายว่าทำไมระบบถึงแนะนำวันนี้และช่วงเวลานี้</p>
+        <a class="mv2-timing-cta-btn" href="${escapeHtml(String(energyTimingHref).trim())}">ดูวิธีคำนวณจังหวะเสริมพลัง</a>
+      </div>`
+          : ""
+      }
     </section>`;
 }
 
@@ -417,14 +425,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const usageDisclaimer = escapeHtml(vm.usageCaution.disclaimer || "");
 
   const ts = vm.timingSection;
-  const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
-  const energyTimingCtaHtml =
-    ts && energyTimingHref
-      ? `<div class="mv2-timing-cta" role="region" aria-label="อธิบายจังหวะเสริมพลัง">
-      <p class="mv2-timing-cta-hint">อธิบายว่าทำไมระบบถึงแนะนำวันนี้และช่วงเวลานี้</p>
-      <a class="mv2-timing-cta-btn" href="${escapeHtml(energyTimingHref)}">ดูวิธีคำนวณจังหวะเสริมพลัง</a>
-    </div>`
-      : "";
+  const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts, energyTimingHref) : "";
   const tac = /** @type {{ title?: string; recommendedWeekday?: string; secondaryWeekday?: string; confidence?: string; weekdayTip?: string; reasonShort?: string; actionLine?: string } | null} */ (
     vm.timingActionCard
   );
@@ -1109,45 +1110,65 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       color: #0c0e12;
       filter: brightness(1.06);
     }
-    .mv2-timing-cta {
-      margin: 0.55rem 0 0;
-      padding: 0.55rem 0.65rem 0.62rem;
-      border-radius: 12px;
-      border: 1px solid rgba(184, 135, 27, 0.22);
-      background: rgba(184, 135, 27, 0.06);
+    /* Timing explain CTA — อยู่ท้ายการ์ดจังหวะเสริมพลัง (ไม่แยก card) */
+    .mv2-timing-cta.mv2-timing-cta--inline {
+      margin: 0.75rem 0 0;
+      padding: 0.72rem 0 0.15rem;
+      border: none;
+      border-top: 1px solid rgba(184, 135, 27, 0.16);
+      border-radius: 0;
+      background: transparent;
       text-align: center;
     }
-    .mv2-timing-cta-hint {
-      margin: 0 0 0.45rem;
+    .mv2-timing-cta--inline .mv2-timing-cta-hint {
+      margin: 0 0 0.52rem;
       font-size: 0.72rem;
-      line-height: 1.45;
+      line-height: 1.48;
       color: var(--mv2a-muted);
+      max-width: 22rem;
+      margin-left: auto;
+      margin-right: auto;
     }
-    .mv2-timing-cta-btn {
+    .mv2-timing-cta--inline .mv2-timing-cta-btn {
       display: inline-block;
-      padding: 0.48rem 0.85rem;
-      font-size: 0.78rem;
-      font-weight: 700;
+      padding: 0.4rem 0.92rem;
+      font-size: 0.74rem;
+      font-weight: 600;
       border-radius: 999px;
       text-decoration: none;
-      color: #0c0e12;
-      background: linear-gradient(165deg, #f0d060, #c9a227);
-      border: 1px solid rgba(0, 0, 0, 0.2);
-      box-shadow: 0 2px 10px rgba(232, 197, 71, 0.22);
+      color: var(--mv2a-gold-dim);
+      background: rgba(184, 135, 27, 0.08);
+      border: 1px solid rgba(184, 135, 27, 0.32);
+      box-shadow: none;
     }
-    .mv2-timing-cta-btn:hover {
-      filter: brightness(1.05);
+    .mv2-timing-cta--inline .mv2-timing-cta-btn:hover {
+      filter: none;
+      background: rgba(184, 135, 27, 0.13);
+      border-color: rgba(184, 135, 27, 0.42);
     }
-    html.mv2a-theme-dark .mv2-timing-cta {
-      border-color: rgba(232, 197, 71, 0.35);
-      background: rgba(232, 197, 71, 0.07);
+    html.mv2a-theme-dark .mv2-timing-cta.mv2-timing-cta--inline {
+      border-top-color: rgba(232, 197, 71, 0.14);
     }
-    html.mv2a-theme-dark .mv2-timing-cta-hint {
-      color: rgba(226, 232, 240, 0.88);
+    html.mv2a-theme-dark .mv2-timing-cta--inline .mv2-timing-cta-hint {
+      color: rgba(148, 163, 184, 0.88);
     }
-    html.mv2a-theme-dark .mv2-timing-cta-btn {
-      color: #0c0e12;
-      background: linear-gradient(165deg, #f0d060, #c9a227);
+    html.mv2a-theme-dark .mv2-timing-cta--inline .mv2-timing-cta-btn {
+      color: rgba(250, 230, 170, 0.95);
+      background: rgba(232, 197, 71, 0.08);
+      border-color: rgba(232, 197, 71, 0.28);
+    }
+    html.mv2a-theme-dark .mv2-timing-cta--inline .mv2-timing-cta-btn:hover {
+      background: rgba(232, 197, 71, 0.12);
+      border-color: rgba(232, 197, 71, 0.38);
+    }
+    @media (max-width: 520px) {
+      .mv2-timing-cta.mv2-timing-cta--inline {
+        margin-top: 0.85rem;
+        padding-top: 0.82rem;
+      }
+      .mv2-timing-cta--inline .mv2-timing-cta-hint {
+        margin-bottom: 0.58rem;
+      }
     }
     .mv2-lib-mini {
       border-left: 3px solid rgba(120, 160, 220, 0.45);
@@ -1807,7 +1828,6 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     </section>
     ${timingActionCardHtml}
     ${timingCardHtml}
-    ${energyTimingCtaHtml}
     ${libraryMiniHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">

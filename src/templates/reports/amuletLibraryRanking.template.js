@@ -62,6 +62,59 @@ function panelHtml(list) {
 }
 
 /**
+ * @param {SacredAmuletLibraryItem} it
+ */
+function spotlightCardHtml(it) {
+  const href = `/r/${encodeURIComponent(it.publicToken)}`;
+  const img = it.thumbUrl
+    ? `<div class="alib-spot-img"><img src="${escapeHtml(it.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async"/></div>`
+    : `<div class="alib-spot-img alib-spot-img--empty" aria-hidden="true"></div>`;
+  const compat =
+    it.compatPercent != null
+      ? `<p class="alib-spot-line"><span class="alib-k">เข้ากับคุณ</span> <span class="alib-v">${escapeHtml(String(it.compatPercent))}%</span></p>`
+      : "";
+  return `
+  <article class="alib-spotlight" aria-label="อันดับหนึ่งโดยรวม">
+    <p class="alib-spot-badge">อันดับ 1 โดยรวมตอนนี้</p>
+    <div class="alib-spot-inner">
+      ${img}
+      <div class="alib-spot-main">
+        <p class="alib-spot-title">${escapeHtml(it.displayReportId)}</p>
+        <p class="alib-spot-line"><span class="alib-k">พลังรวม</span> <span class="alib-v">${escapeHtml(String(it.powerTotal))}</span></p>
+        <p class="alib-spot-line"><span class="alib-k">เด่นสุด</span> <span class="alib-v">${escapeHtml(it.peakPowerLabelTh)}</span></p>
+        ${compat}
+      </div>
+    </div>
+    <a class="alib-spot-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>
+  </article>`;
+}
+
+/**
+ * @param {{ labelTh: string, axisScore: number, item: SacredAmuletLibraryItem }} h
+ */
+function axisHighlightCardHtml(h) {
+  const { item, labelTh, axisScore } = h;
+  const href = `/r/${encodeURIComponent(item.publicToken)}`;
+  const img = item.thumbUrl
+    ? `<div class="alib-axis-img"><img src="${escapeHtml(item.thumbUrl)}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
+    : `<div class="alib-axis-img alib-axis-img--empty" aria-hidden="true"></div>`;
+  return `
+  <article class="alib-axis-card">
+    <p class="alib-axis-dim">${escapeHtml(labelTh)}</p>
+    <p class="alib-axis-rank-note">อันดับ 1 ด้านนี้</p>
+    <div class="alib-axis-body">
+      ${img}
+      <div class="alib-axis-text">
+        <p class="alib-axis-name">${escapeHtml(item.displayReportId)}</p>
+        <p class="alib-axis-score"><span class="alib-axis-score-num">${escapeHtml(String(axisScore))}</span> <span class="alib-axis-score-suf">คะแนน</span></p>
+        <p class="alib-axis-blurb">คะแนนสูงสุดด้านนี้ในคลังของคุณตอนนี้</p>
+      </div>
+    </div>
+    <a class="alib-axis-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>
+  </article>`;
+}
+
+/**
  * @param {object} p
  * @param {string} p.pagePublicToken
  * @param {SacredAmuletLibraryView} p.library
@@ -73,6 +126,23 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
   const dedupeExplainLine =
     Array.isArray(library.items) && library.items.length < n
       ? `<p class="alib-sub alib-sub--grouped">แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้</p>`
+      : "";
+  const spotlightIt = library.topOverall ?? library.byOverall?.[0] ?? null;
+  const spotlightHtml = spotlightIt ? spotlightCardHtml(spotlightIt) : "";
+  const axisHighlights = Array.isArray(library.axisHighlights)
+    ? library.axisHighlights
+    : [];
+  const axisCarouselSection =
+    axisHighlights.length > 0
+      ? `<section class="alib-axis-section" aria-labelledby="alib-axis-h">
+    <h2 id="alib-axis-h" class="alib-axis-h2">พระเด่นประจำพลังของคุณ</h2>
+    <div class="alib-axis-track" role="list">${axisHighlights
+      .map(
+        (h) =>
+          `<div class="alib-axis-slide" role="listitem">${axisHighlightCardHtml(h)}</div>`,
+      )
+      .join("")}</div>
+  </section>`
       : "";
   const tabs = [
     { id: "overall", label: "แรงสุดโดยรวม", list: library.byOverall },
@@ -130,6 +200,181 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
     .alib-h1 { margin: 0 0 0.35rem; font-size: 1.28rem; font-weight: 700; color: var(--alib-gold); }
     .alib-sub { margin: 0 0 1rem; font-size: 0.95rem; color: var(--alib-body); }
     .alib-sub--grouped { margin-top: -0.6rem; }
+    .alib-spotlight {
+      margin: 0 0 1rem;
+      padding: 0.75rem 0.85rem 0.8rem;
+      border-radius: 14px;
+      border: 1px solid rgba(180, 140, 40, 0.22);
+      background: linear-gradient(180deg, #fffefb 0%, #faf7f0 100%);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    .alib-spot-badge {
+      margin: 0 0 0.5rem;
+      font-size: 0.78rem;
+      font-weight: 800;
+      color: var(--alib-gold);
+      letter-spacing: 0.02em;
+    }
+    .alib-spot-inner { display: flex; gap: 0.6rem; align-items: flex-start; }
+    .alib-spot-img {
+      flex-shrink: 0;
+      width: 4.25rem;
+      height: 4.25rem;
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(200, 155, 30, 0.08);
+      border: 1px solid rgba(180, 140, 40, 0.2);
+    }
+    .alib-spot-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .alib-spot-img--empty {
+      background: repeating-linear-gradient(-45deg, rgba(200,155,30,0.1), rgba(200,155,30,0.1) 6px, transparent 6px, transparent 12px);
+    }
+    .alib-spot-main { flex: 1; min-width: 0; }
+    .alib-spot-title {
+      margin: 0 0 0.35rem;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--alib-body);
+      line-height: 1.3;
+    }
+    .alib-spot-line { margin: 0 0 0.2rem; font-size: 0.84rem; }
+    .alib-spot-btn {
+      display: block;
+      text-align: center;
+      margin-top: 0.55rem;
+      padding: 0.45rem 0.7rem;
+      font-size: 0.86rem;
+      font-weight: 700;
+      border-radius: 10px;
+      text-decoration: none;
+      color: #1a1610;
+      background: linear-gradient(165deg, #e8c547, #c9a227);
+      box-shadow: 0 2px 10px rgba(180, 140, 40, 0.18);
+    }
+    .alib-spot-btn:hover { filter: brightness(1.05); }
+    .alib-axis-section { margin: 0.25rem 0 0.35rem; }
+    .alib-axis-h2 {
+      margin: 0 0 0.55rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--alib-gold);
+      line-height: 1.35;
+    }
+    .alib-axis-track {
+      display: flex;
+      gap: 0.65rem;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      padding: 0.15rem 0 0.45rem;
+      margin: 0 -0.15rem;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    .alib-axis-slide {
+      flex: 0 0 min(82vw, 18rem);
+      max-width: 18rem;
+      scroll-snap-align: start;
+    }
+    @media (min-width: 640px) {
+      .alib-axis-slide {
+        flex: 0 0 calc((100% - 1.3rem) / 2.4);
+        min-width: 11rem;
+        max-width: 14rem;
+      }
+    }
+    .alib-axis-card {
+      height: 100%;
+      background: var(--alib-surface);
+      border: 1px solid rgba(180, 140, 40, 0.16);
+      border-radius: 14px;
+      padding: 0.55rem 0.65rem 0.6rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      display: flex;
+      flex-direction: column;
+    }
+    .alib-axis-dim {
+      margin: 0 0 0.15rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: var(--alib-gold);
+      line-height: 1.35;
+    }
+    .alib-axis-rank-note {
+      margin: 0 0 0.45rem;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--alib-muted);
+    }
+    .alib-axis-body { display: flex; gap: 0.5rem; align-items: flex-start; }
+    .alib-axis-img {
+      flex-shrink: 0;
+      width: 3.6rem;
+      height: 3.6rem;
+      border-radius: 9px;
+      overflow: hidden;
+      border: 1px solid rgba(180, 140, 40, 0.18);
+      background: rgba(200, 155, 30, 0.06);
+    }
+    .alib-axis-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .alib-axis-img--empty {
+      background: repeating-linear-gradient(-45deg, rgba(200,155,30,0.1), rgba(200,155,30,0.1) 5px, transparent 5px, transparent 10px);
+    }
+    .alib-axis-text { flex: 1; min-width: 0; }
+    .alib-axis-name {
+      margin: 0 0 0.2rem;
+      font-size: 0.86rem;
+      font-weight: 800;
+      color: var(--alib-body);
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .alib-axis-score { margin: 0 0 0.2rem; line-height: 1.2; }
+    .alib-axis-score-num { font-size: 1.35rem; font-weight: 800; color: var(--alib-gold); }
+    .alib-axis-score-suf { font-size: 0.72rem; font-weight: 600; color: var(--alib-muted); margin-left: 0.15rem; }
+    .alib-axis-blurb {
+      margin: 0;
+      font-size: 0.72rem;
+      line-height: 1.4;
+      color: var(--alib-muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .alib-axis-btn {
+      display: block;
+      text-align: center;
+      margin-top: 0.45rem;
+      padding: 0.38rem 0.5rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      border-radius: 9px;
+      text-decoration: none;
+      color: #1a1610;
+      background: linear-gradient(165deg, #e8c547, #c9a227);
+      box-shadow: 0 2px 8px rgba(180, 140, 40, 0.15);
+    }
+    .alib-axis-btn:hover { filter: brightness(1.04); }
+    .alib-show-all {
+      display: block;
+      width: 100%;
+      margin: 0.65rem 0 0.5rem;
+      padding: 0.52rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 800;
+      font-family: inherit;
+      line-height: 1.35;
+      color: #1a1610;
+      background: linear-gradient(165deg, #e8c547, #c9a227);
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(180, 140, 40, 0.2);
+    }
+    .alib-show-all:hover { filter: brightness(1.04); }
+    .alib-full-rankings { margin-top: 0.15rem; }
     .alib-tabs { margin-bottom: 1rem; }
     .alib-tab-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.65rem; }
     .alib-tab {
@@ -251,13 +496,18 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
   <div class="alib-wrap">
     <a class="alib-back" href="${escapeHtml(backHref)}">← กลับรายงาน</a>
     <h1 class="alib-h1">คลังพลังของคุณ</h1>
-    <p class="alib-sub">จากรายการสแกนทั้งหมด ${escapeHtml(String(n))} รายการ</p>
+    <p class="alib-sub">คุณมีรายการสแกนแล้ว ${escapeHtml(String(n))} รายการ</p>
     ${dedupeExplainLine}
     <p class="alib-safety" role="note">ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
+    ${spotlightHtml}
+    ${axisCarouselSection}
+    <button type="button" class="alib-show-all" id="alib-btn-show-rankings">ดูอันดับทั้งหมด</button>
+    <section id="alib-full-rankings" class="alib-full-rankings" hidden aria-label="อันดับเต็มตามหมวด">
     <div class="alib-tabs">
       <div class="alib-tab-row" role="tablist" aria-label="หมวดอันดับ">${tabButtons}</div>
       ${tabPanels}
     </div>
+    </section>
     <section class="alib-scan-footer" aria-labelledby="alib-scan-footer-h">
       <h2 id="alib-scan-footer-h" class="alib-scan-footer-title">อยากรู้ว่าองค์อื่นของคุณจะขึ้นอันดับไหน?</h2>
       <p class="alib-scan-footer-lead">สแกนเพิ่มเพื่อเทียบพลังรวม โชคลาภ คุ้มครอง เมตตา บารมี และความเข้ากัน</p>
@@ -267,6 +517,15 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
   </div>
   <script>
 (function () {
+  var showBtn = document.getElementById("alib-btn-show-rankings");
+  var rankings = document.getElementById("alib-full-rankings");
+  if (showBtn && rankings) {
+    showBtn.addEventListener("click", function () {
+      rankings.removeAttribute("hidden");
+      showBtn.setAttribute("hidden", "");
+      rankings.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
   var tabs = document.querySelectorAll("[data-alib-tab]");
   var panels = document.querySelectorAll("[data-alib-panel]");
   function activate(id) {

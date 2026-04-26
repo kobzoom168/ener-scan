@@ -45,6 +45,14 @@ import {
  */
 
 /**
+ * @typedef {Object} SacredAmuletAxisHighlight
+ * @property {AmuletPowerKey} axis
+ * @property {string} labelTh — ชื่อมิติพลัง (ไทย)
+ * @property {SacredAmuletLibraryItem} item
+ * @property {number} axisScore
+ */
+
+/**
  * @typedef {Object} SacredAmuletLibraryView
  * @property {number} totalCount
  * @property {number|null} groupedObjectCount
@@ -56,6 +64,7 @@ import {
  * @property {SacredAmuletLibraryItem[]} byBaramee
  * @property {SacredAmuletLibraryItem[]} byFit
  * @property {SacredAmuletLibraryItem|null} topOverall
+ * @property {SacredAmuletAxisHighlight[]} axisHighlights — สูงสุดต่อมิติ (สูงสุด 6 รายการ)
  */
 
 /**
@@ -458,18 +467,56 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
 }
 
 /**
+ * Sort comparator: higher axis score first; tie → สแกนใหม่กว่า; tie → compat สูงกว่า; tie → scan id.
+ * @param {SacredAmuletLibraryItem} a
+ * @param {SacredAmuletLibraryItem} b
+ * @param {AmuletPowerKey} axis
+ * @returns {number}
+ */
+function compareAxisScoreDesc(a, b, axis) {
+  const da = Number(a.axisScores?.[axis]) || 0;
+  const db = Number(b.axisScores?.[axis]) || 0;
+  if (db !== da) return db - da;
+  const ta = Date.parse(String(a.scannedAtIso || "")) || 0;
+  const tb = Date.parse(String(b.scannedAtIso || "")) || 0;
+  if (tb !== ta) return tb - ta;
+  const ca = a.compatPercent != null ? a.compatPercent : -1;
+  const cb = b.compatPercent != null ? b.compatPercent : -1;
+  if (cb !== ca) return cb - ca;
+  return String(b.scanResultV2Id || "").localeCompare(String(a.scanResultV2Id || ""));
+}
+
+/**
  * @param {SacredAmuletLibraryItem[]} items
  * @param {AmuletPowerKey} axis
  */
 function sortByAxisScore(items, axis) {
-  return [...items].sort((a, b) => {
-    const da = Number(a.axisScores?.[axis]) || 0;
-    const db = Number(b.axisScores?.[axis]) || 0;
-    if (db !== da) return db - da;
-    const ta = Date.parse(String(a.scannedAtIso || "")) || 0;
-    const tb = Date.parse(String(b.scannedAtIso || "")) || 0;
-    return tb - ta;
-  });
+  return [...items].sort((a, b) => compareAxisScoreDesc(a, b, axis));
+}
+
+/**
+ * คะแนนสูงสุดต่อมิติ (สูงสุด 6); ข้ามมิติที่ไม่มีคะแนน > 0
+ * @param {SacredAmuletLibraryItem[]} items
+ * @returns {SacredAmuletAxisHighlight[]}
+ */
+function pickSacredAmuletAxisHighlights(items) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  /** @type {SacredAmuletAxisHighlight[]} */
+  const out = [];
+  for (const axis of POWER_ORDER) {
+    const scored = items.filter((it) => {
+      const s = Number(it.axisScores?.[axis]);
+      return Number.isFinite(s) && s > 0;
+    });
+    if (!scored.length) continue;
+    const item = [...scored].sort((a, b) => compareAxisScoreDesc(a, b, axis))[0];
+    const axisScore = Math.round(Number(item.axisScores?.[axis]) || 0);
+    const labelTh =
+      POWER_LABEL_THAI[/** @type {keyof typeof POWER_LABEL_THAI} */ (axis)] ||
+      String(axis);
+    out.push({ axis, labelTh, item, axisScore });
+  }
+  return out;
 }
 
 function sortByOverall(items) {
@@ -553,6 +600,7 @@ export function buildSacredAmuletLibraryViewFromItems(scans) {
     byBaramee: sortByAxisScore(itemsMarked, "baramee"),
     byFit: sortByFit(itemsMarked),
     topOverall: sortByOverall(itemsMarked)[0] || null,
+    axisHighlights: pickSacredAmuletAxisHighlights(itemsMarked),
   };
 }
 
@@ -692,5 +740,6 @@ export function buildSacredAmuletLibraryViewFromPayloadOnly(payload) {
     byBaramee: items,
     byFit: items,
     topOverall: item,
+    axisHighlights: pickSacredAmuletAxisHighlights(items),
   };
 }

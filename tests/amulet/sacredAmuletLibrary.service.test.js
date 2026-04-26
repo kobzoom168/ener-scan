@@ -263,3 +263,82 @@ test("buildSacredAmuletLibraryViewFromItems: same sha256 groups even when public
   assert.equal(view.items[0]?.publicToken, "tok-sha-y");
   assert.equal(view.items[0]?.groupKeySource, "image_sha256");
 });
+
+test("buildSacredAmuletLibraryViewFromItems: axisHighlights picks highest score per axis", () => {
+  const hiLuck = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-luck",
+      reportId: "rluck",
+      generatedAt: "2026-04-20T08:00:00.000Z",
+      energyScore: 8.0,
+      compatibilityPercent: 70,
+      extra: { objectFingerprint: "fp-luck" },
+    }),
+    { id: "row-luck", created_at: "2026-04-20T08:00:00.000Z" },
+  );
+  const rawProtBase = makeRaw({
+    token: "tok-prot",
+    reportId: "rprot",
+    generatedAt: "2026-04-21T08:00:00.000Z",
+    energyScore: 7.5,
+    compatibilityPercent: 72,
+    extra: { objectFingerprint: "fp-prot" },
+  });
+  const hiProt = extractSacredAmuletLibraryItem(
+    {
+      ...rawProtBase,
+      amuletV1: {
+        ...rawProtBase.amuletV1,
+        powerCategories: {
+          protection: { key: "protection", score: 94, labelThai: "คุ้มครอง" },
+          metta: { key: "metta", score: 50, labelThai: "เมตตา" },
+          baramee: { key: "baramee", score: 50, labelThai: "บารมี" },
+          luck: { key: "luck", score: 60, labelThai: "โชคลาภ" },
+          fortune_anchor: { key: "fortune_anchor", score: 50, labelThai: "หนุนดวง" },
+          specialty: { key: "specialty", score: 50, labelThai: "เฉพาะทาง" },
+        },
+      },
+    },
+    { id: "row-prot", created_at: "2026-04-21T08:00:00.000Z" },
+  );
+  assert.ok(hiLuck && hiProt);
+  const view = buildSacredAmuletLibraryViewFromItems([hiLuck, hiProt]);
+  assert.ok(view?.axisHighlights);
+  const luckH = view.axisHighlights.find((h) => h.axis === "luck");
+  const protH = view.axisHighlights.find((h) => h.axis === "protection");
+  assert.equal(luckH?.item.publicToken, "tok-luck");
+  assert.equal(protH?.item.publicToken, "tok-prot");
+  assert.equal(luckH?.axisScore, 85);
+  assert.equal(protH?.axisScore, 94);
+});
+
+test("buildSacredAmuletLibraryViewFromItems: axisHighlights tie-break uses compat when score and date equal", () => {
+  const sameTime = "2026-04-20T08:00:00.000Z";
+  const lowCompat = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-tie-a",
+      reportId: "rtie-a",
+      generatedAt: sameTime,
+      energyScore: 7.0,
+      compatibilityPercent: 60,
+      extra: { objectFingerprint: "fp-tie-a" },
+    }),
+    { id: "row-tie-a", created_at: sameTime },
+  );
+  const highCompat = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-tie-b",
+      reportId: "rtie-b",
+      generatedAt: sameTime,
+      energyScore: 7.0,
+      compatibilityPercent: 88,
+      extra: { objectFingerprint: "fp-tie-b" },
+    }),
+    { id: "row-tie-b", created_at: sameTime },
+  );
+  assert.ok(lowCompat && highCompat);
+  const view = buildSacredAmuletLibraryViewFromItems([lowCompat, highCompat]);
+  assert.ok(view);
+  const luckH = view.axisHighlights.find((h) => h.axis === "luck");
+  assert.equal(luckH?.item.publicToken, "tok-tie-b");
+});

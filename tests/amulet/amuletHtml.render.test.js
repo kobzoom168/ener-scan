@@ -167,6 +167,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes("mv2-timing-mode-body"));
   assert.ok(html.includes("หนุนพลัง"));
   assert.ok(html.includes("/r/t/energy-timing"));
+  assert.ok(html.includes("mv2-timing-cta--inline"));
   assert.ok(html.includes('class="mv2-timing-cta-btn"'));
   assert.ok(html.includes("ดูวิธีคำนวณจังหวะเสริมพลัง"));
   assert.ok(
