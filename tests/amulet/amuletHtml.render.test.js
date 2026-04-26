@@ -457,9 +457,12 @@ test("renderAmuletReportV2Html: library mini box when sacredAmuletLibrary provid
   assert.ok(html.includes('class="mv2-card mv2-lib-mini"'), "mini box section in main report HTML");
   assert.ok(html.includes("คลังพลังของคุณ"));
   assert.ok(html.includes("คุณมีรายการสแกนแล้ว 1 รายการ"));
-  assert.ok(html.includes("อันดับ 1 ตอนนี้"));
-  assert.ok(html.includes("รายการที่พลังรวมเด่นสุดในคลังของคุณ"));
+  assert.ok(html.includes("อันดับ 1 โดยรวมตอนนี้"));
   assert.ok(html.includes("พลังรวม"));
+  assert.ok(html.includes("พระเด่นประจำพลังของคุณ"));
+  assert.ok(html.includes("เลื่อนดูพลังด้านอื่น ๆ"));
+  assert.ok(html.includes('id="mv2-lib-axis-carousel"'));
+  assert.ok(html.includes("mv2-lib-axis-viewport"));
   assert.ok(html.includes("/r/t/library"));
   assert.ok(html.includes("ดูอันดับทั้งหมดในคลัง"));
   assert.ok(html.includes("สแกนเพิ่มอีกสักรายการ"));
@@ -527,6 +530,7 @@ test("renderAmuletReportV2Html: library mini — no CTA when publicToken missing
     byMetta: [],
     byBaramee: [],
     byFit: [],
+    axisHighlights: [],
     topOverall: {
       scanResultV2Id: "",
       publicToken: "internal-only",
@@ -544,6 +548,7 @@ test("renderAmuletReportV2Html: library mini — no CTA when publicToken missing
   assert.ok(html.includes("คลังพลังของคุณ"));
   assert.ok(!html.includes("ดูอันดับทั้งหมดในคลัง"));
   assert.ok(!html.includes('class="mv2-lib-btn"'));
+  assert.ok(!html.includes('id="mv2-lib-axis-carousel"'), "no axis carousel without highlights");
 });
 
 test("renderAmuletReportV2Html: library mini — no nudge when totalCount > 1", () => {

@@ -738,8 +738,34 @@ export function buildSacredAmuletLibraryViewFromItems(scans, options = {}) {
 }
 
 /**
+ * Thumbnail paths to sign for embedded report: #1 overall + each axis highlight card (deduped by scan row / token).
+ * @param {SacredAmuletLibraryView} view
+ * @returns {SacredAmuletLibraryItem[]}
+ */
+function collectMiniLibraryThumbSignTargets(view) {
+  if (!view || typeof view !== "object") return [];
+  /** @type {SacredAmuletLibraryItem[]} */
+  const out = [];
+  const seen = new Set();
+  const add = (it) => {
+    if (!it || typeof it !== "object") return;
+    const sid = String(it.scanResultV2Id || "").trim();
+    const tok = String(it.publicToken || "").trim();
+    const key = sid || tok || String(it.uploadThumbnailPath || it.thumbUrl || "").trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(it);
+  };
+  add(view.topOverall);
+  for (const h of view.axisHighlights || []) {
+    if (h?.item) add(h.item);
+  }
+  return out;
+}
+
+/**
  * @param {string} lineUserId — LINE `userId` จาก report payload
- * @param {{ libraryThumbScope?: "full"|"mini" }} [opts] — `mini`: sign thumbnails only for {@link SacredAmuletLibraryView.topOverall} (report embed). `full`: all grouped cards for `/library`.
+ * @param {{ libraryThumbScope?: "full"|"mini" }} [opts] — `mini`: sign thumbnails for {@link SacredAmuletLibraryView.topOverall} plus items in {@link SacredAmuletLibraryView.axisHighlights} only (report embed). `full`: all grouped cards for `/library`.
  * @returns {Promise<SacredAmuletLibraryView|null>}
  */
 export async function buildSacredAmuletLibraryForLineUser(lineUserId, opts = {}) {
@@ -881,11 +907,7 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId, opts = {})
   if (!view) return null;
 
   const signTargets =
-    thumbScope === "mini"
-      ? view.topOverall
-        ? [view.topOverall]
-        : []
-      : view.items || [];
+    thumbScope === "mini" ? collectMiniLibraryThumbSignTargets(view) : view.items || [];
 
   const pathsToSign = [];
   const seenPath = new Set();
