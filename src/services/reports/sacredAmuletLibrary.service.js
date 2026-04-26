@@ -19,7 +19,7 @@ import {
   POWER_LABEL_THAI,
   POWER_ORDER,
 } from "../../amulet/amuletScores.util.js";
-import { resolveSacredAmuletLibraryThumbUrl } from "../../utils/reports/sacredAmuletLibraryThumbUrl.util.js";
+import { createScanUploadBucketSignedUrls } from "../../utils/storage/scanUploadStorageSignedUrl.util.js";
 
 /** @typedef {import("../../amulet/amuletScores.util.js").AmuletPowerKey} AmuletPowerKey */
 
@@ -547,6 +547,68 @@ function sortByOverall(items) {
   });
 }
 
+/**
+ * @param {SacredAmuletLibraryItem[]} items
+ * @param {Map<string, string>} signedByPath
+ */
+function applySignedThumbUrlsToLibraryItems(items, signedByPath) {
+  if (!Array.isArray(items)) return;
+  for (const it of items) {
+    if (!it || typeof it !== "object") continue;
+    const path = String(it.uploadThumbnailPath || "").trim();
+    const objFb = String(it._objectImageUrlForThumb ?? "").trim();
+    const objHttps = /^https?:\/\//i.test(objFb) ? objFb : "";
+
+    let next = "";
+    if (!path) {
+      next = objHttps;
+    } else if (/^https?:\/\//i.test(path)) {
+      next = path;
+    } else {
+      const signed = signedByPath.get(path);
+      if (signed && /^https?:\/\//i.test(signed)) next = signed;
+      else next = objHttps;
+    }
+    if (!next) {
+      const legacy = String(it.thumbUrl || "").trim();
+      if (/^https?:\/\//i.test(legacy)) next = legacy;
+    }
+    it.thumbUrl = next;
+    delete it._objectImageUrlForThumb;
+  }
+}
+
+/**
+ * @param {SacredAmuletLibraryView} view
+ */
+function stripSacredAmuletLibraryInternalThumbFields(view) {
+  if (!view || typeof view !== "object") return;
+  const lists = [
+    view.items,
+    view.byOverall,
+    view.byLuck,
+    view.byProtection,
+    view.byMetta,
+    view.byBaramee,
+    view.byFit,
+  ];
+  for (const arr of lists) {
+    if (!Array.isArray(arr)) continue;
+    for (const it of arr) {
+      if (it && typeof it === "object") delete it._objectImageUrlForThumb;
+    }
+  }
+  if (view.topOverall && typeof view.topOverall === "object") {
+    delete view.topOverall._objectImageUrlForThumb;
+  }
+  if (Array.isArray(view.axisHighlights)) {
+    for (const h of view.axisHighlights) {
+      const it = h?.item;
+      if (it && typeof it === "object") delete it._objectImageUrlForThumb;
+    }
+  }
+}
+
 function sortByFit(items) {
   return [...items].sort((a, b) => {
     const ca = a.compatPercent != null ? a.compatPercent : -1;
@@ -562,9 +624,10 @@ function sortByFit(items) {
  * Build grouped ranking view from raw scan-level items.
  *
  * @param {SacredAmuletLibraryItem[]} scans
+ * @param {{ retainThumbFallbackField?: boolean }} [options] — when true, keep `_objectImageUrlForThumb` for batch signing in {@link buildSacredAmuletLibraryForLineUser}
  * @returns {SacredAmuletLibraryView|null}
  */
-export function buildSacredAmuletLibraryViewFromItems(scans) {
+export function buildSacredAmuletLibraryViewFromItems(scans, options = {}) {
   if (!Array.isArray(scans) || scans.length === 0) return null;
   /** @type {Map<string, SacredAmuletLibraryItem[]>} */
   const grouped = new Map();
@@ -603,8 +666,10 @@ export function buildSacredAmuletLibraryViewFromItems(scans) {
   }
 
   const itemsMarked = markPossibleDuplicates(items);
-  for (const it of itemsMarked) {
-    if (it && typeof it === "object") delete it._objectImageUrlForThumb;
+  if (!options.retainThumbFallbackField) {
+    for (const it of itemsMarked) {
+      if (it && typeof it === "object") delete it._objectImageUrlForThumb;
+    }
   }
   const groupedObjectCount =
     itemsMarked.length < nearExactGroupedScans.length
@@ -628,11 +693,15 @@ export function buildSacredAmuletLibraryViewFromItems(scans) {
 
 /**
  * @param {string} lineUserId — LINE `userId` จาก report payload
+ * @param {{ libraryThumbScope?: "full"|"mini" }} [opts] — `mini`: sign thumbnails only for {@link SacredAmuletLibraryView.topOverall} (report embed). `full`: all grouped cards for `/library`.
  * @returns {Promise<SacredAmuletLibraryView|null>}
  */
-export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
+export async function buildSacredAmuletLibraryForLineUser(lineUserId, opts = {}) {
+  const buildWallStart = Date.now();
   const uid = String(lineUserId || "").trim();
   if (!uid) return null;
+
+  const thumbScope = opts.libraryThumbScope === "mini" ? "mini" : "full";
 
   const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
 
@@ -760,18 +829,54 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
     }
   }
 
-  for (const s of scans) {
-    const objFallback = String(s._objectImageUrlForThumb ?? "").trim();
-    const objHttps = /^https?:\/\//i.test(objFallback) ? objFallback : "";
-    s.thumbUrl = await resolveSacredAmuletLibraryThumbUrl(
-      s.uploadThumbnailPath,
-      objHttps,
-    );
-    delete s._objectImageUrlForThumb;
+  const view = buildSacredAmuletLibraryViewFromItems(scans, {
+    retainThumbFallbackField: true,
+  });
+  if (!view) return null;
+
+  const signTargets =
+    thumbScope === "mini"
+      ? view.topOverall
+        ? [view.topOverall]
+        : []
+      : view.items || [];
+
+  const pathsToSign = [];
+  const seenPath = new Set();
+  for (const it of signTargets) {
+    const p = String(it?.uploadThumbnailPath || "").trim();
+    if (!p || /^https?:\/\//i.test(p)) continue;
+    if (seenPath.has(p)) continue;
+    seenPath.add(p);
+    pathsToSign.push(p);
   }
 
-  const view = buildSacredAmuletLibraryViewFromItems(scans);
-  if (!view) return null;
+  /** @type {Map<string, string>} */
+  let signedByPath = new Map();
+  if (pathsToSign.length) {
+    const tSign = Date.now();
+    console.log(
+      JSON.stringify({
+        event: "LIBRARY_THUMB_SIGN_START",
+        count: pathsToSign.length,
+        scope: thumbScope,
+      }),
+    );
+    signedByPath = await createScanUploadBucketSignedUrls(pathsToSign, 86400);
+    console.log(
+      JSON.stringify({
+        event: "LIBRARY_THUMB_SIGN_DONE",
+        count: pathsToSign.length,
+        signedOk: signedByPath.size,
+        durationMs: Date.now() - tSign,
+        scope: thumbScope,
+      }),
+    );
+  }
+
+  applySignedThumbUrlsToLibraryItems(view.items || [], signedByPath);
+  stripSacredAmuletLibraryInternalThumbFields(view);
+
   const groupedItemsCount = view.items.length;
   const duplicateGroupsCount = view.items.filter((it) => it.scanCountInGroup > 1).length;
   console.log(
@@ -784,6 +889,14 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
       scansWithPhashCount,
       groupedItemsCount,
       duplicateGroupsCount,
+    }),
+  );
+  console.log(
+    JSON.stringify({
+      event: "LIBRARY_BUILD_DONE",
+      durationMs: Date.now() - buildWallStart,
+      scope: thumbScope,
+      groupedItemsCount,
     }),
   );
   return view;

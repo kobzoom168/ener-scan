@@ -106,7 +106,9 @@ export async function getReportByToken(req, res) {
     const uid = String(normPre.userId || "").trim();
     if (uid) {
       try {
-        sacredAmuletLibrary = await buildSacredAmuletLibraryForLineUser(uid);
+        sacredAmuletLibrary = await buildSacredAmuletLibraryForLineUser(uid, {
+          libraryThumbScope: "mini",
+        });
       } catch (libErr) {
         console.warn(
           JSON.stringify({
@@ -488,7 +490,9 @@ export async function getLibraryRankingByToken(req, res) {
   const uid = String(normalized.userId || "").trim();
   if (uid) {
     try {
-      library = await buildSacredAmuletLibraryForLineUser(uid);
+      library = await buildSacredAmuletLibraryForLineUser(uid, {
+        libraryThumbScope: "full",
+      });
     } catch (e) {
       console.warn(
         JSON.stringify({
