@@ -6,6 +6,9 @@
  *   node scripts/backfillScanUploadThumbnails.js --limit=20
  *   node scripts/backfillScanUploadThumbnails.js --limit=20 --dry-run=true
  *
+ * Safety: with normalized `APP_ENV=local` (including unset APP_ENV), the script exits
+ * unless you pass `--allow-local=true` (prevents accidental writes to a dev Supabase).
+ *
  * Env: same Supabase + SCAN_V2_UPLOAD_BUCKET as the app (see src/config/env.js).
  */
 import {
@@ -19,11 +22,12 @@ import { readScanImageFromStorage } from "../src/storage/scanUploadStorage.js";
 
 /**
  * @param {string[]} argv
- * @returns {{ limit: number, dryRun: boolean }}
+ * @returns {{ limit: number, dryRun: boolean, allowLocal: boolean }}
  */
 function parseCli(argv) {
   let limit = 20;
   let dryRun = false;
+  let allowLocal = false;
   for (const arg of argv.slice(2)) {
     if (arg.startsWith("--limit=")) {
       const n = Number.parseInt(String(arg.split("=")[1] || "").trim(), 10);
@@ -32,9 +36,13 @@ function parseCli(argv) {
       dryRun = true;
     } else if (arg === "--dry-run=false") {
       dryRun = false;
+    } else if (arg === "--allow-local=true") {
+      allowLocal = true;
+    } else if (arg === "--allow-local=false") {
+      allowLocal = false;
     }
   }
-  return { limit, dryRun };
+  return { limit, dryRun, allowLocal };
 }
 
 async function countMissingThumb() {
@@ -49,39 +57,36 @@ async function countMissingThumb() {
   return typeof count === "number" ? count : 0;
 }
 
-function maskHost(host) {
-  const s = String(host || "").trim().toLowerCase();
-  if (!s) return "unknown";
-  if (s.length <= 6) return "***";
-  return `${s.slice(0, 3)}***${s.slice(-3)}`;
-}
-
-function getSupabaseHostMasked() {
+function getSupabaseHostname() {
   try {
-    const u = new URL(String(env.SUPABASE_URL || ""));
-    return maskHost(u.host || "");
+    const h = new URL(String(env.SUPABASE_URL || "")).hostname;
+    return h || "(empty SUPABASE_URL)";
   } catch {
-    return maskHost(String(env.SUPABASE_URL || ""));
+    return "(invalid SUPABASE_URL)";
   }
 }
 
 async function main() {
-  assertDangerousScriptEnvGuard({ scriptName: "backfillScanUploadThumbnails" });
-  const { limit, dryRun } = parseCli(process.argv);
+  const { limit, dryRun, allowLocal } = parseCli(process.argv);
 
-  console.log(
-    JSON.stringify({
-      event: "BACKFILL_SCAN_THUMBNAILS_START",
-      appEnv: envRuntimeMeta.appEnv,
-      runningEnvSource: envRuntimeMeta.runningEnvSource,
-      envFileUsed: envRuntimeMeta.envFileUsed,
-      supabaseHostMasked: getSupabaseHostMasked(),
-      limit,
-      dryRun,
-    }),
-  );
+  if (envRuntimeMeta.appEnv === "local" && !allowLocal) {
+    console.error(
+      "Refusing to run thumbnail backfill with APP_ENV=local. Use staging env or pass --allow-local=true explicitly.",
+    );
+    process.exit(1);
+  }
+
+  assertDangerousScriptEnvGuard({ scriptName: "backfillScanUploadThumbnails" });
 
   const missingBefore = await countMissingThumb();
+
+  console.log("=== backfillScanUploadThumbnails (start) ===");
+  console.log(`appEnv:              ${envRuntimeMeta.appEnv}`);
+  console.log(`supabase hostname:   ${getSupabaseHostname()}`);
+  console.log(`limit:               ${limit}`);
+  console.log(`dryRun:              ${dryRun}`);
+  console.log(`missing_thumb:       ${missingBefore}`);
+  console.log("============================================");
 
   const { data: rows, error: qErr } = await supabase
     .from("scan_uploads")
