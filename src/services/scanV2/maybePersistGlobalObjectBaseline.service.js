@@ -26,6 +26,7 @@ import { extractObjectBaselineFromReportPayload } from "./objectBaselineExtract.
  * @returns {Promise<void>}
  */
 export async function maybePersistGlobalObjectBaselineAfterScanV2(p) {
+  try {
   if (!env.ENABLE_GLOBAL_OBJECT_BASELINE_PERSIST) {
     console.log(
       JSON.stringify({
@@ -185,6 +186,31 @@ export async function maybePersistGlobalObjectBaselineAfterScanV2(p) {
         jobIdPrefix: idPrefix8(p.jobId),
         lineUserIdPrefix: lineUserIdPrefix8(p.lineUserId),
         message: String(err?.message || err).slice(0, 240),
+        timestamp: scanV2TraceTs(),
+      }),
+    );
+  }
+  } catch (outerErr) {
+    let jobIdPrefix = "";
+    let lineUserIdPrefix = "";
+    try {
+      jobIdPrefix = idPrefix8(String(p?.jobId ?? ""));
+    } catch {
+      /* */
+    }
+    try {
+      lineUserIdPrefix = lineUserIdPrefix8(String(p?.lineUserId ?? ""));
+    } catch {
+      /* */
+    }
+    console.log(
+      JSON.stringify({
+        event: "GLOBAL_OBJECT_BASELINE_PERSIST_ERROR",
+        path: "worker-scan",
+        scope: "maybe_persist_outer",
+        jobIdPrefix,
+        lineUserIdPrefix,
+        message: String(outerErr?.message || outerErr).slice(0, 240),
         timestamp: scanV2TraceTs(),
       }),
     );
