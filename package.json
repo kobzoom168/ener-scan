@@ -20,6 +20,7 @@
     "payment:verify:prod": "cross-env APP_ENV=production node scripts/verify-payment.js",
     "backfill:phash:staging": "cross-env APP_ENV=staging node scripts/backfillScanPhashes.js",
     "backfill:phash:prod": "cross-env APP_ENV=production node scripts/backfillScanPhashes.js",
+    "backfill:scan-thumbnails": "node scripts/backfillScanUploadThumbnails.js",
     "analyze:style": "node scripts/analyze-top-quality.mjs",
     "report:style-effectiveness": "node scripts/report-style-reference-effectiveness.mjs",
     "conv-cost:readout": "node scripts/conv-cost-readout.mjs",
