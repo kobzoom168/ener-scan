@@ -218,6 +218,23 @@ export async function markScanUploadOriginalDeleted(uploadId) {
 }
 
 /**
+ * Persist library thumbnail storage path (not the LINE original `storage_path`).
+ *
+ * @param {string} uploadId
+ * @param {string} thumbnailPath — object path within `SCAN_V2_UPLOAD_BUCKET`
+ */
+export async function updateScanUploadThumbnailPath(uploadId, thumbnailPath) {
+  const id = String(uploadId || "").trim();
+  const path = String(thumbnailPath || "").trim();
+  if (!id || !path) throw new Error("updateScanUploadThumbnailPath_missing_args");
+  const { error } = await supabase
+    .from("scan_uploads")
+    .update({ thumbnail_path: path })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/**
  * Fetch `sha256` for uploads by id (same LINE user scope).
  *
  * @param {string[]} uploadIds

@@ -30,6 +30,7 @@ import {
   OUTBOUND_PRIORITY,
 } from "../../stores/scanV2/outboundPriority.js";
 import { readScanImageFromStorage } from "../../storage/scanUploadStorage.js";
+import { ensureScanUploadThumbnail } from "./scanUploadThumbnail.service.js";
 import { parseScanResultForHistory } from "../history/history.parser.js";
 import { createScanRequest, updateScanRequestStatus } from "../../stores/scanRequests.db.js";
 import {
@@ -161,6 +162,12 @@ export async function processScanJob(workerId, jobRow) {
     );
     return;
   }
+
+  await ensureScanUploadThumbnail({
+    upload,
+    lineUserId,
+    imageBuffer,
+  });
 
   // ── Perceptual image dedup ──────────────────────────────────────────────
   // If IMAGE_DEDUP_ENABLED, compute dHash of the image and check if the same

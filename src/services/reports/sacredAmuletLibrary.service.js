@@ -19,6 +19,7 @@ import {
   POWER_LABEL_THAI,
   POWER_ORDER,
 } from "../../amulet/amuletScores.util.js";
+import { resolveSacredAmuletLibraryThumbUrl } from "../../utils/reports/sacredAmuletLibraryThumbUrl.util.js";
 
 /** @typedef {import("../../amulet/amuletScores.util.js").AmuletPowerKey} AmuletPowerKey */
 
@@ -47,7 +48,7 @@ import {
  * @property {number|null} duplicateConfidence
  * @property {string|null} uploadId — scan_uploads.id when known (pin / retention)
  * @property {string|null} [uploadOriginalDeletedAt] — ISO when LINE original bytes were purged
- * @property {string|null} [uploadThumbnailPath] — reserved: future public URL from long-retention thumb
+ * @property {string|null} [uploadThumbnailPath] — `scan_uploads.thumbnail_path` (storage path or URL) for library thumb
  */
 
 /**
@@ -335,7 +336,7 @@ function applyConfirmedGrouping(scans) {
 
 /**
  * @param {unknown} raw
- * @param {{ id?: string, created_at?: string, uploadId?: string|null }} meta
+ * @param {{ id?: string, created_at?: string, uploadId?: string|null, uploadThumbnailPath?: string|null }} meta
  * @returns {SacredAmuletLibraryItem | null}
  */
 export function extractSacredAmuletLibraryItem(raw, meta) {
@@ -376,7 +377,15 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
   const compatPercent = Number.isFinite(cp) ? Math.round(Math.min(100, Math.max(0, cp))) : null;
 
   const img = String(norm.object?.objectImageUrl || "").trim();
-  const thumbUrl = /^https?:\/\//i.test(img) ? img : "";
+  const objectThumb = /^https?:\/\//i.test(img) ? img : "";
+  const metaThumb =
+    meta && "uploadThumbnailPath" in meta && meta.uploadThumbnailPath != null
+      ? String(meta.uploadThumbnailPath).trim()
+      : "";
+  const thumbUrl = resolveSacredAmuletLibraryThumbUrl(
+    metaThumb || null,
+    objectThumb,
+  );
 
   const scannedAtIso =
     String(meta?.created_at || "").trim() ||
@@ -470,6 +479,7 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     userConfirmedGroup,
     duplicateConfidence,
     uploadId: String(meta?.uploadId || "").trim() || null,
+    uploadThumbnailPath: metaThumb || null,
   };
 }
 
@@ -743,6 +753,11 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
     } catch {
       /* non-fatal: library still renders from payload thumbUrl */
     }
+  }
+
+  for (const s of scans) {
+    const objectOnlyThumb = String(s.thumbUrl || "").trim();
+    s.thumbUrl = resolveSacredAmuletLibraryThumbUrl(s.uploadThumbnailPath, objectOnlyThumb);
   }
 
   const view = buildSacredAmuletLibraryViewFromItems(scans);

@@ -4,6 +4,7 @@ import {
   buildSacredAmuletLibraryViewFromItems,
   extractSacredAmuletLibraryItem,
 } from "../../src/services/reports/sacredAmuletLibrary.service.js";
+import { resolveSacredAmuletLibraryThumbUrl } from "../../src/utils/reports/sacredAmuletLibraryThumbUrl.util.js";
 
 function makeRaw({
   token,
@@ -310,6 +311,67 @@ test("buildSacredAmuletLibraryViewFromItems: axisHighlights picks highest score 
   assert.equal(protH?.item.publicToken, "tok-prot");
   assert.equal(luckH?.axisScore, 85);
   assert.equal(protH?.axisScore, 94);
+});
+
+test("extractSacredAmuletLibraryItem: uploadThumbnailPath in meta wins over objectImageUrl", () => {
+  const it = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-thumb-meta",
+      reportId: "rthumb",
+      generatedAt: "2026-04-20T08:00:00.000Z",
+      energyScore: 7.0,
+      compatibilityPercent: 70,
+      imageUrl: "https://object.example/o.jpg",
+    }),
+    {
+      id: "row-thumb",
+      created_at: "2026-04-20T08:00:00.000Z",
+      uploadThumbnailPath: "https://thumb.example/t.webp",
+    },
+  );
+  assert.ok(it);
+  assert.equal(it.thumbUrl, "https://thumb.example/t.webp");
+});
+
+test("library thumb priority pass: thumbnail_path before object thumbUrl (simulated enrich)", () => {
+  const it = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-enrich",
+      reportId: "renr",
+      generatedAt: "2026-04-20T08:00:00.000Z",
+      energyScore: 7.0,
+      compatibilityPercent: 70,
+      imageUrl: "https://object.example/o.jpg",
+    }),
+    { id: "row-e", created_at: "2026-04-20T08:00:00.000Z" },
+  );
+  assert.ok(it);
+  assert.equal(it.thumbUrl, "https://object.example/o.jpg");
+  it.uploadThumbnailPath = "U1/upload-uuid/thumb.webp";
+  it.thumbUrl = resolveSacredAmuletLibraryThumbUrl(
+    it.uploadThumbnailPath,
+    it.thumbUrl,
+    (p) => `https://sb.example/${p}`,
+  );
+  assert.equal(it.thumbUrl, "https://sb.example/U1/upload-uuid/thumb.webp");
+});
+
+test("library thumb after enrich: no thumbnail_path keeps object URL", () => {
+  const it = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-no-thumb",
+      reportId: "rnt",
+      generatedAt: "2026-04-20T08:00:00.000Z",
+      energyScore: 7.0,
+      compatibilityPercent: 70,
+      imageUrl: "https://object.example/only.jpg",
+    }),
+    { id: "row-nt", created_at: "2026-04-20T08:00:00.000Z" },
+  );
+  assert.ok(it);
+  it.uploadThumbnailPath = null;
+  it.thumbUrl = resolveSacredAmuletLibraryThumbUrl(it.uploadThumbnailPath, it.thumbUrl, () => "");
+  assert.equal(it.thumbUrl, "https://object.example/only.jpg");
 });
 
 test("buildSacredAmuletLibraryViewFromItems: axisHighlights tie-break uses compat when score and date equal", () => {
