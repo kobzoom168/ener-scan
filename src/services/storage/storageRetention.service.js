@@ -14,10 +14,12 @@ import {
 } from "../../stores/paymentSlips.db.js";
 import { getPaymentById, clearPaymentSlipUrlAfterRetention } from "../../stores/payments.db.js";
 import { parseSupabasePublicObjectUrl } from "../../utils/storage/supabasePublicStorageUrl.util.js";
+import { isSupabaseStorageObjectAlreadyRemovedError } from "../../utils/storage/supabaseStorageRemove.util.js";
 
 /**
  * @param {string} bucket
  * @param {string[]} paths
+ * @returns {Promise<{ ok: boolean, removed: number, error?: string, alreadyGone?: boolean }>}
  */
 async function removeStorageObjects(bucket, paths) {
   const b = String(bucket || "").trim();
@@ -27,6 +29,16 @@ async function removeStorageObjects(bucket, paths) {
   if (!b || !ps.length) return { ok: true, removed: 0 };
   const { error } = await supabase.storage.from(b).remove(ps);
   if (error) {
+    if (isSupabaseStorageObjectAlreadyRemovedError(error)) {
+      console.log(
+        JSON.stringify({
+          event: "STORAGE_RETENTION_REMOVE_ALREADY_GONE",
+          bucket: b,
+          count: ps.length,
+        }),
+      );
+      return { ok: true, removed: 0, alreadyGone: true };
+    }
     console.error(
       JSON.stringify({
         event: "STORAGE_RETENTION_REMOVE_FAILED",
@@ -86,7 +98,19 @@ export async function runStorageRetentionSweepOnce() {
     if (!paymentId) continue;
 
     const pay = await getPaymentById(paymentId).catch(() => null);
-    const slipUrl = pay && typeof pay.slip_url === "string" ? pay.slip_url.trim() : "";
+    if (!pay) {
+      try {
+        await markPaymentSlipDeleted(paymentId);
+        slipsPurged += 1;
+      } catch (e) {
+        errors.push(`slip_orphan_${paymentId.slice(0, 8)}:${String(e?.message || e)}`);
+      }
+      continue;
+    }
+
+    const slipUrl = typeof pay.slip_url === "string" ? pay.slip_url.trim() : "";
+    let storageHandled = false;
+
     if (slipUrl) {
       const parsed = parseSupabasePublicObjectUrl(slipUrl);
       if (parsed?.bucket && parsed?.path) {
@@ -95,6 +119,7 @@ export async function runStorageRetentionSweepOnce() {
           errors.push(`slip_${paymentId.slice(0, 8)}:${rm.error || "remove_failed"}`);
           continue;
         }
+        storageHandled = true;
       } else {
         const fallbackBucket = env.PAYMENT_SLIP_BUCKET;
         const lineUid = String(pay?.line_user_id || "").trim();
@@ -106,11 +131,27 @@ export async function runStorageRetentionSweepOnce() {
             errors.push(`slip_path_${paymentId.slice(0, 8)}:${rm.error || "remove_failed"}`);
             continue;
           }
-        } else {
-          errors.push(`slip_parse_${paymentId.slice(0, 8)}:no_url_or_path`);
-          continue;
+          storageHandled = true;
         }
       }
+    } else if (pay) {
+      const fallbackBucket = env.PAYMENT_SLIP_BUCKET;
+      const lineUid = String(pay.line_user_id || "").trim();
+      const slipMid = String(pay.slip_message_id || "").trim();
+      if (lineUid && slipMid) {
+        const objectPath = `${lineUid}/${paymentId}/${slipMid}.jpg`;
+        const rm = await removeStorageObjects(fallbackBucket, [objectPath]);
+        if (!rm.ok) {
+          errors.push(`slip_path_${paymentId.slice(0, 8)}:${rm.error || "remove_failed"}`);
+          continue;
+        }
+        storageHandled = true;
+      }
+    }
+
+    if (!storageHandled && slipUrl) {
+      errors.push(`slip_parse_${paymentId.slice(0, 8)}:no_url_or_path`);
+      continue;
     }
 
     try {

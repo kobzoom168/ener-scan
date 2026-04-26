@@ -723,6 +723,7 @@ export const env = {
   ENABLE_MAINTENANCE_WORKER: process.env.ENABLE_MAINTENANCE_WORKER === "true",
   /**
    * Daily (default) purge of expired scan_upload originals + payment slip raw images.
+   * Default false — set true only on the dedicated retention worker service, not on web.
    * Run: ENABLE_STORAGE_RETENTION_WORKER=true node src/workers/storageRetentionWorker.js
    */
   ENABLE_STORAGE_RETENTION_WORKER:

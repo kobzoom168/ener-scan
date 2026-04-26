@@ -120,14 +120,8 @@ export async function findScanUploadBySha256AndUser(
 }
 
 /**
- * Fetch `sha256` for uploads by id (same LINE user scope).
- *
- * @param {string[]} uploadIds
- * @param {string} lineUserId
- * @returns {Promise<Array<{ id: string, sha256: string | null }>>}
- */
-/**
  * Original LINE-ingest files eligible for purge (free tier, not pinned, not yet deleted).
+ * Does not select `thumbnail_path` for deletion — worker removes `storage_path` (original) only.
  * @param {string} beforeIso — delete where original_expires_at < beforeIso
  * @param {number} [limit]
  * @returns {Promise<Array<{ id: string, line_user_id: string, storage_bucket: string, storage_path: string }>>}
@@ -139,12 +133,40 @@ export async function listScanUploadsOriginalDeletionCandidates(beforeIso, limit
     .select("id, line_user_id, storage_bucket, storage_path")
     .is("original_deleted_at", null)
     .eq("is_pinned", false)
+    .neq("storage_tier", "paid_future")
     .not("original_expires_at", "is", null)
     .lt("original_expires_at", beforeIso)
     .not("storage_path", "is", null)
     .neq("storage_path", "")
     .limit(lim);
 
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Retention / UI: original purge state + future thumb path (do not delete in worker v1).
+ *
+ * @param {string[]} uploadIds
+ * @param {string} lineUserId
+ * @returns {Promise<Array<{ id: string, original_deleted_at: string | null, thumbnail_path: string | null }>>}
+ */
+export async function listScanUploadRetentionFieldsByIds(uploadIds, lineUserId) {
+  const ids = Array.from(
+    new Set(
+      (Array.isArray(uploadIds) ? uploadIds : [])
+        .map((x) => String(x || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const uid = String(lineUserId || "").trim();
+  if (!ids.length || !uid) return [];
+
+  const { data, error } = await supabase
+    .from("scan_uploads")
+    .select("id, original_deleted_at, thumbnail_path")
+    .eq("line_user_id", uid)
+    .in("id", ids);
   if (error) throw error;
   return Array.isArray(data) ? data : [];
 }
@@ -195,6 +217,13 @@ export async function markScanUploadOriginalDeleted(uploadId) {
   if (error) throw error;
 }
 
+/**
+ * Fetch `sha256` for uploads by id (same LINE user scope).
+ *
+ * @param {string[]} uploadIds
+ * @param {string} lineUserId
+ * @returns {Promise<Array<{ id: string, sha256: string | null }>>}
+ */
 export async function listScanUploadsSha256ByIds(uploadIds, lineUserId) {
   const ids = Array.from(
     new Set(

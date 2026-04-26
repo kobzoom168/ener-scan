@@ -5,7 +5,10 @@
 import { listScanResultsV2PayloadRowsForLineUser } from "../../stores/scanV2/scanResultsV2.db.js";
 import { listScanPhashesByScanResultIds } from "../../stores/scanV2/imageDedupCache.db.js";
 import { listScanJobsUploadIdsByIds } from "../../stores/scanV2/scanJobs.db.js";
-import { listScanUploadsSha256ByIds } from "../../stores/scanV2/scanUploads.db.js";
+import {
+  listScanUploadRetentionFieldsByIds,
+  listScanUploadsSha256ByIds,
+} from "../../stores/scanV2/scanUploads.db.js";
 import { normalizeReportPayloadForRender } from "../../utils/reports/reportPayloadNormalize.util.js";
 import { formatEsDisplayReportId } from "../../utils/reports/reportHtmlTrust.util.js";
 import { computeAmuletOrdAndAlignFromPayload } from "../../amulet/amuletOrdAlign.util.js";
@@ -43,6 +46,8 @@ import {
  * @property {boolean} userConfirmedGroup
  * @property {number|null} duplicateConfidence
  * @property {string|null} uploadId — scan_uploads.id when known (pin / retention)
+ * @property {string|null} [uploadOriginalDeletedAt] — ISO when LINE original bytes were purged
+ * @property {string|null} [uploadThumbnailPath] — reserved: future public URL from long-retention thumb
  */
 
 /**
@@ -712,6 +717,34 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
     }
   }
   const scansWithPhashCount = scans.filter((s) => String(s.imagePhash || "").trim()).length;
+
+  const uploadIdsForRetention = [
+    ...new Set(scans.map((s) => String(s.uploadId || "").trim()).filter(Boolean)),
+  ];
+  if (uploadIdsForRetention.length && uid) {
+    try {
+      const upMeta = await listScanUploadRetentionFieldsByIds(
+        uploadIdsForRetention,
+        uid,
+      );
+      const byUp = new Map(upMeta.map((r) => [String(r.id || "").trim(), r]));
+      for (const s of scans) {
+        const upid = String(s.uploadId || "").trim();
+        if (!upid) continue;
+        const row = byUp.get(upid);
+        if (!row) continue;
+        s.uploadOriginalDeletedAt = row.original_deleted_at
+          ? String(row.original_deleted_at)
+          : null;
+        s.uploadThumbnailPath = row.thumbnail_path
+          ? String(row.thumbnail_path)
+          : null;
+      }
+    } catch {
+      /* non-fatal: library still renders from payload thumbUrl */
+    }
+  }
+
   const view = buildSacredAmuletLibraryViewFromItems(scans);
   if (!view) return null;
   const groupedItemsCount = view.items.length;

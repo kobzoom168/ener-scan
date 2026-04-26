@@ -1,6 +1,9 @@
--- Ener Scan: storage retention policy (additive).
+-- Ener Scan: storage retention policy (additive, safe to re-run).
 -- Groups: (1) original LINE ingest in scan_uploads, (2) thumbnail_path on same row,
 -- (3) payment slip files + payment_slips metadata, (4) scan_results_v2 payload — never deleted here.
+--
+-- Re-run: ALTER/CREATE IF NOT EXISTS; backfill only fills NULL expiry on rows not yet purged;
+-- payment_slips INSERT uses ON CONFLICT DO NOTHING (no duplicate rows).
 
 -- ---------------------------------------------------------------------------
 -- scan_uploads: original expiry, thumbnail path, pin, tier, deletion audit
@@ -10,6 +13,7 @@ ALTER TABLE public.scan_uploads
 
 ALTER TABLE public.scan_uploads
   ADD COLUMN IF NOT EXISTS thumbnail_path text;
+-- Future: populate when generating long-retention WebP/JPEG; library may prefer this URL over payload objectImageUrl.
 
 ALTER TABLE public.scan_uploads
   ADD COLUMN IF NOT EXISTS is_pinned boolean NOT NULL DEFAULT false;
@@ -34,10 +38,16 @@ CREATE INDEX IF NOT EXISTS idx_scan_uploads_line_user_pinned
   ON public.scan_uploads (line_user_id)
   WHERE COALESCE(is_pinned, false) = true;
 
--- Backfill expiry for existing rows (30 days from ingest).
+-- Ops / reporting: rows already purged (optional; partial keeps index small).
+CREATE INDEX IF NOT EXISTS idx_scan_uploads_original_deleted_at
+  ON public.scan_uploads (original_deleted_at DESC)
+  WHERE original_deleted_at IS NOT NULL;
+
+-- Backfill expiry for existing rows (30 days from ingest). Skip rows already purged.
 UPDATE public.scan_uploads
 SET original_expires_at = created_at + interval '30 days'
-WHERE original_expires_at IS NULL;
+WHERE original_expires_at IS NULL
+  AND original_deleted_at IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- payment_slips: slip file retention (payment row keeps amount/status/ref)

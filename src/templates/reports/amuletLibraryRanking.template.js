@@ -69,6 +69,7 @@ function spotlightPinFormHtml(pagePublicToken, it) {
   const sid = String(it?.scanResultV2Id || "").trim();
   const up = String(it?.uploadId || "").trim();
   if (!sid || !up) return "";
+  if (it?.uploadOriginalDeletedAt) return "";
   const action = `/r/${encodeURIComponent(pagePublicToken)}/library/pin`;
   return `<form method="post" action="${escapeHtml(action)}" class="alib-pin-form">
     <input type="hidden" name="scanResultV2Id" value="${escapeHtml(sid)}" />
@@ -83,7 +84,7 @@ function spotlightPinFormHtml(pagePublicToken, it) {
 function spotlightCardHtml(it, pagePublicToken) {
   const href = `/r/${encodeURIComponent(it.publicToken)}`;
   const img = it.thumbUrl
-    ? `<div class="alib-spot-img"><img src="${escapeHtml(it.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async"/></div>`
+    ? `<div class="alib-spot-img"><img src="${escapeHtml(it.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/></div>`
     : `<div class="alib-spot-img alib-spot-img--empty" aria-hidden="true"></div>`;
   const compat =
     it.compatPercent != null
@@ -114,7 +115,7 @@ function axisHighlightCardHtml(h) {
   const { item, labelTh, axisScore } = h;
   const href = `/r/${encodeURIComponent(item.publicToken)}`;
   const img = item.thumbUrl
-    ? `<div class="alib-axis-img"><img src="${escapeHtml(item.thumbUrl)}" alt="" width="68" height="68" loading="lazy" decoding="async"/></div>`
+    ? `<div class="alib-axis-img"><img src="${escapeHtml(item.thumbUrl)}" alt="" width="68" height="68" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/></div>`
     : `<div class="alib-axis-img alib-axis-img--empty" aria-hidden="true"></div>`;
   return `
   <article class="alib-axis-card">

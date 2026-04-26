@@ -439,6 +439,7 @@ export async function setPaymentSlipPendingVerify({
 
 /**
  * Clear slip image URL after raw object deleted from storage (record + amounts remain).
+ * Does not modify `payment_slips.slip_hash` (retained for audit).
  * @param {string} paymentId
  */
 export async function clearPaymentSlipUrlAfterRetention(paymentId) {

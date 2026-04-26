@@ -3,6 +3,7 @@
  * Run: ENABLE_STORAGE_RETENTION_WORKER=true node src/workers/storageRetentionWorker.js
  *
  * Default interval: 24h (set STORAGE_RETENTION_INTERVAL_MS).
+ * Keep ENABLE_STORAGE_RETENTION_WORKER unset/false on the web app — only this worker process.
  */
 import { env } from "../config/env.js";
 import { startWorkerHeartbeatLoop } from "../redis/scanV2Redis.js";
