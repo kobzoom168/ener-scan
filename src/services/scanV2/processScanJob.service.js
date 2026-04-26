@@ -121,6 +121,10 @@ export async function processScanJob(workerId, jobRow) {
   /** @type {string | null} */
   let reportPublicationId = null;
 
+  /** Hoisted for {@link buildReportPayloadFromScan} + baseline persist (must survive `try/catch` that ends before v2 insert). */
+  /** @type {string | null} */
+  let stableFeatureSeed = null;
+
   console.log(
     JSON.stringify({
       event: "SCAN_JOB_CLAIMED",
@@ -672,8 +676,6 @@ export async function processScanJob(workerId, jobRow) {
       );
     }
 
-    /** @type {string | null} */
-    let stableFeatureSeed = null;
     // TODO(sacred_amulet rollout): keep STABLE_FEATURE_SEED_ENABLED off-by-default; validate seed stability
     // before enabling globally — do not remove the fallback path when seed is null.
     if (env.STABLE_FEATURE_SEED_ENABLED && objectCheck === "single_supported") {
@@ -1304,6 +1306,18 @@ export async function processScanJob(workerId, jobRow) {
       : null,
     catSig,
     reportObjectFamily,
+  }).catch((baselinePersistErr) => {
+    console.log(
+      JSON.stringify({
+        event: "GLOBAL_OBJECT_BASELINE_PERSIST_ERROR",
+        path: "worker-scan",
+        scope: "process_scan_job_unhandled_reject",
+        jobIdPrefix: idPrefix8(jobId),
+        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+        message: String(baselinePersistErr?.message || baselinePersistErr).slice(0, 240),
+        timestamp: scanV2TraceTs(),
+      }),
+    );
   });
 
   if (publicToken && reportUrl && scanResultV2Id) {
