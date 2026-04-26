@@ -29,6 +29,7 @@ import { createScanUploadBucketSignedUrls } from "../../utils/storage/scanUpload
  * @property {string} publicToken
  * @property {string} thumbUrl
  * @property {number} powerTotal
+ * @property {AmuletPowerKey} peakPowerKey — dominant object axis (for library tab filters)
  * @property {string} peakPowerLabelTh
  * @property {number|null} compatPercent
  * @property {string|null} scannedAtIso
@@ -97,6 +98,44 @@ function readPath(obj, path) {
     cur = /** @type {Record<string, unknown>} */ (cur)[p];
   }
   return cur;
+}
+
+/**
+ * Dominant “peak” axis for library ranking tabs: object score order from {@link computeAmuletOrdAndAlignFromPayload}
+ * (`ord[0]`), else `amuletV1.primaryPower`, else highest score in `axisScores` (ties → earlier in `POWER_ORDER`).
+ *
+ * @param {import("./reportPayload.types.js").ReportPayload} norm
+ * @param {NonNullable<import("./reportPayload.types.js").ReportPayload["amuletV1"]>} am
+ * @param {Record<string, number>} axisScores
+ * @returns {AmuletPowerKey}
+ */
+function resolveSacredAmuletLibraryPeakPowerKey(norm, am, axisScores) {
+  try {
+    const m = computeAmuletOrdAndAlignFromPayload(norm);
+    const first = m?.ord?.[0];
+    if (first && POWER_ORDER.includes(/** @type {AmuletPowerKey} */ (first))) {
+      return /** @type {AmuletPowerKey} */ (first);
+    }
+  } catch {
+    /* keep fallbacks */
+  }
+  const primary = String(am?.primaryPower || "").trim();
+  if (primary && POWER_ORDER.includes(/** @type {AmuletPowerKey} */ (primary))) {
+    return /** @type {AmuletPowerKey} */ (primary);
+  }
+  /** @type {AmuletPowerKey} */
+  let bestKey = "protection";
+  let bestSc = -Infinity;
+  for (const k of POWER_ORDER) {
+    const sc = Number(axisScores[k]) || 0;
+    if (sc > bestSc) {
+      bestSc = sc;
+      bestKey = /** @type {AmuletPowerKey} */ (k);
+    } else if (sc === bestSc && POWER_ORDER.indexOf(k) < POWER_ORDER.indexOf(bestKey)) {
+      bestKey = /** @type {AmuletPowerKey} */ (k);
+    }
+  }
+  return bestKey;
 }
 
 /**
@@ -362,17 +401,6 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     ? Math.round(Math.min(100, Math.max(0, es * 10)))
     : 0;
 
-  let peakKey = String(am.primaryPower || "").trim() || "protection";
-  try {
-    const m = computeAmuletOrdAndAlignFromPayload(norm);
-    if (m?.objectPeakKey) peakKey = String(m.objectPeakKey);
-  } catch {
-    /* keep primary */
-  }
-  const peakPowerLabelTh =
-    POWER_LABEL_THAI[/** @type {keyof typeof POWER_LABEL_THAI} */ (peakKey)] ||
-    POWER_LABEL_THAI.protection;
-
   const cp = Number(norm.summary?.compatibilityPercent);
   const compatPercent = Number.isFinite(cp) ? Math.round(Math.min(100, Math.max(0, cp))) : null;
 
@@ -401,6 +429,11 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     const sc = Number(am.powerCategories?.[k]?.score);
     axisScores[k] = Number.isFinite(sc) ? sc : 0;
   }
+
+  const peakPowerKey = resolveSacredAmuletLibraryPeakPowerKey(norm, am, axisScores);
+  const peakPowerLabelTh =
+    POWER_LABEL_THAI[/** @type {keyof typeof POWER_LABEL_THAI} */ (peakPowerKey)] ||
+    POWER_LABEL_THAI.protection;
 
   const identity = resolveGroupIdentity(raw, norm, meta);
   const rawObj = /** @type {Record<string, unknown>} */ (raw);
@@ -461,6 +494,7 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     publicToken: tok,
     thumbUrl,
     powerTotal,
+    peakPowerKey,
     peakPowerLabelTh,
     compatPercent,
     scannedAtIso,
@@ -681,10 +715,22 @@ export function buildSacredAmuletLibraryViewFromItems(scans, options = {}) {
     groupedObjectCount,
     items: itemsMarked,
     byOverall: sortByOverall(itemsMarked),
-    byLuck: sortByAxisScore(itemsMarked, "luck"),
-    byProtection: sortByAxisScore(itemsMarked, "protection"),
-    byMetta: sortByAxisScore(itemsMarked, "metta"),
-    byBaramee: sortByAxisScore(itemsMarked, "baramee"),
+    byLuck: sortByAxisScore(
+      itemsMarked.filter((it) => it.peakPowerKey === "luck"),
+      "luck",
+    ),
+    byProtection: sortByAxisScore(
+      itemsMarked.filter((it) => it.peakPowerKey === "protection"),
+      "protection",
+    ),
+    byMetta: sortByAxisScore(
+      itemsMarked.filter((it) => it.peakPowerKey === "metta"),
+      "metta",
+    ),
+    byBaramee: sortByAxisScore(
+      itemsMarked.filter((it) => it.peakPowerKey === "baramee"),
+      "baramee",
+    ),
     byFit: sortByFit(itemsMarked),
     topOverall: sortByOverall(itemsMarked)[0] || null,
     axisHighlights: pickSacredAmuletAxisHighlights(itemsMarked),
@@ -914,18 +960,5 @@ export function buildSacredAmuletLibraryViewFromPayloadOnly(payload) {
   });
   if (!item) return null;
   delete item._objectImageUrlForThumb;
-  const items = [item];
-  return {
-    totalCount: 1,
-    groupedObjectCount: null,
-    items,
-    byOverall: items,
-    byLuck: items,
-    byProtection: items,
-    byMetta: items,
-    byBaramee: items,
-    byFit: items,
-    topOverall: item,
-    axisHighlights: pickSacredAmuletAxisHighlights(items),
-  };
+  return buildSacredAmuletLibraryViewFromItems([item]);
 }

@@ -53,10 +53,11 @@ function rankCardHtml(it, rank) {
 
 /**
  * @param {SacredAmuletLibraryItem[]} list
+ * @param {string} [emptyText]
  */
-function panelHtml(list) {
+function panelHtml(list, emptyText = "ยังไม่มีข้อมูลในหมวดนี้") {
   if (!list.length) {
-    return `<p class="alib-empty">ยังไม่มีข้อมูลในหมวดนี้</p>`;
+    return `<p class="alib-empty">${escapeHtml(emptyText)}</p>`;
   }
   return list.map((it, i) => rankCardHtml(it, i + 1)).join("");
 }
@@ -192,13 +193,14 @@ export function renderAmuletLibraryRankingHtml({
     <p class="alib-axis-scroll-hint">เลื่อนดูพลังด้านอื่น ๆ</p>
   </section>`
       : "";
+  const emptyAxisTab = "ยังไม่มีรายการที่เด่นด้านนี้";
   const tabs = [
-    { id: "overall", label: "แรงสุดโดยรวม", list: library.byOverall },
-    { id: "luck", label: "โชคลาภสูงสุด", list: library.byLuck },
-    { id: "protection", label: "คุ้มครองสูงสุด", list: library.byProtection },
-    { id: "metta", label: "เมตตาสูงสุด", list: library.byMetta },
-    { id: "baramee", label: "บารมีสูงสุด", list: library.byBaramee },
-    { id: "fit", label: "เข้ากับคุณที่สุด", list: library.byFit },
+    { id: "overall", label: "แรงสุดโดยรวม", list: library.byOverall, emptyText: "ยังไม่มีข้อมูลในหมวดนี้" },
+    { id: "luck", label: "โชคลาภสูงสุด", list: library.byLuck, emptyText: emptyAxisTab },
+    { id: "protection", label: "คุ้มครองสูงสุด", list: library.byProtection, emptyText: emptyAxisTab },
+    { id: "metta", label: "เมตตาสูงสุด", list: library.byMetta, emptyText: emptyAxisTab },
+    { id: "baramee", label: "บารมีสูงสุด", list: library.byBaramee, emptyText: emptyAxisTab },
+    { id: "fit", label: "เข้ากับคุณที่สุด", list: library.byFit, emptyText: "ยังไม่มีข้อมูลในหมวดนี้" },
   ];
 
   const tabButtons = tabs
@@ -211,7 +213,7 @@ export function renderAmuletLibraryRankingHtml({
   const tabPanels = tabs
     .map(
       (t, i) =>
-        `<div class="alib-panel${i === 0 ? " alib-panel--on" : ""}" data-alib-panel="${escapeHtml(t.id)}" role="tabpanel">${panelHtml(t.list)}</div>`,
+        `<div class="alib-panel${i === 0 ? " alib-panel--on" : ""}" data-alib-panel="${escapeHtml(t.id)}" role="tabpanel">${panelHtml(t.list, t.emptyText)}</div>`,
     )
     .join("");
 

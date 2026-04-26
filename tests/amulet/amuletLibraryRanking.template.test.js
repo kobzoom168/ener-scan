@@ -100,6 +100,10 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   assert.ok(html.includes("เลื่อนดูพลังด้านอื่น ๆ"));
   assert.ok(html.includes("ดูอันดับทั้งหมดในคลัง"));
   assert.ok(html.includes("เด่นสุดในด้านนี้"));
+  assert.ok(
+    html.includes("ยังไม่มีรายการที่เด่นด้านนี้"),
+    "axis-specific ranking tab empty copy when no peak match",
+  );
 });
 
 test("renderAmuletLibraryRankingHtml: grouped header + duplicate badge", () => {

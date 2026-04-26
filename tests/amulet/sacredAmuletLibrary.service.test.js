@@ -58,6 +58,7 @@ function makeRaw({
       flexSurface: { headline: "ทดสอบ", fitLine: "", bullets: [], mainEnergyShort: "โชคลาภ" },
       htmlReport: { lifeAreaBlurbs: {}, usageCautionLines: [] },
     },
+    birthdateUsed: "1990-06-15",
     ...extra,
   };
 }
@@ -396,6 +397,124 @@ test("library thumb: signed URL fail falls back to payload objectImageUrl", asyn
   });
   delete it._objectImageUrlForThumb;
   assert.equal(it.thumbUrl, "https://object.example/fallback.jpg");
+});
+
+test("buildSacredAmuletLibraryViewFromItems: ranking tabs by axis filter by peakPowerKey (not raw axis score)", () => {
+  const itemA = extractSacredAmuletLibraryItem(
+    makeRaw({
+      token: "tok-rank-luck-peak",
+      reportId: "rrl",
+      generatedAt: "2026-04-20T08:00:00.000Z",
+      energyScore: 8.2,
+      compatibilityPercent: 71,
+      primaryPower: "luck",
+      extra: { objectFingerprint: "fp-rank-luck" },
+    }),
+    { id: "row-rrl", created_at: "2026-04-20T08:00:00.000Z" },
+  );
+  const rawB = makeRaw({
+    token: "tok-rank-baramee-high-luck",
+    reportId: "rrb",
+    generatedAt: "2026-04-21T08:00:00.000Z",
+    energyScore: 8.0,
+    compatibilityPercent: 73,
+    primaryPower: "baramee",
+    extra: { objectFingerprint: "fp-rank-baram" },
+  });
+  const itemB = extractSacredAmuletLibraryItem(
+    {
+      ...rawB,
+      amuletV1: {
+        ...rawB.amuletV1,
+        powerCategories: {
+          protection: { key: "protection", score: 60, labelThai: "คุ้มครอง" },
+          metta: { key: "metta", score: 62, labelThai: "เมตตา" },
+          baramee: { key: "baramee", score: 92, labelThai: "บารมี" },
+          luck: { key: "luck", score: 88, labelThai: "โชคลาภ" },
+          fortune_anchor: { key: "fortune_anchor", score: 50, labelThai: "หนุนดวง" },
+          specialty: { key: "specialty", score: 50, labelThai: "เฉพาะทาง" },
+        },
+      },
+    },
+    { id: "row-rrb", created_at: "2026-04-21T08:00:00.000Z" },
+  );
+  const rawProt = makeRaw({
+    token: "tok-rank-prot-peak",
+    reportId: "rrp",
+    generatedAt: "2026-04-22T08:00:00.000Z",
+    energyScore: 7.5,
+    compatibilityPercent: 72,
+    primaryPower: "protection",
+    extra: { objectFingerprint: "fp-rank-prot" },
+  });
+  const itemProt = extractSacredAmuletLibraryItem(
+    {
+      ...rawProt,
+      amuletV1: {
+        ...rawProt.amuletV1,
+        powerCategories: {
+          protection: { key: "protection", score: 94, labelThai: "คุ้มครอง" },
+          metta: { key: "metta", score: 50, labelThai: "เมตตา" },
+          baramee: { key: "baramee", score: 50, labelThai: "บารมี" },
+          luck: { key: "luck", score: 60, labelThai: "โชคลาภ" },
+          fortune_anchor: { key: "fortune_anchor", score: 50, labelThai: "หนุนดวง" },
+          specialty: { key: "specialty", score: 50, labelThai: "เฉพาะทาง" },
+        },
+      },
+    },
+    { id: "row-rrp", created_at: "2026-04-22T08:00:00.000Z" },
+  );
+  const rawMetta = makeRaw({
+    token: "tok-rank-metta-peak",
+    reportId: "rrm",
+    generatedAt: "2026-04-23T08:00:00.000Z",
+    energyScore: 7.8,
+    compatibilityPercent: 74,
+    primaryPower: "metta",
+    extra: { objectFingerprint: "fp-rank-metta" },
+  });
+  const itemMetta = extractSacredAmuletLibraryItem(
+    {
+      ...rawMetta,
+      amuletV1: {
+        ...rawMetta.amuletV1,
+        powerCategories: {
+          protection: { key: "protection", score: 70, labelThai: "คุ้มครอง" },
+          metta: { key: "metta", score: 95, labelThai: "เมตตา" },
+          baramee: { key: "baramee", score: 55, labelThai: "บารมี" },
+          luck: { key: "luck", score: 58, labelThai: "โชคลาภ" },
+          fortune_anchor: { key: "fortune_anchor", score: 50, labelThai: "หนุนดวง" },
+          specialty: { key: "specialty", score: 50, labelThai: "เฉพาะทาง" },
+        },
+      },
+    },
+    { id: "row-rrm", created_at: "2026-04-23T08:00:00.000Z" },
+  );
+  assert.ok(itemA && itemB && itemProt && itemMetta);
+  assert.equal(itemA.peakPowerKey, "luck");
+  assert.equal(itemB.peakPowerKey, "baramee");
+  assert.equal(itemProt.peakPowerKey, "protection");
+  assert.equal(itemMetta.peakPowerKey, "metta");
+
+  const view = buildSacredAmuletLibraryViewFromItems([itemA, itemB, itemProt, itemMetta]);
+  assert.ok(view);
+  const tokens = (arr) => arr.map((it) => it.publicToken).sort();
+
+  assert.deepEqual(
+    tokens(view.byLuck),
+    ["tok-rank-luck-peak"],
+    "only luck-peak item appears under โชคลาภ tab",
+  );
+  assert.equal(
+    view.byLuck.some((it) => it.publicToken === "tok-rank-baramee-high-luck"),
+    false,
+    "high luck score but baramee peak must not appear in byLuck",
+  );
+  assert.deepEqual(tokens(view.byOverall), tokens(view.items));
+  assert.deepEqual(tokens(view.byFit), tokens(view.items));
+  assert.deepEqual(tokens(view.byProtection), ["tok-rank-prot-peak"]);
+  assert.deepEqual(tokens(view.byMetta), ["tok-rank-metta-peak"]);
+  assert.deepEqual(tokens(view.byBaramee), ["tok-rank-baramee-high-luck"]);
 });
 
 test("buildSacredAmuletLibraryViewFromItems: axisHighlights tie-break uses compat when score and date equal", () => {
