@@ -722,6 +722,37 @@ export const env = {
   ENABLE_DELIVERY_WORKER: process.env.ENABLE_DELIVERY_WORKER === "true",
   ENABLE_MAINTENANCE_WORKER: process.env.ENABLE_MAINTENANCE_WORKER === "true",
   /**
+   * Daily (default) purge of expired scan_upload originals + payment slip raw images.
+   * Run: ENABLE_STORAGE_RETENTION_WORKER=true node src/workers/storageRetentionWorker.js
+   */
+  ENABLE_STORAGE_RETENTION_WORKER:
+    process.env.ENABLE_STORAGE_RETENTION_WORKER === "true",
+  STORAGE_RETENTION_INTERVAL_MS: Math.max(
+    60_000,
+    Number(process.env.STORAGE_RETENTION_INTERVAL_MS || 86_400_000) || 86_400_000,
+  ),
+  /** Free tier: LINE ingest original bytes deleted after N days unless pinned. */
+  STORAGE_RETENTION_ORIGINAL_DAYS_FREE: Math.max(
+    1,
+    Math.min(
+      3650,
+      Number(process.env.STORAGE_RETENTION_ORIGINAL_DAYS_FREE || 30) || 30,
+    ),
+  ),
+  /** Payment slip JPEG in storage deleted after N days; DB payment row kept. */
+  STORAGE_RETENTION_SLIP_DAYS: Math.max(
+    1,
+    Math.min(3650, Number(process.env.STORAGE_RETENTION_SLIP_DAYS || 90) || 90),
+  ),
+  /** Max pinned full-res originals per LINE user (free tier). */
+  FREE_TIER_PINNED_ORIGINAL_LIMIT: Math.max(
+    0,
+    Math.min(500, Number(process.env.FREE_TIER_PINNED_ORIGINAL_LIMIT || 10) || 10),
+  ),
+  PAYMENT_SLIP_BUCKET:
+    String(process.env.PAYMENT_SLIP_BUCKET || "payment-slips").trim() ||
+    "payment-slips",
+  /**
    * Worker-scan only: optional Wikipedia (th) hints for wording — never overrides deterministic truth.
    * Default off. Set `WEB_ENRICHMENT_ENABLED=true` to enable.
    */

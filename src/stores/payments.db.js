@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+import { upsertPaymentSlipRetentionRow } from "./paymentSlips.db.js";
 import {
   emitPaymentApprovedFunnel,
   emitPaymentRejectedFunnel,
@@ -422,7 +423,31 @@ export async function setPaymentSlipPendingVerify({
     .eq("id", id);
 
   if (error) throw error;
+  try {
+    await upsertPaymentSlipRetentionRow(id);
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: "PAYMENT_SLIP_RETENTION_UPSERT_FAIL",
+        paymentIdPrefix: id.slice(0, 8),
+        message: String(e?.message || e).slice(0, 200),
+      }),
+    );
+  }
   return true;
+}
+
+/**
+ * Clear slip image URL after raw object deleted from storage (record + amounts remain).
+ * @param {string} paymentId
+ */
+export async function clearPaymentSlipUrlAfterRetention(paymentId) {
+  const id = normalizePaymentIdString(paymentId);
+  const { error } = await supabase
+    .from("payments")
+    .update({ slip_url: null, updated_at: getNowIso() })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 /**

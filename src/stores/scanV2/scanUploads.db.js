@@ -126,6 +126,75 @@ export async function findScanUploadBySha256AndUser(
  * @param {string} lineUserId
  * @returns {Promise<Array<{ id: string, sha256: string | null }>>}
  */
+/**
+ * Original LINE-ingest files eligible for purge (free tier, not pinned, not yet deleted).
+ * @param {string} beforeIso — delete where original_expires_at < beforeIso
+ * @param {number} [limit]
+ * @returns {Promise<Array<{ id: string, line_user_id: string, storage_bucket: string, storage_path: string }>>}
+ */
+export async function listScanUploadsOriginalDeletionCandidates(beforeIso, limit = 50) {
+  const lim = Math.min(200, Math.max(1, Math.floor(Number(limit)) || 50));
+  const { data, error } = await supabase
+    .from("scan_uploads")
+    .select("id, line_user_id, storage_bucket, storage_path")
+    .is("original_deleted_at", null)
+    .eq("is_pinned", false)
+    .not("original_expires_at", "is", null)
+    .lt("original_expires_at", beforeIso)
+    .not("storage_path", "is", null)
+    .neq("storage_path", "")
+    .limit(lim);
+
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * @param {string} lineUserId
+ * @returns {Promise<number>}
+ */
+export async function countPinnedScanUploadsByLineUser(lineUserId) {
+  const uid = String(lineUserId || "").trim();
+  if (!uid) return 0;
+  const { count, error } = await supabase
+    .from("scan_uploads")
+    .select("id", { count: "exact", head: true })
+    .eq("line_user_id", uid)
+    .eq("is_pinned", true);
+  if (error) return 0;
+  return typeof count === "number" ? count : 0;
+}
+
+/**
+ * @param {string} uploadId
+ * @param {string} lineUserId
+ * @param {boolean} isPinned
+ */
+export async function setScanUploadPinnedForUser(uploadId, lineUserId, isPinned) {
+  const id = String(uploadId || "").trim();
+  const uid = String(lineUserId || "").trim();
+  if (!id || !uid) throw new Error("scan_upload_pin_missing_ids");
+  const { error } = await supabase
+    .from("scan_uploads")
+    .update({ is_pinned: Boolean(isPinned) })
+    .eq("id", id)
+    .eq("line_user_id", uid);
+  if (error) throw error;
+}
+
+/**
+ * @param {string} uploadId
+ */
+export async function markScanUploadOriginalDeleted(uploadId) {
+  const id = String(uploadId || "").trim();
+  if (!id) return;
+  const { error } = await supabase
+    .from("scan_uploads")
+    .update({ original_deleted_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function listScanUploadsSha256ByIds(uploadIds, lineUserId) {
   const ids = Array.from(
     new Set(

@@ -63,8 +63,24 @@ function panelHtml(list) {
 
 /**
  * @param {SacredAmuletLibraryItem} it
+ * @param {string} pagePublicToken
  */
-function spotlightCardHtml(it) {
+function spotlightPinFormHtml(pagePublicToken, it) {
+  const sid = String(it?.scanResultV2Id || "").trim();
+  const up = String(it?.uploadId || "").trim();
+  if (!sid || !up) return "";
+  const action = `/r/${encodeURIComponent(pagePublicToken)}/library/pin`;
+  return `<form method="post" action="${escapeHtml(action)}" class="alib-pin-form">
+    <input type="hidden" name="scanResultV2Id" value="${escapeHtml(sid)}" />
+    <button type="submit" class="alib-pin-btn">ปักหมุดรูปนี้</button>
+  </form>`;
+}
+
+/**
+ * @param {SacredAmuletLibraryItem} it
+ * @param {string} pagePublicToken
+ */
+function spotlightCardHtml(it, pagePublicToken) {
   const href = `/r/${encodeURIComponent(it.publicToken)}`;
   const img = it.thumbUrl
     ? `<div class="alib-spot-img"><img src="${escapeHtml(it.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async"/></div>`
@@ -73,6 +89,7 @@ function spotlightCardHtml(it) {
     it.compatPercent != null
       ? `<p class="alib-spot-line"><span class="alib-k">เข้ากับคุณ</span> <span class="alib-v">${escapeHtml(String(it.compatPercent))}%</span></p>`
       : "";
+  const pinForm = spotlightPinFormHtml(pagePublicToken, it);
   return `
   <article class="alib-spotlight" aria-label="อันดับหนึ่งโดยรวม">
     <p class="alib-spot-badge">อันดับ 1 โดยรวมตอนนี้</p>
@@ -85,6 +102,7 @@ function spotlightCardHtml(it) {
         ${compat}
       </div>
     </div>
+    ${pinForm}
     <a class="alib-spot-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>
   </article>`;
 }
@@ -120,17 +138,42 @@ function axisHighlightCardHtml(h) {
  * @param {object} p
  * @param {string} p.pagePublicToken
  * @param {SacredAmuletLibraryView} p.library
+ * @param {number|null} [p.pinnedOriginalCount]
+ * @param {string|null} [p.pinFlash]
+ * @param {number} [p.freeTierPinLimit]
  * @returns {string}
  */
-export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
+export function renderAmuletLibraryRankingHtml({
+  pagePublicToken,
+  library,
+  pinnedOriginalCount = null,
+  pinFlash = null,
+  freeTierPinLimit = 10,
+} = {}) {
   const backHref = `/r/${encodeURIComponent(pagePublicToken)}`;
   const n = library.totalCount;
   const dedupeExplainLine =
     Array.isArray(library.items) && library.items.length < n
       ? `<p class="alib-sub alib-sub--grouped">แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้</p>`
       : "";
+  const retentionNoticeHtml =
+    pinnedOriginalCount != null
+      ? `<p class="alib-retention-note" role="note">บัญชีฟรีเก็บรูปเต็มได้ ${escapeHtml(String(freeTierPinLimit))} รายการ ผลสแกนและคะแนนยังอยู่ แม้รูปเต็มหมดอายุ</p>`
+      : "";
+  const pinFlashHtml =
+    pinFlash === "quota"
+      ? `<p class="alib-pin-upsell" role="status">คุณปักหมุดครบ ${escapeHtml(String(freeTierPinLimit))} รายการแล้ว แพ็กเก็บพื้นที่แบบจ่ายเงินจะเปิดให้บริการภายหลัง เพื่อเก็บรูปเต็มเพิ่ม</p>`
+      : pinFlash === "ok"
+        ? `<p class="alib-pin-flash alib-pin-flash--ok" role="status">ปักหมุดรูปเต็มเรียบร้อย</p>`
+        : pinFlash === "err"
+          ? `<p class="alib-pin-flash alib-pin-flash--err" role="status">ไม่สามารถปักหมุดได้ในขณะนี้ ลองใหม่ภายหลัง</p>`
+          : pinFlash === "denied"
+            ? `<p class="alib-pin-flash alib-pin-flash--err" role="status">ไม่พบสิทธิ์ปักหมุดรายการนี้</p>`
+            : "";
   const spotlightIt = library.topOverall ?? library.byOverall?.[0] ?? null;
-  const spotlightHtml = spotlightIt ? spotlightCardHtml(spotlightIt) : "";
+  const spotlightHtml = spotlightIt
+    ? spotlightCardHtml(spotlightIt, pagePublicToken)
+    : "";
   const axisHighlights = Array.isArray(library.axisHighlights)
     ? library.axisHighlights
     : [];
@@ -500,6 +543,46 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
       border-radius: 12px;
       border: 1px solid rgba(180, 140, 40, 0.14);
     }
+    .alib-retention-note {
+      margin: 0 0 0.75rem;
+      padding: 0.55rem 0.65rem;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      color: var(--alib-body);
+      background: #fffdf8;
+      border-radius: 10px;
+      border: 1px solid rgba(180, 140, 40, 0.16);
+    }
+    .alib-pin-upsell {
+      margin: 0 0 0.75rem;
+      padding: 0.55rem 0.65rem;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      font-weight: 600;
+      color: #6b4a00;
+      background: rgba(255, 220, 160, 0.28);
+      border-radius: 10px;
+      border: 1px solid rgba(200, 140, 40, 0.35);
+    }
+    .alib-pin-flash { margin: 0 0 0.65rem; font-size: 0.8rem; font-weight: 600; line-height: 1.45; }
+    .alib-pin-flash--ok { color: #2d6a3a; }
+    .alib-pin-flash--err { color: #8a3a00; }
+    .alib-pin-form { margin: 0.45rem 0 0.5rem; }
+    .alib-pin-btn {
+      display: inline-block;
+      width: 100%;
+      padding: 0.38rem 0.65rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-family: inherit;
+      color: var(--alib-gold);
+      background: #fffefb;
+      border: 1px solid rgba(180, 140, 40, 0.35);
+      border-radius: 999px;
+      cursor: pointer;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+    }
+    .alib-pin-btn:hover { background: #faf6ec; }
     .alib-scan-footer {
       margin-top: 1.35rem;
       padding: 1rem 0.95rem 1.05rem;
@@ -546,6 +629,8 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
     <p class="alib-sub">คุณมีรายการสแกนแล้ว ${escapeHtml(String(n))} รายการ</p>
     ${dedupeExplainLine}
     <p class="alib-safety" role="note">ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
+    ${retentionNoticeHtml}
+    ${pinFlashHtml}
     ${spotlightHtml}
     ${axisCarouselSection}
     <button type="button" class="alib-show-all" id="alib-btn-show-rankings">ดูอันดับทั้งหมดในคลัง</button>

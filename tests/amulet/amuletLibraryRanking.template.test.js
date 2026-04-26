@@ -61,8 +61,17 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   const html = renderAmuletLibraryRankingHtml({
     pagePublicToken: "toklib1",
     library,
+    pinnedOriginalCount: 2,
+    pinFlash: "quota",
+    freeTierPinLimit: 10,
   });
   assert.ok(html.includes("คลังพลังของคุณ"));
+  assert.ok(
+    html.includes(
+      "บัญชีฟรีเก็บรูปเต็มได้ 10 รายการ ผลสแกนและคะแนนยังอยู่ แม้รูปเต็มหมดอายุ",
+    ),
+  );
+  assert.ok(html.includes("แพ็กเก็บพื้นที่แบบจ่ายเงินจะเปิดให้บริการภายหลัง"));
   assert.ok(html.includes('content="noindex,nofollow"'));
   assert.ok(html.includes("แรงสุดโดยรวม"));
   assert.ok(html.includes("โชคลาภสูงสุด"));

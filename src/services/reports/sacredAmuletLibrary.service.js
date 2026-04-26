@@ -42,6 +42,7 @@ import {
  * @property {string|null} objectGroupId
  * @property {boolean} userConfirmedGroup
  * @property {number|null} duplicateConfidence
+ * @property {string|null} uploadId — scan_uploads.id when known (pin / retention)
  */
 
 /**
@@ -329,7 +330,7 @@ function applyConfirmedGrouping(scans) {
 
 /**
  * @param {unknown} raw
- * @param {{ id?: string, created_at?: string }} meta
+ * @param {{ id?: string, created_at?: string, uploadId?: string|null }} meta
  * @returns {SacredAmuletLibraryItem | null}
  */
 export function extractSacredAmuletLibraryItem(raw, meta) {
@@ -463,6 +464,7 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     objectGroupId,
     userConfirmedGroup,
     duplicateConfidence,
+    uploadId: String(meta?.uploadId || "").trim() || null,
   };
 }
 
@@ -613,12 +615,39 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
   if (!uid) return null;
 
   const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
+
+  const scanJobIdByResultId = new Map();
+  for (const row of rows) {
+    const rid = String(row?.id || "").trim();
+    const jobId = String(row?.scan_job_id || "").trim();
+    if (rid && jobId) scanJobIdByResultId.set(rid, jobId);
+  }
+
+  /** @type {Map<string, string>} */
+  const uploadIdByJobId = new Map();
+  const scanJobIds = Array.from(new Set(Array.from(scanJobIdByResultId.values())));
+  if (scanJobIds.length) {
+    try {
+      const jobRows = await listScanJobsUploadIdsByIds(scanJobIds, uid);
+      for (const r of jobRows) {
+        const jid = String(r.id || "").trim();
+        const upid = String(r.upload_id || "").trim();
+        if (jid && upid) uploadIdByJobId.set(jid, upid);
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }
+
   /** @type {SacredAmuletLibraryItem[]} */
   const scans = [];
 
   for (const row of rows) {
     const raw = row?.report_payload_json;
-    const meta = { id: row?.id, created_at: row?.created_at };
+    const rid = String(row?.id || "").trim();
+    const jobId = scanJobIdByResultId.get(rid) || "";
+    const uploadId = jobId ? uploadIdByJobId.get(jobId) || null : null;
+    const meta = { id: row?.id, created_at: row?.created_at, uploadId };
     const fromRow = extractSacredAmuletLibraryItem(raw, meta);
     if (!fromRow) continue;
     let tok = fromRow.publicToken;
@@ -634,23 +663,8 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
     scans.map((s) => String(s.scanResultV2Id || "").trim()).filter(Boolean),
   ).size;
 
-  const scanJobIdByResultId = new Map();
-  for (const row of rows) {
-    const rid = String(row?.id || "").trim();
-    const jobId = String(row?.scan_job_id || "").trim();
-    if (rid && jobId) scanJobIdByResultId.set(rid, jobId);
-  }
-
-  const scanJobIds = Array.from(new Set(Array.from(scanJobIdByResultId.values())));
   if (scanJobIds.length) {
     try {
-      const jobRows = await listScanJobsUploadIdsByIds(scanJobIds, uid);
-      const uploadIdByJobId = new Map();
-      for (const r of jobRows) {
-        const jid = String(r.id || "").trim();
-        const upid = String(r.upload_id || "").trim();
-        if (jid && upid) uploadIdByJobId.set(jid, upid);
-      }
       const uploadIds = Array.from(new Set(Array.from(uploadIdByJobId.values())));
       if (uploadIds.length) {
         const uploadRows = await listScanUploadsSha256ByIds(uploadIds, uid);

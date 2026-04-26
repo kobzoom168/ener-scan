@@ -1,4 +1,5 @@
 import { ensureUserByLineUserId } from "../../stores/users.db.js";
+import { env } from "../../config/env.js";
 import { uploadScanImageToStorage } from "../../storage/scanUploadStorage.js";
 import {
   getScanUploadByLineMessageId,
@@ -127,6 +128,10 @@ export async function ingestScanImageAsyncV2({
     mimeType: "image/jpeg",
   });
 
+  const originalExpiresAt = new Date(
+    Date.now() + env.STORAGE_RETENTION_ORIGINAL_DAYS_FREE * 86_400_000,
+  ).toISOString();
+
   const uploadRow = await insertScanUpload({
     line_user_id: lineUserId,
     app_user_id: appUserId,
@@ -136,6 +141,8 @@ export async function ingestScanImageAsyncV2({
     mime_type: stored.mimeType,
     size_bytes: stored.sizeBytes,
     sha256: stored.sha256,
+    original_expires_at: originalExpiresAt,
+    storage_tier: "free",
   });
 
   if (!uploadRow?.id) {
