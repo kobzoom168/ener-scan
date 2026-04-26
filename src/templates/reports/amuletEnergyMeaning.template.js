@@ -167,19 +167,19 @@ export function renderAmuletEnergyMeaningHtml(payload) {
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --aem-bg: #07090d;
-      --aem-surface: linear-gradient(180deg, #11161f 0%, #0c1017 100%);
-      --aem-border: rgba(242, 201, 76, 0.14);
-      --aem-gold: #f2c94c;
-      --aem-gold-soft: rgba(242, 201, 76, 0.65);
-      --aem-text: rgba(247, 244, 236, 0.95);
-      --aem-body: rgba(233, 226, 209, 0.84);
-      --aem-muted: rgba(190, 178, 151, 0.7);
-      --aem-subtitle: rgba(231, 223, 206, 0.86);
-      --aem-chip-bg: rgba(242, 201, 76, 0.08);
-      --aem-chip-border: rgba(242, 201, 76, 0.18);
-      --aem-score-bg: rgba(242, 201, 76, 0.09);
-      --aem-score-border: rgba(242, 201, 76, 0.28);
+      --aem-bg: #ffffff;
+      --aem-surface: linear-gradient(180deg, #f9f7f3 0%, #f4f1ea 100%);
+      --aem-border: rgba(180, 140, 40, 0.18);
+      --aem-gold: #a07800;
+      --aem-gold-soft: rgba(140, 100, 20, 0.7);
+      --aem-text: #1a1610;
+      --aem-body: #3d3320;
+      --aem-muted: #7a6b4e;
+      --aem-subtitle: #4a3f28;
+      --aem-chip-bg: rgba(200, 155, 30, 0.08);
+      --aem-chip-border: rgba(180, 140, 40, 0.22);
+      --aem-score-bg: rgba(200, 155, 30, 0.09);
+      --aem-score-border: rgba(180, 140, 40, 0.32);
     }
     * { box-sizing: border-box; }
     body {
@@ -205,11 +205,9 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       margin-bottom: 1rem;
       padding: 1rem 1rem 1.05rem;
       border-radius: 20px;
-      border: 1px solid rgba(242, 201, 76, 0.16);
-      background:
-        radial-gradient(circle at top right, rgba(242, 201, 76, 0.08), rgba(242, 201, 76, 0) 52%),
-        linear-gradient(180deg, #121722 0%, #1a140b 100%);
-      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+      border: 1px solid rgba(180, 140, 40, 0.18);
+      background: linear-gradient(180deg, #fffdf7 0%, #fdf8ee 100%);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.07);
     }
     .aem-eyebrow {
       margin: 0 0 0.25rem;
@@ -252,10 +250,10 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     }
     .aem-guide {
       margin: 0 0 1rem;
-      border: 1px solid rgba(242, 201, 76, 0.14);
+      border: 1px solid var(--aem-border);
       border-radius: 18px;
       padding: 0.95rem;
-      background: linear-gradient(180deg, #111722 0%, #0d1219 100%);
+      background: linear-gradient(180deg, #faf8f2 0%, #f5f1e6 100%);
     }
     .aem-guide-title {
       margin: 0 0 0.55rem;
@@ -273,23 +271,23 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       border: 1px solid var(--aem-chip-border);
       border-radius: 10px;
       background: var(--aem-chip-bg);
-      color: rgba(247, 239, 216, 0.92);
+      color: var(--aem-body);
       font-size: 0.83rem;
       line-height: 1.35;
     }
     .aem-card {
-      background: var(--aem-surface);
-      border: 1px solid var(--aem-border);
+      background: #ffffff;
+      border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 20px;
       padding: 0.96rem 1rem 1.02rem;
       margin-bottom: 1.06rem;
-      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.07);
       transition: transform 0.18s ease, border-color 0.18s ease;
     }
     @media (hover: hover) and (pointer: fine) {
       .aem-card:hover {
         transform: translateY(-2px);
-        border-color: rgba(242, 201, 76, 0.28);
+        border-color: rgba(180, 140, 40, 0.28);
       }
     }
     .aem-card-head {
@@ -311,9 +309,9 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       letter-spacing: 0.14em;
       color: var(--aem-gold-soft);
       padding: 0.2rem 0.28rem 0.15rem;
-      border: 1px solid rgba(244, 197, 66, 0.18);
+      border: 1px solid rgba(180, 140, 40, 0.22);
       border-radius: 8px;
-      background: rgba(244, 197, 66, 0.04);
+      background: rgba(200, 155, 30, 0.06);
       line-height: 1;
       flex-shrink: 0;
     }
@@ -342,7 +340,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     .aem-card-summary {
       margin: 0 0 0.78rem;
       font-size: 0.95rem;
-      color: rgba(250, 246, 235, 0.95);
+      color: var(--aem-subtitle);
       font-weight: 650;
       line-height: 1.58;
     }
@@ -368,7 +366,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       border: 1px solid var(--aem-chip-border);
       background: var(--aem-chip-bg);
       font-size: 0.82rem;
-      color: rgba(247, 239, 216, 0.9);
+      color: var(--aem-body);
     }
     .aem-card-detail {
       margin: 0;
@@ -379,15 +377,15 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     .aem-card-foot {
       margin: 0.6rem 0 0;
       font-size: 0.84rem;
-      color: rgba(203, 192, 169, 0.82);
+      color: var(--aem-muted);
       line-height: 1.56;
       padding: 0.52rem 0.58rem;
-      border-left: 2px solid rgba(232, 185, 70, 0.45);
+      border-left: 2px solid rgba(180, 140, 40, 0.45);
       border-top: none;
       border-right: none;
       border-bottom: none;
       border-radius: 10px;
-      background: rgba(255, 255, 255, 0.035);
+      background: rgba(200, 155, 30, 0.05);
     }
     .aem-disclaimer {
       margin: 1.5rem 0 1.25rem;
@@ -395,9 +393,9 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       font-size: 0.88rem;
       line-height: 1.62;
       color: var(--aem-muted);
-      background: rgba(255, 255, 255, 0.02);
+      background: #f9f7f2;
       border-radius: 10px;
-      border: 1px solid rgba(218, 176, 65, 0.16);
+      border: 1px solid rgba(180, 140, 40, 0.16);
     }
     .aem-cta {
       display: block;
