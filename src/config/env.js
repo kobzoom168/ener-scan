@@ -675,6 +675,20 @@ export const env = {
   })(),
 
   /**
+   * Cross-account object baseline (future reuse). Master switch — default off.
+   */
+  ENABLE_CROSS_ACCOUNT_BASELINE_REUSE:
+    String(process.env.ENABLE_CROSS_ACCOUNT_BASELINE_REUSE ?? "false").trim().toLowerCase() ===
+    "true",
+  /**
+   * Phase 1A: after successful sacred_amulet scan, upsert `global_object_baselines` by image SHA.
+   * Does not change scan results; default off until migration is applied / staging rollout.
+   */
+  ENABLE_GLOBAL_OBJECT_BASELINE_PERSIST:
+    String(process.env.ENABLE_GLOBAL_OBJECT_BASELINE_PERSIST ?? "false").trim().toLowerCase() ===
+    "true",
+
+  /**
    * Ener Scan V2: async webhook → storage → DB queue → workers (see docs/ENER_SCAN_V2_ROLLOUT.md).
    * When `true`, web attempts `ingestScanImageAsyncV2` for scan image flows (requires literal trimmed `true`).
    */

@@ -83,6 +83,7 @@ import {
   findDuplicateScanByPhash,
   insertScanPhash,
 } from "../../stores/scanV2/imageDedupCache.db.js";
+import { maybePersistGlobalObjectBaselineAfterScanV2 } from "./maybePersistGlobalObjectBaseline.service.js";
 
 const NEAR_EXACT_DEDUP_THRESHOLD = 4;
 
@@ -1284,6 +1285,26 @@ export async function processScanJob(workerId, jobRow) {
       );
     });
   }
+
+  void maybePersistGlobalObjectBaselineAfterScanV2({
+    jobId,
+    lineUserId,
+    imageBuffer,
+    imageDHash: imageDHash || null,
+    uploadId: String(upload?.id || "").trim(),
+    strictSupportedLane,
+    reportPayload: reportPayloadForReply,
+    scanResultV2Id: String(scanResultV2Id),
+    stableFeatureSeed,
+    scanOut: scanOut
+      ? {
+          objectCategory: scanOut.objectCategory ?? null,
+          dominantColorSlug: scanOut.dominantColorSlug ?? null,
+        }
+      : null,
+    catSig,
+    reportObjectFamily,
+  });
 
   if (publicToken && reportUrl && scanResultV2Id) {
     try {
