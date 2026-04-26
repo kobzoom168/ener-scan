@@ -111,21 +111,24 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --alib-bg: #0a0c10;
-      --alib-surface: #12151c;
-      --alib-border: rgba(212, 175, 55, 0.22);
-      --alib-gold: #d4af37;
-      --alib-gold-soft: #c9a961;
-      --alib-text: #ece8e0;
-      --alib-muted: #9a958c;
+      --alib-bg: #ffffff;
+      --alib-surface: #ffffff;
+      --alib-border: rgba(180, 140, 40, 0.18);
+      --alib-gold: #a07800;
+      --alib-gold-soft: rgba(140, 100, 20, 0.7);
+      --alib-text: #1a1610;
+      --alib-body: #3d3320;
+      --alib-muted: #7a6b4e;
+      --alib-chip-bg: rgba(200, 155, 30, 0.08);
+      --alib-chip-border: rgba(180, 140, 40, 0.22);
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Sarabun, system-ui, sans-serif; background: var(--alib-bg); color: var(--alib-text); line-height: 1.6; font-size: 1.02rem; }
-    .alib-wrap { max-width: 26rem; margin: 0 auto; padding: 1.2rem 1rem 2.5rem; }
+    body { margin: 0; font-family: Sarabun, system-ui, sans-serif; background: var(--alib-bg); color: var(--alib-text); line-height: 1.6; font-size: 1.02rem; -webkit-font-smoothing: antialiased; }
+    .alib-wrap { max-width: 720px; margin: 0 auto; padding: 1.2rem 1.05rem 2.5rem; }
     .alib-back { display: inline-block; margin-bottom: 0.85rem; font-size: 0.9rem; color: var(--alib-gold-soft); text-decoration: none; font-weight: 600; }
     .alib-back:hover { color: var(--alib-gold); text-decoration: underline; }
     .alib-h1 { margin: 0 0 0.35rem; font-size: 1.28rem; font-weight: 700; color: var(--alib-gold); }
-    .alib-sub { margin: 0 0 1rem; font-size: 0.95rem; color: var(--alib-muted); }
+    .alib-sub { margin: 0 0 1rem; font-size: 0.95rem; color: var(--alib-body); }
     .alib-sub--grouped { margin-top: -0.6rem; }
     .alib-tabs { margin-bottom: 1rem; }
     .alib-tab-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.65rem; }
@@ -137,26 +140,27 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
       font-weight: 700;
       font-family: inherit;
       border-radius: 999px;
-      border: 1px solid rgba(212, 175, 55, 0.28);
-      background: rgba(0,0,0,0.2);
-      color: var(--alib-muted);
+      border: 1px solid var(--alib-chip-border);
+      background: var(--alib-chip-bg);
+      color: var(--alib-gold);
       cursor: pointer;
     }
-    .alib-tab--on { color: #0c0e12; background: linear-gradient(165deg, #f0d060, #c9a227); border-color: rgba(0,0,0,0.25); }
+    .alib-tab--on { color: #1a1610; background: linear-gradient(165deg, #e8c547, #c9a227); border-color: rgba(180, 140, 40, 0.35); }
     .alib-panel { display: none; }
     .alib-panel--on { display: block; }
     .alib-card {
       background: var(--alib-surface);
-      border: 1px solid var(--alib-border);
+      border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 14px;
       padding: 0.75rem 0.85rem;
       margin-bottom: 0.65rem;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.07);
     }
     .alib-card-top { display: flex; gap: 0.65rem; align-items: flex-start; }
     .alib-rank { display: block; font-size: 0.78rem; font-weight: 800; color: var(--alib-gold); margin-bottom: 0.35rem; }
-    .alib-card-img { flex-shrink: 0; width: 4.5rem; height: 4.5rem; border-radius: 10px; overflow: hidden; background: rgba(0,0,0,0.35); border: 1px solid rgba(212,175,55,0.15); }
+    .alib-card-img { flex-shrink: 0; width: 4.5rem; height: 4.5rem; border-radius: 10px; overflow: hidden; background: rgba(200, 155, 30, 0.08); border: 1px solid rgba(180, 140, 40, 0.2); }
     .alib-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .alib-card-img--empty { background: repeating-linear-gradient(-45deg, rgba(212,175,55,0.06), rgba(212,175,55,0.06) 6px, transparent 6px, transparent 12px); }
+    .alib-card-img--empty { background: repeating-linear-gradient(-45deg, rgba(200,155,30,0.1), rgba(200,155,30,0.1) 6px, transparent 6px, transparent 12px); }
     .alib-card-main { flex: 1; min-width: 0; }
     .alib-card-line { margin: 0 0 0.25rem; font-size: 0.88rem; }
     .alib-card-line--sub { font-size: 0.8rem; color: var(--alib-muted); }
@@ -166,15 +170,15 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
       padding: 0.16rem 0.52rem;
       font-size: 0.74rem;
       font-weight: 700;
-      color: #f7e09a;
-      border: 1px solid rgba(212, 175, 55, 0.35);
+      color: var(--alib-gold);
+      border: 1px solid var(--alib-chip-border);
       border-radius: 999px;
-      background: rgba(212, 175, 55, 0.12);
+      background: var(--alib-chip-bg);
     }
     .alib-card-dup-pill--possible {
-      color: #ffe5b3;
-      border-color: rgba(255, 170, 90, 0.42);
-      background: rgba(255, 170, 90, 0.12);
+      color: #8a5a00;
+      border-color: rgba(200, 120, 40, 0.35);
+      background: rgba(255, 200, 140, 0.18);
     }
     .alib-card-possible-note {
       margin: 0.28rem 0 0;
@@ -183,12 +187,13 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
       color: var(--alib-muted);
     }
     .alib-k { color: var(--alib-muted); font-weight: 600; margin-right: 0.2rem; }
-    .alib-v { font-weight: 700; color: var(--alib-text); }
+    .alib-v { font-weight: 700; color: var(--alib-body); }
     .alib-card-btn {
       display: block; text-align: center; margin-top: 0.55rem;
       padding: 0.48rem 0.75rem; font-size: 0.88rem; font-weight: 700;
-      border-radius: 10px; text-decoration: none; color: #0c0e12;
+      border-radius: 10px; text-decoration: none; color: #1a1610;
       background: linear-gradient(165deg, #e8c547, #c9a227);
+      box-shadow: 0 2px 10px rgba(180, 140, 40, 0.18);
     }
     .alib-card-btn:hover { filter: brightness(1.05); }
     .alib-empty { color: var(--alib-muted); font-size: 0.9rem; }
@@ -199,17 +204,18 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
       font-size: 0.78rem;
       line-height: 1.55;
       color: var(--alib-muted);
-      background: rgba(0,0,0,0.22);
+      background: #f9f7f2;
       border-radius: 10px;
-      border: 1px solid rgba(212, 175, 55, 0.12);
+      border: 1px solid rgba(180, 140, 40, 0.16);
     }
     .alib-scan-footer {
       margin-top: 1.35rem;
       padding: 1rem 0.95rem 1.05rem;
       border-radius: 14px;
-      border: 1px solid rgba(212, 175, 55, 0.22);
-      background: rgba(184, 135, 27, 0.08);
+      border: 1px solid rgba(180, 140, 40, 0.18);
+      background: linear-gradient(180deg, #faf8f2 0%, #f5f1e6 100%);
       text-align: center;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.06);
     }
     .alib-scan-footer-title {
       margin: 0 0 0.5rem;
@@ -222,7 +228,7 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
       margin: 0 0 0.85rem;
       font-size: 0.93rem;
       font-weight: 600;
-      color: var(--alib-text);
+      color: var(--alib-body);
       line-height: 1.55;
     }
     .alib-scan-btn {
@@ -233,11 +239,11 @@ export function renderAmuletLibraryRankingHtml({ pagePublicToken, library }) {
       font-weight: 800;
       font-family: inherit;
       line-height: 1.35;
-      color: #0c0e12;
+      color: #1a1610;
       background: linear-gradient(165deg, #e8c547, #c9a227);
       border: none;
       border-radius: 999px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      box-shadow: 0 2px 12px rgba(180, 140, 40, 0.2);
     }
   </style>
 </head>
