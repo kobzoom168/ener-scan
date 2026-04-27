@@ -1,4 +1,5 @@
 import { supabase } from "../../config/supabase.js";
+import { hammingDistance } from "../../services/imageDedup/imagePhash.util.js";
 
 /**
  * @typedef {Object} GlobalObjectBaselineUpsertInput
@@ -207,6 +208,106 @@ export async function listGlobalObjectBaselineShaPrefixesByPrefix(shaPrefixHex, 
         : "",
     )
     .filter(Boolean);
+}
+
+/**
+ * @typedef {Object} GlobalObjectBaselinePhashCandidate
+ * @property {string} baselineId
+ * @property {string} shaPrefix
+ * @property {string} imagePhash
+ * @property {number} phashDistance
+ * @property {string} lane
+ * @property {string} objectFamily
+ * @property {string|null} peakPowerKey
+ * @property {string|null} createdAt
+ */
+
+/**
+ * @param {string} imagePhash
+ * @param {Array<Record<string, unknown>>} rows
+ * @param {{ maxDistance?: number, lane?: string|null, objectFamily?: string|null }} [opts]
+ * @returns {GlobalObjectBaselinePhashCandidate[]}
+ */
+export function rankGlobalObjectBaselinePhashCandidates(imagePhash, rows, opts = {}) {
+  const current = String(imagePhash || "")
+    .trim()
+    .toLowerCase();
+  if (!/^[0-9a-f]{16}$/.test(current)) return [];
+  const maxDistance = Math.min(64, Math.max(0, Math.floor(Number(opts.maxDistance ?? 6) || 6)));
+  const laneFilter = String(opts.lane || "").trim().toLowerCase();
+  const familyFilter = String(opts.objectFamily || "").trim().toLowerCase();
+
+  /** @type {GlobalObjectBaselinePhashCandidate[]} */
+  const out = [];
+  for (const raw of Array.isArray(rows) ? rows : []) {
+    if (!raw || typeof raw !== "object") continue;
+    const id = String(raw.id || "").trim();
+    const rowPhash = String(raw.image_phash || "")
+      .trim()
+      .toLowerCase();
+    if (!id || !/^[0-9a-f]{16}$/.test(rowPhash)) continue;
+    const lane = String(raw.lane || "")
+      .trim()
+      .toLowerCase();
+    const objectFamily = String(raw.object_family || "")
+      .trim()
+      .toLowerCase();
+    if (laneFilter && lane !== laneFilter) continue;
+    if (familyFilter && objectFamily !== familyFilter) continue;
+
+    const dist = hammingDistance(current, rowPhash);
+    if (!Number.isFinite(dist) || dist > maxDistance) continue;
+    const shaPrefix = String(raw.image_sha256 || "")
+      .trim()
+      .toLowerCase()
+      .slice(0, 12);
+    out.push({
+      baselineId: id,
+      shaPrefix,
+      imagePhash: rowPhash,
+      phashDistance: dist,
+      lane: lane || "unknown",
+      objectFamily: objectFamily || "unknown",
+      peakPowerKey: raw.peak_power_key != null ? String(raw.peak_power_key).trim() || null : null,
+      createdAt: raw.created_at != null ? String(raw.created_at) : null,
+    });
+  }
+  out.sort((a, b) => a.phashDistance - b.phashDistance);
+  return out;
+}
+
+/**
+ * Diagnostics-only lookup by pHash; does not mutate DB.
+ *
+ * @param {string} imagePhash
+ * @param {number} maxDistance
+ * @param {{ lane?: string|null, objectFamily?: string|null, limit?: number }} [opts]
+ * @returns {Promise<GlobalObjectBaselinePhashCandidate[]>}
+ */
+export async function listGlobalObjectBaselinePhashCandidates(
+  imagePhash,
+  maxDistance,
+  opts = {},
+) {
+  const ph = String(imagePhash || "")
+    .trim()
+    .toLowerCase();
+  if (!/^[0-9a-f]{16}$/.test(ph)) return [];
+
+  const lim = Math.min(500, Math.max(20, Math.floor(Number(opts.limit) || 200)));
+  const { data, error } = await supabase
+    .from("global_object_baselines")
+    .select("id,image_sha256,image_phash,lane,object_family,peak_power_key,created_at")
+    .not("image_phash", "is", null)
+    .neq("image_phash", "")
+    .order("created_at", { ascending: false })
+    .limit(lim);
+  if (error) throw error;
+  return rankGlobalObjectBaselinePhashCandidates(ph, Array.isArray(data) ? data : [], {
+    maxDistance,
+    lane: opts.lane ?? null,
+    objectFamily: opts.objectFamily ?? null,
+  });
 }
 
 /**

@@ -103,6 +103,7 @@ test("env.js: cross-account baseline flags default to false string parsing", () 
   assert.ok(src.includes("ENABLE_CROSS_ACCOUNT_BASELINE_REUSE"));
   assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_REUSE_EXACT_SHA"));
   assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_REUSE_PHASH"));
+  assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTICS"));
   assert.ok(
     src.includes('process.env.CROSS_ACCOUNT_BASELINE_REUSE_EXACT_SHA ?? "false"'),
     "EXACT_SHA should default to false",
@@ -123,6 +124,9 @@ test("tryCrossAccountExactBaselineReuse.service: gates lane, schema, phash env, 
   assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_EXACT_MISS"));
   assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_EXACT_REJECTED"));
   assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_FALLBACK_FULL_SCAN"));
+  assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_START"));
+  assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_CANDIDATES"));
+  assert.ok(src.includes("listGlobalObjectBaselinePhashCandidates"));
   assert.ok(src.includes("baselineTotal"));
   assert.ok(src.includes("nearbyShaPrefixes"));
   assert.ok(src.includes("countGlobalObjectBaselines"));
@@ -175,6 +179,8 @@ test("scan upload debug helper exists for latest SHA/user prefixes", () => {
   assert.ok(srcStore.includes("listRecentScanUploadsDebug"));
   assert.ok(srcStore.includes("lineUserIdPrefix"));
   assert.ok(srcStore.includes("imageSha256Prefix"));
+  assert.ok(srcStore.includes("imagePhash"));
+  assert.ok(srcStore.includes("imagePhashPrefix"));
 
   const srcScript = readFileSync(
     join(__dirname, "../../scripts/scanV2-debug-latest-uploads.mjs"),

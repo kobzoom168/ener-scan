@@ -276,11 +276,59 @@ export async function listRecentScanUploadsDebug(limit = 20) {
     .limit(lim);
   if (error) throw error;
 
-  if (!Array.isArray(data)) return [];
-  return data.map((row) => ({
+  if (!Array.isArray(data) || !data.length) return [];
+  const uploadIds = data
+    .map((row) => String(row?.id || "").trim())
+    .filter(Boolean);
+
+  const { data: jobs, error: jobsErr } = await supabase
+    .from("scan_jobs")
+    .select("upload_id, result_id, created_at")
+    .in("upload_id", uploadIds)
+    .not("result_id", "is", null)
+    .order("created_at", { ascending: false });
+  if (jobsErr) throw jobsErr;
+
+  const newestResultByUpload = new Map();
+  for (const row of Array.isArray(jobs) ? jobs : []) {
+    const uploadId = String(row?.upload_id || "").trim();
+    const resultId = String(row?.result_id || "").trim();
+    if (!uploadId || !resultId || newestResultByUpload.has(uploadId)) continue;
+    newestResultByUpload.set(uploadId, resultId);
+  }
+
+  const resultIds = Array.from(new Set(Array.from(newestResultByUpload.values()))).filter(Boolean);
+  let phashByResult = new Map();
+  if (resultIds.length) {
+    const { data: phRows, error: phErr } = await supabase
+      .from("scan_image_phashes")
+      .select("scan_result_id, image_phash, created_at")
+      .in("scan_result_id", resultIds)
+      .order("created_at", { ascending: false });
+    if (phErr) throw phErr;
+    phashByResult = new Map(
+      (Array.isArray(phRows) ? phRows : [])
+        .map((row) => [
+          String(row?.scan_result_id || "").trim(),
+          String(row?.image_phash || "")
+            .trim()
+            .toLowerCase(),
+        ])
+        .filter(([k, v]) => k && /^[0-9a-f]{16}$/.test(v)),
+    );
+  }
+
+  return data.map((row) => {
+    const uploadId = String(row?.id || "").trim();
+    const resultId = newestResultByUpload.get(uploadId) || "";
+    const imagePhash = resultId ? phashByResult.get(resultId) || null : null;
+    return {
     uploadId: String(row?.id || "").trim(),
     lineUserIdPrefix: String(row?.line_user_id || "").trim().slice(0, 8),
     imageSha256Prefix: row?.sha256 ? String(row.sha256).trim().toLowerCase().slice(0, 12) : null,
+    imagePhash,
+    imagePhashPrefix: imagePhash ? imagePhash.slice(0, 8) : null,
     createdAt: row?.created_at ? String(row.created_at) : null,
-  }));
+    };
+  });
 }

@@ -693,6 +693,22 @@ export const env = {
     String(process.env.CROSS_ACCOUNT_BASELINE_REUSE_PHASH ?? "false").trim().toLowerCase() ===
     "true",
   /**
+   * Phase 2B: pHash near-match diagnostics only (no reuse side effects).
+   */
+  CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTICS:
+    String(process.env.CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTICS ?? "false")
+      .trim()
+      .toLowerCase() === "true",
+  /**
+   * Max Hamming distance for diagnostic pHash candidate logging.
+   * Start strict (default 6) and tune from staging logs.
+   */
+  CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_MAX_DISTANCE: (() => {
+    const raw = process.env.CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_MAX_DISTANCE;
+    const n = raw === undefined || raw === "" ? 6 : Number(raw);
+    return Number.isFinite(n) ? Math.min(64, Math.max(0, Math.floor(n))) : 6;
+  })(),
+  /**
    * Phase 1A: after successful sacred_amulet scan, upsert `global_object_baselines` by image SHA.
    * Does not change scan results; default off until migration is applied / staging rollout.
    */

@@ -7,9 +7,11 @@ import { env } from "../../config/env.js";
 import {
   countGlobalObjectBaselines,
   findGlobalObjectBaselineBySha256,
+  listGlobalObjectBaselinePhashCandidates,
   listGlobalObjectBaselineShaPrefixesByPrefix,
   markGlobalObjectBaselineReused,
 } from "../../stores/scanV2/globalObjectBaselines.db.js";
+import { computeImageDHash } from "../imageDedup/imagePhash.util.js";
 import { createScanRequest, updateScanRequestStatus } from "../../stores/scanRequests.db.js";
 import { createScanResult } from "../../stores/scanResults.db.js";
 import { parseScanResultForHistory } from "../history/history.parser.js";
@@ -97,6 +99,67 @@ export async function tryCrossAccountExactBaselineReusePhase2A(ctx) {
   }
 
   if (!baselineRow) {
+    if (env.CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTICS) {
+      try {
+        console.log(
+          JSON.stringify({
+            event: "CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_START",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(ctx.jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
+            currentShaPrefix: shaPfx12,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+
+        const currentPhash = await computeImageDHash(ctx.imageBuffer);
+        if (/^[0-9a-f]{16}$/.test(String(currentPhash || "").trim().toLowerCase())) {
+          const maxDistance = env.CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_MAX_DISTANCE;
+          const candidates = await listGlobalObjectBaselinePhashCandidates(currentPhash, maxDistance, {
+            lane: "sacred_amulet",
+            objectFamily: "sacred_amulet",
+            limit: 250,
+          });
+          console.log(
+            JSON.stringify({
+              event: "CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_CANDIDATES",
+              path: "worker-scan",
+              jobIdPrefix: idPrefix8(ctx.jobId),
+              lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
+              currentShaPrefix: shaPfx12,
+              currentPhash,
+              maxDistance,
+              candidateCount: candidates.length,
+              candidates: candidates.slice(0, 20).map((c) => ({
+                baselineIdPrefix: String(c.baselineId).slice(0, 8),
+                shaPrefix: c.shaPrefix,
+                phashDistance: c.phashDistance,
+                lane: c.lane,
+                objectFamily: c.objectFamily,
+                peakPowerKey: c.peakPowerKey,
+                createdAt: c.createdAt,
+              })),
+              timestamp: scanV2TraceTs(),
+            }),
+          );
+        }
+      } catch (diagErr) {
+        console.log(
+          JSON.stringify({
+            event: "CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_CANDIDATES",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(ctx.jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
+            currentShaPrefix: shaPfx12,
+            diagnosticError: String(diagErr?.message || diagErr).slice(0, 200),
+            candidateCount: 0,
+            candidates: [],
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+      }
+    }
+
     console.log(
       JSON.stringify({
         event: "CROSS_ACCOUNT_BASELINE_EXACT_MISS",
