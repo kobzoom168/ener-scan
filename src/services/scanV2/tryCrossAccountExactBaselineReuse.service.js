@@ -5,7 +5,9 @@
 import crypto from "crypto";
 import { env } from "../../config/env.js";
 import {
+  countGlobalObjectBaselines,
   findGlobalObjectBaselineBySha256,
+  listGlobalObjectBaselineShaPrefixesByPrefix,
   markGlobalObjectBaselineReused,
 } from "../../stores/scanV2/globalObjectBaselines.db.js";
 import { createScanRequest, updateScanRequestStatus } from "../../stores/scanRequests.db.js";
@@ -49,6 +51,19 @@ export async function tryCrossAccountExactBaselineReusePhase2A(ctx) {
   }
 
   const shaHex = crypto.createHash("sha256").update(ctx.imageBuffer).digest("hex");
+  const shaPfx12 = shaHex.slice(0, 12);
+  const shaNearPfx8 = shaHex.slice(0, 8);
+
+  /** @type {number|null} */
+  let baselineTotal = null;
+  /** @type {string[]} */
+  let nearbyShaPrefixes = [];
+  try {
+    baselineTotal = await countGlobalObjectBaselines();
+    nearbyShaPrefixes = await listGlobalObjectBaselineShaPrefixesByPrefix(shaNearPfx8, 5);
+  } catch {
+    /* diagnostics only; do not block reuse path */
+  }
 
   console.log(
     JSON.stringify({
@@ -56,7 +71,10 @@ export async function tryCrossAccountExactBaselineReusePhase2A(ctx) {
       path: "worker-scan",
       jobIdPrefix: idPrefix8(ctx.jobId),
       lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
-      imageSha256Prefix: shaHex.slice(0, 12),
+      imageSha256Prefix: shaPfx12,
+      baselineTotal,
+      nearbyShaPrefixCount: nearbyShaPrefixes.length,
+      nearbyShaPrefixes,
       timestamp: scanV2TraceTs(),
     }),
   );
@@ -85,7 +103,10 @@ export async function tryCrossAccountExactBaselineReusePhase2A(ctx) {
         path: "worker-scan",
         jobIdPrefix: idPrefix8(ctx.jobId),
         lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
-        imageSha256Prefix: shaHex.slice(0, 12),
+        imageSha256Prefix: shaPfx12,
+        baselineTotal,
+        nearbyShaPrefixCount: nearbyShaPrefixes.length,
+        nearbyShaPrefixes,
         timestamp: scanV2TraceTs(),
       }),
     );
@@ -146,7 +167,8 @@ export async function tryCrossAccountExactBaselineReusePhase2A(ctx) {
       jobIdPrefix: idPrefix8(ctx.jobId),
       lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
       baselineIdPrefix: String(baselineRow.id).slice(0, 8),
-      imageSha256Prefix: shaHex.slice(0, 12),
+      imageSha256Prefix: shaPfx12,
+      baselineTotal,
       timestamp: scanV2TraceTs(),
     }),
   );

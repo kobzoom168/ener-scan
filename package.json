@@ -15,6 +15,7 @@
     "worker:maintenance": "node src/workers/maintenanceWorker.js",
     "scanV2:queue-health": "node scripts/scanV2-queue-health.mjs",
     "scanV2:replay-outbound": "node scripts/scanV2-replay-outbound.mjs",
+    "scanV2:debug-latest-uploads": "node scripts/scanV2-debug-latest-uploads.mjs",
     "payment:verify": "node scripts/verify-payment.js",
     "payment:verify:staging": "cross-env APP_ENV=staging node scripts/verify-payment.js",
     "payment:verify:prod": "cross-env APP_ENV=production node scripts/verify-payment.js",

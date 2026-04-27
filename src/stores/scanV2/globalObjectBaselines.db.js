@@ -167,6 +167,49 @@ export async function findGlobalObjectBaselineBySha256(imageSha256Hex) {
 }
 
 /**
+ * @returns {Promise<number>}
+ */
+export async function countGlobalObjectBaselines() {
+  const { count, error } = await supabase
+    .from("global_object_baselines")
+    .select("id", { count: "exact", head: true });
+  if (error) throw error;
+  return Number.isFinite(Number(count)) ? Number(count) : 0;
+}
+
+/**
+ * Return recent SHA prefixes with the same leading prefix for diagnostics only.
+ *
+ * @param {string} shaPrefixHex
+ * @param {number} [limit]
+ * @returns {Promise<string[]>}
+ */
+export async function listGlobalObjectBaselineShaPrefixesByPrefix(shaPrefixHex, limit = 5) {
+  const pfx = String(shaPrefixHex || "")
+    .trim()
+    .toLowerCase();
+  const lim = Math.min(20, Math.max(1, Math.floor(Number(limit)) || 5));
+  if (!/^[0-9a-f]{4,64}$/.test(pfx)) return [];
+
+  const { data, error } = await supabase
+    .from("global_object_baselines")
+    .select("image_sha256")
+    .ilike("image_sha256", `${pfx}%`)
+    .order("created_at", { ascending: false })
+    .limit(lim);
+  if (error) throw error;
+  if (!Array.isArray(data) || !data.length) return [];
+
+  return data
+    .map((row) =>
+      row && typeof row === "object" && "image_sha256" in row
+        ? String(row.image_sha256 || "").trim().toLowerCase().slice(0, 12)
+        : "",
+    )
+    .filter(Boolean);
+}
+
+/**
  * Best-effort reuse counter (non-atomic increment acceptable for Phase 2A on staging).
  *
  * @param {string} baselineId

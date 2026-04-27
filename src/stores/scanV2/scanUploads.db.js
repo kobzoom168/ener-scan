@@ -260,3 +260,27 @@ export async function listScanUploadsSha256ByIds(uploadIds, lineUserId) {
   if (error) throw error;
   return Array.isArray(data) ? data : [];
 }
+
+/**
+ * Debug helper: latest scan uploads with masked user/hash prefixes only.
+ *
+ * @param {number} [limit]
+ * @returns {Promise<Array<{ uploadId: string, lineUserIdPrefix: string, imageSha256Prefix: string|null, createdAt: string|null }>>}
+ */
+export async function listRecentScanUploadsDebug(limit = 20) {
+  const lim = Math.min(200, Math.max(1, Math.floor(Number(limit)) || 20));
+  const { data, error } = await supabase
+    .from("scan_uploads")
+    .select("id, line_user_id, sha256, created_at")
+    .order("created_at", { ascending: false })
+    .limit(lim);
+  if (error) throw error;
+
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => ({
+    uploadId: String(row?.id || "").trim(),
+    lineUserIdPrefix: String(row?.line_user_id || "").trim().slice(0, 8),
+    imageSha256Prefix: row?.sha256 ? String(row.sha256).trim().toLowerCase().slice(0, 12) : null,
+    createdAt: row?.created_at ? String(row.created_at) : null,
+  }));
+}

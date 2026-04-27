@@ -123,6 +123,10 @@ test("tryCrossAccountExactBaselineReuse.service: gates lane, schema, phash env, 
   assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_EXACT_MISS"));
   assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_EXACT_REJECTED"));
   assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_FALLBACK_FULL_SCAN"));
+  assert.ok(src.includes("baselineTotal"));
+  assert.ok(src.includes("nearbyShaPrefixes"));
+  assert.ok(src.includes("countGlobalObjectBaselines"));
+  assert.ok(src.includes("listGlobalObjectBaselineShaPrefixesByPrefix"));
   assert.ok(src.includes('modelName: "global_object_baseline_reuse"'));
 });
 
@@ -144,9 +148,17 @@ test("processScanJob.service: same-user SHA dedup before cross-account try; reus
     !beforeOutbound.includes("skipQuotaDecrement: baselineCrossAccountReuse"),
     "must not set skipQuotaDecrement from baseline reuse flag alone",
   );
+  assert.ok(
+    src.includes("if (!baselineCrossAccountReuse)"),
+    "full AI scan should be guarded by baseline reuse flag",
+  );
+  assert.ok(
+    /if \(!baselineCrossAccountReuse\)\s*\{[\s\S]*scanOut = await runDeepScan\(/.test(src),
+    "runDeepScan should only run on no-reuse path",
+  );
 });
 
-test("globalObjectBaselines.db: find selects extended columns + mark logs REUSE_MARKED", () => {
+test("globalObjectBaselines.db: find/select diagnostics helpers + mark logs REUSE_MARKED", () => {
   const src = readFileSync(
     join(__dirname, "../../src/stores/scanV2/globalObjectBaselines.db.js"),
     "utf8",
@@ -154,4 +166,20 @@ test("globalObjectBaselines.db: find selects extended columns + mark logs REUSE_
   assert.ok(src.includes("reuse_count"));
   assert.ok(src.includes("CROSS_ACCOUNT_BASELINE_REUSE_MARKED"));
   assert.ok(src.includes("markGlobalObjectBaselineReused"));
+  assert.ok(src.includes("countGlobalObjectBaselines"));
+  assert.ok(src.includes("listGlobalObjectBaselineShaPrefixesByPrefix"));
+});
+
+test("scan upload debug helper exists for latest SHA/user prefixes", () => {
+  const srcStore = readFileSync(join(__dirname, "../../src/stores/scanV2/scanUploads.db.js"), "utf8");
+  assert.ok(srcStore.includes("listRecentScanUploadsDebug"));
+  assert.ok(srcStore.includes("lineUserIdPrefix"));
+  assert.ok(srcStore.includes("imageSha256Prefix"));
+
+  const srcScript = readFileSync(
+    join(__dirname, "../../scripts/scanV2-debug-latest-uploads.mjs"),
+    "utf8",
+  );
+  assert.ok(srcScript.includes("SCAN_V2_DEBUG_LATEST_UPLOADS"));
+  assert.ok(srcScript.includes("listRecentScanUploadsDebug"));
 });
