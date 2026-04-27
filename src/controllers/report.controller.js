@@ -11,6 +11,13 @@ import {
   buildSacredAmuletLibraryForLineUser,
   buildSacredAmuletLibraryViewFromPayloadOnly,
 } from "../services/reports/sacredAmuletLibrary.service.js";
+import { env } from "../config/env.js";
+import {
+  countPinnedScanUploadsByLineUser,
+  getScanUploadById,
+  setScanUploadPinnedForUser,
+} from "../stores/scanV2/scanUploads.db.js";
+import { getUploadIdForScanResultV2AndLineUser } from "../stores/scanV2/scanResultsV2.db.js";
 import {
   logReportPageOpen,
   safeTokenPrefix,
@@ -99,7 +106,9 @@ export async function getReportByToken(req, res) {
     const uid = String(normPre.userId || "").trim();
     if (uid) {
       try {
-        sacredAmuletLibrary = await buildSacredAmuletLibraryForLineUser(uid);
+        sacredAmuletLibrary = await buildSacredAmuletLibraryForLineUser(uid, {
+          libraryThumbScope: "mini",
+        });
       } catch (libErr) {
         console.warn(
           JSON.stringify({
@@ -481,7 +490,9 @@ export async function getLibraryRankingByToken(req, res) {
   const uid = String(normalized.userId || "").trim();
   if (uid) {
     try {
-      library = await buildSacredAmuletLibraryForLineUser(uid);
+      library = await buildSacredAmuletLibraryForLineUser(uid, {
+        libraryThumbScope: "full",
+      });
     } catch (e) {
       console.warn(
         JSON.stringify({
@@ -504,11 +515,24 @@ export async function getLibraryRankingByToken(req, res) {
     return res.redirect(302, `/r/${encodeURIComponent(publicToken)}`);
   }
 
+  let pinnedOriginalCount = null;
+  if (uid) {
+    try {
+      pinnedOriginalCount = await countPinnedScanUploadsByLineUser(uid);
+    } catch {
+      pinnedOriginalCount = null;
+    }
+  }
+  const pinFlash = String(req.query?.pin || "").trim() || null;
+
   let html;
   try {
     html = renderAmuletLibraryRankingHtml({
       pagePublicToken: publicToken,
       library,
+      pinnedOriginalCount,
+      pinFlash,
+      freeTierPinLimit: env.FREE_TIER_PINNED_ORIGINAL_LIMIT,
     });
   } catch (renderErr) {
     console.error(
@@ -547,4 +571,79 @@ export async function getLibraryRankingByToken(req, res) {
     .type("html")
     .set("Cache-Control", "private, no-store")
     .send(html);
+}
+
+/**
+ * POST /r/:publicToken/library/pin — pin scan_upload original (free tier quota).
+ */
+export async function postLibraryPinUpload(req, res) {
+  const publicToken = String(req.params?.publicToken || "").trim();
+  const scanResultV2Id = String(req.body?.scanResultV2Id || "").trim();
+  const baseLib = publicToken
+    ? `/r/${encodeURIComponent(publicToken)}/library`
+    : "/";
+
+  if (!publicToken || !scanResultV2Id) {
+    return res.redirect(302, baseLib);
+  }
+
+  const { payload, accessError } = await getReportByPublicToken(publicToken);
+  if (!payload || accessError) {
+    const status = accessError?.httpStatus ?? 404;
+    const html =
+      accessError?.code === "REPORT_EXPIRED"
+        ? EXPIRED_HTML
+        : accessError?.code === "REPORT_UNAVAILABLE"
+          ? UNAVAILABLE_HTML
+          : NOT_FOUND_HTML;
+    return res.status(status).type("html").set("Cache-Control", "no-store").send(html);
+  }
+
+  const { payload: normalized } = normalizeReportPayloadForRender(payload);
+  const uid = String(normalized.userId || "").trim();
+  if (!uid) {
+    return res.redirect(303, `${baseLib}?pin=denied`);
+  }
+
+  const uploadId = await getUploadIdForScanResultV2AndLineUser(
+    scanResultV2Id,
+    uid,
+  );
+  if (!uploadId) {
+    return res.redirect(303, `${baseLib}?pin=denied`);
+  }
+
+  const uploadRow = await getScanUploadById(uploadId).catch(() => null);
+  if (!uploadRow || String(uploadRow.line_user_id || "").trim() !== uid) {
+    return res.redirect(303, `${baseLib}?pin=denied`);
+  }
+
+  if (uploadRow.is_pinned === true) {
+    return res.redirect(303, `${baseLib}?pin=ok`);
+  }
+
+  const pinned = await countPinnedScanUploadsByLineUser(uid);
+  const limit = env.FREE_TIER_PINNED_ORIGINAL_LIMIT;
+  if (limit > 0 && pinned >= limit) {
+    return res.redirect(303, `${baseLib}?pin=quota`);
+  }
+
+  try {
+    await setScanUploadPinnedForUser(uploadId, uid, true);
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "LIBRARY_PIN_UPLOAD_FAIL",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        reason: String(
+          e && typeof e === "object" && "message" in e
+            ? /** @type {{ message?: unknown }} */ (e).message
+            : e,
+        ).slice(0, 200),
+      }),
+    );
+    return res.redirect(303, `${baseLib}?pin=err`);
+  }
+
+  return res.redirect(303, `${baseLib}?pin=ok`);
 }

@@ -64,3 +64,37 @@ export async function listScanResultsV2PayloadRowsForLineUser(lineUserId, limit 
   }
   return Array.isArray(data) ? data : [];
 }
+
+/**
+ * Resolve scan_uploads.id for a completed scan result (same LINE user).
+ * @param {string} scanResultV2Id
+ * @param {string} lineUserId
+ * @returns {Promise<string | null>}
+ */
+export async function getUploadIdForScanResultV2AndLineUser(
+  scanResultV2Id,
+  lineUserId,
+) {
+  const rid = String(scanResultV2Id || "").trim();
+  const uid = String(lineUserId || "").trim();
+  if (!rid || !uid) return null;
+
+  const { data: res, error } = await supabase
+    .from("scan_results_v2")
+    .select("scan_job_id")
+    .eq("id", rid)
+    .eq("line_user_id", uid)
+    .maybeSingle();
+
+  if (error || !res?.scan_job_id) return null;
+
+  const { data: job, error: jErr } = await supabase
+    .from("scan_jobs")
+    .select("upload_id")
+    .eq("id", res.scan_job_id)
+    .maybeSingle();
+
+  if (jErr || !job?.upload_id) return null;
+  const up = String(job.upload_id || "").trim();
+  return up || null;
+}

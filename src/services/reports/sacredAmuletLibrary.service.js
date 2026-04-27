@@ -5,7 +5,10 @@
 import { listScanResultsV2PayloadRowsForLineUser } from "../../stores/scanV2/scanResultsV2.db.js";
 import { listScanPhashesByScanResultIds } from "../../stores/scanV2/imageDedupCache.db.js";
 import { listScanJobsUploadIdsByIds } from "../../stores/scanV2/scanJobs.db.js";
-import { listScanUploadsSha256ByIds } from "../../stores/scanV2/scanUploads.db.js";
+import {
+  listScanUploadRetentionFieldsByIds,
+  listScanUploadsSha256ByIds,
+} from "../../stores/scanV2/scanUploads.db.js";
 import { normalizeReportPayloadForRender } from "../../utils/reports/reportPayloadNormalize.util.js";
 import { formatEsDisplayReportId } from "../../utils/reports/reportHtmlTrust.util.js";
 import { computeAmuletOrdAndAlignFromPayload } from "../../amulet/amuletOrdAlign.util.js";
@@ -16,6 +19,7 @@ import {
   POWER_LABEL_THAI,
   POWER_ORDER,
 } from "../../amulet/amuletScores.util.js";
+import { createScanUploadBucketSignedUrls } from "../../utils/storage/scanUploadStorageSignedUrl.util.js";
 
 /** @typedef {import("../../amulet/amuletScores.util.js").AmuletPowerKey} AmuletPowerKey */
 
@@ -25,6 +29,7 @@ import {
  * @property {string} publicToken
  * @property {string} thumbUrl
  * @property {number} powerTotal
+ * @property {AmuletPowerKey} peakPowerKey — dominant object axis (for library tab filters)
  * @property {string} peakPowerLabelTh
  * @property {number|null} compatPercent
  * @property {string|null} scannedAtIso
@@ -42,6 +47,17 @@ import {
  * @property {string|null} objectGroupId
  * @property {boolean} userConfirmedGroup
  * @property {number|null} duplicateConfidence
+ * @property {string|null} uploadId — scan_uploads.id when known (pin / retention)
+ * @property {string|null} [uploadOriginalDeletedAt] — ISO when LINE original bytes were purged
+ * @property {string|null} [uploadThumbnailPath] — `scan_uploads.thumbnail_path` (storage path or URL) for library thumb
+ */
+
+/**
+ * @typedef {Object} SacredAmuletAxisHighlight
+ * @property {AmuletPowerKey} axis
+ * @property {string} labelTh — ชื่อมิติพลัง (ไทย)
+ * @property {SacredAmuletLibraryItem} item
+ * @property {number} axisScore
  */
 
 /**
@@ -56,6 +72,7 @@ import {
  * @property {SacredAmuletLibraryItem[]} byBaramee
  * @property {SacredAmuletLibraryItem[]} byFit
  * @property {SacredAmuletLibraryItem|null} topOverall
+ * @property {SacredAmuletAxisHighlight[]} axisHighlights — สูงสุดต่อมิติ (สูงสุด 6 รายการ)
  */
 
 /**
@@ -81,6 +98,44 @@ function readPath(obj, path) {
     cur = /** @type {Record<string, unknown>} */ (cur)[p];
   }
   return cur;
+}
+
+/**
+ * Dominant “peak” axis for library ranking tabs: object score order from {@link computeAmuletOrdAndAlignFromPayload}
+ * (`ord[0]`), else `amuletV1.primaryPower`, else highest score in `axisScores` (ties → earlier in `POWER_ORDER`).
+ *
+ * @param {import("./reportPayload.types.js").ReportPayload} norm
+ * @param {NonNullable<import("./reportPayload.types.js").ReportPayload["amuletV1"]>} am
+ * @param {Record<string, number>} axisScores
+ * @returns {AmuletPowerKey}
+ */
+function resolveSacredAmuletLibraryPeakPowerKey(norm, am, axisScores) {
+  try {
+    const m = computeAmuletOrdAndAlignFromPayload(norm);
+    const first = m?.ord?.[0];
+    if (first && POWER_ORDER.includes(/** @type {AmuletPowerKey} */ (first))) {
+      return /** @type {AmuletPowerKey} */ (first);
+    }
+  } catch {
+    /* keep fallbacks */
+  }
+  const primary = String(am?.primaryPower || "").trim();
+  if (primary && POWER_ORDER.includes(/** @type {AmuletPowerKey} */ (primary))) {
+    return /** @type {AmuletPowerKey} */ (primary);
+  }
+  /** @type {AmuletPowerKey} */
+  let bestKey = "protection";
+  let bestSc = -Infinity;
+  for (const k of POWER_ORDER) {
+    const sc = Number(axisScores[k]) || 0;
+    if (sc > bestSc) {
+      bestSc = sc;
+      bestKey = /** @type {AmuletPowerKey} */ (k);
+    } else if (sc === bestSc && POWER_ORDER.indexOf(k) < POWER_ORDER.indexOf(bestKey)) {
+      bestKey = /** @type {AmuletPowerKey} */ (k);
+    }
+  }
+  return bestKey;
 }
 
 /**
@@ -320,7 +375,7 @@ function applyConfirmedGrouping(scans) {
 
 /**
  * @param {unknown} raw
- * @param {{ id?: string, created_at?: string }} meta
+ * @param {{ id?: string, created_at?: string, uploadId?: string|null, uploadThumbnailPath?: string|null }} meta
  * @returns {SacredAmuletLibraryItem | null}
  */
 export function extractSacredAmuletLibraryItem(raw, meta) {
@@ -346,22 +401,19 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     ? Math.round(Math.min(100, Math.max(0, es * 10)))
     : 0;
 
-  let peakKey = String(am.primaryPower || "").trim() || "protection";
-  try {
-    const m = computeAmuletOrdAndAlignFromPayload(norm);
-    if (m?.objectPeakKey) peakKey = String(m.objectPeakKey);
-  } catch {
-    /* keep primary */
-  }
-  const peakPowerLabelTh =
-    POWER_LABEL_THAI[/** @type {keyof typeof POWER_LABEL_THAI} */ (peakKey)] ||
-    POWER_LABEL_THAI.protection;
-
   const cp = Number(norm.summary?.compatibilityPercent);
   const compatPercent = Number.isFinite(cp) ? Math.round(Math.min(100, Math.max(0, cp))) : null;
 
   const img = String(norm.object?.objectImageUrl || "").trim();
-  const thumbUrl = /^https?:\/\//i.test(img) ? img : "";
+  const objectThumb = /^https?:\/\//i.test(img) ? img : "";
+  const metaThumb =
+    meta && "uploadThumbnailPath" in meta && meta.uploadThumbnailPath != null
+      ? String(meta.uploadThumbnailPath).trim()
+      : "";
+  let thumbUrl = objectThumb;
+  if (metaThumb && /^https?:\/\//i.test(metaThumb)) {
+    thumbUrl = metaThumb;
+  }
 
   const scannedAtIso =
     String(meta?.created_at || "").trim() ||
@@ -377,6 +429,11 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     const sc = Number(am.powerCategories?.[k]?.score);
     axisScores[k] = Number.isFinite(sc) ? sc : 0;
   }
+
+  const peakPowerKey = resolveSacredAmuletLibraryPeakPowerKey(norm, am, axisScores);
+  const peakPowerLabelTh =
+    POWER_LABEL_THAI[/** @type {keyof typeof POWER_LABEL_THAI} */ (peakPowerKey)] ||
+    POWER_LABEL_THAI.protection;
 
   const identity = resolveGroupIdentity(raw, norm, meta);
   const rawObj = /** @type {Record<string, unknown>} */ (raw);
@@ -437,6 +494,7 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     publicToken: tok,
     thumbUrl,
     powerTotal,
+    peakPowerKey,
     peakPowerLabelTh,
     compatPercent,
     scannedAtIso,
@@ -454,7 +512,31 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
     objectGroupId,
     userConfirmedGroup,
     duplicateConfidence,
+    uploadId: String(meta?.uploadId || "").trim() || null,
+    uploadThumbnailPath: metaThumb || null,
+    /** @internal payload object image for signed-URL fallback after DB enrich */
+    _objectImageUrlForThumb: objectThumb,
   };
+}
+
+/**
+ * Sort comparator: higher axis score first; tie → สแกนใหม่กว่า; tie → compat สูงกว่า; tie → scan id.
+ * @param {SacredAmuletLibraryItem} a
+ * @param {SacredAmuletLibraryItem} b
+ * @param {AmuletPowerKey} axis
+ * @returns {number}
+ */
+function compareAxisScoreDesc(a, b, axis) {
+  const da = Number(a.axisScores?.[axis]) || 0;
+  const db = Number(b.axisScores?.[axis]) || 0;
+  if (db !== da) return db - da;
+  const ta = Date.parse(String(a.scannedAtIso || "")) || 0;
+  const tb = Date.parse(String(b.scannedAtIso || "")) || 0;
+  if (tb !== ta) return tb - ta;
+  const ca = a.compatPercent != null ? a.compatPercent : -1;
+  const cb = b.compatPercent != null ? b.compatPercent : -1;
+  if (cb !== ca) return cb - ca;
+  return String(b.scanResultV2Id || "").localeCompare(String(a.scanResultV2Id || ""));
 }
 
 /**
@@ -462,14 +544,32 @@ export function extractSacredAmuletLibraryItem(raw, meta) {
  * @param {AmuletPowerKey} axis
  */
 function sortByAxisScore(items, axis) {
-  return [...items].sort((a, b) => {
-    const da = Number(a.axisScores?.[axis]) || 0;
-    const db = Number(b.axisScores?.[axis]) || 0;
-    if (db !== da) return db - da;
-    const ta = Date.parse(String(a.scannedAtIso || "")) || 0;
-    const tb = Date.parse(String(b.scannedAtIso || "")) || 0;
-    return tb - ta;
-  });
+  return [...items].sort((a, b) => compareAxisScoreDesc(a, b, axis));
+}
+
+/**
+ * คะแนนสูงสุดต่อมิติ (สูงสุด 6); ข้ามมิติที่ไม่มีคะแนน > 0
+ * @param {SacredAmuletLibraryItem[]} items
+ * @returns {SacredAmuletAxisHighlight[]}
+ */
+function pickSacredAmuletAxisHighlights(items) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  /** @type {SacredAmuletAxisHighlight[]} */
+  const out = [];
+  for (const axis of POWER_ORDER) {
+    const scored = items.filter((it) => {
+      const s = Number(it.axisScores?.[axis]);
+      return Number.isFinite(s) && s > 0;
+    });
+    if (!scored.length) continue;
+    const item = [...scored].sort((a, b) => compareAxisScoreDesc(a, b, axis))[0];
+    const axisScore = Math.round(Number(item.axisScores?.[axis]) || 0);
+    const labelTh =
+      POWER_LABEL_THAI[/** @type {keyof typeof POWER_LABEL_THAI} */ (axis)] ||
+      String(axis);
+    out.push({ axis, labelTh, item, axisScore });
+  }
+  return out;
 }
 
 function sortByOverall(items) {
@@ -479,6 +579,68 @@ function sortByOverall(items) {
     const tb = Date.parse(String(b.scannedAtIso || "")) || 0;
     return tb - ta;
   });
+}
+
+/**
+ * @param {SacredAmuletLibraryItem[]} items
+ * @param {Map<string, string>} signedByPath
+ */
+function applySignedThumbUrlsToLibraryItems(items, signedByPath) {
+  if (!Array.isArray(items)) return;
+  for (const it of items) {
+    if (!it || typeof it !== "object") continue;
+    const path = String(it.uploadThumbnailPath || "").trim();
+    const objFb = String(it._objectImageUrlForThumb ?? "").trim();
+    const objHttps = /^https?:\/\//i.test(objFb) ? objFb : "";
+
+    let next = "";
+    if (!path) {
+      next = objHttps;
+    } else if (/^https?:\/\//i.test(path)) {
+      next = path;
+    } else {
+      const signed = signedByPath.get(path);
+      if (signed && /^https?:\/\//i.test(signed)) next = signed;
+      else next = objHttps;
+    }
+    if (!next) {
+      const legacy = String(it.thumbUrl || "").trim();
+      if (/^https?:\/\//i.test(legacy)) next = legacy;
+    }
+    it.thumbUrl = next;
+    delete it._objectImageUrlForThumb;
+  }
+}
+
+/**
+ * @param {SacredAmuletLibraryView} view
+ */
+function stripSacredAmuletLibraryInternalThumbFields(view) {
+  if (!view || typeof view !== "object") return;
+  const lists = [
+    view.items,
+    view.byOverall,
+    view.byLuck,
+    view.byProtection,
+    view.byMetta,
+    view.byBaramee,
+    view.byFit,
+  ];
+  for (const arr of lists) {
+    if (!Array.isArray(arr)) continue;
+    for (const it of arr) {
+      if (it && typeof it === "object") delete it._objectImageUrlForThumb;
+    }
+  }
+  if (view.topOverall && typeof view.topOverall === "object") {
+    delete view.topOverall._objectImageUrlForThumb;
+  }
+  if (Array.isArray(view.axisHighlights)) {
+    for (const h of view.axisHighlights) {
+      const it = h?.item;
+      if (it && typeof it === "object") delete it._objectImageUrlForThumb;
+    }
+  }
 }
 
 function sortByFit(items) {
@@ -496,9 +658,10 @@ function sortByFit(items) {
  * Build grouped ranking view from raw scan-level items.
  *
  * @param {SacredAmuletLibraryItem[]} scans
+ * @param {{ retainThumbFallbackField?: boolean }} [options] — when true, keep `_objectImageUrlForThumb` for batch signing in {@link buildSacredAmuletLibraryForLineUser}
  * @returns {SacredAmuletLibraryView|null}
  */
-export function buildSacredAmuletLibraryViewFromItems(scans) {
+export function buildSacredAmuletLibraryViewFromItems(scans, options = {}) {
   if (!Array.isArray(scans) || scans.length === 0) return null;
   /** @type {Map<string, SacredAmuletLibraryItem[]>} */
   const grouped = new Map();
@@ -537,6 +700,11 @@ export function buildSacredAmuletLibraryViewFromItems(scans) {
   }
 
   const itemsMarked = markPossibleDuplicates(items);
+  if (!options.retainThumbFallbackField) {
+    for (const it of itemsMarked) {
+      if (it && typeof it === "object") delete it._objectImageUrlForThumb;
+    }
+  }
   const groupedObjectCount =
     itemsMarked.length < nearExactGroupedScans.length
       ? itemsMarked.length
@@ -547,30 +715,100 @@ export function buildSacredAmuletLibraryViewFromItems(scans) {
     groupedObjectCount,
     items: itemsMarked,
     byOverall: sortByOverall(itemsMarked),
-    byLuck: sortByAxisScore(itemsMarked, "luck"),
-    byProtection: sortByAxisScore(itemsMarked, "protection"),
-    byMetta: sortByAxisScore(itemsMarked, "metta"),
-    byBaramee: sortByAxisScore(itemsMarked, "baramee"),
+    byLuck: sortByAxisScore(
+      itemsMarked.filter((it) => it.peakPowerKey === "luck"),
+      "luck",
+    ),
+    byProtection: sortByAxisScore(
+      itemsMarked.filter((it) => it.peakPowerKey === "protection"),
+      "protection",
+    ),
+    byMetta: sortByAxisScore(
+      itemsMarked.filter((it) => it.peakPowerKey === "metta"),
+      "metta",
+    ),
+    byBaramee: sortByAxisScore(
+      itemsMarked.filter((it) => it.peakPowerKey === "baramee"),
+      "baramee",
+    ),
     byFit: sortByFit(itemsMarked),
     topOverall: sortByOverall(itemsMarked)[0] || null,
+    axisHighlights: pickSacredAmuletAxisHighlights(itemsMarked),
   };
 }
 
 /**
+ * Thumbnail paths to sign for embedded report: #1 overall + each axis highlight card (deduped by scan row / token).
+ * @param {SacredAmuletLibraryView} view
+ * @returns {SacredAmuletLibraryItem[]}
+ */
+function collectMiniLibraryThumbSignTargets(view) {
+  if (!view || typeof view !== "object") return [];
+  /** @type {SacredAmuletLibraryItem[]} */
+  const out = [];
+  const seen = new Set();
+  const add = (it) => {
+    if (!it || typeof it !== "object") return;
+    const sid = String(it.scanResultV2Id || "").trim();
+    const tok = String(it.publicToken || "").trim();
+    const key = sid || tok || String(it.uploadThumbnailPath || it.thumbUrl || "").trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(it);
+  };
+  add(view.topOverall);
+  for (const h of view.axisHighlights || []) {
+    if (h?.item) add(h.item);
+  }
+  return out;
+}
+
+/**
  * @param {string} lineUserId — LINE `userId` จาก report payload
+ * @param {{ libraryThumbScope?: "full"|"mini" }} [opts] — `mini`: sign thumbnails for {@link SacredAmuletLibraryView.topOverall} plus items in {@link SacredAmuletLibraryView.axisHighlights} only (report embed). `full`: all grouped cards for `/library`.
  * @returns {Promise<SacredAmuletLibraryView|null>}
  */
-export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
+export async function buildSacredAmuletLibraryForLineUser(lineUserId, opts = {}) {
+  const buildWallStart = Date.now();
   const uid = String(lineUserId || "").trim();
   if (!uid) return null;
 
+  const thumbScope = opts.libraryThumbScope === "mini" ? "mini" : "full";
+
   const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
+
+  const scanJobIdByResultId = new Map();
+  for (const row of rows) {
+    const rid = String(row?.id || "").trim();
+    const jobId = String(row?.scan_job_id || "").trim();
+    if (rid && jobId) scanJobIdByResultId.set(rid, jobId);
+  }
+
+  /** @type {Map<string, string>} */
+  const uploadIdByJobId = new Map();
+  const scanJobIds = Array.from(new Set(Array.from(scanJobIdByResultId.values())));
+  if (scanJobIds.length) {
+    try {
+      const jobRows = await listScanJobsUploadIdsByIds(scanJobIds, uid);
+      for (const r of jobRows) {
+        const jid = String(r.id || "").trim();
+        const upid = String(r.upload_id || "").trim();
+        if (jid && upid) uploadIdByJobId.set(jid, upid);
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }
+
   /** @type {SacredAmuletLibraryItem[]} */
   const scans = [];
 
   for (const row of rows) {
     const raw = row?.report_payload_json;
-    const meta = { id: row?.id, created_at: row?.created_at };
+    const rid = String(row?.id || "").trim();
+    const jobId = scanJobIdByResultId.get(rid) || "";
+    const uploadId = jobId ? uploadIdByJobId.get(jobId) || null : null;
+    const meta = { id: row?.id, created_at: row?.created_at, uploadId };
     const fromRow = extractSacredAmuletLibraryItem(raw, meta);
     if (!fromRow) continue;
     let tok = fromRow.publicToken;
@@ -586,23 +824,8 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
     scans.map((s) => String(s.scanResultV2Id || "").trim()).filter(Boolean),
   ).size;
 
-  const scanJobIdByResultId = new Map();
-  for (const row of rows) {
-    const rid = String(row?.id || "").trim();
-    const jobId = String(row?.scan_job_id || "").trim();
-    if (rid && jobId) scanJobIdByResultId.set(rid, jobId);
-  }
-
-  const scanJobIds = Array.from(new Set(Array.from(scanJobIdByResultId.values())));
   if (scanJobIds.length) {
     try {
-      const jobRows = await listScanJobsUploadIdsByIds(scanJobIds, uid);
-      const uploadIdByJobId = new Map();
-      for (const r of jobRows) {
-        const jid = String(r.id || "").trim();
-        const upid = String(r.upload_id || "").trim();
-        if (jid && upid) uploadIdByJobId.set(jid, upid);
-      }
       const uploadIds = Array.from(new Set(Array.from(uploadIdByJobId.values())));
       if (uploadIds.length) {
         const uploadRows = await listScanUploadsSha256ByIds(uploadIds, uid);
@@ -650,8 +873,78 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
     }
   }
   const scansWithPhashCount = scans.filter((s) => String(s.imagePhash || "").trim()).length;
-  const view = buildSacredAmuletLibraryViewFromItems(scans);
+
+  const uploadIdsForRetention = [
+    ...new Set(scans.map((s) => String(s.uploadId || "").trim()).filter(Boolean)),
+  ];
+  if (uploadIdsForRetention.length && uid) {
+    try {
+      const upMeta = await listScanUploadRetentionFieldsByIds(
+        uploadIdsForRetention,
+        uid,
+      );
+      const byUp = new Map(upMeta.map((r) => [String(r.id || "").trim(), r]));
+      for (const s of scans) {
+        const upid = String(s.uploadId || "").trim();
+        if (!upid) continue;
+        const row = byUp.get(upid);
+        if (!row) continue;
+        s.uploadOriginalDeletedAt = row.original_deleted_at
+          ? String(row.original_deleted_at)
+          : null;
+        s.uploadThumbnailPath = row.thumbnail_path
+          ? String(row.thumbnail_path)
+          : null;
+      }
+    } catch {
+      /* non-fatal: library still renders from payload thumbUrl */
+    }
+  }
+
+  const view = buildSacredAmuletLibraryViewFromItems(scans, {
+    retainThumbFallbackField: true,
+  });
   if (!view) return null;
+
+  const signTargets =
+    thumbScope === "mini" ? collectMiniLibraryThumbSignTargets(view) : view.items || [];
+
+  const pathsToSign = [];
+  const seenPath = new Set();
+  for (const it of signTargets) {
+    const p = String(it?.uploadThumbnailPath || "").trim();
+    if (!p || /^https?:\/\//i.test(p)) continue;
+    if (seenPath.has(p)) continue;
+    seenPath.add(p);
+    pathsToSign.push(p);
+  }
+
+  /** @type {Map<string, string>} */
+  let signedByPath = new Map();
+  if (pathsToSign.length) {
+    const tSign = Date.now();
+    console.log(
+      JSON.stringify({
+        event: "LIBRARY_THUMB_SIGN_START",
+        count: pathsToSign.length,
+        scope: thumbScope,
+      }),
+    );
+    signedByPath = await createScanUploadBucketSignedUrls(pathsToSign, 86400);
+    console.log(
+      JSON.stringify({
+        event: "LIBRARY_THUMB_SIGN_DONE",
+        count: pathsToSign.length,
+        signedOk: signedByPath.size,
+        durationMs: Date.now() - tSign,
+        scope: thumbScope,
+      }),
+    );
+  }
+
+  applySignedThumbUrlsToLibraryItems(view.items || [], signedByPath);
+  stripSacredAmuletLibraryInternalThumbFields(view);
+
   const groupedItemsCount = view.items.length;
   const duplicateGroupsCount = view.items.filter((it) => it.scanCountInGroup > 1).length;
   console.log(
@@ -664,6 +957,14 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId) {
       scansWithPhashCount,
       groupedItemsCount,
       duplicateGroupsCount,
+    }),
+  );
+  console.log(
+    JSON.stringify({
+      event: "LIBRARY_BUILD_DONE",
+      durationMs: Date.now() - buildWallStart,
+      scope: thumbScope,
+      groupedItemsCount,
     }),
   );
   return view;
@@ -680,17 +981,6 @@ export function buildSacredAmuletLibraryViewFromPayloadOnly(payload) {
     created_at: String(payload.generatedAt || ""),
   });
   if (!item) return null;
-  const items = [item];
-  return {
-    totalCount: 1,
-    groupedObjectCount: null,
-    items,
-    byOverall: items,
-    byLuck: items,
-    byProtection: items,
-    byMetta: items,
-    byBaramee: items,
-    byFit: items,
-    topOverall: item,
-  };
+  delete item._objectImageUrlForThumb;
+  return buildSacredAmuletLibraryViewFromItems([item]);
 }

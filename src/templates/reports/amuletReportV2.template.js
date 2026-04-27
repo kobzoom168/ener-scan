@@ -172,8 +172,9 @@ const MV2_ET_TIME_ACTIVE = 40;
 /**
  * Sacred amulet timing section — strips จาก `weekdayItems` / `timeItems` ใน model (อ่านจาก timingV1)
  * @param {object} ts — return ของ `buildSacredAmuletTimingCardDisplay`
+ * @param {string} [energyTimingHref] — ลิงก์หน้าอธิบายวิธีคำนวณ (ถ้ามี จะแสดง CTA ท้ายการ์ดเดียวกัน)
  */
-function buildAmuletTimingVisualHtml(ts) {
+function buildAmuletTimingVisualHtml(ts, energyTimingHref = "") {
   const wdItems = ts.weekdayItems || [];
   const wdStrip = wdItems
     .map((it, i) => {
@@ -226,7 +227,14 @@ function buildAmuletTimingVisualHtml(ts) {
         <span class="mv2-timing-k mv2-timing-k--mode">${escapeHtml(String(ts.modeKicker || "").trim() || "แนวใช้ที่แนะนำ")}</span>
         <p class="mv2-timing-mode-body">${escapeHtml(ts.ritualLine)}</p>
         <p class="mv2-timing-hint mv2-timing-hint--compact">${escapeHtml(ts.hint)}</p>
-      </div>
+      </div>${
+        String(energyTimingHref || "").trim()
+          ? `<div class="mv2-timing-cta mv2-timing-cta--inline" role="region" aria-label="อธิบายจังหวะเสริมพลัง">
+        <p class="mv2-timing-cta-hint">อธิบายว่าทำไมระบบถึงแนะนำวันนี้และช่วงเวลานี้</p>
+        <a class="mv2-timing-cta-btn" href="${escapeHtml(String(energyTimingHref).trim())}">ดูวิธีคำนวณจังหวะเสริมพลัง</a>
+      </div>`
+          : ""
+      }
     </section>`;
 }
 
@@ -297,6 +305,53 @@ function mainGraphBlock(vm) {
 }
 
 /**
+ * Horizontal mini carousel: best item per axis (same data as /library “พระเด่นประจำพลังของคุณ”).
+ * @param {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletAxisHighlight[]|null|undefined} highlights
+ */
+function buildLibraryAxisHighlightsMiniCarouselHtml(highlights) {
+  if (!Array.isArray(highlights) || highlights.length === 0) return "";
+  const list = highlights.length > 6 ? highlights.slice(0, 6) : highlights;
+  const slides = list
+    .map((h, idx) => {
+      const item = h.item;
+      const tok = String(item?.publicToken || "").trim();
+      const href = tok ? `/r/${encodeURIComponent(tok)}` : "";
+      const img = item?.thumbUrl
+        ? `<div class="mv2-lib-axis-img"><img src="${escapeHtml(String(item.thumbUrl))}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
+        : `<div class="mv2-lib-axis-img mv2-lib-axis-img--empty" aria-hidden="true"></div>`;
+      const scoreStr = String(Math.round(Number(h.axisScore) || 0));
+      const cta = href
+        ? `<a class="mv2-lib-axis-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>`
+        : `<span class="mv2-lib-axis-btn mv2-lib-axis-btn--disabled" aria-disabled="true">ดูรายละเอียด</span>`;
+      return `
+  <article class="mv2-lib-axis-slide" data-mv2-slide-i="${idx}">
+    <p class="mv2-lib-axis-badge">${escapeHtml(h.labelTh)}</p>
+    ${img}
+    <p class="mv2-lib-axis-id">${escapeHtml(String(item?.displayReportId || ""))}</p>
+    <div class="mv2-lib-axis-score" aria-label="คะแนนด้านนี้"><span class="mv2-lib-axis-score-num">${escapeHtml(scoreStr)}</span><span class="mv2-lib-axis-score-suf">คะแนน</span></div>
+    <p class="mv2-lib-axis-blurb">เด่นสุดในด้านนี้</p>
+    ${cta}
+  </article>`;
+    })
+    .join("");
+  const dots = list
+    .map(
+      (_, idx) =>
+        `<button type="button" class="mv2-lib-axis-dot${idx === 0 ? " mv2-lib-axis-dot--on" : ""}" data-mv2-dot-i="${idx}" aria-label="ไปที่การ์ด ${idx + 1}" aria-current="${idx === 0 ? "true" : "false"}"></button>`,
+    )
+    .join("");
+  return `
+    <div class="mv2-lib-axis" id="mv2-lib-axis-carousel" data-mv2-lib-axis-slides="${String(list.length)}">
+      <h3 id="mv2-lib-axis-h" class="mv2-lib-axis-h3">พระเด่นประจำพลังของคุณ</h3>
+      <p class="mv2-lib-axis-hint">เลื่อนดูพลังด้านอื่น ๆ</p>
+      <div class="mv2-lib-axis-viewport" tabindex="0" role="region" aria-roledescription="carousel" aria-labelledby="mv2-lib-axis-h">
+        ${slides}
+      </div>
+      <div class="mv2-lib-axis-dots" role="tablist" aria-label="ตำแหน่งในแคโรเซล">${dots}</div>
+    </div>`;
+}
+
+/**
  * Mini “คลังพลังของคุณ” — ไม่แสดงชื่อพระเดา; รูป + พลังรวม + พลังเด่นจากแกน
  * @param {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletLibraryView} library
  * @param {string} pageToken — ถ้าว่าง จะไม่แสดงปุ่มลิงก์
@@ -316,8 +371,9 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken) {
       ? `<p class="mv2-lib-nudge">สแกนเพิ่มอีกสักรายการ ระบบจะช่วยจัดอันดับและเปรียบเทียบให้ชัดขึ้น</p>`
       : "";
   const btn = libHref
-    ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">ดูอันดับทั้งหมด</a>`
+    ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">ดูอันดับทั้งหมดในคลัง</a>`
     : "";
+  const axisCarouselHtml = buildLibraryAxisHighlightsMiniCarouselHtml(library.axisHighlights);
   return `
     <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">
       <h2 id="mv2-lib-h">คลังพลังของคุณ</h2>
@@ -325,11 +381,12 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken) {
       <div class="mv2-lib-spot">
         ${imgBlock}
         <div class="mv2-lib-spot-body">
-          <p class="mv2-lib-rankline">อันดับ 1 ตอนนี้ · รายการที่พลังรวมเด่นสุดในคลังของคุณ</p>
+          <p class="mv2-lib-rankline">อันดับ 1 โดยรวมตอนนี้</p>
           <p class="mv2-lib-scoreline">พลังรวม <strong>${escapeHtml(String(top.powerTotal))}</strong></p>
           <p class="mv2-lib-peakline">เด่นสุด: ${escapeHtml(top.peakPowerLabelTh)}</p>
         </div>
       </div>
+      ${axisCarouselHtml}
       ${nudge}
       ${btn}
     </section>`;
@@ -417,14 +474,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const usageDisclaimer = escapeHtml(vm.usageCaution.disclaimer || "");
 
   const ts = vm.timingSection;
-  const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts) : "";
-  const energyTimingCtaHtml =
-    ts && energyTimingHref
-      ? `<div class="mv2-timing-cta" role="region" aria-label="อธิบายจังหวะเสริมพลัง">
-      <p class="mv2-timing-cta-hint">อธิบายว่าทำไมระบบถึงแนะนำวันนี้และช่วงเวลานี้</p>
-      <a class="mv2-timing-cta-btn" href="${escapeHtml(energyTimingHref)}">ดูวิธีคำนวณจังหวะเสริมพลัง</a>
-    </div>`
-      : "";
+  const timingCardHtml = ts ? buildAmuletTimingVisualHtml(ts, energyTimingHref) : "";
   const tac = /** @type {{ title?: string; recommendedWeekday?: string; secondaryWeekday?: string; confidence?: string; weekdayTip?: string; reasonShort?: string; actionLine?: string } | null} */ (
     vm.timingActionCard
   );
@@ -1109,45 +1159,65 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       color: #0c0e12;
       filter: brightness(1.06);
     }
-    .mv2-timing-cta {
-      margin: 0.55rem 0 0;
-      padding: 0.55rem 0.65rem 0.62rem;
-      border-radius: 12px;
-      border: 1px solid rgba(184, 135, 27, 0.22);
-      background: rgba(184, 135, 27, 0.06);
+    /* Timing explain CTA — อยู่ท้ายการ์ดจังหวะเสริมพลัง (ไม่แยก card) */
+    .mv2-timing-cta.mv2-timing-cta--inline {
+      margin: 0.75rem 0 0;
+      padding: 0.72rem 0 0.15rem;
+      border: none;
+      border-top: 1px solid rgba(184, 135, 27, 0.16);
+      border-radius: 0;
+      background: transparent;
       text-align: center;
     }
-    .mv2-timing-cta-hint {
-      margin: 0 0 0.45rem;
+    .mv2-timing-cta--inline .mv2-timing-cta-hint {
+      margin: 0 0 0.52rem;
       font-size: 0.72rem;
-      line-height: 1.45;
+      line-height: 1.48;
       color: var(--mv2a-muted);
+      max-width: 22rem;
+      margin-left: auto;
+      margin-right: auto;
     }
-    .mv2-timing-cta-btn {
+    .mv2-timing-cta--inline .mv2-timing-cta-btn {
       display: inline-block;
-      padding: 0.48rem 0.85rem;
-      font-size: 0.78rem;
-      font-weight: 700;
+      padding: 0.4rem 0.92rem;
+      font-size: 0.74rem;
+      font-weight: 600;
       border-radius: 999px;
       text-decoration: none;
-      color: #0c0e12;
-      background: linear-gradient(165deg, #f0d060, #c9a227);
-      border: 1px solid rgba(0, 0, 0, 0.2);
-      box-shadow: 0 2px 10px rgba(232, 197, 71, 0.22);
+      color: var(--mv2a-gold-dim);
+      background: rgba(184, 135, 27, 0.08);
+      border: 1px solid rgba(184, 135, 27, 0.32);
+      box-shadow: none;
     }
-    .mv2-timing-cta-btn:hover {
-      filter: brightness(1.05);
+    .mv2-timing-cta--inline .mv2-timing-cta-btn:hover {
+      filter: none;
+      background: rgba(184, 135, 27, 0.13);
+      border-color: rgba(184, 135, 27, 0.42);
     }
-    html.mv2a-theme-dark .mv2-timing-cta {
-      border-color: rgba(232, 197, 71, 0.35);
-      background: rgba(232, 197, 71, 0.07);
+    html.mv2a-theme-dark .mv2-timing-cta.mv2-timing-cta--inline {
+      border-top-color: rgba(232, 197, 71, 0.14);
     }
-    html.mv2a-theme-dark .mv2-timing-cta-hint {
-      color: rgba(226, 232, 240, 0.88);
+    html.mv2a-theme-dark .mv2-timing-cta--inline .mv2-timing-cta-hint {
+      color: rgba(148, 163, 184, 0.88);
     }
-    html.mv2a-theme-dark .mv2-timing-cta-btn {
-      color: #0c0e12;
-      background: linear-gradient(165deg, #f0d060, #c9a227);
+    html.mv2a-theme-dark .mv2-timing-cta--inline .mv2-timing-cta-btn {
+      color: rgba(250, 230, 170, 0.95);
+      background: rgba(232, 197, 71, 0.08);
+      border-color: rgba(232, 197, 71, 0.28);
+    }
+    html.mv2a-theme-dark .mv2-timing-cta--inline .mv2-timing-cta-btn:hover {
+      background: rgba(232, 197, 71, 0.12);
+      border-color: rgba(232, 197, 71, 0.38);
+    }
+    @media (max-width: 520px) {
+      .mv2-timing-cta.mv2-timing-cta--inline {
+        margin-top: 0.85rem;
+        padding-top: 0.82rem;
+      }
+      .mv2-timing-cta--inline .mv2-timing-cta-hint {
+        margin-bottom: 0.58rem;
+      }
     }
     .mv2-lib-mini {
       border-left: 3px solid rgba(120, 160, 220, 0.45);
@@ -1241,6 +1311,174 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     }
     .mv2-lib-btn:hover {
       filter: brightness(1.05);
+    }
+    .mv2-lib-axis {
+      margin: 0.55rem 0 0.15rem;
+      padding-top: 0.55rem;
+      border-top: 1px solid rgba(184, 135, 27, 0.14);
+    }
+    .mv2-lib-axis-h3 {
+      margin: 0 0 0.2rem;
+      font-size: 0.86rem;
+      font-weight: 800;
+      color: var(--mv2a-gold-dim);
+      letter-spacing: 0.02em;
+    }
+    .mv2-lib-axis-hint {
+      margin: 0 0 0.45rem;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: var(--mv2a-muted);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mv2-lib-axis-viewport {
+        scroll-behavior: auto;
+      }
+    }
+    .mv2-lib-axis-viewport {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 0.55rem;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      padding: 0.15rem 0 0.35rem;
+      scrollbar-width: none;
+      outline: none;
+    }
+    .mv2-lib-axis-viewport::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+    .mv2-lib-axis-slide {
+      flex: 0 0 min(86%, 280px);
+      max-width: 280px;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      border-radius: 12px;
+      border: 1px solid rgba(184, 135, 27, 0.18);
+      background: rgba(184, 135, 27, 0.04);
+      padding: 0.5rem 0.55rem 0.55rem;
+      box-sizing: border-box;
+    }
+    .mv2-lib-axis-badge {
+      margin: 0 0 0.4rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--mv2a-gold);
+      line-height: 1.35;
+    }
+    .mv2-lib-axis-img {
+      width: 4rem;
+      height: 4rem;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 0 auto 0.4rem;
+      border: 1px solid rgba(184, 135, 27, 0.2);
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .mv2-lib-axis-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .mv2-lib-axis-img--empty {
+      background: repeating-linear-gradient(
+        -45deg,
+        rgba(120, 160, 220, 0.08),
+        rgba(120, 160, 220, 0.08) 5px,
+        transparent 5px,
+        transparent 10px
+      );
+    }
+    .mv2-lib-axis-id {
+      margin: 0 0 0.28rem;
+      text-align: center;
+      font-size: 0.78rem;
+      font-weight: 800;
+      color: var(--mv2a-muted);
+      line-height: 1.3;
+    }
+    .mv2-lib-axis-score {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.15rem;
+      margin: 0 0 0.28rem;
+    }
+    .mv2-lib-axis-score-num {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--mv2a-gold);
+      font-variant-numeric: tabular-nums;
+    }
+    .mv2-lib-axis-score-suf {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--mv2a-muted);
+    }
+    .mv2-lib-axis-blurb {
+      margin: 0 0 0.4rem;
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--mv2a-muted);
+      line-height: 1.4;
+    }
+    .mv2-lib-axis-btn {
+      display: block;
+      text-align: center;
+      padding: 0.38rem 0.5rem;
+      font-size: 0.76rem;
+      font-weight: 700;
+      border-radius: 999px;
+      text-decoration: none;
+      color: #0c0e12;
+      background: linear-gradient(165deg, #e8c547, #c9a227);
+      border: 1px solid rgba(0, 0, 0, 0.18);
+    }
+    .mv2-lib-axis-btn:hover {
+      filter: brightness(1.04);
+    }
+    .mv2-lib-axis-btn--disabled {
+      opacity: 0.45;
+      cursor: default;
+      background: rgba(184, 135, 27, 0.15);
+      border-color: rgba(184, 135, 27, 0.12);
+    }
+    .mv2-lib-axis-dots {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.32rem;
+      margin-top: 0.42rem;
+    }
+    .mv2-lib-axis-dot {
+      width: 0.42rem;
+      height: 0.42rem;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: rgba(184, 135, 27, 0.3);
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.12s ease;
+    }
+    .mv2-lib-axis-dot--on {
+      background: var(--mv2a-gold);
+      transform: scale(1.18);
+    }
+    html.mv2a-theme-dark .mv2-lib-axis {
+      border-top-color: rgba(232, 197, 71, 0.14);
+    }
+    html.mv2a-theme-dark .mv2-lib-axis-slide {
+      border-color: rgba(232, 197, 71, 0.2);
+      background: rgba(232, 197, 71, 0.05);
+    }
+    html.mv2a-theme-dark .mv2-lib-axis-dot {
+      background: rgba(232, 197, 71, 0.28);
     }
     html.mv2a-theme-dark .mv2-lib-mini {
       border-left-color: rgba(160, 198, 255, 0.4);
@@ -1807,7 +2045,6 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     </section>
     ${timingActionCardHtml}
     ${timingCardHtml}
-    ${energyTimingCtaHtml}
     ${libraryMiniHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
@@ -1867,6 +2104,163 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   }
   if (shareBtn) shareBtn.addEventListener("click", doShare);
   if (copyBtn) copyBtn.addEventListener("click", copyUrl);
+})();
+(function () {
+  var root = document.getElementById("mv2-lib-axis-carousel");
+  if (!root) return;
+  var track = root.querySelector(".mv2-lib-axis-viewport");
+  if (!track) return;
+  var slides = track.querySelectorAll(".mv2-lib-axis-slide");
+  var dots = root.querySelectorAll(".mv2-lib-axis-dot");
+  var n = slides.length;
+  if (n < 1) return;
+  var reduceMotion =
+    window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var AUTO_MS = 3500;
+  var RESUME_MS = 6000;
+  var autoEnabled = n >= 2 && !reduceMotion;
+  var timer = null;
+  var resumeTimer = null;
+  var idx = 0;
+  var suppressScrollPause = false;
+  var hovering = false;
+  var ignoreScrollMs = Date.now() + 900;
+  function clearAuto() {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  }
+  function clearResume() {
+    if (resumeTimer) {
+      clearTimeout(resumeTimer);
+      resumeTimer = null;
+    }
+  }
+  function setDots(i) {
+    for (var d = 0; d < dots.length; d++) {
+      var on = d === i;
+      dots[d].classList.toggle("mv2-lib-axis-dot--on", on);
+      dots[d].setAttribute("aria-current", on ? "true" : "false");
+    }
+  }
+  function syncIdxFromScroll() {
+    var x = track.scrollLeft;
+    var w = track.clientWidth || 1;
+    var best = 0;
+    var bestScore = -1;
+    for (var i = 0; i < n; i++) {
+      var el = slides[i];
+      var left = el.offsetLeft;
+      var right = left + el.offsetWidth;
+      var viewL = x;
+      var viewR = x + w;
+      var overlap = Math.max(0, Math.min(right, viewR) - Math.max(left, viewL));
+      if (overlap > bestScore) {
+        bestScore = overlap;
+        best = i;
+      }
+    }
+    idx = best;
+    setDots(idx);
+  }
+  var scrollEndTimer = null;
+  function onScroll() {
+    if (suppressScrollPause) return;
+    if (!autoEnabled) {
+      syncIdxFromScroll();
+      return;
+    }
+    pauseFromUser();
+    clearTimeout(scrollEndTimer);
+    scrollEndTimer = setTimeout(function () {
+      syncIdxFromScroll();
+    }, 120);
+  }
+  function goTo(i, smooth) {
+    if (i < 0 || i >= n) return;
+    idx = i;
+    var el = slides[i];
+    suppressScrollPause = true;
+    var targetLeft = el.offsetLeft;
+    try {
+      if (track.scrollTo) {
+        var beh = smooth && !reduceMotion ? "smooth" : "auto";
+        track.scrollTo({ left: targetLeft, behavior: beh });
+      } else {
+        track.scrollLeft = targetLeft;
+      }
+    } catch (e) {
+      track.scrollLeft = targetLeft;
+    }
+    setDots(idx);
+    setTimeout(
+      function () {
+        suppressScrollPause = false;
+      },
+      smooth ? 720 : 90,
+    );
+  }
+  function tick() {
+    if (!autoEnabled || hovering) return;
+    syncIdxFromScroll();
+    var next = (idx + 1) % n;
+    goTo(next, true);
+  }
+  function scheduleAuto() {
+    clearAuto();
+    if (!autoEnabled || hovering) return;
+    timer = setInterval(tick, AUTO_MS);
+  }
+  function pauseFromUser() {
+    clearAuto();
+    clearResume();
+    resumeTimer = setTimeout(function () {
+      resumeTimer = null;
+      if (!hovering) scheduleAuto();
+    }, RESUME_MS);
+  }
+  track.addEventListener("scroll", onScroll, { passive: true });
+  track.addEventListener(
+    "wheel",
+    function () {
+      if (autoEnabled) pauseFromUser();
+    },
+    { passive: true },
+  );
+  track.addEventListener(
+    "touchstart",
+    function () {
+      if (autoEnabled) pauseFromUser();
+    },
+    { passive: true },
+  );
+  track.addEventListener("pointerdown", function () {
+    if (autoEnabled) pauseFromUser();
+  });
+  root.addEventListener("mouseenter", function () {
+    hovering = true;
+    clearAuto();
+    clearResume();
+  });
+  root.addEventListener("mouseleave", function () {
+    hovering = false;
+    clearResume();
+    resumeTimer = setTimeout(function () {
+      resumeTimer = null;
+      scheduleAuto();
+    }, RESUME_MS);
+  });
+  for (var di = 0; di < dots.length; di++) {
+    (function (j) {
+      dots[j].addEventListener("click", function () {
+        if (autoEnabled) pauseFromUser();
+        goTo(j, true);
+      });
+    })(di);
+  }
+  if (autoEnabled) scheduleAuto();
+  else syncIdxFromScroll();
 })();
   </script>
 </body>

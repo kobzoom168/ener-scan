@@ -10,7 +10,7 @@ import { AMULET_HTML_V2_USAGE_DISCLAIMER } from "./amuletHtmlV2.model.js";
  * @param {Record<string, { key: string, score: number, labelThai: string }>} powerCategories
  * @param {{ headline: string, mainEnergyShort: string, tagline: string }} surface
  */
-function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, surface) {
+export function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, surface) {
   const primaryLabel =
     String(powerCategories[primary]?.labelThai || "").trim() ||
     POWER_LABEL_THAI.protection;

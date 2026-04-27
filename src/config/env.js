@@ -675,6 +675,65 @@ export const env = {
   })(),
 
   /**
+   * Cross-account object baseline (future reuse). Master switch — default off.
+   */
+  ENABLE_CROSS_ACCOUNT_BASELINE_REUSE:
+    String(process.env.ENABLE_CROSS_ACCOUNT_BASELINE_REUSE ?? "false").trim().toLowerCase() ===
+    "true",
+  /**
+   * Phase 2A: reuse path uses exact `image_sha256` match on `global_object_baselines` (default off).
+   */
+  CROSS_ACCOUNT_BASELINE_REUSE_EXACT_SHA:
+    String(process.env.CROSS_ACCOUNT_BASELINE_REUSE_EXACT_SHA ?? "false").trim().toLowerCase() ===
+    "true",
+  /**
+   * Reserved for near-duplicate via pHash (not implemented in Phase 2A; default off).
+   */
+  CROSS_ACCOUNT_BASELINE_REUSE_PHASH:
+    String(process.env.CROSS_ACCOUNT_BASELINE_REUSE_PHASH ?? "false").trim().toLowerCase() ===
+    "true",
+  /**
+   * Phase 2B: pHash near-match diagnostics only (no reuse side effects).
+   */
+  CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTICS:
+    String(process.env.CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTICS ?? "false")
+      .trim()
+      .toLowerCase() === "true",
+  /**
+   * Max Hamming distance for diagnostic pHash candidate logging.
+   * Start strict (default 6) and tune from staging logs.
+   */
+  CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_MAX_DISTANCE: (() => {
+    const raw = process.env.CROSS_ACCOUNT_BASELINE_PHASH_DIAGNOSTIC_MAX_DISTANCE;
+    const n = raw === undefined || raw === "" ? 6 : Number(raw);
+    return Number.isFinite(n) ? Math.min(64, Math.max(0, Math.floor(n))) : 6;
+  })(),
+  /**
+   * Phase 2C: enable pHash near-match baseline reuse. Separate flag from
+   * CROSS_ACCOUNT_BASELINE_REUSE_PHASH (which guards the exact-SHA path).
+   * Default off; enable only after Phase 2C is fully deployed on staging.
+   */
+  CROSS_ACCOUNT_BASELINE_PHASH_REUSE_ENABLED:
+    String(process.env.CROSS_ACCOUNT_BASELINE_PHASH_REUSE_ENABLED ?? "false").trim().toLowerCase() ===
+    "true",
+  /**
+   * Phase 2C: maximum Hamming distance for pHash reuse (0 = visual-exact only).
+   * Default 0 for safety; increase only after validating staging results.
+   */
+  CROSS_ACCOUNT_BASELINE_PHASH_REUSE_MAX_DISTANCE: (() => {
+    const raw = process.env.CROSS_ACCOUNT_BASELINE_PHASH_REUSE_MAX_DISTANCE;
+    const n = raw === undefined || raw === "" ? 0 : Number(raw);
+    return Number.isFinite(n) ? Math.min(64, Math.max(0, Math.floor(n))) : 0;
+  })(),
+  /**
+   * Phase 1A: after successful sacred_amulet scan, upsert `global_object_baselines` by image SHA.
+   * Does not change scan results; default off until migration is applied / staging rollout.
+   */
+  ENABLE_GLOBAL_OBJECT_BASELINE_PERSIST:
+    String(process.env.ENABLE_GLOBAL_OBJECT_BASELINE_PERSIST ?? "false").trim().toLowerCase() ===
+    "true",
+
+  /**
    * Ener Scan V2: async webhook → storage → DB queue → workers (see docs/ENER_SCAN_V2_ROLLOUT.md).
    * When `true`, web attempts `ingestScanImageAsyncV2` for scan image flows (requires literal trimmed `true`).
    */
@@ -721,6 +780,38 @@ export const env = {
   ENABLE_SCAN_WORKER: process.env.ENABLE_SCAN_WORKER === "true",
   ENABLE_DELIVERY_WORKER: process.env.ENABLE_DELIVERY_WORKER === "true",
   ENABLE_MAINTENANCE_WORKER: process.env.ENABLE_MAINTENANCE_WORKER === "true",
+  /**
+   * Daily (default) purge of expired scan_upload originals + payment slip raw images.
+   * Default false — set true only on the dedicated retention worker service, not on web.
+   * Run: ENABLE_STORAGE_RETENTION_WORKER=true node src/workers/storageRetentionWorker.js
+   */
+  ENABLE_STORAGE_RETENTION_WORKER:
+    process.env.ENABLE_STORAGE_RETENTION_WORKER === "true",
+  STORAGE_RETENTION_INTERVAL_MS: Math.max(
+    60_000,
+    Number(process.env.STORAGE_RETENTION_INTERVAL_MS || 86_400_000) || 86_400_000,
+  ),
+  /** Free tier: LINE ingest original bytes deleted after N days unless pinned. */
+  STORAGE_RETENTION_ORIGINAL_DAYS_FREE: Math.max(
+    1,
+    Math.min(
+      3650,
+      Number(process.env.STORAGE_RETENTION_ORIGINAL_DAYS_FREE || 30) || 30,
+    ),
+  ),
+  /** Payment slip JPEG in storage deleted after N days; DB payment row kept. */
+  STORAGE_RETENTION_SLIP_DAYS: Math.max(
+    1,
+    Math.min(3650, Number(process.env.STORAGE_RETENTION_SLIP_DAYS || 90) || 90),
+  ),
+  /** Max pinned full-res originals per LINE user (free tier). */
+  FREE_TIER_PINNED_ORIGINAL_LIMIT: Math.max(
+    0,
+    Math.min(500, Number(process.env.FREE_TIER_PINNED_ORIGINAL_LIMIT || 10) || 10),
+  ),
+  PAYMENT_SLIP_BUCKET:
+    String(process.env.PAYMENT_SLIP_BUCKET || "payment-slips").trim() ||
+    "payment-slips",
   /**
    * Worker-scan only: optional Wikipedia (th) hints for wording — never overrides deterministic truth.
    * Default off. Set `WEB_ENRICHMENT_ENABLED=true` to enable.

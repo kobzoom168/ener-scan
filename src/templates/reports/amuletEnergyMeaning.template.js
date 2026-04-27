@@ -23,15 +23,15 @@ const AXIS_MEANING = {
     foot: "คะแนนสูงไม่ได้หมายถึงการมีอำนาจเหนือผู้อื่น แต่หมายถึงแรงหนุนให้เจ้าของดูนิ่ง หนักแน่น และมีหลักมากขึ้น",
   },
   specialty: {
-    body: "ด้านนี้สื่อถึงพลังที่ช่วยหนุนงานที่ต้องใช้ฝีมือ ความชำนาญ หรือความสามารถเฉพาะตัว เช่น งานขาย งานช่าง งานบริการ งานรักษา งานเจรจา งานสายวิชา หรืองานที่ต้องใช้ประสบการณ์ของเจ้าของโดยตรง ถ้าคะแนนด้านนี้สูง แปลว่าวัตถุชิ้นนี้มีแนวโน้มช่วยเสริมจังหวะการทำงาน ให้ทำงานได้เข้าทางขึ้น ใช้ความสามารถได้ชัดขึ้น หรือเหมาะกับคนที่มีอาชีพเฉพาะทาง",
+    body: "ด้านนี้สื่อถึงพลังที่เหมาะกับการตั้งจิตขอพรเรื่องงานเฉพาะของเจ้าของ โดยเฉพาะงานที่ต้องใช้ฝีมือ วิชา ประสบการณ์ หรือความชำนาญส่วนตัว เช่น งานขาย งานช่าง งานบริการ งานรักษา งานเจรจา งานสายวิชา งานอิสระ หรืออาชีพที่เจ้าของทำอยู่จริง ถ้าคะแนนด้านนี้สูง แปลว่าวัตถุชิ้นนี้มีแนวโน้มช่วยหนุนจังหวะของงานที่ต้องใช้ความสามารถเฉพาะตัว เหมาะกับการขอพรให้ทำงานได้เข้าทางขึ้น เจอลูกค้าที่เหมาะขึ้น เคสงานเดินง่ายขึ้น หรือใช้ฝีมือของตัวเองได้เต็มขึ้น",
     useFor: [
-      "งานที่ต้องใช้ทักษะ",
-      "งานขายหรือติดต่อลูกค้า",
-      "งานบริการ",
-      "งานฝีมือ",
-      "งานที่ต้องใช้ความชำนาญส่วนตัว",
+      "การขอพรเรื่องงานอาชีพเฉพาะของตัวเอง",
+      "งานที่ต้องใช้ฝีมือหรือความชำนาญ",
+      "งานขาย งานบริการ หรืองานติดต่อลูกค้า",
+      "งานช่าง งานรักษา งานสายวิชา หรืองานเฉพาะทาง",
+      "การขอให้เคสงาน ลูกค้า หรือโปรเจกต์เดินได้ราบรื่นขึ้น",
     ],
-    foot: "ด้านนี้ไม่ใช่โชคลอย ๆ แต่เป็นพลังที่ช่วยหนุนสิ่งที่เจ้าของลงมือทำอยู่แล้ว",
+    foot: "ด้านนี้ไม่ใช่โชคลอย ๆ แต่เป็นพลังที่เหมาะกับการขอพรเพื่อหนุนสิ่งที่เจ้าของลงมือทำอยู่แล้ว โดยเฉพาะงานที่ต้องใช้ฝีมือ วิชา หรือความชำนาญเฉพาะตัว",
   },
   luck: {
     body: "ด้านนี้สื่อถึงโอกาส ช่องทางใหม่ และจังหวะที่เรื่องต่าง ๆ เริ่มขยับ ถ้าคะแนนด้านนี้สูง แปลว่าวัตถุชิ้นนี้มีแนวโน้มช่วยเรื่องการเปิดทาง เช่น มีคนแนะนำ มีโอกาสใหม่เข้ามา งานเริ่มเดิน เงินเริ่มขยับ หรือเรื่องที่ติดอยู่เริ่มมีทางออก",
@@ -167,18 +167,19 @@ export function renderAmuletEnergyMeaningHtml(payload) {
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --aem-bg: #07090d;
-      --aem-surface: linear-gradient(180deg, #141923 0%, #0f131b 100%);
-      --aem-border: rgba(218, 176, 65, 0.24);
-      --aem-gold: #f4c542;
-      --aem-gold-soft: #b9922f;
-      --aem-text: #f8fafc;
-      --aem-muted: #a1a1aa;
-      --aem-subtitle: #c6cad3;
-      --aem-chip-bg: rgba(244, 197, 66, 0.08);
-      --aem-chip-border: rgba(244, 197, 66, 0.2);
-      --aem-score-bg: rgba(244, 197, 66, 0.1);
-      --aem-score-border: rgba(244, 197, 66, 0.36);
+      --aem-bg: #ffffff;
+      --aem-surface: linear-gradient(180deg, #f9f7f3 0%, #f4f1ea 100%);
+      --aem-border: rgba(180, 140, 40, 0.18);
+      --aem-gold: #a07800;
+      --aem-gold-soft: rgba(140, 100, 20, 0.7);
+      --aem-text: #1a1610;
+      --aem-body: #3d3320;
+      --aem-muted: #7a6b4e;
+      --aem-subtitle: #4a3f28;
+      --aem-chip-bg: rgba(200, 155, 30, 0.08);
+      --aem-chip-border: rgba(180, 140, 40, 0.22);
+      --aem-score-bg: rgba(200, 155, 30, 0.09);
+      --aem-score-border: rgba(180, 140, 40, 0.32);
     }
     * { box-sizing: border-box; }
     body {
@@ -204,11 +205,9 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       margin-bottom: 1rem;
       padding: 1rem 1rem 1.05rem;
       border-radius: 20px;
-      border: 1px solid var(--aem-border);
-      background:
-        radial-gradient(circle at top right, rgba(244,197,66,0.11), rgba(244,197,66,0) 48%),
-        #0d1118;
-      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+      border: 1px solid rgba(180, 140, 40, 0.18);
+      background: linear-gradient(180deg, #fffdf7 0%, #fdf8ee 100%);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.07);
     }
     .aem-eyebrow {
       margin: 0 0 0.25rem;
@@ -254,7 +253,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       border: 1px solid var(--aem-border);
       border-radius: 18px;
       padding: 0.95rem;
-      background: #0d1118;
+      background: linear-gradient(180deg, #faf8f2 0%, #f5f1e6 100%);
     }
     .aem-guide-title {
       margin: 0 0 0.55rem;
@@ -272,23 +271,23 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       border: 1px solid var(--aem-chip-border);
       border-radius: 10px;
       background: var(--aem-chip-bg);
-      color: var(--aem-subtitle);
+      color: var(--aem-body);
       font-size: 0.83rem;
       line-height: 1.35;
     }
     .aem-card {
-      background: var(--aem-surface);
-      border: 1px solid var(--aem-border);
+      background: #ffffff;
+      border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 20px;
       padding: 0.96rem 1rem 1.02rem;
       margin-bottom: 1.06rem;
-      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.07);
       transition: transform 0.18s ease, border-color 0.18s ease;
     }
     @media (hover: hover) and (pointer: fine) {
       .aem-card:hover {
         transform: translateY(-2px);
-        border-color: rgba(244, 197, 66, 0.38);
+        border-color: rgba(180, 140, 40, 0.28);
       }
     }
     .aem-card-head {
@@ -310,9 +309,9 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       letter-spacing: 0.14em;
       color: var(--aem-gold-soft);
       padding: 0.2rem 0.28rem 0.15rem;
-      border: 1px solid rgba(244, 197, 66, 0.18);
+      border: 1px solid rgba(180, 140, 40, 0.22);
       border-radius: 8px;
-      background: rgba(244, 197, 66, 0.04);
+      background: rgba(200, 155, 30, 0.06);
       line-height: 1;
       flex-shrink: 0;
     }
@@ -339,17 +338,18 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     }
     .aem-score-pill.is-muted { color: var(--aem-muted); }
     .aem-card-summary {
-      margin: 0 0 0.62rem;
+      margin: 0 0 0.78rem;
       font-size: 0.95rem;
-      color: var(--aem-text);
+      color: var(--aem-subtitle);
+      font-weight: 650;
       line-height: 1.58;
     }
-    .aem-use-wrap { margin: 0 0 0.66rem; }
+    .aem-use-wrap { margin: 0 0 0.78rem; }
     .aem-use-h {
       margin: 0 0 0.42rem;
-      font-size: 0.82rem;
+      font-size: 0.81rem;
       font-weight: 700;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
       color: var(--aem-muted);
     }
@@ -366,13 +366,13 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       border: 1px solid var(--aem-chip-border);
       background: var(--aem-chip-bg);
       font-size: 0.82rem;
-      color: var(--aem-subtitle);
+      color: var(--aem-body);
     }
     .aem-card-detail {
       margin: 0;
       font-size: 0.89rem;
-      line-height: 1.58;
-      color: #d6d9e0;
+      line-height: 1.78;
+      color: var(--aem-body);
     }
     .aem-card-foot {
       margin: 0.6rem 0 0;
@@ -380,9 +380,12 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       color: var(--aem-muted);
       line-height: 1.56;
       padding: 0.52rem 0.58rem;
-      border: 1px solid rgba(244, 197, 66, 0.15);
+      border-left: 2px solid rgba(180, 140, 40, 0.45);
+      border-top: none;
+      border-right: none;
+      border-bottom: none;
       border-radius: 10px;
-      background: rgba(255,255,255,0.02);
+      background: rgba(200, 155, 30, 0.05);
     }
     .aem-disclaimer {
       margin: 1.5rem 0 1.25rem;
@@ -390,9 +393,9 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       font-size: 0.88rem;
       line-height: 1.62;
       color: var(--aem-muted);
-      background: rgba(0,0,0,0.25);
+      background: #f9f7f2;
       border-radius: 10px;
-      border: 1px solid rgba(218, 176, 65, 0.16);
+      border: 1px solid rgba(180, 140, 40, 0.16);
     }
     .aem-cta {
       display: block;
@@ -409,8 +412,12 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       text-decoration: none;
       box-shadow: 0 2px 12px rgba(212, 175, 55, 0.25);
     }
-    .aem-cta:hover { filter: brightness(1.06); }
+    .aem-cta:hover { filter: brightness(1.04); }
     .aem-cta-wrap { margin-top: 0.25rem; }
+    @media (max-width: 640px) {
+      .aem-wrap { padding: 1.2rem 1.05rem 2.5rem; }
+      .aem-card { padding: 0.92rem 0.92rem 1rem; }
+    }
   </style>
 </head>
 <body>

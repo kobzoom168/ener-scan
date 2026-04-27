@@ -69,3 +69,56 @@ export async function readScanImageFromStorage(bucket, path) {
   const ab = await data.arrayBuffer();
   return Buffer.from(ab);
 }
+
+/**
+ * Upload long-retention library thumbnail (separate path from LINE original `storage_path`).
+ *
+ * @param {object} opts
+ * @param {string} opts.lineUserId
+ * @param {string} opts.uploadId — `scan_uploads.id`
+ * @param {Buffer} opts.buffer
+ * @param {string} [opts.contentType] — default `image/webp`
+ * @returns {Promise<{ bucket: string, path: string, contentType: string, sizeBytes: number }>}
+ */
+export async function uploadScanUploadThumbnail({
+  lineUserId,
+  uploadId,
+  buffer,
+  contentType = "image/webp",
+}) {
+  const bucket = env.SCAN_V2_UPLOAD_BUCKET;
+  const uid =
+    String(lineUserId || "")
+      .replace(/[^a-zA-Z0-9_-]/g, "")
+      .slice(0, 32) || "unknown";
+  const up =
+    String(uploadId || "")
+      .replace(/[^a-zA-Z0-9_-]/g, "")
+      .slice(0, 40) || "up";
+  const path = `${uid}/${up}/thumb.webp`;
+  const body = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+
+  const { error } = await supabase.storage.from(bucket).upload(path, body, {
+    contentType,
+    upsert: true,
+  });
+
+  if (error) {
+    console.error(
+      JSON.stringify({
+        event: "SCAN_V2_THUMB_STORAGE_UPLOAD_FAILED",
+        bucket,
+        pathPrefix: path.slice(0, 64),
+        message: error.message,
+      }),
+    );
+    throw error;
+  }
+
+  return {
+    bucket,
+    path,
+    contentType,
+    sizeBytes: body.length,
+  };
+}

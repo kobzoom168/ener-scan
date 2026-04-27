@@ -30,6 +30,7 @@ import {
   OUTBOUND_PRIORITY,
 } from "../../stores/scanV2/outboundPriority.js";
 import { readScanImageFromStorage } from "../../storage/scanUploadStorage.js";
+import { ensureScanUploadThumbnail } from "./scanUploadThumbnail.service.js";
 import { parseScanResultForHistory } from "../history/history.parser.js";
 import { createScanRequest, updateScanRequestStatus } from "../../stores/scanRequests.db.js";
 import {
@@ -37,6 +38,9 @@ import {
   deleteScanResultForAppUser,
 } from "../../stores/scanResults.db.js";
 import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js";
+import { buildReportPayloadFromGlobalBaseline } from "./buildReportPayloadFromGlobalBaseline.service.js";
+import { tryCrossAccountExactBaselineReusePhase2A } from "./tryCrossAccountExactBaselineReuse.service.js";
+import { tryCrossAccountPhashBaselineReusePhase2C } from "./tryCrossAccountPhashBaselineReusePhase2C.service.js";
 import { extractStableVisualFeatures } from "../stableFeatureExtract.service.js";
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
@@ -82,6 +86,7 @@ import {
   findDuplicateScanByPhash,
   insertScanPhash,
 } from "../../stores/scanV2/imageDedupCache.db.js";
+import { maybePersistGlobalObjectBaselineAfterScanV2 } from "./maybePersistGlobalObjectBaseline.service.js";
 
 const NEAR_EXACT_DEDUP_THRESHOLD = 4;
 
@@ -118,6 +123,10 @@ export async function processScanJob(workerId, jobRow) {
   /** Set after `upsertReportPublicationForScanResult` (must exist for whole job to avoid ReferenceError). */
   /** @type {string | null} */
   let reportPublicationId = null;
+
+  /** Hoisted for {@link buildReportPayloadFromScan} + baseline persist (must survive `try/catch` that ends before v2 insert). */
+  /** @type {string | null} */
+  let stableFeatureSeed = null;
 
   console.log(
     JSON.stringify({
@@ -161,6 +170,12 @@ export async function processScanJob(workerId, jobRow) {
     );
     return;
   }
+
+  await ensureScanUploadThumbnail({
+    upload,
+    lineUserId,
+    imageBuffer,
+  });
 
   // ── Perceptual image dedup ──────────────────────────────────────────────
   // If IMAGE_DEDUP_ENABLED, compute dHash of the image and check if the same
@@ -356,6 +371,13 @@ export async function processScanJob(workerId, jobRow) {
   }
 
   let scanOut;
+  /** Phase 2A: cross-account baseline exact SHA reuse (sacred_amulet only). */
+  let baselineCrossAccountReuse = false;
+  /** @type {import("../../stores/scanV2/globalObjectBaselines.db.js").GlobalObjectBaselineRow | null} */
+  let baselineRowForPayload = null;
+  /** Successful cross-account baseline reuse payload (see tryCrossAccountExactBaselineReusePhase2A). */
+  let reuseHit = null;
+
   const aiStartedAt = Date.now();
   logScanPipelinePerf("SCAN_AI_STARTED", {
     path: "worker-scan",
@@ -365,21 +387,86 @@ export async function processScanJob(workerId, jobRow) {
     messageId: upload.line_message_id ?? null,
     elapsedMs: Date.now() - workerTurnStartMs,
   });
+
   try {
-    scanOut = await runDeepScan({
-      imageBuffer,
-      birthdate,
-      userId: lineUserId,
-    });
-  } catch (err) {
-    await failJob(
+    const reuseTry = await tryCrossAccountExactBaselineReusePhase2A({
       jobId,
-      "deep_scan_failed",
-      String(err?.message || err),
       lineUserId,
-      workerId,
+      appUserId: String(appUserId),
+      birthdate,
+      imageBuffer,
+      objectCheck,
+    });
+    if (reuseTry.ok) {
+      reuseHit = reuseTry;
+      baselineCrossAccountReuse = true;
+      baselineRowForPayload = reuseTry.baselineRow;
+      scanOut = reuseTry.scanOut;
+      stableFeatureSeed = reuseTry.stableFeatureSeed ?? null;
+    }
+  } catch (reuseErr) {
+    console.log(
+      JSON.stringify({
+        event: "CROSS_ACCOUNT_BASELINE_FALLBACK_FULL_SCAN",
+        path: "worker-scan",
+        reason: "reuse_attempt_exception",
+        jobIdPrefix: idPrefix8(jobId),
+        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+        message: String(reuseErr?.message || reuseErr).slice(0, 240),
+        timestamp: scanV2TraceTs(),
+      }),
     );
-    return;
+  }
+
+  if (!baselineCrossAccountReuse) {
+    try {
+      const reuse2C = await tryCrossAccountPhashBaselineReusePhase2C({
+        jobId,
+        lineUserId,
+        appUserId: String(appUserId),
+        birthdate,
+        imageBuffer,
+        objectCheck,
+      });
+      if (reuse2C.ok) {
+        reuseHit = reuse2C;
+        baselineCrossAccountReuse = true;
+        baselineRowForPayload = reuse2C.baselineRow;
+        scanOut = reuse2C.scanOut;
+        stableFeatureSeed = reuse2C.stableFeatureSeed ?? null;
+      }
+    } catch (reuse2CErr) {
+      console.log(
+        JSON.stringify({
+          event: "CROSS_ACCOUNT_BASELINE_FALLBACK_FULL_SCAN",
+          path: "worker-scan",
+          reason: "phase2c_exception",
+          jobIdPrefix: idPrefix8(jobId),
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          message: String(reuse2CErr?.message || reuse2CErr).slice(0, 240),
+          timestamp: scanV2TraceTs(),
+        }),
+      );
+    }
+  }
+
+  if (!baselineCrossAccountReuse) {
+    try {
+      scanOut = await runDeepScan({
+        imageBuffer,
+        birthdate,
+        userId: lineUserId,
+      });
+    } catch (err) {
+      await failJob(
+        jobId,
+        "deep_scan_failed",
+        String(err?.message || err),
+        lineUserId,
+        workerId,
+      );
+      return;
+    }
   }
 
   const resultText = String(scanOut?.resultText || "").trim();
@@ -394,23 +481,28 @@ export async function processScanJob(workerId, jobRow) {
       elapsedMs: Date.now() - aiStartedAt,
       resultLength: resultText.length,
       fromCache: scanFromCache,
+      crossAccountBaselineReuse: baselineCrossAccountReuse,
       timestamp: scanV2TraceTs(),
     }),
   );
 
   let parsed;
-  try {
-    parsed = parseScanResultForHistory(resultText) || {
-      energyScore: null,
-      mainEnergy: null,
-      compatibility: null,
-    };
-  } catch {
-    parsed = {
-      energyScore: null,
-      mainEnergy: null,
-      compatibility: null,
-    };
+  if (reuseHit) {
+    parsed = reuseHit.parsed;
+  } else {
+    try {
+      parsed = parseScanResultForHistory(resultText) || {
+        energyScore: null,
+        mainEnergy: null,
+        compatibility: null,
+      };
+    } catch {
+      parsed = {
+        energyScore: null,
+        mainEnergy: null,
+        compatibility: null,
+      };
+    }
   }
 
   const catSig = mapObjectCategoryToPipelineSignals(
@@ -431,141 +523,165 @@ export async function processScanJob(workerId, jobRow) {
   let webEnrichmentSkipReason = null;
   /** @type {string | null} */
   let webEnrichmentDecisiveReason = null;
-  try {
-    const enrichRes = await maybeRunWebEnrichment({
-      lineUserId,
-      jobId,
-      scanResultId: null,
-      imageBuffer,
-      objectFamily: catSig.objectFamily,
-      objectCheckResult: objectCheck,
-      supportedFamilyGuess,
-      pipelineObjectCategory: scanOut?.objectCategory ?? null,
-      mainEnergyLine,
-      resultText,
-      scanFromCache,
-      workerElapsedMs: Date.now() - workerTurnStartMs,
-    });
-    externalObjectHints = enrichRes?.hints ?? null;
-    webEnrichmentSkipReason = enrichRes?.skipReason ?? null;
-    webEnrichmentDecisiveReason = enrichRes?.decisiveReason ?? null;
-  } catch (enrichErr) {
-    webEnrichmentSkipReason = String(enrichErr?.message || enrichErr).slice(0, 240);
-    webEnrichmentDecisiveReason = "fetch_exception";
-    console.log(
-      JSON.stringify({
-        event: "WEB_ENRICHMENT_FETCH_FAIL",
-        path: "worker-scan",
-        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
-        jobIdPrefix: idPrefix8(jobId),
-        scanResultIdPrefix: "00000000",
-        reason: webEnrichmentSkipReason,
-        decisiveReason: webEnrichmentDecisiveReason,
-        provider: env.WEB_ENRICHMENT_PROVIDER,
-        cacheHit: false,
-        durationMs: null,
-        hintCount: 0,
-        mergeMode: "n/a",
-      }),
-    );
+  if (!baselineCrossAccountReuse) {
+    try {
+      const enrichRes = await maybeRunWebEnrichment({
+        lineUserId,
+        jobId,
+        scanResultId: null,
+        imageBuffer,
+        objectFamily: catSig.objectFamily,
+        objectCheckResult: objectCheck,
+        supportedFamilyGuess,
+        pipelineObjectCategory: scanOut?.objectCategory ?? null,
+        mainEnergyLine,
+        resultText,
+        scanFromCache,
+        workerElapsedMs: Date.now() - workerTurnStartMs,
+      });
+      externalObjectHints = enrichRes?.hints ?? null;
+      webEnrichmentSkipReason = enrichRes?.skipReason ?? null;
+      webEnrichmentDecisiveReason = enrichRes?.decisiveReason ?? null;
+    } catch (enrichErr) {
+      webEnrichmentSkipReason = String(enrichErr?.message || enrichErr).slice(0, 240);
+      webEnrichmentDecisiveReason = "fetch_exception";
+      console.log(
+        JSON.stringify({
+          event: "WEB_ENRICHMENT_FETCH_FAIL",
+          path: "worker-scan",
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          jobIdPrefix: idPrefix8(jobId),
+          scanResultIdPrefix: "00000000",
+          reason: webEnrichmentSkipReason,
+          decisiveReason: webEnrichmentDecisiveReason,
+          provider: env.WEB_ENRICHMENT_PROVIDER,
+          cacheHit: false,
+          durationMs: null,
+          hintCount: 0,
+          mergeMode: "n/a",
+        }),
+      );
+    }
+  } else {
+    webEnrichmentSkipReason = "cross_account_baseline_reuse";
+    webEnrichmentDecisiveReason = null;
   }
 
   /** @type {string | null} */
   let scanRequestId = null;
-  try {
-    scanRequestId = await createScanRequest({
-      appUserId,
-      flowVersion: null,
-      scanJobId: String(jobId),
-      birthdateUsed: birthdate,
-      usedSavedBirthdate: true,
-      requestSource: "scan_v2_worker",
-    });
-  } catch (reqErr) {
-    await failJob(
-      jobId,
-      "scan_request_failed",
-      String(reqErr?.message || reqErr),
-      lineUserId,
-      workerId,
-    );
-    return;
-  }
-
   /** @type {string | null} */
   let legacyScanResultId = null;
-  try {
-    legacyScanResultId = await createScanResult({
-      scanRequestId,
-      appUserId,
-      resultText,
-      resultSummary: null,
-      energyScore: parsed.energyScore,
-      mainEnergy: parsed.mainEnergy,
-      compatibility: parsed.compatibility,
-      modelName: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
-      promptVersion: scanFromCache ? "cache_v1" : "v1",
-      responseTimeMs: 0,
-      fromCache: scanFromCache,
-      qualityAnalytics: scanOut?.qualityAnalytics ?? null,
-    });
-  } catch (crErr) {
-    await updateScanRequestStatus(scanRequestId, "failed");
-    await failJob(
-      jobId,
-      "scan_result_legacy_failed",
-      String(crErr?.message || crErr),
-      lineUserId,
-      workerId,
-    );
-    return;
+
+  if (reuseHit) {
+    scanRequestId = reuseHit.scanRequestId;
+    legacyScanResultId = reuseHit.legacyScanResultId;
+  } else {
+    try {
+      scanRequestId = await createScanRequest({
+        appUserId,
+        flowVersion: null,
+        scanJobId: String(jobId),
+        birthdateUsed: birthdate,
+        usedSavedBirthdate: true,
+        requestSource: "scan_v2_worker",
+      });
+    } catch (reqErr) {
+      await failJob(
+        jobId,
+        "scan_request_failed",
+        String(reqErr?.message || reqErr),
+        lineUserId,
+        workerId,
+      );
+      return;
+    }
+
+    try {
+      legacyScanResultId = await createScanResult({
+        scanRequestId,
+        appUserId,
+        resultText,
+        resultSummary: null,
+        energyScore: parsed.energyScore,
+        mainEnergy: parsed.mainEnergy,
+        compatibility: parsed.compatibility,
+        modelName: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
+        promptVersion: scanFromCache ? "cache_v1" : "v1",
+        responseTimeMs: 0,
+        fromCache: scanFromCache,
+        qualityAnalytics: scanOut?.qualityAnalytics ?? null,
+      });
+    } catch (crErr) {
+      await updateScanRequestStatus(scanRequestId, "failed");
+      await failJob(
+        jobId,
+        "scan_result_legacy_failed",
+        String(crErr?.message || crErr),
+        lineUserId,
+        workerId,
+      );
+      return;
+    }
   }
 
   const scanResultIdPrefix = String(legacyScanResultId || "").slice(0, 8);
-  const braceletEligibility = await checkCrystalBraceletEligibility(
-    imageBase64,
-    gated,
-    {
-      scanResultIdPrefix,
-      jobIdPrefix: idPrefix8(jobId),
-    },
-  );
 
-  const gptSubtypeInferenceText = buildGptCrystalSubtypeInferenceText({
-    overview: "",
-    mainEnergy:
-      parsed?.mainEnergy && parsed.mainEnergy !== "-"
-        ? String(parsed.mainEnergy).trim()
-        : "",
-    fitReason: "",
-    pipelineObjectCategory: scanOut?.objectCategory ?? null,
-  });
-
+  let braceletEligibility;
+  let gptSubtypeInferenceText;
   /** @type {object|null} */
   let geminiCrystalSubtypeResult = null;
-  const crystalContextForGemini =
-    String(catSig.objectFamily || "").trim().toLowerCase() === "crystal" ||
-    braceletEligibility.eligible;
-  if (crystalContextForGemini) {
-    geminiCrystalSubtypeResult = await classifyCrystalSubtypeWithGemini({
-      imageBuffer,
-      mimeType: "image/jpeg",
+  /** @type {{ lane: string, reason?: string }} */
+  let strictLaneRes;
+
+  if (reuseHit) {
+    braceletEligibility = reuseHit.braceletEligibility;
+    gptSubtypeInferenceText = reuseHit.gptSubtypeInferenceText;
+    geminiCrystalSubtypeResult = reuseHit.geminiCrystalSubtypeResult;
+    strictLaneRes = { lane: "sacred_amulet", reason: "global_baseline_reuse" };
+  } else {
+    braceletEligibility = await checkCrystalBraceletEligibility(
+      imageBase64,
+      gated,
+      {
+        scanResultIdPrefix,
+        jobIdPrefix: idPrefix8(jobId),
+      },
+    );
+
+    gptSubtypeInferenceText = buildGptCrystalSubtypeInferenceText({
+      overview: "",
+      mainEnergy:
+        parsed?.mainEnergy && parsed.mainEnergy !== "-"
+          ? String(parsed.mainEnergy).trim()
+          : "",
+      fitReason: "",
+      pipelineObjectCategory: scanOut?.objectCategory ?? null,
+    });
+
+    const crystalContextForGemini =
+      String(catSig.objectFamily || "").trim().toLowerCase() === "crystal" ||
+      braceletEligibility.eligible;
+    if (crystalContextForGemini) {
+      geminiCrystalSubtypeResult = await classifyCrystalSubtypeWithGemini({
+        imageBuffer,
+        mimeType: "image/jpeg",
+        scanResultIdPrefix,
+      });
+    }
+
+    strictLaneRes = resolveSupportedLaneStrict({
+      baseGateResult: objectCheck,
+      catSig,
+      braceletEligibility,
+      geminiCrystalSubtypeResult,
+      resultText,
+      dominantColorNormalized: scanOut?.dominantColorSlug ?? null,
+      pipelineObjectCategory: scanOut?.objectCategory ?? null,
+      pipelineObjectCategorySource: scanOut?.objectCategorySource ?? "unspecified",
+      gptSubtypeInferenceText,
       scanResultIdPrefix,
     });
   }
-
-  const strictLaneRes = resolveSupportedLaneStrict({
-    baseGateResult: objectCheck,
-    catSig,
-    braceletEligibility,
-    geminiCrystalSubtypeResult,
-    resultText,
-    dominantColorNormalized: scanOut?.dominantColorSlug ?? null,
-    pipelineObjectCategory: scanOut?.objectCategory ?? null,
-    pipelineObjectCategorySource: scanOut?.objectCategorySource ?? "unspecified",
-    gptSubtypeInferenceText,
-    scanResultIdPrefix,
-  });
 
   if (strictLaneRes.lane === "unsupported") {
     logUnsupportedObjectRejected({
@@ -664,11 +780,13 @@ export async function processScanJob(workerId, jobRow) {
       );
     }
 
-    /** @type {string | null} */
-    let stableFeatureSeed = null;
     // TODO(sacred_amulet rollout): keep STABLE_FEATURE_SEED_ENABLED off-by-default; validate seed stability
     // before enabling globally — do not remove the fallback path when seed is null.
-    if (env.STABLE_FEATURE_SEED_ENABLED && objectCheck === "single_supported") {
+    if (
+      env.STABLE_FEATURE_SEED_ENABLED &&
+      objectCheck === "single_supported" &&
+      !baselineRowForPayload
+    ) {
       try {
         const stableEx = await extractStableVisualFeatures({
           imageBase64,
@@ -696,14 +814,93 @@ export async function processScanJob(workerId, jobRow) {
         ? Number(gated.gateMeta.confidence)
         : undefined;
 
-    const reportPayloadBuilt = await buildReportPayloadFromScan({
-      resultText,
-      scanResultId: legacyScanResultId,
-      scanRequestId,
-      lineUserId,
-      birthdateUsed: birthdate,
-      publicToken: token,
-      modelLabel: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
+    let reportPayloadBuilt;
+    if (baselineRowForPayload) {
+      try {
+        reportPayloadBuilt = await buildReportPayloadFromGlobalBaseline({
+          baselineRow: baselineRowForPayload,
+          lineUserId,
+          birthdate,
+          publicToken: token,
+          objectImageUrl,
+          scannedAtIso: new Date().toISOString(),
+          scanRequestId: String(scanRequestId || ""),
+          legacyScanResultId: String(legacyScanResultId || ""),
+        });
+        console.log(
+          JSON.stringify({
+            event: "CROSS_ACCOUNT_BASELINE_REPORT_BUILD_OK",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+            baselineIdPrefix: String(baselineRowForPayload.id).slice(0, 8),
+            scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+      } catch (blBuildErr) {
+        console.log(
+          JSON.stringify({
+            event: "CROSS_ACCOUNT_BASELINE_REPORT_BUILD_ERROR",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+            message: String(blBuildErr?.message || blBuildErr).slice(0, 240),
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        console.log(
+          JSON.stringify({
+            event: "CROSS_ACCOUNT_BASELINE_FALLBACK_FULL_SCAN",
+            path: "worker-scan",
+            reason: "report_build_from_baseline_failed",
+            jobIdPrefix: idPrefix8(jobId),
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        reportPayloadBuilt = await buildReportPayloadFromScan({
+          resultText,
+          scanResultId: legacyScanResultId,
+          scanRequestId,
+          lineUserId,
+          birthdateUsed: birthdate,
+          publicToken: token,
+          modelLabel: baselineCrossAccountReuse
+            ? "global_object_baseline_reuse"
+            : scanFromCache
+              ? "persistent_cache"
+              : "gpt-4.1-mini",
+          objectImageUrl,
+          scannedAt: new Date().toISOString(),
+          objectFamily: reportObjectFamily,
+          materialFamily: catSig.materialFamily,
+          shapeFamily: reportShapeFamily,
+          objectCheckResult: objectCheck,
+          objectCheckConfidence,
+          dominantColor: scanOut?.dominantColorSlug,
+          pipelineDominantColorSource:
+            scanOut?.dominantColorSource === "vision_v1"
+              ? "vision_v1"
+              : scanOut?.dominantColorSource === "cache_persisted"
+                ? "cache_persisted"
+                : undefined,
+          pipelineObjectCategory: scanOut?.objectCategory ?? null,
+          pipelineObjectCategorySource:
+            scanOut?.objectCategorySource ?? "unspecified",
+          geminiCrystalSubtypeResult,
+          strictSupportedLane,
+          stableFeatureSeed,
+        });
+      }
+    } else {
+      reportPayloadBuilt = await buildReportPayloadFromScan({
+        resultText,
+        scanResultId: legacyScanResultId,
+        scanRequestId,
+        lineUserId,
+        birthdateUsed: birthdate,
+        publicToken: token,
+        modelLabel: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
       objectImageUrl,
       scannedAt: new Date().toISOString(),
       objectFamily: reportObjectFamily,
@@ -725,6 +922,7 @@ export async function processScanJob(workerId, jobRow) {
       strictSupportedLane,
       stableFeatureSeed,
     });
+    }
 
     const builtGenAt = String(
       reportPayloadBuilt &&
@@ -1228,8 +1426,12 @@ export async function processScanJob(workerId, jobRow) {
       html_public_token: publicToken,
       quality_tier: null,
       validation_reason: null,
-      from_cache: scanFromCache,
-      model_name: scanFromCache ? "persistent_cache" : "gpt-4.1-mini",
+      from_cache: baselineCrossAccountReuse ? false : scanFromCache,
+      model_name: baselineCrossAccountReuse
+        ? "global_object_baseline_reuse"
+        : scanFromCache
+          ? "persistent_cache"
+          : "gpt-4.1-mini",
     });
     scanResultV2Id = insertRes?.id ?? null;
   } catch (v2Err) {
@@ -1277,6 +1479,38 @@ export async function processScanJob(workerId, jobRow) {
       );
     });
   }
+
+  void maybePersistGlobalObjectBaselineAfterScanV2({
+    jobId,
+    lineUserId,
+    imageBuffer,
+    imageDHash: imageDHash || null,
+    uploadId: String(upload?.id || "").trim(),
+    strictSupportedLane,
+    reportPayload: reportPayloadForReply,
+    scanResultV2Id: String(scanResultV2Id),
+    stableFeatureSeed,
+    scanOut: scanOut
+      ? {
+          objectCategory: scanOut.objectCategory ?? null,
+          dominantColorSlug: scanOut.dominantColorSlug ?? null,
+        }
+      : null,
+    catSig,
+    reportObjectFamily,
+  }).catch((baselinePersistErr) => {
+    console.log(
+      JSON.stringify({
+        event: "GLOBAL_OBJECT_BASELINE_PERSIST_ERROR",
+        path: "worker-scan",
+        scope: "process_scan_job_unhandled_reject",
+        jobIdPrefix: idPrefix8(jobId),
+        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+        message: String(baselinePersistErr?.message || baselinePersistErr).slice(0, 240),
+        timestamp: scanV2TraceTs(),
+      }),
+    );
+  });
 
   if (publicToken && reportUrl && scanResultV2Id) {
     try {
