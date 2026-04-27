@@ -6,6 +6,12 @@ import { resolveSacredAmuletTimingForEnergyPage } from "../../utils/reports/sacr
 import { TIMING_HOUR_WINDOWS } from "../../config/timing/timingWindows.config.js";
 import { TIMING_WEEKDAY_LABEL_TH } from "../../config/timing/timingWeekdayAffinity.config.js";
 
+/** Sunday-first — แกนเรดาร์ (สั้น) */
+const WEEKDAY_RADAR_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+
+/** ช่วงเวลา — ป้ายสั้นสำหรับกราห์แท่ง */
+const HOUR_BAR_SHORT = ["รุ่ง", "เช้า", "กลางวัน", "บ่าย", "เย็น", "คืน", "ดึก"];
+
 /** Sunday-first — ข้อความอ่านง่าย ไม่ใช่คะแนน */
 const WEEKDAY_MEANING_TH = [
   "มีแนวโน้มเด่นเรื่องความมั่นใจ การเริ่มต้น และการออกแรงนำ",
@@ -29,6 +35,169 @@ const HOUR_USE_HINT_TH = {
 };
 
 /**
+ * @param {number} sc
+ * @returns {string}
+ */
+function timingScorePillClass(sc) {
+  const n = Math.round(Number(sc));
+  if (!Number.isFinite(n)) return "aet-score-pill aet-score-pill--na";
+  if (n >= 80) return "aet-score-pill aet-score-pill--t80";
+  if (n >= 60) return "aet-score-pill aet-score-pill--t60";
+  if (n >= 40) return "aet-score-pill aet-score-pill--t40";
+  return "aet-score-pill aet-score-pill--tlt40";
+}
+
+/**
+ * @param {number} sc
+ * @returns {string}
+ */
+function timingMiniBarHtml(sc) {
+  const n = Math.round(Number(sc));
+  const pct = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0;
+  return `<div class="aet-mini-bar-track" aria-hidden="true"><div class="aet-mini-bar-fill" style="width:${pct}%"></div></div>`;
+}
+
+/**
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} r
+ * @param {number} deg
+ */
+function polarSvg(cx, cy, r, deg) {
+  const rad = (deg * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportTimingSlot[]} rows — Sunday-first length 7
+ */
+function buildWeekdayRadarBlock(rows) {
+  const n = 7;
+  const scores = rows.map((slot) => {
+    const v = Math.round(Number(slot.score));
+    return Number.isFinite(v) ? Math.min(100, Math.max(0, v)) / 100 : 0;
+  });
+  const W = 300;
+  const H = 220;
+  const cx = 150;
+  const cy = 100;
+  const R = 82;
+  const Rlabel = 108;
+  const rings = [0.33, 0.66, 1];
+  let d = "";
+  for (const frac of rings) {
+    const pts = [];
+    for (let i = 0; i < n; i += 1) {
+      const deg = -90 + (i * 360) / n;
+      const p = polarSvg(cx, cy, R * frac, deg);
+      pts.push(`${p.x.toFixed(2)},${p.y.toFixed(2)}`);
+    }
+    d += `M ${pts[0]} L ${pts.slice(1).join(" L ")} Z `;
+  }
+  let axes = "";
+  for (let i = 0; i < n; i += 1) {
+    const deg = -90 + (i * 360) / n;
+    const pe = polarSvg(cx, cy, R, deg);
+    axes += `<line x1="${cx}" y1="${cy}" x2="${pe.x.toFixed(2)}" y2="${pe.y.toFixed(2)}" stroke="#ede8dd" stroke-width="1"/>`;
+  }
+  const polyPts = [];
+  for (let i = 0; i < n; i += 1) {
+    const deg = -90 + (i * 360) / n;
+    const p = polarSvg(cx, cy, R * scores[i], deg);
+    polyPts.push(`${p.x.toFixed(2)},${p.y.toFixed(2)}`);
+  }
+  const poly = polyPts.join(" ");
+  let labels = "";
+  for (let i = 0; i < n; i += 1) {
+    const deg = -90 + (i * 360) / n;
+    const pl = polarSvg(cx, cy, Rlabel, deg);
+    const sc = Math.round(Number(rows[i]?.score));
+    const lab = escapeHtml(WEEKDAY_RADAR_SHORT[i] || String(i + 1));
+    const scStr = Number.isFinite(sc) ? escapeHtml(String(sc)) : "—";
+    labels += `<text x="${pl.x.toFixed(2)}" y="${pl.y.toFixed(2)}" text-anchor="middle" dominant-baseline="middle" class="aet-radar-lbl">${lab}</text><text x="${pl.x.toFixed(2)}" y="${(pl.y + 14).toFixed(2)}" text-anchor="middle" dominant-baseline="middle" class="aet-radar-sc">${scStr}</text>`;
+  }
+  return `<figure class="aet-radar-fig" aria-label="คะแนนวันในสัปดาห์แบบเรดาร์">
+    <svg class="aet-radar-svg" viewBox="0 0 ${W} ${H}" width="100%" height="220" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" role="img">
+      <defs>
+        <linearGradient id="aetTimingGoldLine" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#c8971e"/>
+          <stop offset="100%" stop-color="#e8c060"/>
+        </linearGradient>
+      </defs>
+      <path d="${d}" fill="none" stroke="#ede8dd" stroke-width="1"/>
+      ${axes}
+      <polygon points="${poly}" fill="rgba(200,151,30,0.15)" stroke="url(#aetTimingGoldLine)" stroke-width="2" stroke-linejoin="round"/>
+      ${labels}
+    </svg>
+  </figure>`;
+}
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportTimingSlot[]} hrRows
+ */
+function buildHourBarsBlock(hrRows) {
+  const byKey = Object.fromEntries(hrRows.map((r) => [r.key, r]));
+  const vals = TIMING_HOUR_WINDOWS.map((w) => {
+    const slot = byKey[w.key];
+    const sc = slot != null ? Math.round(Number(slot.score)) : null;
+    return Number.isFinite(sc) ? sc : null;
+  });
+  const finite = vals.filter((v) => v != null);
+  const maxSc = finite.length ? Math.max(...finite.map(Number)) : -Infinity;
+  const cols = TIMING_HOUR_WINDOWS.map((w, idx) => {
+    const sc = vals[idx];
+    const short = escapeHtml(HOUR_BAR_SHORT[idx] || w.labelTh);
+    if (sc == null) {
+      return `<div class="aet-hour-bar-col"><span class="aet-hour-bar-num">—</span><div class="aet-hour-bar-track"><div class="aet-hour-bar-fill" style="height:0%"></div></div><span class="aet-hour-bar-lbl">${short}</span></div>`;
+    }
+    const hPct = Math.min(100, Math.max(0, sc));
+    const isMax = sc === maxSc && finite.length > 0;
+    return `<div class="aet-hour-bar-col${isMax ? " is-max" : ""}"><span class="aet-hour-bar-num">${escapeHtml(String(sc))}</span><div class="aet-hour-bar-track"><div class="aet-hour-bar-fill" style="height:${hPct}%"></div></div><span class="aet-hour-bar-lbl">${short}</span></div>`;
+  });
+  return `<div class="aet-hour-bars" role="img" aria-label="คะแนนช่วงเวลาแบบแท่ง">${cols.join("")}</div>`;
+}
+
+function buildFormulaDonutBlock() {
+  const cx = 80;
+  const cy = 80;
+  const r0 = 44;
+  const r1 = 70;
+  const colors = ["#f5e6c8", "#ebd49a", "#e0c26e", "#c9a227", "#8a6a18"];
+  let paths = "";
+  for (let k = 0; k < 5; k += 1) {
+    const deg0 = -90 + k * 72;
+    const deg1 = -90 + (k + 1) * 72;
+    const p0o = polarSvg(cx, cy, r1, deg0);
+    const p1o = polarSvg(cx, cy, r1, deg1);
+    const p1i = polarSvg(cx, cy, r0, deg1);
+    const p0i = polarSvg(cx, cy, r0, deg0);
+    const large = 0;
+    paths += `<path d="M ${p0o.x.toFixed(2)} ${p0o.y.toFixed(2)} A ${r1} ${r1} 0 ${large} 1 ${p1o.x.toFixed(2)} ${p1o.y.toFixed(2)} L ${p1i.x.toFixed(2)} ${p1i.y.toFixed(2)} A ${r0} ${r0} 0 ${large} 0 ${p0i.x.toFixed(2)} ${p0i.y.toFixed(2)} Z" fill="${colors[k]}" stroke="#ede8dd" stroke-width="0.75"/>`;
+  }
+  const legendItems = [
+    "ความเข้ากับเจ้าของ",
+    "พลังเด่นของวัตถุ",
+    "จังหวะของวัน",
+    "ช่วงเวลาที่เหมาะ",
+    "ความสอดคล้องรวม",
+  ]
+    .map(
+      (t, i) =>
+        `<li class="aet-donut-legend-item"><span class="aet-donut-legend-n" style="background:${colors[i]}">${i + 1}</span><span>${escapeHtml(t)}</span></li>`,
+    )
+    .join("");
+  return `<div class="aet-formula-viz">
+    <div class="aet-donut-wrap">
+      <svg class="aet-donut-svg" viewBox="0 0 160 160" width="160" height="160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="สัดส่วนปัจจัยในสูตร (แบ่งเท่า ๆ กันเชิงอธิบาย)">
+        ${paths}
+        <circle cx="${cx}" cy="${cy}" r="${r0 - 2}" fill="#fffdf9"/>
+      </svg>
+    </div>
+    <ol class="aet-donut-legend">${legendItems}</ol>
+  </div>`;
+}
+
+/**
  * @param {import("../../services/reports/reportPayload.types.js").ReportTimingV1} tv
  * @param {boolean} hasScoreTables
  */
@@ -44,10 +213,19 @@ function buildSectionAHtml(tv, hasScoreTables) {
   return `
     <section class="aet-card aet-card--hero" aria-labelledby="aet-a-h">
       <h2 id="aet-a-h" class="aet-h2">สรุปผลที่ระบบแนะนำ</h2>
-      <div class="aet-hero-grid">
-        <div class="aet-hero-item"><span class="aet-hero-k">วันแนะนำ</span><span class="aet-hero-v">${escapeHtml(day)}</span></div>
-        <div class="aet-hero-item"><span class="aet-hero-k">ช่วงเวลาแนะนำ</span><span class="aet-hero-v">${escapeHtml(win)}</span></div>
-        <div class="aet-hero-item"><span class="aet-hero-k">แนวใช้แนะนำ</span><span class="aet-hero-v">${escapeHtml(mode)}</span></div>
+      <div class="aet-hero-summary" role="group" aria-label="สรุปจังหวะแนะนำ">
+        <div class="aet-hero-row">
+          <span class="aet-hero-k">วันแนะนำ</span>
+          <span class="aet-hero-v">${escapeHtml(day)}</span>
+        </div>
+        <div class="aet-hero-row">
+          <span class="aet-hero-k">ช่วงเวลาแนะนำ</span>
+          <span class="aet-hero-v">${escapeHtml(win)}</span>
+        </div>
+        <div class="aet-hero-row aet-hero-row--last">
+          <span class="aet-hero-k">แนวใช้แนะนำ</span>
+          <span class="aet-hero-v">${escapeHtml(mode)}</span>
+        </div>
       </div>
       ${hint ? `<p class="aet-hero-hint">${escapeHtml(hint)}</p>` : ""}
       <p class="aet-hero-bridge">${escapeHtml(bridge)}</p>
@@ -79,8 +257,9 @@ function buildSectionBHtml() {
       <div class="aet-b-grid">
         ${boxes
           .map(
-            (x) => `
+            (x, bi) => `
         <div class="aet-b-box">
+          <span class="aet-b-step" aria-hidden="true">${bi + 1}</span>
           <h3 class="aet-h3">${escapeHtml(x.t)}</h3>
           <p class="aet-p">${escapeHtml(x.b)}</p>
         </div>`,
@@ -92,28 +271,38 @@ function buildSectionBHtml() {
 
 /**
  * @param {import("../../services/reports/reportPayload.types.js").ReportTimingSlot[]} rows
- * @param {string} [topWeekdayLabel]
  */
-function buildWeekdayTableHtml(rows, topWeekdayLabel = "") {
+function buildWeekdayTableHtml(rows) {
+  const rounded = rows.map((slot) => Math.round(Number(slot.score)));
+  const maxSc =
+    rounded.length && rounded.every((n) => Number.isFinite(n))
+      ? Math.max(...rounded)
+      : -Infinity;
   const items = rows.map((slot, i) => {
     const label =
       TIMING_WEEKDAY_LABEL_TH[i] ||
       String(slot.key || "").replace(/^weekday_/, "วัน");
     const sc = Number(slot.score);
+    const scR = Math.round(sc);
     const meaning =
       WEEKDAY_MEANING_TH[i] ||
       (String(slot.reasonText || "").trim() || "—");
     const rank = String(i + 1).padStart(2, "0");
-    const isTop = String(label).trim() === String(topWeekdayLabel).trim();
+    const isTop = Number.isFinite(scR) && scR === maxSc;
+    const badge = isTop ? `<span class="aet-top-badge">เด่นสุด</span>` : "";
+    const pillCls = timingScorePillClass(sc);
+    const pillInner = `${escapeHtml(String(scR))}/100`;
+    const mini = timingMiniBarHtml(sc);
     return {
-      row: `<tr class="${isTop ? "is-top" : ""}"><td>${escapeHtml(label)}</td><td class="aet-num">${escapeHtml(String(Math.round(sc)))}</td><td>${escapeHtml(meaning)}</td></tr>`,
-      card: `<article class="aet-rank-card ${isTop ? "is-top" : ""}"><div class="aet-rank-head"><span class="aet-rank-n">${escapeHtml(rank)}</span><strong class="aet-rank-title">${escapeHtml(label)}</strong><span class="aet-score-pill">${escapeHtml(String(Math.round(sc)))}/100</span></div><p class="aet-rank-body">${escapeHtml(meaning)}</p></article>`,
+      row: `<tr class="${isTop ? "is-top" : ""}"><td class="aet-cell-name">${badge}${escapeHtml(label)}</td><td><span class="${pillCls}">${pillInner}</span></td><td class="aet-cell-desc"><div class="aet-desc-txt">${escapeHtml(meaning)}</div>${mini}</td></tr>`,
+      card: `<article class="aet-rank-card ${isTop ? "is-top" : ""}"><div class="aet-rank-head"><span class="aet-rank-n">${escapeHtml(rank)}</span><strong class="aet-rank-title">${badge}${escapeHtml(label)}</strong><span class="${pillCls}">${pillInner}</span></div><p class="aet-rank-body">${escapeHtml(meaning)}</p>${mini}</article>`,
     };
   });
   return `
     <section class="aet-section" aria-labelledby="aet-c-h">
       <h2 id="aet-c-h" class="aet-h2">ตารางคะแนนวัน</h2>
       <p class="aet-p aet-muted">คะแนนเป็นคะแนนประกอบจากระบบ ใช้เปรียบเทียบวันในสัปดาห์กับเจ้าของและพลังของวัตถุ</p>
+      ${buildWeekdayRadarBlock(rows)}
       <div class="aet-rank-list aet-rank-list--mobile">${items.map((x) => x.card).join("")}</div>
       <div class="aet-table-wrap">
         <table class="aet-table" aria-label="คะแนนตามวัน">
@@ -126,32 +315,43 @@ function buildWeekdayTableHtml(rows, topWeekdayLabel = "") {
 
 /**
  * @param {import("../../services/reports/reportPayload.types.js").ReportTimingSlot[]} rows — same order as TIMING_HOUR_WINDOWS
- * @param {string} [topWindowLabel]
  */
-function buildHourTableHtml(rows, topWindowLabel = "") {
+function buildHourTableHtml(rows) {
   const byKey = Object.fromEntries(rows.map((r) => [r.key, r]));
+  const hourScores = TIMING_HOUR_WINDOWS.map((w) => {
+    const slot = byKey[w.key];
+    const sc = slot != null ? Math.round(Number(slot.score)) : null;
+    return sc != null && Number.isFinite(sc) ? sc : null;
+  });
+  const finiteHr = hourScores.filter((v) => v != null);
+  const maxHr = finiteHr.length ? Math.max(...finiteHr.map(Number)) : -Infinity;
   const items = TIMING_HOUR_WINDOWS.map((w, idx) => {
     const slot = byKey[w.key];
     const sc = slot != null ? Math.round(Number(slot.score)) : null;
     const useHint =
       HOUR_USE_HINT_TH[w.key] || "ใช้เป็นข้อมูลประกอบการตั้งจิตหรือพกติดตัว";
     const rank = String(idx + 1).padStart(2, "0");
-    const isTop = String(w.labelTh).trim() === String(topWindowLabel).trim();
+    const isTop = sc != null && Number.isFinite(sc) && sc === maxHr;
+    const badge = isTop ? `<span class="aet-top-badge">เด่นสุด</span>` : "";
     if (sc == null || !Number.isFinite(sc)) {
       return {
-        row: `<tr><td>${escapeHtml(w.labelTh)}</td><td class="aet-num">—</td><td>${escapeHtml(useHint)}</td></tr>`,
-        card: `<article class="aet-rank-card"><div class="aet-rank-head"><span class="aet-rank-n">${escapeHtml(rank)}</span><strong class="aet-rank-title">${escapeHtml(w.labelTh)}</strong><span class="aet-score-pill is-muted">—</span></div><p class="aet-rank-body">${escapeHtml(useHint)}</p></article>`,
+        row: `<tr><td class="aet-cell-name">${escapeHtml(w.labelTh)}</td><td><span class="aet-score-pill aet-score-pill--na">—</span></td><td class="aet-cell-desc"><div class="aet-desc-txt">${escapeHtml(useHint)}</div></td></tr>`,
+        card: `<article class="aet-rank-card"><div class="aet-rank-head"><span class="aet-rank-n">${escapeHtml(rank)}</span><strong class="aet-rank-title">${escapeHtml(w.labelTh)}</strong><span class="aet-score-pill aet-score-pill--na">—</span></div><p class="aet-rank-body">${escapeHtml(useHint)}</p></article>`,
       };
     }
+    const pillCls = timingScorePillClass(sc);
+    const pillInner = `${escapeHtml(String(sc))}/100`;
+    const mini = timingMiniBarHtml(sc);
     return {
-      row: `<tr class="${isTop ? "is-top" : ""}"><td>${escapeHtml(w.labelTh)}${isTop ? '<span class="aet-recommend">แนะนำ</span>' : ""}</td><td class="aet-num">${escapeHtml(String(sc))}</td><td>${escapeHtml(useHint)}</td></tr>`,
-      card: `<article class="aet-rank-card ${isTop ? "is-top" : ""}"><div class="aet-rank-head"><span class="aet-rank-n">${escapeHtml(rank)}</span><strong class="aet-rank-title">${escapeHtml(w.labelTh)}</strong><span class="aet-score-pill">${escapeHtml(String(sc))}/100</span></div><p class="aet-rank-body">${escapeHtml(useHint)}</p></article>`,
+      row: `<tr class="${isTop ? "is-top" : ""}"><td class="aet-cell-name">${badge}${escapeHtml(w.labelTh)}</td><td><span class="${pillCls}">${pillInner}</span></td><td class="aet-cell-desc"><div class="aet-desc-txt">${escapeHtml(useHint)}</div>${mini}</td></tr>`,
+      card: `<article class="aet-rank-card ${isTop ? "is-top" : ""}"><div class="aet-rank-head"><span class="aet-rank-n">${escapeHtml(rank)}</span><strong class="aet-rank-title">${badge}${escapeHtml(w.labelTh)}</strong><span class="${pillCls}">${pillInner}</span></div><p class="aet-rank-body">${escapeHtml(useHint)}</p>${mini}</article>`,
     };
   });
   return `
     <section class="aet-section" aria-labelledby="aet-d-h">
       <h2 id="aet-d-h" class="aet-h2">ตารางคะแนนช่วงเวลา</h2>
       <p class="aet-p aet-muted">คะแนนเป็นคะแนนประกอบต่อช่วงเวลาในแต่ละวัน ใช้ดูว่าช่วงไหนมีแนวโน้มเข้ากับเจ้าของและพลังของชิ้นนี้มากที่สุด</p>
+      ${buildHourBarsBlock(rows)}
       <div class="aet-rank-list aet-rank-list--mobile">${items.map((x) => x.card).join("")}</div>
       <div class="aet-table-wrap">
         <table class="aet-table" aria-label="คะแนนตามช่วงเวลา">
@@ -202,6 +402,7 @@ function buildSectionEHtml() {
           <span class="aet-formula-chip">ความสอดคล้องรวม</span>
         </div>
       </div>
+      ${buildFormulaDonutBlock()}
       <p class="aet-p aet-muted">ระบบประเมินจาก 5 ส่วนหลักดังนี้</p>
       <div class="aet-e-cards">
         ${parts
@@ -319,8 +520,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
       buildSectionAHtml(tv, Boolean(hasScoreTables)) +
       buildSectionBHtml() +
       (hasScoreTables
-        ? buildWeekdayTableHtml(wdRows, tv.summary?.topWeekdayLabel) +
-          buildHourTableHtml(hrRows, tv.summary?.topWindowLabel)
+        ? buildWeekdayTableHtml(wdRows) + buildHourTableHtml(hrRows)
         : "") +
       buildSectionEHtml() +
       buildSectionFHtml(primary) +
@@ -444,27 +644,33 @@ export function renderAmuletEnergyTimingHtml(payload) {
       box-shadow: 0 4px 18px rgba(0,0,0,0.07);
     }
     .aet-card--hero { border-color: var(--aet-border-active); }
-    .aet-hero-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.6rem;
+    .aet-hero-summary {
+      border: 1px solid rgba(180, 140, 40, 0.2);
+      border-radius: 14px;
+      overflow: hidden;
       margin-bottom: 0.72rem;
+      background: rgba(255, 253, 249, 0.65);
     }
-    .aet-hero-item {
-      background: rgba(200, 155, 30, 0.06);
-      border: 1px solid rgba(180, 140, 40, 0.18);
-      border-radius: 12px;
-      padding: 0.62rem 0.72rem;
+    .aet-hero-row {
+      padding: 0.62rem 0.78rem;
+      border-bottom: 1px solid #ede8dd;
     }
-    .aet-hero-k {
+    .aet-hero-row--last { border-bottom: none; }
+    .aet-hero-row .aet-hero-k {
       display: block;
       font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--aet-muted);
-      letter-spacing: 0.04em;
-      margin-bottom: 0.2rem;
+      font-weight: 600;
+      color: #888;
+      letter-spacing: 0.02em;
+      margin-bottom: 0.22rem;
     }
-    .aet-hero-v { font-size: 1rem; font-weight: 800; color: var(--aet-gold); }
+    .aet-hero-row .aet-hero-v {
+      display: block;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #a07000;
+      line-height: 1.35;
+    }
     .aet-hero-hint { margin: 0 0 0.55rem; font-size: 0.94rem; color: var(--aet-text); line-height: 1.65; }
     .aet-hero-bridge { margin: 0; font-size: 0.93rem; color: var(--aet-subtitle); line-height: 1.65; }
     .aet-b-grid {
@@ -476,11 +682,29 @@ export function renderAmuletEnergyTimingHtml(payload) {
       .aet-b-grid { grid-template-columns: 1fr 1fr; }
     }
     .aet-b-box {
+      position: relative;
       background: #ffffff;
       border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 14px;
-      padding: 0.82rem 0.9rem;
+      padding: 0.82rem 2.1rem 0.82rem 0.9rem;
       box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+    }
+    .aet-b-step {
+      position: absolute;
+      top: 0.55rem;
+      right: 0.55rem;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1.5px solid #c8971e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #a07000;
+      line-height: 1;
+      box-sizing: border-box;
     }
     .aet-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 0.35rem; }
     .aet-rank-list--mobile { display: grid; gap: 0.55rem; margin-top: 0.4rem; }
@@ -491,31 +715,74 @@ export function renderAmuletEnergyTimingHtml(payload) {
       padding: 0.62rem 0.7rem;
       box-shadow: 0 2px 10px rgba(0,0,0,0.04);
     }
-    .aet-rank-card.is-top { border-color: var(--aet-border-active); }
+    .aet-rank-card.is-top {
+      border-color: var(--aet-border-active);
+      background: #fdf8ee;
+    }
     .aet-rank-head { display: flex; align-items: center; gap: 0.45rem; }
     .aet-rank-n { font-size: 0.72rem; color: var(--aet-gold-soft); font-weight: 700; letter-spacing: 0.08em; }
     .aet-rank-title { color: var(--aet-text); font-size: 0.94rem; flex: 1; }
     .aet-rank-body { margin: 0.4rem 0 0; color: var(--aet-body); font-size: 0.88rem; line-height: 1.62; }
     .aet-score-pill {
       border-radius: 999px;
-      border: 1px solid var(--aet-chip-border);
-      background: var(--aet-chip-bg);
-      color: var(--aet-gold);
       font-size: 0.78rem;
       font-weight: 700;
       padding: 0.18rem 0.5rem;
       white-space: nowrap;
+      display: inline-block;
     }
-    .aet-score-pill.is-muted { color: var(--aet-muted); }
-    .aet-recommend {
-      margin-left: 0.4rem;
+    .aet-score-pill--t80 {
+      background: #fdf3dc;
+      border: 1px solid #c8971e;
+      color: #a07000;
+    }
+    .aet-score-pill--t60 {
+      background: #f2f7ec;
+      border: 1px solid #7a9e4e;
+      color: #4a7020;
+    }
+    .aet-score-pill--t40 {
+      background: #f5f5f5;
+      border: 1px solid #9e9e9e;
+      color: #666;
+    }
+    .aet-score-pill--tlt40 {
+      background: #f0f0f0;
+      border: 1px solid #c5c5c5;
+      color: #999;
+    }
+    .aet-score-pill--na {
+      background: #f5f5f5;
+      border: 1px solid #c5c5c5;
+      color: #999;
+    }
+    .aet-top-badge {
+      display: inline-block;
+      margin-right: 0.35rem;
+      vertical-align: middle;
       border-radius: 999px;
-      border: 1px solid var(--aet-chip-border);
-      background: var(--aet-chip-bg);
-      color: var(--aet-gold);
-      font-size: 0.72rem;
-      padding: 0.04rem 0.38rem;
+      padding: 0.06rem 0.42rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #a07000;
+      background: #fdf3dc;
+      border: 1px solid #c8971e;
     }
+    .aet-mini-bar-track {
+      height: 4px;
+      border-radius: 999px;
+      background: #ede8dd;
+      margin-top: 0.38rem;
+      overflow: hidden;
+      max-width: 100%;
+    }
+    .aet-mini-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #c8971e, #e8c060);
+      min-width: 0;
+    }
+    .aet-cell-desc .aet-desc-txt { margin: 0; }
     .aet-table {
       width: 100%;
       border-collapse: collapse;
@@ -528,8 +795,116 @@ export function renderAmuletEnergyTimingHtml(payload) {
       vertical-align: top;
     }
     .aet-table th { background: rgba(200, 155, 30, 0.12); color: var(--aet-gold); font-weight: 700; }
-    .aet-table tr.is-top td { border-color: var(--aet-border-active); }
+    .aet-table tr.is-top td {
+      border-color: var(--aet-border-active);
+      background: #fdf8ee;
+    }
     .aet-num { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; color: var(--aet-gold); }
+    .aet-radar-fig { margin: 0.45rem 0 0.85rem; width: 100%; }
+    .aet-radar-svg { display: block; width: 100%; max-width: 100%; }
+    .aet-radar-svg .aet-radar-lbl {
+      fill: #3d3320;
+      font-size: 11px;
+      font-family: Sarabun, system-ui, sans-serif;
+      font-weight: 600;
+    }
+    .aet-radar-svg .aet-radar-sc {
+      fill: #a07000;
+      font-size: 10px;
+      font-family: Sarabun, system-ui, sans-serif;
+      font-weight: 700;
+    }
+    .aet-hour-bars {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 0.32rem;
+      margin: 0.45rem 0 0.85rem;
+      min-height: 108px;
+      padding: 0 0.05rem 0.15rem;
+    }
+    .aet-hour-bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.28rem;
+      min-width: 0;
+    }
+    .aet-hour-bar-num {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #a07000;
+      line-height: 1.1;
+    }
+    .aet-hour-bar-track {
+      width: 100%;
+      max-width: 40px;
+      height: 80px;
+      background: #ede8dd;
+      border-radius: 999px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      overflow: hidden;
+      padding: 3px;
+      box-sizing: border-box;
+    }
+    .aet-hour-bar-fill {
+      width: 100%;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #e8c060, #c8971e);
+      min-height: 0;
+      transition: height 0.2s ease;
+    }
+    .aet-hour-bar-col.is-max .aet-hour-bar-fill {
+      box-shadow: 0 0 12px rgba(200, 151, 30, 0.55);
+    }
+    .aet-hour-bar-lbl {
+      font-size: 0.66rem;
+      color: var(--aet-body);
+      text-align: center;
+      line-height: 1.2;
+      max-width: 100%;
+    }
+    .aet-formula-viz {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.85rem 1.1rem;
+      margin: 0.55rem 0 0.75rem;
+    }
+    .aet-donut-wrap { flex-shrink: 0; }
+    .aet-donut-svg { display: block; }
+    .aet-donut-legend {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      flex: 1;
+      min-width: 160px;
+    }
+    .aet-donut-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.42rem;
+      margin-bottom: 0.32rem;
+      font-size: 0.86rem;
+      color: var(--aet-body);
+      line-height: 1.35;
+    }
+    .aet-donut-legend-n {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: #1a1610;
+      border: 1px solid rgba(0,0,0,0.06);
+    }
     .aet-formula-card {
       margin: 0 0 0.65rem;
       padding: 0.8rem 0.85rem;
@@ -621,7 +996,6 @@ export function renderAmuletEnergyTimingHtml(payload) {
     .aet-cta-wrap { margin-top: 0.25rem; }
     @media (max-width: 699px) {
       .aet-table-wrap { display: none; }
-      .aet-hero-grid { grid-template-columns: 1fr; }
       .aet-wrap { padding: 1.2rem 1.05rem 2.5rem; }
     }
     @media (min-width: 700px) {

@@ -78,6 +78,11 @@ test("renderAmuletEnergyTimingHtml: title, back CTA, weekday + hour tables, disc
   assert.ok(html.includes("ไม่ควรใช้แทนการตัดสินใจสำคัญในชีวิต"));
   assert.ok(html.includes("วันอาทิตย์"));
   assert.ok(html.includes("ช่วงเช้า 07:00–10:59"));
+  assert.ok(html.includes('aria-label="คะแนนวันในสัปดาห์แบบเรดาร์"'));
+  assert.ok(html.includes('aria-label="คะแนนช่วงเวลาแบบแท่ง"'));
+  assert.ok(html.includes('aria-label="สัดส่วนปัจจัยในสูตร'));
+  assert.ok(html.includes("เด่นสุด"));
+  assert.ok(html.includes("aet-hero-summary"));
 });
 
 test("renderAmuletEnergyTimingHtml: no birth + no timing — fallback, no score tables", () => {
@@ -93,4 +98,6 @@ test("renderAmuletEnergyTimingHtml: no birth + no timing — fallback, no score 
   assert.ok(!html.includes("ตารางคะแนนช่วงเวลา"));
   assert.ok(html.includes("เมื่อยังไม่มีตารางคะแนนรายวัน"));
   assert.ok(html.includes("ไม่ควรใช้แทนการตัดสินใจสำคัญในชีวิต"));
+  assert.ok(html.includes('aria-label="สัดส่วนปัจจัยในสูตร'));
+  assert.ok(!html.includes('aria-label="คะแนนวันในสัปดาห์แบบเรดาร์"'));
 });
