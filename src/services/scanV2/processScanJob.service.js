@@ -40,6 +40,7 @@ import {
 import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js";
 import { buildReportPayloadFromGlobalBaseline } from "./buildReportPayloadFromGlobalBaseline.service.js";
 import { tryCrossAccountExactBaselineReusePhase2A } from "./tryCrossAccountExactBaselineReuse.service.js";
+import { tryCrossAccountPhashBaselineReusePhase2C } from "./tryCrossAccountPhashBaselineReusePhase2C.service.js";
 import { extractStableVisualFeatures } from "../stableFeatureExtract.service.js";
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
@@ -415,6 +416,38 @@ export async function processScanJob(workerId, jobRow) {
         timestamp: scanV2TraceTs(),
       }),
     );
+  }
+
+  if (!baselineCrossAccountReuse) {
+    try {
+      const reuse2C = await tryCrossAccountPhashBaselineReusePhase2C({
+        jobId,
+        lineUserId,
+        appUserId: String(appUserId),
+        birthdate,
+        imageBuffer,
+        objectCheck,
+      });
+      if (reuse2C.ok) {
+        reuseHit = reuse2C;
+        baselineCrossAccountReuse = true;
+        baselineRowForPayload = reuse2C.baselineRow;
+        scanOut = reuse2C.scanOut;
+        stableFeatureSeed = reuse2C.stableFeatureSeed ?? null;
+      }
+    } catch (reuse2CErr) {
+      console.log(
+        JSON.stringify({
+          event: "CROSS_ACCOUNT_BASELINE_FALLBACK_FULL_SCAN",
+          path: "worker-scan",
+          reason: "phase2c_exception",
+          jobIdPrefix: idPrefix8(jobId),
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          message: String(reuse2CErr?.message || reuse2CErr).slice(0, 240),
+          timestamp: scanV2TraceTs(),
+        }),
+      );
+    }
   }
 
   if (!baselineCrossAccountReuse) {

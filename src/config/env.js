@@ -709,6 +709,23 @@ export const env = {
     return Number.isFinite(n) ? Math.min(64, Math.max(0, Math.floor(n))) : 6;
   })(),
   /**
+   * Phase 2C: enable pHash near-match baseline reuse. Separate flag from
+   * CROSS_ACCOUNT_BASELINE_REUSE_PHASH (which guards the exact-SHA path).
+   * Default off; enable only after Phase 2C is fully deployed on staging.
+   */
+  CROSS_ACCOUNT_BASELINE_PHASH_REUSE_ENABLED:
+    String(process.env.CROSS_ACCOUNT_BASELINE_PHASH_REUSE_ENABLED ?? "false").trim().toLowerCase() ===
+    "true",
+  /**
+   * Phase 2C: maximum Hamming distance for pHash reuse (0 = visual-exact only).
+   * Default 0 for safety; increase only after validating staging results.
+   */
+  CROSS_ACCOUNT_BASELINE_PHASH_REUSE_MAX_DISTANCE: (() => {
+    const raw = process.env.CROSS_ACCOUNT_BASELINE_PHASH_REUSE_MAX_DISTANCE;
+    const n = raw === undefined || raw === "" ? 0 : Number(raw);
+    return Number.isFinite(n) ? Math.min(64, Math.max(0, Math.floor(n))) : 0;
+  })(),
+  /**
    * Phase 1A: after successful sacred_amulet scan, upsert `global_object_baselines` by image SHA.
    * Does not change scan results; default off until migration is applied / staging rollout.
    */

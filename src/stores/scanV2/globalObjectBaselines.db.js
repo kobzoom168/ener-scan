@@ -168,6 +168,47 @@ export async function findGlobalObjectBaselineBySha256(imageSha256Hex) {
 }
 
 /**
+ * Fetch a full baseline row by primary key. Used by Phase 2C pHash reuse
+ * after a candidate is identified via `listGlobalObjectBaselinePhashCandidates`.
+ *
+ * @param {string} baselineId
+ * @returns {Promise<GlobalObjectBaselineRow | null>}
+ */
+export async function findGlobalObjectBaselineById(baselineId) {
+  const id = String(baselineId || "").trim();
+  if (!id) return null;
+
+  const { data, error } = await supabase
+    .from("global_object_baselines")
+    .select(
+      [
+        "id",
+        "image_sha256",
+        "image_phash",
+        "stable_feature_seed",
+        "lane",
+        "object_family",
+        "baseline_schema_version",
+        "prompt_version",
+        "scoring_version",
+        "object_baseline_json",
+        "axis_scores_json",
+        "peak_power_key",
+        "thumbnail_path",
+        "source_scan_result_v2_id",
+        "source_upload_id",
+        "confidence",
+        "reuse_count",
+      ].join(","),
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return mapBaselineRow(data);
+}
+
+/**
  * @returns {Promise<number>}
  */
 export async function countGlobalObjectBaselines() {
