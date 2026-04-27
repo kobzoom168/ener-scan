@@ -116,7 +116,7 @@ function axisHighlightCardHtml(h) {
   const { item, labelTh, axisScore } = h;
   const href = `/r/${encodeURIComponent(item.publicToken)}`;
   const img = item.thumbUrl
-    ? `<div class="alib-axis-img"><img src="${escapeHtml(item.thumbUrl)}" alt="" width="68" height="68" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/></div>`
+    ? `<div class="alib-axis-img"><img src="${escapeHtml(item.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/></div>`
     : `<div class="alib-axis-img alib-axis-img--empty" aria-hidden="true"></div>`;
   return `
   <article class="alib-axis-card">
@@ -359,6 +359,7 @@ export function renderAmuletLibraryRankingHtml({
     .alib-axis-card {
       flex: 1;
       width: 100%;
+      min-height: 18.5rem;
       background: var(--alib-surface);
       border: 1px solid rgba(180, 140, 40, 0.14);
       border-radius: 16px;
@@ -384,8 +385,8 @@ export function renderAmuletLibraryRankingHtml({
     .alib-axis-body { display: flex; gap: 0.55rem; align-items: flex-start; }
     .alib-axis-img {
       flex-shrink: 0;
-      width: 4.25rem;
-      height: 4.25rem;
+      width: 88px;
+      height: 88px;
       border-radius: 11px;
       overflow: hidden;
       border: 1px solid rgba(180, 140, 40, 0.16);

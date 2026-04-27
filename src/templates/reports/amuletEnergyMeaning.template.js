@@ -91,6 +91,20 @@ const AXIS_SUMMARY = {
 };
 
 /**
+ * CSS tier for score pill (80+ / 60–79 / 40–59 / &lt;40).
+ * @param {number|null|undefined} sc
+ * @returns {string} class suffix e.g. `aem-score-pill--t80`
+ */
+function scorePillTierClass(sc) {
+  if (sc == null || !Number.isFinite(Number(sc))) return "";
+  const n = Number(sc);
+  if (n >= 80) return "aem-score-pill--t80";
+  if (n >= 60) return "aem-score-pill--t60";
+  if (n >= 40) return "aem-score-pill--t40";
+  return "aem-score-pill--t0";
+}
+
+/**
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload normalized (amulet lane)
  * @returns {string}
  */
@@ -119,6 +133,14 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     }
   }
 
+  const jumpPillsHtml = order
+    .map((_, i) => {
+      const num = String(i + 1).padStart(2, "0");
+      const activeCls = i === 0 ? " is-active" : "";
+      return `<a href="#aem-sec-${num}" class="aem-jump-pill${activeCls}" data-aem-jump="${num}">${num}</a>`;
+    })
+    .join("");
+
   const cardsHtml = order
     .map((key) => {
       const block = AXIS_MEANING[key];
@@ -129,16 +151,25 @@ export function renderAmuletEnergyMeaningHtml(payload) {
         .map((line) => `<span class="aem-chip">${escapeHtml(line)}</span>`)
         .join("");
       const idx = String(order.indexOf(key) + 1).padStart(2, "0");
+      const tierCls = scorePillTierClass(sc);
       const scorePill =
         sc != null
-          ? `<span class="aem-score-pill">${escapeHtml(String(Math.round(sc)))}/100</span>`
+          ? `<span class="aem-score-pill${tierCls ? ` ${tierCls}` : ""}">${escapeHtml(String(Math.round(sc)))}/100</span>`
           : `<span class="aem-score-pill is-muted">N/A</span>`;
+      const barPct = sc != null ? Math.max(0, Math.min(100, Math.round(sc))) : 0;
+      const axisBar =
+        sc != null
+          ? `<div class="aem-axis-bar-track" aria-hidden="true"><div class="aem-axis-bar-fill" style="width:${barPct}%"></div></div>`
+          : "";
       return `
-    <article class="aem-card" data-axis="${escapeHtml(key)}">
+    <article class="aem-card" id="aem-sec-${idx}" data-axis="${escapeHtml(key)}">
       <div class="aem-card-head">
-        <div class="aem-title-wrap">
-          <span class="aem-index">${escapeHtml(idx)}</span>
-          <h2 class="aem-card-title">${escapeHtml(title)}</h2>
+        <div class="aem-title-col">
+          <div class="aem-title-wrap">
+            <span class="aem-index">${escapeHtml(idx)}</span>
+            <h2 class="aem-card-title">${escapeHtml(title)}</h2>
+          </div>
+          ${axisBar}
         </div>
         ${scorePill}
       </div>
@@ -182,6 +213,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       --aem-score-border: rgba(180, 140, 40, 0.32);
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       font-family: Sarabun, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -267,14 +299,20 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       gap: 0.45rem;
     }
     .aem-guide-chip {
-      padding: 0.46rem 0.6rem;
+      padding: 0.46rem 0.6rem 0.46rem 10px;
       border: 1px solid var(--aem-chip-border);
       border-radius: 10px;
       background: var(--aem-chip-bg);
       color: var(--aem-body);
       font-size: 0.83rem;
       line-height: 1.35;
+      border-left-width: 3px;
+      border-left-style: solid;
     }
+    .aem-guide-chip--b80 { border-left-color: #c8971e; }
+    .aem-guide-chip--b60 { border-left-color: #7a9e4e; }
+    .aem-guide-chip--b40 { border-left-color: #9e9e9e; }
+    .aem-guide-chip--b0 { border-left-color: #c5c5c5; }
     .aem-card {
       background: #ffffff;
       border: 1px solid rgba(180, 140, 40, 0.16);
@@ -296,6 +334,28 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       justify-content: space-between;
       gap: 0.75rem;
       margin-bottom: 0.45rem;
+    }
+    .aem-title-col {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .aem-axis-bar-track {
+      height: 4px;
+      width: 100%;
+      max-width: 100%;
+      border-radius: 999px;
+      background: #ede8dd;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .aem-axis-bar-fill {
+      height: 100%;
+      min-width: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #c8971e 0%, #e8c060 100%);
     }
     .aem-title-wrap {
       display: flex;
@@ -336,6 +396,26 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       letter-spacing: 0.03em;
       flex-shrink: 0;
     }
+    .aem-score-pill--t80 {
+      background: #fdf3dc;
+      border-color: #c8971e;
+      color: #a07000;
+    }
+    .aem-score-pill--t60 {
+      background: #f2f7ec;
+      border-color: #7a9e4e;
+      color: #4a7020;
+    }
+    .aem-score-pill--t40 {
+      background: #f5f5f5;
+      border-color: #9e9e9e;
+      color: #666;
+    }
+    .aem-score-pill--t0 {
+      background: #f0f0f0;
+      border-color: #c5c5c5;
+      color: #999;
+    }
     .aem-score-pill.is-muted { color: var(--aem-muted); }
     .aem-card-summary {
       margin: 0 0 0.78rem;
@@ -361,11 +441,12 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     .aem-chip {
       display: inline-flex;
       align-items: center;
-      padding: 0.24rem 0.56rem;
+      padding: 4px 10px;
       border-radius: 999px;
       border: 1px solid var(--aem-chip-border);
       background: var(--aem-chip-bg);
-      font-size: 0.82rem;
+      font-size: 0.78rem;
+      line-height: 1.4;
       color: var(--aem-body);
     }
     .aem-card-detail {
@@ -414,6 +495,58 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     }
     .aem-cta:hover { filter: brightness(1.04); }
     .aem-cta-wrap { margin-top: 0.25rem; }
+    .aem-jump-nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      margin: 0 0 0.85rem;
+      padding: 0.42rem 0.55rem;
+      background: linear-gradient(180deg, #fffdf9 0%, #faf7f0 100%);
+      border: 1px solid rgba(180, 140, 40, 0.14);
+      border-radius: 999px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    }
+    .aem-jump-nav-inner {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.35rem;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: 0.08rem 0;
+    }
+    .aem-jump-nav-inner::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+    .aem-jump-pill {
+      flex: 0 0 auto;
+      min-width: 2.1rem;
+      padding: 0.3rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid rgba(180, 140, 40, 0.28);
+      background: #fff;
+      color: var(--aem-gold-soft);
+      font-size: 0.76rem;
+      font-weight: 700;
+      font-family: inherit;
+      text-align: center;
+      text-decoration: none;
+      line-height: 1.25;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .aem-jump-pill:hover {
+      border-color: rgba(200, 151, 30, 0.55);
+      color: var(--aem-gold);
+    }
+    .aem-jump-pill.is-active {
+      background: #c8971e;
+      border-color: #b8860b;
+      color: #fffdf8;
+    }
     @media (max-width: 640px) {
       .aem-wrap { padding: 1.2rem 1.05rem 2.5rem; }
       .aem-card { padding: 0.92rem 0.92rem 1rem; }
@@ -433,13 +566,16 @@ export function renderAmuletEnergyMeaningHtml(payload) {
         <span class="aem-mini-chip">Sacred Amulet Lane</span>
       </div>
     </section>
+    <nav class="aem-jump-nav" id="aem-jump-nav" aria-label="ไปยังหัวข้อพลังแต่ละด้าน">
+      <div class="aem-jump-nav-inner">${jumpPillsHtml}</div>
+    </nav>
     <section class="aem-guide" aria-label="วิธีอ่านคะแนน">
       <p class="aem-guide-title">วิธีอ่านคะแนน</p>
       <div class="aem-guide-grid">
-        <div class="aem-guide-chip">80–100: เด่นชัด</div>
-        <div class="aem-guide-chip">60–79: มีแรงสนับสนุนดี</div>
-        <div class="aem-guide-chip">40–59: พลังรอง / พอมี</div>
-        <div class="aem-guide-chip">ต่ำกว่า 40: ไม่ใช่แกนหลัก</div>
+        <div class="aem-guide-chip aem-guide-chip--b80">80–100: เด่นชัด</div>
+        <div class="aem-guide-chip aem-guide-chip--b60">60–79: มีแรงสนับสนุนดี</div>
+        <div class="aem-guide-chip aem-guide-chip--b40">40–59: พลังรอง / พอมี</div>
+        <div class="aem-guide-chip aem-guide-chip--b0">ต่ำกว่า 40: ไม่ใช่แกนหลัก</div>
       </div>
     </section>
     ${cardsHtml}
@@ -448,6 +584,60 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       <a class="aem-cta" href="${escapeHtml(reportBackHref)}">กลับไปหน้ารายงาน</a>
     </div>
   </div>
+  <script>
+(function () {
+  var pills = document.querySelectorAll(".aem-jump-pill[data-aem-jump]");
+  if (!pills.length) return;
+  var secs = [];
+  for (var i = 0; i < pills.length; i++) {
+    var j = pills[i].getAttribute("data-aem-jump");
+    if (!j) continue;
+    var el = document.getElementById("aem-sec-" + j);
+    if (el) secs.push(el);
+  }
+  if (!secs.length) return;
+  function applyActive(suffix) {
+    for (var p = 0; p < pills.length; p++) {
+      var on = pills[p].getAttribute("data-aem-jump") === suffix;
+      pills[p].classList.toggle("is-active", on);
+    }
+  }
+  if (!("IntersectionObserver" in window)) return;
+  var ratios = {};
+  function pickBest() {
+    var bestK = null;
+    var bestR = 0;
+    for (var k in ratios) {
+      if (!Object.prototype.hasOwnProperty.call(ratios, k)) continue;
+      var r = ratios[k];
+      if (typeof r === "number" && r > bestR) {
+        bestR = r;
+        bestK = k;
+      }
+    }
+    if (bestK != null && bestR > 0.001) applyActive(bestK);
+  }
+  var io = new IntersectionObserver(
+    function (entries) {
+      for (var e = 0; e < entries.length; e++) {
+        var ent = entries[e];
+        var t = ent.target;
+        if (!t || !t.id) continue;
+        var m = /^aem-sec-([0-9]{2})$/.exec(t.id);
+        if (!m) continue;
+        ratios[m[1]] = ent.intersectionRatio;
+      }
+      pickBest();
+    },
+    {
+      root: null,
+      rootMargin: "-10% 0px -45% 0px",
+      threshold: [0, 0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.5, 0.65, 0.8, 1],
+    }
+  );
+  for (var s = 0; s < secs.length; s++) io.observe(secs[s]);
+})();
+  </script>
 </body>
 </html>`;
 }

@@ -113,8 +113,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   });
   assert.ok(html.includes("พระเครื่อง"));
   assert.ok(
-    html.includes('class="mv2-strip-k">ความเด่นพลังงาน</div>'),
-    "score strip: grade column label is ความเด่นพลังงาน (not authenticity grade)",
+    html.includes('class="mv2-strip-sub">เกรดพลังงาน</div>'),
+    "score strip: grade column sublabel is เกรดพลังงาน (B etc. above)",
   );
   assert.ok(html.includes("level-grade--B"), "ความเด่นพลังงาน strip: score 7 → B + sacred_amulet gold lane class");
   assert.ok(html.includes("กราฟหกมิติพลังพระเครื่อง"));
@@ -132,9 +132,9 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2a-radar-labels"'));
   assert.ok(html.includes("class=\"mv2a-radar-lbl mv2a-radar-lbl--protection mv2a-radar-lbl--top1\""));
   assert.ok(html.includes("class=\"mv2a-radar-lbl mv2a-radar-lbl--metta mv2a-radar-lbl--top2\""));
-  assert.ok(html.includes("คุ้มครอง</span> <span class=\"mv2a-radar-axis-n\">88"));
-  assert.ok(html.includes("เมตตา</span> <span class=\"mv2a-radar-axis-n\">70"));
-  assert.ok(html.includes("งานเฉพาะ</span> <span class=\"mv2a-radar-axis-n\">50"));
+  assert.ok(html.includes("คุ้มครอง</span><span class=\"mv2a-radar-axis-n\">88"));
+  assert.ok(html.includes("เมตตา</span><span class=\"mv2a-radar-axis-n\">70"));
+  assert.ok(html.includes("งานเฉพาะ</span><span class=\"mv2a-radar-axis-n\">50"));
   assert.ok(html.includes("พลังทั้ง 6 ด้าน"));
   assert.ok(html.includes("อ่านคำอธิบายพลังทั้ง 6 ด้าน"));
   assert.ok(html.includes("/r/t/energy-meaning"));
