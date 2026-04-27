@@ -138,6 +138,37 @@ function absoluteUrlForMeta(canonicalPageUrl, rawImage) {
 }
 
 /**
+ * Pip scale under strip grade: A=5 … E=1; S maps to 5 (top tier).
+ * @param {string} gradeClass e.g. `level-grade--B`
+ * @param {string|null|undefined} gradeLetter single letter from metrics
+ * @returns {number} 0–5
+ */
+function stripGradePipActiveCount(gradeClass, gradeLetter) {
+  const cls = String(gradeClass || "");
+  const m = cls.match(/level-grade--([SABCDE])/i);
+  const ch = m
+    ? m[1].toUpperCase()
+    : /^[sabcde]$/i.test(String(gradeLetter || "").trim())
+      ? String(gradeLetter).trim().toUpperCase()
+      : "";
+  /** @type {Record<string, number>} */
+  const map = { S: 5, A: 5, B: 4, C: 3, D: 2, E: 1 };
+  return map[ch] ?? 0;
+}
+
+/**
+ * @param {number} activeCount
+ */
+function buildStripGradePipsHtml(activeCount) {
+  const n = Math.max(0, Math.min(5, Math.floor(Number(activeCount) || 0)));
+  const parts = [];
+  for (let i = 0; i < 5; i++) {
+    parts.push(`<span class="mv2-strip-pip${i < n ? " is-on" : ""}" aria-hidden="true"></span>`);
+  }
+  return `<div class="mv2-strip-pips">${parts.join("")}</div>`;
+}
+
+/**
  * Default: white shell + dark text + gold accents. Dark dashboard via
  * `wording.amuletReportV2Theme: "dark"` or env `AMULET_HTML_THEME=dark`.
  *
@@ -414,6 +445,9 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     Number.isFinite(Number(vm.metrics.compatibilityPercent))
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
       : "ไม่มี";
+  const stripGradePipsHtml = buildStripGradePipsHtml(
+    stripGradePipActiveCount(vm.metrics.energyLevelGradeClass, vm.metrics.energyLevelLabel),
+  );
 
   const publicTokenForLinks = String(payload.publicToken || "").trim();
   const energyMeaningHref = publicTokenForLinks
@@ -463,10 +497,11 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .join("");
 
   const interactionHtml = vm.interactionSummary.rows
-    .map(
-      (row) =>
-        `<div class="mv2-int-card"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-main">${escapeHtml(row.main)}</span><span class="mv2-int-sub">${escapeHtml(row.sub)}</span></div>`,
-    )
+    .map((row) => {
+      const tensionMuted =
+        String(row.kicker || "").trim() === "ยังไม่ส่งกัน" ? " mv2-int-card--tension-muted" : "";
+      return `<div class="mv2-int-card${tensionMuted}"><span class="mv2-int-kicker">${escapeHtml(row.kicker)}</span><span class="mv2-int-main">${escapeHtml(row.main)}</span><span class="mv2-int-sub">${escapeHtml(row.sub)}</span></div>`;
+    })
     .join("");
 
   const lifeRowsHtml = vm.lifeAreaDetail.rows
@@ -812,6 +847,25 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2-strip-cell { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 0.22rem; min-width: 0; }
     .mv2-strip-v { font-size: 1.1rem; font-weight: 700; color: var(--mv2a-gold); line-height: 1.2; }
     .mv2-strip-sub { font-size: 0.72rem; font-weight: 500; color: var(--mv2a-muted); line-height: 1.25; }
+    .mv2-strip-cell--level .mv2-strip-pips {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      justify-content: center;
+      align-items: center;
+      gap: 4px;
+      margin-top: 0.12rem;
+    }
+    .mv2-strip-pip {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #ddd;
+      flex-shrink: 0;
+    }
+    .mv2-strip-pip.is-on { background: #c8971e; }
+    html.mv2a-theme-dark .mv2-strip-pip { background: rgba(221, 221, 221, 0.32); }
+    html.mv2a-theme-dark .mv2-strip-pip.is-on { background: #c8971e; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: #c9a132; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--A { color: #b8871b; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--B { color: #9a6f12; }
@@ -1154,6 +1208,20 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2-owner-note { margin: 0.45rem 0 0; font-size: 0.62rem; color: var(--mv2a-owner-note); }
     .mv2-int-cards { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.15rem 0 0; }
     .mv2-int-card { display: flex; flex-direction: column; gap: 0.12rem; padding: 0.48rem 0.55rem; border-radius: 10px; background: var(--mv2a-int-bg); border: 1px solid var(--mv2a-int-border); }
+    .mv2-int-card--tension-muted {
+      background: #f8f5ef;
+      border: 1px dashed #d4c9b0;
+    }
+    .mv2-int-card--tension-muted .mv2-int-kicker {
+      color: #8a7f6e;
+    }
+    html.mv2a-theme-dark .mv2-int-card--tension-muted {
+      background: rgba(248, 245, 239, 0.07);
+      border-color: rgba(212, 201, 176, 0.4);
+    }
+    html.mv2a-theme-dark .mv2-int-card--tension-muted .mv2-int-kicker {
+      color: rgba(203, 196, 180, 0.92);
+    }
     .mv2-int-kicker { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; color: var(--mv2a-int-kicker); }
     .mv2-int-main { font-size: 0.88rem; font-weight: 700; line-height: 1.28; color: var(--mv2a-int-main); }
     .mv2-int-sub { font-size: 0.72rem; color: var(--mv2a-int-sub); line-height: 1.35; }
@@ -2127,6 +2195,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       <div class="mv2-strip-cell mv2-strip-cell--level">
         <div class="mv2-strip-v ${vm.metrics.energyLevelGradeClass}">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div>
         <div class="mv2-strip-sub">เกรดพลังงาน</div>
+        ${stripGradePipsHtml}
       </div>
     </div>
 
