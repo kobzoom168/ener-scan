@@ -133,12 +133,20 @@ export function renderAmuletEnergyMeaningHtml(payload) {
         sc != null
           ? `<span class="aem-score-pill">${escapeHtml(String(Math.round(sc)))}/100</span>`
           : `<span class="aem-score-pill is-muted">N/A</span>`;
+      const barPct = sc != null ? Math.max(0, Math.min(100, Math.round(sc))) : 0;
+      const axisBar =
+        sc != null
+          ? `<div class="aem-axis-bar-track" aria-hidden="true"><div class="aem-axis-bar-fill" style="width:${barPct}%"></div></div>`
+          : "";
       return `
     <article class="aem-card" data-axis="${escapeHtml(key)}">
       <div class="aem-card-head">
-        <div class="aem-title-wrap">
-          <span class="aem-index">${escapeHtml(idx)}</span>
-          <h2 class="aem-card-title">${escapeHtml(title)}</h2>
+        <div class="aem-title-col">
+          <div class="aem-title-wrap">
+            <span class="aem-index">${escapeHtml(idx)}</span>
+            <h2 class="aem-card-title">${escapeHtml(title)}</h2>
+          </div>
+          ${axisBar}
         </div>
         ${scorePill}
       </div>
@@ -296,6 +304,28 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       justify-content: space-between;
       gap: 0.75rem;
       margin-bottom: 0.45rem;
+    }
+    .aem-title-col {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .aem-axis-bar-track {
+      height: 4px;
+      width: 100%;
+      max-width: 100%;
+      border-radius: 999px;
+      background: #ede8dd;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .aem-axis-bar-fill {
+      height: 100%;
+      min-width: 0;
+      border-radius: inherit;
+      background: #c8971e;
     }
     .aem-title-wrap {
       display: flex;
