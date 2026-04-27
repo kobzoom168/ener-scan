@@ -20,6 +20,27 @@ import { supabase } from "../../config/supabase.js";
  */
 
 /**
+ * @typedef {Object} GlobalObjectBaselineRow
+ * @property {string} id
+ * @property {string} imageSha256
+ * @property {string|null} imagePhash
+ * @property {string|null} stableFeatureSeed
+ * @property {string} lane
+ * @property {string} objectFamily
+ * @property {number} baselineSchemaVersion
+ * @property {string|null} promptVersion
+ * @property {string|null} scoringVersion
+ * @property {unknown} objectBaselineJson
+ * @property {unknown} axisScoresJson
+ * @property {string|null} peakPowerKey
+ * @property {string|null} thumbnailPath
+ * @property {string|null} sourceScanResultV2Id
+ * @property {string|null} sourceUploadId
+ * @property {number|null} confidence
+ * @property {number} reuseCount
+ */
+
+/**
  * Insert or update baseline keyed by `image_sha256`.
  * Does not increment `reuse_count` (reserved for future reuse hits).
  *
@@ -68,8 +89,46 @@ export async function upsertGlobalObjectBaselineFromScanResult(input) {
 }
 
 /**
+ * @param {Record<string, unknown>|null|undefined} raw
+ * @returns {GlobalObjectBaselineRow|null}
+ */
+function mapBaselineRow(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const r = /** @type {Record<string, unknown>} */ (raw);
+  const id = r.id != null ? String(r.id).trim() : "";
+  if (!id) return null;
+  const sha = r.image_sha256 != null ? String(r.image_sha256).trim().toLowerCase() : "";
+  return {
+    id,
+    imageSha256: sha,
+    imagePhash: r.image_phash != null ? String(r.image_phash).trim().toLowerCase() || null : null,
+    stableFeatureSeed:
+      r.stable_feature_seed != null ? String(r.stable_feature_seed).trim() || null : null,
+    lane: String(r.lane || "").trim() || "sacred_amulet",
+    objectFamily: String(r.object_family || "").trim() || "sacred_amulet",
+    baselineSchemaVersion:
+      Number.isFinite(Number(r.baseline_schema_version)) && Number(r.baseline_schema_version) > 0
+        ? Math.floor(Number(r.baseline_schema_version))
+        : 1,
+    promptVersion: r.prompt_version != null ? String(r.prompt_version).trim() || null : null,
+    scoringVersion: r.scoring_version != null ? String(r.scoring_version).trim() || null : null,
+    objectBaselineJson: r.object_baseline_json,
+    axisScoresJson: r.axis_scores_json ?? null,
+    peakPowerKey: r.peak_power_key != null ? String(r.peak_power_key).trim() || null : null,
+    thumbnailPath: r.thumbnail_path != null ? String(r.thumbnail_path).trim() || null : null,
+    sourceScanResultV2Id:
+      r.source_scan_result_v2_id != null ? String(r.source_scan_result_v2_id).trim() || null : null,
+    sourceUploadId: r.source_upload_id != null ? String(r.source_upload_id).trim() || null : null,
+    confidence:
+      r.confidence != null && Number.isFinite(Number(r.confidence)) ? Number(r.confidence) : 1,
+    reuseCount:
+      r.reuse_count != null && Number.isFinite(Number(r.reuse_count)) ? Math.max(0, Math.floor(Number(r.reuse_count))) : 0,
+  };
+}
+
+/**
  * @param {string} imageSha256Hex
- * @returns {Promise<{ id: string, object_baseline_json: unknown } | null>}
+ * @returns {Promise<GlobalObjectBaselineRow | null>}
  */
 export async function findGlobalObjectBaselineBySha256(imageSha256Hex) {
   const sha = String(imageSha256Hex || "")
@@ -79,11 +138,75 @@ export async function findGlobalObjectBaselineBySha256(imageSha256Hex) {
 
   const { data, error } = await supabase
     .from("global_object_baselines")
-    .select("id, object_baseline_json")
+    .select(
+      [
+        "id",
+        "image_sha256",
+        "image_phash",
+        "stable_feature_seed",
+        "lane",
+        "object_family",
+        "baseline_schema_version",
+        "prompt_version",
+        "scoring_version",
+        "object_baseline_json",
+        "axis_scores_json",
+        "peak_power_key",
+        "thumbnail_path",
+        "source_scan_result_v2_id",
+        "source_upload_id",
+        "confidence",
+        "reuse_count",
+      ].join(","),
+    )
     .eq("image_sha256", sha)
     .maybeSingle();
 
   if (error) throw error;
-  if (!data?.id) return null;
-  return { id: String(data.id), object_baseline_json: data.object_baseline_json };
+  return mapBaselineRow(data);
+}
+
+/**
+ * Best-effort reuse counter (non-atomic increment acceptable for Phase 2A on staging).
+ *
+ * @param {string} baselineId
+ * @returns {Promise<void>}
+ */
+export async function markGlobalObjectBaselineReused(baselineId) {
+  const id = String(baselineId || "").trim();
+  if (!id) return;
+
+  try {
+    const { data: cur, error: selErr } = await supabase
+      .from("global_object_baselines")
+      .select("reuse_count")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (selErr) throw selErr;
+    const prev =
+      cur && typeof cur === "object" && "reuse_count" in cur && Number.isFinite(Number(cur.reuse_count))
+        ? Math.max(0, Math.floor(Number(cur.reuse_count)))
+        : 0;
+
+    const { error: upErr } = await supabase
+      .from("global_object_baselines")
+      .update({
+        reuse_count: prev + 1,
+        last_reused_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (upErr) throw upErr;
+    console.log(
+      JSON.stringify({
+        event: "CROSS_ACCOUNT_BASELINE_REUSE_MARKED",
+        path: "worker-scan",
+        baselineIdPrefix: id.slice(0, 8),
+        reuseCountNext: prev + 1,
+      }),
+    );
+  } catch {
+    /* caller logs; never throw */
+  }
 }

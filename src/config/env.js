@@ -681,6 +681,18 @@ export const env = {
     String(process.env.ENABLE_CROSS_ACCOUNT_BASELINE_REUSE ?? "false").trim().toLowerCase() ===
     "true",
   /**
+   * Phase 2A: reuse path uses exact `image_sha256` match on `global_object_baselines` (default off).
+   */
+  CROSS_ACCOUNT_BASELINE_REUSE_EXACT_SHA:
+    String(process.env.CROSS_ACCOUNT_BASELINE_REUSE_EXACT_SHA ?? "false").trim().toLowerCase() ===
+    "true",
+  /**
+   * Reserved for near-duplicate via pHash (not implemented in Phase 2A; default off).
+   */
+  CROSS_ACCOUNT_BASELINE_REUSE_PHASH:
+    String(process.env.CROSS_ACCOUNT_BASELINE_REUSE_PHASH ?? "false").trim().toLowerCase() ===
+    "true",
+  /**
    * Phase 1A: after successful sacred_amulet scan, upsert `global_object_baselines` by image SHA.
    * Does not change scan results; default off until migration is applied / staging rollout.
    */

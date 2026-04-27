@@ -139,3 +139,19 @@ function assertBaselineHasNoForbiddenKeys(obj) {
   };
   walk(obj, "root");
 }
+
+/**
+ * @param {unknown} objectBaselineJson
+ * @returns {{ ok: true } | { ok: false, reason: string }}
+ */
+export function validateObjectBaselineJsonForReuse(objectBaselineJson) {
+  try {
+    assertBaselineHasNoForbiddenKeys(objectBaselineJson);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      reason: String(e?.message || e).slice(0, 120),
+    };
+  }
+}
