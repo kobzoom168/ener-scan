@@ -196,11 +196,18 @@ export function renderAmuletLibraryRankingHtml({
   const emptyAxisTab = "ยังไม่มีรายการที่เด่นด้านนี้";
   const tabs = [
     { id: "overall", label: "แรงสุดโดยรวม", list: library.byOverall, emptyText: "ยังไม่มีข้อมูลในหมวดนี้" },
-    { id: "luck", label: "โชคลาภสูงสุด", list: library.byLuck, emptyText: emptyAxisTab },
-    { id: "protection", label: "คุ้มครองสูงสุด", list: library.byProtection, emptyText: emptyAxisTab },
-    { id: "metta", label: "เมตตาสูงสุด", list: library.byMetta, emptyText: emptyAxisTab },
-    { id: "baramee", label: "บารมีสูงสุด", list: library.byBaramee, emptyText: emptyAxisTab },
     { id: "fit", label: "เข้ากับคุณที่สุด", list: library.byFit, emptyText: "ยังไม่มีข้อมูลในหมวดนี้" },
+    { id: "protection", label: "คุ้มครองสูงสุด", list: library.byProtection ?? [], emptyText: emptyAxisTab },
+    { id: "metta", label: "เมตตาสูงสุด", list: library.byMetta ?? [], emptyText: emptyAxisTab },
+    { id: "baramee", label: "บารมีสูงสุด", list: library.byBaramee ?? [], emptyText: emptyAxisTab },
+    { id: "luck", label: "โชคลาภสูงสุด", list: library.byLuck ?? [], emptyText: emptyAxisTab },
+    {
+      id: "fortune_anchor",
+      label: "หนุนดวงสูงสุด",
+      list: library.byFortuneAnchor ?? [],
+      emptyText: emptyAxisTab,
+    },
+    { id: "specialty", label: "งานเฉพาะทางสูงสุด", list: library.bySpecialty ?? [], emptyText: emptyAxisTab },
   ];
 
   const tabButtons = tabs
@@ -646,7 +653,7 @@ export function renderAmuletLibraryRankingHtml({
     </section>
     <section class="alib-scan-footer" aria-labelledby="alib-scan-footer-h">
       <h2 id="alib-scan-footer-h" class="alib-scan-footer-title">อยากรู้ว่าองค์อื่นของคุณจะขึ้นอันดับไหน?</h2>
-      <p class="alib-scan-footer-lead">สแกนเพิ่มเพื่อเทียบพลังรวม โชคลาภ คุ้มครอง เมตตา บารมี และความเข้ากัน</p>
+      <p class="alib-scan-footer-lead">สแกนเพิ่มเพื่อเทียบพลังรวม ความเข้ากัน คุ้มครอง เมตตา บารมี โชคลาภ หนุนดวง งานเฉพาะทาง</p>
       <p class="alib-scan-btn" role="status" aria-label="ชวนสแกนวัตถุเพิ่ม">สแกนวัตถุเพิ่ม</p>
     </section>
     <p class="alib-note" role="note">อันดับและคะแนนเป็นการประเมินจากผลสแกน ใช้เป็นแนวทาง ไม่ได้ระบุชนิดหรือชื่อพระจริงจากภาพ</p>

@@ -70,6 +70,8 @@ import { createScanUploadBucketSignedUrls } from "../../utils/storage/scanUpload
  * @property {SacredAmuletLibraryItem[]} byProtection
  * @property {SacredAmuletLibraryItem[]} byMetta
  * @property {SacredAmuletLibraryItem[]} byBaramee
+ * @property {SacredAmuletLibraryItem[]} byFortuneAnchor
+ * @property {SacredAmuletLibraryItem[]} bySpecialty
  * @property {SacredAmuletLibraryItem[]} byFit
  * @property {SacredAmuletLibraryItem|null} topOverall
  * @property {SacredAmuletAxisHighlight[]} axisHighlights — สูงสุดต่อมิติ (สูงสุด 6 รายการ)
@@ -101,8 +103,9 @@ function readPath(obj, path) {
 }
 
 /**
- * Dominant “peak” axis for library ranking tabs: object score order from {@link computeAmuletOrdAndAlignFromPayload}
+ * Dominant “peak” axis for card copy (“เด่นสุด”): object score order from {@link computeAmuletOrdAndAlignFromPayload}
  * (`ord[0]`), else `amuletV1.primaryPower`, else highest score in `axisScores` (ties → earlier in `POWER_ORDER`).
+ * Library tabs sort every item by numeric `axisScores` per axis — not by this peak key.
  *
  * @param {import("./reportPayload.types.js").ReportPayload} norm
  * @param {NonNullable<import("./reportPayload.types.js").ReportPayload["amuletV1"]>} am
@@ -624,6 +627,8 @@ function stripSacredAmuletLibraryInternalThumbFields(view) {
     view.byProtection,
     view.byMetta,
     view.byBaramee,
+    view.byFortuneAnchor,
+    view.bySpecialty,
     view.byFit,
   ];
   for (const arr of lists) {
@@ -715,22 +720,12 @@ export function buildSacredAmuletLibraryViewFromItems(scans, options = {}) {
     groupedObjectCount,
     items: itemsMarked,
     byOverall: sortByOverall(itemsMarked),
-    byLuck: sortByAxisScore(
-      itemsMarked.filter((it) => it.peakPowerKey === "luck"),
-      "luck",
-    ),
-    byProtection: sortByAxisScore(
-      itemsMarked.filter((it) => it.peakPowerKey === "protection"),
-      "protection",
-    ),
-    byMetta: sortByAxisScore(
-      itemsMarked.filter((it) => it.peakPowerKey === "metta"),
-      "metta",
-    ),
-    byBaramee: sortByAxisScore(
-      itemsMarked.filter((it) => it.peakPowerKey === "baramee"),
-      "baramee",
-    ),
+    byLuck: sortByAxisScore(itemsMarked, "luck"),
+    byProtection: sortByAxisScore(itemsMarked, "protection"),
+    byMetta: sortByAxisScore(itemsMarked, "metta"),
+    byBaramee: sortByAxisScore(itemsMarked, "baramee"),
+    byFortuneAnchor: sortByAxisScore(itemsMarked, "fortune_anchor"),
+    bySpecialty: sortByAxisScore(itemsMarked, "specialty"),
     byFit: sortByFit(itemsMarked),
     topOverall: sortByOverall(itemsMarked)[0] || null,
     axisHighlights: pickSacredAmuletAxisHighlights(itemsMarked),

@@ -74,7 +74,27 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   assert.ok(html.includes("แพ็กเก็บพื้นที่แบบจ่ายเงินจะเปิดให้บริการภายหลัง"));
   assert.ok(html.includes('content="noindex,nofollow"'));
   assert.ok(html.includes("แรงสุดโดยรวม"));
+  assert.ok(html.includes("เข้ากับคุณที่สุด"));
   assert.ok(html.includes("โชคลาภสูงสุด"));
+  assert.ok(html.includes("หนุนดวงสูงสุด"));
+  assert.ok(html.includes("งานเฉพาะทางสูงสุด"));
+  const idxOverall = html.indexOf('data-alib-tab="overall"');
+  const idxFit = html.indexOf('data-alib-tab="fit"');
+  const idxProt = html.indexOf('data-alib-tab="protection"');
+  const idxMetta = html.indexOf('data-alib-tab="metta"');
+  const idxBaramee = html.indexOf('data-alib-tab="baramee"');
+  const idxLuck = html.indexOf('data-alib-tab="luck"');
+  const idxFa = html.indexOf('data-alib-tab="fortune_anchor"');
+  const idxSp = html.indexOf('data-alib-tab="specialty"');
+  assert.ok(
+    idxOverall < idxFit &&
+      idxFit < idxProt &&
+      idxProt < idxMetta &&
+      idxMetta < idxBaramee &&
+      idxBaramee < idxLuck &&
+      idxLuck < idxFa &&
+      idxFa < idxSp,
+  );
   assert.ok(html.includes("อยากรู้ว่าองค์อื่นของคุณจะขึ้นอันดับไหน?"));
   assert.ok(html.includes("สแกนวัตถุเพิ่ม"));
   assert.ok(html.includes("คุณมีรายการสแกนแล้ว 1 รายการ"));
@@ -91,7 +111,7 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   );
   assert.ok(
     html.includes(
-      "สแกนเพิ่มเพื่อเทียบพลังรวม โชคลาภ คุ้มครอง เมตตา บารมี และความเข้ากัน",
+      "สแกนเพิ่มเพื่อเทียบพลังรวม ความเข้ากัน คุ้มครอง เมตตา บารมี โชคลาภ หนุนดวง งานเฉพาะทาง",
     ),
   );
   assert.ok(html.includes("ดูรายงานนี้"));
@@ -100,10 +120,6 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   assert.ok(html.includes("เลื่อนดูพลังด้านอื่น ๆ"));
   assert.ok(html.includes("ดูอันดับทั้งหมดในคลัง"));
   assert.ok(html.includes("เด่นสุดในด้านนี้"));
-  assert.ok(
-    html.includes("ยังไม่มีรายการที่เด่นด้านนี้"),
-    "axis-specific ranking tab empty copy when no peak match",
-  );
 });
 
 test("renderAmuletLibraryRankingHtml: grouped header + duplicate badge", () => {
@@ -148,6 +164,8 @@ test("renderAmuletLibraryRankingHtml: grouped header + duplicate badge", () => {
     byProtection: [],
     byMetta: [],
     byBaramee: [],
+    byFortuneAnchor: [],
+    bySpecialty: [],
     byFit: [],
     topOverall: null,
     axisHighlights: [],

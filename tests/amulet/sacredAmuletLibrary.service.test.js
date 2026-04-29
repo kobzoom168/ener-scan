@@ -399,7 +399,7 @@ test("library thumb: signed URL fail falls back to payload objectImageUrl", asyn
   assert.equal(it.thumbUrl, "https://object.example/fallback.jpg");
 });
 
-test("buildSacredAmuletLibraryViewFromItems: ranking tabs by axis filter by peakPowerKey (not raw axis score)", () => {
+test("buildSacredAmuletLibraryViewFromItems: ranking tabs sort all items by amuletV1 axis score (not peak label)", () => {
   const itemA = extractSacredAmuletLibraryItem(
     makeRaw({
       token: "tok-rank-luck-peak",
@@ -498,23 +498,46 @@ test("buildSacredAmuletLibraryViewFromItems: ranking tabs by axis filter by peak
 
   const view = buildSacredAmuletLibraryViewFromItems([itemA, itemB, itemProt, itemMetta]);
   assert.ok(view);
-  const tokens = (arr) => arr.map((it) => it.publicToken).sort();
+  const tokens = (arr) => arr.map((it) => it.publicToken);
 
-  assert.deepEqual(
-    tokens(view.byLuck),
-    ["tok-rank-luck-peak"],
-    "only luck-peak item appears under โชคลาภ tab",
-  );
-  assert.equal(
-    view.byLuck.some((it) => it.publicToken === "tok-rank-baramee-high-luck"),
-    false,
-    "high luck score but baramee peak must not appear in byLuck",
-  );
-  assert.deepEqual(tokens(view.byOverall), tokens(view.items));
-  assert.deepEqual(tokens(view.byFit), tokens(view.items));
-  assert.deepEqual(tokens(view.byProtection), ["tok-rank-prot-peak"]);
-  assert.deepEqual(tokens(view.byMetta), ["tok-rank-metta-peak"]);
-  assert.deepEqual(tokens(view.byBaramee), ["tok-rank-baramee-high-luck"]);
+  assert.deepEqual(tokens(view.byLuck), [
+    "tok-rank-baramee-high-luck",
+    "tok-rank-luck-peak",
+    "tok-rank-prot-peak",
+    "tok-rank-metta-peak",
+  ]);
+  assert.deepEqual(tokens(view.byProtection), [
+    "tok-rank-prot-peak",
+    "tok-rank-luck-peak",
+    "tok-rank-metta-peak",
+    "tok-rank-baramee-high-luck",
+  ]);
+  assert.deepEqual(tokens(view.byMetta), [
+    "tok-rank-metta-peak",
+    "tok-rank-luck-peak",
+    "tok-rank-baramee-high-luck",
+    "tok-rank-prot-peak",
+  ]);
+  assert.deepEqual(tokens(view.byBaramee), [
+    "tok-rank-baramee-high-luck",
+    "tok-rank-luck-peak",
+    "tok-rank-metta-peak",
+    "tok-rank-prot-peak",
+  ]);
+  assert.deepEqual(tokens(view.byFortuneAnchor), [
+    "tok-rank-luck-peak",
+    "tok-rank-metta-peak",
+    "tok-rank-prot-peak",
+    "tok-rank-baramee-high-luck",
+  ]);
+  assert.deepEqual(tokens(view.bySpecialty), [
+    "tok-rank-metta-peak",
+    "tok-rank-prot-peak",
+    "tok-rank-baramee-high-luck",
+    "tok-rank-luck-peak",
+  ]);
+  assert.deepEqual(tokens(view.byOverall).sort(), tokens(view.items).sort());
+  assert.deepEqual(tokens(view.byFit).sort(), tokens(view.items).sort());
 });
 
 test("buildSacredAmuletLibraryViewFromItems: axisHighlights tie-break uses compat when score and date equal", () => {
