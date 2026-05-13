@@ -1,0 +1,61 @@
+services:
+  ener-scan:
+    build: .
+    container_name: ener-scan
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - ener-scan-net
+
+  worker-scan:
+    build: .
+    container_name: ener-scan-worker-scan
+    restart: always
+    command: node src/workers/scanWorker.js
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - ener-scan-net
+
+  worker-delivery:
+    build: .
+    container_name: ener-scan-worker-delivery
+    restart: always
+    command: node src/workers/deliveryWorker.js
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - ener-scan-net
+
+  worker-maintenance:
+    build: .
+    container_name: ener-scan-worker-maintenance
+    restart: always
+    command: node src/workers/maintenanceWorker.js
+    env_file: .env
+    depends_on:
+      - redis
+    networks:
+      - ener-scan-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: ener-scan-redis
+    restart: always
+    volumes:
+      - redis-data:/data
+    networks:
+      - ener-scan-net
+
+volumes:
+  redis-data:
+
+networks:
+  ener-scan-net:
+    driver: bridge
