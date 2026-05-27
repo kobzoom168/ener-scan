@@ -2,7 +2,7 @@
  * Storage retention: free-tier scan originals + payment slip images.
  * Never deletes scan_results_v2 payloads or thumbnails (thumbnail_path).
  */
-import { supabase } from "../../config/supabase.js";
+import { supabase } from "../../config/supabaseStorage.js";
 import { env } from "../../config/env.js";
 import {
   listScanUploadsOriginalDeletionCandidates,

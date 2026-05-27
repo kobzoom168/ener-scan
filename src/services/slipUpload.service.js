@@ -1,4 +1,4 @@
-import { supabase } from "../config/supabase.js";
+import { supabase } from "../config/supabaseStorage.js";
 
 const BUCKET_NAME = process.env.PAYMENT_SLIP_BUCKET || "payment-slips";
 

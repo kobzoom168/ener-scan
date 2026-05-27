@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { supabase } from "../config/supabase.js";
+import { supabase } from "../config/supabaseStorage.js";
 import { env } from "../config/env.js";
 
 /**

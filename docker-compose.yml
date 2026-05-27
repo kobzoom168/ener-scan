@@ -8,6 +8,7 @@ services:
     env_file: .env
     depends_on:
       - redis
+      - postgrest
     networks:
       - ener-scan-net
 
@@ -19,6 +20,7 @@ services:
     env_file: .env
     depends_on:
       - redis
+      - postgrest
     networks:
       - ener-scan-net
 
@@ -30,6 +32,7 @@ services:
     env_file: .env
     depends_on:
       - redis
+      - postgrest
     networks:
       - ener-scan-net
 
@@ -41,6 +44,23 @@ services:
     env_file: .env
     depends_on:
       - redis
+      - postgrest
+    networks:
+      - ener-scan-net
+
+  postgrest:
+    image: postgrest/postgrest
+    container_name: ener-scan-postgrest
+    restart: always
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGREST_DB_PASSWORD}@host.docker.internal:5432/${LOCAL_PG_DB:-ener_scan}
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: web_anon
+      PGRST_JWT_SECRET: ${POSTGREST_JWT_SECRET}
+      PGRST_SERVER_PORT: "3001"
+      PGRST_LOG_LEVEL: warn
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - ener-scan-net
 
