@@ -117,8 +117,8 @@ const requiredEnv = [
   "CHANNEL_SECRET",
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
-  "LOCAL_POSTGREST_URL",
-  "LOCAL_POSTGREST_ANON_KEY",
+  // LOCAL_POSTGREST_URL / LOCAL_POSTGREST_ANON_KEY are optional:
+  // present → use local PostgREST (Hetzner); absent → use Supabase cloud (Railway)
 ];
 
 for (const key of requiredEnv) {
