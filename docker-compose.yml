@@ -58,7 +58,6 @@ services:
       PGRST_DB_ANON_ROLE: web_anon
       PGRST_JWT_SECRET: ${POSTGREST_JWT_SECRET}
       PGRST_SERVER_PORT: "3001"
-      PGRST_SERVER_ROOT_PATH: /rest/v1
       PGRST_LOG_LEVEL: warn
     extra_hosts:
       - "host.docker.internal:host-gateway"
