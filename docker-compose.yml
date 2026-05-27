@@ -79,8 +79,20 @@ services:
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - ener-scan-net
+
+  monitor-proxy:
+    build: .
+    container_name: ener-scan-monitor-proxy
+    restart: always
+    command: node /app/monitor-proxy/index.mjs
+    env_file: .env
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      - redis
+      - dozzle
     networks:
       - ener-scan-net
 
