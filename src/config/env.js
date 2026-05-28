@@ -754,6 +754,18 @@ export const env = {
     String(process.env.SCAN_V2_UPLOAD_BUCKET || "").trim() || "scan-uploads",
   /** Optional Redis for rate-limit keys / dedupe (workers use DB locks if unset). */
   REDIS_URL: String(process.env.REDIS_URL || "").trim() || null,
+  ENER_AI_EVENT_ENABLED: String(process.env.ENER_AI_EVENT_ENABLED || "false")
+    .trim()
+    .toLowerCase(),
+  ENER_AI_EVENT_URL: String(
+    process.env.ENER_AI_EVENT_URL || "http://ener-ai:8000/ai/event",
+  ).trim(),
+  ENER_AI_EVENT_TOKEN: String(process.env.ENER_AI_EVENT_TOKEN || "").trim(),
+  ENER_AI_EVENT_TIMEOUT_MS: (() => {
+    const raw = process.env.ENER_AI_EVENT_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 2500 : Number(raw);
+    return Number.isFinite(n) ? Math.max(1000, Math.floor(n)) : 2500;
+  })(),
   /** Key prefix for Scan V2 Redis keys (locks, dedupe, heartbeats). */
   SCAN_V2_REDIS_PREFIX:
     String(process.env.SCAN_V2_REDIS_PREFIX || "ener-scan:v2:").trim() ||

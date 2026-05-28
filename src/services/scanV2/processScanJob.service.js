@@ -87,6 +87,7 @@ import {
   insertScanPhash,
 } from "../../stores/scanV2/imageDedupCache.db.js";
 import { maybePersistGlobalObjectBaselineAfterScanV2 } from "./maybePersistGlobalObjectBaseline.service.js";
+import { sendEnerAiEvent } from "../enerAiEvent.service.js";
 
 const NEAR_EXACT_DEDUP_THRESHOLD = 4;
 
@@ -1684,6 +1685,44 @@ export async function processScanJob(workerId, jobRow) {
   });
 
   await updateScanRequestStatus(scanRequestId, "completed");
+
+  const durationMs = Math.max(0, Date.now() - workerTurnStartMs);
+  const safeScore =
+    typeof reportPayloadForReply?.summary?.score === "number"
+      ? reportPayloadForReply.summary.score
+      : null;
+  const scanEventPayload = {
+    lineUserId: lineUserId || null,
+    scanId: String(jobId || ""),
+    reportId: String(scanResultV2Id || ""),
+    objectType: reportObjectFamily || scanOut?.objectCategory || null,
+    score: safeScore,
+    mode: lineFinalMode,
+    durationMs,
+    reportUrl: reportUrl || null,
+    createdAt: new Date().toISOString(),
+  };
+  void sendEnerAiEvent({
+    eventType: "scan_completed",
+    summary: `Scan completed (${reportObjectFamily || "unknown"})`,
+    externalUserId: lineUserId || appUserId || "",
+    externalObjectId: String(scanResultV2Id || jobId || ""),
+    payload: scanEventPayload,
+  });
+  void sendEnerAiEvent({
+    eventType: "report_created",
+    summary: `Report created ${String(scanResultV2Id || "").slice(0, 8)}`,
+    externalUserId: lineUserId || appUserId || "",
+    externalObjectId: String(scanResultV2Id || ""),
+    payload: {
+      lineUserId: lineUserId || null,
+      reportId: String(scanResultV2Id || ""),
+      objectType: reportObjectFamily || scanOut?.objectCategory || null,
+      score: safeScore,
+      reportUrl: reportUrl || null,
+      createdAt: new Date().toISOString(),
+    },
+  });
 
   console.log(
     JSON.stringify({

@@ -5,6 +5,7 @@ import {
   emitPaymentRejectedFunnel,
 } from "../core/telemetry/paymentLifecycleTelemetry.service.js";
 import { grantEntitlementForPackage } from "../services/entitlement.service.js";
+import { sendEnerAiEvent } from "../services/enerAiEvent.service.js";
 import { generatePaymentRef } from "../utils/paymentRef.util.js";
 
 const DEFAULT_UNLOCK_HOURS = 24;
@@ -740,6 +741,26 @@ export async function markPaymentApprovedAndUnlock({
       reason: "admin_approve",
     });
   }
+  void sendEnerAiEvent({
+    eventType: "payment_approved",
+    summary: `Payment approved for package ${String(payment.package_code || "unknown")}`,
+    externalUserId: lineUid || payment.user_id || "",
+    externalObjectId: id,
+    payload: {
+      lineUserId: lineUid || null,
+      appUserId: payment.user_id || null,
+      paymentId: id,
+      packageCode: payment.package_code || null,
+      packageName: payment.package_name || null,
+      amount: payment.expected_amount != null ? Number(payment.expected_amount) : null,
+      approvedAt: nowIso,
+      paidUntil: entitlement.paidUntil || null,
+      paidRemainingScans:
+        entitlement.paidRemainingScans != null
+          ? Number(entitlement.paidRemainingScans)
+          : null,
+    },
+  });
 
   return {
     lineUserId: payment.line_user_id || null,
