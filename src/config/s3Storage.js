@@ -9,6 +9,7 @@ export const s3Client = env.S3_ENDPOINT_URL
         accessKeyId: env.S3_ACCESS_KEY_ID,
         secretAccessKey: env.S3_SECRET_ACCESS_KEY,
       },
+      forcePathStyle: true, // required for Cloudflare R2
     })
   : null;
 
