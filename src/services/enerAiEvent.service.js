@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { sanitizeEventPayload } from "./enerAiEventPayload.util.js";
 
 const DEFAULT_TIMEOUT_MS = 2500;
 
@@ -41,6 +42,9 @@ export async function sendEnerAiEvent({
     if (token) {
       headers["X-Ener-AI-Event-Token"] = token;
     }
+    const safePayload = sanitizeEventPayload(
+      payload && typeof payload === "object" ? payload : {},
+    );
     const body = {
       source: "ener_scan",
       project_slug: "ener-scan",
@@ -48,7 +52,8 @@ export async function sendEnerAiEvent({
       summary: trimText(summary || eventType || "external_event", 220),
       external_user_id: trimText(externalUserId, 120) || null,
       external_object_id: trimText(externalObjectId, 120) || null,
-      payload: payload && typeof payload === "object" ? payload : {},
+      payload:
+        safePayload && typeof safePayload === "object" ? safePayload : {},
     };
     const res = await fetch(endpoint, {
       method: "POST",

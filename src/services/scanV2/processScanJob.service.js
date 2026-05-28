@@ -87,7 +87,10 @@ import {
   insertScanPhash,
 } from "../../stores/scanV2/imageDedupCache.db.js";
 import { maybePersistGlobalObjectBaselineAfterScanV2 } from "./maybePersistGlobalObjectBaseline.service.js";
-import { sendEnerAiEvent } from "../enerAiEvent.service.js";
+import {
+  emitScanCompletedEvent,
+  emitScanLifecycleEvents,
+} from "../enerAiLifecycleEvents.service.js";
 
 const NEAR_EXACT_DEDUP_THRESHOLD = 4;
 
@@ -223,6 +226,15 @@ export async function processScanJob(workerId, jobRow) {
             },
             status: "queued",
           });
+          emitScanCompletedEvent({
+            lineUserId,
+            appUserId,
+            scanId: jobId,
+            reportId: shaDup.scan_result_id || null,
+            reportUrl: shaDup.report_url,
+            dedupHit: true,
+            dedupType: "sha256",
+          });
           return;
         }
         // no cached report_url yet: continue pipeline and keep quota-skip hint
@@ -276,6 +288,15 @@ export async function processScanJob(workerId, jobRow) {
               dedupType: "phash",
             },
             status: "queued",
+          });
+          emitScanCompletedEvent({
+            lineUserId,
+            appUserId,
+            scanId: jobId,
+            reportId: dupMatch.scan_result_id || null,
+            reportUrl: dupMatch.report_url,
+            dedupHit: true,
+            dedupType: "phash",
           });
         }
         return;
@@ -1691,37 +1712,19 @@ export async function processScanJob(workerId, jobRow) {
     typeof reportPayloadForReply?.summary?.score === "number"
       ? reportPayloadForReply.summary.score
       : null;
-  const scanEventPayload = {
-    lineUserId: lineUserId || null,
-    scanId: String(jobId || ""),
-    reportId: String(scanResultV2Id || ""),
+  emitScanLifecycleEvents({
+    lineUserId,
+    appUserId,
+    scanId: jobId,
+    reportId: scanResultV2Id,
+    publicToken,
+    reportUrl,
     objectType: reportObjectFamily || scanOut?.objectCategory || null,
     score: safeScore,
-    mode: lineFinalMode,
+    scoreSummary: safeScore,
+    scanMode: lineFinalMode,
     durationMs,
-    reportUrl: reportUrl || null,
     createdAt: new Date().toISOString(),
-  };
-  void sendEnerAiEvent({
-    eventType: "scan_completed",
-    summary: `Scan completed (${reportObjectFamily || "unknown"})`,
-    externalUserId: lineUserId || appUserId || "",
-    externalObjectId: String(scanResultV2Id || jobId || ""),
-    payload: scanEventPayload,
-  });
-  void sendEnerAiEvent({
-    eventType: "report_created",
-    summary: `Report created ${String(scanResultV2Id || "").slice(0, 8)}`,
-    externalUserId: lineUserId || appUserId || "",
-    externalObjectId: String(scanResultV2Id || ""),
-    payload: {
-      lineUserId: lineUserId || null,
-      reportId: String(scanResultV2Id || ""),
-      objectType: reportObjectFamily || scanOut?.objectCategory || null,
-      score: safeScore,
-      reportUrl: reportUrl || null,
-      createdAt: new Date().toISOString(),
-    },
   });
 
   console.log(
