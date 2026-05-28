@@ -12,6 +12,7 @@ import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
 import { schedulePersonaAbRecompute } from "./services/personaAbSchedule.service.js";
 import reportRoutes from "./routes/report.routes.js";
+import { lineWebhookErrorHandler } from "./middleware/lineWebhookError.middleware.js";
 
 process.on("uncaughtException", (error) => {
   console.error("[FATAL] uncaughtException", {
@@ -190,6 +191,8 @@ app.post("/webhook/payment", express.json(), paymentGatewayDisabled);
 app.post("/payments/webhook", express.json(), paymentGatewayDisabled);
 app.post("/payments/create", express.json(), paymentGatewayDisabled);
 app.get("/payments/mock/:paymentId", paymentGatewayDisabled);
+
+app.use(lineWebhookErrorHandler);
 
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
