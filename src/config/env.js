@@ -156,6 +156,12 @@ export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   LOCAL_POSTGREST_URL: process.env.LOCAL_POSTGREST_URL,
+  // S3-compatible storage (Cloudflare R2). If set, overrides Supabase Storage.
+  S3_ENDPOINT_URL: process.env.S3_ENDPOINT_URL || "",
+  S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "",
+  S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY || "",
+  S3_REGION: process.env.S3_REGION || "auto",
+  S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL || "",
   LOCAL_POSTGREST_ANON_KEY: process.env.LOCAL_POSTGREST_ANON_KEY,
   PORT: process.env.PORT || 3000,
   /** Admin secret token for /admin endpoints (optional, but required for production use). */
