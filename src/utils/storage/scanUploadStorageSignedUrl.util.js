@@ -3,7 +3,8 @@ import { supabase } from "../../config/supabaseStorage.js";
 import { env } from "../../config/env.js";
 
 function getScanUploadPublicUrl(path) {
-  const base = String(env.S3_PUBLIC_BASE_URL || "").replace(/\/$/, "");
+  // Use scan-uploads specific public URL if set, fallback to general S3_PUBLIC_BASE_URL
+  const base = String(env.S3_UPLOAD_PUBLIC_BASE_URL || env.S3_PUBLIC_BASE_URL || "").replace(/\/$/, "");
   return base && path ? `${base}/${path}` : "";
 }
 

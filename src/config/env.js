@@ -162,6 +162,8 @@ export const env = {
   S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY || "",
   S3_REGION: process.env.S3_REGION || "auto",
   S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL || "",
+  /** Public base URL for scan-uploads bucket (R2) — thumbnails and original uploads. */
+  S3_UPLOAD_PUBLIC_BASE_URL: process.env.S3_UPLOAD_PUBLIC_BASE_URL || "",
   /** Public base URL for payment-slip bucket (R2). Falls back to S3_PUBLIC_BASE_URL in upload code. */
   S3_SLIP_PUBLIC_BASE_URL: process.env.S3_SLIP_PUBLIC_BASE_URL || "",
   LOCAL_POSTGREST_ANON_KEY: process.env.LOCAL_POSTGREST_ANON_KEY,
