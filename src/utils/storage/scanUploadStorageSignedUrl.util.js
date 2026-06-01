@@ -1,12 +1,18 @@
+import { S3_ENABLED } from "../../config/s3Storage.js";
 import { supabase } from "../../config/supabaseStorage.js";
 import { env } from "../../config/env.js";
 
+function getScanUploadPublicUrl(path) {
+  const base = String(env.S3_PUBLIC_BASE_URL || "").replace(/\/$/, "");
+  return base && path ? `${base}/${path}` : "";
+}
+
 /**
- * Time-limited HTTPS URL for an object in the scan upload bucket (private bucket safe).
- * Uses the service-role Supabase client.
+ * Time-limited HTTPS URL for an object in the scan upload bucket.
+ * R2 bucket is public — returns public URL when S3 is configured.
  *
  * @param {string} objectPath — storage path (no leading slash)
- * @param {number} [expiresInSeconds] — default 24h
+ * @param {number} [expiresInSeconds] — default 24h (ignored for R2 public URLs)
  * @returns {Promise<string>} signed URL or "" on failure
  */
 export async function createScanUploadBucketSignedUrl(
@@ -17,6 +23,10 @@ export async function createScanUploadBucketSignedUrl(
     .trim()
     .replace(/^\/+/, "");
   if (!path) return "";
+
+  if (S3_ENABLED) {
+    return getScanUploadPublicUrl(path);
+  }
 
   const ttl = Math.min(604800, Math.max(60, Math.floor(Number(expiresInSeconds) || 86400)));
   const bucket = env.SCAN_V2_UPLOAD_BUCKET;
@@ -84,6 +94,16 @@ export async function createScanUploadBucketSignedUrls(
     ),
   ];
   if (!cleaned.length) return new Map();
+
+  if (S3_ENABLED) {
+    /** @type {Map<string, string>} */
+    const out = new Map();
+    for (const p of cleaned) {
+      const url = getScanUploadPublicUrl(p);
+      if (url && /^https?:\/\//i.test(url)) out.set(p, url);
+    }
+    return out;
+  }
 
   const ttl = Math.min(604800, Math.max(60, Math.floor(Number(expiresInSeconds) || 86400)));
   const bucket = env.SCAN_V2_UPLOAD_BUCKET;

@@ -2,6 +2,8 @@
  * Storage retention: free-tier scan originals + payment slip images.
  * Never deletes scan_results_v2 payloads or thumbnails (thumbnail_path).
  */
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { s3Client, S3_ENABLED } from "../../config/s3Storage.js";
 import { supabase } from "../../config/supabaseStorage.js";
 import { env } from "../../config/env.js";
 import {
@@ -17,6 +19,31 @@ import { parseSupabasePublicObjectUrl } from "../../utils/storage/supabasePublic
 import { isSupabaseStorageObjectAlreadyRemovedError } from "../../utils/storage/supabaseStorageRemove.util.js";
 
 /**
+ * Parse Supabase or R2 public object URL into bucket + object path.
+ * @param {string|null|undefined} url
+ * @returns {{ bucket: string, path: string } | null}
+ */
+function parseStorageObjectUrl(url) {
+  const parsed = parseSupabasePublicObjectUrl(url);
+  if (parsed) return parsed;
+
+  const s = String(url || "").trim();
+  if (!s) return null;
+
+  const candidates = [
+    { base: env.S3_SLIP_PUBLIC_BASE_URL, bucket: env.PAYMENT_SLIP_BUCKET },
+    { base: env.S3_PUBLIC_BASE_URL, bucket: env.SCAN_V2_UPLOAD_BUCKET },
+  ];
+  for (const { base, bucket } of candidates) {
+    const b = String(base || "").replace(/\/$/, "");
+    if (!b || !bucket || !s.startsWith(`${b}/`)) continue;
+    const path = decodeURIComponent(s.slice(b.length + 1).split("?")[0] || "");
+    if (path) return { bucket, path };
+  }
+  return null;
+}
+
+/**
  * @param {string} bucket
  * @param {string[]} paths
  * @returns {Promise<{ ok: boolean, removed: number, error?: string, alreadyGone?: boolean }>}
@@ -27,6 +54,39 @@ async function removeStorageObjects(bucket, paths) {
     .map((p) => String(p || "").trim())
     .filter(Boolean);
   if (!b || !ps.length) return { ok: true, removed: 0 };
+
+  if (S3_ENABLED) {
+    let removed = 0;
+    for (const key of ps) {
+      try {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: b, Key: key }));
+        removed += 1;
+      } catch (e) {
+        const msg = String(e?.message || e);
+        if (/not found|no such key|404/i.test(msg)) {
+          console.log(
+            JSON.stringify({
+              event: "STORAGE_RETENTION_REMOVE_ALREADY_GONE",
+              bucket: b,
+              keyPrefix: key.slice(0, 80),
+            }),
+          );
+          continue;
+        }
+        console.error(
+          JSON.stringify({
+            event: "STORAGE_RETENTION_REMOVE_FAILED",
+            bucket: b,
+            keyPrefix: key.slice(0, 80),
+            message: msg,
+          }),
+        );
+        return { ok: false, removed, error: msg };
+      }
+    }
+    return { ok: true, removed };
+  }
+
   const { error } = await supabase.storage.from(b).remove(ps);
   if (error) {
     if (isSupabaseStorageObjectAlreadyRemovedError(error)) {
@@ -112,7 +172,7 @@ export async function runStorageRetentionSweepOnce() {
     let storageHandled = false;
 
     if (slipUrl) {
-      const parsed = parseSupabasePublicObjectUrl(slipUrl);
+      const parsed = parseStorageObjectUrl(slipUrl);
       if (parsed?.bucket && parsed?.path) {
         const rm = await removeStorageObjects(parsed.bucket, [parsed.path]);
         if (!rm.ok) {

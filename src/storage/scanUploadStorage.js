@@ -1,7 +1,6 @@
 import crypto from "crypto";
 import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client, S3_ENABLED } from "../config/s3Storage.js";
-import { supabase } from "../config/supabaseStorage.js";
 import { env } from "../config/env.js";
 
 function sha256Hex(buffer) {
@@ -36,15 +35,8 @@ export async function uploadScanImageToStorage({ lineUserId, lineMessageId, buff
   const path = `${uid}/${mid}-${Date.now()}.bin`;
   const body = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
 
-  if (S3_ENABLED) {
-    await s3Upload(bucket, path, body, mimeType);
-  } else {
-    const { error } = await supabase.storage.from(bucket).upload(path, body, { contentType: mimeType, upsert: false });
-    if (error) {
-      console.error(JSON.stringify({ event: "SCAN_V2_STORAGE_UPLOAD_FAILED", bucket, pathPrefix: path.slice(0, 48), message: error.message }));
-      throw error;
-    }
-  }
+  if (!S3_ENABLED) throw new Error("S3_not_configured");
+  await s3Upload(bucket, path, body, mimeType);
 
   return { bucket, path, mimeType, sizeBytes: body.length, sha256: sha256Hex(body) };
 }
@@ -56,13 +48,8 @@ export async function uploadScanImageToStorage({ lineUserId, lineMessageId, buff
  */
 export async function readScanImageFromStorage(bucket, path) {
   const b = bucket || env.SCAN_V2_UPLOAD_BUCKET;
-  if (S3_ENABLED) {
-    return s3Download(b, path);
-  }
-  const { data, error } = await supabase.storage.from(b).download(path);
-  if (error) throw error;
-  const ab = await data.arrayBuffer();
-  return Buffer.from(ab);
+  if (!S3_ENABLED) throw new Error("S3_not_configured");
+  return s3Download(b, path);
 }
 
 /**
@@ -80,15 +67,8 @@ export async function uploadScanUploadThumbnail({ lineUserId, uploadId, buffer, 
   const path = `${uid}/${up}/thumb.webp`;
   const body = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
 
-  if (S3_ENABLED) {
-    await s3Upload(bucket, path, body, contentType);
-  } else {
-    const { error } = await supabase.storage.from(bucket).upload(path, body, { contentType, upsert: true });
-    if (error) {
-      console.error(JSON.stringify({ event: "SCAN_V2_THUMB_STORAGE_UPLOAD_FAILED", bucket, pathPrefix: path.slice(0, 64), message: error.message }));
-      throw error;
-    }
-  }
+  if (!S3_ENABLED) throw new Error("S3_not_configured");
+  await s3Upload(bucket, path, body, contentType);
 
   return { bucket, path, contentType, sizeBytes: body.length };
 }
