@@ -90,6 +90,54 @@ for (const [pathKey, methods] of Object.entries(swagger.paths || {})) {
 }
 console.log(`Schema loaded for ${localColumns.size} tables.\n`);
 
+// ---------------------------------------------------------------------------
+// Identity-merge: some app_users / energy_categories rows already exist
+// locally (created while running independently from Supabase) under a
+// DIFFERENT primary key than the same logical record in Supabase. Importing
+// them as-is would either violate a unique constraint (line_user_id / code)
+// or leave child rows pointing at an app_users.id that doesn't exist locally.
+//
+// Strategy: keep the local row as canonical (it reflects the most recent
+// state), skip importing the conflicting Supabase row, and remap every FK
+// reference to the Supabase id onto the local id so historical data lands
+// on the existing local record instead of being orphaned.
+// ---------------------------------------------------------------------------
+async function fetchLocalTable(table, select) {
+  const res = await fetch(`${LOCAL_URL}/${table}?select=${select}`, { headers: localHeaders });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+const localAppUsers = await fetchLocalTable("app_users", "id,line_user_id");
+const localByLineUserId = new Map(localAppUsers.map((u) => [u.line_user_id, u.id]));
+
+const localCategories = await fetchLocalTable("energy_categories", "id,code");
+const localByCategoryCode = new Map(localCategories.map((c) => [c.code, c.id]));
+
+/** @type {Map<string,string>} Supabase app_users.id -> local app_users.id */
+const appUserIdRemap = new Map();
+
+/** Tables whose listed columns hold an app_users.id value (FK-enforced or logical) */
+const APP_USER_FK_FIELDS = {
+  conversation_state: ["app_user_id"],
+  payments: ["user_id"],
+  scan_requests: ["user_id"],
+  scan_results: ["user_id"],
+  scan_results_v2: ["app_user_id"],
+  scan_uploads: ["app_user_id"],
+  user_entitlements: ["app_user_id"],
+  scan_jobs: ["app_user_id"],
+  outbound_messages: ["app_user_id"],
+};
+
+function remapAppUserIds(table, row) {
+  for (const field of APP_USER_FK_FIELDS[table] || []) {
+    const v = row[field];
+    if (v && appUserIdRemap.has(v)) row[field] = appUserIdRemap.get(v);
+  }
+  return row;
+}
+
 function filterRow(table, row) {
   const cols = localColumns.get(table);
   if (!cols) return row;
@@ -132,29 +180,50 @@ async function fetchFromSupabase(table) {
 // ---------------------------------------------------------------------------
 // Upsert into local PostgREST (batched, column-filtered)
 // ---------------------------------------------------------------------------
+async function postRows(table, batch) {
+  return fetch(`${LOCAL_URL}/${table}`, {
+    method: "POST",
+    headers: { ...localHeaders, Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(batch),
+  });
+}
+
 async function upsertLocal(table, rows) {
-  if (!rows.length) return { inserted: 0, errors: 0 };
+  if (!rows.length) return { inserted: 0, errors: 0, duplicates: 0 };
   const BATCH = 200;
   let inserted = 0;
   let errors = 0;
+  let duplicates = 0;
 
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH).map((r) => filterRow(table, r));
-    const res = await fetch(`${LOCAL_URL}/${table}`, {
-      method: "POST",
-      headers: { ...localHeaders, Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify(batch),
-    });
+    const res = await postRows(table, batch);
     if (res.ok || res.status === 201) {
       inserted += batch.length;
     } else {
       const body = await res.text();
-      console.error(`\n  [ERROR] batch ${i}-${i + batch.length - 1}: ${res.status} ${body.slice(0, 200)}`);
-      errors += batch.length;
+      if (body.includes('"code":"23505"') && batch.length > 1) {
+        // A unique-constraint conflict (not the PK — e.g. a content-hash key)
+        // rolled back the whole batch. Retry row-by-row so genuinely-new
+        // rows aren't lost alongside the true duplicates.
+        for (const row of batch) {
+          const single = await postRows(table, [row]);
+          if (single.ok || single.status === 201) {
+            inserted += 1;
+          } else {
+            const sBody = await single.text();
+            if (sBody.includes('"code":"23505"')) duplicates += 1;
+            else { errors += 1; console.error(`\n  [ERROR] row: ${single.status} ${sBody.slice(0, 200)}`); }
+          }
+        }
+      } else {
+        console.error(`\n  [ERROR] batch ${i}-${i + batch.length - 1}: ${res.status} ${body.slice(0, 200)}`);
+        errors += batch.length;
+      }
     }
-    process.stdout.write(`  upserted ${inserted}/${rows.length}\r`);
+    process.stdout.write(`  upserted ${inserted}/${rows.length} (dup ${duplicates}, err ${errors})\r`);
   }
-  return { inserted, errors };
+  return { inserted, errors, duplicates };
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +246,40 @@ for (const table of IMPORT_ORDER) {
   if (rows === null) { console.log(`\n  [SKIP] not in Supabase`); results.push({ table, status: "not_in_supabase" }); continue; }
   if (rows.length === 0) { console.log(`\n  [SKIP] 0 rows`); results.push({ table, status: "empty" }); continue; }
 
-  console.log(`\n  found ${rows.length} rows — upserting...`);
+  // --- Identity-merge: drop rows that already exist locally under a
+  //     different PK, and remember the id translation for child tables ---
+  let merged = 0;
+  if (table === "app_users") {
+    const keep = [];
+    for (const row of rows) {
+      const localId = localByLineUserId.get(row.line_user_id);
+      if (localId && localId !== row.id) {
+        appUserIdRemap.set(row.id, localId);
+        merged += 1;
+        continue;
+      }
+      keep.push(row);
+    }
+    rows = keep;
+    if (merged) console.log(`\n  [MERGE] ${merged} row(s) already exist locally (different id) — keeping local record, remapping references to it`);
+  } else if (table === "energy_categories") {
+    const keep = rows.filter((row) => !localByCategoryCode.has(row.code));
+    merged = rows.length - keep.length;
+    rows = keep;
+    if (merged) console.log(`\n  [SKIP] ${merged} row(s) already exist locally by code (reference data, no FK impact)`);
+  }
+
+  if (APP_USER_FK_FIELDS[table]) {
+    rows = rows.map((row) => remapAppUserIds(table, row));
+  }
+
+  if (rows.length === 0) {
+    console.log(`\n  [SKIP] 0 rows left after merge (${merged} merged into existing local records)`);
+    results.push({ table, status: "empty", merged });
+    continue;
+  }
+
+  console.log(`\n  found ${rows.length} rows${merged ? ` (+${merged} merged)` : ""} — upserting...`);
 
   let r;
   try {
@@ -188,8 +290,8 @@ for (const table of IMPORT_ORDER) {
     continue;
   }
 
-  console.log(`\n  [${r.errors === 0 ? "OK" : "PARTIAL"}] inserted=${r.inserted} errors=${r.errors}`);
-  results.push({ table, status: r.errors === 0 ? "ok" : "partial", ...r });
+  console.log(`\n  [${r.errors === 0 ? "OK" : "PARTIAL"}] inserted=${r.inserted} duplicates=${r.duplicates || 0} errors=${r.errors}${merged ? ` merged=${merged}` : ""}`);
+  results.push({ table, status: r.errors === 0 ? "ok" : "partial", merged, ...r });
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +301,8 @@ console.log("\n\n========== MIGRATION SUMMARY ==========");
 for (const r of results) {
   const icon = r.status === "ok" ? "✅" : (r.status === "empty" || r.status === "not_in_supabase") ? "⚪" : "❌";
   const detail = r.inserted != null ? `${r.inserted} rows` : r.status === "not_in_supabase" ? "not in Supabase" : r.status === "empty" ? "0 rows" : (r.error || "").slice(0, 60);
-  console.log(`${icon} ${r.table.padEnd(30)} ${detail}`);
+  const mergedNote = r.merged ? ` (+${r.merged} merged)` : "";
+  const dupNote = r.duplicates ? ` (+${r.duplicates} already-existed, skipped)` : "";
+  console.log(`${icon} ${r.table.padEnd(30)} ${detail}${mergedNote}${dupNote}`);
 }
 console.log("========================================\n");
