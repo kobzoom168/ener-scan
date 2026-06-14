@@ -21,14 +21,17 @@ function getClient() {
  *   systemInstruction?: string,
  *   jsonMode?: boolean,
  *   timeoutMs?: number,
+ *   temperature?: number,
  * }} opts
  */
 export function getGeminiFlashModel(opts = {}) {
   const client = getClient();
   if (!client) return null;
   const modelId = env.GEMINI_FRONT_MODEL || "gemini-2.5-flash-lite";
+  const temperature =
+    Number.isFinite(opts.temperature) ? Math.min(1, Math.max(0, opts.temperature)) : 0.2;
   const generationConfig = {
-    temperature: 0.2,
+    temperature,
     maxOutputTokens: 1024,
     ...(opts.jsonMode
       ? { responseMimeType: "application/json" }

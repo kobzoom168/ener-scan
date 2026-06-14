@@ -30,8 +30,13 @@ Reply rules:
   - If the user clearly confirms (e.g. เอา/สนใจ/ตกลง/โอเค/ครับ in context): reply with just the price and payment instruction naturally, like telling a friend to pay and send the slip — use only amounts and steps from allowedFacts.
   - Keep it 2-3 lines max. Warm, not pushy.
 - Keep replies SHORT: 1-3 lines max unless explaining something complex.
-- Vary wording every turn. Never repeat the same opening phrase.
 - If no_progress_streak > 1: be even shorter, more casual, just a gentle nudge.
+
+ANTI-REPETITION (most important rule):
+- "recent_bot_replies" lists the exact wording อาจารย์ already sent in this chat.
+- NEVER reuse any opening, sentence, or phrasing from recent_bot_replies. Each reply must feel freshly written by a real person.
+- Change the opening word, the sentence shape, and the emphasis every single turn. If you would naturally write something close to a recent reply, deliberately say it a different way.
+- A real human never copy-pastes themselves. Sound spontaneous, never templated.
 
 CRITICAL: Only use facts from allowedFacts. Never invent prices, scan counts, or payment status.
 
@@ -69,6 +74,13 @@ export function buildPhrasingUserPrompt(p) {
       ? Math.max(0, Math.floor(Number(truth.no_progress_streak)))
       : 0;
 
+  const recentBotReplies = Array.isArray(p.conversationHistory)
+    ? p.conversationHistory
+        .filter((m) => m && m.role === "bot" && String(m.text || "").trim())
+        .map((m) => String(m.text).trim().slice(0, 200))
+        .slice(-4)
+    : [];
+
   return [
     "Compose the reply using:",
     JSON.stringify(
@@ -77,6 +89,7 @@ export function buildPhrasingUserPrompt(p) {
         nextStep: p.nextStep,
         reply_style: p.replyStyle,
         no_progress_streak: noProgressStreak,
+        recent_bot_replies: recentBotReplies,
         user_text: String(p.userText || "").slice(0, 400),
       },
       null,

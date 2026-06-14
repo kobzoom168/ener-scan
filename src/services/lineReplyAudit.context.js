@@ -24,6 +24,7 @@ const auditExemptEnterCountsByReason = new Map();
 export const AuditExemptReason = Object.freeze({
   LINE_WEBHOOK_MISSING_USER_ID: "line_webhook_missing_user_id",
   LINE_WEBHOOK_EVENT_ERROR_NO_USER: "line_webhook_event_error_no_user",
+  LINE_WEBHOOK_FOLLOW_WELCOME: "line_webhook_follow_welcome",
   SCAN_PAYMENT_GATE_NO_USER_ID: "scan_payment_gate_no_user_id",
 });
 

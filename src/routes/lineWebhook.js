@@ -262,6 +262,7 @@ import {
   isHistoryCommand,
   isStatsCommand,
   groupImageEventCountByUser,
+  buildFollowWelcomeText,
 } from "../utils/webhookText.util.js";
 
 import {
@@ -6545,7 +6546,47 @@ async function handleTextMessage({ client, event, userId, session }) {
   });
 }
 
+async function handleFollowEvent({ client, event }) {
+  const userId = event.source?.userId;
+  if (!userId) return;
+
+  // Register the new follower so later scans reuse the same app_users row (best-effort).
+  try {
+    const appUser = await ensureUserByLineUserId(userId);
+    await touchUserLastActive(appUser.id);
+  } catch (error) {
+    console.error("[WEBHOOK] follow ensure app user failed:", {
+      lineUserId: userId,
+      message: error?.message,
+    });
+  }
+
+  if (!event.replyToken) return;
+
+  auditExemptEnter(AuditExemptReason.LINE_WEBHOOK_FOLLOW_WELCOME);
+  try {
+    await replyText(client, event.replyToken, buildFollowWelcomeText());
+    console.log(
+      JSON.stringify({
+        event: "LINE_FOLLOW_WELCOME_SENT",
+        lineUserIdPrefix: String(userId).slice(0, 8),
+      }),
+    );
+  } catch (error) {
+    console.error("[WEBHOOK] follow welcome reply failed:", {
+      lineUserId: userId,
+      message: error?.message,
+    });
+  } finally {
+    auditExemptExit();
+  }
+}
+
 async function handleEvent({ client, event }) {
+  if (event.type === "follow") {
+    await handleFollowEvent({ client, event });
+    return;
+  }
   if (event.type !== "message") return;
   if (!event.replyToken) return;
 

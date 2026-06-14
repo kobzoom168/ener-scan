@@ -60,7 +60,7 @@ test("buildMultiImageInRequestText: deterministic single-line copy", () => {
   const t = buildMultiImageInRequestText();
   assert.equal(
     t,
-    "ตอนนี้ระบบรองรับการสแกนทีละ 1 รูปเท่านั้นครับ กรุณาส่งใหม่ทีละ 1 รูป เพื่อให้วิเคราะห์ได้แม่นที่สุด",
+    "อาจารย์เห็นว่าส่งมาหลายรูปพร้อมกันนะครับ 🙏 ขอดูทีละองค์เพื่อให้แม่นที่สุด รบกวนส่งรูปแรกเข้ามาใหม่ทีละ 1 รูปได้เลยครับ",
   );
   const c = getMultiImageInRequestReplyCandidates();
   assert.equal(c[0], t);

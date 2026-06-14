@@ -109,6 +109,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
       nextStep: "ตอบคำถามช่วยเหลือสั้นๆ เป็นภาษาไทย ไม่สมมติสถานะการชำระเงิน",
       replyStyle: plan.reply_style,
       userText: ctx.text,
+      conversationHistory,
     });
     if (ph) {
       await ctx.sendGatewayReply({

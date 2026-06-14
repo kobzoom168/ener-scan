@@ -531,6 +531,16 @@ export const env = {
     return Number.isFinite(n) ? Math.max(400, Math.floor(n)) : 3200;
   })(),
   /**
+   * Sampling temperature for the natural-language phrasing pass only (not the planner).
+   * Higher = more varied/human wording so replies don't repeat. Range clamped 0..1.
+   */
+  GEMINI_FRONT_PHRASING_TEMPERATURE: (() => {
+    const raw = process.env.GEMINI_FRONT_PHRASING_TEMPERATURE;
+    const n = raw === undefined || raw === "" ? 0.85 : Number(raw);
+    if (!Number.isFinite(n)) return 0.85;
+    return Math.min(1, Math.max(0, n));
+  })(),
+  /**
    * Scan report: optional Gemini vision pass for crystal subtype (Moldavite routing).
    * Default on; set `false` to use legacy text/heuristic Moldavite detection only.
    */
