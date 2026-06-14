@@ -525,6 +525,23 @@ export const env = {
     "false",
   GEMINI_FRONT_MODEL:
     String(process.env.GEMINI_FRONT_MODEL || "").trim() || "gemini-2.5-flash-lite",
+  /**
+   * Provider for the front conversation LLM (planner, phrasing, semanticCatcher,
+   * stateSafeClarifier): `google` (direct Gemini API) or `openrouter`.
+   * Default `google` to preserve existing behavior until OpenRouter is configured.
+   */
+  LLM_FRONT_PROVIDER: (() => {
+    const p = String(process.env.LLM_FRONT_PROVIDER || "google").trim().toLowerCase();
+    return p === "openrouter" ? "openrouter" : "google";
+  })(),
+  OPENROUTER_API_KEY: String(process.env.OPENROUTER_API_KEY || "").trim(),
+  OPENROUTER_BASE_URL:
+    String(process.env.OPENROUTER_BASE_URL || "").trim() ||
+    "https://openrouter.ai/api/v1",
+  /** OpenRouter model id used for the front LLM when LLM_FRONT_PROVIDER=openrouter. */
+  OPENROUTER_FRONT_MODEL:
+    String(process.env.OPENROUTER_FRONT_MODEL || "").trim() ||
+    "google/gemini-2.5-flash-lite",
   GEMINI_FRONT_TIMEOUT_MS: (() => {
     const raw = process.env.GEMINI_FRONT_TIMEOUT_MS;
     const n = raw === undefined || raw === "" ? 3200 : Number(raw);

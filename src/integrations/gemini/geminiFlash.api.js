@@ -1,19 +1,84 @@
 /**
- * Gemini Flash-Lite client for front conversation (non-scan).
- * Uses GOOGLE_API_KEY or GEMINI_API_KEY from env (see env.js).
+ * Front conversation LLM client (planner, phrasing, semanticCatcher, stateSafeClarifier).
+ *
+ * Supports two providers, selected by env.LLM_FRONT_PROVIDER:
+ * - "google":     direct Gemini API via @google/generative-ai (GEMINI_API_KEY / GOOGLE_API_KEY)
+ * - "openrouter": OpenAI-compatible OpenRouter endpoint (OPENROUTER_API_KEY)
+ *
+ * Both providers return a model object exposing `generateContent(prompt)` that resolves
+ * to `{ response: { text(): string } }`, so callers stay provider-agnostic.
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 import { env } from "../../config/env.js";
 
-let _client = null;
+let _googleClient = null;
+let _openrouterClient = null;
 
-function getClient() {
+function frontProvider() {
+  return env.LLM_FRONT_PROVIDER === "openrouter" ? "openrouter" : "google";
+}
+
+function clampTemp(t, fallback) {
+  return Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : fallback;
+}
+
+function getGoogleClient() {
   const key = env.GEMINI_API_KEY || env.GOOGLE_API_KEY;
   if (!key) return null;
-  if (!_client) {
-    _client = new GoogleGenerativeAI(String(key).trim());
+  if (!_googleClient) {
+    _googleClient = new GoogleGenerativeAI(String(key).trim());
   }
-  return _client;
+  return _googleClient;
+}
+
+function getOpenRouterClient() {
+  const key = env.OPENROUTER_API_KEY;
+  if (!key) return null;
+  if (!_openrouterClient) {
+    _openrouterClient = new OpenAI({
+      apiKey: String(key).trim(),
+      baseURL: env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+      maxRetries: 0,
+      defaultHeaders: {
+        "HTTP-Referer": "https://my-ener.uk",
+        "X-Title": "Ener Scan",
+      },
+    });
+  }
+  return _openrouterClient;
+}
+
+/**
+ * @param {OpenAI} client
+ * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number }} opts
+ */
+function buildOpenRouterModel(client, opts = {}) {
+  const modelId = env.OPENROUTER_FRONT_MODEL || "google/gemini-2.5-flash-lite";
+  const temperature = clampTemp(opts.temperature, 0.2);
+  const systemInstruction = opts.systemInstruction;
+  const jsonMode = Boolean(opts.jsonMode);
+  return {
+    async generateContent(userPrompt) {
+      const messages = [];
+      if (systemInstruction) {
+        messages.push({ role: "system", content: String(systemInstruction) });
+      }
+      messages.push({ role: "user", content: String(userPrompt || "") });
+      const resp = await client.chat.completions.create(
+        {
+          model: modelId,
+          temperature,
+          max_tokens: 1024,
+          messages,
+          ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+        },
+        { timeout: env.GEMINI_FRONT_TIMEOUT_MS },
+      );
+      const text = resp?.choices?.[0]?.message?.content ?? "";
+      return { response: { text: () => String(text || "") } };
+    },
+  };
 }
 
 /**
@@ -25,11 +90,16 @@ function getClient() {
  * }} opts
  */
 export function getGeminiFlashModel(opts = {}) {
-  const client = getClient();
+  if (frontProvider() === "openrouter") {
+    const client = getOpenRouterClient();
+    if (!client) return null;
+    return buildOpenRouterModel(client, opts);
+  }
+
+  const client = getGoogleClient();
   if (!client) return null;
   const modelId = env.GEMINI_FRONT_MODEL || "gemini-2.5-flash-lite";
-  const temperature =
-    Number.isFinite(opts.temperature) ? Math.min(1, Math.max(0, opts.temperature)) : 0.2;
+  const temperature = clampTemp(opts.temperature, 0.2);
   const generationConfig = {
     temperature,
     maxOutputTokens: 1024,
@@ -46,11 +116,13 @@ export function getGeminiFlashModel(opts = {}) {
 
 /** @returns {boolean} */
 export function isGeminiConfigured() {
-  return Boolean(getClient());
+  return frontProvider() === "openrouter"
+    ? Boolean(getOpenRouterClient())
+    : Boolean(getGoogleClient());
 }
 
 /**
- * @param {import("@google/generative-ai").GenerativeModel} model
+ * @param {{ generateContent: (p: string) => Promise<{ response: { text: () => string } }> }} model
  * @param {string} userPrompt
  * @param {number} timeoutMs
  * @returns {Promise<string>}

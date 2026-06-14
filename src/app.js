@@ -94,12 +94,19 @@ console.log(
     orchestratorEnabled: env.GEMINI_FRONT_ORCHESTRATOR_ENABLED,
     rawMode: env.GEMINI_FRONT_ORCHESTRATOR_MODE,
     phase1Only: env.GEMINI_FRONT_PHASE1_ONLY,
-    model: env.GEMINI_FRONT_MODEL,
+    provider: env.LLM_FRONT_PROVIDER,
+    model:
+      env.LLM_FRONT_PROVIDER === "openrouter"
+        ? env.OPENROUTER_FRONT_MODEL
+        : env.GEMINI_FRONT_MODEL,
     timeoutMs: env.GEMINI_FRONT_TIMEOUT_MS,
-    apiKeyConfigured: Boolean(
-      String(env.GEMINI_API_KEY || "").trim() ||
-        String(env.GOOGLE_API_KEY || "").trim(),
-    ),
+    apiKeyConfigured:
+      env.LLM_FRONT_PROVIDER === "openrouter"
+        ? Boolean(String(env.OPENROUTER_API_KEY || "").trim())
+        : Boolean(
+            String(env.GEMINI_API_KEY || "").trim() ||
+              String(env.GOOGLE_API_KEY || "").trim(),
+          ),
   }),
 );
 console.log(
