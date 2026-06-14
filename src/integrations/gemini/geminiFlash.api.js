@@ -10,26 +10,31 @@
  * to `{ response: { text(): string } }`, so callers stay provider-agnostic.
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import OpenAI from "openai";
 import { env } from "../../config/env.js";
 
 let _googleClient = null;
-/** @type {Record<string, OpenAI>} */
-const _compatClients = {};
 
-/** OpenAI-compatible providers (OpenRouter, Featherless): per-provider env resolution. */
+/**
+ * OpenAI-compatible providers (OpenRouter, Featherless): per-provider config.
+ * `extraBody` carries non-standard fields that must reach the API verbatim
+ * (the openai SDK silently drops unknown keys, so the compat path uses fetch).
+ * For Featherless DeepSeek-V4 (a reasoning model), `chat_template_kwargs.thinking=false`
+ * disables chain-of-thought, roughly halving latency for short chat replies.
+ */
 const OPENAI_COMPAT = {
   openrouter: {
     apiKey: () => env.OPENROUTER_API_KEY,
     baseURL: () => env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
     model: () => env.OPENROUTER_FRONT_MODEL || "google/gemini-2.5-flash-lite",
     headers: { "HTTP-Referer": "https://my-ener.uk", "X-Title": "Ener Scan" },
+    extraBody: {},
   },
   featherless: {
     apiKey: () => env.FEATHERLESS_API_KEY,
     baseURL: () => env.FEATHERLESS_BASE_URL || "https://api.featherless.ai/v1",
-    model: () => env.FEATHERLESS_FRONT_MODEL || "deepseek-ai/DeepSeek-V3-0324",
+    model: () => env.FEATHERLESS_FRONT_MODEL || "deepseek-ai/DeepSeek-V4-Flash",
     headers: {},
+    extraBody: { chat_template_kwargs: { thinking: false }, reasoning_effort: "none" },
   },
 };
 
@@ -51,30 +56,15 @@ function getGoogleClient() {
   return _googleClient;
 }
 
-/** @param {"openrouter"|"featherless"} provider */
-function getCompatClient(provider) {
-  const cfg = OPENAI_COMPAT[provider];
-  if (!cfg) return null;
-  const key = cfg.apiKey();
-  if (!key) return null;
-  if (!_compatClients[provider]) {
-    _compatClients[provider] = new OpenAI({
-      apiKey: String(key).trim(),
-      baseURL: cfg.baseURL(),
-      maxRetries: 0,
-      defaultHeaders: cfg.headers,
-    });
-  }
-  return _compatClients[provider];
-}
-
 /**
- * @param {OpenAI} client
  * @param {"openrouter"|"featherless"} provider
  * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number }} opts
  */
-function buildCompatModel(client, provider, opts = {}) {
-  const modelId = OPENAI_COMPAT[provider].model();
+function buildCompatModel(provider, opts = {}) {
+  const cfg = OPENAI_COMPAT[provider];
+  const modelId = cfg.model();
+  const apiKey = String(cfg.apiKey() || "").trim();
+  const baseURL = cfg.baseURL().replace(/\/+$/, "");
   const temperature = clampTemp(opts.temperature, 0.2);
   const systemInstruction = opts.systemInstruction;
   const jsonMode = Boolean(opts.jsonMode);
@@ -85,18 +75,39 @@ function buildCompatModel(client, provider, opts = {}) {
         messages.push({ role: "system", content: String(systemInstruction) });
       }
       messages.push({ role: "user", content: String(userPrompt || "") });
-      const resp = await client.chat.completions.create(
-        {
-          model: modelId,
-          temperature,
-          max_tokens: 1024,
-          messages,
-          ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-        },
-        { timeout: env.GEMINI_FRONT_TIMEOUT_MS },
+      const controller = new AbortController();
+      const timer = setTimeout(
+        () => controller.abort(),
+        Math.max(400, Number(env.GEMINI_FRONT_TIMEOUT_MS) || 3200),
       );
-      const text = resp?.choices?.[0]?.message?.content ?? "";
-      return { response: { text: () => String(text || "") } };
+      try {
+        const res = await fetch(`${baseURL}/chat/completions`, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+            ...cfg.headers,
+          },
+          body: JSON.stringify({
+            model: modelId,
+            temperature,
+            max_tokens: 1024,
+            messages,
+            ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+            ...cfg.extraBody,
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(`compat_http_${res.status}:${errText.slice(0, 200)}`);
+        }
+        const j = await res.json();
+        const text = j?.choices?.[0]?.message?.content ?? "";
+        return { response: { text: () => String(text || "") } };
+      } finally {
+        clearTimeout(timer);
+      }
     },
   };
 }
@@ -112,9 +123,8 @@ function buildCompatModel(client, provider, opts = {}) {
 export function getGeminiFlashModel(opts = {}) {
   const provider = frontProvider();
   if (provider !== "google") {
-    const client = getCompatClient(provider);
-    if (!client) return null;
-    return buildCompatModel(client, provider, opts);
+    if (!String(OPENAI_COMPAT[provider].apiKey() || "").trim()) return null;
+    return buildCompatModel(provider, opts);
   }
 
   const client = getGoogleClient();
@@ -139,7 +149,7 @@ export function getGeminiFlashModel(opts = {}) {
 export function isGeminiConfigured() {
   const provider = frontProvider();
   return provider !== "google"
-    ? Boolean(getCompatClient(provider))
+    ? Boolean(String(OPENAI_COMPAT[provider].apiKey() || "").trim())
     : Boolean(getGoogleClient());
 }
 
