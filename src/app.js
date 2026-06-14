@@ -98,15 +98,19 @@ console.log(
     model:
       env.LLM_FRONT_PROVIDER === "openrouter"
         ? env.OPENROUTER_FRONT_MODEL
-        : env.GEMINI_FRONT_MODEL,
+        : env.LLM_FRONT_PROVIDER === "featherless"
+          ? env.FEATHERLESS_FRONT_MODEL
+          : env.GEMINI_FRONT_MODEL,
     timeoutMs: env.GEMINI_FRONT_TIMEOUT_MS,
     apiKeyConfigured:
       env.LLM_FRONT_PROVIDER === "openrouter"
         ? Boolean(String(env.OPENROUTER_API_KEY || "").trim())
-        : Boolean(
-            String(env.GEMINI_API_KEY || "").trim() ||
-              String(env.GOOGLE_API_KEY || "").trim(),
-          ),
+        : env.LLM_FRONT_PROVIDER === "featherless"
+          ? Boolean(String(env.FEATHERLESS_API_KEY || "").trim())
+          : Boolean(
+              String(env.GEMINI_API_KEY || "").trim() ||
+                String(env.GOOGLE_API_KEY || "").trim(),
+            ),
   }),
 );
 console.log(

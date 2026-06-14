@@ -1,11 +1,12 @@
 /**
  * Front conversation LLM client (planner, phrasing, semanticCatcher, stateSafeClarifier).
  *
- * Supports two providers, selected by env.LLM_FRONT_PROVIDER:
- * - "google":     direct Gemini API via @google/generative-ai (GEMINI_API_KEY / GOOGLE_API_KEY)
- * - "openrouter": OpenAI-compatible OpenRouter endpoint (OPENROUTER_API_KEY)
+ * Supports multiple providers, selected by env.LLM_FRONT_PROVIDER:
+ * - "google":      direct Gemini API via @google/generative-ai (GEMINI_API_KEY / GOOGLE_API_KEY)
+ * - "openrouter":  OpenAI-compatible OpenRouter endpoint (OPENROUTER_API_KEY)
+ * - "featherless": OpenAI-compatible Featherless.ai endpoint (FEATHERLESS_API_KEY)
  *
- * Both providers return a model object exposing `generateContent(prompt)` that resolves
+ * Every provider returns a model object exposing `generateContent(prompt)` that resolves
  * to `{ response: { text(): string } }`, so callers stay provider-agnostic.
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -13,10 +14,28 @@ import OpenAI from "openai";
 import { env } from "../../config/env.js";
 
 let _googleClient = null;
-let _openrouterClient = null;
+/** @type {Record<string, OpenAI>} */
+const _compatClients = {};
+
+/** OpenAI-compatible providers (OpenRouter, Featherless): per-provider env resolution. */
+const OPENAI_COMPAT = {
+  openrouter: {
+    apiKey: () => env.OPENROUTER_API_KEY,
+    baseURL: () => env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+    model: () => env.OPENROUTER_FRONT_MODEL || "google/gemini-2.5-flash-lite",
+    headers: { "HTTP-Referer": "https://my-ener.uk", "X-Title": "Ener Scan" },
+  },
+  featherless: {
+    apiKey: () => env.FEATHERLESS_API_KEY,
+    baseURL: () => env.FEATHERLESS_BASE_URL || "https://api.featherless.ai/v1",
+    model: () => env.FEATHERLESS_FRONT_MODEL || "deepseek-ai/DeepSeek-V3-0324",
+    headers: {},
+  },
+};
 
 function frontProvider() {
-  return env.LLM_FRONT_PROVIDER === "openrouter" ? "openrouter" : "google";
+  const p = env.LLM_FRONT_PROVIDER;
+  return p === "openrouter" || p === "featherless" ? p : "google";
 }
 
 function clampTemp(t, fallback) {
@@ -32,29 +51,30 @@ function getGoogleClient() {
   return _googleClient;
 }
 
-function getOpenRouterClient() {
-  const key = env.OPENROUTER_API_KEY;
+/** @param {"openrouter"|"featherless"} provider */
+function getCompatClient(provider) {
+  const cfg = OPENAI_COMPAT[provider];
+  if (!cfg) return null;
+  const key = cfg.apiKey();
   if (!key) return null;
-  if (!_openrouterClient) {
-    _openrouterClient = new OpenAI({
+  if (!_compatClients[provider]) {
+    _compatClients[provider] = new OpenAI({
       apiKey: String(key).trim(),
-      baseURL: env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+      baseURL: cfg.baseURL(),
       maxRetries: 0,
-      defaultHeaders: {
-        "HTTP-Referer": "https://my-ener.uk",
-        "X-Title": "Ener Scan",
-      },
+      defaultHeaders: cfg.headers,
     });
   }
-  return _openrouterClient;
+  return _compatClients[provider];
 }
 
 /**
  * @param {OpenAI} client
+ * @param {"openrouter"|"featherless"} provider
  * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number }} opts
  */
-function buildOpenRouterModel(client, opts = {}) {
-  const modelId = env.OPENROUTER_FRONT_MODEL || "google/gemini-2.5-flash-lite";
+function buildCompatModel(client, provider, opts = {}) {
+  const modelId = OPENAI_COMPAT[provider].model();
   const temperature = clampTemp(opts.temperature, 0.2);
   const systemInstruction = opts.systemInstruction;
   const jsonMode = Boolean(opts.jsonMode);
@@ -90,10 +110,11 @@ function buildOpenRouterModel(client, opts = {}) {
  * }} opts
  */
 export function getGeminiFlashModel(opts = {}) {
-  if (frontProvider() === "openrouter") {
-    const client = getOpenRouterClient();
+  const provider = frontProvider();
+  if (provider !== "google") {
+    const client = getCompatClient(provider);
     if (!client) return null;
-    return buildOpenRouterModel(client, opts);
+    return buildCompatModel(client, provider, opts);
   }
 
   const client = getGoogleClient();
@@ -116,8 +137,9 @@ export function getGeminiFlashModel(opts = {}) {
 
 /** @returns {boolean} */
 export function isGeminiConfigured() {
-  return frontProvider() === "openrouter"
-    ? Boolean(getOpenRouterClient())
+  const provider = frontProvider();
+  return provider !== "google"
+    ? Boolean(getCompatClient(provider))
     : Boolean(getGoogleClient());
 }
 

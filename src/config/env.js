@@ -527,12 +527,14 @@ export const env = {
     String(process.env.GEMINI_FRONT_MODEL || "").trim() || "gemini-2.5-flash-lite",
   /**
    * Provider for the front conversation LLM (planner, phrasing, semanticCatcher,
-   * stateSafeClarifier): `google` (direct Gemini API) or `openrouter`.
-   * Default `google` to preserve existing behavior until OpenRouter is configured.
+   * stateSafeClarifier): `google` (direct Gemini API), `openrouter`, or `featherless`.
+   * `openrouter` and `featherless` are both OpenAI-compatible chat endpoints.
+   * Default `google` to preserve existing behavior until another provider is configured.
    */
   LLM_FRONT_PROVIDER: (() => {
     const p = String(process.env.LLM_FRONT_PROVIDER || "google").trim().toLowerCase();
-    return p === "openrouter" ? "openrouter" : "google";
+    if (p === "openrouter" || p === "featherless") return p;
+    return "google";
   })(),
   OPENROUTER_API_KEY: String(process.env.OPENROUTER_API_KEY || "").trim(),
   OPENROUTER_BASE_URL:
@@ -542,6 +544,14 @@ export const env = {
   OPENROUTER_FRONT_MODEL:
     String(process.env.OPENROUTER_FRONT_MODEL || "").trim() ||
     "google/gemini-2.5-flash-lite",
+  FEATHERLESS_API_KEY: String(process.env.FEATHERLESS_API_KEY || "").trim(),
+  FEATHERLESS_BASE_URL:
+    String(process.env.FEATHERLESS_BASE_URL || "").trim() ||
+    "https://api.featherless.ai/v1",
+  /** Featherless model id (HF-style repo id) when LLM_FRONT_PROVIDER=featherless. */
+  FEATHERLESS_FRONT_MODEL:
+    String(process.env.FEATHERLESS_FRONT_MODEL || "").trim() ||
+    "deepseek-ai/DeepSeek-V3-0324",
   GEMINI_FRONT_TIMEOUT_MS: (() => {
     const raw = process.env.GEMINI_FRONT_TIMEOUT_MS;
     const n = raw === undefined || raw === "" ? 3200 : Number(raw);
