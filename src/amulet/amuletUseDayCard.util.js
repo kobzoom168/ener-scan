@@ -325,11 +325,29 @@ export function buildSacredAmuletUseDayCard(payload, metrics) {
     tensionKey,
   });
 
-  const weekdayTip = sacredUseDayWeekdayTipTh(computed.recommendedIndex0Sun);
+  /**
+   * Align the headline day with the timing engine's "วันส่งดี"
+   * (`timingV1.summary.topWeekdayLabel`) when present, so "วันที่ควรใช้" and the
+   * adjacent "จังหวะเสริมพลัง" card never recommend conflicting days. Falls back
+   * to the standalone affinity model when timing truth is unavailable.
+   */
+  const timingTopWeekday = String(
+    payload?.timingV1?.summary?.topWeekdayLabel || "",
+  ).trim();
+  const timingIdx0Sun = TIMING_WEEKDAY_LABEL_TH.indexOf(timingTopWeekday);
+  const useTimingDay = timingIdx0Sun >= 0;
+
+  const recommendedIndex0Sun = useTimingDay
+    ? timingIdx0Sun
+    : computed.recommendedIndex0Sun;
+  const recommendedWeekday = useTimingDay
+    ? TIMING_WEEKDAY_LABEL_TH[timingIdx0Sun]
+    : computed.recommendedWeekday;
+  const weekdayTip = sacredUseDayWeekdayTipTh(recommendedIndex0Sun);
 
   return {
     title: "วันที่ควรใช้",
-    recommendedWeekday: computed.recommendedWeekday,
+    recommendedWeekday,
     secondaryWeekday: computed.secondaryWeekday,
     confidence: computed.confidence,
     weekdayTip,

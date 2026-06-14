@@ -169,11 +169,13 @@ function buildStripGradePipsHtml(activeCount) {
 }
 
 /**
- * Default: white shell + dark text + gold accents. Dark dashboard via
- * `wording.amuletReportV2Theme: "dark"` or env `AMULET_HTML_THEME=dark`.
+ * Default: "auto" — light shell server-side, but follows the device's
+ * `prefers-color-scheme` at runtime (the dark dashboard palette is fully built).
+ * Force a fixed theme via `wording.amuletReportV2Theme: "dark"|"light"` or env
+ * `AMULET_HTML_THEME=dark|light` (an explicit value disables auto-switching).
  *
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
- * @returns {"dark"|"light"}
+ * @returns {"dark"|"light"|"auto"}
  */
 function resolveAmuletHtmlTheme(payload) {
   const env = String(
@@ -191,7 +193,7 @@ function resolveAmuletHtmlTheme(payload) {
     .toLowerCase();
   if (fromPayload === "dark") return "dark";
   if (fromPayload === "light") return "light";
-  return "light";
+  return "auto";
 }
 
 /** Visual rhythm (px) — ไม่ derive จาก timing formula */
@@ -586,8 +588,9 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const shareTitleJson = JSON.stringify(ogTitle);
   const shareTextJson = JSON.stringify("ดูรายงานพลังจาก Ener Scan ได้ที่ลิงก์นี้");
 
+  const heroImageAlt = `ภาพ${subtypeLabel}ที่ใช้วิเคราะห์`;
   const heroMediaCol = h.objectImageUrl
-    ? `<div class="mv2a-media"><img src="${escapeHtml(h.objectImageUrl)}" alt="" loading="lazy" /><p class="mv2a-media-caption">ภาพวัตถุที่ใช้ในการวิเคราะห์</p></div>`
+    ? `<div class="mv2a-media"><img src="${escapeHtml(h.objectImageUrl)}" alt="${escapeHtml(heroImageAlt)}" loading="lazy" /><p class="mv2a-media-caption">ภาพวัตถุที่ใช้ในการวิเคราะห์</p></div>`
     : "";
 
   const metaTimeRowHtml = metaTimeLabel
@@ -612,9 +615,15 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       </ul>
     </section>`;
 
+  const autoThemeScript =
+    htmlTheme === "auto"
+      ? `<script>try{if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches){document.documentElement.classList.add("mv2a-theme-dark");}}catch(e){}</script>`
+      : "";
+
   return `<!DOCTYPE html>
 <html lang="th"${htmlTheme === "dark" ? ' class="mv2a-theme-dark"' : ""}>
 <head>
+  ${autoThemeScript}
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />

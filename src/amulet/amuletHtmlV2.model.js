@@ -205,8 +205,15 @@ export function buildAmuletHtmlV2ViewModel(payload) {
   const topLabel = POWER_LABEL_THAI[ord[0]];
   const alignLabel = POWER_LABEL_THAI[alignKey];
   const tensionLabel = POWER_LABEL_THAI[tensionKey];
-  const tensionGsumValue =
-    maxD >= 26
+  /**
+   * When the widest owner↔object gap lands on the object's own peak axis, the
+   * "ควรค่อย ๆ ไป"/"ยังไม่ส่งกัน" copy would otherwise contradict the hero
+   * (พลังเด่น = same axis). Reframe it as "strong, but outpaces your rhythm".
+   */
+  const tensionIsPeak = tensionKey === ord[0];
+  const tensionGsumValue = tensionIsPeak
+    ? `${tensionLabel} · แรงนำ ค่อยปรับจูน`
+    : maxD >= 26
       ? `${tensionLabel} · อย่าเร่ง`
       : `${tensionLabel} · ค่อย ๆ สะสม`;
   const graphSummary = {
@@ -240,8 +247,9 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       ? `${alignLabel} เข้ากับคุณชัด · ใช้ได้ดี`
       : `${alignLabel} เริ่มส่งกับคุณ · ใช้ได้ดี`;
 
-  const tensionMain =
-    maxD >= 26
+  const tensionMain = tensionIsPeak
+    ? `${tensionLabel} แรงเด่น แต่จังหวะคุณยังตามไม่ทัน · ค่อยปรับ`
+    : maxD >= 26
       ? `${tensionLabel} ยังไม่ส่งกับจังหวะคุณ · อย่าเร่ง`
       : `${tensionLabel} ยังไม่ส่งกัน · อย่าเร่ง`;
 
@@ -255,9 +263,11 @@ export function buildAmuletHtmlV2ViewModel(payload) {
           : "ตรงกับด้านรองจากเด่น · ยังเสริมคู่กันได้",
     },
     {
-      kicker: "ยังไม่ส่งกัน",
+      kicker: tensionIsPeak ? "แรงเกินจังหวะ" : "ยังไม่ส่งกัน",
       main: tensionMain,
-      sub: "คะแนนห่างกันที่สุด · คุมจังหวะ",
+      sub: tensionIsPeak
+        ? "เป็นพลังเด่นของชิ้นนี้ · ค่อย ๆ จูนเข้าหากัน"
+        : "คะแนนห่างกันที่สุด · คุมจังหวะ",
     },
     {
       kicker: "พลังเด่น",
