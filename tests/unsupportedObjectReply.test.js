@@ -11,14 +11,14 @@ const servicePath = fileURLToPath(
   new URL("../src/services/lineWebhook/unsupportedObjectReply.service.js", import.meta.url),
 );
 
-test("buildUnsupportedObjectText: deterministic Ener Scan copy with bullets", () => {
+test("buildUnsupportedObjectText: warm อาจารย์ copy keeps supported-type bullets", () => {
   const t = buildUnsupportedObjectText();
-  assert.ok(t.includes("Ener Scan ยังไม่รองรับภาพประเภทนี้"));
+  assert.ok(t.includes("อาจารย์"));
   assert.ok(t.includes("• พระเครื่อง"));
   assert.ok(t.includes("• เครื่องราง"));
   assert.ok(t.includes("คริสตัล / หิน"));
   assert.ok(t.includes("วัตถุสายพลังแบบชิ้นเดี่ยว"));
-  assert.ok(t.includes("กรุณาส่งภาพใหม่ที่ตรงประเภท"));
+  assert.ok(t.includes("ส่งรูป"));
 });
 
 test("getUnsupportedObjectReplyCandidates: primary is buildUnsupportedObjectText", () => {
