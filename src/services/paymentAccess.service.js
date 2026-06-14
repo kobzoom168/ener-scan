@@ -4,6 +4,7 @@ import {
   getLocalDateKey,
 } from "../stores/paymentAccess.db.js";
 import { supabase } from "../config/supabase.js";
+import { env } from "../config/env.js";
 import { loadActiveScanOffer } from "./scanOffer.loader.js";
 import {
   decideScanGate,
@@ -57,11 +58,14 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     // Keep payment gate semantics unchanged: fall through to fail-closed behavior.
   }
 
-  // Get app_user + entitlement
+  // Get app_user + entitlement. Only select referral columns when the feature is
+  // enabled, so the gate keeps working on databases without the referral migration.
+  const baseCols =
+    "id, paid_until, paid_remaining_scans, free_scan_daily_offset, free_scan_offset_date";
   const { data: appUserRow, error: appUserErr } = await supabase
     .from("app_users")
     .select(
-      "id, paid_until, paid_remaining_scans, free_scan_daily_offset, free_scan_offset_date"
+      env.ENABLE_REFERRAL ? `${baseCols}, bonus_scan_credits` : baseCols,
     )
     .eq("line_user_id", lineUserId)
     .limit(1)
@@ -116,11 +120,18 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     freeUsedToday = Math.max(0, freeUsedToday - offsetN);
   }
 
+  // Bonus scan credits (share-to-earn) consumed only after free quota is used up.
+  const bonusCredits =
+    env.ENABLE_REFERRAL && !paidActiveNow && appUserRow?.bonus_scan_credits
+      ? Math.max(0, Number(appUserRow.bonus_scan_credits) || 0)
+      : 0;
+
   const gate = decideScanGate({
     freeUsedToday,
     freeQuotaPerDay,
     paidUntil,
     paidRemainingScans,
+    bonusCredits,
     now,
   });
 
@@ -177,6 +188,7 @@ export async function checkScanAccess({ userId, now = new Date() }) {
     usedScans: gate.usedScans,
     freeScansLimit: gate.freeScansLimit,
     freeScansRemaining: gate.freeScansRemaining,
+    bonusRemaining: gate.bonusRemaining ?? bonusCredits,
     paidUntil: gate.paidUntil,
     paidRemainingScans,
   };

@@ -5,9 +5,13 @@ import {
   notifyLineUserTextAfterAdminAction,
 } from "../../utils/lineNotify429Retry.util.js";
 import { invokeLinePushMessage } from "../../utils/lineClientTransport.util.js";
+import line from "@line/bot-sdk";
+import { env } from "../../config/env.js";
 import { updateOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
 import { getScanJobById, updateScanJob } from "../../stores/scanV2/scanJobs.db.js";
 import { decrementUserPaidRemainingScans } from "../../stores/paymentAccess.db.js";
+import { consumeBonusScanCredit } from "../../stores/referral.db.js";
+import { grantReferralRewardOnFirstScanIfEligible } from "../referral.service.js";
 import {
   OUTBOUND_BACKOFF_MS,
   OUTBOUND_MAX_ATTEMPTS,
@@ -435,6 +439,93 @@ async function handleScanResultPostDelivery(msg, payload) {
         }),
       );
     }
+  }
+
+  if (env.ENABLE_REFERRAL) {
+    await handleReferralAfterDelivery(jobId, job);
+  }
+}
+
+/** Lazily-built shared LINE client for best-effort referral push notifications. */
+let referralPushClient = null;
+function getReferralPushClient() {
+  if (referralPushClient) return referralPushClient;
+  referralPushClient = new line.Client({
+    channelAccessToken: env.CHANNEL_ACCESS_TOKEN,
+    channelSecret: env.CHANNEL_SECRET,
+  });
+  return referralPushClient;
+}
+
+async function bestEffortReferralPush(lineUserId, text) {
+  const uid = String(lineUserId || "").trim();
+  if (!uid || !String(text || "").trim()) return;
+  try {
+    await getReferralPushClient().pushMessage(uid, { type: "text", text });
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: "REFERRAL_PUSH_FAILED",
+        lineUserIdPrefix: uid.slice(0, 8),
+        message: e?.message,
+      }),
+    );
+  }
+}
+
+/**
+ * After a successful (non-dedup) delivery:
+ *  - consume 1 bonus credit if this scan was granted via share-to-earn credits
+ *  - grant the one-time referral reward when a referee completes their first scan
+ * @param {string} jobId
+ * @param {object} job scan job row (has access_source, app_user_id)
+ */
+async function handleReferralAfterDelivery(jobId, job) {
+  if (job.access_source === "bonus" && job.app_user_id) {
+    try {
+      const remaining = await consumeBonusScanCredit(job.app_user_id);
+      console.log(
+        JSON.stringify({
+          event: "BONUS_CREDIT_CONSUMED_AFTER_DELIVERY",
+          jobIdPrefix: String(jobId).slice(0, 8),
+          appUserIdPrefix: String(job.app_user_id).slice(0, 8),
+          remaining,
+        }),
+      );
+    } catch (e) {
+      console.error(
+        JSON.stringify({
+          event: "BONUS_CREDIT_CONSUME_FAILED",
+          jobIdPrefix: String(jobId).slice(0, 8),
+          message: e?.message,
+        }),
+      );
+    }
+  }
+
+  if (!job.app_user_id) return;
+  try {
+    const grant = await grantReferralRewardOnFirstScanIfEligible({
+      refereeAppUserId: job.app_user_id,
+    });
+    if (grant.granted) {
+      await bestEffortReferralPush(
+        grant.refereeLineUserId,
+        `🎁 ขอบคุณที่มาให้อาจารย์ดูนะครับ\nอาจารย์เติมสแกนโบนัสให้ +${grant.refereeBonus} ครั้งจากโค้ดเชิญ เก็บไว้ใช้ต่อได้เลยครับ`,
+      );
+      await bestEffortReferralPush(
+        grant.referrerLineUserId,
+        `🎉 มีเพื่อนใช้โค้ดเชิญของคุณแล้วครับ!\nอาจารย์เติมสแกนโบนัสให้ +${grant.referrerBonus} ครั้ง ขอบคุณที่ช่วยบอกต่อนะครับ 🙏`,
+      );
+    }
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: "REFERRAL_GRANT_AFTER_DELIVERY_FAILED",
+        jobIdPrefix: String(jobId).slice(0, 8),
+        message: e?.message,
+      }),
+    );
   }
 }
 

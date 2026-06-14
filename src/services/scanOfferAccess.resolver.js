@@ -48,13 +48,16 @@ export function formatNextResetLabelThai(nextResetAt) {
 }
 
 /**
- * Same branching order as `checkScanAccess` (paid first, then free, else paywall).
+ * Same branching order as `checkScanAccess` (paid first, then free, then bonus
+ * credits, else paywall). `bonusCredits` defaults to 0 so callers that don't
+ * pass it (referral disabled) behave exactly as before.
  *
  * @param {object} opts
  * @param {number} opts.freeUsedToday
  * @param {number} opts.freeQuotaPerDay
  * @param {string|null|undefined} opts.paidUntil
  * @param {number} opts.paidRemainingScans
+ * @param {number} [opts.bonusCredits]
  * @param {Date} [opts.now]
  */
 export function decideScanGate({
@@ -62,11 +65,13 @@ export function decideScanGate({
   freeQuotaPerDay,
   paidUntil,
   paidRemainingScans,
+  bonusCredits = 0,
   now = new Date(),
 }) {
   const used = Number.isFinite(freeUsedToday) ? freeUsedToday : 0;
   const quota = Number.isFinite(freeQuotaPerDay) ? freeQuotaPerDay : 1;
   const paidRem = Number.isFinite(paidRemainingScans) ? paidRemainingScans : 0;
+  const bonus = Number.isFinite(bonusCredits) ? Math.max(0, bonusCredits) : 0;
 
   const freeRemainingToday = Math.max(0, quota - used);
   const paidActive = computePaidActive(paidUntil, paidRem, now);
@@ -79,6 +84,7 @@ export function decideScanGate({
       usedScans: used,
       freeScansLimit: quota,
       freeScansRemaining: freeRemainingToday,
+      bonusRemaining: bonus,
       paidUntil: paidUntil ? String(paidUntil) : null,
     };
   }
@@ -91,6 +97,20 @@ export function decideScanGate({
       usedScans: used,
       freeScansLimit: quota,
       freeScansRemaining: freeRemainingToday,
+      bonusRemaining: bonus,
+      paidUntil: paidUntil ? String(paidUntil) : null,
+    };
+  }
+
+  if (bonus > 0) {
+    return {
+      allowed: true,
+      reason: "bonus",
+      remaining: bonus,
+      usedScans: used,
+      freeScansLimit: quota,
+      freeScansRemaining: 0,
+      bonusRemaining: bonus,
       paidUntil: paidUntil ? String(paidUntil) : null,
     };
   }
@@ -102,6 +122,7 @@ export function decideScanGate({
     usedScans: used,
     freeScansLimit: quota,
     freeScansRemaining: 0,
+    bonusRemaining: 0,
     paidUntil: paidUntil ? String(paidUntil) : null,
   };
 }

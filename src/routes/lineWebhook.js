@@ -55,6 +55,7 @@ import { resolveObjectGateReplyRouting } from "../utils/objectGateReplyResolve.u
 import { sendObjectGateRoutedNonScanReply } from "../services/lineWebhook/objectGateReplySend.service.js";
 
 import { env } from "../config/env.js";
+import { tryHandleReferralText } from "../services/lineWebhook/referralCommand.service.js";
 import {
   scanV2TraceTs,
   lineUserIdPrefix8,
@@ -3146,6 +3147,24 @@ async function handleTextMessage({ client, event, userId, session }) {
     hasPendingImage: !!session.pendingImage,
     sessionFlowVersion: session.flowVersion || 0,
   });
+
+  // Share-to-earn: redeem a pasted referral code or hand out the user's own
+  // invite code. Behind ENABLE_REFERRAL (default off) → zero impact when disabled.
+  if (env.ENABLE_REFERRAL) {
+    try {
+      const referral = await tryHandleReferralText({ userId, text });
+      if (referral.handled) {
+        await replyText(client, event.replyToken, referral.text);
+        return;
+      }
+    } catch (referralErr) {
+      console.error("[REFERRAL_TEXT_HANDLER_FAILED]", {
+        userId,
+        message: referralErr?.message,
+      });
+      // Non-fatal: fall through to normal routing.
+    }
+  }
 
   /**
    * Interactive text route priority (single owner per turn; no LLM routing).
