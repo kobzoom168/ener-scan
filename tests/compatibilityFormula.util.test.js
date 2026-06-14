@@ -51,6 +51,48 @@ test("computeCompatibilityV1Stable: same object signals ignore wall-clock scan t
   assert.ok(a.inputs.stableAnchors);
 });
 
+test("computeCompatibilityV1Stable: same object + same birthdate => identical score across different LINE IDs / scan sessions", () => {
+  // Two different users scan the SAME physical object (same baseline-pinned
+  // attributes) with the SAME birthdate, at different times. LINE ID is never an
+  // input; wall-clock scan time must not leak in. Score must be identical.
+  const baselineAttrs = {
+    birthdate: "1990-02-14",
+    objectFamily: "sacred_amulet",
+    materialFamily: "powder",
+    shapeFamily: "rectangular",
+    mainEnergy: "metta",
+    energyScore: 7.5,
+    dominantColor: "bronze",
+    objectCategory: "พระสมเด็จ",
+    conditionClass: "good",
+  };
+  const userA = buildCompatibilityPayload({
+    ...baselineAttrs,
+    scannedAt: "2026-01-05T08:30:00+07:00",
+  });
+  const userB = buildCompatibilityPayload({
+    ...baselineAttrs,
+    scannedAt: "2026-09-22T21:47:00+07:00",
+  });
+  assert.equal(userA.score, userB.score);
+  assert.equal(userA.band, userB.band);
+  assert.deepEqual(userA.factors, userB.factors);
+});
+
+test("computeCompatibilityV1Stable: different birthdate changes the compatibility score", () => {
+  const obj = {
+    objectFamily: "sacred_amulet",
+    materialFamily: "powder",
+    shapeFamily: "rectangular",
+    mainEnergy: "metta",
+    energyScore: 7.5,
+    scannedAt: "2026-01-05T08:30:00+07:00",
+  };
+  const a = buildCompatibilityPayload({ ...obj, birthdate: "1990-02-14" });
+  const b = buildCompatibilityPayload({ ...obj, birthdate: "1977-11-03" });
+  assert.notEqual(a.score, b.score);
+});
+
 test("computeCompatibilityV1Stable: different objectFamily can change score", () => {
   const base = computeCompatibilityV1Stable(FIXED);
   const crystal = computeCompatibilityV1Stable({
