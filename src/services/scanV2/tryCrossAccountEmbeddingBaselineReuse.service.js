@@ -13,8 +13,10 @@ import {
   markGlobalObjectBaselineReused,
 } from "../../stores/scanV2/globalObjectBaselines.db.js";
 import { computeObjectEmbedding } from "../objectEmbedding.service.js";
+import { verifySameObject } from "./objectSameIdentityVerifier.service.js";
 import { enrollRecognizedAngle } from "./enrollObjectAngle.service.js";
 import { computeImageDHash } from "../imageDedup/imagePhash.util.js";
+import { createScanUploadBucketSignedUrl } from "../../utils/storage/scanUploadStorageSignedUrl.util.js";
 import { createScanRequest, updateScanRequestStatus } from "../../stores/scanRequests.db.js";
 import { createScanResult } from "../../stores/scanResults.db.js";
 import { parseScanResultForHistory } from "../history/history.parser.js";
@@ -45,6 +47,9 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
   const computeEmbedding = deps.computeObjectEmbedding || computeObjectEmbedding;
   const matchByEmbedding = deps.matchGlobalObjectBaselinesByEmbedding || matchGlobalObjectBaselinesByEmbedding;
   const findById = deps.findGlobalObjectBaselineByIdWithGroup || findGlobalObjectBaselineByIdWithGroup;
+  const verifySame = deps.verifySameObject || verifySameObject;
+  const resolveCandidateImageUrl =
+    deps.resolveCandidateImageUrl || ((path) => createScanUploadBucketSignedUrl(path, 600));
   const enrollAngle = deps.enrollRecognizedAngle || enrollRecognizedAngle;
   const createRequest = deps.createScanRequest || createScanRequest;
   const createLegacyResult = deps.createScanResult || createScanResult;
@@ -78,11 +83,25 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
       return { ok: false };
     }
 
+    /**
+     * When the verifier agent is on, embedding NN is only a coarse RECALL filter (loose threshold,
+     * inspect up to N candidates) and the vision agent makes the final same-object call. Otherwise
+     * fall back to similarity-only auto-accept at the strict threshold.
+     */
+    const verifierEnabled = env.OBJECT_SAME_IDENTITY_VERIFIER_ENABLED === true;
+    const autoAcceptMin = env.CROSS_ACCOUNT_BASELINE_EMBEDDING_MIN_SIMILARITY;
+    const recallMin = verifierEnabled
+      ? Math.min(autoAcceptMin, env.CROSS_ACCOUNT_BASELINE_EMBEDDING_RECALL_MIN_SIMILARITY)
+      : autoAcceptMin;
+    const matchCount = verifierEnabled
+      ? env.OBJECT_SAME_IDENTITY_VERIFIER_MAX_CANDIDATES
+      : 5;
+
     const candidates = await matchByEmbedding(embedding, {
       lane: "sacred_amulet",
       objectFamily: "sacred_amulet",
-      minSimilarity: env.CROSS_ACCOUNT_BASELINE_EMBEDDING_MIN_SIMILARITY,
-      matchCount: 5,
+      minSimilarity: recallMin,
+      matchCount,
     });
     if (!Array.isArray(candidates) || !candidates.length) {
       log(
@@ -92,14 +111,79 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
           reason: "no_candidates",
           jobIdPrefix: idPrefix8(ctx.jobId),
           lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
-          minSimilarity: env.CROSS_ACCOUNT_BASELINE_EMBEDDING_MIN_SIMILARITY,
+          minSimilarity: recallMin,
+          verifierEnabled,
           timestamp: scanV2TraceTs(),
         }),
       );
       return { ok: false };
     }
 
-    const candidate = candidates[0];
+    /** @type {(typeof candidates)[number] | null} */
+    let candidate = null;
+    /** @type {{ same: boolean, confidence: number, reason: string } | null} */
+    let verifierVerdict = null;
+
+    if (!verifierEnabled) {
+      candidate = candidates[0];
+    } else {
+      const newImageBase64 = ctx.imageBuffer.toString("base64");
+      const minConfidence = env.OBJECT_SAME_IDENTITY_VERIFIER_MIN_CONFIDENCE;
+      for (const cand of candidates) {
+        let candUrl = "";
+        try {
+          candUrl = String((await resolveCandidateImageUrl(cand.thumbnailPath)) || "").trim();
+        } catch {
+          candUrl = "";
+        }
+        if (!candUrl) continue;
+
+        const verdict = await verifySame({
+          newImageBase64,
+          newImageMimeType: "image/jpeg",
+          candidateImageUrl: candUrl,
+          objectFamily: "sacred_amulet",
+        });
+
+        log(
+          JSON.stringify({
+            event: "OBJECT_SAME_IDENTITY_VERIFIER_RESULT",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(ctx.jobId),
+            candidateIdPrefix: String(cand.id).slice(0, 8),
+            similarity: Number(cand.similarity).toFixed(4),
+            same: verdict.same === true,
+            confidence: Number(verdict.confidence).toFixed(3),
+            reason: String(verdict.reason || "").slice(0, 120),
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+
+        if (verdict.same === true && Number(verdict.confidence) >= minConfidence) {
+          candidate = cand;
+          verifierVerdict = { same: true, confidence: Number(verdict.confidence), reason: verdict.reason };
+          break;
+        }
+      }
+
+      if (!candidate) {
+        log(
+          JSON.stringify({
+            event: "CROSS_ACCOUNT_BASELINE_EMBEDDING_REUSE_SKIPPED",
+            path: "worker-scan",
+            reason: "verifier_rejected_all",
+            jobIdPrefix: idPrefix8(ctx.jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
+            candidateCount: candidates.length,
+            topSimilarity: Number(candidates[0].similarity).toFixed(4),
+            minConfidence,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        return { ok: false };
+      }
+    }
+
     const baselineRow = await findById(candidate.id);
     if (!baselineRow) return { ok: false };
     if (String(baselineRow.lane || "").trim().toLowerCase() !== "sacred_amulet") return { ok: false };
@@ -120,6 +204,7 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
         jobIdPrefix: idPrefix8(ctx.jobId),
         lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
         similarity: Number(candidate.similarity).toFixed(4),
+        verifierConfidence: verifierVerdict ? Number(verifierVerdict.confidence).toFixed(3) : null,
         baselineIdPrefix: String(baselineRow.id).slice(0, 8),
         peakPowerKey: baselineRow.peakPowerKey || null,
         timestamp: scanV2TraceTs(),
@@ -255,8 +340,9 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
       scanFromCache: false,
       stableFeatureSeed: baselineRow.stableFeatureSeed,
       baselineCrossAccountReuse: /** @type {const} */ (true),
-      reuseMode: /** @type {const} */ ("embedding"),
+      reuseMode: verifierVerdict ? /** @type {const} */ ("embedding_verified") : /** @type {const} */ ("embedding"),
       embeddingSimilarity: Number(candidate.similarity),
+      verifierConfidence: verifierVerdict ? Number(verifierVerdict.confidence) : null,
     };
   } catch (e) {
     log(

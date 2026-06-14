@@ -788,6 +788,39 @@ export const env = {
     String(process.env.OBJECT_ENROLLMENT_ENABLED ?? "false").trim().toLowerCase() === "true",
 
   /**
+   * Phase 2F: same-object verifier agent. When on, embedding NN is used only as a coarse RECALL
+   * filter (loose threshold below) and a vision LLM looks at the new photo + each candidate's stored
+   * image to decide "same physical object across angle/rotation/flip/lighting?". Reuse happens only
+   * when the agent confirms — so two different pieces with near-identical trait descriptors are not
+   * confused, and the same piece flipped/rotated still snaps back. Default off.
+   */
+  OBJECT_SAME_IDENTITY_VERIFIER_ENABLED:
+    String(process.env.OBJECT_SAME_IDENTITY_VERIFIER_ENABLED ?? "false").trim().toLowerCase() ===
+    "true",
+  /** Loose cosine threshold used to RETRIEVE verifier candidates (recall). Lower than the auto-accept similarity. */
+  CROSS_ACCOUNT_BASELINE_EMBEDDING_RECALL_MIN_SIMILARITY: (() => {
+    const raw = process.env.CROSS_ACCOUNT_BASELINE_EMBEDDING_RECALL_MIN_SIMILARITY;
+    const n = raw === undefined || raw === "" ? 0.7 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.7;
+  })(),
+  /** Min agent confidence (0–1) required to treat a candidate as the same physical object. */
+  OBJECT_SAME_IDENTITY_VERIFIER_MIN_CONFIDENCE: (() => {
+    const raw = process.env.OBJECT_SAME_IDENTITY_VERIFIER_MIN_CONFIDENCE;
+    const n = raw === undefined || raw === "" ? 0.8 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.8;
+  })(),
+  /** Max number of recall candidates the verifier agent will inspect per scan (cost guard). */
+  OBJECT_SAME_IDENTITY_VERIFIER_MAX_CANDIDATES: (() => {
+    const raw = process.env.OBJECT_SAME_IDENTITY_VERIFIER_MAX_CANDIDATES;
+    const n = raw === undefined || raw === "" ? 3 : Number(raw);
+    return Number.isFinite(n) ? Math.min(8, Math.max(1, Math.floor(n))) : 3;
+  })(),
+  /** Vision model used by the same-object verifier agent. */
+  OBJECT_SAME_IDENTITY_VERIFIER_MODEL:
+    String(process.env.OBJECT_SAME_IDENTITY_VERIFIER_MODEL || "gpt-4.1-mini").trim() ||
+    "gpt-4.1-mini",
+
+  /**
    * Ener Scan V2: async webhook → storage → DB queue → workers (see docs/ENER_SCAN_V2_ROLLOUT.md).
    * When `true`, web attempts `ingestScanImageAsyncV2` for scan image flows (requires literal trimmed `true`).
    */
