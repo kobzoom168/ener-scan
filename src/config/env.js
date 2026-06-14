@@ -748,6 +748,46 @@ export const env = {
     "true",
 
   /**
+   * Phase 2D: semantic embedding nearest-neighbor baseline reuse (angle-robust object recognition).
+   * Requires the `image_embedding` column + `match_global_object_baselines` RPC (see
+   * supabase migration). Default off; enable after migration + staging validation.
+   */
+  CROSS_ACCOUNT_BASELINE_EMBEDDING_REUSE_ENABLED:
+    String(process.env.CROSS_ACCOUNT_BASELINE_EMBEDDING_REUSE_ENABLED ?? "false")
+      .trim()
+      .toLowerCase() === "true",
+  /** Persist the object embedding alongside each new baseline (needed before reuse can hit). */
+  OBJECT_EMBEDDING_PERSIST_ENABLED:
+    String(process.env.OBJECT_EMBEDDING_PERSIST_ENABLED ?? "false").trim().toLowerCase() ===
+    "true",
+  /** Minimum cosine similarity (0–1) to accept an embedding nearest-neighbor as the same object. */
+  CROSS_ACCOUNT_BASELINE_EMBEDDING_MIN_SIMILARITY: (() => {
+    const raw = process.env.CROSS_ACCOUNT_BASELINE_EMBEDDING_MIN_SIMILARITY;
+    const n = raw === undefined || raw === "" ? 0.92 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.92;
+  })(),
+  /** Embedding model + text model for the semantic object fingerprint (descriptor → text embedding). */
+  OBJECT_EMBEDDING_MODEL:
+    String(process.env.OBJECT_EMBEDDING_MODEL || "text-embedding-3-small").trim() ||
+    "text-embedding-3-small",
+  OBJECT_EMBEDDING_DESCRIPTOR_MODEL:
+    String(process.env.OBJECT_EMBEDDING_DESCRIPTOR_MODEL || "gpt-4.1-mini").trim() ||
+    "gpt-4.1-mini",
+  OBJECT_EMBEDDING_TIMEOUT_MS: (() => {
+    const raw = process.env.OBJECT_EMBEDDING_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 14000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(1000, Math.floor(n)) : 14000;
+  })(),
+
+  /**
+   * Phase 2E: multi-angle enrollment. When on, each embedding-recognized angle is appended as a
+   * view of the matched object group; once a group reaches the lock threshold its six-axis scores
+   * are consolidated + locked. Requires migration 035. Default off.
+   */
+  OBJECT_ENROLLMENT_ENABLED:
+    String(process.env.OBJECT_ENROLLMENT_ENABLED ?? "false").trim().toLowerCase() === "true",
+
+  /**
    * Ener Scan V2: async webhook → storage → DB queue → workers (see docs/ENER_SCAN_V2_ROLLOUT.md).
    * When `true`, web attempts `ingestScanImageAsyncV2` for scan image flows (requires literal trimmed `true`).
    */

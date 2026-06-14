@@ -6,6 +6,7 @@ import { SCAN_CACHE_PROMPT_VERSION } from "../../stores/scanResultCache.db.js";
 import { AMULET_SCORING_MODE } from "../../amulet/amuletScores.util.js";
 import { scanV2TraceTs, idPrefix8, lineUserIdPrefix8 } from "../../utils/scanV2Trace.util.js";
 import { extractObjectBaselineFromReportPayload } from "./objectBaselineExtract.util.js";
+import { computeObjectEmbedding } from "../objectEmbedding.service.js";
 
 /**
  * Phase 1A: persist global object baseline after `scan_results_v2` insert (no reuse).
@@ -147,6 +148,36 @@ export async function maybePersistGlobalObjectBaselineAfterScanV2(p) {
     return;
   }
 
+  /** Phase 2D: compute + persist an angle-robust embedding so future different-angle scans can match. */
+  let embedding = null;
+  let embeddingModel = null;
+  let embeddingVersion = null;
+  let embeddingDescriptor = null;
+  if (env.OBJECT_EMBEDDING_PERSIST_ENABLED) {
+    try {
+      const emb = await computeObjectEmbedding({
+        imageBase64: p.imageBuffer.toString("base64"),
+        mimeType: "image/jpeg",
+        objectFamily: String(p.reportObjectFamily || "sacred_amulet"),
+        scanResultIdPrefix: String(p.scanResultV2Id || "").slice(0, 8),
+      });
+      embedding = emb.embedding;
+      embeddingModel = emb.model;
+      embeddingVersion = emb.version;
+      embeddingDescriptor = emb.descriptor;
+    } catch (embErr) {
+      console.log(
+        JSON.stringify({
+          event: "OBJECT_EMBEDDING_PERSIST_SKIP",
+          path: "worker-scan",
+          jobIdPrefix: idPrefix8(p.jobId),
+          message: String(embErr?.message || embErr).slice(0, 200),
+          timestamp: scanV2TraceTs(),
+        }),
+      );
+    }
+  }
+
   try {
     const row = await upsertGlobalObjectBaselineFromScanResult({
       imageSha256,
@@ -164,6 +195,10 @@ export async function maybePersistGlobalObjectBaselineAfterScanV2(p) {
       sourceScanResultV2Id: p.scanResultV2Id,
       sourceUploadId: p.uploadId,
       confidence: 1,
+      imageEmbedding: embedding,
+      embeddingModel,
+      embeddingVersion,
+      embeddingDescriptor,
     });
     console.log(
       JSON.stringify({

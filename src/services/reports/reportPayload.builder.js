@@ -548,6 +548,7 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp)
  * @param {object|null} [opts.geminiCrystalSubtypeResult] — optional Gemini crystal subtype pass (crystal scans only)
  * @param {"moldavite"|"sacred_amulet"|"crystal_bracelet"|null} [opts.strictSupportedLane] — when set (Scan V2 worker), only this lane slice may attach (3-lane closed world)
  * @param {string|null|undefined} [opts.stableFeatureSeed] — vision-stable seed for Moldavite/crystal-bracelet deterministic scores (falls back to scanResultId)
+ * @param {{ primaryColor?: string, materialType?: string, formFactor?: string, textureHint?: string }|null} [opts.stableFeatureFields] — raw vision slugs; enables angle-robust amulet scoring (feature_blend_v3)
  * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
  */
 export async function buildReportPayloadFromScan(opts) {
@@ -574,6 +575,7 @@ export async function buildReportPayloadFromScan(opts) {
     geminiCrystalSubtypeResult: geminiCrystalSubtypeResultOpt = null,
     strictSupportedLane: strictSupportedLaneOpt = null,
     stableFeatureSeed: stableFeatureSeedOpt,
+    stableFeatureFields: stableFeatureFieldsOpt = null,
   } = opts;
 
   const confidenceDamp = resolveConfidenceDampMultiplier(
@@ -1223,7 +1225,9 @@ export async function buildReportPayloadFromScan(opts) {
     famNorm === "sacred_amulet"
       ? buildAmuletV1Slice({
           scanResultId: rid,
-          seedKey: rid || String(scanResultId || ""),
+          // Prefer the angle-stable feature seed; per-scan id only as last resort.
+          seedKey: scoreSeedKey || rid || String(scanResultId || ""),
+          stableFeatureFields: stableFeatureFieldsOpt,
           energyScore,
           mainEnergyLabel: baseMainEnergyLabel,
         })

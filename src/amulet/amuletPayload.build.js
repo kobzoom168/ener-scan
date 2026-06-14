@@ -1,5 +1,5 @@
 import {
-  computeAmuletPowerScoresDeterministicV1,
+  computeAmuletPowerScores,
   POWER_LABEL_THAI,
 } from "./amuletScores.util.js";
 import { AMULET_HTML_V2_USAGE_DISCLAIMER } from "./amuletHtmlV2.model.js";
@@ -51,7 +51,8 @@ function buildAmuletHtmlReportPlaceholder() {
 /**
  * @param {object} p
  * @param {string} p.scanResultId
- * @param {string} p.seedKey
+ * @param {string} p.seedKey — stable feature seed (preferred). Avoid per-scan ids: they make rescans diverge.
+ * @param {{ primaryColor?: string, materialType?: string, formFactor?: string, textureHint?: string }|null} [p.stableFeatureFields] — raw vision slugs; when present, angle-robust feature_blend_v3 is used
  * @param {number|null} [p.energyScore]
  * @param {string} [p.mainEnergyLabel]
  * @returns {import("../services/reports/reportPayload.types.js").ReportAmuletV1}
@@ -59,10 +60,13 @@ function buildAmuletHtmlReportPlaceholder() {
 export function buildAmuletV1Slice({
   scanResultId,
   seedKey,
+  stableFeatureFields = null,
   energyScore = null,
   mainEnergyLabel = "",
 }) {
-  const scores = computeAmuletPowerScoresDeterministicV1(seedKey, {
+  const scores = computeAmuletPowerScores({
+    features: stableFeatureFields,
+    seedKey,
     sessionKey: scanResultId,
     mainEnergyLabel,
   });

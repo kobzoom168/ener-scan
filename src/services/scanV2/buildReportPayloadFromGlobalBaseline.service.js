@@ -35,6 +35,17 @@ import { resolveCrystalMode } from "../../utils/energyCategoryResolve.util.js";
  * @returns {Record<string, number>}
  */
 function axisScoresFromBaseline(baselineRow) {
+  // Phase 2E: an enrolled group's locked, consolidated scores win (identical for every angle).
+  const locked = baselineRow.lockedAxisScoresJson;
+  if (baselineRow.isEnrolled && locked && typeof locked === "object" && !Array.isArray(locked)) {
+    /** @type {Record<string, number>} */
+    const out = {};
+    for (const k of POWER_ORDER) {
+      const n = Number(/** @type {Record<string, unknown>} */ (locked)[k]);
+      out[k] = Number.isFinite(n) ? Math.round(Math.min(100, Math.max(0, n))) : 0;
+    }
+    if (POWER_ORDER.some((k) => out[k] > 0)) return out;
+  }
   const ax = baselineRow.axisScoresJson;
   if (ax && typeof ax === "object" && !Array.isArray(ax)) {
     /** @type {Record<string, number>} */

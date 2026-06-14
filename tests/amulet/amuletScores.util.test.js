@@ -1,11 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  computeAmuletPowerScores,
   computeAmuletPowerScoresDeterministicV1,
+  computeAmuletPowerScoresFromFeaturesV3,
   deriveSacredAmuletEnergyScore10FromPowerCategories,
   inferAmuletAxisFromMainEnergyLabel,
   sacredAmuletEnergyLevelLabelFromScore10,
 } from "../../src/amulet/amuletScores.util.js";
+
+const axisVec = (r) =>
+  Object.fromEntries(Object.entries(r.powerCategories).map(([k, v]) => [k, v.score]));
+const maxAxisDelta = (a, b) =>
+  Math.max(...Object.keys(a).map((k) => Math.abs(a[k] - b[k])));
 
 test("deterministic_v2: same object identity keeps primary/secondary stable across sessions", () => {
   const a = computeAmuletPowerScoresDeterministicV1("object-stable-key", {
@@ -31,6 +38,45 @@ test("deterministic_v2: mainEnergyLabel nudges matching axis upward", () => {
   assert.ok(
     luck.powerCategories.luck.score >= base.powerCategories.luck.score,
   );
+});
+
+test("feature_blend_v3: same object across angles/lighting → identical scores", () => {
+  // gold/polished vs yellow/smooth = same piece, different lighting + texture read.
+  const angle1 = computeAmuletPowerScores({
+    features: { primaryColor: "gold", materialType: "thai_amulet", formFactor: "amulet_coin", textureHint: "polished" },
+    scanResultId: "scan-1",
+  });
+  const angle2 = computeAmuletPowerScores({
+    features: { primaryColor: "yellow", materialType: "thai_amulet", formFactor: "amulet_coin", textureHint: "smooth" },
+    scanResultId: "scan-2",
+  });
+  assert.equal(angle1.scoringMode, "feature_blend_v3");
+  assert.deepEqual(axisVec(angle1), axisVec(angle2));
+  assert.equal(angle1.primaryPower, angle2.primaryPower);
+});
+
+test("feature_blend_v3: a single real slug flip moves scores by a bounded amount (no avalanche)", () => {
+  const base = computeAmuletPowerScoresFromFeaturesV3({
+    primaryColor: "gold", materialType: "thai_amulet", formFactor: "amulet_coin",
+  });
+  const flippedForm = computeAmuletPowerScoresFromFeaturesV3({
+    primaryColor: "gold", materialType: "thai_amulet", formFactor: "amulet_figure",
+  });
+  // Bounded: one layer change must not reroll the whole vector.
+  assert.ok(
+    maxAxisDelta(axisVec(base), axisVec(flippedForm)) <= 20,
+    "single slug flip should be a bounded nudge, not a full reroll",
+  );
+});
+
+test("computeAmuletPowerScores: falls back to legacy seed when features unusable", () => {
+  const r = computeAmuletPowerScores({ features: null, seedKey: "legacy-seed", scanResultId: "x" });
+  assert.equal(r.scoringMode, "deterministic_v2");
+  const allUnknown = computeAmuletPowerScores({
+    features: { primaryColor: "unknown", materialType: "unknown", formFactor: "unknown", textureHint: "unknown" },
+    seedKey: "legacy-seed",
+  });
+  assert.equal(allUnknown.scoringMode, "deterministic_v2");
 });
 
 test("inferAmuletAxisFromMainEnergyLabel: maps hero wording to axis", () => {

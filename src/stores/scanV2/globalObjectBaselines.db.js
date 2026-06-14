@@ -18,6 +18,10 @@ import { hammingDistance } from "../../services/imageDedup/imagePhash.util.js";
  * @property {string|null} [sourceScanResultV2Id]
  * @property {string|null} [sourceUploadId]
  * @property {number|null} [confidence]
+ * @property {number[]|null} [imageEmbedding]
+ * @property {string|null} [embeddingModel]
+ * @property {string|null} [embeddingVersion]
+ * @property {string|null} [embeddingDescriptor]
  */
 
 /**
@@ -39,6 +43,10 @@ import { hammingDistance } from "../../services/imageDedup/imagePhash.util.js";
  * @property {string|null} sourceUploadId
  * @property {number|null} confidence
  * @property {number} reuseCount
+ * @property {string|null} objectGroupId
+ * @property {boolean} isEnrolled
+ * @property {number} viewCount
+ * @property {unknown} lockedAxisScoresJson
  */
 
 /**
@@ -78,6 +86,21 @@ export async function upsertGlobalObjectBaselineFromScanResult(input) {
         ? Math.min(1, Math.max(0, Number(input.confidence)))
         : 1,
   };
+
+  // Embedding columns exist only after migration 034; include them only when provided so the
+  // upsert stays compatible with environments where the column is not yet present.
+  if (
+    Array.isArray(input.imageEmbedding) &&
+    input.imageEmbedding.length > 0 &&
+    input.imageEmbedding.every((x) => Number.isFinite(Number(x)))
+  ) {
+    /** pgvector accepts the JSON array string form `[0.1,0.2,...]`. */
+    row.image_embedding = `[${input.imageEmbedding.map((x) => Number(x)).join(",")}]`;
+    row.embedding_model = input.embeddingModel != null ? String(input.embeddingModel).trim() || null : null;
+    row.embedding_version = input.embeddingVersion != null ? String(input.embeddingVersion).trim() || null : null;
+    row.embedding_descriptor =
+      input.embeddingDescriptor != null ? String(input.embeddingDescriptor).trim().slice(0, 600) || null : null;
+  }
 
   const { data, error } = await supabase
     .from("global_object_baselines")
@@ -124,8 +147,42 @@ function mapBaselineRow(raw) {
       r.confidence != null && Number.isFinite(Number(r.confidence)) ? Number(r.confidence) : 1,
     reuseCount:
       r.reuse_count != null && Number.isFinite(Number(r.reuse_count)) ? Math.max(0, Math.floor(Number(r.reuse_count))) : 0,
+    objectGroupId: r.object_group_id != null ? String(r.object_group_id).trim() || null : null,
+    isEnrolled: r.is_enrolled === true,
+    viewCount:
+      r.view_count != null && Number.isFinite(Number(r.view_count)) ? Math.max(1, Math.floor(Number(r.view_count))) : 1,
+    lockedAxisScoresJson: r.locked_axis_scores_json ?? null,
   };
 }
+
+/**
+ * Column list INCLUDING the enrollment columns (migration 035). PostgREST errors on unknown columns,
+ * so this is only used by enrollment-path lookups that run after the migration is applied (the
+ * feature is flag-gated). Legacy 2A/2C lookups keep their original narrower selects.
+ */
+const BASELINE_FULL_SELECT = [
+  "id",
+  "image_sha256",
+  "image_phash",
+  "stable_feature_seed",
+  "lane",
+  "object_family",
+  "baseline_schema_version",
+  "prompt_version",
+  "scoring_version",
+  "object_baseline_json",
+  "axis_scores_json",
+  "peak_power_key",
+  "thumbnail_path",
+  "source_scan_result_v2_id",
+  "source_upload_id",
+  "confidence",
+  "reuse_count",
+  "object_group_id",
+  "is_enrolled",
+  "view_count",
+  "locked_axis_scores_json",
+].join(",");
 
 /**
  * @param {string} imageSha256Hex
@@ -349,6 +406,171 @@ export async function listGlobalObjectBaselinePhashCandidates(
     lane: opts.lane ?? null,
     objectFamily: opts.objectFamily ?? null,
   });
+}
+
+/**
+ * Phase 2D: semantic nearest-neighbor lookup via the `match_global_object_baselines` RPC.
+ * Returns the closest baselines (cosine) at or above `minSimilarity`, filtered by lane/family.
+ *
+ * @param {number[]} embedding
+ * @param {{ lane?: string|null, objectFamily?: string|null, minSimilarity?: number, matchCount?: number }} [opts]
+ * @returns {Promise<Array<GlobalObjectBaselineRow & { similarity: number }>>}
+ */
+export async function matchGlobalObjectBaselinesByEmbedding(embedding, opts = {}) {
+  if (!Array.isArray(embedding) || embedding.length === 0) return [];
+  if (!embedding.every((x) => Number.isFinite(Number(x)))) return [];
+
+  const minSimilarity = Math.min(1, Math.max(0, Number(opts.minSimilarity ?? 0.92)));
+  const matchCount = Math.min(50, Math.max(1, Math.floor(Number(opts.matchCount) || 5)));
+
+  const { data, error } = await supabase.rpc("match_global_object_baselines", {
+    query_embedding: embedding.map((x) => Number(x)),
+    match_lane: opts.lane != null ? String(opts.lane).trim() || null : null,
+    match_family: opts.objectFamily != null ? String(opts.objectFamily).trim() || null : null,
+    min_similarity: minSimilarity,
+    match_count: matchCount,
+  });
+
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+
+  /** @type {Array<GlobalObjectBaselineRow & { similarity: number }>} */
+  const out = [];
+  for (const raw of data) {
+    const mapped = mapBaselineRow(raw);
+    if (!mapped) continue;
+    const sim =
+      raw && typeof raw === "object" && "similarity" in raw && Number.isFinite(Number(raw.similarity))
+        ? Number(raw.similarity)
+        : 0;
+    out.push({ ...mapped, similarity: sim });
+  }
+  out.sort((a, b) => b.similarity - a.similarity);
+  return out;
+}
+
+/**
+ * Phase 2E: full row including enrollment columns (post-migration 035 only).
+ * @param {string} baselineId
+ * @returns {Promise<GlobalObjectBaselineRow | null>}
+ */
+export async function findGlobalObjectBaselineByIdWithGroup(baselineId) {
+  const id = String(baselineId || "").trim();
+  if (!id) return null;
+  const { data, error } = await supabase
+    .from("global_object_baselines")
+    .select(BASELINE_FULL_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return mapBaselineRow(data);
+}
+
+/**
+ * Phase 2E: per-view axis scores for every row in an object group.
+ * @param {string} objectGroupId
+ * @returns {Promise<Array<Record<string, number>>>}
+ */
+export async function listObjectGroupViewAxisScores(objectGroupId) {
+  const gid = String(objectGroupId || "").trim();
+  if (!gid) return [];
+  const { data, error } = await supabase
+    .from("global_object_baselines")
+    .select("axis_scores_json")
+    .eq("object_group_id", gid);
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((r) => (r && typeof r === "object" ? /** @type {Record<string, unknown>} */ (r).axis_scores_json : null))
+    .filter((a) => a && typeof a === "object" && !Array.isArray(a))
+    .map((a) => /** @type {Record<string, number>} */ (a));
+}
+
+/**
+ * Phase 2E: append a recognized angle as a new view row of an existing object group.
+ * Returns the new row id (or null on failure). Carries the group's locked scores forward.
+ *
+ * @param {object} p
+ * @param {string} p.objectGroupId
+ * @param {string} p.imageSha256
+ * @param {string|null} [p.imagePhash]
+ * @param {number[]|null} [p.imageEmbedding]
+ * @param {string|null} [p.embeddingModel]
+ * @param {string|null} [p.embeddingVersion]
+ * @param {string|null} [p.embeddingDescriptor]
+ * @param {string} p.lane
+ * @param {string} p.objectFamily
+ * @param {Record<string, unknown>} p.objectBaselineJson
+ * @param {Record<string, number>} p.axisScoresJson
+ * @param {string|null} [p.peakPowerKey]
+ * @param {string|null} [p.sourceScanResultV2Id]
+ * @param {string|null} [p.sourceUploadId]
+ * @returns {Promise<{ id: string } | null>}
+ */
+export async function appendObjectGroupAngleView(p) {
+  const sha = String(p?.imageSha256 || "").trim().toLowerCase();
+  const gid = String(p?.objectGroupId || "").trim();
+  if (!/^[0-9a-f]{64}$/.test(sha) || !gid) return null;
+
+  /** @type {Record<string, unknown>} */
+  const row = {
+    image_sha256: sha,
+    image_phash: p.imagePhash != null ? String(p.imagePhash).trim().toLowerCase() || null : null,
+    object_group_id: gid,
+    lane: String(p.lane || "sacred_amulet").trim() || "sacred_amulet",
+    object_family: String(p.objectFamily || "sacred_amulet").trim() || "sacred_amulet",
+    baseline_schema_version: 1,
+    object_baseline_json: p.objectBaselineJson,
+    axis_scores_json: p.axisScoresJson && typeof p.axisScoresJson === "object" ? p.axisScoresJson : null,
+    peak_power_key: p.peakPowerKey != null ? String(p.peakPowerKey).trim() || null : null,
+    source_scan_result_v2_id: p.sourceScanResultV2Id != null ? String(p.sourceScanResultV2Id).trim() || null : null,
+    source_upload_id: p.sourceUploadId != null ? String(p.sourceUploadId).trim() || null : null,
+    confidence: 1,
+  };
+  if (
+    Array.isArray(p.imageEmbedding) &&
+    p.imageEmbedding.length > 0 &&
+    p.imageEmbedding.every((x) => Number.isFinite(Number(x)))
+  ) {
+    row.image_embedding = `[${p.imageEmbedding.map((x) => Number(x)).join(",")}]`;
+    row.embedding_model = p.embeddingModel != null ? String(p.embeddingModel).trim() || null : null;
+    row.embedding_version = p.embeddingVersion != null ? String(p.embeddingVersion).trim() || null : null;
+    row.embedding_descriptor =
+      p.embeddingDescriptor != null ? String(p.embeddingDescriptor).trim().slice(0, 600) || null : null;
+  }
+
+  const { data, error } = await supabase
+    .from("global_object_baselines")
+    .upsert(row, { onConflict: "image_sha256" })
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return data?.id ? { id: String(data.id) } : null;
+}
+
+/**
+ * Phase 2E: lock a group's consolidated scores across all its rows.
+ *
+ * @param {object} p
+ * @param {string} p.objectGroupId
+ * @param {Record<string, number>} p.lockedAxisScores
+ * @param {string|null} p.peakPowerKey
+ * @param {number} p.viewCount
+ * @returns {Promise<void>}
+ */
+export async function lockObjectGroupEnrollment(p) {
+  const gid = String(p?.objectGroupId || "").trim();
+  if (!gid) return;
+  const { error } = await supabase
+    .from("global_object_baselines")
+    .update({
+      is_enrolled: true,
+      view_count: Math.max(1, Math.floor(Number(p.viewCount) || 1)),
+      locked_axis_scores_json: p.lockedAxisScores && typeof p.lockedAxisScores === "object" ? p.lockedAxisScores : null,
+      peak_power_key: p.peakPowerKey != null ? String(p.peakPowerKey).trim() || null : undefined,
+    })
+    .eq("object_group_id", gid);
+  if (error) throw error;
 }
 
 /**

@@ -41,6 +41,7 @@ import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js"
 import { buildReportPayloadFromGlobalBaseline } from "./buildReportPayloadFromGlobalBaseline.service.js";
 import { tryCrossAccountExactBaselineReusePhase2A } from "./tryCrossAccountExactBaselineReuse.service.js";
 import { tryCrossAccountPhashBaselineReusePhase2C } from "./tryCrossAccountPhashBaselineReusePhase2C.service.js";
+import { tryCrossAccountEmbeddingBaselineReuse } from "./tryCrossAccountEmbeddingBaselineReuse.service.js";
 import { extractStableVisualFeatures } from "../stableFeatureExtract.service.js";
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
@@ -131,6 +132,9 @@ export async function processScanJob(workerId, jobRow) {
   /** Hoisted for {@link buildReportPayloadFromScan} + baseline persist (must survive `try/catch` that ends before v2 insert). */
   /** @type {string | null} */
   let stableFeatureSeed = null;
+  /** Raw vision slugs (color/material/form/texture) for angle-robust amulet scoring (feature_blend_v3). */
+  /** @type {{ primaryColor?: string, materialType?: string, formFactor?: string, textureHint?: string } | null} */
+  let stableFeatureFields = null;
 
   console.log(
     JSON.stringify({
@@ -466,6 +470,40 @@ export async function processScanJob(workerId, jobRow) {
           jobIdPrefix: idPrefix8(jobId),
           lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
           message: String(reuse2CErr?.message || reuse2CErr).slice(0, 240),
+          timestamp: scanV2TraceTs(),
+        }),
+      );
+    }
+  }
+
+  if (!baselineCrossAccountReuse) {
+    try {
+      const reuse2D = await tryCrossAccountEmbeddingBaselineReuse({
+        jobId,
+        lineUserId,
+        appUserId: String(appUserId),
+        birthdate,
+        imageBuffer,
+        objectCheck,
+        reportObjectFamily: "sacred_amulet",
+        scanResultIdPrefix: idPrefix8(jobId),
+      });
+      if (reuse2D.ok) {
+        reuseHit = reuse2D;
+        baselineCrossAccountReuse = true;
+        baselineRowForPayload = reuse2D.baselineRow;
+        scanOut = reuse2D.scanOut;
+        stableFeatureSeed = reuse2D.stableFeatureSeed ?? null;
+      }
+    } catch (reuse2DErr) {
+      console.log(
+        JSON.stringify({
+          event: "CROSS_ACCOUNT_BASELINE_FALLBACK_FULL_SCAN",
+          path: "worker-scan",
+          reason: "phase2d_exception",
+          jobIdPrefix: idPrefix8(jobId),
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          message: String(reuse2DErr?.message || reuse2DErr).slice(0, 240),
           timestamp: scanV2TraceTs(),
         }),
       );
@@ -817,6 +855,7 @@ export async function processScanJob(workerId, jobRow) {
           scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
         });
         stableFeatureSeed = stableEx.seed;
+        stableFeatureFields = stableEx.features;
       } catch (stableErr) {
         console.log(
           JSON.stringify({
@@ -912,6 +951,7 @@ export async function processScanJob(workerId, jobRow) {
           geminiCrystalSubtypeResult,
           strictSupportedLane,
           stableFeatureSeed,
+          stableFeatureFields,
         });
       }
     } else {
@@ -943,6 +983,7 @@ export async function processScanJob(workerId, jobRow) {
       geminiCrystalSubtypeResult,
       strictSupportedLane,
       stableFeatureSeed,
+      stableFeatureFields,
     });
     }
 

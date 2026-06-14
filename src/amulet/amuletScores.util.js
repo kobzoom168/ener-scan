@@ -1,11 +1,18 @@
 /**
- * Sacred amulet lane: six-axis power scores (deterministic_v2: object-stable + session drift).
+ * Sacred amulet lane: six-axis power scores.
+ *  - deterministic_v2: legacy hash-seeded (object-stable + session drift) — fallback only.
+ *  - feature_blend_v3: locality-sensitive blend of canonical visual slugs (angle-robust). Preferred.
  */
 import { score10ToEnergyGrade } from "../utils/reports/energyLevelGrade.util.js";
+import {
+  buildAmuletStableSignature,
+  computeAmuletAxisBaseFromFeatures,
+} from "./amuletFeatureProfile.util.js";
 
 /** @typedef {"protection"|"metta"|"baramee"|"luck"|"fortune_anchor"|"specialty"} AmuletPowerKey */
 
 export const AMULET_SCORING_MODE = "deterministic_v2";
+export const AMULET_SCORING_MODE_V3 = "feature_blend_v3";
 
 const POWER_LABEL_THAI = {
   protection: "คุ้มครองป้องกัน",
@@ -169,6 +176,89 @@ export function computeAmuletPowerScoresDeterministicV1(seedKey, opts = {}) {
     primaryPower,
     secondaryPower,
   };
+}
+
+/**
+ * Locality-sensitive six-axis scores from canonical visual features (feature_blend_v3).
+ *
+ * Preferred over {@link computeAmuletPowerScoresDeterministicV1}: the same object across angles
+ * yields near-identical scores because (a) fragile fields are dropped/bucketed and (b) each slug
+ * contributes additively, so a single flipped slug shifts scores by a bounded amount instead of
+ * avalanche-rerolling the whole vector. No per-scan/session jitter → rescans are identical.
+ *
+ * @param {{ primaryColor?: string, materialType?: string, formFactor?: string, textureHint?: string }} features
+ * @param {{ mainEnergyLabel?: string }} [opts]
+ * @returns {{
+ *   scoringMode: typeof AMULET_SCORING_MODE_V3,
+ *   powerCategories: Record<AmuletPowerKey, { key: AmuletPowerKey, score: number, labelThai: string }>,
+ *   primaryPower: AmuletPowerKey,
+ *   secondaryPower: AmuletPowerKey,
+ *   signature: string,
+ * }}
+ */
+export function computeAmuletPowerScoresFromFeaturesV3(features, opts = {}) {
+  const { axes, signature } = computeAmuletAxisBaseFromFeatures(features);
+
+  /** Optional hero/summary alignment nudge (same intent as v1; bounded). */
+  const hint = inferAmuletAxisFromMainEnergyLabel(opts.mainEnergyLabel);
+  if (hint && POWER_ORDER.includes(hint)) {
+    axes[hint] = Math.min(99, axes[hint] + 5 + (fnv1a32(`${signature}|v3|nudge|${hint}`) % 6));
+  }
+
+  const sortedKeys = [...POWER_ORDER].sort((a, b) => {
+    const ds = axes[b] - axes[a];
+    if (ds !== 0) return ds;
+    return POWER_ORDER.indexOf(a) - POWER_ORDER.indexOf(b);
+  });
+
+  /** Guarantee a readable lead between primary and secondary. */
+  if (axes[sortedKeys[0]] - axes[sortedKeys[1]] < 4) {
+    axes[sortedKeys[0]] = Math.min(99, axes[sortedKeys[0]] + 3);
+  }
+
+  /** @type {Record<AmuletPowerKey, { key: AmuletPowerKey, score: number, labelThai: string }>} */
+  const powerCategories = {};
+  for (const k of POWER_ORDER) {
+    powerCategories[k] = { key: k, score: axes[k], labelThai: POWER_LABEL_THAI[k] };
+  }
+
+  return {
+    scoringMode: AMULET_SCORING_MODE_V3,
+    powerCategories,
+    primaryPower: sortedKeys[0],
+    secondaryPower: sortedKeys[1],
+    signature,
+  };
+}
+
+/**
+ * Unified entry: prefer angle-robust feature blend (v3); fall back to legacy hash seed (v2).
+ *
+ * @param {{
+ *   features?: { primaryColor?: string, materialType?: string, formFactor?: string, textureHint?: string }|null,
+ *   seedKey?: string,
+ *   sessionKey?: string,
+ *   mainEnergyLabel?: string,
+ * }} input
+ */
+export function computeAmuletPowerScores(input = {}) {
+  const features = input.features;
+  const hasUsableFeatures =
+    features &&
+    typeof features === "object" &&
+    buildAmuletStableSignature(features) != null;
+
+  if (hasUsableFeatures) {
+    return computeAmuletPowerScoresFromFeaturesV3(features, {
+      mainEnergyLabel: input.mainEnergyLabel,
+    });
+  }
+
+  const scores = computeAmuletPowerScoresDeterministicV1(input.seedKey || "", {
+    sessionKey: input.sessionKey,
+    mainEnergyLabel: input.mainEnergyLabel,
+  });
+  return { ...scores, signature: null };
 }
 
 /**
