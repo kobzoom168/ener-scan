@@ -800,8 +800,18 @@ export const env = {
   /** Loose cosine threshold used to RETRIEVE verifier candidates (recall). Lower than the auto-accept similarity. */
   CROSS_ACCOUNT_BASELINE_EMBEDDING_RECALL_MIN_SIMILARITY: (() => {
     const raw = process.env.CROSS_ACCOUNT_BASELINE_EMBEDDING_RECALL_MIN_SIMILARITY;
-    const n = raw === undefined || raw === "" ? 0.7 : Number(raw);
-    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.7;
+    const n = raw === undefined || raw === "" ? 0.45 : Number(raw);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.45;
+  })(),
+  /**
+   * Recency safety-net: also hand the verifier the N most recently registered baselines (regardless
+   * of embedding similarity). The trait-descriptor embedding is unreliable under crop/zoom, so this
+   * guarantees a just-registered object is actually shown to the agent. 0 disables the net.
+   */
+  OBJECT_SAME_IDENTITY_VERIFIER_RECENT_CANDIDATES: (() => {
+    const raw = process.env.OBJECT_SAME_IDENTITY_VERIFIER_RECENT_CANDIDATES;
+    const n = raw === undefined || raw === "" ? 4 : Number(raw);
+    return Number.isFinite(n) ? Math.min(20, Math.max(0, Math.floor(n))) : 4;
   })(),
   /** Min agent confidence (0–1) required to treat a candidate as the same physical object. */
   OBJECT_SAME_IDENTITY_VERIFIER_MIN_CONFIDENCE: (() => {
@@ -809,11 +819,11 @@ export const env = {
     const n = raw === undefined || raw === "" ? 0.8 : Number(raw);
     return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.8;
   })(),
-  /** Max number of recall candidates the verifier agent will inspect per scan (cost guard). */
+  /** Max number of recall candidates (embedding + recency, deduped) the verifier inspects per scan (cost guard). */
   OBJECT_SAME_IDENTITY_VERIFIER_MAX_CANDIDATES: (() => {
     const raw = process.env.OBJECT_SAME_IDENTITY_VERIFIER_MAX_CANDIDATES;
-    const n = raw === undefined || raw === "" ? 3 : Number(raw);
-    return Number.isFinite(n) ? Math.min(8, Math.max(1, Math.floor(n))) : 3;
+    const n = raw === undefined || raw === "" ? 5 : Number(raw);
+    return Number.isFinite(n) ? Math.min(12, Math.max(1, Math.floor(n))) : 5;
   })(),
   /** Vision model used by the same-object verifier agent. */
   OBJECT_SAME_IDENTITY_VERIFIER_MODEL:

@@ -450,6 +450,32 @@ export async function matchGlobalObjectBaselinesByEmbedding(embedding, opts = {}
 }
 
 /**
+ * Phase 2F: recency safety-net for the verifier agent. Returns the most recently registered
+ * baselines for a lane/family (full rows incl. thumbnail_path), newest first.
+ *
+ * @param {{ lane?: string|null, objectFamily?: string|null, limit?: number }} [opts]
+ * @returns {Promise<GlobalObjectBaselineRow[]>}
+ */
+export async function listRecentGlobalObjectBaselines(opts = {}) {
+  const lim = Math.min(50, Math.max(1, Math.floor(Number(opts.limit) || 6)));
+  let query = supabase
+    .from("global_object_baselines")
+    .select(BASELINE_FULL_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(lim);
+
+  const lane = String(opts.lane || "").trim();
+  const family = String(opts.objectFamily || "").trim();
+  if (lane) query = query.eq("lane", lane);
+  if (family) query = query.eq("object_family", family);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+  return data.map(mapBaselineRow).filter(Boolean);
+}
+
+/**
  * Phase 2E: full row including enrollment columns (post-migration 035 only).
  * @param {string} baselineId
  * @returns {Promise<GlobalObjectBaselineRow | null>}

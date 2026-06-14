@@ -10,10 +10,12 @@ import { env } from "../../config/env.js";
 import {
   findGlobalObjectBaselineByIdWithGroup,
   matchGlobalObjectBaselinesByEmbedding,
+  listRecentGlobalObjectBaselines,
   markGlobalObjectBaselineReused,
 } from "../../stores/scanV2/globalObjectBaselines.db.js";
 import { computeObjectEmbedding } from "../objectEmbedding.service.js";
 import { verifySameObject } from "./objectSameIdentityVerifier.service.js";
+import { mergeVerifierCandidates } from "./objectSameIdentityVerifier.util.js";
 import { enrollRecognizedAngle } from "./enrollObjectAngle.service.js";
 import { computeImageDHash } from "../imageDedup/imagePhash.util.js";
 import { createScanUploadBucketSignedUrl } from "../../utils/storage/scanUploadStorageSignedUrl.util.js";
@@ -48,6 +50,7 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
   const matchByEmbedding = deps.matchGlobalObjectBaselinesByEmbedding || matchGlobalObjectBaselinesByEmbedding;
   const findById = deps.findGlobalObjectBaselineByIdWithGroup || findGlobalObjectBaselineByIdWithGroup;
   const verifySame = deps.verifySameObject || verifySameObject;
+  const listRecent = deps.listRecentGlobalObjectBaselines || listRecentGlobalObjectBaselines;
   const resolveCandidateImageUrl =
     deps.resolveCandidateImageUrl || ((path) => createScanUploadBucketSignedUrl(path, 600));
   const enrollAngle = deps.enrollRecognizedAngle || enrollRecognizedAngle;
@@ -97,39 +100,80 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
       ? env.OBJECT_SAME_IDENTITY_VERIFIER_MAX_CANDIDATES
       : 5;
 
-    const candidates = await matchByEmbedding(embedding, {
+    const embeddingCandidates = await matchByEmbedding(embedding, {
       lane: "sacred_amulet",
       objectFamily: "sacred_amulet",
       minSimilarity: recallMin,
       matchCount,
     });
-    if (!Array.isArray(candidates) || !candidates.length) {
-      log(
-        JSON.stringify({
-          event: "CROSS_ACCOUNT_BASELINE_EMBEDDING_REUSE_SKIPPED",
-          path: "worker-scan",
-          reason: "no_candidates",
-          jobIdPrefix: idPrefix8(ctx.jobId),
-          lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
-          minSimilarity: recallMin,
-          verifierEnabled,
-          timestamp: scanV2TraceTs(),
-        }),
-      );
-      return { ok: false };
-    }
 
-    /** @type {(typeof candidates)[number] | null} */
+    /** @type {Record<string, unknown> & { id: string, similarity: number } | null} */
     let candidate = null;
     /** @type {{ same: boolean, confidence: number, reason: string } | null} */
     let verifierVerdict = null;
 
     if (!verifierEnabled) {
-      candidate = candidates[0];
+      if (!Array.isArray(embeddingCandidates) || !embeddingCandidates.length) {
+        log(
+          JSON.stringify({
+            event: "CROSS_ACCOUNT_BASELINE_EMBEDDING_REUSE_SKIPPED",
+            path: "worker-scan",
+            reason: "no_candidates",
+            jobIdPrefix: idPrefix8(ctx.jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
+            minSimilarity: recallMin,
+            verifierEnabled,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        return { ok: false };
+      }
+      candidate = embeddingCandidates[0];
     } else {
+      /**
+       * Recency safety-net: the trait-descriptor embedding drifts under crop/zoom and can fail to
+       * retrieve the true object, so also hand the agent the most recently registered baselines.
+       */
+      let recentCandidates = [];
+      const recentLimit = env.OBJECT_SAME_IDENTITY_VERIFIER_RECENT_CANDIDATES;
+      if (recentLimit > 0) {
+        try {
+          recentCandidates = await listRecent({
+            lane: "sacred_amulet",
+            objectFamily: "sacred_amulet",
+            limit: recentLimit,
+          });
+        } catch {
+          recentCandidates = [];
+        }
+      }
+
+      const pool = mergeVerifierCandidates(
+        Array.isArray(embeddingCandidates) ? embeddingCandidates : [],
+        recentCandidates,
+        env.OBJECT_SAME_IDENTITY_VERIFIER_MAX_CANDIDATES,
+      );
+
+      if (!pool.length) {
+        log(
+          JSON.stringify({
+            event: "CROSS_ACCOUNT_BASELINE_EMBEDDING_REUSE_SKIPPED",
+            path: "worker-scan",
+            reason: "no_candidates",
+            jobIdPrefix: idPrefix8(ctx.jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
+            minSimilarity: recallMin,
+            verifierEnabled,
+            recentLimit,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        return { ok: false };
+      }
+
       const newImageBase64 = ctx.imageBuffer.toString("base64");
       const minConfidence = env.OBJECT_SAME_IDENTITY_VERIFIER_MIN_CONFIDENCE;
-      for (const cand of candidates) {
+      for (const cand of pool) {
         let candUrl = "";
         try {
           candUrl = String((await resolveCandidateImageUrl(cand.thumbnailPath)) || "").trim();
@@ -151,6 +195,7 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
             path: "worker-scan",
             jobIdPrefix: idPrefix8(ctx.jobId),
             candidateIdPrefix: String(cand.id).slice(0, 8),
+            recallSource: String(cand.recallSource || "embedding"),
             similarity: Number(cand.similarity).toFixed(4),
             same: verdict.same === true,
             confidence: Number(verdict.confidence).toFixed(3),
@@ -174,8 +219,7 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
             reason: "verifier_rejected_all",
             jobIdPrefix: idPrefix8(ctx.jobId),
             lineUserIdPrefix: lineUserIdPrefix8(ctx.lineUserId),
-            candidateCount: candidates.length,
-            topSimilarity: Number(candidates[0].similarity).toFixed(4),
+            candidateCount: pool.length,
             minConfidence,
             timestamp: scanV2TraceTs(),
           }),

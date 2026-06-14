@@ -32,6 +32,41 @@ export function parseSameObjectVerdict(raw) {
 }
 
 /**
+ * Build the ordered, deduped candidate pool the verifier will inspect: embedding nearest-neighbors
+ * first (most semantically similar), then recency-net rows not already present. Capped at `maxCount`.
+ * Each entry is tagged with `recallSource` ("embedding" | "recent") for telemetry.
+ *
+ * @param {Array<{ id?: unknown, similarity?: unknown }>} embeddingCandidates — sorted by similarity desc
+ * @param {Array<{ id?: unknown }>} recentCandidates — sorted by recency desc
+ * @param {number} maxCount
+ * @returns {Array<Record<string, unknown> & { id: string, similarity: number, recallSource: string }>}
+ */
+export function mergeVerifierCandidates(embeddingCandidates, recentCandidates, maxCount) {
+  const max = Number.isFinite(Number(maxCount)) ? Math.max(1, Math.floor(Number(maxCount))) : 5;
+  /** @type {Array<Record<string, unknown> & { id: string, similarity: number, recallSource: string }>} */
+  const out = [];
+  const seen = new Set();
+
+  const push = (c, source) => {
+    const id = c && typeof c === "object" && c.id != null ? String(c.id).trim() : "";
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const sim = Number(/** @type {{ similarity?: unknown }} */ (c).similarity);
+    out.push({ ...c, id, similarity: Number.isFinite(sim) ? sim : 0, recallSource: source });
+  };
+
+  for (const c of Array.isArray(embeddingCandidates) ? embeddingCandidates : []) {
+    if (out.length >= max) return out;
+    push(c, "embedding");
+  }
+  for (const c of Array.isArray(recentCandidates) ? recentCandidates : []) {
+    if (out.length >= max) return out;
+    push(c, "recent");
+  }
+  return out;
+}
+
+/**
  * Decide whether a verdict is strong enough to treat two images as the same physical object.
  *
  * @param {{ same?: boolean, confidence?: number } | null | undefined} verdict

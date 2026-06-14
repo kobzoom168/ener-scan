@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   parseSameObjectVerdict,
   isSameObjectAccepted,
+  mergeVerifierCandidates,
 } from "../../src/services/scanV2/objectSameIdentityVerifier.util.js";
 
 test("parseSameObjectVerdict: clean JSON same=true", () => {
@@ -48,4 +49,28 @@ test("isSameObjectAccepted: requires same=true AND confidence >= min", () => {
   assert.equal(isSameObjectAccepted({ same: false, confidence: 0.99 }, 0.8), false);
   assert.equal(isSameObjectAccepted(null, 0.8), false);
   assert.equal(isSameObjectAccepted({ same: true }, 0.8), false);
+});
+
+test("mergeVerifierCandidates: embedding first, recency appended, deduped, capped", () => {
+  const emb = [
+    { id: "a", similarity: 0.9 },
+    { id: "b", similarity: 0.8 },
+  ];
+  const recent = [{ id: "b" }, { id: "c" }, { id: "d" }];
+  const out = mergeVerifierCandidates(emb, recent, 3);
+  assert.deepEqual(out.map((c) => c.id), ["a", "b", "c"]);
+  assert.equal(out[0].recallSource, "embedding");
+  assert.equal(out[2].recallSource, "recent");
+  assert.equal(out[2].similarity, 0); // recent-only has no similarity
+});
+
+test("mergeVerifierCandidates: handles empty embedding (recency-only)", () => {
+  const out = mergeVerifierCandidates([], [{ id: "x" }, { id: "y" }], 5);
+  assert.deepEqual(out.map((c) => c.id), ["x", "y"]);
+  assert.equal(out[0].recallSource, "recent");
+});
+
+test("mergeVerifierCandidates: drops blank ids and dedups within a source", () => {
+  const out = mergeVerifierCandidates([{ id: "a" }, { id: "" }, { id: "a" }], [], 5);
+  assert.deepEqual(out.map((c) => c.id), ["a"]);
 });
