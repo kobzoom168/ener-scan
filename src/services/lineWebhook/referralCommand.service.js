@@ -53,6 +53,20 @@ export function buildMyCodeReply(code, credits) {
 }
 
 /**
+ * Short "invite a friend" promo appended to the free-quota paywall so users who
+ * just hit the daily limit learn they can earn free scans instead of paying.
+ * @param {string} code
+ * @returns {string}
+ */
+export function buildReferralPaywallPromoBlock(code) {
+  return [
+    "หรือชวนเพื่อนก็ได้ครับ 🙏",
+    "เพื่อนสแกนครั้งแรกด้วยโค้ดนี้ ได้สแกนเพิ่มฟรีทั้งคู่เลย",
+    `โค้ดของคุณ: ${code}`,
+  ].join("\n");
+}
+
+/**
  * @param {{ ok: boolean, reason: string }} res
  * @returns {string}
  */

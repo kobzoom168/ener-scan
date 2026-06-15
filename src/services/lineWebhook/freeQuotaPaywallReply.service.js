@@ -5,10 +5,13 @@
  * @module freeQuotaPaywallReply.service
  */
 
+import { env } from "../../config/env.js";
 import { loadActiveScanOffer } from "../scanOffer.loader.js";
 import { getDefaultPackage } from "../scanOffer.packages.js";
 import { sendNonScanReply } from "../nonScanReply.gateway.js";
 import { lineStickerPaymentSupportMessage } from "../../utils/lineStickerMessage.util.js";
+import { ensureReferralForLineUser } from "../referral.service.js";
+import { buildReferralPaywallPromoBlock } from "./referralCommand.service.js";
 import {
   buildDeterministicFreeQuotaExhaustedPaywallText,
   getDeterministicFreeQuotaExhaustedPaywallAlternateTexts,
@@ -39,14 +42,37 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
   const uid = String(userId || "").trim();
   const offer = loadActiveScanOffer();
   const pkg = getDefaultPackage(offer);
-  const primary = buildDeterministicFreeQuotaExhaustedPaywallText(offer, {
+  let primary = buildDeterministicFreeQuotaExhaustedPaywallText(offer, {
     lineUserId: uid,
   });
   const primaryFirstLine = primary.split("\n")[0] || "";
-  const alternates = getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(offer, {
+  let alternates = getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(offer, {
     lineUserId: uid,
     primaryFirstLine,
   });
+
+  // Share-to-earn: at the limit moment, offer free scans via invites instead of
+  // (or before) paying. Best-effort + behind ENABLE_REFERRAL → never blocks the paywall.
+  let referralPromoAppended = false;
+  if (env.ENABLE_REFERRAL && uid) {
+    try {
+      const { code } = await ensureReferralForLineUser(uid);
+      if (code) {
+        const promo = `\n\n${buildReferralPaywallPromoBlock(code)}`;
+        primary += promo;
+        alternates = alternates.map((t) => `${t}${promo}`);
+        referralPromoAppended = true;
+      }
+    } catch (referralErr) {
+      console.warn(
+        JSON.stringify({
+          event: "PAYWALL_REFERRAL_PROMO_SKIP",
+          userId: uid,
+          message: referralErr?.message,
+        }),
+      );
+    }
+  }
 
   const replyType = "free_quota_exhausted_deterministic";
   const semanticKey = `scan_offer:${replyType}:v${offer.configVersion}`;
@@ -72,6 +98,7 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
       freeUsedToday: accessDecision?.usedScans ?? null,
       replyType,
       semanticKey,
+      referralPromoAppended,
     }),
   );
 

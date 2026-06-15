@@ -12,6 +12,7 @@ import { mapAccessDecisionToSource } from "../src/services/scanV2/mapAccessSourc
 import {
   buildMyCodeReply,
   buildRedeemReply,
+  buildReferralPaywallPromoBlock,
 } from "../src/services/lineWebhook/referralCommand.service.js";
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,13 @@ test("buildMyCodeReply: omits credits line when 0", () => {
   const t = buildMyCodeReply("EN-7KMQ9P", 0);
   assert.ok(t.includes("EN-7KMQ9P"));
   assert.ok(!t.includes("สะสม"));
+});
+
+test("buildReferralPaywallPromoBlock: shows code + invite framing", () => {
+  const t = buildReferralPaywallPromoBlock("EN-7KMQ9P");
+  assert.ok(t.includes("EN-7KMQ9P"));
+  assert.ok(t.includes("ชวนเพื่อน"));
+  assert.ok(t.includes("ฟรี"));
 });
 
 test("buildRedeemReply: distinct copy per outcome", () => {
