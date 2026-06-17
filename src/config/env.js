@@ -769,22 +769,6 @@ export const env = {
     "true",
 
   /**
-   * Share-to-earn referral (master switch — default off). When off, no referral
-   * code/credit logic runs and the scan gate behaves exactly as before.
-   */
-  ENABLE_REFERRAL:
-    String(process.env.ENABLE_REFERRAL ?? "false").trim().toLowerCase() === "true",
-  /** Bonus scan credits granted to the referrer when a referee completes their first scan. */
-  REFERRAL_REFERRER_BONUS: (() => {
-    const n = Number(process.env.REFERRAL_REFERRER_BONUS);
-    return Number.isFinite(n) ? Math.min(20, Math.max(0, Math.floor(n))) : 2;
-  })(),
-  /** Bonus scan credits granted to the referee when they complete their first scan. */
-  REFERRAL_REFEREE_BONUS: (() => {
-    const n = Number(process.env.REFERRAL_REFEREE_BONUS);
-    return Number.isFinite(n) ? Math.min(20, Math.max(0, Math.floor(n))) : 2;
-  })(),
-  /**
    * Phase 2C: maximum Hamming distance for pHash reuse (0 = visual-exact only).
    * Default 0 for safety; increase only after validating staging results.
    */
