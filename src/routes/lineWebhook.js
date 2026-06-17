@@ -2199,6 +2199,15 @@ async function finalizeAcceptedImage({
       // means the user already had at least one failed attempt on this payment.
       const priorSlipVerifyStatus = await getSlipVerifyStatusByPaymentId(paymentId);
       const isRepeatSlipFailure = priorSlipVerifyStatus === "manual_review";
+      if (isRepeatSlipFailure) {
+        console.log(
+          JSON.stringify({
+            event: "SLIP_RESEND_VERIFY_STARTED",
+            paymentId,
+            lineUserIdPrefix: String(userId || "").slice(0, 8),
+          }),
+        );
+      }
 
       const approvalFlow = await runSlipAutoApprovalAfterGateAccept({
         userId,
@@ -2288,7 +2297,6 @@ async function finalizeAcceptedImage({
 
       if (approvalFlow.mode === "manual_review") {
         if (isRepeatSlipFailure) {
-          // Second (or later) failed attempt on this payment → escalate to admin.
           void maybeNotifyAdminSlipPendingVerify({
             client,
             lineUserId: userId,
@@ -2303,6 +2311,7 @@ async function finalizeAcceptedImage({
               paymentId,
               lineUserIdPrefix: String(userId || "").slice(0, 8),
               reasons: approvalFlow.reasons,
+              isResend: true,
             }),
           );
           await sendNonScanReply({
@@ -2319,8 +2328,6 @@ async function finalizeAcceptedImage({
           return;
         }
 
-        // First failed attempt → ask the user to resend a correct slip; don't
-        // notify the admin yet.
         const reasonSet = new Set(approvalFlow.reasons || []);
         let hint = "";
         if (reasonSet.has("amount_mismatch") || reasonSet.has("missing_amount")) {
