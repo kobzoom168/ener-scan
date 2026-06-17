@@ -29,7 +29,11 @@ Prioritize these labels/keywords when present on Thai slips:
 Always return transferredAtText if you can see any date/time text, even if transferredAtIso is null.
 Use Asia/Bangkok timezone.
 Convert Buddhist Era years to Common Era.
-If datetime cannot be parsed confidently, set transferredAtIso to null.`;
+If datetime cannot be parsed confidently, set transferredAtIso to null.
+Return a JSON object using EXACTLY these key names (do not rename them):
+amount, currency, transferredAtText, transferredAtIso, receiverName, receiverAccountLast4, receiverPromptPay, senderName, bankName, slipRef, confidence, rawText.
+slipRef is the transaction id / reference (e.g. เลขที่รายการ or รหัสอ้างอิง). Put the full readable text into rawText.
+confidence MUST be a number between 0 and 1 (e.g. 0.95) — never null.`;
 
 /**
  * @param {string} text
@@ -222,19 +226,45 @@ export function normalizeSlipOcrResult(parsedRaw) {
       : {};
   const transferredAtText = cleanText(p.transferredAtText);
   const transferredAtIsoRaw = normalizeIso(p.transferredAtIso);
+  // The vision model frequently drifts the JSON key names (e.g. "slipReference"
+  // instead of "slipRef", "rawImportantText" instead of "rawText"). Accept the
+  // common aliases so a correctly-read slip isn't dropped as "missing_*".
+  const slipRefRaw =
+    p.slipRef ??
+    p.slipReference ??
+    p.reference ??
+    p.referenceNo ??
+    p.referenceNumber ??
+    p.transactionId ??
+    p.transactionRef ??
+    p.refNo ??
+    p.ref ??
+    null;
+  const rawTextRaw =
+    p.rawText ?? p.rawImportantText ?? p.raw_text ?? p.importantText ?? p.text ?? "";
+  const last4Raw =
+    p.receiverAccountLast4 ??
+    p.receiverAccountLast4Digits ??
+    p.receiverLast4 ??
+    p.receiverAccountLastFour ??
+    null;
+  // Some responses return receiverPromptPay as a boolean (true) — that's noise,
+  // not a number. Only keep a string PromptPay value.
+  const promptPayRaw =
+    typeof p.receiverPromptPay === "string" ? p.receiverPromptPay : null;
   return {
     amount: toAmount(p.amount),
     currency: String(p.currency || "").trim().toUpperCase() === "THB" ? "THB" : null,
     transferredAtText,
     transferredAtIso: transferredAtIsoRaw || parseThaiDateTextToIso(transferredAtText),
     receiverName: cleanText(p.receiverName),
-    receiverAccountLast4: normalizeLast4(p.receiverAccountLast4),
-    receiverPromptPay: cleanText(p.receiverPromptPay),
+    receiverAccountLast4: normalizeLast4(last4Raw),
+    receiverPromptPay: cleanText(promptPayRaw),
     senderName: cleanText(p.senderName),
     bankName: cleanText(p.bankName),
-    slipRef: cleanText(p.slipRef),
+    slipRef: cleanText(slipRefRaw),
     confidence: normalizeConfidence(p.confidence),
-    rawText: String(p.rawText || "").trim().slice(0, 4000),
+    rawText: String(rawTextRaw || "").trim().slice(0, 4000),
   };
 }
 

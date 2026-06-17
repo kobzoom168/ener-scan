@@ -19,6 +19,27 @@ test("normalizeSlipOcrResult: parse Thai BE transferredAtText", () => {
   assert.equal(out.confidence, 0.9);
 });
 
+test("normalizeSlipOcrResult: accepts model key aliases (slipReference/rawImportantText/last4Digits)", () => {
+  const out = normalizeSlipOcrResult({
+    amount: 49.0,
+    currency: "บาท",
+    transferredAtText: "17 พ.ค. 69 22:23 น.",
+    transferredAtIso: "2026-05-17T22:23:00+07:00",
+    receiverName: "นาย ธนริศย์ อภิโชคจิรศิลป์",
+    receiverAccountLast4Digits: "0981",
+    receiverPromptPay: true,
+    slipReference: "016137222337ATF08857",
+    confidence: 0.95,
+    rawImportantText: "โอนเงินสำเร็จ ... เลขที่รายการ: 016137222337ATF08857",
+  });
+  assert.equal(out.slipRef, "016137222337ATF08857");
+  assert.equal(out.receiverAccountLast4, "0981");
+  // boolean PromptPay must be dropped, not stored as "true"
+  assert.equal(out.receiverPromptPay, null);
+  assert.ok(out.rawText.includes("เลขที่รายการ"));
+  assert.equal(out.confidence, 0.95);
+});
+
 test("extractSlipOcrFromImage: parse JSON output_text", async () => {
   const fake = async () => ({
     output_text:
