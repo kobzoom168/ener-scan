@@ -486,6 +486,35 @@ export async function updatePaymentSlipVerificationFields(paymentId, patch = {})
   return true;
 }
 
+/**
+ * Current slip verification status for a payment (reflects the previous slip
+ * attempt before a new auto-approval run overwrites it). Used to tell a first
+ * failed attempt apart from a repeat one. Non-fatal: returns null on any error.
+ * @param {string} paymentId
+ * @returns {Promise<string|null>}
+ */
+export async function getSlipVerifyStatusByPaymentId(paymentId) {
+  const id = String(paymentId || "").trim();
+  if (!id) return null;
+  try {
+    const { data, error } = await supabase
+      .from("payments")
+      .select("slip_verify_status")
+      .eq("id", id)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    const status = data?.slip_verify_status;
+    return status ? String(status).trim().toLowerCase() : null;
+  } catch (e) {
+    console.error("[PAYMENTS_DB] getSlipVerifyStatusByPaymentId failed (ignored):", {
+      paymentId: id,
+      message: e?.message,
+    });
+    return null;
+  }
+}
+
 export async function getPaymentsPendingVerifyForAdmin({
   limit = 50,
 } = {}) {

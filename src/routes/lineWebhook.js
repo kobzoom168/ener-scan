@@ -89,6 +89,7 @@ import {
   createPaymentPending,
   ensurePaymentRefForPaymentId,
   getLatestAwaitingPaymentForLineUserId,
+  getSlipVerifyStatusByPaymentId,
   markPaymentApprovedAndUnlock,
   setPaymentSlipPendingVerify,
   updatePaymentSlipVerificationFields,
@@ -2193,6 +2194,12 @@ async function finalizeAcceptedImage({
         reason: "slip_uploaded_set_pending_verify",
       });
 
+      // Tell a first failed slip apart from a repeat attempt: read the prior
+      // verification status before this run overwrites it. A prior "manual_review"
+      // means the user already had at least one failed attempt on this payment.
+      const priorSlipVerifyStatus = await getSlipVerifyStatusByPaymentId(paymentId);
+      const isRepeatSlipFailure = priorSlipVerifyStatus === "manual_review";
+
       const approvalFlow = await runSlipAutoApprovalAfterGateAccept({
         userId,
         paymentId,
@@ -2271,35 +2278,96 @@ async function finalizeAcceptedImage({
         return;
       }
 
+      clearPaymentState(userId);
+      markAcceptedImageEvent(userId, eventTimestamp);
+      clearLatestScanJob(userId);
+
+      const adminNotifyPackageKey = pendingPayment?.package_code
+        ? String(pendingPayment.package_code).trim()
+        : undefined;
+
+      if (approvalFlow.mode === "manual_review") {
+        if (isRepeatSlipFailure) {
+          // Second (or later) failed attempt on this payment → escalate to admin.
+          void maybeNotifyAdminSlipPendingVerify({
+            client,
+            lineUserId: userId,
+            paymentId,
+            paymentRef: slipPaymentRef,
+            packageKey: adminNotifyPackageKey,
+            slipUrl,
+          });
+          console.log(
+            JSON.stringify({
+              event: "SLIP_AUTO_APPROVE_ESCALATED_TO_ADMIN",
+              paymentId,
+              lineUserIdPrefix: String(userId || "").slice(0, 8),
+              reasons: approvalFlow.reasons,
+            }),
+          );
+          await sendNonScanReply({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: "slip_manual_review",
+            semanticKey: "slip_manual_review",
+            text: "ได้รับสลิปแล้วครับ\n\nระบบยังตรวจสอบอัตโนมัติไม่ผ่าน\nเดี๋ยวอาจารย์ตรวจสอบให้เอง แล้วจะแจ้งกลับในแชตนี้ครับ",
+            alternateTexts: [
+              "รับสลิปแล้วครับ เดี๋ยวอาจารย์ช่วยตรวจสอบให้นะครับ",
+            ],
+          });
+          return;
+        }
+
+        // First failed attempt → ask the user to resend a correct slip; don't
+        // notify the admin yet.
+        const reasonSet = new Set(approvalFlow.reasons || []);
+        let hint = "";
+        if (reasonSet.has("amount_mismatch") || reasonSet.has("missing_amount")) {
+          hint = "ยอดเงินในสลิปไม่ตรงกับที่ต้องชำระ";
+        } else if (reasonSet.has("duplicate_slip_ref")) {
+          hint = "สลิปนี้เคยถูกใช้ไปแล้ว";
+        } else if (
+          reasonSet.has("transfer_too_old") ||
+          reasonSet.has("transfer_before_payment_created")
+        ) {
+          hint = "สลิปนี้เป็นการโอนเก่า/คนละรายการ";
+        } else if (
+          reasonSet.has("receiver_mismatch") ||
+          reasonSet.has("missing_receiver")
+        ) {
+          hint = "ชื่อบัญชีผู้รับเงินไม่ตรง";
+        }
+        console.log(
+          JSON.stringify({
+            event: "SLIP_AUTO_APPROVE_RETRY_REQUESTED",
+            paymentId,
+            lineUserIdPrefix: String(userId || "").slice(0, 8),
+            reasons: approvalFlow.reasons,
+          }),
+        );
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "slip_retry_request",
+          semanticKey: "slip_retry_request",
+          text: `ขออภัยครับ ระบบตรวจสลิปนี้ยังไม่ผ่าน${hint ? `\n(${hint})` : ""}\n\nรบกวนส่ง "สลิปการโอนล่าสุดที่ถูกต้อง" ของรายการนี้เข้ามาใหม่อีกครั้งนะครับ\nถ้าส่งใหม่แล้วยังไม่ผ่าน เดี๋ยวอาจารย์จะมาช่วยตรวจสอบให้เองครับ`,
+          alternateTexts: [
+            "สลิปยังไม่ผ่านการตรวจครับ รบกวนส่งสลิปโอนล่าสุดที่ถูกต้องอีกครั้งนะครับ",
+          ],
+        });
+        return;
+      }
+
       void maybeNotifyAdminSlipPendingVerify({
         client,
         lineUserId: userId,
         paymentId,
         paymentRef: slipPaymentRef,
-        packageKey: pendingPayment?.package_code
-          ? String(pendingPayment.package_code).trim()
-          : undefined,
+        packageKey: adminNotifyPackageKey,
         slipUrl,
       });
-
-      clearPaymentState(userId);
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-
-      if (approvalFlow.mode === "manual_review") {
-        await sendNonScanReply({
-          client,
-          userId,
-          replyToken: event.replyToken,
-          replyType: "slip_manual_review",
-          semanticKey: "slip_manual_review",
-          text: "ได้รับสลิปแล้วครับ\n\nระบบอ่านข้อมูลบางส่วนยังไม่ชัดเจน\nเดี๋ยวอาจารย์ตรวจสอบให้ก่อน แล้วจะแจ้งกลับในแชตนี้ครับ",
-          alternateTexts: [
-            "รับสลิปแล้วครับ ตอนนี้อยู่ระหว่างรอตรวจสอบเพิ่มเติม",
-          ],
-        });
-        return;
-      }
 
       await sendNonScanReply({
         client,
