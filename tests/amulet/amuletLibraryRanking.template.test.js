@@ -73,6 +73,8 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   );
   assert.ok(html.includes("แพ็กเก็บพื้นที่แบบจ่ายเงินจะเปิดให้บริการภายหลัง"));
   assert.ok(html.includes('content="noindex,nofollow"'));
+  assert.ok(html.includes("amulet-subpage-dark"));
+  assert.ok(html.includes("prefers-color-scheme: dark"));
   assert.ok(html.includes("แรงสุดโดยรวม"));
   assert.ok(html.includes("เข้ากับคุณที่สุด"));
   assert.ok(html.includes("โชคลาภสูงสุด"));

@@ -5,6 +5,10 @@ import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { resolveSacredAmuletTimingForEnergyPage } from "../../utils/reports/sacredAmuletTimingEnrich.util.js";
 import { TIMING_HOUR_WINDOWS } from "../../config/timing/timingWindows.config.js";
 import { TIMING_WEEKDAY_LABEL_TH } from "../../config/timing/timingWeekdayAffinity.config.js";
+import {
+  amuletSubpageAutoDarkScriptHtml,
+  buildAmuletSubpageDarkThemeCss,
+} from "../../utils/reports/amuletSubpageTheme.util.js";
 
 /** Sunday-first — แกนเรดาร์ (สั้น) */
 const WEEKDAY_RADAR_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -190,7 +194,7 @@ function buildFormulaDonutBlock() {
     <div class="aet-donut-wrap">
       <svg class="aet-donut-svg" viewBox="0 0 160 160" width="160" height="160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="สัดส่วนปัจจัยในสูตร (แบ่งเท่า ๆ กันเชิงอธิบาย)">
         ${paths}
-        <circle cx="${cx}" cy="${cy}" r="${r0 - 2}" fill="#fffdf9"/>
+        <circle cx="${cx}" cy="${cy}" r="${r0 - 2}" fill="var(--aet-donut-hole)"/>
       </svg>
     </div>
     <ol class="aet-donut-legend">${legendItems}</ol>
@@ -532,6 +536,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
   const docTitle = "วิธีคำนวณจังหวะเสริมพลัง · Ener Scan";
 
   return `<!DOCTYPE html>
+${amuletSubpageAutoDarkScriptHtml()}
 <html lang="th">
 <head>
   <meta charset="utf-8"/>
@@ -543,18 +548,44 @@ export function renderAmuletEnergyTimingHtml(payload) {
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --aet-bg: #ffffff;
-      --aet-surface: linear-gradient(180deg, #f9f7f3 0%, #f4f1ea 100%);
+      color-scheme: light;
+      --aet-bg: #f6f6f4;
+      --aet-surface: #fcfcfa;
+      --aet-elevated: #fffefb;
       --aet-border: rgba(180, 140, 40, 0.18);
       --aet-border-active: rgba(180, 140, 40, 0.32);
-      --aet-gold: #a07800;
-      --aet-gold-soft: rgba(140, 100, 20, 0.7);
-      --aet-text: #1a1610;
-      --aet-body: #3d3320;
-      --aet-muted: #7a6b4e;
-      --aet-subtitle: #4a3f28;
+      --aet-gold: #b8871b;
+      --aet-gold-soft: #8f6710;
+      --aet-text: #241c12;
+      --aet-body: rgba(36, 28, 18, 0.92);
+      --aet-muted: #7a6a58;
+      --aet-subtitle: rgba(36, 28, 18, 0.82);
       --aet-chip-bg: rgba(200, 155, 30, 0.08);
       --aet-chip-border: rgba(180, 140, 40, 0.22);
+      --aet-panel-bg: linear-gradient(180deg, #fffdf7 0%, #fdf8ee 100%);
+      --aet-guide-bg: linear-gradient(180deg, #faf8f2 0%, #f5f1e6 100%);
+      --aet-btn-text: #1a1610;
+      --aet-shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
+      --aet-divider: #ede8dd;
+      --aet-score-high: #fdf3dc;
+      --aet-score-mid: #f2f7ec;
+      --aet-score-low: #f5f5f5;
+      --aet-score-none: #f0f0f0;
+      --aet-pill-bg: #fdf8ee;
+      --aet-note-bg: #f9f7f2;
+      --aet-donut-hole: #fffdf9;
+    }
+    ${buildAmuletSubpageDarkThemeCss("aet")}
+    html.amulet-subpage-dark {
+      --aet-border-active: rgba(232, 197, 71, 0.32);
+      --aet-divider: rgba(148, 163, 184, 0.22);
+      --aet-score-high: rgba(232, 197, 71, 0.18);
+      --aet-score-mid: rgba(110, 231, 160, 0.12);
+      --aet-score-low: rgba(148, 163, 184, 0.12);
+      --aet-score-none: rgba(148, 163, 184, 0.08);
+      --aet-pill-bg: #151820;
+      --aet-note-bg: #151820;
+      --aet-donut-hole: #13151c;
     }
     * { box-sizing: border-box; }
     body {
@@ -580,9 +611,9 @@ export function renderAmuletEnergyTimingHtml(payload) {
       margin: 0 0 1rem;
       padding: 1rem 1rem 1.05rem;
       border-radius: 20px;
-      border: 1px solid rgba(180, 140, 40, 0.18);
-      background: linear-gradient(180deg, #fffdf7 0%, #fdf8ee 100%);
-      box-shadow: 0 4px 18px rgba(0,0,0,0.07);
+      border: 1px solid var(--aet-border);
+      background: var(--aet-panel-bg);
+      box-shadow: var(--aet-shadow);
     }
     .aet-eyebrow {
       margin: 0 0 0.28rem;
@@ -636,7 +667,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
     .aet-muted { color: var(--aet-muted); font-size: 0.92rem; }
     .aet-section { margin-bottom: 1.2rem; }
     .aet-card {
-      background: #ffffff;
+      background: var(--aet-surface);
       border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 18px;
       padding: 1rem 1rem 1.05rem;
@@ -653,7 +684,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
     }
     .aet-hero-row {
       padding: 0.62rem 0.78rem;
-      border-bottom: 1px solid #ede8dd;
+      border-bottom: 1px solid var(--aet-divider);
     }
     .aet-hero-row--last { border-bottom: none; }
     .aet-hero-row .aet-hero-k {
@@ -683,7 +714,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
     }
     .aet-b-box {
       position: relative;
-      background: #ffffff;
+      background: var(--aet-surface);
       border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 14px;
       padding: 0.82rem 2.1rem 0.82rem 0.9rem;
@@ -709,7 +740,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
     .aet-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 0.35rem; }
     .aet-rank-list--mobile { display: grid; gap: 0.55rem; margin-top: 0.4rem; }
     .aet-rank-card {
-      background: #ffffff;
+      background: var(--aet-surface);
       border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 13px;
       padding: 0.62rem 0.7rem;
@@ -717,7 +748,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
     }
     .aet-rank-card.is-top {
       border-color: var(--aet-border-active);
-      background: #fdf8ee;
+      background: var(--aet-pill-bg);
     }
     .aet-rank-head { display: flex; align-items: center; gap: 0.45rem; }
     .aet-rank-n { font-size: 0.72rem; color: var(--aet-gold-soft); font-weight: 700; letter-spacing: 0.08em; }
@@ -732,27 +763,27 @@ export function renderAmuletEnergyTimingHtml(payload) {
       display: inline-block;
     }
     .aet-score-pill--t80 {
-      background: #fdf3dc;
+      background: var(--aet-score-high);
       border: 1px solid #c8971e;
       color: #a07000;
     }
     .aet-score-pill--t60 {
-      background: #f2f7ec;
+      background: var(--aet-score-mid);
       border: 1px solid #7a9e4e;
       color: #4a7020;
     }
     .aet-score-pill--t40 {
-      background: #f5f5f5;
+      background: var(--aet-score-low);
       border: 1px solid #9e9e9e;
       color: #666;
     }
     .aet-score-pill--tlt40 {
-      background: #f0f0f0;
+      background: var(--aet-score-none);
       border: 1px solid #c5c5c5;
       color: #999;
     }
     .aet-score-pill--na {
-      background: #f5f5f5;
+      background: var(--aet-score-low);
       border: 1px solid #c5c5c5;
       color: #999;
     }
@@ -765,13 +796,13 @@ export function renderAmuletEnergyTimingHtml(payload) {
       font-size: 0.68rem;
       font-weight: 700;
       color: #a07000;
-      background: #fdf3dc;
+      background: var(--aet-score-high);
       border: 1px solid #c8971e;
     }
     .aet-mini-bar-track {
       height: 4px;
       border-radius: 999px;
-      background: #ede8dd;
+      background: var(--aet-divider);
       margin-top: 0.38rem;
       overflow: hidden;
       max-width: 100%;
@@ -797,7 +828,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
     .aet-table th { background: rgba(200, 155, 30, 0.12); color: var(--aet-gold); font-weight: 700; }
     .aet-table tr.is-top td {
       border-color: var(--aet-border-active);
-      background: #fdf8ee;
+      background: var(--aet-pill-bg);
     }
     .aet-num { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; color: var(--aet-gold); }
     .aet-radar-fig { margin: 0.45rem 0 0.85rem; width: 100%; }
@@ -841,7 +872,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
       width: 100%;
       max-width: 40px;
       height: 80px;
-      background: #ede8dd;
+      background: var(--aet-divider);
       border-radius: 999px;
       display: flex;
       flex-direction: column;
@@ -908,7 +939,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
     .aet-formula-card {
       margin: 0 0 0.65rem;
       padding: 0.8rem 0.85rem;
-      background: linear-gradient(180deg, #faf8f2 0%, #f5f1e6 100%);
+      background: var(--aet-guide-bg);
       border: 1px solid var(--aet-border);
       border-radius: 14px;
     }
@@ -926,7 +957,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
     .aet-steps { display: grid; gap: 0.55rem; margin-bottom: 0.65rem; }
     .aet-step-card {
       position: relative;
-      background: #ffffff;
+      background: var(--aet-surface);
       border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 13px;
       padding: 0.7rem 0.8rem 0.3rem;
@@ -944,7 +975,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
     .aet-e-card {
       display: flex;
       gap: 0.65rem;
-      background: #ffffff;
+      background: var(--aet-surface);
       border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 14px;
       padding: 0.65rem 0.75rem;
@@ -973,7 +1004,7 @@ export function renderAmuletEnergyTimingHtml(payload) {
       font-size: 0.88rem;
       line-height: 1.62;
       color: var(--aet-muted);
-      background: #f9f7f2;
+      background: var(--aet-note-bg);
       border-radius: 10px;
       border: 1px solid rgba(180, 140, 40, 0.16);
     }

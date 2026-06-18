@@ -3,6 +3,10 @@
  */
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { formatBangkokScanDateThaiBE } from "../../utils/dateTime.util.js";
+import {
+  amuletSubpageAutoDarkScriptHtml,
+  buildAmuletSubpageDarkThemeCss,
+} from "../../utils/reports/amuletSubpageTheme.util.js";
 
 /**
  * @typedef {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletLibraryItem} SacredAmuletLibraryItem
@@ -227,6 +231,7 @@ export function renderAmuletLibraryRankingHtml({
   const docTitle = "คลังพลังของคุณ · Ener Scan";
 
   return `<!DOCTYPE html>
+${amuletSubpageAutoDarkScriptHtml()}
 <html lang="th">
 <head>
   <meta charset="utf-8"/>
@@ -238,17 +243,32 @@ export function renderAmuletLibraryRankingHtml({
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --alib-bg: #ffffff;
-      --alib-surface: #ffffff;
+      color-scheme: light;
+      --alib-bg: #f6f6f4;
+      --alib-surface: #fcfcfa;
+      --alib-elevated: #fffefb;
       --alib-border: rgba(180, 140, 40, 0.18);
-      --alib-gold: #a07800;
-      --alib-gold-soft: rgba(140, 100, 20, 0.7);
-      --alib-text: #1a1610;
-      --alib-body: #3d3320;
-      --alib-muted: #7a6b4e;
+      --alib-gold: #b8871b;
+      --alib-gold-soft: #8f6710;
+      --alib-text: #241c12;
+      --alib-body: rgba(36, 28, 18, 0.92);
+      --alib-muted: #7a6a58;
       --alib-chip-bg: rgba(200, 155, 30, 0.08);
       --alib-chip-border: rgba(180, 140, 40, 0.22);
+      --alib-panel-bg: linear-gradient(180deg, #fffefb 0%, #faf7f0 100%);
+      --alib-safety-bg: #faf8f4;
+      --alib-btn-text: #1a1610;
+      --alib-shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
+      --alib-img-bg: rgba(200, 155, 30, 0.08);
+      --alib-img-empty: repeating-linear-gradient(-45deg, rgba(200,155,30,0.1), rgba(200,155,30,0.1) 6px, transparent 6px, transparent 12px);
+      --alib-dup-possible-bg: rgba(255, 200, 140, 0.18);
+      --alib-dup-possible-text: #8a5a00;
+      --alib-pin-upsell-bg: rgba(255, 220, 160, 0.28);
+      --alib-pin-upsell-text: #6b4a00;
+      --alib-pin-flash-ok: #2d6a3a;
+      --alib-pin-flash-err: #8a3a00;
     }
+    ${buildAmuletSubpageDarkThemeCss("alib")}
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Sarabun, system-ui, sans-serif; background: var(--alib-bg); color: var(--alib-text); line-height: 1.62; font-size: 1.02rem; -webkit-font-smoothing: antialiased; }
     .alib-wrap { max-width: 720px; margin: 0 auto; padding: 1.35rem 1.1rem 2.6rem; }
@@ -261,9 +281,9 @@ export function renderAmuletLibraryRankingHtml({
       margin: 0 0 1.15rem;
       padding: 0.95rem 1rem 0.95rem;
       border-radius: 16px;
-      border: 1px solid rgba(180, 140, 40, 0.2);
-      background: linear-gradient(180deg, #fffefb 0%, #faf7f0 100%);
-      box-shadow: 0 6px 28px rgba(0,0,0,0.055);
+      border: 1px solid var(--alib-border);
+      background: var(--alib-panel-bg);
+      box-shadow: var(--alib-shadow);
     }
     .alib-spot-badge {
       margin: 0 0 0.55rem;
@@ -279,13 +299,11 @@ export function renderAmuletLibraryRankingHtml({
       height: 4.25rem;
       border-radius: 10px;
       overflow: hidden;
-      background: rgba(200, 155, 30, 0.08);
-      border: 1px solid rgba(180, 140, 40, 0.2);
+      background: var(--alib-img-bg);
+      border: 1px solid var(--alib-border);
     }
     .alib-spot-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .alib-spot-img--empty {
-      background: repeating-linear-gradient(-45deg, rgba(200,155,30,0.1), rgba(200,155,30,0.1) 6px, transparent 6px, transparent 12px);
-    }
+    .alib-spot-img--empty { background: var(--alib-img-empty); }
     .alib-spot-main { flex: 1; min-width: 0; }
     .alib-spot-title {
       margin: 0 0 0.35rem;
@@ -304,7 +322,7 @@ export function renderAmuletLibraryRankingHtml({
       font-weight: 700;
       border-radius: 10px;
       text-decoration: none;
-      color: #1a1610;
+      color: var(--alib-btn-text);
       background: linear-gradient(165deg, #e8c547, #c9a227);
       box-shadow: 0 2px 10px rgba(180, 140, 40, 0.18);
     }
@@ -368,10 +386,10 @@ export function renderAmuletLibraryRankingHtml({
       width: 100%;
       min-height: 18.5rem;
       background: var(--alib-surface);
-      border: 1px solid rgba(180, 140, 40, 0.14);
+      border: 1px solid var(--alib-border);
       border-radius: 16px;
       padding: 0.7rem 0.75rem 0.72rem;
-      box-shadow: 0 6px 22px rgba(0,0,0,0.055);
+      box-shadow: var(--alib-shadow);
       display: flex;
       flex-direction: column;
     }
@@ -396,13 +414,11 @@ export function renderAmuletLibraryRankingHtml({
       height: 88px;
       border-radius: 11px;
       overflow: hidden;
-      border: 1px solid rgba(180, 140, 40, 0.16);
-      background: rgba(200, 155, 30, 0.06);
+      border: 1px solid var(--alib-border);
+      background: var(--alib-img-bg);
     }
     .alib-axis-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .alib-axis-img--empty {
-      background: repeating-linear-gradient(-45deg, rgba(200,155,30,0.1), rgba(200,155,30,0.1) 5px, transparent 5px, transparent 10px);
-    }
+    .alib-axis-img--empty { background: var(--alib-img-empty); }
     .alib-axis-text { flex: 1; min-width: 0; align-self: center; }
     .alib-axis-name {
       margin: 0;
@@ -453,7 +469,7 @@ export function renderAmuletLibraryRankingHtml({
       font-weight: 700;
       border-radius: 10px;
       text-decoration: none;
-      color: #1a1610;
+      color: var(--alib-btn-text);
       background: linear-gradient(165deg, #e8c547, #c9a227);
       box-shadow: 0 2px 10px rgba(180, 140, 40, 0.16);
     }
@@ -467,7 +483,7 @@ export function renderAmuletLibraryRankingHtml({
       font-weight: 800;
       font-family: inherit;
       line-height: 1.35;
-      color: #1a1610;
+      color: var(--alib-btn-text);
       background: linear-gradient(165deg, #e8c547, #c9a227);
       border: none;
       border-radius: 999px;
@@ -491,22 +507,22 @@ export function renderAmuletLibraryRankingHtml({
       color: var(--alib-gold);
       cursor: pointer;
     }
-    .alib-tab--on { color: #1a1610; background: linear-gradient(165deg, #e8c547, #c9a227); border-color: rgba(180, 140, 40, 0.35); }
+    .alib-tab--on { color: var(--alib-btn-text); background: linear-gradient(165deg, #e8c547, #c9a227); border-color: rgba(180, 140, 40, 0.35); }
     .alib-panel { display: none; }
     .alib-panel--on { display: block; }
     .alib-card {
       background: var(--alib-surface);
-      border: 1px solid rgba(180, 140, 40, 0.16);
+      border: 1px solid var(--alib-border);
       border-radius: 14px;
       padding: 0.75rem 0.85rem;
       margin-bottom: 0.65rem;
-      box-shadow: 0 4px 18px rgba(0,0,0,0.07);
+      box-shadow: var(--alib-shadow);
     }
     .alib-card-top { display: flex; gap: 0.65rem; align-items: flex-start; }
     .alib-rank { display: block; font-size: 0.78rem; font-weight: 800; color: var(--alib-gold); margin-bottom: 0.35rem; }
-    .alib-card-img { flex-shrink: 0; width: 4.5rem; height: 4.5rem; border-radius: 10px; overflow: hidden; background: rgba(200, 155, 30, 0.08); border: 1px solid rgba(180, 140, 40, 0.2); }
+    .alib-card-img { flex-shrink: 0; width: 4.5rem; height: 4.5rem; border-radius: 10px; overflow: hidden; background: var(--alib-img-bg); border: 1px solid var(--alib-border); }
     .alib-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .alib-card-img--empty { background: repeating-linear-gradient(-45deg, rgba(200,155,30,0.1), rgba(200,155,30,0.1) 6px, transparent 6px, transparent 12px); }
+    .alib-card-img--empty { background: var(--alib-img-empty); }
     .alib-card-main { flex: 1; min-width: 0; }
     .alib-card-line { margin: 0 0 0.25rem; font-size: 0.88rem; }
     .alib-card-line--sub { font-size: 0.8rem; color: var(--alib-muted); }
@@ -522,9 +538,9 @@ export function renderAmuletLibraryRankingHtml({
       background: var(--alib-chip-bg);
     }
     .alib-card-dup-pill--possible {
-      color: #8a5a00;
+      color: var(--alib-dup-possible-text);
       border-color: rgba(200, 120, 40, 0.35);
-      background: rgba(255, 200, 140, 0.18);
+      background: var(--alib-dup-possible-bg);
     }
     .alib-card-possible-note {
       margin: 0.28rem 0 0;
@@ -537,7 +553,7 @@ export function renderAmuletLibraryRankingHtml({
     .alib-card-btn {
       display: block; text-align: center; margin-top: 0.55rem;
       padding: 0.48rem 0.75rem; font-size: 0.88rem; font-weight: 700;
-      border-radius: 10px; text-decoration: none; color: #1a1610;
+      border-radius: 10px; text-decoration: none; color: var(--alib-btn-text);
       background: linear-gradient(165deg, #e8c547, #c9a227);
       box-shadow: 0 2px 10px rgba(180, 140, 40, 0.18);
     }
@@ -550,9 +566,9 @@ export function renderAmuletLibraryRankingHtml({
       font-size: 0.8rem;
       line-height: 1.58;
       color: var(--alib-muted);
-      background: #faf8f4;
+      background: var(--alib-safety-bg);
       border-radius: 12px;
-      border: 1px solid rgba(180, 140, 40, 0.14);
+      border: 1px solid var(--alib-border);
     }
     .alib-retention-note {
       margin: 0 0 0.75rem;
@@ -560,9 +576,9 @@ export function renderAmuletLibraryRankingHtml({
       font-size: 0.78rem;
       line-height: 1.55;
       color: var(--alib-body);
-      background: #fffdf8;
+      background: var(--alib-elevated);
       border-radius: 10px;
-      border: 1px solid rgba(180, 140, 40, 0.16);
+      border: 1px solid var(--alib-border);
     }
     .alib-pin-upsell {
       margin: 0 0 0.75rem;
@@ -570,14 +586,14 @@ export function renderAmuletLibraryRankingHtml({
       font-size: 0.8rem;
       line-height: 1.5;
       font-weight: 600;
-      color: #6b4a00;
-      background: rgba(255, 220, 160, 0.28);
+      color: var(--alib-pin-upsell-text);
+      background: var(--alib-pin-upsell-bg);
       border-radius: 10px;
-      border: 1px solid rgba(200, 140, 40, 0.35);
+      border: 1px solid var(--alib-border);
     }
     .alib-pin-flash { margin: 0 0 0.65rem; font-size: 0.8rem; font-weight: 600; line-height: 1.45; }
-    .alib-pin-flash--ok { color: #2d6a3a; }
-    .alib-pin-flash--err { color: #8a3a00; }
+    .alib-pin-flash--ok { color: var(--alib-pin-flash-ok); }
+    .alib-pin-flash--err { color: var(--alib-pin-flash-err); }
     .alib-pin-form { margin: 0.45rem 0 0.5rem; }
     .alib-pin-btn {
       display: inline-block;
@@ -587,21 +603,21 @@ export function renderAmuletLibraryRankingHtml({
       font-weight: 700;
       font-family: inherit;
       color: var(--alib-gold);
-      background: #fffefb;
-      border: 1px solid rgba(180, 140, 40, 0.35);
+      background: var(--alib-elevated);
+      border: 1px solid var(--alib-border);
       border-radius: 999px;
       cursor: pointer;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+      box-shadow: var(--alib-shadow);
     }
-    .alib-pin-btn:hover { background: #faf6ec; }
+    .alib-pin-btn:hover { filter: brightness(1.06); }
     .alib-scan-footer {
       margin-top: 1.35rem;
       padding: 1rem 0.95rem 1.05rem;
       border-radius: 14px;
-      border: 1px solid rgba(180, 140, 40, 0.18);
-      background: linear-gradient(180deg, #faf8f2 0%, #f5f1e6 100%);
+      border: 1px solid var(--alib-border);
+      background: var(--alib-panel-bg);
       text-align: center;
-      box-shadow: 0 4px 18px rgba(0,0,0,0.06);
+      box-shadow: var(--alib-shadow);
     }
     .alib-scan-footer-title {
       margin: 0 0 0.5rem;
@@ -625,7 +641,7 @@ export function renderAmuletLibraryRankingHtml({
       font-weight: 800;
       font-family: inherit;
       line-height: 1.35;
-      color: #1a1610;
+      color: var(--alib-btn-text);
       background: linear-gradient(165deg, #e8c547, #c9a227);
       border: none;
       border-radius: 999px;

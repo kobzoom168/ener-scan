@@ -4,6 +4,10 @@
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { buildAmuletHtmlV2ViewModel } from "../../amulet/amuletHtmlV2.model.js";
 import { POWER_LABEL_THAI, POWER_ORDER } from "../../amulet/amuletScores.util.js";
+import {
+  amuletSubpageAutoDarkScriptHtml,
+  buildAmuletSubpageDarkThemeCss,
+} from "../../utils/reports/amuletSubpageTheme.util.js";
 
 /** @typedef {import("../../amulet/amuletScores.util.js").AmuletPowerKey} AmuletPowerKey */
 
@@ -187,6 +191,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
   const docTitle = "ความหมายพลังทั้ง 6 ด้าน · Ener Scan";
 
   return `<!DOCTYPE html>
+${amuletSubpageAutoDarkScriptHtml()}
 <html lang="th">
 <head>
   <meta charset="utf-8"/>
@@ -198,19 +203,44 @@ export function renderAmuletEnergyMeaningHtml(payload) {
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --aem-bg: #ffffff;
-      --aem-surface: linear-gradient(180deg, #f9f7f3 0%, #f4f1ea 100%);
+      color-scheme: light;
+      --aem-bg: #f6f6f4;
+      --aem-surface: #fcfcfa;
+      --aem-elevated: #fffefb;
       --aem-border: rgba(180, 140, 40, 0.18);
-      --aem-gold: #a07800;
-      --aem-gold-soft: rgba(140, 100, 20, 0.7);
-      --aem-text: #1a1610;
-      --aem-body: #3d3320;
-      --aem-muted: #7a6b4e;
-      --aem-subtitle: #4a3f28;
+      --aem-gold: #b8871b;
+      --aem-gold-soft: #8f6710;
+      --aem-text: #241c12;
+      --aem-body: rgba(36, 28, 18, 0.92);
+      --aem-muted: #7a6a58;
+      --aem-subtitle: rgba(36, 28, 18, 0.82);
       --aem-chip-bg: rgba(200, 155, 30, 0.08);
       --aem-chip-border: rgba(180, 140, 40, 0.22);
       --aem-score-bg: rgba(200, 155, 30, 0.09);
       --aem-score-border: rgba(180, 140, 40, 0.32);
+      --aem-panel-bg: linear-gradient(180deg, #fffdf7 0%, #fdf8ee 100%);
+      --aem-guide-bg: linear-gradient(180deg, #faf8f2 0%, #f5f1e6 100%);
+      --aem-btn-text: #1a1610;
+      --aem-shadow: 0 4px 18px rgba(0, 0, 0, 0.07);
+      --aem-bar-track: #ede8dd;
+      --aem-score-high: #fdf3dc;
+      --aem-score-mid: #f2f7ec;
+      --aem-score-low: #f5f5f5;
+      --aem-score-none: #f0f0f0;
+      --aem-note-bg: #f9f7f2;
+      --aem-footer-bg: linear-gradient(180deg, #fffdf9 0%, #faf7f0 100%);
+    }
+    ${buildAmuletSubpageDarkThemeCss("aem")}
+    html.amulet-subpage-dark {
+      --aem-score-bg: rgba(232, 197, 71, 0.1);
+      --aem-score-border: rgba(232, 197, 71, 0.28);
+      --aem-bar-track: rgba(148, 163, 184, 0.22);
+      --aem-score-high: rgba(232, 197, 71, 0.18);
+      --aem-score-mid: rgba(110, 231, 160, 0.12);
+      --aem-score-low: rgba(148, 163, 184, 0.12);
+      --aem-score-none: rgba(148, 163, 184, 0.08);
+      --aem-note-bg: #151820;
+      --aem-footer-bg: linear-gradient(180deg, #151820 0%, #11141b 100%);
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -237,9 +267,9 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       margin-bottom: 1rem;
       padding: 1rem 1rem 1.05rem;
       border-radius: 20px;
-      border: 1px solid rgba(180, 140, 40, 0.18);
-      background: linear-gradient(180deg, #fffdf7 0%, #fdf8ee 100%);
-      box-shadow: 0 4px 18px rgba(0,0,0,0.07);
+      border: 1px solid var(--aem-border);
+      background: var(--aem-panel-bg);
+      box-shadow: var(--aem-shadow);
     }
     .aem-eyebrow {
       margin: 0 0 0.25rem;
@@ -285,7 +315,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       border: 1px solid var(--aem-border);
       border-radius: 18px;
       padding: 0.95rem;
-      background: linear-gradient(180deg, #faf8f2 0%, #f5f1e6 100%);
+      background: var(--aem-guide-bg);
     }
     .aem-guide-title {
       margin: 0 0 0.55rem;
@@ -314,7 +344,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     .aem-guide-chip--b40 { border-left-color: #9e9e9e; }
     .aem-guide-chip--b0 { border-left-color: #c5c5c5; }
     .aem-card {
-      background: #ffffff;
+      background: var(--aem-surface);
       border: 1px solid rgba(180, 140, 40, 0.16);
       border-radius: 20px;
       padding: 0.96rem 1rem 1.02rem;
@@ -347,7 +377,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       width: 100%;
       max-width: 100%;
       border-radius: 999px;
-      background: #ede8dd;
+      background: var(--aem-bar-track);
       overflow: hidden;
       box-sizing: border-box;
     }
@@ -397,22 +427,22 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       flex-shrink: 0;
     }
     .aem-score-pill--t80 {
-      background: #fdf3dc;
+      background: var(--aem-score-high);
       border-color: #c8971e;
       color: #a07000;
     }
     .aem-score-pill--t60 {
-      background: #f2f7ec;
+      background: var(--aem-score-mid);
       border-color: #7a9e4e;
       color: #4a7020;
     }
     .aem-score-pill--t40 {
-      background: #f5f5f5;
+      background: var(--aem-score-low);
       border-color: #9e9e9e;
       color: #666;
     }
     .aem-score-pill--t0 {
-      background: #f0f0f0;
+      background: var(--aem-score-none);
       border-color: #c5c5c5;
       color: #999;
     }
@@ -474,7 +504,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       font-size: 0.88rem;
       line-height: 1.62;
       color: var(--aem-muted);
-      background: #f9f7f2;
+      background: var(--aem-note-bg);
       border-radius: 10px;
       border: 1px solid rgba(180, 140, 40, 0.16);
     }
@@ -501,7 +531,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       z-index: 50;
       margin: 0 0 0.85rem;
       padding: 0.42rem 0.55rem;
-      background: linear-gradient(180deg, #fffdf9 0%, #faf7f0 100%);
+      background: var(--aem-footer-bg);
       border: 1px solid rgba(180, 140, 40, 0.14);
       border-radius: 999px;
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -528,7 +558,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       padding: 0.3rem 0.5rem;
       border-radius: 999px;
       border: 1px solid rgba(180, 140, 40, 0.28);
-      background: #fff;
+      background: var(--aem-elevated);
       color: var(--aem-gold-soft);
       font-size: 0.76rem;
       font-weight: 700;
