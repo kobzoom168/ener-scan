@@ -574,11 +574,21 @@ ${amuletSubpageAutoDarkScriptHtml()}
       --aet-pill-bg: #fdf8ee;
       --aet-note-bg: #f9f7f2;
       --aet-donut-hole: #fffdf9;
+      --aet-hero-summary-bg: rgba(252, 252, 250, 0.85);
+      --aet-hero-k: #888888;
+      --aet-hero-v: #a07000;
+      --aet-score-pill-high-text: #a07000;
+      --aet-score-pill-mid-text: #4a7020;
+      --aet-score-pill-low-text: #666666;
+      --aet-legend-n-text: #1a1610;
+      --aet-radar-lbl-fill: #3d3320;
+      --aet-radar-sc-fill: #a07000;
     }
     ${buildAmuletSubpageDarkThemeCss("aet")}
     html.amulet-subpage-dark {
       --aet-border-active: rgba(232, 197, 71, 0.32);
       --aet-divider: rgba(148, 163, 184, 0.22);
+      --aet-guide-bg: linear-gradient(180deg, #151820 0%, #11141b 100%);
       --aet-score-high: rgba(232, 197, 71, 0.18);
       --aet-score-mid: rgba(110, 231, 160, 0.12);
       --aet-score-low: rgba(148, 163, 184, 0.12);
@@ -586,6 +596,15 @@ ${amuletSubpageAutoDarkScriptHtml()}
       --aet-pill-bg: #151820;
       --aet-note-bg: #151820;
       --aet-donut-hole: #13151c;
+      --aet-hero-summary-bg: #151820;
+      --aet-hero-k: #94a3b8;
+      --aet-hero-v: #e8c547;
+      --aet-score-pill-high-text: #e8c547;
+      --aet-score-pill-mid-text: #6ee7a0;
+      --aet-score-pill-low-text: #94a3b8;
+      --aet-legend-n-text: #090a0d;
+      --aet-radar-lbl-fill: rgba(241, 245, 249, 0.88);
+      --aet-radar-sc-fill: #e8c547;
     }
     * { box-sizing: border-box; }
     body {
@@ -676,11 +695,11 @@ ${amuletSubpageAutoDarkScriptHtml()}
     }
     .aet-card--hero { border-color: var(--aet-border-active); }
     .aet-hero-summary {
-      border: 1px solid rgba(180, 140, 40, 0.2);
+      border: 1px solid var(--aet-border);
       border-radius: 14px;
       overflow: hidden;
       margin-bottom: 0.72rem;
-      background: rgba(255, 253, 249, 0.65);
+      background: var(--aet-hero-summary-bg);
     }
     .aet-hero-row {
       padding: 0.62rem 0.78rem;
@@ -691,7 +710,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
       display: block;
       font-size: 0.72rem;
       font-weight: 600;
-      color: #888;
+      color: var(--aet-hero-k);
       letter-spacing: 0.02em;
       margin-bottom: 0.22rem;
     }
@@ -699,7 +718,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
       display: block;
       font-size: 1rem;
       font-weight: 600;
-      color: #a07000;
+      color: var(--aet-hero-v);
       line-height: 1.35;
     }
     .aet-hero-hint { margin: 0 0 0.55rem; font-size: 0.94rem; color: var(--aet-text); line-height: 1.65; }
@@ -733,7 +752,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
       justify-content: center;
       font-size: 0.72rem;
       font-weight: 700;
-      color: #a07000;
+      color: var(--aet-gold);
       line-height: 1;
       box-sizing: border-box;
     }
@@ -765,27 +784,27 @@ ${amuletSubpageAutoDarkScriptHtml()}
     .aet-score-pill--t80 {
       background: var(--aet-score-high);
       border: 1px solid #c8971e;
-      color: #a07000;
+      color: var(--aet-score-pill-high-text);
     }
     .aet-score-pill--t60 {
       background: var(--aet-score-mid);
       border: 1px solid #7a9e4e;
-      color: #4a7020;
+      color: var(--aet-score-pill-mid-text);
     }
     .aet-score-pill--t40 {
       background: var(--aet-score-low);
       border: 1px solid #9e9e9e;
-      color: #666;
+      color: var(--aet-score-pill-low-text);
     }
     .aet-score-pill--tlt40 {
       background: var(--aet-score-none);
       border: 1px solid #c5c5c5;
-      color: #999;
+      color: var(--aet-score-pill-low-text);
     }
     .aet-score-pill--na {
       background: var(--aet-score-low);
       border: 1px solid #c5c5c5;
-      color: #999;
+      color: var(--aet-score-pill-low-text);
     }
     .aet-top-badge {
       display: inline-block;
@@ -795,7 +814,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
       padding: 0.06rem 0.42rem;
       font-size: 0.68rem;
       font-weight: 700;
-      color: #a07000;
+      color: var(--aet-gold);
       background: var(--aet-score-high);
       border: 1px solid #c8971e;
     }
@@ -834,13 +853,13 @@ ${amuletSubpageAutoDarkScriptHtml()}
     .aet-radar-fig { margin: 0.45rem 0 0.85rem; width: 100%; }
     .aet-radar-svg { display: block; width: 100%; max-width: 100%; }
     .aet-radar-svg .aet-radar-lbl {
-      fill: #3d3320;
+      fill: var(--aet-radar-lbl-fill);
       font-size: 11px;
       font-family: Sarabun, system-ui, sans-serif;
       font-weight: 600;
     }
     .aet-radar-svg .aet-radar-sc {
-      fill: #a07000;
+      fill: var(--aet-radar-sc-fill);
       font-size: 10px;
       font-family: Sarabun, system-ui, sans-serif;
       font-weight: 700;
@@ -865,7 +884,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
     .aet-hour-bar-num {
       font-size: 0.72rem;
       font-weight: 700;
-      color: #a07000;
+      color: var(--aet-gold);
       line-height: 1.1;
     }
     .aet-hour-bar-track {
@@ -933,7 +952,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
       justify-content: center;
       font-size: 0.7rem;
       font-weight: 800;
-      color: #1a1610;
+      color: var(--aet-legend-n-text);
       border: 1px solid rgba(0,0,0,0.06);
     }
     .aet-formula-card {
@@ -1016,7 +1035,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
       font-size: 1rem;
       font-weight: 700;
       font-family: inherit;
-      color: #1a1610;
+      color: var(--aet-btn-text);
       background: linear-gradient(165deg, #e8c547, #c9a227);
       border: none;
       border-radius: 15px;

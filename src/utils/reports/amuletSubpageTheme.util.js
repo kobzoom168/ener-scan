@@ -37,6 +37,7 @@ export function buildAmuletSubpageDarkThemeCss(prefix) {
       --${p}-chip-bg: rgba(232, 197, 71, 0.1);
       --${p}-chip-border: rgba(232, 197, 71, 0.28);
       --${p}-panel-bg: linear-gradient(180deg, #151820 0%, #11141b 100%);
+      --${p}-guide-bg: linear-gradient(180deg, #151820 0%, #11141b 100%);
       --${p}-safety-bg: #151820;
       --${p}-btn-text: #090a0d;
       --${p}-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
