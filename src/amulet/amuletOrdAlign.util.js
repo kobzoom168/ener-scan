@@ -46,10 +46,6 @@ export function computeAmuletOrdAndAlignFromPayload(payload) {
       ? av.powerCategories
       : {};
 
-  const seed =
-    String(payload?.scanId || payload?.reportId || "seed").trim() || "seed";
-  const ownerProf = deriveAmuletOwnerPowerProfile(payload?.birthdateUsed, seed);
-
   /** @type {Record<string, number>} */
   const objectP = {};
   for (const k of POWER_ORDER) {
@@ -58,6 +54,20 @@ export function computeAmuletOrdAndAlignFromPayload(payload) {
       e && typeof e === "object" && e.score != null ? Number(e.score) : NaN;
     objectP[k] = clamp0100(sc);
   }
+
+  /**
+   * Owner-fit profile must be STABLE per (owner, object) so "เข้ากับคุณที่สุด" does NOT flip when
+   * the same amulet is re-scanned from another angle. It used `payload.scanId` (unique per scan)
+   * → the owner profile re-rolled every scan and the alignment axis flipped even though the object
+   * scores were identical. Seed it on the object's own score signature instead (same object →
+   * same scores, incl. on baseline reuse → same seed). Prefer an explicit stable id if present.
+   */
+  const objSig = POWER_ORDER.map((k) => objectP[k]).join(",");
+  const seed =
+    String(
+      payload?.stableFeatureSeed || objSig || payload?.scanId || payload?.reportId || "seed",
+    ).trim() || "seed";
+  const ownerProf = deriveAmuletOwnerPowerProfile(payload?.birthdateUsed, seed);
 
   /** @type {Record<string, number>} */
   const ownerP = {};
