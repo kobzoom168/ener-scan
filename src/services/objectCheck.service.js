@@ -8,7 +8,9 @@ import { openai, withOpenAi429RetryOnce } from "./openaiDeepScan.api.js";
 import { isTrueUnsupportedEvidence } from "../utils/objectGateReplyResolve.util.js";
 
 const OBJECT_CHECK_PROVIDER = "openai.responses";
-const OBJECT_CHECK_MODEL = "gpt-4.1-mini";
+// Upgraded from gpt-4.1-mini: the mini model mis-rejected clear sacred objects (e.g. a crystal
+// bracelet on a display box read as generic "jewelry/product"). Override via OBJECT_CHECK_MODEL.
+const OBJECT_CHECK_MODEL = String(process.env.OBJECT_CHECK_MODEL || "gpt-4.1").trim() || "gpt-4.1";
 const OBJECT_CHECK_TIMEOUT_MS = Number(env.OBJECT_CHECK_TIMEOUT_MS || 35000);
 const OBJECT_CHECK_MAX_RETRIES = Number(env.OBJECT_CHECK_MAX_RETRIES || 0);
 const OBJECT_CHECK_DISABLE_SECOND_PASS =
