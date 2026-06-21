@@ -88,7 +88,6 @@ export function inferAmuletAxisFromMainEnergyLabel(label) {
  */
 export function computeAmuletPowerScoresDeterministicV1(seedKey, opts = {}) {
   const identity = String(seedKey || "").trim() || "amulet_seed_missing";
-  const session = String(opts.sessionKey ?? opts.scanSessionKey ?? "").trim();
 
   const hId = fnv1a32(`${identity}|v2|id`);
   const ia = hId % 6;
@@ -117,10 +116,10 @@ export function computeAmuletPowerScoresDeterministicV1(seedKey, opts = {}) {
       s += 6 + (fnv1a32(`${identity}|v2|b2|${k}`) % 12);
     }
 
-      if (withSessionJitter && session) {
-        s += (fnv1a32(`${session}|v2|sess|${k}`) % 9) - 4;
-        s += (fnv1a32(`${identity}|${session}|jit|${k}`) % 3);
-      }
+      // (per-scan `session` jitter removed: it drifted displayed scores on rescans of the SAME
+      // object even though primary/secondary were identity-stable. Fallback scores are now fully
+      // identity-deterministic.)
+      void withSessionJitter;
 
       out[k] = Math.min(AXIS_MAX, Math.max(AXIS_MIN, Math.round(s)));
     }
