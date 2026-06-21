@@ -199,6 +199,25 @@ export function computeAmuletPowerScoresDeterministicV1(seedKey, opts = {}) {
 export function computeAmuletPowerScoresFromFeaturesV3(features, opts = {}) {
   const { axes, signature } = computeAmuletAxisBaseFromFeatures(features);
 
+  /**
+   * Per-object discrimination: the coarse material/form/color buckets above give the angle-stable
+   * "character", but two DIFFERENT pieces sharing those buckets would otherwise score identically
+   * (±2). Add a bounded per-axis offset keyed on the granular stable-feature seed (hash of raw
+   * color:material:form:texture, incl. fields the buckets drop) so distinct pieces separate while
+   * the SAME object keeps the same seed → same offset (and re-scans also snap via baseline reuse).
+   */
+  const objSeed = String(opts.seedKey || "").trim();
+  if (objSeed) {
+    // shared per-object LEVEL shift (moves the mean → the overall 0–10 score differs between
+    // pieces, not just the axis shape) + per-axis shape variation. Random per-axis alone averages
+    // out and leaves every piece ~the same overall score.
+    const level = (fnv1a32(`${objSeed}|v3|lvl`) % 25) - 9; // ≈ ±10 mean shift
+    for (const k of POWER_ORDER) {
+      const off = (fnv1a32(`${objSeed}|v3|obj|${k}`) % 15) - 7; // ±7 shape
+      axes[k] = Math.min(99, Math.max(34, axes[k] + level + off));
+    }
+  }
+
   /** Optional hero/summary alignment nudge (same intent as v1; bounded). */
   const hint = inferAmuletAxisFromMainEnergyLabel(opts.mainEnergyLabel);
   if (hint && POWER_ORDER.includes(hint)) {
@@ -251,6 +270,7 @@ export function computeAmuletPowerScores(input = {}) {
   if (hasUsableFeatures) {
     return computeAmuletPowerScoresFromFeaturesV3(features, {
       mainEnergyLabel: input.mainEnergyLabel,
+      seedKey: input.seedKey,
     });
   }
 
