@@ -79,7 +79,9 @@ function ownerFitBandFromScore(score) {
  * @returns {number}
  */
 function computeOwnerFitScoreValue(seed, session, mainEnergyLabel, ownerFitScoreOpt) {
-  const h = fnv1a32(`${seed}|cb_axis|owner_fit|${session}`);
+  // NOTE: `session` (per-scan id) intentionally NOT hashed — it re-rolled the score on every
+  // rescan of the SAME bracelet. Seed only on the stable `seed` so rescans are identical.
+  const h = fnv1a32(`${seed}|cb_axis|owner_fit`);
   let s = 34 + (h % 46);
   if (ownerFitScoreOpt != null) {
     const oc = Number(ownerFitScoreOpt);
@@ -120,7 +122,7 @@ export function computeCrystalBraceletScoresDeterministicV1(seedKey, opts = {}) 
   const axes = {};
 
   for (const key of CRYSTAL_BRACELET_AXIS_ORDER) {
-    const h = fnv1a32(`${seed}|cb_axis|${key}|${session}`);
+    const h = fnv1a32(`${seed}|cb_axis|${key}`); // no per-scan session → same bracelet = same axes
     let s = 34 + (h % 46);
     const hint = String(mainEnergyLabel || "").trim();
     if (hint && (h % 5) === 0) {
@@ -212,7 +214,7 @@ export function computeCrystalBraceletOwnerAxisScoresV1(
   ownerFitScore,
 ) {
   const seed = String(seedKey || "").trim() || "cb";
-  const session = String(sessionKey || "").trim() || "sess";
+  void sessionKey; // per-scan id no longer hashed (kept for call-site compatibility)
   const fit =
     ownerFitScore != null && Number.isFinite(Number(ownerFitScore))
       ? Math.min(100, Math.max(0, Math.round(Number(ownerFitScore))))
@@ -222,7 +224,7 @@ export function computeCrystalBraceletOwnerAxisScoresV1(
   /** @type {Record<string, number>} */
   const out = {};
   for (const key of CRYSTAL_BRACELET_AXIS_ORDER) {
-    const h = fnv1a32(`${seed}|cb_owner_axis|${key}|${session}`);
+    const h = fnv1a32(`${seed}|cb_owner_axis|${key}`); // no per-scan session
     const stone = Math.max(
       0,
       Math.min(100, Math.round(Number(stoneAxisScores[key]) || 0)),

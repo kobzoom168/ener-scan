@@ -39,7 +39,9 @@ function spread(h, min, max) {
 }
 
 /**
- * @param {string} seedKey — prefer scan result id (UUID)
+ * @param {string} seedKey — MUST be the STABLE per-object seed (vision stableFeatureSeed), NOT a
+ *   per-scan id: scores depend only on this, so a per-scan id makes the same moldavite re-roll
+ *   every scan. (The reportPayload builder passes scoreSeedKey = stableFeatureSeed ?? scanId.)
  * @param {{ confidenceDamp?: number }} [opts]
  * @returns {{
  *   scoringMode: typeof MOLDAVITE_SCORING_MODE,

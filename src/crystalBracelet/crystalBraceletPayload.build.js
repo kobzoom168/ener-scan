@@ -167,7 +167,7 @@ export function buildCrystalBraceletV1Slice({
   const ownerProfile = deriveCrystalBraceletOwnerProfile({
     birthdateUsed,
     displayCompatibilityPercent,
-    stableSeed: String(scanResultId || seedKey || "").trim(),
+    stableSeed: String(seedKey || scanResultId || "").trim(),
     stoneScores: stoneScoresMap,
     ownerAxisScores: ownerAxisForAlign,
     primaryAxis: scores.primaryAxis,
