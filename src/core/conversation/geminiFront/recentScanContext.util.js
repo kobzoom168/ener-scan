@@ -13,6 +13,30 @@ function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
+/** Category words that must never be shown as a "พลังเด่น" (they're object types, not powers). */
+const CATEGORY_WORDS = [
+  "พระเครื่อง",
+  "พระบูชา",
+  "คริสตัล",
+  "หิน",
+  "เครื่องราง",
+  "ของขลัง",
+  "มอลดาไวต์",
+  "moldavite",
+  "กำไล",
+  "วัตถุมงคล",
+  "วัตถุจากการสแกน",
+];
+function looksLikeCategory(s) {
+  const t = String(s || "").trim();
+  return CATEGORY_WORDS.some((w) => t === w || t.includes(w));
+}
+/** Accept a value as a power label only if it isn't a bare category term. */
+function powerLabel(v) {
+  const s = str(v);
+  if (!s || looksLikeCategory(s)) return "";
+  return s;
+}
 function coercePayload(raw) {
   if (!raw) return null;
   if (typeof raw === "object") return raw;
@@ -49,8 +73,9 @@ export async function buildRecentScanContext(userId) {
   const object = p.object && typeof p.object === "object" ? p.object : {};
 
   const objectLabel = str(object.objectLabel) || str(object.objectType);
-  const main = str(summary.visibleMainLabel) || str(summary.mainEnergyLabel);
-  const secondary = str(summary.secondaryEnergyLabel);
+  // Prefer the canonical power label; both are dropped if they're really a category.
+  const main = powerLabel(summary.mainEnergyLabel) || powerLabel(summary.visibleMainLabel);
+  const secondary = powerLabel(summary.secondaryEnergyLabel);
   const score = num(summary.energyScore);
   const compat = num(summary.compatibilityPercent);
   const band = str(summary.compatibilityBand);
