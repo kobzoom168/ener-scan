@@ -836,6 +836,24 @@ export const env = {
     String(process.env.SCAN_ABUSE_LOCK_ENABLED ?? "false").trim().toLowerCase() === "true",
 
   /**
+   * Gemini-front "consult" brain: answer amulet/crystal/talisman KNOWLEDGE questions
+   * (จัดชุดห้อย / การบูชา / ความหมายพลัง) in the OA as อาจารย์ Ener, grounded in the
+   * scan knowledge base + guardrails (no แท้-เก๊/ราคา, no over-promise). Default ON.
+   * Runs on the existing front LLM (OpenRouter). Disable with `false`/`0`/`no`.
+   * @type {boolean}
+   */
+  GEMINI_CONSULT_ENABLED: (() => {
+    const v = String(process.env.GEMINI_CONSULT_ENABLED ?? "").trim().toLowerCase();
+    if (v === "false" || v === "0" || v === "no") return false;
+    return true;
+  })(),
+  /** Timeout for a consult answer (longer than a normal front reply). Default 12000ms. */
+  GEMINI_CONSULT_TIMEOUT_MS:
+    Number(process.env.GEMINI_CONSULT_TIMEOUT_MS) > 0
+      ? Math.floor(Number(process.env.GEMINI_CONSULT_TIMEOUT_MS))
+      : 12000,
+
+  /**
    * Phase 2F: same-object verifier agent. When on, embedding NN is used only as a coarse RECALL
    * filter (loose threshold below) and a vision LLM looks at the new photo + each candidate's stored
    * image to decide "same physical object across angle/rotation/flip/lighting?". Reuse happens only

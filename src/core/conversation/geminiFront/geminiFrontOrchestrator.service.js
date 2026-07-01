@@ -11,6 +11,7 @@ import {
   buildNextStepHint,
 } from "./geminiPhrasingContext.builder.js";
 import { runGeminiPhrasing } from "./geminiPhrasing.service.js";
+import { runGeminiConsult } from "./geminiConsult.service.js";
 import { logGeminiOrchestrator } from "./geminiFront.telemetry.js";
 import { getGeminiConversationHistory } from "../../../utils/conversationHistory.util.js";
 
@@ -98,6 +99,24 @@ export async function runGeminiFrontOrchestrator(ctx) {
     return { handled: true, mode: "active" };
   }
 
+  if (resolved === "consult_amulet") {
+    const consultText = await runGeminiConsult({
+      userText: ctx.text,
+      conversationHistory,
+    });
+    if (consultText) {
+      await ctx.sendGatewayReply({
+        replyType: "gemini_front_consult",
+        semanticKey: `gemini_front_consult:${phase1}`,
+        text: consultText.slice(0, 1800),
+        alternateTexts: [],
+      });
+      logGeminiOrchestrator({ mode: "active", handled: true, via: "consult" });
+      return { handled: true, mode: "active" };
+    }
+    // consult failed → fall through to a safe generic phrase (below)
+  }
+
   if (resolved === "send_help_reply") {
     const ph = await runGeminiPhrasing({
       allowedFacts: buildAllowedFactsForPhrasing({
@@ -127,7 +146,8 @@ export async function runGeminiFrontOrchestrator(ctx) {
     resolved === "noop_phrase_only" ||
     Boolean(v.deny_reason) ||
     resolved === "get_conversation_context" ||
-    resolved === "handoff_to_scan";
+    resolved === "handoff_to_scan" ||
+    resolved === "consult_amulet";
 
   if (!shouldPhrase) {
     logGeminiOrchestrator({

@@ -10,6 +10,8 @@ Rules:
 - conversation_history (if present) is prior turns for tone/context only; fields under truth and allowed_actions always override history.
 - Use state_guess to mirror the provided truth.state_owner when they match; if unsure, pick the closest.
 - proposed_action must be one of the allowed_actions listed in the user message.
+- If the user's message is a KNOWLEDGE / CONSULTATION question about amulets, crystals, talismans, or sacred objects — e.g. how to wear/arrange them (จัดชุด/ห้อยคอ/ใส่กี่องค์), how to บูชา/ดูแล, which พลัง/พุทธคุณ suits them, or what a type of object means — AND "consult_amulet" is in allowed_actions, choose proposed_action "consult_amulet".
+- Do NOT choose consult_amulet for authenticity (แท้/เก๊/ปลอม) or price/appraisal (ราคา/ประเมิน) questions, or for flow actions (birthdate, payment, slip) — for authenticity/price use "noop_phrase_only" (a human handles those); for flow, use the matching flow action.
 - confidence is 0..1.
 - reply_style is a short snake_case label (e.g. short_warm_operator, gentle_remind, neutral_help).
 

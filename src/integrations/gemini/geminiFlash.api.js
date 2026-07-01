@@ -58,7 +58,7 @@ function getGoogleClient() {
 
 /**
  * @param {"openrouter"|"featherless"} provider
- * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number }} opts
+ * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number, timeoutMs?: number, maxTokens?: number }} opts
  */
 function buildCompatModel(provider, opts = {}) {
   const cfg = OPENAI_COMPAT[provider];
@@ -68,6 +68,11 @@ function buildCompatModel(provider, opts = {}) {
   const temperature = clampTemp(opts.temperature, 0.2);
   const systemInstruction = opts.systemInstruction;
   const jsonMode = Boolean(opts.jsonMode);
+  const abortMs = Math.max(
+    400,
+    Number(opts.timeoutMs) || Number(env.GEMINI_FRONT_TIMEOUT_MS) || 3200,
+  );
+  const maxTokens = Math.max(64, Number(opts.maxTokens) || 1024);
   return {
     async generateContent(userPrompt) {
       const messages = [];
@@ -76,10 +81,7 @@ function buildCompatModel(provider, opts = {}) {
       }
       messages.push({ role: "user", content: String(userPrompt || "") });
       const controller = new AbortController();
-      const timer = setTimeout(
-        () => controller.abort(),
-        Math.max(400, Number(env.GEMINI_FRONT_TIMEOUT_MS) || 3200),
-      );
+      const timer = setTimeout(() => controller.abort(), abortMs);
       try {
         const res = await fetch(`${baseURL}/chat/completions`, {
           method: "POST",
@@ -92,7 +94,7 @@ function buildCompatModel(provider, opts = {}) {
           body: JSON.stringify({
             model: modelId,
             temperature,
-            max_tokens: 1024,
+            max_tokens: maxTokens,
             messages,
             ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
             ...cfg.extraBody,
@@ -133,7 +135,7 @@ export function getGeminiFlashModel(opts = {}) {
   const temperature = clampTemp(opts.temperature, 0.2);
   const generationConfig = {
     temperature,
-    maxOutputTokens: 1024,
+    maxOutputTokens: Math.max(64, Number(opts.maxTokens) || 1024),
     ...(opts.jsonMode
       ? { responseMimeType: "application/json" }
       : {}),

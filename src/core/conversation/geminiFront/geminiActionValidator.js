@@ -13,6 +13,7 @@ export const ALL_PHASE1_ACTIONS = [
   "get_payment_status",
   "handoff_to_scan",
   "send_help_reply",
+  "consult_amulet",
 ];
 
 /**
@@ -25,6 +26,7 @@ export function allowedActionsForPhase1State(phase1) {
         "noop_phrase_only",
         "set_birthdate",
         "send_help_reply",
+        "consult_amulet",
         "get_conversation_context",
         "handoff_to_scan",
       ];
@@ -63,12 +65,13 @@ export function allowedActionsForPhase1State(phase1) {
         "get_conversation_context",
       ];
     case "scan_ready_idle":
+    case "idle":
+      return ["noop_phrase_only", "consult_amulet"];
     case "hard_blocked":
     case "soft_locked":
-    case "idle":
       return ["noop_phrase_only"];
     default:
-      return ["noop_phrase_only", "send_help_reply"];
+      return ["noop_phrase_only", "send_help_reply", "consult_amulet"];
   }
 }
 
