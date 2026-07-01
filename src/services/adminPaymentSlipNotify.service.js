@@ -14,6 +14,7 @@ import { invokeLinePushMessage } from "../utils/lineClientTransport.util.js";
  * @param {string|null|undefined} opts.paymentRef
  * @param {string|null|undefined} opts.packageKey
  * @param {string|null|undefined} opts.slipUrl — public slip image URL (optional)
+ * @param {string[]|null|undefined} [opts.reasons] — auto-verify fail reasons (optional)
  * @param {Partial<typeof env>} [opts.env] — test override
  */
 export async function maybeNotifyAdminSlipPendingVerify({
@@ -23,6 +24,7 @@ export async function maybeNotifyAdminSlipPendingVerify({
   paymentRef,
   packageKey,
   slipUrl,
+  reasons,
   env: envOverride,
 } = {}) {
   const e = envOverride ? { ...env, ...envOverride } : env;
@@ -43,9 +45,14 @@ export async function maybeNotifyAdminSlipPendingVerify({
       ? `${base}/admin/payments/${encodeURIComponent(pid)}`
       : "";
 
+  const reasonText = Array.isArray(reasons)
+    ? reasons.filter((r) => r != null && String(r).trim() !== "").join(", ")
+    : "";
+
   /** @type {(string | null)[]} */
   const lines = [
     "[ชำระเงิน] มีสลิปรอตรวจ (pending_verify)",
+    reasonText ? `auto ไม่ผ่าน: ${reasonText}` : null,
     ref ? `อ้างอิง: ${ref}` : null,
     `paymentId: ${pid}`,
     pkg ? `แพ็กเกจ: ${pkg}` : null,

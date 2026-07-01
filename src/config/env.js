@@ -826,6 +826,16 @@ export const env = {
     String(process.env.OBJECT_ENROLLMENT_ENABLED ?? "false").trim().toLowerCase() === "true",
 
   /**
+   * Anti-scan frequency lock (soft/hard scan-rate abuse lock). Default OFF —
+   * genuine heavy scanners (e.g. a customer scanning many amulets in one sitting)
+   * were getting hard-blocked with "ขอพักการรับสแกน". Payment/slip abuse guard is
+   * unaffected. Set `true` to re-enable the scan-rate lock.
+   * @type {boolean}
+   */
+  SCAN_ABUSE_LOCK_ENABLED:
+    String(process.env.SCAN_ABUSE_LOCK_ENABLED ?? "false").trim().toLowerCase() === "true",
+
+  /**
    * Phase 2F: same-object verifier agent. When on, embedding NN is used only as a coarse RECALL
    * filter (loose threshold below) and a vision LLM looks at the new photo + each candidate's stored
    * image to decide "same physical object across angle/rotation/flip/lighting?". Reuse happens only

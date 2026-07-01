@@ -3,6 +3,8 @@
  * Resets on process restart.
  */
 
+import { env } from "../config/env.js";
+
 const abuseMap = new Map();
 
 export const QUIET_RESET_MS = 10 * 60 * 1000;
@@ -257,6 +259,11 @@ export function checkGlobalAbuseStatus(userId, now = nowMs()) {
 export function checkScanAbuseStatus(userId, now = nowMs()) {
   const state = resetAbuseStateIfExpired(userId, now);
 
+  // Scan-rate abuse lock disabled (default): scanning is never locked.
+  if (!env.SCAN_ABUSE_LOCK_ENABLED) {
+    return { isLocked: false, lockUntil: 0, scanSpamScore: state.scanSpamScore };
+  }
+
   return {
     isLocked: Boolean(state.scanLockUntil && now < state.scanLockUntil),
     lockUntil: state.scanLockUntil,
@@ -362,6 +369,12 @@ export function registerScanIntent(userId, now = nowMs()) {
 
   const reasons = [];
 
+  // Scan-rate abuse lock disabled (default): record activity for telemetry but
+  // never score/lock scanning — genuine heavy scanners must not be hard-blocked.
+  if (!env.SCAN_ABUSE_LOCK_ENABLED) {
+    return { state, reasons, abusive: false };
+  }
+
   if (state.recentScanTimestamps.length > MAX_SCAN_EVENTS_PER_10_MIN) {
     state.scanSpamScore += 2;
     reasons.push("too_many_scan_attempts");
@@ -381,9 +394,13 @@ export function registerScanIntent(userId, now = nowMs()) {
 
 export function registerScanAbuse(userId, reason, amount = 1, now = nowMs()) {
   const state = resetAbuseStateIfExpired(userId, now);
+  state.lastEventAt = now;
+  // Scan-rate abuse lock disabled (default): do not accrue scan spam score.
+  if (!env.SCAN_ABUSE_LOCK_ENABLED) {
+    return { state, reason };
+  }
   const prevScan = state.scanSpamScore;
   state.scanSpamScore += Number(amount) || 0;
-  state.lastEventAt = now;
 
   maybeApplyScanLock(state, now, prevScan);
   recomputeHardBlock(state);

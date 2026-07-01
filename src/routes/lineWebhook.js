@@ -2296,72 +2296,37 @@ async function finalizeAcceptedImage({
         : undefined;
 
       if (approvalFlow.mode === "manual_review") {
-        if (isRepeatSlipFailure) {
-          void maybeNotifyAdminSlipPendingVerify({
-            client,
-            lineUserId: userId,
-            paymentId,
-            paymentRef: slipPaymentRef,
-            packageKey: adminNotifyPackageKey,
-            slipUrl,
-          });
-          console.log(
-            JSON.stringify({
-              event: "SLIP_AUTO_APPROVE_ESCALATED_TO_ADMIN",
-              paymentId,
-              lineUserIdPrefix: String(userId || "").slice(0, 8),
-              reasons: approvalFlow.reasons,
-              isResend: true,
-            }),
-          );
-          await sendNonScanReply({
-            client,
-            userId,
-            replyToken: event.replyToken,
-            replyType: "slip_manual_review",
-            semanticKey: "slip_manual_review",
-            text: "ได้รับสลิปแล้วครับ\n\nระบบยังตรวจสอบอัตโนมัติไม่ผ่าน\nเดี๋ยวอาจารย์ตรวจสอบให้เอง แล้วจะแจ้งกลับในแชตนี้ครับ",
-            alternateTexts: [
-              "รับสลิปแล้วครับ เดี๋ยวอาจารย์ช่วยตรวจสอบให้นะครับ",
-            ],
-          });
-          return;
-        }
-
-        const reasonSet = new Set(approvalFlow.reasons || []);
-        let hint = "";
-        if (reasonSet.has("amount_mismatch") || reasonSet.has("missing_amount")) {
-          hint = "ยอดเงินในสลิปไม่ตรงกับที่ต้องชำระ";
-        } else if (reasonSet.has("duplicate_slip_ref")) {
-          hint = "สลิปนี้เคยถูกใช้ไปแล้ว";
-        } else if (
-          reasonSet.has("transfer_too_old") ||
-          reasonSet.has("transfer_before_payment_created")
-        ) {
-          hint = "สลิปนี้เป็นการโอนเก่า/คนละรายการ";
-        } else if (
-          reasonSet.has("receiver_mismatch") ||
-          reasonSet.has("missing_receiver")
-        ) {
-          hint = "ชื่อบัญชีผู้รับเงินไม่ตรง";
-        }
+        // Auto-verify could not confirm the slip. Policy (kob): never tell the
+        // customer it "failed" or ask them to resend — the auto-checker has false
+        // negatives on valid slips. Always silently escalate to the LINE admin and
+        // keep the customer on a neutral "received, admin will check" reply.
+        void maybeNotifyAdminSlipPendingVerify({
+          client,
+          lineUserId: userId,
+          paymentId,
+          paymentRef: slipPaymentRef,
+          packageKey: adminNotifyPackageKey,
+          slipUrl,
+          reasons: approvalFlow.reasons,
+        });
         console.log(
           JSON.stringify({
-            event: "SLIP_AUTO_APPROVE_RETRY_REQUESTED",
+            event: "SLIP_AUTO_APPROVE_ESCALATED_TO_ADMIN",
             paymentId,
             lineUserIdPrefix: String(userId || "").slice(0, 8),
             reasons: approvalFlow.reasons,
+            isResend: isRepeatSlipFailure,
           }),
         );
         await sendNonScanReply({
           client,
           userId,
           replyToken: event.replyToken,
-          replyType: "slip_retry_request",
-          semanticKey: "slip_retry_request",
-          text: `ขออภัยครับ ระบบตรวจสลิปนี้ยังไม่ผ่าน${hint ? `\n(${hint})` : ""}\n\nรบกวนส่ง "สลิปการโอนล่าสุดที่ถูกต้อง" ของรายการนี้เข้ามาใหม่อีกครั้งนะครับ\nถ้าส่งใหม่แล้วยังไม่ผ่าน เดี๋ยวอาจารย์จะมาช่วยตรวจสอบให้เองครับ`,
+          replyType: "slip_manual_review",
+          semanticKey: "slip_manual_review",
+          text: "ได้รับสลิปแล้วครับ\n\nเดี๋ยวอาจารย์ตรวจสอบให้ แล้วจะแจ้งเปิดสิทธิ์กลับในแชตนี้ครับ รอสักครู่นะครับ",
           alternateTexts: [
-            "สลิปยังไม่ผ่านการตรวจครับ รบกวนส่งสลิปโอนล่าสุดที่ถูกต้องอีกครั้งนะครับ",
+            "รับสลิปแล้วครับ เดี๋ยวอาจารย์ช่วยตรวจสอบให้ รอแป๊บนึงนะครับ",
           ],
         });
         return;
