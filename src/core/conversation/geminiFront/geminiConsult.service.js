@@ -5,7 +5,7 @@ import {
   isGeminiConfigured,
 } from "../../../integrations/gemini/geminiFlash.api.js";
 import { GEMINI_CONSULT_SYSTEM, buildConsultUserPrompt } from "./geminiConsultPrompt.js";
-import { buildRecentScanContext } from "./recentScanContext.util.js";
+import { buildScanHistoryContext } from "./recentScanContext.util.js";
 
 /**
  * Answer an amulet/crystal KNOWLEDGE question as อาจารย์ Ener (grounded + guarded).
@@ -19,11 +19,12 @@ export async function runGeminiConsult(p) {
   if (!env.GEMINI_CONSULT_ENABLED) return null;
   if (!isGeminiConfigured()) return null;
 
-  // Phase B: best-effort personalization from the user's own latest scan.
+  // Phase B: best-effort personalization from the user's own scan history
+  // (multiple pieces, so it can compare "องค์ไหนแรงสุด/ดีสุด" + link the report).
   let recentScan = null;
   if (p.userId) {
     try {
-      recentScan = await buildRecentScanContext(p.userId);
+      recentScan = await buildScanHistoryContext(p.userId, 6);
     } catch {
       recentScan = null;
     }

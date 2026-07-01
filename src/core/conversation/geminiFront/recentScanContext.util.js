@@ -1,9 +1,10 @@
 /**
- * Phase B: give the consult brain the customer's OWN latest scan so it can answer
- * "องค์ที่ผมสแกนไปเข้ากับผมไหม / เสริมด้านไหน" with real numbers instead of generic talk.
- * Best-effort + defensive: returns a compact Thai one-liner, or null (consult still works).
+ * Phase B: give the consult brain the customer's OWN scan history so it can answer
+ * "องค์ที่ผมสแกนไปเข้ากับผมไหม", and compare across pieces ("องค์ไหนแรงสุด / ดีสุด").
+ * Best-effort + defensive: returns a compact Thai block, or null (consult still works).
  */
 import { listScanResultsV2PayloadRowsForLineUser } from "../../../stores/scanV2/scanResultsV2.db.js";
+import { buildPublicReportUrl } from "../../../services/reports/reportLink.service.js";
 
 function str(v) {
   const s = String(v ?? "").trim();
@@ -13,6 +14,7 @@ function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
+
 /** Category words that must never be shown as a "พลังเด่น" (they're object types, not powers). */
 const CATEGORY_WORDS = [
   "พระเครื่อง",
@@ -51,41 +53,90 @@ function coercePayload(raw) {
 }
 
 /**
+ * @param {{ report_payload_json?: unknown, created_at?: string, html_public_token?: string|null }} row
+ * @returns {{ when: string, label: string, power: string, score: number|null, compat: number|null, band: string, url: string } | null}
+ */
+function extractRow(row) {
+  const p = coercePayload(row?.report_payload_json);
+  if (!p || typeof p !== "object") return null;
+  const summary = p.summary && typeof p.summary === "object" ? p.summary : {};
+  const object = p.object && typeof p.object === "object" ? p.object : {};
+
+  const label = str(object.objectLabel) || str(object.objectType);
+  const power = powerLabel(summary.mainEnergyLabel) || powerLabel(summary.visibleMainLabel);
+  const score = num(summary.energyScore);
+  const compat = num(summary.compatibilityPercent);
+  const band = str(summary.compatibilityBand);
+  const when = str(row?.created_at).slice(0, 10); // YYYY-MM-DD
+  const token = str(row?.html_public_token) || str(p.publicToken);
+  const url = token ? buildPublicReportUrl(token) : "";
+
+  if (!label && !power && score == null && compat == null) return null;
+  return { when, label, power, score, compat, band, url };
+}
+
+function formatItem(it) {
+  const parts = [];
+  if (it.label) parts.push(`ชื่อ/ประเภท: ${it.label}`);
+  if (it.power) parts.push(`พลังเด่น: ${it.power}`);
+  if (it.score != null) parts.push(`คะแนนพลัง: ${it.score}/10`);
+  if (it.compat != null) parts.push(`เข้ากับคุณ: ${it.compat}%${it.band ? ` (${it.band})` : ""}`);
+  if (it.url) parts.push(`ลิงก์รายงาน: ${it.url}`);
+  const when = it.when ? `[${it.when}] ` : "";
+  return `${when}${parts.join(" · ")}`;
+}
+
+/**
+ * Compact multi-line Thai history of the user's recent scans (most recent first,
+ * near-duplicate re-scans collapsed), for comparison questions. Null when none.
  * @param {string} userId LINE userId
- * @returns {Promise<string | null>} compact Thai summary of the latest scan, or null
+ * @param {number} [maxItems]
+ * @returns {Promise<string | null>}
+ */
+export async function buildScanHistoryContext(userId, maxItems = 6) {
+  const uid = String(userId || "").trim();
+  if (!uid) return null;
+
+  let rows = [];
+  try {
+    rows = await listScanResultsV2PayloadRowsForLineUser(uid, 14);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  const seen = new Set();
+  const items = [];
+  for (const row of rows) {
+    const it = extractRow(row);
+    if (!it) continue;
+    // Collapse identical re-scans of the same object.
+    const key = `${it.label}|${it.power}|${it.score}|${it.compat}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(it);
+    if (items.length >= Math.max(1, maxItems)) break;
+  }
+  if (items.length === 0) return null;
+
+  const lines = items.map((it, i) => `${i + 1}) ${formatItem(it)}`);
+  return lines.join("\n");
+}
+
+/**
+ * Single latest scan (kept for callers that only want the most recent line).
+ * @param {string} userId
+ * @returns {Promise<string | null>}
  */
 export async function buildRecentScanContext(userId) {
   const uid = String(userId || "").trim();
   if (!uid) return null;
-
   let rows = [];
   try {
     rows = await listScanResultsV2PayloadRowsForLineUser(uid, 1);
   } catch {
     return null;
   }
-  if (!Array.isArray(rows) || rows.length === 0) return null;
-
-  const p = coercePayload(rows[0]?.report_payload_json);
-  if (!p || typeof p !== "object") return null;
-
-  const summary = p.summary && typeof p.summary === "object" ? p.summary : {};
-  const object = p.object && typeof p.object === "object" ? p.object : {};
-
-  const objectLabel = str(object.objectLabel) || str(object.objectType);
-  // Prefer the canonical power label; both are dropped if they're really a category.
-  const main = powerLabel(summary.mainEnergyLabel) || powerLabel(summary.visibleMainLabel);
-  const secondary = powerLabel(summary.secondaryEnergyLabel);
-  const score = num(summary.energyScore);
-  const compat = num(summary.compatibilityPercent);
-  const band = str(summary.compatibilityBand);
-
-  const parts = [];
-  if (objectLabel) parts.push(`ประเภท/ชื่อ: ${objectLabel}`);
-  if (main) parts.push(`พลังเด่น: ${main}${secondary ? ` (รอง: ${secondary})` : ""}`);
-  if (score != null) parts.push(`คะแนนพลัง: ${score}/10`);
-  if (compat != null) parts.push(`เข้ากับคุณ: ${compat}%${band ? ` (${band})` : ""}`);
-
-  if (parts.length === 0) return null;
-  return parts.join(" · ");
+  const it = Array.isArray(rows) && rows.length ? extractRow(rows[0]) : null;
+  return it ? formatItem(it) : null;
 }

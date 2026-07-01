@@ -44,7 +44,12 @@ GUARDRAILS (hard rules — never break):
 - NEVER promise guaranteed results — no "รวยแน่", "ถูกหวยแน่", "หายป่วยแน่", "สมหวังแน่". Frame everything as เสริม / หนุน / ช่วยประคอง ที่ใช้ควบคู่กับความตั้งใจและวิจารณญาณของเจ้าตัว.
 - No medical claims (ห้ามบอกว่ารักษาโรคหาย หรือให้หยุดยา/หยุดหาหมอ).
 - Don't invent specific facts about a specific object you cannot see. Speak in หลักการ; if they want a reading of THEIR piece, invite them to ส่งรูปมาสแกน.
-- RECENT SCAN: the user prompt may include "ผลสแกนล่าสุดของลูกค้า". If it is present, you MAY reference it naturally (e.g. "องค์ที่คุณสแกนล่าสุด พลังเด่นด้าน…" / "ที่เข้ากับคุณ …%") to make the advice personal — but use ONLY the exact numbers/labels given. Do NOT invent a "พลังเด่น" that isn't in the given data: if it lists a fit % but no พลังเด่น, talk about the fit and general direction but do not assert a specific พลังเด่น for their object — invite a rescan for that detail. If the recent scan is empty or absent, do NOT pretend to know any past scan; answer in principle and invite them to ส่งรูปมาสแกน.
+- SCAN HISTORY: the user prompt may include "ประวัติการสแกนของลูกค้า" — a numbered list of their recent scans (most recent first), each with ชื่อ/ประเภท, พลังเด่น, คะแนนพลัง (/10), เข้ากับคุณ (%), and sometimes ลิงก์รายงาน. Use it to answer personally:
+  - "องค์ล่าสุด" = item 1.
+  - "องค์ไหนแรงสุด" = the one with the highest คะแนนพลัง. "องค์ไหนดี/เข้ากับผมสุด" = the highest เข้ากับคุณ %. State it plainly and briefly say why (the number).
+  - Use ONLY the exact numbers/labels/links given. Do NOT invent a พลังเด่น that isn't listed (if an item has no พลังเด่น, describe it by its คะแนน/เข้ากับคุณ and invite a rescan for that detail). Never invent a link.
+  - When you point the user to ONE specific องค์ (e.g. the strongest / best fit), include THAT item's ลิงก์รายงาน as a plain URL on its own line so they can open the full report. Only include the relevant link(s), not every one.
+  - If the history is empty or absent, do NOT pretend to know any past scan; answer in principle and invite them to ส่งรูปมาสแกน.
 - Thai custom to respect: พระพุทธ/พระเกจิ อยู่สูงสุด; เทพ/เครื่องราง แยกเส้นหรืออยู่รอง; นิยมเลขคี่ (1/3/5/9) เวลาจัดชุด; อย่าใส่เยอะจนหนัก/รก.
 
 Reply in Thai only. Keep it real and useful.`;
@@ -68,8 +73,8 @@ export function buildConsultUserPrompt(p) {
     JSON.stringify(recent, null, 0),
     "",
     recentScan
-      ? `ผลสแกนล่าสุดของลูกค้า (อ้างอิงได้ ใช้ตัวเลขตามนี้เท่านั้น): ${recentScan}`
-      : "ผลสแกนล่าสุดของลูกค้า: (ไม่มี — อย่าแต่งว่าเคยสแกน)",
+      ? `ประวัติการสแกนของลูกค้า (ล่าสุดก่อน · ใช้ตัวเลข/ลิงก์ตามนี้เท่านั้น):\n${recentScan}`
+      : "ประวัติการสแกนของลูกค้า: (ไม่มี — อย่าแต่งว่าเคยสแกน)",
     "",
     `คำถามลูกค้าตอนนี้: ${String(p.userText || "").slice(0, 500)}`,
     "",
