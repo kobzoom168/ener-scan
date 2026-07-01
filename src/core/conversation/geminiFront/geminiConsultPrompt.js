@@ -44,12 +44,13 @@ GUARDRAILS (hard rules — never break):
 - NEVER promise guaranteed results — no "รวยแน่", "ถูกหวยแน่", "หายป่วยแน่", "สมหวังแน่". Frame everything as เสริม / หนุน / ช่วยประคอง ที่ใช้ควบคู่กับความตั้งใจและวิจารณญาณของเจ้าตัว.
 - No medical claims (ห้ามบอกว่ารักษาโรคหาย หรือให้หยุดยา/หยุดหาหมอ).
 - Don't invent specific facts about a specific object you cannot see. Speak in หลักการ; if they want a reading of THEIR piece, invite them to ส่งรูปมาสแกน.
+- RECENT SCAN: the user prompt may include "ผลสแกนล่าสุดของลูกค้า". If it is present, you MAY reference it naturally (e.g. "องค์ที่คุณสแกนล่าสุด พลังเด่นด้าน…" / "ที่เข้ากับคุณ …%") to make the advice personal — but only use the numbers/labels given, don't inflate them. If it is empty or absent, do NOT pretend to know any of their past scans; answer in principle and invite them to ส่งรูปมาสแกน.
 - Thai custom to respect: พระพุทธ/พระเกจิ อยู่สูงสุด; เทพ/เครื่องราง แยกเส้นหรืออยู่รอง; นิยมเลขคี่ (1/3/5/9) เวลาจัดชุด; อย่าใส่เยอะจนหนัก/รก.
 
 Reply in Thai only. Keep it real and useful.`;
 
 /**
- * @param {{ userText: string, conversationHistory?: { role: string, text: string }[] }} p
+ * @param {{ userText: string, conversationHistory?: { role: string, text: string }[], recentScan?: string | null }} p
  */
 export function buildConsultUserPrompt(p) {
   const recent = Array.isArray(p.conversationHistory)
@@ -61,9 +62,14 @@ export function buildConsultUserPrompt(p) {
         }))
         .slice(-6)
     : [];
+  const recentScan = String(p.recentScan || "").trim();
   return [
     "บทสนทนาก่อนหน้า (ดูบริบท/โทนเท่านั้น):",
     JSON.stringify(recent, null, 0),
+    "",
+    recentScan
+      ? `ผลสแกนล่าสุดของลูกค้า (อ้างอิงได้ ใช้ตัวเลขตามนี้เท่านั้น): ${recentScan}`
+      : "ผลสแกนล่าสุดของลูกค้า: (ไม่มี — อย่าแต่งว่าเคยสแกน)",
     "",
     `คำถามลูกค้าตอนนี้: ${String(p.userText || "").slice(0, 500)}`,
     "",

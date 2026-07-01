@@ -101,6 +101,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
 
   if (resolved === "consult_amulet") {
     const consultText = await runGeminiConsult({
+      userId: ctx.userId,
       userText: ctx.text,
       conversationHistory,
     });
