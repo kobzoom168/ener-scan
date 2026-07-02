@@ -24,6 +24,11 @@ const LIFE_AREA_BAR_TRACK_BG = "#d8dee6";
 const LIFE_AREA_BAR_FILL = "#c9a227";
 const AMULET_ACCENT = "#b8860b";
 const AMULET_ACCENT_DIM = "#a16207";
+/** Top-tier (คะแนนพลัง ≥ 9) premium-gold accents. */
+const TOP_TIER_MIN_SCORE = 9;
+const AMULET_GOLD_BRIGHT = "#d4a017";
+const TOP_TIER_BOX_BG = "#fdf6e3";
+const TOP_TIER_BOX_BORDER = "#e0c86a";
 const FLEX_TEXT_PRIMARY = "#1c1917";
 const FLEX_TEXT_SECONDARY = "#57534e";
 /** Tagline under title: softer than body so headline stays primary. */
@@ -494,8 +499,9 @@ function createPowerCategoryBarBlock(powerCategories) {
  * @param {string} scoreDisplay
  * @param {string} compatPctStr
  * @param {string} [compatBandStr]
+ * @param {boolean} [topTier] — คะแนนพลัง ≥ 9: premium-gold score box + badge
  */
-function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
+function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "", topTier = false) {
   const levelValue = `${String(scoreDisplay || "-").trim() || "-"} / 10`;
   const pct = String(compatPctStr || "-").trim().replace(/\s+/g, "");
   const band = String(compatBandStr || "").trim();
@@ -540,23 +546,36 @@ function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
         flex: 1,
         paddingAll: "14px",
         cornerRadius: "md",
-        backgroundColor: FLEX_BOX_BG,
-        borderWidth: "1px",
-        borderColor: FLEX_BOX_BORDER,
+        backgroundColor: topTier ? TOP_TIER_BOX_BG : FLEX_BOX_BG,
+        borderWidth: topTier ? "2px" : "1px",
+        borderColor: topTier ? TOP_TIER_BOX_BORDER : FLEX_BOX_BORDER,
         contents: [
+          ...(topTier
+            ? [
+                {
+                  type: "text",
+                  text: "✨ TOP TIER · หายาก",
+                  size: "xxs",
+                  weight: "bold",
+                  color: AMULET_GOLD_BRIGHT,
+                  wrap: false,
+                },
+              ]
+            : []),
           {
             type: "text",
             text: "คะแนนพลัง",
             size: "xs",
             color: FLEX_TEXT_SECONDARY,
             wrap: true,
+            margin: topTier ? "xs" : "none",
           },
           {
             type: "text",
             text: levelValue,
             size: "xl",
             weight: "bold",
-            color: AMULET_ACCENT,
+            color: topTier ? AMULET_GOLD_BRIGHT : AMULET_ACCENT,
             margin: "sm",
             wrap: true,
           },
@@ -711,17 +730,37 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
     };
   }
 
+  const isTopTier =
+    s?.energyScore != null &&
+    Number.isFinite(Number(s.energyScore)) &&
+    Number(s.energyScore) >= TOP_TIER_MIN_SCORE;
+
   const scoreRowBlock = createScoreRowTwoUp(
     score.display || "-",
     compatPctStr,
     compatBandStr,
+    isTopTier,
   );
+
+  const topTierNote = isTopTier
+    ? {
+        type: "text",
+        text: "✨ องค์ระดับสูง · พลังหายากที่พบไม่บ่อย",
+        size: "xs",
+        weight: "bold",
+        color: AMULET_GOLD_BRIGHT,
+        align: "center",
+        wrap: true,
+        margin: "md",
+      }
+    : null;
 
   /** @type {object[]} */
   const bodyContents = [
     headlineBlock,
     taglineBlock,
     scoreRowBlock,
+    ...(topTierNote ? [topTierNote] : []),
     ...(lifeAreasBlock ? [lifeAreasBlock] : []),
     ...(fitBlock ? [fitBlock] : []),
   ];

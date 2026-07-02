@@ -443,6 +443,14 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     vm.metrics.energyScore != null && Number.isFinite(Number(vm.metrics.energyScore))
       ? String(vm.metrics.energyScore)
       : "ไม่มี";
+  /** คะแนนพลัง ≥ 9: premium-gold "top tier" treatment (rare). */
+  const isTopTier =
+    vm.metrics.energyScore != null &&
+    Number.isFinite(Number(vm.metrics.energyScore)) &&
+    Number(vm.metrics.energyScore) >= 9;
+  const topTierBannerHtml = isTopTier
+    ? `<div class="mv2a-toptier">✨ องค์ระดับสูง · พลัง 9+ ที่พบได้ยาก ✨</div>`
+    : "";
   const compat =
     Number.isFinite(Number(vm.metrics.compatibilityPercent))
       ? `${Math.round(Number(vm.metrics.compatibilityPercent))}%`
@@ -845,6 +853,21 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       .mv2-main { font-size: 0.88rem; line-height: 1.36; }
     }
     .mv2-hero-clarifier { font-size: 0.76rem; margin: 0.28rem 0 0; color: var(--mv2a-hero-clarifier); line-height: 1.38; }
+    .mv2a-toptier {
+      margin: 0.55rem 0 0.15rem;
+      padding: 0.5rem 0.8rem;
+      border-radius: 10px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 0.02em;
+      color: #7a5c00;
+      background: linear-gradient(135deg, #fff7e0 0%, #ffe9a8 50%, #f4d06a 100%);
+      border: 1px solid #e0c86a;
+      box-shadow: 0 2px 12px rgba(212, 160, 23, 0.28);
+    }
+    .mv2-strip-cell--top { background: #fdf6e3; border-radius: 10px; }
+    .mv2-strip-cell--top .mv2-strip-v { color: #d4a017; }
     .mv2-date { font-size: 0.72rem; color: var(--mv2a-muted); margin: 0.35rem 0 0; }
     .mv2-strip {
       display: grid;
@@ -2181,6 +2204,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   <div class="mv2a-wrap">
     <header class="mv2-hero">
       <div class="mv2a-badge">รายงานฉบับเต็ม</div>
+      ${topTierBannerHtml}
       <div class="mv2-hero-main">
         <div class="mv2-hero-text">
           <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "พระเครื่อง")}</h1>
@@ -2193,7 +2217,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     </header>
 
     <div class="mv2-strip" role="group" aria-label="สรุปตัวเลข">
-      <div class="mv2-strip-cell">
+      <div class="mv2-strip-cell${isTopTier ? " mv2-strip-cell--top" : ""}">
         <div class="mv2-strip-v">${escapeHtml(score)}<small> /10</small></div>
         <div class="mv2-strip-sub">คะแนนพลัง</div>
       </div>
