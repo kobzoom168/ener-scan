@@ -12,6 +12,7 @@ import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
 import { schedulePersonaAbRecompute } from "./services/personaAbSchedule.service.js";
 import reportRoutes from "./routes/report.routes.js";
+import { liffRouter } from "./routes/liff.routes.js";
 import { lineWebhookErrorHandler } from "./middleware/lineWebhookError.middleware.js";
 
 process.on("uncaughtException", (error) => {
@@ -155,53 +156,8 @@ app.get("/version", (req, res) => {
   res.status(200).json({ ok: true, version: "payment-slip-fix-v2" });
 });
 
-// LIFF entry page (LINE Front-end Framework). LIFF_ID injected from env so we can
-// wire the LINE Login channel's LIFF ID without a code change.
-app.get("/liff", (req, res) => {
-  const liffId = String(process.env.LIFF_ID || "").trim();
-  res.set("Content-Type", "text/html; charset=utf-8");
-  res.send(`<!doctype html>
-<html lang="th">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>Ener สายมู</title>
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<style>
-  *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,"Noto Sans Thai",sans-serif;background:linear-gradient(180deg,#faf6ef,#f2ede3);color:#3a2f22;display:flex;min-height:100dvh;align-items:center;justify-content:center;padding:24px}
-  .card{width:100%;max-width:420px;background:#fff;border-radius:22px;box-shadow:0 12px 40px rgba(120,90,40,.14);padding:34px 26px;text-align:center}
-  .logo{width:74px;height:74px;border-radius:20px;background:linear-gradient(135deg,#e8d9b8,#c9a227);margin:0 auto 18px;display:flex;align-items:center;justify-content:center;font-size:36px}
-  h1{margin:.2em 0;font-size:1.5rem;color:#7a5c00}
-  p{color:#6b5d49;line-height:1.5;margin:.5em 0}
-  .hi{font-weight:700;color:#b8860b}
-  .muted{font-size:.85rem;color:#9c8f7a;margin-top:20px}
-</style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo">🔮</div>
-    <h1>Ener สายมู</h1>
-    <p id="msg">กำลังเชื่อมต่อ...</p>
-    <p class="muted">อาจารย์ AI สายมู · ดูดวง · วิเคราะห์พลังงาน · ฮวงจุ้ย</p>
-  </div>
-<script>
-  var LIFF_ID = ${JSON.stringify(liffId)};
-  var msg = document.getElementById('msg');
-  if (!LIFF_ID) {
-    msg.textContent = 'หน้านี้พร้อมแล้ว ✓ (รอผูก LIFF ID)';
-  } else {
-    liff.init({ liffId: LIFF_ID }).then(function () {
-      if (!liff.isLoggedIn()) { liff.login(); return; }
-      return liff.getProfile();
-    }).then(function (p) {
-      if (p) { msg.innerHTML = 'สวัสดี <span class="hi">' + (p.displayName || '') + '</span> 🙏<br/>เชื่อมต่อ Ener สำเร็จ'; }
-    }).catch(function (e) { msg.textContent = 'เชื่อมต่อไม่สำเร็จ: ' + (e && e.message); });
-  }
-</script>
-</body>
-</html>`);
-});
+// Ener สายมู LIFF app (SPA + profile/daily APIs) — see routes/liff.routes.js
+app.use(liffRouter);
 
 app.use(reportRoutes);
 
