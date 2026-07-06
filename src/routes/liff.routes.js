@@ -60,7 +60,14 @@ function buildDaily(userId, now = Date.now()) {
 
 liffRouter.get("/api/liff/daily", (req, res) => {
   const userId = String(req.query.userId || "").trim();
-  res.json({ ok: true, ...buildDaily(userId) });
+  const now = Date.now();
+  // 7-day trend ending today (deterministic, so past days are reproducible)
+  const history = [];
+  for (let k = 6; k >= 0; k--) {
+    const d = buildDaily(userId, now - k * 86400000);
+    history.push({ day: d.day, score: d.score });
+  }
+  res.json({ ok: true, ...buildDaily(userId, now), history });
 });
 
 /* ---------------- monthly reading (deterministic per user per month) ---------------- */
@@ -363,12 +370,12 @@ function buildLiffHtml(liffId) {
   }
   .score .k{font-size:1.02rem;font-weight:800}
   .score .k small{display:block;font-weight:500;color:var(--faint);font-size:.82rem;margin-top:2px}
-  .score .mid{display:flex;align-items:center;gap:10px;margin-top:4px}
-  .score .num{font-size:4rem;line-height:1.08;color:var(--gold-deep);font-weight:500}
-  .score .per{font-size:1.05rem;color:var(--faint)}
-  .score .grade{margin-left:auto;text-align:right}
-  .score .grade b{display:block;color:var(--gold-deep);font-size:1.25rem}
-  .score .grade small{color:var(--faint);font-size:.8rem}
+  .score .mid{display:flex;align-items:flex-end;gap:8px;margin-top:4px}
+  .score .num{font-size:4rem;line-height:1.05;color:var(--gold-deep);font-weight:500}
+  .score .per{font-size:1.05rem;color:var(--faint);padding-bottom:8px}
+  .sparkbox{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:3px;padding-bottom:4px;position:relative;z-index:1}
+  .sparkbox svg{width:126px;height:46px;display:block}
+  .sparkbox b{color:var(--gold-deep);font-size:1rem;font-weight:800}
   .score .ft{font-size:.98rem;color:var(--sub);margin-top:8px;line-height:1.65}
   .score .lucky{display:inline-flex;align-items:center;gap:9px;margin-top:12px;border:1px solid var(--line-gold);
     background:#fdf8ec;border-radius:999px;padding:7px 15px;font-size:.9rem;color:var(--gold-deep);font-weight:700}
@@ -390,7 +397,15 @@ function buildLiffHtml(liffId) {
   .med2{background:linear-gradient(150deg,#eed9b4,#c9a35c)}
   .med3{background:linear-gradient(150deg,#f0dcbc,#c5a05e)}
   .row .rt{font-weight:800;font-size:1.13rem;color:var(--ink)}
+  .row .en{display:block;font-size:.6rem;color:var(--gold-deep);letter-spacing:.12em;font-weight:700;margin-top:1px}
   .row .rd{font-size:.88rem;color:var(--sub);margin-top:2px;line-height:1.5}
+  /* bottom nav (mockup v6) */
+  .homenav{margin-top:auto;background:#fff;border:1px solid var(--line);border-radius:20px;display:flex;justify-content:space-around;
+    padding:10px 6px;box-shadow:var(--shadow);position:sticky;bottom:10px}
+  .homenav .n{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.68rem;color:var(--faint);width:64px;font-weight:600;background:none}
+  .homenav .n svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .homenav .n.on{color:var(--gold-deep)}
+  .homenav .n.on::after{content:"";width:16px;height:2.5px;border-radius:2px;background:var(--gold);margin-top:1px}
   .row .chev{margin-left:auto;flex:0 0 auto;width:32px;height:32px;border-radius:999px;display:grid;place-items:center;
     background:#fdf8ec;border:1px solid var(--line-gold);color:var(--gold-deep);font-size:1.05rem;font-weight:700}
 
@@ -626,7 +641,14 @@ function buildLiffHtml(liffId) {
       <div class="k">ดวงวันนี้ของคุณ<small id="s-date"></small></div>
       <div class="mid">
         <span class="num serif" id="s-num">–</span><span class="per serif">/100</span>
-        <span class="grade"><b id="s-grade"></b><small>พลังงานโดยรวม</small></span>
+        <span class="sparkbox">
+          <svg viewBox="0 0 126 46" aria-hidden="true">
+            <path id="sp-area" d="" fill="rgba(201,163,92,.13)" stroke="none"/>
+            <path id="sp-line" d="" fill="none" stroke="#c9a35c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle id="sp-dot" r="2.8" fill="#a5813a" cx="-9" cy="-9"/>
+          </svg>
+          <b id="s-grade"></b>
+        </span>
       </div>
       <div class="ft" id="s-msg"></div>
       <span class="lucky">✦ เลขนำโชควันนี้ <b id="s-lucky" style="font-size:1.15rem">–</b></span>
@@ -644,11 +666,18 @@ function buildLiffHtml(liffId) {
 
     <div class="sect">วันนี้ให้อาจารย์ช่วยเรื่องไหนดี</div>
     <div class="rows">
-      <button class="row" data-say="สแกนพระ"><span class="med med1"><svg viewBox="0 0 24 24"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><path d="M12 8.2c-1.9 0-3 1.5-3 3.3 0 2 1.5 3.3 3 4.8 1.5-1.5 3-2.8 3-4.8 0-1.8-1.1-3.3-3-3.3z"/><circle cx="12" cy="11.4" r=".9" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">สแกนพระ</span><br/><span class="rd">ส่งรูปพระ ให้อาจารย์อ่านพลัง</span></span><span class="chev">›</span></button>
-      <button class="row" data-say="ดูฮวงจุ้ยห้อง"><span class="med med2"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10.2V19h12v-8.8"/><path d="M12 12.3v4.4M9.9 14.5h4.2"/><path d="M12 12.3l1.5 2.2-1.5-.6-1.5.6z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ฮวงจุ้ยจากรูป</span><br/><span class="rd">ถ่ายรูปห้อง อาจารย์ดูพลังบ้านให้</span></span><span class="chev">›</span></button>
-      <button class="row" data-say="ถามอาจารย์"><span class="med med3"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/><path d="M12 8.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ถามอาจารย์</span><br/><span class="rd">มีอะไรค้างใจ มาคุยกันได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
+      <button class="row" data-say="สแกนพระ"><span class="med med1"><svg viewBox="0 0 24 24"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><path d="M12 8.2c-1.9 0-3 1.5-3 3.3 0 2 1.5 3.3 3 4.8 1.5-1.5 3-2.8 3-4.8 0-1.8-1.1-3.3-3-3.3z"/><circle cx="12" cy="11.4" r=".9" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">สแกนพระ</span><span class="en">AMULET SCAN</span><span class="rd">ส่งรูปพระ ให้อาจารย์อ่านพลัง</span></span><span class="chev">›</span></button>
+      <button class="row" data-say="ดูฮวงจุ้ยห้อง"><span class="med med2"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10.2V19h12v-8.8"/><path d="M12 12.3v4.4M9.9 14.5h4.2"/><path d="M12 12.3l1.5 2.2-1.5-.6-1.5.6z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ฮวงจุ้ยจากรูป</span><span class="en">FENG SHUI</span><span class="rd">ถ่ายรูปห้อง อาจารย์ดูพลังบ้านให้</span></span><span class="chev">›</span></button>
+      <button class="row" data-say="ถามอาจารย์"><span class="med med3"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/><path d="M12 8.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ถามอาจารย์</span><span class="en">ASK MASTER</span><span class="rd">มีอะไรค้างใจ มาคุยกันได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
     </div>
     <p class="note">กดบริการแล้วกลับไปคุยกับอาจารย์ในแชตได้เลย</p>
+
+    <div class="homenav">
+      <button class="n on"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>หน้าหลัก</button>
+      <button class="n" id="nav-read"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 9l-4.4 3.8L17 19l-5-3.2L7 19l1.4-6.2L4 9l5.8-.6z"/></svg>ดวงเดือน</button>
+      <button class="n" id="nav-ask"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/></svg>ถามอาจารย์</button>
+      <button class="n" id="nav-me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>ข้อมูลฉัน</button>
+    </div>
   </div>
 
   <!-- monthly reading -->
@@ -839,6 +868,28 @@ function buildLiffHtml(liffId) {
     }
     requestAnimationFrame(step);
   }
+  /* 7-day trend sparkline (smoothed quadratic curve, like the v6 mockup) */
+  function renderSpark(history){
+    if(!history || history.length < 2) return;
+    var W=126, H=46, padX=6, top=7, bottom=40;
+    var n = history.length;
+    var pts = history.map(function(h, i){
+      var x = padX + i * ((W - padX*2) / (n - 1));
+      var y = bottom - ((h.score - 55) / 40) * (bottom - top);
+      return [Number(x.toFixed(1)), Number(Math.max(top, Math.min(bottom, y)).toFixed(1))];
+    });
+    var d = "M" + pts[0][0] + " " + pts[0][1];
+    for(var i=1;i<n;i++){
+      var mx = ((pts[i-1][0]+pts[i][0])/2).toFixed(1);
+      var my = ((pts[i-1][1]+pts[i][1])/2).toFixed(1);
+      d += " Q" + pts[i-1][0] + " " + pts[i-1][1] + " " + mx + " " + my;
+    }
+    d += " T" + pts[n-1][0] + " " + pts[n-1][1];
+    $("sp-line").setAttribute("d", d);
+    $("sp-area").setAttribute("d", d + " L" + pts[n-1][0] + " " + H + " L" + pts[0][0] + " " + H + " Z");
+    $("sp-dot").setAttribute("cx", pts[n-1][0]);
+    $("sp-dot").setAttribute("cy", pts[n-1][1]);
+  }
   function enterHome(nickname){
     $("h-when").textContent = greetWord();
     $("h-name").textContent = "คุณ" + (nickname || state.displayName || "");
@@ -850,6 +901,7 @@ function buildLiffHtml(liffId) {
         countUp($("s-num"), j.score);
         $("s-grade").textContent = j.grade;
         $("s-msg").textContent = j.message; $("s-lucky").textContent = j.luckyNum;
+        renderSpark(j.history);
       }).catch(function(){});
     show("v-home");
   }
@@ -926,6 +978,15 @@ function buildLiffHtml(liffId) {
       });
   }
   $("btn-reading").addEventListener("click", openReading);
+  $("nav-read").addEventListener("click", openReading);
+  $("nav-me").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
+  $("nav-ask").addEventListener("click", function(){
+    try{
+      liff.sendMessages([{ type:"text", text:"ถามอาจารย์" }])
+        .then(function(){ liff.closeWindow(); })
+        .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์ถามอาจารย์ได้เลยครับ"); liff.closeWindow(); });
+    }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์ถามอาจารย์ได้เลยครับ"); }
+  });
   $("rd-back").addEventListener("click", function(){ show("v-home"); });
   $("rd-fill").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
   $("rd-ask").addEventListener("click", function(){
