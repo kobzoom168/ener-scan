@@ -49,13 +49,27 @@ function gradeFor(score) {
   return "ค่อยเป็นค่อยไป";
 }
 
+const LUCKY_COLORS = [
+  { name: "สีทอง", hex: "#c9a35c" },
+  { name: "สีแดง", hex: "#d64545" },
+  { name: "สีชมพู", hex: "#e88ab8" },
+  { name: "สีส้ม", hex: "#e8863c" },
+  { name: "สีเหลือง", hex: "#e6c34a" },
+  { name: "สีเขียว", hex: "#4c9e6b" },
+  { name: "สีฟ้า", hex: "#58a6d6" },
+  { name: "สีน้ำเงิน", hex: "#3f6bb5" },
+  { name: "สีม่วง", hex: "#8a63b8" },
+  { name: "สีขาว", hex: "#f4f1ea" },
+];
+
 function buildDaily(userId, now = Date.now()) {
   const day = bangkokDateKey(now);
   const seed = String(userId || "guest").trim() + "|" + day;
   const score = 55 + (fnv1a32(seed + "|score") % 41); // 55..95
   const message = DAILY_MESSAGES[fnv1a32(seed + "|msg") % DAILY_MESSAGES.length];
   const luckyNum = fnv1a32(seed + "|num") % 10;
-  return { day, score, grade: gradeFor(score), message, luckyNum };
+  const luckyColor = LUCKY_COLORS[fnv1a32(seed + "|color") % LUCKY_COLORS.length];
+  return { day, score, grade: gradeFor(score), message, luckyNum, luckyColor };
 }
 
 liffRouter.get("/api/liff/daily", (req, res) => {
@@ -383,8 +397,11 @@ function buildLiffHtml(liffId) {
   .delta.flat{background:#f3efe4;color:var(--sub)}
   .sparkcap{font-size:.62rem;color:var(--faint)}
   .score .ft{font-size:.98rem;color:var(--sub);margin-top:8px;line-height:1.65}
-  .score .lucky{display:inline-flex;align-items:center;gap:9px;margin-top:12px;border:1px solid var(--line-gold);
-    background:#fdf8ec;border-radius:999px;padding:7px 15px;font-size:.9rem;color:var(--gold-deep);font-weight:700}
+  .score .luckies{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .score .lucky{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-gold);
+    background:#fdf8ec;border-radius:999px;padding:7px 14px;font-size:.9rem;color:var(--gold-deep);font-weight:700}
+  .score .cdot{width:15px;height:15px;border-radius:99px;display:inline-block;background:#ccc;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.12)}
 
   .sect{font-size:1.08rem;font-weight:800;margin-top:2px}
   .rows{display:flex;flex-direction:column;gap:12px}
@@ -665,7 +682,10 @@ function buildLiffHtml(liffId) {
         </span>
       </div>
       <div class="ft" id="s-msg"></div>
-      <span class="lucky">✦ เลขนำโชควันนี้ <b id="s-lucky" style="font-size:1.15rem">–</b></span>
+      <span class="luckies">
+        <span class="lucky">✦ เลขนำโชควันนี้ <b id="s-lucky" style="font-size:1.15rem">–</b></span>
+        <span class="lucky"><i class="cdot" id="s-cdot"></i> สีนำโชค <b id="s-color">–</b></span>
+      </span>
       <button class="readbtn" id="btn-reading">
         <svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round">
           <rect x="8.5" y="4.5" width="8" height="12.5" rx="1.6"/>
@@ -931,6 +951,10 @@ function buildLiffHtml(liffId) {
         countUp($("s-num"), j.score);
         $("s-grade").textContent = j.grade;
         $("s-msg").textContent = j.message; $("s-lucky").textContent = j.luckyNum;
+        if(j.luckyColor){
+          $("s-color").textContent = j.luckyColor.name.replace("สี","");
+          $("s-cdot").style.background = j.luckyColor.hex;
+        }
         renderSpark(j.history);
         renderDelta(j.history);
       }).catch(function(){});
