@@ -15,6 +15,7 @@ import {
 } from "../stores/payments.db.js";
 import { checkScanAccess } from "../services/paymentAccess.service.js";
 import {
+  adjustPaidRemainingScansForLineUserByAdmin,
   resetFreeTrialForLineUserByAdmin,
   revokePaidAccessForLineUserByAdmin,
 } from "../stores/adminReset.db.js";
@@ -889,6 +890,13 @@ function renderDetailPage({
       <button type="button" class="btn btn-neu js-reset-free" data-reset-mode="reset_free_quota_only">รีเซ็ตสิทธิ์ทดลองใช้ฟรี</button>
       <button type="button" class="btn btn-neu js-reset-free-scan-abuse" data-reset-mode="reset_free_quota_and_scan_abuse" style="border-color:var(--accent,#6b8);">รีเซ็ตสิทธิ์ฟรี + ปลดล็อก anti-scan</button>
     </div>
+    <p class="reject-hint"><strong>ปรับจำนวนสแกนคงเหลือ (paid)</strong> — เพิ่ม/ลด paid_remaining_scans ทีละกี่ครั้งก็ได้ · ถ้าเพิ่มให้คนที่หน้าต่างเวลาหมดแล้ว ระบบต่ออายุให้อัตโนมัติ 24 ชม. · ลดได้ต่ำสุด 0</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
+      <span style="color:var(--muted);font-size:0.9rem;">ตอนนี้เหลือ <strong>${rem}</strong> ครั้ง</span>
+      <input type="number" id="adj-scan-n" min="1" max="99" step="1" value="1" style="width:76px;padding:8px 10px;border-radius:10px;border:1px solid var(--line,#444);background:transparent;color:inherit;font-size:1rem;text-align:center;" />
+      <button type="button" class="btn btn-neu js-adj-scan" data-dir="1" style="border-color:var(--accent,#6b8);">＋ เพิ่มสแกน</button>
+      <button type="button" class="btn btn-neu js-adj-scan" data-dir="-1" style="border-color:var(--bad);color:var(--bad);">－ ลดสแกน</button>
+    </div>
     <p class="reject-hint"><strong>เพิกถอนสิทธิ์ชำระเงิน</strong> — ล้าง paid_until / โควต้า paid เท่านั้น · <strong>ไม่</strong>รีเซ็ตโควต้าฟรี · ปิด payment ที่ค้าง</p>
     <button type="button" class="btn btn-neu js-revoke-paid" style="border-color:var(--bad);color:var(--bad);">เพิกถอนสิทธิ์ชำระเงิน</button>
   </div>`
@@ -1050,6 +1058,34 @@ function renderDetailPage({
         "ยืนยันรีเซ็ตสิทธิ์ฟรี + ปลดล็อก anti-scan?\\n\\n• เหมือนรีเซ็ตฟรี\\n• เพิ่มเติม: เคลียร์คะแนน/ล็อกสแกน และปลด hard block ถ้าเหลือคะแนนรวมต่ำกว่าเกณฑ์\\n• ไม่รีเซ็ต payment / slip abuse",
         "รีเซ็ตสิทธิ์ฟรีและปลดล็อก anti-scan เรียบร้อยแล้ว"
       );
+      var adjBtns = document.querySelectorAll(".js-adj-scan");
+      Array.prototype.forEach.call(adjBtns, function (ab) {
+        if (!lineUid) return;
+        ab.addEventListener("click", async function () {
+          var nEl = document.getElementById("adj-scan-n");
+          var n = Math.trunc(Number(nEl && nEl.value));
+          if (!Number.isFinite(n) || n < 1 || n > 99) { showToast("จำนวนต้องอยู่ระหว่าง 1-99", "err"); return; }
+          var dir = Number(ab.dataset.dir) < 0 ? -1 : 1;
+          var word = dir > 0 ? "เพิ่ม" : "ลด";
+          if (!confirm("ยืนยัน" + word + "สแกนคงเหลือ " + n + " ครั้ง?")) return;
+          Array.prototype.forEach.call(adjBtns, function (b) { b.disabled = true; });
+          try {
+            var ra = await fetch("/admin/users/" + encodeURIComponent(lineUid) + "/adjust-paid-scans", {
+              method: "POST",
+              headers: { Accept: "application/json", "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ delta: dir * n })
+            });
+            var ja = await ra.json().catch(function () { return null; });
+            if (!ra.ok || (ja && ja.ok === false)) throw new Error((ja && ja.message) || "ปรับไม่สำเร็จ");
+            showToast(word + "แล้ว: " + ja.before + " → " + ja.after + " ครั้ง" + (ja.paidUntilExtended ? " (ต่ออายุ 24 ชม.)" : ""), "ok");
+            setTimeout(function () { location.reload(); }, 800);
+          } catch (ea) {
+            showToast(ea.message || "เกิดข้อผิดพลาด", "err");
+            Array.prototype.forEach.call(adjBtns, function (b) { b.disabled = false; });
+          }
+        });
+      });
       var rp = document.querySelector(".js-revoke-paid");
       if (rp && lineUid) {
         rp.addEventListener("click", async function () {
@@ -1642,6 +1678,43 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
         } else {
           res.status(code).send(msg);
         }
+      }
+    }
+  );
+
+  router.post(
+    "/admin/users/:lineUserId/adjust-paid-scans",
+    requireAdminSession,
+    express.json(),
+    async (req, res) => {
+      let lineUserId = String(req.params?.lineUserId || "").trim();
+      try {
+        lineUserId = decodeURIComponent(lineUserId);
+      } catch {
+        /* ignore */
+      }
+      if (!lineUserId) {
+        res.status(400).json({ ok: false, message: "line_user_id_missing" });
+        return;
+      }
+
+      try {
+        const result = await adjustPaidRemainingScansForLineUserByAdmin({
+          lineUserId,
+          delta: req.body?.delta,
+          adminLabel: "admin_dashboard",
+        });
+        res.status(200).json({ ok: true, ...result });
+      } catch (err) {
+        console.error("[ADMIN_DASH] adjust_paid_scans failed:", err);
+        const msg = err?.message || "adjust_paid_scans_failed";
+        const code =
+          msg === "app_user_not_found"
+            ? 404
+            : msg === "invalid_delta"
+              ? 400
+              : 409;
+        res.status(code).json({ ok: false, message: msg });
       }
     }
   );

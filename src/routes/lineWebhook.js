@@ -89,8 +89,10 @@ import {
   createPaymentPending,
   ensurePaymentRefForPaymentId,
   getLatestAwaitingPaymentForLineUserId,
+  getLatestRecentRejectedPaymentForLineUserId,
   getSlipVerifyStatusByPaymentId,
   markPaymentApprovedAndUnlock,
+  reopenRejectedPaymentForResubmit,
   setPaymentSlipPendingVerify,
   updatePaymentSlipVerificationFields,
 } from "../stores/payments.db.js";
@@ -103,6 +105,7 @@ import {
   logSlipPendingVerifyRouted,
 } from "../services/lineWebhook/slipImageValidation.service.js";
 import { runSlipAutoApprovalAfterGateAccept } from "../core/payments/slipCheck/slipAutoApprovalOrchestrator.service.js";
+import { evaluateSlipAutoApproval } from "../core/payments/slipCheck/slipAutoApproval.service.js";
 import { runGeminiFrontOrchestrator } from "../core/conversation/geminiFront/geminiFrontOrchestrator.service.js";
 import { resolveGeminiPhase1StateKey } from "../core/conversation/geminiFront/geminiFront.featureFlags.js";
 import { invokePhase1GeminiShadow } from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
@@ -1947,8 +1950,58 @@ async function finalizeAcceptedImage({
       turnPerf,
     });
 
+  // AUTO RE-VERIFY LOOP shared flags (slip resubmit after reject / while pending review).
+  let slipGatePassedPreRoute = false;
+  let reopenedRejectedPriorSlipRef = null;
+
   // Access denied (quota / paywall): end in non-scan gateway only — never duplicate/object/AI scan.
   if (chosenPath === "payment_gate") {
+    // AUTO RE-VERIFY LOOP (rejected case): the customer may be resending a corrected
+    // slip for a recently rejected payment. If this image is a real transfer slip,
+    // revive that payment and run the verify pipeline instead of showing the paywall.
+    let rejectedResubmitRow = null;
+    try {
+      const recentRejected =
+        await getLatestRecentRejectedPaymentForLineUserId(userId);
+      if (recentRejected?.id) {
+        const rejVal = await evaluateAwaitingPaymentSlipImage({
+          imageBuffer,
+          userId,
+          paymentId: recentRejected.id,
+          messageId: event?.message?.id ?? null,
+          flowState: "rejected_resubmit",
+        });
+        if (rejVal?.proceed) {
+          const reopened = await reopenRejectedPaymentForResubmit(recentRejected.id);
+          if (reopened) rejectedResubmitRow = recentRejected;
+        }
+      }
+    } catch (reopenErr) {
+      console.error(
+        JSON.stringify({
+          event: "REJECTED_RESUBMIT_CHECK_FAILED",
+          lineUserIdPrefix: lineUserIdPrefix8(userId),
+          message: String(reopenErr?.message || reopenErr).slice(0, 200),
+        }),
+      );
+    }
+    if (rejectedResubmitRow) {
+      reopenedRejectedPriorSlipRef =
+        String(rejectedResubmitRow.slip_ref || "").trim() || null;
+      slipGatePassedPreRoute = true;
+      pendingPayment = { ...rejectedResubmitRow, status: "awaiting_payment" };
+      if (turnCache) turnCache.pendingPaymentRow = pendingPayment;
+      slipPipelineNeeded = true;
+      chosenPath = "slip";
+      console.log(
+        JSON.stringify({
+          event: "SLIP_REVERIFY_AFTER_REJECT_ROUTED",
+          lineUserIdPrefix: lineUserIdPrefix8(userId),
+          paymentId: rejectedResubmitRow.id ?? null,
+          hadPriorSlipRef: Boolean(reopenedRejectedPriorSlipRef),
+        }),
+      );
+    } else {
     console.log(
       JSON.stringify({
         event: "ACCESS_GATE_PAYWALL_NON_SCAN_ONLY",
@@ -2025,6 +2078,7 @@ async function finalizeAcceptedImage({
       source: "finalize_image_payment_required_text_only",
     });
     return;
+    }
   }
 
   if (chosenPath === "scan") {
@@ -2076,50 +2130,83 @@ async function finalizeAcceptedImage({
       return;
     }
 
-    if (String(pendingPayment.status) === "pending_verify") {
-      let paymentRef = null;
+    if (
+      String(pendingPayment.status) === "pending_verify" &&
+      !slipGatePassedPreRoute
+    ) {
+      // AUTO RE-VERIFY LOOP (pending case): a new image while waiting for review
+      // may be a corrected slip. Gate it first — a real transfer slip falls through
+      // to the shared verify pipeline below; anything else keeps the block reply.
+      let resubmitVal = null;
       try {
-        paymentRef =
-          pendingPayment.payment_ref ||
-          (await ensurePaymentRefForPaymentId(pendingPayment.id));
-      } catch (_) {
-        paymentRef = null;
-      }
-      markAcceptedImageEvent(userId, eventTimestamp);
-      clearLatestScanJob(userId);
-      console.log(
-        JSON.stringify({
-          event: "PENDING_VERIFY_STATE_ENFORCED",
+        resubmitVal = await evaluateAwaitingPaymentSlipImage({
+          imageBuffer,
           userId,
-          paymentId: pendingPayment.id ?? null,
+          paymentId: pendingPayment.id,
+          messageId: event?.message?.id ?? null,
+          flowState: "pending_verify_resubmit",
+        });
+      } catch (_) {
+        resubmitVal = null;
+      }
+      if (resubmitVal?.proceed) {
+        slipGatePassedPreRoute = true;
+        console.log(
+          JSON.stringify({
+            event: "SLIP_REVERIFY_RESUBMIT_ACCEPTED",
+            userId,
+            paymentId: pendingPayment.id ?? null,
+            priorStatus: "pending_verify",
+          }),
+        );
+        // fall through to the shared slip pipeline (upload → verify → approve/admin)
+      } else {
+        let paymentRef = null;
+        try {
+          paymentRef =
+            pendingPayment.payment_ref ||
+            (await ensurePaymentRefForPaymentId(pendingPayment.id));
+        } catch (_) {
+          paymentRef = null;
+        }
+        markAcceptedImageEvent(userId, eventTimestamp);
+        clearLatestScanJob(userId);
+        console.log(
+          JSON.stringify({
+            event: "PENDING_VERIFY_STATE_ENFORCED",
+            userId,
+            paymentId: pendingPayment.id ?? null,
+            replyType: "pending_verify_block_scan",
+          }),
+        );
+        if ((await imgPhase1Invoke()).handled) return;
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
           replyType: "pending_verify_block_scan",
-        }),
-      );
-      if ((await imgPhase1Invoke()).handled) return;
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "pending_verify_block_scan",
-        semanticKey: "pending_verify_block_scan",
-        text: buildPendingVerifyBlockScanText({ userId, paymentRef }),
-        alternateTexts: [
-          "ตอนนี้รอตรวจสลิปอยู่นะครับ ส่งสลิปหรือรอแอดมินก่อน แล้วค่อยสแกนใหม่ได้",
-        ],
-      });
-      return;
+          semanticKey: "pending_verify_block_scan",
+          text: buildPendingVerifyBlockScanText({ userId, paymentRef }),
+          alternateTexts: [
+            "ตอนนี้รอตรวจสลิปอยู่นะครับ ส่งสลิปหรือรอแอดมินก่อน แล้วค่อยสแกนใหม่ได้",
+          ],
+        });
+        return;
+      }
     }
 
     const slipMessageId = event?.message?.id;
     const paymentId = pendingPayment.id;
 
-    const slipVal = await evaluateAwaitingPaymentSlipImage({
-      imageBuffer,
-      userId,
-      paymentId,
-      messageId: slipMessageId ?? null,
-      flowState: "awaiting_payment",
-    });
+    const slipVal = slipGatePassedPreRoute
+      ? { proceed: true }
+      : await evaluateAwaitingPaymentSlipImage({
+          imageBuffer,
+          userId,
+          paymentId,
+          messageId: slipMessageId ?? null,
+          flowState: "awaiting_payment",
+        });
 
     if (!slipVal.proceed) {
       await sendNonScanReply({
@@ -2219,6 +2306,25 @@ async function finalizeAcceptedImage({
           status: "pending_verify",
         },
         updatePaymentFields: updatePaymentSlipVerificationFields,
+        // Reopened-after-reject only: never auto-approve the exact slip the admin
+        // already rejected — force it back to manual review instead.
+        evaluate: reopenedRejectedPriorSlipRef
+          ? async (args) => {
+              const verdict = await evaluateSlipAutoApproval(args);
+              const newRef = String(args?.ocrResult?.slipRef || "").trim();
+              if (newRef && newRef === reopenedRejectedPriorSlipRef) {
+                return {
+                  ...verdict,
+                  decision: "manual_review_required",
+                  reasons: [
+                    ...(verdict.reasons || []),
+                    "same_slip_as_admin_rejected",
+                  ],
+                };
+              }
+              return verdict;
+            }
+          : undefined,
       });
 
       if (approvalFlow.mode === "auto_approved") {

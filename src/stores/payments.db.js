@@ -404,6 +404,65 @@ export async function getLatestAwaitingPaymentForLineUserId(lineUserId) {
   return data;
 }
 
+/** A rejected payment may be revived by a fresh slip within this window. */
+const REJECTED_RESUBMIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Latest admin-rejected payment recent enough to revive when the customer sends
+ * a new transfer slip (auto re-verify loop). Includes slip_ref so the caller can
+ * refuse to auto-approve the exact same slip the admin already rejected.
+ */
+export async function getLatestRecentRejectedPaymentForLineUserId(lineUserId) {
+  const lu = String(lineUserId || "").trim();
+  if (!lu) return null;
+  const sinceIso = new Date(Date.now() - REJECTED_RESUBMIT_WINDOW_MS).toISOString();
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,created_at,payment_ref,rejected_at,slip_ref"
+    )
+    .eq("line_user_id", lu)
+    .eq("status", "rejected")
+    .gte("rejected_at", sinceIso)
+    .order("rejected_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+/**
+ * Revive a rejected payment so a resent slip can run the normal verify pipeline
+ * (rejected -> awaiting_payment). Conditional update: only flips if still rejected.
+ * @returns {Promise<boolean>} true if the row was reopened
+ */
+export async function reopenRejectedPaymentForResubmit(paymentId) {
+  const id = String(paymentId || "").trim();
+  if (!id) return false;
+  const { data, error } = await supabase
+    .from("payments")
+    .update({
+      status: "awaiting_payment",
+      reject_reason: null,
+      rejected_at: null,
+      updated_at: getNowIso(),
+    })
+    .eq("id", id)
+    .eq("status", "rejected")
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  const reopened = Boolean(data?.id);
+  console.log(
+    JSON.stringify({
+      event: "REJECTED_PAYMENT_REOPENED_FOR_RESUBMIT",
+      paymentIdPrefix: id.slice(0, 8),
+      reopened,
+    }),
+  );
+  return reopened;
+}
+
 export async function setPaymentSlipPendingVerify({
   paymentId,
   slipUrl,
