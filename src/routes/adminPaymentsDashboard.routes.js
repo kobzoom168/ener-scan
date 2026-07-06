@@ -1071,14 +1071,14 @@ function renderDetailPage({
           if (!Number.isFinite(n) || n < 1 || n > 99) { showToast("จำนวนต้องอยู่ระหว่าง 1-99", "err"); return; }
           var dir = Number(ab.dataset.dir) < 0 ? -1 : 1;
           var word = dir > 0 ? "เพิ่ม" : "ลด";
-          if (!confirm("ยืนยัน" + word + "สแกนคงเหลือ " + n + " ครั้ง?")) return;
+          if (!confirm("ยืนยัน" + word + "สแกนคงเหลือ " + n + " ครั้ง?\n\nระบบจะส่ง LINE แจ้งลูกค้าว่าเหลือกี่ครั้งด้วย")) return;
           Array.prototype.forEach.call(adjBtns, function (b) { b.disabled = true; });
           try {
             var ra = await fetch("/admin/users/" + encodeURIComponent(lineUid) + "/adjust-paid-scans", {
               method: "POST",
               headers: { Accept: "application/json", "Content-Type": "application/json" },
               credentials: "same-origin",
-              body: JSON.stringify({ delta: dir * n })
+              body: JSON.stringify({ delta: dir * n, notify: true })
             });
             var ja = await ra.json().catch(function () { return null; });
             if (!ra.ok || (ja && ja.ok === false)) throw new Error((ja && ja.message) || "ปรับไม่สำเร็จ");
@@ -1788,17 +1788,17 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
           if (!Number.isFinite(n) || n < 0 || n > 999) { showToast("จำนวน 0-999", "err"); return; }
           var before = Math.trunc(Number(nEl.dataset.before)) || 0;
           if (n === before) { showToast("ค่าเท่าเดิม ไม่ต้องบันทึก", "err"); return; }
-          if (!confirm("ตั้งสแกนคงเหลือของ " + uid.slice(0, 12) + "… เป็น " + n + " ครั้ง? (เดิม " + before + ")")) return;
+          if (!confirm("ตั้งสแกนคงเหลือของ " + uid.slice(0, 12) + "… เป็น " + n + " ครั้ง? (เดิม " + before + ")\n\nระบบจะส่ง LINE แจ้งลูกค้าว่าเหลือกี่ครั้งด้วย")) return;
           save.disabled = true;
           fetch("/admin/users/" + encodeURIComponent(uid) + "/adjust-paid-scans", {
             method: "POST",
             headers: { Accept: "application/json", "Content-Type": "application/json" },
             credentials: "same-origin",
-            body: JSON.stringify({ set: n })
+            body: JSON.stringify({ set: n, notify: true })
           }).then(function (r) { return r.json(); }).then(function (j) {
             if (!j || j.ok === false) throw new Error((j && j.message) || "ไม่สำเร็จ");
-            showToast("บันทึกแล้ว: " + j.before + " → " + j.after + (j.paidUntilExtended ? " (ต่ออายุ 24 ชม.)" : ""), "ok");
-            setTimeout(function () { location.reload(); }, 800);
+            showToast("บันทึกแล้ว: " + j.before + " → " + j.after + (j.paidUntilExtended ? " (ต่ออายุ 24 ชม.)" : "") + (j.notified ? " · แจ้งลูกค้าแล้ว 📨" : ""), "ok");
+            setTimeout(function () { location.reload(); }, 900);
           }).catch(function (err) { showToast(err.message || "ผิดพลาด", "err"); save.disabled = false; });
           return;
         }
@@ -1852,7 +1852,51 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
           setTo: req.body?.set != null ? req.body.set : null,
           adminLabel: "admin_dashboard",
         });
-        res.status(200).json({ ok: true, ...result });
+
+        // On top-up: also clear the in-memory anti-scan lock so the customer
+        // can really scan right away (per กบ: เพิ่มปุ๊บต้องปลดล็อกให้สแกนได้เลย).
+        if (result.after > result.before) {
+          try {
+            adminResetScanAbuseState(lineUserId, Date.now());
+          } catch {
+            /* in-memory only — never block the adjust */
+          }
+        }
+
+        // Tell the customer their new balance in LINE (อาจารย์ voice, friendly).
+        // Default ON every time; pass notify:false to stay silent (scripted calls).
+        let notified = false;
+        if (req.body?.notify !== false && result.after !== result.before) {
+          const untilLine =
+            result.after > 0 && result.paidUntil
+              ? (() => {
+                  const d = new Date(Date.parse(result.paidUntil) + 7 * 3600 * 1000);
+                  if (Number.isNaN(d.getTime())) return "";
+                  const th = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+                  const hh = String(d.getUTCHours()).padStart(2, "0");
+                  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+                  return ` (ใช้ได้ถึง ${d.getUTCDate()} ${th[d.getUTCMonth()]} ${d.getUTCFullYear() + 543} เวลา ${hh}:${mm} น.)`;
+                })()
+              : "";
+          const text =
+            result.after > result.before
+              ? `อาจารย์เติมสิทธิ์สแกนให้เรียบร้อยแล้วนะ ✨\n\nตอนนี้ใช้ได้อีก ${result.after} ครั้ง${untilLine}\nพร้อมใช้งานได้ทันที ส่งรูปพระ เครื่องราง หิน หรือกำไลเข้ามาได้เลยครับ อาจารย์รอดูให้อยู่ 🙏`
+              : `อาจารย์ปรับสิทธิ์สแกนของคุณให้เรียบร้อยแล้วนะครับ\n\nตอนนี้คงเหลือ ${result.after} ครั้ง${untilLine} มีอะไรสงสัยทักถามอาจารย์ได้เลยนะ`;
+          try {
+            await enqueueAdminSystemText({ lineUserId, text, replyToken: null });
+            notified = true;
+          } catch (nErr) {
+            console.error(
+              JSON.stringify({
+                event: "ADMIN_ADJUST_NOTIFY_FAILED",
+                lineUserIdPrefix: lineUserId.slice(0, 8),
+                message: String(nErr?.message || nErr).slice(0, 160),
+              }),
+            );
+          }
+        }
+
+        res.status(200).json({ ok: true, notified, ...result });
       } catch (err) {
         console.error("[ADMIN_DASH] adjust_paid_scans failed:", err);
         const msg = err?.message || "adjust_paid_scans_failed";
