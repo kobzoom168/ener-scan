@@ -381,11 +381,9 @@ export function buildPaymentQrIntroFactsText({ paymentRef, paidPackage = null } 
   const base = [
     "วันนี้สิทธิ์สแกนฟรีครบแล้วครับ",
     "",
-    `ถ้าต้องการเปิดเพิ่มวันนี้ มีค่าเปิดระบบ ${priceThb} บาท`,
-    `ใช้สแกนเพิ่มได้ ${scanCount} ครั้ง ภายใน ${windowHours} ชั่วโมง`,
+    `เปิดสแกนต่อได้เลย ${priceThb} บาท สแกนได้ ${scanCount} ครั้ง ใน ${windowHours} ชม.`,
     "",
-    "ถ้าพร้อม ตอบว่า 'จ่าย' ได้เลยครับ",
-    "เดี๋ยวผมส่งรายละเอียดให้",
+    "พร้อมเมื่อไหร่ พิมพ์ จ่าย มาได้เลยครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -1368,24 +1366,16 @@ export function buildDeterministicFreeQuotaExhaustedPaywallText(offer, opts = {}
   const price = pkg?.priceThb ?? o.paidPriceThb;
   const count = pkg?.scanCount ?? o.paidScanCount;
   const hours = pkg?.windowHours ?? o.paidWindowHours;
-  const facts = [
-    "วันนี้สิทธิ์สแกนฟรีครบแล้วครับ",
+  // Short + clear per กบ (customer feedback: "ยาวไปมั้ยคะ") — no soft support
+  // preamble, อาจารย์ voice, no quote marks.
+  void lineUserId;
+  return [
+    "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ ✨",
     "",
-    `ถ้าจะเปิดเพิ่มวันนี้ แพ็ก ${price} บาท ใช้ได้ ${count} ครั้งภายใน ${hours} ชม.`,
+    `เปิดสแกนต่อได้เลย แพ็ก ${price} บาท สแกนได้ ${count} ครั้ง ใน ${hours} ชม.`,
     "",
-    'ถ้าพร้อม พิมพ์ "จ่าย" ได้เลยครับ เดี๋ยวผมส่งรายละเอียดให้',
+    "พร้อมเมื่อไหร่ พิมพ์ จ่าย มาได้เลยครับ",
   ].join("\n");
-  const uid =
-    lineUserId != null && String(lineUserId).trim()
-      ? String(lineUserId).trim()
-      : "anonymous";
-  const soft = pickReplyVariant(
-    uid,
-    "payment_support_soft",
-    paymentSupportVariants,
-    3,
-  );
-  return [soft, "", facts].join("\n");
 }
 
 /**
@@ -1403,24 +1393,14 @@ export function getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(
   const price = pkg?.priceThb ?? o.paidPriceThb;
   const count = pkg?.scanCount ?? o.paidScanCount;
   const hours = pkg?.windowHours ?? o.paidWindowHours;
-  const uid =
-    lineUserId != null && String(lineUserId).trim()
-      ? String(lineUserId).trim()
-      : "anonymous";
-  const ex = primaryFirstLine ? [primaryFirstLine] : [];
-  const softAlt = pickReplyVariantExcluding(
-    uid,
-    "payment_support_soft",
-    paymentSupportVariants,
-    ex,
-    3,
-  );
+  void lineUserId;
+  void primaryFirstLine;
   const factsAlt = [
-    "ฟรีวันนี้หมดแล้วครับ",
+    "สิทธิ์ฟรีวันนี้หมดแล้วนะครับ",
     "",
-    `ถ้าอยากใช้ต่อวันนี้ เปิดแพ็ก ${price} บาท ได้ ${count} ครั้ง ภายใน ${hours} ชม. พิมพ์ว่าจ่ายมาได้เลยครับ`,
+    `สแกนต่อได้เลย ${price} บาท ได้ ${count} ครั้ง ใน ${hours} ชม. พิมพ์ จ่าย มาได้เลยครับ`,
   ].join("\n");
-  return [[softAlt, "", factsAlt].join("\n")];
+  return [factsAlt];
 }
 
 export function buildDeterministicPaywallSoftCloseText() {
