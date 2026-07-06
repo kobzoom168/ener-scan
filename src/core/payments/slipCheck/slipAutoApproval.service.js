@@ -133,16 +133,22 @@ export async function evaluateSlipAutoApproval({
   const confidenceMatched = confidence >= env.SLIP_OCR_MIN_CONFIDENCE;
   if (!confidenceMatched) reasons.push("low_confidence");
 
+  // Allow the transfer to predate payment creation by a small grace window —
+  // customers often transfer first, then tap "จ่าย" (slip replay is still
+  // blocked by duplicate_slip_ref + amount/receiver checks).
+  const transferBeforeGraceMs =
+    env.SLIP_TRANSFER_BEFORE_GRACE_MINUTES * 60 * 1000;
   const timeMatched =
     transferredAtIso &&
     Number.isFinite(transferredAtMs) &&
     Number.isFinite(paymentCreatedAtMs) &&
-    transferredAtMs >= paymentCreatedAtMs &&
+    transferredAtMs >= paymentCreatedAtMs - transferBeforeGraceMs &&
     now.getTime() - transferredAtMs <= env.SLIP_AUTO_APPROVE_MAX_AGE_HOURS * 60 * 60 * 1000;
   if (!transferredAtIso) reasons.push("invalid_transfer_time");
   else if (!Number.isFinite(transferredAtMs)) reasons.push("invalid_transfer_time");
   else if (!Number.isFinite(paymentCreatedAtMs)) reasons.push("payment_created_at_invalid");
-  else if (transferredAtMs < paymentCreatedAtMs) reasons.push("transfer_before_payment_created");
+  else if (transferredAtMs < paymentCreatedAtMs - transferBeforeGraceMs)
+    reasons.push("transfer_before_payment_created");
   else if (
     now.getTime() - transferredAtMs >
     env.SLIP_AUTO_APPROVE_MAX_AGE_HOURS * 60 * 60 * 1000

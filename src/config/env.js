@@ -696,6 +696,17 @@ export const env = {
     const n = raw === undefined || raw === "" ? 24 : Number(raw);
     return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 24;
   })(),
+  /**
+   * Grace window (minutes) allowing the transfer time to be BEFORE payment
+   * created_at. Customers often transfer first, then tap "จ่าย" — a real slip
+   * was auto-rejected for being 90s early. Replay is still blocked by the
+   * duplicate_slip_ref check + amount/receiver matching. Default 15.
+   */
+  SLIP_TRANSFER_BEFORE_GRACE_MINUTES: (() => {
+    const raw = process.env.SLIP_TRANSFER_BEFORE_GRACE_MINUTES;
+    const n = raw === undefined || raw === "" ? 15 : Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : 15;
+  })(),
   SLIP_AMOUNT_TOLERANCE: (() => {
     const raw = process.env.SLIP_AMOUNT_TOLERANCE;
     const n = raw === undefined || raw === "" ? 0 : Number(raw);
