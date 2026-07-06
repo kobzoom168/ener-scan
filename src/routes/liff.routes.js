@@ -373,9 +373,15 @@ function buildLiffHtml(liffId) {
   .score .mid{display:flex;align-items:flex-end;gap:8px;margin-top:4px}
   .score .num{font-size:4rem;line-height:1.05;color:var(--gold-deep);font-weight:500}
   .score .per{font-size:1.05rem;color:var(--faint);padding-bottom:8px}
-  .sparkbox{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:3px;padding-bottom:4px;position:relative;z-index:1}
+  .sparkbox{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px;padding-bottom:4px;position:relative;z-index:1}
   .sparkbox svg{width:126px;height:46px;display:block}
+  .sparkbox .gline{display:flex;align-items:center;gap:7px}
   .sparkbox b{color:var(--gold-deep);font-size:1rem;font-weight:800}
+  .delta{font-size:.72rem;font-weight:800;border-radius:99px;padding:2.5px 9px;white-space:nowrap}
+  .delta.up{background:#e6f4ea;color:#2e8b57}
+  .delta.down{background:#f9efe9;color:#b06a45}
+  .delta.flat{background:#f3efe4;color:var(--sub)}
+  .sparkcap{font-size:.62rem;color:var(--faint)}
   .score .ft{font-size:.98rem;color:var(--sub);margin-top:8px;line-height:1.65}
   .score .lucky{display:inline-flex;align-items:center;gap:9px;margin-top:12px;border:1px solid var(--line-gold);
     background:#fdf8ec;border-radius:999px;padding:7px 15px;font-size:.9rem;color:var(--gold-deep);font-weight:700}
@@ -651,9 +657,11 @@ function buildLiffHtml(liffId) {
           <svg viewBox="0 0 126 46" aria-hidden="true">
             <path id="sp-area" d="" fill="rgba(201,163,92,.13)" stroke="none"/>
             <path id="sp-line" d="" fill="none" stroke="#c9a35c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle id="sp-dot-prev" r="2.3" fill="#fff" stroke="#c9a35c" stroke-width="1.4" cx="-9" cy="-9"/>
             <circle id="sp-dot" r="2.8" fill="#a5813a" cx="-9" cy="-9"/>
           </svg>
-          <b id="s-grade"></b>
+          <span class="gline"><b id="s-grade"></b><span class="delta hidden" id="s-delta"></span></span>
+          <span class="sparkcap">ดวง 7 วันล่าสุดของคุณ</span>
         </span>
       </div>
       <div class="ft" id="s-msg"></div>
@@ -895,6 +903,22 @@ function buildLiffHtml(liffId) {
     $("sp-area").setAttribute("d", d + " L" + pts[n-1][0] + " " + H + " L" + pts[0][0] + " " + H + " Z");
     $("sp-dot").setAttribute("cx", pts[n-1][0]);
     $("sp-dot").setAttribute("cy", pts[n-1][1]);
+    if(n >= 2){
+      $("sp-dot-prev").setAttribute("cx", pts[n-2][0]);
+      $("sp-dot-prev").setAttribute("cy", pts[n-2][1]);
+    }
+  }
+  /* explicit vs-yesterday chip: ▲ ขึ้น / ▼ ลง / เท่าเดิม */
+  function renderDelta(history){
+    var el = $("s-delta");
+    if(!el || !history || history.length < 2){ return; }
+    var today = history[history.length-1].score;
+    var yesterday = history[history.length-2].score;
+    var d = today - yesterday;
+    el.classList.remove("hidden","up","down","flat");
+    if(d > 0){ el.classList.add("up"); el.textContent = "▲ +" + d + " จากเมื่อวาน"; }
+    else if(d < 0){ el.classList.add("down"); el.textContent = "▼ " + d + " จากเมื่อวาน"; }
+    else { el.classList.add("flat"); el.textContent = "เท่าเมื่อวาน"; }
   }
   function enterHome(nickname){
     $("h-when").textContent = greetWord();
@@ -908,6 +932,7 @@ function buildLiffHtml(liffId) {
         $("s-grade").textContent = j.grade;
         $("s-msg").textContent = j.message; $("s-lucky").textContent = j.luckyNum;
         renderSpark(j.history);
+        renderDelta(j.history);
       }).catch(function(){});
     show("v-home");
   }
