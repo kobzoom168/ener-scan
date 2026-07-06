@@ -63,6 +63,173 @@ liffRouter.get("/api/liff/daily", (req, res) => {
   res.json({ ok: true, ...buildDaily(userId) });
 });
 
+/* ---------------- monthly reading (deterministic per user per month) ---------------- */
+
+const TH_MONTHS_FULL = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
+
+// Ener tarot deck (Thai-flavored majors): name / emoji / keyword / meaning fragment.
+const TAROT_DECK = [
+  { n: "ดวงอาทิตย์", e: "☀️", k: "ความสำเร็จ", m: "พลังความสำเร็จและความสดใสกำลังส่องทางให้" },
+  { n: "ดวงจันทร์", e: "🌙", k: "สัญชาตญาณ", m: "ให้เชื่อเสียงข้างในตัวเองมากขึ้น มันกำลังบอกทางที่ใช่" },
+  { n: "ดวงดาว", e: "⭐", k: "ความหวัง", m: "ความหวังใหม่กำลังก่อตัว อย่าเพิ่งถอดใจ" },
+  { n: "นักปราชญ์", e: "🧙", k: "ผู้ชี้ทาง", m: "จะมีผู้ใหญ่หรือผู้รู้เข้ามาช่วยชี้ทางในจังหวะสำคัญ" },
+  { n: "จักรพรรดิ", e: "👑", k: "ความมั่นคง", m: "การงานและฐานะกำลังตั้งหลักได้มั่นคงขึ้น" },
+  { n: "คู่รัก", e: "💞", k: "ความสัมพันธ์", m: "ความสัมพันธ์รอบตัวกำลังส่งพลังบวกเข้ามาหนุน" },
+  { n: "รถศึก", e: "🏇", k: "เดินหน้า", m: "ถึงเวลาเดินหน้าอย่างมีเป้าหมาย อย่าลังเล" },
+  { n: "ตราชู", e: "⚖️", k: "ความสมดุล", m: "เรื่องที่คาราคาซังกำลังคลี่คลายอย่างเป็นธรรม" },
+  { n: "กงล้อโชคชะตา", e: "🎡", k: "จังหวะชีวิต", m: "จังหวะชีวิตกำลังหมุนเข้าสู่รอบที่ดีขึ้น" },
+  { n: "ราชสีห์", e: "🦁", k: "พลังใจ", m: "พลังใจแข็งแรงพอจะตัดสินใจเรื่องที่เลื่อนมานาน" },
+  { n: "ฤๅษี", e: "🏮", k: "การทบทวน", m: "เหมาะกับการพักทบทวนใจตัวเองก่อนก้าวใหญ่" },
+  { n: "นกพิราบขาว", e: "🕊️", k: "ความพอดี", m: "ค่อยเป็นค่อยไปจะได้ผลดีกว่าเร่งรีบ" },
+  { n: "แม่โพสพ", e: "🌾", k: "ความอุดม", m: "รายรับและความอุดมสมบูรณ์กำลังงอกเงยทีละน้อย" },
+  { n: "โลกทั้งใบ", e: "🌏", k: "ความสมบูรณ์", m: "สิ่งที่ลงแรงมานานใกล้ครบวงจรสมบูรณ์แล้ว" },
+  { n: "แสงเทียน", e: "🕯️", k: "ทางสว่าง", m: "ทางออกที่เคยมองไม่เห็นกำลังค่อย ๆ สว่างขึ้น" },
+  { n: "ดอกบัว", e: "🪷", k: "ใจสงบ", m: "ใจที่สงบจะดึงสิ่งดี ๆ เข้ามาหาเอง" },
+];
+
+const READING_ADVICE = [
+  "หมั่นสวดมนต์สั้น ๆ ก่อนนอน จิตที่นิ่งจะทำให้ตัดสินใจแม่นขึ้น",
+  "หาเวลาไปไหว้พระสักครั้งในเดือนนี้ พลังใจจะกลับมาเต็ม",
+  "ใส่ใจคนใกล้ตัวอีกนิด แรงหนุนสำคัญมาจากคนข้าง ๆ",
+  "เก็บออมเล็ก ๆ ทุกวัน เดือนนี้วินัยการเงินคือเครื่องรางชั้นดี",
+  "พักผ่อนให้พอ สุขภาพดีคือฐานของดวงทุกด้าน",
+  "ทำบุญเล็ก ๆ ตามกำลัง บุญที่ทำเองส่งผลไวที่สุด",
+  "จัดบ้านให้โปร่ง ของที่ไม่ใช้แล้วปล่อยไป พลังใหม่จะเข้ามา",
+  "กล้าปฏิเสธในสิ่งที่เกินกำลัง เดือนนี้ใจแข็งคือใจดีต่อตัวเอง",
+];
+
+const ZODIAC_BOUNDS = [
+  { d: 19, a: "มังกร", b: "กุมภ์" }, { d: 18, a: "กุมภ์", b: "มีน" },
+  { d: 20, a: "มีน", b: "เมษ" }, { d: 19, a: "เมษ", b: "พฤษภ" },
+  { d: 20, a: "พฤษภ", b: "เมถุน" }, { d: 20, a: "เมถุน", b: "กรกฎ" },
+  { d: 22, a: "กรกฎ", b: "สิงห์" }, { d: 22, a: "สิงห์", b: "กันย์" },
+  { d: 22, a: "กันย์", b: "ตุลย์" }, { d: 22, a: "ตุลย์", b: "พิจิก" },
+  { d: 21, a: "พิจิก", b: "ธนู" }, { d: 21, a: "ธนู", b: "มังกร" },
+];
+const ELEMENT_BY_ZODIAC = {
+  เมษ: "ไฟ", สิงห์: "ไฟ", ธนู: "ไฟ",
+  พฤษภ: "ดิน", กันย์: "ดิน", มังกร: "ดิน",
+  เมถุน: "ลม", ตุลย์: "ลม", กุมภ์: "ลม",
+  กรกฎ: "น้ำ", พิจิก: "น้ำ", มีน: "น้ำ",
+};
+const ANIMAL_YEARS = ["ชวด (หนู)", "ฉลู (วัว)", "ขาล (เสือ)", "เถาะ (กระต่าย)", "มะโรง (งูใหญ่)", "มะเส็ง (งูเล็ก)", "มะเมีย (ม้า)", "มะแม (แพะ)", "วอก (ลิง)", "ระกา (ไก่)", "จอ (สุนัข)", "กุน (หมู)"];
+
+function thaiAstroFromBirthdate(birthdate) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(birthdate || ""));
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!(y > 1900 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return null;
+  const zb = ZODIAC_BOUNDS[mo - 1];
+  const zodiac = d <= zb.d ? zb.a : zb.b;
+  const animal = ANIMAL_YEARS[(((y - 2008) % 12) + 12) % 12];
+  const nowBkk = new Date(Date.now() + 7 * 3600 * 1000);
+  let age = nowBkk.getUTCFullYear() - y;
+  if (nowBkk.getUTCMonth() + 1 < mo || (nowBkk.getUTCMonth() + 1 === mo && nowBkk.getUTCDate() < d)) {
+    age -= 1;
+  }
+  return {
+    zodiac: "ราศี" + zodiac,
+    element: "ธาตุ" + (ELEMENT_BY_ZODIAC[zodiac] || "ดิน"),
+    animal,
+    age,
+    birthdateLabel: d + " " + TH_MONTHS_FULL[mo - 1] + " " + (y + 543),
+  };
+}
+
+const READING_AXES = ["การงาน", "การเงิน", "ความรัก", "สุขภาพ", "โชคลาภ"];
+
+function readingGrade(score) {
+  if (score >= 85) return "ดวงดีมาก";
+  if (score >= 75) return "ดวงดี";
+  if (score >= 65) return "กำลังไต่ระดับ";
+  return "ค่อย ๆ ฟื้นตัว";
+}
+
+function buildMonthlyReading(userId, birthdate) {
+  const monthKey = bangkokDateKey().slice(0, 7); // YYYY-MM (BKK)
+  const seed =
+    String(userId || "guest").trim() + "|" + monthKey + "|" + String(birthdate || "");
+
+  const picked = [];
+  let i = 0;
+  while (picked.length < 3 && i < 48) {
+    const idx = fnv1a32(seed + "|card" + i) % TAROT_DECK.length;
+    if (!picked.includes(idx)) picked.push(idx);
+    i += 1;
+  }
+  const positions = ["อดีต", "ตอนนี้", "ข้างหน้า"];
+  const cards = picked.map((idx, j) => ({
+    pos: positions[j],
+    n: TAROT_DECK[idx].n,
+    e: TAROT_DECK[idx].e,
+    k: TAROT_DECK[idx].k,
+  }));
+
+  const axes = {};
+  for (const ax of READING_AXES) {
+    axes[ax] = 62 + (fnv1a32(seed + "|ax|" + ax) % 32); // 62..93
+  }
+  const overall = Math.round(
+    Object.values(axes).reduce((s, v) => s + v, 0) / READING_AXES.length,
+  );
+  const bestAxis = READING_AXES.reduce((a, b) => (axes[a] >= axes[b] ? a : b));
+
+  const c = picked.map((idx) => TAROT_DECK[idx]);
+  const reading =
+    "ช่วงที่ผ่านมา " + c[0].m + " มาถึงช่วงนี้ " + c[1].m +
+    " และก้าวต่อไป " + c[2].m +
+    " เดือนนี้ด้านที่เด่นที่สุดของคุณคือ" + bestAxis;
+  const advice = READING_ADVICE[fnv1a32(seed + "|adv") % READING_ADVICE.length];
+
+  const lucky = [
+    fnv1a32(seed + "|l1") % 10,
+    fnv1a32(seed + "|l2") % 10,
+    fnv1a32(seed + "|l3") % 10,
+  ];
+  const luckyPair = 10 + (fnv1a32(seed + "|lp") % 90);
+
+  const [yy, mm] = monthKey.split("-").map(Number);
+  return {
+    month: monthKey,
+    monthLabel: TH_MONTHS_FULL[mm - 1] + " " + (yy + 543),
+    cards,
+    overall,
+    grade: readingGrade(overall),
+    axes,
+    bestAxis,
+    reading,
+    advice,
+    lucky,
+    luckyPair,
+  };
+}
+
+liffRouter.get("/api/liff/reading", async (req, res) => {
+  const userId = String(req.query.userId || "").trim();
+  if (!userId) return res.status(400).json({ ok: false, error: "missing_userId" });
+  try {
+    const { data, error } = await supabase
+      .from("liff_profiles")
+      .select("nickname,birthdate")
+      .eq("line_user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.json({ ok: true, needsProfile: true });
+    if (!data.birthdate) return res.json({ ok: true, needsBirthdate: true });
+    const astro = thaiAstroFromBirthdate(data.birthdate);
+    const reading = buildMonthlyReading(userId, data.birthdate);
+    res.json({ ok: true, nickname: data.nickname || "", astro, ...reading });
+  } catch (e) {
+    console.error(JSON.stringify({ event: "LIFF_READING_ERROR", message: String(e?.message || e).slice(0, 200) }));
+    res.status(500).json({ ok: false, error: "reading_error" });
+  }
+});
+
 /* ---------------- profile API ---------------- */
 
 const PROFILE_FIELDS = [
@@ -256,7 +423,61 @@ function buildLiffHtml(liffId) {
     @keyframes gem{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
     @keyframes glow{0%,100%{opacity:.45}50%{opacity:.95}}
     @keyframes dot{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-5px)}}
+    .tcard{animation:rise .55s ease-out both}
+    .tcard:nth-child(2){animation-delay:.15s}
+    .tcard:nth-child(3){animation-delay:.3s}
+    @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
   }
+
+  /* ---- monthly reading view ---- */
+  .rd-top{display:flex;align-items:center;gap:10px}
+  .rd-back{width:40px;height:40px;border-radius:999px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;
+    font-size:1.15rem;color:var(--gold-deep);flex:0 0 auto}
+  .rd-title{font-size:1.15rem;font-weight:800}
+  .rd-title small{display:block;font-weight:600;color:var(--gold-deep);font-size:.82rem;margin-top:1px}
+  .repcard{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px;box-shadow:var(--shadow)}
+  .tarotrow{display:flex;gap:12px;justify-content:center;padding:6px 0 2px}
+  .tcard{width:88px;border-radius:16px;padding:13px 6px 11px;text-align:center;background:linear-gradient(170deg,#fdfaf2,#f7efdd);
+    border:1px solid var(--line-gold)}
+  .tcard.mid{border:1.5px solid var(--gold);box-shadow:0 8px 24px -10px rgba(201,163,92,.45);transform:translateY(-6px)}
+  .tcard .te{font-size:30px;line-height:1.2}
+  .tcard .tn{font-size:.78rem;font-weight:800;color:var(--ink);margin-top:5px;line-height:1.3}
+  .tcard .tk{font-size:.64rem;color:var(--gold-deep);font-weight:700;margin-top:2px}
+  .tcard .tp{display:inline-block;font-size:.6rem;color:var(--sub);border:1px solid var(--line);border-radius:99px;
+    padding:2px 9px;margin-top:7px;background:#fff}
+  .rd-score{display:flex;align-items:center;gap:12px;margin-top:6px}
+  .rd-score .num{font-size:3rem;line-height:1.05;color:var(--gold-deep);font-weight:500}
+  .rd-score .per{font-size:.9rem;color:var(--faint)}
+  .rd-score .gd{margin-left:auto;text-align:right}
+  .rd-score .gd b{display:block;color:var(--gold-deep);font-size:1.15rem}
+  .rd-score .gd small{color:var(--faint);font-size:.76rem}
+  .radwrap{position:relative;width:230px;height:180px;margin:8px auto 0}
+  .radwrap svg{width:230px;height:180px;display:block}
+  .rlab{position:absolute;font-size:.7rem;color:var(--sub);white-space:nowrap}
+  .rlab b{color:var(--gold-deep)}
+  .sgrid{display:grid;grid-template-columns:1fr 1fr 1fr;margin-top:4px}
+  .sg{padding:9px 2px 10px;border-top:1px solid var(--line)}
+  .sg:nth-child(-n+3){border-top:none}
+  .sg small{display:block;font-size:.7rem;color:var(--faint)}
+  .sg .v{font-size:.92rem;font-weight:700;margin-top:2px}
+  .rd-read p{margin:.55em 0 0;font-size:1rem;line-height:1.8;color:var(--ink)}
+  .rd-read .rk{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-gold);border-radius:999px;
+    padding:5px 13px;font-size:.68rem;font-weight:700;color:var(--gold-deep);letter-spacing:.12em}
+  .rd-adv{background:#fdf8ec;border:1px solid var(--line-gold);border-radius:16px;padding:12px 14px;font-size:.95rem;
+    line-height:1.7;color:var(--ink);margin-top:11px}
+  .rd-adv b{color:var(--gold-deep)}
+  .luckyrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .luckyrow .lt{font-size:.95rem;font-weight:800}
+  .ln{width:42px;height:42px;border-radius:999px;border:1.5px solid var(--gold);display:grid;place-items:center;
+    color:var(--gold-deep);font-weight:700;font-size:1.15rem;background:#fff}
+  .ln.wide{width:auto;padding:0 15px}
+  .readbtn{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:13px;background:linear-gradient(165deg,#e3c98f,#c9a35c 60%,#b08a40);
+    color:#fff;font-weight:800;text-align:center;padding:14px;border-radius:16px;font-size:1.05rem;width:100%;
+    box-shadow:0 12px 26px -10px rgba(176,138,64,.5)}
+  .needbd{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;text-align:center;box-shadow:var(--shadow)}
+  .needbd .big{font-size:2.2rem}
+  .needbd .t{font-weight:800;font-size:1.1rem;margin-top:8px}
+  .needbd p{color:var(--sub);font-size:.92rem;line-height:1.65;margin:.5em 0 0}
 </style>
 </head>
 <body>
@@ -375,6 +596,7 @@ function buildLiffHtml(liffId) {
       </div>
       <div class="ft" id="s-msg"></div>
       <span class="lucky">✦ เลขนำโชควันนี้ <b id="s-lucky" style="font-size:1.15rem">–</b></span>
+      <button class="readbtn" id="btn-reading">🔮 เปิดดวงประจำเดือน</button>
     </div>
 
     <div class="sect">บริการแนะนำ</div>
@@ -386,6 +608,79 @@ function buildLiffHtml(liffId) {
     <p class="note">กดบริการแล้วกลับไปคุยกับอาจารย์ในแชตได้เลย</p>
   </div>
 
+  <!-- monthly reading -->
+  <div id="v-read" class="hidden" style="display:flex;flex-direction:column;gap:13px">
+    <div class="rd-top">
+      <button class="rd-back" id="rd-back">‹</button>
+      <div class="rd-title">ดวงประจำเดือน<small id="rd-month"></small></div>
+    </div>
+
+    <div id="rd-needbd" class="needbd hidden">
+      <div class="big">🗓️</div>
+      <div class="t">ยังไม่มีวันเกิดของคุณ</div>
+      <p>บอกวันเกิดให้อาจารย์หน่อย<br>จะได้ผูกดวงและเปิดไพ่ประจำเดือนให้ได้</p>
+      <button class="readbtn" id="rd-fill" style="margin-top:16px">กรอกข้อมูล</button>
+    </div>
+
+    <div id="rd-body" class="hidden" style="display:flex;flex-direction:column;gap:13px">
+      <div class="repcard">
+        <div class="tarotrow" id="rd-cards"></div>
+      </div>
+
+      <div class="repcard">
+        <div class="rd-score">
+          <span class="num serif" id="rd-num">–</span><span class="per serif">/100</span>
+          <span class="gd"><b id="rd-grade"></b><small>ภาพรวมพลังเดือนนี้</small></span>
+        </div>
+        <div class="radwrap">
+          <svg viewBox="0 0 140 124">
+            <polygon points="70,16 113.7,47.8 97,99.2 43,99.2 26.3,47.8" fill="none" stroke="#eee6d4" stroke-width="1"/>
+            <polygon points="70,31.6 98.9,52.6 87.9,86.6 52.1,86.6 41.1,52.6" fill="none" stroke="#f2ecdd" stroke-width="1"/>
+            <polygon points="70,46.8 84.5,57.3 78.9,74.3 61.1,74.3 55.5,57.3" fill="none" stroke="#f5f0e4" stroke-width="1"/>
+            <polygon id="rd-poly" points="" fill="rgba(201,163,92,.20)" stroke="#c9a35c" stroke-width="1.6"/>
+            <circle class="rd-dot" r="2.6" fill="#a5813a"/><circle class="rd-dot" r="2.6" fill="#a5813a"/>
+            <circle class="rd-dot" r="2.6" fill="#a5813a"/><circle class="rd-dot" r="2.6" fill="#a5813a"/>
+            <circle class="rd-dot" r="2.6" fill="#a5813a"/>
+          </svg>
+          <span class="rlab" id="rl0" style="left:50%;top:-4px;transform:translateX(-50%)"></span>
+          <span class="rlab" id="rl1" style="right:-6px;top:52px"></span>
+          <span class="rlab" id="rl2" style="right:14px;bottom:-4px"></span>
+          <span class="rlab" id="rl3" style="left:14px;bottom:-4px"></span>
+          <span class="rlab" id="rl4" style="left:-6px;top:52px"></span>
+        </div>
+      </div>
+
+      <div class="repcard">
+        <div style="font-size:.95rem;font-weight:800;margin-bottom:2px">สรุปดวงชะตา</div>
+        <div class="sgrid">
+          <div class="sg"><small>วันเกิด</small><div class="v" id="sm-bd">–</div></div>
+          <div class="sg"><small>ราศี</small><div class="v" id="sm-zd">–</div></div>
+          <div class="sg"><small>ธาตุ</small><div class="v" id="sm-el">–</div></div>
+          <div class="sg"><small>นักษัตร</small><div class="v" id="sm-an">–</div></div>
+          <div class="sg"><small>อายุ</small><div class="v" id="sm-ag">–</div></div>
+          <div class="sg"><small>ด้านที่เด่น</small><div class="v" id="sm-bx" style="color:var(--gold-deep)">–</div></div>
+        </div>
+      </div>
+
+      <div class="repcard rd-read">
+        <span class="rk">🧠 คำอ่านจากอาจารย์</span>
+        <p id="rd-text"></p>
+        <div class="rd-adv"><b>เคล็ดเสริมดวง:</b> <span id="rd-adv"></span></div>
+      </div>
+
+      <div class="repcard luckyrow">
+        <span class="lt">เลขนำโชค</span>
+        <span class="ln serif" id="lk0">–</span>
+        <span class="ln serif" id="lk1">–</span>
+        <span class="ln serif" id="lk2">–</span>
+        <span class="ln serif wide" id="lk3">–</span>
+      </div>
+
+      <button class="readbtn" id="rd-ask">💬 ถามอาจารย์ต่อจากดวงนี้</button>
+      <p class="note">ไพ่ประจำเดือนเปิดได้เดือนละชุด อัปเดตชุดใหม่ทุกต้นเดือน</p>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -393,7 +688,7 @@ function buildLiffHtml(liffId) {
   var LIFF_ID = ${JSON.stringify(liffId)};
   var state = { userId:"", displayName:"", step:0, sex:"", interest:"", channel:"" };
   function $(id){ return document.getElementById(id); }
-  function show(id){ ["v-load","v-ob","v-home"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); }
+  function show(id){ ["v-load","v-ob","v-home","v-read"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); window.scrollTo(0,0); }
   function showLoadMsg(t){ var lm=$("loadmsg"); if(lm){ lm.style.display="block"; lm.textContent=t; } }
   function pad2(x){ x=String(x); return x.length<2 ? "0"+x : x; }
 
@@ -486,6 +781,87 @@ function buildLiffHtml(liffId) {
     show("v-home");
   }
   $("btn-edit").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
+
+  /* ---- monthly reading ---- */
+  var READ_AXES = ["การงาน","การเงิน","ความรัก","สุขภาพ","โชคลาภ"];
+  function radarPt(i, v){
+    var ang = -Math.PI/2 + i*2*Math.PI/5;
+    var r = 46*Math.max(0,Math.min(100,v))/100;
+    return [(70 + r*Math.cos(ang)).toFixed(1), (62 + r*Math.sin(ang)).toFixed(1)];
+  }
+  function renderReading(j){
+    $("rd-month").textContent = j.monthLabel || "";
+    var wrap = $("rd-cards"); wrap.innerHTML = "";
+    (j.cards || []).forEach(function(c, i){
+      var el = document.createElement("div");
+      el.className = "tcard" + (i===1 ? " mid" : "");
+      el.innerHTML = '<div class="te">' + c.e + '</div><div class="tn">' + c.n +
+        '</div><div class="tk">' + c.k + '</div><span class="tp">' + c.pos + '</span>';
+      wrap.appendChild(el);
+    });
+    $("rd-num").textContent = j.overall;
+    $("rd-grade").textContent = j.grade;
+    var pts = [], dots = document.querySelectorAll(".rd-dot");
+    READ_AXES.forEach(function(ax, i){
+      var v = (j.axes && j.axes[ax]) || 0;
+      var p = radarPt(i, v);
+      pts.push(p[0] + "," + p[1]);
+      if(dots[i]){ dots[i].setAttribute("cx", p[0]); dots[i].setAttribute("cy", p[1]); }
+      var lab = $("rl" + i);
+      if(lab) lab.innerHTML = ax + " <b>" + v + "</b>";
+    });
+    var poly = $("rd-poly"); if(poly) poly.setAttribute("points", pts.join(" "));
+    if(j.astro){
+      $("sm-bd").textContent = j.astro.birthdateLabel || "–";
+      $("sm-zd").textContent = j.astro.zodiac || "–";
+      $("sm-el").textContent = j.astro.element || "–";
+      $("sm-an").textContent = j.astro.animal || "–";
+      $("sm-ag").textContent = j.astro.age != null ? j.astro.age + " ปี" : "–";
+    }
+    $("sm-bx").textContent = j.bestAxis || "–";
+    $("rd-text").textContent = j.reading || "";
+    $("rd-adv").textContent = j.advice || "";
+    var lk = j.lucky || [];
+    $("lk0").textContent = lk[0] != null ? lk[0] : "–";
+    $("lk1").textContent = lk[1] != null ? lk[1] : "–";
+    $("lk2").textContent = lk[2] != null ? lk[2] : "–";
+    $("lk3").textContent = j.luckyPair != null ? j.luckyPair : "–";
+  }
+  function openReading(){
+    var btn = $("btn-reading");
+    if(btn){ btn.disabled = true; btn.textContent = "กำลังเปิดไพ่..."; }
+    fetch("/api/liff/reading?userId=" + encodeURIComponent(state.userId))
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(btn){ btn.disabled = false; btn.textContent = "🔮 เปิดดวงประจำเดือน"; }
+        if(!j || !j.ok){ alert("เปิดดวงไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
+        if(j.needsProfile || j.needsBirthdate){
+          $("rd-needbd").classList.remove("hidden");
+          $("rd-body").classList.add("hidden");
+          $("rd-month").textContent = "";
+          show("v-read");
+          return;
+        }
+        $("rd-needbd").classList.add("hidden");
+        $("rd-body").classList.remove("hidden");
+        renderReading(j);
+        show("v-read");
+      })
+      .catch(function(){
+        if(btn){ btn.disabled = false; btn.textContent = "🔮 เปิดดวงประจำเดือน"; }
+        alert("เปิดดวงไม่สำเร็จ ลองใหม่อีกครั้งครับ");
+      });
+  }
+  $("btn-reading").addEventListener("click", openReading);
+  $("rd-back").addEventListener("click", function(){ show("v-home"); });
+  $("rd-fill").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
+  $("rd-ask").addEventListener("click", function(){
+    try{
+      liff.sendMessages([{ type:"text", text:"ถามอาจารย์เรื่องดวงเดือนนี้" }])
+        .then(function(){ liff.closeWindow(); })
+        .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์ถามอาจารย์ได้เลยครับ"); liff.closeWindow(); });
+    }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์ถามอาจารย์ได้เลยครับ"); }
+  });
 
   /* service rows → send message into the chat then close */
   Array.prototype.forEach.call(document.querySelectorAll(".row[data-say]"), function(btn){
