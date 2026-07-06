@@ -85,41 +85,169 @@ const LUCKY_COLORS = [
   { name: "สีขาว", hex: "#f4f1ea" },
 ];
 
+/* ---------------- ตำราทักษาไทย (real Thai taksa system) ----------------
+ * Wheel order (clockwise): อาทิตย์ จันทร์ อังคาร พุธ เสาร์ พฤหัสบดี ราหู ศุกร์.
+ * From the birth day (บริวาร), counting clockwise gives:
+ * บริวาร อายุ เดช ศรี มูละ อุตสาหะ มนตรี กาลกิณี.
+ * Wednesday-night births (>=18:00 or night words) sit on ราหู.
+ */
+const TAKSA_CIRCLE = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "เสาร์", "พฤหัสบดี", "ราหู", "ศุกร์"];
+const WEEKDAY_TO_CIRCLE = [0, 1, 2, 3, 5, 7, 4]; // JS Sun..Sat → wheel index
+const TAKSA_STATUS_ORDER = ["บริวาร", "อายุ", "เดช", "ศรี", "มูละ", "อุตสาหะ", "มนตรี", "กาลกิณี"];
+const TAKSA_SCORE_RANGE = {
+  ศรี: [86, 95], เดช: [83, 93], มนตรี: [80, 90], บริวาร: [75, 85],
+  อายุ: [73, 83], มูละ: [69, 79], อุตสาหะ: [62, 74], กาลกิณี: [55, 65],
+};
+const DAY_NUMBER = { อาทิตย์: 1, จันทร์: 2, อังคาร: 3, พุธ: 4, พฤหัสบดี: 5, ศุกร์: 6, เสาร์: 7, ราหู: 8 };
+// สีมงคล/สีกาลกิณีประจำวัน (ตำราไทยพื้นบ้านที่คนคุ้นเคย), indexed by JS weekday
+const DAY_COLORS = [
+  { good: [["สีแดง", "#d64545"], ["สีส้ม", "#e8863c"]], ban: { name: "สีน้ำเงิน", hex: "#3f6bb5" } },
+  { good: [["สีเหลือง", "#e6c34a"], ["สีขาวครีม", "#efe7d2"]], ban: { name: "สีแดง", hex: "#d64545" } },
+  { good: [["สีชมพู", "#e88ab8"], ["สีม่วง", "#8a63b8"]], ban: { name: "สีขาว", hex: "#f4f1ea" } },
+  { good: [["สีเขียว", "#4c9e6b"]], ban: { name: "สีชมพู", hex: "#e88ab8" } },
+  { good: [["สีส้ม", "#e8863c"], ["สีเหลือง", "#e6c34a"]], ban: { name: "สีดำ", hex: "#3f3b35" } },
+  { good: [["สีฟ้า", "#58a6d6"], ["สีน้ำเงิน", "#3f6bb5"]], ban: { name: "สีเทาเข้ม", hex: "#8b8b8b" } },
+  { good: [["สีม่วง", "#8a63b8"], ["สีดำ", "#3f3b35"]], ban: { name: "สีเขียว", hex: "#4c9e6b" } },
+];
+const TAKSA_MESSAGES = {
+  ศรี: [
+    "วันนี้เป็นวัน 'ศรี' ของคุณ เสน่ห์และโชคเรื่องเงินทองเด่นเป็นพิเศษ จะเจรจาหรือขายอะไรก็ราบรื่น",
+    "วัน 'ศรี' มาเยือน สิ่งดี ๆ กำลังไหลเข้ามา ยิ้มรับแล้วแบ่งความสดใสให้คนรอบตัวด้วยนะ",
+  ],
+  เดช: [
+    "วันนี้เป็นวัน 'เดช' อำนาจบารมีมาเต็ม เหมาะคุยงานใหญ่ ตัดสินใจเรื่องสำคัญ คนจะรับฟังเรา",
+    "วัน 'เดช' ของคุณ กล้าคิดกล้านำได้เลย วันนี้พูดอะไรมีน้ำหนักเป็นพิเศษ",
+  ],
+  มนตรี: [
+    "วัน 'มนตรี' ผู้ใหญ่เมตตา มีคนคอยหนุนอยู่ ติดขัดอะไรลองเปิดปากขอคำปรึกษา จะมีคนช่วยเปิดทาง",
+    "วันนี้ดาวผู้อุปถัมภ์เด่น ใครที่รอคำตอบจากผู้ใหญ่หรือหัวหน้า มีเกณฑ์ได้ข่าวดีนะ",
+  ],
+  บริวาร: [
+    "วัน 'บริวาร' คนรอบตัวคือพลังของคุณ งานทีม ครอบครัว เพื่อนฝูง ราบรื่นเป็นพิเศษ ชวนกันทำสิ่งดี ๆ เลย",
+    "วันนี้เหมาะดูแลคนใกล้ตัว ให้เวลาครอบครัวสักหน่อย พลังใจจะเต็มทั้งเราและเขา",
+  ],
+  อายุ: [
+    "วัน 'อายุ' พลังชีวิตกำลังฟื้นตัว ดูแลสุขภาพกายใจ กินดี นอนพอ ทำอะไรแบบพอดี ๆ จะยั่งยืนที่สุด",
+    "วันนี้ร่างกายและใจขอความใส่ใจหน่อยนะ เดินเล่น ยืดเส้น พักสายตา แค่นี้ดวงก็เสริมแล้ว",
+  ],
+  มูละ: [
+    "วัน 'มูละ' ฐานทรัพย์เดิมหนุนอยู่ เหมาะจัดระเบียบการเงิน ของเก่าหรือคนเก่า ๆ อาจให้คุณอย่างคาดไม่ถึง",
+    "วันนี้เหมาะกลับไปสานต่อของเดิมที่เคยวางไว้ รากที่เราปลูกไว้กำลังส่งผลนะ",
+  ],
+  อุตสาหะ: [
+    "วัน 'อุตสาหะ' ยิ่งขยันยิ่งได้ วันนี้ความพยายามไม่หลอกใคร ลงแรงตรงไหน ผลงอกตรงนั้น",
+    "วันนี้อาจต้องออกแรงมากกว่าปกตินิดนึง แต่ทุกหยดเหงื่อคุ้มแน่นอน ค่อย ๆ ไป อาจารย์เป็นกำลังใจให้",
+  ],
+  กาลกิณี: [
+    "วันนี้ตรงกับ 'กาลกิณี' ของคุณ ไม่ต้องกังวลนะ แค่เพลาเรื่องเสี่ยง ใจเย็นขึ้นอีกนิด แล้วหาโอกาสทำสิ่งดี ๆ สักอย่าง พลังจะกลับมาเป็นของเรา",
+    "วันแบบนี้ตำราให้เลี่ยงการตัดสินใจใหญ่และคำพูดร้อน ๆ ทำเรื่องเบา ๆ ช่วยเหลือใครสักคน ดวงจะพลิกกลับมาสวยเอง",
+  ],
+};
+
+/** Wheel index of the birth day, or null when birthdate is unusable. */
+function birthCircleIndex(birthdate, birthTime) {
+  const dt = new Date(String(birthdate || "") + "T00:00:00Z");
+  if (Number.isNaN(dt.getTime())) return null;
+  const wd = dt.getUTCDay();
+  let idx = WEEKDAY_TO_CIRCLE[wd];
+  if (wd === 3) {
+    const t = String(birthTime || "");
+    const hm = /^(\d{1,2})/.exec(t);
+    const hour = hm ? Number(hm[1]) : NaN;
+    const isNight = (Number.isFinite(hour) && (hour >= 18 || hour < 6)) || /ค่ำ|ดึก|กลางคืน/.test(t);
+    if (isNight) idx = 6; // ราหู
+  }
+  return idx;
+}
+
 function dailyScoreFor(userId, dayKey) {
   const seed = String(userId || "guest").trim() + "|" + dayKey;
   return 55 + (fnv1a32(seed + "|score") % 41); // 55..95 (unchanged formula)
 }
 
-function buildDaily(userId, now = Date.now()) {
+/**
+ * Daily reading. With a birth (taksa) — REAL ตำราทักษาไทย: today's wheel position
+ * vs the birth day drives score band + message; colors follow the Thai day-color
+ * table; lucky numbers = planet numbers of birth day + today. Without a birth —
+ * the previous stable-hash behavior with trend messages.
+ */
+function buildDaily(userId, now = Date.now(), birth = null) {
   const day = bangkokDateKey(now);
   const seed = String(userId || "guest").trim() + "|" + day;
-  const score = dailyScoreFor(userId, day);
-  const yesterdayScore = dailyScoreFor(userId, bangkokDateKey(now - 86400000));
-  const delta = score - yesterdayScore;
-  const band =
-    delta >= 8 ? "up_big" : delta >= 1 ? "up" : delta === 0 ? "flat" : delta <= -8 ? "down_big" : "down";
-  const pool = TREND_MESSAGES[band];
-  const message = pool[fnv1a32(seed + "|msg") % pool.length];
-  const luckyNum = fnv1a32(seed + "|num") % 10;
-  let luckyNum2 = fnv1a32(seed + "|num2") % 10;
-  if (luckyNum2 === luckyNum) luckyNum2 = (luckyNum2 + 3) % 10;
-  const luckyColor = LUCKY_COLORS[fnv1a32(seed + "|color") % LUCKY_COLORS.length];
+  const wdToday = new Date(now + 7 * 3600 * 1000).getUTCDay();
+  const bIdx = birth ? birthCircleIndex(birth.birthdate, birth.birthTime) : null;
+
+  let score, message, taksa = null, basis = "stable_random";
+  if (bIdx != null) {
+    basis = "taksa";
+    const todayCircle = WEEKDAY_TO_CIRCLE[wdToday];
+    const status = TAKSA_STATUS_ORDER[(todayCircle - bIdx + 8) % 8];
+    const [lo, hi] = TAKSA_SCORE_RANGE[status];
+    score = lo + (fnv1a32(seed + "|taksa") % (hi - lo + 1));
+    const pool = TAKSA_MESSAGES[status];
+    message = pool[fnv1a32(seed + "|msg") % pool.length];
+    taksa = {
+      status,
+      todayDay: TAKSA_CIRCLE[todayCircle],
+      birthDay: TAKSA_CIRCLE[bIdx],
+    };
+  } else {
+    score = dailyScoreFor(userId, day);
+    const yesterdayScore = dailyScoreFor(userId, bangkokDateKey(now - 86400000));
+    const d = score - yesterdayScore;
+    const band = d >= 8 ? "up_big" : d >= 1 ? "up" : d === 0 ? "flat" : d <= -8 ? "down_big" : "down";
+    const pool = TREND_MESSAGES[band];
+    message = pool[fnv1a32(seed + "|msg") % pool.length];
+  }
+
+  // lucky numbers: taksa = planet numbers (birth day + today); else stable hash
+  let luckyNum, luckyNum2;
+  if (bIdx != null) {
+    luckyNum = DAY_NUMBER[TAKSA_CIRCLE[bIdx]];
+    luckyNum2 = DAY_NUMBER[TAKSA_CIRCLE[WEEKDAY_TO_CIRCLE[wdToday]]];
+    if (luckyNum2 === luckyNum) luckyNum2 = DAY_NUMBER[TAKSA_CIRCLE[(bIdx + 3) % 8]]; // เลขวันตำแหน่ง 'ศรี'
+  } else {
+    luckyNum = fnv1a32(seed + "|num") % 10;
+    luckyNum2 = fnv1a32(seed + "|num2") % 10;
+    if (luckyNum2 === luckyNum) luckyNum2 = (luckyNum2 + 3) % 10;
+  }
+
+  // colors: Thai day-color table (good pick varies per user, ban fixed per day)
+  const dc = DAY_COLORS[wdToday];
+  const pick = dc.good[fnv1a32(seed + "|color") % dc.good.length];
+  const luckyColor = { name: pick[0], hex: pick[1] };
+  const banColor = dc.ban;
+
   return {
-    day, score, grade: gradeFor(score), message, delta,
-    luckyNum, luckyNums: [luckyNum, luckyNum2], luckyColor,
+    day, score, grade: gradeFor(score), message, basis, taksa,
+    luckyNum, luckyNums: [luckyNum, luckyNum2], luckyColor, banColor,
   };
 }
 
-liffRouter.get("/api/liff/daily", (req, res) => {
+liffRouter.get("/api/liff/daily", async (req, res) => {
   const userId = String(req.query.userId || "").trim();
   const now = Date.now();
+  // Pull birthdate so the reading follows ตำราทักษา; degrade gracefully without it.
+  let birth = null;
+  if (userId) {
+    try {
+      const { data } = await supabase
+        .from("liff_profiles")
+        .select("birthdate,birth_time")
+        .eq("line_user_id", userId)
+        .maybeSingle();
+      if (data?.birthdate) birth = { birthdate: data.birthdate, birthTime: data.birth_time };
+    } catch (_) {
+      birth = null;
+    }
+  }
   // 7-day trend ending today (deterministic, so past days are reproducible)
   const history = [];
   for (let k = 6; k >= 0; k--) {
-    const d = buildDaily(userId, now - k * 86400000);
+    const d = buildDaily(userId, now - k * 86400000, birth);
     history.push({ day: d.day, score: d.score });
   }
-  res.json({ ok: true, ...buildDaily(userId, now), history });
+  res.json({ ok: true, ...buildDaily(userId, now, birth), history, needsBirthdate: !birth });
 });
 
 /* ---------------- monthly reading (deterministic per user per month) ---------------- */
@@ -440,6 +568,7 @@ function buildLiffHtml(liffId) {
     background:#fdf8ec;border-radius:999px;padding:7px 14px;font-size:.9rem;color:var(--gold-deep);font-weight:700}
   .score .cdot{width:15px;height:15px;border-radius:99px;display:inline-block;background:#ccc;
     box-shadow:inset 0 0 0 1px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.12)}
+  .score .lucky.ban{background:#f5f2ea;border-color:#e2ddcf;color:var(--sub)}
 
   .sect{font-size:1.08rem;font-weight:800;margin-top:2px}
   .rows{display:flex;flex-direction:column;gap:12px}
@@ -723,6 +852,7 @@ function buildLiffHtml(liffId) {
       <span class="luckies">
         <span class="lucky">✦ เลขเด่นวันนี้ <b id="s-lucky" style="font-size:1.15rem">–</b></span>
         <span class="lucky"><i class="cdot" id="s-cdot"></i> สีนำโชค <b id="s-color">–</b></span>
+        <span class="lucky ban hidden" id="s-banwrap"><i class="cdot" id="s-bdot"></i> เลี่ยง <b id="s-ban">–</b></span>
       </span>
       <button class="readbtn" id="btn-reading">
         <svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round">
@@ -993,6 +1123,17 @@ function buildLiffHtml(liffId) {
         if(j.luckyColor){
           $("s-color").textContent = j.luckyColor.name.replace("สี","");
           $("s-cdot").style.background = j.luckyColor.hex;
+        }
+        if(j.banColor){
+          $("s-ban").textContent = j.banColor.name.replace("สี","");
+          $("s-bdot").style.background = j.banColor.hex;
+          $("s-banwrap").classList.remove("hidden");
+        }
+        var cap = document.querySelector(".sparkcap");
+        if(cap){
+          cap.textContent = j.basis === "taksa"
+            ? "ดวง 7 วัน · ตามตำราทักษาไทย"
+            : "กรอกวันเกิดใน ข้อมูลของฉัน เพื่อดวงตามตำรา";
         }
         renderSpark(j.history);
         renderDelta(j.history);
