@@ -1074,7 +1074,7 @@ function renderDetailPage({
           if (!Number.isFinite(n) || n < 1 || n > 99) { showToast("จำนวนต้องอยู่ระหว่าง 1-99", "err"); return; }
           var dir = Number(ab.dataset.dir) < 0 ? -1 : 1;
           var word = dir > 0 ? "เพิ่ม" : "ลด";
-          if (!confirm("ยืนยัน" + word + "สแกนคงเหลือ " + n + " ครั้ง?\n\nระบบจะส่ง LINE แจ้งลูกค้าว่าเหลือกี่ครั้งด้วย")) return;
+          if (!confirm("ยืนยัน" + word + "สแกนคงเหลือ " + n + " ครั้ง?\\n\\nระบบจะส่ง LINE แจ้งลูกค้าว่าเหลือกี่ครั้งด้วย")) return;
           Array.prototype.forEach.call(adjBtns, function (b) { b.disabled = true; });
           try {
             var ra = await fetch("/admin/users/" + encodeURIComponent(lineUid) + "/adjust-paid-scans", {
@@ -1846,7 +1846,7 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
           if (!Number.isFinite(n) || n < 0 || n > 999) { showToast("จำนวน 0-999", "err"); return; }
           var before = Math.trunc(Number(nEl.dataset.before)) || 0;
           if (n === before) { showToast("ค่าเท่าเดิม ไม่ต้องบันทึก", "err"); return; }
-          if (!confirm("ตั้งสแกนคงเหลือของ " + uid.slice(0, 12) + "… เป็น " + n + " ครั้ง? (เดิม " + before + ")\n\nระบบจะส่ง LINE แจ้งลูกค้าว่าเหลือกี่ครั้งด้วย")) return;
+          if (!confirm("ตั้งสแกนคงเหลือของ " + uid.slice(0, 12) + "… เป็น " + n + " ครั้ง? (เดิม " + before + ")\\n\\nระบบจะส่ง LINE แจ้งลูกค้าว่าเหลือกี่ครั้งด้วย")) return;
           save.disabled = true;
           fetch("/admin/users/" + encodeURIComponent(uid) + "/adjust-paid-scans", {
             method: "POST",
