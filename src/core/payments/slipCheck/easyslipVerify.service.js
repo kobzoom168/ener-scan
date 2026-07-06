@@ -109,23 +109,25 @@ export async function verifySlipWithEasyslip({ imageBuffer, lineUserId, paymentI
     };
   }
 
-  // Failure mapping:
+  // Failure mapping. Real error shape (observed live):
+  //   { "success": false, "error": { "code": "VALIDATION_ERROR", "message": "..." } }
   //   invalid (→ manual review): SLIP_NOT_FOUND (no such transaction / no QR —
   //   conservative: a human looks at it, fakes never auto-pass).
   //   error (→ fallback to OCR): auth/quota/validation/pending-bank/image-format.
-  const msg = String(json?.message || "").toUpperCase();
-  const FALLBACK_MSGS = new Set([
+  const errCode = String(json?.error?.code || json?.message || "").toUpperCase();
+  const errMessage = String(json?.error?.message || json?.message || "").slice(0, 200) || null;
+  const FALLBACK_CODES = new Set([
     "INVALID_API_KEY", "UNAUTHORIZED", "QUOTA_EXCEEDED", "VALIDATION_ERROR",
     "SLIP_PENDING", "IMAGE_SIZE_TOO_LARGE", "INVALID_IMAGE_FORMAT", "APPLICATION_EXPIRED",
   ]);
   const outcome =
-    resp.status === 401 || resp.status === 403 || FALLBACK_MSGS.has(msg)
+    resp.status === 401 || resp.status === 403 || FALLBACK_CODES.has(errCode)
       ? "error"
       : "invalid";
   return {
     outcome,
-    failCode: msg ? msg.toLowerCase() : `http_${resp.status}`,
-    failMessage: json?.message ? String(json.message).slice(0, 200) : null,
+    failCode: errCode ? errCode.toLowerCase() : `http_${resp.status}`,
+    failMessage: errMessage,
     raw: json,
   };
 }
