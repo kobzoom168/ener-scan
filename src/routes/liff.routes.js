@@ -30,16 +30,39 @@ function bangkokDateKey(now = Date.now()) {
   return new Date(now + 7 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-const DAILY_MESSAGES = [
-  "วันนี้เหมาะกับการเริ่มต้นสิ่งใหม่ ลงมือช่วงเช้าแล้วดีมาก อาจารย์เอาใจช่วยนะ",
-  "โชคจากผู้ใหญ่เข้ามาหนุน งานที่ค้างจะคลี่คลาย อย่าลืมขอบคุณคนที่ช่วยเราด้วยนะ",
-  "พลังเมตตาเด่นมาก ยิ้มให้คนรอบตัว แบ่งปันเล็ก ๆ น้อย ๆ พลังดีจะย้อนกลับมาหาคุณ",
-  "วันนี้ใจเย็นเป็นพิเศษนะ ช้าแต่ชัวร์ได้ผลดีกว่า ใจที่นิ่งคือเครื่องรางที่แรงที่สุด",
-  "การเงินมีจังหวะดีช่วงบ่าย ตัดสินใจด้วยสติ แล้วแบ่งไปทำสิ่งดี ๆ สักหน่อยยิ่งเสริมดวง",
-  "วันนี้เหมาะกับการทำสิ่งดี ๆ ตามที่คุณศรัทธา ไหว้พระ สวดมนต์ หรือแค่ช่วยเหลือใครสักคนก็บุญแล้ว",
-  "ความรักและครอบครัวเด่น หาเวลาอยู่กับคนสำคัญ คำพูดดี ๆ หนึ่งประโยคเปลี่ยนทั้งวันได้เลย",
-  "พลังกำลังฟื้นตัว พักผ่อนให้พอ ใจดีกับตัวเองหน่อยนะ พรุ่งนี้จะแรงกว่าเดิมแน่นอน",
-];
+// Daily encouragement keyed to the REAL trend vs yesterday (score is deterministic,
+// so yesterday is reproducible). Positive life-mentor voice; no amulet metaphors.
+const TREND_MESSAGES = {
+  up_big: [
+    "พลังวันนี้พุ่งขึ้นจากเมื่อวานแบบเห็นชัดเลย จังหวะดีแบบนี้เหมาะลงมือเรื่องสำคัญที่ตั้งใจไว้นะ",
+    "ดวงกำลังขาขึ้นแรงมาก อะไรที่ลังเลอยู่ วันนี้กล้าตัดสินใจได้เลย อาจารย์เชียร์เต็มที่",
+    "วันนี้ฟ้าเปิดกว่าเมื่อวานเยอะ ยิ้มรับสิ่งดี ๆ แล้วส่งต่อพลังบวกให้คนรอบตัวด้วยนะ",
+    "พลังบวกไหลเข้ามาเต็มที่ ใช้วันนี้เริ่มสิ่งใหม่หรือสะสางเรื่องค้างคา จะได้ผลดีเป็นพิเศษ",
+  ],
+  up: [
+    "ดวงขยับขึ้นจากเมื่อวานทีละนิด กำลังมาถูกทางแล้วนะ ทำต่อเนื่องไปเรื่อย ๆ",
+    "วันนี้ดีกว่าเมื่อวานอีกนิดนึง ค่อย ๆ สะสมพลังบวกไป เดี๋ยวเรื่องดี ๆ ตามมาเอง",
+    "พลังกำลังไต่ขึ้นเรื่อย ๆ ขยันต่ออีกวัน แล้วอย่าลืมชมตัวเองบ้างนะ",
+    "แนวโน้มดีขึ้นกว่าเมื่อวานแล้ว ใครที่รอจังหวะเริ่มอะไร วันนี้เริ่มเบา ๆ ได้เลย",
+  ],
+  flat: [
+    "พลังวันนี้นิ่งเท่าเมื่อวาน เหมาะกับการทำเรื่องเดิมให้ดีขึ้นอีกนิด ความสม่ำเสมอนี่แหละพลังที่แรงที่สุด",
+    "วันนี้ดวงคงที่ ใจเย็น ๆ ทำทีละอย่าง ความนิ่งจะพาเราไปได้ไกลกว่าที่คิดนะ",
+    "พลังทรงตัวจากเมื่อวาน ใช้วันนี้ดูแลตัวเองและคนใกล้ตัว เติมแรงไว้สำหรับพรุ่งนี้",
+  ],
+  down: [
+    "วันนี้พลังแผ่วลงจากเมื่อวานนิดหน่อย ไม่เป็นไรเลยนะ ช้าลงอีกนิด ใจเย็นอีกหน่อย เดี๋ยวก็กลับมา",
+    "ดวงพักตัวเบา ๆ วันนี้เหมาะกับงานที่ไม่เร่งรีบ ทำเท่าที่ไหว แล้วใจดีกับตัวเองด้วยนะ",
+    "แผ่วลงนิดเดียวเอง ถือเป็นวันเก็บแรง ทำเรื่องง่าย ๆ ให้เสร็จ แล้วพรุ่งนี้ค่อยลุยต่อ",
+    "วันนี้อย่าเพิ่งรีบตัดสินใจเรื่องใหญ่ พักใจ ฟังเสียงตัวเองเยอะ ๆ พลังจะค่อย ๆ ฟื้นกลับมาเอง",
+  ],
+  down_big: [
+    "วันนี้ดวงขอพักหน่อยนะ ไม่ใช่วันแย่ แค่เป็นวันเติมพลัง ช้าลง หายใจลึก ๆ แล้วทำทีละเรื่อง",
+    "พลังลดจากเมื่อวานพอสมควร อาจารย์แนะให้เลี่ยงเรื่องเสี่ยงไว้ก่อน แล้วดูแลใจตัวเองเป็นอันดับแรก",
+    "วันแบบนี้มีไว้ให้เราได้พัก ทำสิ่งเล็ก ๆ ที่ทำให้ใจสบาย เดี๋ยวพรุ่งนี้เส้นกราฟจะกลับขึ้นมาเอง",
+    "ดวงย่อตัวเพื่อสะสมแรง อย่าเพิ่งท้อนะ คนที่ผ่านวันเบา ๆ ได้อย่างใจเย็น คือคนที่ไปได้ไกลที่สุด",
+  ],
+};
 
 function gradeFor(score) {
   if (score >= 90) return "ดีเยี่ยม";
@@ -62,14 +85,29 @@ const LUCKY_COLORS = [
   { name: "สีขาว", hex: "#f4f1ea" },
 ];
 
+function dailyScoreFor(userId, dayKey) {
+  const seed = String(userId || "guest").trim() + "|" + dayKey;
+  return 55 + (fnv1a32(seed + "|score") % 41); // 55..95 (unchanged formula)
+}
+
 function buildDaily(userId, now = Date.now()) {
   const day = bangkokDateKey(now);
   const seed = String(userId || "guest").trim() + "|" + day;
-  const score = 55 + (fnv1a32(seed + "|score") % 41); // 55..95
-  const message = DAILY_MESSAGES[fnv1a32(seed + "|msg") % DAILY_MESSAGES.length];
+  const score = dailyScoreFor(userId, day);
+  const yesterdayScore = dailyScoreFor(userId, bangkokDateKey(now - 86400000));
+  const delta = score - yesterdayScore;
+  const band =
+    delta >= 8 ? "up_big" : delta >= 1 ? "up" : delta === 0 ? "flat" : delta <= -8 ? "down_big" : "down";
+  const pool = TREND_MESSAGES[band];
+  const message = pool[fnv1a32(seed + "|msg") % pool.length];
   const luckyNum = fnv1a32(seed + "|num") % 10;
+  let luckyNum2 = fnv1a32(seed + "|num2") % 10;
+  if (luckyNum2 === luckyNum) luckyNum2 = (luckyNum2 + 3) % 10;
   const luckyColor = LUCKY_COLORS[fnv1a32(seed + "|color") % LUCKY_COLORS.length];
-  return { day, score, grade: gradeFor(score), message, luckyNum, luckyColor };
+  return {
+    day, score, grade: gradeFor(score), message, delta,
+    luckyNum, luckyNums: [luckyNum, luckyNum2], luckyColor,
+  };
 }
 
 liffRouter.get("/api/liff/daily", (req, res) => {
@@ -683,7 +721,7 @@ function buildLiffHtml(liffId) {
       </div>
       <div class="ft" id="s-msg"></div>
       <span class="luckies">
-        <span class="lucky">✦ เลขนำโชควันนี้ <b id="s-lucky" style="font-size:1.15rem">–</b></span>
+        <span class="lucky">✦ เลขเด่นวันนี้ <b id="s-lucky" style="font-size:1.15rem">–</b></span>
         <span class="lucky"><i class="cdot" id="s-cdot"></i> สีนำโชค <b id="s-color">–</b></span>
       </span>
       <button class="readbtn" id="btn-reading">
@@ -950,7 +988,8 @@ function buildLiffHtml(liffId) {
         if(!j || !j.ok) return;
         countUp($("s-num"), j.score);
         $("s-grade").textContent = j.grade;
-        $("s-msg").textContent = j.message; $("s-lucky").textContent = j.luckyNum;
+        $("s-msg").textContent = j.message;
+        $("s-lucky").textContent = j.luckyNums ? j.luckyNums.join(" และ ") : j.luckyNum;
         if(j.luckyColor){
           $("s-color").textContent = j.luckyColor.name.replace("สี","");
           $("s-cdot").style.background = j.luckyColor.hex;
