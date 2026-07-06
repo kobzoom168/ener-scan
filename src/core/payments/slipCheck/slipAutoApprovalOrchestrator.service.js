@@ -2,6 +2,14 @@ import { env } from "../../../config/env.js";
 import { extractSlipOcrFromImage } from "./slipOcrExtractor.service.js";
 import { evaluateSlipAutoApproval } from "./slipAutoApproval.service.js";
 import { isSlipokConfigured, verifySlipWithSlipok } from "./slipokVerify.service.js";
+import { isEasyslipConfigured, verifySlipWithEasyslip } from "./easyslipVerify.service.js";
+
+/** Pick the configured bank-verification provider (EasySlip preferred). */
+function resolveBankSlipVerifier() {
+  if (isEasyslipConfigured()) return { provider: "easyslip", verify: verifySlipWithEasyslip };
+  if (isSlipokConfigured()) return { provider: "slipok", verify: verifySlipWithSlipok };
+  return null;
+}
 
 /**
  * @param {object} p
@@ -32,21 +40,22 @@ export async function runSlipAutoApprovalAfterGateAccept({
   let provider = "internal_vision";
   let ocrResult = null;
 
-  // Primary: SlipOK bank verification (when configured). "verified" maps the
-  // bank's own numbers into the evaluate() shape; "invalid" = bank says the
-  // transaction is not real/usable → straight to manual review; "error"
+  // Primary: bank verification (EasySlip or SlipOK, when configured). "verified"
+  // maps the bank's own numbers into the evaluate() shape; "invalid" = the slip
+  // is not a real/usable transaction → straight to manual review; "error"
   // (network/auth/quota) falls back to the internal OCR path below.
-  if (isSlipokConfigured()) {
+  const bankVerifier = resolveBankSlipVerifier();
+  if (bankVerifier) {
     const expectedAmount =
       Number(payment?.expected_amount ?? payment?.amount) || null;
-    const sv = await verifySlipWithSlipok({
+    const sv = await bankVerifier.verify({
       imageBuffer,
       lineUserId: userId,
       paymentId,
       expectedAmount,
     });
     if (sv.outcome === "verified") {
-      provider = "slipok";
+      provider = bankVerifier.provider;
       ocrResult = {
         amount: sv.amount,
         confidence: 1,
@@ -60,10 +69,14 @@ export async function runSlipAutoApprovalAfterGateAccept({
         rawText: null,
       };
     } else if (sv.outcome === "invalid") {
+      const rawCode = String(sv.failCode || "invalid");
+      const reason = rawCode.startsWith(bankVerifier.provider)
+        ? rawCode
+        : `${bankVerifier.provider}_${rawCode}`;
       await updatePaymentFields(paymentId, {
-        slip_verify_provider: "slipok",
+        slip_verify_provider: bankVerifier.provider,
         slip_verify_status: "manual_review",
-        slip_review_reason: `slipok_${sv.failCode || "invalid"}`,
+        slip_review_reason: reason,
         manual_review_at: now.toISOString(),
       });
       console.log(
@@ -71,14 +84,14 @@ export async function runSlipAutoApprovalAfterGateAccept({
           event: "SLIP_MANUAL_REVIEW_REQUIRED",
           paymentId,
           lineUserIdPrefix: String(userId || "").slice(0, 8),
-          reasons: [`slipok_${sv.failCode || "invalid"}`],
-          slipokMessage: sv.failMessage || null,
+          reasons: [reason],
+          providerMessage: sv.failMessage || null,
         }),
       );
       return {
         mode: "manual_review",
         ocrResult: null,
-        reasons: [`slipok_${sv.failCode || "invalid"}`],
+        reasons: [reason],
       };
     }
     // outcome === "error" → fall through to OCR
