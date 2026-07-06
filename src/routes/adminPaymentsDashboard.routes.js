@@ -19,6 +19,7 @@ import {
   resetFreeTrialForLineUserByAdmin,
   revokePaidAccessForLineUserByAdmin,
 } from "../stores/adminReset.db.js";
+import { listRecentScanUsersForAdmin } from "../stores/adminUsers.db.js";
 import { getScanUsageSummaryForAppUser } from "../stores/paymentAccess.db.js";
 import {
   buildPaymentApprovedText,
@@ -712,9 +713,12 @@ function renderListPage({
   <div class="wrap">
     <div class="topbar">
       <h1>💳 Payments</h1>
-      <form method="POST" action="/admin/logout" style="margin:0;">
-        <button type="submit">ออกจากระบบ</button>
-      </form>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <a class="btn btn-neu" style="padding:8px 12px;font-size:0.85rem;text-decoration:none;" href="/admin/users">👥 จัดการ User</a>
+        <form method="POST" action="/admin/logout" style="margin:0;">
+          <button type="submit">ออกจากระบบ</button>
+        </form>
+      </div>
     </div>
     <form class="search-bar" method="get" action="/admin/payments">
       <input type="hidden" name="status" value="${escapeHtml(filterStatus)}" />
@@ -1681,6 +1685,139 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
       }
     }
   );
+
+  // 👥 User management: latest scanners + inline paid-scan adjust / free reset.
+  router.get("/admin/users", requireAdminSession, async (req, res) => {
+    try {
+      const q = String(req.query?.q || "").trim();
+      const { users, scanWindow } = await listRecentScanUsersForAdmin({
+        limit: 100,
+        q,
+      });
+      const rowsHtml = users
+        .map((u, i) => {
+          const uid = escapeHtml(u.lineUserId);
+          const paidTxt =
+            u.paidRemainingScans > 0
+              ? `<strong>${u.paidRemainingScans}</strong> ครั้ง`
+              : `<span style="color:var(--muted);">0</span>`;
+          const untilTxt = u.paidUntil ? fmtDt(u.paidUntil) : "—";
+          return `<tr>
+            <td>${i + 1}</td>
+            <td style="word-break:break-all;font-family:monospace;font-size:0.82rem;">${uid} ${copyBtnHtml("LINE", u.lineUserId)}</td>
+            <td>${u.lastScanAt ? fmtDt(u.lastScanAt) : "—"}</td>
+            <td style="text-align:center;">${u.recentScans}</td>
+            <td style="text-align:center;">${paidTxt}</td>
+            <td>${untilTxt}</td>
+            <td>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <input type="number" class="adj-n" data-uid="${uid}" min="1" max="99" value="1" style="width:58px;padding:6px;border-radius:8px;border:1px solid var(--line,#444);background:transparent;color:inherit;text-align:center;" />
+                <button type="button" class="btn btn-neu js-user-adj" data-uid="${uid}" data-dir="1" style="padding:6px 10px;font-size:0.8rem;border-color:var(--accent,#6b8);">＋เพิ่ม</button>
+                <button type="button" class="btn btn-neu js-user-adj" data-uid="${uid}" data-dir="-1" style="padding:6px 10px;font-size:0.8rem;border-color:var(--bad);color:var(--bad);">－ลด</button>
+                <button type="button" class="btn btn-neu js-user-freereset" data-uid="${uid}" style="padding:6px 10px;font-size:0.8rem;">รีเซ็ตฟรี</button>
+                <a class="btn btn-neu" style="padding:6px 10px;font-size:0.8rem;text-decoration:none;" href="/admin/payments?status=paid&q=${encodeURIComponent(u.lineUserId)}">payments</a>
+              </div>
+            </td>
+          </tr>`;
+        })
+        .join("");
+
+      res.status(200).type("html").send(`<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Ener Scan — Admin Users</title>
+  <style>${DASHBOARD_STYLES}</style>
+</head>
+<body>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>👥 User ล่าสุดที่สแกน</h1>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <a class="btn btn-neu" style="padding:8px 12px;font-size:0.85rem;text-decoration:none;" href="/admin/payments">💳 Payments</a>
+        <form method="POST" action="/admin/logout" style="margin:0;"><button type="submit">ออกจากระบบ</button></form>
+      </div>
+    </div>
+    <form class="search-bar" method="get" action="/admin/users">
+      <input type="search" name="q" value="${escapeHtml(q)}" placeholder="ค้นหา LINE user id…" autocomplete="off" />
+      <button type="submit">ค้นหา</button>
+      ${q ? `<a class="btn btn-neu" style="padding:8px 12px;font-size:0.85rem;text-decoration:none;" href="/admin/users">ล้าง</a>` : ""}
+    </form>
+    <p style="color:var(--muted);font-size:0.85rem;margin:8px 2px;">เรียงตามสแกนล่าสุด · นับจากสแกน ${scanWindow} รายการล่าสุด · ปุ่มเพิ่ม/ลดปรับ paid_remaining_scans (เพิ่มให้คนหมดอายุ = ต่อ 24 ชม.อัตโนมัติ)</p>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>#</th><th>LINE ID</th><th>สแกนล่าสุด</th><th>ครั้ง (ล่าสุด)</th><th>paid เหลือ</th><th>paid ถึง</th><th>จัดการ</th></tr></thead>
+        <tbody>${rowsHtml || `<tr><td colspan="7" style="text-align:center;color:var(--muted);">ไม่พบรายการ</td></tr>`}</tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var toastEl = document.getElementById("toast");
+      var toastTimer = null;
+      function showToast(msg, kind) {
+        if (!toastEl) return;
+        toastEl.textContent = msg;
+        toastEl.className = "toast show " + (kind === "err" ? "err" : "ok");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastEl.className = "toast"; }, 2600);
+      }
+      document.body.addEventListener("click", function (e) {
+        var copyBtn = e.target.closest(".btn-copy");
+        if (copyBtn && copyBtn.dataset.copy && navigator.clipboard) {
+          navigator.clipboard.writeText(copyBtn.dataset.copy).then(function () { showToast("คัดลอกแล้ว", "ok"); });
+          return;
+        }
+        var adj = e.target.closest(".js-user-adj");
+        if (adj) {
+          var uid = adj.dataset.uid;
+          var nEl = document.querySelector('.adj-n[data-uid="' + uid.replace(/"/g, '') + '"]');
+          var n = Math.trunc(Number(nEl && nEl.value));
+          if (!Number.isFinite(n) || n < 1 || n > 99) { showToast("จำนวน 1-99", "err"); return; }
+          var dir = Number(adj.dataset.dir) < 0 ? -1 : 1;
+          var word = dir > 0 ? "เพิ่ม" : "ลด";
+          if (!confirm("ยืนยัน" + word + "สแกน " + n + " ครั้ง ให้ " + uid.slice(0, 12) + "… ?")) return;
+          adj.disabled = true;
+          fetch("/admin/users/" + encodeURIComponent(uid) + "/adjust-paid-scans", {
+            method: "POST",
+            headers: { Accept: "application/json", "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ delta: dir * n })
+          }).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j || j.ok === false) throw new Error((j && j.message) || "ไม่สำเร็จ");
+            showToast(word + "แล้ว: " + j.before + " → " + j.after + (j.paidUntilExtended ? " (ต่ออายุ 24 ชม.)" : ""), "ok");
+            setTimeout(function () { location.reload(); }, 800);
+          }).catch(function (err) { showToast(err.message || "ผิดพลาด", "err"); adj.disabled = false; });
+          return;
+        }
+        var fr = e.target.closest(".js-user-freereset");
+        if (fr) {
+          var fuid = fr.dataset.uid;
+          if (!confirm("รีเซ็ตสิทธิ์ฟรีวันนี้ให้ " + fuid.slice(0, 12) + "… ?")) return;
+          fr.disabled = true;
+          fetch("/admin/users/" + encodeURIComponent(fuid) + "/reset-free-trial", {
+            method: "POST",
+            headers: { Accept: "application/json", "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ resetMode: "reset_free_quota_only" })
+          }).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j || j.ok === false) throw new Error((j && j.message) || "ไม่สำเร็จ");
+            showToast("รีเซ็ตฟรีแล้ว", "ok");
+            setTimeout(function () { location.reload(); }, 800);
+          }).catch(function (err) { showToast(err.message || "ผิดพลาด", "err"); fr.disabled = false; });
+        }
+      });
+    })();
+  </script>
+</body>
+</html>`);
+    } catch (err) {
+      console.error("[ADMIN_DASH] users page failed:", err);
+      res.status(500).send("users_page_failed");
+    }
+  });
 
   router.post(
     "/admin/users/:lineUserId/adjust-paid-scans",
