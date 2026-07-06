@@ -696,6 +696,17 @@ export const env = {
     const n = raw === undefined || raw === "" ? 24 : Number(raw);
     return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 24;
   })(),
+  /** SlipOK bank-verified slip checking (slipok.com). Inert until enabled + keyed. */
+  SLIPOK_ENABLED: String(process.env.SLIPOK_ENABLED || "").trim() === "true",
+  SLIPOK_API_KEY: String(process.env.SLIPOK_API_KEY || "").trim(),
+  SLIPOK_BRANCH_ID: String(process.env.SLIPOK_BRANCH_ID || "").trim(),
+  SLIPOK_API_BASE: String(
+    process.env.SLIPOK_API_BASE || "https://api.slipok.com/api/line/apikey",
+  ).trim(),
+  SLIPOK_TIMEOUT_MS: (() => {
+    const n = Number(process.env.SLIPOK_TIMEOUT_MS);
+    return Number.isFinite(n) && n >= 2000 ? n : 12000;
+  })(),
   /**
    * Grace window (minutes) allowing the transfer time to be BEFORE payment
    * created_at. Customers often transfer first, then tap "จ่าย" — a real slip
