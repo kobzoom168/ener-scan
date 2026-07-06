@@ -37,10 +37,13 @@ export async function runSlipAutoApprovalAfterGateAccept({
   // transaction is not real/usable → straight to manual review; "error"
   // (network/auth/quota) falls back to the internal OCR path below.
   if (isSlipokConfigured()) {
+    const expectedAmount =
+      Number(payment?.expected_amount ?? payment?.amount) || null;
     const sv = await verifySlipWithSlipok({
       imageBuffer,
       lineUserId: userId,
       paymentId,
+      expectedAmount,
     });
     if (sv.outcome === "verified") {
       provider = "slipok";
