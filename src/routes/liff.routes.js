@@ -31,14 +31,14 @@ function bangkokDateKey(now = Date.now()) {
 }
 
 const DAILY_MESSAGES = [
-  "วันนี้เหมาะกับการเริ่มต้นสิ่งใหม่ โดยเฉพาะช่วงเช้า",
-  "โชคจากผู้ใหญ่เข้ามาช่วยหนุน งานที่ค้างอยู่จะคลี่คลาย",
-  "พลังเมตตาเด่น คนรอบตัวพร้อมช่วยเหลือ อย่าลืมยิ้มรับ",
-  "วันนี้ควรใจเย็นเป็นพิเศษ ช้าแต่ชัวร์จะได้ผลดีกว่า",
-  "การเงินมีจังหวะดีช่วงบ่าย ตัดสินใจด้วยสติจะได้เปรียบ",
-  "เหมาะกับการไหว้พระเสริมดวง จิตใจจะสงบและเห็นทางออก",
-  "ความรักและครอบครัวเด่น หาเวลาอยู่กับคนสำคัญ",
-  "พลังกำลังฟื้นตัว พักผ่อนให้พอ แล้วพรุ่งนี้จะแรงกว่าเดิม",
+  "วันนี้เหมาะกับการเริ่มต้นสิ่งใหม่ ลงมือช่วงเช้าแล้วดีมาก อาจารย์เอาใจช่วยนะ",
+  "โชคจากผู้ใหญ่เข้ามาหนุน งานที่ค้างจะคลี่คลาย อย่าลืมขอบคุณคนที่ช่วยเราด้วยนะ",
+  "พลังเมตตาเด่นมาก ยิ้มให้คนรอบตัว แบ่งปันเล็ก ๆ น้อย ๆ พลังดีจะย้อนกลับมาหาคุณ",
+  "วันนี้ใจเย็นเป็นพิเศษนะ ช้าแต่ชัวร์ได้ผลดีกว่า ใจที่นิ่งคือเครื่องรางที่แรงที่สุด",
+  "การเงินมีจังหวะดีช่วงบ่าย ตัดสินใจด้วยสติ แล้วแบ่งไปทำสิ่งดี ๆ สักหน่อยยิ่งเสริมดวง",
+  "วันนี้เหมาะกับการทำสิ่งดี ๆ ตามที่คุณศรัทธา ไหว้พระ สวดมนต์ หรือแค่ช่วยเหลือใครสักคนก็บุญแล้ว",
+  "ความรักและครอบครัวเด่น หาเวลาอยู่กับคนสำคัญ คำพูดดี ๆ หนึ่งประโยคเปลี่ยนทั้งวันได้เลย",
+  "พลังกำลังฟื้นตัว พักผ่อนให้พอ ใจดีกับตัวเองหน่อยนะ พรุ่งนี้จะแรงกว่าเดิมแน่นอน",
 ];
 
 function gradeFor(score) {
@@ -91,14 +91,14 @@ const TAROT_DECK = [
 ];
 
 const READING_ADVICE = [
-  "หมั่นสวดมนต์สั้น ๆ ก่อนนอน จิตที่นิ่งจะทำให้ตัดสินใจแม่นขึ้น",
-  "หาเวลาไปไหว้พระสักครั้งในเดือนนี้ พลังใจจะกลับมาเต็ม",
-  "ใส่ใจคนใกล้ตัวอีกนิด แรงหนุนสำคัญมาจากคนข้าง ๆ",
-  "เก็บออมเล็ก ๆ ทุกวัน เดือนนี้วินัยการเงินคือเครื่องรางชั้นดี",
-  "พักผ่อนให้พอ สุขภาพดีคือฐานของดวงทุกด้าน",
-  "ทำบุญเล็ก ๆ ตามกำลัง บุญที่ทำเองส่งผลไวที่สุด",
-  "จัดบ้านให้โปร่ง ของที่ไม่ใช้แล้วปล่อยไป พลังใหม่จะเข้ามา",
-  "กล้าปฏิเสธในสิ่งที่เกินกำลัง เดือนนี้ใจแข็งคือใจดีต่อตัวเอง",
+  "ก่อนนอนลองนิ่งกับตัวเองสัก 5 นาที สวดมนต์หรือขอบคุณสิ่งดี ๆ ของวันนี้ตามแบบที่คุณศรัทธา ใจที่นิ่งจะทำให้ตัดสินใจแม่นขึ้น",
+  "เดือนนี้หาเวลาไปที่ที่ใจคุณสงบสักครั้ง วัด ศาลเจ้า โบสถ์ หรือธรรมชาติก็ได้ พลังใจจะกลับมาเต็ม",
+  "ใส่ใจคนใกล้ตัวอีกนิด พูดดี ๆ กับเขาสักประโยค แรงหนุนสำคัญของเดือนนี้มาจากคนข้าง ๆ นี่แหละ",
+  "เก็บออมเล็ก ๆ ทุกวัน แล้วแบ่งส่วนหนึ่งไปช่วยคนที่ลำบากกว่า วินัยบวกน้ำใจคือเครื่องรางชั้นดีที่สุด",
+  "พักผ่อนให้พอ กินให้ดี สุขภาพดีคือฐานของดวงทุกด้าน ดูแลตัวเองก็คือการเสริมดวงแล้ว",
+  "ทำสิ่งดี ๆ เล็ก ๆ ตามกำลัง จะทำบุญ บริจาค หรือช่วยใครสักคนก็ได้ ความดีที่ทำเองส่งผลไวที่สุด",
+  "จัดบ้านให้โปร่ง ของที่ไม่ใช้แล้วส่งต่อให้คนที่ต้องการ ได้ทั้งพื้นที่ ได้ทั้งบุญ พลังใหม่จะเข้ามาเอง",
+  "กล้าปฏิเสธสิ่งที่เกินกำลัง เดือนนี้การใจดีกับตัวเองไม่ใช่ความเห็นแก่ตัวนะ",
 ];
 
 const ZODIAC_BOUNDS = [
@@ -327,7 +327,7 @@ function buildLiffHtml(liffId) {
   .app{width:100%;max-width:520px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;
     padding:18px 18px calc(26px + env(safe-area-inset-bottom));gap:15px;overflow-x:hidden}
   .hidden{display:none!important}
-  button{font:inherit;border:none;cursor:pointer}
+  button{font:inherit;border:none;cursor:pointer;color:inherit;-webkit-appearance:none;appearance:none}
 
   .apphead{display:flex;align-items:center;justify-content:space-between}
   .lg{font-size:1.9rem;color:var(--gold-deep);letter-spacing:.05em}
@@ -339,8 +339,28 @@ function buildLiffHtml(liffId) {
   .greet .ds{color:var(--sub);font-size:.92rem;margin-top:2px}
 
   .score{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden}
-  .score::before{content:"";position:absolute;right:-40px;top:-60px;width:180px;height:180px;border-radius:50%;
-    background:radial-gradient(closest-side, rgba(201,163,92,.10), transparent 70%)}
+  .score::before{content:"";position:absolute;right:-40px;top:-60px;width:200px;height:200px;border-radius:50%;
+    background:radial-gradient(closest-side, rgba(201,163,92,.16), transparent 70%)}
+  /* WOW layer: breathing glow + drifting sparkles + shimmer sweep */
+  .score .fx{position:absolute;color:var(--gold);pointer-events:none;opacity:.55;font-size:13px}
+  .score .f1{right:26px;top:20px;font-size:17px}
+  .score .f2{right:64px;top:52px;font-size:10px}
+  .score .f3{right:38px;top:84px}
+  .score .f4{left:20px;bottom:66px;font-size:9px;opacity:.35}
+  @media (prefers-reduced-motion:no-preference){
+    .score::before{animation:breathe 3.8s ease-in-out infinite}
+    @keyframes breathe{0%,100%{transform:scale(1);opacity:.75}50%{transform:scale(1.18);opacity:1}}
+    .score .fx{animation:twinkle 2.6s ease-in-out infinite}
+    .score .f2{animation-delay:.7s}
+    .score .f3{animation-delay:1.3s}
+    .score .f4{animation-delay:1.9s}
+    @keyframes twinkle{0%,100%{opacity:.15;transform:scale(.7) rotate(0deg)}50%{opacity:.9;transform:scale(1.15) rotate(24deg)}}
+    .score::after{content:"";position:absolute;top:0;bottom:0;left:-70%;width:45%;pointer-events:none;
+      background:linear-gradient(100deg,transparent,rgba(233,207,147,.16) 50%,transparent);
+      animation:sweep 4.6s ease-in-out infinite}
+    @keyframes sweep{0%,55%{left:-70%}85%,100%{left:130%}}
+    .score .num{transition:none}
+  }
   .score .k{font-size:1.02rem;font-weight:800}
   .score .k small{display:block;font-weight:500;color:var(--faint);font-size:.82rem;margin-top:2px}
   .score .mid{display:flex;align-items:center;gap:10px;margin-top:4px}
@@ -354,19 +374,25 @@ function buildLiffHtml(liffId) {
     background:#fdf8ec;border-radius:999px;padding:7px 15px;font-size:.9rem;color:var(--gold-deep);font-weight:700}
 
   .sect{font-size:1.08rem;font-weight:800;margin-top:2px}
-  .rows{display:flex;flex-direction:column;gap:11px}
-  .row{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:13px;display:flex;align-items:center;gap:13px;
-    box-shadow:var(--shadow);text-align:left;width:100%}
+  .rows{display:flex;flex-direction:column;gap:12px}
+  .row{background:linear-gradient(165deg,#ffffff,#fdf9f0);border:1px solid var(--line-gold);border-radius:20px;
+    padding:15px 13px;display:flex;align-items:center;gap:14px;text-align:left;width:100%;position:relative;overflow:hidden;
+    box-shadow:0 14px 30px -16px rgba(165,129,58,.38);transition:transform .12s ease}
+  .row:active{transform:scale(.985)}
+  .row::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3.5px;border-radius:0 4px 4px 0;
+    background:linear-gradient(180deg,#e9cf93,#c9a35c)}
   /* bespoke Ener medallions (gold line-icons) instead of stock emoji */
-  .med{width:58px;height:54px;border-radius:16px;flex:0 0 auto;display:grid;place-items:center;position:relative;
-    box-shadow:inset 0 0 0 1px rgba(165,129,58,.18)}
-  .med svg{width:28px;height:28px;stroke:var(--gold-deep);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-  .med1{background:linear-gradient(150deg,#f8ecd6,#efdab6)}
-  .med2{background:linear-gradient(150deg,#f4ebd8,#e7d1a3)}
-  .med3{background:linear-gradient(150deg,#f1e9db,#ddcaa6)}
-  .row .rt{font-weight:800;font-size:1.08rem}
-  .row .rd{font-size:.88rem;color:var(--sub);margin-top:1px;line-height:1.5}
-  .row .chev{margin-left:auto;color:var(--faint);font-size:1.3rem;padding-right:2px}
+  .med{width:62px;height:58px;border-radius:17px;flex:0 0 auto;display:grid;place-items:center;position:relative;
+    background:linear-gradient(150deg,#efd9ae,#cfa963);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.55), 0 8px 18px -8px rgba(165,129,58,.55)}
+  .med svg{width:30px;height:30px;stroke:#7c5f24;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .med1{background:linear-gradient(150deg,#f2ddb2,#d2ab62)}
+  .med2{background:linear-gradient(150deg,#eed9b4,#c9a35c)}
+  .med3{background:linear-gradient(150deg,#f0dcbc,#c5a05e)}
+  .row .rt{font-weight:800;font-size:1.13rem;color:var(--ink)}
+  .row .rd{font-size:.88rem;color:var(--sub);margin-top:2px;line-height:1.5}
+  .row .chev{margin-left:auto;flex:0 0 auto;width:32px;height:32px;border-radius:999px;display:grid;place-items:center;
+    background:#fdf8ec;border:1px solid var(--line-gold);color:var(--gold-deep);font-size:1.05rem;font-weight:700}
 
   .note{color:var(--faint);font-size:.85rem;text-align:center;line-height:1.6}
 
@@ -385,8 +411,14 @@ function buildLiffHtml(liffId) {
     font-size:1.25rem;font-weight:700;color:var(--ink);outline:none;font-family:inherit}
   .bigin:focus{border-color:var(--gold);box-shadow:0 0 0 4px rgba(201,163,92,.15)}
   .pills{display:flex;flex-wrap:wrap;gap:11px;margin-top:14px;justify-content:center}
-  .pill{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:14px 24px;font-size:1.08rem;font-weight:700;color:var(--sub)}
-  .pill.on{border-color:var(--gold);color:var(--gold-deep);background:#fdf8ec;font-weight:800}
+  .pill{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:14px 22px;font-size:1.05rem;font-weight:700;
+    color:var(--sub);display:inline-flex;align-items:center;gap:9px}
+  .pill svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+  .pill.on{border-color:var(--gold);color:var(--gold-deep);background:#fdf8ec;font-weight:800;
+    box-shadow:0 8px 18px -10px rgba(201,163,92,.55)}
+  .pill .tick{display:none;width:19px;height:19px;border-radius:99px;background:var(--gold);color:#fff;font-size:.7rem;
+    place-items:center;margin-left:2px}
+  .pill.on .tick{display:grid}
   .obfoot{margin-top:auto;display:flex;flex-direction:column;gap:11px;padding-top:18px}
   .goldbtn{width:100%;background:linear-gradient(165deg,#e3c98f,#c9a35c 60%,#b08a40);color:#fff;font-weight:800;
     text-align:center;padding:17px;border-radius:18px;font-size:1.2rem;box-shadow:0 14px 30px -12px rgba(176,138,64,.55)}
@@ -520,7 +552,7 @@ function buildLiffHtml(liffId) {
 
   <!-- onboarding -->
   <div id="v-ob" class="hidden" style="display:flex;flex-direction:column;flex:1">
-    <div class="obt"><div class="t">เริ่มต้นใช้งาน Ener</div><small>ตอบทีละข้อ ง่าย ๆ ไม่กี่ขั้น</small></div>
+    <div class="obt"><div class="t">มาทำความรู้จักกันก่อนนะ</div><small>อาจารย์ขอถามทีละข้อ ง่าย ๆ แป๊บเดียวเสร็จ</small></div>
     <div class="dots"><span class="dot" id="d0"></span><span class="dot" id="d1"></span><span class="dot" id="d2"></span><span class="dot" id="d3"></span></div>
 
     <div id="st0">
@@ -530,7 +562,7 @@ function buildLiffHtml(liffId) {
 
     <div id="st1" class="hidden">
       <div class="q">เกิดวันไหน<br>บอกอาจารย์หน่อย</div>
-      <div class="why">ใช้ผูกดวงของคุณ ข้อมูลนี้เก็บเป็นความลับ</div>
+      <div class="why">อาจารย์จะได้ผูกดวงให้ตรงตัวคุณที่สุด ข้อมูลนี้เก็บเป็นความลับนะ</div>
       <div class="bigfield"><label>วันเกิด</label>
         <div class="row3">
           <span class="selwrap"><select class="bigin" id="f-day"></select></span>
@@ -545,6 +577,7 @@ function buildLiffHtml(liffId) {
 
     <div id="st2" class="hidden">
       <div class="q">เพศของคุณ</div>
+      <div class="why">เพื่อให้คำแนะนำของอาจารย์ตรงทางยิ่งขึ้น</div>
       <div class="pills" id="g-sex">
         <button class="pill" data-v="หญิง">หญิง</button>
         <button class="pill" data-v="ชาย">ชาย</button>
@@ -553,14 +586,15 @@ function buildLiffHtml(liffId) {
     </div>
 
     <div id="st3" class="hidden">
-      <div class="q">สนใจบริการไหน<br>มากที่สุด</div>
+      <div class="q">อยากให้อาจารย์<br>ช่วยเรื่องไหนบ้าง</div>
+      <div class="why">เลือกได้หลายข้อเลยนะ</div>
       <div class="pills" id="g-int">
-        <button class="pill" data-v="ดูดวง">🔮 ดูดวง</button>
-        <button class="pill" data-v="สแกนพระ">🪬 สแกนพระ</button>
-        <button class="pill" data-v="ฮวงจุ้ย">🏠 ฮวงจุ้ย</button>
-        <button class="pill" data-v="เครื่องราง">🧿 เครื่องราง</button>
+        <button class="pill" data-v="ดูดวง"><svg viewBox="0 0 24 24"><circle cx="12" cy="10.5" r="6"/><path d="M8.5 18.5h7M10 21h4"/><path d="M12 7.6l.7 1.5 1.5.7-1.5.7-.7 1.5-.7-1.5-1.5-.7 1.5-.7z" fill="currentColor" stroke="none"/></svg>ดูดวง<span class="tick">✓</span></button>
+        <button class="pill" data-v="สแกนพระ"><svg viewBox="0 0 24 24"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5M15.5 4H18a2 2 0 0 1 2 2v2.5M20 15.5V18a2 2 0 0 1-2 2h-2.5M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><path d="M12 8.2c-1.9 0-3 1.5-3 3.3 0 2 1.5 3.3 3 4.8 1.5-1.5 3-2.8 3-4.8 0-1.8-1.1-3.3-3-3.3z"/></svg>สแกนพระ<span class="tick">✓</span></button>
+        <button class="pill" data-v="ฮวงจุ้ย"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6M6 10.2V19h12v-8.8"/><path d="M12 12v4.5M9.8 14.2h4.4"/></svg>ฮวงจุ้ย<span class="tick">✓</span></button>
+        <button class="pill" data-v="เครื่องราง"><svg viewBox="0 0 24 24"><path d="M12 3v3.5"/><path d="M12 6.5l4 3.5-1.5 6.5h-5L8 10z"/><path d="M12 10.2l1.6 1.4-.6 2.6h-2l-.6-2.6z" fill="currentColor" stroke="none" opacity=".55"/></svg>เครื่องราง<span class="tick">✓</span></button>
       </div>
-      <div class="why" style="margin-top:18px">รู้จัก Ener จากช่องทางไหน</div>
+      <div class="why" style="margin-top:18px">แล้วมาเจออาจารย์จากช่องทางไหนนะ</div>
       <div class="pills" id="g-ch">
         <button class="pill" data-v="Facebook">Facebook</button>
         <button class="pill" data-v="TikTok">TikTok</button>
@@ -585,7 +619,7 @@ function buildLiffHtml(liffId) {
     <div class="greet">
       <small id="h-when">สวัสดี</small>
       <div class="nm" id="h-name">คุณ...</div>
-      <div class="ds">ให้ Ener เป็นพลังบวกในการใช้ชีวิตของคุณ</div>
+      <div class="ds">อาจารย์อยู่ตรงนี้ เป็นพลังบวกให้คุณทุกวัน</div>
     </div>
 
     <div class="score">
@@ -596,14 +630,23 @@ function buildLiffHtml(liffId) {
       </div>
       <div class="ft" id="s-msg"></div>
       <span class="lucky">✦ เลขนำโชควันนี้ <b id="s-lucky" style="font-size:1.15rem">–</b></span>
-      <button class="readbtn" id="btn-reading">🔮 เปิดดวงประจำเดือน</button>
+      <button class="readbtn" id="btn-reading">
+        <svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round">
+          <rect x="8.5" y="4.5" width="8" height="12.5" rx="1.6"/>
+          <path d="M6.2 6.8l-2.4 1 4.6 10.8 1.9-.8" opacity=".75"/>
+          <path d="M17.8 6.8l2.4 1-4.6 10.8-1.9-.8" opacity=".75"/>
+          <path d="M12.5 8.6l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z" fill="#fff" stroke="none"/>
+        </svg>
+        เปิดดวงประจำเดือน
+      </button>
+      <span class="fx f1">✦</span><span class="fx f2">✦</span><span class="fx f3">✦</span><span class="fx f4">✦</span>
     </div>
 
-    <div class="sect">บริการแนะนำ</div>
+    <div class="sect">วันนี้ให้อาจารย์ช่วยเรื่องไหนดี</div>
     <div class="rows">
       <button class="row" data-say="สแกนพระ"><span class="med med1"><svg viewBox="0 0 24 24"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><path d="M12 8.2c-1.9 0-3 1.5-3 3.3 0 2 1.5 3.3 3 4.8 1.5-1.5 3-2.8 3-4.8 0-1.8-1.1-3.3-3-3.3z"/><circle cx="12" cy="11.4" r=".9" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">สแกนพระ</span><br/><span class="rd">ส่งรูปพระ ให้อาจารย์อ่านพลัง</span></span><span class="chev">›</span></button>
-      <button class="row" data-say="ดูฮวงจุ้ยห้อง"><span class="med med2"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10.2V19h12v-8.8"/><path d="M12 12.3v4.4M9.9 14.5h4.2"/><path d="M12 12.3l1.5 2.2-1.5-.6-1.5.6z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ฮวงจุ้ยจากรูป</span><br/><span class="rd">ถ่ายรูปห้อง เช็คพลังงานบ้าน</span></span><span class="chev">›</span></button>
-      <button class="row" data-say="ถามอาจารย์"><span class="med med3"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/><path d="M12 8.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ถามอาจารย์</span><br/><span class="rd">คุยเรื่องมู ถามได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
+      <button class="row" data-say="ดูฮวงจุ้ยห้อง"><span class="med med2"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10.2V19h12v-8.8"/><path d="M12 12.3v4.4M9.9 14.5h4.2"/><path d="M12 12.3l1.5 2.2-1.5-.6-1.5.6z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ฮวงจุ้ยจากรูป</span><br/><span class="rd">ถ่ายรูปห้อง อาจารย์ดูพลังบ้านให้</span></span><span class="chev">›</span></button>
+      <button class="row" data-say="ถามอาจารย์"><span class="med med3"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/><path d="M12 8.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ถามอาจารย์</span><br/><span class="rd">มีอะไรค้างใจ มาคุยกันได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
     </div>
     <p class="note">กดบริการแล้วกลับไปคุยกับอาจารย์ในแชตได้เลย</p>
   </div>
@@ -677,7 +720,7 @@ function buildLiffHtml(liffId) {
       </div>
 
       <button class="readbtn" id="rd-ask">💬 ถามอาจารย์ต่อจากดวงนี้</button>
-      <p class="note">ไพ่ประจำเดือนเปิดได้เดือนละชุด อัปเดตชุดใหม่ทุกต้นเดือน</p>
+      <p class="note">อาจารย์เปิดไพ่ให้เดือนละชุด ต้นเดือนหน้ามาเปิดชุดใหม่กันนะ ระหว่างนี้หมั่นคิดดี ทำดี พลังดีจะอยู่กับคุณ</p>
     </div>
   </div>
 
@@ -694,7 +737,6 @@ function buildLiffHtml(liffId) {
 
   /* ---- Thai date/time picker (no native OS locale dependence) ---- */
   var TH_MONTHS=["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
-  var TH_TIMES=["ไม่ทราบเวลา","เช้าตรู่","ตอนเช้า","ตอนสาย","เที่ยง","ตอนบ่าย","ตอนเย็น","ตอนค่ำ","กลางดึก"];
   function addOpt(sel,val,txt,placeholder){ var o=document.createElement("option"); o.value=val; o.textContent=txt;
     if(placeholder){ o.disabled=true; o.selected=true; } sel.appendChild(o); }
   function fillDates(){
@@ -705,7 +747,12 @@ function buildLiffHtml(liffId) {
     addOpt(y,"","ปีเกิด",true);
     var nowBE=(new Date(Date.now()+7*3600*1000)).getUTCFullYear()+543;
     for(var b=nowBE;b>=nowBE-95;b--) addOpt(y,b,"พ.ศ. "+b);
-    TH_TIMES.forEach(function(w,k){ addOpt(t, k===0?"":w, w, k===0); });
+    addOpt(t,"","ไม่ทราบเวลา",true);
+    for(var h=0;h<24;h++){
+      var hh=pad2(h);
+      addOpt(t, hh+":00", hh+":00 น.");
+      addOpt(t, hh+":30", hh+":30 น.");
+    }
   }
 
   /* ---- pill groups ---- */
@@ -717,13 +764,24 @@ function buildLiffHtml(liffId) {
       b.classList.add("on"); state[key] = b.getAttribute("data-v");
     });
   }
-  wireGroup("g-sex","sex"); wireGroup("g-int","interest"); wireGroup("g-ch","channel");
+  /* multi-select: toggle pills, store as comma-joined list */
+  function wireGroupMulti(gid, key){
+    var g = $(gid);
+    g.addEventListener("click", function(e){
+      var b = e.target.closest(".pill"); if(!b) return;
+      b.classList.toggle("on");
+      var vals = [];
+      Array.prototype.forEach.call(g.querySelectorAll(".pill.on"), function(p){ vals.push(p.getAttribute("data-v")); });
+      state[key] = vals.join(",");
+    });
+  }
+  wireGroup("g-sex","sex"); wireGroupMulti("g-int","interest"); wireGroup("g-ch","channel");
 
   /* ---- onboarding stepper ---- */
   function renderStep(){
     for(var i=0;i<4;i++){ $("st"+i).classList.toggle("hidden", i!==state.step); $("d"+i).classList.toggle("on", i<=state.step); }
     $("ob-back").classList.toggle("hidden", state.step===0);
-    $("ob-next").textContent = state.step===3 ? "เริ่มใช้งาน ✦" : "ต่อไป";
+    $("ob-next").textContent = state.step===3 ? "เปิดดวงกันเลย ✦" : "ต่อไป";
   }
   $("ob-back").addEventListener("click", function(){ if(state.step>0){ state.step--; renderStep(); } });
   $("ob-next").addEventListener("click", function(){
@@ -744,7 +802,7 @@ function buildLiffHtml(liffId) {
   }
 
   function saveProfile(){
-    var btn = $("ob-next"); btn.disabled = true; btn.textContent = "กำลังบันทึก...";
+    var btn = $("ob-next"); btn.disabled = true; btn.textContent = "อาจารย์กำลังจดไว้...";
     fetch("/api/liff/profile", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
         userId: state.userId, displayName: state.displayName,
@@ -767,6 +825,20 @@ function buildLiffHtml(liffId) {
     var m = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
     return d.getUTCDate() + " " + m[d.getUTCMonth()] + " " + (d.getUTCFullYear()+543);
   }
+  /* WOW: count the score up 0 → n on entry (skipped when reduced-motion) */
+  function countUp(el, target){
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if(reduce){ el.textContent = target; return; }
+    var t0 = null, dur = 1100;
+    function step(ts){
+      if(!t0) t0 = ts;
+      var p = Math.min(1, (ts - t0) / dur);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(target * eased);
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
   function enterHome(nickname){
     $("h-when").textContent = greetWord();
     $("h-name").textContent = "คุณ" + (nickname || state.displayName || "");
@@ -775,7 +847,8 @@ function buildLiffHtml(liffId) {
       .then(function(r){ return r.json(); })
       .then(function(j){
         if(!j || !j.ok) return;
-        $("s-num").textContent = j.score; $("s-grade").textContent = j.grade;
+        countUp($("s-num"), j.score);
+        $("s-grade").textContent = j.grade;
         $("s-msg").textContent = j.message; $("s-lucky").textContent = j.luckyNum;
       }).catch(function(){});
     show("v-home");
