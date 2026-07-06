@@ -390,12 +390,18 @@ function buildLiffHtml(liffId) {
     background:linear-gradient(180deg,#e9cf93,#c9a35c)}
   /* bespoke Ener medallions (gold line-icons) instead of stock emoji */
   .med{width:62px;height:58px;border-radius:17px;flex:0 0 auto;display:grid;place-items:center;position:relative;
-    background:linear-gradient(150deg,#efd9ae,#cfa963);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.55), 0 8px 18px -8px rgba(165,129,58,.55)}
-  .med svg{width:30px;height:30px;stroke:#7c5f24;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-  .med1{background:linear-gradient(150deg,#f2ddb2,#d2ab62)}
-  .med2{background:linear-gradient(150deg,#eed9b4,#c9a35c)}
-  .med3{background:linear-gradient(150deg,#f0dcbc,#c5a05e)}
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.55), 0 8px 18px -8px rgba(120,100,60,.45)}
+  .med svg{width:30px;height:30px;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  /* per-service colors (mockup v6): peach / gold / lavender */
+  .med1{background:linear-gradient(150deg,#f8e3cd,#e6c19a)}
+  .med1 svg{stroke:#a4653a}
+  .med1 svg [fill]{fill:#a4653a}
+  .med2{background:linear-gradient(150deg,#f4e3bd,#d9b264)}
+  .med2 svg{stroke:#8a6a22}
+  .med2 svg [fill]{fill:#8a6a22}
+  .med3{background:linear-gradient(150deg,#eae4f8,#c3b5e4)}
+  .med3 svg{stroke:#65559f}
+  .med3 svg [fill]{fill:#65559f}
   .row .rt{font-weight:800;font-size:1.13rem;color:var(--ink)}
   .row .en{display:block;font-size:.6rem;color:var(--gold-deep);letter-spacing:.12em;font-weight:700;margin-top:1px}
   .row .rd{font-size:.88rem;color:var(--sub);margin-top:2px;line-height:1.5}
