@@ -151,12 +151,14 @@ function buildLiffHtml(liffId) {
     --shadow:0 12px 32px -18px rgba(165,129,58,.28);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html{-webkit-text-size-adjust:100%}
+  html{-webkit-text-size-adjust:100%;overflow-x:hidden}
   /* elderly-friendly: large base type, big targets */
   body{margin:0;font-family:"IBM Plex Sans Thai","Noto Sans Thai","Sukhumvit Set",-apple-system,system-ui,sans-serif;
-    background:var(--bg);color:var(--ink);font-size:17.5px;line-height:1.6;min-height:100dvh}
+    background:var(--bg);color:var(--ink);font-size:17.5px;line-height:1.6;min-height:100dvh;
+    width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none}
   .serif{font-family:"Didot","Bodoni 72","Playfair Display","Iowan Old Style",Palatino,Georgia,serif}
-  .app{max-width:520px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;padding:18px 18px 26px;gap:15px}
+  .app{width:100%;max-width:520px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;
+    padding:18px 18px calc(26px + env(safe-area-inset-bottom));gap:15px;overflow-x:hidden}
   .hidden{display:none!important}
   button{font:inherit;border:none;cursor:pointer}
 
@@ -188,9 +190,13 @@ function buildLiffHtml(liffId) {
   .rows{display:flex;flex-direction:column;gap:11px}
   .row{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:13px;display:flex;align-items:center;gap:13px;
     box-shadow:var(--shadow);text-align:left;width:100%}
-  .row .ph{width:64px;height:56px;border-radius:14px;flex:0 0 auto;display:grid;place-items:center;font-size:27px}
-  .p1{background:linear-gradient(150deg,#f6e3cf,#e8c9a8)} .p2{background:linear-gradient(150deg,#f9ecd2,#ddb96f)}
-  .p3{background:linear-gradient(150deg,#e9e4f6,#c4b7e2)} .p4{background:linear-gradient(150deg,#e2f2ea,#a9d8c3)}
+  /* bespoke Ener medallions (gold line-icons) instead of stock emoji */
+  .med{width:58px;height:54px;border-radius:16px;flex:0 0 auto;display:grid;place-items:center;position:relative;
+    box-shadow:inset 0 0 0 1px rgba(165,129,58,.18)}
+  .med svg{width:28px;height:28px;stroke:var(--gold-deep);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .med1{background:linear-gradient(150deg,#f8ecd6,#efdab6)}
+  .med2{background:linear-gradient(150deg,#f4ebd8,#e7d1a3)}
+  .med3{background:linear-gradient(150deg,#f1e9db,#ddcaa6)}
   .row .rt{font-weight:800;font-size:1.08rem}
   .row .rd{font-size:.88rem;color:var(--sub);margin-top:1px;line-height:1.5}
   .row .chev{margin-left:auto;color:var(--faint);font-size:1.3rem;padding-right:2px}
@@ -220,25 +226,74 @@ function buildLiffHtml(liffId) {
   .goldbtn:disabled{opacity:.5}
   .backbtn{width:100%;background:transparent;color:var(--faint);font-size:.98rem;font-weight:600;padding:6px;text-align:center}
 
-  .center{display:grid;place-items:center;min-height:70dvh;text-align:center}
-  .orb{width:84px;height:84px;border-radius:26px;background:linear-gradient(150deg,#f2e2bd,#c9a35c);display:grid;place-items:center;
-    font-size:40px;box-shadow:var(--shadow);margin:0 auto 16px}
-  .ld{color:var(--sub);font-size:1.05rem}
+  /* date selects (custom Thai picker) */
+  .row3{display:grid;grid-template-columns:1fr 1.3fr 1.2fr;gap:9px}
+  select.bigin{-webkit-appearance:none;appearance:none;background:#fff;padding-right:34px;
+    text-align:center;text-align-last:center;background-image:none}
+  .selwrap{position:relative}
+  .selwrap::after{content:"";position:absolute;right:15px;top:50%;width:9px;height:9px;pointer-events:none;
+    border-right:2px solid var(--gold-deep);border-bottom:2px solid var(--gold-deep);transform:translateY(-70%) rotate(45deg)}
+  select.bigin:focus{border-color:var(--gold);box-shadow:0 0 0 4px rgba(201,163,92,.15)}
+
+  /* premium loading emblem */
+  .center{display:grid;place-items:center;min-height:80dvh;text-align:center}
+  .load-wrap{display:flex;flex-direction:column;align-items:center}
+  .emblem{width:138px;height:138px;display:block}
+  .wordmark{font-size:2.6rem;color:var(--gold-deep);letter-spacing:.16em;margin-top:16px;line-height:1;padding-left:.16em}
+  .wordmark-sub{font-size:.82rem;color:var(--gold);letter-spacing:.62em;margin-top:9px;padding-left:.62em}
+  .loaddots{display:flex;gap:8px;margin-top:22px}
+  .loaddots i{width:7px;height:7px;border-radius:99px;background:var(--gold);opacity:.35}
+  .ld{color:var(--sub);font-size:1rem;margin-top:16px}
   @media (prefers-reduced-motion:no-preference){
-    .pulse{animation:pu 1.6s ease-in-out infinite}
-    @keyframes pu{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+    .em-ring{transform-origin:60px 60px;animation:spin 26s linear infinite}
+    .em-orbit{transform-origin:60px 60px;animation:spin 9s linear infinite}
+    .em-gem{transform-origin:60px 60px;animation:gem 3.6s ease-in-out infinite}
+    .em-glow{transform-origin:60px 60px;animation:glow 3.6s ease-in-out infinite}
+    .loaddots i{animation:dot 1.3s ease-in-out infinite}
+    .loaddots i:nth-child(2){animation-delay:.16s}
+    .loaddots i:nth-child(3){animation-delay:.32s}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes gem{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+    @keyframes glow{0%,100%{opacity:.45}50%{opacity:.95}}
+    @keyframes dot{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-5px)}}
   }
 </style>
 </head>
 <body>
 <div class="app">
 
-  <!-- loading -->
+  <!-- loading (bespoke Ener energy sigil) -->
   <div id="v-load" class="center">
-    <div>
-      <div class="orb pulse">🔮</div>
-      <div class="lg serif" style="font-size:2.2rem">Ener</div>
-      <p class="ld" id="loadmsg">กำลังเชื่อมต่อ...</p>
+    <div class="load-wrap">
+      <svg class="emblem" viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <linearGradient id="eg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#e9cf93"/><stop offset="1" stop-color="#a5813a"/>
+          </linearGradient>
+          <radialGradient id="eglow" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#e9cf93" stop-opacity=".55"/><stop offset="1" stop-color="#e9cf93" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle class="em-glow" cx="60" cy="60" r="52" fill="url(#eglow)"/>
+        <g class="em-ring"><circle cx="60" cy="60" r="47" fill="none" stroke="url(#eg)" stroke-width="1" stroke-dasharray="1.5 7" stroke-linecap="round"/></g>
+        <circle cx="60" cy="60" r="39" fill="none" stroke="url(#eg)" stroke-width="1.3"/>
+        <g stroke="url(#eg)" stroke-width="1.2" stroke-linecap="round">
+          <line x1="60" y1="14" x2="60" y2="19"/><line x1="92.5" y1="27.5" x2="89" y2="31"/>
+          <line x1="106" y1="60" x2="101" y2="60"/><line x1="92.5" y1="92.5" x2="89" y2="89"/>
+          <line x1="60" y1="106" x2="60" y2="101"/><line x1="27.5" y1="92.5" x2="31" y2="89"/>
+          <line x1="14" y1="60" x2="19" y2="60"/><line x1="27.5" y1="27.5" x2="31" y2="31"/>
+        </g>
+        <g class="em-gem">
+          <path d="M60 40 L76 60 L60 80 L44 60 Z" fill="none" stroke="url(#eg)" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M60 40 L60 80 M44 60 L76 60 M51 51 L69 51 M51 69 L69 69" stroke="url(#eg)" stroke-width=".8" opacity=".65"/>
+          <circle cx="60" cy="60" r="3" fill="url(#eg)"/>
+        </g>
+        <g class="em-orbit"><circle cx="60" cy="13" r="2.6" fill="#a5813a"/></g>
+      </svg>
+      <div class="wordmark serif">Ener</div>
+      <div class="wordmark-sub">สายมู</div>
+      <div class="loaddots"><i></i><i></i><i></i></div>
+      <p class="ld" id="loadmsg" style="display:none"></p>
     </div>
   </div>
 
@@ -254,9 +309,17 @@ function buildLiffHtml(liffId) {
 
     <div id="st1" class="hidden">
       <div class="q">เกิดวันไหน<br>บอกอาจารย์หน่อย</div>
-      <div class="why">ใช้ผูกดวงของคุณ — ข้อมูลเก็บเป็นความลับ</div>
-      <div class="bigfield"><label>วันเกิด</label><input class="bigin" id="f-bd" type="date"/></div>
-      <div class="bigfield"><label>เวลาเกิด (ถ้าทราบ ไม่บังคับ)</label><input class="bigin" id="f-bt" type="time"/></div>
+      <div class="why">ใช้ผูกดวงของคุณ ข้อมูลนี้เก็บเป็นความลับ</div>
+      <div class="bigfield"><label>วันเกิด</label>
+        <div class="row3">
+          <span class="selwrap"><select class="bigin" id="f-day"></select></span>
+          <span class="selwrap"><select class="bigin" id="f-mon"></select></span>
+          <span class="selwrap"><select class="bigin" id="f-year"></select></span>
+        </div>
+      </div>
+      <div class="bigfield"><label>ช่วงเวลาที่เกิด (ถ้าทราบ)</label>
+        <span class="selwrap" style="display:block"><select class="bigin" id="f-bt"></select></span>
+      </div>
     </div>
 
     <div id="st2" class="hidden">
@@ -283,7 +346,7 @@ function buildLiffHtml(liffId) {
         <button class="pill" data-v="เพื่อนแนะนำ">เพื่อนแนะนำ</button>
         <button class="pill" data-v="อื่นๆ">อื่น ๆ</button>
       </div>
-      <div class="bigfield"><label>เบอร์โทร (ไม่บังคับ)</label><input class="bigin" id="f-ph" type="tel" placeholder="08x-xxx-xxxx" maxlength="20"/></div>
+      <div class="bigfield"><label>เบอร์โทร (ไม่บังคับ)</label><input class="bigin" id="f-ph" type="tel" placeholder="เบอร์มือถือ 10 หลัก" maxlength="20"/></div>
     </div>
 
     <div class="obfoot">
@@ -316,9 +379,9 @@ function buildLiffHtml(liffId) {
 
     <div class="sect">บริการแนะนำ</div>
     <div class="rows">
-      <button class="row" data-say="สแกนพระ"><span class="ph p1">🪬</span><span><span class="rt">สแกนพระ</span><br/><span class="rd">ส่งรูปพระ ให้อาจารย์อ่านพลัง</span></span><span class="chev">›</span></button>
-      <button class="row" data-say="ดูฮวงจุ้ยห้อง"><span class="ph p2">🏠</span><span><span class="rt">ฮวงจุ้ยจากรูป</span><br/><span class="rd">ถ่ายรูปห้อง เช็คพลังงานบ้าน</span></span><span class="chev">›</span></button>
-      <button class="row" data-say="ถามอาจารย์"><span class="ph p3">🧙‍♂️</span><span><span class="rt">ถามอาจารย์</span><br/><span class="rd">คุยเรื่องมู ถามได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
+      <button class="row" data-say="สแกนพระ"><span class="med med1"><svg viewBox="0 0 24 24"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><path d="M12 8.2c-1.9 0-3 1.5-3 3.3 0 2 1.5 3.3 3 4.8 1.5-1.5 3-2.8 3-4.8 0-1.8-1.1-3.3-3-3.3z"/><circle cx="12" cy="11.4" r=".9" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">สแกนพระ</span><br/><span class="rd">ส่งรูปพระ ให้อาจารย์อ่านพลัง</span></span><span class="chev">›</span></button>
+      <button class="row" data-say="ดูฮวงจุ้ยห้อง"><span class="med med2"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10.2V19h12v-8.8"/><path d="M12 12.3v4.4M9.9 14.5h4.2"/><path d="M12 12.3l1.5 2.2-1.5-.6-1.5.6z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ฮวงจุ้ยจากรูป</span><br/><span class="rd">ถ่ายรูปห้อง เช็คพลังงานบ้าน</span></span><span class="chev">›</span></button>
+      <button class="row" data-say="ถามอาจารย์"><span class="med med3"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/><path d="M12 8.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ถามอาจารย์</span><br/><span class="rd">คุยเรื่องมู ถามได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
     </div>
     <p class="note">กดบริการแล้วกลับไปคุยกับอาจารย์ในแชตได้เลย</p>
   </div>
@@ -331,6 +394,24 @@ function buildLiffHtml(liffId) {
   var state = { userId:"", displayName:"", step:0, sex:"", interest:"", channel:"" };
   function $(id){ return document.getElementById(id); }
   function show(id){ ["v-load","v-ob","v-home"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); }
+  function showLoadMsg(t){ var lm=$("loadmsg"); if(lm){ lm.style.display="block"; lm.textContent=t; } }
+  function pad2(x){ x=String(x); return x.length<2 ? "0"+x : x; }
+
+  /* ---- Thai date/time picker (no native OS locale dependence) ---- */
+  var TH_MONTHS=["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+  var TH_TIMES=["ไม่ทราบเวลา","เช้าตรู่","ตอนเช้า","ตอนสาย","เที่ยง","ตอนบ่าย","ตอนเย็น","ตอนค่ำ","กลางดึก"];
+  function addOpt(sel,val,txt,placeholder){ var o=document.createElement("option"); o.value=val; o.textContent=txt;
+    if(placeholder){ o.disabled=true; o.selected=true; } sel.appendChild(o); }
+  function fillDates(){
+    var d=$("f-day"), m=$("f-mon"), y=$("f-year"), t=$("f-bt");
+    if(!d||d.options.length) return;
+    addOpt(d,"","วัน",true); for(var i=1;i<=31;i++) addOpt(d,i,String(i));
+    addOpt(m,"","เดือน",true); for(var j=0;j<12;j++) addOpt(m,j+1,TH_MONTHS[j]);
+    addOpt(y,"","ปีเกิด",true);
+    var nowBE=(new Date(Date.now()+7*3600*1000)).getUTCFullYear()+543;
+    for(var b=nowBE;b>=nowBE-95;b--) addOpt(y,b,"พ.ศ. "+b);
+    TH_TIMES.forEach(function(w,k){ addOpt(t, k===0?"":w, w, k===0); });
+  }
 
   /* ---- pill groups ---- */
   function wireGroup(gid, key){
@@ -352,16 +433,27 @@ function buildLiffHtml(liffId) {
   $("ob-back").addEventListener("click", function(){ if(state.step>0){ state.step--; renderStep(); } });
   $("ob-next").addEventListener("click", function(){
     if(state.step===0 && !$("f-nick").value.trim()){ $("f-nick").focus(); return; }
+    if(state.step===1){
+      if(!$("f-day").value){ $("f-day").focus(); return; }
+      if(!$("f-mon").value){ $("f-mon").focus(); return; }
+      if(!$("f-year").value){ $("f-year").focus(); return; }
+    }
     if(state.step<3){ state.step++; renderStep(); return; }
     saveProfile();
   });
+
+  function buildBirthdate(){
+    var dd=$("f-day").value, mm=$("f-mon").value, yy=$("f-year").value;
+    if(!(dd&&mm&&yy)) return "";
+    return (parseInt(yy,10)-543) + "-" + pad2(mm) + "-" + pad2(dd); // BE -> CE, YYYY-MM-DD
+  }
 
   function saveProfile(){
     var btn = $("ob-next"); btn.disabled = true; btn.textContent = "กำลังบันทึก...";
     fetch("/api/liff/profile", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
         userId: state.userId, displayName: state.displayName,
-        nickname: $("f-nick").value.trim(), birthdate: $("f-bd").value || "", birth_time: $("f-bt").value || "",
+        nickname: $("f-nick").value.trim(), birthdate: buildBirthdate(), birth_time: $("f-bt").value || "",
         gender: state.sex, interest: state.interest, channel: state.channel, phone: $("f-ph").value.trim()
       })
     }).then(function(r){ return r.json(); }).then(function(j){
@@ -402,14 +494,15 @@ function buildLiffHtml(liffId) {
       try{
         liff.sendMessages([{ type:"text", text: say }])
           .then(function(){ liff.closeWindow(); })
-          .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์ \\"" + say + "\\" ได้เลยครับ"); liff.closeWindow(); });
-      }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์ \\"" + say + "\\" ได้เลยครับ"); }
+          .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + " ได้เลยครับ"); liff.closeWindow(); });
+      }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + " ได้เลยครับ"); }
     });
   });
 
   /* ---- boot ---- */
   function boot(){
-    if(!LIFF_ID){ $("loadmsg").textContent = "หน้านี้พร้อมแล้ว (รอผูก LIFF ID)"; return; }
+    fillDates();
+    if(!LIFF_ID){ showLoadMsg("หน้านี้พร้อมแล้ว (รอผูก LIFF ID)"); return; }
     liff.init({ liffId: LIFF_ID }).then(function(){
       if(!liff.isLoggedIn()){ liff.login(); return; }
       return liff.getProfile().then(function(p){
@@ -419,7 +512,7 @@ function buildLiffHtml(liffId) {
         if(j && j.found && j.profile && j.profile.nickname){ enterHome(j.profile.nickname); }
         else { renderStep(); show("v-ob"); }
       });
-    }).catch(function(e){ $("loadmsg").textContent = "เชื่อมต่อไม่สำเร็จ: " + (e && e.message ? e.message : e); });
+    }).catch(function(){ showLoadMsg("เชื่อมต่อไม่สำเร็จ ลองเปิดใหม่อีกครั้ง"); });
   }
   boot();
 })();
