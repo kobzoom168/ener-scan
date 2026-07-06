@@ -154,3 +154,90 @@ export async function revokePaidAccessForLineUserByAdmin({
     expiredPayments: expiredCount,
   };
 }
+
+/** Adding paid scans to a user whose window lapsed re-opens it for this long. */
+const ADMIN_ADJUST_DEFAULT_WINDOW_HOURS = 24;
+
+/**
+ * Admin dashboard: add/remove paid_remaining_scans by a delta (clamped at 0).
+ * When adding to a user whose paid_until is missing/past, the window is extended
+ * to now + 24h so the added scans are actually usable (paid access needs both
+ * remaining scans AND an active window).
+ */
+export async function adjustPaidRemainingScansForLineUserByAdmin({
+  lineUserId,
+  delta,
+  adminLabel = "admin_dashboard",
+} = {}) {
+  const lu = String(lineUserId || "").trim();
+  if (!lu) throw new Error("line_user_id_missing");
+
+  const d = Math.trunc(Number(delta));
+  if (!Number.isFinite(d) || d === 0 || Math.abs(d) > 99) {
+    throw new Error("invalid_delta");
+  }
+
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+
+  const { data: userRow, error: uErr } = await supabase
+    .from("app_users")
+    .select("id,line_user_id,paid_remaining_scans,paid_until")
+    .eq("line_user_id", lu)
+    .maybeSingle();
+
+  if (uErr) throw uErr;
+  if (!userRow?.id) throw new Error("app_user_not_found");
+
+  const appUserId = String(userRow.id);
+  const before = Number(userRow.paid_remaining_scans) || 0;
+  const after = Math.max(0, before + d);
+
+  const paidUntilMs = userRow.paid_until
+    ? Date.parse(String(userRow.paid_until))
+    : NaN;
+  const windowActive = Number.isFinite(paidUntilMs) && paidUntilMs > nowMs;
+
+  const patch = {
+    paid_remaining_scans: after,
+    updated_at: nowIso,
+  };
+  let paidUntilExtended = false;
+  if (d > 0 && after > 0 && !windowActive) {
+    patch.paid_until = new Date(
+      nowMs + ADMIN_ADJUST_DEFAULT_WINDOW_HOURS * 60 * 60 * 1000,
+    ).toISOString();
+    paidUntilExtended = true;
+  }
+
+  const { error: updErr } = await supabase
+    .from("app_users")
+    .update(patch)
+    .eq("id", appUserId);
+  if (updErr) throw updErr;
+
+  console.log(
+    JSON.stringify({
+      event: "admin_adjust_paid_scans",
+      outcome: "ok",
+      lineUserId: lu,
+      appUserId,
+      adminLabel,
+      delta: d,
+      before,
+      after,
+      paidUntilExtended,
+      paidUntil: patch.paid_until || userRow.paid_until || null,
+    })
+  );
+
+  return {
+    appUserId,
+    lineUserId: lu,
+    delta: d,
+    before,
+    after,
+    paidUntilExtended,
+    paidUntil: patch.paid_until || userRow.paid_until || null,
+  };
+}
