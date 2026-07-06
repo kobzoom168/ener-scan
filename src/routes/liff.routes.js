@@ -650,7 +650,9 @@ function buildLiffHtml(liffId) {
   .load-wrap{display:flex;flex-direction:column;align-items:center}
   .emblem{width:138px;height:138px;display:block}
   .wordmark{font-size:2.6rem;color:var(--gold-deep);letter-spacing:.16em;margin-top:16px;line-height:1;padding-left:.16em}
-  .wordmark-sub{font-size:.82rem;color:var(--gold);letter-spacing:.62em;margin-top:9px;padding-left:.62em}
+  /* NOTE: no letter-spacing on Thai text — iOS detaches combining vowels (ู) from
+     their consonant. Spacing is done with real spaces between whole clusters. */
+  .wordmark-sub{font-size:.86rem;color:var(--gold);margin-top:9px;font-weight:600}
   .loaddots{display:flex;gap:8px;margin-top:22px}
   .loaddots i{width:7px;height:7px;border-radius:99px;background:var(--gold);opacity:.35}
   .ld{color:var(--sub);font-size:1rem;margin-top:16px}
@@ -755,7 +757,7 @@ function buildLiffHtml(liffId) {
         <g class="em-orbit"><circle cx="60" cy="13" r="2.6" fill="#a5813a"/></g>
       </svg>
       <div class="wordmark serif">Ener</div>
-      <div class="wordmark-sub">สายมู</div>
+      <div class="wordmark-sub">ส า ย มู</div>
       <div class="loaddots"><i></i><i></i><i></i></div>
       <p class="ld" id="loadmsg" style="display:none"></p>
     </div>
