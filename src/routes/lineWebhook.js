@@ -6896,6 +6896,43 @@ function collectImageMessageMetaForUser(events, userId) {
   };
 }
 
+/**
+ * LINE's official typing indicator ("•••") — auto-clears when the bot replies.
+ * Fire-and-forget; failures are logged and never block the flow.
+ */
+async function startLineLoadingAnimation(channelAccessToken, chatId) {
+  const uid = String(chatId || "").trim();
+  const token = String(channelAccessToken || "").trim();
+  if (!uid || !token) return;
+  try {
+    const resp = await fetch("https://api.line.me/v2/bot/chat/loading/start", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ chatId: uid, loadingSeconds: 60 }),
+    });
+    if (!resp.ok) {
+      console.log(
+        JSON.stringify({
+          event: "LINE_LOADING_START_NON_OK",
+          status: resp.status,
+          lineUserIdPrefix: uid.slice(0, 8),
+        }),
+      );
+    }
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "LINE_LOADING_START_FAILED",
+        lineUserIdPrefix: uid.slice(0, 8),
+        message: String(e?.message || e).slice(0, 120),
+      }),
+    );
+  }
+}
+
 export function lineWebhookRouter(lineConfig) {
   const client = new line.Client(lineConfig);
 
@@ -6911,6 +6948,19 @@ export function lineWebhookRouter(lineConfig) {
         "[WEBHOOK] imageCountByUser:",
         Object.fromEntries(imageCountByUser)
       );
+
+      // ACK-FIRST: LINE expects a fast 200 — a slow response (image download can
+      // take ~30s) makes LINE mark the delivery failed and the message is lost.
+      // Respond now; all processing below continues detached. Reply tokens stay
+      // valid (~1 min) regardless of when the 200 is sent.
+      res.status(200).json({ ok: true });
+      console.log(JSON.stringify({ event: "WEBHOOK_ACK_FIRST_SENT", events: events.length }));
+
+      // Show LINE's typing indicator "•••" right away for every image sender —
+      // covers the silent gap while we download the image + run the scan/slip flow.
+      for (const uid of imageCountByUser.keys()) {
+        void startLineLoadingAnimation(lineConfig.channelAccessToken, uid);
+      }
 
       cleanupExpiredRequestBlocks();
       clearExpiredImageCandidates();
@@ -7049,10 +7099,10 @@ export function lineWebhookRouter(lineConfig) {
       cleanupExpiredRequestBlocks();
       clearExpiredImageCandidates();
 
-      res.status(200).json({ ok: true });
+      if (!res.headersSent) res.status(200).json({ ok: true });
     } catch (error) {
       console.error("[WEBHOOK] fatal:", error);
-      res.status(500).json({ error: "webhook_failed" });
+      if (!res.headersSent) res.status(500).json({ error: "webhook_failed" });
     }
   };
 }

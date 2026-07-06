@@ -1,6 +1,7 @@
 import { env } from "../../../config/env.js";
 import { extractSlipOcrFromImage } from "./slipOcrExtractor.service.js";
 import { evaluateSlipAutoApproval } from "./slipAutoApproval.service.js";
+import { isSlipokConfigured, verifySlipWithSlipok } from "./slipokVerify.service.js";
 
 /**
  * @param {object} p
@@ -28,35 +29,88 @@ export async function runSlipAutoApprovalAfterGateAccept({
   extract = extractSlipOcrFromImage,
 }) {
   const now = new Date();
-  const basePatch = {
-    slip_verify_provider: "internal_vision",
-  };
+  let provider = "internal_vision";
   let ocrResult = null;
-  try {
-    ocrResult = await extract({
+
+  // Primary: SlipOK bank verification (when configured). "verified" maps the
+  // bank's own numbers into the evaluate() shape; "invalid" = bank says the
+  // transaction is not real/usable → straight to manual review; "error"
+  // (network/auth/quota) falls back to the internal OCR path below.
+  if (isSlipokConfigured()) {
+    const sv = await verifySlipWithSlipok({
       imageBuffer,
       lineUserId: userId,
       paymentId,
     });
-  } catch (err) {
-    await updatePaymentFields(paymentId, {
-      ...basePatch,
-      slip_verify_status: "manual_review",
-      slip_review_reason:
-        String(err?.message || "").includes("ocr_json_parse_failed")
-          ? "ocr_json_parse_failed"
-          : "ocr_failed",
-      manual_review_at: now.toISOString(),
-    });
-    console.log(
-      JSON.stringify({
-        event: "SLIP_AUTO_APPROVE_VALIDATION_FAILED",
+    if (sv.outcome === "verified") {
+      provider = "slipok";
+      ocrResult = {
+        amount: sv.amount,
+        confidence: 1,
+        slipRef: sv.transRef,
+        transferredAtIso: sv.transferredAtIso,
+        receiverName: sv.receiverName,
+        receiverAccountLast4: sv.receiverAccountLast4,
+        receiverPromptPay: sv.receiverPromptPay,
+        senderName: sv.senderName,
+        bankName: sv.bankName,
+        rawText: null,
+      };
+    } else if (sv.outcome === "invalid") {
+      await updatePaymentFields(paymentId, {
+        slip_verify_provider: "slipok",
+        slip_verify_status: "manual_review",
+        slip_review_reason: `slipok_${sv.failCode || "invalid"}`,
+        manual_review_at: now.toISOString(),
+      });
+      console.log(
+        JSON.stringify({
+          event: "SLIP_MANUAL_REVIEW_REQUIRED",
+          paymentId,
+          lineUserIdPrefix: String(userId || "").slice(0, 8),
+          reasons: [`slipok_${sv.failCode || "invalid"}`],
+          slipokMessage: sv.failMessage || null,
+        }),
+      );
+      return {
+        mode: "manual_review",
+        ocrResult: null,
+        reasons: [`slipok_${sv.failCode || "invalid"}`],
+      };
+    }
+    // outcome === "error" → fall through to OCR
+  }
+
+  const basePatch = {
+    slip_verify_provider: provider,
+  };
+  if (!ocrResult) {
+    try {
+      ocrResult = await extract({
+        imageBuffer,
+        lineUserId: userId,
         paymentId,
-        lineUserIdPrefix: String(userId || "").slice(0, 8),
-        reason: String(err?.message || err).slice(0, 120),
-      }),
-    );
-    return { mode: "manual_review", ocrResult: null, reasons: ["ocr_failed"] };
+      });
+    } catch (err) {
+      await updatePaymentFields(paymentId, {
+        ...basePatch,
+        slip_verify_status: "manual_review",
+        slip_review_reason:
+          String(err?.message || "").includes("ocr_json_parse_failed")
+            ? "ocr_json_parse_failed"
+            : "ocr_failed",
+        manual_review_at: now.toISOString(),
+      });
+      console.log(
+        JSON.stringify({
+          event: "SLIP_AUTO_APPROVE_VALIDATION_FAILED",
+          paymentId,
+          lineUserIdPrefix: String(userId || "").slice(0, 8),
+          reason: String(err?.message || err).slice(0, 120),
+        }),
+      );
+      return { mode: "manual_review", ocrResult: null, reasons: ["ocr_failed"] };
+    }
   }
 
   const ocrPatch = {
