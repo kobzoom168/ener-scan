@@ -44,7 +44,7 @@ export async function listRecentScanUsersForAdmin({
   const ids = users.map((u) => u.lineUserId);
   const { data: appUsers, error: auErr } = await supabase
     .from("app_users")
-    .select("line_user_id,paid_until,paid_remaining_scans,paid_plan_code")
+    .select("line_user_id,paid_until,paid_remaining_scans,paid_plan_code,admin_note")
     .in("line_user_id", ids);
   if (auErr) throw auErr;
 
@@ -56,7 +56,31 @@ export async function listRecentScanUsersForAdmin({
     u.paidRemainingScans = a?.paid_remaining_scans != null ? Number(a.paid_remaining_scans) : 0;
     u.paidUntil = a?.paid_until ? String(a.paid_until) : null;
     u.paidPlanCode = a?.paid_plan_code ? String(a.paid_plan_code) : null;
+    u.adminNote = a?.admin_note ? String(a.admin_note) : "";
     u.hasAppUser = Boolean(a);
   }
   return { users, scanWindow: scans?.length ?? 0 };
+}
+
+/** Save the admin's free-text label for a user (e.g. "admin", "test", "VIP"). */
+export async function setAdminNoteForLineUser({ lineUserId, note }) {
+  const lu = String(lineUserId || "").trim();
+  if (!lu) throw new Error("line_user_id_missing");
+  const clean = String(note ?? "").trim().slice(0, 60);
+  const { data, error } = await supabase
+    .from("app_users")
+    .update({ admin_note: clean || null, updated_at: new Date().toISOString() })
+    .eq("line_user_id", lu)
+    .select("line_user_id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("app_user_not_found");
+  console.log(
+    JSON.stringify({
+      event: "admin_user_note_saved",
+      lineUserIdPrefix: lu.slice(0, 8),
+      note: clean || null,
+    }),
+  );
+  return { lineUserId: lu, note: clean };
 }

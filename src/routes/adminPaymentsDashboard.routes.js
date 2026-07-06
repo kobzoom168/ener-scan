@@ -19,7 +19,10 @@ import {
   resetFreeTrialForLineUserByAdmin,
   revokePaidAccessForLineUserByAdmin,
 } from "../stores/adminReset.db.js";
-import { listRecentScanUsersForAdmin } from "../stores/adminUsers.db.js";
+import {
+  listRecentScanUsersForAdmin,
+  setAdminNoteForLineUser,
+} from "../stores/adminUsers.db.js";
 import { getScanUsageSummaryForAppUser } from "../stores/paymentAccess.db.js";
 import {
   buildPaymentApprovedText,
@@ -1686,6 +1689,35 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
     }
   );
 
+  // Save a per-user free-text note (e.g. admin / test / VIP).
+  router.post(
+    "/admin/users/:lineUserId/note",
+    requireAdminSession,
+    express.json(),
+    async (req, res) => {
+      let lineUserId = String(req.params?.lineUserId || "").trim();
+      try {
+        lineUserId = decodeURIComponent(lineUserId);
+      } catch {
+        /* ignore */
+      }
+      if (!lineUserId) {
+        res.status(400).json({ ok: false, message: "line_user_id_missing" });
+        return;
+      }
+      try {
+        const result = await setAdminNoteForLineUser({
+          lineUserId,
+          note: req.body?.note,
+        });
+        res.status(200).json({ ok: true, ...result });
+      } catch (err) {
+        const msg = err?.message || "note_save_failed";
+        res.status(msg === "app_user_not_found" ? 404 : 500).json({ ok: false, message: msg });
+      }
+    },
+  );
+
   // 👥 User management: latest scanners + inline paid-scan adjust / free reset.
   router.get("/admin/users", requireAdminSession, async (req, res) => {
     try {
@@ -1705,6 +1737,7 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
           return `<tr>
             <td>${i + 1}</td>
             <td style="word-break:break-all;font-family:monospace;font-size:0.82rem;">${uid} ${copyBtnHtml("LINE", u.lineUserId)}</td>
+            <td><input type="text" class="note-in" data-uid="${uid}" data-orig="${escapeHtml(u.adminNote || "")}" value="${escapeHtml(u.adminNote || "")}" maxlength="60" placeholder="เช่น admin, test" style="width:110px;padding:6px 8px;border-radius:8px;border:1px solid var(--line,#444);background:transparent;color:var(--accent,#e6c34a);font-size:0.82rem;font-weight:700;" /></td>
             <td>${u.lastScanAt ? fmtDt(u.lastScanAt) : "—"}</td>
             <td style="text-align:center;">${u.recentScans}</td>
             <td style="text-align:center;">${paidTxt}</td>
@@ -1749,8 +1782,8 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
     <p style="color:var(--muted);font-size:0.85rem;margin:8px 2px;">เรียงตามสแกนล่าสุด · นับจากสแกน ${scanWindow} รายการล่าสุด · ปุ่มเพิ่ม/ลดปรับ paid_remaining_scans (สิทธิ์ที่เติมจากหน้านี้อยู่ได้ 1 ปี ไม่หายรายวัน · แพ็ก 49 ของลูกค้ายังหมดอายุ 24 ชม.ตามเดิม)</p>
     <div class="card" style="overflow-x:auto;">
       <table>
-        <thead><tr><th>#</th><th>LINE ID</th><th>สแกนล่าสุด</th><th>ครั้ง (ล่าสุด)</th><th>paid เหลือ</th><th>paid ถึง</th><th>จัดการ</th></tr></thead>
-        <tbody>${rowsHtml || `<tr><td colspan="7" style="text-align:center;color:var(--muted);">ไม่พบรายการ</td></tr>`}</tbody>
+        <thead><tr><th>#</th><th>LINE ID</th><th>โน้ต</th><th>สแกนล่าสุด</th><th>ครั้ง (ล่าสุด)</th><th>paid เหลือ</th><th>paid ถึง</th><th>จัดการ</th></tr></thead>
+        <tbody>${rowsHtml || `<tr><td colspan="8" style="text-align:center;color:var(--muted);">ไม่พบรายการ</td></tr>`}</tbody>
       </table>
     </div>
   </div>
@@ -1765,6 +1798,31 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
         clearTimeout(toastTimer);
         toastTimer = setTimeout(function () { toastEl.className = "toast"; }, 2600);
       }
+      function saveNote(inp) {
+        var uid = inp.dataset.uid;
+        var val = String(inp.value || "").trim();
+        if (val === String(inp.dataset.orig || "")) return;
+        fetch("/admin/users/" + encodeURIComponent(uid) + "/note", {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ note: val })
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          if (!j || j.ok === false) throw new Error((j && j.message) || "บันทึกโน้ตไม่สำเร็จ");
+          inp.dataset.orig = j.note || "";
+          inp.value = j.note || "";
+          showToast("บันทึกโน้ตแล้ว 📝", "ok");
+        }).catch(function (err) { showToast(err.message || "บันทึกโน้ตไม่สำเร็จ", "err"); });
+      }
+      document.body.addEventListener("focusout", function (e) {
+        var inp = e.target.closest(".note-in");
+        if (inp) saveNote(inp);
+      });
+      document.body.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter") return;
+        var inp = e.target.closest(".note-in");
+        if (inp) { e.preventDefault(); inp.blur(); }
+      });
       document.body.addEventListener("click", function (e) {
         var copyBtn = e.target.closest(".btn-copy");
         if (copyBtn && copyBtn.dataset.copy && navigator.clipboard) {
