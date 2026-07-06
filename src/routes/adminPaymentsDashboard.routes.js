@@ -1711,9 +1711,10 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
             <td>${untilTxt}</td>
             <td>
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                <input type="number" class="adj-n" data-uid="${uid}" min="1" max="99" value="1" style="width:58px;padding:6px;border-radius:8px;border:1px solid var(--line,#444);background:transparent;color:inherit;text-align:center;" />
-                <button type="button" class="btn btn-neu js-user-adj" data-uid="${uid}" data-dir="1" style="padding:6px 10px;font-size:0.8rem;border-color:var(--accent,#6b8);">＋เพิ่ม</button>
-                <button type="button" class="btn btn-neu js-user-adj" data-uid="${uid}" data-dir="-1" style="padding:6px 10px;font-size:0.8rem;border-color:var(--bad);color:var(--bad);">－ลด</button>
+                <button type="button" class="btn btn-neu js-user-step" data-uid="${uid}" data-dir="-1" style="padding:6px 11px;font-size:0.9rem;">−</button>
+                <input type="number" class="adj-n" data-uid="${uid}" data-before="${u.paidRemainingScans}" min="0" max="999" value="${u.paidRemainingScans}" style="width:64px;padding:6px;border-radius:8px;border:1px solid var(--line,#444);background:transparent;color:inherit;text-align:center;font-weight:700;" />
+                <button type="button" class="btn btn-neu js-user-step" data-uid="${uid}" data-dir="1" style="padding:6px 11px;font-size:0.9rem;">＋</button>
+                <button type="button" class="btn btn-ok js-user-save" data-uid="${uid}" style="padding:6px 12px;font-size:0.8rem;">💾 บันทึก</button>
                 <button type="button" class="btn btn-neu js-user-freereset" data-uid="${uid}" style="padding:6px 10px;font-size:0.8rem;">รีเซ็ตฟรี</button>
                 <a class="btn btn-neu" style="padding:6px 10px;font-size:0.8rem;text-decoration:none;" href="/admin/payments?status=paid&q=${encodeURIComponent(u.lineUserId)}">payments</a>
               </div>
@@ -1770,26 +1771,35 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
           navigator.clipboard.writeText(copyBtn.dataset.copy).then(function () { showToast("คัดลอกแล้ว", "ok"); });
           return;
         }
-        var adj = e.target.closest(".js-user-adj");
-        if (adj) {
-          var uid = adj.dataset.uid;
+        var step = e.target.closest(".js-user-step");
+        if (step) {
+          var sEl = document.querySelector('.adj-n[data-uid="' + step.dataset.uid.replace(/"/g, '') + '"]');
+          if (!sEl) return;
+          var cur = Math.trunc(Number(sEl.value)) || 0;
+          var next = cur + (Number(step.dataset.dir) < 0 ? -1 : 1);
+          sEl.value = Math.max(0, Math.min(999, next));
+          return;
+        }
+        var save = e.target.closest(".js-user-save");
+        if (save) {
+          var uid = save.dataset.uid;
           var nEl = document.querySelector('.adj-n[data-uid="' + uid.replace(/"/g, '') + '"]');
           var n = Math.trunc(Number(nEl && nEl.value));
-          if (!Number.isFinite(n) || n < 1 || n > 99) { showToast("จำนวน 1-99", "err"); return; }
-          var dir = Number(adj.dataset.dir) < 0 ? -1 : 1;
-          var word = dir > 0 ? "เพิ่ม" : "ลด";
-          if (!confirm("ยืนยัน" + word + "สแกน " + n + " ครั้ง ให้ " + uid.slice(0, 12) + "… ?")) return;
-          adj.disabled = true;
+          if (!Number.isFinite(n) || n < 0 || n > 999) { showToast("จำนวน 0-999", "err"); return; }
+          var before = Math.trunc(Number(nEl.dataset.before)) || 0;
+          if (n === before) { showToast("ค่าเท่าเดิม ไม่ต้องบันทึก", "err"); return; }
+          if (!confirm("ตั้งสแกนคงเหลือของ " + uid.slice(0, 12) + "… เป็น " + n + " ครั้ง? (เดิม " + before + ")")) return;
+          save.disabled = true;
           fetch("/admin/users/" + encodeURIComponent(uid) + "/adjust-paid-scans", {
             method: "POST",
             headers: { Accept: "application/json", "Content-Type": "application/json" },
             credentials: "same-origin",
-            body: JSON.stringify({ delta: dir * n })
+            body: JSON.stringify({ set: n })
           }).then(function (r) { return r.json(); }).then(function (j) {
             if (!j || j.ok === false) throw new Error((j && j.message) || "ไม่สำเร็จ");
-            showToast(word + "แล้ว: " + j.before + " → " + j.after + (j.paidUntilExtended ? " (ต่ออายุ 24 ชม.)" : ""), "ok");
+            showToast("บันทึกแล้ว: " + j.before + " → " + j.after + (j.paidUntilExtended ? " (ต่ออายุ 24 ชม.)" : ""), "ok");
             setTimeout(function () { location.reload(); }, 800);
-          }).catch(function (err) { showToast(err.message || "ผิดพลาด", "err"); adj.disabled = false; });
+          }).catch(function (err) { showToast(err.message || "ผิดพลาด", "err"); save.disabled = false; });
           return;
         }
         var fr = e.target.closest(".js-user-freereset");
@@ -1839,6 +1849,7 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
         const result = await adjustPaidRemainingScansForLineUserByAdmin({
           lineUserId,
           delta: req.body?.delta,
+          setTo: req.body?.set != null ? req.body.set : null,
           adminLabel: "admin_dashboard",
         });
         res.status(200).json({ ok: true, ...result });
