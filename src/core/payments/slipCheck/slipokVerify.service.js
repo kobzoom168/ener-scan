@@ -42,9 +42,9 @@ function buildTransferredAtIso(data) {
 }
 
 /**
- * @param {{ imageBuffer: Buffer, lineUserId?: string, paymentId?: string }} p
+ * @param {{ imageBuffer: Buffer, lineUserId?: string, paymentId?: string, expectedAmount?: number|null }} p
  */
-export async function verifySlipWithSlipok({ imageBuffer, lineUserId, paymentId }) {
+export async function verifySlipWithSlipok({ imageBuffer, lineUserId, paymentId, expectedAmount = null }) {
   const base = env.SLIPOK_API_BASE.replace(/\/+$/, "");
   const url = `${base}/${encodeURIComponent(env.SLIPOK_BRANCH_ID)}`;
 
@@ -54,7 +54,13 @@ export async function verifySlipWithSlipok({ imageBuffer, lineUserId, paymentId 
     new Blob([imageBuffer], { type: "image/jpeg" }),
     "slip.jpg",
   );
+  // log:true = SlipOK also checks duplicates (1012) + receiver-vs-branch (1014),
+  // and per their quota rules duplicates then don't consume quota.
   form.append("log", "true");
+  // Optional cross-validation: SlipOK rejects amount mismatches itself (1013).
+  if (Number.isFinite(Number(expectedAmount)) && Number(expectedAmount) > 0) {
+    form.append("amount", String(Number(expectedAmount)));
+  }
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), env.SLIPOK_TIMEOUT_MS);
@@ -115,12 +121,19 @@ export async function verifySlipWithSlipok({ imageBuffer, lineUserId, paymentId 
     };
   }
 
-  // SlipOK/bank replied but says no — misconfig/auth/quota → "error" (fallback to
-  // OCR); anything about the slip itself → definitive "invalid".
+  // Error-code map per SlipOK API Guide v1.13:
+  //   fallback-to-OCR ("error"): 1000 bad request, 1001 branch not found,
+  //   1002 bad api key, 1003 package expired, 1004 quota exceeded, 1015 package
+  //   missing, 1005 not-an-image, 1006 corrupted image, 1007 no QR in image
+  //   (legit slips cropped without the mini-QR can still pass OCR),
+  //   1009/1010 temporary bank delays (retry-able).
+  //   definitive reject ("invalid" → manual review): 1008 QR not a payment slip,
+  //   1011 transaction does not exist (FAKE slip), 1012 duplicate slip,
+  //   1013 amount mismatch, 1014 receiver is not our registered account.
   const code = json?.code != null ? Number(json.code) : null;
-  const CONFIG_CODES = new Set([1000, 1001, 1002, 1003, 1004, 1005]); // auth/branch/quota-type errors
+  const FALLBACK_CODES = new Set([1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1009, 1010, 1015]);
   const outcome =
-    resp.status === 401 || resp.status === 403 || (code != null && CONFIG_CODES.has(code))
+    resp.status === 401 || resp.status === 403 || (code != null && FALLBACK_CODES.has(code))
       ? "error"
       : "invalid";
   return {
