@@ -554,9 +554,85 @@ ${row(
 }
 
 /**
- * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
+ * Mini "คลังกำไลของคุณ" — photo history the customer can browse back through
+ * (bracelet counterpart of the amulet library box). Each row links to that
+ * scan's own public report.
+ * @param {import("../../services/reports/crystalBraceletLibrary.service.js").CrystalBraceletLibraryView|null} library
+ * @param {string} currentToken
  */
-export function renderCrystalBraceletReportV2Html(payload) {
+function buildCrystalBraceletLibraryHtml(library, currentToken) {
+  if (!library || library.totalCount <= 0) return "";
+  const top = library.topOverall;
+  const cur = String(currentToken || "").trim();
+
+  const fmtDateTh = (iso) => {
+    if (!iso) return "";
+    const d = new Date(Date.parse(iso) + 7 * 3600 * 1000);
+    if (Number.isNaN(d.getTime())) return "";
+    const m = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+    return `${d.getUTCDate()} ${m[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
+  };
+
+  const rows = library.items
+    .slice(0, 8)
+    .map((it) => {
+      const isCurrent = cur && it.publicToken === cur;
+      const href = it.publicToken ? `/r/${encodeURIComponent(it.publicToken)}` : "";
+      const thumb = it.thumbUrl
+        ? `<img src="${escapeHtml(it.thumbUrl)}" alt="" width="46" height="46" loading="lazy" decoding="async"/>`
+        : `<span class="cb2-lib-thumb-empty" aria-hidden="true"></span>`;
+      const fit = it.fitPercent != null ? ` · เข้ากัน ${escapeHtml(String(it.fitPercent))}%` : "";
+      const times = it.scanCountInGroup > 1 ? ` · สแกน ${it.scanCountInGroup} ครั้ง` : "";
+      const body = `
+        <span class="cb2-lib-thumb">${thumb}</span>
+        <span class="cb2-lib-rowbody">
+          <span class="cb2-lib-rowtitle">พลัง ${escapeHtml(String(it.powerScore))}/10 · เด่น ${escapeHtml(it.peakAxisLabelTh)}</span>
+          <span class="cb2-lib-rowsub">${escapeHtml(fmtDateTh(it.scannedAtIso))}${fit}${times}</span>
+        </span>
+        <span class="cb2-lib-rowgo">${isCurrent ? "รายงานนี้" : "ดูรายงาน ›"}</span>`;
+      return isCurrent || !href
+        ? `<div class="cb2-lib-row cb2-lib-row--current">${body}</div>`
+        : `<a class="cb2-lib-row" href="${escapeHtml(href)}">${body}</a>`;
+    })
+    .join("");
+
+  const topLine = top
+    ? `<p class="cb2-lib-topline">เส้นที่พลังสูงสุดของคุณตอนนี้: <strong>${escapeHtml(String(top.powerScore))}/10</strong> (เด่น ${escapeHtml(top.peakAxisLabelTh)})</p>`
+    : "";
+  const nudge =
+    library.totalCount === 1
+      ? `<p class="cb2-lib-nudge">สแกนกำไลเพิ่มอีกสักเส้น ระบบจะช่วยเปรียบเทียบพลังให้เห็นชัดขึ้น</p>`
+      : "";
+
+  return `
+    <section class="cb2-card cb2-lib" aria-labelledby="cb2-lib-h">
+      <style>
+        .cb2-lib-count{margin:.15rem 0 .4rem;font-size:.86rem;opacity:.8}
+        .cb2-lib-topline{margin:.1rem 0 .55rem;font-size:.9rem}
+        .cb2-lib-rows{display:flex;flex-direction:column;gap:.45rem}
+        .cb2-lib-row{display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border:1px solid rgba(255,255,255,.14);
+          border-radius:.7rem;text-decoration:none;color:inherit}
+        .cb2-lib-row--current{border-style:dashed;opacity:.85}
+        .cb2-lib-thumb img,.cb2-lib-thumb-empty{width:46px;height:46px;border-radius:.55rem;object-fit:cover;display:block;background:rgba(255,255,255,.08)}
+        .cb2-lib-rowbody{flex:1;min-width:0}
+        .cb2-lib-rowtitle{display:block;font-size:.88rem;font-weight:700}
+        .cb2-lib-rowsub{display:block;font-size:.74rem;opacity:.72;margin-top:.1rem}
+        .cb2-lib-rowgo{font-size:.76rem;font-weight:700;white-space:nowrap;opacity:.9}
+        .cb2-lib-nudge{margin:.55rem 0 0;font-size:.8rem;opacity:.75}
+      </style>
+      <h2 id="cb2-lib-h">คลังกำไลของคุณ</h2>
+      <p class="cb2-lib-count">คุณสแกนกำไลไว้แล้ว ${escapeHtml(String(library.totalCount))} เส้น (${escapeHtml(String(library.scanCount))} ครั้ง) กดแต่ละรายการเพื่อย้อนดูรายงานเดิมได้เลย</p>
+      ${topLine}
+      <div class="cb2-lib-rows">${rows}</div>
+      ${nudge}
+    </section>`;
+}
+
+/**
+ * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
+ * @param {{ crystalBraceletLibrary?: import("../../services/reports/crystalBraceletLibrary.service.js").CrystalBraceletLibraryView|null }} [options]
+ */
+export function renderCrystalBraceletReportV2Html(payload, options = {}) {
   const cb = payload?.crystalBraceletV1;
   if (!cb || typeof cb !== "object" || Array.isArray(cb)) {
     throw new Error("CRYSTAL_BRACELET_HTML_MISSING_PAYLOAD");
@@ -678,6 +754,10 @@ export function renderCrystalBraceletReportV2Html(payload) {
   const radarSectionHtml = createCbRadarSection(axes, ownerScores);
   const ownerProfileHtml = buildCrystalBraceletOwnerProfileHtml(cb);
   const energyTimingHtml = buildCrystalBraceletEnergyTimingHtml(hr);
+  const braceletLibraryHtml = buildCrystalBraceletLibraryHtml(
+    options.crystalBraceletLibrary || null,
+    String(payload.publicToken || "").trim(),
+  );
 
   const canonicalLinkTag = canonicalUrl
     ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
@@ -1403,6 +1483,8 @@ export function renderCrystalBraceletReportV2Html(payload) {
     ${ownerProfileHtml}
 
     ${energyTimingHtml}
+
+    ${braceletLibraryHtml}
 
     <section class="cb2-card cb2-share-card" aria-labelledby="cb2-share-h">
       <h2 id="cb2-share-h">แชร์และบันทึก</h2>

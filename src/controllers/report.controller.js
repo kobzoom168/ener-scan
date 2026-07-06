@@ -11,6 +11,10 @@ import {
   buildSacredAmuletLibraryForLineUser,
   buildSacredAmuletLibraryViewFromPayloadOnly,
 } from "../services/reports/sacredAmuletLibrary.service.js";
+import {
+  buildCrystalBraceletLibraryForLineUser,
+  buildCrystalBraceletLibraryViewFromPayloadOnly,
+} from "../services/reports/crystalBraceletLibrary.service.js";
 import { env } from "../config/env.js";
 import {
   countPinnedScanUploadsByLineUser,
@@ -127,8 +131,44 @@ export async function getReportByToken(req, res) {
       sacredAmuletLibrary = buildSacredAmuletLibraryViewFromPayloadOnly(normPre);
     }
   }
+
+  // "คลังกำไลของคุณ" — bracelet counterpart of the amulet library (per กบ).
+  let crystalBraceletLibrary = null;
+  if (
+    normPre.crystalBraceletV1 &&
+    typeof normPre.crystalBraceletV1 === "object" &&
+    !Array.isArray(normPre.crystalBraceletV1)
+  ) {
+    const uid = String(normPre.userId || "").trim();
+    if (uid) {
+      try {
+        crystalBraceletLibrary = await buildCrystalBraceletLibraryForLineUser(uid);
+      } catch (libErr) {
+        console.warn(
+          JSON.stringify({
+            event: "REPORT_LIBRARY_LOOKUP_SKIP",
+            path: "getReportByToken",
+            lane: "crystal_bracelet",
+            reason: String(
+              libErr && typeof libErr === "object" && "message" in libErr
+                ? /** @type {{ message?: unknown }} */ (libErr).message
+                : libErr,
+            ).slice(0, 200),
+          }),
+        );
+      }
+    }
+    if (!crystalBraceletLibrary) {
+      crystalBraceletLibrary =
+        buildCrystalBraceletLibraryViewFromPayloadOnly(normPre);
+    }
+  }
+
   try {
-    html = renderReportHtmlPage(payload, { sacredAmuletLibrary });
+    html = renderReportHtmlPage(payload, {
+      sacredAmuletLibrary,
+      crystalBraceletLibrary,
+    });
   } catch (renderErr) {
     console.error(
       JSON.stringify({
