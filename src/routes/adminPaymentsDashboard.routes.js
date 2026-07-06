@@ -894,7 +894,7 @@ function renderDetailPage({
       <button type="button" class="btn btn-neu js-reset-free" data-reset-mode="reset_free_quota_only">รีเซ็ตสิทธิ์ทดลองใช้ฟรี</button>
       <button type="button" class="btn btn-neu js-reset-free-scan-abuse" data-reset-mode="reset_free_quota_and_scan_abuse" style="border-color:var(--accent,#6b8);">รีเซ็ตสิทธิ์ฟรี + ปลดล็อก anti-scan</button>
     </div>
-    <p class="reject-hint"><strong>ปรับจำนวนสแกนคงเหลือ (paid)</strong> — เพิ่ม/ลด paid_remaining_scans ทีละกี่ครั้งก็ได้ · ถ้าเพิ่มให้คนที่หน้าต่างเวลาหมดแล้ว ระบบต่ออายุให้อัตโนมัติ 24 ชม. · ลดได้ต่ำสุด 0</p>
+    <p class="reject-hint"><strong>ปรับจำนวนสแกนคงเหลือ (paid)</strong> — เพิ่ม/ลด paid_remaining_scans ทีละกี่ครั้งก็ได้ · สิทธิ์ที่เติมจากแอดมินอยู่ได้ 1 ปี ไม่หายรายวัน · ลดได้ต่ำสุด 0</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
       <span style="color:var(--muted);font-size:0.9rem;">ตอนนี้เหลือ <strong>${rem}</strong> ครั้ง</span>
       <input type="number" id="adj-scan-n" min="1" max="99" step="1" value="1" style="width:76px;padding:8px 10px;border-radius:10px;border:1px solid var(--line,#444);background:transparent;color:inherit;font-size:1rem;text-align:center;" />
@@ -1082,7 +1082,7 @@ function renderDetailPage({
             });
             var ja = await ra.json().catch(function () { return null; });
             if (!ra.ok || (ja && ja.ok === false)) throw new Error((ja && ja.message) || "ปรับไม่สำเร็จ");
-            showToast(word + "แล้ว: " + ja.before + " → " + ja.after + " ครั้ง" + (ja.paidUntilExtended ? " (ต่ออายุ 24 ชม.)" : ""), "ok");
+            showToast(word + "แล้ว: " + ja.before + " → " + ja.after + " ครั้ง" + (ja.paidUntilExtended ? " (อยู่ได้ 1 ปี)" : ""), "ok");
             setTimeout(function () { location.reload(); }, 800);
           } catch (ea) {
             showToast(ea.message || "เกิดข้อผิดพลาด", "err");
@@ -1746,7 +1746,7 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
       <button type="submit">ค้นหา</button>
       ${q ? `<a class="btn btn-neu" style="padding:8px 12px;font-size:0.85rem;text-decoration:none;" href="/admin/users">ล้าง</a>` : ""}
     </form>
-    <p style="color:var(--muted);font-size:0.85rem;margin:8px 2px;">เรียงตามสแกนล่าสุด · นับจากสแกน ${scanWindow} รายการล่าสุด · ปุ่มเพิ่ม/ลดปรับ paid_remaining_scans (เพิ่มให้คนหมดอายุ = ต่อ 24 ชม.อัตโนมัติ)</p>
+    <p style="color:var(--muted);font-size:0.85rem;margin:8px 2px;">เรียงตามสแกนล่าสุด · นับจากสแกน ${scanWindow} รายการล่าสุด · ปุ่มเพิ่ม/ลดปรับ paid_remaining_scans (สิทธิ์ที่เติมจากหน้านี้อยู่ได้ 1 ปี ไม่หายรายวัน · แพ็ก 49 ของลูกค้ายังหมดอายุ 24 ชม.ตามเดิม)</p>
     <div class="card" style="overflow-x:auto;">
       <table>
         <thead><tr><th>#</th><th>LINE ID</th><th>สแกนล่าสุด</th><th>ครั้ง (ล่าสุด)</th><th>paid เหลือ</th><th>paid ถึง</th><th>จัดการ</th></tr></thead>
@@ -1797,7 +1797,7 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
             body: JSON.stringify({ set: n, notify: true })
           }).then(function (r) { return r.json(); }).then(function (j) {
             if (!j || j.ok === false) throw new Error((j && j.message) || "ไม่สำเร็จ");
-            showToast("บันทึกแล้ว: " + j.before + " → " + j.after + (j.paidUntilExtended ? " (ต่ออายุ 24 ชม.)" : "") + (j.notified ? " · แจ้งลูกค้าแล้ว 📨" : ""), "ok");
+            showToast("บันทึกแล้ว: " + j.before + " → " + j.after + (j.paidUntilExtended ? " (อยู่ได้ 1 ปี)" : "") + (j.notified ? " · แจ้งลูกค้าแล้ว 📨" : ""), "ok");
             setTimeout(function () { location.reload(); }, 900);
           }).catch(function (err) { showToast(err.message || "ผิดพลาด", "err"); save.disabled = false; });
           return;

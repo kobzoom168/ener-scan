@@ -155,8 +155,12 @@ export async function revokePaidAccessForLineUserByAdmin({
   };
 }
 
-/** Adding paid scans to a user whose window lapsed re-opens it for this long. */
-const ADMIN_ADJUST_DEFAULT_WINDOW_HOURS = 24;
+/**
+ * Admin-granted scans must NOT evaporate with the daily/paid-package windows
+ * (กบ: เติม 50 แล้วพรุ่งนี้ต้องไม่หาย). Granting extends paid_until this far;
+ * the 49฿ package path (grantEntitlementForPackage) keeps its own 24h window.
+ */
+const ADMIN_GRANT_WINDOW_DAYS = 365;
 
 /**
  * Admin dashboard: add/remove paid_remaining_scans by a delta (clamped at 0).
@@ -206,18 +210,18 @@ export async function adjustPaidRemainingScansForLineUserByAdmin({
   const paidUntilMs = userRow.paid_until
     ? Date.parse(String(userRow.paid_until))
     : NaN;
-  const windowActive = Number.isFinite(paidUntilMs) && paidUntilMs > nowMs;
 
   const patch = {
     paid_remaining_scans: after,
     updated_at: nowIso,
   };
   let paidUntilExtended = false;
-  if (after > before && after > 0 && !windowActive) {
-    patch.paid_until = new Date(
-      nowMs + ADMIN_ADJUST_DEFAULT_WINDOW_HOURS * 60 * 60 * 1000,
-    ).toISOString();
-    paidUntilExtended = true;
+  if (after > before && after > 0) {
+    const targetMs = nowMs + ADMIN_GRANT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    if (!(Number.isFinite(paidUntilMs) && paidUntilMs >= targetMs)) {
+      patch.paid_until = new Date(targetMs).toISOString();
+      paidUntilExtended = true;
+    }
   }
 
   const { error: updErr } = await supabase
