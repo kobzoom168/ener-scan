@@ -226,6 +226,22 @@ export async function adjustPaidRemainingScansForLineUserByAdmin({
     .eq("id", appUserId);
   if (updErr) throw updErr;
 
+  // On top-up: unlock the customer for scanning — close open payment rows
+  // (awaiting_payment/pending_verify would capture their next image as a slip)
+  // and clear the in-memory payment conversation state.
+  let expiredPayments = 0;
+  if (after > before) {
+    const { data: expRows, error: expErr } = await supabase
+      .from("payments")
+      .update({ status: "expired", updated_at: nowIso })
+      .eq("user_id", appUserId)
+      .in("status", ["awaiting_payment", "pending_verify"])
+      .select("id");
+    if (expErr) throw expErr;
+    expiredPayments = Array.isArray(expRows) ? expRows.length : 0;
+    clearPaymentState(lu);
+  }
+
   console.log(
     JSON.stringify({
       event: "admin_adjust_paid_scans",
@@ -238,6 +254,7 @@ export async function adjustPaidRemainingScansForLineUserByAdmin({
       before,
       after,
       paidUntilExtended,
+      expiredPayments,
       paidUntil: patch.paid_until || userRow.paid_until || null,
     })
   );
@@ -250,6 +267,7 @@ export async function adjustPaidRemainingScansForLineUserByAdmin({
     before,
     after,
     paidUntilExtended,
+    expiredPayments,
     paidUntil: patch.paid_until || userRow.paid_until || null,
   };
 }
