@@ -167,14 +167,24 @@ const ADMIN_ADJUST_DEFAULT_WINDOW_HOURS = 24;
 export async function adjustPaidRemainingScansForLineUserByAdmin({
   lineUserId,
   delta,
+  setTo = null,
   adminLabel = "admin_dashboard",
 } = {}) {
   const lu = String(lineUserId || "").trim();
   if (!lu) throw new Error("line_user_id_missing");
 
-  const d = Math.trunc(Number(delta));
-  if (!Number.isFinite(d) || d === 0 || Math.abs(d) > 99) {
-    throw new Error("invalid_delta");
+  let d = null;
+  let absolute = null;
+  if (setTo != null) {
+    absolute = Math.trunc(Number(setTo));
+    if (!Number.isFinite(absolute) || absolute < 0 || absolute > 999) {
+      throw new Error("invalid_delta");
+    }
+  } else {
+    d = Math.trunc(Number(delta));
+    if (!Number.isFinite(d) || d === 0 || Math.abs(d) > 99) {
+      throw new Error("invalid_delta");
+    }
   }
 
   const nowMs = Date.now();
@@ -191,7 +201,7 @@ export async function adjustPaidRemainingScansForLineUserByAdmin({
 
   const appUserId = String(userRow.id);
   const before = Number(userRow.paid_remaining_scans) || 0;
-  const after = Math.max(0, before + d);
+  const after = absolute != null ? absolute : Math.max(0, before + d);
 
   const paidUntilMs = userRow.paid_until
     ? Date.parse(String(userRow.paid_until))
@@ -203,7 +213,7 @@ export async function adjustPaidRemainingScansForLineUserByAdmin({
     updated_at: nowIso,
   };
   let paidUntilExtended = false;
-  if (d > 0 && after > 0 && !windowActive) {
+  if (after > before && after > 0 && !windowActive) {
     patch.paid_until = new Date(
       nowMs + ADMIN_ADJUST_DEFAULT_WINDOW_HOURS * 60 * 60 * 1000,
     ).toISOString();
@@ -224,6 +234,7 @@ export async function adjustPaidRemainingScansForLineUserByAdmin({
       appUserId,
       adminLabel,
       delta: d,
+      setTo: absolute,
       before,
       after,
       paidUntilExtended,
@@ -235,6 +246,7 @@ export async function adjustPaidRemainingScansForLineUserByAdmin({
     appUserId,
     lineUserId: lu,
     delta: d,
+    setTo: absolute,
     before,
     after,
     paidUntilExtended,
