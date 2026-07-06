@@ -13,6 +13,7 @@ import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRollout
  * @param {import("./reportPayload.types.js").ReportPayload} payload
  * @param {object} [renderOpts]
  * @param {import("./sacredAmuletLibrary.service.js").SacredAmuletLibraryView | null | undefined} [renderOpts.sacredAmuletLibrary]
+ * @param {import("./crystalBraceletLibrary.service.js").CrystalBraceletLibraryView | null | undefined} [renderOpts.crystalBraceletLibrary]
  * @returns {string}
  */
 export function renderReportHtmlPage(payload, renderOpts = {}) {
@@ -80,7 +81,9 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
         reportIdPrefix: String(normalized.reportId || "").slice(0, 8),
       }),
     );
-    return renderCrystalBraceletReportV2Html(normalized);
+    return renderCrystalBraceletReportV2Html(normalized, {
+      crystalBraceletLibrary: renderOpts.crystalBraceletLibrary ?? null,
+    });
   }
   console.log(
     JSON.stringify({
