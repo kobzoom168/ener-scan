@@ -696,6 +696,16 @@ export const env = {
     const n = raw === undefined || raw === "" ? 24 : Number(raw);
     return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 24;
   })(),
+  /** EasySlip bank-verified slip checking (easyslip.com, API v2). Inert until enabled + keyed. */
+  EASYSLIP_ENABLED: String(process.env.EASYSLIP_ENABLED || "").trim() === "true",
+  EASYSLIP_API_KEY: String(process.env.EASYSLIP_API_KEY || "").trim(),
+  EASYSLIP_API_BASE: String(
+    process.env.EASYSLIP_API_BASE || "https://api.easyslip.com/v2/verify/bank",
+  ).trim(),
+  EASYSLIP_TIMEOUT_MS: (() => {
+    const n = Number(process.env.EASYSLIP_TIMEOUT_MS);
+    return Number.isFinite(n) && n >= 2000 ? n : 12000;
+  })(),
   /** SlipOK bank-verified slip checking (slipok.com). Inert until enabled + keyed. */
   SLIPOK_ENABLED: String(process.env.SLIPOK_ENABLED || "").trim() === "true",
   SLIPOK_API_KEY: String(process.env.SLIPOK_API_KEY || "").trim(),
