@@ -28,7 +28,10 @@ export async function verifySlipWithEasyslip({ imageBuffer, lineUserId, paymentI
 
   const form = new FormData();
   form.append("image", new Blob([imageBuffer], { type: "image/jpeg" }), "slip.jpg");
-  form.append("checkDuplicate", "true");
+  // NOTE: no checkDuplicate — EasySlip counts every submission, so a legit
+  // resend of the same slip for the SAME payment (our auto re-verify loop)
+  // would be flagged. Cross-payment reuse is already blocked by our own
+  // duplicate_slip_ref check (excludes the current payment).
   // matchAccount: EasySlip validates the receiver against the bank accounts
   // registered in their dashboard — much more reliable than masked-name matching.
   form.append("matchAccount", "true");
@@ -81,9 +84,6 @@ export async function verifySlipWithEasyslip({ imageBuffer, lineUserId, paymentI
 
   if (ok) {
     // Bank confirmed the transaction exists — now their extra checks:
-    if (data.isDuplicate === true) {
-      return { outcome: "invalid", failCode: "easyslip_duplicate", failMessage: "duplicate slip", raw: data };
-    }
     if (expectedAmount != null && data.isAmountMatched === false) {
       return { outcome: "invalid", failCode: "easyslip_amount_mismatch", failMessage: "amount mismatch", raw: data };
     }
