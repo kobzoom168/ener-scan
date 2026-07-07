@@ -6,7 +6,13 @@ import {
 } from "../utils/lineClientTransport.util.js";
 import { lineStickerPaymentSupportMessage } from "../utils/lineStickerMessage.util.js";
 
-export async function replyText(client, replyToken, text) {
+/**
+ * @param {*} client
+ * @param {string} replyToken
+ * @param {string} text
+ * @param {{ items: unknown[] } | null} [quickReply] — LINE quickReply object
+ */
+export async function replyText(client, replyToken, text, quickReply = null) {
   if (
     env.NONSCAN_REPLY_AUDIT === "warn" &&
     isAuditNonScanBypassSuspect()
@@ -22,10 +28,12 @@ export async function replyText(client, replyToken, text) {
   }
   const safeText = String(text || "").slice(0, 4900);
 
-  return invokeLineReplyMessage(client, "lineReply.replyText", replyToken, {
-    type: "text",
-    text: safeText,
-  });
+  /** @type {{ type: "text", text: string, quickReply?: unknown }} */
+  const msg = { type: "text", text: safeText };
+  if (quickReply && Array.isArray(quickReply.items) && quickReply.items.length) {
+    msg.quickReply = quickReply;
+  }
+  return invokeLineReplyMessage(client, "lineReply.replyText", replyToken, msg);
 }
 
 /**
@@ -40,6 +48,7 @@ export async function replyTextWithTrailingSticker(
   replyToken,
   text,
   stickerMessage,
+  quickReply = null,
 ) {
   if (
     env.NONSCAN_REPLY_AUDIT === "warn" &&
@@ -55,13 +64,18 @@ export async function replyTextWithTrailingSticker(
     );
   }
   const safeText = String(text || "").slice(0, 4900);
+  // quickReply attaches to the LAST message in the sequence (the sticker).
+  const stickerMsg =
+    quickReply && Array.isArray(quickReply.items) && quickReply.items.length
+      ? { ...stickerMessage, quickReply }
+      : stickerMessage;
   return invokeLineReplyMessage(
     client,
     "lineReply.replyTextWithTrailingSticker",
     replyToken,
     [
       { type: "text", text: safeText },
-      stickerMessage,
+      stickerMsg,
     ],
   );
 }

@@ -10,7 +10,7 @@ import { isAuditNonScanBypassSuspect } from "./lineReplyAudit.context.js";
  * @param {string} userId
  * @param {string} text
  */
-export async function pushText(client, userId, text) {
+export async function pushText(client, userId, text, quickReply = null) {
   const uid = String(userId || "").trim();
   if (
     uid &&
@@ -30,10 +30,12 @@ export async function pushText(client, userId, text) {
     throw new Error("pushText_missing_userId");
   }
   const safeText = String(text || "").slice(0, 4900);
-  await invokeLinePushMessage(client, "lineSequence.pushText", uid, {
-    type: "text",
-    text: safeText,
-  });
+  /** @type {{ type: "text", text: string, quickReply?: unknown }} */
+  const msg = { type: "text", text: safeText };
+  if (quickReply && Array.isArray(quickReply.items) && quickReply.items.length) {
+    msg.quickReply = quickReply;
+  }
+  await invokeLinePushMessage(client, "lineSequence.pushText", uid, msg);
 }
 
 /**
@@ -48,6 +50,7 @@ export async function pushTextWithTrailingSticker(
   userId,
   text,
   stickerMessage,
+  quickReply = null,
 ) {
   const uid = String(userId || "").trim();
   if (
@@ -68,13 +71,17 @@ export async function pushTextWithTrailingSticker(
     throw new Error("pushTextWithTrailingSticker_missing_userId");
   }
   const safeText = String(text || "").slice(0, 4900);
+  const stickerMsg =
+    quickReply && Array.isArray(quickReply.items) && quickReply.items.length
+      ? { ...stickerMessage, quickReply }
+      : stickerMessage;
   await invokeLinePushMessage(
     client,
     "lineSequence.pushTextWithTrailingSticker",
     uid,
     [
       { type: "text", text: safeText },
-      stickerMessage,
+      stickerMsg,
     ],
   );
 }
