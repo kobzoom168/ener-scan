@@ -10,13 +10,13 @@ const SVG_CY = 50;
 const SVG_R = 38;
 
 /** พลังกำไล (solid) — blue; จังหวะผู้สวม (dashed) — red */
-const STONE_STROKE = "#60a5fa";
-const STONE_FILL = "rgba(96,165,250,0.12)";
-const OWNER_STROKE = "#f87171";
-const STONE_DOT_FILL = "#93c5fd";
+const STONE_STROKE = "#d97bb0";
+const STONE_FILL = "rgba(217,123,176,0.14)";
+const OWNER_STROKE = "#b98be0";
+const STONE_DOT_FILL = "#c05a9e";
 /** จุดรอง “เข้ากับคุณที่สุด” บนเส้นพลังกำไล — เทียบ moldavite mv2-radar-peak-compatibility */
-const ALIGN_DOT_FILL = "rgba(148,163,184,0.9)";
-const ALIGN_DOT_RING = "rgba(148,163,184,0.42)";
+const ALIGN_DOT_FILL = "rgba(138,100,120,0.9)";
+const ALIGN_DOT_RING = "rgba(138,100,120,0.45)";
 
 // CSS % positions — 6-axis hex (order: top → clockwise from charm_attraction)
 const AXIS_LABEL_CSS = {
@@ -103,7 +103,7 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
       .join(" ");
   const gridRings = [SVG_R * 0.25, SVG_R * 0.5, SVG_R * 0.75]
     .map((r) => {
-      return `<polygon points="${heptPoints(r)}" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="0.5"/>`;
+      return `<polygon points="${heptPoints(r)}" fill="none" stroke="rgba(120,60,95,0.18)" stroke-width="0.5"/>`;
     })
     .join("");
 
@@ -112,7 +112,7 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
     .map((ang) => {
       const x2 = SVG_CX + SVG_R * Math.cos(ang);
       const y2 = SVG_CY + SVG_R * Math.sin(ang);
-      return `<line x1="${SVG_CX}" y1="${SVG_CY}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="rgba(255,255,255,0.10)" stroke-width="0.4"/>`;
+      return `<line x1="${SVG_CX}" y1="${SVG_CY}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="rgba(120,60,95,0.18)" stroke-width="0.4"/>`;
     })
     .join("");
 
@@ -126,7 +126,7 @@ export function buildCrystalBraceletRadarChartSvg(axes, ownerAxisScores) {
   const pxf = (SVG_CX + Math.cos(peakAng) * peakV * SVG_R).toFixed(2);
   const pyf = (SVG_CY + Math.sin(peakAng) * peakV * SVG_R).toFixed(2);
   const stonePeakMarker = `<g class="cb2-radar-blink">
-  <circle cx="${pxf}" cy="${pyf}" r="3.2" fill="none" stroke="rgba(96,165,250,0.45)" stroke-width="0.8"/>
+  <circle cx="${pxf}" cy="${pyf}" r="3.2" fill="none" stroke="rgba(217,123,176,0.5)" stroke-width="0.8"/>
   <circle cx="${pxf}" cy="${pyf}" r="1.6" fill="${STONE_DOT_FILL}"/>
 </g>`;
 

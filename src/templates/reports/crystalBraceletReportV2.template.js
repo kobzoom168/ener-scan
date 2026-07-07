@@ -1102,7 +1102,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     .cb2-et-slot.is-active .cb2-et-slot-bar {
       width: 0.52rem;
       max-width: 48%;
-      background: linear-gradient(180deg, #d97bb0 0%, #c05a9e 38%, #0284c7 100%);
+      background: linear-gradient(180deg, #d97bb0 0%, #c05a9e 38%, #b34d8f 100%);
       border: 1px solid rgba(165, 220, 252, 0.5);
       box-shadow:
         0 0 0 1px rgba(217, 123, 176, 0.25),
@@ -1125,7 +1125,8 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     }
     .cb2-et-insight {
       margin-top: 0.8rem;
-      background: rgba(15, 23, 32, 0.65);
+      background: rgba(217, 123, 176, 0.10);
+      border: 1px solid rgba(217, 123, 176, 0.25);
       border: 1px solid rgba(217, 123, 176, 0.12);
       border-radius: 14px;
       padding: 0.9rem 0.95rem;
@@ -1350,14 +1351,14 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     .cb2-radar-legend-swatch--dashed {
       width: 18px;
       height: 0;
-      border-top: 2px dashed #fb7185;
+      border-top: 2px dashed #b98be0;
     }
     .cb2-radar-legend-swatch--dot {
       width: 10px;
       height: 10px;
       border-radius: 999px;
-      background: rgba(148, 163, 184, 0.42);
-      border: 2px solid rgba(96, 165, 250, 0.7);
+      background: rgba(138, 100, 120, 0.45);
+      border: 2px solid rgba(217, 123, 176, 0.7);
       box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.16);
     }
     @media (max-width: 380px) {

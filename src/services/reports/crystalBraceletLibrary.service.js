@@ -108,7 +108,11 @@ function buildItemFromNormalizedPayload(norm, row = {}) {
   }
 
   const rawScore = Number(
-    cb.energyScore ?? cb.score ?? cb.htmlReport?.energyScore ?? NaN,
+    cb.energyScore ??
+      cb.score ??
+      cb.htmlReport?.energyScore ??
+      norm?.summary?.energyScore ??
+      NaN,
   );
   const avgAxis =
     CRYSTAL_BRACELET_AXIS_ORDER.reduce((s, k) => s + axisScores[k], 0) /
