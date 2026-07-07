@@ -44,7 +44,7 @@ function buildCrystalBraceletFlexSurfaceCopy(primary, alignAxis, axes, surface) 
     mainEnergyWordingLine:
       "กำไลเส้นนี้อ่านจากโทนพลังรวมของชิ้น ไม่ได้ยืนยันชนิดหินเฉพาะจากภาพเพียงอย่างเดียว",
     htmlOpeningLine:
-      "ผลนี้เน้นการอ่านภาพรวมของพลังในกำไลหินคริสตัล โดยดูว่าช่วงนี้พลังไปเด่นในมิติใดของชีวิตมากกว่า",
+      "ผลนี้เน้นการอ่านภาพรวมของพลังในกำไล โดยดูว่าช่วงนี้พลังไปเด่นในมิติใดของชีวิตมากกว่า",
     tagline: surface.tagline,
   };
 }
@@ -64,7 +64,7 @@ function buildCrystalBraceletHtmlReport(axes, primary, secondary, alignAxis) {
 
   return {
     meaningParagraphs: [
-      "กำไลหินคริสตัลเส้นนี้อ่านจากพลังรวมของวัตถุทั้งเส้น ไม่ได้ฟันธงชนิดหินรายเม็ดจากภาพเพียงอย่างเดียว",
+      "กำไลเส้นนี้อ่านจากพลังรวมของวัตถุทั้งเส้น ไม่ได้ฟันธงชนิดหินรายเม็ดจากภาพเพียงอย่างเดียว",
       "การแปลผลใช้มิติพลังงานชุดใหม่หกด้าน (เสน่ห์ การเงิน การงาน โชคลาภ เซ้นส์ ความรัก) เพื่อดูว่าช่วงนี้โทนรวมของกำไลเอียงไปทางด้านใดมากที่สุด และด้านใดมาถัดไป",
     ],
     graphSummaryRows: [
@@ -131,14 +131,14 @@ export function buildCrystalBraceletV1Slice({
     confidenceDamp,
   });
 
-  const headline = "กำไลหินคริสตัล";
+  const headline = "กำไล";
   const primaryAxisLabel =
     String(scores.axes[scores.primaryAxis]?.labelThai || "").trim();
   const mainEnergyShort =
     String(mainEnergyLabel || "").trim().slice(0, 24) ||
     primaryAxisLabel ||
     "พลังรวมของกำไล";
-  const tagline = "กำไลหินคริสตัล · อ่านจากพลังรวม";
+  const tagline = "กำไล · อ่านจากพลังรวม";
 
   /** @type {Record<string, number>} */
   const stoneScoresMap = {};
@@ -235,7 +235,7 @@ export function buildCrystalBraceletV1Slice({
     flexSurface,
     htmlReport,
     display: {
-      displayLabel: "กำไลหินคริสตัล",
+      displayLabel: "กำไล",
       visibleMainEnergyLabel: mainEnergyShort,
       namingPolicy: "generic_crystal_bracelet",
     },
