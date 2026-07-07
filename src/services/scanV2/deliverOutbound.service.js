@@ -1,4 +1,33 @@
 import { pushText } from "../lineSequenceReply.service.js";
+import { env } from "../../config/env.js";
+
+/**
+ * LINE typing indicator ("•••"), fired after the pre-scan ack so it covers the
+ * report-generation wait. Fire-and-forget; never blocks delivery.
+ */
+async function startPostAckLoadingAnimation(chatId) {
+  const uid = String(chatId || "").trim();
+  const token = String(env.CHANNEL_ACCESS_TOKEN || "").trim();
+  if (!uid || !token) return;
+  try {
+    await fetch("https://api.line.me/v2/bot/chat/loading/start", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ chatId: uid, loadingSeconds: 60 }),
+    });
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "POST_ACK_LOADING_START_FAILED",
+        lineUserIdPrefix: uid.slice(0, 8),
+        message: String(e?.message || e).slice(0, 120),
+      }),
+    );
+  }
+}
 import { sendScanResultPushWith429Retry } from "../../utils/linePush429Retry.util.js";
 import {
   isLine429Error,
@@ -97,6 +126,10 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       }
       await pushText(client, lineUserId, text);
       await markSent(id);
+      // Re-arm LINE's typing "•••" AFTER the ack bubble (sending the ack cleared
+      // the webhook-time one) so the customer sees the bot working while the
+      // scan/report generates (~20-30s). Auto-clears when scan_result is sent.
+      void startPostAckLoadingAnimation(lineUserId);
       console.log(
         JSON.stringify({
           event: "OUTBOUND_SEND_SUCCESS",
