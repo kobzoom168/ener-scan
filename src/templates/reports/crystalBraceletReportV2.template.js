@@ -632,26 +632,26 @@ function buildCrystalBraceletLibraryHtml(library, currentToken) {
         .cb2-lib-spot-img img,.cb2-lib-spot-img--empty{width:76px;height:76px;border-radius:.7rem;object-fit:cover;display:block;background:rgba(255,255,255,.08)}
         .cb2-lib-spot-rank{margin:0;font-size:.74rem;opacity:.7}
         .cb2-lib-spot-score{margin:.12rem 0;font-size:1.05rem}
-        .cb2-lib-spot-score strong{font-size:1.5rem;color:#e8c547}
+        .cb2-lib-spot-score strong{font-size:1.5rem;color:var(--cb2-accent)}
         .cb2-lib-spot-peak{margin:0;font-size:.82rem;opacity:.85}
         .cb2-lib-ax{margin-top:.7rem;padding-top:.55rem;border-top:1px solid rgba(255,255,255,.1)}
         .cb2-lib-ax-h{margin:0 0 .1rem;font-size:.9rem;font-weight:800}
         .cb2-lib-ax-hint{margin:0 0 .5rem;font-size:.74rem;opacity:.6}
         .cb2-lib-ax-view{display:flex;gap:.55rem;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;padding:.1rem 0 .35rem;scrollbar-width:none}
         .cb2-lib-ax-view::-webkit-scrollbar{display:none;height:0}
-        .cb2-lib-ax-slide{flex:0 0 min(80%,240px);scroll-snap-align:start;scroll-snap-stop:always;border-radius:.8rem;border:1px solid rgba(232,197,71,.28);background:rgba(232,197,71,.06);padding:.6rem;box-sizing:border-box;text-align:center;animation:cb2LibRise .5s ease both}
+        .cb2-lib-ax-slide{flex:0 0 min(80%,240px);scroll-snap-align:start;scroll-snap-stop:always;border-radius:.8rem;border:1px solid rgba(56,189,248,.30);background:rgba(56,189,248,.07);padding:.6rem;box-sizing:border-box;text-align:center;animation:cb2LibRise .5s ease both}
         @keyframes cb2LibRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-        .cb2-lib-ax-badge{margin:0 0 .45rem;font-size:.74rem;font-weight:800;color:#e8c547;line-height:1.3}
+        .cb2-lib-ax-badge{margin:0 0 .45rem;font-size:.74rem;font-weight:800;color:var(--cb2-accent);line-height:1.3}
         .cb2-lib-ax-img img,.cb2-lib-ax-img--empty{width:72px;height:72px;border-radius:.6rem;object-fit:cover;display:block;margin:0 auto .4rem;background:rgba(255,255,255,.08)}
         .cb2-lib-ax-score{display:flex;align-items:baseline;justify-content:center;gap:.12rem;margin-bottom:.3rem}
-        .cb2-lib-ax-num{font-size:1.35rem;font-weight:800;color:#e8c547}
+        .cb2-lib-ax-num{font-size:1.35rem;font-weight:800;color:var(--cb2-accent)}
         .cb2-lib-ax-suf{font-size:.78rem;opacity:.7}
         .cb2-lib-ax-blurb{margin:0 0 .5rem;font-size:.72rem;opacity:.7}
-        .cb2-lib-ax-btn{display:block;text-align:center;padding:.5rem;font-size:.82rem;font-weight:800;border-radius:999px;text-decoration:none;color:#231a05;background:linear-gradient(165deg,#e8c547,#c9a227)}
-        .cb2-lib-ax-btn--off{opacity:.45;background:rgba(232,197,71,.15);color:inherit}
+        .cb2-lib-ax-btn{display:block;text-align:center;padding:.5rem;font-size:.82rem;font-weight:800;border-radius:999px;text-decoration:none;color:#04121d;background:linear-gradient(165deg,#7dd3fc,#38bdf8 55%,#0ea5e9)}
+        .cb2-lib-ax-btn--off{opacity:.45;background:rgba(56,189,248,.15);color:inherit}
         .cb2-lib-ax-dots{display:flex;flex-wrap:wrap;justify-content:center;gap:.32rem;margin-top:.15rem}
-        .cb2-lib-ax-dot{width:.44rem;height:.44rem;padding:0;border:none;border-radius:50%;background:rgba(232,197,71,.32);cursor:pointer;transition:transform .12s,background .12s}
-        .cb2-lib-ax-dot.on{background:#e8c547;transform:scale(1.2)}
+        .cb2-lib-ax-dot{width:.44rem;height:.44rem;padding:0;border:none;border-radius:50%;background:rgba(56,189,248,.35);cursor:pointer;transition:transform .12s,background .12s}
+        .cb2-lib-ax-dot.on{background:var(--cb2-accent);transform:scale(1.2)}
         .cb2-lib-nudge{margin:.55rem 0 0;font-size:.8rem;opacity:.75}
       </style>
       <h2 id="cb2-lib-h">คลังกำไลของคุณ</h2>
