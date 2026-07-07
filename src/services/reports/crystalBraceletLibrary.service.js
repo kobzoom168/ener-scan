@@ -45,26 +45,34 @@ import {
  */
 
 /**
- * Best bracelet per axis (for the "กำไลเด่นประจำพลังของคุณ" carousel).
+ * One highlight per bracelet = the SINGLE axis that bracelet is strongest in
+ * (per กบ: show each เส้น only at its standout power, not every axis repeated).
+ * 2 bracelets → 2 cards; sorted by that peak-axis score, highest first.
  * @param {CrystalBraceletLibraryItem[]} items
  * @returns {CrystalBraceletAxisHighlight[]}
  */
 function pickCrystalBraceletAxisHighlights(items) {
   if (!Array.isArray(items) || items.length === 0) return [];
   const out = [];
-  for (const axis of CRYSTAL_BRACELET_AXIS_ORDER) {
-    const scored = items.filter((it) => Number(it.axisScores?.[axis]) > 0);
-    if (!scored.length) continue;
-    const item = [...scored].sort(
-      (a, b) => Number(b.axisScores[axis]) - Number(a.axisScores[axis]),
-    )[0];
+  for (const item of items) {
+    let bestAxis = null;
+    let bestScore = 0;
+    for (const axis of CRYSTAL_BRACELET_AXIS_ORDER) {
+      const s = Number(item.axisScores?.[axis]) || 0;
+      if (s > bestScore) {
+        bestScore = s;
+        bestAxis = axis;
+      }
+    }
+    if (!bestAxis) continue;
     out.push({
-      axis,
-      labelTh: CRYSTAL_BRACELET_AXIS_LABEL_THAI[axis] || axis,
-      axisScore: Math.round((Number(item.axisScores[axis]) || 0) * 10) / 10,
+      axis: bestAxis,
+      labelTh: CRYSTAL_BRACELET_AXIS_LABEL_THAI[bestAxis] || bestAxis,
+      axisScore: Math.round(bestScore * 10) / 10,
       item,
     });
   }
+  out.sort((a, b) => b.axisScore - a.axisScore);
   return out;
 }
 
