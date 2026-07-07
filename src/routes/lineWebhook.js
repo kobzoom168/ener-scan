@@ -6956,9 +6956,18 @@ export function lineWebhookRouter(lineConfig) {
       res.status(200).json({ ok: true });
       console.log(JSON.stringify({ event: "WEBHOOK_ACK_FIRST_SENT", events: events.length }));
 
-      // Show LINE's typing indicator "•••" right away for every image sender —
-      // covers the silent gap while we download the image + run the scan/slip flow.
-      for (const uid of imageCountByUser.keys()) {
+      // Show LINE's typing indicator "•••" right away for EVERY 1:1 message
+      // (text, image, sticker) so the customer knows the bot is answering —
+      // it auto-clears when the bot's reply is sent. Skip group/room chats
+      // (loading API is 1:1 only) and non-message events (follow/join/etc.).
+      const loadingUserIds = new Set();
+      for (const ev of events) {
+        if (ev?.type !== "message") continue;
+        if (ev?.source?.type && ev.source.type !== "user") continue; // 1:1 only
+        const uid = String(ev?.source?.userId || "").trim();
+        if (uid) loadingUserIds.add(uid);
+      }
+      for (const uid of loadingUserIds) {
         void startLineLoadingAnimation(lineConfig.channelAccessToken, uid);
       }
 
