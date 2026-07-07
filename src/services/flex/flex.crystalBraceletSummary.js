@@ -460,7 +460,7 @@ function compatPercentAndBand(reportPayload, fallbackCompat) {
 }
 
 /** Default identity under headline — matches crystal bracelet payload tagline. */
-const IDENTITY_LINE_DEFAULT = "กำไลหินคริสตัล · อ่านจากพลังรวม";
+const IDENTITY_LINE_DEFAULT = "กำไล · อ่านจากพลังรวม";
 
 /**
  * @param {string} rawText unused — kept for signature parity with summary-first
@@ -493,7 +493,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
   );
 
   const fs = cb.flexSurface;
-  const headlineText = String(fs?.headline || "").trim() || "กำไลหินคริสตัล";
+  const headlineText = String(fs?.headline || "").trim() || "กำไล";
   const taglineText =
     String(fs?.tagline || "").trim() || IDENTITY_LINE_DEFAULT;
   const fitLine = String(fs?.fitLine || "").trim();
@@ -513,7 +513,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
   const axesBlock = createCrystalBraceletAxesBarBlock(cb.axes);
   const alignBarScore = crystalBraceletAlignBarScoreFromPayload(reportPayload);
 
-  const altMain = headlineText.split("\n")[0].trim() || "กำไลหินคริสตัล";
+  const altMain = headlineText.split("\n")[0].trim() || "กำไล";
   const altText = buildScanFlexAltText({
     mainEnergyLabel: altMain,
     scoreDisplay: score.display || "-",
