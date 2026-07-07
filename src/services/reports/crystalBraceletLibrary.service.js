@@ -27,13 +27,46 @@ import {
  */
 
 /**
+ * @typedef {Object} CrystalBraceletAxisHighlight
+ * @property {string} axis
+ * @property {string} labelTh
+ * @property {number} axisScore
+ * @property {CrystalBraceletLibraryItem} item
+ */
+
+/**
  * @typedef {Object} CrystalBraceletLibraryView
  * @property {number} totalCount — distinct bracelets (grouped)
  * @property {number} scanCount — raw bracelet scans seen
  * @property {CrystalBraceletLibraryItem[]} items — newest first
  * @property {CrystalBraceletLibraryItem[]} byOverall — powerScore desc
  * @property {CrystalBraceletLibraryItem|null} topOverall
+ * @property {CrystalBraceletAxisHighlight[]} axisHighlights — best bracelet per axis
  */
+
+/**
+ * Best bracelet per axis (for the "กำไลเด่นประจำพลังของคุณ" carousel).
+ * @param {CrystalBraceletLibraryItem[]} items
+ * @returns {CrystalBraceletAxisHighlight[]}
+ */
+function pickCrystalBraceletAxisHighlights(items) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const out = [];
+  for (const axis of CRYSTAL_BRACELET_AXIS_ORDER) {
+    const scored = items.filter((it) => Number(it.axisScores?.[axis]) > 0);
+    if (!scored.length) continue;
+    const item = [...scored].sort(
+      (a, b) => Number(b.axisScores[axis]) - Number(a.axisScores[axis]),
+    )[0];
+    out.push({
+      axis,
+      labelTh: CRYSTAL_BRACELET_AXIS_LABEL_THAI[axis] || axis,
+      axisScore: Math.round((Number(item.axisScores[axis]) || 0) * 10) / 10,
+      item,
+    });
+  }
+  return out;
+}
 
 function axisScoreOf(axes, key) {
   const v = axes?.[key];
@@ -140,6 +173,7 @@ export async function buildCrystalBraceletLibraryForLineUser(
     items,
     byOverall,
     topOverall: byOverall[0] || null,
+    axisHighlights: pickCrystalBraceletAxisHighlights(items),
   };
 }
 
@@ -157,5 +191,6 @@ export function buildCrystalBraceletLibraryViewFromPayloadOnly(norm) {
     items: [item],
     byOverall: [item],
     topOverall: item,
+    axisHighlights: pickCrystalBraceletAxisHighlights([item]),
   };
 }

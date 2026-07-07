@@ -563,69 +563,128 @@ ${row(
 function buildCrystalBraceletLibraryHtml(library, currentToken) {
   if (!library || library.totalCount <= 0) return "";
   const top = library.topOverall;
-  const cur = String(currentToken || "").trim();
+  void currentToken;
 
-  const fmtDateTh = (iso) => {
-    if (!iso) return "";
-    const d = new Date(Date.parse(iso) + 7 * 3600 * 1000);
-    if (Number.isNaN(d.getTime())) return "";
-    const m = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-    return `${d.getUTCDate()} ${m[d.getUTCMonth()]} ${d.getUTCFullYear() + 543}`;
-  };
+  // Spotlight (อันดับ 1 โดยรวม) — like the amulet library's top card.
+  const spotThumb = top?.thumbUrl
+    ? `<div class="cb2-lib-spot-img"><img src="${escapeHtml(top.thumbUrl)}" alt="" width="76" height="76" loading="lazy" decoding="async"/></div>`
+    : `<div class="cb2-lib-spot-img cb2-lib-spot-img--empty" aria-hidden="true"></div>`;
+  const spotHtml = top
+    ? `<div class="cb2-lib-spot">
+        ${spotThumb}
+        <div class="cb2-lib-spot-body">
+          <p class="cb2-lib-spot-rank">อันดับ 1 โดยรวมตอนนี้</p>
+          <p class="cb2-lib-spot-score">พลังรวม <strong>${escapeHtml(String(top.powerScore))}</strong>/10</p>
+          <p class="cb2-lib-spot-peak">เด่นสุด: ${escapeHtml(top.peakAxisLabelTh)}</p>
+        </div>
+      </div>`
+    : "";
 
-  const rows = library.items
-    .slice(0, 8)
-    .map((it) => {
-      const isCurrent = cur && it.publicToken === cur;
-      const href = it.publicToken ? `/r/${encodeURIComponent(it.publicToken)}` : "";
-      const thumb = it.thumbUrl
-        ? `<img src="${escapeHtml(it.thumbUrl)}" alt="" width="46" height="46" loading="lazy" decoding="async"/>`
-        : `<span class="cb2-lib-thumb-empty" aria-hidden="true"></span>`;
-      const fit = it.fitPercent != null ? ` · เข้ากัน ${escapeHtml(String(it.fitPercent))}%` : "";
-      const times = it.scanCountInGroup > 1 ? ` · สแกน ${it.scanCountInGroup} ครั้ง` : "";
-      const body = `
-        <span class="cb2-lib-thumb">${thumb}</span>
-        <span class="cb2-lib-rowbody">
-          <span class="cb2-lib-rowtitle">พลัง ${escapeHtml(String(it.powerScore))}/10 · เด่น ${escapeHtml(it.peakAxisLabelTh)}</span>
-          <span class="cb2-lib-rowsub">${escapeHtml(fmtDateTh(it.scannedAtIso))}${fit}${times}</span>
-        </span>
-        <span class="cb2-lib-rowgo">${isCurrent ? "รายงานนี้" : "ดูรายงาน ›"}</span>`;
-      return isCurrent || !href
-        ? `<div class="cb2-lib-row cb2-lib-row--current">${body}</div>`
-        : `<a class="cb2-lib-row" href="${escapeHtml(href)}">${body}</a>`;
+  // Swipeable carousel — best bracelet per axis (like "พระเด่นประจำพลังของคุณ").
+  const highlights = Array.isArray(library.axisHighlights)
+    ? library.axisHighlights.slice(0, 6)
+    : [];
+  const slides = highlights
+    .map((h, idx) => {
+      const it = h.item;
+      const href = it?.publicToken ? `/r/${encodeURIComponent(it.publicToken)}` : "";
+      const img = it?.thumbUrl
+        ? `<div class="cb2-lib-ax-img"><img src="${escapeHtml(it.thumbUrl)}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
+        : `<div class="cb2-lib-ax-img cb2-lib-ax-img--empty" aria-hidden="true"></div>`;
+      const cta = href
+        ? `<a class="cb2-lib-ax-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>`
+        : `<span class="cb2-lib-ax-btn cb2-lib-ax-btn--off" aria-disabled="true">ดูรายละเอียด</span>`;
+      return `<article class="cb2-lib-ax-slide" data-cb2-slide-i="${idx}">
+        <p class="cb2-lib-ax-badge">${escapeHtml(h.labelTh)}</p>
+        ${img}
+        <div class="cb2-lib-ax-score"><span class="cb2-lib-ax-num">${escapeHtml(String(h.axisScore))}</span><span class="cb2-lib-ax-suf">/10</span></div>
+        <p class="cb2-lib-ax-blurb">เด่นสุดในด้านนี้</p>
+        ${cta}
+      </article>`;
     })
     .join("");
+  const dots = highlights
+    .map(
+      (_, idx) =>
+        `<button type="button" class="cb2-lib-ax-dot${idx === 0 ? " on" : ""}" data-cb2-dot-i="${idx}" aria-label="ไปที่การ์ด ${idx + 1}"></button>`,
+    )
+    .join("");
+  const carousel =
+    highlights.length > 0
+      ? `<div class="cb2-lib-ax" id="cb2-lib-ax-carousel" data-cb2-slides="${highlights.length}">
+          <h3 class="cb2-lib-ax-h">กำไลเด่นประจำพลังของคุณ</h3>
+          <p class="cb2-lib-ax-hint">เลื่อนดูพลังด้านอื่น ๆ</p>
+          <div class="cb2-lib-ax-view" tabindex="0" role="region" aria-roledescription="carousel">${slides}</div>
+          <div class="cb2-lib-ax-dots" role="tablist">${dots}</div>
+        </div>`
+      : "";
 
-  const topLine = top
-    ? `<p class="cb2-lib-topline">เส้นที่พลังสูงสุดของคุณตอนนี้: <strong>${escapeHtml(String(top.powerScore))}/10</strong> (เด่น ${escapeHtml(top.peakAxisLabelTh)})</p>`
-    : "";
   const nudge =
     library.totalCount === 1
-      ? `<p class="cb2-lib-nudge">สแกนกำไลเพิ่มอีกสักเส้น ระบบจะช่วยเปรียบเทียบพลังให้เห็นชัดขึ้น</p>`
+      ? `<p class="cb2-lib-nudge">สแกนกำไลเพิ่มอีกสักเส้น ระบบจะช่วยเปรียบเทียบพลังให้เห็นชัดขึ้น ✨</p>`
       : "";
 
   return `
     <section class="cb2-card cb2-lib" aria-labelledby="cb2-lib-h">
       <style>
-        .cb2-lib-count{margin:.15rem 0 .4rem;font-size:.86rem;opacity:.8}
-        .cb2-lib-topline{margin:.1rem 0 .55rem;font-size:.9rem}
-        .cb2-lib-rows{display:flex;flex-direction:column;gap:.45rem}
-        .cb2-lib-row{display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border:1px solid rgba(255,255,255,.14);
-          border-radius:.7rem;text-decoration:none;color:inherit}
-        .cb2-lib-row--current{border-style:dashed;opacity:.85}
-        .cb2-lib-thumb img,.cb2-lib-thumb-empty{width:46px;height:46px;border-radius:.55rem;object-fit:cover;display:block;background:rgba(255,255,255,.08)}
-        .cb2-lib-rowbody{flex:1;min-width:0}
-        .cb2-lib-rowtitle{display:block;font-size:.88rem;font-weight:700}
-        .cb2-lib-rowsub{display:block;font-size:.74rem;opacity:.72;margin-top:.1rem}
-        .cb2-lib-rowgo{font-size:.76rem;font-weight:700;white-space:nowrap;opacity:.9}
+        .cb2-lib-count{margin:.15rem 0 .5rem;font-size:.86rem;opacity:.82}
+        .cb2-lib-spot{display:flex;align-items:center;gap:.7rem;padding:.55rem .5rem;border-top:1px solid rgba(255,255,255,.12);border-bottom:1px solid rgba(255,255,255,.12)}
+        .cb2-lib-spot-img img,.cb2-lib-spot-img--empty{width:76px;height:76px;border-radius:.7rem;object-fit:cover;display:block;background:rgba(255,255,255,.08)}
+        .cb2-lib-spot-rank{margin:0;font-size:.74rem;opacity:.7}
+        .cb2-lib-spot-score{margin:.12rem 0;font-size:1.05rem}
+        .cb2-lib-spot-score strong{font-size:1.5rem;color:#e8c547}
+        .cb2-lib-spot-peak{margin:0;font-size:.82rem;opacity:.85}
+        .cb2-lib-ax{margin-top:.7rem;padding-top:.55rem;border-top:1px solid rgba(255,255,255,.1)}
+        .cb2-lib-ax-h{margin:0 0 .1rem;font-size:.9rem;font-weight:800}
+        .cb2-lib-ax-hint{margin:0 0 .5rem;font-size:.74rem;opacity:.6}
+        .cb2-lib-ax-view{display:flex;gap:.55rem;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;padding:.1rem 0 .35rem;scrollbar-width:none}
+        .cb2-lib-ax-view::-webkit-scrollbar{display:none;height:0}
+        .cb2-lib-ax-slide{flex:0 0 min(80%,240px);scroll-snap-align:start;scroll-snap-stop:always;border-radius:.8rem;border:1px solid rgba(232,197,71,.28);background:rgba(232,197,71,.06);padding:.6rem;box-sizing:border-box;text-align:center;animation:cb2LibRise .5s ease both}
+        @keyframes cb2LibRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+        .cb2-lib-ax-badge{margin:0 0 .45rem;font-size:.74rem;font-weight:800;color:#e8c547;line-height:1.3}
+        .cb2-lib-ax-img img,.cb2-lib-ax-img--empty{width:72px;height:72px;border-radius:.6rem;object-fit:cover;display:block;margin:0 auto .4rem;background:rgba(255,255,255,.08)}
+        .cb2-lib-ax-score{display:flex;align-items:baseline;justify-content:center;gap:.12rem;margin-bottom:.3rem}
+        .cb2-lib-ax-num{font-size:1.35rem;font-weight:800;color:#e8c547}
+        .cb2-lib-ax-suf{font-size:.78rem;opacity:.7}
+        .cb2-lib-ax-blurb{margin:0 0 .5rem;font-size:.72rem;opacity:.7}
+        .cb2-lib-ax-btn{display:block;text-align:center;padding:.5rem;font-size:.82rem;font-weight:800;border-radius:999px;text-decoration:none;color:#231a05;background:linear-gradient(165deg,#e8c547,#c9a227)}
+        .cb2-lib-ax-btn--off{opacity:.45;background:rgba(232,197,71,.15);color:inherit}
+        .cb2-lib-ax-dots{display:flex;flex-wrap:wrap;justify-content:center;gap:.32rem;margin-top:.15rem}
+        .cb2-lib-ax-dot{width:.44rem;height:.44rem;padding:0;border:none;border-radius:50%;background:rgba(232,197,71,.32);cursor:pointer;transition:transform .12s,background .12s}
+        .cb2-lib-ax-dot.on{background:#e8c547;transform:scale(1.2)}
         .cb2-lib-nudge{margin:.55rem 0 0;font-size:.8rem;opacity:.75}
       </style>
       <h2 id="cb2-lib-h">คลังกำไลของคุณ</h2>
-      <p class="cb2-lib-count">คุณสแกนกำไลไว้แล้ว ${escapeHtml(String(library.totalCount))} เส้น (${escapeHtml(String(library.scanCount))} ครั้ง) กดแต่ละรายการเพื่อย้อนดูรายงานเดิมได้เลย</p>
-      ${topLine}
-      <div class="cb2-lib-rows">${rows}</div>
+      <p class="cb2-lib-count">คุณสแกนกำไลไว้แล้ว ${escapeHtml(String(library.totalCount))} เส้น (${escapeHtml(String(library.scanCount))} ครั้ง) 🔮</p>
+      ${spotHtml}
+      ${carousel}
       ${nudge}
-    </section>`;
+    </section>
+    <script>
+    (function(){
+      var root=document.getElementById("cb2-lib-ax-carousel");
+      if(!root)return;
+      var view=root.querySelector(".cb2-lib-ax-view");
+      var slides=root.querySelectorAll(".cb2-lib-ax-slide");
+      var dots=root.querySelectorAll(".cb2-lib-ax-dot");
+      var n=slides.length; if(n<1)return;
+      var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var idx=0,timer=null,resume=null;
+      function setDots(i){for(var d=0;d<dots.length;d++)dots[d].classList.toggle("on",d===i);}
+      function sync(){var x=view.scrollLeft,w=view.clientWidth||1,best=0,bs=-1;
+        for(var i=0;i<n;i++){var el=slides[i],l=el.offsetLeft,r=l+el.offsetWidth,ov=Math.max(0,Math.min(r,x+w)-Math.max(l,x));if(ov>bs){bs=ov;best=i;}}
+        idx=best;setDots(idx);}
+      function go(i){idx=(i+n)%n;var el=slides[idx];if(el)view.scrollTo({left:el.offsetLeft,behavior:reduce?"auto":"smooth"});setDots(idx);}
+      function start(){if(reduce||n<2)return;stop();timer=setInterval(function(){go(idx+1);},3800);}
+      function stop(){if(timer){clearInterval(timer);timer=null;}}
+      function pause(){stop();if(resume)clearTimeout(resume);resume=setTimeout(start,6000);}
+      var st=null;
+      view.addEventListener("scroll",function(){pause();clearTimeout(st);st=setTimeout(sync,90);},{passive:true});
+      for(var d=0;d<dots.length;d++){(function(k){dots[k].addEventListener("click",function(){go(k);pause();});})(d);}
+      view.addEventListener("pointerdown",pause,{passive:true});
+      start();
+    })();
+    </script>`;
 }
 
 /**
