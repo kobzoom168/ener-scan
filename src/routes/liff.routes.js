@@ -12,8 +12,31 @@
  */
 import express from "express";
 import { supabase } from "../config/supabase.js";
+import { saveBirthdate, getSavedBirthdate } from "../stores/userProfile.db.js";
 
 export const liffRouter = express.Router();
+
+/* ---- birthdate = ONE source of truth (users.birthdate, shared with the OA
+   scan flow) so LIFF onboarding and สแกน never ask twice. LIFF keeps ISO
+   (YYYY-MM-DD); the scan store keeps display DD/MM/YYYY. ---- */
+function isoToDisplayBirthdate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+function displayToIsoBirthdate(disp) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(String(disp || "").trim());
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+/** Resolve the user's birthdate as ISO, preferring the LIFF value, else the shared scan store. */
+async function resolveBirthdateIso(userId, liffBirthdate) {
+  if (liffBirthdate) return String(liffBirthdate);
+  try {
+    const disp = await getSavedBirthdate(userId);
+    return displayToIsoBirthdate(disp);
+  } catch {
+    return "";
+  }
+}
 
 /* ---------------- deterministic daily reading ---------------- */
 
@@ -240,6 +263,12 @@ liffRouter.get("/api/liff/daily", async (req, res) => {
     } catch (_) {
       birth = null;
     }
+    // Fall back to the shared scan store so a birthdate entered via สแกน also
+    // powers the daily reading (one dataset).
+    if (!birth) {
+      const iso = await resolveBirthdateIso(userId, null);
+      if (iso) birth = { birthdate: iso, birthTime: null };
+    }
   }
   // 7-day trend ending today (deterministic, so past days are reproducible)
   const history = [];
@@ -406,11 +435,13 @@ liffRouter.get("/api/liff/reading", async (req, res) => {
       .eq("line_user_id", userId)
       .maybeSingle();
     if (error) throw error;
-    if (!data) return res.json({ ok: true, needsProfile: true });
-    if (!data.birthdate) return res.json({ ok: true, needsBirthdate: true });
-    const astro = thaiAstroFromBirthdate(data.birthdate);
-    const reading = buildMonthlyReading(userId, data.birthdate);
-    res.json({ ok: true, nickname: data.nickname || "", astro, ...reading });
+    // birthdate = one shared dataset: prefer LIFF, else the OA scan store.
+    const bdIso = await resolveBirthdateIso(userId, data?.birthdate || null);
+    if (!data && !bdIso) return res.json({ ok: true, needsProfile: true });
+    if (!bdIso) return res.json({ ok: true, needsBirthdate: true });
+    const astro = thaiAstroFromBirthdate(bdIso);
+    const reading = buildMonthlyReading(userId, bdIso);
+    res.json({ ok: true, nickname: data?.nickname || "", astro, ...reading });
   } catch (e) {
     console.error(JSON.stringify({ event: "LIFF_READING_ERROR", message: String(e?.message || e).slice(0, 200) }));
     res.status(500).json({ ok: false, error: "reading_error" });
@@ -472,6 +503,18 @@ liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
     } else {
       const { error } = await supabase.from("liff_profiles").insert(row);
       if (error) throw error;
+    }
+    // Mirror birthdate into the shared scan store (users.birthdate) so the OA
+    // สแกน flow reuses it and never asks again. Best-effort — never fail the save.
+    if (row.birthdate) {
+      const disp = isoToDisplayBirthdate(row.birthdate);
+      if (disp) {
+        try {
+          await saveBirthdate(userId, disp, { rawBirthdateInput: "liff_onboarding" });
+        } catch (mErr) {
+          console.error(JSON.stringify({ event: "LIFF_BIRTHDATE_MIRROR_FAIL", message: String(mErr?.message || mErr).slice(0, 160) }));
+        }
+      }
     }
     console.log(JSON.stringify({ event: "LIFF_PROFILE_SAVED", lineUserIdPrefix: userId.slice(0, 8), isNew: !existing }));
     res.json({ ok: true });
