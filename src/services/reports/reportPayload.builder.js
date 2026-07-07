@@ -1522,7 +1522,7 @@ export async function buildReportPayloadFromScan(opts) {
       ...(amuletV1 && !moldaviteV1
         ? {
             heroNaming: String(
-              amuletV1.flexSurface.heroNamingLine || "พระเครื่อง",
+              amuletV1.flexSurface.heroNamingLine || "พระ / เครื่องราง",
             ).trim(),
             mainEnergy: String(
               amuletV1.flexSurface.mainEnergyWordingLine || "",

@@ -70,10 +70,10 @@ export function buildAmuletV1Slice({
     sessionKey: scanResultId,
     mainEnergyLabel,
   });
-  const headline = "พระเครื่อง";
+  const headline = "พระ / เครื่องราง";
   const mainShort =
     String(mainEnergyLabel || "").trim().slice(0, 22) || "พลังมุ่งเน้นรวม";
-  const tagline = "พระเครื่อง · หกมิติพลัง";
+  const tagline = "พระ / เครื่องราง · หกมิติพลัง";
 
   const flexSurface = buildAmuletFlexSurfaceCopy(
     scores.primaryPower,
