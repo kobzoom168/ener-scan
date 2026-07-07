@@ -7,40 +7,31 @@ import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 import {
   CRYSTAL_BRACELET_AXIS_ORDER,
-  computeCrystalBraceletAlignmentAxisKey,
-  computeCrystalBraceletOwnerAxisScoresV1,
   crystalBraceletCompatibilityBandFromPercent,
 } from "../../crystalBracelet/crystalBraceletScores.util.js";
 
-const FLEX_CARD_BG = "#0f1415";
-const FLEX_BOX_BG = "#1a2330";
-const LIFE_AREA_BAR_TRACK_BG = "#334155";
-const CB_BAR_FILL = "#38bdf8";
-const CB_ACCENT = "#7dd3fc";
-const CB_ACCENT_DIM = "#bae6fd";
-const CB_PILL_BORDER = "#0369a1";
-const CB_PILL_BG = "#0c4a6e";
-const CB_CTA_BG = "#0ea5e9";
+/* Feminine light theme — matches the bracelet HTML report (ชมพูพาสเทล-ลาเวนเดอร์). */
+const FLEX_CARD_BG = "#fdf3f8";
+const FLEX_BOX_BG = "#fbeaf3";
+const LIFE_AREA_BAR_TRACK_BG = "#f0d7e6";
+const CB_BAR_FILL = "#d97bb0";
+const CB_ACCENT = "#b34d8f";
+const CB_ACCENT_DIM = "#b34d8f";
+const CB_CTA_BG = "#d97bb0";
 const FLEX_ACCENT = CB_CTA_BG;
-const FLEX_TEXT_PRIMARY = "#f1f5f9";
-const FLEX_TEXT_SECONDARY = "#94a3b8";
-const FLEX_TEXT_CAPTION = "#94a3b8";
-const CB_TITLE_TAGLINE_COLOR = "#64748b";
+const FLEX_TEXT_PRIMARY = "#4a2b40";
+const FLEX_TEXT_SECONDARY = "#8a6478";
+const FLEX_TEXT_CAPTION = "#a988a0";
+const CB_TITLE_TAGLINE_COLOR = "#a988a0";
 
 /** Slightly slim bar + looser row gaps keeps 6 rows readable without crowding labels. */
 const LIFE_AREA_BAR_HEIGHT = "6px";
-const LIFE_AREA_LABEL_COL_WIDTH = "112px";
-const LIFE_AREA_SCORE_COL_WIDTH = "44px";
-const MAIN_ENERGY_PILL_MAX_LEN = 22;
+const LIFE_AREA_LABEL_COL_WIDTH = "100px";
+const LIFE_AREA_SCORE_COL_WIDTH = "38px";
 
-/**
- * @param {string} text
- * @param {number} [maxLen]
- */
-function truncateEnergyBadgeLabel(text, maxLen = 14) {
-  const s = String(text || "").trim();
-  if (!s) return "-";
-  return s.length > maxLen ? s.slice(0, maxLen) : s;
+/** Older payloads baked "กำไลหินคริสตัล" — display just "กำไล" (many bracelet kinds). */
+function simplifyBraceletWord(t) {
+  return String(t || "").split("กำไลหินคริสตัล").join("กำไล");
 }
 
 /**
@@ -49,25 +40,12 @@ function truncateEnergyBadgeLabel(text, maxLen = 14) {
  */
 function axisBarFlexPair(score0to100) {
   if (score0to100 == null || !Number.isFinite(Number(score0to100))) {
-    return { greenFlex: 0, emptyFlex: 3 };
+    return { greenFlex: 0, emptyFlex: 10 };
   }
+  // Flex integers out of 10 → 10% bar resolution (was thirds; 69 vs 58 looked equal).
   const r = Math.max(0, Math.min(100, Number(score0to100))) / 100;
-  let bestG = 0;
-  let bestE = 3;
-  let bestErr = 1;
-  for (let g = 0; g <= 3; g++) {
-    for (let e = 0; e <= 3; e++) {
-      if (g === 0 && e === 0) continue;
-      const ratio = g / (g + e);
-      const err = Math.abs(ratio - r);
-      if (err < bestErr - 1e-9) {
-        bestErr = err;
-        bestG = g;
-        bestE = e;
-      }
-    }
-  }
-  return { greenFlex: bestG, emptyFlex: bestE };
+  const g = Math.max(0, Math.min(10, Math.round(r * 10)));
+  return { greenFlex: g, emptyFlex: 10 - g };
 }
 
 /**
@@ -196,7 +174,7 @@ function createCrystalBraceletAxesBarBlock(axes) {
         type: "text",
         text: "เรียงจากพลังเด่นไปเบา",
         size: "xxs",
-        color: "#475569",
+        color: "#a988a0",
         wrap: true,
         margin: "sm",
       },
@@ -214,31 +192,17 @@ function createCrystalBraceletAxesBarBlock(axes) {
 }
 
 /**
+ * Two stat boxes: ระดับพลัง x/10 + เข้ากับคุณ % (one clear number each —
+ * the old version showed the align-axis score AND the overall % together,
+ * which read as two conflicting numbers; same fix as the HTML report).
  * @param {string} scoreDisplay
  * @param {string} compatPctStr
  * @param {string} [compatBandStr]
- * @param {number|null} [alignBarScore0to100] — bracelet score on the align axis (0–100), same as graph summary / HTML; when set, main figure is this value and overall % is shown below
  */
-function createScoreRowTwoUp(
-  scoreDisplay,
-  compatPctStr,
-  compatBandStr = "",
-  alignBarScore0to100 = null,
-) {
+function createScoreRowTwoUp(scoreDisplay, compatPctStr, compatBandStr = "") {
   const levelValue = `${String(scoreDisplay || "-").trim() || "-"} / 10`;
   const pct = String(compatPctStr || "-").trim().replace(/\s+/g, "");
   const band = String(compatBandStr || "").trim();
-  const useAlignBar =
-    alignBarScore0to100 != null &&
-    Number.isFinite(Number(alignBarScore0to100));
-  const barStr = useAlignBar
-    ? String(
-        Math.max(
-          0,
-          Math.min(100, Math.round(Number(alignBarScore0to100))),
-        ),
-      )
-    : "";
   /** @type {object[]} */
   const compatContents = [
     {
@@ -250,7 +214,7 @@ function createScoreRowTwoUp(
     },
     {
       type: "text",
-      text: useAlignBar ? barStr : pct,
+      text: pct,
       size: "xxl",
       weight: "bold",
       color: CB_ACCENT,
@@ -258,22 +222,11 @@ function createScoreRowTwoUp(
       wrap: false,
     },
   ];
-  if (useAlignBar && pct && pct !== "-") {
-    compatContents.push({
-      type: "text",
-      text: `โดยรวม ${pct}`,
-      size: "sm",
-      color: FLEX_TEXT_SECONDARY,
-      wrap: true,
-      maxLines: 2,
-      margin: "xs",
-    });
-  }
   if (band) {
     compatContents.push({
       type: "text",
       text: band,
-      size: "sm",
+      size: "xs",
       color: FLEX_TEXT_SECONDARY,
       wrap: true,
       maxLines: 2,
@@ -291,6 +244,7 @@ function createScoreRowTwoUp(
         layout: "vertical",
         flex: 1,
         paddingAll: "14px",
+        cornerRadius: "12px",
         backgroundColor: FLEX_BOX_BG,
         contents: [
           {
@@ -303,10 +257,10 @@ function createScoreRowTwoUp(
           {
             type: "text",
             text: levelValue,
-            size: "xl",
+            size: "xxl",
             weight: "bold",
             color: CB_ACCENT,
-            margin: "sm",
+            margin: "xs",
             wrap: true,
           },
         ],
@@ -316,125 +270,12 @@ function createScoreRowTwoUp(
         layout: "vertical",
         flex: 1,
         paddingAll: "14px",
+        cornerRadius: "12px",
         backgroundColor: FLEX_BOX_BG,
         contents: compatContents,
       },
     ],
   };
-}
-
-function createEnergyBadgePill(mainLabel) {
-  return {
-    type: "box",
-    layout: "vertical",
-    spacing: "sm",
-    margin: "md",
-    contents: [
-      {
-        type: "text",
-        text: "โทนหลัก",
-        size: "xs",
-        color: FLEX_TEXT_CAPTION,
-        wrap: true,
-      },
-      {
-        type: "box",
-        layout: "horizontal",
-        contents: [
-          {
-            type: "box",
-            layout: "horizontal",
-            flex: 1,
-            justifyContent: "center",
-            paddingTop: "10px",
-            paddingBottom: "10px",
-            paddingStart: "14px",
-            paddingEnd: "14px",
-            borderWidth: "1px",
-            borderColor: CB_PILL_BORDER,
-            backgroundColor: CB_PILL_BG,
-            contents: [
-              {
-                type: "text",
-                text: truncateEnergyBadgeLabel(
-                  String(mainLabel || "-").trim(),
-                  MAIN_ENERGY_PILL_MAX_LEN,
-                ),
-                size: "sm",
-                weight: "bold",
-                color: CB_ACCENT,
-                align: "center",
-                wrap: true,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-}
-
-/**
- * Bracelet score on the align axis — same seed/session/compat + min-|stone−owner| as HTML radar/graph.
- * @param {import("../reports/reportPayload.types.js").ReportPayload | null | undefined} reportPayload
- * @returns {number|null}
- */
-function crystalBraceletAlignBarScoreFromPayload(reportPayload) {
-  const cb = reportPayload?.crystalBraceletV1;
-  if (!cb || typeof cb !== "object") return null;
-  const axes = cb.axes;
-  if (!axes || typeof axes !== "object") return null;
-
-  /** @type {Record<string, number>} */
-  const stoneScores = {};
-  for (const k of CRYSTAL_BRACELET_AXIS_ORDER) {
-    const sc = axes[k]?.score;
-    stoneScores[k] =
-      sc != null && Number.isFinite(Number(sc))
-        ? Math.max(0, Math.min(100, Math.round(Number(sc))))
-        : 0;
-  }
-
-  const reportId = String(reportPayload?.reportId || "").trim();
-  const scanReqId = String(reportPayload?.scanId || "").trim();
-  const seedKey =
-    String(cb.context?.ownerAxisSeedKey || "").trim() ||
-    reportId ||
-    scanReqId ||
-    String(cb.context?.scanResultIdPrefix || "cb");
-  const sessionKey =
-    String(cb.context?.ownerAxisSessionKey || "").trim() ||
-    reportId ||
-    scanReqId ||
-    String(cb.context?.scanResultIdPrefix || "session");
-
-  const ownerFitFromCb =
-    cb.ownerFit &&
-    typeof cb.ownerFit === "object" &&
-    cb.ownerFit.score != null &&
-    Number.isFinite(Number(cb.ownerFit.score))
-      ? Number(cb.ownerFit.score)
-      : null;
-  const ownerFitFromSummary =
-    reportPayload?.summary?.compatibilityPercent != null &&
-    Number.isFinite(Number(reportPayload.summary.compatibilityPercent))
-      ? Math.round(Number(reportPayload.summary.compatibilityPercent))
-      : null;
-  const ownerFitInput = ownerFitFromSummary ?? ownerFitFromCb ?? 66;
-
-  const ownerScores = computeCrystalBraceletOwnerAxisScoresV1(
-    seedKey,
-    sessionKey,
-    stoneScores,
-    ownerFitInput,
-  );
-  const alignKey = computeCrystalBraceletAlignmentAxisKey(
-    stoneScores,
-    ownerScores,
-  );
-  const sc = axes[alignKey]?.score;
-  if (sc == null || !Number.isFinite(Number(sc))) return null;
-  return Math.max(0, Math.min(100, Math.round(Number(sc))));
 }
 
 function compatPercentAndBand(reportPayload, fallbackCompat) {
@@ -493,25 +334,24 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
   );
 
   const fs = cb.flexSurface;
-  const headlineText = String(fs?.headline || "").trim() || "กำไล";
+  const headlineText =
+    simplifyBraceletWord(String(fs?.headline || "").trim()) || "กำไล";
   const taglineText =
-    String(fs?.tagline || "").trim() || IDENTITY_LINE_DEFAULT;
-  const fitLine = String(fs?.fitLine || "").trim();
+    simplifyBraceletWord(String(fs?.tagline || "").trim()) ||
+    IDENTITY_LINE_DEFAULT;
+  const fitLine = simplifyBraceletWord(String(fs?.fitLine || "").trim());
   const bulletLines = Array.isArray(fs?.bullets)
     ? fs.bullets
-        .map((x) => String(x || "").trim())
+        .map((x) => simplifyBraceletWord(String(x || "").trim()))
         .filter(Boolean)
         .slice(0, 2)
     : [];
-  const mainPill =
-    String(fs?.mainEnergyShort || "").trim() || "พลังรวมของกำไล";
 
   const imgUrl = String(reportPayload?.object?.objectImageUrl || "").trim();
   const heroOk = /^https:\/\//i.test(imgUrl);
   const url = String(reportUrl || "").trim();
 
   const axesBlock = createCrystalBraceletAxesBarBlock(cb.axes);
-  const alignBarScore = crystalBraceletAlignBarScoreFromPayload(reportPayload);
 
   const altMain = headlineText.split("\n")[0].trim() || "กำไล";
   const altText = buildScanFlexAltText({
@@ -596,12 +436,7 @@ export async function buildCrystalBraceletSummaryFirstFlex(rawText, options = {}
     headlineBlock,
     taglineBlock,
     ...(ownerTeaserBlock ? [ownerTeaserBlock] : []),
-    createScoreRowTwoUp(
-      score.display || "-",
-      compatPctStr,
-      compatBandStr,
-      alignBarScore,
-    ),
+    createScoreRowTwoUp(score.display || "-", compatPctStr, compatBandStr),
     ...(axesBlock ? [axesBlock] : []),
     ...(fitBlock ? [fitBlock] : []),
     ...(bulletRows.length > 0
