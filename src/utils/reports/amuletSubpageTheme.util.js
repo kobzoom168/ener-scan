@@ -7,10 +7,32 @@
 export const AMULET_SUBPAGE_THEME_PREFIXES = ["alib", "aem", "aet"];
 
 /**
+ * Same env override as `resolveAmuletHtmlTheme` in amuletReportV2.template.js —
+ * subpages must match the main report (light = always white, dark = always dark).
+ * @returns {"dark"|"light"|"auto"}
+ */
+function resolveAmuletSubpageTheme() {
+  const env = String(
+    process.env.AMULET_HTML_THEME ?? process.env.REPORT_AMULET_HTML_THEME ?? "",
+  )
+    .trim()
+    .toLowerCase();
+  if (env === "dark") return "dark";
+  if (env === "light") return "light";
+  return "auto";
+}
+
+/**
  * Inline script — auto-apply dark when OS prefers dark (same as report V2).
+ * Env AMULET_HTML_THEME=light → no script (stays white); =dark → force dark.
  * @returns {string}
  */
 export function amuletSubpageAutoDarkScriptHtml() {
+  const theme = resolveAmuletSubpageTheme();
+  if (theme === "light") return "";
+  if (theme === "dark") {
+    return `<script>document.documentElement.classList.add("amulet-subpage-dark");</script>`;
+  }
   return `<script>try{if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches){document.documentElement.classList.add("amulet-subpage-dark");}}catch(e){}</script>`;
 }
 
