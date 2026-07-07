@@ -398,18 +398,10 @@ export function buildPaymentQrIntroText({
   paidPackage = null,
   lineUserId = null,
 } = {}) {
-  const facts = buildPaymentQrIntroFactsText({ paymentRef, paidPackage });
-  const uid =
-    lineUserId != null && String(lineUserId).trim()
-      ? String(lineUserId).trim()
-      : "anonymous";
-  const soft = pickReplyVariant(
-    uid,
-    "payment_support_soft",
-    paymentSupportVariants,
-    3,
-  );
-  return [soft, "", facts].join("\n");
+  // Short + clean — no server-cost preamble (per กบ). Facts already carry the
+  // friendly อาจารย์ line + payment ref.
+  void lineUserId;
+  return buildPaymentQrIntroFactsText({ paymentRef, paidPackage });
 }
 
 /** Single paid offer — short alternate (no multi-package menu). */
