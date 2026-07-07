@@ -9,8 +9,14 @@
 import { REPORT_ROLLOUT_SCHEMA_VERSION } from "../../utils/reports/reportRolloutTelemetry.util.js";
 import { computeAmuletOrdAndAlignFromPayload } from "../../amulet/amuletOrdAlign.util.js";
 import { POWER_LABEL_THAI } from "../../amulet/amuletScores.util.js";
-const AMULET_VISIBLE_LABEL_FALLBACK = "พระเครื่อง";
+const AMULET_VISIBLE_LABEL_FALLBACK = "พระ / เครื่องราง";
 import { normalizeScore } from "./flex.utils.js";
+
+/** Old payloads baked "พระเครื่อง"; lane now displays "พระ / เครื่องราง". */
+function normalizeAmuletVisibleLabel(raw) {
+  const s = String(raw || "").trim();
+  return s === "พระเครื่อง" ? AMULET_VISIBLE_LABEL_FALLBACK : s;
+}
 import { buildScanFlexAltText } from "./flex.display.js";
 import { SCAN_COPY_CONFIG_VERSION } from "./scanCopy.generator.js";
 
@@ -36,7 +42,7 @@ const AMULET_TITLE_TAGLINE_COLOR = "#78716c";
 /** Life-area helper line: dimmer than captions; metadata only. */
 const LIFE_AREA_HELPER_TEXT_COLOR = "#a8a29e";
 /** Fallback when power rows are missing (Flex display only). */
-const AMULET_TITLE_TAGLINE = "พระเครื่อง · หกมิติพลัง";
+const AMULET_TITLE_TAGLINE = "พระ / เครื่องราง · หกมิติพลัง";
 
 /** Bar score numerals: quieter than labels (read dimension + bar first). */
 const LIFE_AREA_BAR_SCORE_COLOR = "#6b7280";
@@ -59,7 +65,7 @@ const AMULET_FLEX_SUMMARY_VALUE_MAX_CHARS = 52;
 const AMULET_FLEX_SUMMARY_LINE_MAX_CHARS = 26;
 /** Flex-only: max chars per side when fitLine uses `A → B` (teaser sharpen; payload unchanged). */
 const AMULET_FLEX_SUMMARY_ARROW_PART_MAX = 22;
-/** Flex tagline: max Thai chars for “เด่น{มิติ}” segment after `พระเครื่อง · `. */
+/** Flex tagline: max Thai chars for “เด่น{มิติ}” segment after `พระ / เครื่องราง · `. */
 const AMULET_FLEX_TAGLINE_DIM_MAX_CHARS = 18;
 
 /**
@@ -326,7 +332,7 @@ function buildAmuletFlexTaglineDisplay(mv) {
   }
   const dimRaw = applyAmuletFlexLabelAlias(lab);
   const dim = shortenThaiSnippet(dimRaw || lab, AMULET_FLEX_TAGLINE_DIM_MAX_CHARS);
-  return `พระเครื่อง · เด่น${dim}`;
+  return `พระ / เครื่องราง · เด่น${dim}`;
 }
 
 /**
@@ -647,7 +653,7 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
   );
 
   const headlineText =
-    String(mv.flexSurface?.headline || "").trim() ||
+    normalizeAmuletVisibleLabel(mv.flexSurface?.headline) ||
     AMULET_VISIBLE_LABEL_FALLBACK;
   const fitLine = String(mv.flexSurface?.fitLine || "").trim();
 

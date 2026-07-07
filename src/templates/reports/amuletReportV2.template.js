@@ -292,7 +292,7 @@ function mainGraphBlock(vm) {
   const peak = amuletRadarVertexForAxis(vm.power.object, vm.power.objectPeakKey);
   const peakX = peak.x.toFixed(2);
   const peakY = peak.y.toFixed(2);
-  const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="var(--mv2a-radar-peak-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="var(--mv2a-radar-peak-fill)" stroke="var(--mv2a-radar-peak-stroke)" stroke-width="0.26" aria-hidden="true"><title>พลังเด่นสุดของพระเครื่อง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
+  const peakMarker = `<circle cx="${peakX}" cy="${peakY}" r="2.6" fill="var(--mv2a-radar-peak-halo)" stroke="none" aria-hidden="true"/><circle class="mv2a-radar-peak" cx="${peakX}" cy="${peakY}" r="1.4" fill="var(--mv2a-radar-peak-fill)" stroke="var(--mv2a-radar-peak-stroke)" stroke-width="0.26" aria-hidden="true"><title>พลังเด่นสุดของพระ / เครื่องราง: ${escapeHtml(vm.power.objectPeakLabelThai || "")}</title></circle>`;
   const alignLabelThai = String(vm.power.alignment?.labelThai || "").trim();
   const alignMarker =
     alignKey && alignKey !== vm.power.objectPeakKey
@@ -306,9 +306,9 @@ function mainGraphBlock(vm) {
       : "";
 
   return `<section class="mv2a-card mv2a-graph-card" aria-labelledby="mv2a-graph-h">
-    <h2 id="mv2a-graph-h">กราฟหกมิติพลังพระเครื่อง</h2>
-    <p class="mv2a-hint">เทียบโปรไฟล์คุณกับพลังพระเครื่อง</p>
-    <div class="mv2a-radar-wrap" role="img" aria-label="เปรียบเทียบพลังคุณกับพลังพระเครื่อง">
+    <h2 id="mv2a-graph-h">กราฟหกมิติพลังพระ / เครื่องราง</h2>
+    <p class="mv2a-hint">เทียบโปรไฟล์คุณกับพลังพระ / เครื่องราง</p>
+    <div class="mv2a-radar-wrap" role="img" aria-label="เปรียบเทียบพลังคุณกับพลังพระ / เครื่องราง">
       <div class="mv2a-radar-plot">
         <svg class="mv2a-radar-svg mv2a-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility">
           <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100 })}" fill="var(--mv2a-radar-ring-outer-fill)" stroke="var(--mv2a-radar-ring-outer-stroke)" stroke-width="0.28"/>
@@ -330,9 +330,9 @@ function mainGraphBlock(vm) {
         <div class="mv2a-radar-labels" aria-hidden="true">${axisLabelsHtml}</div>
       </div>
     </div>
-    <div class="mv2a-radar-key" role="group" aria-label="คุณและพลังพระเครื่อง">
+    <div class="mv2a-radar-key" role="group" aria-label="คุณและพลังพระ / เครื่องราง">
       <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--owner"></span>คุณ</span>
-      <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--amulet"></span>พลังพระเครื่อง</span>
+      <span class="mv2a-radar-key-chip"><span class="mv2a-radar-dot mv2a-radar-dot--amulet"></span>พลังพระ / เครื่องราง</span>
     </div>
   </section>`;
 }
@@ -553,12 +553,16 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     </section>`
       : "";
 
-  const subtypeLabel = h.subtypeLabel || "พระเครื่อง";
+  /** Old payloads baked "พระเครื่อง"; lane now displays "พระ / เครื่องราง". */
+  const subtypeLabelRaw = String(h.subtypeLabel || "").trim();
+  const subtypeLabel =
+    (subtypeLabelRaw === "พระเครื่อง" ? "" : subtypeLabelRaw) ||
+    "พระ / เครื่องราง";
   /** Shorter tab / share title — big `<h1>` stays the main on-page anchor */
   const docTitle = `รายงาน · ${subtypeLabel} · Ener Scan`;
   const ogTitle = docTitle;
   const ogDescription =
-    "ดูรายงานพลังพระเครื่องจาก Ener Scan พร้อมพลังเด่น ความเข้ากัน และพลังทั้ง 6 ด้าน";
+    "ดูรายงานพลังพระ / เครื่องรางจาก Ener Scan พร้อมพลังเด่น ความเข้ากัน และพลังทั้ง 6 ด้าน";
   const ogImageAlt = ogTitle;
 
   const canonicalFromWording = String(
@@ -2207,7 +2211,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       ${topTierBannerHtml}
       <div class="mv2-hero-main">
         <div class="mv2-hero-text">
-          <h1 class="mv2-h1">${escapeHtml(h.subtypeLabel || "พระเครื่อง")}</h1>
+          <h1 class="mv2-h1">${escapeHtml(subtypeLabel)}</h1>
           ${metaBlockHtml}
           <p class="mv2-main">${escapeHtml(h.displayLine || `โทนหลัก · ${h.mainEnergyLabel}`)}</p>
           ${h.clarifierLine ? `<p class="mv2-hero-clarifier">${escapeHtml(h.clarifierLine)}</p>` : ""}
