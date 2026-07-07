@@ -192,6 +192,8 @@ export async function sendNonScanReply(opts) {
     turnPerf = undefined,
     /** @type {{ type: "sticker", packageId: string, stickerId: string } | null | undefined} */
     trailingStickerMessage = null,
+    /** @type {{ items: unknown[] } | null | undefined} — LINE quickReply pills on the sent message */
+    quickReply = null,
   } = opts;
 
   const uid = String(userId || "").trim();
@@ -277,9 +279,9 @@ export async function sendNonScanReply(opts) {
           );
         }
         if (sticker) {
-          await pushTextWithTrailingSticker(client, uid, body, sticker);
+          await pushTextWithTrailingSticker(client, uid, body, sticker, quickReply);
         } else {
-          await pushText(client, uid, body);
+          await pushText(client, uid, body, quickReply);
         }
         logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
           userId: uid,
@@ -297,9 +299,10 @@ export async function sendNonScanReply(opts) {
           replyToken,
           body,
           sticker,
+          quickReply,
         );
       } else {
-        await replyText(client, replyToken, body);
+        await replyText(client, replyToken, body, quickReply);
       }
       recordSent(uid, dedupeKey, body);
       void insertLineConversationMessage(uid, "bot", body);

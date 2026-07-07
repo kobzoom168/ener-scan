@@ -75,6 +75,21 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
     }),
   );
 
+  // Quick Reply pill so the customer can TAP to pay instead of typing "จ่าย"
+  // (typing still works — the button just sends the same word).
+  const payQuickReply = {
+    items: [
+      {
+        type: "action",
+        action: { type: "message", label: "💳 จ่ายเงิน", text: "จ่าย" },
+      },
+      {
+        type: "action",
+        action: { type: "message", label: "🕐 ไว้ก่อน", text: "ไว้ก่อน" },
+      },
+    ],
+  };
+
   const res = await sendNonScanReply({
     client,
     userId: uid,
@@ -86,6 +101,7 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
     scanOfferMeta,
     turnPerf,
     trailingStickerMessage: lineStickerPaymentSupportMessage(),
+    quickReply: payQuickReply,
   });
 
   if (res.suppressed) {
