@@ -1419,6 +1419,14 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       font-weight: 400;
     }
 
+    /* ── Energy-meaning CTA (like the amulet report) ── */
+    .cb2-em-cta { margin-top: 0.9rem; padding: 0.75rem 0.8rem; border-radius: 12px;
+      background: rgba(217,123,176,0.08); border: 1px solid rgba(217,123,176,0.25); }
+    .cb2-em-cta-hint { margin: 0 0 0.55rem; font-size: 0.78rem; color: var(--cb2-sub); text-align: center; }
+    .cb2-em-cta-btn { display: block; text-align: center; padding: 0.7rem; border-radius: 999px;
+      text-decoration: none; font-weight: 800; font-size: 0.9rem; color: #fff;
+      background: linear-gradient(165deg, #eab6dc, #d97bb0 55%, #b34d8f); }
+
     /* ── Disclaimer ── */
     .cb2-disclaimer { margin-top: 1.25rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(217,123,176,0.07); border: 1px solid rgba(217,123,176,0.20); font-size: 0.76rem; line-height: 1.55; color: #b34d8f; }
 
@@ -1539,6 +1547,14 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     <section class="cb2-card" aria-labelledby="cb2-gsum-h">
       <h2 id="cb2-gsum-h">สรุปจากกราฟ</h2>
       ${graphSummaryHtml}
+      ${
+        String(payload.publicToken || "").trim()
+          ? `<div class="cb2-em-cta">
+        <p class="cb2-em-cta-hint">เสน่ห์ การเงิน โชคลาภ และด้านอื่น ๆ หมายถึงอะไร</p>
+        <a class="cb2-em-cta-btn" href="/r/${encodeURIComponent(String(payload.publicToken).trim())}/energy-meaning">อ่านคำอธิบายพลังทั้ง 6 ด้าน</a>
+      </div>`
+          : ""
+      }
     </section>
 
     ${ownerProfileHtml}
