@@ -597,7 +597,7 @@ function buildCrystalBraceletLibraryHtml(library, currentToken) {
       return `<article class="cb2-lib-ax-slide" data-cb2-slide-i="${idx}">
         <p class="cb2-lib-ax-badge">${escapeHtml(h.labelTh)}</p>
         ${img}
-        <div class="cb2-lib-ax-score"><span class="cb2-lib-ax-num">${escapeHtml(String(h.axisScore))}</span><span class="cb2-lib-ax-suf">/10</span></div>
+        <div class="cb2-lib-ax-score"><span class="cb2-lib-ax-num">${escapeHtml(String(Math.round(Number(h.axisScore) || 0)))}</span><span class="cb2-lib-ax-suf">คะแนน</span></div>
         <p class="cb2-lib-ax-blurb">เด่นสุดในด้านนี้</p>
         ${cta}
       </article>`;

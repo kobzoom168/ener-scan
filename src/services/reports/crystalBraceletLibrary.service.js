@@ -113,9 +113,11 @@ function buildItemFromNormalizedPayload(norm, row = {}) {
   const avgAxis =
     CRYSTAL_BRACELET_AXIS_ORDER.reduce((s, k) => s + axisScores[k], 0) /
     Math.max(1, CRYSTAL_BRACELET_AXIS_ORDER.length);
+  // Overall power is the /10 energy score; the per-axis scores are /100 (radar).
+  // Fallback: derive a /10 figure from the /100 axis average (avoid the 64.5/10 bug).
   const powerScore = Number.isFinite(rawScore)
     ? Math.round(rawScore * 10) / 10
-    : Math.round(avgAxis * 10) / 10;
+    : Math.round(avgAxis) / 10;
 
   const fitRaw = Number(cb.ownerFit?.score);
   const fitPercent = Number.isFinite(fitRaw) ? Math.round(fitRaw) : null;
