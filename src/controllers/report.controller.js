@@ -6,6 +6,7 @@ import { renderReportHtmlPage } from "../services/reports/reportHtmlRenderer.ser
 import { normalizeReportPayloadForRender } from "../utils/reports/reportPayloadNormalize.util.js";
 import { renderAmuletEnergyMeaningHtml } from "../templates/reports/amuletEnergyMeaning.template.js";
 import { renderCrystalBraceletEnergyMeaningHtml } from "../templates/reports/crystalBraceletEnergyMeaning.template.js";
+import { renderCrystalBraceletEnergyTimingHtml } from "../templates/reports/crystalBraceletEnergyTiming.template.js";
 import { renderAmuletEnergyTimingHtml } from "../templates/reports/amuletEnergyTiming.template.js";
 import { renderAmuletLibraryRankingHtml } from "../templates/reports/amuletLibraryRanking.template.js";
 import {
@@ -412,14 +413,18 @@ export async function getEnergyTimingByToken(req, res) {
     normalized.amuletV1 &&
     typeof normalized.amuletV1 === "object" &&
     !Array.isArray(normalized.amuletV1);
+  const hasBracelet =
+    normalized.crystalBraceletV1 &&
+    typeof normalized.crystalBraceletV1 === "object" &&
+    !Array.isArray(normalized.crystalBraceletV1);
 
-  if (!hasAmulet) {
+  if (!hasAmulet && !hasBracelet) {
     console.log(
       JSON.stringify({
         event: "REPORT_HTTP",
         path: "getEnergyTimingByToken",
         status: 302,
-        reason: "not_amulet_lane",
+        reason: "unsupported_lane",
         publicTokenPrefix: publicTokenPrefix12(publicToken),
       }),
     );
@@ -428,7 +433,9 @@ export async function getEnergyTimingByToken(req, res) {
 
   let html;
   try {
-    html = renderAmuletEnergyTimingHtml(normalized);
+    html = hasAmulet
+      ? renderAmuletEnergyTimingHtml(normalized)
+      : renderCrystalBraceletEnergyTimingHtml(normalized);
   } catch (renderErr) {
     console.error(
       JSON.stringify({
