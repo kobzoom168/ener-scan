@@ -543,8 +543,8 @@ ${row(
     " cb2-gsum-bar-row--lead",
   )}
 ${row(
-    "เข้ากับคุณ",
-    `เข้ากับคุณที่สุด ${alignName}`,
+    "จังหวะตรงกัน",
+    `จังหวะคุณตรงด้าน ${alignName}`,
     cbGraphSummarySubText(alignAxisKey, "align"),
     alignDisplayPct,
     alignColor,
@@ -1202,17 +1202,15 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       -webkit-tap-highlight-color: transparent;
     }
     .cb2-share-btn--primary {
-      background: #1877f2;
-      border-color: #1877f2;
-      color: #ffffff;
+      background: linear-gradient(165deg, #7dd3fc, #38bdf8 55%, #0ea5e9);
+      border-color: rgba(56, 189, 248, 0.5);
+      color: #04121d;
     }
     .cb2-share-btn--primary:hover {
-      background: #166fe5;
-      border-color: #166fe5;
+      filter: brightness(1.05);
     }
     .cb2-share-btn--primary:active {
-      background: #1464d4;
-      border-color: #1464d4;
+      filter: brightness(0.96);
     }
     .cb2-share-btn--line {
       background: #06c755;
