@@ -98,6 +98,15 @@ import {
 } from "../stores/payments.db.js";
 
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
+import {
+  isFengShuiCommandText,
+  armFengShuiMode,
+  isFengShuiModeArmed,
+  clearFengShuiMode,
+  runFengShuiReadingFromLineImage,
+  FENGSHUI_INTRO_TEXT,
+  FENGSHUI_FAIL_TEXT,
+} from "../services/fengShuiFlow.service.js";
 import { maybeNotifyAdminSlipPendingVerify } from "../services/adminPaymentSlipNotify.service.js";
 import {
   evaluateAwaitingPaymentSlipImage,
@@ -2824,6 +2833,44 @@ async function handleImageMessage({ client, event, userId, session }) {
     return;
   }
 
+  // ฮวงจุ้ยจากรูป: armed mode consumes this image (free teaser) — skip the scan
+  // pipeline entirely. One-shot: clear before analyzing so a stuck reading never
+  // swallows follow-up scan images.
+  if (isFengShuiModeArmed(userId)) {
+    clearFengShuiMode(userId);
+    try {
+      const reading = await runFengShuiReadingFromLineImage({
+        client,
+        messageId: event.message?.id,
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "fengshui_reading",
+        semanticKey: `fengshui_reading:${event.message?.id || Date.now()}`,
+        text: reading,
+        alternateTexts: [reading],
+      });
+    } catch (fsErr) {
+      console.error("[FENGSHUI] reading failed:", {
+        userId,
+        message: fsErr?.message,
+      });
+      armFengShuiMode(userId); // let them resend without re-typing the command
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "fengshui_fail",
+        semanticKey: `fengshui_fail:${event.message?.id || Date.now()}`,
+        text: FENGSHUI_FAIL_TEXT,
+        alternateTexts: [FENGSHUI_FAIL_TEXT],
+      });
+    }
+    return;
+  }
+
   let routeAccessDecision;
   let routePendingPayment = null;
   try {
@@ -3272,6 +3319,22 @@ async function handleTextMessage({ client, event, userId, session }) {
       userId,
       session,
       source: "placeholder_text",
+    });
+    return;
+  }
+
+  // ฮวงจุ้ยจากรูป: explicit command (LIFF service row / typed keyword) arms the
+  // photo mode — the next image goes to the feng-shui reader, not the scan lane.
+  if (isFengShuiCommandText(text)) {
+    armFengShuiMode(userId);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "fengshui_intro",
+      semanticKey: "fengshui_intro",
+      text: FENGSHUI_INTRO_TEXT,
+      alternateTexts: [FENGSHUI_INTRO_TEXT],
     });
     return;
   }

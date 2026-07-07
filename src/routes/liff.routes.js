@@ -3,18 +3,110 @@
  * v6 design: White & Gold, elderly-friendly large type.
  *
  * GET  /liff                    → single-page LIFF app (onboarding → home)
- * GET  /api/liff/profile        → ?userId= → { found, profile }
+ * GET  /api/liff/profile        → { found, profile } (user from verified idToken)
  * POST /api/liff/profile        → upsert profile (registration) into liff_profiles
- * GET  /api/liff/daily          → ?userId= → deterministic "ดวงวันนี้" (same user+day = same result)
+ * GET  /api/liff/daily          → deterministic "ดวงวันนี้" (same user+day = same result)
  *
- * NOTE: MVP trusts the LIFF-provided userId (no idToken verification yet) — staging only;
- * verify LINE idToken server-side before prod.
+ * Auth: every /api/liff/* call must carry `Authorization: Bearer <LINE idToken>`;
+ * the server verifies it with LINE (oauth2/v2.1/verify) and uses the verified
+ * `sub` as the userId — client-sent userId is never trusted.
  */
 import express from "express";
 import { supabase } from "../config/supabase.js";
 import { saveBirthdate, getSavedBirthdate } from "../stores/userProfile.db.js";
+import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
+import { getPromptPayQrPublicUrl } from "../utils/promptpayQrPublicUrl.util.js";
+import { ensureUserByLineUserId } from "../stores/users.db.js";
+import {
+  createPaymentPending,
+  ensurePaymentRefForPaymentId,
+  getLatestAwaitingPaymentForLineUserId,
+  setPaymentSlipPendingVerify,
+  updatePaymentSlipVerificationFields,
+  markPaymentApprovedAndUnlock,
+} from "../stores/payments.db.js";
+import {
+  setAwaitingPayment,
+  clearPaymentState,
+} from "../stores/manualPaymentAccess.store.js";
+import { evaluateAwaitingPaymentSlipImage } from "../services/lineWebhook/slipImageValidation.service.js";
+import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
+import { runSlipAutoApprovalAfterGateAccept } from "../core/payments/slipCheck/slipAutoApprovalOrchestrator.service.js";
+import { maybeNotifyAdminSlipPendingVerify } from "../services/adminPaymentSlipNotify.service.js";
+import { pushText } from "../services/lineSequenceReply.service.js";
+import { checkScanAccess } from "../services/paymentAccess.service.js";
+import {
+  getConversationStateByLineUserId,
+  upsertConversationState,
+} from "../stores/conversationState.db.js";
 
 export const liffRouter = express.Router();
+
+/** LINE client for push messages (payment confirmations) — injected from app.js. */
+let liffLineClient = null;
+export function setLiffLineClient(client) {
+  liffLineClient = client;
+}
+
+/* ---------------- LINE idToken verification ---------------- */
+
+/** Verified-token cache: idToken → { userId, exp(sec) } (LINE verify is rate-limited). */
+const LIFF_TOKEN_CACHE = new Map();
+
+/** LIFF channel id = client_id for verify; derivable from LIFF_ID prefix ("2010xxxxxx-abcd"). */
+function liffChannelId() {
+  const explicit = String(process.env.LIFF_CHANNEL_ID || "").trim();
+  if (explicit) return explicit;
+  const m = /^(\d+)-/.exec(String(process.env.LIFF_ID || "").trim());
+  return m ? m[1] : "";
+}
+
+/** @returns {Promise<string|null>} verified LINE userId, or null when invalid/expired. */
+async function verifyLiffIdToken(idToken) {
+  const tok = String(idToken || "").trim();
+  if (!tok) return null;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const cached = LIFF_TOKEN_CACHE.get(tok);
+  if (cached) {
+    if (cached.exp > nowSec + 30) return cached.userId;
+    LIFF_TOKEN_CACHE.delete(tok);
+    return null;
+  }
+  const clientId = liffChannelId();
+  if (!clientId) return null;
+  const res = await fetch("https://api.line.me/oauth2/v2.1/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ id_token: tok, client_id: clientId }),
+  });
+  const j = await res.json().catch(() => null);
+  if (!res.ok || !j?.sub) return null;
+  if (LIFF_TOKEN_CACHE.size > 500) {
+    for (const [k, v] of LIFF_TOKEN_CACHE) {
+      if (v.exp <= nowSec) LIFF_TOKEN_CACHE.delete(k);
+    }
+    if (LIFF_TOKEN_CACHE.size > 500) LIFF_TOKEN_CACHE.clear();
+  }
+  LIFF_TOKEN_CACHE.set(tok, { userId: j.sub, exp: Number(j.exp) || nowSec + 300 });
+  return j.sub;
+}
+
+/** Auth gate: returns verified userId or replies 401 and returns null. */
+async function requireLiffUser(req, res) {
+  const h = String(req.headers.authorization || "");
+  const idToken = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
+  let userId = null;
+  try {
+    userId = await verifyLiffIdToken(idToken);
+  } catch (err) {
+    console.error("[LIFF] idToken verify error:", err?.message);
+  }
+  if (!userId) {
+    res.status(401).json({ ok: false, error: "unauthorized" });
+    return null;
+  }
+  return userId;
+}
 
 /* ---- birthdate = ONE source of truth (users.birthdate, shared with the OA
    scan flow) so LIFF onboarding and สแกน never ask twice. LIFF keeps ISO
@@ -248,7 +340,8 @@ function buildDaily(userId, now = Date.now(), birth = null) {
 }
 
 liffRouter.get("/api/liff/daily", async (req, res) => {
-  const userId = String(req.query.userId || "").trim();
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
   const now = Date.now();
   // Pull birthdate so the reading follows ตำราทักษา; degrade gracefully without it.
   let birth = null;
@@ -426,8 +519,8 @@ function buildMonthlyReading(userId, birthdate) {
 }
 
 liffRouter.get("/api/liff/reading", async (req, res) => {
-  const userId = String(req.query.userId || "").trim();
-  if (!userId) return res.status(400).json({ ok: false, error: "missing_userId" });
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
   try {
     const { data, error } = await supabase
       .from("liff_profiles")
@@ -461,8 +554,8 @@ const PROFILE_FIELDS = [
 ];
 
 liffRouter.get("/api/liff/profile", async (req, res) => {
-  const userId = String(req.query.userId || "").trim();
-  if (!userId) return res.status(400).json({ ok: false, error: "missing_userId" });
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
   try {
     const { data, error } = await supabase
       .from("liff_profiles")
@@ -478,9 +571,9 @@ liffRouter.get("/api/liff/profile", async (req, res) => {
 });
 
 liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
   const b = req.body || {};
-  const userId = String(b.userId || "").trim();
-  if (!userId) return res.status(400).json({ ok: false, error: "missing_userId" });
 
   const row = { line_user_id: userId, display_name: String(b.displayName || "").slice(0, 120) || null };
   for (const f of PROFILE_FIELDS) {
@@ -523,6 +616,242 @@ liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
     res.status(500).json({ ok: false, error: "db_error" });
   }
 });
+
+/* ---------------- payment (เติมสิทธิ์สแกน) ----------------
+ * Same pipeline as the chat slip flow: createPaymentPending → EasySlip
+ * auto-approval orchestrator → unlock; only the transport (HTTP upload
+ * instead of a chat image) differs. LINE push keeps the chat in sync. */
+
+const LIFF_SLIP_MAX_BYTES = 8 * 1024 * 1024;
+
+function packageForApi(p) {
+  return {
+    key: p.key,
+    priceThb: p.priceThb,
+    scanCount: p.scanCount,
+    windowHours: p.windowHours,
+    label: p.label,
+  };
+}
+
+liffRouter.get("/api/liff/pay/info", async (req, res) => {
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
+  try {
+    const offer = loadActiveScanOffer();
+    const packages = (offer.packages || []).filter((p) => p.active);
+    const [payment, access] = await Promise.all([
+      getLatestAwaitingPaymentForLineUserId(userId).catch(() => null),
+      checkScanAccess({ userId }).catch(() => null),
+    ]);
+    res.json({
+      ok: true,
+      packages: packages.map(packageForApi),
+      defaultPackageKey: offer.defaultPackageKey,
+      qrUrl: getPromptPayQrPublicUrl() || null,
+      payment: payment
+        ? {
+            status: String(payment.status || ""),
+            paymentRef: payment.payment_ref || null,
+            amount: payment.expected_amount ?? payment.amount ?? null,
+            packageCode: payment.package_code || null,
+          }
+        : null,
+      access: access
+        ? {
+            allowed: Boolean(access.allowed),
+            paidRemainingScans: access.paidRemainingScans ?? null,
+          }
+        : null,
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ event: "LIFF_PAY_INFO_ERROR", message: String(e?.message || e).slice(0, 200) }));
+    res.status(500).json({ ok: false, error: "pay_info_error" });
+  }
+});
+
+liffRouter.post("/api/liff/pay/create", express.json(), async (req, res) => {
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
+  try {
+    const offer = loadActiveScanOffer();
+    const packages = (offer.packages || []).filter((p) => p.active);
+    const wantKey = String(req.body?.packageKey || "").trim();
+    const pkg =
+      packages.find((p) => p.key === wantKey) ||
+      packages.find((p) => p.key === offer.defaultPackageKey) ||
+      packages[0];
+    if (!pkg) return res.status(409).json({ ok: false, error: "no_active_package" });
+
+    // Reuse an open payment for the same package instead of piling up rows
+    // (the chat flow may already have one going).
+    const existing = await getLatestAwaitingPaymentForLineUserId(userId).catch(() => null);
+    if (existing?.id && String(existing.status || "") === "pending_verify") {
+      return res.json({ ok: true, result: "pending_verify", paymentRef: existing.payment_ref || null });
+    }
+    let paymentId = null;
+    let paymentRef = null;
+    if (
+      existing?.id &&
+      String(existing.status || "") === "awaiting_payment" &&
+      Number(existing.expected_amount ?? existing.amount) === Number(pkg.priceThb)
+    ) {
+      paymentId = existing.id;
+      paymentRef = existing.payment_ref || (await ensurePaymentRefForPaymentId(existing.id).catch(() => null));
+    } else {
+      const appUser = await ensureUserByLineUserId(userId);
+      const created = await createPaymentPending({
+        appUserId: appUser.id,
+        amount: pkg.priceThb,
+        currency: process.env.PAYMENT_UNLOCK_CURRENCY || "THB",
+        packageCode: pkg.key,
+        packageName: pkg.label,
+        expectedAmount: pkg.priceThb,
+        unlockHours: pkg.windowHours,
+      });
+      paymentId = created?.paymentId ?? null;
+      paymentRef = created?.paymentRef ?? null;
+    }
+    if (!paymentId) return res.status(500).json({ ok: false, error: "payment_create_failed" });
+    setAwaitingPayment(userId);
+    console.log(JSON.stringify({
+      event: "LIFF_PAYMENT_CREATED",
+      lineUserIdPrefix: userId.slice(0, 8),
+      paymentId,
+      packageKey: pkg.key,
+    }));
+    res.json({
+      ok: true,
+      result: "created",
+      paymentId,
+      paymentRef,
+      amount: pkg.priceThb,
+      packageLabel: pkg.label,
+      qrUrl: getPromptPayQrPublicUrl() || null,
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ event: "LIFF_PAY_CREATE_ERROR", message: String(e?.message || e).slice(0, 200) }));
+    res.status(500).json({ ok: false, error: "pay_create_error" });
+  }
+});
+
+liffRouter.post(
+  "/api/liff/pay/slip",
+  express.json({ limit: "12mb" }),
+  async (req, res) => {
+    const userId = await requireLiffUser(req, res);
+    if (!userId) return;
+    try {
+      const b64 = String(req.body?.imageBase64 || "").replace(/^data:image\/\w+;base64,/, "");
+      if (!b64) return res.status(400).json({ ok: false, error: "missing_image" });
+      const imageBuffer = Buffer.from(b64, "base64");
+      if (imageBuffer.length < 5 * 1024 || imageBuffer.length > LIFF_SLIP_MAX_BYTES) {
+        return res.status(400).json({ ok: false, error: "bad_image_size" });
+      }
+
+      const payment = await getLatestAwaitingPaymentForLineUserId(userId).catch(() => null);
+      if (!payment?.id) return res.status(409).json({ ok: false, error: "no_payment" });
+      const paymentId = payment.id;
+      const slipMessageId = `liff_${Date.now()}`;
+
+      const slipVal = await evaluateAwaitingPaymentSlipImage({
+        imageBuffer,
+        userId,
+        paymentId,
+        messageId: slipMessageId,
+        flowState: "awaiting_payment",
+      });
+      if (!slipVal.proceed) return res.json({ ok: true, result: "not_slip" });
+
+      const slipUrl = await uploadSlipImageToStorage({
+        buffer: imageBuffer,
+        lineUserId: userId,
+        paymentId,
+        slipMessageId,
+      });
+      await setPaymentSlipPendingVerify({ paymentId, slipUrl, slipMessageId });
+
+      const approvalFlow = await runSlipAutoApprovalAfterGateAccept({
+        userId,
+        paymentId,
+        imageBuffer,
+        payment: { ...(payment || {}), id: paymentId, status: "pending_verify" },
+        updatePaymentFields: updatePaymentSlipVerificationFields,
+      });
+
+      if (approvalFlow.mode === "auto_approved") {
+        const rowAfter = await getLatestAwaitingPaymentForLineUserId(userId).catch(() => null);
+        if (String(rowAfter?.status || "").trim().toLowerCase() !== "paid") {
+          await markPaymentApprovedAndUnlock({ paymentId, approvedBy: "slip_auto_liff" });
+        }
+        // Keep chat-side conversation state in sync (same as the webhook path).
+        try {
+          const appUser = await ensureUserByLineUserId(userId);
+          const existingCs = await getConversationStateByLineUserId(userId).catch(() => null);
+          if (appUser?.id) {
+            await upsertConversationState({
+              line_user_id: userId,
+              app_user_id: String(appUser.id),
+              flow_state: existingCs?.flow_state ?? null,
+              payment_state: "paid_active_scan_ready",
+              pending_upload_id: existingCs?.pending_upload_id ?? null,
+              selected_package_key: existingCs?.selected_package_key ?? null,
+              birthdate_change_state: existingCs?.birthdate_change_state ?? null,
+              reply_token_spent: Boolean(existingCs?.reply_token_spent),
+              pending_approved_intro_compensation:
+                existingCs?.pending_approved_intro_compensation ?? null,
+              last_inbound_at: existingCs?.last_inbound_at ?? null,
+              updated_at: new Date().toISOString(),
+            });
+          }
+        } catch (csErr) {
+          console.error(JSON.stringify({
+            event: "LIFF_SLIP_APPROVE_CS_SYNC_FAILED",
+            paymentId,
+            message: String(csErr?.message || csErr).slice(0, 160),
+          }));
+        }
+        clearPaymentState(userId);
+        if (liffLineClient) {
+          pushText(
+            liffLineClient,
+            userId,
+            "✅ ตรวจสลิปเรียบร้อยครับ อาจารย์เปิดสิทธิ์สแกนให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล เข้ามาได้เลยครับ",
+          ).catch(() => {});
+        }
+        console.log(JSON.stringify({ event: "LIFF_SLIP_AUTO_APPROVED", paymentId }));
+        return res.json({ ok: true, result: "approved" });
+      }
+
+      clearPaymentState(userId);
+      let payRef = null;
+      try {
+        payRef = payment.payment_ref || (await ensurePaymentRefForPaymentId(paymentId));
+      } catch { payRef = null; }
+      if (liffLineClient) {
+        maybeNotifyAdminSlipPendingVerify({
+          client: liffLineClient,
+          lineUserId: userId,
+          paymentId,
+          paymentRef: payRef,
+          packageKey: payment?.package_code || undefined,
+          slipUrl,
+          reasons: approvalFlow?.reasons || [],
+        }).catch(() => {});
+        pushText(
+          liffLineClient,
+          userId,
+          "🙏 รับสลิปแล้วครับ ระบบกำลังตรวจอยู่\n⏳ เสร็จเมื่อไหร่อาจารย์จะรีบเปิดสิทธิ์แล้วแจ้งในแชตทันทีครับ",
+        ).catch(() => {});
+      }
+      console.log(JSON.stringify({ event: "LIFF_SLIP_PENDING_VERIFY", paymentId }));
+      return res.json({ ok: true, result: "pending" });
+    } catch (e) {
+      console.error(JSON.stringify({ event: "LIFF_PAY_SLIP_ERROR", message: String(e?.message || e).slice(0, 200) }));
+      res.status(500).json({ ok: false, error: "pay_slip_error" });
+    }
+  },
+);
 
 /* ---------------- the LIFF single-page app ---------------- */
 
@@ -766,6 +1095,33 @@ function buildLiffHtml(liffId) {
   .needbd .big{font-size:2.2rem}
   .needbd .t{font-weight:800;font-size:1.1rem;margin-top:8px}
   .needbd p{color:var(--sub);font-size:.92rem;line-height:1.65;margin:.5em 0 0}
+  /* ---- เติมสิทธิ์สแกน (pay) ---- */
+  .pkg{display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:var(--card);
+    border:1.6px solid var(--line);border-radius:16px;padding:14px 15px;box-shadow:var(--shadow);cursor:pointer;transition:border-color .18s}
+  .pkg.on{border-color:var(--gold);background:linear-gradient(160deg,#fffdf7,#fdf8ec)}
+  .pkg .pk-price{font-size:1.5rem;font-weight:800;color:var(--gold-deep);min-width:74px}
+  .pkg .pk-price small{font-size:.8rem;font-weight:700;color:var(--sub)}
+  .pkg .pk-d{flex:1;display:flex;flex-direction:column;gap:2px}
+  .pkg .pk-t{font-weight:800;font-size:.98rem}
+  .pkg .pk-s{font-size:.8rem;color:var(--sub)}
+  .pkg .pk-r{width:22px;height:22px;border-radius:50%;border:2px solid var(--line-gold);flex:none;position:relative}
+  .pkg.on .pk-r{border-color:var(--gold)}
+  .pkg.on .pk-r:after{content:"";position:absolute;inset:4px;border-radius:50%;background:var(--gold)}
+  .payqr{display:flex;flex-direction:column;align-items:center;gap:9px;padding:18px 14px}
+  .payqr img{width:min(230px,64vw);border-radius:14px;border:1px solid var(--line)}
+  .payref{font-size:.82rem;color:var(--sub)}
+  .payamt{font-size:1.35rem;font-weight:800;color:var(--gold-deep)}
+  .slipdrop{display:flex;flex-direction:column;align-items:center;gap:8px;border:1.8px dashed var(--line-gold);
+    border-radius:16px;padding:20px 14px;background:#fffdf8;cursor:pointer;text-align:center}
+  .slipdrop img{max-width:min(200px,56vw);border-radius:12px}
+  .slipdrop .sd-t{font-weight:800;font-size:.95rem}
+  .slipdrop .sd-s{font-size:.8rem;color:var(--sub)}
+  .payst{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:26px 14px}
+  .payst .big{font-size:2.6rem}
+  .payst .t{font-weight:800;font-size:1.05rem}
+  .payst p{font-size:.88rem;color:var(--sub);line-height:1.75;margin:0}
+  .paychip{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:700;color:var(--gold-deep);
+    background:#fdf6e3;border:1px solid var(--line-gold);border-radius:999px;padding:4px 12px}
 </style>
 </head>
 <body>
@@ -916,6 +1272,7 @@ function buildLiffHtml(liffId) {
       <button class="row" data-say="สแกนพระ"><span class="med med1"><svg viewBox="0 0 24 24"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><path d="M12 8.2c-1.9 0-3 1.5-3 3.3 0 2 1.5 3.3 3 4.8 1.5-1.5 3-2.8 3-4.8 0-1.8-1.1-3.3-3-3.3z"/><circle cx="12" cy="11.4" r=".9" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">สแกนพระ เครื่องราง</span><span class="en">AMULET SCAN</span><span class="rd">อ่านพลังได้ทั้ง พระ เครื่องราง หิน กำไล</span></span><span class="chev">›</span></button>
       <button class="row" data-say="ดูฮวงจุ้ยห้อง"><span class="med med2"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10.2V19h12v-8.8"/><path d="M12 12.3v4.4M9.9 14.5h4.2"/><path d="M12 12.3l1.5 2.2-1.5-.6-1.5.6z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ฮวงจุ้ยจากรูป</span><span class="en">FENG SHUI</span><span class="rd">ถ่ายรูปห้อง อาจารย์ดูพลังบ้านให้</span></span><span class="chev">›</span></button>
       <button class="row" data-say="ถามอาจารย์"><span class="med med3"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/><path d="M12 8.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ถามอาจารย์</span><span class="en">ASK MASTER</span><span class="rd">มีอะไรค้างใจ มาคุยกันได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
+      <button class="row" id="row-pay"><span class="med med1"><svg viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="12.5" rx="2.4"/><path d="M3.5 10h17"/><path d="M7 14.8h4"/><circle cx="16.8" cy="14.8" r="1.1" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">เติมสิทธิ์สแกน</span><span class="en">TOP UP</span><span class="rd">เลือกแพ็กเกจ โอน แนบสลิป จบในหน้าเดียว</span></span><span class="chev">›</span></button>
     </div>
     <p class="note">กดบริการแล้วกลับไปคุยกับอาจารย์ในแชตได้เลย</p>
 
@@ -1000,6 +1357,48 @@ function buildLiffHtml(liffId) {
     </div>
   </div>
 
+  <!-- เติมสิทธิ์สแกน -->
+  <div id="v-pay" class="hidden" style="display:flex;flex-direction:column;gap:13px">
+    <div class="rd-top">
+      <button class="rd-back" id="pay-back">‹</button>
+      <div class="rd-title">เติมสิทธิ์สแกน<small>เลือกแพ็ก โอน แนบสลิป จบเลย</small></div>
+    </div>
+
+    <!-- step 1: pick package -->
+    <div id="pay-pick" style="display:flex;flex-direction:column;gap:11px">
+      <span class="paychip hidden" id="pay-remain" style="align-self:flex-start"></span>
+      <div id="pay-pkgs" style="display:flex;flex-direction:column;gap:10px"></div>
+      <button class="readbtn" id="pay-go">💳 สร้างรายการโอน</button>
+      <p class="note">โอนผ่านพร้อมเพย์ แล้วแนบสลิปในหน้านี้ ระบบตรวจกับธนาคารให้ทันที</p>
+    </div>
+
+    <!-- step 2: QR + slip -->
+    <div id="pay-qr" class="hidden" style="display:flex;flex-direction:column;gap:11px">
+      <div class="repcard payqr">
+        <div class="payamt" id="pay-amt"></div>
+        <img id="pay-qrimg" alt="PromptPay QR" />
+        <div class="payref" id="pay-ref"></div>
+        <div class="payref">สแกน QR โอนตามยอดด้านบน แล้วแนบสลิปด้านล่างได้เลย</div>
+      </div>
+      <label class="slipdrop" id="pay-drop">
+        <input type="file" id="pay-file" accept="image/*" style="display:none" />
+        <img id="pay-prev" class="hidden" alt="" />
+        <span class="sd-t" id="pay-dt">📎 แตะเพื่อแนบสลิปโอนเงิน</span>
+        <span class="sd-s">ถ่ายหรือเลือกรูปสลิปจากเครื่องได้เลย</span>
+      </label>
+      <button class="readbtn hidden" id="pay-send">✅ ส่งสลิปให้ระบบตรวจ</button>
+      <p class="note" id="pay-hint">ระบบตรวจสลิปกับธนาคารอัตโนมัติ ส่วนใหญ่ไม่เกินครึ่งนาที</p>
+    </div>
+
+    <!-- step 3: result -->
+    <div id="pay-done" class="hidden repcard payst">
+      <div class="big" id="pd-ic">✅</div>
+      <div class="t" id="pd-t"></div>
+      <p id="pd-p"></p>
+      <button class="readbtn" id="pd-chat" style="margin-top:6px">💬 กลับไปที่แชต</button>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -1007,7 +1406,7 @@ function buildLiffHtml(liffId) {
   var LIFF_ID = ${JSON.stringify(liffId)};
   var state = { userId:"", displayName:"", step:0, sex:"", interest:"", channel:"" };
   function $(id){ return document.getElementById(id); }
-  function show(id){ ["v-load","v-ob","v-home","v-read"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); window.scrollTo(0,0); }
+  function show(id){ ["v-load","v-ob","v-home","v-read","v-pay"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); window.scrollTo(0,0); }
   function showLoadMsg(t){ var lm=$("loadmsg"); if(lm){ lm.style.display="block"; lm.textContent=t; } }
   function pad2(x){ x=String(x); return x.length<2 ? "0"+x : x; }
 
@@ -1077,11 +1476,28 @@ function buildLiffHtml(liffId) {
     return (parseInt(yy,10)-543) + "-" + pad2(mm) + "-" + pad2(dd); // BE -> CE, YYYY-MM-DD
   }
 
+  /* All API calls carry the LINE idToken; the server verifies it and derives
+     the userId itself. On 401 (token expired) → one re-login round trip. */
+  function api(path, opts){
+    opts = opts || {};
+    var h = opts.headers || {};
+    try { h["Authorization"] = "Bearer " + (liff.getIDToken() || ""); } catch(e){}
+    opts.headers = h;
+    return fetch(path, opts).then(function(r){
+      if(r.status === 401 && !sessionStorage.getItem("liffReauth")){
+        sessionStorage.setItem("liffReauth", "1");
+        liff.login();
+        return new Promise(function(){});
+      }
+      return r;
+    });
+  }
+
   function saveProfile(){
     var btn = $("ob-next"); btn.disabled = true; btn.textContent = "อาจารย์กำลังจดไว้...";
-    fetch("/api/liff/profile", { method:"POST", headers:{ "Content-Type":"application/json" },
+    api("/api/liff/profile", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
-        userId: state.userId, displayName: state.displayName,
+        displayName: state.displayName,
         nickname: $("f-nick").value.trim(), birthdate: buildBirthdate(), birth_time: $("f-bt").value || "",
         gender: state.sex, interest: state.interest, channel: state.channel, phone: $("f-ph").value.trim()
       })
@@ -1157,7 +1573,7 @@ function buildLiffHtml(liffId) {
     $("h-when").textContent = greetWord();
     $("h-name").textContent = "คุณ" + (nickname || state.displayName || "");
     $("s-date").textContent = thDate();
-    fetch("/api/liff/daily?userId=" + encodeURIComponent(state.userId))
+    api("/api/liff/daily")
       .then(function(r){ return r.json(); })
       .then(function(j){
         if(!j || !j.ok) return;
@@ -1235,7 +1651,7 @@ function buildLiffHtml(liffId) {
   function openReading(){
     var btn = $("btn-reading");
     if(btn){ btn.disabled = true; btn.textContent = "กำลังเปิดไพ่..."; }
-    fetch("/api/liff/reading?userId=" + encodeURIComponent(state.userId))
+    api("/api/liff/reading")
       .then(function(r){ return r.json(); })
       .then(function(j){
         if(btn){ btn.disabled = false; btn.textContent = "🔮 เปิดดวงประจำเดือน"; }
@@ -1289,6 +1705,139 @@ function buildLiffHtml(liffId) {
     });
   });
 
+  /* ---- เติมสิทธิ์สแกน ---- */
+  var pay = { pkgs: [], selected: "", qrUrl: "", slipB64: "" };
+
+  function payRenderPkgs(){
+    var wrap = $("pay-pkgs"); wrap.innerHTML = "";
+    pay.pkgs.forEach(function(p){
+      var b = document.createElement("button");
+      b.className = "pkg" + (p.key === pay.selected ? " on" : "");
+      b.innerHTML = '<span class="pk-price">' + p.priceThb + '<small> บาท</small></span>' +
+        '<span class="pk-d"><span class="pk-t">สแกน ' + p.scanCount + ' ครั้ง</span>' +
+        '<span class="pk-s">ใช้ได้ภายใน ' + p.windowHours + ' ชั่วโมง</span></span>' +
+        '<span class="pk-r"></span>';
+      b.addEventListener("click", function(){ pay.selected = p.key; payRenderPkgs(); });
+      wrap.appendChild(b);
+    });
+  }
+
+  function openPay(){
+    show("v-pay");
+    $("pay-pick").classList.remove("hidden");
+    $("pay-qr").classList.add("hidden");
+    $("pay-done").classList.add("hidden");
+    api("/api/liff/pay/info").then(function(r){ return r.json(); }).then(function(j){
+      if(!j || !j.ok) return;
+      pay.pkgs = j.packages || [];
+      pay.selected = j.defaultPackageKey || (pay.pkgs[0] && pay.pkgs[0].key) || "";
+      pay.qrUrl = j.qrUrl || "";
+      payRenderPkgs();
+      var rem = $("pay-remain");
+      if(j.access && j.access.paidRemainingScans > 0){
+        rem.textContent = "✦ ตอนนี้เหลือสิทธิ์สแกน " + j.access.paidRemainingScans + " ครั้ง";
+        rem.classList.remove("hidden");
+      } else { rem.classList.add("hidden"); }
+      if(j.payment && j.payment.status === "pending_verify"){
+        payShowDone("⏳", "สลิปกำลังตรวจอยู่", "รายการก่อนหน้ากำลังตรวจ เดี๋ยวอาจารย์แจ้งผลในแชตครับ");
+      }
+    }).catch(function(){});
+  }
+
+  function payShowQr(j){
+    $("pay-pick").classList.add("hidden");
+    $("pay-done").classList.add("hidden");
+    $("pay-qr").classList.remove("hidden");
+    $("pay-amt").textContent = j.amount + " บาท";
+    if(j.qrUrl){ $("pay-qrimg").src = j.qrUrl; }
+    $("pay-ref").textContent = j.paymentRef ? "รหัสรายการ " + j.paymentRef : "";
+    pay.slipB64 = "";
+    $("pay-prev").classList.add("hidden");
+    $("pay-send").classList.add("hidden");
+    $("pay-dt").textContent = "📎 แตะเพื่อแนบสลิปโอนเงิน";
+  }
+
+  function payShowDone(ic, t, p){
+    $("pay-pick").classList.add("hidden");
+    $("pay-qr").classList.add("hidden");
+    $("pay-done").classList.remove("hidden");
+    $("pd-ic").textContent = ic; $("pd-t").textContent = t; $("pd-p").textContent = p;
+  }
+
+  $("pay-go").addEventListener("click", function(){
+    var btn = $("pay-go"); btn.disabled = true; btn.textContent = "กำลังสร้างรายการ...";
+    api("/api/liff/pay/create", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ packageKey: pay.selected }) })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        btn.disabled = false; btn.textContent = "💳 สร้างรายการโอน";
+        if(!j || !j.ok){ alert("สร้างรายการไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
+        if(j.result === "pending_verify"){
+          payShowDone("⏳", "สลิปกำลังตรวจอยู่", "รายการก่อนหน้ากำลังตรวจ เดี๋ยวอาจารย์แจ้งผลในแชตครับ");
+          return;
+        }
+        payShowQr(j);
+      })
+      .catch(function(){ btn.disabled = false; btn.textContent = "💳 สร้างรายการโอน"; alert("สร้างรายการไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
+  });
+
+  /* slip: downscale big photos client-side so upload stays snappy */
+  function fileToJpegB64(file, cb){
+    var fr = new FileReader();
+    fr.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        var max = 1600, w = img.width, h = img.height;
+        if(Math.max(w,h) > max){ var k = max/Math.max(w,h); w = Math.round(w*k); h = Math.round(h*k); }
+        var c = document.createElement("canvas"); c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        cb(c.toDataURL("image/jpeg", .88));
+      };
+      img.onerror = function(){ cb(""); };
+      img.src = fr.result;
+    };
+    fr.onerror = function(){ cb(""); };
+    fr.readAsDataURL(file);
+  }
+
+  $("pay-file").addEventListener("change", function(){
+    var f = this.files && this.files[0];
+    if(!f) return;
+    fileToJpegB64(f, function(b64){
+      if(!b64){ alert("อ่านรูปไม่สำเร็จ ลองรูปอื่นดูครับ"); return; }
+      pay.slipB64 = b64;
+      var pv = $("pay-prev"); pv.src = b64; pv.classList.remove("hidden");
+      $("pay-dt").textContent = "แตะอีกครั้งถ้าอยากเปลี่ยนรูป";
+      $("pay-send").classList.remove("hidden");
+    });
+  });
+
+  $("pay-send").addEventListener("click", function(){
+    if(!pay.slipB64) return;
+    var btn = $("pay-send"); btn.disabled = true; btn.textContent = "🔍 ระบบกำลังตรวจสลิป...";
+    api("/api/liff/pay/slip", { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ imageBase64: pay.slipB64 }) })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ระบบตรวจ";
+        if(!j || !j.ok){ alert("ส่งสลิปไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
+        if(j.result === "approved"){
+          payShowDone("🎉", "เปิดสิทธิ์สแกนแล้ว", "ตรวจสลิปผ่านเรียบร้อย กลับไปที่แชตแล้วส่งรูปพระ เครื่องราง หิน หรือกำไล ได้เลยครับ");
+        } else if(j.result === "pending"){
+          payShowDone("⏳", "รับสลิปแล้ว กำลังตรวจ", "ระบบกำลังตรวจกับธนาคาร เสร็จแล้วอาจารย์จะแจ้งในแชตทันทีครับ");
+        } else {
+          alert("รูปนี้ยังไม่เหมือนสลิปโอนเงิน ลองแนบสลิปที่เห็นยอดและเวลาโอนชัด ๆ ครับ");
+        }
+      })
+      .catch(function(){ btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ระบบตรวจ"; alert("ส่งสลิปไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
+  });
+
+  $("row-pay").addEventListener("click", openPay);
+  $("pay-back").addEventListener("click", function(){ show("v-home"); });
+  $("pd-chat").addEventListener("click", function(){
+    try{ liff.closeWindow(); }catch(e){ show("v-home"); }
+  });
+
   /* ---- boot ---- */
   function boot(){
     fillDates();
@@ -1297,7 +1846,8 @@ function buildLiffHtml(liffId) {
       if(!liff.isLoggedIn()){ liff.login(); return; }
       return liff.getProfile().then(function(p){
         state.userId = p.userId; state.displayName = p.displayName || "";
-        return fetch("/api/liff/profile?userId=" + encodeURIComponent(p.userId)).then(function(r){ return r.json(); });
+        try { sessionStorage.removeItem("liffReauth"); } catch(e){}
+        return api("/api/liff/profile").then(function(r){ return r.json(); });
       }).then(function(j){
         if(j && j.found && j.profile && j.profile.nickname){ enterHome(j.profile.nickname); }
         else { renderStep(); show("v-ob"); }

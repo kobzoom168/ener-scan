@@ -12,7 +12,7 @@ import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
 import { schedulePersonaAbRecompute } from "./services/personaAbSchedule.service.js";
 import reportRoutes from "./routes/report.routes.js";
-import { liffRouter } from "./routes/liff.routes.js";
+import { liffRouter, setLiffLineClient } from "./routes/liff.routes.js";
 import { lineWebhookErrorHandler } from "./middleware/lineWebhookError.middleware.js";
 
 process.on("uncaughtException", (error) => {
@@ -156,7 +156,8 @@ app.get("/version", (req, res) => {
   res.status(200).json({ ok: true, version: "payment-slip-fix-v2" });
 });
 
-// Ener สายมู LIFF app (SPA + profile/daily APIs) — see routes/liff.routes.js
+// Ener สายมู LIFF app (SPA + profile/daily/pay APIs) — see routes/liff.routes.js
+setLiffLineClient(lineClient);
 app.use(liffRouter);
 
 app.use(reportRoutes);
