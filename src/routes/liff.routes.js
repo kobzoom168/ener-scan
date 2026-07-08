@@ -14,6 +14,7 @@
 import express from "express";
 import { supabase } from "../config/supabase.js";
 import { saveBirthdate, getSavedBirthdate } from "../stores/userProfile.db.js";
+import { listScanResultsV2PayloadRowsForLineUser } from "../stores/scanV2/scanResultsV2.db.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
 import { getPromptPayQrPublicUrl } from "../utils/promptpayQrPublicUrl.util.js";
 import { ensureUserByLineUserId } from "../stores/users.db.js";
@@ -541,6 +542,187 @@ liffRouter.get("/api/liff/reading", async (req, res) => {
   }
 });
 
+/* ---------------- scan stats (home hero card) ---------------- */
+
+/** Short axis chip label: "โชคลาภและการเปิดทาง" → "โชคลาภ". */
+function shortAxisLabel(label) {
+  return String(label || "").split("และ")[0].trim();
+}
+
+/**
+ * Aggregate the user's whole scan library (all lanes: amulet / bracelet /
+ * moldavite): count, best /10 energy score, strongest + weakest axis.
+ */
+function aggregateScanAxes(rows) {
+  let scanned = 0;
+  let topScore = null;
+  const axisMax = new Map(); // label → best score seen (0-100)
+  for (const r of rows || []) {
+    const p = r?.report_payload_json;
+    if (!p || typeof p !== "object") continue;
+    const lane = p.amuletV1 || p.crystalBraceletV1 || p.moldaviteV1;
+    if (!lane) continue;
+    scanned++;
+    const es = Number(p.summary?.energyScore);
+    if (Number.isFinite(es) && (topScore == null || es > topScore)) topScore = es;
+    const cats = lane.powerCategories || lane.axes || null;
+    if (cats && typeof cats === "object") {
+      for (const k of Object.keys(cats)) {
+        const s = Number(cats[k]?.score);
+        const label = shortAxisLabel(cats[k]?.labelThai || k);
+        if (!Number.isFinite(s) || !label) continue;
+        const prev = axisMax.get(label);
+        if (prev == null || s > prev) axisMax.set(label, s);
+      }
+    }
+  }
+  let bestAxis = null, weakAxis = null;
+  for (const [label, s] of axisMax) {
+    if (!bestAxis || s > bestAxis.score) bestAxis = { label, score: s };
+    if (!weakAxis || s < weakAxis.score) weakAxis = { label, score: s };
+  }
+  return { scanned, topScore, bestAxis, weakAxis };
+}
+
+/** Paid scans remaining (0 when the window has expired). */
+async function getRemainingScans(userId) {
+  try {
+    const { data } = await supabase
+      .from("app_users")
+      .select("paid_remaining_scans,paid_until")
+      .eq("line_user_id", userId)
+      .maybeSingle();
+    const paidOk = data?.paid_until && new Date(data.paid_until).getTime() > Date.now();
+    return paidOk ? Math.max(0, Number(data.paid_remaining_scans) || 0) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+liffRouter.get("/api/liff/stats", async (req, res) => {
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
+  try {
+    const [rows, remaining] = await Promise.all([
+      listScanResultsV2PayloadRowsForLineUser(userId, 150),
+      getRemainingScans(userId),
+    ]);
+    const agg = aggregateScanAxes(rows);
+    res.json({
+      ok: true,
+      scanned: agg.scanned,
+      remaining,
+      topScore: agg.topScore,
+      bestAxis: agg.bestAxis ? agg.bestAxis.label : null,
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ event: "LIFF_STATS_ERROR", message: String(e?.message || e).slice(0, 200) }));
+    res.status(500).json({ ok: false, error: "stats_error" });
+  }
+});
+
+/* ---------------- หาเครื่องรางที่เข้ากับดวง (ตำราทักษา) ---------------- */
+
+/** Wheel position label for humans; ราหู = คนเกิดพุธกลางคืน. */
+function circleDayLabel(idx) {
+  return idx === 6 ? "พุธกลางคืน" : TAKSA_CIRCLE[idx];
+}
+
+/** Inverse of WEEKDAY_TO_CIRCLE (wheel idx → JS weekday); ราหู(6) has none. */
+const CIRCLE_TO_WEEKDAY = [0, 1, 2, 3, 6, 4, -1, 5];
+
+/** Per-birth-star guide: พระประจำวัน + สายเครื่องราง + หินมงคล (สีตามวัน). */
+const MATCH_GUIDE = [
+  { buddha: "พระปางถวายเนตร", star: "ดาวอาทิตย์ ดาวแห่งผู้นำและเกียรติยศ ใจถึง รับผิดชอบสูง",
+    recs: [["บารมีและอำนาจนำ", "หนุนความเป็นผู้นำที่มีอยู่ให้คนยอมรับ เหมาะคนคุมงาน คุมทีม"], ["คุ้มครองป้องกัน", "คนเด่นย่อมมีทั้งคนรักและคนอิจฉา มีของคุ้มกันไว้ เดินหน้าได้สบายใจ"]],
+    stones: [["การ์เนต", "#9e3039"], ["คาร์เนเลียน", "#d0663a"], ["ซันสโตน", "#e8955c"]] },
+  { buddha: "พระปางห้ามญาติ", star: "ดาวจันทร์ ดาวแห่งเสน่ห์และจิตใจ ละเอียดอ่อน คนเมตตา",
+    recs: [["เมตตามหานิยม", "เสริมเสน่ห์ที่มีติดตัวให้แรงขึ้น เจรจา ค้าขาย ขอความช่วยเหลือ ลื่นไหล"], ["หนุนดวง", "ใจที่อ่อนโยนบางทีก็ไหวตามคนอื่นง่าย ของหนุนดวงช่วยให้ใจนิ่ง มีหลักยึด"]],
+    stones: [["มูนสโตน", "#e8e3d8"], ["ซิทริน", "#e6c34a"], ["ไข่มุก", "#f1ece2"]] },
+  { buddha: "พระปางไสยาสน์", star: "ดาวอังคาร ดาวนักสู้ กล้าลุย ไม่ถอยง่าย ๆ",
+    recs: [["คุ้มครองป้องกัน", "สายลุยต้องมีเกราะ ของคุ้มครองคือคู่กายคนเกิดวันอังคารตามตำรา"], ["บารมีและอำนาจนำ", "แปลงความกล้าเป็นบารมี ให้คนเกรงใจแบบนับถือ ไม่ใช่แค่เกรงกลัว"]],
+    stones: [["โรสควอตซ์", "#e8a8bf"], ["อเมทิสต์", "#8a63b8"], ["โรโดไนต์", "#c66a80"]] },
+  { buddha: "พระปางอุ้มบาตร", star: "ดาวพุธ ดาวแห่งการเจรจาและค้าขาย หัวไว ปรับตัวเก่ง",
+    recs: [["โชคลาภและการเปิดทาง", "คนพุธจังหวะดีอยู่แล้ว ของเปิดทางช่วยให้โอกาสวิ่งเข้าถี่ขึ้น"], ["เมตตามหานิยม", "เสริมปากเสียงที่เป็นทุนเดิม พูดอะไรคนอยากฟัง ค้าขายยิ่งขึ้น"]],
+    stones: [["หยก", "#4c9e6b"], ["กรีนอะเวนจูรีน", "#6db98a"], ["เพอริดอท", "#a8c862"]] },
+  { buddha: "พระปางนาคปรก", star: "ดาวเสาร์ ดาวแห่งความอดทนและความหนักแน่น ยิ่งนาน ยิ่งแกร่ง",
+    recs: [["คุ้มครองป้องกัน", "นาคปรกคุ้มคนเกิดวันเสาร์โดยตรงตามตำรา กันเรื่องหนักให้ผ่านเบา"], ["หนุนดวง", "ช่วงไหนรู้สึกฝืด ของหนุนดวงช่วยพยุงจังหวะให้เดินต่อได้ไม่สะดุด"]],
+    stones: [["อเมทิสต์", "#8a63b8"], ["ออนิกซ์", "#42403c"], ["ออบซิเดียน", "#35333a"]] },
+  { buddha: "พระปางสมาธิ", star: "ดาวพฤหัสบดี ดาวครู ปัญญาดี มีหลักคิด คนชอบขอคำปรึกษา",
+    recs: [["บารมีและอำนาจนำ", "สายครูบาอาจารย์เข้าทางที่สุด เสริมความน่าเชื่อถือให้คำพูดมีน้ำหนัก"], ["หนุนดวง", "ของสายครูช่วยเปิดปัญญา ตัดสินใจเรื่องใหญ่ได้คมขึ้น"]],
+    stones: [["ซิทริน", "#e6c34a"], ["ไทเกอร์อาย", "#b07a3c"], ["แอมเบอร์", "#d89440"]] },
+  { buddha: "พระปางป่าเลไลยก์", star: "ดาวราหู ดาวแห่งการพลิกผัน ชีวิตมีจังหวะหักมุม แต่พลิกเป็นโอกาสได้เสมอ",
+    recs: [["หนุนดวง", "คนราหูตำราให้เน้นของหนุนดวงแก้ดวงเป็นหลัก ให้จังหวะพลิกไปทางบวก"], ["คุ้มครองป้องกัน", "ช่วงดวงแกว่ง มีของคุ้มไว้ก่อน อุ่นใจกว่า"]],
+    stones: [["สโมกกี้ควอตซ์", "#7a6a58"], ["ลาบราดอไรต์", "#5b7a86"], ["ออบซิเดียน", "#35333a"]] },
+  { buddha: "พระปางรำพึง", star: "ดาวศุกร์ ดาวแห่งโชคทรัพย์และศิลปะ มีรสนิยม เจ้าเสน่ห์เงียบ ๆ",
+    recs: [["โชคลาภและการเปิดทาง", "ดาวศุกร์คือดาวการเงิน ของสายโชคลาภยิ่งเสริมทางทรัพย์ให้ไหลลื่น"], ["เมตตามหานิยม", "บุคลิกละมุนอยู่แล้ว เติมเมตตาอีกนิด ใครเจอก็เอ็นดู"]],
+    stones: [["อความารีน", "#7ec4d8"], ["ลาพิสลาซูลี", "#3f6bb5"], ["บลูเลซอาเกต", "#a8cede"]] },
+];
+
+/** ราหู has no JS weekday — its own color row (ตำราพุธกลางคืน). */
+const RAHU_COLORS = { good: [["สีม่วงเข้ม", "#5b4a86"], ["สีเทาควัน", "#8b8b95"]], ban: { name: "สีเหลืองทอง", hex: "#e6c34a" } };
+
+liffRouter.get("/api/liff/match", async (req, res) => {
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
+  try {
+    let birthdate = null, birthTime = null;
+    try {
+      const { data } = await supabase
+        .from("liff_profiles")
+        .select("birthdate,birth_time")
+        .eq("line_user_id", userId)
+        .maybeSingle();
+      birthdate = data?.birthdate || null;
+      birthTime = data?.birth_time || null;
+    } catch {}
+    const bdIso = await resolveBirthdateIso(userId, birthdate);
+    const bIdx = bdIso ? birthCircleIndex(bdIso, birthTime) : null;
+    if (bIdx == null) return res.json({ ok: true, needsBirthdate: true });
+
+    const g = MATCH_GUIDE[bIdx];
+    const wd = CIRCLE_TO_WEEKDAY[bIdx];
+    const colors = wd >= 0 ? DAY_COLORS[wd] : RAHU_COLORS;
+    // ตำแหน่งทักษาจากวันเกิด: เดช +2, ศรี +3, มนตรี +6, กาลกิณี +7 รอบวง
+    const days = {
+      det: circleDayLabel((bIdx + 2) % 8),
+      sri: circleDayLabel((bIdx + 3) % 8),
+      montri: circleDayLabel((bIdx + 6) % 8),
+      kala: circleDayLabel((bIdx + 7) % 8),
+    };
+
+    let fromScans = null;
+    try {
+      const rows = await listScanResultsV2PayloadRowsForLineUser(userId, 150);
+      const agg = aggregateScanAxes(rows);
+      if (agg.scanned > 0 && agg.bestAxis) {
+        fromScans = {
+          scanned: agg.scanned,
+          have: agg.bestAxis.label,
+          boost: agg.weakAxis && agg.weakAxis.label !== agg.bestAxis.label ? agg.weakAxis.label : null,
+        };
+      }
+    } catch {}
+
+    res.json({
+      ok: true,
+      birthDay: circleDayLabel(bIdx),
+      buddha: g.buddha,
+      star: g.star,
+      recs: g.recs.map(([t, d]) => ({ t, d })),
+      stones: g.stones.map(([n, hex]) => ({ n, hex })),
+      goodColors: colors.good.map(([name, hex]) => ({ name, hex })),
+      banColor: colors.ban,
+      days,
+      luckyNum: DAY_NUMBER[TAKSA_CIRCLE[bIdx]],
+      fromScans,
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ event: "LIFF_MATCH_ERROR", message: String(e?.message || e).slice(0, 200) }));
+    res.status(500).json({ ok: false, error: "match_error" });
+  }
+});
+
 /* ---------------- profile API ---------------- */
 
 const PROFILE_FIELDS = [
@@ -964,7 +1146,62 @@ function buildLiffHtml(liffId) {
   .med3{background:linear-gradient(150deg,#eae4f8,#c3b5e4)}
   .med3 svg{stroke:#65559f}
   .med3 svg [fill]{fill:#65559f}
+  .med4{background:linear-gradient(150deg,#e4eef4,#aecbdd)}
+  .med4 svg{stroke:#3f6b8a}
+  .med4 svg [fill]{fill:#3f6b8a}
   .row .rt{font-weight:800;font-size:1.13rem;color:var(--ink)}
+  .freechip{font-style:normal;font-size:.62rem;font-weight:800;color:#3e7d55;background:#e4f2e9;border:1px solid #bcdcc8;
+    border-radius:99px;padding:2px 8px;vertical-align:2px;margin-left:4px}
+  /* ---- scan-first hero card ---- */
+  .stat{background:var(--card);border:1px solid var(--line-gold);border-radius:22px;padding:18px 18px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .stat .k{font-size:.86rem;color:var(--sub);font-weight:700}
+  .stgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}
+  .stc{background:linear-gradient(165deg,#fdfaf3,#faf4e6);border:1px solid var(--line-gold);border-radius:15px;padding:9px 12px 8px}
+  .stc small{display:block;font-size:.7rem;color:var(--sub);font-weight:600}
+  .stv{display:flex;align-items:baseline;gap:4px;margin-top:1px}
+  .stc b{font-size:1.65rem;font-weight:800;color:var(--gold-deep);line-height:1.15}
+  .stc b.staxis{font-size:1.12rem;color:var(--ink);line-height:1.3}
+  .stc i{font-style:normal;font-size:.72rem;color:var(--faint);font-weight:600}
+  .stbtns{display:flex;gap:9px;margin-top:13px}
+  .stgo{flex:1.6;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(165deg,#e3c98f,#c9a35c 60%,#b08a40);
+    color:#fff;font-weight:800;font-size:1.08rem;border:none;border-radius:15px;padding:13px 10px;box-shadow:0 8px 18px -8px rgba(165,129,58,.55)}
+  .sttop{flex:1;background:#fff;border:1.5px solid var(--line-gold);color:var(--gold-deep);font-weight:800;font-size:1rem;border-radius:15px;padding:13px 8px}
+  /* ---- daily strip (collapsed ดวงวันนี้) ---- */
+  .dstrip{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;
+    background:linear-gradient(165deg,#ffffff,#fdf9f0);border:1px solid var(--line-gold);border-radius:17px;padding:12px 15px;box-shadow:var(--shadow)}
+  .dstrip .dsl{display:flex;align-items:baseline;gap:6px;min-width:0}
+  .dstrip .dsk{font-size:.84rem;color:var(--sub);font-weight:700;flex:0 0 auto}
+  .dstrip b{font-size:1.5rem;font-weight:800;color:var(--gold-deep)}
+  .dstrip .dsper{font-size:.72rem;color:var(--faint);font-weight:600}
+  .dstrip .dsr{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--sub);font-weight:600;flex:0 0 auto}
+  .dstrip .dsn b{font-size:.95rem;color:var(--ink)}
+  .dstrip .cdot{width:11px;height:11px}
+  .dschev{color:var(--faint);font-size:.8rem;transition:transform .25s}
+  .dstrip.open .dschev{transform:rotate(180deg)}
+  /* ---- match by destiny page ---- */
+  .mtcard{background:var(--card);border:1px solid var(--line);border-radius:19px;padding:15px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .mthero{border-color:var(--line-gold);background:linear-gradient(170deg,#fffdf7,#faf3e3)}
+  .mtkick{display:block;font-size:.78rem;color:var(--sub);font-weight:600}
+  .mtkick b{color:var(--gold-deep)}
+  .mtbuddha{font-size:1.5rem;font-weight:800;color:var(--ink);margin-top:5px}
+  .mtstar{font-size:.9rem;color:var(--sub);line-height:1.65;margin:7px 0 2px}
+  .mtrec{background:linear-gradient(165deg,#ffffff,#fdf9f0);border:1px solid var(--line-gold);border-radius:17px;padding:13px 15px}
+  .mtrec .t{font-weight:800;font-size:1.05rem;color:var(--gold-deep)}
+  .mtrec .d{font-size:.88rem;color:var(--sub);line-height:1.6;margin-top:3px}
+  .mtstones{display:flex;flex-wrap:wrap;gap:8px}
+  .mtstone{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line-gold);border-radius:99px;
+    padding:8px 14px;font-size:.9rem;font-weight:700;color:var(--ink)}
+  .mtstone i{width:13px;height:13px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
+  .mtcolors{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .mtcolor{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:7px 13px;font-size:.86rem;font-weight:700}
+  .mtcolor i{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
+  .mtban{margin-top:9px;font-size:.84rem;color:var(--sub);display:flex;align-items:center;gap:6px}
+  .mtban .cdot{width:11px;height:11px}
+  .mtdays{display:grid;grid-template-columns:1fr;gap:7px;margin-top:8px;font-size:.9rem;color:var(--sub)}
+  .mtdays b{color:var(--ink)}
+  .mtdays .mtkala b{color:#b0642f}
+  .mtfs{border-color:var(--line-gold);background:linear-gradient(170deg,#fffdf7,#faf3e3);font-size:.92rem;color:var(--ink);line-height:1.7}
+  .mtfs b{color:var(--gold-deep)}
   .row .en{display:block;font-size:.6rem;color:var(--gold-deep);letter-spacing:.12em;font-weight:700;margin-top:1px}
   .row .rd{font-size:.88rem;color:var(--sub);margin-top:2px;line-height:1.5}
   /* bottom nav (mockup v6) */
@@ -1234,7 +1471,29 @@ function buildLiffHtml(liffId) {
       <div class="ds">อาจารย์อยู่ตรงนี้ เป็นพลังบวกให้คุณทุกวัน</div>
     </div>
 
-    <div class="score">
+    <!-- scan-first hero: คลังพลังของคุณ -->
+    <div class="stat">
+      <div class="k">คลังพลังของคุณ</div>
+      <div class="stgrid">
+        <div class="stc"><small>สแกนแล้ว</small><span class="stv"><b class="serif" id="st-count">–</b><i>ชิ้น</i></span></div>
+        <div class="stc"><small>สิทธิ์เหลือ</small><span class="stv"><b class="serif" id="st-left">–</b><i>ครั้ง</i></span></div>
+        <div class="stc"><small>คะแนนสูงสุด</small><span class="stv"><b class="serif" id="st-top">–</b><i>/10</i></span></div>
+        <div class="stc"><small>พลังเด่นสุด</small><span class="stv"><b class="staxis" id="st-axis">–</b></span></div>
+      </div>
+      <div class="stbtns">
+        <button class="stgo" id="btn-scan"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>สแกนเลย</button>
+        <button class="sttop" id="btn-topup">＋ เติมสิทธิ์</button>
+      </div>
+      <span class="fx f1">✦</span><span class="fx f3">✦</span>
+    </div>
+
+    <!-- ดวงวันนี้: แถบย่อ กดเพื่อกางการ์ดเต็ม -->
+    <button class="dstrip" id="dstrip" aria-expanded="false">
+      <span class="dsl"><span class="dsk">ดวงวันนี้</span><b class="serif" id="ds-num">–</b><span class="dsper">/100</span><span class="delta hidden" id="ds-delta"></span></span>
+      <span class="dsr"><span class="dsn">✦ <b id="ds-lucky">–</b></span><i class="cdot" id="ds-cdot"></i><span id="ds-color">–</span><span class="dschev" id="ds-chev">▾</span></span>
+    </button>
+
+    <div class="score hidden" id="scorecard">
       <div class="k">ดวงวันนี้ของคุณ<small id="s-date"></small></div>
       <div class="mid">
         <span class="num serif" id="s-num">–</span><span class="per serif">/100</span>
@@ -1269,10 +1528,10 @@ function buildLiffHtml(liffId) {
 
     <div class="sect">วันนี้ให้อาจารย์ช่วยเรื่องไหนดี</div>
     <div class="rows">
-      <button class="row" data-say="สแกนพระ"><span class="med med1"><svg viewBox="0 0 24 24"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><path d="M12 8.2c-1.9 0-3 1.5-3 3.3 0 2 1.5 3.3 3 4.8 1.5-1.5 3-2.8 3-4.8 0-1.8-1.1-3.3-3-3.3z"/><circle cx="12" cy="11.4" r=".9" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">สแกนพระ เครื่องราง</span><span class="en">AMULET SCAN</span><span class="rd">อ่านพลังได้ทั้ง พระ เครื่องราง หิน กำไล</span></span><span class="chev">›</span></button>
+      <button class="row" id="row-match"><span class="med med1"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3.6"/><circle cx="12" cy="12" r="1" fill="#a5813a" stroke="none"/><path d="M12 1.8v2.7M12 19.5v2.7M1.8 12h2.7M19.5 12h2.7"/></svg></span><span><span class="rt">หาเครื่องรางที่เข้ากับดวง</span><span class="en">MATCH BY DESTINY</span><span class="rd">ดูตามวันเกิด สายไหนเสริมดวงคุณ</span></span><span class="chev">›</span></button>
       <button class="row" data-say="ดูฮวงจุ้ยห้อง"><span class="med med2"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10.2V19h12v-8.8"/><path d="M12 12.3v4.4M9.9 14.5h4.2"/><path d="M12 12.3l1.5 2.2-1.5-.6-1.5.6z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ฮวงจุ้ยจากรูป</span><span class="en">FENG SHUI</span><span class="rd">ถ่ายรูปห้อง อาจารย์ดูพลังบ้านให้</span></span><span class="chev">›</span></button>
-      <button class="row" data-say="ถามอาจารย์"><span class="med med3"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/><path d="M12 8.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ถามอาจารย์</span><span class="en">ASK MASTER</span><span class="rd">มีอะไรค้างใจ มาคุยกันได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
-      <button class="row" id="row-pay"><span class="med med1"><svg viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="12.5" rx="2.4"/><path d="M3.5 10h17"/><path d="M7 14.8h4"/><circle cx="16.8" cy="14.8" r="1.1" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">เติมสิทธิ์สแกน</span><span class="en">TOP UP</span><span class="rd">เลือกแพ็กเกจ โอน แนบสลิป จบในหน้าเดียว</span></span><span class="chev">›</span></button>
+      <button class="row" id="row-monthly"><span class="med med4"><svg viewBox="0 0 24 24"><rect x="8.5" y="4.5" width="8" height="12.5" rx="1.6"/><path d="M6.2 6.8l-2.4 1 4.6 10.8 1.9-.8" opacity=".75"/><path d="M17.8 6.8l2.4 1-4.6 10.8-1.9-.8" opacity=".75"/><path d="M12.5 8.6l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ดูดวงรายเดือน <em class="freechip">ฟรี</em></span><span class="en">MONTHLY READING</span><span class="rd">ไพ่สามใบ พร้อมกราฟห้าด้านของเดือนนี้</span></span><span class="chev">›</span></button>
+      <button class="row" data-say="ถามอาจารย์"><span class="med med3"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/><path d="M12 8.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">คุยกับอาจารย์</span><span class="en">ASK MASTER</span><span class="rd">มีอะไรค้างใจ มาคุยกันได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
     </div>
     <p class="note">กดบริการแล้วกลับไปคุยกับอาจารย์ในแชตได้เลย</p>
 
@@ -1281,6 +1540,52 @@ function buildLiffHtml(liffId) {
       <button class="n" id="nav-read"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 9l-4.4 3.8L17 19l-5-3.2L7 19l1.4-6.2L4 9l5.8-.6z"/></svg>ดวงเดือน</button>
       <button class="n" id="nav-ask"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/></svg>ถามอาจารย์</button>
       <button class="n" id="nav-me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>ข้อมูลฉัน</button>
+    </div>
+  </div>
+
+  <!-- หาเครื่องรางที่เข้ากับดวง -->
+  <div id="v-match" class="hidden" style="display:flex;flex-direction:column;gap:13px">
+    <div class="rd-top">
+      <button class="rd-back" id="mt-back">‹</button>
+      <span class="rd-title serif">เครื่องรางที่เข้ากับดวง</span>
+    </div>
+    <div id="mt-needbd" class="hidden">
+      <div class="mtcard" style="text-align:center">
+        <p style="margin:4px 0 12px">อาจารย์ขอวันเกิดก่อนนะ จะได้เทียบตำราให้ตรงดวงคุณจริง ๆ</p>
+        <button class="readbtn" id="mt-fill" style="margin:0 auto">กรอกวันเกิด</button>
+      </div>
+    </div>
+    <div id="mt-body" class="hidden" style="display:flex;flex-direction:column;gap:13px">
+      <div class="mtcard mthero">
+        <small class="mtkick">คนเกิดวัน<b id="mt-day">–</b> · เลขประจำวัน <b id="mt-num">–</b></small>
+        <div class="mtbuddha serif" id="mt-buddha">–</div>
+        <p class="mtstar" id="mt-star"></p>
+        <span class="fx f2">✦</span>
+      </div>
+      <div class="sect">สายที่เสริมดวงคุณตามตำรา</div>
+      <div id="mt-recs" style="display:flex;flex-direction:column;gap:10px"></div>
+      <div class="sect">หินที่ถูกโฉลกกับวันเกิด</div>
+      <div class="mtstones" id="mt-stones"></div>
+      <div class="mtcard">
+        <small class="mtkick">สีถูกโฉลก</small>
+        <div class="mtcolors" id="mt-good"></div>
+        <div class="mtban">เลี่ยง <i class="cdot" id="mt-bandot"></i><b id="mt-ban">–</b></div>
+      </div>
+      <div class="mtcard">
+        <small class="mtkick">จังหวะวันตามทักษาของคุณ</small>
+        <div class="mtdays">
+          <span>เริ่มงานใหญ่ วัน<b id="mt-det">–</b></span>
+          <span>เรื่องเงินเสน่ห์ วัน<b id="mt-sri">–</b></span>
+          <span>ขอความช่วยเหลือ วัน<b id="mt-mon">–</b></span>
+          <span class="mtkala">เพลาเรื่องเสี่ยง วัน<b id="mt-kala">–</b></span>
+        </div>
+      </div>
+      <div class="mtcard mtfs hidden" id="mt-fs"></div>
+      <button class="readbtn" id="mt-scan">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>
+        สแกนเช็คชิ้นที่คุณมี
+      </button>
+      <p class="note">คำแนะนำอิงตำราทักษาไทยและความเชื่อวันเกิด ใช้เป็นแนวทางประกอบวิจารณญาณนะครับ</p>
     </div>
   </div>
 
@@ -1406,7 +1711,7 @@ function buildLiffHtml(liffId) {
   var LIFF_ID = ${JSON.stringify(liffId)};
   var state = { userId:"", displayName:"", step:0, sex:"", interest:"", channel:"" };
   function $(id){ return document.getElementById(id); }
-  function show(id){ ["v-load","v-ob","v-home","v-read","v-pay"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); window.scrollTo(0,0); }
+  function show(id){ ["v-load","v-ob","v-home","v-read","v-pay","v-match"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); window.scrollTo(0,0); }
   function showLoadMsg(t){ var lm=$("loadmsg"); if(lm){ lm.style.display="block"; lm.textContent=t; } }
   function pad2(x){ x=String(x); return x.length<2 ? "0"+x : x; }
 
@@ -1569,10 +1874,23 @@ function buildLiffHtml(liffId) {
     else if(d < 0){ el.classList.add("down"); el.textContent = "▼ " + d + " จากเมื่อวาน"; }
     else { el.classList.add("flat"); el.textContent = "เท่าเมื่อวาน"; }
   }
+  /* scan-first hero: คลังพลังของคุณ */
+  function loadStats(){
+    api("/api/liff/stats")
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(!j || !j.ok) return;
+        countUp($("st-count"), j.scanned || 0);
+        $("st-left").textContent = j.remaining != null ? j.remaining : 0;
+        $("st-top").textContent = j.topScore != null ? j.topScore : "–";
+        $("st-axis").textContent = j.bestAxis || "–";
+      }).catch(function(){});
+  }
   function enterHome(nickname){
     $("h-when").textContent = greetWord();
     $("h-name").textContent = "คุณ" + (nickname || state.displayName || "");
     $("s-date").textContent = thDate();
+    loadStats();
     api("/api/liff/daily")
       .then(function(r){ return r.json(); })
       .then(function(j){
@@ -1581,6 +1899,21 @@ function buildLiffHtml(liffId) {
         $("s-grade").textContent = j.grade;
         $("s-msg").textContent = j.message;
         $("s-lucky").textContent = j.luckyNums ? j.luckyNums.join(" และ ") : j.luckyNum;
+        /* ดวงวันนี้: fill the collapsed strip too */
+        $("ds-num").textContent = j.score;
+        $("ds-lucky").textContent = j.luckyNums ? j.luckyNums.join(" ") : j.luckyNum;
+        if(j.luckyColor){
+          $("ds-color").textContent = j.luckyColor.name.replace("สี","");
+          $("ds-cdot").style.background = j.luckyColor.hex;
+        }
+        if(j.history && j.history.length > 1){
+          var dd = j.score - j.history[j.history.length-2].score;
+          var dsd = $("ds-delta");
+          dsd.classList.remove("hidden","up","down","flat");
+          if(dd > 0){ dsd.classList.add("up"); dsd.textContent = "▲+" + dd; }
+          else if(dd < 0){ dsd.classList.add("down"); dsd.textContent = "▼" + dd; }
+          else { dsd.classList.add("flat"); dsd.textContent = "="; }
+        }
         if(j.luckyColor){
           $("s-color").textContent = j.luckyColor.name.replace("สี","");
           $("s-cdot").style.background = j.luckyColor.hex;
@@ -1693,17 +2026,96 @@ function buildLiffHtml(liffId) {
     }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์ถามอาจารย์ได้เลยครับ"); }
   });
 
-  /* service rows → send message into the chat then close */
+  /* service rows / buttons → send message into the chat then close */
+  function sendSay(say){
+    try{
+      liff.sendMessages([{ type:"text", text: say }])
+        .then(function(){ liff.closeWindow(); })
+        .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + " ได้เลยครับ"); liff.closeWindow(); });
+    }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + " ได้เลยครับ"); }
+  }
   Array.prototype.forEach.call(document.querySelectorAll(".row[data-say]"), function(btn){
-    btn.addEventListener("click", function(){
-      var say = btn.getAttribute("data-say");
-      try{
-        liff.sendMessages([{ type:"text", text: say }])
-          .then(function(){ liff.closeWindow(); })
-          .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + " ได้เลยครับ"); liff.closeWindow(); });
-      }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + " ได้เลยครับ"); }
-    });
+    btn.addEventListener("click", function(){ sendSay(btn.getAttribute("data-say")); });
   });
+  $("btn-scan").addEventListener("click", function(){ sendSay("สแกนพระ"); });
+  $("mt-scan").addEventListener("click", function(){ sendSay("สแกนพระ"); });
+  $("row-monthly").addEventListener("click", openReading);
+
+  /* ดวงวันนี้ strip ↔ full card */
+  $("dstrip").addEventListener("click", function(){
+    var card = $("scorecard");
+    var open = card.classList.toggle("hidden") === false;
+    this.classList.toggle("open", open);
+    this.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+
+  /* ---- หาเครื่องรางที่เข้ากับดวง ---- */
+  function renderMatch(j){
+    $("mt-day").textContent = j.birthDay || "–";
+    $("mt-num").textContent = j.luckyNum != null ? j.luckyNum : "–";
+    $("mt-buddha").textContent = j.buddha || "–";
+    $("mt-star").textContent = j.star || "";
+    var recs = $("mt-recs"); recs.innerHTML = "";
+    (j.recs || []).forEach(function(rc){
+      var el = document.createElement("div");
+      el.className = "mtrec";
+      el.innerHTML = '<div class="t">' + rc.t + '</div><div class="d">' + rc.d + '</div>';
+      recs.appendChild(el);
+    });
+    var st = $("mt-stones"); st.innerHTML = "";
+    (j.stones || []).forEach(function(s){
+      var el = document.createElement("span");
+      el.className = "mtstone";
+      el.innerHTML = '<i style="background:' + s.hex + '"></i>' + s.n;
+      st.appendChild(el);
+    });
+    var gc = $("mt-good"); gc.innerHTML = "";
+    (j.goodColors || []).forEach(function(c){
+      var el = document.createElement("span");
+      el.className = "mtcolor";
+      el.innerHTML = '<i style="background:' + c.hex + '"></i>' + c.name.replace("สี","");
+      gc.appendChild(el);
+    });
+    if(j.banColor){
+      $("mt-ban").textContent = j.banColor.name.replace("สี","");
+      $("mt-bandot").style.background = j.banColor.hex;
+    }
+    if(j.days){
+      $("mt-det").textContent = j.days.det || "–";
+      $("mt-sri").textContent = j.days.sri || "–";
+      $("mt-mon").textContent = j.days.montri || "–";
+      $("mt-kala").textContent = j.days.kala || "–";
+    }
+    var fs = $("mt-fs");
+    if(j.fromScans && j.fromScans.have){
+      var t = "จากคลังที่คุณสแกนมา " + j.fromScans.scanned + " ชิ้น พลังที่เด่นอยู่แล้วคือ <b>" + j.fromScans.have + "</b>";
+      if(j.fromScans.boost){ t += " ถ้าอยากให้ดวงกลมขึ้น ลองมองหาชิ้นที่เสริมด้าน <b>" + j.fromScans.boost + "</b> เพิ่มดูนะ"; }
+      fs.innerHTML = t;
+      fs.classList.remove("hidden");
+    } else {
+      fs.classList.add("hidden");
+    }
+  }
+  function openMatch(){
+    api("/api/liff/match")
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(!j || !j.ok){ alert("เปิดไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
+        if(j.needsBirthdate){
+          $("mt-needbd").classList.remove("hidden");
+          $("mt-body").classList.add("hidden");
+        } else {
+          $("mt-needbd").classList.add("hidden");
+          $("mt-body").classList.remove("hidden");
+          renderMatch(j);
+        }
+        show("v-match");
+      })
+      .catch(function(){ alert("เปิดไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
+  }
+  $("row-match").addEventListener("click", openMatch);
+  $("mt-back").addEventListener("click", function(){ show("v-home"); });
+  $("mt-fill").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
 
   /* ---- เติมสิทธิ์สแกน ---- */
   var pay = { pkgs: [], selected: "", qrUrl: "", slipB64: "" };
@@ -1832,7 +2244,7 @@ function buildLiffHtml(liffId) {
       .catch(function(){ btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ระบบตรวจ"; alert("ส่งสลิปไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
   });
 
-  $("row-pay").addEventListener("click", openPay);
+  $("btn-topup").addEventListener("click", openPay);
   $("pay-back").addEventListener("click", function(){ show("v-home"); });
   $("pd-chat").addEventListener("click", function(){
     try{ liff.closeWindow(); }catch(e){ show("v-home"); }
