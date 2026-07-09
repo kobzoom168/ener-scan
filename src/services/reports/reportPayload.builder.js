@@ -576,6 +576,7 @@ export async function buildReportPayloadFromScan(opts) {
     strictSupportedLane: strictSupportedLaneOpt = null,
     stableFeatureSeed: stableFeatureSeedOpt,
     stableFeatureFields: stableFeatureFieldsOpt = null,
+    amuletTypeLabelThai: amuletTypeLabelThaiOpt = "",
   } = opts;
 
   const confidenceDamp = resolveConfidenceDampMultiplier(
@@ -1230,6 +1231,7 @@ export async function buildReportPayloadFromScan(opts) {
           stableFeatureFields: stableFeatureFieldsOpt,
           energyScore,
           mainEnergyLabel: baseMainEnergyLabel,
+          typedLabelThai: amuletTypeLabelThaiOpt,
         })
       : undefined;
 

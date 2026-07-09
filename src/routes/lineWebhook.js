@@ -2220,6 +2220,44 @@ async function finalizeAcceptedImage({
         });
 
     if (!slipVal.proceed) {
+      // ลูกค้าส่ง "รูปพระ" มาระหว่างติดสถานะรอสลิป (เช่น state ค้างข้ามคืน
+      // แต่โควต้าฟรีรีเซ็ตแล้ว) → อย่าบังคับส่งสลิป: ถ้าเป็นวัตถุมงคลและมี
+      // สิทธิ์สแกน + มีวันเกิดในระบบ ให้ไหลเข้าเลนสแกนตามปกติเลย
+      if (String(slipVal.objectCheckResult || "") === "single_supported") {
+        try {
+          const rerouteAccess = await checkScanAccess({ userId });
+          const rerouteBd = rerouteAccess?.allowed
+            ? await getSavedBirthdate(userId).catch(() => null)
+            : null;
+          if (rerouteAccess?.allowed && rerouteBd) {
+            console.log(
+              JSON.stringify({
+                event: "SLIP_STATE_IMAGE_REROUTED_TO_SCAN",
+                userId,
+                paymentId: paymentId ?? null,
+                accessReason: rerouteAccess?.reason ?? null,
+              }),
+            );
+            const ing = await ingestScanImageAsyncV2({
+              userId,
+              lineMessageId: event?.message?.id,
+              imageBuffer,
+              birthdateSnapshot: rerouteBd,
+              accessDecision: rerouteAccess,
+              flowVersion: null,
+            });
+            if (ing?.ok) return;
+          }
+        } catch (rerouteErr) {
+          console.error(
+            JSON.stringify({
+              event: "SLIP_STATE_IMAGE_REROUTE_FAIL",
+              userId,
+              message: String(rerouteErr?.message || rerouteErr).slice(0, 160),
+            }),
+          );
+        }
+      }
       await sendNonScanReply({
         client,
         userId,

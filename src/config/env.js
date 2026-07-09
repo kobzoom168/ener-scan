@@ -934,6 +934,20 @@ export const env = {
   })(),
 
   /**
+   * ระบุประเภทพิมพ์: broad amulet-type classification from a controlled taxonomy
+   * (พระสมเด็จ/พระกริ่ง/เหรียญ/ปิดตา…). Confidence-gated headline upgrade —
+   * below threshold the report keeps the generic "พระ / เครื่องราง".
+   */
+  AMULET_TYPE_CLASSIFY_ENABLED:
+    String(process.env.AMULET_TYPE_CLASSIFY_ENABLED ?? "true").trim().toLowerCase() !== "false",
+  AMULET_TYPE_CLASSIFY_MODEL:
+    String(process.env.AMULET_TYPE_CLASSIFY_MODEL || "gpt-4.1-mini").trim() || "gpt-4.1-mini",
+  AMULET_TYPE_MIN_CONFIDENCE: (() => {
+    const n = Number(process.env.AMULET_TYPE_MIN_CONFIDENCE);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.75;
+  })(),
+
+  /**
    * Phase 2F: same-object verifier agent. When on, embedding NN is used only as a coarse RECALL
    * filter (loose threshold below) and a vision LLM looks at the new photo + each candidate's stored
    * image to decide "same physical object across angle/rotation/flip/lighting?". Reuse happens only

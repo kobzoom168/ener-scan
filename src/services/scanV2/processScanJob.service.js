@@ -43,6 +43,7 @@ import { tryCrossAccountExactBaselineReusePhase2A } from "./tryCrossAccountExact
 import { tryCrossAccountPhashBaselineReusePhase2C } from "./tryCrossAccountPhashBaselineReusePhase2C.service.js";
 import { tryCrossAccountEmbeddingBaselineReuse } from "./tryCrossAccountEmbeddingBaselineReuse.service.js";
 import { tryVisionReidBaselineReuse } from "./tryVisionReidBaselineReuse.service.js";
+import { classifyAmuletType } from "../../amulet/amuletTypeClassify.service.js";
 import { extractStableVisualFeatures } from "../stableFeatureExtract.service.js";
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
@@ -546,7 +547,11 @@ export async function processScanJob(workerId, jobRow) {
     }
   }
 
+  /** ระบุประเภทพิมพ์ (พระสมเด็จ/พระกริ่ง/เหรียญ…): runs in parallel with the deep
+      scan so it adds no latency; null = keep generic headline. */
+  let amuletTypeLabelThai = "";
   if (!baselineCrossAccountReuse) {
+    const typeClassifyPromise = classifyAmuletType({ imageBase64 }).catch(() => null);
     try {
       scanOut = await runDeepScan({
         imageBuffer,
@@ -562,6 +567,25 @@ export async function processScanJob(workerId, jobRow) {
         workerId,
       );
       return;
+    }
+    try {
+      const typed = await typeClassifyPromise;
+      if (typed?.labelThai) {
+        amuletTypeLabelThai = typed.labelThai;
+        console.log(
+          JSON.stringify({
+            event: "AMULET_TYPE_CLASSIFIED",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(jobId),
+            typeKey: typed.typeKey,
+            labelThai: typed.labelThai,
+            confidence: Number(typed.confidence).toFixed(2),
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+      }
+    } catch {
+      /* keep generic headline */
     }
   }
 
@@ -988,6 +1012,7 @@ export async function processScanJob(workerId, jobRow) {
           strictSupportedLane,
           stableFeatureSeed,
           stableFeatureFields,
+          amuletTypeLabelThai,
         });
       }
     } else {
@@ -1020,6 +1045,7 @@ export async function processScanJob(workerId, jobRow) {
       strictSupportedLane,
       stableFeatureSeed,
       stableFeatureFields,
+      amuletTypeLabelThai,
     });
     }
 
