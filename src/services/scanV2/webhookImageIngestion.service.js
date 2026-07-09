@@ -15,7 +15,7 @@ import {
   OUTBOUND_PRIORITY,
 } from "../../stores/scanV2/outboundPriority.js";
 import { mapAccessDecisionToSource } from "./mapAccessSource.js";
-import { tryDedupeOnce, clearDedupeKey } from "../../redis/scanV2Redis.js";
+import { tryDedupeOnce, clearDedupeKey, incrementCounterWithTtl } from "../../redis/scanV2Redis.js";
 import {
   scanV2TraceTs,
   lineUserIdPrefix8,
@@ -41,7 +41,11 @@ function pickPreScanAckText(seedStr) {
 
 /** กติกา 1 ชิ้นต่อ 1 รูป: extra images while a scan is in flight are held (no scan, no quota). */
 const MULTI_IMAGE_WAIT_TEXT =
-  "อาจารย์ขอดูทีละ 1 รูปนะครับ 🙏\nรูปแรกกำลังเพ่งพลังให้อยู่ เดี๋ยวผลออกแล้วค่อยส่งชิ้นถัดไปนะครับ\nถ้าชิ้นเดียวกันมีหลายมุม เลือกมุมที่ชัดสุดรูปเดียวพอครับ";
+  "อาจารย์ขอดูทีละ 1 รูปนะ\nรูปแรกกำลังเพ่งอยู่ เดี๋ยวผลออกแล้วค่อยส่งชิ้นถัดไป\nถ้าชิ้นเดียวกันหลายมุม เลือกมุมที่ชัดสุดรูปเดียวพอ";
+
+/** ครั้งที่ 2+ ภายใน 6 ชม. → ดุ. */
+const MULTI_IMAGE_WAIT_TEXT_STERN =
+  "อาจารย์บอกแล้วนะ ให้ส่งทีละ 1 รูป\nส่งพร้อมกันหลายรูปแบบนี้อาจารย์ไม่ดูให้ รอผลชิ้นแรกเสร็จก่อน แล้วค่อยส่งชิ้นถัดไปทีละรูป";
 
 /** รูปตามมาในหน้าต่างหน่วง: แนบเข้าชุดเดียวกัน อาจารย์ดูจากรูปแรกเป็นหลัก */
 const DEBOUNCE_ATTACHED_TEXT =
@@ -236,12 +240,16 @@ export async function ingestScanImageAsyncV2({
       120,
     );
     if (noticeFirst) {
+      let strikes = 1;
+      try {
+        strikes = await incrementCounterWithTtl(`scan_v2:multi_img_strikes:${lineUserId}`, 21600);
+      } catch {}
       try {
         await insertOutboundMessage({
           line_user_id: lineUserId,
           kind: "pre_scan_ack",
           priority: OUTBOUND_PRIORITY.pre_scan_ack,
-          payload_json: { text: MULTI_IMAGE_WAIT_TEXT },
+          payload_json: { text: strikes >= 2 ? MULTI_IMAGE_WAIT_TEXT_STERN : MULTI_IMAGE_WAIT_TEXT },
           status: "queued",
         });
       } catch (noticeErr) {
