@@ -6,6 +6,7 @@ import {
 } from "../../../integrations/gemini/geminiFlash.api.js";
 import { GEMINI_CONSULT_SYSTEM, buildConsultUserPrompt } from "./geminiConsultPrompt.js";
 import { buildScanHistoryContext } from "./recentScanContext.util.js";
+import { buildCustomerFactsContext } from "./customerFactsContext.util.js";
 
 /**
  * Answer an amulet/crystal KNOWLEDGE question as อาจารย์ Ener (grounded + guarded).
@@ -20,14 +21,16 @@ export async function runGeminiConsult(p) {
   if (!isGeminiConfigured()) return null;
 
   // Phase B: best-effort personalization from the user's own scan history
-  // (multiple pieces, so it can compare "องค์ไหนแรงสุด/ดีสุด" + link the report).
+  // (multiple pieces, so it can compare "องค์ไหนแรงสุด/ดีสุด" + link the report)
+  // + real account facts (birthdate on file, free/paid quota) so the model
+  // never re-asks known data or guesses service rules.
   let recentScan = null;
+  let customerFacts = null;
   if (p.userId) {
-    try {
-      recentScan = await buildScanHistoryContext(p.userId, 6);
-    } catch {
-      recentScan = null;
-    }
+    [recentScan, customerFacts] = await Promise.all([
+      buildScanHistoryContext(p.userId, 6).catch(() => null),
+      buildCustomerFactsContext(p.userId).catch(() => null),
+    ]);
   }
 
   const model = getGeminiFlashModel({
@@ -43,6 +46,7 @@ export async function runGeminiConsult(p) {
     userText: p.userText,
     conversationHistory: p.conversationHistory,
     recentScan,
+    customerFacts,
   });
 
   try {
