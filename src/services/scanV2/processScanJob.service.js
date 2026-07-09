@@ -44,6 +44,7 @@ import { tryCrossAccountPhashBaselineReusePhase2C } from "./tryCrossAccountPhash
 import { tryCrossAccountEmbeddingBaselineReuse } from "./tryCrossAccountEmbeddingBaselineReuse.service.js";
 import { tryVisionReidBaselineReuse } from "./tryVisionReidBaselineReuse.service.js";
 import { classifyAmuletType } from "../../amulet/amuletTypeClassify.service.js";
+import { matchAmuletTypeByExamples } from "./amuletTypeExampleMatch.service.js";
 import { extractStableVisualFeatures } from "../stableFeatureExtract.service.js";
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
@@ -551,6 +552,8 @@ export async function processScanJob(workerId, jobRow) {
       scan so it adds no latency; null = keep generic headline. */
   let amuletTypeLabelThai = "";
   if (!baselineCrossAccountReuse) {
+    // คลังพิมพ์พระ (ตัวอย่างที่กบรับรอง) ชนะ LLM เสมอ — ทั้งคู่วิ่งขนานกับ deep scan
+    const typeRefPromise = matchAmuletTypeByExamples({ imageBase64, jobId }).catch(() => null);
     const typeClassifyPromise = classifyAmuletType({ imageBase64 }).catch(() => null);
     try {
       scanOut = await runDeepScan({
@@ -569,8 +572,21 @@ export async function processScanJob(workerId, jobRow) {
       return;
     }
     try {
-      const typed = await typeClassifyPromise;
-      if (typed?.labelThai) {
+      const [refMatch, typed] = await Promise.all([typeRefPromise, typeClassifyPromise]);
+      if (refMatch?.labelThai) {
+        amuletTypeLabelThai = refMatch.labelThai;
+        console.log(
+          JSON.stringify({
+            event: "AMULET_TYPE_FROM_REF_LIBRARY",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(jobId),
+            typeKey: refMatch.typeKey,
+            labelThai: refMatch.labelThai,
+            similarity: Number(refMatch.similarity).toFixed(3),
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+      } else if (typed?.labelThai) {
         amuletTypeLabelThai = typed.labelThai;
         console.log(
           JSON.stringify({
