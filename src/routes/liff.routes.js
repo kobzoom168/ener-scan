@@ -584,16 +584,39 @@ function aggregateScanAxes(rows) {
   return { scanned, topScore, bestAxis, weakAxis };
 }
 
-/** Paid scans remaining (0 when the window has expired). */
+/** สิทธิ์เหลือรวม: แพ็กจ่ายเงิน (ถ้ายังไม่หมดอายุ) + ฟรีที่เหลือของวันนี้. */
 async function getRemainingScans(userId) {
   try {
     const { data } = await supabase
       .from("app_users")
-      .select("paid_remaining_scans,paid_until")
+      .select("id,paid_remaining_scans,paid_until,free_scan_daily_offset,free_scan_offset_date")
       .eq("line_user_id", userId)
       .maybeSingle();
-    const paidOk = data?.paid_until && new Date(data.paid_until).getTime() > Date.now();
-    return paidOk ? Math.max(0, Number(data.paid_remaining_scans) || 0) : 0;
+    if (!data) return 0;
+    const now = new Date();
+    const paidOk = data.paid_until && new Date(data.paid_until).getTime() > now.getTime();
+    const paidLeft = paidOk ? Math.max(0, Number(data.paid_remaining_scans) || 0) : 0;
+
+    // ฟรีรายวัน: quota - จำนวนสแกนวันนี้ (บวก offset ที่ admin ชดเชย) — ตอนแพ็ก
+    // จ่ายเงิน active โควต้าฟรีถูกกันไว้ ไม่โดนนับ
+    const { loadActiveScanOffer } = await import("../services/scanOffer.loader.js");
+    const { countScanResultsTodayForAppUser, getLocalDateKey } = await import(
+      "../stores/paymentAccess.db.js"
+    );
+    const freeQuota = Number(loadActiveScanOffer(now)?.freeQuotaPerDay) || 2;
+    let freeLeft = freeQuota;
+    if (!paidOk) {
+      let used = await countScanResultsTodayForAppUser(String(data.id), now).catch(() => 0);
+      const offsetDate = data.free_scan_offset_date
+        ? String(data.free_scan_offset_date).slice(0, 10)
+        : null;
+      const offsetN = Number(data.free_scan_daily_offset) || 0;
+      if (offsetDate && offsetDate === getLocalDateKey(now) && offsetN > 0) {
+        used = Math.max(0, used - offsetN);
+      }
+      freeLeft = Math.max(0, freeQuota - used);
+    }
+    return paidLeft + freeLeft;
   } catch {
     return 0;
   }
