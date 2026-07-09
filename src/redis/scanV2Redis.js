@@ -159,6 +159,26 @@ export async function tryDedupeOnce(dedupeKey, ttlSec) {
 }
 
 /**
+ * Escalation counter: INCR with TTL set on first hit (e.g. multi-image strikes
+ * — ครั้งแรกเตือนสุภาพ ครั้งถัดไปเตือนดุ). Returns the new count (1 = first).
+ * @param {string} counterKey
+ * @param {number} ttlSec
+ * @returns {Promise<number>}
+ */
+export async function incrementCounterWithTtl(counterKey, ttlSec) {
+  const r = await getScanV2Redis();
+  if (!r) return 1;
+  try {
+    const k = kDedupe(counterKey);
+    const n = await r.incr(k);
+    if (n === 1) await r.expire(k, Math.min(Math.max(Number(ttlSec) || 3600, 60), 86400));
+    return Number(n) || 1;
+  } catch {
+    return 1;
+  }
+}
+
+/**
  * Non-mutating check: is a dedupe/gate key currently set? (e.g. scan in-flight
  * gate — text messages arriving mid-scan get a "รอแป๊บ" reply instead of AI routing.)
  * @param {string} dedupeKey

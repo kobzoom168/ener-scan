@@ -7,6 +7,15 @@
 
 import { sendNonScanReply } from "../nonScanReply.gateway.js";
 import { getMultiImageInRequestReplyCandidates } from "../../utils/webhookText.util.js";
+import { incrementCounterWithTtl } from "../../redis/scanV2Redis.js";
+
+/** ครั้งที่ 2+ ภายใน 6 ชม. → เตือนดุแบบอาจารย์ (ไม่มีไหว้ ไม่มีรบกวน). */
+const STERN_MULTI_IMAGE_TEXT = [
+  "อาจารย์บอกแล้วนะ ให้ส่งทีละ 1 รูป",
+  "ส่งพร้อมกันหลายรูปแบบนี้อาจารย์ไม่ดูให้ รอผลชิ้นแรกเสร็จก่อน แล้วค่อยส่งชิ้นถัดไปทีละรูป",
+].join("\n");
+
+export const MULTI_IMAGE_STRIKE_KEY_PREFIX = "scan_v2:multi_img_strikes:";
 
 /**
  * @typedef {"candidate_window"|"same_webhook_batch"|"burst_window"} MultiImageRejectReason
@@ -58,7 +67,16 @@ export async function sendMultiImageRejectionViaGateway({
   count,
 }) {
   const uid = String(userId || "").trim();
-  const candidates = getMultiImageInRequestReplyCandidates();
+  let strikes = 1;
+  try {
+    strikes = await incrementCounterWithTtl(`${MULTI_IMAGE_STRIKE_KEY_PREFIX}${uid}`, 21600);
+  } catch {
+    strikes = 1;
+  }
+  const candidates =
+    strikes >= 2
+      ? [STERN_MULTI_IMAGE_TEXT, "ทีละ 1 รูปนะ บอกครั้งสุดท้าย รอผลชิ้นแรกก่อนแล้วค่อยส่งต่อ"]
+      : getMultiImageInRequestReplyCandidates();
 
   console.log(
     JSON.stringify({
