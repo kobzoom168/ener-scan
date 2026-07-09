@@ -214,9 +214,13 @@ export async function maybePersistGlobalObjectBaselineAfterScanV2(p) {
       }),
     );
     // Phase 2G: fire-and-forget DINOv2 visual embedding for future re-id recall
+    // + Phase 2: enroll debounce-window extra photos as confirmed angle views
     if (row?.id && thumbnailPath) {
       import("./tryVisionReidBaselineReuse.service.js")
-        .then((m) => m.backfillVisualEmbedding(String(row.id), thumbnailPath))
+        .then(async (m) => {
+          await m.backfillVisualEmbedding(String(row.id), thumbnailPath);
+          await m.enrollDebounceExtrasForBaseline(String(row.id), p.jobId, thumbnailPath);
+        })
         .catch(() => {});
     }
   } catch (err) {

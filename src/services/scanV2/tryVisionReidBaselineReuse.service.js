@@ -15,10 +15,17 @@
 import { env } from "../../config/env.js";
 import { tryCrossAccountEmbeddingBaselineReuse } from "./tryCrossAccountEmbeddingBaselineReuse.service.js";
 import { visionEmbedImage, visionMatchPair } from "./visionSidecar.client.js";
-import { matchGlobalObjectBaselinesByVisualEmbedding, updateGlobalObjectBaselineVisualEmbedding } from "../../stores/scanV2/globalObjectBaselines.db.js";
+import {
+  matchGlobalObjectBaselinesByVisualEmbedding,
+  updateGlobalObjectBaselineVisualEmbedding,
+  findGlobalObjectBaselineByIdWithGroup,
+} from "../../stores/scanV2/globalObjectBaselines.db.js";
 import { verifySameObject } from "./objectSameIdentityVerifier.service.js";
 import { enrollRecognizedAngle } from "./enrollObjectAngle.service.js";
 import { readScanImageFromStorage } from "../../storage/scanUploadStorage.js";
+import { getScanJobById } from "../../stores/scanV2/scanJobs.db.js";
+import { getScanUploadById } from "../../stores/scanV2/scanUploads.db.js";
+import { computeImageDHash } from "../imageDedup/imagePhash.util.js";
 import { scanV2TraceTs, idPrefix8, lineUserIdPrefix8 } from "../../utils/scanV2Trace.util.js";
 
 /** Fetch a baseline thumbnail from object storage as base64 (null on failure). */
@@ -158,6 +165,82 @@ export async function tryVisionReidBaselineReuse(ctx) {
       }),
     );
     return { ok: false };
+  }
+}
+
+/**
+ * Phase 2: enroll the debounce-window extra photos (หน้า-หลัง-ข้าง ที่ลูกค้าส่ง
+ * ตามมาใน 15 วิ) as additional views of the SAME object group — LightGlue must
+ * confirm each extra really is the same piece before it joins the baseline.
+ * Fire-and-forget from maybePersistGlobalObjectBaseline.
+ * @param {string} baselineId
+ * @param {string} jobId
+ * @param {string} thumbnailPath primary view thumbnail (reference image)
+ */
+export async function enrollDebounceExtrasForBaseline(baselineId, jobId, thumbnailPath) {
+  if (!env.VISION_REID_ENABLED) return;
+  try {
+    const job = await getScanJobById(jobId);
+    const extras = Array.isArray(job?.extra_upload_ids) ? job.extra_upload_ids : [];
+    if (!extras.length) return;
+
+    const primaryB64 = await thumbnailToBase64(thumbnailPath);
+    if (!primaryB64) return;
+
+    const matchedRow = await findGlobalObjectBaselineByIdWithGroup(String(baselineId));
+    if (!matchedRow) return;
+
+    for (const uploadId of extras.slice(0, 4)) {
+      try {
+        const up = await getScanUploadById(String(uploadId));
+        if (!up?.storage_path) continue;
+        const buf = await readScanImageFromStorage(up.storage_bucket, up.storage_path);
+        if (!Buffer.isBuffer(buf) || !buf.length) continue;
+
+        const m = await visionMatchPair(primaryB64, buf.toString("base64"));
+        const sameObject = Boolean(m && m.inliers >= env.VISION_REID_INLIERS_ARBITER_MIN);
+        console.log(
+          JSON.stringify({
+            event: "VISION_REID_EXTRA_VIEW_CHECK",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(jobId),
+            uploadIdPrefix: String(uploadId).slice(0, 8),
+            inliers: m ? m.inliers : null,
+            enrolled: sameObject,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+        if (!sameObject) continue;
+
+        let phash = null;
+        try {
+          phash = await computeImageDHash(buf);
+        } catch {}
+        await enrollRecognizedAngle({
+          jobId,
+          matchedRow,
+          imageBuffer: buf,
+          imagePhash: phash,
+          embedding: null,
+          embeddingModel: null,
+          embeddingVersion: null,
+          embeddingDescriptor: null,
+          similarity: 0.9,
+          sourceScanResultV2Id: null,
+        });
+      } catch {
+        /* per-extra best-effort */
+      }
+    }
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: "VISION_REID_EXTRA_ENROLL_FAIL",
+        jobIdPrefix: idPrefix8(jobId),
+        message: String(e?.message || e).slice(0, 160),
+        timestamp: scanV2TraceTs(),
+      }),
+    );
   }
 }
 
