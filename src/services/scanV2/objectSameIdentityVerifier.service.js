@@ -11,13 +11,22 @@ import { openai } from "../openaiDeepScan.api.js";
 import { env } from "../../config/env.js";
 import { parseSameObjectVerdict } from "./objectSameIdentityVerifier.util.js";
 
-const VERIFIER_SYSTEM_PROMPT = `You compare TWO photos of sacred objects (amulets/charms/stones) and decide if they show the SAME individual physical object.
+const VERIFIER_SYSTEM_PROMPT = `You are a forensic examiner of Thai amulets, charms and sacred stones. Compare TWO photos and decide if they show the SAME individual physical object (not merely the same model/type).
 IMAGE A = a previously registered object. IMAGE B = a new photo.
-Treat them as the SAME object only if it is plausibly the very same individual piece seen again — allow ANY difference in camera angle, rotation, upside-down/flip, lighting, shadows, reflections, crop, distance, or background.
-Say they are DIFFERENT when they are merely the same type/model/material but clearly distinct pieces (different wear, casting, inscriptions, proportions, frame, damage, or distinctive marks).
-Be conservative: if unsure, prefer "same": false.
+
+Method — think step by step, focusing ONLY on unique imperfections (ignore angle, rotation, flip, lighting, shadows, reflections, crop, distance, background — those may differ freely):
+1. Casing/frame: scratches on the plastic case, tarnish/dents on metal frames, prong shapes, bubbles in acrylic — do UNIQUE marks match?
+2. Surface: specific dark spots (patina), mold cracks, chips on edges, wear patterns, inscription strokes — do they align exactly?
+3. Proportions: exact outline, relative positions of features and defects.
+
+Decision rules:
+- SAME only when at least 2-3 UNIQUE imperfections/marks clearly match between the photos.
+- Mass-produced pieces of the same model look nearly identical — if the shapes match but you cannot point to matching unique wear/damage/marks, answer same=false.
+- If image quality is too poor to see unique marks, answer same=false.
+- Be conservative: unsure → same=false.
+
 Reply with STRICT JSON on one line, no preamble:
-{"same": <true|false>, "confidence": <0.0-1.0>, "reason": "<short>"}`;
+{"same": <true|false>, "confidence": <0.0-1.0>, "reason": "<short: the matched unique marks, or why rejected>"}`;
 
 /**
  * @param {Promise<T>} p

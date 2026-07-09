@@ -892,6 +892,37 @@ export const env = {
   LLM_CONSULT_MODEL: String(process.env.LLM_CONSULT_MODEL || "").trim(),
 
   /**
+   * Phase 2G: TRUE instance re-id — DINOv2 recall + LightGlue geometric verify
+   * via the vision sidecar (vision-sidecar/). Default off; enable per env.
+   */
+  VISION_REID_ENABLED:
+    String(process.env.VISION_REID_ENABLED ?? "false").trim().toLowerCase() === "true",
+  VISION_SIDECAR_URL: String(process.env.VISION_SIDECAR_URL || "http://host.docker.internal:8077").trim(),
+  VISION_REID_TIMEOUT_MS: (() => {
+    const n = Number(process.env.VISION_REID_TIMEOUT_MS);
+    return Number.isFinite(n) && n >= 1000 ? Math.floor(n) : 15000;
+  })(),
+  /** Loose DINOv2 cosine recall threshold (retrieval only — LightGlue decides). */
+  VISION_REID_RECALL_MIN_SIM: (() => {
+    const n = Number(process.env.VISION_REID_RECALL_MIN_SIM);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.6;
+  })(),
+  /** RANSAC inliers ≥ this → same physical piece (expert band 25-40). */
+  VISION_REID_INLIERS_ACCEPT: (() => {
+    const n = Number(process.env.VISION_REID_INLIERS_ACCEPT);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 25;
+  })(),
+  /** Inliers in [this, accept) → borderline: forensic LLM arbiter decides. */
+  VISION_REID_INLIERS_ARBITER_MIN: (() => {
+    const n = Number(process.env.VISION_REID_INLIERS_ARBITER_MIN);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 12;
+  })(),
+  VISION_REID_MAX_CANDIDATES: (() => {
+    const n = Number(process.env.VISION_REID_MAX_CANDIDATES);
+    return Number.isFinite(n) && n > 0 ? Math.min(12, Math.floor(n)) : 6;
+  })(),
+
+  /**
    * Phase 2F: same-object verifier agent. When on, embedding NN is used only as a coarse RECALL
    * filter (loose threshold below) and a vision LLM looks at the new photo + each candidate's stored
    * image to decide "same physical object across angle/rotation/flip/lighting?". Reuse happens only

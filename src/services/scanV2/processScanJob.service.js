@@ -42,6 +42,7 @@ import { buildReportPayloadFromGlobalBaseline } from "./buildReportPayloadFromGl
 import { tryCrossAccountExactBaselineReusePhase2A } from "./tryCrossAccountExactBaselineReuse.service.js";
 import { tryCrossAccountPhashBaselineReusePhase2C } from "./tryCrossAccountPhashBaselineReusePhase2C.service.js";
 import { tryCrossAccountEmbeddingBaselineReuse } from "./tryCrossAccountEmbeddingBaselineReuse.service.js";
+import { tryVisionReidBaselineReuse } from "./tryVisionReidBaselineReuse.service.js";
 import { extractStableVisualFeatures } from "../stableFeatureExtract.service.js";
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
@@ -470,6 +471,41 @@ export async function processScanJob(workerId, jobRow) {
           jobIdPrefix: idPrefix8(jobId),
           lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
           message: String(reuse2CErr?.message || reuse2CErr).slice(0, 240),
+          timestamp: scanV2TraceTs(),
+        }),
+      );
+    }
+  }
+
+  /** Phase 2G: TRUE instance re-id (DINOv2 + LightGlue) — strongest path, before 2D. */
+  if (!baselineCrossAccountReuse && env.VISION_REID_ENABLED) {
+    try {
+      const reuse2G = await tryVisionReidBaselineReuse({
+        jobId,
+        lineUserId,
+        appUserId: String(appUserId),
+        birthdate,
+        imageBuffer,
+        objectCheck,
+        reportObjectFamily: "sacred_amulet",
+        scanResultIdPrefix: idPrefix8(jobId),
+      });
+      if (reuse2G.ok) {
+        reuseHit = reuse2G;
+        baselineCrossAccountReuse = true;
+        baselineRowForPayload = reuse2G.baselineRow;
+        scanOut = reuse2G.scanOut;
+        stableFeatureSeed = reuse2G.stableFeatureSeed ?? null;
+      }
+    } catch (reuse2GErr) {
+      console.log(
+        JSON.stringify({
+          event: "CROSS_ACCOUNT_BASELINE_FALLBACK_FULL_SCAN",
+          path: "worker-scan",
+          reason: "phase2g_exception",
+          jobIdPrefix: idPrefix8(jobId),
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          message: String(reuse2GErr?.message || reuse2GErr).slice(0, 240),
           timestamp: scanV2TraceTs(),
         }),
       );
