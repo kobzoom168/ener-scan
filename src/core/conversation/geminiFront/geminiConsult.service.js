@@ -7,6 +7,7 @@ import {
 import { GEMINI_CONSULT_SYSTEM, buildConsultUserPrompt } from "./geminiConsultPrompt.js";
 import { buildScanHistoryContext } from "./recentScanContext.util.js";
 import { buildCustomerFactsContext } from "./customerFactsContext.util.js";
+import { buildKbContext } from "./kbRetrieval.util.js";
 
 /**
  * Answer an amulet/crystal KNOWLEDGE question as อาจารย์ Ener (grounded + guarded).
@@ -26,11 +27,16 @@ export async function runGeminiConsult(p) {
   // never re-asks known data or guesses service rules.
   let recentScan = null;
   let customerFacts = null;
+  let kbContext = null;
+  const kbPromise = buildKbContext(p.userText).catch(() => null);
   if (p.userId) {
-    [recentScan, customerFacts] = await Promise.all([
+    [recentScan, customerFacts, kbContext] = await Promise.all([
       buildScanHistoryContext(p.userId, 6).catch(() => null),
       buildCustomerFactsContext(p.userId).catch(() => null),
+      kbPromise,
     ]);
+  } else {
+    kbContext = await kbPromise;
   }
 
   const model = getGeminiFlashModel({
@@ -50,6 +56,7 @@ export async function runGeminiConsult(p) {
     conversationHistory: p.conversationHistory,
     recentScan,
     customerFacts,
+    kbContext,
   });
 
   try {
