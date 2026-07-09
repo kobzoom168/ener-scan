@@ -302,6 +302,7 @@ import {
 
 import { ingestScanImageAsyncV2, scanInFlightKeyForUser } from "../services/scanV2/webhookImageIngestion.service.js";
 import { tryDedupeOnce, isDedupeKeyActive, setValueWithTtl, getValue, clearDedupeKey, incrementCounterWithTtl } from "../redis/scanV2Redis.js";
+import { getUserPaidUntil } from "../stores/paymentAccess.db.js";
 
 import {
   checkGlobalAbuseStatus,
@@ -3269,8 +3270,43 @@ async function handleTextMessage({ client, event, userId, session }) {
     /* best-effort memory */
   }
 
+  // คำหยาบ: เตือนสุภาพ 1 ครั้ง → ครั้งที่สอง แบนเงียบ 24 ชม. (ยกเว้นลูกค้าที่เคยจ่ายเงิน — เตือนอย่างเดียว ไม่แบน)
+  try {
+    const PROFANITY_RE = /(เหี้ย|เชี่ย|สัส|ควย|เย็ด|ส้นตีน|ไอ้สัตว์|อีดอก|กระหรี่|พ่อมึงตาย|แม่มึงตาย)/;
+    if (PROFANITY_RE.test(text)) {
+      const paidBefore = Boolean(await getUserPaidUntil(userId).catch(() => null));
+      const firstOffense = await tryDedupeOnce(`scan_v2:profanity_warned:${userId}`, 86400);
+      if (!firstOffense && !paidBefore) {
+        await setValueWithTtl(`scan_v2:banned:${userId}`, "profanity", 86400);
+        console.log(JSON.stringify({ event: "SHADOW_BAN_SET", userId, reason: "profanity_repeat" }));
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "profanity_ban",
+          semanticKey: "profanity_ban",
+          text: "อาจารย์ขอพักการคุยกับคุณไว้ก่อนนะ วันหลังพร้อมคุยกันดี ๆ ค่อยกลับมา",
+          alternateTexts: ["ขอพักไว้ตรงนี้ก่อนนะ"],
+        });
+        return;
+      }
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "profanity_warn",
+        semanticKey: "profanity_warn",
+        text: "อาจารย์ไม่คุยด้วยคำแบบนี้นะ พูดกันดี ๆ ค่อยว่ากัน",
+        alternateTexts: ["คำแบบนี้อาจารย์ไม่รับนะ พูดดี ๆ ค่อยคุยกัน"],
+      });
+      return;
+    }
+  } catch {
+    /* profanity guard best-effort */
+  }
+
   // ความอดทนอาจารย์: ข้อความกวน (สั้นจุ๋มจิ๋ม/พิมพ์ซ้ำ) นับแต้มใน 30 นาที —
-  // 3-4 แต้ม = ตัดบทสุภาพแบบมีบารมี (ไม่เปลือง AI), 5+ = เงียบ, พิมพ์จริงจัง = รีเซ็ต
+  // 3-4 แต้ม = ตัดบทสุภาพแบบมีบารมี (ไม่เปลือง AI), 5+ = เงียบ, 8+ = แบน 24 ชม. (เว้นลูกค้าเคยจ่าย)
   try {
     const bare = text.replace(/[\s!?.…ๆฯ]+/g, "");
     const isAck = /^(ครับ|คับ|ค่ะ|คะ|จ้า|จ๊ะ|โอเค|ok|okay|ได้|จ่าย|ปลดล็อก|ขอบคุณ|ขอบใจ|555|thank)/i.test(bare);
@@ -3284,6 +3320,14 @@ async function handleTextMessage({ client, event, userId, session }) {
       void clearDedupeKey(`scan_v2:troll:${userId}`);
     } else if (isLowEffort) {
       const troll = await incrementCounterWithTtl(`scan_v2:troll:${userId}`, 1800);
+      if (troll >= 8) {
+        const paidBefore = Boolean(await getUserPaidUntil(userId).catch(() => null));
+        if (!paidBefore) {
+          await setValueWithTtl(`scan_v2:banned:${userId}`, "troll", 86400);
+          console.log(JSON.stringify({ event: "SHADOW_BAN_SET", userId, reason: "troll_strikes", troll }));
+        }
+        return;
+      }
       if (troll >= 5) {
         console.log(JSON.stringify({ event: "TROLL_MUTED", userId, troll }));
         return; // อาจารย์เงียบ — ท่าที่จริงที่สุดและประหยัดสุด
@@ -7046,6 +7090,23 @@ async function handleEvent({ client, event }) {
       messageType: event.message?.type || "no-message-type",
     });
     return;
+  }
+
+  // แบนเงียบ (shadow ban 24 ชม.): คนกวนหนัก/หยาบคายที่ไม่เคยจ่ายเงิน —
+  // ระบบเมินทุก event เงียบ ๆ (LINE ไม่มี API block จริง นี่คือเทียบเท่า)
+  try {
+    if (await isDedupeKeyActive(`scan_v2:banned:${userId}`)) {
+      console.log(
+        JSON.stringify({
+          event: "SHADOW_BANNED_EVENT_IGNORED",
+          userId,
+          messageType: event.message?.type || null,
+        }),
+      );
+      return;
+    }
+  } catch {
+    /* ban check best-effort */
   }
 
   try {
