@@ -22,8 +22,22 @@ import {
   idPrefix8,
 } from "../../utils/scanV2Trace.util.js";
 
-const PRE_SCAN_ACK_TEXT =
-  "✅ รับรูปแล้วครับ\n🔍 อาจารย์กำลังพิจารณาพลังให้อยู่\n✨ เดี๋ยวสรุปผลให้เลยครับ";
+/** ข้อความรับรูป: หมุนเวียนไม่ซ้ำ ไอคอนน้อย (สุ่มตาม message id — คนเดิมส่งหลายครั้งก็ได้คนละแบบ) */
+const PRE_SCAN_ACK_VARIANTS = [
+  "รับรูปแล้วครับ อาจารย์ขอเพ่งดูพลังสักครู่นะครับ",
+  "ถึงมือแล้วครับ กำลังอ่านพลังให้อยู่ รอแป๊บนึงนะครับ",
+  "ได้รูปแล้วนะครับ ขอเวลาอาจารย์เชื่อมพลังดูสักครู่",
+  "รับไว้แล้วครับ กำลังพิจารณาให้อย่างละเอียด เดี๋ยวสรุปผลให้เลย",
+  "เห็นแล้วครับ อาจารย์ขอดูคลื่นพลังของชิ้นนี้ก่อนนะ เดี๋ยวเล่าให้ฟัง",
+  "รับรูปเรียบร้อยครับ 🙏 รอผลแป๊บเดียวนะครับ",
+];
+
+function pickPreScanAckText(seedStr) {
+  let h = 0;
+  const s = String(seedStr || "");
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return PRE_SCAN_ACK_VARIANTS[h % PRE_SCAN_ACK_VARIANTS.length];
+}
 
 /** กติกา 1 ชิ้นต่อ 1 รูป: extra images while a scan is in flight are held (no scan, no quota). */
 const MULTI_IMAGE_WAIT_TEXT =
@@ -350,7 +364,7 @@ export async function ingestScanImageAsyncV2({
     kind: "pre_scan_ack",
     priority: OUTBOUND_PRIORITY.pre_scan_ack,
     related_job_id: jobRow.id,
-    payload_json: { text: PRE_SCAN_ACK_TEXT },
+    payload_json: { text: pickPreScanAckText(mid) },
     status: "queued",
   });
 
