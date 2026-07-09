@@ -48,6 +48,14 @@ import {
   clearDedupeKey,
 } from "../../redis/scanV2Redis.js";
 import { scanInFlightKeyForUser } from "./webhookImageIngestion.service.js";
+import { supabase } from "../../config/supabase.js";
+import {
+  countScanResultsTodayForAppUser,
+  getLocalDateKey,
+} from "../../stores/paymentAccess.db.js";
+import { computePaidActive } from "../scanOfferAccess.resolver.js";
+import { loadActiveScanOffer } from "../scanOffer.loader.js";
+import { getDefaultPackage } from "../scanOffer.packages.js";
 import {
   scanV2TraceTs,
   lineUserIdPrefix8,
@@ -202,6 +210,13 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         await markSent(id);
         releaseScanGate(lineUserId);
         await handleScanResultPostDelivery(msg, payload);
+        // บอกสิทธิ์คงเหลือทันทีหลัง report ถึงมือ (หลัง decrement แล้ว)
+        try {
+          const quotaNotice = await buildRemainingQuotaNoticeText(lineUserId);
+          if (quotaNotice) await pushText(client, lineUserId, quotaNotice);
+        } catch {
+          /* notice is best-effort */
+        }
         console.log(
           JSON.stringify({
             event: "OUTBOUND_SEND_SUCCESS",
@@ -484,6 +499,54 @@ function releaseScanGate(lineUserId) {
 /** Report couldn't be delivered at all (LINE down/lost) — tell the customer to resend. */
 const REPORT_LOST_RESEND_TEXT =
   "ขออภัยครับ ผลอ่านพลังส่งเข้าแชทไม่สำเร็จ 🙏\nรบกวนส่งรูปเดิมมาใหม่อีกครั้งนะครับ เดี๋ยวอาจารย์ดูให้ทันที";
+
+/**
+ * บอกสิทธิ์คงเหลือทันทีหลัง report ถึงมือ — และถ้าเพิ่งใช้ครั้งสุดท้ายของวัน
+ * บอกตรง ๆ ว่าหมดแล้ว พรุ่งนี้มาต่อ (หรือเปิดแพ็กถ้าอยากดูต่อเลย).
+ * Runs AFTER handleScanResultPostDelivery so the paid decrement is reflected.
+ * @param {string} lineUserId
+ * @returns {Promise<string|null>}
+ */
+async function buildRemainingQuotaNoticeText(lineUserId) {
+  try {
+    const { data: u } = await supabase
+      .from("app_users")
+      .select("id,paid_until,paid_remaining_scans,free_scan_daily_offset,free_scan_offset_date")
+      .eq("line_user_id", String(lineUserId || "").trim())
+      .maybeSingle();
+    if (!u?.id) return null;
+    const now = new Date();
+    const paidRemaining = Number(u.paid_remaining_scans) || 0;
+    if (computePaidActive(u.paid_until, paidRemaining, now)) {
+      return `เหลือสิทธิ์สแกนอีก ${paidRemaining} ครั้งครับ ส่งชิ้นต่อไปมาได้เลย`;
+    }
+    const offer = loadActiveScanOffer(now);
+    const freeQuota = Number(offer?.freeQuotaPerDay) || 2;
+    let used = await countScanResultsTodayForAppUser(String(u.id), now).catch(() => 0);
+    const offsetDate = u.free_scan_offset_date
+      ? String(u.free_scan_offset_date).slice(0, 10)
+      : null;
+    const offsetN = Number(u.free_scan_daily_offset) || 0;
+    if (offsetDate && offsetDate === getLocalDateKey(now) && offsetN > 0) {
+      used = Math.max(0, used - offsetN);
+    }
+    const left = Math.max(0, freeQuota - used);
+    if (left > 0) {
+      return `วันนี้ยังสแกนฟรีได้อีก ${left} ครั้งครับ ส่งชิ้นต่อไปมาได้เลย`;
+    }
+    const pkg = getDefaultPackage(offer);
+    return [
+      `สิทธิ์สแกนวันนี้ครบแล้วนะครับ พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
+      pkg
+        ? `ถ้าอยากดูต่อวันนี้เลย มีแพ็ก ${pkg.priceThb} บาท สแกนได้อีก ${pkg.scanCount} ครั้ง พิมพ์ว่า จ่าย มาได้เลยครับ`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  } catch {
+    return null;
+  }
+}
 
 async function markSent(id) {
   await updateOutboundMessage(id, {
