@@ -1726,6 +1726,13 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
         limit: 100,
         q,
       });
+      const TH_M_SHORT = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+      const fmtBirth = (iso) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+        if (!m) return "";
+        return `${Number(m[3])} ${TH_M_SHORT[Number(m[2]) - 1]} ${Number(m[1]) + 543}`;
+      };
+      const dim = (t) => `<span style="color:var(--muted);">${t}</span>`;
       const rowsHtml = users
         .map((u, i) => {
           const uid = escapeHtml(u.lineUserId);
@@ -1734,11 +1741,31 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
               ? `<strong>${u.paidRemainingScans}</strong> ครั้ง`
               : `<span style="color:var(--muted);">0</span>`;
           const untilTxt = u.paidUntil ? fmtDt(u.paidUntil) : "—";
+          const lp = u.liff;
+          const nameTd = lp && (lp.nickname || lp.displayName)
+            ? `<strong>${escapeHtml(lp.nickname || lp.displayName)}</strong>${lp.gender ? `<br><small style="color:var(--muted);">${escapeHtml(lp.gender)}</small>` : ""}`
+            : dim("—");
+          const birthTd = lp && lp.birthdate
+            ? `${escapeHtml(fmtBirth(lp.birthdate))}${lp.birthTime ? `<br><small style="color:var(--muted);">${escapeHtml(lp.birthTime)} น.</small>` : ""}`
+            : dim("—");
+          const phoneTd = lp && lp.phone
+            ? `<a href="tel:${escapeHtml(lp.phone)}" style="color:inherit;">${escapeHtml(lp.phone)}</a> ${copyBtnHtml("เบอร์", lp.phone)}`
+            : dim("—");
+          const srcTd = lp && (lp.channel || lp.interest)
+            ? `${lp.channel ? escapeHtml(lp.channel) : dim("—")}${lp.interest ? `<br><small style="color:var(--muted);">สนใจ: ${escapeHtml(lp.interest)}</small>` : ""}`
+            : dim("—");
+          const lastScanTd = u.lastScanAt
+            ? fmtDt(u.lastScanAt)
+            : (lp ? `<span style="color:var(--accent,#e6c34a);font-size:0.8rem;">ลงทะเบียน LIFF ยังไม่สแกน</span>` : "—");
           return `<tr>
             <td>${i + 1}</td>
             <td style="word-break:break-all;font-family:monospace;font-size:0.82rem;">${uid} ${copyBtnHtml("LINE", u.lineUserId)}</td>
             <td><input type="text" class="note-in" data-uid="${uid}" data-orig="${escapeHtml(u.adminNote || "")}" value="${escapeHtml(u.adminNote || "")}" maxlength="60" placeholder="เช่น admin, test" style="width:110px;padding:6px 8px;border-radius:8px;border:1px solid var(--line,#444);background:transparent;color:var(--accent,#e6c34a);font-size:0.82rem;font-weight:700;" /></td>
-            <td>${u.lastScanAt ? fmtDt(u.lastScanAt) : "—"}</td>
+            <td>${nameTd}</td>
+            <td style="white-space:nowrap;">${birthTd}</td>
+            <td style="white-space:nowrap;">${phoneTd}</td>
+            <td>${srcTd}</td>
+            <td>${lastScanTd}</td>
             <td style="text-align:center;">${u.recentScans}</td>
             <td style="text-align:center;">${paidTxt}</td>
             <td>${untilTxt}</td>
@@ -1768,22 +1795,22 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div class="wrap">
     <div class="topbar">
-      <h1>👥 User ล่าสุดที่สแกน</h1>
+      <h1>👥 จัดการ User</h1>
       <div style="display:flex;gap:8px;align-items:center;">
         <a class="btn btn-neu" style="padding:8px 12px;font-size:0.85rem;text-decoration:none;" href="/admin/payments">💳 Payments</a>
         <form method="POST" action="/admin/logout" style="margin:0;"><button type="submit">ออกจากระบบ</button></form>
       </div>
     </div>
     <form class="search-bar" method="get" action="/admin/users">
-      <input type="search" name="q" value="${escapeHtml(q)}" placeholder="ค้นหา LINE user id…" autocomplete="off" />
+      <input type="search" name="q" value="${escapeHtml(q)}" placeholder="ค้นหา LINE id / ชื่อเล่น / เบอร์โทร…" autocomplete="off" />
       <button type="submit">ค้นหา</button>
       ${q ? `<a class="btn btn-neu" style="padding:8px 12px;font-size:0.85rem;text-decoration:none;" href="/admin/users">ล้าง</a>` : ""}
     </form>
-    <p style="color:var(--muted);font-size:0.85rem;margin:8px 2px;">เรียงตามสแกนล่าสุด · นับจากสแกน ${scanWindow} รายการล่าสุด · ปุ่มเพิ่ม/ลดปรับ paid_remaining_scans (สิทธิ์ที่เติมจากหน้านี้อยู่ได้ 1 ปี ไม่หายรายวัน · แพ็ก 49 ของลูกค้ายังหมดอายุ 24 ชม.ตามเดิม)</p>
+    <p style="color:var(--muted);font-size:0.85rem;margin:8px 2px;">เรียงตามสแกนล่าสุด · นับจากสแกน ${scanWindow} รายการล่าสุด · ชื่อเล่น/วันเกิด/เบอร์/ช่องทาง มาจากการลงทะเบียน LIFF (คนที่ลงทะเบียนแต่ยังไม่สแกนก็โชว์) · ปุ่มเพิ่ม/ลดปรับ paid_remaining_scans (สิทธิ์ที่เติมจากหน้านี้อยู่ได้ 1 ปี ไม่หายรายวัน · แพ็ก 49 ของลูกค้ายังหมดอายุ 24 ชม.ตามเดิม)</p>
     <div class="card" style="overflow-x:auto;">
       <table>
-        <thead><tr><th>#</th><th>LINE ID</th><th>โน้ต</th><th>สแกนล่าสุด</th><th>ครั้ง (ล่าสุด)</th><th>paid เหลือ</th><th>paid ถึง</th><th>จัดการ</th></tr></thead>
-        <tbody>${rowsHtml || `<tr><td colspan="8" style="text-align:center;color:var(--muted);">ไม่พบรายการ</td></tr>`}</tbody>
+        <thead><tr><th>#</th><th>LINE ID</th><th>โน้ต</th><th>ชื่อเล่น</th><th>วันเกิด</th><th>เบอร์โทร</th><th>มาจาก</th><th>สแกนล่าสุด</th><th>ครั้ง (ล่าสุด)</th><th>paid เหลือ</th><th>paid ถึง</th><th>จัดการ</th></tr></thead>
+        <tbody>${rowsHtml || `<tr><td colspan="12" style="text-align:center;color:var(--muted);">ไม่พบรายการ</td></tr>`}</tbody>
       </table>
     </div>
   </div>
