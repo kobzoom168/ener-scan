@@ -1078,11 +1078,11 @@ function buildLiffHtml(liffId) {
     --shadow:0 12px 32px -18px rgba(31,74,102,.26);
   }
   html[data-lt="dark"]{
-    --bg:#131110; --card:#1d1a16; --card2:#252017; --card3:#2b251b;
-    --hero-a:#272113; --hero-b:#1f1b12; --line:#332e27; --line-gold:#51452f;
-    --gold:#d9b36a; --gold-deep:#e6c887; --gold-hi:#8f6f35;
-    --btn-a:#e3c98f; --btn-b:#c9a35c; --btn-c:#a5813a;
-    --ink:#f2ead9; --sub:#b5a98e; --faint:#7e745f;
+    --bg:#121214; --card:#1c1c1f; --card2:#232327; --card3:#2b2b30;
+    --hero-a:#26262b; --hero-b:#1e1e22; --line:#323238; --line-gold:#45454c;
+    --gold:#9a9aa2; --gold-deep:#e6e6ea; --gold-hi:#55555c;
+    --btn-a:#f0f0f2; --btn-b:#d5d5da; --btn-c:#b4b4bb;
+    --ink:#ececef; --sub:#a5a5ae; --faint:#6f6f78;
     --shadow:0 12px 32px -18px rgba(0,0,0,.65);
   }
   html[data-lt="white"]{
@@ -1093,7 +1093,8 @@ function buildLiffHtml(liffId) {
     --ink:#1c1917; --sub:#6e6e6e; --faint:#a8a8a8;
     --shadow:0 12px 30px -18px rgba(0,0,0,.14);
   }
-  html[data-lt="dark"] .stgo, html[data-lt="dark"] .readbtn, html[data-lt="dark"] .goldbtn{color:#241c0e}
+  html[data-lt="dark"] .stgo, html[data-lt="dark"] .readbtn, html[data-lt="dark"] .goldbtn{color:#141416}
+  html[data-lt="dark"] .stgo svg, html[data-lt="dark"] .readbtn svg{stroke:#141416!important}
   /* sparkline follows the theme */
   #sp-line{stroke:var(--gold)}
   #sp-dot{fill:var(--gold-deep)}
@@ -1801,7 +1802,7 @@ function buildLiffHtml(liffId) {
     { k:"cream", n:"ครีมทอง", d:"อบอุ่น นุ่มนวล อ่านง่าย", sw:["#c9a35c","#a5813a","#faf8f3"] },
     { k:"plum",  n:"พลัมทอง", d:"ขลัง หรูหรา คลาสสิก",   sw:["#7c3a44","#b98a4a","#f8f2ee"] },
     { k:"blue",  n:"ฟ้าเงิน",  d:"สงบ สะอาด โมเดิร์น",    sw:["#1f4a66","#6f9cb8","#f2f6f9"] },
-    { k:"dark",  n:"โทนดำ",   d:"ขลัง สงบ สบายตากลางคืน", sw:["#131110","#d9b36a","#332e27"] },
+    { k:"dark",  n:"โทนดำ",   d:"มืดล้วน สบายตากลางคืน", sw:["#121214","#d5d5da","#323238"] },
     { k:"white", n:"โทนขาว",  d:"สะอาด เรียบ มินิมอล",    sw:["#1c1917","#9a9a9a","#ffffff"] }
   ];
   function currentTheme(){
