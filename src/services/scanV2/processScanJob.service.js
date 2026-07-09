@@ -572,8 +572,30 @@ export async function processScanJob(workerId, jobRow) {
       return;
     }
     try {
+      // เจ้าของพระบอกพิมพ์เอง (จำใน redis 24 ชม.) = ความจริงสูงสุด ห้ามเถียง
+      let ownerStated = null;
+      try {
+        const { getValue } = await import("../../redis/scanV2Redis.js");
+        ownerStated = await getValue(`scan_v2:owner_type:${lineUserId}`);
+      } catch {}
       const [refMatch, typed] = await Promise.all([typeRefPromise, typeClassifyPromise]);
-      if (refMatch?.labelThai) {
+      if (ownerStated && String(ownerStated).trim().length >= 4) {
+        amuletTypeLabelThai = String(ownerStated).trim().slice(0, 30);
+        // one-shot: ใช้กับสแกนถัดไปครั้งเดียว กันไปติดชิ้นอื่นของลูกค้าคนเดิม
+        try {
+          const { clearDedupeKey } = await import("../../redis/scanV2Redis.js");
+          void clearDedupeKey(`scan_v2:owner_type:${lineUserId}`);
+        } catch {}
+        console.log(
+          JSON.stringify({
+            event: "AMULET_TYPE_FROM_OWNER",
+            path: "worker-scan",
+            jobIdPrefix: idPrefix8(jobId),
+            labelThai: amuletTypeLabelThai,
+            timestamp: scanV2TraceTs(),
+          }),
+        );
+      } else if (refMatch?.labelThai) {
         amuletTypeLabelThai = refMatch.labelThai;
         console.log(
           JSON.stringify({

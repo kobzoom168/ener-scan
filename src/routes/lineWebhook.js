@@ -301,7 +301,7 @@ import {
 } from "../utils/paymentSlipGrace.util.js";
 
 import { ingestScanImageAsyncV2, scanInFlightKeyForUser } from "../services/scanV2/webhookImageIngestion.service.js";
-import { tryDedupeOnce, isDedupeKeyActive } from "../redis/scanV2Redis.js";
+import { tryDedupeOnce, isDedupeKeyActive, setValueWithTtl } from "../redis/scanV2Redis.js";
 
 import {
   checkGlobalAbuseStatus,
@@ -3249,6 +3249,25 @@ async function handleTextMessage({ client, event, userId, session }) {
   const now = Date.now();
 
   const messageId = event.message?.id ?? null;
+
+  // ห้ามแพ้เจ้าของพระ: ลูกค้าระบุพิมพ์ของชิ้นตัวเอง ("ไม่ใช่... มันคือพระซุ้มกอ")
+  // → จำไว้ 24 ชม. สแกนถัดไปใช้ชื่อที่เจ้าของบอก ไม่เถียง
+  try {
+    const corr = text.match(
+      /(?:ไม่ใช่|มันคือ|องค์นี้คือ|อันนี้คือ|นี่คือ)\s*((?:พระ|เหรียญ|หลวงพ่อ|หลวงปู่|หลวงตา|ตะกรุด|ล็อกเก็ต|ปิดตา|นางพญา|ขุนแผน|ซุ้มกอ|สมเด็จ)[฀-๿\s]{0,25})/,
+    );
+    if (corr && corr[1]) {
+      const stated = corr[1].trim().replace(/\s+/g, " ").slice(0, 40);
+      if (stated.length >= 4) {
+        await setValueWithTtl(`scan_v2:owner_type:${userId}`, stated, 86400);
+        console.log(
+          JSON.stringify({ event: "OWNER_TYPE_CORRECTION_SAVED", userId, stated }),
+        );
+      }
+    }
+  } catch {
+    /* best-effort memory */
+  }
 
   // ลูกค้าพิมพ์มาระหว่างอาจารย์กำลังสแกน (in-flight gate ยังล็อกอยู่) →
   // บอกให้รอแบบสายสมาธิ ครั้งเดียวต่อรอบ ไม่ปล่อยเข้าคิว AI ให้คุยแทรก
