@@ -1331,6 +1331,7 @@ function buildLiffHtml(liffId) {
   .bigin{width:100%;background:var(--card);border:1.5px solid var(--line-gold);border-radius:18px;padding:17px 18px;
     font-size:1.25rem;font-weight:700;color:var(--ink);outline:none;font-family:inherit}
   .bigin:focus{border-color:var(--gold);box-shadow:0 0 0 4px color-mix(in srgb, var(--gold) 15%, transparent)}
+  .fielderr{border-color:#c0564a !important;box-shadow:0 0 0 4px rgba(192,86,74,.14) !important}
   .pills{display:flex;flex-wrap:wrap;gap:11px;margin-top:14px;justify-content:center}
   .pill{background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:14px 22px;font-size:1.05rem;font-weight:700;
     color:var(--sub);display:inline-flex;align-items:center;gap:9px}
@@ -1547,14 +1548,15 @@ function buildLiffHtml(liffId) {
         <button class="pill" data-v="ฮวงจุ้ย"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6M6 10.2V19h12v-8.8"/><path d="M12 12v4.5M9.8 14.2h4.4"/></svg>ฮวงจุ้ย<span class="tick">✓</span></button>
         <button class="pill" data-v="เครื่องราง"><svg viewBox="0 0 24 24"><path d="M12 3v3.5"/><path d="M12 6.5l4 3.5-1.5 6.5h-5L8 10z"/><path d="M12 10.2l1.6 1.4-.6 2.6h-2l-.6-2.6z" fill="currentColor" stroke="none" opacity=".55"/></svg>เครื่องราง<span class="tick">✓</span></button>
       </div>
-      <div class="why" style="margin-top:18px">แล้วมาเจออาจารย์จากช่องทางไหนนะ</div>
+      <div class="why" style="margin-top:18px">แล้วมาเจออาจารย์จากช่องทางไหนนะ เลือกได้หลายอันเลย</div>
       <div class="pills" id="g-ch">
-        <button class="pill" data-v="Facebook">Facebook</button>
-        <button class="pill" data-v="TikTok">TikTok</button>
-        <button class="pill" data-v="เพื่อนแนะนำ">เพื่อนแนะนำ</button>
-        <button class="pill" data-v="อื่นๆ">อื่น ๆ</button>
+        <button class="pill" data-v="Facebook">Facebook<span class="tick">✓</span></button>
+        <button class="pill" data-v="TikTok">TikTok<span class="tick">✓</span></button>
+        <button class="pill" data-v="เพื่อนแนะนำ">เพื่อนแนะนำ<span class="tick">✓</span></button>
+        <button class="pill" data-v="อื่นๆ">อื่น ๆ<span class="tick">✓</span></button>
       </div>
-      <div class="bigfield"><label>เบอร์โทร (ไม่บังคับ)</label><input class="bigin" id="f-ph" type="tel" placeholder="เบอร์มือถือ 10 หลัก" maxlength="20"/></div>
+      <input class="bigin hidden" id="f-ch-other" placeholder="เล่าหน่อยว่าเจออาจารย์จากไหน" maxlength="80" style="margin-top:10px"/>
+      <div class="bigfield"><label>เบอร์โทร</label><input class="bigin" id="f-ph" type="tel" placeholder="เบอร์มือถือ 10 หลัก" maxlength="20"/></div>
     </div>
 
     <div class="obfoot">
@@ -1905,6 +1907,13 @@ function buildLiffHtml(liffId) {
     if(!h) return "";
     return h + ":" + ($("f-btm").value || "00");
   }
+  /* ช่องทางที่เจอ: multi + อื่น ๆ แนบข้อความที่ลูกค้าพิมพ์เอง */
+  function buildChannel(){
+    var c = state.channel || "";
+    var o = $("f-ch-other").value.trim();
+    if(o && c.indexOf("อื่นๆ") !== -1) c = c.replace("อื่นๆ", "อื่นๆ: " + o);
+    return c;
+  }
 
   /* ---- pill groups ---- */
   function wireGroup(gid, key){
@@ -1926,7 +1935,11 @@ function buildLiffHtml(liffId) {
       state[key] = vals.join(",");
     });
   }
-  wireGroup("g-sex","sex"); wireGroupMulti("g-int","interest"); wireGroup("g-ch","channel");
+  wireGroup("g-sex","sex"); wireGroupMulti("g-int","interest"); wireGroupMulti("g-ch","channel");
+  /* เลือก อื่น ๆ → เปิดช่องพิมพ์เล่าเอง */
+  $("g-ch").addEventListener("click", function(){
+    $("f-ch-other").classList.toggle("hidden", state.channel.indexOf("อื่นๆ") === -1);
+  });
 
   /* ---- onboarding stepper ---- */
   function renderStep(){
@@ -1943,6 +1956,14 @@ function buildLiffHtml(liffId) {
       if(!$("f-year").value){ $("f-year").focus(); return; }
     }
     if(state.step<3){ state.step++; renderStep(); return; }
+    /* เบอร์โทรบังคับ (ตัวเลข 9-10 หลัก) ก่อนเปิดดวง */
+    var ph = $("f-ph").value.replace(/[^0-9]/g, "");
+    if(ph.length < 9 || ph.length > 10){
+      $("f-ph").classList.add("fielderr");
+      $("f-ph").focus();
+      return;
+    }
+    $("f-ph").classList.remove("fielderr");
     saveProfile();
   });
 
@@ -1975,7 +1996,7 @@ function buildLiffHtml(liffId) {
       body: JSON.stringify({
         displayName: state.displayName,
         nickname: $("f-nick").value.trim(), birthdate: buildBirthdate(), birth_time: buildBirthTime(),
-        gender: state.sex, interest: state.interest, channel: state.channel, phone: $("f-ph").value.trim()
+        gender: state.sex, interest: state.interest, channel: buildChannel(), phone: $("f-ph").value.trim()
       })
     }).then(function(r){ return r.json(); }).then(function(j){
       btn.disabled=false;
