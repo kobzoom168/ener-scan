@@ -5,7 +5,11 @@ import {
   getScanUploadByLineMessageId,
   insertScanUpload,
 } from "../../stores/scanV2/scanUploads.db.js";
-import { insertScanJob } from "../../stores/scanV2/scanJobs.db.js";
+import {
+  insertScanJob,
+  findPendingDebounceJobForUser,
+  appendExtraUploadToScanJob,
+} from "../../stores/scanV2/scanJobs.db.js";
 import { insertOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
 import {
   OUTBOUND_PRIORITY,
@@ -38,6 +42,13 @@ function pickPreScanAckText(seedStr) {
 /** กติกา 1 ชิ้นต่อ 1 รูป: extra images while a scan is in flight are held (no scan, no quota). */
 const MULTI_IMAGE_WAIT_TEXT =
   "อาจารย์ขอดูทีละ 1 รูปนะครับ 🙏\nรูปแรกกำลังเพ่งพลังให้อยู่ เดี๋ยวผลออกแล้วค่อยส่งชิ้นถัดไปนะครับ\nถ้าชิ้นเดียวกันมีหลายมุม เลือกมุมที่ชัดสุดรูปเดียวพอครับ";
+
+/** รูปตามมาในหน้าต่างหน่วง: แนบเข้าชุดเดียวกัน อาจารย์ดูจากรูปแรกเป็นหลัก */
+const DEBOUNCE_ATTACHED_TEXT =
+  "ได้รับเพิ่มอีกรูปนะครับ 🙏 อาจารย์ขอดูจากรูปแรกเป็นหลัก 1 ชิ้นต่อ 1 รูป\nถ้าเป็นคนละชิ้น รอผลชิ้นแรกออกก่อน แล้วค่อยส่งชิ้นถัดไปนะครับ";
+
+/** Cap of extra photos absorbed into one debounce window. */
+const DEBOUNCE_MAX_EXTRAS = 4;
 
 /** In-flight gate key (delivery worker clears it when the report lands; TTL is the safety net). */
 export function scanInFlightKeyForUser(lineUserId) {
@@ -148,6 +159,78 @@ export async function ingestScanImageAsyncV2({
   const inflightKey = scanInFlightKeyForUser(lineUserId);
   const inflightFirst = await tryDedupeOnce(inflightKey, 180);
   if (!inflightFirst) {
+    // Debounce window still open? → attach this photo to the SAME job
+    // (one report; อาจารย์ดูรูปแรกเป็นหลัก) instead of dropping it.
+    try {
+      const pendingJob = await findPendingDebounceJobForUser(lineUserId);
+      const extras = Array.isArray(pendingJob?.extra_upload_ids)
+        ? pendingJob.extra_upload_ids
+        : [];
+      if (pendingJob?.id && extras.length < DEBOUNCE_MAX_EXTRAS) {
+        const appUserA = await ensureUserByLineUserId(lineUserId);
+        const storedA = await uploadScanImageToStorage({
+          lineUserId,
+          lineMessageId: mid,
+          buffer: imageBuffer,
+          mimeType: "image/jpeg",
+        });
+        const upA = await insertScanUpload({
+          line_user_id: lineUserId,
+          app_user_id: String(appUserA.id),
+          line_message_id: mid,
+          storage_bucket: storedA.bucket,
+          storage_path: storedA.path,
+          mime_type: storedA.mimeType,
+          size_bytes: storedA.sizeBytes,
+          sha256: storedA.sha256,
+          original_expires_at: new Date(
+            Date.now() + env.STORAGE_RETENTION_ORIGINAL_DAYS_FREE * 86_400_000,
+          ).toISOString(),
+          storage_tier: "free",
+        });
+        if (upA?.id) {
+          await appendExtraUploadToScanJob(pendingJob.id, upA.id, extras);
+          const attachNoticeFirst = await tryDedupeOnce(
+            `scan_v2:debounce_notice:${lineUserId}`,
+            120,
+          );
+          if (attachNoticeFirst) {
+            await insertOutboundMessage({
+              line_user_id: lineUserId,
+              kind: "pre_scan_ack",
+              priority: OUTBOUND_PRIORITY.pre_scan_ack,
+              related_job_id: pendingJob.id,
+              payload_json: { text: DEBOUNCE_ATTACHED_TEXT },
+              status: "queued",
+            });
+          }
+          console.log(
+            JSON.stringify({
+              event: "SCAN_V2_INGEST_ATTACHED_DEBOUNCE",
+              ...base(),
+              jobIdPrefix: idPrefix8(pendingJob.id),
+              extrasCount: extras.length + 1,
+            }),
+          );
+          return {
+            ok: true,
+            duplicate: true,
+            heldInFlight: true,
+            uploadId: upA.id,
+            jobId: pendingJob.id,
+            outboundId: null,
+          };
+        }
+      }
+    } catch (attachErr) {
+      console.error(
+        JSON.stringify({
+          event: "SCAN_V2_INGEST_ATTACH_FAIL",
+          ...base(),
+          errorMessage: String(attachErr?.message || attachErr).slice(0, 160),
+        }),
+      );
+    }
     const noticeFirst = await tryDedupeOnce(
       `scan_v2:inflight_notice:${lineUserId}`,
       120,
@@ -237,6 +320,7 @@ export async function ingestScanImageAsyncV2({
     }),
   );
 
+  const debounceSec = Number(env.SCAN_IMAGE_DEBOUNCE_SECONDS) || 0;
   const jobRow = await insertScanJob({
     line_user_id: lineUserId,
     app_user_id: appUserId,
@@ -245,6 +329,10 @@ export async function ingestScanImageAsyncV2({
     access_source: accessSource,
     status: "queued",
     priority: 100,
+    // 1 ชิ้นต่อ 1 รูป: hold the job briefly so burst photos attach here
+    ...(debounceSec > 0
+      ? { process_after: new Date(Date.now() + debounceSec * 1000).toISOString() }
+      : {}),
   });
 
   if (!jobRow?.id) {

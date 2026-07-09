@@ -98,6 +98,15 @@ import {
 } from "../stores/payments.db.js";
 
 import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
+import {
+  isFengShuiCommandText,
+  armFengShuiMode,
+  isFengShuiModeArmed,
+  clearFengShuiMode,
+  runFengShuiReadingFromLineImage,
+  FENGSHUI_INTRO_TEXT,
+  FENGSHUI_FAIL_TEXT,
+} from "../services/fengShuiFlow.service.js";
 import { maybeNotifyAdminSlipPendingVerify } from "../services/adminPaymentSlipNotify.service.js";
 import {
   evaluateAwaitingPaymentSlipImage,
@@ -2211,6 +2220,44 @@ async function finalizeAcceptedImage({
         });
 
     if (!slipVal.proceed) {
+      // ลูกค้าส่ง "รูปพระ" มาระหว่างติดสถานะรอสลิป (เช่น state ค้างข้ามคืน
+      // แต่โควต้าฟรีรีเซ็ตแล้ว) → อย่าบังคับส่งสลิป: ถ้าเป็นวัตถุมงคลและมี
+      // สิทธิ์สแกน + มีวันเกิดในระบบ ให้ไหลเข้าเลนสแกนตามปกติเลย
+      if (String(slipVal.objectCheckResult || "") === "single_supported") {
+        try {
+          const rerouteAccess = await checkScanAccess({ userId });
+          const rerouteBd = rerouteAccess?.allowed
+            ? await getSavedBirthdate(userId).catch(() => null)
+            : null;
+          if (rerouteAccess?.allowed && rerouteBd) {
+            console.log(
+              JSON.stringify({
+                event: "SLIP_STATE_IMAGE_REROUTED_TO_SCAN",
+                userId,
+                paymentId: paymentId ?? null,
+                accessReason: rerouteAccess?.reason ?? null,
+              }),
+            );
+            const ing = await ingestScanImageAsyncV2({
+              userId,
+              lineMessageId: event?.message?.id,
+              imageBuffer,
+              birthdateSnapshot: rerouteBd,
+              accessDecision: rerouteAccess,
+              flowVersion: null,
+            });
+            if (ing?.ok) return;
+          }
+        } catch (rerouteErr) {
+          console.error(
+            JSON.stringify({
+              event: "SLIP_STATE_IMAGE_REROUTE_FAIL",
+              userId,
+              message: String(rerouteErr?.message || rerouteErr).slice(0, 160),
+            }),
+          );
+        }
+      }
       await sendNonScanReply({
         client,
         userId,
@@ -2485,7 +2532,7 @@ async function finalizeAcceptedImage({
         replyToken: event.replyToken,
         replyType: "slip_save_failed",
         semanticKey: "slip_save_failed",
-        text: "ขออภัยครับ ระบบบันทึกสลิปไม่สำเร็จ กรุณาลองส่งสลิปใหม่อีกครั้ง",
+        text: "สลิปเข้ามาไม่ครบครับ ส่งรูปสลิปมาใหม่อีกครั้งได้เลย",
         alternateTexts: [
           "บันทึกสลิปไม่สำเร็จชั่วคราว ลองส่งสลิปใหม่อีกครั้งได้เลยครับ",
         ],
@@ -2640,7 +2687,7 @@ async function finalizeAcceptedImage({
         await replyText(
           client,
           event.replyToken,
-          "ขออภัยครับ ระบบสแกนชั่วคราวไม่พร้อม ลองใหม่อีกครั้งในภายหลังนะครับ",
+          "ตอนนี้อาจารย์พักปรับระบบแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่นะ",
         );
       } catch (replyErr) {
         console.error(
@@ -2745,7 +2792,7 @@ async function finalizeAcceptedImage({
         await replyText(
           client,
           event.replyToken,
-          "ขออภัยครับ ระบบรับรูปชั่วคราวไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งนะครับ",
+          "รูปเข้ามาไม่ครบครับ ส่งมาใหม่อีกครั้งได้เลย",
         );
       } catch (replyErr) {
         console.error(
@@ -2823,6 +2870,44 @@ async function handleImageMessage({ client, event, userId, session }) {
       lockType: "hard",
       semanticKey: "scan_locked_hard:handle_image_after_locked_activity",
     });
+    return;
+  }
+
+  // ฮวงจุ้ยจากรูป: armed mode consumes this image (free teaser) — skip the scan
+  // pipeline entirely. One-shot: clear before analyzing so a stuck reading never
+  // swallows follow-up scan images.
+  if (isFengShuiModeArmed(userId)) {
+    clearFengShuiMode(userId);
+    try {
+      const reading = await runFengShuiReadingFromLineImage({
+        client,
+        messageId: event.message?.id,
+      });
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "fengshui_reading",
+        semanticKey: `fengshui_reading:${event.message?.id || Date.now()}`,
+        text: reading,
+        alternateTexts: [reading],
+      });
+    } catch (fsErr) {
+      console.error("[FENGSHUI] reading failed:", {
+        userId,
+        message: fsErr?.message,
+      });
+      armFengShuiMode(userId); // let them resend without re-typing the command
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "fengshui_fail",
+        semanticKey: `fengshui_fail:${event.message?.id || Date.now()}`,
+        text: FENGSHUI_FAIL_TEXT,
+        alternateTexts: [FENGSHUI_FAIL_TEXT],
+      });
+    }
     return;
   }
 
@@ -3274,6 +3359,22 @@ async function handleTextMessage({ client, event, userId, session }) {
       userId,
       session,
       source: "placeholder_text",
+    });
+    return;
+  }
+
+  // ฮวงจุ้ยจากรูป: explicit command (LIFF service row / typed keyword) arms the
+  // photo mode — the next image goes to the feng-shui reader, not the scan lane.
+  if (isFengShuiCommandText(text)) {
+    armFengShuiMode(userId);
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "fengshui_intro",
+      semanticKey: "fengshui_intro",
+      text: FENGSHUI_INTRO_TEXT,
+      alternateTexts: [FENGSHUI_INTRO_TEXT],
     });
     return;
   }
@@ -6175,7 +6276,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             await replyText(
               client,
               event.replyToken,
-              "ขออภัยครับ ระบบสแกนชั่วคราวไม่พร้อม ลองใหม่อีกครั้งในภายหลังนะครับ",
+              "ตอนนี้อาจารย์พักปรับระบบแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่นะ",
             );
           } catch (replyErr) {
             console.error(
@@ -6282,7 +6383,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             await replyText(
               client,
               event.replyToken,
-              "ขออภัยครับ ระบบรับรูปชั่วคราวไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งนะครับ",
+              "รูปเข้ามาไม่ครบครับ ส่งมาใหม่อีกครั้งได้เลย",
             );
           } catch (replyErr) {
             console.error(
@@ -7111,7 +7212,7 @@ export function lineWebhookRouter(lineConfig) {
                     semanticKey: "system_error",
                     text: buildSystemErrorText(),
                     alternateTexts: [
-                      "ขออภัยครับ มีข้อผิดพลาดชั่วคราว ลองส่งใหม่อีกครั้งได้เลย",
+                      "สัญญาณสะดุดนิดนึงครับ ส่งเข้ามาใหม่อีกทีได้เลย",
                     ],
                   });
                 }

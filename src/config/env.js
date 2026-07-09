@@ -892,6 +892,17 @@ export const env = {
   LLM_CONSULT_MODEL: String(process.env.LLM_CONSULT_MODEL || "").trim(),
 
   /**
+   * 1 ชิ้นต่อ 1 รูป: hold the first image's scan job N seconds so photos sent
+   * as a burst/album attach to the SAME job (one report) instead of scoring
+   * separately. 0 disables the wait (job runs immediately).
+   */
+  SCAN_IMAGE_DEBOUNCE_SECONDS: (() => {
+    const raw = process.env.SCAN_IMAGE_DEBOUNCE_SECONDS;
+    const n = raw === undefined || raw === "" ? 15 : Number(raw);
+    return Number.isFinite(n) ? Math.min(60, Math.max(0, Math.floor(n))) : 15;
+  })(),
+
+  /**
    * Phase 2G: TRUE instance re-id — DINOv2 recall + LightGlue geometric verify
    * via the vision sidecar (vision-sidecar/). Default off; enable per env.
    */
@@ -920,6 +931,20 @@ export const env = {
   VISION_REID_MAX_CANDIDATES: (() => {
     const n = Number(process.env.VISION_REID_MAX_CANDIDATES);
     return Number.isFinite(n) && n > 0 ? Math.min(12, Math.floor(n)) : 6;
+  })(),
+
+  /**
+   * ระบุประเภทพิมพ์: broad amulet-type classification from a controlled taxonomy
+   * (พระสมเด็จ/พระกริ่ง/เหรียญ/ปิดตา…). Confidence-gated headline upgrade —
+   * below threshold the report keeps the generic "พระ / เครื่องราง".
+   */
+  AMULET_TYPE_CLASSIFY_ENABLED:
+    String(process.env.AMULET_TYPE_CLASSIFY_ENABLED ?? "true").trim().toLowerCase() !== "false",
+  AMULET_TYPE_CLASSIFY_MODEL:
+    String(process.env.AMULET_TYPE_CLASSIFY_MODEL || "gpt-4.1-mini").trim() || "gpt-4.1-mini",
+  AMULET_TYPE_MIN_CONFIDENCE: (() => {
+    const n = Number(process.env.AMULET_TYPE_MIN_CONFIDENCE);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.75;
   })(),
 
   /**

@@ -63,6 +63,7 @@ export function buildAmuletV1Slice({
   stableFeatureFields = null,
   energyScore = null,
   mainEnergyLabel = "",
+  typedLabelThai = "",
 }) {
   const scores = computeAmuletPowerScores({
     features: stableFeatureFields,
@@ -70,10 +71,12 @@ export function buildAmuletV1Slice({
     sessionKey: scanResultId,
     mainEnergyLabel,
   });
-  const headline = "พระ / เครื่องราง";
+  // ระบุประเภทพิมพ์: confidence-gated classifier label (เช่น พระสมเด็จ) — flows
+  // to Flex headline, summary.headlineShort and the HTML report h1 together.
+  const headline = String(typedLabelThai || "").trim() || "พระ / เครื่องราง";
   const mainShort =
     String(mainEnergyLabel || "").trim().slice(0, 22) || "พลังมุ่งเน้นรวม";
-  const tagline = "พระ / เครื่องราง · หกมิติพลัง";
+  const tagline = `${headline} · หกมิติพลัง`;
 
   const flexSurface = buildAmuletFlexSurfaceCopy(
     scores.primaryPower,

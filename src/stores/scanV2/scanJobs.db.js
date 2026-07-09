@@ -60,6 +60,44 @@ export async function claimNextScanJob(workerId) {
 }
 
 /**
+ * Debounce window: the user's queued job still waiting for its process_after
+ * (images arriving now should attach to it, not create a new job/score).
+ * @param {string} lineUserId
+ * @returns {Promise<object | null>}
+ */
+export async function findPendingDebounceJobForUser(lineUserId) {
+  const uid = String(lineUserId || "").trim();
+  if (!uid) return null;
+  const { data, error } = await supabase
+    .from("scan_jobs")
+    .select("id, extra_upload_ids, process_after, status")
+    .eq("line_user_id", uid)
+    .eq("status", "queued")
+    .gt("process_after", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return null;
+  return data || null;
+}
+
+/**
+ * Attach an extra upload (another photo in the same debounce window) to a job.
+ * @param {string} jobId
+ * @param {string} uploadId
+ * @param {string[]} currentExtras
+ */
+export async function appendExtraUploadToScanJob(jobId, uploadId, currentExtras) {
+  const extras = Array.isArray(currentExtras) ? [...currentExtras] : [];
+  extras.push(String(uploadId));
+  const { error } = await supabase
+    .from("scan_jobs")
+    .update({ extra_upload_ids: extras, updated_at: new Date().toISOString() })
+    .eq("id", String(jobId));
+  if (error) throw error;
+}
+
+/**
  * @param {string} id
  * @returns {Promise<object | null>}
  */
