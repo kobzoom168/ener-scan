@@ -50,8 +50,11 @@ test("lineWebhook inserts clarifier before same-state fallback", () => {
 
 test("paywall deterministic copy refresh stays short and human", () => {
   const src = readFileSync(join(__dirname, "../src/utils/webhookText.util.js"), "utf8");
-  assert.ok(src.includes("ค่าเปิดระบบวันนี้"));
-  assert.ok(src.includes("ใช้สแกนเพิ่มได้"));
-  assert.ok(src.includes("ภายใน"));
-  assert.ok(src.includes("ตอบว่า 'จ่าย' ได้เลยครับ"));
+  assert.ok(src.includes("เปิดสิทธิ์เพิ่มวันนี้"));
+  assert.ok(src.includes("ได้สแกนอีก"));
+  assert.ok(src.includes("ชั่วโมง"));
+  assert.ok(src.includes("พิมพ์ว่า จ่าย มาได้เลยครับ"));
+  // persona guard: customer copy never says บอท/แอดมิน
+  assert.ok(!src.includes("ที่บอทบอก"));
+  assert.ok(!src.includes("แอดมินตรวจ"));
 });
