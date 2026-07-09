@@ -46,6 +46,7 @@ import {
   setDeliveryRateBackoffMs,
   sleepIfRateHint,
   clearDedupeKey,
+  tryDedupeOnce,
 } from "../../redis/scanV2Redis.js";
 import { scanInFlightKeyForUser } from "./webhookImageIngestion.service.js";
 import { supabase } from "../../config/supabase.js";
@@ -210,10 +211,24 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         await markSent(id);
         releaseScanGate(lineUserId);
         await handleScanResultPostDelivery(msg, payload);
-        // บอกสิทธิ์คงเหลือทันทีหลัง report ถึงมือ (หลัง decrement แล้ว)
+        // บอกสิทธิ์คงเหลือทันทีหลัง report ถึงมือ (หลัง decrement แล้ว) — เฉพาะ
+        // report สแกนใหม่จริง (ข้าม "เคยสแกนแล้ว" dedupHit) และข้อความสิทธิ์
+        // เนื้อหาเดิมไม่ยิงซ้ำภายใน 30 นาที
         try {
-          const quotaNotice = await buildRemainingQuotaNoticeText(lineUserId);
-          if (quotaNotice) await pushText(client, lineUserId, quotaNotice);
+          if (!payload.dedupHit) {
+            const quotaNotice = await buildRemainingQuotaNoticeText(lineUserId);
+            if (quotaNotice) {
+              let h = 0;
+              for (let i = 0; i < quotaNotice.length; i++) {
+                h = (h * 31 + quotaNotice.charCodeAt(i)) >>> 0;
+              }
+              const firstThisText = await tryDedupeOnce(
+                `scan_v2:quota_notice:${lineUserId}:${h}`,
+                1800,
+              );
+              if (firstThisText) await pushText(client, lineUserId, quotaNotice);
+            }
+          }
         } catch {
           /* notice is best-effort */
         }
