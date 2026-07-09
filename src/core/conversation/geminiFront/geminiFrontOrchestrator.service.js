@@ -99,26 +99,34 @@ export async function runGeminiFrontOrchestrator(ctx) {
     return { handled: true, mode: "active" };
   }
 
-  if (resolved === "consult_amulet") {
+  /** Customer-visible answer via the smart consult brain (Opus + real facts).
+      Used for consult/help/chit-chat so the cheap model never writes to the
+      customer directly unless consult fails. */
+  async function tryConsultReply(via) {
     const consultText = await runGeminiConsult({
       userId: ctx.userId,
       userText: ctx.text,
       conversationHistory,
     });
-    if (consultText) {
-      await ctx.sendGatewayReply({
-        replyType: "gemini_front_consult",
-        semanticKey: `gemini_front_consult:${phase1}`,
-        text: consultText.slice(0, 1800),
-        alternateTexts: [],
-      });
-      logGeminiOrchestrator({ mode: "active", handled: true, via: "consult" });
-      return { handled: true, mode: "active" };
-    }
+    if (!consultText) return false;
+    await ctx.sendGatewayReply({
+      replyType: "gemini_front_consult",
+      semanticKey: `gemini_front_consult:${phase1}`,
+      text: consultText.slice(0, 1800),
+      alternateTexts: [],
+    });
+    logGeminiOrchestrator({ mode: "active", handled: true, via });
+    return true;
+  }
+
+  if (resolved === "consult_amulet") {
+    if (await tryConsultReply("consult")) return { handled: true, mode: "active" };
     // consult failed → fall through to a safe generic phrase (below)
   }
 
   if (resolved === "send_help_reply") {
+    // Smart brain first — help answers are exactly where flash-lite sounded flat.
+    if (await tryConsultReply("consult_help")) return { handled: true, mode: "active" };
     const ph = await runGeminiPhrasing({
       allowedFacts: buildAllowedFactsForPhrasing({
         phase1State: phase1,
@@ -158,6 +166,11 @@ export async function runGeminiFrontOrchestrator(ctx) {
       resolved,
     });
     return { handled: false, reason: "delegate_unimplemented", mode: "active" };
+  }
+
+  // Chit-chat / context replies (no state correction pending) → smart brain first.
+  if (!v.deny_reason && (resolved === "noop_phrase_only" || resolved === "get_conversation_context")) {
+    if (await tryConsultReply("consult_chat")) return { handled: true, mode: "active" };
   }
 
   const ph = await runGeminiPhrasing({
