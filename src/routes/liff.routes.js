@@ -1520,8 +1520,11 @@ function buildLiffHtml(liffId) {
           <span class="selwrap"><select class="bigin" id="f-year"></select></span>
         </div>
       </div>
-      <div class="bigfield"><label>ช่วงเวลาที่เกิด (ถ้าทราบ)</label>
-        <span class="selwrap" style="display:block"><select class="bigin" id="f-bt"></select></span>
+      <div class="bigfield"><label>เวลาที่เกิด (ถ้าทราบ)</label>
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:9px">
+          <span class="selwrap"><select class="bigin" id="f-bth"></select></span>
+          <span class="selwrap"><select class="bigin" id="f-btm"></select></span>
+        </div>
       </div>
     </div>
 
@@ -1884,19 +1887,23 @@ function buildLiffHtml(liffId) {
   function addOpt(sel,val,txt,placeholder){ var o=document.createElement("option"); o.value=val; o.textContent=txt;
     if(placeholder){ o.disabled=true; o.selected=true; } sel.appendChild(o); }
   function fillDates(){
-    var d=$("f-day"), m=$("f-mon"), y=$("f-year"), t=$("f-bt");
+    var d=$("f-day"), m=$("f-mon"), y=$("f-year"), th=$("f-bth"), tm=$("f-btm");
     if(!d||d.options.length) return;
     addOpt(d,"","วัน",true); for(var i=1;i<=31;i++) addOpt(d,i,String(i));
     addOpt(m,"","เดือน",true); for(var j=0;j<12;j++) addOpt(m,j+1,TH_MONTHS[j]);
     addOpt(y,"","ปีเกิด",true);
     var nowBE=(new Date(Date.now()+7*3600*1000)).getUTCFullYear()+543;
     for(var b=nowBE;b>=nowBE-95;b--) addOpt(y,b,"พ.ศ. "+b);
-    addOpt(t,"","ไม่ทราบเวลา",true);
-    for(var h=0;h<24;h++){
-      var hh=pad2(h);
-      addOpt(t, hh+":00", hh+":00 น.");
-      addOpt(t, hh+":30", hh+":30 น.");
-    }
+    /* เวลาเกิดละเอียดถึงนาที — ตอนนี้ใช้แยกพุธกลางวัน/กลางคืน (ราหู) และเก็บไว้ผูกดวงละเอียดในอนาคต */
+    addOpt(th,"","ไม่ทราบเวลา",true);
+    for(var h=0;h<24;h++) addOpt(th, pad2(h), pad2(h)+" น.");
+    addOpt(tm,"","นาที",true);
+    for(var mi=0;mi<60;mi++) addOpt(tm, pad2(mi), ": "+pad2(mi));
+  }
+  function buildBirthTime(){
+    var h=$("f-bth").value;
+    if(!h) return "";
+    return h + ":" + ($("f-btm").value || "00");
   }
 
   /* ---- pill groups ---- */
@@ -1967,7 +1974,7 @@ function buildLiffHtml(liffId) {
     api("/api/liff/profile", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
         displayName: state.displayName,
-        nickname: $("f-nick").value.trim(), birthdate: buildBirthdate(), birth_time: $("f-bt").value || "",
+        nickname: $("f-nick").value.trim(), birthdate: buildBirthdate(), birth_time: buildBirthTime(),
         gender: state.sex, interest: state.interest, channel: state.channel, phone: $("f-ph").value.trim()
       })
     }).then(function(r){ return r.json(); }).then(function(j){
