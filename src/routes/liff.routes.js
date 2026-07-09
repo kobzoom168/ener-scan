@@ -1121,7 +1121,7 @@ function buildLiffHtml(liffId) {
 
   .score{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden}
   .score::before{content:"";position:absolute;right:-40px;top:-60px;width:200px;height:200px;border-radius:50%;
-    background:radial-gradient(closest-side, rgba(201,163,92,.16), transparent 70%)}
+    background:radial-gradient(closest-side, color-mix(in srgb, var(--gold) 16%, transparent), transparent 70%)}
   /* WOW layer: breathing glow + drifting sparkles + shimmer sweep */
   .score .fx{position:absolute;color:var(--gold);pointer-events:none;opacity:.55;font-size:13px}
   .score .f1{right:26px;top:20px;font-size:17px}
@@ -1159,7 +1159,7 @@ function buildLiffHtml(liffId) {
   .score .ft{font-size:.98rem;color:var(--sub);margin-top:8px;line-height:1.65}
   .score .luckies{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
   .score .lucky{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-gold);
-    background:#fdf8ec;border-radius:999px;padding:7px 14px;font-size:.9rem;color:var(--gold-deep);font-weight:700}
+    background:var(--card3);border-radius:999px;padding:7px 14px;font-size:.9rem;color:var(--gold-deep);font-weight:700}
   .score .cdot{width:15px;height:15px;border-radius:99px;display:inline-block;background:#ccc;
     box-shadow:inset 0 0 0 1px rgba(0,0,0,.1), 0 1px 3px rgba(0,0,0,.12)}
   .score .lucky.ban{background:#f5f2ea;border-color:#e2ddcf;color:var(--sub)}
@@ -1168,21 +1168,21 @@ function buildLiffHtml(liffId) {
   .rows{display:flex;flex-direction:column;gap:12px}
   .row{background:linear-gradient(165deg,var(--card),var(--card2));border:1px solid var(--line-gold);border-radius:20px;
     padding:15px 13px;display:flex;align-items:center;gap:14px;text-align:left;width:100%;position:relative;overflow:hidden;
-    box-shadow:0 14px 30px -16px rgba(165,129,58,.38);transition:transform .12s ease}
+    box-shadow:0 14px 30px -16px color-mix(in srgb, var(--btn-c) 38%, transparent);transition:transform .12s ease}
   .row:active{transform:scale(.985)}
   .row::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3.5px;border-radius:0 4px 4px 0;
-    background:linear-gradient(180deg,#e9cf93,#c9a35c)}
+    background:linear-gradient(180deg,var(--gold-hi),var(--gold))}
   /* bespoke Ener medallions (gold line-icons) instead of stock emoji */
   .med{width:62px;height:58px;border-radius:17px;flex:0 0 auto;display:grid;place-items:center;position:relative;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.55), 0 8px 18px -8px rgba(120,100,60,.45)}
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.55), 0 8px 18px -8px color-mix(in srgb, var(--gold) 45%, transparent)}
   .med svg{width:30px;height:30px;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
   /* per-service colors (mockup v6): peach / gold / lavender */
-  .med1{background:linear-gradient(150deg,#f8e3cd,#e6c19a)}
-  .med1 svg{stroke:#a4653a}
-  .med1 svg [fill]{fill:#a4653a}
-  .med2{background:linear-gradient(150deg,#f4e3bd,#d9b264)}
-  .med2 svg{stroke:#8a6a22}
-  .med2 svg [fill]{fill:#8a6a22}
+  .med1{background:linear-gradient(150deg,var(--card3),var(--gold-hi))}
+  .med1 svg{stroke:var(--gold-deep)}
+  .med1 svg [fill]{fill:var(--gold-deep)}
+  .med2{background:linear-gradient(150deg,var(--gold-hi),var(--gold))}
+  .med2 svg{stroke:var(--gold-deep)}
+  .med2 svg [fill]{fill:var(--gold-deep)}
   .med3{background:linear-gradient(150deg,#eae4f8,#c3b5e4)}
   .med3 svg{stroke:#65559f}
   .med3 svg [fill]{fill:#65559f}
@@ -1204,7 +1204,7 @@ function buildLiffHtml(liffId) {
   .stc i{font-style:normal;font-size:.72rem;color:var(--faint);font-weight:600}
   .stbtns{display:flex;gap:9px;margin-top:13px}
   .stgo{flex:1.6;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(165deg,var(--btn-a),var(--btn-b) 60%,var(--btn-c));
-    color:#fff;font-weight:800;font-size:1.08rem;border:none;border-radius:15px;padding:13px 10px;box-shadow:0 8px 18px -8px rgba(165,129,58,.55)}
+    color:#fff;font-weight:800;font-size:1.08rem;border:none;border-radius:15px;padding:13px 10px;box-shadow:0 8px 18px -8px color-mix(in srgb, var(--btn-c) 55%, transparent)}
   .sttop{flex:1;background:var(--card);border:1.5px solid var(--line-gold);color:var(--gold-deep);font-weight:800;font-size:1rem;border-radius:15px;padding:13px 8px}
   /* ---- daily strip (collapsed ดวงวันนี้) ---- */
   .dstrip{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;
@@ -1271,7 +1271,7 @@ function buildLiffHtml(liffId) {
   .homenav .n.on{color:var(--gold-deep)}
   .homenav .n.on::after{content:"";width:16px;height:2.5px;border-radius:2px;background:var(--gold);margin-top:1px}
   .row .chev{margin-left:auto;flex:0 0 auto;width:32px;height:32px;border-radius:999px;display:grid;place-items:center;
-    background:#fdf8ec;border:1px solid var(--line-gold);color:var(--gold-deep);font-size:1.05rem;font-weight:700}
+    background:var(--card3);border:1px solid var(--line-gold);color:var(--gold-deep);font-size:1.05rem;font-weight:700}
 
   .note{color:var(--faint);font-size:.85rem;text-align:center;line-height:1.6}
 
@@ -1288,13 +1288,13 @@ function buildLiffHtml(liffId) {
   .bigfield label{display:block;font-size:.95rem;font-weight:700;color:var(--sub);margin:0 4px 8px}
   .bigin{width:100%;background:var(--card);border:1.5px solid var(--line-gold);border-radius:18px;padding:17px 18px;
     font-size:1.25rem;font-weight:700;color:var(--ink);outline:none;font-family:inherit}
-  .bigin:focus{border-color:var(--gold);box-shadow:0 0 0 4px rgba(201,163,92,.15)}
+  .bigin:focus{border-color:var(--gold);box-shadow:0 0 0 4px color-mix(in srgb, var(--gold) 15%, transparent)}
   .pills{display:flex;flex-wrap:wrap;gap:11px;margin-top:14px;justify-content:center}
   .pill{background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:14px 22px;font-size:1.05rem;font-weight:700;
     color:var(--sub);display:inline-flex;align-items:center;gap:9px}
   .pill svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
-  .pill.on{border-color:var(--gold);color:var(--gold-deep);background:#fdf8ec;font-weight:800;
-    box-shadow:0 8px 18px -10px rgba(201,163,92,.55)}
+  .pill.on{border-color:var(--gold);color:var(--gold-deep);background:var(--card3);font-weight:800;
+    box-shadow:0 8px 18px -10px color-mix(in srgb, var(--gold) 55%, transparent)}
   .pill .tick{display:none;width:19px;height:19px;border-radius:99px;background:var(--gold);color:#fff;font-size:.7rem;
     place-items:center;margin-left:2px}
   .pill.on .tick{display:grid}
@@ -1311,7 +1311,7 @@ function buildLiffHtml(liffId) {
   .selwrap{position:relative}
   .selwrap::after{content:"";position:absolute;right:15px;top:50%;width:9px;height:9px;pointer-events:none;
     border-right:2px solid var(--gold-deep);border-bottom:2px solid var(--gold-deep);transform:translateY(-70%) rotate(45deg)}
-  select.bigin:focus{border-color:var(--gold);box-shadow:0 0 0 4px rgba(201,163,92,.15)}
+  select.bigin:focus{border-color:var(--gold);box-shadow:0 0 0 4px color-mix(in srgb, var(--gold) 15%, transparent)}
 
   /* premium loading emblem */
   .center{display:grid;place-items:center;min-height:80dvh;text-align:center}
@@ -1352,7 +1352,7 @@ function buildLiffHtml(liffId) {
   .tarotrow{display:flex;gap:12px;justify-content:center;padding:6px 0 2px}
   .tcard{width:88px;border-radius:16px;padding:13px 6px 11px;text-align:center;background:linear-gradient(170deg,#fdfaf2,#f7efdd);
     border:1px solid var(--line-gold)}
-  .tcard.mid{border:1.5px solid var(--gold);box-shadow:0 8px 24px -10px rgba(201,163,92,.45);transform:translateY(-6px)}
+  .tcard.mid{border:1.5px solid var(--gold);box-shadow:0 8px 24px -10px color-mix(in srgb, var(--gold) 45%, transparent);transform:translateY(-6px)}
   .tcard .te{font-size:30px;line-height:1.2}
   .tcard .tn{font-size:.78rem;font-weight:800;color:var(--ink);margin-top:5px;line-height:1.3}
   .tcard .tk{font-size:.64rem;color:var(--gold-deep);font-weight:700;margin-top:2px}
@@ -1376,7 +1376,7 @@ function buildLiffHtml(liffId) {
   .rd-read p{margin:.55em 0 0;font-size:1rem;line-height:1.8;color:var(--ink)}
   .rd-read .rk{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-gold);border-radius:999px;
     padding:5px 13px;font-size:.68rem;font-weight:700;color:var(--gold-deep);letter-spacing:.12em}
-  .rd-adv{background:#fdf8ec;border:1px solid var(--line-gold);border-radius:16px;padding:12px 14px;font-size:.95rem;
+  .rd-adv{background:var(--card3);border:1px solid var(--line-gold);border-radius:16px;padding:12px 14px;font-size:.95rem;
     line-height:1.7;color:var(--ink);margin-top:11px}
   .rd-adv b{color:var(--gold-deep)}
   .luckyrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -1394,7 +1394,7 @@ function buildLiffHtml(liffId) {
   /* ---- เติมสิทธิ์สแกน (pay) ---- */
   .pkg{display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:var(--card);
     border:1.6px solid var(--line);border-radius:16px;padding:14px 15px;box-shadow:var(--shadow);cursor:pointer;transition:border-color .18s}
-  .pkg.on{border-color:var(--gold);background:linear-gradient(160deg,#fffdf7,#fdf8ec)}
+  .pkg.on{border-color:var(--gold);background:linear-gradient(160deg,var(--hero-a),var(--hero-b))}
   .pkg .pk-price{font-size:1.5rem;font-weight:800;color:var(--gold-deep);min-width:74px}
   .pkg .pk-price small{font-size:.8rem;font-weight:700;color:var(--sub)}
   .pkg .pk-d{flex:1;display:flex;flex-direction:column;gap:2px}
@@ -1417,7 +1417,7 @@ function buildLiffHtml(liffId) {
   .payst .t{font-weight:800;font-size:1.05rem}
   .payst p{font-size:.88rem;color:var(--sub);line-height:1.75;margin:0}
   .paychip{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:700;color:var(--gold-deep);
-    background:#fdf6e3;border:1px solid var(--line-gold);border-radius:999px;padding:4px 12px}
+    background:var(--card3);border:1px solid var(--line-gold);border-radius:999px;padding:4px 12px}
 </style>
 </head>
 <body>
