@@ -300,7 +300,8 @@ import {
   shouldOfferSlipPaymentGraceHold,
 } from "../utils/paymentSlipGrace.util.js";
 
-import { ingestScanImageAsyncV2 } from "../services/scanV2/webhookImageIngestion.service.js";
+import { ingestScanImageAsyncV2, scanInFlightKeyForUser } from "../services/scanV2/webhookImageIngestion.service.js";
+import { tryDedupeOnce, isDedupeKeyActive } from "../redis/scanV2Redis.js";
 
 import {
   checkGlobalAbuseStatus,
@@ -3248,6 +3249,32 @@ async function handleTextMessage({ client, event, userId, session }) {
   const now = Date.now();
 
   const messageId = event.message?.id ?? null;
+
+  // ลูกค้าพิมพ์มาระหว่างอาจารย์กำลังสแกน (in-flight gate ยังล็อกอยู่) →
+  // บอกให้รอแบบสายสมาธิ ครั้งเดียวต่อรอบ ไม่ปล่อยเข้าคิว AI ให้คุยแทรก
+  try {
+    if (text && (await isDedupeKeyActive(scanInFlightKeyForUser(userId)))) {
+      const firstNotice = await tryDedupeOnce(
+        `scan_v2:inflight_text_notice:${userId}`,
+        60,
+      );
+      if (firstNotice) {
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "scan_in_flight_wait",
+          semanticKey: "scan_in_flight_wait",
+          text: "อาจารย์กำลังเข้าสมาธิเพ่งชิ้นที่ส่งมาอยู่ ขออย่าเพิ่งคุยแทรกนะ อีกสัก 1-2 นาทีผลออกแล้วค่อยว่ากัน",
+          alternateTexts: ["รอผลอีกนิดนะ กำลังเพ่งอยู่ เดี๋ยวสรุปให้"],
+        });
+      }
+      return;
+    }
+  } catch {
+    /* gate check best-effort — continue normal routing */
+  }
+
   const edge = evaluateTextEdgeGate({ userId, messageId, text, now });
   if (edge.action === "drop_duplicate_event") {
     logConversationCost({
