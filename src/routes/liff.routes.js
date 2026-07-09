@@ -1546,7 +1546,6 @@ function buildLiffHtml(liffId) {
         <button class="stgo" id="btn-scan"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>สแกนเลย</button>
         <button class="sttop" id="btn-topup">＋ เติมสิทธิ์</button>
       </div>
-      <span class="fx f1">✦</span><span class="fx f3">✦</span>
     </div>
 
     <!-- ดวงวันนี้: แถบย่อ กดเพื่อกางการ์ดเต็ม -->
@@ -1615,7 +1614,6 @@ function buildLiffHtml(liffId) {
       <small class="mtkick">PERSONALIZE</small>
       <div class="mtbuddha serif" style="font-size:1.3rem">เลือกโทนสีที่คุณสบายตา</div>
       <p class="mtstar">ธีมจะถูกบันทึกไว้ในเครื่องคุณเอง เปิดมาครั้งหน้าก็เป็นโทนนี้เลย</p>
-      <span class="fx f2">✦</span>
     </div>
     <div id="th-list" style="display:flex;flex-direction:column;gap:11px"></div>
     <div class="mtcard">
@@ -1646,7 +1644,6 @@ function buildLiffHtml(liffId) {
         <small class="mtkick">คนเกิดวัน<b id="mt-day">–</b> · เลขประจำวัน <b id="mt-num">–</b></small>
         <div class="mtbuddha serif" id="mt-buddha">–</div>
         <p class="mtstar" id="mt-star"></p>
-        <span class="fx f2">✦</span>
       </div>
       <div class="sect">สายที่เสริมดวงคุณตามตำรา</div>
       <div id="mt-recs" style="display:flex;flex-direction:column;gap:10px"></div>
