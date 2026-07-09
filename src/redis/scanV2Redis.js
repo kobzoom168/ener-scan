@@ -159,6 +159,35 @@ export async function tryDedupeOnce(dedupeKey, ttlSec) {
 }
 
 /**
+ * Small string value with TTL (e.g. customer's own type correction —
+ * "องค์นี้คือพระซุ้มกอ" — remembered so the next scan never contradicts the owner).
+ * @param {string} key
+ * @param {string} value
+ * @param {number} ttlSec
+ */
+export async function setValueWithTtl(key, value, ttlSec) {
+  const r = await getScanV2Redis();
+  if (!r) return;
+  try {
+    await r.set(kDedupe(key), String(value).slice(0, 200), "EX", Math.min(Math.max(Number(ttlSec) || 3600, 60), 604800));
+  } catch {}
+}
+
+/**
+ * @param {string} key
+ * @returns {Promise<string|null>}
+ */
+export async function getValue(key) {
+  const r = await getScanV2Redis();
+  if (!r) return null;
+  try {
+    return await r.get(kDedupe(key));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Escalation counter: INCR with TTL set on first hit (e.g. multi-image strikes
  * — ครั้งแรกเตือนสุภาพ ครั้งถัดไปเตือนดุ). Returns the new count (1 = first).
  * @param {string} counterKey
