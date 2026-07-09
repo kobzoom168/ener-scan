@@ -892,6 +892,17 @@ export const env = {
   LLM_CONSULT_MODEL: String(process.env.LLM_CONSULT_MODEL || "").trim(),
 
   /**
+   * 1 ชิ้นต่อ 1 รูป: hold the first image's scan job N seconds so photos sent
+   * as a burst/album attach to the SAME job (one report) instead of scoring
+   * separately. 0 disables the wait (job runs immediately).
+   */
+  SCAN_IMAGE_DEBOUNCE_SECONDS: (() => {
+    const raw = process.env.SCAN_IMAGE_DEBOUNCE_SECONDS;
+    const n = raw === undefined || raw === "" ? 15 : Number(raw);
+    return Number.isFinite(n) ? Math.min(60, Math.max(0, Math.floor(n))) : 15;
+  })(),
+
+  /**
    * Phase 2F: same-object verifier agent. When on, embedding NN is used only as a coarse RECALL
    * filter (loose threshold below) and a vision LLM looks at the new photo + each candidate's stored
    * image to decide "same physical object across angle/rotation/flip/lighting?". Reuse happens only
