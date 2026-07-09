@@ -1053,11 +1053,51 @@ function buildLiffHtml(liffId) {
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
   :root{
-    --bg:#faf8f3; --card:#ffffff; --line:#efe8d9; --line-gold:#e2d3b0;
+    --bg:#faf8f3; --card:#ffffff; --card2:#fdf9f0; --card3:#faf4e6;
+    --hero-a:#fffdf7; --hero-b:#faf3e3; --line:#efe8d9; --line-gold:#e2d3b0;
     --gold:#c9a35c; --gold-deep:#a5813a; --gold-hi:#e3c98f;
+    --btn-a:#e3c98f; --btn-b:#c9a35c; --btn-c:#b08a40;
     --ink:#37332b; --sub:#8b8577; --faint:#b8b1a0;
     --shadow:0 12px 32px -18px rgba(165,129,58,.28);
   }
+  /* ---- โทนสีเลือกได้ (บันทึกใน localStorage เครื่องลูกค้า) ---- */
+  html[data-lt="plum"]{
+    --bg:#f8f2ee; --card:#ffffff; --card2:#fbf2ec; --card3:#f6e9e0;
+    --hero-a:#fdf7f2; --hero-b:#f7ebe2; --line:#eee0d6; --line-gold:#dfc3ad;
+    --gold:#b98a4a; --gold-deep:#8c4a50; --gold-hi:#e0bc8a;
+    --btn-a:#a05a62; --btn-b:#7c3a44; --btn-c:#5e2830;
+    --ink:#3b2b2b; --sub:#8d7370; --faint:#b8a49e;
+    --shadow:0 12px 32px -18px rgba(124,58,68,.28);
+  }
+  html[data-lt="blue"]{
+    --bg:#f2f6f9; --card:#ffffff; --card2:#f3f8fb; --card3:#e8f0f5;
+    --hero-a:#f8fbfd; --hero-b:#eaf2f7; --line:#e2eaef; --line-gold:#c6d7e1;
+    --gold:#5b87a3; --gold-deep:#1f4a66; --gold-hi:#a9c4d4;
+    --btn-a:#6f9cb8; --btn-b:#3f6b8a; --btn-c:#24506e;
+    --ink:#20313c; --sub:#647a89; --faint:#9db0bc;
+    --shadow:0 12px 32px -18px rgba(31,74,102,.26);
+  }
+  html[data-lt="dark"]{
+    --bg:#131110; --card:#1d1a16; --card2:#252017; --card3:#2b251b;
+    --hero-a:#272113; --hero-b:#1f1b12; --line:#332e27; --line-gold:#51452f;
+    --gold:#d9b36a; --gold-deep:#e6c887; --gold-hi:#8f6f35;
+    --btn-a:#e3c98f; --btn-b:#c9a35c; --btn-c:#a5813a;
+    --ink:#f2ead9; --sub:#b5a98e; --faint:#7e745f;
+    --shadow:0 12px 32px -18px rgba(0,0,0,.65);
+  }
+  html[data-lt="white"]{
+    --bg:#ffffff; --card:#ffffff; --card2:#fafafa; --card3:#f3f3f3;
+    --hero-a:#fcfcfc; --hero-b:#f4f4f4; --line:#ececec; --line-gold:#dddddd;
+    --gold:#6b6b6b; --gold-deep:#1c1917; --gold-hi:#cfcfcf;
+    --btn-a:#4a4a4a; --btn-b:#2d2d2d; --btn-c:#141414;
+    --ink:#1c1917; --sub:#6e6e6e; --faint:#a8a8a8;
+    --shadow:0 12px 30px -18px rgba(0,0,0,.14);
+  }
+  html[data-lt="dark"] .stgo, html[data-lt="dark"] .readbtn, html[data-lt="dark"] .goldbtn{color:#241c0e}
+  /* sparkline follows the theme */
+  #sp-line{stroke:var(--gold)}
+  #sp-dot{fill:var(--gold-deep)}
+  #sp-dot-prev{stroke:var(--gold);fill:var(--card)}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html{-webkit-text-size-adjust:100%;overflow-x:hidden}
   /* elderly-friendly: large base type, big targets */
@@ -1073,7 +1113,7 @@ function buildLiffHtml(liffId) {
   .apphead{display:flex;align-items:center;justify-content:space-between}
   .lg{font-size:1.9rem;color:var(--gold-deep);letter-spacing:.05em}
   .mywrap{display:flex;align-items:center;gap:8px}
-  .mybtn{background:#fff;border:1px solid var(--line);border-radius:999px;padding:9px 16px;font-size:.86rem;color:var(--gold-deep);font-weight:700}
+  .mybtn{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:9px 16px;font-size:.86rem;color:var(--gold-deep);font-weight:700}
 
   .greet small{color:var(--sub);font-size:.95rem}
   .greet .nm{font-weight:800;font-size:1.55rem;line-height:1.3}
@@ -1126,7 +1166,7 @@ function buildLiffHtml(liffId) {
 
   .sect{font-size:1.08rem;font-weight:800;margin-top:2px}
   .rows{display:flex;flex-direction:column;gap:12px}
-  .row{background:linear-gradient(165deg,#ffffff,#fdf9f0);border:1px solid var(--line-gold);border-radius:20px;
+  .row{background:linear-gradient(165deg,var(--card),var(--card2));border:1px solid var(--line-gold);border-radius:20px;
     padding:15px 13px;display:flex;align-items:center;gap:14px;text-align:left;width:100%;position:relative;overflow:hidden;
     box-shadow:0 14px 30px -16px rgba(165,129,58,.38);transition:transform .12s ease}
   .row:active{transform:scale(.985)}
@@ -1156,19 +1196,19 @@ function buildLiffHtml(liffId) {
   .stat{background:var(--card);border:1px solid var(--line-gold);border-radius:22px;padding:18px 18px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
   .stat .k{font-size:.86rem;color:var(--sub);font-weight:700}
   .stgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}
-  .stc{background:linear-gradient(165deg,#fdfaf3,#faf4e6);border:1px solid var(--line-gold);border-radius:15px;padding:9px 12px 8px}
+  .stc{background:linear-gradient(165deg,var(--card2),var(--card3));border:1px solid var(--line-gold);border-radius:15px;padding:9px 12px 8px}
   .stc small{display:block;font-size:.7rem;color:var(--sub);font-weight:600}
   .stv{display:flex;align-items:baseline;gap:4px;margin-top:1px}
   .stc b{font-size:1.65rem;font-weight:800;color:var(--gold-deep);line-height:1.15}
   .stc b.staxis{font-size:1.12rem;color:var(--ink);line-height:1.3}
   .stc i{font-style:normal;font-size:.72rem;color:var(--faint);font-weight:600}
   .stbtns{display:flex;gap:9px;margin-top:13px}
-  .stgo{flex:1.6;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(165deg,#e3c98f,#c9a35c 60%,#b08a40);
+  .stgo{flex:1.6;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(165deg,var(--btn-a),var(--btn-b) 60%,var(--btn-c));
     color:#fff;font-weight:800;font-size:1.08rem;border:none;border-radius:15px;padding:13px 10px;box-shadow:0 8px 18px -8px rgba(165,129,58,.55)}
-  .sttop{flex:1;background:#fff;border:1.5px solid var(--line-gold);color:var(--gold-deep);font-weight:800;font-size:1rem;border-radius:15px;padding:13px 8px}
+  .sttop{flex:1;background:var(--card);border:1.5px solid var(--line-gold);color:var(--gold-deep);font-weight:800;font-size:1rem;border-radius:15px;padding:13px 8px}
   /* ---- daily strip (collapsed ดวงวันนี้) ---- */
   .dstrip{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;
-    background:linear-gradient(165deg,#ffffff,#fdf9f0);border:1px solid var(--line-gold);border-radius:17px;padding:12px 15px;box-shadow:var(--shadow)}
+    background:linear-gradient(165deg,var(--card),var(--card2));border:1px solid var(--line-gold);border-radius:17px;padding:12px 15px;box-shadow:var(--shadow)}
   .dstrip .dsl{display:flex;align-items:baseline;gap:6px;min-width:0}
   .dstrip .dsk{font-size:.84rem;color:var(--sub);font-weight:700;flex:0 0 auto}
   .dstrip b{font-size:1.5rem;font-weight:800;color:var(--gold-deep)}
@@ -1180,32 +1220,51 @@ function buildLiffHtml(liffId) {
   .dstrip.open .dschev{transform:rotate(180deg)}
   /* ---- match by destiny page ---- */
   .mtcard{background:var(--card);border:1px solid var(--line);border-radius:19px;padding:15px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
-  .mthero{border-color:var(--line-gold);background:linear-gradient(170deg,#fffdf7,#faf3e3)}
+  .mthero{border-color:var(--line-gold);background:linear-gradient(170deg,var(--hero-a),var(--hero-b))}
   .mtkick{display:block;font-size:.78rem;color:var(--sub);font-weight:600}
   .mtkick b{color:var(--gold-deep)}
   .mtbuddha{font-size:1.5rem;font-weight:800;color:var(--ink);margin-top:5px}
   .mtstar{font-size:.9rem;color:var(--sub);line-height:1.65;margin:7px 0 2px}
-  .mtrec{background:linear-gradient(165deg,#ffffff,#fdf9f0);border:1px solid var(--line-gold);border-radius:17px;padding:13px 15px}
+  .mtrec{background:linear-gradient(165deg,var(--card),var(--card2));border:1px solid var(--line-gold);border-radius:17px;padding:13px 15px}
   .mtrec .t{font-weight:800;font-size:1.05rem;color:var(--gold-deep)}
   .mtrec .d{font-size:.88rem;color:var(--sub);line-height:1.6;margin-top:3px}
   .mtstones{display:flex;flex-wrap:wrap;gap:8px}
-  .mtstone{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line-gold);border-radius:99px;
+  .mtstone{display:inline-flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line-gold);border-radius:99px;
     padding:8px 14px;font-size:.9rem;font-weight:700;color:var(--ink)}
   .mtstone i{width:13px;height:13px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
   .mtcolors{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-  .mtcolor{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:7px 13px;font-size:.86rem;font-weight:700}
+  .mtcolor{display:inline-flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:7px 13px;font-size:.86rem;font-weight:700}
   .mtcolor i{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
   .mtban{margin-top:9px;font-size:.84rem;color:var(--sub);display:flex;align-items:center;gap:6px}
   .mtban .cdot{width:11px;height:11px}
   .mtdays{display:grid;grid-template-columns:1fr;gap:7px;margin-top:8px;font-size:.9rem;color:var(--sub)}
   .mtdays b{color:var(--ink)}
   .mtdays .mtkala b{color:#b0642f}
-  .mtfs{border-color:var(--line-gold);background:linear-gradient(170deg,#fffdf7,#faf3e3);font-size:.92rem;color:var(--ink);line-height:1.7}
+  .mtfs{border-color:var(--line-gold);background:linear-gradient(170deg,var(--hero-a),var(--hero-b));font-size:.92rem;color:var(--ink);line-height:1.7}
   .mtfs b{color:var(--gold-deep)}
+  /* ---- theme picker ---- */
+  .iconbtn{width:42px;height:42px;padding:0;display:grid;place-items:center;border-radius:50%}
+  .iconbtn svg{width:21px;height:21px;stroke:var(--gold-deep);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;color:var(--gold-deep)}
+  .throw{display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:var(--card);
+    border:1.5px solid var(--line);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow)}
+  .throw.on{border-color:var(--gold-deep)}
+  .thsw{display:flex;flex:0 0 auto}
+  .thsw i{width:26px;height:26px;border-radius:50%;border:2px solid var(--card);margin-left:-9px}
+  .thsw i:first-child{margin-left:0}
+  .throw .tn{font-weight:800;font-size:1.08rem;color:var(--ink)}
+  .throw .td{font-size:.84rem;color:var(--sub);margin-top:1px}
+  .throw .tchk{margin-left:auto;flex:0 0 auto;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+    background:var(--card3);color:transparent;font-size:.82rem;font-weight:800}
+  .throw.on .tchk{background:var(--gold-deep);color:var(--card)}
+  .thchip{font-size:.62rem;font-weight:800;color:#3e7d55;background:#e4f2e9;border:1px solid #bcdcc8;border-radius:99px;padding:2px 8px;margin-left:7px;vertical-align:2px}
+  html[data-lt="dark"] .thchip{background:#233527;border-color:#3a5a42;color:#8fd0a5}
+  .thprev{display:flex;gap:18px;margin-top:10px}
+  .thpc{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:.72rem;color:var(--sub);font-weight:600}
+  .thpc i{width:38px;height:38px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
   .row .en{display:block;font-size:.6rem;color:var(--gold-deep);letter-spacing:.12em;font-weight:700;margin-top:1px}
   .row .rd{font-size:.88rem;color:var(--sub);margin-top:2px;line-height:1.5}
   /* bottom nav (mockup v6) */
-  .homenav{margin-top:auto;background:#fff;border:1px solid var(--line);border-radius:20px;display:flex;justify-content:space-around;
+  .homenav{margin-top:auto;background:var(--card);border:1px solid var(--line);border-radius:20px;display:flex;justify-content:space-around;
     padding:10px 6px;box-shadow:var(--shadow);position:sticky;bottom:10px}
   .homenav .n{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.68rem;color:var(--faint);width:64px;font-weight:600;background:none}
   .homenav .n svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
@@ -1227,11 +1286,11 @@ function buildLiffHtml(liffId) {
   .why{color:var(--sub);font-size:.95rem;text-align:center;margin-top:8px;line-height:1.6}
   .bigfield{margin-top:18px}
   .bigfield label{display:block;font-size:.95rem;font-weight:700;color:var(--sub);margin:0 4px 8px}
-  .bigin{width:100%;background:#fff;border:1.5px solid var(--line-gold);border-radius:18px;padding:17px 18px;
+  .bigin{width:100%;background:var(--card);border:1.5px solid var(--line-gold);border-radius:18px;padding:17px 18px;
     font-size:1.25rem;font-weight:700;color:var(--ink);outline:none;font-family:inherit}
   .bigin:focus{border-color:var(--gold);box-shadow:0 0 0 4px rgba(201,163,92,.15)}
   .pills{display:flex;flex-wrap:wrap;gap:11px;margin-top:14px;justify-content:center}
-  .pill{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:14px 22px;font-size:1.05rem;font-weight:700;
+  .pill{background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:14px 22px;font-size:1.05rem;font-weight:700;
     color:var(--sub);display:inline-flex;align-items:center;gap:9px}
   .pill svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
   .pill.on{border-color:var(--gold);color:var(--gold-deep);background:#fdf8ec;font-weight:800;
@@ -1240,14 +1299,14 @@ function buildLiffHtml(liffId) {
     place-items:center;margin-left:2px}
   .pill.on .tick{display:grid}
   .obfoot{margin-top:auto;display:flex;flex-direction:column;gap:11px;padding-top:18px}
-  .goldbtn{width:100%;background:linear-gradient(165deg,#e3c98f,#c9a35c 60%,#b08a40);color:#fff;font-weight:800;
+  .goldbtn{width:100%;background:linear-gradient(165deg,var(--btn-a),var(--btn-b) 60%,var(--btn-c));color:#fff;font-weight:800;
     text-align:center;padding:17px;border-radius:18px;font-size:1.2rem;box-shadow:0 14px 30px -12px rgba(176,138,64,.55)}
   .goldbtn:disabled{opacity:.5}
   .backbtn{width:100%;background:transparent;color:var(--faint);font-size:.98rem;font-weight:600;padding:6px;text-align:center}
 
   /* date selects (custom Thai picker) */
   .row3{display:grid;grid-template-columns:1fr 1.3fr 1.2fr;gap:9px}
-  select.bigin{-webkit-appearance:none;appearance:none;background:#fff;padding-right:34px;
+  select.bigin{-webkit-appearance:none;appearance:none;background:var(--card);padding-right:34px;
     text-align:center;text-align-last:center;background-image:none}
   .selwrap{position:relative}
   .selwrap::after{content:"";position:absolute;right:15px;top:50%;width:9px;height:9px;pointer-events:none;
@@ -1285,7 +1344,7 @@ function buildLiffHtml(liffId) {
 
   /* ---- monthly reading view ---- */
   .rd-top{display:flex;align-items:center;gap:10px}
-  .rd-back{width:40px;height:40px;border-radius:999px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;
+  .rd-back{width:40px;height:40px;border-radius:999px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;
     font-size:1.15rem;color:var(--gold-deep);flex:0 0 auto}
   .rd-title{font-size:1.15rem;font-weight:800}
   .rd-title small{display:block;font-weight:600;color:var(--gold-deep);font-size:.82rem;margin-top:1px}
@@ -1298,7 +1357,7 @@ function buildLiffHtml(liffId) {
   .tcard .tn{font-size:.78rem;font-weight:800;color:var(--ink);margin-top:5px;line-height:1.3}
   .tcard .tk{font-size:.64rem;color:var(--gold-deep);font-weight:700;margin-top:2px}
   .tcard .tp{display:inline-block;font-size:.6rem;color:var(--sub);border:1px solid var(--line);border-radius:99px;
-    padding:2px 9px;margin-top:7px;background:#fff}
+    padding:2px 9px;margin-top:7px;background:var(--card)}
   .rd-score{display:flex;align-items:center;gap:12px;margin-top:6px}
   .rd-score .num{font-size:3rem;line-height:1.05;color:var(--gold-deep);font-weight:500}
   .rd-score .per{font-size:.9rem;color:var(--faint)}
@@ -1323,9 +1382,9 @@ function buildLiffHtml(liffId) {
   .luckyrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .luckyrow .lt{font-size:.95rem;font-weight:800}
   .ln{width:42px;height:42px;border-radius:999px;border:1.5px solid var(--gold);display:grid;place-items:center;
-    color:var(--gold-deep);font-weight:700;font-size:1.15rem;background:#fff}
+    color:var(--gold-deep);font-weight:700;font-size:1.15rem;background:var(--card)}
   .ln.wide{width:auto;padding:0 15px}
-  .readbtn{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:13px;background:linear-gradient(165deg,#e3c98f,#c9a35c 60%,#b08a40);
+  .readbtn{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:13px;background:linear-gradient(165deg,var(--btn-a),var(--btn-b) 60%,var(--btn-c));
     color:#fff;font-weight:800;text-align:center;padding:14px;border-radius:16px;font-size:1.05rem;width:100%;
     box-shadow:0 12px 26px -10px rgba(176,138,64,.5)}
   .needbd{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;text-align:center;box-shadow:var(--shadow)}
@@ -1463,7 +1522,10 @@ function buildLiffHtml(liffId) {
   <div id="v-home" class="hidden" style="display:flex;flex-direction:column;gap:15px">
     <div class="apphead">
       <span class="lg serif">Ener</span>
-      <span class="mywrap"><button class="mybtn" id="btn-edit">ข้อมูลของฉัน</button></span>
+      <span class="mywrap">
+        <button class="mybtn iconbtn" id="btn-theme" aria-label="เลือกโทนสี"><svg viewBox="0 0 24 24"><path d="M12 3.5c-4.8 0-8.5 3.4-8.5 7.9 0 4.4 3.6 7.6 7.6 7.6.9 0 1.5-.6 1.5-1.4 0-.4-.2-.7-.4-1-.2-.3-.4-.6-.4-1 0-.8.7-1.4 1.5-1.4h1.8c2.9 0 5.4-2.1 5.4-5 0-3.5-3.7-5.7-8.5-5.7z"/><circle cx="7.8" cy="10.2" r="1.15" fill="currentColor" stroke="none"/><circle cx="12" cy="7.6" r="1.15" fill="currentColor" stroke="none"/><circle cx="16.2" cy="10.2" r="1.15" fill="currentColor" stroke="none"/></svg></button>
+        <button class="mybtn" id="btn-edit">ข้อมูลของฉัน</button>
+      </span>
     </div>
     <div class="greet">
       <small id="h-when">สวัสดี</small>
@@ -1540,6 +1602,30 @@ function buildLiffHtml(liffId) {
       <button class="n" id="nav-read"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 9l-4.4 3.8L17 19l-5-3.2L7 19l1.4-6.2L4 9l5.8-.6z"/></svg>ดวงเดือน</button>
       <button class="n" id="nav-ask"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/></svg>ถามอาจารย์</button>
       <button class="n" id="nav-me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>ข้อมูลฉัน</button>
+    </div>
+  </div>
+
+  <!-- เลือกโทนสี -->
+  <div id="v-theme" class="hidden" style="display:flex;flex-direction:column;gap:13px">
+    <div class="rd-top">
+      <button class="rd-back" id="th-back">‹</button>
+      <span class="rd-title serif">แต่งแอปให้ถูกใจคุณ</span>
+    </div>
+    <div class="mtcard mthero">
+      <small class="mtkick">PERSONALIZE</small>
+      <div class="mtbuddha serif" style="font-size:1.3rem">เลือกโทนสีที่คุณสบายตา</div>
+      <p class="mtstar">ธีมจะถูกบันทึกไว้ในเครื่องคุณเอง เปิดมาครั้งหน้าก็เป็นโทนนี้เลย</p>
+      <span class="fx f2">✦</span>
+    </div>
+    <div id="th-list" style="display:flex;flex-direction:column;gap:11px"></div>
+    <div class="mtcard">
+      <small class="mtkick">ตัวอย่างสีของโทนนี้</small>
+      <div class="thprev">
+        <span class="thpc"><i style="background:var(--gold)"></i>ทอง</span>
+        <span class="thpc"><i style="background:var(--gold-deep)"></i>เข้ม</span>
+        <span class="thpc"><i style="background:var(--ink)"></i>หลัก</span>
+        <span class="thpc"><i style="background:var(--bg);border:1px solid var(--line)"></i>พื้น</span>
+      </div>
     </div>
   </div>
 
@@ -1711,7 +1797,39 @@ function buildLiffHtml(liffId) {
   var LIFF_ID = ${JSON.stringify(liffId)};
   var state = { userId:"", displayName:"", step:0, sex:"", interest:"", channel:"" };
   function $(id){ return document.getElementById(id); }
-  function show(id){ ["v-load","v-ob","v-home","v-read","v-pay","v-match"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); window.scrollTo(0,0); }
+  function show(id){ ["v-load","v-ob","v-home","v-read","v-pay","v-match","v-theme"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); window.scrollTo(0,0); }
+
+  /* ---- โทนสี: เก็บใน localStorage เครื่องลูกค้า ---- */
+  var THEMES = [
+    { k:"cream", n:"ครีมทอง", d:"อบอุ่น นุ่มนวล อ่านง่าย", sw:["#c9a35c","#a5813a","#faf8f3"] },
+    { k:"plum",  n:"พลัมทอง", d:"ขลัง หรูหรา คลาสสิก",   sw:["#7c3a44","#b98a4a","#f8f2ee"] },
+    { k:"blue",  n:"ฟ้าเงิน",  d:"สงบ สะอาด โมเดิร์น",    sw:["#1f4a66","#6f9cb8","#f2f6f9"] },
+    { k:"dark",  n:"โทนดำ",   d:"ขลัง สงบ สบายตากลางคืน", sw:["#131110","#d9b36a","#332e27"] },
+    { k:"white", n:"โทนขาว",  d:"สะอาด เรียบ มินิมอล",    sw:["#1c1917","#9a9a9a","#ffffff"] }
+  ];
+  function currentTheme(){
+    try { return localStorage.getItem("enerLiffTheme") || "cream"; } catch(e){ return "cream"; }
+  }
+  function applyTheme(k){
+    if(k === "cream"){ document.documentElement.removeAttribute("data-lt"); }
+    else { document.documentElement.setAttribute("data-lt", k); }
+    try { localStorage.setItem("enerLiffTheme", k); } catch(e){}
+  }
+  function renderThemes(){
+    var cur = currentTheme();
+    var list = $("th-list"); list.innerHTML = "";
+    THEMES.forEach(function(t){
+      var btn = document.createElement("button");
+      btn.className = "throw" + (t.k === cur ? " on" : "");
+      btn.innerHTML =
+        '<span class="thsw"><i style="background:' + t.sw[0] + '"></i><i style="background:' + t.sw[1] + '"></i><i style="background:' + t.sw[2] + '"></i></span>' +
+        '<span><span class="tn">' + t.n + (t.k === cur ? '<em class="thchip" style="font-style:normal">กำลังใช้</em>' : '') + '</span><span class="td" style="display:block">' + t.d + '</span></span>' +
+        '<span class="tchk">✓</span>';
+      btn.addEventListener("click", function(){ applyTheme(t.k); renderThemes(); });
+      list.appendChild(btn);
+    });
+  }
+  applyTheme(currentTheme());
   function showLoadMsg(t){ var lm=$("loadmsg"); if(lm){ lm.style.display="block"; lm.textContent=t; } }
   function pad2(x){ x=String(x); return x.length<2 ? "0"+x : x; }
 
@@ -2116,6 +2234,8 @@ function buildLiffHtml(liffId) {
   $("row-match").addEventListener("click", openMatch);
   $("mt-back").addEventListener("click", function(){ show("v-home"); });
   $("mt-fill").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
+  $("btn-theme").addEventListener("click", function(){ renderThemes(); show("v-theme"); });
+  $("th-back").addEventListener("click", function(){ show("v-home"); });
 
   /* ---- เติมสิทธิ์สแกน ---- */
   var pay = { pkgs: [], selected: "", qrUrl: "", slipB64: "" };
