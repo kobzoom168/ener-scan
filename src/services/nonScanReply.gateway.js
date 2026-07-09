@@ -24,6 +24,22 @@ const lastSemanticByUser = new Map();
 
 const DEFAULT_SEMANTIC_WINDOW_MS = 22_000;
 
+/**
+ * ตอบแบบคน: random pause before conversational replies (คนจริงไม่ตอบภายใน
+ * เสี้ยววินาที). Bounds via HUMAN_REPLY_DELAY_MS_MIN/MAX (default 2500–5500),
+ * MAX=0 disables. The webhook's "•••" typing indicator covers the wait.
+ */
+async function humanReplyPause() {
+  const rawMin = process.env.HUMAN_REPLY_DELAY_MS_MIN;
+  const rawMax = process.env.HUMAN_REPLY_DELAY_MS_MAX;
+  const min = rawMin === undefined || rawMin === "" ? 2500 : Math.max(0, Number(rawMin) || 0);
+  const max = rawMax === undefined || rawMax === "" ? 5500 : Math.max(0, Number(rawMax) || 0);
+  if (max <= 0) return;
+  const lo = Math.min(min, max);
+  const ms = lo + Math.floor(Math.random() * (Math.max(min, max) - lo + 1));
+  if (ms > 0) await new Promise((r) => setTimeout(r, ms));
+}
+
 function resolveSemanticWindowMs() {
   const raw = process.env.NON_SCAN_SEMANTIC_WINDOW_MS;
   if (raw === undefined || raw === "") return DEFAULT_SEMANTIC_WINDOW_MS;
@@ -220,6 +236,9 @@ export async function sendNonScanReply(opts) {
       retryCount: 0,
     };
   }
+
+  // ตอบแบบคน: หน่วงสุ่ม 2.5–5.5 วิ ก่อนส่งทุกข้อความคุย (ลูกค้าเห็น ••• ระหว่างรอ)
+  await humanReplyPause();
 
   const primary = String(text || "").trim();
   const alts = (Array.isArray(alternateTexts) ? alternateTexts : [])
