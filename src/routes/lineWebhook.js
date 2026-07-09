@@ -2532,7 +2532,7 @@ async function finalizeAcceptedImage({
         replyToken: event.replyToken,
         replyType: "slip_save_failed",
         semanticKey: "slip_save_failed",
-        text: "ขออภัยครับ ระบบบันทึกสลิปไม่สำเร็จ กรุณาลองส่งสลิปใหม่อีกครั้ง",
+        text: "สลิปเข้ามาไม่ครบครับ ส่งรูปสลิปมาใหม่อีกครั้งได้เลย",
         alternateTexts: [
           "บันทึกสลิปไม่สำเร็จชั่วคราว ลองส่งสลิปใหม่อีกครั้งได้เลยครับ",
         ],
@@ -2687,7 +2687,7 @@ async function finalizeAcceptedImage({
         await replyText(
           client,
           event.replyToken,
-          "ขออภัยครับ ระบบสแกนชั่วคราวไม่พร้อม ลองใหม่อีกครั้งในภายหลังนะครับ",
+          "ตอนนี้อาจารย์พักปรับระบบแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่นะ",
         );
       } catch (replyErr) {
         console.error(
@@ -2792,7 +2792,7 @@ async function finalizeAcceptedImage({
         await replyText(
           client,
           event.replyToken,
-          "ขออภัยครับ ระบบรับรูปชั่วคราวไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งนะครับ",
+          "รูปเข้ามาไม่ครบครับ ส่งมาใหม่อีกครั้งได้เลย",
         );
       } catch (replyErr) {
         console.error(
@@ -6276,7 +6276,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             await replyText(
               client,
               event.replyToken,
-              "ขออภัยครับ ระบบสแกนชั่วคราวไม่พร้อม ลองใหม่อีกครั้งในภายหลังนะครับ",
+              "ตอนนี้อาจารย์พักปรับระบบแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่นะ",
             );
           } catch (replyErr) {
             console.error(
@@ -6383,7 +6383,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             await replyText(
               client,
               event.replyToken,
-              "ขออภัยครับ ระบบรับรูปชั่วคราวไม่สำเร็จ ลองส่งรูปใหม่อีกครั้งนะครับ",
+              "รูปเข้ามาไม่ครบครับ ส่งมาใหม่อีกครั้งได้เลย",
             );
           } catch (replyErr) {
             console.error(
@@ -7212,7 +7212,7 @@ export function lineWebhookRouter(lineConfig) {
                     semanticKey: "system_error",
                     text: buildSystemErrorText(),
                     alternateTexts: [
-                      "ขออภัยครับ มีข้อผิดพลาดชั่วคราว ลองส่งใหม่อีกครั้งได้เลย",
+                      "สัญญาณสะดุดนิดนึงครับ ส่งเข้ามาใหม่อีกทีได้เลย",
                     ],
                   });
                 }

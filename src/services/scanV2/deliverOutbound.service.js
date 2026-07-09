@@ -152,7 +152,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
 
     if (kind === "scan_result") {
       if (payload.error) {
-        const t = String(payload.text || "").trim() || "ขออภัยครับ ลองส่งรูปใหม่ได้เลย";
+        const t = String(payload.text || "").trim() || "รูปนี้อ่านไม่ผ่านครับ ส่งใหม่อีกทีนะ";
         await pushText(client, lineUserId, t);
         await markSent(id);
         releaseScanGate(lineUserId);
@@ -513,7 +513,7 @@ function releaseScanGate(lineUserId) {
 
 /** Report couldn't be delivered at all (LINE down/lost) — tell the customer to resend. */
 const REPORT_LOST_RESEND_TEXT =
-  "ขออภัยครับ ผลอ่านพลังส่งเข้าแชทไม่สำเร็จ 🙏\nรบกวนส่งรูปเดิมมาใหม่อีกครั้งนะครับ เดี๋ยวอาจารย์ดูให้ทันที";
+  "ผลอ่านพลังส่งเข้าแชทไม่ผ่านครับ ส่งรูปเดิมมาใหม่อีกครั้ง เดี๋ยวอาจารย์ดูให้ทันที";
 
 /**
  * บอกสิทธิ์คงเหลือทันทีหลัง report ถึงมือ — และถ้าเพิ่งใช้ครั้งสุดท้ายของวัน
