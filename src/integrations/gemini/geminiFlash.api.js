@@ -62,7 +62,7 @@ function getGoogleClient() {
  */
 function buildCompatModel(provider, opts = {}) {
   const cfg = OPENAI_COMPAT[provider];
-  const modelId = cfg.model();
+  const modelId = String(opts.modelOverride || "").trim() || cfg.model();
   const apiKey = String(cfg.apiKey() || "").trim();
   const baseURL = cfg.baseURL().replace(/\/+$/, "");
   const temperature = clampTemp(opts.temperature, 0.2);
@@ -120,6 +120,7 @@ function buildCompatModel(provider, opts = {}) {
  *   jsonMode?: boolean,
  *   timeoutMs?: number,
  *   temperature?: number,
+ *   modelOverride?: string,
  * }} opts
  */
 export function getGeminiFlashModel(opts = {}) {
@@ -131,7 +132,10 @@ export function getGeminiFlashModel(opts = {}) {
 
   const client = getGoogleClient();
   if (!client) return null;
-  const modelId = env.GEMINI_FRONT_MODEL || "gemini-2.5-flash-lite";
+  const modelId =
+    String(opts.modelOverride || "").trim() ||
+    env.GEMINI_FRONT_MODEL ||
+    "gemini-2.5-flash-lite";
   const temperature = clampTemp(opts.temperature, 0.2);
   const generationConfig = {
     temperature,

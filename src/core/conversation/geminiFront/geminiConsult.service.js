@@ -39,6 +39,9 @@ export async function runGeminiConsult(p) {
     temperature: 0.7,
     timeoutMs: env.GEMINI_CONSULT_TIMEOUT_MS,
     maxTokens: 1536,
+    // Customer-visible replies deserve the smartest brain; planner/phrasing
+    // stay on the cheap fast model. e.g. LLM_CONSULT_MODEL=anthropic/claude-opus-4.8
+    modelOverride: env.LLM_CONSULT_MODEL,
   });
   if (!model) return null;
 
