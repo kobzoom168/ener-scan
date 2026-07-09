@@ -884,6 +884,12 @@ export const env = {
     Number(process.env.GEMINI_CONSULT_TIMEOUT_MS) > 0
       ? Math.floor(Number(process.env.GEMINI_CONSULT_TIMEOUT_MS))
       : 12000,
+  /**
+   * Smart-brain override for customer-visible consult replies only (planner/
+   * phrasing stay on the cheap front model). Provider-native model id, e.g.
+   * "anthropic/claude-opus-4.8" on OpenRouter. Empty = use the front model.
+   */
+  LLM_CONSULT_MODEL: String(process.env.LLM_CONSULT_MODEL || "").trim(),
 
   /**
    * Phase 2F: same-object verifier agent. When on, embedding NN is used only as a coarse RECALL
