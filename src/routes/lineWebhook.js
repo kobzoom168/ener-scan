@@ -2259,18 +2259,18 @@ async function finalizeAcceptedImage({
           );
         }
       }
-      await sendNonScanReply({
-        client,
-        userId,
-        replyToken: event.replyToken,
-        replyType: "slip_not_transfer_receipt",
-        semanticKey: "deterministic_slip_not_transfer_receipt",
-        text: buildSlipNotTransferReceiptText(),
-        alternateTexts: [
-          "ลองส่งสลิปโอนที่เห็นยอดและเวลาชัด ๆ ในแชตนี้ได้เลยครับ",
-        ],
-      });
-      return;
+      // กติกาใหม่ (กบ): สลิปที่ด่าน vision ไม่มั่นใจ ห้ามตีกลับลูกค้า — ปล่อยเข้า
+      // pipeline ตรวจจริงต่อ (EasySlip เช็คกับธนาคาร → ผ่านก็อนุมัติอัตโนมัติ,
+      // ไม่ผ่านก็เข้าคิว admin อนุมัติเอง) เคสจริง: สลิปกรุงเทพโดนด่านแรกปัดทั้งที่โอนจริง
+      console.log(
+        JSON.stringify({
+          event: "SLIP_GATE_SOFT_PASS_TO_VERIFY",
+          userId,
+          paymentId: paymentId ?? null,
+          gateRejectKind: slipVal?.rejectKind ?? null,
+          objectCheckResult: slipVal?.objectCheckResult ?? null,
+        }),
+      );
     }
 
     const slipReg = registerSlipEvent(userId, payNow);
