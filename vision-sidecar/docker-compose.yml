@@ -6,6 +6,9 @@ services:
     container_name: ener-vision
     restart: unless-stopped
     ports:
+      # loopback (host tooling) + docker bridge gateway (reachable from stack
+      # containers via host.docker.internal) — never the public interface
       - "127.0.0.1:8077:8077"
+      - "172.17.0.1:8077:8077"
     mem_limit: 2600m
     cpus: 2.0
