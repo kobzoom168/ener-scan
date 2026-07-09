@@ -942,6 +942,20 @@ export const env = {
     String(process.env.AMULET_TYPE_CLASSIFY_ENABLED ?? "true").trim().toLowerCase() !== "false",
   AMULET_TYPE_CLASSIFY_MODEL:
     String(process.env.AMULET_TYPE_CLASSIFY_MODEL || "gpt-4.1-mini").trim() || "gpt-4.1-mini",
+  /**
+   * คลังพิมพ์พระ: scan-time DINOv2 kNN vs กบ-confirmed example images — a strong
+   * match overrides the LLM classifier label (requires vision sidecar + sql/039).
+   */
+  AMULET_TYPE_REF_MATCH_ENABLED:
+    String(process.env.AMULET_TYPE_REF_MATCH_ENABLED ?? "true").trim().toLowerCase() !== "false",
+  AMULET_TYPE_REF_MIN_SIM: (() => {
+    const n = Number(process.env.AMULET_TYPE_REF_MIN_SIM);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.74;
+  })(),
+  AMULET_TYPE_REF_MARGIN: (() => {
+    const n = Number(process.env.AMULET_TYPE_REF_MARGIN);
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.04;
+  })(),
   AMULET_TYPE_MIN_CONFIDENCE: (() => {
     const n = Number(process.env.AMULET_TYPE_MIN_CONFIDENCE);
     return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.75;
