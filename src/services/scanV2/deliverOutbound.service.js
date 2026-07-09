@@ -533,7 +533,7 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     const now = new Date();
     const paidRemaining = Number(u.paid_remaining_scans) || 0;
     if (computePaidActive(u.paid_until, paidRemaining, now)) {
-      return `เหลือสิทธิ์สแกนอีก ${paidRemaining} ครั้งครับ ส่งชิ้นต่อไปมาได้เลย`;
+      return `เหลือสิทธิ์สแกนอีก ${paidRemaining} ครั้ง ส่งชิ้นต่อไปมาได้เลย`;
     }
     const offer = loadActiveScanOffer(now);
     const freeQuota = Number(offer?.freeQuotaPerDay) || 2;
@@ -547,13 +547,13 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     }
     const left = Math.max(0, freeQuota - used);
     if (left > 0) {
-      return `วันนี้ยังสแกนฟรีได้อีก ${left} ครั้งครับ ส่งชิ้นต่อไปมาได้เลย`;
+      return `วันนี้ยังสแกนฟรีได้อีก ${left} ครั้ง ส่งชิ้นต่อไปมาได้เลย`;
     }
     const pkg = getDefaultPackage(offer);
     return [
-      `สิทธิ์สแกนวันนี้ครบแล้วนะครับ พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
+      `สิทธิ์สแกนวันนี้ครบแล้ว พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
       pkg
-        ? `ถ้าอยากดูต่อวันนี้เลย มีแพ็ก ${pkg.priceThb} บาท สแกนได้อีก ${pkg.scanCount} ครั้ง พิมพ์ว่า จ่าย มาได้เลยครับ`
+        ? `ถ้าอยากดูต่อวันนี้เลย มีแพ็ก ${pkg.priceThb} บาท สแกนได้อีก ${pkg.scanCount} ครั้ง พิมพ์ว่า จ่าย มาได้เลย`
         : "",
     ]
       .filter(Boolean)

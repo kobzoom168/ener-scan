@@ -159,6 +159,22 @@ export async function tryDedupeOnce(dedupeKey, ttlSec) {
 }
 
 /**
+ * Non-mutating check: is a dedupe/gate key currently set? (e.g. scan in-flight
+ * gate — text messages arriving mid-scan get a "รอแป๊บ" reply instead of AI routing.)
+ * @param {string} dedupeKey
+ * @returns {Promise<boolean>}
+ */
+export async function isDedupeKeyActive(dedupeKey) {
+  const r = await getScanV2Redis();
+  if (!r) return false;
+  try {
+    return (await r.exists(kDedupe(dedupeKey))) === 1;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Release a dedupe/gate key early (e.g. scan in-flight gate once the report is
  * delivered). Best-effort — TTL remains the safety net when redis is down.
  * @param {string} dedupeKey
