@@ -159,6 +159,21 @@ export async function tryDedupeOnce(dedupeKey, ttlSec) {
 }
 
 /**
+ * Release a dedupe/gate key early (e.g. scan in-flight gate once the report is
+ * delivered). Best-effort — TTL remains the safety net when redis is down.
+ * @param {string} dedupeKey
+ */
+export async function clearDedupeKey(dedupeKey) {
+  const r = await getScanV2Redis();
+  if (!r) return;
+  try {
+    await r.del(kDedupe(dedupeKey));
+  } catch {
+    /* TTL will expire it */
+  }
+}
+
+/**
  * Suggested delay before next LINE push/reply for this user (ms).
  * @param {string} lineUserId
  * @returns {Promise<number>}

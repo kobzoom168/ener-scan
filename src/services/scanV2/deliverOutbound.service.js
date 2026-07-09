@@ -45,7 +45,9 @@ import {
   incrementLine429CanaryCounter,
   setDeliveryRateBackoffMs,
   sleepIfRateHint,
+  clearDedupeKey,
 } from "../../redis/scanV2Redis.js";
+import { scanInFlightKeyForUser } from "./webhookImageIngestion.service.js";
 import {
   scanV2TraceTs,
   lineUserIdPrefix8,
@@ -144,6 +146,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         const t = String(payload.text || "").trim() || "ขออภัยครับ ลองส่งรูปใหม่ได้เลย";
         await pushText(client, lineUserId, t);
         await markSent(id);
+        releaseScanGate(lineUserId);
         if (payload.rejectReason === "object_validation_failed") {
           console.log(
             JSON.stringify({
@@ -197,6 +200,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
 
       if (delivery.sent) {
         await markSent(id);
+        releaseScanGate(lineUserId);
         await handleScanResultPostDelivery(msg, payload);
         console.log(
           JSON.stringify({
@@ -472,6 +476,15 @@ async function handleScanResultPostDelivery(msg, payload) {
 
 }
 
+/** กติกา 1 ชิ้นต่อ 1 รูป: reopen the image gate once the report reached (or terminally failed to reach) the customer. */
+function releaseScanGate(lineUserId) {
+  clearDedupeKey(scanInFlightKeyForUser(lineUserId)).catch(() => {});
+}
+
+/** Report couldn't be delivered at all (LINE down/lost) — tell the customer to resend. */
+const REPORT_LOST_RESEND_TEXT =
+  "ขออภัยครับ ผลอ่านพลังส่งเข้าแชทไม่สำเร็จ 🙏\nรบกวนส่งรูปเดิมมาใหม่อีกครั้งนะครับ เดี๋ยวอาจารย์ดูให้ทันที";
+
 async function markSent(id) {
   await updateOutboundMessage(id, {
     status: "sent",
@@ -483,13 +496,33 @@ async function markSent(id) {
   });
 }
 
+/** Terminal scan_result failure: reopen the gate + best-effort tell the customer to resend. */
+async function handleScanResultTerminalFailure(msg, client) {
+  if (msg.kind !== "scan_result") return;
+  releaseScanGate(msg.line_user_id);
+  if (!client) return;
+  try {
+    await pushText(client, msg.line_user_id, REPORT_LOST_RESEND_TEXT);
+    console.log(
+      JSON.stringify({
+        event: "SCAN_RESULT_LOST_RESEND_NOTICE_SENT",
+        lineUserIdPrefix: lineUserIdPrefix8(msg.line_user_id),
+        outboundIdPrefix: idPrefix8(msg.id),
+      }),
+    );
+  } catch {
+    /* LINE ยังล่มอยู่ — เกตเปิดแล้ว ลูกค้าส่งใหม่ได้เมื่อระบบกลับมา */
+  }
+}
+
 /**
  * @param {string} id
  * @param {object} msg
  * @param {{ sent: boolean, is429?: boolean, errorCode?: string, errorMessage?: string }} result
  * @param {{ workerId?: string, attempt?: number }} [traceCtx]
+ * @param {object} [client] LINE client for terminal-failure customer notice
  */
-export async function finalizeOutboundAttempt(id, msg, result, traceCtx = {}) {
+export async function finalizeOutboundAttempt(id, msg, result, traceCtx = {}, client = null) {
   const kind = msg.kind;
   const max = OUTBOUND_MAX_ATTEMPTS[kind] ?? 5;
   const base = outboundDeliveryBase(msg, traceCtx);
@@ -526,6 +559,7 @@ export async function finalizeOutboundAttempt(id, msg, result, traceCtx = {}) {
           errorMessage: "max_attempts",
         }),
       );
+      await handleScanResultTerminalFailure(msg, client);
       return;
     }
 
@@ -576,4 +610,5 @@ export async function finalizeOutboundAttempt(id, msg, result, traceCtx = {}) {
       errorMessage: String(result.errorMessage || "").slice(0, 500),
     }),
   );
+  await handleScanResultTerminalFailure(msg, client);
 }

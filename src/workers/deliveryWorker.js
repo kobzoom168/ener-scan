@@ -81,7 +81,7 @@ async function loop() {
       try {
         const result = await deliverOutboundMessage(lineClient, msg, traceCtx);
         if (!result.sent) {
-          await finalizeOutboundAttempt(msg.id, msg, result, traceCtx);
+          await finalizeOutboundAttempt(msg.id, msg, result, traceCtx, lineClient);
         }
       } finally {
         activeDeliveries--;

@@ -11,7 +11,7 @@ import {
   OUTBOUND_PRIORITY,
 } from "../../stores/scanV2/outboundPriority.js";
 import { mapAccessDecisionToSource } from "./mapAccessSource.js";
-import { tryDedupeOnce } from "../../redis/scanV2Redis.js";
+import { tryDedupeOnce, clearDedupeKey } from "../../redis/scanV2Redis.js";
 import {
   scanV2TraceTs,
   lineUserIdPrefix8,
@@ -20,6 +20,15 @@ import {
 
 const PRE_SCAN_ACK_TEXT =
   "✅ รับรูปแล้วครับ\n🔍 อาจารย์กำลังพิจารณาพลังให้อยู่\n✨ เดี๋ยวสรุปผลให้เลยครับ";
+
+/** กติกา 1 ชิ้นต่อ 1 รูป: extra images while a scan is in flight are held (no scan, no quota). */
+const MULTI_IMAGE_WAIT_TEXT =
+  "อาจารย์ขอดูทีละ 1 รูปนะครับ 🙏\nรูปแรกกำลังเพ่งพลังให้อยู่ เดี๋ยวผลออกแล้วค่อยส่งชิ้นถัดไปนะครับ\nถ้าชิ้นเดียวกันมีหลายมุม เลือกมุมที่ชัดสุดรูปเดียวพอครับ";
+
+/** In-flight gate key (delivery worker clears it when the report lands; TTL is the safety net). */
+export function scanInFlightKeyForUser(lineUserId) {
+  return `scan_v2:inflight:${String(lineUserId || "").trim()}`;
+}
 
 /**
  * Webhook-side ingestion: storage + scan_uploads + scan_jobs + pre_scan_ack outbound.
@@ -118,6 +127,53 @@ export async function ingestScanImageAsyncV2({
     }
   }
 
+  // 1 ชิ้นต่อ 1 รูป: hold any image arriving while a scan is still in flight
+  // for this user (albums / multi-angle bursts). First photo scans; the rest
+  // get ONE polite notice, consume nothing, and the gate reopens when the
+  // report is delivered (worker clears the key; TTL 180s = safety net).
+  const inflightKey = scanInFlightKeyForUser(lineUserId);
+  const inflightFirst = await tryDedupeOnce(inflightKey, 180);
+  if (!inflightFirst) {
+    const noticeFirst = await tryDedupeOnce(
+      `scan_v2:inflight_notice:${lineUserId}`,
+      120,
+    );
+    if (noticeFirst) {
+      try {
+        await insertOutboundMessage({
+          line_user_id: lineUserId,
+          kind: "pre_scan_ack",
+          priority: OUTBOUND_PRIORITY.pre_scan_ack,
+          payload_json: { text: MULTI_IMAGE_WAIT_TEXT },
+          status: "queued",
+        });
+      } catch (noticeErr) {
+        console.error(
+          JSON.stringify({
+            event: "SCAN_V2_INFLIGHT_NOTICE_FAIL",
+            ...base(),
+            errorMessage: String(noticeErr?.message || noticeErr).slice(0, 160),
+          }),
+        );
+      }
+    }
+    console.log(
+      JSON.stringify({
+        event: "SCAN_V2_INGEST_HELD_IN_FLIGHT",
+        ...base(),
+        noticed: noticeFirst,
+      }),
+    );
+    return {
+      ok: true,
+      duplicate: true,
+      heldInFlight: true,
+      uploadId: null,
+      jobId: null,
+      outboundId: null,
+    };
+  }
+
   const appUser = await ensureUserByLineUserId(lineUserId);
   const appUserId = String(appUser.id);
 
@@ -154,6 +210,7 @@ export async function ingestScanImageAsyncV2({
         errorMessage: null,
       }),
     );
+    await clearDedupeKey(inflightKey);
     return { ok: false, error: "upload_insert_failed", errorMessage: null };
   }
 
@@ -186,6 +243,7 @@ export async function ingestScanImageAsyncV2({
         uploadIdPrefix: idPrefix8(uploadRow.id),
       }),
     );
+    await clearDedupeKey(inflightKey);
     return { ok: false, error: "job_insert_failed", errorMessage: null };
   }
 
