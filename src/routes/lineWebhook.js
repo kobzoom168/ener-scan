@@ -301,7 +301,7 @@ import {
 } from "../utils/paymentSlipGrace.util.js";
 
 import { ingestScanImageAsyncV2, scanInFlightKeyForUser } from "../services/scanV2/webhookImageIngestion.service.js";
-import { tryDedupeOnce, isDedupeKeyActive, setValueWithTtl } from "../redis/scanV2Redis.js";
+import { tryDedupeOnce, isDedupeKeyActive, setValueWithTtl, getValue, clearDedupeKey, incrementCounterWithTtl } from "../redis/scanV2Redis.js";
 
 import {
   checkGlobalAbuseStatus,
@@ -3267,6 +3267,46 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
   } catch {
     /* best-effort memory */
+  }
+
+  // ความอดทนอาจารย์: ข้อความกวน (สั้นจุ๋มจิ๋ม/พิมพ์ซ้ำ) นับแต้มใน 30 นาที —
+  // 3-4 แต้ม = ตัดบทสุภาพแบบมีบารมี (ไม่เปลือง AI), 5+ = เงียบ, พิมพ์จริงจัง = รีเซ็ต
+  try {
+    const bare = text.replace(/[\s!?.…ๆฯ]+/g, "");
+    const isAck = /^(ครับ|คับ|ค่ะ|คะ|จ้า|จ๊ะ|โอเค|ok|okay|ได้|จ่าย|ปลดล็อก|ขอบคุณ|ขอบใจ|555|thank)/i.test(bare);
+    const lastKey = `scan_v2:last_text:${userId}`;
+    const prevText = await getValue(lastKey).catch(() => null);
+    void setValueWithTtl(lastKey, text.slice(0, 60), 1800);
+    const isRepeat = Boolean(prevText && prevText === text.slice(0, 60));
+    const isLowEffort = !isAck && bare.length > 0 && (bare.length <= 4 || isRepeat);
+
+    if (text.length >= 15 && !isRepeat) {
+      void clearDedupeKey(`scan_v2:troll:${userId}`);
+    } else if (isLowEffort) {
+      const troll = await incrementCounterWithTtl(`scan_v2:troll:${userId}`, 1800);
+      if (troll >= 5) {
+        console.log(JSON.stringify({ event: "TROLL_MUTED", userId, troll }));
+        return; // อาจารย์เงียบ — ท่าที่จริงที่สุดและประหยัดสุด
+      }
+      if (troll >= 3) {
+        const firstCut = await tryDedupeOnce(`scan_v2:troll_notice:${userId}`, 600);
+        if (firstCut) {
+          await sendNonScanReply({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: "troll_soft_cut",
+            semanticKey: "troll_soft_cut",
+            text: "อาจารย์รับดูพลังพระ เครื่องราง หิน กำไล ไม่ได้รับคุยเล่นนะ\nมีเรื่องจริงเมื่อไหร่ค่อยว่ามา อาจารย์ขอเก็บสมาธิไว้ดูให้คนที่ตั้งใจ",
+            alternateTexts: ["พร้อมเรื่องพระจริง ๆ เมื่อไหร่ค่อยพิมพ์มานะ"],
+          });
+        }
+        console.log(JSON.stringify({ event: "TROLL_SOFT_CUT", userId, troll }));
+        return;
+      }
+    }
+  } catch {
+    /* patience system best-effort */
   }
 
   // ลูกค้าพิมพ์มาระหว่างอาจารย์กำลังสแกน (in-flight gate ยังล็อกอยู่) →
