@@ -115,10 +115,9 @@ const requiredEnv = [
   "OPENAI_API_KEY",
   "CHANNEL_ACCESS_TOKEN",
   "CHANNEL_SECRET",
-  "SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
-  // LOCAL_POSTGREST_URL / LOCAL_POSTGREST_ANON_KEY are optional:
-  // present → use local PostgREST (Hetzner); absent → use Supabase cloud (Railway)
+  // Supabase cloud retired (Jul 2026): local PostgREST is the only DB path.
+  "LOCAL_POSTGREST_URL",
+  "LOCAL_POSTGREST_ANON_KEY",
 ];
 
 for (const key of requiredEnv) {
@@ -153,10 +152,8 @@ export const env = {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   CHANNEL_ACCESS_TOKEN: process.env.CHANNEL_ACCESS_TOKEN,
   CHANNEL_SECRET: process.env.CHANNEL_SECRET,
-  SUPABASE_URL: process.env.SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   LOCAL_POSTGREST_URL: process.env.LOCAL_POSTGREST_URL,
-  // S3-compatible storage (Cloudflare R2). If set, overrides Supabase Storage.
+  // S3-compatible storage (Cloudflare R2) — the only object storage (Supabase retired Jul 2026).
   S3_ENDPOINT_URL: process.env.S3_ENDPOINT_URL || "",
   S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "",
   S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY || "",

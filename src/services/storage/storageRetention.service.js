@@ -4,7 +4,6 @@
  */
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client, S3_ENABLED } from "../../config/s3Storage.js";
-import { supabase } from "../../config/supabaseStorage.js";
 import { env } from "../../config/env.js";
 import {
   listScanUploadsOriginalDeletionCandidates,
@@ -15,17 +14,14 @@ import {
   markPaymentSlipDeleted,
 } from "../../stores/paymentSlips.db.js";
 import { getPaymentById, clearPaymentSlipUrlAfterRetention } from "../../stores/payments.db.js";
-import { parseSupabasePublicObjectUrl } from "../../utils/storage/supabasePublicStorageUrl.util.js";
-import { isSupabaseStorageObjectAlreadyRemovedError } from "../../utils/storage/supabaseStorageRemove.util.js";
-
 /**
- * Parse Supabase or R2 public object URL into bucket + object path.
+ * Parse an R2/S3 public object URL into bucket + object path.
+ * (Supabase-hosted URLs retired Jul 2026 — old rows with those URLs are just
+ * marked deleted without a storage call.)
  * @param {string|null|undefined} url
  * @returns {{ bucket: string, path: string } | null}
  */
 function parseStorageObjectUrl(url) {
-  const parsed = parseSupabasePublicObjectUrl(url);
-  if (parsed) return parsed;
 
   const s = String(url || "").trim();
   if (!s) return null;
@@ -87,29 +83,16 @@ async function removeStorageObjects(bucket, paths) {
     return { ok: true, removed };
   }
 
-  const { error } = await supabase.storage.from(b).remove(ps);
-  if (error) {
-    if (isSupabaseStorageObjectAlreadyRemovedError(error)) {
-      console.log(
-        JSON.stringify({
-          event: "STORAGE_RETENTION_REMOVE_ALREADY_GONE",
-          bucket: b,
-          count: ps.length,
-        }),
-      );
-      return { ok: true, removed: 0, alreadyGone: true };
-    }
-    console.error(
-      JSON.stringify({
-        event: "STORAGE_RETENTION_REMOVE_FAILED",
-        bucket: b,
-        count: ps.length,
-        message: error.message,
-      }),
-    );
-    return { ok: false, removed: 0, error: error.message };
-  }
-  return { ok: true, removed: ps.length };
+  // S3 not configured: nothing to delete against (Supabase storage retired) —
+  // treat as already gone so the sweep can mark DB rows and move on.
+  console.log(
+    JSON.stringify({
+      event: "STORAGE_RETENTION_REMOVE_SKIPPED_NO_S3",
+      bucket: b,
+      count: ps.length,
+    }),
+  );
+  return { ok: true, removed: 0, alreadyGone: true };
 }
 
 /**

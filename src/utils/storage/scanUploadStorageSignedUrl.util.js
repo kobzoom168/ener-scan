@@ -1,5 +1,4 @@
 import { S3_ENABLED } from "../../config/s3Storage.js";
-import { supabase } from "../../config/supabaseStorage.js";
 import { env } from "../../config/env.js";
 
 function getScanUploadPublicUrl(path) {
@@ -10,82 +9,35 @@ function getScanUploadPublicUrl(path) {
 
 /**
  * Time-limited HTTPS URL for an object in the scan upload bucket.
- * R2 bucket is public — returns public URL when S3 is configured.
+ * R2/S3 only (public bucket → public URL) — Supabase storage retired Jul 2026.
  *
  * @param {string} objectPath — storage path (no leading slash)
- * @param {number} [expiresInSeconds] — default 24h (ignored for R2 public URLs)
- * @returns {Promise<string>} signed URL or "" on failure
+ * @param {number} [expiresInSeconds] — kept for call-site compatibility (ignored for R2 public URLs)
+ * @returns {Promise<string>} URL or "" on failure
  */
 export async function createScanUploadBucketSignedUrl(
   objectPath,
   expiresInSeconds = 86400,
 ) {
+  void expiresInSeconds;
   const path = String(objectPath || "")
     .trim()
     .replace(/^\/+/, "");
-  if (!path) return "";
-
-  if (S3_ENABLED) {
-    return getScanUploadPublicUrl(path);
-  }
-
-  const ttl = Math.min(604800, Math.max(60, Math.floor(Number(expiresInSeconds) || 86400)));
-  const bucket = env.SCAN_V2_UPLOAD_BUCKET;
-
-  try {
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(path, ttl);
-
-    if (error) {
-      console.warn(
-        JSON.stringify({
-          event: "SCAN_UPLOAD_BUCKET_SIGNED_URL_FAIL",
-          bucket,
-          pathPrefix: path.slice(0, 80),
-          message: String(error?.message || error).slice(0, 240),
-        }),
-      );
-      return "";
-    }
-
-    const url = String(data?.signedUrl || "").trim();
-    if (!url || !/^https?:\/\//i.test(url)) {
-      console.warn(
-        JSON.stringify({
-          event: "SCAN_UPLOAD_BUCKET_SIGNED_URL_EMPTY",
-          bucket,
-          pathPrefix: path.slice(0, 80),
-        }),
-      );
-      return "";
-    }
-    return url;
-  } catch (e) {
-    console.warn(
-      JSON.stringify({
-        event: "SCAN_UPLOAD_BUCKET_SIGNED_URL_EXCEPTION",
-        bucket,
-        pathPrefix: path.slice(0, 80),
-        message: String(e?.message || e).slice(0, 240),
-      }),
-    );
-    return "";
-  }
+  if (!path || !S3_ENABLED) return "";
+  return getScanUploadPublicUrl(path);
 }
 
-const SIGNED_URLS_MAX_CHUNK = 100;
-
 /**
- * Batch signed URLs for many paths in one (or few) HTTP calls.
- * @param {string[]} paths — storage paths (deduped by caller optional)
+ * Batch URLs for many paths.
+ * @param {string[]} paths
  * @param {number} [expiresInSeconds]
- * @returns {Promise<Map<string, string>>} path → HTTPS signed URL (only successful entries)
+ * @returns {Promise<Map<string, string>>} path → HTTPS URL (only successful entries)
  */
 export async function createScanUploadBucketSignedUrls(
   paths,
   expiresInSeconds = 86400,
 ) {
+  void expiresInSeconds;
   const raw = Array.isArray(paths) ? paths : [];
   const cleaned = [
     ...new Set(
@@ -94,68 +46,12 @@ export async function createScanUploadBucketSignedUrls(
         .filter(Boolean),
     ),
   ];
-  if (!cleaned.length) return new Map();
-
-  if (S3_ENABLED) {
-    /** @type {Map<string, string>} */
-    const out = new Map();
-    for (const p of cleaned) {
-      const url = getScanUploadPublicUrl(p);
-      if (url && /^https?:\/\//i.test(url)) out.set(p, url);
-    }
-    return out;
-  }
-
-  const ttl = Math.min(604800, Math.max(60, Math.floor(Number(expiresInSeconds) || 86400)));
-  const bucket = env.SCAN_V2_UPLOAD_BUCKET;
   /** @type {Map<string, string>} */
   const out = new Map();
-
-  try {
-    for (let i = 0; i < cleaned.length; i += SIGNED_URLS_MAX_CHUNK) {
-      const chunk = cleaned.slice(i, i + SIGNED_URLS_MAX_CHUNK);
-      const { data, error } = await supabase.storage
-        .from(bucket)
-        .createSignedUrls(chunk, ttl);
-
-      if (error) {
-        console.warn(
-          JSON.stringify({
-            event: "SCAN_UPLOAD_BUCKET_SIGNED_URLS_BATCH_FAIL",
-            bucket,
-            chunkSize: chunk.length,
-            message: String(error?.message || error).slice(0, 240),
-          }),
-        );
-        continue;
-      }
-      if (!Array.isArray(data)) continue;
-      for (const row of data) {
-        const p = String(row?.path || "").trim();
-        const u = String(row?.signedUrl || row?.signedURL || "").trim();
-        if (row?.error && p) {
-          console.warn(
-            JSON.stringify({
-              event: "SCAN_UPLOAD_BUCKET_SIGNED_URLS_ROW_FAIL",
-              bucket,
-              pathPrefix: p.slice(0, 80),
-              message: String(row.error?.message || row.error).slice(0, 200),
-            }),
-          );
-        }
-        if (p && u && /^https?:\/\//i.test(u)) out.set(p, u);
-      }
-    }
-    return out;
-  } catch (e) {
-    console.warn(
-      JSON.stringify({
-        event: "SCAN_UPLOAD_BUCKET_SIGNED_URLS_EXCEPTION",
-        bucket,
-        pathCount: cleaned.length,
-        message: String(e?.message || e).slice(0, 240),
-      }),
-    );
-    return out;
+  if (!cleaned.length || !S3_ENABLED) return out;
+  for (const p of cleaned) {
+    const url = getScanUploadPublicUrl(p);
+    if (url && /^https?:\/\//i.test(url)) out.set(p, url);
   }
+  return out;
 }

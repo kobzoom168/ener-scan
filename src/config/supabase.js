@@ -1,14 +1,14 @@
 import { PostgrestClient } from "@supabase/postgrest-js";
-import { createClient } from "@supabase/supabase-js";
 import { env } from "./env.js";
 
-// If LOCAL_POSTGREST_URL is set → Hetzner local PG via PostgREST
-// If not set → Supabase cloud (Railway / any env without local PG)
-export const supabase = env.LOCAL_POSTGREST_URL
-  ? new PostgrestClient(env.LOCAL_POSTGREST_URL, {
-      headers: {
-        apikey: env.LOCAL_POSTGREST_ANON_KEY,
-        Authorization: `Bearer ${env.LOCAL_POSTGREST_ANON_KEY}`,
-      },
-    })
-  : createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+// Local PostgREST (Hetzner) is the ONLY database path — Supabase cloud retired Jul 2026.
+if (!env.LOCAL_POSTGREST_URL || !env.LOCAL_POSTGREST_ANON_KEY) {
+  throw new Error("LOCAL_POSTGREST_URL / LOCAL_POSTGREST_ANON_KEY missing (Supabase cloud fallback removed)");
+}
+
+export const supabase = new PostgrestClient(env.LOCAL_POSTGREST_URL, {
+  headers: {
+    apikey: env.LOCAL_POSTGREST_ANON_KEY,
+    Authorization: `Bearer ${env.LOCAL_POSTGREST_ANON_KEY}`,
+  },
+});
