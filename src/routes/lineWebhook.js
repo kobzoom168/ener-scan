@@ -116,6 +116,8 @@ import {
 import { runSlipAutoApprovalAfterGateAccept } from "../core/payments/slipCheck/slipAutoApprovalOrchestrator.service.js";
 import { evaluateSlipAutoApproval } from "../core/payments/slipCheck/slipAutoApproval.service.js";
 import { runGeminiFrontOrchestrator } from "../core/conversation/geminiFront/geminiFrontOrchestrator.service.js";
+import { runGeminiConsult } from "../core/conversation/geminiFront/geminiConsult.service.js";
+import { getGeminiConversationHistory } from "../utils/conversationHistory.util.js";
 import { resolveGeminiPhase1StateKey } from "../core/conversation/geminiFront/geminiFront.featureFlags.js";
 import { invokePhase1GeminiShadow } from "../core/conversation/geminiFront/geminiFrontShadow.service.js";
 import {
@@ -3604,6 +3606,36 @@ async function handleTextMessage({ client, event, userId, session }) {
             return true;
           }
           if (paymentState === "paywall_offer_single") {
+            // ลูกค้าถามคำถามจริงระหว่างติด paywall (เช่น "พรุ่งนี้ฟรีได้กี่โมง")
+            // → ให้สมอง consult ที่มีข้อมูลสิทธิ์จริงตอบแบบคน แทนการยิง paywall ซ้ำ
+            try {
+              const history = await getGeminiConversationHistory(userId, 8, 2000).catch(() => []);
+              const consultText = await runGeminiConsult({
+                userId,
+                userText: text,
+                conversationHistory: history,
+              });
+              if (consultText) {
+                await sendNonScanReplyWithOptionalConvSurface({
+                  client,
+                  userId,
+                  replyToken: event.replyToken,
+                  replyType: "paywall_question_consult",
+                  semanticKey: "paywall_question_consult",
+                  text: consultText.slice(0, 1800),
+                  alternateTexts: [],
+                  convSurface: buildConvSurfacePaywall(
+                    userId,
+                    text,
+                    "paywall_question_consult",
+                    consultText.slice(0, 1800),
+                    "short",
+                    getDefaultPackage(offer),
+                  ),
+                });
+                return true;
+              }
+            } catch {}
             const defaultPkg = getDefaultPackage(offer);
             const selectedKey = getSelectedPaymentPackageKey(userId);
             const selectedPkg =
