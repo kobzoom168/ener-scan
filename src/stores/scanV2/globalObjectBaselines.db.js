@@ -450,6 +450,65 @@ export async function matchGlobalObjectBaselinesByEmbedding(embedding, opts = {}
 }
 
 /**
+ * Phase 2G: NN over the TRUE image embedding (DINOv2, visual_embedding vector(384)).
+ * Same row shape as matchGlobalObjectBaselinesByEmbedding.
+ *
+ * @param {number[]} embedding
+ * @param {{ lane?: string|null, objectFamily?: string|null, minSimilarity?: number, matchCount?: number }} [opts]
+ * @returns {Promise<Array<GlobalObjectBaselineRow & { similarity: number }>>}
+ */
+export async function matchGlobalObjectBaselinesByVisualEmbedding(embedding, opts = {}) {
+  if (!Array.isArray(embedding) || embedding.length !== 384) return [];
+  if (!embedding.every((x) => Number.isFinite(Number(x)))) return [];
+
+  const minSimilarity = Math.min(1, Math.max(0, Number(opts.minSimilarity ?? 0.6)));
+  const matchCount = Math.min(50, Math.max(1, Math.floor(Number(opts.matchCount) || 6)));
+
+  const { data, error } = await supabase.rpc("match_global_object_baselines_visual", {
+    query_embedding: embedding.map((x) => Number(x)),
+    match_lane: opts.lane != null ? String(opts.lane).trim() || null : null,
+    match_family: opts.objectFamily != null ? String(opts.objectFamily).trim() || null : null,
+    min_similarity: minSimilarity,
+    match_count: matchCount,
+  });
+
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+
+  const out = [];
+  for (const raw of data) {
+    const mapped = mapBaselineRow(raw);
+    if (!mapped) continue;
+    const sim =
+      raw && typeof raw === "object" && "similarity" in raw && Number.isFinite(Number(raw.similarity))
+        ? Number(raw.similarity)
+        : 0;
+    out.push({ ...mapped, similarity: sim });
+  }
+  out.sort((a, b) => b.similarity - a.similarity);
+  return out;
+}
+
+/**
+ * Phase 2G: store/refresh the DINOv2 visual embedding on a baseline row.
+ * @param {string} baselineId
+ * @param {number[]} embedding 384-d
+ * @param {string} [model]
+ */
+export async function updateGlobalObjectBaselineVisualEmbedding(baselineId, embedding, model = "dinov2_vits14") {
+  if (!Array.isArray(embedding) || embedding.length !== 384) return;
+  const { error } = await supabase
+    .from("global_object_baselines")
+    .update({
+      visual_embedding: JSON.stringify(embedding.map((x) => Number(x))),
+      visual_embedding_model: String(model || "dinov2_vits14"),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", String(baselineId));
+  if (error) throw error;
+}
+
+/**
  * Phase 2F: recency safety-net for the verifier agent. Returns the most recently registered
  * baselines for a lane/family (full rows incl. thumbnail_path), newest first.
  *

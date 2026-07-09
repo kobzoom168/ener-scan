@@ -213,6 +213,12 @@ export async function maybePersistGlobalObjectBaselineAfterScanV2(p) {
         timestamp: scanV2TraceTs(),
       }),
     );
+    // Phase 2G: fire-and-forget DINOv2 visual embedding for future re-id recall
+    if (row?.id && thumbnailPath) {
+      import("./tryVisionReidBaselineReuse.service.js")
+        .then((m) => m.backfillVisualEmbedding(String(row.id), thumbnailPath))
+        .catch(() => {});
+    }
   } catch (err) {
     console.log(
       JSON.stringify({
