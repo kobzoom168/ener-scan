@@ -276,6 +276,7 @@ ${
               const sim = r.similarity != null ? `<span class="sim">${(Number(r.similarity) * 100).toFixed(0)}%</span>` : "";
               return `<form class="pick" method="post" action="/admin/types/${esc(key)}/pick">
                 <input type="hidden" name="baselineId" value="${esc(r.id)}"/>
+                <input type="hidden" name="page" value="${mode === "library" ? page : 1}"/>
                 <img src="${esc(url)}" loading="lazy"/>${sim}
                 <button class="ok">✓ ใช่</button>
               </form>`;
@@ -341,7 +342,11 @@ ${
         source: "library",
       });
       const back = String(req.headers.referer || "").includes("/suggest") ? "suggest" : "library";
-      res.redirect(`/admin/types/${esc(req.params.key)}/${back}`);
+      // กลับหน้าเดิมที่ค้างอยู่ (เช่นเลือกจากหน้า 2 ต้องเด้งกลับหน้า 2)
+      const pageN = Math.max(1, Math.floor(Number(req.body?.page)) || 1);
+      res.redirect(
+        `/admin/types/${esc(req.params.key)}/${back}${back === "library" && pageN > 1 ? `?page=${pageN}` : ""}`,
+      );
     } catch (e) {
       res.status(500).send(`ติดป้ายไม่สำเร็จ: ${esc(e?.message)} <a href="/admin/types?type=${esc(req.params.key)}">กลับ</a>`);
     }
