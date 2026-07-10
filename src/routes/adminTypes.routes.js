@@ -236,6 +236,10 @@ ${
       const t = types.find((x) => x.type_key === key);
       if (!t) return res.redirect("/admin/types");
 
+      // แบ่งหน้า: ไล่ดูได้ครบทุกองค์ในคลัง (รวมของลูกค้าทั้งหมด)
+      const PAGE_SIZE = 120;
+      const page = Math.max(1, Math.floor(Number(req.query?.page)) || 1);
+      let totalCount = 0;
       let rows = [];
       if (mode === "suggest") {
         const centroid = await typeCentroid(key);
@@ -248,13 +252,14 @@ ${
           });
         }
       } else {
-        const { data } = await supabase
+        const { data, count } = await supabase
           .from("global_object_baselines")
-          .select("id, thumbnail_path, created_at")
+          .select("id, thumbnail_path, created_at", { count: "exact" })
           .not("thumbnail_path", "is", null)
           .order("created_at", { ascending: false })
-          .limit(60);
+          .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
         rows = Array.isArray(data) ? data : [];
+        totalCount = Number(count) || 0;
       }
 
       const { data: usedRows } = await supabase
@@ -295,8 +300,16 @@ ${
   .muted{color:#7a6a58;font-size:.85rem}
 </style></head><body>
 <b>${mode === "suggest" ? "✨ ระบบหาให้ — กดอนุมัติที่ใช่" : "🔍 เลือกจากคลังสแกน"}: ${esc(t.label_thai)}</b>
-<p class="muted"><a href="/admin/types?type=${esc(key)}">← กลับ</a> · ${mode === "suggest" ? "เรียงจากใกล้เคียงสุด (ต้องมีตัวอย่างอย่างน้อย 1 รูปก่อนระบบถึงหาได้)" : "องค์ล่าสุดในคลังสแกน กดที่ใช่เพื่อติดป้าย"}</p>
+<p class="muted"><a href="/admin/types?type=${esc(key)}">← กลับ</a> · ${mode === "suggest" ? "เรียงจากใกล้เคียงสุด (ต้องมีตัวอย่างอย่างน้อย 1 รูปก่อนระบบถึงหาได้)" : `ทุกองค์ในคลังสแกน (รวมของลูกค้า) ${totalCount} องค์ · หน้า ${page}/${Math.max(1, Math.ceil(totalCount / PAGE_SIZE))} · กดที่ใช่เพื่อติดป้าย`}</p>
 <div class="grid">${cards || '<p class="muted">ไม่มีรายการ</p>'}</div>
+${
+  mode === "library"
+    ? `<p style="display:flex;gap:14px;justify-content:center;margin-top:18px">
+        ${page > 1 ? `<a class="btn" href="/admin/types/${esc(key)}/library?page=${page - 1}">← ก่อนหน้า</a>` : ""}
+        ${page * PAGE_SIZE < totalCount ? `<a class="btn" href="/admin/types/${esc(key)}/library?page=${page + 1}">ถัดไป →</a>` : ""}
+      </p>`
+    : ""
+}
 </body></html>`);
     } catch (e) {
       res.status(500).send(`โหลดไม่สำเร็จ: ${esc(e?.message)}`);
