@@ -38,36 +38,6 @@ async function signedUrlSafe(path) {
   }
 }
 
-/** Average embedding of a type's examples (centroid) for suggestions. */
-async function typeCentroid(typeKey) {
-  const { data, error } = await supabase
-    .from("amulet_type_examples")
-    .select("embedding")
-    .eq("type_key", String(typeKey))
-    .eq("status", "confirmed")
-    .limit(50);
-  if (error || !Array.isArray(data) || !data.length) return null;
-  const vecs = data
-    .map((r) => {
-      try {
-        return typeof r.embedding === "string" ? JSON.parse(r.embedding) : r.embedding;
-      } catch {
-        return null;
-      }
-    })
-    .filter((v) => Array.isArray(v) && v.length === 384);
-  if (!vecs.length) return null;
-  const c = new Array(384).fill(0);
-  for (const v of vecs) for (let i = 0; i < 384; i++) c[i] += Number(v[i]);
-  let norm = 0;
-  for (let i = 0; i < 384; i++) {
-    c[i] /= vecs.length;
-    norm += c[i] * c[i];
-  }
-  norm = Math.sqrt(norm) || 1;
-  return c.map((x) => x / norm);
-}
-
 export default function createAdminTypesRouter() {
   const router = express.Router();
   const jsonBig = express.json({ limit: "10mb" });
@@ -242,15 +212,42 @@ ${
       let totalCount = 0;
       let rows = [];
       if (mode === "suggest") {
-        const centroid = await typeCentroid(key);
-        if (centroid) {
-          rows = await matchGlobalObjectBaselinesByVisualEmbedding(centroid, {
+        // เทียบกับตัวอย่าง "ทีละใบ" แล้วรวมผล (คล้ายใบไหนก็นับ ใช้ค่าที่คล้ายสุด)
+        // — ดีกว่าเฉลี่ยเป็น centroid เดียว ซึ่งเบลอเมื่อตัวอย่างหลากหลาย (เคสตะกรุด 17 แบบ)
+        const { data: exRows } = await supabase
+          .from("amulet_type_examples")
+          .select("embedding")
+          .eq("type_key", key)
+          .eq("status", "confirmed")
+          .order("created_at", { ascending: false })
+          .limit(12);
+        const vecs = (exRows || [])
+          .map((r) => {
+            try {
+              return typeof r.embedding === "string" ? JSON.parse(r.embedding) : r.embedding;
+            } catch {
+              return null;
+            }
+          })
+          .filter((v) => Array.isArray(v) && v.length === 384);
+        const byId = new Map();
+        for (const v of vecs) {
+          const ms = await matchGlobalObjectBaselinesByVisualEmbedding(v, {
             lane: "sacred_amulet",
             objectFamily: "sacred_amulet",
-            minSimilarity: 0.55,
-            matchCount: 30,
-          });
+            minSimilarity: 0.45,
+            matchCount: 20,
+          }).catch(() => []);
+          for (const m of ms || []) {
+            const prev = byId.get(String(m.id));
+            if (!prev || Number(m.similarity) > Number(prev.similarity)) {
+              byId.set(String(m.id), m);
+            }
+          }
         }
+        rows = [...byId.values()]
+          .sort((a, b) => Number(b.similarity) - Number(a.similarity))
+          .slice(0, 40);
       } else {
         const { data, count } = await supabase
           .from("global_object_baselines")
