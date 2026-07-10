@@ -48,7 +48,9 @@ export async function listExamplesForType(typeKey) {
 }
 
 /**
- * @param {{ typeKey: string, embedding: number[], imagePath?: string|null, sourceBaselineId?: string|null, source?: string }} p
+ * @param {{ typeKey: string, embedding: number[], imagePath?: string|null, sourceBaselineId?: string|null, source?: string, status?: string }} p
+ * status "rejected" = ตัวอย่างลบ (กบกด ✗ ไม่ใช่) — ใช้กันเสนอซ้ำ/สอนจุดต่าง
+ * ไม่ถูกใช้ตอนสแกน (RPC กรอง confirmed) และไม่โชว์ในแถบตัวอย่าง
  */
 export async function addTypeExample(p) {
   if (!Array.isArray(p.embedding) || p.embedding.length !== 384) throw new Error("bad_embedding");
@@ -58,7 +60,7 @@ export async function addTypeExample(p) {
     image_path: p.imagePath != null ? String(p.imagePath) : null,
     source_baseline_id: p.sourceBaselineId != null ? String(p.sourceBaselineId) : null,
     source: ["upload", "library", "suggested"].includes(String(p.source)) ? String(p.source) : "upload",
-    status: "confirmed",
+    status: String(p.status) === "rejected" ? "rejected" : "confirmed",
   });
   if (error) throw error;
 }
