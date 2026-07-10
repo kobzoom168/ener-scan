@@ -36,7 +36,13 @@ async function humanReplyPause() {
   const max = rawMax === undefined || rawMax === "" ? 5500 : Math.max(0, Number(rawMax) || 0);
   if (max <= 0) return;
   const lo = Math.min(min, max);
-  const ms = lo + Math.floor(Math.random() * (Math.max(min, max) - lo + 1));
+  let ms = lo + Math.floor(Math.random() * (Math.max(min, max) - lo + 1));
+  // ดึก (ตี 1 - 6 โมงเช้าไทย): อาจารย์หยิบมือถือช้ากว่ากลางวัน +3-5 วิ —
+  // คนจริงไม่เด้งตอบตี 3 ใน 3 วินาที (กบ Jul 2026, ส่วนหนึ่งของ "อาจารย์มีนาฬิกาชีวิต")
+  const bkkHour = new Date(Date.now() + 7 * 3600 * 1000).getUTCHours();
+  if (bkkHour >= 1 && bkkHour < 6) {
+    ms += 3000 + Math.floor(Math.random() * 2001);
+  }
   if (ms > 0) await new Promise((r) => setTimeout(r, ms));
 }
 
