@@ -900,6 +900,70 @@ export const env = {
   })(),
 
   /**
+   * Voice note "เสียงอาจารย์" ท้าย flex report (ElevenLabs → m4a → R2 → LINE audio).
+   * Default off. Audience: paid_and_first_free (จ่ายเงิน=ทุกสแกน, ฟรี=สแกนแรกครั้งเดียว)
+   * หรือ "all" สำหรับเทสบน staging.
+   */
+  VOICE_NOTE_ENABLED:
+    String(process.env.VOICE_NOTE_ENABLED ?? "false").trim().toLowerCase() === "true",
+  VOICE_NOTE_AUDIENCE: String(process.env.VOICE_NOTE_AUDIENCE || "paid_and_first_free").trim(),
+  VOICE_NOTE_TIMEOUT_MS: (() => {
+    const n = Number(process.env.VOICE_NOTE_TIMEOUT_MS);
+    return Number.isFinite(n) && n >= 3000 ? Math.floor(n) : 15000;
+  })(),
+  ELEVENLABS_API_KEY: String(process.env.ELEVENLABS_API_KEY || "").trim(),
+  ELEVENLABS_VOICE_ID: String(process.env.ELEVENLABS_VOICE_ID || "KaT6JiTgr6OcQNnpAc35").trim(),
+  ELEVENLABS_MODEL_ID: String(process.env.ELEVENLABS_MODEL_ID || "eleven_v3").trim(),
+  /** อัตราเร็วเสียงพูด 0.7-1.2 (1.0 = ปกติ) — อาจารย์พูดช้ากว่าปกติเล็กน้อย */
+  ELEVENLABS_SPEED: (() => {
+    const n = Number(process.env.ELEVENLABS_SPEED);
+    return Number.isFinite(n) && n >= 0.7 && n <= 1.2 ? n : 0.85;
+  })(),
+
+  /**
+   * Phase 1 image forensics: ธง screen-photo / AI-generated / edited จาก LLM
+   * (ยิงขนานกับ object gate). suspect = ขอถ่ายใหม่นุ่ม ๆ — ยกเว้นลูกค้าจ่ายเงิน
+   * และชิ้นที่ match baseline จริงเดิม. Default off.
+   */
+  IMAGE_FORENSIC_ENABLED:
+    String(process.env.IMAGE_FORENSIC_ENABLED ?? "false").trim().toLowerCase() === "true",
+  IMAGE_FORENSIC_MODEL: String(process.env.IMAGE_FORENSIC_MODEL || "gpt-4.1-mini").trim(),
+  IMAGE_FORENSIC_TIMEOUT_MS: (() => {
+    const n = Number(process.env.IMAGE_FORENSIC_TIMEOUT_MS);
+    return Number.isFinite(n) && n >= 5000 ? Math.floor(n) : 25000;
+  })(),
+  /** ขอถ่ายใหม่เมื่อธง screen_photo มั่นใจ ≥ ค่านี้ (พร้อมหลักฐาน ≥1 ชิ้น) */
+  IMAGE_FORENSIC_SCREEN_MIN_CONF: (() => {
+    const n = Number(process.env.IMAGE_FORENSIC_SCREEN_MIN_CONF);
+    return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.85;
+  })(),
+  /** ขอถ่ายใหม่เมื่อธง ai_generated/edited มั่นใจ ≥ ค่านี้ (เกณฑ์สูงกว่า — detector ไม่นิ่ง) */
+  IMAGE_FORENSIC_AI_MIN_CONF: (() => {
+    const n = Number(process.env.IMAGE_FORENSIC_AI_MIN_CONF);
+    return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.9;
+  })(),
+  /**
+   * ท้าถ่ายสด (challenge): รูปติดธงสงสัย → อาจารย์ขอ "อีกมุม ตอนนี้เลย" แล้ว
+   * LightGlue พิสูจน์ว่าชิ้นเดียวกันจริง — ไม้ตายเดียวที่ชนะรูป AI เนียน ๆ.
+   * ต้องมี vision sidecar. Default off.
+   */
+  AUTH_CHALLENGE_ENABLED:
+    String(process.env.AUTH_CHALLENGE_ENABLED ?? "false").trim().toLowerCase() === "true",
+  /** inliers ขั้นต่ำที่ถือว่าสองรูปคือชิ้นเดียวกัน (คนละมุม — ต่ำกว่าเกณฑ์ re-id เล็กน้อย) */
+  AUTH_CHALLENGE_MIN_INLIERS: (() => {
+    const n = Number(process.env.AUTH_CHALLENGE_MIN_INLIERS);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 18;
+  })(),
+  /** หน้าต่างเวลาส่งรูปมุมสอง (วินาที) */
+  AUTH_CHALLENGE_TTL_SEC: (() => {
+    const n = Number(process.env.AUTH_CHALLENGE_TTL_SEC);
+    return Number.isFinite(n) && n >= 60 ? Math.floor(n) : 900;
+  })(),
+  /** เทสบน staging: ท้าแม้เป็นลูกค้าจ่ายเงิน (prod ต้อง false — ลูกค้าจ่ายไม่โดนท้า) */
+  AUTH_CHALLENGE_INCLUDE_PAID:
+    String(process.env.AUTH_CHALLENGE_INCLUDE_PAID ?? "false").trim().toLowerCase() === "true",
+
+  /**
    * Phase 2G: TRUE instance re-id — DINOv2 recall + LightGlue geometric verify
    * via the vision sidecar (vision-sidecar/). Default off; enable per env.
    */

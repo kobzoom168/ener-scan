@@ -34,6 +34,7 @@ import {
   notifyLineUserTextAfterAdminAction,
 } from "../../utils/lineNotify429Retry.util.js";
 import { invokeLinePushMessage } from "../../utils/lineClientTransport.util.js";
+import { getStaticVoiceNote } from "../voiceNote/scanVoiceNote.service.js";
 import { updateOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
 import { getScanJobById, updateScanJob } from "../../stores/scanV2/scanJobs.db.js";
 import { decrementUserPaidRemainingScans } from "../../stores/paymentAccess.db.js";
@@ -135,7 +136,25 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           errorMessage: "pre_scan_ack missing text",
         };
       }
-      await pushText(client, lineUserId, text);
+      // เตือนหลายรูป → เสียงอาจารย์ (static cached) แทนข้อความ; พลาด → ข้อความเดิม
+      let sentAsVoice = false;
+      const staticName = String(payload.voiceStatic || "").trim();
+      if (staticName) {
+        try {
+          const v = await getStaticVoiceNote(staticName);
+          if (v?.url && v.durationMs >= 500) {
+            await client.pushMessage(lineUserId, {
+              type: "audio",
+              originalContentUrl: v.url,
+              duration: Math.min(v.durationMs, 60000),
+            });
+            sentAsVoice = true;
+          }
+        } catch {
+          /* fall back to text */
+        }
+      }
+      if (!sentAsVoice) await pushText(client, lineUserId, text);
       await markSent(id);
       // Re-arm LINE's typing "•••" AFTER the ack bubble (sending the ack cleared
       // the webhook-time one) so the customer sees the bot working while the
@@ -199,13 +218,49 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
 
       const flex = payload.flex ?? null;
       const text = String(payload.text || "");
-      const delivery = await sendScanResultPushWith429Retry({
+      // เสียงอาจารย์ (ถ้า worker-scan สร้างไว้) — แนบใน push เดียวกับ report
+      // (LINE นับ 1 push หลาย message objects = 1 ข้อความ ไม่เปลืองโควต้า)
+      const voice =
+        payload.voice && typeof payload.voice === "object" ? payload.voice : null;
+      const voiceUrl = String(voice?.url || "").trim();
+      const voiceDurationMs = Math.floor(Number(voice?.durationMs) || 0);
+      const audioMessage =
+        voiceUrl.startsWith("https://") && voiceDurationMs >= 500
+          ? {
+              type: "audio",
+              originalContentUrl: voiceUrl,
+              duration: Math.min(voiceDurationMs, 60000),
+            }
+          : null;
+      const primaryMessage = audioMessage
+        ? flex
+          ? [flex, audioMessage]
+          : [{ type: "text", text: text.slice(0, 4900) }, audioMessage]
+        : flex;
+      let delivery = await sendScanResultPushWith429Retry({
         client,
         userId: lineUserId,
-        flexMessage: flex,
+        flexMessage: primaryMessage,
         text,
         logPrefix: "[SCAN_V2_DELIVERY]",
       });
+      // เสียงห้ามทำให้ report ล่ม: push พร้อมเสียงไม่ผ่าน (ไม่ใช่ 429) → ส่งซ้ำแบบไม่มีเสียง
+      if (!delivery.sent && !delivery.is429 && audioMessage) {
+        console.warn(
+          JSON.stringify({
+            event: "SCAN_VOICE_ATTACH_RETRY_WITHOUT_AUDIO",
+            ...base(),
+            finalMessage: delivery.finalMessage,
+          }),
+        );
+        delivery = await sendScanResultPushWith429Retry({
+          client,
+          userId: lineUserId,
+          flexMessage: flex,
+          text,
+          logPrefix: "[SCAN_V2_DELIVERY_NO_VOICE]",
+        });
+      }
 
       if (delivery.sent) {
         await markSent(id);
@@ -522,6 +577,14 @@ const REPORT_LOST_RESEND_TEXT =
  * @param {string} lineUserId
  * @returns {Promise<string|null>}
  */
+/** สั้น ๆ สุ่มตาม (user, จำนวนที่เหลือ) — เลขเดิมได้ประโยคเดิม ให้ dedupe 30 นาทีทำงาน */
+function pickRemainingText(variants, seedStr) {
+  let h = 0;
+  const s = String(seedStr || "");
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return variants[h % variants.length];
+}
+
 async function buildRemainingQuotaNoticeText(lineUserId) {
   try {
     const { data: u } = await supabase
@@ -533,7 +596,15 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     const now = new Date();
     const paidRemaining = Number(u.paid_remaining_scans) || 0;
     if (computePaidActive(u.paid_until, paidRemaining, now)) {
-      return `เหลือสิทธิ์สแกนอีก ${paidRemaining} ครั้ง ส่งชิ้นต่อไปมาได้เลย`;
+      return pickRemainingText(
+        [
+          `เหลืออีก ${paidRemaining} ครั้ง`,
+          `สแกนได้อีก ${paidRemaining} ครั้ง`,
+          `เหลือ ${paidRemaining} ครั้งนะ`,
+          `ยังเหลืออีก ${paidRemaining} ครั้ง ส่งมาต่อได้เลย`,
+        ],
+        `${lineUserId}:${paidRemaining}`,
+      );
     }
     const offer = loadActiveScanOffer(now);
     const freeQuota = Number(offer?.freeQuotaPerDay) || 2;
@@ -547,7 +618,15 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     }
     const left = Math.max(0, freeQuota - used);
     if (left > 0) {
-      return `วันนี้ยังสแกนฟรีได้อีก ${left} ครั้ง ส่งชิ้นต่อไปมาได้เลย`;
+      return pickRemainingText(
+        [
+          `วันนี้ฟรีเหลืออีก ${left} ครั้ง`,
+          `ฟรีวันนี้ยังเหลือ ${left} ครั้ง`,
+          `สแกนฟรีได้อีก ${left} ครั้งวันนี้`,
+          `เหลือฟรีอีก ${left} ครั้ง ส่งมาได้เลย`,
+        ],
+        `${lineUserId}:free:${left}`,
+      );
     }
     const pkg = getDefaultPackage(offer);
     return [

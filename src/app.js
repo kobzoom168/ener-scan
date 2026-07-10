@@ -10,6 +10,7 @@ import createAdminAuthRouter from "./routes/adminAuth.routes.js";
 import createAdminPaymentsDashboardRouter from "./routes/adminPaymentsDashboard.routes.js";
 import createAdminKbRouter from "./routes/adminKb.routes.js";
 import createAdminTypesRouter from "./routes/adminTypes.routes.js";
+import createAdminVoiceRouter from "./routes/adminVoice.routes.js";
 import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
 import { schedulePersonaAbRecompute } from "./services/personaAbSchedule.service.js";
@@ -193,6 +194,7 @@ app.use(createAdminAuthRouter());
 app.use(createAdminPaymentsDashboardRouter(lineClient));
 app.use(createAdminKbRouter());
 app.use(createAdminTypesRouter());
+app.use(createAdminVoiceRouter());
 
 app.post(
   "/webhook/line",

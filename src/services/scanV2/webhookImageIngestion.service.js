@@ -22,14 +22,18 @@ import {
   idPrefix8,
 } from "../../utils/scanV2Trace.util.js";
 
-/** ข้อความรับรูป: หมุนเวียนไม่ซ้ำ ไอคอนน้อย (สุ่มตาม message id — คนเดิมส่งหลายครั้งก็ได้คนละแบบ) */
+/** ข้อความรับรูป: สั้น ๆ ภาษาพูด 10 แบบ สุ่มตาม message id (กบ Jul 2026: "รับแล้วรอแปป") */
 const PRE_SCAN_ACK_VARIANTS = [
-  "รับรูปแล้ว อาจารย์ขอเข้าสมาธิเพ่งดูพลังก่อน รอสัก 1-2 นาที",
-  "ถึงมือแล้ว ขอใช้สมาธิอ่านพลังชิ้นนี้แป๊บนึง ประมาณ 1-2 นาทีผลออก",
-  "ได้รูปแล้ว อาจารย์ขอนั่งสมาธิเชื่อมพลังดูก่อน ไม่เกิน 2 นาที",
-  "รับไว้แล้ว กำลังเพ่งพิจารณาอย่างละเอียด อีกสัก 1-2 นาทีเดี๋ยวเล่าให้ฟัง",
-  "เห็นแล้ว ขอรวบรวมสมาธิดูคลื่นพลังของชิ้นนี้ก่อน รอประมาณ 1-2 นาทีนะ",
-  "รับเรียบร้อย ขอเวลาเพ่งดูสักครู่ ราว 1-2 นาทีสรุปผลให้",
+  "รับแล้ว รอแปปนะ",
+  "รอแปป เดี๋ยวดูให้",
+  "แปปนึงนะ",
+  "ได้ละ ขอดูแปปนึง",
+  "รับแล้วนะ แปปเดียว",
+  "มาละ รอแปปนึง",
+  "ขอเพ่งดูแปปนะ",
+  "กำลังดูให้ รอแปป",
+  "อึดใจเดียวนะ",
+  "เดี๋ยวดูให้ รอแปปนึง",
 ];
 
 function pickPreScanAckText(seedStr) {
@@ -249,7 +253,11 @@ export async function ingestScanImageAsyncV2({
           line_user_id: lineUserId,
           kind: "pre_scan_ack",
           priority: OUTBOUND_PRIORITY.pre_scan_ack,
-          payload_json: { text: strikes >= 2 ? MULTI_IMAGE_WAIT_TEXT_STERN : MULTI_IMAGE_WAIT_TEXT },
+          payload_json: {
+            text: strikes >= 2 ? MULTI_IMAGE_WAIT_TEXT_STERN : MULTI_IMAGE_WAIT_TEXT,
+            // ส่งเป็นเสียงอาจารย์แทนข้อความ (static, เจนครั้งเดียวใช้ซ้ำ) — text = fallback
+            voiceStatic: strikes >= 2 ? "multi_image_stern" : "multi_image",
+          },
           status: "queued",
         });
       } catch (noticeErr) {

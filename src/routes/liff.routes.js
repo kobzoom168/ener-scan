@@ -592,7 +592,7 @@ async function getRemainingScans(userId) {
       .select("id,paid_remaining_scans,paid_until,free_scan_daily_offset,free_scan_offset_date")
       .eq("line_user_id", userId)
       .maybeSingle();
-    if (!data) return 0;
+    if (!data) return { total: 0, freeLeft: 0, paidLeft: 0 };
     const now = new Date();
     const paidOk = data.paid_until && new Date(data.paid_until).getTime() > now.getTime();
     const paidLeft = paidOk ? Math.max(0, Number(data.paid_remaining_scans) || 0) : 0;
@@ -616,9 +616,9 @@ async function getRemainingScans(userId) {
       }
       freeLeft = Math.max(0, freeQuota - used);
     }
-    return paidLeft + freeLeft;
+    return { total: paidLeft + freeLeft, freeLeft, paidLeft };
   } catch {
-    return 0;
+    return { total: 0, freeLeft: 0, paidLeft: 0 };
   }
 }
 
@@ -634,7 +634,9 @@ liffRouter.get("/api/liff/stats", async (req, res) => {
     res.json({
       ok: true,
       scanned: agg.scanned,
-      remaining,
+      remaining: remaining.total,
+      remainingFree: remaining.freeLeft,
+      remainingPaid: remaining.paidLeft,
       topScore: agg.topScore,
       bestAxis: agg.bestAxis ? agg.bestAxis.label : null,
     });
@@ -1216,6 +1218,12 @@ function buildLiffHtml(liffId) {
   .row .rt{font-weight:800;font-size:1.13rem;color:var(--ink)}
   .freechip{font-style:normal;font-size:.62rem;font-weight:800;color:#3e7d55;background:#e4f2e9;border:1px solid #bcdcc8;
     border-radius:99px;padding:2px 8px;vertical-align:2px;margin-left:4px}
+  /* บริการที่ยังไม่เปิด: โชว์ในเมนูแต่กดไม่ได้ */
+  .soonchip{font-style:normal;font-size:.62rem;font-weight:800;color:var(--sub);background:var(--card3);border:1px solid var(--line);
+    border-radius:99px;padding:2px 8px;vertical-align:2px;margin-left:4px;white-space:nowrap}
+  .row.soon{opacity:.6;pointer-events:none;box-shadow:none}
+  .row.soon:active{transform:none}
+  .row.soon .med{filter:grayscale(.55)}
   /* ---- scan-first hero card ---- */
   .stat{background:var(--card);border:1px solid var(--line-gold);border-radius:22px;padding:18px 18px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
   .stat .k{font-size:.86rem;color:var(--sub);font-weight:700}
@@ -1226,6 +1234,14 @@ function buildLiffHtml(liffId) {
   .stc b{font-size:1.65rem;font-weight:800;color:var(--gold-deep);line-height:1.15}
   .stc b.staxis{font-size:1.12rem;color:var(--ink);line-height:1.3}
   .stc i{font-style:normal;font-size:.72rem;color:var(--faint);font-weight:600}
+  .stsub{display:block;font-size:.64rem;color:var(--faint);font-weight:600;margin-top:1px}
+  /* การ์ดชวนสแกนองค์แรก (ลูกค้าใหม่ที่ยังไม่มีสถิติ) */
+  .firstscan{background:linear-gradient(165deg,var(--card2),var(--card3));border:1px dashed var(--gold);border-radius:15px;
+    padding:16px 15px;margin-top:11px;text-align:center}
+  .firstscan .fst{font-size:1.22rem;font-weight:800;color:var(--ink)}
+  .firstscan .fst em{font-style:normal;color:var(--gold-deep)}
+  .firstscan p{margin:6px 0 0;font-size:.82rem;color:var(--sub);line-height:1.55}
+  .firstscan p b{color:var(--gold-deep)}
   .stbtns{display:flex;gap:9px;margin-top:13px}
   .stgo{flex:1.6;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(165deg,var(--btn-a),var(--btn-b) 60%,var(--btn-c));
     color:#fff;font-weight:800;font-size:1.08rem;border:none;border-radius:15px;padding:13px 10px;box-shadow:0 8px 18px -8px color-mix(in srgb, var(--btn-c) 55%, transparent)}
@@ -1288,6 +1304,8 @@ function buildLiffHtml(liffId) {
   .row .en{display:block;font-size:.6rem;color:var(--gold-deep);letter-spacing:.12em;font-weight:700;margin-top:1px}
   .row .rd{font-size:.88rem;color:var(--sub);margin-top:2px;line-height:1.5}
   /* bottom nav (mockup v6) */
+  .sharebtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--card);
+    border:1.5px solid var(--line-gold);color:var(--gold-deep);font-weight:800;font-size:1rem;border-radius:15px;padding:12px 10px}
   .homenav{margin-top:auto;background:var(--card);border:1px solid var(--line);border-radius:20px;display:flex;justify-content:space-around;
     padding:10px 6px;box-shadow:var(--shadow);position:sticky;bottom:10px}
   .homenav .n{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.68rem;color:var(--faint);width:64px;font-weight:600;background:none}
@@ -1313,6 +1331,7 @@ function buildLiffHtml(liffId) {
   .bigin{width:100%;background:var(--card);border:1.5px solid var(--line-gold);border-radius:18px;padding:17px 18px;
     font-size:1.25rem;font-weight:700;color:var(--ink);outline:none;font-family:inherit}
   .bigin:focus{border-color:var(--gold);box-shadow:0 0 0 4px color-mix(in srgb, var(--gold) 15%, transparent)}
+  .fielderr{border-color:#c0564a !important;box-shadow:0 0 0 4px rgba(192,86,74,.14) !important}
   .pills{display:flex;flex-wrap:wrap;gap:11px;margin-top:14px;justify-content:center}
   .pill{background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:14px 22px;font-size:1.05rem;font-weight:700;
     color:var(--sub);display:inline-flex;align-items:center;gap:9px}
@@ -1502,8 +1521,11 @@ function buildLiffHtml(liffId) {
           <span class="selwrap"><select class="bigin" id="f-year"></select></span>
         </div>
       </div>
-      <div class="bigfield"><label>ช่วงเวลาที่เกิด (ถ้าทราบ)</label>
-        <span class="selwrap" style="display:block"><select class="bigin" id="f-bt"></select></span>
+      <div class="bigfield"><label>เวลาที่เกิด (ถ้าทราบ)</label>
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:9px">
+          <span class="selwrap"><select class="bigin" id="f-bth"></select></span>
+          <span class="selwrap"><select class="bigin" id="f-btm"></select></span>
+        </div>
       </div>
     </div>
 
@@ -1526,14 +1548,15 @@ function buildLiffHtml(liffId) {
         <button class="pill" data-v="ฮวงจุ้ย"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6M6 10.2V19h12v-8.8"/><path d="M12 12v4.5M9.8 14.2h4.4"/></svg>ฮวงจุ้ย<span class="tick">✓</span></button>
         <button class="pill" data-v="เครื่องราง"><svg viewBox="0 0 24 24"><path d="M12 3v3.5"/><path d="M12 6.5l4 3.5-1.5 6.5h-5L8 10z"/><path d="M12 10.2l1.6 1.4-.6 2.6h-2l-.6-2.6z" fill="currentColor" stroke="none" opacity=".55"/></svg>เครื่องราง<span class="tick">✓</span></button>
       </div>
-      <div class="why" style="margin-top:18px">แล้วมาเจออาจารย์จากช่องทางไหนนะ</div>
+      <div class="why" style="margin-top:18px">แล้วมาเจออาจารย์จากช่องทางไหนนะ เลือกได้หลายอันเลย</div>
       <div class="pills" id="g-ch">
-        <button class="pill" data-v="Facebook">Facebook</button>
-        <button class="pill" data-v="TikTok">TikTok</button>
-        <button class="pill" data-v="เพื่อนแนะนำ">เพื่อนแนะนำ</button>
-        <button class="pill" data-v="อื่นๆ">อื่น ๆ</button>
+        <button class="pill" data-v="Facebook">Facebook<span class="tick">✓</span></button>
+        <button class="pill" data-v="TikTok">TikTok<span class="tick">✓</span></button>
+        <button class="pill" data-v="เพื่อนแนะนำ">เพื่อนแนะนำ<span class="tick">✓</span></button>
+        <button class="pill" data-v="อื่นๆ">อื่น ๆ<span class="tick">✓</span></button>
       </div>
-      <div class="bigfield"><label>เบอร์โทร (ไม่บังคับ)</label><input class="bigin" id="f-ph" type="tel" placeholder="เบอร์มือถือ 10 หลัก" maxlength="20"/></div>
+      <input class="bigin hidden" id="f-ch-other" placeholder="เล่าหน่อยว่าเจออาจารย์จากไหน" maxlength="80" style="margin-top:10px"/>
+      <div class="bigfield"><label>เบอร์โทร</label><input class="bigin" id="f-ph" type="tel" placeholder="เบอร์มือถือ 10 หลัก" maxlength="20"/></div>
     </div>
 
     <div class="obfoot">
@@ -1547,7 +1570,6 @@ function buildLiffHtml(liffId) {
     <div class="apphead">
       <span class="lg serif">Ener</span>
       <span class="mywrap">
-        <button class="mybtn iconbtn" id="btn-theme" aria-label="เลือกโทนสี"><svg viewBox="0 0 24 24"><path d="M12 3.5c-4.8 0-8.5 3.4-8.5 7.9 0 4.4 3.6 7.6 7.6 7.6.9 0 1.5-.6 1.5-1.4 0-.4-.2-.7-.4-1-.2-.3-.4-.6-.4-1 0-.8.7-1.4 1.5-1.4h1.8c2.9 0 5.4-2.1 5.4-5 0-3.5-3.7-5.7-8.5-5.7z"/><circle cx="7.8" cy="10.2" r="1.15" fill="currentColor" stroke="none"/><circle cx="12" cy="7.6" r="1.15" fill="currentColor" stroke="none"/><circle cx="16.2" cy="10.2" r="1.15" fill="currentColor" stroke="none"/></svg></button>
         <button class="mybtn" id="btn-edit">ข้อมูลของฉัน</button>
       </span>
     </div>
@@ -1560,11 +1582,16 @@ function buildLiffHtml(liffId) {
     <!-- scan-first hero: คลังพลังของคุณ -->
     <div class="stat">
       <div class="k">คลังพลังของคุณ</div>
-      <div class="stgrid">
+      <div class="stgrid" id="stgrid">
         <div class="stc"><small>สแกนแล้ว</small><span class="stv"><b class="serif" id="st-count">–</b><i>ชิ้น</i></span></div>
-        <div class="stc"><small>สิทธิ์เหลือ</small><span class="stv"><b class="serif" id="st-left">–</b><i>ครั้ง</i></span></div>
+        <div class="stc"><small>สิทธิ์เหลือ</small><span class="stv"><b class="serif" id="st-left">–</b><i>ครั้ง</i></span><small class="stsub hidden" id="st-left-sub"></small></div>
         <div class="stc"><small>คะแนนสูงสุด</small><span class="stv"><b class="serif" id="st-top">–</b><i>/10</i></span></div>
         <div class="stc"><small>พลังเด่นสุด</small><span class="stv"><b class="staxis" id="st-axis">–</b></span></div>
+      </div>
+      <!-- ลูกค้าใหม่ (สแกน 0 ชิ้น): แทนตารางขีด ๆ ด้วยการ์ดชวนสแกนองค์แรก -->
+      <div class="firstscan hidden" id="st-first">
+        <div class="fst serif">สแกนองค์แรกของคุณ <em>ฟรี</em></div>
+        <p>ส่งรูปพระ เครื่องราง หรือกำไลหินมา<br>อาจารย์อ่านพลังให้ทันที วันนี้มีสิทธิ์ฟรี <b id="st-first-free">2</b> ครั้ง</p>
       </div>
       <div class="stbtns">
         <button class="stgo" id="btn-scan"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>สแกนเลย</button>
@@ -1613,17 +1640,16 @@ function buildLiffHtml(liffId) {
 
     <div class="sect">วันนี้ให้อาจารย์ช่วยเรื่องไหนดี</div>
     <div class="rows">
-      <button class="row" id="row-match"><span class="med med1"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3.6"/><circle cx="12" cy="12" r="1" fill="#a5813a" stroke="none"/><path d="M12 1.8v2.7M12 19.5v2.7M1.8 12h2.7M19.5 12h2.7"/></svg></span><span><span class="rt">หาเครื่องรางที่เข้ากับดวง</span><span class="en">MATCH BY DESTINY</span><span class="rd">ดูตามวันเกิด สายไหนเสริมดวงคุณ</span></span><span class="chev">›</span></button>
-      <button class="row" data-say="ดูฮวงจุ้ยห้อง"><span class="med med2"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10.2V19h12v-8.8"/><path d="M12 12.3v4.4M9.9 14.5h4.2"/><path d="M12 12.3l1.5 2.2-1.5-.6-1.5.6z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ฮวงจุ้ยจากรูป</span><span class="en">FENG SHUI</span><span class="rd">ถ่ายรูปห้อง อาจารย์ดูพลังบ้านให้</span></span><span class="chev">›</span></button>
       <button class="row" id="row-monthly"><span class="med med4"><svg viewBox="0 0 24 24"><rect x="8.5" y="4.5" width="8" height="12.5" rx="1.6"/><path d="M6.2 6.8l-2.4 1 4.6 10.8 1.9-.8" opacity=".75"/><path d="M17.8 6.8l2.4 1-4.6 10.8-1.9-.8" opacity=".75"/><path d="M12.5 8.6l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ดูดวงรายเดือน <em class="freechip">ฟรี</em></span><span class="en">MONTHLY READING</span><span class="rd">ไพ่สามใบ พร้อมกราฟห้าด้านของเดือนนี้</span></span><span class="chev">›</span></button>
-      <button class="row" data-say="ถามอาจารย์"><span class="med med3"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/><path d="M12 8.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">คุยกับอาจารย์</span><span class="en">ASK MASTER</span><span class="rd">มีอะไรค้างใจ มาคุยกันได้ทุกเรื่อง</span></span><span class="chev">›</span></button>
+      <div class="row soon"><span class="med med1"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3.6"/><circle cx="12" cy="12" r="1" fill="#a5813a" stroke="none"/><path d="M12 1.8v2.7M12 19.5v2.7M1.8 12h2.7M19.5 12h2.7"/></svg></span><span><span class="rt">หาเครื่องรางที่เข้ากับดวง <em class="soonchip">เร็ว ๆ นี้</em></span><span class="en">MATCH BY DESTINY</span><span class="rd">ดูตามวันเกิด สายไหนเสริมดวงคุณ</span></span></div>
+      <div class="row soon"><span class="med med2"><svg viewBox="0 0 24 24"><path d="M4 11l8-6 8 6"/><path d="M6 10.2V19h12v-8.8"/><path d="M12 12.3v4.4M9.9 14.5h4.2"/><path d="M12 12.3l1.5 2.2-1.5-.6-1.5.6z" fill="#a5813a" stroke="none"/></svg></span><span><span class="rt">ฮวงจุ้ยจากรูป <em class="soonchip">เร็ว ๆ นี้</em></span><span class="en">FENG SHUI</span><span class="rd">ถ่ายรูปห้อง อาจารย์ดูพลังบ้านให้</span></span></div>
     </div>
     <p class="note">กดบริการแล้วกลับไปคุยกับอาจารย์ในแชตได้เลย</p>
 
     <div class="homenav">
       <button class="n on"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>หน้าหลัก</button>
       <button class="n" id="nav-read"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.4L20 9l-4.4 3.8L17 19l-5-3.2L7 19l1.4-6.2L4 9l5.8-.6z"/></svg>ดวงเดือน</button>
-      <button class="n" id="nav-ask"><svg viewBox="0 0 24 24"><path d="M20 11.4c0 3.5-3.4 6.3-7.6 6.3-.9 0-1.8-.1-2.6-.4L5.2 18.8l1.2-3.4C5.2 14.3 4.4 13 4.4 11.4 4.4 7.9 7.8 5.1 12 5.1s8 2.8 8 6.3z"/></svg>ถามอาจารย์</button>
+      <button class="n" id="nav-theme"><svg viewBox="0 0 24 24"><path d="M12 3.5c-4.8 0-8.5 3.4-8.5 7.9 0 4.4 3.6 7.6 7.6 7.6.9 0 1.5-.6 1.5-1.4 0-.4-.2-.7-.4-1-.2-.3-.4-.6-.4-1 0-.8.7-1.4 1.5-1.4h1.8c2.9 0 5.4-2.1 5.4-5 0-3.5-3.7-5.7-8.5-5.7z"/><circle cx="7.8" cy="10.2" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="7.6" r="1" fill="currentColor" stroke="none"/><circle cx="16.2" cy="10.2" r="1" fill="currentColor" stroke="none"/></svg>โทนสี</button>
       <button class="n" id="nav-me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>ข้อมูลฉัน</button>
     </div>
   </div>
@@ -1691,6 +1717,10 @@ function buildLiffHtml(liffId) {
       <button class="readbtn" id="mt-scan">
         <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>
         สแกนเช็คชิ้นที่คุณมี
+      </button>
+      <button class="sharebtn" id="mt-share">
+        <svg viewBox="0 0 24 24" style="width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><circle cx="6" cy="12" r="2.6"/><circle cx="17.5" cy="5.5" r="2.6"/><circle cx="17.5" cy="18.5" r="2.6"/><path d="M8.4 10.8l6.8-4M8.4 13.2l6.8 4"/></svg>
+        แชร์การ์ดดวงนี้ให้เพื่อน
       </button>
       <p class="note">คำแนะนำอิงตำราทักษาไทยและความเชื่อวันเกิด ใช้เป็นแนวทางประกอบวิจารณญาณนะครับ</p>
     </div>
@@ -1859,19 +1889,30 @@ function buildLiffHtml(liffId) {
   function addOpt(sel,val,txt,placeholder){ var o=document.createElement("option"); o.value=val; o.textContent=txt;
     if(placeholder){ o.disabled=true; o.selected=true; } sel.appendChild(o); }
   function fillDates(){
-    var d=$("f-day"), m=$("f-mon"), y=$("f-year"), t=$("f-bt");
+    var d=$("f-day"), m=$("f-mon"), y=$("f-year"), th=$("f-bth"), tm=$("f-btm");
     if(!d||d.options.length) return;
     addOpt(d,"","วัน",true); for(var i=1;i<=31;i++) addOpt(d,i,String(i));
     addOpt(m,"","เดือน",true); for(var j=0;j<12;j++) addOpt(m,j+1,TH_MONTHS[j]);
     addOpt(y,"","ปีเกิด",true);
     var nowBE=(new Date(Date.now()+7*3600*1000)).getUTCFullYear()+543;
     for(var b=nowBE;b>=nowBE-95;b--) addOpt(y,b,"พ.ศ. "+b);
-    addOpt(t,"","ไม่ทราบเวลา",true);
-    for(var h=0;h<24;h++){
-      var hh=pad2(h);
-      addOpt(t, hh+":00", hh+":00 น.");
-      addOpt(t, hh+":30", hh+":30 น.");
-    }
+    /* เวลาเกิดละเอียดถึงนาที — ตอนนี้ใช้แยกพุธกลางวัน/กลางคืน (ราหู) และเก็บไว้ผูกดวงละเอียดในอนาคต */
+    addOpt(th,"","ไม่ทราบเวลา",true);
+    for(var h=0;h<24;h++) addOpt(th, pad2(h), pad2(h)+" น.");
+    addOpt(tm,"","นาที",true);
+    for(var mi=0;mi<60;mi++) addOpt(tm, pad2(mi), ": "+pad2(mi));
+  }
+  function buildBirthTime(){
+    var h=$("f-bth").value;
+    if(!h) return "";
+    return h + ":" + ($("f-btm").value || "00");
+  }
+  /* ช่องทางที่เจอ: multi + อื่น ๆ แนบข้อความที่ลูกค้าพิมพ์เอง */
+  function buildChannel(){
+    var c = state.channel || "";
+    var o = $("f-ch-other").value.trim();
+    if(o && c.indexOf("อื่นๆ") !== -1) c = c.replace("อื่นๆ", "อื่นๆ: " + o);
+    return c;
   }
 
   /* ---- pill groups ---- */
@@ -1894,7 +1935,11 @@ function buildLiffHtml(liffId) {
       state[key] = vals.join(",");
     });
   }
-  wireGroup("g-sex","sex"); wireGroupMulti("g-int","interest"); wireGroup("g-ch","channel");
+  wireGroup("g-sex","sex"); wireGroupMulti("g-int","interest"); wireGroupMulti("g-ch","channel");
+  /* เลือก อื่น ๆ → เปิดช่องพิมพ์เล่าเอง */
+  $("g-ch").addEventListener("click", function(){
+    $("f-ch-other").classList.toggle("hidden", state.channel.indexOf("อื่นๆ") === -1);
+  });
 
   /* ---- onboarding stepper ---- */
   function renderStep(){
@@ -1911,6 +1956,14 @@ function buildLiffHtml(liffId) {
       if(!$("f-year").value){ $("f-year").focus(); return; }
     }
     if(state.step<3){ state.step++; renderStep(); return; }
+    /* เบอร์โทรบังคับ (ตัวเลข 9-10 หลัก) ก่อนเปิดดวง */
+    var ph = $("f-ph").value.replace(/[^0-9]/g, "");
+    if(ph.length < 9 || ph.length > 10){
+      $("f-ph").classList.add("fielderr");
+      $("f-ph").focus();
+      return;
+    }
+    $("f-ph").classList.remove("fielderr");
     saveProfile();
   });
 
@@ -1942,8 +1995,8 @@ function buildLiffHtml(liffId) {
     api("/api/liff/profile", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
         displayName: state.displayName,
-        nickname: $("f-nick").value.trim(), birthdate: buildBirthdate(), birth_time: $("f-bt").value || "",
-        gender: state.sex, interest: state.interest, channel: state.channel, phone: $("f-ph").value.trim()
+        nickname: $("f-nick").value.trim(), birthdate: buildBirthdate(), birth_time: buildBirthTime(),
+        gender: state.sex, interest: state.interest, channel: buildChannel(), phone: $("f-ph").value.trim()
       })
     }).then(function(r){ return r.json(); }).then(function(j){
       btn.disabled=false;
@@ -2023,6 +2076,24 @@ function buildLiffHtml(liffId) {
         $("st-left").textContent = j.remaining != null ? j.remaining : 0;
         $("st-top").textContent = j.topScore != null ? j.topScore : "–";
         $("st-axis").textContent = j.bestAxis || "–";
+        /* บรรทัดจิ๋วแยกฟรี/แพ็ก ใต้ตัวเลขรวม (โปร่งใสว่าสิทธิ์มาจากไหน) */
+        var sub = $("st-left-sub");
+        if(sub){
+          if(j.remainingPaid > 0){
+            sub.textContent = "ฟรี " + (j.remainingFree || 0) + " · แพ็ก " + j.remainingPaid;
+            sub.classList.remove("hidden");
+          } else {
+            sub.classList.add("hidden");
+          }
+        }
+        /* ลูกค้าใหม่ยังไม่เคยสแกน: ตารางขีด ๆ ดูจืด → สลับเป็นการ์ดชวนสแกนองค์แรก */
+        var first = $("st-first"), grid = $("stgrid");
+        if(first && grid){
+          var fresh = !(j.scanned > 0);
+          first.classList.toggle("hidden", !fresh);
+          grid.classList.toggle("hidden", fresh);
+          if(fresh) $("st-first-free").textContent = j.remainingFree != null ? j.remainingFree : 2;
+        }
       }).catch(function(){});
   }
   function enterHome(nickname){
@@ -2148,13 +2219,7 @@ function buildLiffHtml(liffId) {
   $("btn-reading").addEventListener("click", openReading);
   $("nav-read").addEventListener("click", openReading);
   $("nav-me").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
-  $("nav-ask").addEventListener("click", function(){
-    try{
-      liff.sendMessages([{ type:"text", text:"ถามอาจารย์" }])
-        .then(function(){ liff.closeWindow(); })
-        .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์ถามอาจารย์ได้เลยครับ"); liff.closeWindow(); });
-    }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์ถามอาจารย์ได้เลยครับ"); }
-  });
+  $("nav-theme").addEventListener("click", function(){ renderThemes(); show("v-theme"); });
   $("rd-back").addEventListener("click", function(){ show("v-home"); });
   $("rd-fill").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
   $("rd-ask").addEventListener("click", function(){
@@ -2189,7 +2254,9 @@ function buildLiffHtml(liffId) {
   });
 
   /* ---- หาเครื่องรางที่เข้ากับดวง ---- */
+  var lastMatch = null;
   function renderMatch(j){
+    lastMatch = j;
     $("mt-day").textContent = j.birthDay || "–";
     $("mt-num").textContent = j.luckyNum != null ? j.luckyNum : "–";
     $("mt-buddha").textContent = j.buddha || "–";
@@ -2252,10 +2319,48 @@ function buildLiffHtml(liffId) {
       })
       .catch(function(){ alert("เปิดไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
   }
-  $("row-match").addEventListener("click", openMatch);
+  /* row-match ถูกพักเป็น "เร็ว ๆ นี้" — openMatch ยังอยู่ พร้อมต่อกลับเมื่อเปิดบริการ */
+  void openMatch;
+  /* แชร์การ์ดดวงให้เพื่อน (viral loop): flex card ผ่าน shareTargetPicker */
+  function buildShareFlex(j){
+    var liffUrl = "https://liff.line.me/" + (liff.id || "");
+    var recTitle = (j.recs && j.recs[0] && j.recs[0].t) || "";
+    var stones = (j.stones || []).map(function(s){ return s.n; }).slice(0,3).join(" · ");
+    var colors = (j.goodColors || []).map(function(c){ return c.name.replace("สี",""); }).slice(0,3).join(" · ");
+    var body = [
+      { type:"text", text:"เครื่องรางที่เข้ากับดวง", size:"xs", color:"#a5813a", weight:"bold" },
+      { type:"text", text:"คนเกิดวัน" + (j.birthDay || "–"), size:"xl", weight:"bold", color:"#2c2418", margin:"sm" },
+      { type:"text", text: j.buddha || "", size:"sm", color:"#6b5d45", wrap:true, margin:"xs" },
+      { type:"separator", margin:"lg", color:"#eee2c8" }
+    ];
+    if(recTitle) body.push({ type:"text", text:"สายเสริมดวง  " + recTitle, size:"sm", color:"#2c2418", wrap:true, margin:"lg" });
+    if(stones) body.push({ type:"text", text:"หินถูกโฉลก  " + stones, size:"sm", color:"#2c2418", wrap:true, margin:"sm" });
+    if(colors) body.push({ type:"text", text:"สีนำโชค  " + colors, size:"sm", color:"#2c2418", wrap:true, margin:"sm" });
+    return {
+      type:"flex",
+      altText:"ดวงคนเกิดวัน" + (j.birthDay || "") + " เครื่องรางสายไหนเสริมดวง มาดูของคุณบ้าง",
+      contents:{
+        type:"bubble",
+        body:{ type:"box", layout:"vertical", backgroundColor:"#fdf9f0", paddingAll:"20px", contents: body },
+        footer:{ type:"box", layout:"vertical", backgroundColor:"#fdf9f0", paddingAll:"14px", contents:[
+          { type:"button", style:"primary", color:"#a5813a", height:"sm",
+            action:{ type:"uri", label:"เปิดดูดวงของฉันบ้าง", uri: liffUrl } },
+          { type:"text", text:"Ener อ่านพลังพระ เครื่องราง หินมงคล", size:"xxs", color:"#a89a7e", align:"center", margin:"sm" }
+        ]}
+      }
+    };
+  }
+  $("mt-share").addEventListener("click", function(){
+    if(!lastMatch) return;
+    var msg = buildShareFlex(lastMatch);
+    if(liff.isApiAvailable && liff.isApiAvailable("shareTargetPicker")){
+      liff.shareTargetPicker([msg]).catch(function(){});
+    } else {
+      alert("เปิดจากในแอป LINE แล้วกดแชร์อีกครั้งครับ");
+    }
+  });
   $("mt-back").addEventListener("click", function(){ show("v-home"); });
   $("mt-fill").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
-  $("btn-theme").addEventListener("click", function(){ renderThemes(); show("v-theme"); });
   $("th-back").addEventListener("click", function(){ show("v-home"); });
 
   /* ---- เติมสิทธิ์สแกน ---- */
