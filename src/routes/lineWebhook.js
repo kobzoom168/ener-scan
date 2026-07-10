@@ -7148,6 +7148,30 @@ async function handleEvent({ client, event }) {
     return;
   }
 
+  // ลูกค้าส่งเสียง/วิดีโอมา (เห็นอาจารย์ส่งเสียงเลยส่งกลับ) — อาจารย์ตอบแบบคน:
+  // ไม่สะดวกเปิดลำโพง ให้พิมพ์มาแทน (สุ่มสำนวนตาม message id, gateway กันสแปมให้)
+  if (event.message?.type === "audio" || event.message?.type === "video") {
+    const variants = [
+      "ตอนนี้อาจารย์ไม่สะดวกเปิดลำโพงนะ พิมพ์มาได้เลย",
+      "อาจารย์ไม่สะดวกฟังเสียงตอนนี้ พิมพ์มาเลยนะ",
+      "ขอเป็นพิมพ์นะ ตอนนี้ไม่สะดวกเปิดเสียง",
+      "ไม่สะดวกเปิดลำโพงตอนนี้นะ พิมพ์มาได้เลย เดี๋ยวตอบให้",
+    ];
+    let hh = 0;
+    const mid = String(event.message?.id || userId);
+    for (let i = 0; i < mid.length; i++) hh = (hh * 31 + mid.charCodeAt(i)) >>> 0;
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "audio_video_message",
+      semanticKey: "audio_video_not_convenient",
+      text: variants[hh % variants.length],
+      alternateTexts: variants.filter((_, i) => i !== hh % variants.length),
+    });
+    return;
+  }
+
   console.log("[WEBHOOK] skip unsupported message");
 }
 
