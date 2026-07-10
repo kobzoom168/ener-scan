@@ -34,6 +34,7 @@ import {
   notifyLineUserTextAfterAdminAction,
 } from "../../utils/lineNotify429Retry.util.js";
 import { invokeLinePushMessage } from "../../utils/lineClientTransport.util.js";
+import { getStaticVoiceNote } from "../voiceNote/scanVoiceNote.service.js";
 import { updateOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
 import { getScanJobById, updateScanJob } from "../../stores/scanV2/scanJobs.db.js";
 import { decrementUserPaidRemainingScans } from "../../stores/paymentAccess.db.js";
@@ -135,7 +136,25 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           errorMessage: "pre_scan_ack missing text",
         };
       }
-      await pushText(client, lineUserId, text);
+      // เตือนหลายรูป → เสียงอาจารย์ (static cached) แทนข้อความ; พลาด → ข้อความเดิม
+      let sentAsVoice = false;
+      const staticName = String(payload.voiceStatic || "").trim();
+      if (staticName) {
+        try {
+          const v = await getStaticVoiceNote(staticName);
+          if (v?.url && v.durationMs >= 500) {
+            await client.pushMessage(lineUserId, {
+              type: "audio",
+              originalContentUrl: v.url,
+              duration: Math.min(v.durationMs, 60000),
+            });
+            sentAsVoice = true;
+          }
+        } catch {
+          /* fall back to text */
+        }
+      }
+      if (!sentAsVoice) await pushText(client, lineUserId, text);
       await markSent(id);
       // Re-arm LINE's typing "•••" AFTER the ack bubble (sending the ack cleared
       // the webhook-time one) so the customer sees the bot working while the

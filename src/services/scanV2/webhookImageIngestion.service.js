@@ -253,7 +253,11 @@ export async function ingestScanImageAsyncV2({
           line_user_id: lineUserId,
           kind: "pre_scan_ack",
           priority: OUTBOUND_PRIORITY.pre_scan_ack,
-          payload_json: { text: strikes >= 2 ? MULTI_IMAGE_WAIT_TEXT_STERN : MULTI_IMAGE_WAIT_TEXT },
+          payload_json: {
+            text: strikes >= 2 ? MULTI_IMAGE_WAIT_TEXT_STERN : MULTI_IMAGE_WAIT_TEXT,
+            // ส่งเป็นเสียงอาจารย์แทนข้อความ (static, เจนครั้งเดียวใช้ซ้ำ) — text = fallback
+            voiceStatic: strikes >= 2 ? "multi_image_stern" : "multi_image",
+          },
           status: "queued",
         });
       } catch (noticeErr) {

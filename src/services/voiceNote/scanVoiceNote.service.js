@@ -169,6 +169,76 @@ async function uploadVoiceNote(lineUserId, scanResultV2Id, m4a) {
 }
 
 /**
+ * เสียงประจำเหตุการณ์ (คงที่ ไม่ผูกกับสแกน) — เจนครั้งเดียวต่อ (สคริปต์+เสียง+ความเร็ว)
+ * แล้ว cache URL ใน app_settings ใช้ซ้ำทุกคนทุกครั้ง = ต้นทุนแทบศูนย์.
+ * เปลี่ยนเสียง/ความเร็วจาก /admin/voice เมื่อไหร่ ระบบเจนใหม่ให้เองรอบแรกที่ใช้.
+ */
+const STATIC_VOICE_SCRIPTS = {
+  multi_image: "ใจเย็น ๆ นะ, ทีละรูปพอ, รอชิ้นแรกออกก่อน, แล้วค่อยส่งชิ้นต่อไป",
+  multi_image_stern:
+    "อาจารย์บอกแล้วนะ, ทีละรูป, ส่งพร้อมกันแบบนี้, อาจารย์ไม่ดูให้, รอชิ้นแรกเสร็จก่อน",
+};
+
+/**
+ * @param {string} name key ใน STATIC_VOICE_SCRIPTS
+ * @returns {Promise<{ url: string, durationMs: number } | null>}
+ */
+export async function getStaticVoiceNote(name) {
+  try {
+    const script = STATIC_VOICE_SCRIPTS[String(name || "")];
+    if (!script) return null;
+    const cfg = await getVoiceNoteConfig();
+    if (!cfg.enabled) return null;
+
+    const settingKey = `voice_note_static:${name}`;
+    const cached = await getAppSetting(settingKey).catch(() => null);
+    if (
+      cached &&
+      typeof cached === "object" &&
+      /** @type {any} */ (cached).url &&
+      /** @type {any} */ (cached).script === script &&
+      /** @type {any} */ (cached).voiceId === cfg.voiceId &&
+      Number(/** @type {any} */ (cached).speed) === cfg.speed
+    ) {
+      return {
+        url: String(/** @type {any} */ (cached).url),
+        durationMs: Number(/** @type {any} */ (cached).durationMs) || 0,
+      };
+    }
+
+    const mp3 = await synthesizeMp3(script, {
+      voiceId: cfg.voiceId,
+      speed: cfg.speed,
+      modelId: cfg.modelId,
+    });
+    const { m4a, durationMs } = await convertMp3ToM4a(mp3);
+    if (!durationMs || durationMs < 500) throw new Error("duration_unreadable");
+    const url = await uploadVoiceNote("static", `${name}-${Date.now().toString(36)}`, m4a);
+    const { setAppSetting } = await import("../../stores/appSettings.db.js");
+    await setAppSetting(settingKey, {
+      url,
+      durationMs,
+      script,
+      voiceId: cfg.voiceId,
+      speed: cfg.speed,
+    });
+    console.log(
+      JSON.stringify({ event: "STATIC_VOICE_NOTE_GENERATED", name, durationMs }),
+    );
+    return { url, durationMs };
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "STATIC_VOICE_NOTE_SKIPPED",
+        name: String(name || ""),
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+    return null;
+  }
+}
+
+/**
  * Fallback พลังเด่น: บางสแกนช่องสรุป mainEnergy ว่าง → ขุดจากแกนคะแนนใน
  * report ตรง ๆ (แกนที่คะแนนสูงสุดใน powerCategories/axes ของ lane นั้น)
  * @param {Record<string, unknown> | null | undefined} reportPayload

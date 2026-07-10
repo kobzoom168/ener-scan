@@ -7,7 +7,8 @@
 
 import { sendNonScanReply } from "../nonScanReply.gateway.js";
 import { getMultiImageInRequestReplyCandidates } from "../../utils/webhookText.util.js";
-import { incrementCounterWithTtl } from "../../redis/scanV2Redis.js";
+import { incrementCounterWithTtl, tryDedupeOnce } from "../../redis/scanV2Redis.js";
+import { getStaticVoiceNote } from "../voiceNote/scanVoiceNote.service.js";
 
 /** ครั้งที่ 2+ ภายใน 6 ชม. → เตือนดุแบบอาจารย์ (ไม่มีไหว้ ไม่มีรบกวน). */
 const STERN_MULTI_IMAGE_TEXT = [
@@ -73,6 +74,49 @@ export async function sendMultiImageRejectionViaGateway({
   } catch {
     strikes = 1;
   }
+  // เตือนเป็นเสียงอาจารย์แทนข้อความ (static cached — เจนครั้งเดียวใช้ซ้ำทุกคน)
+  // dedupe 120 วิกันสแปมเสียง; เสียงพัง/ปิดใช้ → ถอยไปข้อความตาม gateway เดิม
+  try {
+    const v = await getStaticVoiceNote(strikes >= 2 ? "multi_image_stern" : "multi_image");
+    if (v?.url && v.durationMs >= 500) {
+      const firstVoice = await tryDedupeOnce(`scan_v2:multi_img_voice:${uid}`, 120);
+      if (!firstVoice) {
+        console.log(
+          JSON.stringify({ event: "MULTI_IMAGE_VOICE_SUPPRESSED", userId: uid, reason }),
+        );
+        return { sent: false, suppressed: true };
+      }
+      const audio = {
+        type: "audio",
+        originalContentUrl: v.url,
+        duration: Math.min(v.durationMs, 60000),
+      };
+      const rt = String(replyToken || "").trim();
+      if (rt) {
+        await client.replyMessage(rt, audio);
+      } else {
+        await client.pushMessage(uid, audio);
+      }
+      console.log(
+        JSON.stringify({
+          event: "MULTI_IMAGE_VOICE_SENT",
+          userId: uid,
+          stern: strikes >= 2,
+          reason,
+        }),
+      );
+      return { sent: true, suppressed: false };
+    }
+  } catch (voiceErr) {
+    console.warn(
+      JSON.stringify({
+        event: "MULTI_IMAGE_VOICE_FALLBACK_TEXT",
+        userId: uid,
+        message: String(voiceErr?.message || voiceErr).slice(0, 160),
+      }),
+    );
+  }
+
   const candidates =
     strikes >= 2
       ? [STERN_MULTI_IMAGE_TEXT, "ทีละ 1 รูปนะ บอกครั้งสุดท้าย รอผลชิ้นแรกก่อนแล้วค่อยส่งต่อ"]
