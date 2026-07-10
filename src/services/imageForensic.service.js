@@ -157,9 +157,11 @@ export function evaluateForensicDecision(f) {
   ) {
     return "suspect";
   }
+  // ธงเงียบเกณฑ์ต่ำ (log อย่างเดียว ไม่กระทบลูกค้า) — เก็บ distribution จริงไว้จูน:
+  // รูป GPT-image เนียน ๆ gpt-4.1 ให้ unsure:0.4 ขณะที่รูปจริงมักได้ no มั่นใจสูง
   const weak = (flag) =>
-    (flag.verdict === "yes" && flag.confidence >= 0.5) ||
-    (flag.verdict === "unsure" && flag.confidence >= 0.6);
+    (flag.verdict === "yes" && flag.confidence >= 0.4) ||
+    (flag.verdict === "unsure" && flag.confidence >= 0.35);
   if (weak(f.screenPhoto) || weak(f.aiGenerated) || weak(f.edited)) return "flag";
   return "pass";
 }
