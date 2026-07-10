@@ -1778,6 +1778,7 @@ export async function processScanJob(workerId, jobRow) {
     lane: strictSupportedLane,
     dedupHit: wasExactDup,
     lineSummary: lineSummaryForOutbound,
+    reportPayload: reportPayloadForReply,
   });
 
   /** @type {{ id?: string } | null} */

@@ -58,18 +58,18 @@ export function buildVoiceScript({ score, mainEnergy, compatibility, lane, seed 
   const s = String(seed || "");
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
 
-  // ภาษาพูด สั้น โทนตรงแรง — โครงตามที่กบเคาะ: ชิ้น → คะแนน → พลังเด่น →
-  // เข้ากับดวง → รายงาน. 4 สำนวนสุ่มตาม seed (ชิ้นเดิม = สำนวนเดิมเสมอ)
+  // ภาษาพูด สั้น โทนตรงแรง — โครงตามที่กบเคาะ: ชิ้น → คะแนน → พลังเด่น
+  // (+หนุนดวง) → เข้ากับดวง → รายงาน. 4 สำนวนสุ่มตาม seed (ชิ้นเดิม = สำนวนเดิม)
   if (scoreTxt && energy) {
     const compat1 = compatTxt ? ` ส่วนความเข้ากับดวงคุณ... อยู่ที่ ${compatTxt} เปอร์เซ็นต์,` : "";
     const compat2 = compatTxt ? ` เข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,` : "";
     const compat3 = compatTxt ? ` ดวงคุณกับ${piece}, เข้ากัน ${compatTxt} เปอร์เซ็นต์,` : "";
     const compat4 = compatTxt ? ` ความเข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,` : "";
     const variants = [
-      `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด, ${energy},${compat1} รายละเอียดทั้งหมด, อยู่ในรายงาน`,
-      `ดูให้แล้ว... ${piece}, คะแนนพลังรวม, ${scoreTxt} เต็มสิบ, ที่เด่นชัดสุด, ${energy},${compat2} ที่เหลือทั้งหมด, เปิดดูในรายงาน`,
-      `บอกเลยนะ... ${piece}, พลังรวมได้, ${scoreTxt} เต็มสิบ, เด่นสุดคือ, ${energy},${compat3} รายละเอียด, อยู่ในรายงานครบ`,
-      `${piece}นะ... อาจารย์ดูแล้ว, คะแนน, ${scoreTxt} เต็มสิบ, พลังที่นำมาชัด ๆ, ${energy},${compat4} ลึกกว่านี้, ไปอ่านในรายงาน`,
+      `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด, ${energy}, ตัวนี้แหละหนุนดวงคุณอยู่,${compat1} รายละเอียดทั้งหมด, อยู่ในรายงาน`,
+      `ดูให้แล้ว... ${piece}, คะแนนพลังรวม, ${scoreTxt} เต็มสิบ, ที่เด่นชัดสุด, ${energy}, สายนี้หนุนดวงคุณโดยตรง,${compat2} ที่เหลือทั้งหมด, เปิดดูในรายงาน`,
+      `บอกเลยนะ... ${piece}, พลังรวมได้, ${scoreTxt} เต็มสิบ, เด่นสุดคือ, ${energy}, หนุนดวงคุณด้านนี้เต็ม ๆ,${compat3} รายละเอียด, อยู่ในรายงานครบ`,
+      `${piece}นะ... อาจารย์ดูแล้ว, คะแนน, ${scoreTxt} เต็มสิบ, พลังที่นำมาชัด ๆ, ${energy}, เข้ามาหนุนดวงคุณพอดี,${compat4} ลึกกว่านี้, ไปอ่านในรายงาน`,
     ];
     return variants[h % variants.length];
   }
@@ -168,6 +168,37 @@ async function uploadVoiceNote(lineUserId, scanResultV2Id, m4a) {
   return `${base}/${key}`;
 }
 
+/**
+ * Fallback พลังเด่น: บางสแกนช่องสรุป mainEnergy ว่าง → ขุดจากแกนคะแนนใน
+ * report ตรง ๆ (แกนที่คะแนนสูงสุดใน powerCategories/axes ของ lane นั้น)
+ * @param {Record<string, unknown> | null | undefined} reportPayload
+ */
+export function topAxisLabelFromReport(reportPayload) {
+  const p = reportPayload && typeof reportPayload === "object" ? reportPayload : {};
+  const lane =
+    /** @type {Record<string, unknown> | null} */ (
+      p.amuletV1 || p.crystalBraceletV1 || p.moldaviteV1 || null
+    );
+  const cats =
+    lane && typeof lane === "object"
+      ? /** @type {Record<string, { score?: unknown, labelThai?: unknown }>} */ (
+          lane.powerCategories || lane.axes || null
+        )
+      : null;
+  if (!cats || typeof cats !== "object") return "";
+  let best = "";
+  let bestScore = -Infinity;
+  for (const k of Object.keys(cats)) {
+    const s = Number(cats[k]?.score);
+    const label = String(cats[k]?.labelThai || "").trim();
+    if (Number.isFinite(s) && label && s > bestScore) {
+      bestScore = s;
+      best = label;
+    }
+  }
+  return best;
+}
+
 /** ครั้งแรกในชีวิต = แถวใน scan_results_v2 ของ user นี้มีแค่แถวที่เพิ่ง insert (≤1). */
 async function isFirstEverScan(lineUserId) {
   const { count, error } = await supabase
@@ -196,6 +227,7 @@ async function passesAudienceGate(lineUserId, audience) {
  *   lane: string,
  *   dedupHit?: boolean,
  *   lineSummary?: { energyScore?: number | null, mainEnergy?: string, compatibility?: number | null } | null,
+ *   reportPayload?: Record<string, unknown> | null,
  * }} p
  * @returns {Promise<{ url: string, durationMs: number, script: string } | null>}
  */
@@ -211,7 +243,9 @@ export async function maybeBuildScanVoiceNote(p) {
     const work = (async () => {
       const script = buildVoiceScript({
         score: p.lineSummary?.energyScore ?? null,
-        mainEnergy: String(p.lineSummary?.mainEnergy || ""),
+        mainEnergy:
+          String(p.lineSummary?.mainEnergy || "").trim() ||
+          topAxisLabelFromReport(p.reportPayload),
         compatibility: p.lineSummary?.compatibility ?? null,
         lane: String(p.lane || ""),
         seed: String(p.scanResultV2Id || p.lineUserId),
