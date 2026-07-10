@@ -36,29 +36,22 @@ export function buildVoiceScript({ score, mainEnergy, compatibility, lane, seed 
   const s = String(seed || "");
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
 
+  // ภาษาพูด สั้น ตามที่กบเคาะคำต่อคำ (Jul 2026):
+  // "องค์นี้นะ... คะแนนพลังรวม, อยู่ที่ 8.2 เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด,
+  //  เมตตา, ส่วนความเข้ากับดวงคุณ... อยู่ที่ 86 เปอร์เซ็นต์, รายละเอียดทั้งหมด, อยู่ในรายงาน"
+  void h;
   const compatLine = compatTxt
-    ? ` ส่วนความเข้ากับดวงคุณ... อยู่ที่ ${compatTxt} เปอร์เซ็นต์เลยนะ,`
+    ? ` ส่วนความเข้ากับดวงคุณ... อยู่ที่ ${compatTxt} เปอร์เซ็นต์,`
     : "";
-  const closing = " รายละเอียดทั้งหมด, อาจารย์เขียนไว้ในรายงานให้แล้ว, เปิดอ่านได้เลย";
+  const closing = " รายละเอียดทั้งหมด, อยู่ในรายงาน";
 
-  /** @type {string[]} */
-  const variants = [];
   if (scoreTxt && energy) {
-    variants.push(
-      `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด, คือด้าน${energy},${compatLine}${closing}`,
-      `${piece}นะ... อาจารย์ดูให้แล้ว, คะแนนได้ ${scoreTxt} เต็มสิบ, พลังเด่นคือสาย${energy},${compatLine}${closing}`,
-      `${piece}นะ... พลังรวมได้ ${scoreTxt} เต็มสิบ, ด้านที่แรงชัดเลย, คือ${energy},${compatLine}${closing}`,
-    );
-  } else if (scoreTxt) {
-    variants.push(
-      `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ,${compatLine}${closing}`,
-    );
-  } else {
-    variants.push(
-      `${piece}นะ... อาจารย์ดูให้เรียบร้อยแล้ว, มีเรื่องน่าสนใจอยู่,${closing}`,
-    );
+    return `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด, ${energy},${compatLine}${closing}`;
   }
-  return variants[h % variants.length];
+  if (scoreTxt) {
+    return `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ,${compatLine}${closing}`;
+  }
+  return `${piece}นะ... อาจารย์ดูให้เรียบร้อยแล้ว,${closing}`;
 }
 
 /** @returns {Promise<Buffer>} mp3 audio from ElevenLabs */
