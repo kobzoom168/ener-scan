@@ -7,4 +7,5 @@ create table if not exists app_settings (
 );
 
 grant select, insert, update, delete on app_settings to service_role;
-grant select on app_settings to web_anon;
+-- แอปต่อ PostgREST ด้วย anon key (role web_anon) — ต้องเขียนได้ด้วย
+grant select, insert, update, delete on app_settings to web_anon;
