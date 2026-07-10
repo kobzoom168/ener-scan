@@ -921,6 +921,29 @@ export const env = {
   })(),
 
   /**
+   * Phase 1 image forensics: ธง screen-photo / AI-generated / edited จาก LLM
+   * (ยิงขนานกับ object gate). suspect = ขอถ่ายใหม่นุ่ม ๆ — ยกเว้นลูกค้าจ่ายเงิน
+   * และชิ้นที่ match baseline จริงเดิม. Default off.
+   */
+  IMAGE_FORENSIC_ENABLED:
+    String(process.env.IMAGE_FORENSIC_ENABLED ?? "false").trim().toLowerCase() === "true",
+  IMAGE_FORENSIC_MODEL: String(process.env.IMAGE_FORENSIC_MODEL || "gpt-4.1-mini").trim(),
+  IMAGE_FORENSIC_TIMEOUT_MS: (() => {
+    const n = Number(process.env.IMAGE_FORENSIC_TIMEOUT_MS);
+    return Number.isFinite(n) && n >= 5000 ? Math.floor(n) : 25000;
+  })(),
+  /** ขอถ่ายใหม่เมื่อธง screen_photo มั่นใจ ≥ ค่านี้ (พร้อมหลักฐาน ≥1 ชิ้น) */
+  IMAGE_FORENSIC_SCREEN_MIN_CONF: (() => {
+    const n = Number(process.env.IMAGE_FORENSIC_SCREEN_MIN_CONF);
+    return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.85;
+  })(),
+  /** ขอถ่ายใหม่เมื่อธง ai_generated/edited มั่นใจ ≥ ค่านี้ (เกณฑ์สูงกว่า — detector ไม่นิ่ง) */
+  IMAGE_FORENSIC_AI_MIN_CONF: (() => {
+    const n = Number(process.env.IMAGE_FORENSIC_AI_MIN_CONF);
+    return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.9;
+  })(),
+
+  /**
    * Phase 2G: TRUE instance re-id — DINOv2 recall + LightGlue geometric verify
    * via the vision sidecar (vision-sidecar/). Default off; enable per env.
    */

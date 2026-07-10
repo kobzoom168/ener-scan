@@ -39,6 +39,12 @@ import {
 } from "../../stores/scanResults.db.js";
 import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js";
 import { maybeBuildScanVoiceNote } from "../voiceNote/scanVoiceNote.service.js";
+import {
+  runImageForensicCheck,
+  evaluateForensicDecision,
+  FORENSIC_RETRY_TEXTS,
+} from "../imageForensic.service.js";
+import { getUserPaidUntil } from "../../stores/paymentAccess.db.js";
 import { buildReportPayloadFromGlobalBaseline } from "./buildReportPayloadFromGlobalBaseline.service.js";
 import { tryCrossAccountExactBaselineReusePhase2A } from "./tryCrossAccountExactBaselineReuse.service.js";
 import { tryCrossAccountPhashBaselineReusePhase2C } from "./tryCrossAccountPhashBaselineReusePhase2C.service.js";
@@ -325,6 +331,8 @@ export async function processScanJob(workerId, jobRow) {
   // ────────────────────────────────────────────────────────────────────────
 
   const imageBase64 = toBase64(imageBuffer);
+  // Phase 1 forensics (screen/AI/edited) วิ่งขนานกับ gate — ตัดสินทีหลังตรงก่อน fresh scan
+  const forensicPromise = runImageForensicCheck(imageBase64).catch(() => null);
   const gated = await checkSingleObjectGated(imageBase64, {
     messageId: null,
     path: "worker_scan_job",
@@ -547,6 +555,74 @@ export async function processScanJob(workerId, jobRow) {
         }),
       );
     }
+  }
+
+  /** Phase 1 forensics ตัดสินเฉพาะตอนกำลังจะสแกนสด — ชิ้นที่ match baseline จริงเดิม
+      (2A/2C/2G) คือของจริงพิสูจน์แล้ว ไม่มีวันโดนปัด (LightGlue override) */
+  if (!baselineCrossAccountReuse) {
+    const forensic = await forensicPromise;
+    const forensicDecision = evaluateForensicDecision(forensic);
+    if (forensicDecision !== "pass") {
+      let paidActive = false;
+      try {
+        const paidUntil = await getUserPaidUntil(lineUserId);
+        paidActive = Boolean(paidUntil && new Date(paidUntil).getTime() > Date.now());
+      } catch {}
+      console.log(
+        JSON.stringify({
+          event: "IMAGE_FORENSIC_DECISION",
+          path: "worker-scan",
+          jobIdPrefix: idPrefix8(jobId),
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          decision: forensicDecision,
+          paidActive,
+          action:
+            forensicDecision === "suspect" && !paidActive ? "soft_retry" : "silent_flag",
+        }),
+      );
+      if (forensicDecision === "suspect" && !paidActive) {
+        // ขอถ่ายใหม่นุ่ม ๆ — ไม่กินสิทธิ์ (จบแบบเดียวกับ gate ปัด) ไม่มีคำกล่าวหา
+        let fh = 0;
+        const fs = String(jobId || lineUserId);
+        for (let i = 0; i < fs.length; i++) fh = (fh * 31 + fs.charCodeAt(i)) >>> 0;
+        await failJob(
+          jobId,
+          "image_authenticity_suspect",
+          "forensic_suspect",
+          lineUserId,
+          workerId,
+        );
+        await insertOutboundMessage({
+          line_user_id: lineUserId,
+          kind: "scan_result",
+          priority: OUTBOUND_PRIORITY.scan_result,
+          related_job_id: jobId,
+          payload_json: {
+            error: true,
+            rejectReason: "image_authenticity_suspect",
+            text: FORENSIC_RETRY_TEXTS[fh % FORENSIC_RETRY_TEXTS.length],
+            accessSource: job.access_source,
+            appUserId,
+          },
+          status: "queued",
+        });
+        await updateScanRequestStatus(scanRequestId, "failed");
+        return;
+      }
+    }
+  } else {
+    // baseline matched — log override for tuning (รูปที่เคยสงสัยแต่คือชิ้นจริงเดิม)
+    void forensicPromise.then((f) => {
+      if (f && evaluateForensicDecision(f) !== "pass") {
+        console.log(
+          JSON.stringify({
+            event: "IMAGE_FORENSIC_OVERRIDDEN_BY_BASELINE",
+            jobIdPrefix: idPrefix8(jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          }),
+        );
+      }
+    });
   }
 
   /** ระบุประเภทพิมพ์ (พระสมเด็จ/พระกริ่ง/เหรียญ…): runs in parallel with the deep
