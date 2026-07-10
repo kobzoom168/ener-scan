@@ -25,7 +25,8 @@ function esc(s) {
 function sampleScript() {
   return buildVoiceScript({
     score: 8.2,
-    mainEnergy: "เมตตา",
+    topPower: "โชคลาภ",
+    fitPower: "บารมี",
     compatibility: 86,
     lane: "sacred_amulet",
     seed: "preview",

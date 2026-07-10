@@ -37,18 +37,19 @@ export async function getVoiceNoteConfig() {
 }
 
 /**
- * สคริปต์พูด ~15-20 วิ จากข้อมูลจริงใน report — deterministic (ไม่ใช้ LLM)
- * โครงตามที่กบสั่ง: องค์นี้นะ → คะแนน → พลังเด่น → เข้ากับดวงคุณ → ชี้ไปรายงาน
- * ใส่ , และวรรคถี่ ๆ ให้จังหวะพูดช้าลง. หมุนหลายสำนวนตาม seed กันซ้ำ.
- * @param {{ score: number | null, mainEnergy: string, compatibility?: number | null, lane: string, seed: string }} p
+ * สคริปต์พูด ~12-16 วิ จากข้อมูลจริงใน report — deterministic (ไม่ใช้ LLM)
+ * โครงสุดท้ายที่กบเคาะ: คะแนนพลัง → พลังเด่นอะไร → เข้ากับคุณสุดพลังอะไร → รายงาน
+ * (topPower/fitPower = คู่เดียวกับที่การ์ด flex โชว์ "เด่นสุด X · รอง Y")
+ * @param {{ score: number | null, topPower: string, fitPower?: string, compatibility?: number | null, lane: string, seed: string }} p
  */
-export function buildVoiceScript({ score, mainEnergy, compatibility, lane, seed }) {
+export function buildVoiceScript({ score, topPower, fitPower, compatibility, lane, seed }) {
   const piece = lane === "sacred_amulet" ? "องค์นี้" : "ชิ้นนี้";
   const scoreTxt =
     typeof score === "number" && Number.isFinite(score)
       ? String(Math.round(score * 10) / 10).replace(/\.0$/, "")
       : "";
-  const energy = String(mainEnergy || "").trim();
+  const top = String(topPower || "").trim();
+  const fit = String(fitPower || "").trim();
   const compatTxt =
     typeof compatibility === "number" && Number.isFinite(compatibility) && compatibility > 0
       ? String(Math.round(compatibility))
@@ -58,18 +59,33 @@ export function buildVoiceScript({ score, mainEnergy, compatibility, lane, seed 
   const s = String(seed || "");
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
 
-  // ภาษาพูด สั้น โทนตรงแรง — โครงตามที่กบเคาะ: ชิ้น → คะแนน → พลังเด่น
-  // (+หนุนดวง) → เข้ากับดวง → รายงาน. 4 สำนวนสุ่มตาม seed (ชิ้นเดิม = สำนวนเดิม)
-  if (scoreTxt && energy) {
-    const compat1 = compatTxt ? ` ส่วนความเข้ากับดวงคุณ... อยู่ที่ ${compatTxt} เปอร์เซ็นต์,` : "";
-    const compat2 = compatTxt ? ` เข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,` : "";
-    const compat3 = compatTxt ? ` ดวงคุณกับ${piece}, เข้ากัน ${compatTxt} เปอร์เซ็นต์,` : "";
-    const compat4 = compatTxt ? ` ความเข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,` : "";
+  if (scoreTxt && top) {
+    // ไม่มีตัว "เข้ากับคุณสุด" → ถอยไปบอก % ความเข้ากับดวงแทน
+    const fit1 = fit
+      ? ` ส่วนที่เข้ากับคุณสุด... ${fit},`
+      : compatTxt
+        ? ` เข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,`
+        : "";
+    const fit2 = fit
+      ? ` ที่เข้ากับดวงคุณสุด, ${fit},`
+      : compatTxt
+        ? ` เข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,`
+        : "";
+    const fit3 = fit
+      ? ` เข้ากับคุณสุดคือ, ${fit},`
+      : compatTxt
+        ? ` ดวงคุณกับ${piece}, เข้ากัน ${compatTxt} เปอร์เซ็นต์,`
+        : "";
+    const fit4 = fit
+      ? ` ตัวที่หนุนดวงคุณสุด, ${fit},`
+      : compatTxt
+        ? ` ความเข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,`
+        : "";
     const variants = [
-      `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด, ${energy}, ตัวนี้แหละหนุนดวงคุณอยู่,${compat1} รายละเอียดทั้งหมด, อยู่ในรายงาน`,
-      `ดูให้แล้ว... ${piece}, คะแนนพลังรวม, ${scoreTxt} เต็มสิบ, ที่เด่นชัดสุด, ${energy}, สายนี้หนุนดวงคุณโดยตรง,${compat2} ที่เหลือทั้งหมด, เปิดดูในรายงาน`,
-      `บอกเลยนะ... ${piece}, พลังรวมได้, ${scoreTxt} เต็มสิบ, เด่นสุดคือ, ${energy}, หนุนดวงคุณด้านนี้เต็ม ๆ,${compat3} รายละเอียด, อยู่ในรายงานครบ`,
-      `${piece}นะ... อาจารย์ดูแล้ว, คะแนน, ${scoreTxt} เต็มสิบ, พลังที่นำมาชัด ๆ, ${energy}, เข้ามาหนุนดวงคุณพอดี,${compat4} ลึกกว่านี้, ไปอ่านในรายงาน`,
+      `${piece}นะ... คะแนนพลัง, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังเด่น, ${top},${fit1} รายละเอียดทั้งหมด, อยู่ในรายงาน`,
+      `ดูให้แล้ว... ${piece}, คะแนนพลัง, ${scoreTxt} เต็มสิบ, เด่นเรื่อง, ${top},${fit2} ที่เหลือทั้งหมด, เปิดดูในรายงาน`,
+      `บอกเลยนะ... ${piece}, พลังได้, ${scoreTxt} เต็มสิบ, เด่นสุดคือ, ${top},${fit3} รายละเอียด, อยู่ในรายงานครบ`,
+      `${piece}นะ... อาจารย์ดูแล้ว, คะแนน, ${scoreTxt} เต็มสิบ, พลังเด่น, ${top},${fit4} ลึกกว่านี้, ไปอ่านในรายงาน`,
     ];
     return variants[h % variants.length];
   }
@@ -77,7 +93,7 @@ export function buildVoiceScript({ score, mainEnergy, compatibility, lane, seed 
     ? ` ส่วนความเข้ากับดวงคุณ... อยู่ที่ ${compatTxt} เปอร์เซ็นต์,`
     : "";
   if (scoreTxt) {
-    return `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ,${compatLine} รายละเอียดทั้งหมด, อยู่ในรายงาน`;
+    return `${piece}นะ... คะแนนพลัง, อยู่ที่ ${scoreTxt} เต็มสิบ,${compatLine} รายละเอียดทั้งหมด, อยู่ในรายงาน`;
   }
   return `${piece}นะ... อาจารย์ดูให้เรียบร้อยแล้ว, รายละเอียดทั้งหมด, อยู่ในรายงาน`;
 }
@@ -239,6 +255,28 @@ export async function getStaticVoiceNote(name) {
 }
 
 /**
+ * พลังเด่นตัวจริงที่ต้องพูด = ช่องเดียวกับที่การ์ด flex โชว์:
+ * summary.fitReasonShort "เด่นสุด โชคลาภและการเปิดทาง · รอง บารมีและอำนาจนำ"
+ * → { top: "โชคลาภ", second: "บารมี" } (ตัดที่ "และ" ให้สั้นพอพูด)
+ * @param {Record<string, unknown> | null | undefined} reportPayload
+ * @returns {{ top: string, second: string }}
+ */
+export function extractTopPowersFromReport(reportPayload) {
+  const s =
+    reportPayload && typeof reportPayload === "object" &&
+    reportPayload.summary && typeof reportPayload.summary === "object"
+      ? /** @type {Record<string, unknown>} */ (reportPayload.summary)
+      : {};
+  const fit = String(s.fitReasonShort || "").trim();
+  const shorten = (t) => String(t || "").split("และ")[0].trim().slice(0, 40);
+  const m = /เด่นสุด\s*([^·]+?)(?:\s*·\s*รอง\s*(.+))?$/.exec(fit);
+  if (m) {
+    return { top: shorten(m[1]), second: shorten(m[2] || "") };
+  }
+  return { top: "", second: "" };
+}
+
+/**
  * Fallback พลังเด่น: บางสแกนช่องสรุป mainEnergy ว่าง → ขุดจากแกนคะแนนใน
  * report ตรง ๆ (แกนที่คะแนนสูงสุดใน powerCategories/axes ของ lane นั้น)
  * @param {Record<string, unknown> | null | undefined} reportPayload
@@ -311,11 +349,14 @@ export async function maybeBuildScanVoiceNote(p) {
     if (!allowed) return null;
 
     const work = (async () => {
+      const powers = extractTopPowersFromReport(p.reportPayload);
       const script = buildVoiceScript({
         score: p.lineSummary?.energyScore ?? null,
-        mainEnergy:
+        topPower:
+          powers.top ||
           String(p.lineSummary?.mainEnergy || "").trim() ||
           topAxisLabelFromReport(p.reportPayload),
+        fitPower: powers.second,
         compatibility: p.lineSummary?.compatibility ?? null,
         lane: String(p.lane || ""),
         seed: String(p.scanResultV2Id || p.lineUserId),
