@@ -942,6 +942,26 @@ export const env = {
     const n = Number(process.env.IMAGE_FORENSIC_AI_MIN_CONF);
     return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.9;
   })(),
+  /**
+   * ท้าถ่ายสด (challenge): รูปติดธงสงสัย → อาจารย์ขอ "อีกมุม ตอนนี้เลย" แล้ว
+   * LightGlue พิสูจน์ว่าชิ้นเดียวกันจริง — ไม้ตายเดียวที่ชนะรูป AI เนียน ๆ.
+   * ต้องมี vision sidecar. Default off.
+   */
+  AUTH_CHALLENGE_ENABLED:
+    String(process.env.AUTH_CHALLENGE_ENABLED ?? "false").trim().toLowerCase() === "true",
+  /** inliers ขั้นต่ำที่ถือว่าสองรูปคือชิ้นเดียวกัน (คนละมุม — ต่ำกว่าเกณฑ์ re-id เล็กน้อย) */
+  AUTH_CHALLENGE_MIN_INLIERS: (() => {
+    const n = Number(process.env.AUTH_CHALLENGE_MIN_INLIERS);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 18;
+  })(),
+  /** หน้าต่างเวลาส่งรูปมุมสอง (วินาที) */
+  AUTH_CHALLENGE_TTL_SEC: (() => {
+    const n = Number(process.env.AUTH_CHALLENGE_TTL_SEC);
+    return Number.isFinite(n) && n >= 60 ? Math.floor(n) : 900;
+  })(),
+  /** เทสบน staging: ท้าแม้เป็นลูกค้าจ่ายเงิน (prod ต้อง false — ลูกค้าจ่ายไม่โดนท้า) */
+  AUTH_CHALLENGE_INCLUDE_PAID:
+    String(process.env.AUTH_CHALLENGE_INCLUDE_PAID ?? "false").trim().toLowerCase() === "true",
 
   /**
    * Phase 2G: TRUE instance re-id — DINOv2 recall + LightGlue geometric verify
