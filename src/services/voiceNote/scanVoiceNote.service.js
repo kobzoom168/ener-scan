@@ -13,6 +13,28 @@ import { s3Client, S3_ENABLED } from "../../config/s3Storage.js";
 import { env } from "../../config/env.js";
 import { supabase } from "../../config/supabase.js";
 import { getUserPaidUntil } from "../../stores/paymentAccess.db.js";
+import { getAppSetting } from "../../stores/appSettings.db.js";
+
+/**
+ * ค่าที่ปรับได้จากหน้า /admin/voice (app_settings key "voice_note") — มีผลสด
+ * ไม่ต้อง restart; ค่าที่ไม่ได้ตั้งถอยไปใช้ env.
+ * @returns {Promise<{ enabled: boolean, audience: string, voiceId: string, speed: number, modelId: string }>}
+ */
+export async function getVoiceNoteConfig() {
+  const raw = await getAppSetting("voice_note").catch(() => null);
+  const v = raw && typeof raw === "object" ? /** @type {Record<string, unknown>} */ (raw) : {};
+  const speedN = Number(v.speed);
+  return {
+    enabled: typeof v.enabled === "boolean" ? v.enabled : env.VOICE_NOTE_ENABLED,
+    audience: String(v.audience || env.VOICE_NOTE_AUDIENCE),
+    voiceId: String(v.voiceId || env.ELEVENLABS_VOICE_ID),
+    speed:
+      Number.isFinite(speedN) && speedN >= 0.7 && speedN <= 1.2
+        ? speedN
+        : env.ELEVENLABS_SPEED,
+    modelId: String(v.modelId || env.ELEVENLABS_MODEL_ID),
+  };
+}
 
 /**
  * สคริปต์พูด ~15-20 วิ จากข้อมูลจริงใน report — deterministic (ไม่ใช้ LLM)
@@ -54,11 +76,19 @@ export function buildVoiceScript({ score, mainEnergy, compatibility, lane, seed 
   return `${piece}นะ... อาจารย์ดูให้เรียบร้อยแล้ว,${closing}`;
 }
 
-/** @returns {Promise<Buffer>} mp3 audio from ElevenLabs */
-async function synthesizeMp3(text) {
-  const voiceId = String(env.ELEVENLABS_VOICE_ID || "").trim();
+/**
+ * @param {string} text
+ * @param {{ voiceId?: string, speed?: number, modelId?: string }} [opts]
+ * @returns {Promise<Buffer>} mp3 audio from ElevenLabs
+ */
+export async function synthesizeMp3(text, opts = {}) {
+  const voiceId = String(opts.voiceId || env.ELEVENLABS_VOICE_ID || "").trim();
   const apiKey = String(env.ELEVENLABS_API_KEY || "").trim();
   if (!voiceId || !apiKey) throw new Error("elevenlabs_not_configured");
+  const speed =
+    Number.isFinite(Number(opts.speed)) && Number(opts.speed) >= 0.7 && Number(opts.speed) <= 1.2
+      ? Number(opts.speed)
+      : env.ELEVENLABS_SPEED;
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`;
   const call = (voiceSettings) =>
     fetch(url, {
@@ -66,12 +96,12 @@ async function synthesizeMp3(text) {
       headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         text,
-        model_id: String(env.ELEVENLABS_MODEL_ID || "eleven_v3"),
+        model_id: String(opts.modelId || env.ELEVENLABS_MODEL_ID || "eleven_v3"),
         ...(voiceSettings ? { voice_settings: voiceSettings } : {}),
       }),
     });
   // stability 1.0 (Robust) เสียงนิ่ง + speed ช้ากว่าปกติ (กบ: "พูดช้าหน่อย ดูไวไป")
-  let res = await call({ stability: 1.0, speed: env.ELEVENLABS_SPEED });
+  let res = await call({ stability: 1.0, speed });
   if (res.status === 400 || res.status === 422) {
     // บาง model ปฏิเสธ voice_settings บางฟิลด์ — ยอมเสีย speed ดีกว่าเสียทั้งเสียง
     res = await call(null);
@@ -143,9 +173,8 @@ async function isFirstEverScan(lineUserId) {
 }
 
 /** จ่ายเงิน = ทุกสแกน / ฟรี = เฉพาะสแกนแรกครั้งเดียว (wow moment) / "all" ไว้เทส staging */
-async function passesAudienceGate(lineUserId) {
-  const audience = String(env.VOICE_NOTE_AUDIENCE || "paid_and_first_free");
-  if (audience === "all") return true;
+async function passesAudienceGate(lineUserId, audience) {
+  if (String(audience) === "all") return true;
   const paidUntil = await getUserPaidUntil(lineUserId).catch(() => null);
   if (paidUntil && new Date(paidUntil).getTime() > Date.now()) return true;
   return isFirstEverScan(lineUserId).catch(() => false);
@@ -165,11 +194,12 @@ async function passesAudienceGate(lineUserId) {
  * @returns {Promise<{ url: string, durationMs: number, script: string } | null>}
  */
 export async function maybeBuildScanVoiceNote(p) {
-  if (!env.VOICE_NOTE_ENABLED) return null;
   if (p.dedupHit) return null; // report "เคยสแกนแล้ว" ไม่ต้องมีเสียงซ้ำ
   const t0 = Date.now();
   try {
-    const allowed = await passesAudienceGate(p.lineUserId);
+    const cfg = await getVoiceNoteConfig();
+    if (!cfg.enabled) return null;
+    const allowed = await passesAudienceGate(p.lineUserId, cfg.audience);
     if (!allowed) return null;
 
     const work = (async () => {
@@ -180,7 +210,11 @@ export async function maybeBuildScanVoiceNote(p) {
         lane: String(p.lane || ""),
         seed: String(p.scanResultV2Id || p.lineUserId),
       });
-      const mp3 = await synthesizeMp3(script);
+      const mp3 = await synthesizeMp3(script, {
+        voiceId: cfg.voiceId,
+        speed: cfg.speed,
+        modelId: cfg.modelId,
+      });
       const { m4a, durationMs } = await convertMp3ToM4a(mp3);
       if (!durationMs || durationMs < 500) throw new Error("duration_unreadable");
       const url = await uploadVoiceNote(p.lineUserId, p.scanResultV2Id, m4a);
