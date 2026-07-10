@@ -216,36 +216,57 @@ ${
         // — ดีกว่าเฉลี่ยเป็น centroid เดียว ซึ่งเบลอเมื่อตัวอย่างหลากหลาย (เคสตะกรุด 17 แบบ)
         const { data: exRows } = await supabase
           .from("amulet_type_examples")
-          .select("embedding")
+          .select("embedding, status")
           .eq("type_key", key)
-          .eq("status", "confirmed")
+          .in("status", ["confirmed", "rejected"])
           .order("created_at", { ascending: false })
-          .limit(12);
-        const vecs = (exRows || [])
-          .map((r) => {
-            try {
-              return typeof r.embedding === "string" ? JSON.parse(r.embedding) : r.embedding;
-            } catch {
-              return null;
-            }
-          })
-          .filter((v) => Array.isArray(v) && v.length === 384);
-        const byId = new Map();
-        for (const v of vecs) {
-          const ms = await matchGlobalObjectBaselinesByVisualEmbedding(v, {
+          .limit(30);
+        const parseVec = (r) => {
+          try {
+            const v = typeof r.embedding === "string" ? JSON.parse(r.embedding) : r.embedding;
+            return Array.isArray(v) && v.length === 384 ? v : null;
+          } catch {
+            return null;
+          }
+        };
+        const confirmedVecs = (exRows || [])
+          .filter((r) => r.status === "confirmed")
+          .map(parseVec)
+          .filter(Boolean)
+          .slice(0, 12);
+        const rejectedVecs = (exRows || [])
+          .filter((r) => r.status === "rejected")
+          .map(parseVec)
+          .filter(Boolean)
+          .slice(0, 12);
+        const knn = (v) =>
+          matchGlobalObjectBaselinesByVisualEmbedding(v, {
             lane: "sacred_amulet",
             objectFamily: "sacred_amulet",
             minSimilarity: 0.45,
             matchCount: 20,
           }).catch(() => []);
-          for (const m of ms || []) {
+        const byId = new Map();
+        for (const v of confirmedVecs) {
+          for (const m of (await knn(v)) || []) {
             const prev = byId.get(String(m.id));
             if (!prev || Number(m.similarity) > Number(prev.similarity)) {
               byId.set(String(m.id), m);
             }
           }
         }
+        // ตัวอย่างลบ (กด ✗ ไว้): ชิ้นไหนคล้ายตัวลบมากกว่าตัวจริง → ไม่เสนอ (ระบบเรียนรู้จุดต่าง)
+        const rejSim = new Map();
+        for (const v of rejectedVecs) {
+          for (const m of (await knn(v)) || []) {
+            const id = String(m.id);
+            if (!rejSim.has(id) || Number(m.similarity) > rejSim.get(id)) {
+              rejSim.set(id, Number(m.similarity));
+            }
+          }
+        }
         rows = [...byId.values()]
+          .filter((m) => (rejSim.get(String(m.id)) ?? 0) < Number(m.similarity))
           .sort((a, b) => Number(b.similarity) - Number(a.similarity))
           .slice(0, 40);
       } else {
@@ -259,11 +280,16 @@ ${
         totalCount = Number(count) || 0;
       }
 
+      // confirmed = ซ่อนทุกพิมพ์ (1 ชิ้น 1 พิมพ์) / rejected = ซ่อนเฉพาะพิมพ์นี้ (ไม่ใช่พิมพ์นี้ ≠ ไม่ใช่พิมพ์อื่น)
       const { data: usedRows } = await supabase
         .from("amulet_type_examples")
-        .select("source_baseline_id")
+        .select("source_baseline_id, status, type_key")
         .not("source_baseline_id", "is", null);
-      const used = new Set((usedRows || []).map((r) => String(r.source_baseline_id)));
+      const used = new Set(
+        (usedRows || [])
+          .filter((r) => r.status === "confirmed" || String(r.type_key) === String(key))
+          .map((r) => String(r.source_baseline_id)),
+      );
 
       const cards = (
         await Promise.all(
@@ -278,7 +304,10 @@ ${
                 <input type="hidden" name="baselineId" value="${esc(r.id)}"/>
                 <input type="hidden" name="page" value="${mode === "library" ? page : 1}"/>
                 <img src="${esc(url)}" loading="lazy"/>${sim}
-                <button class="ok">✓ ใช่</button>
+                <span class="btns">
+                  <button class="ok" name="verdict" value="yes">✓ ใช่</button>
+                  ${mode === "suggest" ? '<button class="no" name="verdict" value="no">✗ ไม่ใช่</button>' : ""}
+                </span>
               </form>`;
             }),
         )
@@ -293,7 +322,9 @@ ${
   a{color:#8f6710} .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:14px}
   .pick{position:relative;border:1px solid #e2ddd2;border-radius:10px;overflow:hidden;aspect-ratio:1;margin:0}
   .pick img{width:100%;height:100%;object-fit:cover;display:block}
-  .pick .ok{position:absolute;bottom:6px;left:6px;right:6px;border:none;background:#b8871b;color:#fff;font-weight:800;border-radius:8px;padding:6px;cursor:pointer;font:inherit}
+  .pick .btns{position:absolute;bottom:6px;left:6px;right:6px;display:flex;gap:5px}
+  .pick .ok{flex:1.4;border:none;background:#b8871b;color:#fff;font-weight:800;border-radius:8px;padding:6px;cursor:pointer;font:inherit}
+  .pick .no{flex:1;border:none;background:#6b6257;color:#fff;font-weight:800;border-radius:8px;padding:6px;cursor:pointer;font:inherit;font-size:.85em}
   .sim{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;font-size:.7rem;border-radius:6px;padding:1px 6px}
   .muted{color:#7a6a58;font-size:.85rem}
 </style></head><body>
@@ -334,12 +365,15 @@ ${
         embedding = null;
       }
       if (!Array.isArray(embedding) || embedding.length !== 384) throw new Error("baseline_missing_embedding");
+      // ✗ ไม่ใช่ = ตัวอย่างลบ: ไม่เสนอซ้ำ + ชิ้นที่คล้ายตัวลบมากกว่าตัวจริงจะถูกกรองออก
+      const isReject = String(req.body.verdict || "yes") === "no";
       await addTypeExample({
         typeKey: req.params.key,
         embedding,
         imagePath: b.thumbnail_path || null,
         sourceBaselineId: baselineId,
-        source: "library",
+        source: isReject ? "suggested" : "library",
+        status: isReject ? "rejected" : "confirmed",
       });
       const back = String(req.headers.referer || "").includes("/suggest") ? "suggest" : "library";
       // กลับหน้าเดิมที่ค้างอยู่ (เช่นเลือกจากหน้า 2 ต้องเด้งกลับหน้า 2)
