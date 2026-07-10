@@ -649,13 +649,38 @@ export async function processScanJob(workerId, jobRow) {
             forensicDecision === "suspect" && !paidActive ? "soft_retry" : "silent_flag",
         }),
       );
-      const challengeReady =
-        env.AUTH_CHALLENGE_ENABLED &&
-        isChallengeWorthy(forensic) &&
-        (env.AUTH_CHALLENGE_INCLUDE_PAID || !paidActive);
+      const actOnFlagged = env.AUTH_CHALLENGE_INCLUDE_PAID || !paidActive;
       let fh = 0;
       const fs = String(jobId || lineUserId);
       for (let i = 0; i < fs.length; i++) fh = (fh * 31 + fs.charCodeAt(i)) >>> 0;
+      // หลักฐานแข็ง (เช่น ข้อความ/ป้ายฝังในรูป, คอลลาจกราฟิก, ขอบจอชัด) → บอกถ่ายใหม่ตรง ๆ
+      if (forensicDecision === "suspect" && actOnFlagged) {
+        await failJob(
+          jobId,
+          "image_authenticity_suspect",
+          "forensic_suspect",
+          lineUserId,
+          workerId,
+        );
+        await insertOutboundMessage({
+          line_user_id: lineUserId,
+          kind: "scan_result",
+          priority: OUTBOUND_PRIORITY.scan_result,
+          related_job_id: jobId,
+          payload_json: {
+            error: true,
+            rejectReason: "image_authenticity_suspect",
+            text: FORENSIC_RETRY_TEXTS[fh % FORENSIC_RETRY_TEXTS.length],
+            accessSource: job.access_source,
+            appUserId,
+          },
+          status: "queued",
+        });
+        await updateScanRequestStatus(scanRequestId, "failed");
+        return;
+      }
+      const challengeReady =
+        env.AUTH_CHALLENGE_ENABLED && isChallengeWorthy(forensic) && actOnFlagged;
       if (challengeReady) {
         // ท้าถ่ายสด: จำรูปนี้ไว้ รอมุมที่สองมาให้ LightGlue พิสูจน์ — ไม่กินสิทธิ์
         try {
@@ -684,32 +709,6 @@ export async function processScanJob(workerId, jobRow) {
             error: true,
             rejectReason: "auth_challenge_issued",
             text: CHALLENGE_REQUEST_TEXTS[fh % CHALLENGE_REQUEST_TEXTS.length],
-            accessSource: job.access_source,
-            appUserId,
-          },
-          status: "queued",
-        });
-        await updateScanRequestStatus(scanRequestId, "failed");
-        return;
-      }
-      if (forensicDecision === "suspect" && !paidActive) {
-        // challenge ปิดอยู่ → ขอถ่ายใหม่นุ่ม ๆ แบบเดิม — ไม่กินสิทธิ์ ไม่มีคำกล่าวหา
-        await failJob(
-          jobId,
-          "image_authenticity_suspect",
-          "forensic_suspect",
-          lineUserId,
-          workerId,
-        );
-        await insertOutboundMessage({
-          line_user_id: lineUserId,
-          kind: "scan_result",
-          priority: OUTBOUND_PRIORITY.scan_result,
-          related_job_id: jobId,
-          payload_json: {
-            error: true,
-            rejectReason: "image_authenticity_suspect",
-            text: FORENSIC_RETRY_TEXTS[fh % FORENSIC_RETRY_TEXTS.length],
             accessSource: job.access_source,
             appUserId,
           },

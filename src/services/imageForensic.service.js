@@ -33,9 +33,15 @@ Check three things:
    evidence: garbled/melting Thai script or yantra lines that are nonsense strokes,
    physically impossible geometry (casing merging into background), warped repeating textures,
    dream-like inconsistent details.
-3. edited — composited/manipulated:
+3. edited — composited/manipulated/prepared graphic (NOT a direct photo):
    evidence: hard cutout halo around object, shadow direction contradicting highlights,
-   clone-stamp repeats.
+   clone-stamp repeats, ADDED text captions/labels overlaid on the image in any language
+   (e.g. "ด้านหน้า", "ด้านหลัง", price text, arrows), decorative frames/borders,
+   side-by-side collage with visible dividing edges or matching mirrored composition.
+   If you see overlaid caption text or a designed collage layout → edited = "yes" with
+   HIGH confidence (0.9+): that is a prepared graphic, not a fresh photo.
+   NOTE: two sides of the same piece physically laid together and photographed in ONE
+   real shot (no added text, no frames) is normal Thai practice — NOT edited.
 
 Return JSON ONLY:
 {
@@ -180,7 +186,6 @@ export const FORENSIC_RETRY_TEXTS = [
  */
 export function isChallengeWorthy(f) {
   if (!f) return false;
-  if (evaluateForensicDecision(f) === "suspect") return true;
   const hot = (flag) =>
     (flag.verdict === "yes" && flag.confidence >= 0.4) ||
     (flag.verdict === "unsure" && flag.confidence >= 0.4);
