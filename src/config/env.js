@@ -914,6 +914,11 @@ export const env = {
   ELEVENLABS_API_KEY: String(process.env.ELEVENLABS_API_KEY || "").trim(),
   ELEVENLABS_VOICE_ID: String(process.env.ELEVENLABS_VOICE_ID || "KaT6JiTgr6OcQNnpAc35").trim(),
   ELEVENLABS_MODEL_ID: String(process.env.ELEVENLABS_MODEL_ID || "eleven_v3").trim(),
+  /** อัตราเร็วเสียงพูด 0.7-1.2 (1.0 = ปกติ) — อาจารย์พูดช้ากว่าปกติเล็กน้อย */
+  ELEVENLABS_SPEED: (() => {
+    const n = Number(process.env.ELEVENLABS_SPEED);
+    return Number.isFinite(n) && n >= 0.7 && n <= 1.2 ? n : 0.85;
+  })(),
 
   /**
    * Phase 2G: TRUE instance re-id — DINOv2 recall + LightGlue geometric verify

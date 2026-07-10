@@ -15,37 +15,47 @@ import { supabase } from "../../config/supabase.js";
 import { getUserPaidUntil } from "../../stores/paymentAccess.db.js";
 
 /**
- * สคริปต์พูด ~10-18 วิ จากข้อมูลจริงใน report — deterministic (ไม่ใช้ LLM)
- * เพื่อไม่มีทางหลุด persona และไม่เพิ่ม latency. หมุนหลายแบบตาม seed กันซ้ำ.
- * @param {{ score: number | null, mainEnergy: string, lane: string, seed: string }} p
+ * สคริปต์พูด ~15-20 วิ จากข้อมูลจริงใน report — deterministic (ไม่ใช้ LLM)
+ * โครงตามที่กบสั่ง: องค์นี้นะ → คะแนน → พลังเด่น → เข้ากับดวงคุณ → ชี้ไปรายงาน
+ * ใส่ , และวรรคถี่ ๆ ให้จังหวะพูดช้าลง. หมุนหลายสำนวนตาม seed กันซ้ำ.
+ * @param {{ score: number | null, mainEnergy: string, compatibility?: number | null, lane: string, seed: string }} p
  */
-export function buildVoiceScript({ score, mainEnergy, lane, seed }) {
+export function buildVoiceScript({ score, mainEnergy, compatibility, lane, seed }) {
   const piece = lane === "sacred_amulet" ? "องค์นี้" : "ชิ้นนี้";
   const scoreTxt =
     typeof score === "number" && Number.isFinite(score)
       ? String(Math.round(score * 10) / 10).replace(/\.0$/, "")
       : "";
   const energy = String(mainEnergy || "").trim();
+  const compatTxt =
+    typeof compatibility === "number" && Number.isFinite(compatibility) && compatibility > 0
+      ? String(Math.round(compatibility))
+      : "";
 
   let h = 0;
   const s = String(seed || "");
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
 
+  const compatLine = compatTxt
+    ? ` ส่วนความเข้ากับดวงคุณ... อยู่ที่ ${compatTxt} เปอร์เซ็นต์เลยนะ,`
+    : "";
+  const closing = " รายละเอียดทั้งหมด, อาจารย์เขียนไว้ในรายงานให้แล้ว, เปิดอ่านได้เลย";
+
   /** @type {string[]} */
   const variants = [];
   if (scoreTxt && energy) {
     variants.push(
-      `อาจารย์ดูให้แล้วนะ ${piece}พลังรวมได้ ${scoreTxt} เต็มสิบ ที่เด่นชัดเลยคือด้าน${energy} รายละเอียดทั้งหมดอาจารย์เขียนไว้ในรายงาน เปิดอ่านได้เลย`,
-      `${piece}พลังเดินดีนะ ได้ ${scoreTxt} เต็มสิบ สาย${energy}นำมาเลย ใครพกไว้เรื่องนี้จะหนุนเป็นพิเศษ ที่เหลืออาจารย์ลงไว้ในรายงานให้แล้วนะ`,
-      `อาจารย์เพ่งดูแล้ว ${piece}ได้ ${scoreTxt} เต็มสิบ พลังด้าน${energy}โดดเด่นสุด ลองเปิดรายงานดู อาจารย์เขียนรายละเอียดไว้ให้ครบเลย`,
+      `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด, คือด้าน${energy},${compatLine}${closing}`,
+      `${piece}นะ... อาจารย์ดูให้แล้ว, คะแนนได้ ${scoreTxt} เต็มสิบ, พลังเด่นคือสาย${energy},${compatLine}${closing}`,
+      `${piece}นะ... พลังรวมได้ ${scoreTxt} เต็มสิบ, ด้านที่แรงชัดเลย, คือ${energy},${compatLine}${closing}`,
     );
   } else if (scoreTxt) {
     variants.push(
-      `อาจารย์ดูให้แล้วนะ ${piece}พลังรวมได้ ${scoreTxt} เต็มสิบ รายละเอียดแต่ละด้านอาจารย์เขียนไว้ในรายงาน เปิดอ่านได้เลย`,
+      `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ,${compatLine}${closing}`,
     );
   } else {
     variants.push(
-      `อาจารย์ดูให้เรียบร้อยแล้วนะ ${piece}มีเรื่องน่าสนใจอยู่ รายละเอียดอาจารย์เขียนไว้ในรายงาน เปิดอ่านได้เลย`,
+      `${piece}นะ... อาจารย์ดูให้เรียบร้อยแล้ว, มีเรื่องน่าสนใจอยู่,${closing}`,
     );
   }
   return variants[h % variants.length];
@@ -56,19 +66,23 @@ async function synthesizeMp3(text) {
   const voiceId = String(env.ELEVENLABS_VOICE_ID || "").trim();
   const apiKey = String(env.ELEVENLABS_API_KEY || "").trim();
   if (!voiceId || !apiKey) throw new Error("elevenlabs_not_configured");
-  const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
-    {
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`;
+  const call = (voiceSettings) =>
+    fetch(url, {
       method: "POST",
       headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         text,
         model_id: String(env.ELEVENLABS_MODEL_ID || "eleven_v3"),
-        // v3 รับ stability 0.0 / 0.5 / 1.0 — 1.0 (Robust) เสียงนิ่งเหมาะบทอาจารย์
-        voice_settings: { stability: 1.0 },
+        ...(voiceSettings ? { voice_settings: voiceSettings } : {}),
       }),
-    },
-  );
+    });
+  // stability 1.0 (Robust) เสียงนิ่ง + speed ช้ากว่าปกติ (กบ: "พูดช้าหน่อย ดูไวไป")
+  let res = await call({ stability: 1.0, speed: env.ELEVENLABS_SPEED });
+  if (res.status === 400 || res.status === 422) {
+    // บาง model ปฏิเสธ voice_settings บางฟิลด์ — ยอมเสีย speed ดีกว่าเสียทั้งเสียง
+    res = await call(null);
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`elevenlabs_${res.status}:${body.slice(0, 160)}`);
@@ -153,7 +167,7 @@ async function passesAudienceGate(lineUserId) {
  *   scanResultV2Id: string,
  *   lane: string,
  *   dedupHit?: boolean,
- *   lineSummary?: { energyScore?: number | null, mainEnergy?: string } | null,
+ *   lineSummary?: { energyScore?: number | null, mainEnergy?: string, compatibility?: number | null } | null,
  * }} p
  * @returns {Promise<{ url: string, durationMs: number, script: string } | null>}
  */
@@ -169,6 +183,7 @@ export async function maybeBuildScanVoiceNote(p) {
       const script = buildVoiceScript({
         score: p.lineSummary?.energyScore ?? null,
         mainEnergy: String(p.lineSummary?.mainEnergy || ""),
+        compatibility: p.lineSummary?.compatibility ?? null,
         lane: String(p.lane || ""),
         seed: String(p.scanResultV2Id || p.lineUserId),
       });
