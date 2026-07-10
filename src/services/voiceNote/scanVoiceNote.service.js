@@ -58,22 +58,28 @@ export function buildVoiceScript({ score, mainEnergy, compatibility, lane, seed 
   const s = String(seed || "");
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
 
-  // ภาษาพูด สั้น ตามที่กบเคาะคำต่อคำ (Jul 2026):
-  // "องค์นี้นะ... คะแนนพลังรวม, อยู่ที่ 8.2 เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด,
-  //  เมตตา, ส่วนความเข้ากับดวงคุณ... อยู่ที่ 86 เปอร์เซ็นต์, รายละเอียดทั้งหมด, อยู่ในรายงาน"
-  void h;
+  // ภาษาพูด สั้น โทนตรงแรง — โครงตามที่กบเคาะ: ชิ้น → คะแนน → พลังเด่น →
+  // เข้ากับดวง → รายงาน. 4 สำนวนสุ่มตาม seed (ชิ้นเดิม = สำนวนเดิมเสมอ)
+  if (scoreTxt && energy) {
+    const compat1 = compatTxt ? ` ส่วนความเข้ากับดวงคุณ... อยู่ที่ ${compatTxt} เปอร์เซ็นต์,` : "";
+    const compat2 = compatTxt ? ` เข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,` : "";
+    const compat3 = compatTxt ? ` ดวงคุณกับ${piece}, เข้ากัน ${compatTxt} เปอร์เซ็นต์,` : "";
+    const compat4 = compatTxt ? ` ความเข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,` : "";
+    const variants = [
+      `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด, ${energy},${compat1} รายละเอียดทั้งหมด, อยู่ในรายงาน`,
+      `ดูให้แล้ว... ${piece}, คะแนนพลังรวม, ${scoreTxt} เต็มสิบ, ที่เด่นชัดสุด, ${energy},${compat2} ที่เหลือทั้งหมด, เปิดดูในรายงาน`,
+      `บอกเลยนะ... ${piece}, พลังรวมได้, ${scoreTxt} เต็มสิบ, เด่นสุดคือ, ${energy},${compat3} รายละเอียด, อยู่ในรายงานครบ`,
+      `${piece}นะ... อาจารย์ดูแล้ว, คะแนน, ${scoreTxt} เต็มสิบ, พลังที่นำมาชัด ๆ, ${energy},${compat4} ลึกกว่านี้, ไปอ่านในรายงาน`,
+    ];
+    return variants[h % variants.length];
+  }
   const compatLine = compatTxt
     ? ` ส่วนความเข้ากับดวงคุณ... อยู่ที่ ${compatTxt} เปอร์เซ็นต์,`
     : "";
-  const closing = " รายละเอียดทั้งหมด, อยู่ในรายงาน";
-
-  if (scoreTxt && energy) {
-    return `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังที่เด่นออกมาชัดที่สุด, ${energy},${compatLine}${closing}`;
-  }
   if (scoreTxt) {
-    return `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ,${compatLine}${closing}`;
+    return `${piece}นะ... คะแนนพลังรวม, อยู่ที่ ${scoreTxt} เต็มสิบ,${compatLine} รายละเอียดทั้งหมด, อยู่ในรายงาน`;
   }
-  return `${piece}นะ... อาจารย์ดูให้เรียบร้อยแล้ว,${closing}`;
+  return `${piece}นะ... อาจารย์ดูให้เรียบร้อยแล้ว, รายละเอียดทั้งหมด, อยู่ในรายงาน`;
 }
 
 /**
