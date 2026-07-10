@@ -558,6 +558,14 @@ const REPORT_LOST_RESEND_TEXT =
  * @param {string} lineUserId
  * @returns {Promise<string|null>}
  */
+/** สั้น ๆ สุ่มตาม (user, จำนวนที่เหลือ) — เลขเดิมได้ประโยคเดิม ให้ dedupe 30 นาทีทำงาน */
+function pickRemainingText(variants, seedStr) {
+  let h = 0;
+  const s = String(seedStr || "");
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return variants[h % variants.length];
+}
+
 async function buildRemainingQuotaNoticeText(lineUserId) {
   try {
     const { data: u } = await supabase
@@ -569,7 +577,15 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     const now = new Date();
     const paidRemaining = Number(u.paid_remaining_scans) || 0;
     if (computePaidActive(u.paid_until, paidRemaining, now)) {
-      return `เหลือสิทธิ์สแกนอีก ${paidRemaining} ครั้ง ส่งชิ้นต่อไปมาได้เลย`;
+      return pickRemainingText(
+        [
+          `เหลืออีก ${paidRemaining} ครั้ง`,
+          `สแกนได้อีก ${paidRemaining} ครั้ง`,
+          `เหลือ ${paidRemaining} ครั้งนะ`,
+          `ยังเหลืออีก ${paidRemaining} ครั้ง ส่งมาต่อได้เลย`,
+        ],
+        `${lineUserId}:${paidRemaining}`,
+      );
     }
     const offer = loadActiveScanOffer(now);
     const freeQuota = Number(offer?.freeQuotaPerDay) || 2;
@@ -583,7 +599,15 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     }
     const left = Math.max(0, freeQuota - used);
     if (left > 0) {
-      return `วันนี้ยังสแกนฟรีได้อีก ${left} ครั้ง ส่งชิ้นต่อไปมาได้เลย`;
+      return pickRemainingText(
+        [
+          `วันนี้ฟรีเหลืออีก ${left} ครั้ง`,
+          `ฟรีวันนี้ยังเหลือ ${left} ครั้ง`,
+          `สแกนฟรีได้อีก ${left} ครั้งวันนี้`,
+          `เหลือฟรีอีก ${left} ครั้ง ส่งมาได้เลย`,
+        ],
+        `${lineUserId}:free:${left}`,
+      );
     }
     const pkg = getDefaultPackage(offer);
     return [
