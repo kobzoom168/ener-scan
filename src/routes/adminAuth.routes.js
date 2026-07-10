@@ -163,7 +163,7 @@ export default function createAdminAuthRouter() {
   router.get("/admin/login", (req, res) => {
     if (req.session?.admin?.authenticated === true) {
       const next = String(req.query?.next || "/admin/payments");
-      const safe = next.startsWith("/admin") ? next : "/admin/payments";
+      const safe = next.startsWith("/admin") ? next : "/admin";
       res.redirect(302, safe);
       return;
     }
@@ -230,7 +230,7 @@ export default function createAdminAuthRouter() {
     }
 
     const nextRaw = String(req.body?.next || req.query?.next || "/admin/payments");
-    const next = nextRaw.startsWith("/admin") ? nextRaw : "/admin/payments";
+    const next = nextRaw.startsWith("/admin") ? nextRaw : "/admin";
 
     if (isLoginRateLimited(req)) {
       res.redirect(
