@@ -900,6 +900,22 @@ export const env = {
   })(),
 
   /**
+   * Voice note "เสียงอาจารย์" ท้าย flex report (ElevenLabs → m4a → R2 → LINE audio).
+   * Default off. Audience: paid_and_first_free (จ่ายเงิน=ทุกสแกน, ฟรี=สแกนแรกครั้งเดียว)
+   * หรือ "all" สำหรับเทสบน staging.
+   */
+  VOICE_NOTE_ENABLED:
+    String(process.env.VOICE_NOTE_ENABLED ?? "false").trim().toLowerCase() === "true",
+  VOICE_NOTE_AUDIENCE: String(process.env.VOICE_NOTE_AUDIENCE || "paid_and_first_free").trim(),
+  VOICE_NOTE_TIMEOUT_MS: (() => {
+    const n = Number(process.env.VOICE_NOTE_TIMEOUT_MS);
+    return Number.isFinite(n) && n >= 3000 ? Math.floor(n) : 15000;
+  })(),
+  ELEVENLABS_API_KEY: String(process.env.ELEVENLABS_API_KEY || "").trim(),
+  ELEVENLABS_VOICE_ID: String(process.env.ELEVENLABS_VOICE_ID || "KaT6JiTgr6OcQNnpAc35").trim(),
+  ELEVENLABS_MODEL_ID: String(process.env.ELEVENLABS_MODEL_ID || "eleven_v3").trim(),
+
+  /**
    * Phase 2G: TRUE instance re-id — DINOv2 recall + LightGlue geometric verify
    * via the vision sidecar (vision-sidecar/). Default off; enable per env.
    */

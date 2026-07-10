@@ -38,6 +38,7 @@ import {
   deleteScanResultForAppUser,
 } from "../../stores/scanResults.db.js";
 import { buildReportPayloadFromScan } from "../reports/reportPayload.builder.js";
+import { maybeBuildScanVoiceNote } from "../voiceNote/scanVoiceNote.service.js";
 import { buildReportPayloadFromGlobalBaseline } from "./buildReportPayloadFromGlobalBaseline.service.js";
 import { tryCrossAccountExactBaselineReusePhase2A } from "./tryCrossAccountExactBaselineReuse.service.js";
 import { tryCrossAccountPhashBaselineReusePhase2C } from "./tryCrossAccountPhashBaselineReusePhase2C.service.js";
@@ -1770,6 +1771,15 @@ export async function processScanJob(workerId, jobRow) {
     }),
   );
 
+  // เสียงอาจารย์แนบท้าย report (best-effort, timeout ในตัว — null = ส่งแบบเดิม)
+  const voiceNote = await maybeBuildScanVoiceNote({
+    lineUserId,
+    scanResultV2Id: String(scanResultV2Id),
+    lane: strictSupportedLane,
+    dedupHit: wasExactDup,
+    lineSummary: lineSummaryForOutbound,
+  });
+
   /** @type {{ id?: string } | null} */
   let reportOutboundRow = null;
   try {
@@ -1784,6 +1794,7 @@ export async function processScanJob(workerId, jobRow) {
         flex,
         text: lineDeliveryText,
         reportUrl,
+        voice: voiceNote,
         lineSummary: lineSummaryForOutbound,
         reportPayload:
           lineFinalMode === "legacy_full" ? reportPayloadForReply : null,
