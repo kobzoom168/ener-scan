@@ -244,7 +244,7 @@ function sortAmuletPowerCategoryRows(powerCategories) {
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload | null | undefined} reportPayload
  * @returns {{ top: string, second: string } | null}
  */
-function buildAmuletFlexGsumPillData(powerCategories, reportPayload) {
+export function buildAmuletFlexGsumPillData(powerCategories, reportPayload) {
   const rows = sortAmuletPowerCategoryRows(powerCategories);
   const r0 = rows[0];
   const r1 = rows[1];

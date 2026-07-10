@@ -60,27 +60,37 @@ export function buildVoiceScript({ score, topPower, fitPower, compatibility, lan
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
 
   if (scoreTxt && top) {
+    // พลังเด่นกับตัวที่เข้ากับคุณเป็นด้านเดียวกัน → พูดรวบ ไม่ทวนคำเดิมสองรอบ
+    const same = Boolean(fit) && fit === top;
     // ไม่มีตัว "เข้ากับคุณสุด" → ถอยไปบอก % ความเข้ากับดวงแทน
-    const fit1 = fit
-      ? ` ส่วนที่เข้ากับคุณสุด... ${fit},`
-      : compatTxt
-        ? ` เข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,`
-        : "";
-    const fit2 = fit
-      ? ` ที่เข้ากับดวงคุณสุด, ${fit},`
-      : compatTxt
-        ? ` เข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,`
-        : "";
-    const fit3 = fit
-      ? ` เข้ากับคุณสุดคือ, ${fit},`
-      : compatTxt
-        ? ` ดวงคุณกับ${piece}, เข้ากัน ${compatTxt} เปอร์เซ็นต์,`
-        : "";
-    const fit4 = fit
-      ? ` ตัวที่หนุนดวงคุณสุด, ${fit},`
-      : compatTxt
-        ? ` ความเข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,`
-        : "";
+    const fit1 = same
+      ? " และด้านนี้แหละ... เข้ากับคุณที่สุดด้วย,"
+      : fit
+        ? ` ส่วนที่เข้ากับคุณสุด... ${fit},`
+        : compatTxt
+          ? ` เข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,`
+          : "";
+    const fit2 = same
+      ? " ซึ่งเข้ากับดวงคุณสุดด้วยนะ,"
+      : fit
+        ? ` ที่เข้ากับดวงคุณสุด, ${fit},`
+        : compatTxt
+          ? ` เข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,`
+          : "";
+    const fit3 = same
+      ? " แล้วก็ด้านนี้เลย, ที่เข้ากับคุณสุด,"
+      : fit
+        ? ` เข้ากับคุณสุดคือ, ${fit},`
+        : compatTxt
+          ? ` ดวงคุณกับ${piece}, เข้ากัน ${compatTxt} เปอร์เซ็นต์,`
+          : "";
+    const fit4 = same
+      ? " และหนุนดวงคุณตรงด้านนี้ที่สุด,"
+      : fit
+        ? ` ตัวที่หนุนดวงคุณสุด, ${fit},`
+        : compatTxt
+          ? ` ความเข้ากับดวงคุณ, ${compatTxt} เปอร์เซ็นต์,`
+          : "";
     const variants = [
       `${piece}นะ... คะแนนพลัง, อยู่ที่ ${scoreTxt} เต็มสิบ, พลังเด่น, ${top},${fit1} รายละเอียดทั้งหมด, อยู่ในรายงาน`,
       `ดูให้แล้ว... ${piece}, คะแนนพลัง, ${scoreTxt} เต็มสิบ, เด่นเรื่อง, ${top},${fit2} ที่เหลือทั้งหมด, เปิดดูในรายงาน`,
@@ -349,14 +359,30 @@ export async function maybeBuildScanVoiceNote(p) {
     if (!allowed) return null;
 
     const work = (async () => {
+      // แหล่งความจริงอันดับหนึ่ง = ฟังก์ชันเดียวกับปิลล์ "พลังเด่น/เข้ากับคุณที่สุด" บนการ์ด
+      // (เคสกบ: การ์ดโชว์คุ้มครองคู่ แต่เสียงไปหยิบ "รอง" จาก fitReasonShort → ไม่ตรงการ์ด)
+      let pill = null;
+      try {
+        const pc =
+          p.reportPayload && typeof p.reportPayload === "object"
+            ? /** @type {any} */ (p.reportPayload).amuletV1?.powerCategories
+            : null;
+        if (pc) {
+          const { buildAmuletFlexGsumPillData } = await import(
+            "../flex/flex.amuletSummary.js"
+          );
+          pill = buildAmuletFlexGsumPillData(pc, p.reportPayload);
+        }
+      } catch {}
       const powers = extractTopPowersFromReport(p.reportPayload);
       const script = buildVoiceScript({
         score: p.lineSummary?.energyScore ?? null,
         topPower:
+          pill?.top ||
           powers.top ||
           String(p.lineSummary?.mainEnergy || "").trim() ||
           topAxisLabelFromReport(p.reportPayload),
-        fitPower: powers.second,
+        fitPower: pill?.second || powers.second,
         compatibility: p.lineSummary?.compatibility ?? null,
         lane: String(p.lane || ""),
         seed: String(p.scanResultV2Id || p.lineUserId),
