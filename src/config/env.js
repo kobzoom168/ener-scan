@@ -1003,6 +1003,8 @@ export const env = {
     String(process.env.AMULET_TYPE_CLASSIFY_ENABLED ?? "true").trim().toLowerCase() !== "false",
   AMULET_TYPE_CLASSIFY_MODEL:
     String(process.env.AMULET_TYPE_CLASSIFY_MODEL || "gpt-4.1-mini").trim() || "gpt-4.1-mini",
+  /** token คงที่ให้ ener-ai ดึงรูปพระจริงจากคลังพิมพ์ไปทำคลิป (GET /api/amulet-refs) */
+  AMULET_REFS_TOKEN: String(process.env.AMULET_REFS_TOKEN || "").trim(),
   /**
    * คลังพิมพ์พระ: scan-time DINOv2 kNN vs กบ-confirmed example images — a strong
    * match overrides the LLM classifier label (requires vision sidecar + sql/039).
