@@ -395,5 +395,30 @@ ${
     }
   });
 
+  /**
+   * รูปพระจริงจากคลังพิมพ์ สำหรับระบบทำคลิป (ener-ai autopost ช่องพระเครื่อง) —
+   * token คงที่ผ่าน env ไม่ใช่ session admin. คืน [{key,label,urls}] เฉพาะพิมพ์ที่เปิดใช้
+   */
+  router.get("/api/amulet-refs", async (req, res) => {
+    try {
+      const tok = String(env.AMULET_REFS_TOKEN || "").trim();
+      if (!tok || String(req.query?.token || "").trim() !== tok) {
+        return res.status(403).json({ ok: false });
+      }
+      const types = (await listAmuletTypes()).filter((t) => t.enabled !== false);
+      const out = [];
+      for (const t of types) {
+        const examples = await listExamplesForType(t.type_key);
+        const urls = (
+          await Promise.all(examples.slice(0, 12).map((e) => signedUrlSafe(e.image_path)))
+        ).filter(Boolean);
+        if (urls.length) out.push({ key: t.type_key, label: t.label_thai, urls });
+      }
+      res.json({ ok: true, types: out });
+    } catch {
+      res.status(500).json({ ok: false });
+    }
+  });
+
   return router;
 }
