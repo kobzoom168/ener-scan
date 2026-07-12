@@ -520,6 +520,44 @@ function buildMonthlyReading(userId, birthdate) {
   };
 }
 
+/**
+ * สรุปดวงจากแอป Ener ของลูกค้าคนนี้ (ชุดเดียวกับที่เห็นใน LIFF — deterministic ต่อคน/วัน/เดือน)
+ * ให้สมองแชทใช้ตอบต่อยอดแบบไม่ขัดกัน (กบ 12 ก.ค.: ยึด LIFF เป็นหลัก)
+ * @returns {Promise<string|null>} บรรทัด facts หรือ null เมื่อไม่มีวันเกิด
+ */
+export async function buildLiffReadingFactsForChat(lineUserId) {
+  try {
+    const uid = String(lineUserId || "").trim();
+    if (!uid) return null;
+    let birth = null;
+    try {
+      const { data } = await supabase
+        .from("liff_profiles")
+        .select("birthdate,birth_time")
+        .eq("line_user_id", uid)
+        .maybeSingle();
+      if (data?.birthdate) birth = { birthdate: data.birthdate, birthTime: data.birth_time };
+    } catch {}
+    if (!birth) {
+      const iso = await resolveBirthdateIso(uid, null);
+      if (iso) birth = { birthdate: iso, birthTime: null };
+    }
+    const daily = buildDaily(uid, Date.now(), birth);
+    const monthly = buildMonthlyReading(uid, birth?.birthdate || "");
+    const cardsTxt = monthly.cards.map((c) => `${c.pos}: ${c.n} (${c.k})`).join(", ");
+    return [
+      `ดวงจากแอป Ener ของลูกค้าคนนี้ (ลูกค้าเห็นชุดเดียวกันในแอป — ยึดตามนี้):`,
+      `  วันนี้: คะแนน ${daily.score}/100 เลขนำโชค ${daily.luckyNums.join(" ")} สีมงคล ${daily.luckyColor?.name || "-"} สีเลี่ยง ${daily.banColor?.[0] || daily.banColor?.name || "-"} — ${daily.message}`,
+      `  เดือนนี้ (${monthly.monthLabel}): คะแนนรวม ${monthly.overall}/100 ด้านเด่น ${monthly.bestAxis} ไพ่ ${cardsTxt}`,
+      `  คำอ่านเดือนนี้: ${monthly.reading}`,
+      `  เคล็ดเสริมดวง: ${monthly.advice}`,
+      `  เลขนำโชคเดือนนี้: ${monthly.lucky.join(" ")} และ ${monthly.luckyPair}`,
+    ].join("\n");
+  } catch {
+    return null;
+  }
+}
+
 liffRouter.get("/api/liff/reading", async (req, res) => {
   const userId = await requireLiffUser(req, res);
   if (!userId) return;
