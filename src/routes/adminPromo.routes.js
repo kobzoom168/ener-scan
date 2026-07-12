@@ -18,6 +18,10 @@ import {
   getRenewalReminderConfig,
   RENEWAL_REMINDER_DEFAULTS,
 } from "../services/scanV2/renewalReminder.service.js";
+import {
+  getRegistrationGateConfig,
+  REGISTRATION_GATE_DEFAULTS,
+} from "../services/registrationGate.service.js";
 
 function esc(s) {
   return String(s ?? "")
@@ -27,7 +31,7 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
-function pageHtml({ offer, overrideOn, savedMsg, errorMsg, renewal }) {
+function pageHtml({ offer, overrideOn, savedMsg, errorMsg, renewal, regGate }) {
   const pkgRows = offer.packages
     .map(
       (p, i) => `
@@ -123,6 +127,20 @@ ${pkgRows}
       <small>ส่งเฉพาะลูกค้าแพ็กรายเดือน ครั้งเดียวต่อรอบสมาชิก ช่วง 10:00-20:00 พร้อมปุ่ม จ่าย ทุกแพ็ก กับ ไว้ก่อน</small>
     </div>
 
+    <div class="card">
+      <h2>บังคับลงทะเบียนก่อนใช้ (ลูกค้าใหม่)</h2>
+      <label class="chk" style="flex-direction:row;align-items:center;gap:8px">
+        <input type="checkbox" name="regGateEnabled"${regGate.enabled ? " checked" : ""}/> เปิดใช้งาน
+      </label>
+      <label>ข้อความชวนลงทะเบียน (ลิงก์ LIFF ต่อท้ายให้อัตโนมัติ)
+        <input type="text" name="regGateText" value="${esc(regGate.text)}"/>
+      </label>
+      <small>
+        เฉพาะลูกค้าที่เพิ่งมาหลังเปิดระบบนี้ (${regGate.sinceIso ? "ตัดเส้น " + esc(String(regGate.sinceIso).slice(0, 10)) : "จะตัดเส้น ณ วินาทีที่กดเปิดครั้งแรก"}) —
+        ลูกค้าเดิมไม่โดนบังคับ · ต้องมี LIFF ผูกกับ OA ก่อนถึงทำงาน · โดนบล็อกครบ 3 ครั้งระบบถอยให้ใช้แบบเดิม · ระบบล่ม = ปล่อยผ่านเสมอ
+      </small>
+    </div>
+
     <input type="hidden" name="payload" id="payload"/>
     <div style="display:flex;gap:10px">
       <button type="submit" class="btn save">💾 บันทึก (มีผลสด)</button>
@@ -192,10 +210,12 @@ export default function createAdminPromoRouter() {
     const overrideRaw = await getScanOfferOverrideRaw().catch(() => null);
     const offer = loadActiveScanOffer();
     const renewal = await getRenewalReminderConfig().catch(() => ({ ...RENEWAL_REMINDER_DEFAULTS }));
+    const regGate = await getRegistrationGateConfig().catch(() => ({ ...REGISTRATION_GATE_DEFAULTS }));
     res.status(200).type("html").send(
       pageHtml({
         offer,
         renewal,
+        regGate,
         overrideOn: Boolean(overrideRaw),
         savedMsg: req.query.saved ? "บันทึกแล้ว — มีผลกับลูกค้าภายใน ~30 วินาที" : "",
         errorMsg: req.query.err ? String(req.query.err) : "",
@@ -246,6 +266,18 @@ export default function createAdminPromoRouter() {
         await saveScanOfferOverride({ ...raw, ...normalized });
         // ตั้งค่าเตือนต่ออายุรายเดือน (บันทึกพร้อมกันในฟอร์มเดียว)
         const renewalDays = Math.floor(Number(req.body?.renewalDaysBefore));
+        {
+          const prevGate = await getRegistrationGateConfig().catch(() => ({ ...REGISTRATION_GATE_DEFAULTS }));
+          const gateOn = req.body?.regGateEnabled === "on";
+          await setAppSetting("registration_gate", {
+            enabled: gateOn,
+            // ตัดเส้นครั้งแรกที่เปิด แล้วคงไว้ตลอด — ลูกค้าเดิมไม่มีวันโดนย้อนหลัง
+            sinceIso: prevGate.sinceIso || (gateOn ? new Date().toISOString() : null),
+            text:
+              String(req.body?.regGateText || "").trim().slice(0, 300) ||
+              REGISTRATION_GATE_DEFAULTS.text,
+          });
+        }
         await setAppSetting("renewal_reminder", {
           enabled: req.body?.renewalEnabled === "on",
           daysBefore:

@@ -35,6 +35,7 @@ import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 import { runSlipAutoApprovalAfterGateAccept } from "../core/payments/slipCheck/slipAutoApprovalOrchestrator.service.js";
 import { maybeNotifyAdminSlipPendingVerify } from "../services/adminPaymentSlipNotify.service.js";
 import { pushText } from "../services/lineSequenceReply.service.js";
+import { bustRegistrationCache } from "../services/registrationGate.service.js";
 import { checkScanAccess } from "../services/paymentAccess.service.js";
 import {
   getConversationStateByLineUserId,
@@ -817,6 +818,18 @@ liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
       }
     }
     console.log(JSON.stringify({ event: "LIFF_PROFILE_SAVED", lineUserIdPrefix: userId.slice(0, 8), isNew: !existing }));
+    // Registration Gate: สถานะเปลี่ยนแล้ว — ล้าง cache ทันที (กันบอทตอบ "ยังไม่ลง" ทั้งที่ลงแล้ว)
+    try {
+      bustRegistrationCache(userId);
+    } catch {}
+    // ลงทะเบียนใหม่ครบ (ชื่อ+วันเกิด) → บอกในแชทเลยว่าเริ่มใช้ได้ ไม่ต้องเดา
+    if (!existing && row.nickname && row.birthdate && liffLineClient) {
+      pushText(
+        liffLineClient,
+        userId,
+        `ลงทะเบียนเรียบร้อยครับ คุณ${row.nickname}\nส่งรูปพระ เครื่องราง หิน หรือกำไล มาได้เลย เดี๋ยวอาจารย์อ่านให้`,
+      ).catch(() => {});
+    }
     res.json({ ok: true });
   } catch (e) {
     console.error(JSON.stringify({ event: "LIFF_PROFILE_SAVE_ERROR", message: String(e?.message || e).slice(0, 200) }));
