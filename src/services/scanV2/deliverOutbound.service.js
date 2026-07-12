@@ -634,19 +634,11 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
         const daysLeft = Math.ceil((untilMs - now.getTime()) / 86400000);
         const dateTxt = formatThaiShortDateBkk(untilMs);
         if (daysLeft <= 3) {
-          let renewPrice = null;
-          try {
-            const offerNow = loadActiveScanOffer(now);
-            const monthly = (offerNow?.packages || []).find(
-              (p) => p.active && Number(p.scanCount) >= 999999,
-            );
-            renewPrice = monthly ? monthly.priceThb : null;
-          } catch {}
-          const renewCta = renewPrice ? ` ต่อได้เลย พิมพ์ จ่าย ${renewPrice}` : "";
+          // เตือนนุ่ม ๆ อย่างเดียว ไม่ขาย (กบ) — เมนูเลือกแพ็กจะเด้งเองตอนหมดจริง
           return pickRemainingText(
             [
-              `รายเดือนเหลืออีก ${daysLeft} วันครับ${renewCta}`,
-              `แพ็กรายเดือนจะหมด ${dateTxt} นี้ครับ${renewCta}`,
+              `แพ็กรายเดือนเหลืออีก ${daysLeft} วันครับ`,
+              `รายเดือนของคุณใช้ได้ถึง ${dateTxt} นี้ครับ`,
             ],
             `${lineUserId}:unlimited:renew:${daysLeft}`,
           );
