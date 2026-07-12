@@ -272,16 +272,20 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         try {
           if (!payload.dedupHit) {
             const quotaNotice = await buildRemainingQuotaNoticeText(lineUserId);
-            if (quotaNotice) {
+            const noticeText =
+              typeof quotaNotice === "string" ? quotaNotice : quotaNotice?.text;
+            const noticeQuickReply =
+              quotaNotice && typeof quotaNotice === "object" ? quotaNotice.quickReply : null;
+            if (noticeText) {
               let h = 0;
-              for (let i = 0; i < quotaNotice.length; i++) {
-                h = (h * 31 + quotaNotice.charCodeAt(i)) >>> 0;
+              for (let i = 0; i < noticeText.length; i++) {
+                h = (h * 31 + noticeText.charCodeAt(i)) >>> 0;
               }
               const firstThisText = await tryDedupeOnce(
                 `scan_v2:quota_notice:${lineUserId}:${h}`,
                 1800,
               );
-              if (firstThisText) await pushText(client, lineUserId, quotaNotice);
+              if (firstThisText) await pushText(client, lineUserId, noticeText, noticeQuickReply);
             }
           }
         } catch {
@@ -577,6 +581,29 @@ const REPORT_LOST_RESEND_TEXT =
  * @param {string} lineUserId
  * @returns {Promise<string|null>}
  */
+/** ปุ่มลัดใต้ข้อความหมดโควตา: เปิด LIFF หน้าเลือกแพ็ก (เมื่อผูก LIFF_ID) + ปุ่มพิมพ์ จ่าย X */
+function buildPayLiffQuickReply(sortedPkgs) {
+  const items = [];
+  const liffId = String(process.env.LIFF_ID || "").trim();
+  if (liffId) {
+    items.push({
+      type: "action",
+      action: {
+        type: "uri",
+        label: "💳 เลือกแพ็กจ่ายเลย",
+        uri: `https://liff.line.me/${liffId}?view=pay`,
+      },
+    });
+  }
+  for (const p of sortedPkgs.slice(0, 3)) {
+    items.push({
+      type: "action",
+      action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
+    });
+  }
+  return items.length ? { items } : null;
+}
+
 /** สั้น ๆ สุ่มตาม (user, จำนวนที่เหลือ) — เลขเดิมได้ประโยคเดิม ให้ dedupe 30 นาทีทำงาน */
 function pickRemainingText(variants, seedStr) {
   let h = 0;
@@ -629,15 +656,27 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
         `${lineUserId}:free:${left}`,
       );
     }
-    const pkg = getDefaultPackage(offer);
-    return [
-      `สิทธิ์สแกนวันนี้ครบแล้ว พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
-      pkg
-        ? `ถ้าอยากดูต่อวันนี้เลย มีแพ็ก ${pkg.priceThb} บาท สแกนได้อีก ${pkg.scanCount} ครั้ง พิมพ์ว่า จ่าย มาได้เลย`
-        : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+    const pkgs = (offer?.packages || []).filter((p) => p.active);
+    if (!pkgs.length) {
+      return {
+        text: `สิทธิ์สแกนวันนี้ครบแล้ว พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
+        quickReply: null,
+      };
+    }
+    const sortedPkgs = [...pkgs].sort((a, b) => a.priceThb - b.priceThb);
+    const menuLines = sortedPkgs.map((p) =>
+      Number(p.scanCount) >= 999999
+        ? `• ${p.priceThb} บาท — สแกนไม่จำกัด ${Math.round(p.windowHours / 24)} วัน (รายเดือน)`
+        : `• ${p.priceThb} บาท — สแกน ${p.scanCount} ครั้ง${p.windowHours >= 48 ? ` / ${Math.round(p.windowHours / 24)} วัน` : ""}`,
+    );
+    return {
+      text: [
+        `สิทธิ์สแกนวันนี้ครบแล้ว พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
+        "ถ้าอยากดูต่อวันนี้เลย เปิดสิทธิ์เพิ่มได้ครับ",
+        ...menuLines,
+      ].join("\n"),
+      quickReply: buildPayLiffQuickReply(sortedPkgs),
+    };
   } catch {
     return null;
   }
