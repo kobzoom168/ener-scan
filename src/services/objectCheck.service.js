@@ -6,6 +6,7 @@ import {
 } from "../integrations/gemini/braceletFormRescue.service.js";
 import { openai, withOpenAi429RetryOnce } from "./openaiDeepScan.api.js";
 import { isTrueUnsupportedEvidence } from "../utils/objectGateReplyResolve.util.js";
+import { openaiAuxBreaker } from "../utils/circuitBreaker.util.js";
 
 const OBJECT_CHECK_PROVIDER = "openai.responses";
 // Upgraded from gpt-4.1-mini: the mini model mis-rejected clear sacred objects (e.g. a crystal
@@ -438,6 +439,10 @@ async function runStrictObjectCheck(imageBase64) {
       const message = String(error?.message || error || "");
       const timeout = /timeout/i.test(message);
       const status = Number(error?.status || 0);
+      // ด่านหลักเริ่มมีอาการ (429/timeout) = quota ตึง → แจ้งวงจรให้งานเสริมหลบทันที
+      if (timeout || status === 429) {
+        openaiAuxBreaker.recordFailure(`object_gate:${status || "timeout"}`);
+      }
       const retryable =
         timeout ||
         status === 408 ||

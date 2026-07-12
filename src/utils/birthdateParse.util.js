@@ -174,21 +174,36 @@ export function parseBirthdateInput(text) {
       yearRaw = delimMatch[4];
       confidence = "high";
     } else {
-      const compact = originalInput.replace(/\s/g, "");
-      const compact8 = compact.match(/^(\d{2})(\d{2})(\d{4})$/);
-      if (compact8) {
-        day = Number(compact8[1]);
-        month = Number(compact8[2]);
-        yearRaw = compact8[3];
+      // ปี 2 หลักตามธรรมเนียมไทย: "15/11/57" = พ.ศ. 2557 (ลูกค้าจริงพิมพ์แบบนี้บ่อย —
+      // เคส Ua7ddc 12 ก.ค.). ถ้า 25xx เกินปีปัจจุบัน ตีเป็น 24xx (เช่น 98 → 2498)
+      const delim2 = originalInput.match(
+        /^(\d{1,2})\s*([/.-])\s*(\d{1,2})\s*\2\s*(\d{2})$/,
+      );
+      if (delim2) {
+        day = Number(delim2[1]);
+        month = Number(delim2[3]);
+        const yy = Number(delim2[4]);
+        let be = 2500 + yy;
+        if (be > maxBEYear) be = 2400 + yy;
+        yearRaw = String(be);
         confidence = "medium";
-        isCompact8 = true;
       } else {
-        return {
-          ok: false,
-          reason: "invalid_format",
-          originalInput,
-          confidence: "low",
-        };
+        const compact = originalInput.replace(/\s/g, "");
+        const compact8 = compact.match(/^(\d{2})(\d{2})(\d{4})$/);
+        if (compact8) {
+          day = Number(compact8[1]);
+          month = Number(compact8[2]);
+          yearRaw = compact8[3];
+          confidence = "medium";
+          isCompact8 = true;
+        } else {
+          return {
+            ok: false,
+            reason: "invalid_format",
+            originalInput,
+            confidence: "low",
+          };
+        }
       }
     }
   }

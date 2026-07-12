@@ -280,12 +280,12 @@ export function buildWaitingBirthdateFlex() {
           borderColor: "#242427",
         }
       ),
-      createExampleCard("ตัวอย่าง", "14/09/1995"),
+      createExampleCard("ตัวอย่าง", "14/09/2538"),
     ],
     footer: createSecondaryFooterButtons([
       {
         label: "ส่งวันเกิด",
-        text: "14/09/1995",
+        text: "14/09/2538",
         color: "#D4AF37",
       },
     ]),

@@ -13,6 +13,7 @@
  */
 import { env } from "../config/env.js";
 import { openai, withOpenAi429RetryOnce } from "./openaiDeepScan.api.js";
+import { openaiAuxBreaker } from "../utils/circuitBreaker.util.js";
 
 const FORENSIC_PROMPT = `You are an image authenticity risk assessor for a Thai sacred-amulet photo service.
 Users photograph real amulets/talismans/stone bracelets with their phone. Assess ONLY with visible evidence.
@@ -82,6 +83,11 @@ function normalizeFlag(raw) {
  */
 export async function runImageForensicCheck(imageBase64) {
   if (!env.IMAGE_FORENSIC_ENABLED) return null;
+  // งานเสริมต้องหลบเมื่อ OpenAI ตึง (วงจรเปิดจากอาการ 429/timeout ของด่านหลักหรือของตัวเอง)
+  if (!openaiAuxBreaker.allow()) {
+    console.log(JSON.stringify({ event: "IMAGE_FORENSIC_CIRCUIT_SKIP" }));
+    return null;
+  }
   const t0 = Date.now();
   try {
     const response = await Promise.race([
@@ -133,12 +139,17 @@ export async function runImageForensicCheck(imageBase64) {
         editedEvidence: out.edited.evidence,
       }),
     );
+    openaiAuxBreaker.recordSuccess();
     return out;
   } catch (e) {
+    const msg = String(e?.message || e);
+    if (/429|rate|timeout/i.test(msg)) {
+      openaiAuxBreaker.recordFailure(`forensic:${msg.slice(0, 60)}`);
+    }
     console.warn(
       JSON.stringify({
         event: "IMAGE_FORENSIC_SKIPPED",
-        message: String(e?.message || e).slice(0, 160),
+        message: msg.slice(0, 160),
         elapsedMs: Date.now() - t0,
       }),
     );
