@@ -685,6 +685,133 @@ liffRouter.get("/api/liff/stats", async (req, res) => {
   }
 });
 
+/* ---------------- ชิ้นไหนหนุนดวงวันนี้ (Daily Pick) ---------------- */
+
+/** ของตั้งบูชา (พกไม่ได้): ดูจากหมวดที่เก็บใน payload + คำในชื่อ — ของเก่าไม่รู้ = null */
+function pickPortability(objectType, name) {
+  const t = (String(objectType || "") + " " + String(name || "")).trim();
+  if (/บูชา|รูปปั้น|รูปหล่อ|เทวรูป|องค์เทพ|กุมาร|ฤๅษี|ฤาษี|ครุฑ|เวสสุวรรณ|พิฆเนศ/.test(t)) return "altar";
+  if (/พระเครื่อง|เครื่องราง|ตะกรุด|คริสตัล|หิน|กำไล/.test(t)) return "carry";
+  return null; // ของเก่าที่ยังไม่มีหมวด — ใช้คำกลาง
+}
+
+/** ดึงชิ้นงานจากคลังสแกน (dedupe ชิ้นซ้ำ เอารายการล่าสุด) */
+function extractPickPieces(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const r of rows || []) {
+    const p = r?.report_payload_json;
+    if (!p || typeof p !== "object") continue;
+    const laneObj = p.amuletV1 || p.crystalBraceletV1 || p.moldaviteV1;
+    if (!laneObj) continue;
+    const isCrystal = Boolean(p.crystalBraceletV1 || p.moldaviteV1);
+    const laneLabel = p.amuletV1 ? "พระ/เทวรูป/เครื่องราง" : p.crystalBraceletV1 ? "กำไล/หิน" : "มอลดาไวท์";
+    const es = Number(p.summary?.energyScore);
+    const compat = Number(p.summary?.compatibilityPercent);
+    const cats = laneObj.powerCategories || laneObj.axes || {};
+    let peak = null;
+    for (const k of Object.keys(cats)) {
+      const sc = Number(cats[k]?.score);
+      const label = shortAxisLabel(cats[k]?.labelThai || k);
+      if (Number.isFinite(sc) && label && (!peak || sc > peak.score)) peak = { label, score: sc };
+    }
+    const name =
+      String(laneObj.flexSurface?.heroNamingLine || p.flexSurface?.heroNamingLine || "").trim() ||
+      laneLabel;
+    const key = name + "|" + (Number.isFinite(es) ? Math.round(es * 10) : "x") + "|" + (peak ? peak.label : "-");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // กำไล/หิน = พกได้แน่นอน; สายพระใช้หมวดที่เก็บไว้ + คำในชื่อ
+    const portability = isCrystal ? "carry" : pickPortability(p.object?.objectType, name);
+    out.push({
+      name,
+      energyScore: Number.isFinite(es) ? es : null,
+      compatPct: Number.isFinite(compat) ? compat : null,
+      peakLabel: peak ? peak.label : null,
+      portability,
+    });
+  }
+  return out;
+}
+
+const PICK_ACTION_HINT = {
+  carry: "พกติดตัวได้เลย",
+  altar: "ชิ้นนี้เป็นของบูชา ตั้งจิตหรือไหว้ที่บ้านก่อนออกเดินทาง",
+  unknown: "พกติดตัว หรืออาราธนาก่อนออกจากบ้านก็ได้",
+};
+
+/** จัดอันดับ — deterministic ต่อวัน (เปิดซ้ำผลไม่เปลี่ยน) */
+function rankPickPieces(pieces, dayKey) {
+  const wd = new Date(Date.now() + 7 * 3600 * 1000).getUTCDay();
+  const todayCircle = WEEKDAY_TO_CIRCLE[wd];
+  const guide = MATCH_GUIDE[todayCircle] || MATCH_GUIDE[0];
+  const dayStar = String(guide.star || "").split(" ")[0] || "ดาววันนี้";
+  const dayPowers = (guide.recs || []).map((rc) => shortAxisLabel(rc[0]));
+  const ranked = pieces.map((pc) => {
+    const aligned = pc.peakLabel && dayPowers.includes(pc.peakLabel);
+    const raw =
+      (pc.compatPct != null ? pc.compatPct : 68) * 0.45 +
+      (pc.energyScore != null ? pc.energyScore : 6) * 10 * 0.3 +
+      (aligned ? 22 : 0) +
+      (fnv1a32(dayKey + "|pick|" + pc.name + "|" + (pc.peakLabel || "")) % 9);
+    const suit = Math.max(55, Math.min(97, Math.round(raw)));
+    const base = aligned
+      ? "วันนี้" + dayStar + "หนุนด้าน" + pc.peakLabel + " ชิ้นนี้พลังเด่นตรงพอดี"
+      : pc.peakLabel
+        ? "พลังเด่นด้าน" + pc.peakLabel + " ช่วยประคองจังหวะวันนี้ได้ดี"
+        : "พลังโดยรวมเข้ากับจังหวะวันนี้";
+    const hint = PICK_ACTION_HINT[pc.portability || "unknown"];
+    return { ...pc, suit, aligned, reason: base + " " + hint };
+  });
+  ranked.sort((a, b) => b.suit - a.suit);
+  return { ranked, dayStar };
+}
+
+liffRouter.get("/api/liff/daily-pick", async (req, res) => {
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
+  try {
+    const rows = await listScanResultsV2PayloadRowsForLineUser(userId, 100);
+    const pieces = extractPickPieces(rows);
+    if (!pieces.length) return res.json({ ok: true, empty: true });
+
+    const dayKey = bangkokDateKey();
+    const { ranked, dayStar } = rankPickPieces(pieces, dayKey);
+
+    // สมาชิกรายเดือน (ไม่จำกัด) = เทียบทั้งตู้ / อื่น ๆ = เห็นเฉพาะชิ้นล่าสุด
+    let isMember = false;
+    try {
+      const { data: u } = await supabase
+        .from("app_users")
+        .select("paid_until,paid_remaining_scans")
+        .eq("line_user_id", userId)
+        .maybeSingle();
+      isMember = Boolean(
+        u?.paid_until &&
+          new Date(u.paid_until).getTime() > Date.now() &&
+          Number(u.paid_remaining_scans) >= 900000,
+      );
+    } catch {}
+
+    if (isMember) {
+      return res.json({ ok: true, member: true, dayStar, total: ranked.length, items: ranked.slice(0, 3) });
+    }
+    const latestName = pieces[0]?.name;
+    const latestRanked = ranked.find((x) => x.name === latestName) || ranked[0];
+    return res.json({
+      ok: true,
+      member: false,
+      dayStar,
+      total: ranked.length,
+      items: [latestRanked],
+      lockedCount: Math.max(0, ranked.length - 1),
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ event: "LIFF_DAILY_PICK_ERROR", message: String(e?.message || e).slice(0, 200) }));
+    res.status(500).json({ ok: false, error: "daily_pick_error" });
+  }
+});
+
 /* ---------------- หาเครื่องรางที่เข้ากับดวง (ตำราทักษา) ---------------- */
 
 /** Wheel position label for humans; ราหู = คนเกิดพุธกลางคืน. */
@@ -1640,13 +1767,21 @@ function buildLiffHtml(liffId) {
       </div>
       <!-- ลูกค้าใหม่ (สแกน 0 ชิ้น): แทนตารางขีด ๆ ด้วยการ์ดชวนสแกนองค์แรก -->
       <div class="firstscan hidden" id="st-first">
-        <div class="fst serif">สแกนองค์แรกของคุณ <em>ฟรี</em></div>
+        <div class="fst serif">สแกนชิ้นแรกของคุณ <em>ฟรี</em></div>
         <p>ส่งรูปพระ เครื่องราง หรือกำไลหินมา<br>อาจารย์อ่านพลังให้ทันที วันนี้มีสิทธิ์ฟรี <b id="st-first-free">2</b> ครั้ง</p>
       </div>
       <div class="stbtns">
         <button class="stgo" id="btn-scan"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>สแกนเลย</button>
         <button class="sttop" id="btn-topup">＋ เติมสิทธิ์</button>
       </div>
+    </div>
+
+    <!-- ชิ้นไหนหนุนดวงวันนี้ (Daily Pick) -->
+    <div class="score hidden" id="pickcard">
+      <div class="k">ชิ้นไหนหนุนดวงวันนี้ <small id="pk-day"></small></div>
+      <div id="pk-list" style="display:flex;flex-direction:column;gap:10px;margin-top:6px"></div>
+      <div class="ft hidden" id="pk-lock" style="margin-top:10px"></div>
+      <button class="sttop hidden" id="pk-upgrade" style="margin-top:10px;width:100%">ให้อาจารย์เทียบทุกชิ้น ทุกวัน</button>
     </div>
 
     <!-- ดวงวันนี้: แถบย่อ กดเพื่อกางการ์ดเต็ม -->
@@ -2165,11 +2300,38 @@ function buildLiffHtml(liffId) {
         }
       }).catch(function(){});
   }
+  function loadDailyPick(){
+    api("/api/liff/daily-pick").then(function(r){ return r.json(); }).then(function(j){
+      if(!j || !j.ok || j.empty) return;
+      $("pickcard").classList.remove("hidden");
+      $("pk-day").textContent = j.dayStar ? "อิงพลัง" + j.dayStar : "";
+      var list = $("pk-list"); list.innerHTML = "";
+      var medals = ["อันดับ 1", "อันดับ 2", "อันดับ 3"];
+      (j.items || []).forEach(function(it, i){
+        var row = document.createElement("div");
+        row.style.cssText = "border:1px solid rgba(160,140,90,.25);border-radius:12px;padding:10px 12px";
+        row.innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">' +
+          '<b style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (j.member ? medals[i] + " " : "") + it.name + '</b>' +
+          '<b class="serif" style="flex:0 0 auto;font-size:1.15rem">' + it.suit + '<small style="font-size:.65rem;font-weight:600"> เหมาะ%</small></b></div>' +
+          '<div class="ft" style="margin-top:4px">' + it.reason + '</div>';
+        list.appendChild(row);
+      });
+      if(!j.member && j.lockedCount > 0){
+        var lk = $("pk-lock");
+        lk.textContent = "ในคลังคุณมีอีก " + j.lockedCount + " ชิ้น สมาชิกรายเดือนให้อาจารย์เทียบทั้งหมดแล้วเลือกให้ทุกเช้า";
+        lk.classList.remove("hidden");
+        var up = $("pk-upgrade"); up.classList.remove("hidden");
+        up.onclick = openPay;
+      }
+    }).catch(function(){});
+  }
+
   function enterHome(nickname){
     $("h-when").textContent = greetWord();
     $("h-name").textContent = "คุณ" + (nickname || state.displayName || "");
     $("s-date").textContent = thDate();
     loadStats();
+    loadDailyPick();
     api("/api/liff/daily")
       .then(function(r){ return r.json(); })
       .then(function(j){
