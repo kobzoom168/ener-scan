@@ -101,6 +101,9 @@ export async function generateSmartRejectionText(p) {
     text = text
       .replace(/^\s*(?:\*\*[^\n]*\*\*|#+[^\n]*)\s*\n/gm, "")
       .replace(/\*\*/g, "")
+      .replace(/[—–]/g, " ")
+      .replace(/[ \t]-[ \t]/g, " ")
+      .replace(/[ \t]{2,}/g, " ")
       .trim();
     if (!text || text.length < 15 || text.length > 500) return null;
     if (/\b(AI|bot)\b|บอท|ระบบ|ขอโทษ|ขออภัย/i.test(text)) return null; // กันหลุดบท

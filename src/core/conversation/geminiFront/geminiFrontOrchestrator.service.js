@@ -118,10 +118,18 @@ export async function runGeminiFrontOrchestrator(ctx) {
     return { handled: true, mode: "active" };
   }
 
-  /** คำต้องห้าม persona: องค์ → ชิ้น (เว้นคำประกอบอย่าง องค์กร/องค์ประกอบ) —
-      กฎอยู่ใน prompt แล้วแต่ LLM หลุดจริง (เคสกบ 12 ก.ค. "ทีละองค์นะ") = ต้องกันที่ทางออก */
+  /** คำต้องห้าม persona (กันที่ทางออก — prompt ขอแล้วแต่ LLM หลุดจริง):
+      องค์ → ชิ้น, แบรนด์ = Ener เฉย ๆ, และห้ามขีดคั่นประโยค (— – -) โทน AI ชัด
+      ขีดใน URL/เบอร์โทร/คำติดกันไม่โดน (กรองเฉพาะขีดที่มีช่องว่างรอบ/หัวบรรทัด) */
   function sanitizePersonaWords(text) {
-    return String(text || "").replace(/องค์(?!กร|การ|ประกอบ|รวม|ความรู้|ประชุม)/g, "ชิ้น");
+    let t = String(text || "");
+    t = t.replace(/องค์(?!กร|การ|ประกอบ|รวม|ความรู้|ประชุม)/g, "ชิ้น");
+    t = t.replace(/Ener\s*สายมู/g, "Ener");
+    t = t.replace(/[—–]/g, " ");
+    t = t.replace(/(^|\n)[ \t]*-[ \t]+/g, "$1");
+    t = t.replace(/[ \t]-[ \t]/g, " ");
+    t = t.replace(/[ \t]{2,}/g, " ");
+    return t.trim();
   }
 
   /** คำตอบค้างท่อ (เคสจริง prod 12 ก.ค.): ลูกค้าถามตอนยังไม่ส่งรูป → Opus ตอบช้า
