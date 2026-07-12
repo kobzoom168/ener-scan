@@ -13,6 +13,11 @@ import {
   getScanOfferOverrideRaw,
 } from "../services/scanOffer.loader.js";
 import { buildSingleOfferPaywallAltText, formatOfferWindowThai } from "../utils/webhookText.util.js";
+import { setAppSetting } from "../stores/appSettings.db.js";
+import {
+  getRenewalReminderConfig,
+  RENEWAL_REMINDER_DEFAULTS,
+} from "../services/scanV2/renewalReminder.service.js";
 
 function esc(s) {
   return String(s ?? "")
@@ -22,7 +27,7 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
-function pageHtml({ offer, overrideOn, savedMsg, errorMsg }) {
+function pageHtml({ offer, overrideOn, savedMsg, errorMsg, renewal }) {
   const pkgRows = offer.packages
     .map(
       (p, i) => `
@@ -104,6 +109,20 @@ ${pkgRows}
       <button type="button" class="btn" id="addPkg">➕ เพิ่มแพ็ก</button>
     </div>
 
+    <div class="card">
+      <h2>เตือนต่ออายุรายเดือนอัตโนมัติ</h2>
+      <label class="chk" style="flex-direction:row;align-items:center;gap:8px">
+        <input type="checkbox" name="renewalEnabled"${renewal.enabled ? " checked" : ""}/> เปิดใช้งาน
+      </label>
+      <label style="max-width:220px">เตือนก่อนหมดกี่วัน
+        <input type="number" name="renewalDaysBefore" min="1" max="10" value="${renewal.daysBefore}"/>
+      </label>
+      <label>ข้อความเตือน (ใช้ {date} = วันหมด, {days} = อีกกี่วัน)
+        <input type="text" name="renewalText" value="${esc(renewal.text)}"/>
+      </label>
+      <small>ส่งเฉพาะลูกค้าแพ็กรายเดือน ครั้งเดียวต่อรอบสมาชิก ช่วง 10:00-20:00 พร้อมปุ่ม จ่าย ทุกแพ็ก กับ ไว้ก่อน</small>
+    </div>
+
     <input type="hidden" name="payload" id="payload"/>
     <div style="display:flex;gap:10px">
       <button type="submit" class="btn save">💾 บันทึก (มีผลสด)</button>
@@ -172,9 +191,11 @@ export default function createAdminPromoRouter() {
   router.get("/admin/promo", requireAdminSession, async (req, res) => {
     const overrideRaw = await getScanOfferOverrideRaw().catch(() => null);
     const offer = loadActiveScanOffer();
+    const renewal = await getRenewalReminderConfig().catch(() => ({ ...RENEWAL_REMINDER_DEFAULTS }));
     res.status(200).type("html").send(
       pageHtml({
         offer,
+        renewal,
         overrideOn: Boolean(overrideRaw),
         savedMsg: req.query.saved ? "บันทึกแล้ว — มีผลกับลูกค้าภายใน ~30 วินาที" : "",
         errorMsg: req.query.err ? String(req.query.err) : "",
@@ -223,6 +244,18 @@ export default function createAdminPromoRouter() {
         // normalize รอบนึงกันค่าหลุด (โครงเดียวกับที่ loader ใช้)
         const normalized = normalizeScanOffer(raw);
         await saveScanOfferOverride({ ...raw, ...normalized });
+        // ตั้งค่าเตือนต่ออายุรายเดือน (บันทึกพร้อมกันในฟอร์มเดียว)
+        const renewalDays = Math.floor(Number(req.body?.renewalDaysBefore));
+        await setAppSetting("renewal_reminder", {
+          enabled: req.body?.renewalEnabled === "on",
+          daysBefore:
+            Number.isFinite(renewalDays) && renewalDays >= 1 && renewalDays <= 10
+              ? renewalDays
+              : RENEWAL_REMINDER_DEFAULTS.daysBefore,
+          text:
+            String(req.body?.renewalText || "").trim().slice(0, 300) ||
+            RENEWAL_REMINDER_DEFAULTS.text,
+        });
         console.log(
           JSON.stringify({
             event: "ADMIN_PROMO_SAVED",
