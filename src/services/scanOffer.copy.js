@@ -21,24 +21,20 @@ export function fillPlaceholders(template, vars) {
 export function buildPlaceholderVars(offer, accessContext) {
   const pkgs = listActivePackages(offer);
   const def = getDefaultPackage(offer);
+  // ไม่จำกัด (≥999999) ห้ามโชว์เลขดิบ + ช่วงยาวข้ามวันพูดเป็น "วัน"
+  const winTxt = (h) => (h >= 48 && h % 24 === 0 ? `${h / 24} วัน` : `${h} ชั่วโมง`);
+  const pkgLine = (p, suffix = "") =>
+    Number(p.scanCount) >= 999999
+      ? `${p.priceThb} บาท สแกนไม่จำกัด ${winTxt(p.windowHours)}${suffix} (รายเดือน)`
+      : `${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${winTxt(p.windowHours)}${suffix}`;
   const pkgPaywallLines =
     pkgs.length <= 1 && def
-      ? `${def.priceThb} บาท ใช้ได้ ${def.scanCount} ครั้ง ภายใน ${def.windowHours} ชั่วโมงหลังอนุมัติ`
-      : pkgs
-          .map(
-            (p) =>
-              `${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมงหลังอนุมัติ`,
-          )
-          .join("\n");
+      ? pkgLine(def, "หลังอนุมัติ")
+      : pkgs.map((p) => pkgLine(p, "หลังอนุมัติ")).join("\n");
   const pkgNumberedList =
     pkgs.length <= 1 && def
-      ? `${def.priceThb} บาท ใช้ได้ ${def.scanCount} ครั้ง ภายใน ${def.windowHours} ชั่วโมง`
-      : pkgs
-          .map(
-            (p, i) =>
-              `${i + 1}) ${p.priceThb} บาท ใช้ได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
-          )
-          .join("\n\n");
+      ? pkgLine(def)
+      : pkgs.map((p, i) => `${i + 1}) ${pkgLine(p)}`).join("\n\n");
   const priceTokens =
     pkgs.length <= 1 && def
       ? String(def.priceThb)
