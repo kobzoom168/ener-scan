@@ -1087,7 +1087,7 @@ function buildLiffHtml(liffId) {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>Ener สายมู</title>
+<title>Ener</title>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
   :root{
@@ -1508,7 +1508,6 @@ function buildLiffHtml(liffId) {
         <g class="em-orbit"><circle cx="60" cy="13" r="2.6" fill="#a5813a"/></g>
       </svg>
       <div class="wordmark serif">Ener</div>
-      <div class="wordmark-sub">ส า ย มู</div>
       <div class="loaddots"><i></i><i></i><i></i></div>
       <p class="ld" id="loadmsg" style="display:none"></p>
     </div>
