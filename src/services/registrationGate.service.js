@@ -1,6 +1,6 @@
 /**
  * Registration Gate (กบ 12 ก.ค.): ลูกค้าใหม่ต้องลงทะเบียนผ่าน LIFF (ชื่อเล่น + วันเกิด)
- * ก่อนคุยกับ AI / ส่งรูปสแกน — ลูกค้าเดิม (มี record ก่อนวันเปิดระบบ) ไม่โดนแตะตลอดไป
+ * ก่อนคุยกับ AI / ส่งรูปสแกน — บังคับทุกคนที่ยังไม่ลงทะเบียน (กบเคาะรอบสอง: ไม่เว้นลูกค้าเดิม)
  *
  * หลักกันพังทั้งหมด fail-open:
  *  - เช็คพลาด (DB/Redis สะดุด) = ปล่อยผ่าน — ห้ามล็อกลูกค้าเพราะระบบเราเอง
@@ -71,8 +71,6 @@ export async function isRegistrationComplete(lineUserId) {
   return ok;
 }
 
-/* ลูกค้าเดิม (legacy) ก็ตัดสินครั้งเดียวพอ — created_at ไม่เปลี่ยนย้อนหลัง */
-const legacyCache = new Map();
 
 /**
  * ตัดสินว่า "ต้องบล็อกให้ไปลงทะเบียนไหม" — เรียกจาก webhook ก่อนถึง AI/สแกน
@@ -83,7 +81,6 @@ export async function shouldBlockForRegistration(lineUserId) {
     const cfg = await getRegistrationGateConfig();
     if (!cfg.enabled) return { block: false, reason: "disabled" };
     if (!String(process.env.LIFF_ID || "").trim()) return { block: false, reason: "no_liff" };
-    if (!cfg.sinceIso) return { block: false, reason: "no_since" };
 
     if (await isRegistrationComplete(lineUserId)) {
       // ลงครบแล้ว — ล้างตัวนับ (เผื่อเคยโดนบล็อกมาก่อน)
@@ -91,19 +88,7 @@ export async function shouldBlockForRegistration(lineUserId) {
       return { block: false, reason: "registered" };
     }
 
-    // ลูกค้าเดิม (record เกิดก่อนวันเปิดระบบ) = ไม่บังคับตลอดไป — ตัดสินครั้งเดียวจำถาวร
-    const uid = String(lineUserId).trim();
-    if (legacyCache.get(uid) === true) return { block: false, reason: "legacy_user" };
-    const { data: au, error: auErr } = await supabase
-      .from("app_users")
-      .select("created_at")
-      .eq("line_user_id", uid)
-      .maybeSingle();
-    if (auErr) throw auErr;
-    if (au?.created_at && Date.parse(au.created_at) < Date.parse(cfg.sinceIso)) {
-      legacyCache.set(uid, true);
-      return { block: false, reason: "legacy_user" };
-    }
+    // กบ 12 ก.ค. (รอบสอง): บังคับทุกคน — ไม่มีข้อยกเว้นลูกค้าเดิมแล้ว
 
     // โดนบล็อกครบ 3 ครั้งแล้ว = ถอยให้ (LIFF อาจล่ม/ลูกค้าไม่ถนัด) — ใช้ flow เดิมได้
     const attempt = await incrementCounterWithTtl(
