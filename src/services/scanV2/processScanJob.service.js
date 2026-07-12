@@ -49,6 +49,12 @@ import {
 } from "../imageForensic.service.js";
 import { getUserPaidUntil } from "../../stores/paymentAccess.db.js";
 import {
+  bumpRejectionCount,
+  clearRejectionCount,
+  generateSmartRejectionText,
+  ESCALATION_TEXT,
+} from "./smartRejection.service.js";
+import {
   getValue as getRedisValue,
   setValueWithTtl,
   clearDedupeKey,
@@ -457,6 +463,33 @@ export async function processScanJob(workerId, jobRow) {
       lineUserId,
       workerId,
     );
+    // ข้อความปัดผ่านสมอง AI (รู้ว่าโดนมากี่ครั้ง) + ครั้งที่ 5 อาจารย์รับไปดูเอง+เตือนกบ
+    const rejReason = objectCheck === "multiple" ? "multiple" : objectCheck === "unclear" ? "unclear" : "unsupported";
+    const rejAttempt = await bumpRejectionCount(lineUserId);
+    setValueWithTtl(`scan_v2:reject_last:${lineUserId}`, rejReason, 7200);
+    let rejText = null;
+    if (rejAttempt >= 5) {
+      rejText = ESCALATION_TEXT;
+      const adminId = String(process.env.ADMIN_LINE_USER_ID || "").trim();
+      if (adminId) {
+        await insertOutboundMessage({
+          line_user_id: adminId,
+          kind: "pre_scan_ack",
+          priority: OUTBOUND_PRIORITY.pre_scan_ack,
+          payload_json: {
+            text: `⚠️ ลูกค้า ${String(lineUserId).slice(0, 10)}… รูปโดนปัด ${rejAttempt} ครั้งติด (${rejReason})
+อาจารย์บอกเขาว่าจะรับไปดูเอง — เข้าไปช่วยเช็คใน OA หน่อย`,
+          },
+          status: "queued",
+        }).catch(() => {});
+      }
+    } else {
+      rejText = await generateSmartRejectionText({
+        reasonKind: rejReason,
+        attempt: rejAttempt,
+        gateMeta: gated?.gateMeta || null,
+      });
+    }
     await insertOutboundMessage({
       line_user_id: lineUserId,
       kind: "scan_result",
@@ -467,7 +500,7 @@ export async function processScanJob(workerId, jobRow) {
         rejectReason: "object_validation_failed",
         objectCheckResult: String(objectCheck),
         objectGateKind: objectGateRouting.kind,
-        text: c[0] || "ภาพนี้อาจารย์อ่านไม่ถนัดครับ ถ่ายใหม่ชัด ๆ ส่งมาอีกทีนะ",
+        text: rejText || c[0] || "ภาพนี้อาจารย์อ่านไม่ถนัดครับ ถ่ายใหม่ชัด ๆ ส่งมาอีกทีนะ",
         accessSource: job.access_source,
         appUserId,
       },
@@ -1965,6 +1998,8 @@ export async function processScanJob(workerId, jobRow) {
       lineSummaryPresent: Boolean(lineSummaryForOutbound),
     }),
   );
+
+  clearRejectionCount(lineUserId); // สแกนสำเร็จ = ล้างสตรีคโดนปัด
 
   // เสียงอาจารย์แนบท้าย report (best-effort, timeout ในตัว — null = ส่งแบบเดิม)
   const voiceNote = await maybeBuildScanVoiceNote({

@@ -12,6 +12,13 @@ import {
 } from "../nonScanReply.gateway.js";
 import { sendUnsupportedObjectRejectionViaGateway } from "./unsupportedObjectReply.service.js";
 import {
+  bumpRejectionCount,
+  generateSmartRejectionText,
+  ESCALATION_TEXT,
+  notifyAdminRejectionStreak,
+} from "../scanV2/smartRejection.service.js";
+import { setValueWithTtl } from "../../redis/scanV2Redis.js";
+import {
   getImageRetakeRequiredReplyCandidates,
   getMultipleObjectsReplyCandidates,
   getObjectInconclusiveReplyCandidates,
@@ -60,6 +67,38 @@ export async function sendObjectGateRoutedNonScanReply({
     throw new Error("sendObjectGateRoutedNonScanReply: allow_scan must not send");
   }
 
+  // สตรีคโดนปัด: นับทุกเหตุผล เก็บสาเหตุล่าสุดให้สมองแชทเห็น + บันได escalation
+  const reasonKind =
+    routing.kind === "multiple_objects"
+      ? "multiple"
+      : routing.kind === "image_retake_required"
+        ? "unclear"
+        : routing.kind === "object_inconclusive"
+          ? "inconclusive"
+          : "unsupported";
+  const attempt = await bumpRejectionCount(uid);
+  setValueWithTtl(`scan_v2:reject_last:${uid}`, reasonKind, 7200);
+  if (attempt >= 5) {
+    // หยุดวนประโยคเดิม: อาจารย์รับไปดูเอง + เตือนกบเข้า LINE ให้มาช่วย
+    await notifyAdminRejectionStreak(client, uid, attempt, reasonKind);
+    return sendNonScanReply({
+      client,
+      userId: uid,
+      replyToken,
+      replyType: "reject_escalation",
+      semanticKey: "reject_escalation",
+      text: ESCALATION_TEXT,
+    });
+  }
+  const smart =
+    routing.kind === "unsupported_object"
+      ? null
+      : await generateSmartRejectionText({
+          reasonKind,
+          attempt,
+          gateMeta: gated?.gateMeta || null,
+        });
+
   if (routing.kind === "multiple_objects") {
     const c = getMultipleObjectsReplyCandidates();
     return sendNonScanReply({
@@ -68,8 +107,8 @@ export async function sendObjectGateRoutedNonScanReply({
       replyToken,
       replyType: "multiple_objects",
       semanticKey: "multiple_objects",
-      text: c[0],
-      alternateTexts: c.slice(1),
+      text: smart || c[0],
+      alternateTexts: smart ? c : c.slice(1),
     });
   }
 
@@ -93,9 +132,9 @@ export async function sendObjectGateRoutedNonScanReply({
       replyToken,
       replyType: "image_retake_required",
       semanticKey: "image_retake_required",
-      text: c[0],
-      alternateTexts: c.slice(1),
-      convSurface,
+      text: smart || c[0],
+      alternateTexts: smart ? c : c.slice(1),
+      convSurface: smart ? undefined : convSurface,
     });
   }
 
@@ -119,9 +158,9 @@ export async function sendObjectGateRoutedNonScanReply({
       replyToken,
       replyType: "object_inconclusive",
       semanticKey: "object_inconclusive",
-      text: c[0],
-      alternateTexts: c.slice(1),
-      convSurface,
+      text: smart || c[0],
+      alternateTexts: smart ? c : c.slice(1),
+      convSurface: smart ? undefined : convSurface,
     });
   }
 
