@@ -73,7 +73,7 @@ export function buildAmuletV1Slice({
   });
   // ระบุประเภทพิมพ์: confidence-gated classifier label (เช่น พระสมเด็จ) — flows
   // to Flex headline, summary.headlineShort and the HTML report h1 together.
-  const headline = String(typedLabelThai || "").trim() || "พระ / เครื่องราง";
+  const headline = String(typedLabelThai || "").trim() || "พระ/เทวรูป/เครื่องราง";
   const mainShort =
     String(mainEnergyLabel || "").trim().slice(0, 22) || "พลังมุ่งเน้นรวม";
   const tagline = `${headline} · หกมิติพลัง`;
