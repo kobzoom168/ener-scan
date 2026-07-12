@@ -2603,7 +2603,19 @@ async function finalizeAcceptedImage({
 
   console.log("[WEBHOOK] object check result:", objectCheck, objectGateRouting.kind);
 
-  if (objectCheck !== "single_supported") {
+  // inconclusive = ระบบเองไม่แน่ใจ (timeout / rate-limit / สัญญาณอ่อน) ไม่ใช่ความผิด
+  // ของรูปลูกค้า → ปล่อยเข้าเส้นสแกน (worker มีด่านเช็คซ้ำของตัวเอง) แทนการปัด
+  // บทเรียน 12 ก.ค.: forensic ถล่ม rate limit → gate ตอบไม่ทัน → ปัดลูกค้าจริง 62% ทั้งวัน
+  if (objectCheck === "inconclusive") {
+    console.log(
+      JSON.stringify({
+        event: "OBJECT_GATE_INCONCLUSIVE_PASS_THROUGH",
+        path: "web",
+        lineUserIdPrefix: lineUserIdPrefix8(userId),
+        messageId: event?.message?.id ?? null,
+      }),
+    );
+  } else if (objectCheck !== "single_supported") {
     markAcceptedImageEvent(userId, eventTimestamp);
     clearLatestScanJob(userId);
     clearSessionIfFlowVersionMatches(userId, flowVersion);
