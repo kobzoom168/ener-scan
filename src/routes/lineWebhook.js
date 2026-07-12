@@ -111,6 +111,7 @@ import { maybeNotifyAdminSlipPendingVerify } from "../services/adminPaymentSlipN
 import {
   shouldBlockForRegistration,
   buildRegistrationPrompt,
+  getRegistrationGateConfig,
 } from "../services/registrationGate.service.js";
 import { handleProfileEditCommand } from "../services/profileEditChat.service.js";
 import {
@@ -7127,7 +7128,37 @@ async function handleFollowEvent({ client, event }) {
 
   auditExemptEnter(AuditExemptReason.LINE_WEBHOOK_FOLLOW_WELCOME);
   try {
-    await replyText(client, event.replyToken, buildFollowWelcomeText());
+    // gate เปิด + มี LIFF → welcome ต้องชวนลงทะเบียนเลย (กันย้อนแย้ง: บอกส่งรูปมา
+    // แล้วพอส่งจริงโดนบล็อกให้ไปลงทะเบียน) — ปุ่มแตะเดียวเปิดฟอร์ม
+    let welcomeText = buildFollowWelcomeText();
+    let welcomeQuickReply;
+    try {
+      const gateCfg = await getRegistrationGateConfig();
+      const liffId = String(process.env.LIFF_ID || "").trim();
+      if (gateCfg.enabled && liffId) {
+        welcomeText = [
+          welcomeText,
+          "",
+          "ก่อนเริ่ม อาจารย์ขอรู้จักกันสักนิดครับ กดลงทะเบียนตรงนี้ ไม่ถึงนาทีเสร็จ",
+          `https://liff.line.me/${liffId}`,
+        ].join("\n");
+        welcomeQuickReply = {
+          items: [
+            {
+              type: "action",
+              action: { type: "uri", label: "ลงทะเบียน", uri: `https://liff.line.me/${liffId}` },
+            },
+          ],
+        };
+      }
+    } catch {
+      /* welcome เดิมยังส่งได้ */
+    }
+    await client.replyMessage(event.replyToken, {
+      type: "text",
+      text: welcomeText,
+      ...(welcomeQuickReply ? { quickReply: welcomeQuickReply } : {}),
+    });
     console.log(
       JSON.stringify({
         event: "LINE_FOLLOW_WELCOME_SENT",
