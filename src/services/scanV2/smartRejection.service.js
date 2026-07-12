@@ -94,7 +94,7 @@ export async function generateSmartRejectionText(p) {
           input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
         }),
       ),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("smart_reject_timeout")), 6000)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("smart_reject_timeout")), 12000)),
     ]);
     let text = String(res?.output_text || "").trim().replace(/^["']|["']$/g, "");
     // โมเดลตระกูล Claude ชอบใส่หัวข้อ/ตัวหนา markdown — ล้างออกก่อนส่งเข้า LINE
