@@ -1422,9 +1422,49 @@ async function handlePaymentCommandTextRoute({
 
   const offerPay = loadActiveScanOffer();
   const selectedPayKey = getSelectedPaymentPackageKey(userId);
+  // "จ่าย 149" = ระบุแพ็กมากับข้อความ — ชนะ state ที่เลือกค้างไว้
+  const typedPayPkgKey = parsePackageSelectionFromText(text, offerPay);
+  const activePayPkgs = (offerPay.packages || []).filter((p) => p.active);
   const paidPackage =
+    (typedPayPkgKey && findPackageByKey(offerPay, typedPayPkgKey)) ||
     (selectedPayKey && findPackageByKey(offerPay, selectedPayKey)) ||
-    getDefaultPackage(offerPay);
+    (activePayPkgs.length <= 1 ? getDefaultPackage(offerPay) : null);
+
+  if (!paidPackage && activePayPkgs.length > 1) {
+    // พิมพ์ จ่าย เฉย ๆ ตอนมีหลายโปร → เด้งเมนูให้เลือกก่อน (กบ 12 ก.ค.) ไม่เดาแพ็กแทนลูกค้า
+    const sortedPayPkgs = [...activePayPkgs].sort((a, b) => a.priceThb - b.priceThb);
+    console.log(
+      JSON.stringify({
+        event: "PAYMENT_PACKAGE_PROMPT_REASON",
+        userId,
+        inputText: text,
+        reason: "multi_package_needs_pick",
+      }),
+    );
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "payment_pick_package_menu",
+      semanticKey: "payment_pick_package_menu",
+      text: buildSingleOfferPaywallAltText(offerPay),
+      alternateTexts: [],
+      quickReply: {
+        items: sortedPayPkgs.slice(0, 3).map((p) => ({
+          type: "action",
+          action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
+        })),
+      },
+    });
+    logEvent("payment_intent", {
+      userId,
+      personaVariant: await getAssignedPersonaVariant(userId),
+      patternUsed: "multi_package_menu",
+      bubbleCount: 1,
+      source: "payment_command",
+    });
+    return true;
+  }
 
   if (!paidPackage) {
     console.log(
