@@ -124,6 +124,34 @@ export async function runGeminiFrontOrchestrator(ctx) {
     return String(text || "").replace(/องค์(?!กร|การ|ประกอบ|รวม|ความรู้|ประชุม)/g, "ชิ้น");
   }
 
+  /** คำตอบค้างท่อ (เคสจริง prod 12 ก.ค.): ลูกค้าถามตอนยังไม่ส่งรูป → Opus ตอบช้า
+      "ยังไม่เห็นรูป" ไปโผล่หลังรูปเข้าแล้ว — ก่อนส่ง เช็คว่ามีรูปเพิ่งเข้า/กำลังสแกนไหม */
+  async function guardStaleNoImageClaim(text) {
+    if (!/ยังไม่เห็นรูป|ยังไม่มีรูป|ไม่เห็นรูปเข้ามา|ไม่มีรูปเข้ามา/.test(String(text || ""))) return text;
+    try {
+      const { supabase } = await import("../../../config/supabase.js");
+      const since = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("scan_jobs")
+        .select("id")
+        .eq("line_user_id", String(ctx.userId || "").trim())
+        .gte("created_at", since)
+        .limit(1);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log(
+          JSON.stringify({
+            event: "GEMINI_STALE_NO_IMAGE_CLAIM_BLOCKED",
+            lineUserIdPrefix: String(ctx.userId || "").slice(0, 8),
+          }),
+        );
+        return "รับรูปแล้วครับ อาจารย์กำลังเพ่งดูให้อยู่ เดี๋ยวผลตามมาในแชทนี้";
+      }
+    } catch {
+      /* เช็คไม่ได้ = ปล่อยข้อความเดิม */
+    }
+    return text;
+  }
+
   /** guard สิทธิ์ปลอม: ใช้กับทุกข้อความ LLM ขาออกจาก orchestrator นี้ */
   function guardEntitlementClaims(text, via) {
     text = sanitizePersonaWords(text);
@@ -151,10 +179,13 @@ export async function runGeminiFrontOrchestrator(ctx) {
       conversationHistory,
     });
     if (!consultText) return false;
+    const guardedConsult = await guardStaleNoImageClaim(
+      guardEntitlementClaims(consultText.slice(0, 1800), via),
+    );
     await ctx.sendGatewayReply({
       replyType: "gemini_front_consult",
       semanticKey: `gemini_front_consult:${phase1}`,
-      text: guardEntitlementClaims(consultText.slice(0, 1800), via),
+      text: guardedConsult,
       alternateTexts: [],
     });
     logGeminiOrchestrator({ mode: "active", handled: true, via });

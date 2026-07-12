@@ -107,6 +107,8 @@ export function isPaymentCommandLikeText(text) {
   if (!t) return false;
   const lt = t.toLowerCase();
   if (lt === "payment" || t === "จ่ายเงิน" || t === "ปลดล็อก") return true;
+  // "จ่าย 49" จากปุ่ม/พิมพ์เอง = คำสั่งจ่ายพร้อมเลือกแพ็ก (mirror ของ isPaymentCommand)
+  if (/^(?:จ่าย|ซื้อ|สมัคร)\s*\d{2,4}(?:\s*บาท)?$/.test(t)) return true;
   return isLoosePayIntentExact(t);
 }
 

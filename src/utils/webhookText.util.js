@@ -800,6 +800,9 @@ export function isPaymentCommand(text, lowerText) {
   const lt = String(lowerText || t.toLowerCase()).trim();
 
   if (lt === "payment" || t === "จ่ายเงิน" || t === "ปลดล็อก") return true;
+  // "จ่าย 49" (จากปุ่ม quick reply / ลูกค้าพิมพ์เอง) = คำสั่งจ่าย + เลือกแพ็กในตัว
+  // (เคสจริง 12 ก.ค.: ลูกค้ากดปุ่ม จ่าย 49 แล้วหลุดไปเลนแชท โดนสอนให้พิมพ์ จ่าย ใหม่)
+  if (/^(?:จ่าย|ซื้อ|สมัคร)\s*\d{2,4}(?:\s*บาท)?$/.test(t)) return true;
   return isLoosePayIntentExact(t);
 }
 
