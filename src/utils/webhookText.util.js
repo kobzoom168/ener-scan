@@ -403,16 +403,49 @@ export function buildPaymentQrIntroText({
   return buildPaymentQrIntroFactsText({ paymentRef, paidPackage });
 }
 
-/** Single paid offer — short alternate (no multi-package menu). */
+/** 168 ชม. → "7 วัน", 24 ชม. → "24 ชม." (ยาวข้ามวันอ่านเป็นวันง่ายกว่า) */
+export function formatOfferWindowThai(windowHours) {
+  const h = Number(windowHours) || 0;
+  if (h >= 48 && h % 24 === 0) return `${h / 24} วัน`;
+  return `${h} ชม.`;
+}
+
+/** scanCount ≥ 999999 = แพ็กไม่จำกัด (รายเดือน 299) — ห้ามโชว์เลขดิบ */
+export function isUnlimitedScanCount(scanCount) {
+  return Number(scanCount) >= 999999;
+}
+
+/** "สแกน 15 ครั้ง" หรือ "สแกนไม่จำกัด" */
+export function formatOfferScanCountThai(scanCount) {
+  return isUnlimitedScanCount(scanCount) ? "สแกนไม่จำกัด" : `สแกน ${scanCount} ครั้ง`;
+}
+
+/** Paywall — แพ็กเดียวพูดสั้น, หลายแพ็กขึ้นเมนูให้เลือก */
 export function buildSingleOfferPaywallAltText(offer = loadActiveScanOffer()) {
-  const pkg = getDefaultPackage(offer);
-  if (!pkg) {
+  const pkgs = listActivePackages(offer);
+  if (!pkgs.length) {
     return "ตอนนี้ยังไม่เปิดแพ็กชำระเงิน กรุณาลองใหม่ภายหลังครับ";
   }
+  if (pkgs.length === 1) {
+    const pkg = pkgs[0];
+    return [
+      `เปิดสิทธิ์เพิ่มวันนี้ ${pkg.priceThb} บาทครับ ได้สแกนอีก ${pkg.scanCount} ครั้งใน ${formatOfferWindowThai(pkg.windowHours)} ✨`,
+      "ส่งรูปทีละรูปนะครับ อาจารย์จะได้ดูให้ละเอียดเต็มที่",
+      "พร้อมเมื่อไหร่พิมพ์ว่า จ่าย มาได้เลยครับ",
+    ].join("\n");
+  }
+  const sorted = [...pkgs].sort((a, b) => a.priceThb - b.priceThb);
+  const lines = sorted.map((p) =>
+    isUnlimitedScanCount(p.scanCount)
+      ? `• ${p.priceThb} บาท — สแกนไม่จำกัด ${formatOfferWindowThai(p.windowHours)} (รายเดือน)`
+      : `• ${p.priceThb} บาท — สแกน ${p.scanCount} ครั้ง ใน ${formatOfferWindowThai(p.windowHours)}`,
+  );
+  const priceList = sorted.map((p) => p.priceThb).join(" หรือ ");
   return [
-    `เปิดสิทธิ์เพิ่มวันนี้ ${pkg.priceThb} บาทครับ ได้สแกนอีก ${pkg.scanCount} ครั้งใน ${pkg.windowHours} ชั่วโมง ✨`,
+    "เปิดสิทธิ์เพิ่มวันนี้มีให้เลือกครับ ✨",
+    ...lines,
     "ส่งรูปทีละรูปนะครับ อาจารย์จะได้ดูให้ละเอียดเต็มที่",
-    "พร้อมเมื่อไหร่พิมพ์ว่า จ่าย มาได้เลยครับ",
+    `พร้อมเมื่อไหร่พิมพ์ว่า จ่าย ${priceList} มาได้เลยครับ`,
   ].join("\n");
 }
 
@@ -441,7 +474,9 @@ export function buildPaymentPackageSelectedAck(paidPackage) {
   if (!p) return buildSingleOfferPaywallAltText();
   return [
     `โอเคครับ แพ็กนี้ค่าเปิดสิทธิ์ ${p.priceThb} บาท`,
-    `ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
+    isUnlimitedScanCount(p.scanCount)
+      ? `สแกนได้ไม่จำกัดตลอด ${formatOfferWindowThai(p.windowHours)}`
+      : `ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${formatOfferWindowThai(p.windowHours)}`,
     "",
     "ถ้าพร้อม ตอบว่า 'จ่าย' ได้เลยครับ เดี๋ยวผมส่งรายละเอียดกับคิวอาร์ให้ครับ",
   ].join("\n");
