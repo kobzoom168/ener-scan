@@ -2514,7 +2514,13 @@ function buildLiffHtml(liffId) {
         try { sessionStorage.removeItem("liffReauth"); } catch(e){}
         return api("/api/liff/profile").then(function(r){ return r.json(); });
       }).then(function(j){
-        if(j && j.found && j.profile && j.profile.nickname){ enterHome(j.profile.nickname); }
+        if(j && j.found && j.profile && j.profile.nickname){
+          enterHome(j.profile.nickname);
+          // ลิงก์จากแชท liff.line.me/{id}?view=pay → เข้าหน้าเลือกแพ็กจ่ายทันที
+          var qs = new URLSearchParams(location.search);
+          var st = qs.get("liff.state") || "";
+          if (qs.get("view") === "pay" || st.indexOf("view=pay") !== -1) { openPay(); }
+        }
         else { renderStep(); show("v-ob"); }
       });
     }).catch(function(){ showLoadMsg("เชื่อมต่อไม่สำเร็จ ลองเปิดใหม่อีกครั้ง"); });
