@@ -13,6 +13,14 @@ import {
 } from "../../../stores/paymentAccess.db.js";
 import { computePaidActive } from "../../../services/scanOfferAccess.resolver.js";
 import { loadActiveScanOffer } from "../../../services/scanOffer.loader.js";
+import { getValue } from "../../../redis/scanV2Redis.js";
+
+const REJECT_REASON_THAI = {
+  unclear: "ภาพไม่ชัด/ระบบมองวัตถุไม่เห็น",
+  inconclusive: "ระบบอ่านภาพไม่ออกชัดเจน",
+  multiple: "ในภาพมีหลายชิ้นปนกัน",
+  unsupported: "วัตถุไม่ใช่ประเภทที่รับดู",
+};
 
 /**
  * @param {string} lineUserId
@@ -60,10 +68,31 @@ export async function buildCustomerFactsContext(lineUserId) {
       freeLine = `สิทธิ์ฟรีวันนี้เหลือ ${freeLeft} จาก ${freeQuota} ครั้ง${paidRemaining > 0 ? "" : " (ไม่มีแพ็กชำระเงินค้างอยู่)"}`;
     }
 
+    // เหตุการณ์สด: ลูกค้าเพิ่งโดนปัดรูปกี่ครั้ง เพราะอะไร — อาจารย์ต้องรู้ก่อนตอบ
+    // (บทเรียน 12 ก.ค.: ลูกค้าโดนปัด 8 รอบแต่อาจารย์คุยเหมือนไม่รู้เรื่อง)
+    let rejectLine = null;
+    try {
+      const [streakRaw, lastReason] = await Promise.all([
+        getValue(`scan_v2:reject_streak:${uid}`),
+        getValue(`scan_v2:reject_last:${uid}`),
+      ]);
+      const streak = Number(streakRaw) || 0;
+      if (streak >= 1) {
+        const reasonThai = REJECT_REASON_THAI[String(lastReason || "")] || "อ่านภาพไม่ผ่าน";
+        rejectLine =
+          `⚠️ เหตุการณ์สด: รูปที่ลูกค้าส่งมาโดนระบบปัดไปแล้ว ${streak} ครั้งติดใน 2 ชม.ล่าสุด ` +
+          `(สาเหตุล่าสุด: ${reasonThai}) — ถ้าลูกค้าบ่นหรือถามว่าทำไมสแกนไม่ได้ ให้เห็นใจ ` +
+          `ช่วยแนะวิธีถ่ายใหม่แบบใจเย็นและเจาะจง ห้ามตอบเหมือนไม่รู้ว่าเกิดอะไรขึ้น`;
+      }
+    } catch {
+      rejectLine = null;
+    }
+
     return [
       `• วันเกิดในระบบ: ${birthdate ? `${birthdate} (มีแล้ว — ห้ามถามซ้ำ)` : "ยังไม่มี"}`,
       `• ${freeLine}`,
       `• กติกาสิทธิ์ฟรี: วันละ ${freeQuota} ครั้ง รีเซ็ตหลังเที่ยงคืนเวลาไทย ใช้ไม่หมดไม่ทบไปวันถัดไป`,
+      ...(rejectLine ? [`• ${rejectLine}`] : []),
     ].join("\n");
   } catch {
     return null;

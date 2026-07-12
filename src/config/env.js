@@ -921,6 +921,14 @@ export const env = {
   })(),
 
   /**
+   * Smart rejection: ข้อความปัดรูปแต่งสดด้วย LLM ที่รู้จำนวนครั้งที่โดนปัด
+   * (แทนประโยคสำเร็จรูปวนซ้ำ) — fail-open กลับไปใช้ข้อความเดิมเมื่อ LLM ล่ม/ตึง
+   */
+  SMART_REJECTION_ENABLED:
+    String(process.env.SMART_REJECTION_ENABLED ?? "true").trim().toLowerCase() !== "false",
+  SMART_REJECTION_MODEL: String(process.env.SMART_REJECTION_MODEL || "gpt-4.1-mini").trim(),
+
+  /**
    * Phase 1 image forensics: ธง screen-photo / AI-generated / edited จาก LLM
    * (ยิงขนานกับ object gate). suspect = ขอถ่ายใหม่นุ่ม ๆ — ยกเว้นลูกค้าจ่ายเงิน
    * และชิ้นที่ match baseline จริงเดิม. Default off.
