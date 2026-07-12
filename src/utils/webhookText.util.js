@@ -379,11 +379,8 @@ export function buildPaymentQrIntroFactsText({ paymentRef, paidPackage = null } 
   const priceThb = pkg?.priceThb ?? offer.paidPriceThb;
   const scanCount = pkg?.scanCount ?? offer.paidScanCount;
   const windowHours = pkg?.windowHours ?? offer.paidWindowHours;
-  const pkgLabel =
-    String(pkg?.label || "").trim() ||
-    (isUnlimitedScanCount(scanCount)
-      ? `สแกนไม่จำกัด ${formatOfferWindowThai(windowHours)}`
-      : `สแกน ${scanCount} ครั้ง ใน ${formatOfferWindowThai(windowHours)}`);
+  // ใช้สำนวนกลางตัวเดียวกับเมนู (ไม่ดึง label ที่อาจมี "/" จากหน้า admin)
+  const pkgLabel = formatOfferPackageLineThai({ priceThb, scanCount, windowHours });
   const base = [
     "สรุปยอดก่อนโอนครับ",
     `โปร ${pkgLabel}`,
