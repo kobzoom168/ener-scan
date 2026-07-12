@@ -46,6 +46,8 @@ import {
   FORENSIC_RETRY_TEXTS,
   CHALLENGE_REQUEST_TEXTS,
   CHALLENGE_FAILED_TEXTS,
+  CHALLENGE_NO_THUMB_TEXTS,
+  verifyChallengeThumbTouch,
 } from "../imageForensic.service.js";
 import { getUserPaidUntil } from "../../stores/paymentAccess.db.js";
 import {
@@ -353,7 +355,6 @@ export async function processScanJob(workerId, jobRow) {
     try {
       const chalRaw = await getRedisValue(`scan_v2:authchal:${lineUserId}`);
       if (chalRaw) {
-        await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
         const chal = JSON.parse(chalRaw);
         const firstBuf = await readScanImageFromStorage(chal.b, chal.p);
         const pair = await visionMatchPair(toBase64(firstBuf), imageBase64);
@@ -370,8 +371,41 @@ export async function processScanJob(workerId, jobRow) {
           }),
         );
         if (passed) {
-          challengeProven = true; // ของจริงพิสูจน์แล้ว — ข้าม forensic รอบนี้
+          // v2: ชิ้นเดียวกันจริง + ต้องเห็นนิ้วแตะชิ้นงาน (หลักฐานว่าของอยู่ในมือ)
+          const thumbOk = await verifyChallengeThumbTouch(imageBase64);
+          if (thumbOk) {
+            await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
+            challengeProven = true; // ของจริงพิสูจน์แล้ว — ข้าม forensic รอบนี้
+          } else {
+            // ชิ้นถูกแต่ลืมนิ้ว — คีย์ยังอยู่ ให้ถ่ายซ้ำได้จน TTL หมด ไม่กินสิทธิ์
+            console.log(
+              JSON.stringify({
+                event: "AUTH_CHALLENGE_NO_THUMB",
+                path: "worker-scan",
+                jobIdPrefix: idPrefix8(jobId),
+                lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+              }),
+            );
+            await failJob(jobId, "auth_challenge_no_thumb", "thumb_missing", lineUserId, workerId);
+            await insertOutboundMessage({
+              line_user_id: lineUserId,
+              kind: "scan_result",
+              priority: OUTBOUND_PRIORITY.scan_result,
+              related_job_id: jobId,
+              payload_json: {
+                error: true,
+                rejectReason: "auth_challenge_no_thumb",
+                text: CHALLENGE_NO_THUMB_TEXTS[0],
+                accessSource: job.access_source,
+                appUserId,
+              },
+              status: "queued",
+            });
+            await updateScanRequestStatus(scanRequestId, "failed");
+            return;
+          }
         } else if (inliers >= 0) {
+          await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
           // จับคู่ได้แต่ไม่ใช่ชิ้นเดียวกัน → จับโป๊ะแบบมีบารมี ไม่กินสิทธิ์
           await failJob(jobId, "auth_challenge_failed", `inliers=${inliers}`, lineUserId, workerId);
           await insertOutboundMessage({
@@ -390,8 +424,10 @@ export async function processScanJob(workerId, jobRow) {
           });
           await updateScanRequestStatus(scanRequestId, "failed");
           return;
+        } else {
+          // inliers = -1 (sidecar ล่ม/ตอบไม่ได้) → ทิ้ง challenge ปล่อยผ่านตามหลัก false-positive-first
+          await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
         }
-        // inliers = -1 (sidecar ล่ม/ตอบไม่ได้) → ปล่อยผ่านตามหลัก false-positive-first
       }
     } catch (chalErr) {
       console.warn(
@@ -677,8 +713,10 @@ export async function processScanJob(workerId, jobRow) {
     const forensicDecision = evaluateForensicDecision(forensic);
     if (forensicDecision !== "pass") {
       let paidActive = false;
+      let paidEver = false; // เคยจ่ายสักครั้ง (แม้สิทธิ์หมดอายุ) = ลูกค้าเชื่อถือได้ ไม่โดนท้า
       try {
         const paidUntil = await getUserPaidUntil(lineUserId);
+        paidEver = Boolean(paidUntil);
         paidActive = Boolean(paidUntil && new Date(paidUntil).getTime() > Date.now());
       } catch {}
       console.log(
@@ -689,11 +727,14 @@ export async function processScanJob(workerId, jobRow) {
           lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
           decision: forensicDecision,
           paidActive,
+          paidEver,
           action:
             forensicDecision === "suspect" && !paidActive ? "soft_retry" : "silent_flag",
         }),
       );
       const actOnFlagged = env.AUTH_CHALLENGE_INCLUDE_PAID || !paidActive;
+      /* ท้าถ่ายสด: เฉพาะคนไม่เคยจ่ายเงินเลย (กบ 12 ก.ค. — ลูกค้าเก่าทุกคนผ่านฟรี) */
+      const challengeEligible = env.AUTH_CHALLENGE_INCLUDE_PAID || !paidEver;
       let fh = 0;
       const fs = String(jobId || lineUserId);
       for (let i = 0; i < fs.length; i++) fh = (fh * 31 + fs.charCodeAt(i)) >>> 0;
@@ -724,7 +765,7 @@ export async function processScanJob(workerId, jobRow) {
         return;
       }
       const challengeReady =
-        env.AUTH_CHALLENGE_ENABLED && isChallengeWorthy(forensic) && actOnFlagged;
+        env.AUTH_CHALLENGE_ENABLED && isChallengeWorthy(forensic) && challengeEligible;
       if (challengeReady) {
         // ท้าถ่ายสด: จำรูปนี้ไว้ รอมุมที่สองมาให้ LightGlue พิสูจน์ — ไม่กินสิทธิ์
         try {
