@@ -8,6 +8,8 @@ export const OUTBOUND_PRIORITY = {
   reject_notify: 22,
   payment_qr: 30,
   pre_scan_ack: 80,
+  /** เตือนต่ออายุรายเดือน (push อัตโนมัติ) — ต่ำสุด ไม่แซงข้อความตอบลูกค้า */
+  renewal_reminder: 90,
 };
 
 /** Backoff steps (ms) for LINE 429 / transient failures. */
@@ -22,4 +24,5 @@ export const OUTBOUND_MAX_ATTEMPTS = {
   reject_notify: 3,
   pending_intro: 4,
   slip_received: 3,
+  renewal_reminder: 2,
 };

@@ -6,6 +6,7 @@
 import { env } from "../config/env.js";
 import { supabase } from "../config/supabase.js";
 import { maybeSendDlqAlert } from "../services/maintenanceDlqAlert.service.js";
+import { runRenewalReminderSweep } from "../services/scanV2/renewalReminder.service.js";
 import {
   getLine429CanaryCountHour,
   startWorkerHeartbeatLoop,
@@ -169,6 +170,18 @@ async function runOnce() {
   await sweepStaleOutboundSending();
   await sweepStaleScanProcessing();
   await logQueueHealthAndDlq();
+  // เตือนต่ออายุรายเดือนอัตโนมัติ — self-gated (เปิด/ปิดจาก /admin/promo, ช่วง 10-20 น.,
+  // ครั้งเดียวต่อรอบสมาชิกผ่าน redis dedupe) เรียกทุกรอบได้ปลอดภัย
+  try {
+    await runRenewalReminderSweep();
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "RENEWAL_REMINDER_SWEEP_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+  }
 }
 
 async function main() {

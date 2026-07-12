@@ -169,6 +169,20 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       return { sent: true };
     }
 
+    if (kind === "renewal_reminder") {
+      // เตือนต่ออายุรายเดือน (push อัตโนมัติจาก maintenance) — ข้อความ + ปุ่มเลือกแพ็ก/ไว้ก่อน
+      const text = String(payload.text || "").trim();
+      if (!text) {
+        return { sent: false, errorCode: "empty_payload", errorMessage: "renewal_reminder missing text" };
+      }
+      const qr =
+        payload.quickReply && typeof payload.quickReply === "object" ? payload.quickReply : null;
+      await pushText(client, lineUserId, text, qr);
+      await markSent(id);
+      console.log(JSON.stringify({ event: "OUTBOUND_SEND_SUCCESS", ...base() }));
+      return { sent: true };
+    }
+
     if (kind === "scan_result") {
       if (payload.error) {
         const t = String(payload.text || "").trim() || "รูปนี้อ่านไม่ผ่านครับ ส่งใหม่อีกทีนะ";
