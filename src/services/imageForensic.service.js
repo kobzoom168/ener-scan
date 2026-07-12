@@ -203,13 +203,67 @@ export function isChallengeWorthy(f) {
   return hot(f.aiGenerated) || hot(f.edited) || hot(f.screenPhoto);
 }
 
-/** ท้าถ่ายมุมใหม่ตอนนี้เลย — LightGlue จะพิสูจน์ว่าเป็นชิ้นเดียวกันจริง */
+/** ท้าถ่ายสด v2: มุมเดิม + นิ้วโป้งแตะชิ้นงาน — มุมเดิมทำให้ LightGlue จับคู่ได้ชัวร์
+    (บทเรียน v1: สั่งพลิกหลังแต่เทียบกับรูปหน้า → ลูกค้าจริงตกทุกราย) ส่วนนิ้วโป้ง
+    คือหลักฐานว่าของอยู่ในมือจริง — คนใช้รูป AI/รูปเซฟจากเว็บไม่มีของให้แตะ */
 export const CHALLENGE_REQUEST_TEXTS = [
-  "องค์นี้อาจารย์ขอดูอีกมุมนะ ถือไว้บนฝ่ามือ หรือพลิกด้านหลัง แล้วถ่ายส่งมาตอนนี้เลย เดี๋ยวอ่านให้เต็ม ๆ",
-  "ขอดูชิ้นนี้อีกมุมหน่อยนะ วางบนฝ่ามือหรือเอียงองค์ ถ่ายสดส่งมาเลย อาจารย์จะได้อ่านให้แม่น",
+  "อาจารย์ขอเช็กของสดหน่อย ถ่ายชิ้นเดิม มุมเดียวกับรูปเมื่อกี้ แต่ใช้นิ้วโป้งแตะที่ชิ้นงานไว้ในรูปด้วย แล้วส่งมาตอนนี้เลย เดี๋ยวอ่านให้เต็ม ๆ",
+  "ขอดูของสด ๆ อีกรูปนะ ถ่ายชิ้นเดิมมุมเดิมกับเมื่อกี้ เอานิ้วโป้งแตะชิ้นงานค้างไว้ให้เห็นในรูป ส่งมาได้เลย อาจารย์รออ่านอยู่",
 ];
 
 /** รูปที่สองไม่ใช่ชิ้นเดียวกัน (หรือไม่มีของจริงให้ถ่าย) — ตอบแบบมีบารมี ไม่เผาขาด */
 export const CHALLENGE_FAILED_TEXTS = [
-  "สองรูปนี้อาจารย์เพ่งดูแล้ว ไม่ใช่ชิ้นเดียวกันนะ\nอาจารย์อ่านพลังเฉพาะของจริงที่อยู่กับตัวคุณ ถ่ายชิ้นเดิมอีกมุมส่งมาใหม่ได้เลย",
+  "สองรูปนี้อาจารย์เพ่งดูแล้ว ไม่ใช่ชิ้นเดียวกันนะ\nอาจารย์อ่านพลังเฉพาะของจริงที่อยู่กับตัวคุณ ถ่ายชิ้นเดิมมุมเดิมพร้อมนิ้วโป้งแตะไว้ ส่งมาใหม่ได้เลย",
 ];
+
+/** ชิ้นเดียวกันจริงแต่ยังไม่เห็นนิ้วแตะ — ให้โอกาสถ่ายซ้ำ (คีย์ challenge ยังไม่หมดอายุ) */
+export const CHALLENGE_NO_THUMB_TEXTS = [
+  "ชิ้นเดิมถูกต้อง แต่รูปนี้ยังไม่เห็นนิ้วแตะที่ชิ้นงานเลย ถ่ายอีกรอบ มุมเดิม แล้วใช้นิ้วโป้งแตะค้างไว้ให้เห็นชัด ๆ ส่งมาเลย",
+];
+
+/**
+ * เช็คว่าในรูปมีนิ้วมือคนแตะ/จับ/สัมผัสตัววัตถุจริงไหม (โจทย์ท้าถ่ายสด v2)
+ * Fail-open: ตรวจไม่ได้/API พัง = ถือว่าผ่าน (false-positive-first เหมือน forensic)
+ * @param {string} imageBase64
+ * @returns {Promise<boolean>}
+ */
+export async function verifyChallengeThumbTouch(imageBase64) {
+  if (!openaiAuxBreaker.allow()) return true;
+  try {
+    const response = await Promise.race([
+      withOpenAi429RetryOnce(() =>
+        openai.responses.create({
+          model: env.IMAGE_FORENSIC_MODEL,
+          temperature: 0,
+          input: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text:
+                    'A customer was asked to photograph their sacred object while touching it with their thumb/finger. ' +
+                    'Look at the photo: is a real human finger or hand visibly touching, holding, or resting on the object ' +
+                    '(or the object sitting in an open palm)? Be lenient — any finger contact or hand-held counts as yes. ' +
+                    'Return JSON only: {"touching": true|false}',
+                },
+                { type: "input_image", image_url: `data:image/jpeg;base64,${imageBase64}` },
+              ],
+            },
+          ],
+        }),
+      ),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("thumb_check_timeout")), 10000)),
+    ]);
+    const raw = String(response?.output_text || "").trim();
+    const s = raw.indexOf("{");
+    const e = raw.lastIndexOf("}");
+    if (s === -1 || e <= s) return true;
+    const parsed = JSON.parse(raw.slice(s, e + 1));
+    return parsed?.touching !== false;
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (/429|rate|timeout/i.test(msg)) openaiAuxBreaker.recordFailure(`thumb_check:${msg.slice(0, 40)}`);
+    return true;
+  }
+}
