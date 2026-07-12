@@ -386,8 +386,8 @@ export function buildPaymentQrIntroFactsText({ paymentRef, paidPackage = null } 
       : `สแกน ${scanCount} ครั้ง ใน ${formatOfferWindowThai(windowHours)}`);
   const base = [
     "สรุปยอดก่อนโอนครับ",
-    `• โปร: ${pkgLabel}`,
-    `• ยอดโอน: ${priceThb} บาท`,
+    `โปร ${pkgLabel}`,
+    `ยอดโอน ${priceThb} บาท`,
     "",
     "สแกน QR ด้านล่างได้เลย โอนเสร็จส่งสลิปในแชตนี้",
   ].join("\n");
@@ -436,24 +436,32 @@ export function buildSingleOfferPaywallAltText(offer = loadActiveScanOffer()) {
   if (pkgs.length === 1) {
     const pkg = pkgs[0];
     return [
-      `เปิดสิทธิ์เพิ่มวันนี้ ${pkg.priceThb} บาทครับ ได้สแกนอีก ${pkg.scanCount} ครั้งใน ${formatOfferWindowThai(pkg.windowHours)} ✨`,
+      `เปิดสิทธิ์เพิ่มวันนี้ ${pkg.priceThb} บาทครับ ได้สแกนอีก ${pkg.scanCount} ครั้งใน ${formatOfferWindowThai(pkg.windowHours)}`,
       "ส่งรูปทีละรูปนะครับ อาจารย์จะได้ดูให้ละเอียดเต็มที่",
       "พร้อมเมื่อไหร่พิมพ์ว่า จ่าย มาได้เลยครับ",
     ].join("\n");
   }
+  // โทนคนพิมพ์เอง (กบ): ไม่มีขีด ไม่มีบูลเล็ต ไม่มีอิโมจิ
   const sorted = [...pkgs].sort((a, b) => a.priceThb - b.priceThb);
-  const lines = sorted.map((p) =>
-    isUnlimitedScanCount(p.scanCount)
-      ? `• ${p.priceThb} บาท — สแกนไม่จำกัด ${formatOfferWindowThai(p.windowHours)} (รายเดือน)`
-      : `• ${p.priceThb} บาท — สแกน ${p.scanCount} ครั้ง ใน ${formatOfferWindowThai(p.windowHours)}`,
-  );
-  const priceList = sorted.map((p) => p.priceThb).join(" หรือ ");
+  const lines = sorted.map((p) => formatOfferPackageLineThai(p));
+  const priceList = sorted.map((p) => `จ่าย ${p.priceThb}`).join(" หรือ ");
   return [
-    "เปิดสิทธิ์เพิ่มวันนี้มีให้เลือกครับ ✨",
+    "เปิดสิทธิ์เพิ่มวันนี้มีให้เลือกครับ",
     ...lines,
-    "ส่งรูปทีละรูปนะครับ อาจารย์จะได้ดูให้ละเอียดเต็มที่",
-    `พร้อมเมื่อไหร่พิมพ์ว่า จ่าย ${priceList} มาได้เลยครับ`,
+    `สะดวกแบบไหนพิมพ์มาเลย ${priceList} ครับ`,
   ].join("\n");
+}
+
+/** บรรทัดโปรแบบภาษาคน: "149 บาท สแกนได้ 15 ครั้ง ใช้ได้ 7 วัน" */
+export function formatOfferPackageLineThai(p) {
+  if (isUnlimitedScanCount(p.scanCount)) {
+    return `${p.priceThb} บาท เหมารายเดือน สแกนไม่จำกัด ${formatOfferWindowThai(p.windowHours)}`;
+  }
+  const win =
+    Number(p.windowHours) >= 48
+      ? `ใช้ได้ ${formatOfferWindowThai(p.windowHours)}`
+      : `ใน ${formatOfferWindowThai(p.windowHours)}`;
+  return `${p.priceThb} บาท สแกนได้ ${p.scanCount} ครั้ง ${win}`;
 }
 
 /** @deprecated Use buildSingleOfferPaywallAltText — kept for call sites. */
