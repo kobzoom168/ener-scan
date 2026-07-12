@@ -109,6 +109,10 @@ import {
 } from "../services/fengShuiFlow.service.js";
 import { maybeNotifyAdminSlipPendingVerify } from "../services/adminPaymentSlipNotify.service.js";
 import {
+  shouldBlockForRegistration,
+  buildRegistrationPrompt,
+} from "../services/registrationGate.service.js";
+import {
   evaluateAwaitingPaymentSlipImage,
   buildSlipNotTransferReceiptText,
   logSlipPendingVerifyRouted,
@@ -1801,6 +1805,35 @@ async function finalizeAcceptedImage({
     eventTimestamp,
     imageBufferLength: imageBuffer?.length || 0,
   });
+
+  // 🔐 Registration Gate (กบ): ลูกค้าใหม่ยังไม่ลงทะเบียน → ส่งลิงก์ LIFF ก่อน ไม่เข้าสแกน
+  // (ลูกค้าเดิม/เช็คพลาด/ไม่มี LIFF/โดนครบ 3 ครั้ง = ปล่อยผ่านหมด — fail-open)
+  {
+    const regGate = await shouldBlockForRegistration(userId);
+    if (regGate.block) {
+      const prompt = await buildRegistrationPrompt(regGate.attempt || 1);
+      if (prompt) {
+        console.log(
+          JSON.stringify({
+            event: "REG_GATE_BLOCKED_IMAGE",
+            lineUserIdPrefix: String(userId).slice(0, 8),
+            attempt: regGate.attempt || 1,
+          }),
+        );
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "registration_required",
+          semanticKey: `registration_required:${regGate.attempt || 1}`,
+          text: prompt.text,
+          alternateTexts: [],
+          quickReply: prompt.quickReply,
+        });
+        return;
+      }
+    }
+  }
 
   // Access truth + DB payment row: active slip rows own slip validation unless paid entitlement says scan first.
   let accessDecision;
@@ -3588,6 +3621,35 @@ async function handleTextMessage({ client, event, userId, session }) {
     hasPendingImage: !!session.pendingImage,
     sessionFlowVersion: session.flowVersion || 0,
   });
+
+  // 🔐 Registration Gate: ลูกค้าใหม่ยังไม่ลงทะเบียน → ชวนลง LIFF ก่อน ไม่ปล่อยเข้า AI/flow ใด ๆ
+  // (fail-open ทุกกรณีพิเศษ — ลูกค้าเดิม/เช็คพลาด/ไม่มี LIFF/ครบ 3 ครั้ง)
+  {
+    const regGateText = await shouldBlockForRegistration(userId);
+    if (regGateText.block) {
+      const prompt = await buildRegistrationPrompt(regGateText.attempt || 1);
+      if (prompt) {
+        console.log(
+          JSON.stringify({
+            event: "REG_GATE_BLOCKED_TEXT",
+            lineUserIdPrefix: String(userId).slice(0, 8),
+            attempt: regGateText.attempt || 1,
+          }),
+        );
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "registration_required",
+          semanticKey: `registration_required:${regGateText.attempt || 1}`,
+          text: prompt.text,
+          alternateTexts: [],
+          quickReply: prompt.quickReply,
+        });
+        return;
+      }
+    }
+  }
 
   /**
    * Interactive text route priority (single owner per turn; no LLM routing).
