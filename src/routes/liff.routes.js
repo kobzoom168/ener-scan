@@ -1668,6 +1668,14 @@ function buildLiffHtml(liffId) {
   </div>
 
   <!-- เลือกโทนสี -->
+  <div id="v-me" class="hidden" style="display:flex;flex-direction:column;gap:13px">
+    <div class="q" style="margin-bottom:2px">ข้อมูลของฉัน</div>
+    <div class="card" id="me-card" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div class="why" style="text-align:center;line-height:1.7">
+      ต้องการแก้ไขข้อมูล พิมพ์บอกอาจารย์ในแชทได้เลย<br/>เช่น "ขอเปลี่ยนวันเกิด" · "เปลี่ยนชื่อ กบ" · "เปลี่ยนเบอร์ 0812345678"
+    </div>
+  </div>
+
   <div id="v-theme" class="hidden" style="display:flex;flex-direction:column;gap:13px">
     <div class="rd-top">
       <button class="rd-back" id="th-back">‹</button>
@@ -1861,7 +1869,7 @@ function buildLiffHtml(liffId) {
   var LIFF_ID = ${JSON.stringify(liffId)};
   var state = { userId:"", displayName:"", step:0, sex:"", interest:"", channel:"" };
   function $(id){ return document.getElementById(id); }
-  function show(id){ ["v-load","v-ob","v-home","v-read","v-pay","v-match","v-theme"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); window.scrollTo(0,0); }
+  function show(id){ ["v-load","v-ob","v-home","v-read","v-pay","v-match","v-theme","v-me"].forEach(function(v){ $(v).classList.add("hidden"); }); $(id).classList.remove("hidden"); window.scrollTo(0,0); }
 
   /* ---- โทนสี: เก็บใน localStorage เครื่องลูกค้า ---- */
   var THEMES = [
@@ -2164,7 +2172,27 @@ function buildLiffHtml(liffId) {
       }).catch(function(){});
     show("v-home");
   }
-  $("btn-edit").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
+  function renderMe(){
+    var el = $("me-card");
+    el.innerHTML = '<div class="why">กำลังโหลด...</div>';
+    api("/api/liff/profile").then(function(r){ return r.json(); }).then(function(j){
+      var p = (j && j.profile) || {};
+      function row(k, v){ return '<div style="display:flex;justify-content:space-between;gap:12px"><span class="why">' + k + '</span><b>' + (v || "-") + '</b></div>'; }
+      var bd = "-";
+      if (p.birthdate) {
+        var m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})/.exec(String(p.birthdate));
+        if (m) bd = Number(m[3]) + "/" + Number(m[2]) + "/" + (Number(m[1]) + 543);
+      }
+      el.innerHTML =
+        row("ชื่อเล่น", p.nickname) +
+        row("วันเกิด", bd) +
+        row("เวลาเกิด", p.birth_time || "ไม่ระบุ") +
+        row("เพศ", p.gender) +
+        row("เบอร์โทร", p.phone) +
+        row("เรื่องที่สนใจ", p.interest);
+    }).catch(function(){ el.innerHTML = '<div class="why">โหลดไม่สำเร็จ ลองใหม่อีกครั้ง</div>'; });
+  }
+  $("btn-edit").addEventListener("click", function(){ renderMe(); show("v-me"); });
 
   /* ---- monthly reading ---- */
   var READ_AXES = ["การงาน","การเงิน","ความรัก","สุขภาพ","โชคลาภ"];
@@ -2238,7 +2266,7 @@ function buildLiffHtml(liffId) {
   }
   $("btn-reading").addEventListener("click", openReading);
   $("nav-read").addEventListener("click", openReading);
-  $("nav-me").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
+  $("nav-me").addEventListener("click", function(){ renderMe(); show("v-me"); });
   $("nav-theme").addEventListener("click", function(){ renderThemes(); show("v-theme"); });
   $("rd-back").addEventListener("click", function(){ show("v-home"); });
   $("rd-fill").addEventListener("click", function(){ state.step=0; renderStep(); show("v-ob"); });
