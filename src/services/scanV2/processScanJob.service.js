@@ -430,7 +430,18 @@ export async function processScanJob(workerId, jobRow) {
     }),
   );
 
-  if (objectCheck !== "single_supported") {
+  if (objectCheck === "inconclusive") {
+    // ระบบเองไม่แน่ใจ (timeout/rate-limit/สัญญาณอ่อน) ≠ รูปลูกค้าผิด — เดินหน้าสแกนต่อ
+    // (บทเรียนพายุ rate-limit 12 ก.ค.: ปัดลูกค้าจริง 62% ทั้งวันเพราะ gate ตอบไม่ทัน)
+    console.log(
+      JSON.stringify({
+        event: "WORKER_GATE_INCONCLUSIVE_PASS_THROUGH",
+        path: "worker-scan",
+        jobIdPrefix: idPrefix8(jobId),
+        lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+      }),
+    );
+  } else if (objectCheck !== "single_supported") {
     logUnsupportedObjectRejected({
       path: "worker_scan",
       userId: lineUserId,
