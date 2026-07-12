@@ -591,6 +591,23 @@ function buildPayLiffQuickReply(sortedPkgs) {
   return items.length ? { items } : null;
 }
 
+const THAI_SHORT_MONTHS = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+];
+
+/** "11 ส.ค." ตามเวลาไทย — ใช้บอกวันหมดอายุแพ็กรายเดือน */
+function formatThaiShortDateBkk(ms) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Bangkok",
+    day: "numeric",
+    month: "numeric",
+  }).formatToParts(new Date(ms));
+  const day = parts.find((p) => p.type === "day")?.value || "";
+  const mon = Number(parts.find((p) => p.type === "month")?.value || 0);
+  return `${day} ${THAI_SHORT_MONTHS[mon - 1] || ""}`.trim();
+}
+
 /** สั้น ๆ สุ่มตาม (user, จำนวนที่เหลือ) — เลขเดิมได้ประโยคเดิม ให้ dedupe 30 นาทีทำงาน */
 function pickRemainingText(variants, seedStr) {
   let h = 0;
@@ -610,7 +627,38 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     const now = new Date();
     const paidRemaining = Number(u.paid_remaining_scans) || 0;
     if (computePaidActive(u.paid_until, paidRemaining, now)) {
-      if (paidRemaining >= 900000) return null; // แพ็กไม่จำกัด — ไม่ต้องนับเหลือให้ฟัง
+      if (paidRemaining >= 900000) {
+        // แพ็กไม่จำกัด: ห้ามโชว์เลขนับ — บอกวันหมดอายุสั้น ๆ แทน + เตือนต่ออายุ 3 วันสุดท้าย
+        const untilMs = Date.parse(u.paid_until);
+        if (!Number.isFinite(untilMs)) return null;
+        const daysLeft = Math.ceil((untilMs - now.getTime()) / 86400000);
+        const dateTxt = formatThaiShortDateBkk(untilMs);
+        if (daysLeft <= 3) {
+          let renewPrice = null;
+          try {
+            const offerNow = loadActiveScanOffer(now);
+            const monthly = (offerNow?.packages || []).find(
+              (p) => p.active && Number(p.scanCount) >= 999999,
+            );
+            renewPrice = monthly ? monthly.priceThb : null;
+          } catch {}
+          const renewCta = renewPrice ? ` ต่อได้เลย พิมพ์ จ่าย ${renewPrice}` : "";
+          return pickRemainingText(
+            [
+              `รายเดือนเหลืออีก ${daysLeft} วันครับ${renewCta}`,
+              `แพ็กรายเดือนจะหมด ${dateTxt} นี้ครับ${renewCta}`,
+            ],
+            `${lineUserId}:unlimited:renew:${daysLeft}`,
+          );
+        }
+        return pickRemainingText(
+          [
+            `ส่งชิ้นต่อไปมาได้เลย รายเดือนใช้ได้ถึง ${dateTxt}`,
+            `รายเดือนของคุณใช้ได้ถึง ${dateTxt} ครับ`,
+          ],
+          `${lineUserId}:unlimited:${dateTxt}`,
+        );
+      }
       return pickRemainingText(
         [
           `เหลืออีก ${paidRemaining} ครั้ง`,
