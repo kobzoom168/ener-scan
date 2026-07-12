@@ -112,6 +112,7 @@ import {
   shouldBlockForRegistration,
   buildRegistrationPrompt,
 } from "../services/registrationGate.service.js";
+import { handleProfileEditCommand } from "../services/profileEditChat.service.js";
 import {
   evaluateAwaitingPaymentSlipImage,
   buildSlipNotTransferReceiptText,
@@ -3648,6 +3649,24 @@ async function handleTextMessage({ client, event, userId, session }) {
         });
         return;
       }
+    }
+  }
+
+  // ✏️ แก้ข้อมูลลงทะเบียนผ่านแชท (เปลี่ยนชื่อ/เบอร์/เพศ) — deterministic, มาก่อน AI
+  // (วันเกิดมี flow เดิม birthdateChangeFlow อยู่แล้ว ไม่แตะ)
+  {
+    const profileEditReply = await handleProfileEditCommand(userId, text).catch(() => null);
+    if (profileEditReply) {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "profile_edit_chat",
+        semanticKey: `profile_edit_chat:${Date.now() % 100000}`,
+        text: profileEditReply,
+        alternateTexts: [],
+      });
+      return;
     }
   }
 
