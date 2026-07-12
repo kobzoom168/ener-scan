@@ -1,9 +1,46 @@
 import OpenAI from "openai";
 import { env } from "../config/env.js";
 
-export const openai = new OpenAI({
-  apiKey: env.OPENAI_API_KEY,
-});
+// 🌉 สะพานฉุกเฉิน: OPENAI_VIA_OPENROUTER=true → ทุกคอล OpenAI (responses/embeddings)
+// วิ่งผ่าน OpenRouter แทน (บทเรียน 12 ก.ค.: เครดิตบัญชี OpenAI หมด ระบบสแกนล้มทั้งเส้น
+// ทั้งที่ OpenRouter ยังมีเครดิต — เทสแล้ว OpenRouter รองรับ Responses API,
+// แค่เติม prefix "openai/" หน้าชื่อโมเดล). ปิด flag = กลับไปตรง OpenAI เหมือนเดิมเป๊ะ
+const viaOpenRouter =
+  String(process.env.OPENAI_VIA_OPENROUTER ?? "false").trim().toLowerCase() === "true" &&
+  Boolean(String(process.env.OPENROUTER_API_KEY || "").trim());
+
+const rawClient = new OpenAI(
+  viaOpenRouter
+    ? {
+        apiKey: String(process.env.OPENROUTER_API_KEY || "").trim(),
+        baseURL: "https://openrouter.ai/api/v1",
+      }
+    : { apiKey: env.OPENAI_API_KEY },
+);
+
+if (viaOpenRouter) {
+  console.log(JSON.stringify({ event: "OPENAI_VIA_OPENROUTER_ACTIVE" }));
+}
+
+const prefixModel = (m) =>
+  viaOpenRouter && m && !String(m).includes("/") ? `openai/${m}` : m;
+
+export const openai = viaOpenRouter
+  ? {
+      responses: {
+        create: (p) => rawClient.responses.create({ ...p, model: prefixModel(p?.model) }),
+      },
+      embeddings: {
+        create: (p) => rawClient.embeddings.create({ ...p, model: prefixModel(p?.model) }),
+      },
+      chat: {
+        completions: {
+          create: (p) =>
+            rawClient.chat.completions.create({ ...p, model: prefixModel(p?.model) }),
+        },
+      },
+    }
+  : rawClient;
 
 /** Model id sent to `openai.responses.create` for deep-scan draft + rewrite. */
 const OPENAI_DEEP_SCAN_RESPONSES_MODEL = "gpt-4.1-mini";
