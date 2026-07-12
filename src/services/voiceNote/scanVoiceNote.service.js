@@ -338,6 +338,56 @@ async function passesAudienceGate(lineUserId, audience) {
 }
 
 /**
+ * สคริปต์เสียงเขียนสดโดย Opus (โหมดคุณภาพ 100%) — ตัวเลข/พลังฉีดจากระบบ ห้ามเพี้ยน
+ * มีปฏิกิริยาตามคะแนนจริง + คำเชื่อมแบบคนพูด ไม่ใช่ลิสต์สับท่อน. คืน null = ใช้ template เดิม
+ * @param {{ score: number | null, topPower: string, fitPower?: string, seed: string }} p
+ */
+async function generateVoiceScriptLLM(p) {
+  if (String(process.env.VOICE_SCRIPT_LLM_ENABLED ?? "true").trim().toLowerCase() === "false") {
+    return null;
+  }
+  const scoreTxt =
+    typeof p.score === "number" && Number.isFinite(p.score)
+      ? String(Math.round(p.score * 10) / 10).replace(/\.0$/, "")
+      : "";
+  const top = String(p.topPower || "").trim();
+  if (!scoreTxt || !top) return null;
+  const fit = String(p.fitPower || "").trim();
+  try {
+    const { openai, withOpenAi429RetryOnce } = await import("../openaiDeepScan.api.js");
+    const model = String(process.env.VOICE_SCRIPT_MODEL || "anthropic/claude-opus-4.8").trim();
+    const prompt = [
+      "เขียนบทพูด 1 ข้อความ ให้ \"อาจารย์\" ชายไทยวัย 45 สุขุมมีบารมี พูดใส่ voice note หาลูกค้า",
+      "หลังอ่านพลังวัตถุมงคลเสร็จ (ผลละเอียดอยู่ในรายงานที่ส่งไปพร้อมกัน)",
+      `ข้อมูลจริงที่ต้องพูดให้ครบและห้ามเปลี่ยนตัวเลข: คะแนนพลัง ${scoreTxt} เต็มสิบ, พลังเด่นคือ ${top}${fit && fit !== top ? `, ด้านที่เข้ากับเจ้าของที่สุดคือ ${fit}` : top ? ", และด้านนี้ก็เป็นด้านที่เข้ากับเจ้าของที่สุดด้วย" : ""}`,
+      "และปิดท้ายให้รู้ว่ารายละเอียดเต็ม ๆ อยู่ในรายงาน",
+      `น้ำเสียงตามคะแนน: ${Number(scoreTxt) >= 7.5 ? "ชื่นชมแบบผู้ใหญ่ ของดีจริง" : Number(scoreTxt) >= 5.5 ? "กลาง ๆ ตรงไปตรงมา ใช้ได้" : "นุ่มแต่ตรง ไม่ปลอบเวอร์ ชี้จุดที่ยังพอหนุนได้"}`,
+      "กติกาเข้ม: ภาษาพูดธรรมชาติมีคำเชื่อม ไม่ใช่ลิสต์ · ยาว 1-2 ประโยค ไม่เกิน 170 ตัวอักษร ·",
+      "ห้ามใช้คำ: นะ / องค์ / ระบบ / AI / บอท / ขอโทษ / เข้าใจเลย / แน่นอน · เรียกวัตถุว่า ชิ้นนี้ หรือ ตัวนี้ ·",
+      "แทนตัวเองว่า อาจารย์ (ไม่บังคับต้องมี) · ห้ามอีโมจิ ห้ามเครื่องหมายคำพูด · ตอบเฉพาะบทพูดเท่านั้น",
+    ].join("\n");
+    const res = await Promise.race([
+      withOpenAi429RetryOnce(() =>
+        openai.responses.create({
+          model,
+          temperature: 0.8,
+          input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+        }),
+      ),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("voice_script_timeout")), 10000)),
+    ]);
+    let text = String(res?.output_text || "").trim().replace(/^["'“”]|["'“”]$/g, "");
+    text = text.replace(/\*\*/g, "").replace(/\n+/g, " ").trim();
+    if (!text || text.length < 30 || text.length > 260) return null;
+    if (!text.includes(scoreTxt) || !text.includes(top)) return null; // ตัวเลข/พลังต้องครบ
+    if (/องค์|ระบบ|บอท|AI|ขอโทษ|ขออภัย|นะ/.test(text)) return null; // กันหลุดกฎกบ
+    return text;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * ประกอบ voice note ครบเส้น (สคริปต์ → TTS → m4a → R2) ภายใต้ timeout รวม.
  * คืน null เมื่อปิด flag / ไม่ผ่าน gate / พังกลางทาง — report เดินต่อแบบไม่มีเสียง
  *
@@ -377,7 +427,7 @@ export async function maybeBuildScanVoiceNote(p) {
         }
       } catch {}
       const powers = extractTopPowersFromReport(p.reportPayload);
-      const script = buildVoiceScript({
+      const vsArgs = {
         score: p.lineSummary?.energyScore ?? null,
         topPower:
           pill?.top ||
@@ -388,7 +438,9 @@ export async function maybeBuildScanVoiceNote(p) {
         compatibility: p.lineSummary?.compatibility ?? null,
         lane: String(p.lane || ""),
         seed: String(p.scanResultV2Id || p.lineUserId),
-      });
+      };
+      const script =
+        (await generateVoiceScriptLLM(vsArgs)) || buildVoiceScript(vsArgs);
       const mp3 = await synthesizeMp3(script, {
         voiceId: cfg.voiceId,
         speed: cfg.speed,
