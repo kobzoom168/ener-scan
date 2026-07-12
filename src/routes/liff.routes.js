@@ -823,7 +823,7 @@ liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
       bustRegistrationCache(userId);
     } catch {}
     // ลงทะเบียนใหม่ครบ (ชื่อ+วันเกิด) → บอกในแชทเลยว่าเริ่มใช้ได้ ไม่ต้องเดา
-    if (!existing && row.nickname && row.birthdate && liffLineClient) {
+    if (!existing && row.nickname && row.birthdate && row.phone && liffLineClient) {
       pushText(
         liffLineClient,
         userId,
