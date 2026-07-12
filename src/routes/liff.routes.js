@@ -2292,8 +2292,10 @@ function buildLiffHtml(liffId) {
   Array.prototype.forEach.call(document.querySelectorAll(".row[data-say]"), function(btn){
     btn.addEventListener("click", function(){ sendSay(btn.getAttribute("data-say")); });
   });
-  $("btn-scan").addEventListener("click", function(){ sendSay("สแกนพระ"); });
-  $("mt-scan").addEventListener("click", function(){ sendSay("สแกนพระ"); });
+  /* สแกนเลย = ปิด LIFF กลับแชทเงียบ ๆ (กบ: ไม่ต้องยิงข้อความให้บอทตอบ ลูกค้าแนบรูปเองเลย) */
+  function closeToChat(){ try { liff.closeWindow(); } catch(e) { window.close(); } }
+  $("btn-scan").addEventListener("click", closeToChat);
+  $("mt-scan").addEventListener("click", closeToChat);
   $("row-monthly").addEventListener("click", openReading);
 
   /* ดวงวันนี้ strip ↔ full card */
