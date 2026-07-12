@@ -134,7 +134,7 @@ export async function buildWaitingBirthdateGuidanceMessages(userId) {
 }
 
 export function buildMultiImageInRequestText() {
-  return "อาจารย์เห็นว่าส่งมาหลายรูปพร้อมกันนะครับ 🙏 ขอดูทีละองค์เพื่อให้แม่นที่สุด รบกวนส่งรูปแรกเข้ามาใหม่ทีละ 1 รูปได้เลยครับ";
+  return "อาจารย์เห็นว่าส่งมาหลายรูปพร้อมกันนะครับ 🙏 ขอดูทีละชิ้นเพื่อให้แม่นที่สุด รบกวนส่งรูปแรกเข้ามาใหม่ทีละ 1 รูปได้เลยครับ";
 }
 
 /**
@@ -151,7 +151,7 @@ export function buildFollowWelcomeText() {
     "• ถ่ายใหม่ทุกครั้ง ทีละ 1 ชิ้น วางบนพื้นเรียบ แสงสว่าง",
     "• ไม่รับรูปตัดต่อ รูปที่มีข้อความหรือตัวหนังสือแปะมา",
     "• ไม่รับรูปจากเน็ต รูปแคปจอ หรือถ่ายจากหน้าจอ",
-    "คลื่นพลังอ่านได้จากภาพถ่ายตรงจากองค์จริงเท่านั้น ภาพที่ผ่านการปรุงแต่งอาจารย์จับพลังไม่ได้นะ",
+    "คลื่นพลังอ่านได้จากภาพถ่ายตรงจากของจริงเท่านั้น ภาพที่ผ่านการปรุงแต่งอาจารย์จับพลังไม่ได้นะ",
     "",
     "*ตามศาสตร์ความเชื่อ ไว้ประกอบการพิจารณา ไม่รับรองพระแท้หรือราคา",
   ].join("\n");
@@ -168,7 +168,7 @@ export function buildMultipleObjectsText() {
 export function buildUnclearImageText() {
   return [
     "รูปยังไม่ค่อยชัดนะครับ อาจารย์เลยอ่านพลังไม่ถนัด",
-    "ลองถ่ายใหม่ให้เห็นองค์ชัด ๆ ใกล้หน่อย วางไว้กลางภาพ",
+    "ลองถ่ายใหม่ให้เห็นตัวชิ้นงานชัด ๆ ใกล้หน่อย วางไว้กลางภาพ",
     "ทีละชิ้นต่อรูปนะครับ แล้วส่งกลับมาได้เลย",
   ].join("\n");
 }
@@ -183,14 +183,14 @@ export function buildUnsupportedObjectText() {
     "• คริสตัล / หิน",
     "• วัตถุสายพลังแบบชิ้นเดี่ยว",
     "",
-    "ลองส่งรูปองค์ที่อยากให้ดูเข้ามาใหม่ได้เลยครับ",
+    "ลองส่งรูปชิ้นที่อยากให้ดูเข้ามาใหม่ได้เลยครับ",
   ].join("\n");
 }
 
 export function buildDuplicateImageText() {
   return [
     "รูปนี้เหมือนเคยส่งเข้ามาให้อาจารย์ดูแล้วนะครับ",
-    "ถ้าอยากดูองค์ใหม่ ส่งรูปอีกองค์เข้ามาได้เลยครับ",
+    "ถ้าอยากดูชิ้นใหม่ ส่งรูปอีกชิ้นเข้ามาได้เลยครับ",
   ].join("\n");
 }
 
@@ -230,7 +230,7 @@ export function getUnsupportedObjectReplyCandidates() {
 /** Deterministic primary for object_gate / object_inconclusive (timeout, weak signal, inconclusive merge). */
 export function buildObjectInconclusiveText() {
   return [
-    "ภาพนี้ระบบยังจับวัตถุได้ไม่ชัดพอครับ",
+    "ภาพนี้อาจารย์ยังมองตัวชิ้นงานไม่ชัดครับ",
     "รบกวนส่งรูปใหม่ที่เห็นพระหรือเครื่องราง 1 ชิ้นชัด ๆ อีกครั้งนะครับ",
     "แนะนำให้ถ่ายใกล้ขึ้น วัตถุอยู่กลางภาพ และพื้นหลังเรียบครับ",
   ].join("\n");
@@ -239,15 +239,15 @@ export function buildObjectInconclusiveText() {
 export function getObjectInconclusiveReplyCandidates() {
   return [
     buildObjectInconclusiveText(),
-    "ภาพนี้ระบบยังไม่มั่นใจพอที่จะสแกนครับ รบกวนส่งรูปพระ เครื่องราง หิน หรือวัตถุสายพลังแบบชิ้นเดี่ยว 1 รูปที่ชัดกว่านี้อีกครั้งครับ",
-    "ระบบยังประเมินวัตถุในภาพไม่ชัดพอ ขอส่งรูปใหม่ทีละชิ้น ให้เห็นชิ้นง่าย ๆ กลางเฟรมนะครับ",
+    "ภาพนี้อาจารย์ยังอ่านไม่ถนัดครับ รบกวนส่งรูปพระ เครื่องราง หิน หรือวัตถุสายพลังแบบชิ้นเดี่ยว 1 รูปที่ชัดกว่านี้อีกครั้งครับ",
+    "อาจารย์ยังมองชิ้นในภาพไม่ชัดพอ ขอส่งรูปใหม่ทีละชิ้น ให้เห็นชิ้นง่าย ๆ กลางเฟรมนะครับ",
   ];
 }
 
 /** Same family as unclear_image but dedicated replyType `image_retake_required` for observability. */
 export function buildImageRetakeRequiredPrimaryText() {
   return [
-    "ภาพนี้ยังไม่ชัดพอที่ระบบจะประเมินได้ครับ",
+    "ภาพนี้อาจารย์ยังมองไม่ชัดพอครับ",
     "รบกวนส่งรูปพระ เครื่องราง หิน หรือวัตถุสายพลังแบบชิ้นเดี่ยว 1 รูปที่ชัดกว่านี้อีกครั้งนะครับ",
     "แนะนำให้ถ่ายใกล้ขึ้น วางวัตถุกลางภาพ และใช้พื้นหลังเรียบครับ",
   ].join("\n");
@@ -267,7 +267,7 @@ export function getImageRetakeRequiredReplyCandidates() {
  */
 export function buildObjectInconclusiveAllowedFacts() {
   return [
-    { key: "scan_confidence", value: "ระบบยังไม่มั่นใจพอที่จะสแกน" },
+    { key: "scan_confidence", value: "อาจารย์ยังอ่านไม่ถนัด" },
     { key: "needs_new_photo", value: "ตอนนี้ยังต้องการรูปใหม่" },
     {
       key: "supported_scope",
@@ -317,8 +317,8 @@ export function getMultiImageInRequestReplyCandidates() {
   const primary = buildMultiImageInRequestText();
   return [
     primary,
-    "ส่งมาหลายรูปเลยนะครับ 🙏 มีหลายองค์ส่งได้หมด แต่ขอทีละรูป เริ่มจากองค์แรกได้เลย",
-    "อาจารย์ขอดูทีละองค์นะครับ รบกวนส่งใหม่ทีละ 1 รูป",
+    "ส่งมาหลายรูปเลยนะครับ 🙏 มีหลายชิ้นส่งได้หมด แต่ขอทีละรูป เริ่มจากชิ้นแรกได้เลย",
+    "อาจารย์ขอดูทีละชิ้นนะครับ รบกวนส่งใหม่ทีละ 1 รูป",
   ];
 }
 
@@ -350,7 +350,7 @@ export function getRateLimitReplyCandidates(retryAfterSec = 0) {
 export function getCooldownReplyCandidates(remainingSec = 0) {
   return [
     buildCooldownText(remainingSec),
-    "ระบบขอเว้นระยะนิดนึงก่อนสแกนรอบถัดไปนะครับ",
+    "ขอเว้นระยะนิดนึงก่อนดูชิ้นถัดไปนะครับ",
   ];
 }
 
@@ -531,7 +531,7 @@ export async function buildWaitingBirthdateDateFirstGuidanceMessages(userId, opt
     return ["อาจารย์รอวันเกิดอยู่ครับ เช่น 19/08/2528"];
   }
   const lines = [
-    "ขอวันเกิดที่ใช้ในระบบหน่อยครับ อ่านแบบ 19/08/2528 นะครับ",
+    "ขอวันเกิดหน่อยครับ อ่านแบบ 19/08/2528 นะครับ",
     "รอวันเกิดอยู่ครับ เช่น 19-08-2528 บอกอาจารย์ได้เลยครับ",
   ];
   const primary = lines[slotFromUserId(userId, lines.length)];
@@ -557,7 +557,7 @@ export function buildDeterministicBirthdateErrorText(
     return "รูปแบบยังไม่ตรงครับ ลองเช่น 19/08/2528";
   }
   if (r === "out_of_range") {
-    return "วันเกิดนี้ยังใช้ในระบบไม่ได้ครับ ลองปีอื่นที่อยู่ในช่วงที่รองรับ";
+    return "วันเกิดนี้อาจารย์ยังใช้ผูกดวงไม่ได้ครับ ลองเช็คปีอีกทีนะ";
   }
   if (r === "invalid_date") {
     return "วันที่ไม่ตรงกับปฏิทินครับ ลองบอกใหม่อีกครั้งนะครับ";

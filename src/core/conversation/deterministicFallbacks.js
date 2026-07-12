@@ -56,7 +56,7 @@ export function getDeterministicFallback(replyType, ctx = {}) {
     case "wb_guidance_birthdate":
       return tier >= 3
         ? SHORT.wb_guidance_birthdate_micro
-        : "ขอวันเกิดที่ใช้ในระบบหน่อยครับ เช่น 19/08/2528 บอกอาจารย์ได้เลยครับ";
+        : "ขอวันเกิดหน่อยครับ เช่น 19/08/2528 บอกอาจารย์ได้เลยครับ";
 
     case "pw_package_selected":
       return price

@@ -43,7 +43,9 @@ export async function getVoiceNoteConfig() {
  * @param {{ score: number | null, topPower: string, fitPower?: string, compatibility?: number | null, lane: string, seed: string }} p
  */
 export function buildVoiceScript({ score, topPower, fitPower, compatibility, lane, seed }) {
-  const piece = lane === "sacred_amulet" ? "องค์นี้" : "ชิ้นนี้";
+  // กบ 12 ก.ค.: ใช้ "ชิ้น" เสมอ — ถ้า lane เพี้ยน (กำไลหลุดมาสาย amulet) คำว่า "องค์" จะฟ้องว่าผิด
+  const piece = "ชิ้นนี้";
+  void lane;
   const scoreTxt =
     typeof score === "number" && Number.isFinite(score)
       ? String(Math.round(score * 10) / 10).replace(/\.0$/, "")
