@@ -1,8 +1,52 @@
 import { readFileSync, existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { getAppSetting, setAppSetting } from "../stores/appSettings.db.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Override สด ๆ จาก app_settings key "scan_offer" (หน้า /admin/promo) —
+ * ชนะไฟล์ scanOffer.default.json เสมอเมื่อมีค่า. ผู้เรียกเดิมเป็น sync ทั้งหมด
+ * เลย refresh แบบ background: อ่านค่าล่าสุดที่ fetch ไว้ แล้วยิง fetch ใหม่ทุก 30 วิ
+ * (บูตใหม่ 30 วิแรกใช้ไฟล์ไปก่อน — ยอมรับได้)
+ */
+const OFFER_SETTING_KEY = "scan_offer";
+const OFFER_DB_REFRESH_MS = 30_000;
+let offerDbRaw = null;
+let offerDbFetchedAt = 0;
+let offerDbInFlight = false;
+
+function maybeRefreshOfferDbOverride() {
+  if (offerDbInFlight || Date.now() - offerDbFetchedAt < OFFER_DB_REFRESH_MS) return;
+  offerDbInFlight = true;
+  getAppSetting(OFFER_SETTING_KEY)
+    .then((v) => {
+      offerDbRaw = v && typeof v === "object" && !Array.isArray(v) ? v : null;
+      offerDbFetchedAt = Date.now();
+    })
+    .catch(() => {
+      offerDbFetchedAt = Date.now(); // DB สะดุด → ใช้ไฟล์ไปก่อน อย่าถามรัว
+    })
+    .finally(() => {
+      offerDbInFlight = false;
+    });
+}
+maybeRefreshOfferDbOverride();
+
+/** สำหรับหน้า admin: บันทึก override (null = ล้างกลับไปใช้ไฟล์) พร้อมรีเฟรชทันที */
+export async function saveScanOfferOverride(rawOrNull) {
+  await setAppSetting(OFFER_SETTING_KEY, rawOrNull);
+  offerDbRaw =
+    rawOrNull && typeof rawOrNull === "object" && !Array.isArray(rawOrNull) ? rawOrNull : null;
+  offerDbFetchedAt = Date.now();
+}
+
+/** สำหรับหน้า admin: ค่า override ดิบใน DB (null = ไม่มี ใช้ไฟล์อยู่) */
+export async function getScanOfferOverrideRaw() {
+  const v = await getAppSetting(OFFER_SETTING_KEY);
+  return v && typeof v === "object" && !Array.isArray(v) ? v : null;
+}
 
 /** Safe fallback when file missing or invalid — matches `scanOffer.default.json` intent. */
 export const SCAN_OFFER_SAFE_DEFAULT = Object.freeze({
@@ -171,6 +215,12 @@ function readRawConfigFromDisk() {
   }
 }
 
+/** DB override (ถ้ามี) ชนะไฟล์ — และกระตุ้น background refresh ทุกครั้งที่ถูกอ่าน */
+function readRawConfig() {
+  maybeRefreshOfferDbOverride();
+  return offerDbRaw ?? readRawConfigFromDisk();
+}
+
 /**
  * Pure resolution for tests + shared logic (no disk I/O, no logging).
  *
@@ -219,12 +269,12 @@ export function resolveEffectiveScanOfferFromRaw(raw, now = new Date()) {
  * (e.g. entitlement grant / hot paths).
  */
 export function resolveActiveScanOfferCalm(now = new Date()) {
-  const raw = readRawConfigFromDisk();
+  const raw = readRawConfig();
   return resolveEffectiveScanOfferFromRaw(raw, now).offer;
 }
 
 export function loadActiveScanOffer(now = new Date()) {
-  const raw = readRawConfigFromDisk();
+  const raw = readRawConfig();
   const resolved = resolveEffectiveScanOfferFromRaw(raw, now);
   const offer = resolved.offer;
 

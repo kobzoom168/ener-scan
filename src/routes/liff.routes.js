@@ -2371,9 +2371,14 @@ function buildLiffHtml(liffId) {
     pay.pkgs.forEach(function(p){
       var b = document.createElement("button");
       b.className = "pkg" + (p.key === pay.selected ? " on" : "");
+      var unlimited = p.scanCount >= 999999;
+      var countTxt = unlimited ? "สแกนไม่จำกัด" : "สแกน " + p.scanCount + " ครั้ง";
+      var winTxt = (p.windowHours >= 48 && p.windowHours % 24 === 0)
+        ? (unlimited ? "รายเดือน · ใช้ได้ " : "ใช้ได้ ") + (p.windowHours / 24) + " วัน"
+        : "ใช้ได้ภายใน " + p.windowHours + " ชั่วโมง";
       b.innerHTML = '<span class="pk-price">' + p.priceThb + '<small> บาท</small></span>' +
-        '<span class="pk-d"><span class="pk-t">สแกน ' + p.scanCount + ' ครั้ง</span>' +
-        '<span class="pk-s">ใช้ได้ภายใน ' + p.windowHours + ' ชั่วโมง</span></span>' +
+        '<span class="pk-d"><span class="pk-t">' + countTxt + '</span>' +
+        '<span class="pk-s">' + winTxt + '</span></span>' +
         '<span class="pk-r"></span>';
       b.addEventListener("click", function(){ pay.selected = p.key; payRenderPkgs(); });
       wrap.appendChild(b);
@@ -2393,7 +2398,9 @@ function buildLiffHtml(liffId) {
       payRenderPkgs();
       var rem = $("pay-remain");
       if(j.access && j.access.paidRemainingScans > 0){
-        rem.textContent = "✦ ตอนนี้เหลือสิทธิ์สแกน " + j.access.paidRemainingScans + " ครั้ง";
+        rem.textContent = j.access.paidRemainingScans >= 900000
+          ? "✦ ตอนนี้ใช้แพ็กไม่จำกัดอยู่"
+          : "✦ ตอนนี้เหลือสิทธิ์สแกน " + j.access.paidRemainingScans + " ครั้ง";
         rem.classList.remove("hidden");
       } else { rem.classList.add("hidden"); }
       if(j.payment && j.payment.status === "pending_verify"){

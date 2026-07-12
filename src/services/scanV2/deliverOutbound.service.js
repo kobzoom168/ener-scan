@@ -596,6 +596,7 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     const now = new Date();
     const paidRemaining = Number(u.paid_remaining_scans) || 0;
     if (computePaidActive(u.paid_until, paidRemaining, now)) {
+      if (paidRemaining >= 900000) return null; // แพ็กไม่จำกัด — ไม่ต้องนับเหลือให้ฟัง
       return pickRemainingText(
         [
           `เหลืออีก ${paidRemaining} ครั้ง`,
