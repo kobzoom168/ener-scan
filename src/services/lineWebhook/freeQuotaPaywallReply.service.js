@@ -75,18 +75,22 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
     }),
   );
 
-  // Quick Reply pill so the customer can TAP to pay instead of typing "จ่าย"
-  // (typing still works — the button just sends the same word).
+  // ปุ่มให้เลือกแพ็กตรง ๆ (กบ: ใช้หมดแล้วต้องได้เลือกเลย) — กดปุ๊บ QR แพ็กนั้นเด้งทันที
+  // แพ็กเดียวค่อยเป็นปุ่ม จ่าย คำเดียว; ป้ายปุ่มไม่ใส่ไอคอน
+  const activePayPkgs = (offer.packages || [])
+    .filter((p) => p.active)
+    .sort((a, b) => a.priceThb - b.priceThb);
+  const pkgItems =
+    activePayPkgs.length > 1
+      ? activePayPkgs.slice(0, 3).map((p) => ({
+          type: "action",
+          action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
+        }))
+      : [{ type: "action", action: { type: "message", label: "จ่ายเงิน", text: "จ่าย" } }];
   const payQuickReply = {
     items: [
-      {
-        type: "action",
-        action: { type: "message", label: "💳 จ่ายเงิน", text: "จ่าย" },
-      },
-      {
-        type: "action",
-        action: { type: "message", label: "🕐 ไว้ก่อน", text: "ไว้ก่อน" },
-      },
+      ...pkgItems,
+      { type: "action", action: { type: "message", label: "ไว้ก่อน", text: "ไว้ก่อน" } },
     ],
   };
 
