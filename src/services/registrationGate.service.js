@@ -46,7 +46,7 @@ export function bustRegistrationCache(lineUserId) {
   regCache.delete(String(lineUserId || "").trim());
 }
 
-/** ลงทะเบียนครบ = liff_profiles มีชื่อเล่น + วันเกิด */
+/** ลงทะเบียนครบ = liff_profiles มีชื่อเล่น + วันเกิด + เบอร์โทร (กบ: บังคับเบอร์ด้วย) */
 export async function isRegistrationComplete(lineUserId) {
   const uid = String(lineUserId || "").trim();
   if (!uid) return true; // ข้อมูลแปลก = ปล่อยผ่าน
@@ -57,11 +57,16 @@ export async function isRegistrationComplete(lineUserId) {
   }
   const { data, error } = await supabase
     .from("liff_profiles")
-    .select("nickname,birthdate")
+    .select("nickname,birthdate,phone")
     .eq("line_user_id", uid)
     .maybeSingle();
   if (error) throw error;
-  const ok = Boolean(String(data?.nickname || "").trim() && String(data?.birthdate || "").trim());
+  const phoneDigits = String(data?.phone || "").replace(/[^0-9]/g, "");
+  const ok = Boolean(
+    String(data?.nickname || "").trim() &&
+      String(data?.birthdate || "").trim() &&
+      phoneDigits.length >= 9,
+  );
   regCache.set(uid, { ok, at: Date.now() });
   return ok;
 }
@@ -132,7 +137,7 @@ const REG_PROMPT_VARIANTS = [
   null, // index 0 unused — attempt เริ่มที่ 1
   null, // attempt 1 ใช้ข้อความจาก config
   "ลงทะเบียนแปปเดียวครับ กดปุ่มด้านล่างได้เลย เสร็จแล้วส่งรูปมาได้ทันที",
-  "เหลือแค่ลงทะเบียนครับ กดลิงก์แล้วกรอกชื่อกับวันเกิด อาจารย์จะได้อ่านให้ตรงดวง",
+  "เหลือแค่ลงทะเบียนครับ กดลิงก์แล้วกรอกชื่อ วันเกิด เบอร์ติดต่อ อาจารย์จะได้อ่านให้ตรงดวง",
 ];
 
 /**

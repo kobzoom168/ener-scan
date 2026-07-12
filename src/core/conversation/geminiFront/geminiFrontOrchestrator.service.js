@@ -118,8 +118,15 @@ export async function runGeminiFrontOrchestrator(ctx) {
     return { handled: true, mode: "active" };
   }
 
+  /** คำต้องห้าม persona: องค์ → ชิ้น (เว้นคำประกอบอย่าง องค์กร/องค์ประกอบ) —
+      กฎอยู่ใน prompt แล้วแต่ LLM หลุดจริง (เคสกบ 12 ก.ค. "ทีละองค์นะ") = ต้องกันที่ทางออก */
+  function sanitizePersonaWords(text) {
+    return String(text || "").replace(/องค์(?!กร|การ|ประกอบ|รวม|ความรู้|ประชุม)/g, "ชิ้น");
+  }
+
   /** guard สิทธิ์ปลอม: ใช้กับทุกข้อความ LLM ขาออกจาก orchestrator นี้ */
   function guardEntitlementClaims(text, via) {
+    text = sanitizePersonaWords(text);
     if (ctx.accessState === "paid_active") return text; // สิทธิ์จริง พูดถึงสิทธิ์ได้
     if (!ENTITLEMENT_CLAIM_RE.test(String(text || ""))) return text;
     console.warn(
