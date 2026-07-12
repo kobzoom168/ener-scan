@@ -43,7 +43,9 @@ export const openai = viaOpenRouter
   : rawClient;
 
 /** Model id sent to `openai.responses.create` for deep-scan draft + rewrite. */
-const OPENAI_DEEP_SCAN_RESPONSES_MODEL = "gpt-4.1-mini";
+// โหมดคุณภาพสูงสุด (กบ 12 ก.ค.: "ค่า AI เยอะไม่เป็นไร ขอคุณภาพ 100%") — override ได้ทาง env
+const OPENAI_DEEP_SCAN_RESPONSES_MODEL =
+  String(process.env.DEEP_SCAN_MODEL || "").trim() || "gpt-4.1-mini";
 
 const OPENAI_RATE_LIMIT_RETRY_MS = 10_000;
 
