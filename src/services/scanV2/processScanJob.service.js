@@ -247,7 +247,7 @@ export async function processScanJob(workerId, jobRow) {
             related_job_id: jobId,
             payload_json: {
               type: "text",
-              text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${shaDup.report_url}`,
+              text: `ชิ้นนี้เคยสแกนไปแล้วครับ\nดูผลเดิมได้ที่: ${shaDup.report_url}`,
               appUserId,
               skipQuotaDecrement: true,
               dedupHit: true,
@@ -310,7 +310,7 @@ export async function processScanJob(workerId, jobRow) {
             related_job_id: jobId,
             payload_json: {
               type: "text",
-              text: `ระบบตรวจพบว่าวัตถุนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${dupMatch.report_url}`,
+              text: `ชิ้นนี้เคยสแกนไปแล้วครับ\nดูผลเดิมได้ที่: ${dupMatch.report_url}`,
               appUserId,
               skipQuotaDecrement: true,
               dedupHit: true,

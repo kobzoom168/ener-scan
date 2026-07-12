@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ข่าวสาร · Ener Scan</title>
+  <meta name="description" content="ข่าวสารและประกาศจาก Ener Scan รับอ่านพลังงานวัตถุเฉพาะบุคคล"/>
+  <meta property="og:title" content="ข่าวสาร · Ener Scan"/>
+  <meta property="og:description" content="อัปเดตข่าวสาร คู่มือ และประกาศบริการ Ener Scan"/>
+  <meta property="og:url" content="https://my-ener.uk/news.html"/>
+  <meta property="og:type" content="website"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/site.css"/>
+</head>
+<body>
+  <div class="es-sparkle" aria-hidden="true"></div>
+  <div class="es-wrap">
+    <header class="es-topbar">
+      <div class="es-topbar-left">
+        <a class="es-logo" href="/" aria-label="Ener Scan หน้าแรก">
+          <span class="es-logo-mark" aria-hidden="true">⚡</span>
+          <span class="es-logo-text">Ener <em>Scan</em></span>
+        </a>
+        <nav class="es-nav" aria-label="เมนูหลัก">
+          <a href="/">หน้าแรก</a>
+          <a href="/news.html" class="is-on">ข่าวสาร</a>
+        </nav>
+      </div>
+      <span class="es-badge">รับอ่านพลังงาน · รับฝากขายพระ</span>
+    </header>
+
+    <main>
+      <h1 class="es-page-h">ข่าวสาร</h1>
+      <p class="es-page-sub">ประกาศ คู่มือ และอัปเดตบริการ Ener Scan</p>
+
+      <div id="es-news-list" class="es-news-list" aria-live="polite">
+        <p class="es-page-sub">กำลังโหลดข่าวสาร…</p>
+      </div>
+    </main>
+
+    <footer class="es-footer">
+      <p>© Ener Scan · <a href="/">หน้าแรก</a> · <a href="/news.html">ข่าวสาร</a> · <a href="https://scan.my-ener.uk/">scan.my-ener.uk</a></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var list = document.getElementById("es-news-list");
+      if (!list) return;
+
+      function formatDate(iso) {
+        try {
+          return new Date(iso + "T00:00:00").toLocaleDateString("th-TH", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          });
+        } catch (e) {
+          return iso;
+        }
+      }
+
+      fetch("/data/news.json")
+        .then(function (res) {
+          if (!res.ok) throw new Error("load failed");
+          return res.json();
+        })
+        .then(function (items) {
+          if (!items.length) {
+            list.innerHTML = "<p class=\"es-page-sub\">ยังไม่มีข่าวสารในขณะนี้</p>";
+            return;
+          }
+          list.innerHTML = items
+            .map(function (item) {
+              return (
+                "<article class=\"es-news-item\">" +
+                  "<div class=\"es-news-meta\">" +
+                    "<span class=\"es-news-tag\">" + item.tag + "</span>" +
+                    "<time class=\"es-news-date\" datetime=\"" + item.date + "\">" + formatDate(item.date) + "</time>" +
+                  "</div>" +
+                  "<h2 class=\"es-news-t\">" + item.title + "</h2>" +
+                  "<p class=\"es-news-p\">" + item.summary + "</p>" +
+                "</article>"
+              );
+            })
+            .join("");
+        })
+        .catch(function () {
+          list.innerHTML = "<p class=\"es-page-sub\">โหลดข่าวสารไม่สำเร็จ กรุณารีเฟรชหน้าใหม่</p>";
+        });
+    })();
+  </script>
+</body>
+</html>

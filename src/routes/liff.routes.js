@@ -1048,7 +1048,7 @@ liffRouter.post(
         pushText(
           liffLineClient,
           userId,
-          "🙏 รับสลิปแล้วครับ ระบบกำลังตรวจอยู่\n⏳ เสร็จเมื่อไหร่อาจารย์จะรีบเปิดสิทธิ์แล้วแจ้งในแชตทันทีครับ",
+          "🙏 รับสลิปแล้วครับ กำลังตรวจกับธนาคารอยู่\n⏳ เสร็จเมื่อไหร่อาจารย์จะรีบเปิดสิทธิ์แล้วแจ้งในแชตทันทีครับ",
         ).catch(() => {});
       }
       console.log(JSON.stringify({ event: "LIFF_SLIP_PENDING_VERIFY", paymentId }));
@@ -1811,7 +1811,7 @@ function buildLiffHtml(liffId) {
       <span class="paychip hidden" id="pay-remain" style="align-self:flex-start"></span>
       <div id="pay-pkgs" style="display:flex;flex-direction:column;gap:10px"></div>
       <button class="readbtn" id="pay-go">💳 สร้างรายการโอน</button>
-      <p class="note">โอนผ่านพร้อมเพย์ แล้วแนบสลิปในหน้านี้ ระบบตรวจกับธนาคารให้ทันที</p>
+      <p class="note">โอนผ่านพร้อมเพย์ แล้วแนบสลิปในหน้านี้ ตรวจกับธนาคารให้ทันที</p>
     </div>
 
     <!-- step 2: QR + slip -->
@@ -1828,8 +1828,8 @@ function buildLiffHtml(liffId) {
         <span class="sd-t" id="pay-dt">📎 แตะเพื่อแนบสลิปโอนเงิน</span>
         <span class="sd-s">ถ่ายหรือเลือกรูปสลิปจากเครื่องได้เลย</span>
       </label>
-      <button class="readbtn hidden" id="pay-send">✅ ส่งสลิปให้ระบบตรวจ</button>
-      <p class="note" id="pay-hint">ระบบตรวจสลิปกับธนาคารอัตโนมัติ ส่วนใหญ่ไม่เกินครึ่งนาที</p>
+      <button class="readbtn hidden" id="pay-send">✅ ส่งสลิปให้ตรวจ</button>
+      <p class="note" id="pay-hint">ตรวจสลิปกับธนาคารอัตโนมัติ ส่วนใหญ่ไม่เกินครึ่งนาที</p>
     </div>
 
     <!-- step 3: result -->
@@ -2472,22 +2472,22 @@ function buildLiffHtml(liffId) {
 
   $("pay-send").addEventListener("click", function(){
     if(!pay.slipB64) return;
-    var btn = $("pay-send"); btn.disabled = true; btn.textContent = "🔍 ระบบกำลังตรวจสลิป...";
+    var btn = $("pay-send"); btn.disabled = true; btn.textContent = "🔍 กำลังตรวจสลิป...";
     api("/api/liff/pay/slip", { method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ imageBase64: pay.slipB64 }) })
       .then(function(r){ return r.json(); })
       .then(function(j){
-        btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ระบบตรวจ";
+        btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ตรวจ";
         if(!j || !j.ok){ alert("ส่งสลิปไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
         if(j.result === "approved"){
           payShowDone("🎉", "เปิดสิทธิ์สแกนแล้ว", "ตรวจสลิปผ่านเรียบร้อย กลับไปที่แชตแล้วส่งรูปพระ เครื่องราง หิน หรือกำไล ได้เลยครับ");
         } else if(j.result === "pending"){
-          payShowDone("⏳", "รับสลิปแล้ว กำลังตรวจ", "ระบบกำลังตรวจกับธนาคาร เสร็จแล้วอาจารย์จะแจ้งในแชตทันทีครับ");
+          payShowDone("⏳", "รับสลิปแล้ว กำลังตรวจ", "กำลังตรวจกับธนาคาร เสร็จแล้วอาจารย์จะแจ้งในแชตทันทีครับ");
         } else {
           alert("รูปนี้ยังไม่เหมือนสลิปโอนเงิน ลองแนบสลิปที่เห็นยอดและเวลาโอนชัด ๆ ครับ");
         }
       })
-      .catch(function(){ btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ระบบตรวจ"; alert("ส่งสลิปไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
+      .catch(function(){ btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ตรวจ"; alert("ส่งสลิปไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
   });
 
   $("btn-topup").addEventListener("click", openPay);

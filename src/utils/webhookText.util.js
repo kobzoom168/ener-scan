@@ -440,7 +440,7 @@ export function buildPaymentPackageSelectedAck(paidPackage) {
   const p = paidPackage || getDefaultPackage(loadActiveScanOffer());
   if (!p) return buildSingleOfferPaywallAltText();
   return [
-    `โอเคครับ แพ็กนี้ค่าเปิดระบบ ${p.priceThb} บาท`,
+    `โอเคครับ แพ็กนี้ค่าเปิดสิทธิ์ ${p.priceThb} บาท`,
     `ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${p.windowHours} ชั่วโมง`,
     "",
     "ถ้าพร้อม ตอบว่า 'จ่าย' ได้เลยครับ เดี๋ยวผมส่งรายละเอียดกับคิวอาร์ให้ครับ",

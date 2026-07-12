@@ -205,10 +205,10 @@ export function buildUnsupportedObjectFlex() {
   return createBaseBubble({
     accentColor: "#8E24AA",
     title: "ยังไม่รองรับภาพประเภทนี้",
-    subtitle: "Ener Scan อ่านได้เฉพาะวัตถุสายพลังที่อยู่ในขอบเขตของระบบ",
+    subtitle: "Ener Scan อ่านได้เฉพาะวัตถุสายพลังที่อาจารย์รับดู",
     bodyContents: [
       createCard(
-        "ระบบรองรับเฉพาะ",
+        "อาจารย์รับดูเฉพาะ",
         "• พระเครื่อง\n• เครื่องราง\n• คริสตัล / หิน\n• วัตถุสายพลังแบบชิ้นเดี่ยว"
       ),
       createCard(
@@ -232,7 +232,7 @@ export function buildIdleFlex() {
     bodyContents: [
       createCard(
         "ข้อสำคัญ",
-        "กรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป\nเพื่อให้ระบบอ่านพลังได้ชัดเจนขึ้น",
+        "กรุณาถ่ายวัตถุ 1 ชิ้นต่อ 1 รูป\nเพื่อให้อ่านพลังได้ชัดเจนขึ้น",
         {
           backgroundColor: "#171717",
           borderColor: "#242427",
@@ -296,7 +296,7 @@ export function buildMultipleObjectsFlex() {
   return createBaseBubble({
     accentColor: "#C62828",
     title: "พบว่าวัตถุในภาพมีมากกว่า 1 ชิ้น",
-    subtitle: "เพื่อให้ระบบอ่านพลังได้แม่นขึ้น กรุณาส่งเพียง 1 ชิ้นต่อ 1 รูป",
+    subtitle: "เพื่อให้อ่านพลังได้แม่นขึ้น กรุณาส่งเพียง 1 ชิ้นต่อ 1 รูป",
     bodyContents: [
       createCard(
         "คำแนะนำ",
@@ -315,7 +315,7 @@ export function buildUnclearImageFlex() {
   return createBaseBubble({
     accentColor: "#8E24AA",
     title: "ภาพยังไม่ชัดเจนพอ",
-    subtitle: "ลองถ่ายใหม่ให้เห็นวัตถุชัดขึ้น เพื่อให้ระบบอ่านพลังได้ดีขึ้น",
+    subtitle: "ลองถ่ายใหม่ให้เห็นวัตถุชัดขึ้น เพื่อให้อ่านพลังได้ดีขึ้น",
     bodyContents: [
       createCard(
         "คำแนะนำ",
@@ -338,8 +338,8 @@ export function buildRateLimitFlex(retryAfterSec = 0) {
 
   return createBaseBubble({
     accentColor: "#1565C0",
-    title: "ระบบมีการใช้งานต่อเนื่อง",
-    subtitle: "เพื่อให้การทำงานเสถียร ระบบจะเว้นจังหวะการสแกนไว้ชั่วคราว",
+    title: "ช่วงนี้มีคนส่งเข้ามาต่อเนื่อง",
+    subtitle: "อาจารย์ขอเว้นจังหวะการรับดูไว้ชั่วคราว เดี๋ยวค่อยส่งเข้ามาใหม่",
     bodyContents: [
       createCard(
         "สถานะตอนนี้",
@@ -363,7 +363,7 @@ export function buildCooldownFlex(remainingSec = 0) {
   return createBaseBubble({
     accentColor: "#2E7D32",
     title: "เว้นจังหวะสักครู่ก่อนสแกนใหม่",
-    subtitle: "เพื่อให้ระบบอ่านพลังได้เสถียรมากขึ้น",
+    subtitle: "เพื่อให้อ่านพลังได้เสถียรมากขึ้น",
     bodyContents: [
       createCard(
         "สถานะตอนนี้",

@@ -34,7 +34,7 @@ function rankCardHtml(it, rank) {
   const possibleDupBadge =
     it.duplicateStatus === "possible_duplicate"
       ? `<p class="alib-card-dup"><span class="alib-card-dup-pill alib-card-dup-pill--possible">อาจซ้ำกับรายการอื่น</span></p>
-        <p class="alib-card-possible-note">ระบบพบว่ารายการนี้อาจเป็นวัตถุเดียวกับรายการอื่น แต่ยังไม่รวมให้อัตโนมัติ เพื่อป้องกันการรวมผิด</p>`
+        <p class="alib-card-possible-note">อาจารย์พบว่ารายการนี้อาจเป็นวัตถุเดียวกับรายการอื่น แต่ยังไม่รวมให้อัตโนมัติ เพื่อป้องกันการรวมผิด</p>`
       : "";
   return `
   <article class="alib-card" data-rank="${rank}">
@@ -655,7 +655,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
     <h1 class="alib-h1">คลังพลังของคุณ</h1>
     <p class="alib-sub">คุณมีรายการสแกนแล้ว ${escapeHtml(String(n))} รายการ</p>
     ${dedupeExplainLine}
-    <p class="alib-safety" role="note">ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
+    <p class="alib-safety" role="note">อันดับนี้จัดจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
     ${retentionNoticeHtml}
     ${pinFlashHtml}
     ${spotlightHtml}

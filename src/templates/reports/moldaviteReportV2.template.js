@@ -487,7 +487,7 @@ export function renderMoldaviteReportV2Html(payload) {
     <section class="mv2-trust-sources" aria-labelledby="mv2-trust-src-h">
       <h2 id="mv2-trust-src-h" class="mv2-trust-sources-h">ผลนี้คำนวณจากอะไร</h2>
       <ul class="mv2-trust-sources-list">
-        <li>ภาพวัตถุที่ส่งเข้าระบบ</li>
+        <li>ภาพวัตถุที่ส่งเข้ามา</li>
         <li>วันเดือนปีเกิดของเจ้าของ</li>
         <li>โมเดลการอ่านพลังงานของ Ener Scan</li>
       </ul>

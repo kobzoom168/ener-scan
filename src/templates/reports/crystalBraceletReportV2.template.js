@@ -448,7 +448,7 @@ function buildCrystalBraceletEnergyTimingHtml(hr, publicToken = "") {
   ${
     String(publicToken || "").trim()
       ? `<div class="cb2-em-cta" style="margin-top:0.8rem;">
-    <p class="cb2-em-cta-hint">อธิบายว่าทำไมระบบถึงแนะนำวันนี้และช่วงเวลานี้</p>
+    <p class="cb2-em-cta-hint">อธิบายว่าทำไมอาจารย์ถึงแนะนำวันนี้และช่วงเวลานี้</p>
     <a class="cb2-em-cta-btn" href="/r/${encodeURIComponent(String(publicToken).trim())}/energy-timing">ดูวิธีคำนวณจังหวะเสริมพลัง</a>
   </div>`
       : ""
@@ -629,7 +629,7 @@ function buildCrystalBraceletLibraryHtml(library, currentToken) {
 
   const nudge =
     library.totalCount === 1
-      ? `<p class="cb2-lib-nudge">สแกนกำไลเพิ่มอีกสักเส้น ระบบจะช่วยเปรียบเทียบพลังให้เห็นชัดขึ้น ✨</p>`
+      ? `<p class="cb2-lib-nudge">สแกนกำไลเพิ่มอีกสักเส้น อาจารย์จะช่วยเปรียบเทียบพลังให้เห็นชัดขึ้น ✨</p>`
       : "";
 
   return `
@@ -814,7 +814,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     <section class="cb2-trust-sources" aria-labelledby="cb2-trust-src-h">
       <h2 id="cb2-trust-src-h" class="cb2-trust-sources-h">ผลนี้คำนวณจากอะไร</h2>
       <ul class="cb2-trust-sources-list">
-        <li>ภาพวัตถุที่ส่งเข้าระบบ</li>
+        <li>ภาพวัตถุที่ส่งเข้ามา</li>
         <li>วันเดือนปีเกิดของเจ้าของ</li>
         <li>โมเดลการอ่านพลังงานของ Ener Scan</li>
       </ul>

@@ -135,26 +135,26 @@ function buildPaywallAnswer(intent, facts) {
   }
   if (intent === "explain_next_step") {
     return {
-      answer_short: "ถ้าพร้อม เดี๋ยวระบบส่งรายละเอียดกับคิวอาร์ให้ครับ",
+      answer_short: "ถ้าพร้อม เดี๋ยวอาจารย์ส่งรายละเอียดกับคิวอาร์ให้ครับ",
       bridge_back_to: "pay_intent",
     };
   }
   if (intent === "explain_single_image_rule") {
     return {
-      answer_short: `ระบบดูทีละ 1 รูปนะครับ เพื่อให้วิเคราะห์ได้แม่นที่สุด แพ็กนี้ใช้ได้ ${scans} ครั้งครับ`,
+      answer_short: `อาจารย์ดูทีละ 1 รูปนะครับ เพื่อให้วิเคราะห์ได้แม่นที่สุด แพ็กนี้ใช้ได้ ${scans} ครั้งครับ`,
       bridge_back_to: "pay_intent",
     };
   }
   if (intent === "recommendation_question") {
     return {
       answer_short:
-        "ระบบจะดูจากวัตถุที่ส่งเข้ามาทีละชิ้นครับ แล้วประเมินว่าชิ้นไหนเข้ากับคุณมากกว่า",
+        "อาจารย์จะดูจากวัตถุที่ส่งเข้ามาทีละชิ้นครับ แล้วประเมินว่าชิ้นไหนเข้ากับคุณมากกว่า",
       bridge_back_to: "pay_intent",
     };
   }
   if (intent === "explain_how_scan_works") {
     return {
-      answer_short: "ใช้งานง่ายครับ ส่งรูปวัตถุมา 1 รูป แล้วระบบจะอ่านให้ทีละชิ้น",
+      answer_short: "ใช้งานง่ายครับ ส่งรูปวัตถุมา 1 รูป แล้วอาจารย์จะอ่านให้ทีละชิ้น",
       bridge_back_to: "pay_intent",
     };
   }
@@ -176,7 +176,7 @@ function buildBirthdateAnswer(intent) {
     intent === "off_topic_recoverable"
   ) {
     return {
-      answer_short: "ตอนนี้ขอเก็บวันเกิดก่อนครับ เพื่อให้ระบบอ่านผลได้ตรงขึ้น",
+      answer_short: "ตอนนี้ขอเก็บวันเกิดก่อนครับ เพื่อให้อ่านผลได้ตรงขึ้น",
       bridge_back_to: "provide_birthdate",
     };
   }
@@ -205,7 +205,7 @@ function buildPendingVerifyAnswer(intent) {
   if (intent === "explain_next_step" || intent === "off_topic_recoverable") {
     return {
       answer_short:
-        "ตอนนี้ระบบรับข้อมูลสลิปแล้วครับ เหลือรอแอดมินตรวจสอบก่อนปลดล็อก",
+        "ตอนนี้รับสลิปแล้วครับ อาจารย์กำลังตรวจสอบก่อนปลดล็อกให้",
       bridge_back_to: "wait_status",
     };
   }

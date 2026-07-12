@@ -81,7 +81,7 @@ export function deriveMoldaviteOwnerAxisProfile(birthdateUsed, fallbackSeed) {
 
   const note = dobStr
     ? "โปรไฟล์นี้สรุปจากวันเดือนปีเกิดเพื่อใช้เทียบกับกราฟ"
-    : "ยังไม่มีวันเกิดในระบบ ใช้รหัสรายงานเป็นฐานจำลอง";
+    : "ยังไม่ได้บันทึกวันเกิดไว้ ใช้รหัสรายงานเป็นฐานจำลอง";
 
   // --- Legacy fields (kept for backward compat outside Moldavite V2) ---
   const hId = fnv1a32(`${seed}|owner_identity`);
@@ -121,8 +121,8 @@ export function deriveMoldaviteOwnerAxisProfile(birthdateUsed, fallbackSeed) {
   ].filter((t, i, a) => a.indexOf(t) === i).slice(0, 3);
 
   const derivationNote = dobStr
-    ? "โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์ ไม่ใช่คำทำนายชะตาแบบเต็มระบบ"
-    : "ยังไม่มีวันเกิดในระบบ ใช้รหัสรายงานเป็นฐานจำลองแนวโน้มแกนแทน";
+    ? "โปรไฟล์แกนสรุปจากวันเกิดแบบจำลองเชิงสัญลักษณ์ ไม่ใช่คำทำนายชะตาแบบเต็มรูปแบบ"
+    : "ยังไม่ได้บันทึกวันเกิดไว้ ใช้รหัสรายงานเป็นฐานจำลองแนวโน้มแกนแทน";
 
   return {
     work,

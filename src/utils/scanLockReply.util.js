@@ -2,7 +2,7 @@ import { sendNonScanReply } from "../services/nonScanReply.gateway.js";
 
 /** Primary + alternates must not reuse wording from free-quota or generic “ระบบพัง”. */
 export const SCAN_LOCKED_SOFT_PRIMARY =
-  "ตอนนี้ระบบขอพักการรับสแกนชั่วคราวนะครับ ลองส่งใหม่อีกครั้งในอีกสักครู่";
+  "ตอนนี้อาจารย์ขอพักรับสแกนชั่วคราวนะครับ ลองส่งใหม่อีกครั้งในอีกสักครู่";
 
 export const SCAN_LOCKED_SOFT_ALTERNATES = [
   "ขอพักรับสแกนชั่วคราวครับ รอสักครู่แล้วลองส่งรูปใหม่อีกทีนะครับ",
@@ -10,7 +10,7 @@ export const SCAN_LOCKED_SOFT_ALTERNATES = [
 ];
 
 export const SCAN_LOCKED_HARD_PRIMARY =
-  "ตอนนี้ระบบขอพักการรับสแกนไว้ชั่วคราวก่อนนะครับ รอสักพักแล้วค่อยลองใหม่อีกครั้ง";
+  "ตอนนี้อาจารย์ขอพักรับสแกนไว้ชั่วคราวก่อนนะครับ รอสักพักแล้วค่อยลองใหม่อีกครั้ง";
 
 export const SCAN_LOCKED_HARD_ALTERNATES = [
   "ขอพักรับสแกนไว้ชั่วคราวก่อนครับ รอแล้วค่อยส่งรูปใหม่ได้เลย",

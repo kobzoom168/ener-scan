@@ -263,7 +263,7 @@ function buildAmuletTimingVisualHtml(ts, energyTimingHref = "") {
       </div>${
         String(energyTimingHref || "").trim()
           ? `<div class="mv2-timing-cta mv2-timing-cta--inline" role="region" aria-label="อธิบายจังหวะเสริมพลัง">
-        <p class="mv2-timing-cta-hint">อธิบายว่าทำไมระบบถึงแนะนำวันนี้และช่วงเวลานี้</p>
+        <p class="mv2-timing-cta-hint">อธิบายว่าทำไมอาจารย์ถึงแนะนำวันนี้และช่วงเวลานี้</p>
         <a class="mv2-timing-cta-btn" href="${escapeHtml(String(energyTimingHref).trim())}">ดูวิธีคำนวณจังหวะเสริมพลัง</a>
       </div>`
           : ""
@@ -401,7 +401,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken) {
     : `<div class="mv2-lib-img mv2-lib-img--empty" aria-hidden="true"></div>`;
   const nudge =
     library.totalCount === 1
-      ? `<p class="mv2-lib-nudge">สแกนเพิ่มอีกสักรายการ ระบบจะช่วยจัดอันดับและเปรียบเทียบให้ชัดขึ้น</p>`
+      ? `<p class="mv2-lib-nudge">สแกนเพิ่มอีกสักรายการ อาจารย์จะช่วยจัดอันดับและเปรียบเทียบให้ชัดขึ้น</p>`
       : "";
   const btn = libHref
     ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">ดูอันดับทั้งหมดในคลัง</a>`
@@ -621,7 +621,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       <h2 id="mv2-trust-src-h" class="mv2-trust-sources-h">ผลนี้คำนวณจากอะไร</h2>
       <p class="mv2-trust-sources-line mv2-trust-sources-line--mobile">ผลนี้อ้างอิงจากภาพวัตถุ วันเดือนปีเกิด และโมเดลการอ่านพลังงานของ Ener Scan</p>
       <ul class="mv2-trust-sources-list mv2-trust-sources-list--desktop" aria-label="รายละเอียด">
-        <li>ภาพวัตถุที่ส่งเข้าระบบ</li>
+        <li>ภาพวัตถุที่ส่งเข้ามา</li>
         <li>วันเดือนปีเกิดของเจ้าของ</li>
         <li>โมเดลการอ่านพลังงานของ Ener Scan</li>
       </ul>

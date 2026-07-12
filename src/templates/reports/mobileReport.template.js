@@ -180,7 +180,7 @@ function hero(p) {
   const typeLabel = humanObjectTypeLabel(p.object?.objectType);
   const alt = imageUrl
     ? `รูปวัตถุ — ${escapeHtml(label)}`
-    : "ไม่มีรูปวัตถุจากระบบ";
+    : "ไม่มีรูปวัตถุแนบมาในรายงานนี้";
   const media = imageUrl
     ? `<div class="hero-media">
     <img class="hero-img" src="${escapeHtml(imageUrl)}" alt="${alt}" loading="lazy" decoding="async" fetchpriority="high" onerror="this.classList.add('hero-img--broken'); this.closest('.hero-media')?.classList.add('hero-media--broken');" />
@@ -289,7 +289,7 @@ function objectEnergySection(p) {
       ? `<p class="oe-confidence">${escapeHtml(confidenceReadableForObjectEnergy(Number(conf)))}<span class="oe-confidence-pct"> (${Math.round(Number(conf) * 100)}%)</span></p>`
       : "";
 
-  const inner = `<p class="oe-sub">โปรไฟล์พลัง 5 มิติจากสูตรกลางของระบบ — ไม่ได้ดึงจากข้อความ AI โดยตรง</p>${lead}<div class="oe-table" role="group" aria-label="โปรไฟล์พลังห้ามิติ">${rowHtml}</div>${bullets}${confLine}`;
+  const inner = `<p class="oe-sub">โปรไฟล์พลัง 5 มิติจากสูตรการอ่านของอาจารย์</p>${lead}<div class="oe-table" role="group" aria-label="โปรไฟล์พลังห้ามิติ">${rowHtml}</div>${bullets}${confLine}`;
 
   return sectionCard(
     "พลังของวัตถุชิ้นนี้",

@@ -85,3 +85,106 @@ npm run payment:verify -- a1b2c3d4-e5f6-7890-abcd-ef1234567890 admin
 
 Success: prints `Payment approved. paid_until: <iso date>`.  
 Failure: prints an error and exits with code 1.
+
+---
+
+# Slip auto-approval (OCR) — status & ops
+
+> Goal: read the slip with a vision model (OCR), validate against the expected
+> payment, and auto-approve without an admin if everything matches. Forgery-proof
+> level is **medium** (reads text only; does not verify with the bank).
+
+## Pipeline (code)
+
+- `src/core/payments/slipCheck/slipOcrExtractor.service.js` — vision LLM OCR (extract amount, date, receiver, ref, confidence).
+- `src/core/payments/slipCheck/slipAutoApproval.service.js` — validation rules (amount / receiver / time / slip_ref / confidence / dedupe).
+- `src/core/payments/slipCheck/slipAutoApprovalOrchestrator.service.js` — runs OCR → evaluate → write result columns.
+
+Result is written to `payments` columns: `slip_verify_status`, `slip_review_reason`,
+`slip_ref`, `slip_amount`, `slip_transferred_at`, `slip_receiver_name`,
+`slip_receiver_account_last4`, `slip_receiver_promptpay`, `slip_ocr_confidence`, `slip_ocr_raw_text`.
+
+`slip_verify_status` ends up one of: `dry_run_would_auto_approve` | `manual_review` | `auto_approved`.
+
+## Environment flags
+
+| flag | default | meaning |
+|---|---|---|
+| `SLIP_AUTO_APPROVE_ENABLED` | `false` | master switch for the OCR pipeline |
+| `SLIP_AUTO_APPROVE_DRY_RUN` | `true` | when true: evaluate + log only, **do not** auto-approve (admin still approves) |
+| `SLIP_OCR_MODEL` | `gpt-4.1-mini` | vision model used for OCR |
+| `SLIP_OCR_MIN_CONFIDENCE` | `0.85` | min OCR confidence to pass |
+| `SLIP_AMOUNT_TOLERANCE` | `0` | allowed THB diff vs expected (0 = exact) |
+| `SLIP_AUTO_APPROVE_MAX_AGE_HOURS` | `24` | reject slips transferred longer ago than this |
+| `SLIP_RECEIVER_NAME` | _(empty)_ | expected receiver name (substring match). **Must be set** or receiver check fails |
+| `SLIP_RECEIVER_ACCOUNT_LAST4` | _(empty)_ | expected receiver account last 4 digits |
+| `SLIP_RECEIVER_PROMPTPAY` | _(empty)_ | expected receiver PromptPay id |
+
+Receiver passes if **any** of last4 / PromptPay / name matches the configured value.
+
+### Live server state (as of 2026-06-17)
+
+- `SLIP_AUTO_APPROVE_ENABLED=true`, `SLIP_AUTO_APPROVE_DRY_RUN=true` (safe), `SLIP_RECEIVER_NAME=ธนริศย์ อภิโชคจิรศิลป์`
+- Account is KBank; receiver name check relies on the name above.
+
+## Known issue (the main blocker)
+
+Across all historical slips, `slip_ref` (เลขที่รายการ) extracted as **null** → reason
+`missing_slip_ref` blocked every auto-approve. `slipOcrExtractor.service.js` was
+patched with key aliases + a stricter system prompt to fix this, **but it has not yet
+been confirmed against a fresh slip** processed by the new code. Also `confidence`
+was sometimes `0` → `low_confidence` (threshold is strict at 0.85).
+
+Genuine 49 THB KBank slips to the configured account otherwise pass amount + receiver
++ time. So the open items to verify on the next real test: **slip_ref read OK?** and
+**confidence ≥ 0.85?**
+
+## How to re-check results (server)
+
+A query script is kept on the server at `/root/_slipcheck.mjs` (lists the latest 10
+payment rows with all slip OCR columns). Re-run any time:
+
+```bash
+ssh root@my-ener.uk "docker cp /root/_slipcheck.mjs ener-scan:/tmp/_slipcheck.mjs && docker exec ener-scan node /tmp/_slipcheck.mjs; exit"
+```
+
+## Go-live checklist
+
+1. Do one real 49 THB transfer + send slip; confirm row shows `dry_run_would_auto_approve` (slip_ref read, confidence ok).
+2. Flip `SLIP_AUTO_APPROVE_DRY_RUN=false` and rebuild/restart the `ener-scan` container.
+3. Keep watching `slip_review_reason` on the first few live ones.
+
+---
+
+# KBank K API — reference (parked; not started)
+
+> Decision parked on 2026-06-17. KBank fees / eligibility are **unknown** and must be
+> confirmed with KBank directly (business line / relationship manager). Do not assume prices.
+
+## Two relevant products
+
+### A. Slip Verification
+- **What**: send the slip QR / reference to KBank → confirms the slip is **real and actually paid** (forgery-proof).
+- **Needs**: business relationship/account with KBank + subscribe the product in K API portal + OAuth credentials.
+- **Fit**: customer still uploads a slip (current flow); we verify for real instead of OCR-guessing. Minimal code change.
+
+### B. QR Payment (the product opened in the portal: app "Ener-scan")
+- **What**: generate a dynamic Thai QR bound to amount + reference → bank confirms payment directly (no slip at all).
+- **Needs**: merchant onboarding (settlement account, KYC) + **pass the 15 sandbox certification exercises** ("ทดสอบ API 0/15") before production credentials.
+- **Confirm flow**: always call **Inquiry QR Transaction** (`GET /qr/v2/qr/{charge_id}`, status PAID) server-to-server to confirm — do not trust the UI callback alone.
+- **Effort**: larger (new payment provider integration).
+
+## Open questions to ask KBank before deciding
+1. Is the receiving account **personal** or **business/merchant** (juristic)? Some products require a merchant account.
+2. **Fees** for Slip Verification / QR Payment (per call vs monthly package)?
+3. **Eligibility** thresholds (sales volume / documents) — do we qualify?
+4. Does it work with slips from **all banks**, or only transfers into KBank?
+
+## Comparison (for later decision)
+
+| Option | Anti-forgery | Cost | Start now? |
+|---|---|---|---|
+| OCR (current) | medium (reads text) | free | yes — built, pending test |
+| KBank Slip Verify | very high | ask KBank | needs product subscription |
+| KBank QR Payment | highest (no slip) | ask KBank | needs onboarding + pass 15 exercises |
+| EasySlip / SlipOK (3rd-party) | high | ~99 THB/mo | yes — self-serve signup |

@@ -2,8 +2,8 @@ import { insertOutboundMessage } from "../../stores/scanV2/outboundMessages.db.j
 import { OUTBOUND_PRIORITY } from "../../stores/scanV2/outboundPriority.js";
 
 const SCAN_FAILURE_TEXT =
-  "ขออภัยครับ ระบบประมวลผลรูปนี้ไม่สำเร็จ กรุณาส่งรูปใหม่อีกครั้ง " +
-  "หากยังไม่ได้ผลลองถ่ายรูปในมุมที่ชัดขึ้นครับ";
+  "รูปนี้อ่านไม่สำเร็จครับ รบกวนส่งใหม่อีกครั้ง " +
+  "ถ้ายังไม่ผ่านลองถ่ายมุมที่เห็นตัววัตถุชัดขึ้นครับ";
 
 /** Reasons where user already gets a tailored outbound (or failJob runs before that enqueue). */
 const SKIP_REASONS = [
