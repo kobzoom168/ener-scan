@@ -1,6 +1,7 @@
 import { SCAN_OFFER_TEMPLATES_TH } from "../config/scanOffer.templates.th.js";
 import { chooseScanOfferReplyType } from "./scanOffer.replyType.js";
 import { getDefaultPackage, listActivePackages } from "./scanOffer.packages.js";
+import { buildPayLiffLine } from "../utils/payLiffLink.util.js";
 
 /**
  * @param {string} template
@@ -148,9 +149,14 @@ export function buildScanOfferReply({
     variantIndex: idx,
   };
 
+  // ลิงก์เข้า LIFF หน้าเลือกแพ็ก (กบ: ต้องมีทางไป LIFF เสมอ) — ลิงก์ในเนื้อข้อความ
+  // อยู่ทนกว่า quick reply ที่หายทันทีที่ลูกค้าพิมพ์อะไรต่อ
+  const liffLine = buildPayLiffLine();
+  const withLiff = (t) => (liffLine && t ? `${t}\n\n${liffLine}` : t);
+
   return {
-    primaryText,
-    alternateTexts: alternates,
+    primaryText: withLiff(primaryText),
+    alternateTexts: alternates.map(withLiff),
     replyType,
     semanticKey,
     scanOfferMeta,
