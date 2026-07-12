@@ -1958,7 +1958,7 @@ function buildLiffHtml(liffId) {
   function renderStep(){
     for(var i=0;i<4;i++){ $("st"+i).classList.toggle("hidden", i!==state.step); $("d"+i).classList.toggle("on", i<=state.step); }
     $("ob-back").classList.toggle("hidden", state.step===0);
-    $("ob-next").textContent = state.step===3 ? "เปิดดวงกันเลย ✦" : "ต่อไป";
+    $("ob-next").textContent = state.step===3 ? "เสร็จแล้ว" : "ต่อไป";
   }
   $("ob-back").addEventListener("click", function(){ if(state.step>0){ state.step--; renderStep(); } });
   $("ob-next").addEventListener("click", function(){
@@ -1967,6 +1967,13 @@ function buildLiffHtml(liffId) {
       if(!$("f-day").value){ $("f-day").focus(); return; }
       if(!$("f-mon").value){ $("f-mon").focus(); return; }
       if(!$("f-year").value){ $("f-year").focus(); return; }
+    }
+    /* เพศบังคับเลือก (เลือก ไม่ระบุ ก็ได้) — เว้นแค่เวลาเกิดที่ไม่บังคับ */
+    if(state.step===2 && !state.sex){
+      var gs = $("g-sex");
+      gs.style.outline = "2px solid #d9534f"; gs.style.borderRadius = "14px";
+      setTimeout(function(){ gs.style.outline = ""; }, 1600);
+      return;
     }
     if(state.step<3){ state.step++; renderStep(); return; }
     /* เบอร์โทรบังคับ (ตัวเลข 9-10 หลัก) ก่อนเปิดดวง */
