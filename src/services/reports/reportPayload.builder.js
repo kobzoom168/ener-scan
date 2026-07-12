@@ -414,7 +414,9 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp)
     object: {
       objectImageUrl,
       objectLabel: "วัตถุจากการสแกน",
-      objectType: "",
+      // หมวดจากตัวจำแนก (พระเครื่อง/พระบูชา/รูปปั้น/เครื่องราง/คริสตัล...) — ให้ daily pick
+      // แยกของพกได้กับของตั้งบูชา (กบ 13 ก.ค.: เทวรูปพกไม่ได้)
+      objectType: String(pipelineObjectCategoryOpt || "").trim(),
     },
     summary: {
       energyScore: summaryEnergyScore,
@@ -1441,7 +1443,9 @@ export async function buildReportPayloadFromScan(opts) {
     object: {
       objectImageUrl,
       objectLabel: "วัตถุจากการสแกน",
-      objectType: "",
+      // หมวดจากตัวจำแนก (พระเครื่อง/พระบูชา/รูปปั้น/เครื่องราง/คริสตัล...) — ให้ daily pick
+      // แยกของพกได้กับของตั้งบูชา (กบ 13 ก.ค.: เทวรูปพกไม่ได้)
+      objectType: String(pipelineObjectCategoryOpt || "").trim(),
     },
     summary: {
       energyScore: summaryEnergyScore,
