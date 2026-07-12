@@ -72,6 +72,14 @@ export function parsePackageSelectionFromText(text, offer, opts = {}) {
     if (new RegExp(`^${priceStr}\\s*บาท$`, "i").test(t)) return p.key;
     if (new RegExp(`แพ็ก\\s*${priceStr}`, "i").test(t)) return p.key;
     if (new RegExp(`แพ็ค\\s*${priceStr}`, "i").test(t)) return p.key;
+    // paywall บอกลูกค้าว่า "พิมพ์ว่า จ่าย 49 หรือ 149..." — ต้องแมตช์ตามนั้น
+    if (new RegExp(`(?:จ่าย|ซื้อ|สมัคร|โอน)\\s*${priceStr}(?:\\s*บาท)?`, "i").test(t)) return p.key;
+  }
+
+  // "รายเดือน" = แพ็กไม่จำกัด (ถ้ามีเปิดขาย) — ลูกค้าเรียกตามป้ายที่เราโฆษณา
+  if (/รายเดือน/.test(t)) {
+    const monthly = pkgs.find((p) => Number(p.scanCount) >= 999999);
+    if (monthly) return monthly.key;
   }
 
   if (opts?.allowEoaPricePhrase) {
