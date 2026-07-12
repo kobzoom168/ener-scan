@@ -59,6 +59,17 @@ export function resolveWaitingBirthdateMicroIntent(text, _opts = {}) {
     };
   }
 
+  // ลูกค้าตอบเป็น "ชื่อวัน" (เคส Uf293d พิมพ์ "อาทิต") — ถือเป็นความตั้งใจบอกวันเกิด
+  // แต่ข้อมูลไม่พอ → ให้ถามวันที่เต็มต่อ ไม่ใช่ตีเป็น noise
+  if (/^(วัน)?(อาทิตย?|จันทร?์?|อังคาร|พุธ|พฤหัส(บดี)?|ศุกร?์?|เสาร?์?)(\s*(ครับ|ค่ะ|คะ))?$/u.test(t)) {
+    return {
+      microIntent: "invalid_date",
+      confidence: "high",
+      safeToConsume: true,
+      reason: "weekday_only",
+    };
+  }
+
   if (looksLikeBirthdateInput(t)) {
     return {
       microIntent: "invalid_date",

@@ -116,7 +116,7 @@ export function buildStartInstructionFlex() {
               },
               {
                 type: "text",
-                text: "เช่น 14/09/1995",
+                text: "เช่น 14/09/2538",
                 size: "md",
                 weight: "bold",
                 color: "#F4E3AE",
@@ -142,7 +142,7 @@ export function buildStartInstructionFlex() {
             action: {
               type: "message",
               label: "ส่งวันเกิด",
-              text: "14/09/1995",
+              text: "14/09/2538",
             },
           },
         ],
