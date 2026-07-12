@@ -68,6 +68,15 @@ export async function buildCustomerFactsContext(lineUserId) {
       freeLine = `สิทธิ์ฟรีวันนี้เหลือ ${freeLeft} จาก ${freeQuota} ครั้ง${paidRemaining > 0 ? "" : " (ไม่มีแพ็กชำระเงินค้างอยู่)"}`;
     }
 
+    // ดวงจากแอป Ener (LIFF) — คำอ่านชุดเดียวกับที่ลูกค้าเห็น ให้อาจารย์ตอบต่อยอดไม่ขัดกัน
+    let liffReadingLines = null;
+    try {
+      const { buildLiffReadingFactsForChat } = await import("../../../routes/liff.routes.js");
+      liffReadingLines = await buildLiffReadingFactsForChat(uid);
+    } catch {
+      liffReadingLines = null;
+    }
+
     // เหตุการณ์สด: ลูกค้าเพิ่งโดนปัดรูปกี่ครั้ง เพราะอะไร — อาจารย์ต้องรู้ก่อนตอบ
     // (บทเรียน 12 ก.ค.: ลูกค้าโดนปัด 8 รอบแต่อาจารย์คุยเหมือนไม่รู้เรื่อง)
     let rejectLine = null;
@@ -95,6 +104,7 @@ export async function buildCustomerFactsContext(lineUserId) {
       "• แพ็กชำระเงิน: ห้ามอาจารย์เชียร์ขาย ระบุราคา หรือเลือกแพ็กแทนลูกค้าเด็ดขาด — ถ้าลูกค้าถามเรื่องแพ็ก/อยากเปิดสิทธิ์/สิทธิ์หมด ให้บอกสั้น ๆ ว่าพิมพ์คำว่า จ่าย แล้วจะมีตัวเลือกให้เลือกเอง",
 
       ...(rejectLine ? [`• ${rejectLine}`] : []),
+      ...(liffReadingLines ? [`• ${liffReadingLines}`] : []),
     ].join("\n");
   } catch {
     return null;
