@@ -108,7 +108,7 @@ test("renderAmuletLibraryRankingHtml: tabs, cards, footer CTA, noindex", () => {
   assert.ok(!html.includes("แสดงเฉพาะรายการที่ไม่ซ้ำกันในหน้านี้"));
   assert.ok(
     html.includes(
-      "ระบบจัดอันดับจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง",
+      "อันดับนี้จัดจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง",
     ),
   );
   assert.ok(

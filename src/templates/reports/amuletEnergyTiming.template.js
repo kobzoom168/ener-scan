@@ -211,12 +211,12 @@ function buildSectionAHtml(tv, hasScoreTables) {
   const mode = String(tv.ritualMode || "").trim() || "—";
   const hint = String(tv.summary?.practicalHint || "").trim();
   const bridge = hasScoreTables
-    ? `จากคะแนนรวม ระบบพบว่า ${day} กับ ${win} เป็นจังหวะที่เข้ากับพลังของวัตถุชิ้นนี้มากที่สุดเมื่อเทียบกับช่วงอื่นในตารางด้านล่าง`
-    : `ระบบประเมินจากวันเกิดของเจ้าของ พลังเด่นของวัตถุ และจังหวะวันเวลา แล้วเลือก ${day} กับ ${win} เป็นจังหวะที่เหมาะที่สุดในรอบนี้`;
+    ? `จากคะแนนรวม อาจารย์พบว่า ${day} กับ ${win} เป็นจังหวะที่เข้ากับพลังของวัตถุชิ้นนี้มากที่สุดเมื่อเทียบกับช่วงอื่นในตารางด้านล่าง`
+    : `อาจารย์ประเมินจากวันเกิดของเจ้าของ พลังเด่นของวัตถุ และจังหวะวันเวลา แล้วเลือก ${day} กับ ${win} เป็นจังหวะที่เหมาะที่สุดในรอบนี้`;
 
   return `
     <section class="aet-card aet-card--hero" aria-labelledby="aet-a-h">
-      <h2 id="aet-a-h" class="aet-h2">สรุปผลที่ระบบแนะนำ</h2>
+      <h2 id="aet-a-h" class="aet-h2">สรุปผลที่อาจารย์แนะนำ</h2>
       <div class="aet-hero-summary" role="group" aria-label="สรุปจังหวะแนะนำ">
         <div class="aet-hero-row">
           <span class="aet-hero-k">วันแนะนำ</span>
@@ -257,7 +257,7 @@ function buildSectionBHtml() {
   ];
   return `
     <section class="aet-section" aria-labelledby="aet-b-h">
-      <h2 id="aet-b-h" class="aet-h2">ระบบดูจากอะไรบ้าง</h2>
+      <h2 id="aet-b-h" class="aet-h2">อาจารย์ดูจากอะไรบ้าง</h2>
       <div class="aet-b-grid">
         ${boxes
           .map(
@@ -305,7 +305,7 @@ function buildWeekdayTableHtml(rows) {
   return `
     <section class="aet-section" aria-labelledby="aet-c-h">
       <h2 id="aet-c-h" class="aet-h2">ตารางคะแนนวัน</h2>
-      <p class="aet-p aet-muted">คะแนนเป็นคะแนนประกอบจากระบบ ใช้เปรียบเทียบวันในสัปดาห์กับเจ้าของและพลังของวัตถุ</p>
+      <p class="aet-p aet-muted">คะแนนเป็นคะแนนประกอบที่อาจารย์ใช้เปรียบเทียบวันในสัปดาห์กับเจ้าของและพลังของวัตถุ</p>
       ${buildWeekdayRadarBlock(rows)}
       <div class="aet-rank-list aet-rank-list--mobile">${items.map((x) => x.card).join("")}</div>
       <div class="aet-table-wrap">
@@ -407,7 +407,7 @@ function buildSectionEHtml() {
         </div>
       </div>
       ${buildFormulaDonutBlock()}
-      <p class="aet-p aet-muted">ระบบประเมินจาก 5 ส่วนหลักดังนี้</p>
+      <p class="aet-p aet-muted">อาจารย์ประเมินจาก 5 ส่วนหลักดังนี้</p>
       <div class="aet-e-cards">
         ${parts
           .map(
@@ -430,7 +430,7 @@ function buildSectionEHtml() {
 function buildSectionFHtml(primary) {
   const pk = String(primary || "").trim() || "protection";
   const base =
-    "ในวันที่ระบบแนะนำ ให้ใช้วัตถุชิ้นนี้แบบตั้งใจมากกว่าปกติ เช่น พกติดตัว สวดคาถา ตั้งจิต หรือขอพรในเรื่องที่เกี่ยวกับพลังเด่นของชิ้นนี้";
+    "ในวันที่อาจารย์แนะนำ ให้ใช้วัตถุชิ้นนี้แบบตั้งใจมากกว่าปกติ เช่น พกติดตัว สวดคาถา ตั้งจิต หรือขอพรในเรื่องที่เกี่ยวกับพลังเด่นของชิ้นนี้";
   const extraBy = {
     luck: "ถ้าวัตถุเด่นโชคลาภ เหมาะกับการขอเปิดทางเรื่องงาน เงิน โอกาส หรือลูกค้า",
     baramee:
@@ -457,7 +457,7 @@ function buildSectionFHtml(primary) {
         <article class="aet-step-card">
           <span class="aet-step-n">2</span>
           <h3 class="aet-h3">ใช้ในช่วงเวลาที่แนะนำ</h3>
-          <p class="aet-p">พกติดตัว สวดภาวนา หรือตั้งไว้ใกล้ตัวในช่วงเวลาที่ระบบแนะนำ</p>
+          <p class="aet-p">พกติดตัว สวดภาวนา หรือตั้งไว้ใกล้ตัวในช่วงเวลาที่อาจารย์แนะนำ</p>
         </article>
         <article class="aet-step-card">
           <span class="aet-step-n">3</span>
@@ -475,8 +475,8 @@ function buildFallbackBody() {
     ${buildSectionBHtml()}
     <section class="aet-section" aria-labelledby="aet-fb-h">
       <h2 id="aet-fb-h" class="aet-h2">เมื่อยังไม่มีตารางคะแนนรายวัน</h2>
-      <p class="aet-p">ถ้ายังไม่มีวันเกิดครบถ้วน หรือระบบยังประเมินจังหวะไม่ได้ชัดเจน หน้านี้จะไม่แสดงตัวเลขคะแนนเพื่อไม่ให้เข้าใจผิดว่าเป็นตัวเลขสุ่ม</p>
-      <p class="aet-p">โดยหลักแล้ว ระบบจะดูวันเกิดของเจ้าของ พลังเด่นของวัตถุ แล้วจับคู่กับวันและช่วงเวลาที่มีแนวโน้มเข้ากันมากที่สุด เมื่อข้อมูลพร้อม ตารางคะแนนจะแสดงในหน้านี้โดยอัตโนมัติ</p>
+      <p class="aet-p">ถ้ายังไม่มีวันเกิดครบถ้วน หรืออาจารย์ยังประเมินจังหวะไม่ได้ชัดเจน หน้านี้จะไม่แสดงตัวเลขคะแนนเพื่อไม่ให้เข้าใจผิดว่าเป็นตัวเลขสุ่ม</p>
+      <p class="aet-p">โดยหลักแล้ว อาจารย์จะดูวันเกิดของเจ้าของ พลังเด่นของวัตถุ แล้วจับคู่กับวันและช่วงเวลาที่มีแนวโน้มเข้ากันมากที่สุด เมื่อข้อมูลพร้อม ตารางคะแนนจะแสดงในหน้านี้โดยอัตโนมัติ</p>
     </section>
     ${buildSectionEHtml()}
     ${buildSectionFHtml("protection")}
@@ -1059,7 +1059,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
     <section class="aet-hero">
       <p class="aet-eyebrow">รายงาน</p>
       <h1 class="aet-h1">วิธีคำนวณจังหวะเสริมพลัง</h1>
-      <p class="aet-sub">ระบบประเมินจากวันเกิดของเจ้าของ พลังเด่นของวัตถุ และจังหวะวันเวลา เพื่อแนะนำช่วงที่เหมาะกับการตั้งจิต ใช้งาน หรือพกติดตัว</p>
+      <p class="aet-sub">อาจารย์ประเมินจากวันเกิดของเจ้าของ พลังเด่นของวัตถุ และจังหวะวันเวลา เพื่อแนะนำช่วงที่เหมาะกับการตั้งจิต ใช้งาน หรือพกติดตัว</p>
       <div class="aet-hero-chips">
         <span class="aet-hero-chip">วันแนะนำ</span>
         <span class="aet-hero-chip">ช่วงเวลา</span>

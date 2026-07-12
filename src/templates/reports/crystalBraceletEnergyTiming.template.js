@@ -83,17 +83,17 @@ export function renderCrystalBraceletEnergyTimingHtml(payload) {
     <div class="card">
       <span class="k">รายงาน · กำไล</span>
       <h1>วิธีคำนวณจังหวะเสริมพลัง</h1>
-      <p class="lead">ระบบดูวันเกิดของคุณคู่กับพลังเด่นของกำไล แล้วเลือกวันและช่วงเวลาที่พลังตอบกันได้ดีที่สุด</p>
+      <p class="lead">อาจารย์ดูวันเกิดของคุณคู่กับพลังเด่นของกำไล แล้วเลือกวันและช่วงเวลาที่พลังตอบกันได้ดีที่สุด</p>
     </div>
     <div class="card">
-      <p class="sumt">สรุปผลที่ระบบแนะนำ</p>
+      <p class="sumt">สรุปผลที่อาจารย์แนะนำ</p>
       <div class="sumrow"><span class="sk">วันแนะนำ</span><span class="sv">${escapeHtml(w)}</span></div>
       <div class="sumrow"><span class="sk">ช่วงเวลาแนะนำ</span><span class="sv">${escapeHtml(t)}</span></div>
       <div class="sumrow"><span class="sk">แนวใช้แนะนำ</span><span class="sv">${escapeHtml(m)}</span></div>
       ${r ? `<p class="reason">${escapeHtml(r)}</p>` : ""}
-      <p class="reason-sub">จากการเทียบทุกวันและทุกช่วงเวลา ระบบพบว่าชุดนี้เข้ากับพลังของกำไลเส้นนี้และจังหวะของคุณมากที่สุด</p>
+      <p class="reason-sub">จากการเทียบทุกวันและทุกช่วงเวลา อาจารย์พบว่าชุดนี้เข้ากับพลังของกำไลเส้นนี้และจังหวะของคุณมากที่สุด</p>
     </div>
-    <p class="ft">ระบบดูจากอะไรบ้าง</p>
+    <p class="ft">อาจารย์ดูจากอะไรบ้าง</p>
     <div class="factors">${factorsHtml}</div>
     <p class="note">จังหวะแนะนำคือช่วงที่พลังหนุนกันง่ายที่สุด ไม่ใช่ข้อบังคับ วันอื่นก็ใช้กำไลได้ตามปกติ</p>
     <a class="cta" href="${escapeHtml(backHref)}">กลับไปดูรายงานของฉัน</a>

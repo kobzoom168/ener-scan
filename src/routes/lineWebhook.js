@@ -852,7 +852,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_please_confirm_first",
         semanticKey: "birthdate_change_candidate",
-        text: "ขอคอนเฟิร์มก่อนนะครับ จะเปลี่ยนวันเกิดในระบบใช่ไหม\nถ้าใช่ ตอบว่าใช่ หรือโอเค มาก็ได้ครับ",
+        text: "ขอคอนเฟิร์มก่อนนะครับ จะเปลี่ยนวันเกิดที่บันทึกไว้ใช่ไหม\nถ้าใช่ ตอบว่าใช่ หรือโอเค มาก็ได้ครับ",
       });
       return true;
     }
@@ -2436,7 +2436,7 @@ async function finalizeAcceptedImage({
           replyToken: event.replyToken,
           replyType: "slip_auto_approved",
           semanticKey: "slip_auto_approved",
-          text: "ตรวจสอบสลิปเรียบร้อยแล้วครับ\n\nระบบเปิดสิทธิ์สแกนให้แล้ว\nตอนนี้สามารถส่งรูปวัตถุที่ต้องการสแกนเข้ามาได้เลยครับ",
+          text: "ตรวจสอบสลิปเรียบร้อยแล้วครับ\n\nอาจารย์เปิดสิทธิ์สแกนให้แล้ว\nตอนนี้สามารถส่งรูปวัตถุที่ต้องการสแกนเข้ามาได้เลยครับ",
           alternateTexts: [
             "ยืนยันสลิปเรียบร้อยแล้วครับ ส่งรูปวัตถุที่ต้องการสแกนมาได้เลย",
           ],
@@ -2701,7 +2701,7 @@ async function finalizeAcceptedImage({
         await replyText(
           client,
           event.replyToken,
-          "ตอนนี้อาจารย์พักปรับระบบแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่นะ",
+          "ตอนนี้อาจารย์ขอพักแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่",
         );
       } catch (replyErr) {
         console.error(
@@ -6154,8 +6154,8 @@ async function handleTextMessage({ client, event, userId, session }) {
           const helperText = [
             "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
             savedBirthdate
-              ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว ระบบจะเริ่มสแกนให้ทันที"
-              : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะขอวันเกิดก่อนสแกน",
+              ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว อาจารย์จะเริ่มสแกนให้ทันที"
+              : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ อาจารย์จะขอวันเกิดก่อนสแกน",
             "",
             "ส่งรูปถัดไปมาได้เลยครับ",
           ].join("\n");
@@ -6168,7 +6168,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             semanticKey: "scan_energy_helper",
             text: helperText,
             alternateTexts: [
-              "ส่งรูปวัตถุ 1 รูปมาได้เลยครับ แล้วตามด้วยวันเกิดถ้าระบบถาม",
+              "ส่งรูปวัตถุ 1 รูปมาได้เลยครับ แล้วตามด้วยวันเกิดถ้าอาจารย์ถาม",
             ],
           });
           return;
@@ -6181,8 +6181,8 @@ async function handleTextMessage({ client, event, userId, session }) {
             "วิธีใช้งาน Ener Scan",
             "",
             "1) ส่งรูปวัตถุที่ต้องการสแกน",
-            "2) ระบบจะขอวันเกิด (DD/MM/YYYY)",
-            "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
+            "2) อาจารย์จะขอวันเกิด (DD/MM/YYYY)",
+            "3) อาจารย์ส่งผลการสแกนกลับมาในแชทนี้",
             "",
             `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
           ].join("\n");
@@ -6418,7 +6418,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             await replyText(
               client,
               event.replyToken,
-              "ตอนนี้อาจารย์พักปรับระบบแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่นะ",
+              "ตอนนี้อาจารย์ขอพักแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่",
             );
           } catch (replyErr) {
             console.error(
@@ -6883,8 +6883,8 @@ async function handleTextMessage({ client, event, userId, session }) {
     const helperText = [
       "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
       savedBirthdate
-        ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว ระบบจะเริ่มสแกนให้ทันที"
-        : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ ระบบจะขอวันเกิดก่อนสแกน",
+        ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว อาจารย์จะเริ่มสแกนให้ทันที"
+        : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ อาจารย์จะขอวันเกิดก่อนสแกน",
       "",
       "ส่งรูปถัดไปมาได้เลยครับ",
     ].join("\n");
@@ -6898,7 +6898,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       semanticKey: "scan_energy_helper",
       text: helperText,
       alternateTexts: [
-        "ส่งรูปวัตถุ 1 รูปมาได้เลยครับ แล้วตามด้วยวันเกิดถ้าระบบถาม",
+        "ส่งรูปวัตถุ 1 รูปมาได้เลยครับ แล้วตามด้วยวันเกิดถ้าอาจารย์ถาม",
       ],
     });
     return;
@@ -6924,8 +6924,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       "วิธีใช้งาน Ener Scan",
       "",
       "1) ส่งรูปวัตถุที่ต้องการสแกน",
-      "2) ระบบจะขอวันเกิด (DD/MM/YYYY)",
-      "3) ระบบจะส่งผลการสแกนกลับมาในแชทนี้",
+      "2) อาจารย์จะขอวันเกิด (DD/MM/YYYY)",
+      "3) อาจารย์ส่งผลการสแกนกลับมาในแชทนี้",
       "",
       `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
     ].join("\n");

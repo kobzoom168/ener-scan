@@ -171,7 +171,7 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
   assert.ok(html.includes('class="mv2-timing-cta-btn"'));
   assert.ok(html.includes("ดูวิธีคำนวณจังหวะเสริมพลัง"));
   assert.ok(
-    html.includes("อธิบายว่าทำไมระบบถึงแนะนำวันนี้และช่วงเวลานี้"),
+    html.includes("อธิบายว่าทำไมอาจารย์ถึงแนะนำวันนี้และช่วงเวลานี้"),
   );
   assert.ok(
     html.includes("เสริมดวงให้ขึ้นง่าย"),
