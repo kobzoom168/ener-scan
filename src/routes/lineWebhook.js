@@ -6876,9 +6876,12 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   const offerPick = loadActiveScanOffer();
+  // "จ่าย 49" = คำสั่งจ่ายชัดเจน → ข้าม block ใบ้แพ็ก ตรงไปสร้าง QR เลย (กบ 13 ก.ค.:
+  // ลูกค้าพิมพ์ครบแล้วห้ามถามซ้ำ — เดิมโดน block นี้ดักแล้ว AI ตอบให้พิมพ์ จ่าย ใหม่)
   const idlePayHint =
-    isSingleOfferPriceToken(text, offerPick) ||
-    parsePackageSelectionFromText(text, offerPick);
+    !isPaymentCommand(text, lowerText) &&
+    (isSingleOfferPriceToken(text, offerPick) ||
+      parsePackageSelectionFromText(text, offerPick));
   if (idlePayHint) {
     try {
       const ps = getPaymentState(userId).state;
@@ -6913,7 +6916,11 @@ async function handleTextMessage({ client, event, userId, session }) {
       /* ignore */
     }
 
-    const pkg = getDefaultPackage(offerPick);
+    // ใช้แพ็กที่ลูกค้าพิมพ์มาจริง (เช่น "149") — default เฉพาะเมื่อไม่ได้ระบุ
+    const idleTypedPkgKey = parsePackageSelectionFromText(text, offerPick);
+    const pkg =
+      (idleTypedPkgKey && findPackageByKey(offerPick, idleTypedPkgKey)) ||
+      getDefaultPackage(offerPick);
     if (pkg) {
       console.log(
         JSON.stringify({
