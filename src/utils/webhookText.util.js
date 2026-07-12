@@ -904,11 +904,11 @@ export function buildPendingVerifyReminderText({ paymentRef } = {}) {
 /** User sent another image while slip is already pending_verify (block scan / duplicate slip). */
 export function buildPendingVerifyBlockScanText({ paymentRef } = {}) {
   const base = [
-    "รับสลิปแล้วครับ",
-    "กำลังรอตรวจอยู่",
+    "รูปนี้อาจารย์เก็บไว้ก่อนครับ",
+    "สลิปที่ส่งมาก่อนหน้ากำลังตรวจอยู่",
     "",
-    "ตอนนี้ยังสแกนต่อไม่ได้",
-    "พออนุมัติแล้ว เดี๋ยวแจ้งในแชตนี้ให้ครับ",
+    "พอเปิดสิทธิ์แล้วจะแจ้งในแชตนี้",
+    "แล้วค่อยส่งรูปชิ้นงานมาสแกนได้เลยครับ",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }

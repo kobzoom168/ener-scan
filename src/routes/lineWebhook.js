@@ -2192,7 +2192,8 @@ async function finalizeAcceptedImage({
             replyType: "pending_verify_block_scan",
           }),
         );
-        if ((await imgPhase1Invoke()).handled) return;
+        // สถานะเงิน = ข้อเท็จจริง ห้ามให้ LLM แต่งตอบ (เคสกบ 12 ก.ค.: LLM ประกาศ
+        // "เปิดสิทธิ์ให้เรียบร้อย" ทั้งที่สลิปยัง pending) — ข้อความตายตัวเท่านั้น
         await sendNonScanReply({
           client,
           userId,
@@ -2201,7 +2202,7 @@ async function finalizeAcceptedImage({
           semanticKey: "pending_verify_block_scan",
           text: buildPendingVerifyBlockScanText({ userId, paymentRef }),
           alternateTexts: [
-            "ตอนนี้รอตรวจสลิปอยู่นะครับ ส่งสลิปหรือรอแอดมินก่อน แล้วค่อยสแกนใหม่ได้",
+            "รูปนี้อาจารย์เก็บไว้ก่อนครับ สลิปเดิมกำลังตรวจอยู่ พอเปิดสิทธิ์แล้วค่อยส่งมาสแกนอีกทีครับ",
           ],
         });
         return;

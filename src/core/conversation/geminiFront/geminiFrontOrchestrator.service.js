@@ -16,6 +16,25 @@ import { logGeminiOrchestrator } from "./geminiFront.telemetry.js";
 import { getGeminiConversationHistory } from "../../../utils/conversationHistory.util.js";
 
 /**
+ * สถานะเงิน/สิทธิ์ = ข้อเท็จจริงจากระบบเท่านั้น — LLM ห้ามประกาศเอง
+ * (เคสจริง 12 ก.ค.: สลิปยัง pending แต่ Opus ตอบ "ได้สลิปแล้ว เปิดสิทธิ์ให้เรียบร้อย
+ * สแกนได้ 4 ครั้ง" = สัญญาสิทธิ์ปลอมกับลูกค้า)
+ */
+const ENTITLEMENT_CLAIM_RE =
+  /เปิดสิทธิ์(?:ให้)?(?:แล้ว|เรียบร้อย)|อนุมัติ(?:แล้ว|เรียบร้อย)|(?:ได้|รับ)สลิปแล้ว|สแกนได้(?:อีก)?\s*\d+\s*ครั้ง|(?:ยังมี|เหลือ)สิทธิ์|สิทธิ์(?:ยัง)?เหลือ/;
+
+/** ข้อความตายตัวเมื่อ guard จับได้ — ตามสถานะจริง */
+function safeTextForBlockedClaim(phase1State) {
+  if (phase1State === "pending_verify") {
+    return "สลิปกำลังตรวจอยู่ครับ พอเรียบร้อยอาจารย์จะแจ้งเปิดสิทธิ์ในแชตนี้ทันที รอแปปนึงครับ";
+  }
+  if (phase1State === "awaiting_slip") {
+    return "ยังไม่เห็นสลิปเข้ามาครับ โอนแล้วแนบสลิปในแชตนี้ได้เลย เดี๋ยวอาจารย์เปิดสิทธิ์ให้ทันที";
+  }
+  return "เดี๋ยวอาจารย์เช็กสถานะให้ก่อนครับ แล้วแจ้งกลับในแชตนี้";
+}
+
+/**
  * @param {{
  *   userId: string,
  *   text: string,
@@ -99,6 +118,22 @@ export async function runGeminiFrontOrchestrator(ctx) {
     return { handled: true, mode: "active" };
   }
 
+  /** guard สิทธิ์ปลอม: ใช้กับทุกข้อความ LLM ขาออกจาก orchestrator นี้ */
+  function guardEntitlementClaims(text, via) {
+    if (ctx.accessState === "paid_active") return text; // สิทธิ์จริง พูดถึงสิทธิ์ได้
+    if (!ENTITLEMENT_CLAIM_RE.test(String(text || ""))) return text;
+    console.warn(
+      JSON.stringify({
+        event: "GEMINI_ENTITLEMENT_CLAIM_BLOCKED",
+        phase1State: phase1,
+        accessState: ctx.accessState,
+        via,
+        sample: String(text).slice(0, 120),
+      }),
+    );
+    return safeTextForBlockedClaim(phase1);
+  }
+
   /** Customer-visible answer via the smart consult brain (Opus + real facts).
       Used for consult/help/chit-chat so the cheap model never writes to the
       customer directly unless consult fails. */
@@ -112,7 +147,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
     await ctx.sendGatewayReply({
       replyType: "gemini_front_consult",
       semanticKey: `gemini_front_consult:${phase1}`,
-      text: consultText.slice(0, 1800),
+      text: guardEntitlementClaims(consultText.slice(0, 1800), via),
       alternateTexts: [],
     });
     logGeminiOrchestrator({ mode: "active", handled: true, via });
@@ -143,7 +178,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
       await ctx.sendGatewayReply({
         replyType: "gemini_front_help",
         semanticKey: `gemini_front_help:${phase1}`,
-        text: ph.slice(0, 1200),
+        text: guardEntitlementClaims(ph.slice(0, 1200), "help_phrase"),
         alternateTexts: [],
       });
       logGeminiOrchestrator({ mode: "active", handled: true, via: "help_phrase" });
@@ -193,7 +228,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
   await ctx.sendGatewayReply({
     replyType: "gemini_front_reply",
     semanticKey: `gemini_front:${phase1}`,
-    text: ph.slice(0, 1200),
+    text: guardEntitlementClaims(ph.slice(0, 1200), "noop_phrase"),
     alternateTexts: [],
   });
   logGeminiOrchestrator({ mode: "active", handled: true, via: "noop_phrase" });
