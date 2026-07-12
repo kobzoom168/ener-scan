@@ -2034,7 +2034,11 @@ function buildLiffHtml(liffId) {
   /* ---- home ---- */
   function greetWord(){
     var h = (new Date(Date.now() + 7*3600*1000)).getUTCHours();
-    if(h<12) return "สวัสดีตอนเช้า"; if(h<17) return "สวัสดีตอนบ่าย"; return "สวัสดีตอนเย็น";
+    if(h>=1&&h<5) return "สวัสดีตอนตี " + h;
+    if(h<12) return "สวัสดีตอนเช้า";
+    if(h<17) return "สวัสดีตอนบ่าย";
+    if(h<21) return "สวัสดีตอนเย็น";
+    return "สวัสดีตอนดึก";
   }
   function thDate(){
     var d = new Date(Date.now() + 7*3600*1000);
