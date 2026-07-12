@@ -61,6 +61,21 @@ export function mapObjectCategoryToPipelineSignals(objectCategoryThai) {
     };
   }
 
+  // รูปปั้น/รูปหล่อสายมูทุกแบบ = สายพระ (กบ 12 ก.ค.: รับองค์เทพ กุมาร รูปปั้นทั้งหมด)
+  if (
+    t.includes("รูปปั้น") || t.includes("รูปหล่อ") || t.includes("เทวรูป") ||
+    t.includes("องค์เทพ") || t.includes("เทพ") || t.includes("กุมาร") ||
+    t.includes("พระพุทธรูป") || t.includes("ฤๅษี") || t.includes("ฤาษี") ||
+    t.includes("นางกวัก") || t.includes("พญานาค") || t.includes("ครุฑ") ||
+    t.includes("เวสสุวรรณ") || t.includes("พิฆเนศ") || t.includes("พราหมณ์")
+  ) {
+    return {
+      objectFamily: "sacred_amulet",
+      materialFamily: undefined,
+      shapeFamily: "seated",
+    };
+  }
+
   return { objectFamily: "generic", materialFamily: undefined, shapeFamily: undefined };
 }
 
