@@ -15,6 +15,7 @@ import {
   idlePostScanText,
 } from "./replyCopy.util.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
+import { buildPayLiffLine } from "./payLiffLink.util.js";
 import { resolveScanOfferAccessContext } from "../services/scanOfferAccess.resolver.js";
 import {
   buildApprovedIntroReply,
@@ -632,7 +633,10 @@ export function buildPaidActiveScanReadyHumanText(userId) {
 }
 
 export function buildPaymentQrSlipText() {
-  return "โอนแล้วส่งสลิปในแชตนี้ได้เลยครับ";
+  const liffLine = buildPayLiffLine();
+  return liffLine
+    ? `โอนแล้วส่งสลิปในแชตนี้ได้เลยครับ\n${liffLine}`
+    : "โอนแล้วส่งสลิปในแชตนี้ได้เลยครับ";
 }
 
 /**
