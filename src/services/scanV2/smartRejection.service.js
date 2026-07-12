@@ -96,7 +96,12 @@ export async function generateSmartRejectionText(p) {
       ),
       new Promise((_, rej) => setTimeout(() => rej(new Error("smart_reject_timeout")), 6000)),
     ]);
-    const text = String(res?.output_text || "").trim().replace(/^["']|["']$/g, "");
+    let text = String(res?.output_text || "").trim().replace(/^["']|["']$/g, "");
+    // โมเดลตระกูล Claude ชอบใส่หัวข้อ/ตัวหนา markdown — ล้างออกก่อนส่งเข้า LINE
+    text = text
+      .replace(/^\s*(?:\*\*[^\n]*\*\*|#+[^\n]*)\s*\n/gm, "")
+      .replace(/\*\*/g, "")
+      .trim();
     if (!text || text.length < 15 || text.length > 500) return null;
     if (/\b(AI|bot)\b|บอท|ระบบอัตโนมัติ|ขอโทษ|ขออภัย/i.test(text)) return null; // กันหลุดบท
     console.log(
