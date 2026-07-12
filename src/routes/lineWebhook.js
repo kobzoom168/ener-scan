@@ -241,6 +241,7 @@ import {
   buildPaymentQrIntroFactsText,
   buildPaymentQrSlipText,
   buildSingleOfferPaywallAltText,
+  formatOfferPackageLineThai,
   buildPackageSelectionPromptFromOffer,
   buildPaymentPackageSelectedAck,
   buildSlipReceivedText,
@@ -1448,7 +1449,15 @@ async function handlePaymentCommandTextRoute({
       replyType: "payment_pick_package_menu",
       semanticKey: "payment_pick_package_menu",
       text: buildSingleOfferPaywallAltText(offerPay),
-      alternateTexts: [],
+      alternateTexts: [
+        // สำนวนสำรอง — ถามซ้ำต้องได้คำตอบเสมอ (dedupe จะสลับมาใช้อันนี้แทนการเงียบ)
+        [
+          "เลือกได้เลยครับ",
+          ...sortedPayPkgs.map((p) => formatOfferPackageLineThai(p)),
+          "เอาแบบไหนพิมพ์ราคามาได้เลย",
+        ].join("\n"),
+        "กดปุ่มด้านล่างหรือพิมพ์ราคาที่ต้องการมาได้เลยครับ เดี๋ยวส่งคิวอาร์ให้ทันที",
+      ],
       quickReply: {
         items: sortedPayPkgs.slice(0, 3).map((p) => ({
           type: "action",
@@ -4961,13 +4970,15 @@ async function handleTextMessage({ client, event, userId, session }) {
         chosenReplyType: "awaiting_slip_resend_qr",
       });
       resetSameStateAckStreak(userId, "awaiting_slip");
+      // ส่งข้อความจริงต่อไป — เดิม hardcode "จ่ายเงิน" ทำให้ "จ่าย 49/149/299"
+      // เสียเลขแพ็กกลางทาง → เด้งเมนูซ้ำ → โดน dedupe → ลูกค้าเจอความเงียบ (กบเทสเจอ)
       await handlePaymentCommandTextRoute({
         client,
         event,
         userId,
         session,
-        text: "จ่ายเงิน",
-        lowerText: "จ่ายเงิน",
+        text: String(text || "จ่ายเงิน"),
+        lowerText: String(lowerText || text || "จ่ายเงิน").toLowerCase(),
         isPaywallGateWithPendingScan,
         forcePaymentIntent: true,
         turnCache,
