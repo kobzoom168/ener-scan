@@ -373,17 +373,23 @@ function appendPaymentRefLine(bodyText, paymentRef) {
  * @param {{ paymentRef?: string|null, paidPackage?: { priceThb: number, scanCount: number, windowHours: number }|null }} [opts]
  */
 export function buildPaymentQrIntroFactsText({ paymentRef, paidPackage = null } = {}) {
+  // ส่งคู่กับ QR = สรุปรายการให้ชัดก่อนโอน (กบ: ต้องเห็นยอดโอน + โปรที่เลือก)
   const offer = loadActiveScanOffer();
   const pkg = paidPackage || getDefaultPackage(offer);
   const priceThb = pkg?.priceThb ?? offer.paidPriceThb;
   const scanCount = pkg?.scanCount ?? offer.paidScanCount;
   const windowHours = pkg?.windowHours ?? offer.paidWindowHours;
+  const pkgLabel =
+    String(pkg?.label || "").trim() ||
+    (isUnlimitedScanCount(scanCount)
+      ? `สแกนไม่จำกัด ${formatOfferWindowThai(windowHours)}`
+      : `สแกน ${scanCount} ครั้ง ใน ${formatOfferWindowThai(windowHours)}`);
   const base = [
-    "วันนี้สิทธิ์สแกนฟรีครบแล้วครับ",
+    "สรุปยอดก่อนโอนครับ",
+    `• โปร: ${pkgLabel}`,
+    `• ยอดโอน: ${priceThb} บาท`,
     "",
-    `เปิดสแกนต่อได้เลย ${priceThb} บาท สแกนได้ ${scanCount} ครั้ง ใน ${windowHours} ชม.`,
-    "",
-    "พร้อมเมื่อไหร่ พิมพ์ จ่าย มาได้เลยครับ",
+    "สแกน QR ด้านล่างได้เลย โอนเสร็จส่งสลิปในแชตนี้",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
