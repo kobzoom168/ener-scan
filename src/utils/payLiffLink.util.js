@@ -7,8 +7,11 @@ export function getPayLiffUrl() {
   return liffId ? `https://liff.line.me/${liffId}?view=pay` : "";
 }
 
-/** บรรทัดชวนกดเข้าหน้าจ่าย ("" เมื่อไม่มี LIFF) — ใช้ต่อท้ายข้อความ paywall/QR */
+/**
+ * บรรทัดชวนกดเข้าหน้าจ่าย — ปิดถาวรตามกบ (12 ก.ค.): จ่ายในแชทจบในจอเดียว
+ * (LIFF ต้องแคป QR สลับแอป ถ้าเผลอปิดก่อนอัพสลิปหาทางกลับยาก)
+ * หน้า LIFF ?view=pay ยังใช้ได้สำหรับคนที่เข้าเอง แค่ไม่ยัดลิงก์ในแชท
+ */
 export function buildPayLiffLine() {
-  const url = getPayLiffUrl();
-  return url ? `หรือแตะเปิดหน้าจ่ายได้เลย 👉 ${url}` : "";
+  return "";
 }

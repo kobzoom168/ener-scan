@@ -581,26 +581,13 @@ const REPORT_LOST_RESEND_TEXT =
  * @param {string} lineUserId
  * @returns {Promise<string|null>}
  */
-/** ปุ่มลัดใต้ข้อความหมดโควตา: เปิด LIFF หน้าเลือกแพ็ก (เมื่อผูก LIFF_ID) + ปุ่มพิมพ์ จ่าย X */
+/** ปุ่มลัดใต้ข้อความหมดโควตา: กด จ่าย X → QR เด้งในแชทเลย จบในจอเดียว
+    (ปุ่ม LIFF ถอดออกตามกบ 12 ก.ค. — สลับแอปแคป QR ยากกว่าจ่ายในแชท) */
 function buildPayLiffQuickReply(sortedPkgs) {
-  const items = [];
-  const liffId = String(process.env.LIFF_ID || "").trim();
-  if (liffId) {
-    items.push({
-      type: "action",
-      action: {
-        type: "uri",
-        label: "💳 เลือกแพ็กจ่ายเลย",
-        uri: `https://liff.line.me/${liffId}?view=pay`,
-      },
-    });
-  }
-  for (const p of sortedPkgs.slice(0, 3)) {
-    items.push({
-      type: "action",
-      action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
-    });
-  }
+  const items = sortedPkgs.slice(0, 3).map((p) => ({
+    type: "action",
+    action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
+  }));
   return items.length ? { items } : null;
 }
 

@@ -633,10 +633,15 @@ export function buildPaidActiveScanReadyHumanText(userId) {
 }
 
 export function buildPaymentQrSlipText() {
-  const liffLine = buildPayLiffLine();
-  return liffLine
-    ? `โอนแล้วส่งสลิปในแชตนี้ได้เลยครับ\n${liffLine}`
-    : "โอนแล้วส่งสลิปในแชตนี้ได้เลยครับ";
+  // จ่ายจบในแชท (กบ 12 ก.ค.): เซฟ QR → สแกนจากรูปในแอปธนาคาร ไม่ต้องสลับจอถ่าย
+  // + เลขพร้อมเพย์แบบแตะค้างคัดลอก สำหรับคนไม่ถนัด QR
+  const ppId = String(process.env.SLIP_RECEIVER_PROMPTPAY || "").trim();
+  const lines = [
+    "โอนแล้วส่งสลิปในแชตนี้ได้เลยครับ",
+    "วิธีง่ายสุด: กดเซฟรูป QR ไว้ แล้วเปิดแอปธนาคาร เลือก สแกนจากรูป",
+  ];
+  if (ppId) lines.push(`หรือโอนพร้อมเพย์ ${ppId} (แตะค้างที่เลขเพื่อคัดลอก)`);
+  return lines.join("\n");
 }
 
 /**
