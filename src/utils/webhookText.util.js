@@ -452,7 +452,8 @@ export function buildSingleOfferPaywallAltText(offer = loadActiveScanOffer()) {
 /** บรรทัดโปรแบบภาษาคน: "149 บาท สแกนได้ 15 ครั้ง ใช้ได้ 7 วัน" */
 export function formatOfferPackageLineThai(p) {
   if (isUnlimitedScanCount(p.scanCount)) {
-    return `${p.priceThb} บาท เหมารายเดือน สแกนไม่จำกัด ${formatOfferWindowThai(p.windowHours)}`;
+    // กบ (Growth #2): ขาย 299 ด้วยคุณค่า "อาจารย์ดูแล" ไม่ใช่แค่จำนวนครั้ง
+    return `${p.priceThb} บาท สมาชิกรายเดือน อาจารย์ดูแลตลอด ${formatOfferWindowThai(p.windowHours)} สแกนไม่จำกัด`;
   }
   const win =
     Number(p.windowHours) >= 48
@@ -464,7 +465,7 @@ export function formatOfferPackageLineThai(p) {
 /** สลิปยอดไม่ตรงแพ็กที่เลือกแต่ตรงแพ็กอื่น → อนุมัติพร้อมบอกว่าปรับแพ็กตามยอดให้แล้ว */
 export function buildSlipPackageSwitchedApprovedText(sw) {
   const pkgPart = isUnlimitedScanCount(sw.scanCount)
-    ? `เหมารายเดือน สแกนไม่จำกัด ${formatOfferWindowThai(sw.windowHours)}`
+    ? `สมาชิกรายเดือน อาจารย์ดูแลตลอด ${formatOfferWindowThai(sw.windowHours)} สแกนไม่จำกัด`
     : `สแกน ${sw.scanCount} ครั้ง ใช้ได้ ${formatOfferWindowThai(sw.windowHours)}`;
   return (
     `ตรวจสอบสลิปเรียบร้อยครับ ยอดโอนเข้ามา ${sw.priceThb} บาท ` +

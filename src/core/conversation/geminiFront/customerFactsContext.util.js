@@ -107,7 +107,7 @@ export async function buildCustomerFactsContext(lineUserId) {
         .sort((a, b) => a.priceThb - b.priceThb)
         .map((p) =>
           Number(p.scanCount) >= 999999
-            ? `${p.priceThb} บาท เหมารายเดือน สแกนไม่จำกัด`
+            ? `${p.priceThb} บาท สมาชิกรายเดือน อาจารย์ดูแลทั้งเดือน สแกนไม่จำกัด`
             : `${p.priceThb} บาท สแกน ${p.scanCount} ครั้ง`,
         )
         .join(", ") || "ยังไม่เปิดแพ็ก"} และมีฟรีวันละ ${freeQuota} ครั้ง`,
