@@ -824,6 +824,21 @@ export function isPaywallInstantQrIntentText(text, lowerText) {
   return matchesPaywallInstantQrPhrase(text);
 }
 
+/**
+ * ลูกค้าถามเรื่องโปร/แพ็ก/ราคาบริการตรง ๆ ("มีโปรอะไรบ้าง") → โชว์เมนูแพ็กพร้อมปุ่ม
+ * (การตอบคำถาม ไม่ใช่การขาย — กบ 14 ก.ค.) กัน "โปรด/โปรไฟล์" และคำถามราคาพระ (ประเมินราคา)
+ */
+export function isPromoInquiryText(text) {
+  const t = String(text || "").trim();
+  if (!t || t.length > 40) return false;
+  if (/ประเมิน|เช่า|ขาย|ปล่อย|พระ|เหรียญ|องค์|หิน|กำไล/.test(t)) return false;
+  if (/โปรโมชั่น|โปรโมชัน/.test(t)) return true;
+  if (/โปร(?!ด|ไฟล์|แกรม)/.test(t) && /มี|อะไร|ไหน|บ้าง|ตอนนี้|ล่าสุด/.test(t)) return true;
+  if (/แพ็ก|แพ็ค|แพคเกจ|แพ็กเกจ/.test(t) && /มี|อะไร|ไหน|บ้าง|ราคา|เท่าไหร่|เท่าไร|กี่บาท/.test(t)) return true;
+  if (/ราคา|เท่าไหร่|เท่าไร|กี่บาท/.test(t) && /สแกน|บริการ|สมัคร|รายเดือน|เติม|เปิดสิทธิ์|ค่าใช้/.test(t)) return true;
+  return false;
+}
+
 function displayAmountThb(amount, fallbackThb) {
   const n = Number(amount);
   const fb = Number(fallbackThb);

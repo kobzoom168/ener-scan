@@ -290,6 +290,7 @@ import {
   groupImageEventCountByUser,
   buildFollowWelcomeText,
   buildSlipPackageSwitchedApprovedText,
+  isPromoInquiryText,
 } from "../utils/webhookText.util.js";
 
 import {
@@ -1171,7 +1172,12 @@ async function handlePaymentCommandTextRoute({
   turnCache = undefined,
   turnPerf = undefined,
 }) {
-  if (!forcePaymentIntent && !isPaymentCommand(text, lowerText)) {
+  // "มีโปรอะไรบ้าง" = คำถามข้อเท็จจริง → ตอบด้วยเมนูแพ็กพร้อมปุ่มตรง ๆ (กบ 14 ก.ค.)
+  if (
+    !forcePaymentIntent &&
+    !isPaymentCommand(text, lowerText) &&
+    !isPromoInquiryText(text)
+  ) {
     return false;
   }
 
