@@ -472,6 +472,34 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     publicTokenForLinks,
   );
 
+  // teaser ขาย 299 (กบ: คนไม่จ่ายเห็นแล้วต้องจ่าย): อันดับ 1 ของคลังวันนี้ รูปเบลอ
+  // ตัวเลขจริงชุดเดียวกับ Daily Pick ใน LIFF — เฉพาะเจ้าของที่ยังไม่เป็นสมาชิก
+  const teaser = options.dailyPickTeaser ?? null;
+  const liffPayUrl = String(options.liffPayUrl || "https://lin.ee/6YZeFZ1");
+  const pickTeaserHtml = teaser
+    ? `
+    <section class="mv2-card mv2-pick-tease" aria-label="ชิ้นที่หนุนดวงวันนี้">
+      <h2 class="mv2-tease-h">ชิ้นไหนในคลังหนุนดวงคุณวันนี้</h2>
+      <div class="mv2-tease-row">
+        ${
+          teaser.img
+            ? `<img class="mv2-tease-img" src="${escapeHtml(teaser.img)}" alt="" loading="lazy" onerror="this.remove()"/>`
+            : `<div class="mv2-tease-img mv2-tease-img--empty" aria-hidden="true"></div>`
+        }
+        <div class="mv2-tease-main">
+          <p class="mv2-tease-line">อันดับ 1 ของคลังคุณวันนี้ เหมาะกับวันนี้ <b>${escapeHtml(String(teaser.suit))}%</b></p>
+          <p class="mv2-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(teaser.total))} ชิ้นกับดาวประจำวันแล้ว สมาชิกรายเดือนเห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
+        </div>
+      </div>
+      <a class="mv2-share-btn mv2-share-btn--primary mv2-tease-btn" href="${escapeHtml(liffPayUrl)}">เปิดดูชิ้นที่หนุนดวงวันนี้</a>
+    </section>`
+    : "";
+  const stickyCtaHtml = `
+  <nav class="mv2-stickycta" aria-label="เริ่มใช้ Ener">
+    <a class="mv2-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้น</a>
+    ${teaser ? `<a class="mv2-cta-member" href="${escapeHtml(liffPayUrl)}">สมาชิก 299</a>` : ""}
+  </nav>`;
+
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
     .map((r, i) => {
       const lead = i === 0 ? " mv2-gsum-row--lead" : "";
@@ -2202,6 +2230,23 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--mv2a-trust-border); text-align: center; font-size: 0.78rem; color: var(--mv2a-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: var(--mv2a-render-meta); }
+    /* teaser อันดับ 1 ของวันนี้ (เบลอ) + แถบเริ่มใช้ล่างจอ */
+    .mv2-pick-tease { border: 1.5px dashed rgba(165, 129, 58, 0.55); }
+    .mv2-tease-h { margin: 0 0 0.7rem; font-size: 1.05rem; }
+    .mv2-tease-row { display: flex; gap: 12px; align-items: center; }
+    .mv2-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: blur(9px) saturate(0.75); background: rgba(165, 129, 58, 0.12); }
+    .mv2-tease-img--empty { filter: none; }
+    .mv2-tease-main { min-width: 0; flex: 1; }
+    .mv2-tease-line { margin: 0; font-weight: 800; font-size: 0.98rem; }
+    .mv2-tease-line b { font-size: 1.25rem; color: #a5813a; }
+    .mv2-tease-sub { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--mv2a-muted); }
+    .mv2-tease-btn { display: block; text-align: center; margin-top: 0.85rem; text-decoration: none; }
+    body { padding-bottom: 76px; }
+    .mv2-stickycta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: rgba(253, 249, 240, 0.96); backdrop-filter: blur(8px); border-top: 1px solid rgba(165, 129, 58, 0.28); }
+    html.mv2a-theme-dark .mv2-stickycta { background: rgba(16, 15, 12, 0.94); border-top-color: rgba(233, 207, 147, 0.25); }
+    .mv2-cta-scan { flex: 1; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 8px; border-radius: 12px; background: #a5813a; color: #fffdf6; }
+    .mv2-cta-member { flex: 0 0 auto; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #a5813a; color: #a5813a; background: transparent; }
+    html.mv2a-theme-dark .mv2-cta-member { border-color: #e9cf93; color: #e9cf93; }
   </style>
 </head>
 <body>
@@ -2273,6 +2318,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     </section>
     ${timingActionCardHtml}
     ${timingCardHtml}
+    ${pickTeaserHtml}
     ${libraryMiniHtml}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
@@ -2292,6 +2338,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       ${amuletHtmlShowRenderMetaLine() ? `<p class="mv2-render-meta">render ${escapeHtml(vm.rendererId)} · เวอร์ชัน ${escapeHtml(vm.reportVersion)}${vm.modelLabel ? ` · ${escapeHtml(vm.modelLabel)}` : ""}</p>` : ""}
     </footer>
   </div>
+  ${stickyCtaHtml}
   <div id="mv2-copy-toast" class="mv2-toast" role="status" hidden>คัดลอกลิงก์รายงานแล้ว</div>
   <script>
 (function () {

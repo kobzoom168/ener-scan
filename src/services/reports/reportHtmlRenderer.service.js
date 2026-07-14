@@ -53,6 +53,8 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
     );
     return renderAmuletReportV2Html(normalized, {
       sacredAmuletLibrary: renderOpts.sacredAmuletLibrary ?? null,
+      dailyPickTeaser: renderOpts.dailyPickTeaser ?? null,
+      liffPayUrl: renderOpts.liffPayUrl ?? null,
     });
   }
   if (
