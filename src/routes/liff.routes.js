@@ -856,6 +856,10 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
     }
     const latestName = pieces[0]?.name;
     const latestRanked = ranked.find((x) => x.name === latestName) || ranked[0];
+    // teaser ขาย 299: อันดับ 1 จริงของคลังวันนี้ (เบลอรูป บอก % ไม่บอกชิ้น) —
+    // ถ้าชิ้นล่าสุดคืออันดับ 1 พอดี ไม่มี teaser แต่ติดป้ายอันดับ 1 ให้แทน
+    const topRanked = ranked[0];
+    const latestIsTop = pickPieceKey(topRanked) === pickPieceKey(latestRanked);
     return res.json({
       ok: true,
       member: false,
@@ -863,6 +867,11 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
       streak,
       total: ranked.length,
       items: [latestRanked],
+      latestIsTop,
+      teaser:
+        !latestIsTop && ranked.length > 1
+          ? { img: topRanked.img || null, suit: topRanked.suit }
+          : null,
       lockedCount: Math.max(0, ranked.length - 1),
     });
   } catch (e) {
@@ -1437,6 +1446,12 @@ function buildLiffHtml(liffId) {
   .pk-tag{display:inline-block;font-size:.72rem;font-weight:800;color:var(--gold-deep);border:1px solid var(--line-gold);border-radius:999px;padding:2px 10px;margin-bottom:5px}
   .pk-up{display:inline-block;font-size:.7rem;font-weight:800;color:#2e7d4f;background:rgba(46,125,79,.1);border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:1px}
   .pk-open{display:block;margin-top:5px;font-size:.78rem;font-weight:700;color:var(--gold-deep)}
+  .pk-tease{display:flex;gap:10px;align-items:center;border:1.5px dashed var(--line-gold);border-radius:12px;padding:8px 10px;margin-top:10px;cursor:pointer}
+  .pk-tease img{width:44px;height:44px;border-radius:10px;object-fit:cover;flex:0 0 auto;filter:blur(7px) saturate(.75);background:rgba(160,140,90,.15)}
+  .pk-tease .pk-rn{min-width:0;flex:1}
+  .pk-tease .pk-rn b{display:block;font-size:.9rem}
+  .pk-tease .pk-rn span{font-size:.76rem;color:var(--faint)}
+  .pk-lockpill{flex:0 0 auto;font-size:.68rem;font-weight:800;color:var(--gold-deep);border:1px solid var(--line-gold);border-radius:999px;padding:3px 10px}
   .pk-name{font-weight:800;font-size:1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pk-suit{font-size:2.5rem;line-height:1.1;color:var(--gold-deep);font-weight:500}
   .pk-suitl{font-size:.74rem;font-weight:700;color:var(--faint)}
@@ -1875,9 +1890,10 @@ function buildLiffHtml(liffId) {
 
     <!-- ชิ้นไหนหนุนดวงวันนี้ (Daily Pick): ชิ้นเด่นใบใหญ่มีรูปจริง + รองเป็นแถวเล็ก -->
     <div class="score hidden" id="pickcard">
-      <div class="k">ชิ้นไหนหนุนดวงวันนี้ <small id="pk-day"></small></div>
+      <div class="k"><span id="pk-title">ชิ้นไหนหนุนดวงวันนี้</span> <small id="pk-day"></small></div>
       <div class="pk-hero hidden" id="pk-hero"></div>
       <div class="ft hidden" id="pk-reason" style="margin-top:8px"></div>
+      <div class="pk-tease hidden" id="pk-tease"></div>
       <div id="pk-list" style="display:flex;flex-direction:column;gap:8px;margin-top:10px"></div>
       <div class="ft hidden" id="pk-lock" style="margin-top:10px"></div>
       <button class="sttop hidden" id="pk-upgrade" style="margin-top:10px;width:100%">ให้อาจารย์เทียบทุกชิ้น ทุกวัน</button>
@@ -2424,17 +2440,22 @@ function buildLiffHtml(liffId) {
       var items = j.items || [];
       if(!items.length) return;
       $("pickcard").classList.remove("hidden");
+      // หัวการ์ดต้องตรงกับของที่เห็น (กบ: ไม่ใช่สมาชิกเห็นชิ้นล่าสุด ไม่ใช่ชิ้นท็อป)
+      $("pk-title").textContent = j.member ? "ชิ้นไหนหนุนดวงวันนี้" : "ชิ้นล่าสุดของคุณ กับดวงวันนี้";
       var dayBits = [];
       if (j.dayStar) dayBits.push("อิงพลัง" + j.dayStar);
       if (j.streak >= 2) dayBits.push("เปิดต่อเนื่อง " + j.streak + " วัน");
       $("pk-day").textContent = dayBits.join(" · ");
 
       var hero = items[0];
+      var heroTag = j.member
+        ? "อาจารย์เลือกให้วันนี้"
+        : (j.latestIsTop ? "อันดับ 1 ของคลังคุณวันนี้" : "ชิ้นล่าสุดของคุณ");
       var hbox = $("pk-hero");
       hbox.innerHTML =
         (hero.img ? '<img class="pk-img" src="' + hero.img + '" alt="" onerror="this.remove()">' : '') +
         '<div style="min-width:0;flex:1">' +
-          '<span class="pk-tag">' + (j.member ? "อาจารย์เลือกให้วันนี้" : "ชิ้นล่าสุดของคุณ") + '</span>' +
+          '<span class="pk-tag">' + heroTag + '</span>' +
           (hero.moved === "up" ? '<span class="pk-up">ขึ้นจากเมื่อวาน</span>' : '') +
           '<div class="pk-name">' + hero.name + '</div>' +
           '<div><b class="serif pk-suit" id="pk-suit-n">0</b><span class="pk-suitl"> เหมาะกับวันนี้ %</span></div>' +
@@ -2465,6 +2486,18 @@ function buildLiffHtml(liffId) {
         }
         list.appendChild(row);
       });
+
+      // teaser อันดับ 1 จริงของคลัง (เบลอรูป โชว์ % เฉย ๆ) — จุดขาย 299 ที่แรงสุดของหน้านี้
+      var tz = $("pk-tease");
+      if(!j.member && j.teaser){
+        tz.innerHTML =
+          (j.teaser.img ? '<img src="' + j.teaser.img + '" alt="" onerror="this.remove()">' : '') +
+          '<div class="pk-rn"><b>อันดับ 1 ของคลังคุณวันนี้ เหมาะ ' + j.teaser.suit + '%</b>' +
+          '<span>สมาชิกรายเดือนเห็นทันทีว่าชิ้นไหน อาจารย์เลือกให้ทุกเช้า</span></div>' +
+          '<span class="pk-lockpill">สมาชิก</span>';
+        tz.classList.remove("hidden");
+        tz.onclick = function(){ openPay(true); };
+      } else { tz.classList.add("hidden"); tz.onclick = null; }
 
       if(!j.member && j.lockedCount > 0){
         var lk = $("pk-lock");
