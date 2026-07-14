@@ -727,9 +727,12 @@ function extractPickPieces(rows) {
     const portability = isCrystal ? "carry" : pickPortability(p.object?.objectType, name);
     // รูปจริงของชิ้นจากตอนสแกน — เจ้าของเห็นรูปก็รู้ทันทีว่าชิ้นไหน ไม่ต้องระบุว่าเป็นพระอะไร
     const imgRaw = String(p.object?.objectImageUrl || "").trim();
+    // token รายงาน HTML ของชิ้นนี้ — กดการ์ดแล้วเปิดรายงานเต็มได้ (กบ 14 ก.ค.)
+    const tok = String(p.publicToken || "").trim();
     out.push({
       name,
       img: /^https:\/\//i.test(imgRaw) ? imgRaw : null,
+      reportUrl: /^[A-Za-z0-9_-]{8,64}$/.test(tok) ? "/r/" + tok : null,
       energyScore: Number.isFinite(es) ? es : null,
       compatPct: Number.isFinite(compat) ? compat : null,
       peakLabel: peak ? peak.label : null,
@@ -1411,6 +1414,7 @@ function buildLiffHtml(liffId) {
   .pk-hero .pk-img{width:104px;height:104px;border-radius:14px;object-fit:cover;flex:0 0 auto;border:1px solid var(--line-gold);background:rgba(160,140,90,.12)}
   .pk-tag{display:inline-block;font-size:.72rem;font-weight:800;color:var(--gold-deep);border:1px solid var(--line-gold);border-radius:999px;padding:2px 10px;margin-bottom:5px}
   .pk-up{display:inline-block;font-size:.7rem;font-weight:800;color:#2e7d4f;background:rgba(46,125,79,.1);border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:1px}
+  .pk-open{display:block;margin-top:5px;font-size:.78rem;font-weight:700;color:var(--gold-deep)}
   .pk-name{font-weight:800;font-size:1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pk-suit{font-size:2.5rem;line-height:1.1;color:var(--gold-deep);font-weight:500}
   .pk-suitl{font-size:.74rem;font-weight:700;color:var(--faint)}
@@ -2373,6 +2377,14 @@ function buildLiffHtml(liffId) {
         }
       }).catch(function(){});
   }
+  function pkOpenReport(url){
+    if(!url) return;
+    var abs = location.origin + url;
+    try {
+      if (window.liff && liff.openWindow) { liff.openWindow({ url: abs, external: false }); return; }
+    } catch(e){}
+    window.open(abs, "_blank");
+  }
   function pkCountUp(el, target){
     var t0 = null, dur = 900;
     function step(ts){
@@ -2404,7 +2416,12 @@ function buildLiffHtml(liffId) {
           (hero.moved === "up" ? '<span class="pk-up">ขึ้นจากเมื่อวาน</span>' : '') +
           '<div class="pk-name">' + hero.name + '</div>' +
           '<div><b class="serif pk-suit" id="pk-suit-n">0</b><span class="pk-suitl"> เหมาะกับวันนี้ %</span></div>' +
+          (hero.reportUrl ? '<span class="pk-open">ดูรายละเอียดชิ้นนี้ ›</span>' : '') +
         '</div>';
+      if (hero.reportUrl) {
+        hbox.style.cursor = "pointer";
+        hbox.onclick = function(){ pkOpenReport(hero.reportUrl); };
+      } else { hbox.onclick = null; }
       hbox.classList.remove("hidden");
       var rs = $("pk-reason");
       rs.textContent = hero.reason || "";
@@ -2420,6 +2437,10 @@ function buildLiffHtml(liffId) {
           '<div class="pk-rn"><b>' + it.name + '</b>' +
           '<span>' + (it.peakLabel ? "พลังเด่นด้าน" + it.peakLabel : "พลังโดยรวมเข้ากับวันนี้") + '</span></div>' +
           '<b class="serif" style="flex:0 0 auto;font-size:1.1rem;color:var(--gold-deep)">' + it.suit + '</b>';
+        if (it.reportUrl) {
+          row.style.cursor = "pointer";
+          row.onclick = function(){ pkOpenReport(it.reportUrl); };
+        }
         list.appendChild(row);
       });
 
