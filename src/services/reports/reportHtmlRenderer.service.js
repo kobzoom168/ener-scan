@@ -69,7 +69,10 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
         reportIdPrefix: String(normalized.reportId || "").slice(0, 8),
       }),
     );
-    return renderMoldaviteReportV2Html(normalized);
+    return renderMoldaviteReportV2Html(normalized, {
+      dailyPickTeaser: renderOpts.dailyPickTeaser ?? null,
+      liffPayUrl: renderOpts.liffPayUrl ?? null,
+    });
   }
   if (
     normalized.crystalBraceletV1 &&
@@ -85,6 +88,8 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
     );
     return renderCrystalBraceletReportV2Html(normalized, {
       crystalBraceletLibrary: renderOpts.crystalBraceletLibrary ?? null,
+      dailyPickTeaser: renderOpts.dailyPickTeaser ?? null,
+      liffPayUrl: renderOpts.liffPayUrl ?? null,
     });
   }
   console.log(

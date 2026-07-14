@@ -167,8 +167,9 @@ export async function getReportByToken(req, res) {
   }
 
   // teaser ขาย 299 บนหน้ารายงาน: อันดับ 1 ของคลังวันนี้ (เบลอ) — เฉพาะเจ้าของที่ยังไม่เป็นสมาชิก
+  // (ทุกเลน: พระ กำไล มอลดาไวท์ — คลัง Daily Pick รวมทุกเลนอยู่แล้ว)
   let dailyPickTeaser = null;
-  if (normPre.amuletV1) {
+  if (normPre.amuletV1 || normPre.crystalBraceletV1 || normPre.moldaviteV1) {
     const uid = String(normPre.userId || "").trim();
     if (uid) {
       try {

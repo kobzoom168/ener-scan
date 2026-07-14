@@ -392,9 +392,36 @@ function radarBlock(vm) {
  * @param {import("../../services/reports/reportPayload.types.js").ReportPayload} payload
  * @returns {string}
  */
-export function renderMoldaviteReportV2Html(payload) {
+export function renderMoldaviteReportV2Html(payload, options = {}) {
   const vm = buildMoldaviteHtmlV2ViewModel(payload);
   const h = vm.hero;
+
+  // teaser ขาย 299 (กบ: คนไม่จ่ายเห็นแล้วต้องจ่าย) — เลขชุดเดียวกับ Daily Pick ใน LIFF
+  const pickTeaser = options.dailyPickTeaser ?? null;
+  const liffPayUrl = String(options.liffPayUrl || "https://lin.ee/6YZeFZ1");
+  const pickTeaserHtml = pickTeaser
+    ? `
+    <section class="mv2-card pk-tease-card" aria-label="ชิ้นที่หนุนดวงวันนี้">
+      <h2 class="pk-tease-h">ชิ้นไหนในคลังหนุนดวงคุณวันนี้</h2>
+      <div class="pk-tease-row">
+        ${
+          pickTeaser.img
+            ? `<img class="pk-tease-img" src="${escapeHtml(pickTeaser.img)}" alt="" loading="lazy" onerror="this.remove()"/>`
+            : `<div class="pk-tease-img pk-tease-img--empty" aria-hidden="true"></div>`
+        }
+        <div class="pk-tease-main">
+          <p class="pk-tease-line">อันดับ 1 ของคลังคุณวันนี้ เหมาะกับวันนี้ <b>${escapeHtml(String(pickTeaser.suit))}%</b></p>
+          <p class="pk-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(pickTeaser.total))} ชิ้นกับดาวประจำวันแล้ว สมาชิกรายเดือนเห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
+        </div>
+      </div>
+      <a class="pk-tease-cta" href="${escapeHtml(liffPayUrl)}">เปิดดูชิ้นที่หนุนดวงวันนี้</a>
+    </section>`
+    : "";
+  const stickyCtaHtml = `
+  <nav class="pk-stickycta" aria-label="เริ่มใช้ Ener">
+    <a class="pk-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้น</a>
+    ${pickTeaser ? `<a class="pk-cta-member" href="${escapeHtml(liffPayUrl)}">สมาชิก 299</a>` : ""}
+  </nav>`;
   const scannedIso = resolveScannedAtIsoForReportMeta(payload);
   const metaScannedLabel = scannedAtLabelThai(scannedIso);
   const metaReportId = formatEsDisplayReportId(payload.publicToken, payload.reportId);
@@ -1180,6 +1207,21 @@ export function renderMoldaviteReportV2Html(payload) {
     }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.038); text-align: center; font-size: 0.78rem; color: var(--mv2-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: rgba(100,116,139,0.85); letter-spacing: 0.02em; }
+    /* teaser อันดับ 1 ของวันนี้ (เบลอ) + แถบเริ่มใช้ล่างจอ (ธีมมืดเขียวมอลดาไวท์) */
+    .pk-tease-card { border: 1.5px dashed rgba(74, 222, 128, 0.4); }
+    .pk-tease-h { margin: 0 0 0.7rem; font-size: 1.05rem; }
+    .pk-tease-row { display: flex; gap: 12px; align-items: center; }
+    .pk-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: blur(9px) saturate(0.75); background: rgba(74, 222, 128, 0.1); }
+    .pk-tease-img--empty { filter: none; }
+    .pk-tease-main { min-width: 0; flex: 1; }
+    .pk-tease-line { margin: 0; font-weight: 800; font-size: 0.98rem; }
+    .pk-tease-line b { font-size: 1.25rem; color: #4ade80; }
+    .pk-tease-sub { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--mv2-muted); }
+    .pk-tease-cta { display: block; text-align: center; margin-top: 0.85rem; text-decoration: none; font-weight: 800; padding: 12px 8px; border-radius: 12px; background: #16a34a; color: #ffffff; }
+    body { padding-bottom: 76px; }
+    .pk-stickycta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: rgba(10, 14, 12, 0.94); backdrop-filter: blur(8px); border-top: 1px solid rgba(74, 222, 128, 0.25); }
+    .pk-cta-scan { flex: 1; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 8px; border-radius: 12px; background: #16a34a; color: #ffffff; }
+    .pk-cta-member { flex: 0 0 auto; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #4ade80; color: #4ade80; background: transparent; }
   </style>
 </head>
 <body>
@@ -1231,6 +1273,7 @@ export function renderMoldaviteReportV2Html(payload) {
       <ul class="mv2-owner-traits">${usageHtml}</ul>
     </section>
 
+    ${pickTeaserHtml}
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์และบันทึก</h2>
       <p class="mv2-share-note">แชร์ลิงก์รายงานนี้ หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูได้อีกครั้ง</p>
@@ -1291,6 +1334,7 @@ export function renderMoldaviteReportV2Html(payload) {
   if (saveBtn) saveBtn.addEventListener("click", function () { window.print(); });
 })();
   </script>
+  ${stickyCtaHtml}
 </body>
 </html>`;
 }

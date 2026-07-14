@@ -705,6 +705,33 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     throw new Error("CRYSTAL_BRACELET_HTML_MISSING_PAYLOAD");
   }
 
+  // teaser ขาย 299 (กบ: คนไม่จ่ายเห็นแล้วต้องจ่าย) — เลขชุดเดียวกับ Daily Pick ใน LIFF
+  const pickTeaser = options.dailyPickTeaser ?? null;
+  const liffPayUrl = String(options.liffPayUrl || "https://lin.ee/6YZeFZ1");
+  const pickTeaserHtml = pickTeaser
+    ? `
+    <section class="cb2-card pk-tease-card" aria-label="ชิ้นที่หนุนดวงวันนี้">
+      <h2 class="pk-tease-h">ชิ้นไหนในคลังหนุนดวงคุณวันนี้</h2>
+      <div class="pk-tease-row">
+        ${
+          pickTeaser.img
+            ? `<img class="pk-tease-img" src="${escapeHtml(pickTeaser.img)}" alt="" loading="lazy" onerror="this.remove()"/>`
+            : `<div class="pk-tease-img pk-tease-img--empty" aria-hidden="true"></div>`
+        }
+        <div class="pk-tease-main">
+          <p class="pk-tease-line">อันดับ 1 ของคลังคุณวันนี้ เหมาะกับวันนี้ <b>${escapeHtml(String(pickTeaser.suit))}%</b></p>
+          <p class="pk-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(pickTeaser.total))} ชิ้นกับดาวประจำวันแล้ว สมาชิกรายเดือนเห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
+        </div>
+      </div>
+      <a class="pk-tease-cta" href="${escapeHtml(liffPayUrl)}">เปิดดูชิ้นที่หนุนดวงวันนี้</a>
+    </section>`
+    : "";
+  const stickyCtaHtml = `
+  <nav class="pk-stickycta" aria-label="เริ่มใช้ Ener">
+    <a class="pk-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้น</a>
+    ${pickTeaser ? `<a class="pk-cta-member" href="${escapeHtml(liffPayUrl)}">สมาชิก 299</a>` : ""}
+  </nav>`;
+
   const fs = cb.flexSurface;
   const hr = cb.htmlReport;
   if (!hr || typeof hr !== "object") {
@@ -1529,6 +1556,21 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       color: #5a3348;
     }
     .cb2-share-btn--ghost:hover { background: rgba(148, 163, 184, 0.16); }
+    /* teaser อันดับ 1 ของวันนี้ (เบลอ) + แถบเริ่มใช้ล่างจอ */
+    .pk-tease-card { border: 1.5px dashed rgba(217, 123, 176, 0.55); }
+    .pk-tease-h { margin: 0 0 0.7rem; font-size: 1.05rem; }
+    .pk-tease-row { display: flex; gap: 12px; align-items: center; }
+    .pk-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: blur(9px) saturate(0.75); background: rgba(217, 123, 176, 0.12); }
+    .pk-tease-img--empty { filter: none; }
+    .pk-tease-main { min-width: 0; flex: 1; }
+    .pk-tease-line { margin: 0; font-weight: 800; font-size: 0.98rem; }
+    .pk-tease-line b { font-size: 1.25rem; }
+    .pk-tease-sub { margin: 0.3rem 0 0; font-size: 0.8rem; opacity: 0.75; }
+    .pk-tease-cta { display: block; text-align: center; margin-top: 0.85rem; text-decoration: none; font-weight: 800; padding: 12px 8px; border-radius: 12px; background: #b23d76; color: #fff; }
+    body { padding-bottom: 76px; }
+    .pk-stickycta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: rgba(255, 251, 253, 0.96); backdrop-filter: blur(8px); border-top: 1px solid rgba(217, 123, 176, 0.3); }
+    .pk-cta-scan { flex: 1; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 8px; border-radius: 12px; background: #b23d76; color: #fff; }
+    .pk-cta-member { flex: 0 0 auto; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #b23d76; color: #b23d76; background: transparent; }
   </style>
 </head>
 <body>
@@ -1572,6 +1614,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
 
     ${energyTimingHtml}
 
+    ${pickTeaserHtml}
     ${braceletLibraryHtml}
 
     <section class="cb2-card cb2-share-card" aria-labelledby="cb2-share-h">
@@ -1636,6 +1679,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
   if (saveBtn) saveBtn.addEventListener("click", function () { window.print(); });
 })();
   </script>
+  ${stickyCtaHtml}
 </body>
 </html>`;
 }
