@@ -118,6 +118,7 @@ import {
   handleProfileEditCommand,
   handlePendingProfileEditValue,
 } from "../services/profileEditChat.service.js";
+import { getUpgradeCreditForLineUser } from "../services/upgradeCredit.service.js";
 import {
   evaluateAwaitingPaymentSlipImage,
   buildSlipNotTransferReceiptText,
@@ -291,6 +292,7 @@ import {
   buildFollowWelcomeText,
   buildSlipPackageSwitchedApprovedText,
   isPromoInquiryText,
+  isUnlimitedScanCount,
 } from "../utils/webhookText.util.js";
 
 import {
@@ -1529,17 +1531,34 @@ async function handlePaymentCommandTextRoute({
   }
 
   const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
+  // เครดิตอัปเกรด: เพิ่งจ่ายแพ็กเริ่มต้นภายในกำหนด → รายเดือนหักให้อัตโนมัติ (299→250)
+  let upgradeCredit = null;
+  if (isUnlimitedScanCount(paidPackage.scanCount)) {
+    upgradeCredit = await getUpgradeCreditForLineUser(userId).catch(() => null);
+  }
+  const payAmountThb = upgradeCredit ? upgradeCredit.payThb : paidPackage.priceThb;
+  if (upgradeCredit) {
+    console.log(
+      JSON.stringify({
+        event: "UPGRADE_CREDIT_APPLIED",
+        userId,
+        creditThb: upgradeCredit.creditThb,
+        payThb: upgradeCredit.payThb,
+        sourcePaymentId: upgradeCredit.sourcePaymentId,
+      }),
+    );
+  }
   let cmdPaymentRef = null;
   let cmdPaymentId = null;
   try {
     const appUser = await ensureUserByLineUserId(userId);
     const created = await createPaymentPending({
       appUserId: appUser.id,
-      amount: paidPackage.priceThb,
+      amount: payAmountThb,
       currency,
       packageCode: paidPackage.key,
       packageName: paidPackage.label,
-      expectedAmount: paidPackage.priceThb,
+      expectedAmount: payAmountThb,
       unlockHours: paidPackage.windowHours,
     });
     cmdPaymentRef = created?.paymentRef ?? null;
@@ -1591,6 +1610,8 @@ async function handlePaymentCommandTextRoute({
     paymentRef: cmdPaymentRef,
     paidPackage,
     lineUserId: userId,
+    amountThb: payAmountThb,
+    creditFromThb: upgradeCredit ? upgradeCredit.creditThb : null,
   });
   const slipText = buildPaymentQrSlipText();
 
@@ -1634,7 +1655,7 @@ async function handlePaymentCommandTextRoute({
   }
 
   const payCmdBody = buildPaymentInstructionText({
-    amount: paidPackage.priceThb,
+    amount: payAmountThb,
     currency,
     paymentRef: cmdPaymentRef,
     paidPackage,

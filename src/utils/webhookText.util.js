@@ -373,7 +373,12 @@ function appendPaymentRefLine(bodyText, paymentRef) {
  * Deterministic payment QR body (prices / counts / hours) — no curated soft line.
  * @param {{ paymentRef?: string|null, paidPackage?: { priceThb: number, scanCount: number, windowHours: number }|null }} [opts]
  */
-export function buildPaymentQrIntroFactsText({ paymentRef, paidPackage = null } = {}) {
+export function buildPaymentQrIntroFactsText({
+  paymentRef,
+  paidPackage = null,
+  amountThb = null,
+  creditFromThb = null,
+} = {}) {
   // ส่งคู่กับ QR = สรุปรายการให้ชัดก่อนโอน (กบ: ต้องเห็นยอดโอน + โปรที่เลือก)
   const offer = loadActiveScanOffer();
   const pkg = paidPackage || getDefaultPackage(offer);
@@ -382,10 +387,19 @@ export function buildPaymentQrIntroFactsText({ paymentRef, paidPackage = null } 
   const windowHours = pkg?.windowHours ?? offer.paidWindowHours;
   // ใช้สำนวนกลางตัวเดียวกับเมนู (ไม่ดึง label ที่อาจมี "/" จากหน้า admin)
   const pkgLabel = formatOfferPackageLineThai({ priceThb, scanCount, windowHours });
+  const payThb = Number(amountThb) >= 1 ? Number(amountThb) : priceThb;
+  // เครดิตอัปเกรด: หักค่าแพ็กที่จ่ายไปแล้วออกจากรายเดือน — บอกชัดว่าหักให้เท่าไหร่
+  const amountLines =
+    Number(creditFromThb) >= 1 && payThb < priceThb
+      ? [
+          `หักค่าแพ็ก ${Number(creditFromThb)} บาทที่จ่ายไปแล้วให้เรียบร้อย`,
+          `เหลือยอดโอน ${payThb} บาท`,
+        ]
+      : [`ยอดโอน ${payThb} บาท`];
   const base = [
     "สรุปยอดก่อนโอนครับ",
     `โปร ${pkgLabel}`,
-    `ยอดโอน ${priceThb} บาท`,
+    ...amountLines,
     "",
     "สแกน QR ด้านล่างได้เลย โอนเสร็จส่งสลิปในแชตนี้",
   ].join("\n");
@@ -395,17 +409,19 @@ export function buildPaymentQrIntroFactsText({ paymentRef, paidPackage = null } 
 /**
  * ข้อความหลักสำหรับชำระเงิน (ไม่ใส่ URL — QR ส่งแยกเป็น image message)
  * Curated soft line + deterministic facts.
- * @param {{ paymentRef?: string|null, paidPackage?: object|null, lineUserId?: string|null }} [opts]
+ * @param {{ paymentRef?: string|null, paidPackage?: object|null, lineUserId?: string|null, amountThb?: number|null, creditFromThb?: number|null }} [opts]
  */
 export function buildPaymentQrIntroText({
   paymentRef,
   paidPackage = null,
   lineUserId = null,
+  amountThb = null,
+  creditFromThb = null,
 } = {}) {
   // Short + clean — no server-cost preamble (per กบ). Facts already carry the
   // friendly อาจารย์ line + payment ref.
   void lineUserId;
-  return buildPaymentQrIntroFactsText({ paymentRef, paidPackage });
+  return buildPaymentQrIntroFactsText({ paymentRef, paidPackage, amountThb, creditFromThb });
 }
 
 /** 168 ชม. → "7 วัน", 24 ชม. → "24 ชม." (ยาวข้ามวันอ่านเป็นวันง่ายกว่า) */

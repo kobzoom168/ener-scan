@@ -43,6 +43,7 @@ import {
 } from "../stores/conversationState.db.js";
 import { buildSlipPackageSwitchedApprovedText } from "../utils/webhookText.util.js";
 import { getValue, setValueWithTtl } from "../redis/scanV2Redis.js";
+import { getUpgradeCreditForLineUser } from "../services/upgradeCredit.service.js";
 
 export const liffRouter = express.Router();
 
@@ -1083,14 +1084,23 @@ liffRouter.get("/api/liff/pay/info", async (req, res) => {
   try {
     const offer = loadActiveScanOffer();
     const packages = (offer.packages || []).filter((p) => p.active);
-    const [payment, access] = await Promise.all([
+    const [payment, access, upgradeCredit] = await Promise.all([
       getLatestAwaitingPaymentForLineUserId(userId).catch(() => null),
       checkScanAccess({ userId }).catch(() => null),
+      getUpgradeCreditForLineUser(userId).catch(() => null),
     ]);
     res.json({
       ok: true,
       packages: packages.map(packageForApi),
       defaultPackageKey: offer.defaultPackageKey,
+      // เครดิตอัปเกรด: จ่ายแพ็กเริ่มต้นภายในกำหนด → รายเดือนหักให้ (299→250)
+      upgradeCredit: upgradeCredit
+        ? {
+            creditThb: upgradeCredit.creditThb,
+            payThb: upgradeCredit.payThb,
+            monthlyPkgKey: upgradeCredit.monthlyPkgKey,
+          }
+        : null,
       qrUrl: getPromptPayQrPublicUrl() || null,
       payment: payment
         ? {
@@ -1126,6 +1136,17 @@ liffRouter.post("/api/liff/pay/create", express.json(), async (req, res) => {
       packages[0];
     if (!pkg) return res.status(409).json({ ok: false, error: "no_active_package" });
 
+    // เครดิตอัปเกรด: รายเดือน + มีสิทธิ์ → คิดยอดฝั่ง server เท่านั้น (ไม่เชื่อ client)
+    let payAmountThb = Number(pkg.priceThb);
+    let appliedCreditThb = null;
+    if (Number(pkg.scanCount) >= 999999) {
+      const credit = await getUpgradeCreditForLineUser(userId).catch(() => null);
+      if (credit && credit.monthlyPkgKey === pkg.key) {
+        payAmountThb = credit.payThb;
+        appliedCreditThb = credit.creditThb;
+      }
+    }
+
     // Reuse an open payment for the same package instead of piling up rows
     // (the chat flow may already have one going).
     const existing = await getLatestAwaitingPaymentForLineUserId(userId).catch(() => null);
@@ -1137,7 +1158,7 @@ liffRouter.post("/api/liff/pay/create", express.json(), async (req, res) => {
     if (
       existing?.id &&
       String(existing.status || "") === "awaiting_payment" &&
-      Number(existing.expected_amount ?? existing.amount) === Number(pkg.priceThb)
+      Number(existing.expected_amount ?? existing.amount) === payAmountThb
     ) {
       paymentId = existing.id;
       paymentRef = existing.payment_ref || (await ensurePaymentRefForPaymentId(existing.id).catch(() => null));
@@ -1145,11 +1166,11 @@ liffRouter.post("/api/liff/pay/create", express.json(), async (req, res) => {
       const appUser = await ensureUserByLineUserId(userId);
       const created = await createPaymentPending({
         appUserId: appUser.id,
-        amount: pkg.priceThb,
+        amount: payAmountThb,
         currency: process.env.PAYMENT_UNLOCK_CURRENCY || "THB",
         packageCode: pkg.key,
         packageName: pkg.label,
-        expectedAmount: pkg.priceThb,
+        expectedAmount: payAmountThb,
         unlockHours: pkg.windowHours,
       });
       paymentId = created?.paymentId ?? null;
@@ -1168,7 +1189,8 @@ liffRouter.post("/api/liff/pay/create", express.json(), async (req, res) => {
       result: "created",
       paymentId,
       paymentRef,
-      amount: pkg.priceThb,
+      amount: payAmountThb,
+      creditThb: appliedCreditThb,
       packageLabel: pkg.label,
       qrUrl: getPromptPayQrPublicUrl() || null,
     });
@@ -2746,7 +2768,7 @@ function buildLiffHtml(liffId) {
   $("th-back").addEventListener("click", function(){ show("v-home"); });
 
   /* ---- เติมสิทธิ์สแกน ---- */
-  var pay = { pkgs: [], selected: "", qrUrl: "", slipB64: "" };
+  var pay = { pkgs: [], selected: "", qrUrl: "", slipB64: "", credit: null };
 
   function payRenderPkgs(){
     var wrap = $("pay-pkgs"); wrap.innerHTML = "";
@@ -2758,7 +2780,13 @@ function buildLiffHtml(liffId) {
       var winTxt = (p.windowHours >= 48 && p.windowHours % 24 === 0)
         ? (unlimited ? "สมาชิกรายเดือน · อาจารย์ดูแลตลอด " : "ใช้ได้ ") + (p.windowHours / 24) + " วัน"
         : "ใช้ได้ภายใน " + p.windowHours + " ชั่วโมง";
-      b.innerHTML = '<span class="pk-price">' + p.priceThb + '<small> บาท</small></span>' +
+      // เครดิตอัปเกรด: จ่ายแพ็กเริ่มต้นไปแล้ว → รายเดือนโชว์ราคาหักเครดิต
+      var hasCredit = pay.credit && pay.credit.monthlyPkgKey === p.key;
+      var priceHtml = hasCredit
+        ? '<span class="pk-price"><s style="font-size:.62em;opacity:.55">' + p.priceThb + '</s> ' + pay.credit.payThb + '<small> บาท</small></span>'
+        : '<span class="pk-price">' + p.priceThb + '<small> บาท</small></span>';
+      if (hasCredit) winTxt += ' · หักค่าแพ็ก ' + pay.credit.creditThb + ' ที่จ่ายแล้ว';
+      b.innerHTML = priceHtml +
         '<span class="pk-d"><span class="pk-t">' + countTxt + '</span>' +
         '<span class="pk-s">' + winTxt + '</span></span>' +
         '<span class="pk-r"></span>';
@@ -2775,8 +2803,9 @@ function buildLiffHtml(liffId) {
     api("/api/liff/pay/info").then(function(r){ return r.json(); }).then(function(j){
       if(!j || !j.ok) return;
       pay.pkgs = j.packages || [];
+      pay.credit = j.upgradeCredit || null;
       pay.selected = j.defaultPackageKey || (pay.pkgs[0] && pay.pkgs[0].key) || "";
-      if(preferUnlimited === true){
+      if(preferUnlimited === true || pay.credit){
         var mo = pay.pkgs.filter(function(p){ return p.scanCount >= 999999; })[0];
         if(mo) pay.selected = mo.key;
       }
@@ -2799,7 +2828,7 @@ function buildLiffHtml(liffId) {
     $("pay-pick").classList.add("hidden");
     $("pay-done").classList.add("hidden");
     $("pay-qr").classList.remove("hidden");
-    $("pay-amt").textContent = j.amount + " บาท";
+    $("pay-amt").textContent = j.amount + " บาท" + (j.creditThb ? " (หักค่าแพ็ก " + j.creditThb + " ที่จ่ายแล้ว)" : "");
     if(j.qrUrl){ $("pay-qrimg").src = j.qrUrl; }
     $("pay-ref").textContent = j.paymentRef ? "รหัสรายการ " + j.paymentRef : "";
     pay.slipB64 = "";
