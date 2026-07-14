@@ -166,10 +166,29 @@ export async function getReportByToken(req, res) {
     }
   }
 
+  // teaser ขาย 299 บนหน้ารายงาน: อันดับ 1 ของคลังวันนี้ (เบลอ) — เฉพาะเจ้าของที่ยังไม่เป็นสมาชิก
+  let dailyPickTeaser = null;
+  if (normPre.amuletV1) {
+    const uid = String(normPre.userId || "").trim();
+    if (uid) {
+      try {
+        const { buildDailyPickTeaserForLineUser } = await import("../routes/liff.routes.js");
+        dailyPickTeaser = await buildDailyPickTeaserForLineUser(uid);
+      } catch {
+        dailyPickTeaser = null;
+      }
+    }
+  }
+  const liffPayUrl = process.env.LIFF_ID
+    ? `https://liff.line.me/${String(process.env.LIFF_ID).trim()}?view=pay`
+    : "https://lin.ee/6YZeFZ1";
+
   try {
     html = renderReportHtmlPage(payload, {
       sacredAmuletLibrary,
       crystalBraceletLibrary,
+      dailyPickTeaser,
+      liffPayUrl,
     });
   } catch (renderErr) {
     console.error(

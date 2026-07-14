@@ -803,6 +803,39 @@ function pickPieceKey(pc) {
   return pc.name + "|" + (pc.peakLabel || "-");
 }
 
+/**
+ * Teaser สำหรับหน้ารายงาน HTML (คนยังไม่เป็นสมาชิก): อันดับ 1 ของคลังวันนี้
+ * ตัวเลขชุดเดียวกับ Daily Pick ใน LIFF เป๊ะ (สูตรเดียว วันเดียว ผลเดียว — กันเลขไม่ตรงกัน)
+ * @returns {Promise<null | { suit: number, img: string|null, total: number }>}
+ */
+export async function buildDailyPickTeaserForLineUser(lineUserId) {
+  try {
+    const uid = String(lineUserId || "").trim();
+    if (!uid) return null;
+    const { data: u } = await supabase
+      .from("app_users")
+      .select("paid_until,paid_remaining_scans")
+      .eq("line_user_id", uid)
+      .maybeSingle();
+    const isMember = Boolean(
+      u?.paid_until &&
+        new Date(u.paid_until).getTime() > Date.now() &&
+        Number(u.paid_remaining_scans) >= 900000,
+    );
+    if (isMember) return null; // สมาชิกเห็นของจริงในแอปอยู่แล้ว
+    const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
+    const pieces = extractPickPieces(rows);
+    if (pieces.length < 2) return null; // ชิ้นเดียวไม่มีอะไรให้ล็อก
+    const nowBkk = new Date(Date.now() + 7 * 3600 * 1000);
+    const { ranked } = rankPickPieces(pieces, bangkokDateKey(), nowBkk.getUTCDay());
+    const top = ranked[0];
+    if (!top) return null;
+    return { suit: top.suit, img: top.img || null, total: ranked.length };
+  } catch {
+    return null;
+  }
+}
+
 liffRouter.get("/api/liff/daily-pick", async (req, res) => {
   const userId = await requireLiffUser(req, res);
   if (!userId) return;
