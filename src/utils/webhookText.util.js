@@ -436,17 +436,16 @@ export function buildSingleOfferPaywallAltText(offer = loadActiveScanOffer()) {
     return [
       `เปิดสิทธิ์เพิ่มวันนี้ ${pkg.priceThb} บาทครับ ได้สแกนอีก ${pkg.scanCount} ครั้งใน ${formatOfferWindowThai(pkg.windowHours)}`,
       "ส่งรูปทีละรูปนะครับ อาจารย์จะได้ดูให้ละเอียดเต็มที่",
-      "พร้อมเมื่อไหร่พิมพ์ว่า จ่าย มาได้เลยครับ",
+      "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์มาได้เลยครับ",
     ].join("\n");
   }
-  // โทนคนพิมพ์เอง (กบ): ไม่มีขีด ไม่มีบูลเล็ต ไม่มีอิโมจิ
+  // โทนคนพิมพ์เอง (กบ): ไม่มีขีด ไม่มีบูลเล็ต ไม่มีอิโมจิ ไม่สอนพิมพ์คำสั่ง
   const sorted = [...pkgs].sort((a, b) => a.priceThb - b.priceThb);
   const lines = sorted.map((p) => formatOfferPackageLineThai(p));
-  const priceList = sorted.map((p) => `จ่าย ${p.priceThb}`).join(" หรือ ");
   return [
     "เปิดสิทธิ์เพิ่มวันนี้มีให้เลือกครับ",
     ...lines,
-    `สะดวกแบบไหนพิมพ์มาเลย ${priceList} ครับ`,
+    "สะดวกแบบไหนแตะปุ่มด้านล่าง หรือบอกราคามาเลยครับ",
   ].join("\n");
 }
 
@@ -565,7 +564,7 @@ export function buildPaymentPayIntentNoPackageHumanText({
   const alt = buildSingleOfferPaywallAltText(offer);
   const lines = [
     "ตอนนี้ยังไม่ได้อยู่ในขั้นตอนชำระเงินครับ ถ้าฟรีหมดแล้ว จะมีข้อความบอกแพ็กให้",
-    "หรือถ้าอยู่ช่วงชำระอยู่แล้ว พิมพ์ว่า จ่าย มาได้เลยครับ",
+    "หรือถ้าจะเปิดสิทธิ์เลย บอกอาจารย์มาได้เลยครับ",
   ];
   const head = lines[slotFromUserId(userId, lines.length)];
   return `${head}\n\n${alt}`;
@@ -1438,7 +1437,7 @@ export function buildDeterministicFreeQuotaExhaustedPaywallText(offer, opts = {}
     "",
     `เปิดสแกนต่อได้เลย แพ็ก ${price} บาท สแกนได้ ${count} ครั้ง ใน ${hours} ชม.`,
     "",
-    "พร้อมเมื่อไหร่ พิมพ์ จ่าย มาได้เลยครับ",
+    "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์ได้เลยครับ",
   ].join("\n");
 }
 
@@ -1462,7 +1461,7 @@ export function getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(
   const factsAlt = [
     "สิทธิ์ฟรีวันนี้หมดแล้วนะครับ",
     "",
-    `สแกนต่อได้เลย ${price} บาท ได้ ${count} ครั้ง ใน ${hours} ชม. พิมพ์ จ่าย มาได้เลยครับ`,
+    `สแกนต่อได้เลย ${price} บาท ได้ ${count} ครั้ง ใน ${hours} ชม. แตะปุ่มด้านล่างหรือบอกอาจารย์ได้เลยครับ`,
   ].join("\n");
   return [factsAlt];
 }
@@ -1496,7 +1495,10 @@ export function matchesDeterministicPaywallSoftDeclineIntent(text) {
 }
 
 export function isHistoryCommand(text, lowerText) {
-  return lowerText === "history" || text === "ประวัติ";
+  if (lowerText === "history" || text === "ประวัติ") return true;
+  // พูดแบบคน (กบ 14 ก.ค.): "ขอดูประวัติ" / "ดูประวัติการสแกนหน่อย" ก็ต้องเข้าใจ
+  const t = String(text || "").trim();
+  return t.length <= 30 && /ประวัติ/.test(t) && /^(ขอ|ดู|เปิด|เช็ค|อยากดู)/.test(t);
 }
 
 export function isStatsCommand(text, lowerText) {
