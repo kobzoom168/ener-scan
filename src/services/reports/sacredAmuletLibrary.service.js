@@ -551,7 +551,8 @@ function sortByAxisScore(items, axis) {
 }
 
 /**
- * คะแนนสูงสุดต่อมิติ (สูงสุด 6); ข้ามมิติที่ไม่มีคะแนน > 0
+ * ชิ้นเด่นประจำด้าน — 1 ชิ้นโผล่ได้ด้านเดียวคือด้าน peak ของตัวเอง (กติกาเดียวกับ
+ * ranking tabs และฝั่งกำไล; กบ 14 ก.ค.: ชิ้นเดียวเคยโผล่ครบทุกด้านดูซ้ำซาก)
  * @param {SacredAmuletLibraryItem[]} items
  * @returns {SacredAmuletAxisHighlight[]}
  */
@@ -561,6 +562,7 @@ function pickSacredAmuletAxisHighlights(items) {
   const out = [];
   for (const axis of POWER_ORDER) {
     const scored = items.filter((it) => {
+      if (String(it.peakPowerKey || "") !== axis) return false;
       const s = Number(it.axisScores?.[axis]);
       return Number.isFinite(s) && s > 0;
     });
