@@ -105,6 +105,8 @@ async function main() {
   for (const u of users) {
     const uid = u.line_user_id;
     if (!uid || seen.has(uid)) continue;
+    // เฉพาะ LINE user id จริง (ตัด test-user-*/ข้อมูลหลงระบบ)
+    if (!/^U[0-9a-f]{16,}$/i.test(uid)) continue;
     seen.add(uid);
     if (now - (lastInbound.get(uid) || 0) < RECENT_MS) continue; // เพิ่งคุยอยู่ ไม่ต้องปลุก
     if (activePaid(u)) continue; // แพ็กยังวิ่ง ไม่ใช่กลุ่มปลุก
@@ -118,6 +120,17 @@ async function main() {
   console.log("=== REACTIVATION SEGMENTS ===");
   for (const k of ["A", "B", "C"]) {
     console.log(`${k}: ${segments[k].length} คน${SEGMENTS.includes(k) ? "" : " (ข้าม — ไม่อยู่ใน SEGMENTS)"}`);
+  }
+
+  // โควตาข้อความ push ของ OA เดือนนี้ — กันยิงแล้วเกินแพลน
+  try {
+    const [q, c] = await Promise.all([
+      fetch("https://api.line.me/v2/bot/message/quota", { headers: { Authorization: `Bearer ${TOKEN}` } }).then((r) => r.json()),
+      fetch("https://api.line.me/v2/bot/message/quota/consumption", { headers: { Authorization: `Bearer ${TOKEN}` } }).then((r) => r.json()),
+    ]);
+    console.log(`LINE quota: type=${q?.type} limit=${q?.value ?? "-"} used=${c?.totalUsage ?? "?"}`);
+  } catch {
+    console.log("LINE quota: (เช็คไม่ได้)");
   }
 
   let sent = 0;
