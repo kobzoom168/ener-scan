@@ -3593,7 +3593,22 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // ฮวงจุ้ยจากรูป: explicit command (LIFF service row / typed keyword) arms the
   // photo mode — the next image goes to the feng-shui reader, not the scan lane.
+  // กบ 14 ก.ค.: ยังไม่เปิดรับ — ตอบตรง ๆ ว่ายังไม่เปิด จนกว่า FENGSHUI_ENABLED=1
   if (isFengShuiCommandText(text)) {
+    if (process.env.FENGSHUI_ENABLED !== "1") {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "fengshui_not_open",
+        semanticKey: "fengshui_not_open",
+        text: "ตอนนี้อาจารย์ยังไม่เปิดรับดูฮวงจุ้ยหรือพลังบ้านครับ กำลังเตรียมเปิดเร็ว ๆ นี้ เปิดเมื่อไหร่จะแจ้งในแชทนี้เลย\n\nตอนนี้ส่งรูปพระ เครื่องราง หิน หรือกำไล มาให้อาจารย์อ่านพลังก่อนได้ครับ",
+        alternateTexts: [
+          "เรื่องฮวงจุ้ยกับพลังบ้านตอนนี้ยังไม่เปิดรับครับ ใกล้เปิดแล้ว เดี๋ยวอาจารย์แจ้งในแชทนี้ ระหว่างนี้ส่งรูปชิ้นงานมาอ่านพลังก่อนได้เลย",
+        ],
+      });
+      return;
+    }
     armFengShuiMode(userId);
     await sendNonScanReply({
       client,
