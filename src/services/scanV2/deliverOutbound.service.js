@@ -708,7 +708,7 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     const sortedPkgs = [...pkgs].sort((a, b) => a.priceThb - b.priceThb);
     const menuLines = sortedPkgs.map((p) =>
       Number(p.scanCount) >= 999999
-        ? `${p.priceThb} บาท เหมารายเดือน สแกนไม่จำกัด ${Math.round(p.windowHours / 24)} วัน`
+        ? `${p.priceThb} บาท สมาชิกรายเดือน อาจารย์ดูแลตลอด ${Math.round(p.windowHours / 24)} วัน สแกนไม่จำกัด`
         : `${p.priceThb} บาท สแกนได้ ${p.scanCount} ครั้ง${p.windowHours >= 48 ? ` ใช้ได้ ${Math.round(p.windowHours / 24)} วัน` : ""}`,
     );
     return {

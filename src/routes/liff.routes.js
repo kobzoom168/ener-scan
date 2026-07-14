@@ -42,6 +42,7 @@ import {
   upsertConversationState,
 } from "../stores/conversationState.db.js";
 import { buildSlipPackageSwitchedApprovedText } from "../utils/webhookText.util.js";
+import { getValue, setValueWithTtl } from "../redis/scanV2Redis.js";
 
 export const liffRouter = express.Router();
 
@@ -744,9 +745,30 @@ const PICK_ACTION_HINT = {
   unknown: "พกติดตัว หรืออาราธนาก่อนออกจากบ้านก็ได้",
 };
 
-/** จัดอันดับ — deterministic ต่อวัน (เปิดซ้ำผลไม่เปลี่ยน) */
-function rankPickPieces(pieces, dayKey) {
-  const wd = new Date(Date.now() + 7 * 3600 * 1000).getUTCDay();
+// พูลประโยคเหตุผล — หมุนตาม (วัน, ชิ้น) ไม่ให้เห็นประโยคซ้ำในสัปดาห์เดียว (กบ: template ซ้ำ = ดูเป็นเครื่อง)
+const PICK_REASON_ALIGNED = [
+  (star, ax) => `วันนี้${star}หนุนด้าน${ax} ชิ้นนี้พลังเด่นตรงจังหวะพอดี`,
+  (star, ax) => `${star}เปิดทางเรื่อง${ax}วันนี้ ชิ้นนี้รับพลังช่วงนี้ได้เต็มที่`,
+  (star, ax) => `จังหวะ${ax}กำลังเด่นตาม${star} ชิ้นนี้คือตัวรับพลังของวันนี้`,
+  (star, ax) => `${star}ส่งแรงด้าน${ax}มาทั้งวัน ชิ้นนี้พลังตรงสายพอดี`,
+  (star, ax) => `วันนี้เรื่อง${ax}มีลุ้นเป็นพิเศษ ชิ้นนี้เสริมตรงจุดเลย`,
+  (star, ax) => `${star}คุมวันนี้และถูกโฉลกกับด้าน${ax} ชิ้นนี้เลยขึ้นแท่น`,
+];
+const PICK_REASON_PLAIN = [
+  (ax) => `พลังเด่นด้าน${ax} ช่วยประคองจังหวะวันนี้ได้ดี`,
+  (ax) => `ด้าน${ax}ของชิ้นนี้ช่วยให้วันนี้ราบรื่นขึ้น`,
+  (ax) => `ชิ้นนี้ถนัดเรื่อง${ax} เข้ากับโจทย์ของวันนี้`,
+  (ax) => `เสริม${ax}ไว้ทั้งวัน เดินเรื่องไหนก็ลื่นขึ้น`,
+  (ax) => `พลัง${ax}ของชิ้นนี้เข้ากับโทนของวันพอดี`,
+];
+const PICK_REASON_GENERIC = [
+  "พลังโดยรวมเข้ากับจังหวะวันนี้",
+  "คลื่นพลังของชิ้นนี้นิ่ง เข้ากับวันนี้",
+  "โทนพลังกลมกล่อม พาวันนี้ไปได้เรื่อย ๆ",
+];
+
+/** จัดอันดับ — deterministic ต่อวัน (เปิดซ้ำผลไม่เปลี่ยน); wd = วันในสัปดาห์ของ dayKey นั้น */
+function rankPickPieces(pieces, dayKey, wd) {
   const todayCircle = WEEKDAY_TO_CIRCLE[wd];
   const guide = MATCH_GUIDE[todayCircle] || MATCH_GUIDE[0];
   const dayStar = String(guide.star || "").split(" ")[0] || "ดาววันนี้";
@@ -759,16 +781,22 @@ function rankPickPieces(pieces, dayKey) {
       (aligned ? 22 : 0) +
       (fnv1a32(dayKey + "|pick|" + pc.name + "|" + (pc.peakLabel || "")) % 9);
     const suit = Math.max(55, Math.min(97, Math.round(raw)));
+    const rsnSeed = fnv1a32(dayKey + "|rsn|" + pc.name + "|" + (pc.peakLabel || ""));
     const base = aligned
-      ? "วันนี้" + dayStar + "หนุนด้าน" + pc.peakLabel + " ชิ้นนี้พลังเด่นตรงพอดี"
+      ? PICK_REASON_ALIGNED[rsnSeed % PICK_REASON_ALIGNED.length](dayStar, pc.peakLabel)
       : pc.peakLabel
-        ? "พลังเด่นด้าน" + pc.peakLabel + " ช่วยประคองจังหวะวันนี้ได้ดี"
-        : "พลังโดยรวมเข้ากับจังหวะวันนี้";
+        ? PICK_REASON_PLAIN[rsnSeed % PICK_REASON_PLAIN.length](pc.peakLabel)
+        : PICK_REASON_GENERIC[rsnSeed % PICK_REASON_GENERIC.length];
     const hint = PICK_ACTION_HINT[pc.portability || "unknown"];
     return { ...pc, suit, aligned, reason: base + " " + hint };
   });
   ranked.sort((a, b) => b.suit - a.suit);
   return { ranked, dayStar };
+}
+
+/** คีย์เทียบชิ้นข้ามวัน (ชื่อ+ด้านเด่น — ชุดเดียวกับ dedupe) */
+function pickPieceKey(pc) {
+  return pc.name + "|" + (pc.peakLabel || "-");
 }
 
 liffRouter.get("/api/liff/daily-pick", async (req, res) => {
@@ -779,8 +807,30 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
     const pieces = extractPickPieces(rows);
     if (!pieces.length) return res.json({ ok: true, empty: true });
 
+    const nowBkk = new Date(Date.now() + 7 * 3600 * 1000);
     const dayKey = bangkokDateKey();
-    const { ranked, dayStar } = rankPickPieces(pieces, dayKey);
+    const { ranked, dayStar } = rankPickPieces(pieces, dayKey, nowBkk.getUTCDay());
+
+    // ป้าย "ขึ้นจากเมื่อวาน": จัดอันดับของเมื่อวานด้วยสูตรเดิม (deterministic ไม่ต้องเก็บ state)
+    const yBkk = new Date(nowBkk.getTime() - 86400000);
+    const yKey = yBkk.toISOString().slice(0, 10);
+    const { ranked: rankedY } = rankPickPieces(pieces, yKey, yBkk.getUTCDay());
+    const posY = new Map(rankedY.map((pc, i) => [pickPieceKey(pc), i]));
+    ranked.forEach((pc, i) => {
+      const prev = posY.get(pickPieceKey(pc));
+      pc.moved = prev == null ? "same" : prev > i ? "up" : prev < i ? "down" : "same";
+    });
+
+    // streak เปิดต่อเนื่อง (redis, พลาดได้ไม่พัง)
+    let streak = 1;
+    try {
+      const raw = await getValue(`liff:pickstreak:${userId}`);
+      const [lastKey, nRaw] = String(raw || "").split("|");
+      const n = Number(nRaw) || 0;
+      if (lastKey === dayKey) streak = Math.max(1, n);
+      else if (lastKey === yKey) streak = n + 1;
+      await setValueWithTtl(`liff:pickstreak:${userId}`, `${dayKey}|${streak}`, 3 * 24 * 3600);
+    } catch {}
 
     // สมาชิกรายเดือน (ไม่จำกัด) = เทียบทั้งตู้ / อื่น ๆ = เห็นเฉพาะชิ้นล่าสุด
     let isMember = false;
@@ -798,7 +848,7 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
     } catch {}
 
     if (isMember) {
-      return res.json({ ok: true, member: true, dayStar, total: ranked.length, items: ranked.slice(0, 3) });
+      return res.json({ ok: true, member: true, dayStar, streak, total: ranked.length, items: ranked.slice(0, 3) });
     }
     const latestName = pieces[0]?.name;
     const latestRanked = ranked.find((x) => x.name === latestName) || ranked[0];
@@ -806,6 +856,7 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
       ok: true,
       member: false,
       dayStar,
+      streak,
       total: ranked.length,
       items: [latestRanked],
       lockedCount: Math.max(0, ranked.length - 1),
@@ -1359,6 +1410,7 @@ function buildLiffHtml(liffId) {
   .pk-hero{position:relative;margin-top:10px;border:1.5px solid var(--line-gold);border-radius:18px;padding:14px;display:flex;gap:14px;align-items:center;background:linear-gradient(135deg,rgba(233,207,147,.12),rgba(233,207,147,.02))}
   .pk-hero .pk-img{width:104px;height:104px;border-radius:14px;object-fit:cover;flex:0 0 auto;border:1px solid var(--line-gold);background:rgba(160,140,90,.12)}
   .pk-tag{display:inline-block;font-size:.72rem;font-weight:800;color:var(--gold-deep);border:1px solid var(--line-gold);border-radius:999px;padding:2px 10px;margin-bottom:5px}
+  .pk-up{display:inline-block;font-size:.7rem;font-weight:800;color:#2e7d4f;background:rgba(46,125,79,.1);border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:1px}
   .pk-name{font-weight:800;font-size:1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pk-suit{font-size:2.5rem;line-height:1.1;color:var(--gold-deep);font-weight:500}
   .pk-suitl{font-size:.74rem;font-weight:700;color:var(--faint)}
@@ -2338,7 +2390,10 @@ function buildLiffHtml(liffId) {
       var items = j.items || [];
       if(!items.length) return;
       $("pickcard").classList.remove("hidden");
-      $("pk-day").textContent = j.dayStar ? "อิงพลัง" + j.dayStar : "";
+      var dayBits = [];
+      if (j.dayStar) dayBits.push("อิงพลัง" + j.dayStar);
+      if (j.streak >= 2) dayBits.push("เปิดต่อเนื่อง " + j.streak + " วัน");
+      $("pk-day").textContent = dayBits.join(" · ");
 
       var hero = items[0];
       var hbox = $("pk-hero");
@@ -2346,6 +2401,7 @@ function buildLiffHtml(liffId) {
         (hero.img ? '<img class="pk-img" src="' + hero.img + '" alt="" onerror="this.remove()">' : '') +
         '<div style="min-width:0;flex:1">' +
           '<span class="pk-tag">' + (j.member ? "อาจารย์เลือกให้วันนี้" : "ชิ้นล่าสุดของคุณ") + '</span>' +
+          (hero.moved === "up" ? '<span class="pk-up">ขึ้นจากเมื่อวาน</span>' : '') +
           '<div class="pk-name">' + hero.name + '</div>' +
           '<div><b class="serif pk-suit" id="pk-suit-n">0</b><span class="pk-suitl"> เหมาะกับวันนี้ %</span></div>' +
         '</div>';
@@ -2678,7 +2734,7 @@ function buildLiffHtml(liffId) {
       var unlimited = p.scanCount >= 999999;
       var countTxt = unlimited ? "สแกนไม่จำกัด" : "สแกน " + p.scanCount + " ครั้ง";
       var winTxt = (p.windowHours >= 48 && p.windowHours % 24 === 0)
-        ? (unlimited ? "รายเดือน · ใช้ได้ " : "ใช้ได้ ") + (p.windowHours / 24) + " วัน"
+        ? (unlimited ? "สมาชิกรายเดือน · อาจารย์ดูแลตลอด " : "ใช้ได้ ") + (p.windowHours / 24) + " วัน"
         : "ใช้ได้ภายใน " + p.windowHours + " ชั่วโมง";
       b.innerHTML = '<span class="pk-price">' + p.priceThb + '<small> บาท</small></span>' +
         '<span class="pk-d"><span class="pk-t">' + countTxt + '</span>' +
