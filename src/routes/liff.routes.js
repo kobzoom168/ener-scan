@@ -724,8 +724,11 @@ function extractPickPieces(rows) {
     seen.add(key);
     // กำไล/หิน = พกได้แน่นอน; สายพระใช้หมวดที่เก็บไว้ + คำในชื่อ
     const portability = isCrystal ? "carry" : pickPortability(p.object?.objectType, name);
+    // รูปจริงของชิ้นจากตอนสแกน — เจ้าของเห็นรูปก็รู้ทันทีว่าชิ้นไหน ไม่ต้องระบุว่าเป็นพระอะไร
+    const imgRaw = String(p.object?.objectImageUrl || "").trim();
     out.push({
       name,
+      img: /^https:\/\//i.test(imgRaw) ? imgRaw : null,
       energyScore: Number.isFinite(es) ? es : null,
       compatPct: Number.isFinite(compat) ? compat : null,
       peakLabel: peak ? peak.label : null,
@@ -1352,6 +1355,18 @@ function buildLiffHtml(liffId) {
   }
   .score .k{font-size:1.02rem;font-weight:800}
   .score .k small{display:block;font-weight:500;color:var(--faint);font-size:.82rem;margin-top:2px}
+  /* Daily Pick: ชิ้นเด่นประจำวัน */
+  .pk-hero{position:relative;margin-top:10px;border:1.5px solid var(--line-gold);border-radius:18px;padding:14px;display:flex;gap:14px;align-items:center;background:linear-gradient(135deg,rgba(233,207,147,.12),rgba(233,207,147,.02))}
+  .pk-hero .pk-img{width:104px;height:104px;border-radius:14px;object-fit:cover;flex:0 0 auto;border:1px solid var(--line-gold);background:rgba(160,140,90,.12)}
+  .pk-tag{display:inline-block;font-size:.72rem;font-weight:800;color:var(--gold-deep);border:1px solid var(--line-gold);border-radius:999px;padding:2px 10px;margin-bottom:5px}
+  .pk-name{font-weight:800;font-size:1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pk-suit{font-size:2.5rem;line-height:1.1;color:var(--gold-deep);font-weight:500}
+  .pk-suitl{font-size:.74rem;font-weight:700;color:var(--faint)}
+  .pk-row{display:flex;gap:10px;align-items:center;border:1px solid rgba(160,140,90,.25);border-radius:12px;padding:8px 10px}
+  .pk-row img{width:44px;height:44px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:rgba(160,140,90,.12)}
+  .pk-row .pk-rn{min-width:0;flex:1}
+  .pk-row .pk-rn b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.92rem}
+  .pk-row .pk-rn span{font-size:.78rem;color:var(--faint)}
   .score .mid{display:flex;align-items:flex-end;gap:8px;margin-top:4px}
   .score .num{font-size:4rem;line-height:1.05;color:var(--gold-deep);font-weight:500}
   .score .per{font-size:1.05rem;color:var(--faint);padding-bottom:8px}
@@ -1780,10 +1795,12 @@ function buildLiffHtml(liffId) {
       </div>
     </div>
 
-    <!-- ชิ้นไหนหนุนดวงวันนี้ (Daily Pick) -->
+    <!-- ชิ้นไหนหนุนดวงวันนี้ (Daily Pick): ชิ้นเด่นใบใหญ่มีรูปจริง + รองเป็นแถวเล็ก -->
     <div class="score hidden" id="pickcard">
       <div class="k">ชิ้นไหนหนุนดวงวันนี้ <small id="pk-day"></small></div>
-      <div id="pk-list" style="display:flex;flex-direction:column;gap:10px;margin-top:6px"></div>
+      <div class="pk-hero hidden" id="pk-hero"></div>
+      <div class="ft hidden" id="pk-reason" style="margin-top:8px"></div>
+      <div id="pk-list" style="display:flex;flex-direction:column;gap:8px;margin-top:10px"></div>
       <div class="ft hidden" id="pk-lock" style="margin-top:10px"></div>
       <button class="sttop hidden" id="pk-upgrade" style="margin-top:10px;width:100%">ให้อาจารย์เทียบทุกชิ้น ทุกวัน</button>
     </div>
@@ -2304,22 +2321,52 @@ function buildLiffHtml(liffId) {
         }
       }).catch(function(){});
   }
+  function pkCountUp(el, target){
+    var t0 = null, dur = 900;
+    function step(ts){
+      if(!t0) t0 = ts;
+      var k = Math.min(1, (ts - t0) / dur);
+      k = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(target * k);
+      if(k < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
   function loadDailyPick(){
     api("/api/liff/daily-pick").then(function(r){ return r.json(); }).then(function(j){
       if(!j || !j.ok || j.empty) return;
+      var items = j.items || [];
+      if(!items.length) return;
       $("pickcard").classList.remove("hidden");
       $("pk-day").textContent = j.dayStar ? "อิงพลัง" + j.dayStar : "";
+
+      var hero = items[0];
+      var hbox = $("pk-hero");
+      hbox.innerHTML =
+        (hero.img ? '<img class="pk-img" src="' + hero.img + '" alt="" onerror="this.remove()">' : '') +
+        '<div style="min-width:0;flex:1">' +
+          '<span class="pk-tag">' + (j.member ? "อาจารย์เลือกให้วันนี้" : "ชิ้นล่าสุดของคุณ") + '</span>' +
+          '<div class="pk-name">' + hero.name + '</div>' +
+          '<div><b class="serif pk-suit" id="pk-suit-n">0</b><span class="pk-suitl"> เหมาะกับวันนี้ %</span></div>' +
+        '</div>';
+      hbox.classList.remove("hidden");
+      var rs = $("pk-reason");
+      rs.textContent = hero.reason || "";
+      rs.classList.toggle("hidden", !hero.reason);
+      pkCountUp($("pk-suit-n"), hero.suit);
+
       var list = $("pk-list"); list.innerHTML = "";
-      var medals = ["อันดับ 1", "อันดับ 2", "อันดับ 3"];
-      (j.items || []).forEach(function(it, i){
+      items.slice(1).forEach(function(it){
         var row = document.createElement("div");
-        row.style.cssText = "border:1px solid rgba(160,140,90,.25);border-radius:12px;padding:10px 12px";
-        row.innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">' +
-          '<b style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (j.member ? medals[i] + " " : "") + it.name + '</b>' +
-          '<b class="serif" style="flex:0 0 auto;font-size:1.15rem">' + it.suit + '<small style="font-size:.65rem;font-weight:600"> เหมาะ%</small></b></div>' +
-          '<div class="ft" style="margin-top:4px">' + it.reason + '</div>';
+        row.className = "pk-row";
+        row.innerHTML =
+          (it.img ? '<img src="' + it.img + '" alt="" onerror="this.remove()">' : '') +
+          '<div class="pk-rn"><b>' + it.name + '</b>' +
+          '<span>' + (it.peakLabel ? "พลังเด่นด้าน" + it.peakLabel : "พลังโดยรวมเข้ากับวันนี้") + '</span></div>' +
+          '<b class="serif" style="flex:0 0 auto;font-size:1.1rem;color:var(--gold-deep)">' + it.suit + '</b>';
         list.appendChild(row);
       });
+
       if(!j.member && j.lockedCount > 0){
         var lk = $("pk-lock");
         lk.textContent = "ในคลังคุณมีอีก " + j.lockedCount + " ชิ้น สมาชิกรายเดือนให้อาจารย์เทียบทั้งหมดแล้วเลือกให้ทุกเช้า";
