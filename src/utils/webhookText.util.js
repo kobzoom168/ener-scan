@@ -462,6 +462,18 @@ export function formatOfferPackageLineThai(p) {
   return `${p.priceThb} บาท สแกนได้ ${p.scanCount} ครั้ง ${win}`;
 }
 
+/** สลิปยอดไม่ตรงแพ็กที่เลือกแต่ตรงแพ็กอื่น → อนุมัติพร้อมบอกว่าปรับแพ็กตามยอดให้แล้ว */
+export function buildSlipPackageSwitchedApprovedText(sw) {
+  const pkgPart = isUnlimitedScanCount(sw.scanCount)
+    ? `เหมารายเดือน สแกนไม่จำกัด ${formatOfferWindowThai(sw.windowHours)}`
+    : `สแกน ${sw.scanCount} ครั้ง ใช้ได้ ${formatOfferWindowThai(sw.windowHours)}`;
+  return (
+    `ตรวจสอบสลิปเรียบร้อยครับ ยอดโอนเข้ามา ${sw.priceThb} บาท ` +
+    `อาจารย์จัดเป็นแพ็ก${pkgPart} ให้ตามยอดเลยนะครับ\n\n` +
+    `เปิดสิทธิ์แล้ว ส่งรูปชิ้นที่ต้องการสแกนเข้ามาได้เลยครับ`
+  );
+}
+
 /** @deprecated Use buildSingleOfferPaywallAltText — kept for call sites. */
 export function buildPackageSelectionPromptFromOffer(offer = loadActiveScanOffer()) {
   return buildSingleOfferPaywallAltText(offer);

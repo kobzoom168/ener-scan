@@ -41,6 +41,7 @@ import {
   getConversationStateByLineUserId,
   upsertConversationState,
 } from "../stores/conversationState.db.js";
+import { buildSlipPackageSwitchedApprovedText } from "../utils/webhookText.util.js";
 
 export const liffRouter = express.Router();
 
@@ -1198,10 +1199,13 @@ liffRouter.post(
         }
         clearPaymentState(userId);
         if (liffLineClient) {
+          const swPkg = approvalFlow.switchedPackage || null;
           pushText(
             liffLineClient,
             userId,
-            "✅ ตรวจสลิปเรียบร้อยครับ อาจารย์เปิดสิทธิ์สแกนให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล เข้ามาได้เลยครับ",
+            swPkg
+              ? buildSlipPackageSwitchedApprovedText(swPkg)
+              : "✅ ตรวจสลิปเรียบร้อยครับ อาจารย์เปิดสิทธิ์สแกนให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล เข้ามาได้เลยครับ",
           ).catch(() => {});
         }
         console.log(JSON.stringify({ event: "LIFF_SLIP_AUTO_APPROVED", paymentId }));
