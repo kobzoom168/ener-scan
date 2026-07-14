@@ -74,6 +74,7 @@ import {
   parsePackageSelectionFromText,
   getDefaultPackage,
   findPackageByKey,
+  listActivePackages,
 } from "../services/scanOffer.packages.js";
 import {
   getPromptPayQrPublicUrl,
@@ -113,7 +114,10 @@ import {
   buildRegistrationPrompt,
   getRegistrationGateConfig,
 } from "../services/registrationGate.service.js";
-import { handleProfileEditCommand } from "../services/profileEditChat.service.js";
+import {
+  handleProfileEditCommand,
+  handlePendingProfileEditValue,
+} from "../services/profileEditChat.service.js";
 import {
   evaluateAwaitingPaymentSlipImage,
   buildSlipNotTransferReceiptText,
@@ -1461,9 +1465,9 @@ async function handlePaymentCommandTextRoute({
         [
           "เลือกได้เลยครับ",
           ...sortedPayPkgs.map((p) => formatOfferPackageLineThai(p)),
-          "เอาแบบไหนพิมพ์ราคามาได้เลย",
+          "เอาแบบไหนแตะปุ่มด้านล่าง หรือบอกราคามาเลยครับ",
         ].join("\n"),
-        "กดปุ่มด้านล่างหรือพิมพ์ราคาที่ต้องการมาได้เลยครับ เดี๋ยวส่งคิวอาร์ให้ทันที",
+        "แตะปุ่มด้านล่าง หรือบอกราคามาเลยครับ เดี๋ยวส่งคิวอาร์ให้ทันที",
       ],
       quickReply: {
         items: sortedPayPkgs.slice(0, 3).map((p) => ({
@@ -3679,17 +3683,32 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // ✏️ แก้ข้อมูลลงทะเบียนผ่านแชท (เปลี่ยนชื่อ/เบอร์/เพศ) — deterministic, มาก่อน AI
   // (วันเกิดมี flow เดิม birthdateChangeFlow อยู่แล้ว ไม่แตะ)
+  // กบ 14 ก.ค.: สองจังหวะแบบคนคุยกัน — "เปลี่ยนเบอร์" → อาจารย์ถามกลับ → ลูกค้าตอบค่าใหม่
   {
-    const profileEditReply = await handleProfileEditCommand(userId, text).catch(() => null);
-    if (profileEditReply) {
+    const pendingValueReply = await handlePendingProfileEditValue(userId, text).catch(() => null);
+    if (pendingValueReply) {
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
         replyType: "profile_edit_chat",
         semanticKey: `profile_edit_chat:${Date.now() % 100000}`,
-        text: profileEditReply,
+        text: pendingValueReply,
         alternateTexts: [],
+      });
+      return;
+    }
+    const profileEditReply = await handleProfileEditCommand(userId, text).catch(() => null);
+    if (profileEditReply?.text) {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "profile_edit_chat",
+        semanticKey: `profile_edit_chat:${Date.now() % 100000}`,
+        text: profileEditReply.text,
+        alternateTexts: [],
+        quickReply: profileEditReply.quickReply || null,
       });
       return;
     }
@@ -4742,6 +4761,41 @@ async function handleTextMessage({ client, event, userId, session }) {
 
     if (branch === "ack") {
       const ackStreak = bumpSameStateAckStreak(userId, "paywall_offer_single");
+      // กบ 14 ก.ค.: ครับ/โอเค/ตกลง หลังเห็น paywall = ตกลงจะเปิดสิทธิ์ → ส่งเมนูปุ่ม
+      // เลือกแพ็กทันที ไม่ย้ำเฉย ๆ ให้ลูกค้าลอยค้าง (ack ซ้ำ ๆ ค่อยผ่อนเป็นโทนเดิม)
+      if (ackStreak === 1) {
+        const ackPkgs = listActivePackages(offer)
+          .slice()
+          .sort((a, b) => a.priceThb - b.priceThb);
+        if (ackPkgs.length) {
+          logStateMicroIntent({
+            userId,
+            activeState: "paywall_offer_single",
+            inputText: text,
+            normalizedIntent: "ack_as_purchase_agree",
+            confidence: "near_safe",
+            chosenReplyType: "payment_pick_package_menu",
+          });
+          await sendNonScanReply({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            replyType: "payment_pick_package_menu",
+            semanticKey: "payment_pick_package_menu_ack",
+            text: buildSingleOfferPaywallAltText(offer),
+            alternateTexts: [
+              "แตะปุ่มด้านล่าง หรือบอกราคามาเลยครับ เดี๋ยวส่งคิวอาร์ให้ทันที",
+            ],
+            quickReply: {
+              items: ackPkgs.slice(0, 3).map((p) => ({
+                type: "action",
+                action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
+              })),
+            },
+          });
+          return;
+        }
+      }
       const ackTier = guidanceTierFromStreak(ackStreak);
       logHumanConversationMemory({
         event: "STATE_ACK_CONTINUE",

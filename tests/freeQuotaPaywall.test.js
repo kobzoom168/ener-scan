@@ -40,11 +40,11 @@ test("buildDeterministicFreeQuotaExhaustedPaywallText: short natural copy + offe
   const t = buildDeterministicFreeQuotaExhaustedPaywallText(o, {
     lineUserId: "U_test_free_quota_paywall",
   });
-  assert.ok(t.includes("วันนี้สิทธิ์สแกนฟรีครบแล้วครับ"));
+  assert.ok(t.includes("วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ"));
   assert.ok(t.includes("แพ็ก 49 บาท"));
   assert.ok(t.includes("4 ครั้ง"));
   assert.ok(t.includes("24 ชม."));
-  assert.ok(t.includes('"จ่าย"'));
+  assert.ok(t.includes("แตะปุ่มด้านล่าง"));
   assert.ok(!t.includes("• "));
 });
 
@@ -101,5 +101,5 @@ test("deterministic paywall primary is stable (phase1 must not replace before se
     lineUserId: "U_test_stable_paywall",
   });
   assert.ok(t.length > 120);
-  assert.ok(t.includes("วันนี้สิทธิ์สแกนฟรีครบแล้วครับ"));
+  assert.ok(t.includes("วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ"));
 });

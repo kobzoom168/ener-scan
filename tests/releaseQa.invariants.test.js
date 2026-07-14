@@ -71,7 +71,7 @@ test("release: single-offer alt text includes price from formatPaywallPriceToken
   assert.equal(tokens, "49");
   const alt = buildSingleOfferPaywallAltText(offer);
   assert.ok(alt.includes("49"));
-  assert.ok(alt.includes("จ่ายเงิน"));
+  assert.ok(alt.includes("บอกอาจารย์"));
 });
 
 test("release: buildPaymentApprovedText reflects DB fields and paidPlanCode intro shape", async () => {
