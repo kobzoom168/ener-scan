@@ -2428,7 +2428,8 @@ function buildLiffHtml(liffId) {
         lk.textContent = "ในคลังคุณมีอีก " + j.lockedCount + " ชิ้น สมาชิกรายเดือนให้อาจารย์เทียบทั้งหมดแล้วเลือกให้ทุกเช้า";
         lk.classList.remove("hidden");
         var up = $("pk-upgrade"); up.classList.remove("hidden");
-        up.onclick = openPay;
+        // ปุ่มขายสมาชิกรายเดือน → เปิดหน้าจ่ายโดยติ๊ก 299 มาให้เลย (กบ 14 ก.ค.)
+        up.onclick = function(){ openPay(true); };
       }
     }).catch(function(){});
   }
@@ -2745,7 +2746,7 @@ function buildLiffHtml(liffId) {
     });
   }
 
-  function openPay(){
+  function openPay(preferUnlimited){
     show("v-pay");
     $("pay-pick").classList.remove("hidden");
     $("pay-qr").classList.add("hidden");
@@ -2754,6 +2755,10 @@ function buildLiffHtml(liffId) {
       if(!j || !j.ok) return;
       pay.pkgs = j.packages || [];
       pay.selected = j.defaultPackageKey || (pay.pkgs[0] && pay.pkgs[0].key) || "";
+      if(preferUnlimited === true){
+        var mo = pay.pkgs.filter(function(p){ return p.scanCount >= 999999; })[0];
+        if(mo) pay.selected = mo.key;
+      }
       pay.qrUrl = j.qrUrl || "";
       payRenderPkgs();
       var rem = $("pay-remain");
