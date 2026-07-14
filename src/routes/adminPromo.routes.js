@@ -22,6 +22,10 @@ import {
   getRegistrationGateConfig,
   REGISTRATION_GATE_DEFAULTS,
 } from "../services/registrationGate.service.js";
+import {
+  getUpgradeCreditConfig,
+  UPGRADE_CREDIT_DEFAULTS,
+} from "../services/upgradeCredit.service.js";
 
 function esc(s) {
   return String(s ?? "")
@@ -128,6 +132,21 @@ ${pkgRows}
     </div>
 
     <div class="card">
+      <h2>เครดิตอัปเกรดเป็นรายเดือน</h2>
+      <label class="chk" style="flex-direction:row;align-items:center;gap:8px">
+        <input type="checkbox" name="upgradeCreditEnabled"${upgradeCredit.enabled ? " checked" : ""}/> เปิดใช้งาน
+      </label>
+      <label style="max-width:220px">ใช้สิทธิ์ได้ภายในกี่วันหลังจ่ายแพ็กเริ่มต้น
+        <input type="number" name="upgradeCreditDays" min="1" max="30" value="${upgradeCredit.days}"/>
+      </label>
+      <small>
+        จ่ายแพ็กเริ่มต้น (ราคาถูกสุด) แล้วสมัครรายเดือนภายในกำหนด ระบบหักค่าแพ็กออกจากยอดโอนให้อัตโนมัติ
+        (เช่น 299 หัก 49 เหลือโอน 250) ใช้ได้ครั้งเดียวต่อการจ่ายหนึ่งรอบ ·
+        มีข้อความชวนอัตโนมัติตอนลูกค้าใช้แพ็กครบทุกครั้ง
+      </small>
+    </div>
+
+    <div class="card">
       <h2>บังคับลงทะเบียนก่อนใช้ (ลูกค้าใหม่)</h2>
       <label class="chk" style="flex-direction:row;align-items:center;gap:8px">
         <input type="checkbox" name="regGateEnabled"${regGate.enabled ? " checked" : ""}/> เปิดใช้งาน
@@ -211,6 +230,7 @@ export default function createAdminPromoRouter() {
     const offer = loadActiveScanOffer();
     const renewal = await getRenewalReminderConfig().catch(() => ({ ...RENEWAL_REMINDER_DEFAULTS }));
     const regGate = await getRegistrationGateConfig().catch(() => ({ ...REGISTRATION_GATE_DEFAULTS }));
+    const upgradeCredit = await getUpgradeCreditConfig().catch(() => ({ ...UPGRADE_CREDIT_DEFAULTS }));
     res.status(200).type("html").send(
       pageHtml({
         offer,
@@ -288,6 +308,16 @@ export default function createAdminPromoRouter() {
             String(req.body?.renewalText || "").trim().slice(0, 300) ||
             RENEWAL_REMINDER_DEFAULTS.text,
         });
+        {
+          const creditDays = Math.floor(Number(req.body?.upgradeCreditDays));
+          await setAppSetting("upgrade_credit", {
+            enabled: req.body?.upgradeCreditEnabled === "on",
+            days:
+              Number.isFinite(creditDays) && creditDays >= 1 && creditDays <= 30
+                ? creditDays
+                : UPGRADE_CREDIT_DEFAULTS.days,
+          });
+        }
         console.log(
           JSON.stringify({
             event: "ADMIN_PROMO_SAVED",

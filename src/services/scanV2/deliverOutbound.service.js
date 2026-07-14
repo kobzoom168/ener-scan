@@ -48,6 +48,8 @@ import {
   sleepIfRateHint,
   clearDedupeKey,
   tryDedupeOnce,
+  getValue,
+  setValueWithTtl,
 } from "../../redis/scanV2Redis.js";
 import { scanInFlightKeyForUser } from "./webhookImageIngestion.service.js";
 import { supabase } from "../../config/supabase.js";
@@ -630,6 +632,78 @@ function pickRemainingText(variants, seedStr) {
   return variants[h % variants.length];
 }
 
+/**
+ * Upsell รายเดือนตอนแพ็กเพิ่งหมด — เฉพาะคนที่มีเครดิตอัปเกรด (เพิ่งจ่ายแพ็กเริ่มต้น
+ * ภายในกำหนด) ส่งครั้งเดียวต่อแพ็ก (dedupe ด้วย paid_until)
+ * @returns {Promise<{text: string, quickReply: object|null}|null>}
+ */
+async function buildPackExhaustedUpsellNotice(lineUserId, paidUntilIso) {
+  try {
+    const uid = String(lineUserId || "").trim();
+    const dedupeKey = `upsell_pack_done:${uid}:${paidUntilIso}`;
+    const already = await getValue(dedupeKey).catch(() => null);
+    if (already) return null;
+
+    const { getUpgradeCreditForLineUser } = await import("../upgradeCredit.service.js");
+    const credit = await getUpgradeCreditForLineUser(uid);
+    if (!credit) return null;
+
+    const offer = loadActiveScanOffer();
+    const monthly = (offer?.packages || []).find(
+      (p) => p.active && String(p.key) === credit.monthlyPkgKey,
+    );
+    if (!monthly) return null;
+    const winDays = Math.round(Number(monthly.windowHours) / 24) || 30;
+    const daysLeft = Math.max(
+      1,
+      Math.ceil((credit.expiresAtMs - Date.now()) / 86400000),
+    );
+
+    await setValueWithTtl(dedupeKey, "1", 10 * 24 * 3600).catch(() => {});
+    console.log(
+      JSON.stringify({
+        event: "PACK_EXHAUSTED_UPSELL_SENT",
+        lineUserIdPrefix: uid.slice(0, 8),
+        payThb: credit.payThb,
+        creditThb: credit.creditThb,
+      }),
+    );
+    return {
+      text: [
+        "ครบทุกครั้งของแพ็กนี้แล้วครับ ขอบคุณที่ให้อาจารย์ดูให้นะครับ",
+        "",
+        `ถ้าช่วงนี้กำลังดูของเพลิน สมาชิกรายเดือน ${credit.monthlyPriceThb} บาท อาจารย์ดูแลตลอด ${winDays} วัน สแกนไม่จำกัด และทุกเช้าอาจารย์เทียบทุกชิ้นในคลังแล้วเลือกชิ้นที่หนุนดวงวันนั้นให้เลย`,
+        "",
+        `พิเศษ ภายใน ${daysLeft} วันนี้ ค่าแพ็ก ${credit.creditThb} บาทที่จ่ายไปหักออกได้เลย เหลือ ${credit.payThb} บาท แตะปุ่มด้านล่างได้เลยครับ`,
+      ].join("\n"),
+      quickReply: {
+        items: [
+          {
+            type: "action",
+            action: {
+              type: "message",
+              label: `รายเดือนเหลือ ${credit.payThb}`,
+              text: `จ่าย ${credit.monthlyPriceThb}`,
+            },
+          },
+          {
+            type: "action",
+            action: { type: "message", label: "ไว้ก่อน", text: "ไว้ก่อน" },
+          },
+        ],
+      },
+    };
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: "PACK_EXHAUSTED_UPSELL_FAILED",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+    return null;
+  }
+}
+
 async function buildRemainingQuotaNoticeText(lineUserId) {
   try {
     const { data: u } = await supabase
@@ -675,6 +749,19 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
         `${lineUserId}:${paidRemaining}`,
       );
     }
+    // เพิ่งใช้ครั้งสุดท้ายของแพ็ก (ยอดเหลือ 0 แต่หน้าต่างแพ็กยังไม่หมดอายุ)
+    // → จังหวะ upsell รายเดือน + เครดิตหักค่าแพ็ก (แผนการตลาด W1 — ส่งครั้งเดียวต่อแพ็ก)
+    const paidUntilMs = Date.parse(String(u.paid_until || ""));
+    if (
+      paidRemaining <= 0 &&
+      Number.isFinite(paidUntilMs) &&
+      paidUntilMs > now.getTime()
+    ) {
+      const upsell = await buildPackExhaustedUpsellNotice(lineUserId, String(u.paid_until));
+      if (upsell) return upsell;
+      // ไม่เข้าเงื่อนไข (ไม่มีเครดิต/ส่งไปแล้ว) → ไหลไปแจ้งสิทธิ์ฟรีตามปกติ
+    }
+
     const offer = loadActiveScanOffer(now);
     const freeQuota = Number(offer?.freeQuotaPerDay) || 2;
     let used = await countScanResultsTodayForAppUser(String(u.id), now).catch(() => 0);
