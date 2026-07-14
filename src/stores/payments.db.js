@@ -546,6 +546,38 @@ export async function updatePaymentSlipVerificationFields(paymentId, patch = {})
 }
 
 /**
+ * ยอดโอนไม่ตรงแพ็กที่เลือก แต่ตรงราคาแพ็กอื่นเป๊ะ → สลับแพ็กของ payment ให้ตามเงินจริง
+ * อัปเดตเฉพาะสถานะก่อนอนุมัติ กันชนกับ admin ที่กำลังกดอนุมัติอยู่พอดี
+ * @param {{ paymentId: string, pkg: { key: string, label?: string, priceThb: number, windowHours?: number } }} p
+ * @returns {Promise<boolean>} true เมื่อสลับสำเร็จ
+ */
+export async function switchPendingPaymentPackage({ paymentId, pkg } = {}) {
+  const id = String(paymentId || "").trim();
+  if (!id) throw new Error("payments_missing_payment_id");
+  const key = String(pkg?.key || "").trim();
+  const price = Number(pkg?.priceThb);
+  if (!key || !Number.isFinite(price) || price < 1) {
+    throw new Error("payments_invalid_switch_package");
+  }
+  const uh = Math.floor(Number(pkg?.windowHours));
+  const { data, error } = await supabase
+    .from("payments")
+    .update({
+      package_code: key,
+      package_name: String(pkg?.label || key).trim() || key,
+      amount: price,
+      expected_amount: price,
+      unlock_hours: Number.isFinite(uh) && uh >= 1 ? uh : DEFAULT_UNLOCK_HOURS,
+      updated_at: getNowIso(),
+    })
+    .eq("id", id)
+    .in("status", ["awaiting_payment", "awaiting_slip", "pending_verify"])
+    .select("id");
+  if (error) throw error;
+  return Boolean(data && data.length);
+}
+
+/**
  * Current slip verification status for a payment (reflects the previous slip
  * attempt before a new auto-approval run overwrites it). Used to tell a first
  * failed attempt apart from a repeat one. Non-fatal: returns null on any error.

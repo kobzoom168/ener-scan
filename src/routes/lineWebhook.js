@@ -285,6 +285,7 @@ import {
   isStatsCommand,
   groupImageEventCountByUser,
   buildFollowWelcomeText,
+  buildSlipPackageSwitchedApprovedText,
 } from "../utils/webhookText.util.js";
 
 import {
@@ -2515,16 +2516,24 @@ async function finalizeAcceptedImage({
         clearPaymentState(userId);
         markAcceptedImageEvent(userId, eventTimestamp);
         clearLatestScanJob(userId);
+        // สลับแพ็กตามยอดโอนจริง → บอกลูกค้าตรง ๆ ว่าปรับให้แล้ว กันงงว่าได้แพ็กไหน
+        const swPkg = approvalFlow.switchedPackage || null;
         await sendNonScanReply({
           client,
           userId,
           replyToken: event.replyToken,
           replyType: "slip_auto_approved",
           semanticKey: "slip_auto_approved",
-          text: "ตรวจสอบสลิปเรียบร้อยแล้วครับ\n\nอาจารย์เปิดสิทธิ์สแกนให้แล้ว\nตอนนี้สามารถส่งรูปวัตถุที่ต้องการสแกนเข้ามาได้เลยครับ",
-          alternateTexts: [
-            "ยืนยันสลิปเรียบร้อยแล้วครับ ส่งรูปวัตถุที่ต้องการสแกนมาได้เลย",
-          ],
+          text: swPkg
+            ? buildSlipPackageSwitchedApprovedText(swPkg)
+            : "ตรวจสอบสลิปเรียบร้อยแล้วครับ\n\nอาจารย์เปิดสิทธิ์สแกนให้แล้ว\nตอนนี้สามารถส่งรูปวัตถุที่ต้องการสแกนเข้ามาได้เลยครับ",
+          alternateTexts: swPkg
+            ? [
+                `ยืนยันสลิปแล้วครับ ยอด ${swPkg.priceThb} บาท ปรับแพ็กให้ตามยอดแล้ว ส่งรูปมาสแกนได้เลย`,
+              ]
+            : [
+                "ยืนยันสลิปเรียบร้อยแล้วครับ ส่งรูปวัตถุที่ต้องการสแกนมาได้เลย",
+              ],
         });
         return;
       }

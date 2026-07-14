@@ -3,6 +3,9 @@ import { extractSlipOcrFromImage } from "./slipOcrExtractor.service.js";
 import { evaluateSlipAutoApproval } from "./slipAutoApproval.service.js";
 import { isSlipokConfigured, verifySlipWithSlipok } from "./slipokVerify.service.js";
 import { isEasyslipConfigured, verifySlipWithEasyslip } from "./easyslipVerify.service.js";
+import { loadActiveScanOffer } from "../../../services/scanOffer.loader.js";
+import { findActivePackageByPriceThb } from "../../../services/scanOffer.packages.js";
+import { switchPendingPaymentPackage } from "../../../stores/payments.db.js";
 
 /** Pick the configured bank-verification provider (EasySlip preferred). */
 function resolveBankSlipVerifier() {
@@ -24,7 +27,15 @@ function resolveBankSlipVerifier() {
  *   mode: "dry_run_would_auto_approve"|"manual_review"|"auto_approved",
  *   ocrResult: Record<string, unknown>|null,
  *   reasons: string[],
- *   matched?: Record<string, boolean>
+ *   matched?: Record<string, boolean>,
+ *   switchedPackage?: {
+ *     fromPackageCode: string|null,
+ *     key: string,
+ *     label: string,
+ *     priceThb: number,
+ *     scanCount: number,
+ *     windowHours: number
+ *   }|null
  * }>}
  */
 export async function runSlipAutoApprovalAfterGateAccept({
@@ -172,6 +183,67 @@ export async function runSlipAutoApprovalAfterGateAccept({
     };
   }
 
+  // ยอดโอนไม่ตรงแพ็กที่เลือก แต่ทุกอย่างอื่นผ่านหมด และยอดตรงราคาแพ็กอื่นเป๊ะ
+  // → สลับแพ็กของ payment ให้ตามเงินจริง แล้วประเมินใหม่ ไม่ตีกลับลูกค้า (กติกา กบ:
+  // ลูกค้ากด 49 แต่โอน 149 = อยากได้แพ็ก 149 จัดให้เลยพร้อมบอกว่าปรับให้แล้ว)
+  let switchedPackage = null;
+  if (
+    result.decision !== "would_auto_approve" &&
+    result.reasons.length === 1 &&
+    result.reasons[0] === "amount_mismatch"
+  ) {
+    try {
+      const offer = loadActiveScanOffer(now);
+      const matched = findActivePackageByPriceThb(offer, ocrResult.amount);
+      const expectedAmount = Number(payment?.expected_amount ?? payment?.amount);
+      if (matched && Number(matched.priceThb) !== expectedAmount) {
+        const applied = await switchPendingPaymentPackage({ paymentId, pkg: matched });
+        if (applied) {
+          const patchedPayment = {
+            ...payment,
+            package_code: matched.key,
+            package_name: matched.label,
+            amount: matched.priceThb,
+            expected_amount: matched.priceThb,
+            unlock_hours: matched.windowHours,
+          };
+          result = await evaluate({ payment: patchedPayment, ocrResult, now });
+          if (result.decision === "would_auto_approve") {
+            switchedPackage = {
+              fromPackageCode: String(payment?.package_code || "") || null,
+              key: matched.key,
+              label: matched.label,
+              priceThb: Number(matched.priceThb),
+              scanCount: Number(matched.scanCount),
+              windowHours: Number(matched.windowHours),
+            };
+          }
+          console.log(
+            JSON.stringify({
+              event: "SLIP_PACKAGE_AUTO_SWITCHED",
+              paymentId,
+              lineUserIdPrefix: String(userId || "").slice(0, 8),
+              fromPackageCode: String(payment?.package_code || "") || null,
+              toPackageKey: matched.key,
+              slipAmount: Number(ocrResult.amount),
+              secondDecision: result.decision,
+            }),
+          );
+        }
+      }
+    } catch (swErr) {
+      // fail-open: สลับไม่สำเร็จก็เข้าคิว admin ตามปกติ
+      console.error(
+        JSON.stringify({
+          event: "SLIP_PACKAGE_AUTO_SWITCH_FAILED",
+          paymentId,
+          lineUserIdPrefix: String(userId || "").slice(0, 8),
+          message: String(swErr?.message || swErr).slice(0, 160),
+        }),
+      );
+    }
+  }
+
   if (result.decision !== "would_auto_approve") {
     await updatePaymentFields(paymentId, {
       ...ocrPatch,
@@ -200,6 +272,7 @@ export async function runSlipAutoApprovalAfterGateAccept({
       ocrResult,
       reasons: result.reasons,
       matched: result.matched,
+      switchedPackage,
     };
   }
 
@@ -221,6 +294,7 @@ export async function runSlipAutoApprovalAfterGateAccept({
       ocrResult,
       reasons: [],
       matched: result.matched,
+      switchedPackage,
     };
   }
 
@@ -242,5 +316,6 @@ export async function runSlipAutoApprovalAfterGateAccept({
     ocrResult,
     reasons: [],
     matched: result.matched,
+    switchedPackage,
   };
 }
