@@ -1,4 +1,5 @@
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
+import { formatBangkokScanDateThaiBE } from "../../utils/dateTime.util.js";
 import { buildAmuletHtmlV2ViewModel } from "../../amulet/amuletHtmlV2.model.js";
 import {
   resolveScannedAtIsoForReportMeta,
