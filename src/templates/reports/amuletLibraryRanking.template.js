@@ -51,14 +51,60 @@ function rankCardHtml(it, rank) {
 }
 
 /**
+ * แถวที่ถูกล็อก (แบบ A — ไม่มีแพ็กแอคทีฟเห็นได้ 7 รายการล่าสุด): รูปเบลอ ไม่บอกชิ้น
+ * @param {SacredAmuletLibraryItem} it
+ * @param {number} rank
+ */
+function lockedRowHtml(it, rank) {
+  const img = it.thumbUrl
+    ? `<img class="alib-row-img alib-row-img--blur" src="${escapeHtml(it.thumbUrl)}" alt="" width="46" height="46" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
+    : `<span class="alib-row-img alib-row-img--empty" aria-hidden="true"></span>`;
+  return `
+  <span class="alib-row alib-row--locked" data-rank="${rank}">
+    <span class="alib-row-rank">${rank}</span>
+    ${img}
+    <span class="alib-row-main">
+      <span class="alib-row-id">อยู่ในคลังของคุณ</span>
+      <span class="alib-row-peak">เปิดแพ็กเพื่อดูรายละเอียดชิ้นนี้</span>
+    </span>
+    <span class="alib-row-lockpill">ล็อก</span>
+  </span>`;
+}
+
+/**
  * @param {SacredAmuletLibraryItem[]} list
  * @param {string} [emptyText]
+ * @param {{ allowedTokens?: Set<string>|null, liffPayUrl?: string }} [opts]
  */
-function panelHtml(list, emptyText = "ยังไม่มีข้อมูลในหมวดนี้") {
+function panelHtml(list, emptyText = "ยังไม่มีข้อมูลในหมวดนี้", opts = {}) {
   if (!list.length) {
     return `<p class="alib-empty">${escapeHtml(emptyText)}</p>`;
   }
-  return `<div class="alib-rows">${list.map((it, i) => rankCardHtml(it, i + 1)).join("")}</div>`;
+  const allowed = opts.allowedTokens ?? null;
+  const liffPayUrl = String(opts.liffPayUrl || "");
+  if (!allowed) {
+    return `<div class="alib-rows">${list.map((it, i) => rankCardHtml(it, i + 1)).join("")}</div>`;
+  }
+  // โหมดล็อก: แถวที่ไม่อยู่ใน 7 ล่าสุด = เบลอ (โชว์ตัวอย่างล็อกไม่เกิน 3 แถว แล้วสรุปยอด)
+  const parts = [];
+  let lockedShown = 0;
+  let lockedHidden = 0;
+  list.forEach((it, i) => {
+    if (allowed.has(String(it.publicToken))) {
+      parts.push(rankCardHtml(it, i + 1));
+    } else if (lockedShown < 3) {
+      lockedShown++;
+      parts.push(lockedRowHtml(it, i + 1));
+    } else {
+      lockedHidden++;
+    }
+  });
+  if (lockedHidden > 0 && liffPayUrl) {
+    parts.push(
+      `<a class="alib-row alib-row--more" href="${escapeHtml(liffPayUrl)}">และอีก ${lockedHidden} ชิ้นถูกล็อกอยู่ · เปิดแพ็กเพื่อดูทั้งคลัง ›</a>`,
+    );
+  }
+  return `<div class="alib-rows">${parts.join("")}</div>`;
 }
 
 /**
@@ -196,8 +242,26 @@ export function renderAmuletLibraryRankingHtml({
   pinnedOriginalCount = null,
   pinFlash = null,
   freeTierPinLimit = 10,
+  accessFull = true,
+  freeVisibleCount = 7,
+  dailyPick = null,
+  liffPayUrl = "",
 } = {}) {
   const backHref = `/r/${encodeURIComponent(pagePublicToken)}`;
+  // แบบ A (กบ 15 ก.ค.): ไม่มีแพ็กแอคทีฟ → เห็นเฉพาะ N รายการล่าสุด ที่เหลือล็อกเบลอ
+  const allowedTokens = accessFull
+    ? null
+    : new Set(
+        [...(Array.isArray(library.items) ? library.items : [])]
+          .sort(
+            (a, b) =>
+              (Date.parse(String(b.scannedAtIso || "")) || 0) -
+              (Date.parse(String(a.scannedAtIso || "")) || 0),
+          )
+          .slice(0, Math.max(1, freeVisibleCount))
+          .map((it) => String(it.publicToken)),
+      );
+  const panelOpts = { allowedTokens, liffPayUrl };
   const n = library.totalCount;
   const dedupeExplainLine =
     Array.isArray(library.items) && library.items.length < n
@@ -245,8 +309,36 @@ export function renderAmuletLibraryRankingHtml({
   </section>`
       : "";
   const emptyAxisTab = "ยังไม่มีรายการที่เด่นด้านนี้";
+
+  // แท็บ "หนุนดวงวันนี้" — ลำดับชุดเดียวกับ Daily Pick ใน LIFF (map ด้วย publicToken)
+  const todayOrder = new Map(
+    (dailyPick?.ranked || [])
+      .map((r, i) => {
+        const m = /^\/r\/(.+)$/.exec(String(r.reportUrl || ""));
+        return m ? [m[1], i] : null;
+      })
+      .filter(Boolean),
+  );
+  const todayList =
+    todayOrder.size > 0
+      ? [...(library.byOverall || [])].sort(
+          (a, b) =>
+            (todayOrder.get(String(a.publicToken)) ?? 9999) -
+            (todayOrder.get(String(b.publicToken)) ?? 9999),
+        )
+      : [];
+  const todayLockedPanel = `
+    <div class="alib-today-locked">
+      <p class="alib-today-locked-line">อาจารย์เทียบทุกชิ้นในคลังกับ${escapeHtml(String(dailyPick?.dayStar || "ดาวประจำวัน"))}แล้ว</p>
+      <p class="alib-today-locked-sub">เปิดแพ็กเพื่อดูว่าวันนี้ควรพกชิ้นไหน อาจารย์เรียงให้ใหม่ทุกเช้า</p>
+      ${liffPayUrl ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl)}">เปิดดูอันดับวันนี้</a>` : ""}
+    </div>`;
+
   const tabs = [
     { id: "overall", label: "แรงสุดโดยรวม", list: library.byOverall, emptyText: "ยังไม่มีข้อมูลในหมวดนี้" },
+    ...(todayList.length
+      ? [{ id: "today", label: "หนุนดวงวันนี้", list: todayList, emptyText: emptyAxisTab, lockedPanel: !accessFull }]
+      : []),
     { id: "fit", label: "เข้ากับคุณที่สุด", list: library.byFit, emptyText: "ยังไม่มีข้อมูลในหมวดนี้" },
     { id: "protection", label: "คุ้มครองสูงสุด", list: library.byProtection ?? [], emptyText: emptyAxisTab },
     { id: "metta", label: "เมตตาสูงสุด", list: library.byMetta ?? [], emptyText: emptyAxisTab },
@@ -264,14 +356,16 @@ export function renderAmuletLibraryRankingHtml({
   const tabButtons = tabs
     .map(
       (t, i) =>
-        `<button type="button" class="alib-tab${i === 0 ? " alib-tab--on" : ""}" data-alib-tab="${escapeHtml(t.id)}" aria-pressed="${i === 0 ? "true" : "false"}">${escapeHtml(t.label)}</button>`,
+        `<button type="button" class="alib-tab${i === 0 ? " alib-tab--on" : ""}${t.id === "today" ? " alib-tab--today" : ""}" data-alib-tab="${escapeHtml(t.id)}" aria-pressed="${i === 0 ? "true" : "false"}">${escapeHtml(t.label)}</button>`,
     )
     .join("");
 
   const tabPanels = tabs
     .map(
       (t, i) =>
-        `<div class="alib-panel${i === 0 ? " alib-panel--on" : ""}" data-alib-panel="${escapeHtml(t.id)}" role="tabpanel">${panelHtml(t.list, t.emptyText)}</div>`,
+        `<div class="alib-panel${i === 0 ? " alib-panel--on" : ""}" data-alib-panel="${escapeHtml(t.id)}" role="tabpanel">${
+          t.lockedPanel ? todayLockedPanel : panelHtml(t.list, t.emptyText, panelOpts)
+        }</div>`,
     )
     .join("");
 
@@ -415,6 +509,17 @@ ${amuletSubpageAutoDarkScriptHtml()}
       .alib-rows { grid-template-columns: 1fr 1fr; }
       .alib-podium { max-width: 860px; margin-left: auto; margin-right: auto; }
     }
+    /* ── สเต็ป 2 แบบ A: แถวล็อกเบลอ + แท็บหนุนดวงวันนี้ ── */
+    .alib-row--locked { cursor: default; opacity: 0.92; border-style: dashed; }
+    .alib-row-img--blur { filter: blur(7px) saturate(0.7); }
+    .alib-row--locked .alib-row-id { color: var(--alib-muted); }
+    .alib-row-lockpill { flex: 0 0 auto; font-size: 0.68rem; font-weight: 800; color: var(--alib-gold-soft); border: 1px solid var(--alib-chip-border); background: var(--alib-chip-bg); border-radius: 999px; padding: 0.2rem 0.7rem; }
+    .alib-row--more { justify-content: center; font-weight: 800; color: var(--alib-gold-soft); border-style: dashed; font-size: 0.85rem; }
+    .alib-tab--today { border-color: var(--alib-gold); color: var(--alib-gold-soft); font-weight: 800; }
+    .alib-today-locked { text-align: center; border: 1.5px dashed var(--alib-chip-border); border-radius: 16px; padding: 1.3rem 1rem; background: var(--alib-panel-bg); }
+    .alib-today-locked-line { margin: 0; font-weight: 800; font-size: 0.95rem; }
+    .alib-today-locked-sub { margin: 0.35rem 0 0.8rem; font-size: 0.82rem; color: var(--alib-muted); }
+    .alib-today-locked .alib-spot-btn { display: inline-block; padding: 0.45rem 1.6rem; }
     .alib-axis-section { margin: 0.35rem 0 0.5rem; }
     .alib-axis-h2 {
       margin: 0 0 0.35rem;
