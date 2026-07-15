@@ -55,6 +55,7 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
       sacredAmuletLibrary: renderOpts.sacredAmuletLibrary ?? null,
       dailyPickTeaser: renderOpts.dailyPickTeaser ?? null,
       liffPayUrl: renderOpts.liffPayUrl ?? null,
+      accessFull: renderOpts.accessFull ?? true,
     });
   }
   if (

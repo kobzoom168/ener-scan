@@ -114,8 +114,9 @@ export async function getReportByToken(req, res) {
     const uid = String(normPre.userId || "").trim();
     if (uid) {
       try {
+        // full: คลังย้ายมาโชว์ทั้งแท่นรางวัล + อันดับบนหน้ารายงานแล้ว (กบ 15 ก.ค.)
         sacredAmuletLibrary = await buildSacredAmuletLibraryForLineUser(uid, {
-          libraryThumbScope: "mini",
+          libraryThumbScope: "full",
         });
       } catch (libErr) {
         console.warn(
@@ -171,6 +172,8 @@ export async function getReportByToken(req, res) {
   // teaser ขาย 299 บนหน้ารายงาน: อันดับ 1 ของคลังวันนี้ (เบลอ) — เฉพาะเจ้าของที่ยังไม่เป็นสมาชิก
   // (ทุกเลน: พระ กำไล มอลดาไวท์ — คลัง Daily Pick รวมทุกเลนอยู่แล้ว)
   let dailyPickTeaser = null;
+  // ฟรี = เซ็นเซอร์อันดับ 1-2 ของคลัง (กบ 15 ก.ค.) — เช็คพลาด = เปิดหมด (fail-open)
+  let accessFull = true;
   if (normPre.amuletV1 || normPre.crystalBraceletV1 || normPre.moldaviteV1) {
     const uid = String(normPre.userId || "").trim();
     if (uid) {
@@ -179,6 +182,20 @@ export async function getReportByToken(req, res) {
         dailyPickTeaser = await buildDailyPickTeaserForLineUser(uid);
       } catch {
         dailyPickTeaser = null;
+      }
+      try {
+        const { data: u } = await supabase
+          .from("app_users")
+          .select("paid_until,paid_remaining_scans")
+          .eq("line_user_id", uid)
+          .maybeSingle();
+        accessFull = computePaidActive(
+          u?.paid_until,
+          Number(u?.paid_remaining_scans) || 0,
+          new Date(),
+        );
+      } catch {
+        accessFull = true;
       }
     }
   }
@@ -192,6 +209,7 @@ export async function getReportByToken(req, res) {
       crystalBraceletLibrary,
       dailyPickTeaser,
       liffPayUrl,
+      accessFull,
     });
   } catch (renderErr) {
     console.error(
