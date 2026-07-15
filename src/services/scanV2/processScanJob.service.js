@@ -405,25 +405,46 @@ export async function processScanJob(workerId, jobRow) {
             return;
           }
         } else if (inliers >= 0) {
-          await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
-          // จับคู่ได้แต่ไม่ใช่ชิ้นเดียวกัน → จับโป๊ะแบบมีบารมี ไม่กินสิทธิ์
-          await failJob(jobId, "auth_challenge_failed", `inliers=${inliers}`, lineUserId, workerId);
-          await insertOutboundMessage({
-            line_user_id: lineUserId,
-            kind: "scan_result",
-            priority: OUTBOUND_PRIORITY.scan_result,
-            related_job_id: jobId,
-            payload_json: {
-              error: true,
-              rejectReason: "auth_challenge_failed",
-              text: CHALLENGE_FAILED_TEXTS[0],
-              accessSource: job.access_source,
-              appUserId,
-            },
-            status: "queued",
-          });
-          await updateScanRequestStatus(scanRequestId, "failed");
-          return;
+          // matcher บอกคนละชิ้น — แต่ถ้ารูปนี้มีนิ้วโป้งแตะชิ้นงานจริง = ของอยู่ในมือจริง
+          // ระบบสแกน "รูปปัจจุบัน" อยู่แล้ว ผลที่ออกคือชิ้นที่ถืออยู่ → ปล่อยผ่านแบบ soft
+          // (เคส GopGap 15 ก.ค.: หินกลมผิวเรียบจุดจับคู่น้อย + รูปแรกซูมจัดฉาก
+          //  matcher ไม่มีวันแมตช์ ลูกค้าถือของจริงแท้ ๆ แต่ติดลูปตลอด)
+          const thumbOkSoft = await verifyChallengeThumbTouch(imageBase64).catch(() => false);
+          if (thumbOkSoft) {
+            await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
+            challengeProven = true;
+            console.log(
+              JSON.stringify({
+                event: "AUTH_CHALLENGE_SOFT_PASS",
+                path: "worker-scan",
+                jobIdPrefix: idPrefix8(jobId),
+                lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+                reason: "thumb_in_hand_match_low",
+                inliers,
+                minInliers: env.AUTH_CHALLENGE_MIN_INLIERS,
+              }),
+            );
+          } else {
+            await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
+            // ไม่ใช่ชิ้นเดียวกัน + ไม่เห็นนิ้วแตะของจริง → จับโป๊ะแบบมีบารมี ไม่กินสิทธิ์
+            await failJob(jobId, "auth_challenge_failed", `inliers=${inliers}`, lineUserId, workerId);
+            await insertOutboundMessage({
+              line_user_id: lineUserId,
+              kind: "scan_result",
+              priority: OUTBOUND_PRIORITY.scan_result,
+              related_job_id: jobId,
+              payload_json: {
+                error: true,
+                rejectReason: "auth_challenge_failed",
+                text: CHALLENGE_FAILED_TEXTS[0],
+                accessSource: job.access_source,
+                appUserId,
+              },
+              status: "queued",
+            });
+            await updateScanRequestStatus(scanRequestId, "failed");
+            return;
+          }
         } else {
           // inliers = -1 (sidecar ล่ม/ตอบไม่ได้) → ทิ้ง challenge ปล่อยผ่านตามหลัก false-positive-first
           await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
