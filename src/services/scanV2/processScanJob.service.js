@@ -1359,6 +1359,7 @@ export async function processScanJob(workerId, jobRow) {
           geminiCrystalSubtypeResult,
           strictSupportedLane,
           stableFeatureSeed,
+          scoreImageDHash: imageDHash,
           stableFeatureFields,
           amuletTypeLabelThai,
         });
@@ -1392,6 +1393,7 @@ export async function processScanJob(workerId, jobRow) {
       geminiCrystalSubtypeResult,
       strictSupportedLane,
       stableFeatureSeed,
+      scoreImageDHash: imageDHash,
       stableFeatureFields,
       amuletTypeLabelThai,
     });
