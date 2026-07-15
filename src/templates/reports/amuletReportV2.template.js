@@ -2361,8 +2361,8 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2r-pod-btn--pay { background: transparent; border: 1.5px solid #a5813a; color: #a5813a; }
     @media (max-width: 560px) {
       /* มือถือ (กบ): แถวบน = อันดับ 1 ใหญ่ + อันดับ 2 เล็กข้างกัน / แถวล่าง = อันดับ 3 เต็มแถว */
-      .mv2r-podium { flex-wrap: wrap; align-items: stretch; }
-      .mv2r-pod { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; }
+      .mv2r-podium { flex-wrap: wrap; align-items: flex-end; }
+      .mv2r-pod { flex: 1 1 0; }
       .mv2r-pod--first { order: -1; flex: 1.5 1 0; }
       .mv2r-pod[data-rank="3"] { order: 2; flex: 1 1 100%; margin-top: 14px; }
     }
