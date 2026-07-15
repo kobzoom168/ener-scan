@@ -126,8 +126,99 @@ const REG_PROMPT_VARIANTS = [
 ];
 
 /**
+ * การ์ดลงทะเบียน Flex "แบบ B" (กบเคาะ 16 ก.ค.): การ์ดครีม ตราบัวทอง ปุ่มทองใหญ่ —
+ * ไม่มี URL เปล่าโผล่ให้เห็นเลย (ลูกค้าบางคนกลัวลิงก์ นึกว่ามิจฉาชีพ)
+ * greet ใช้ข้อความจาก /admin/promo (cfg.text) — กบแก้สดได้เหมือนเดิม
+ * @param {string} greetText
+ * @param {string} liffId
+ */
+export function buildRegistrationFlexMessage(greetText, liffId) {
+  const liffUrl = `https://liff.line.me/${liffId}`;
+  const check = (label) => ({
+    type: "box",
+    layout: "baseline",
+    spacing: "sm",
+    contents: [
+      { type: "text", text: "✓", flex: 0, size: "sm", weight: "bold", color: "#A5813A" },
+      { type: "text", text: label, size: "xs", color: "#6B5D40", wrap: true },
+    ],
+  });
+  return {
+    type: "flex",
+    altText: "ลงทะเบียนกับอาจารย์ Ener ฟรี ไม่ถึงนาที",
+    contents: {
+      type: "bubble",
+      size: "mega",
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "0px",
+        backgroundColor: "#FFFDF6",
+        contents: [
+          // แถบทองบาง ๆ ขอบบน (ตามม็อกแบบ B)
+          { type: "box", layout: "vertical", height: "6px", backgroundColor: "#C9A24D", contents: [] },
+          {
+            type: "box",
+            layout: "vertical",
+            paddingAll: "20px",
+            spacing: "sm",
+            contents: [
+              { type: "text", text: "🪷", size: "3xl", align: "center" },
+              { type: "text", text: "อาจารย์ Ener", weight: "bold", size: "xl", color: "#7A5C1D", align: "center" },
+              {
+                type: "text",
+                text: "อ่านพลังพระเครื่อง กำไลหิน เทียบดวงคุณ",
+                size: "xs",
+                color: "#9A8A66",
+                align: "center",
+              },
+              {
+                type: "text",
+                text: greetText,
+                size: "sm",
+                color: "#3D3426",
+                wrap: true,
+                align: "center",
+                margin: "lg",
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                spacing: "xs",
+                margin: "lg",
+                contents: [
+                  check("เปิดในแอป LINE นี้เลย ไม่เด้งออกไปไหน"),
+                  check("ไม่ต้องติดตั้งแอป ไม่มีค่าใช้จ่าย"),
+                ],
+              },
+              {
+                type: "button",
+                style: "primary",
+                color: "#C9A227",
+                height: "md",
+                margin: "lg",
+                action: { type: "uri", label: "ลงทะเบียนกับอาจารย์", uri: liffUrl },
+              },
+              {
+                type: "text",
+                text: "ข้อมูลใช้อ่านดวงเท่านั้น ปลอดภัย 100%",
+                size: "xxs",
+                color: "#9A8A66",
+                align: "center",
+                margin: "md",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  };
+}
+
+/**
  * ข้อความ + ปุ่มเปิด LIFF (สำนวนสลับตามครั้งที่โดน — ห้ามวน ห้ามเงียบ)
- * @returns {{ text: string, quickReply: object } | null} null = สร้างไม่ได้ (ไม่มี LIFF)
+ * flexMessage = การ์ดแบบ B (ตัวหลัก); text/quickReply เก็บไว้เป็นทางหนีเมื่อส่ง flex ไม่ได้
+ * @returns {{ text: string, quickReply: object, flexMessage: object } | null} null = สร้างไม่ได้ (ไม่มี LIFF)
  */
 export async function buildRegistrationPrompt(attempt = 1) {
   const liffId = String(process.env.LIFF_ID || "").trim();
@@ -145,5 +236,6 @@ export async function buildRegistrationPrompt(attempt = 1) {
         },
       ],
     },
+    flexMessage: buildRegistrationFlexMessage(text, liffId),
   };
 }
