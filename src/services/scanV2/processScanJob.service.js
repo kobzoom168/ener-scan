@@ -1140,6 +1140,25 @@ export async function processScanJob(workerId, jobRow) {
       messageId: null,
       objectCheckResult: `supported_lane_unresolved:${strictLaneRes.reason}`,
     });
+    // คืนสิทธิ์: แถว scan_results ถูกสร้างก่อนถึงด่าน lane — ถ้าจบที่ปัดตรงนี้ต้องลบทิ้ง
+    // ไม่งั้นลูกค้าโดนหักฟรีทั้งที่ไม่ได้รายงาน (เคส Nart 15 ก.ค.: โดนหัก 1 สิทธิ์
+    // จากรูปที่ถูกปัด แล้ว AI อธิบายไม่ถูกเพราะไม่มีรายงานวันนี้ให้ชี้)
+    if (legacyScanResultId) {
+      const refunded = await deleteScanResultForAppUser(
+        legacyScanResultId,
+        String(appUserId),
+      ).catch(() => false);
+      console.log(
+        JSON.stringify({
+          event: "SCAN_QUOTA_REFUND_ON_LANE_REJECT",
+          path: "worker-scan",
+          jobIdPrefix: idPrefix8(jobId),
+          lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+          scanResultIdPrefix: String(legacyScanResultId).slice(0, 8),
+          refunded,
+        }),
+      );
+    }
     const c = getUnsupportedObjectReplyCandidates();
     await failJob(
       jobId,
