@@ -165,12 +165,24 @@ function mapStripBullets(bulletLines) {
 /** Same shape as parseScanText output when everything is missing. */
 /**
  * Prefer vision-stable hash seed for deterministic scores; fallback to scan result id.
+ *
+ * ผสมลายนิ้วมือรูป (dHash) เข้า seed (กบ 15 ก.ค. เคสคุณชิตรอบ 2): พระสายเดียวกัน (ซุ้มโค้ง
+ * เนื้อดิน องค์เดี่ยว) slug ชนกันหมดทุกช่อง → คนละองค์คะแนนซ้ำเป๊ะ. dHash แยกรายรูป 100%;
+ * ชิ้นเดิมส่งรูปเดิม/ใกล้เคียงยังนิ่งเพราะ baseline reuse (SHA/phash/Re-ID) ดักไว้ก่อนถึงตัวคำนวณ
+ * — เส้นทาง forensic/ท้าถ่ายสด ไม่แตะ.
+ *
+ * ⚠️ ใช้ dHash เฉพาะเลนพระ (sacred_amulet) เท่านั้น — กำไล/มอลดาไวท์ไม่มี baseline reuse
+ * ถ้าผสม dHash จะกลายเป็นเส้นเดิมถ่ายใหม่เลขเด้ง (บั๊กเก่า มิ.ย. คืนชีพ).
+ *
  * @param {string|null|undefined} stableFeatureSeed
  * @param {string} scanResultId
+ * @param {string|null|undefined} [scoreImageDHash] — dHash 16-hex ของรูปที่สแกน
  * @returns {string}
  */
-function resolveScoreSeedKey(stableFeatureSeed, scanResultId) {
+function resolveScoreSeedKey(stableFeatureSeed, scanResultId, scoreImageDHash) {
   const s = String(stableFeatureSeed ?? "").trim();
+  const d = String(scoreImageDHash ?? "").trim().toLowerCase();
+  if (s && /^[0-9a-f]{16}$/.test(d)) return `${s}|${d}`;
   if (s) return s;
   return String(scanResultId || "").trim();
 }
@@ -225,10 +237,12 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp)
     pipelineObjectCategorySource: pipelineObjectCategorySourceOpt = "unspecified",
     pipelineDominantColorSource: pipelineDominantColorSourceOpt,
     stableFeatureSeed: stableFeatureSeedOpt,
+    scoreImageDHash: scoreImageDHashOpt = null,
   } = opts;
 
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
   const rid = String(scanResultId || "").trim();
+  // เลนกำไล: ไม่ผสม dHash (ไม่มี baseline reuse ดักชิ้นเดิม — ดูคอมเมนต์ resolveScoreSeedKey)
   const scoreSeedKey = resolveScoreSeedKey(stableFeatureSeedOpt, rid);
   const tok = String(publicToken || "").trim();
 
@@ -550,6 +564,7 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp)
  * @param {object|null} [opts.geminiCrystalSubtypeResult] — optional Gemini crystal subtype pass (crystal scans only)
  * @param {"moldavite"|"sacred_amulet"|"crystal_bracelet"|null} [opts.strictSupportedLane] — when set (Scan V2 worker), only this lane slice may attach (3-lane closed world)
  * @param {string|null|undefined} [opts.stableFeatureSeed] — vision-stable seed for Moldavite/crystal-bracelet deterministic scores (falls back to scanResultId)
+ * @param {string|null|undefined} [opts.scoreImageDHash] — dHash 16-hex ของรูปที่สแกน ผสมเข้า score seed (แยกชิ้นรายรูป; reuse path ดักชิ้นเดิมก่อนถึงตรงนี้)
  * @param {{ primaryColor?: string, materialType?: string, formFactor?: string, textureHint?: string }|null} [opts.stableFeatureFields] — raw vision slugs; enables angle-robust amulet scoring (feature_blend_v3)
  * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
  */
@@ -577,6 +592,7 @@ export async function buildReportPayloadFromScan(opts) {
     geminiCrystalSubtypeResult: geminiCrystalSubtypeResultOpt = null,
     strictSupportedLane: strictSupportedLaneOpt = null,
     stableFeatureSeed: stableFeatureSeedOpt,
+    scoreImageDHash: scoreImageDHashOpt = null,
     stableFeatureFields: stableFeatureFieldsOpt = null,
     amuletTypeLabelThai: amuletTypeLabelThaiOpt = "",
   } = opts;
@@ -1228,8 +1244,12 @@ export async function buildReportPayloadFromScan(opts) {
     famNorm === "sacred_amulet"
       ? buildAmuletV1Slice({
           scanResultId: rid,
-          // Prefer the angle-stable feature seed; per-scan id only as last resort.
-          seedKey: scoreSeedKey || rid || String(scanResultId || ""),
+          // เลนพระ: seed = feature seed ผสม dHash รายรูป (ชิ้นเดิมรูปเดิม/ใกล้เคียงถูก baseline
+          // reuse ดักก่อนถึงตรงนี้แล้ว) — per-scan id เป็นทางหนีท้ายสุดเท่านั้น
+          seedKey:
+            resolveScoreSeedKey(stableFeatureSeedOpt, rid, scoreImageDHashOpt) ||
+            rid ||
+            String(scanResultId || ""),
           stableFeatureFields: stableFeatureFieldsOpt,
           energyScore,
           mainEnergyLabel: baseMainEnergyLabel,
