@@ -836,6 +836,29 @@ export async function buildDailyPickTeaserForLineUser(lineUserId) {
   }
 }
 
+/**
+ * อันดับหนุนดวงวันนี้ทั้งคลัง (ให้หน้าคลังพระใช้เรียงแท็บ "หนุนดวงวันนี้")
+ * ตัวเลข/ลำดับชุดเดียวกับ Daily Pick ใน LIFF เป๊ะ
+ * @returns {Promise<null | { dayStar: string, ranked: Array<{reportUrl: string|null, suit: number}> }>}
+ */
+export async function listDailyPickRankedForLineUser(lineUserId) {
+  try {
+    const uid = String(lineUserId || "").trim();
+    if (!uid) return null;
+    const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
+    const pieces = extractPickPieces(rows);
+    if (!pieces.length) return null;
+    const nowBkk = new Date(Date.now() + 7 * 3600 * 1000);
+    const { ranked, dayStar } = rankPickPieces(pieces, bangkokDateKey(), nowBkk.getUTCDay());
+    return {
+      dayStar,
+      ranked: ranked.map((pc) => ({ reportUrl: pc.reportUrl || null, suit: pc.suit })),
+    };
+  } catch {
+    return null;
+  }
+}
+
 liffRouter.get("/api/liff/daily-pick", async (req, res) => {
   const userId = await requireLiffUser(req, res);
   if (!userId) return;

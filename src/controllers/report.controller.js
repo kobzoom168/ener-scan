@@ -18,6 +18,8 @@ import {
   buildCrystalBraceletLibraryViewFromPayloadOnly,
 } from "../services/reports/crystalBraceletLibrary.service.js";
 import { env } from "../config/env.js";
+import { supabase } from "../config/supabase.js";
+import { computePaidActive } from "../services/scanOfferAccess.resolver.js";
 import {
   countPinnedScanUploadsByLineUser,
   getScanUploadById,
@@ -599,6 +601,36 @@ export async function getLibraryRankingByToken(req, res) {
   }
   const pinFlash = String(req.query?.pin || "").trim() || null;
 
+  // สเต็ป 2 (กบเคาะแบบ A, 15 ก.ค.): แพ็กแอคทีฟเห็นทั้งคลัง / ไม่มีแพ็กเห็น 7 รายการล่าสุด
+  // + แถวล็อกเบลอ; แท็บ "หนุนดวงวันนี้" เฉพาะแพ็กแอคทีฟ — เช็คพลาด = เปิดหมด (fail-open)
+  let accessFull = true;
+  let dailyPick = null;
+  if (uid) {
+    try {
+      const { data: u } = await supabase
+        .from("app_users")
+        .select("paid_until,paid_remaining_scans")
+        .eq("line_user_id", uid)
+        .maybeSingle();
+      accessFull = computePaidActive(
+        u?.paid_until,
+        Number(u?.paid_remaining_scans) || 0,
+        new Date(),
+      );
+    } catch {
+      accessFull = true;
+    }
+    try {
+      const { listDailyPickRankedForLineUser } = await import("../routes/liff.routes.js");
+      dailyPick = await listDailyPickRankedForLineUser(uid);
+    } catch {
+      dailyPick = null;
+    }
+  }
+  const libLiffPayUrl = process.env.LIFF_ID
+    ? `https://liff.line.me/${String(process.env.LIFF_ID).trim()}?view=pay`
+    : "https://lin.ee/6YZeFZ1";
+
   let html;
   try {
     html = renderAmuletLibraryRankingHtml({
@@ -607,6 +639,10 @@ export async function getLibraryRankingByToken(req, res) {
       pinnedOriginalCount,
       pinFlash,
       freeTierPinLimit: env.FREE_TIER_PINNED_ORIGINAL_LIMIT,
+      accessFull,
+      freeVisibleCount: 7,
+      dailyPick,
+      liffPayUrl: libLiffPayUrl,
     });
   } catch (renderErr) {
     console.error(
