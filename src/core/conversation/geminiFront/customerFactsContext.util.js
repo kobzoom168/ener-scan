@@ -50,6 +50,7 @@ export async function buildCustomerFactsContext(lineUserId) {
     const paidActive = computePaidActive(paidUntil, paidRemaining, now);
 
     let freeLine;
+    let adminResetLine = null;
     if (paidActive) {
       freeLine = `สิทธิ์แบบชำระเงินยังใช้งานอยู่ เหลือ ${paidRemaining} ครั้ง (ระบบตัดสิทธิ์จ่ายก่อน โควต้าฟรีถูกกันไว้)`;
     } else {
@@ -61,11 +62,20 @@ export async function buildCustomerFactsContext(lineUserId) {
         ? String(userRow.free_scan_offset_date).slice(0, 10)
         : null;
       const offsetN = Number(userRow?.free_scan_daily_offset) || 0;
-      if (offsetDate && offsetDate === getLocalDateKey(now) && offsetN > 0) {
+      const resetAppliedToday =
+        offsetDate && offsetDate === getLocalDateKey(now) && offsetN > 0;
+      if (resetAppliedToday) {
         freeUsed = Math.max(0, freeUsed - offsetN);
       }
       const freeLeft = Math.max(0, freeQuota - freeUsed);
       freeLine = `สิทธิ์ฟรีวันนี้เหลือ ${freeLeft} จาก ${freeQuota} ครั้ง${paidRemaining > 0 ? "" : " (ไม่มีแพ็กชำระเงินค้างอยู่)"}`;
+      // เหตุการณ์สด (เคส Nart 15 ก.ค.: แอดมินรีเซ็ตแล้ว AI ยังบอกให้รอพรุ่งนี้):
+      // แอดมินเพิ่งรีเซ็ต/เพิ่มสิทธิ์ให้วันนี้ — ห้ามพูดสวนว่าสิทธิ์หมด
+      if (resetAppliedToday && freeLeft > 0) {
+        adminResetLine =
+          `⚠️ เหตุการณ์สด: แอดมินเพิ่งเพิ่มสิทธิ์ฟรีให้ลูกค้าคนนี้วันนี้ (ตอนนี้เหลือ ${freeLeft} ครั้ง) — ` +
+          `ห้ามบอกว่าสิทธิ์หมดหรือให้รอพรุ่งนี้ ให้ชวนส่งรูปมาใช้สิทธิ์ได้เลย`;
+      }
     }
 
     // ดวงจากแอป Ener (LIFF) — คำอ่านชุดเดียวกับที่ลูกค้าเห็น ให้อาจารย์ตอบต่อยอดไม่ขัดกัน
@@ -112,6 +122,7 @@ export async function buildCustomerFactsContext(lineUserId) {
         )
         .join(", ") || "ยังไม่เปิดแพ็ก"} และมีฟรีวันละ ${freeQuota} ครั้ง`,
 
+      ...(adminResetLine ? [`• ${adminResetLine}`] : []),
       ...(rejectLine ? [`• ${rejectLine}`] : []),
       ...(liffReadingLines ? [`• ${liffReadingLines}`] : []),
     ].join("\n");
