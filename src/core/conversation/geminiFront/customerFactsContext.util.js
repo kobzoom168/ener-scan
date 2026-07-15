@@ -87,6 +87,20 @@ export async function buildCustomerFactsContext(lineUserId) {
       liffReadingLines = null;
     }
 
+    // โน้ตเคสจากแอดมิน (เคสคุณชิต 15 ก.ค.: แอดมินลบผลผิด+เติมสิทธิ์ แต่บอทไม่รู้เรื่อง พูดคนละทาง):
+    // แอดมินฝากเรื่องต่อบอทผ่าน redis `admin_case_note:{uid}` (TTL ตามเคส) — บอทต้องเล่าตรงกัน
+    let adminCaseLine = null;
+    try {
+      const note = String((await getValue(`admin_case_note:${uid}`)) || "").trim();
+      if (note) {
+        adminCaseLine =
+          `⚠️ เหตุการณ์สด (แอดมินฝากบอก): ${note} — ` +
+          `ตอบให้ตรงกับเรื่องนี้ ห้ามพูดสวนหรือทำเหมือนไม่รู้เรื่อง`;
+      }
+    } catch {
+      adminCaseLine = null;
+    }
+
     // เหตุการณ์สด: ลูกค้าเพิ่งโดนปัดรูปกี่ครั้ง เพราะอะไร — อาจารย์ต้องรู้ก่อนตอบ
     // (บทเรียน 12 ก.ค.: ลูกค้าโดนปัด 8 รอบแต่อาจารย์คุยเหมือนไม่รู้เรื่อง)
     let rejectLine = null;
@@ -122,6 +136,7 @@ export async function buildCustomerFactsContext(lineUserId) {
         )
         .join(", ") || "ยังไม่เปิดแพ็ก"} และมีฟรีวันละ ${freeQuota} ครั้ง`,
 
+      ...(adminCaseLine ? [`• ${adminCaseLine}`] : []),
       ...(adminResetLine ? [`• ${adminResetLine}`] : []),
       ...(rejectLine ? [`• ${rejectLine}`] : []),
       ...(liffReadingLines ? [`• ${liffReadingLines}`] : []),
