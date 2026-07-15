@@ -126,7 +126,8 @@ const REG_PROMPT_VARIANTS = [
 ];
 
 /**
- * การ์ดลงทะเบียน Flex "แบบ B" (กบเคาะ 16 ก.ค.): การ์ดครีม ตราบัวทอง ปุ่มทองใหญ่ —
+ * การ์ดลงทะเบียน Flex "แบบ B พื้นขาว + โลโก้จริง" (กบเคาะ 16 ก.ค.): โลโก้ตราเพชรทอง
+ * ตัวเดียวกับหน้า login LIFF (/brand/ener-reg-logo.png) — การ์ดกับหน้าลงทะเบียนดูเป็นชุดเดียวกัน
  * ไม่มี URL เปล่าโผล่ให้เห็นเลย (ลูกค้าบางคนกลัวลิงก์ นึกว่ามิจฉาชีพ)
  * greet ใช้ข้อความจาก /admin/promo (cfg.text) — กบแก้สดได้เหมือนเดิม
  * @param {string} greetText
@@ -134,6 +135,7 @@ const REG_PROMPT_VARIANTS = [
  */
 export function buildRegistrationFlexMessage(greetText, liffId) {
   const liffUrl = `https://liff.line.me/${liffId}`;
+  const base = String(process.env.APP_BASE_URL || "https://scan.my-ener.uk").trim().replace(/\/$/, "");
   const check = (label) => ({
     type: "box",
     layout: "baseline",
@@ -153,21 +155,24 @@ export function buildRegistrationFlexMessage(greetText, liffId) {
         type: "box",
         layout: "vertical",
         paddingAll: "0px",
-        backgroundColor: "#FFFDF6",
+        backgroundColor: "#FFFFFF",
         contents: [
-          // แถบทองบาง ๆ ขอบบน (ตามม็อกแบบ B)
-          { type: "box", layout: "vertical", height: "6px", backgroundColor: "#C9A24D", contents: [] },
           {
             type: "box",
             layout: "vertical",
             paddingAll: "20px",
             spacing: "sm",
             contents: [
-              { type: "text", text: "🪷", size: "3xl", align: "center" },
-              { type: "text", text: "อาจารย์ Ener", weight: "bold", size: "xl", color: "#7A5C1D", align: "center" },
+              {
+                type: "image",
+                url: `${base}/brand/ener-reg-logo.png`,
+                size: "lg",
+                aspectRatio: "10:7",
+                aspectMode: "fit",
+              },
               {
                 type: "text",
-                text: "อ่านพลังพระเครื่อง กำไลหิน เทียบดวงคุณ",
+                text: "อาจารย์อ่านพลังพระเครื่อง กำไลหิน",
                 size: "xs",
                 color: "#9A8A66",
                 align: "center",

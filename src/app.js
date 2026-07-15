@@ -174,6 +174,13 @@ app.use(
   express.static(path.join(process.cwd(), "src", "payment"))
 );
 
+// Brand assets (โลโก้บนการ์ด Flex ลงทะเบียน ฯลฯ)
+// URL: /brand/ener-reg-logo.png
+app.use(
+  "/brand",
+  express.static(path.join(process.cwd(), "src", "brand"), { maxAge: "1d" })
+);
+
 app.get("/debug/payment-access/:lineUserId", async (req, res) => {
   const lineUserId = String(req.params?.lineUserId || "").trim();
   console.log("[DEBUG] /debug/payment-access", { lineUserId });
