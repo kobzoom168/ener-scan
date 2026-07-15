@@ -112,6 +112,7 @@ import { maybeNotifyAdminSlipPendingVerify } from "../services/adminPaymentSlipN
 import {
   shouldBlockForRegistration,
   buildRegistrationPrompt,
+  buildRegistrationFlexMessage,
   getRegistrationGateConfig,
 } from "../services/registrationGate.service.js";
 import {
@@ -1854,16 +1855,25 @@ async function finalizeAcceptedImage({
             attempt: regGate.attempt || 1,
           }),
         );
-        await sendNonScanReply({
-          client,
-          userId,
-          replyToken: event.replyToken,
-          replyType: "registration_required",
-          semanticKey: `registration_required:${regGate.attempt || 1}`,
-          text: prompt.text,
-          alternateTexts: [],
-          quickReply: prompt.quickReply,
-        });
+        // การ์ด Flex แบบ B (กบ 16 ก.ค. — ลูกค้ากลัวลิงก์เปล่า) → reply พลาดค่อย push → พลาดอีกถอยไปข้อความเดิม
+        try {
+          try {
+            await client.replyMessage(event.replyToken, prompt.flexMessage);
+          } catch {
+            await client.pushMessage(userId, prompt.flexMessage);
+          }
+        } catch {
+          await sendNonScanReply({
+            client,
+            userId,
+            replyToken: null,
+            replyType: "registration_required",
+            semanticKey: `registration_required:${regGate.attempt || 1}`,
+            text: prompt.text,
+            alternateTexts: [],
+            quickReply: prompt.quickReply,
+          });
+        }
         return;
       }
     }
@@ -3693,16 +3703,25 @@ async function handleTextMessage({ client, event, userId, session }) {
             attempt: regGateText.attempt || 1,
           }),
         );
-        await sendNonScanReply({
-          client,
-          userId,
-          replyToken: event.replyToken,
-          replyType: "registration_required",
-          semanticKey: `registration_required:${regGateText.attempt || 1}`,
-          text: prompt.text,
-          alternateTexts: [],
-          quickReply: prompt.quickReply,
-        });
+        // การ์ด Flex แบบ B (กบ 16 ก.ค.) → reply พลาดค่อย push → พลาดอีกถอยไปข้อความเดิม
+        try {
+          try {
+            await client.replyMessage(event.replyToken, prompt.flexMessage);
+          } catch {
+            await client.pushMessage(userId, prompt.flexMessage);
+          }
+        } catch {
+          await sendNonScanReply({
+            client,
+            userId,
+            replyToken: null,
+            replyType: "registration_required",
+            semanticKey: `registration_required:${regGateText.attempt || 1}`,
+            text: prompt.text,
+            alternateTexts: [],
+            quickReply: prompt.quickReply,
+          });
+        }
         return;
       }
     }
@@ -7234,36 +7253,25 @@ async function handleFollowEvent({ client, event }) {
   auditExemptEnter(AuditExemptReason.LINE_WEBHOOK_FOLLOW_WELCOME);
   try {
     // gate เปิด + มี LIFF → welcome ต้องชวนลงทะเบียนเลย (กันย้อนแย้ง: บอกส่งรูปมา
-    // แล้วพอส่งจริงโดนบล็อกให้ไปลงทะเบียน) — ปุ่มแตะเดียวเปิดฟอร์ม
-    let welcomeText = buildFollowWelcomeText();
-    let welcomeQuickReply;
+    // แล้วพอส่งจริงโดนบล็อกให้ไปลงทะเบียน) — การ์ด Flex แบบ B แทนลิงก์เปล่า (กบ 16 ก.ค.:
+    // ลูกค้าบางคนกลัวกดลิงก์ นึกว่ามิจฉาชีพ)
+    const welcomeText = buildFollowWelcomeText();
+    let welcomeRegCard = null;
     try {
       const gateCfg = await getRegistrationGateConfig();
       const liffId = String(process.env.LIFF_ID || "").trim();
       if (gateCfg.enabled && liffId) {
-        welcomeText = [
-          welcomeText,
-          "",
-          "ก่อนเริ่ม อาจารย์ขอรู้จักกันสักนิดครับ กดลงทะเบียนตรงนี้ ไม่ถึงนาทีเสร็จ",
-          `https://liff.line.me/${liffId}`,
-        ].join("\n");
-        welcomeQuickReply = {
-          items: [
-            {
-              type: "action",
-              action: { type: "uri", label: "ลงทะเบียน", uri: `https://liff.line.me/${liffId}` },
-            },
-          ],
-        };
+        welcomeRegCard = buildRegistrationFlexMessage(gateCfg.text, liffId);
       }
     } catch {
       /* welcome เดิมยังส่งได้ */
     }
-    await client.replyMessage(event.replyToken, {
-      type: "text",
-      text: welcomeText,
-      ...(welcomeQuickReply ? { quickReply: welcomeQuickReply } : {}),
-    });
+    await client.replyMessage(
+      event.replyToken,
+      welcomeRegCard
+        ? [{ type: "text", text: welcomeText }, welcomeRegCard]
+        : { type: "text", text: welcomeText },
+    );
     console.log(
       JSON.stringify({
         event: "LINE_FOLLOW_WELCOME_SENT",
