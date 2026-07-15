@@ -389,37 +389,125 @@ function buildLibraryAxisHighlightsMiniCarouselHtml(highlights) {
  * @param {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletLibraryView} library
  * @param {string} pageToken — ถ้าว่าง จะไม่แสดงปุ่มลิงก์
  */
-function buildSacredAmuletLibraryMiniHtml(library, pageToken) {
+function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   if (!library || library.totalCount <= 0) return "";
   const top = library.topOverall;
   if (!top) return "";
+  const accessFull = opts.accessFull !== false;
+  const liffPayUrl = String(opts.liffPayUrl || "https://lin.ee/6YZeFZ1");
   const tok = String(pageToken || "").trim();
   const canLinkLibrary = Boolean(tok && tok !== "unknown");
   const libHref = canLinkLibrary ? `/r/${encodeURIComponent(tok)}/library` : "";
-  const imgBlock = top.thumbUrl
-    ? `<div class="mv2-lib-img"><img src="${escapeHtml(top.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async"/></div>`
-    : `<div class="mv2-lib-img mv2-lib-img--empty" aria-hidden="true"></div>`;
+  const byOverall = Array.isArray(library.byOverall) ? library.byOverall : [];
+
+  // ── แท่นรางวัลท็อป 3 โชว์บนหน้ารายงานเลย ไม่ต้องกดเข้าไปดู (กบ 15 ก.ค.)
+  //    ฟรี: อันดับ 1-2 เซ็นเซอร์ (จ่ายถึงเห็นชิ้นแรงสุดของตัวเอง) อันดับ 3 โชว์
+  const podCard = (it, rank) => {
+    const first = rank === 1;
+    const censored = !accessFull && rank <= 2;
+    const img = it.thumbUrl
+      ? `<img class="mv2r-pod-img${censored ? " mv2r-blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
+      : `<span class="mv2r-pod-img mv2r-pod-img--empty" aria-hidden="true"></span>`;
+    const idLine = censored
+      ? `<p class="mv2r-pod-id">ปลดล็อกเพื่อดู</p>`
+      : `<p class="mv2r-pod-id">${escapeHtml(it.displayReportId)}</p>`;
+    const action = censored
+      ? `<a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">เปิดแพ็กเพื่อดู</a>`
+      : `<a class="mv2r-pod-btn" href="/r/${encodeURIComponent(it.publicToken)}">ดูรายงานนี้</a>`;
+    return `
+    <article class="mv2r-pod${first ? " mv2r-pod--first" : ""}${censored ? " mv2r-pod--locked" : ""}">
+      <span class="mv2r-pod-chip">${first ? "อันดับ 1 ของคลังคุณ" : `อันดับ ${rank}`}</span>
+      ${img}
+      ${idLine}
+      <p class="mv2r-pod-total">${escapeHtml(String(it.powerTotal))}<small>พลังรวม</small></p>
+      <p class="mv2r-pod-peak">${escapeHtml(it.peakPowerLabelTh)}</p>
+      ${action}
+    </article>`;
+  };
+  const podItems = byOverall.slice(0, 3);
+  const podiumHtml =
+    podItems.length >= 2
+      ? `<div class="mv2r-podium">${[
+          podItems[1] ? podCard(podItems[1], 2) : "",
+          podCard(podItems[0], 1),
+          podItems[2] ? podCard(podItems[2], 3) : "",
+        ].join("")}</div>`
+      : "";
+
+  // ── อันดับทั้งหมดต่อท้ายเลย: จ่าย = 10 แถวแรก + ปุ่มดูเพิ่ม / ฟรี = 1-2 เซ็นเซอร์ 3-5 โชว์ + CTA
+  const rowHtml = (it, rank, censored) => {
+    const img = it.thumbUrl
+      ? `<img class="mv2r-row-img${censored ? " mv2r-blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" width="44" height="44" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
+      : `<span class="mv2r-row-img mv2r-row-img--empty" aria-hidden="true"></span>`;
+    const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
+    if (censored) {
+      return `
+      <a class="mv2r-row mv2r-row--locked" href="${escapeHtml(liffPayUrl)}">
+        <span class="mv2r-row-rank">${rank}</span>
+        ${img}
+        <span class="mv2r-row-main">
+          <span class="mv2r-row-id">ชิ้นอันดับ ${rank} ของคุณ</span>
+          <span class="mv2r-row-peak">เปิดแพ็กเพื่อดูว่าชิ้นไหนแรงสุด</span>
+        </span>
+        <span class="mv2r-row-lockpill">ล็อก</span>
+      </a>`;
+    }
+    return `
+    <a class="mv2r-row" href="/r/${encodeURIComponent(it.publicToken)}">
+      <span class="mv2r-row-rank">${rank}</span>
+      ${img}
+      <span class="mv2r-row-main">
+        <span class="mv2r-row-id">${escapeHtml(it.displayReportId)}</span>
+        <span class="mv2r-row-peak">เด่นสุด ${escapeHtml(it.peakPowerLabelTh)}${when ? ` · ${escapeHtml(when)}` : ""}</span>
+      </span>
+      <span class="mv2r-row-score"><b>${escapeHtml(String(it.powerTotal))}</b>${
+        it.compatPercent != null ? `<span>เข้ากับคุณ ${escapeHtml(String(it.compatPercent))}%</span>` : ""
+      }</span>
+      <span class="mv2r-row-go" aria-hidden="true">›</span>
+    </a>`;
+  };
+
+  let rowsHtml = "";
+  if (accessFull) {
+    const first10 = byOverall.slice(0, 10).map((it, i) => rowHtml(it, i + 1, false)).join("");
+    const rest = byOverall.slice(10).map((it, i) => rowHtml(it, i + 11, false)).join("");
+    rowsHtml = `
+      <div class="mv2r-rows">${first10}</div>
+      ${
+        rest
+          ? `<div class="mv2r-rows mv2r-rows--more" id="mv2r-more" hidden>${rest}</div>
+      <button type="button" class="mv2r-more-btn" id="mv2r-more-btn">ดูเพิ่มอีก ${byOverall.length - 10} รายการ ˅</button>
+      <script>(function(){var b=document.getElementById("mv2r-more-btn"),m=document.getElementById("mv2r-more");if(b&&m){b.addEventListener("click",function(){var open=m.hidden;m.hidden=!open;b.textContent=open?"ย่อกลับ ˄":"ดูเพิ่มอีก ${byOverall.length - 10} รายการ ˅";});}})();</script>`
+          : ""
+      }`;
+  } else {
+    const five = byOverall.slice(0, 5).map((it, i) => rowHtml(it, i + 1, i < 2)).join("");
+    const remain = Math.max(0, byOverall.length - 5);
+    rowsHtml = `
+      <div class="mv2r-rows">${five}</div>
+      ${
+        remain > 0
+          ? `<a class="mv2r-row mv2r-row--cta" href="${escapeHtml(liffPayUrl)}">และอีก ${remain} ชิ้นในคลัง · เปิดแพ็กเพื่อดูครบทุกอันดับ ›</a>`
+          : ""
+      }`;
+  }
+
   const nudge =
     library.totalCount === 1
       ? `<p class="mv2-lib-nudge">สแกนเพิ่มอีกสักรายการ อาจารย์จะช่วยจัดอันดับและเปรียบเทียบให้ชัดขึ้น</p>`
       : "";
   const btn = libHref
-    ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">ดูอันดับทั้งหมดในคลัง</a>`
+    ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">เปิดหน้าคลังแบบเต็ม แยกตามด้านพลัง</a>`
     : "";
   const axisCarouselHtml = buildLibraryAxisHighlightsMiniCarouselHtml(library.axisHighlights);
   return `
     <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">
       <h2 id="mv2-lib-h">คลังพลังของคุณ</h2>
       <p class="mv2-lib-count">คุณมีรายการสแกนแล้ว ${escapeHtml(String(library.totalCount))} รายการ</p>
-      <div class="mv2-lib-spot">
-        ${imgBlock}
-        <div class="mv2-lib-spot-body">
-          <p class="mv2-lib-rankline">อันดับ 1 โดยรวมตอนนี้</p>
-          <p class="mv2-lib-scoreline">พลังรวม <strong>${escapeHtml(String(top.powerTotal))}</strong></p>
-          <p class="mv2-lib-peakline">เด่นสุด: ${escapeHtml(top.peakPowerLabelTh)}</p>
-        </div>
-      </div>
+      ${podiumHtml}
       ${axisCarouselHtml}
+      ${byOverall.length > 1 ? `<h3 class="mv2r-rank-h">อันดับทั้งหมดในคลัง</h3>` : ""}
+      ${byOverall.length > 1 ? rowsHtml : ""}
       ${nudge}
       ${btn}
     </section>`;
@@ -470,6 +558,10 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const libraryMiniHtml = buildSacredAmuletLibraryMiniHtml(
     sacredAmuletLibrary,
     publicTokenForLinks,
+    {
+      accessFull: options.accessFull !== false,
+      liffPayUrl: options.liffPayUrl || "",
+    },
   );
 
   // teaser ขาย 299 (กบ: คนไม่จ่ายเห็นแล้วต้องจ่าย): อันดับ 1 ของคลังวันนี้ รูปเบลอ
@@ -2230,6 +2322,46 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     }
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--mv2a-trust-border); text-align: center; font-size: 0.78rem; color: var(--mv2a-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: var(--mv2a-render-meta); }
+    /* คลังในหน้ารายงาน: แท่นรางวัล + อันดับทั้งหมด (กบ 15 ก.ค. — ฟรีเซ็นเซอร์อันดับ 1-2) */
+    .mv2r-podium { display: flex; gap: 10px; align-items: flex-end; margin: 0.8rem 0 0.4rem; }
+    .mv2r-pod { flex: 1; text-align: center; position: relative; border: 1px solid rgba(165, 129, 58, 0.28); border-radius: 16px; padding: 1.15rem 0.5rem 0.75rem; background: rgba(233, 207, 147, 0.05); }
+    .mv2r-pod--first { flex: 1.3; border: 2px solid #c9a24d; box-shadow: 0 8px 24px rgba(165, 129, 58, 0.16); }
+    .mv2r-pod--locked { border-style: dashed; }
+    .mv2r-pod-chip { position: absolute; top: -0.75rem; left: 50%; transform: translateX(-50%); white-space: nowrap; background: #a5813a; color: #fffdf6; font-weight: 800; font-size: 0.66rem; border-radius: 999px; padding: 0.12rem 0.7rem; }
+    .mv2r-pod--first .mv2r-pod-chip { background: linear-gradient(90deg, #b98a2e, #e3bc5f); font-size: 0.74rem; }
+    .mv2r-pod-img { width: 4.2rem; height: 4.2rem; border-radius: 12px; object-fit: cover; border: 1px solid rgba(165, 129, 58, 0.3); display: block; margin: 0.3rem auto 0.35rem; background: rgba(165, 129, 58, 0.08); }
+    .mv2r-pod--first .mv2r-pod-img { width: 5.6rem; height: 5.6rem; border: 2px solid #c9a24d; }
+    .mv2r-blur { filter: blur(8px) saturate(0.75); }
+    .mv2r-pod-id { margin: 0; font-weight: 800; font-size: 0.68rem; color: var(--mv2a-muted); }
+    .mv2r-pod-total { margin: 0.05rem 0 0; font-size: 1.5rem; font-weight: 700; color: #a5813a; line-height: 1.1; }
+    .mv2r-pod--first .mv2r-pod-total { font-size: 2rem; }
+    .mv2r-pod-total small { display: block; font-size: 0.55rem; font-weight: 600; color: var(--mv2a-muted); }
+    .mv2r-pod-peak { display: inline-block; margin: 0.3rem 0 0; font-size: 0.62rem; font-weight: 700; color: #8f6710; background: rgba(200, 155, 30, 0.1); border-radius: 999px; padding: 0.1rem 0.5rem; }
+    .mv2r-pod-btn { display: block; margin-top: 0.5rem; text-decoration: none; text-align: center; font-weight: 700; font-size: 0.72rem; padding: 0.4rem 0.3rem; border-radius: 9px; background: linear-gradient(165deg, #e8c547, #c9a227); color: #1a1610; }
+    .mv2r-pod-btn--pay { background: transparent; border: 1.5px solid #a5813a; color: #a5813a; }
+    @media (max-width: 460px) {
+      .mv2r-podium { flex-wrap: wrap; }
+      .mv2r-pod--first { order: -1; flex: 1 1 100%; }
+      .mv2r-pod { flex: 1 1 calc(50% - 5px); }
+    }
+    .mv2r-rank-h { margin: 1.1rem 0 0.6rem; font-size: 1rem; }
+    .mv2r-rows { display: flex; flex-direction: column; gap: 0.5rem; }
+    .mv2r-rows--more { margin-top: 0.5rem; }
+    .mv2r-row { display: flex; align-items: center; gap: 0.55rem; border: 1px solid rgba(165, 129, 58, 0.22); border-radius: 12px; padding: 0.5rem 0.65rem; text-decoration: none; color: inherit; }
+    .mv2r-row--locked { border-style: dashed; }
+    .mv2r-row--cta { justify-content: center; font-weight: 800; color: #8f6710; border-style: dashed; font-size: 0.82rem; margin-top: 0.5rem; }
+    .mv2r-row-rank { flex: 0 0 1.5rem; text-align: center; font-weight: 800; color: var(--mv2a-muted); font-size: 0.85rem; }
+    .mv2r-row-img { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; flex: 0 0 auto; background: rgba(165, 129, 58, 0.08); border: 1px solid rgba(165, 129, 58, 0.25); }
+    .mv2r-row-img--empty { display: inline-block; }
+    .mv2r-row-main { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+    .mv2r-row-id { font-weight: 800; font-size: 0.8rem; }
+    .mv2r-row-peak { font-size: 0.68rem; color: var(--mv2a-muted); }
+    .mv2r-row-score { flex: 0 0 auto; text-align: right; display: flex; flex-direction: column; line-height: 1.15; }
+    .mv2r-row-score b { font-size: 1.15rem; color: #a5813a; font-weight: 700; }
+    .mv2r-row-score span { font-size: 0.58rem; color: var(--mv2a-muted); }
+    .mv2r-row-go { flex: 0 0 auto; color: #c9a24d; font-weight: 800; }
+    .mv2r-row-lockpill { flex: 0 0 auto; font-size: 0.64rem; font-weight: 800; color: #8f6710; border: 1px solid rgba(180, 140, 40, 0.35); background: rgba(200, 155, 30, 0.08); border-radius: 999px; padding: 0.18rem 0.6rem; }
+    .mv2r-more-btn { display: block; width: 100%; margin-top: 0.6rem; padding: 0.6rem; border-radius: 12px; border: 1.5px solid #c9a24d; background: transparent; color: #8f6710; font-weight: 800; font-size: 0.86rem; font-family: inherit; cursor: pointer; }
     /* teaser อันดับ 1 ของวันนี้ (เบลอ) + แถบเริ่มใช้ล่างจอ */
     .mv2-pick-tease { border: 1.5px dashed rgba(165, 129, 58, 0.55); }
     .mv2-tease-h { margin: 0 0 0.7rem; font-size: 1.05rem; }

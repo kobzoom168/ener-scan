@@ -51,60 +51,43 @@ function rankCardHtml(it, rank) {
 }
 
 /**
- * แถวที่ถูกล็อก (แบบ A — ไม่มีแพ็กแอคทีฟเห็นได้ 7 รายการล่าสุด): รูปเบลอ ไม่บอกชิ้น
+ * แถวเซ็นเซอร์ (กบ 15 ก.ค.: ฟรีไม่เห็นอันดับ 1-2 — จ่ายถึงเห็นชิ้นแรงสุดของตัวเอง)
  * @param {SacredAmuletLibraryItem} it
  * @param {number} rank
+ * @param {string} liffPayUrl
  */
-function lockedRowHtml(it, rank) {
+function lockedRowHtml(it, rank, liffPayUrl) {
   const img = it.thumbUrl
     ? `<img class="alib-row-img alib-row-img--blur" src="${escapeHtml(it.thumbUrl)}" alt="" width="46" height="46" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
     : `<span class="alib-row-img alib-row-img--empty" aria-hidden="true"></span>`;
-  return `
-  <span class="alib-row alib-row--locked" data-rank="${rank}">
+  const inner = `
     <span class="alib-row-rank">${rank}</span>
     ${img}
     <span class="alib-row-main">
-      <span class="alib-row-id">อยู่ในคลังของคุณ</span>
-      <span class="alib-row-peak">เปิดแพ็กเพื่อดูรายละเอียดชิ้นนี้</span>
+      <span class="alib-row-id">ชิ้นอันดับ ${rank} ของคุณ</span>
+      <span class="alib-row-peak">เปิดแพ็กเพื่อดูว่าชิ้นไหนแรงสุด</span>
     </span>
-    <span class="alib-row-lockpill">ล็อก</span>
-  </span>`;
+    <span class="alib-row-lockpill">ล็อก</span>`;
+  return liffPayUrl
+    ? `<a class="alib-row alib-row--locked" data-rank="${rank}" href="${escapeHtml(liffPayUrl)}">${inner}</a>`
+    : `<span class="alib-row alib-row--locked" data-rank="${rank}">${inner}</span>`;
 }
 
 /**
  * @param {SacredAmuletLibraryItem[]} list
  * @param {string} [emptyText]
- * @param {{ allowedTokens?: Set<string>|null, liffPayUrl?: string }} [opts]
+ * @param {{ censorTop?: boolean, liffPayUrl?: string }} [opts]
  */
 function panelHtml(list, emptyText = "ยังไม่มีข้อมูลในหมวดนี้", opts = {}) {
   if (!list.length) {
     return `<p class="alib-empty">${escapeHtml(emptyText)}</p>`;
   }
-  const allowed = opts.allowedTokens ?? null;
+  const censorTop = opts.censorTop === true;
   const liffPayUrl = String(opts.liffPayUrl || "");
-  if (!allowed) {
-    return `<div class="alib-rows">${list.map((it, i) => rankCardHtml(it, i + 1)).join("")}</div>`;
-  }
-  // โหมดล็อก: แถวที่ไม่อยู่ใน 7 ล่าสุด = เบลอ (โชว์ตัวอย่างล็อกไม่เกิน 3 แถว แล้วสรุปยอด)
-  const parts = [];
-  let lockedShown = 0;
-  let lockedHidden = 0;
-  list.forEach((it, i) => {
-    if (allowed.has(String(it.publicToken))) {
-      parts.push(rankCardHtml(it, i + 1));
-    } else if (lockedShown < 3) {
-      lockedShown++;
-      parts.push(lockedRowHtml(it, i + 1));
-    } else {
-      lockedHidden++;
-    }
-  });
-  if (lockedHidden > 0 && liffPayUrl) {
-    parts.push(
-      `<a class="alib-row alib-row--more" href="${escapeHtml(liffPayUrl)}">และอีก ${lockedHidden} ชิ้นถูกล็อกอยู่ · เปิดแพ็กเพื่อดูทั้งคลัง ›</a>`,
-    );
-  }
-  return `<div class="alib-rows">${parts.join("")}</div>`;
+  const rows = list.map((it, i) =>
+    censorTop && i < 2 ? lockedRowHtml(it, i + 1, liffPayUrl) : rankCardHtml(it, i + 1),
+  );
+  return `<div class="alib-rows">${rows.join("")}</div>`;
 }
 
 /**
@@ -113,42 +96,51 @@ function panelHtml(list, emptyText = "ยังไม่มีข้อมูล
  * @param {number} rank
  * @param {string} pagePublicToken
  */
-function podiumCardHtml(it, rank, pagePublicToken) {
+function podiumCardHtml(it, rank, pagePublicToken, opts = {}) {
   const first = rank === 1;
+  const censored = opts.censorTop === true && rank <= 2;
+  const liffPayUrl = String(opts.liffPayUrl || "");
   const href = `/r/${encodeURIComponent(it.publicToken)}`;
   const img = it.thumbUrl
-    ? `<img class="alib-pod-img" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
+    ? `<img class="alib-pod-img${censored ? " alib-row-img--blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
     : `<span class="alib-pod-img alib-pod-img--empty" aria-hidden="true"></span>`;
   const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
   const fitBits = [];
   if (it.compatPercent != null) fitBits.push(`เข้ากับคุณ ${it.compatPercent}%`);
   if (first && when) fitBits.push(`สแกนเมื่อ ${when}`);
-  const pinForm = first ? spotlightPinFormHtml(pagePublicToken, it) : "";
+  const pinForm = first && !censored ? spotlightPinFormHtml(pagePublicToken, it) : "";
+  const idLine = censored
+    ? `<p class="alib-pod-id">ปลดล็อกเพื่อดู</p>`
+    : `<p class="alib-pod-id">${escapeHtml(it.displayReportId)}</p>`;
+  const action = censored
+    ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl || href)}">เปิดแพ็กเพื่อดู</a>`
+    : `<a class="alib-spot-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>`;
   return `
-  <article class="alib-pod${first ? " alib-pod--first" : ""}" data-rank="${rank}">
+  <article class="alib-pod${first ? " alib-pod--first" : ""}${censored ? " alib-pod--locked" : ""}" data-rank="${rank}">
     <span class="alib-pod-chip">${first ? "อันดับ 1 ของคลังคุณ" : `อันดับ ${rank}`}</span>
     ${img}
-    <p class="alib-pod-id">${escapeHtml(it.displayReportId)}</p>
+    ${idLine}
     <p class="alib-pod-total">${escapeHtml(String(it.powerTotal))}<small>พลังรวม</small></p>
     <p class="alib-pod-peak">${escapeHtml(it.peakPowerLabelTh)}</p>
-    ${fitBits.length ? `<p class="alib-pod-fit">${escapeHtml(fitBits.join(" · "))}</p>` : ""}
+    ${!censored && fitBits.length ? `<p class="alib-pod-fit">${escapeHtml(fitBits.join(" · "))}</p>` : ""}
     ${pinForm}
-    <a class="alib-spot-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>
+    ${action}
   </article>`;
 }
 
 /**
  * @param {SacredAmuletLibraryItem[]} items — top 3 by overall
  * @param {string} pagePublicToken
+ * @param {{ censorTop?: boolean, liffPayUrl?: string }} [opts]
  */
-function podiumHtml(items, pagePublicToken) {
+function podiumHtml(items, pagePublicToken, opts = {}) {
   if (!items.length) return "";
   if (items.length === 1) return spotlightCardHtml(items[0], pagePublicToken);
   const [a, b, c] = items;
   const cards = [
-    b ? podiumCardHtml(b, 2, pagePublicToken) : "",
-    podiumCardHtml(a, 1, pagePublicToken),
-    c ? podiumCardHtml(c, 3, pagePublicToken) : "",
+    b ? podiumCardHtml(b, 2, pagePublicToken, opts) : "",
+    podiumCardHtml(a, 1, pagePublicToken, opts),
+    c ? podiumCardHtml(c, 3, pagePublicToken, opts) : "",
   ].join("");
   return `<section class="alib-podium" aria-label="ท็อป 3 ของคลังคุณ">${cards}</section>`;
 }
@@ -248,20 +240,10 @@ export function renderAmuletLibraryRankingHtml({
   liffPayUrl = "",
 } = {}) {
   const backHref = `/r/${encodeURIComponent(pagePublicToken)}`;
-  // แบบ A (กบ 15 ก.ค.): ไม่มีแพ็กแอคทีฟ → เห็นเฉพาะ N รายการล่าสุด ที่เหลือล็อกเบลอ
-  const allowedTokens = accessFull
-    ? null
-    : new Set(
-        [...(Array.isArray(library.items) ? library.items : [])]
-          .sort(
-            (a, b) =>
-              (Date.parse(String(b.scannedAtIso || "")) || 0) -
-              (Date.parse(String(a.scannedAtIso || "")) || 0),
-          )
-          .slice(0, Math.max(1, freeVisibleCount))
-          .map((it) => String(it.publicToken)),
-      );
-  const panelOpts = { allowedTokens, liffPayUrl };
+  // กบ 15 ก.ค. (ปรับจากแบบ A เดิม): ฟรี = เซ็นเซอร์อันดับ 1-2 ทุกแท็บ (จ่ายถึงเห็น
+  // ชิ้นแรงสุดของตัวเอง) อันดับ 3 ขึ้นไปเห็นหมด; แท็บหนุนดวงวันนี้ยังล็อกทั้งแผง
+  void freeVisibleCount;
+  const panelOpts = { censorTop: !accessFull, liffPayUrl };
   const n = library.totalCount;
   const dedupeExplainLine =
     Array.isArray(library.items) && library.items.length < n
@@ -287,7 +269,7 @@ export function renderAmuletLibraryRankingHtml({
     : [];
   const spotlightIt = library.topOverall ?? library.byOverall?.[0] ?? null;
   const spotlightHtml = podiumItems.length
-    ? podiumHtml(podiumItems, pagePublicToken)
+    ? podiumHtml(podiumItems, pagePublicToken, panelOpts)
     : spotlightIt
       ? spotlightCardHtml(spotlightIt, pagePublicToken)
       : "";
