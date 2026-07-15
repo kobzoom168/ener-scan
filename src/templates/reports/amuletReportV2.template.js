@@ -412,6 +412,20 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
     const idLine = censored
       ? `<p class="mv2r-pod-id">ปลดล็อกเพื่อดู</p>`
       : `<p class="mv2r-pod-id">${escapeHtml(it.displayReportId)}</p>`;
+    const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
+    const fitBits = [];
+    if (it.compatPercent != null) fitBits.push(`เข้ากับคุณ ${it.compatPercent}%`);
+    if (first && when) fitBits.push(`สแกนเมื่อ ${when}`);
+    // ปักหมุดรูปเต็มได้จากหน้ารายงานเลย (POST เดียวกับหน้าคลัง)
+    const sid = String(it?.scanResultV2Id || "").trim();
+    const upId = String(it?.uploadId || "").trim();
+    const pinForm =
+      first && !censored && sid && upId && !it?.uploadOriginalDeletedAt && tok && tok !== "unknown"
+        ? `<form method="post" action="/r/${encodeURIComponent(tok)}/library/pin" class="mv2r-pin-form">
+        <input type="hidden" name="scanResultV2Id" value="${escapeHtml(sid)}" />
+        <button type="submit" class="mv2r-pin-btn">ปักหมุดรูปนี้</button>
+      </form>`
+        : "";
     const action = censored
       ? `<a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">เปิดแพ็กเพื่อดู</a>`
       : `<a class="mv2r-pod-btn" href="/r/${encodeURIComponent(it.publicToken)}">ดูรายงานนี้</a>`;
@@ -422,6 +436,8 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
       ${idLine}
       <p class="mv2r-pod-total">${escapeHtml(String(it.powerTotal))}<small>พลังรวม</small></p>
       <p class="mv2r-pod-peak">${escapeHtml(it.peakPowerLabelTh)}</p>
+      ${!censored && fitBits.length ? `<p class="mv2r-pod-fit">${escapeHtml(fitBits.join(" · "))}</p>` : ""}
+      ${pinForm}
       ${action}
     </article>`;
   };
@@ -2324,26 +2340,29 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2-trust { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--mv2a-trust-border); text-align: center; font-size: 0.78rem; color: var(--mv2a-muted); }
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: var(--mv2a-render-meta); }
     /* คลังในหน้ารายงาน: แท่นรางวัล + อันดับทั้งหมด (กบ 15 ก.ค. — ฟรีเซ็นเซอร์อันดับ 1-2) */
-    .mv2r-podium { display: flex; gap: 10px; align-items: flex-end; margin: 0.8rem 0 0.4rem; }
-    .mv2r-pod { flex: 1; text-align: center; position: relative; border: 1px solid rgba(165, 129, 58, 0.28); border-radius: 16px; padding: 1.15rem 0.5rem 0.75rem; background: rgba(233, 207, 147, 0.05); }
-    .mv2r-pod--first { flex: 1.3; border: 2px solid #c9a24d; box-shadow: 0 8px 24px rgba(165, 129, 58, 0.16); }
+    .mv2r-podium { display: flex; gap: 12px; align-items: flex-end; margin: 1.1rem 0 0.5rem; }
+    .mv2r-pod { flex: 1; text-align: center; position: relative; border: 1px solid rgba(165, 129, 58, 0.28); border-radius: 18px; padding: 1.35rem 0.8rem 0.9rem; background: rgba(233, 207, 147, 0.05); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05); }
+    .mv2r-pod--first { flex: 1.35; border: 2px solid #c9a24d; box-shadow: 0 10px 28px rgba(165, 129, 58, 0.18); padding: 1.6rem 1rem 1rem; }
     .mv2r-pod--locked { border-style: dashed; }
-    .mv2r-pod-chip { position: absolute; top: -0.75rem; left: 50%; transform: translateX(-50%); white-space: nowrap; background: #a5813a; color: #fffdf6; font-weight: 800; font-size: 0.66rem; border-radius: 999px; padding: 0.12rem 0.7rem; }
-    .mv2r-pod--first .mv2r-pod-chip { background: linear-gradient(90deg, #b98a2e, #e3bc5f); font-size: 0.74rem; }
-    .mv2r-pod-img { width: 4.2rem; height: 4.2rem; border-radius: 12px; object-fit: cover; border: 1px solid rgba(165, 129, 58, 0.3); display: block; margin: 0.3rem auto 0.35rem; background: rgba(165, 129, 58, 0.08); }
-    .mv2r-pod--first .mv2r-pod-img { width: 5.6rem; height: 5.6rem; border: 2px solid #c9a24d; }
+    .mv2r-pod-chip { position: absolute; top: -0.8rem; left: 50%; transform: translateX(-50%); white-space: nowrap; background: #a5813a; color: #fffdf6; font-weight: 800; font-size: 0.72rem; border-radius: 999px; padding: 0.15rem 0.85rem; }
+    .mv2r-pod--first .mv2r-pod-chip { background: linear-gradient(90deg, #b98a2e, #e3bc5f); font-size: 0.8rem; padding: 0.2rem 1.1rem; }
+    .mv2r-pod-img { width: 5.4rem; height: 5.4rem; border-radius: 14px; object-fit: cover; border: 1px solid rgba(165, 129, 58, 0.3); display: block; margin: 0.35rem auto 0.45rem; background: rgba(165, 129, 58, 0.08); }
+    .mv2r-pod--first .mv2r-pod-img { width: 7.6rem; height: 7.6rem; border: 2px solid #c9a24d; }
     .mv2r-blur { filter: blur(8px) saturate(0.75); }
-    .mv2r-pod-id { margin: 0; font-weight: 800; font-size: 0.68rem; color: var(--mv2a-muted); }
-    .mv2r-pod-total { margin: 0.05rem 0 0; font-size: 1.5rem; font-weight: 700; color: #a5813a; line-height: 1.1; }
-    .mv2r-pod--first .mv2r-pod-total { font-size: 2rem; }
-    .mv2r-pod-total small { display: block; font-size: 0.55rem; font-weight: 600; color: var(--mv2a-muted); }
-    .mv2r-pod-peak { display: inline-block; margin: 0.3rem 0 0; font-size: 0.62rem; font-weight: 700; color: #8f6710; background: rgba(200, 155, 30, 0.1); border-radius: 999px; padding: 0.1rem 0.5rem; }
-    .mv2r-pod-btn { display: block; margin-top: 0.5rem; text-decoration: none; text-align: center; font-weight: 700; font-size: 0.72rem; padding: 0.4rem 0.3rem; border-radius: 9px; background: linear-gradient(165deg, #e8c547, #c9a227); color: #1a1610; }
+    .mv2r-pod-id { margin: 0; font-weight: 800; font-size: 0.78rem; color: var(--mv2a-muted); letter-spacing: 0.02em; }
+    .mv2r-pod-total { margin: 0.1rem 0 0; font-size: 1.9rem; font-weight: 700; color: #a5813a; line-height: 1.1; }
+    .mv2r-pod--first .mv2r-pod-total { font-size: 2.5rem; }
+    .mv2r-pod-total small { display: block; font-size: 0.6rem; font-weight: 600; color: var(--mv2a-muted); }
+    .mv2r-pod-peak { display: inline-block; margin: 0.35rem 0 0; font-size: 0.72rem; font-weight: 700; color: #8f6710; background: rgba(200, 155, 30, 0.1); border: 1px solid rgba(180, 140, 40, 0.22); border-radius: 999px; padding: 0.15rem 0.6rem; }
+    .mv2r-pod-fit { margin: 0.35rem 0 0; font-size: 0.75rem; color: var(--mv2a-muted); }
+    .mv2r-pin-form { margin: 0.55rem 0 0; }
+    .mv2r-pin-btn { display: block; width: 100%; padding: 0.42rem 0.5rem; border-radius: 10px; border: 1.5px solid #c9a24d; background: transparent; color: #8f6710; font-weight: 700; font-size: 0.8rem; font-family: inherit; cursor: pointer; }
+    .mv2r-pod-btn { display: block; margin-top: 0.5rem; text-decoration: none; text-align: center; font-weight: 700; font-size: 0.82rem; padding: 0.48rem 0.4rem; border-radius: 10px; background: linear-gradient(165deg, #e8c547, #c9a227); color: #1a1610; }
     .mv2r-pod-btn--pay { background: transparent; border: 1.5px solid #a5813a; color: #a5813a; }
-    @media (max-width: 460px) {
+    @media (max-width: 560px) {
       .mv2r-podium { flex-wrap: wrap; }
       .mv2r-pod--first { order: -1; flex: 1 1 100%; }
-      .mv2r-pod { flex: 1 1 calc(50% - 5px); }
+      .mv2r-pod { flex: 1 1 calc(50% - 6px); }
     }
     .mv2r-rank-h { margin: 1.1rem 0 0.6rem; font-size: 1rem; }
     .mv2r-rows { display: flex; flex-direction: column; gap: 0.5rem; }
