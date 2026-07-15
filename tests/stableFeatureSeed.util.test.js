@@ -47,6 +47,60 @@ test("buildStableFeatureSeed: different features → different seed", () => {
   assert.notEqual(a, b);
 });
 
+// เคสคุณชิต (15 ก.ค.): พระคนละองค์ เนื้อ/สี/ทรง/ผิวเหมือนกันหมด ต้องแยก seed ด้วยช่องอัตลักษณ์พิมพ์
+test("buildStableFeatureSeed: same coarse fields but different identity fields → different seed", () => {
+  const coarse = {
+    primaryColor: "brown",
+    materialType: "thai_amulet",
+    formFactor: "amulet_figure",
+    textureHint: "carved",
+  };
+  const somdej = buildStableFeatureSeed({
+    ...coarse,
+    shapeOutline: "rectangular",
+    mainMotif: "seated_figure",
+    figureCount: "one",
+    casing: "bare",
+  });
+  const naPhaya = buildStableFeatureSeed({
+    ...coarse,
+    shapeOutline: "triangular",
+    mainMotif: "seated_figure",
+    figureCount: "one",
+    casing: "framed_metal",
+  });
+  const multiFigure = buildStableFeatureSeed({
+    ...coarse,
+    shapeOutline: "rectangular",
+    mainMotif: "multi_figure",
+    figureCount: "three_plus",
+    casing: "framed_metal",
+  });
+  assert.notEqual(somdej, naPhaya);
+  assert.notEqual(somdej, multiFigure);
+  assert.notEqual(naPhaya, multiFigure);
+});
+
+test("buildStableFeatureSeed: identity fields all unknown → same seed as legacy 4-field formula", () => {
+  const legacy = buildStableFeatureSeed({
+    primaryColor: "brown",
+    materialType: "thai_amulet",
+    formFactor: "amulet_figure",
+    textureHint: "carved",
+  });
+  const withUnknownIdentity = buildStableFeatureSeed({
+    primaryColor: "brown",
+    materialType: "thai_amulet",
+    formFactor: "amulet_figure",
+    textureHint: "carved",
+    shapeOutline: "unknown",
+    mainMotif: "unknown",
+    figureCount: "unknown",
+    casing: "unknown",
+  });
+  assert.equal(legacy, withUnknownIdentity);
+});
+
 test("buildStableFeatureSeed: null or all-unknown → null", () => {
   assert.equal(buildStableFeatureSeed(null), null);
   assert.equal(

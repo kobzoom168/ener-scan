@@ -6,10 +6,13 @@ import { env } from "../config/env.js";
 import { buildStableFeatureSeed } from "../utils/stableFeatureSeed.util.js";
 
 /** Bump when model, SYSTEM_PROMPT, or slug set changes. */
-export const STABLE_FEATURE_EXTRACT_VERSION = "v1";
+export const STABLE_FEATURE_EXTRACT_VERSION = "v2";
 
 const STABLE_FEATURE_MODEL = "gpt-4.1-mini";
 
+// v2 (กบ 15 ก.ค.): เพิ่ม 4 ช่องอัตลักษณ์พิมพ์ (shapeOutline/mainMotif/figureCount/casing)
+// — เคสคุณชิต: พระเนื้อผงสีน้ำตาลคนละองค์ได้ 4 ช่องหยาบชุดเดียวกัน → seed ชน → คะแนน 6 แกนซ้ำเป๊ะ
+// ช่องใหม่ต้องนิ่งข้ามมุมกล้อง (โครงพิมพ์/ลวดลาย/จำนวนองค์/กรอบเลี่ยม ไม่เปลี่ยนตามมุม)
 const SYSTEM_PROMPT = `Extract stable visual features from this object image. These features must be
 consistent across different camera angles of the same object.
 Reply with JSON only:
@@ -17,13 +20,22 @@ Reply with JSON only:
   "primaryColor": "<dominant color slug: green|blue|purple|red|orange|yellow|white|black|brown|gold|silver|mixed>",
   "materialType": "<material: moldavite|quartz|amethyst|obsidian|jade|agate|tiger_eye|mixed_crystal|thai_amulet|brass|bronze|clay|unknown>",
   "formFactor": "<bracelet|pendant|amulet_coin|amulet_figure|loose_stone|necklace|ring|unknown>",
-  "textureHint": "<smooth|rough|faceted|natural_raw|carved|polished|unknown>"
+  "textureHint": "<smooth|rough|faceted|natural_raw|carved|polished|unknown>",
+  "shapeOutline": "<overall silhouette: rectangular|triangular|oval|round|arch|shield|irregular|unknown>",
+  "mainMotif": "<dominant relief/imagery: seated_figure|standing_figure|multi_figure|face_only|animal|yantra_or_text|pattern_only|plain|unknown>",
+  "figureCount": "<count of depicted figures: none|one|two|three_plus|unknown>",
+  "casing": "<framed_metal|clear_case|bare|unknown>"
 }
 Rules:
 - Use exact slugs from the lists above only
 - If unsure, use 'unknown' rather than guessing
 - primaryColor = most dominant color visible
-- Focus on what is stable: shape, material, dominant color — NOT lighting or angle`;
+- shapeOutline = silhouette of the object itself (ignore hand/background); for amulets this is the
+  outline of the votive tablet, not the frame
+- mainMotif/figureCount = what is depicted in the relief; the SAME object must give the same answer
+  from any angle, so judge overall composition, not fine detail
+- casing = framed_metal when a metal bezel/frame surrounds it, clear_case for plastic/glass cases
+- Focus on what is stable: shape, material, dominant color, composition — NOT lighting or angle`;
 
 /**
  * @param {string} raw
@@ -183,6 +195,10 @@ export async function extractStableVisualFeatures(
       materialType: String(parsed.materialType ?? "unknown").trim() || "unknown",
       formFactor: String(parsed.formFactor ?? "unknown").trim() || "unknown",
       textureHint: String(parsed.textureHint ?? "unknown").trim() || "unknown",
+      shapeOutline: String(parsed.shapeOutline ?? "unknown").trim() || "unknown",
+      mainMotif: String(parsed.mainMotif ?? "unknown").trim() || "unknown",
+      figureCount: String(parsed.figureCount ?? "unknown").trim() || "unknown",
+      casing: String(parsed.casing ?? "unknown").trim() || "unknown",
     };
 
     const seed = buildStableFeatureSeed(features);

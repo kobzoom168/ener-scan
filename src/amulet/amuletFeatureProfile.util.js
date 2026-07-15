@@ -162,6 +162,33 @@ const COLOR_AXIS = /** @type {Record<string, AxisDelta>} */ ({
   mixed: { luck: 5, metta: 3 },
 });
 
+/**
+ * v2 identity layers (กบ 15 ก.ค.): โครงพิมพ์ + ลวดลายหลัก ดันแกนตามคติพิมพ์จริง
+ * (สามเหลี่ยม≈นางพญา→เมตตา, ยันต์→งานเฉพาะ/คุ้มครอง) — ช่วยให้พระเนื้อ/สี/ทรงหยาบเดียวกัน
+ * แต่คนละพิมพ์ ได้ทั้งตัวเลขและ "พลังเด่น" ที่ต่างกันอย่างมีความหมาย ไม่ใช่แค่สุ่มแยก.
+ * ช่องพวกนี้นิ่งข้ามมุมกล้อง จึงไม่กระทบความเสถียรของชิ้นเดิม.
+ */
+const SHAPE_AXIS = /** @type {Record<string, AxisDelta>} */ ({
+  rectangular: { fortune_anchor: 5, baramee: 3 },
+  triangular: { metta: 6, protection: 3 },
+  oval: { metta: 4, fortune_anchor: 3 },
+  round: { luck: 5, metta: 2 },
+  arch: { protection: 5, fortune_anchor: 3 },
+  shield: { protection: 6, baramee: 3 },
+  irregular: { specialty: 4, luck: 2 },
+});
+
+const MOTIF_AXIS = /** @type {Record<string, AxisDelta>} */ ({
+  seated_figure: { fortune_anchor: 5, metta: 4 },
+  standing_figure: { baramee: 6, protection: 3 },
+  multi_figure: { baramee: 5, metta: 4 },
+  face_only: { baramee: 5, metta: 3 },
+  animal: { luck: 7, specialty: 3 },
+  yantra_or_text: { specialty: 7, protection: 4 },
+  pattern_only: { luck: 4, specialty: 3 },
+  plain: { fortune_anchor: 3 },
+});
+
 const AXIS_MIN = 34;
 const AXIS_MAX = 99;
 const BASE_CENTER = 46;
@@ -210,6 +237,20 @@ export function computeAmuletAxisBaseFromFeatures(features) {
   }
   if (c.colorBucket !== "unknown") {
     applyContribution(COLOR_AXIS, c.colorBucket, out);
+    knownLayers += 1;
+  }
+
+  // v2 identity layers: อ่านจาก features ดิบตรง ๆ (ไม่เข้า signature — signature คง 3 ช่องเดิม
+  // เพื่อไม่รีเซ็ต jitter/nudge ของชิ้นที่ extractor รุ่นเก่าเคยให้ไว้)
+  const f = features && typeof features === "object" ? features : {};
+  const shapeOutline = String(f.shapeOutline ?? "").trim().toLowerCase();
+  const mainMotif = String(f.mainMotif ?? "").trim().toLowerCase();
+  if (SHAPE_AXIS[shapeOutline]) {
+    applyContribution(SHAPE_AXIS, shapeOutline, out);
+    knownLayers += 1;
+  }
+  if (MOTIF_AXIS[mainMotif]) {
+    applyContribution(MOTIF_AXIS, mainMotif, out);
     knownLayers += 1;
   }
 
