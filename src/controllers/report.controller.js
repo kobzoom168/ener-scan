@@ -172,8 +172,10 @@ export async function getReportByToken(req, res) {
   // teaser ขาย 299 บนหน้ารายงาน: อันดับ 1 ของคลังวันนี้ (เบลอ) — เฉพาะเจ้าของที่ยังไม่เป็นสมาชิก
   // (ทุกเลน: พระ กำไล มอลดาไวท์ — คลัง Daily Pick รวมทุกเลนอยู่แล้ว)
   let dailyPickTeaser = null;
-  // ฟรี = เซ็นเซอร์อันดับ 1-2 ของคลัง (กบ 15 ก.ค.) — เช็คพลาด = เปิดหมด (fail-open)
+  // อันดับ 1-2 ของคลังเซ็นเซอร์ไว้ให้สมาชิกรายเดือนเท่านั้น อันดับ 3 เปิดทุกคน (กบ 15 ก.ค.)
+  // accessFull = แพ็กแอคทีฟ (คุมลิสต์เต็ม 10 แถว) / memberAccess = รายเดือน (คุมเบลอ 1-2) — เช็คพลาด = เปิดหมด (fail-open)
   let accessFull = true;
+  let memberAccess = true;
   if (normPre.amuletV1 || normPre.crystalBraceletV1 || normPre.moldaviteV1) {
     const uid = String(normPre.userId || "").trim();
     if (uid) {
@@ -189,13 +191,12 @@ export async function getReportByToken(req, res) {
           .select("paid_until,paid_remaining_scans")
           .eq("line_user_id", uid)
           .maybeSingle();
-        accessFull = computePaidActive(
-          u?.paid_until,
-          Number(u?.paid_remaining_scans) || 0,
-          new Date(),
-        );
+        const remaining = Number(u?.paid_remaining_scans) || 0;
+        accessFull = computePaidActive(u?.paid_until, remaining, new Date());
+        memberAccess = accessFull && remaining >= 900000;
       } catch {
         accessFull = true;
+        memberAccess = true;
       }
     }
   }
@@ -210,6 +211,7 @@ export async function getReportByToken(req, res) {
       dailyPickTeaser,
       liffPayUrl,
       accessFull,
+      memberAccess,
     });
   } catch (renderErr) {
     console.error(
@@ -621,7 +623,9 @@ export async function getLibraryRankingByToken(req, res) {
 
   // สเต็ป 2 (กบเคาะแบบ A, 15 ก.ค.): แพ็กแอคทีฟเห็นทั้งคลัง / ไม่มีแพ็กเห็น 7 รายการล่าสุด
   // + แถวล็อกเบลอ; แท็บ "หนุนดวงวันนี้" เฉพาะแพ็กแอคทีฟ — เช็คพลาด = เปิดหมด (fail-open)
+  // อันดับ 1-2 เซ็นเซอร์ไว้ให้สมาชิกรายเดือนเท่านั้น (memberAccess) อันดับ 3 เปิดทุกคน (กบ 15 ก.ค.)
   let accessFull = true;
+  let memberAccess = true;
   let dailyPick = null;
   if (uid) {
     try {
@@ -630,13 +634,12 @@ export async function getLibraryRankingByToken(req, res) {
         .select("paid_until,paid_remaining_scans")
         .eq("line_user_id", uid)
         .maybeSingle();
-      accessFull = computePaidActive(
-        u?.paid_until,
-        Number(u?.paid_remaining_scans) || 0,
-        new Date(),
-      );
+      const remaining = Number(u?.paid_remaining_scans) || 0;
+      accessFull = computePaidActive(u?.paid_until, remaining, new Date());
+      memberAccess = accessFull && remaining >= 900000;
     } catch {
       accessFull = true;
+      memberAccess = true;
     }
     try {
       const { listDailyPickRankedForLineUser } = await import("../routes/liff.routes.js");
@@ -658,6 +661,7 @@ export async function getLibraryRankingByToken(req, res) {
       pinFlash,
       freeTierPinLimit: env.FREE_TIER_PINNED_ORIGINAL_LIMIT,
       accessFull,
+      memberAccess,
       freeVisibleCount: 7,
       dailyPick,
       liffPayUrl: libLiffPayUrl,

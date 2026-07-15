@@ -56,6 +56,7 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
       dailyPickTeaser: renderOpts.dailyPickTeaser ?? null,
       liffPayUrl: renderOpts.liffPayUrl ?? null,
       accessFull: renderOpts.accessFull ?? true,
+      memberAccess: renderOpts.memberAccess ?? true,
     });
   }
   if (

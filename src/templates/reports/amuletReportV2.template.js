@@ -395,6 +395,8 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   const top = library.topOverall;
   if (!top) return "";
   const accessFull = opts.accessFull !== false;
+  // สมาชิกรายเดือนเท่านั้นถึงเห็นอันดับ 1-2 (กบ 15 ก.ค.) — แพ็กเครดิตยังเห็นลิสต์เต็มแต่ 1-2 เบลอ
+  const memberAccess = opts.memberAccess !== false;
   const liffPayUrl = String(opts.liffPayUrl || "https://lin.ee/6YZeFZ1");
   const tok = String(pageToken || "").trim();
   const canLinkLibrary = Boolean(tok && tok !== "unknown");
@@ -402,15 +404,15 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   const byOverall = Array.isArray(library.byOverall) ? library.byOverall : [];
 
   // ── แท่นรางวัลท็อป 3 โชว์บนหน้ารายงานเลย ไม่ต้องกดเข้าไปดู (กบ 15 ก.ค.)
-  //    ฟรี: อันดับ 1-2 เซ็นเซอร์ (จ่ายถึงเห็นชิ้นแรงสุดของตัวเอง) อันดับ 3 โชว์
+  //    อันดับ 1-2 เซ็นเซอร์ไว้ให้สมาชิกรายเดือนเท่านั้น อันดับ 3 โชว์ทุกคน
   const podCard = (it, rank) => {
     const first = rank === 1;
-    const censored = !accessFull && rank <= 2;
+    const censored = !memberAccess && rank <= 2;
     const img = it.thumbUrl
       ? `<img class="mv2r-pod-img${censored ? " mv2r-blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
       : `<span class="mv2r-pod-img mv2r-pod-img--empty" aria-hidden="true"></span>`;
     const idLine = censored
-      ? `<p class="mv2r-pod-id">ปลดล็อกเพื่อดู</p>`
+      ? `<p class="mv2r-pod-id">สมาชิกรายเดือนเปิดดูได้</p>`
       : `<p class="mv2r-pod-id">${escapeHtml(it.displayReportId)}</p>`;
     const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
     const fitBits = [];
@@ -427,7 +429,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
       </form>`
         : "";
     const action = censored
-      ? `<a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">เปิดแพ็กเพื่อดู</a>`
+      ? `<a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">สมาชิก 299 เปิดดู</a>`
       : `<a class="mv2r-pod-btn" href="/r/${encodeURIComponent(it.publicToken)}">ดูรายงานนี้</a>`;
     return `
     <article class="mv2r-pod${first ? " mv2r-pod--first" : ""}${censored ? " mv2r-pod--locked" : ""}" data-rank="${rank}">
@@ -464,7 +466,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
         ${img}
         <span class="mv2r-row-main">
           <span class="mv2r-row-id">ชิ้นอันดับ ${rank} ของคุณ</span>
-          <span class="mv2r-row-peak">เปิดแพ็กเพื่อดูว่าชิ้นไหนแรงสุด</span>
+          <span class="mv2r-row-peak">สมาชิกรายเดือนเปิดดูว่าชิ้นไหนแรงสุด</span>
         </span>
         <span class="mv2r-row-lockpill">ล็อก</span>
       </a>`;
@@ -486,7 +488,10 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
 
   let rowsHtml = "";
   if (accessFull) {
-    const first10 = byOverall.slice(0, 10).map((it, i) => rowHtml(it, i + 1, false)).join("");
+    const first10 = byOverall
+      .slice(0, 10)
+      .map((it, i) => rowHtml(it, i + 1, !memberAccess && i < 2))
+      .join("");
     const rest = byOverall.slice(10).map((it, i) => rowHtml(it, i + 11, false)).join("");
     rowsHtml = `
       <div class="mv2r-rows">${first10}</div>
@@ -577,6 +582,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     publicTokenForLinks,
     {
       accessFull: options.accessFull !== false,
+      memberAccess: options.memberAccess !== false,
       liffPayUrl: options.liffPayUrl || "",
     },
   );
