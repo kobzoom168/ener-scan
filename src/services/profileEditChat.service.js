@@ -5,6 +5,7 @@
  */
 import { supabase } from "../config/supabase.js";
 import { bustRegistrationCache } from "./registrationGate.service.js";
+import { getValue, setValueWithTtl, clearDedupeKey } from "../redis/scanV2Redis.js";
 
 /**
  * @param {string} text
@@ -55,11 +56,21 @@ export const GENDER_QUICK_REPLY = {
   })),
 };
 
-/** รอค่าใหม่หลังถามกลับ — จำในเครื่อง 10 นาที (แบบเดียวกับ fengShui armed mode) */
-const PENDING_TTL_MS = 10 * 60 * 1000;
-const pendingEditByUser = new Map(); // uid → { field, until }
+/** รอค่าใหม่หลังถามกลับ — เก็บ redis 10 นาที (รอด deploy — งานเก็บกวาดชั้น 1 ข้อ 1
+ * กบ 15 ก.ค.) พร้อม in-memory สำรองเผื่อ redis สะดุด */
+const PENDING_TTL_SEC = 10 * 60;
+const pendingEditByUser = new Map(); // uid → { field, until } — L2 fallback เท่านั้น
+const PENDING_FIELDS = new Set(["nickname", "phone", "gender"]);
 
-function getPendingField(uid) {
+function pendingKey(uid) {
+  return `profile_edit_pending:${uid}`;
+}
+
+async function getPendingField(uid) {
+  try {
+    const v = await getValue(pendingKey(uid));
+    if (v && PENDING_FIELDS.has(v)) return v;
+  } catch {}
   const row = pendingEditByUser.get(uid);
   if (!row) return null;
   if (Date.now() > row.until) {
@@ -69,12 +80,19 @@ function getPendingField(uid) {
   return row.field;
 }
 
-function setPendingField(uid, field) {
-  pendingEditByUser.set(uid, { field, until: Date.now() + PENDING_TTL_MS });
+async function setPendingField(uid, field) {
+  pendingEditByUser.set(uid, { field, until: Date.now() + PENDING_TTL_SEC * 1000 });
+  try {
+    await setValueWithTtl(pendingKey(uid), field, PENDING_TTL_SEC);
+  } catch {}
 }
 
-export function clearPendingProfileEdit(lineUserId) {
-  pendingEditByUser.delete(String(lineUserId || "").trim());
+export async function clearPendingProfileEdit(lineUserId) {
+  const uid = String(lineUserId || "").trim();
+  pendingEditByUser.delete(uid);
+  try {
+    await clearDedupeKey(pendingKey(uid));
+  } catch {}
 }
 
 async function applyProfileEdit(uid, field, value) {
@@ -120,14 +138,14 @@ const GENDER_VALUE_MAP = {
  */
 export async function handlePendingProfileEditValue(lineUserId, text) {
   const uid = String(lineUserId || "").trim();
-  const field = getPendingField(uid);
+  const field = await getPendingField(uid);
   if (!field) return null;
   const t = String(text || "").trim().replace(/\s+/g, " ");
   if (!t || t.length > 40) return null;
 
   // เปลี่ยนใจ — เลิกแก้
   if (/^(ยกเลิก|ไม่เปลี่ยน|ไม่แก้|ไม่เอา)(แล้ว)?$/.test(t)) {
-    pendingEditByUser.delete(uid);
+    await clearPendingProfileEdit(uid);
     return "ได้ครับ ไม่เปลี่ยนนะครับ";
   }
 
@@ -151,7 +169,7 @@ export async function handlePendingProfileEditValue(lineUserId, text) {
   }
   if (!value) return null;
 
-  pendingEditByUser.delete(uid);
+  await clearPendingProfileEdit(uid);
   try {
     return await applyProfileEdit(uid, field, value);
   } catch (e) {
@@ -175,7 +193,7 @@ export async function handleProfileEditCommand(lineUserId, text) {
   if (!cmd) return null;
   const uid = String(lineUserId || "").trim();
   if (!cmd.value) {
-    setPendingField(uid, cmd.field);
+    await setPendingField(uid, cmd.field);
     return {
       text: FIELD_ASK[cmd.field],
       quickReply: cmd.field === "gender" ? GENDER_QUICK_REPLY : null,
