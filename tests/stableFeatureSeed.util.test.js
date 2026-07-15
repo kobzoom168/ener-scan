@@ -101,6 +101,26 @@ test("buildStableFeatureSeed: identity fields all unknown → same seed as legac
   assert.equal(legacy, withUnknownIdentity);
 });
 
+// กันกลุ่มกำไลหิน (15 ก.ค.): กำไลสี/วัสดุ/ผิวเดียวกันคนละเส้น ต้องแยก seed ด้วยลายลูกปัด/ชิ้นเด่น
+test("buildStableFeatureSeed: same coarse bracelet fields but different bead identity → different seed", () => {
+  const coarse = {
+    primaryColor: "green",
+    materialType: "jade",
+    formFactor: "bracelet",
+    textureHint: "polished",
+    shapeOutline: "round",
+    mainMotif: "pattern_only",
+    figureCount: "none",
+    casing: "bare",
+  };
+  const uniform = buildStableFeatureSeed({ ...coarse, beadPattern: "uniform", accentPiece: "none" });
+  const charm = buildStableFeatureSeed({ ...coarse, beadPattern: "uniform", accentPiece: "charm" });
+  const multi = buildStableFeatureSeed({ ...coarse, beadPattern: "multi_color", accentPiece: "buddha_bead" });
+  assert.notEqual(uniform, charm);
+  assert.notEqual(uniform, multi);
+  assert.notEqual(charm, multi);
+});
+
 test("buildStableFeatureSeed: null or all-unknown → null", () => {
   assert.equal(buildStableFeatureSeed(null), null);
   assert.equal(
