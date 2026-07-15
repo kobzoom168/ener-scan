@@ -28,6 +28,8 @@ function normField(v) {
  *   mainMotif?: string|null,
  *   figureCount?: string|null,
  *   casing?: string|null,
+ *   beadPattern?: string|null,
+ *   accentPiece?: string|null,
  * }} features
  * @returns {string|null}
  */
@@ -43,6 +45,8 @@ export function buildStableFeatureSeed(features) {
   const mainMotif = normField(features.mainMotif);
   const figureCount = normField(features.figureCount);
   const casing = normField(features.casing);
+  const beadPattern = normField(features.beadPattern);
+  const accentPiece = normField(features.accentPiece);
 
   if (
     primaryColor === "unknown" &&
@@ -54,12 +58,13 @@ export function buildStableFeatureSeed(features) {
   }
 
   const concat = `${primaryColor}:${materialType}:${formFactor}:${textureHint}`;
-  const identityConcat = `${shapeOutline}:${mainMotif}:${figureCount}:${casing}`;
+  // ช่องอัตลักษณ์: 4 ช่องพิมพ์พระ + 2 ช่องกำไลลูกปัด (beadPattern/accentPiece กันกำไลสี/วัสดุเดียวกันชน seed)
+  const identityFields = [shapeOutline, mainMotif, figureCount, casing, beadPattern, accentPiece];
 
   /** ช่องอัตลักษณ์ unknown หมด (เช่น extractor รุ่นเก่า/ตอบไม่ได้) → seed เท่าสูตรเดิมเป๊ะ ไม่รีโรลของเก่า */
-  if (identityConcat === "unknown:unknown:unknown:unknown") {
+  if (identityFields.every((f) => f === "unknown")) {
     return String(fnv1a32(concat));
   }
 
-  return String(fnv1a32(`${concat}|${identityConcat}`));
+  return String(fnv1a32(`${concat}|${identityFields.join(":")}`));
 }

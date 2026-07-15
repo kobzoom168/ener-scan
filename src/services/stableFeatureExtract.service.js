@@ -24,7 +24,9 @@ Reply with JSON only:
   "shapeOutline": "<overall silhouette: rectangular|triangular|oval|round|arch|shield|irregular|unknown>",
   "mainMotif": "<dominant relief/imagery: seated_figure|standing_figure|multi_figure|face_only|animal|yantra_or_text|pattern_only|plain|unknown>",
   "figureCount": "<count of depicted figures: none|one|two|three_plus|unknown>",
-  "casing": "<framed_metal|clear_case|bare|unknown>"
+  "casing": "<framed_metal|clear_case|bare|unknown>",
+  "beadPattern": "<beaded items only: uniform|two_tone|multi_color|gradient|not_beaded|unknown>",
+  "accentPiece": "<beaded items only: charm|pendant_bead|metal_spacer|buddha_bead|none|not_beaded|unknown>"
 }
 Rules:
 - Use exact slugs from the lists above only
@@ -35,6 +37,8 @@ Rules:
 - mainMotif/figureCount = what is depicted in the relief; the SAME object must give the same answer
   from any angle, so judge overall composition, not fine detail
 - casing = framed_metal when a metal bezel/frame surrounds it, clear_case for plastic/glass cases
+- beadPattern/accentPiece: for bracelets/necklaces made of beads — beadPattern = how bead colors are
+  arranged; accentPiece = the standout piece among the beads; use 'not_beaded' for amulets/pendants/stones
 - Focus on what is stable: shape, material, dominant color, composition — NOT lighting or angle`;
 
 /**
@@ -199,6 +203,8 @@ export async function extractStableVisualFeatures(
       mainMotif: String(parsed.mainMotif ?? "unknown").trim() || "unknown",
       figureCount: String(parsed.figureCount ?? "unknown").trim() || "unknown",
       casing: String(parsed.casing ?? "unknown").trim() || "unknown",
+      beadPattern: String(parsed.beadPattern ?? "unknown").trim() || "unknown",
+      accentPiece: String(parsed.accentPiece ?? "unknown").trim() || "unknown",
     };
 
     const seed = buildStableFeatureSeed(features);
