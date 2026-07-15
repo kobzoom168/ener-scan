@@ -2341,16 +2341,16 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2-render-meta { margin: 0.5rem 0 0; font-size: 0.65rem; color: var(--mv2a-render-meta); }
     /* คลังในหน้ารายงาน: แท่นรางวัล + อันดับทั้งหมด (กบ 15 ก.ค. — ฟรีเซ็นเซอร์อันดับ 1-2) */
     .mv2r-podium { display: flex; gap: 12px; align-items: flex-end; margin: 1.1rem 0 0.5rem; }
-    .mv2r-pod { flex: 1; text-align: center; position: relative; border: 1px solid rgba(165, 129, 58, 0.28); border-radius: 18px; padding: 1.35rem 0.8rem 0.9rem; background: rgba(233, 207, 147, 0.05); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05); }
-    .mv2r-pod--first { flex: 1.35; border: 2px solid #c9a24d; box-shadow: 0 10px 28px rgba(165, 129, 58, 0.18); padding: 1.6rem 1rem 1rem; }
+    .mv2r-pod { flex: 1; text-align: center; position: relative; border: 1px solid rgba(165, 129, 58, 0.28); border-radius: 16px; padding: 1.15rem 0.6rem 0.75rem; background: rgba(233, 207, 147, 0.05); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05); }
+    .mv2r-pod--first { flex: 1.5; border: 2px solid #c9a24d; box-shadow: 0 10px 28px rgba(165, 129, 58, 0.18); padding: 1.6rem 1rem 1rem; border-radius: 18px; }
     .mv2r-pod--locked { border-style: dashed; }
     .mv2r-pod-chip { position: absolute; top: -0.8rem; left: 50%; transform: translateX(-50%); white-space: nowrap; background: #a5813a; color: #fffdf6; font-weight: 800; font-size: 0.72rem; border-radius: 999px; padding: 0.15rem 0.85rem; }
     .mv2r-pod--first .mv2r-pod-chip { background: linear-gradient(90deg, #b98a2e, #e3bc5f); font-size: 0.8rem; padding: 0.2rem 1.1rem; }
-    .mv2r-pod-img { width: 5.4rem; height: 5.4rem; border-radius: 14px; object-fit: cover; border: 1px solid rgba(165, 129, 58, 0.3); display: block; margin: 0.35rem auto 0.45rem; background: rgba(165, 129, 58, 0.08); }
-    .mv2r-pod--first .mv2r-pod-img { width: 7.6rem; height: 7.6rem; border: 2px solid #c9a24d; }
+    .mv2r-pod-img { width: 4.2rem; height: 4.2rem; border-radius: 12px; object-fit: cover; border: 1px solid rgba(165, 129, 58, 0.3); display: block; margin: 0.35rem auto 0.4rem; background: rgba(165, 129, 58, 0.08); }
+    .mv2r-pod--first .mv2r-pod-img { width: 7.6rem; height: 7.6rem; border: 2px solid #c9a24d; border-radius: 14px; }
     .mv2r-blur { filter: blur(8px) saturate(0.75); }
     .mv2r-pod-id { margin: 0; font-weight: 800; font-size: 0.78rem; color: var(--mv2a-muted); letter-spacing: 0.02em; }
-    .mv2r-pod-total { margin: 0.1rem 0 0; font-size: 1.9rem; font-weight: 700; color: #a5813a; line-height: 1.1; }
+    .mv2r-pod-total { margin: 0.1rem 0 0; font-size: 1.45rem; font-weight: 700; color: #a5813a; line-height: 1.1; }
     .mv2r-pod--first .mv2r-pod-total { font-size: 2.5rem; }
     .mv2r-pod-total small { display: block; font-size: 0.6rem; font-weight: 600; color: var(--mv2a-muted); }
     .mv2r-pod-peak { display: inline-block; margin: 0.35rem 0 0; font-size: 0.72rem; font-weight: 700; color: #8f6710; background: rgba(200, 155, 30, 0.1); border: 1px solid rgba(180, 140, 40, 0.22); border-radius: 999px; padding: 0.15rem 0.6rem; }
