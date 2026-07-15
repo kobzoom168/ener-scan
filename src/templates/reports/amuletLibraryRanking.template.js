@@ -65,7 +65,7 @@ function lockedRowHtml(it, rank, liffPayUrl) {
     ${img}
     <span class="alib-row-main">
       <span class="alib-row-id">ชิ้นอันดับ ${rank} ของคุณ</span>
-      <span class="alib-row-peak">เปิดแพ็กเพื่อดูว่าชิ้นไหนแรงสุด</span>
+      <span class="alib-row-peak">สมาชิกรายเดือนเปิดดูว่าชิ้นไหนแรงสุด</span>
     </span>
     <span class="alib-row-lockpill">ล็อก</span>`;
   return liffPayUrl
@@ -110,10 +110,10 @@ function podiumCardHtml(it, rank, pagePublicToken, opts = {}) {
   if (first && when) fitBits.push(`สแกนเมื่อ ${when}`);
   const pinForm = first && !censored ? spotlightPinFormHtml(pagePublicToken, it) : "";
   const idLine = censored
-    ? `<p class="alib-pod-id">ปลดล็อกเพื่อดู</p>`
+    ? `<p class="alib-pod-id">สมาชิกรายเดือนเปิดดูได้</p>`
     : `<p class="alib-pod-id">${escapeHtml(it.displayReportId)}</p>`;
   const action = censored
-    ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl || href)}">เปิดแพ็กเพื่อดู</a>`
+    ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl || href)}">สมาชิก 299 เปิดดู</a>`
     : `<a class="alib-spot-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>`;
   return `
   <article class="alib-pod${first ? " alib-pod--first" : ""}${censored ? " alib-pod--locked" : ""}" data-rank="${rank}">
@@ -235,15 +235,16 @@ export function renderAmuletLibraryRankingHtml({
   pinFlash = null,
   freeTierPinLimit = 10,
   accessFull = true,
+  memberAccess = true,
   freeVisibleCount = 7,
   dailyPick = null,
   liffPayUrl = "",
 } = {}) {
   const backHref = `/r/${encodeURIComponent(pagePublicToken)}`;
-  // กบ 15 ก.ค. (ปรับจากแบบ A เดิม): ฟรี = เซ็นเซอร์อันดับ 1-2 ทุกแท็บ (จ่ายถึงเห็น
-  // ชิ้นแรงสุดของตัวเอง) อันดับ 3 ขึ้นไปเห็นหมด; แท็บหนุนดวงวันนี้ยังล็อกทั้งแผง
+  // กบ 15 ก.ค.: อันดับ 1-2 เซ็นเซอร์ทุกแท็บ ให้สมาชิกรายเดือน (memberAccess) เท่านั้น
+  // อันดับ 3 ขึ้นไปเห็นหมด; แท็บหนุนดวงวันนี้ยังล็อกทั้งแผงตามแพ็กแอคทีฟ (accessFull)
   void freeVisibleCount;
-  const panelOpts = { censorTop: !accessFull, liffPayUrl };
+  const panelOpts = { censorTop: !memberAccess, liffPayUrl };
   const n = library.totalCount;
   const dedupeExplainLine =
     Array.isArray(library.items) && library.items.length < n
