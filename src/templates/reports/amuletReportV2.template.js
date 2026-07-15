@@ -430,7 +430,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
       ? `<a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">เปิดแพ็กเพื่อดู</a>`
       : `<a class="mv2r-pod-btn" href="/r/${encodeURIComponent(it.publicToken)}">ดูรายงานนี้</a>`;
     return `
-    <article class="mv2r-pod${first ? " mv2r-pod--first" : ""}${censored ? " mv2r-pod--locked" : ""}">
+    <article class="mv2r-pod${first ? " mv2r-pod--first" : ""}${censored ? " mv2r-pod--locked" : ""}" data-rank="${rank}">
       <span class="mv2r-pod-chip">${first ? "อันดับ 1 ของคลังคุณ" : `อันดับ ${rank}`}</span>
       ${img}
       ${idLine}
@@ -2360,9 +2360,11 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2r-pod-btn { display: block; margin-top: 0.5rem; text-decoration: none; text-align: center; font-weight: 700; font-size: 0.82rem; padding: 0.48rem 0.4rem; border-radius: 10px; background: linear-gradient(165deg, #e8c547, #c9a227); color: #1a1610; }
     .mv2r-pod-btn--pay { background: transparent; border: 1.5px solid #a5813a; color: #a5813a; }
     @media (max-width: 560px) {
-      .mv2r-podium { flex-wrap: wrap; }
-      .mv2r-pod--first { order: -1; flex: 1 1 100%; }
-      .mv2r-pod { flex: 1 1 calc(50% - 6px); }
+      /* มือถือ (กบ): แถวบน = อันดับ 1 ใหญ่ + อันดับ 2 เล็กข้างกัน / แถวล่าง = อันดับ 3 เต็มแถว */
+      .mv2r-podium { flex-wrap: wrap; align-items: stretch; }
+      .mv2r-pod { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; }
+      .mv2r-pod--first { order: -1; flex: 1.5 1 0; }
+      .mv2r-pod[data-rank="3"] { order: 2; flex: 1 1 100%; margin-top: 14px; }
     }
     .mv2r-rank-h { margin: 1.1rem 0 0.6rem; font-size: 1rem; }
     .mv2r-rows { display: flex; flex-direction: column; gap: 0.5rem; }
