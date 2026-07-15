@@ -18,41 +18,36 @@ import {
  * @param {number} rank
  */
 function rankCardHtml(it, rank) {
+  // แถวเตี้ยบรรทัดเดียว (โฉมใหม่ กบ 15 ก.ค. — ของเดิมการ์ดใหญ่ 94 ใบเลื่อนไม่ไหว)
   const href = `/r/${encodeURIComponent(it.publicToken)}`;
   const img = it.thumbUrl
-    ? `<div class="alib-card-img"><img src="${escapeHtml(it.thumbUrl)}" alt="" width="96" height="96" loading="lazy" decoding="async"/></div>`
-    : `<div class="alib-card-img alib-card-img--empty" aria-hidden="true"></div>`;
-  const compat =
-    it.compatPercent != null
-      ? `<p class="alib-card-line"><span class="alib-k">เข้ากับคุณ</span> <span class="alib-v">${escapeHtml(String(it.compatPercent))}%</span></p>`
-      : "";
+    ? `<img class="alib-row-img" src="${escapeHtml(it.thumbUrl)}" alt="" width="46" height="46" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
+    : `<span class="alib-row-img alib-row-img--empty" aria-hidden="true"></span>`;
   const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
-  const dupBadge =
+  const fit =
+    it.compatPercent != null
+      ? `<span class="alib-row-fit">เข้ากับคุณ ${escapeHtml(String(it.compatPercent))}%</span>`
+      : "";
+  const dupPills = [
     it.scanCountInGroup > 1
-      ? `<p class="alib-card-dup"><span class="alib-card-dup-pill">สแกนซ้ำ ${escapeHtml(String(it.scanCountInGroup))} ครั้ง</span></p>`
-      : "";
-  const possibleDupBadge =
+      ? `<span class="alib-card-dup-pill">สแกนซ้ำ ${escapeHtml(String(it.scanCountInGroup))} ครั้ง</span>`
+      : "",
     it.duplicateStatus === "possible_duplicate"
-      ? `<p class="alib-card-dup"><span class="alib-card-dup-pill alib-card-dup-pill--possible">อาจซ้ำกับรายการอื่น</span></p>
-        <p class="alib-card-possible-note">อาจารย์พบว่ารายการนี้อาจเป็นวัตถุเดียวกับรายการอื่น แต่ยังไม่รวมให้อัตโนมัติ เพื่อป้องกันการรวมผิด</p>`
-      : "";
+      ? `<span class="alib-card-dup-pill alib-card-dup-pill--possible" title="อาจเป็นวัตถุเดียวกับรายการอื่น ยังไม่รวมให้อัตโนมัติเพื่อป้องกันการรวมผิด">อาจซ้ำกับรายการอื่น</span>`
+      : "",
+  ].join("");
   return `
-  <article class="alib-card" data-rank="${rank}">
-    <div class="alib-card-top">
-      <span class="alib-rank">อันดับ ${rank}</span>
-      ${img}
-      <div class="alib-card-main">
-        <p class="alib-card-line"><span class="alib-k">พลังรวม</span> <span class="alib-v">${escapeHtml(String(it.powerTotal))}</span></p>
-        <p class="alib-card-line"><span class="alib-k">เด่นสุด</span> <span class="alib-v">${escapeHtml(it.peakPowerLabelTh)}</span></p>
-        ${compat}
-        <p class="alib-card-line"><span class="alib-k">สแกนเมื่อ</span> <span class="alib-v">${escapeHtml(when)}</span></p>
-        <p class="alib-card-line alib-card-line--sub"><span class="alib-k">รหัสรายงาน</span> <span class="alib-v">${escapeHtml(it.displayReportId)}</span></p>
-        ${dupBadge}
-        ${possibleDupBadge}
-      </div>
-    </div>
-    <a class="alib-card-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>
-  </article>`;
+  <a class="alib-row" data-rank="${rank}" href="${escapeHtml(href)}">
+    <span class="alib-row-rank">${rank}</span>
+    ${img}
+    <span class="alib-row-main">
+      <span class="alib-row-id">${escapeHtml(it.displayReportId)}</span>
+      <span class="alib-row-peak">เด่นสุด ${escapeHtml(it.peakPowerLabelTh)} · ${escapeHtml(when)}</span>
+      ${dupPills ? `<span class="alib-row-dups">${dupPills}</span>` : ""}
+    </span>
+    <span class="alib-row-score"><b>${escapeHtml(String(it.powerTotal))}</b>${fit}</span>
+    <span class="alib-row-go" aria-hidden="true">›</span>
+  </a>`;
 }
 
 /**
@@ -63,7 +58,53 @@ function panelHtml(list, emptyText = "ยังไม่มีข้อมูล
   if (!list.length) {
     return `<p class="alib-empty">${escapeHtml(emptyText)}</p>`;
   }
-  return list.map((it, i) => rankCardHtml(it, i + 1)).join("");
+  return `<div class="alib-rows">${list.map((it, i) => rankCardHtml(it, i + 1)).join("")}</div>`;
+}
+
+/**
+ * การ์ดแท่นรับรางวัลท็อป 3 — อันดับ 1 ใบใหญ่กลาง (โฉมใหม่ กบ 15 ก.ค.)
+ * @param {SacredAmuletLibraryItem} it
+ * @param {number} rank
+ * @param {string} pagePublicToken
+ */
+function podiumCardHtml(it, rank, pagePublicToken) {
+  const first = rank === 1;
+  const href = `/r/${encodeURIComponent(it.publicToken)}`;
+  const img = it.thumbUrl
+    ? `<img class="alib-pod-img" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
+    : `<span class="alib-pod-img alib-pod-img--empty" aria-hidden="true"></span>`;
+  const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
+  const fitBits = [];
+  if (it.compatPercent != null) fitBits.push(`เข้ากับคุณ ${it.compatPercent}%`);
+  if (first && when) fitBits.push(`สแกนเมื่อ ${when}`);
+  const pinForm = first ? spotlightPinFormHtml(pagePublicToken, it) : "";
+  return `
+  <article class="alib-pod${first ? " alib-pod--first" : ""}" data-rank="${rank}">
+    <span class="alib-pod-chip">${first ? "อันดับ 1 ของคลังคุณ" : `อันดับ ${rank}`}</span>
+    ${img}
+    <p class="alib-pod-id">${escapeHtml(it.displayReportId)}</p>
+    <p class="alib-pod-total">${escapeHtml(String(it.powerTotal))}<small>พลังรวม</small></p>
+    <p class="alib-pod-peak">${escapeHtml(it.peakPowerLabelTh)}</p>
+    ${fitBits.length ? `<p class="alib-pod-fit">${escapeHtml(fitBits.join(" · "))}</p>` : ""}
+    ${pinForm}
+    <a class="alib-spot-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>
+  </article>`;
+}
+
+/**
+ * @param {SacredAmuletLibraryItem[]} items — top 3 by overall
+ * @param {string} pagePublicToken
+ */
+function podiumHtml(items, pagePublicToken) {
+  if (!items.length) return "";
+  if (items.length === 1) return spotlightCardHtml(items[0], pagePublicToken);
+  const [a, b, c] = items;
+  const cards = [
+    b ? podiumCardHtml(b, 2, pagePublicToken) : "",
+    podiumCardHtml(a, 1, pagePublicToken),
+    c ? podiumCardHtml(c, 3, pagePublicToken) : "",
+  ].join("");
+  return `<section class="alib-podium" aria-label="ท็อป 3 ของคลังคุณ">${cards}</section>`;
 }
 
 /**
@@ -176,10 +217,16 @@ export function renderAmuletLibraryRankingHtml({
           : pinFlash === "denied"
             ? `<p class="alib-pin-flash alib-pin-flash--err" role="status">ไม่พบสิทธิ์ปักหมุดรายการนี้</p>`
             : "";
+  // แท่นรับรางวัลท็อป 3 (มีชิ้นเดียวถอยเป็นการ์ด spotlight เดิม)
+  const podiumItems = Array.isArray(library.byOverall)
+    ? library.byOverall.slice(0, 3)
+    : [];
   const spotlightIt = library.topOverall ?? library.byOverall?.[0] ?? null;
-  const spotlightHtml = spotlightIt
-    ? spotlightCardHtml(spotlightIt, pagePublicToken)
-    : "";
+  const spotlightHtml = podiumItems.length
+    ? podiumHtml(podiumItems, pagePublicToken)
+    : spotlightIt
+      ? spotlightCardHtml(spotlightIt, pagePublicToken)
+      : "";
   const axisHighlights = Array.isArray(library.axisHighlights)
     ? library.axisHighlights
     : [];
@@ -327,6 +374,47 @@ ${amuletSubpageAutoDarkScriptHtml()}
       box-shadow: 0 2px 10px rgba(180, 140, 40, 0.18);
     }
     .alib-spot-btn:hover { filter: brightness(1.05); }
+    /* ── โฉมใหม่ (กบ 15 ก.ค.): แท่นรับรางวัลท็อป 3 + แถวอันดับแบบเตี้ย ── */
+    .alib-podium { display: flex; gap: 12px; align-items: flex-end; margin: 0.4rem 0 1.15rem; }
+    .alib-pod { flex: 1; text-align: center; position: relative; border: 1px solid var(--alib-border); border-radius: 18px; background: var(--alib-panel-bg); box-shadow: var(--alib-shadow); padding: 1.35rem 0.8rem 0.9rem; }
+    .alib-pod--first { flex: 1.35; border: 2px solid var(--alib-gold); padding: 1.6rem 1rem 1rem; }
+    .alib-pod-chip { position: absolute; top: -0.8rem; left: 50%; transform: translateX(-50%); white-space: nowrap; background: var(--alib-gold); color: #fffdf6; font-weight: 800; font-size: 0.72rem; border-radius: 999px; padding: 0.15rem 0.85rem; }
+    .alib-pod--first .alib-pod-chip { background: linear-gradient(90deg, #b98a2e, #e3bc5f); font-size: 0.8rem; padding: 0.2rem 1.1rem; }
+    .alib-pod-img { width: 5.4rem; height: 5.4rem; border-radius: 14px; object-fit: cover; border: 1px solid var(--alib-border); background: var(--alib-img-bg); display: block; margin: 0.35rem auto 0.45rem; }
+    .alib-pod--first .alib-pod-img { width: 7.6rem; height: 7.6rem; border: 2px solid var(--alib-gold); }
+    .alib-pod-img--empty { background: var(--alib-img-empty); }
+    .alib-pod-id { margin: 0; font-weight: 800; font-size: 0.78rem; color: var(--alib-muted); letter-spacing: 0.02em; }
+    .alib-pod-total { margin: 0.1rem 0 0; font-size: 1.9rem; font-weight: 700; color: var(--alib-gold); line-height: 1.1; }
+    .alib-pod--first .alib-pod-total { font-size: 2.5rem; }
+    .alib-pod-total small { display: block; font-size: 0.6rem; font-weight: 600; color: var(--alib-muted); }
+    .alib-pod-peak { display: inline-block; margin: 0.35rem 0 0; font-size: 0.72rem; font-weight: 700; color: var(--alib-gold-soft); background: var(--alib-chip-bg); border: 1px solid var(--alib-chip-border); border-radius: 999px; padding: 0.15rem 0.6rem; }
+    .alib-pod-fit { margin: 0.35rem 0 0; font-size: 0.75rem; color: var(--alib-muted); }
+    .alib-pod .alib-spot-btn { margin-top: 0.6rem; font-size: 0.8rem; padding: 0.4rem 0.5rem; }
+    .alib-pod .alib-pin-form { margin-top: 0.5rem; }
+    @media (max-width: 560px) {
+      .alib-podium { flex-wrap: wrap; }
+      .alib-pod--first { order: -1; flex: 1 1 100%; }
+      .alib-pod { flex: 1 1 calc(50% - 6px); }
+    }
+    .alib-rows { display: grid; grid-template-columns: 1fr; gap: 0.6rem; }
+    .alib-row { display: flex; align-items: center; gap: 0.65rem; background: var(--alib-elevated); border: 1px solid var(--alib-border); border-radius: 13px; padding: 0.55rem 0.75rem; text-decoration: none; color: var(--alib-text); }
+    .alib-row:hover { border-color: var(--alib-gold); }
+    .alib-row-rank { flex: 0 0 1.7rem; text-align: center; font-weight: 800; color: var(--alib-muted); }
+    .alib-row-img { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex: 0 0 auto; background: var(--alib-img-bg); border: 1px solid var(--alib-border); }
+    .alib-row-img--empty { display: inline-block; background: var(--alib-img-empty); }
+    .alib-row-main { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+    .alib-row-id { font-weight: 800; font-size: 0.84rem; }
+    .alib-row-peak { font-size: 0.73rem; color: var(--alib-muted); }
+    .alib-row-dups { margin-top: 2px; }
+    .alib-row-score { flex: 0 0 auto; text-align: right; display: flex; flex-direction: column; line-height: 1.2; }
+    .alib-row-score b { font-size: 1.3rem; color: var(--alib-gold); font-weight: 700; }
+    .alib-row-fit { font-size: 0.63rem; color: var(--alib-muted); }
+    .alib-row-go { flex: 0 0 auto; color: var(--alib-gold); font-weight: 800; font-size: 1.1rem; }
+    @media (min-width: 900px) {
+      .alib-wrap { max-width: 1080px; }
+      .alib-rows { grid-template-columns: 1fr 1fr; }
+      .alib-podium { max-width: 860px; margin-left: auto; margin-right: auto; }
+    }
     .alib-axis-section { margin: 0.35rem 0 0.5rem; }
     .alib-axis-h2 {
       margin: 0 0 0.35rem;
