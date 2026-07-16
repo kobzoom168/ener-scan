@@ -793,6 +793,18 @@ export async function buildAmuletSummaryFirstFlex(rawText, options = {}) {
         uri: url,
       },
     });
+    // การ์ดผลแชร์ได้ (กบ 16 ก.ค. awareness #1): เปิดรูปการ์ดเต็มจอ กดค้างเซฟ/แชร์ต่อได้เลย
+    bodyContents.push({
+      type: "button",
+      style: "secondary",
+      height: "sm",
+      margin: "sm",
+      action: {
+        type: "uri",
+        label: "แชร์การ์ดอวดพระ",
+        uri: `${url.replace(/\/$/, "")}/card.png`,
+      },
+    });
   }
 
   const bubble = {

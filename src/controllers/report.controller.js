@@ -809,8 +809,10 @@ export async function getShareCardByToken(req, res) {
     if (!objectImageUrl) {
       return res.status(404).type("text").send("no object image");
     }
-    const gradeLabel =
-      resolveEnergyLevelDisplayGrade(norm.summary?.energyLevelLabel, energyScore10) || "A";
+    // การ์ดไว้อวด: โชว์เกรดเฉพาะ S/A/B — เกรด D ไม่ขึ้นบนการ์ด (รายงานเต็มยังเห็นจริงครบ)
+    const rawGrade =
+      resolveEnergyLevelDisplayGrade(norm.summary?.energyLevelLabel, energyScore10) || "";
+    const gradeLabel = ["S", "A", "B"].includes(rawGrade) ? rawGrade : null;
     const peakLabel =
       POWER_LABEL_THAI[String(a.primaryPower || "").trim()] ||
       String(a.flexSurface?.mainEnergyShort || "").trim() ||
