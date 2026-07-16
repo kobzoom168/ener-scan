@@ -58,7 +58,7 @@ function getGoogleClient() {
 
 /**
  * @param {"openrouter"|"featherless"} provider
- * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number, timeoutMs?: number, maxTokens?: number }} opts
+ * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number, timeoutMs?: number, maxTokens?: number, cacheSystemPrompt?: boolean }} opts
  */
 function buildCompatModel(provider, opts = {}) {
   const cfg = OPENAI_COMPAT[provider];
@@ -77,7 +77,23 @@ function buildCompatModel(provider, opts = {}) {
     async generateContent(userPrompt) {
       const messages = [];
       if (systemInstruction) {
-        messages.push({ role: "system", content: String(systemInstruction) });
+        // Prompt caching (กบ 16 ก.ค. — ค่าแชท consult แพง): system prompt อาจารย์ ~14k chars
+        // นิ่ง 100% ทุกข้อความ/ทุกคน → cache_control ephemeral ให้ Anthropic/Gemini ผ่าน OpenRouter
+        // อ่านซ้ำจ่าย ~10% ของราคา input (TTL 5 นาที ต่ออายุเองทุกครั้งที่โดนใช้)
+        if (opts.cacheSystemPrompt && provider === "openrouter") {
+          messages.push({
+            role: "system",
+            content: [
+              {
+                type: "text",
+                text: String(systemInstruction),
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          });
+        } else {
+          messages.push({ role: "system", content: String(systemInstruction) });
+        }
       }
       messages.push({ role: "user", content: String(userPrompt || "") });
       const controller = new AbortController();
@@ -121,6 +137,7 @@ function buildCompatModel(provider, opts = {}) {
  *   timeoutMs?: number,
  *   temperature?: number,
  *   modelOverride?: string,
+ *   cacheSystemPrompt?: boolean,
  * }} opts
  */
 export function getGeminiFlashModel(opts = {}) {

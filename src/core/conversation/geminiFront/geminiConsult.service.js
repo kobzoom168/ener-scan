@@ -48,6 +48,8 @@ export async function runGeminiConsult(p) {
     // Customer-visible replies deserve the smartest brain; planner/phrasing
     // stay on the cheap fast model. e.g. LLM_CONSULT_MODEL=anthropic/claude-opus-4.8
     modelOverride: env.LLM_CONSULT_MODEL,
+    // system prompt อาจารย์ ~14k chars ซ้ำทุกข้อความ → แคช (จ่ายซ้ำแค่ ~10%)
+    cacheSystemPrompt: true,
   });
   if (!model) return null;
 
