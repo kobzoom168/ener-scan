@@ -887,6 +887,8 @@ export const env = {
    * "anthropic/claude-opus-4.8" on OpenRouter. Empty = use the front model.
    */
   LLM_CONSULT_MODEL: String(process.env.LLM_CONSULT_MODEL || "").trim(),
+  /** โมเดล consult สำหรับลูกค้าฟรี/แพ็กหมดอายุ (กบ 16 ก.ค.: จ่ายแพงเฉพาะคนที่จ่ายเรา) — แพ็กแอคทีฟยังได้ LLM_CONSULT_MODEL (Opus) */
+  LLM_CONSULT_MODEL_FREE: String(process.env.LLM_CONSULT_MODEL_FREE || "deepseek/deepseek-v4-flash").trim(),
 
   /**
    * 1 ชิ้นต่อ 1 รูป: hold the first image's scan job N seconds so photos sent
