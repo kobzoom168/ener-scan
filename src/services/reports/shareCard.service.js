@@ -8,32 +8,17 @@
  * กติกาข้อมูลบนการ์ด: ของวัตถุล้วน (รูป/คะแนน/เกรด/พลังเด่น/ประเภท) —
  * ห้ามมีข้อมูลส่วนตัวลูกค้า (ชื่อ วันเกิด เข้ากับคุณ%) ลูกค้าอวดได้โดยไม่เผยดวงตัวเอง
  */
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { Resvg } from "@resvg/resvg-js";
 import QRCode from "qrcode";
 
 const FONT_DIR = path.join(process.cwd(), "src", "brand", "fonts");
-const FONT_FILES = [
-  "Kanit-Regular.ttf",
-  "Kanit-SemiBold.ttf",
-  "Kanit-ExtraBold.ttf",
-  "CormorantGaramond-SemiBold.ttf",
-];
 
 /** ลิงก์แอดเพื่อน OA (ตัวเดียวกับปุ่มสแกนบนหน้ารายงาน) */
 const OA_ADD_FRIEND_URL = "https://lin.ee/6YZeFZ1";
 
 const CARD_W = 1080;
 const CARD_H = 1350;
-
-let fontBuffers = null;
-function loadFonts() {
-  if (!fontBuffers) {
-    fontBuffers = FONT_FILES.map((f) => readFileSync(path.join(FONT_DIR, f)));
-  }
-  return fontBuffers;
-}
 
 let qrDataUriCache = null;
 async function getOaQrDataUri() {
@@ -153,7 +138,9 @@ export async function renderShareCardPng(p) {
   const resvg = new Resvg(svg, {
     fitTo: { mode: "width", value: CARD_W },
     font: {
-      fontBuffers: loadFonts(),
+      // ⚠️ ต้องใช้ fontDirs — โหมด fontBuffers ของ resvg-js 2.6.2 บน linux
+      // โหลดฟอนต์ไทยไม่เข้า (สระกลายเป็นกล่อง — พิสูจน์แล้ว 16 ก.ค.)
+      fontDirs: [FONT_DIR],
       loadSystemFonts: false,
       defaultFontFamily: "Kanit",
     },
