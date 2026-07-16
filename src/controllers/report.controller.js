@@ -26,6 +26,9 @@ import {
   setScanUploadPinnedForUser,
 } from "../stores/scanV2/scanUploads.db.js";
 import { getUploadIdForScanResultV2AndLineUser } from "../stores/scanV2/scanResultsV2.db.js";
+import { renderShareCardPng } from "../services/reports/shareCard.service.js";
+import { resolveEnergyLevelDisplayGrade } from "../utils/reports/energyLevelGrade.util.js";
+import { POWER_LABEL_THAI } from "../amulet/amuletScores.util.js";
 import {
   logReportPageOpen,
   safeTokenPrefix,
@@ -778,4 +781,63 @@ export async function postLibraryPinUpload(req, res) {
   }
 
   return res.redirect(303, `${baseLib}?pin=ok`);
+}
+
+/**
+ * GET /r/:publicToken/card.png — การ์ดผลแชร์ได้ ธีมทองเข้ม (กบ 16 ก.ค.)
+ * ข้อมูลวัตถุล้วน ไม่มีข้อมูลส่วนตัวลูกค้า — เฟสแรกเลนพระเท่านั้น
+ */
+export async function getShareCardByToken(req, res) {
+  const publicToken = String(req.params?.publicToken || "").trim();
+  try {
+    const { payload } = await getReportByPublicToken(publicToken);
+    if (!payload) {
+      return res.status(404).type("text").send("not found");
+    }
+    const { payload: norm } = normalizeReportPayloadForRender(payload);
+    const a = norm.amuletV1;
+    if (!a || typeof a !== "object" || Array.isArray(a)) {
+      return res.status(404).type("text").send("card not available for this lane");
+    }
+    const energyScore10 = Number(norm.summary?.energyScore);
+    if (!Number.isFinite(energyScore10)) {
+      return res.status(404).type("text").send("no score");
+    }
+    const objectImageUrl = String(
+      norm.objectImageUrl || norm.object?.objectImageUrl || "",
+    ).trim();
+    if (!objectImageUrl) {
+      return res.status(404).type("text").send("no object image");
+    }
+    const gradeLabel =
+      resolveEnergyLevelDisplayGrade(norm.summary?.energyLevelLabel, energyScore10) || "A";
+    const peakLabel =
+      POWER_LABEL_THAI[String(a.primaryPower || "").trim()] ||
+      String(a.flexSurface?.mainEnergyShort || "").trim() ||
+      "พลังเด่นเฉพาะองค์";
+    const typeLabel =
+      String(a.flexSurface?.headline || "").trim() || "พระ/เทวรูป/เครื่องราง";
+
+    const buf = await renderShareCardPng({
+      publicToken,
+      objectImageUrl,
+      typeLabel,
+      energyScore10,
+      gradeLabel,
+      peakLabel,
+    });
+    res
+      .type("png")
+      .set("Cache-Control", "public, max-age=86400")
+      .send(buf);
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: "SHARE_CARD_RENDER_FAIL",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        reason: String(e?.message || e).slice(0, 200),
+      }),
+    );
+    res.status(503).type("text").send("card render failed");
+  }
 }
