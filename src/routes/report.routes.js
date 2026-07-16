@@ -18,6 +18,7 @@ router.get(
   "/r/:publicToken/energy-timing",
   reportController.getEnergyTimingByToken,
 );
+router.get("/r/:publicToken/card.png", reportController.getShareCardByToken);
 router.get("/r/:publicToken", reportController.getReportByToken);
 
 router.get(
