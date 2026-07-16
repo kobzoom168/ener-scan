@@ -79,7 +79,8 @@ export async function runGeminiConsult(p) {
     jsonMode: false,
     temperature: 0.7,
     timeoutMs: env.GEMINI_CONSULT_TIMEOUT_MS,
-    maxTokens: 1536,
+    // ลูกค้าจ่าย = ดูแลเต็ม (กบ 16 ก.ค.) / ฟรี = กระชับพิเศษ ประหยัด output
+    maxTokens: paidActive ? 1536 : 512,
     // Customer-visible replies deserve the smartest brain; planner/phrasing
     // stay on the cheap fast model. e.g. LLM_CONSULT_MODEL=anthropic/claude-opus-4.8
     modelOverride: consultModel,
@@ -90,13 +91,18 @@ export async function runGeminiConsult(p) {
   });
   if (!model) return null;
 
-  const prompt = buildConsultUserPrompt({
+  let prompt = buildConsultUserPrompt({
     userText: p.userText,
     conversationHistory: p.conversationHistory,
     recentScan,
     customerFacts,
     kbContext,
   });
+  // ชั้นฟรี: ถามคำตอบคำ (กบ 16 ก.ค.) — ตอบตรงคำถาม สั้นสุด ไม่ขยายความเอง
+  // (ลูกค้าแพ็กแอคทีฟใช้กติกา 2-4 บรรทัดใน system ตามเดิม = ดูแลเต็ม)
+  if (!paidActive) {
+    prompt += "\n\nข้อกำหนดรอบนี้: ตอบสั้นที่สุด ตรงคำถามพอ 1-2 ประโยค ไม่ต้องขยายความหรือชวนคุยต่อ ยกเว้นลูกค้าขอรายละเอียดชัด ๆ";
+  }
 
   try {
     const text = await generateTextWithTimeout(
