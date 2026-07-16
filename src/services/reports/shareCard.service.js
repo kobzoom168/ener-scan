@@ -57,7 +57,8 @@ function escapeXml(s) {
 function buildShareCardSvg({ objectImageDataUri, typeLabel, powerTotal, gradeLabel, peakLabel, qrDataUri }) {
   const type = escapeXml(typeLabel);
   const peak = escapeXml(`เด่น ${peakLabel}`);
-  const gradeLine = escapeXml(`พลังรวม · เกรด ${gradeLabel}`);
+  // เกรดขึ้นเฉพาะเมื่อ controller ปล่อยมา (S/A/B) — เกรดต่ำไม่ตะโกนบนการ์ดอวด
+  const gradeLine = escapeXml(gradeLabel ? `พลังรวม · เกรด ${gradeLabel}` : "พลังรวม");
   // ความกว้างป้ายพลังเด่นโดยประมาณ (Kanit ~0.52em/ตัวอักษรไทย ที่ 38px + padding)
   const pillW = Math.min(760, Math.max(320, peak.length * 26 + 140));
   const pillX = (CARD_W - pillW) / 2;

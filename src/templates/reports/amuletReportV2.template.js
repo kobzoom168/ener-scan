@@ -728,10 +728,17 @@ export function renderAmuletReportV2Html(payload, options = {}) {
 
   const rawSocialImage = String(payload.object?.socialImageUrl || "").trim();
   const rawObjectImage = String(payload.object?.objectImageUrl || "").trim();
-  const ogImageUrl = absoluteUrlForMeta(
-    /^https?:\/\//i.test(canonicalUrl) ? canonicalUrl : "",
-    rawSocialImage || rawObjectImage,
-  );
+  // og:image = การ์ดผลแชร์ได้ (กบ 16 ก.ค.): ลิงก์รายงานที่ลูกค้าแปะในกลุ่ม
+  // พรีวิวเป็นการ์ดทองพร้อมโลโก้+QR แทนรูปวัตถุเปล่า ๆ — ทุกการแปะลิงก์ = ป้ายโฆษณา
+  const shareCardOgUrl = /^https?:\/\//i.test(canonicalUrl)
+    ? `${canonicalUrl.replace(/\/$/, "")}/card.png`
+    : "";
+  const ogImageUrl =
+    shareCardOgUrl ||
+    absoluteUrlForMeta(
+      /^https?:\/\//i.test(canonicalUrl) ? canonicalUrl : "",
+      rawSocialImage || rawObjectImage,
+    );
   const ogImageTags =
     ogImageUrl !== ""
       ? `
@@ -2483,10 +2490,11 @@ export function renderAmuletReportV2Html(payload, options = {}) {
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์รายงาน</h2>
-      <p class="mv2-share-note">แชร์ลิงก์รายงานนี้ หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูได้อีกครั้ง</p>
+      <p class="mv2-share-note">อวดการ์ดพลังชิ้นนี้ลงเฟซหรือกลุ่มไลน์ หรือแชร์ลิงก์รายงานเต็ม</p>
       <div class="mv2-share-stack">
+        <button type="button" class="mv2-share-btn mv2-share-btn--primary" id="mv2-btn-sharecard">แชร์การ์ดอวดพระ</button>
         <div class="mv2-share-actions">
-          <button type="button" class="mv2-share-btn mv2-share-btn--primary" id="mv2-btn-share">แชร์รายงาน</button>
+          <button type="button" class="mv2-share-btn mv2-share-btn--secondary" id="mv2-btn-share">แชร์ลิงก์รายงาน</button>
           <button type="button" class="mv2-share-btn mv2-share-btn--secondary" id="mv2-btn-copy">คัดลอกลิงก์</button>
         </div>
         <a class="mv2-share-btn mv2-share-btn--line-outline" href="https://lin.ee/6YZeFZ1" target="_blank" rel="noopener noreferrer">เพิ่มเพื่อน LINE OA</a>
@@ -2539,6 +2547,33 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   }
   if (shareBtn) shareBtn.addEventListener("click", doShare);
   if (copyBtn) copyBtn.addEventListener("click", copyUrl);
+  // การ์ดผลแชร์ได้ (กบ 16 ก.ค.): แชร์เป็นไฟล์รูปผ่าน share sheet ของเครื่อง
+  // เครื่องที่แชร์ไฟล์ไม่ได้ → เปิดรูปเต็มจอให้กดค้างเซฟ/แชร์เอง
+  var shareCardBtn = document.getElementById("mv2-btn-sharecard");
+  function cardUrl() {
+    return String(window.location.href || "").split(/[?#]/)[0].replace(/\\/$/, "") + "/card.png";
+  }
+  function doShareCard() {
+    var u = cardUrl();
+    if (navigator.canShare && window.fetch) {
+      fetch(u)
+        .then(function (r) { if (!r.ok) throw new Error("fetch"); return r.blob(); })
+        .then(function (b) {
+          var f = new File([b], "ener-card.png", { type: "image/png" });
+          if (navigator.canShare({ files: [f] })) {
+            return navigator.share({ files: [f], title: shareTitle });
+          }
+          throw new Error("nofiles");
+        })
+        .catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          window.open(u, "_blank");
+        });
+    } else {
+      window.open(u, "_blank");
+    }
+  }
+  if (shareCardBtn) shareCardBtn.addEventListener("click", doShareCard);
 })();
 (function () {
   var root = document.getElementById("mv2-lib-axis-carousel");
