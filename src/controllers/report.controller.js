@@ -28,7 +28,7 @@ import {
 import { getUploadIdForScanResultV2AndLineUser } from "../stores/scanV2/scanResultsV2.db.js";
 import { renderShareCardPng } from "../services/reports/shareCard.service.js";
 import { resolveEnergyLevelDisplayGrade } from "../utils/reports/energyLevelGrade.util.js";
-import { POWER_LABEL_THAI } from "../amulet/amuletScores.util.js";
+import { POWER_LABEL_THAI, AMULET_PEAK_SHORT_THAI } from "../amulet/amuletScores.util.js";
 import {
   logReportPageOpen,
   safeTokenPrefix,
@@ -820,6 +820,16 @@ export async function getShareCardByToken(req, res) {
     const typeLabel =
       String(a.flexSurface?.headline || "").trim() || "พระ/เทวรูป/เครื่องราง";
 
+    // เส้นพลังรอบรูป (สเก็ตช์กบ): ท็อป 3 แกนตามคะแนนจริง ชื่อย่อสั้น (เมตตา/หนุนดวง/โชคลาภ...)
+    const topAxes = Object.entries(a.powerCategories || {})
+      .map(([key, v]) => ({
+        label: AMULET_PEAK_SHORT_THAI[key] || String(v?.labelThai || "").trim(),
+        score: Number(v?.score),
+      }))
+      .filter((x) => x.label && Number.isFinite(x.score))
+      .sort((x, y) => y.score - x.score)
+      .slice(0, 3);
+
     const buf = await renderShareCardPng({
       publicToken,
       objectImageUrl,
@@ -827,6 +837,7 @@ export async function getShareCardByToken(req, res) {
       energyScore10,
       gradeLabel,
       peakLabel,
+      topAxes,
     });
     res
       .type("png")

@@ -45,16 +45,41 @@ function escapeXml(s) {
 }
 
 /**
+ * เส้นพลังชี้รอบรูป (กบวาดสเก็ตช์ 16 ก.ค.): พลังท็อป 3 ขององค์นั้นตามคะแนนจริง
+ * จุดยึดฝั่งวัตถุกะจากองค์กลางรูป (รูปมือถือพระ วัตถุอยู่กลางเฟรมแทบทุกใบ)
+ * @param {Array<{label: string, score: number}>} topAxes — สูงสุดก่อน ไม่เกิน 3
+ */
+function buildPowerCalloutsSvg(topAxes) {
+  const spots = [
+    // [จุดแตะวัตถุ x,y] [ปลายเส้น x,y] [text x, anchor]
+    { ax: 640, ay: 250, ex: 800, ey: 215, tx: 812, anchor: "start" },
+    { ax: 430, ay: 400, ex: 255, ey: 400, tx: 243, anchor: "end" },
+    { ax: 650, ay: 520, ex: 806, ey: 545, tx: 818, anchor: "start" },
+  ];
+  let out = "";
+  (topAxes || []).slice(0, 3).forEach((a, i) => {
+    const s = spots[i];
+    const label = `${escapeXml(a.label)} ${Math.round(a.score)}`;
+    out += `
+  <circle cx="${s.ax}" cy="${s.ay}" r="7" fill="#e8c547" stroke="#14100a" stroke-width="2"/>
+  <path d="M${s.ax} ${s.ay} L${s.ex} ${s.ey}" stroke="#e8c547" stroke-width="3" stroke-linecap="round"/>
+  <text x="${s.tx}" y="${s.ey + 13}" text-anchor="${s.anchor}" font-family="Kanit" font-weight="600" font-size="38" fill="#f4e9d0" stroke="#14100a" stroke-width="8" paint-order="stroke" stroke-linejoin="round">${label}</text>`;
+  });
+  return out;
+}
+
+/**
  * @param {object} p
  * @param {string} p.objectImageDataUri — รูปวัตถุเป็น data URI (jpeg/png)
  * @param {string} p.typeLabel — เช่น "พระ/เทวรูป/เครื่องราง" หรือชื่อพิมพ์
  * @param {number} p.powerTotal — 0-100 (energyScore × 10 — เลขชุดเดียวกับคลัง)
  * @param {string} p.gradeLabel — เช่น "A"
  * @param {string} p.peakLabel — เช่น "คุ้มครองป้องกัน"
+ * @param {Array<{label: string, score: number}>} [p.topAxes] — เส้นพลังท็อป 3
  * @param {string} p.qrDataUri
  * @returns {string} SVG
  */
-function buildShareCardSvg({ objectImageDataUri, typeLabel, powerTotal, gradeLabel, peakLabel, qrDataUri }) {
+function buildShareCardSvg({ objectImageDataUri, typeLabel, powerTotal, gradeLabel, peakLabel, topAxes, qrDataUri }) {
   const type = escapeXml(typeLabel);
   const peak = escapeXml(`เด่น ${peakLabel}`);
   // เกรดขึ้นเฉพาะเมื่อ controller ปล่อยมา (S/A/B) — เกรดต่ำไม่ตะโกนบนการ์ดอวด
@@ -79,6 +104,9 @@ function buildShareCardSvg({ objectImageDataUri, typeLabel, powerTotal, gradeLab
   <!-- รูปวัตถุ (cover) + เงาจางลงหาพื้นด้านล่าง -->
   <image href="${objectImageDataUri}" x="0" y="0" width="${CARD_W}" height="760" preserveAspectRatio="xMidYMid slice"/>
   <rect x="0" y="540" width="${CARD_W}" height="220" fill="url(#fade)"/>
+
+  <!-- เส้นพลังชี้รอบองค์ (สเก็ตช์กบ 16 ก.ค.) -->
+  ${buildPowerCalloutsSvg(topAxes)}
 
   <!-- กรอบทองซ้อนสอง (กรอบในจบที่ขอบแถบแบรนด์ ไม่ตัดผ่านตัวหนังสือ) -->
   <rect x="26" y="26" width="${CARD_W - 52}" height="${CARD_H - 52}" fill="none" stroke="#c9a24d" stroke-width="3" opacity="0.85"/>
@@ -114,6 +142,7 @@ function buildShareCardSvg({ objectImageDataUri, typeLabel, powerTotal, gradeLab
  * @param {number} p.energyScore10 — 0-10
  * @param {string} p.gradeLabel
  * @param {string} p.peakLabel
+ * @param {Array<{label: string, score: number}>} [p.topAxes]
  * @returns {Promise<Buffer>}
  */
 export async function renderShareCardPng(p) {
@@ -133,6 +162,7 @@ export async function renderShareCardPng(p) {
     powerTotal: Math.min(100, Math.max(0, Number(p.energyScore10) * 10)),
     gradeLabel: p.gradeLabel,
     peakLabel: p.peakLabel,
+    topAxes: Array.isArray(p.topAxes) ? p.topAxes : [],
     qrDataUri: await getOaQrDataUri(),
   });
 
