@@ -58,7 +58,7 @@ function getGoogleClient() {
 
 /**
  * @param {"openrouter"|"featherless"} provider
- * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number, timeoutMs?: number, maxTokens?: number, cacheSystemPrompt?: boolean }} opts
+ * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number, timeoutMs?: number, maxTokens?: number, cacheSystemPrompt?: boolean, disableReasoning?: boolean }} opts
  */
 function buildCompatModel(provider, opts = {}) {
   const cfg = OPENAI_COMPAT[provider];
@@ -113,6 +113,9 @@ function buildCompatModel(provider, opts = {}) {
             max_tokens: maxTokens,
             messages,
             ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+            // DeepSeek V4 Flash บางเจ้า (เช่น Alibaba) แอบคิดในใจ (reasoning) กิน max_tokens
+            // จนคำตอบจริงโดนตัด — ปิดเมื่อผู้เรียกขอ (consult ชั้นฟรี)
+            ...(opts.disableReasoning ? { reasoning: { enabled: false } } : {}),
             ...cfg.extraBody,
           }),
         });

@@ -8,6 +8,34 @@ import { GEMINI_CONSULT_SYSTEM, buildConsultUserPrompt } from "./geminiConsultPr
 import { buildScanHistoryContext } from "./recentScanContext.util.js";
 import { buildCustomerFactsContext } from "./customerFactsContext.util.js";
 import { buildKbContext } from "./kbRetrieval.util.js";
+import { supabase } from "../../../config/supabase.js";
+import { computePaidActive } from "../../../services/scanOfferAccess.resolver.js";
+
+/**
+ * แพ็กแอคทีฟ = Opus (LLM_CONSULT_MODEL) / ฟรี-แพ็กหมด = โมเดลถูก (LLM_CONSULT_MODEL_FREE)
+ * (กบ 16 ก.ค.: ค่าแชทคือรูรั่วหลัก — จ่ายสมองแพงเฉพาะลูกค้าที่จ่ายเรา)
+ * เช็คพลาด = ถือว่าจ่าย (ไม่ลดเกรดลูกค้าจริงเพราะระบบเราสะดุด)
+ * @param {string|undefined} userId
+ * @returns {Promise<boolean>}
+ */
+async function isPaidActiveCustomer(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return false;
+  try {
+    const { data: u } = await supabase
+      .from("app_users")
+      .select("paid_until,paid_remaining_scans")
+      .eq("line_user_id", uid)
+      .maybeSingle();
+    return computePaidActive(
+      u?.paid_until,
+      Number(u?.paid_remaining_scans) || 0,
+      new Date(),
+    );
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Answer an amulet/crystal KNOWLEDGE question as อาจารย์ Ener (grounded + guarded).
@@ -28,16 +56,23 @@ export async function runGeminiConsult(p) {
   let recentScan = null;
   let customerFacts = null;
   let kbContext = null;
+  let paidActive = false;
   const kbPromise = buildKbContext(p.userText).catch(() => null);
   if (p.userId) {
-    [recentScan, customerFacts, kbContext] = await Promise.all([
+    [recentScan, customerFacts, kbContext, paidActive] = await Promise.all([
       buildScanHistoryContext(p.userId, 6).catch(() => null),
       buildCustomerFactsContext(p.userId).catch(() => null),
       kbPromise,
+      isPaidActiveCustomer(p.userId),
     ]);
   } else {
     kbContext = await kbPromise;
   }
+
+  // แพ็กแอคทีฟ = สมองแพง (Opus) / ฟรี = สมองถูก (DeepSeek) — persona/guardrails ชุดเดียวกัน
+  const consultModel = paidActive
+    ? env.LLM_CONSULT_MODEL
+    : env.LLM_CONSULT_MODEL_FREE || env.LLM_CONSULT_MODEL;
 
   const model = getGeminiFlashModel({
     systemInstruction: GEMINI_CONSULT_SYSTEM,
@@ -47,9 +82,11 @@ export async function runGeminiConsult(p) {
     maxTokens: 1536,
     // Customer-visible replies deserve the smartest brain; planner/phrasing
     // stay on the cheap fast model. e.g. LLM_CONSULT_MODEL=anthropic/claude-opus-4.8
-    modelOverride: env.LLM_CONSULT_MODEL,
+    modelOverride: consultModel,
     // system prompt อาจารย์ ~14k chars ซ้ำทุกข้อความ → แคช (จ่ายซ้ำแค่ ~10%)
     cacheSystemPrompt: true,
+    // ชั้นฟรี (DeepSeek): ปิดโหมดคิดในใจ กันกิน max_tokens จนคำตอบโดนตัด
+    disableReasoning: !paidActive,
   });
   if (!model) return null;
 
@@ -74,6 +111,8 @@ export async function runGeminiConsult(p) {
         outcome: out ? "ok" : "empty",
         len: out.length,
         hasRecentScan: Boolean(recentScan),
+        tier: paidActive ? "paid_opus" : "free_cheap",
+        model: consultModel || "(front_default)",
       }),
     );
     return out || null;
