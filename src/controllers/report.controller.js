@@ -829,6 +829,8 @@ export async function getShareCardByToken(req, res) {
       .filter((x) => x.label && Number.isFinite(x.score));
     const topAxes = [...allAxes].sort((x, y) => y.score - x.score).slice(0, 3);
     const axisScores = Object.fromEntries(allAxes.map((x) => [x.label, x.score]));
+    // เข้ากับดวงเจ้าของ (มีเฉพาะเจ้าของที่มีวันเกิดในระบบ) — จุดขายจริงบนการ์ด
+    const compatPercent = Number(norm.summary?.compatibilityPercent);
 
     const buf = await renderShareCardPng({
       publicToken,
@@ -839,6 +841,7 @@ export async function getShareCardByToken(req, res) {
       peakLabel,
       topAxes,
       axisScores,
+      compatPercent: Number.isFinite(compatPercent) ? compatPercent : null,
     });
     res
       .type("png")
