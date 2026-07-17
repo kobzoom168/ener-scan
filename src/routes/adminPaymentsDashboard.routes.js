@@ -22,6 +22,7 @@ import {
 import {
   listRecentScanUsersForAdmin,
   setAdminNoteForLineUser,
+  updateLiffProfileByAdmin,
 } from "../stores/adminUsers.db.js";
 import { getScanUsageSummaryForAppUser } from "../stores/paymentAccess.db.js";
 import {
@@ -1718,6 +1719,38 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
     },
   );
 
+  // แก้ข้อมูลลงทะเบียน LIFF (กบ 17 ก.ค.: เคสลูกค้ากดเพศผิด) — gender/nickname
+  router.post(
+    "/admin/users/:lineUserId/profile",
+    requireAdminSession,
+    express.json(),
+    async (req, res) => {
+      let lineUserId = String(req.params?.lineUserId || "").trim();
+      try {
+        lineUserId = decodeURIComponent(lineUserId);
+      } catch {
+        /* ignore */
+      }
+      if (!lineUserId) {
+        res.status(400).json({ ok: false, message: "line_user_id_missing" });
+        return;
+      }
+      try {
+        const result = await updateLiffProfileByAdmin({
+          lineUserId,
+          ...(req.body?.gender !== undefined ? { gender: req.body.gender } : {}),
+          ...(req.body?.nickname !== undefined ? { nickname: req.body.nickname } : {}),
+        });
+        res.status(200).json({ ok: true, ...result });
+      } catch (err) {
+        const msg = err?.message || "profile_save_failed";
+        res
+          .status(msg === "liff_profile_not_found" ? 404 : msg === "gender_invalid" ? 400 : 500)
+          .json({ ok: false, message: msg });
+      }
+    },
+  );
+
   // 👥 User management: latest scanners + inline paid-scan adjust / free reset.
   router.get("/admin/users", requireAdminSession, async (req, res) => {
     try {
@@ -1742,9 +1775,14 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
               : `<span style="color:var(--muted);">0</span>`;
           const untilTxt = u.paidUntil ? fmtDt(u.paidUntil) : "—";
           const lp = u.liff;
+          const genderSel = lp
+            ? `<select class="gender-in" data-uid="${uid}" data-orig="${escapeHtml(lp.gender || "")}" style="margin-top:4px;padding:3px 6px;border-radius:7px;border:1px solid var(--line,#444);background:transparent;color:var(--muted);font-size:0.78rem;">
+                ${["", "ชาย", "หญิง", "ไม่ระบุ"].map((g) => `<option value="${g}"${(lp.gender || "") === g ? " selected" : ""}>${g || "— เพศ —"}</option>`).join("")}
+              </select>`
+            : "";
           const nameTd = lp && (lp.nickname || lp.displayName)
-            ? `<strong>${escapeHtml(lp.nickname || lp.displayName)}</strong>${lp.gender ? `<br><small style="color:var(--muted);">${escapeHtml(lp.gender)}</small>` : ""}`
-            : dim("—");
+            ? `<strong>${escapeHtml(lp.nickname || lp.displayName)}</strong><br>${genderSel}`
+            : (lp ? genderSel : dim("—"));
           const birthTd = lp && lp.birthdate
             ? `${escapeHtml(fmtBirth(lp.birthdate))}${lp.birthTime ? `<br><small style="color:var(--muted);">${escapeHtml(lp.birthTime)} น.</small>` : ""}`
             : dim("—");
@@ -1841,6 +1879,28 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
           showToast("บันทึกโน้ตแล้ว 📝", "ok");
         }).catch(function (err) { showToast(err.message || "บันทึกโน้ตไม่สำเร็จ", "err"); });
       }
+      function saveGender(sel) {
+        var uid = sel.dataset.uid;
+        var val = String(sel.value || "");
+        if (val === String(sel.dataset.orig || "")) return;
+        fetch("/admin/users/" + encodeURIComponent(uid) + "/profile", {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ gender: val })
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          if (!j || j.ok === false) throw new Error((j && j.message) || "บันทึกเพศไม่สำเร็จ");
+          sel.dataset.orig = j.gender || "";
+          showToast("บันทึกเพศแล้ว: " + (j.gender || "—"), "ok");
+        }).catch(function (err) {
+          sel.value = String(sel.dataset.orig || "");
+          showToast(err.message || "บันทึกเพศไม่สำเร็จ", "err");
+        });
+      }
+      document.body.addEventListener("change", function (e) {
+        var sel = e.target.closest(".gender-in");
+        if (sel) saveGender(sel);
+      });
       document.body.addEventListener("focusout", function (e) {
         var inp = e.target.closest(".note-in");
         if (inp) saveNote(inp);
