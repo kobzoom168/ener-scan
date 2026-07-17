@@ -2362,7 +2362,27 @@ async function finalizeAcceptedImage({
       // ลูกค้าส่ง "รูปพระ" มาระหว่างติดสถานะรอสลิป (เช่น state ค้างข้ามคืน
       // แต่โควต้าฟรีรีเซ็ตแล้ว) → อย่าบังคับส่งสลิป: ถ้าเป็นวัตถุมงคลและมี
       // สิทธิ์สแกน + มีวันเกิดในระบบ ให้ไหลเข้าเลนสแกนตามปกติเลย
-      if (String(slipVal.objectCheckResult || "") === "single_supported") {
+      //
+      // เคสกบ 17 ก.ค. 2026: gate ปัดตั้งแต่ด่าน vision (object_photo) จะ return
+      // ก่อนเช็ควัตถุ → objectCheckResult ว่าง ทำให้รูปพระหลุดเข้า soft-pass ไป
+      // คิวตรวจสลิป+เด้งแอดมิน — เติมเช็ควัตถุยืนยันอีกชั้นเฉพาะเคส vision ฟันธง
+      let slipRejectObjectResult = String(slipVal.objectCheckResult || "");
+      if (
+        !slipRejectObjectResult &&
+        String(slipVal?.gate?.slipLabel || "") === "object_photo"
+      ) {
+        try {
+          slipRejectObjectResult = String(
+            (await checkSingleObjectGated(imageBuffer.toString("base64"), {
+              messageId: slipMessageId ?? null,
+              path: "slip_reject_object_confirm",
+            }))?.result || "",
+          );
+        } catch {
+          slipRejectObjectResult = "";
+        }
+      }
+      if (slipRejectObjectResult === "single_supported") {
         try {
           const rerouteAccess = await checkScanAccess({ userId });
           const rerouteBd = rerouteAccess?.allowed
@@ -2396,6 +2416,34 @@ async function finalizeAcceptedImage({
             }),
           );
         }
+        // ยืนยันแล้วว่าเป็นวัตถุมงคลจริง แต่สแกนไม่ได้ (โควตาหมด/ไม่มีวันเกิด) →
+        // ห้ามเข้าคิวตรวจสลิป (กันเคสกบ: รูปพระกลายเป็น pending_verify + เด้งแอดมิน)
+        // ตอบตรง ๆ แล้วคงสถานะรอสลิปเดิมไว้
+        console.log(
+          JSON.stringify({
+            event: "SLIP_OBJECT_PHOTO_BLOCKED_FROM_VERIFY",
+            userId,
+            paymentId: paymentId ?? null,
+            slipLabel: String(slipVal?.gate?.slipLabel || ""),
+          }),
+        );
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "slip_object_photo_guard",
+          semanticKey: "slip_object_photo_guard",
+          text: [
+            "รูปนี้เป็นวัตถุมงคล ไม่ใช่สลิปนะครับ ✨",
+            "",
+            "ตอนนี้อาจารย์ยังรอสลิปเปิดสิทธิ์อยู่ โอนแล้วส่งสลิปมาได้เลยครับ",
+            "พอสิทธิ์เปิดแล้ว ส่งรูปชิ้นนี้มาอีกครั้ง อาจารย์ดูให้ทันทีครับ",
+          ].join("\n"),
+          alternateTexts: [
+            "ภาพนี้ยังไม่ใช่สลิปการโอนนะครับ โอนแล้วส่งสลิปมาก่อน เดี๋ยวอาจารย์เปิดสิทธิ์ให้แล้วค่อยส่งรูปชิ้นนี้มาใหม่ครับ",
+          ],
+        });
+        return;
       }
       // กติกาใหม่ (กบ): สลิปที่ด่าน vision ไม่มั่นใจ ห้ามตีกลับลูกค้า — ปล่อยเข้า
       // pipeline ตรวจจริงต่อ (EasySlip เช็คกับธนาคาร → ผ่านก็อนุมัติอัตโนมัติ,
