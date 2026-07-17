@@ -1,17 +1,27 @@
 /**
  * Flex paywall การ์ดโปรทั้งร้าน (กบ 17 ก.ค. 2026: "เอา flex + reply") —
- * โควตาฟรีหมด → การ์ดดำทองโชว์ทุกแพ็กจาก config + ปุ่มจ่ายในการ์ด
+ * โควตาฟรีหมด → การ์ดพื้นขาวคาดทอง (สุภาพ ไม่เด่นแข่งการ์ดรายงาน) โชว์ทุกแพ็ก + ปุ่มจ่ายในการ์ด
  * ราคา/จำนวน/อายุดึงจาก offer สด ๆ — เปลี่ยนโปรที่ /admin/promo การ์ดตามเอง
  */
 import { listActivePackages, getDefaultPackage } from "../scanOffer.packages.js";
 import { formatOfferWindowThai } from "../../utils/webhookText.util.js";
 
-/** ชื่อแพ็กจาก label ใน config: ตัด "29 บาท " ข้างหน้าออก เหลือชื่อเรียก */
+/**
+ * ชื่อแพ็กจาก label ใน config: ตัด "29 บาท " หน้า + "1 ครั้ง / 24 ชม." ท้ายออก
+ * เหลือชื่อเรียกสั้น ๆ (บรรทัดเดียวไม่ตัดคำ) — รายละเอียดครั้ง/อายุแยกไปบรรทัดรอง
+ */
 function packageDisplayName(p) {
   const label = String(p?.label || "").trim();
-  const stripped = label.replace(/^\d+\s*บาท\s*/, "").trim();
-  if (stripped) return stripped;
-  return `สแกน ${p.scanCount} ครั้ง / ${formatOfferWindowThai(p.windowHours)}`;
+  const stripped = label
+    .replace(/^\d+\s*บาท\s*/, "")
+    .replace(/\s*\d+\s*ครั้ง.*$/, "")
+    .trim();
+  return stripped || "แพ็กสแกน";
+}
+
+/** บรรทัดรอง: "4 ครั้ง · 24 ชม." / "30 ครั้ง · 30 วัน" */
+function packageDetailLine(p) {
+  return `${p.scanCount} ครั้ง · ${formatOfferWindowThai(p.windowHours)}`;
 }
 
 /**
@@ -33,45 +43,44 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
       layout: "horizontal",
       paddingAll: "12px",
       cornerRadius: "14px",
-      backgroundColor: isDefault ? "#1D1A14" : "#151515",
+      backgroundColor: isDefault ? "#FFF8E7" : "#FAF9F6",
       borderWidth: "1px",
-      borderColor: isDefault ? "#D4AF37" : "#262629",
+      borderColor: isDefault ? "#D4AF37" : "#E8E4DC",
+      alignItems: "center",
       contents: [
         {
           type: "box",
           layout: "vertical",
-          flex: 5,
+          flex: 6,
           spacing: "none",
           contents: [
             {
               type: "text",
               text: `${isDefault ? "⭐ " : ""}${packageDisplayName(p)}`,
-              size: "sm",
-              weight: isDefault ? "bold" : "regular",
-              color: isDefault ? "#F3D98B" : "#E3E3E3",
-              wrap: true,
+              size: "md",
+              weight: "bold",
+              color: isDefault ? "#8F6710" : "#33302B",
             },
-            ...(isDefault
-              ? [
-                  {
-                    type: "text",
-                    text: "คนเลือกมากที่สุด",
-                    size: "xxs",
-                    color: "#A4906A",
-                  },
-                ]
-              : []),
+            {
+              type: "text",
+              text: isDefault
+                ? `${packageDetailLine(p)} · คนเลือกมากที่สุด`
+                : packageDetailLine(p),
+              size: "xs",
+              color: isDefault ? "#A4813A" : "#8A857C",
+              margin: "xs",
+            },
           ],
         },
         {
           type: "text",
           text: `${p.priceThb}.-`,
           flex: 2,
-          size: "lg",
+          size: "xl",
           weight: "bold",
           align: "end",
           gravity: "center",
-          color: isDefault ? "#D4AF37" : "#F8F8F8",
+          color: isDefault ? "#B8871B" : "#241C12",
         },
       ],
       action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
@@ -98,7 +107,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
         layout: "vertical",
         paddingAll: "18px",
         spacing: "md",
-        backgroundColor: "#101010",
+        backgroundColor: "#FFFFFF",
         contents: [
           {
             type: "box",
@@ -119,14 +128,14 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
                 text: "วันนี้ใช้สิทธิ์ฟรีครบแล้วครับ ✨",
                 weight: "bold",
                 size: "lg",
-                color: "#F8F8F8",
+                color: "#241C12",
                 wrap: true,
               },
               {
                 type: "text",
                 text: "เปิดพลังต่อได้เลยวันนี้ หรือพรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีกครับ",
                 size: "xs",
-                color: "#A4A4A8",
+                color: "#7A6A58",
                 wrap: true,
               },
             ],
@@ -145,7 +154,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
         layout: "vertical",
         spacing: "sm",
         paddingAll: "16px",
-        backgroundColor: "#101010",
+        backgroundColor: "#FFFFFF",
         contents: [
           {
             type: "button",
