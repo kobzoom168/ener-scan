@@ -104,6 +104,45 @@ export async function listRecentScanUsersForAdmin({
 }
 
 /** Save the admin's free-text label for a user (e.g. "admin", "test", "VIP"). */
+/**
+ * แอดมินแก้ข้อมูลลงทะเบียน LIFF (กบ 17 ก.ค. 2026: เคสลูกค้ากดเพศผิด) —
+ * แก้ได้เฉพาะฟิลด์ที่อนุญาต (gender/nickname) ในตาราง liff_profiles
+ * @param {{ lineUserId: string, gender?: string|null, nickname?: string|null }} p
+ */
+export async function updateLiffProfileByAdmin({ lineUserId, gender, nickname }) {
+  const lu = String(lineUserId || "").trim();
+  if (!lu) throw new Error("line_user_id_missing");
+  /** @type {Record<string, string|null>} */
+  const patch = {};
+  if (gender !== undefined) {
+    const g = String(gender ?? "").trim();
+    const allowed = new Set(["ชาย", "หญิง", "ไม่ระบุ"]);
+    if (g && !allowed.has(g)) throw new Error("gender_invalid");
+    patch.gender = g || null;
+  }
+  if (nickname !== undefined) {
+    patch.nickname = String(nickname ?? "").trim().slice(0, 60) || null;
+  }
+  if (Object.keys(patch).length === 0) throw new Error("no_fields");
+  patch.updated_at = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("liff_profiles")
+    .update(patch)
+    .eq("line_user_id", lu)
+    .select("line_user_id,gender,nickname")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("liff_profile_not_found");
+  console.log(
+    JSON.stringify({
+      event: "admin_liff_profile_updated",
+      lineUserIdPrefix: lu.slice(0, 8),
+      fields: Object.keys(patch).filter((k) => k !== "updated_at"),
+    }),
+  );
+  return { lineUserId: lu, gender: data.gender, nickname: data.nickname };
+}
+
 export async function setAdminNoteForLineUser({ lineUserId, note }) {
   const lu = String(lineUserId || "").trim();
   if (!lu) throw new Error("line_user_id_missing");
