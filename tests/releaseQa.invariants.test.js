@@ -68,10 +68,13 @@ test("release: approve path can resolve entitlement when package key is stale bu
 test("release: single-offer alt text includes price from formatPaywallPriceTokensForLine", () => {
   const offer = loadActiveScanOffer(new Date());
   const tokens = formatPaywallPriceTokensForLine(offer);
-  assert.equal(tokens, "49");
+  assert.equal(tokens, "29 หรือ 49 หรือ 399");
   const alt = buildSingleOfferPaywallAltText(offer);
+  assert.ok(alt.includes("29"));
   assert.ok(alt.includes("49"));
-  assert.ok(alt.includes("บอกอาจารย์"));
+  assert.ok(alt.includes("399"));
+  // เมนูหลายแพ็กปิดท้ายด้วยชวนบอกราคา (โทนคนพิมพ์เอง ไม่มีบูลเล็ต)
+  assert.ok(alt.includes("บอกราคา"));
 });
 
 test("release: buildPaymentApprovedText reflects DB fields and paidPlanCode intro shape", async () => {

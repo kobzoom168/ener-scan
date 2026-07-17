@@ -395,13 +395,26 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   const top = library.topOverall;
   if (!top) return "";
   const accessFull = opts.accessFull !== false;
-  // สมาชิกรายเดือนเท่านั้นถึงเห็นอันดับ 1-2 (กบ 15 ก.ค.) — แพ็กเครดิตยังเห็นลิสต์เต็มแต่ 1-2 เบลอ
+  // กบ 17 ก.ค. 2026: เกต "เคยจ่ายเงินสักครั้ง" — ไม่เคยจ่าย = ล็อกคลังทั้งก้อน ไม่เห็นสักรายการ
   const memberAccess = opts.memberAccess !== false;
   const liffPayUrl = String(opts.liffPayUrl || "https://lin.ee/6YZeFZ1");
   const tok = String(pageToken || "").trim();
   const canLinkLibrary = Boolean(tok && tok !== "unknown");
   const libHref = canLinkLibrary ? `/r/${encodeURIComponent(tok)}/library` : "";
   const byOverall = Array.isArray(library.byOverall) ? library.byOverall : [];
+
+  // ไม่เคยจ่าย → การ์ดล็อกอย่างเดียว (บอกจำนวน ไม่โชว์ของ) + CTA เปิดสิทธิ์
+  if (!memberAccess) {
+    return `
+    <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">
+      <h2 id="mv2-lib-h">คลังพลังของคุณ</h2>
+      <p class="mv2-lib-count">คุณมีรายการสแกนแล้ว ${escapeHtml(String(library.totalCount))} รายการ</p>
+      <div class="mv2r-pod mv2r-pod--locked" role="note">
+        <p class="mv2r-pod-id">อาจารย์จัดอันดับทุกชิ้นของคุณไว้แล้ว — แรงสุด เข้ากับคุณที่สุด คุ้มครอง เมตตา บารมี โชคลาภ</p>
+        <a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดูคลัง</a>
+      </div>
+    </section>`;
+  }
 
   // ── แท่นรางวัลท็อป 3 โชว์บนหน้ารายงานเลย ไม่ต้องกดเข้าไปดู (กบ 15 ก.ค.)
   //    อันดับ 1-2 เซ็นเซอร์ไว้ให้สมาชิกรายเดือนเท่านั้น อันดับ 3 โชว์ทุกคน
@@ -412,7 +425,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
       ? `<img class="mv2r-pod-img${censored ? " mv2r-blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
       : `<span class="mv2r-pod-img mv2r-pod-img--empty" aria-hidden="true"></span>`;
     const idLine = censored
-      ? `<p class="mv2r-pod-id">สมาชิกรายเดือนเปิดดูได้</p>`
+      ? `<p class="mv2r-pod-id">เปิดสิทธิ์ครั้งแรกแล้วดูได้ตลอด</p>`
       : `<p class="mv2r-pod-id">${escapeHtml(it.displayReportId)}</p>`;
     const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
     const fitBits = [];
@@ -429,7 +442,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
       </form>`
         : "";
     const action = censored
-      ? `<a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">สมาชิก 299 เปิดดู</a>`
+      ? `<a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>`
       : `<a class="mv2r-pod-btn" href="/r/${encodeURIComponent(it.publicToken)}">ดูรายงานนี้</a>`;
     return `
     <article class="mv2r-pod${first ? " mv2r-pod--first" : ""}${censored ? " mv2r-pod--locked" : ""}" data-rank="${rank}">
@@ -466,7 +479,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
         ${img}
         <span class="mv2r-row-main">
           <span class="mv2r-row-id">ชิ้นอันดับ ${rank} ของคุณ</span>
-          <span class="mv2r-row-peak">สมาชิกรายเดือนเปิดดูว่าชิ้นไหนแรงสุด</span>
+          <span class="mv2r-row-peak">เปิดสิทธิ์เพื่อดูว่าชิ้นไหนแรงสุด</span>
         </span>
         <span class="mv2r-row-lockpill">ล็อก</span>
       </a>`;
@@ -603,7 +616,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
         }
         <div class="mv2-tease-main">
           <p class="mv2-tease-line">อันดับ 1 ของคลังคุณวันนี้ เหมาะกับวันนี้ <b>${escapeHtml(String(teaser.suit))}%</b></p>
-          <p class="mv2-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(teaser.total))} ชิ้นกับดาวประจำวันแล้ว สมาชิกรายเดือนเห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
+          <p class="mv2-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(teaser.total))} ชิ้นกับดาวประจำวันแล้ว ลูกค้าอาจารย์เห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
         </div>
       </div>
       <a class="mv2-share-btn mv2-share-btn--primary mv2-tease-btn" href="${escapeHtml(liffPayUrl)}">เปิดดูชิ้นที่หนุนดวงวันนี้</a>
@@ -612,7 +625,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const stickyCtaHtml = `
   <nav class="mv2-stickycta" aria-label="เริ่มใช้ Ener">
     <a class="mv2-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้น</a>
-    ${teaser ? `<a class="mv2-cta-member" href="${escapeHtml(liffPayUrl)}">สมาชิก 299</a>` : ""}
+    ${teaser ? `<a class="mv2-cta-member" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>` : ""}
   </nav>`;
 
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows

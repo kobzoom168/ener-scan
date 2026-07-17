@@ -65,7 +65,7 @@ function lockedRowHtml(it, rank, liffPayUrl) {
     ${img}
     <span class="alib-row-main">
       <span class="alib-row-id">ชิ้นอันดับ ${rank} ของคุณ</span>
-      <span class="alib-row-peak">สมาชิกรายเดือนเปิดดูว่าชิ้นไหนแรงสุด</span>
+      <span class="alib-row-peak">เปิดสิทธิ์เพื่อดูว่าชิ้นไหนแรงสุด</span>
     </span>
     <span class="alib-row-lockpill">ล็อก</span>`;
   return liffPayUrl
@@ -110,10 +110,10 @@ function podiumCardHtml(it, rank, pagePublicToken, opts = {}) {
   if (first && when) fitBits.push(`สแกนเมื่อ ${when}`);
   const pinForm = first && !censored ? spotlightPinFormHtml(pagePublicToken, it) : "";
   const idLine = censored
-    ? `<p class="alib-pod-id">สมาชิกรายเดือนเปิดดูได้</p>`
+    ? `<p class="alib-pod-id">เปิดสิทธิ์ครั้งแรกแล้วดูได้ตลอด</p>`
     : `<p class="alib-pod-id">${escapeHtml(it.displayReportId)}</p>`;
   const action = censored
-    ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl || href)}">สมาชิก 299 เปิดดู</a>`
+    ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl || href)}">เปิดสิทธิ์เพื่อดู</a>`
     : `<a class="alib-spot-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>`;
   return `
   <article class="alib-pod${first ? " alib-pod--first" : ""}${censored ? " alib-pod--locked" : ""}" data-rank="${rank}">
@@ -239,10 +239,11 @@ export function renderAmuletLibraryRankingHtml({
   freeVisibleCount = 7,
   dailyPick = null,
   liffPayUrl = "",
+  lockedAll = false,
 } = {}) {
   const backHref = `/r/${encodeURIComponent(pagePublicToken)}`;
-  // กบ 15 ก.ค.: อันดับ 1-2 เซ็นเซอร์ทุกแท็บ ให้สมาชิกรายเดือน (memberAccess) เท่านั้น
-  // อันดับ 3 ขึ้นไปเห็นหมด; แท็บหนุนดวงวันนี้ยังล็อกทั้งแผงตามแพ็กแอคทีฟ (accessFull)
+  // กบ 17 ก.ค. 2026: ไม่เคยจ่ายเงินเลย = ล็อกคลังทั้งหน้า (lockedAll) เหลือแค่จำนวนรายการ
+  // เคยจ่ายสักครั้ง = เห็นหมดทุกแท็บทุกอันดับ (memberAccess/accessFull เป็น true จาก controller)
   void freeVisibleCount;
   const panelOpts = { censorTop: !memberAccess, liffPayUrl };
   const n = library.totalCount;
@@ -830,7 +831,18 @@ ${amuletSubpageAutoDarkScriptHtml()}
     <a class="alib-back" href="${escapeHtml(backHref)}">← กลับรายงาน</a>
     <h1 class="alib-h1">คลังพลังของคุณ</h1>
     <p class="alib-sub">คุณมีรายการสแกนแล้ว ${escapeHtml(String(n))} รายการ</p>
-    ${dedupeExplainLine}
+    ${
+      lockedAll
+        ? `<div class="alib-today-locked" role="note">
+      <p class="alib-today-locked-line">คลังพลังจัดอันดับทุกชิ้นของคุณ ${escapeHtml(String(n))} รายการไว้เรียบร้อยแล้ว</p>
+      <p class="alib-today-locked-sub">เปิดสิทธิ์ครั้งแรกกับอาจารย์ แล้วดูได้ตลอด — แรงสุดโดยรวม เข้ากับคุณที่สุด คุ้มครอง เมตตา บารมี โชคลาภ หนุนดวงวันนี้</p>
+      ${liffPayUrl ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดูคลัง</a>` : ""}
+    </div>
+    <section class="alib-scan-footer" aria-labelledby="alib-scan-footer-h">
+      <h2 id="alib-scan-footer-h" class="alib-scan-footer-title">อยากรู้ว่าชิ้นไหนของคุณแรงสุด?</h2>
+      <p class="alib-scan-footer-lead">คลังเทียบพลังรวม ความเข้ากัน คุ้มครอง เมตตา บารมี โชคลาภ หนุนดวง ให้อัตโนมัติทุกครั้งที่สแกน</p>
+    </section>`
+        : `${dedupeExplainLine}
     <p class="alib-safety" role="note">อันดับนี้จัดจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
     ${retentionNoticeHtml}
     ${pinFlashHtml}
@@ -847,7 +859,8 @@ ${amuletSubpageAutoDarkScriptHtml()}
       <h2 id="alib-scan-footer-h" class="alib-scan-footer-title">อยากรู้ว่าองค์อื่นของคุณจะขึ้นอันดับไหน?</h2>
       <p class="alib-scan-footer-lead">สแกนเพิ่มเพื่อเทียบพลังรวม ความเข้ากัน คุ้มครอง เมตตา บารมี โชคลาภ หนุนดวง งานเฉพาะทาง</p>
       <p class="alib-scan-btn" role="status" aria-label="ชวนสแกนวัตถุเพิ่ม">สแกนวัตถุเพิ่ม</p>
-    </section>
+    </section>`
+    }
     <p class="alib-note" role="note">อันดับและคะแนนเป็นการประเมินจากผลสแกน ใช้เป็นแนวทาง ไม่ได้ระบุชนิดหรือชื่อพระจริงจากภาพ</p>
   </div>
   <script>

@@ -105,13 +105,19 @@ test("resolveEffectiveScanOfferFromRaw: active in window → use file numbers", 
   assert.equal(r.offer.freeQuotaPerDay, 3);
 });
 
-test("loadActiveScanOffer: reads repo default json (single-package)", () => {
+test("loadActiveScanOffer: reads repo default json (promo jul2026 v2: 29/49/399)", () => {
   const o = loadActiveScanOffer(new Date());
-  assert.equal(o.freeQuotaPerDay, 2);
+  assert.equal(o.freeQuotaPerDay, 1);
   assert.equal(o.paidPriceThb, 49);
   assert.equal(o.paidScanCount, 4);
   assert.equal(o.paidWindowHours, 24);
   assert.equal(o.defaultPackageKey, "49baht_4scans_24h");
   assert.ok(Array.isArray(o.packages));
-  assert.equal(o.packages.length, 1);
+  assert.equal(o.packages.length, 3);
+  assert.deepEqual(
+    o.packages.map((p) => p.priceThb),
+    [29, 49, 399],
+  );
+  // ไม่มีแพ็ก "ไม่จำกัด" (scanCount >= 999999) เหลือในโปรใหม่
+  assert.ok(o.packages.every((p) => Number(p.scanCount) < 999999));
 });

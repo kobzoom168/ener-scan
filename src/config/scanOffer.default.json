@@ -1,16 +1,32 @@
 {
   "active": true,
-  "label": "default",
-  "freeQuotaPerDay": 2,
+  "label": "promo_jul2026_v2",
+  "freeQuotaPerDay": 1,
   "defaultPackageKey": "49baht_4scans_24h",
   "packages": [
+    {
+      "key": "29baht_1scan_24h",
+      "priceThb": 29,
+      "scanCount": 1,
+      "windowHours": 24,
+      "active": true,
+      "label": "29 บาท สแกนรายองค์ 1 ครั้ง / 24 ชม."
+    },
     {
       "key": "49baht_4scans_24h",
       "priceThb": 49,
       "scanCount": 4,
       "windowHours": 24,
       "active": true,
-      "label": "49 บาท 4 ครั้ง / 24 ชม."
+      "label": "49 บาท เปิดพลัง 4 ครั้ง / 24 ชม."
+    },
+    {
+      "key": "399baht_30scans_30d",
+      "priceThb": 399,
+      "scanCount": 30,
+      "windowHours": 720,
+      "active": true,
+      "label": "399 บาท สมาชิกอาจารย์ 30 ครั้ง / 30 วัน"
     }
   ],
   "paidPriceThb": 49,
@@ -18,5 +34,5 @@
   "paidWindowHours": 24,
   "startAt": null,
   "endAt": null,
-  "configVersion": "3"
+  "configVersion": "promo-2026-07-21-v2"
 }

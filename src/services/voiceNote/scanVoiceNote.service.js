@@ -12,7 +12,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client, S3_ENABLED } from "../../config/s3Storage.js";
 import { env } from "../../config/env.js";
 import { supabase } from "../../config/supabase.js";
-import { getUserPaidUntil } from "../../stores/paymentAccess.db.js";
+import { hasEverPaid } from "../everPaid.service.js";
 import { getAppSetting } from "../../stores/appSettings.db.js";
 
 /**
@@ -319,22 +319,12 @@ export function topAxisLabelFromReport(reportPayload) {
   return best;
 }
 
-/** ครั้งแรกในชีวิต = แถวใน scan_results_v2 ของ user นี้มีแค่แถวที่เพิ่ง insert (≤1). */
-async function isFirstEverScan(lineUserId) {
-  const { count, error } = await supabase
-    .from("scan_results_v2")
-    .select("id", { count: "exact", head: true })
-    .eq("line_user_id", lineUserId);
-  if (error) throw error;
-  return (count ?? 0) <= 1;
-}
-
-/** จ่ายเงิน = ทุกสแกน / ฟรี = เฉพาะสแกนแรกครั้งเดียว (wow moment) / "all" ไว้เทส staging */
+/** เคยจ่ายเงินสักครั้ง = ทุกสแกน / ไม่เคยจ่าย = ไม่มีเสียง / "all" ไว้เทส staging */
 async function passesAudienceGate(lineUserId, audience) {
   if (String(audience) === "all") return true;
-  const paidUntil = await getUserPaidUntil(lineUserId).catch(() => null);
-  if (paidUntil && new Date(paidUntil).getTime() > Date.now()) return true;
-  return isFirstEverScan(lineUserId).catch(() => false);
+  // กบ 17 ก.ค. 2026: ฟรีไม่ได้เสียงแล้ว (ตัดเงื่อนไขสแกนครั้งแรกออก) —
+  // เคยจ่ายเงินสักครั้ง = ได้เสียงตลอด · เช็คพลาด = ไม่ส่งเสียง (fail-closed, มีต้นทุน TTS)
+  return hasEverPaid(lineUserId).catch(() => false);
 }
 
 /**
