@@ -9,6 +9,7 @@ import { loadActiveScanOffer } from "../scanOffer.loader.js";
 import { getDefaultPackage } from "../scanOffer.packages.js";
 import { sendNonScanReply } from "../nonScanReply.gateway.js";
 import { lineStickerPaymentSupportMessage } from "../../utils/lineStickerMessage.util.js";
+import { buildFreeQuotaPaywallFlex } from "../flex/paywallOffer.flex.js";
 import {
   buildDeterministicFreeQuotaExhaustedPaywallText,
   getDeterministicFreeQuotaExhaustedPaywallAlternateTexts,
@@ -94,6 +95,10 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
     ],
   };
 
+  // การ์ด Flex โปรทั้งร้าน (กบ 17 ก.ค.) — text เป็น altText/fallback; การ์ด build
+  // ไม่ได้ (เช่นไม่มีแพ็ก) = ถอยไปส่งข้อความแบบเดิมเอง
+  const paywallFlex = buildFreeQuotaPaywallFlex(offer, { altText: primary.slice(0, 400) });
+
   const res = await sendNonScanReply({
     client,
     userId: uid,
@@ -104,8 +109,9 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
     alternateTexts: alternates,
     scanOfferMeta,
     turnPerf,
-    trailingStickerMessage: lineStickerPaymentSupportMessage(),
+    trailingStickerMessage: paywallFlex ? null : lineStickerPaymentSupportMessage(),
     quickReply: payQuickReply,
+    flexMessage: paywallFlex,
   });
 
   if (res.suppressed) {
