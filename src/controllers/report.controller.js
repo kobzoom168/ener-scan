@@ -820,15 +820,15 @@ export async function getShareCardByToken(req, res) {
     const typeLabel =
       String(a.flexSurface?.headline || "").trim() || "พระ/เทวรูป/เครื่องราง";
 
-    // เส้นพลังรอบรูป (สเก็ตช์กบ): ท็อป 3 แกนตามคะแนนจริง ชื่อย่อสั้น (เมตตา/หนุนดวง/โชคลาภ...)
-    const topAxes = Object.entries(a.powerCategories || {})
+    // ป้ายพลังชี้รอบรูป: ท็อป 3 แกนตามคะแนนจริง + เรดาร์ใช้ครบ 6 แกน (ชื่อย่อ → คะแนน)
+    const allAxes = Object.entries(a.powerCategories || {})
       .map(([key, v]) => ({
         label: AMULET_PEAK_SHORT_THAI[key] || String(v?.labelThai || "").trim(),
         score: Number(v?.score),
       }))
-      .filter((x) => x.label && Number.isFinite(x.score))
-      .sort((x, y) => y.score - x.score)
-      .slice(0, 3);
+      .filter((x) => x.label && Number.isFinite(x.score));
+    const topAxes = [...allAxes].sort((x, y) => y.score - x.score).slice(0, 3);
+    const axisScores = Object.fromEntries(allAxes.map((x) => [x.label, x.score]));
 
     const buf = await renderShareCardPng({
       publicToken,
@@ -838,6 +838,7 @@ export async function getShareCardByToken(req, res) {
       gradeLabel,
       peakLabel,
       topAxes,
+      axisScores,
     });
     res
       .type("png")
