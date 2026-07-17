@@ -1486,10 +1486,13 @@ async function handlePaymentCommandTextRoute({
         altText: buildSingleOfferPaywallAltText(offerPay).slice(0, 400),
       }),
       quickReply: {
-        items: sortedPayPkgs.slice(0, 3).map((p) => ({
-          type: "action",
-          action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
-        })),
+        items: [
+          ...sortedPayPkgs.slice(0, 3).map((p) => ({
+            type: "action",
+            action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
+          })),
+          { type: "action", action: { type: "message", label: "ไว้ก่อน", text: "ไว้ก่อน" } },
+        ],
       },
     });
     logEvent("payment_intent", {
