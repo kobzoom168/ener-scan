@@ -1469,7 +1469,7 @@ export function buildDeterministicFreeQuotaExhaustedPaywallText(offer, opts = {}
     const count = pkg?.scanCount ?? o.paidScanCount;
     const hours = pkg?.windowHours ?? o.paidWindowHours;
     return [
-      "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ ✨",
+      "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ",
       "",
       `เปิดสแกนต่อได้เลย แพ็ก ${price} บาท สแกนได้ ${count} ครั้ง ใน ${hours} ชม.`,
       "",
@@ -1489,7 +1489,7 @@ export function buildDeterministicFreeQuotaExhaustedPaywallText(offer, opts = {}
       : `${p.scanCount} ครั้ง ${p.priceThb} บาท${perScan}${win}${star}`;
   });
   return [
-    "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ ✨",
+    "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ",
     "",
     ...lines,
     "",

@@ -1482,7 +1482,7 @@ async function handlePaymentCommandTextRoute({
       ],
       // การ์ดโปรใบเดียวกับ paywall โควตาหมด — หัวการ์ดปรับตามบริบท "พิมพ์ จ่าย"
       flexMessage: buildFreeQuotaPaywallFlex(offerPay, {
-        title: "เปิดสิทธิ์เพิ่มวันนี้ ✨",
+        title: "เปิดสิทธิ์เพิ่มวันนี้",
         subtitle: "เลือกแพ็กที่สะดวก แตะแถวไหนก็ได้เลยครับ",
         altText: buildSingleOfferPaywallAltText(offerPay).slice(0, 400),
       }),
