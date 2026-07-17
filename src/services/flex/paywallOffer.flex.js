@@ -26,10 +26,14 @@ function packageDetailLine(p) {
 
 /**
  * @param {import("../scanOffer.loader.js").NormalizedScanOffer} offer
- * @param {{ altText?: string }} [opts]
+ * @param {{ altText?: string, title?: string, subtitle?: string }} [opts]
  * @returns {object|null} LINE flex message (null เมื่อไม่มีแพ็กเปิดขาย)
  */
 export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
+  const title = String(opts.title || "").trim() || "วันนี้ใช้สิทธิ์ฟรีครบแล้วครับ ✨";
+  const subtitle =
+    String(opts.subtitle || "").trim() ||
+    "เปิดพลังต่อได้เลยวันนี้ หรือพรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีกครับ";
   const pkgs = listActivePackages(offer)
     .slice()
     .sort((a, b) => a.priceThb - b.priceThb);
@@ -125,7 +129,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
             contents: [
               {
                 type: "text",
-                text: "วันนี้ใช้สิทธิ์ฟรีครบแล้วครับ ✨",
+                text: title,
                 weight: "bold",
                 size: "lg",
                 color: "#241C12",
@@ -133,7 +137,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
               },
               {
                 type: "text",
-                text: "เปิดพลังต่อได้เลยวันนี้ หรือพรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีกครับ",
+                text: subtitle,
                 size: "xs",
                 color: "#7A6A58",
                 wrap: true,
