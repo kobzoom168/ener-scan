@@ -395,32 +395,21 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   const top = library.topOverall;
   if (!top) return "";
   const accessFull = opts.accessFull !== false;
-  // กบ 17 ก.ค. 2026: เกต "เคยจ่ายเงินสักครั้ง" — ไม่เคยจ่าย = ล็อกคลังทั้งก้อน ไม่เห็นสักรายการ
+  // กบ 17 ก.ค. 2026: เกต "เคยจ่ายเงินสักครั้ง" — ไม่เคยจ่าย = เห็นภาพคลังทั้งหมดแต่เบลอ+
+  // เซ็นเซอร์ทุกชิ้น (ไม่ใช่ซ่อนทั้งหน้า) มีปุ่มเปิดสิทธิ์ทุกชิ้น · เคยจ่าย = เห็นชัดครบ
   const memberAccess = opts.memberAccess !== false;
+  const censorAll = !memberAccess;
   const liffPayUrl = String(opts.liffPayUrl || "https://lin.ee/6YZeFZ1");
   const tok = String(pageToken || "").trim();
   const canLinkLibrary = Boolean(tok && tok !== "unknown");
   const libHref = canLinkLibrary ? `/r/${encodeURIComponent(tok)}/library` : "";
   const byOverall = Array.isArray(library.byOverall) ? library.byOverall : [];
 
-  // ไม่เคยจ่าย → การ์ดล็อกอย่างเดียว (บอกจำนวน ไม่โชว์ของ) + CTA เปิดสิทธิ์
-  if (!memberAccess) {
-    return `
-    <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">
-      <h2 id="mv2-lib-h">คลังพลังของคุณ</h2>
-      <p class="mv2-lib-count">คุณมีรายการสแกนแล้ว ${escapeHtml(String(library.totalCount))} รายการ</p>
-      <div class="mv2r-pod mv2r-pod--locked" role="note">
-        <p class="mv2r-pod-id">อาจารย์จัดอันดับทุกชิ้นของคุณไว้แล้ว — แรงสุด เข้ากับคุณที่สุด คุ้มครอง เมตตา บารมี โชคลาภ</p>
-        <a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดูคลัง</a>
-      </div>
-    </section>`;
-  }
-
   // ── แท่นรางวัลท็อป 3 โชว์บนหน้ารายงานเลย ไม่ต้องกดเข้าไปดู (กบ 15 ก.ค.)
-  //    อันดับ 1-2 เซ็นเซอร์ไว้ให้สมาชิกรายเดือนเท่านั้น อันดับ 3 โชว์ทุกคน
+  //    ไม่เคยจ่าย = เบลอทุกชิ้น (censorAll) / เคยจ่าย = ชัดครบ
   const podCard = (it, rank) => {
     const first = rank === 1;
-    const censored = !memberAccess && rank <= 2;
+    const censored = censorAll;
     const img = it.thumbUrl
       ? `<img class="mv2r-pod-img${censored ? " mv2r-blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
       : `<span class="mv2r-pod-img mv2r-pod-img--empty" aria-hidden="true"></span>`;
@@ -503,7 +492,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   if (accessFull) {
     const first10 = byOverall
       .slice(0, 10)
-      .map((it, i) => rowHtml(it, i + 1, !memberAccess && i < 2))
+      .map((it, i) => rowHtml(it, i + 1, false))
       .join("");
     const rest = byOverall.slice(10).map((it, i) => rowHtml(it, i + 11, false)).join("");
     rowsHtml = `
@@ -516,13 +505,14 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
           : ""
       }`;
   } else {
-    const five = byOverall.slice(0, 5).map((it, i) => rowHtml(it, i + 1, i < 2)).join("");
+    // ไม่เคยจ่าย: โชว์ 5 แถวแรก เบลอ+เซ็นเซอร์ทุกแถว (เห็นภาพแต่ยังดูไม่ได้) + CTA
+    const five = byOverall.slice(0, 5).map((it, i) => rowHtml(it, i + 1, true)).join("");
     const remain = Math.max(0, byOverall.length - 5);
     rowsHtml = `
       <div class="mv2r-rows">${five}</div>
       ${
         remain > 0
-          ? `<a class="mv2r-row mv2r-row--cta" href="${escapeHtml(liffPayUrl)}">และอีก ${remain} ชิ้นในคลัง · เปิดแพ็กเพื่อดูครบทุกอันดับ ›</a>`
+          ? `<a class="mv2r-row mv2r-row--cta" href="${escapeHtml(liffPayUrl)}">และอีก ${remain} ชิ้นในคลัง · เปิดสิทธิ์เพื่อดูครบทุกอันดับ ›</a>`
           : ""
       }`;
   }
