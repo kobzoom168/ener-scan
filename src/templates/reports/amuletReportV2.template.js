@@ -342,8 +342,10 @@ function mainGraphBlock(vm) {
  * Horizontal mini carousel: best item per axis (same data as /library “พระเด่นประจำพลังของคุณ”).
  * @param {import("../../services/reports/sacredAmuletLibrary.service.js").SacredAmuletAxisHighlight[]|null|undefined} highlights
  */
-function buildLibraryAxisHighlightsMiniCarouselHtml(highlights) {
+function buildLibraryAxisHighlightsMiniCarouselHtml(highlights, opts = {}) {
   if (!Array.isArray(highlights) || highlights.length === 0) return "";
+  const censored = opts.censorAll === true;
+  const liffPayUrl = String(opts.liffPayUrl || "");
   const list = highlights.length > 6 ? highlights.slice(0, 6) : highlights;
   const slides = list
     .map((h, idx) => {
@@ -351,17 +353,22 @@ function buildLibraryAxisHighlightsMiniCarouselHtml(highlights) {
       const tok = String(item?.publicToken || "").trim();
       const href = tok ? `/r/${encodeURIComponent(tok)}` : "";
       const img = item?.thumbUrl
-        ? `<div class="mv2-lib-axis-img"><img src="${escapeHtml(String(item.thumbUrl))}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
+        ? `<div class="mv2-lib-axis-img"><img class="${censored ? "mv2r-blur" : ""}" src="${escapeHtml(String(item.thumbUrl))}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
         : `<div class="mv2-lib-axis-img mv2-lib-axis-img--empty" aria-hidden="true"></div>`;
       const scoreStr = String(Math.round(Number(h.axisScore) || 0));
-      const cta = href
-        ? `<a class="mv2-lib-axis-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>`
-        : `<span class="mv2-lib-axis-btn mv2-lib-axis-btn--disabled" aria-disabled="true">ดูรายละเอียด</span>`;
+      const idLine = censored
+        ? "เปิดสิทธิ์เพื่อดู"
+        : String(item?.displayReportId || "");
+      const cta = censored
+        ? `<a class="mv2-lib-axis-btn" href="${escapeHtml(liffPayUrl || href)}">เปิดสิทธิ์เพื่อดู</a>`
+        : href
+          ? `<a class="mv2-lib-axis-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>`
+          : `<span class="mv2-lib-axis-btn mv2-lib-axis-btn--disabled" aria-disabled="true">ดูรายละเอียด</span>`;
       return `
   <article class="mv2-lib-axis-slide" data-mv2-slide-i="${idx}">
     <p class="mv2-lib-axis-badge">${escapeHtml(h.labelTh)}</p>
     ${img}
-    <p class="mv2-lib-axis-id">${escapeHtml(String(item?.displayReportId || ""))}</p>
+    <p class="mv2-lib-axis-id">${escapeHtml(idLine)}</p>
     <div class="mv2-lib-axis-score" aria-label="คะแนนด้านนี้"><span class="mv2-lib-axis-score-num">${escapeHtml(scoreStr)}</span><span class="mv2-lib-axis-score-suf">คะแนน</span></div>
     <p class="mv2-lib-axis-blurb">เด่นสุดในด้านนี้</p>
     ${cta}
@@ -524,7 +531,10 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   const btn = libHref
     ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">เปิดหน้าคลังแบบเต็ม แยกตามด้านพลัง</a>`
     : "";
-  const axisCarouselHtml = buildLibraryAxisHighlightsMiniCarouselHtml(library.axisHighlights);
+  const axisCarouselHtml = buildLibraryAxisHighlightsMiniCarouselHtml(library.axisHighlights, {
+    censorAll,
+    liffPayUrl,
+  });
   return `
     <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">
       <h2 id="mv2-lib-h">คลังพลังของคุณ</h2>

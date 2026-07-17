@@ -197,13 +197,21 @@ function spotlightCardHtml(it, pagePublicToken) {
 
 /**
  * @param {{ labelTh: string, axisScore: number, item: SacredAmuletLibraryItem }} h
+ * @param {{ censorAll?: boolean, liffPayUrl?: string }} [opts]
  */
-function axisHighlightCardHtml(h) {
+function axisHighlightCardHtml(h, opts = {}) {
   const { item, labelTh, axisScore } = h;
-  const href = `/r/${encodeURIComponent(item.publicToken)}`;
+  const censored = opts.censorAll === true;
+  const liffPayUrl = String(opts.liffPayUrl || "");
+  const href = censored
+    ? escapeHtml(liffPayUrl || `/r/${encodeURIComponent(item.publicToken)}`)
+    : `/r/${encodeURIComponent(item.publicToken)}`;
   const img = item.thumbUrl
-    ? `<div class="alib-axis-img"><img src="${escapeHtml(item.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/></div>`
+    ? `<div class="alib-axis-img"><img class="${censored ? "alib-row-img--blur" : ""}" src="${escapeHtml(item.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/></div>`
     : `<div class="alib-axis-img alib-axis-img--empty" aria-hidden="true"></div>`;
+  const nameLine = censored
+    ? `<p class="alib-axis-name">เปิดสิทธิ์เพื่อดู</p>`
+    : `<p class="alib-axis-name">${escapeHtml(item.displayReportId)}</p>`;
   return `
   <article class="alib-axis-card">
     <p class="alib-axis-dim">${escapeHtml(labelTh)}</p>
@@ -211,14 +219,14 @@ function axisHighlightCardHtml(h) {
     <div class="alib-axis-body">
       ${img}
       <div class="alib-axis-text">
-        <p class="alib-axis-name">${escapeHtml(item.displayReportId)}</p>
+        ${nameLine}
       </div>
     </div>
     <p class="alib-axis-blurb">เด่นสุดในด้านนี้</p>
     <div class="alib-axis-score-block" aria-label="คะแนนด้านนี้">
       <span class="alib-axis-score-num">${escapeHtml(String(axisScore))}</span><span class="alib-axis-score-suf">คะแนน</span>
     </div>
-    <a class="alib-axis-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>
+    <a class="alib-axis-btn" href="${href}">${censored ? "เปิดสิทธิ์เพื่อดู" : "ดูรายละเอียด"}</a>
   </article>`;
 }
 
@@ -290,7 +298,7 @@ export function renderAmuletLibraryRankingHtml({
     <div class="alib-axis-track" role="list">${axisHighlights
       .map(
         (h) =>
-          `<div class="alib-axis-slide" role="listitem">${axisHighlightCardHtml(h)}</div>`,
+          `<div class="alib-axis-slide" role="listitem">${axisHighlightCardHtml(h, { censorAll, liffPayUrl })}</div>`,
       )
       .join("")}</div>
     <p class="alib-axis-scroll-hint">เลื่อนดูพลังด้านอื่น ๆ</p>
