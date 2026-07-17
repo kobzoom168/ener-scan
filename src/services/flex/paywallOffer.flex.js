@@ -55,7 +55,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
         {
           type: "box",
           layout: "vertical",
-          flex: 6,
+          flex: 5,
           spacing: "none",
           contents: [
             {
@@ -79,7 +79,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
         {
           type: "text",
           text: `${p.priceThb}.-`,
-          flex: 2,
+          flex: 3,
           size: "xl",
           weight: "bold",
           align: "end",
