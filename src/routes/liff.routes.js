@@ -1701,25 +1701,25 @@ function buildLiffHtml(liffId) {
   .ld{color:var(--sub);font-size:1rem;margin-top:16px}
   @media (prefers-reduced-motion:no-preference){
     /* 1) สัญลักษณ์วาดตัวเอง (draw-on ผ่าน pathLength=1) เรียงจากวงนอก→รัศมี→เพชร */
-    .dw{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1s ease forwards}
-    .dw-circle{animation-delay:.15s}
-    .dw-ray{animation-delay:.5s;animation-duration:.7s}
-    .dw-gem{animation-delay:.8s}
-    .dw-gem2{animation-delay:1.15s;animation-duration:.7s}
+    .dw{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1.15s ease forwards}
+    .dw-circle{animation-delay:.2s}
+    .dw-ray{animation-delay:.6s;animation-duration:.85s}
+    .dw-gem{animation-delay:1s}
+    .dw-gem2{animation-delay:1.5s;animation-duration:.75s}
     @keyframes draw{to{stroke-dashoffset:0}}
     /* 2) ชิ้นที่ค่อย ๆ ปรากฏหลังวาดเสร็จ */
-    .em-glow{opacity:0;transform-origin:60px 60px;animation:fadein .9s ease .1s forwards,glow 3.6s ease-in-out 1.6s infinite}
-    .em-center{opacity:0;transform-origin:60px 60px;animation:pop .6s cubic-bezier(.2,1.5,.4,1) 1.35s forwards}
-    .em-ring{opacity:0;transform-origin:60px 60px;animation:fadein .8s ease 1.2s forwards,spin 26s linear 1.2s infinite}
-    .em-orbit{opacity:0;transform-origin:60px 60px;animation:fadein .6s ease 1.5s forwards,spin 9s linear 1.5s infinite}
-    .em-gem{transform-origin:60px 60px;animation:gem 3.6s ease-in-out 1.7s infinite}
-    .em-rays{opacity:0;transform-origin:60px 60px;animation:rays .9s ease .95s forwards}
+    .em-glow{opacity:0;transform-origin:60px 60px;animation:fadein 1s ease .1s forwards,glow 3.8s ease-in-out 2s infinite}
+    .em-center{opacity:0;transform-origin:60px 60px;animation:pop .65s cubic-bezier(.2,1.5,.4,1) 1.7s forwards}
+    .em-ring{opacity:0;transform-origin:60px 60px;animation:fadein .9s ease 1.5s forwards,spin 28s linear 1.5s infinite}
+    .em-orbit{opacity:0;transform-origin:60px 60px;animation:fadein .7s ease 1.9s forwards,spin 10s linear 1.9s infinite}
+    .em-gem{transform-origin:60px 60px;animation:gem 3.8s ease-in-out 2.1s infinite}
+    .em-rays{opacity:0;transform-origin:60px 60px;animation:rays 1s ease 1.15s forwards}
     @keyframes rays{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}
     /* 3) ออร่าทองแผ่ออกเป็นวง (พลังเรืองรอง) */
-    .aura{transform-origin:60px 60px;opacity:0;animation:aura 3.2s ease-out 1.7s infinite}
-    .aura2{animation-delay:2.8s}
+    .aura{transform-origin:60px 60px;opacity:0;animation:aura 3.4s ease-out 2.1s infinite}
+    .aura2{animation-delay:3.8s}
     /* 4) ชื่อ Ener แสงทองกวาดผ่าน */
-    .wordmark{opacity:0;animation:fadeup .7s ease 1.3s forwards,shine 3.4s ease-in-out 2.2s infinite}
+    .wordmark{opacity:0;animation:fadeup .8s ease 1.6s forwards,shine 3.6s ease-in-out 2.7s infinite}
     .loaddots i{animation:dot 1.3s ease-in-out infinite}
     .loaddots i:nth-child(2){animation-delay:.16s}
     .loaddots i:nth-child(3){animation-delay:.32s}
