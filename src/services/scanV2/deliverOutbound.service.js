@@ -1,4 +1,6 @@
 import { pushText } from "../lineSequenceReply.service.js";
+import { pushFlex } from "../lineReply.service.js";
+import { buildFreeQuotaPaywallFlex } from "../flex/paywallOffer.flex.js";
 import { env } from "../../config/env.js";
 
 /**
@@ -292,6 +294,8 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
               typeof quotaNotice === "string" ? quotaNotice : quotaNotice?.text;
             const noticeQuickReply =
               quotaNotice && typeof quotaNotice === "object" ? quotaNotice.quickReply : null;
+            const noticeFlex =
+              quotaNotice && typeof quotaNotice === "object" ? quotaNotice.flexMessage : null;
             if (noticeText) {
               let h = 0;
               for (let i = 0; i < noticeText.length; i++) {
@@ -301,7 +305,18 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
                 `scan_v2:quota_notice:${lineUserId}:${h}`,
                 1800,
               );
-              if (firstThisText) await pushText(client, lineUserId, noticeText, noticeQuickReply);
+              if (firstThisText) {
+                // paywall โควตาหมด = การ์ด Flex (quickReply เกาะการ์ด) / อื่น ๆ = ข้อความ
+                if (noticeFlex && typeof noticeFlex === "object") {
+                  const flexToSend =
+                    noticeQuickReply && Array.isArray(noticeQuickReply.items) && noticeQuickReply.items.length
+                      ? { ...noticeFlex, quickReply: noticeQuickReply }
+                      : noticeFlex;
+                  await pushFlex(client, lineUserId, flexToSend);
+                } else {
+                  await pushText(client, lineUserId, noticeText, noticeQuickReply);
+                }
+              }
             }
           }
         } catch {
@@ -798,13 +813,21 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
         ? `${p.priceThb} บาท สมาชิกรายเดือน อาจารย์ดูแลตลอด ${Math.round(p.windowHours / 24)} วัน สแกนไม่จำกัด`
         : `${p.priceThb} บาท สแกนได้ ${p.scanCount} ครั้ง${p.windowHours >= 48 ? ` ใช้ได้ ${Math.round(p.windowHours / 24)} วัน` : ""}`,
     );
+    const paywallText = [
+      `สิทธิ์สแกนวันนี้ครบแล้ว พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
+      "ถ้าอยากดูต่อวันนี้เลย เปิดสิทธิ์เพิ่มได้ครับ",
+      ...menuLines,
+    ].join("\n");
+    // การ์ด Flex โปร (กบ 17 ก.ค. — เส้นหลังสแกน) หัวการ์ดปรับตามบริบท
+    const paywallFlex = buildFreeQuotaPaywallFlex(offer, {
+      title: "สิทธิ์สแกนวันนี้ครบแล้ว ✨",
+      subtitle: `พรุ่งนี้หลังเที่ยงคืนมีฟรีอีก ${freeQuota} ครั้ง หรือเปิดสิทธิ์ต่อวันนี้เลยครับ`,
+      altText: paywallText.slice(0, 400),
+    });
     return {
-      text: [
-        `สิทธิ์สแกนวันนี้ครบแล้ว พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
-        "ถ้าอยากดูต่อวันนี้เลย เปิดสิทธิ์เพิ่มได้ครับ",
-        ...menuLines,
-      ].join("\n"),
+      text: paywallText,
       quickReply: buildPayLiffQuickReply(sortedPkgs),
+      flexMessage: paywallFlex,
     };
   } catch {
     return null;
