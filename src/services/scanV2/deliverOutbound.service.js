@@ -820,7 +820,7 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
     ].join("\n");
     // การ์ด Flex โปร (กบ 17 ก.ค. — เส้นหลังสแกน) หัวการ์ดปรับตามบริบท
     const paywallFlex = buildFreeQuotaPaywallFlex(offer, {
-      title: "สิทธิ์สแกนวันนี้ครบแล้ว ✨",
+      title: "สิทธิ์สแกนวันนี้ครบแล้ว",
       subtitle: `พรุ่งนี้หลังเที่ยงคืนมีฟรีอีก ${freeQuota} ครั้ง หรือเปิดสิทธิ์ต่อวันนี้เลยครับ`,
       altText: paywallText.slice(0, 400),
     });

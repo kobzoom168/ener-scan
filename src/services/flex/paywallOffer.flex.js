@@ -30,7 +30,7 @@ function packageDetailLine(p) {
  * @returns {object|null} LINE flex message (null เมื่อไม่มีแพ็กเปิดขาย)
  */
 export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
-  const title = String(opts.title || "").trim() || "วันนี้ใช้สิทธิ์ฟรีครบแล้วครับ ✨";
+  const title = String(opts.title || "").trim() || "วันนี้ใช้สิทธิ์ฟรีครบแล้วครับ";
   const subtitle =
     String(opts.subtitle || "").trim() ||
     "เปิดพลังต่อได้เลยวันนี้ หรือพรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีกครับ";
@@ -42,11 +42,34 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
 
   const rows = pkgs.map((p) => {
     const isDefault = p.key === defKey;
+    const nameContents = [
+      {
+        type: "text",
+        text: packageDisplayName(p),
+        size: "sm",
+        weight: "bold",
+        color: isDefault ? "#8F6710" : "#33302B",
+        flex: 0,
+      },
+    ];
+    if (isDefault) {
+      nameContents.push({
+        type: "text",
+        text: "แนะนำ",
+        size: "xxs",
+        weight: "bold",
+        color: "#B8871B",
+        align: "start",
+        gravity: "center",
+        margin: "sm",
+        flex: 0,
+      });
+    }
     return {
       type: "box",
       layout: "horizontal",
-      paddingAll: "12px",
-      cornerRadius: "14px",
+      paddingAll: "10px",
+      cornerRadius: "12px",
       backgroundColor: isDefault ? "#FFF8E7" : "#FAF9F6",
       borderWidth: "1px",
       borderColor: isDefault ? "#D4AF37" : "#E8E4DC",
@@ -59,18 +82,15 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
           spacing: "none",
           contents: [
             {
-              type: "text",
-              text: `${isDefault ? "⭐ " : ""}${packageDisplayName(p)}`,
-              size: "md",
-              weight: "bold",
-              color: isDefault ? "#8F6710" : "#33302B",
+              type: "box",
+              layout: "baseline",
+              spacing: "none",
+              contents: nameContents,
             },
             {
               type: "text",
-              text: isDefault
-                ? `${packageDetailLine(p)} · คนเลือกมากที่สุด`
-                : packageDetailLine(p),
-              size: "xs",
+              text: packageDetailLine(p),
+              size: "xxs",
               color: isDefault ? "#A4813A" : "#8A857C",
               margin: "xs",
             },
@@ -79,8 +99,8 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
         {
           type: "text",
           text: `${p.priceThb}.-`,
-          flex: 3,
-          size: "xl",
+          flex: 2,
+          size: "lg",
           weight: "bold",
           align: "end",
           gravity: "center",
@@ -131,14 +151,14 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
                 type: "text",
                 text: title,
                 weight: "bold",
-                size: "lg",
+                size: "md",
                 color: "#241C12",
                 wrap: true,
               },
               {
                 type: "text",
                 text: subtitle,
-                size: "xs",
+                size: "xxs",
                 color: "#7A6A58",
                 wrap: true,
               },
@@ -167,7 +187,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
             color: "#D4AF37",
             action: {
               type: "message",
-              label: `จ่าย ${def.priceThb} เปิดเลย`,
+              label: `จ่าย ${def.priceThb}`,
               text: `จ่าย ${def.priceThb}`,
             },
           },
