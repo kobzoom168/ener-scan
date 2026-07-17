@@ -37,11 +37,16 @@ const cardCache = new Map();
 const CARD_CACHE_MAX = 200;
 
 function escapeXml(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return (
+    String(s ?? "")
+      // ⚠️ resvg-js วาดสระอำตัวประกอบ (U+0E33) เพี้ยน — สระ า หาย เหลือแต่นิคหิต
+      // ("อำนาจ" กลายเป็น "อํ​าจ" — เจอบนการ์ดจริง 17 ก.ค.) แตกเป็น ํ + า วาดถูก
+      .replace(/ำ/g, "ํา")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+  );
 }
 
 /** ไอคอนป้ายพลัง (stroke 24×24) ตามแกน */
