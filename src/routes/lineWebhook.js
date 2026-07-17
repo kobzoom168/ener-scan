@@ -295,6 +295,7 @@ import {
   isPromoInquiryText,
   isUnlimitedScanCount,
 } from "../utils/webhookText.util.js";
+import { buildFreeQuotaPaywallFlex } from "../services/flex/paywallOffer.flex.js";
 
 import {
   getPaymentState,
@@ -1478,6 +1479,12 @@ async function handlePaymentCommandTextRoute({
         ].join("\n"),
         "แตะปุ่มด้านล่าง หรือบอกราคามาเลยครับ เดี๋ยวส่งคิวอาร์ให้ทันที",
       ],
+      // การ์ดโปรใบเดียวกับ paywall โควตาหมด — หัวการ์ดปรับตามบริบท "พิมพ์ จ่าย"
+      flexMessage: buildFreeQuotaPaywallFlex(offerPay, {
+        title: "เปิดสิทธิ์เพิ่มวันนี้ ✨",
+        subtitle: "เลือกแพ็กที่สะดวก แตะแถวไหนก็ได้เลยครับ",
+        altText: buildSingleOfferPaywallAltText(offerPay).slice(0, 400),
+      }),
       quickReply: {
         items: sortedPayPkgs.slice(0, 3).map((p) => ({
           type: "action",
