@@ -1457,17 +1457,41 @@ export function buildWaitingBirthdatePaymentDeferredRedirectText() {
 export function buildDeterministicFreeQuotaExhaustedPaywallText(offer, opts = {}) {
   const { lineUserId = null } = opts;
   const o = offer || loadActiveScanOffer();
-  const pkg = getDefaultPackage(o);
-  const price = pkg?.priceThb ?? o.paidPriceThb;
-  const count = pkg?.scanCount ?? o.paidScanCount;
-  const hours = pkg?.windowHours ?? o.paidWindowHours;
-  // Short + clear per กบ (customer feedback: "ยาวไปมั้ยคะ") — no soft support
-  // preamble, อาจารย์ voice, no quote marks.
+  // กบ 17 ก.ค. 2026: โชว์ครบทุกแพ็ก (แบบ B — บันไดราคาเล่าตัวเอง "องค์ละ") ไม่ยาว
+  // ข้อความนี้เป็น altText/fallback ของการ์ด Flex ด้วย (buildFreeQuotaPaywallFlex)
   void lineUserId;
+  const pkgs = (o.packages || [])
+    .filter((p) => p && p.active !== false)
+    .sort((a, b) => a.priceThb - b.priceThb);
+  if (pkgs.length <= 1) {
+    const pkg = getDefaultPackage(o);
+    const price = pkg?.priceThb ?? o.paidPriceThb;
+    const count = pkg?.scanCount ?? o.paidScanCount;
+    const hours = pkg?.windowHours ?? o.paidWindowHours;
+    return [
+      "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ ✨",
+      "",
+      `เปิดสแกนต่อได้เลย แพ็ก ${price} บาท สแกนได้ ${count} ครั้ง ใน ${hours} ชม.`,
+      "",
+      "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์ได้เลยครับ",
+    ].join("\n");
+  }
+  const def = getDefaultPackage(o);
+  const lines = pkgs.map((p) => {
+    const isDef = Boolean(def && p.key === def.key);
+    // "ตกองค์ละ" โชว์เฉพาะแพ็กเด่น (จุดขายคุ้มสุด) — ไม่กางเลขให้แพ็กใหญ่เสียเปรียบ
+    const perScan =
+      isDef && p.scanCount > 1 ? ` ตกองค์ละ ${Math.floor(p.priceThb / p.scanCount)}` : "";
+    const win = p.windowHours >= 48 ? ` ตลอด ${formatOfferWindowThai(p.windowHours)}` : "";
+    const star = isDef ? " คุ้มสุด" : "";
+    return p.scanCount === 1
+      ? `องค์เดียว ${p.priceThb} บาท`
+      : `${p.scanCount} ครั้ง ${p.priceThb} บาท${perScan}${win}${star}`;
+  });
   return [
     "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ ✨",
     "",
-    `เปิดสแกนต่อได้เลย แพ็ก ${price} บาท สแกนได้ ${count} ครั้ง ใน ${hours} ชม.`,
+    ...lines,
     "",
     "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์ได้เลยครับ",
   ].join("\n");
@@ -1484,16 +1508,22 @@ export function getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(
 ) {
   const { lineUserId = null, primaryFirstLine = null } = opts;
   const o = offer || loadActiveScanOffer();
-  const pkg = getDefaultPackage(o);
-  const price = pkg?.priceThb ?? o.paidPriceThb;
-  const count = pkg?.scanCount ?? o.paidScanCount;
-  const hours = pkg?.windowHours ?? o.paidWindowHours;
   void lineUserId;
   void primaryFirstLine;
+  const pkgs = (o.packages || [])
+    .filter((p) => p && p.active !== false)
+    .sort((a, b) => a.priceThb - b.priceThb);
+  const menu = pkgs
+    .map((p) =>
+      p.scanCount === 1
+        ? `องค์เดียว ${p.priceThb}`
+        : `${p.scanCount} ครั้ง ${p.priceThb}${p.windowHours >= 48 ? ` (${formatOfferWindowThai(p.windowHours)})` : ""}`,
+    )
+    .join(" · ");
   const factsAlt = [
     "สิทธิ์ฟรีวันนี้หมดแล้วนะครับ",
     "",
-    `สแกนต่อได้เลย ${price} บาท ได้ ${count} ครั้ง ใน ${hours} ชม. แตะปุ่มด้านล่างหรือบอกอาจารย์ได้เลยครับ`,
+    `สแกนต่อได้เลย ${menu} แตะปุ่มด้านล่างหรือบอกอาจารย์ได้เลยครับ`,
   ].join("\n");
   return [factsAlt];
 }

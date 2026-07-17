@@ -2,6 +2,8 @@ import {
   replyText,
   replyTextWithTrailingSticker,
   replyPaymentInstructions,
+  replyFlex,
+  pushFlex,
 } from "./lineReply.service.js";
 import {
   replyTextSequenceOrSingle,
@@ -216,6 +218,11 @@ export async function sendNonScanReply(opts) {
     trailingStickerMessage = null,
     /** @type {{ items: unknown[] } | null | undefined} — LINE quickReply pills on the sent message */
     quickReply = null,
+    /**
+     * @type {object | null | undefined} — LINE flex message; เมื่อมี จะส่งการ์ดแทน
+     * ข้อความ (text ใช้เป็น altText/dedupe/fallback) — sticker ท้ายถูกงดในโหมดการ์ด
+     */
+    flexMessage = null,
   } = opts;
 
   const uid = String(userId || "").trim();
@@ -292,6 +299,66 @@ export async function sendNonScanReply(opts) {
       const sticker = isStickerMessage(trailingStickerMessage)
         ? trailingStickerMessage
         : null;
+      // โหมดการ์ด Flex: ส่งการ์ดแทนข้อความ (quickReply เกาะบนการ์ด, altText = body)
+      if (flexMessage && typeof flexMessage === "object") {
+        const flexToSend = {
+          ...flexMessage,
+          altText: String(flexMessage.altText || body).slice(0, 400),
+          ...(quickReply && Array.isArray(quickReply.items) && quickReply.items.length
+            ? { quickReply }
+            : {}),
+        };
+        if (!tokenStr || tokenSpent) {
+          await pushFlex(client, uid, flexToSend);
+          logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
+            userId: uid,
+            replyType: rt,
+            semanticKey: skLog,
+            retryCount: i + 1,
+            suppressed: false,
+            reason: tokenSpent
+              ? "scan_flow_reply_token_spent"
+              : "missing_reply_token",
+          });
+        } else {
+          await replyFlex(client, replyToken, flexToSend);
+        }
+        recordSent(uid, dedupeKey, body);
+        void insertLineConversationMessage(uid, "bot", body);
+        if (scanOfferMeta && typeof scanOfferMeta === "object") {
+          console.log(
+            JSON.stringify({
+              event: "SCAN_OFFER_REPLY_BUILT",
+              phase: "send",
+              channel: "flex",
+              userIdPrefix: uid.slice(0, 8),
+              ...scanOfferMeta,
+            }),
+          );
+        }
+        logGateway({
+          userId: uid,
+          replyType: rt,
+          semanticKey: skLog,
+          exactDuplicate: false,
+          semanticDuplicate: false,
+          suppressed: false,
+          retryCount: i + 1,
+        });
+        if (turnPerf) {
+          turnPerf.log("NON_SCAN_REPLY_SENT", {
+            replyType: rt,
+            semanticKey: skLog,
+          });
+        }
+        return {
+          sent: true,
+          suppressed: false,
+          exactDuplicate: false,
+          semanticDuplicate: false,
+          retryCount: i + 1,
+        };
+      }
       if (!tokenStr || tokenSpent) {
         if (tokenSpent && tokenStr) {
           console.log(
