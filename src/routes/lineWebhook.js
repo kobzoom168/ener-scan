@@ -90,6 +90,7 @@ import {
   createPaymentPending,
   ensurePaymentRefForPaymentId,
   getLatestAwaitingPaymentForLineUserId,
+  cancelAwaitingPaymentOnDefer,
   getLatestRecentRejectedPaymentForLineUserId,
   getSlipVerifyStatusByPaymentId,
   markPaymentApprovedAndUnlock,
@@ -3916,6 +3917,55 @@ async function handleTextMessage({ client, event, userId, session }) {
       nextPaymentState: paymentState,
       reason: "payment_state_wins",
     });
+  }
+
+  // กบ 17 ก.ค. 2026: "ไว้ก่อน" ตอนรอโอน (awaiting_slip = ส่ง QR แล้วยังไม่ส่งสลิป)
+  // = ลูกค้าไม่จ่ายตอนนี้ → ยกเลิกรายการให้หลุด flow เลย รูปที่ส่งถัดไปจะได้ไม่โดน
+  // มองเป็นสลิป (เดิม "ไว้ก่อน" ถูก Gemini ตอบรับแต่รายการยังค้าง)
+  // pending_verify (ส่งสลิปแล้ว รอตรวจ) ไม่แตะ — ปล่อยเข้าเลนสถานะเดิม
+  if (
+    paymentState === "awaiting_slip" &&
+    matchesDeterministicPaywallSoftDeclineIntent(text)
+  ) {
+    let cancelled = false;
+    try {
+      if (activePendingPaymentRow?.id) {
+        cancelled = await cancelAwaitingPaymentOnDefer(activePendingPaymentRow.id);
+      }
+    } catch (cancelErr) {
+      console.error(
+        JSON.stringify({
+          event: "AWAITING_PAYMENT_DEFER_CANCEL_FAIL",
+          userId,
+          paymentId: activePendingPaymentRow?.id ?? null,
+          message: String(cancelErr?.message || cancelErr).slice(0, 160),
+        }),
+      );
+    }
+    clearPaymentState(userId);
+    clearSelectedPaymentPackageKey(userId);
+    if (turnCache) turnCache.pendingPaymentRow = null;
+    console.log(
+      JSON.stringify({
+        event: "AWAITING_PAYMENT_DEFERRED_AND_CLEARED",
+        userId,
+        paymentId: activePendingPaymentRow?.id ?? null,
+        cancelled,
+        inputText: text,
+      }),
+    );
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "awaiting_payment_soft_defer_ack",
+      semanticKey: "awaiting_payment_soft_defer_ack",
+      text: "ได้เลยครับ ไว้พร้อมเมื่อไหร่พิมพ์ จ่าย หรือส่งรูปมาสแกนใหม่ได้เลยครับ",
+      alternateTexts: [
+        "โอเคครับ ยกเลิกให้แล้ว อยากสแกนหรือเปิดสิทธิ์ตอนไหนบอกได้เลยครับ",
+      ],
+    });
+    return;
   }
 
   /** Phase-1 Gemini runs only after deterministic shortcuts / micro-intents above each insertion point. */

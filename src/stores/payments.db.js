@@ -130,6 +130,26 @@ async function expirePaymentRowById(paymentId) {
 }
 
 /**
+ * ลูกค้าพิมพ์ "ไว้ก่อน" ตอนรอโอน (awaiting_payment ยังไม่ส่งสลิป) → ยกเลิกรายการ
+ * เพื่อให้หลุด flow จ่ายเงิน รูปที่ส่งถัดไปจะไม่ถูกมองเป็นสลิป (กบ 17 ก.ค. 2026).
+ * ยกเลิกเฉพาะ awaiting_payment — pending_verify (ส่งสลิปแล้ว รอตรวจ) ห้ามแตะ.
+ * @returns {Promise<boolean>} true = ยกเลิกจริง
+ */
+export async function cancelAwaitingPaymentOnDefer(paymentId) {
+  const pid = String(paymentId || "").trim();
+  if (!pid) return false;
+  const { data, error } = await supabase
+    .from("payments")
+    .update({ status: "expired", updated_at: getNowIso() })
+    .eq("id", pid)
+    .eq("status", "awaiting_payment")
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.id);
+}
+
+/**
  * Latest active payment for an app user (for deduping createPaymentPending).
  */
 export async function getLatestActivePaymentForAppUser(appUserId) {
