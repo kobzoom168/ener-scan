@@ -145,9 +145,38 @@ function buildTagSvg({ x, y, label, score, anchorRight }) {
  * @param {string} p.qrDataUri
  * @returns {string} SVG
  */
-function buildShareCardSvg({ objectImageDataUri, powerTotal, gradeLabel, peakLabel, topAxes, axisScores, qrDataUri }) {
+function buildShareCardSvg({ objectImageDataUri, powerTotal, gradeLabel, peakLabel, topAxes, axisScores, compatPercent, qrDataUri }) {
   const peak = escapeXml(peakLabel);
   const lbText = gradeLabel ? `พลังรวม · เกรด ${escapeXml(gradeLabel)}` : "พลังรวม";
+
+  // แถว "เข้ากับดวงเจ้าของ" ★ (กบ 17 ก.ค. — สิ่งที่ลูกค้าซื้อจริง ๆ / จุดชวนเพื่อนสแกน)
+  // โชว์เฉพาะองค์ที่มี % จริงจาก summary.compatibilityPercent (เจ้าของมีวันเกิดในระบบ)
+  const compat = Number.isFinite(Number(compatPercent))
+    ? Math.max(0, Math.min(100, Math.round(Number(compatPercent))))
+    : null;
+  let compatRow = "";
+  if (compat != null) {
+    const fullStars = Math.max(1, Math.min(5, Math.round(compat / 20)));
+    const star = (cx, cy, r, fill) => {
+      const pts = [];
+      for (let i = 0; i < 10; i++) {
+        const rr = i % 2 === 0 ? r : r * 0.44;
+        const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+        pts.push(`${(cx + rr * Math.cos(ang)).toFixed(1)},${(cy + rr * Math.sin(ang)).toFixed(1)}`);
+      }
+      return `<polygon points="${pts.join(" ")}" fill="${fill}"/>`;
+    };
+    const labelW = 196, starsW = 5 * 31, pctW = 62, gap = 15;
+    const sx = 770 - (labelW + gap + starsW + gap + pctW) / 2;
+    const starsX = sx + labelW + gap;
+    const stars = Array.from({ length: 5 }, (_, i) =>
+      star(starsX + i * 31 + 13, 995, 13, i < fullStars ? "#e8c547" : "rgba(201,162,77,0.28)"),
+    ).join("");
+    compatRow = `
+  <text x="${sx}" y="1004" font-family="Kanit" font-weight="500" font-size="26" fill="#cbb686">เข้ากับดวงเจ้าของ</text>
+  ${stars}
+  <text x="${starsX + starsW + gap}" y="1005" font-family="Kanit" font-weight="700" font-size="29" fill="#e8c547">${compat}%</text>`;
+  }
 
   // ป้ายท็อป 3: ขวาบน / ซ้ายกลาง / ขวาล่าง (ตำแหน่ง ×2 จากม็อก 540)
   const tags = Array.isArray(topAxes) ? topAxes.slice(0, 3) : [];
@@ -236,6 +265,7 @@ function buildShareCardSvg({ objectImageDataUri, powerTotal, gradeLabel, peakLab
 
   <text x="770" y="806" text-anchor="middle" font-family="Kanit" font-weight="500" font-size="30" letter-spacing="4" fill="#cbb686">◆  ${escapeXml(lbText)}  ◆</text>
   <text x="770" y="962" text-anchor="middle" font-family="Kanit" font-weight="800" font-size="150" fill="url(#goldTxt)">${Math.round(powerTotal)}</text>
+  ${compatRow}
 
   <rect x="${peakX}" y="1022" width="${peakW}" height="66" rx="33" fill="rgba(201,162,77,0.10)" stroke="#c9a24d" stroke-width="2.5"/>
   <text x="540" y="1068" text-anchor="middle" font-family="Kanit" font-weight="700" font-size="36" fill="#f4e6bd"><tspan fill="#e8c547">เด่น</tspan> ${peak}</text>
@@ -289,6 +319,7 @@ export async function renderShareCardPng(p) {
     peakLabel: p.peakLabel,
     topAxes: Array.isArray(p.topAxes) ? p.topAxes : [],
     axisScores: p.axisScores && typeof p.axisScores === "object" ? p.axisScores : {},
+    compatPercent: p.compatPercent,
     qrDataUri: await getOaQrDataUri(),
   });
 
