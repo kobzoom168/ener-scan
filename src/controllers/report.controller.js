@@ -18,8 +18,7 @@ import {
   buildCrystalBraceletLibraryViewFromPayloadOnly,
 } from "../services/reports/crystalBraceletLibrary.service.js";
 import { env } from "../config/env.js";
-import { supabase } from "../config/supabase.js";
-import { computePaidActive } from "../services/scanOfferAccess.resolver.js";
+import { hasEverPaid } from "../services/everPaid.service.js";
 import {
   countPinnedScanUploadsByLineUser,
   getScanUploadById,
@@ -172,11 +171,11 @@ export async function getReportByToken(req, res) {
     }
   }
 
-  // teaser ขาย 299 บนหน้ารายงาน: อันดับ 1 ของคลังวันนี้ (เบลอ) — เฉพาะเจ้าของที่ยังไม่เป็นสมาชิก
+  // teaser อันดับ 1 ของคลังวันนี้ (เบลอ) บนหน้ารายงาน — เฉพาะเจ้าของที่ยังไม่เคยจ่าย
   // (ทุกเลน: พระ กำไล มอลดาไวท์ — คลัง Daily Pick รวมทุกเลนอยู่แล้ว)
   let dailyPickTeaser = null;
-  // อันดับ 1-2 ของคลังเซ็นเซอร์ไว้ให้สมาชิกรายเดือนเท่านั้น อันดับ 3 เปิดทุกคน (กบ 15 ก.ค.)
-  // accessFull = แพ็กแอคทีฟ (คุมลิสต์เต็ม 10 แถว) / memberAccess = รายเดือน (คุมเบลอ 1-2) — เช็คพลาด = เปิดหมด (fail-open)
+  // กบ 17 ก.ค. 2026: เกตเปลี่ยนเป็น "เคยจ่ายเงินสักครั้ง" — เคยจ่าย = เห็นหมด
+  // (ลิสต์เต็ม + อันดับ 1-2) / ไม่เคยจ่าย = เซ็นเซอร์ — เช็คพลาด = เปิดหมด (fail-open)
   let accessFull = true;
   let memberAccess = true;
   if (normPre.amuletV1 || normPre.crystalBraceletV1 || normPre.moldaviteV1) {
@@ -189,14 +188,9 @@ export async function getReportByToken(req, res) {
         dailyPickTeaser = null;
       }
       try {
-        const { data: u } = await supabase
-          .from("app_users")
-          .select("paid_until,paid_remaining_scans")
-          .eq("line_user_id", uid)
-          .maybeSingle();
-        const remaining = Number(u?.paid_remaining_scans) || 0;
-        accessFull = computePaidActive(u?.paid_until, remaining, new Date());
-        memberAccess = accessFull && remaining >= 900000;
+        const everPaid = await hasEverPaid(uid);
+        accessFull = everPaid;
+        memberAccess = everPaid;
       } catch {
         accessFull = true;
         memberAccess = true;
@@ -624,22 +618,17 @@ export async function getLibraryRankingByToken(req, res) {
   }
   const pinFlash = String(req.query?.pin || "").trim() || null;
 
-  // สเต็ป 2 (กบเคาะแบบ A, 15 ก.ค.): แพ็กแอคทีฟเห็นทั้งคลัง / ไม่มีแพ็กเห็น 7 รายการล่าสุด
-  // + แถวล็อกเบลอ; แท็บ "หนุนดวงวันนี้" เฉพาะแพ็กแอคทีฟ — เช็คพลาด = เปิดหมด (fail-open)
-  // อันดับ 1-2 เซ็นเซอร์ไว้ให้สมาชิกรายเดือนเท่านั้น (memberAccess) อันดับ 3 เปิดทุกคน (กบ 15 ก.ค.)
+  // กบ 17 ก.ค. 2026: เกตเปลี่ยนจาก "แพ็กแอคทีฟ/สมาชิกรายเดือน" → "เคยจ่ายเงินสักครั้ง"
+  // เคยจ่าย = เห็นหมด (คลังเต็ม + อันดับ 1-2 + หนุนดวงวันนี้)
+  // ไม่เคยจ่าย = ล็อกคลังทั้งหน้า (lockedAll) — เช็คพลาด = เปิดหมด (fail-open) ตามเดิม
   let accessFull = true;
   let memberAccess = true;
   let dailyPick = null;
   if (uid) {
     try {
-      const { data: u } = await supabase
-        .from("app_users")
-        .select("paid_until,paid_remaining_scans")
-        .eq("line_user_id", uid)
-        .maybeSingle();
-      const remaining = Number(u?.paid_remaining_scans) || 0;
-      accessFull = computePaidActive(u?.paid_until, remaining, new Date());
-      memberAccess = accessFull && remaining >= 900000;
+      const everPaid = await hasEverPaid(uid);
+      accessFull = everPaid;
+      memberAccess = everPaid;
     } catch {
       accessFull = true;
       memberAccess = true;
@@ -668,6 +657,7 @@ export async function getLibraryRankingByToken(req, res) {
       freeVisibleCount: 7,
       dailyPick,
       liffPayUrl: libLiffPayUrl,
+      lockedAll: !memberAccess,
     });
   } catch (renderErr) {
     console.error(

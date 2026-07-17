@@ -16,6 +16,7 @@ import { supabase } from "../config/supabase.js";
 import { saveBirthdate, getSavedBirthdate } from "../stores/userProfile.db.js";
 import { listScanResultsV2PayloadRowsForLineUser } from "../stores/scanV2/scanResultsV2.db.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
+import { hasEverPaid } from "../services/everPaid.service.js";
 import { getPromptPayQrPublicUrl } from "../utils/promptpayQrPublicUrl.util.js";
 import { ensureUserByLineUserId } from "../stores/users.db.js";
 import {
@@ -812,17 +813,9 @@ export async function buildDailyPickTeaserForLineUser(lineUserId) {
   try {
     const uid = String(lineUserId || "").trim();
     if (!uid) return null;
-    const { data: u } = await supabase
-      .from("app_users")
-      .select("paid_until,paid_remaining_scans")
-      .eq("line_user_id", uid)
-      .maybeSingle();
-    const isMember = Boolean(
-      u?.paid_until &&
-        new Date(u.paid_until).getTime() > Date.now() &&
-        Number(u.paid_remaining_scans) >= 900000,
-    );
-    if (isMember) return null; // สมาชิกเห็นของจริงในแอปอยู่แล้ว
+    // กบ 17 ก.ค. 2026: เกต "เคยจ่ายสักครั้ง" — เคยจ่ายเห็นของจริงในแอปอยู่แล้ว ไม่ต้องมี teaser
+    const isMember = await hasEverPaid(uid).catch(() => false);
+    if (isMember) return null;
     const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
     const pieces = extractPickPieces(rows);
     if (pieces.length < 2) return null; // ชิ้นเดียวไม่มีอะไรให้ล็อก
@@ -892,19 +885,10 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
       await setValueWithTtl(`liff:pickstreak:${userId}`, `${dayKey}|${streak}`, 3 * 24 * 3600);
     } catch {}
 
-    // สมาชิกรายเดือน (ไม่จำกัด) = เทียบทั้งตู้ / อื่น ๆ = เห็นเฉพาะชิ้นล่าสุด
+    // กบ 17 ก.ค. 2026: เคยจ่ายสักครั้ง = เทียบทั้งตู้ / ไม่เคยจ่าย = เห็นเฉพาะชิ้นล่าสุด
     let isMember = false;
     try {
-      const { data: u } = await supabase
-        .from("app_users")
-        .select("paid_until,paid_remaining_scans")
-        .eq("line_user_id", userId)
-        .maybeSingle();
-      isMember = Boolean(
-        u?.paid_until &&
-          new Date(u.paid_until).getTime() > Date.now() &&
-          Number(u.paid_remaining_scans) >= 900000,
-      );
+      isMember = await hasEverPaid(userId);
     } catch {}
 
     if (isMember) {

@@ -411,7 +411,7 @@ export function renderMoldaviteReportV2Html(payload, options = {}) {
         }
         <div class="pk-tease-main">
           <p class="pk-tease-line">อันดับ 1 ของคลังคุณวันนี้ เหมาะกับวันนี้ <b>${escapeHtml(String(pickTeaser.suit))}%</b></p>
-          <p class="pk-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(pickTeaser.total))} ชิ้นกับดาวประจำวันแล้ว สมาชิกรายเดือนเห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
+          <p class="pk-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(pickTeaser.total))} ชิ้นกับดาวประจำวันแล้ว ลูกค้าอาจารย์เห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
         </div>
       </div>
       <a class="pk-tease-cta" href="${escapeHtml(liffPayUrl)}">เปิดดูชิ้นที่หนุนดวงวันนี้</a>
@@ -420,7 +420,7 @@ export function renderMoldaviteReportV2Html(payload, options = {}) {
   const stickyCtaHtml = `
   <nav class="pk-stickycta" aria-label="เริ่มใช้ Ener">
     <a class="pk-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้น</a>
-    ${pickTeaser ? `<a class="pk-cta-member" href="${escapeHtml(liffPayUrl)}">สมาชิก 299</a>` : ""}
+    ${pickTeaser ? `<a class="pk-cta-member" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>` : ""}
   </nav>`;
   const scannedIso = resolveScannedAtIsoForReportMeta(payload);
   const metaScannedLabel = scannedAtLabelThai(scannedIso);

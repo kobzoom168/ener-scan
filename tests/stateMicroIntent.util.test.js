@@ -29,22 +29,27 @@ test("isLoosePayIntentExact recognizes จ่าย / โอน", () => {
 
 test("parsePackageSelectionFromText thaiRelativeAliases (paywall-only)", () => {
   const offer = loadActiveScanOffer();
+  // โปร jul2026 v2: ถูกสุด = 29 รายองค์ / แพงสุด = 399 สมาชิกอาจารย์
   assert.equal(
     parsePackageSelectionFromText("อันถูก", offer, { thaiRelativeAliases: true }),
-    "49baht_4scans_24h",
+    "29baht_1scan_24h",
   );
   assert.equal(
     parsePackageSelectionFromText("แพง", offer, { thaiRelativeAliases: true }),
-    "49baht_4scans_24h",
+    "399baht_30scans_30d",
   );
   assert.equal(parsePackageSelectionFromText("แพง", offer), null);
 });
 
-test("parsePackageSelectionFromText เอา 49 phrase", () => {
+test("parsePackageSelectionFromText เอา <ราคา> phrase", () => {
   const offer = loadActiveScanOffer();
   assert.equal(
     parsePackageSelectionFromText("เอา 49", offer, { allowEoaPricePhrase: true }),
     "49baht_4scans_24h",
+  );
+  assert.equal(
+    parsePackageSelectionFromText("เอา 399", offer, { allowEoaPricePhrase: true }),
+    "399baht_30scans_30d",
   );
 });
 
