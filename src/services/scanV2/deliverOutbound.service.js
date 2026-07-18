@@ -284,11 +284,15 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         await markSent(id);
         releaseScanGate(lineUserId);
         await handleScanResultPostDelivery(msg, payload);
-        // บอกสิทธิ์คงเหลือทันทีหลัง report ถึงมือ (หลัง decrement แล้ว) — เฉพาะ
-        // report สแกนใหม่จริง (ข้าม "เคยสแกนแล้ว" dedupHit) และข้อความสิทธิ์
-        // เนื้อหาเดิมไม่ยิงซ้ำภายใน 30 นาที
+        // กบ 18 ก.ค. 2026 (รอบสอง): ส่ง report จบแล้วเงียบ — ไม่บอกสิทธิ์คงเหลือ/โปรตามหลัง
+        // การแจ้งสิทธิ์หมด+โปรย้ายไปตอนลูกค้าส่งรูปใหม่ (เส้น webhook มีการ์ด paywall อยู่แล้ว)
+        // เปิดพฤติกรรมเดิมกลับได้ด้วย POST_REPORT_QUOTA_NOTICE_ENABLED=true
         try {
-          if (!payload.dedupHit) {
+          const postReportNoticeEnabled =
+            String(process.env.POST_REPORT_QUOTA_NOTICE_ENABLED || "")
+              .trim()
+              .toLowerCase() === "true";
+          if (postReportNoticeEnabled && !payload.dedupHit) {
             const quotaNotice = await buildRemainingQuotaNoticeText(lineUserId);
             const noticeText =
               typeof quotaNotice === "string" ? quotaNotice : quotaNotice?.text;
