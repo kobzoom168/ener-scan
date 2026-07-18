@@ -191,6 +191,15 @@ export async function getReportByToken(req, res) {
         const recentPaid = await hasRecentPaidAccess(uid);
         accessFull = recentPaid;
         memberAccess = recentPaid;
+        if (!recentPaid) {
+          // กบ 19 ก.ค.: คลังไม่เกิน 5 ชิ้น = ไม่เซ็นเซอร์ (นับพลาด = เปิด)
+          const { countUserPiecesForCensorGate } = await import("../routes/liff.routes.js");
+          const n = await countUserPiecesForCensorGate(uid);
+          if (n == null || n <= 5) {
+            accessFull = true;
+            memberAccess = true;
+          }
+        }
       } catch {
         accessFull = true;
         memberAccess = true;
@@ -629,6 +638,15 @@ export async function getLibraryRankingByToken(req, res) {
       const recentPaid = await hasRecentPaidAccess(uid);
       accessFull = recentPaid;
       memberAccess = recentPaid;
+      if (!recentPaid) {
+        // กบ 19 ก.ค.: คลังไม่เกิน 5 ชิ้น = ไม่เซ็นเซอร์ (นับพลาด = เปิด)
+        const { countUserPiecesForCensorGate } = await import("../routes/liff.routes.js");
+        const n = await countUserPiecesForCensorGate(uid);
+        if (n == null || n <= 5) {
+          accessFull = true;
+          memberAccess = true;
+        }
+      }
     } catch {
       accessFull = true;
       memberAccess = true;
