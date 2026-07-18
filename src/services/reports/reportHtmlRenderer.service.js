@@ -74,6 +74,8 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
     return renderMoldaviteReportV2Html(normalized, {
       dailyPickTeaser: renderOpts.dailyPickTeaser ?? null,
       liffPayUrl: renderOpts.liffPayUrl ?? null,
+      accessFull: renderOpts.accessFull ?? true,
+      memberAccess: renderOpts.memberAccess ?? true,
     });
   }
   if (
@@ -92,6 +94,8 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
       crystalBraceletLibrary: renderOpts.crystalBraceletLibrary ?? null,
       dailyPickTeaser: renderOpts.dailyPickTeaser ?? null,
       liffPayUrl: renderOpts.liffPayUrl ?? null,
+      accessFull: renderOpts.accessFull ?? true,
+      memberAccess: renderOpts.memberAccess ?? true,
     });
   }
   console.log(

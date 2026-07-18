@@ -568,14 +568,17 @@ ${row(
  * @param {import("../../services/reports/crystalBraceletLibrary.service.js").CrystalBraceletLibraryView|null} library
  * @param {string} currentToken
  */
-function buildCrystalBraceletLibraryHtml(library, currentToken) {
+function buildCrystalBraceletLibraryHtml(library, currentToken, opts = {}) {
   if (!library || library.totalCount <= 0) return "";
   const top = library.topOverall;
   void currentToken;
+  // กบ 18 ก.ค. 2026: ไม่เคยจ่าย = เห็นคลังกำไลแบบเบลอ+เซ็นเซอร์ + ปุ่มเปิดสิทธิ์ (เหมือนเลนพระ)
+  const censorAll = opts.censorAll === true;
+  const liffPayUrl = String(opts.liffPayUrl || "https://lin.ee/6YZeFZ1");
 
   // Spotlight (อันดับ 1 โดยรวม) — like the amulet library's top card.
   const spotThumb = top?.thumbUrl
-    ? `<div class="cb2-lib-spot-img"><img src="${escapeHtml(top.thumbUrl)}" alt="" width="76" height="76" loading="lazy" decoding="async"/></div>`
+    ? `<div class="cb2-lib-spot-img"><img class="${censorAll ? "cb2-lib-blur" : ""}" src="${escapeHtml(top.thumbUrl)}" alt="" width="76" height="76" loading="lazy" decoding="async"/></div>`
     : `<div class="cb2-lib-spot-img cb2-lib-spot-img--empty" aria-hidden="true"></div>`;
   const spotHtml = top
     ? `<div class="cb2-lib-spot">
@@ -597,11 +600,13 @@ function buildCrystalBraceletLibraryHtml(library, currentToken) {
       const it = h.item;
       const href = it?.publicToken ? `/r/${encodeURIComponent(it.publicToken)}` : "";
       const img = it?.thumbUrl
-        ? `<div class="cb2-lib-ax-img"><img src="${escapeHtml(it.thumbUrl)}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
+        ? `<div class="cb2-lib-ax-img"><img class="${censorAll ? "cb2-lib-blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
         : `<div class="cb2-lib-ax-img cb2-lib-ax-img--empty" aria-hidden="true"></div>`;
-      const cta = href
-        ? `<a class="cb2-lib-ax-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>`
-        : `<span class="cb2-lib-ax-btn cb2-lib-ax-btn--off" aria-disabled="true">ดูรายละเอียด</span>`;
+      const cta = censorAll
+        ? `<a class="cb2-lib-ax-btn" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>`
+        : href
+          ? `<a class="cb2-lib-ax-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>`
+          : `<span class="cb2-lib-ax-btn cb2-lib-ax-btn--off" aria-disabled="true">ดูรายละเอียด</span>`;
       return `<article class="cb2-lib-ax-slide" data-cb2-slide-i="${idx}">
         <p class="cb2-lib-ax-badge">${escapeHtml(h.labelTh)}</p>
         ${img}
@@ -661,11 +666,15 @@ function buildCrystalBraceletLibraryHtml(library, currentToken) {
         .cb2-lib-ax-dot{width:.44rem;height:.44rem;padding:0;border:none;border-radius:50%;background:rgba(217,123,176,.35);cursor:pointer;transition:transform .12s,background .12s}
         .cb2-lib-ax-dot.on{background:var(--cb2-accent);transform:scale(1.2)}
         .cb2-lib-nudge{margin:.55rem 0 0;font-size:.8rem;opacity:.75}
+        .cb2-lib-blur{filter:blur(9px);transform:scale(1.06)}
+        .cb2-lib-unlock{display:block;text-align:center;margin:.6rem 0 0;padding:.55rem;font-size:.84rem;font-weight:800;border-radius:999px;text-decoration:none;color:#04121d;background:linear-gradient(165deg,#b98be0,#d97bb0 55%,#b34d8f)}
       </style>
       <h2 id="cb2-lib-h">คลังกำไลของคุณ</h2>
       <p class="cb2-lib-count">คุณสแกนกำไลไว้แล้ว ${escapeHtml(String(library.totalCount))} เส้น (${escapeHtml(String(library.scanCount))} ครั้ง) 🔮</p>
+      ${censorAll ? `<p class="cb2-lib-count" role="note">อาจารย์จัดอันดับกำไลทุกเส้นของคุณไว้แล้ว — เปิดสิทธิ์ครั้งแรกดูภาพชัดได้ตลอด</p>` : ""}
       ${spotHtml}
       ${carousel}
+      ${censorAll ? `<a class="cb2-lib-unlock" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดูคลังชัด ๆ</a>` : ""}
       ${nudge}
     </section>
     <script>
@@ -856,6 +865,10 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
   const braceletLibraryHtml = buildCrystalBraceletLibraryHtml(
     options.crystalBraceletLibrary || null,
     String(payload.publicToken || "").trim(),
+    {
+      censorAll: options.memberAccess === false,
+      liffPayUrl: options.liffPayUrl || "",
+    },
   );
 
   const canonicalLinkTag = canonicalUrl
