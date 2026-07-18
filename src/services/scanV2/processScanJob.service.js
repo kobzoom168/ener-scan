@@ -70,7 +70,11 @@ import { tryVisionReidBaselineReuse } from "./tryVisionReidBaselineReuse.service
 import { classifyAmuletType } from "../../amulet/amuletTypeClassify.service.js";
 import { matchAmuletTypeByExamples } from "./amuletTypeExampleMatch.service.js";
 import { extractStableVisualFeatures } from "../stableFeatureExtract.service.js";
-import { evaluateRitualScanGate } from "../objectTaxonomy/objectTaxonomy.js";
+import {
+  evaluateRitualScanGate,
+  mergeUnderstandingSources,
+} from "../objectTaxonomy/objectTaxonomy.js";
+import { classifyObjectFormWithGemini } from "../../integrations/gemini/objectFormClassifier.service.js";
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
 import { mergeExternalHintsIntoWordingContext } from "../../utils/webEnrichmentMerge.util.js";
@@ -1269,6 +1273,27 @@ export async function processScanJob(workerId, jobRow) {
         stableFeatureSeed = stableEx.seed;
         stableFeatureFields = stableEx.features;
         objectUnderstandingRaw = stableEx.understanding ?? null;
+        // Gemini second opinion เฉพาะชั้นจำแนก (ธูปหวยแบนหลอก gpt-4.1-mini เป็นพระพิมพ์ได้)
+        try {
+          const geminiForm = await classifyObjectFormWithGemini({
+            imageBuffer,
+            mimeType: "image/jpeg",
+            scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+          });
+          objectUnderstandingRaw = mergeUnderstandingSources(
+            objectUnderstandingRaw,
+            geminiForm,
+          );
+        } catch (gfErr) {
+          console.log(
+            JSON.stringify({
+              event: "GEMINI_OBJECT_FORM_WORKER_EXCEPTION_IGNORED",
+              path: "worker-scan",
+              jobIdPrefix: idPrefix8(jobId),
+              message: String(gfErr?.message || gfErr).slice(0, 200),
+            }),
+          );
+        }
       } catch (stableErr) {
         console.log(
           JSON.stringify({

@@ -565,6 +565,21 @@ export const env = {
     return Math.min(1, Math.max(0, n));
   })(),
   /**
+   * จำแนกประเภทวัตถุด้วย Gemini (กบ 18 ก.ค. — gpt-4.1-mini อ่านธูปหวยแบนเป็นพระพิมพ์
+   * แต่ Gemini รู้จักธูปหวย): second opinion เฉพาะ objectForm/motif ไม่แตะคะแนน
+   * Default on; set `false` เพื่อใช้ผล extractor เดี่ยว
+   */
+  GEMINI_OBJECT_FORM_ENABLED:
+    String(process.env.GEMINI_OBJECT_FORM_ENABLED ?? "true").trim().toLowerCase() !==
+    "false",
+  /** Overrides GEMINI_FRONT_MODEL for object form classifier when set. */
+  GEMINI_OBJECT_FORM_MODEL: String(process.env.GEMINI_OBJECT_FORM_MODEL || "").trim(),
+  GEMINI_OBJECT_FORM_TIMEOUT_MS: (() => {
+    const raw = process.env.GEMINI_OBJECT_FORM_TIMEOUT_MS;
+    const n = raw === undefined || raw === "" ? 12000 : Number(raw);
+    return Number.isFinite(n) ? Math.max(2000, Math.floor(n)) : 12000;
+  })(),
+  /**
    * Scan report: optional Gemini vision pass for crystal subtype (Moldavite routing).
    * Default on; set `false` to use legacy text/heuristic Moldavite detection only.
    */
