@@ -96,3 +96,65 @@ test("กรอง tips พก/สวม เมื่อพกไม่ได้
     ["พกติดตัวไว้เสริมโชค"],
   );
 });
+<<<<<<< HEAD
+=======
+
+test("เกตธูป/เทียน: มั่นใจสูง→reject ก้ำกึ่ง→ask_angle ต่ำ/ไม่ใช่→pass", async () => {
+  const { evaluateRitualScanGate } = await import(
+    "../src/services/objectTaxonomy/objectTaxonomy.js"
+  );
+  assert.equal(
+    evaluateRitualScanGate({ objectForm: "incense_stick", formConfidence: 0.92 }).action,
+    "reject",
+  );
+  assert.equal(
+    evaluateRitualScanGate({ objectForm: "candle", formConfidence: 0.7 }).action,
+    "ask_angle",
+  );
+  assert.equal(
+    evaluateRitualScanGate({ objectForm: "incense_stick", formConfidence: 0.3 }).action,
+    "pass",
+  );
+  // พระ/เครื่องราง ผ่านเสมอ แม้มั่นใจสูง
+  assert.equal(
+    evaluateRitualScanGate({ objectForm: "amulet_tablet", formConfidence: 0.99 }).action,
+    "pass",
+  );
+  assert.equal(evaluateRitualScanGate(null).action, "pass");
+  assert.equal(evaluateRitualScanGate({}).action, "pass");
+});
+
+test("merge สองแหล่ง: Gemini เห็นธูป conf สูงชนะ gpt ที่อ่านเป็นพระพิมพ์", async () => {
+  const { mergeUnderstandingSources, evaluateRitualScanGate } = await import(
+    "../src/services/objectTaxonomy/objectTaxonomy.js"
+  );
+  // เคสจริง 18 ก.ค.: gpt=amulet_tablet 0.8 / gemini=incense_stick 0.9 → ธูปชนะ → เกต reject
+  const merged = mergeUnderstandingSources(
+    { objectForm: "amulet_tablet", formConfidence: 0.8, motifFamily: "other_deity", motifConfidence: 0.7 },
+    { mode: "ok", objectForm: "incense_stick", formConfidence: 0.9, motifFamily: "vessavana_giant", motifConfidence: 0.85 },
+  );
+  assert.equal(merged.objectForm, "incense_stick");
+  assert.equal(merged.motifFamily, "vessavana_giant");
+  assert.equal(evaluateRitualScanGate(merged).action, "reject");
+
+  // gpt มั่นใจพระ + gemini ก็ว่าพระ → ยึด gpt เดิม
+  const keep = mergeUnderstandingSources(
+    { objectForm: "amulet_tablet", formConfidence: 0.9, motifFamily: "monk_guru", motifConfidence: 0.8 },
+    { mode: "ok", objectForm: "amulet_coin", formConfidence: 0.75, motifFamily: "monk_guru", motifConfidence: 0.6 },
+  );
+  assert.equal(keep.objectForm, "amulet_tablet");
+
+  // gpt อ่านไม่ออก + gemini รู้ → เชื่อ gemini
+  const fill = mergeUnderstandingSources(
+    { objectForm: "unknown", formConfidence: 0, motifFamily: "unknown", motifConfidence: 0 },
+    { mode: "ok", objectForm: "takrut", formConfidence: 0.8, motifFamily: "yantra_script", motifConfidence: 0.8 },
+  );
+  assert.equal(fill.objectForm, "takrut");
+
+  // gemini error/disabled → ผล extractor เดิมเป๊ะ
+  const e = { objectForm: "amulet_tablet", formConfidence: 0.8 };
+  assert.equal(mergeUnderstandingSources(e, { mode: "error" }), e);
+  assert.equal(mergeUnderstandingSources(e, null), e);
+  assert.equal(mergeUnderstandingSources(null, null), null);
+});
+>>>>>>> 6b07281 (Gemini second opinion ชั้นจำแนก objectForm (ธูปหวยแบนหลอก gpt-4.1-mini เป็นพระพิมพ์))

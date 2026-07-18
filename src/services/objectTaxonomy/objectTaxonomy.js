@@ -205,6 +205,80 @@ export function buildObjectUnderstanding(raw) {
   };
 }
 
+/**
+ * รวมผลจำแนกจาก 2 แหล่ง: extractor (gpt-4.1-mini) + Gemini second opinion
+ * (กบ 18 ก.ค. — gpt อ่านธูปหวยแบนเป็นพระพิมพ์ 0.8 แต่ Gemini รู้จักธูปหวย)
+ * กติกา: ① Gemini เห็นธูป/เทียน conf ≥0.7 → เชื่อ Gemini (จุดอ่อนของ gpt ที่เจอจริง)
+ * ② extractor อ่านไม่ออก/ต่ำ แต่ Gemini รู้ conf ≥0.7 → เชื่อ Gemini
+ * ③ นอกนั้นยึด extractor เดิม · motif เอาฝั่งที่มั่นใจกว่า · sensitiveFlags รวมสองฝั่ง
+ * @param {object|null} extractorRaw
+ * @param {object|null} geminiRes ผลจาก classifyObjectFormWithGemini (mode ok เท่านั้นที่ใช้)
+ * @returns {object|null} raw รวมแล้ว (โครงเดียวกับ extractor raw)
+ */
+export function mergeUnderstandingSources(extractorRaw, geminiRes) {
+  const g = geminiRes && geminiRes.mode === "ok" ? geminiRes : null;
+  if (!g) return extractorRaw ?? null;
+  const gForm = String(g.objectForm || "").trim().toLowerCase();
+  const gFormKnown = Boolean(OBJECT_FORM_TH[gForm]);
+  const gConf = Number(g.formConfidence) || 0;
+
+  const e = extractorRaw && typeof extractorRaw === "object" ? extractorRaw : null;
+  const eForm = String(e?.objectForm || "").trim().toLowerCase();
+  const eFormKnown = Boolean(OBJECT_FORM_TH[eForm]);
+  const eConf = Number(e?.formConfidence) || 0;
+
+  const geminiSaysRitual = ["incense_stick", "candle"].includes(gForm) && gConf >= 0.7;
+  const extractorWeak = !eFormKnown || eConf < FORM_NEAR_CONF;
+  const useGeminiForm = gFormKnown && (geminiSaysRitual || (extractorWeak && gConf >= 0.7));
+
+  const gMotif = String(g.motifFamily || "").trim().toLowerCase();
+  const gMotifKnown = Boolean(OBJECT_MOTIF_TH[gMotif]);
+  const eMotif = String(e?.motifFamily || "").trim().toLowerCase();
+  const eMotifKnown = Boolean(OBJECT_MOTIF_TH[eMotif]);
+  const gMotifConf = Number(g.motifConfidence) || 0;
+  const eMotifConf = Number(e?.motifConfidence) || 0;
+  const useGeminiMotif = gMotifKnown && (!eMotifKnown || gMotifConf > eMotifConf);
+
+  const flags = Array.isArray(e?.sensitiveFlags) ? e.sensitiveFlags : [];
+
+  return {
+    objectForm: useGeminiForm ? gForm : (e?.objectForm ?? "unknown"),
+    formConfidence: useGeminiForm ? gConf : (e?.formConfidence ?? 0),
+    motifFamily: useGeminiMotif ? gMotif : (e?.motifFamily ?? "unknown"),
+    motifConfidence: useGeminiMotif ? gMotifConf : (e?.motifConfidence ?? 0),
+    sensitiveFlags: flags,
+  };
+}
+
+/**
+ * เกตของใช้พิธี (กบ 18 ก.ค. — ธูปหวยไม่ควรได้คะแนนพลัง):
+ * มั่นใจสูงว่าธูป/เทียน → reject (ไม่อ่านพลัง คืนสิทธิ์) · ก้ำกึ่ง → ask_angle (ขอรูปมุมใหม่ 1 รอบ)
+ * นอกนั้น pass — เกณฑ์ reject สูง (0.85) กันพระจริงโดนลูกหลง
+ * ข้อความหาลูกค้าห้ามฟันธงว่าเป็นธูป/เทียน (กบสั่ง) — reason ใช้ log ภายในเท่านั้น
+ */
+export const RITUAL_REJECT_CONF = 0.85;
+export const RITUAL_ASK_ANGLE_MIN_CONF = 0.5;
+const RITUAL_CONSUMABLE_FORMS = new Set(["incense_stick", "candle"]);
+
+/**
+ * @param {object|null|undefined} raw ผลดิบจาก extractor หรือ objectUnderstanding ที่ normalize แล้ว (ช่องชื่อเดียวกัน)
+ * @returns {{ action: "pass"|"reject"|"ask_angle", reason: string }}
+ */
+export function evaluateRitualScanGate(raw) {
+  const u = buildObjectUnderstanding(raw);
+  if (!u) return { action: "pass", reason: "no_understanding" };
+  if (!RITUAL_CONSUMABLE_FORMS.has(u.objectForm)) {
+    return { action: "pass", reason: "not_ritual_consumable" };
+  }
+  if (u.formConfidence >= RITUAL_REJECT_CONF) {
+    return { action: "reject", reason: `${u.objectForm}:${u.formConfidence}` };
+  }
+  if (u.formConfidence >= RITUAL_ASK_ANGLE_MIN_CONF) {
+    return { action: "ask_angle", reason: `${u.objectForm}:${u.formConfidence}` };
+  }
+  return { action: "pass", reason: `low_conf:${u.formConfidence}` };
+}
+
 /** คำต้องห้ามใน tips เมื่อวัตถุพก/สวมไม่ได้ (ธูป/เทียน/รูปตั้ง/ผ้ายันต์/มีดหมอ) */
 const CARRY_WEAR_TIP_RE =
   /พกติดตัว|พกไว้|พกพา|ห้อยคอ|คล้องคอ|ใส่กระเป๋า|สวมใส่|สวมไว้|ติดตัวไว้|ติดกระเป๋า/;
