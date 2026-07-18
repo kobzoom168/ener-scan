@@ -384,7 +384,8 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
             : "OUTBOUND_PENDING_INTRO";
       /** @type {{ type: "sticker", packageId: string, stickerId: string } | null} */
       let approveSticker = null;
-      if (kind === "approve_notify") {
+      // ข้อความระบบทั่วไปที่ยืมช่อง approve_notify (enqueueAdminSystemText) ไม่แนบสติกเกอร์ฉลอง
+      if (kind === "approve_notify" && payload.noSticker !== true) {
         const st = payload.stickerAfterText;
         approveSticker =
           st &&

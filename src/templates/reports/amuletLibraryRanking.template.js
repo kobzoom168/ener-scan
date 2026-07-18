@@ -17,8 +17,13 @@ import {
  * @param {SacredAmuletLibraryItem} it
  * @param {number} rank
  */
-function rankCardHtml(it, rank) {
+function rankCardHtml(it, rank, opts = {}) {
   // แถวเตี้ยบรรทัดเดียว (โฉมใหม่ กบ 15 ก.ค. — ของเดิมการ์ดใหญ่ 94 ใบเลื่อนไม่ไหว)
+  // กบ 18 ก.ค. 2026: แท็บรายด้าน (เมตตาสูงสุด ฯลฯ) เลขใหญ่ต้องเป็นคะแนน "ด้านนั้น"
+  // ไม่ใช่พลังรวม — เดิมเรียงตามแกนแต่โชว์พลังรวม ลูกค้าเห็นแล้วคิดว่า filter เพี้ยน
+  const axisKey = String(opts.axisKey || "");
+  const axisScoreRaw = axisKey && it.axisScores ? Number(it.axisScores[axisKey]) : NaN;
+  const axisScore = Number.isFinite(axisScoreRaw) ? Math.round(axisScoreRaw) : null;
   const href = `/r/${encodeURIComponent(it.publicToken)}`;
   const img = it.thumbUrl
     ? `<img class="alib-row-img" src="${escapeHtml(it.thumbUrl)}" alt="" width="46" height="46" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
@@ -36,6 +41,10 @@ function rankCardHtml(it, rank) {
       ? `<span class="alib-card-dup-pill alib-card-dup-pill--possible" title="อาจเป็นวัตถุเดียวกับรายการอื่น ยังไม่รวมให้อัตโนมัติเพื่อป้องกันการรวมผิด">อาจซ้ำกับรายการอื่น</span>`
       : "",
   ].join("");
+  const scoreHtml =
+    axisScore != null
+      ? `<b>${escapeHtml(String(axisScore))}</b><span class="alib-row-fit">คะแนนด้านนี้</span>`
+      : `<b>${escapeHtml(String(it.powerTotal))}</b>${fit}`;
   return `
   <a class="alib-row" data-rank="${rank}" href="${escapeHtml(href)}">
     <span class="alib-row-rank">${rank}</span>
@@ -45,7 +54,7 @@ function rankCardHtml(it, rank) {
       <span class="alib-row-peak">เด่นสุด ${escapeHtml(it.peakPowerLabelTh)} · ${escapeHtml(when)}</span>
       ${dupPills ? `<span class="alib-row-dups">${dupPills}</span>` : ""}
     </span>
-    <span class="alib-row-score"><b>${escapeHtml(String(it.powerTotal))}</b>${fit}</span>
+    <span class="alib-row-score">${scoreHtml}</span>
     <span class="alib-row-go" aria-hidden="true">›</span>
   </a>`;
 }
@@ -88,7 +97,7 @@ function panelHtml(list, emptyText = "ยังไม่มีข้อมูล
   const rows = list.map((it, i) =>
     censorAll || (censorTop && i < 2)
       ? lockedRowHtml(it, i + 1, liffPayUrl)
-      : rankCardHtml(it, i + 1),
+      : rankCardHtml(it, i + 1, opts),
   );
   return `<div class="alib-rows">${rows.join("")}</div>`;
 }
@@ -336,17 +345,18 @@ export function renderAmuletLibraryRankingHtml({
       ? [{ id: "today", label: "หนุนดวงวันนี้", list: todayList, emptyText: emptyAxisTab, lockedPanel: !accessFull }]
       : []),
     { id: "fit", label: "เข้ากับคุณที่สุด", list: library.byFit, emptyText: "ยังไม่มีข้อมูลในหมวดนี้" },
-    { id: "protection", label: "คุ้มครองสูงสุด", list: library.byProtection ?? [], emptyText: emptyAxisTab },
-    { id: "metta", label: "เมตตาสูงสุด", list: library.byMetta ?? [], emptyText: emptyAxisTab },
-    { id: "baramee", label: "บารมีสูงสุด", list: library.byBaramee ?? [], emptyText: emptyAxisTab },
-    { id: "luck", label: "โชคลาภสูงสุด", list: library.byLuck ?? [], emptyText: emptyAxisTab },
+    { id: "protection", label: "คุ้มครองสูงสุด", list: library.byProtection ?? [], emptyText: emptyAxisTab, axisKey: "protection" },
+    { id: "metta", label: "เมตตาสูงสุด", list: library.byMetta ?? [], emptyText: emptyAxisTab, axisKey: "metta" },
+    { id: "baramee", label: "บารมีสูงสุด", list: library.byBaramee ?? [], emptyText: emptyAxisTab, axisKey: "baramee" },
+    { id: "luck", label: "โชคลาภสูงสุด", list: library.byLuck ?? [], emptyText: emptyAxisTab, axisKey: "luck" },
     {
       id: "fortune_anchor",
       label: "หนุนดวงสูงสุด",
       list: library.byFortuneAnchor ?? [],
       emptyText: emptyAxisTab,
+      axisKey: "fortune_anchor",
     },
-    { id: "specialty", label: "งานเฉพาะทางสูงสุด", list: library.bySpecialty ?? [], emptyText: emptyAxisTab },
+    { id: "specialty", label: "งานเฉพาะทางสูงสุด", list: library.bySpecialty ?? [], emptyText: emptyAxisTab, axisKey: "specialty" },
   ];
 
   const tabButtons = tabs
@@ -360,7 +370,7 @@ export function renderAmuletLibraryRankingHtml({
     .map(
       (t, i) =>
         `<div class="alib-panel${i === 0 ? " alib-panel--on" : ""}" data-alib-panel="${escapeHtml(t.id)}" role="tabpanel">${
-          t.lockedPanel ? todayLockedPanel : panelHtml(t.list, t.emptyText, panelOpts)
+          t.lockedPanel ? todayLockedPanel : panelHtml(t.list, t.emptyText, { ...panelOpts, axisKey: t.axisKey || "" })
         }</div>`,
     )
     .join("");

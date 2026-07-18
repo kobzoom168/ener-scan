@@ -205,6 +205,7 @@ export async function enqueueAdminSystemText({
       text: String(text || "").slice(0, 4900),
       replyToken: replyToken ? String(replyToken).trim() : null,
       source: String(source || "admin_system"),
+      noSticker: true,
     },
     status: "queued",
   });
