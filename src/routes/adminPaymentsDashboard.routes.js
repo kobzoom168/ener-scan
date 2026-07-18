@@ -12,7 +12,10 @@ import {
   getPaymentDetailForAdmin,
   markPaymentApprovedAndUnlock,
   markPaymentRejected,
+  switchPendingPaymentPackageByAdmin,
 } from "../stores/payments.db.js";
+import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
+import { listActivePackages, findPackageByKey } from "../services/scanOffer.packages.js";
 import { checkScanAccess } from "../services/paymentAccess.service.js";
 import {
   adjustPaidRemainingScansForLineUserByAdmin,
@@ -111,6 +114,31 @@ function adminListTableActionsTd(p) {
   return `<td class="t-actions">${detailLink}${approveReject}</td>`;
 }
 
+
+/** ฟอร์ม "อนุมัติเป็นแพ็ก..." — เคสลูกค้าโอนยอดไม่ตรงแพ็กที่เลือก (กบ 18 ก.ค. 2026) */
+function adminApproveAsFormHtml(postBase) {
+  if (!postBase) return "";
+  let opts = "";
+  try {
+    const offer = loadActiveScanOffer();
+    opts = listActivePackages(offer)
+      .slice()
+      .sort((a, b) => a.priceThb - b.priceThb)
+      .map(
+        (p) =>
+          `<option value="${escapeHtml(p.key)}">${escapeHtml(`${p.priceThb} บาท · ${p.scanCount} ครั้ง`)}</option>`,
+      )
+      .join("");
+  } catch {
+    return "";
+  }
+  if (!opts) return "";
+  return `<form method="POST" action="${postBase}/approve-as" class="adm-inline-form" onsubmit="return confirm('อนุมัติเป็นแพ็กที่เลือก (ตามยอดที่ลูกค้าโอนจริง)?')" style="display:flex;gap:6px;align-items:center;">
+      <select name="packageKey" style="padding:6px 8px;border-radius:8px;border:1px solid var(--line,#444);background:transparent;color:inherit;font-size:0.8rem;">${opts}</select>
+      <button type="submit" class="btn btn-neu" style="padding:6px 10px;font-size:0.78rem;">อนุมัติเป็นแพ็กนี้</button>
+    </form>`;
+}
+
 /** Mobile cards: same POST forms as table row. */
 function adminListCardActionForms(p) {
   const idRaw = String(p?.id ?? "").trim();
@@ -119,7 +147,8 @@ function adminListCardActionForms(p) {
   if (!canAct || !postBase) return "";
   return `
         <form method="POST" action="${postBase}/approve" class="adm-inline-form"><button type="submit" class="btn btn-ok">✅ อนุมัติ</button></form>
-        <form method="POST" action="${postBase}/reject" class="adm-inline-form"><input type="hidden" name="reject_preset" value="blur" /><input type="hidden" name="reject_detail" value="" /><button type="submit" class="btn btn-bad">❌ ปฏิเสธ</button></form>`;
+        <form method="POST" action="${postBase}/reject" class="adm-inline-form"><input type="hidden" name="reject_preset" value="blur" /><input type="hidden" name="reject_detail" value="" /><button type="submit" class="btn btn-bad">❌ ปฏิเสธ</button></form>
+        ${adminApproveAsFormHtml(postBase)}`;
 }
 
 function statusBadgeClass(status) {
@@ -975,6 +1004,7 @@ function renderDetailPage({
     <a class="btn btn-neu" href="/admin/payments?status=pending_verify">← กลับ</a>
     <form method="POST" action="${postBase}/approve" class="adm-inline-form"><button type="submit" class="btn btn-ok">✅ อนุมัติ</button></form>
     <button type="submit" form="detail-reject-form" class="btn btn-bad">❌ ปฏิเสธ</button>
+    ${adminApproveAsFormHtml(postBase)}
   </div>`
       : `<div class="sticky-actions">
     <a class="btn btn-neu" href="/admin/payments?status=${encodeURIComponent(String(p.status))}">← กลับรายการ</a>
@@ -1420,6 +1450,86 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
       }
     }
   });
+
+  // อนุมัติเป็นแพ็กอื่นตามยอดที่โอนจริง (กบ 18 ก.ค. 2026 — เคส 7Kendo โอน 29 เข้ารายการ 49)
+  router.post(
+    "/admin/payments/:id/approve-as",
+    requireAdminSession,
+    express.json(),
+    async (req, res) => {
+      const paymentId = String(req.params?.id || "").trim();
+      const packageKey = String(req.body?.packageKey || "").trim();
+      const offer = loadActiveScanOffer();
+      const pkg = findPackageByKey(offer, packageKey);
+      if (!paymentId || !pkg) {
+        if (prefersAdminJson(req)) {
+          res.status(400).json({ ok: false, message: "paymentId_or_package_invalid" });
+        } else {
+          res.redirect(302, "/admin/payments?status=pending_verify&flash=approve_err");
+        }
+        return;
+      }
+      try {
+        await switchPendingPaymentPackageByAdmin({
+          paymentId,
+          packageCode: pkg.key,
+          packageName: pkg.label,
+          expectedAmount: pkg.priceThb,
+          unlockHours: pkg.windowHours,
+        });
+        const activation = await markPaymentApprovedAndUnlock({
+          paymentId,
+          approvedBy: "admin_dashboard_approve_as",
+        });
+        if (!activation?.lineUserId) throw new Error("activation_missing_lineUserId");
+        try {
+          clearPaymentState(activation.lineUserId);
+        } catch {}
+        console.log(
+          JSON.stringify({
+            event: "ADMIN_APPROVE_AS_APPLIED",
+            paymentId,
+            packageKey: pkg.key,
+            lineUserIdPrefix: String(activation.lineUserId).slice(0, 8),
+            paidRemainingScans: activation.paidRemainingScans ?? null,
+          }),
+        );
+        const isIdempotent =
+          activation.paidUntil == null && activation.paidRemainingScans == null;
+        if (!isIdempotent) {
+          let paymentRefForPush = null;
+          try {
+            paymentRefForPush = await ensurePaymentRefForPaymentId(paymentId);
+          } catch {}
+          const message = await buildPaymentApprovedText({
+            paidRemainingScans: activation.paidRemainingScans,
+            paidUntil: activation.paidUntil,
+            paymentRef: paymentRefForPush,
+            lineUserId: activation.lineUserId,
+            paidPlanCode: activation.paidPlanCode,
+          });
+          await enqueueApproveNotify({
+            lineUserId: activation.lineUserId,
+            paymentId,
+            text: message,
+            replyToken: null,
+          });
+        }
+        if (prefersAdminJson(req)) {
+          res.status(200).json({ ok: true, packageKey: pkg.key });
+        } else {
+          res.redirect(302, "/admin/payments?status=paid&flash=approved");
+        }
+      } catch (err) {
+        console.error("[ADMIN_DASH] approve-as failed:", err);
+        if (prefersAdminJson(req)) {
+          res.status(409).json({ ok: false, message: err?.message || "approve_as_failed" });
+        } else {
+          res.redirect(302, "/admin/payments?status=pending_verify&flash=approve_err");
+        }
+      }
+    },
+  );
 
   router.post("/admin/payments/:id/reject", requireAdminSession, async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();

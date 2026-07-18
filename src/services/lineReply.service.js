@@ -4,7 +4,6 @@ import {
   invokeLinePushMessage,
   invokeLineReplyMessage,
 } from "../utils/lineClientTransport.util.js";
-import { lineStickerPaymentSupportMessage } from "../utils/lineStickerMessage.util.js";
 
 /**
  * @param {*} client
@@ -139,15 +138,21 @@ export async function replyPaymentInstructionWithQr(client, replyToken, opts) {
     throw new Error("replyPaymentInstructionWithQr_missing_qrImageUrl");
   }
 
+  // กบ 18 ก.ค. 2026 (เคส 7Kendo): ยุบ 4 ข้อความ → 2 (สรุป+วิธีส่งสลิปรวมก้อนเดียว,
+  // QR ปิดท้าย) — ข้อความใน call เดียว timestamp ชนกัน แอป LINE เรียง tie สลับได้
+  // ยิ่งน้อยก้อนยิ่งไม่สลับ และสิ่งสุดท้ายที่ค้างตาลูกค้า = QR ที่ต้องสแกน
+  const combinedText = [introText, slipText]
+    .map((t) => String(t || "").trim())
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 4900);
   const messages = [
-    { type: "text", text: introText },
-    lineStickerPaymentSupportMessage(),
+    { type: "text", text: combinedText },
     {
       type: "image",
       originalContentUrl: qrImageUrl,
       previewImageUrl: qrImageUrl,
     },
-    { type: "text", text: slipText },
   ];
 
   console.log("[LINE_REPLY_PAYMENT_QR] start", {
