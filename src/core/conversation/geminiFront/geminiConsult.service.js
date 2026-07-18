@@ -5,7 +5,7 @@ import {
   isGeminiConfigured,
 } from "../../../integrations/gemini/geminiFlash.api.js";
 import { GEMINI_CONSULT_SYSTEM, buildConsultUserPrompt } from "./geminiConsultPrompt.js";
-import { buildScanHistoryContext } from "./recentScanContext.util.js";
+import { buildScanHistoryContext, buildAxisTopContext } from "./recentScanContext.util.js";
 import { buildCustomerFactsContext } from "./customerFactsContext.util.js";
 import { buildKbContext } from "./kbRetrieval.util.js";
 import { supabase } from "../../../config/supabase.js";
@@ -57,13 +57,15 @@ export async function runGeminiConsult(p) {
   let customerFacts = null;
   let kbContext = null;
   let paidActive = false;
+  let axisTop = null;
   const kbPromise = buildKbContext(p.userText).catch(() => null);
   if (p.userId) {
-    [recentScan, customerFacts, kbContext, paidActive] = await Promise.all([
+    [recentScan, customerFacts, kbContext, paidActive, axisTop] = await Promise.all([
       buildScanHistoryContext(p.userId, 6).catch(() => null),
       buildCustomerFactsContext(p.userId).catch(() => null),
       kbPromise,
       isPaidActiveCustomer(p.userId),
+      buildAxisTopContext(p.userId).catch(() => null),
     ]);
   } else {
     kbContext = await kbPromise;
@@ -97,6 +99,7 @@ export async function runGeminiConsult(p) {
     recentScan,
     customerFacts,
     kbContext,
+    axisTop,
   });
   // ชั้นฟรี: ถามคำตอบคำ (กบ 16 ก.ค.) — ตอบตรงคำถาม สั้นสุด ไม่ขยายความเอง
   // (ลูกค้าแพ็กแอคทีฟใช้กติกา 2-4 บรรทัดใน system ตามเดิม = ดูแลเต็ม)

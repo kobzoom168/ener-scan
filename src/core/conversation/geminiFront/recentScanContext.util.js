@@ -124,6 +124,50 @@ export async function buildScanHistoryContext(userId, maxItems = 6) {
 }
 
 /**
+ * ชิ้นเด่นสุดของลูกค้าแยกตามด้านพลัง (กบ 18 ก.ค. 2026) — ใช้ตัวจัดอันดับเดียวกับ
+ * หน้าคลัง (sacredAmuletLibrary: axisHighlights = อันดับ 1 ต่อมิติ ด้วยคะแนนรายแกน)
+ * เพื่อให้ consult ตอบ "ด้านโชคลาภ/เมตตา ชิ้นไหนของผมแรงสุด" ได้ตรงกับหน้าเว็บ + ส่งลิงก์ถูกชิ้น
+ * Best-effort: คืน null เมื่อไม่มีคลัง/พัง (consult ทำงานต่อได้ตามเดิม)
+ * @param {string} userId
+ * @returns {Promise<string | null>}
+ */
+export async function buildAxisTopContext(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return null;
+  try {
+    const { buildSacredAmuletLibraryForLineUser } = await import(
+      "../../../services/reports/sacredAmuletLibrary.service.js"
+    );
+    const lib = await buildSacredAmuletLibraryForLineUser(uid, {});
+    if (!lib || !Number(lib.totalCount)) return null;
+    const lines = [];
+    const fmt = (it, extra) => {
+      if (!it) return null;
+      const url = it.publicToken ? buildPublicReportUrl(String(it.publicToken)) : "";
+      const name = str(it.displayReportId) || str(it.objectLabel) || "ชิ้นนี้";
+      return `${name}${extra ? ` ${extra}` : ""}${url ? ` · ลิงก์รายงาน: ${url}` : ""}`;
+    };
+    for (const h of Array.isArray(lib.axisHighlights) ? lib.axisHighlights : []) {
+      const line = fmt(h?.item, `(คะแนนด้านนี้ ${Math.round(Number(h?.axisScore) || 0)})`);
+      if (line && h?.labelTh) lines.push(`${h.labelTh}: ${line}`);
+    }
+    const top = Array.isArray(lib.byOverall) ? lib.byOverall[0] : null;
+    if (top) {
+      const line = fmt(top, `(พลังรวม ${top.powerTotal ?? "?"})`);
+      if (line) lines.push(`แรงสุดโดยรวม: ${line}`);
+    }
+    const fit = Array.isArray(lib.byFit) ? lib.byFit[0] : null;
+    if (fit && fit.compatPercent != null) {
+      const line = fmt(fit, `(เข้ากับคุณ ${fit.compatPercent}%)`);
+      if (line) lines.push(`เข้ากับคุณที่สุด: ${line}`);
+    }
+    return lines.length ? lines.join("\n") : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Single latest scan (kept for callers that only want the most recent line).
  * @param {string} userId
  * @returns {Promise<string | null>}
