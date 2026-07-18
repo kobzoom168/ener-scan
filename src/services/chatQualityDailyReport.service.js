@@ -15,6 +15,7 @@ import {
 } from "../integrations/gemini/geminiFlash.api.js";
 import { env } from "../config/env.js";
 import { sendTelegramText, isTelegramConfigured } from "./telegramNotify.service.js";
+import { setAppSetting } from "../stores/appSettings.db.js";
 
 const REPORT_HOUR_BKK = (() => {
   const n = Number(process.env.CHAT_QUALITY_REPORT_HOUR);
@@ -240,6 +241,15 @@ export async function runChatQualityDailySweep(now = new Date()) {
     analyzeFailed,
     truncatedUsers,
   });
+  // เก็บฉบับล่าสุดให้ Hermes Agent ดึงผ่าน /internal/chat-quality/latest (best-effort)
+  try {
+    await setAppSetting("chat_quality_last_report", {
+      dateKey,
+      text: report,
+      createdAt: new Date().toISOString(),
+    });
+  } catch {}
+
   const sent = await sendTelegramText(report);
   console.log(
     JSON.stringify({

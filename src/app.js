@@ -7,6 +7,7 @@ import { env } from "./config/env.js";
 import { getGeminiFrontMode } from "./core/conversation/geminiFront/geminiFront.featureFlags.js";
 import { lineWebhookRouter } from "./routes/lineWebhook.js";
 import createAdminAuthRouter from "./routes/adminAuth.routes.js";
+import createChatQualityReportRouter from "./routes/chatQualityReport.routes.js";
 import createAdminPaymentsDashboardRouter from "./routes/adminPaymentsDashboard.routes.js";
 import createAdminKbRouter from "./routes/adminKb.routes.js";
 import createAdminTypesRouter from "./routes/adminTypes.routes.js";
@@ -199,6 +200,7 @@ app.get("/debug/payment-access/:lineUserId", async (req, res) => {
   }
 });
 
+app.use(createChatQualityReportRouter());
 app.use(createAdminAuthRouter());
 app.use(createAdminPaymentsDashboardRouter(lineClient));
 app.use(createAdminKbRouter());
