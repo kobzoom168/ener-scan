@@ -147,9 +147,22 @@ export async function buildAxisTopContext(userId) {
       const name = str(it.displayReportId) || str(it.objectLabel) || "ชิ้นนี้";
       return `${name}${extra ? ` ${extra}` : ""}${url ? ` · ลิงก์รายงาน: ${url}` : ""}`;
     };
-    for (const h of Array.isArray(lib.axisHighlights) ? lib.axisHighlights : []) {
-      const line = fmt(h?.item, `(คะแนนด้านนี้ ${Math.round(Number(h?.axisScore) || 0)})`);
-      if (line && h?.labelTh) lines.push(`${h.labelTh}: ${line}`);
+    // ใช้ by* arrays = แหล่งเดียวกับแท็บหน้าคลัง (เรียงตามคะแนนแกนจริง) —
+    // ห้ามใช้ axisHighlights (carousel กันชิ้นซ้ำข้ามด้าน) ไม่งั้น AI ตอบขัดกับหน้าเว็บ
+    const AXES = [
+      ["byProtection", "protection", "คุ้มครอง"],
+      ["byMetta", "metta", "เมตตา"],
+      ["byBaramee", "baramee", "บารมี"],
+      ["byLuck", "luck", "โชคลาภ"],
+      ["byFortuneAnchor", "fortune_anchor", "หนุนดวง"],
+      ["bySpecialty", "specialty", "งานเฉพาะทาง"],
+    ];
+    for (const [listKey, axisKey, labelTh] of AXES) {
+      const it = Array.isArray(lib[listKey]) ? lib[listKey][0] : null;
+      if (!it) continue;
+      const sc = it.axisScores ? Math.round(Number(it.axisScores[axisKey]) || 0) : null;
+      const line = fmt(it, sc != null ? `(คะแนนด้าน${labelTh} ${sc})` : "");
+      if (line) lines.push(`${labelTh}สูงสุด: ${line}`);
     }
     const top = Array.isArray(lib.byOverall) ? lib.byOverall[0] : null;
     if (top) {
