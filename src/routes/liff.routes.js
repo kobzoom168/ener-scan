@@ -805,6 +805,22 @@ function pickPieceKey(pc) {
 }
 
 /**
+ * นับชิ้นในคลังลูกค้า (รวมทุกเลน — ชุดเดียวกับ Daily Pick) สำหรับเกตเซ็นเซอร์
+ * กบ 19 ก.ค. 2026: คลังไม่เกิน 5 ชิ้น = ไม่เซ็นเซอร์ (ยังไม่มีอะไรให้เสียดาย ให้สะสมก่อน)
+ * @returns {Promise<number | null>} null = นับไม่ได้ ให้ผู้เรียก fail-open
+ */
+export async function countUserPiecesForCensorGate(lineUserId) {
+  try {
+    const uid = String(lineUserId || "").trim();
+    if (!uid) return null;
+    const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
+    return extractPickPieces(rows).length;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Teaser สำหรับหน้ารายงาน HTML (คนยังไม่เป็นสมาชิก): อันดับ 1 ของคลังวันนี้
  * ตัวเลขชุดเดียวกับ Daily Pick ใน LIFF เป๊ะ (สูตรเดียว วันเดียว ผลเดียว — กันเลขไม่ตรงกัน)
  * @returns {Promise<null | { suit: number, img: string|null, total: number }>}
@@ -818,7 +834,8 @@ export async function buildDailyPickTeaserForLineUser(lineUserId) {
     if (isMember) return null;
     const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
     const pieces = extractPickPieces(rows);
-    if (pieces.length < 2) return null; // ชิ้นเดียวไม่มีอะไรให้ล็อก
+    // กบ 19 ก.ค.: คลังไม่เกิน 5 ชิ้น = ไม่เซ็นเซอร์ → ไม่ต้องมี teaser ขาย
+    if (pieces.length <= 5) return null;
     const nowBkk = new Date(Date.now() + 7 * 3600 * 1000);
     const { ranked } = rankPickPieces(pieces, bangkokDateKey(), nowBkk.getUTCDay());
     const top = ranked[0];
@@ -890,6 +907,8 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
     try {
       isMember = await hasRecentPaidAccess(userId);
     } catch {}
+    // กบ 19 ก.ค.: คลังไม่เกิน 5 ชิ้น = เปิดหมดเหมือนสมาชิก (ยังไม่เซ็นเซอร์)
+    if (!isMember && pieces.length <= 5) isMember = true;
 
     if (isMember) {
       return res.json({ ok: true, member: true, dayStar, streak, total: ranked.length, items: ranked.slice(0, 3) });
