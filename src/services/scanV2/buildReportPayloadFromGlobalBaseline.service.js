@@ -4,6 +4,7 @@
  */
 
 import { REPORT_PAYLOAD_VERSION } from "../reports/reportPayload.types.js";
+import { buildObjectUnderstanding } from "../objectTaxonomy/objectTaxonomy.js";
 import { sanitizeHttpsPublicImageUrl } from "../../utils/reports/reportImageUrl.util.js";
 import { parseScanText } from "../flex/flex.parser.js";
 import { deriveReportWordingFromParsed } from "../reports/reportWording.derive.js";
@@ -116,10 +117,13 @@ export async function buildReportPayloadFromGlobalBaseline(p) {
     scannedAtIso,
     scanRequestId,
     legacyScanResultId,
+    objectUnderstandingRaw = null,
   } = p;
 
   /** จำแนกประเภทวัตถุจาก baseline (ระดับวัตถุ ไม่ผูกผู้ใช้) */
   const obJson = baselineRow?.objectBaselineJson;
+  // ผลจำแนกสดรอบนี้ (Gemini ใน reuse path) ชนะของเก่าใน baseline — ของเก่าอาจอ่านผิด (เคสธูป 18 ก.ค.)
+  const freshUnderstanding = buildObjectUnderstanding(objectUnderstandingRaw);
   const baselineObjectUnderstanding =
     obJson &&
     typeof obJson === "object" &&
@@ -303,8 +307,8 @@ export async function buildReportPayloadFromGlobalBaseline(p) {
       objectImageUrl,
       objectLabel: "วัตถุจากการสแกน",
       objectType: "",
-      ...(baselineObjectUnderstanding
-        ? { objectUnderstanding: baselineObjectUnderstanding }
+      ...(freshUnderstanding || baselineObjectUnderstanding
+        ? { objectUnderstanding: freshUnderstanding || baselineObjectUnderstanding }
         : {}),
     },
     summary: {
