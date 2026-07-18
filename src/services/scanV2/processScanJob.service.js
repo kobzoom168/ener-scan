@@ -70,14 +70,11 @@ import { tryVisionReidBaselineReuse } from "./tryVisionReidBaselineReuse.service
 import { classifyAmuletType } from "../../amulet/amuletTypeClassify.service.js";
 import { matchAmuletTypeByExamples } from "./amuletTypeExampleMatch.service.js";
 import { extractStableVisualFeatures } from "../stableFeatureExtract.service.js";
-<<<<<<< HEAD
-=======
 import {
   evaluateRitualScanGate,
   mergeUnderstandingSources,
 } from "../objectTaxonomy/objectTaxonomy.js";
 import { classifyObjectFormWithGemini } from "../../integrations/gemini/objectFormClassifier.service.js";
->>>>>>> 6b07281 (Gemini second opinion ชั้นจำแนก objectForm (ธูปหวยแบนหลอก gpt-4.1-mini เป็นพระพิมพ์))
 import { maybeRunWebEnrichment } from "../webEnrichment/webEnrichment.service.js";
 import { getWebEnrichmentEligibility } from "../webEnrichment/webEnrichment.service.js";
 import { mergeExternalHintsIntoWordingContext } from "../../utils/webEnrichmentMerge.util.js";
@@ -1308,6 +1305,95 @@ export async function processScanJob(workerId, jobRow) {
           }),
         );
       }
+    }
+
+    // เกตของใช้พิธี (กบ 18 ก.ค. — ธูปหวยไม่ควรได้คะแนน): มั่นใจสูงว่าธูป/เทียน → ไม่อ่านพลัง+คืนสิทธิ์
+    // ก้ำกึ่ง → ขอรูปมุมใหม่ 1 รอบ (redis กันถามวน ครั้งถัดไปใน 2 ชม ปล่อยผ่าน) — พระ/เครื่องรางผ่านปกติ
+    // ข้อความหาลูกค้าไม่ฟันธงว่าเป็นอะไร (กบสั่ง) · baseline reuse เช็คจาก objectUnderstanding ใน baseline JSON
+    try {
+      const ritualGateSource =
+        objectUnderstandingRaw ??
+        (baselineRowForPayload?.objectBaselineJson &&
+        typeof baselineRowForPayload.objectBaselineJson === "object" &&
+        !Array.isArray(baselineRowForPayload.objectBaselineJson)
+          ? /** @type {Record<string, unknown>} */ (baselineRowForPayload.objectBaselineJson)
+              .objectUnderstanding ?? null
+          : null);
+      const ritualGate = evaluateRitualScanGate(ritualGateSource);
+      let ritualAction = ritualGate.action;
+      if (ritualAction === "ask_angle") {
+        const askedKey = `scan_v2:ritual_angle_asked:${lineUserId}`;
+        const asked = await getRedisValue(askedKey).catch(() => null);
+        if (asked) {
+          ritualAction = "pass"; // เคยขอมุมแล้วยังก้ำกึ่ง → ปล่อยอ่านปกติ กันถามวน
+        } else {
+          await setValueWithTtl(askedKey, "1", 7200).catch(() => {});
+        }
+      }
+      if (ritualAction === "reject" || ritualAction === "ask_angle") {
+        console.log(
+          JSON.stringify({
+            event: "RITUAL_OBJECT_SCAN_GATE",
+            path: "worker-scan",
+            action: ritualAction,
+            reason: ritualGate.reason,
+            source: objectUnderstandingRaw ? "fresh_extract" : "baseline_reuse",
+            jobIdPrefix: idPrefix8(jobId),
+            lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+            scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+          }),
+        );
+        if (legacyScanResultId) {
+          const refunded = await deleteScanResultForAppUser(
+            legacyScanResultId,
+            String(appUserId),
+          ).catch(() => false);
+          console.log(
+            JSON.stringify({
+              event: "SCAN_QUOTA_REFUND_ON_RITUAL_GATE",
+              path: "worker-scan",
+              jobIdPrefix: idPrefix8(jobId),
+              refunded,
+            }),
+          );
+        }
+        await failJob(
+          jobId,
+          "ritual_object_not_readable",
+          ritualGate.reason,
+          lineUserId,
+          workerId,
+        );
+        await insertOutboundMessage({
+          line_user_id: lineUserId,
+          kind: "scan_result",
+          priority: OUTBOUND_PRIORITY.scan_result,
+          related_job_id: jobId,
+          payload_json: {
+            error: true,
+            rejectReason: "ritual_object_not_readable",
+            objectCheckResult: `ritual_gate:${ritualAction}`,
+            text:
+              ritualAction === "reject"
+                ? "ชิ้นนี้อาจารย์อ่านพลังให้ไม่ได้ครับ ไม่ตัดสิทธิ์นะครับ — เปลี่ยนชิ้นอื่นส่งมาได้เลย"
+                : "ชิ้นนี้ยังอ่านไม่ชัดครับ ขอรูปมุมตรง ๆ เห็นเต็มชิ้นอีกทีนะครับ หรือเปลี่ยนชิ้นอื่นก็ได้ ไม่ตัดสิทธิ์ครับ",
+            accessSource: job.access_source,
+            appUserId,
+          },
+          status: "queued",
+        });
+        await updateScanRequestStatus(scanRequestId, "failed");
+        return;
+      }
+    } catch (ritualErr) {
+      console.log(
+        JSON.stringify({
+          event: "RITUAL_OBJECT_SCAN_GATE_ERROR_IGNORED",
+          path: "worker-scan",
+          jobIdPrefix: idPrefix8(jobId),
+          message: String(ritualErr?.message || ritualErr).slice(0, 200),
+        }),
+      );
     }
 
     const objectCheckConfidence =
