@@ -1542,6 +1542,81 @@ async function handlePaymentCommandTextRoute({
     return true;
   }
 
+  // กบ 18 ก.ค. 2026 (เคส 7Kendo กด 29→49 วนไปมา): สลับแพ็กตอนมีรายการรอโอนค้าง
+  // ครั้งแรก = เปลี่ยนให้เลย (intro บอกชัดว่ายกเลิกอันเก่า ยึดอันใหม่)
+  // ครั้งที่ 2+ ใน 10 นาที = หยุดยิง QR ยกเลิกรายการค้าง แล้วถามสรุปว่าจะเอาโปรไหน
+  let switchedFromPriceThb = null;
+  if (
+    rowForPayIntent &&
+    String(rowForPayIntent.status) === "awaiting_payment" &&
+    String(rowForPayIntent.package_code || "") &&
+    String(rowForPayIntent.package_code) !== String(paidPackage.key)
+  ) {
+    let paySwitchCount = 1;
+    try {
+      paySwitchCount = await incrementCounterWithTtl(
+        `scan_v2:pay_switch:${userId}`,
+        600,
+      );
+    } catch {
+      paySwitchCount = 1;
+    }
+    if (paySwitchCount >= 2) {
+      try {
+        await cancelAwaitingPaymentOnDefer(rowForPayIntent.id);
+      } catch (cancelErr) {
+        console.error(
+          JSON.stringify({
+            event: "PAY_SWITCH_CANCEL_OLD_FAIL",
+            userId,
+            paymentId: rowForPayIntent.id ?? null,
+            message: String(cancelErr?.message || cancelErr).slice(0, 160),
+          }),
+        );
+      }
+      clearPaymentState(userId);
+      clearSelectedPaymentPackageKey(userId);
+      if (turnCache) turnCache.pendingPaymentRow = null;
+      const menuPkgs = [...activePayPkgs].sort((a, b) => a.priceThb - b.priceThb);
+      console.log(
+        JSON.stringify({
+          event: "PAYMENT_SWITCH_CONFIRM_PROMPT",
+          userId,
+          paySwitchCount,
+          fromPackage: String(rowForPayIntent.package_code),
+          toPackage: String(paidPackage.key),
+        }),
+      );
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "payment_switch_confirm_prompt",
+        semanticKey: "payment_switch_confirm_prompt",
+        text: [
+          "เดี๋ยวสับสนครับ สรุปจะเอาโปรไหนดีครับ",
+          ...menuPkgs.map((pkg) => formatOfferPackageLineThai(pkg)),
+          "",
+          "บอกมาคำเดียว เดี๋ยวอาจารย์ส่ง QR อันเดียวจบเลยครับ",
+        ].join("\n"),
+        alternateTexts: [
+          "สรุปเอาแพ็กไหนดีครับ บอกราคามาได้เลย เดี๋ยวส่ง QR ให้อันเดียวจบครับ",
+        ],
+        quickReply: {
+          items: [
+            ...menuPkgs.slice(0, 3).map((pkg) => ({
+              type: "action",
+              action: { type: "message", label: `จ่าย ${pkg.priceThb}`, text: `จ่าย ${pkg.priceThb}` },
+            })),
+            { type: "action", action: { type: "message", label: "ไว้ก่อน", text: "ไว้ก่อน" } },
+          ],
+        },
+      });
+      return true;
+    }
+    switchedFromPriceThb = Number(rowForPayIntent.expected_amount) || null;
+  }
+
   const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
   // เครดิตอัปเกรด: เพิ่งจ่ายแพ็กเริ่มต้นภายในกำหนด → รายเดือนหักให้อัตโนมัติ (299→250)
   let upgradeCredit = null;
@@ -1624,6 +1699,7 @@ async function handlePaymentCommandTextRoute({
     lineUserId: userId,
     amountThb: payAmountThb,
     creditFromThb: upgradeCredit ? upgradeCredit.creditThb : null,
+    switchedFromPriceThb,
   });
   const slipText = buildPaymentQrSlipText();
 

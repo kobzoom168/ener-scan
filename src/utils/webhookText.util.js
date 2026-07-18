@@ -378,6 +378,7 @@ export function buildPaymentQrIntroFactsText({
   paidPackage = null,
   amountThb = null,
   creditFromThb = null,
+  switchedFromPriceThb = null,
 } = {}) {
   // ส่งคู่กับ QR = สรุปรายการให้ชัดก่อนโอน (กบ: ต้องเห็นยอดโอน + โปรที่เลือก)
   const offer = loadActiveScanOffer();
@@ -396,10 +397,21 @@ export function buildPaymentQrIntroFactsText({
           `เหลือยอดโอน ${payThb} บาท`,
         ]
       : [`ยอดโอน ${payThb} บาท`];
+  // กบ 18 ก.ค. 2026 (เคส 7Kendo สลับ 29→49 แล้วงงยอด): เปลี่ยนแพ็ก = บอกชัดในสรุป
+  // ว่ารายการเดิมยกเลิกแล้ว ยึดรายการนี้อันเดียว — กันข้อความเก่าในแชตหลอกตา
+  const switchHeader =
+    Number(switchedFromPriceThb) >= 1 && Number(switchedFromPriceThb) !== payThb
+      ? [
+          `เปลี่ยนจากแพ็ก ${Number(switchedFromPriceThb)} บาท เป็นแพ็กนี้ให้แล้วนะครับ รายการเดิมยกเลิกเรียบร้อย`,
+          "",
+        ]
+      : [];
   const base = [
+    ...switchHeader,
     "สรุปยอดก่อนโอนครับ",
     `โปร ${pkgLabel}`,
     ...amountLines,
+    ...(switchHeader.length ? ["ยึดตามรายการนี้อันเดียวนะครับ"] : []),
     "",
     "สแกน QR ด้านล่างได้เลย โอนเสร็จส่งสลิปในแชตนี้",
   ].join("\n");
@@ -417,11 +429,18 @@ export function buildPaymentQrIntroText({
   lineUserId = null,
   amountThb = null,
   creditFromThb = null,
+  switchedFromPriceThb = null,
 } = {}) {
   // Short + clean — no server-cost preamble (per กบ). Facts already carry the
   // friendly อาจารย์ line + payment ref.
   void lineUserId;
-  return buildPaymentQrIntroFactsText({ paymentRef, paidPackage, amountThb, creditFromThb });
+  return buildPaymentQrIntroFactsText({
+    paymentRef,
+    paidPackage,
+    amountThb,
+    creditFromThb,
+    switchedFromPriceThb,
+  });
 }
 
 /** 168 ชม. → "7 วัน", 24 ชม. → "24 ชม." (ยาวข้ามวันอ่านเป็นวันง่ายกว่า) */

@@ -784,6 +784,47 @@ export async function getPaymentDetailForAdmin(paymentId) {
   return data;
 }
 
+/**
+ * แอดมินสลับแพ็กของรายการ pending_verify ก่อนอนุมัติ (กบ 18 ก.ค. 2026 —
+ * เคส 7Kendo: ลูกค้าโอนยอดแพ็กอื่น สลิปเกาะรายการเดิม แอดมิน "เลือก 29 ไม่ได้")
+ * เฉพาะ pending_verify เท่านั้น — ไม่แตะรายการที่จ่าย/ปฏิเสธไปแล้ว
+ */
+export async function switchPendingPaymentPackageByAdmin({
+  paymentId,
+  packageCode,
+  packageName,
+  expectedAmount,
+  unlockHours,
+} = {}) {
+  const id = String(paymentId || "").trim();
+  const code = String(packageCode || "").trim();
+  if (!id || !code) throw new Error("switch_package_missing_params");
+  const { data, error } = await supabase
+    .from("payments")
+    .update({
+      package_code: code,
+      package_name: String(packageName || code),
+      expected_amount: Number(expectedAmount) || null,
+      unlock_hours: Number(unlockHours) || null,
+      updated_at: getNowIso(),
+    })
+    .eq("id", id)
+    .eq("status", "pending_verify")
+    .select("id,package_code,expected_amount")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("payment_not_pending_verify");
+  console.log(
+    JSON.stringify({
+      event: "ADMIN_PAYMENT_PACKAGE_SWITCHED",
+      paymentIdPrefix: id.slice(0, 8),
+      packageCode: code,
+      expectedAmount: Number(expectedAmount) || null,
+    }),
+  );
+  return data;
+}
+
 export async function markPaymentApprovedAndUnlock({
   paymentId,
   approvedBy = null,
