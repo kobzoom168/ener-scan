@@ -205,6 +205,35 @@ export function buildObjectUnderstanding(raw) {
   };
 }
 
+/**
+ * เกตของใช้พิธี (กบ 18 ก.ค. — ธูปหวยไม่ควรได้คะแนนพลัง):
+ * มั่นใจสูงว่าธูป/เทียน → reject (ไม่อ่านพลัง คืนสิทธิ์) · ก้ำกึ่ง → ask_angle (ขอรูปมุมใหม่ 1 รอบ)
+ * นอกนั้น pass — เกณฑ์ reject สูง (0.85) กันพระจริงโดนลูกหลง
+ * ข้อความหาลูกค้าห้ามฟันธงว่าเป็นธูป/เทียน (กบสั่ง) — reason ใช้ log ภายในเท่านั้น
+ */
+export const RITUAL_REJECT_CONF = 0.85;
+export const RITUAL_ASK_ANGLE_MIN_CONF = 0.5;
+const RITUAL_CONSUMABLE_FORMS = new Set(["incense_stick", "candle"]);
+
+/**
+ * @param {object|null|undefined} raw ผลดิบจาก extractor หรือ objectUnderstanding ที่ normalize แล้ว (ช่องชื่อเดียวกัน)
+ * @returns {{ action: "pass"|"reject"|"ask_angle", reason: string }}
+ */
+export function evaluateRitualScanGate(raw) {
+  const u = buildObjectUnderstanding(raw);
+  if (!u) return { action: "pass", reason: "no_understanding" };
+  if (!RITUAL_CONSUMABLE_FORMS.has(u.objectForm)) {
+    return { action: "pass", reason: "not_ritual_consumable" };
+  }
+  if (u.formConfidence >= RITUAL_REJECT_CONF) {
+    return { action: "reject", reason: `${u.objectForm}:${u.formConfidence}` };
+  }
+  if (u.formConfidence >= RITUAL_ASK_ANGLE_MIN_CONF) {
+    return { action: "ask_angle", reason: `${u.objectForm}:${u.formConfidence}` };
+  }
+  return { action: "pass", reason: `low_conf:${u.formConfidence}` };
+}
+
 /** คำต้องห้ามใน tips เมื่อวัตถุพก/สวมไม่ได้ (ธูป/เทียน/รูปตั้ง/ผ้ายันต์/มีดหมอ) */
 const CARRY_WEAR_TIP_RE =
   /พกติดตัว|พกไว้|พกพา|ห้อยคอ|คล้องคอ|ใส่กระเป๋า|สวมใส่|สวมไว้|ติดตัวไว้|ติดกระเป๋า/;

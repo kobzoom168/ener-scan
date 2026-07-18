@@ -96,3 +96,28 @@ test("กรอง tips พก/สวม เมื่อพกไม่ได้
     ["พกติดตัวไว้เสริมโชค"],
   );
 });
+
+test("เกตธูป/เทียน: มั่นใจสูง→reject ก้ำกึ่ง→ask_angle ต่ำ/ไม่ใช่→pass", async () => {
+  const { evaluateRitualScanGate } = await import(
+    "../src/services/objectTaxonomy/objectTaxonomy.js"
+  );
+  assert.equal(
+    evaluateRitualScanGate({ objectForm: "incense_stick", formConfidence: 0.92 }).action,
+    "reject",
+  );
+  assert.equal(
+    evaluateRitualScanGate({ objectForm: "candle", formConfidence: 0.7 }).action,
+    "ask_angle",
+  );
+  assert.equal(
+    evaluateRitualScanGate({ objectForm: "incense_stick", formConfidence: 0.3 }).action,
+    "pass",
+  );
+  // พระ/เครื่องราง ผ่านเสมอ แม้มั่นใจสูง
+  assert.equal(
+    evaluateRitualScanGate({ objectForm: "amulet_tablet", formConfidence: 0.99 }).action,
+    "pass",
+  );
+  assert.equal(evaluateRitualScanGate(null).action, "pass");
+  assert.equal(evaluateRitualScanGate({}).action, "pass");
+});
