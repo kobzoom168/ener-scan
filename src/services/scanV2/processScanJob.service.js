@@ -1388,7 +1388,7 @@ export async function processScanJob(workerId, jobRow) {
             objectCheckResult: `ritual_gate:${ritualAction}`,
             text:
               ritualAction === "reject"
-                ? "ชิ้นนี้อาจารย์อ่านพลังให้ไม่ได้ครับ ไม่ตัดสิทธิ์นะครับ — เปลี่ยนชิ้นอื่นส่งมาได้เลย"
+                ? "ชิ้นนี้อาจารย์อ่านพลังให้ไม่ได้ครับ ไม่ตัดสิทธิ์นะครับ เปลี่ยนชิ้นอื่นส่งมาได้เลย"
                 : "ชิ้นนี้ยังอ่านไม่ชัดครับ ขอรูปมุมตรง ๆ เห็นเต็มชิ้นอีกทีนะครับ หรือเปลี่ยนชิ้นอื่นก็ได้ ไม่ตัดสิทธิ์ครับ",
             accessSource: job.access_source,
             appUserId,
