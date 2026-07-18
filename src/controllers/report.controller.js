@@ -18,7 +18,7 @@ import {
   buildCrystalBraceletLibraryViewFromPayloadOnly,
 } from "../services/reports/crystalBraceletLibrary.service.js";
 import { env } from "../config/env.js";
-import { hasEverPaid } from "../services/everPaid.service.js";
+import { hasRecentPaidAccess } from "../services/everPaid.service.js";
 import {
   countPinnedScanUploadsByLineUser,
   getScanUploadById,
@@ -174,7 +174,7 @@ export async function getReportByToken(req, res) {
   // teaser อันดับ 1 ของคลังวันนี้ (เบลอ) บนหน้ารายงาน — เฉพาะเจ้าของที่ยังไม่เคยจ่าย
   // (ทุกเลน: พระ กำไล มอลดาไวท์ — คลัง Daily Pick รวมทุกเลนอยู่แล้ว)
   let dailyPickTeaser = null;
-  // กบ 17 ก.ค. 2026: เกตเปลี่ยนเป็น "เคยจ่ายเงินสักครั้ง" — เคยจ่าย = เห็นหมด
+  // กบ 18 ก.ค. 2026: เกต = จ่ายใบล่าสุดไม่เกิน 3 วัน หรือ paid_until ยังไม่หมด (399 เปิดตลอด 30 วัน)
   // (ลิสต์เต็ม + อันดับ 1-2) / ไม่เคยจ่าย = เซ็นเซอร์ — เช็คพลาด = เปิดหมด (fail-open)
   let accessFull = true;
   let memberAccess = true;
@@ -188,9 +188,9 @@ export async function getReportByToken(req, res) {
         dailyPickTeaser = null;
       }
       try {
-        const everPaid = await hasEverPaid(uid);
-        accessFull = everPaid;
-        memberAccess = everPaid;
+        const recentPaid = await hasRecentPaidAccess(uid);
+        accessFull = recentPaid;
+        memberAccess = recentPaid;
       } catch {
         accessFull = true;
         memberAccess = true;
@@ -618,7 +618,7 @@ export async function getLibraryRankingByToken(req, res) {
   }
   const pinFlash = String(req.query?.pin || "").trim() || null;
 
-  // กบ 17 ก.ค. 2026: เกตเปลี่ยนจาก "แพ็กแอคทีฟ/สมาชิกรายเดือน" → "เคยจ่ายเงินสักครั้ง"
+  // กบ 18 ก.ค. 2026: เกต = จ่ายใบล่าสุดไม่เกิน 3 วัน หรือ paid_until ยังไม่หมด (399 เปิดตลอด 30 วัน) — เกิน 3 วันเซ็นเซอร์ ดึงกลับมาจ่ายซ้ำ
   // เคยจ่าย = เห็นหมด (คลังเต็ม + อันดับ 1-2 + หนุนดวงวันนี้)
   // ไม่เคยจ่าย = ล็อกคลังทั้งหน้า (lockedAll) — เช็คพลาด = เปิดหมด (fail-open) ตามเดิม
   let accessFull = true;
@@ -626,9 +626,9 @@ export async function getLibraryRankingByToken(req, res) {
   let dailyPick = null;
   if (uid) {
     try {
-      const everPaid = await hasEverPaid(uid);
-      accessFull = everPaid;
-      memberAccess = everPaid;
+      const recentPaid = await hasRecentPaidAccess(uid);
+      accessFull = recentPaid;
+      memberAccess = recentPaid;
     } catch {
       accessFull = true;
       memberAccess = true;

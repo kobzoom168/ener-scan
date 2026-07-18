@@ -317,6 +317,7 @@
  * @property {string} [socialImageUrl] — optional Open Graph / share image (https); when set, preferred over objectImageUrl for previews
  * @property {string} [objectLabel]
  * @property {string} [objectType]
+ * @property {object} [objectUnderstanding] — จำแนกประเภทวัตถุ (objectTaxonomy): form/motif/usageProfile/readingLineTh — แสดงผล+consult เท่านั้น ไม่แตะคะแนน
  */
 
 /**

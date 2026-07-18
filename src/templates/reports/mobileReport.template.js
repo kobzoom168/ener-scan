@@ -194,6 +194,16 @@ function hero(p) {
   const opening = heroOpeningLine(p);
   const heroModifier = imageUrl ? " hero--with-image" : " hero--no-image";
 
+  // "ลักษณะที่อ่านได้" (กบ 18 ก.ค. — เคสธูปหวย): objectUnderstanding ผ่านเกณฑ์ความมั่นใจแล้ว
+  const ou = p.object?.objectUnderstanding;
+  const ouReading = String(ou?.readingLineTh || "").trim();
+  const ouUsageNote = String(ou?.usageProfile?.usageNoteTh || "").trim();
+  const ouReadingHtml = ouReading
+    ? `<p class="hero-object-kind hero-object-reading">ลักษณะที่อ่านได้: ${escapeHtml(ouReading)}</p>${
+        ouUsageNote ? `<p class="hero-object-kind hero-object-reading">${escapeHtml(ouUsageNote)}</p>` : ""
+      }`
+    : "";
+
   const style = String(p.wording?.heroNaming || "").trim()
     ? `<p class="hero-energy-style">${escapeHtml(String(p.wording.heroNaming).trim())}</p>`
     : "";
@@ -209,6 +219,7 @@ function hero(p) {
         <span class="badge"><span class="badge-inner">Ener Scan</span><span class="badge-sep" aria-hidden="true"></span><span class="badge-sub">รายงานเฉพาะชิ้น</span></span>
         <p class="hero-reading">การอ่านวัตถุชิ้นนี้</p>
         ${typeLabel ? `<p class="hero-object-kind">${escapeHtml(typeLabel)}</p>` : ""}
+        ${ouReadingHtml}
         ${titleBlock}
         ${opening ? `<p class="hero-hook">${escapeHtml(opening)}</p>` : ""}
         <p class="hero-doc-title">รายงานพลังวัตถุ</p>

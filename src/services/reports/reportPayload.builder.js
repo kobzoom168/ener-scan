@@ -1,4 +1,8 @@
 import { env } from "../../config/env.js";
+import {
+  buildObjectUnderstanding,
+  filterTipsForUsageProfile,
+} from "../objectTaxonomy/objectTaxonomy.js";
 import { parseScanText } from "../flex/flex.parser.js";
 import { normalizeScore, stripBullet } from "../flex/flex.utils.js";
 import { REPORT_PAYLOAD_VERSION } from "./reportPayload.types.js";
@@ -216,6 +220,8 @@ function emptyParsedShape() {
  * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
  */
 async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp) {
+  /** จำแนกประเภทวัตถุ — แสดงผล/consult เท่านั้น ไม่แตะคะแนน */
+  const objectUnderstanding = buildObjectUnderstanding(opts.objectUnderstandingRaw ?? null);
   const {
     resultText,
     scanResultId,
@@ -431,6 +437,7 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp)
       // หมวดจากตัวจำแนก (พระเครื่อง/พระบูชา/รูปปั้น/เครื่องราง/คริสตัล...) — ให้ daily pick
       // แยกของพกได้กับของตั้งบูชา (กบ 13 ก.ค.: เทวรูปพกไม่ได้)
       objectType: String(pipelineObjectCategoryOpt || "").trim(),
+      ...(objectUnderstanding ? { objectUnderstanding } : {}),
     },
     summary: {
       energyScore: summaryEnergyScore,
@@ -566,6 +573,7 @@ async function buildCrystalBraceletStrictLaneReportPayload(opts, confidenceDamp)
  * @param {string|null|undefined} [opts.stableFeatureSeed] — vision-stable seed for Moldavite/crystal-bracelet deterministic scores (falls back to scanResultId)
  * @param {string|null|undefined} [opts.scoreImageDHash] — dHash 16-hex ของรูปที่สแกน ผสมเข้า score seed (แยกชิ้นรายรูป; reuse path ดักชิ้นเดิมก่อนถึงตรงนี้)
  * @param {{ primaryColor?: string, materialType?: string, formFactor?: string, textureHint?: string }|null} [opts.stableFeatureFields] — raw vision slugs; enables angle-robust amulet scoring (feature_blend_v3)
+ * @param {object|null} [opts.objectUnderstandingRaw] — ผลดิบ objectForm/motifFamily จาก extractor (เคสธูปหวย) — แสดงผล/consult เท่านั้น ไม่แตะคะแนน
  * @returns {Promise<import("./reportPayload.types.js").ReportPayload>}
  */
 export async function buildReportPayloadFromScan(opts) {
@@ -594,8 +602,12 @@ export async function buildReportPayloadFromScan(opts) {
     stableFeatureSeed: stableFeatureSeedOpt,
     scoreImageDHash: scoreImageDHashOpt = null,
     stableFeatureFields: stableFeatureFieldsOpt = null,
+    objectUnderstandingRaw: objectUnderstandingRawOpt = null,
     amuletTypeLabelThai: amuletTypeLabelThaiOpt = "",
   } = opts;
+
+  /** จำแนกประเภทวัตถุ (ธูป/ตะกรุด/รูปตั้ง…) — null เมื่อ extractor ไม่ได้รัน/อ่านไม่ออก */
+  const objectUnderstanding = buildObjectUnderstanding(objectUnderstandingRawOpt);
 
   const confidenceDamp = resolveConfidenceDampMultiplier(
     objectCheckConfidenceOpt != null &&
@@ -771,7 +783,7 @@ export async function buildReportPayloadFromScan(opts) {
       : "";
   if (ns) weakMoments.push(ns);
 
-  const guidanceTips = [];
+  let guidanceTips = [];
   const ug =
     parsed.usageGuide && parsed.usageGuide !== "-"
       ? String(parsed.usageGuide).trim()
@@ -782,6 +794,13 @@ export async function buildReportPayloadFromScan(opts) {
       ? String(parsed.closing).trim()
       : "";
   if (cl) guidanceTips.push(cl);
+
+  // ของจุดบูชา/ตั้งบูชา (ธูป/เทียน/รูปตั้ง/ผ้ายันต์) ห้ามได้คำแนะนำ "พกติดตัว/สวมใส่"
+  if (objectUnderstanding?.usageProfile) {
+    whatItGives = filterTipsForUsageProfile(whatItGives, objectUnderstanding.usageProfile);
+    bestUseCases = filterTipsForUsageProfile(bestUseCases, objectUnderstanding.usageProfile);
+    guidanceTips = filterTipsForUsageProfile(guidanceTips, objectUnderstanding.usageProfile);
+  }
 
   const rid = String(scanResultId || "").trim();
   const tok = String(publicToken || "").trim();
@@ -1466,6 +1485,7 @@ export async function buildReportPayloadFromScan(opts) {
       // หมวดจากตัวจำแนก (พระเครื่อง/พระบูชา/รูปปั้น/เครื่องราง/คริสตัล...) — ให้ daily pick
       // แยกของพกได้กับของตั้งบูชา (กบ 13 ก.ค.: เทวรูปพกไม่ได้)
       objectType: String(pipelineObjectCategoryOpt || "").trim(),
+      ...(objectUnderstanding ? { objectUnderstanding } : {}),
     },
     summary: {
       energyScore: summaryEnergyScore,

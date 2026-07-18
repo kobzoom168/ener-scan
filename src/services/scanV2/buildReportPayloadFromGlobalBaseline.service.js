@@ -118,6 +118,17 @@ export async function buildReportPayloadFromGlobalBaseline(p) {
     legacyScanResultId,
   } = p;
 
+  /** จำแนกประเภทวัตถุจาก baseline (ระดับวัตถุ ไม่ผูกผู้ใช้) */
+  const obJson = baselineRow?.objectBaselineJson;
+  const baselineObjectUnderstanding =
+    obJson &&
+    typeof obJson === "object" &&
+    !Array.isArray(obJson) &&
+    /** @type {Record<string, unknown>} */ (obJson).objectUnderstanding &&
+    typeof (/** @type {Record<string, unknown>} */ (obJson).objectUnderstanding) === "object"
+      ? /** @type {Record<string, unknown>} */ (obJson).objectUnderstanding
+      : null;
+
   const rid = String(legacyScanResultId || "").trim();
   const tok = String(publicToken || "").trim();
   const objectImageUrl = sanitizeHttpsPublicImageUrl(objectImageUrlRaw);
@@ -292,6 +303,9 @@ export async function buildReportPayloadFromGlobalBaseline(p) {
       objectImageUrl,
       objectLabel: "วัตถุจากการสแกน",
       objectType: "",
+      ...(baselineObjectUnderstanding
+        ? { objectUnderstanding: baselineObjectUnderstanding }
+        : {}),
     },
     summary: {
       energyScore: summaryEnergyScore,

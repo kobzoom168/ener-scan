@@ -63,6 +63,13 @@ function extractRow(row) {
   const object = p.object && typeof p.object === "object" ? p.object : {};
 
   const label = str(object.objectLabel) || str(object.objectType);
+  // จำแนกประเภทวัตถุ (ธูป/ตะกรุด/รูปตั้ง…) — ให้ AI ตอบตามลักษณะการใช้จริง (ธูปห้ามแนะนำให้พก)
+  const ou =
+    object.objectUnderstanding && typeof object.objectUnderstanding === "object"
+      ? object.objectUnderstanding
+      : null;
+  const reading = str(ou?.readingLineTh);
+  const usageNote = str(ou?.usageProfile?.usageNoteTh);
   const power = powerLabel(summary.mainEnergyLabel) || powerLabel(summary.visibleMainLabel);
   const score = num(summary.energyScore);
   const compat = num(summary.compatibilityPercent);
@@ -72,12 +79,14 @@ function extractRow(row) {
   const url = token ? buildPublicReportUrl(token) : "";
 
   if (!label && !power && score == null && compat == null) return null;
-  return { when, label, power, score, compat, band, url };
+  return { when, label, power, score, compat, band, url, reading, usageNote };
 }
 
 function formatItem(it) {
   const parts = [];
   if (it.label) parts.push(`ชื่อ/ประเภท: ${it.label}`);
+  if (it.reading) parts.push(`ลักษณะที่อ่านได้: ${it.reading}`);
+  if (it.usageNote) parts.push(`ข้อควรรู้การใช้: ${it.usageNote}`);
   if (it.power) parts.push(`พลังเด่น: ${it.power}`);
   if (it.score != null) parts.push(`คะแนนพลัง: ${it.score}/10`);
   if (it.compat != null) parts.push(`เข้ากับคุณ: ${it.compat}%${it.band ? ` (${it.band})` : ""}`);

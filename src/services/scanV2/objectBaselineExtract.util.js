@@ -99,6 +99,14 @@ export function extractObjectBaselineFromReportPayload(payloadRaw, context) {
   /** Phase 1A: keep storage path out of JSON (often `{lineUserId}/…`); `global_object_baselines.thumbnail_path` stores DB copy. */
   const thumbInJson = null;
 
+  /** ข้อมูลระดับวัตถุ (ไม่ผูกผู้ใช้) — ให้ reuse ข้ามบัญชีโชว์ "ลักษณะที่อ่านได้" ได้เหมือนสแกนสด */
+  const objectUnderstanding =
+    norm.object?.objectUnderstanding &&
+    typeof norm.object.objectUnderstanding === "object" &&
+    !Array.isArray(norm.object.objectUnderstanding)
+      ? norm.object.objectUnderstanding
+      : null;
+
   /** @type {Record<string, unknown>} */
   const baseline = {
     baselineSchemaVersion: 1,
@@ -107,6 +115,7 @@ export function extractObjectBaselineFromReportPayload(payloadRaw, context) {
     objectCategory,
     peakPowerKey,
     powerCategories,
+    ...(objectUnderstanding ? { objectUnderstanding } : {}),
     visual: {
       dominantColor: dom,
       materialType: mat,
