@@ -12,7 +12,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client, S3_ENABLED } from "../../config/s3Storage.js";
 import { env } from "../../config/env.js";
 import { supabase } from "../../config/supabase.js";
-import { hasEverPaid } from "../everPaid.service.js";
+import { hasRecentPaidAccess } from "../everPaid.service.js";
 import { getAppSetting } from "../../stores/appSettings.db.js";
 
 /**
@@ -319,12 +319,12 @@ export function topAxisLabelFromReport(reportPayload) {
   return best;
 }
 
-/** เคยจ่ายเงินสักครั้ง = ทุกสแกน / ไม่เคยจ่าย = ไม่มีเสียง / "all" ไว้เทส staging */
+/** จ่ายล่าสุดไม่เกิน 3 วัน (หรือ paid_until ยังไม่หมด เช่น 399) = มีเสียง / "all" ไว้เทส staging */
 async function passesAudienceGate(lineUserId, audience) {
   if (String(audience) === "all") return true;
-  // กบ 17 ก.ค. 2026: ฟรีไม่ได้เสียงแล้ว (ตัดเงื่อนไขสแกนครั้งแรกออก) —
-  // เคยจ่ายเงินสักครั้ง = ได้เสียงตลอด · เช็คพลาด = ไม่ส่งเสียง (fail-closed, มีต้นทุน TTS)
-  return hasEverPaid(lineUserId).catch(() => false);
+  // กบ 19 ก.ค. 2026: เสียงใช้กติกาเดียวกับเซ็นเซอร์คลัง — ไม่มียอดจ่ายเกิน 3 วัน = ไม่มีเสียง
+  // (ดึงกลับมาจ่ายซ้ำ) · เช็คพลาด = ไม่ส่งเสียง (fail-closed, มีต้นทุน TTS)
+  return hasRecentPaidAccess(lineUserId).catch(() => false);
 }
 
 /**
