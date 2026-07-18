@@ -182,6 +182,12 @@ export function normalizeReportPayloadForRender(input) {
       ),
       objectLabel: str(objectIn?.objectLabel).trim() || "วัตถุของคุณ",
       objectType: str(objectIn?.objectType),
+      // จำแนกประเภทวัตถุ (ธูป/ตะกรุด/รูปตั้ง…) — โครงสร้างคุมโดย objectTaxonomy แล้ว ส่งผ่านทั้งก้อน
+      ...(objectIn?.objectUnderstanding &&
+      typeof objectIn.objectUnderstanding === "object" &&
+      !Array.isArray(objectIn.objectUnderstanding)
+        ? { objectUnderstanding: objectIn.objectUnderstanding }
+        : {}),
     },
     summary: {
       energyScore,

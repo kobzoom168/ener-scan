@@ -763,6 +763,16 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const shareTitleJson = JSON.stringify(ogTitle);
   const shareTextJson = JSON.stringify("ดูรายงานพลังจาก Ener Scan ได้ที่ลิงก์นี้");
 
+  // "ลักษณะที่อ่านได้" (กบ 18 ก.ค. — เคสธูปหวย): จาก objectUnderstanding ที่ผ่านเกณฑ์ความมั่นใจแล้ว
+  const ou = payload.object?.objectUnderstanding;
+  const ouReading = String(ou?.readingLineTh || "").trim();
+  const ouUsageNote = String(ou?.usageProfile?.usageNoteTh || "").trim();
+  const heroReadingHtml = ouReading
+    ? `<p class="mv2-hero-reading">ลักษณะที่อ่านได้: ${escapeHtml(ouReading)}<span class="mv2-hero-reading-note"> · อ่านจากภาพเท่านั้น ไม่ยืนยันรุ่น/ที่มา</span></p>${
+        ouUsageNote ? `<p class="mv2-hero-reading mv2-hero-reading--usage">${escapeHtml(ouUsageNote)}</p>` : ""
+      }`
+    : "";
+
   const heroImageAlt = `ภาพ${subtypeLabel}ที่ใช้วิเคราะห์`;
   const heroMediaCol = h.objectImageUrl
     ? `<div class="mv2a-media"><img src="${escapeHtml(h.objectImageUrl)}" alt="${escapeHtml(heroImageAlt)}" loading="lazy" /><p class="mv2a-media-caption">ภาพวัตถุที่ใช้ในการวิเคราะห์</p></div>`
@@ -1020,6 +1030,9 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       .mv2-main { font-size: 0.88rem; line-height: 1.36; }
     }
     .mv2-hero-clarifier { font-size: 0.76rem; margin: 0.28rem 0 0; color: var(--mv2a-hero-clarifier); line-height: 1.38; }
+    .mv2-hero-reading { font-size: 0.78rem; margin: 0.3rem 0 0; color: var(--mv2a-hero-clarifier); line-height: 1.4; }
+    .mv2-hero-reading-note { opacity: 0.75; font-size: 0.7rem; }
+    .mv2-hero-reading--usage { opacity: 0.9; }
     .mv2a-toptier {
       margin: 0.55rem 0 0.15rem;
       padding: 0.5rem 0.8rem;
@@ -2440,6 +2453,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
           ${metaBlockHtml}
           <p class="mv2-main">${escapeHtml(h.displayLine || `โทนหลัก · ${h.mainEnergyLabel}`)}</p>
           ${h.clarifierLine ? `<p class="mv2-hero-clarifier">${escapeHtml(h.clarifierLine)}</p>` : ""}
+          ${heroReadingHtml}
         </div>
         ${heroMediaCol}
       </div>

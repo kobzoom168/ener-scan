@@ -162,6 +162,9 @@ export async function processScanJob(workerId, jobRow) {
   /** Raw vision slugs (color/material/form/texture) for angle-robust amulet scoring (feature_blend_v3). */
   /** @type {{ primaryColor?: string, materialType?: string, formFactor?: string, textureHint?: string } | null} */
   let stableFeatureFields = null;
+  /** objectUnderstanding ดิบจาก extractor (เคสธูปหวย) — แสดงผล/consult เท่านั้น ไม่แตะคะแนน */
+  /** @type {object | null} */
+  let objectUnderstandingRaw = null;
 
   console.log(
     JSON.stringify({
@@ -1264,6 +1267,7 @@ export async function processScanJob(workerId, jobRow) {
         });
         stableFeatureSeed = stableEx.seed;
         stableFeatureFields = stableEx.features;
+        objectUnderstandingRaw = stableEx.understanding ?? null;
       } catch (stableErr) {
         console.log(
           JSON.stringify({
@@ -1361,6 +1365,7 @@ export async function processScanJob(workerId, jobRow) {
           stableFeatureSeed,
           scoreImageDHash: imageDHash,
           stableFeatureFields,
+          objectUnderstandingRaw,
           amuletTypeLabelThai,
         });
       }
@@ -1395,6 +1400,7 @@ export async function processScanJob(workerId, jobRow) {
       stableFeatureSeed,
       scoreImageDHash: imageDHash,
       stableFeatureFields,
+      objectUnderstandingRaw,
       amuletTypeLabelThai,
     });
     }

@@ -16,7 +16,7 @@ import { supabase } from "../config/supabase.js";
 import { saveBirthdate, getSavedBirthdate } from "../stores/userProfile.db.js";
 import { listScanResultsV2PayloadRowsForLineUser } from "../stores/scanV2/scanResultsV2.db.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
-import { hasEverPaid } from "../services/everPaid.service.js";
+import { hasRecentPaidAccess } from "../services/everPaid.service.js";
 import { getPromptPayQrPublicUrl } from "../utils/promptpayQrPublicUrl.util.js";
 import { ensureUserByLineUserId } from "../stores/users.db.js";
 import {
@@ -814,7 +814,7 @@ export async function buildDailyPickTeaserForLineUser(lineUserId) {
     const uid = String(lineUserId || "").trim();
     if (!uid) return null;
     // กบ 17 ก.ค. 2026: เกต "เคยจ่ายสักครั้ง" — เคยจ่ายเห็นของจริงในแอปอยู่แล้ว ไม่ต้องมี teaser
-    const isMember = await hasEverPaid(uid).catch(() => false);
+    const isMember = await hasRecentPaidAccess(uid).catch(() => false);
     if (isMember) return null;
     const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
     const pieces = extractPickPieces(rows);
@@ -888,7 +888,7 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
     // กบ 17 ก.ค. 2026: เคยจ่ายสักครั้ง = เทียบทั้งตู้ / ไม่เคยจ่าย = เห็นเฉพาะชิ้นล่าสุด
     let isMember = false;
     try {
-      isMember = await hasEverPaid(userId);
+      isMember = await hasRecentPaidAccess(userId);
     } catch {}
 
     if (isMember) {
