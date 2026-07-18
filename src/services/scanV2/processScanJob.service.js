@@ -1311,15 +1311,28 @@ export async function processScanJob(workerId, jobRow) {
     // ก้ำกึ่ง → ขอรูปมุมใหม่ 1 รอบ (redis กันถามวน ครั้งถัดไปใน 2 ชม ปล่อยผ่าน) — พระ/เครื่องรางผ่านปกติ
     // ข้อความหาลูกค้าไม่ฟันธงว่าเป็นอะไร (กบสั่ง) · baseline reuse เช็คจาก objectUnderstanding ใน baseline JSON
     try {
-      const ritualGateSource =
-        objectUnderstandingRaw ??
-        (baselineRowForPayload?.objectBaselineJson &&
-        typeof baselineRowForPayload.objectBaselineJson === "object" &&
-        !Array.isArray(baselineRowForPayload.objectBaselineJson)
-          ? /** @type {Record<string, unknown>} */ (baselineRowForPayload.objectBaselineJson)
-              .objectUnderstanding ?? null
-          : null);
-      const ritualGate = evaluateRitualScanGate(ritualGateSource);
+      // เคส reuse ชิ้นเดิม (extractor ไม่รัน): understanding เก่าใน baseline อาจมาจาก gpt ที่อ่าน
+      // ธูปเป็นพระพิมพ์ (เคสกบ 18:10) → เรียก Gemini สดจากรูปรอบนี้ก่อนเข้าเกตเสมอ
+      if (!objectUnderstandingRaw && objectCheck === "single_supported") {
+        const baseUnderstanding =
+          baselineRowForPayload?.objectBaselineJson &&
+          typeof baselineRowForPayload.objectBaselineJson === "object" &&
+          !Array.isArray(baselineRowForPayload.objectBaselineJson)
+            ? /** @type {Record<string, unknown>} */ (baselineRowForPayload.objectBaselineJson)
+                .objectUnderstanding ?? null
+            : null;
+        try {
+          const geminiForm = await classifyObjectFormWithGemini({
+            imageBuffer,
+            mimeType: "image/jpeg",
+            scanResultIdPrefix: String(legacyScanResultId || "").slice(0, 8),
+          });
+          objectUnderstandingRaw = mergeUnderstandingSources(baseUnderstanding, geminiForm);
+        } catch {
+          objectUnderstandingRaw = baseUnderstanding;
+        }
+      }
+      const ritualGate = evaluateRitualScanGate(objectUnderstandingRaw);
       let ritualAction = ritualGate.action;
       if (ritualAction === "ask_angle") {
         const askedKey = `scan_v2:ritual_angle_asked:${lineUserId}`;
@@ -1414,6 +1427,7 @@ export async function processScanJob(workerId, jobRow) {
           scannedAtIso: new Date().toISOString(),
           scanRequestId: String(scanRequestId || ""),
           legacyScanResultId: String(legacyScanResultId || ""),
+          objectUnderstandingRaw,
         });
         console.log(
           JSON.stringify({
