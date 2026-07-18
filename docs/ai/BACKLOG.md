@@ -25,6 +25,7 @@
 12. Ener Platform PaaS (ระยะยาว)
 
 ## 🖥 จิปาถะ
+- **โปรเจกต์ใหม่ "Ener Bridge" — วัตถุมงคลไทยสู่ eBay** (คุย 18 ก.ค. 2026): ขายพระเครื่อง+เหล็กไหล/หินชิ้นเล็ก รับตรงจากวัดน่าเชื่อถือ (รายได้ส่วนหนึ่งช่วยวัด — story หลัก) · **เฟส 0 (ตอนนี้): กบลองขายพระตัวเอง manual บน eBay ~1 เดือน** (Payoneer+eBay US, เริ่ม 3-5 องค์เก็บ feedback, EMS มี tracking เท่านั้น, ห้าม claim แท้/ปลุกเสก ใช้ disclaimer ตามศาสตร์ความเชื่อ) · แต้มต่อ: แนบการ์ด Ener Scan ทุกชิ้น + ener-ai เจน listing EN · เฟส 1: ระบบ LIFF ฟอร์มรับของ→eBay Sell API (Inventory/Fulfillment/Notification)→แจ้ง order ผ่าน LINE · เฟส 2 (อีกระยะ): เว็บตัวเอง WordPress+SEO เมื่อมีฐานลูกค้าซื้อซ้ำ · มีพรอมพ์ถาม 4-AI ร่างไว้แล้ว รอยิงหลังได้ข้อมูลจริงจากเฟส 0
 - ลอง kob-dev จาก Mac บ้าน (ลง Tailscale + Windows App แล้วต่อ 100.80.106.63 / เปิด vscode.dev)
 - ไฟล์เศษใน ener-ai (SESSION_HANDOFF.md, ร่างพรอมต์ DeepSeek, รูปเทส) — ไม่ใช้แล้วลบได้
 
