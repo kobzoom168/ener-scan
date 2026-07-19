@@ -1,4 +1,8 @@
 import {
+  detectSingleReportLink,
+  buildReportLinkAutoFlex,
+} from "./flex/reportLinkAuto.flex.js";
+import {
   replyText,
   replyTextWithTrailingSticker,
   replyPaymentInstructions,
@@ -226,6 +230,37 @@ export async function sendNonScanReply(opts) {
   } = opts;
 
   const uid = String(userId || "").trim();
+
+  // กบ 19 ก.ค.: ทุกคำตอบที่มีลิงก์รายงานเดียว (รวมคำตอบ AI สด) → การ์ด Flex อัตโนมัติ
+  // รูปชิ้นจริง + ข้อความเดิมไม่ตายตัว + ปุ่มเปิดรายงาน · หารูปไม่ได้ = การ์ดไม่มีรูป
+  // ปิดได้ด้วย REPORT_LINK_AUTO_FLEX_ENABLED=false
+  let autoFlexMessage = flexMessage;
+  if (
+    !autoFlexMessage &&
+    String(process.env.REPORT_LINK_AUTO_FLEX_ENABLED ?? "true").trim().toLowerCase() !== "false"
+  ) {
+    try {
+      const link = detectSingleReportLink(text);
+      if (link) {
+        let img = null;
+        try {
+          const { getScanResultPayloadByPublicToken } = await import(
+            "../stores/scanV2/scanResultsV2.db.js"
+          );
+          const raw = await getScanResultPayloadByPublicToken(link.token);
+          const payload = typeof raw === "string" ? JSON.parse(raw) : raw;
+          const u = String(payload?.object?.objectImageUrl || "").trim();
+          img = /^https:\/\//i.test(u) ? u : null;
+        } catch {}
+        autoFlexMessage = buildReportLinkAutoFlex({
+          text: String(text || ""),
+          reportUrl: link.url,
+          img,
+        });
+      }
+    } catch {}
+  }
+
   const dedupeKey = resolveDedupeKey(replyType, semanticKey);
   const rt = String(replyType || "").trim() || "unknown";
   const skLog = String(semanticKey || "").trim() || dedupeKey;
@@ -300,10 +335,10 @@ export async function sendNonScanReply(opts) {
         ? trailingStickerMessage
         : null;
       // โหมดการ์ด Flex: ส่งการ์ดแทนข้อความ (quickReply เกาะบนการ์ด, altText = body)
-      if (flexMessage && typeof flexMessage === "object") {
+      if (autoFlexMessage && typeof autoFlexMessage === "object") {
         const flexToSend = {
-          ...flexMessage,
-          altText: String(flexMessage.altText || body).slice(0, 400),
+          ...autoFlexMessage,
+          altText: String(autoFlexMessage.altText || body).slice(0, 400),
           ...(quickReply && Array.isArray(quickReply.items) && quickReply.items.length
             ? { quickReply }
             : {}),
