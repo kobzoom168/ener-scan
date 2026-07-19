@@ -15,6 +15,7 @@ import { insertOutboundMessage } from "../stores/scanV2/outboundMessages.db.js";
 import { OUTBOUND_PRIORITY } from "../stores/scanV2/outboundPriority.js";
 import { hasRecentPaidAccess } from "./everPaid.service.js";
 import { buildPublicReportUrl } from "./reports/reportLink.service.js";
+import { buildDailyPickPushFlex } from "./flex/dailyPickPush.flex.js";
 
 const PUSH_HOUR_BKK = (() => {
   const n = Number(process.env.DAILY_PICK_PUSH_HOUR);
@@ -159,12 +160,19 @@ export async function runDailyLuckyPickSweep(now = new Date()) {
       if (!open) open = await hasRecentPaidAccess(uid).catch(() => false);
 
       const text = open ? buildFullText(pick.top) : buildTeaserText(pick.top);
+      const reportUrl = pick.top.token ? buildPublicReportUrl(pick.top.token) : "";
+      const flexMessage = buildDailyPickPushFlex(pick.top, {
+        mode: open ? "open" : "teaser",
+        reportUrl: reportUrl || undefined,
+        libraryUrl: reportUrl ? `${reportUrl}/library` : undefined,
+        altText: text,
+      });
       await insertOutboundMessage({
         line_user_id: uid,
         kind: "daily_pick_push",
         priority: OUTBOUND_PRIORITY.daily_pick_push ?? 88,
         related_job_id: null,
-        payload_json: { text },
+        payload_json: { text, flexMessage },
         status: "queued",
       });
       sent += 1;

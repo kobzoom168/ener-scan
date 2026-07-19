@@ -181,7 +181,15 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       }
       const qr =
         payload.quickReply && typeof payload.quickReply === "object" ? payload.quickReply : null;
-      await pushText(client, lineUserId, text, qr);
+      const flexMsg =
+        payload.flexMessage && typeof payload.flexMessage === "object"
+          ? payload.flexMessage
+          : null;
+      if (flexMsg) {
+        await pushFlex(client, lineUserId, qr ? { ...flexMsg, quickReply: qr } : flexMsg);
+      } else {
+        await pushText(client, lineUserId, text, qr);
+      }
       await markSent(id);
       console.log(JSON.stringify({ event: "OUTBOUND_SEND_SUCCESS", ...base() }));
       return { sent: true };
