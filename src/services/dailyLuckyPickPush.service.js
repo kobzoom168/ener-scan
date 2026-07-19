@@ -165,6 +165,9 @@ export async function runDailyLuckyPickSweep(now = new Date()) {
         mode: open ? "open" : "teaser",
         reportUrl: reportUrl || undefined,
         libraryUrl: reportUrl ? `${reportUrl}/library` : undefined,
+        dayStar: pick.dayStar,
+        streak: pick.streak,
+        movedUp: pick.movedUp,
         altText: text,
       });
       await insertOutboundMessage({
