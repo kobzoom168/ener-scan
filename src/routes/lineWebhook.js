@@ -323,6 +323,7 @@ import { tryDedupeOnce, isDedupeKeyActive, setValueWithTtl, getValue, clearDedup
 import { getUserPaidUntil } from "../stores/paymentAccess.db.js";
 
 import {
+
   checkGlobalAbuseStatus,
   checkPaymentAbuseStatus,
   checkScanAbuseStatus,
@@ -335,6 +336,36 @@ import {
 } from "../stores/abuseGuard.store.js";
 
 /** Lightweight QA logs (grep: `[WAITING_BIRTHDATE]`). */
+
+/**
+ * ปิด/เปิดแจ้งเตือนหนุนดวงรายเช้า (กบ 19 ก.ค.) — พิมพ์ "หยุดแจ้งเตือน" / "เปิดแจ้งเตือน"
+ * @returns {Promise<boolean>} handled
+ */
+async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, text }) {
+  const t = String(text || "").trim();
+  if (t !== "หยุดแจ้งเตือน" && t !== "ปิดแจ้งเตือน" && t !== "เปิดแจ้งเตือน") return false;
+  const { setDailyPickOptout, clearDailyPickOptout } = await import(
+    "../services/dailyLuckyPickPush.service.js"
+  );
+  let reply;
+  if (t === "เปิดแจ้งเตือน") {
+    await clearDailyPickOptout(userId).catch(() => {});
+    reply = "เปิดการแจ้งเตือนหนุนดวงตอนเช้าให้แล้วครับ วันไหนมีชิ้นหนุนแรงจะส่งมาบอกครับ";
+  } else {
+    await setDailyPickOptout(userId).catch(() => {});
+    reply = "ปิดการแจ้งเตือนหนุนดวงตอนเช้าให้แล้วครับ พิมพ์ เปิดแจ้งเตือน เมื่ออยากรับอีกครั้ง";
+  }
+  await sendNonScanReply({
+    client,
+    userId,
+    replyToken,
+    replyType: "daily_pick_notify_toggle",
+    semanticKey: "daily_pick_notify_toggle",
+    text: reply,
+  });
+  return true;
+}
+
 function logWaitingBirthdate(event, payload = {}) {
   console.log(`[WAITING_BIRTHDATE] ${event}`, payload);
 }
@@ -6584,6 +6615,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           });
           return;
         }
+        if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
         if (text === "สแกนพลังงาน") {
           let savedBirthdate = null;
           try {
@@ -7319,6 +7351,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
+  if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;
     try {
