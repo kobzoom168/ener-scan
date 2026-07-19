@@ -3893,6 +3893,8 @@ async function handleTextMessage({ client, event, userId, session }) {
     });
     return;
   }
+  // ข้อความจริง → ล้างนับสติกเกอร์ซ้ำ (กติกาบันได ครับ/เงียบ/มีอะไรไหมครับ)
+  void clearDedupeKey(`scan_v2:sticker_streak:${userId}`).catch(() => {});
 
   // ฮวงจุ้ยจากรูป: explicit command (LIFF service row / typed keyword) arms the
   // photo mode — the next image goes to the feng-shui reader, not the scan lane.
