@@ -98,3 +98,20 @@ export async function getUploadIdForScanResultV2AndLineUser(
   const up = String(job.upload_id || "").trim();
   return up || null;
 }
+
+/**
+ * ดึง payload ตาม html_public_token (การ์ดอัตโนมัติจากลิงก์รายงานในคำตอบ — กบ 19 ก.ค.)
+ * @param {string} token
+ * @returns {Promise<unknown | null>} report_payload_json หรือ null
+ */
+export async function getScanResultPayloadByPublicToken(token) {
+  const t = String(token || "").trim();
+  if (!t) return null;
+  const { data, error } = await supabase
+    .from("scan_results_v2")
+    .select("report_payload_json")
+    .eq("html_public_token", t)
+    .limit(1);
+  if (error) throw error;
+  return Array.isArray(data) && data.length ? data[0].report_payload_json : null;
+}
