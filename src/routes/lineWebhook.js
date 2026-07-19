@@ -341,6 +341,92 @@ import {
  * ปิด/เปิดแจ้งเตือนหนุนดวงรายเช้า (กบ 19 ก.ค.) — พิมพ์ "หยุดแจ้งเตือน" / "เปิดแจ้งเตือน"
  * @returns {Promise<boolean>} handled
  */
+
+/**
+ * ลูกค้าพิมพ์ถามหาชิ้นเด่นรายด้านแบบสั้น ๆ ("ถ้าโชคลาภละ" "ขอเมตตา" "ด้านบารมีมีไหม")
+ * → ตอบการ์ด Flex ชิ้น top ด้านนั้นจากคลังเขาเอง (กบ 19 ก.ค.) — ดักเฉพาะข้อความสั้น
+ * ตรง pattern เท่านั้น กันชนบทสนทนาปกติ · โดนเซ็นเซอร์ = teaser ไม่เฉลยชิ้น
+ * @returns {Promise<boolean>} handled
+ */
+async function maybeHandleAxisTopPieceQuery({ client, userId, replyToken, text }) {
+  const t = String(text || "").trim();
+  if (!t || t.length > 30) return false;
+  const AXES = [
+    [/โชคลาภ/, "byLuck", "luck", "โชคลาภและการเปิดทาง", "โชคลาภ"],
+    [/เมตตา/, "byMetta", "metta", "เมตตาและคนเอ็นดู", "เมตตา"],
+    [/คุ้มครอง|ป้องกัน/, "byProtection", "protection", "คุ้มครองป้องกัน", "คุ้มครอง"],
+    [/บารมี|อำนาจ/, "byBaramee", "baramee", "บารมีและอำนาจนำ", "บารมี"],
+    [/หนุนดวง|ตั้งหลัก/, "byFortuneAnchor", "fortune_anchor", "หนุนดวงและการตั้งหลัก", "หนุนดวง"],
+    [/เฉพาะทาง/, "bySpecialty", "specialty", "งานเฉพาะทาง", "งานเฉพาะทาง"],
+  ];
+  const hit = AXES.find(([re]) => re.test(t));
+  if (!hit) return false;
+  // ต้องเป็นประโยคถามหาแบบสั้น: ตัดคำแกนกับคำช่วยออกแล้วต้องไม่เหลือเนื้อหาอื่น
+  const stripped = t
+    .replace(hit[0], "")
+    .replace(/ถ้า|ขอ|เอา|หา|ด้าน|สาย|ล่ะ|ละ|บ้าง|มีไหม|มีมั้ย|มีปะ|หน่อย|อะไร|ชิ้นไหน|องค์ไหน|ครับ|คับ|ค่ะ|คะ|พี่|จ้า|ๆ|\s|\?|ของผม|ของฉัน/g, "");
+  if (stripped.length > 4) return false;
+
+  const [, listKey, axisKey, axisLabelFull, axisLabelShort] = hit;
+  try {
+    const { buildSacredAmuletLibraryForLineUser } = await import(
+      "../services/reports/sacredAmuletLibrary.service.js"
+    );
+    const lib = await buildSacredAmuletLibraryForLineUser(userId, {});
+    const item = Array.isArray(lib?.[listKey]) ? lib[listKey][0] : null;
+    const score = item?.axisScores ? Math.round(Number(item.axisScores[axisKey]) || 0) : 0;
+    if (!item || score < 60) {
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken,
+        replyType: "axis_top_piece_none",
+        semanticKey: `axis_top_none_${axisKey}`,
+        text: `ในคลังของคุณยังไม่มีชิ้นที่เด่นด้าน${axisLabelShort}ชัด ๆ ครับ ลองส่งพระหรือเครื่องรางชิ้นอื่นที่บ้านมาสแกนดู เผื่อเจอตัวเด่นด้านนี้ครับ`,
+      });
+      return true;
+    }
+    const { hasRecentPaidAccess } = await import("../services/everPaid.service.js");
+    const totalCount = Number(lib.totalCount) || 0;
+    let open = totalCount <= 5;
+    if (!open) open = await hasRecentPaidAccess(userId).catch(() => false);
+    const { buildAxisTopPieceFlex } = await import("../services/flex/dailyPickPush.flex.js");
+    const { buildPublicReportUrl } = await import("../services/reports/reportLink.service.js");
+    const reportUrl = item.publicToken ? buildPublicReportUrl(String(item.publicToken)) : "";
+    const altText = open
+      ? `ชิ้นเด่นด้าน${axisLabelShort}ของคุณ คะแนนด้านนี้ ${score} เปิดดู: ${reportUrl}`
+      : `ชิ้นเด่นด้าน${axisLabelShort}ของคุณ คะแนนด้านนี้ ${score} เปิดสิทธิ์เพื่อดูว่าชิ้นไหน`;
+    const flexMessage = buildAxisTopPieceFlex({
+      img: open ? item.thumbUrl || null : null,
+      axisLabelTh: axisLabelFull,
+      axisScore: score,
+      reportUrl: reportUrl || undefined,
+      libraryUrl: reportUrl ? `${reportUrl}/library` : undefined,
+      mode: open ? "open" : "teaser",
+      altText,
+    });
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken,
+      replyType: "axis_top_piece_card",
+      semanticKey: `axis_top_${axisKey}`,
+      text: altText,
+      flexMessage,
+    });
+    return true;
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "AXIS_TOP_PIECE_QUERY_ERROR_IGNORED",
+        lineUserIdPrefix: String(userId || "").slice(0, 10),
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+    return false; // พัง = ปล่อยไหลไปสมองแชทปกติ
+  }
+}
+
 async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, text }) {
   const t = String(text || "").trim();
   if (t !== "หยุดแจ้งเตือน" && t !== "ปิดแจ้งเตือน" && t !== "เปิดแจ้งเตือน") return false;
@@ -6616,6 +6702,8 @@ async function handleTextMessage({ client, event, userId, session }) {
           return;
         }
         if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
+  if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
+        if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
         if (text === "สแกนพลังงาน") {
           let savedBirthdate = null;
           try {

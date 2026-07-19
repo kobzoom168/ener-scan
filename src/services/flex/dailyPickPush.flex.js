@@ -166,3 +166,134 @@ export function buildDailyPickPushFlex(top, opts) {
     contents: bubble,
   };
 }
+
+/**
+ * การ์ด "ชิ้นเด่นด้าน X ของคุณ" (กบ 19 ก.ค. — ลูกค้าพิมพ์ถาม "ถ้าโชคลาภละ")
+ * @param {{ img?: string|null, axisLabelTh: string, axisScore: number,
+ *   reportUrl?: string, libraryUrl?: string, mode: "open"|"teaser", altText: string }} p
+ */
+export function buildAxisTopPieceFlex(p) {
+  const teaser = p.mode === "teaser";
+  const bodyContents = [
+    {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: GOLD,
+      height: "4px",
+      cornerRadius: "2px",
+      contents: [{ type: "filler" }],
+    },
+    {
+      type: "text",
+      text: `⭐ ชิ้นเด่นด้าน${p.axisLabelTh}ของคุณ`,
+      weight: "bold",
+      size: "md",
+      color: GOLD,
+      margin: "lg",
+      wrap: true,
+    },
+    {
+      type: "box",
+      layout: "baseline",
+      margin: "md",
+      contents: [
+        {
+          type: "text",
+          text: String(Math.round(p.axisScore)),
+          size: "3xl",
+          weight: "bold",
+          color: GOLD,
+          flex: 0,
+        },
+        { type: "text", text: "คะแนนด้านนี้", size: "xs", color: "#888888", margin: "md" },
+      ],
+    },
+    {
+      type: "text",
+      text: teaser
+        ? "เปิดสิทธิ์แล้วดูได้เลยว่าชิ้นไหน พร้อมรายงานเต็มของชิ้นนี้ครับ"
+        : "กดเปิดดูรายงานเต็มของชิ้นนี้ได้เลยครับ",
+      size: "xs",
+      color: "#666666",
+      wrap: true,
+      margin: "md",
+    },
+  ];
+  const footerContents = teaser
+    ? [
+        {
+          type: "button",
+          style: "primary",
+          color: GOLD,
+          height: "sm",
+          action: { type: "uri", label: "เปิดสิทธิ์ดูชิ้นนี้", uri: liffPayUrl() },
+        },
+        ...(p.libraryUrl
+          ? [
+              {
+                type: "button",
+                style: "secondary",
+                height: "sm",
+                action: { type: "uri", label: "ดูคลังของคุณ", uri: p.libraryUrl },
+              },
+            ]
+          : []),
+      ]
+    : [
+        ...(p.reportUrl
+          ? [
+              {
+                type: "button",
+                style: "primary",
+                color: GOLD,
+                height: "sm",
+                action: { type: "uri", label: "เปิดดูชิ้นนี้", uri: p.reportUrl },
+              },
+            ]
+          : []),
+        ...(p.libraryUrl
+          ? [
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: { type: "uri", label: "ดูคลังทั้งหมด", uri: p.libraryUrl },
+              },
+            ]
+          : []),
+      ];
+  /** @type {Record<string, unknown>} */
+  const bubble = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      backgroundColor: BG,
+      paddingAll: "16px",
+      contents: bodyContents,
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      backgroundColor: BG,
+      paddingAll: "12px",
+      contents: footerContents,
+    },
+    styles: { body: { backgroundColor: BG }, footer: { backgroundColor: BG } },
+  };
+  if (!teaser && p.img && /^https:\/\//i.test(String(p.img))) {
+    bubble.hero = {
+      type: "image",
+      url: String(p.img),
+      size: "full",
+      aspectRatio: "20:13",
+      aspectMode: "cover",
+    };
+  }
+  return {
+    type: "flex",
+    altText: String(p.altText || "").slice(0, 380) || "ชิ้นเด่นตามด้าน",
+    contents: bubble,
+  };
+}
