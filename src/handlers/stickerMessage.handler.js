@@ -15,6 +15,7 @@ import {
   buildWaitingBirthdateGuidanceText,
 } from "../utils/webhookText.util.js";
 import { sendNonScanReply } from "../services/nonScanReply.gateway.js";
+import { incrementCounterWithTtl } from "../redis/scanV2Redis.js";
 
 /**
  * LINE sometimes delivers sticker sends as plain text like "(content Cony)" or "(unwell Moon)".
@@ -32,10 +33,13 @@ export function isLineStickerPlaceholderText(text) {
   if (parts.length < 2) return false;
   const first = parts[0];
   const second = parts[1];
-  // e.g. content / unwell / wailing / pleading + Cony / Moon
-  if (!/^[a-z][a-z0-9]{1,24}$/.test(first)) return false;
-  if (!/^[A-Z][a-zA-Z0-9]{1,24}$/.test(second)) return false;
-  return true;
+  // e.g. "(content Cony)" "(unwell Moon)" และแบบกลับด้าน "(Brown bow)" "(Cony love)"
+  // — เคสกบ 19 ก.ค.: "(Brown bow)" หลุดตัวกรองไปให้ AI วิเคราะห์สติกเกอร์
+  const lowerWord = /^[a-z][a-z0-9]{1,24}$/;
+  const capWord = /^[A-Z][a-zA-Z0-9]{1,24}$/;
+  if (lowerWord.test(first) && capWord.test(second)) return true;
+  if (capWord.test(first) && lowerWord.test(second)) return true;
+  return false;
 }
 
 const IDLE_STICKER_LINES = [
@@ -219,14 +223,26 @@ export async function handleStickerLikeInput(opts) {
     return;
   }
 
-  const idle = pickIdleStickerLine(uid);
+  // กบ 19 ก.ค.: สติกเกอร์/ทักเปล่ามาหลายรอบ อย่าเห่อเหมือน AI —
+  // รอบแรกตอบ ครับ · รอบ 2 เงียบ · รอบ 3 ถามสั้น ๆ · รอบต่อ ๆ ไปเงียบ
+  // (นับซ้ำใน 2 ชม · ข้อความจริงจากลูกค้าจะล้าง streak ที่ webhook)
+  let streak = 1;
+  try {
+    streak = await incrementCounterWithTtl(`scan_v2:sticker_streak:${uid}`, 7200);
+  } catch {}
+  if (streak === 2 || streak >= 4) {
+    console.log(
+      JSON.stringify({ event: "STICKER_STREAK_SILENT", userId: uid.slice(0, 10), streak }),
+    );
+    return;
+  }
+  const idle = streak >= 3 ? "มีอะไรไหมครับ" : "ครับ";
   await sendNonScanReply({
     client,
     userId: uid,
     replyToken,
     replyType,
-    semanticKey: "sticker_idle",
+    semanticKey: `sticker_idle_${streak}`,
     text: idle,
-    alternateTexts: IDLE_STICKER_LINES.filter((l) => l !== idle),
   });
 }
