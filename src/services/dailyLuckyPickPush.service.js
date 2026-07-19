@@ -21,9 +21,11 @@ const PUSH_HOUR_BKK = (() => {
   const n = Number(process.env.DAILY_PICK_PUSH_HOUR);
   return Number.isFinite(n) && n >= 0 && n <= 23 ? Math.floor(n) : 7;
 })();
+// กบ 19 ก.ค. (รอบสอง): ยิงทุกวันทุกคนที่คลัง ≥5 ชิ้น — ไม่รอวันหนุนแรง (default 0)
+// อยากกลับไปส่งเฉพาะวันแรง ตั้ง DAILY_PICK_PUSH_MIN_SUIT=75
 const MIN_SUIT = (() => {
   const n = Number(process.env.DAILY_PICK_PUSH_MIN_SUIT);
-  return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.floor(n) : 75;
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.floor(n) : 0;
 })();
 const MIN_PIECES = 5;
 const MAX_USERS = 2000;
