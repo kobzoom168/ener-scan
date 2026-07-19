@@ -19,9 +19,8 @@ function liffPayUrl() {
  */
 export function buildDailyPickPushFlex(top, opts) {
   const teaser = opts.mode === "teaser";
-  const nameLine = teaser
-    ? "ชิ้นลับในคลังของคุณ"
-    : `${String(top.name || "ชิ้นเด่นในคลัง")}${top.peakLabel ? ` · ${top.peakLabel}` : ""}`;
+  // ใช้ชื่อแบบ LIFF ตรง ๆ (heroNamingLine มีด้านเด่นในตัวอยู่แล้ว ห้ามเติมซ้ำ)
+  const nameLine = teaser ? "ชิ้นลับในคลังของคุณ" : String(top.name || "ชิ้นเด่นในคลัง");
   const badge = (text, opts2 = {}) => ({
     type: "box",
     layout: "vertical",
@@ -39,7 +38,7 @@ export function buildDailyPickPushFlex(top, opts) {
   });
   const badges = [badge("อาจารย์เลือกให้วันนี้")];
   if (opts.movedUp) {
-    badges.push(badge("ขึ้นจากเมื่อวาน", { bg: "#e8f5ec", border: "#e8f5ec", color: "#2e7d4f" }));
+    badges.push(badge("▲ ขึ้นจากเมื่อวาน", { bg: "#e8f5ec", border: "#e8f5ec", color: "#2e7d4f" }));
   }
 
   const infoCol = {
@@ -48,7 +47,6 @@ export function buildDailyPickPushFlex(top, opts) {
     flex: 7,
     spacing: "sm",
     contents: [
-      { type: "box", layout: "horizontal", spacing: "sm", contents: badges },
       { type: "text", text: nameLine, weight: "bold", size: "md", color: "#222222", wrap: true },
       {
         type: "box",
@@ -73,28 +71,40 @@ export function buildDailyPickPushFlex(top, opts) {
     ],
   };
   const showImg = !teaser && top.img && /^https:\/\//i.test(String(top.img));
-  const pickBoxContents = showImg
-    ? [
-        {
-          type: "box",
-          layout: "vertical",
-          flex: 3,
-          cornerRadius: "8px",
-          contents: [
-            {
-              type: "image",
-              url: String(top.img),
-              size: "full",
-              aspectRatio: "1:1",
-              aspectMode: "cover",
-            },
-          ],
-        },
-        infoCol,
-      ]
-    : [infoCol];
+  const pickRow = {
+    type: "box",
+    layout: "horizontal",
+    spacing: "md",
+    margin: "md",
+    contents: showImg
+      ? [
+          {
+            type: "box",
+            layout: "vertical",
+            flex: 3,
+            cornerRadius: "8px",
+            contents: [
+              {
+                type: "image",
+                url: String(top.img),
+                size: "full",
+                aspectRatio: "1:1",
+                aspectMode: "cover",
+              },
+            ],
+          },
+          infoCol,
+        ]
+      : [infoCol],
+  };
+  // ป้ายแถวบนเต็มความกว้างกล่อง (กันป้ายเขียวโดนรูปเบียดจนตัดคำ)
+  const pickBoxContents = [
+    { type: "box", layout: "horizontal", spacing: "sm", contents: badges },
+    pickRow,
+  ];
 
-  const subLine = `อิงพลังดาว${String(opts.dayStar || "ประจำวัน")}${
+  const starName = String(opts.dayStar || "ดาวประจำวัน");
+  const subLine = `อิงพลัง${starName.startsWith("ดาว") ? starName : `ดาว${starName}`}${
     Number(opts.streak) > 1 ? ` · เปิดต่อเนื่อง ${Number(opts.streak)} วัน` : ""
   }`;
 
@@ -103,9 +113,8 @@ export function buildDailyPickPushFlex(top, opts) {
     { type: "text", text: subLine, size: "xs", color: "#999999", margin: "sm" },
     {
       type: "box",
-      layout: "horizontal",
+      layout: "vertical",
       margin: "md",
-      spacing: "md",
       borderColor: "#e3d5b3",
       borderWidth: "1px",
       cornerRadius: "12px",
