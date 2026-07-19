@@ -831,6 +831,7 @@ export async function buildDailyPickTopForLineUser(lineUserId) {
         suit: top.suit,
         reason: String(top.reason || ""),
         peakLabel: top.peakLabel || null,
+        img: top.img || null,
         token,
       },
     };
