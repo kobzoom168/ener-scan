@@ -818,14 +818,35 @@ export async function buildDailyPickTopForLineUser(lineUserId) {
     const pieces = extractPickPieces(rows);
     if (!pieces.length) return null;
     const nowBkk = new Date(Date.now() + 7 * 3600 * 1000);
-    const { ranked, dayStar } = rankPickPieces(pieces, bangkokDateKey(), nowBkk.getUTCDay());
+    const dayKey = bangkokDateKey();
+    const { ranked, dayStar } = rankPickPieces(pieces, dayKey, nowBkk.getUTCDay());
     const top = ranked[0];
     if (!top) return null;
+    // "ขึ้นจากเมื่อวาน" + streak: ตรรกะเดียวกับ /api/liff/daily-pick (อ่านอย่างเดียว ไม่เขียน key)
+    let movedUp = false;
+    try {
+      const yBkk = new Date(nowBkk.getTime() - 86400000);
+      const yKey = yBkk.toISOString().slice(0, 10);
+      const { ranked: rankedY } = rankPickPieces(pieces, yKey, yBkk.getUTCDay());
+      const posY = rankedY.findIndex((pc) => pc.name === top.name);
+      movedUp = posY > 0;
+    } catch {}
+    let streak = 1;
+    try {
+      const raw = await getValue(`liff:pickstreak:${uid}`);
+      const [lastKey, nRaw] = String(raw || "").split("|");
+      const n = Number(nRaw) || 0;
+      const yKey = new Date(nowBkk.getTime() - 86400000).toISOString().slice(0, 10);
+      if (lastKey === dayKey) streak = Math.max(1, n);
+      else if (lastKey === yKey) streak = n + 1;
+    } catch {}
     const token =
       top.reportUrl && top.reportUrl.startsWith("/r/") ? top.reportUrl.slice(3) : null;
     return {
       piecesCount: pieces.length,
       dayStar,
+      streak,
+      movedUp,
       top: {
         name: top.name,
         suit: top.suit,

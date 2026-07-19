@@ -19,81 +19,130 @@ function liffPayUrl() {
  */
 export function buildDailyPickPushFlex(top, opts) {
   const teaser = opts.mode === "teaser";
-  const headline = teaser
-    ? "เปิดสิทธิ์แล้วดูได้เลยว่าชิ้นไหน จะได้พกถูกชิ้นวันนี้ครับ"
-    : String(top.reason || "").trim();
+  const nameLine = teaser
+    ? "ชิ้นลับในคลังของคุณ"
+    : `${String(top.name || "ชิ้นเด่นในคลัง")}${top.peakLabel ? ` · ${top.peakLabel}` : ""}`;
+  const badge = (text, opts2 = {}) => ({
+    type: "box",
+    layout: "vertical",
+    backgroundColor: opts2.bg || BG,
+    borderColor: opts2.border || GOLD,
+    borderWidth: "1px",
+    cornerRadius: "12px",
+    paddingAll: "4px",
+    paddingStart: "8px",
+    paddingEnd: "8px",
+    flex: 0,
+    contents: [
+      { type: "text", text, size: "xxs", color: opts2.color || GOLD, align: "center" },
+    ],
+  });
+  const badges = [badge("อาจารย์เลือกให้วันนี้")];
+  if (opts.movedUp) {
+    badges.push(badge("ขึ้นจากเมื่อวาน", { bg: "#e8f5ec", border: "#e8f5ec", color: "#2e7d4f" }));
+  }
+
+  const infoCol = {
+    type: "box",
+    layout: "vertical",
+    flex: 7,
+    spacing: "sm",
+    contents: [
+      { type: "box", layout: "horizontal", spacing: "sm", contents: badges },
+      { type: "text", text: nameLine, weight: "bold", size: "md", color: "#222222", wrap: true },
+      {
+        type: "box",
+        layout: "baseline",
+        contents: [
+          { type: "text", text: String(top.suit), size: "3xl", weight: "bold", color: GOLD, flex: 0 },
+          { type: "text", text: "เหมาะกับวันนี้ %", size: "xs", color: "#888888", margin: "md" },
+        ],
+      },
+      ...(!teaser && opts.reportUrl
+        ? [
+            {
+              type: "text",
+              text: "ดูรายละเอียดชิ้นนี้ ›",
+              size: "xs",
+              color: GOLD,
+              weight: "bold",
+              action: { type: "uri", label: "ดูรายละเอียด", uri: opts.reportUrl },
+            },
+          ]
+        : []),
+    ],
+  };
+  const showImg = !teaser && top.img && /^https:\/\//i.test(String(top.img));
+  const pickBoxContents = showImg
+    ? [
+        {
+          type: "box",
+          layout: "vertical",
+          flex: 3,
+          cornerRadius: "8px",
+          contents: [
+            {
+              type: "image",
+              url: String(top.img),
+              size: "full",
+              aspectRatio: "1:1",
+              aspectMode: "cover",
+            },
+          ],
+        },
+        infoCol,
+      ]
+    : [infoCol];
+
+  const subLine = `อิงพลังดาว${String(opts.dayStar || "ประจำวัน")}${
+    Number(opts.streak) > 1 ? ` · เปิดต่อเนื่อง ${Number(opts.streak)} วัน` : ""
+  }`;
 
   const bodyContents = [
+    { type: "text", text: "ชิ้นไหนหนุนดวงวันนี้", weight: "bold", size: "lg", color: "#222222" },
+    { type: "text", text: subLine, size: "xs", color: "#999999", margin: "sm" },
     {
       type: "box",
-      layout: "vertical",
-      backgroundColor: GOLD,
-      height: "4px",
-      cornerRadius: "2px",
-      contents: [{ type: "filler" }],
-    },
-    {
-      type: "text",
-      text: "☀️ หนุนดวงเช้านี้",
-      weight: "bold",
-      size: "md",
-      color: GOLD,
-      margin: "lg",
-    },
-    {
-      type: "text",
-      text: "อาจารย์เลือกให้วันนี้",
-      size: "xs",
-      color: "#888888",
+      layout: "horizontal",
       margin: "md",
+      spacing: "md",
+      borderColor: "#e3d5b3",
+      borderWidth: "1px",
+      cornerRadius: "12px",
+      paddingAll: "12px",
+      contents: pickBoxContents,
     },
-    ...(!teaser && top.name
+    ...(teaser
       ? [
           {
             type: "text",
-            text: String(top.name),
-            weight: "bold",
-            size: "md",
-            color: "#333333",
-            wrap: true,
-            margin: "sm",
-          },
-        ]
-      : []),
-    {
-      type: "box",
-      layout: "baseline",
-      margin: "sm",
-      contents: [
-        {
-          type: "text",
-          text: `${top.suit}`,
-          size: "3xl",
-          weight: "bold",
-          color: GOLD,
-          flex: 0,
-        },
-        {
-          type: "text",
-          text: "เหมาะกับวันนี้ %",
-          size: "xs",
-          color: "#888888",
-          margin: "md",
-        },
-      ],
-    },
-    ...(headline
-      ? [
-          {
-            type: "text",
-            text: headline,
-            size: "xs",
-            color: "#666666",
+            text: "เปิดสิทธิ์แล้วดูได้เลยว่าชิ้นไหน จะได้พกถูกชิ้นวันนี้ครับ",
+            size: "sm",
+            color: "#555555",
             wrap: true,
             margin: "md",
           },
         ]
-      : []),
+      : String(top.reason || "").trim()
+        ? [
+            {
+              type: "text",
+              text: String(top.reason).trim(),
+              size: "sm",
+              color: "#555555",
+              wrap: true,
+              margin: "md",
+            },
+          ]
+        : []),
+    {
+      type: "text",
+      text: "มีชิ้นอื่นที่บ้าน ส่งมาสแกนเทียบดูได้เลยครับ เผื่อมีตัวแรงกว่านี้",
+      size: "xs",
+      color: "#999999",
+      wrap: true,
+      margin: "md",
+    },
   ];
 
   const footerContents = teaser
@@ -105,30 +154,24 @@ export function buildDailyPickPushFlex(top, opts) {
           height: "sm",
           action: { type: "uri", label: "เปิดสิทธิ์ดูชิ้นนี้", uri: liffPayUrl() },
         },
-        ...(opts.libraryUrl
-          ? [
-              {
-                type: "button",
-                style: "secondary",
-                height: "sm",
-                action: { type: "uri", label: "ดูคลังของคุณ", uri: opts.libraryUrl },
-              },
-            ]
-          : []),
       ]
-    : [
-        ...(opts.reportUrl
-          ? [
-              {
-                type: "button",
-                style: "primary",
-                color: GOLD,
-                height: "sm",
-                action: { type: "uri", label: "เปิดดูชิ้นนี้", uri: opts.reportUrl },
-              },
-            ]
-          : []),
-      ];
+    : opts.reportUrl
+      ? [
+          {
+            type: "button",
+            style: "primary",
+            color: GOLD,
+            height: "sm",
+            action: { type: "uri", label: "เปิดดูชิ้นนี้", uri: opts.reportUrl },
+          },
+        ]
+      : [];
+  footerContents.push({
+    type: "button",
+    style: "secondary",
+    height: "sm",
+    action: { type: "message", label: "สแกนชิ้นใหม่", text: "สแกนพลังงาน" },
+  });
   footerContents.push({
     type: "button",
     style: "link",
@@ -156,16 +199,6 @@ export function buildDailyPickPushFlex(top, opts) {
     },
     styles: { body: { backgroundColor: BG }, footer: { backgroundColor: BG } },
   };
-  // รูปชิ้นจริงของลูกค้า (เฉพาะโหมดเปิด — teaser ไม่เฉลยชิ้น)
-  if (!teaser && top.img && /^https:\/\//i.test(String(top.img))) {
-    bubble.hero = {
-      type: "image",
-      url: String(top.img),
-      size: "full",
-      aspectRatio: "20:13",
-      aspectMode: "cover",
-    };
-  }
 
   return {
     type: "flex",
@@ -283,6 +316,13 @@ export function buildAxisTopPieceFlex(p) {
             ]
           : []),
       ];
+  footerContents.push({
+    type: "button",
+    style: "secondary",
+    height: "sm",
+    action: { type: "message", label: "สแกนชิ้นใหม่", text: "สแกนพลังงาน" },
+  });
+
   /** @type {Record<string, unknown>} */
   const bubble = {
     type: "bubble",
