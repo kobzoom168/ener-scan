@@ -549,10 +549,20 @@ export async function processScanJob(workerId, jobRow) {
         }).catch(() => {});
       }
     } else {
+      // วัดความมืดจริงจากรูป (mean luminance < 60/255 = มืด) — พลาด = ไม่ใช้ hint
+      let imageDark = false;
+      try {
+        const sharpMod = (await import("sharp")).default;
+        const st = await sharpMod(imageBuffer).stats();
+        const means = (st.channels || []).slice(0, 3).map((c) => Number(c.mean) || 0);
+        const lum = means.length ? means.reduce((a, b) => a + b, 0) / means.length : 255;
+        imageDark = lum < 60;
+      } catch {}
       rejText = await generateSmartRejectionText({
         reasonKind: rejReason,
         attempt: rejAttempt,
         gateMeta: gated?.gateMeta || null,
+        imageDark,
       });
     }
     await insertOutboundMessage({
