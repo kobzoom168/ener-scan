@@ -173,11 +173,11 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       return { sent: true };
     }
 
-    if (kind === "renewal_reminder") {
-      // เตือนต่ออายุรายเดือน (push อัตโนมัติจาก maintenance) — ข้อความ + ปุ่มเลือกแพ็ก/ไว้ก่อน
+    if (kind === "renewal_reminder" || kind === "daily_pick_push") {
+      // push อัตโนมัติจาก maintenance (เตือนต่ออายุ / หนุนดวงเช้า) — ข้อความ + quickReply optional
       const text = String(payload.text || "").trim();
       if (!text) {
-        return { sent: false, errorCode: "empty_payload", errorMessage: "renewal_reminder missing text" };
+        return { sent: false, errorCode: "empty_payload", errorMessage: `${kind} missing text` };
       }
       const qr =
         payload.quickReply && typeof payload.quickReply === "object" ? payload.quickReply : null;

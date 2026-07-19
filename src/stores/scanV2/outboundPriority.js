@@ -10,6 +10,7 @@ export const OUTBOUND_PRIORITY = {
   pre_scan_ack: 80,
   /** เตือนต่ออายุรายเดือน (push อัตโนมัติ) — ต่ำสุด ไม่แซงข้อความตอบลูกค้า */
   renewal_reminder: 90,
+  daily_pick_push: 88,
 };
 
 /** Backoff steps (ms) for LINE 429 / transient failures. */

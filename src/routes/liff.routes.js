@@ -805,6 +805,41 @@ function pickPieceKey(pc) {
 }
 
 /**
+ * Top pick วันนี้ของลูกค้า (กบ 19 ก.ค. — push หนุนดวงเช้า 7 โมง)
+ * ตัวเลข/เหตุผลชุดเดียวกับ LIFF "หนุนดวงวันนี้" เป๊ะ
+ * @returns {Promise<null | { piecesCount: number, dayStar: string,
+ *   top: { name: string, suit: number, reason: string, peakLabel: string|null, token: string|null } }>}
+ */
+export async function buildDailyPickTopForLineUser(lineUserId) {
+  try {
+    const uid = String(lineUserId || "").trim();
+    if (!uid) return null;
+    const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
+    const pieces = extractPickPieces(rows);
+    if (!pieces.length) return null;
+    const nowBkk = new Date(Date.now() + 7 * 3600 * 1000);
+    const { ranked, dayStar } = rankPickPieces(pieces, bangkokDateKey(), nowBkk.getUTCDay());
+    const top = ranked[0];
+    if (!top) return null;
+    const token =
+      top.reportUrl && top.reportUrl.startsWith("/r/") ? top.reportUrl.slice(3) : null;
+    return {
+      piecesCount: pieces.length,
+      dayStar,
+      top: {
+        name: top.name,
+        suit: top.suit,
+        reason: String(top.reason || ""),
+        peakLabel: top.peakLabel || null,
+        token,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * นับชิ้นในคลังลูกค้า (รวมทุกเลน — ชุดเดียวกับ Daily Pick) สำหรับเกตเซ็นเซอร์
  * กบ 19 ก.ค. 2026: คลังไม่เกิน 5 ชิ้น = ไม่เซ็นเซอร์ (ยังไม่มีอะไรให้เสียดาย ให้สะสมก่อน)
  * @returns {Promise<number | null>} null = นับไม่ได้ ให้ผู้เรียก fail-open

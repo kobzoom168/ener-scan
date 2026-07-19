@@ -8,6 +8,7 @@ import { supabase } from "../config/supabase.js";
 import { maybeSendDlqAlert } from "../services/maintenanceDlqAlert.service.js";
 import { runRenewalReminderSweep } from "../services/scanV2/renewalReminder.service.js";
 import { runChatQualityDailySweep } from "../services/chatQualityDailyReport.service.js";
+import { runDailyLuckyPickSweep } from "../services/dailyLuckyPickPush.service.js";
 import {
   getLine429CanaryCountHour,
   startWorkerHeartbeatLoop,
@@ -179,6 +180,17 @@ async function runOnce() {
     console.warn(
       JSON.stringify({
         event: "RENEWAL_REMINDER_SWEEP_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+  }
+  // push หนุนดวงเช้า 7 โมง (กบ 19 ก.ค.) — self-gated + dedupe รายวัน/รายคน
+  try {
+    await runDailyLuckyPickSweep();
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "DAILY_PICK_PUSH_SWEEP_ERROR",
         message: String(e?.message || e).slice(0, 160),
       }),
     );
