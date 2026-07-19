@@ -24,6 +24,17 @@ function rankCardHtml(it, rank, opts = {}) {
   const axisKey = String(opts.axisKey || "");
   const axisScoreRaw = axisKey && it.axisScores ? Number(it.axisScores[axisKey]) : NaN;
   const axisScore = Number.isFinite(axisScoreRaw) ? Math.round(axisScoreRaw) : null;
+  // กบ 19 ก.ค.: แท็บรายด้าน บรรทัดรองต้องบอก "ด้านที่เลือก" ไม่ใช่ "เด่นสุด <แกนของชิ้น>"
+  // (เรียงถูกแต่ป้ายเขียนแกนอื่น ลูกค้าอ่านแล้วคิดว่า filter แยกไม่ได้)
+  const AXIS_LABEL_TH = {
+    protection: "คุ้มครองป้องกัน",
+    metta: "เมตตาและคนเอ็นดู",
+    baramee: "บารมีและอำนาจนำ",
+    luck: "โชคลาภและการเปิดทาง",
+    fortune_anchor: "หนุนดวงและการตั้งหลัก",
+    specialty: "งานเฉพาะทาง",
+  };
+  const axisLabelTh = AXIS_LABEL_TH[axisKey] || "";
   const href = `/r/${encodeURIComponent(it.publicToken)}`;
   const img = it.thumbUrl
     ? `<img class="alib-row-img" src="${escapeHtml(it.thumbUrl)}" alt="" width="46" height="46" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
@@ -51,7 +62,11 @@ function rankCardHtml(it, rank, opts = {}) {
     ${img}
     <span class="alib-row-main">
       <span class="alib-row-id">${escapeHtml(it.displayReportId)}</span>
-      <span class="alib-row-peak">เด่นสุด ${escapeHtml(it.peakPowerLabelTh)} · ${escapeHtml(when)}</span>
+      <span class="alib-row-peak">${
+        axisScore != null && axisLabelTh
+          ? `ด้าน${escapeHtml(axisLabelTh)} · ${escapeHtml(when)}`
+          : `เด่นสุด ${escapeHtml(it.peakPowerLabelTh)} · ${escapeHtml(when)}`
+      }</span>
       ${dupPills ? `<span class="alib-row-dups">${dupPills}</span>` : ""}
     </span>
     <span class="alib-row-score">${scoreHtml}</span>
