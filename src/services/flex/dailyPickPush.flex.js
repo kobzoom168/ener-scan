@@ -42,12 +42,24 @@ export function buildDailyPickPushFlex(top, opts) {
     },
     {
       type: "text",
-      text: "วันนี้มีชิ้นในคลังของคุณหนุนดวงถึง",
-      size: "sm",
-      color: "#555555",
-      wrap: true,
+      text: "อาจารย์เลือกให้วันนี้",
+      size: "xs",
+      color: "#888888",
       margin: "md",
     },
+    ...(!teaser && top.name
+      ? [
+          {
+            type: "text",
+            text: String(top.name),
+            weight: "bold",
+            size: "md",
+            color: "#333333",
+            wrap: true,
+            margin: "sm",
+          },
+        ]
+      : []),
     {
       type: "box",
       layout: "baseline",
@@ -55,24 +67,19 @@ export function buildDailyPickPushFlex(top, opts) {
       contents: [
         {
           type: "text",
-          text: `${top.suit}%`,
+          text: `${top.suit}`,
           size: "3xl",
           weight: "bold",
           color: GOLD,
           flex: 0,
         },
-        ...(top.peakLabel
-          ? [
-              {
-                type: "text",
-                text: `เด่นด้าน${top.peakLabel}`,
-                size: "xs",
-                color: "#888888",
-                margin: "md",
-                wrap: true,
-              },
-            ]
-          : []),
+        {
+          type: "text",
+          text: "เหมาะกับวันนี้ %",
+          size: "xs",
+          color: "#888888",
+          margin: "md",
+        },
       ],
     },
     ...(headline
@@ -174,6 +181,7 @@ export function buildDailyPickPushFlex(top, opts) {
  */
 export function buildAxisTopPieceFlex(p) {
   const teaser = p.mode === "teaser";
+  const pieceName = !teaser && p.pieceName ? String(p.pieceName) : "";
   const bodyContents = [
     {
       type: "box",
@@ -192,6 +200,19 @@ export function buildAxisTopPieceFlex(p) {
       margin: "lg",
       wrap: true,
     },
+    ...(pieceName
+      ? [
+          {
+            type: "text",
+            text: pieceName,
+            weight: "bold",
+            size: "sm",
+            color: "#333333",
+            wrap: true,
+            margin: "sm",
+          },
+        ]
+      : []),
     {
       type: "box",
       layout: "baseline",

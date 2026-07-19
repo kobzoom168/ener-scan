@@ -398,6 +398,7 @@ async function maybeHandleAxisTopPieceQuery({ client, userId, replyToken, text }
       : `ชิ้นเด่นด้าน${axisLabelShort}ของคุณ คะแนนด้านนี้ ${score} เปิดสิทธิ์เพื่อดูว่าชิ้นไหน`;
     const flexMessage = buildAxisTopPieceFlex({
       img: open ? item.thumbUrl || null : null,
+      pieceName: String(item.displayReportId || item.objectLabel || ""),
       axisLabelTh: axisLabelFull,
       axisScore: score,
       reportUrl: reportUrl || undefined,

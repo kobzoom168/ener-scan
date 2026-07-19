@@ -77,7 +77,7 @@ function buildFullText(top) {
   const url = top.token ? buildPublicReportUrl(top.token) : "";
   return [
     "☀️ หนุนดวงเช้านี้",
-    `วันนี้มีชิ้นในคลังหนุนดวงคุณถึง ${top.suit}%${top.peakLabel ? ` พลังเด่นด้าน${top.peakLabel}` : ""}`,
+    `อาจารย์เลือกให้วันนี้: ${top.name || "ชิ้นเด่นในคลังของคุณ"} เหมาะกับวันนี้ ${top.suit}%`,
     top.reason,
     url ? `เปิดดูชิ้นนี้: ${url}` : "",
     "",
