@@ -1,5 +1,6 @@
 /**
- * Push หนุนดวงรายเช้า (กบ 19 ก.ค. 2026): ทุกเช้า 7 โมง (เวลาไทย) ส่ง LINE บอกลูกค้า
+ * Push หนุนดวง "อาจารย์เลือกให้วันนี้" (กบ 19-20 ก.ค. 2026): **ทุกวันศุกร์ 07:00** (เวลาไทย)
+ * ส่ง LINE บอกลูกค้า
  * ที่มีชิ้นในคลัง ≥5 ว่า "วันนี้ชิ้นไหนหนุนดวงสุด กี่ % หนุนเรื่องอะไร" + ลิงก์รายงาน
  * - ส่งเฉพาะวันหนุนแรง (suit ≥ 75 ปรับได้) กันข้อความล้าจนคนบล็อก OA
  * - คนโดนเซ็นเซอร์ (>5 ชิ้น + ไม่มียอดจ่าย 3 วัน) ได้แบบ teaser: บอก % ไม่บอกชิ้น
@@ -27,6 +28,17 @@ const MIN_SUIT = (() => {
   const n = Number(process.env.DAILY_PICK_PUSH_MIN_SUIT);
   return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.floor(n) : 0;
 })();
+// กบ 20 ก.ค.: ส่งเฉพาะวันศุกร์ — ปรับได้ DAILY_PICK_PUSH_WEEKDAYS เช่น "5" (ศุกร์),
+// "1,5" (จันทร์+ศุกร์), "*" (ทุกวัน) · 0=อาทิตย์ ... 6=เสาร์
+const PUSH_WEEKDAYS = (() => {
+  const raw = String(process.env.DAILY_PICK_PUSH_WEEKDAYS ?? "5").trim();
+  if (raw === "*") return new Set([0, 1, 2, 3, 4, 5, 6]);
+  const days = raw
+    .split(",")
+    .map((x) => Number(x.trim()))
+    .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+  return new Set(days.length ? days : [5]);
+})();
 const MIN_PIECES = 5;
 const MAX_USERS = 2000;
 
@@ -49,6 +61,14 @@ export async function clearDailyPickOptout(lineUserId) {
 export async function isDailyPickOptedOut(lineUserId) {
   const v = await getValue(dailyPickOptoutKey(lineUserId)).catch(() => null);
   return String(v || "") === "1";
+}
+
+function bangkokWeekday(now) {
+  const wd = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Bangkok",
+    weekday: "short",
+  }).format(now);
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(wd);
 }
 
 function bangkokHour(now) {
@@ -116,6 +136,7 @@ export async function runDailyLuckyPickSweep(now = new Date()) {
   ) {
     return { skipped: "disabled" };
   }
+  if (!PUSH_WEEKDAYS.has(bangkokWeekday(now))) return { skipped: "not_push_day" };
   if (bangkokHour(now) !== PUSH_HOUR_BKK) return { skipped: "not_push_hour" };
 
   const dateKey = bangkokDateKey(now);
