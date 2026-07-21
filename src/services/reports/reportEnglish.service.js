@@ -11,7 +11,7 @@
  *
  * พังทุกจุด = คืนของเดิม (หน้าไทย) — ห้ามทำหน้ารายงานล่ม
  */
-import { getValue, setValueWithTtl } from "../../redis/scanV2Redis.js";
+import { getValue, setLargeValueWithTtl } from "../../redis/scanV2Redis.js";
 import {
   getGeminiFlashModel,
   generateTextWithTimeout,
@@ -160,7 +160,7 @@ export async function translateReportPayloadEn(payload, publicToken) {
       }
     }
     if (Object.keys(map).length === 0) return payload;
-    await setValueWithTtl(cacheKey, JSON.stringify(map), CACHE_TTL_SEC).catch(() => {});
+    await setLargeValueWithTtl(cacheKey, JSON.stringify(map), CACHE_TTL_SEC).catch(() => {});
     console.log(
       JSON.stringify({
         event: "REPORT_EN_TRANSLATED",
@@ -232,10 +232,34 @@ const STATIC_LABELS = {
   "พลังรวม": "Total power",
   "เด่นสุด": "Peak",
   "สรุปผล": "Summary",
-  "คะแนน": "score",
-  "ล็อก": "Locked",
-  "ครั้ง": "times",
-  "ไม่มี": "N/A",
+  "หนุนดวงและการตั้งหลัก": "Fortune Anchor & Grounding",
+  "โชคลาภและการเปิดทาง": "Luck & Opportunity",
+  "คุ้มครองป้องกัน": "Protection & Shielding",
+  "เมตตาและคนเอ็นดู": "Charm & Kindness",
+  "บารมีและอำนาจนำ": "Authority & Presence",
+  "งานเฉพาะทางสูงสุด": "Top Specialty",
+  "งานเฉพาะทาง": "Specialty Work",
+  "คุ้มครองสูงสุด": "Top Protection",
+  "เมตตาสูงสุด": "Top Charm",
+  "บารมีสูงสุด": "Top Authority",
+  "โชคลาภสูงสุด": "Top Luck",
+  "หนุนดวงสูงสุด": "Top Fortune Anchor",
+  "แรงสุดโดยรวม": "Strongest Overall",
+  "แนวใช้ที่แนะนำ": "Recommended use",
+  "โทนหลัก": "Main tone",
+  "หนุนดวง": "Fortune anchor",
+  "โชคลาภ": "Luck",
+  "เมตตา": "Charm",
+  "บารมี": "Authority",
+  "คุ้มครอง": "Protection",
+  "วันอาทิตย์": "Sunday",
+  "วันจันทร์": "Monday",
+  "วันอังคาร": "Tuesday",
+  "วันพุธ": "Wednesday",
+  "วันพฤหัสบดี": "Thursday",
+  "วันพฤหัส": "Thursday",
+  "วันศุกร์": "Friday",
+  "วันเสาร์": "Saturday",
 };
 
 const THAI_MONTHS = {
