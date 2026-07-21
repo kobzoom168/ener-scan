@@ -20,6 +20,11 @@ import {
 import { env } from "../config/env.js";
 import { hasRecentPaidAccess } from "../services/everPaid.service.js";
 import {
+  translateReportPayloadEn,
+  applyEnglishStaticLabels,
+  injectLangToggle,
+} from "../services/reports/reportEnglish.service.js";
+import {
   countPinnedScanUploadsByLineUser,
   getScanUploadById,
   setScanUploadPinnedForUser,
@@ -107,7 +112,17 @@ export async function getReportByToken(req, res) {
   /** @type {string} */
   let html;
   let sacredAmuletLibrary = null;
-  const { payload: normPre } = normalizeReportPayloadForRender(payload);
+  // กบ 20 ก.ค.: ?lang=en → แปล payload (LLM+cache) แล้ว render ปกติ · พลาด = หน้าไทยเดิม
+  const wantEn = String(req.query?.lang || "").trim().toLowerCase() === "en";
+  let payloadForRender = payload;
+  if (wantEn) {
+    try {
+      payloadForRender = await translateReportPayloadEn(payload, publicToken);
+    } catch {
+      payloadForRender = payload;
+    }
+  }
+  const { payload: normPre } = normalizeReportPayloadForRender(payloadForRender);
   if (
     normPre.amuletV1 &&
     typeof normPre.amuletV1 === "object" &&
@@ -211,7 +226,7 @@ export async function getReportByToken(req, res) {
     : "https://lin.ee/6YZeFZ1";
 
   try {
-    html = renderReportHtmlPage(payload, {
+    html = renderReportHtmlPage(payloadForRender, {
       sacredAmuletLibrary,
       crystalBraceletLibrary,
       dailyPickTeaser,
@@ -290,6 +305,14 @@ export async function getReportByToken(req, res) {
     reportVersion: payload?.reportVersion ?? null,
     isDemoToken: publicToken === PHASE1_DEMO_PUBLIC_TOKEN,
   });
+  if (wantEn) {
+    try {
+      html = applyEnglishStaticLabels(html);
+    } catch {}
+  }
+  try {
+    html = injectLangToggle(html, wantEn);
+  } catch {}
   res
     .status(200)
     .type("html")
