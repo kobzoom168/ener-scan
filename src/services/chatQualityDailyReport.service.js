@@ -65,6 +65,7 @@ You receive one conversation transcript (24h window). Judge ONLY the bot's repli
 - หลุดบท: bot admits being AI/บอท/ระบบ/โมเดล/แอดมิน, or breaks the อาจารย์ persona
 - เดา/มโน: bot invents facts, dates, prices, piece names, ดวง readings, or claims to be doing something it cannot do (e.g. "กำลังดูข้อมูลอยู่")
 - ผิด flow: customer clearly wants to pay / asks about packages / sends slip context but bot answers off-track; or customer asks a direct question and bot answers something else or repeats itself
+- ไม่ต่อเนื่อง (กบ 21 ก.ค.): the customer is in the middle of asking about topic X but the bot switches to a different topic, ignores the pending question, or answers a question the customer did not ask. When the bot does not understand, the CORRECT behavior is one short clarifying question — guessing and answering something unrelated must be flagged
 - งง/วน: bot replies that contradict earlier replies, loop the same phrasing, or leave the customer visibly confused/annoyed
 - bug text: raw error strings, template placeholders, broken formatting, dash characters (— – " - ") used as sentence separators, mixed languages ผิดที่
 - เกินขอบเขต: guarantees results (รวยแน่/ถูกหวยแน่), authenticity/price judgements (แท้/เก๊/ราคา), medical claims
