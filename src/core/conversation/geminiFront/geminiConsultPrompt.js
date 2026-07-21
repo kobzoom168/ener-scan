@@ -188,6 +188,35 @@ export function buildConsultUserPrompt(p) {
       : []),
     `คำถามลูกค้าตอนนี้: ${String(p.userText || "").slice(0, 500)}`,
     "",
+    // กบ 21 ก.ค. (เคส James "yes" ได้คำตอบไทย): ตรวจภาษาด้วยโค้ดแล้วสั่งตรง ๆ ต่อข้อความ
+    // — กติกาใน system อย่างเดียว DeepSeek ชั้นฟรีไม่ทำตามเมื่อ history เป็นไทยล้วน
+    detectReplyLanguage(p.userText, p.conversationHistory) === "en"
+      ? "REPLY LANGUAGE: English ONLY. The customer writes in English. Reply 100% in English (calm Ajarn tone, no Thai words except names)."
+      : "ตอบเป็นภาษาไทย",
     "ตอบเป็นอาจารย์เอเนอร์ ตามกฎด้านบน",
   ].join("\n");
+}
+
+/**
+ * ภาษาที่ควรตอบ: ดูข้อความล่าสุดของลูกค้าเป็นหลัก — มีอักษรไทย = ไทย ·
+ * ละตินล้วน = อังกฤษ · สั้น/กำกวม (เช่น "yes", "ok") = ดูข้อความลูกค้าย้อนหลังประกอบ
+ * @param {string} userText
+ * @param {Array<{ role?: string, text?: string }>} [history]
+ * @returns {"th"|"en"}
+ */
+export function detectReplyLanguage(userText, history) {
+  const THAI = /[฀-๿]/;
+  const LATIN = /[A-Za-z]/;
+  const t = String(userText || "").trim();
+  if (THAI.test(t)) return "th";
+  if (LATIN.test(t) && t.length >= 8) return "en";
+  // สั้น/ไม่ชัด → ดูข้อความลูกค้าล่าสุด ๆ ใน history
+  const userMsgs = (Array.isArray(history) ? history : [])
+    .filter((m) => m && m.role !== "bot" && String(m.text || "").trim())
+    .slice(-3)
+    .map((m) => String(m.text));
+  const joined = userMsgs.join(" ");
+  if (THAI.test(joined)) return "th";
+  if (LATIN.test(joined) || (LATIN.test(t) && t.length > 0)) return "en";
+  return "th";
 }
