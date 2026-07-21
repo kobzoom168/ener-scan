@@ -302,3 +302,87 @@ export function injectLangToggle(html, isEnglishPage) {
   const s = String(html || "");
   return s.includes("</body>") ? s.replace("</body>", `${btn}</body>`) : s + btn;
 }
+
+const HTML_SEGMENT_RE = /(?<=>)([^<>]*[฀-๿][^<>]*)(?=<)/g;
+
+/**
+ * เก็บตกข้อความไทยที่เหลือบน HTML (ป้าย template สร้างสด/ผสม EN) → LLM แปล + cache
+ * ครอบทุกหน้า ไม่ต้องไล่แก้ template — cacheKey ต่อหน้า+token
+ * @param {string} html
+ * @param {string} cacheKey
+ * @returns {Promise<string>}
+ */
+export async function translateHtmlResidualThai(html, cacheKey) {
+  const src = String(html || "");
+  const segments = [
+    ...new Set(
+      [...src.matchAll(HTML_SEGMENT_RE)]
+        .map((m) => m[1])
+        .filter((t) => t.trim() && t.length <= 300),
+    ),
+  ];
+  if (!segments.length) return src;
+
+  const key = `scan_v2:report_en_html:${String(cacheKey || "").slice(0, 80)}`;
+  /** @type {Record<string, string>} */
+  let map = {};
+  try {
+    const cached = await getValue(key);
+    if (cached) map = JSON.parse(String(cached)) || {};
+  } catch {
+    map = {};
+  }
+
+  const missing = segments.filter((t) => !Object.prototype.hasOwnProperty.call(map, t));
+  if (missing.length) {
+    for (let i = 0; i < missing.length; i += CHUNK_SIZE) {
+      const chunk = missing.slice(i, i + CHUNK_SIZE);
+      const translated = await translateChunk(chunk).catch(() => null);
+      if (!translated) continue;
+      for (let j = 0; j < chunk.length; j += 1) {
+        const en = String(translated[j] || "").trim();
+        if (en) map[chunk[j]] = en;
+      }
+    }
+    await setLargeValueWithTtl(key, JSON.stringify(map), CACHE_TTL_SEC).catch(() => {});
+  }
+
+  let out = src;
+  const keys = segments
+    .filter((t) => Object.prototype.hasOwnProperty.call(map, t))
+    .sort((a, b) => b.length - a.length);
+  for (const k of keys) {
+    out = out.split(`>${k}<`).join(`>${map[k]}<`);
+  }
+  return out;
+}
+
+/**
+ * ลิงก์ภายในหน้า /r/... ให้พก ?lang=en ต่อ (ปุ่มอธิบายพลัง/จังหวะ/กลับรายงาน)
+ * @param {string} html
+ */
+export function rewriteReportLinksForEn(html) {
+  return String(html || "").replace(/href="(\/r\/[^"?]*)(\?[^"]*)?"/g, (m, path, q) => {
+    if (q && /[?&]lang=/.test(q)) return m;
+    return q ? `href="${path}${q}&lang=en"` : `href="${path}?lang=en"`;
+  });
+}
+
+/**
+ * ประกอบหน้า EN เต็ม: dict → เก็บตก LLM → ลิงก์พก lang — พังชั้นไหนคืนชั้นก่อนหน้า
+ * @param {string} html
+ * @param {{ cacheKey: string }} opts
+ */
+export async function buildEnglishReportPage(html, opts) {
+  let out = String(html || "");
+  try {
+    out = applyEnglishStaticLabels(out);
+  } catch {}
+  try {
+    out = await translateHtmlResidualThai(out, opts?.cacheKey || "page");
+  } catch {}
+  try {
+    out = rewriteReportLinksForEn(out);
+  } catch {}
+  return out;
+}

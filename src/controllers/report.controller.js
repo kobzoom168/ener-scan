@@ -21,7 +21,7 @@ import { env } from "../config/env.js";
 import { hasRecentPaidAccess } from "../services/everPaid.service.js";
 import {
   translateReportPayloadEn,
-  applyEnglishStaticLabels,
+  buildEnglishReportPage,
   injectLangToggle,
 } from "../services/reports/reportEnglish.service.js";
 import {
@@ -306,9 +306,7 @@ export async function getReportByToken(req, res) {
     isDemoToken: publicToken === PHASE1_DEMO_PUBLIC_TOKEN,
   });
   if (wantEn) {
-    try {
-      html = applyEnglishStaticLabels(html);
-    } catch {}
+    html = await buildEnglishReportPage(html, { cacheKey: `main:${publicToken}` });
   }
   try {
     html = injectLangToggle(html, wantEn);
@@ -426,6 +424,14 @@ export async function getEnergyMeaningByToken(req, res) {
     }),
   );
 
+  const wantEnMeaning = String(req.query?.lang || "").trim().toLowerCase() === "en";
+  if (wantEnMeaning) {
+    html = await buildEnglishReportPage(html, { cacheKey: `meaning:${publicToken}` });
+  }
+  try {
+    html = injectLangToggle(html, wantEnMeaning);
+  } catch {}
+
   return res
     .status(200)
     .type("html")
@@ -538,6 +544,14 @@ export async function getEnergyTimingByToken(req, res) {
       loadSource: loadSource ?? null,
     }),
   );
+
+  const wantEnTiming = String(req.query?.lang || "").trim().toLowerCase() === "en";
+  if (wantEnTiming) {
+    html = await buildEnglishReportPage(html, { cacheKey: `timing:${publicToken}` });
+  }
+  try {
+    html = injectLangToggle(html, wantEnTiming);
+  } catch {}
 
   return res
     .status(200)
