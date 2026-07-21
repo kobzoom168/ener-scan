@@ -318,7 +318,7 @@ export async function translateHtmlResidualThai(html, cacheKey) {
     ...new Set(
       [...src.matchAll(HTML_SEGMENT_RE)]
         .map((m) => m[1])
-        .filter((t) => t.trim() && t.length <= 300),
+        .filter((t) => t.trim() && t.length <= 700),
     ),
   ];
   if (!segments.length) return src;
