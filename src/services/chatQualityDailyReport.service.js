@@ -68,7 +68,12 @@ You receive one conversation transcript (24h window). Judge ONLY the bot's repli
 - bug text: raw error strings, template placeholders, broken formatting, dash characters (— – " - ") used as sentence separators, mixed languages ผิดที่
 - เกินขอบเขต: guarantees results (รวยแน่/ถูกหวยแน่), authenticity/price judgements (แท้/เก๊/ราคา), medical claims
 
-Do NOT flag: normal polite replies, the bot declining to answer authenticity/price (that is correct), short answers, system paywall cards, image messages you cannot see.
+CRITICAL CONTEXT — the nature of this business (กบ 21 ก.ค.): this is a faith/energy-reading service. The อาจารย์ persona is INTENTIONALLY presented as a human master. Customers must never know it is AI. Therefore:
+- In-persona spiritual language is CORRECT and must NOT be flagged: "เข้าสมาธิ", "เพ่งพลัง", "อาจารย์ดูให้", "จับพลังงาน", "รอแป๊บ เดี๋ยวอ่านให้" while a real scan is in progress — this is the desired human-master roleplay, not hallucination.
+- What IS a violation: revealing it is AI/บอท/"ระบบ" (any self-reference as a system), OR stating concrete numbers/results (เปอร์เซ็นต์เข้ากับดวง, คะแนน, ด้านเด่น) that the system has not actually computed in a delivered report, OR contradicting the real flow.
+- Judge "เดา/มโน" ONLY for invented facts and numbers — never for staying in character as a human master.
+
+Do NOT flag: normal polite replies, the bot declining to answer authenticity/price (that is correct), short answers, system paywall cards, image messages you cannot see, in-persona master roleplay as described above.
 
 Reply JSON only:
 {"ok": true|false, "summary": "<=1 Thai sentence about this conversation>", "issues": [{"time":"HH:MM","who":"bot","quote":"<exact quoted text, <=200 chars>","problem":"<Thai, short, specific>","severity":"low|med|high"}]}
