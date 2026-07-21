@@ -177,6 +177,22 @@ export async function setValueWithTtl(key, value, ttlSec) {
  * @param {string} key
  * @returns {Promise<string|null>}
  */
+/**
+ * เก็บค่าใหญ่ (เช่น cache คำแปลรายงาน ~หลาย KB) — ต่างจาก setValueWithTtl ที่ตัด 200 ตัว
+ * cap 512KB กันหลุด · TTL สูงสุด 45 วัน
+ * @param {string} key
+ * @param {string} value
+ * @param {number} ttlSec
+ */
+export async function setLargeValueWithTtl(key, value, ttlSec) {
+  const r = await getScanV2Redis();
+  if (!r) return;
+  try {
+    const v = String(value).slice(0, 512 * 1024);
+    await r.set(kDedupe(key), v, "EX", Math.min(Math.max(Number(ttlSec) || 3600, 60), 45 * 86400));
+  } catch {}
+}
+
 export async function getValue(key) {
   const r = await getScanV2Redis();
   if (!r) return null;
