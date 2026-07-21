@@ -16,6 +16,7 @@ import {
 import { env } from "../config/env.js";
 import { sendTelegramText, isTelegramConfigured } from "./telegramNotify.service.js";
 import { setAppSetting } from "../stores/appSettings.db.js";
+import { getBangkokDayUtcRangeExclusiveEnd } from "../utils/bangkokTime.util.js";
 
 const REPORT_HOUR_BKK = (() => {
   const n = Number(process.env.CHAT_QUALITY_REPORT_HOUR);
@@ -131,7 +132,7 @@ async function analyzeConversation(transcript) {
  */
 function buildReportText({ dateKey, convCount, okCount, problemCases, analyzeFailed, truncatedUsers }) {
   const head = [
-    `📋 ตรวจแชทประจำวัน ${dateKey} (ย้อนหลัง 24 ชม ถึง 06:00)`,
+    `📋 ตรวจแชทของวันที่ ${dateKey} (00:00-23:59 เวลาไทย)`,
     `บทสนทนา ${convCount} ราย · ปกติ ${okCount} · มีประเด็น ${problemCases.length}${analyzeFailed ? ` · ตรวจไม่ได้ ${analyzeFailed}` : ""}`,
   ];
   if (!problemCases.length) {
@@ -173,11 +174,14 @@ export async function runChatQualityDailySweep(now = new Date()) {
   const first = await tryDedupeOnce(`scan_v2:chat_quality_report:${dateKey}`, 40 * 3600);
   if (!first) return { skipped: "already_sent_today" };
 
-  const sinceIso = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
+  // กบ 21 ก.ค.: ดึงเต็มวันปฏิทินของเมื่อวาน 00:00-23:59 เวลาไทย (ไม่ใช่ 24 ชม ย้อนจากตอนรัน)
+  const reportDateKey = bangkokDateKey(new Date(now.getTime() - 24 * 3600 * 1000));
+  const dayRange = getBangkokDayUtcRangeExclusiveEnd(reportDateKey);
   const { data: rows, error } = await supabase
     .from("line_conversation_messages")
     .select("line_user_id,role,text,created_at")
-    .gte("created_at", sinceIso)
+    .gte("created_at", dayRange.startIso)
+    .lt("created_at", dayRange.endIso)
     .order("created_at", { ascending: true })
     .limit(MAX_ROWS);
   if (error) throw error;
@@ -239,7 +243,7 @@ export async function runChatQualityDailySweep(now = new Date()) {
   problemCases.sort((a, b) => (sevRank[a.severity] ?? 1) - (sevRank[b.severity] ?? 1));
 
   const report = buildReportText({
-    dateKey,
+    dateKey: reportDateKey,
     convCount: targetIds.length,
     okCount,
     problemCases,
@@ -249,7 +253,7 @@ export async function runChatQualityDailySweep(now = new Date()) {
   // เก็บฉบับล่าสุดให้ Hermes Agent ดึงผ่าน /internal/chat-quality/latest (best-effort)
   try {
     await setAppSetting("chat_quality_last_report", {
-      dateKey,
+      dateKey: reportDateKey,
       text: report,
       createdAt: new Date().toISOString(),
     });
