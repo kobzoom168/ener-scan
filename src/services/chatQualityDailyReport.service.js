@@ -79,6 +79,10 @@ CRITICAL CONTEXT — the nature of this business (กบ 21 ก.ค.): this is a
 
 Do NOT flag: normal polite replies, the bot declining to answer authenticity/price (that is correct), short answers, system paywall cards, image messages you cannot see, in-persona master roleplay as described above.
 
+Two false-positive traps to avoid (กบ 22 ก.ค. — both happened):
+1. NUMBERS FROM REAL REPORTS: you cannot see the scan reports, but the bot can. If the conversation shows a scan completed earlier (customer sent a photo and got a result), numbers the bot quotes (คะแนน/เปอร์เซ็นต์/ด้านเด่น) usually come from that real report — do NOT flag them. Only flag invented numbers when it is clear no report exists yet (e.g. customer just sent the photo, bot said "รอสักครู่", then suddenly quotes results before any delivery).
+2. SYSTEM PAYWALL TEXT: messages listing package prices right after the customer runs out of free quota (pattern: "ใช้สิทธิ์สแกนฟรีครบแล้ว" + prices 29/49/399) are automated system templates the owner designed — correct behavior, never flag as "เสนอขายเอง".
+
 Reply JSON only:
 {"ok": true|false, "summary": "<=1 Thai sentence about this conversation>", "issues": [{"time":"HH:MM","who":"bot","quote":"<exact quoted text, <=200 chars>","problem":"<Thai, short, specific>","severity":"low|med|high"}]}
 ok=true when no issues. Copy quotes exactly from the transcript. Max 5 issues, worst first.`;
