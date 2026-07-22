@@ -366,6 +366,108 @@ async function loadPieceByToken(token) {
   return extractShowcasePiece(payload);
 }
 
+/** โพสต์ 1 แถวจากคิว (ใช้ร่วมกันทั้ง sweep ตามรอบ และโหมดโพสต์ทันทีตอนสแกน) */
+async function postShowcaseRow(row) {
+  const piece = await loadPieceByToken(row.public_token);
+  if (!piece) {
+    await supabase
+      .from("fb_showcase_queue")
+      .update({ status: "skipped", error_message: "payload not eligible anymore" })
+      .eq("id", row.id);
+    return { posted: 0, reason: "stale_row" };
+  }
+
+  const caption = await buildCaption(piece);
+  const cardUrl = `${buildPublicReportUrl(piece.token)}/card.png`;
+  const res = await postPagePhotoByUrl(cardUrl, caption, {
+    published:
+      String(process.env.FB_AUTOPOST_UNPUBLISHED ?? "false").trim().toLowerCase() !== "true",
+  });
+
+  if (!res.ok) {
+    await supabase
+      .from("fb_showcase_queue")
+      .update({ status: "failed", error_message: String(res.error || "").slice(0, 300) })
+      .eq("id", row.id);
+    console.log(
+      JSON.stringify({ event: "FB_AUTOPOST_FAILED", error: String(res.error || "").slice(0, 200) }),
+    );
+    await sendTelegramText(
+      `โพสต์เพจไม่สำเร็จ (${piece.name})\n${String(res.error || "").slice(0, 300)}`,
+    ).catch(() => {});
+    return { posted: 0, reason: "fb_error" };
+  }
+
+  await supabase
+    .from("fb_showcase_queue")
+    .update({
+      status: "posted",
+      caption,
+      fb_post_id: res.postId || null,
+      posted_at: new Date().toISOString(),
+    })
+    .eq("id", row.id);
+  console.log(
+    JSON.stringify({
+      event: "FB_AUTOPOST_POSTED",
+      tokenPrefix: piece.token.slice(0, 10),
+      source: row.source,
+      fbPostId: res.postId || null,
+    }),
+  );
+  await sendTelegramText(
+    `โพสต์ขึ้นเพจ Ener แล้ว (${row.source === "library" ? "คลังกบ" : "ลูกค้ายินดี"})\n${piece.name} · ${piece.energyScore.toFixed(1)}/10${res.postId ? `\nhttps://www.facebook.com/${res.postId}` : ""}`,
+  ).catch(() => {});
+  return { posted: 1 };
+}
+
+/**
+ * โหมดทดสอบ (กบ 22 ก.ค.): สแกนชิ้นจากบัญชีเจ้าของระบบ → โพสต์ขึ้นเพจทันที ไม่รอรอบ
+ * เปิดด้วย FB_AUTOPOST_ON_SCAN=true (default ปิด — ตั้งใจใช้เฉพาะ staging)
+ * จำกัดเฉพาะ FB_LIBRARY_LINE_USER_ID เท่านั้น ชิ้นลูกค้าไม่เข้าเงื่อนไขนี้เด็ดขาด
+ * @param {{ lineUserId: string, reportPayload: object }} p
+ */
+export async function maybeAutoPostOnScan({ lineUserId, reportPayload }) {
+  try {
+    if (
+      String(process.env.FB_AUTOPOST_ON_SCAN ?? "false").trim().toLowerCase() !== "true"
+    ) {
+      return { skipped: "disabled" };
+    }
+    if (!isFbPageConfigured()) return { skipped: "not_configured" };
+    const uid = String(lineUserId || "").trim();
+    if (!uid || uid !== LIBRARY_LINE_USER_ID) return { skipped: "not_library_user" };
+    const piece = extractShowcasePiece(reportPayload);
+    if (!piece) return { skipped: "not_eligible" };
+
+    const { data: row, error } = await supabase
+      .from("fb_showcase_queue")
+      .insert({
+        line_user_id: uid,
+        public_token: piece.token,
+        source: "library",
+        status: "queued",
+      })
+      .select("id, line_user_id, public_token, source, status")
+      .maybeSingle();
+    if (error) {
+      if (/duplicate|unique/i.test(String(error.message || ""))) {
+        return { skipped: "already_queued" };
+      }
+      throw error;
+    }
+    return await postShowcaseRow(row);
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "FB_AUTOPOST_ON_SCAN_ERROR",
+        message: String(e?.message || e).slice(0, 200),
+      }),
+    );
+    return { error: true };
+  }
+}
+
 /**
  * เรียกทุกนาทีจาก maintenanceWorker — โพสต์จริงเฉพาะชั่วโมงใน FB_AUTOPOST_HOURS
  * (default 11,19) รอบละ 1 โพสต์ ต่อวันไม่เกินจำนวนรอบ
@@ -386,58 +488,7 @@ export async function runFbShowcaseAutoPostSweep(now = new Date()) {
       console.log(JSON.stringify({ event: "FB_AUTOPOST_QUEUE_EMPTY" }));
       return { posted: 0, reason: "queue_empty" };
     }
-
-    const piece = await loadPieceByToken(row.public_token);
-    if (!piece) {
-      await supabase
-        .from("fb_showcase_queue")
-        .update({ status: "skipped", error_message: "payload not eligible anymore" })
-        .eq("id", row.id);
-      return { posted: 0, reason: "stale_row" };
-    }
-
-    const caption = await buildCaption(piece);
-    const cardUrl = `${buildPublicReportUrl(piece.token)}/card.png`;
-    const res = await postPagePhotoByUrl(cardUrl, caption, {
-      published:
-        String(process.env.FB_AUTOPOST_UNPUBLISHED ?? "false").trim().toLowerCase() !== "true",
-    });
-
-    if (!res.ok) {
-      await supabase
-        .from("fb_showcase_queue")
-        .update({ status: "failed", error_message: String(res.error || "").slice(0, 300) })
-        .eq("id", row.id);
-      console.log(
-        JSON.stringify({ event: "FB_AUTOPOST_FAILED", error: String(res.error || "").slice(0, 200) }),
-      );
-      await sendTelegramText(
-        `โพสต์เพจไม่สำเร็จ (${piece.name})\n${String(res.error || "").slice(0, 300)}`,
-      ).catch(() => {});
-      return { posted: 0, reason: "fb_error" };
-    }
-
-    await supabase
-      .from("fb_showcase_queue")
-      .update({
-        status: "posted",
-        caption,
-        fb_post_id: res.postId || null,
-        posted_at: new Date().toISOString(),
-      })
-      .eq("id", row.id);
-    console.log(
-      JSON.stringify({
-        event: "FB_AUTOPOST_POSTED",
-        tokenPrefix: piece.token.slice(0, 10),
-        source: row.source,
-        fbPostId: res.postId || null,
-      }),
-    );
-    await sendTelegramText(
-      `โพสต์ขึ้นเพจ Ener แล้ว (${row.source === "library" ? "คลังกบ" : "ลูกค้ายินดี"})\n${piece.name} · ${piece.energyScore.toFixed(1)}/10${res.postId ? `\nhttps://www.facebook.com/${res.postId}` : ""}`,
-    ).catch(() => {});
-    return { posted: 1 };
+    return await postShowcaseRow(row);
   } catch (e) {
     console.log(
       JSON.stringify({

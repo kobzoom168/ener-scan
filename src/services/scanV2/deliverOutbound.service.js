@@ -292,11 +292,16 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         await markSent(id);
         releaseScanGate(lineUserId);
         await handleScanResultPostDelivery(msg, payload);
-        // ขออนุญาตอวดชิ้นคะแนนสูงในเพจ FB (กบ 22 ก.ค.) — fire-and-forget ห้ามกระทบ report
+        // อวดชิ้นขึ้นเพจ FB (กบ 22 ก.ค.) — fire-and-forget ห้ามกระทบ report:
+        // ชิ้นเจ้าของระบบ + เปิดโหมดโพสต์ทันที = โพสต์เลย · ชิ้นลูกค้าคะแนนสูง = ถามขออนุญาตก่อน
         try {
-          const { maybeEnqueueFbConsentAsk } = await import(
+          const { maybeAutoPostOnScan, maybeEnqueueFbConsentAsk } = await import(
             "../fbShowcase/fbShowcase.service.js"
           );
+          void maybeAutoPostOnScan({
+            lineUserId,
+            reportPayload: payload.reportPayload,
+          });
           void maybeEnqueueFbConsentAsk({
             lineUserId,
             reportPayload: payload.reportPayload,
