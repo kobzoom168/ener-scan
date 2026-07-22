@@ -11,6 +11,8 @@ export const OUTBOUND_PRIORITY = {
   /** เตือนต่ออายุรายเดือน (push อัตโนมัติ) — ต่ำสุด ไม่แซงข้อความตอบลูกค้า */
   renewal_reminder: 90,
   daily_pick_push: 88,
+  /** ขออนุญาตอวดชิ้นในเพจ Facebook หลังส่ง report (กบ 22 ก.ค.) */
+  fb_consent_ask: 85,
 };
 
 /** Backoff steps (ms) for LINE 429 / transient failures. */
@@ -26,4 +28,5 @@ export const OUTBOUND_MAX_ATTEMPTS = {
   pending_intro: 4,
   slip_received: 3,
   renewal_reminder: 2,
+  fb_consent_ask: 2,
 };

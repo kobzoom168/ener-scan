@@ -9,6 +9,7 @@ import { maybeSendDlqAlert } from "../services/maintenanceDlqAlert.service.js";
 import { runRenewalReminderSweep } from "../services/scanV2/renewalReminder.service.js";
 import { runChatQualityDailySweep } from "../services/chatQualityDailyReport.service.js";
 import { runDailyLuckyPickSweep } from "../services/dailyLuckyPickPush.service.js";
+import { runFbShowcaseAutoPostSweep } from "../services/fbShowcase/fbShowcase.service.js";
 import {
   getLine429CanaryCountHour,
   startWorkerHeartbeatLoop,
@@ -191,6 +192,17 @@ async function runOnce() {
     console.warn(
       JSON.stringify({
         event: "DAILY_PICK_PUSH_SWEEP_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+  }
+  // โพสต์การ์ดอวดพระขึ้นเพจ FB วันละ 2 รอบ 11:00/19:00 (กบ 22 ก.ค.) — self-gated + dedupe ต่อรอบ
+  try {
+    await runFbShowcaseAutoPostSweep();
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "FB_AUTOPOST_SWEEP_CALL_ERROR",
         message: String(e?.message || e).slice(0, 160),
       }),
     );

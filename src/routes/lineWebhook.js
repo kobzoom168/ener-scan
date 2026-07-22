@@ -453,6 +453,34 @@ async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, te
   return true;
 }
 
+/** คำตอบขออนุญาตอวดชิ้นในเพจ FB (กบ 22 ก.ค.) — ดักเฉพาะตอนมีคำถามค้างใน redis เท่านั้น */
+async function maybeHandleFbShowcaseConsentReply({ client, userId, replyToken, text }) {
+  try {
+    const { handleFbConsentReplyText } = await import(
+      "../services/fbShowcase/fbShowcase.service.js"
+    );
+    const res = await handleFbConsentReplyText({ lineUserId: userId, text });
+    if (!res) return false;
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken,
+      replyType: "fb_showcase_consent",
+      semanticKey: "fb_showcase_consent",
+      text: res.reply,
+    });
+    return true;
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "FB_CONSENT_REPLY_HANDLER_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+    return false; // พัง = ปล่อยไหลไปสมองแชทปกติ
+  }
+}
+
 function logWaitingBirthdate(event, payload = {}) {
   console.log(`[WAITING_BIRTHDATE] ${event}`, payload);
 }
@@ -6705,7 +6733,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           return;
         }
         if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
-  if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
+        if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
         if (text === "สแกนพลังงาน") {
           let savedBirthdate = null;
@@ -7443,6 +7471,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
+  if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;
     try {

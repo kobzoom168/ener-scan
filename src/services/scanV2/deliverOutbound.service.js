@@ -173,8 +173,8 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       return { sent: true };
     }
 
-    if (kind === "renewal_reminder" || kind === "daily_pick_push") {
-      // push อัตโนมัติจาก maintenance (เตือนต่ออายุ / หนุนดวงเช้า) — ข้อความ + quickReply optional
+    if (kind === "renewal_reminder" || kind === "daily_pick_push" || kind === "fb_consent_ask") {
+      // push อัตโนมัติ (เตือนต่ออายุ / หนุนดวงเช้า / ขออนุญาตอวดชิ้นในเพจ) — ข้อความ + quickReply optional
       const text = String(payload.text || "").trim();
       if (!text) {
         return { sent: false, errorCode: "empty_payload", errorMessage: `${kind} missing text` };
@@ -292,6 +292,18 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         await markSent(id);
         releaseScanGate(lineUserId);
         await handleScanResultPostDelivery(msg, payload);
+        // ขออนุญาตอวดชิ้นคะแนนสูงในเพจ FB (กบ 22 ก.ค.) — fire-and-forget ห้ามกระทบ report
+        try {
+          const { maybeEnqueueFbConsentAsk } = await import(
+            "../fbShowcase/fbShowcase.service.js"
+          );
+          void maybeEnqueueFbConsentAsk({
+            lineUserId,
+            reportPayload: payload.reportPayload,
+          });
+        } catch {
+          /* ignore */
+        }
         // กบ 18 ก.ค. 2026 (รอบสอง): ส่ง report จบแล้วเงียบ — ไม่บอกสิทธิ์คงเหลือ/โปรตามหลัง
         // การแจ้งสิทธิ์หมด+โปรย้ายไปตอนลูกค้าส่งรูปใหม่ (เส้น webhook มีการ์ด paywall อยู่แล้ว)
         // เปิดพฤติกรรมเดิมกลับได้ด้วย POST_REPORT_QUOTA_NOTICE_ENABLED=true
