@@ -301,10 +301,12 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           void maybeAutoPostOnScan({
             lineUserId,
             reportPayload: payload.reportPayload,
+            publicToken: payload.publicToken,
           });
           void maybeEnqueueFbConsentAsk({
             lineUserId,
             reportPayload: payload.reportPayload,
+            publicToken: payload.publicToken,
           });
         } catch {
           /* ignore */

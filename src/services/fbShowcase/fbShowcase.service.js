@@ -114,15 +114,35 @@ export function extractShowcasePiece(reportPayload) {
 /* ────────────────────── 1) ถามขออนุญาตหลังส่ง report ────────────────────── */
 
 /**
+ * payload แนบใน outbound อาจไม่มี reportPayload (โหมด summary_link แนบแค่ลิงก์)
+ * → โหลด report ตัวเต็มจาก DB ด้วย publicToken แทน
+ */
+async function resolveShowcasePiece(reportPayload, publicToken) {
+  let piece = extractShowcasePiece(reportPayload);
+  const token = String(publicToken || "").trim();
+  if (!piece && token) {
+    try {
+      const { getScanResultPayloadByPublicToken } = await import(
+        "../../stores/scanV2/scanResultsV2.db.js"
+      );
+      piece = extractShowcasePiece(await getScanResultPayloadByPublicToken(token));
+    } catch {
+      piece = null;
+    }
+  }
+  return piece;
+}
+
+/**
  * เรียกจาก deliverOutbound หลัง report ถึงมือลูกค้า — fire-and-forget (ห้าม throw)
  * @param {{ lineUserId: string, reportPayload: object }} p
  */
-export async function maybeEnqueueFbConsentAsk({ lineUserId, reportPayload }) {
+export async function maybeEnqueueFbConsentAsk({ lineUserId, reportPayload, publicToken }) {
   try {
     if (!consentAskEnabled() || !isFbPageConfigured()) return { skipped: "disabled" };
     const uid = String(lineUserId || "").trim();
     if (!uid || uid === LIBRARY_LINE_USER_ID) return { skipped: "library_user" };
-    const piece = extractShowcasePiece(reportPayload);
+    const piece = await resolveShowcasePiece(reportPayload, publicToken);
     if (!piece || piece.energyScore < MIN_SCORE) return { skipped: "not_eligible" };
 
     const declined = await getValue(`${DECLINED_KEY_PREFIX}${piece.token}`).catch(() => null);
@@ -427,7 +447,7 @@ async function postShowcaseRow(row) {
  * จำกัดเฉพาะ FB_LIBRARY_LINE_USER_ID เท่านั้น ชิ้นลูกค้าไม่เข้าเงื่อนไขนี้เด็ดขาด
  * @param {{ lineUserId: string, reportPayload: object }} p
  */
-export async function maybeAutoPostOnScan({ lineUserId, reportPayload }) {
+export async function maybeAutoPostOnScan({ lineUserId, reportPayload, publicToken }) {
   try {
     if (
       String(process.env.FB_AUTOPOST_ON_SCAN ?? "false").trim().toLowerCase() !== "true"
@@ -436,9 +456,20 @@ export async function maybeAutoPostOnScan({ lineUserId, reportPayload }) {
     }
     if (!isFbPageConfigured()) return { skipped: "not_configured" };
     const uid = String(lineUserId || "").trim();
-    if (!uid || uid !== LIBRARY_LINE_USER_ID) return { skipped: "not_library_user" };
-    const piece = extractShowcasePiece(reportPayload);
-    if (!piece) return { skipped: "not_eligible" };
+    const skip = (reason) => {
+      console.log(
+        JSON.stringify({
+          event: "FB_AUTOPOST_ON_SCAN_SKIPPED",
+          reason,
+          lineUserIdPrefix: uid.slice(0, 10),
+          tokenPrefix: String(publicToken || "").slice(0, 12),
+        }),
+      );
+      return { skipped: reason };
+    };
+    if (!uid || uid !== LIBRARY_LINE_USER_ID) return skip("not_library_user");
+    const piece = await resolveShowcasePiece(reportPayload, publicToken);
+    if (!piece) return skip("not_eligible");
 
     const { data: row, error } = await supabase
       .from("fb_showcase_queue")
