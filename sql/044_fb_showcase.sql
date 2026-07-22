@@ -38,3 +38,7 @@ CREATE INDEX IF NOT EXISTS idx_fb_showcase_queue_status
   ON public.fb_showcase_queue (status, created_at);
 
 COMMENT ON TABLE public.fb_showcase_queue IS 'คิวโพสต์การ์ดอวดพระขึ้นเพจ Facebook (ต้องมี consent จากลูกค้า หรือเป็นชิ้นจากคลังเจ้าของระบบเท่านั้น)';
+
+-- PostgREST เข้าตารางผ่าน role web_anon (JWT) / service_role — ตารางใหม่ต้อง grant เอง
+GRANT SELECT, INSERT, UPDATE ON public.fb_showcase_queue TO service_role;
+GRANT SELECT, INSERT, UPDATE ON public.fb_showcase_queue TO web_anon;
