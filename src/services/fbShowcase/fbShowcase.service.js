@@ -22,6 +22,7 @@ import { buildPublicReportUrl } from "../reports/reportLink.service.js";
 import {
   isFbPageConfigured,
   postPagePhotoByUrl,
+  getPostPermalink,
 } from "../../integrations/facebook/facebookPage.api.js";
 import {
   getGeminiFlashModel,
@@ -435,8 +436,9 @@ async function postShowcaseRow(row) {
       fbPostId: res.postId || null,
     }),
   );
+  const permalink = res.postId ? await getPostPermalink(res.postId) : "";
   await sendTelegramText(
-    `โพสต์ขึ้นเพจ Ener แล้ว (${row.source === "library" ? "คลังกบ" : "ลูกค้ายินดี"})\n${piece.name} · ${piece.energyScore.toFixed(1)}/10${res.postId ? `\nhttps://www.facebook.com/${res.postId}` : ""}`,
+    `โพสต์ขึ้นเพจ Ener แล้ว (${row.source === "library" ? "คลังกบ" : "ลูกค้ายินดี"})\n${piece.name} · ${piece.energyScore.toFixed(1)}/10${permalink ? `\n${permalink}` : ""}`,
   ).catch(() => {});
   return { posted: 1 };
 }

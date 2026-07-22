@@ -59,3 +59,24 @@ export async function postPagePhotoByUrl(imageUrl, caption, opts = {}) {
     return { ok: false, error: String(e?.message || e).slice(0, 200) };
   }
 }
+
+/**
+ * ลิงก์เปิดโพสต์จริง (id ดิบ facebook.com/<id> เปิดไม่ได้) — พลาด = คืน ""
+ * @param {string} postId
+ * @returns {Promise<string>}
+ */
+export async function getPostPermalink(postId) {
+  const { token, version } = cfg();
+  const id = String(postId || "").trim();
+  if (!id || !token) return "";
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${version}/${id}?fields=permalink_url&access_token=${encodeURIComponent(token)}`,
+      { signal: AbortSignal.timeout(20000) },
+    );
+    const data = await res.json().catch(() => ({}));
+    return res.ok ? String(data.permalink_url || "") : "";
+  } catch {
+    return "";
+  }
+}
