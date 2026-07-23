@@ -83,14 +83,6 @@ export function deriveShowcaseCardData(payload) {
   const objectImageUrl = String(p.objectImageUrl || p.object?.objectImageUrl || "").trim();
   if (!/^https:\/\//i.test(objectImageUrl)) return null;
 
-  // ชื่อสายบนการ์ด: ส่วนหลัง "·" ของ heroNamingLine (กบ: ตัดคำ generic "พระ/เทวรูป" ทิ้ง)
-  const hero = String(
-    a.flexSurface?.heroNamingLine || p.flexSurface?.heroNamingLine || "",
-  ).trim();
-  const heroTail = hero.includes("·") ? hero.split("·").pop().trim() : hero;
-  const name =
-    heroTail || String(a.flexSurface?.headline || "").trim() || "พลังเฉพาะองค์";
-
   const cats = a.powerCategories || {};
   const axes = [];
   for (const key of AXIS_ORDER) {
@@ -106,6 +98,15 @@ export function deriveShowcaseCardData(payload) {
   if (axes.length < 3) return null; // เรดาร์ต้องมีแกนพอวาด
 
   const skills = [...axes].sort((x, y) => y.score - x.score).slice(0, 2);
+  // ชื่อบนการ์ด = พลังหลักตามคะแนนจริง (กบ 23 ก.ค. — เดิมใช้ป้ายสายจาก heroNamingLine
+  // แล้วขัดกับเรดาร์: การ์ดขึ้น "ปกป้อง" แต่แกนเด่นจริงคือหนุนดวง)
+  const heroTail = String(
+    a.flexSurface?.heroNamingLine || p.flexSurface?.heroNamingLine || "",
+  )
+    .split("·")
+    .pop()
+    .trim();
+  const name = skills[0]?.label || heroTail || "พลังเฉพาะองค์";
   const gradeRaw = resolveEnergyLevelDisplayGrade(p.summary?.energyLevelLabel, energyScore);
   const grade = ["S", "A", "B"].includes(gradeRaw) ? gradeRaw : null; // เกรดต่ำไม่ขึ้นการ์ด
   const compatRaw = Number(p.summary?.compatibilityPercent);

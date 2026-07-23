@@ -75,7 +75,7 @@ const cardPayload = () => ({
 test("deriveShowcaseCardData: ชื่อ = ส่วนหลัง · + แกนครบ 6 + สกิลท็อป 2 เรียงถูก", () => {
   const d = deriveShowcaseCardData(cardPayload());
   assert.ok(d);
-  assert.equal(d.name, "ปกป้อง");
+  assert.equal(d.name, "บารมี"); // ชื่อ = แกนคะแนนสูงสุดจริง (กบ 23 ก.ค.)
   assert.equal(d.axes.length, 6);
   assert.equal(d.axes[2].label, "บารมี");
   assert.equal(d.skills[0].labelFull, "บารมีและอำนาจนำ");
