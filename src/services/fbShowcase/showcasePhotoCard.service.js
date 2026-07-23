@@ -637,14 +637,16 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
               ]),
             ],
           },
-          { type: "separator", margin: "lg", color: "#e2d8ba" },
         ],
       },
       footer: {
         type: "box",
         layout: "vertical",
         backgroundColor: "#fffdf6",
-        paddingAll: "14px",
+        paddingStart: "14px",
+        paddingEnd: "14px",
+        paddingBottom: "14px",
+        paddingTop: "0px",
         contents: [
           {
             type: "button",
