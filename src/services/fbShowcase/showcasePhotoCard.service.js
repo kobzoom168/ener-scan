@@ -352,13 +352,12 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   ${stars ? starsSvg(68, 298, 14, stars) : ""}
   ${top ? `<text x="240" y="306" font-family="Kanit" font-size="26" fill="${CREAM}">${peakLevelWord(top.score)}</text>` : ""}
 
-  <!-- เข้ากับคุณ (แทนตราเกรด — กบ 23 ก.ค.) -->
+  <!-- เกรดแบบไม่มีโล่ (กบ 23 ก.ค.) -->
   ${
-    second
+    data.grade
       ? `
-  <rect x="420" y="152" width="220" height="46" rx="23" fill="none" stroke="${GOLD}" stroke-width="2"/>
-  <text x="530" y="184" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${GOLD}">เข้ากับคุณ</text>
-  <text x="420" y="262" font-family="Kanit" font-weight="800" font-size="54" fill="url(#gold)" filter="url(#glowSoft)">${escapeXml(second.label)}</text>`
+  <text x="470" y="250" font-family="Kanit" font-weight="800" font-size="96" fill="#ffffff" filter="url(#glowSoft)">${data.grade}<tspan font-size="30" fill="${GOLD}"> RANK</tspan></text>
+  ${starsSvg(488, 288, 13, stars)}`
       : ""
   }
 
@@ -370,9 +369,12 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <rect x="76" y="980" width="140" height="40" rx="20" fill="#2a2214" stroke="${GOLD}" stroke-width="1.5"/>
   <text x="146" y="1008" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="22" fill="${GOLD}">พลังรวม</text>
   <text x="84" y="1096" font-family="Kanit" font-weight="800" font-size="76" fill="url(#gold)" filter="url(#glow)">${scoreText}<tspan font-size="40" fill="#bfae8a"> /10</tspan></text>
-  <rect x="400" y="1062" width="216" height="12" rx="6" fill="#3a2f1a"/>
-  <rect x="400" y="1062" width="${(216 * Math.min(100, data.energyScore * 10)) / 100}" height="12" rx="6" fill="url(#gold)"/>
-  ${data.grade ? `<text x="400" y="1112" font-family="Kanit" font-weight="600" font-size="26" fill="${CREAM}">${gradeWord(data.grade)}</text>` : ""}
+  ${
+    second
+      ? `<text x="400" y="1058" font-family="Kanit" font-size="24" fill="#bfae8a">เข้ากับคุณ</text>
+  <text x="400" y="1116" font-family="Kanit" font-weight="800" font-size="48" fill="url(#gold)" filter="url(#glowSoft)">${escapeXml(second.label)}</text>`
+      : ""
+  }
 
   <!-- ท้ายซ้าย -->
   <text x="52" y="${H - 34}" font-family="Kanit" font-size="24" fill="#bfae8a">สแกนพระ 1 ชิ้น = การ์ดพลังงาน 1 ใบ</text>
