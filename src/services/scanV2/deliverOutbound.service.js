@@ -273,6 +273,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           chatCardMessages = await buildChatPhotoCardMessages(
             payload.publicToken,
             payload.reportUrl,
+            lineUserId,
           );
         } catch (e) {
           console.log(

@@ -348,7 +348,7 @@ function buildSvg(data, photoDataUri, qrDataUri) {
  * @param {string} reportUrl ลิงก์รายงาน HTML
  * @returns {Promise<Array<object> | null>}
  */
-export async function buildChatPhotoCardMessages(publicToken, reportUrl) {
+export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUserId) {
   const token = String(publicToken || "").trim();
   if (!token) return null;
   const { getScanResultPayloadByPublicToken } = await import(
@@ -371,11 +371,46 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl) {
     originalContentUrl: cardUrl,
     previewImageUrl: cardUrl,
   };
-  const scoreText = (Math.round(data.energyScore * 10) / 10).toFixed(1);
-  const headLine = `พลังรวม ${scoreText}${data.grade ? ` · เกรด ${data.grade}` : ""}`;
+
+  // อันดับชิ้นนี้ในคลังลูกค้า (ของที่ไม่มีบนรูปการ์ด — กบ 23 ก.ค.) · พัง = ไม่แสดง
+  let rankLine = "";
+  try {
+    const uid = String(lineUserId || "").trim();
+    if (uid) {
+      const { listScanResultsV2PayloadRowsForLineUser } = await import(
+        "../../stores/scanV2/scanResultsV2.db.js"
+      );
+      const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 150);
+      const seen = new Set();
+      const pieces = [];
+      for (const r of rows || []) {
+        const d = deriveShowcaseCardData(r?.report_payload_json);
+        if (!d) continue;
+        const key = `${d.name}|${d.energyScore}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pieces.push({ token: String(r?.report_payload_json?.publicToken || ""), score: d.energyScore });
+      }
+      if (pieces.length >= 2) {
+        const sorted = [...pieces].sort((a, b) => b.score - a.score);
+        let rank = sorted.findIndex((p) => p.token === token) + 1;
+        if (rank === 0) {
+          rank = sorted.filter((p) => p.score > data.energyScore).length + 1;
+        }
+        rankLine = `ชิ้นนี้พลังแรงเป็นอันดับ ${rank} จาก ${pieces.length} ชิ้นในคลังของคุณ`;
+      } else {
+        rankLine = "ชิ้นแรกในคลังของคุณ สะสมเพิ่มได้เรื่อย ๆ ครับ";
+      }
+    }
+  } catch {
+    rankLine = "";
+  }
+
+  const compatPct = data.compat != null ? Math.min(100, Math.max(0, data.compat)) : null;
+  const altText = compatPct != null ? `เข้ากับคุณ ${compatPct}%` : "ผลอ่านพลังของคุณ";
   const miniFlex = {
     type: "flex",
-    altText: headLine,
+    altText,
     contents: {
       type: "bubble",
       size: "kilo",
@@ -385,27 +420,57 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl) {
         backgroundColor: "#fffdf6",
         paddingAll: "16px",
         contents: [
-          { type: "text", text: headLine, weight: "bold", size: "lg", color: "#222222" },
-          ...(data.compat != null
+          // ของเฉพาะตัวลูกค้า (ไม่มีบนรูปการ์ด): เข้ากับคุณ% เป็นหลอดพลัง + อันดับในคลัง
+          ...(compatPct != null
             ? [
                 {
-                  type: "text",
-                  text: `เข้ากับคุณ ${data.compat}%`,
-                  size: "sm",
-                  color: "#a5813a",
-                  weight: "bold",
-                  margin: "sm",
+                  type: "box",
+                  layout: "baseline",
+                  contents: [
+                    { type: "text", text: "เข้ากับคุณ", size: "sm", color: "#555555", flex: 0 },
+                    {
+                      type: "text",
+                      text: `${compatPct}%`,
+                      size: "xl",
+                      weight: "bold",
+                      color: "#a5813a",
+                      margin: "md",
+                    },
+                  ],
+                },
+                {
+                  type: "box",
+                  layout: "vertical",
+                  margin: "md",
+                  height: "10px",
+                  backgroundColor: "#eee5cc",
+                  cornerRadius: "5px",
+                  contents: [
+                    {
+                      type: "box",
+                      layout: "vertical",
+                      width: `${compatPct}%`,
+                      height: "10px",
+                      backgroundColor: "#c9a136",
+                      cornerRadius: "5px",
+                      contents: [{ type: "filler" }],
+                    },
+                  ],
                 },
               ]
             : []),
-          {
-            type: "text",
-            text: "รายละเอียดครบทั้ง 6 ด้านกับคำแนะนำอยู่ในรายงานเต็มครับ",
-            size: "xs",
-            color: "#888888",
-            wrap: true,
-            margin: "md",
-          },
+          ...(rankLine
+            ? [
+                {
+                  type: "text",
+                  text: rankLine,
+                  size: "sm",
+                  color: "#555555",
+                  wrap: true,
+                  margin: "lg",
+                },
+              ]
+            : []),
         ],
       },
       footer: {
