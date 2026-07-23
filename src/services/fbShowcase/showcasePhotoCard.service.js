@@ -546,7 +546,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
     altText,
     contents: {
       type: "bubble",
-      size: "giga",
+      size: "kilo",
       body: {
         type: "box",
         layout: "vertical",
@@ -563,7 +563,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
             contents: [
               {
                 type: "text",
-                text: "🔒 เปิดรายงานพลังงานเต็ม",
+                text: "เปิดรายงานพลังงานเต็ม",
                 weight: "bold",
                 size: "md",
                 color: "#ffffff",
