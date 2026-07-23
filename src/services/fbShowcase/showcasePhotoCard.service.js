@@ -349,8 +349,7 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <rect x="52" y="152" width="150" height="46" rx="23" fill="none" stroke="${GOLD}" stroke-width="2"/>
   <text x="127" y="184" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${GOLD}">พลังเด่น</text>
   <text x="52" y="258" font-family="Kanit" font-weight="800" font-size="68" fill="#ffffff" filter="url(#glowSoft)">${escapeXml(data.name)}</text>
-  ${stars ? starsSvg(68, 298, 14, stars) : ""}
-  ${top ? `<text x="240" y="306" font-family="Kanit" font-size="26" fill="${CREAM}">${peakLevelWord(top.score)}</text>` : ""}
+  ${top ? `<text x="52" y="306" font-family="Kanit" font-size="26" fill="${CREAM}">${peakLevelWord(top.score)}</text>` : ""}
 
   <!-- เกรดแบบไม่มีโล่ (กบ 23 ก.ค.) -->
   ${
@@ -602,7 +601,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
             type: "image",
             url: cardUrl,
             size: "full",
-            aspectRatio: "4:5",
+            aspectRatio: "1080:1200",
             aspectMode: "cover",
             action: { type: "uri", uri: cardUrl },
           },
