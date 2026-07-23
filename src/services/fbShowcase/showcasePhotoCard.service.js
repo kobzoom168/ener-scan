@@ -481,7 +481,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
     altText,
     contents: {
       type: "bubble",
-      size: "kilo",
+      size: "giga",
       body: {
         type: "box",
         layout: "vertical",
@@ -502,14 +502,28 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
                 cornerRadius: "12px",
                 paddingAll: "10px",
                 contents: [
-                  { type: "text", text: "พลังเด่น", size: "xxs", color: "#8a8272" },
                   {
-                    type: "text",
-                    text: top?.label || "-",
-                    weight: "bold",
-                    size: "lg",
-                    color: "#a5813a",
-                    margin: "xs",
+                    type: "box",
+                    layout: "horizontal",
+                    contents: [
+                      { type: "text", text: "✨", size: "xl", flex: 0, gravity: "center" },
+                      {
+                        type: "box",
+                        layout: "vertical",
+                        margin: "sm",
+                        contents: [
+                          { type: "text", text: "พลังเด่น", size: "xxs", color: "#8a8272" },
+                          {
+                            type: "text",
+                            text: top?.label || "-",
+                            weight: "bold",
+                            size: "lg",
+                            color: "#a5813a",
+                            margin: "xs",
+                          },
+                        ],
+                      },
+                    ],
                   },
                 ],
               },
@@ -522,14 +536,28 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
                 cornerRadius: "12px",
                 paddingAll: "10px",
                 contents: [
-                  { type: "text", text: "พลังเข้ากับคุณ", size: "xxs", color: "#8a8272" },
                   {
-                    type: "text",
-                    text: second?.label || "-",
-                    weight: "bold",
-                    size: "lg",
-                    color: "#3b3324",
-                    margin: "xs",
+                    type: "box",
+                    layout: "horizontal",
+                    contents: [
+                      { type: "text", text: "🍀", size: "xl", flex: 0, gravity: "center" },
+                      {
+                        type: "box",
+                        layout: "vertical",
+                        margin: "sm",
+                        contents: [
+                          { type: "text", text: "พลังเข้ากับคุณ", size: "xxs", color: "#8a8272" },
+                          {
+                            type: "text",
+                            text: second?.label || "-",
+                            weight: "bold",
+                            size: "lg",
+                            color: "#3b3324",
+                            margin: "xs",
+                          },
+                        ],
+                      },
+                    ],
                   },
                 ],
               },
@@ -543,24 +571,40 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
             contents: [
               statCol([
                 {
-                  type: "text",
-                  text: scoreText,
-                  size: "xxl",
-                  weight: "bold",
-                  color: "#a5813a",
+                  type: "box",
+                  layout: "baseline",
+                  contents: [
+                    {
+                      type: "text",
+                      text: scoreText,
+                      size: "xxl",
+                      weight: "bold",
+                      color: "#a5813a",
+                      flex: 0,
+                    },
+                    { type: "text", text: "/10", size: "xs", color: "#8a8272", margin: "sm", flex: 0 },
+                  ],
                 },
-                { type: "text", text: "พลังรวม", size: "xxs", color: "#8a8272", margin: "xs" },
+                { type: "text", text: "⚡ พลังรวม", size: "xxs", color: "#8a8272", margin: "xs" },
               ]),
               { type: "separator", color: "#e2d8ba" },
               statCol(
                 data.grade
                   ? [
                       {
-                        type: "text",
-                        text: data.grade,
-                        size: "xxl",
-                        weight: "bold",
-                        color: "#3b3324",
+                        type: "box",
+                        layout: "baseline",
+                        contents: [
+                          {
+                            type: "text",
+                            text: data.grade,
+                            size: "xxl",
+                            weight: "bold",
+                            color: "#3b3324",
+                            flex: 0,
+                          },
+                          { type: "text", text: "RANK", size: "xxs", color: "#8a8272", margin: "sm", flex: 0 },
+                        ],
                       },
                       {
                         type: "box",
@@ -649,13 +693,31 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
         paddingTop: "0px",
         contents: [
           {
-            type: "button",
-            style: "primary",
-            color: "#a5813a",
-            height: "md",
-            action: { type: "uri", label: "เปิดรายงานฉบับเต็ม", uri: rUrl },
+            type: "box",
+            layout: "vertical",
+            backgroundColor: "#a5813a",
+            cornerRadius: "10px",
+            paddingAll: "12px",
+            action: { type: "uri", label: "เปิดรายงาน", uri: rUrl },
+            contents: [
+              {
+                type: "text",
+                text: "🔒 เปิดรายงานพลังงานเต็ม",
+                weight: "bold",
+                size: "md",
+                color: "#ffffff",
+                align: "center",
+              },
+              {
+                type: "text",
+                text: "ดูรายละเอียดครบทุกด้าน + คำแนะนำเฉพาะคุณ",
+                size: "xxs",
+                color: "#f5edd8",
+                align: "center",
+                margin: "xs",
+              },
+            ],
           },
-
         ],
       },
       styles: { body: { backgroundColor: "#fffdf6" }, footer: { backgroundColor: "#fffdf6" } },
