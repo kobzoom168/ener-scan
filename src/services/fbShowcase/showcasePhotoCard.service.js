@@ -408,102 +408,155 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
   }
 
   const compatPct = data.compat != null ? Math.min(100, Math.max(0, data.compat)) : null;
-  const altText = compatPct != null ? `เข้ากับคุณ ${compatPct}%` : "ผลอ่านพลังของคุณ";
+  const altText = `ผลการอ่านพลัง: พลังรวม ${(Math.round(data.energyScore * 10) / 10).toFixed(1)}`;
+  const scoreText = (Math.round(data.energyScore * 10) / 10).toFixed(1);
+  const top = data.skills[0];
+  const second = data.skills[1];
+  const gradeStars = data.grade === "S" ? 5 : data.grade === "A" ? 4 : data.grade === "B" ? 3 : 0;
+
+  // ประโยคอธิบายพลังเด่น (ตายตัวต่อแกน — ไม่มโนตัวเลข ไม่การันตีผล)
+  const AXIS_BLURB = {
+    luck: "ชิ้นนี้มีพลังเด่นด้านการเปิดทางและจังหวะโอกาส เหมาะกับการพกในวันเจรจา ค้าขาย หรือวันที่มีนัดสำคัญ",
+    metta: "ชิ้นนี้มีพลังเด่นด้านเมตตาและไมตรี เหมาะกับการพกในวันพบผู้คน งานบริการ หรือวันที่ต้องเจรจาให้ราบรื่น",
+    baramee: "ชิ้นนี้มีพลังเด่นด้านบารมีและภาวะผู้นำ เหมาะกับการพกในวันประชุม คุมงาน หรือเข้าพบผู้ใหญ่",
+    specialty: "ชิ้นนี้มีพลังเด่นด้านงานเฉพาะทาง เหมาะกับการพกในวันที่ต้องใช้ฝีมือหรือความชำนาญเฉพาะตัว",
+    protection: "ชิ้นนี้มีพลังเด่นด้านคุ้มครองป้องกัน เหมาะกับการพกในวันเดินทางหรือวันที่งานต้องระวังตัวเป็นพิเศษ",
+    fortune_anchor: "ชิ้นนี้มีพลังเด่นด้านการหนุนโอกาสและเสริมความมั่นคง เหมาะกับการพกในวันทำงานหรือช่วงเริ่มต้นสิ่งใหม่",
+  };
+  const blurb = AXIS_BLURB[top?.key] || "";
+
+  const statCol = (contents) => ({
+    type: "box",
+    layout: "vertical",
+    flex: 1,
+    alignItems: "center",
+    contents,
+  });
   const miniFlex = {
     type: "flex",
     altText,
     contents: {
       type: "bubble",
-      size: "kilo",
+      size: "mega",
       body: {
         type: "box",
         layout: "vertical",
         backgroundColor: "#fffdf6",
         paddingAll: "16px",
         contents: [
-          // ของเฉพาะตัวลูกค้า (ไม่มีบนรูปการ์ด): เข้ากับคุณ% เป็นหลอดพลัง + อันดับในคลัง
-          ...(compatPct != null
-            ? [
-                {
-                  type: "box",
-                  layout: "baseline",
-                  contents: [
-                    { type: "text", text: "เข้ากับคุณ", size: "sm", color: "#555555", flex: 0 },
-                    {
-                      type: "text",
-                      text: `${compatPct}%`,
-                      size: "xl",
-                      weight: "bold",
-                      color: "#a5813a",
-                      margin: "md",
-                    },
-                  ],
-                },
-                {
-                  type: "box",
-                  layout: "vertical",
-                  margin: "md",
-                  height: "10px",
-                  backgroundColor: "#eee5cc",
-                  cornerRadius: "5px",
-                  contents: [
-                    {
-                      type: "box",
-                      layout: "vertical",
-                      width: `${compatPct}%`,
-                      height: "10px",
-                      backgroundColor: "#c9a136",
-                      cornerRadius: "5px",
-                      contents: [{ type: "filler" }],
-                    },
-                  ],
-                },
-              ]
-            : []),
-          // หลอดพลังสไตล์การ์ดสรุปเดิมย่อส่วน (กบ 23 ก.ค.): ชื่อเต็มบน + หลอดกับเลขแถวเดียว
-          // ครบทุกแกน เรียงสูง→ต่ำ
           {
             type: "text",
-            text: "พลังเด่น",
-            size: "sm",
+            text: "ผลการอ่านพลังของคุณ",
             weight: "bold",
-            color: "#a5813a",
-            margin: "lg",
+            size: "md",
+            color: "#3b3324",
           },
+          { type: "separator", margin: "md", color: "#e2d8ba" },
           {
-            type: "text",
-            text: "เรียงจากคะแนนสูงไปต่ำ",
-            size: "xxs",
-            color: "#aaaaaa",
-            margin: "xs",
-          },
-          ...[...data.axes]
-            .sort((x, y) => y.score - x.score)
-            .map((ax) => {
-              const pct = Math.min(100, Math.max(3, ax.score));
-              return {
-                type: "box",
-                layout: "vertical",
-                margin: "md",
-                contents: [
-                  { type: "text", text: ax.labelFull, size: "xs", color: "#333333" },
-                  {
-                    type: "box",
-                    layout: "horizontal",
-                    margin: "xs",
-                    contents: [
+            type: "box",
+            layout: "horizontal",
+            margin: "lg",
+            contents: [
+              statCol([
+                {
+                  type: "text",
+                  text: scoreText,
+                  size: "xxl",
+                  weight: "bold",
+                  color: "#a5813a",
+                },
+                { type: "text", text: "พลังรวม", size: "xxs", color: "#8a8272", margin: "xs" },
+              ]),
+              { type: "separator", color: "#e2d8ba" },
+              statCol(
+                data.grade
+                  ? [
+                      {
+                        type: "box",
+                        layout: "baseline",
+                        contents: [
+                          { type: "text", text: "เกรด", size: "xxs", color: "#8a8272", flex: 0 },
+                          {
+                            type: "text",
+                            text: data.grade,
+                            size: "xxl",
+                            weight: "bold",
+                            color: "#3b3324",
+                            margin: "sm",
+                            flex: 0,
+                          },
+                        ],
+                      },
+                      {
+                        type: "box",
+                        layout: "baseline",
+                        margin: "xs",
+                        contents: [
+                          {
+                            type: "text",
+                            text: "★".repeat(gradeStars),
+                            size: "xs",
+                            color: "#c9a136",
+                            flex: 0,
+                          },
+                          ...(gradeStars < 5
+                            ? [
+                                {
+                                  type: "text",
+                                  text: "★".repeat(5 - gradeStars),
+                                  size: "xs",
+                                  color: "#d9d2c0",
+                                  flex: 0,
+                                },
+                              ]
+                            : []),
+                        ],
+                      },
+                    ]
+                  : [
+                      {
+                        type: "text",
+                        text: data.name,
+                        size: "lg",
+                        weight: "bold",
+                        color: "#3b3324",
+                      },
+                      { type: "text", text: "สายพลัง", size: "xxs", color: "#8a8272", margin: "xs" },
+                    ],
+              ),
+              { type: "separator", color: "#e2d8ba" },
+              statCol([
+                ...(compatPct != null
+                  ? [
+                      {
+                        type: "box",
+                        layout: "baseline",
+                        contents: [
+                          { type: "text", text: "เข้ากับคุณ", size: "xxs", color: "#8a8272", flex: 0 },
+                          {
+                            type: "text",
+                            text: `${compatPct}%`,
+                            size: "lg",
+                            weight: "bold",
+                            color: "#a5813a",
+                            margin: "sm",
+                            flex: 0,
+                          },
+                        ],
+                      },
                       {
                         type: "box",
                         layout: "vertical",
-                        flex: 5,
+                        margin: "sm",
+                        width: "80px",
                         height: "8px",
-                        backgroundColor: "#e4e0d4",
+                        backgroundColor: "#eee5cc",
                         cornerRadius: "4px",
                         contents: [
                           {
                             type: "box",
                             layout: "vertical",
-                            width: `${pct}%`,
+                            width: `${Math.max(3, compatPct)}%`,
                             height: "8px",
                             backgroundColor: "#c9a136",
                             cornerRadius: "4px",
@@ -511,28 +564,71 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
                           },
                         ],
                       },
-                      {
-                        type: "text",
-                        text: String(ax.score),
-                        size: "sm",
-                        weight: "bold",
-                        color: "#8a6a1f",
-                        align: "end",
-                        gravity: "center",
-                        flex: 1,
-                      },
-                    ],
+                    ]
+                  : [{ type: "text", text: "-", size: "lg", color: "#8a8272" }]),
+              ]),
+            ],
+          },
+          { type: "separator", margin: "lg", color: "#e2d8ba" },
+          {
+            type: "box",
+            layout: "horizontal",
+            margin: "lg",
+            spacing: "md",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                flex: 5,
+                contents: [
+                  { type: "text", text: "พลังเด่น", size: "xs", weight: "bold", color: "#a5813a" },
+                  {
+                    type: "text",
+                    text: top?.labelFull || "-",
+                    size: "sm",
+                    weight: "bold",
+                    color: "#3b3324",
+                    wrap: true,
+                    margin: "xs",
+                  },
+                  ...(second
+                    ? [
+                        {
+                          type: "text",
+                          text: `รองลงมา: ${second.labelFull}`,
+                          size: "xxs",
+                          color: "#8a8272",
+                          wrap: true,
+                          margin: "xs",
+                        },
+                      ]
+                    : []),
+                ],
+              },
+              { type: "separator", color: "#e2d8ba" },
+              {
+                type: "box",
+                layout: "vertical",
+                flex: 6,
+                contents: [
+                  {
+                    type: "text",
+                    text: blurb,
+                    size: "xxs",
+                    color: "#555555",
+                    wrap: true,
                   },
                 ],
-              };
-            }),
+              },
+            ],
+          },
           ...(rankLine
             ? [
                 {
                   type: "text",
                   text: rankLine,
-                  size: "sm",
-                  color: "#555555",
+                  size: "xxs",
+                  color: "#8a8272",
                   wrap: true,
                   margin: "lg",
                 },
@@ -544,20 +640,30 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
         type: "box",
         layout: "vertical",
         backgroundColor: "#fffdf6",
-        paddingAll: "12px",
+        paddingAll: "14px",
         contents: [
           {
             type: "button",
             style: "primary",
             color: "#a5813a",
-            height: "sm",
-            action: { type: "uri", label: "เปิดรายงานเต็ม", uri: rUrl },
+            height: "md",
+            action: { type: "uri", label: "เปิดรายงานฉบับเต็ม", uri: rUrl },
+          },
+          {
+            type: "text",
+            text: "ดูคำแนะนำการพก วันเด่น ช่วงเวลา และรายละเอียดครบทั้ง 6 ด้าน",
+            size: "xxs",
+            color: "#8a8272",
+            align: "center",
+            wrap: true,
+            margin: "md",
           },
         ],
       },
       styles: { body: { backgroundColor: "#fffdf6" }, footer: { backgroundColor: "#fffdf6" } },
     },
   };
+
   // สไตล์ส่ง (กบ 23 ก.ค. ลองเทียบ): image_plus_flex = รูปซูมได้ + flex แยก (default)
   // single_flex = flex ใบเดียว รูป hero บน + หลอด/อันดับ/ปุ่มล่าง (กดรูปเปิดภาพเต็ม)
   const style = String(process.env.SCAN_CHAT_PHOTO_CARD_STYLE || "image_plus_flex")
