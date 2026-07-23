@@ -109,7 +109,8 @@ export function deriveShowcaseCardData(payload) {
     .trim();
   const name = skills[0]?.label || heroTail || "พลังเฉพาะองค์";
   const gradeRaw = resolveEnergyLevelDisplayGrade(p.summary?.energyLevelLabel, energyScore);
-  const grade = ["S", "A", "B"].includes(gradeRaw) ? gradeRaw : null; // เกรดต่ำไม่ขึ้นการ์ด
+  const grade = ["S", "A", "B"].includes(gradeRaw) ? gradeRaw : null; // ใช้เลือกธีมสี
+  const displayGrade = gradeRaw || null; // บนการ์ดโชว์ทุกระดับรวม D (กบ 24 ก.ค.)
   const compatRaw = Number(p.summary?.compatibilityPercent);
   const compat = Number.isFinite(compatRaw) ? Math.round(compatRaw) : null;
 
@@ -128,6 +129,7 @@ export function deriveShowcaseCardData(payload) {
     name,
     energyScore,
     grade,
+    displayGrade,
     compat,
     axes,
     skills,
@@ -250,6 +252,7 @@ const CARD_THEMES = {
     accent: "#ffc555", accentHi: "#ffe9b0",
     title: "#ffffff", text: "#f5edd8", sub: "#bfae8a",
     starDim: "#57503f", flexBtn: "#a5813a",
+    fxSoft: ' filter="url(#glowSoft)"', fxMain: ' filter="url(#glow)"',
   },
   silver: {
     bg1: "#243447", bg2: "#141d29", bg3: "#0a0f16",
@@ -258,6 +261,7 @@ const CARD_THEMES = {
     accent: "#a8cdf0", accentHi: "#dcecfb",
     title: "#ffffff", text: "#e6eef7", sub: "#92a7bc",
     starDim: "#3c4a5c", flexBtn: "#4a7fb5",
+    fxSoft: ' filter="url(#glowSoft)"', fxMain: ' filter="url(#glow)"',
   },
   white: {
     bg1: "#ffffff", bg2: "#f7f3ea", bg3: "#ece6d8",
@@ -266,6 +270,7 @@ const CARD_THEMES = {
     accent: "#8a6a1f", accentHi: "#a5813a",
     title: "#2b2620", text: "#3b3324", sub: "#8a8272",
     starDim: "#d5cdb9", flexBtn: "#8b8577",
+    fxSoft: "", fxMain: "",
   },
 };
 function cardTheme(grade) {
@@ -308,7 +313,7 @@ function radarPanelSvg(data, cx, cy, r, T) {
     })
     .join("");
   return `${rings}
-    <polygon points="${valuePts}" fill="${T.accent}" fill-opacity="0.35" stroke="${T.accentHi}" stroke-width="3" filter="url(#glowSoft)"/>
+    <polygon points="${valuePts}" fill="${T.accent}" fill-opacity="0.35" stroke="${T.accentHi}" stroke-width="3"${T.fxSoft}/>
     ${dots}${labels}`;
 }
 
@@ -317,7 +322,8 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   const scoreText = (Math.round(data.energyScore * 10) / 10).toFixed(1);
   const top = data.skills[0];
   const second = data.skills[1];
-  const stars = data.grade === "S" ? 5 : data.grade === "A" ? 4 : data.grade === "B" ? 3 : 0;
+  const dispGrade = data.displayGrade;
+  const stars = dispGrade === "S" ? 5 : dispGrade === "A" ? 4 : dispGrade === "B" ? 3 : dispGrade === "D" ? 2 : 0;
   const starsSvg = (x, y, size, n) =>
     Array.from({ length: 5 }, (_, i) =>
       `<polygon points="${starPath(x + i * (size * 2.4), y, size)}" fill="${i < n ? "#ffd54f" : "${T.starDim}"}"/>`,
@@ -377,20 +383,20 @@ function buildSvg(data, photoDataUri, qrDataUri) {
 
   <!-- หัวซ้าย -->
   <text x="52" y="86" font-family="Cormorant Garamond" font-weight="600" font-size="40"
-        fill="url(#gold)" letter-spacing="4" filter="url(#glowSoft)">ENER SCAN</text>
+        fill="url(#gold)" letter-spacing="4"${T.fxSoft}>ENER SCAN</text>
   <text x="52" y="122" font-family="Kanit" font-size="22" fill="${T.sub}">รายงานพลังงานวัตถุมงคล</text>
 
   <!-- ป้ายพลังเด่น + ชื่อ -->
   <rect x="52" y="152" width="150" height="46" rx="23" fill="none" stroke="${T.accent}" stroke-width="2"/>
   <text x="127" y="184" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${T.accent}">พลังเด่น</text>
-  <text x="52" y="258" font-family="Kanit" font-weight="800" font-size="68" fill="${T.title}" filter="url(#glowSoft)">${escapeXml(data.name)}</text>
+  <text x="52" y="258" font-family="Kanit" font-weight="800" font-size="68" fill="${T.title}"${T.fxSoft}>${escapeXml(data.name)}</text>
   ${top ? `<text x="52" y="306" font-family="Kanit" font-size="26" fill="${T.text}">${peakLevelWord(top.score)}</text>` : ""}
 
-  <!-- เกรดแบบไม่มีโล่ (กบ 23 ก.ค.) -->
+  <!-- เกรดแบบไม่มีโล่ (โชว์ทุกระดับรวม D — กบ 24 ก.ค.) -->
   ${
-    data.grade
+    data.displayGrade
       ? `
-  <text x="470" y="250" font-family="Kanit" font-weight="800" font-size="96" fill="${T.title}" filter="url(#glowSoft)">${data.grade}<tspan font-size="30" fill="${T.accent}"> RANK</tspan></text>
+  <text x="470" y="250" font-family="Kanit" font-weight="800" font-size="96" fill="${T.title}"${T.fxSoft}>${data.displayGrade}<tspan font-size="30" fill="${T.accent}"> RANK</tspan></text>
   ${starsSvg(488, 288, 13, stars)}`
       : ""
   }
@@ -402,11 +408,11 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <rect x="52" y="1000" width="588" height="150" rx="18" fill="${T.panel}" stroke="${T.frame}" stroke-width="2"/>
   <rect x="76" y="980" width="140" height="40" rx="20" fill="${T.pill}" stroke="${T.accent}" stroke-width="1.5"/>
   <text x="146" y="1008" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="22" fill="${T.accent}">พลังรวม</text>
-  <text x="84" y="1096" font-family="Kanit" font-weight="800" font-size="76" fill="url(#gold)" filter="url(#glow)">${scoreText}<tspan font-size="40" fill="${T.sub}"> /10</tspan></text>
+  <text x="84" y="1096" font-family="Kanit" font-weight="800" font-size="76" fill="url(#gold)"${T.fxMain}>${scoreText}<tspan font-size="40" fill="${T.sub}"> /10</tspan></text>
   ${
     second
       ? `<text x="400" y="1058" font-family="Kanit" font-size="24" fill="${T.sub}">เข้ากับคุณ</text>
-  <text x="400" y="1116" font-family="Kanit" font-weight="800" font-size="48" fill="url(#gold)" filter="url(#glowSoft)">${escapeXml(second.label)}</text>`
+  <text x="400" y="1116" font-family="Kanit" font-weight="800" font-size="48" fill="url(#gold)"${T.fxSoft}>${escapeXml(second.label)}</text>`
       : ""
   }
 
