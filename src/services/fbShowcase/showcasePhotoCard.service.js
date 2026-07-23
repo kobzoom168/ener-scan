@@ -459,6 +459,63 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
                 },
               ]
             : []),
+          // หลอดพลังรายแกนแบบการ์ดสรุปเดิม (กบ 23 ก.ค.) — ท็อป 3 พอ ให้การ์ดเล็กกะทัดรัด
+          {
+            type: "text",
+            text: "พลังเด่น",
+            size: "sm",
+            weight: "bold",
+            color: "#a5813a",
+            margin: "lg",
+          },
+          ...[...data.axes]
+            .sort((x, y) => y.score - x.score)
+            .slice(0, 3)
+            .map((ax) => {
+              const pct = Math.min(100, Math.max(2, ax.score));
+              return {
+                type: "box",
+                layout: "vertical",
+                margin: "sm",
+                contents: [
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      { type: "text", text: ax.labelFull, size: "xs", color: "#555555", flex: 5 },
+                      {
+                        type: "text",
+                        text: String(ax.score),
+                        size: "xs",
+                        weight: "bold",
+                        color: "#a5813a",
+                        align: "end",
+                        flex: 1,
+                      },
+                    ],
+                  },
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    height: "6px",
+                    backgroundColor: "#eee5cc",
+                    cornerRadius: "3px",
+                    margin: "xs",
+                    contents: [
+                      {
+                        type: "box",
+                        layout: "vertical",
+                        width: `${pct}%`,
+                        height: "6px",
+                        backgroundColor: "#c9a136",
+                        cornerRadius: "3px",
+                        contents: [{ type: "filler" }],
+                      },
+                    ],
+                  },
+                ],
+              };
+            }),
           ...(rankLine
             ? [
                 {
