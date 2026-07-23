@@ -399,7 +399,8 @@ async function postShowcaseRow(row) {
   }
 
   const caption = await buildCaption(piece);
-  const cardUrl = `${buildPublicReportUrl(piece.token)}/card.png`;
+  // โฉมรูปเต็ม (กบเคาะ 23 ก.ค.) — fallback การ์ดเดิมถ้าใบใหม่ใช้ไม่ได้ไม่มี เพราะเงื่อนไขเดียวกัน
+  const cardUrl = `${buildPublicReportUrl(piece.token)}/photo-card.png`;
   const res = await postPagePhotoByUrl(cardUrl, caption, {
     published:
       String(process.env.FB_AUTOPOST_UNPUBLISHED ?? "false").trim().toLowerCase() !== "true",
