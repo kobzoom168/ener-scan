@@ -342,6 +342,50 @@ function buildSvg(data, photoDataUri, qrDataUri) {
 }
 
 /**
+ * รูปเรดาร์เพียว ๆ ธีมครีมทอง (ใช้แทรกใน Flex — Flex วาดกราฟเองไม่ได้ ต้องเป็นรูป)
+ * @param {string} publicToken
+ * @returns {Promise<Buffer|null>}
+ */
+export async function renderRadarChipPng(publicToken) {
+  const tok = String(publicToken || "").trim();
+  if (!tok) return null;
+  const { getScanResultPayloadByPublicToken } = await import(
+    "../../stores/scanV2/scanResultsV2.db.js"
+  );
+  const payload = await getScanResultPayloadByPublicToken(tok);
+  const data = deriveShowcaseCardData(payload);
+  if (!data) return null;
+  const { buildRadarStandaloneSvg } = await import(
+    "../../utils/reports/radarOgImage.util.js"
+  );
+  const axisOrder = data.axes.map((a) => a.key);
+  const axisLabels = Object.fromEntries(data.axes.map((a) => [a.key, a.label]));
+  const axisScores = Object.fromEntries(data.axes.map((a) => [a.key, a.score]));
+  const svg = buildRadarStandaloneSvg({
+    axisOrder,
+    axisLabels,
+    axisScores,
+    colors: {
+      bg: "#fffdf6",
+      ringOuterFill: "rgba(201,161,54,0.06)",
+      ringOuterStroke: "rgba(165,129,58,0.5)",
+      ringMid: "rgba(165,129,58,0.25)",
+      ringInner: "rgba(165,129,58,0.15)",
+      spoke: "rgba(165,129,58,0.22)",
+      polyFill: "rgba(201,161,54,0.35)",
+      polyStroke: "#a5813a",
+      peakFill: "#a5813a",
+      label: "#3b3324",
+    },
+  });
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: "width", value: 640 },
+    font: { fontDirs: [FONT_DIR], loadSystemFonts: false, defaultFontFamily: "Kanit" },
+  });
+  return Buffer.from(resvg.render().asPng());
+}
+
+/**
  * ข้อความแชทแบบ B (กบเคาะ 23 ก.ค.): รูปการ์ด (กดซูมได้) + Flex ใบเล็ก
  * (คะแนน + เข้ากับคุณ% + ปุ่มเปิดรายงานเต็ม) — แทนการ์ด Flex สรุปเดิมเฉพาะเลนพระ
  * คืน null = ใช้ไม่ได้ (เลนอื่น/ไม่มีรูป/render พัง) → caller ถอยไปส่ง Flex เดิม
@@ -554,6 +598,16 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
             ],
           },
           { type: "separator", margin: "lg", color: "#e2d8ba" },
+          // เรดาร์ 6 แกนเป็นรูป (Flex วาดกราฟเองไม่ได้ — กบถาม 23 ก.ค.)
+          {
+            type: "image",
+            url: `${base}/r/${encodeURIComponent(token)}/radar.png`,
+            size: "full",
+            aspectRatio: "1200:630",
+            aspectMode: "fit",
+            margin: "md",
+          },
+          { type: "separator", margin: "md", color: "#e2d8ba" },
           {
             type: "box",
             layout: "horizontal",
