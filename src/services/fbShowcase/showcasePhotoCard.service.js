@@ -35,6 +35,16 @@ const AXIS_SHORT_BY_KEY = {
 };
 const AXIS_ORDER = ["luck", "metta", "baramee", "specialty", "protection", "fortune_anchor"];
 
+/** กลุ่มคนที่เหมาะ ตามด้านเด่นจริง (copy ตายตัว — ไม่ใช่ตัวเลข ไม่มโนคะแนน) */
+const AXIS_AUDIENCE = {
+  luck: "ค้าขาย / เสี่ยงโชค",
+  metta: "งานบริการ / เจรจาต่อรอง",
+  baramee: "หัวหน้างาน / งานปกครอง",
+  specialty: "งานเฉพาะทาง / งานฝีมือ",
+  protection: "เดินทางบ่อย / งานเสี่ยงภัย",
+  fortune_anchor: "ผู้เริ่มต้นทำงาน / ตั้งหลักชีวิต",
+};
+
 let qrDataUriCache = null;
 async function getOaQrDataUri() {
   if (!qrDataUriCache) {
@@ -101,7 +111,30 @@ export function deriveShowcaseCardData(payload) {
   const compatRaw = Number(p.summary?.compatibilityPercent);
   const compat = Number.isFinite(compatRaw) ? Math.round(compatRaw) : null;
 
-  return { name, energyScore, grade, compat, axes, skills, objectImageUrl };
+  // แถบล่าง 3 ช่อง: พลังเด่น / จังหวะที่เหมาะ (timingV1 จริง) / เหมาะกับ (map จากด้านเด่น)
+  const peakLine = skills.map((s) => s.label).join(" · ");
+  const timingDay = String(p.timingV1?.summary?.topWeekdayLabel || "").trim();
+  const timingWindow = String(p.timingV1?.summary?.topWindowLabel || "")
+    .trim()
+    .replace(/[–—]/g, "-");
+  const audience = skills
+    .map((s) => AXIS_AUDIENCE[s.key])
+    .filter(Boolean)
+    .join(" / ");
+
+  return {
+    name,
+    energyScore,
+    grade,
+    compat,
+    axes,
+    skills,
+    objectImageUrl,
+    peakLine,
+    timingDay,
+    timingWindow,
+    audience,
+  };
 }
 
 function starPath(cx, cy, r) {
@@ -146,39 +179,67 @@ function radarSvg(data, cx, cy, r) {
   const valuePts = axes
     .map((a, i) => pt(i, (r * Math.min(100, Math.max(0, a.score))) / 100).map((v) => v.toFixed(1)).join(","))
     .join(" ");
-  const topScore = Math.max(...axes.map((a) => a.score));
+  // ทุกแกน: ชื่อขาว + คะแนนทองใต้ชื่อ (ตาม mockup กบ 23 ก.ค.)
   const labels = axes
     .map((a, i) => {
-      const [x, y] = pt(i, r + 38);
-      const isTop = a.score === topScore;
-      // ตัวคมไม่ฟุ้ง: ขอบดำหนุนแทน glow — แกนเด่นขาวหนา + คะแนนกำกับ
-      return `<text x="${x.toFixed(1)}" y="${(y + 9).toFixed(1)}" text-anchor="middle"
-        font-family="Kanit" font-weight="${isTop ? 800 : 600}" font-size="${isTop ? 36 : 29}"
-        fill="${isTop ? "#ffffff" : "#f0e8d2"}" stroke="#000000" stroke-width="${isTop ? 7 : 5}"
-        stroke-opacity="0.8" paint-order="stroke">${escapeXml(a.label)}${isTop ? ` ${a.score}` : ""}</text>`;
+      const [x, y] = pt(i, r + 46);
+      return `<text x="${x.toFixed(1)}" y="${(y - 2).toFixed(1)}" text-anchor="middle"
+        font-family="Kanit" font-weight="600" font-size="28" fill="#ffffff"
+        stroke="#000000" stroke-width="5" stroke-opacity="0.8" paint-order="stroke">${escapeXml(a.label)}</text>
+      <text x="${x.toFixed(1)}" y="${(y + 32).toFixed(1)}" text-anchor="middle"
+        font-family="Kanit" font-weight="800" font-size="30" fill="${GOLD}"
+        stroke="#000000" stroke-width="5" stroke-opacity="0.8" paint-order="stroke">${a.score}</text>`;
     })
     .join("");
   return `
   <g filter="url(#glowSoft)">
     ${rings}${spokes}
-    <polygon points="${valuePts}" fill="${GOLD}" fill-opacity="0.32"
+    <polygon points="${valuePts}" fill="${GOLD}" fill-opacity="0.35"
              stroke="${GOLD_HI}" stroke-width="3"/>
   </g>
   ${labels}`;
 }
 
+/** เส้นทองประดับ + เพชรกลาง (ตาม mockup) */
+function goldDivider(x1, x2, y) {
+  const mid = (x1 + x2) / 2;
+  return `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#d4af37" stroke-width="2" opacity="0.8"/>
+  <polygon points="${mid},${y - 7} ${mid + 7},${y} ${mid},${y + 7} ${mid - 7},${y}" fill="#ffd54f" filter="url(#glowSoft)"/>`;
+}
+
+/** ไอคอนแถบล่าง (วาดเองสีทอง 44px) */
+const PANEL_ICONS = {
+  lotus: `<path d="M0 10 Q -12 2 -16 -8 Q -6 -6 0 2 Q 6 -6 16 -8 Q 12 2 0 10 Z M0 2 Q -4 -8 0 -16 Q 4 -8 0 2 Z" fill="#ffc555"/>`,
+  calendar: `<rect x="-14" y="-12" width="28" height="26" rx="4" fill="none" stroke="#ffc555" stroke-width="3"/><line x1="-14" y1="-4" x2="14" y2="-4" stroke="#ffc555" stroke-width="3"/><line x1="-7" y1="-18" x2="-7" y2="-10" stroke="#ffc555" stroke-width="3"/><line x1="7" y1="-18" x2="7" y2="-10" stroke="#ffc555" stroke-width="3"/><circle cx="-5" cy="4" r="2.2" fill="#ffc555"/><circle cx="3" cy="4" r="2.2" fill="#ffc555"/><circle cx="-5" cy="9" r="2.2" fill="#ffc555"/>`,
+  target: `<circle cx="0" cy="0" r="14" fill="none" stroke="#ffc555" stroke-width="3"/><circle cx="0" cy="0" r="7" fill="none" stroke="#ffc555" stroke-width="3"/><circle cx="0" cy="0" r="2" fill="#ffc555"/><line x1="8" y1="-8" x2="17" y2="-17" stroke="#ffc555" stroke-width="3"/><polygon points="17,-17 10,-15 15,-10" fill="#ffc555"/>`,
+};
+
 function buildSvg(data, photoDataUri, qrDataUri) {
   const scoreText = (Math.round(data.energyScore * 10) / 10).toFixed(1);
+  const infoW = 770;
+  const colW = infoW / 3;
+  const panels = [
+    { icon: "lotus", title: "พลังเด่น", lines: [data.peakLine || "-"] },
+    {
+      icon: "calendar",
+      title: "จังหวะที่เหมาะ",
+      lines:
+        data.timingDay || data.timingWindow
+          ? [data.timingDay || "", data.timingWindow || ""].filter(Boolean)
+          : ["ดูในหน้ารายงาน"],
+    },
+    { icon: "target", title: "เหมาะกับ", lines: (data.audience || "-").split(" / ").slice(0, 3) },
+  ];
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="topShade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#000000" stop-opacity="0.82"/>
+      <stop offset="0" stop-color="#000000" stop-opacity="0.85"/>
       <stop offset="1" stop-color="#000000" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="bottomShade" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="0.35" stop-color="#000000" stop-opacity="0.78"/>
-      <stop offset="1" stop-color="#000000" stop-opacity="0.94"/>
+      <stop offset="0.3" stop-color="#000000" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.96"/>
     </linearGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${GOLD_HI}"/>
@@ -195,50 +256,86 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   </defs>
 
   <image href="${photoDataUri}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>
-  <rect x="0" y="0" width="${W}" height="330" fill="url(#topShade)"/>
-  <rect x="0" y="${H - 620}" width="${W}" height="620" fill="url(#bottomShade)"/>
+  <rect x="0" y="0" width="${W}" height="560" fill="url(#topShade)"/>
+  <rect x="0" y="${H - 560}" width="${W}" height="560" fill="url(#bottomShade)"/>
   <rect x="26" y="26" width="${W - 52}" height="${H - 52}" rx="18" fill="none"
-        stroke="#d4af37" stroke-width="2" opacity="0.55"/>
+        stroke="#d4af37" stroke-width="2" opacity="0.6"/>
 
-  <text x="60" y="108" font-family="Cormorant Garamond" font-weight="600" font-size="44"
+  <!-- ซ้ายบน: ENER + ชื่อ + เส้นประดับ -->
+  <text x="64" y="112" font-family="Cormorant Garamond" font-weight="600" font-size="46"
         fill="url(#gold)" filter="url(#glowSoft)">E N E R</text>
-  <text x="60" y="182" font-family="Kanit" font-weight="600" font-size="52"
+  <text x="64" y="196" font-family="Kanit" font-weight="800" font-size="68"
         fill="#ffffff" ${STROKE_TXT}>${escapeXml(data.name)}</text>
+  ${goldDivider(64, 330, 232)}
 
-  <!-- เรดาร์ขวาบน / QR ขวาล่าง (กบ 23 ก.ค. — สลับตำแหน่งกัน) -->
-  ${radarSvg(data, 855, 350, 92)}
-
-  <rect x="${W - 210}" y="960" width="150" height="150" rx="16" fill="#ffffff"/>
-  <image href="${qrDataUri}" x="${W - 202}" y="968" width="134" height="134"/>
-  <text x="${W - 135}" y="1142" text-anchor="middle" font-family="Kanit" font-size="22"
-        fill="${CREAM}" ${STROKE_TXT}>สแกนดูพลังชิ้นคุณ</text>
-
-  <text x="60" y="${H - 388}" font-family="Kanit" font-size="32" fill="${CREAM}" ${STROKE_TXT}>พลังรวม</text>
-  <text x="60" y="${H - 258}" font-family="Kanit" font-weight="800" font-size="150"
+  <!-- ซ้าย: พลังรวม -->
+  <text x="64" y="330" font-family="Kanit" font-size="34" fill="${CREAM}" ${STROKE_TXT}>พลังรวม</text>
+  <text x="58" y="472" font-family="Kanit" font-weight="800" font-size="140"
         fill="url(#gold)" filter="url(#glow)">${scoreText}</text>
+  ${goldDivider(64, 300, 505)}
+
+  <!-- ขวาบน: เกรด + ดาว -->
   ${
     data.grade
       ? `
-  <text x="330" y="${H - 388}" font-family="Kanit" font-size="32" fill="${CREAM}" ${STROKE_TXT}>เกรด</text>
-  <text x="330" y="${H - 288}" font-family="Kanit" font-weight="800" font-size="96"
-        fill="#ffffff" filter="url(#glowSoft)">${data.grade}</text>
-  ${starsRow(500, H - 316, data.grade)}`
+  <text x="${W - 64}" y="112" text-anchor="end" font-family="Kanit" font-size="34"
+        fill="${CREAM}" ${STROKE_TXT}>เกรด</text>
+  <text x="${W - 64}" y="212" text-anchor="end" font-family="Kanit" font-weight="800"
+        font-size="100" fill="#ffffff" ${STROKE_TXT}>${data.grade}</text>
+  ${starsRow(W - 64 - 5 * 44, 246, data.grade)}`
       : ""
   }
 
+  <!-- ขวากลาง: เรดาร์พร้อมคะแนนทุกแกน -->
+  ${radarSvg(data, 848, 560, 100)}
+
+  <!-- ซ้ายล่าง: สกิลท็อป 2 -->
+  <rect x="56" y="${H - 400}" width="620" height="140" rx="18" fill="#12100c" fill-opacity="0.72"
+        stroke="#d4af37" stroke-width="1.5" opacity="0.95"/>
   ${data.skills
     .map((s, i) => {
-      const y = H - 180 + i * 58;
+      const y = H - 352 + i * 58;
       return `
-  <circle cx="72" cy="${y - 12}" r="6" fill="${GOLD}" filter="url(#glowSoft)"/>
-  <text x="98" y="${y}" font-family="Kanit" font-weight="600" font-size="36"
-        fill="${CREAM}" ${STROKE_TXT}>${escapeXml(s.labelFull)}</text>
-  <text x="470" y="${y}" font-family="Kanit" font-weight="800" font-size="42"
-        fill="url(#gold)">${s.score}</text>`;
+  <circle cx="98" cy="${y - 11}" r="6" fill="${GOLD}" filter="url(#glowSoft)"/>
+  <text x="124" y="${y}" font-family="Kanit" font-weight="600" font-size="33"
+        fill="#f5edd8">${escapeXml(s.labelFull)}</text>
+  <text x="${640}" y="${y}" text-anchor="end" font-family="Kanit" font-weight="800"
+        font-size="40" fill="url(#gold)">${s.score}</text>`;
     })
     .join("")}
 
-  <text x="${W - 60}" y="${H - 96}" text-anchor="end" font-family="Kanit" font-size="28"
+  <!-- แถบล่าง 3 ช่อง + QR -->
+  <rect x="56" y="${H - 230}" width="${infoW}" height="160" rx="18" fill="#12100c" fill-opacity="0.85"
+        stroke="#d4af37" stroke-width="1.5"/>
+  ${panels
+    .map((p, i) => {
+      const cxp = 56 + colW * i + colW / 2;
+      const divider =
+        i > 0
+          ? `<line x1="${56 + colW * i}" y1="${H - 210}" x2="${56 + colW * i}" y2="${H - 90}" stroke="#d4af37" stroke-width="1.5" opacity="0.5"/>`
+          : "";
+      const lines = p.lines
+        .slice(0, 2)
+        .map(
+          (ln, j) =>
+            `<text x="${cxp}" y="${H - 122 + j * 30}" text-anchor="middle" font-family="Kanit"
+        font-size="22" fill="#f0e8d2">${escapeXml(ln)}</text>`,
+        )
+        .join("");
+      return `${divider}
+  <g transform="translate(${cxp}, ${H - 182})">${PANEL_ICONS[p.icon]}</g>
+  <text x="${cxp}" y="${H - 148}" text-anchor="middle" font-family="Kanit" font-weight="600"
+        font-size="26" fill="url(#gold)">${p.title}</text>
+  ${lines}`;
+    })
+    .join("")}
+
+  <rect x="${W - 216}" y="${H - 236}" width="152" height="152" rx="16" fill="#ffffff"/>
+  <image href="${qrDataUri}" x="${W - 208}" y="${H - 228}" width="136" height="136"/>
+  <text x="${W - 140}" y="${H - 58}" text-anchor="middle" font-family="Kanit" font-size="21"
+        fill="${CREAM}" ${STROKE_TXT}>สแกนดูพลังชิ้นคุณ</text>
+
+  <text x="${56 + infoW / 2}" y="${H - 38}" text-anchor="middle" font-family="Kanit" font-size="25"
         fill="#e5dcc4" ${STROKE_TXT}>สแกนพระ 1 ชิ้น = การ์ดพลังงาน 1 ใบ</text>
 </svg>`;
 }
