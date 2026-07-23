@@ -549,6 +549,34 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
       styles: { body: { backgroundColor: "#fffdf6" }, footer: { backgroundColor: "#fffdf6" } },
     },
   };
+  // สไตล์ส่ง (กบ 23 ก.ค. ลองเทียบ): image_plus_flex = รูปซูมได้ + flex แยก (default)
+  // single_flex = flex ใบเดียว รูป hero บน + หลอด/อันดับ/ปุ่มล่าง (กดรูปเปิดภาพเต็ม)
+  const style = String(process.env.SCAN_CHAT_PHOTO_CARD_STYLE || "image_plus_flex")
+    .trim()
+    .toLowerCase();
+  if (style === "single_flex") {
+    return [
+      {
+        type: "flex",
+        altText,
+        contents: {
+          type: "bubble",
+          size: "mega",
+          hero: {
+            type: "image",
+            url: cardUrl,
+            size: "full",
+            aspectRatio: "4:5",
+            aspectMode: "cover",
+            action: { type: "uri", uri: cardUrl },
+          },
+          body: miniFlex.contents.body,
+          footer: miniFlex.contents.footer,
+          styles: miniFlex.contents.styles,
+        },
+      },
+    ];
+  }
   return [imageMessage, miniFlex];
 }
 
