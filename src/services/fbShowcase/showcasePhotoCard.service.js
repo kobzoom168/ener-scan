@@ -490,10 +490,19 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
         contents: [
           {
             type: "text",
-            text: "ผลการอ่านพลังของคุณ",
+            text: "พลังเด่น | พลังเข้ากับคุณ",
+            size: "xxs",
+            color: "#8a8272",
+            align: "center",
+          },
+          {
+            type: "text",
+            text: `${top?.label || "-"} | ${second?.label || "-"}`,
             weight: "bold",
-            size: "md",
+            size: "lg",
             color: "#3b3324",
+            align: "center",
+            margin: "xs",
           },
           { type: "separator", margin: "md", color: "#e2d8ba" },
           {
@@ -598,80 +607,6 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
             ],
           },
           { type: "separator", margin: "lg", color: "#e2d8ba" },
-          // เรดาร์ 6 แกนเป็นรูป (Flex วาดกราฟเองไม่ได้ — กบถาม 23 ก.ค.)
-          {
-            type: "image",
-            url: `${base}/r/${encodeURIComponent(token)}/radar.png`,
-            size: "full",
-            aspectRatio: "1200:630",
-            aspectMode: "fit",
-            margin: "md",
-          },
-          { type: "separator", margin: "md", color: "#e2d8ba" },
-          {
-            type: "box",
-            layout: "horizontal",
-            margin: "lg",
-            spacing: "md",
-            contents: [
-              {
-                type: "box",
-                layout: "vertical",
-                flex: 5,
-                contents: [
-                  { type: "text", text: "พลังเด่น", size: "xs", weight: "bold", color: "#a5813a" },
-                  {
-                    type: "text",
-                    text: top?.labelFull || "-",
-                    size: "sm",
-                    weight: "bold",
-                    color: "#3b3324",
-                    wrap: true,
-                    margin: "xs",
-                  },
-                  ...(second
-                    ? [
-                        {
-                          type: "text",
-                          text: `รองลงมา: ${second.labelFull}`,
-                          size: "xxs",
-                          color: "#8a8272",
-                          wrap: true,
-                          margin: "xs",
-                        },
-                      ]
-                    : []),
-                ],
-              },
-              { type: "separator", color: "#e2d8ba" },
-              {
-                type: "box",
-                layout: "vertical",
-                flex: 6,
-                contents: [
-                  {
-                    type: "text",
-                    text: blurb,
-                    size: "xxs",
-                    color: "#555555",
-                    wrap: true,
-                  },
-                ],
-              },
-            ],
-          },
-          ...(rankLine
-            ? [
-                {
-                  type: "text",
-                  text: rankLine,
-                  size: "xxs",
-                  color: "#8a8272",
-                  wrap: true,
-                  margin: "lg",
-                },
-              ]
-            : []),
         ],
       },
       footer: {
