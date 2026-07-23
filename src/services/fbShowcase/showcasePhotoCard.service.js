@@ -387,10 +387,10 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <rect x="${RX}" y="60" width="${RW}" height="560" rx="16" fill="#171310" stroke="#6b5320" stroke-width="1.5"/>
   <rect x="${RX + 40}" y="76" width="${RW - 80}" height="44" rx="22" fill="#2a2214" stroke="${GOLD}" stroke-width="1.5"/>
   <text x="${RX + RW / 2}" y="107" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${GOLD}">พลังงาน 6 ด้าน</text>
-  ${radarPanelSvg(data, RX + RW / 2, 330, 128)}
+  ${radarPanelSvg(data, RX + RW / 2, 316, 116)}
   ${data.skills
     .map((s, i) => {
-      const y = 548 + i * 34;
+      const y = 546 + i * 36;
       return `
   <circle cx="${RX + 30}" cy="${y - 9}" r="5" fill="${GOLD}"/>
   <text x="${RX + 48}" y="${y}" font-family="Kanit" font-weight="600" font-size="24" fill="${CREAM}">${escapeXml(s.labelFull)}</text>
@@ -852,7 +852,7 @@ export async function renderShowcasePhotoCardPng(publicToken, payload) {
   );
   const circleBuf = await sharp(imgBuf)
     .rotate()
-    .resize(CIRCLE, CIRCLE, { fit: "cover", position: "attention" })
+    .resize(CIRCLE, CIRCLE, { fit: "cover", position: "centre" })
     .composite([{ input: circleMask, blend: "dest-in" }])
     .png()
     .toBuffer();
