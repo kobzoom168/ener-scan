@@ -903,3 +903,62 @@ export async function getShareCardByToken(req, res) {
     res.status(503).type("text").send("card render failed");
   }
 }
+
+/**
+ * GET /r/:publicToken/radar.png — รูปเรดาร์ธีมครีมทอง (ใช้แทรกใน Flex แชท)
+ */
+export async function getRadarChipByToken(req, res) {
+  const publicToken = String(req.params?.publicToken || "").trim();
+  try {
+    const { renderRadarChipPng } = await import(
+      "../services/fbShowcase/showcasePhotoCard.service.js"
+    );
+    const buf = await renderRadarChipPng(publicToken);
+    if (!buf) return res.status(404).type("text").send("not available");
+    res.type("png").set("Cache-Control", "public, max-age=86400").send(buf);
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: "RADAR_CHIP_RENDER_FAIL",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        reason: String(e?.message || e).slice(0, 200),
+      }),
+    );
+    res.status(503).type("text").send("render failed");
+  }
+}
+
+/**
+ * GET /r/:publicToken/photo-card.png — การ์ดอวดพระโฉมรูปเต็ม (กบเคาะ 23 ก.ค. 2026)
+ * ใช้กับระบบโพสต์เพจ Facebook — ข้อมูลวัตถุ + เข้ากับเจ้าของ% (ไม่ระบุตัวตน)
+ */
+export async function getShowcasePhotoCardByToken(req, res) {
+  const publicToken = String(req.params?.publicToken || "").trim();
+  try {
+    const { payload } = await getReportByPublicToken(publicToken);
+    if (!payload) {
+      return res.status(404).type("text").send("not found");
+    }
+    const { payload: norm } = normalizeReportPayloadForRender(payload);
+    const { renderShowcasePhotoCardPng } = await import(
+      "../services/fbShowcase/showcasePhotoCard.service.js"
+    );
+    const buf = await renderShowcasePhotoCardPng(publicToken, norm);
+    if (!buf) {
+      return res.status(404).type("text").send("card not available");
+    }
+    res
+      .type("png")
+      .set("Cache-Control", "public, max-age=86400")
+      .send(buf);
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: "SHOWCASE_PHOTO_CARD_RENDER_FAIL",
+        publicTokenPrefix: publicTokenPrefix12(publicToken),
+        reason: String(e?.message || e).slice(0, 200),
+      }),
+    );
+    res.status(503).type("text").send("card render failed");
+  }
+}

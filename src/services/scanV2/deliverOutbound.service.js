@@ -173,8 +173,8 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       return { sent: true };
     }
 
-    if (kind === "renewal_reminder" || kind === "daily_pick_push") {
-      // push อัตโนมัติจาก maintenance (เตือนต่ออายุ / หนุนดวงเช้า) — ข้อความ + quickReply optional
+    if (kind === "renewal_reminder" || kind === "daily_pick_push" || kind === "fb_consent_ask") {
+      // push อัตโนมัติ (เตือนต่ออายุ / หนุนดวงเช้า / ขออนุญาตอวดชิ้นในเพจ) — ข้อความ + quickReply optional
       const text = String(payload.text || "").trim();
       if (!text) {
         return { sent: false, errorCode: "empty_payload", errorMessage: `${kind} missing text` };
@@ -258,11 +258,39 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
               duration: Math.min(voiceDurationMs, 60000),
             }
           : null;
+      // โหมดการ์ดภาพในแชท (กบเคาะแบบ B 23 ก.ค.): รูปการ์ด (ซูมได้) + Flex ใบเล็ก
+      // แทนการ์ดสรุปเดิม — เฉพาะเลนพระที่การ์ดพร้อม, พัง = ถอยไป flex เดิมเงียบ ๆ
+      let chatCardMessages = null;
+      if (
+        String(process.env.SCAN_CHAT_PHOTO_CARD_ENABLED ?? "false").trim().toLowerCase() ===
+          "true" &&
+        payload.publicToken
+      ) {
+        try {
+          const { buildChatPhotoCardMessages } = await import(
+            "../fbShowcase/showcasePhotoCard.service.js"
+          );
+          chatCardMessages = await buildChatPhotoCardMessages(
+            payload.publicToken,
+            payload.reportUrl,
+            lineUserId,
+          );
+        } catch (e) {
+          console.log(
+            JSON.stringify({
+              event: "SCAN_CHAT_PHOTO_CARD_FALLBACK",
+              message: String(e?.message || e).slice(0, 160),
+            }),
+          );
+          chatCardMessages = null;
+        }
+      }
+      const baseMessages = chatCardMessages || (flex ? [flex] : null);
       const primaryMessage = audioMessage
-        ? flex
-          ? [flex, audioMessage]
+        ? baseMessages
+          ? [...baseMessages, audioMessage]
           : [{ type: "text", text: text.slice(0, 4900) }, audioMessage]
-        : flex;
+        : chatCardMessages || flex;
       let delivery = await sendScanResultPushWith429Retry({
         client,
         userId: lineUserId,
@@ -292,6 +320,25 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         await markSent(id);
         releaseScanGate(lineUserId);
         await handleScanResultPostDelivery(msg, payload);
+        // อวดชิ้นขึ้นเพจ FB (กบ 22 ก.ค.) — fire-and-forget ห้ามกระทบ report:
+        // ชิ้นเจ้าของระบบ + เปิดโหมดโพสต์ทันที = โพสต์เลย · ชิ้นลูกค้าคะแนนสูง = ถามขออนุญาตก่อน
+        try {
+          const { maybeAutoPostOnScan, maybeEnqueueFbConsentAsk } = await import(
+            "../fbShowcase/fbShowcase.service.js"
+          );
+          void maybeAutoPostOnScan({
+            lineUserId,
+            reportPayload: payload.reportPayload,
+            publicToken: payload.publicToken,
+          });
+          void maybeEnqueueFbConsentAsk({
+            lineUserId,
+            reportPayload: payload.reportPayload,
+            publicToken: payload.publicToken,
+          });
+        } catch {
+          /* ignore */
+        }
         // กบ 18 ก.ค. 2026 (รอบสอง): ส่ง report จบแล้วเงียบ — ไม่บอกสิทธิ์คงเหลือ/โปรตามหลัง
         // การแจ้งสิทธิ์หมด+โปรย้ายไปตอนลูกค้าส่งรูปใหม่ (เส้น webhook มีการ์ด paywall อยู่แล้ว)
         // เปิดพฤติกรรมเดิมกลับได้ด้วย POST_REPORT_QUOTA_NOTICE_ENABLED=true
