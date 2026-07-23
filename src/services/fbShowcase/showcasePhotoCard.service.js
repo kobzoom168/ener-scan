@@ -348,9 +348,9 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <!-- ป้ายพลังเด่น + ชื่อ -->
   <rect x="52" y="152" width="150" height="46" rx="23" fill="none" stroke="${GOLD}" stroke-width="2"/>
   <text x="127" y="184" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${GOLD}">พลังเด่น</text>
-  <text x="52" y="272" font-family="Kanit" font-weight="800" font-size="72" fill="#ffffff" filter="url(#glowSoft)">${escapeXml(data.name)}</text>
-  ${top ? `<text x="52" y="318" font-family="Kanit" font-size="28" fill="${CREAM}">${peakLevelWord(top.score)}</text>` : ""}
-  ${stars ? starsSvg(70, 356, 15, stars) : ""}
+  <text x="52" y="258" font-family="Kanit" font-weight="800" font-size="68" fill="#ffffff" filter="url(#glowSoft)">${escapeXml(data.name)}</text>
+  ${stars ? starsSvg(68, 298, 14, stars) : ""}
+  ${top ? `<text x="240" y="306" font-family="Kanit" font-size="26" fill="${CREAM}">${peakLevelWord(top.score)}</text>` : ""}
 
   <!-- ตราเกรด -->
   ${
@@ -366,19 +366,19 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   }
 
   <!-- รูปพระวงกลม + วงแหวนทอง -->
-  <circle cx="340" cy="560" r="218" fill="#0d0a06" filter="url(#glowSoft)"/>
-  <image href="${photoDataUri}" x="130" y="350" width="420" height="420"/>
-  <circle cx="340" cy="560" r="212" fill="none" stroke="url(#gold)" stroke-width="6" filter="url(#glowSoft)"/>
-  <circle cx="340" cy="560" r="224" fill="none" stroke="#6b5320" stroke-width="1.5"/>
+  <circle cx="340" cy="585" r="245" fill="#0d0a06" filter="url(#glowSoft)"/>
+  <image href="${photoDataUri}" x="95" y="340" width="490" height="490"/>
+  <circle cx="340" cy="585" r="239" fill="none" stroke="url(#gold)" stroke-width="6" filter="url(#glowSoft)"/>
+  <circle cx="340" cy="585" r="251" fill="none" stroke="#6b5320" stroke-width="1.5"/>
 
   <!-- กล่องพลังรวม -->
-  <rect x="52" y="826" width="588" height="190" rx="18" fill="#171310" stroke="#c9a136" stroke-width="2"/>
-  <rect x="76" y="806" width="140" height="40" rx="20" fill="#2a2214" stroke="${GOLD}" stroke-width="1.5"/>
-  <text x="146" y="834" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="22" fill="${GOLD}">พลังรวม</text>
-  <text x="84" y="948" font-family="Kanit" font-weight="800" font-size="96" fill="url(#gold)" filter="url(#glow)">${scoreText}<tspan font-size="40" fill="#bfae8a"> /10</tspan></text>
-  <rect x="84" y="966" width="300" height="12" rx="6" fill="#3a2f1a"/>
-  <rect x="84" y="966" width="${(300 * Math.min(100, data.energyScore * 10)) / 100}" height="12" rx="6" fill="url(#gold)"/>
-  ${data.grade ? `<text x="84" y="1006" font-family="Kanit" font-weight="600" font-size="26" fill="${CREAM}">${gradeWord(data.grade)}</text>` : ""}
+  <rect x="52" y="852" width="588" height="170" rx="18" fill="#171310" stroke="#c9a136" stroke-width="2"/>
+  <rect x="76" y="832" width="140" height="40" rx="20" fill="#2a2214" stroke="${GOLD}" stroke-width="1.5"/>
+  <text x="146" y="860" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="22" fill="${GOLD}">พลังรวม</text>
+  <text x="84" y="962" font-family="Kanit" font-weight="800" font-size="88" fill="url(#gold)" filter="url(#glow)">${scoreText}<tspan font-size="40" fill="#bfae8a"> /10</tspan></text>
+  <rect x="84" y="978" width="300" height="12" rx="6" fill="#3a2f1a"/>
+  <rect x="84" y="978" width="${(300 * Math.min(100, data.energyScore * 10)) / 100}" height="12" rx="6" fill="url(#gold)"/>
+  ${data.grade ? `<text x="84" y="1014" font-family="Kanit" font-weight="600" font-size="26" fill="${CREAM}">${gradeWord(data.grade)}</text>` : ""}
 
   <!-- ท้ายซ้าย -->
   <text x="52" y="${H - 34}" font-family="Kanit" font-size="24" fill="#bfae8a">สแกนพระ 1 ชิ้น = การ์ดพลังงาน 1 ใบ</text>
@@ -846,7 +846,7 @@ export async function renderShowcasePhotoCardPng(publicToken, payload) {
   if (!imgRes.ok) throw new Error(`SHOWCASE_PHOTO_FETCH_${imgRes.status}`);
   const imgBuf = Buffer.from(await imgRes.arrayBuffer());
   // crop วงกลมด้วย sharp — resvg ไม่รองรับ clip-path (บทเรียนการ์ด TCG 22 ก.ค.)
-  const CIRCLE = 420;
+  const CIRCLE = 490;
   const circleMask = Buffer.from(
     `<svg width="${CIRCLE}" height="${CIRCLE}"><circle cx="${CIRCLE / 2}" cy="${CIRCLE / 2}" r="${CIRCLE / 2}" fill="#fff"/></svg>`,
   );
