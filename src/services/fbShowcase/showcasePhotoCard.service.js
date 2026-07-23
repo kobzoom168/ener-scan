@@ -352,16 +352,13 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   ${stars ? starsSvg(68, 298, 14, stars) : ""}
   ${top ? `<text x="240" y="306" font-family="Kanit" font-size="26" fill="${CREAM}">${peakLevelWord(top.score)}</text>` : ""}
 
-  <!-- ตราเกรด -->
+  <!-- เข้ากับคุณ (แทนตราเกรด — กบ 23 ก.ค.) -->
   ${
-    data.grade
+    second
       ? `
-  <g transform="translate(490, 60)">
-    <path d="M60 0 L120 18 V64 Q120 108 60 132 Q0 108 0 64 V18 Z" fill="#171310" stroke="url(#gold)" stroke-width="4" filter="url(#glowSoft)"/>
-    <text x="60" y="76" text-anchor="middle" font-family="Kanit" font-weight="800" font-size="58" fill="#ffffff">${data.grade}</text>
-    <text x="60" y="108" text-anchor="middle" font-family="Kanit" font-size="20" fill="${GOLD}">RANK</text>
-  </g>
-  ${starsSvg(505, 216, 12, stars)}`
+  <rect x="420" y="152" width="220" height="46" rx="23" fill="none" stroke="${GOLD}" stroke-width="2"/>
+  <text x="530" y="184" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${GOLD}">เข้ากับคุณ</text>
+  <text x="420" y="262" font-family="Kanit" font-weight="800" font-size="54" fill="url(#gold)" filter="url(#glowSoft)">${escapeXml(second.label)}</text>`
       : ""
   }
 
