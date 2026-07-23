@@ -210,7 +210,7 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <text x="${W - 135}" y="242" text-anchor="middle" font-family="Kanit" font-size="22"
         fill="${CREAM}" ${STROKE_TXT}>สแกนดูพลังชิ้นคุณ</text>
 
-  ${radarSvg(data, 210, 380, 98)}
+  ${radarSvg(data, 850, 985, 90)}
 
   <text x="60" y="${H - 388}" font-family="Kanit" font-size="32" fill="${CREAM}" ${STROKE_TXT}>พลังรวม</text>
   <text x="60" y="${H - 258}" font-family="Kanit" font-weight="800" font-size="150"
