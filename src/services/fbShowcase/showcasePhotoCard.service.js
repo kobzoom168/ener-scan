@@ -340,6 +340,95 @@ function buildSvg(data, photoDataUri, qrDataUri) {
 </svg>`;
 }
 
+/**
+ * ข้อความแชทแบบ B (กบเคาะ 23 ก.ค.): รูปการ์ด (กดซูมได้) + Flex ใบเล็ก
+ * (คะแนน + เข้ากับคุณ% + ปุ่มเปิดรายงานเต็ม) — แทนการ์ด Flex สรุปเดิมเฉพาะเลนพระ
+ * คืน null = ใช้ไม่ได้ (เลนอื่น/ไม่มีรูป/render พัง) → caller ถอยไปส่ง Flex เดิม
+ * @param {string} publicToken
+ * @param {string} reportUrl ลิงก์รายงาน HTML
+ * @returns {Promise<Array<object> | null>}
+ */
+export async function buildChatPhotoCardMessages(publicToken, reportUrl) {
+  const token = String(publicToken || "").trim();
+  if (!token) return null;
+  const { getScanResultPayloadByPublicToken } = await import(
+    "../../stores/scanV2/scanResultsV2.db.js"
+  );
+  const payload = await getScanResultPayloadByPublicToken(token);
+  const data = deriveShowcaseCardData(payload);
+  if (!data) return null;
+  // validate render จริงก่อนส่ง URL — กันภาพพังโผล่ในแชท (ผล render มี cache ต่อ instance)
+  const buf = await renderShowcasePhotoCardPng(token, payload);
+  if (!buf) return null;
+
+  const base = String(process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || "").replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(base)) return null; // LINE ต้องการ https เท่านั้น
+  const cardUrl = `${base}/r/${encodeURIComponent(token)}/photo-card.png`;
+  const rUrl = String(reportUrl || `${base}/r/${encodeURIComponent(token)}`);
+
+  const imageMessage = {
+    type: "image",
+    originalContentUrl: cardUrl,
+    previewImageUrl: cardUrl,
+  };
+  const scoreText = (Math.round(data.energyScore * 10) / 10).toFixed(1);
+  const headLine = `พลังรวม ${scoreText}${data.grade ? ` · เกรด ${data.grade}` : ""}`;
+  const miniFlex = {
+    type: "flex",
+    altText: headLine,
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      body: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#fffdf6",
+        paddingAll: "16px",
+        contents: [
+          { type: "text", text: headLine, weight: "bold", size: "lg", color: "#222222" },
+          ...(data.compat != null
+            ? [
+                {
+                  type: "text",
+                  text: `เข้ากับคุณ ${data.compat}%`,
+                  size: "sm",
+                  color: "#a5813a",
+                  weight: "bold",
+                  margin: "sm",
+                },
+              ]
+            : []),
+          {
+            type: "text",
+            text: "รายละเอียดครบทั้ง 6 ด้านกับคำแนะนำอยู่ในรายงานเต็มครับ",
+            size: "xs",
+            color: "#888888",
+            wrap: true,
+            margin: "md",
+          },
+        ],
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#fffdf6",
+        paddingAll: "12px",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            color: "#a5813a",
+            height: "sm",
+            action: { type: "uri", label: "เปิดรายงานเต็ม", uri: rUrl },
+          },
+        ],
+      },
+      styles: { body: { backgroundColor: "#fffdf6" }, footer: { backgroundColor: "#fffdf6" } },
+    },
+  };
+  return [imageMessage, miniFlex];
+}
+
 /** แคชต่อ token (in-memory ต่อ instance) */
 const cardCache = new Map();
 const CARD_CACHE_MAX = 100;

@@ -258,11 +258,38 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
               duration: Math.min(voiceDurationMs, 60000),
             }
           : null;
+      // โหมดการ์ดภาพในแชท (กบเคาะแบบ B 23 ก.ค.): รูปการ์ด (ซูมได้) + Flex ใบเล็ก
+      // แทนการ์ดสรุปเดิม — เฉพาะเลนพระที่การ์ดพร้อม, พัง = ถอยไป flex เดิมเงียบ ๆ
+      let chatCardMessages = null;
+      if (
+        String(process.env.SCAN_CHAT_PHOTO_CARD_ENABLED ?? "false").trim().toLowerCase() ===
+          "true" &&
+        payload.publicToken
+      ) {
+        try {
+          const { buildChatPhotoCardMessages } = await import(
+            "../fbShowcase/showcasePhotoCard.service.js"
+          );
+          chatCardMessages = await buildChatPhotoCardMessages(
+            payload.publicToken,
+            payload.reportUrl,
+          );
+        } catch (e) {
+          console.log(
+            JSON.stringify({
+              event: "SCAN_CHAT_PHOTO_CARD_FALLBACK",
+              message: String(e?.message || e).slice(0, 160),
+            }),
+          );
+          chatCardMessages = null;
+        }
+      }
+      const baseMessages = chatCardMessages || (flex ? [flex] : null);
       const primaryMessage = audioMessage
-        ? flex
-          ? [flex, audioMessage]
+        ? baseMessages
+          ? [...baseMessages, audioMessage]
           : [{ type: "text", text: text.slice(0, 4900) }, audioMessage]
-        : flex;
+        : chatCardMessages || flex;
       let delivery = await sendScanResultPushWith429Retry({
         client,
         userId: lineUserId,
