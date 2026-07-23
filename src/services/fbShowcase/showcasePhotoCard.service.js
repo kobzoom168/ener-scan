@@ -240,7 +240,41 @@ const AXIS_ADVICE = {
   fortune_anchor: "พกติดตัว ตั้งจิตอธิษฐานก่อนเริ่มงาน จะเสริมพลังให้ราบรื่น",
 };
 
-function radarPanelSvg(data, cx, cy, r) {
+/** ธีมสีการ์ดตามเกรด (กบ 24 ก.ค.): S/A ทองดำ · B ฟ้าเงิน · ต่ำกว่า/ไม่มีเกรด โทนขาว
+ *  เฉพาะการ์ดรูป + ปุ่ม Flex — รายงาน HTML คงเดิม */
+const CARD_THEMES = {
+  gold: {
+    bg1: "#3a2c14", bg2: "#1d150c", bg3: "#0d0a06",
+    frame: "#c9a136", frameDim: "#6b5320",
+    panel: "#171310", pill: "#2a2214",
+    accent: "#ffc555", accentHi: "#ffe9b0",
+    title: "#ffffff", text: "#f5edd8", sub: "#bfae8a",
+    starDim: "#57503f", flexBtn: "#a5813a",
+  },
+  silver: {
+    bg1: "#243447", bg2: "#141d29", bg3: "#0a0f16",
+    frame: "#9db9d6", frameDim: "#3c5169",
+    panel: "#131c26", pill: "#1c2a3a",
+    accent: "#a8cdf0", accentHi: "#dcecfb",
+    title: "#ffffff", text: "#e6eef7", sub: "#92a7bc",
+    starDim: "#3c4a5c", flexBtn: "#4a7fb5",
+  },
+  white: {
+    bg1: "#ffffff", bg2: "#f7f3ea", bg3: "#ece6d8",
+    frame: "#b8a878", frameDim: "#d8d0bc",
+    panel: "#fdfbf6", pill: "#f1ebdc",
+    accent: "#8a6a1f", accentHi: "#a5813a",
+    title: "#2b2620", text: "#3b3324", sub: "#8a8272",
+    starDim: "#d5cdb9", flexBtn: "#8b8577",
+  },
+};
+function cardTheme(grade) {
+  if (grade === "S" || grade === "A") return CARD_THEMES.gold;
+  if (grade === "B") return CARD_THEMES.silver;
+  return CARD_THEMES.white;
+}
+
+function radarPanelSvg(data, cx, cy, r, T) {
   const axes = data.axes;
   const n = axes.length;
   const pt = (i, rr) => {
@@ -252,7 +286,7 @@ function radarPanelSvg(data, cx, cy, r) {
       const pts = Array.from({ length: n }, (_, i) =>
         pt(i, r * f).map((v) => v.toFixed(1)).join(","),
       );
-      return `<polygon points="${pts.join(" ")}" fill="none" stroke="#b18f3e" stroke-width="1.5" opacity="0.5"/>`;
+      return `<polygon points="${pts.join(" ")}" fill="none" stroke="${T.frameDim}" stroke-width="1.5" opacity="0.5"/>`;
     })
     .join("");
   const valuePts = axes
@@ -261,31 +295,32 @@ function radarPanelSvg(data, cx, cy, r) {
   const dots = axes
     .map((a, i) => {
       const [x, y] = pt(i, (r * Math.min(100, Math.max(0, a.score))) / 100);
-      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${GOLD_HI}"/>`;
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${T.accentHi}"/>`;
     })
     .join("");
   const labels = axes
     .map((a, i) => {
       const [x, y] = pt(i, r + 40);
       return `<text x="${x.toFixed(1)}" y="${(y - 2).toFixed(1)}" text-anchor="middle"
-        font-family="Kanit" font-weight="600" font-size="24" fill="${CREAM}">${escapeXml(a.label)}</text>
+        font-family="Kanit" font-weight="600" font-size="24" fill="${T.text}">${escapeXml(a.label)}</text>
       <text x="${x.toFixed(1)}" y="${(y + 26).toFixed(1)}" text-anchor="middle"
-        font-family="Kanit" font-weight="800" font-size="26" fill="${GOLD}">${a.score}</text>`;
+        font-family="Kanit" font-weight="800" font-size="26" fill="${T.accent}">${a.score}</text>`;
     })
     .join("");
   return `${rings}
-    <polygon points="${valuePts}" fill="${GOLD}" fill-opacity="0.35" stroke="${GOLD_HI}" stroke-width="3" filter="url(#glowSoft)"/>
+    <polygon points="${valuePts}" fill="${T.accent}" fill-opacity="0.35" stroke="${T.accentHi}" stroke-width="3" filter="url(#glowSoft)"/>
     ${dots}${labels}`;
 }
 
 function buildSvg(data, photoDataUri, qrDataUri) {
+  const T = cardTheme(data.grade);
   const scoreText = (Math.round(data.energyScore * 10) / 10).toFixed(1);
   const top = data.skills[0];
   const second = data.skills[1];
   const stars = data.grade === "S" ? 5 : data.grade === "A" ? 4 : data.grade === "B" ? 3 : 0;
   const starsSvg = (x, y, size, n) =>
     Array.from({ length: 5 }, (_, i) =>
-      `<polygon points="${starPath(x + i * (size * 2.4), y, size)}" fill="${i < n ? "#ffd54f" : "#57503f"}"/>`,
+      `<polygon points="${starPath(x + i * (size * 2.4), y, size)}" fill="${i < n ? "#ffd54f" : "${T.starDim}"}"/>`,
     ).join("");
   const advice = AXIS_ADVICE[top?.key] || "";
   const adviceLines = wrapText(advice, 30).slice(0, 2);
@@ -300,12 +335,12 @@ function buildSvg(data, photoDataUri, qrDataUri) {
     if (!lines.length) return;
     const h = 46 + lines.length * 30;
     rightBoxes.push(`
-  <rect x="${RX}" y="${ry}" width="${RW}" height="${h}" rx="14" fill="#171310" stroke="#6b5320" stroke-width="1.5"/>
-  <text x="${RX + 22}" y="${ry + 34}" font-family="Kanit" font-weight="600" font-size="24" fill="${GOLD}">${escapeXml(title)}</text>
+  <rect x="${RX}" y="${ry}" width="${RW}" height="${h}" rx="14" fill="${T.panel}" stroke="${T.frameDim}" stroke-width="1.5"/>
+  <text x="${RX + 22}" y="${ry + 34}" font-family="Kanit" font-weight="600" font-size="24" fill="${T.accent}">${escapeXml(title)}</text>
   ${lines
     .map(
       (ln, i) =>
-        `<text x="${RX + 22}" y="${ry + 64 + i * 30}" font-family="Kanit" font-size="22" fill="${CREAM}">${escapeXml(ln)}</text>`,
+        `<text x="${RX + 22}" y="${ry + 64 + i * 30}" font-family="Kanit" font-size="22" fill="${T.text}">${escapeXml(ln)}</text>`,
     )
     .join("")}`);
     ry += h + 14;
@@ -318,13 +353,13 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <radialGradient id="bgGlow" cx="0.32" cy="0.4" r="0.9">
-      <stop offset="0" stop-color="#3a2c14"/>
-      <stop offset="0.55" stop-color="#1d150c"/>
-      <stop offset="1" stop-color="#0d0a06"/>
+      <stop offset="0" stop-color="${T.bg1}"/>
+      <stop offset="0.55" stop-color="${T.bg2}"/>
+      <stop offset="1" stop-color="${T.bg3}"/>
     </radialGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${GOLD_HI}"/>
-      <stop offset="1" stop-color="${GOLD}"/>
+      <stop offset="0" stop-color="${T.accentHi}"/>
+      <stop offset="1" stop-color="${T.accent}"/>
     </linearGradient>
     <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
       <feGaussianBlur stdDeviation="8" result="b"/>
@@ -337,25 +372,25 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   </defs>
 
   <rect x="0" y="0" width="${W}" height="${H}" fill="url(#bgGlow)"/>
-  <rect x="18" y="18" width="${W - 36}" height="${H - 36}" rx="26" fill="none" stroke="#c9a136" stroke-width="2.5" opacity="0.9"/>
-  <rect x="26" y="26" width="${W - 52}" height="${H - 52}" rx="22" fill="none" stroke="#6b5320" stroke-width="1"/>
+  <rect x="18" y="18" width="${W - 36}" height="${H - 36}" rx="26" fill="none" stroke="${T.frame}" stroke-width="2.5" opacity="0.9"/>
+  <rect x="26" y="26" width="${W - 52}" height="${H - 52}" rx="22" fill="none" stroke="${T.frameDim}" stroke-width="1"/>
 
   <!-- หัวซ้าย -->
   <text x="52" y="86" font-family="Cormorant Garamond" font-weight="600" font-size="40"
         fill="url(#gold)" letter-spacing="4" filter="url(#glowSoft)">ENER SCAN</text>
-  <text x="52" y="122" font-family="Kanit" font-size="22" fill="#bfae8a">รายงานพลังงานวัตถุมงคล</text>
+  <text x="52" y="122" font-family="Kanit" font-size="22" fill="${T.sub}">รายงานพลังงานวัตถุมงคล</text>
 
   <!-- ป้ายพลังเด่น + ชื่อ -->
-  <rect x="52" y="152" width="150" height="46" rx="23" fill="none" stroke="${GOLD}" stroke-width="2"/>
-  <text x="127" y="184" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${GOLD}">พลังเด่น</text>
-  <text x="52" y="258" font-family="Kanit" font-weight="800" font-size="68" fill="#ffffff" filter="url(#glowSoft)">${escapeXml(data.name)}</text>
-  ${top ? `<text x="52" y="306" font-family="Kanit" font-size="26" fill="${CREAM}">${peakLevelWord(top.score)}</text>` : ""}
+  <rect x="52" y="152" width="150" height="46" rx="23" fill="none" stroke="${T.accent}" stroke-width="2"/>
+  <text x="127" y="184" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${T.accent}">พลังเด่น</text>
+  <text x="52" y="258" font-family="Kanit" font-weight="800" font-size="68" fill="${T.title}" filter="url(#glowSoft)">${escapeXml(data.name)}</text>
+  ${top ? `<text x="52" y="306" font-family="Kanit" font-size="26" fill="${T.text}">${peakLevelWord(top.score)}</text>` : ""}
 
   <!-- เกรดแบบไม่มีโล่ (กบ 23 ก.ค.) -->
   ${
     data.grade
       ? `
-  <text x="470" y="250" font-family="Kanit" font-weight="800" font-size="96" fill="#ffffff" filter="url(#glowSoft)">${data.grade}<tspan font-size="30" fill="${GOLD}"> RANK</tspan></text>
+  <text x="470" y="250" font-family="Kanit" font-weight="800" font-size="96" fill="${T.title}" filter="url(#glowSoft)">${data.grade}<tspan font-size="30" fill="${T.accent}"> RANK</tspan></text>
   ${starsSvg(488, 288, 13, stars)}`
       : ""
   }
@@ -364,43 +399,43 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <image href="${photoDataUri}" x="52" y="315" width="588" height="660"/>
 
   <!-- กล่องพลังรวม -->
-  <rect x="52" y="1000" width="588" height="150" rx="18" fill="#171310" stroke="#c9a136" stroke-width="2"/>
-  <rect x="76" y="980" width="140" height="40" rx="20" fill="#2a2214" stroke="${GOLD}" stroke-width="1.5"/>
-  <text x="146" y="1008" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="22" fill="${GOLD}">พลังรวม</text>
-  <text x="84" y="1096" font-family="Kanit" font-weight="800" font-size="76" fill="url(#gold)" filter="url(#glow)">${scoreText}<tspan font-size="40" fill="#bfae8a"> /10</tspan></text>
+  <rect x="52" y="1000" width="588" height="150" rx="18" fill="${T.panel}" stroke="${T.frame}" stroke-width="2"/>
+  <rect x="76" y="980" width="140" height="40" rx="20" fill="${T.pill}" stroke="${T.accent}" stroke-width="1.5"/>
+  <text x="146" y="1008" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="22" fill="${T.accent}">พลังรวม</text>
+  <text x="84" y="1096" font-family="Kanit" font-weight="800" font-size="76" fill="url(#gold)" filter="url(#glow)">${scoreText}<tspan font-size="40" fill="${T.sub}"> /10</tspan></text>
   ${
     second
-      ? `<text x="400" y="1058" font-family="Kanit" font-size="24" fill="#bfae8a">เข้ากับคุณ</text>
+      ? `<text x="400" y="1058" font-family="Kanit" font-size="24" fill="${T.sub}">เข้ากับคุณ</text>
   <text x="400" y="1116" font-family="Kanit" font-weight="800" font-size="48" fill="url(#gold)" filter="url(#glowSoft)">${escapeXml(second.label)}</text>`
       : ""
   }
 
   <!-- ท้ายซ้าย -->
-  <text x="52" y="${H - 34}" font-family="Kanit" font-size="24" fill="#bfae8a">สแกนพระ 1 ชิ้น = การ์ดพลังงาน 1 ใบ</text>
+  <text x="52" y="${H - 34}" font-family="Kanit" font-size="24" fill="${T.sub}">สแกนพระ 1 ชิ้น = การ์ดพลังงาน 1 ใบ</text>
 
   <!-- คอลัมน์ขวา: เรดาร์ -->
-  <rect x="${RX}" y="60" width="${RW}" height="560" rx="16" fill="#171310" stroke="#6b5320" stroke-width="1.5"/>
-  <rect x="${RX + 40}" y="76" width="${RW - 80}" height="44" rx="22" fill="#2a2214" stroke="${GOLD}" stroke-width="1.5"/>
-  <text x="${RX + RW / 2}" y="107" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${GOLD}">พลังงาน 6 ด้าน</text>
-  ${radarPanelSvg(data, RX + RW / 2, 316, 116)}
+  <rect x="${RX}" y="60" width="${RW}" height="560" rx="16" fill="${T.panel}" stroke="${T.frameDim}" stroke-width="1.5"/>
+  <rect x="${RX + 40}" y="76" width="${RW - 80}" height="44" rx="22" fill="${T.pill}" stroke="${T.accent}" stroke-width="1.5"/>
+  <text x="${RX + RW / 2}" y="107" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${T.accent}">พลังงาน 6 ด้าน</text>
+  ${radarPanelSvg(data, RX + RW / 2, 316, 116, T)}
   ${data.skills
     .map((s, i) => {
       const y = 546 + i * 36;
       return `
-  <circle cx="${RX + 30}" cy="${y - 9}" r="5" fill="${GOLD}"/>
-  <text x="${RX + 48}" y="${y}" font-family="Kanit" font-weight="600" font-size="24" fill="${CREAM}">${escapeXml(s.labelFull)}</text>
-  <text x="${RX + RW - 26}" y="${y}" text-anchor="end" font-family="Kanit" font-weight="800" font-size="28" fill="${GOLD}">${s.score}</text>`;
+  <circle cx="${RX + 30}" cy="${y - 9}" r="5" fill="${T.accent}"/>
+  <text x="${RX + 48}" y="${y}" font-family="Kanit" font-weight="600" font-size="24" fill="${T.text}">${escapeXml(s.labelFull)}</text>
+  <text x="${RX + RW - 26}" y="${y}" text-anchor="end" font-family="Kanit" font-weight="800" font-size="28" fill="${T.accent}">${s.score}</text>`;
     })
     .join("")}
 
   ${rightBoxes.join("")}
 
   <!-- QR -->
-  <rect x="${RX}" y="${H - 190}" width="${RW}" height="150" rx="14" fill="#171310" stroke="#6b5320" stroke-width="1.5"/>
+  <rect x="${RX}" y="${H - 190}" width="${RW}" height="150" rx="14" fill="${T.panel}" stroke="${T.frameDim}" stroke-width="1.5"/>
   <rect x="${RX + 18}" y="${H - 172}" width="114" height="114" rx="10" fill="#ffffff"/>
   <image href="${qrDataUri}" x="${RX + 24}" y="${H - 166}" width="102" height="102"/>
-  <text x="${RX + 150}" y="${H - 122}" font-family="Kanit" font-size="24" fill="${CREAM}">สแกนเพื่อดูรายงานเต็ม</text>
-  <text x="${RX + 150}" y="${H - 88}" font-family="Kanit" font-size="24" fill="${CREAM}">และแชร์การ์ดนี้</text>
+  <text x="${RX + 150}" y="${H - 122}" font-family="Kanit" font-size="24" fill="${T.text}">สแกนเพื่อดูรายงานเต็ม</text>
+  <text x="${RX + 150}" y="${H - 88}" font-family="Kanit" font-size="24" fill="${T.text}">และแชร์การ์ดนี้</text>
 </svg>`;
 }
 
@@ -555,7 +590,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
           {
             type: "box",
             layout: "vertical",
-            backgroundColor: "#a5813a",
+            backgroundColor: cardTheme(data.grade).flexBtn,
             cornerRadius: "10px",
             paddingAll: "12px",
             action: { type: "uri", label: "เปิดรายงาน", uri: rUrl },
