@@ -491,12 +491,16 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
           {
             type: "box",
             layout: "horizontal",
+            spacing: "md",
             contents: [
               {
                 type: "box",
                 layout: "vertical",
                 flex: 1,
                 alignItems: "center",
+                backgroundColor: "#faf3e0",
+                cornerRadius: "12px",
+                paddingAll: "10px",
                 contents: [
                   { type: "text", text: "พลังเด่น", size: "xxs", color: "#8a8272" },
                   {
@@ -504,17 +508,19 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
                     text: top?.label || "-",
                     weight: "bold",
                     size: "lg",
-                    color: "#3b3324",
+                    color: "#a5813a",
                     margin: "xs",
                   },
                 ],
               },
-              { type: "separator", color: "#e2d8ba" },
               {
                 type: "box",
                 layout: "vertical",
                 flex: 1,
                 alignItems: "center",
+                backgroundColor: "#faf3e0",
+                cornerRadius: "12px",
+                paddingAll: "10px",
                 contents: [
                   { type: "text", text: "พลังเข้ากับคุณ", size: "xxs", color: "#8a8272" },
                   {
