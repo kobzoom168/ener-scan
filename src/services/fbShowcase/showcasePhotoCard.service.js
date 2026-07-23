@@ -342,13 +342,13 @@ function buildSvg(data, photoDataUri, qrDataUri) {
 
   <!-- หัวซ้าย -->
   <text x="52" y="86" font-family="Cormorant Garamond" font-weight="600" font-size="40"
-        fill="#e3c06f" letter-spacing="4">ENER SCAN</text>
+        fill="url(#gold)" letter-spacing="4" filter="url(#glowSoft)">ENER SCAN</text>
   <text x="52" y="122" font-family="Kanit" font-size="22" fill="#bfae8a">รายงานพลังงานวัตถุมงคล</text>
 
   <!-- ป้ายพลังเด่น + ชื่อ -->
   <rect x="52" y="152" width="150" height="46" rx="23" fill="none" stroke="${GOLD}" stroke-width="2"/>
   <text x="127" y="184" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${GOLD}">พลังเด่น</text>
-  <text x="52" y="258" font-family="Kanit" font-weight="800" font-size="68" fill="#f4ede0">${escapeXml(data.name)}</text>
+  <text x="52" y="258" font-family="Kanit" font-weight="800" font-size="68" fill="#ffffff" filter="url(#glowSoft)">${escapeXml(data.name)}</text>
   ${stars ? starsSvg(68, 298, 14, stars) : ""}
   ${top ? `<text x="240" y="306" font-family="Kanit" font-size="26" fill="${CREAM}">${peakLevelWord(top.score)}</text>` : ""}
 
@@ -356,7 +356,7 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   ${
     data.grade
       ? `
-  <text x="470" y="250" font-family="Kanit" font-weight="800" font-size="96" fill="#f4ede0">${data.grade}<tspan font-size="30" fill="${GOLD}"> RANK</tspan></text>
+  <text x="470" y="250" font-family="Kanit" font-weight="800" font-size="96" fill="#ffffff" filter="url(#glowSoft)">${data.grade}<tspan font-size="30" fill="${GOLD}"> RANK</tspan></text>
   ${starsSvg(488, 288, 13, stars)}`
       : ""
   }
@@ -368,11 +368,11 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <rect x="52" y="1000" width="588" height="150" rx="18" fill="#171310" stroke="#c9a136" stroke-width="2"/>
   <rect x="76" y="980" width="140" height="40" rx="20" fill="#2a2214" stroke="${GOLD}" stroke-width="1.5"/>
   <text x="146" y="1008" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="22" fill="${GOLD}">พลังรวม</text>
-  <text x="84" y="1096" font-family="Kanit" font-weight="800" font-size="76" fill="#e3c06f">${scoreText}<tspan font-size="40" fill="#bfae8a"> /10</tspan></text>
+  <text x="84" y="1096" font-family="Kanit" font-weight="800" font-size="76" fill="url(#gold)" filter="url(#glow)">${scoreText}<tspan font-size="40" fill="#bfae8a"> /10</tspan></text>
   ${
     second
       ? `<text x="400" y="1058" font-family="Kanit" font-size="24" fill="#bfae8a">เข้ากับคุณ</text>
-  <text x="400" y="1116" font-family="Kanit" font-weight="800" font-size="48" fill="#e3c06f">${escapeXml(second.label)}</text>`
+  <text x="400" y="1116" font-family="Kanit" font-weight="800" font-size="48" fill="url(#gold)" filter="url(#glowSoft)">${escapeXml(second.label)}</text>`
       : ""
   }
 
