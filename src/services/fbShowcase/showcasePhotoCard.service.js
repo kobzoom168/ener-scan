@@ -365,10 +365,8 @@ function buildSvg(data, photoDataUri, qrDataUri) {
       : ""
   }
 
-  <!-- รูปพระเต็มกรอบมุมมน + ขอบทอง -->
+  <!-- รูปพระเต็ม มุมมน ไม่มีเส้นกรอบ (กบ 23 ก.ค.) -->
   <image href="${photoDataUri}" x="52" y="330" width="588" height="470"/>
-  <rect x="52" y="330" width="588" height="470" rx="24" fill="none" stroke="url(#gold)" stroke-width="5" filter="url(#glowSoft)"/>
-  <rect x="44" y="322" width="604" height="486" rx="30" fill="none" stroke="#6b5320" stroke-width="1.5"/>
 
   <!-- กล่องพลังรวม -->
   <rect x="52" y="852" width="588" height="170" rx="18" fill="#171310" stroke="#c9a136" stroke-width="2"/>
