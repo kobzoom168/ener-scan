@@ -12,7 +12,7 @@ import {
 } from "./scanOfferAccess.resolver.js";
 import { buildScanOfferReply } from "./scanOffer.copy.js";
 
-export async function checkScanAccess({ userId, now = new Date() }) {
+export async function checkScanAccess({ userId, now = new Date(), consumeBonus = false }) {
   const lineUserId = String(userId || "").trim();
   const nowIso = now.toISOString();
   const offer = loadActiveScanOffer(now);
@@ -59,7 +59,7 @@ export async function checkScanAccess({ userId, now = new Date() }) {
 
   // Get app_user + entitlement.
   const baseCols =
-    "id, paid_until, paid_remaining_scans, free_scan_daily_offset, free_scan_offset_date";
+    "id, paid_until, paid_remaining_scans, free_scan_daily_offset, free_scan_offset_date, bonus_scans";
   const { data: appUserRow, error: appUserErr } = await supabase
     .from("app_users")
     .select(baseCols)
@@ -153,6 +153,46 @@ export async function checkScanAccess({ userId, now = new Date() }) {
       paidWindowHours: ctx.paidWindowHours,
     }),
   );
+
+  // สิทธิ์โบนัสจากชวนเพื่อน (กบ 23 ก.ค.) — ใช้เมื่อฟรีรายวันหมดเท่านั้น
+  // เส้นทางฟรีล้วน: ไม่แตะ paid_until/payments → ไม่กระทบเกตเซ็นเซอร์
+  // consumeBonus=true เฉพาะจุดสแกนรูปจริง — จุดเช็คสถานะอื่นดูเฉย ๆ ไม่กินสิทธิ์
+  let viaBonus = false;
+  const bonusScansAvail = Number(appUserRow?.bonus_scans) || 0;
+  if (!gate.allowed && bonusScansAvail > 0 && appUserId) {
+    if (!consumeBonus) {
+      viaBonus = true;
+    } else {
+      try {
+        const { data: upd } = await supabase
+          .from("app_users")
+          .update({ bonus_scans: bonusScansAvail - 1 })
+          .eq("id", appUserId)
+          .eq("bonus_scans", bonusScansAvail)
+          .select("id")
+          .maybeSingle();
+        viaBonus = Boolean(upd?.id);
+        if (viaBonus) {
+          console.log(
+            JSON.stringify({
+              event: "REFERRAL_BONUS_SCAN_CONSUMED",
+              userIdPrefix: lineUserId.slice(0, 8),
+              bonusLeft: bonusScansAvail - 1,
+            }),
+          );
+        }
+      } catch (e) {
+        console.error("[SCAN_ACCESS] bonus consume failed (ignored):", {
+          message: e?.message,
+        });
+      }
+    }
+  }
+  if (viaBonus) {
+    gate.allowed = true;
+    gate.reason = "free";
+    gate.remaining = Math.max(1, Number(gate.remaining) || 0);
+  }
 
   const finalDecision = gate.allowed
     ? { allowed: true, reason: gate.reason }

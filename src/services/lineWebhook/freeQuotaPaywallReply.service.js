@@ -91,6 +91,8 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
   const payQuickReply = {
     items: [
       ...pkgItems,
+      // ชวนเพื่อนได้สแกนฟรี (กบ 23 ก.ค.) — ทางเลือกไม่จ่ายเงินตอนสิทธิ์หมด
+      { type: "action", action: { type: "message", label: "ชวนเพื่อน ได้สแกนฟรี", text: "ชวนเพื่อน" } },
       { type: "action", action: { type: "message", label: "ไว้ก่อน", text: "ไว้ก่อน" } },
     ],
   };

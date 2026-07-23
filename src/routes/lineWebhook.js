@@ -453,6 +453,105 @@ async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, te
   return true;
 }
 
+/** ลูกค้าพิมพ์ "ชวนเพื่อน" (หรือกดปุ่มใน paywall) → การ์ดโค้ด + ข้อความ forward (กบ 23 ก.ค.) */
+async function maybeHandleReferralInvite({ client, userId, replyToken, text }) {
+  const t = String(text || "").trim();
+  if (t !== "ชวนเพื่อน" && t !== "ชวนเพื่อน ได้สแกนฟรี") return false;
+  try {
+    const {
+      referralEnabled,
+      getOrCreateReferralCode,
+      countReferrerRedemptionsThisMonth,
+      buildInviteCardFlex,
+      buildInviteForwardText,
+      MONTHLY_CAP,
+    } = await import("../services/referral/referral.service.js");
+    if (!referralEnabled()) return false;
+    const code = await getOrCreateReferralCode(userId);
+    if (!code) return false;
+    const used = await countReferrerRedemptionsThisMonth(userId).catch(() => 0);
+    const remaining = Math.max(0, MONTHLY_CAP - used);
+    // 2 ก้อนใน reply เดียว: การ์ดไว้ดูเอง + ข้อความธรรมดาไว้กดส่งต่อให้เพื่อน
+    await client.replyMessage(replyToken, [
+      buildInviteCardFlex(code, remaining),
+      { type: "text", text: buildInviteForwardText(code) },
+    ]);
+    console.log(
+      JSON.stringify({
+        event: "REFERRAL_INVITE_SENT",
+        lineUserIdPrefix: String(userId).slice(0, 10),
+        code,
+        remainingThisMonth: remaining,
+      }),
+    );
+    return true;
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "REFERRAL_INVITE_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+    return false; // พัง = ปล่อยไหลไปสมองแชทปกติ
+  }
+}
+
+/** เพื่อนใหม่พิมพ์โค้ด ENER-XXXX → ตรวจ + ให้สิทธิ์ทั้งคู่ + push แจ้งคนชวน */
+async function maybeHandleReferralCodeRedeem({ client, userId, replyToken, text }) {
+  try {
+    const {
+      referralEnabled,
+      parseReferralCodeText,
+      redeemReferralCode,
+      REDEEM_REPLY_TEXTS,
+      buildReferrerNotifyText,
+    } = await import("../services/referral/referral.service.js");
+    if (!referralEnabled()) return false;
+    const code = parseReferralCodeText(text);
+    if (!code) return false;
+    let result;
+    try {
+      result = await redeemReferralCode({ friendLineUserId: userId, code });
+    } catch (e) {
+      console.log(
+        JSON.stringify({
+          event: "REFERRAL_REDEEM_ERROR",
+          message: String(e?.message || e).slice(0, 160),
+        }),
+      );
+      result = { ok: false, reason: "error" };
+    }
+    const replyText = result.ok
+      ? REDEEM_REPLY_TEXTS.ok
+      : REDEEM_REPLY_TEXTS[result.reason] || REDEEM_REPLY_TEXTS.error;
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken,
+      replyType: "referral_redeem",
+      semanticKey: `referral_redeem_${result.ok ? "ok" : result.reason}`,
+      text: replyText,
+    });
+    if (result.ok && result.referrerLineUserId) {
+      client
+        .pushMessage(result.referrerLineUserId, {
+          type: "text",
+          text: buildReferrerNotifyText(),
+        })
+        .catch(() => {});
+    }
+    return true;
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "REFERRAL_REDEEM_HANDLER_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+    return false;
+  }
+}
+
 /** คำตอบขออนุญาตอวดชิ้นในเพจ FB (กบ 22 ก.ค.) — ดักเฉพาะตอนมีคำถามค้างใน redis เท่านั้น */
 async function maybeHandleFbShowcaseConsentReply({ client, userId, replyToken, text }) {
   try {
@@ -2121,7 +2220,8 @@ async function finalizeAcceptedImage({
     accessDecision = turnCache.accessDecision;
   } else {
     try {
-      accessDecision = await checkScanAccess({ userId });
+      // consumeBonus: จุดนี้คือการสแกนรูปจริง — สิทธิ์โบนัสชวนเพื่อนถูกกินที่นี่ที่เดียว
+      accessDecision = await checkScanAccess({ userId, consumeBonus: true });
       if (turnCache) turnCache.accessDecision = accessDecision;
     } catch (accessErr) {
       console.error("[WEBHOOK] checkScanAccess (image routing) failed:", {
@@ -6734,6 +6834,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         }
         if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
+        if (await maybeHandleReferralInvite({ client, userId, replyToken: event.replyToken, text })) return;
+        if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
         if (text === "สแกนพลังงาน") {
           let savedBirthdate = null;
@@ -7472,6 +7574,8 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
   if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
+  if (await maybeHandleReferralInvite({ client, userId, replyToken: event.replyToken, text })) return;
+  if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;
     try {
