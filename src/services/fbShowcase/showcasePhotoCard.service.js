@@ -365,11 +365,10 @@ function buildSvg(data, photoDataUri, qrDataUri) {
       : ""
   }
 
-  <!-- รูปพระวงกลม + วงแหวนทอง -->
-  <circle cx="340" cy="585" r="245" fill="#0d0a06" filter="url(#glowSoft)"/>
-  <image href="${photoDataUri}" x="95" y="340" width="490" height="490"/>
-  <circle cx="340" cy="585" r="239" fill="none" stroke="url(#gold)" stroke-width="6" filter="url(#glowSoft)"/>
-  <circle cx="340" cy="585" r="251" fill="none" stroke="#6b5320" stroke-width="1.5"/>
+  <!-- รูปพระเต็มกรอบมุมมน + ขอบทอง -->
+  <image href="${photoDataUri}" x="52" y="330" width="588" height="470"/>
+  <rect x="52" y="330" width="588" height="470" rx="24" fill="none" stroke="url(#gold)" stroke-width="5" filter="url(#glowSoft)"/>
+  <rect x="44" y="322" width="604" height="486" rx="30" fill="none" stroke="#6b5320" stroke-width="1.5"/>
 
   <!-- กล่องพลังรวม -->
   <rect x="52" y="852" width="588" height="170" rx="18" fill="#171310" stroke="#c9a136" stroke-width="2"/>
@@ -845,18 +844,20 @@ export async function renderShowcasePhotoCardPng(publicToken, payload) {
   });
   if (!imgRes.ok) throw new Error(`SHOWCASE_PHOTO_FETCH_${imgRes.status}`);
   const imgBuf = Buffer.from(await imgRes.arrayBuffer());
-  // crop วงกลมด้วย sharp — resvg ไม่รองรับ clip-path (บทเรียนการ์ด TCG 22 ก.ค.)
-  const CIRCLE = 490;
-  const circleMask = Buffer.from(
-    `<svg width="${CIRCLE}" height="${CIRCLE}"><circle cx="${CIRCLE / 2}" cy="${CIRCLE / 2}" r="${CIRCLE / 2}" fill="#fff"/></svg>`,
+  // รูปเต็มกรอบสี่เหลี่ยมมุมมน (กบ 23 ก.ค. — เลิกวงกลม) · mask ด้วย sharp
+  // เพราะ resvg ไม่รองรับ clip-path (บทเรียนการ์ด TCG 22 ก.ค.)
+  const PW = 588;
+  const PH = 470;
+  const rectMask = Buffer.from(
+    `<svg width="${PW}" height="${PH}"><rect width="${PW}" height="${PH}" rx="24" fill="#fff"/></svg>`,
   );
-  const circleBuf = await sharp(imgBuf)
+  const photoBuf = await sharp(imgBuf)
     .rotate()
-    .resize(CIRCLE, CIRCLE, { fit: "cover", position: "centre" })
-    .composite([{ input: circleMask, blend: "dest-in" }])
+    .resize(PW, PH, { fit: "cover", position: "centre" })
+    .composite([{ input: rectMask, blend: "dest-in" }])
     .png()
     .toBuffer();
-  const photoDataUri = `data:image/png;base64,${circleBuf.toString("base64")}`;
+  const photoDataUri = `data:image/png;base64,${photoBuf.toString("base64")}`;
 
   const svg = buildSvg(data, photoDataUri, await getOaQrDataUri());
   const resvg = new Resvg(svg, {
