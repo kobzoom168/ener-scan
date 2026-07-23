@@ -238,13 +238,6 @@ function buildSvg(data, photoDataUri, qrDataUri) {
     })
     .join("")}
 
-  ${
-    data.compat != null
-      ? `<text x="${W - 60}" y="${H - 156}" text-anchor="end" font-family="Kanit" font-size="30"
-        fill="${CREAM}" ${STROKE_TXT}>เข้ากับเจ้าของ <tspan font-weight="800" font-size="44"
-        fill="${GOLD}">${data.compat}%</tspan></text>`
-      : ""
-  }
   <text x="${W - 60}" y="${H - 96}" text-anchor="end" font-family="Kanit" font-size="28"
         fill="#e5dcc4" ${STROKE_TXT}>สแกนพระ 1 ชิ้น = การ์ดพลังงาน 1 ใบ</text>
 </svg>`;
