@@ -437,7 +437,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
     altText,
     contents: {
       type: "bubble",
-      size: "mega",
+      size: "kilo",
       body: {
         type: "box",
         layout: "vertical",
@@ -472,20 +472,11 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
                 data.grade
                   ? [
                       {
-                        type: "box",
-                        layout: "baseline",
-                        contents: [
-                          { type: "text", text: "เกรด", size: "xxs", color: "#8a8272", flex: 0 },
-                          {
-                            type: "text",
-                            text: data.grade,
-                            size: "xxl",
-                            weight: "bold",
-                            color: "#3b3324",
-                            margin: "sm",
-                            flex: 0,
-                          },
-                        ],
+                        type: "text",
+                        text: data.grade,
+                        size: "xxl",
+                        weight: "bold",
+                        color: "#3b3324",
                       },
                       {
                         type: "box",
@@ -512,6 +503,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
                             : []),
                         ],
                       },
+                      { type: "text", text: "เกรด", size: "xxs", color: "#8a8272", margin: "xs" },
                     ]
                   : [
                       {
@@ -529,26 +521,17 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
                 ...(compatPct != null
                   ? [
                       {
-                        type: "box",
-                        layout: "baseline",
-                        contents: [
-                          { type: "text", text: "เข้ากับคุณ", size: "xxs", color: "#8a8272", flex: 0 },
-                          {
-                            type: "text",
-                            text: `${compatPct}%`,
-                            size: "lg",
-                            weight: "bold",
-                            color: "#a5813a",
-                            margin: "sm",
-                            flex: 0,
-                          },
-                        ],
+                        type: "text",
+                        text: `${compatPct}%`,
+                        size: "xxl",
+                        weight: "bold",
+                        color: "#a5813a",
                       },
                       {
                         type: "box",
                         layout: "vertical",
                         margin: "sm",
-                        width: "80px",
+                        width: "64px",
                         height: "8px",
                         backgroundColor: "#eee5cc",
                         cornerRadius: "4px",
@@ -564,6 +547,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
                           },
                         ],
                       },
+                      { type: "text", text: "เข้ากับคุณ", size: "xxs", color: "#8a8272", margin: "xs" },
                     ]
                   : [{ type: "text", text: "-", size: "lg", color: "#8a8272" }]),
               ]),
