@@ -205,12 +205,13 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <text x="60" y="182" font-family="Kanit" font-weight="600" font-size="52"
         fill="#ffffff" ${STROKE_TXT}>${escapeXml(data.name)}</text>
 
-  <rect x="${W - 210}" y="60" width="150" height="150" rx="16" fill="#ffffff"/>
-  <image href="${qrDataUri}" x="${W - 202}" y="68" width="134" height="134"/>
-  <text x="${W - 135}" y="242" text-anchor="middle" font-family="Kanit" font-size="22"
-        fill="${CREAM}" ${STROKE_TXT}>สแกนดูพลังชิ้นคุณ</text>
+  <!-- เรดาร์ขวาบน / QR ขวาล่าง (กบ 23 ก.ค. — สลับตำแหน่งกัน) -->
+  ${radarSvg(data, 855, 350, 92)}
 
-  ${radarSvg(data, 850, 985, 90)}
+  <rect x="${W - 210}" y="960" width="150" height="150" rx="16" fill="#ffffff"/>
+  <image href="${qrDataUri}" x="${W - 202}" y="968" width="134" height="134"/>
+  <text x="${W - 135}" y="1142" text-anchor="middle" font-family="Kanit" font-size="22"
+        fill="${CREAM}" ${STROKE_TXT}>สแกนดูพลังชิ้นคุณ</text>
 
   <text x="60" y="${H - 388}" font-family="Kanit" font-size="32" fill="${CREAM}" ${STROKE_TXT}>พลังรวม</text>
   <text x="60" y="${H - 258}" font-family="Kanit" font-weight="800" font-size="150"
