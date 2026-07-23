@@ -366,16 +366,16 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   }
 
   <!-- รูปพระเต็ม มุมมน ไม่มีเส้นกรอบ (กบ 23 ก.ค.) -->
-  <image href="${photoDataUri}" x="52" y="330" width="588" height="470"/>
+  <image href="${photoDataUri}" x="52" y="315" width="588" height="660"/>
 
   <!-- กล่องพลังรวม -->
-  <rect x="52" y="852" width="588" height="170" rx="18" fill="#171310" stroke="#c9a136" stroke-width="2"/>
-  <rect x="76" y="832" width="140" height="40" rx="20" fill="#2a2214" stroke="${GOLD}" stroke-width="1.5"/>
-  <text x="146" y="860" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="22" fill="${GOLD}">พลังรวม</text>
-  <text x="84" y="962" font-family="Kanit" font-weight="800" font-size="88" fill="url(#gold)" filter="url(#glow)">${scoreText}<tspan font-size="40" fill="#bfae8a"> /10</tspan></text>
-  <rect x="84" y="978" width="300" height="12" rx="6" fill="#3a2f1a"/>
-  <rect x="84" y="978" width="${(300 * Math.min(100, data.energyScore * 10)) / 100}" height="12" rx="6" fill="url(#gold)"/>
-  ${data.grade ? `<text x="84" y="1014" font-family="Kanit" font-weight="600" font-size="26" fill="${CREAM}">${gradeWord(data.grade)}</text>` : ""}
+  <rect x="52" y="1000" width="588" height="150" rx="18" fill="#171310" stroke="#c9a136" stroke-width="2"/>
+  <rect x="76" y="980" width="140" height="40" rx="20" fill="#2a2214" stroke="${GOLD}" stroke-width="1.5"/>
+  <text x="146" y="1008" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="22" fill="${GOLD}">พลังรวม</text>
+  <text x="84" y="1096" font-family="Kanit" font-weight="800" font-size="76" fill="url(#gold)" filter="url(#glow)">${scoreText}<tspan font-size="40" fill="#bfae8a"> /10</tspan></text>
+  <rect x="400" y="1062" width="216" height="12" rx="6" fill="#3a2f1a"/>
+  <rect x="400" y="1062" width="${(216 * Math.min(100, data.energyScore * 10)) / 100}" height="12" rx="6" fill="url(#gold)"/>
+  ${data.grade ? `<text x="400" y="1112" font-family="Kanit" font-weight="600" font-size="26" fill="${CREAM}">${gradeWord(data.grade)}</text>` : ""}
 
   <!-- ท้ายซ้าย -->
   <text x="52" y="${H - 34}" font-family="Kanit" font-size="24" fill="#bfae8a">สแกนพระ 1 ชิ้น = การ์ดพลังงาน 1 ใบ</text>
@@ -845,7 +845,7 @@ export async function renderShowcasePhotoCardPng(publicToken, payload) {
   // รูปเต็มกรอบสี่เหลี่ยมมุมมน (กบ 23 ก.ค. — เลิกวงกลม) · mask ด้วย sharp
   // เพราะ resvg ไม่รองรับ clip-path (บทเรียนการ์ด TCG 22 ก.ค.)
   const PW = 588;
-  const PH = 470;
+  const PH = 660;
   const rectMask = Buffer.from(
     `<svg width="${PW}" height="${PH}"><rect width="${PW}" height="${PH}" rx="24" fill="#fff"/></svg>`,
   );
