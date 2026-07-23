@@ -540,6 +540,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
     alignItems: "center",
     contents,
   });
+  // Flex เหลือปุ่มเดียว (กบ 24 ก.ค. — ข้อมูลครบบนรูปการ์ดแล้ว)
   const miniFlex = {
     type: "flex",
     altText,
@@ -550,211 +551,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
         type: "box",
         layout: "vertical",
         backgroundColor: "#fffdf6",
-        paddingAll: "16px",
-        contents: [
-          {
-            type: "box",
-            layout: "horizontal",
-            spacing: "md",
-            contents: [
-              {
-                type: "box",
-                layout: "vertical",
-                flex: 1,
-                alignItems: "center",
-                backgroundColor: "#faf3e0",
-                cornerRadius: "12px",
-                paddingAll: "10px",
-                contents: [
-                  {
-                    type: "box",
-                    layout: "horizontal",
-                    contents: [
-                      { type: "text", text: "✨", size: "xl", flex: 0, gravity: "center" },
-                      {
-                        type: "box",
-                        layout: "vertical",
-                        margin: "sm",
-                        contents: [
-                          { type: "text", text: "พลังเด่น", size: "xxs", color: "#8a8272" },
-                          {
-                            type: "text",
-                            text: top?.label || "-",
-                            weight: "bold",
-                            size: "lg",
-                            color: "#a5813a",
-                            margin: "xs",
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-              {
-                type: "box",
-                layout: "vertical",
-                flex: 1,
-                alignItems: "center",
-                backgroundColor: "#faf3e0",
-                cornerRadius: "12px",
-                paddingAll: "10px",
-                contents: [
-                  {
-                    type: "box",
-                    layout: "horizontal",
-                    contents: [
-                      { type: "text", text: "🍀", size: "xl", flex: 0, gravity: "center" },
-                      {
-                        type: "box",
-                        layout: "vertical",
-                        margin: "sm",
-                        contents: [
-                          { type: "text", text: "พลังเข้ากับคุณ", size: "xxs", color: "#8a8272" },
-                          {
-                            type: "text",
-                            text: second?.label || "-",
-                            weight: "bold",
-                            size: "lg",
-                            color: "#3b3324",
-                            margin: "xs",
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-          { type: "separator", margin: "md", color: "#e2d8ba" },
-          {
-            type: "box",
-            layout: "horizontal",
-            margin: "lg",
-            contents: [
-              statCol([
-                {
-                  type: "box",
-                  layout: "baseline",
-                  contents: [
-                    {
-                      type: "text",
-                      text: scoreText,
-                      size: "xxl",
-                      weight: "bold",
-                      color: "#a5813a",
-                      flex: 0,
-                    },
-                    { type: "text", text: "/10", size: "xs", color: "#8a8272", margin: "sm", flex: 0 },
-                  ],
-                },
-                { type: "text", text: "⚡ พลังรวม", size: "xxs", color: "#8a8272", margin: "xs" },
-              ]),
-              { type: "separator", color: "#e2d8ba" },
-              statCol(
-                data.grade
-                  ? [
-                      {
-                        type: "box",
-                        layout: "baseline",
-                        contents: [
-                          {
-                            type: "text",
-                            text: data.grade,
-                            size: "xxl",
-                            weight: "bold",
-                            color: "#3b3324",
-                            flex: 0,
-                          },
-                          { type: "text", text: "RANK", size: "xxs", color: "#8a8272", margin: "sm", flex: 0 },
-                        ],
-                      },
-                      {
-                        type: "box",
-                        layout: "baseline",
-                        margin: "xs",
-                        contents: [
-                          {
-                            type: "text",
-                            text: "★".repeat(gradeStars),
-                            size: "xs",
-                            color: "#c9a136",
-                            flex: 0,
-                          },
-                          ...(gradeStars < 5
-                            ? [
-                                {
-                                  type: "text",
-                                  text: "★".repeat(5 - gradeStars),
-                                  size: "xs",
-                                  color: "#d9d2c0",
-                                  flex: 0,
-                                },
-                              ]
-                            : []),
-                        ],
-                      },
-                      { type: "text", text: "เกรด", size: "xxs", color: "#8a8272", margin: "xs" },
-                    ]
-                  : [
-                      {
-                        type: "text",
-                        text: data.name,
-                        size: "lg",
-                        weight: "bold",
-                        color: "#3b3324",
-                      },
-                      { type: "text", text: "สายพลัง", size: "xxs", color: "#8a8272", margin: "xs" },
-                    ],
-              ),
-              { type: "separator", color: "#e2d8ba" },
-              statCol([
-                ...(compatPct != null
-                  ? [
-                      {
-                        type: "text",
-                        text: `${compatPct}%`,
-                        size: "xxl",
-                        weight: "bold",
-                        color: "#a5813a",
-                      },
-                      {
-                        type: "box",
-                        layout: "vertical",
-                        margin: "sm",
-                        width: "64px",
-                        height: "8px",
-                        backgroundColor: "#eee5cc",
-                        cornerRadius: "4px",
-                        contents: [
-                          {
-                            type: "box",
-                            layout: "vertical",
-                            width: `${Math.max(3, compatPct)}%`,
-                            height: "8px",
-                            backgroundColor: "#c9a136",
-                            cornerRadius: "4px",
-                            contents: [{ type: "filler" }],
-                          },
-                        ],
-                      },
-                      { type: "text", text: "เข้ากับคุณ", size: "xxs", color: "#8a8272", margin: "xs" },
-                    ]
-                  : [{ type: "text", text: "-", size: "lg", color: "#8a8272" }]),
-              ]),
-            ],
-          },
-        ],
-      },
-      footer: {
-        type: "box",
-        layout: "vertical",
-        backgroundColor: "#fffdf6",
-        paddingStart: "14px",
-        paddingEnd: "14px",
-        paddingBottom: "14px",
-        paddingTop: "0px",
+        paddingAll: "14px",
         contents: [
           {
             type: "box",
@@ -784,7 +581,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
           },
         ],
       },
-      styles: { body: { backgroundColor: "#fffdf6" }, footer: { backgroundColor: "#fffdf6" } },
+      styles: { body: { backgroundColor: "#fffdf6" } },
     },
   };
 
