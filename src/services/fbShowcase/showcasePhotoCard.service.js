@@ -489,20 +489,45 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
         paddingAll: "16px",
         contents: [
           {
-            type: "text",
-            text: "พลังเด่น | พลังเข้ากับคุณ",
-            size: "xxs",
-            color: "#8a8272",
-            align: "center",
-          },
-          {
-            type: "text",
-            text: `${top?.label || "-"} | ${second?.label || "-"}`,
-            weight: "bold",
-            size: "lg",
-            color: "#3b3324",
-            align: "center",
-            margin: "xs",
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                flex: 1,
+                alignItems: "center",
+                contents: [
+                  { type: "text", text: "พลังเด่น", size: "xxs", color: "#8a8272" },
+                  {
+                    type: "text",
+                    text: top?.label || "-",
+                    weight: "bold",
+                    size: "lg",
+                    color: "#3b3324",
+                    margin: "xs",
+                  },
+                ],
+              },
+              { type: "separator", color: "#e2d8ba" },
+              {
+                type: "box",
+                layout: "vertical",
+                flex: 1,
+                alignItems: "center",
+                contents: [
+                  { type: "text", text: "พลังเข้ากับคุณ", size: "xxs", color: "#8a8272" },
+                  {
+                    type: "text",
+                    text: second?.label || "-",
+                    weight: "bold",
+                    size: "lg",
+                    color: "#3b3324",
+                    margin: "xs",
+                  },
+                ],
+              },
+            ],
           },
           { type: "separator", margin: "md", color: "#e2d8ba" },
           {
@@ -622,15 +647,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
             height: "md",
             action: { type: "uri", label: "เปิดรายงานฉบับเต็ม", uri: rUrl },
           },
-          {
-            type: "text",
-            text: "ดูคำแนะนำการพก วันเด่น ช่วงเวลา และรายละเอียดครบทั้ง 6 ด้าน",
-            size: "xxs",
-            color: "#8a8272",
-            align: "center",
-            wrap: true,
-            margin: "md",
-          },
+
         ],
       },
       styles: { body: { backgroundColor: "#fffdf6" }, footer: { backgroundColor: "#fffdf6" } },
