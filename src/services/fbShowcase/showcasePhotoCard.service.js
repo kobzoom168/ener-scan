@@ -25,7 +25,7 @@ const CREAM = "#f5edd8";
 const STROKE_TXT =
   'stroke="#000000" stroke-width="4" stroke-opacity="0.7" paint-order="stroke"';
 
-/** ชื่อย่อ 6 แกนบนเรดาร์ (ตาม key จริงใน powerCategories) */
+/** เลนพระ: ชื่อย่อ 6 แกน (ตาม key จริงใน powerCategories) */
 const AXIS_SHORT_BY_KEY = {
   luck: "โชคลาภ",
   metta: "เมตตา",
@@ -44,6 +44,32 @@ const AXIS_AUDIENCE = {
   specialty: "งานเฉพาะทาง / งานฝีมือ",
   protection: "เดินทางบ่อย / งานเสี่ยงภัย",
   fortune_anchor: "ผู้เริ่มต้นทำงาน / ตั้งหลักชีวิต",
+};
+
+/** เลนกำไล/หิน (crystalBraceletV1.axes) — key คนละชุดกับเลนพระ (กบ 24 ก.ค.) */
+const BRACELET_AXIS_ORDER = [
+  "love",
+  "luck",
+  "money",
+  "career",
+  "intuition",
+  "charm_attraction",
+];
+const BRACELET_AXIS_SHORT = {
+  love: "ความรัก",
+  luck: "โชคลาภ",
+  money: "การเงิน",
+  career: "การงาน",
+  intuition: "เซ้นส์",
+  charm_attraction: "เสน่ห์",
+};
+const BRACELET_AXIS_AUDIENCE = {
+  love: "คนโสด / คนมีคู่",
+  luck: "เสี่ยงโชค / จับจังหวะ",
+  money: "ค้าขาย / จัดการเงิน",
+  career: "คนทำงาน / สายอาชีพ",
+  intuition: "งานสร้างสรรค์ / ตัดสินใจไว",
+  charm_attraction: "งานบริการ / งานพบคน",
 };
 
 let qrDataUriCache = null;
@@ -77,21 +103,32 @@ function escapeXml(s) {
 export function deriveShowcaseCardData(payload) {
   const p = payload;
   if (!p || typeof p !== "object") return null;
-  const a = p.amuletV1;
-  if (!a || typeof a !== "object" || Array.isArray(a)) return null;
   const energyScore = Number(p.summary?.energyScore);
   if (!Number.isFinite(energyScore)) return null;
   const objectImageUrl = String(p.objectImageUrl || p.object?.objectImageUrl || "").trim();
   if (!/^https:\/\//i.test(objectImageUrl)) return null;
 
-  const cats = a.powerCategories || {};
+  const amulet = p.amuletV1;
+  const bracelet = p.crystalBraceletV1;
+  const isAmulet = amulet && typeof amulet === "object" && !Array.isArray(amulet);
+  const isBracelet = bracelet && typeof bracelet === "object" && !Array.isArray(bracelet);
+  if (!isAmulet && !isBracelet) return null; // รองรับ 2 เลน: พระ + กำไล/หิน
+
+  // เลือกชุด axis/mapping ตามเลน
+  const laneObj = isAmulet ? amulet : bracelet;
+  const cats = isAmulet ? laneObj.powerCategories || {} : laneObj.axes || {};
+  const order = isAmulet ? AXIS_ORDER : BRACELET_AXIS_ORDER;
+  const shortMap = isAmulet ? AXIS_SHORT_BY_KEY : BRACELET_AXIS_SHORT;
+  const audienceMap = isAmulet ? AXIS_AUDIENCE : BRACELET_AXIS_AUDIENCE;
+  const adviceMap = isAmulet ? AXIS_ADVICE : BRACELET_AXIS_ADVICE;
+
   const axes = [];
-  for (const key of AXIS_ORDER) {
+  for (const key of order) {
     const sc = Number(cats[key]?.score);
     if (!Number.isFinite(sc)) continue;
     axes.push({
       key,
-      label: AXIS_SHORT_BY_KEY[key] || String(cats[key]?.labelThai || key).split("และ")[0].trim(),
+      label: shortMap[key] || String(cats[key]?.labelThai || key).split("และ")[0].trim(),
       labelFull: String(cats[key]?.labelThai || key).trim(),
       score: Math.round(sc),
     });
@@ -99,34 +136,34 @@ export function deriveShowcaseCardData(payload) {
   if (axes.length < 3) return null; // เรดาร์ต้องมีแกนพอวาด
 
   const skills = [...axes].sort((x, y) => y.score - x.score).slice(0, 2);
-  // ชื่อบนการ์ด = พลังหลักตามคะแนนจริง (กบ 23 ก.ค. — เดิมใช้ป้ายสายจาก heroNamingLine
-  // แล้วขัดกับเรดาร์: การ์ดขึ้น "ปกป้อง" แต่แกนเด่นจริงคือหนุนดวง)
-  const heroTail = String(
-    a.flexSurface?.heroNamingLine || p.flexSurface?.heroNamingLine || "",
-  )
-    .split("·")
-    .pop()
-    .trim();
-  const name = skills[0]?.label || heroTail || "พลังเฉพาะองค์";
+  // ชื่อบนการ์ด = พลังหลักตามคะแนนจริง (กบ 23 ก.ค.)
+  const name = skills[0]?.label || "พลังเฉพาะชิ้น";
   const gradeRaw = resolveEnergyLevelDisplayGrade(p.summary?.energyLevelLabel, energyScore);
   const grade = ["S", "A", "B"].includes(gradeRaw) ? gradeRaw : null; // ใช้เลือกธีมสี
   const displayGrade = gradeRaw || null; // บนการ์ดโชว์ทุกระดับรวม D (กบ 24 ก.ค.)
   const compatRaw = Number(p.summary?.compatibilityPercent);
   const compat = Number.isFinite(compatRaw) ? Math.round(compatRaw) : null;
 
-  // แถบล่าง 3 ช่อง: พลังเด่น / จังหวะที่เหมาะ (timingV1 จริง) / เหมาะกับ (map จากด้านเด่น)
   const peakLine = skills.map((s) => s.label).join(" · ");
-  const timingDay = String(p.timingV1?.summary?.topWeekdayLabel || "").trim();
-  const timingWindow = String(p.timingV1?.summary?.topWindowLabel || "")
-    .trim()
-    .replace(/[–—]/g, "-");
-  const audience = skills
-    .map((s) => AXIS_AUDIENCE[s.key])
-    .filter(Boolean)
-    .join(" / ");
+  // จังหวะที่เหมาะ: เลนพระ = timingV1 · เลนกำไล = htmlReport.energyTiming
+  let timingDay = "";
+  let timingWindow = "";
+  if (isAmulet) {
+    timingDay = String(p.timingV1?.summary?.topWeekdayLabel || "").trim();
+    timingWindow = String(p.timingV1?.summary?.topWindowLabel || "").trim();
+  } else {
+    const et = laneObj.htmlReport?.energyTiming || {};
+    timingDay = String(et.recommendedWeekday || "").trim();
+    timingWindow = String(et.recommendedTimeBand || "").trim();
+  }
+  timingWindow = timingWindow.replace(/[–—]/g, "-");
+
+  const audience = skills.map((s) => audienceMap[s.key]).filter(Boolean).join(" / ");
+  const advice = skills.map((s) => adviceMap[s.key]).find(Boolean) || "";
 
   return {
     name,
+    lane: isAmulet ? "amulet" : "bracelet",
     energyScore,
     grade,
     displayGrade,
@@ -138,6 +175,7 @@ export function deriveShowcaseCardData(payload) {
     timingDay,
     timingWindow,
     audience,
+    advice,
   };
 }
 
@@ -232,7 +270,7 @@ function gradeWord(grade) {
   return grade === "S" ? "ระดับสูงสุด" : grade === "A" ? "ยอดเยี่ยม" : grade === "B" ? "ดีมาก" : "";
 }
 
-/** ประโยคคำแนะนำตายตัวต่อแกนเด่น (ใช้ทั้ง Flex และการ์ดรูป — ไม่มโน) */
+/** ประโยคคำแนะนำตายตัวต่อแกนเด่น เลนพระ (ใช้ทั้ง Flex และการ์ดรูป — ไม่มโน) */
 const AXIS_ADVICE = {
   luck: "พกติดตัวช่วงมีนัดเจรจา ตั้งจิตให้ชัดก่อนออกจากบ้าน",
   metta: "พกติดตัวเวลาพบผู้คน ตั้งจิตขอความราบรื่นก่อนเริ่มงาน",
@@ -240,6 +278,16 @@ const AXIS_ADVICE = {
   specialty: "พกติดตัวเวลาทำงานสายเฉพาะ ตั้งจิตอธิษฐานก่อนเริ่มงาน",
   protection: "พกติดตัวเวลาเดินทาง ตั้งจิตขอความแคล้วคลาดก่อนออกเดินทาง",
   fortune_anchor: "พกติดตัว ตั้งจิตอธิษฐานก่อนเริ่มงาน จะเสริมพลังให้ราบรื่น",
+};
+
+/** คำแนะนำเลนกำไล/หิน — ใช้คำ ใส่ ไม่ใช่ พก (กบ 24 ก.ค.) */
+const BRACELET_AXIS_ADVICE = {
+  love: "ใส่ประจำช่วงพบปะผู้คน ตั้งจิตสั้น ๆ ก่อนใส่ให้ใจเปิด",
+  luck: "ใส่ประจำ ตั้งจิตขอจังหวะดี ๆ ก่อนเริ่มวัน",
+  money: "ใส่ประจำวันทำงานหรือค้าขาย ตั้งเจตนาเรื่องการจัดการเงินให้ชัด",
+  career: "ใส่ประจำวันทำงาน ตั้งจิตเรื่องความต่อเนื่องก่อนเริ่มงาน",
+  intuition: "ใส่ตอนต้องตัดสินใจ ทำใจให้นิ่งก่อนฟังสัญญาณในใจ",
+  charm_attraction: "ใส่ช่วงพบคนหรือออกงาน ตั้งจิตให้มั่นใจก่อนใส่",
 };
 
 /** ธีมสีการ์ดตามเกรด (กบ 24 ก.ค.): S/A ทองดำ · B ฟ้าเงิน · ต่ำกว่า/ไม่มีเกรด โทนขาว
@@ -328,7 +376,7 @@ function buildSvg(data, photoDataUri, qrDataUri) {
     Array.from({ length: 5 }, (_, i) =>
       `<polygon points="${starPath(x + i * (size * 2.4), y, size)}" fill="${i < n ? "#ffd54f" : "${T.starDim}"}"/>`,
     ).join("");
-  const advice = AXIS_ADVICE[top?.key] || "";
+  const advice = data.advice || AXIS_ADVICE[top?.key] || "";
   const adviceLines = wrapText(advice, 30).slice(0, 2);
   const audienceLines = (data.audience || "").split(" / ").slice(0, 2);
 
