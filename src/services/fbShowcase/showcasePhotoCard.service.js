@@ -465,7 +465,7 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   }
 
   <!-- ท้ายซ้าย -->
-  <text x="52" y="${H - 34}" font-family="Kanit" font-size="24" fill="${T.sub}">สแกนพระ 1 ชิ้น = การ์ดพลังงาน 1 ใบ</text>
+  <text x="52" y="${H - 34}" font-family="Kanit" font-size="24" fill="${T.sub}">สแกน 1 ชิ้น = การ์ดพลังงาน 1 ใบ</text>
 
   <!-- คอลัมน์ขวา: เรดาร์ -->
   <rect x="${RX}" y="60" width="${RW}" height="560" rx="16" fill="${T.panel}" stroke="${T.frameDim}" stroke-width="1.5"/>
