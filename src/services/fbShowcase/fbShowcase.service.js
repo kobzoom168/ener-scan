@@ -31,9 +31,10 @@ import {
 import { env } from "../../config/env.js";
 import { sendTelegramText } from "../telegramNotify.service.js";
 
+// เกตถามขออนุญาต = เกรด A ขึ้นไป (คะแนน ≥7.5) — กบ 24 ก.ค. "เจอ A ถาม แล้วโพสต์ทันที"
 const MIN_SCORE = (() => {
   const n = Number(process.env.FB_CONSENT_MIN_SCORE);
-  return Number.isFinite(n) && n > 0 && n <= 10 ? n : 8;
+  return Number.isFinite(n) && n > 0 && n <= 10 ? n : 7.5;
 })();
 const POST_HOURS_BKK = (() => {
   const raw = String(process.env.FB_AUTOPOST_HOURS ?? "11,19").trim();
@@ -157,8 +158,8 @@ export async function maybeEnqueueFbConsentAsk({ lineUserId, reportPayload, publ
     );
     if (!firstForUser) return { skipped: "user_cooldown" };
 
-    const text =
-      "ชิ้นนี้พลังสวยมากครับ อาจารย์ขออนุญาตนำการ์ดผลชิ้นนี้ไปอวดในเพจ Ener หน่อยได้ไหมครับ ลงเฉพาะภาพวัตถุกับผลอ่าน ไม่มีข้อมูลของคุณอยู่บนการ์ดแน่นอน";
+    // 5 แบบไม่ซ้ำ สั้น ไม่อวย (กบ 24 ก.ค.) — สุ่มด้วย hash ของ token ให้คงที่ต่อชิ้น
+    const text = pickConsentAskText(piece.token);
     await insertOutboundMessage({
       line_user_id: uid,
       kind: "fb_consent_ask",
@@ -206,6 +207,21 @@ export async function maybeEnqueueFbConsentAsk({ lineUserId, reportPayload, publ
   }
 }
 
+/** ข้อความขออนุญาต 5 แบบ สั้น ไม่อวย (กบ 24 ก.ค.) — เลือกตาม hash token คงที่ต่อชิ้น */
+const CONSENT_ASK_TEXTS = [
+  "ชิ้นนี้ออกมาสวยครับ อาจารย์ขอลงเพจ Ener ได้ไหมครับ ลงแค่ภาพกับผลอ่าน",
+  "ขออนุญาตนำชิ้นนี้ลงเพจหน่อยครับ ไม่มีข้อมูลส่วนตัวของคุณ",
+  "ชิ้นนี้น่าสนใจครับ อาจารย์ขอเอาลงเพจ Ener ได้ไหมครับ",
+  "ขอลงชิ้นนี้ในเพจได้ไหมครับ ลงเฉพาะภาพวัตถุกับผลอ่าน",
+  "ชิ้นนี้อยากเก็บไว้ลงเพจหน่อยครับ อนุญาตไหมครับ",
+];
+function pickConsentAskText(token) {
+  let h = 0;
+  const s = String(token || "");
+  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return CONSENT_ASK_TEXTS[h % CONSENT_ASK_TEXTS.length];
+}
+
 /* ────────────────────── 2) ดักคำตอบลูกค้าใน webhook ────────────────────── */
 
 const ACCEPT_RE = /ยินดี|อวดได้|ได้เลย|จัดเลย|โอเค|ตามสบาย/;
@@ -247,14 +263,30 @@ export async function handleFbConsentReplyText({ lineUserId, text }) {
   }
 
   try {
-    const { error } = await supabase.from("fb_showcase_queue").insert({
-      line_user_id: uid,
-      public_token: token,
-      source: "customer",
-      status: "queued",
-    });
+    const { data: row, error } = await supabase
+      .from("fb_showcase_queue")
+      .insert({
+        line_user_id: uid,
+        public_token: token,
+        source: "customer",
+        status: "queued",
+      })
+      .select("id, line_user_id, public_token, source, status")
+      .maybeSingle();
     // ชิ้นซ้ำ (unique token) = เคยเข้าคิวแล้ว — ถือว่าสำเร็จ ตอบเหมือนกัน
     if (error && !/duplicate|unique/i.test(String(error.message || ""))) throw error;
+    // ลูกค้ากดยินดี = โพสต์ทันที ไม่รอรอบ 11:00/19:00 (กบ 24 ก.ค.) — background ไม่หน่วงตอบแชท
+    // คลังกบยังโพสต์ตามรอบเหมือนเดิม · ชิ้นซ้ำ (row null) ข้าม
+    if (row?.id && row.status === "queued") {
+      void postShowcaseRow(row).catch((e) =>
+        console.log(
+          JSON.stringify({
+            event: "FB_CONSENT_INSTANT_POST_ERROR",
+            message: String(e?.message || e).slice(0, 160),
+          }),
+        ),
+      );
+    }
   } catch (e) {
     console.log(
       JSON.stringify({
@@ -265,7 +297,7 @@ export async function handleFbConsentReplyText({ lineUserId, text }) {
     return { reply: "ขอบคุณครับ เดี๋ยวอาจารย์จัดลงเพจให้สวย ๆ เลยครับ" };
   }
   console.log(JSON.stringify({ event: "FB_CONSENT_ACCEPTED", tokenPrefix: token.slice(0, 10) }));
-  return { reply: "ขอบคุณครับ เดี๋ยวอาจารย์จัดลงเพจให้สวย ๆ เลยครับ" };
+  return { reply: "ขอบคุณครับ เดี๋ยวอาจารย์จัดลงเพจให้เลยครับ" };
 }
 
 /* ────────────────────── 3) แคปชัน ────────────────────── */
