@@ -99,3 +99,36 @@ test("deriveShowcaseCardData: ไม่ใช่เลนพระ → null", ()
   delete p.amuletV1;
   assert.equal(deriveShowcaseCardData(p), null);
 });
+
+// ─── เลนกำไล/หิน (กบ 24 ก.ค.) ───
+const braceletPayload = () => ({
+  object: { objectImageUrl: "https://cdn.example.com/b.jpg" },
+  summary: { energyScore: 7.6, energyLevelLabel: "A", compatibilityPercent: 81 },
+  crystalBraceletV1: {
+    axes: {
+      love: { score: 68, labelThai: "ความรัก" },
+      luck: { score: 39, labelThai: "โชคลาภ" },
+      money: { score: 78, labelThai: "การเงิน" },
+      career: { score: 42, labelThai: "การงาน" },
+      intuition: { score: 51, labelThai: "เซ้นส์" },
+      charm_attraction: { score: 65, labelThai: "เสน่ห์" },
+    },
+    htmlReport: {
+      energyTiming: { recommendedWeekday: "วันพุธ", recommendedTimeBand: "10:00-12:59" },
+    },
+  },
+});
+
+test("deriveShowcaseCardData: เลนกำไล → axes 6 แกน + ชื่อ=แกนสูงสุด + timing จาก energyTiming", () => {
+  const d = deriveShowcaseCardData(braceletPayload());
+  assert.ok(d);
+  assert.equal(d.lane, "bracelet");
+  assert.equal(d.name, "การเงิน");
+  assert.equal(d.axes.length, 6);
+  assert.equal(d.skills[0].score, 78);
+  assert.equal(d.timingDay, "วันพุธ");
+  assert.equal(d.timingWindow, "10:00-12:59");
+  assert.ok(d.advice.includes("ใส่"));
+  assert.equal(d.grade, "A");
+  assert.equal(d.compat, 81);
+});
