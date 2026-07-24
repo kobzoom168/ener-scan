@@ -930,7 +930,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     .cb2-owner-card {
       margin-top: 0.75rem;
       padding: 0.75rem 0 0.75rem 0.95rem;
-      border-left: 3px solid rgba(217, 123, 176, 0.55);
+      border-left: 3px solid rgba(184,135,27, 0.55);
     }
     .cb2-owner-card--below-summary {
       margin-top: 1.15rem;
@@ -953,8 +953,8 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       font-weight: 600;
       padding: 0.18rem 0.42rem;
       border-radius: 999px;
-      background: rgba(217, 123, 176, 0.10);
-      border: 1px solid rgba(217, 123, 176, 0.28);
+      background: rgba(184,135,27, 0.10);
+      border: 1px solid rgba(184,135,27, 0.28);
       color: #8f6710;
       letter-spacing: 0.01em;
     }
@@ -963,7 +963,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
 
     /* ── Energy timing — mini trend / productivity strip + insight ── */
     .cb2-card--et {
-      border-left-color: rgba(217, 123, 176, 0.55);
+      border-left-color: rgba(184,135,27, 0.55);
       margin-top: 1rem;
     }
     .cb2-card--et h2 {
@@ -1071,7 +1071,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       border: 1px solid rgba(186, 230, 253, 0.55);
       box-shadow:
         0 0 0 1px rgba(125, 211, 252, 0.35),
-        0 0 16px rgba(217, 123, 176, 0.22),
+        0 0 16px rgba(184,135,27, 0.22),
         0 5px 12px rgba(14, 165, 233, 0.18);
     }
     .cb2-et-strip--weekday .cb2-et-pill.is-active .cb2-et-pill-shape::after {
@@ -1158,8 +1158,8 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       background: linear-gradient(180deg, #b8871b 0%, #b8860b 38%, #8f6710 100%);
       border: 1px solid rgba(165, 220, 252, 0.5);
       box-shadow:
-        0 0 0 1px rgba(217, 123, 176, 0.25),
-        0 0 14px rgba(217, 123, 176, 0.2),
+        0 0 0 1px rgba(184,135,27, 0.25),
+        0 0 14px rgba(184,135,27, 0.2),
         0 4px 10px rgba(8, 80, 120, 0.25);
     }
     .cb2-et-slot.is-active .cb2-et-slot-bar::after {
@@ -1178,9 +1178,9 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     }
     .cb2-et-insight {
       margin-top: 0.8rem;
-      background: rgba(217, 123, 176, 0.10);
-      border: 1px solid rgba(217, 123, 176, 0.25);
-      border: 1px solid rgba(217, 123, 176, 0.12);
+      background: rgba(184,135,27, 0.10);
+      border: 1px solid rgba(184,135,27, 0.25);
+      border: 1px solid rgba(184,135,27, 0.12);
       border-radius: 14px;
       padding: 0.9rem 0.95rem;
     }
@@ -1216,7 +1216,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
 
     /* ── แชร์รายงาน (เทียบพระเครื่อง: Web Share + LINE OA) ── */
     .cb2-share-card {
-      border-left-color: rgba(217, 123, 176, 0.45);
+      border-left-color: rgba(184,135,27, 0.45);
       margin-top: 1rem;
     }
     .cb2-share-card h2 {
@@ -1258,7 +1258,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     }
     .cb2-share-btn--primary {
       background: linear-gradient(165deg, #8f6710, #b8871b 55%, #8f6710);
-      border-color: rgba(217, 123, 176, 0.5);
+      border-color: rgba(184,135,27, 0.5);
       color: #04121d;
     }
     .cb2-share-btn--primary:hover {
@@ -1410,8 +1410,8 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       width: 10px;
       height: 10px;
       border-radius: 999px;
-      background: rgba(138, 100, 120, 0.45);
-      border: 2px solid rgba(217, 123, 176, 0.7);
+      background: rgba(120,108,84, 0.45);
+      border: 2px solid rgba(184,135,27, 0.7);
       box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.16);
     }
     @media (max-width: 380px) {
@@ -1507,8 +1507,8 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       margin: 0.5rem 0 0.65rem;
       padding: 0.55rem 0.65rem;
       border-radius: 10px;
-      background: rgba(217, 123, 176, 0.06);
-      border: 1px solid rgba(217, 123, 176, 0.16);
+      background: rgba(184,135,27, 0.06);
+      border: 1px solid rgba(184,135,27, 0.16);
       font-size: 0.68rem;
       line-height: 1.45;
       color: var(--cb2-muted);
@@ -1527,8 +1527,8 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       margin: 0.85rem 0 0;
       padding: 0.65rem 0.75rem;
       border-radius: 12px;
-      background: rgba(217, 123, 176, 0.05);
-      border: 1px solid rgba(217, 123, 176, 0.12);
+      background: rgba(184,135,27, 0.05);
+      border: 1px solid rgba(184,135,27, 0.12);
     }
     .cb2-trust-sources-h {
       font-size: 0.72rem;
@@ -1559,10 +1559,10 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     }
     .cb2-share-btn--secondary {
       background: transparent;
-      border-color: rgba(217, 123, 176, 0.45);
+      border-color: rgba(184,135,27, 0.45);
       color: #8f6710;
     }
-    .cb2-share-btn--secondary:hover { background: rgba(217, 123, 176, 0.1); }
+    .cb2-share-btn--secondary:hover { background: rgba(184,135,27, 0.1); }
     .cb2-share-btn--ghost {
       background: rgba(148, 163, 184, 0.1);
       border-color: rgba(148, 163, 184, 0.25);
@@ -1570,10 +1570,10 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     }
     .cb2-share-btn--ghost:hover { background: rgba(148, 163, 184, 0.16); }
     /* teaser อันดับ 1 ของวันนี้ (เบลอ) + แถบเริ่มใช้ล่างจอ */
-    .pk-tease-card { border: 1.5px dashed rgba(217, 123, 176, 0.55); }
+    .pk-tease-card { border: 1.5px dashed rgba(184,135,27, 0.55); }
     .pk-tease-h { margin: 0 0 0.7rem; font-size: 1.05rem; }
     .pk-tease-row { display: flex; gap: 12px; align-items: center; }
-    .pk-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: blur(9px) saturate(0.75); background: rgba(217, 123, 176, 0.12); }
+    .pk-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: blur(9px) saturate(0.75); background: rgba(184,135,27, 0.12); }
     .pk-tease-img--empty { filter: none; }
     .pk-tease-main { min-width: 0; flex: 1; }
     .pk-tease-line { margin: 0; font-weight: 800; font-size: 0.98rem; }
@@ -1581,7 +1581,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     .pk-tease-sub { margin: 0.3rem 0 0; font-size: 0.8rem; opacity: 0.75; }
     .pk-tease-cta { display: block; text-align: center; margin-top: 0.85rem; text-decoration: none; font-weight: 800; padding: 12px 8px; border-radius: 12px; background: #a5813a; color: #fff; }
     body { padding-bottom: 76px; }
-    .pk-stickycta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: rgba(255, 251, 253, 0.96); backdrop-filter: blur(8px); border-top: 1px solid rgba(217, 123, 176, 0.3); }
+    .pk-stickycta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: rgba(255, 251, 253, 0.96); backdrop-filter: blur(8px); border-top: 1px solid rgba(184,135,27, 0.3); }
     .pk-cta-scan { flex: 1; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 8px; border-radius: 12px; background: #a5813a; color: #fff; }
     .pk-cta-member { flex: 0 0 auto; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #a5813a; color: #a5813a; background: transparent; }
   </style>
