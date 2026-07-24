@@ -293,6 +293,16 @@ const BRACELET_AXIS_ADVICE = {
 /** ธีมสีการ์ดตามเกรด (กบ 24 ก.ค.): S/A ทองดำ · B ฟ้าเงิน · ต่ำกว่า/ไม่มีเกรด โทนขาว
  *  เฉพาะการ์ดรูป + ปุ่ม Flex — รายงาน HTML คงเดิม */
 const CARD_THEMES = {
+  // S = ระดับสูงสุด (ดำสนิท + ทองแพลตินัมสว่าง เรืองแรงกว่า A) — กบ 24 ก.ค.
+  prestige: {
+    bg1: "#2a2140", bg2: "#120e1e", bg3: "#050308",
+    frame: "#e6cf7a", frameDim: "#7a6a3a",
+    panel: "#14101c", pill: "#241d33",
+    accent: "#ffe08a", accentHi: "#fff6d0",
+    title: "#ffffff", text: "#fbf2d8", sub: "#cbb98a",
+    starDim: "#4a4258", flexBtn: "#b89334",
+    fxSoft: ' filter="url(#glow)"', fxMain: ' filter="url(#glow)"',
+  },
   gold: {
     bg1: "#3a2c14", bg2: "#1d150c", bg3: "#0d0a06",
     frame: "#c9a136", frameDim: "#6b5320",
@@ -322,7 +332,8 @@ const CARD_THEMES = {
   },
 };
 function cardTheme(grade) {
-  if (grade === "S" || grade === "A") return CARD_THEMES.gold;
+  if (grade === "S") return CARD_THEMES.prestige;
+  if (grade === "A") return CARD_THEMES.gold;
   if (grade === "B") return CARD_THEMES.silver;
   return CARD_THEMES.white;
 }
