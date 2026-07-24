@@ -518,8 +518,8 @@ function buildCrystalBraceletGraphSummaryBarsHtml(
   );
   const peakName = cbAxisLabelThai(axes, primaryAxis);
   const alignName = cbAxisLabelThai(axes, alignAxisKey);
-  const peakColor = CB_RING_COLORS[primaryAxis] || "#d97bb0";
-  const alignColor = CB_RING_COLORS[alignAxisKey] || "#b98be0";
+  const peakColor = CB_RING_COLORS[primaryAxis] || "#b8871b";
+  const alignColor = CB_RING_COLORS[alignAxisKey] || "#8f6710";
 
   const row = (
     rowLabel,
@@ -652,7 +652,7 @@ function buildCrystalBraceletLibraryHtml(library, currentToken, opts = {}) {
         .cb2-lib-ax-hint{margin:0 0 .5rem;font-size:.74rem;opacity:.6}
         .cb2-lib-ax-view{display:flex;gap:.55rem;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;padding:.1rem 0 .35rem;scrollbar-width:none}
         .cb2-lib-ax-view::-webkit-scrollbar{display:none;height:0}
-        .cb2-lib-ax-slide{flex:0 0 min(80%,240px);scroll-snap-align:start;scroll-snap-stop:always;border-radius:.8rem;border:1px solid rgba(217,123,176,.30);background:rgba(217,123,176,.07);padding:.6rem;box-sizing:border-box;text-align:center;animation:cb2LibRise .5s ease both}
+        .cb2-lib-ax-slide{flex:0 0 min(80%,240px);scroll-snap-align:start;scroll-snap-stop:always;border-radius:.8rem;border:1px solid rgba(184,135,27,.30);background:rgba(184,135,27,.07);padding:.6rem;box-sizing:border-box;text-align:center;animation:cb2LibRise .5s ease both}
         @keyframes cb2LibRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
         .cb2-lib-ax-badge{margin:0 0 .45rem;font-size:.74rem;font-weight:800;color:var(--cb2-accent);line-height:1.3}
         .cb2-lib-ax-img img,.cb2-lib-ax-img--empty{width:72px;height:72px;border-radius:.6rem;object-fit:cover;display:block;margin:0 auto .4rem;background:rgba(255,255,255,.08)}
@@ -660,14 +660,14 @@ function buildCrystalBraceletLibraryHtml(library, currentToken, opts = {}) {
         .cb2-lib-ax-num{font-size:1.35rem;font-weight:800;color:var(--cb2-accent)}
         .cb2-lib-ax-suf{font-size:.78rem;opacity:.7}
         .cb2-lib-ax-blurb{margin:0 0 .5rem;font-size:.72rem;opacity:.7}
-        .cb2-lib-ax-btn{display:block;text-align:center;padding:.5rem;font-size:.82rem;font-weight:800;border-radius:999px;text-decoration:none;color:#04121d;background:linear-gradient(165deg,#b98be0,#d97bb0 55%,#b34d8f)}
-        .cb2-lib-ax-btn--off{opacity:.45;background:rgba(217,123,176,.15);color:inherit}
+        .cb2-lib-ax-btn{display:block;text-align:center;padding:.5rem;font-size:.82rem;font-weight:800;border-radius:999px;text-decoration:none;color:#04121d;background:linear-gradient(165deg,#8f6710,#b8871b 55%,#8f6710)}
+        .cb2-lib-ax-btn--off{opacity:.45;background:rgba(184,135,27,.15);color:inherit}
         .cb2-lib-ax-dots{display:flex;flex-wrap:wrap;justify-content:center;gap:.32rem;margin-top:.15rem}
-        .cb2-lib-ax-dot{width:.44rem;height:.44rem;padding:0;border:none;border-radius:50%;background:rgba(217,123,176,.35);cursor:pointer;transition:transform .12s,background .12s}
+        .cb2-lib-ax-dot{width:.44rem;height:.44rem;padding:0;border:none;border-radius:50%;background:rgba(184,135,27,.35);cursor:pointer;transition:transform .12s,background .12s}
         .cb2-lib-ax-dot.on{background:var(--cb2-accent);transform:scale(1.2)}
         .cb2-lib-nudge{margin:.55rem 0 0;font-size:.8rem;opacity:.75}
         .cb2-lib-blur{filter:blur(9px);transform:scale(1.06)}
-        .cb2-lib-unlock{display:block;text-align:center;margin:.6rem 0 0;padding:.55rem;font-size:.84rem;font-weight:800;border-radius:999px;text-decoration:none;color:#04121d;background:linear-gradient(165deg,#b98be0,#d97bb0 55%,#b34d8f)}
+        .cb2-lib-unlock{display:block;text-align:center;margin:.6rem 0 0;padding:.55rem;font-size:.84rem;font-weight:800;border-radius:999px;text-decoration:none;color:#04121d;background:linear-gradient(165deg,#8f6710,#b8871b 55%,#8f6710)}
       </style>
       <h2 id="cb2-lib-h">คลังกำไลของคุณ</h2>
       <p class="cb2-lib-count">คุณสแกนกำไลไว้แล้ว ${escapeHtml(String(library.totalCount))} เส้น (${escapeHtml(String(library.scanCount))} ครั้ง) 🔮</p>
@@ -892,23 +892,23 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
   <style>
     :root {
       /* Feminine light theme (ชมพูพาสเทล-ม่วงลาเวนเดอร์) — crystal bracelets skew female */
-      --cb2-bg: #fdf3f8;
+      --cb2-bg: #f6f6f4;
       --cb2-card: #ffffff;
-      --cb2-card2: #fbeaf3;
-      --cb2-border: rgba(120,60,95,0.12);
-      --cb2-text: #4a2b40;
-      --cb2-sub: #8a6478;
-      --cb2-muted: #a988a0;
-      --cb2-accent: #d97bb0;
-      --cb2-accent2: #b98be0;
-      --cb2-card-shadow: 0 2px 12px rgba(190,120,165,0.16), 0 0 0 1px rgba(120,60,95,0.05);
-      --cb2-gsum-bg: #fbeaf3;
-      --cb2-gsum-border: rgba(120,60,95,0.10);
-      --cb2-gsum-lead-bg: rgba(217,123,176,0.12);
-      --cb2-gsum-lead-border: rgba(217,123,176,0.32);
-      --cb2-gsum-k: #a988a0;
-      --cb2-gsum-v: #5a3348;
-      --cb2-gsum-v-lead: #c05a9e;
+      --cb2-card2: #f2f2ef;
+      --cb2-border: rgba(100,92,82,0.12);
+      --cb2-text: #241c12;
+      --cb2-sub: #5a4a38;
+      --cb2-muted: #7a6a58;
+      --cb2-accent: #b8871b;
+      --cb2-accent2: #8f6710;
+      --cb2-card-shadow: 0 2px 12px rgba(184,135,27,0.16), 0 0 0 1px rgba(100,92,82,0.05);
+      --cb2-gsum-bg: #f2f2ef;
+      --cb2-gsum-border: rgba(100,92,82,0.10);
+      --cb2-gsum-lead-bg: rgba(184,135,27,0.12);
+      --cb2-gsum-lead-border: rgba(184,135,27,0.32);
+      --cb2-gsum-k: #7a6a58;
+      --cb2-gsum-v: #241c12;
+      --cb2-gsum-v-lead: #b8860b;
     }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, "Segoe UI", sans-serif; background: var(--cb2-bg); color: var(--cb2-text); line-height: 1.5; -webkit-font-smoothing: antialiased; }
@@ -918,10 +918,10 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     .cb2-header-row { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.25rem; }
     .cb2-header-text { flex: 1; min-width: 0; }
     .cb2-hero-stack { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex-shrink: 0; }
-    .cb2-hero-img { width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: #fbeaf3; margin-bottom: 0.85rem; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    .cb2-hero-img { width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: #f2f2ef; margin-bottom: 0.85rem; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
     .cb2-header-row .cb2-hero-img { width: 88px; height: 88px; aspect-ratio: 1 / 1; border-radius: 12px; flex-shrink: 0; margin-bottom: 0; }
     .cb2-hero-img img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
-    .cb2-h1 { font-size: 1.4rem; font-weight: 800; margin: 0 0 0.2rem; line-height: 1.3; color: #4a2b40; letter-spacing: -0.01em; }
+    .cb2-h1 { font-size: 1.4rem; font-weight: 800; margin: 0 0 0.2rem; line-height: 1.3; color: #241c12; letter-spacing: -0.01em; }
     .cb2-tag { font-size: 0.78rem; color: var(--cb2-muted); margin: 0 0 0.3rem; }
     .cb2-main { font-size: 0.88rem; font-weight: 600; color: var(--cb2-accent); margin: 0.15rem 0 0; }
     .cb2-date { font-size: 0.7rem; color: var(--cb2-muted); margin: 0.45rem 0 0; }
@@ -936,17 +936,17 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       margin-top: 1.15rem;
       padding-top: 0.65rem;
     }
-    .cb2-owner-card h2 { font-size: 0.88rem; font-weight: 700; margin: 0 0 0.55rem; color: #5a3348; }
+    .cb2-owner-card h2 { font-size: 0.88rem; font-weight: 700; margin: 0 0 0.55rem; color: #241c12; }
     .cb2-owner-card--below-summary h2 {
       font-size: 0.82rem;
       font-weight: 600;
-      color: #8a6478;
+      color: #5a4a38;
     }
     .cb2-owner-inner { display: flex; align-items: flex-start; gap: 0.65rem; }
     .cb2-owner-glyph-wrap { flex-shrink: 0; opacity: 0.95; }
     .cb2-owner-glyph { display: block; }
     .cb2-owner-body { flex: 1; min-width: 0; }
-    .cb2-owner-id { margin: 0; font-size: 0.8rem; font-weight: 600; line-height: 1.45; color: #4a2b40; }
+    .cb2-owner-id { margin: 0; font-size: 0.8rem; font-weight: 600; line-height: 1.45; color: #241c12; }
     .cb2-owner-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.45rem 0 0; }
     .cb2-owner-chip {
       font-size: 0.6rem;
@@ -955,7 +955,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       border-radius: 999px;
       background: rgba(217, 123, 176, 0.10);
       border: 1px solid rgba(217, 123, 176, 0.28);
-      color: #b34d8f;
+      color: #8f6710;
       letter-spacing: 0.01em;
     }
     .cb2-owner-sum { margin: 0.45rem 0 0; font-size: 0.72rem; line-height: 1.45; color: var(--cb2-sub); }
@@ -970,7 +970,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       margin: 0;
       font-size: 0.88rem;
       font-weight: 700;
-      color: #b34d8f;
+      color: #8f6710;
     }
     .cb2-et-head { margin-bottom: 0.7rem; }
     .cb2-et-sub {
@@ -1060,14 +1060,14 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
     }
     .cb2-et-strip--weekday .cb2-et-pill:not(.is-active) .cb2-et-pill-label {
-      color: #8a6478;
+      color: #5a4a38;
       font-weight: 500;
     }
     .cb2-et-strip--weekday .cb2-et-pill.is-active {
       opacity: 1;
     }
     .cb2-et-strip--weekday .cb2-et-pill.is-active .cb2-et-pill-shape {
-      background: linear-gradient(165deg, #eab6dc 0%, #d97bb0 45%, #b34d8f 100%);
+      background: linear-gradient(165deg, #e8c547 0%, #b8871b 45%, #8f6710 100%);
       border: 1px solid rgba(186, 230, 253, 0.55);
       box-shadow:
         0 0 0 1px rgba(125, 211, 252, 0.35),
@@ -1084,7 +1084,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       max-width: 100%;
     }
     .cb2-et-strip--weekday .cb2-et-pill.is-active .cb2-et-pill-label {
-      color: #4a2b40;
+      color: #241c12;
       font-weight: 800;
       letter-spacing: 0.03em;
     }
@@ -1146,7 +1146,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       box-shadow: inset 0 2px 3px rgba(0,0,0,0.45);
     }
     .cb2-et-slot:not(.is-active) .cb2-et-slot-label {
-      color: #8a6478;
+      color: #5a4a38;
       font-weight: 500;
     }
     .cb2-et-slot.is-active {
@@ -1155,7 +1155,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     .cb2-et-slot.is-active .cb2-et-slot-bar {
       width: 0.52rem;
       max-width: 48%;
-      background: linear-gradient(180deg, #d97bb0 0%, #c05a9e 38%, #b34d8f 100%);
+      background: linear-gradient(180deg, #b8871b 0%, #b8860b 38%, #8f6710 100%);
       border: 1px solid rgba(165, 220, 252, 0.5);
       box-shadow:
         0 0 0 1px rgba(217, 123, 176, 0.25),
@@ -1172,7 +1172,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       max-width: 100%;
     }
     .cb2-et-slot.is-active .cb2-et-slot-label {
-      color: #5a3348;
+      color: #241c12;
       font-weight: 800;
       letter-spacing: 0.02em;
     }
@@ -1193,7 +1193,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       font-weight: 800;
       letter-spacing: 0.09em;
       text-transform: uppercase;
-      color: #b34d8f;
+      color: #8f6710;
       margin: 0 0 0.68rem;
     }
     .cb2-et-mode-body {
@@ -1201,7 +1201,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       font-size: 0.94rem;
       line-height: 1.6;
       font-weight: 800;
-      color: #4a2b40;
+      color: #241c12;
       letter-spacing: 0.01em;
     }
     .cb2-et-note {
@@ -1210,7 +1210,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       border-top: 1px solid rgba(255,255,255,0.06);
       font-size: 0.67rem;
       line-height: 1.7;
-      color: #8a6478;
+      color: #5a4a38;
       font-weight: 400;
     }
 
@@ -1220,7 +1220,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       margin-top: 1rem;
     }
     .cb2-share-card h2 {
-      color: #b34d8f;
+      color: #8f6710;
       font-size: 0.88rem;
     }
     .cb2-share-note {
@@ -1257,7 +1257,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       -webkit-tap-highlight-color: transparent;
     }
     .cb2-share-btn--primary {
-      background: linear-gradient(165deg, #b98be0, #d97bb0 55%, #b34d8f);
+      background: linear-gradient(165deg, #8f6710, #b8871b 55%, #8f6710);
       border-color: rgba(217, 123, 176, 0.5);
       color: #04121d;
     }
@@ -1288,7 +1288,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       border: none;
     }
     .cb2-strip-k { font-size: 0.6rem; color: var(--cb2-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
-    .cb2-strip-v { font-size: 1.1rem; font-weight: 800; color: #4a2b40; margin-top: 0.25rem; line-height: 1; }
+    .cb2-strip-v { font-size: 1.1rem; font-weight: 800; color: #241c12; margin-top: 0.25rem; line-height: 1; }
     .cb2-strip-v small { font-size: 0.6em; font-weight: 600; color: var(--cb2-sub); }
 
     /* ── Sections: white left rule แทนกล่องพื้นหลัง ── */
@@ -1299,13 +1299,13 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       margin-top: 0.85rem;
       box-shadow: none;
       border: none;
-      border-left: 3px solid rgba(217,123,176,0.55);
+      border-left: 3px solid rgba(184,135,27,0.55);
     }
     .cb2-card h2 {
       font-size: 0.88rem;
       font-weight: 700;
       margin: 0 0 0.8rem;
-      color: #5a3348;
+      color: #241c12;
       display: flex;
       align-items: center;
       gap: 0.45rem;
@@ -1325,15 +1325,15 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       flex-direction: column;
       font-size: 0.62rem;
       line-height: 1.3;
-      color: #8a6478;
+      color: #5a4a38;
     }
-    .cb2-radar-lbl--peak { color: #b34d8f; }
+    .cb2-radar-lbl--peak { color: #8f6710; }
     .cb2-radar-lbl-t { font-size: 0.62rem; }
     .cb2-radar-lbl-n { font-size: 0.67rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .cb2-radar-lbl--peak .cb2-radar-lbl-n { color: #b34d8f; }
+    .cb2-radar-lbl--peak .cb2-radar-lbl-n { color: #8f6710; }
     /* แกนเข้ากับคุณที่สุด (min |owner−stone|) — เทียบจุดเทาใน SVG */
-    .cb2-radar-lbl--align { color: #8a6478; }
-    .cb2-radar-lbl--align .cb2-radar-lbl-n { color: #8a6478; }
+    .cb2-radar-lbl--align { color: #5a4a38; }
+    .cb2-radar-lbl--align .cb2-radar-lbl-n { color: #5a4a38; }
     @keyframes cb2-radar-blink {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.38; }
@@ -1381,7 +1381,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       display: block;
       font-size: 0.58rem;
       font-weight: 700;
-      color: #5a3348;
+      color: #241c12;
       line-height: 1.25;
     }
     .cb2-radar-legend-v {
@@ -1399,12 +1399,12 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       width: 18px;
       height: 2px;
       border-radius: 999px;
-      background: #d97bb0;
+      background: #b8871b;
     }
     .cb2-radar-legend-swatch--dashed {
       width: 18px;
       height: 0;
-      border-top: 2px dashed #b98be0;
+      border-top: 2px dashed #8f6710;
     }
     .cb2-radar-legend-swatch--dot {
       width: 10px;
@@ -1428,7 +1428,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       border-bottom: 1px solid rgba(255,255,255,0.06);
     }
     .cb2-gsum-bar-row:last-child { border-bottom: none; }
-    .cb2-gsum-bar-row--lead { border-bottom-color: rgba(217,123,176,0.18); }
+    .cb2-gsum-bar-row--lead { border-bottom-color: rgba(184,135,27,0.18); }
     .cb2-gsum-bar-k {
       flex: 0 0 5.5rem;
       font-size: 0.68rem;
@@ -1449,7 +1449,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       flex: 1;
       height: 8px;
       border-radius: 9999px;
-      background: rgba(120,60,95,0.10);
+      background: rgba(100,92,82,0.10);
       overflow: hidden;
       min-width: 0;
     }
@@ -1459,7 +1459,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       font-size: 0.82rem;
       font-weight: 800;
       font-variant-numeric: tabular-nums;
-      color: #4a2b40;
+      color: #241c12;
       text-align: end;
     }
     .cb2-gsum-bar-sub {
@@ -1472,14 +1472,14 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
 
     /* ── Energy-meaning CTA (like the amulet report) ── */
     .cb2-em-cta { margin-top: 0.9rem; padding: 0.75rem 0.8rem; border-radius: 12px;
-      background: rgba(217,123,176,0.08); border: 1px solid rgba(217,123,176,0.25); }
+      background: rgba(184,135,27,0.08); border: 1px solid rgba(184,135,27,0.25); }
     .cb2-em-cta-hint { margin: 0 0 0.55rem; font-size: 0.78rem; color: var(--cb2-sub); text-align: center; }
     .cb2-em-cta-btn { display: block; text-align: center; padding: 0.7rem; border-radius: 999px;
       text-decoration: none; font-weight: 800; font-size: 0.9rem; color: #fff;
-      background: linear-gradient(165deg, #eab6dc, #d97bb0 55%, #b34d8f); }
+      background: linear-gradient(165deg, #e8c547, #b8871b 55%, #8f6710); }
 
     /* ── Disclaimer ── */
-    .cb2-disclaimer { margin-top: 1.25rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(217,123,176,0.07); border: 1px solid rgba(217,123,176,0.20); font-size: 0.76rem; line-height: 1.55; color: #b34d8f; }
+    .cb2-disclaimer { margin-top: 1.25rem; padding: 0.8rem 1rem; border-radius: 12px; background: rgba(184,135,27,0.07); border: 1px solid rgba(184,135,27,0.20); font-size: 0.76rem; line-height: 1.55; color: #8f6710; }
 
     /* ── Footer ── */
     .cb2-foot {
@@ -1520,9 +1520,9 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       flex-wrap: wrap;
       margin: 0.1rem 0;
     }
-    .cb2-meta-k { font-weight: 700; color: #4a2b40; opacity: 0.92; }
+    .cb2-meta-k { font-weight: 700; color: #241c12; opacity: 0.92; }
     .cb2-meta-v { text-align: right; font-variant-numeric: tabular-nums; max-width: 68%; }
-    .cb2-meta-id { font-weight: 700; letter-spacing: 0.04em; color: #b34d8f; }
+    .cb2-meta-id { font-weight: 700; letter-spacing: 0.04em; color: #8f6710; }
     .cb2-trust-sources {
       margin: 0.85rem 0 0;
       padding: 0.65rem 0.75rem;
@@ -1535,7 +1535,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       margin: 0 0 0.45rem;
       font-weight: 800;
       letter-spacing: 0.04em;
-      color: #b34d8f;
+      color: #8f6710;
     }
     .cb2-trust-sources-list {
       margin: 0;
@@ -1553,20 +1553,20 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       padding: 0.45rem 0.95rem;
       border-radius: 999px;
       background: rgba(15, 23, 42, 0.94);
-      color: #4a2b40;
+      color: #241c12;
       font-size: 0.75rem;
       box-shadow: 0 4px 16px rgba(0,0,0,0.35);
     }
     .cb2-share-btn--secondary {
       background: transparent;
       border-color: rgba(217, 123, 176, 0.45);
-      color: #b34d8f;
+      color: #8f6710;
     }
     .cb2-share-btn--secondary:hover { background: rgba(217, 123, 176, 0.1); }
     .cb2-share-btn--ghost {
       background: rgba(148, 163, 184, 0.1);
       border-color: rgba(148, 163, 184, 0.25);
-      color: #5a3348;
+      color: #241c12;
     }
     .cb2-share-btn--ghost:hover { background: rgba(148, 163, 184, 0.16); }
     /* teaser อันดับ 1 ของวันนี้ (เบลอ) + แถบเริ่มใช้ล่างจอ */

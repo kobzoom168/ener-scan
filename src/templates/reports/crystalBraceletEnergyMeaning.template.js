@@ -123,41 +123,41 @@ export function renderCrystalBraceletEnergyMeaningHtml(payload) {
 <title>ความหมายพลังทั้ง 6 ด้าน · กำไล · Ener Scan</title>
 <style>
   :root{
-    --bg:#fdf3f8; --card:#ffffff; --border:rgba(120,60,95,.12); --text:#4a2b40;
-    --sub:#8a6478; --muted:#a988a0; --accent:#d97bb0; --accent2:#b98be0; --deep:#b34d8f;
+    --bg:#f6f6f4; --card:#ffffff; --border:rgba(100,92,82,.12); --text:#241c12;
+    --sub:#5a4a38; --muted:#7a6a58; --accent:#b8871b; --accent2:#8f6710; --deep:#8f6710;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
   .wrap{max-width:40rem;margin:0 auto;padding:1rem 1rem 2.5rem}
   .back{display:inline-block;margin:.3rem 0 .8rem;color:var(--deep);text-decoration:none;font-size:.86rem;font-weight:700}
-  .hero{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1rem 1.1rem;box-shadow:0 2px 12px rgba(190,120,165,.14)}
+  .hero{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1rem 1.1rem;box-shadow:0 2px 12px rgba(184,135,27,.14)}
   .hero .k{font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--deep)}
   .hero h1{margin:.25rem 0 .4rem;font-size:1.25rem}
   .hero p{margin:0;font-size:.86rem;color:var(--sub)}
   .bands{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:.9rem 1.1rem;margin-top:.8rem}
   .bands .t{font-size:.82rem;font-weight:800;margin:0 0 .55rem}
   .bands .grid{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
-  .band{border:1px solid rgba(217,123,176,.35);border-radius:10px;padding:.4rem .6rem;font-size:.76rem}
+  .band{border:1px solid rgba(184,135,27,.35);border-radius:10px;padding:.4rem .6rem;font-size:.76rem}
   .band b{color:var(--deep)}
-  .cbem-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1rem 1.1rem;margin-top:.8rem;box-shadow:0 2px 12px rgba(190,120,165,.10)}
+  .cbem-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1rem 1.1rem;margin-top:.8rem;box-shadow:0 2px 12px rgba(184,135,27,.10)}
   .cbem-card-head{display:flex;align-items:center;gap:.55rem}
-  .cbem-idx{font-size:.68rem;font-weight:800;color:var(--deep);border:1px solid rgba(217,123,176,.4);border-radius:8px;padding:.12rem .4rem}
+  .cbem-idx{font-size:.68rem;font-weight:800;color:var(--deep);border:1px solid rgba(184,135,27,.4);border-radius:8px;padding:.12rem .4rem}
   .cbem-card h2{margin:0;font-size:1.02rem;flex:1}
   .cbem-score{font-size:.78rem;font-weight:800;border-radius:999px;padding:.18rem .6rem;border:1px solid}
   .cbem-score--t80{color:#0e7a4e;border-color:rgba(14,122,78,.4);background:rgba(14,122,78,.08)}
-  .cbem-score--t60{color:var(--deep);border-color:rgba(217,123,176,.45);background:rgba(217,123,176,.10)}
+  .cbem-score--t60{color:var(--deep);border-color:rgba(184,135,27,.45);background:rgba(184,135,27,.10)}
   .cbem-score--t40{color:#a06a1f;border-color:rgba(160,106,31,.35);background:rgba(160,106,31,.08)}
   .cbem-score--t0{color:var(--muted);border-color:rgba(169,136,160,.35);background:rgba(169,136,160,.08)}
-  .cbem-bar{height:6px;border-radius:99px;background:rgba(217,123,176,.15);margin:.6rem 0 .55rem;overflow:hidden}
+  .cbem-bar{height:6px;border-radius:99px;background:rgba(184,135,27,.15);margin:.6rem 0 .55rem;overflow:hidden}
   .cbem-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent2),var(--accent))}
   .cbem-sum{margin:0 0 .5rem;font-size:.88rem;font-weight:700;color:var(--deep)}
   .cbem-k{margin:0 0 .3rem;font-size:.68rem;font-weight:800;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
   .cbem-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.6rem}
-  .cbem-chip{font-size:.74rem;border:1px solid rgba(217,123,176,.4);border-radius:999px;padding:.2rem .6rem;color:var(--sub);background:rgba(217,123,176,.06)}
+  .cbem-chip{font-size:.74rem;border:1px solid rgba(184,135,27,.4);border-radius:999px;padding:.2rem .6rem;color:var(--sub);background:rgba(184,135,27,.06)}
   .cbem-body{margin:0 0 .55rem;font-size:.86rem;color:var(--text)}
   .cbem-foot{margin:0;padding:.55rem .7rem;font-size:.76rem;color:var(--sub);background:rgba(185,139,224,.10);border:1px solid rgba(185,139,224,.28);border-radius:10px}
   .cta{display:block;text-align:center;margin-top:1rem;padding:.8rem;border-radius:999px;text-decoration:none;font-weight:800;
-    color:#fff;background:linear-gradient(165deg,#eab6dc,#d97bb0 55%,#b34d8f)}
+    color:#fff;background:linear-gradient(165deg,#e8c547,#b8871b 55%,#8f6710)}
 </style>
 </head>
 <body>

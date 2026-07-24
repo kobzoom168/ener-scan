@@ -46,19 +46,19 @@ export function renderCrystalBraceletEnergyTimingHtml(payload) {
 <title>วิธีคำนวณจังหวะเสริมพลัง · กำไล · Ener Scan</title>
 <style>
   :root{
-    --bg:#fdf3f8; --card:#ffffff; --border:rgba(120,60,95,.12); --text:#4a2b40;
-    --sub:#8a6478; --muted:#a988a0; --accent:#d97bb0; --deep:#b34d8f;
+    --bg:#f6f6f4; --card:#ffffff; --border:rgba(100,92,82,.12); --text:#241c12;
+    --sub:#5a4a38; --muted:#7a6a58; --accent:#b8871b; --deep:#8f6710;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
   .wrap{max-width:40rem;margin:0 auto;padding:1rem 1rem 2.5rem}
   .back{display:inline-block;margin:.3rem 0 .8rem;color:var(--deep);text-decoration:none;font-size:.86rem;font-weight:700}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1rem 1.1rem;margin-top:.8rem;box-shadow:0 2px 12px rgba(190,120,165,.12)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1rem 1.1rem;margin-top:.8rem;box-shadow:0 2px 12px rgba(184,135,27,.12)}
   .k{font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--deep)}
   h1{margin:.25rem 0 .4rem;font-size:1.22rem}
   .lead{margin:0;font-size:.86rem;color:var(--sub)}
   .sumt{margin:0 0 .6rem;font-size:.9rem;font-weight:800}
-  .sumrow{border:1px solid rgba(217,123,176,.3);border-radius:12px;padding:.55rem .8rem;margin-bottom:.5rem}
+  .sumrow{border:1px solid rgba(184,135,27,.3);border-radius:12px;padding:.55rem .8rem;margin-bottom:.5rem}
   .sumrow .sk{display:block;font-size:.66rem;color:var(--muted)}
   .sumrow .sv{display:block;font-size:1rem;font-weight:800;color:var(--deep)}
   .reason{margin:.6rem 0 0;font-size:.84rem;color:var(--text)}
@@ -66,14 +66,14 @@ export function renderCrystalBraceletEnergyTimingHtml(payload) {
   .ft{margin:1rem 0 .4rem;font-size:.92rem;font-weight:800}
   .factors{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}
   .cbet-factor{position:relative;border:1px solid var(--border);border-radius:14px;padding:.7rem .8rem;background:var(--card)}
-  .cbet-fno{position:absolute;top:.5rem;right:.6rem;width:20px;height:20px;border-radius:99px;border:1px solid rgba(217,123,176,.5);
+  .cbet-fno{position:absolute;top:.5rem;right:.6rem;width:20px;height:20px;border-radius:99px;border:1px solid rgba(184,135,27,.5);
     display:grid;place-items:center;font-size:.68rem;font-weight:800;color:var(--deep)}
   .cbet-fk{margin:0 0 .2rem;font-size:.84rem;font-weight:800;color:var(--deep)}
   .cbet-fv{margin:0;font-size:.76rem;color:var(--sub)}
   .note{margin-top:.9rem;padding:.65rem .8rem;border-radius:12px;font-size:.78rem;color:var(--sub);
     background:rgba(185,139,224,.10);border:1px solid rgba(185,139,224,.28)}
   .cta{display:block;text-align:center;margin-top:1rem;padding:.8rem;border-radius:999px;text-decoration:none;font-weight:800;
-    color:#fff;background:linear-gradient(165deg,#eab6dc,#d97bb0 55%,#b34d8f)}
+    color:#fff;background:linear-gradient(165deg,#e8c547,#b8871b 55%,#8f6710)}
   @media (max-width:420px){.factors{grid-template-columns:1fr}}
 </style>
 </head>
