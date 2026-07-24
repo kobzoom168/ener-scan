@@ -160,3 +160,4 @@
 
 ## 24 ก.ค. 2026 | Claude (kob-dev VPS)
 - **ขึ้น pro ชุดใหญ่ (กบสั่ง "เสร็จเอาขึ้น Pro เลย")**: การ์ด photo-card v2 (iterate ~15 รอบตาม feedback: layout 2 คอลัมน์ → รูปเต็มไม่มีกรอบ/วงกลม → A RANK ไม่มีโล่ → เข้ากับคุณแทนยอดเยี่ยม → สีเดิม → ตัดดาว) + **ธีมสีตามเกรด S/A ทอง · B ฟ้าเงิน · ต่ำกว่า ขาว** + แชท Flex เหลือ hero การ์ด+ปุ่มเดียว (single_flex giga) + Auto post FB (consent+sweep) + ชวนเพื่อน — เทส 38/38 + fbShowcase 8 + referral 5 · ธีม 3 เกรด render ผ่านหมด ส่งตัวอย่างเข้า Telegram
+- **การ์ดรองรับเลนกำไล/หิน (กบสั่งต่อ + เอาขึ้น prod)**: deriveShowcaseCardData รับ 2 เลน — เลนกำไล crystalBraceletV1.axes (6 แกน: ความรัก/โชคลาภ/การเงิน/การงาน/เซ้นส์/เสน่ห์) + BRACELET_AXIS_SHORT/AUDIENCE/ADVICE (คำ "ใส่" ไม่ใช่ "พก") + timing จาก htmlReport.energyTiming · ธีมสีตามเกรดใช้ buildSvg ตัวเดียวกับพระ (A ทอง/B ฟ้าเงิน/D ขาว ครบ) · footer ตัด "พระ" → "สแกน 1 ชิ้น = การ์ดพลังงาน 1 ใบ" กลางเลน · เทส 9/9 · LIVE prod (มอลดาไวต์ยังไม่รองรับ)
