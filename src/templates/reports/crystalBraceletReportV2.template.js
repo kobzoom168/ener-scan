@@ -1579,11 +1579,11 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     .pk-tease-line { margin: 0; font-weight: 800; font-size: 0.98rem; }
     .pk-tease-line b { font-size: 1.25rem; }
     .pk-tease-sub { margin: 0.3rem 0 0; font-size: 0.8rem; opacity: 0.75; }
-    .pk-tease-cta { display: block; text-align: center; margin-top: 0.85rem; text-decoration: none; font-weight: 800; padding: 12px 8px; border-radius: 12px; background: #b23d76; color: #fff; }
+    .pk-tease-cta { display: block; text-align: center; margin-top: 0.85rem; text-decoration: none; font-weight: 800; padding: 12px 8px; border-radius: 12px; background: #a5813a; color: #fff; }
     body { padding-bottom: 76px; }
     .pk-stickycta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: rgba(255, 251, 253, 0.96); backdrop-filter: blur(8px); border-top: 1px solid rgba(217, 123, 176, 0.3); }
-    .pk-cta-scan { flex: 1; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 8px; border-radius: 12px; background: #b23d76; color: #fff; }
-    .pk-cta-member { flex: 0 0 auto; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #b23d76; color: #b23d76; background: transparent; }
+    .pk-cta-scan { flex: 1; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 8px; border-radius: 12px; background: #a5813a; color: #fff; }
+    .pk-cta-member { flex: 0 0 auto; text-align: center; text-decoration: none; font-weight: 800; font-size: 0.92rem; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #a5813a; color: #a5813a; background: transparent; }
   </style>
 </head>
 <body>

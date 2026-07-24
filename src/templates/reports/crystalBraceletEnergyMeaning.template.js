@@ -147,7 +147,7 @@ export function renderCrystalBraceletEnergyMeaningHtml(payload) {
   .cbem-score--t80{color:#0e7a4e;border-color:rgba(14,122,78,.4);background:rgba(14,122,78,.08)}
   .cbem-score--t60{color:var(--deep);border-color:rgba(184,135,27,.45);background:rgba(184,135,27,.10)}
   .cbem-score--t40{color:#a06a1f;border-color:rgba(160,106,31,.35);background:rgba(160,106,31,.08)}
-  .cbem-score--t0{color:var(--muted);border-color:rgba(169,136,160,.35);background:rgba(169,136,160,.08)}
+  .cbem-score--t0{color:var(--muted);border-color:rgba(122,106,88,.35);background:rgba(122,106,88,.08)}
   .cbem-bar{height:6px;border-radius:99px;background:rgba(184,135,27,.15);margin:.6rem 0 .55rem;overflow:hidden}
   .cbem-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent2),var(--accent))}
   .cbem-sum{margin:0 0 .5rem;font-size:.88rem;font-weight:700;color:var(--deep)}
@@ -155,7 +155,7 @@ export function renderCrystalBraceletEnergyMeaningHtml(payload) {
   .cbem-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.6rem}
   .cbem-chip{font-size:.74rem;border:1px solid rgba(184,135,27,.4);border-radius:999px;padding:.2rem .6rem;color:var(--sub);background:rgba(184,135,27,.06)}
   .cbem-body{margin:0 0 .55rem;font-size:.86rem;color:var(--text)}
-  .cbem-foot{margin:0;padding:.55rem .7rem;font-size:.76rem;color:var(--sub);background:rgba(185,139,224,.10);border:1px solid rgba(185,139,224,.28);border-radius:10px}
+  .cbem-foot{margin:0;padding:.55rem .7rem;font-size:.76rem;color:var(--sub);background:rgba(184,135,27,.10);border:1px solid rgba(184,135,27,.28);border-radius:10px}
   .cta{display:block;text-align:center;margin-top:1rem;padding:.8rem;border-radius:999px;text-decoration:none;font-weight:800;
     color:#fff;background:linear-gradient(165deg,#e8c547,#b8871b 55%,#8f6710)}
 </style>

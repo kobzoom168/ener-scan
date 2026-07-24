@@ -71,7 +71,7 @@ export function renderCrystalBraceletEnergyTimingHtml(payload) {
   .cbet-fk{margin:0 0 .2rem;font-size:.84rem;font-weight:800;color:var(--deep)}
   .cbet-fv{margin:0;font-size:.76rem;color:var(--sub)}
   .note{margin-top:.9rem;padding:.65rem .8rem;border-radius:12px;font-size:.78rem;color:var(--sub);
-    background:rgba(185,139,224,.10);border:1px solid rgba(185,139,224,.28)}
+    background:rgba(184,135,27,.10);border:1px solid rgba(184,135,27,.28)}
   .cta{display:block;text-align:center;margin-top:1rem;padding:.8rem;border-radius:999px;text-decoration:none;font-weight:800;
     color:#fff;background:linear-gradient(165deg,#e8c547,#b8871b 55%,#8f6710)}
   @media (max-width:420px){.factors{grid-template-columns:1fr}}
