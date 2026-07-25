@@ -312,29 +312,36 @@ export function sanitizeFbCaption(s) {
     .trim();
 }
 
-/** ท้ายแคปชัน "แบบมีลิงก์" (โหมด facebook โพสต์ตรง) */
-function captionFooter() {
-  return [
-    "",
-    `อยากรู้พลังของชิ้นที่บ้าน ส่งรูปให้อาจารย์ดูได้ ฟรีวันละ 1 ชิ้น ${OA_LINK}`,
-    "",
-    "ผลอ่านเป็นการวิเคราะห์ตามแนวทางของ Ener ไม่ใช่คำทำนาย และไม่ได้ตัดสินแท้หรือเก๊",
-    "#พระเครื่อง #เครื่องราง #สายมู #EnerScan",
-  ].join("\n");
+/** แฮชแท็กตามสายพลังเด่น (จับจากคำในป้ายด้านเด่น) — ดันทางที่ชิ้นนั้นเด่น */
+function hashtagsForPeak(peakLabel) {
+  const s = String(peakLabel || "");
+  const base = ["#พระเครื่อง", "#เครื่องราง", "#สายมู"];
+  let tags = [];
+  if (/คุ้มครอง|ปกป้อง|แคล้ว/.test(s)) tags = ["#คุ้มครอง", "#แคล้วคลาด", "#เดินทางปลอดภัย"];
+  else if (/เมตตา|เอ็นดู|เสน่ห์/.test(s)) tags = ["#เมตตามหานิยม", "#เสน่ห์", "#คนเอ็นดู"];
+  else if (/บารมี|อำนาจ/.test(s)) tags = ["#บารมี", "#อำนาจวาสนา", "#ผู้ใหญ่เมตตา"];
+  else if (/โชคลาภ|ทรัพย์|เงิน|ค้าขาย/.test(s)) tags = ["#โชคลาภ", "#ค้าขายร่ำรวย", "#เปิดทรัพย์"];
+  else if (/หนุนดวง|ตั้งหลัก|วาสนา/.test(s)) tags = ["#หนุนดวง", "#เสริมดวง", "#ตั้งหลักชีวิต"];
+  else tags = ["#ของดีบอกต่อ"];
+  return [...tags, ...base].join(" ");
 }
 
-/** ท้ายแคปชัน "แบบไม่มีลิงก์" (โหมด telegram — ลิงก์แยกไปคอมเมนต์แรก เลี่ยง FB ลดการมองเห็น) */
-function captionFooterNoLink() {
-  return [
-    "",
-    "ผลอ่านเป็นการวิเคราะห์ตามแนวทางของ Ener ไม่ใช่คำทำนาย และไม่ได้ตัดสินแท้หรือเก๊",
-    "#พระเครื่อง #เครื่องราง #สายมู #EnerScan",
-  ].join("\n");
+/** ท้ายแคปชันโซเชียล (ไม่มีลิงก์ — กบ 24 ก.ค. พร้อมก็อปลง FB/TikTok) */
+function captionSocialFooter(peakLabel) {
+  return ["", hashtagsAndDisclaimer(peakLabel)].join("\n");
+}
+function hashtagsAndDisclaimer(peakLabel) {
+  return `${hashtagsForPeak(peakLabel)}\n\nอ่านพลังตามแนวทาง Ener ไม่ใช่คำทำนาย`;
 }
 
-/** บรรทัดลิงก์ LINE ไว้แปะเป็นคอมเมนต์แรกของโพสต์ */
-function captionLinkComment() {
-  return `อยากรู้พลังของชิ้นที่บ้าน ส่งรูปให้อาจารย์ดูได้ ฟรีวันละ 1 ชิ้น ${OA_LINK}`;
+/** ท้ายแคปชัน "แบบมีลิงก์" (โหมด facebook opt-in) */
+function captionFooter(peakLabel) {
+  return [
+    "",
+    `อยากรู้พลังของชิ้นที่บ้าน ทักอาจารย์ได้ ${OA_LINK}`,
+    "",
+    hashtagsAndDisclaimer(peakLabel),
+  ].join("\n");
 }
 
 function fallbackCaptionBody(piece) {
@@ -342,13 +349,14 @@ function fallbackCaptionBody(piece) {
   return `เปิดคลังวันนี้ ${piece.name} อ่านพลังได้ ${piece.energyScore.toFixed(1)} เต็ม 10${peak} ครับ`;
 }
 
-const CAPTION_SYSTEM = `คุณคือแอดมินเพจ Ener เพจอ่านพลังงานพระเครื่องและเครื่องราง เขียนแคปชันโพสต์อวดชิ้นเด่นประจำวัน
+const CAPTION_SYSTEM = `คุณคือแอดมินเพจ Ener เขียนแคปชันโพสต์โซเชียล (Facebook/TikTok) โชว์พลังของพระเครื่อง/เครื่องรางชิ้นเด่น ให้คนเลื่อนผ่านแล้วอยากหยุดดู
 กติกา:
-- ภาษาไทย 2-3 ประโยคสั้น โทนอาจารย์ชายวัย 41 สุขุม ภูมิใจนำเสนอ ไม่โอ้อวดเกินจริง ไม่ขายตรง
-- ต้องอิงข้อมูลที่ให้เท่านั้น ห้ามมโนตัวเลขหรือสรรพคุณเพิ่ม ห้ามการันตีโชคลาภหรือผลใด ๆ
-- 🚫 ห้ามระบุชนิด/รุ่น/พิมพ์พระเฉพาะเด็ดขาด (สมเด็จ นางพญา ปิดตา หลวงปู่ทวด ไอ้ไข่ ฯลฯ) ห้ามระบุเนื้อ (เนื้อผง โลหะ ว่าน) ห้ามระบุวัด/เกจิ — เรียกแค่ ชิ้นนี้ หรือ พระองค์นี้
-- ห้ามใช้เครื่องหมาย — หรือ " " ห้ามอีโมจิเกิน 1 ตัว
-- ห้ามพูดถึงเจ้าของชิ้นหรือลูกค้า (พูดถึงตัวชิ้นอย่างเดียว)
+- ภาษาไทย 2-3 บรรทัดสั้น เปิดด้วยประโยคที่สะดุด ชวนสนใจ (hook) แล้วขยายด้วยพลังด้านที่เด่นสุดของชิ้นนี้ (ให้ข้อมูล peakLabel นำ) เช่นถ้าเด่นโชคลาภก็พูดมุมเปิดทางการเงิน/ค้าขาย ถ้าเด่นคุ้มครองก็มุมแคล้วคลาดปลอดภัย — ดันทางที่เด่น
+- โทนสุขุมแบบอาจารย์ ไม่อวยเว่อร์ ไม่การันตีผล ไม่ขายตรง แต่เขียนให้มีชีวิตชวนอ่าน ไม่แข็งทื่อ
+- อิงข้อมูลที่ให้เท่านั้น ห้ามมโนตัวเลข/สรรพคุณ · พูดคะแนนได้ (เต็ม 10)
+- 🚫 ห้ามระบุชนิด/รุ่น/พิมพ์พระเฉพาะ (สมเด็จ นางพญา ปิดตา หลวงปู่ทวด ไอ้ไข่ ฯลฯ) ห้ามระบุเนื้อ/วัด/เกจิ — เรียกแค่ ชิ้นนี้ หรือ พระองค์นี้
+- ห้ามใช้ — หรือ " " · อีโมจิได้ไม่เกิน 1 ตัว
+- ห้ามพูดถึงเจ้าของ/ลูกค้า พูดถึงตัวชิ้นอย่างเดียว
 ตอบเป็นเนื้อแคปชันล้วน ไม่ต้องมีแฮชแท็กหรือลิงก์ (ระบบเติมเอง)`;
 
 async function buildCaption(piece) {
@@ -379,11 +387,12 @@ async function buildCaption(piece) {
     body = "";
   }
   if (!body || body.length < 20) body = fallbackCaptionBody(piece);
-  // คืนทั้ง 2 แบบ: full (มีลิงก์ในตัว) + noLink (ตัวโพสต์) + linkComment (คอมเมนต์แรก)
+  const peak = piece.peakLabel || piece.name;
   return {
-    full: `${body}\n${captionFooter()}`,
-    main: `${body}\n${captionFooterNoLink()}`,
-    linkComment: captionLinkComment(),
+    // social: พร้อมก็อปลง FB/TikTok ไม่มีลิงก์ (default)
+    social: `${body}\n${captionSocialFooter(peak)}`,
+    // full: มีลิงก์ในตัว (โหมด facebook opt-in)
+    full: `${body}\n${captionFooter(peak)}`,
   };
 }
 
@@ -460,11 +469,14 @@ async function postShowcaseRow(row) {
   const caption = await buildCaption(piece);
   const cardUrl = `${buildPublicReportUrl(piece.token)}/photo-card.png`;
 
-  // โหมด telegram (กบ 24 ก.ค.): ส่งรูปการ์ด + แคปชัน (แยกลิงก์) เข้า Telegram ให้กบโพสต์เอง
+  // โหมด telegram (กบ 24 ก.ค.): ส่งรูปการ์ด (แยก) + แคปชันพร้อมก็อป (แยก) ให้กบก็อปลง FB/TikTok
   if (showcaseDelivery() === "telegram") {
     const { sendTelegramPhoto, sendTelegramText } = await import("../telegramNotify.service.js");
-    const photoCaption = `พร้อมโพสต์ลงเพจ (${piece.name} · ${piece.energyScore.toFixed(1)}/10)\nเซฟรูปนี้ + ก็อปแคปชันด้านล่างไปโพสต์ได้เลยครับ\n\n${caption.main}`;
-    const res = await sendTelegramPhoto(cardUrl, photoCaption);
+    // ก้อน 1: รูปการ์ด (caption สั้นบอกว่าคือชิ้นอะไร) — เซฟรูปไปแนบโพสต์
+    const res = await sendTelegramPhoto(
+      cardUrl,
+      `การ์ดพร้อมโพสต์ · ${piece.name} ${piece.energyScore.toFixed(1)}/10`,
+    );
     if (!res.ok) {
       await supabase
         .from("fb_showcase_queue")
@@ -473,11 +485,11 @@ async function postShowcaseRow(row) {
       console.log(JSON.stringify({ event: "FB_SHOWCASE_TELEGRAM_FAILED", reason: res.reason }));
       return { posted: 0, reason: "telegram_error" };
     }
-    // ลิงก์ LINE แยกส่งอีกก้อน ไว้แปะเป็นคอมเมนต์แรก (เลี่ยง FB ลดการมองเห็นโพสต์มีลิงก์ออกนอก)
-    await sendTelegramText(`คอมเมนต์แรก (แปะใต้โพสต์):\n${caption.linkComment}`).catch(() => {});
+    // ก้อน 2: แคปชันล้วน (ไม่มีลิงก์) ส่งแยกเป็นข้อความเดียว กดค้างก็อปได้ทั้งก้อน
+    await sendTelegramText(caption.social).catch(() => {});
     await supabase
       .from("fb_showcase_queue")
-      .update({ status: "posted", caption: caption.main, posted_at: new Date().toISOString() })
+      .update({ status: "posted", caption: caption.social, posted_at: new Date().toISOString() })
       .eq("id", row.id);
     console.log(
       JSON.stringify({
