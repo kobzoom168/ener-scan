@@ -312,6 +312,7 @@ export function sanitizeFbCaption(s) {
     .trim();
 }
 
+/** ท้ายแคปชัน "แบบมีลิงก์" (โหมด facebook โพสต์ตรง) */
 function captionFooter() {
   return [
     "",
@@ -320,6 +321,20 @@ function captionFooter() {
     "ผลอ่านเป็นการวิเคราะห์ตามแนวทางของ Ener ไม่ใช่คำทำนาย และไม่ได้ตัดสินแท้หรือเก๊",
     "#พระเครื่อง #เครื่องราง #สายมู #EnerScan",
   ].join("\n");
+}
+
+/** ท้ายแคปชัน "แบบไม่มีลิงก์" (โหมด telegram — ลิงก์แยกไปคอมเมนต์แรก เลี่ยง FB ลดการมองเห็น) */
+function captionFooterNoLink() {
+  return [
+    "",
+    "ผลอ่านเป็นการวิเคราะห์ตามแนวทางของ Ener ไม่ใช่คำทำนาย และไม่ได้ตัดสินแท้หรือเก๊",
+    "#พระเครื่อง #เครื่องราง #สายมู #EnerScan",
+  ].join("\n");
+}
+
+/** บรรทัดลิงก์ LINE ไว้แปะเป็นคอมเมนต์แรกของโพสต์ */
+function captionLinkComment() {
+  return `อยากรู้พลังของชิ้นที่บ้าน ส่งรูปให้อาจารย์ดูได้ ฟรีวันละ 1 ชิ้น ${OA_LINK}`;
 }
 
 function fallbackCaptionBody(piece) {
@@ -331,6 +346,7 @@ const CAPTION_SYSTEM = `คุณคือแอดมินเพจ Ener เ�
 กติกา:
 - ภาษาไทย 2-3 ประโยคสั้น โทนอาจารย์ชายวัย 41 สุขุม ภูมิใจนำเสนอ ไม่โอ้อวดเกินจริง ไม่ขายตรง
 - ต้องอิงข้อมูลที่ให้เท่านั้น ห้ามมโนตัวเลขหรือสรรพคุณเพิ่ม ห้ามการันตีโชคลาภหรือผลใด ๆ
+- 🚫 ห้ามระบุชนิด/รุ่น/พิมพ์พระเฉพาะเด็ดขาด (สมเด็จ นางพญา ปิดตา หลวงปู่ทวด ไอ้ไข่ ฯลฯ) ห้ามระบุเนื้อ (เนื้อผง โลหะ ว่าน) ห้ามระบุวัด/เกจิ — เรียกแค่ ชิ้นนี้ หรือ พระองค์นี้
 - ห้ามใช้เครื่องหมาย — หรือ " " ห้ามอีโมจิเกิน 1 ตัว
 - ห้ามพูดถึงเจ้าของชิ้นหรือลูกค้า (พูดถึงตัวชิ้นอย่างเดียว)
 ตอบเป็นเนื้อแคปชันล้วน ไม่ต้องมีแฮชแท็กหรือลิงก์ (ระบบเติมเอง)`;
@@ -363,7 +379,12 @@ async function buildCaption(piece) {
     body = "";
   }
   if (!body || body.length < 20) body = fallbackCaptionBody(piece);
-  return `${body}\n${captionFooter()}`;
+  // คืนทั้ง 2 แบบ: full (มีลิงก์ในตัว) + noLink (ตัวโพสต์) + linkComment (คอมเมนต์แรก)
+  return {
+    full: `${body}\n${captionFooter()}`,
+    main: `${body}\n${captionFooterNoLink()}`,
+    linkComment: captionLinkComment(),
+  };
 }
 
 /* ────────────────────── 4) sweep โพสต์ตามรอบ ────────────────────── */
@@ -439,11 +460,11 @@ async function postShowcaseRow(row) {
   const caption = await buildCaption(piece);
   const cardUrl = `${buildPublicReportUrl(piece.token)}/photo-card.png`;
 
-  // โหมด telegram (กบ 24 ก.ค.): ส่งรูปการ์ด + แคปชันพร้อมโพสต์เข้า Telegram ให้กบโพสต์เอง
+  // โหมด telegram (กบ 24 ก.ค.): ส่งรูปการ์ด + แคปชัน (แยกลิงก์) เข้า Telegram ให้กบโพสต์เอง
   if (showcaseDelivery() === "telegram") {
-    const { sendTelegramPhoto } = await import("../telegramNotify.service.js");
-    const tgCaption = `พร้อมโพสต์ลงเพจ (${piece.name} · ${piece.energyScore.toFixed(1)}/10)\nก็อปข้อความด้านล่างไปโพสต์พร้อมรูปนี้ได้เลยครับ\n\n${caption}`;
-    const res = await sendTelegramPhoto(cardUrl, tgCaption);
+    const { sendTelegramPhoto, sendTelegramText } = await import("../telegramNotify.service.js");
+    const photoCaption = `พร้อมโพสต์ลงเพจ (${piece.name} · ${piece.energyScore.toFixed(1)}/10)\nเซฟรูปนี้ + ก็อปแคปชันด้านล่างไปโพสต์ได้เลยครับ\n\n${caption.main}`;
+    const res = await sendTelegramPhoto(cardUrl, photoCaption);
     if (!res.ok) {
       await supabase
         .from("fb_showcase_queue")
@@ -452,9 +473,11 @@ async function postShowcaseRow(row) {
       console.log(JSON.stringify({ event: "FB_SHOWCASE_TELEGRAM_FAILED", reason: res.reason }));
       return { posted: 0, reason: "telegram_error" };
     }
+    // ลิงก์ LINE แยกส่งอีกก้อน ไว้แปะเป็นคอมเมนต์แรก (เลี่ยง FB ลดการมองเห็นโพสต์มีลิงก์ออกนอก)
+    await sendTelegramText(`คอมเมนต์แรก (แปะใต้โพสต์):\n${caption.linkComment}`).catch(() => {});
     await supabase
       .from("fb_showcase_queue")
-      .update({ status: "posted", caption, posted_at: new Date().toISOString() })
+      .update({ status: "posted", caption: caption.main, posted_at: new Date().toISOString() })
       .eq("id", row.id);
     console.log(
       JSON.stringify({
@@ -467,7 +490,7 @@ async function postShowcaseRow(row) {
   }
 
   // โหมด facebook: โพสต์ขึ้นเพจตรง (เก็บไว้ ใช้เมื่อ FB_SHOWCASE_DELIVERY=facebook)
-  const res = await postPagePhotoByUrl(cardUrl, caption, {
+  const res = await postPagePhotoByUrl(cardUrl, caption.full, {
     published:
       String(process.env.FB_AUTOPOST_UNPUBLISHED ?? "false").trim().toLowerCase() !== "true",
   });
