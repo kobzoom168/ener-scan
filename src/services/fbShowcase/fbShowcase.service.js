@@ -58,9 +58,10 @@ const PENDING_TTL_SEC = 48 * 3600;
 const ASKED_TTL_SEC = 60 * 86400;
 const USER_COOLDOWN_TTL_SEC = 3 * 86400;
 
+// กบ 24 ก.ค.: ยกเลิกการขออนุญาตรูปลูกค้าลงเพจ — โพสต์เฉพาะคลังกบเท่านั้น (default ปิด)
 function consentAskEnabled() {
   return (
-    String(process.env.FB_CONSENT_ASK_ENABLED ?? "true").trim().toLowerCase() !== "false"
+    String(process.env.FB_CONSENT_ASK_ENABLED ?? "false").trim().toLowerCase() === "true"
   );
 }
 function autoPostEnabled() {
