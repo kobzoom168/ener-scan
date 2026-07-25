@@ -312,6 +312,7 @@ export function sanitizeFbCaption(s) {
     .trim();
 }
 
+/** ท้ายแคปชัน "แบบมีลิงก์" (โหมด facebook โพสต์ตรง) */
 function captionFooter() {
   return [
     "",
@@ -320,6 +321,20 @@ function captionFooter() {
     "ผลอ่านเป็นการวิเคราะห์ตามแนวทางของ Ener ไม่ใช่คำทำนาย และไม่ได้ตัดสินแท้หรือเก๊",
     "#พระเครื่อง #เครื่องราง #สายมู #EnerScan",
   ].join("\n");
+}
+
+/** ท้ายแคปชัน "แบบไม่มีลิงก์" (โหมด telegram — ลิงก์แยกไปคอมเมนต์แรก เลี่ยง FB ลดการมองเห็น) */
+function captionFooterNoLink() {
+  return [
+    "",
+    "ผลอ่านเป็นการวิเคราะห์ตามแนวทางของ Ener ไม่ใช่คำทำนาย และไม่ได้ตัดสินแท้หรือเก๊",
+    "#พระเครื่อง #เครื่องราง #สายมู #EnerScan",
+  ].join("\n");
+}
+
+/** บรรทัดลิงก์ LINE ไว้แปะเป็นคอมเมนต์แรกของโพสต์ */
+function captionLinkComment() {
+  return `อยากรู้พลังของชิ้นที่บ้าน ส่งรูปให้อาจารย์ดูได้ ฟรีวันละ 1 ชิ้น ${OA_LINK}`;
 }
 
 function fallbackCaptionBody(piece) {
@@ -331,6 +346,7 @@ const CAPTION_SYSTEM = `คุณคือแอดมินเพจ Ener เ�
 กติกา:
 - ภาษาไทย 2-3 ประโยคสั้น โทนอาจารย์ชายวัย 41 สุขุม ภูมิใจนำเสนอ ไม่โอ้อวดเกินจริง ไม่ขายตรง
 - ต้องอิงข้อมูลที่ให้เท่านั้น ห้ามมโนตัวเลขหรือสรรพคุณเพิ่ม ห้ามการันตีโชคลาภหรือผลใด ๆ
+- 🚫 ห้ามระบุชนิด/รุ่น/พิมพ์พระเฉพาะเด็ดขาด (สมเด็จ นางพญา ปิดตา หลวงปู่ทวด ไอ้ไข่ ฯลฯ) ห้ามระบุเนื้อ (เนื้อผง โลหะ ว่าน) ห้ามระบุวัด/เกจิ — เรียกแค่ ชิ้นนี้ หรือ พระองค์นี้
 - ห้ามใช้เครื่องหมาย — หรือ " " ห้ามอีโมจิเกิน 1 ตัว
 - ห้ามพูดถึงเจ้าของชิ้นหรือลูกค้า (พูดถึงตัวชิ้นอย่างเดียว)
 ตอบเป็นเนื้อแคปชันล้วน ไม่ต้องมีแฮชแท็กหรือลิงก์ (ระบบเติมเอง)`;
@@ -363,7 +379,12 @@ async function buildCaption(piece) {
     body = "";
   }
   if (!body || body.length < 20) body = fallbackCaptionBody(piece);
-  return `${body}\n${captionFooter()}`;
+  // คืนทั้ง 2 แบบ: full (มีลิงก์ในตัว) + noLink (ตัวโพสต์) + linkComment (คอมเมนต์แรก)
+  return {
+    full: `${body}\n${captionFooter()}`,
+    main: `${body}\n${captionFooterNoLink()}`,
+    linkComment: captionLinkComment(),
+  };
 }
 
 /* ────────────────────── 4) sweep โพสต์ตามรอบ ────────────────────── */
@@ -420,7 +441,12 @@ async function loadPieceByToken(token) {
   return extractShowcasePiece(payload);
 }
 
-/** โพสต์ 1 แถวจากคิว (ใช้ร่วมกันทั้ง sweep ตามรอบ และโหมดโพสต์ทันทีตอนสแกน) */
+/** โหมดส่ง: telegram (กบโพสต์เอง — default 24 ก.ค.) | facebook (โพสต์เพจตรง) */
+function showcaseDelivery() {
+  return String(process.env.FB_SHOWCASE_DELIVERY || "telegram").trim().toLowerCase();
+}
+
+/** โพสต์/ส่ง 1 แถวจากคิว (ใช้ร่วมกันทั้ง sweep ตามรอบ และโหมดทันทีตอนสแกน) */
 async function postShowcaseRow(row) {
   const piece = await loadPieceByToken(row.public_token);
   if (!piece) {
@@ -432,13 +458,42 @@ async function postShowcaseRow(row) {
   }
 
   const caption = await buildCaption(piece);
-  // โฉมรูปเต็ม (กบเคาะ 23 ก.ค.) — fallback การ์ดเดิมถ้าใบใหม่ใช้ไม่ได้ไม่มี เพราะเงื่อนไขเดียวกัน
   const cardUrl = `${buildPublicReportUrl(piece.token)}/photo-card.png`;
-  const res = await postPagePhotoByUrl(cardUrl, caption, {
+
+  // โหมด telegram (กบ 24 ก.ค.): ส่งรูปการ์ด + แคปชัน (แยกลิงก์) เข้า Telegram ให้กบโพสต์เอง
+  if (showcaseDelivery() === "telegram") {
+    const { sendTelegramPhoto, sendTelegramText } = await import("../telegramNotify.service.js");
+    const photoCaption = `พร้อมโพสต์ลงเพจ (${piece.name} · ${piece.energyScore.toFixed(1)}/10)\nเซฟรูปนี้ + ก็อปแคปชันด้านล่างไปโพสต์ได้เลยครับ\n\n${caption.main}`;
+    const res = await sendTelegramPhoto(cardUrl, photoCaption);
+    if (!res.ok) {
+      await supabase
+        .from("fb_showcase_queue")
+        .update({ status: "failed", error_message: `telegram: ${res.reason || ""}`.slice(0, 300) })
+        .eq("id", row.id);
+      console.log(JSON.stringify({ event: "FB_SHOWCASE_TELEGRAM_FAILED", reason: res.reason }));
+      return { posted: 0, reason: "telegram_error" };
+    }
+    // ลิงก์ LINE แยกส่งอีกก้อน ไว้แปะเป็นคอมเมนต์แรก (เลี่ยง FB ลดการมองเห็นโพสต์มีลิงก์ออกนอก)
+    await sendTelegramText(`คอมเมนต์แรก (แปะใต้โพสต์):\n${caption.linkComment}`).catch(() => {});
+    await supabase
+      .from("fb_showcase_queue")
+      .update({ status: "posted", caption: caption.main, posted_at: new Date().toISOString() })
+      .eq("id", row.id);
+    console.log(
+      JSON.stringify({
+        event: "FB_SHOWCASE_SENT_TELEGRAM",
+        tokenPrefix: piece.token.slice(0, 10),
+        source: row.source,
+      }),
+    );
+    return { posted: 1, via: "telegram" };
+  }
+
+  // โหมด facebook: โพสต์ขึ้นเพจตรง (เก็บไว้ ใช้เมื่อ FB_SHOWCASE_DELIVERY=facebook)
+  const res = await postPagePhotoByUrl(cardUrl, caption.full, {
     published:
       String(process.env.FB_AUTOPOST_UNPUBLISHED ?? "false").trim().toLowerCase() !== "true",
   });
-
   if (!res.ok) {
     await supabase
       .from("fb_showcase_queue")
@@ -452,7 +507,6 @@ async function postShowcaseRow(row) {
     ).catch(() => {});
     return { posted: 0, reason: "fb_error" };
   }
-
   await supabase
     .from("fb_showcase_queue")
     .update({
@@ -462,19 +516,11 @@ async function postShowcaseRow(row) {
       posted_at: new Date().toISOString(),
     })
     .eq("id", row.id);
-  console.log(
-    JSON.stringify({
-      event: "FB_AUTOPOST_POSTED",
-      tokenPrefix: piece.token.slice(0, 10),
-      source: row.source,
-      fbPostId: res.postId || null,
-    }),
-  );
   const permalink = res.postId ? await getPostPermalink(res.postId) : "";
   await sendTelegramText(
     `โพสต์ขึ้นเพจ Ener แล้ว (${row.source === "library" ? "คลังกบ" : "ลูกค้ายินดี"})\n${piece.name} · ${piece.energyScore.toFixed(1)}/10${permalink ? `\n${permalink}` : ""}`,
   ).catch(() => {});
-  return { posted: 1 };
+  return { posted: 1, via: "facebook" };
 }
 
 /**
@@ -541,7 +587,11 @@ export async function maybeAutoPostOnScan({ lineUserId, reportPayload, publicTok
  * @param {Date} [now]
  */
 export async function runFbShowcaseAutoPostSweep(now = new Date()) {
-  if (!autoPostEnabled() || !isFbPageConfigured()) return { skipped: "disabled" };
+  if (!autoPostEnabled()) return { skipped: "disabled" };
+  // โหมด facebook ต้องมี token เพจ · โหมด telegram ไม่ต้อง (กบ 24 ก.ค.)
+  if (showcaseDelivery() === "facebook" && !isFbPageConfigured()) {
+    return { skipped: "fb_not_configured" };
+  }
   const hour = bangkokHour(now);
   if (!POST_HOURS_BKK.has(hour)) return { skipped: "not_post_hour" };
   const slotKey = `scan_v2:fb_autopost_done:${bangkokDateKey(now)}:${hour}`;
