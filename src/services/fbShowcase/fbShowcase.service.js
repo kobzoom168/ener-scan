@@ -396,6 +396,67 @@ async function buildCaption(piece) {
   };
 }
 
+/**
+ * ทุกสแกน → ส่งการ์ด + แคปชันพลังงานเข้า Telegram กบทันที (กบ 24 ก.ค.)
+ * รองรับทั้งเลนพระ+กำไล (การ์ด photo-card รองรับแล้ว) · dedupe ต่อ token กันส่งซ้ำ
+ * fire-and-forget — ห้าม throw
+ * @param {{ lineUserId: string, reportPayload: object, publicToken: string }} p
+ */
+export async function maybeSendScanCardToTelegram({ reportPayload, publicToken }) {
+  try {
+    if (
+      String(process.env.SCAN_TO_TELEGRAM_ENABLED ?? "true").trim().toLowerCase() === "false"
+    ) {
+      return { skipped: "disabled" };
+    }
+    const token = String(publicToken || "").trim();
+    if (!token) return { skipped: "no_token" };
+
+    // ดึงข้อมูลการ์ด (รองรับ 2 เลน) — payload อาจไม่มากับ msg (summary_link) → โหลดจาก DB
+    const { deriveShowcaseCardData } = await import("./showcasePhotoCard.service.js");
+    let data = deriveShowcaseCardData(reportPayload);
+    if (!data) {
+      const { getScanResultPayloadByPublicToken } = await import(
+        "../../stores/scanV2/scanResultsV2.db.js"
+      );
+      data = deriveShowcaseCardData(await getScanResultPayloadByPublicToken(token));
+    }
+    if (!data) return { skipped: "not_eligible" };
+
+    // ส่งครั้งเดียวต่อ token
+    const first = await tryDedupeOnce(`scan_v2:scan_to_tg:${token}`, 45 * 86400);
+    if (!first) return { skipped: "already_sent" };
+
+    const piece = {
+      token,
+      name: data.name,
+      energyScore: data.energyScore,
+      peakLabel: data.skills?.[0]?.labelFull || data.name,
+    };
+    const caption = await buildCaption(piece);
+    const cardUrl = `${buildPublicReportUrl(token)}/photo-card.png`;
+    const { sendTelegramPhoto, sendTelegramText } = await import("../telegramNotify.service.js");
+    const res = await sendTelegramPhoto(
+      cardUrl,
+      `การ์ดพร้อมโพสต์ · ${piece.name} ${piece.energyScore.toFixed(1)}/10`,
+    );
+    if (!res.ok) {
+      console.log(JSON.stringify({ event: "SCAN_TO_TG_PHOTO_FAILED", reason: res.reason }));
+      return { sent: false };
+    }
+    await sendTelegramText(caption.social).catch(() => {});
+    console.log(
+      JSON.stringify({ event: "SCAN_TO_TG_SENT", tokenPrefix: token.slice(0, 10), lane: data.lane }),
+    );
+    return { sent: true };
+  } catch (e) {
+    console.log(
+      JSON.stringify({ event: "SCAN_TO_TG_ERROR", message: String(e?.message || e).slice(0, 160) }),
+    );
+    return { error: true };
+  }
+}
+
 /* ────────────────────── 4) sweep โพสต์ตามรอบ ────────────────────── */
 
 async function pickNextQueuedRow() {
