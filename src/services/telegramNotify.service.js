@@ -88,3 +88,45 @@ export async function sendTelegramText(text) {
   );
   return { ok: true, parts: parts.length };
 }
+
+/**
+ * ส่งรูป + แคปชันในข้อความเดียว (กบ 24 ก.ค. — การ์ดอวดพระให้กบโพสต์เอง)
+ * caption ยาวได้ถึง 1024 ตัว (ลิมิต Telegram) — เกินนั้นตัด + ส่งส่วนที่เหลือเป็น text ตาม
+ * @param {string} photoUrl รูปสาธารณะ (https)
+ * @param {string} caption
+ * @returns {Promise<{ ok: boolean, reason?: string }>}
+ */
+export async function sendTelegramPhoto(photoUrl, caption = "") {
+  const cfg = readTelegramConfig();
+  if (!cfg) return { ok: false, reason: "not_configured" };
+  const url = String(photoUrl || "").trim();
+  if (!/^https:\/\//i.test(url)) return { ok: false, reason: "bad_url" };
+  const cap = String(caption || "");
+  const CAP_MAX = 1024;
+  const res = await fetch(`https://api.telegram.org/bot${cfg.token}/sendPhoto`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      chat_id: cfg.chatId,
+      photo: url,
+      caption: cap.slice(0, CAP_MAX),
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.log(
+      JSON.stringify({
+        event: "TELEGRAM_PHOTO_FAILED",
+        status: res.status,
+        body: body.slice(0, 200),
+      }),
+    );
+    return { ok: false, reason: `http_${res.status}` };
+  }
+  // แคปชันเกิน 1024 → ส่งส่วนที่เหลือเป็นข้อความตามมา (กบจะได้ก็อปครบ)
+  if (cap.length > CAP_MAX) {
+    await sendTelegramText(cap.slice(CAP_MAX)).catch(() => {});
+  }
+  console.log(JSON.stringify({ event: "TELEGRAM_PHOTO_OK" }));
+  return { ok: true };
+}

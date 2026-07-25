@@ -420,7 +420,12 @@ async function loadPieceByToken(token) {
   return extractShowcasePiece(payload);
 }
 
-/** โพสต์ 1 แถวจากคิว (ใช้ร่วมกันทั้ง sweep ตามรอบ และโหมดโพสต์ทันทีตอนสแกน) */
+/** โหมดส่ง: telegram (กบโพสต์เอง — default 24 ก.ค.) | facebook (โพสต์เพจตรง) */
+function showcaseDelivery() {
+  return String(process.env.FB_SHOWCASE_DELIVERY || "telegram").trim().toLowerCase();
+}
+
+/** โพสต์/ส่ง 1 แถวจากคิว (ใช้ร่วมกันทั้ง sweep ตามรอบ และโหมดทันทีตอนสแกน) */
 async function postShowcaseRow(row) {
   const piece = await loadPieceByToken(row.public_token);
   if (!piece) {
@@ -432,13 +437,40 @@ async function postShowcaseRow(row) {
   }
 
   const caption = await buildCaption(piece);
-  // โฉมรูปเต็ม (กบเคาะ 23 ก.ค.) — fallback การ์ดเดิมถ้าใบใหม่ใช้ไม่ได้ไม่มี เพราะเงื่อนไขเดียวกัน
   const cardUrl = `${buildPublicReportUrl(piece.token)}/photo-card.png`;
+
+  // โหมด telegram (กบ 24 ก.ค.): ส่งรูปการ์ด + แคปชันพร้อมโพสต์เข้า Telegram ให้กบโพสต์เอง
+  if (showcaseDelivery() === "telegram") {
+    const { sendTelegramPhoto } = await import("../telegramNotify.service.js");
+    const tgCaption = `พร้อมโพสต์ลงเพจ (${piece.name} · ${piece.energyScore.toFixed(1)}/10)\nก็อปข้อความด้านล่างไปโพสต์พร้อมรูปนี้ได้เลยครับ\n\n${caption}`;
+    const res = await sendTelegramPhoto(cardUrl, tgCaption);
+    if (!res.ok) {
+      await supabase
+        .from("fb_showcase_queue")
+        .update({ status: "failed", error_message: `telegram: ${res.reason || ""}`.slice(0, 300) })
+        .eq("id", row.id);
+      console.log(JSON.stringify({ event: "FB_SHOWCASE_TELEGRAM_FAILED", reason: res.reason }));
+      return { posted: 0, reason: "telegram_error" };
+    }
+    await supabase
+      .from("fb_showcase_queue")
+      .update({ status: "posted", caption, posted_at: new Date().toISOString() })
+      .eq("id", row.id);
+    console.log(
+      JSON.stringify({
+        event: "FB_SHOWCASE_SENT_TELEGRAM",
+        tokenPrefix: piece.token.slice(0, 10),
+        source: row.source,
+      }),
+    );
+    return { posted: 1, via: "telegram" };
+  }
+
+  // โหมด facebook: โพสต์ขึ้นเพจตรง (เก็บไว้ ใช้เมื่อ FB_SHOWCASE_DELIVERY=facebook)
   const res = await postPagePhotoByUrl(cardUrl, caption, {
     published:
       String(process.env.FB_AUTOPOST_UNPUBLISHED ?? "false").trim().toLowerCase() !== "true",
   });
-
   if (!res.ok) {
     await supabase
       .from("fb_showcase_queue")
@@ -452,7 +484,6 @@ async function postShowcaseRow(row) {
     ).catch(() => {});
     return { posted: 0, reason: "fb_error" };
   }
-
   await supabase
     .from("fb_showcase_queue")
     .update({
@@ -462,19 +493,11 @@ async function postShowcaseRow(row) {
       posted_at: new Date().toISOString(),
     })
     .eq("id", row.id);
-  console.log(
-    JSON.stringify({
-      event: "FB_AUTOPOST_POSTED",
-      tokenPrefix: piece.token.slice(0, 10),
-      source: row.source,
-      fbPostId: res.postId || null,
-    }),
-  );
   const permalink = res.postId ? await getPostPermalink(res.postId) : "";
   await sendTelegramText(
     `โพสต์ขึ้นเพจ Ener แล้ว (${row.source === "library" ? "คลังกบ" : "ลูกค้ายินดี"})\n${piece.name} · ${piece.energyScore.toFixed(1)}/10${permalink ? `\n${permalink}` : ""}`,
   ).catch(() => {});
-  return { posted: 1 };
+  return { posted: 1, via: "facebook" };
 }
 
 /**
@@ -541,7 +564,11 @@ export async function maybeAutoPostOnScan({ lineUserId, reportPayload, publicTok
  * @param {Date} [now]
  */
 export async function runFbShowcaseAutoPostSweep(now = new Date()) {
-  if (!autoPostEnabled() || !isFbPageConfigured()) return { skipped: "disabled" };
+  if (!autoPostEnabled()) return { skipped: "disabled" };
+  // โหมด facebook ต้องมี token เพจ · โหมด telegram ไม่ต้อง (กบ 24 ก.ค.)
+  if (showcaseDelivery() === "facebook" && !isFbPageConfigured()) {
+    return { skipped: "fb_not_configured" };
+  }
   const hour = bangkokHour(now);
   if (!POST_HOURS_BKK.has(hour)) return { skipped: "not_post_hour" };
   const slotKey = `scan_v2:fb_autopost_done:${bangkokDateKey(now)}:${hour}`;
