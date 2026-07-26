@@ -320,18 +320,13 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         await markSent(id);
         releaseScanGate(lineUserId);
         await handleScanResultPostDelivery(msg, payload);
-        // อวดชิ้นขึ้นเพจ FB (กบ 22 ก.ค.) — fire-and-forget ห้ามกระทบ report:
-        // ชิ้นเจ้าของระบบ + เปิดโหมดโพสต์ทันที = โพสต์เลย · ชิ้นลูกค้าคะแนนสูง = ถามขออนุญาตก่อน
+        // ทุกสแกน → ส่งการ์ด + แคปชันพลังงานเข้า Telegram กบทันที (กบ 24 ก.ค. — เก็บคอนเทนต์ไว้โพสต์เอง)
+        // fire-and-forget ห้ามกระทบ report · dedupe ต่อ token
         try {
-          const { maybeAutoPostOnScan, maybeEnqueueFbConsentAsk } = await import(
+          const { maybeSendScanCardToTelegram } = await import(
             "../fbShowcase/fbShowcase.service.js"
           );
-          void maybeAutoPostOnScan({
-            lineUserId,
-            reportPayload: payload.reportPayload,
-            publicToken: payload.publicToken,
-          });
-          void maybeEnqueueFbConsentAsk({
+          void maybeSendScanCardToTelegram({
             lineUserId,
             reportPayload: payload.reportPayload,
             publicToken: payload.publicToken,
