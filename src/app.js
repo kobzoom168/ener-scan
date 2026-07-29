@@ -162,6 +162,30 @@ app.get("/version", (req, res) => {
   res.status(200).json({ ok: true, version: "payment-slip-fix-v2" });
 });
 
+// นโยบายความเป็นส่วนตัว — Meta บังคับต้องมี URL นี้ก่อนสลับ app เป็น Live (กบ 29 ก.ค.)
+app.get("/privacy", (req, res) => {
+  res.status(200).type("html").send(`<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>นโยบายความเป็นส่วนตัว - Ener Scan</title>
+<style>body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.8;color:#333}h1{color:#8f6710}h2{color:#555;font-size:1.1em;margin-top:1.6em}</style>
+</head><body>
+<h1>นโยบายความเป็นส่วนตัว (Privacy Policy)</h1>
+<p>บริการ Ener Scan ("บริการ") ให้บริการอ่านพลังงานวัตถุมงคลผ่าน LINE Official Account และเผยแพร่คอนเทนต์ผ่านเพจ Facebook ของเรา</p>
+<h2>ข้อมูลที่เราเก็บ</h2>
+<p>ชื่อที่แสดงและรหัสผู้ใช้จากแพลตฟอร์มแชท รูปภาพวัตถุที่ผู้ใช้ส่งเข้ามาเพื่อรับผลการอ่าน วันเกิดที่ผู้ใช้ให้ไว้เพื่อประกอบการอ่าน และประวัติการสนทนากับบริการ</p>
+<h2>การใช้ข้อมูล</h2>
+<p>ใช้เพื่อให้บริการอ่านพลังงาน จัดทำรายงานผล ปรับปรุงคุณภาพบริการ และจัดทำคอนเทนต์เผยแพร่ (ไม่เปิดเผยข้อมูลติดต่อส่วนตัวของผู้ใช้) เราไม่ขายหรือส่งต่อข้อมูลส่วนบุคคลให้บุคคลที่สามเพื่อการตลาด</p>
+<h2>Facebook / Meta</h2>
+<p>แอปของเราใช้สิทธิ์จัดการเพจของเราเองเพื่อโพสต์คอนเทนต์อัตโนมัติเท่านั้น ไม่เข้าถึงข้อมูลผู้ใช้ Facebook รายอื่น</p>
+<h2>การลบข้อมูล</h2>
+<p>ผู้ใช้ขอให้ลบข้อมูลของตนได้โดยแจ้งผ่านแชท LINE Official Account ของบริการ เราจะดำเนินการลบภายใน 30 วัน</p>
+<h2>ติดต่อ</h2>
+<p>ติดต่อผู้ให้บริการได้ทางแชท LINE Official Account: Ener Scan</p>
+<p><em>This service reads user-submitted images and birthdates to generate energy reports, and auto-posts content to our own Facebook Page only. We do not access other Facebook users' data, and we do not sell personal data. Data deletion requests are accepted via our LINE Official Account chat and processed within 30 days.</em></p>
+<p>ปรับปรุงล่าสุด: 29 กรกฎาคม 2026</p>
+</body></html>`);
+});
+
 // Ener สายมู LIFF app (SPA + profile/daily/pay APIs) — see routes/liff.routes.js
 setLiffLineClient(lineClient);
 app.use(liffRouter);
