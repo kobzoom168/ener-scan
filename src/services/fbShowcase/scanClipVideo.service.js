@@ -70,9 +70,9 @@ export async function renderScanZoomClip(cardPngBuffer) {
 /**
  * ทุกสแกนที่ทำการ์ดได้ → คลิปซูม 5 วิ → โพสต์เพจ FB ทันที
  * fire-and-forget จาก deliverOutbound · dedupe ต่อ token
- * @param {{ reportPayload?: object, publicToken?: string }} p
+ * @param {{ lineUserId?: string, reportPayload?: object, publicToken?: string }} p
  */
-export async function maybeAutoPostScanClip({ reportPayload, publicToken }) {
+export async function maybeAutoPostScanClip({ lineUserId, reportPayload, publicToken }) {
   try {
     if (!clipEnabled()) return { skipped: "disabled" };
     if (!isFbPageConfigured()) return { skipped: "fb_not_configured" };
@@ -107,9 +107,22 @@ export async function maybeAutoPostScanClip({ reportPayload, publicToken }) {
       peakLabel: data.skills?.[0]?.labelFull || data.name,
     });
 
+    // เครดิตเจ้าของชิ้นนำหน้าแคปชัน (กบ 29 ก.ค. — "ชิ้นนี้จากคุณ ...") · ไม่มีชื่อ = ละไว้
+    let ownerLine = "";
+    if (lineUserId) {
+      try {
+        const { getAppUserByLineUserId } = await import("../../stores/users.db.js");
+        const u = await getAppUserByLineUserId(lineUserId);
+        const dn = String(u?.display_name || "").replace(/\s+/g, " ").trim().slice(0, 40);
+        if (dn) ownerLine = `ชิ้นนี้จากคุณ ${dn}\n\n`;
+      } catch {
+        /* ignore */
+      }
+    }
+
     const clip = await renderScanZoomClip(cardPng);
     try {
-      const res = await postPageVideo(clip.mp4Path, caption.social, { published: true });
+      const res = await postPageVideo(clip.mp4Path, ownerLine + caption.social, { published: true });
       console.log(
         JSON.stringify({
           event: res.ok ? "SCAN_CLIP_FB_POSTED" : "SCAN_CLIP_FB_FAILED",

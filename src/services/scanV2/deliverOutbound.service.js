@@ -340,6 +340,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
             "../fbShowcase/scanClipVideo.service.js"
           );
           void maybeAutoPostScanClip({
+            lineUserId,
             reportPayload: payload.reportPayload,
             publicToken: payload.publicToken,
           });
