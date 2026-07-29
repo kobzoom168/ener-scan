@@ -12,12 +12,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { tryDedupeOnce } from "../../redis/scanV2Redis.js";
-import {
-  isFbPageConfigured,
-  postPageVideo,
-  postPagePhotoByUrl,
-} from "../../integrations/facebook/facebookPage.api.js";
-import { buildPublicReportUrl } from "../reports/reportLink.service.js";
+import { isFbPageConfigured, postPageVideo } from "../../integrations/facebook/facebookPage.api.js";
 
 const AUDIO_PATH = path.join(process.cwd(), "src", "brand", "audio", "daily_recap.m4a");
 const CLIP_SECONDS = 5;
@@ -155,18 +150,8 @@ export async function maybeAutoPostScanClip({ lineUserId, reportPayload, publicT
           ...(res.ok ? { videoIdPrefix: String(res.videoId || "").slice(0, 12) } : { error: res.error }),
         }),
       );
-      // FB บังคับวิดีโอทุกตัวเป็น Reel (ไม่ขึ้นหน้า Posts ของเพจ) → โพสต์รูปการ์ดควบ
-      // ขึ้นไทม์ไลน์ด้วย (กบ 29 ก.ค. เคาะ: Reel เอา reach + รูปเอาหน้าเพจ)
-      const cardUrl = `${buildPublicReportUrl(token)}/photo-card.png`;
-      const photoRes = await postPagePhotoByUrl(cardUrl, ownerLine + caption.social);
-      console.log(
-        JSON.stringify({
-          event: photoRes.ok ? "SCAN_CARD_FB_PHOTO_POSTED" : "SCAN_CARD_FB_PHOTO_FAILED",
-          tokenPrefix: token.slice(0, 10),
-          ...(photoRes.ok ? {} : { error: photoRes.error }),
-        }),
-      );
-      return { posted: res.ok, photoPosted: photoRes.ok };
+      // โพสต์วิดีโออย่างเดียว — กบ 29 ก.ค. (รอบสอง หลัง app เป็น Live): รูปการ์ดควบไม่เอาแล้ว
+      return { posted: res.ok };
     } finally {
       await clip.cleanup();
     }
