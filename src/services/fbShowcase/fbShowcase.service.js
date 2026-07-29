@@ -359,7 +359,7 @@ const CAPTION_SYSTEM = `คุณคือแอดมินเพจ Ener เ�
 - ห้ามพูดถึงเจ้าของ/ลูกค้า พูดถึงตัวชิ้นอย่างเดียว
 ตอบเป็นเนื้อแคปชันล้วน ไม่ต้องมีแฮชแท็กหรือลิงก์ (ระบบเติมเอง)`;
 
-async function buildCaption(piece) {
+export async function buildCaption(piece) {
   let body = "";
   try {
     const model = getGeminiFlashModel({
