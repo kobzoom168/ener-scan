@@ -38,6 +38,8 @@ function runFfmpeg(args) {
 
 /**
  * การ์ด png → mp4 ซูมเข้าช้า ๆ 5 วิ + เพลง
+ * เฟรมแนวนอน 1920x1080 (กบ 29 ก.ค. — คลิปแนวตั้งสั้นโดน FB จับเป็น Reel ไม่ขึ้นไทม์ไลน์เพจ
+ * แนวนอนขึ้นเป็นโพสต์วิดีโอปกติ) — การ์ดซูมอยู่กลาง พื้นหลังการ์ดเบลอเต็มจอ
  * upscale 2 เท่าก่อน zoompan กันภาพสั่น (zoompan ปัดพิกัดเป็นจำนวนเต็ม)
  * @param {Buffer} cardPngBuffer
  * @returns {Promise<{ mp4Path: string, cleanup: () => Promise<void> }>}
@@ -53,7 +55,9 @@ export async function renderScanZoomClip(cardPngBuffer) {
     "-loop", "1", "-i", imgPath,
     "-i", AUDIO_PATH,
     "-filter_complex",
-    `[0:v]scale=2160:2400,zoompan=z='min(zoom+0.0012,1.18)':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1200:fps=${FPS},format=yuv420p[v]`,
+    `[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,boxblur=24[bg];` +
+      `[0:v]scale=2160:2400,zoompan=z='min(zoom+0.0012,1.18)':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=972x1080:fps=${FPS}[fg];` +
+      `[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]`,
     "-map", "[v]", "-map", "1:a",
     "-t", String(CLIP_SECONDS),
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
