@@ -43,6 +43,7 @@ import {
   upsertConversationState,
 } from "../stores/conversationState.db.js";
 import { buildSlipPackageSwitchedApprovedText } from "../utils/webhookText.util.js";
+import { insertLineConversationMessage } from "../stores/conversationMessages.db.js";
 import { getValue, setValueWithTtl } from "../redis/scanV2Redis.js";
 import { getUpgradeCreditForLineUser } from "../services/upgradeCredit.service.js";
 
@@ -1404,13 +1405,12 @@ liffRouter.post(
         clearPaymentState(userId);
         if (liffLineClient) {
           const swPkg = approvalFlow.switchedPackage || null;
-          pushText(
-            liffLineClient,
-            userId,
-            swPkg
-              ? buildSlipPackageSwitchedApprovedText(swPkg)
-              : "✅ ตรวจสลิปเรียบร้อยครับ อาจารย์เปิดสิทธิ์สแกนให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล เข้ามาได้เลยครับ",
-          ).catch(() => {});
+          const approvedText = swPkg
+            ? buildSlipPackageSwitchedApprovedText(swPkg)
+            : "✅ ตรวจสลิปเรียบร้อยครับ อาจารย์เปิดสิทธิ์สแกนให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล เข้ามาได้เลยครับ";
+          pushText(liffLineClient, userId, approvedText).catch(() => {});
+          // ลงประวัติแชทให้ AI เห็นว่าเรื่องจ่ายจบแล้ว (เคส 29 ก.ค.: บอททวงสลิปซ้ำ)
+          void insertLineConversationMessage(userId, "bot", approvedText);
         }
         console.log(JSON.stringify({ event: "LIFF_SLIP_AUTO_APPROVED", paymentId }));
         return res.json({ ok: true, result: "approved" });

@@ -9,6 +9,7 @@ import {
   LINE_STICKER_ID_PAYMENT_APPROVED_BLESSING,
   LINE_STICKER_PACKAGE_BROWN_CONY_SALLY_ANIMATED,
 } from "../../utils/lineStickerMessage.util.js";
+import { insertLineConversationMessage } from "../../stores/conversationMessages.db.js";
 
 /**
  * @param {object} opts
@@ -66,6 +67,10 @@ export async function enqueueApproveNotify({
       outboundIdPrefix: row?.id ? String(row.id).slice(0, 8) : null,
     }),
   );
+
+  // ลงประวัติแชทให้ AI เห็นว่าเรื่องจ่ายจบแล้ว (เคส 29 ก.ค.: ข้อความเปิดสิทธิ์
+  // ไม่อยู่ใน history → บอททวงสลิปทั้งที่จ่ายแล้ว)
+  void insertLineConversationMessage(lineUserId, "bot", String(text || "").slice(0, 1500));
 
   return { id: row?.id ?? null, deduped: false };
 }
