@@ -116,13 +116,28 @@ export async function maybeAutoPostScanClip({ lineUserId, reportPayload, publicT
       peakLabel: data.skills?.[0]?.labelFull || data.name,
     });
 
-    // เครดิตเจ้าของชิ้นนำหน้าแคปชัน (กบ 29 ก.ค. — "ชิ้นนี้จากคุณ ...") · ไม่มีชื่อ = ละไว้
+    // เครดิตเจ้าของชิ้นนำหน้าแคปชัน (กบ 29 ก.ค. — "ชิ้นนี้จากคุณ ...")
+    // DB ไม่มีชื่อ (ลูกค้าส่วนใหญ่ไม่ผ่าน LIFF) → ดึงจาก LINE profile ตรง + backfill DB
     let ownerLine = "";
     if (lineUserId) {
       try {
-        const { getAppUserByLineUserId } = await import("../../stores/users.db.js");
+        const { getAppUserByLineUserId, ensureUserByLineUserId } = await import(
+          "../../stores/users.db.js"
+        );
         const u = await getAppUserByLineUserId(lineUserId);
-        const dn = String(u?.display_name || "").replace(/\s+/g, " ").trim().slice(0, 40);
+        let dn = String(u?.display_name || "").replace(/\s+/g, " ").trim();
+        if (!dn && process.env.CHANNEL_ACCESS_TOKEN) {
+          const pr = await fetch(
+            `https://api.line.me/v2/bot/profile/${encodeURIComponent(lineUserId)}`,
+            {
+              headers: { Authorization: `Bearer ${process.env.CHANNEL_ACCESS_TOKEN}` },
+              signal: AbortSignal.timeout(8000),
+            },
+          ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+          dn = String(pr?.displayName || "").replace(/\s+/g, " ").trim();
+          if (dn) void ensureUserByLineUserId(lineUserId, { displayName: dn });
+        }
+        dn = dn.slice(0, 40);
         if (dn) ownerLine = `ชิ้นนี้จากคุณ ${dn}\n\n`;
       } catch {
         /* ignore */
