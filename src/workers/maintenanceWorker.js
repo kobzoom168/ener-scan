@@ -10,6 +10,7 @@ import { runRenewalReminderSweep } from "../services/scanV2/renewalReminder.serv
 import { runChatQualityDailySweep } from "../services/chatQualityDailyReport.service.js";
 import { runDailyLuckyPickSweep } from "../services/dailyLuckyPickPush.service.js";
 import { runFbShowcaseAutoPostSweep } from "../services/fbShowcase/fbShowcase.service.js";
+import { runDailyRecapVideoSweep } from "../services/fbShowcase/dailyRecapVideo.service.js";
 import {
   getLine429CanaryCountHour,
   startWorkerHeartbeatLoop,
@@ -203,6 +204,17 @@ async function runOnce() {
     console.warn(
       JSON.stringify({
         event: "FB_AUTOPOST_SWEEP_CALL_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+  }
+  // วิดีโอสรุปรายวัน 17:00 → เพจ FB + Telegram (กบ 29 ก.ค.) — self-gated + dedupe รายวัน
+  try {
+    await runDailyRecapVideoSweep();
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "DAILY_RECAP_SWEEP_CALL_ERROR",
         message: String(e?.message || e).slice(0, 160),
       }),
     );

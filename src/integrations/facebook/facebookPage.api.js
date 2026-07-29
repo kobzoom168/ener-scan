@@ -80,3 +80,36 @@ export async function getPostPermalink(postId) {
     return "";
   }
 }
+
+/**
+ * โพสต์วิดีโอขึ้นเพจ (ไฟล์ mp4 ในเครื่อง) — วิดีโอสรุปรายวัน (กบ 29 ก.ค.)
+ * ใช้ graph-video endpoint แบบ multipart (แนวเดียวกับตัวโพสต์วิดีโอใน ener-ai)
+ * @param {string} mp4Path
+ * @param {string} description
+ * @param {{ published?: boolean }} [opts]
+ * @returns {Promise<{ ok: boolean, videoId?: string, error?: string }>}
+ */
+export async function postPageVideo(mp4Path, description, opts = {}) {
+  const { pageId, token, version } = cfg();
+  if (!pageId || !token) return { ok: false, error: "FB_PAGE_ID/FB_PAGE_TOKEN not set" };
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const buf = await readFile(mp4Path);
+    const form = new FormData();
+    form.set("access_token", token);
+    form.set("description", String(description || "").slice(0, 5000));
+    if (opts.published === false) form.set("published", "false");
+    form.set("source", new Blob([buf], { type: "video/mp4" }), "recap.mp4");
+    const res = await fetch(
+      `https://graph-video.facebook.com/${version}/${pageId}/videos`,
+      { method: "POST", body: form, signal: AbortSignal.timeout(600000) },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: `FB ${res.status}: ${String(data?.error?.message || "").slice(0, 200)}` };
+    }
+    return { ok: true, videoId: String(data.id || "") };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e).slice(0, 200) };
+  }
+}

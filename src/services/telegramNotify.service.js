@@ -130,3 +130,37 @@ export async function sendTelegramPhoto(photoUrl, caption = "") {
   console.log(JSON.stringify({ event: "TELEGRAM_PHOTO_OK" }));
   return { ok: true };
 }
+
+/**
+ * ส่งไฟล์วิดีโอ + แคปชัน (กบ 29 ก.ค. — วิดีโอสรุปรายวัน) · ลิมิต bot 50MB
+ * @param {string} filePath
+ * @param {string} caption
+ * @returns {Promise<{ ok: boolean, reason?: string }>}
+ */
+export async function sendTelegramVideo(filePath, caption = "") {
+  const cfg = readTelegramConfig();
+  if (!cfg) return { ok: false, reason: "not_configured" };
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const buf = await readFile(filePath);
+    const form = new FormData();
+    form.set("chat_id", cfg.chatId);
+    form.set("caption", String(caption || "").slice(0, 1024));
+    form.set("video", new Blob([buf], { type: "video/mp4" }), "recap.mp4");
+    const res = await fetch(`https://api.telegram.org/bot${cfg.token}/sendVideo`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.log(
+        JSON.stringify({ event: "TELEGRAM_VIDEO_FAILED", status: res.status, body: body.slice(0, 200) }),
+      );
+      return { ok: false, reason: `http_${res.status}` };
+    }
+    console.log(JSON.stringify({ event: "TELEGRAM_VIDEO_OK" }));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 120) };
+  }
+}
