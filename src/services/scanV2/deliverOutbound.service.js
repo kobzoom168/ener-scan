@@ -347,6 +347,19 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         } catch {
           /* ignore */
         }
+        // ทุกสแกน → YouTube Shorts เสียงอาจารย์ (กบ 29 ก.ค. — ช่องเดียวกับ autopost workspace)
+        try {
+          const { maybeAutoPostScanShort } = await import(
+            "../fbShowcase/scanYoutubeShort.service.js"
+          );
+          void maybeAutoPostScanShort({
+            lineUserId,
+            reportPayload: payload.reportPayload,
+            publicToken: payload.publicToken,
+          });
+        } catch {
+          /* ignore */
+        }
         // กบ 18 ก.ค. 2026 (รอบสอง): ส่ง report จบแล้วเงียบ — ไม่บอกสิทธิ์คงเหลือ/โปรตามหลัง
         // การแจ้งสิทธิ์หมด+โปรย้ายไปตอนลูกค้าส่งรูปใหม่ (เส้น webhook มีการ์ด paywall อยู่แล้ว)
         // เปิดพฤติกรรมเดิมกลับได้ด้วย POST_REPORT_QUOTA_NOTICE_ENABLED=true
