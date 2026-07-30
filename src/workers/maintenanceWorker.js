@@ -10,6 +10,7 @@ import { runRenewalReminderSweep } from "../services/scanV2/renewalReminder.serv
 import { runChatQualityDailySweep } from "../services/chatQualityDailyReport.service.js";
 import { runDailyLuckyPickSweep } from "../services/dailyLuckyPickPush.service.js";
 import { runFbShowcaseAutoPostSweep } from "../services/fbShowcase/fbShowcase.service.js";
+import { runYoutubeShortSweep } from "../services/fbShowcase/scanYoutubeShort.service.js";
 import {
   getLine429CanaryCountHour,
   startWorkerHeartbeatLoop,
@@ -203,6 +204,17 @@ async function runOnce() {
     console.warn(
       JSON.stringify({
         event: "FB_AUTOPOST_SWEEP_CALL_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+  }
+  // YouTube Shorts รายรอบ 8/13/19 น. — คัดชิ้นเด่นของช่วง (กบ 30 ก.ค.) — self-gated + dedupe ต่อรอบ
+  try {
+    await runYoutubeShortSweep();
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "YT_SHORT_SWEEP_CALL_ERROR",
         message: String(e?.message || e).slice(0, 160),
       }),
     );
