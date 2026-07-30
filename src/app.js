@@ -162,6 +162,12 @@ app.get("/version", (req, res) => {
   res.status(200).json({ ok: true, version: "payment-slip-fix-v2" });
 });
 
+// ลิงก์วัด conversion จาก YouTube → LINE (ลิงก์แรกหน้าช่อง — กบ 30 ก.ค.)
+app.get("/yt", (req, res) => {
+  console.log(JSON.stringify({ event: "YT_REDIRECT_CLICK", ua: String(req.headers["user-agent"] || "").slice(0, 80) }));
+  res.redirect(302, String(process.env.YT_SHORT_OA_LINK || "https://lin.ee/p2sxdYFJ").trim());
+});
+
 // นโยบายความเป็นส่วนตัว — Meta บังคับต้องมี URL นี้ก่อนสลับ app เป็น Live (กบ 29 ก.ค.)
 app.get("/privacy", (req, res) => {
   res.status(200).type("html").send(`<!doctype html>
