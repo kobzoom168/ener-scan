@@ -231,7 +231,7 @@ export async function renderYoutubeShort(cardPngBuffer, voiceMp3Buffer) {
     "-stream_loop", "-1", "-i", AUDIO_PATH,
     "-filter_complex",
     `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24[bg];` +
-      `[0:v]scale=2160:2400,zoompan=z='min(zoom+${zoomStep},1.18)':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1200:fps=${FPS}[fg];` +
+      `[0:v]scale=1620:1800,zoompan=z='min(zoom+${zoomStep},1.18)':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1200:fps=${FPS}[fg];` +
       `[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v];` +
       `[1:a]apad=pad_dur=2,volume=1.0[voice];[2:a]volume=0.10[music];` +
       `[voice][music]amix=inputs=2:duration=first:dropout_transition=0[a]`,
