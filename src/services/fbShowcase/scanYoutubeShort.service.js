@@ -62,15 +62,19 @@ const SHORT_SYSTEM = `คุณคือทีมคอนเทนต์ขอ�
 ตอบเป็น JSON object เดียวเท่านั้น ไม่มี markdown:
 {"script": string, "title": string, "description": string, "hashtags": string[]}
 
-script (บทพูดของอาจารย์ ~3-4 ประโยค อ่านออกเสียง ~12-18 วินาที):
-- ภาษาพูดเป็นกันเอง โทนสุขุมแบบอาจารย์วัย 41 เปิดด้วย hook ให้คนหยุดฟัง → พลังเด่น + คะแนน → คำแนวพลังงาน "เด่นทางไหนดันทางนั้น" → ปิดสั้น ๆ
-- เขียนแบบคนพูดจริง ไม่มีอีโมจิ ไม่มีตัวเลขแบบ 8.5/10 (ให้เขียน "แปดจุดห้าเต็มสิบ" แบบคำอ่าน)
+script (บทพูดของอาจารย์ ~4-5 ประโยค อ่านออกเสียง ~18-25 วินาที) โครงตามลำดับนี้ (กบ 29 ก.ค.):
+1. เปิดด้วย "ชิ้นนี้จากคุณ{ownerFirstName}" ถ้ามีชื่อมาให้ (ไม่มีชื่อ → เปิดด้วย hook ชวนฟังแทน)
+2. เล่าความเชื่อของสายพลังเด่นนั้น 1-2 ประโยค แบบที่คนสายมูถือต่อกันมา — ใช้คำว่า "เชื่อกันว่า" หรือ "คนโบราณถือกันว่า" เสมอ (เช่น เด่นเมตตา ก็เล่าความเชื่อเรื่องเมตตามหานิยม คนเอ็นดู เจรจาราบรื่น) ห้ามเล่าเป็นข้อเท็จจริง
+3. พลังงานของชิ้นนี้ + คะแนน (เขียนเป็นคำอ่าน เช่น "แปดจุดห้าเต็มสิบ" ห้ามเขียน 8.5/10)
+4. ปิดด้วยคำแนวพลังงาน "เด่นทางไหนดันทางนั้น" สั้น ๆ
+- ภาษาพูดเป็นกันเอง โทนสุขุมแบบอาจารย์วัย 41 เขียนแบบคนพูดจริง ไม่มีอีโมจิ
 title: ≤90 ตัวอักษร มี hook ชวนกด อีโมจิได้ไม่เกิน 1 ตัว
-description: 2-3 บรรทัดแนวพลังงาน คิดใหม่ไม่ซ้ำกับ script ปิดท้ายชวนติดตามดูชิ้นต่อไปแบบนุ่ม ๆ
-hashtags: 5-8 แท็ก เช่น #วัตถุมงคล #สายมู #พลังงาน #มูเตลู #Shorts
+description: 2-3 บรรทัดแนวความเชื่อ+พลังงาน คิดใหม่ไม่ซ้ำกับ script ปิดท้ายชวนติดตามดูชิ้นต่อไปแบบนุ่ม ๆ
+hashtags: 5-8 แท็ก เช่น #วัตถุมงคล #สายมู #พลังงาน #มูเตลู #ความเชื่อ #Shorts
 
 กติกาเหล็กทุกฟิลด์:
 - 🚫 ห้ามบอกประเภทวัตถุ (พระ หิน กำไล เครื่องราง) หรือชนิด/รุ่น/พิมพ์/เนื้อ/วัด/เกจิ — เรียก "ชิ้นนี้" เท่านั้น รวมถึงแฮชแท็ก
+- ชื่อเจ้าของใช้แค่ท่อนเปิด "ชิ้นนี้จากคุณ..." ห้ามเล่าเรื่องส่วนตัวของเจ้าของ
 - ห้ามอวยเว่อร์ ห้ามการันตีผล ห้ามหลุดว่าเป็นระบบอัตโนมัติ/AI
 - อิงข้อมูลที่ให้เท่านั้น ห้ามมโนตัวเลข/สรรพคุณ
 - ห้ามใช้ — หรือ " "`;
@@ -79,8 +83,9 @@ hashtags: 5-8 แท็ก เช่น #วัตถุมงคล #สาย�
  * @param {{ name: string, score: number, peakLabel: string, audience?: string, ownerName?: string }} p
  */
 async function buildShortContent(p) {
+  const openLine = p.ownerName ? `ชิ้นนี้จากคุณ${p.ownerName} ` : "";
   const fallback = {
-    script: `หลายคนถามว่าชิ้นแบบไหนถึงเรียกว่ามีของ ชิ้นนี้อ่านพลังได้${scoreThai(p.score)}เต็มสิบ เด่นทาง${p.peakLabel} ใครกำลังเดินสายนี้อยู่ พลังแบบนี้ช่วยดันให้ถึงเป้าไวขึ้นครับ`,
+    script: `${openLine}เชื่อกันมาแต่โบราณว่าพลังทาง${p.peakLabel}ช่วยหนุนให้ชีวิตเดินไปข้างหน้า ชิ้นนี้อ่านพลังได้${scoreThai(p.score)}เต็มสิบ เด่นทาง${p.peakLabel} เด่นทางไหนดันทางนั้นครับ`,
     title: `ชิ้นนี้พลัง${p.peakLabel} ${p.score.toFixed(1)}/10 ✨`,
     description: `เปิดผลอ่านพลังงานชิ้นเด่นวันนี้ เด่นทาง${p.peakLabel} เด่นทางไหนดันทางนั้น\nติดตามชิ้นต่อไปได้ที่ช่องนี้`,
     hashtags: ["#วัตถุมงคล", "#สายมู", "#พลังงาน", "#มูเตลู", "#Shorts"],
@@ -198,10 +203,10 @@ async function uploadViaEnerAi({ mp4Path, title, description, tags, privacy }) {
 
 /**
  * สร้าง Shorts ของ 1 report แบบครบวงจร (ใช้ทั้ง auto hook และเทสมือ)
- * @param {{ reportPayload?: object, publicToken?: string, ownerName?: string, privacy?: string }} p
+ * @param {{ reportPayload?: object, publicToken?: string, ownerName?: string, privacy?: string, minScore?: number }} p
  * @returns {Promise<{ ok?: boolean, message?: string, skipped?: string, content?: object }>}
  */
-export async function buildAndUploadScanShort({ reportPayload, publicToken, ownerName, privacy }) {
+export async function buildAndUploadScanShort({ reportPayload, publicToken, ownerName, privacy, minScore }) {
   const token = String(publicToken || "").trim();
   if (!token) return { skipped: "no_token" };
   const { deriveShowcaseCardData, renderShowcasePhotoCardPng } = await import(
@@ -217,6 +222,9 @@ export async function buildAndUploadScanShort({ reportPayload, publicToken, owne
     data = deriveShowcaseCardData(payload);
   }
   if (!data) return { skipped: "not_eligible" };
+  if (Number.isFinite(Number(minScore)) && data.energyScore < Number(minScore)) {
+    return { skipped: "below_min_score" };
+  }
 
   const cardPng = await renderShowcasePhotoCardPng(token, payload);
   if (!cardPng) return { skipped: "render_failed" };
@@ -241,7 +249,12 @@ export async function buildAndUploadScanShort({ reportPayload, publicToken, owne
 
   const short = await renderYoutubeShort(cardPng, voiceMp3);
   try {
-    const description = `${content.description}\n\n${content.hashtags.join(" ")}\n\nอ่านพลังตามแนวทาง Ener ไม่ใช่คำทำนาย`;
+    // ชวนสแกน + ลิงก์ LINE (กบ 29 ก.ค. — YouTube ใส่ลิงก์ได้ ไม่โดนกดแบบ FB)
+    const oaLink = String(process.env.YT_SHORT_OA_LINK || "https://lin.ee/p2sxdYFJ").trim();
+    const description =
+      `${content.description}\n\n` +
+      `อยากรู้พลังของชิ้นที่คุณมีบ้าง ส่งรูปให้อาจารย์อ่านได้เลย 👉 ${oaLink}\n\n` +
+      `${content.hashtags.join(" ")}\n\nอ่านพลังตามแนวทาง Ener ไม่ใช่คำทำนาย`;
     const res = await uploadViaEnerAi({
       mp4Path: short.mp4Path,
       title: content.title,
@@ -279,7 +292,15 @@ export async function maybeAutoPostScanShort({ lineUserId, reportPayload, public
       }
     }
 
-    const res = await buildAndUploadScanShort({ reportPayload, publicToken: token, ownerName });
+    // เฉพาะชิ้นเกรดสวย (กบเคาะ 29 ก.ค. — คุมเครดิตเสียง ElevenLabs + คุณภาพช่อง)
+    const minScoreN = Number(process.env.SCAN_YT_SHORT_MIN_SCORE);
+    const minScore = Number.isFinite(minScoreN) ? minScoreN : 7.5;
+    const res = await buildAndUploadScanShort({
+      reportPayload,
+      publicToken: token,
+      ownerName,
+      minScore,
+    });
     console.log(
       JSON.stringify({
         event: res.ok ? "SCAN_YT_SHORT_POSTED" : "SCAN_YT_SHORT_FAILED",
@@ -287,6 +308,10 @@ export async function maybeAutoPostScanShort({ lineUserId, reportPayload, public
         message: String(res.message || res.skipped || "").slice(0, 160),
       }),
     );
+    if (res.ok) {
+      const { sendTelegramText } = await import("../telegramNotify.service.js");
+      void sendTelegramText(`ลง YouTube แล้ว: ${String(res.message || "").replace(/^.*(https:\/\/youtu\.be\/\S+).*$/, "$1")}`).catch(() => {});
+    }
     return res;
   } catch (e) {
     console.log(
