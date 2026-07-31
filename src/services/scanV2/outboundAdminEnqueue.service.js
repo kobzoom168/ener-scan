@@ -72,6 +72,11 @@ export async function enqueueApproveNotify({
   // ไม่อยู่ใน history → บอททวงสลิปทั้งที่จ่ายแล้ว)
   void insertLineConversationMessage(lineUserId, "bot", String(text || "").slice(0, 1500));
 
+  // Spend-to-upgrade (กบ 30 ก.ค.): จ่ายรอบ 2+ ของวัน → เสนอหักยอดขึ้นแพ็กใหญ่
+  import("../upgradeCredit.service.js")
+    .then((m) => void m.maybeOfferSpendUpgrade(lineUserId))
+    .catch(() => {});
+
   return { id: row?.id ?? null, deduped: false };
 }
 

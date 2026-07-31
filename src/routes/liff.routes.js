@@ -1411,6 +1411,10 @@ liffRouter.post(
           pushText(liffLineClient, userId, approvedText).catch(() => {});
           // ลงประวัติแชทให้ AI เห็นว่าเรื่องจ่ายจบแล้ว (เคส 29 ก.ค.: บอททวงสลิปซ้ำ)
           void insertLineConversationMessage(userId, "bot", approvedText);
+          // Spend-to-upgrade (กบ 30 ก.ค.): จ่ายรอบ 2+ ของวัน → เสนอหักยอดขึ้นแพ็กใหญ่
+          import("../services/upgradeCredit.service.js")
+            .then((m) => void m.maybeOfferSpendUpgrade(userId))
+            .catch(() => {});
         }
         console.log(JSON.stringify({ event: "LIFF_SLIP_AUTO_APPROVED", paymentId }));
         return res.json({ ok: true, result: "approved" });

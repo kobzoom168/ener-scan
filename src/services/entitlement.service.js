@@ -3,6 +3,7 @@ import { resolveActiveScanOfferCalm } from "./scanOffer.loader.js";
 import {
   findActivePackageByPriceThb,
   findPackageByKey,
+  listActivePackages,
 } from "./scanOffer.packages.js";
 
 /** Legacy แพ็กเกจเดิม (อนุมัติสลิปเก่าที่ยังอ้าง package นี้) */
@@ -109,9 +110,37 @@ export async function grantEntitlementForPackage({
     const paid_until_ms =
       paidUntilMsFromUnlockHint(unlockHoursFromPayment, pkg) ??
       Date.now() + 24 * 60 * 60 * 1000;
+    // Spend-to-upgrade (กบ 30 ก.ค.): อัปเป็นแพ็กใหญ่สุดทั้งที่แพ็กเล็กยังไม่หมด →
+    // สิทธิ์คงเหลือเดิมทบเข้าไป ไม่หาย (สัญญาในข้อเสนอ "สิทธิ์ที่เหลืออยู่ระบบทบให้")
+    let carryOver = 0;
+    try {
+      const pkgsAll = listActivePackages(offer);
+      const isTop =
+        pkgsAll.length > 0 &&
+        Number(pkg.priceThb) === Math.max(...pkgsAll.map((p) => Number(p.priceThb)));
+      if (isTop && Number(pkg.scanCount) < 900000) {
+        const { data: cur } = await supabase
+          .from("app_users")
+          .select("paid_until,paid_remaining_scans,paid_plan_code")
+          .eq("id", appUserIdStr)
+          .maybeSingle();
+        const curRemaining = Number(cur?.paid_remaining_scans) || 0;
+        if (
+          cur?.paid_until &&
+          new Date(cur.paid_until).getTime() > Date.now() &&
+          String(cur.paid_plan_code || "") !== String(pkg.key) &&
+          curRemaining > 0 &&
+          curRemaining < 900000
+        ) {
+          carryOver = curRemaining;
+        }
+      }
+    } catch {
+      carryOver = 0;
+    }
     const entitlement = {
       paid_until_ms,
-      paid_remaining_scans: pkg.scanCount,
+      paid_remaining_scans: Number(pkg.scanCount) + carryOver,
       paid_plan_code: pkg.key,
     };
     const paidUntilIso = new Date(entitlement.paid_until_ms).toISOString();
