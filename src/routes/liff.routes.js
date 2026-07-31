@@ -2252,7 +2252,7 @@ function buildLiffHtml(liffId) {
   <div id="v-pay" class="hidden" style="display:flex;flex-direction:column;gap:13px">
     <div class="rd-top">
       <button class="rd-back" id="pay-back">‹</button>
-      <div class="rd-title">เติมสิทธิ์สแกน<small>เลือกแพ็ก โอน แนบสลิป จบเลย</small></div>
+      <div class="rd-title">เติมสิทธิ์สแกน<small>เลือกค่าครู โอน แนบสลิป จบเลย</small></div>
     </div>
 
     <!-- step 1: pick package -->
@@ -2540,7 +2540,7 @@ function buildLiffHtml(liffId) {
         var sub = $("st-left-sub");
         if(sub){
           if(j.remainingPaid > 0){
-            sub.textContent = "ฟรี " + (j.remainingFree || 0) + " · แพ็ก " + j.remainingPaid;
+            sub.textContent = "ฟรี " + (j.remainingFree || 0) + " · ค่าครู " + j.remainingPaid;
             sub.classList.remove("hidden");
           } else {
             sub.classList.add("hidden");
@@ -2959,7 +2959,7 @@ function buildLiffHtml(liffId) {
       var priceHtml = hasCredit
         ? '<span class="pk-price"><s style="font-size:.62em;opacity:.55">' + p.priceThb + '</s> ' + pay.credit.payThb + '<small> บาท</small></span>'
         : '<span class="pk-price">' + p.priceThb + '<small> บาท</small></span>';
-      if (hasCredit) winTxt += ' · หักค่าแพ็ก ' + pay.credit.creditThb + ' ที่จ่ายแล้ว';
+      if (hasCredit) winTxt += ' · หักค่าครู ' + pay.credit.creditThb + ' ที่ชำระแล้ว';
       b.innerHTML = priceHtml +
         '<span class="pk-d"><span class="pk-t">' + countTxt + '</span>' +
         '<span class="pk-s">' + winTxt + '</span></span>' +
@@ -2988,7 +2988,7 @@ function buildLiffHtml(liffId) {
       var rem = $("pay-remain");
       if(j.access && j.access.paidRemainingScans > 0){
         rem.textContent = j.access.paidRemainingScans >= 900000
-          ? "✦ ตอนนี้ใช้แพ็กไม่จำกัดอยู่"
+          ? "✦ ตอนนี้ใช้สิทธิ์รายเดือนอยู่"
           : "✦ ตอนนี้เหลือสิทธิ์สแกน " + j.access.paidRemainingScans + " ครั้ง";
         rem.classList.remove("hidden");
       } else { rem.classList.add("hidden"); }
@@ -3002,7 +3002,7 @@ function buildLiffHtml(liffId) {
     $("pay-pick").classList.add("hidden");
     $("pay-done").classList.add("hidden");
     $("pay-qr").classList.remove("hidden");
-    $("pay-amt").textContent = j.amount + " บาท" + (j.creditThb ? " (หักค่าแพ็ก " + j.creditThb + " ที่จ่ายแล้ว)" : "");
+    $("pay-amt").textContent = j.amount + " บาท" + (j.creditThb ? " (หักค่าครู " + j.creditThb + " ที่ชำระแล้ว)" : "");
     if(j.qrUrl){ $("pay-qrimg").src = j.qrUrl; }
     $("pay-ref").textContent = j.paymentRef ? "รหัสรายการ " + j.paymentRef : "";
     pay.slipB64 = "";
