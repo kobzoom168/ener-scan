@@ -766,11 +766,11 @@ async function buildPackExhaustedUpsellNotice(lineUserId, paidUntilIso) {
     );
     return {
       text: [
-        "ครบทุกครั้งของแพ็กนี้แล้วครับ ขอบคุณที่ให้อาจารย์ดูให้นะครับ",
+        "ครบทุกครั้งของรอบค่าครูนี้แล้วครับ ขอบคุณที่ให้อาจารย์ดูให้นะครับ",
         "",
         `ถ้าช่วงนี้กำลังดูของเพลิน สมาชิกรายเดือน ${credit.monthlyPriceThb} บาท อาจารย์ดูแลตลอด ${winDays} วัน สแกนไม่จำกัด และทุกเช้าอาจารย์เทียบทุกชิ้นในคลังแล้วเลือกชิ้นที่หนุนดวงวันนั้นให้เลย`,
         "",
-        `พิเศษ ภายใน ${daysLeft} วันนี้ ค่าแพ็ก ${credit.creditThb} บาทที่จ่ายไปหักออกได้เลย เหลือ ${credit.payThb} บาท แตะปุ่มด้านล่างได้เลยครับ`,
+        `พิเศษ ภายใน ${daysLeft} วันนี้ ค่าครู ${credit.creditThb} บาทที่ชำระไปหักออกได้เลย เหลือ ${credit.payThb} บาท แตะปุ่มด้านล่างได้เลยครับ`,
       ].join("\n"),
       quickReply: {
         items: [
@@ -821,7 +821,7 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
           // เตือนนุ่ม ๆ อย่างเดียว ไม่ขาย (กบ) — เมนูเลือกแพ็กจะเด้งเองตอนหมดจริง
           return pickRemainingText(
             [
-              `แพ็กรายเดือนเหลืออีก ${daysLeft} วันครับ`,
+              `สิทธิ์รายเดือนเหลืออีก ${daysLeft} วันครับ`,
               `รายเดือนของคุณใช้ได้ถึง ${dateTxt} นี้ครับ`,
             ],
             `${lineUserId}:unlimited:renew:${daysLeft}`,

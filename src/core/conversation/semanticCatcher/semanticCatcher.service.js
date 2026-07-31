@@ -154,13 +154,13 @@ function hasWaitTomorrow(text) {
 }
 
 function hasPackageAck(text) {
-  return /(\d+\s*บาท|แพ็ก|แพค|แพคเกจ|ใช่ไหม|เอาแพ็ก|เอาแพค)/i.test(
+  return /(\d+\s*บาท|แพ็ก|แพค|แพคเกจ|ค่าครู|ใช่ไหม|เอาแพ็ก|เอาแพค)/i.test(
     String(text || ""),
   );
 }
 
 function hasOfferValueQuestion(text) {
-  return /(ได้อะไร|คุ้มไหม|49\s*บาท.*อะไร|แพ็ก.*อะไร|ราคา.*อะไร)/i.test(
+  return /(ได้อะไร|คุ้มไหม|49\s*บาท.*อะไร|แพ็ก.*อะไร|ค่าครู.*อะไร|ราคา.*อะไร)/i.test(
     String(text || ""),
   );
 }

@@ -33,6 +33,8 @@ const PAY_INTENT_WORDS = new Set([
   "เติมสิทธิ์",
   "ซื้อแพ็ก",
   "เอาแพ็ก",
+  "ค่าครู",
+  "จ่ายค่าครู",
   "ซื้อเพิ่ม",
   "สมัครรายเดือน",
   "เอารายเดือน",
@@ -290,7 +292,7 @@ export function isWaitingBirthdatePackageOrPaymentWords(text) {
   const t = normText(text);
   if (!t) return false;
   if (isLoosePayIntentExact(t)) return true;
-  if (/แพ็ก|แพ็ค|แพ็กเกจ|package|บาท|49|ชำระ|โอน|จ่าย|คิวอาร์|qr/i.test(t)) {
+  if (/แพ็ก|แพ็ค|แพ็กเกจ|ค่าครู|package|บาท|49|ชำระ|โอน|จ่าย|คิวอาร์|qr/i.test(t)) {
     return true;
   }
   return false;

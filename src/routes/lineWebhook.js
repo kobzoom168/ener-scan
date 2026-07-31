@@ -1728,7 +1728,7 @@ async function handlePaymentCommandTextRoute({
       // การ์ดโปรใบเดียวกับ paywall โควตาหมด — หัวการ์ดปรับตามบริบท "พิมพ์ จ่าย"
       flexMessage: buildFreeQuotaPaywallFlex(offerPay, {
         title: "เปิดสิทธิ์เพิ่มวันนี้",
-        subtitle: "เลือกแพ็กที่สะดวก แตะแถวไหนก็ได้เลยครับ",
+        subtitle: "เลือกค่าครูที่สะดวก แตะแถวไหนก็ได้เลยครับ",
         altText: buildSingleOfferPaywallAltText(offerPay).slice(0, 400),
       }),
       quickReply: {
@@ -1845,7 +1845,7 @@ async function handlePaymentCommandTextRoute({
           "บอกมาคำเดียว เดี๋ยวอาจารย์ส่ง QR อันเดียวจบเลยครับ",
         ].join("\n"),
         alternateTexts: [
-          "สรุปเอาแพ็กไหนดีครับ บอกราคามาได้เลย เดี๋ยวส่ง QR ให้อันเดียวจบครับ",
+          "สรุปเอาค่าครูแบบไหนดีครับ บอกราคามาได้เลย เดี๋ยวส่ง QR ให้อันเดียวจบครับ",
         ],
         quickReply: {
           items: [
@@ -2951,7 +2951,7 @@ async function finalizeAcceptedImage({
             : "ตรวจสอบสลิปเรียบร้อยแล้วครับ\n\nอาจารย์เปิดสิทธิ์สแกนให้แล้ว\nตอนนี้สามารถส่งรูปวัตถุที่ต้องการสแกนเข้ามาได้เลยครับ",
           alternateTexts: swPkg
             ? [
-                `ยืนยันสลิปแล้วครับ ยอด ${swPkg.priceThb} บาท ปรับแพ็กให้ตามยอดแล้ว ส่งรูปมาสแกนได้เลย`,
+                `ยืนยันสลิปแล้วครับ ยอด ${swPkg.priceThb} บาท ปรับรายการค่าครูให้ตามยอดแล้ว ส่งรูปมาสแกนได้เลย`,
               ]
             : [
                 "ยืนยันสลิปเรียบร้อยแล้วครับ ส่งรูปวัตถุที่ต้องการสแกนมาได้เลย",
@@ -6872,7 +6872,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         if (text === "วิธีใช้" || text === "วิธีใช้งาน") {
           const payPick =
             formatPaywallPriceTokensForLine(loadActiveScanOffer()) ||
-            "แพ็กจากเมนู";
+            "ค่าครูจากเมนู";
           const usage = [
             "วิธีใช้งาน Ener Scan",
             "",
@@ -6880,7 +6880,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "2) อาจารย์จะขอวันเกิด (DD/MM/YYYY)",
             "3) อาจารย์ส่งผลการสแกนกลับมาในแชทนี้",
             "",
-            `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
+            `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
           ].join("\n");
           if ((await invokePhase1GeminiOrchestrator()).handled) return;
           await sendNonScanReply({
@@ -7626,7 +7626,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   // "วิธีใช้" should show usage instructions (not the menu itself)
   if (text === "วิธีใช้" || text === "วิธีใช้งาน") {
     const payPickMain =
-      formatPaywallPriceTokensForLine(loadActiveScanOffer()) || "แพ็กจากเมนู";
+      formatPaywallPriceTokensForLine(loadActiveScanOffer()) || "ค่าครูจากเมนู";
     const usageMain = [
       "วิธีใช้งาน Ener Scan",
       "",
@@ -7634,7 +7634,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "2) อาจารย์จะขอวันเกิด (DD/MM/YYYY)",
       "3) อาจารย์ส่งผลการสแกนกลับมาในแชทนี้",
       "",
-      `หากหมดสิทธิ์ฟรี: เลือกแพ็กด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
+      `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
     ].join("\n");
     if ((await invokePhase1GeminiOrchestrator()).handled) return;
     await sendNonScanReply({

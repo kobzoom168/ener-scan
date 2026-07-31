@@ -393,7 +393,7 @@ export function buildPaymentQrIntroFactsText({
   const amountLines =
     Number(creditFromThb) >= 1 && payThb < priceThb
       ? [
-          `หักค่าแพ็ก ${Number(creditFromThb)} บาทที่จ่ายไปแล้วให้เรียบร้อย`,
+          `หักค่าครู ${Number(creditFromThb)} บาทที่ชำระไปแล้วให้เรียบร้อย`,
           `เหลือยอดโอน ${payThb} บาท`,
         ]
       : [`ยอดโอน ${payThb} บาท`];
@@ -402,7 +402,7 @@ export function buildPaymentQrIntroFactsText({
   const switchHeader =
     Number(switchedFromPriceThb) >= 1 && Number(switchedFromPriceThb) !== payThb
       ? [
-          `เปลี่ยนจากแพ็ก ${Number(switchedFromPriceThb)} บาท เป็นแพ็กนี้ให้แล้วนะครับ รายการเดิมยกเลิกเรียบร้อย`,
+          `เปลี่ยนจากค่าครู ${Number(switchedFromPriceThb)} บาท เป็นรายการนี้ให้แล้วนะครับ รายการเดิมยกเลิกเรียบร้อย`,
           "",
         ]
       : [];
@@ -464,7 +464,7 @@ export function formatOfferScanCountThai(scanCount) {
 export function buildSingleOfferPaywallAltText(offer = loadActiveScanOffer()) {
   const pkgs = listActivePackages(offer);
   if (!pkgs.length) {
-    return "ตอนนี้ยังไม่เปิดแพ็กชำระเงิน กรุณาลองใหม่ภายหลังครับ";
+    return "ตอนนี้ยังไม่เปิดรับค่าครู กรุณาลองใหม่ภายหลังครับ";
   }
   if (pkgs.length === 1) {
     const pkg = pkgs[0];
@@ -504,7 +504,7 @@ export function buildSlipPackageSwitchedApprovedText(sw) {
     : `สแกน ${sw.scanCount} ครั้ง ใช้ได้ ${formatOfferWindowThai(sw.windowHours)}`;
   return (
     `ตรวจสอบสลิปเรียบร้อยครับ ยอดโอนเข้ามา ${sw.priceThb} บาท ` +
-    `อาจารย์จัดเป็นแพ็ก${pkgPart} ให้ตามยอดเลยนะครับ\n\n` +
+    `อาจารย์จัดเป็นค่าครู${pkgPart} ให้ตามยอดเลยนะครับ\n\n` +
     `เปิดสิทธิ์แล้ว ส่งรูปชิ้นที่ต้องการสแกนเข้ามาได้เลยครับ`
   );
 }
@@ -533,7 +533,7 @@ export function buildPaymentPackageSelectedAck(paidPackage) {
   const p = paidPackage || getDefaultPackage(loadActiveScanOffer());
   if (!p) return buildSingleOfferPaywallAltText();
   return [
-    `โอเคครับ แพ็กนี้ค่าเปิดสิทธิ์ ${p.priceThb} บาท`,
+    `โอเคครับ ค่าครูรายการนี้ ${p.priceThb} บาท`,
     isUnlimitedScanCount(p.scanCount)
       ? `สแกนได้ไม่จำกัดตลอด ${formatOfferWindowThai(p.windowHours)}`
       : `ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${formatOfferWindowThai(p.windowHours)}`,
@@ -559,7 +559,7 @@ export function buildPackageAlreadySelectedContinueHuman(paidPackage) {
     return "พร้อมเมื่อไหร่ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
   }
   return [
-    `ตกลงครับ แพ็ก ${p.priceThb} บาท`,
+    `ตกลงครับ ค่าครู ${p.priceThb} บาท`,
     "พร้อมโอนเมื่อไหร่ แจ้งอาจารย์ได้เลยครับ",
   ].join("\n");
 }
@@ -599,7 +599,7 @@ export function buildPaymentPayIntentNoPackageHumanText({
 } = {}) {
   const alt = buildSingleOfferPaywallAltText(offer);
   const lines = [
-    "ตอนนี้ยังไม่ได้อยู่ในขั้นตอนชำระเงินครับ ถ้าฟรีหมดแล้ว จะมีข้อความบอกแพ็กให้",
+    "ตอนนี้ยังไม่ได้อยู่ในขั้นตอนชำระเงินครับ ถ้าฟรีหมดแล้ว จะมีข้อความบอกค่าครูให้",
     "หรือถ้าจะเปิดสิทธิ์เลย บอกอาจารย์มาได้เลยครับ",
   ];
   const head = lines[slotFromUserId(userId, lines.length)];
@@ -870,7 +870,7 @@ export function isPromoInquiryText(text) {
   if (/ประเมิน|เช่า|ขาย|ปล่อย|พระ|เหรียญ|องค์|หิน|กำไล/.test(t)) return false;
   if (/โปรโมชั่น|โปรโมชัน/.test(t)) return true;
   if (/โปร(?!ด|ไฟล์|แกรม)/.test(t) && /มี|อะไร|ไหน|บ้าง|ตอนนี้|ล่าสุด/.test(t)) return true;
-  if (/แพ็ก|แพ็ค|แพคเกจ|แพ็กเกจ/.test(t) && /มี|อะไร|ไหน|บ้าง|ราคา|เท่าไหร่|เท่าไร|กี่บาท/.test(t)) return true;
+  if (/แพ็ก|แพ็ค|แพคเกจ|แพ็กเกจ|ค่าครู/.test(t) && /มี|อะไร|ไหน|บ้าง|ราคา|เท่าไหร่|เท่าไร|กี่บาท/.test(t)) return true;
   if (/ราคา|เท่าไหร่|เท่าไร|กี่บาท/.test(t) && /สแกน|บริการ|สมัคร|รายเดือน|เติม|เปิดสิทธิ์|ค่าใช้/.test(t)) return true;
   return false;
 }
@@ -1490,7 +1490,7 @@ export function buildDeterministicFreeQuotaExhaustedPaywallText(offer, opts = {}
     return [
       "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ",
       "",
-      `เปิดสแกนต่อได้เลย แพ็ก ${price} บาท สแกนได้ ${count} ครั้ง ใน ${hours} ชม.`,
+      `เปิดสแกนต่อได้เลย ค่าครู ${price} บาท สแกนได้ ${count} ครั้ง ใน ${hours} ชม.`,
       "",
       "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์ได้เลยครับ",
     ].join("\n");

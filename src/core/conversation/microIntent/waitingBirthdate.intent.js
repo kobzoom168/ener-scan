@@ -107,7 +107,7 @@ export function resolveWaitingBirthdateMicroIntent(text, _opts = {}) {
   }
 
   if (isWaitingBirthdatePackageOrPaymentWords(t)) {
-    const payish = /จ่าย|โอน|ชำระ|qr|คิวอาร์|แพ็ก|บาท|49|สแกน/i.test(t);
+    const payish = /จ่าย|โอน|ชำระ|qr|คิวอาร์|แพ็ก|ค่าครู|บาท|49|สแกน/i.test(t);
     return {
       microIntent: payish ? "paymentish_text" : "packageish_text",
       confidence: "medium",

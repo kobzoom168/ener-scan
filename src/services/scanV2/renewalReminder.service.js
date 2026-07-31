@@ -18,7 +18,7 @@ const UNLIMITED_MIN = 900000;
 export const RENEWAL_REMINDER_DEFAULTS = Object.freeze({
   enabled: true,
   daysBefore: 2,
-  text: "แพ็กรายเดือนของคุณจะหมด {date} นี้ครับ ต่อเลยหรือไว้ก่อนก็ได้ เลือกได้เลย",
+  text: "ค่าครูรายเดือนของคุณจะครบรอบ {date} นี้ครับ ต่อเลยหรือไว้ก่อนก็ได้ เลือกได้เลย",
 });
 
 /** @returns {Promise<{enabled: boolean, daysBefore: number, text: string}>} */

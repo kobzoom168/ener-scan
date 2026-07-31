@@ -293,7 +293,7 @@ export function renderAmuletLibraryRankingHtml({
       : "";
   const pinFlashHtml =
     pinFlash === "quota"
-      ? `<p class="alib-pin-upsell" role="status">คุณปักหมุดครบ ${escapeHtml(String(freeTierPinLimit))} รายการแล้ว แพ็กเก็บพื้นที่แบบจ่ายเงินจะเปิดให้บริการภายหลัง เพื่อเก็บรูปเต็มเพิ่ม</p>`
+      ? `<p class="alib-pin-upsell" role="status">คุณปักหมุดครบ ${escapeHtml(String(freeTierPinLimit))} รายการแล้ว ค่าครูเก็บพื้นที่เพิ่มจะเปิดให้บริการภายหลัง เพื่อเก็บรูปเต็มเพิ่ม</p>`
       : pinFlash === "ok"
         ? `<p class="alib-pin-flash alib-pin-flash--ok" role="status">ปักหมุดรูปเต็มเรียบร้อย</p>`
         : pinFlash === "err"
@@ -350,7 +350,7 @@ export function renderAmuletLibraryRankingHtml({
   const todayLockedPanel = `
     <div class="alib-today-locked">
       <p class="alib-today-locked-line">อาจารย์เทียบทุกชิ้นในคลังกับ${escapeHtml(String(dailyPick?.dayStar || "ดาวประจำวัน"))}แล้ว</p>
-      <p class="alib-today-locked-sub">เปิดแพ็กเพื่อดูว่าวันนี้ควรพกชิ้นไหน อาจารย์เรียงให้ใหม่ทุกเช้า</p>
+      <p class="alib-today-locked-sub">เปิดค่าครูเพื่อดูว่าวันนี้ควรพกชิ้นไหน อาจารย์เรียงให้ใหม่ทุกเช้า</p>
       ${liffPayUrl ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl)}">เปิดดูอันดับวันนี้</a>` : ""}
     </div>`;
 

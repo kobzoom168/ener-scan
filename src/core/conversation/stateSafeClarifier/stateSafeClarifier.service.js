@@ -88,7 +88,7 @@ export function parseStateSafeClarifierJson(raw) {
 }
 
 function hasOfferValueQuestion(text) {
-  return /(ได้อะไร|คุ้มไหม|49\s*บาท.*อะไร|แพ็ก.*อะไร|ราคา.*อะไร)/i.test(
+  return /(ได้อะไร|คุ้มไหม|49\s*บาท.*อะไร|แพ็ก.*อะไร|ค่าครู.*อะไร|ราคา.*อะไร)/i.test(
     String(text || ""),
   );
 }
@@ -129,7 +129,7 @@ function buildPaywallAnswer(intent, facts) {
   const hours = Number(facts?.windowHours) || 24;
   if (intent === "explain_offer_value") {
     return {
-      answer_short: `แพ็กนี้ใช้สแกนเพิ่มได้ ${scans} ครั้ง ภายใน ${hours} ชั่วโมงครับ`,
+      answer_short: `ค่าครูรายการนี้ใช้สแกนเพิ่มได้ ${scans} ครั้ง ภายใน ${hours} ชั่วโมงครับ`,
       bridge_back_to: "pay_intent",
     };
   }
@@ -141,7 +141,7 @@ function buildPaywallAnswer(intent, facts) {
   }
   if (intent === "explain_single_image_rule") {
     return {
-      answer_short: `อาจารย์ดูทีละ 1 รูปนะครับ เพื่อให้วิเคราะห์ได้แม่นที่สุด แพ็กนี้ใช้ได้ ${scans} ครั้งครับ`,
+      answer_short: `อาจารย์ดูทีละ 1 รูปนะครับ เพื่อให้วิเคราะห์ได้แม่นที่สุด ค่าครูรายการนี้ใช้ได้ ${scans} ครั้งครับ`,
       bridge_back_to: "pay_intent",
     };
   }
@@ -160,7 +160,7 @@ function buildPaywallAnswer(intent, facts) {
   }
   if (intent === "off_topic_recoverable") {
     return {
-      answer_short: `ถ้าจะสรุปสั้น ๆ คือ แพ็กนี้ ${price} บาท ใช้สแกนเพิ่มได้ ${scans} ครั้งใน ${hours} ชั่วโมงครับ`,
+      answer_short: `ถ้าจะสรุปสั้น ๆ คือ ค่าครูรายการนี้ ${price} บาท ใช้สแกนเพิ่มได้ ${scans} ครั้งใน ${hours} ชั่วโมงครับ`,
       bridge_back_to: "pay_intent",
     };
   }

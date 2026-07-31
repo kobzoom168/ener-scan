@@ -16,7 +16,7 @@ function packageDisplayName(p) {
     .replace(/^\d+\s*บาท\s*/, "")
     .replace(/\s*\d+\s*ครั้ง.*$/, "")
     .trim();
-  return stripped || "แพ็กสแกน";
+  return stripped || "ค่าครูสแกน";
 }
 
 /** บรรทัดรอง: "4 ครั้ง · 24 ชม." / "30 ครั้ง · 30 วัน" */

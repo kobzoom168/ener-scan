@@ -10,7 +10,7 @@ export function buildNextStepHint(phase1, denyReason) {
     case "waiting_birthdate":
       return "ขอวันเกิดเพื่อใช้ตอนสแกน ตามรูปที่ส่งมา";
     case "paywall_selecting_package":
-      return "อธิบายแพ็กที่เปิดได้ และชวนเลือก/ยืนยันแพ็กก่อนชำระ";
+      return "อธิบายค่าครูที่เปิดได้ และชวนเลือก/ยืนยันรายการก่อนชำระ";
     case "payment_package_selected":
       return "ชวนให้ขอคิวอาร์หรือยืนยันชำระเมื่อพร้อม";
     case "awaiting_slip":
