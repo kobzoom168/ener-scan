@@ -750,10 +750,6 @@ async function buildPackExhaustedUpsellNotice(lineUserId, paidUntilIso) {
     );
     if (!monthly) return null;
     const winDays = Math.round(Number(monthly.windowHours) / 24) || 30;
-    const daysLeft = Math.max(
-      1,
-      Math.ceil((credit.expiresAtMs - Date.now()) / 86400000),
-    );
 
     await setValueWithTtl(dedupeKey, "1", 10 * 24 * 3600).catch(() => {});
     console.log(
@@ -768,9 +764,9 @@ async function buildPackExhaustedUpsellNotice(lineUserId, paidUntilIso) {
       text: [
         "ครบทุกครั้งของรอบค่าครูนี้แล้วครับ ขอบคุณที่ให้อาจารย์ดูให้นะครับ",
         "",
-        `ถ้าช่วงนี้กำลังดูของเพลิน สมาชิกรายเดือน ${credit.monthlyPriceThb} บาท อาจารย์ดูแลตลอด ${winDays} วัน สแกนไม่จำกัด และทุกเช้าอาจารย์เทียบทุกชิ้นในคลังแล้วเลือกชิ้นที่หนุนดวงวันนั้นให้เลย`,
+        `ถ้าช่วงนี้กำลังดูของเพลิน ค่าครูดูแลคลังพลัง ${credit.monthlyPriceThb} บาท อาจารย์ดูแลตลอด ${winDays} วัน สแกนได้ ${credit.monthlyScanCount} ครั้ง คลังกับเสียงอาจารย์เปิดยาวทั้งรอบ`,
         "",
-        `พิเศษ ภายใน ${daysLeft} วันนี้ ค่าครู ${credit.creditThb} บาทที่ชำระไปหักออกได้เลย เหลือ ${credit.payThb} บาท แตะปุ่มด้านล่างได้เลยครับ`,
+        `พิเศษ ภายในวันนี้ ค่าครู ${credit.creditThb} บาทที่ชำระไปหักออกได้เลย เหลือ ${credit.payThb} บาท แตะปุ่มด้านล่างได้เลยครับ`,
       ].join("\n"),
       quickReply: {
         items: [
@@ -778,7 +774,7 @@ async function buildPackExhaustedUpsellNotice(lineUserId, paidUntilIso) {
             type: "action",
             action: {
               type: "message",
-              label: `รายเดือนเหลือ ${credit.payThb}`,
+              label: `อัปเกรด เหลือโอน ${credit.payThb}`,
               text: `จ่าย ${credit.monthlyPriceThb}`,
             },
           },

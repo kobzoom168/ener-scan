@@ -2957,6 +2957,15 @@ async function finalizeAcceptedImage({
                 "ยืนยันสลิปเรียบร้อยแล้วครับ ส่งรูปวัตถุที่ต้องการสแกนมาได้เลย",
               ],
         });
+        // Spend-to-upgrade (กบ 30 ก.ค.): จ่ายรอบ 2+ ของวัน → เสนอหักยอดขึ้นแพ็กใหญ่
+        try {
+          const { maybeOfferSpendUpgrade } = await import(
+            "../services/upgradeCredit.service.js"
+          );
+          void maybeOfferSpendUpgrade(userId);
+        } catch {
+          /* ignore */
+        }
         return;
       }
 
