@@ -163,9 +163,48 @@ app.get("/version", (req, res) => {
 });
 
 // ลิงก์วัด conversion จาก YouTube → LINE (ลิงก์แรกหน้าช่อง — กบ 30 ก.ค.)
-app.get("/yt", (req, res) => {
-  console.log(JSON.stringify({ event: "YT_REDIRECT_CLICK", ua: String(req.headers["user-agent"] || "").slice(0, 80) }));
-  res.redirect(302, String(process.env.YT_SHORT_OA_LINK || "https://lin.ee/p2sxdYFJ").trim());
+// มือถือ: redirect ตรงเข้า LINE · เดสก์ท็อป: หน้า landing ของเราเอง (audit 31 ก.ค. —
+// ปลายทาง lin.ee บนคอมคือหน้า QR โล่งไม่มีชื่อ คนไม่รู้กำลังแอดใคร)
+let ytQrDataUrl = null;
+app.get("/yt", async (req, res) => {
+  const ua = String(req.headers["user-agent"] || "");
+  const oaLink = String(process.env.YT_SHORT_OA_LINK || "https://lin.ee/p2sxdYFJ").trim();
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+  console.log(JSON.stringify({ event: "YT_REDIRECT_CLICK", mobile: isMobile, ua: ua.slice(0, 80) }));
+  if (isMobile) return res.redirect(302, oaLink);
+  try {
+    if (!ytQrDataUrl) {
+      const QRCode = (await import("qrcode")).default;
+      ytQrDataUrl = await QRCode.toDataURL(oaLink, {
+        width: 360,
+        margin: 2,
+        color: { dark: "#0d0b08", light: "#f5edd8" },
+      });
+    }
+  } catch {
+    ytQrDataUrl = null;
+  }
+  if (!ytQrDataUrl) return res.redirect(302, oaLink);
+  res.status(200).type("html").send(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>แอดไลน์ Ener Scan - อาจารย์อ่านพลังวัตถุมงคล</title>
+<meta name="description" content="ส่งรูปพระ เครื่องราง หิน หรือกำไล ให้อาจารย์อ่านพลังครบ 6 ด้าน ฟรีวันละ 1 ครั้ง ผ่าน LINE">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d0b08'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23e8c547'%3E✦%3C/text%3E%3C/svg%3E">
+<style>body{font-family:system-ui,'Segoe UI',sans-serif;background:#0d0b08;color:#f5edd8;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
+.card{max-width:420px;text-align:center;padding:36px 28px;border:1px solid #8f6710;border-radius:18px;background:linear-gradient(160deg,#1a1610,#0d0b08)}
+h1{color:#e8c547;font-size:22px;letter-spacing:2px;margin:0 0 4px}
+.sub{color:#cbb98a;font-size:14px;margin-bottom:18px}
+img.qr{width:230px;height:230px;border-radius:14px;border:4px solid #e8c547}
+.steps{text-align:left;color:#e8dcbc;font-size:13.5px;line-height:2;margin:16px auto 4px;display:inline-block}
+.btn{display:inline-block;margin-top:14px;background:linear-gradient(90deg,#b8871b,#e8c547);color:#0d0b08;font-weight:600;border-radius:10px;padding:10px 26px;text-decoration:none}
+.ft{color:#b3a479;font-size:11.5px;margin-top:14px}</style></head><body>
+<div class="card">
+<h1>ENER SCAN</h1>
+<div class="sub">อาจารย์อ่านพลังวัตถุมงคล · ฟรีวันละ 1 ครั้ง</div>
+<img class="qr" src="${ytQrDataUrl}" alt="QR code สำหรับแอดไลน์ Ener Scan สแกนด้วยกล้องมือถือหรือแอป LINE">
+<div class="steps">1. เปิดกล้องมือถือ สแกน QR นี้<br>2. แอดไลน์ Ener Scan แล้วบอกวันเกิด<br>3. ส่งรูปชิ้นของคุณ 1 รูป รอรับผลได้เลย</div>
+<br><a class="btn" href="${oaLink}">หรือเปิด LINE บนเครื่องนี้</a>
+<div class="ft">อ่านพลังตามแนวทาง Ener ไม่ใช่คำทำนาย · ไม่ตัดสินแท้เก๊หรือมูลค่า</div>
+</div></body></html>`);
 });
 
 // นโยบายความเป็นส่วนตัว — Meta บังคับต้องมี URL นี้ก่อนสลับ app เป็น Live (กบ 29 ก.ค.)
