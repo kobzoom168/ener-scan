@@ -31,6 +31,12 @@ export function SiteFooter() {
           >
             ข่าวสาร
           </Link>
+          <Link
+            href="/about"
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            เกี่ยวกับเรา · About
+          </Link>
           <a
             href={siteConfig.reportUrl}
             target="_blank"
