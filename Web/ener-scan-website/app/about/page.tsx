@@ -67,9 +67,38 @@ function InfoRow({
   )
 }
 
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'LocalBusiness',
+  name: 'Ener Scan',
+  url: 'https://my-ener.uk',
+  image: 'https://my-ener.uk/images/tanarit-owner.jpg',
+  description:
+    'Personalized energy reading for Thai amulets, charms, and crystals via LINE chat — plus Thai amulet consignment and sales for collectors worldwide.',
+  founder: {
+    '@type': 'Person',
+    name: 'Tanarit Apichokjirasin',
+  },
+  telephone: '+66936664405',
+  email: 'tanarit.ap@gmail.com',
+  address: {
+    '@type': 'PostalAddress',
+    streetAddress: '42/281 Eco-House Village, Bueng Kham Phroi',
+    addressLocality: 'Lam Luk Ka',
+    addressRegion: 'Pathum Thani',
+    postalCode: '12150',
+    addressCountry: 'TH',
+  },
+  sameAs: ['https://scan.my-ener.uk/', siteConfig.lineUrl],
+}
+
 export default function AboutPage() {
   return (
     <div className="min-h-screen">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <SiteHeader />
       <main>
         <section className="bg-radial-gold">

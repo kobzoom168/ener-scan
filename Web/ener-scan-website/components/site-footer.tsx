@@ -23,13 +23,13 @@ export function SiteFooter() {
             href="/"
             className="text-muted-foreground transition-colors hover:text-foreground"
           >
-            หน้าแรก
+            หน้าแรก · Home
           </Link>
           <Link
             href="/news"
             className="text-muted-foreground transition-colors hover:text-foreground"
           >
-            ข่าวสาร
+            ข่าวสาร · News
           </Link>
           <Link
             href="/about"

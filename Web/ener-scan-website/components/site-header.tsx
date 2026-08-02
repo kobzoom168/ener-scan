@@ -44,8 +44,11 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <span className="hidden rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs font-medium text-gold-soft md:inline-block">
-          รับอ่านพลังงาน · รับฝากขายพระ
+        <span className="hidden flex-col items-center rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs font-medium leading-tight text-gold-soft md:flex">
+          <span>รับอ่านพลังงาน · รับฝากขายพระ</span>
+          <span className="text-[10px] opacity-80">
+            Energy Reading · Amulet Consignment
+          </span>
         </span>
       </div>
     </header>
