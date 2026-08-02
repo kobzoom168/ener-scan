@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import { MapPin, Phone, Mail, Globe, User, ScanLine, Store } from 'lucide-react'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
@@ -98,6 +99,15 @@ export default function AboutPage() {
                 <User className="size-5 text-gold" aria-hidden="true" />
                 เจ้าของกิจการ · Owner
               </h2>
+              <div className="mt-4 overflow-hidden rounded-xl border border-gold/20">
+                <Image
+                  src="/images/tanarit-owner.jpg"
+                  alt="Tanarit Apichokjirasin — เจ้าของกิจการ Ener Scan กับตู้พระเครื่อง"
+                  width={1000}
+                  height={563}
+                  className="h-auto w-full object-cover"
+                />
+              </div>
               <div className="mt-4 space-y-1">
                 <p className="text-xl font-bold text-gradient-gold">
                   {contact.ownerEn}
