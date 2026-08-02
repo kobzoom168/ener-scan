@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "postbuild": "node ./scripts/fix-en-lang.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

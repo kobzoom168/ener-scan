@@ -23,8 +23,18 @@ export function SiteHeader({ locale = 'th' }: { locale?: Locale }) {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-gold focus:px-4 focus:py-2 focus:font-semibold focus:text-black"
+      >
+        {t.common.skip}
+      </a>
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href={localePath(locale, '/')} className="flex items-center gap-2.5">
+        <Link
+          href={localePath(locale, '/')}
+          aria-label="Ener Scan home"
+          className="flex items-center gap-2.5"
+        >
           <span className="flex size-9 items-center justify-center rounded-xl bg-gold/15 ring-1 ring-gold/30">
             <ScanLine className="size-5 text-gold" aria-hidden="true" />
           </span>
@@ -45,7 +55,7 @@ export function SiteHeader({ locale = 'th' }: { locale?: Locale }) {
                 className={cn(
                   'rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
                   active
-                    ? 'bg-gold/15 text-gold'
+                    ? 'bg-gold/20 font-semibold text-gold ring-1 ring-gold/40'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >

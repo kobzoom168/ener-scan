@@ -2,7 +2,9 @@ import type { Metadata } from 'next'
 import { HomePage } from '@/components/home-page'
 
 export const metadata: Metadata = {
-  title: 'Ener Scan · Personalized Energy Reading for Thai Amulets via LINE',
+  title: {
+    absolute: 'Ener Scan · Personalized Energy Reading for Thai Amulets via LINE',
+  },
   description:
     'Personalized energy analysis for Thai amulets, charms, and stones/crystals with instant summaries in LINE chat, plus Thai amulet consignment and sales for collectors worldwide.',
   alternates: {
