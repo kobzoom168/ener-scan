@@ -18,8 +18,10 @@ type YtFeed = { channel: string; updatedAt: string; videos: YtVideo[] }
 const CHANNEL_URL = 'https://www.youtube.com/@Ener-scan/shorts'
 
 function ThumbCard({ video }: { video: YtVideo }) {
+  // hqdefault มีเสมอทุกคลิป (Shorts เป็นภาพแนวตั้งใน 16:9 pillarbox —
+  // object-cover 9:16 ครอปข้างดำออกพอดี) · oardefault ใช้ไม่ได้: 404 แต่แถมรูปเทา
   const [src, setSrc] = useState(
-    `https://i.ytimg.com/vi/${video.id}/oardefault.jpg`,
+    `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`,
   )
 
   return (
@@ -35,7 +37,7 @@ function ThumbCard({ video }: { video: YtVideo }) {
         src={src}
         alt={video.title}
         loading="lazy"
-        onError={() => setSrc(`https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`)}
+        onError={() => setSrc(`https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`)}
         className="aspect-[9/16] w-full object-cover transition-transform duration-300 group-hover/card:scale-105"
       />
       <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
