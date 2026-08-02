@@ -107,6 +107,11 @@ export const dict = {
       ],
       cta: 'สอบถามฝากขายพระ · ทัก LINE',
     },
+    youtube: {
+      h2: 'คลิปพลังงานล่าสุดจากช่อง YouTube',
+      desc: 'คลิปจากการสแกนจริงทุกวัน อัปเดตอัตโนมัติ แตะที่คลิปเพื่อเปิดดูได้เลย',
+      cta: 'ดูทั้งหมดบน YouTube',
+    },
     qr: {
       h2: 'สแกน QR เพื่อแอดเพื่อน LINE',
       desc: 'เปิดกล้องหรือแอป LINE แล้วสแกน QR ด้านข้าง หรือกดปุ่มเพื่อแอดเพื่อนได้ทันที',
@@ -246,6 +251,11 @@ export const dict = {
         },
       ],
       cta: 'Ask about consignment · LINE',
+    },
+    youtube: {
+      h2: 'Latest energy clips on YouTube',
+      desc: 'New clips from real scans every day, updated automatically. Tap any clip to watch.',
+      cta: 'Watch all on YouTube',
     },
     qr: {
       h2: 'Scan the QR to add us on LINE',
