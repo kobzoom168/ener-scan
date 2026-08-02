@@ -2,7 +2,11 @@ import Script from 'next/script'
 
 const VIDEO_SRC = '/videos/ener-scan-hero.mp4'
 
-export function HeroVideo() {
+export function HeroVideo({
+  ariaLabel = 'วิดีโอแนะนำ Ener Scan ระบบวิเคราะห์พลังงานวัตถุ',
+}: {
+  ariaLabel?: string
+}) {
   return (
     <>
       <video
@@ -15,7 +19,7 @@ export function HeroVideo() {
         preload="auto"
         disablePictureInPicture
         controlsList="nofullscreen noremoteplayback nodownload noplaybackrate"
-        aria-label="วิดีโอแนะนำ Ener Scan ระบบวิเคราะห์พลังงานวัตถุ"
+        aria-label={ariaLabel}
         className="pointer-events-none aspect-[27/50] h-auto w-full select-none object-cover"
       />
       <Script id="ener-hero-video-play" strategy="afterInteractive">
