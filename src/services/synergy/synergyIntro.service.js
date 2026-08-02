@@ -1,0 +1,45 @@
+/**
+ * แนะนำรายงานจัดชุดพลังตอนลูกค้ามีครบ 3 ชิ้นครั้งแรก (trigger ตามสเปก — ครั้งเดียวต่อคน)
+ * fire-and-forget จาก deliverOutbound หลังส่ง report สำเร็จ
+ */
+import { tryDedupeOnce } from "../../redis/scanV2Redis.js";
+import { env } from "../../config/env.js";
+
+export async function maybeIntroduceSynergy(lineUserId) {
+  const uid = String(lineUserId || "").trim();
+  if (!uid) return { skipped: "no_uid" };
+  try {
+    const { loadVault, getOrCreateSynergyToken } = await import("./synergyReport.service.js");
+    const vault = await loadVault(uid);
+    if (vault.length < 3) return { skipped: "below_3" };
+    const first = await tryDedupeOnce(`synergy:intro:${uid}`, 365 * 86400);
+    if (!first) return { skipped: "already_introduced" };
+    const token = await getOrCreateSynergyToken(uid);
+    if (!token) return { skipped: "no_token" };
+    const base = String(env.APP_BASE_URL || "").replace(/\/+$/, "");
+    const lineToken = String(process.env.CHANNEL_ACCESS_TOKEN || "").trim();
+    if (!lineToken) return { skipped: "no_line_token" };
+    const text = [
+      `ตอนนี้คลังของคุณมี ${vault.length} ชิ้นแล้ว อาจารย์จัดชุดให้ได้แล้วครับ`,
+      `วันไหนควรพกชิ้นไหน ชุดไหนเหมาะกับคุยงาน เดินทาง หรือนัดสำคัญ เปิดดูได้เลย`,
+      `${base}/synergy/${token}`,
+      "",
+      "พิมพ์ จัดชุด ในแชทนี้เมื่อไหร่ก็ได้ เพื่อเปิดดูชุดของวัน",
+    ].join("\n");
+    await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` },
+      body: JSON.stringify({ to: uid, messages: [{ type: "text", text }] }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const { insertLineConversationMessage } = await import(
+      "../../stores/conversationMessages.db.js"
+    );
+    void insertLineConversationMessage(uid, "bot", text);
+    console.log(JSON.stringify({ event: "SYNERGY_INTRO_SENT", lineUserIdPrefix: uid.slice(0, 10), pieces: vault.length }));
+    return { sent: true };
+  } catch (e) {
+    console.log(JSON.stringify({ event: "SYNERGY_INTRO_ERROR", message: String(e?.message || e).slice(0, 160) }));
+    return { error: true };
+  }
+}

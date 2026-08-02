@@ -229,6 +229,21 @@ app.get("/synergy/:token", async (req, res) => {
   }
 });
 
+app.post("/synergy/:token/carry", async (req, res) => {
+  try {
+    const { getLineUserIdBySynergyToken, recordCarryToday } = await import(
+      "./services/synergy/synergyReport.service.js"
+    );
+    const uid = await getLineUserIdBySynergyToken(req.params.token);
+    if (!uid) return res.status(404).json({ ok: false });
+    const { streak } = await recordCarryToday(uid);
+    res.json({ ok: true, streak });
+  } catch (e) {
+    console.error(JSON.stringify({ event: "SYNERGY_CARRY_ERROR", message: String(e?.message || e).slice(0, 160) }));
+    res.status(500).json({ ok: false });
+  }
+});
+
 // นโยบายความเป็นส่วนตัว — Meta บังคับต้องมี URL นี้ก่อนสลับ app เป็น Live (กบ 29 ก.ค.)
 app.get("/privacy", (req, res) => {
   res.status(200).type("html").send(`<!doctype html>
