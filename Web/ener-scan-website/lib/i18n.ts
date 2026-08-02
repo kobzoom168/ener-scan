@@ -19,6 +19,12 @@ export const dict = {
       switchTitle: 'Switch to English',
     },
     badge: 'รับอ่านพลังงาน · รับฝากขายพระ',
+    common: {
+      skip: 'ข้ามไปยังเนื้อหา',
+      trustLine: 'สอบถามได้ฟรี ไม่มีข้อผูกมัด ตอบกลับในแชต LINE',
+      playVideo: 'เล่นวิดีโอ',
+      pauseVideo: 'หยุดวิดีโอ',
+    },
     footer: {
       tagline: 'ระบบวิเคราะห์พลังงานวัตถุ',
       ariaLabel: 'ลิงก์ส่วนท้าย',
@@ -64,10 +70,10 @@ export const dict = {
       freeTitle: 'ฟรีทุกวัน',
       freePrice: `${freePerDay} ครั้ง / วัน`,
       freeDesc: `สแกนพระเครื่อง เครื่องราง หรือหิน/คริสตัลได้ฟรีวันละ ${freePerDay} ครั้ง รีเซ็ตทุกวันตามเวลาท้องถิ่น`,
-      paidTitle: 'เกินโควตาฟรี',
+      paidTitle: 'ต้องการสแกนเพิ่ม',
       paidPrice: `${paidPriceThb} บาท`,
       paidSub: `${paidScanCount} ครั้ง / ${paidWindowHours} ชม.`,
-      paidDesc: `ต้องการสแกนเพิ่ม แพ็ก ${paidPriceThb} บาท ใช้ได้ ${paidScanCount} ครั้งภายใน ${paidWindowHours} ชั่วโมง ชำระผ่าน PromptPay และส่งสลิปใน LINE`,
+      paidDesc: `แพ็ก ${paidPriceThb} บาท ใช้ได้ ${paidScanCount} ครั้งภายใน ${paidWindowHours} ชั่วโมง ชำระผ่าน PromptPay และส่งสลิปใน LINE`,
       cta: 'แอดเพื่อน เริ่มสแกนฟรี',
     },
     howto: {
@@ -164,6 +170,12 @@ export const dict = {
       switchTitle: 'สลับเป็นภาษาไทย',
     },
     badge: 'Energy Reading · Amulet Consignment',
+    common: {
+      skip: 'Skip to content',
+      trustLine: 'Free to ask with no obligation. We reply in LINE chat.',
+      playVideo: 'Play video',
+      pauseVideo: 'Pause video',
+    },
     footer: {
       tagline: 'Object Energy Analysis',
       ariaLabel: 'Footer links',
@@ -205,14 +217,14 @@ export const dict = {
     },
     pricing: {
       h2: `${freePerDay} free scans every day`,
-      desc: 'Try it free every day. Past the free quota, pay instantly via PromptPay right in LINE chat.',
+      desc: 'Try it free every day. Past the free quota, pay instantly via PromptPay (Thai instant bank transfer) right in LINE chat.',
       freeTitle: 'Free every day',
       freePrice: `${freePerDay} scans / day`,
       freeDesc: `Scan amulets, charms, or stones/crystals free ${freePerDay} times a day. Resets daily (local time).`,
-      paidTitle: 'Beyond the free quota',
+      paidTitle: 'Need more scans?',
       paidPrice: `${paidPriceThb} THB`,
       paidSub: `${paidScanCount} scans / ${paidWindowHours} hr`,
-      paidDesc: `Need more scans? The ${paidPriceThb} THB pack gives you ${paidScanCount} scans within ${paidWindowHours} hours. Pay via PromptPay and send the slip in LINE.`,
+      paidDesc: `The ${paidPriceThb} THB pack gives you ${paidScanCount} scans within ${paidWindowHours} hours. Pay via PromptPay (Thai instant bank transfer) and send the slip in LINE.`,
       cta: 'Add on LINE · Scan free',
     },
     howto: {
@@ -254,7 +266,7 @@ export const dict = {
     },
     youtube: {
       h2: 'Latest energy clips on YouTube',
-      desc: 'New clips from real scans every day, updated automatically. Tap any clip to watch.',
+      desc: 'New clips from real scans every day, updated automatically. Clips are in Thai. Tap any clip to watch.',
       cta: 'Watch all on YouTube',
     },
     qr: {

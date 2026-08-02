@@ -48,7 +48,7 @@ function InfoRow({
 }) {
   return (
     <div className="flex items-start gap-3.5">
-      <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold/15 ring-1 ring-gold/30">
+      <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold/20 ring-1 ring-gold/50">
         {icon}
       </span>
       <div>
@@ -63,6 +63,7 @@ function InfoRow({
 
 export function AboutContent({ locale }: { locale: Locale }) {
   const t = getDict(locale).about
+  const tc = getDict(locale).common
 
   return (
     <div className="min-h-screen">
@@ -71,7 +72,7 @@ export function AboutContent({ locale }: { locale: Locale }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <SiteHeader locale={locale} />
-      <main>
+      <main id="main">
         <section className="bg-radial-gold">
           <div className="mx-auto max-w-4xl px-4 pb-8 pt-14 text-center sm:px-6 lg:pt-20">
             <span className="inline-block rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-sm font-medium text-gold-soft">
@@ -154,7 +155,13 @@ export function AboutContent({ locale }: { locale: Locale }) {
                   label={t.websiteLabel}
                 >
                   <p>
-                    my-ener.uk ·{' '}
+                    <a
+                      href="https://my-ener.uk/"
+                      className="transition-colors hover:text-foreground"
+                    >
+                      my-ener.uk
+                    </a>{' '}
+                    ·{' '}
                     <a
                       href={siteConfig.reportUrl}
                       target="_blank"
@@ -178,7 +185,7 @@ export function AboutContent({ locale }: { locale: Locale }) {
             <ul className="mt-4 space-y-4">
               {t.services.map((s) => (
                 <li key={s} className="flex items-start gap-3.5">
-                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold/15 ring-1 ring-gold/30">
+                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold/20 ring-1 ring-gold/50">
                     <ScanLine className="size-4 text-gold" aria-hidden="true" />
                   </span>
                   <p className="text-sm leading-relaxed">{s}</p>
@@ -187,14 +194,17 @@ export function AboutContent({ locale }: { locale: Locale }) {
             </ul>
           </div>
 
-          {/* Disclaimer */}
-          <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
-            {t.disclaimer}
+          <p className="mt-8 text-center text-sm text-muted-foreground">
+            {tc.trustLine}
           </p>
-
-          <div className="mt-8 flex justify-center">
+          <div className="mt-3 flex justify-center">
             <LineButton>{t.cta}</LineButton>
           </div>
+
+          {/* Disclaimer — อยู่ใต้ CTA ไม่ขวางจังหวะตัดสินใจ */}
+          <p className="mt-8 text-center text-xs leading-relaxed text-muted-foreground">
+            {t.disclaimer}
+          </p>
         </section>
       </main>
       <SiteFooter locale={locale} />

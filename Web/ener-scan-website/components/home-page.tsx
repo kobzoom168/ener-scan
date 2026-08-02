@@ -13,7 +13,7 @@ export function HomePage({ locale }: { locale: Locale }) {
   return (
     <div className="min-h-screen">
       <SiteHeader locale={locale} />
-      <main>
+      <main id="main">
         <Hero locale={locale} />
         <ScanCategories locale={locale} />
         <Pricing locale={locale} />

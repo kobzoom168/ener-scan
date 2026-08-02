@@ -8,6 +8,7 @@ const trustIcons = [ScanLine, MessageCircle, BadgeCheck]
 
 export function Hero({ locale = 'th' }: { locale?: Locale }) {
   const t = getDict(locale).hero
+  const tc = getDict(locale).common
 
   return (
     <section className="grain relative overflow-hidden bg-radial-gold">
@@ -49,10 +50,15 @@ export function Hero({ locale = 'th' }: { locale?: Locale }) {
             style={{ animationDelay: '0.6s' }}
           >
             <LineButton>{t.ctaAdd}</LineButton>
-            <LineButton variant="outline" href={siteConfig.reportUrl}>
-              <FileText className="size-5 text-gold" aria-hidden="true" />
+            <a
+              href={siteConfig.reportUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-border/70 px-5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-gold/40 hover:text-foreground"
+            >
+              <FileText className="size-4 text-gold/80" aria-hidden="true" />
               {t.ctaReport}
-            </LineButton>
+            </a>
           </div>
 
           <ul
@@ -84,7 +90,11 @@ export function Hero({ locale = 'th' }: { locale?: Locale }) {
             aria-hidden="true"
           />
           <div className="border-gold-hairline overflow-hidden rounded-3xl ring-gold-glow">
-            <HeroVideo ariaLabel={t.videoAria} />
+            <HeroVideo
+              ariaLabel={t.videoAria}
+              playLabel={tc.playVideo}
+              pauseLabel={tc.pauseVideo}
+            />
           </div>
 
           <div className="border-gold-hairline absolute -bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-2xl bg-card/90 px-4 py-2.5 backdrop-blur-md lg:left-auto lg:right-6 lg:translate-x-0">

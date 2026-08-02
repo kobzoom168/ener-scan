@@ -34,7 +34,7 @@ export function NewsPage({ locale }: { locale: Locale }) {
   return (
     <div className="min-h-screen">
       <SiteHeader locale={locale} />
-      <main>
+      <main id="main">
         <section className="bg-radial-gold">
           <div className="mx-auto max-w-4xl px-4 pb-8 pt-14 text-center sm:px-6 lg:pt-20">
             <span className="inline-block rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-sm font-medium text-gold-soft">
@@ -61,7 +61,7 @@ export function NewsPage({ locale }: { locale: Locale }) {
                     </span>
                     <time
                       dateTime={item.date}
-                      className="text-sm text-muted-foreground"
+                      className="text-sm text-foreground/75"
                     >
                       {formatDate(item.date)}
                     </time>
@@ -85,6 +85,9 @@ export function NewsPage({ locale }: { locale: Locale }) {
             <div className="mt-5 flex justify-center">
               <LineButton>{t.news.ctaBtn}</LineButton>
             </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {t.common.trustLine}
+            </p>
           </div>
         </section>
       </main>

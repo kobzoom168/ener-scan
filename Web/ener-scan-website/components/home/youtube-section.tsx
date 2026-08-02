@@ -29,7 +29,7 @@ function ThumbCard({ video }: { video: YtVideo }) {
       href={`https://www.youtube.com/shorts/${video.id}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="border-gold-hairline group/card relative block w-40 shrink-0 overflow-hidden rounded-2xl bg-card sm:w-44"
+      className="border-gold-hairline group/card relative block w-32 shrink-0 overflow-hidden rounded-2xl bg-card sm:w-36"
       title={video.title}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -66,8 +66,9 @@ export function YoutubeSection({ locale = 'th' }: { locale?: Locale }) {
 
   if (!videos.length) return null
 
-  // วนลูป: ทำซ้ำลิสต์ 2 รอบ แล้วเลื่อน -50% แบบ infinite
-  const loop = [...videos, ...videos]
+  // โชว์ 6 คลิปล่าสุดพอ (audit: เยอะไปแย่ง CTA หลัก) · วนลูป: ซ้ำ 2 รอบ เลื่อน -50% infinite
+  const shown = videos.slice(0, 6)
+  const loop = [...shown, ...shown]
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
