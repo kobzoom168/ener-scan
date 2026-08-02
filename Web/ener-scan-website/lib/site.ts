@@ -12,7 +12,7 @@ export const siteConfig = {
 }
 
 export const navLinks = [
-  { href: '/', label: 'หน้าแรก' },
-  { href: '/news', label: 'ข่าวสาร' },
-  { href: '/about', label: 'เกี่ยวกับเรา' },
+  { href: '/', label: 'หน้าแรก · Home' },
+  { href: '/news', label: 'ข่าวสาร · News' },
+  { href: '/about', label: 'เกี่ยวกับเรา · About' },
 ]
