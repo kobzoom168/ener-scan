@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: '%s · Ener Scan',
   },
   description:
-    'Ener Scan ระบบวิเคราะห์พลังงานวัตถุแบบเฉพาะบุคคล สแกนฟรีวันละ 2 ครั้ง แพ็ก 49 บาท (4 ครั้ง/24 ชม.) รับอ่านพระเครื่อง เครื่องราง หิน/คริสตัล พร้อมสรุปผลในแชต LINE | Personalized energy reading for Thai amulets, charms, and crystals via LINE chat — plus Thai amulet consignment and sales for collectors worldwide.',
+    'Ener Scan ระบบวิเคราะห์พลังงานวัตถุแบบเฉพาะบุคคล สแกนฟรีวันละ 2 ครั้ง แพ็ก 49 บาท (4 ครั้ง/24 ชม.) รับอ่านพระเครื่อง เครื่องราง หิน/คริสตัล พร้อมสรุปผลในแชต LINE | Personalized energy reading for Thai amulets, charms, and crystals via LINE chat, plus Thai amulet consignment and sales for collectors worldwide.',
   keywords: [
     'Ener Scan',
     'อ่านพลังงาน',

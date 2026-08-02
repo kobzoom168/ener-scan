@@ -4,7 +4,7 @@ import { AboutContent } from '@/components/about-content'
 export const metadata: Metadata = {
   title: 'About Us',
   description:
-    'Ener Scan business information — owner, address, and contact details. Energy reading for Thai amulets, amulet consignment, and Thai sacred objects for collectors.',
+    'Ener Scan business information, including owner, address, and contact details. Energy reading for Thai amulets, amulet consignment, and Thai sacred objects for collectors.',
   alternates: {
     canonical: '/en/about/',
     languages: { th: '/about/', en: '/en/about/' },
