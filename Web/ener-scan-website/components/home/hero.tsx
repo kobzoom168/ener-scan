@@ -2,14 +2,13 @@ import { FileText, Sparkles, ScanLine, MessageCircle, BadgeCheck } from 'lucide-
 import { LineButton } from '@/components/line-button'
 import { HeroVideo } from '@/components/home/hero-video'
 import { siteConfig } from '@/lib/site'
+import { getDict, type Locale } from '@/lib/i18n'
 
-const trust = [
-  { icon: ScanLine, label: 'วิเคราะห์เฉพาะบุคคล' },
-  { icon: MessageCircle, label: 'สรุปผลในแชต LINE' },
-  { icon: BadgeCheck, label: `สแกนฟรีวันละ ${siteConfig.pricing.freePerDay} ครั้ง` },
-]
+const trustIcons = [ScanLine, MessageCircle, BadgeCheck]
 
-export function Hero() {
+export function Hero({ locale = 'th' }: { locale?: Locale }) {
+  const t = getDict(locale).hero
+
   return (
     <section className="grain relative overflow-hidden bg-radial-gold">
       <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-14 sm:px-6 lg:grid-cols-2 lg:gap-12 lg:pb-24 lg:pt-20">
@@ -26,34 +25,33 @@ export function Hero() {
             className="animate-rise mt-5 text-balance text-3xl font-extrabold leading-[1.15] tracking-tight sm:text-4xl lg:text-[3.25rem]"
             style={{ animationDelay: '0.18s' }}
           >
-            สงสัยไหมว่า วัตถุชิ้นนี้
-            <br className="hidden sm:block" /> เหมาะกับ
-            <span className="text-gold-shimmer"> คุณแค่ไหน</span>
+            {t.h1a}
+            <br className="hidden sm:block" /> {t.h1b}
+            <span className="text-gold-shimmer">{t.h1c}</span>
           </h1>
 
           <p
             className="animate-rise mt-4 text-xl font-semibold sm:text-2xl"
             style={{ animationDelay: '0.32s' }}
           >
-            ลองสแกนกับ <span className="text-gold-shimmer">Ener Scan</span>
+            {t.sub1} <span className="text-gold-shimmer">Ener Scan</span>
           </p>
 
           <p
             className="animate-rise mx-auto mt-4 max-w-xl text-pretty leading-relaxed text-muted-foreground lg:mx-0"
             style={{ animationDelay: '0.46s' }}
           >
-            ระบบวิเคราะห์พลังงานวัตถุแบบเฉพาะบุคคล พร้อมสรุปผลเบื้องต้นในแชต LINE
-            รับอ่านพระเครื่อง เครื่องราง หิน/คริสตัล และบริการรับฝากขายพระเครื่อง
+            {t.desc}
           </p>
 
           <div
             className="animate-rise mt-7 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center lg:justify-start"
             style={{ animationDelay: '0.6s' }}
           >
-            <LineButton>แอดเพื่อน เริ่มสแกน</LineButton>
+            <LineButton>{t.ctaAdd}</LineButton>
             <LineButton variant="outline" href={siteConfig.reportUrl}>
               <FileText className="size-5 text-gold" aria-hidden="true" />
-              ดูตัวอย่างรายงาน
+              {t.ctaReport}
             </LineButton>
           </div>
 
@@ -61,15 +59,18 @@ export function Hero() {
             className="animate-rise mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 lg:justify-start"
             style={{ animationDelay: '0.74s' }}
           >
-            {trust.map(({ icon: Icon, label }) => (
-              <li
-                key={label}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground"
-              >
-                <Icon className="size-4 text-gold" aria-hidden="true" />
-                {label}
-              </li>
-            ))}
+            {t.trust.map((label, i) => {
+              const Icon = trustIcons[i]
+              return (
+                <li
+                  key={label}
+                  className="flex items-center gap-1.5 text-sm text-muted-foreground"
+                >
+                  <Icon className="size-4 text-gold" aria-hidden="true" />
+                  {label}
+                </li>
+              )
+            })}
           </ul>
         </div>
 
@@ -83,7 +84,7 @@ export function Hero() {
             aria-hidden="true"
           />
           <div className="border-gold-hairline overflow-hidden rounded-3xl ring-gold-glow">
-            <HeroVideo />
+            <HeroVideo ariaLabel={t.videoAria} />
           </div>
 
           <div className="border-gold-hairline absolute -bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-2xl bg-card/90 px-4 py-2.5 backdrop-blur-md lg:left-auto lg:right-6 lg:translate-x-0">
@@ -91,9 +92,9 @@ export function Hero() {
               <BadgeCheck className="size-4 text-gold" aria-hidden="true" />
             </span>
             <span className="text-sm font-semibold">
-              รายงานพร้อมกราฟพลัง
+              {t.floatTitle}
               <span className="block text-xs font-normal text-muted-foreground">
-                Ener Scan Report
+                {t.floatSub}
               </span>
             </span>
           </div>
