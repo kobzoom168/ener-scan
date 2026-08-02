@@ -19,7 +19,7 @@ const jsonLd = {
   url: 'https://my-ener.uk',
   image: 'https://my-ener.uk/images/tanarit-owner.jpg',
   description:
-    'Personalized energy reading for Thai amulets, charms, and crystals via LINE chat — plus Thai amulet consignment and sales for collectors worldwide.',
+    'Personalized energy reading for Thai amulets, charms, and crystals via LINE chat, plus Thai amulet consignment and sales for collectors worldwide.',
   founder: {
     '@type': 'Person',
     name: 'Tanarit Apichokjirasin',

@@ -131,7 +131,7 @@ export const dict = {
       ownerRole: 'เจ้าของกิจการ Ener Scan',
       ownerDesc:
         'ดำเนินธุรกิจอ่านพลังงานวัตถุและพระเครื่องวัตถุมงคลไทย ให้บริการลูกค้าทั้งในประเทศและต่างประเทศ',
-      ownerPhotoAlt: 'Tanarit Apichokjirasin — เจ้าของกิจการ Ener Scan กับตู้พระเครื่อง',
+      ownerPhotoAlt: 'Tanarit Apichokjirasin เจ้าของกิจการ Ener Scan กับตู้พระเครื่อง',
       contactH2: 'ติดต่อเรา',
       addressLabel: 'ที่อยู่',
       address:
@@ -168,7 +168,7 @@ export const dict = {
       h1b: 'matches',
       h1c: ' you?',
       sub1: 'Try a scan with',
-      desc: 'Personalized object-energy analysis with instant summaries in LINE chat. We read Thai amulets, charms, and stones/crystals — plus an amulet consignment service.',
+      desc: 'Personalized object-energy analysis with instant summaries in LINE chat. We read Thai amulets, charms, and stones/crystals, and also offer an amulet consignment service.',
       ctaAdd: 'Add on LINE · Start scanning',
       ctaReport: 'View sample report',
       trust: [
@@ -178,7 +178,7 @@ export const dict = {
       ],
       floatTitle: 'Report with energy chart',
       floatSub: 'Ener Scan Report',
-      videoAria: 'Intro video — Ener Scan object energy analysis',
+      videoAria: 'Intro video for Ener Scan object energy analysis',
     },
     categories: {
       h2: 'What you can scan',
@@ -186,7 +186,7 @@ export const dict = {
       items: [
         {
           title: 'Thai Amulets',
-          desc: 'Analysis of protection, charm, and merit power — plus our amulet consignment service.',
+          desc: 'Analysis of protection, charm, and merit power, plus our amulet consignment service.',
         },
         {
           title: 'Charms & Talismans',
@@ -230,7 +230,7 @@ export const dict = {
     },
     consignment: {
       h2: 'Have an amulet to sell? Consign it with Ener Scan',
-      desc: 'We take care of everything — appraisal, listing, and finding interested buyers — in just a few steps.',
+      desc: 'We take care of everything from appraisal and listing to finding interested buyers, all in just a few steps.',
       steps: [
         {
           title: 'Send photos via LINE',
@@ -272,7 +272,7 @@ export const dict = {
       ownerDesc:
         'Operating an energy-reading and Thai amulet business, serving customers in Thailand and worldwide.',
       ownerPhotoAlt:
-        'Tanarit Apichokjirasin — owner of Ener Scan, with an amulet display cabinet',
+        'Tanarit Apichokjirasin, owner of Ener Scan, with an amulet display cabinet',
       contactH2: 'Contact',
       addressLabel: 'Address',
       address:
@@ -307,13 +307,13 @@ export const newsItemsEn: Record<
     tag: 'Service',
     title: 'Amulet consignment now open',
     summary:
-      'Ener Scan now offers amulet consignment — from appraisal and listing to finding buyers. Send photos via LINE to get started.',
+      'Ener Scan now offers amulet consignment, from appraisal and listing to finding buyers. Send photos via LINE to get started.',
   },
   'service-launch': {
     tag: 'Announcement',
-    title: 'Ener Scan launches — energy readings via LINE',
+    title: 'Ener Scan launches energy readings via LINE',
     summary:
-      'Our personalized object-energy analysis is now live. Thai amulets, charms, stones/crystals — with summaries right in LINE chat.',
+      'Our personalized object-energy analysis is now live. Thai amulets, charms, stones/crystals, with summaries right in LINE chat.',
   },
   'how-to-scan': {
     tag: 'Guide',
@@ -325,6 +325,6 @@ export const newsItemsEn: Record<
     tag: 'Service',
     title: '2 free scans daily · 49 THB pack',
     summary:
-      'Scan free twice a day. Past the quota, the 49 THB pack gives 4 scans per 24 hours — pay via PromptPay in LINE chat.',
+      'Scan free twice a day. Past the quota, the 49 THB pack gives 4 scans per 24 hours. Pay via PromptPay in LINE chat.',
   },
 }
