@@ -347,6 +347,15 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         } catch {
           /* ignore */
         }
+        // ครบ 3 ชิ้นครั้งแรก → แนะนำรายงานจัดชุดพลัง (Synergy — กบ 31 ก.ค.) ครั้งเดียวต่อคน
+        try {
+          const { maybeIntroduceSynergy } = await import(
+            "../synergy/synergyIntro.service.js"
+          );
+          void maybeIntroduceSynergy(lineUserId);
+        } catch {
+          /* ignore */
+        }
         // ทุกสแกน → YouTube Shorts เสียงอาจารย์ (กบ 29 ก.ค. — ช่องเดียวกับ autopost workspace)
         try {
           const { maybeAutoPostScanShort } = await import(

@@ -496,6 +496,37 @@ async function maybeHandleReferralInvite({ client, userId, replyToken, text }) {
   }
 }
 
+/** ลูกค้าพิมพ์ "จัดชุด/ชุดวันนี้/ชุดพลัง" → ลิงก์รายงานจัดชุดพลังของเขา (Synergy — กบ 31 ก.ค.) */
+async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
+  const t = String(text || "").trim();
+  if (!/^(จัดชุด|ชุดวันนี้|ชุดพลัง|จัดชุดพลัง)$/.test(t)) return false;
+  try {
+    const { loadVault, getOrCreateSynergyToken } = await import(
+      "../services/synergy/synergyReport.service.js"
+    );
+    const vault = await loadVault(userId);
+    if (vault.length < 3) {
+      await client.replyMessage(replyToken, {
+        type: "text",
+        text: `ตอนนี้คลังของคุณมี ${vault.length} ชิ้นครับ อาจารย์จัดชุดให้ได้เมื่อมีตั้งแต่ 3 ชิ้นขึ้นไป ส่งรูปชิ้นเพิ่มเข้ามาได้เลย`,
+      });
+      return true;
+    }
+    const token = await getOrCreateSynergyToken(userId);
+    if (!token) return false;
+    const base = String(env.APP_BASE_URL || "").replace(/\/+$/, "");
+    await client.replyMessage(replyToken, {
+      type: "text",
+      text: `อาจารย์จัดชุดจากคลังของคุณ ${vault.length} ชิ้นไว้ให้แล้วครับ วันนี้ควรพกชุดไหน เปิดดูได้เลย\n${base}/synergy/${token}`,
+    });
+    console.log(JSON.stringify({ event: "SYNERGY_LINK_SENT", lineUserIdPrefix: String(userId).slice(0, 10), pieces: vault.length }));
+    return true;
+  } catch (e) {
+    console.log(JSON.stringify({ event: "SYNERGY_LINK_ERROR", message: String(e?.message || e).slice(0, 160) }));
+    return false;
+  }
+}
+
 /** เพื่อนใหม่พิมพ์โค้ด ENER-XXXX → ตรวจ + ให้สิทธิ์ทั้งคู่ + push แจ้งคนชวน */
 async function maybeHandleReferralCodeRedeem({ client, userId, replyToken, text }) {
   try {
@@ -6844,6 +6875,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleReferralInvite({ client, userId, replyToken: event.replyToken, text })) return;
+        if (await maybeHandleSynergyRequest({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
         if (text === "สแกนพลังงาน") {
@@ -7584,6 +7616,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
   if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
   if (await maybeHandleReferralInvite({ client, userId, replyToken: event.replyToken, text })) return;
+  if (await maybeHandleSynergyRequest({ client, userId, replyToken: event.replyToken, text })) return;
   if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;

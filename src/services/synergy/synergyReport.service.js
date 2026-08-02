@@ -266,6 +266,24 @@ async function buildContent({ uid, dateKey, pieces, sets, avg, dayAxis }) {
   return j;
 }
 
+// ── บันทึก "วันนี้พกชุดนี้" + นับต่อเนื่อง (redis) ────────────────
+
+export async function recordCarryToday(lineUserId) {
+  const uid = String(lineUserId);
+  const today = bangkokDateKey();
+  const yesterday = bangkokDateKey(new Date(), -1);
+  const lastKey = `synergy:carry:last:${uid}`;
+  const cntKey = `synergy:carry:cnt:${uid}`;
+  const last = await getValue(lastKey).catch(() => null);
+  let streak = Number(await getValue(cntKey).catch(() => 0)) || 0;
+  if (last === today) return { streak: Math.max(1, streak) };
+  streak = last === yesterday ? streak + 1 : 1;
+  await setValueWithTtl(lastKey, today, 60 * 86400).catch(() => {});
+  await setValueWithTtl(cntKey, String(streak), 60 * 86400).catch(() => {});
+  console.log(JSON.stringify({ event: "SYNERGY_CARRY_RECORDED", lineUserIdPrefix: uid.slice(0, 10), streak }));
+  return { streak };
+}
+
 // ── ประกอบหน้า ──────────────────────────────────────────────────
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -376,6 +394,9 @@ body{font-family:Kanit,sans-serif;background:#0d0b08;color:#f5edd8;max-width:520
 .lb3 i{width:26px;height:10px;border-radius:3px;background:#33301f;border:1px solid #4a3f22}
 .lb3 i.on{background:linear-gradient(90deg,#b8871b,#e8c547);border-color:#e8c547}
 .bar .lb{color:#b3a479;font-size:12.5px}
+.carry{font-family:inherit;cursor:pointer;margin-top:12px;background:#0d0b08;border:1.5px solid #e8c547;color:#e8c547;border-radius:12px;padding:10px 28px;font-size:14.5px;font-weight:600}
+.carry.done{background:linear-gradient(90deg,#b8871b,#e8c547);color:#0d0b08}
+.carry-note{color:#cbb98a;font-size:12.5px;margin-top:6px;min-height:16px}
 .gap{border:1px dashed #8f6710;border-radius:12px;padding:12px;margin-top:12px;background:#171307}
 .gap b{color:#e8c547}.gap p{font-size:13.5px;line-height:1.6;margin-top:4px}
 .cta{display:block;text-align:center;background:linear-gradient(90deg,#b8871b,#e8c547);color:#0d0b08;font-weight:600;border-radius:12px;padding:12px;margin-top:14px;text-decoration:none;font-size:15px}
@@ -401,6 +422,8 @@ body{font-family:Kanit,sans-serif;background:#0d0b08;color:#f5edd8;max-width:520
   <div class="tags">${(content.tags || []).map((t) => `<i>${esc(t)}</i>`).join("")}</div>
   <div class="say" id="set-line"></div>
   <div class="daymeta">โทนสีเสริมกำลังใจวันนี้: ${esc(dayColor)} · คำตั้งใจ: ${esc(content.intent || "")}</div>
+  <button class="carry" id="carry-btn">วันนี้พกชุดนี้</button>
+  <div class="carry-note" id="carry-note"></div>
 </div>
 
 <div class="sec"><h3>วันไหนไม่แน่ใจ พกชิ้นนี้</h3>
@@ -451,6 +474,20 @@ document.addEventListener("click",function(e){
  if(p.url){go.style.display="block";go.href=p.url}else{go.style.display="none"}
  document.getElementById("ov").classList.add("show");});
 renderSet();
+document.getElementById("carry-btn").addEventListener("click", async function () {
+  var b = this;
+  b.disabled = true;
+  try {
+    var r = await fetch(location.pathname + "/carry", { method: "POST" });
+    var j = await r.json();
+    if (j.ok) {
+      b.textContent = "บันทึกแล้ว ✓";
+      b.classList.add("done");
+      document.getElementById("carry-note").textContent =
+        j.streak > 1 ? "พกตามชุดแนะนำต่อเนื่อง " + j.streak + " วัน" : "ขอให้เป็นวันที่ดีครับ";
+    } else { b.disabled = false; }
+  } catch (e) { b.disabled = false; }
+});
 </script>
 </body></html>`;
 
