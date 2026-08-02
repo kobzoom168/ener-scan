@@ -412,10 +412,6 @@ body{font-family:Kanit,sans-serif;background:#0d0b08;color:#f5edd8;max-width:520
   <div class="bars">${AXES.map((ax) => { const [n, lb] = lvl(avg[ax]); return `<div class="bar"><span class="nm">${IC[ax] || ""} ${ax}</span>${lvlBar(n)}<span class="lb">${lb}</span></div>`; }).join("")}</div>
 </div>
 
-<div class="sec"><h3>ชิ้นในคลังทั้งหมด</h3>
-  <div class="grid">${pieces.map((p) => `<div class="chip tap" data-n="${p.n}">${p.img ? `<img src="${esc(p.img)}" alt="${p.unit} ${p.n} สาย${esc(p.peakShort)}">` : ""}<div><b>${p.unit} ${p.n}</b><span>${esc(p.peakShort)}</span></div></div>`).join("")}</div>
-</div>
-
 <div class="gap"><b>ทัพคุณยังขาดสาย${esc(content.gapAxis || "")}</b><p>${esc(content.gapLine || "")}</p></div>
 
 <a class="cta" href="${esc(String(process.env.YT_SHORT_OA_LINK || "https://lin.ee/p2sxdYFJ"))}">ส่งชิ้นเพิ่มให้อาจารย์ดู เติมทัพให้ครบ</a>
