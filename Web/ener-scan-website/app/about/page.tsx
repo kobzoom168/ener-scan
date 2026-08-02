@@ -21,7 +21,7 @@ const contact = {
   addressEn:
     '42/281 Eco-House Village, Bueng Kham Phroi, Lam Luk Ka, Pathum Thani 12150, Thailand',
   phone: '+66 93 666 4405',
-  email: 'kobzooms@gmail.com',
+  email: 'tanarit.ap@gmail.com',
 }
 
 const services = [
