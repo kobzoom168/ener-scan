@@ -18,6 +18,7 @@ const AMULET_AXIS_KEYS = /** @type {const} */ ([
   "luck",
   "fortune_anchor",
   "specialty",
+  "charm",
 ]);
 const AMULET_RADAR_ANGLES = AMULET_AXIS_KEYS.map(
   (_, i) => -Math.PI / 2 + (i * 2 * Math.PI) / AMULET_AXIS_KEYS.length,
@@ -29,6 +30,7 @@ const AMULET_AXIS_LABEL_ALIAS = {
   luck: "โชคลาภ",
   fortune_anchor: "หนุนดวง",
   specialty: "งานเฉพาะ",
+  charm: "เสน่หา",
 };
 
 /**
@@ -307,14 +309,14 @@ function mainGraphBlock(vm) {
       : "";
 
   return `<section class="mv2a-card mv2a-graph-card" aria-labelledby="mv2a-graph-h">
-    <h2 id="mv2a-graph-h">กราฟหกมิติพลังพระ/เทวรูป/เครื่องราง</h2>
+    <h2 id="mv2a-graph-h">กราฟเจ็ดมิติพลังพระ/เทวรูป/เครื่องราง</h2>
     <p class="mv2a-hint">เทียบโปรไฟล์คุณกับพลังพระ/เทวรูป/เครื่องราง</p>
     <div class="mv2a-radar-wrap" role="img" aria-label="เปรียบเทียบพลังคุณกับพลังพระ/เทวรูป/เครื่องราง">
       <div class="mv2a-radar-plot">
         <svg class="mv2a-radar-svg mv2a-radar-svg--animate" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" text-rendering="optimizeLegibility">
-          <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100 })}" fill="var(--mv2a-radar-ring-outer-fill)" stroke="var(--mv2a-radar-ring-outer-stroke)" stroke-width="0.28"/>
-          <polygon points="${amuletRadarPolygonPoints({ protection: 66, metta: 66, baramee: 66, luck: 66, fortune_anchor: 66, specialty: 66 })}" fill="none" stroke="var(--mv2a-radar-ring-mid-stroke)" stroke-width="0.22"/>
-          <polygon points="${amuletRadarPolygonPoints({ protection: 33, metta: 33, baramee: 33, luck: 33, fortune_anchor: 33, specialty: 33 })}" fill="none" stroke="var(--mv2a-radar-ring-inner-stroke)" stroke-width="0.2"/>
+          <polygon points="${amuletRadarPolygonPoints({ protection: 100, metta: 100, baramee: 100, luck: 100, fortune_anchor: 100, specialty: 100, charm: 100 })}" fill="var(--mv2a-radar-ring-outer-fill)" stroke="var(--mv2a-radar-ring-outer-stroke)" stroke-width="0.28"/>
+          <polygon points="${amuletRadarPolygonPoints({ protection: 66, metta: 66, baramee: 66, luck: 66, fortune_anchor: 66, specialty: 66, charm: 66 })}" fill="none" stroke="var(--mv2a-radar-ring-mid-stroke)" stroke-width="0.22"/>
+          <polygon points="${amuletRadarPolygonPoints({ protection: 33, metta: 33, baramee: 33, luck: 33, fortune_anchor: 33, specialty: 33, charm: 33 })}" fill="none" stroke="var(--mv2a-radar-ring-inner-stroke)" stroke-width="0.2"/>
           ${AMULET_RADAR_ANGLES.map((ang) => {
             const x = AMULET_RADAR_CX + AMULET_RADAR_R * Math.cos(ang);
             const y = AMULET_RADAR_CY + AMULET_RADAR_R * Math.sin(ang);
@@ -2503,9 +2505,9 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       <div class="mv2-life-rows">${lifeRowsHtml}</div>
       ${
         energyMeaningHref
-          ? `<div class="mv2-life-cta" role="region" aria-label="อ่านคำอธิบายพลังทั้ง 6 ด้าน">
+          ? `<div class="mv2-life-cta" role="region" aria-label="อ่านคำอธิบายพลังทั้ง 7 ด้าน">
       <p class="mv2-life-cta-hint">อธิบายว่าบารมี เมตตา โชคลาภ คุ้มครอง และด้านอื่น ๆ หมายถึงอะไร</p>
-      <a class="mv2-life-cta-btn" href="${escapeHtml(energyMeaningHref)}">อ่านคำอธิบายพลังทั้ง 6 ด้าน</a>
+      <a class="mv2-life-cta-btn" href="${escapeHtml(energyMeaningHref)}">อ่านคำอธิบายพลังทั้ง 7 ด้าน</a>
     </div>`
           : ""
       }

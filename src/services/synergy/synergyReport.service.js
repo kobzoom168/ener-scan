@@ -108,6 +108,11 @@ export async function loadVault(lineUserId) {
   const seen = new Set();
   const pieces = [];
   for (const r of rows || []) {
+    // ชุดนี้คือ "ชุดพก" — ของตั้งบูชา/รูปปั้น/ของพกไม่ได้ ตัดออกเลย (กบ 4 ส.ค.
+    // เคสรูปปั้นโดนจับเข้าชุด · ต่อยอดกติกา 13 ก.ค. "เทวรูปพกไม่ได้")
+    const obj = r.report_payload_json?.object || {};
+    if (String(obj.objectType || "").trim() === "พระบูชา") continue;
+    if (obj.objectUnderstanding?.usageProfile?.canCarry === false) continue;
     const d = deriveShowcaseCardData(r.report_payload_json);
     if (!d) continue;
     const key = `${d.name}|${d.energyScore}`;
@@ -186,9 +191,11 @@ export function pickSet(pieces, mission, dateKey, uid) {
     }))
     .sort((a, b) => b.s - a.s);
   const main = ranked[0].p;
+  // คู่เสริม: ประเภทเดียวกับชิ้นหลักเท่านั้น (กบ 4 ส.ค. "แยกพระกับกำไลออก") — ไม่มีก็พกเดี่ยว
+  const sameLane = ranked.slice(1).filter((r) => r.p.lane === main.lane);
   const partner =
-    ranked.slice(1).find((r) => r.p.peakShort !== main.peakShort)?.p ||
-    ranked[1]?.p ||
+    sameLane.find((r) => r.p.peakShort !== main.peakShort)?.p ||
+    sameLane[0]?.p ||
     null;
   return { main, partner, dayAxis };
 }
