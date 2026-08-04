@@ -26,10 +26,21 @@ export async function maybeIntroduceSynergy(lineUserId) {
       "",
       "พิมพ์ จัดชุด ในแชทนี้เมื่อไหร่ก็ได้ เพื่อเปิดดูชุดของวัน",
     ].join("\n");
+    // Flex carousel (กบ 1 ส.ค.) — พังค่อยถอยไป text
+    let messages;
+    try {
+      const { buildSynergyCarouselFlex } = await import("./synergyReport.service.js");
+      const flex = await buildSynergyCarouselFlex(uid);
+      messages = flex
+        ? [{ type: "text", text: `ตอนนี้คลังของคุณมี ${vault.length} ชิ้นแล้ว อาจารย์จัดชุดให้ได้แล้วครับ เลื่อนดูได้เลย (พิมพ์ จัดชุด เมื่อไหร่ก็ได้)` }, flex]
+        : [{ type: "text", text }];
+    } catch {
+      messages = [{ type: "text", text }];
+    }
     await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` },
-      body: JSON.stringify({ to: uid, messages: [{ type: "text", text }] }),
+      body: JSON.stringify({ to: uid, messages }),
       signal: AbortSignal.timeout(15000),
     });
     const { insertLineConversationMessage } = await import(

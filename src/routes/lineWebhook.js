@@ -515,10 +515,20 @@ async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
     const token = await getOrCreateSynergyToken(userId);
     if (!token) return false;
     const base = String(env.APP_BASE_URL || "").replace(/\/+$/, "");
-    await client.replyMessage(replyToken, {
-      type: "text",
-      text: `อาจารย์จัดชุดจากคลังของคุณ ${vault.length} ชิ้นไว้ให้แล้วครับ วันนี้ควรพกชุดไหน เปิดดูได้เลย\n${base}/synergy/${token}`,
-    });
+    let replyMsg;
+    try {
+      const { buildSynergyCarouselFlex } = await import("../services/synergy/synergyReport.service.js");
+      replyMsg = await buildSynergyCarouselFlex(userId);
+    } catch {
+      replyMsg = null;
+    }
+    await client.replyMessage(
+      replyToken,
+      replyMsg || {
+        type: "text",
+        text: `อาจารย์จัดชุดจากคลังของคุณ ${vault.length} ชิ้นไว้ให้แล้วครับ วันนี้ควรพกชุดไหน เปิดดูได้เลย\n${base}/synergy/${token}`,
+      },
+    );
     console.log(JSON.stringify({ event: "SYNERGY_LINK_SENT", lineUserIdPrefix: String(userId).slice(0, 10), pieces: vault.length }));
     import("../services/synergy/synergyReport.service.js").then((m) => void m.renderSynergyPage(userId)).catch(() => {});
     return true;

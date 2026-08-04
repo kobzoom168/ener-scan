@@ -285,6 +285,78 @@ export async function recordCarryToday(lineUserId) {
   return { streak };
 }
 
+// ── Flex carousel แนะนำ (กบ 1 ส.ค. — แทนข้อความล้วน ใช้ทั้ง trigger + คำสั่งแชท) ──
+
+/**
+ * @param {string} lineUserId
+ * @returns {Promise<object|null>} LINE flex message (carousel) หรือ null ถ้าคลัง <3 ชิ้น
+ */
+export async function buildSynergyCarouselFlex(lineUserId) {
+  const uid = String(lineUserId || "").trim();
+  const pieces = await loadVault(uid);
+  if (pieces.length < 3) return null;
+  const token = await getOrCreateSynergyToken(uid);
+  if (!token) return null;
+  const base = String(env.APP_BASE_URL || "").replace(/\/+$/, "");
+  const url = `${base}/synergy/${token}`;
+  const todayKey = bangkokDateKey();
+  const dayName = thaiDayName(todayKey);
+  const set = pickSet(pieces, MISSIONS[0], todayKey, uid);
+  const best = [...pieces].sort((a, b) => b.score - a.score)[0];
+
+  const btn = (label) => ({
+    type: "box", layout: "vertical", backgroundColor: "#14110C",
+    paddingAll: "12px", paddingTop: "0px",
+    contents: [{
+      type: "button", style: "primary", color: "#B8871B", height: "sm",
+      action: { type: "uri", label, uri: url },
+    }],
+  });
+  const bubble = ({ img, title, lines, btnLabel }) => ({
+    type: "bubble", size: "kilo",
+    ...(img ? { hero: { type: "image", url: img, size: "full", aspectRatio: "4:5", aspectMode: "cover" } } : {}),
+    body: {
+      type: "box", layout: "vertical", backgroundColor: "#14110C",
+      paddingAll: "14px", spacing: "sm",
+      contents: [
+        { type: "text", text: title, weight: "bold", size: "md", color: "#E8C547", wrap: true },
+        ...lines.map((t) => ({ type: "text", text: t, size: "sm", color: "#F5EDD8", wrap: true })),
+      ],
+    },
+    footer: btn(btnLabel),
+  });
+
+  const bubbles = [
+    bubble({
+      img: set?.main?.img || "",
+      title: `ชุดพลัง${dayName}`,
+      lines: [
+        `${set.main.unit} ${set.main.n}${set.partner ? ` + ${set.partner.unit} ${set.partner.n}` : ""}`,
+        set.dayAxis ? `${dayName} เชื่อกันว่าสาย${set.dayAxis}เด่นเป็นพิเศษ` : "อาจารย์จัดจากคลังของคุณ",
+      ],
+      btnLabel: "เปิดดูชุดของวัน",
+    }),
+    bubble({
+      img: best.img || "",
+      title: "ชิ้นหลักประจำคลัง",
+      lines: [`${best.unit} ${best.n} · สาย${best.peakShort}`, "วันไหนไม่แน่ใจ พกชิ้นนี้ได้เลย"],
+      btnLabel: "ดูรายละเอียด",
+    }),
+    bubble({
+      img: set?.partner?.img || "",
+      title: "เลือกชุดตามสิ่งที่จะทำ",
+      lines: ["คุยงานสำคัญ · เดินทางไกล", "เสี่ยงโชค · นัดพบคนสำคัญ", `จัดจากคลังของคุณ ${pieces.length} ชิ้น`],
+      btnLabel: "เลือกภารกิจ",
+    }),
+  ];
+
+  return {
+    type: "flex",
+    altText: "อาจารย์จัดชุดพลังจากคลังของคุณไว้ให้แล้ว เปิดดูได้เลย",
+    contents: { type: "carousel", contents: bubbles },
+  };
+}
+
 // ── ประกอบหน้า ──────────────────────────────────────────────────
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
