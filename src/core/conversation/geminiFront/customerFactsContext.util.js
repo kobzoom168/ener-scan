@@ -13,7 +13,7 @@ import {
 } from "../../../stores/paymentAccess.db.js";
 import { computePaidActive } from "../../../services/scanOfferAccess.resolver.js";
 import { loadActiveScanOffer } from "../../../services/scanOffer.loader.js";
-import { getValue } from "../../../redis/scanV2Redis.js";
+import { getValue, setLargeValueWithTtl } from "../../../redis/scanV2Redis.js";
 
 const REJECT_REASON_THAI = {
   unclear: "ภาพไม่ชัด/ระบบมองวัตถุไม่เห็น",
@@ -21,6 +21,37 @@ const REJECT_REASON_THAI = {
   multiple: "ในภาพมีหลายชิ้นปนกัน",
   unsupported: "วัตถุไม่ใช่ประเภทที่รับดู",
 };
+
+// สถิติคะแนนรวมทั้งระบบ (กบ 4 ส.ค. — เคสลูกค้าถาม "ของคนอื่นแรงสุดเท่าไหร่"): ตัวเลขจริงจาก DB
+// ตอบได้เฉพาะภาพรวม ห้ามเผยรายชิ้น/รายชื่อของลูกค้าคนอื่น · cache 6 ชม.
+async function buildScoreStatsLine() {
+  const cacheKey = "ener:score_stats_line:v1";
+  try {
+    const c = await getValue(cacheKey);
+    if (c) return c;
+  } catch { /* ignore */ }
+  try {
+    const { data, error } = await supabase.rpc("ener_score_stats");
+    if (error || !data) return null;
+    const j = typeof data === "string" ? JSON.parse(data) : data;
+    const max = Number(j.max);
+    if (!Number.isFinite(max)) return null;
+    const line =
+      `สถิติคะแนนรวมทั้งระบบ (ตัวเลขจริง — ใช้ตอบเมื่อลูกค้าถามเทียบกับของคนอื่น/แรงสุดเท่าไหร่ ` +
+      `บอกได้เฉพาะภาพรวม ⛔️ ห้ามเผยว่าชิ้นไหนของใคร): จากการอ่านทั้งหมด ${Number(j.total).toLocaleString()} ครั้ง ` +
+      `แรงสุดที่เคยเจอคือ ${max}/10 (มี ${j.cntAtMax} ชิ้น จากลูกค้า ${j.ownersAtMax} คน) · ` +
+      `ระดับ 8.5 ขึ้นไปเจอ ${j.cnt85} ครั้ง · ` +
+      (Number(j.cnt89) > 0
+        ? `เกรด S (8.9 ขึ้นไป) เจอแล้ว ${j.cnt89} ครั้ง`
+        : `เกรด S (8.9 ขึ้นไป) ยังไม่เคยเจอเลย — ถ้าลูกค้ามีชิ้นที่ถึง จะเป็นชิ้นแรกของระบบ`);
+    try {
+      await setLargeValueWithTtl(cacheKey, line, 21600);
+    } catch { /* ignore */ }
+    return line;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * @param {string} lineUserId
@@ -89,6 +120,8 @@ export async function buildCustomerFactsContext(lineUserId) {
       liffReadingLines = null;
     }
 
+    const scoreStatsLine = await buildScoreStatsLine();
+
     // ชุดจัดพลังวันนี้ (กบ 4 ส.ค.): ลูกค้าถามชุดที่ระบบจัดให้ อาจารย์ต้องตอบตรงกับรายงาน
     let synergyLines = null;
     try {
@@ -153,6 +186,7 @@ export async function buildCustomerFactsContext(lineUserId) {
       ...(adminResetLine ? [`• ${adminResetLine}`] : []),
       ...(rejectLine ? [`• ${rejectLine}`] : []),
       ...(liffReadingLines ? [`• ${liffReadingLines}`] : []),
+      ...(scoreStatsLine ? [`• ${scoreStatsLine}`] : []),
       ...(synergyLines ? [synergyLines] : []),
     ].join("\n");
   } catch {
