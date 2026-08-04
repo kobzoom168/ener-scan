@@ -208,3 +208,9 @@
 - test:release 38/38 · deploy staging · ทดสอบจริงใน container (3 bubbles, hero R2, URL ถูก) · push ผ่าน LINE API สำเร็จ 200 → เข้า OA staging แล้ว
 - ค้าง: กบดู carousel ใน OA staging → สั่งขึ้น pro
 
+## 2026-08-04 | Claude | Carousel deep-link ตามหัวข้อ (กบ: "link flex ควรเข้าไปตามหัวข้อ")
+- การ์ด 1 → หน้าปกติ (ชุดของวันอยู่บนสุด) · การ์ด 2 → ?go=main เลื่อนไป "วันไหนไม่แน่ใจ พกชิ้นนี้" · การ์ด 3 → ?go=missions เลื่อนไปแถวปุ่มภารกิจ — scroll smooth + กรอบทองกะพริบ 2 วิ (goflash)
+- ids ใหม่ #main-piece / #mission-row + JS อ่าน ?go= ฝั่ง client → HTML cache ต่อวันใช้ร่วมกันได้ทั้ง 3 ลิงก์
+- gotcha: คีย์ redis จริงมี prefix scanv2_stagingdedupe:/scan_v2dedupe: — ล้าง cache ต้องใช้ pattern '*synergy*'
+- deploy staging · verify body สด (0.35s มี markup ครบ) · push carousel ตัวใหม่เข้า OA staging แล้ว · ค้าง: กบลองกด → สั่งขึ้น pro
+
