@@ -195,6 +195,19 @@ export function pickSet(pieces, mission, dateKey, uid) {
 
 // ── เนื้อความ (LLM 1 ครั้ง/คน/วัน — cache redis) ────────────────
 
+// เลของค์ที่/ชิ้นที่ เลื่อนทันทีที่มีสแกนใหม่ (คลังเรียง created_at desc) — cache เนื้อความ
+// ต้องผูกกับหน้าตาคลัง ไม่งั้นคำอ่านอ้างเลขเก่าทั้งวัน (บั๊กเจอ 4 ส.ค.: "องค์ที่ 11" ทั้งที่ชุดคือ 12)
+function vaultSig(pieces) {
+  return crypto
+    .createHash("md5")
+    .update(pieces.map((p) => `${p.name}|${p.score}`).join("~"))
+    .digest("hex")
+    .slice(0, 8);
+}
+function contentCacheKey(uid, dateKey, pieces) {
+  return `synergy:content:${uid}:${dateKey}:${vaultSig(pieces)}`;
+}
+
 const CONTENT_SYS = `คุณคืออาจารย์ Ener เขียนเนื้อความรายงานจัดชุดพลัง ตอบ JSON เดียวเท่านั้น:
 {"vaultTitle":string,"tags":[string,string,string],"setLines":{"daily":string,"work":string,"travel":string,"luck":string,"date":string},"mainLine":string,"gapLine":string,"intent":string}
 กติกาภาษา: ทุก line 2 ประโยคเป๊ะ — ประโยคแรกบอกทำอะไร (พก/ห้อย/เพิ่ม/เลือก + เลขชิ้นตามที่ให้) ประโยคสอง "เชื่อกันว่า..." · ห้ามคำ: พุ่งสูง/ทุกมิติ/เติมเต็ม/ขยายโอกาส/สะท้อนพลัง/ชนกัน/ตีกัน
@@ -205,7 +218,7 @@ const CONTENT_SYS = `คุณคืออาจารย์ Ener เขีย�
 ห้ามระบุชนิด/รุ่น/วัดพระ · ห้ามการันตีผล · เรียกตามหน่วยที่ให้ (องค์ที่/ชิ้นที่)`;
 
 async function buildContent({ uid, dateKey, pieces, sets, avg, dayAxis }) {
-  const cacheKey = `synergy:content:${uid}:${dateKey}`;
+  const cacheKey = contentCacheKey(uid, dateKey, pieces);
   try {
     const cached = await getValue(cacheKey);
     if (cached) return JSON.parse(cached);
@@ -321,7 +334,7 @@ export async function buildSynergyFactsForChat(lineUserId) {
     // คำอ่านจริงจากรายงาน (ถ้า cache ของวันมีอยู่) — ให้คำพูดอาจารย์ตรงกับหน้ารายงานเป๊ะ
     let daySay = null;
     try {
-      const raw = await getValue(`synergy:content:${uid}:${todayKey}`);
+      const raw = await getValue(contentCacheKey(uid, todayKey, pieces));
       const j = raw ? JSON.parse(raw) : null;
       daySay = String(j?.setLines?.daily || "").trim() || null;
     } catch { /* ignore */ }
