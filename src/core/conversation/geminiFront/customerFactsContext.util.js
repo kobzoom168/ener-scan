@@ -89,6 +89,17 @@ export async function buildCustomerFactsContext(lineUserId) {
       liffReadingLines = null;
     }
 
+    // ชุดจัดพลังวันนี้ (กบ 4 ส.ค.): ลูกค้าถามชุดที่ระบบจัดให้ อาจารย์ต้องตอบตรงกับรายงาน
+    let synergyLines = null;
+    try {
+      const { buildSynergyFactsForChat } = await import(
+        "../../../services/synergy/synergyReport.service.js"
+      );
+      synergyLines = await buildSynergyFactsForChat(uid);
+    } catch {
+      synergyLines = null;
+    }
+
     // โน้ตเคสจากแอดมิน (เคสคุณชิต 15 ก.ค.: แอดมินลบผลผิด+เติมสิทธิ์ แต่บอทไม่รู้เรื่อง พูดคนละทาง):
     // แอดมินฝากเรื่องต่อบอทผ่าน redis `admin_case_note:{uid}` (TTL ตามเคส) — บอทต้องเล่าตรงกัน
     let adminCaseLine = null;
@@ -142,6 +153,7 @@ export async function buildCustomerFactsContext(lineUserId) {
       ...(adminResetLine ? [`• ${adminResetLine}`] : []),
       ...(rejectLine ? [`• ${rejectLine}`] : []),
       ...(liffReadingLines ? [`• ${liffReadingLines}`] : []),
+      ...(synergyLines ? [synergyLines] : []),
     ].join("\n");
   } catch {
     return null;

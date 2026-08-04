@@ -195,6 +195,19 @@ export function pickSet(pieces, mission, dateKey, uid) {
 
 // ── เนื้อความ (LLM 1 ครั้ง/คน/วัน — cache redis) ────────────────
 
+// เลของค์ที่/ชิ้นที่ เลื่อนทันทีที่มีสแกนใหม่ (คลังเรียง created_at desc) — cache เนื้อความ
+// ต้องผูกกับหน้าตาคลัง ไม่งั้นคำอ่านอ้างเลขเก่าทั้งวัน (บั๊กเจอ 4 ส.ค.: "องค์ที่ 11" ทั้งที่ชุดคือ 12)
+function vaultSig(pieces) {
+  return crypto
+    .createHash("md5")
+    .update(pieces.map((p) => `${p.name}|${p.score}`).join("~"))
+    .digest("hex")
+    .slice(0, 8);
+}
+function contentCacheKey(uid, dateKey, pieces) {
+  return `synergy:content:${uid}:${dateKey}:${vaultSig(pieces)}`;
+}
+
 const CONTENT_SYS = `คุณคืออาจารย์ Ener เขียนเนื้อความรายงานจัดชุดพลัง ตอบ JSON เดียวเท่านั้น:
 {"vaultTitle":string,"tags":[string,string,string],"setLines":{"daily":string,"work":string,"travel":string,"luck":string,"date":string},"mainLine":string,"gapLine":string,"intent":string}
 กติกาภาษา: ทุก line 2 ประโยคเป๊ะ — ประโยคแรกบอกทำอะไร (พก/ห้อย/เพิ่ม/เลือก + เลขชิ้นตามที่ให้) ประโยคสอง "เชื่อกันว่า..." · ห้ามคำ: พุ่งสูง/ทุกมิติ/เติมเต็ม/ขยายโอกาส/สะท้อนพลัง/ชนกัน/ตีกัน
@@ -205,7 +218,7 @@ const CONTENT_SYS = `คุณคืออาจารย์ Ener เขีย�
 ห้ามระบุชนิด/รุ่น/วัดพระ · ห้ามการันตีผล · เรียกตามหน่วยที่ให้ (องค์ที่/ชิ้นที่)`;
 
 async function buildContent({ uid, dateKey, pieces, sets, avg, dayAxis }) {
-  const cacheKey = `synergy:content:${uid}:${dateKey}`;
+  const cacheKey = contentCacheKey(uid, dateKey, pieces);
   try {
     const cached = await getValue(cacheKey);
     if (cached) return JSON.parse(cached);
@@ -283,6 +296,65 @@ export async function recordCarryToday(lineUserId) {
   await setValueWithTtl(cntKey, String(streak), 60 * 86400).catch(() => {});
   console.log(JSON.stringify({ event: "SYNERGY_CARRY_RECORDED", lineUserIdPrefix: uid.slice(0, 10), streak }));
   return { streak };
+}
+
+// ── ความรู้ให้อาจารย์ในแชท (กบ 4 ส.ค.: ลูกค้าถามชุดที่จัดให้ ต้องตอบตรงกับรายงาน) ──
+
+/**
+ * fact block ชุดจัดของวันนี้สำหรับ consult — deterministic ตัวเดียวกับหน้ารายงาน
+ * ไม่ยิง LLM เอง (ใช้คำอ่านจาก cache ต่อเมื่อลูกค้าเคยเปิดหน้าแล้วเท่านั้น) · cache 15 นาที
+ * @param {string} lineUserId
+ * @returns {Promise<string|null>}
+ */
+export async function buildSynergyFactsForChat(lineUserId) {
+  const uid = String(lineUserId || "").trim();
+  if (!uid) return null;
+  const todayKey = bangkokDateKey();
+  // โหลดคลังก่อนค่อยเช็ค cache — key ผูก vaultSig เหมือน content ไม่งั้นสแกนใหม่แล้วเลขค้าง 15 นาที
+  const pieces = await loadVault(uid);
+  const cacheKey = `synergy:factchat:${uid}:${todayKey}:${vaultSig(pieces)}`;
+  try {
+    const c = await getValue(cacheKey);
+    if (c) return c;
+  } catch { /* ignore */ }
+
+  let out;
+  if (pieces.length < 3) {
+    out =
+      `• จัดชุดพลัง: คลังลูกค้ามี ${pieces.length} ชิ้น ยังไม่ครบ 3 ชิ้นขั้นต่ำที่อาจารย์จะจัดชุดให้ได้ — ` +
+      `ตอบเรื่องนี้เฉพาะเมื่อลูกค้าถามเอง แล้วชวนส่งชิ้นมาสแกนเพิ่มแบบนุ่ม ๆ`;
+  } else {
+    const dayName = thaiDayName(todayKey);
+    const dayAxis = DAY_AXIS_BOOST[dayName] || null;
+    const best = [...pieces].sort((a, b) => b.score - a.score)[0];
+    const ref = (pc) => `${pc.unit} ${pc.n} (สาย${pc.peakShort})`;
+    const setLine = (m) => {
+      const st = pickSet(pieces, m, todayKey, uid);
+      return `  - ${m.label}: ${ref(st.main)}${st.partner ? ` คู่กับ ${ref(st.partner)}` : ""}`;
+    };
+    // คำอ่านจริงจากรายงาน (ถ้า cache ของวันมีอยู่) — ให้คำพูดอาจารย์ตรงกับหน้ารายงานเป๊ะ
+    let daySay = null;
+    try {
+      const raw = await getValue(contentCacheKey(uid, todayKey, pieces));
+      const j = raw ? JSON.parse(raw) : null;
+      daySay = String(j?.setLines?.daily || "").trim() || null;
+    } catch { /* ignore */ }
+    out = [
+      `• จัดชุดพลังของลูกค้าคนนี้ (ระบบจัดไว้แล้ว ประจำ${dayName}ที่ ${todayKey} — ข้อเท็จจริง ห้ามจัดใหม่/สลับชิ้นเอง):`,
+      ...MISSIONS.map(setLine),
+      `  - ชิ้นหลักประจำคลัง: ${ref(best)} — วันไหนไม่แน่ใจให้พกชิ้นนี้`,
+      ...(dayAxis ? [`  - ${dayName} เชื่อกันว่าสาย${dayAxis}เด่นเป็นพิเศษ (เหตุผลที่ชุดวันนี้ออกมาแบบนี้)`] : []),
+      ...(daySay ? [`  - คำอ่านชุดวันทั่วไปตามรายงาน: "${daySay}" (เล่าให้ตรงแนวนี้)`] : []),
+      `  - เลของค์ที่/ชิ้นที่ อ้างตามคลังลูกค้า ตรงกับหน้ารายงานจัดชุด · พูดแบบ "เชื่อกันว่า" ห้ามการันตีผล`,
+      `  - ⛔️ เรื่อง flow: ใช้ข้อมูลนี้เฉพาะเมื่อลูกค้าถามเรื่องจัดชุด/วันนี้พกชิ้นไหน/ชุดที่จัดให้เอง — ` +
+        `ห้ามยกเรื่องจัดชุดขึ้นมาเองหรือดึงบทสนทนาเรื่องอื่นของลูกค้ามาเข้าเรื่องนี้เด็ดขาด · ` +
+        `ลูกค้าอยากเปิดดู: บอกว่าพิมพ์ จัดชุด ในแชทนี้ได้เลย`,
+    ].join("\n");
+  }
+  try {
+    await setLargeValueWithTtl(cacheKey, out, 900);
+  } catch { /* ignore */ }
+  return out;
 }
 
 // ── Flex carousel แนะนำ (กบ 1 ส.ค. — แทนข้อความล้วน ใช้ทั้ง trigger + คำสั่งแชท) ──
