@@ -42,7 +42,7 @@ const AMULET_TITLE_TAGLINE_COLOR = "#78716c";
 /** Life-area helper line: dimmer than captions; metadata only. */
 const LIFE_AREA_HELPER_TEXT_COLOR = "#a8a29e";
 /** Fallback when power rows are missing (Flex display only). */
-const AMULET_TITLE_TAGLINE = "พระ/เทวรูป/เครื่องราง · หกมิติพลัง";
+const AMULET_TITLE_TAGLINE = "พระ/เทวรูป/เครื่องราง · เจ็ดมิติพลัง";
 
 /** Bar score numerals: quieter than labels (read dimension + bar first). */
 const LIFE_AREA_BAR_SCORE_COLOR = "#6b7280";

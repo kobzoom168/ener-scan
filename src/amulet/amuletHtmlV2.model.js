@@ -185,6 +185,14 @@ export function buildAmuletHtmlV2ViewModel(payload) {
   }
   const { ord, alignKey, objectP, ownerP, ownerProf } = metrics;
 
+  // แกนที่ 7 "เสน่หา" (กบ 4 ส.ค. — แสดงผลเท่านั้น): derive จากเมตตา สูตรเดียวกับหน้าจัดชุด
+  // ไม่แตะ ord/align/ความเข้ากัน% — คะแนน 6 แกนเดิม + เกรด + seed นิ่งทุกชิ้น
+  const charmyLabel = /เสน่หา|มหานิยม|เสน่ห์/.test(
+    String(payload?.summary?.mainEnergyLabel || "") + String(payload?.summary?.energyLevelLabel || ""),
+  );
+  objectP.charm = Math.min(100, Math.round((Number(objectP.metta) || 0) * 0.88 + (charmyLabel ? 14 : 0)));
+  ownerP.charm = Math.min(100, Math.round((Number(ownerP.metta) || 0) * 0.88));
+
   const pc =
     av.powerCategories && typeof av.powerCategories === "object"
       ? av.powerCategories
@@ -314,7 +322,7 @@ export function buildAmuletHtmlV2ViewModel(payload) {
     rendererId: "amulet-html-v2",
     hero: {
       subtypeLabel: String(fs.headline || "").trim(),
-      tagline: String(fs.tagline || "").trim(),
+      tagline: String(fs.tagline || "").trim().replace(/หกมิติพลัง/g, "เจ็ดมิติพลัง"),
       mainEnergyLabel: mainShort,
       displayLine: `โทนหลัก · ${peakShort}`,
       clarifierLine,
@@ -335,7 +343,10 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       };
     })(),
     power: {
-      axes: POWER_ORDER.map((id) => ({ id, labelThai: POWER_LABEL_THAI[id] })),
+      axes: [...POWER_ORDER, "charm"].map((id) => ({
+        id,
+        labelThai: id === "charm" ? "เสน่ห์และแรงดึงดูดใจ" : POWER_LABEL_THAI[id],
+      })),
       owner: ownerP,
       object: objectP,
       objectPeakKey: peakKey,

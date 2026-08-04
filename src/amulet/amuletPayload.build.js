@@ -34,7 +34,7 @@ export function buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, 
     ctaLabel,
     mainEnergyShort: surface.mainEnergyShort,
     heroNamingLine: `${surface.headline} · ${mainShort}`,
-    mainEnergyWordingLine: `โทนหลัก: ${mainShort} · หกมิติพลัง`,
+    mainEnergyWordingLine: `โทนหลัก: ${mainShort} · เจ็ดมิติพลัง`,
     htmlOpeningLine: "เปิดจากคะแนน แล้วไล่รายละเอียดตามลำดับ",
     tagline: surface.tagline,
   };
@@ -76,7 +76,7 @@ export function buildAmuletV1Slice({
   const headline = String(typedLabelThai || "").trim() || "พระ/เทวรูป/เครื่องราง";
   const mainShort =
     String(mainEnergyLabel || "").trim().slice(0, 22) || "พลังมุ่งเน้นรวม";
-  const tagline = `${headline} · หกมิติพลัง`;
+  const tagline = `${headline} · เจ็ดมิติพลัง`;
 
   const flexSurface = buildAmuletFlexSurfaceCopy(
     scores.primaryPower,

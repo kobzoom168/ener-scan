@@ -15,6 +15,17 @@ import {
  * @type {Record<AmuletPowerKey, { body: string, useFor: string[], foot: string }>}
  */
 const AXIS_MEANING = {
+  charm: {
+    body: "ด้านนี้สื่อถึงเสน่ห์ แรงดึงดูดใจ และความประทับใจเมื่อแรกพบ อาจารย์อ่านต่อยอดจากพลังเมตตาของชิ้น ถ้าคะแนนด้านนี้สูง แปลว่าวัตถุชิ้นนี้มีแนวโน้มช่วยให้เจ้าของดูมีแรงดึงดูดขึ้น คนอยากเข้าใกล้ อยากคุยด้วย เหมาะกับช่วงที่ต้องพบคนสำคัญ ออกงานสังคม หรืออยากให้ความสัมพันธ์มีจังหวะที่ดีขึ้น",
+    useFor: [
+      "นัดพบคนสำคัญ",
+      "การออกงานสังคม",
+      "ความรักและความสัมพันธ์",
+      "งานที่ต้องสร้างความประทับใจแรก",
+      "การเจรจาที่ต้องให้อีกฝ่ายเปิดใจ",
+    ],
+    foot: "พลังเสน่หาอ่านตามแนวทาง Ener จากพลังเมตตาของชิ้น เป็นแรงหนุนบรรยากาศ ไม่ใช่การการันตีความรักหรือผลลัพธ์กับใครคนใดคนหนึ่ง",
+  },
   baramee: {
     body: "ด้านนี้สื่อถึงพลังของความหนักแน่น ความน่าเชื่อถือ และแรงนำในตัวเจ้าของ ถ้าคะแนนด้านนี้สูง แปลว่าวัตถุชิ้นนี้มีแนวโน้มช่วยเสริมบุคลิกให้ดูมั่นคงขึ้น พูดแล้วมีน้ำหนักขึ้น หรือเหมาะกับช่วงที่ต้องตัดสินใจ เจรจา พบผู้ใหญ่ นำทีม หรือทำเรื่องที่ต้องใช้ความน่าเชื่อถือ",
     useFor: [
@@ -86,6 +97,7 @@ const AXIS_MEANING = {
 
 /** @type {Record<AmuletPowerKey, string>} */
 const AXIS_SUMMARY = {
+  charm: "พลังเสน่ห์ แรงดึงดูดใจ และความประทับใจแรกพบ",
   baramee: "พลังความหนักแน่น ความน่าเชื่อถือ และแรงนำในบทบาทสำคัญ",
   specialty: "พลังหนุนงานที่ต้องใช้ทักษะเฉพาะ ฝีมือ และความชำนาญ",
   luck: "พลังโอกาสใหม่ การเปิดทาง และจังหวะที่เรื่องเริ่มขยับ",
@@ -127,6 +139,8 @@ export function renderAmuletEnergyMeaningHtml(payload) {
   } else {
     order = [...POWER_ORDER];
   }
+  // แกนที่ 7 เสน่หา (กบ 4 ส.ค.) — แสดงผลท้ายรายการเสมอ คะแนน derive จาก view model
+  order = [...order.filter((k) => k !== "charm"), /** @type {AmuletPowerKey} */ ("charm")];
 
   /** @type {Record<string, number | null>} */
   const scoreByKey = {};
@@ -135,6 +149,9 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       scoreByKey[r.key] =
         r.score != null && Number.isFinite(Number(r.score)) ? Number(r.score) : null;
     }
+  }
+  if (scoreByKey.charm == null && Number.isFinite(Number(vm.power?.object?.charm))) {
+    scoreByKey.charm = Number(vm.power.object.charm);
   }
 
   const jumpPillsHtml = order
@@ -149,7 +166,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     .map((key) => {
       const block = AXIS_MEANING[key];
       if (!block) return "";
-      const title = POWER_LABEL_THAI[key] || key;
+      const title = key === "charm" ? "เสน่ห์และแรงดึงดูดใจ" : POWER_LABEL_THAI[key] || key;
       const sc = scoreByKey[key];
       const useList = block.useFor
         .map((line) => `<span class="aem-chip">${escapeHtml(line)}</span>`)
@@ -188,7 +205,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     })
     .join("");
 
-  const docTitle = "ความหมายพลังทั้ง 6 ด้าน · Ener Scan";
+  const docTitle = "ความหมายพลังทั้ง 7 ด้าน · Ener Scan";
 
   return `<!DOCTYPE html>
 ${amuletSubpageAutoDarkScriptHtml()}
@@ -588,10 +605,10 @@ ${amuletSubpageAutoDarkScriptHtml()}
     <a class="aem-back" href="${escapeHtml(reportBackHref)}">← รายงาน</a>
     <section class="aem-hero">
       <p class="aem-eyebrow">รายงาน</p>
-      <h1 class="aem-h1">ความหมายพลังทั้ง 6 ด้าน</h1>
+      <h1 class="aem-h1">ความหมายพลังทั้ง 7 ด้าน</h1>
       <p class="aem-sub">คะแนนพลังแต่ละด้านใช้เพื่อบอกแนวโน้มว่าแรงของวัตถุเด่นไปทางไหน คะแนนสูงไม่ได้แปลว่าดีที่สุดเสมอไป แต่บอกว่าด้านนั้นส่งแรงชัดกว่าด้านอื่น</p>
       <div class="aem-mini-stats">
-        <span class="aem-mini-chip">6 มิติพลัง</span>
+        <span class="aem-mini-chip">7 มิติพลัง</span>
         <span class="aem-mini-chip">Score-based</span>
         <span class="aem-mini-chip">Sacred Amulet Lane</span>
       </div>

@@ -164,7 +164,7 @@ export async function buildReportPayloadFromGlobalBaseline(p) {
   const flexSurface = buildAmuletFlexSurfaceCopy(primary, secondary, powerCategories, {
     headline: "พระเครื่อง",
     mainEnergyShort,
-    tagline: "พระเครื่อง · หกมิติพลัง",
+    tagline: "พระเครื่อง · เจ็ดมิติพลัง",
   });
 
   const amuletV1 = {
