@@ -310,13 +310,14 @@ export async function buildSynergyFactsForChat(lineUserId) {
   const uid = String(lineUserId || "").trim();
   if (!uid) return null;
   const todayKey = bangkokDateKey();
-  const cacheKey = `synergy:factchat:${uid}:${todayKey}`;
+  // โหลดคลังก่อนค่อยเช็ค cache — key ผูก vaultSig เหมือน content ไม่งั้นสแกนใหม่แล้วเลขค้าง 15 นาที
+  const pieces = await loadVault(uid);
+  const cacheKey = `synergy:factchat:${uid}:${todayKey}:${vaultSig(pieces)}`;
   try {
     const c = await getValue(cacheKey);
     if (c) return c;
   } catch { /* ignore */ }
 
-  const pieces = await loadVault(uid);
   let out;
   if (pieces.length < 3) {
     out =
