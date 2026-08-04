@@ -229,3 +229,9 @@
 - **บั๊กเจอระหว่างตรวจ (หน้า report ก็โดน — เห็นในภาพกบ)**: cache คำอ่าน 26 ชม. อ้างเลขชิ้นเก่า เพราะเลของค์ที่/ชิ้นที่เลื่อนเมื่อมีสแกนใหม่ (คลังเรียง created_at desc) → คำอ่านบอก "องค์ที่ 11 คู่ 3" แต่ชุดจริง 12+4 · แก้: contentCacheKey ผูก vaultSig (md5 ชื่อ+คะแนนทุกชิ้น 8 hex) — คลังเปลี่ยน = คำอ่านสร้างใหม่
 - test 38/38 · deploy staging · verify ตรงทุกภารกิจแล้ว · sync main · ค้าง: กบสั่งขึ้น pro
 
+## 2026-08-04 | Claude | โลโก้โหลดแบบ LIFF ทั้ง /synergy และ report หลัก (กบ: "logo ตอนเข้า html อยากให้เหมือนเข้า lift" + "รวมถึง report html หลักด้วย")
+- util กลาง src/utils/enerLoaderShell.util.js — emblem SVG วาดตัวเอง + wordmark Ener + จุดวิ่ง 3 จุด (คัดลอกจาก LIFF v-load เป๊ะ) parameterize title/message/bodyUrlExpr
+- /synergy/:token ใช้ util แทน shell เดิม (✦ ENER SCAN) · /r/:publicToken เพิ่ม shell ด้วย: browser จริงได้โลโก้แล้ว fetch /r/:token/body (+location.search คง ?lang=en) · **crawler (FB/LINE/Twitter/Google ฯลฯ regex CRAWLER_UA) ได้หน้าเต็มทันที — OG preview ไม่พัง**
+- route ใหม่ GET /r/:publicToken/body = getReportBodyByToken (โลจิกเดิมทั้งก้อน telemetry อยู่ครบ)
+- verify staging: UA ปกติได้ shell / facebookexternalhit ได้ og:title / body 200 0.53s · test 38/38
+
