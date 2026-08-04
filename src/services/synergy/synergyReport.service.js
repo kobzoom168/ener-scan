@@ -304,15 +304,15 @@ export async function buildSynergyCarouselFlex(lineUserId) {
   const set = pickSet(pieces, MISSIONS[0], todayKey, uid);
   const best = [...pieces].sort((a, b) => b.score - a.score)[0];
 
-  const btn = (label) => ({
+  const btn = (label, href) => ({
     type: "box", layout: "vertical", backgroundColor: "#14110C",
     paddingAll: "12px", paddingTop: "0px",
     contents: [{
       type: "button", style: "primary", color: "#B8871B", height: "sm",
-      action: { type: "uri", label, uri: url },
+      action: { type: "uri", label, uri: href || url },
     }],
   });
-  const bubble = ({ img, title, lines, btnLabel }) => ({
+  const bubble = ({ img, title, lines, btnLabel, href }) => ({
     type: "bubble", size: "kilo",
     ...(img ? { hero: { type: "image", url: img, size: "full", aspectRatio: "4:5", aspectMode: "cover" } } : {}),
     body: {
@@ -323,7 +323,7 @@ export async function buildSynergyCarouselFlex(lineUserId) {
         ...lines.map((t) => ({ type: "text", text: t, size: "sm", color: "#F5EDD8", wrap: true })),
       ],
     },
-    footer: btn(btnLabel),
+    footer: btn(btnLabel, href),
   });
 
   const bubbles = [
@@ -335,18 +335,21 @@ export async function buildSynergyCarouselFlex(lineUserId) {
         set.dayAxis ? `${dayName} เชื่อกันว่าสาย${set.dayAxis}เด่นเป็นพิเศษ` : "อาจารย์จัดจากคลังของคุณ",
       ],
       btnLabel: "เปิดดูชุดของวัน",
+      href: url,
     }),
     bubble({
       img: best.img || "",
       title: "ชิ้นหลักประจำคลัง",
       lines: [`${best.unit} ${best.n} · สาย${best.peakShort}`, "วันไหนไม่แน่ใจ พกชิ้นนี้ได้เลย"],
       btnLabel: "ดูรายละเอียด",
+      href: `${url}?go=main`,
     }),
     bubble({
       img: set?.partner?.img || "",
       title: "เลือกชุดตามสิ่งที่จะทำ",
       lines: ["คุยงานสำคัญ · เดินทางไกล", "เสี่ยงโชค · นัดพบคนสำคัญ", `จัดจากคลังของคุณ ${pieces.length} ชิ้น`],
       btnLabel: "เลือกภารกิจ",
+      href: `${url}?go=missions`,
     }),
   ];
 
@@ -488,11 +491,13 @@ body{font-family:Kanit,sans-serif;background:#0d0b08;color:#f5edd8;max-width:520
 .pm .sc{color:#fff;font-size:15px;margin:6px 0 12px}
 .pm a.go{display:block;background:linear-gradient(90deg,#b8871b,#e8c547);color:#0d0b08;font-weight:600;border-radius:10px;padding:11px;text-decoration:none;font-size:14.5px}
 .pm .cl{margin-top:10px;color:#b3a479;font-size:13px;background:none;border:none;cursor:pointer;font-family:inherit}
+@keyframes goflash{0%,60%{box-shadow:0 0 0 2px #e8c547,0 0 26px rgba(232,197,71,.5)}100%{box-shadow:none}}
+.goflash{animation:goflash 2.2s ease-out 1;border-radius:14px}
 </style></head><body>
 <div class="hd"><h1>ENER SCAN</h1><div class="vault">${esc(content.vaultTitle)}</div><small>จัดจากวัตถุมงคลของคุณ ${pieces.length} ชิ้น</small></div>
 
 <div class="tabs"><button class="db on" data-d="today">วันนี้</button><button class="db" data-d="tomorrow">พรุ่งนี้</button></div>
-<div class="mrowbtns">${missionBtns}</div>
+<div class="mrowbtns" id="mission-row">${missionBtns}</div>
 
 <div class="today">
   <div class="tag" id="set-title">${esc(dayName)} แนะนำพกชุดนี้</div>
@@ -504,7 +509,7 @@ body{font-family:Kanit,sans-serif;background:#0d0b08;color:#f5edd8;max-width:520
   <div class="carry-note" id="carry-note"></div>
 </div>
 
-<div class="sec"><h3>วันไหนไม่แน่ใจ พกชิ้นนี้</h3>
+<div class="sec" id="main-piece"><h3>วันไหนไม่แน่ใจ พกชิ้นนี้</h3>
   <div style="display:flex;flex-direction:column;gap:7px"><div class="grid" style="grid-template-columns:1fr">${`<div class="chip tap" data-n="${best.n}"><img src="${esc(best.img)}" alt="${best.unit} ${best.n}"><div><b>${best.unit} ${best.n}</b><span>${esc(best.peakShort)}</span></div></div>`}</div>
   <p style="font-size:13px;color:#e8dcbc;line-height:1.55">${esc(content.mainLine || "")}</p></div>
 </div>
@@ -566,6 +571,12 @@ document.getElementById("carry-btn").addEventListener("click", async function ()
     } else { b.disabled = false; }
   } catch (e) { b.disabled = false; }
 });
+(function(){
+ var go=new URLSearchParams(location.search).get("go");
+ var el=go==="main"?document.getElementById("main-piece"):go==="missions"?document.getElementById("mission-row"):null;
+ if(!el)return;
+ setTimeout(function(){el.scrollIntoView({behavior:"smooth",block:"center"});el.classList.add("goflash");},250);
+})();
 </script>
 </body></html>`;
 
