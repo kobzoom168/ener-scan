@@ -235,3 +235,7 @@
 - route ใหม่ GET /r/:publicToken/body = getReportBodyByToken (โลจิกเดิมทั้งก้อน telemetry อยู่ครบ)
 - verify staging: UA ปกติได้ shell / facebookexternalhit ได้ og:title / body 200 0.53s · test 38/38
 
+## 2026-08-04 | Claude | ขึ้น pro ชุดใหญ่ (กบสั่ง "เอาขึ้น Pro เลย")
+- pro LIVE: consult รู้ชุดจัดพลัง + กฎ flow · vaultSig fix คำอ่านเลขเลื่อน · โลโก้ LIFF ทั้ง /synergy และ /r
+- verify pro: /r browser=shell โลโก้ / crawler=og ครบ / body 0.48s / synergy shell emblem ✓
+
