@@ -285,6 +285,64 @@ export async function recordCarryToday(lineUserId) {
   return { streak };
 }
 
+// ── ความรู้ให้อาจารย์ในแชท (กบ 4 ส.ค.: ลูกค้าถามชุดที่จัดให้ ต้องตอบตรงกับรายงาน) ──
+
+/**
+ * fact block ชุดจัดของวันนี้สำหรับ consult — deterministic ตัวเดียวกับหน้ารายงาน
+ * ไม่ยิง LLM เอง (ใช้คำอ่านจาก cache ต่อเมื่อลูกค้าเคยเปิดหน้าแล้วเท่านั้น) · cache 15 นาที
+ * @param {string} lineUserId
+ * @returns {Promise<string|null>}
+ */
+export async function buildSynergyFactsForChat(lineUserId) {
+  const uid = String(lineUserId || "").trim();
+  if (!uid) return null;
+  const todayKey = bangkokDateKey();
+  const cacheKey = `synergy:factchat:${uid}:${todayKey}`;
+  try {
+    const c = await getValue(cacheKey);
+    if (c) return c;
+  } catch { /* ignore */ }
+
+  const pieces = await loadVault(uid);
+  let out;
+  if (pieces.length < 3) {
+    out =
+      `• จัดชุดพลัง: คลังลูกค้ามี ${pieces.length} ชิ้น ยังไม่ครบ 3 ชิ้นขั้นต่ำที่อาจารย์จะจัดชุดให้ได้ — ` +
+      `ตอบเรื่องนี้เฉพาะเมื่อลูกค้าถามเอง แล้วชวนส่งชิ้นมาสแกนเพิ่มแบบนุ่ม ๆ`;
+  } else {
+    const dayName = thaiDayName(todayKey);
+    const dayAxis = DAY_AXIS_BOOST[dayName] || null;
+    const best = [...pieces].sort((a, b) => b.score - a.score)[0];
+    const ref = (pc) => `${pc.unit} ${pc.n} (สาย${pc.peakShort})`;
+    const setLine = (m) => {
+      const st = pickSet(pieces, m, todayKey, uid);
+      return `  - ${m.label}: ${ref(st.main)}${st.partner ? ` คู่กับ ${ref(st.partner)}` : ""}`;
+    };
+    // คำอ่านจริงจากรายงาน (ถ้า cache ของวันมีอยู่) — ให้คำพูดอาจารย์ตรงกับหน้ารายงานเป๊ะ
+    let daySay = null;
+    try {
+      const raw = await getValue(`synergy:content:${uid}:${todayKey}`);
+      const j = raw ? JSON.parse(raw) : null;
+      daySay = String(j?.setLines?.daily || "").trim() || null;
+    } catch { /* ignore */ }
+    out = [
+      `• จัดชุดพลังของลูกค้าคนนี้ (ระบบจัดไว้แล้ว ประจำ${dayName}ที่ ${todayKey} — ข้อเท็จจริง ห้ามจัดใหม่/สลับชิ้นเอง):`,
+      ...MISSIONS.map(setLine),
+      `  - ชิ้นหลักประจำคลัง: ${ref(best)} — วันไหนไม่แน่ใจให้พกชิ้นนี้`,
+      ...(dayAxis ? [`  - ${dayName} เชื่อกันว่าสาย${dayAxis}เด่นเป็นพิเศษ (เหตุผลที่ชุดวันนี้ออกมาแบบนี้)`] : []),
+      ...(daySay ? [`  - คำอ่านชุดวันทั่วไปตามรายงาน: "${daySay}" (เล่าให้ตรงแนวนี้)`] : []),
+      `  - เลของค์ที่/ชิ้นที่ อ้างตามคลังลูกค้า ตรงกับหน้ารายงานจัดชุด · พูดแบบ "เชื่อกันว่า" ห้ามการันตีผล`,
+      `  - ⛔️ เรื่อง flow: ใช้ข้อมูลนี้เฉพาะเมื่อลูกค้าถามเรื่องจัดชุด/วันนี้พกชิ้นไหน/ชุดที่จัดให้เอง — ` +
+        `ห้ามยกเรื่องจัดชุดขึ้นมาเองหรือดึงบทสนทนาเรื่องอื่นของลูกค้ามาเข้าเรื่องนี้เด็ดขาด · ` +
+        `ลูกค้าอยากเปิดดู: บอกว่าพิมพ์ จัดชุด ในแชทนี้ได้เลย`,
+    ].join("\n");
+  }
+  try {
+    await setLargeValueWithTtl(cacheKey, out, 900);
+  } catch { /* ignore */ }
+  return out;
+}
+
 // ── Flex carousel แนะนำ (กบ 1 ส.ค. — แทนข้อความล้วน ใช้ทั้ง trigger + คำสั่งแชท) ──
 
 /**
