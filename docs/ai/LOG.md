@@ -219,3 +219,7 @@
 - การ์ด 1 ชุดของวัน: รูปคู่ชิ้นหลัก+เสริม (3:4) มี + ทองตรงกลาง เหมือนกล่อง "แนะนำพกชุดนี้" · การ์ด 2 ชิ้นหลัก: รูปเล็ก 1:1 + ข้อความ เหมือน chip · การ์ด 3 ภารกิจ: ลิสต์ ◆ 4 แถว
 - deep-link เดิมคงไว้ (การ์ด 2 ?go=main, การ์ด 3 ?go=missions) · test 38/38 · deploy staging · push ตัวใหม่เข้า OA staging แล้ว รอกบดู
 
+## 2026-08-04 | Claude | Carousel v2 ขึ้น pro (กบสั่ง "เอาขึ้น pro เลย")
+- deploy pro สำเร็จ · push carousel จริงผ่าน OA pro แล้ว (LINE 200) · verify body pro มี deep-link markup (0.44s)
+- LIVE ครบ: trigger 3 ชิ้น + คำสั่ง "จัดชุด" ส่ง carousel การ์ดละเรื่อง 3 ใบ (fallback text ถ้าพัง) · ปุ่มการ์ด 2→?go=main การ์ด 3→?go=missions
+
