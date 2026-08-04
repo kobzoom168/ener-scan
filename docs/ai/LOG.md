@@ -214,3 +214,8 @@
 - gotcha: คีย์ redis จริงมี prefix scanv2_stagingdedupe:/scan_v2dedupe: — ล้าง cache ต้องใช้ pattern '*synergy*'
 - deploy staging · verify body สด (0.35s มี markup ครบ) · push carousel ตัวใหม่เข้า OA staging แล้ว · ค้าง: กบลองกด → สั่งขึ้น pro
 
+## 2026-08-04 | Claude | Carousel v2: การ์ดละเรื่อง (กบ: "Design มันดูแปลก อยากให้แยกเป็นเรื่อง" เหมือนกล่องหน้า HTML)
+- เลิก hero รูปเดียวเต็มการ์ด → ทุกการ์ดโครงเดียวกับ .sec ในหน้า HTML: หัวข้อทอง + เส้นคั่น + เนื้อใน
+- การ์ด 1 ชุดของวัน: รูปคู่ชิ้นหลัก+เสริม (3:4) มี + ทองตรงกลาง เหมือนกล่อง "แนะนำพกชุดนี้" · การ์ด 2 ชิ้นหลัก: รูปเล็ก 1:1 + ข้อความ เหมือน chip · การ์ด 3 ภารกิจ: ลิสต์ ◆ 4 แถว
+- deep-link เดิมคงไว้ (การ์ด 2 ?go=main, การ์ด 3 ?go=missions) · test 38/38 · deploy staging · push ตัวใหม่เข้า OA staging แล้ว รอกบดู
+

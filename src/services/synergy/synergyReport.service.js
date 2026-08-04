@@ -304,50 +304,98 @@ export async function buildSynergyCarouselFlex(lineUserId) {
   const set = pickSet(pieces, MISSIONS[0], todayKey, uid);
   const best = [...pieces].sort((a, b) => b.score - a.score)[0];
 
+  // ธีมตามกล่องในหน้า HTML (กบ 4 ส.ค.): การ์ดละเรื่อง กรอบทอง หัวข้อทอง เนื้อในเหมือน .sec
+  const GOLD = "#E8C547", DIM = "#CBB98A", CREAM = "#F5EDD8", BG = "#14110C", LINE_C = "#3A3122";
   const btn = (label, href) => ({
-    type: "box", layout: "vertical", backgroundColor: "#14110C",
-    paddingAll: "12px", paddingTop: "0px",
+    type: "box", layout: "vertical", backgroundColor: BG,
+    paddingAll: "12px", paddingTop: "4px",
     contents: [{
       type: "button", style: "primary", color: "#B8871B", height: "sm",
       action: { type: "uri", label, uri: href || url },
     }],
   });
-  const bubble = ({ img, title, lines, btnLabel, href }) => ({
+  const card = ({ title, contents, btnLabel, href }) => ({
     type: "bubble", size: "kilo",
-    ...(img ? { hero: { type: "image", url: img, size: "full", aspectRatio: "4:5", aspectMode: "cover" } } : {}),
     body: {
-      type: "box", layout: "vertical", backgroundColor: "#14110C",
+      type: "box", layout: "vertical", backgroundColor: BG,
       paddingAll: "14px", spacing: "sm",
       contents: [
-        { type: "text", text: title, weight: "bold", size: "md", color: "#E8C547", wrap: true },
-        ...lines.map((t) => ({ type: "text", text: t, size: "sm", color: "#F5EDD8", wrap: true })),
+        { type: "text", text: title, weight: "bold", size: "md", color: GOLD, wrap: true },
+        { type: "separator", color: LINE_C },
+        ...contents,
       ],
     },
     footer: btn(btnLabel, href),
   });
+  const pieceCol = (pc) => ({
+    type: "box", layout: "vertical", flex: 1, spacing: "xs",
+    contents: [
+      { type: "image", url: pc.img, size: "full", aspectRatio: "3:4", aspectMode: "cover" },
+      { type: "text", text: `${pc.unit} ${pc.n}`, size: "sm", weight: "bold", color: GOLD, align: "center" },
+      { type: "text", text: `สาย${pc.peakShort}`, size: "xs", color: DIM, align: "center" },
+    ],
+  });
 
   const bubbles = [
-    bubble({
-      img: set?.main?.img || "",
+    // เรื่อง 1: ชุดของวัน — โชว์คู่ชิ้นเหมือนกล่อง "แนะนำพกชุดนี้"
+    card({
       title: `ชุดพลัง${dayName}`,
-      lines: [
-        `${set.main.unit} ${set.main.n}${set.partner ? ` + ${set.partner.unit} ${set.partner.n}` : ""}`,
-        set.dayAxis ? `${dayName} เชื่อกันว่าสาย${set.dayAxis}เด่นเป็นพิเศษ` : "อาจารย์จัดจากคลังของคุณ",
+      contents: [
+        {
+          type: "box", layout: "horizontal", spacing: "sm",
+          contents: [
+            pieceCol(set.main),
+            ...(set.partner
+              ? [
+                  { type: "text", text: "+", size: "xxl", weight: "bold", color: GOLD, flex: 0, gravity: "center" },
+                  pieceCol(set.partner),
+                ]
+              : []),
+          ],
+        },
+        {
+          type: "text", size: "sm", color: CREAM, wrap: true,
+          text: set.dayAxis ? `${dayName} เชื่อกันว่าสาย${set.dayAxis}เด่นเป็นพิเศษ` : "อาจารย์จัดจากคลังของคุณ",
+        },
       ],
       btnLabel: "เปิดดูชุดของวัน",
       href: url,
     }),
-    bubble({
-      img: best.img || "",
+    // เรื่อง 2: ชิ้นหลักประจำคลัง — รูปเล็ก+ข้อความ เหมือน chip ในหน้า HTML
+    card({
       title: "ชิ้นหลักประจำคลัง",
-      lines: [`${best.unit} ${best.n} · สาย${best.peakShort}`, "วันไหนไม่แน่ใจ พกชิ้นนี้ได้เลย"],
+      contents: [
+        {
+          type: "box", layout: "horizontal", spacing: "md", alignItems: "center",
+          contents: [
+            { type: "image", url: best.img, aspectRatio: "1:1", aspectMode: "cover", flex: 1 },
+            {
+              type: "box", layout: "vertical", flex: 2, spacing: "xs",
+              contents: [
+                { type: "text", text: `${best.unit} ${best.n}`, weight: "bold", size: "md", color: GOLD },
+                { type: "text", text: `สาย${best.peakShort}`, size: "xs", color: DIM },
+              ],
+            },
+          ],
+        },
+        { type: "text", text: "วันไหนไม่แน่ใจ พกชิ้นนี้ได้เลย", size: "sm", color: CREAM, wrap: true },
+      ],
       btnLabel: "ดูรายละเอียด",
       href: `${url}?go=main`,
     }),
-    bubble({
-      img: set?.partner?.img || "",
+    // เรื่อง 3: เลือกตามภารกิจ — ลิสต์เหมือนแถวปุ่มภารกิจ
+    card({
       title: "เลือกชุดตามสิ่งที่จะทำ",
-      lines: ["คุยงานสำคัญ · เดินทางไกล", "เสี่ยงโชค · นัดพบคนสำคัญ", `จัดจากคลังของคุณ ${pieces.length} ชิ้น`],
+      contents: [
+        ...["คุยงานสำคัญ", "เดินทางไกล", "เสี่ยงโชค", "นัดพบคนสำคัญ"].map((t) => ({
+          type: "box", layout: "horizontal", spacing: "sm",
+          contents: [
+            { type: "text", text: "◆", size: "xs", color: GOLD, flex: 0, gravity: "center" },
+            { type: "text", text: t, size: "sm", color: CREAM, flex: 1 },
+          ],
+        })),
+        { type: "text", text: `อาจารย์จัดชุดให้จากคลังของคุณ ${pieces.length} ชิ้น`, size: "xs", color: DIM, wrap: true },
+      ],
       btnLabel: "เลือกภารกิจ",
       href: `${url}?go=missions`,
     }),
