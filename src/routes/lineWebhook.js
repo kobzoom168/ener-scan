@@ -319,7 +319,8 @@ import {
 } from "../utils/paymentSlipGrace.util.js";
 
 import { ingestScanImageAsyncV2, scanInFlightKeyForUser } from "../services/scanV2/webhookImageIngestion.service.js";
-import { tryDedupeOnce, isDedupeKeyActive, setValueWithTtl, getValue, clearDedupeKey, incrementCounterWithTtl } from "../redis/scanV2Redis.js";
+import { tryDedupeOnce, isDedupeKeyActive, setValueWithTtl, setLargeValueWithTtl, getValue, clearDedupeKey, incrementCounterWithTtl } from "../redis/scanV2Redis.js";
+import { supabase } from "../config/supabase.js";
 import { getUserPaidUntil } from "../stores/paymentAccess.db.js";
 
 import {
@@ -3824,10 +3825,74 @@ async function handleImageMessage({ client, event, userId, session }) {
   }
 }
 
+// แอดมินช่วยตอบ (กบ 4 ส.ค.): LINE ไม่ส่ง webhook ข้อความที่แอดมินพิมพ์เองใน OA Manager
+// → กบพิมพ์ในแชทตัวเองกับ OA: "ช่วยตอบ <ชื่อลูกค้า>: <ที่ตอบไป>" ระบบผูกให้ AI ตอบต่อเนียน
+async function maybeHandleAdminAssist({ client, event, userId, text }) {
+  const adminUid = String(env.ADMIN_LINE_USER_ID || "").trim();
+  if (!adminUid || userId !== adminUid) return false;
+  const m = text.match(/^(?:ช่วยตอบ|ตอบแทน)\s+([^:：]{1,40}?)\s*[:：]\s*([\s\S]{1,2000})$/);
+  if (!m) return false;
+  const nameQuery = m[1].trim();
+  const said = m[2].trim();
+  try {
+    const { data: cands } = await supabase
+      .from("app_users")
+      .select("line_user_id,display_name")
+      .ilike("display_name", `%${nameQuery}%`)
+      .limit(5);
+    const list = (cands || []).filter((c) => c.line_user_id && c.line_user_id !== adminUid);
+    if (!list.length) {
+      await client.replyMessage(event.replyToken, {
+        type: "text",
+        text: `ไม่เจอลูกค้าชื่อ "${nameQuery}" ครับ ลองพิมพ์ชื่อตามที่ขึ้นในแชท LINE เป๊ะ ๆ อีกครั้ง (รูปแบบ: ช่วยตอบ ชื่อ: ข้อความที่ตอบไป)`,
+      });
+      return true;
+    }
+    // หลายคนชื่อคล้ายกัน → เลือกคนที่คุยล่าสุด
+    let best = list[0];
+    if (list.length > 1) {
+      let bestTs = 0;
+      for (const c of list) {
+        const { data: last } = await supabase
+          .from("line_conversation_messages")
+          .select("created_at")
+          .eq("line_user_id", c.line_user_id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const ts = last?.[0]?.created_at ? Date.parse(last[0].created_at) : 0;
+        if (ts > bestTs) { bestTs = ts; best = c; }
+      }
+    }
+    const targetUid = best.line_user_id;
+    // ลง history เป็นฝั่งอาจารย์ (verbatim) — AI เห็นเป็นคำพูดตัวเอง ตอบต่อเนื่องธรรมชาติ
+    const { insertLineConversationMessage } = await import("../stores/conversationMessages.db.js");
+    await insertLineConversationMessage(targetUid, "bot", said);
+    // แปะโน้ตสด 48 ชม. ให้ fact block ชี้ชัดว่ามีคนช่วยตอบ — ห้ามพูดสวน
+    await setLargeValueWithTtl(
+      `admin_case_note:${targetUid}`,
+      `แอดมินเพิ่งช่วยตอบลูกค้าคนนี้ในแชทด้วยตัวเองว่า: "${said.slice(0, 400)}" — ให้ตอบต่อยอดจากแนวนี้ให้เนียนเป็นเนื้อเดียวกัน ห้ามพูดสวนหรือแนะนำขัดกัน`,
+      172800,
+    );
+    await client.replyMessage(event.replyToken, {
+      type: "text",
+      text: `รับทราบครับ ผูกกับคุณ ${best.display_name || nameQuery} แล้ว อาจารย์จะตอบต่อจากที่พี่ตอบไว้ให้เนียน (มีผล 48 ชม.)`,
+    });
+    console.log(JSON.stringify({ event: "ADMIN_ASSIST_NOTE_SAVED", target: targetUid.slice(0, 8), chars: said.length }));
+  } catch (e) {
+    console.error("[ADMIN_ASSIST] failed:", e?.message);
+    try {
+      await client.replyMessage(event.replyToken, { type: "text", text: "บันทึกไม่สำเร็จ ลองใหม่อีกครั้งครับ" });
+    } catch { /* ignore */ }
+  }
+  return true;
+}
+
 async function handleTextMessage({ client, event, userId, session }) {
   const text = String(event.message.text || "").trim();
   const lowerText = text.toLowerCase();
   const now = Date.now();
+
+  if (await maybeHandleAdminAssist({ client, event, userId, text })) return;
 
   const messageId = event.message?.id ?? null;
 
