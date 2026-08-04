@@ -21,6 +21,7 @@ router.get(
 router.get("/r/:publicToken/card.png", reportController.getShareCardByToken);
 router.get("/r/:publicToken/photo-card.png", reportController.getShowcasePhotoCardByToken);
 router.get("/r/:publicToken/radar.png", reportController.getRadarChipByToken);
+router.get("/r/:publicToken/body", reportController.getReportBodyByToken);
 router.get("/r/:publicToken", reportController.getReportByToken);
 
 router.get(

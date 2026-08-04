@@ -67,7 +67,28 @@ export function getReportDemo(req, res) {
 /**
  * GET /r/:publicToken
  */
+// รายงานหลัก: browser จริงได้ shell โลโก้ก่อน (กบ 4 ส.ค. — เหมือนเข้า LIFF) แล้ว fetch /body
+// bot/crawler (FB/LINE/Twitter preview) ได้หน้าเต็มทันที — OG tags ต้องอยู่ใน response แรกเสมอ
+const CRAWLER_UA =
+  /facebookexternalhit|facebot|twitterbot|line-poker|linespider|linkedinbot|slackbot|telegrambot|whatsapp|discordbot|googlebot|bingbot|applebot|duckduckbot|pinterest|vkshare|preview/i;
+
 export async function getReportByToken(req, res) {
+  const ua = String(req.headers["user-agent"] || "");
+  if (!CRAWLER_UA.test(ua)) {
+    const { buildLoaderShellHtml } = await import("../utils/enerLoaderShell.util.js");
+    res.status(200).type("html").set("Cache-Control", "no-store").send(
+      buildLoaderShellHtml({
+        title: "รายงานพลังงาน - Ener Scan",
+        message: "อาจารย์กำลังเปิดรายงานพลังของคุณ…",
+        bodyUrlExpr: 'location.pathname+"/body"+location.search',
+      }),
+    );
+    return;
+  }
+  return getReportBodyByToken(req, res);
+}
+
+export async function getReportBodyByToken(req, res) {
   const publicToken = String(req.params?.publicToken || "").trim();
   const { payload, loadSource, accessError } =
     await getReportByPublicToken(publicToken);

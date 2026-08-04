@@ -209,19 +209,14 @@ img.qr{width:230px;height:230px;border-radius:14px;border:4px solid #e8c547}
 
 // รายงานจัดชุดพลัง (Synergy — กบเคาะ 31 ก.ค.) — token ถาวรต่อลูกค้า
 // เปิดลิงก์ = เห็นโลโก้ทันที (shell) แล้วค่อยดึงเนื้อจริง (/body) — ครั้งแรกของวันรอ AI ~5 วิ
-app.get("/synergy/:token", (req, res) => {
+app.get("/synergy/:token", async (req, res) => {
   if (!/^syn_[a-f0-9]{24}$/.test(String(req.params.token))) return res.status(404).send("ไม่พบรายงาน");
-  res.status(200).type("html").send(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>จัดชุดพลังของคุณ - Ener Scan</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d0b08'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23e8c547'%3E✦%3C/text%3E%3C/svg%3E">
-<style>body{margin:0;background:#0d0b08;color:#e8c547;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px}
-.lg{font-size:26px;letter-spacing:5px;font-weight:700;animation:p 1.4s ease-in-out infinite}
-.st{font-size:30px;animation:p 1.4s ease-in-out infinite .2s}
-.tx{color:#b3a479;font-size:13.5px}
-@keyframes p{0%,100%{opacity:.35}50%{opacity:1}}</style></head><body>
-<div class="st">✦</div><div class="lg">ENER SCAN</div><div class="tx">อาจารย์กำลังจัดชุดพลังของคุณ…</div>
-<script>fetch(location.pathname+"/body").then(function(r){return r.text()}).then(function(h){document.open();document.write(h);document.close();}).catch(function(){document.querySelector(".tx").textContent="โหลดไม่สำเร็จ ลองรีเฟรชอีกครั้งครับ"});</script>
-</body></html>`);
+  const { buildLoaderShellHtml } = await import("./utils/enerLoaderShell.util.js");
+  res.status(200).type("html").send(buildLoaderShellHtml({
+    title: "จัดชุดพลังของคุณ - Ener Scan",
+    message: "อาจารย์กำลังจัดชุดพลังของคุณ…",
+    bodyUrlExpr: 'location.pathname+"/body"',
+  }));
 });
 
 app.get("/synergy/:token/body", async (req, res) => {
