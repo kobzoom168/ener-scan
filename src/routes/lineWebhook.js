@@ -520,6 +520,7 @@ async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
       text: `อาจารย์จัดชุดจากคลังของคุณ ${vault.length} ชิ้นไว้ให้แล้วครับ วันนี้ควรพกชุดไหน เปิดดูได้เลย\n${base}/synergy/${token}`,
     });
     console.log(JSON.stringify({ event: "SYNERGY_LINK_SENT", lineUserIdPrefix: String(userId).slice(0, 10), pieces: vault.length }));
+    import("../services/synergy/synergyReport.service.js").then((m) => void m.renderSynergyPage(userId)).catch(() => {});
     return true;
   } catch (e) {
     console.log(JSON.stringify({ event: "SYNERGY_LINK_ERROR", message: String(e?.message || e).slice(0, 160) }));

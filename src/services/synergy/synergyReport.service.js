@@ -18,6 +18,7 @@ import { env } from "../../config/env.js";
 import {
   getValue,
   setValueWithTtl,
+  setLargeValueWithTtl,
 } from "../../redis/scanV2Redis.js";
 import {
   getGeminiFlashModel,
@@ -261,7 +262,7 @@ async function buildContent({ uid, dateKey, pieces, sets, avg, dayAxis }) {
   }
   j.gapAxis = gapAxis;
   try {
-    await setValueWithTtl(cacheKey, JSON.stringify(j), 26 * 3600);
+    await setLargeValueWithTtl(cacheKey, JSON.stringify(j), 26 * 3600);
   } catch { /* ignore */ }
   return j;
 }
@@ -290,6 +291,11 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 
 export async function renderSynergyPage(lineUserId) {
   const uid = String(lineUserId);
+  const htmlCacheKey = `synergy:html:${uid}:${bangkokDateKey()}`;
+  try {
+    const cached = await getValue(htmlCacheKey);
+    if (cached && cached.length > 5000) return { ok: true, html: cached, fromCache: true };
+  } catch { /* ignore */ }
   const pieces = await loadVault(uid);
   if (pieces.length < 3) {
     return { ok: false, reason: "not_enough_pieces", count: pieces.length };
@@ -491,5 +497,8 @@ document.getElementById("carry-btn").addEventListener("click", async function ()
 </script>
 </body></html>`;
 
+  try {
+    await setLargeValueWithTtl(htmlCacheKey, html, 600);
+  } catch { /* ignore */ }
   return { ok: true, html };
 }

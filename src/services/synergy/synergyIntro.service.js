@@ -37,6 +37,8 @@ export async function maybeIntroduceSynergy(lineUserId) {
     );
     void insertLineConversationMessage(uid, "bot", text);
     console.log(JSON.stringify({ event: "SYNERGY_INTRO_SENT", lineUserIdPrefix: uid.slice(0, 10), pieces: vault.length }));
+    // prewarm: คำนวณ+cache หน้าไว้ล่วงหน้า คนกดลิงก์แล้วเปิดไว
+    import("./synergyReport.service.js").then((m) => void m.renderSynergyPage(uid)).catch(() => {});
     return { sent: true };
   } catch (e) {
     console.log(JSON.stringify({ event: "SYNERGY_INTRO_ERROR", message: String(e?.message || e).slice(0, 160) }));
