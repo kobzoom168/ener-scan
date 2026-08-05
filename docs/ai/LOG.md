@@ -276,3 +276,6 @@
 - **mitigation pro ทันที (ก่อน deploy)**: seed คีย์ scan_v2dedupe:synergy:intro:* ให้ 56 คนที่เคยได้รับแล้ว TTL 366 วัน — สแปมหยุดแล้ว
 - verify staging: คลังกบแสดง 24 / จริง 26 · dedupe TTL คงอยู่ 365 วัน · test 38/38 · ค้าง: ขึ้น pro (โค้ดแก้ยังอยู่แค่ staging)
 
+## 2026-08-05 | Claude | ขึ้น pro: dedupe TTL 366 วัน + เลขจำนวนชิ้นจริง (กบสั่ง)
+- verify pro: คลังกบชุดแสดง 24 / นับจริง 54 ชิ้น (ข้อความ intro จะบอก 54) · dedupe TTL อยู่ 365 วันจริง · seed 56 คนก่อนหน้ายังอยู่
+
