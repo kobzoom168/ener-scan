@@ -134,7 +134,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
 
   /** @type {AmuletPowerKey[]} */
   let order;
-  if (Array.isArray(rows) && rows.length === 6) {
+  if (Array.isArray(rows) && rows.length >= 6) {
     order = rows.map((r) => /** @type {AmuletPowerKey} */ (r.key));
   } else {
     order = [...POWER_ORDER];

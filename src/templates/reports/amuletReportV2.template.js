@@ -727,7 +727,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const docTitle = `รายงาน · ${subtypeLabel} · Ener Scan`;
   const ogTitle = docTitle;
   const ogDescription =
-    "ดูรายงานพลังพระ/เทวรูป/เครื่องรางจาก Ener Scan พร้อมพลังเด่น ความเข้ากัน และพลังทั้ง 6 ด้าน";
+    "ดูรายงานพลังพระ/เทวรูป/เครื่องรางจาก Ener Scan พร้อมพลังเด่น ความเข้ากัน และพลังทั้ง 7 ด้าน";
   const ogImageAlt = ogTitle;
 
   const canonicalFromWording = String(
@@ -2507,7 +2507,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     </section>
 
     <section class="mv2-card mv2-card--life" aria-labelledby="mv2-life-h">
-      <h2 id="mv2-life-h">พลังทั้ง 6 ด้าน</h2>
+      <h2 id="mv2-life-h">พลังทั้ง 7 ด้าน</h2>
       <p class="mv2-life-hint">เรียงจากคะแนนสูงไปต่ำ</p>
       <div class="mv2-life-rows">${lifeRowsHtml}</div>
       ${

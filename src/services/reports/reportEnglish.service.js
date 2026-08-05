@@ -220,6 +220,8 @@ const STATIC_LABELS = {
   "โปรไฟล์เจ้าของ": "Owner profile",
   "เวอร์ชันรายงาน": "Report version",
   "พลังทั้ง 6 ด้าน": "All six aspects",
+  "พลังทั้ง 7 ด้าน": "All seven aspects",
+  "หนุนแรงดึงดูดใจ คนอยากเข้าใกล้ คุยแล้วประทับใจ": "Boosts appeal — people feel drawn in and impressed",
   "เข้ากับคุณที่สุด": "Best match for you",
   "แรงสุดโดยรวม": "Strongest overall",
   "หนุนดวงวันนี้": "Supports today",
