@@ -303,8 +303,19 @@ export function buildAmuletHtmlV2ViewModel(payload) {
       blurb: "",
     };
   });
+  // แถวที่ 7 เสน่หา (กบ 5 ส.ค.) — คะแนน derive แล้วใน objectP.charm, คำอธิบายตายตัว
+  lifeRows.push({
+    key: "charm",
+    label: "เสน่ห์และแรงดึงดูดใจ",
+    score: clamp0100(Number(objectP.charm) || 0),
+    blurb: "",
+  });
   lifeRows.sort((a, b) => b.score - a.score);
   lifeRows.forEach((row, idx) => {
+    if (row.key === "charm") {
+      row.blurb = "หนุนแรงดึงดูดใจ คนอยากเข้าใกล้ คุยแล้วประทับใจ";
+      return;
+    }
     const custom = String(blurbs[row.key] || "").trim();
     row.blurb = custom
       ? custom.replace(/\s+/g, " ").trim().slice(0, 96)
