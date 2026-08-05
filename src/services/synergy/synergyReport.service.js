@@ -403,6 +403,11 @@ export async function buildSynergyFactsForChat(lineUserId) {
       ...(dayAxis ? [`  - ${dayName} เชื่อกันว่าสาย${dayAxis}เด่นเป็นพิเศษ (เหตุผลที่ชุดวันนี้ออกมาแบบนี้)`] : []),
       ...(daySay ? [`  - คำอ่านชุดวันทั่วไปตามรายงาน: "${daySay}" (เล่าให้ตรงแนวนี้)`] : []),
       `  - เลของค์ที่/ชิ้นที่ อ้างตามคลังลูกค้า ตรงกับหน้ารายงานจัดชุด · พูดแบบ "เชื่อกันว่า" ห้ามการันตีผล`,
+      `  - ถ้าลูกค้าถามว่า "อาจารย์เลือกจากอะไร/ทำไมจัดชุดนี้": ตอบแบบอาจารย์ — อาจารย์ดู 3 อย่างประกอบกัน ` +
+        `①พลังเด่นของแต่ละชิ้นในคลัง (สายไหนแรงชัด) ②พลังประจำวันตามคติโบราณ (อาทิตย์=บารมี จันทร์=เมตตา ` +
+        `อังคาร=คุ้มครอง พุธ=งานเฉพาะ พฤหัสบดี=หนุนดวง ศุกร์=เสน่หา เสาร์=โชคลาภ) ③ความเข้ากับดวงเจ้าของ ` +
+        `แล้วจับคู่ชิ้นหลักกับชิ้นเสริมที่ต่างสายกันให้หนุนกันไม่ทับกัน วันเปลี่ยนพลังวันก็เปลี่ยน ชุดจึงหมุนตามวัน — ` +
+        `⛔️ ห้ามใช้คำว่า สูตร/คำนวณ/ระบบ/สุ่ม/อัลกอริทึม เด็ดขาด ให้พูดเป็นหลักวิชาอาจารย์`,
       `  - ⛔️ เรื่อง flow: ใช้ข้อมูลนี้เฉพาะเมื่อลูกค้าถามเรื่องจัดชุด/วันนี้พกชิ้นไหน/ชุดที่จัดให้เอง — ` +
         `ห้ามยกเรื่องจัดชุดขึ้นมาเองหรือดึงบทสนทนาเรื่องอื่นของลูกค้ามาเข้าเรื่องนี้เด็ดขาด · ` +
         `ลูกค้าอยากเปิดดู: บอกว่าพิมพ์ จัดชุด ในแชทนี้ได้เลย`,
@@ -524,7 +529,7 @@ export async function buildSynergyCarouselFlex(lineUserId) {
             { type: "text", text: t, size: "sm", color: CREAM, flex: 1 },
           ],
         })),
-        { type: "text", text: `อาจารย์จัดชุดให้จากคลังของคุณ ${pieces.length} ชิ้น`, size: "xs", color: DIM, wrap: true },
+        { type: "text", text: `อาจารย์จัดชุดให้จากคลังของคุณ ${Number(pieces.totalUniqueCount) || pieces.length} ชิ้น`, size: "xs", color: DIM, wrap: true },
       ],
       btnLabel: "เลือกภารกิจ",
       href: `${url}?go=missions`,
@@ -606,70 +611,70 @@ export async function renderSynergyPage(lineUserId) {
 <title>จัดชุดพลังของคุณ - Ener Scan</title>
 <meta name="description" content="อาจารย์จัดชุดวัตถุมงคลจากคลังของคุณ วันนี้ควรพกชิ้นไหน ดูได้เลย">
 <meta property="og:title" content="จัดชุดพลังของคุณ - Ener Scan">
-<meta property="og:description" content="อาจารย์จัดชุดจากวัตถุมงคลของคุณ ${pieces.length} ชิ้น อ่านตามแนวทาง Ener">
+<meta property="og:description" content="อาจารย์จัดชุดจากวัตถุมงคลของคุณ ${Number(pieces.totalUniqueCount) || pieces.length} ชิ้น อ่านตามแนวทาง Ener">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d0b08'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23e8c547'%3E✦%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Kanit,sans-serif;background:#0d0b08;color:#f5edd8;max-width:520px;margin:0 auto;padding:16px 14px 40px}
+body{font-family:Kanit,sans-serif;background:#faf6ea;color:#43371f;max-width:520px;margin:0 auto;padding:16px 14px 40px}
 .hd{text-align:center;margin-bottom:8px}
-.hd h1{font-size:16px;color:#e8c547;letter-spacing:3px}
-.vault{color:#fff;font-size:17px;font-weight:600;margin-top:2px}
-.hd small{color:#b3a479;font-size:12.5px}
+.hd h1{font-size:16px;color:#a5811c;letter-spacing:3px}
+.vault{color:#2f2617;font-size:17px;font-weight:600;margin-top:2px}
+.hd small{color:#9a8b66;font-size:12.5px}
 .tabs{display:flex;gap:8px;justify-content:center;margin:10px 0 4px}
 .tabs button,.mrowbtns button{font-family:inherit;cursor:pointer}
-.db{background:#14110c;border:1px solid #3a3122;color:#cbb98a;border-radius:20px;padding:6px 18px;font-size:13.5px}
-.db.on{background:linear-gradient(90deg,#b8871b,#e8c547);color:#0d0b08;border-color:#e8c547;font-weight:600}
+.db{background:#fffdf6;border:1px solid #e2d6b4;color:#8a7a55;border-radius:20px;padding:6px 18px;font-size:13.5px}
+.db.on{background:linear-gradient(90deg,#b8871b,#a5811c);color:#0d0b08;border-color:#a5811c;font-weight:600}
 .mrowbtns{display:flex;gap:6px;overflow-x:auto;padding:6px 2px 8px;-webkit-overflow-scrolling:touch}
-.mb{flex:0 0 auto;background:#14110c;border:1px solid #3a3122;color:#cbb98a;border-radius:20px;padding:6px 14px;font-size:12.5px}
-.mb.on{background:#241d10;border-color:#e8c547;color:#e8c547;font-weight:600}
-.today{border:2px solid #e8c547;border-radius:16px;background:linear-gradient(160deg,#241d10,#14110c);padding:16px 14px;text-align:center;box-shadow:0 0 24px rgba(232,197,71,.22)}
-.today .tag{color:#e8c547;font-size:14px;font-weight:600}
+.mb{flex:0 0 auto;background:#fffdf6;border:1px solid #e2d6b4;color:#8a7a55;border-radius:20px;padding:6px 14px;font-size:12.5px}
+.mb.on{background:#fdf6e0;border-color:#a5811c;color:#a5811c;font-weight:600}
+.today{border:2px solid #a5811c;border-radius:16px;background:linear-gradient(160deg,#fdf6e0,#fffdf6);padding:16px 14px;text-align:center;box-shadow:0 0 24px rgba(176,138,64,.22)}
+.today .tag{color:#a5811c;font-size:14px;font-weight:600}
 .pair{display:flex;justify-content:center;align-items:center;gap:10px;margin:12px 0}
 .bp{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
 .bp:active{transform:scale(.97)}
-.bp img{width:118px;height:140px;object-fit:cover;border-radius:12px;border:1px solid #8f6710}
-.bp b{color:#e8c547;font-size:14px;white-space:nowrap}.bp span{color:#cbb98a;font-size:11.5px;white-space:nowrap}
-.plus{color:#e8c547;font-size:26px;font-weight:800}
+.bp img{width:118px;height:140px;object-fit:cover;border-radius:12px;border:1px solid #c9a95f}
+.bp b{color:#a5811c;font-size:14px;white-space:nowrap}.bp span{color:#8a7a55;font-size:11.5px;white-space:nowrap}
+.plus{color:#a5811c;font-size:26px;font-weight:800}
 .tags{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
-.tags i{font-style:normal;background:#0d0b08;border:1px solid #8f6710;color:#e8c547;border-radius:20px;padding:2px 12px;font-size:12.5px}
-.say{font-size:14.5px;line-height:1.65;color:#f5edd8;min-height:44px}
-.daymeta{color:#cbb98a;font-size:12.5px;margin-top:8px}
-.sec{border:1px solid #3a3122;border-radius:14px;background:#14110c;padding:13px 14px;margin-top:12px}
-.sec h3{color:#e8c547;font-size:15px;margin-bottom:10px}
-.chip{display:flex;gap:9px;align-items:center;background:#1a1610;border:1px solid #3a3122;border-radius:10px;padding:7px;cursor:pointer}
+.tags i{font-style:normal;background:#fff;border:1px solid #c9a95f;color:#a5811c;border-radius:20px;padding:2px 12px;font-size:12.5px}
+.say{font-size:14.5px;line-height:1.65;color:#43371f;min-height:44px}
+.daymeta{color:#8a7a55;font-size:12.5px;margin-top:8px}
+.sec{border:1px solid #e2d6b4;border-radius:14px;background:#fffdf6;padding:13px 14px;margin-top:12px}
+.sec h3{color:#a5811c;font-size:15px;margin-bottom:10px}
+.chip{display:flex;gap:9px;align-items:center;background:#f8f3e4;border:1px solid #e2d6b4;border-radius:10px;padding:7px;cursor:pointer}
 .chip:active{transform:scale(.98)}
 .chip img{width:42px;height:50px;object-fit:cover;border-radius:6px}
-.chip b{color:#e8c547;font-size:13.5px;display:block;white-space:nowrap}.chip span{color:#cbb98a;font-size:11.5px;white-space:nowrap}
+.chip b{color:#a5811c;font-size:13.5px;display:block;white-space:nowrap}.chip span{color:#8a7a55;font-size:11.5px;white-space:nowrap}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .ic{width:19px;height:19px;vertical-align:-4px;margin-right:2px}
 .bars{display:flex;flex-direction:column;gap:7px}
 .bar{display:flex;align-items:center;gap:8px;font-size:13px}
-.bar .nm{flex:0 0 118px;color:#e8dcbc}
+.bar .nm{flex:0 0 118px;color:#5d4d2b}
 .lb3{display:inline-flex;gap:4px}
-.lb3 i{width:26px;height:10px;border-radius:3px;background:#33301f;border:1px solid #4a3f22}
-.lb3 i.on{background:linear-gradient(90deg,#b8871b,#e8c547);border-color:#e8c547}
-.bar .lb{color:#b3a479;font-size:12.5px}
-.carry{font-family:inherit;cursor:pointer;margin-top:12px;background:#0d0b08;border:1.5px solid #e8c547;color:#e8c547;border-radius:12px;padding:10px 28px;font-size:14.5px;font-weight:600}
-.carry.done{background:linear-gradient(90deg,#b8871b,#e8c547);color:#0d0b08}
-.carry-note{color:#cbb98a;font-size:12.5px;margin-top:6px;min-height:16px}
-.gap{border:1px dashed #8f6710;border-radius:12px;padding:12px;margin-top:12px;background:#171307}
-.gap b{color:#e8c547}.gap p{font-size:13.5px;line-height:1.6;margin-top:4px}
-.cta{display:block;text-align:center;background:linear-gradient(90deg,#b8871b,#e8c547);color:#0d0b08;font-weight:600;border-radius:12px;padding:12px;margin-top:14px;text-decoration:none;font-size:15px}
-.ft{color:#b3a479;font-size:12px;text-align:center;margin-top:12px;line-height:1.6}
-#ov{position:fixed;inset:0;background:rgba(0,0,0,.78);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.lb3 i{width:26px;height:10px;border-radius:3px;background:#ece2c6;border:1px solid #d6c69a}
+.lb3 i.on{background:linear-gradient(90deg,#b8871b,#a5811c);border-color:#a5811c}
+.bar .lb{color:#9a8b66;font-size:12.5px}
+.carry{font-family:inherit;cursor:pointer;margin-top:12px;background:#fff;border:1.5px solid #a5811c;color:#a5811c;border-radius:12px;padding:10px 28px;font-size:14.5px;font-weight:600}
+.carry.done{background:linear-gradient(90deg,#b8871b,#a5811c);color:#0d0b08}
+.carry-note{color:#8a7a55;font-size:12.5px;margin-top:6px;min-height:16px}
+.gap{border:1px dashed #c9a95f;border-radius:12px;padding:12px;margin-top:12px;background:#fbf5e2}
+.gap b{color:#a5811c}.gap p{font-size:13.5px;line-height:1.6;margin-top:4px}
+.cta{display:block;text-align:center;background:linear-gradient(90deg,#b8871b,#a5811c);color:#0d0b08;font-weight:600;border-radius:12px;padding:12px;margin-top:14px;text-decoration:none;font-size:15px}
+.ft{color:#9a8b66;font-size:12px;text-align:center;margin-top:12px;line-height:1.6}
+#ov{position:fixed;inset:0;background:rgba(60,45,15,.4);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
 #ov.show{display:flex}
-.pm{background:linear-gradient(160deg,#241d10,#14110c);border:1.5px solid #e8c547;border-radius:18px;max-width:340px;width:100%;padding:20px;text-align:center;box-shadow:0 0 30px rgba(232,197,71,.3)}
-.pm img{width:180px;height:214px;object-fit:cover;border-radius:12px;border:1px solid #8f6710}
-.pm h4{color:#e8c547;font-size:18px;margin:10px 0 2px}
-.pm .ps{color:#cbb98a;font-size:13.5px}
-.pm .sc{color:#fff;font-size:15px;margin:6px 0 12px}
-.pm a.go{display:block;background:linear-gradient(90deg,#b8871b,#e8c547);color:#0d0b08;font-weight:600;border-radius:10px;padding:11px;text-decoration:none;font-size:14.5px}
-.pm .cl{margin-top:10px;color:#b3a479;font-size:13px;background:none;border:none;cursor:pointer;font-family:inherit}
-@keyframes goflash{0%,60%{box-shadow:0 0 0 2px #e8c547,0 0 26px rgba(232,197,71,.5)}100%{box-shadow:none}}
+.pm{background:linear-gradient(160deg,#fdf6e0,#fffdf6);border:1.5px solid #a5811c;border-radius:18px;max-width:340px;width:100%;padding:20px;text-align:center;box-shadow:0 0 30px rgba(176,138,64,.28)}
+.pm img{width:180px;height:214px;object-fit:cover;border-radius:12px;border:1px solid #c9a95f}
+.pm h4{color:#a5811c;font-size:18px;margin:10px 0 2px}
+.pm .ps{color:#8a7a55;font-size:13.5px}
+.pm .sc{color:#2f2617;font-size:15px;margin:6px 0 12px}
+.pm a.go{display:block;background:linear-gradient(90deg,#b8871b,#a5811c);color:#0d0b08;font-weight:600;border-radius:10px;padding:11px;text-decoration:none;font-size:14.5px}
+.pm .cl{margin-top:10px;color:#9a8b66;font-size:13px;background:none;border:none;cursor:pointer;font-family:inherit}
+@keyframes goflash{0%,60%{box-shadow:0 0 0 2px #a5811c,0 0 26px rgba(176,138,64,.4)}100%{box-shadow:none}}
 .goflash{animation:goflash 2.2s ease-out 1;border-radius:14px}
 </style></head><body>
-<div class="hd"><h1>ENER SCAN</h1><div class="vault">${esc(content.vaultTitle)}</div><small>จัดจากวัตถุมงคลของคุณ ${pieces.length} ชิ้น</small></div>
+<div class="hd"><h1>ENER SCAN</h1><div class="vault">${esc(content.vaultTitle)}</div><small>จัดจากวัตถุมงคลของคุณ ${Number(pieces.totalUniqueCount) || pieces.length} ชิ้น</small></div>
 
 <div class="tabs"><button class="db on" data-d="today">วันนี้</button><button class="db" data-d="tomorrow">พรุ่งนี้</button></div>
 <div class="mrowbtns" id="mission-row">${missionBtns}</div>
@@ -686,7 +691,7 @@ body{font-family:Kanit,sans-serif;background:#0d0b08;color:#f5edd8;max-width:520
 
 <div class="sec" id="main-piece"><h3>วันไหนไม่แน่ใจ พกชิ้นนี้</h3>
   <div style="display:flex;flex-direction:column;gap:7px"><div class="grid" style="grid-template-columns:1fr">${`<div class="chip tap" data-n="${best.n}"><img src="${esc(best.img)}" alt="${best.unit} ${best.n}"><div><b>${best.unit} ${best.n}</b><span>${esc(best.peakShort)}</span></div></div>`}</div>
-  <p style="font-size:13px;color:#e8dcbc;line-height:1.55">${esc(content.mainLine || "")}</p></div>
+  <p style="font-size:13px;color:#5d4d2b;line-height:1.55">${esc(content.mainLine || "")}</p></div>
 </div>
 
 <div class="sec"><h3>คลังของคุณเด่นด้านไหน</h3>
