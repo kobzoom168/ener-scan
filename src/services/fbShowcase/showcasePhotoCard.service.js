@@ -149,6 +149,11 @@ export function deriveShowcaseCardData(payload) {
       });
     }
   }
+  // เรียงแกนตามโซนความหมายให้ตรงกับกราฟหน้ารายงานหลัก (กบ 5 ส.ค.)
+  if (isAmulet) {
+    const DISPLAY_ORDER = ["protection", "metta", "charm", "luck", "fortune_anchor", "specialty", "baramee"];
+    axes.sort((a, b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key));
+  }
   if (axes.length < 3) return null; // เรดาร์ต้องมีแกนพอวาด
 
   const skills = [...axes].sort((x, y) => y.score - x.score).slice(0, 2);
