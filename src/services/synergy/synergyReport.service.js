@@ -190,24 +190,51 @@ function missionScore(piece, mission, dayAxis) {
   return s;
 }
 
-/** เลือกชุด 2 ชิ้น (หลัก+เสริมต่างสาย) ต่อ (วัน, ภารกิจ) — คลังเดิมได้ชุดเดิมเสมอ */
-export function pickSet(pieces, mission, dateKey, uid) {
+/**
+ * เลือกชุด 2 ชิ้น (หลัก+เสริมต่างสาย) ต่อ (วัน, ภารกิจ) — คลังเดิม+วันเดิมได้ชุดเดิมเสมอ
+ * กบ 5 ส.ค. "วันนี้/พรุ่งนี้/ภารกิจอื่นซ้ำ ๆ กัน": เดิมคะแนนแกนชนะขาด (ตัววัน×4 จิ๋ว) →
+ * ชิ้นหลักเลือกจากกลุ่มท็อป 4 ด้วย seed ประจำวัน (เอียงหาอันดับต้น) + หักคะแนนชิ้นที่
+ * ภารกิจอื่นของวันใช้ไปแล้ว (`used` — ส่งผ่าน pickAllSets)
+ */
+export function pickSet(pieces, mission, dateKey, uid, used = {}) {
   if (!pieces.length) return null;
   const dayAxis = DAY_AXIS_BOOST[thaiDayName(dateKey)] || null;
   const ranked = pieces
     .map((p) => ({
       p,
-      s: missionScore(p, mission, dayAxis) + seededFrac(`${uid}|${dateKey}|${mission.key}|${p.n}`) * 4,
+      s:
+        missionScore(p, mission, dayAxis) +
+        seededFrac(`${uid}|${dateKey}|${mission.key}|${p.n}`) * 4 -
+        (used[p.n] || 0) * 70,
     }))
     .sort((a, b) => b.s - a.s);
-  const main = ranked[0].p;
+  const pool = ranked.slice(0, Math.min(4, ranked.length));
+  const f = seededFrac(`${uid}|${dateKey}|${mission.key}|pick`);
+  const main = pool[Math.min(pool.length - 1, Math.floor(Math.pow(f, 1.7) * pool.length))].p;
   // คู่เสริม: ประเภทเดียวกับชิ้นหลักเท่านั้น (กบ 4 ส.ค. "แยกพระกับกำไลออก") — ไม่มีก็พกเดี่ยว
-  const sameLane = ranked.slice(1).filter((r) => r.p.lane === main.lane);
+  const sameLane = ranked.filter((r) => r.p.n !== main.n && r.p.lane === main.lane);
   const partner =
     sameLane.find((r) => r.p.peakShort !== main.peakShort)?.p ||
     sameLane[0]?.p ||
     null;
   return { main, partner, dayAxis };
+}
+
+/** ชุดครบ 5 ภารกิจของวัน — ทุกหน้า (page/carousel/facts) ต้องใช้ตัวนี้ให้ชุดตรงกัน */
+export function pickAllSets(pieces, dateKey, uid) {
+  /** @type {Record<string, number>} */
+  const used = {};
+  /** @type {Record<string, any>} */
+  const out = {};
+  for (const m of MISSIONS) {
+    const st = pickSet(pieces, m, dateKey, uid, used);
+    out[m.key] = st;
+    if (st) {
+      used[st.main.n] = (used[st.main.n] || 0) + 1;
+      if (st.partner) used[st.partner.n] = (used[st.partner.n] || 0) + 0.5;
+    }
+  }
+  return out;
 }
 
 // ── เนื้อความ (LLM 1 ครั้ง/คน/วัน — cache redis) ────────────────
@@ -222,7 +249,7 @@ function vaultSig(pieces) {
     .slice(0, 8);
 }
 function contentCacheKey(uid, dateKey, pieces) {
-  return `synergy:content:${uid}:${dateKey}:${vaultSig(pieces)}`;
+  return `synergy:content2:${uid}:${dateKey}:${vaultSig(pieces)}`;
 }
 
 const CONTENT_SYS = `คุณคืออาจารย์ Ener เขียนเนื้อความรายงานจัดชุดพลัง ตอบ JSON เดียวเท่านั้น:
@@ -354,8 +381,9 @@ export async function buildSynergyFactsForChat(lineUserId) {
     const dayAxis = DAY_AXIS_BOOST[dayName] || null;
     const best = [...pieces].sort((a, b) => b.score - a.score)[0];
     const ref = (pc) => `${pc.unit} ${pc.n} (สาย${pc.peakShort})`;
+    const allSets = pickAllSets(pieces, todayKey, uid);
     const setLine = (m) => {
-      const st = pickSet(pieces, m, todayKey, uid);
+      const st = allSets[m.key];
       return `  - ${m.label}: ${ref(st.main)}${st.partner ? ` คู่กับ ${ref(st.partner)}` : ""}`;
     };
     // คำอ่านจริงจากรายงาน (ถ้า cache ของวันมีอยู่) — ให้คำพูดอาจารย์ตรงกับหน้ารายงานเป๊ะ
@@ -400,7 +428,7 @@ export async function buildSynergyCarouselFlex(lineUserId) {
   const url = `${base}/synergy/${token}`;
   const todayKey = bangkokDateKey();
   const dayName = thaiDayName(todayKey);
-  const set = pickSet(pieces, MISSIONS[0], todayKey, uid);
+  const set = pickAllSets(pieces, todayKey, uid)[MISSIONS[0].key];
   const best = [...pieces].sort((a, b) => b.score - a.score)[0];
 
   // ธีมตามกล่องในหน้า HTML (กบ 4 ส.ค.): การ์ดละเรื่อง กรอบทอง หัวข้อทอง เนื้อในเหมือน .sec
@@ -532,10 +560,7 @@ export async function renderSynergyPage(lineUserId) {
   // พรีคำนวณ 10 ชุด (2 วัน × 5 ภารกิจ) — JS ฝั่งหน้าแค่สลับ
   const setsByDay = {};
   for (const [dayId, dk] of [["today", todayKey], ["tomorrow", tomorrowKey]]) {
-    setsByDay[dayId] = {};
-    for (const m of MISSIONS) {
-      setsByDay[dayId][m.key] = pickSet(pieces, m, dk, uid);
-    }
+    setsByDay[dayId] = pickAllSets(pieces, dk, uid);
   }
   const content = await buildContent({
     uid, dateKey: todayKey, pieces,
