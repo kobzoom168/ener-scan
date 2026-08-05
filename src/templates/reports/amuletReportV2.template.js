@@ -14,11 +14,11 @@ const AMULET_RADAR_CY = 50;
 const AMULET_AXIS_KEYS = /** @type {const} */ ([
   "protection",
   "metta",
-  "baramee",
+  "charm",
   "luck",
   "fortune_anchor",
   "specialty",
-  "charm",
+  "baramee",
 ]);
 const AMULET_RADAR_ANGLES = AMULET_AXIS_KEYS.map(
   (_, i) => -Math.PI / 2 + (i * 2 * Math.PI) / AMULET_AXIS_KEYS.length,
@@ -82,7 +82,14 @@ function amuletRadarAxisLabelHtml(axis, score, isPeak, isAlignHighlight) {
       ? " mv2a-radar-lbl--top2"
       : "";
   const alias = amuletRadarAxisAlias(axis.id, axis.labelThai);
-  return `<span class="mv2a-radar-lbl mv2a-radar-lbl--${escapeHtml(axis.id)}${rankCls}"><span class="mv2a-radar-axis-t">${escapeHtml(alias)}</span><span class="mv2a-radar-axis-n">${escapeHtml(String(score))}</span></span>`;
+  // ตำแหน่งจากมุมแฉกจริง (7 แกน — กบ 5 ส.ค. "ให้รูปเข้ามุมกับความหมาย"):
+  // ป้ายลอยนอกวงที่รัศมี ~49 หน่วย viewBox, กันตกขอบด้วย clamp
+  const i = AMULET_AXIS_KEYS.indexOf(/** @type {any} */ (axis.id));
+  const ang = i >= 0 ? AMULET_RADAR_ANGLES[i] : -Math.PI / 2;
+  const lx = Math.max(9, Math.min(91, 50 + 49 * Math.cos(ang)));
+  const ly = Math.max(4, Math.min(96, 50 + 49 * Math.sin(ang)));
+  const pos = `left:${lx.toFixed(1)}%;top:${ly.toFixed(1)}%;right:auto;bottom:auto;transform:translate(-50%,-50%);text-align:center;align-items:center;`;
+  return `<span class="mv2a-radar-lbl mv2a-radar-lbl--${escapeHtml(axis.id)}${rankCls}" style="${pos}"><span class="mv2a-radar-axis-t">${escapeHtml(alias)}</span><span class="mv2a-radar-axis-n">${escapeHtml(String(score))}</span></span>`;
 }
 
 function amuletHtmlShowRenderMetaLine() {
