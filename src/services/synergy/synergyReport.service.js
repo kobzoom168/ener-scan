@@ -115,7 +115,7 @@ export async function loadVault(lineUserId) {
     if (obj.objectUnderstanding?.usageProfile?.canCarry === false) continue;
     const d = deriveShowcaseCardData(r.report_payload_json);
     if (!d) continue;
-    const key = `${d.name}|${d.energyScore}`;
+    const key = `${d.name}|${d.energyScore}|${(d.axes || []).map((a) => a.score).join(",")}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const axes = Object.fromEntries(
@@ -142,16 +142,24 @@ export async function loadVault(lineUserId) {
     });
     if (pieces.length >= MAX_PIECES) break;
   }
-  // จำนวนชิ้นไม่ซ้ำจริงทั้งคลัง (ไม่ติดเพดาน MAX_PIECES) — นับต่อจนจบ rows เพื่อข้อความแจ้งลูกค้า
-  for (const r of rows || []) {
-    const obj2 = r.report_payload_json?.object || {};
-    if (String(obj2.objectType || "").trim() === "พระบูชา") continue;
-    if (obj2.objectUnderstanding?.usageProfile?.canCarry === false) continue;
-    const d2 = deriveShowcaseCardData(r.report_payload_json);
-    if (!d2) continue;
-    seen.add(`${d2.name}|${d2.energyScore}`);
-  }
-  pieces.totalUniqueCount = seen.size;
+  // จำนวนชิ้นทั้งคลังที่โชว์ลูกค้า = เลขเดียวกับหน้าคลัง (library จับภาพซ้ำด้วย sha256/phash —
+  // กบ 5 ส.ค.: กุญแจ ชื่อ|คะแนน ยุบพระผงคะแนนเท่ากันผิดตัว เลยขาดจากเลขหน้าคลัง)
+  let total = 0;
+  try {
+    const { buildSacredAmuletLibraryForLineUser } = await import(
+      "../reports/sacredAmuletLibrary.service.js"
+    );
+    const av = await buildSacredAmuletLibraryForLineUser(uid, { libraryThumbScope: "mini" });
+    total += Number(av?.items?.length) || 0;
+  } catch { /* นับได้เท่าที่นับ */ }
+  try {
+    const { buildCrystalBraceletLibraryForLineUser } = await import(
+      "../reports/crystalBraceletLibrary.service.js"
+    );
+    const bv = await buildCrystalBraceletLibraryForLineUser(uid, { maxRows: 80, maxItems: 500 });
+    total += Number(bv?.items?.length) || 0;
+  } catch { /* นับได้เท่าที่นับ */ }
+  pieces.totalUniqueCount = total > 0 ? total : seen.size;
   return pieces;
 }
 
