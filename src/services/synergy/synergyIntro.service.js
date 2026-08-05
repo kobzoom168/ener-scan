@@ -12,6 +12,7 @@ export async function maybeIntroduceSynergy(lineUserId) {
     const { loadVault, getOrCreateSynergyToken } = await import("./synergyReport.service.js");
     const vault = await loadVault(uid);
     if (vault.length < 3) return { skipped: "below_3" };
+    const vaultCount = Number(vault.totalUniqueCount) || vault.length;
     const first = await tryDedupeOnce(`synergy:intro:${uid}`, 365 * 86400);
     if (!first) return { skipped: "already_introduced" };
     const token = await getOrCreateSynergyToken(uid);
@@ -20,7 +21,7 @@ export async function maybeIntroduceSynergy(lineUserId) {
     const lineToken = String(process.env.CHANNEL_ACCESS_TOKEN || "").trim();
     if (!lineToken) return { skipped: "no_line_token" };
     const text = [
-      `ตอนนี้คลังของคุณมี ${vault.length} ชิ้นแล้ว อาจารย์จัดชุดให้ได้แล้วครับ`,
+      `ตอนนี้คลังของคุณมี ${vaultCount} ชิ้นแล้ว อาจารย์จัดชุดให้ได้แล้วครับ`,
       `วันไหนควรพกชิ้นไหน ชุดไหนเหมาะกับคุยงาน เดินทาง หรือนัดสำคัญ เปิดดูได้เลย`,
       `${base}/synergy/${token}`,
       "",
@@ -32,7 +33,7 @@ export async function maybeIntroduceSynergy(lineUserId) {
       const { buildSynergyCarouselFlex } = await import("./synergyReport.service.js");
       const flex = await buildSynergyCarouselFlex(uid);
       messages = flex
-        ? [{ type: "text", text: `ตอนนี้คลังของคุณมี ${vault.length} ชิ้นแล้ว อาจารย์จัดชุดให้ได้แล้วครับ เลื่อนดูได้เลย (พิมพ์ จัดชุด เมื่อไหร่ก็ได้)` }, flex]
+        ? [{ type: "text", text: `ตอนนี้คลังของคุณมี ${vaultCount} ชิ้นแล้ว อาจารย์จัดชุดให้ได้แล้วครับ เลื่อนดูได้เลย (พิมพ์ จัดชุด เมื่อไหร่ก็ได้)` }, flex]
         : [{ type: "text", text }];
     } catch {
       messages = [{ type: "text", text }];
@@ -47,7 +48,7 @@ export async function maybeIntroduceSynergy(lineUserId) {
       "../../stores/conversationMessages.db.js"
     );
     void insertLineConversationMessage(uid, "bot", text);
-    console.log(JSON.stringify({ event: "SYNERGY_INTRO_SENT", lineUserIdPrefix: uid.slice(0, 10), pieces: vault.length }));
+    console.log(JSON.stringify({ event: "SYNERGY_INTRO_SENT", lineUserIdPrefix: uid.slice(0, 10), pieces: vaultCount }));
     // prewarm: คำนวณ+cache หน้าไว้ล่วงหน้า คนกดลิงก์แล้วเปิดไว
     import("./synergyReport.service.js").then((m) => void m.renderSynergyPage(uid)).catch(() => {});
     return { sent: true };
