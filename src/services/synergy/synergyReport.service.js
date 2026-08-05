@@ -121,9 +121,12 @@ export async function loadVault(lineUserId) {
     const axes = Object.fromEntries(
       (d.axes || []).map((a) => [a.label || a.key, Number(a.score) || 0]),
     );
-    // สายที่ 7 เสน่หา (กบ 31 ก.ค.): ฐานเมตตา + โบนัสป้ายพลังสายเสน่ห์ — deterministic ชิ้นเก่าใช้ได้
-    const charmy = /เสน่หา|มหานิยม|เสน่ห์/.test(String(d.name || ""));
-    axes["เสน่หา"] = Math.min(100, Math.round((axes["เมตตา"] || 0) * 0.88 + (charmy ? 14 : 0)));
+    // สายที่ 7 เสน่หา (กบ 31 ก.ค.): ใช้ค่าจากการ์ด (deriveShowcaseCardData ใส่มาแล้ว 5 ส.ค.)
+    // — fallback derive เองเมื่อยังไม่มี (สูตรเดิม ฐานเมตตา + โบนัสป้ายสายเสน่ห์)
+    if (axes["เสน่หา"] == null) {
+      const charmy = /เสน่หา|มหานิยม|เสน่ห์/.test(String(d.name || ""));
+      axes["เสน่หา"] = Math.min(100, Math.round((axes["เมตตา"] || 0) * 0.88 + (charmy ? 14 : 0)));
+    }
     const peak = (d.axes || []).slice().sort((a, b) => b.score - a.score)[0];
     pieces.push({
       n: pieces.length + 1,

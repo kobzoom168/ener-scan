@@ -44,6 +44,7 @@ const AXIS_AUDIENCE = {
   specialty: "งานเฉพาะทาง / งานฝีมือ",
   protection: "เดินทางบ่อย / งานเสี่ยงภัย",
   fortune_anchor: "ผู้เริ่มต้นทำงาน / ตั้งหลักชีวิต",
+  charm: "นัดพบคนสำคัญ / งานเข้าสังคม",
 };
 
 /** เลนกำไล/หิน (crystalBraceletV1.axes) — key คนละชุดกับเลนพระ (กบ 24 ก.ค.) */
@@ -132,6 +133,21 @@ export function deriveShowcaseCardData(payload) {
       labelFull: String(cats[key]?.labelThai || key).trim(),
       score: Math.round(sc),
     });
+  }
+  // แกนที่ 7 เสน่หา (กบ 5 ส.ค. — เลนพระ derive จากเมตตาแบบเดียวกับหน้ารายงาน/จัดชุด)
+  if (isAmulet) {
+    const mettaAx = axes.find((a) => a.key === "metta");
+    if (mettaAx) {
+      const charmyCard = /เสน่หา|มหานิยม|เสน่ห์/.test(
+        String(p.summary?.mainEnergyLabel || "") + String(p.summary?.energyLevelLabel || ""),
+      );
+      axes.push({
+        key: "charm",
+        label: "เสน่หา",
+        labelFull: "เสน่ห์และแรงดึงดูดใจ",
+        score: Math.min(100, Math.round(mettaAx.score * 0.88 + (charmyCard ? 14 : 0))),
+      });
+    }
   }
   if (axes.length < 3) return null; // เรดาร์ต้องมีแกนพอวาด
 
@@ -278,6 +294,7 @@ const AXIS_ADVICE = {
   specialty: "พกติดตัวเวลาทำงานสายเฉพาะ ตั้งจิตอธิษฐานก่อนเริ่มงาน",
   protection: "พกติดตัวเวลาเดินทาง ตั้งจิตขอความแคล้วคลาดก่อนออกเดินทาง",
   fortune_anchor: "พกติดตัว ตั้งจิตอธิษฐานก่อนเริ่มงาน จะเสริมพลังให้ราบรื่น",
+  charm: "พกติดตัววันพบคนสำคัญ ตั้งจิตให้นิ่งและยิ้มง่ายก่อนออกจากบ้าน",
 };
 
 /** คำแนะนำเลนกำไล/หิน — ใช้คำ ใส่ ไม่ใช่ พก (กบ 24 ก.ค.) */
@@ -481,7 +498,7 @@ function buildSvg(data, photoDataUri, qrDataUri) {
   <!-- คอลัมน์ขวา: เรดาร์ -->
   <rect x="${RX}" y="60" width="${RW}" height="560" rx="16" fill="${T.panel}" stroke="${T.frameDim}" stroke-width="1.5"/>
   <rect x="${RX + 40}" y="76" width="${RW - 80}" height="44" rx="22" fill="${T.pill}" stroke="${T.accent}" stroke-width="1.5"/>
-  <text x="${RX + RW / 2}" y="107" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${T.accent}">พลังงาน 6 ด้าน</text>
+  <text x="${RX + RW / 2}" y="107" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="26" fill="${T.accent}">พลังงาน ${data.axes.length} ด้าน</text>
   ${radarPanelSvg(data, RX + RW / 2, 316, 116, T)}
   ${data.skills
     .map((s, i) => {
