@@ -231,7 +231,7 @@ app.get("/synergy/:token/body", async (req, res) => {
       return res
         .status(200)
         .type("html")
-        .send(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>จัดชุดพลัง - Ener Scan</title></head><body style="font-family:sans-serif;background:#0d0b08;color:#f5edd8;text-align:center;padding:60px 20px"><h2 style="color:#e8c547">คลังของคุณยังมีไม่ถึง 3 ชิ้น</h2><p>ส่งรูปชิ้นเพิ่มให้อาจารย์อ่านก่อน แล้วอาจารย์จะจัดชุดให้ครับ</p></body></html>`);
+        .send(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>จัดชุดพลัง - Ener Scan</title></head><body style="font-family:sans-serif;background:#faf6ea;color:#43371f;text-align:center;padding:60px 20px"><h2 style="color:#a5811c">คลังของคุณยังมีไม่ถึง 3 ชิ้น</h2><p>ส่งรูปชิ้นเพิ่มให้อาจารย์อ่านก่อน แล้วอาจารย์จะจัดชุดให้ครับ</p></body></html>`);
     }
     res.status(200).type("html").send(out.html);
   } catch (e) {
