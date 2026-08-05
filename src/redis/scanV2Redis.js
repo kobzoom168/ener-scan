@@ -149,7 +149,9 @@ export async function releaseShortLock(resourceKey, token) {
 export async function tryDedupeOnce(dedupeKey, ttlSec) {
   const r = await getScanV2Redis();
   if (!r) return true;
-  const ttl = Math.min(Math.max(Number(ttlSec) || 30, 5), 3600);
+  // เพดานเดิม 3600s ตัด TTL ยาวเงียบ ๆ (บั๊กเจอ 5 ส.ค.: intro จัดชุดขอ 365 วันเหลือ 1 ชม.
+  // เลยเด้งซ้ำทุกวัน — และ dedupe FB/YT 45 วันก็โดนเหมือนกัน) → ขยายเป็น 366 วัน
+  const ttl = Math.min(Math.max(Number(ttlSec) || 30, 5), 366 * 86400);
   try {
     const ok = await r.set(kDedupe(dedupeKey), "1", "EX", ttl, "NX");
     return ok === "OK";

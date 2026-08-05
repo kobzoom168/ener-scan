@@ -139,6 +139,16 @@ export async function loadVault(lineUserId) {
     });
     if (pieces.length >= MAX_PIECES) break;
   }
+  // จำนวนชิ้นไม่ซ้ำจริงทั้งคลัง (ไม่ติดเพดาน MAX_PIECES) — นับต่อจนจบ rows เพื่อข้อความแจ้งลูกค้า
+  for (const r of rows || []) {
+    const obj2 = r.report_payload_json?.object || {};
+    if (String(obj2.objectType || "").trim() === "พระบูชา") continue;
+    if (obj2.objectUnderstanding?.usageProfile?.canCarry === false) continue;
+    const d2 = deriveShowcaseCardData(r.report_payload_json);
+    if (!d2) continue;
+    seen.add(`${d2.name}|${d2.energyScore}`);
+  }
+  pieces.totalUniqueCount = seen.size;
   return pieces;
 }
 
