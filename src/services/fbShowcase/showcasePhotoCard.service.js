@@ -156,7 +156,13 @@ export function deriveShowcaseCardData(payload) {
   }
   if (axes.length < 3) return null; // เรดาร์ต้องมีแกนพอวาด
 
-  const skills = [...axes].sort((x, y) => y.score - x.score).slice(0, 2);
+  // tie-break คงที่ตามลำดับ engine เดิม — ไม่ให้การเรียงแกนโชว์ (5 ส.ค.) ทำ "พลังเด่น/เข้ากับคุณ"
+  // ของชิ้นที่คะแนนเสมอกันขยับจากการ์ดที่เคยออกไปแล้ว
+  const TIE_ORDER = ["luck", "metta", "baramee", "specialty", "protection", "fortune_anchor", "charm",
+    "charm_attraction", "money", "career", "intuition", "love"];
+  const skills = [...axes]
+    .sort((x, y) => y.score - x.score || TIE_ORDER.indexOf(x.key) - TIE_ORDER.indexOf(y.key))
+    .slice(0, 2);
   // ชื่อบนการ์ด = พลังหลักตามคะแนนจริง (กบ 23 ก.ค.)
   const name = skills[0]?.label || "พลังเฉพาะชิ้น";
   const gradeRaw = resolveEnergyLevelDisplayGrade(p.summary?.energyLevelLabel, energyScore);
