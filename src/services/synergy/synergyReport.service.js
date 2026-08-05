@@ -149,16 +149,20 @@ export async function loadVault(lineUserId) {
     const { buildSacredAmuletLibraryForLineUser } = await import(
       "../reports/sacredAmuletLibrary.service.js"
     );
-    const av = await buildSacredAmuletLibraryForLineUser(uid, { libraryThumbScope: "mini" });
+    const av = await buildSacredAmuletLibraryForLineUser(String(lineUserId), { libraryThumbScope: "mini" });
     total += Number(av?.items?.length) || 0;
-  } catch { /* นับได้เท่าที่นับ */ }
+  } catch (e) {
+    console.log(JSON.stringify({ event: "SYNERGY_VAULT_COUNT_ERR", lane: "amulet", msg: String(e?.message || e).slice(0, 140) }));
+  }
   try {
     const { buildCrystalBraceletLibraryForLineUser } = await import(
       "../reports/crystalBraceletLibrary.service.js"
     );
-    const bv = await buildCrystalBraceletLibraryForLineUser(uid, { maxRows: 80, maxItems: 500 });
+    const bv = await buildCrystalBraceletLibraryForLineUser(String(lineUserId), { maxRows: 80, maxItems: 500 });
     total += Number(bv?.items?.length) || 0;
-  } catch { /* นับได้เท่าที่นับ */ }
+  } catch (e) {
+    console.log(JSON.stringify({ event: "SYNERGY_VAULT_COUNT_ERR", lane: "bracelet", msg: String(e?.message || e).slice(0, 140) }));
+  }
   pieces.totalUniqueCount = total > 0 ? total : seen.size;
   return pieces;
 }
