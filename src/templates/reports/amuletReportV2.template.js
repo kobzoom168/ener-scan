@@ -14,11 +14,11 @@ const AMULET_RADAR_CY = 50;
 const AMULET_AXIS_KEYS = /** @type {const} */ ([
   "protection",
   "metta",
-  "baramee",
+  "charm",
   "luck",
   "fortune_anchor",
   "specialty",
-  "charm",
+  "baramee",
 ]);
 const AMULET_RADAR_ANGLES = AMULET_AXIS_KEYS.map(
   (_, i) => -Math.PI / 2 + (i * 2 * Math.PI) / AMULET_AXIS_KEYS.length,
