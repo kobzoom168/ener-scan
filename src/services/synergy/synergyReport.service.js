@@ -213,10 +213,13 @@ export function pickSet(pieces, mission, dateKey, uid, used = {}) {
   const main = pool[Math.min(pool.length - 1, Math.floor(Math.pow(f, 1.7) * pool.length))].p;
   // คู่เสริม: ประเภทเดียวกับชิ้นหลักเท่านั้น (กบ 4 ส.ค. "แยกพระกับกำไลออก") — ไม่มีก็พกเดี่ยว
   const sameLane = ranked.filter((r) => r.p.n !== main.n && r.p.lane === main.lane);
-  const partner =
-    sameLane.find((r) => r.p.peakShort !== main.peakShort)?.p ||
-    sameLane[0]?.p ||
-    null;
+  // คู่เสริมก็เลือกจากกลุ่มท็อป 3 ด้วย seed ประจำวัน (ไม่งั้นคู่เดิมตามชิ้นหลักตลอด)
+  const diverse = sameLane.filter((r) => r.p.peakShort !== main.peakShort);
+  const ppool = (diverse.length ? diverse : sameLane).slice(0, 3);
+  const pf = seededFrac(`${uid}|${dateKey}|${mission.key}|partner`);
+  const partner = ppool.length
+    ? ppool[Math.min(ppool.length - 1, Math.floor(Math.pow(pf, 1.7) * ppool.length))].p
+    : null;
   return { main, partner, dayAxis };
 }
 
