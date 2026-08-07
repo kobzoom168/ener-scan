@@ -323,3 +323,10 @@
 - env: OBJECT_INFO_GATE_ENABLED=true เฉพาะ staging (pro ยังปิด — ตารางพร้อมแล้ว)
 - verify: objectKey deterministic ✓ parser จับ ขุนแผน/วัด/ปี ✓ ปัดทักทาย ✓ หิน ✓ · test 38/38 · ค้าง: กบสแกนจริงบน staging OA แล้วเคาะขึ้น pro
 
+## 2026-08-07 | Claude | เสียงอาจารย์หาย (กบ: "ลูกค้าเสียเงินปกติจะมีเสียง") — แก้แล้ว pro+staging
+- ต้นตอ: ElevenLabs เลิกรับคีย์รุ่นเก่า (บังคับ sk_ 51 ตัว) → auth 400 ทุกครั้งตั้งแต่ ~5 ส.ค. วันนี้ 0/99 · ระบบ fail-closed ส่งรายงานไม่มีเสียงเงียบ ๆ ตามดีไซน์
+- เคล็ดดีบัก: payload_json->'voice' เป็น JSON null — เช็ค IS NOT NULL โดนหลอก ต้องใช้ jsonb_typeof='object'
+- กบสร้างคีย์ใหม่ (ener-voice, จำกัดสิทธิ์ — /v1/user 401 แต่ TTS ผ่าน) → ใส่ .env ทั้ง 2 stack + redeploy · verify: synthesizeMp3 ใน container pro ได้ 28KB ✓
+- เสียงเฉพาะคนจ่าย (กบสั่งย้ำ): เป็นอยู่แล้ว — DB app_settings audience="paid" (hasRecentPaidAccess) staging="all" ไว้เทส
+- หมายเหตุ pro deploy รอบนี้: main อยู่ที่ object-info-gate (แต่ flag ปิดบน pro) — quota notice หลังสแกนยังอยู่แค่ staging รอกบเคาะ
+
