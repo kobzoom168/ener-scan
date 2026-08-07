@@ -391,8 +391,12 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
             String(process.env.POST_REPORT_QUOTA_NOTICE_ENABLED || "")
               .trim()
               .toLowerCase() === "true";
-          if (postReportNoticeEnabled && !payload.dedupHit) {
-            const quotaNotice = await buildRemainingQuotaNoticeText(lineUserId);
+          // กบ 7 ส.ค. 2026 (เคสคุณสิทธิพร 30 ครั้งใน 70 นาที): สมาชิกจ่ายต้องเห็นจำนวน
+          // คงเหลือหลังทุกสแกน — ลูกค้าฟรียังเงียบตามกติกา 18 ก.ค. (เปิดเต็มด้วย flag เดิม)
+          if (!payload.dedupHit) {
+            const quotaNotice = await buildRemainingQuotaNoticeText(lineUserId, {
+              paidOnly: !postReportNoticeEnabled,
+            });
             const noticeText =
               typeof quotaNotice === "string" ? quotaNotice : quotaNotice?.text;
             const noticeQuickReply =
@@ -819,7 +823,7 @@ async function buildPackExhaustedUpsellNotice(lineUserId, paidUntilIso) {
   }
 }
 
-async function buildRemainingQuotaNoticeText(lineUserId) {
+async function buildRemainingQuotaNoticeText(lineUserId, { paidOnly = false } = {}) {
   try {
     const { data: u } = await supabase
       .from("app_users")
@@ -876,6 +880,8 @@ async function buildRemainingQuotaNoticeText(lineUserId) {
       if (upsell) return upsell;
       // ไม่เข้าเงื่อนไข (ไม่มีเครดิต/ส่งไปแล้ว) → ไหลไปแจ้งสิทธิ์ฟรีตามปกติ
     }
+
+    if (paidOnly) return null; // โหมดแจ้งเฉพาะคนจ่าย — ลูกค้าฟรีเงียบตามกติกา 18 ก.ค.
 
     const offer = loadActiveScanOffer(now);
     const freeQuota = Number(offer?.freeQuotaPerDay) || 2;
