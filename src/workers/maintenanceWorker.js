@@ -219,6 +219,17 @@ async function runOnce() {
       }),
     );
   }
+  // สรุปเก็บข้อมูลชิ้นรายวัน ~2 ทุ่ม → Telegram (กบ 7 ส.ค.) — self-gated + dedupe รายวัน
+  try {
+    const { runObjectInfoDailySweep } = await import(
+      "../services/objectInfoGate/objectInfoDailyReport.service.js"
+    );
+    await runObjectInfoDailySweep();
+  } catch (e) {
+    console.warn(
+      JSON.stringify({ event: "OBJECT_INFO_DAILY_SWEEP_ERROR", message: String(e?.message || e).slice(0, 160) }),
+    );
+  }
   // ตรวจคุณภาพแชทรายวัน 6 โมงเช้า → Telegram (กบ 19 ก.ค.) — self-gated + dedupe รายวัน
   try {
     await runChatQualityDailySweep();
