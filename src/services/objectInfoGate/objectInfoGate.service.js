@@ -111,37 +111,50 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
 
     const base = String(process.env.APP_BASE_URL || "").replace(/\/+$/, "");
     const formUrl = `${base}/obj-info/${formToken}`;
+    const POSTER_URL = String(
+      process.env.OBJECT_INFO_POSTER_URL ||
+        "https://pub-66a3e24b05f44d809106818ceb606936.r2.dev/brand/objinfo-ask-v1.png",
+    ).trim();
     const askText =
       lane === "bracelet"
-        ? "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลชิ้นนี้นิดเดียว เพื่อให้อาจารย์อ่านพลังได้ตรงทางที่สุด — เป็นหิน/กำไลชนิดไหนครับ พิมพ์ตอบในแชทนี้ได้เลย หรือกดกรอกแบบละเอียดด้านล่าง"
-        : "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลองค์นี้นิดเดียว เพื่อให้อาจารย์อ่านพลังได้ตรงทางที่สุด — เป็นพระอะไร วัดไหน รุ่น/ปีอะไร พิมพ์ตอบในแชทนี้ได้เลย (รู้เท่าไหนบอกเท่านั้น) หรือกดกรอกแบบละเอียดด้านล่าง";
+        ? "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลชิ้นนี้นิดเดียว เพื่อให้อาจารย์อ่านพลังได้ตรงทางที่สุด เป็นหิน/กำไลชนิดไหนครับ พิมพ์ตอบในแชทนี้ได้เลย หรือกดกรอกแบบละเอียดด้านล่าง"
+        : "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลองค์นี้นิดเดียว เพื่อให้อาจารย์อ่านพลังได้ตรงทางที่สุด เป็นพระอะไร วัดไหน รุ่น/ปีอะไร พิมพ์ตอบในแชทนี้ได้เลย รู้เท่าไหนบอกเท่านั้นได้";
     const items = [
       { type: "action", action: { type: "message", label: "ไม่ทราบข้อมูลชิ้นนี้", text: "ไม่ทราบข้อมูลชิ้นนี้" } },
     ];
     if (isPaid) {
       items.push({ type: "action", action: { type: "message", label: "ข้ามก่อน รับผลเลย", text: "ข้ามก่อน รับผลเลย" } });
     }
+    const formButtonFooter = {
+      type: "box", layout: "vertical", backgroundColor: lane === "amulet" ? "#0c241a" : "#14110C",
+      paddingAll: "12px",
+      contents: [{
+        type: "button", style: "primary", color: "#B8871B", height: "sm",
+        action: { type: "uri", label: "กรอกข้อมูลแบบละเอียด", uri: formUrl },
+      }],
+    };
     const flexAsk = {
       type: "flex",
       altText: "ขอข้อมูลชิ้นนี้ก่อนส่งผลครับ",
-      contents: {
-        type: "bubble", size: "kilo",
-        body: {
-          type: "box", layout: "vertical", backgroundColor: "#14110C", paddingAll: "16px", spacing: "md",
-          contents: [
-            { type: "text", text: "ก่อนส่งผล ขอข้อมูลชิ้นนี้ครับ", weight: "bold", size: "md", color: "#E8C547", wrap: true },
-            { type: "text", text: askText, size: "sm", color: "#F5EDD8", wrap: true },
-            { type: "text", text: "ข้อมูลจะถูกเก็บเข้าทะเบียนคลังของคุณ (บันทึกแบบ \"เจ้าของแจ้ง\")", size: "xs", color: "#CBB98A", wrap: true },
-          ],
-        },
-        footer: {
-          type: "box", layout: "vertical", backgroundColor: "#14110C", paddingAll: "12px", paddingTop: "0px",
-          contents: [{
-            type: "button", style: "primary", color: "#B8871B", height: "sm",
-            action: { type: "uri", label: "กรอกข้อมูลแบบละเอียด", uri: formUrl },
-          }],
-        },
-      },
+      contents:
+        lane === "amulet"
+          ? {
+              type: "bubble", size: "mega",
+              hero: { type: "image", url: POSTER_URL, size: "full", aspectRatio: "1080:1180", aspectMode: "fit" },
+              footer: formButtonFooter,
+            }
+          : {
+              type: "bubble", size: "kilo",
+              body: {
+                type: "box", layout: "vertical", backgroundColor: "#14110C", paddingAll: "16px", spacing: "md",
+                contents: [
+                  { type: "text", text: "ก่อนส่งผล ขอข้อมูลชิ้นนี้ครับ", weight: "bold", size: "md", color: "#E8C547", wrap: true },
+                  { type: "text", text: askText, size: "sm", color: "#F5EDD8", wrap: true },
+                  { type: "text", text: "ข้อมูลจะถูกเก็บเข้าทะเบียนคลังของคุณ (บันทึกแบบ \"เจ้าของแจ้ง\")", size: "xs", color: "#CBB98A", wrap: true },
+                ],
+              },
+              footer: formButtonFooter,
+            },
       quickReply: { items },
     };
     await client.pushMessage(lineUserId, flexAsk);
@@ -257,7 +270,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       // ไม่ใช่ข้อมูลชิ้น → วนเตือนนุ่ม ๆ (กติกากบ: วนจนกว่าจะได้)
       await client.replyMessage(event.replyToken, {
         type: "text",
-        text: "อาจารย์รอส่งผลอยู่ครับ ขอข้อมูลชิ้นนี้ก่อนนิดเดียว — เป็นพระอะไร วัดไหน รุ่น/ปีอะไร (หรือชนิดหิน) พิมพ์บอกได้เลย ไม่แน่ใจกดปุ่มไม่ทราบได้ครับ",
+        text: "อาจารย์รอส่งผลอยู่ครับ ขอข้อมูลชิ้นนี้ก่อนนิดเดียว เป็นพระอะไร วัดไหน รุ่น/ปีอะไร (หรือชนิดหิน) พิมพ์บอกได้เลย ไม่แน่ใจกดปุ่มไม่ทราบได้ครับ",
         quickReply: { items: [{ type: "action", action: { type: "message", label: "ไม่ทราบข้อมูลชิ้นนี้", text: "ไม่ทราบข้อมูลชิ้นนี้" } }] },
       });
       return true;
@@ -286,7 +299,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await setLargeValueWithTtl(backupKey(userId), JSON.stringify(pending), PENDING_TTL_SEC * 2);
       await client.replyMessage(event.replyToken, {
         type: "text",
-        text: `ขอบคุณครับ ${merged.objectName} — แล้วพอทราบไหมครับว่า${missing.join(" ")} (ไม่ทราบกดปุ่มได้เลย เดี๋ยวอาจารย์ส่งผลให้ทันที)`,
+        text: `ขอบคุณครับ ${merged.objectName} แล้วพอทราบไหมครับว่า${missing.join(" ")} (ไม่ทราบกดปุ่มได้เลย เดี๋ยวอาจารย์ส่งผลให้ทันที)`,
         quickReply: { items: [{ type: "action", action: { type: "message", label: "ไม่ทราบครับ", text: "ไม่ทราบครับ" } }] },
       });
       return true;
@@ -315,15 +328,24 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await clearDedupeKey(backupKey(userId));
     await reEnqueueHeldReport(userId, pending);
 
-    // คำถามต่อยอดไม่บล็อก: พกเพื่ออะไร (ตอบก็ได้ไม่ตอบก็ได้ — รายงานส่งแล้ว)
-    await setLargeValueWithTtl(`objinfo:purpose:${userId}`, JSON.stringify({ objectKey: pending.objectKey }), PURPOSE_TTL_SEC);
     await client.replyMessage(event.replyToken, {
       type: "text",
-      text: "บันทึกเข้าทะเบียนคลังของคุณแล้วครับ อาจารย์ส่งผลให้เลย — ชิ้นนี้ตั้งใจพกเพื่ออะไรเป็นหลักครับ (ตอบหรือไม่ตอบก็ได้)",
-      quickReply: {
-        items: PURPOSE_CHOICES.map((c) => ({ type: "action", action: { type: "message", label: c, text: `พกเพื่อ${c}` } })),
-      },
+      text: "บันทึกเข้าทะเบียนคลังของคุณแล้วครับ อาจารย์ส่งผลให้เลยครับ",
     });
+    // คำถาม "พกเพื่ออะไร" ส่งหลังรายงานถึงมือ (~7 วิ) — ส่งพร้อมกันปุ่ม quickReply จะโดน
+    // การ์ดรายงานดันหาย (กบ 7 ส.ค. "ยังไม่ทันเลือกคำตอบ")
+    await setLargeValueWithTtl(`objinfo:purpose:${userId}`, JSON.stringify({ objectKey: pending.objectKey }), PURPOSE_TTL_SEC);
+    setTimeout(() => {
+      client
+        .pushMessage(userId, {
+          type: "text",
+          text: "ถามเพิ่มนิดเดียวครับ ชิ้นนี้ตั้งใจพกเพื่ออะไรเป็นหลัก (ตอบหรือไม่ตอบก็ได้)",
+          quickReply: {
+            items: PURPOSE_CHOICES.map((c) => ({ type: "action", action: { type: "message", label: c, text: `พกเพื่อ${c}` } })),
+          },
+        })
+        .catch(() => {});
+    }, 7000);
     console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", lineUserIdPrefix: userId.slice(0, 8), conflict, hasName: Boolean(merged.objectName) }));
     return true;
   } catch (e) {
