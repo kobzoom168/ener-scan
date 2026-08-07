@@ -88,14 +88,9 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     if (await hasInfoForObject(lineUserId, objectKey)) return false;
 
     const lane = laneFromReportPayload(rp);
-    const paidUntil = await supabase
-      .from("app_users")
-      .select("paid_until")
-      .eq("line_user_id", lineUserId)
-      .maybeSingle()
-      .then((r) => r?.data?.paid_until || null)
-      .catch(() => null);
-    const isPaid = Boolean(paidUntil && Date.parse(paidUntil) > Date.now());
+    // ปุ่มข้าม = เฉพาะคนเคยจ่ายอย่างน้อย 1 ครั้ง (กบ: ไม่เคยจ่ายเลยต้องใส่ ห้ามข้าม)
+    const { hasEverPaid } = await import("../everPaid.service.js");
+    const isPaid = await hasEverPaid(lineUserId).catch(() => false);
 
     const pending = {
       objectKey,
@@ -106,25 +101,50 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
       outboundPayload: payload,
       heldAt: Date.now(),
     };
+    // token ฟอร์ม HTML (กรอกแยกฟิลด์) — อายุเท่าคีย์สำรอง
+    const formToken = crypto.randomBytes(10).toString("hex");
+    pending.formToken = formToken;
+    await setLargeValueWithTtl(`objinfo:form:${formToken}`, lineUserId, PENDING_TTL_SEC * 2);
     await setLargeValueWithTtl(pendingKey(lineUserId), JSON.stringify(pending), PENDING_TTL_SEC);
     // สำรองกันรายงานหาย: pending หมดอายุโดยไม่มีคำตอบ → ข้อความถัดไปของลูกค้าจะปล่อยรายงานออก
     await setLargeValueWithTtl(backupKey(lineUserId), JSON.stringify(pending), PENDING_TTL_SEC * 2);
 
+    const base = String(process.env.APP_BASE_URL || "").replace(/\/+$/, "");
+    const formUrl = `${base}/obj-info/${formToken}`;
     const askText =
       lane === "bracelet"
-        ? "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลชิ้นนี้นิดเดียว — เป็นหิน/กำไลชนิดไหนครับ (เช่น โรสควอตซ์ ไทเกอร์อาย หยก) พิมพ์บอกได้เลย เพื่อให้อาจารย์อ่านต่อยอดได้ละเอียดขึ้น และเก็บเข้าทะเบียนคลังของคุณ"
-        : "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลองค์นี้นิดเดียว — เป็นพระอะไร วัดไหน รุ่น/ปีอะไรครับ พิมพ์บอกได้เลย (รู้เท่าไหนบอกเท่านั้นได้) เพื่อให้อาจารย์อ่านต่อยอดได้ละเอียดขึ้น และเก็บเข้าทะเบียนคลังของคุณ";
+        ? "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลชิ้นนี้นิดเดียว เพื่อให้อาจารย์อ่านพลังได้ตรงทางที่สุด — เป็นหิน/กำไลชนิดไหนครับ พิมพ์ตอบในแชทนี้ได้เลย หรือกดกรอกแบบละเอียดด้านล่าง"
+        : "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลองค์นี้นิดเดียว เพื่อให้อาจารย์อ่านพลังได้ตรงทางที่สุด — เป็นพระอะไร วัดไหน รุ่น/ปีอะไร พิมพ์ตอบในแชทนี้ได้เลย (รู้เท่าไหนบอกเท่านั้น) หรือกดกรอกแบบละเอียดด้านล่าง";
     const items = [
       { type: "action", action: { type: "message", label: "ไม่ทราบข้อมูลชิ้นนี้", text: "ไม่ทราบข้อมูลชิ้นนี้" } },
     ];
     if (isPaid) {
       items.push({ type: "action", action: { type: "message", label: "ข้ามก่อน รับผลเลย", text: "ข้ามก่อน รับผลเลย" } });
     }
-    await client.pushMessage(lineUserId, {
-      type: "text",
-      text: askText,
+    const flexAsk = {
+      type: "flex",
+      altText: "ขอข้อมูลชิ้นนี้ก่อนส่งผลครับ",
+      contents: {
+        type: "bubble", size: "kilo",
+        body: {
+          type: "box", layout: "vertical", backgroundColor: "#14110C", paddingAll: "16px", spacing: "md",
+          contents: [
+            { type: "text", text: "ก่อนส่งผล ขอข้อมูลชิ้นนี้ครับ", weight: "bold", size: "md", color: "#E8C547", wrap: true },
+            { type: "text", text: askText, size: "sm", color: "#F5EDD8", wrap: true },
+            { type: "text", text: "ข้อมูลจะถูกเก็บเข้าทะเบียนคลังของคุณ (บันทึกแบบ \"เจ้าของแจ้ง\")", size: "xs", color: "#CBB98A", wrap: true },
+          ],
+        },
+        footer: {
+          type: "box", layout: "vertical", backgroundColor: "#14110C", paddingAll: "12px", paddingTop: "0px",
+          contents: [{
+            type: "button", style: "primary", color: "#B8871B", height: "sm",
+            action: { type: "uri", label: "กรอกข้อมูลแบบละเอียด", uri: formUrl },
+          }],
+        },
+      },
       quickReply: { items },
-    });
+    };
+    await client.pushMessage(lineUserId, flexAsk);
     try {
       const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
       void insertLineConversationMessage(lineUserId, "bot", askText);
@@ -280,6 +300,53 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
     } catch { /* ignore */ }
     return true;
   }
+}
+
+/** ฟอร์ม HTML: หา pending จาก formToken — คืน { uid, pending } หรือ null */
+export async function getPendingByFormToken(formToken) {
+  const tok = String(formToken || "").trim();
+  if (!/^[a-f0-9]{20}$/.test(tok)) return null;
+  const uid = await getValue(`objinfo:form:${tok}`);
+  if (!uid) return null;
+  const raw = (await getValue(pendingKey(uid))) || (await getValue(backupKey(uid)));
+  if (!raw) return null;
+  try {
+    return { uid, pending: JSON.parse(raw) };
+  } catch {
+    return null;
+  }
+}
+
+/** ฟอร์ม HTML submit: บันทึกแยกฟิลด์ตรง ๆ (ไม่ผ่าน LLM) + ปล่อยรายงาน */
+export async function submitOwnerInfoForm(formToken, fields) {
+  const found = await getPendingByFormToken(formToken);
+  if (!found) return { ok: false, reason: "expired" };
+  const { uid, pending } = found;
+  const f = fields || {};
+  const clean = (v, n = 200) => String(v || "").trim().slice(0, n) || null;
+  const unknownAll = !clean(f.objectName) && !clean(f.temple) && !clean(f.eraYear) && !clean(f.stoneType);
+  await supabase.from("object_owner_info").insert({
+    line_user_id: uid,
+    scan_result_id: pending.scanResultId || null,
+    object_key: pending.objectKey,
+    lane: pending.lane,
+    raw_text: clean(JSON.stringify({ src: "form", ...f }), 2000),
+    object_name: clean(f.objectName),
+    temple: clean(f.temple),
+    era_year: clean(f.eraYear, 40),
+    stone_type: clean(f.stoneType),
+    purpose: clean(f.purpose, 40),
+    origin_story: clean([f.origin, f.story].filter(Boolean).join(" — "), 1000),
+    parse_confidence: 1,
+    unknown: unknownAll,
+    source: "owner_form",
+  });
+  await clearDedupeKey(pendingKey(uid));
+  await clearDedupeKey(backupKey(uid));
+  await clearDedupeKey(`objinfo:form:${String(formToken).trim()}`);
+  await reEnqueueHeldReport(uid, pending);
+  console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", via: "form", lineUserIdPrefix: uid.slice(0, 8) }));
+  return { ok: true };
 }
 
 /** ปุ่ม "พกเพื่อX" หลังส่งผล — อัปเดตแถวล่าสุดของชิ้น */

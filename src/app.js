@@ -207,6 +207,71 @@ img.qr{width:230px;height:230px;border-radius:14px;border:4px solid #e8c547}
 </div></body></html>`);
 });
 
+// ฟอร์มกรอกข้อมูลชิ้น (เกตเก็บข้อมูล — กบ 7 ส.ค.: "link HTML กรอกข้อมูลแยกฟิลด์")
+// ข้อมูลบันทึกแบบ "เจ้าของแจ้ง" — ไม่ผ่าน LLM · submit แล้วรายงานที่ค้างถูกปล่อยทันที
+app.get("/obj-info/:tok", async (req, res) => {
+  try {
+    const { getPendingByFormToken } = await import("./services/objectInfoGate/objectInfoGate.service.js");
+    const found = await getPendingByFormToken(req.params.tok);
+    if (!found) {
+      return res.status(404).type("html").send('<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ener Scan</title></head><body style="font-family:sans-serif;background:#faf6ea;color:#43371f;text-align:center;padding:60px 20px"><h3 style="color:#a5811c">ลิงก์นี้หมดอายุแล้วครับ</h3><p>กลับไปที่แชท LINE แล้วพิมพ์ตอบอาจารย์ได้เลย</p></body></html>');
+    }
+    const isBracelet = found.pending?.lane === "bracelet";
+    const nameLabel = isBracelet ? "ชนิดหิน/กำไล" : "ชื่อพระ/พิมพ์";
+    const namePh = isBracelet ? "เช่น โรสควอตซ์ ไทเกอร์อาย หยก" : "เช่น พระขุนแผน เหรียญหลวงพ่อคูณ";
+    res.status(200).type("html").send(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ข้อมูลชิ้นของคุณ - Ener Scan</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Kanit,sans-serif;background:#faf6ea;color:#43371f;max-width:480px;margin:0 auto;padding:24px 18px 48px}
+h1{font-size:18px;color:#a5811c;text-align:center;margin-bottom:4px}
+.sub{text-align:center;color:#8a7a55;font-size:12.5px;margin-bottom:18px}
+label{display:block;font-size:13.5px;color:#5d4d2b;font-weight:600;margin:14px 0 5px}
+label small{font-weight:300;color:#9a8b66}
+input,select,textarea{width:100%;font-family:inherit;font-size:15px;padding:11px 12px;border:1px solid #dcd0ae;border-radius:10px;background:#fffdf6;color:#2f2617}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#c9a437}
+textarea{min-height:72px;resize:vertical}
+button{width:100%;margin-top:22px;font-family:inherit;font-size:16px;font-weight:600;padding:14px;border:none;border-radius:12px;background:linear-gradient(90deg,#b8871b,#d9b93e);color:#fff;cursor:pointer}
+.note{font-size:11.5px;color:#9a8b66;text-align:center;margin-top:14px;line-height:1.6}</style></head><body>
+<h1>ข้อมูลชิ้นของคุณ</h1>
+<div class="sub">รู้เท่าไหนกรอกเท่านั้นได้เลยครับ · ส่งแล้วอาจารย์ส่งผลให้ทันที</div>
+<form method="POST" action="/obj-info/${req.params.tok}">
+  <label>${nameLabel}</label>
+  <input name="objectName" placeholder="${namePh}" maxlength="120">
+  ${isBracelet ? "" : `<label>วัด <small>(ถ้าทราบ)</small></label><input name="temple" placeholder="เช่น วัดใหญ่ชัยมงคล" maxlength="120">
+  <label>รุ่น / ปีที่สร้าง <small>(ถ้าทราบ)</small></label><input name="eraYear" placeholder="เช่น รุ่นแรก ปี 2560" maxlength="60">`}
+  <label>ตั้งใจพกเพื่ออะไรเป็นหลัก <small>(เลือกได้)</small></label>
+  <select name="purpose"><option value="">— เลือก —</option><option>งาน</option><option>การเงิน</option><option>ความรัก</option><option>คุ้มครอง</option><option>เสี่ยงโชค</option><option>สะสมบูชา</option></select>
+  <label>ได้มาจากไหน <small>(เลือกได้)</small></label>
+  <select name="origin"><option value="">— เลือก —</option><option>เช่า/ซื้อมาเอง</option><option>มรดก/ผู้ใหญ่ให้</option><option>ของขวัญ</option><option>ได้จากวัดโดยตรง</option><option>อื่น ๆ</option></select>
+  <label>เรื่องราวของชิ้นนี้ <small>(อยากเล่าอะไรก็ได้ ไม่บังคับ)</small></label>
+  <textarea name="story" placeholder="เช่น พ่อให้ไว้ก่อนบวช พกมา 10 ปีแล้ว" maxlength="800"></textarea>
+  <button type="submit">บันทึก แล้วรับผลการอ่าน</button>
+</form>
+<div class="note">ข้อมูลบันทึกแบบ "เจ้าของแจ้ง" เพื่อให้อาจารย์อ่านต่อยอดและเก็บเข้าทะเบียนคลังของคุณ<br>ไม่มีผลต่อคะแนนพลัง · Ener Scan ไม่ตัดสินแท้เก๊หรือมูลค่า</div>
+</body></html>`);
+  } catch (e) {
+    console.error(JSON.stringify({ event: "OBJ_INFO_FORM_ERROR", message: String(e?.message || e).slice(0, 160) }));
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+  }
+});
+
+app.post("/obj-info/:tok", async (req, res) => {
+  try {
+    const { submitOwnerInfoForm } = await import("./services/objectInfoGate/objectInfoGate.service.js");
+    const out = await submitOwnerInfoForm(req.params.tok, req.body || {});
+    const ok = out?.ok === true;
+    res.status(ok ? 200 : 410).type("html").send(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ener Scan</title></head><body style="font-family:Kanit,sans-serif;background:#faf6ea;color:#43371f;text-align:center;padding:70px 24px">
+<div style="font-size:44px">${ok ? "✅" : "⌛"}</div>
+<h2 style="color:#a5811c;margin:12px 0 8px">${ok ? "บันทึกเรียบร้อยครับ" : "ลิงก์นี้หมดอายุแล้ว"}</h2>
+<p style="color:#6b5836;font-size:15px;line-height:1.7">${ok ? "อาจารย์กำลังส่งผลการอ่านเข้าแชท LINE ให้เลยครับ<br>ปิดหน้านี้แล้วกลับไปดูได้เลย" : "กลับไปที่แชท LINE แล้วพิมพ์ตอบอาจารย์ได้เลยครับ"}</p>
+</body></html>`);
+  } catch (e) {
+    console.error(JSON.stringify({ event: "OBJ_INFO_FORM_ERROR", message: String(e?.message || e).slice(0, 160) }));
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+  }
+});
+
 // รายงานจัดชุดพลัง (Synergy — กบเคาะ 31 ก.ค.) — token ถาวรต่อลูกค้า
 // เปิดลิงก์ = เห็นโลโก้ทันที (shell) แล้วค่อยดึงเนื้อจริง (/body) — ครั้งแรกของวันรอ AI ~5 วิ
 app.get("/synergy/:token", async (req, res) => {
