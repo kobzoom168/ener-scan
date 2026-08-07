@@ -3894,6 +3894,15 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   if (await maybeHandleAdminAssist({ client, event, userId, text })) return;
 
+  // เกตข้อมูลชิ้น (กบ 7 ส.ค.): มีรายงานค้างรอข้อมูล → ข้อความนี้คือคำตอบ/ปุ่ม จบในตัว
+  try {
+    const { maybeHandleObjectInfoAnswer, maybeHandlePurposeAnswer } = await import(
+      "../services/objectInfoGate/objectInfoGate.service.js"
+    );
+    if (await maybeHandleObjectInfoAnswer({ client, event, userId, text })) return;
+    if (await maybeHandlePurposeAnswer({ client, event, userId, text })) return;
+  } catch { /* เกตพังห้ามขวางแชทปกติ */ }
+
   const messageId = event.message?.id ?? null;
 
   // ห้ามแพ้เจ้าของพระ: ลูกค้าระบุพิมพ์ของชิ้นตัวเอง ("ไม่ใช่... มันคือพระซุ้มกอ")
