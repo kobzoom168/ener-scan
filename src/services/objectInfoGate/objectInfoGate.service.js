@@ -67,8 +67,22 @@ const backupKey = (uid) => `objinfo:pending_backup:${uid}`;
 export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload }) {
   if (!objectInfoGateEnabled()) return false;
   try {
-    const rp = payload?.reportPayload;
-    if (!rp || payload?.error) return false;
+    if (payload?.error) return false;
+    // โหมด summary_link ไม่แนบ reportPayload ใน outbound (เป็น JSON null) → โหลดจาก DB ด้วย token
+    let rp = payload?.reportPayload || null;
+    if (!rp && payload?.publicToken) {
+      const { data: srow } = await supabase
+        .from("scan_results_v2")
+        .select("id,report_payload_json")
+        .eq("html_public_token", String(payload.publicToken))
+        .maybeSingle();
+      rp = srow?.report_payload_json || null;
+      if (srow?.id && !payload.scanResultId) payload.scanResultId = String(srow.id);
+    }
+    if (!rp) {
+      console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_SKIP", reason: "no_report_payload" }));
+      return false;
+    }
     const objectKey = objectKeyFromReportPayload(rp);
     if (!objectKey) return false;
     if (await hasInfoForObject(lineUserId, objectKey)) return false;
