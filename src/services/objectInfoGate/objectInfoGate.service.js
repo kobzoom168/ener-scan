@@ -233,9 +233,17 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       return true;
     }
     if (/^ไม่ทราบ/.test(t)) {
+      const partial = pending.partial || {};
       await supabase.from("object_owner_info").insert({
         line_user_id: userId, scan_result_id: pending.scanResultId || null,
-        object_key: pending.objectKey, lane: pending.lane, unknown: true, raw_text: t,
+        object_key: pending.objectKey, lane: pending.lane,
+        unknown: !partial.objectName && !partial.stoneType,
+        raw_text: (pending.rawSoFar ? pending.rawSoFar + " | " : "") + t,
+        object_name: partial.objectName || null,
+        temple: partial.temple || null,
+        era_year: partial.eraYear || null,
+        stone_type: partial.stoneType || null,
+        parse_confidence: partial.confidence || null,
       });
       await clearDedupeKey(pendingKey(userId));
       await clearDedupeKey(backupKey(userId));
@@ -255,24 +263,52 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       return true;
     }
 
+    // รวมกับข้อมูลรอบแรก (กรณีถามซ้ำช่องที่ขาด)
+    const prev = pending.partial || {};
+    const merged = {
+      objectName: parsed.objectName || prev.objectName || null,
+      temple: parsed.temple || prev.temple || null,
+      eraYear: parsed.eraYear || prev.eraYear || null,
+      stoneType: parsed.stoneType || prev.stoneType || null,
+      confidence: Number(parsed.confidence) || prev.confidence || null,
+    };
+    const rawAll = (pending.rawSoFar ? pending.rawSoFar + " | " : "") + t.slice(0, 800);
+
+    // ยังไม่ครบ + ยังไม่เคยถามซ้ำ → ถามเฉพาะช่องที่ขาดอีก 1 รอบเดียว (ครบขึ้นโดยไม่วนไม่รู้จบ)
+    if (pending.stage !== 2 && pending.lane === "amulet" && merged.objectName && (!merged.temple || !merged.eraYear)) {
+      const missing = [];
+      if (!merged.temple) missing.push("วัดไหน");
+      if (!merged.eraYear) missing.push("รุ่น/ปีอะไร");
+      pending.stage = 2;
+      pending.partial = merged;
+      pending.rawSoFar = rawAll;
+      await setLargeValueWithTtl(pendingKey(userId), JSON.stringify(pending), PENDING_TTL_SEC);
+      await setLargeValueWithTtl(backupKey(userId), JSON.stringify(pending), PENDING_TTL_SEC * 2);
+      await client.replyMessage(event.replyToken, {
+        type: "text",
+        text: `ขอบคุณครับ ${merged.objectName} — แล้วพอทราบไหมครับว่า${missing.join(" ")} (ไม่ทราบกดปุ่มได้เลย เดี๋ยวอาจารย์ส่งผลให้ทันที)`,
+        quickReply: { items: [{ type: "action", action: { type: "message", label: "ไม่ทราบครับ", text: "ไม่ทราบครับ" } }] },
+      });
+      return true;
+    }
+
     // ขัดกับที่ตัวจำแนกเห็นไหม (เก็บ+ธง ไม่เถียงลูกค้า)
-    const form = String(pending.objectForm || "");
-    const saysStone = Boolean(parsed.stoneType) && !parsed.objectName;
+    const saysStone = Boolean(merged.stoneType) && !merged.objectName;
     const conflict =
       (pending.lane === "amulet" && saysStone) ||
-      (pending.lane === "bracelet" && /^พระ|^เหรียญ|^ตะกรุด/.test(String(parsed.objectName || "")));
+      (pending.lane === "bracelet" && /^พระ|^เหรียญ|^ตะกรุด/.test(String(merged.objectName || "")));
 
     await supabase.from("object_owner_info").insert({
       line_user_id: userId,
       scan_result_id: pending.scanResultId || null,
       object_key: pending.objectKey,
       lane: pending.lane,
-      raw_text: t.slice(0, 2000),
-      object_name: parsed.objectName || null,
-      temple: parsed.temple || null,
-      era_year: parsed.eraYear || null,
-      stone_type: parsed.stoneType || null,
-      parse_confidence: Number(parsed.confidence) || null,
+      raw_text: rawAll.slice(0, 2000),
+      object_name: merged.objectName,
+      temple: merged.temple,
+      era_year: merged.eraYear,
+      stone_type: merged.stoneType,
+      parse_confidence: merged.confidence,
       conflict_flag: conflict,
     });
     await clearDedupeKey(pendingKey(userId));
@@ -288,7 +324,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
         items: PURPOSE_CHOICES.map((c) => ({ type: "action", action: { type: "message", label: c, text: `พกเพื่อ${c}` } })),
       },
     });
-    console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", lineUserIdPrefix: userId.slice(0, 8), conflict, hasName: Boolean(parsed.objectName) }));
+    console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", lineUserIdPrefix: userId.slice(0, 8), conflict, hasName: Boolean(merged.objectName) }));
     return true;
   } catch (e) {
     console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_ERROR", step: "answer", msg: String(e?.message || e).slice(0, 140) }));
