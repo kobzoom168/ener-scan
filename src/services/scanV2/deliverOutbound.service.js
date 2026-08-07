@@ -222,6 +222,20 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         return { sent: true };
       }
 
+      // เกตเก็บข้อมูลชิ้น (กบ 7 ส.ค.): ชิ้นใหม่ยังไม่มีข้อมูลเจ้าของ → ส่งคำถามแทน พักรายงานไว้
+      // ตอบแล้วค่อย re-enqueue กลับมาคิวนี้ (ตอนนั้นเกตจะปล่อยผ่านเพราะมีข้อมูลแล้ว)
+      try {
+        const { maybeHoldReportForObjectInfo } = await import(
+          "../objectInfoGate/objectInfoGate.service.js"
+        );
+        if (await maybeHoldReportForObjectInfo({ client, lineUserId, payload })) {
+          await markSent(id);
+          releaseScanGate(lineUserId);
+          console.log(JSON.stringify({ event: "OUTBOUND_HELD_FOR_OBJECT_INFO", ...base() }));
+          return { sent: true };
+        }
+      } catch { /* เกตพัง = ส่งรายงานปกติ */ }
+
       const deliveryStrategy =
         payload.deliveryStrategy != null
           ? String(payload.deliveryStrategy)
