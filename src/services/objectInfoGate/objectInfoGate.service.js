@@ -242,7 +242,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await clearDedupeKey(pendingKey(userId));
       await clearDedupeKey(backupKey(userId));
       await reEnqueueHeldReport(userId, pending);
-      await client.replyMessage(event.replyToken, { type: "text", text: "ได้เลยครับ ส่งผลให้ทันที (ว่าง ๆ ค่อยบอกข้อมูลองค์นี้เพิ่มก็ได้นะครับ)" });
+      await client.replyMessage(event.replyToken, { type: "text", text: "ได้ครับ รับผลพลังได้ทันทีครับ" });
       return true;
     }
     if (/^ไม่ทราบ/.test(t)) {
