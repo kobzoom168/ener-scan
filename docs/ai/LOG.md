@@ -316,3 +316,10 @@
 - Claude ตัด: โหวตชุมชน / Activation Level / โฆษณาสถิติผลลัพธ์ — ชนเส้นแดง
 - ลำดับ 90 วัน: เกต → Pre-Check → registry+ES-ID → ถามหลังพก+ซีรีส์ VDO → PDF+B2B · อยู่ท้าย ener-object-data-monetize.md · รอกบสั่งเริ่มเฟส 0+1
 
+## 2026-08-07 | Claude | เฟส 0 เกตเก็บข้อมูลชิ้น — LIVE staging (กบสั่ง "ลุยเฟส 0")
+- ตำแหน่งเกต: หลังสแกนเสร็จ ก่อนส่งรายงาน (deliverOutbound scan_result) — รายงานเป็นแรงจูงใจให้ตอบ ไม่ต้องแช่รูป รู้เลน+ชิ้นแม่น
+- flow: ชิ้นใหม่ (objectKey = md5 คะแนน+แกน — ชิ้นเดิมไม่ถามซ้ำ) → ส่งคำถามตามเลน + พัก payload ใน redis (pending 24 ชม. + backup 48 ชม. fail-open) → ลูกค้าตอบ → Gemini parse (isObjectInfo กันตอบมั่ว/ทักทาย → วนเตือน) → insert object_owner_info (migration 049 รันทั้ง 2 DB) → re-enqueue รายงานส่งทันที → ปุ่มตาม "พกเพื่ออะไร" ไม่บล็อก
+- กติกา: "ไม่ทราบ" ผ่าน · ลูกค้าจ่าย (paid_until active) มีปุ่ม "ข้ามก่อน รับผลเลย" · conflict_flag เมื่อคำตอบขัดเลน · ask ลง history · เกตพังทุกกรณี = ส่งรายงานปกติ (ห้ามขวางลูกค้า)
+- env: OBJECT_INFO_GATE_ENABLED=true เฉพาะ staging (pro ยังปิด — ตารางพร้อมแล้ว)
+- verify: objectKey deterministic ✓ parser จับ ขุนแผน/วัด/ปี ✓ ปัดทักทาย ✓ หิน ✓ · test 38/38 · ค้าง: กบสแกนจริงบน staging OA แล้วเคาะขึ้น pro
+
