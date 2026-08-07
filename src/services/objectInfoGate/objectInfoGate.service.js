@@ -113,7 +113,7 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     const formUrl = `${base}/obj-info/${formToken}`;
     const POSTER_URL = String(
       process.env.OBJECT_INFO_POSTER_URL ||
-        "https://pub-66a3e24b05f44d809106818ceb606936.r2.dev/brand/objinfo-ask-v1.png",
+        "https://pub-66a3e24b05f44d809106818ceb606936.r2.dev/brand/objinfo-ask-v2.png",
     ).trim();
     const askText =
       lane === "bracelet"
@@ -140,7 +140,7 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
         lane === "amulet"
           ? {
               type: "bubble", size: "mega",
-              hero: { type: "image", url: POSTER_URL, size: "full", aspectRatio: "1080:1180", aspectMode: "fit" },
+              hero: { type: "image", url: POSTER_URL, size: "full", aspectRatio: "1080:1220", aspectMode: "fit" },
               footer: formButtonFooter,
             }
           : {
