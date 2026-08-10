@@ -3903,6 +3903,12 @@ async function handleTextMessage({ client, event, userId, session }) {
     if (await maybeHandlePurposeAnswer({ client, event, userId, text })) return;
   } catch { /* เกตพังห้ามขวางแชทปกติ */ }
 
+  // ปุ่ม "เข้าใจแล้ว" จากการ์ดกติกาตอน add เพื่อน (กบ 8 ส.ค.)
+  try {
+    const { maybeHandleHowtoAck } = await import("../services/welcome/howtoFlow.service.js");
+    if (await maybeHandleHowtoAck({ client, event, userId, text })) return;
+  } catch { /* ignore */ }
+
   // เช็คก่อนเช่า (กบ 8 ส.ค.): เปิดโหมด 30 นาที รูปถัดไปไม่เข้าคลัง + ได้การ์ดสถิติ
   try {
     const { maybeHandlePrecheckTrigger } = await import("../services/precheck/precheck.service.js");
@@ -7840,12 +7846,16 @@ async function handleFollowEvent({ client, event }) {
     } catch {
       /* welcome เดิมยังส่งได้ */
     }
-    await client.replyMessage(
-      event.replyToken,
-      welcomeRegCard
-        ? [{ type: "text", text: welcomeText }, welcomeRegCard]
-        : { type: "text", text: welcomeText },
-    );
+    // การ์ดกติกา 5 ขั้น + ปุ่ม "เข้าใจแล้ว" (กบ 8 ส.ค.) — ต่อท้าย welcome เสมอ
+    let howtoFlex = null;
+    try {
+      const { buildHowtoFlowFlex } = await import("../services/welcome/howtoFlow.service.js");
+      howtoFlex = buildHowtoFlowFlex();
+    } catch { /* ส่ง welcome เดิมได้ */ }
+    const welcomeMsgs = [{ type: "text", text: welcomeText }];
+    if (welcomeRegCard) welcomeMsgs.push(welcomeRegCard);
+    if (howtoFlex) welcomeMsgs.push(howtoFlex);
+    await client.replyMessage(event.replyToken, welcomeMsgs);
     console.log(
       JSON.stringify({
         event: "LINE_FOLLOW_WELCOME_SENT",
