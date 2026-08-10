@@ -9,7 +9,7 @@ import { tryDedupeOnce } from "../../redis/scanV2Redis.js";
 const HOWTO_URL = () =>
   String(
     process.env.HOWTO_FLOW_IMAGE_URL ||
-      "https://pub-66a3e24b05f44d809106818ceb606936.r2.dev/brand/flow-howto-v2.png",
+      "https://pub-66a3e24b05f44d809106818ceb606936.r2.dev/brand/flow-howto-v3.png",
   ).trim();
 
 export function buildHowtoFlowFlex() {
@@ -23,7 +23,7 @@ export function buildHowtoFlowFlex() {
         type: "image",
         url: HOWTO_URL(),
         size: "full",
-        aspectRatio: "1080:1560",
+        aspectRatio: "1024:1560",
         aspectMode: "fit",
       },
       footer: {
