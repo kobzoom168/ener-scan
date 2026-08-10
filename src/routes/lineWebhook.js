@@ -3903,6 +3903,12 @@ async function handleTextMessage({ client, event, userId, session }) {
     if (await maybeHandlePurposeAnswer({ client, event, userId, text })) return;
   } catch { /* เกตพังห้ามขวางแชทปกติ */ }
 
+  // เช็คก่อนเช่า (กบ 8 ส.ค.): เปิดโหมด 30 นาที รูปถัดไปไม่เข้าคลัง + ได้การ์ดสถิติ
+  try {
+    const { maybeHandlePrecheckTrigger } = await import("../services/precheck/precheck.service.js");
+    if (await maybeHandlePrecheckTrigger({ client, event, userId, text })) return;
+  } catch { /* ignore */ }
+
   const messageId = event.message?.id ?? null;
 
   // ห้ามแพ้เจ้าของพระ: ลูกค้าระบุพิมพ์ของชิ้นตัวเอง ("ไม่ใช่... มันคือพระซุ้มกอ")

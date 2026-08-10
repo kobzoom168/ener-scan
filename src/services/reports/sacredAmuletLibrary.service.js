@@ -802,6 +802,7 @@ export async function buildSacredAmuletLibraryForLineUser(lineUserId, opts = {})
 
   for (const row of rows) {
     const raw = row?.report_payload_json;
+    if (raw?.precheckMode) continue; // เช็คก่อนเช่า — ไม่ใช่ของลูกค้า ไม่เข้าคลัง
     const rid = String(row?.id || "").trim();
     const jobId = scanJobIdByResultId.get(rid) || "";
     const uploadId = jobId ? uploadIdByJobId.get(jobId) || null : null;

@@ -222,9 +222,17 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         return { sent: true };
       }
 
+      // โหมดเช็คก่อนเช่า (กบ 8 ส.ค.): ชิ้นที่เช็คไม่ใช่ของลูกค้า — ข้ามเกตถามข้อมูล
+      // และหลังส่งรายงานจะติดธง precheck + ส่งการ์ดสถิติตาม (ดู hook ด้านล่าง)
+      let precheckActive = false;
+      try {
+        const { isPrecheckActive } = await import("../precheck/precheck.service.js");
+        precheckActive = await isPrecheckActive(lineUserId);
+      } catch { /* ignore */ }
+
       // เกตเก็บข้อมูลชิ้น (กบ 7 ส.ค.): ชิ้นใหม่ยังไม่มีข้อมูลเจ้าของ → ส่งคำถามแทน พักรายงานไว้
       // ตอบแล้วค่อย re-enqueue กลับมาคิวนี้ (ตอนนั้นเกตจะปล่อยผ่านเพราะมีข้อมูลแล้ว)
-      try {
+      if (!precheckActive) try {
         const { maybeHoldReportForObjectInfo } = await import(
           "../objectInfoGate/objectInfoGate.service.js"
         );
@@ -334,9 +342,16 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         await markSent(id);
         releaseScanGate(lineUserId);
         await handleScanResultPostDelivery(msg, payload);
+        if (precheckActive) {
+          // เช็คก่อนเช่า: ติดธง + การ์ดสถิติ (หน่วง 2 วิ ให้รายงานถึงก่อน) — ไม่เข้า hook โพสต์/คลัง
+          try {
+            const { handlePrecheckAfterReport } = await import("../precheck/precheck.service.js");
+            setTimeout(() => void handlePrecheckAfterReport({ client, lineUserId, payload }), 2000);
+          } catch { /* ignore */ }
+        }
         // ทุกสแกน → ส่งการ์ด + แคปชันพลังงานเข้า Telegram กบทันที (กบ 24 ก.ค. — เก็บคอนเทนต์ไว้โพสต์เอง)
         // fire-and-forget ห้ามกระทบ report · dedupe ต่อ token
-        try {
+        if (!precheckActive) try {
           const { maybeSendScanCardToTelegram } = await import(
             "../fbShowcase/fbShowcase.service.js"
           );
@@ -349,7 +364,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           /* ignore */
         }
         // ทุกสแกน → คลิปซูม 5 วิ auto post เพจ FB (กบ 29 ก.ค. — แทนวิดีโอสรุปรายวัน)
-        try {
+        if (!precheckActive) try {
           const { maybeAutoPostScanClip } = await import(
             "../fbShowcase/scanClipVideo.service.js"
           );
@@ -362,7 +377,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           /* ignore */
         }
         // ครบ 3 ชิ้นครั้งแรก → แนะนำรายงานจัดชุดพลัง (Synergy — กบ 31 ก.ค.) ครั้งเดียวต่อคน
-        try {
+        if (!precheckActive) try {
           const { maybeIntroduceSynergy } = await import(
             "../synergy/synergyIntro.service.js"
           );

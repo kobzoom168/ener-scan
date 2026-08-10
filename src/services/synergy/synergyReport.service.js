@@ -110,6 +110,7 @@ export async function loadVault(lineUserId) {
   for (const r of rows || []) {
     // ชุดนี้คือ "ชุดพก" — ของตั้งบูชา/รูปปั้น/ของพกไม่ได้ ตัดออกเลย (กบ 4 ส.ค.
     // เคสรูปปั้นโดนจับเข้าชุด · ต่อยอดกติกา 13 ก.ค. "เทวรูปพกไม่ได้")
+    if (r.report_payload_json?.precheckMode) continue; // เช็คก่อนเช่า — ไม่ใช่ของลูกค้า
     const obj = r.report_payload_json?.object || {};
     if (String(obj.objectType || "").trim() === "พระบูชา") continue;
     if (obj.objectUnderstanding?.usageProfile?.canCarry === false) continue;
