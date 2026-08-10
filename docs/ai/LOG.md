@@ -351,3 +351,8 @@
 - จุดอ่อน=retention หลังวัน 7-14 · 7-Day Loop ขึ้น top-2 (3/4 ตัว) · Event log ตั้งแต่วันแรก · Collector Vault จากเคสสิทธิพร · ES ลด scope · Marketplace→Wanted (demand graph) · เสี่ยง: LINE SPOF + AI Fatigue + data ต้อง normalize เป็น tag
 - แผน 30 วันใหม่: ①Pre-Check ②7-Day Loop+event log ③Collector Vault+B2B ล็อต+PDF · เบรก: ขายความกลัว/เก็บเงิน feedback/โหวตผล/คำการันตี — ท้ายไฟล์ ener-object-data-monetize.md · รอกบเคาะ
 
+## 2026-08-08 | Claude | Pre-Check LIVE staging + สังเคราะห์ growth/commerce (AI 4 ตัว)
+- Pre-Check "เช็คก่อนเช่า" ขึ้น staging: พิมพ์ trigger → โหมด 30 นาที → สแกนถัดไปข้ามเกต + ธง precheckMode (ไม่เข้าคลัง/ชุด/คลิป FB-YT/TG — กรองที่ loadVault+library 2 เลน+YT sweep) + การ์ดสถิติ ener_form_stats ("ของประเภทเดียวกัน N รายการ ช่วงที่พบบ่อย p25-p75") ภาษาปลอดภัย + migration 050 (mark_precheck/form_stats/normalized_tag) + parser เกตคืน normalizedName · ยืนยันกับกบ: ไม่มีระบบปล่อยเช่า/ขายในงานนี้
+- แผนใหม่ docs/ai/plans/ener-growth-commerce.md (โจทย์ 400-500 add ให้ยอมจ่าย + ร้านเครื่องราง + โต 10k): A conversion pack (greeting/rich menu 6 ช่อง/upsell หลังสแกนฟรี/broadcast 3 จังหวะ) → B TikTok (repurpose คลิป pipeline) → C ร้าน LINE MyShop 10-15 SKU กำไล/เซ็ตตามสาย + เช็คดวงก่อนซื้อ → D ads "ก่อนเช่า อย่าเพิ่งจ่าย" · KPI = cost ต่อคนจ่ายแรก · เบรก FOMO ปลอม/ลดราคาถาวร
+- รอกบ: ทดสอบเช็คก่อนเช่าบน staging + เคาะเริ่มเฟส A
+

@@ -162,6 +162,7 @@ export async function buildCrystalBraceletLibraryForLineUser(
   let scanCount = 0;
 
   for (const row of rows) {
+    if (row?.report_payload_json?.precheckMode) continue; // เช็คก่อนเช่า — ไม่เข้าคลัง
     let norm = null;
     try {
       norm = normalizeReportPayloadForRender(row?.report_payload_json).payload;

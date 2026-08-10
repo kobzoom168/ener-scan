@@ -83,6 +83,7 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
       console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_SKIP", reason: "no_report_payload" }));
       return false;
     }
+    if (rp.precheckMode) return false; // ชิ้นเช็คก่อนเช่า — ไม่ใช่ของลูกค้า ไม่ถาม
     const objectKey = objectKeyFromReportPayload(rp);
     if (!objectKey) return false;
     if (await hasInfoForObject(lineUserId, objectKey)) return false;
@@ -177,11 +178,11 @@ async function parseOwnerInfo(rawText, lane) {
   );
   const sys =
     `แยกข้อมูลวัตถุมงคลจากข้อความเจ้าของ ตอบ JSON เดียวเท่านั้น: ` +
-    `{"isObjectInfo":boolean,"objectName":string|null,"temple":string|null,"eraYear":string|null,"stoneType":string|null,"confidence":number}\n` +
+    `{"isObjectInfo":boolean,"objectName":string|null,"temple":string|null,"eraYear":string|null,"stoneType":string|null,"normalizedName":string|null,"confidence":number}\n` +
     `- isObjectInfo=true เมื่อข้อความบอกชนิด/ชื่อ/วัด/รุ่น/ปี ของพระหรือหิน (แม้บอกแค่บางส่วน)\n` +
     `- isObjectInfo=false เมื่อเป็นทักทาย/คำถาม/เรื่องอื่น\n` +
     `- objectName=ชื่อพิมพ์หรือชนิด เช่น "พระขุนแผน" "เหรียญหลวงพ่อคูณ" · stoneType เฉพาะหิน/กำไล\n` +
-    `- confidence 0-1 · ห้ามเดาข้อมูลที่ไม่ได้พูดถึง ให้ null`;
+    `- normalizedName=ชื่อมาตรฐานกลางสำหรับจัดกลุ่ม (ตัดคำฟุ่มเฟือย/สะกดมาตรฐาน เช่น "พระสมเด็จ วัดระฆัง") · confidence 0-1 · ห้ามเดาข้อมูลที่ไม่ได้พูดถึง ให้ null`;
   try {
     const model = getGeminiFlashModel();
     const out = await generateTextWithTimeout(model, `${sys}\n\nเลน: ${lane}\nข้อความ: ${rawText}`, 8000);
@@ -322,6 +323,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       era_year: merged.eraYear,
       stone_type: merged.stoneType,
       parse_confidence: merged.confidence,
+      normalized_tag: parsed.normalizedName || null,
       conflict_flag: conflict,
     });
     await clearDedupeKey(pendingKey(userId));

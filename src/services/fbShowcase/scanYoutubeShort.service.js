@@ -491,6 +491,7 @@ export async function runYoutubeShortSweep(now = new Date()) {
     const seen = new Set();
     const candidates = [];
     for (const r of rows || []) {
+      if (r.report_payload_json?.precheckMode) continue; // เช็คก่อนเช่า — ไม่เอาลงคลิป
       const d = deriveShowcaseCardData(r.report_payload_json);
       if (!d || d.energyScore < minScore()) continue;
       if (d.energyScore >= S_GRADE_MIN_SCORE) continue; // S มีคลิปพิเศษของตัวเองแล้ว
