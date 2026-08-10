@@ -411,11 +411,29 @@ export async function submitOwnerInfoForm(formToken, fields) {
 
 /** ปุ่ม "พกเพื่อX" หลังส่งผล — อัปเดตแถวล่าสุดของชิ้น */
 export async function maybeHandlePurposeAnswer({ client, event, userId, text }) {
-  const m = String(text || "").trim().match(/^พกเพื่อ(.+)$/);
-  if (!m || !PURPOSE_CHOICES.includes(m[1])) return false;
+  const t = String(text || "").trim();
+  let choice = null;
+  const m = t.match(/^พกเพื่อ(.+)$/);
+  if (m && PURPOSE_CHOICES.includes(m[1])) choice = m[1];
   try {
     const raw = await getValue(`objinfo:purpose:${userId}`);
     if (!raw) return false;
+    if (!choice) {
+      // ตอบเป็นข้อความอิสระแทนกดปุ่ม (เคส GopGap 8 ส.ค.: "อยากใส่เสริมเรื่องงาน"
+      // หลุดไป consult แล้วโดนเสนอขาย) — จับคำสำคัญเอง ไม่เข้าเค้าค่อยปล่อยไปแชทปกติ
+      const KEYMAP = [
+        [/งาน|เจ้านาย|หัวหน้า|ประชุม|สัมภาษณ์/, "งาน"],
+        [/เงิน|ขาย|ค้า|ธุรกิจ|ลูกค้า|รวย/, "การเงิน"],
+        [/รัก|แฟน|คู่|เสน่ห|นัด|คนชอบ/, "ความรัก"],
+        [/คุ้มครอง|ปลอดภัย|เดินทาง|แคล้ว|กันภัย/, "คุ้มครอง"],
+        [/โชค|หวย|ลาภ|เสี่ยง/, "เสี่ยงโชค"],
+        [/สะสม|บูชา|เก็บไว้/, "สะสมบูชา"],
+      ];
+      for (const [re, c] of KEYMAP) {
+        if (re.test(t)) { choice = c; break; }
+      }
+      if (!choice) return false;
+    }
     const { objectKey } = JSON.parse(raw);
     const { data } = await supabase
       .from("object_owner_info")
@@ -425,10 +443,13 @@ export async function maybeHandlePurposeAnswer({ client, event, userId, text }) 
       .order("created_at", { ascending: false })
       .limit(1);
     if (data?.[0]?.id) {
-      await supabase.from("object_owner_info").update({ purpose: m[1] }).eq("id", data[0].id);
+      await supabase.from("object_owner_info").update({ purpose: choice }).eq("id", data[0].id);
     }
     await clearDedupeKey(`objinfo:purpose:${userId}`);
-    await client.replyMessage(event.replyToken, { type: "text", text: "รับทราบครับ อาจารย์จะจำไว้เวลาแนะนำการพกชิ้นนี้" });
+    await client.replyMessage(event.replyToken, {
+      type: "text",
+      text: `รับทราบครับ ชิ้นนี้พกเพื่อ${choice} อาจารย์จะจำไว้เวลาแนะนำการพกครับ`,
+    });
     return true;
   } catch {
     return false;
