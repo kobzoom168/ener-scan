@@ -347,3 +347,7 @@
 - ใหม่: objectInfoDailyReport.service — สรุปทุก ~20:00 ไทย เข้า Telegram (ชิ้นใหม่ที่ถาม / ได้ชื่อ% / ครบชื่อ+วัด+ปี% / ไม่ทราบ / ข้าม / ผ่านฟอร์ม / ขัดภาพ + ตัวอย่าง 8 รายการ) hook ใน maintenanceWorker · OBJECT_INFO_REPORT_HOUR ปรับได้ · ทดสอบยิงจริงเข้า Telegram แล้ว
 - เฟส 0 ของแผน object data ครบ — คิวถัดไป: เช็คก่อนเช่า (Pre-Check) → ทะเบียน+ES-ID
 
+## 2026-08-08 | Claude | สังเคราะห์รอบ 3 (วิจารณ์ทั้งธุรกิจ AI 4 ตัว) → ปรับแผน 30 วัน
+- จุดอ่อน=retention หลังวัน 7-14 · 7-Day Loop ขึ้น top-2 (3/4 ตัว) · Event log ตั้งแต่วันแรก · Collector Vault จากเคสสิทธิพร · ES ลด scope · Marketplace→Wanted (demand graph) · เสี่ยง: LINE SPOF + AI Fatigue + data ต้อง normalize เป็น tag
+- แผน 30 วันใหม่: ①Pre-Check ②7-Day Loop+event log ③Collector Vault+B2B ล็อต+PDF · เบรก: ขายความกลัว/เก็บเงิน feedback/โหวตผล/คำการันตี — ท้ายไฟล์ ener-object-data-monetize.md · รอกบเคาะ
+
