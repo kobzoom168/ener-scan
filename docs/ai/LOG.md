@@ -455,3 +455,6 @@
 - gotcha สำคัญ: /r เสิร์ฟเป็น loader shell (6KB) แล้ว fetch /body — SEO tags ต้องอยู่ head ของ shell ไม่ใช่ body → เพิ่ม meta description + JSON-LD ใน enerLoaderShell.util (favicon ✦ มีอยู่แล้ว)
 - verify สดจากรายงานจริง rpt_2dcOG2kG: เกรดสเกลโชว์ / radar ไม่มี hidden base / fill both / พ.ศ. 2569 / min-height 44px / pill ชื่อด้าน / shell มี description+ld+json ครบ
 - ค้าง: กบเปิดรายงานดูด้วยตา + รัน Snapsite audit ซ้ำเทียบคะแนน → ผ่านแล้วค่อยขึ้น pro
+
+## 2026-08-11 | Claude | audit fixes ขึ้น Pro (กบสั่ง)
+- sync 7 ไฟล์ → main → deploy pro healthy · verify รายงานลูกค้าจริงล่าสุด: เกรดสเกล/fill both/พ.ศ./44px/JSON-LD ครบ
