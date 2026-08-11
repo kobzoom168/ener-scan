@@ -85,8 +85,9 @@ const TH_MONTH_ABBREV = [
 ];
 
 /**
- * Readable report-meta line: Bangkok wall time, Gregorian year, Thai month abbrev.
- * Example: `16 เม.ย. 2026 15:25` (not slash-numeric or Buddhist-era year).
+ * Readable report-meta line: Bangkok wall time, Buddhist-era year, Thai month abbrev.
+ * Example: `16 เม.ย. 2569 15:25` — UX audit 11 ส.ค. 2026: ทั้งรายงานต้องใช้ศักราชเดียว
+ * (การ์ดคลังเป็น พ.ศ. อยู่แล้ว จึงย้าย meta จาก ค.ศ. มาตาม ไม่ใช่กลับกัน)
  * @param {unknown} value ISO string, timestamp, or Date
  * @returns {string}
  */
@@ -120,7 +121,8 @@ export function formatBangkokReportMetaDateTime(value) {
   const mon = TH_MONTH_ABBREV[monthNum - 1] || "";
   if (!mon) return "-";
   const time = timeFmt.format(d).replace(/\s/g, "");
-  return `${day} ${mon} ${year} ${time}`;
+  const beYear = Number(year) + 543;
+  return `${day} ${mon} ${Number.isFinite(beYear) ? beYear : year} ${time}`;
 }
 
 /**

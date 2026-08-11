@@ -40,12 +40,12 @@ test("formatBangkokDateTime: Date object accepted", () => {
   assert.equal(formatBangkokDateTime(d), "15/6/2567 10:00");
 });
 
-test("formatBangkokReportMetaDateTime: Gregorian Thai month abbrev + Bangkok time", () => {
+test("formatBangkokReportMetaDateTime: Buddhist-era Thai month abbrev + Bangkok time (ศักราชเดียวทั้งรายงาน)", () => {
   assert.equal(
     formatBangkokReportMetaDateTime("2026-04-16T08:25:00.000Z"),
-    "16 เม.ย. 2026 15:25",
+    "16 เม.ย. 2569 15:25",
   );
-  assert.equal(formatBangkokReportMetaDateTime(SAMPLE_JUN_UTC), "15 มิ.ย. 2024 10:00");
+  assert.equal(formatBangkokReportMetaDateTime(SAMPLE_JUN_UTC), "15 มิ.ย. 2567 10:00");
   assert.equal(formatBangkokReportMetaDateTime(null), "-");
   assert.equal(formatBangkokReportMetaDateTime("not-a-date"), "-");
 });

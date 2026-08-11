@@ -590,6 +590,12 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const stripGradePipsHtml = buildStripGradePipsHtml(
     stripGradePipActiveCount(vm.metrics.energyLevelGradeClass, vm.metrics.energyLevelLabel),
   );
+  // UX audit 11 ส.ค.: เกรดต้องมีสเกลกำกับ ไม่ลอยเดี่ยว ๆ (ลูกค้าไม่รู้ B คืออะไร)
+  const gradeMeaningTh = { S: "สูงสุด", A: "สูง", B: "ดี", D: "พื้นฐาน" };
+  const gradeNow = String(vm.metrics.energyLevelLabel || "").trim().toUpperCase();
+  const stripGradeScaleHtml = gradeMeaningTh[gradeNow]
+    ? `<div class="mv2-strip-scale">${escapeHtml(gradeNow)} = ${escapeHtml(gradeMeaningTh[gradeNow])} · สเกล D → B → A → S</div>`
+    : "";
 
   const publicTokenForLinks = String(payload.publicToken || "").trim();
   const energyMeaningHref = publicTokenForLinks
@@ -828,6 +834,9 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escapeHtml(ogTitle)}" />
   <meta name="twitter:description" content="${escapeHtml(ogDescription)}" />
+  <meta name="description" content="${escapeHtml(ogDescription)}" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Ener Scan","url":"https://scan.my-ener.uk","logo":"https://scan.my-ener.uk/favicon.ico"}</script>
   <title>${escapeHtml(ogTitle)}</title>
   <style>
     :root {
@@ -837,7 +846,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       --mv2a-gold-dim: #8f6710;
       --mv2a-bg: #f6f6f4;
       --mv2a-card: #fcfcfa;
-      --mv2a-muted: #7a6a58;
+      --mv2a-muted: #63543f;
       --mv2a-text: #241c12;
       --mv2a-text-body: rgba(36, 28, 18, 0.92);
       --mv2a-badge-border: rgba(184, 135, 27, 0.28);
@@ -859,7 +868,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       --mv2a-radar-peak-fill: #c9a132;
       --mv2a-radar-peak-stroke: rgba(255, 250, 235, 0.95);
       --mv2a-radar-lbl-axis: rgba(36, 28, 18, 0.88);
-      --mv2a-radar-lbl-num: rgba(110, 78, 22, 0.92);
+      --mv2a-radar-lbl-num: rgba(96, 66, 14, 1);
       --mv2a-radar-lbl-top1-glow: rgba(184, 135, 27, 0.26);
       --mv2a-radar-lbl-top1-t: #7a5a12;
       --mv2a-radar-lbl-top1-n: #5c420a;
@@ -1087,6 +1096,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2-strip-pip.is-on { background: #c8971e; }
     html.mv2a-theme-dark .mv2-strip-pip { background: rgba(221, 221, 221, 0.32); }
     html.mv2a-theme-dark .mv2-strip-pip.is-on { background: #c8971e; }
+    .mv2-strip-scale { font-size: 0.6rem; color: var(--mv2a-muted); margin-top: 0.18rem; letter-spacing: 0.01em; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--S { color: #c9a132; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--A { color: #b8871b; }
     .mv2-strip-cell--level .mv2-strip-v.level-grade--B { color: #9a6f12; }
@@ -1108,14 +1118,14 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2a-radar-wrap { max-width: 18rem; margin: 0 auto; }
     .mv2a-radar-plot { position: relative; container-type: inline-size; }
     .mv2a-radar-svg { width: 100%; height: auto; display: block; overflow: visible; }
+    /* UX audit 11 ส.ค.: ห้ามซ่อนกราฟใน base state (opacity:0 เดิมทำ SVG เปล่าถาวร
+       ใน browser/crawler ที่ไม่รัน animation) — สถานะซ่อนย้ายไปอยู่ในคีย์เฟรม 0%
+       ผ่าน animation-fill-mode: backwards แทน: animation ไม่ทำงาน = กราฟโชว์เต็มทันที */
     .mv2a-radar-svg--animate .mv2a-radar-layer--owner,
     .mv2a-radar-svg--animate .mv2a-radar-layer--amulet {
       transform-box: view-box;
       transform-origin: 50% 50%;
-      opacity: 0;
-      transform: scale(0);
     }
-    .mv2a-radar-svg--animate .mv2a-radar-layer--peak { opacity: 0; }
     .mv2a-radar-labels {
       position: absolute;
       inset: 0;
@@ -1123,13 +1133,13 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     }
     @media (prefers-reduced-motion: no-preference) {
       .mv2a-radar-svg--animate .mv2a-radar-layer--owner {
-        animation: mv2aRdrPoly 1.55s cubic-bezier(0.22, 1, 0.36, 1) 0.2s forwards;
+        animation: mv2aRdrPoly 1.55s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
       }
       .mv2a-radar-svg--animate .mv2a-radar-layer--amulet {
-        animation: mv2aRdrPoly 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.58s forwards;
+        animation: mv2aRdrPoly 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.58s both;
       }
       .mv2a-radar-svg--animate .mv2a-radar-layer--peak {
-        animation: mv2aRdrFade 0.6s ease-out 1.38s forwards;
+        animation: mv2aRdrFade 0.6s ease-out 1.38s both;
       }
       .mv2a-radar-peak {
         animation: mv2aLblPulse 2.3s ease-in-out 2.1s infinite;
@@ -1206,7 +1216,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       gap: 0.06em;
       white-space: nowrap;
       font-family: inherit;
-      font-size: clamp(11px, 4.55cqw, 13px);
+      font-size: clamp(12px, 5.1cqw, 15px);
       line-height: 1.12;
       letter-spacing: 0.01em;
     }
@@ -1259,7 +1269,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       font-size: 0.92em;
       margin-top: 0.02em;
     }
-    .mv2a-radar-lbl--top1 { font-size: clamp(12px, 5cqw, 14px); text-shadow: 0 0 10px var(--mv2a-radar-lbl-top1-glow); }
+    .mv2a-radar-lbl--top1 { font-size: clamp(13px, 5.5cqw, 16px); text-shadow: 0 0 10px var(--mv2a-radar-lbl-top1-glow); }
     .mv2a-radar-lbl--top1 .mv2a-radar-axis-t { color: var(--mv2a-radar-lbl-top1-t); font-weight: 700; }
     .mv2a-radar-lbl--top1 .mv2a-radar-axis-n { color: var(--mv2a-radar-lbl-top1-n); font-weight: 800; }
     .mv2a-radar-lbl--top2 { font-size: clamp(11.5px, 4.7cqw, 13.5px); }
@@ -2417,7 +2427,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2r-rank-h { margin: 1.1rem 0 0.6rem; font-size: 1rem; }
     .mv2r-rows { display: flex; flex-direction: column; gap: 0.5rem; }
     .mv2r-rows--more { margin-top: 0.5rem; }
-    .mv2r-row { display: flex; align-items: center; gap: 0.55rem; border: 1px solid rgba(165, 129, 58, 0.22); border-radius: 12px; padding: 0.5rem 0.65rem; text-decoration: none; color: inherit; }
+    .mv2r-row { display: flex; align-items: center; min-height: 44px; gap: 0.55rem; border: 1px solid rgba(165, 129, 58, 0.22); border-radius: 12px; padding: 0.5rem 0.65rem; text-decoration: none; color: inherit; }
     .mv2r-row--locked { border-style: dashed; }
     .mv2r-row--cta { justify-content: center; font-weight: 800; color: #8f6710; border-style: dashed; font-size: 0.82rem; margin-top: 0.5rem; }
     .mv2r-row-rank { flex: 0 0 1.5rem; text-align: center; font-weight: 800; color: var(--mv2a-muted); font-size: 0.85rem; }
@@ -2481,6 +2491,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
         <div class="mv2-strip-v ${vm.metrics.energyLevelGradeClass}">${escapeHtml(vm.metrics.energyLevelLabel || "ไม่มี")}</div>
         <div class="mv2-strip-sub">เกรดพลังงาน</div>
         ${stripGradePipsHtml}
+        ${stripGradeScaleHtml}
       </div>
     </div>
 

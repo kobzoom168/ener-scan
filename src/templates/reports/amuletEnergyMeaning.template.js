@@ -3,7 +3,7 @@
  */
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { buildAmuletHtmlV2ViewModel } from "../../amulet/amuletHtmlV2.model.js";
-import { POWER_LABEL_THAI, POWER_ORDER } from "../../amulet/amuletScores.util.js";
+import { POWER_LABEL_THAI, POWER_ORDER, AMULET_PEAK_SHORT_THAI } from "../../amulet/amuletScores.util.js";
 import {
   amuletSubpageAutoDarkScriptHtml,
   buildAmuletSubpageDarkThemeCss,
@@ -154,11 +154,15 @@ export function renderAmuletEnergyMeaningHtml(payload) {
     scoreByKey.charm = Number(vm.power.object.charm);
   }
 
+  // UX audit 11 ส.ค.: pill ต้องมีชื่อด้าน ไม่ใช่เลขล้วน (จำเลขไม่ได้) + aria-label ให้ screen reader
+  const shortAxisName = (key) =>
+    key === "charm" ? "เสน่ห์" : AMULET_PEAK_SHORT_THAI[key] || String(key);
   const jumpPillsHtml = order
-    .map((_, i) => {
+    .map((key, i) => {
       const num = String(i + 1).padStart(2, "0");
       const activeCls = i === 0 ? " is-active" : "";
-      return `<a href="#aem-sec-${num}" class="aem-jump-pill${activeCls}" data-aem-jump="${num}">${num}</a>`;
+      const name = shortAxisName(key);
+      return `<a href="#aem-sec-${num}" class="aem-jump-pill${activeCls}" data-aem-jump="${num}" aria-label="ไปยัง ${num} ${escapeHtml(name)}"><span class="aem-jp-n">${num}</span><span class="aem-jp-t">${escapeHtml(name)}</span></a>`;
     })
     .join("");
 
@@ -187,8 +191,7 @@ export function renderAmuletEnergyMeaningHtml(payload) {
       <div class="aem-card-head">
         <div class="aem-title-col">
           <div class="aem-title-wrap">
-            <span class="aem-index">${escapeHtml(idx)}</span>
-            <h2 class="aem-card-title">${escapeHtml(title)}</h2>
+            <h2 class="aem-card-title"><span class="aem-index">${escapeHtml(idx)}</span>${escapeHtml(title)}</h2>
           </div>
           ${axisBar}
         </div>
@@ -213,6 +216,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E" />
   <title>${escapeHtml(docTitle)}</title>
   <meta name="robots" content="noindex,nofollow"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -569,6 +573,10 @@ ${amuletSubpageAutoDarkScriptHtml()}
       width: 0;
       height: 0;
     }
+    .aem-jump-pill { display: inline-flex; flex-direction: column; align-items: center; gap: 0.05em; }
+    .aem-jp-n { font-weight: 800; line-height: 1; }
+    .aem-jp-t { font-size: 0.6em; line-height: 1; opacity: 0.85; }
+    .aem-card-title .aem-index { margin-right: 0.4em; }
     .aem-jump-pill {
       flex: 0 0 auto;
       min-width: 2.1rem;
