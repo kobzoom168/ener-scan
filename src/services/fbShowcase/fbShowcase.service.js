@@ -295,10 +295,10 @@ export async function handleFbConsentReplyText({ lineUserId, text }) {
         message: String(e?.message || e).slice(0, 160),
       }),
     );
-    return { reply: "ขอบคุณครับ เดี๋ยวอาจารย์จัดลงเพจให้สวย ๆ เลยครับ" };
+    return { reply: "ขอบคุณครับ เดี๋ยวผมจัดลงเพจให้สวย ๆ เลยครับ" };
   }
   console.log(JSON.stringify({ event: "FB_CONSENT_ACCEPTED", tokenPrefix: token.slice(0, 10) }));
-  return { reply: "ขอบคุณครับ เดี๋ยวอาจารย์จัดลงเพจให้เลยครับ" };
+  return { reply: "ขอบคุณครับ เดี๋ยวผมจัดลงเพจให้เลยครับ" };
 }
 
 /* ────────────────────── 3) แคปชัน ────────────────────── */

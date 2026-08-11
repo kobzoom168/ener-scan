@@ -1407,7 +1407,7 @@ liffRouter.post(
           const swPkg = approvalFlow.switchedPackage || null;
           const approvedText = swPkg
             ? buildSlipPackageSwitchedApprovedText(swPkg)
-            : "✅ ตรวจสลิปเรียบร้อยครับ อาจารย์เปิดสิทธิ์สแกนให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล เข้ามาได้เลยครับ";
+            : "✅ ตรวจสลิปเรียบร้อยครับ ผมเปิดสิทธิ์ให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล ให้อาจารย์ดูได้เลยครับ";
           pushText(liffLineClient, userId, approvedText).catch(() => {});
           // ลงประวัติแชทให้ AI เห็นว่าเรื่องจ่ายจบแล้ว (เคส 29 ก.ค.: บอททวงสลิปซ้ำ)
           void insertLineConversationMessage(userId, "bot", approvedText);
@@ -1438,7 +1438,7 @@ liffRouter.post(
         pushText(
           liffLineClient,
           userId,
-          "🙏 รับสลิปแล้วครับ กำลังตรวจกับธนาคารอยู่\n⏳ เสร็จเมื่อไหร่อาจารย์จะรีบเปิดสิทธิ์แล้วแจ้งในแชตทันทีครับ",
+          "🙏 รับสลิปแล้วครับ กำลังตรวจกับธนาคารอยู่\n⏳ เสร็จเมื่อไหร่ผมเปิดสิทธิ์แล้วแจ้งในแชตทันทีครับ",
         ).catch(() => {});
       }
       console.log(JSON.stringify({ event: "LIFF_SLIP_PENDING_VERIFY", paymentId }));
@@ -2997,7 +2997,7 @@ function buildLiffHtml(liffId) {
         rem.classList.remove("hidden");
       } else { rem.classList.add("hidden"); }
       if(j.payment && j.payment.status === "pending_verify"){
-        payShowDone("⏳", "สลิปกำลังตรวจอยู่", "รายการก่อนหน้ากำลังตรวจ เดี๋ยวอาจารย์แจ้งผลในแชตครับ");
+        payShowDone("⏳", "สลิปกำลังตรวจอยู่", "รายการก่อนหน้ากำลังตรวจ เดี๋ยวแอดมินแจ้งผลในแชตครับ");
       }
     }).catch(function(){});
   }
@@ -3031,7 +3031,7 @@ function buildLiffHtml(liffId) {
         btn.disabled = false; btn.textContent = "💳 สร้างรายการโอน";
         if(!j || !j.ok){ alert("สร้างรายการไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
         if(j.result === "pending_verify"){
-          payShowDone("⏳", "สลิปกำลังตรวจอยู่", "รายการก่อนหน้ากำลังตรวจ เดี๋ยวอาจารย์แจ้งผลในแชตครับ");
+          payShowDone("⏳", "สลิปกำลังตรวจอยู่", "รายการก่อนหน้ากำลังตรวจ เดี๋ยวแอดมินแจ้งผลในแชตครับ");
           return;
         }
         payShowQr(j);
@@ -3082,7 +3082,7 @@ function buildLiffHtml(liffId) {
         if(j.result === "approved"){
           payShowDone("🎉", "เปิดสิทธิ์สแกนแล้ว", "ตรวจสลิปผ่านเรียบร้อย กลับไปที่แชตแล้วส่งรูปพระ เครื่องราง หิน หรือกำไล ได้เลยครับ");
         } else if(j.result === "pending"){
-          payShowDone("⏳", "รับสลิปแล้ว กำลังตรวจ", "กำลังตรวจกับธนาคาร เสร็จแล้วอาจารย์จะแจ้งในแชตทันทีครับ");
+          payShowDone("⏳", "รับสลิปแล้ว กำลังตรวจ", "กำลังตรวจกับธนาคาร เสร็จแล้วแอดมินแจ้งในแชตทันทีครับ");
         } else {
           alert("รูปนี้ยังไม่เหมือนสลิปโอนเงิน ลองแนบสลิปที่เห็นยอดและเวลาโอนชัด ๆ ครับ");
         }

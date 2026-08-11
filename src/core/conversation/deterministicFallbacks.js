@@ -30,9 +30,9 @@ const SHORT = {
   slip_remind_micro: "แนบสลิปโอนมาในแชตนี้ได้เลยครับ",
   slip_ack_micro: "ได้ครับ",
   pv_status_micro: "กำลังตรวจสอบให้อยู่ครับ",
-  pv_reassure: "สลิปถึงอาจารย์แล้วครับ ขอเวลาตรวจแป๊บนึงนะ เสร็จแล้วแจ้งทันทีครับ",
+  pv_reassure: "สลิปถึงผมแล้วครับ ขอเวลาตรวจแป๊บนึงนะ เสร็จแล้วแจ้งทันทีครับ",
   pv_ack_micro: "รับทราบครับ",
-  pv_wait_micro: "เดี๋ยวอาจารย์แจ้งต่อในแชตนี้เลยครับ",
+  pv_wait_micro: "เดี๋ยวผมแจ้งต่อในแชตนี้เลยครับ",
 };
 
 /**
@@ -75,7 +75,7 @@ export function getDeterministicFallback(replyType, ctx = {}) {
       return tier >= 3 ? SHORT.pw_guidance_micro : "ถ้าจะใช้ต่อ แจ้งอาจารย์ได้เลยครับ";
 
     case "pp_show_payment_flow":
-      return "ได้ครับ เดี๋ยวอาจารย์แนบรายละเอียดให้ครับ" + ref;
+      return "ได้ครับ เดี๋ยวผมแนบรายละเอียดให้ครับ" + ref;
 
     case "pp_no_package_change":
       return tier >= 3 ? SHORT.pp_remind_pay : SHORT.pp_no_package_change;

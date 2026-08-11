@@ -392,3 +392,9 @@
 - แก้ nudge "พร้อมสแกนแล้ว" เด้งซ้ำ (U277f747 โดน 3 รอบ): เพิ่ม redis dedupe 10 นาที (nudge:scan_ready) — dedupe เดิมเป็น in-memory Map ข้าม process/restart ไม่ได้
 - test:release 38/38 pass (ต้อง set env placeholder บนเครื่อง dev) · ขึ้น staging แล้ว รอกบสั่งขึ้น pro
 - หมายเหตุ: รายงานที่หายของ Ua1f60ba ยังเปิดดูได้ในคลัง /library (สแกนสำเร็จหมด แค่ push LINE ไม่ถึง) — ถ้ากบอยากเยียวยาค่อยว่ากัน
+
+## 2026-08-11 | Claude | Persona เฟส A รอบแรก: ข้อความบริการ/เงิน → เสียงแอดมิน (staging)
+- welcome + pre-scan ack 10 แบบ + multi-image = แอดมินรับแล้วส่งต่ออาจารย์ · สลิป/เปิดสิทธิ์/เติมสิทธิ์/QR ทุกจุด = ผม(แอดมิน) ไม่ใช่อาจารย์ (lineWebhook, liff.routes, adminPaymentsDashboard, orchestrator, stateSafeClarifier, deterministicFallbacks, webhookText) · ตัดฉาก "เข้าสมาธิ" · วิธีใช้ 3 ขั้น + fbShowcase ขอบคุณ = แอดมิน
+- GEMINI_PHRASING_SYSTEM เขียนใหม่เป็น persona แอดมิน (ผม + ส่งต่ออาจารย์ + ห้ามตีความพลัง + แบนคำ ack AI/ขีด/เครื่องหมายคำพูด) · GEMINI_CONSULT_SYSTEM เพิ่ม TWO ROLES (อาจารย์ห้ามแตะเงิน ทุกประโยคชวนเปิดสิทธิ์ย้ายไปเสียงแอดมิน + กติกาแยกตอบข้อความผสม)
+- npm test 934 pass / 20 fail = ชุดเดียวกับ baseline เป๊ะ (diff รายชื่อ IDENTICAL) — ไม่มี regression จาก copy ใหม่
+- ยังไม่แตะ: rich menu/broadcast/greeting card (คิวถัดไป) · ยังไม่ขึ้น pro
