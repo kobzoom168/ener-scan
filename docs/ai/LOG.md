@@ -438,3 +438,7 @@
 - กบสแกนบน staging: rpt_2dcOG2kG... = evidence_score_v4 จริง · scoreBreakdown เก็บครบ (ตย. protection 46+8 brass -5 collision = 49) · readingConfidence สูง · energyScore 6.9 (v4 transform) · SCORE_V4_SHADOW_OVERALL logged (shadow 3.6, coherence 0.2) · หน้า public 200 ไม่มี scoreBreakdown หลุด ✓
 - ⚠️ gotcha DB: staging ใช้ ener_scan_staging ไม่ใช่ ener_scan (ener_scan = ตัวเก่า/dev) — 051 เมื่อเช้า apply ผิดตัว แก้แล้ว apply เข้า ener_scan_staging สำเร็จ (pro=ener_scan_pro ถูกอยู่แล้ว ยืนยันจาก postgrest PGRST_DB_URI) · ช่วงที่หายไป insert meta fail → fallback ไม่มี meta ทำงานตามดีไซน์ history ไม่หาย
 - ค้าง: เก็บ shadow 3-7 วัน → calibrate band 46-70 จาก scan จริง → รายงาน distribution ให้กบ
+
+## 2026-08-11 | Claude | ขึ้น Pro รอบเย็น (กบสั่ง): v4 codebase + fix แชทชุดบ่าย
+- sync 17 ไฟล์ → main → deploy pro healthy (200, log สะอาด) — รวม: identity handler + โทนจริงจัง/ห้ามอีโมจิ + sanitizer consult + prompt ปังมาก fix + slug validator telemetry + โค้ด v4 ทั้งชุด
+- ⚠️ AMULET_SCORE_V4_ENABLED ไม่ตั้งบน pro = ลูกค้ายังเห็น v3 ตามแผน shadow ที่กบเคาะ (band v4 ยังไม่ calibrate จากชิ้นจริง) — เปิดจริงเมื่อกบยืนยันข้าม shadow หรือหลัง calibrate เสร็จ
