@@ -6772,6 +6772,16 @@ async function handleTextMessage({ client, event, userId, session }) {
       text !== "สแกนพลังงาน"
     ) {
       if ((await invokePhase1GeminiOrchestrator()).handled) return;
+      // กันสแปม nudge (quality report 10 ส.ค.: "พร้อมสแกนแล้ว" เด้งซ้ำ 3 รอบใส่ลูกค้า
+      // ที่บอก "ไว้ก่อน") — dedupe in-memory ของ gateway ข้าม process ไม่ได้ → ใช้ redis
+      // เงียบดีกว่ายิงประโยคเดิมซ้ำ: เพิ่งส่งไปใน 10 นาที = ไม่ส่งอีก
+      try {
+        const { tryDedupeOnce } = await import("../redis/scanV2Redis.js");
+        if (!(await tryDedupeOnce(`nudge:scan_ready:${userId}`, 600))) {
+          console.log(JSON.stringify({ event: "SCAN_READY_NUDGE_SUPPRESSED", lineUserIdPrefix: String(userId).slice(0, 8) }));
+          return;
+        }
+      } catch { /* redis พัง = ส่งตามปกติ */ }
       const scanReadyText = buildPaidActiveScanReadyHumanText(userId);
       emitActiveStateRouting({
         userId,
