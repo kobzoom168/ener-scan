@@ -408,3 +408,8 @@
 - ตัด masking user ID ตามกบ (Telegram กลุ่มปิด ใช้ ID เต็มตามเคสเอง)
 - test ใหม่ 5 ตัว (เพิ่มเข้า npm test แล้ว) ผ่านหมด · ชุดเต็ม fail set เท่า baseline
 - ค้าง: apply 051 + deploy pro พร้อม persona (ห้ามแยกรอบ — monitor เดิมจะตี false alarm) · ชั้น 3 (sequence เทียบ scan_jobs/health score/funnel/Hermes summary) รอ persona นิ่งบน pro
+
+## 2026-08-11 | Claude | ผลเทสต์กบบน staging: แก้ 2 บั๊กจากแชทจริง
+- เคส "ผมคุยกับใคร" โดน nudge "พร้อมสแกนแล้ว" สวน (planner LLM aborted → orchestrator ไม่ handle → หล่นไป nudge) + เคส "คุณเป็น admin ใช่ครับ" Opus ตอบดีแต่มีขยะ "พูดno" ติดท้ายข้อความ
+- แก้: ①identityQuestion.service ใหม่ — คำถาม identity (คุยกับใคร/เป็นบอทไหม/เป็นแอดมินใช่ไหม/ใช่ AI) ตอบสคริปต์ตายตัวตามแผน persona ข้อ 7 หมุน 3 สำนวน ไม่พึ่ง LLM · hook ก่อนเกตข้อมูลชิ้น (ถามระหว่างเกตค้างต้องได้คำตอบ) · แท็ก speakerRole admin ②sanitizer ท้ายคำตอบ consult — บรรทัดสุดท้าย ≤12 ตัว มีละติน ไม่มีลิงก์/เลข ไม่จบแบบประโยคไทย → ตัดทิ้ง + log GEMINI_CONSULT_TRAILING_JUNK_STRIPPED
+- test:release 38/38 · deploy staging แล้ว — กบเทสต์ถามซ้ำ 2 ประโยคเดิมได้เลย

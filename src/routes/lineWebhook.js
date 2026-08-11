@@ -3894,6 +3894,14 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   if (await maybeHandleAdminAssist({ client, event, userId, text })) return;
 
+  // คำถาม identity "คุยกับใคร/เป็นบอทไหม/เป็นแอดมินใช่ไหม" → สคริปต์ตายตัว ไม่พึ่ง LLM
+  // (persona ข้อ 7 — เคส 11 ส.ค.: planner ตายแล้วคำถามนี้โดน nudge สแกนสวน)
+  // อยู่ก่อนเกตข้อมูลชิ้น: ถามระหว่างเกตค้างต้องได้คำตอบ ไม่ใช่โดนเตือนสวน
+  try {
+    const { maybeHandleIdentityQuestion } = await import("../services/welcome/identityQuestion.service.js");
+    if (await maybeHandleIdentityQuestion({ client, event, userId, text })) return;
+  } catch { /* ignore */ }
+
   // เกตข้อมูลชิ้น (กบ 7 ส.ค.): มีรายงานค้างรอข้อมูล → ข้อความนี้คือคำตอบ/ปุ่ม จบในตัว
   try {
     const { maybeHandleObjectInfoAnswer, maybeHandlePurposeAnswer } = await import(

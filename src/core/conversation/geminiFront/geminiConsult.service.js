@@ -113,7 +113,23 @@ export async function runGeminiConsult(p) {
       prompt,
       env.GEMINI_CONSULT_TIMEOUT_MS,
     );
-    const out = String(text || "").trim();
+    let out = String(text || "").trim();
+    // ขยะท้ายคำตอบจากโมเดล (เคสจริง 11 ส.ค.: Opus ปิดท้ายด้วยบรรทัด "พูดno"):
+    // บรรทัดสุดท้ายสั้น ๆ มีตัวละติน ไม่มีลิงก์/ตัวเลข และไม่จบแบบประโยคไทยปกติ → ตัดทิ้ง
+    const lines = out.split("\n");
+    const last = (lines[lines.length - 1] || "").trim();
+    if (
+      lines.length > 1 &&
+      last.length > 0 &&
+      last.length <= 12 &&
+      /[A-Za-z]/.test(last) &&
+      !/https?:\/\//.test(last) &&
+      !/\d/.test(last) &&
+      !/(ครับ|ค่ะ|นะ|เลย|จ้า)$/.test(last)
+    ) {
+      console.log(JSON.stringify({ event: "GEMINI_CONSULT_TRAILING_JUNK_STRIPPED", junk: last.slice(0, 20) }));
+      out = lines.slice(0, -1).join("\n").trim();
+    }
     console.log(
       JSON.stringify({
         event: "GEMINI_CONSULT",
