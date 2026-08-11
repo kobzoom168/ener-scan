@@ -187,7 +187,7 @@ export async function maybePersistGlobalObjectBaselineAfterScanV2(p) {
       objectFamily: String(p.reportObjectFamily || "sacred_amulet").trim() || "sacred_amulet",
       baselineSchemaVersion: 1,
       promptVersion: SCAN_CACHE_PROMPT_VERSION,
-      scoringVersion: AMULET_SCORING_MODE,
+      scoringVersion: extracted.scoringMode || AMULET_SCORING_MODE,
       objectBaselineJson: extracted.baseline,
       axisScoresJson: extracted.axisScores,
       peakPowerKey: extracted.peakPowerKey,

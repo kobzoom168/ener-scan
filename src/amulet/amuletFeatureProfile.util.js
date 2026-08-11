@@ -266,3 +266,106 @@ export function computeAmuletAxisBaseFromFeatures(features) {
 }
 
 export { COLOR_BUCKET, MATERIAL_CANON, FORM_CANON };
+
+/* ============================== evidence_score_v4 ============================== */
+
+/**
+ * v4 (11 ส.ค. 2026 — แผน docs/ai/plans/ener-scoring-v4.md): whitelist ต่อช่อง
+ * ใช้โดย validator (log-only) + เส้นทางคะแนน v4 (slug นอกชุด = unknown)
+ * ⚠️ ห้ามใช้เปลี่ยนพฤติกรรม v3 — สูตรเก่า/รายงานเก่าต้องเป๊ะเดิม
+ */
+export const FEATURE_SLUG_WHITELIST = {
+  primaryColor: [...Object.keys(COLOR_BUCKET), "unknown"],
+  materialType: [...Object.keys(MATERIAL_CANON), "unknown"],
+  formFactor: [...Object.keys(FORM_CANON), "unknown"],
+  textureHint: ["smooth", "rough", "faceted", "natural_raw", "carved", "polished", "unknown"],
+  shapeOutline: [...Object.keys(SHAPE_AXIS), "unknown"],
+  mainMotif: [...Object.keys(MOTIF_AXIS), "unknown"],
+  figureCount: ["none", "one", "two", "three_plus", "unknown"],
+  casing: ["framed_metal", "clear_case", "bare", "unknown"],
+  beadPattern: ["uniform", "two_tone", "multi_color", "gradient", "not_beaded", "unknown"],
+  accentPiece: ["charm", "pendant_bead", "metal_spacer", "buddha_bead", "none", "not_beaded", "unknown"],
+};
+
+/**
+ * ตรวจ slug ทุกช่องกับ whitelist — คืนรายชื่อช่องที่ผิด (ไม่แก้ค่า ใช้ log telemetry)
+ * @param {Record<string, unknown>|null|undefined} features
+ * @returns {Array<{ field: string, value: string }>}
+ */
+export function listInvalidFeatureSlugs(features) {
+  const f = features && typeof features === "object" ? features : {};
+  const out = [];
+  for (const [field, allowed] of Object.entries(FEATURE_SLUG_WHITELIST)) {
+    if (f[field] == null) continue;
+    const v = String(f[field]).trim().toLowerCase().replace(/\s+/g, "_");
+    if (v && !allowed.includes(v)) out.push({ field, value: v.slice(0, 40) });
+  }
+  return out;
+}
+
+/**
+ * v4: คะแนนฐาน 6 แกนแบบเก็บ evidence ต่อชั้น — slug นอก whitelist ถูกบังคับเป็น unknown
+ * ไม่มี jitter จาก hash (hash เหลือหน้าที่เดียวคือแก้คะแนนชน ทำในชั้น collision ของ scores v4)
+ *
+ * @param {Record<string, unknown>|null|undefined} features
+ * @returns {{
+ *   axes: Record<AmuletPowerKey, number>,
+ *   evidence: Array<{ field: string, value: string, deltas: Partial<Record<AmuletPowerKey, number>> }>,
+ *   signature: string,
+ *   knownLayers: number,
+ * }}
+ */
+export function computeAmuletAxisEvidenceV4(features) {
+  const f = features && typeof features === "object" ? { ...features } : {};
+  // บังคับ whitelist เฉพาะเส้นทาง v4
+  for (const bad of listInvalidFeatureSlugs(f)) f[bad.field] = "unknown";
+
+  const c = normalizeAmuletFeatures(f);
+  /** @type {Record<AmuletPowerKey, number>} */
+  const axes = {
+    protection: BASE_CENTER,
+    metta: BASE_CENTER,
+    baramee: BASE_CENTER,
+    luck: BASE_CENTER,
+    fortune_anchor: BASE_CENTER,
+    specialty: BASE_CENTER,
+  };
+  /** @type {Array<{ field: string, value: string, deltas: Partial<Record<AmuletPowerKey, number>> }>} */
+  const evidence = [];
+  let knownLayers = 0;
+
+  const layer = (field, value, table, key) => {
+    const row = table[key];
+    if (!row) return;
+    knownLayers += 1;
+    const deltas = {};
+    for (const axis of AMULET_AXES) {
+      const d = row[axis];
+      if (typeof d === "number") {
+        axes[axis] += d;
+        deltas[axis] = d;
+      }
+    }
+    evidence.push({ field, value: key, deltas });
+  };
+
+  if (c.materialType !== "unknown") layer("materialType", c.materialType, MATERIAL_AXIS, c.materialType);
+  if (c.formFactor !== "unknown") layer("formFactor", c.formFactor, FORM_AXIS, c.formFactor);
+  if (c.colorBucket !== "unknown") layer("primaryColor", c.colorBucket, COLOR_AXIS, c.colorBucket);
+
+  const shapeOutline = String(f.shapeOutline ?? "").trim().toLowerCase();
+  const mainMotif = String(f.mainMotif ?? "").trim().toLowerCase();
+  if (SHAPE_AXIS[shapeOutline]) layer("shapeOutline", shapeOutline, SHAPE_AXIS, shapeOutline);
+  if (MOTIF_AXIS[mainMotif]) layer("mainMotif", mainMotif, MOTIF_AXIS, mainMotif);
+
+  for (const axis of AMULET_AXES) {
+    axes[axis] = Math.min(AXIS_MAX, Math.max(AXIS_MIN, Math.round(axes[axis])));
+  }
+
+  return {
+    axes,
+    evidence,
+    signature: `${c.materialType}:${c.formFactor}:${c.colorBucket}`,
+    knownLayers,
+  };
+}

@@ -1,7 +1,14 @@
 import {
   computeAmuletPowerScores,
+  computeAmuletPowerScoresFromFeaturesV4,
   POWER_LABEL_THAI,
 } from "./amuletScores.util.js";
+import { buildAmuletStableSignature } from "./amuletFeatureProfile.util.js";
+
+/** evidence_score_v4 (11 ส.ค. 2026): เปิดเฉพาะ staging ผ่าน env — default ปิด, ปิดแล้วกลับ v3 ทันที */
+export function amuletScoreV4Enabled() {
+  return String(process.env.AMULET_SCORE_V4_ENABLED ?? "false").trim().toLowerCase() === "true";
+}
 import { AMULET_HTML_V2_USAGE_DISCLAIMER } from "./amuletHtmlV2.model.js";
 
 /**
@@ -65,12 +72,20 @@ export function buildAmuletV1Slice({
   mainEnergyLabel = "",
   typedLabelThai = "",
 }) {
-  const scores = computeAmuletPowerScores({
-    features: stableFeatureFields,
-    seedKey,
-    sessionKey: scanResultId,
-    mainEnergyLabel,
-  });
+  // v4: สูตรเป็นเจ้าของเลขชุดเดียว — ไม่รับ mainEnergyLabel จาก LLM (ตัด circular nudge)
+  // ใช้เฉพาะชิ้นใหม่ที่มี features จริง · flag ปิด = v3 เดิมเป๊ะ · baseline reuse ของเก่าไม่ผ่านทางนี้
+  const useV4 =
+    amuletScoreV4Enabled() &&
+    stableFeatureFields &&
+    buildAmuletStableSignature(stableFeatureFields) != null;
+  const scores = useV4
+    ? computeAmuletPowerScoresFromFeaturesV4(stableFeatureFields, { seedKey })
+    : computeAmuletPowerScores({
+        features: stableFeatureFields,
+        seedKey,
+        sessionKey: scanResultId,
+        mainEnergyLabel,
+      });
   // ระบุประเภทพิมพ์: confidence-gated classifier label (เช่น พระสมเด็จ) — flows
   // to Flex headline, summary.headlineShort and the HTML report h1 together.
   const headline = String(typedLabelThai || "").trim() || "พระ/เทวรูป/เครื่องราง";
@@ -101,6 +116,10 @@ export function buildAmuletV1Slice({
     powerCategories: scores.powerCategories,
     primaryPower: scores.primaryPower,
     secondaryPower: scores.secondaryPower,
+    // v4 เท่านั้น: breakdown ฝั่ง admin/QA (public mapper ตัดออกก่อนถึงลูกค้า) + ความมั่นใจจากหลักฐานภาพ
+    ...(useV4
+      ? { scoreBreakdown: scores.breakdown, readingConfidence: scores.readingConfidence }
+      : {}),
     flexSurface,
     htmlReport,
     context: {

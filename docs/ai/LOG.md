@@ -421,3 +421,20 @@
 ## 2026-08-11 | Claude | โทนจริงจังทั้งระบบ + อุด regex identity (feedback กบรอบ 3)
 - เคส "สรุป เป็น ai ใช้ไหม" สะกด ใช้ไหม หลุด regex → ไป Opus แล้วเล่นมุก 555 → กบสั่งห้ามติดตลกทุกข้อความ
 - แก้: regex identity รับสะกดเพี้ยน (ใช้ไหม/ใช้มั้ย/ป่ะ/รึป่าว + โปรแกรม + สรุปเป็น ai) · สคริปต์ identity โทนนิ่งขึ้น · consult+phrasing prompt เพิ่ม ⛔️ ห้าม 555/มุก/แซว ทุกกรณี + กติกาตอบคำถามบอท/AI ในตัว LLM เอง (ห้ามทวนคำ ห้ามหยอก) · monitor flag โทนติดตลก · แผน persona อัปเดต
+
+## 2026-08-11 | Claude | ขึ้น Pro ทั้งชุด (กบสั่ง "จบนี้เอาขึ้น Pro เลย") + รับแผน scoring v4 ไว้คัด
+- sync staging→main (28 ไฟล์: เกตกันสแปม + persona เฟส A + monitor v2 + identity/โทน) · apply migration 051 ที่ ener_scan_pro · deploy pro blue-green healthy · smoke: https 200, log สะอาด
+- แผนรื้อคะแนนจาก Codex: Claude ตรวจยืนยันบั๊กจริง 3 จุด (hash -9..+15 / LLM ออกเลขซ้อนสูตร / circular nudge + prompt "ปังมาก" ขัดกฎห้ามอวย) → คัดเป็น ทำ/ย่อ/พัก ใน docs/ai/plans/ener-scoring-v4.md — กบบอก "ไม่ทำตามทุกอย่าง" รอเคาะข้อ ยังไม่ลงมือ
+- ค้าง: เฝ้า pro หลัง persona ขึ้น (monitor v2 จะรายงานเช้าพรุ่งนี้แบบ 2 บทบาทครั้งแรก) · เฟส A ที่เหลือ (rich menu/broadcast/greeting)
+
+## 2026-08-11 | Claude | Scoring evidence_score_v4 — implement ครบตามเคาะกบ (staging, เลนพระเท่านั้น)
+- prompt ปังมาก/ฟันธง แก้แล้ว (วัยเปลี่ยนได้แค่ความยาว/ภาษา/ตัวอย่างชีวิต) · slug validator log-only · v4: hash สมมาตร ±3 (collisionNudge แยกจากแต้มหลัก) + ตัด mainEnergyLabel nudge + breakdown ต่อแกน (public mapper กันหลุด) + readingConfidence · shadow overall 55/25/20 log-only · baseline จำ scoringMode → reuse ใช้ transform ถูกรุ่น · flag AMULET_SCORE_V4_ENABLED default ปิด
+- ค้นพบจาก distribution 10k: ถอด hash แล้วคะแนนบีบ (ทุกชิ้น ~6.8) → เพิ่ม v4 transform band 46-70 (PRELIM ต้อง calibrate จาก scan จริงช่วง shadow) → median 6.9 spread 6.0-8.2 · ตารางเต็ม+บทเรียนใน ener-scoring-v4.md
+- test ใหม่ 10 ตัว (รวม invariant fixture v3/v1 เลขเดิมเป๊ะ + v3 hash เบ้ +3 เป็นหลักฐาน) · ชุดเต็ม 949 pass / 20 fail = baseline เดิม
+- แผน growth/scale 10k จาก AI ภายนอก → จดเป็นข้อมูลอ้างอิง ener-growth-conversion-notes.md (กบยังไม่ตัดสิน)
+- ค้าง: เปิด flag บน staging เก็บ shadow จริง → calibrate band → รายงาน distribution จริงให้กบก่อนคุยเปิด pro
+
+## 2026-08-11 | Claude | v4 สแกนจริงชิ้นแรกผ่านครบ + แก้ migration 051 ลง DB ผิดตัว
+- กบสแกนบน staging: rpt_2dcOG2kG... = evidence_score_v4 จริง · scoreBreakdown เก็บครบ (ตย. protection 46+8 brass -5 collision = 49) · readingConfidence สูง · energyScore 6.9 (v4 transform) · SCORE_V4_SHADOW_OVERALL logged (shadow 3.6, coherence 0.2) · หน้า public 200 ไม่มี scoreBreakdown หลุด ✓
+- ⚠️ gotcha DB: staging ใช้ ener_scan_staging ไม่ใช่ ener_scan (ener_scan = ตัวเก่า/dev) — 051 เมื่อเช้า apply ผิดตัว แก้แล้ว apply เข้า ener_scan_staging สำเร็จ (pro=ener_scan_pro ถูกอยู่แล้ว ยืนยันจาก postgrest PGRST_DB_URI) · ช่วงที่หายไป insert meta fail → fallback ไม่มี meta ทำงานตามดีไซน์ history ไม่หาย
+- ค้าง: เก็บ shadow 3-7 วัน → calibrate band 46-70 จาก scan จริง → รายงาน distribution ให้กบ
