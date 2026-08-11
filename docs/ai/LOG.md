@@ -450,3 +450,8 @@
 - ศักราชเดียวทั้งรายงาน: meta datetime ค.ศ.→พ.ศ. (formatBangkokReportMetaDateTime — คลังเป็น พ.ศ. อยู่แล้ว) + แก้ dateTime test
 - SEO: meta description + favicon 🔮 (data URI ทุกหน้า amulet) + JSON-LD Organization
 - npm test 949/20 = baseline · ขึ้น staging รอกบเปิดรายงานดู → pro รอสั่ง
+
+## 2026-08-11 | Claude | HTML report audit fixes — verify บน staging ครบ + SEO ที่ shell
+- gotcha สำคัญ: /r เสิร์ฟเป็น loader shell (6KB) แล้ว fetch /body — SEO tags ต้องอยู่ head ของ shell ไม่ใช่ body → เพิ่ม meta description + JSON-LD ใน enerLoaderShell.util (favicon ✦ มีอยู่แล้ว)
+- verify สดจากรายงานจริง rpt_2dcOG2kG: เกรดสเกลโชว์ / radar ไม่มี hidden base / fill both / พ.ศ. 2569 / min-height 44px / pill ชื่อด้าน / shell มี description+ld+json ครบ
+- ค้าง: กบเปิดรายงานดูด้วยตา + รัน Snapsite audit ซ้ำเทียบคะแนน → ผ่านแล้วค่อยขึ้น pro
