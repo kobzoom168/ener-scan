@@ -3866,7 +3866,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
     const targetUid = best.line_user_id;
     // ลง history เป็นฝั่งอาจารย์ (verbatim) — AI เห็นเป็นคำพูดตัวเอง ตอบต่อเนื่องธรรมชาติ
     const { insertLineConversationMessage } = await import("../stores/conversationMessages.db.js");
-    await insertLineConversationMessage(targetUid, "bot", said);
+    await insertLineConversationMessage(targetUid, "bot", said, { speakerRole: "ajarn", replyType: "admin_assist_reply", source: "human" });
     // แปะโน้ตสด 48 ชม. ให้ fact block ชี้ชัดว่ามีคนช่วยตอบ — ห้ามพูดสวน
     await setLargeValueWithTtl(
       `admin_case_note:${targetUid}`,

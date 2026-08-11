@@ -195,7 +195,7 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     await setLargeValueWithTtl(askCooldownKey(lineUserId), "1", ASK_COOLDOWN_SEC()).catch(() => {});
     try {
       const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
-      void insertLineConversationMessage(lineUserId, "bot", askText);
+      void insertLineConversationMessage(lineUserId, "bot", askText, { speakerRole: "admin", replyType: "object_info_gate_ask", source: "worker" });
     } catch { /* ignore */ }
     console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_ASKED", lineUserIdPrefix: lineUserId.slice(0, 8), lane, isPaid }));
     return true;

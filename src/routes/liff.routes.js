@@ -1410,7 +1410,7 @@ liffRouter.post(
             : "✅ ตรวจสลิปเรียบร้อยครับ ผมเปิดสิทธิ์ให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล ให้อาจารย์ดูได้เลยครับ";
           pushText(liffLineClient, userId, approvedText).catch(() => {});
           // ลงประวัติแชทให้ AI เห็นว่าเรื่องจ่ายจบแล้ว (เคส 29 ก.ค.: บอททวงสลิปซ้ำ)
-          void insertLineConversationMessage(userId, "bot", approvedText);
+          void insertLineConversationMessage(userId, "bot", approvedText, { speakerRole: "admin", replyType: "slip_approved", source: "flow" });
           // Spend-to-upgrade (กบ 30 ก.ค.): จ่ายรอบ 2+ ของวัน → เสนอหักยอดขึ้นแพ็กใหญ่
           import("../services/upgradeCredit.service.js")
             .then((m) => void m.maybeOfferSpendUpgrade(userId))

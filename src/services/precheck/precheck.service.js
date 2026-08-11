@@ -133,6 +133,7 @@ export async function handlePrecheckAfterReport({ client, lineUserId, payload })
         lineUserId,
         "bot",
         `[เช็คก่อนเช่า] พลังรวม ${score}/10${statsLine ? ` · ${statsLine}` : ""}${judged ? ` · ${judged}` : ""}`,
+        { speakerRole: "ajarn", replyType: "precheck_result", source: "worker" },
       );
     } catch { /* ignore */ }
     console.log(JSON.stringify({ event: "PRECHECK_RESULT_SENT", lineUserIdPrefix: lineUserId.slice(0, 8), form, score }));

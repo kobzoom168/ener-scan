@@ -398,3 +398,13 @@
 - GEMINI_PHRASING_SYSTEM เขียนใหม่เป็น persona แอดมิน (ผม + ส่งต่ออาจารย์ + ห้ามตีความพลัง + แบนคำ ack AI/ขีด/เครื่องหมายคำพูด) · GEMINI_CONSULT_SYSTEM เพิ่ม TWO ROLES (อาจารย์ห้ามแตะเงิน ทุกประโยคชวนเปิดสิทธิ์ย้ายไปเสียงแอดมิน + กติกาแยกตอบข้อความผสม)
 - npm test 934 pass / 20 fail = ชุดเดียวกับ baseline เป๊ะ (diff รายชื่อ IDENTICAL) — ไม่มี regression จาก copy ใหม่
 - ยังไม่แตะ: rich menu/broadcast/greeting card (คิวถัดไป) · ยังไม่ขึ้น pro
+
+## 2026-08-11 | Claude | Chat quality monitor อัปเกรดรับ persona 2 ชั้น (ชั้น 1+2 จากสังเคราะห์ Codex — กบสั่ง "เอาแบบที่พี่คิด")
+- migration 051: line_conversation_messages + คอลัมน์ metadata_json (apply staging DB แล้ว · pro ค่อย apply ตอน deploy pro) — insertLineConversationMessage รับ meta {speakerRole admin/ajarn/consult/system, replyType, source} + fallback insert แบบไม่มี meta ถ้าคอลัมน์ยังไม่มา (history ห้ามหาย)
+- แท็กจุด insert: gateway ทุกตัว (admin, consult ถ้า replyType มีคำ consult) · เกตถามข้อมูล=admin · precheck=ajarn · slip approved (liff)=admin · คำสั่ง "ช่วยตอบ" ของกบ=ajarn/human
+- ANALYZER_SYSTEM เขียนใหม่: TWO ROLES (แอดมิน=persona ถูกต้อง ไม่ใช่หลุดบท · อาจารย์+เงิน=violation ร้ายแรงสุด · กติกา handoff/ข้อความผสม) + โทนแยกบท + transcript ติดป้าย บอท(แอดมิน)/บอท(อาจารย์)
+- deterministic checks ใหม่ (chatQualityDeterministic.util.js รันก่อน LLM): อาจารย์+คำเงิน / ข้อความเดิมซ้ำ 3 ครั้ง 10 นาที (เคสเกตสแปมเมื่อวานจะโดนจับอัตโนมัติ) / handoff ค้างไม่มีคำตอบ · จัดลำดับตรวจ ด่า>เงิน>คุยเยอะ แทน 60 คนแรก
+- แจ้งทันทีไม่รอเช้า: เสียงอาจารย์ (tag ajarn) หลุดคำเงิน → Telegram ทันที dedupe 1 ชม./คน (hook ใน insert helper)
+- ตัด masking user ID ตามกบ (Telegram กลุ่มปิด ใช้ ID เต็มตามเคสเอง)
+- test ใหม่ 5 ตัว (เพิ่มเข้า npm test แล้ว) ผ่านหมด · ชุดเต็ม fail set เท่า baseline
+- ค้าง: apply 051 + deploy pro พร้อม persona (ห้ามแยกรอบ — monitor เดิมจะตี false alarm) · ชั้น 3 (sequence เทียบ scan_jobs/health score/funnel/Hermes summary) รอ persona นิ่งบน pro
