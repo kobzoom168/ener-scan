@@ -3,9 +3,13 @@
  * "logo ตอนเข้า html อยากให้เหมือนเข้า lift" ใช้ทั้ง /synergy และ /r report หลัก)
  * ตอบทันทีแล้ว fetch เนื้อจริงจาก bodyUrlExpr (นิพจน์ JS ฝั่ง browser) มา document.write ทับ
  */
-export function buildLoaderShellHtml({ title, message, bodyUrlExpr }) {
+export function buildLoaderShellHtml({ title, message, bodyUrlExpr, metaDescription }) {
+  // SEO (UX audit 11 ส.ค.): shell คือ head ที่ Google เห็น — ต้องมี description + JSON-LD ที่นี่
+  const desc = String(metaDescription || "ดูรายงานพลังพระ/เทวรูป/เครื่องรางจาก Ener Scan พร้อมพลังเด่น ความเข้ากัน และพลังทั้ง 7 ด้าน").slice(0, 300);
   return `<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>
+<meta name="description" content="${desc.replace(/"/g, "&quot;")}">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Ener Scan","url":"https://scan.my-ener.uk"}</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d0b08'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23e8c547'%3E✦%3C/text%3E%3C/svg%3E">
 <style>body{margin:0;background:#0d0b08;display:grid;place-items:center;min-height:100vh;font-family:system-ui,sans-serif}
 .load-wrap{display:flex;flex-direction:column;align-items:center;text-align:center}

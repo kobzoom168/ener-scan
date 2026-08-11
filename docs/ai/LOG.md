@@ -438,3 +438,20 @@
 - กบสแกนบน staging: rpt_2dcOG2kG... = evidence_score_v4 จริง · scoreBreakdown เก็บครบ (ตย. protection 46+8 brass -5 collision = 49) · readingConfidence สูง · energyScore 6.9 (v4 transform) · SCORE_V4_SHADOW_OVERALL logged (shadow 3.6, coherence 0.2) · หน้า public 200 ไม่มี scoreBreakdown หลุด ✓
 - ⚠️ gotcha DB: staging ใช้ ener_scan_staging ไม่ใช่ ener_scan (ener_scan = ตัวเก่า/dev) — 051 เมื่อเช้า apply ผิดตัว แก้แล้ว apply เข้า ener_scan_staging สำเร็จ (pro=ener_scan_pro ถูกอยู่แล้ว ยืนยันจาก postgrest PGRST_DB_URI) · ช่วงที่หายไป insert meta fail → fallback ไม่มี meta ทำงานตามดีไซน์ history ไม่หาย
 - ค้าง: เก็บ shadow 3-7 วัน → calibrate band 46-70 จาก scan จริง → รายงาน distribution ให้กบ
+
+## 2026-08-11 | Claude | ขึ้น Pro รอบเย็น (กบสั่ง): v4 codebase + fix แชทชุดบ่าย
+- sync 17 ไฟล์ → main → deploy pro healthy (200, log สะอาด) — รวม: identity handler + โทนจริงจัง/ห้ามอีโมจิ + sanitizer consult + prompt ปังมาก fix + slug validator telemetry + โค้ด v4 ทั้งชุด
+- ⚠️ AMULET_SCORE_V4_ENABLED ไม่ตั้งบน pro = ลูกค้ายังเห็น v3 ตามแผน shadow ที่กบเคาะ (band v4 ยังไม่ calibrate จากชิ้นจริง) — เปิดจริงเมื่อกบยืนยันข้าม shadow หรือหลัง calibrate เสร็จ
+
+## 2026-08-11 | Claude | แก้ HTML Report ตาม UX audit (backlog 0.5) — staging
+- 🔴 เรดาร์ SVG เปล่า: ต้นตอ = base CSS ซ่อน polygon (opacity:0+scale(0)) แล้วพึ่ง animation เปิดกลับ → browser/crawler ที่ไม่รัน animation เห็นกราฟเปล่าถาวร · แก้เป็น animation-fill-mode: both (สถานะซ่อนอยู่ในคีย์เฟรม) ไม่รัน animation = กราฟโชว์เต็มทันที
+- เกรดมีสเกลกำกับ (B = ดี · สเกล D→B→A→S) ใต้ช่องเกรด · ป้ายแกนเรดาร์ใหญ่ขึ้น (12-15px) · contrast: muted #7a6a58→#63543f + เลขบนแกนเข้มขึ้น (ธีมสว่าง) · แถวอันดับ min-height 44px (mv2r-row + alib-row, WCAG 2.5.8)
+- jump-nav หน้า energy-meaning: pill เลข+ชื่อย่อด้าน + aria-label + เลขเข้าไปใน h2 (screen reader ได้ยินครบ)
+- ศักราชเดียวทั้งรายงาน: meta datetime ค.ศ.→พ.ศ. (formatBangkokReportMetaDateTime — คลังเป็น พ.ศ. อยู่แล้ว) + แก้ dateTime test
+- SEO: meta description + favicon 🔮 (data URI ทุกหน้า amulet) + JSON-LD Organization
+- npm test 949/20 = baseline · ขึ้น staging รอกบเปิดรายงานดู → pro รอสั่ง
+
+## 2026-08-11 | Claude | HTML report audit fixes — verify บน staging ครบ + SEO ที่ shell
+- gotcha สำคัญ: /r เสิร์ฟเป็น loader shell (6KB) แล้ว fetch /body — SEO tags ต้องอยู่ head ของ shell ไม่ใช่ body → เพิ่ม meta description + JSON-LD ใน enerLoaderShell.util (favicon ✦ มีอยู่แล้ว)
+- verify สดจากรายงานจริง rpt_2dcOG2kG: เกรดสเกลโชว์ / radar ไม่มี hidden base / fill both / พ.ศ. 2569 / min-height 44px / pill ชื่อด้าน / shell มี description+ld+json ครบ
+- ค้าง: กบเปิดรายงานดูด้วยตา + รัน Snapsite audit ซ้ำเทียบคะแนน → ผ่านแล้วค่อยขึ้น pro

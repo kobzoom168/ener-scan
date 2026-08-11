@@ -398,6 +398,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E" />
   <title>${escapeHtml(docTitle)}</title>
   <meta name="robots" content="noindex,nofollow"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -512,7 +513,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
       .alib-pod { flex: 1 1 calc(50% - 6px); }
     }
     .alib-rows { display: grid; grid-template-columns: 1fr; gap: 0.6rem; }
-    .alib-row { display: flex; align-items: center; gap: 0.65rem; background: var(--alib-elevated); border: 1px solid var(--alib-border); border-radius: 13px; padding: 0.55rem 0.75rem; text-decoration: none; color: var(--alib-text); }
+    .alib-row { display: flex; align-items: center; min-height: 44px; gap: 0.65rem; background: var(--alib-elevated); border: 1px solid var(--alib-border); border-radius: 13px; padding: 0.55rem 0.75rem; text-decoration: none; color: var(--alib-text); }
     .alib-row:hover { border-color: var(--alib-gold); }
     .alib-row-rank { flex: 0 0 1.7rem; text-align: center; font-weight: 800; color: var(--alib-muted); }
     .alib-row-img { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex: 0 0 auto; background: var(--alib-img-bg); border: 1px solid var(--alib-border); }
