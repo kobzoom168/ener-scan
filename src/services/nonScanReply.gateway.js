@@ -114,6 +114,13 @@ function recordSent(userId, dedupeKey, bodyText) {
   });
 }
 
+
+/** persona 2 ชั้น (11 ส.ค. 2026): flow/บริการ = เสียงแอดมิน · consult LLM = ปนได้สองเสียง */
+function speakerMetaFor(replyType) {
+  const rt = String(replyType || "");
+  return { speakerRole: /consult/i.test(rt) ? "consult" : "admin", replyType: rt, source: "flow" };
+}
+
 function logGateway(payload) {
   console.log(
     JSON.stringify({
@@ -359,7 +366,7 @@ export async function sendNonScanReply(opts) {
           await replyFlex(client, replyToken, flexToSend);
         }
         recordSent(uid, dedupeKey, body);
-        void insertLineConversationMessage(uid, "bot", body);
+        void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt));
         if (scanOfferMeta && typeof scanOfferMeta === "object") {
           console.log(
             JSON.stringify({
@@ -432,7 +439,7 @@ export async function sendNonScanReply(opts) {
         await replyText(client, replyToken, body, quickReply);
       }
       recordSent(uid, dedupeKey, body);
-      void insertLineConversationMessage(uid, "bot", body);
+      void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt));
       if (scanOfferMeta && typeof scanOfferMeta === "object") {
         console.log(
           JSON.stringify({
@@ -588,7 +595,7 @@ export async function sendNonScanSequenceReply(opts) {
         messages: list,
       });
       recordSent(uid, dedupeKey, fingerprint);
-      void insertLineConversationMessage(uid, "bot", list.join("\n\n"));
+      void insertLineConversationMessage(uid, "bot", list.join("\n\n"), speakerMetaFor(rt));
       logGateway({
         userId: uid,
         replyType: rt,
@@ -802,7 +809,7 @@ export async function sendNonScanPushMessage(opts) {
           await pushText(client, uid, body);
         }
         recordSent(uid, dedupeKey, body);
-        void insertLineConversationMessage(uid, "bot", body);
+        void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt));
         logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
           userId: uid,
           replyType: rt,

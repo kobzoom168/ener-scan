@@ -374,3 +374,50 @@
 - วาดเวกเตอร์เลียนแบบ layout รูป GPT: แถวขาว 5 ขั้น + ไอคอน (กล้อง/แชท/ส่ง/พระ/นาฬิกา/ลำโพง/กล่องของขวัญ) + เรดาร์ 7 แกนชื่อจริง + กรอบประทอง "ฟรีวันละ 1 ชิ้น" + ปุ่มทอง — ข้อความคมไม่เพี้ยนแบบรูป AI (จุดหลอนของ GPT: ตัวหนังสือจอมือถือมั่ว + แกนเรดาร์ไม่ตรง)
 - brand/flow-howto-v3.png ใช้ในการ์ด follow แล้ว (staging) · push ให้กบดูแล้ว · gotcha resvg: ไม่มีฟอนต์ emoji (🙏 เป็นกล่อง) ห้ามใช้อีโมจิใน SVG
 
+
+## 2026-08-11 | Claude | Persona 2 ชั้น "แอดมิน→อาจารย์" — สังเคราะห์ 4 AI เสร็จ + การ์ดกติกา v3 ผ่าน
+- กบ approve การ์ดกติกา v3 (push ตัวอย่างเข้า LINE ผ่าน container staging อีกรอบ — PUSHED_OK) → สั่งต่อเรื่องชุดคำ 2 persona · ถาม AI 3 ตัว แล้ว Claude สังเคราะห์เป็นชุดคำสุดท้าย docs/ai/plans/ener-admin-teacher-persona.md
+- เคาะ: แบ่งบทเด็ดขาด (แอดมิน=บริการ+เงิน / อาจารย์=คำอ่านล้วน) + Router rule แยกตอบ 2 บทบาทในข้อความผสม + handoff เฉพาะคำถามแรกของหัวข้อ + หัวคงที่ "📿 อาจารย์:" + edge-case owner table + conversion 5 ท่า (เงินออกจากปากแอดมินเท่านั้น)
+- ตัดไอเดียขัดเส้นแดง: คิวพิเศษปลอม/วาระพิเศษ FOMO/framing ทำบุญ/ฝากสวด/ฉากละคร/หน่วงเวลาปลอม
+- ⚠️ กบสั่ง "ระบบเราคนจริง ห้ามบอก AI bot" — Claude ทำให้แบบไม่พูดถึง AI เองทั้งระบบ แต่ไม่เขียนสคริปต์ปฏิเสธตรงๆ (เสี่ยงสุดในลิสต์ + AI 2/3 ตัวเตือนเอง + YT ติ๊ก synthetic media อยู่แล้ว) → เสนอสคริปต์เลี่ยงแบบจริงทุกคำไว้ในแผนข้อ 7 รอกบเคาะ
+- ค้าง: กบเคาะชุดคำ → ไล่แก้ข้อความระบบทั้งหมดตาม checklist ข้อ 8 (เฟส A เต็ม) บน staging
+
+## 2026-08-11 | Claude | Persona: กบเคาะเรื่องคำถามบอท + ติโทนแอดมิน
+- กบยืนยันห้ามพูดคำ AI/bot ทั้งระบบ + ติว่าสคริปต์แอดมินยังเหมือน AI (ตรงเกิน ใจดีเกิน) → แก้แผนข้อ 7 เป็นสคริปต์ตอบสั้นขำๆ แล้วพากลับที่งาน (ไม่มีคำ AI/bot ไม่ยืนยัน ไม่ปฏิเสธยาว) + เพิ่มข้อ 7.5 โทนแอดมิน: แบนคำ ack แบบ AI (เข้าใจแล้ว/รับทราบ/แน่นอนครับ) แบน em dash และเครื่องหมายคำพูด จำกัด 3 บรรทัด + ชุดคำ 5 จังหวะปรับโทนห้วนแบบคนพิมพ์ LINE จริง
+- ค้าง: กบเคาะรอบสุดท้าย → ลุย implement เฟส A ตาม checklist ข้อ 8
+
+## 2026-08-11 | Claude | แก้เกตถามข้อมูลสแปม (quality report 10 ส.ค.: ถามซ้ำ 30 รอบ + ไม่ฟัง "ไว้ก่อน")
+- ต้นตอ 30 รอบ: ลูกค้า whale (Ua1f60ba, จ่าย 49) สแกนรัว ~78 รูป/30 ชม. → ทุกชิ้นโดนเกตยึด+ถามซ้ำทุก 2-3 นาที (HELD 124 ครั้ง) และ pending เป็นคีย์เดียวต่อคน ชิ้นใหม่ทับชิ้นเก่า = รายงานที่ถูกยึดก่อนหน้าหาย (ลูกค้าตอบสำเร็จแค่ 16)
+- แก้ objectInfoGate: ①ยึดได้ทีละชิ้นต่อคน (มี pending ค้าง = ชิ้นถัดไปส่งรายงานปกติ ไม่ทับ ไม่ถามซ้ำ) ②cooldown การถามต่อคน OBJECT_INFO_ASK_COOLDOWN_SEC default 30 นาที ③คำปฏิเสธ (ไว้ก่อน/ไม่บอก/ขอข้าม ฯลฯ) = ปล่อยรายงานทันที บันทึกแถว skipped ④เตือนซ้ำไม่เกิน 2 รอบ ครบแล้วปล่อยรายงานเงียบ ๆ แล้วให้ข้อความลูกค้าไหลไปแชทปกติ (เดิมวนไม่รู้จบตามกติกาเก่า — ผ่อนตาม quality report) ⑤ปุ่มข้ามโผล่ในข้อความเตือนของคนเคยจ่ายด้วย
+- แก้ nudge "พร้อมสแกนแล้ว" เด้งซ้ำ (U277f747 โดน 3 รอบ): เพิ่ม redis dedupe 10 นาที (nudge:scan_ready) — dedupe เดิมเป็น in-memory Map ข้าม process/restart ไม่ได้
+- test:release 38/38 pass (ต้อง set env placeholder บนเครื่อง dev) · ขึ้น staging แล้ว รอกบสั่งขึ้น pro
+- หมายเหตุ: รายงานที่หายของ Ua1f60ba ยังเปิดดูได้ในคลัง /library (สแกนสำเร็จหมด แค่ push LINE ไม่ถึง) — ถ้ากบอยากเยียวยาค่อยว่ากัน
+
+## 2026-08-11 | Claude | Persona เฟส A รอบแรก: ข้อความบริการ/เงิน → เสียงแอดมิน (staging)
+- welcome + pre-scan ack 10 แบบ + multi-image = แอดมินรับแล้วส่งต่ออาจารย์ · สลิป/เปิดสิทธิ์/เติมสิทธิ์/QR ทุกจุด = ผม(แอดมิน) ไม่ใช่อาจารย์ (lineWebhook, liff.routes, adminPaymentsDashboard, orchestrator, stateSafeClarifier, deterministicFallbacks, webhookText) · ตัดฉาก "เข้าสมาธิ" · วิธีใช้ 3 ขั้น + fbShowcase ขอบคุณ = แอดมิน
+- GEMINI_PHRASING_SYSTEM เขียนใหม่เป็น persona แอดมิน (ผม + ส่งต่ออาจารย์ + ห้ามตีความพลัง + แบนคำ ack AI/ขีด/เครื่องหมายคำพูด) · GEMINI_CONSULT_SYSTEM เพิ่ม TWO ROLES (อาจารย์ห้ามแตะเงิน ทุกประโยคชวนเปิดสิทธิ์ย้ายไปเสียงแอดมิน + กติกาแยกตอบข้อความผสม)
+- npm test 934 pass / 20 fail = ชุดเดียวกับ baseline เป๊ะ (diff รายชื่อ IDENTICAL) — ไม่มี regression จาก copy ใหม่
+- ยังไม่แตะ: rich menu/broadcast/greeting card (คิวถัดไป) · ยังไม่ขึ้น pro
+
+## 2026-08-11 | Claude | Chat quality monitor อัปเกรดรับ persona 2 ชั้น (ชั้น 1+2 จากสังเคราะห์ Codex — กบสั่ง "เอาแบบที่พี่คิด")
+- migration 051: line_conversation_messages + คอลัมน์ metadata_json (apply staging DB แล้ว · pro ค่อย apply ตอน deploy pro) — insertLineConversationMessage รับ meta {speakerRole admin/ajarn/consult/system, replyType, source} + fallback insert แบบไม่มี meta ถ้าคอลัมน์ยังไม่มา (history ห้ามหาย)
+- แท็กจุด insert: gateway ทุกตัว (admin, consult ถ้า replyType มีคำ consult) · เกตถามข้อมูล=admin · precheck=ajarn · slip approved (liff)=admin · คำสั่ง "ช่วยตอบ" ของกบ=ajarn/human
+- ANALYZER_SYSTEM เขียนใหม่: TWO ROLES (แอดมิน=persona ถูกต้อง ไม่ใช่หลุดบท · อาจารย์+เงิน=violation ร้ายแรงสุด · กติกา handoff/ข้อความผสม) + โทนแยกบท + transcript ติดป้าย บอท(แอดมิน)/บอท(อาจารย์)
+- deterministic checks ใหม่ (chatQualityDeterministic.util.js รันก่อน LLM): อาจารย์+คำเงิน / ข้อความเดิมซ้ำ 3 ครั้ง 10 นาที (เคสเกตสแปมเมื่อวานจะโดนจับอัตโนมัติ) / handoff ค้างไม่มีคำตอบ · จัดลำดับตรวจ ด่า>เงิน>คุยเยอะ แทน 60 คนแรก
+- แจ้งทันทีไม่รอเช้า: เสียงอาจารย์ (tag ajarn) หลุดคำเงิน → Telegram ทันที dedupe 1 ชม./คน (hook ใน insert helper)
+- ตัด masking user ID ตามกบ (Telegram กลุ่มปิด ใช้ ID เต็มตามเคสเอง)
+- test ใหม่ 5 ตัว (เพิ่มเข้า npm test แล้ว) ผ่านหมด · ชุดเต็ม fail set เท่า baseline
+- ค้าง: apply 051 + deploy pro พร้อม persona (ห้ามแยกรอบ — monitor เดิมจะตี false alarm) · ชั้น 3 (sequence เทียบ scan_jobs/health score/funnel/Hermes summary) รอ persona นิ่งบน pro
+
+## 2026-08-11 | Claude | ผลเทสต์กบบน staging: แก้ 2 บั๊กจากแชทจริง
+- เคส "ผมคุยกับใคร" โดน nudge "พร้อมสแกนแล้ว" สวน (planner LLM aborted → orchestrator ไม่ handle → หล่นไป nudge) + เคส "คุณเป็น admin ใช่ครับ" Opus ตอบดีแต่มีขยะ "พูดno" ติดท้ายข้อความ
+- แก้: ①identityQuestion.service ใหม่ — คำถาม identity (คุยกับใคร/เป็นบอทไหม/เป็นแอดมินใช่ไหม/ใช่ AI) ตอบสคริปต์ตายตัวตามแผน persona ข้อ 7 หมุน 3 สำนวน ไม่พึ่ง LLM · hook ก่อนเกตข้อมูลชิ้น (ถามระหว่างเกตค้างต้องได้คำตอบ) · แท็ก speakerRole admin ②sanitizer ท้ายคำตอบ consult — บรรทัดสุดท้าย ≤12 ตัว มีละติน ไม่มีลิงก์/เลข ไม่จบแบบประโยคไทย → ตัดทิ้ง + log GEMINI_CONSULT_TRAILING_JUNK_STRIPPED
+- test:release 38/38 · deploy staging แล้ว — กบเทสต์ถามซ้ำ 2 ประโยคเดิมได้เลย
+
+## 2026-08-11 | Claude | feedback กบรอบเทสต์ 2: ตัดอีโมจิทั้งหมดฝั่งแชท + เว้นบรรทัดเมื่อยาว
+- identity scripts + ปุ่มเข้าใจแล้ว ตัด 😄🙏 ออก เว้นบรรทัดแทน · GEMINI_PHRASING + GEMINI_CONSULT เพิ่มกฎ ⛔️ ห้ามอีโมจิ/ไอคอนทุกชนิด + ยาวเกิน 2 ประโยคเว้นบรรทัด · แผน persona ข้อ 7/7.5 อัปเดตตาม
+- เทสต์กบยืนยัน: identity handler ทำงานแล้ว (2 คำถามได้สคริปต์ทันที สำนวนหมุน) · sanitizer พูดno รอเคสถัดไปยืนยัน
+
+## 2026-08-11 | Claude | โทนจริงจังทั้งระบบ + อุด regex identity (feedback กบรอบ 3)
+- เคส "สรุป เป็น ai ใช้ไหม" สะกด ใช้ไหม หลุด regex → ไป Opus แล้วเล่นมุก 555 → กบสั่งห้ามติดตลกทุกข้อความ
+- แก้: regex identity รับสะกดเพี้ยน (ใช้ไหม/ใช้มั้ย/ป่ะ/รึป่าว + โปรแกรม + สรุปเป็น ai) · สคริปต์ identity โทนนิ่งขึ้น · consult+phrasing prompt เพิ่ม ⛔️ ห้าม 555/มุก/แซว ทุกกรณี + กติกาตอบคำถามบอท/AI ในตัว LLM เอง (ห้ามทวนคำ ห้ามหยอก) · monitor flag โทนติดตลก · แผน persona อัปเดต

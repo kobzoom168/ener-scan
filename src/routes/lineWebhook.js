@@ -2806,7 +2806,7 @@ async function finalizeAcceptedImage({
             "พอสิทธิ์เปิดแล้ว ส่งรูปชิ้นนี้มาอีกครั้ง อาจารย์ดูให้ทันทีครับ",
           ].join("\n"),
           alternateTexts: [
-            "ภาพนี้ยังไม่ใช่สลิปการโอนนะครับ โอนแล้วส่งสลิปมาก่อน เดี๋ยวอาจารย์เปิดสิทธิ์ให้แล้วค่อยส่งรูปชิ้นนี้มาใหม่ครับ",
+            "ภาพนี้ยังไม่ใช่สลิปการโอนนะครับ โอนแล้วส่งสลิปมาก่อน เดี๋ยวผมเปิดสิทธิ์ให้แล้วค่อยส่งรูปชิ้นนี้มาใหม่ครับ",
           ],
         });
         return;
@@ -2991,7 +2991,7 @@ async function finalizeAcceptedImage({
           semanticKey: "slip_auto_approved",
           text: swPkg
             ? buildSlipPackageSwitchedApprovedText(swPkg)
-            : "ตรวจสอบสลิปเรียบร้อยแล้วครับ\n\nอาจารย์เปิดสิทธิ์สแกนให้แล้ว\nตอนนี้สามารถส่งรูปวัตถุที่ต้องการสแกนเข้ามาได้เลยครับ",
+            : "ตรวจสลิปเรียบร้อยครับ ผมเปิดสิทธิ์ให้แล้ว\nส่งรูปชิ้นที่จะให้อาจารย์ดูเข้ามาได้เลยครับ",
           alternateTexts: swPkg
             ? [
                 `ยืนยันสลิปแล้วครับ ยอด ${swPkg.priceThb} บาท ปรับรายการค่าครูให้ตามยอดแล้ว ส่งรูปมาสแกนได้เลย`,
@@ -3049,7 +3049,7 @@ async function finalizeAcceptedImage({
           replyToken: event.replyToken,
           replyType: "slip_manual_review",
           semanticKey: "slip_manual_review",
-          text: "รับรูปแล้วครับ ขอเช็กแปปนึง\nถ้าเป็นสลิปโอน เดี๋ยวอาจารย์เปิดสิทธิ์แล้วแจ้งกลับในแชตนี้เลยครับ",
+          text: "รับรูปแล้วครับ ขอเช็กแปปนึง\nถ้าเป็นสลิปโอน เดี๋ยวผมเปิดสิทธิ์แล้วแจ้งกลับในแชตนี้เลยครับ",
           alternateTexts: [
             "รอแปปนะครับ กำลังเช็กรูปที่ส่งมาให้อยู่",
             "กำลังดูให้อยู่ครับ อีกแปปเดียว เดี๋ยวแจ้งผลในแชตนี้",
@@ -3866,7 +3866,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
     const targetUid = best.line_user_id;
     // ลง history เป็นฝั่งอาจารย์ (verbatim) — AI เห็นเป็นคำพูดตัวเอง ตอบต่อเนื่องธรรมชาติ
     const { insertLineConversationMessage } = await import("../stores/conversationMessages.db.js");
-    await insertLineConversationMessage(targetUid, "bot", said);
+    await insertLineConversationMessage(targetUid, "bot", said, { speakerRole: "ajarn", replyType: "admin_assist_reply", source: "human" });
     // แปะโน้ตสด 48 ชม. ให้ fact block ชี้ชัดว่ามีคนช่วยตอบ — ห้ามพูดสวน
     await setLargeValueWithTtl(
       `admin_case_note:${targetUid}`,
@@ -3893,6 +3893,14 @@ async function handleTextMessage({ client, event, userId, session }) {
   const now = Date.now();
 
   if (await maybeHandleAdminAssist({ client, event, userId, text })) return;
+
+  // คำถาม identity "คุยกับใคร/เป็นบอทไหม/เป็นแอดมินใช่ไหม" → สคริปต์ตายตัว ไม่พึ่ง LLM
+  // (persona ข้อ 7 — เคส 11 ส.ค.: planner ตายแล้วคำถามนี้โดน nudge สแกนสวน)
+  // อยู่ก่อนเกตข้อมูลชิ้น: ถามระหว่างเกตค้างต้องได้คำตอบ ไม่ใช่โดนเตือนสวน
+  try {
+    const { maybeHandleIdentityQuestion } = await import("../services/welcome/identityQuestion.service.js");
+    if (await maybeHandleIdentityQuestion({ client, event, userId, text })) return;
+  } catch { /* ignore */ }
 
   // เกตข้อมูลชิ้น (กบ 7 ส.ค.): มีรายงานค้างรอข้อมูล → ข้อความนี้คือคำตอบ/ปุ่ม จบในตัว
   try {
@@ -4034,8 +4042,8 @@ async function handleTextMessage({ client, event, userId, session }) {
           replyToken: event.replyToken,
           replyType: "scan_in_flight_wait",
           semanticKey: "scan_in_flight_wait",
-          text: "อาจารย์กำลังเข้าสมาธิเพ่งชิ้นที่ส่งมาอยู่ ขออย่าเพิ่งคุยแทรกนะ อีกสัก 1-2 นาทีผลออกแล้วค่อยว่ากัน",
-          alternateTexts: ["รอผลอีกนิดนะ กำลังเพ่งอยู่ เดี๋ยวสรุปให้"],
+          text: "ชิ้นที่ส่งมาอาจารย์กำลังดูอยู่ครับ อีกสัก 1-2 นาทีผลออก รอแปปนึงนะครับ",
+          alternateTexts: ["รอผลอีกนิดนะครับ อาจารย์กำลังดูอยู่ เดี๋ยวผลมาเลย"],
         });
       }
       return;
@@ -6772,6 +6780,16 @@ async function handleTextMessage({ client, event, userId, session }) {
       text !== "สแกนพลังงาน"
     ) {
       if ((await invokePhase1GeminiOrchestrator()).handled) return;
+      // กันสแปม nudge (quality report 10 ส.ค.: "พร้อมสแกนแล้ว" เด้งซ้ำ 3 รอบใส่ลูกค้า
+      // ที่บอก "ไว้ก่อน") — dedupe in-memory ของ gateway ข้าม process ไม่ได้ → ใช้ redis
+      // เงียบดีกว่ายิงประโยคเดิมซ้ำ: เพิ่งส่งไปใน 10 นาที = ไม่ส่งอีก
+      try {
+        const { tryDedupeOnce } = await import("../redis/scanV2Redis.js");
+        if (!(await tryDedupeOnce(`nudge:scan_ready:${userId}`, 600))) {
+          console.log(JSON.stringify({ event: "SCAN_READY_NUDGE_SUPPRESSED", lineUserIdPrefix: String(userId).slice(0, 8) }));
+          return;
+        }
+      } catch { /* redis พัง = ส่งตามปกติ */ }
       const scanReadyText = buildPaidActiveScanReadyHumanText(userId);
       emitActiveStateRouting({
         userId,
@@ -7015,8 +7033,8 @@ async function handleTextMessage({ client, event, userId, session }) {
             "วิธีใช้งาน Ener Scan",
             "",
             "1) ส่งรูปวัตถุที่ต้องการสแกน",
-            "2) อาจารย์จะขอวันเกิด (DD/MM/YYYY)",
-            "3) อาจารย์ส่งผลการสแกนกลับมาในแชทนี้",
+            "2) ผมจะขอวันเกิด (DD/MM/YYYY)",
+            "3) อาจารย์อ่านเสร็จ ผมส่งผลกลับมาในแชทนี้",
             "",
             `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
           ].join("\n");
@@ -7770,8 +7788,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       "วิธีใช้งาน Ener Scan",
       "",
       "1) ส่งรูปวัตถุที่ต้องการสแกน",
-      "2) อาจารย์จะขอวันเกิด (DD/MM/YYYY)",
-      "3) อาจารย์ส่งผลการสแกนกลับมาในแชทนี้",
+      "2) ผมจะขอวันเกิด (DD/MM/YYYY)",
+      "3) อาจารย์อ่านเสร็จ ผมส่งผลกลับมาในแชทนี้",
       "",
       `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
     ].join("\n");

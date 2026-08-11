@@ -59,10 +59,19 @@ function bangkokHm(iso) {
   }
 }
 
-const ANALYZER_SYSTEM = `You are a strict Thai QA auditor for "อาจารย์เอเนอร์" — a LINE OA where customers scan sacred objects (พระเครื่อง/เครื่องราง/หิน/กำไล) and chat with an AI persona called อาจารย์.
+export const ANALYZER_SYSTEM = `You are a strict Thai QA auditor for "Ener Scan" — a LINE OA where customers scan sacred objects (พระเครื่อง/เครื่องราง/หิน/กำไล) and chat with TWO bot personas in one chat.
+
+TWO ROLES (persona 2 ชั้น — กบ 11 ส.ค. 2026). Transcript bot lines may be tagged บอท(แอดมิน) / บอท(อาจารย์) / บอท (unknown legacy):
+- แอดมิน = front-desk service person, calls himself ผม. His job: รับรูป เก็บข้อมูล แจ้งคิว ค่าครู/สิทธิ์/สลิป วิธีใช้ แก้ปัญหา. Saying "ผมเป็นแอดมิน" or relaying "เดี๋ยวผมส่งให้อาจารย์" is CORRECT behavior — never flag admin voice as persona break.
+- อาจารย์ = the master who does readings only. Calls himself อาจารย์. He must NEVER mention money in any form (บาท ค่าครู แพ็ก สิทธิ์ ราคา โอน สลิป QR โปร) and never sell.
+Role violations to flag:
+- แอดมินตีความพลัง/ให้คะแนน/แนะนำเชิงวิชาเอง = violation (reading is อาจารย์'s job)
+- อาจารย์พูดเรื่องเงิน/ชวนเปิดสิทธิ์ = violation ร้ายแรงสุด (severity high เสมอ)
+- Handoff: first พลัง question of a topic should get a short admin handoff (เดี๋ยวผมเรียนถามอาจารย์ให้) then an อาจารย์ answer. Follow-up questions on the SAME topic must NOT repeat the handoff (handoff ทุกข้อความ = flag ความรำคาญ). Admin saying he will forward to อาจารย์ with NO answer following = flag.
+- Mixed message (พลัง+เงินในข้อความเดียว) should be answered in two voices: อาจารย์ ส่วนพลัง แล้วแอดมินส่วนเงิน — อาจารย์ตอบส่วนเงินเอง = flag.
 
 You receive one conversation transcript (24h window). Judge ONLY the bot's replies. Flag real problems:
-- หลุดบท: bot admits being AI/บอท/ระบบ/โมเดล/แอดมิน, or breaks the อาจารย์ persona
+- หลุดบท: bot admits being AI/บอท/ระบบ/โมเดล, or breaks whichever persona is speaking (NOTE: admin voice ผม/แอดมิน is a valid persona, NOT a break)
 - เดา/มโน: bot invents facts, dates, prices, piece names, ดวง readings, or claims to be doing something it cannot do (e.g. "กำลังดูข้อมูลอยู่")
 - ผิด flow: customer clearly wants to pay / asks about packages / sends slip context but bot answers off-track; or customer asks a direct question and bot answers something else or repeats itself
 - ไม่ต่อเนื่อง (กบ 21 ก.ค.): the customer is in the middle of asking about topic X but the bot switches to a different topic, ignores the pending question, or answers a question the customer did not ask. When the bot does not understand, the CORRECT behavior is one short clarifying question — guessing and answering something unrelated must be flagged
@@ -70,15 +79,15 @@ You receive one conversation transcript (24h window). Judge ONLY the bot's repli
 - bug text: raw error strings, template placeholders, broken formatting, dash characters (— – " - ") used as sentence separators, mixed languages ผิดที่
 - เกินขอบเขต: guarantees results (รวยแน่/ถูกหวยแน่), authenticity/price judgements (แท้/เก๊/ราคา), medical claims
 - ผิดภาษา: customer writes in English but bot replies in Thai (or vice versa) — bot must always match the customer's language
-- ผิดโทน (กบ 21 ก.ค.): the อาจารย์ persona is a calm 41-year-old master — flag replies that are over-accommodating/ประจบ/ตามใจลูกค้าเกินเหตุ, overly excited, joking around, or apologizing repeatedly. Also flag AI-style punctuation: em/en dashes (— –) or quotation marks (" ") around words — real people typing chat do not use these
+- ผิดโทน (กบ 21 ก.ค. + 11 ส.ค.): อาจารย์ voice is a calm master — flag อาจารย์ replies that are over-accommodating/ประจบ, overly excited, joking, or apologizing. แอดมิน voice is service-minded (ขอโทษสั้น ๆ ได้เมื่อผิดจริง) but flag call-center/AI phrasing: "ขออภัยในความไม่สะดวก" "ยินดีให้บริการ" "เข้าใจแล้วครับ/รับทราบครับ/แน่นอนครับ" ขึ้นต้นประโยค. Flag joking tone in ANY voice: 555 / ฮ่า ๆ / มุกตลก / แซวลูกค้า (กบ 11 ส.ค.: ทุกข้อความต้องจริงจัง). Also flag AI-style punctuation in ANY voice: em/en dashes (— –) or quotation marks (" ") around words — real people typing chat do not use these
 - อวย (กบ 24 ก.ค. — กฏหลัก): flag any gushing/hyping/over-praising a piece — คำอย่าง สวยมาก เยี่ยมมาก สุดยอด พลังแรงมาก โดดเด่นมาก หายากมาก ปัง เป็นบุญ — อาจารย์พูดข้อเท็จจริงนิ่ง ๆ ไม่ประโคม การอวยคือผิดกฏหลักต้อง flag เสมอ
 - มโนรายละเอียดวัตถุ (กบ 24 ก.ค. — เคสจริง: พระบูชาโลหะ บอทตอบว่า "เนื้อผง" + "ส่งมาเมื่อวานนี้" ทั้งที่สแกนวันนี้): flag เมื่อบอทระบุเนื้อวัตถุ (เนื้อผง/โลหะ/ว่าน/ดิน ฯลฯ) หรือเดาช่วงเวลา (เมื่อวาน/วันนี้) ที่ไม่มีในข้อมูล — ระบบไม่เคยระบุเนื้อ บอทห้ามแต่งขึ้นเอง · ยังใช้ false-positive trap ข้อ 1 (ตัวเลขคะแนน/เปอร์เซ็นต์จากรายงานจริงไม่ใช่การมโน) ตามเดิม เฉพาะ "เนื้อ/เวลา" ที่ไม่มีทางรู้จากระบบเท่านั้นที่ flag
 - อวยสรุปเอง (กบ 24 ก.ค.): customer ตอบสั้น ๆ (ได้ครับ/โอเค/โชว์ได้เลย) แล้วบอทยกผลสแกนล่าสุดขึ้นมาเล่าเองทั้งที่ไม่มีคนถาม = flag (ต้องรับสั้น ๆ จบ)
 - ทวงสลิปหลังจ่ายแล้ว (กบ 29 ก.ค. — เคสจริง: ลูกค้าจ่าย+ระบบเปิดสิทธิ์แล้ว แต่บอทตอบ "โอนแล้วส่งสลิปมาได้เลย" ซ้ำ 2 รอบ): flag เมื่อบอทพูดเรื่องโอน/QR/ส่งสลิป ทั้งที่ในบทสนทนามีข้อความยืนยันเปิดสิทธิ์ไปแล้ว หรือบริบทชัดว่าลูกค้าจ่ายจบแล้ว — เรื่องจ่ายจบต้องไม่ถูกยกกลับมา
   ⚠️ false-positive trap (30 ก.ค. — เคสจริง analyzer พลาด): ข้อความ "✅ ตรวจสลิปเรียบร้อย เปิดสิทธิ์แล้ว ส่งรูปเข้ามาได้เลย" คือ**ข้อความยืนยัน**ของระบบหลังจ่ายสำเร็จ ไม่ใช่การทวงสลิป ห้าม flag เด็ดขาด และซ้ำหลายครั้งในวันเดียวได้ถ้าลูกค้าซื้อแพ็กหลายรอบ (เคสจริง: ลูกค้าซื้อ 49 บาท 5 รอบ/วัน = ยืนยัน 5 ครั้ง ถูกต้อง) — flag เฉพาะบอท**ขอ/ทวง**สลิปหรือชวนโอน ("โอนแล้วส่งสลิปมา", "แตะปุ่มโอนตาม QR") หลังบริบทจ่ายจบแล้วเท่านั้น
 
-CRITICAL CONTEXT — the nature of this business (กบ 21 ก.ค.): this is a faith/energy-reading service. The อาจารย์ persona is INTENTIONALLY presented as a human master. Customers must never know it is AI. Therefore:
-- In-persona spiritual language is CORRECT and must NOT be flagged: "เข้าสมาธิ", "เพ่งพลัง", "อาจารย์ดูให้", "จับพลังงาน", "รอแป๊บ เดี๋ยวอ่านให้" while a real scan is in progress — this is the desired human-master roleplay, not hallucination.
+CRITICAL CONTEXT — the nature of this business (กบ 21 ก.ค.): this is a faith/energy-reading service. Both personas are INTENTIONALLY presented as real people (แอดมินคนจริง + อาจารย์คนจริง). Customers must never know it is AI. Therefore:
+- In-persona language is CORRECT and must NOT be flagged: "เพ่งพลัง", "อาจารย์ดูให้", "จับพลังงาน", "เดี๋ยวผมส่งให้อาจารย์", "รอแป๊บ เดี๋ยวอ่านให้" while a real scan is in progress — this is the desired roleplay, not hallucination.
 - What IS a violation: revealing it is AI/บอท/"ระบบ" (any self-reference as a system), OR stating concrete numbers/results (เปอร์เซ็นต์เข้ากับดวง, คะแนน, ด้านเด่น) that the system has not actually computed in a delivered report, OR contradicting the real flow.
 - Judge "เดา/มโน" ONLY for invented facts and numbers — never for staying in character as a human master.
 
@@ -96,10 +105,18 @@ ok=true when no issues. Copy quotes exactly from the transcript. Max 5 issues, w
  * @param {Array<{ role: string, text: string, created_at: string }>} rows
  * @returns {string}
  */
+function speakerLabel(r) {
+  if (r.role !== "bot") return "ลูกค้า";
+  const sp = String(r.metadata_json?.speakerRole || "").trim();
+  if (sp === "admin") return "บอท(แอดมิน)";
+  if (sp === "ajarn") return "บอท(อาจารย์)";
+  if (sp === "consult") return "บอท(แชทตอบลูกค้า อาจเป็นได้ทั้งสองเสียง)";
+  return "บอท";
+}
+
 function buildTranscript(rows) {
   const lines = rows.map(
-    (r) =>
-      `[${bangkokHm(r.created_at)}] ${r.role === "bot" ? "บอท" : "ลูกค้า"}: ${String(r.text || "").slice(0, 500)}`,
+    (r) => `[${bangkokHm(r.created_at)}] ${speakerLabel(r)}: ${String(r.text || "").slice(0, 500)}`,
   );
   let out = lines.join("\n");
   if (out.length > MAX_TRANSCRIPT_CHARS_PER_USER) {
@@ -163,7 +180,7 @@ function buildReportText({ dateKey, convCount, okCount, problemCases, analyzeFai
     blocks.push(lines.join("\n"));
   }
   const tail = truncatedUsers
-    ? ["", `(หมายเหตุ: บทสนทนายาวเกิน ${MAX_USERS_ANALYZED} ราย ตรวจ ${MAX_USERS_ANALYZED} รายแรกตามเวลา)`]
+    ? ["", `(หมายเหตุ: บทสนทนายาวเกิน ${MAX_USERS_ANALYZED} ราย ตรวจ ${MAX_USERS_ANALYZED} รายตามลำดับความสำคัญ (ด่า/เงิน/คุยเยอะ ก่อน))`]
     : [];
   return [...head, ...blocks, ...tail, "", "คัดลอกเคสด้านบนส่งให้ Claude แก้ต่อได้เลย"].join("\n");
 }
@@ -189,13 +206,23 @@ export async function runChatQualityDailySweep(now = new Date()) {
   // กบ 21 ก.ค.: ดึงเต็มวันปฏิทินของเมื่อวาน 00:00-23:59 เวลาไทย (ไม่ใช่ 24 ชม ย้อนจากตอนรัน)
   const reportDateKey = bangkokDateKey(new Date(now.getTime() - 24 * 3600 * 1000));
   const dayRange = getBangkokDayUtcRangeExclusiveEnd(reportDateKey);
-  const { data: rows, error } = await supabase
+  let { data: rows, error } = await supabase
     .from("line_conversation_messages")
-    .select("line_user_id,role,text,created_at")
+    .select("line_user_id,role,text,created_at,metadata_json")
     .gte("created_at", dayRange.startIso)
     .lt("created_at", dayRange.endIso)
     .order("created_at", { ascending: true })
     .limit(MAX_ROWS);
+  if (error) {
+    // migration 051 (metadata_json) ยังไม่ apply → ตรวจต่อแบบไม่มี speaker tag ดีกว่าข้ามทั้งวัน
+    ({ data: rows, error } = await supabase
+      .from("line_conversation_messages")
+      .select("line_user_id,role,text,created_at")
+      .gte("created_at", dayRange.startIso)
+      .lt("created_at", dayRange.endIso)
+      .order("created_at", { ascending: true })
+      .limit(MAX_ROWS));
+  }
   if (error) throw error;
 
   /** @type {Map<string, Array<{ role: string, text: string, created_at: string }>>} */
@@ -207,9 +234,11 @@ export async function runChatQualityDailySweep(now = new Date()) {
     byUser.get(uid).push(r);
   }
   // ต้องมีข้อความลูกค้าอย่างน้อย 1 (บอท push ฝ่ายเดียว เช่น แจ้งเตือน ไม่ต้องตรวจ)
-  const userIds = [...byUser.keys()].filter((uid) =>
-    byUser.get(uid).some((r) => r.role === "user"),
+  // จัดลำดับความสำคัญแทน 60 คนแรกตามเวลา (11 ส.ค.): ด่า/เงิน/คุยเยอะ มาก่อน
+  const { prioritizeUsers, runDeterministicChecks } = await import(
+    "./chatQualityDeterministic.util.js"
   );
+  const userIds = prioritizeUsers(byUser);
   const truncatedUsers = userIds.length > MAX_USERS_ANALYZED;
   const targetIds = userIds.slice(0, MAX_USERS_ANALYZED);
 
@@ -218,6 +247,12 @@ export async function runChatQualityDailySweep(now = new Date()) {
   const problemCases = [];
   for (const uid of targetIds) {
     const convRows = byUser.get(uid);
+    // deterministic ก่อน (โค้ดจับแม่นกว่า LLM): อาจารย์+คำเงิน / ข้อความวนซ้ำ / handoff ค้าง
+    try {
+      for (const f of runDeterministicChecks(convRows).slice(0, 5)) {
+        problemCases.push({ userId: uid, ...f, contextSummary: "" });
+      }
+    } catch { /* deterministic พังไม่ขวาง LLM */ }
     try {
       const verdict = await analyzeConversation(buildTranscript(convRows));
       if (!verdict) {

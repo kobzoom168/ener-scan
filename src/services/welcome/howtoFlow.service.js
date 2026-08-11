@@ -52,7 +52,7 @@ export async function maybeHandleHowtoAck({ client, event, userId, text }) {
     await tryDedupeOnce(`howto:ack:${userId}`, 366 * 86400);
     await client.replyMessage(event.replyToken, {
       type: "text",
-      text: "เยี่ยมครับ ส่งรูปชิ้นแรกมาได้เลย ฟรีวันละ 1 ชิ้นครับ 🙏",
+      text: "ส่งรูปชิ้นแรกมาได้เลยครับ ฟรีวันละ 1 ชิ้น",
     });
     console.log(JSON.stringify({ event: "HOWTO_ACK", lineUserIdPrefix: String(userId).slice(0, 8) }));
   } catch {

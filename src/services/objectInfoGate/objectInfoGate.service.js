@@ -59,6 +59,28 @@ async function hasInfoForObject(lineUserId, objectKey) {
 
 const pendingKey = (uid) => `objinfo:pending:${uid}`;
 const backupKey = (uid) => `objinfo:pending_backup:${uid}`;
+const askCooldownKey = (uid) => `objinfo:ask_cooldown:${uid}`;
+// เว้นช่วงการถามต่อคน (เคส 10 ส.ค.: whale สแกนรัว โดนถามทุกชิ้นทุก 2-3 นาที รวม 30 รอบติด)
+const ASK_COOLDOWN_SEC = () =>
+  Math.max(60, Number(process.env.OBJECT_INFO_ASK_COOLDOWN_SEC ?? 1800) || 1800);
+
+/** ปล่อยรายงานที่ค้างโดยไม่มีข้อมูล (ปฏิเสธ/เตือนครบ/ข้าม) — บันทึกแถว skipped กันถามชิ้นเดิมซ้ำ */
+async function releaseHeldWithoutInfo(userId, pending, rawText) {
+  try {
+    await supabase.from("object_owner_info").insert({
+      line_user_id: userId,
+      scan_result_id: pending.scanResultId || null,
+      object_key: pending.objectKey,
+      lane: pending.lane,
+      skipped: true,
+      unknown: true,
+      raw_text: String(rawText || "").slice(0, 400) || null,
+    });
+  } catch { /* บันทึกไม่ได้ก็ยังต้องปล่อยรายงาน */ }
+  await clearDedupeKey(pendingKey(userId));
+  await clearDedupeKey(backupKey(userId));
+  await reEnqueueHeldReport(userId, pending);
+}
 
 /**
  * เรียกจาก deliverOutbound ก่อนส่ง scan_result — คืน true = เกตยึดไว้แล้ว (ส่งคำถามแทน อย่าส่งรายงาน)
@@ -87,6 +109,17 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     const objectKey = objectKeyFromReportPayload(rp);
     if (!objectKey) return false;
     if (await hasInfoForObject(lineUserId, objectKey)) return false;
+
+    // กันสแปม+รายงานหาย (เคส 10 ส.ค.): ยึดได้ทีละชิ้นต่อคน — มีคำถามค้างอยู่
+    // หรือเพิ่งถามไปไม่นาน → ชิ้นนี้ส่งรายงานปกติ ไม่ยึดเพิ่ม (pending เดิมห้ามโดนทับ)
+    if (await getValue(pendingKey(lineUserId))) {
+      console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_SKIP", reason: "pending_exists", lineUserIdPrefix: lineUserId.slice(0, 8) }));
+      return false;
+    }
+    if (await getValue(askCooldownKey(lineUserId))) {
+      console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_SKIP", reason: "ask_cooldown", lineUserIdPrefix: lineUserId.slice(0, 8) }));
+      return false;
+    }
 
     const lane = laneFromReportPayload(rp);
     // ปุ่มข้าม = เฉพาะคนเคยจ่ายอย่างน้อย 1 ครั้ง (กบ: ไม่เคยจ่ายเลยต้องใส่ ห้ามข้าม)
@@ -159,9 +192,10 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
       quickReply: { items },
     };
     await client.pushMessage(lineUserId, flexAsk);
+    await setLargeValueWithTtl(askCooldownKey(lineUserId), "1", ASK_COOLDOWN_SEC()).catch(() => {});
     try {
       const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
-      void insertLineConversationMessage(lineUserId, "bot", askText);
+      void insertLineConversationMessage(lineUserId, "bot", askText, { speakerRole: "admin", replyType: "object_info_gate_ask", source: "worker" });
     } catch { /* ignore */ }
     console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_ASKED", lineUserIdPrefix: lineUserId.slice(0, 8), lane, isPaid }));
     return true;
@@ -266,13 +300,41 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       return true;
     }
 
+    // ปฏิเสธ/ขอผ่าน (เคส 10 ส.ค. quality report: ลูกค้าตอบ "ไว้ก่อน" แต่โดนวนถามซ้ำ)
+    // → ปล่อยรายงานเลย บันทึกแบบข้าม ไม่ดันต่อ
+    if (/^(ไว้ก่อน|ยังก่อน|ไว้ค่อย|เดี๋ยวค่อย|ยังไม่|ไม่บอก|ไม่สะดวก|ไม่อยากบอก|ไม่ตอบ|ขอข้าม|ข้าม|ไม่เอา)/.test(t)) {
+      await releaseHeldWithoutInfo(userId, pending, t);
+      await client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "ได้ครับ เดี๋ยวอาจารย์ส่งผลให้เลย ข้อมูลชิ้นนี้ไว้สะดวกค่อยบอกก็ได้ครับ",
+      });
+      console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_RELEASED", reason: "declined", lineUserIdPrefix: userId.slice(0, 8) }));
+      return true;
+    }
+
     const parsed = await parseOwnerInfo(t, pending.lane);
     if (!parsed || parsed.isObjectInfo !== true) {
-      // ไม่ใช่ข้อมูลชิ้น → วนเตือนนุ่ม ๆ (กติกากบ: วนจนกว่าจะได้)
+      // ไม่ใช่ข้อมูลชิ้น → เตือนนุ่ม ๆ ไม่เกิน 2 รอบ — ครบแล้วปล่อยรายงานเงียบ ๆ
+      // แล้วคืน false ให้ข้อความนี้ไหลไปแชทปกติ (ลูกค้าจะได้คำตอบเรื่องที่ถามจริง)
+      const reminded = Number(pending.remindCount || 0);
+      if (reminded >= 2) {
+        await releaseHeldWithoutInfo(userId, pending, t);
+        console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_RELEASED", reason: "remind_cap", lineUserIdPrefix: userId.slice(0, 8) }));
+        return false;
+      }
+      pending.remindCount = reminded + 1;
+      await setLargeValueWithTtl(pendingKey(userId), JSON.stringify(pending), PENDING_TTL_SEC);
+      await setLargeValueWithTtl(backupKey(userId), JSON.stringify(pending), PENDING_TTL_SEC * 2);
+      const remindItems = [
+        { type: "action", action: { type: "message", label: "ไม่ทราบข้อมูลชิ้นนี้", text: "ไม่ทราบข้อมูลชิ้นนี้" } },
+      ];
+      if (pending.isPaid) {
+        remindItems.push({ type: "action", action: { type: "message", label: "ข้ามก่อน รับผลเลย", text: "ข้ามก่อน รับผลเลย" } });
+      }
       await client.replyMessage(event.replyToken, {
         type: "text",
         text: "อาจารย์รอส่งผลอยู่ครับ ขอข้อมูลชิ้นนี้ก่อนนิดเดียว เป็นพระอะไร วัดไหน รุ่น/ปีอะไร (หรือชนิดหิน) พิมพ์บอกได้เลย ไม่แน่ใจกดปุ่มไม่ทราบได้ครับ",
-        quickReply: { items: [{ type: "action", action: { type: "message", label: "ไม่ทราบข้อมูลชิ้นนี้", text: "ไม่ทราบข้อมูลชิ้นนี้" } }] },
+        quickReply: { items: remindItems },
       });
       return true;
     }

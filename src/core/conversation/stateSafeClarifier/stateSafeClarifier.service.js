@@ -135,7 +135,7 @@ function buildPaywallAnswer(intent, facts) {
   }
   if (intent === "explain_next_step") {
     return {
-      answer_short: "ถ้าพร้อม เดี๋ยวอาจารย์ส่งรายละเอียดกับคิวอาร์ให้ครับ",
+      answer_short: "ถ้าพร้อม เดี๋ยวผมส่งรายละเอียดกับคิวอาร์ให้ครับ",
       bridge_back_to: "pay_intent",
     };
   }
@@ -205,7 +205,7 @@ function buildPendingVerifyAnswer(intent) {
   if (intent === "explain_next_step" || intent === "off_topic_recoverable") {
     return {
       answer_short:
-        "ตอนนี้รับสลิปแล้วครับ อาจารย์กำลังตรวจสอบก่อนปลดล็อกให้",
+        "ตอนนี้รับสลิปแล้วครับ ผมกำลังตรวจสอบก่อนเปิดสิทธิ์ให้",
       bridge_back_to: "wait_status",
     };
   }
