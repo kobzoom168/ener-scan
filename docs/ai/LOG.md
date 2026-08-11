@@ -421,3 +421,8 @@
 ## 2026-08-11 | Claude | โทนจริงจังทั้งระบบ + อุด regex identity (feedback กบรอบ 3)
 - เคส "สรุป เป็น ai ใช้ไหม" สะกด ใช้ไหม หลุด regex → ไป Opus แล้วเล่นมุก 555 → กบสั่งห้ามติดตลกทุกข้อความ
 - แก้: regex identity รับสะกดเพี้ยน (ใช้ไหม/ใช้มั้ย/ป่ะ/รึป่าว + โปรแกรม + สรุปเป็น ai) · สคริปต์ identity โทนนิ่งขึ้น · consult+phrasing prompt เพิ่ม ⛔️ ห้าม 555/มุก/แซว ทุกกรณี + กติกาตอบคำถามบอท/AI ในตัว LLM เอง (ห้ามทวนคำ ห้ามหยอก) · monitor flag โทนติดตลก · แผน persona อัปเดต
+
+## 2026-08-11 | Claude | ขึ้น Pro ทั้งชุด (กบสั่ง "จบนี้เอาขึ้น Pro เลย") + รับแผน scoring v4 ไว้คัด
+- sync staging→main (28 ไฟล์: เกตกันสแปม + persona เฟส A + monitor v2 + identity/โทน) · apply migration 051 ที่ ener_scan_pro · deploy pro blue-green healthy · smoke: https 200, log สะอาด
+- แผนรื้อคะแนนจาก Codex: Claude ตรวจยืนยันบั๊กจริง 3 จุด (hash -9..+15 / LLM ออกเลขซ้อนสูตร / circular nudge + prompt "ปังมาก" ขัดกฎห้ามอวย) → คัดเป็น ทำ/ย่อ/พัก ใน docs/ai/plans/ener-scoring-v4.md — กบบอก "ไม่ทำตามทุกอย่าง" รอเคาะข้อ ยังไม่ลงมือ
+- ค้าง: เฝ้า pro หลัง persona ขึ้น (monitor v2 จะรายงานเช้าพรุ่งนี้แบบ 2 บทบาทครั้งแรก) · เฟส A ที่เหลือ (rich menu/broadcast/greeting)
