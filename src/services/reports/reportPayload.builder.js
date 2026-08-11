@@ -53,7 +53,7 @@ import { resolveMoldaviteDisplayNaming } from "../../moldavite/moldaviteDisplayN
 import { buildAmuletV1Slice } from "../../amulet/amuletPayload.build.js";
 import { buildCrystalBraceletV1Slice } from "../../crystalBracelet/crystalBraceletPayload.build.js";
 import { crystalBraceletCompatibilityBandFromPercent } from "../../crystalBracelet/crystalBraceletScores.util.js";
-import { deriveSacredAmuletEnergyScore10FromPowerCategories } from "../../amulet/amuletScores.util.js";
+import { deriveSacredAmuletEnergyScore10FromPowerCategories, deriveSacredAmuletOverallByMode } from "../../amulet/amuletScores.util.js";
 import { score10ToEnergyGrade } from "../../utils/reports/energyLevelGrade.util.js";
 import { computeTimingV1 } from "../timing/timingEngine.service.js";
 import {
@@ -1435,8 +1435,29 @@ export async function buildReportPayloadFromScan(opts) {
   /** Hero `คะแนนพลัง` / `ระดับ` for sacred_amulet: derived from six axis scores (same as graph), not parsed scan text. */
   const summaryEnergyScore =
     amuletV1 != null
-      ? deriveSacredAmuletEnergyScore10FromPowerCategories(amuletV1.powerCategories)
+      ? deriveSacredAmuletOverallByMode(amuletV1.scoringMode, amuletV1.powerCategories)
       : energyScore;
+  // v4 shadow overall (11 ส.ค.): คำนวณสูตรใหม่เทียบสูตรเดิม log อย่างเดียว ห้ามแสดงลูกค้า
+  if (amuletV1 && Array.isArray(amuletV1.scoreBreakdown)) {
+    try {
+      const { deriveEvidenceOverallShadowV4 } = await import("../../amulet/amuletScores.util.js");
+      const shadow = deriveEvidenceOverallShadowV4(
+        amuletV1.powerCategories,
+        amuletV1.scoreBreakdown,
+        amuletV1.primaryPower,
+      );
+      console.log(
+        JSON.stringify({
+          event: "SCORE_V4_SHADOW_OVERALL",
+          scanResultIdPrefix: String(scanResultId || "").slice(0, 8),
+          currentScore10: summaryEnergyScore,
+          shadowScore10: shadow.score10,
+          coherenceFrac: shadow.coherenceFrac,
+          readingConfidence: amuletV1.readingConfidence?.level ?? null,
+        }),
+      );
+    } catch { /* shadow พังห้ามขวางรายงาน */ }
+  }
   const summaryEnergyLevelLabel =
     summaryEnergyScore != null && Number.isFinite(Number(summaryEnergyScore))
       ? score10ToEnergyGrade(Number(summaryEnergyScore))

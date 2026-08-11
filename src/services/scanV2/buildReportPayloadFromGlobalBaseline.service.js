@@ -14,6 +14,7 @@ import { scanDimensionsFromObjectEnergyStars } from "../../utils/objectEnergyFor
 import {
   AMULET_PEAK_SHORT_THAI,
   deriveSacredAmuletEnergyScore10FromPowerCategories,
+  deriveSacredAmuletOverallByMode,
   POWER_ORDER,
   POWER_LABEL_THAI,
 } from "../../amulet/amuletScores.util.js";
@@ -189,7 +190,7 @@ export async function buildReportPayloadFromGlobalBaseline(p) {
     },
   };
 
-  const summaryEnergyScore = deriveSacredAmuletEnergyScore10FromPowerCategories(powerCategories);
+  const summaryEnergyScore = deriveSacredAmuletOverallByMode(amuletV1.scoringMode, powerCategories);
   const summaryEnergyLevelLabel =
     summaryEnergyScore != null && Number.isFinite(Number(summaryEnergyScore))
       ? score10ToEnergyGrade(Number(summaryEnergyScore))

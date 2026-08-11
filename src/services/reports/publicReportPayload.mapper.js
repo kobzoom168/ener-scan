@@ -97,7 +97,8 @@ export function mapLegacyReportPayloadToPublicReportView({
       payload?.amuletV1 &&
       typeof payload.amuletV1 === "object" &&
       !Array.isArray(payload.amuletV1)
-        ? payload.amuletV1
+        ? // v4: scoreBreakdown เป็นข้อมูล admin/QA — ห้ามหลุดไปหน้า public
+          (({ scoreBreakdown, ...pub }) => pub)(payload.amuletV1)
         : undefined,
   };
 }

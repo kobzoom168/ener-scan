@@ -226,6 +226,21 @@ export async function extractStableVisualFeatures(
       accentPiece: String(parsed.accentPiece ?? "unknown").trim() || "unknown",
     };
 
+    // v4 telemetry (11 ส.ค. — log-only ยังไม่เปลี่ยนคะแนน): โมเดลตอบ slug นอก whitelist = จับตาไว้
+    try {
+      const { listInvalidFeatureSlugs } = await import("../amulet/amuletFeatureProfile.util.js");
+      const invalid = listInvalidFeatureSlugs(features);
+      if (invalid.length) {
+        console.log(
+          JSON.stringify({
+            event: "STABLE_FEATURE_SLUG_INVALID",
+            scanResultIdPrefix: prefix,
+            invalid,
+          }),
+        );
+      }
+    } catch { /* telemetry ห้ามขวาง extract */ }
+
     const seed = buildStableFeatureSeed(features);
 
     // objectUnderstanding: ส่งดิบไปให้ builder normalize (slug whitelist อยู่ใน objectTaxonomy)

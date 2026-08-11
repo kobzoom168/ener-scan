@@ -30,3 +30,21 @@ Claude ตรวจโค้ดยืนยันข้อกล่าวหา�
 evidence_score_v4 + เก็บ formulaVersion/extractorVersion · shadow 3-7 วัน ไม่โชว์ลูกค้า · สรุป distribution เข้า Telegram · เปิดเฉพาะชิ้นใหม่ · ห้าม recalc เก่า
 
 Full prompt ต้นฉบับของ Codex: อยู่ในแชทกบ 11 ส.ค. (รายละเอียด P1/P2 ครบ) — เอากลับมาอ่านตอนลงมือ
+
+
+## สถานะ implement (11 ส.ค. 2026 เย็น — staging เท่านั้น, กบเคาะขอบเขตแล้ว)
+- ✅ ทำครบตามเคาะ: prompt "ปังมาก" แก้แล้ว (วัยคุมแค่ความยาว/ระดับภาษา/ตัวอย่างชีวิต) · slug whitelist validator log-only (STABLE_FEATURE_SLUG_INVALID) · evidence_score_v4 เลนพระเท่านั้น (hash สมมาตร ±3 บันทึก collisionNudge แยก + ตัด mainEnergyLabel nudge + breakdown ต่อแกน + readingConfidence จาก knownLayers) · shadow overall 55/25/20 log SCORE_V4_SHADOW_OVERALL · baseline จำ scoringMode ของชิ้น (reuse ใช้ transform ตรงรุ่น) · public mapper ตัด scoreBreakdown ก่อนถึงลูกค้า
+- Flag: AMULET_SCORE_V4_ENABLED (default ปิด = v3 เดิมเป๊ะ ปิดกลับได้ทันที) — เปิดเฉพาะ staging
+- เทสต์ 10 ตัวรวม invariant fixture ล็อก v3/v1 เลขเดิมเป๊ะ + distribution 10k seeds
+
+## Distribution comparison (synthetic 10k, 11 ส.ค.)
+| | v3 ปัจจุบัน | v4 + transform ใหม่ (PRELIM band 46-70) |
+|---|---|---|
+| median | 7.1 | 6.9 |
+| p10 / p90 | 6.1 / 8.1 | 6.0 / 7.7 |
+| ต่ำกว่า 6 | 4.8% | 9.3% |
+| 8 ขึ้นไป | 13.5% | 4.1% |
+| เกรด A | 34.3% | 19.1% |
+- บทเรียนสำคัญ: ถอด hash level แล้วความต่างระหว่างชิ้นแคบลงมาก — v4 กับ transform เดิมบีบทุกชิ้นเหลือ ~6.8 (B 87%) → ต้องมี v4 transform เอง (band 46-70) และ**ต้อง calibrate ด้วย scan จริงช่วง shadow ก่อนเปิดลูกค้า** (synthetic สุ่ม uniform ไม่ตรง distribution จริงที่เทไปทาง thai_amulet)
+- shadow overall (coherence) ยังสเกลต่ำ (median 3.8) — ใช้เทียบเชิงรูปทรง distribution เท่านั้น อย่าเพิ่งตีความค่าสัมบูรณ์
+- ถัดไป: เก็บ SCORE_V4_SHADOW_OVERALL + เทียบ v3/v4 จาก scan จริงบน staging → ปรับ band → ค่อยคุยเปิด pro

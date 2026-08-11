@@ -129,7 +129,9 @@ export function extractObjectBaselineFromReportPayload(payloadRaw, context) {
   };
 
   assertBaselineHasNoForbiddenKeys(baseline);
-  return { baseline, peakPowerKey, axisScores };
+  // v4 (11 ส.ค.): scoringMode จริงของ payload — ให้ baseline จำได้ว่าชิ้นนี้คิดด้วยสูตรไหน
+  const scoringMode = String(am.scoringMode || "").trim() || null;
+  return { baseline, peakPowerKey, axisScores, scoringMode };
 }
 
 /**
