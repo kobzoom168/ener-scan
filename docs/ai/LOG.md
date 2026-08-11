@@ -433,3 +433,8 @@
 - test ใหม่ 10 ตัว (รวม invariant fixture v3/v1 เลขเดิมเป๊ะ + v3 hash เบ้ +3 เป็นหลักฐาน) · ชุดเต็ม 949 pass / 20 fail = baseline เดิม
 - แผน growth/scale 10k จาก AI ภายนอก → จดเป็นข้อมูลอ้างอิง ener-growth-conversion-notes.md (กบยังไม่ตัดสิน)
 - ค้าง: เปิด flag บน staging เก็บ shadow จริง → calibrate band → รายงาน distribution จริงให้กบก่อนคุยเปิด pro
+
+## 2026-08-11 | Claude | v4 สแกนจริงชิ้นแรกผ่านครบ + แก้ migration 051 ลง DB ผิดตัว
+- กบสแกนบน staging: rpt_2dcOG2kG... = evidence_score_v4 จริง · scoreBreakdown เก็บครบ (ตย. protection 46+8 brass -5 collision = 49) · readingConfidence สูง · energyScore 6.9 (v4 transform) · SCORE_V4_SHADOW_OVERALL logged (shadow 3.6, coherence 0.2) · หน้า public 200 ไม่มี scoreBreakdown หลุด ✓
+- ⚠️ gotcha DB: staging ใช้ ener_scan_staging ไม่ใช่ ener_scan (ener_scan = ตัวเก่า/dev) — 051 เมื่อเช้า apply ผิดตัว แก้แล้ว apply เข้า ener_scan_staging สำเร็จ (pro=ener_scan_pro ถูกอยู่แล้ว ยืนยันจาก postgrest PGRST_DB_URI) · ช่วงที่หายไป insert meta fail → fallback ไม่มี meta ทำงานตามดีไซน์ history ไม่หาย
+- ค้าง: เก็บ shadow 3-7 วัน → calibrate band 46-70 จาก scan จริง → รายงาน distribution ให้กบ
