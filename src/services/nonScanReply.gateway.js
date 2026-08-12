@@ -686,6 +686,7 @@ export async function sendNonScanPaymentQrInstructions(opts) {
       [String(introText || "").trim(), String(slipText || "").trim()]
         .filter(Boolean)
         .join("\n\n"),
+      { speakerRole: "admin", replyType: rt, source: "flow" },
     );
 
     logGateway({

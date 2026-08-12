@@ -160,6 +160,13 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       }
       if (!sentAsVoice) await pushText(client, lineUserId, text);
       await markSent(id);
+      // history ให้ monitor เห็นครบ (Codex H4): ack รับรูป = เสียงแอดมิน
+      try {
+        const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
+        void insertLineConversationMessage(lineUserId, "bot", sentAsVoice ? "[เสียงเตือนเรื่องหลายรูป]" : text, {
+          speakerRole: "admin", replyType: "pre_scan_ack", source: "worker",
+        });
+      } catch { /* ignore */ }
       // Re-arm LINE's typing "•••" AFTER the ack bubble (sending the ack cleared
       // the webhook-time one) so the customer sees the bot working while the
       // scan/report generates (~20-30s). Auto-clears when scan_result is sent.
@@ -444,6 +451,14 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         } catch {
           /* notice is best-effort */
         }
+        // history ให้ monitor รู้ว่าผลสแกน (การ์ด/เสียงอาจารย์) ถึงมือลูกค้าแล้ว —
+        // ไม่งั้น detector handoff จะคิดว่าอาจารย์เงียบทั้งที่ส่ง Flex ไปแล้ว (Codex H4)
+        try {
+          const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
+          void insertLineConversationMessage(lineUserId, "bot", "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]", {
+            speakerRole: "ajarn", replyType: "scan_result", source: "worker",
+          });
+        } catch { /* ignore */ }
         console.log(
           JSON.stringify({
             event: "OUTBOUND_SEND_SUCCESS",

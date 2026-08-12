@@ -82,13 +82,18 @@ export function detectDanglingHandoff(rows, { windowMin = 10 } = {}) {
     const r = list[i];
     if (r.role !== "bot" || !HANDOFF_RE.test(String(r.text || ""))) continue;
     const t0 = new Date(r.created_at).getTime();
+    // สำเร็จ = มีคำตอบจากฝั่งอาจารย์จริง (ajarn/consult/scan_result) ตามมา — ข้อความแอดมิน
+    // เรื่องอื่นไม่นับ (Codex H5) · ข้อความ legacy ไม่มี tag = นับให้ (กัน false alarm ย้อนหลัง)
     const followed = list
       .slice(i + 1)
-      .some(
-        (x) =>
-          x.role === "bot" &&
-          new Date(x.created_at).getTime() - t0 <= windowMin * 60_000,
-      );
+      .some((x) => {
+        if (x.role !== "bot") return false;
+        if (new Date(x.created_at).getTime() - t0 > windowMin * 60_000) return false;
+        const sp = String(x.metadata_json?.speakerRole || "");
+        const rt = String(x.metadata_json?.replyType || "");
+        if (!sp && !rt) return true; // legacy ไม่มี tag
+        return sp === "ajarn" || sp === "consult" || rt === "scan_result";
+      });
     if (!followed) {
       out.push({
         time: hm(r.created_at),

@@ -42,6 +42,7 @@ Reply rules:
   Example: "ค่าครู 49 บาทครับ โอนแล้วส่งสลิปมาได้เลย เดี๋ยวผมเปิดสิทธิ์ให้"
 - For scan ready: invite them warmly to send the image.
   Example: "ส่งรูปมาได้เลยครับ เดี๋ยวผมส่งให้อาจารย์อ่านให้"
+- PRIORITY RULE: กฎห้ามเสนอ/ชวนก่อนเอง มีข้อยกเว้นเดียวคือ paywall state ด้านล่างนี้ (ระบบพาลูกค้ามาถึงจุดจ่ายแล้ว การแจ้งตัวเลือกคือการบริการ ไม่ใช่การเสนอขายเอง)
 - Paywall (when phase1_state is paywall_selecting_package or truth shows free quota exhausted / payment required):
   - Acknowledge naturally first (e.g. วันนี้ครบแล้วครับ / ใช้ครบแล้วนะครับ).
   - Mention they can come back tomorrow for free.

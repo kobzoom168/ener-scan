@@ -470,3 +470,9 @@
 - ยอด 350 ที่อาจเข้าวันนี้จากข้อเสนอที่ส่งไปแล้ว = กบอนุมัติมือเองใน /admin/payments (ใช้ปุ่ม Approve as เลือกแพ็ก 399)
 - โค้ดแก้ทั้งสาย (บิลหักเครดิต + EasySlip passthrough + auto-approve ยอดอัปเกรด) อยู่บน staging เทสต์ผ่านแล้ว — ถ้าวันหน้ากบอยากเปิดข้อเสนอ 350 กลับมา ให้ขึ้น pro ชุดนี้ก่อนแล้วค่อยเปิด enabled:true (ห้ามเปิดโดยไม่ขึ้นโค้ด จะงงซ้ำ)
 - หมายเหตุ: EasySlip passthrough ยังมีประโยชน์แม้ปิด offer (ชุบชีวิต auto-switch โอน 149 ทั้งที่กด 49) — ติดไปกับ pro deploy รอบหน้าตามปกติ
+
+## 2026-08-12 | Claude | รับ review Codex รอบ 2 (flow scan/persona) — ทำ 7 ข้อถูก คิว 4 เห็นต่าง 1
+- ทำทันที (staging): H4 บันทึก pre_scan_ack + scan_result delivery ลง history พร้อม speakerRole (monitor เห็น transcript ครบ ไม่ตี handoff ค้างผิด) · H5 dangling handoff นับสำเร็จเฉพาะ ajarn/consult/scan_result (legacy ไม่มี tag นับให้กัน false alarm) · M7 ตัด ack "อีกแปปเดียว/อึดใจเดียว" → เวลาจริง 2-3 นาที · M8 multi-image stern เลิกตำหนิ + บอกสิทธิ์ไม่ถูกหัก · M9 ตัด 🙏 หลุดใน DEBOUNCE_ATTACHED_TEXT · M11 เพิ่ม PRIORITY RULE (paywall = ข้อยกเว้นเดียวของห้ามเสนอ) · M12 payment QR insert ติด meta admin
+- เข้าคิว (persona hardening round เดียวกับเฟส A): C2 pre-send money guard + C3 resolve consult→ajarn/admin/mixed + H6 handoff state ใน redis (สามตัวนี้ต้องมี router ก่อน ทำแยกไม่ได้) · C1 เพิ่มรูปชิ้นในการ์ดถามข้อมูลกันสับสนชิ้น (ไม่บล็อกสแกนใหม่ — บล็อกคือต้นเหตุสแปม 30 รอบเมื่อวาน จงใจออกแบบให้ B ไหลได้)
+- เห็นต่าง: M10 human delay 2.5-5.5s เป็นการตัดสินใจ product ของกบ (ก.ค.) เรื่อง pacing ไม่ใช่หน่วงหลอกผล — เสนอยกเว้น delay เฉพาะข้อความ QR/ยืนยันจ่าย รอกบเคาะ
+- test detector เพิ่ม 1 ตัว · ชุดเต็ม 950 pass / 20 baseline · ขึ้น staging

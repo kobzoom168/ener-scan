@@ -82,3 +82,20 @@ test("analyzer prompt รู้จัก 2 บทบาท และไม่ต
   // อาจารย์พูดเงินต้องถูกระบุเป็น violation ร้ายแรง
   assert.ok(ANALYZER_SYSTEM.includes("อาจารย์พูดเรื่องเงิน"));
 });
+
+test("handoff + ข้อความแอดมิน (tagged) = ยัง dangling / + scan_result = จบ (Codex H5)", () => {
+  const admin = { speakerRole: "admin", replyType: "quota_notice" };
+  const scanDone = { speakerRole: "ajarn", replyType: "scan_result" };
+  const stillDangling = [
+    row(0, "user", "องค์นี้เหมาะไหม"),
+    row(1, "bot", "เดี๋ยวผมเรียนถามอาจารย์ให้ครับ", admin),
+    row(2, "bot", "ตอนนี้เหลือสิทธิ์ 2 ครั้งครับ", admin),
+  ];
+  assert.equal(detectDanglingHandoff(stillDangling).length, 1);
+  const completed = [
+    row(0, "user", "องค์นี้เหมาะไหม"),
+    row(1, "bot", "เดี๋ยวผมเรียนถามอาจารย์ให้ครับ", admin),
+    row(3, "bot", "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]", scanDone),
+  ];
+  assert.equal(detectDanglingHandoff(completed).length, 0);
+});
