@@ -555,3 +555,9 @@
 - ยืนยัน SSOT money intent ถูกส่งทั้ง main/snapshot entry; local regex เหลือ deprecated fallback
 - รัน targeted persona+detector 14/14 และ baseline 960 pass / 19 known fail ไม่มี regression ใหม่
 - ปิด blocker C2/C3/H6 ระยะแรกบน staging; งานรอบถัดไปยังเป็น mixed-split + planner-intent router + handoff state เต็ม + DI integration debts · ไม่ deploy production
+
+## 2026-08-12 | Claude | Codex รอบ 7 (058c151) — ✅ ผ่านทั้งชุด ไม่มี blocker ใหม่
+- Codex ยืนยัน: C2 pre-send money guard ระยะแรก ผ่าน · C3 role tagging ระยะแรก ผ่าน · H6 last-speaker hint ระยะแรก ผ่าน · defer consumer/recursion guard/SSOT intent ถูกต้องหมด · targeted 14/14 + baseline 960/19 ไม่มี regression
+- ข้อสังเกต (ไม่ใช่ blocker): handlePaymentCommandTextRoute มี LLM phrasing ภายในบาง branch — "deterministic" หมายถึง flow เป็นเจ้าของผลสุดท้าย ไม่วนซ้ำ ไม่ใช่ไร้ LLM สนิท (รับทราบ ตรงกัน)
+- คงเหลือฉบับเต็ม (คิวถัดไป): mixed-split · router จาก planner intent · handoff state เต็ม (topic/turnId/scanResultId/handoffDone) · integration+persisted metadata tests หลัง DI round · rich menu 6 ช่อง + broadcast (เฟส A โครง)
+- สถานะ staging stack พร้อมขึ้น pro 7 ก้อน: Spend-to-upgrade fix / Codex H4-H5-M7-M9-M11-M12 / detector เข้ม+await history / M10-B payment ไม่หน่วง / เคาะ C ถอดเสียงหลายรูป / persona hardening C2-C3-H6 ระยะแรก / defer consumer — รอกบสั่ง
