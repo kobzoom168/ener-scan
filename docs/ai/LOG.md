@@ -492,3 +492,8 @@
 ## 2026-08-12 | Claude | Codex เคาะผ่าน staging + วางเกณฑ์เทสต์ใหม่
 - Codex รับ 4 fix รอบก่อนครบ · เก็บ 2 จุดสุดท้าย: ①comment META_ROLLOUT ระบุชัดว่าเที่ยงคืน 12 ส.ค. = intentional grace period ~5 ชม. (deploy จริง ~19:00 คาบเกี่ยว instance เก่า/ใหม่) ②เกณฑ์ release ใหม่: tests/known-failing.txt (ลิสต์ 19 ชื่อ exact) + scripts/test-baseline-check.sh — fail ใหม่นอกลิสต์ = regression, ห้ามเทียบจำนวนรวมอีก · เขียนเข้า CLAUDE.md เป็นกติกาถาวร
 - สถานะตกลงกับ Codex: persona split เต็ม production รอชุด C2/C3/H6 (role router → pre-send money guard → handoff state) + C1 (thumbnail+relatedScanResultId+telemetry ในการ์ดถามข้อมูล) — ทำรวมกับเฟส A
+
+## 2026-08-12 | Codex | ตรวจปิด commit 52a00ce และอัปเดตสมุด review
+- ยืนยัน comment ของ metadata cutoff อธิบาย intentional grace period ตรงเหตุผล blue-green แล้ว
+- รัน `bash scripts/test-baseline-check.sh` จริง: 952 pass / 19 known fail · exit ผ่านและไม่มี fail ใหม่นอก manifest
+- อัปเดต `CODEX_REVIEW.md` ย้าย rollout cutoff/test-baseline เป็นปิดแล้ว · blocker production ยังเป็น C2/C3/H6 + C1 ตามเดิม

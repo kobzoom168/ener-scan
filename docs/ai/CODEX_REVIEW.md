@@ -99,16 +99,21 @@
 
 ### Test hygiene
 
-- full suite ล่าสุดที่ Claude รายงาน: 952 pass / 19 fail; ยังไม่ใช่ suite เขียว
-- ห้ามใช้เพียง "จำนวน fail เท่า baseline" เพราะ regression ใหม่อาจแทน test เก่าที่กลับมาผ่านโดยยอดรวมเท่าเดิม
-- ควรทำ exact known-fail manifest หรือแยก `test:unit-clean` ที่ต้องผ่าน 100% ออกจาก integration ที่ต้องใช้ Redis/DB จริง
-- เมื่อ review ให้เทียบชื่อ test ที่ fail ไม่ใช่เทียบเพียงจำนวน
+- full suite ยังมี technical debt 19 tests แต่ commit `52a00ce` เพิ่ม exact manifest ที่ `tests/known-failing.txt` และตัวตรวจ `scripts/test-baseline-check.sh` แล้ว
+- Codex รันสคริปต์จริงเมื่อ 12 ส.ค. 2026: `952 pass / 19 fail` และไม่พบ failure ใหม่นอก baseline
+- กติกาถาวรใน `CLAUDE.md`: ห้ามใช้เพียง "จำนวน fail เท่า baseline"; ต้องเทียบชื่อ test ที่ fail
+- ถ้ามี fail ใหม่นอก manifest สคริปต์ exit 1; ถ้า known-fail กลับมาเขียว สคริปต์แจ้งให้ลบออกจาก manifest
+- งานแยก `test:unit-clean` พักไว้จนถึงรอบล้างหนี้ 19 tests
 
 ### จุดเล็กที่ต้องยืนยัน
 
-- `META_ROLLOUT_MS` ตั้งไว้ `2026-08-12T00:00:00+07:00` แต่ comment ระบุเริ่มบันทึกบน pro เย็น 11 ส.ค.; ต้องยืนยันว่าเป็นเวลา deploy จริงหรือ intentional grace period
 - M10 human delay เป็น product decision ของกบ; ข้อเสนอค้างคือยกเว้น QR, ยืนยันชำระ, error/status และข้อความที่ต้องตอบทันที
 - M12 บังคับทุก outbound ผ่าน gateway ที่ require metadata ยังเป็น refactor รอบถัดไป
+
+### จุดที่ปิดแล้วใน commit `52a00ce`
+
+- ยืนยัน `META_ROLLOUT_MS = 12 ส.ค. 00:00 ไทย` เป็น intentional grace period ราว 5 ชั่วโมง หลัง deploy metadata จริงประมาณ 19:00 วันที่ 11 เพื่อรองรับ blue-green instance เก่า/ใหม่คาบเกี่ยว
+- เพิ่ม exact known-fail manifest, baseline check script และกติกา release ถาวรใน `CLAUDE.md`
 
 ## แนวทางตรวจเมื่อ Claude ส่งสรุปมา
 
@@ -127,6 +132,7 @@
 | 12 ส.ค. 2026 | Codex | scoring/flow/persona รอบแรก | พบ score bias, เลขสองเจ้าของ, nudge, history/tag/handoff gaps | scoring v4 calibration, persona hardening |
 | 12 ส.ค. 2026 | Codex | `db2fef8` | รับบางส่วน; พบ consult/no-tag false success, history fire-and-forget, stale multi-image test | แก้ใน `5eeff5c` |
 | 12 ส.ค. 2026 | Codex | `5eeff5c` | targeted tests ผ่าน; 4 จุดแก้ตรงข้อเสนอ | C2/C3/H6, C1 card correlation, test baseline, rollout cutoff |
+| 12 ส.ค. 2026 | Codex | `52a00ce` | ยืนยัน grace-period comment; baseline script รันจริง 952/19 และไม่พบ fail ใหม่ | C2/C3/H6, C1 card correlation, หนี้ known-fail 19 ตัว |
 
 ## กติกาการอัปเดตไฟล์นี้
 
