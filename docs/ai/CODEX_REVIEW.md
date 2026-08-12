@@ -89,6 +89,14 @@
 - **Gateway regression ใน `bccf43f`:** `sendNonScanSequenceReply` และ `sendNonScanPushMessage` อ้าง `speakerRoleOverride` โดยไม่ได้ destructure จาก `opts`; Codex reproduce ได้ว่า LINE transport ส่งออกแล้วจึงเกิด `ReferenceError` ทั้งสองเส้น ต้องแก้และเพิ่ม test ก่อน deploy
 - ยังห้ามปลด `consult` กลับเข้า dangling-success จน router coverage วัดจากข้อมูลจริงและ state ผูก handoff ถูก turn
 
+### Review commit `5583238`
+
+- **ปิดแล้ว:** ReferenceError ของ sequence/push; targeted tests รวม persona+gateway ผ่าน 11/11 · gateway wrapper คืนผล และ last-speaker hint เขียนเฉพาะ `sent === true` · mixed/ajarn/unknown ที่มีคำเงินถูก block
+- **Blocker — defer ไม่ถึง deterministic payment:** `tryConsultReply()` คืน `false` เมื่อ retry ยังเสี่ยงและ user มี money intent แต่ caller ของ `consult_amulet`, `send_help_reply` และ `consult_chat` จะไหลต่อเข้า `runGeminiPhrasing()` ใน orchestrator เดิม ไม่ได้ส่งตรงเข้า deterministic payment flow ตาม comment
+- **Blocker — unsolicited admin money ยังผ่าน:** ถ้า retry เปลี่ยนข้อความเป็นเสียง admin ที่มีคำว่า `ผม` + เงิน guard ถือว่าปลอดภัยทันที แม้ลูกค้าถามเฉพาะพลัง; ต้องมี guard อีกแกน `hasMoney && !userMoneyIntent && !paywall/paymentState` เพื่อกันปัญหาต้นเรื่อง “เสนอขายเอง” ไม่ใช่ตรวจแค่ใครพูด
+- **Blocker — neutral fallback สร้าง dangling เอง:** ข้อความ `เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่อีกทีครับ` ถูกส่งแล้วจบรอบโดยไม่มี ajarn follow-up; regex handoff จะจับ และลูกค้าถูกปล่อยให้รอ ต้องใช้ recovery ที่ไม่สัญญา future action หรือส่งคำตอบอาจารย์จริงใน turn เดียวกัน
+- **Test gap:** sequence/push tests ยืนยัน transport + `sent` + no throw แต่ยังไม่ assert ว่า history ได้ `speakerRoleOverride` ถูกต้อง; orchestrator ยังไม่มี branch tests ของ blocked→retry→defer/fallback
+
 ### Object-info gate / concurrent scans
 
 - ไม่บล็อกลูกค้าสแกนชิ้นถัดไประหว่างเกตค้าง เพราะเคยทำให้ลูกค้าสแกนจำนวนมากโดนถามซ้ำหลายรอบ
@@ -135,6 +143,7 @@
 | 12 ส.ค. 2026 | Codex | `5eeff5c` | targeted tests ผ่าน; 4 จุดแก้ตรงข้อเสนอ | C2/C3/H6, C1 card correlation, test baseline, rollout cutoff |
 | 12 ส.ค. 2026 | Codex | `52a00ce` | ยืนยัน grace-period comment; baseline script รันจริง 952/19 และไม่พบ fail ใหม่ | C2/C3/H6, C1 card correlation, หนี้ known-fail 19 ตัว |
 | 12 ส.ค. 2026 | Codex | `bccf43f` persona hardening ระยะแรก | รับทิศทาง แต่พบ gateway ReferenceError, money guard bypass ด้วย `ผม`, unknown ยังเป็น consult และ state ไม่รู้ send/suppress | แก้ก่อน production; C2/C3/H6 ยังเป็น partial |
+| 12 ส.ค. 2026 | Codex | `5583238` | ReferenceError/role guard/send-result แก้จริง; targeted 11/11 ผ่าน แต่ defer routing, unsolicited admin money และ dangling fallback ยังผิด | แก้ 3 logic blockers + เพิ่ม orchestrator branch tests |
 
 ## กติกาการอัปเดตไฟล์นี้
 

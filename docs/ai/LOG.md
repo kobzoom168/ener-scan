@@ -523,3 +523,10 @@
 - sendGatewayReply คืนผล gateway แล้ว · last_speaker เขียนเฉพาะ sent===true (dedupe/suppress ไม่อัปเดต state) · unknown คง tag "consult" ไม่อ้างว่า resolved
 - adversarial tests 2 ชุด (mixed bubble/เส้นผม documented limitation/fallback ไม่มีคำขาย) · suite 957 pass / 19 known-fail เดิม
 - ตกลงตาม Codex: consult ยังไม่ปลดเข้า detector จนกว่า tag ใหม่สะสม 2-3 วัน · H6 ยังเรียก hint ไม่ใช่ state เต็ม (topic/turnId/scanResultId รอบถัดไป) · router ใช้ route/intent เป็นหลัก = งานรอบ mixed-split
+
+## 2026-08-12 | Codex | Review commit 5583238 — gateway ปิด แต่ fallback routing ยังมี 3 blocker
+- ยืนยัน ReferenceError sequence/push ปิดจริง · targeted persona+gateway 11/11 ผ่าน · mixed/ajarn/unknown+เงินถูก block และ state เขียนเฉพาะ sent จริง
+- พบว่า `return false` ใน tryConsultReply ไม่ได้ defer ถึง deterministic payment ตาม comment: caller ไหลต่อเข้า Gemini phrasing ใน orchestrator
+- guard ยังอนุญาต retry ที่เป็น admin+เงิน แม้ user ไม่ได้ถามเงิน จึงยังกัน “เสนอขายเอง” ไม่ครบ; ต้องตรวจ user intent/paywall state แยกจาก speaker role
+- neutral fallback มีคำ “เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่” แต่ไม่มี ajarn follow-up ใน turn เดียวกัน จึงสร้าง dangling handoff/ลูกค้ารอเอง
+- test gap: ยังไม่มี orchestrator branch tests สำหรับ blocked→retry→defer/fallback และ gateway tests ยังไม่ assert persisted metadata · บันทึกใน CODEX_REVIEW; ไม่แก้ runtime/ไม่ deploy
