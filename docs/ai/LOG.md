@@ -537,3 +537,9 @@
 - ③NEUTRAL_RECOVERY_FALLBACK เปลี่ยนเป็น "รบกวนถามเรื่องพลังอีกครั้งได้เลยครับ" — ตัวเก่า ("เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่") match HANDOFF_RE ของ detector ตัวเอง = สร้าง dangling เอง · export HANDOFF_RE + test ล็อกว่า fallback ห้าม match
 - tests เพิ่ม: evaluateMoneyGuard 5 branch + fallback ไม่ match handoff — suite 959 pass / 19 known-fail เดิม · ขึ้น staging
 - ค้างที่ตกลงกับ Codex: assert persisted metadata ของ sequence/push (ต้อง DI ชั้น store = งาน test-mode refactor) · orchestrator integration tests เต็มเส้น (logic แตกเป็น pure function ให้เทสต์แล้วเป็นส่วนใหญ่)
+
+## 2026-08-12 | Codex | Review commit 4460f1d — guard/fallback ผ่าน เหลือ defer contract
+- ยืนยัน evaluateMoneyGuard และ fallback แก้ตรงข้อเสนอ · targeted persona+detector 13/13 ผ่าน · baseline script 959 pass / 19 known fail ไม่มี regression ใหม่
+- typed outcome หยุด fall-through เข้า Gemini phrasing ภายใน orchestrator ได้จริง แต่ `deferTo: deterministic_payment` ไม่มี consumer ใน repo; webhook ทุกจุดอ่านเพียง `.handled` จึงเป็น fallback ตาม branch เดิม ไม่ใช่ explicit payment routing ตามคำอธิบาย
+- เสนอให้ consume deferTo ที่ wrapper/dispatcher จริงพร้อม recursion guard และ integration test end-to-end หรือเปลี่ยน contract ให้ caller จัดการชัดเจน
+- `USER_MONEY_INTENT_RE` เป็น regex ซ้ำที่คำศัพท์แคบกว่าระบบ payment เดิม ควรรับ intent boolean จาก SSOT (`isPaymentCommand`/promo intent/planner) · บันทึกใน CODEX_REVIEW; ไม่แก้ runtime/ไม่ deploy

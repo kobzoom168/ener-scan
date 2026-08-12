@@ -97,6 +97,13 @@
 - **Blocker — neutral fallback สร้าง dangling เอง:** ข้อความ `เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่อีกทีครับ` ถูกส่งแล้วจบรอบโดยไม่มี ajarn follow-up; regex handoff จะจับ และลูกค้าถูกปล่อยให้รอ ต้องใช้ recovery ที่ไม่สัญญา future action หรือส่งคำตอบอาจารย์จริงใน turn เดียวกัน
 - **Test gap:** sequence/push tests ยืนยัน transport + `sent` + no throw แต่ยังไม่ assert ว่า history ได้ `speakerRoleOverride` ถูกต้อง; orchestrator ยังไม่มี branch tests ของ blocked→retry→defer/fallback
 
+### Review commit `4460f1d`
+
+- **ปิดแล้ว:** unsolicited-money guard แยก speaker/timing ถูกทิศ; payment state อนุญาต admin money · neutral fallback ไม่ match handoff และไม่สัญญางานอนาคต · Codex รัน targeted 13/13 และ baseline 959 pass / 19 known-fail ไม่มี regression ใหม่
+- **ยังไม่ปิด — `deferTo` ไม่มี consumer:** orchestrator คืน `{ handled:false, deferTo:"deterministic_payment" }` ครบสาม call sites และไม่ fall through เข้า phrasing ภายในแล้วจริง แต่ค้นทั้ง repoพบ `deferTo` เฉพาะสามจุดที่ return ไม่มี webhook/caller จุดใดอ่านค่า; caller ทุกจุดตรวจเพียง `.handled` แล้วไหลไป deterministic fallback ของ branch ปัจจุบัน ซึ่งไม่ได้รับประกันว่าเป็น payment flow
+- ต้องเลือกอย่างใดอย่างหนึ่ง: (A) ให้ wrapper กลาง consume `deferTo` และเรียก deterministic payment handlerพร้อมกัน recursion หรือ (B) เปลี่ยน contract เป็น outcome ที่ caller แต่ละ insertion point จัดการและมี integration test ยืนยัน customer money turn ได้ price/QR/clarifier เพียงหนึ่งคำตอบ
+- **Intent vocabulary gap:** `USER_MONEY_INTENT_RE` ยังไม่ครอบคำที่ระบบ payment เดิมรู้จักทั้งหมด เช่น `โปร`, `QR/คิวอาร์`, `ซื้อ`, `เพิ่มรอบ`, `ต่อสมาชิก`; ควร reuse SSOT `isPaymentCommand/isPromoInquiryText` หรือส่ง boolean intent จาก webhook/planner แทน regex ชุดใหม่
+
 ### Object-info gate / concurrent scans
 
 - ไม่บล็อกลูกค้าสแกนชิ้นถัดไประหว่างเกตค้าง เพราะเคยทำให้ลูกค้าสแกนจำนวนมากโดนถามซ้ำหลายรอบ
@@ -144,6 +151,7 @@
 | 12 ส.ค. 2026 | Codex | `52a00ce` | ยืนยัน grace-period comment; baseline script รันจริง 952/19 และไม่พบ fail ใหม่ | C2/C3/H6, C1 card correlation, หนี้ known-fail 19 ตัว |
 | 12 ส.ค. 2026 | Codex | `bccf43f` persona hardening ระยะแรก | รับทิศทาง แต่พบ gateway ReferenceError, money guard bypass ด้วย `ผม`, unknown ยังเป็น consult และ state ไม่รู้ send/suppress | แก้ก่อน production; C2/C3/H6 ยังเป็น partial |
 | 12 ส.ค. 2026 | Codex | `5583238` | ReferenceError/role guard/send-result แก้จริง; targeted 11/11 ผ่าน แต่ defer routing, unsolicited admin money และ dangling fallback ยังผิด | แก้ 3 logic blockers + เพิ่ม orchestrator branch tests |
+| 12 ส.ค. 2026 | Codex | `4460f1d` | guard timing/fallback ปิด; targeted 13/13 + baseline 959/19 ผ่าน | `deferTo` ยังไม่มี consumer; intent regex ต้องใช้ payment SSOT |
 
 ## กติกาการอัปเดตไฟล์นี้
 
