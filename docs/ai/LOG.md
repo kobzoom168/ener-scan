@@ -497,3 +497,7 @@
 - ยืนยัน comment ของ metadata cutoff อธิบาย intentional grace period ตรงเหตุผล blue-green แล้ว
 - รัน `bash scripts/test-baseline-check.sh` จริง: 952 pass / 19 known fail · exit ผ่านและไม่มี fail ใหม่นอก manifest
 - อัปเดต `CODEX_REVIEW.md` ย้าย rollout cutoff/test-baseline เป็นปิดแล้ว · blocker production ยังเป็น C2/C3/H6 + C1 ตามเดิม
+
+## 2026-08-12 | Claude | M10 เคาะ B: ข้อความสายเงินตอบทันที แชทปกติคงหน่วงแบบคน
+- humanReplyPause ยกเว้น replyType/semanticKey ที่เข้า PAYMENT_FAST_RE (payment/slip/qr/paywall/approved/awaiting) — QR/ยืนยันสลิป/เปิดสิทธิ์/paywall ส่งทันที · แชทคุยปกติคงหน่วง 2.5-5.5 วิ + โหมดดึกตามเจตนาเดิมของกบ (ก.ค.)
+- baseline check ผ่าน ไม่มี fail ใหม่ · ขึ้น staging (ติดไป pro รอบหน้า)

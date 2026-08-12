@@ -35,7 +35,12 @@ const DEFAULT_SEMANTIC_WINDOW_MS = 22_000;
  * เสี้ยววินาที). Bounds via HUMAN_REPLY_DELAY_MS_MIN/MAX (default 2500–5500),
  * MAX=0 disables. The webhook's "•••" typing indicator covers the wait.
  */
-async function humanReplyPause() {
+/** ข้อความสายเงินตอบทันที (กบเคาะ B, 12 ส.ค. 2026 — Codex M10): QR/สลิป/เปิดสิทธิ์/paywall
+ *  ทุกวินาทีคือโอกาสเปลี่ยนใจ และความไวตรงนี้ไม่ทำให้ persona เสีย (ไม่มีใครคาดว่าแอดมินพิมพ์ QR เอง) */
+const PAYMENT_FAST_RE = /payment|slip|qr|paywall|pay_|approved|awaiting/i;
+
+async function humanReplyPause(replyTypeOrKey = "") {
+  if (PAYMENT_FAST_RE.test(String(replyTypeOrKey))) return;
   const rawMin = process.env.HUMAN_REPLY_DELAY_MS_MIN;
   const rawMax = process.env.HUMAN_REPLY_DELAY_MS_MAX;
   const min = rawMin === undefined || rawMin === "" ? 2500 : Math.max(0, Number(rawMin) || 0);
@@ -292,8 +297,9 @@ export async function sendNonScanReply(opts) {
     };
   }
 
-  // ตอบแบบคน: หน่วงสุ่ม 2.5–5.5 วิ ก่อนส่งทุกข้อความคุย (ลูกค้าเห็น ••• ระหว่างรอ)
-  await humanReplyPause();
+  // ตอบแบบคน: หน่วงสุ่ม 2.5–5.5 วิ ก่อนส่งข้อความคุย (ลูกค้าเห็น ••• ระหว่างรอ)
+  // — ยกเว้นสายเงินตอบทันที (กบเคาะ B 12 ส.ค.)
+  await humanReplyPause(`${rt}:${skLog}`);
 
   const primary = String(text || "").trim();
   const alts = (Array.isArray(alternateTexts) ? alternateTexts : [])
