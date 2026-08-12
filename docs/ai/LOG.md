@@ -501,3 +501,11 @@
 ## 2026-08-12 | Claude | M10 เคาะ B: ข้อความสายเงินตอบทันที แชทปกติคงหน่วงแบบคน
 - humanReplyPause ยกเว้น replyType/semanticKey ที่เข้า PAYMENT_FAST_RE (payment/slip/qr/paywall/approved/awaiting) — QR/ยืนยันสลิป/เปิดสิทธิ์/paywall ส่งทันที · แชทคุยปกติคงหน่วง 2.5-5.5 วิ + โหมดดึกตามเจตนาเดิมของกบ (ก.ค.)
 - baseline check ผ่าน ไม่มี fail ใหม่ · ขึ้น staging (ติดไป pro รอบหน้า)
+
+## 2026-08-12 | Claude | Persona hardening ชิ้นแรก: role router + pre-send money guard + handoff state MVP (staging)
+- กบเคาะเริ่มชุด hardening+เฟส A · เคาะ C ก่อนหน้า: ถอดเสียงอาจารย์จากเคสหลายรูป (voiceStatic ตัดออก ใช้ข้อความแอดมินล้วน)
+- personaRole.util ใหม่: resolveSpeakerRole (admin/ajarn/mixed/unknown จากเส้น "ผม" vs ท่าพูดอาจารย์) + ajarnMoneyRisk (เงินโดยไม่มีเสียงแอดมิน = เสี่ยง) + SAFE_ADMIN_MONEY_FALLBACK · gotcha: regex ผม ห้าม require ช่องว่างนำหน้า (ไทยเขียนติด "เดี๋ยวผม") — baseline check จับ regression นี้ได้เองครั้งแรก ✓
+- orchestrator: consult ขาออกผ่าน guard chain ใหม่ — ajarnMoneyRisk → regenerate 1 ครั้งพร้อมคำสั่งแก้ → ยังเสี่ยง = fallback แอดมินล้วน (AJARN_MONEY_PRESEND_BLOCKED/FALLBACK logs) · เสียงที่ resolve แล้วส่งเป็น speakerRoleOverride เข้า gateway → history/monitor ได้ tag admin/ajarn/mixed จริงแทน "consult" กำกวม (Codex C3) · Telegram alert เดิมกลายเป็นชั้นสำรองตามแผน
+- handoff state MVP: redis persona:last_speaker (TTL 30 นาที) → inject เข้า consult prompt "เสียงเดิมตอบต่อ ไม่ handoff ซ้ำ" (Codex H6 ขั้นแรก — state เต็ม topic/scanResultId รอบถัดไป)
+- gateway: speakerRoleOverride param + sendGatewayReply ส่งผ่าน 2 จุด · test personaRole 3 ตัว · suite 955 pass / 19 known-fail
+- ค้างในชุดนี้: detector ปลด consult กลับเข้าเงื่อนไข (รอ tag ใหม่สะสมก่อน) · C1 thumbnail การ์ดถามข้อมูล · rich menu 6 ช่อง + broadcast (เฟส A ส่วนโครง)

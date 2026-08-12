@@ -12,6 +12,15 @@ import {
 } from "./geminiPhrasingContext.builder.js";
 import { runGeminiPhrasing } from "./geminiPhrasing.service.js";
 import { runGeminiConsult } from "./geminiConsult.service.js";
+import {
+  resolveSpeakerRole,
+  ajarnMoneyRisk,
+  SAFE_ADMIN_MONEY_FALLBACK,
+} from "../personaRole.util.js";
+import { getValue, setLargeValueWithTtl } from "../../../redis/scanV2Redis.js";
+
+/** handoff state MVP: เสียงล่าสุดของบทสนทนา (TTL 30 นาที) */
+const lastSpeakerKey = (uid) => `persona:last_speaker:${uid}`;
 import { logGeminiOrchestrator } from "./geminiFront.telemetry.js";
 import { getGeminiConversationHistory } from "../../../utils/conversationHistory.util.js";
 
@@ -181,22 +190,62 @@ export async function runGeminiFrontOrchestrator(ctx) {
       Used for consult/help/chit-chat so the cheap model never writes to the
       customer directly unless consult fails. */
   async function tryConsultReply(via) {
+    const lastSpeaker = await getValue(lastSpeakerKey(ctx.userId)).catch(() => null);
     const consultText = await runGeminiConsult({
       userId: ctx.userId,
       userText: ctx.text,
       conversationHistory,
+      lastSpeaker: lastSpeaker || null,
     });
     if (!consultText) return false;
-    const guardedConsult = await guardStaleNoImageClaim(
+    let guardedConsult = await guardStaleNoImageClaim(
       guardEntitlementClaims(consultText.slice(0, 1800), via),
     );
+    // pre-send money guard (Codex C2 — กบเคาะ 12 ส.ค.): เสียงอาจารย์+เงิน ห้ามถึงลูกค้า
+    // → regenerate 1 ครั้งพร้อมคำสั่งแก้ · ยังเสี่ยง = fallback แอดมินล้วน (ไม่มีเลข)
+    if (ajarnMoneyRisk(guardedConsult)) {
+      console.warn(
+        JSON.stringify({
+          event: "AJARN_MONEY_PRESEND_BLOCKED",
+          via,
+          attempt: 1,
+          sample: guardedConsult.slice(0, 120),
+        }),
+      );
+      const retry = await runGeminiConsult({
+        userId: ctx.userId,
+        userText: ctx.text,
+        conversationHistory,
+        lastSpeaker: lastSpeaker || null,
+        extraDirective:
+          "คำตอบก่อนหน้าของคุณผิดกติกาใหญ่: พูดเรื่องเงิน/ค่าครู/สิทธิ์โดยไม่ใช่เสียงแอดมิน — ตอบใหม่: ส่วนที่เป็นเงินต้องพูดเป็นเสียงแอดมิน (เรียกตัวเองว่า ผม) เท่านั้น หรือถ้าเงินไม่จำเป็นต่อคำถาม ให้ตัดเรื่องเงินออกทั้งหมด",
+      });
+      const retryGuarded = retry
+        ? await guardStaleNoImageClaim(guardEntitlementClaims(retry.slice(0, 1800), via))
+        : null;
+      if (retryGuarded && !ajarnMoneyRisk(retryGuarded)) {
+        guardedConsult = retryGuarded;
+      } else {
+        console.warn(
+          JSON.stringify({ event: "AJARN_MONEY_PRESEND_FALLBACK", via }),
+        );
+        guardedConsult = SAFE_ADMIN_MONEY_FALLBACK;
+      }
+    }
+    // role router (Codex C3): resolve เสียงจริงก่อนส่ง — history/monitor ได้ tag ตรง
+    const speaker = resolveSpeakerRole(guardedConsult);
     await ctx.sendGatewayReply({
       replyType: "gemini_front_consult",
       semanticKey: `gemini_front_consult:${phase1}`,
       text: guardedConsult,
       alternateTexts: [],
+      speakerRoleOverride: speaker === "unknown" ? "consult" : speaker,
     });
-    logGeminiOrchestrator({ mode: "active", handled: true, via });
+    // จำเสียงล่าสุด 30 นาที (handoff state MVP)
+    if (speaker === "ajarn" || speaker === "admin") {
+      void setLargeValueWithTtl(lastSpeakerKey(ctx.userId), speaker, 1800).catch(() => {});
+    }
+    logGeminiOrchestrator({ mode: "active", handled: true, via, speaker });
     return true;
   }
 

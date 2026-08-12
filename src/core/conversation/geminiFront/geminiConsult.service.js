@@ -101,6 +101,15 @@ export async function runGeminiConsult(p) {
     kbContext,
     axisTop,
   });
+  // handoff state MVP (persona hardening 12 ส.ค.): บอกโมเดลว่ารอบก่อนใครพูดอยู่
+  // — ต่อเนื่องเรื่องเดิมไม่ต้อง handoff ซ้ำ / เพิ่งเป็นแอดมิน ค่อยเปิด handoff เมื่อเข้าเรื่องพลัง
+  if (p.lastSpeaker) {
+    prompt += `\n\nสถานะบทสนทนา: ข้อความก่อนหน้าของเราเป็นเสียง "${p.lastSpeaker}" — ถ้าลูกค้าถามต่อเนื่องเรื่องเดิม ให้เสียงเดิมตอบต่อทันที ไม่ต้องเกริ่น handoff ซ้ำ · เปลี่ยนหัวข้อเป็นเงิน/ระบบ = เสียงแอดมิน (ผม)`;
+  }
+  // pre-send guard สั่งแก้ (retry ครั้งเดียวจาก orchestrator)
+  if (p.extraDirective) {
+    prompt += `\n\nข้อกำหนดเพิ่มรอบนี้ (สำคัญสุด): ${p.extraDirective}`;
+  }
   // ชั้นฟรี: ถามคำตอบคำ (กบ 16 ก.ค.) — ตอบตรงคำถาม สั้นสุด ไม่ขยายความเอง
   // (ลูกค้าแพ็กแอคทีฟใช้กติกา 2-4 บรรทัดใน system ตามเดิม = ดูแลเต็ม)
   if (!paidActive) {

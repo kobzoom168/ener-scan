@@ -1009,7 +1009,7 @@ async function invokePhase1GeminiFromSnapshot({
     pendingPaymentStatus: snapshot.pendingStatus || null,
     selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
     noProgressStreak: snapshot.activeResolved.noProgressStreak ?? 0,
-    sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts }) => {
+    sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts, speakerRoleOverride }) => {
       await sendNonScanReply({
         client,
         userId,
@@ -1018,6 +1018,7 @@ async function invokePhase1GeminiFromSnapshot({
         semanticKey,
         text,
         alternateTexts: alternateTexts || [],
+        speakerRoleOverride: speakerRoleOverride || null,
       });
     },
     delegates,
@@ -4467,7 +4468,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       pendingPaymentStatus: pendingStatus || null,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
       noProgressStreak: activeResolved.noProgressStreak ?? 0,
-      sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts }) => {
+      sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts, speakerRoleOverride }) => {
         await sendNonScanReply({
           client,
           userId,
@@ -4476,6 +4477,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey,
           text,
           alternateTexts: alternateTexts || [],
+          speakerRoleOverride: speakerRoleOverride || null,
         });
       },
       delegates: {
