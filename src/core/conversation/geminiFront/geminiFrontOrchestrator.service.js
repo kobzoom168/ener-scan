@@ -15,7 +15,8 @@ import { runGeminiConsult } from "./geminiConsult.service.js";
 import {
   resolveSpeakerRole,
   ajarnMoneyRisk,
-  SAFE_ADMIN_MONEY_FALLBACK,
+  USER_MONEY_INTENT_RE,
+  NEUTRAL_RECOVERY_FALLBACK,
 } from "../personaRole.util.js";
 import { getValue, setLargeValueWithTtl } from "../../../redis/scanV2Redis.js";
 
@@ -225,24 +226,34 @@ export async function runGeminiFrontOrchestrator(ctx) {
         : null;
       if (retryGuarded && !ajarnMoneyRisk(retryGuarded)) {
         guardedConsult = retryGuarded;
+      } else if (USER_MONEY_INTENT_RE.test(String(ctx.text || ""))) {
+        // ลูกค้าถามเรื่องเงินจริง → ไม่ตอบผ่าน LLM เลย คืน false ให้ deterministic
+        // payment flow ชั้นล่างจัดการ (ปุ่ม/QR/clarifier) — Codex รอบ 4 ข้อ 4
+        console.warn(
+          JSON.stringify({ event: "AJARN_MONEY_PRESEND_DEFER_TO_PAYMENT_FLOW", via }),
+        );
+        return false;
       } else {
+        // ลูกค้าไม่ได้ถามเงิน แต่โมเดลพยายามขาย → recovery กลาง ๆ ห้ามขายซ้ำ
         console.warn(
           JSON.stringify({ event: "AJARN_MONEY_PRESEND_FALLBACK", via }),
         );
-        guardedConsult = SAFE_ADMIN_MONEY_FALLBACK;
+        guardedConsult = NEUTRAL_RECOVERY_FALLBACK;
       }
     }
     // role router (Codex C3): resolve เสียงจริงก่อนส่ง — history/monitor ได้ tag ตรง
     const speaker = resolveSpeakerRole(guardedConsult);
-    await ctx.sendGatewayReply({
+    const sendRes = await ctx.sendGatewayReply({
       replyType: "gemini_front_consult",
       semanticKey: `gemini_front_consult:${phase1}`,
       text: guardedConsult,
       alternateTexts: [],
+      // unknown = surface resolve ไม่ได้ → คง tag consult ตามจริง ไม่อ้างว่า resolved
       speakerRoleOverride: speaker === "unknown" ? "consult" : speaker,
     });
-    // จำเสียงล่าสุด 30 นาที (handoff state MVP)
-    if (speaker === "ajarn" || speaker === "admin") {
+    // จำเสียงล่าสุด 30 นาที (handoff hint — ยังไม่ใช่ state เต็ม topic/turnId/scanResultId)
+    // เขียนเฉพาะข้อความที่ส่งจริง — dedupe/suppress ห้ามอัปเดต state (Codex รอบ 4 ข้อ 6)
+    if ((speaker === "ajarn" || speaker === "admin") && sendRes?.sent === true) {
       void setLargeValueWithTtl(lastSpeakerKey(ctx.userId), speaker, 1800).catch(() => {});
     }
     logGeminiOrchestrator({ mode: "active", handled: true, via, speaker });

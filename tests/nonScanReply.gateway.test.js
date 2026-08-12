@@ -159,3 +159,44 @@ test("isLineStickerPlaceholderText: LINE-style placeholders", () => {
   assert.equal(isLineStickerPlaceholderText("(note)"), false);
   assert.equal(isLineStickerPlaceholderText("(Content Cony)"), false);
 });
+
+test("sequence + push success-path พร้อม speakerRoleOverride: ไม่ throw, sent จริง (regression ReferenceError 12 ส.ค.)", async () => {
+  process.env.HUMAN_REPLY_DELAY_MS_MAX = "0";
+  const { sendNonScanSequenceReply, sendNonScanPushMessage } = await import(
+    "../src/services/nonScanReply.gateway.js"
+  );
+  const mk = () => {
+    const payloads = [];
+    return {
+      payloads,
+      replyMessage: async (_t, msg) => { payloads.push(msg); },
+      pushMessage: async (_to, msg) => { payloads.push(msg); },
+    };
+  };
+  const c1 = mk();
+  const uid1 = `u_seq_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const seqRes = await sendNonScanSequenceReply({
+    client: c1,
+    userId: uid1,
+    replyToken: "tok-seq",
+    replyType: "seq_test",
+    semanticKey: "seq_test",
+    messages: ["บรรทัดหนึ่ง", "บรรทัดสอง"],
+    speakerRoleOverride: "admin",
+  });
+  assert.equal(seqRes.sent, true);
+  assert.ok(c1.payloads.length >= 1);
+
+  const c2 = mk();
+  const uid2 = `u_push_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const pushRes = await sendNonScanPushMessage({
+    client: c2,
+    userId: uid2,
+    replyType: "push_test",
+    semanticKey: "push_test",
+    text: "ข้อความ push ทดสอบ",
+    speakerRoleOverride: "ajarn",
+  });
+  assert.equal(pushRes.sent, true);
+  assert.ok(c2.payloads.length >= 1);
+});

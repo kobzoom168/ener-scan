@@ -534,6 +534,7 @@ export async function sendNonScanSequenceReply(opts) {
     semanticKey,
     messages,
     alternateSequences = [],
+    speakerRoleOverride = null,
   } = opts;
 
   const uid = String(userId || "").trim();
@@ -750,6 +751,7 @@ export async function sendNonScanPushMessage(opts) {
       semanticKey,
       text,
       alternateTexts = [],
+      speakerRoleOverride = null,
       /** @type {{ type: "sticker", packageId: string, stickerId: string } | null | undefined} */
       trailingStickerMessage = null,
     } = opts;

@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   resolveSpeakerRole,
   ajarnMoneyRisk,
-  SAFE_ADMIN_MONEY_FALLBACK,
 } from "../src/core/conversation/personaRole.util.js";
 
 test("resolveSpeakerRole: แยก admin/ajarn/mixed/unknown ถูก", () => {
@@ -28,7 +27,27 @@ test("ajarnMoneyRisk: เงินโดยไม่มีเสียงแอ�
   assert.equal(ajarnMoneyRisk("อาจารย์มองว่าเหมาะกับวันเจรจาครับ"), false);
 });
 
-test("fallback ปลอดภัย: เสียงแอดมิน ไม่มีตัวเลข ไม่เสี่ยงเอง", () => {
-  assert.equal(ajarnMoneyRisk(SAFE_ADMIN_MONEY_FALLBACK), false);
-  assert.equal(resolveSpeakerRole(SAFE_ADMIN_MONEY_FALLBACK), "admin");
+
+test("adversarial (Codex รอบ 4): mixed/unknown/ajarn + เงิน = block ทั้งหมด", async () => {
+  const { ajarnMoneyRisk: risk } = await import("../src/core/conversation/personaRole.util.js");
+  // mixed bubble (อาจารย์+แอดมินปนกัน) + เงิน = block
+  assert.equal(risk("อาจารย์มองว่าเด่นเมตตาครับ ส่วนค่าครูผมแจ้งให้ครับ"), true);
+  // unknown + เงิน = block
+  assert.equal(risk("ชิ้นนี้เด่นเมตตา ค่าครู 49 บาทเปิดดูลึกได้ครับ"), true);
+  // ajarn + เงิน = block
+  assert.equal(risk("อาจารย์แนะนำว่าเปิดค่าครู 49 บาทดูต่อครับ"), true);
+  // admin ล้วน + เงิน = ผ่าน (ตามกติกา resolvedRole === admin)
+  assert.equal(risk("ค่าครู 49 บาทครับ เดี๋ยวผมส่งวิธีโอนให้"), false);
+  // ⚠️ ข้อจำกัดที่รู้ (documented): "เส้นผม" ทำให้ resolve เป็น admin → เงินผ่านได้
+  // แลกกับไม่บล็อกคำตอบแอดมินจริง — จะแม่นขึ้นเมื่อ router ใช้ route/intent เป็นหลัก
+  assert.equal(risk("สระผมด้วยน้ำมนต์ แล้วค่าครู 49 บาทครับ"), false);
+});
+
+test("fallback ใหม่: neutral ไม่มีคำเงิน ไม่ชวนขาย", async () => {
+  const { NEUTRAL_RECOVERY_FALLBACK, ajarnMoneyRisk: risk, USER_MONEY_INTENT_RE } =
+    await import("../src/core/conversation/personaRole.util.js");
+  assert.equal(risk(NEUTRAL_RECOVERY_FALLBACK), false);
+  assert.ok(!/(บาท|ค่าครู|แพ็ก|สิทธิ์|ตัวเลือก)/.test(NEUTRAL_RECOVERY_FALLBACK));
+  assert.ok(USER_MONEY_INTENT_RE.test("ค่าครูกี่บาทครับ"));
+  assert.ok(!USER_MONEY_INTENT_RE.test("องค์นี้เหมาะกับงานไหม"));
 });

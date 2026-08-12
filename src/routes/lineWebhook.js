@@ -1010,7 +1010,7 @@ async function invokePhase1GeminiFromSnapshot({
     selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
     noProgressStreak: snapshot.activeResolved.noProgressStreak ?? 0,
     sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts, speakerRoleOverride }) => {
-      await sendNonScanReply({
+      return await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
@@ -4469,7 +4469,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
       noProgressStreak: activeResolved.noProgressStreak ?? 0,
       sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts, speakerRoleOverride }) => {
-        await sendNonScanReply({
+        return await sendNonScanReply({
           client,
           userId,
           replyToken: event.replyToken,

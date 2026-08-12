@@ -515,3 +515,11 @@
 - C2 ยัง bypass ได้ด้วยคำว่า `ผม`: mixed เช่นอาจารย์อ่านพลังแล้วแอดมินพูดเงินใน bubble เดียวผ่าน guard และ teacher ที่ใช้สรรพนามผิดก็ผ่าน · fallback ยังชวน “สนใจแบบไหน/มีตัวเลือก” ซึ่งอาจทำซ้ำเหตุขายของเอง
 - C3 ยัง tag `unknown` กลับเป็น `consult`; คำอ่านทั่วไปไม่มี marker อาจ unknown ได้ จึงยังไม่ใช่ทุก consult มี role จริง
 - H6 เป็น last-speaker hint ไม่ใช่ handoff state เต็ม และ wrapper ไม่คืน gateway result จึง set state ได้แม้ข้อความถูก suppress · บันทึกข้อเสนอไว้ใน CODEX_REVIEW; ไม่แก้ runtime และไม่ deploy
+
+## 2026-08-12 | Claude | Codex รอบ 4 (bccf43f) — แก้ blocker ครบ 7 ข้อ
+- 🔴 ReferenceError speakerRoleOverride ใน sequence/push (ผม replace ทั้งไฟล์แต่เพิ่ม param ฟังก์ชันเดียว — error หลัง LINE ส่งสำเร็จ = history หาย/เสี่ยง retry ซ้ำ): destructure ครบทั้ง 2 ฟังก์ชัน + success-path tests ทั้งสองเส้น
+- guard เข้มขึ้น: ajarnMoneyRisk = มีคำเงิน && resolveSpeakerRole(text) !== "admin" — mixed/ajarn/unknown โดน block หมด (เดิมเช็คแค่มีคำ "ผม" mixed หลุด)
+- fallback แยกตาม intent: ลูกค้าถามเงินจริง → คืน false ให้ deterministic payment flow ตอบ (ไม่ผ่าน LLM) · ไม่ได้ถามเงิน → NEUTRAL_RECOVERY_FALLBACK กลาง ๆ ไม่มีคำขาย (เดิม fallback ยังชวนขาย = ทำซ้ำปัญหาแค่เปลี่ยนคนพูด — Codex ชี้ถูก)
+- sendGatewayReply คืนผล gateway แล้ว · last_speaker เขียนเฉพาะ sent===true (dedupe/suppress ไม่อัปเดต state) · unknown คง tag "consult" ไม่อ้างว่า resolved
+- adversarial tests 2 ชุด (mixed bubble/เส้นผม documented limitation/fallback ไม่มีคำขาย) · suite 957 pass / 19 known-fail เดิม
+- ตกลงตาม Codex: consult ยังไม่ปลดเข้า detector จนกว่า tag ใหม่สะสม 2-3 วัน · H6 ยังเรียก hint ไม่ใช่ state เต็ม (topic/turnId/scanResultId รอบถัดไป) · router ใช้ route/intent เป็นหลัก = งานรอบ mixed-split

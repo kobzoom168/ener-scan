@@ -31,15 +31,21 @@ export function resolveSpeakerRole(text) {
 }
 
 /**
- * ความเสี่ยง "อาจารย์พูดเงิน": มีคำการเงิน แต่ไม่มีเสียงแอดมิน (ผม) กำกับเลย
- * — กติกา: ทุกการพูดเรื่องเงินต้องออกจากปากแอดมินเท่านั้น
+ * ความเสี่ยง "เงินนอกปากแอดมิน" (Codex รอบ 4): มีคำการเงิน และเสียงที่ resolve ได้
+ * ไม่ใช่ admin ล้วน — mixed/ajarn/unknown ที่มีคำเงิน = block ทั้งหมด
+ * (mixed = อาจารย์กับแอดมินปน bubble เดียว ก็ขัดกติกา ต้องแยกก่อน)
  * @param {string} text
  */
 export function ajarnMoneyRisk(text) {
   const t = String(text || "");
-  return AJARN_MONEY_RE.test(t) && !ADMIN_SELF_RE.test(t);
+  if (!AJARN_MONEY_RE.test(t)) return false;
+  return resolveSpeakerRole(t) !== "admin";
 }
 
-/** fallback ปลอดภัยเมื่อ regenerate แล้วยังเสี่ยง — เสียงแอดมินล้วน ไม่มีตัวเลข */
-export const SAFE_ADMIN_MONEY_FALLBACK =
-  "เรื่องค่าครูเดี๋ยวผมดูแลให้เองครับ สนใจแบบไหนบอกผมได้เลย เดี๋ยวมีตัวเลือกเด้งให้แตะครับ";
+/** intent เงินฝั่งลูกค้า — ใช้เลือกทาง fallback เมื่อ guard ตัดคำตอบทิ้ง */
+export const USER_MONEY_INTENT_RE =
+  /(ราคา|กี่บาท|ค่าครู|จ่าย|โอน|แพ็ก|เปิดสิทธิ์|สลิป|ชำระ|สมัคร)/;
+
+/** neutral recovery — ห้ามชวนขาย (guard เพิ่งจับว่าโมเดลพยายามขาย อย่าขายซ้ำแค่เปลี่ยนคนพูด) */
+export const NEUTRAL_RECOVERY_FALLBACK =
+  "เมื่อกี้ตอบคลาดเคลื่อนไปนิดครับ เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่อีกทีครับ";
