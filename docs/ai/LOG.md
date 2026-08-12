@@ -530,3 +530,10 @@
 - guard ยังอนุญาต retry ที่เป็น admin+เงิน แม้ user ไม่ได้ถามเงิน จึงยังกัน “เสนอขายเอง” ไม่ครบ; ต้องตรวจ user intent/paywall state แยกจาก speaker role
 - neutral fallback มีคำ “เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่” แต่ไม่มี ajarn follow-up ใน turn เดียวกัน จึงสร้าง dangling handoff/ลูกค้ารอเอง
 - test gap: ยังไม่มี orchestrator branch tests สำหรับ blocked→retry→defer/fallback และ gateway tests ยังไม่ assert persisted metadata · บันทึกใน CODEX_REVIEW; ไม่แก้ runtime/ไม่ deploy
+
+## 2026-08-12 | Claude | Codex รอบ 5 (5583238) — แก้ 3 logic blockers
+- ①tryConsultReply เปลี่ยนเป็น typed outcome ("sent"/"defer_payment"/false) — defer_payment ออกจาก orchestrator ทันทีทั้ง 3 เส้น (consult/consult_help/consult_chat) ไม่ไหลลง Gemini phrasing อีก ให้ deterministic payment flow ชั้น webhook ตอบ
+- ②guard สองชั้น: evaluateMoneyGuard — ชั้นคนพูด (เงินต้องเป็นเสียงแอดมิน) + ชั้นจังหวะ (unsolicited: ลูกค้าไม่ได้ถามเงิน + ไม่อยู่ paywall/payment state = block แม้เสียงแอดมิน พร้อม directive "ตัดเงินออกทั้งหมด") — อุดช่อง "guard แค่ย้ายการขายไปให้อีกคนพูด" ที่ Codex ชี้
+- ③NEUTRAL_RECOVERY_FALLBACK เปลี่ยนเป็น "รบกวนถามเรื่องพลังอีกครั้งได้เลยครับ" — ตัวเก่า ("เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่") match HANDOFF_RE ของ detector ตัวเอง = สร้าง dangling เอง · export HANDOFF_RE + test ล็อกว่า fallback ห้าม match
+- tests เพิ่ม: evaluateMoneyGuard 5 branch + fallback ไม่ match handoff — suite 959 pass / 19 known-fail เดิม · ขึ้น staging
+- ค้างที่ตกลงกับ Codex: assert persisted metadata ของ sequence/push (ต้อง DI ชั้น store = งาน test-mode refactor) · orchestrator integration tests เต็มเส้น (logic แตกเป็น pure function ให้เทสต์แล้วเป็นส่วนใหญ่)

@@ -46,6 +46,24 @@ export function ajarnMoneyRisk(text) {
 export const USER_MONEY_INTENT_RE =
   /(ราคา|กี่บาท|ค่าครู|จ่าย|โอน|แพ็ก|เปิดสิทธิ์|สลิป|ชำระ|สมัคร)/;
 
-/** neutral recovery — ห้ามชวนขาย (guard เพิ่งจับว่าโมเดลพยายามขาย อย่าขายซ้ำแค่เปลี่ยนคนพูด) */
+/** neutral recovery — ห้ามชวนขาย และห้ามสัญญาว่าจะไปถามอาจารย์ (Codex รอบ 5:
+ *  ประโยค "เดี๋ยวเรียนถามอาจารย์ให้" ไม่มีคำตอบตามจริง = สร้าง dangling handoff เอง) */
 export const NEUTRAL_RECOVERY_FALLBACK =
-  "เมื่อกี้ตอบคลาดเคลื่อนไปนิดครับ เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่อีกทีครับ";
+  "เมื่อกี้คำตอบคลาดเคลื่อนไปครับ รบกวนถามเรื่องพลังอีกครั้งได้เลยครับ";
+
+/**
+ * Guard เงินสองชั้น (Codex รอบ 5):
+ *  ชั้น 1 ใครพูด — เงินต้องออกจากเสียงแอดมินเท่านั้น (mixed/ajarn/unknown = block)
+ *  ชั้น 2 ถูกจังหวะไหม — ลูกค้าไม่ได้ถามเงิน + ไม่ได้อยู่ paywall/payment state
+ *  = เสนอขายเอง block แม้เสียงแอดมิน
+ * @param {string} text
+ * @param {{ userMoneyIntent?: boolean, inPaymentState?: boolean }} [ctx]
+ * @returns {{ ok: true } | { ok: false, reason: "wrong_speaker" | "unsolicited" }}
+ */
+export function evaluateMoneyGuard(text, { userMoneyIntent = false, inPaymentState = false } = {}) {
+  const t = String(text || "");
+  if (!AJARN_MONEY_RE.test(t)) return { ok: true };
+  if (resolveSpeakerRole(t) !== "admin") return { ok: false, reason: "wrong_speaker" };
+  if (!userMoneyIntent && !inPaymentState) return { ok: false, reason: "unsolicited" };
+  return { ok: true };
+}

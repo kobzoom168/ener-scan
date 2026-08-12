@@ -51,3 +51,28 @@ test("fallback ใหม่: neutral ไม่มีคำเงิน ไม่
   assert.ok(USER_MONEY_INTENT_RE.test("ค่าครูกี่บาทครับ"));
   assert.ok(!USER_MONEY_INTENT_RE.test("องค์นี้เหมาะกับงานไหม"));
 });
+
+test("evaluateMoneyGuard สองชั้น (Codex รอบ 5): ผิดคนพูด / ผิดจังหวะ / ถูกทั้งคู่", async () => {
+  const { evaluateMoneyGuard } = await import("../src/core/conversation/personaRole.util.js");
+  const adminMoney = "ค่าครู 49 บาทครับ เดี๋ยวผมส่งวิธีโอนให้";
+  // ลูกค้าถามเงิน + แอดมินพูด = ผ่าน
+  assert.deepEqual(evaluateMoneyGuard(adminMoney, { userMoneyIntent: true }), { ok: true });
+  // อยู่ paywall state + แอดมินพูด = ผ่าน (ระบบพามาถึงจุดจ่ายแล้ว)
+  assert.deepEqual(evaluateMoneyGuard(adminMoney, { inPaymentState: true }), { ok: true });
+  // ลูกค้าถามพลัง + แอดมินพูดเงินเอง = unsolicited block (ขายเองแม้เสียงถูก)
+  assert.deepEqual(evaluateMoneyGuard(adminMoney, {}), { ok: false, reason: "unsolicited" });
+  // ลูกค้าถามเงิน แต่เสียงไม่ใช่แอดมิน = wrong_speaker block
+  assert.deepEqual(
+    evaluateMoneyGuard("อาจารย์แนะนำค่าครู 49 บาทครับ", { userMoneyIntent: true }),
+    { ok: false, reason: "wrong_speaker" },
+  );
+  // ไม่มีเงินเลย = ผ่านทุกบริบท
+  assert.deepEqual(evaluateMoneyGuard("อาจารย์มองว่าเด่นเมตตาครับ", {}), { ok: true });
+});
+
+test("neutral fallback ต้องไม่สร้าง dangling handoff เอง (ไม่ match HANDOFF_RE)", async () => {
+  const { NEUTRAL_RECOVERY_FALLBACK } = await import("../src/core/conversation/personaRole.util.js");
+  const { HANDOFF_RE } = await import("../src/services/chatQualityDeterministic.util.js");
+  assert.ok(!HANDOFF_RE.test(NEUTRAL_RECOVERY_FALLBACK));
+  assert.ok(!/(บาท|ค่าครู|แพ็ก|สิทธิ์)/.test(NEUTRAL_RECOVERY_FALLBACK));
+});
