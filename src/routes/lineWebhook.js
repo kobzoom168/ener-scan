@@ -1906,10 +1906,15 @@ async function handlePaymentCommandTextRoute({
   }
 
   const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
-  // เครดิตอัปเกรด: เพิ่งจ่ายแพ็กเริ่มต้นภายในกำหนด → รายเดือนหักให้อัตโนมัติ (299→250)
+  // เครดิตอัปเกรด Spend-to-upgrade: พิมพ์ "จ่าย 399" ตอนมีเครดิตวันนี้ → หักให้อัตโนมัติ
+  // (เคสจริง 12 ส.ค.: เงื่อนไขเดิมเช็ค unlimited ของแพ็ก 299 ที่เลิกขาย → 399/30ครั้ง
+  // ไม่เข้าเงื่อนไข บิลเต็มราคาทั้งที่ข้อเสนอบอกลูกค้าว่าเหลือ 350 → ลูกค้าโอน 350 แล้วระบบงง)
   let upgradeCredit = null;
-  if (isUnlimitedScanCount(paidPackage.scanCount)) {
-    upgradeCredit = await getUpgradeCreditForLineUser(userId).catch(() => null);
+  {
+    const credit = await getUpgradeCreditForLineUser(userId).catch(() => null);
+    if (credit && String(credit.monthlyPkgKey) === String(paidPackage.key)) {
+      upgradeCredit = credit;
+    }
   }
   const payAmountThb = upgradeCredit ? upgradeCredit.payThb : paidPackage.priceThb;
   if (upgradeCredit) {

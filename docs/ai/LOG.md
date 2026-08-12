@@ -458,3 +458,9 @@
 
 ## 2026-08-11 | Claude | audit fixes ขึ้น Pro (กบสั่ง)
 - sync 7 ไฟล์ → main → deploy pro healthy · verify รายงานลูกค้าจริงล่าสุด: เกรดสเกล/fill both/พ.ศ./44px/JSON-LD ครบ
+
+## 2026-08-12 | Claude | เคสคุณชิตโอน 350 + แก้บั๊ก Spend-to-upgrade ทั้งสาย
+- เคสจริง: ระบบเสนอ "อัป 399 หัก 49 เหลือ 350" → ลูกค้าพิมพ์ "จ่าย 399" ได้บิลเต็ม 399 → โอน 350 → EasySlip ตัดเป็น mismatch เข้า manual review + LIFF เปิดบิล 49 ซ้อน → กบสั่งอนุมัติ: Claude รัน switchPendingPaymentPackageByAdmin + markPaymentApprovedAndUnlock ใน container pro (PAY-55EF6029 → แพ็ก 399, 30 ครั้งถึง 11 ก.ย.) + push อธิบายสั้น "350+49 = 399 ครบพอดี เปิดสิทธิ์แล้ว"
+- ราก 3 บั๊ก แก้แล้ว (staging): ①lineWebhook "จ่าย 399" เช็คเครดิตด้วยเงื่อนไข isUnlimited ของแพ็ก 299 ที่เลิกขาย → เปลี่ยนเป็น match แพ็กเป้าหมายของเครดิต ②liff.routes เงื่อนไข scanCount>=999999 ตายแบบเดียวกัน → แก้เหมือนกัน ③EasySlip ยอดไม่ตรง = return invalid ตัดจบก่อนถึง logic สลับแพ็ก (ทำ auto-switch 49→149 เดิมตายด้วย) → เปลี่ยนเป็น passthrough verified พร้อมยอดจริง ให้ evaluate จับ mismatch → เข้าตัวสลับแพ็กตามยอด + branch ใหม่: ยอด = ราคาแพ็กใหญ่−เครดิตวันนี้ → สลับเป็นแพ็กใหญ่ expected=ยอดหัก แล้ว auto-approve (SLIP_UPGRADE_CREDIT_MATCHED)
+- นโยบายที่คุยกับกบ: ยอดขาดจริงไม่ auto-approve (ค้าง manual review เหมือนเดิม) · ระบบยังไม่รวมยอดหลายสลิปต่อบิล = เคสโอนเพิ่มต้องจบด้วยมือ admin (top-up flow ไว้คิวหลัง) · ค้างเล็ก: ข้อความแจ้งลูกค้าตอน mismatch ควรบอกยอดขาด/เกิน
+- npm test 949/20 = baseline · ขึ้น staging แล้ว รอกบสั่งขึ้น pro
