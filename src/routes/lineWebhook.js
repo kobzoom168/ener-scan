@@ -151,6 +151,7 @@ import {
   sendNonScanPaymentQrInstructions,
   sendNonScanPushMessage,
 } from "../services/nonScanReply.gateway.js";
+import { consumeOrchestratorOutcome } from "../core/conversation/personaRole.util.js";
 import {
   logMultiImageGroupRejected,
   sendMultiImageRejectionViaGateway,
@@ -1001,6 +1002,8 @@ async function invokePhase1GeminiFromSnapshot({
     userId,
     text,
     lowerText,
+    // SSOT intent (Codex รอบ 6) · เส้นนี้อยู่ใน payment route แล้ว — defer ไม่ consume กัน recursion
+    userMoneyIntent: isPaymentCommand(text, lowerText) || isPromoInquiryText(text),
     phase1State: phase1GeminiKey,
     conversationOwner: snapshot.geminiConversationOwner,
     paymentState: snapshot.paymentState,
@@ -4456,10 +4459,11 @@ async function handleTextMessage({ client, event, userId, session }) {
       canonicalStateOwner,
     });
     if (!phase1GeminiKey) return { handled: false };
-    return runGeminiFrontOrchestrator({
+    const orchRes = await runGeminiFrontOrchestrator({
       userId,
       text,
       lowerText,
+      userMoneyIntent: isPaymentCommand(text, lowerText) || isPromoInquiryText(text),
       phase1State: phase1GeminiKey,
       conversationOwner: geminiConversationOwner,
       paymentState,
@@ -4713,6 +4717,22 @@ async function handleTextMessage({ client, event, userId, session }) {
           return true;
         },
       },
+    });
+    // Codex รอบ 6: deferTo ต้องมีผู้รับจริง — defer_payment → เรียก payment route
+    // เดิม (SSOT) ด้วย forcePaymentIntent แล้วปิด turn · recursion guard: payment
+    // route ใช้ snapshot ของตัวเอง ไม่วนกลับมา wrapper นี้
+    return await consumeOrchestratorOutcome(orchRes, {
+      runDeterministicPayment: () =>
+        handlePaymentCommandTextRoute({
+          client,
+          event,
+          userId,
+          session,
+          text,
+          lowerText,
+          isPaywallGateWithPendingScan,
+          forcePaymentIntent: true,
+        }),
     });
   };
 

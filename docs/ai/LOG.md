@@ -543,3 +543,9 @@
 - typed outcome หยุด fall-through เข้า Gemini phrasing ภายใน orchestrator ได้จริง แต่ `deferTo: deterministic_payment` ไม่มี consumer ใน repo; webhook ทุกจุดอ่านเพียง `.handled` จึงเป็น fallback ตาม branch เดิม ไม่ใช่ explicit payment routing ตามคำอธิบาย
 - เสนอให้ consume deferTo ที่ wrapper/dispatcher จริงพร้อม recursion guard และ integration test end-to-end หรือเปลี่ยน contract ให้ caller จัดการชัดเจน
 - `USER_MONEY_INTENT_RE` เป็น regex ซ้ำที่คำศัพท์แคบกว่าระบบ payment เดิม ควรรับ intent boolean จาก SSOT (`isPaymentCommand`/promo intent/planner) · บันทึกใน CODEX_REVIEW; ไม่แก้ runtime/ไม่ deploy
+
+## 2026-08-12 | Claude | Codex รอบ 6 (4460f1d) — ปิด blocker สุดท้าย: deferTo มีผู้รับจริงแล้ว
+- consumeOrchestratorOutcome (personaRole.util) = consumer กลาง: defer_payment → เรียก handlePaymentCommandTextRoute (SSOT payment route เดิม) ด้วย forcePaymentIntent=true 1 ครั้ง → ปิด turn (handled:true via deferred_deterministic_payment) · payment route ตอบไม่ได้ → handled:false ให้ flow เดิมต่อ ไม่เงียบใส่ลูกค้า · recursion guard: payment route ใช้ snapshot ตัวเอง ไม่วนกลับ wrapper และเส้น snapshot (ในตัว payment route) จงใจไม่ consume defer
+- SSOT intent: ctx.userMoneyIntent = isPaymentCommand||isPromoInquiryText ส่งจาก webhook ทั้ง 2 entry (wrapper หลัก + snapshot) — ครอบ โปร/ซื้อ/สมัคร/QR ตามพจนานุกรมเดิม · USER_MONEY_INTENT_RE ลดชั้นเป็น @deprecated fallback สำหรับ caller เก่า
+- tests: consumer 4 กรณี (defer→เรียก 1 ครั้ง+handled / payment fail→handled:false / ไม่มี defer / ไม่มี consumer) · suite 960 pass / 19 known-fail เดิม · ขึ้น staging
+- หนี้คงเหลือ (คิว DI/test-mode): integration เต็มเส้น blocked→defer→payment route จริง + assert persisted metadata sequence/push

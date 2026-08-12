@@ -205,7 +205,12 @@ export async function runGeminiFrontOrchestrator(ctx) {
     // pre-send money guard สองชั้น (Codex รอบ 5): ①เงินต้องออกจากเสียงแอดมิน
     // ②และต้องเป็นจังหวะที่ลูกค้าถามเงิน/อยู่ payment state เท่านั้น (unsolicited = block
     // แม้เสียงแอดมิน — ไม่งั้น guard แค่ย้ายการขายไปให้อีกคนพูด)
-    const userMoneyIntent = USER_MONEY_INTENT_RE.test(String(ctx.text || ""));
+    // SSOT ก่อน (isPaymentCommand/isPromoInquiryText จาก webhook ส่งเป็น boolean) —
+    // regex เป็น fallback ให้ caller เก่าเท่านั้น (Codex รอบ 6)
+    const userMoneyIntent =
+      typeof ctx.userMoneyIntent === "boolean"
+        ? ctx.userMoneyIntent
+        : USER_MONEY_INTENT_RE.test(String(ctx.text || ""));
     const inPaymentState = /paywall|payment|slip|verify|awaiting/i.test(String(phase1 || ""));
     const guardCtx = { userMoneyIntent, inPaymentState };
     const verdict1 = evaluateMoneyGuard(guardedConsult, guardCtx);

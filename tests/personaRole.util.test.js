@@ -76,3 +76,27 @@ test("neutral fallback ต้องไม่สร้าง dangling handoff เ
   assert.ok(!HANDOFF_RE.test(NEUTRAL_RECOVERY_FALLBACK));
   assert.ok(!/(บาท|ค่าครู|แพ็ก|สิทธิ์)/.test(NEUTRAL_RECOVERY_FALLBACK));
 });
+
+test("consumeOrchestratorOutcome (Codex รอบ 6): defer → payment route ถูกเรียก 1 ครั้ง แล้วปิด turn", async () => {
+  const { consumeOrchestratorOutcome } = await import("../src/core/conversation/personaRole.util.js");
+  let calls = 0;
+  const res = await consumeOrchestratorOutcome(
+    { handled: false, deferTo: "deterministic_payment" },
+    { runDeterministicPayment: async () => { calls += 1; return true; } },
+  );
+  assert.equal(calls, 1);
+  assert.equal(res.handled, true);
+  assert.equal(res.via, "deferred_deterministic_payment");
+  // payment route ตอบไม่ได้ → handled=false ให้ flow เดิมทำงานต่อ (ไม่เงียบใส่ลูกค้า)
+  const res2 = await consumeOrchestratorOutcome(
+    { handled: false, deferTo: "deterministic_payment" },
+    { runDeterministicPayment: async () => false },
+  );
+  assert.equal(res2.handled, false);
+  // ไม่มี defer → ผ่านค่าเดิมไม่แตะ
+  const plain = { handled: true, mode: "active" };
+  assert.equal(await consumeOrchestratorOutcome(plain, {}), plain);
+  // ไม่มี consumer (caller เก่า) → ผ่านค่าเดิม
+  const deferNoConsumer = { handled: false, deferTo: "deterministic_payment" };
+  assert.equal(await consumeOrchestratorOutcome(deferNoConsumer, {}), deferNoConsumer);
+});

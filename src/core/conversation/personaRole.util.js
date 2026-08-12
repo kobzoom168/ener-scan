@@ -42,9 +42,42 @@ export function ajarnMoneyRisk(text) {
   return resolveSpeakerRole(t) !== "admin";
 }
 
-/** intent เงินฝั่งลูกค้า — ใช้เลือกทาง fallback เมื่อ guard ตัดคำตอบทิ้ง */
+/** @deprecated fallback เท่านั้น — SSOT จริงคือ isPaymentCommand/isPromoInquiryText
+ *  (webhookText.util) ส่งเป็น ctx.userMoneyIntent เข้ามา (Codex รอบ 6: ห้าม regex เงินสองชุด drift) */
 export const USER_MONEY_INTENT_RE =
   /(ราคา|กี่บาท|ค่าครู|จ่าย|โอน|แพ็ก|เปิดสิทธิ์|สลิป|ชำระ|สมัคร)/;
+
+/**
+ * Consumer กลางของ typed outcome จาก orchestrator (Codex รอบ 6: deferTo ต้องมีผู้รับจริง)
+ * — defer_payment → เรียก deterministic payment route 1 ครั้ง แล้วปิด turn (handled)
+ * caller ที่ไม่มี payment context ไม่ต้องส่ง runDeterministicPayment = ผ่าน res เดิม
+ * @param {{ handled?: boolean, deferTo?: string } | null | undefined} res
+ * @param {{ runDeterministicPayment?: () => Promise<boolean> }} [opts]
+ */
+export async function consumeOrchestratorOutcome(res, { runDeterministicPayment } = {}) {
+  if (
+    res &&
+    res.deferTo === "deterministic_payment" &&
+    typeof runDeterministicPayment === "function"
+  ) {
+    let ok = false;
+    try {
+      ok = Boolean(await runDeterministicPayment());
+    } catch (e) {
+      console.warn(
+        JSON.stringify({
+          event: "ORCH_DEFER_PAYMENT_CONSUMER_FAILED",
+          message: String(e?.message || e).slice(0, 140),
+        }),
+      );
+    }
+    console.log(
+      JSON.stringify({ event: "ORCH_DEFER_PAYMENT_CONSUMED", handledByPaymentRoute: ok }),
+    );
+    return { handled: ok, mode: "active", via: "deferred_deterministic_payment" };
+  }
+  return res;
+}
 
 /** neutral recovery — ห้ามชวนขาย และห้ามสัญญาว่าจะไปถามอาจารย์ (Codex รอบ 5:
  *  ประโยค "เดี๋ยวเรียนถามอาจารย์ให้" ไม่มีคำตอบตามจริง = สร้าง dangling handoff เอง) */
