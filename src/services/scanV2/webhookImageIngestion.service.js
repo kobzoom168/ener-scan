@@ -258,7 +258,8 @@ export async function ingestScanImageAsyncV2({
           payload_json: {
             text: strikes >= 2 ? MULTI_IMAGE_WAIT_TEXT_STERN : MULTI_IMAGE_WAIT_TEXT,
             // ส่งเป็นเสียงอาจารย์แทนข้อความ (static, เจนครั้งเดียวใช้ซ้ำ) — text = fallback
-            voiceStatic: strikes >= 2 ? "multi_image_stern" : "multi_image",
+            // เสียงอาจารย์ในเคสหลายรูปถูกถอด (กบเคาะ C, 12 ส.ค. 2026 — งานจัดระเบียบรูป
+            // เป็นบทแอดมิน เสียงอาจารย์เก็บไว้เฉพาะคำอ่าน) — ใช้ข้อความแอดมินล้วน
           },
           status: "queued",
         });
