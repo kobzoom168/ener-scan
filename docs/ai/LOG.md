@@ -488,3 +488,7 @@
 - เพิ่ม `docs/ai/CODEX_REVIEW.md` รวมภาพระบบ, เรื่องที่กบเคยให้ตรวจ, ข้อเสนอ scoring/persona/monitor/growth, commit ที่ยืนยันว่าแก้แล้ว และ blocker ที่ยังเปิด
 - เพิ่มไฟล์นี้ในลำดับอ่านของ `AI-README.md` สำหรับ session ที่ใช้ Codex review เพื่อไม่เสนอซ้ำและไม่สับสน staging กับ production
 - ไม่แก้ runtime, scoring, flow หรือสถานะ deploy · ค้างตามเดิม: C2/C3/H6, C1 correlation card/telemetry, test baseline และยืนยัน metadata rollout cutoff
+
+## 2026-08-12 | Claude | Codex เคาะผ่าน staging + วางเกณฑ์เทสต์ใหม่
+- Codex รับ 4 fix รอบก่อนครบ · เก็บ 2 จุดสุดท้าย: ①comment META_ROLLOUT ระบุชัดว่าเที่ยงคืน 12 ส.ค. = intentional grace period ~5 ชม. (deploy จริง ~19:00 คาบเกี่ยว instance เก่า/ใหม่) ②เกณฑ์ release ใหม่: tests/known-failing.txt (ลิสต์ 19 ชื่อ exact) + scripts/test-baseline-check.sh — fail ใหม่นอกลิสต์ = regression, ห้ามเทียบจำนวนรวมอีก · เขียนเข้า CLAUDE.md เป็นกติกาถาวร
+- สถานะตกลงกับ Codex: persona split เต็ม production รอชุด C2/C3/H6 (role router → pre-send money guard → handoff state) + C1 (thumbnail+relatedScanResultId+telemetry ในการ์ดถามข้อมูล) — ทำรวมกับเฟส A

@@ -7,7 +7,9 @@
 import { AJARN_MONEY_RE } from "../stores/conversationMessages.db.js";
 
 const HANDOFF_RE = /(เรียนถามอาจารย์|ส่งให้อาจารย์|ถามอาจารย์ให้|ส่งต่อให้อาจารย์)/;
-// speakerRole metadata เริ่มบันทึกบน pro 11 ส.ค. 2026 เย็น — ก่อนหน้านี้ = legacy ไม่มี tag
+// speakerRole metadata เริ่มบันทึกบน pro 11 ส.ค. 2026 ~19:00 — cutoff ตั้งเที่ยงคืน 12 ส.ค.
+// โดยตั้งใจ (intentional grace period ~5 ชม.: ช่วง deploy คาบเกี่ยว มีข้อความจาก instance
+// เก่า/ใหม่ปนกัน อนุโลม no-tag ถึงเที่ยงคืนกัน false alarm — หลังจากนั้นเข้มเต็ม)
 const META_ROLLOUT_MS = Date.parse("2026-08-12T00:00:00+07:00");
 const COMPLAINT_RE =
   /(ห่วย|แย่มาก|โกง|หลอก|คืนเงิน|ยกเลิก|ไม่พอใจ|ช้ามาก|ทำไมยังไม่|รอนานมาก|ไม่ตอบ|เงียบ)/;
