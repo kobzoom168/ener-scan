@@ -483,3 +483,8 @@
 - multiImageRejection test ที่พังค้างมาก่อน (คาด "ทีละองค์"+🙏 แต่ runtime "ทีละชิ้น") — แก้ทั้งคู่: copy ใหม่เสียงแอดมินไม่มีอีโมจิ + test ล็อกตาม · บทเรียน: ก่อนหน้านี้ผมเทียบแค่จำนวน fail เท่า baseline เลยไม่เห็นเทสต์เก่าค้างพัง — Codex จับได้
 - M7 ครบทั้ง 10 variants: ทุก ack ไม่สัญญาเวลาเกินจริง (บอก 2-3 นาที หรือกลาง ๆ)
 - full suite 952 pass / 19 fail (ลดจาก 20 — ที่เหลือคือชุดพังก่อนยุคนี้: ต้อง redis/DB จริง + copy เก่าค้าง = งานเก็บกวาดแยก) · ขึ้น staging · C1 thumbnail+relatedScanResultId ในการ์ดถาม + ordering telemetry = เข้าคิวก่อนขึ้น pro รอบหน้า
+
+## 2026-08-12 | Codex | สร้างสมุดตรวจงานถาวรสำหรับ review Claude
+- เพิ่ม `docs/ai/CODEX_REVIEW.md` รวมภาพระบบ, เรื่องที่กบเคยให้ตรวจ, ข้อเสนอ scoring/persona/monitor/growth, commit ที่ยืนยันว่าแก้แล้ว และ blocker ที่ยังเปิด
+- เพิ่มไฟล์นี้ในลำดับอ่านของ `AI-README.md` สำหรับ session ที่ใช้ Codex review เพื่อไม่เสนอซ้ำและไม่สับสน staging กับ production
+- ไม่แก้ runtime, scoring, flow หรือสถานะ deploy · ค้างตามเดิม: C2/C3/H6, C1 correlation card/telemetry, test baseline และยืนยัน metadata rollout cutoff
