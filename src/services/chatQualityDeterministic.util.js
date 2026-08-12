@@ -7,6 +7,8 @@
 import { AJARN_MONEY_RE } from "../stores/conversationMessages.db.js";
 
 const HANDOFF_RE = /(เรียนถามอาจารย์|ส่งให้อาจารย์|ถามอาจารย์ให้|ส่งต่อให้อาจารย์)/;
+// speakerRole metadata เริ่มบันทึกบน pro 11 ส.ค. 2026 เย็น — ก่อนหน้านี้ = legacy ไม่มี tag
+const META_ROLLOUT_MS = Date.parse("2026-08-12T00:00:00+07:00");
 const COMPLAINT_RE =
   /(ห่วย|แย่มาก|โกง|หลอก|คืนเงิน|ยกเลิก|ไม่พอใจ|ช้ามาก|ทำไมยังไม่|รอนานมาก|ไม่ตอบ|เงียบ)/;
 const PAYMENT_RE = /(สลิป|โอน|จ่าย|ค่าครู|แพ็ก|QR|คิวอาร์|เปิดสิทธิ์|บาท)/i;
@@ -82,17 +84,19 @@ export function detectDanglingHandoff(rows, { windowMin = 10 } = {}) {
     const r = list[i];
     if (r.role !== "bot" || !HANDOFF_RE.test(String(r.text || ""))) continue;
     const t0 = new Date(r.created_at).getTime();
-    // สำเร็จ = มีคำตอบจากฝั่งอาจารย์จริง (ajarn/consult/scan_result) ตามมา — ข้อความแอดมิน
-    // เรื่องอื่นไม่นับ (Codex H5) · ข้อความ legacy ไม่มี tag = นับให้ (กัน false alarm ย้อนหลัง)
+    // สำเร็จ = มีคำตอบจากอาจารย์จริงเท่านั้น: speakerRole=ajarn หรือส่งผลสแกน (Codex รอบ 2:
+    // consult ยังแยกเสียงไม่ได้ ห้ามนับจนกว่า role router เสร็จ) · ข้อความไม่มี tag อนุโลม
+    // เฉพาะก่อนวัน rollout metadata — หลังจากนั้น tag หลุด = ต้องโผล่ให้เห็น ไม่ซ่อน regression
     const followed = list
       .slice(i + 1)
       .some((x) => {
         if (x.role !== "bot") return false;
-        if (new Date(x.created_at).getTime() - t0 > windowMin * 60_000) return false;
+        const ts = new Date(x.created_at).getTime();
+        if (ts - t0 > windowMin * 60_000) return false;
         const sp = String(x.metadata_json?.speakerRole || "");
         const rt = String(x.metadata_json?.replyType || "");
-        if (!sp && !rt) return true; // legacy ไม่มี tag
-        return sp === "ajarn" || sp === "consult" || rt === "scan_result";
+        if (!sp && !rt) return ts < META_ROLLOUT_MS; // legacy ก่อน rollout เท่านั้น
+        return sp === "ajarn" || rt === "scan_result";
       });
     if (!followed) {
       out.push({

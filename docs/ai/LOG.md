@@ -476,3 +476,10 @@
 - เข้าคิว (persona hardening round เดียวกับเฟส A): C2 pre-send money guard + C3 resolve consult→ajarn/admin/mixed + H6 handoff state ใน redis (สามตัวนี้ต้องมี router ก่อน ทำแยกไม่ได้) · C1 เพิ่มรูปชิ้นในการ์ดถามข้อมูลกันสับสนชิ้น (ไม่บล็อกสแกนใหม่ — บล็อกคือต้นเหตุสแปม 30 รอบเมื่อวาน จงใจออกแบบให้ B ไหลได้)
 - เห็นต่าง: M10 human delay 2.5-5.5s เป็นการตัดสินใจ product ของกบ (ก.ค.) เรื่อง pacing ไม่ใช่หน่วงหลอกผล — เสนอยกเว้น delay เฉพาะข้อความ QR/ยืนยันจ่าย รอกบเคาะ
 - test detector เพิ่ม 1 ตัว · ชุดเต็ม 950 pass / 20 baseline · ขึ้น staging
+
+## 2026-08-12 | Claude | Codex ตรวจรอบ 3 (db2fef8) — เก็บครบ 4 ข้อ
+- H5 เข้มขึ้น: consult ไม่นับเป็นคำตอบอาจารย์ (จน role router เสร็จ) · no-tag อนุโลมเฉพาะ row ก่อน META_ROLLOUT (12 ส.ค. 00:00 ไทย) — หลังนั้น tag หลุด = โผล่เป็น dangling ไม่ซ่อน regression · เทสต์ post-rollout เพิ่ม
+- H4: history insert เปลี่ยน void→await ทั้ง ack/marker + ย้าย scan_result marker มาบันทึกทันทีหลังส่งสำเร็จ (ก่อน hooks/quota notice) ให้ timeline ตรงจริง
+- multiImageRejection test ที่พังค้างมาก่อน (คาด "ทีละองค์"+🙏 แต่ runtime "ทีละชิ้น") — แก้ทั้งคู่: copy ใหม่เสียงแอดมินไม่มีอีโมจิ + test ล็อกตาม · บทเรียน: ก่อนหน้านี้ผมเทียบแค่จำนวน fail เท่า baseline เลยไม่เห็นเทสต์เก่าค้างพัง — Codex จับได้
+- M7 ครบทั้ง 10 variants: ทุก ack ไม่สัญญาเวลาเกินจริง (บอก 2-3 นาที หรือกลาง ๆ)
+- full suite 952 pass / 19 fail (ลดจาก 20 — ที่เหลือคือชุดพังก่อนยุคนี้: ต้อง redis/DB จริง + copy เก่าค้าง = งานเก็บกวาดแยก) · ขึ้น staging · C1 thumbnail+relatedScanResultId ในการ์ดถาม + ordering telemetry = เข้าคิวก่อนขึ้น pro รอบหน้า

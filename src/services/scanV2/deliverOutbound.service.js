@@ -163,7 +163,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       // history ให้ monitor เห็นครบ (Codex H4): ack รับรูป = เสียงแอดมิน
       try {
         const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
-        void insertLineConversationMessage(lineUserId, "bot", sentAsVoice ? "[เสียงเตือนเรื่องหลายรูป]" : text, {
+        await insertLineConversationMessage(lineUserId, "bot", sentAsVoice ? "[เสียงเตือนเรื่องหลายรูป]" : text, {
           speakerRole: "admin", replyType: "pre_scan_ack", source: "worker",
         });
       } catch { /* ignore */ }
@@ -348,6 +348,14 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       if (delivery.sent) {
         await markSent(id);
         releaseScanGate(lineUserId);
+        // history ให้ monitor รู้ว่าผลสแกน (การ์ด/เสียงอาจารย์) ถึงมือลูกค้าแล้ว — บันทึกทันที
+        // หลังส่งสำเร็จ ให้ timeline ตรงกับที่ลูกค้าเห็นจริง (ก่อน quota notice) — Codex H4 รอบ 2
+        try {
+          const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
+          await insertLineConversationMessage(lineUserId, "bot", "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]", {
+            speakerRole: "ajarn", replyType: "scan_result", source: "worker",
+          });
+        } catch { /* ignore */ }
         await handleScanResultPostDelivery(msg, payload);
         if (precheckActive) {
           // เช็คก่อนเช่า: ติดธง + การ์ดสถิติ (หน่วง 2 วิ ให้รายงานถึงก่อน) — ไม่เข้า hook โพสต์/คลัง
@@ -451,14 +459,6 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         } catch {
           /* notice is best-effort */
         }
-        // history ให้ monitor รู้ว่าผลสแกน (การ์ด/เสียงอาจารย์) ถึงมือลูกค้าแล้ว —
-        // ไม่งั้น detector handoff จะคิดว่าอาจารย์เงียบทั้งที่ส่ง Flex ไปแล้ว (Codex H4)
-        try {
-          const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
-          void insertLineConversationMessage(lineUserId, "bot", "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]", {
-            speakerRole: "ajarn", replyType: "scan_result", source: "worker",
-          });
-        } catch { /* ignore */ }
         console.log(
           JSON.stringify({
             event: "OUTBOUND_SEND_SUCCESS",
