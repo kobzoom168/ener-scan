@@ -83,10 +83,11 @@
 
 ### Blocker หลัก
 
-- **C2 pre-send money guard:** ก่อนส่งข้อความที่เป็นเสียงอาจารย์ ต้อง block/re-route เมื่อพบคำการเงิน ปัจจุบัน alert หลังบันทึกอย่างเดียวยังไม่พอ
-- **C3 role router:** resolve แต่ละคำตอบเป็น `ajarn`, `admin` หรือ `mixed`; mixed ต้องแยกข้อความหรือส่งกลับให้แอดมิน ไม่ควรติดป้ายรวมแบบคลุมเครือ
-- **H6 handoff state ใน Redis:** ผูก handoff กับคำถาม/turn จริง ป้องกัน scan result หรือคำตอบคนละเรื่องมาปิด dangling handoff ผิดตัว
-- ลำดับที่ Claude เสนอ: role router → pre-send guard → Redis handoff state → จึงค่อยพิจารณาให้ consult เข้า detector
+- **C2 pre-send money guard (เริ่มใน `bccf43f`, ยังไม่ผ่าน review):** มี retry/fallback ก่อนส่ง consult แล้ว แต่ guard ปัจจุบันถือว่าแค่มีคำว่า `ผม` ก็อนุญาตเรื่องเงิน ทำให้ข้อความ `mixed` หรืออาจารย์ใช้สรรพนามผิดยังผ่านได้; fallback ยังชวนเลือกซื้อ จึงอาจทำซ้ำเหตุเดิมในเสียงแอดมิน และ guard ยังไม่ได้ครอบทุก ajarn outbound
+- **C3 role router (เริ่มใน `bccf43f`, ยังไม่ผ่าน review):** deterministic router มี `admin/ajarn/mixed/unknown` แต่ข้อความอ่านพลังทั่วไปที่ไม่มีคำว่า “อาจารย์” ยังเป็น `unknown` และถูกเก็บกลับเป็น `consult`; คำกล่าวว่า consult ใหม่ทุกตัวมี tag เสียงจริงจึงยังไม่ครบ ต้องใช้ route/intent เป็นข้อมูลหลักและ surface text เป็นสัญญาณเสริม
+- **H6 handoff state (MVP ใน `bccf43f`, ยังไม่ใช่ state เต็ม):** มีเพียง `last_speaker` TTL 30 นาที; ยังไม่มี topic/turn/scanResultId/handoffDone และปัจจุบันอาจ set state หลัง gateway suppress เพราะ wrapper ไม่คืนผล `sent`
+- **Gateway regression ใน `bccf43f`:** `sendNonScanSequenceReply` และ `sendNonScanPushMessage` อ้าง `speakerRoleOverride` โดยไม่ได้ destructure จาก `opts`; Codex reproduce ได้ว่า LINE transport ส่งออกแล้วจึงเกิด `ReferenceError` ทั้งสองเส้น ต้องแก้และเพิ่ม test ก่อน deploy
+- ยังห้ามปลด `consult` กลับเข้า dangling-success จน router coverage วัดจากข้อมูลจริงและ state ผูก handoff ถูก turn
 
 ### Object-info gate / concurrent scans
 
@@ -133,6 +134,7 @@
 | 12 ส.ค. 2026 | Codex | `db2fef8` | รับบางส่วน; พบ consult/no-tag false success, history fire-and-forget, stale multi-image test | แก้ใน `5eeff5c` |
 | 12 ส.ค. 2026 | Codex | `5eeff5c` | targeted tests ผ่าน; 4 จุดแก้ตรงข้อเสนอ | C2/C3/H6, C1 card correlation, test baseline, rollout cutoff |
 | 12 ส.ค. 2026 | Codex | `52a00ce` | ยืนยัน grace-period comment; baseline script รันจริง 952/19 และไม่พบ fail ใหม่ | C2/C3/H6, C1 card correlation, หนี้ known-fail 19 ตัว |
+| 12 ส.ค. 2026 | Codex | `bccf43f` persona hardening ระยะแรก | รับทิศทาง แต่พบ gateway ReferenceError, money guard bypass ด้วย `ผม`, unknown ยังเป็น consult และ state ไม่รู้ send/suppress | แก้ก่อน production; C2/C3/H6 ยังเป็น partial |
 
 ## กติกาการอัปเดตไฟล์นี้
 

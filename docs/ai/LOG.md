@@ -509,3 +509,9 @@
 - handoff state MVP: redis persona:last_speaker (TTL 30 นาที) → inject เข้า consult prompt "เสียงเดิมตอบต่อ ไม่ handoff ซ้ำ" (Codex H6 ขั้นแรก — state เต็ม topic/scanResultId รอบถัดไป)
 - gateway: speakerRoleOverride param + sendGatewayReply ส่งผ่าน 2 จุด · test personaRole 3 ตัว · suite 955 pass / 19 known-fail
 - ค้างในชุดนี้: detector ปลด consult กลับเข้าเงื่อนไข (รอ tag ใหม่สะสมก่อน) · C1 thumbnail การ์ดถามข้อมูล · rich menu 6 ช่อง + broadcast (เฟส A ส่วนโครง)
+
+## 2026-08-12 | Codex | Review persona hardening commit bccf43f — พบ blocker ก่อน production
+- reproduce regression: sequence และ push gateway ส่ง LINE สำเร็จก่อนชน `ReferenceError: speakerRoleOverride is not defined` เพราะสองฟังก์ชันไม่ได้ destructure field จาก opts; baseline manifest ไม่จับเพราะ test ไม่มี success-path สองเส้นนี้
+- C2 ยัง bypass ได้ด้วยคำว่า `ผม`: mixed เช่นอาจารย์อ่านพลังแล้วแอดมินพูดเงินใน bubble เดียวผ่าน guard และ teacher ที่ใช้สรรพนามผิดก็ผ่าน · fallback ยังชวน “สนใจแบบไหน/มีตัวเลือก” ซึ่งอาจทำซ้ำเหตุขายของเอง
+- C3 ยัง tag `unknown` กลับเป็น `consult`; คำอ่านทั่วไปไม่มี marker อาจ unknown ได้ จึงยังไม่ใช่ทุก consult มี role จริง
+- H6 เป็น last-speaker hint ไม่ใช่ handoff state เต็ม และ wrapper ไม่คืน gateway result จึง set state ได้แม้ข้อความถูก suppress · บันทึกข้อเสนอไว้ใน CODEX_REVIEW; ไม่แก้ runtime และไม่ deploy
