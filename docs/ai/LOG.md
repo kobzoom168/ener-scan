@@ -455,3 +455,109 @@
 - gotcha สำคัญ: /r เสิร์ฟเป็น loader shell (6KB) แล้ว fetch /body — SEO tags ต้องอยู่ head ของ shell ไม่ใช่ body → เพิ่ม meta description + JSON-LD ใน enerLoaderShell.util (favicon ✦ มีอยู่แล้ว)
 - verify สดจากรายงานจริง rpt_2dcOG2kG: เกรดสเกลโชว์ / radar ไม่มี hidden base / fill both / พ.ศ. 2569 / min-height 44px / pill ชื่อด้าน / shell มี description+ld+json ครบ
 - ค้าง: กบเปิดรายงานดูด้วยตา + รัน Snapsite audit ซ้ำเทียบคะแนน → ผ่านแล้วค่อยขึ้น pro
+
+## 2026-08-11 | Claude | audit fixes ขึ้น Pro (กบสั่ง)
+- sync 7 ไฟล์ → main → deploy pro healthy · verify รายงานลูกค้าจริงล่าสุด: เกรดสเกล/fill both/พ.ศ./44px/JSON-LD ครบ
+
+## 2026-08-12 | Claude | เคสคุณชิตโอน 350 + แก้บั๊ก Spend-to-upgrade ทั้งสาย
+- เคสจริง: ระบบเสนอ "อัป 399 หัก 49 เหลือ 350" → ลูกค้าพิมพ์ "จ่าย 399" ได้บิลเต็ม 399 → โอน 350 → EasySlip ตัดเป็น mismatch เข้า manual review + LIFF เปิดบิล 49 ซ้อน → กบสั่งอนุมัติ: Claude รัน switchPendingPaymentPackageByAdmin + markPaymentApprovedAndUnlock ใน container pro (PAY-55EF6029 → แพ็ก 399, 30 ครั้งถึง 11 ก.ย.) + push อธิบายสั้น "350+49 = 399 ครบพอดี เปิดสิทธิ์แล้ว"
+- ราก 3 บั๊ก แก้แล้ว (staging): ①lineWebhook "จ่าย 399" เช็คเครดิตด้วยเงื่อนไข isUnlimited ของแพ็ก 299 ที่เลิกขาย → เปลี่ยนเป็น match แพ็กเป้าหมายของเครดิต ②liff.routes เงื่อนไข scanCount>=999999 ตายแบบเดียวกัน → แก้เหมือนกัน ③EasySlip ยอดไม่ตรง = return invalid ตัดจบก่อนถึง logic สลับแพ็ก (ทำ auto-switch 49→149 เดิมตายด้วย) → เปลี่ยนเป็น passthrough verified พร้อมยอดจริง ให้ evaluate จับ mismatch → เข้าตัวสลับแพ็กตามยอด + branch ใหม่: ยอด = ราคาแพ็กใหญ่−เครดิตวันนี้ → สลับเป็นแพ็กใหญ่ expected=ยอดหัก แล้ว auto-approve (SLIP_UPGRADE_CREDIT_MATCHED)
+- นโยบายที่คุยกับกบ: ยอดขาดจริงไม่ auto-approve (ค้าง manual review เหมือนเดิม) · ระบบยังไม่รวมยอดหลายสลิปต่อบิล = เคสโอนเพิ่มต้องจบด้วยมือ admin (top-up flow ไว้คิวหลัง) · ค้างเล็ก: ข้อความแจ้งลูกค้าตอน mismatch ควรบอกยอดขาด/เกิน
+- npm test 949/20 = baseline · ขึ้น staging แล้ว รอกบสั่งขึ้น pro
+
+## 2026-08-12 | Claude | กบเคาะ: ปิดข้อเสนอ 350 (Spend-to-upgrade) บน pro — ขาย 399 เต็มราคา
+- ตั้ง app_settings upgrade_credit {enabled:false} ใน pro (config ไม่ใช่ deploy — มีผลทันที ไม่มีข้อเสนอ 350 ยิงหาลูกค้าอีก) · เคาะจากเคสลูกค้างง 2 รายวันนี้ (ชิต+สิทธิพร ได้ข้อเสนอ 350 แต่ระบบรับเงินไม่รู้จักยอด)
+- ยอด 350 ที่อาจเข้าวันนี้จากข้อเสนอที่ส่งไปแล้ว = กบอนุมัติมือเองใน /admin/payments (ใช้ปุ่ม Approve as เลือกแพ็ก 399)
+- โค้ดแก้ทั้งสาย (บิลหักเครดิต + EasySlip passthrough + auto-approve ยอดอัปเกรด) อยู่บน staging เทสต์ผ่านแล้ว — ถ้าวันหน้ากบอยากเปิดข้อเสนอ 350 กลับมา ให้ขึ้น pro ชุดนี้ก่อนแล้วค่อยเปิด enabled:true (ห้ามเปิดโดยไม่ขึ้นโค้ด จะงงซ้ำ)
+- หมายเหตุ: EasySlip passthrough ยังมีประโยชน์แม้ปิด offer (ชุบชีวิต auto-switch โอน 149 ทั้งที่กด 49) — ติดไปกับ pro deploy รอบหน้าตามปกติ
+
+## 2026-08-12 | Claude | รับ review Codex รอบ 2 (flow scan/persona) — ทำ 7 ข้อถูก คิว 4 เห็นต่าง 1
+- ทำทันที (staging): H4 บันทึก pre_scan_ack + scan_result delivery ลง history พร้อม speakerRole (monitor เห็น transcript ครบ ไม่ตี handoff ค้างผิด) · H5 dangling handoff นับสำเร็จเฉพาะ ajarn/consult/scan_result (legacy ไม่มี tag นับให้กัน false alarm) · M7 ตัด ack "อีกแปปเดียว/อึดใจเดียว" → เวลาจริง 2-3 นาที · M8 multi-image stern เลิกตำหนิ + บอกสิทธิ์ไม่ถูกหัก · M9 ตัด 🙏 หลุดใน DEBOUNCE_ATTACHED_TEXT · M11 เพิ่ม PRIORITY RULE (paywall = ข้อยกเว้นเดียวของห้ามเสนอ) · M12 payment QR insert ติด meta admin
+- เข้าคิว (persona hardening round เดียวกับเฟส A): C2 pre-send money guard + C3 resolve consult→ajarn/admin/mixed + H6 handoff state ใน redis (สามตัวนี้ต้องมี router ก่อน ทำแยกไม่ได้) · C1 เพิ่มรูปชิ้นในการ์ดถามข้อมูลกันสับสนชิ้น (ไม่บล็อกสแกนใหม่ — บล็อกคือต้นเหตุสแปม 30 รอบเมื่อวาน จงใจออกแบบให้ B ไหลได้)
+- เห็นต่าง: M10 human delay 2.5-5.5s เป็นการตัดสินใจ product ของกบ (ก.ค.) เรื่อง pacing ไม่ใช่หน่วงหลอกผล — เสนอยกเว้น delay เฉพาะข้อความ QR/ยืนยันจ่าย รอกบเคาะ
+- test detector เพิ่ม 1 ตัว · ชุดเต็ม 950 pass / 20 baseline · ขึ้น staging
+
+## 2026-08-12 | Claude | Codex ตรวจรอบ 3 (db2fef8) — เก็บครบ 4 ข้อ
+- H5 เข้มขึ้น: consult ไม่นับเป็นคำตอบอาจารย์ (จน role router เสร็จ) · no-tag อนุโลมเฉพาะ row ก่อน META_ROLLOUT (12 ส.ค. 00:00 ไทย) — หลังนั้น tag หลุด = โผล่เป็น dangling ไม่ซ่อน regression · เทสต์ post-rollout เพิ่ม
+- H4: history insert เปลี่ยน void→await ทั้ง ack/marker + ย้าย scan_result marker มาบันทึกทันทีหลังส่งสำเร็จ (ก่อน hooks/quota notice) ให้ timeline ตรงจริง
+- multiImageRejection test ที่พังค้างมาก่อน (คาด "ทีละองค์"+🙏 แต่ runtime "ทีละชิ้น") — แก้ทั้งคู่: copy ใหม่เสียงแอดมินไม่มีอีโมจิ + test ล็อกตาม · บทเรียน: ก่อนหน้านี้ผมเทียบแค่จำนวน fail เท่า baseline เลยไม่เห็นเทสต์เก่าค้างพัง — Codex จับได้
+- M7 ครบทั้ง 10 variants: ทุก ack ไม่สัญญาเวลาเกินจริง (บอก 2-3 นาที หรือกลาง ๆ)
+- full suite 952 pass / 19 fail (ลดจาก 20 — ที่เหลือคือชุดพังก่อนยุคนี้: ต้อง redis/DB จริง + copy เก่าค้าง = งานเก็บกวาดแยก) · ขึ้น staging · C1 thumbnail+relatedScanResultId ในการ์ดถาม + ordering telemetry = เข้าคิวก่อนขึ้น pro รอบหน้า
+
+## 2026-08-12 | Codex | สร้างสมุดตรวจงานถาวรสำหรับ review Claude
+- เพิ่ม `docs/ai/CODEX_REVIEW.md` รวมภาพระบบ, เรื่องที่กบเคยให้ตรวจ, ข้อเสนอ scoring/persona/monitor/growth, commit ที่ยืนยันว่าแก้แล้ว และ blocker ที่ยังเปิด
+- เพิ่มไฟล์นี้ในลำดับอ่านของ `AI-README.md` สำหรับ session ที่ใช้ Codex review เพื่อไม่เสนอซ้ำและไม่สับสน staging กับ production
+- ไม่แก้ runtime, scoring, flow หรือสถานะ deploy · ค้างตามเดิม: C2/C3/H6, C1 correlation card/telemetry, test baseline และยืนยัน metadata rollout cutoff
+
+## 2026-08-12 | Claude | Codex เคาะผ่าน staging + วางเกณฑ์เทสต์ใหม่
+- Codex รับ 4 fix รอบก่อนครบ · เก็บ 2 จุดสุดท้าย: ①comment META_ROLLOUT ระบุชัดว่าเที่ยงคืน 12 ส.ค. = intentional grace period ~5 ชม. (deploy จริง ~19:00 คาบเกี่ยว instance เก่า/ใหม่) ②เกณฑ์ release ใหม่: tests/known-failing.txt (ลิสต์ 19 ชื่อ exact) + scripts/test-baseline-check.sh — fail ใหม่นอกลิสต์ = regression, ห้ามเทียบจำนวนรวมอีก · เขียนเข้า CLAUDE.md เป็นกติกาถาวร
+- สถานะตกลงกับ Codex: persona split เต็ม production รอชุด C2/C3/H6 (role router → pre-send money guard → handoff state) + C1 (thumbnail+relatedScanResultId+telemetry ในการ์ดถามข้อมูล) — ทำรวมกับเฟส A
+
+## 2026-08-12 | Codex | ตรวจปิด commit 52a00ce และอัปเดตสมุด review
+- ยืนยัน comment ของ metadata cutoff อธิบาย intentional grace period ตรงเหตุผล blue-green แล้ว
+- รัน `bash scripts/test-baseline-check.sh` จริง: 952 pass / 19 known fail · exit ผ่านและไม่มี fail ใหม่นอก manifest
+- อัปเดต `CODEX_REVIEW.md` ย้าย rollout cutoff/test-baseline เป็นปิดแล้ว · blocker production ยังเป็น C2/C3/H6 + C1 ตามเดิม
+
+## 2026-08-12 | Claude | M10 เคาะ B: ข้อความสายเงินตอบทันที แชทปกติคงหน่วงแบบคน
+- humanReplyPause ยกเว้น replyType/semanticKey ที่เข้า PAYMENT_FAST_RE (payment/slip/qr/paywall/approved/awaiting) — QR/ยืนยันสลิป/เปิดสิทธิ์/paywall ส่งทันที · แชทคุยปกติคงหน่วง 2.5-5.5 วิ + โหมดดึกตามเจตนาเดิมของกบ (ก.ค.)
+- baseline check ผ่าน ไม่มี fail ใหม่ · ขึ้น staging (ติดไป pro รอบหน้า)
+
+## 2026-08-12 | Claude | Persona hardening ชิ้นแรก: role router + pre-send money guard + handoff state MVP (staging)
+- กบเคาะเริ่มชุด hardening+เฟส A · เคาะ C ก่อนหน้า: ถอดเสียงอาจารย์จากเคสหลายรูป (voiceStatic ตัดออก ใช้ข้อความแอดมินล้วน)
+- personaRole.util ใหม่: resolveSpeakerRole (admin/ajarn/mixed/unknown จากเส้น "ผม" vs ท่าพูดอาจารย์) + ajarnMoneyRisk (เงินโดยไม่มีเสียงแอดมิน = เสี่ยง) + SAFE_ADMIN_MONEY_FALLBACK · gotcha: regex ผม ห้าม require ช่องว่างนำหน้า (ไทยเขียนติด "เดี๋ยวผม") — baseline check จับ regression นี้ได้เองครั้งแรก ✓
+- orchestrator: consult ขาออกผ่าน guard chain ใหม่ — ajarnMoneyRisk → regenerate 1 ครั้งพร้อมคำสั่งแก้ → ยังเสี่ยง = fallback แอดมินล้วน (AJARN_MONEY_PRESEND_BLOCKED/FALLBACK logs) · เสียงที่ resolve แล้วส่งเป็น speakerRoleOverride เข้า gateway → history/monitor ได้ tag admin/ajarn/mixed จริงแทน "consult" กำกวม (Codex C3) · Telegram alert เดิมกลายเป็นชั้นสำรองตามแผน
+- handoff state MVP: redis persona:last_speaker (TTL 30 นาที) → inject เข้า consult prompt "เสียงเดิมตอบต่อ ไม่ handoff ซ้ำ" (Codex H6 ขั้นแรก — state เต็ม topic/scanResultId รอบถัดไป)
+- gateway: speakerRoleOverride param + sendGatewayReply ส่งผ่าน 2 จุด · test personaRole 3 ตัว · suite 955 pass / 19 known-fail
+- ค้างในชุดนี้: detector ปลด consult กลับเข้าเงื่อนไข (รอ tag ใหม่สะสมก่อน) · C1 thumbnail การ์ดถามข้อมูล · rich menu 6 ช่อง + broadcast (เฟส A ส่วนโครง)
+
+## 2026-08-12 | Codex | Review persona hardening commit bccf43f — พบ blocker ก่อน production
+- reproduce regression: sequence และ push gateway ส่ง LINE สำเร็จก่อนชน `ReferenceError: speakerRoleOverride is not defined` เพราะสองฟังก์ชันไม่ได้ destructure field จาก opts; baseline manifest ไม่จับเพราะ test ไม่มี success-path สองเส้นนี้
+- C2 ยัง bypass ได้ด้วยคำว่า `ผม`: mixed เช่นอาจารย์อ่านพลังแล้วแอดมินพูดเงินใน bubble เดียวผ่าน guard และ teacher ที่ใช้สรรพนามผิดก็ผ่าน · fallback ยังชวน “สนใจแบบไหน/มีตัวเลือก” ซึ่งอาจทำซ้ำเหตุขายของเอง
+- C3 ยัง tag `unknown` กลับเป็น `consult`; คำอ่านทั่วไปไม่มี marker อาจ unknown ได้ จึงยังไม่ใช่ทุก consult มี role จริง
+- H6 เป็น last-speaker hint ไม่ใช่ handoff state เต็ม และ wrapper ไม่คืน gateway result จึง set state ได้แม้ข้อความถูก suppress · บันทึกข้อเสนอไว้ใน CODEX_REVIEW; ไม่แก้ runtime และไม่ deploy
+
+## 2026-08-12 | Claude | Codex รอบ 4 (bccf43f) — แก้ blocker ครบ 7 ข้อ
+- 🔴 ReferenceError speakerRoleOverride ใน sequence/push (ผม replace ทั้งไฟล์แต่เพิ่ม param ฟังก์ชันเดียว — error หลัง LINE ส่งสำเร็จ = history หาย/เสี่ยง retry ซ้ำ): destructure ครบทั้ง 2 ฟังก์ชัน + success-path tests ทั้งสองเส้น
+- guard เข้มขึ้น: ajarnMoneyRisk = มีคำเงิน && resolveSpeakerRole(text) !== "admin" — mixed/ajarn/unknown โดน block หมด (เดิมเช็คแค่มีคำ "ผม" mixed หลุด)
+- fallback แยกตาม intent: ลูกค้าถามเงินจริง → คืน false ให้ deterministic payment flow ตอบ (ไม่ผ่าน LLM) · ไม่ได้ถามเงิน → NEUTRAL_RECOVERY_FALLBACK กลาง ๆ ไม่มีคำขาย (เดิม fallback ยังชวนขาย = ทำซ้ำปัญหาแค่เปลี่ยนคนพูด — Codex ชี้ถูก)
+- sendGatewayReply คืนผล gateway แล้ว · last_speaker เขียนเฉพาะ sent===true (dedupe/suppress ไม่อัปเดต state) · unknown คง tag "consult" ไม่อ้างว่า resolved
+- adversarial tests 2 ชุด (mixed bubble/เส้นผม documented limitation/fallback ไม่มีคำขาย) · suite 957 pass / 19 known-fail เดิม
+- ตกลงตาม Codex: consult ยังไม่ปลดเข้า detector จนกว่า tag ใหม่สะสม 2-3 วัน · H6 ยังเรียก hint ไม่ใช่ state เต็ม (topic/turnId/scanResultId รอบถัดไป) · router ใช้ route/intent เป็นหลัก = งานรอบ mixed-split
+
+## 2026-08-12 | Codex | Review commit 5583238 — gateway ปิด แต่ fallback routing ยังมี 3 blocker
+- ยืนยัน ReferenceError sequence/push ปิดจริง · targeted persona+gateway 11/11 ผ่าน · mixed/ajarn/unknown+เงินถูก block และ state เขียนเฉพาะ sent จริง
+- พบว่า `return false` ใน tryConsultReply ไม่ได้ defer ถึง deterministic payment ตาม comment: caller ไหลต่อเข้า Gemini phrasing ใน orchestrator
+- guard ยังอนุญาต retry ที่เป็น admin+เงิน แม้ user ไม่ได้ถามเงิน จึงยังกัน “เสนอขายเอง” ไม่ครบ; ต้องตรวจ user intent/paywall state แยกจาก speaker role
+- neutral fallback มีคำ “เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่” แต่ไม่มี ajarn follow-up ใน turn เดียวกัน จึงสร้าง dangling handoff/ลูกค้ารอเอง
+- test gap: ยังไม่มี orchestrator branch tests สำหรับ blocked→retry→defer/fallback และ gateway tests ยังไม่ assert persisted metadata · บันทึกใน CODEX_REVIEW; ไม่แก้ runtime/ไม่ deploy
+
+## 2026-08-12 | Claude | Codex รอบ 5 (5583238) — แก้ 3 logic blockers
+- ①tryConsultReply เปลี่ยนเป็น typed outcome ("sent"/"defer_payment"/false) — defer_payment ออกจาก orchestrator ทันทีทั้ง 3 เส้น (consult/consult_help/consult_chat) ไม่ไหลลง Gemini phrasing อีก ให้ deterministic payment flow ชั้น webhook ตอบ
+- ②guard สองชั้น: evaluateMoneyGuard — ชั้นคนพูด (เงินต้องเป็นเสียงแอดมิน) + ชั้นจังหวะ (unsolicited: ลูกค้าไม่ได้ถามเงิน + ไม่อยู่ paywall/payment state = block แม้เสียงแอดมิน พร้อม directive "ตัดเงินออกทั้งหมด") — อุดช่อง "guard แค่ย้ายการขายไปให้อีกคนพูด" ที่ Codex ชี้
+- ③NEUTRAL_RECOVERY_FALLBACK เปลี่ยนเป็น "รบกวนถามเรื่องพลังอีกครั้งได้เลยครับ" — ตัวเก่า ("เดี๋ยวผมเรียนถามอาจารย์ให้ใหม่") match HANDOFF_RE ของ detector ตัวเอง = สร้าง dangling เอง · export HANDOFF_RE + test ล็อกว่า fallback ห้าม match
+- tests เพิ่ม: evaluateMoneyGuard 5 branch + fallback ไม่ match handoff — suite 959 pass / 19 known-fail เดิม · ขึ้น staging
+- ค้างที่ตกลงกับ Codex: assert persisted metadata ของ sequence/push (ต้อง DI ชั้น store = งาน test-mode refactor) · orchestrator integration tests เต็มเส้น (logic แตกเป็น pure function ให้เทสต์แล้วเป็นส่วนใหญ่)
+
+## 2026-08-12 | Codex | Review commit 4460f1d — guard/fallback ผ่าน เหลือ defer contract
+- ยืนยัน evaluateMoneyGuard และ fallback แก้ตรงข้อเสนอ · targeted persona+detector 13/13 ผ่าน · baseline script 959 pass / 19 known fail ไม่มี regression ใหม่
+- typed outcome หยุด fall-through เข้า Gemini phrasing ภายใน orchestrator ได้จริง แต่ `deferTo: deterministic_payment` ไม่มี consumer ใน repo; webhook ทุกจุดอ่านเพียง `.handled` จึงเป็น fallback ตาม branch เดิม ไม่ใช่ explicit payment routing ตามคำอธิบาย
+- เสนอให้ consume deferTo ที่ wrapper/dispatcher จริงพร้อม recursion guard และ integration test end-to-end หรือเปลี่ยน contract ให้ caller จัดการชัดเจน
+- `USER_MONEY_INTENT_RE` เป็น regex ซ้ำที่คำศัพท์แคบกว่าระบบ payment เดิม ควรรับ intent boolean จาก SSOT (`isPaymentCommand`/promo intent/planner) · บันทึกใน CODEX_REVIEW; ไม่แก้ runtime/ไม่ deploy
+
+## 2026-08-12 | Claude | Codex รอบ 6 (4460f1d) — ปิด blocker สุดท้าย: deferTo มีผู้รับจริงแล้ว
+- consumeOrchestratorOutcome (personaRole.util) = consumer กลาง: defer_payment → เรียก handlePaymentCommandTextRoute (SSOT payment route เดิม) ด้วย forcePaymentIntent=true 1 ครั้ง → ปิด turn (handled:true via deferred_deterministic_payment) · payment route ตอบไม่ได้ → handled:false ให้ flow เดิมต่อ ไม่เงียบใส่ลูกค้า · recursion guard: payment route ใช้ snapshot ตัวเอง ไม่วนกลับ wrapper และเส้น snapshot (ในตัว payment route) จงใจไม่ consume defer
+- SSOT intent: ctx.userMoneyIntent = isPaymentCommand||isPromoInquiryText ส่งจาก webhook ทั้ง 2 entry (wrapper หลัก + snapshot) — ครอบ โปร/ซื้อ/สมัคร/QR ตามพจนานุกรมเดิม · USER_MONEY_INTENT_RE ลดชั้นเป็น @deprecated fallback สำหรับ caller เก่า
+- tests: consumer 4 กรณี (defer→เรียก 1 ครั้ง+handled / payment fail→handled:false / ไม่มี defer / ไม่มี consumer) · suite 960 pass / 19 known-fail เดิม · ขึ้น staging
+- หนี้คงเหลือ (คิว DI/test-mode): integration เต็มเส้น blocked→defer→payment route จริง + assert persisted metadata sequence/push
+
+## 2026-08-12 | Codex | ตรวจปิด commit 058c151 — persona hardening ระยะแรกครบวงจร
+- ยืนยัน wrapper กลาง consume deferTo แล้วเรียก payment SSOT 1 ครั้งจริง; snapshot path ไม่ consume ซ้ำจึงไม่ recursion และ payment fail ยังปล่อย deterministic branch เดิมทำงานต่อ
+- ยืนยัน SSOT money intent ถูกส่งทั้ง main/snapshot entry; local regex เหลือ deprecated fallback
+- รัน targeted persona+detector 14/14 และ baseline 960 pass / 19 known fail ไม่มี regression ใหม่
+- ปิด blocker C2/C3/H6 ระยะแรกบน staging; งานรอบถัดไปยังเป็น mixed-split + planner-intent router + handoff state เต็ม + DI integration debts · ไม่ deploy production
+
+## 2026-08-12 | Claude | Codex รอบ 7 (058c151) — ✅ ผ่านทั้งชุด ไม่มี blocker ใหม่
+- Codex ยืนยัน: C2 pre-send money guard ระยะแรก ผ่าน · C3 role tagging ระยะแรก ผ่าน · H6 last-speaker hint ระยะแรก ผ่าน · defer consumer/recursion guard/SSOT intent ถูกต้องหมด · targeted 14/14 + baseline 960/19 ไม่มี regression
+- ข้อสังเกต (ไม่ใช่ blocker): handlePaymentCommandTextRoute มี LLM phrasing ภายในบาง branch — "deterministic" หมายถึง flow เป็นเจ้าของผลสุดท้าย ไม่วนซ้ำ ไม่ใช่ไร้ LLM สนิท (รับทราบ ตรงกัน)
+- คงเหลือฉบับเต็ม (คิวถัดไป): mixed-split · router จาก planner intent · handoff state เต็ม (topic/turnId/scanResultId/handoffDone) · integration+persisted metadata tests หลัง DI round · rich menu 6 ช่อง + broadcast (เฟส A โครง)
+- สถานะ staging stack พร้อมขึ้น pro 7 ก้อน: Spend-to-upgrade fix / Codex H4-H5-M7-M9-M11-M12 / detector เข้ม+await history / M10-B payment ไม่หน่วง / เคาะ C ถอดเสียงหลายรูป / persona hardening C2-C3-H6 ระยะแรก / defer consumer — รอกบสั่ง

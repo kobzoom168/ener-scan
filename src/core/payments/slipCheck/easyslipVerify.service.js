@@ -84,8 +84,18 @@ export async function verifySlipWithEasyslip({ imageBuffer, lineUserId, paymentI
 
   if (ok) {
     // Bank confirmed the transaction exists — now their extra checks:
+    // 12 ส.ค.: ยอดไม่ตรง ≠ สลิปปลอม — ปล่อยผ่านเป็น verified พร้อมยอดจริง ให้ evaluate
+    // ชั้นในจับ amount_mismatch เอง → เข้าตัวสลับแพ็กตามยอด/เครดิตอัปเกรด (เดิม return
+    // invalid ตรงนี้ = ตัด logic สลับแพ็ก 49→149 และเคสอัปเกรด 350 ตายทั้งคู่)
     if (expectedAmount != null && data.isAmountMatched === false) {
-      return { outcome: "invalid", failCode: "easyslip_amount_mismatch", failMessage: "amount mismatch", raw: data };
+      console.log(
+        JSON.stringify({
+          event: "EASYSLIP_AMOUNT_DIFFERS_PASSTHROUGH",
+          paymentIdPrefix: String(paymentId || "").slice(0, 8),
+          slipAmount: Number(data.rawSlip?.amount?.amount ?? data.amountInSlip) || null,
+          expectedAmount,
+        }),
+      );
     }
     const raw = data.rawSlip || {};
     const receiverMatched = data.matchedAccount != null;

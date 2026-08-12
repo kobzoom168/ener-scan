@@ -12,6 +12,16 @@ import {
 } from "./geminiPhrasingContext.builder.js";
 import { runGeminiPhrasing } from "./geminiPhrasing.service.js";
 import { runGeminiConsult } from "./geminiConsult.service.js";
+import {
+  resolveSpeakerRole,
+  evaluateMoneyGuard,
+  USER_MONEY_INTENT_RE,
+  NEUTRAL_RECOVERY_FALLBACK,
+} from "../personaRole.util.js";
+import { getValue, setLargeValueWithTtl } from "../../../redis/scanV2Redis.js";
+
+/** handoff state MVP: เสียงล่าสุดของบทสนทนา (TTL 30 นาที) */
+const lastSpeakerKey = (uid) => `persona:last_speaker:${uid}`;
 import { logGeminiOrchestrator } from "./geminiFront.telemetry.js";
 import { getGeminiConversationHistory } from "../../../utils/conversationHistory.util.js";
 
@@ -181,33 +191,109 @@ export async function runGeminiFrontOrchestrator(ctx) {
       Used for consult/help/chit-chat so the cheap model never writes to the
       customer directly unless consult fails. */
   async function tryConsultReply(via) {
+    const lastSpeaker = await getValue(lastSpeakerKey(ctx.userId)).catch(() => null);
     const consultText = await runGeminiConsult({
       userId: ctx.userId,
       userText: ctx.text,
       conversationHistory,
+      lastSpeaker: lastSpeaker || null,
     });
     if (!consultText) return false;
-    const guardedConsult = await guardStaleNoImageClaim(
+    let guardedConsult = await guardStaleNoImageClaim(
       guardEntitlementClaims(consultText.slice(0, 1800), via),
     );
-    await ctx.sendGatewayReply({
+    // pre-send money guard สองชั้น (Codex รอบ 5): ①เงินต้องออกจากเสียงแอดมิน
+    // ②และต้องเป็นจังหวะที่ลูกค้าถามเงิน/อยู่ payment state เท่านั้น (unsolicited = block
+    // แม้เสียงแอดมิน — ไม่งั้น guard แค่ย้ายการขายไปให้อีกคนพูด)
+    // SSOT ก่อน (isPaymentCommand/isPromoInquiryText จาก webhook ส่งเป็น boolean) —
+    // regex เป็น fallback ให้ caller เก่าเท่านั้น (Codex รอบ 6)
+    const userMoneyIntent =
+      typeof ctx.userMoneyIntent === "boolean"
+        ? ctx.userMoneyIntent
+        : USER_MONEY_INTENT_RE.test(String(ctx.text || ""));
+    const inPaymentState = /paywall|payment|slip|verify|awaiting/i.test(String(phase1 || ""));
+    const guardCtx = { userMoneyIntent, inPaymentState };
+    const verdict1 = evaluateMoneyGuard(guardedConsult, guardCtx);
+    if (!verdict1.ok) {
+      console.warn(
+        JSON.stringify({
+          event: "AJARN_MONEY_PRESEND_BLOCKED",
+          via,
+          reason: verdict1.reason,
+          attempt: 1,
+          sample: guardedConsult.slice(0, 120),
+        }),
+      );
+      const retry = await runGeminiConsult({
+        userId: ctx.userId,
+        userText: ctx.text,
+        conversationHistory,
+        lastSpeaker: lastSpeaker || null,
+        extraDirective:
+          verdict1.reason === "unsolicited"
+            ? "คำตอบก่อนหน้าของคุณผิดกติกาใหญ่: พูดเรื่องเงิน/ค่าครู/สิทธิ์ทั้งที่ลูกค้าไม่ได้ถาม — ตอบใหม่โดยตัดเรื่องเงิน/ค่าครู/สิทธิ์/แพ็กออกทั้งหมด ตอบเฉพาะเรื่องที่ลูกค้าถามเท่านั้น"
+            : "คำตอบก่อนหน้าของคุณผิดกติกาใหญ่: พูดเรื่องเงิน/ค่าครู/สิทธิ์โดยไม่ใช่เสียงแอดมิน — ตอบใหม่: ส่วนที่เป็นเงินต้องพูดเป็นเสียงแอดมิน (เรียกตัวเองว่า ผม) เท่านั้น หรือถ้าเงินไม่จำเป็นต่อคำถาม ให้ตัดเรื่องเงินออกทั้งหมด",
+      });
+      const retryGuarded = retry
+        ? await guardStaleNoImageClaim(guardEntitlementClaims(retry.slice(0, 1800), via))
+        : null;
+      if (retryGuarded && evaluateMoneyGuard(retryGuarded, guardCtx).ok) {
+        guardedConsult = retryGuarded;
+      } else if (userMoneyIntent) {
+        // ลูกค้าถามเงินจริง → ออกจาก orchestrator ทันที (typed outcome — ห้ามไหลลง
+        // Gemini phrasing) ให้ deterministic payment flow ของ webhook ชั้นนอกตอบ
+        console.warn(
+          JSON.stringify({ event: "AJARN_MONEY_PRESEND_DEFER_TO_PAYMENT_FLOW", via }),
+        );
+        return "defer_payment";
+      } else {
+        console.warn(
+          JSON.stringify({ event: "AJARN_MONEY_PRESEND_FALLBACK", via, reason: verdict1.reason }),
+        );
+        guardedConsult = NEUTRAL_RECOVERY_FALLBACK;
+      }
+    }
+    // role router (Codex C3): resolve เสียงจริงก่อนส่ง — history/monitor ได้ tag ตรง
+    const speaker = resolveSpeakerRole(guardedConsult);
+    const sendRes = await ctx.sendGatewayReply({
       replyType: "gemini_front_consult",
       semanticKey: `gemini_front_consult:${phase1}`,
       text: guardedConsult,
       alternateTexts: [],
+      // unknown = surface resolve ไม่ได้ → คง tag consult ตามจริง ไม่อ้างว่า resolved
+      speakerRoleOverride: speaker === "unknown" ? "consult" : speaker,
     });
-    logGeminiOrchestrator({ mode: "active", handled: true, via });
-    return true;
+    // จำเสียงล่าสุด 30 นาที (handoff hint — ยังไม่ใช่ state เต็ม topic/turnId/scanResultId)
+    // เขียนเฉพาะข้อความที่ส่งจริง — dedupe/suppress ห้ามอัปเดต state (Codex รอบ 4 ข้อ 6)
+    if ((speaker === "ajarn" || speaker === "admin") && sendRes?.sent === true) {
+      void setLargeValueWithTtl(lastSpeakerKey(ctx.userId), speaker, 1800).catch(() => {});
+    }
+    logGeminiOrchestrator({ mode: "active", handled: true, via, speaker });
+    return "sent";
   }
 
   if (resolved === "consult_amulet") {
-    if (await tryConsultReply("consult")) return { handled: true, mode: "active" };
+    {
+      const consultOutcome = await tryConsultReply("consult");
+      if (consultOutcome === "sent") return { handled: true, mode: "active" };
+      if (consultOutcome === "defer_payment") {
+        // ออกทั้ง orchestrator — ห้ามไหลลง phrasing (Codex รอบ 5 ข้อ 1)
+        return { handled: false, mode: "active", deferTo: "deterministic_payment" };
+      }
+    }
     // consult failed → fall through to a safe generic phrase (below)
   }
 
   if (resolved === "send_help_reply") {
     // Smart brain first — help answers are exactly where flash-lite sounded flat.
-    if (await tryConsultReply("consult_help")) return { handled: true, mode: "active" };
+    {
+      const consultOutcome = await tryConsultReply("consult_help");
+      if (consultOutcome === "sent") return { handled: true, mode: "active" };
+      if (consultOutcome === "defer_payment") {
+        // ออกทั้ง orchestrator — ห้ามไหลลง phrasing (Codex รอบ 5 ข้อ 1)
+        return { handled: false, mode: "active", deferTo: "deterministic_payment" };
+      }
+    }
     const ph = await runGeminiPhrasing({
       allowedFacts: buildAllowedFactsForPhrasing({
         phase1State: phase1,
@@ -251,7 +337,14 @@ export async function runGeminiFrontOrchestrator(ctx) {
 
   // Chit-chat / context replies (no state correction pending) → smart brain first.
   if (!v.deny_reason && (resolved === "noop_phrase_only" || resolved === "get_conversation_context")) {
-    if (await tryConsultReply("consult_chat")) return { handled: true, mode: "active" };
+    {
+      const consultOutcome = await tryConsultReply("consult_chat");
+      if (consultOutcome === "sent") return { handled: true, mode: "active" };
+      if (consultOutcome === "defer_payment") {
+        // ออกทั้ง orchestrator — ห้ามไหลลง phrasing (Codex รอบ 5 ข้อ 1)
+        return { handled: false, mode: "active", deferTo: "deterministic_payment" };
+      }
+    }
   }
 
   const ph = await runGeminiPhrasing({

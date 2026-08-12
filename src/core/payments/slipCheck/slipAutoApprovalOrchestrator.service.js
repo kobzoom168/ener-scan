@@ -4,7 +4,7 @@ import { evaluateSlipAutoApproval } from "./slipAutoApproval.service.js";
 import { isSlipokConfigured, verifySlipWithSlipok } from "./slipokVerify.service.js";
 import { isEasyslipConfigured, verifySlipWithEasyslip } from "./easyslipVerify.service.js";
 import { loadActiveScanOffer } from "../../../services/scanOffer.loader.js";
-import { findActivePackageByPriceThb } from "../../../services/scanOffer.packages.js";
+import { findActivePackageByPriceThb, findPackageByKey } from "../../../services/scanOffer.packages.js";
 import { switchPendingPaymentPackage } from "../../../stores/payments.db.js";
 
 /** Pick the configured bank-verification provider (EasySlip preferred). */
@@ -194,17 +194,54 @@ export async function runSlipAutoApprovalAfterGateAccept({
   ) {
     try {
       const offer = loadActiveScanOffer(now);
-      const matched = findActivePackageByPriceThb(offer, ocrResult.amount);
+      let matched = findActivePackageByPriceThb(offer, ocrResult.amount);
+      let upgradeExpectedOverride = null;
+      // ยอดไม่ตรงราคาแพ็กไหนเลย → เช็คเคสอัปเกรด Spend-to-upgrade (เคสจริง 12 ส.ค.:
+      // ข้อเสนอบอก "หัก 49 เหลือ 350" ลูกค้าโอน 350 = ราคาแพ็กใหญ่ − เครดิตวันนี้พอดี
+      // → สลับบิลเป็นแพ็กใหญ่ ยอดคาดหวัง = ยอดหักแล้ว อนุมัติอัตโนมัติ ไม่ต้องรอ admin)
+      if (!matched && userId) {
+        try {
+          const { getUpgradeCreditForLineUser } = await import(
+            "../../../services/upgradeCredit.service.js"
+          );
+          const credit = await getUpgradeCreditForLineUser(userId);
+          if (credit && Number(ocrResult.amount) === Number(credit.payThb)) {
+            const target = findPackageByKey(offer, credit.monthlyPkgKey);
+            if (target) {
+              matched = target;
+              upgradeExpectedOverride = Number(credit.payThb);
+              console.log(
+                JSON.stringify({
+                  event: "SLIP_UPGRADE_CREDIT_MATCHED",
+                  paymentId,
+                  lineUserIdPrefix: String(userId || "").slice(0, 8),
+                  slipAmount: Number(ocrResult.amount),
+                  creditThb: credit.creditThb,
+                  targetPackageKey: credit.monthlyPkgKey,
+                }),
+              );
+            }
+          }
+        } catch { /* เช็คเครดิตพลาด = ไปคิว admin ตามเดิม */ }
+      }
       const expectedAmount = Number(payment?.expected_amount ?? payment?.amount);
       if (matched && Number(matched.priceThb) !== expectedAmount) {
         const applied = await switchPendingPaymentPackage({ paymentId, pkg: matched });
+        if (applied && upgradeExpectedOverride != null) {
+          // เคสอัปเกรด: ยอดคาดหวัง = ราคาแพ็ก − เครดิตวันนี้ (ไม่ใช่ราคาเต็ม)
+          await updatePaymentFields(paymentId, {
+            amount: upgradeExpectedOverride,
+            expected_amount: upgradeExpectedOverride,
+          });
+        }
         if (applied) {
+          const effAmount = upgradeExpectedOverride != null ? upgradeExpectedOverride : matched.priceThb;
           const patchedPayment = {
             ...payment,
             package_code: matched.key,
             package_name: matched.label,
-            amount: matched.priceThb,
-            expected_amount: matched.priceThb,
+            amount: effAmount,
+            expected_amount: effAmount,
             unlock_hours: matched.windowHours,
           };
           result = await evaluate({ payment: patchedPayment, ocrResult, now });

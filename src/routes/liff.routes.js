@@ -1262,12 +1262,13 @@ liffRouter.post("/api/liff/pay/create", express.json(), async (req, res) => {
       packages[0];
     if (!pkg) return res.status(409).json({ ok: false, error: "no_active_package" });
 
-    // เครดิตอัปเกรด: รายเดือน + มีสิทธิ์ → คิดยอดฝั่ง server เท่านั้น (ไม่เชื่อ client)
+    // เครดิตอัปเกรด: คิดยอดฝั่ง server เท่านั้น (ไม่เชื่อ client)
+    // 12 ส.ค.: ตัดเงื่อนไข unlimited เดิม (แพ็ก 299 เลิกขาย ทำเครดิตไม่เคยหักให้ 399/30ครั้ง)
     let payAmountThb = Number(pkg.priceThb);
     let appliedCreditThb = null;
-    if (Number(pkg.scanCount) >= 999999) {
+    {
       const credit = await getUpgradeCreditForLineUser(userId).catch(() => null);
-      if (credit && credit.monthlyPkgKey === pkg.key) {
+      if (credit && String(credit.monthlyPkgKey) === String(pkg.key)) {
         payAmountThb = credit.payThb;
         appliedCreditThb = credit.creditThb;
       }

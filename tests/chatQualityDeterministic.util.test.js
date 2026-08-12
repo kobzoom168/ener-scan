@@ -44,6 +44,25 @@ test("ข้อความเดิมซ้ำ 3 ครั้งใน 10 น�
   assert.equal(detectRepeatedBotMessages(spread).length, 0);
 });
 
+test("post-rollout ไม่มี tag = ไม่นับเป็นคำตอบ (กัน metadata regression) / consult ไม่นับ", () => {
+  // ใช้เวลาแบบหลังวัน rollout metadata (13 ส.ค.) — no-tag ต้องไม่ผ่านเป็น legacy
+  const t1 = Date.parse("2026-08-13T03:00:00Z");
+  const late = (min, role, text, meta = null) => ({
+    role,
+    text,
+    created_at: new Date(t1 + min * 60_000).toISOString(),
+    ...(meta ? { metadata_json: meta } : {}),
+  });
+  const admin = { speakerRole: "admin", replyType: "x" };
+  const rows = [
+    late(0, "user", "ถามหน่อย"),
+    late(1, "bot", "เดี๋ยวผมเรียนถามอาจารย์ให้ครับ", admin),
+    late(2, "bot", "ข้อความไม่มี tag (หลัง rollout)"),
+    late(3, "bot", "ตอบแบบ consult", { speakerRole: "consult" }),
+  ];
+  assert.equal(detectDanglingHandoff(rows).length, 1);
+});
+
 test("handoff แล้วเงียบ = จับ / มีคำตอบตามมา = ไม่จับ", () => {
   const dangling = [
     row(0, "user", "องค์นี้เหมาะกับงานไหม"),
@@ -81,4 +100,21 @@ test("analyzer prompt รู้จัก 2 บทบาท และไม่ต
   assert.ok(breachLine.includes("NOT a break"));
   // อาจารย์พูดเงินต้องถูกระบุเป็น violation ร้ายแรง
   assert.ok(ANALYZER_SYSTEM.includes("อาจารย์พูดเรื่องเงิน"));
+});
+
+test("handoff + ข้อความแอดมิน (tagged) = ยัง dangling / + scan_result = จบ (Codex H5)", () => {
+  const admin = { speakerRole: "admin", replyType: "quota_notice" };
+  const scanDone = { speakerRole: "ajarn", replyType: "scan_result" };
+  const stillDangling = [
+    row(0, "user", "องค์นี้เหมาะไหม"),
+    row(1, "bot", "เดี๋ยวผมเรียนถามอาจารย์ให้ครับ", admin),
+    row(2, "bot", "ตอนนี้เหลือสิทธิ์ 2 ครั้งครับ", admin),
+  ];
+  assert.equal(detectDanglingHandoff(stillDangling).length, 1);
+  const completed = [
+    row(0, "user", "องค์นี้เหมาะไหม"),
+    row(1, "bot", "เดี๋ยวผมเรียนถามอาจารย์ให้ครับ", admin),
+    row(3, "bot", "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]", scanDone),
+  ];
+  assert.equal(detectDanglingHandoff(completed).length, 0);
 });

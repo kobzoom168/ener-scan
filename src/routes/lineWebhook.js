@@ -151,6 +151,7 @@ import {
   sendNonScanPaymentQrInstructions,
   sendNonScanPushMessage,
 } from "../services/nonScanReply.gateway.js";
+import { consumeOrchestratorOutcome } from "../core/conversation/personaRole.util.js";
 import {
   logMultiImageGroupRejected,
   sendMultiImageRejectionViaGateway,
@@ -1001,6 +1002,8 @@ async function invokePhase1GeminiFromSnapshot({
     userId,
     text,
     lowerText,
+    // SSOT intent (Codex รอบ 6) · เส้นนี้อยู่ใน payment route แล้ว — defer ไม่ consume กัน recursion
+    userMoneyIntent: isPaymentCommand(text, lowerText) || isPromoInquiryText(text),
     phase1State: phase1GeminiKey,
     conversationOwner: snapshot.geminiConversationOwner,
     paymentState: snapshot.paymentState,
@@ -1009,8 +1012,8 @@ async function invokePhase1GeminiFromSnapshot({
     pendingPaymentStatus: snapshot.pendingStatus || null,
     selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
     noProgressStreak: snapshot.activeResolved.noProgressStreak ?? 0,
-    sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts }) => {
-      await sendNonScanReply({
+    sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts, speakerRoleOverride }) => {
+      return await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
@@ -1018,6 +1021,7 @@ async function invokePhase1GeminiFromSnapshot({
         semanticKey,
         text,
         alternateTexts: alternateTexts || [],
+        speakerRoleOverride: speakerRoleOverride || null,
       });
     },
     delegates,
@@ -1906,10 +1910,15 @@ async function handlePaymentCommandTextRoute({
   }
 
   const currency = env.PAYMENT_UNLOCK_CURRENCY || "THB";
-  // เครดิตอัปเกรด: เพิ่งจ่ายแพ็กเริ่มต้นภายในกำหนด → รายเดือนหักให้อัตโนมัติ (299→250)
+  // เครดิตอัปเกรด Spend-to-upgrade: พิมพ์ "จ่าย 399" ตอนมีเครดิตวันนี้ → หักให้อัตโนมัติ
+  // (เคสจริง 12 ส.ค.: เงื่อนไขเดิมเช็ค unlimited ของแพ็ก 299 ที่เลิกขาย → 399/30ครั้ง
+  // ไม่เข้าเงื่อนไข บิลเต็มราคาทั้งที่ข้อเสนอบอกลูกค้าว่าเหลือ 350 → ลูกค้าโอน 350 แล้วระบบงง)
   let upgradeCredit = null;
-  if (isUnlimitedScanCount(paidPackage.scanCount)) {
-    upgradeCredit = await getUpgradeCreditForLineUser(userId).catch(() => null);
+  {
+    const credit = await getUpgradeCreditForLineUser(userId).catch(() => null);
+    if (credit && String(credit.monthlyPkgKey) === String(paidPackage.key)) {
+      upgradeCredit = credit;
+    }
   }
   const payAmountThb = upgradeCredit ? upgradeCredit.payThb : paidPackage.priceThb;
   if (upgradeCredit) {
@@ -4450,10 +4459,11 @@ async function handleTextMessage({ client, event, userId, session }) {
       canonicalStateOwner,
     });
     if (!phase1GeminiKey) return { handled: false };
-    return runGeminiFrontOrchestrator({
+    const orchRes = await runGeminiFrontOrchestrator({
       userId,
       text,
       lowerText,
+      userMoneyIntent: isPaymentCommand(text, lowerText) || isPromoInquiryText(text),
       phase1State: phase1GeminiKey,
       conversationOwner: geminiConversationOwner,
       paymentState,
@@ -4462,8 +4472,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       pendingPaymentStatus: pendingStatus || null,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
       noProgressStreak: activeResolved.noProgressStreak ?? 0,
-      sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts }) => {
-        await sendNonScanReply({
+      sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts, speakerRoleOverride }) => {
+        return await sendNonScanReply({
           client,
           userId,
           replyToken: event.replyToken,
@@ -4471,6 +4481,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey,
           text,
           alternateTexts: alternateTexts || [],
+          speakerRoleOverride: speakerRoleOverride || null,
         });
       },
       delegates: {
@@ -4706,6 +4717,22 @@ async function handleTextMessage({ client, event, userId, session }) {
           return true;
         },
       },
+    });
+    // Codex รอบ 6: deferTo ต้องมีผู้รับจริง — defer_payment → เรียก payment route
+    // เดิม (SSOT) ด้วย forcePaymentIntent แล้วปิด turn · recursion guard: payment
+    // route ใช้ snapshot ของตัวเอง ไม่วนกลับมา wrapper นี้
+    return await consumeOrchestratorOutcome(orchRes, {
+      runDeterministicPayment: () =>
+        handlePaymentCommandTextRoute({
+          client,
+          event,
+          userId,
+          session,
+          text,
+          lowerText,
+          isPaywallGateWithPendingScan,
+          forcePaymentIntent: true,
+        }),
     });
   };
 
