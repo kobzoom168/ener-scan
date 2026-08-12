@@ -549,3 +549,9 @@
 - SSOT intent: ctx.userMoneyIntent = isPaymentCommand||isPromoInquiryText ส่งจาก webhook ทั้ง 2 entry (wrapper หลัก + snapshot) — ครอบ โปร/ซื้อ/สมัคร/QR ตามพจนานุกรมเดิม · USER_MONEY_INTENT_RE ลดชั้นเป็น @deprecated fallback สำหรับ caller เก่า
 - tests: consumer 4 กรณี (defer→เรียก 1 ครั้ง+handled / payment fail→handled:false / ไม่มี defer / ไม่มี consumer) · suite 960 pass / 19 known-fail เดิม · ขึ้น staging
 - หนี้คงเหลือ (คิว DI/test-mode): integration เต็มเส้น blocked→defer→payment route จริง + assert persisted metadata sequence/push
+
+## 2026-08-12 | Codex | ตรวจปิด commit 058c151 — persona hardening ระยะแรกครบวงจร
+- ยืนยัน wrapper กลาง consume deferTo แล้วเรียก payment SSOT 1 ครั้งจริง; snapshot path ไม่ consume ซ้ำจึงไม่ recursion และ payment fail ยังปล่อย deterministic branch เดิมทำงานต่อ
+- ยืนยัน SSOT money intent ถูกส่งทั้ง main/snapshot entry; local regex เหลือ deprecated fallback
+- รัน targeted persona+detector 14/14 และ baseline 960 pass / 19 known fail ไม่มี regression ใหม่
+- ปิด blocker C2/C3/H6 ระยะแรกบน staging; งานรอบถัดไปยังเป็น mixed-split + planner-intent router + handoff state เต็ม + DI integration debts · ไม่ deploy production

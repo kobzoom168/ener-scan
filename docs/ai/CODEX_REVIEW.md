@@ -104,6 +104,15 @@
 - ต้องเลือกอย่างใดอย่างหนึ่ง: (A) ให้ wrapper กลาง consume `deferTo` และเรียก deterministic payment handlerพร้อมกัน recursion หรือ (B) เปลี่ยน contract เป็น outcome ที่ caller แต่ละ insertion point จัดการและมี integration test ยืนยัน customer money turn ได้ price/QR/clarifier เพียงหนึ่งคำตอบ
 - **Intent vocabulary gap:** `USER_MONEY_INTENT_RE` ยังไม่ครอบคำที่ระบบ payment เดิมรู้จักทั้งหมด เช่น `โปร`, `QR/คิวอาร์`, `ซื้อ`, `เพิ่มรอบ`, `ต่อสมาชิก`; ควร reuse SSOT `isPaymentCommand/isPromoInquiryText` หรือส่ง boolean intent จาก webhook/planner แทน regex ชุดใหม่
 
+### Review commit `058c151`
+
+- **ปิด blocker defer contract:** main webhook wrapper consume `deferTo=deterministic_payment` แล้วเรียก `handlePaymentCommandTextRoute(... forcePaymentIntent:true)` หนึ่งครั้ง; success คืน handled=true ให้ call sites เดิมหยุด และ failure คืน handled=false ให้ deterministic branch เดิมเดินต่อ
+- **recursion guard ถูกต้อง:** payment handler เรียก snapshot orchestrator path ซึ่งไม่ consume defer ซ้ำ จึงไม่มีวงวนกลับ wrapper
+- **ปิด intent drift ระยะแรก:** main และ snapshot entries ส่ง `userMoneyIntent = isPaymentCommand || isPromoInquiryText` จาก SSOT เดิม; regex local เหลือ deprecated fallback เท่านั้น
+- Codex รัน targeted persona+detector 14/14 และ baseline 960 pass / 19 known-fail ไม่มี regression ใหม่
+- หมายเหตุไม่เป็น blocker: ชื่อ “deterministic payment route” ยังมี Phase-1 Gemini hook ภายในบาง branch แต่ hook ไม่ consume ซ้ำและ deterministic fallback ยังเป็นเจ้าของผลสุดท้าย
+- สถานะ: C2/C3/H6 **ระยะแรกครบวงจรบน staging**; ยังไม่เท่ากับ C3/H6 ฉบับเต็ม — mixed-split, planner-intent role routing และ state topic/turnId/scanResultId/handoffDone ยังเป็นรอบถัดไป
+
 ### Object-info gate / concurrent scans
 
 - ไม่บล็อกลูกค้าสแกนชิ้นถัดไประหว่างเกตค้าง เพราะเคยทำให้ลูกค้าสแกนจำนวนมากโดนถามซ้ำหลายรอบ
@@ -152,6 +161,7 @@
 | 12 ส.ค. 2026 | Codex | `bccf43f` persona hardening ระยะแรก | รับทิศทาง แต่พบ gateway ReferenceError, money guard bypass ด้วย `ผม`, unknown ยังเป็น consult และ state ไม่รู้ send/suppress | แก้ก่อน production; C2/C3/H6 ยังเป็น partial |
 | 12 ส.ค. 2026 | Codex | `5583238` | ReferenceError/role guard/send-result แก้จริง; targeted 11/11 ผ่าน แต่ defer routing, unsolicited admin money และ dangling fallback ยังผิด | แก้ 3 logic blockers + เพิ่ม orchestrator branch tests |
 | 12 ส.ค. 2026 | Codex | `4460f1d` | guard timing/fallback ปิด; targeted 13/13 + baseline 959/19 ผ่าน | `deferTo` ยังไม่มี consumer; intent regex ต้องใช้ payment SSOT |
+| 12 ส.ค. 2026 | Codex | `058c151` | defer consumer + payment SSOT ต่อครบ; targeted 14/14 + baseline 960/19 ผ่าน | mixed-split/planner router, handoff state เต็ม, DI integration debts |
 
 ## กติกาการอัปเดตไฟล์นี้
 
