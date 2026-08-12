@@ -561,3 +561,8 @@
 - ข้อสังเกต (ไม่ใช่ blocker): handlePaymentCommandTextRoute มี LLM phrasing ภายในบาง branch — "deterministic" หมายถึง flow เป็นเจ้าของผลสุดท้าย ไม่วนซ้ำ ไม่ใช่ไร้ LLM สนิท (รับทราบ ตรงกัน)
 - คงเหลือฉบับเต็ม (คิวถัดไป): mixed-split · router จาก planner intent · handoff state เต็ม (topic/turnId/scanResultId/handoffDone) · integration+persisted metadata tests หลัง DI round · rich menu 6 ช่อง + broadcast (เฟส A โครง)
 - สถานะ staging stack พร้อมขึ้น pro 7 ก้อน: Spend-to-upgrade fix / Codex H4-H5-M7-M9-M11-M12 / detector เข้ม+await history / M10-B payment ไม่หน่วง / เคาะ C ถอดเสียงหลายรูป / persona hardening C2-C3-H6 ระยะแรก / defer consumer — รอกบสั่ง
+
+## 2026-08-12 | Claude | ขึ้น Pro ทั้ง stack (กบสั่ง) — 25 ไฟล์
+- sync staging→main → deploy pro healthy: Spend-to-upgrade fix ทั้งสาย + EasySlip passthrough + persona hardening (role router/money guard 2 ชั้น/handoff hint/defer consumer) + monitor H4-H5 + M10-B + เคาะ C + copy fixes
+- smoke: web 200 · ไม่มี error ใน 3 containers · AMULET_SCORE_V4 flag ไม่มีบน pro = ลูกค้ายังเห็น v3 ตามแผน shadow
+- จับตาหลัง deploy: AJARN_MONEY_PRESEND_* logs (guard ทำงานจริงครั้งแรกบน pro) + ORCH_DEFER_PAYMENT_CONSUMED + รายงาน monitor 6 โมงพรุ่งนี้
