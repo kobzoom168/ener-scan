@@ -269,7 +269,8 @@ export function permissiveLabelFromParsedJson(parsed) {
 async function callObjectCheckModel(instructionText, imageBase64) {
   const model = OBJECT_CHECK_MODEL;
   console.log("[OPENAI_MODEL]", model);
-  return openai.responses.create({
+  const mainPromise = openai.responses.create({
+    user: "objectCheck",
     model,
     temperature: 0,
     input: [
@@ -288,6 +289,55 @@ async function callObjectCheckModel(instructionText, imageBase64) {
       },
     ],
   });
+  // detail:"low" SHADOW (Codex อนุมัติ 13 ส.ค. — log เทียบทุก label เท่านั้น
+  // ห้ามกระทบคำตัดสินจริงเด็ดขาด): เก็บ false accept / false reject จริงก่อน
+  // ตัดสินใจสลับ · เปิดด้วย OBJECT_CHECK_LOW_SHADOW_ENABLED (default ปิด)
+  if (
+    String(process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED ?? "false").trim().toLowerCase() === "true"
+  ) {
+    void (async () => {
+      try {
+        const lowRes = await openai.responses.create({
+          user: "objectCheckLowShadow",
+          model,
+          temperature: 0,
+          input: [
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: instructionText },
+                {
+                  type: "input_image",
+                  image_url: `data:image/jpeg;base64,${imageBase64}`,
+                  detail: "low",
+                },
+              ],
+            },
+          ],
+        });
+        const mainRes = await mainPromise.catch(() => null);
+        const norm = (r) => String(r?.output_text || "").trim().slice(0, 120);
+        const a = norm(mainRes);
+        const b = norm(lowRes);
+        console.log(
+          JSON.stringify({
+            event: "OBJECT_CHECK_LOW_SHADOW",
+            match: a === b,
+            full: a,
+            low: b,
+          }),
+        );
+      } catch (e) {
+        console.log(
+          JSON.stringify({
+            event: "OBJECT_CHECK_LOW_SHADOW_ERROR",
+            message: String(e?.message || e).slice(0, 120),
+          }),
+        );
+      }
+    })();
+  }
+  return mainPromise;
 }
 
 const STRICT_PROMPT = `

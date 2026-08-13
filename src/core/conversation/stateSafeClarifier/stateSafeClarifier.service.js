@@ -278,6 +278,7 @@ function buildPayload({ activeState, text, facts, conversationHistory }) {
 async function runGeminiClarifier(payload) {
   if (!isGeminiConfigured()) throw new Error("gemini_not_configured");
   const model = getGeminiFlashModel({
+    callSite: "stateSafeClarifier",
     systemInstruction: STATE_SAFE_CLARIFIER_SYSTEM_PROMPT,
     jsonMode: true,
   });

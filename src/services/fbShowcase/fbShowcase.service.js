@@ -366,6 +366,7 @@ export async function buildCaption(piece) {
   let body = "";
   try {
     const model = getGeminiFlashModel({
+    callSite: "fbCaption",
       systemInstruction: CAPTION_SYSTEM,
       temperature: 0.7,
       timeoutMs: 20000,

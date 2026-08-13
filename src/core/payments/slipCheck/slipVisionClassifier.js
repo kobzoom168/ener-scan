@@ -52,6 +52,7 @@ export async function classifySlipWithVision(imageBase64) {
   try {
     const response = await Promise.race([
       openai.responses.create({
+        user: "slipVisionClassifier",
         model: env.SLIP_GATE_VISION_MODEL,
         temperature: 0,
         input: [

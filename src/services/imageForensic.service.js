@@ -93,6 +93,7 @@ export async function runImageForensicCheck(imageBase64) {
     const response = await Promise.race([
       withOpenAi429RetryOnce(() =>
         openai.responses.create({
+          user: "imageForensic",
           model: env.IMAGE_FORENSIC_MODEL,
           temperature: 0,
           input: [
@@ -238,6 +239,7 @@ export async function verifyChallengeThumbTouch(imageBase64) {
     const response = await Promise.race([
       withOpenAi429RetryOnce(() =>
         openai.responses.create({
+          user: "imageForensic",
           model: env.IMAGE_FORENSIC_MODEL,
           temperature: 0,
           input: [

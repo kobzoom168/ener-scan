@@ -22,6 +22,7 @@ export async function rephraseWithConversationModel(input) {
   const started = Date.now();
   const response = await withTimeout(
     openai.responses.create({
+      user: "conversationSurface",
       model,
       input: [
         {

@@ -577,3 +577,11 @@
 - ยืนยันตาม Codex: Opus cache ไม่ได้พัง (cache_control ทำงาน แต่ miss เพราะลูกค้าคุยห่าง + TTL สั้น) · ตัวเลข "system 14k chars" ที่ Claude อ้างผิด — วัดจริง GEMINI_CONSULT_SYSTEM = 27,551 chars + call consult จริงเฉลี่ย 29,169 tokens/ข้อความ (≈5.6 บาท/คำตอบลูกค้าจ่าย!) — ตัวหนักคือ user prompt (history+facts+KB+scan history) ไม่ใช่แค่ system
 - 🔍 Opus ลึกลับ 147 calls @714 tok = **VOICE_SCRIPT_MODEL default "anthropic/claude-opus-4.8"** (scanVoiceNote.service.js:348) — สคริปต์เสียงอาจารย์ทุกสแกนใช้ Opus เขียน 3-4 ประโยค ($1.07/4วัน) · ผ่าน API key เดียวกันแต่ไม่ติด app header เลยโผล่เป็น (unknown)
 - แผนตามลำดับ Codex (จดใน docs/ai/plans/openrouter-cost-audit-2026-08-13.md ของ Codex): ①call-site attribution ②ลด consult prompt ③KB retrieval ④objectCheck detail:low แบบ shadow+escalation ⑤voice script เปลี่ยนโมเดล (รอกบเคาะ — เป็น product surface เสียง) ⑥ยุบ mini calls หลังเห็น attribution — เป้า 45-60% (60-70% = stretch)
+
+## 2026-08-13 | Claude | Cost audit ข้อ ① เริ่มแล้ว: attribution + telemetry (staging) — ตามที่ Codex อนุมัติ
+- attribution ครบสองชั้น: ①OpenAI client via OpenRouter ติด X-Title "Ener Scan" (แก้ app (unknown) ในบิล) ②ทุก call ใหญ่ติด user=callSite: objectCheck/stableFeatureExtract/deepScan/voiceScript/slipVisionClassifier/slipOcr(ยังไม่เจอจุด req—ข้าม)/conversationSurface/smartRejection/imageForensic ③ฝั่ง front LLM (geminiFlash) ติด callSite: consult/planner/phrasing/chatQuality/semanticCatcher/stateSafeClarifier/synergyReport/ytShortCaption/fbCaption/reportEnglish
+- telemetry ใหม่: LLM_USAGE ต่อ call (promptChars/promptTokens/cachedTokens/completionTokens/callSite) + CONSULT_TURN_SPACING (ช่องห่างระหว่าง consult ต่อคน — ใช้คำนวณ break-even TTL 5 นาที vs 1 ชม. ตามที่ Codex สั่ง ไม่เดา)
+- objectCheck detail:low = SHADOW เท่านั้น หลัง flag OBJECT_CHECK_LOW_SHADOW_ENABLED (default ปิด) — ยิงคู่ขนาน log OBJECT_CHECK_LOW_SHADOW {match, full, low} ทุก label ไม่กระทบคำตัดสินจริง
+- แก้ถ้อยคำตาม Codex: เป้าลด 45-55% = เป้าทดลอง ยังไม่รับรองจนมี attribution+ผล shadow จริง · "คุณภาพเท่าเดิม 100%" → "โมเดลและ context ไม่เปลี่ยน ไม่คาดว่ากระทบ แต่ต้องมี regression comparison ยืนยัน"
+- ยังไม่แตะ: cache restructure/TTL (รอข้อมูล spacing) · prompt trim (รอ golden tests) · voice model (รอ attribution ยืนยันต้นทุนจริง)
+- baseline 960/19 เดิม · ขึ้น staging

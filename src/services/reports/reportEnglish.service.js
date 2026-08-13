@@ -99,6 +99,7 @@ Reply JSON only: {"items": ["<translation of item 1>", ...]} — same length and
  */
 async function translateChunk(items) {
   const model = getGeminiFlashModel({
+    callSite: "reportEnglish",
     systemInstruction: TRANSLATOR_SYSTEM,
     jsonMode: true,
     temperature: 0.2,

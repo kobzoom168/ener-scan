@@ -14,6 +14,11 @@ const rawClient = new OpenAI(
     ? {
         apiKey: String(process.env.OPENROUTER_API_KEY || "").trim(),
         baseURL: "https://openrouter.ai/api/v1",
+        // attribution (Codex 13 ส.ค.): ให้บิล OpenRouter เห็นชื่อ app แทน (unknown)
+        defaultHeaders: {
+          "HTTP-Referer": "https://scan.my-ener.uk",
+          "X-Title": "Ener Scan",
+        },
       }
     : { apiKey: env.OPENAI_API_KEY },
 );

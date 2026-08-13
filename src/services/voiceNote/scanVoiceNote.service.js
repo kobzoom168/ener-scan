@@ -359,6 +359,7 @@ async function generateVoiceScriptLLM(p) {
     const res = await Promise.race([
       withOpenAi429RetryOnce(() =>
         openai.responses.create({
+          user: "voiceScript",
           model,
           temperature: 0.8,
           input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],

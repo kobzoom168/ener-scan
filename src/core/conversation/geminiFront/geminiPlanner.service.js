@@ -50,6 +50,7 @@ export async function runGeminiPlannerWithMeta(userPayloadJson, opts = {}) {
     return { plan: null, outcome: "skipped_no_key" };
   }
   const model = getGeminiFlashModel({
+    callSite: "planner",
     systemInstruction: GEMINI_PLANNER_SYSTEM,
     jsonMode: true,
   });

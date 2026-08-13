@@ -167,6 +167,7 @@ async function buildShortContent(p) {
   };
   try {
     const model = getGeminiFlashModel({
+    callSite: "ytShortCaption",
       systemInstruction: SHORT_SYSTEM,
       temperature: 0.8,
       timeoutMs: 25000,

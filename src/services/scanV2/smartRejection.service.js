@@ -94,6 +94,7 @@ export async function generateSmartRejectionText(p) {
     const res = await Promise.race([
       withOpenAi429RetryOnce(() =>
         openai.responses.create({
+          user: "smartRejection",
           model: env.SMART_REJECTION_MODEL,
           temperature: 0.7,
           input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
