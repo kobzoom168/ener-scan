@@ -266,11 +266,125 @@ export function permissiveLabelFromParsedJson(parsed) {
  * @param {string} instructionText
  * @param {string} imageBase64
  */
-async function callObjectCheckModel(instructionText, imageBase64) {
+/** shadow hygiene (Codex 13 ส.ค.): sampling + concurrency cap + timeout + settled log · ไม่ retry */
+let lowShadowInFlight = 0;
+const LOW_SHADOW_MAX_CONCURRENT = 2;
+const LOW_SHADOW_TIMEOUT_MS = 15000;
+
+function lowShadowRate() {
+  const n = Number(process.env.OBJECT_CHECK_LOW_SHADOW_RATE ?? 0.1);
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.1;
+}
+
+/** normalize label แบบเดียวกับ production ต่อ pass (Codex: ห้ามเทียบ raw text) */
+export function normalizeShadowLabel(passType, rawText) {
+  const t = String(rawText || "").trim();
+  if (passType === "permissive") {
+    // permissive = JSON contract → parse แบบเดียวกับ production
+    let parsed = null;
+    try {
+      const unfenced = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
+      const v = JSON.parse(unfenced);
+      parsed = v && typeof v === "object" ? v : null;
+    } catch { parsed = null; }
+    return permissiveLabelFromParsedJson(parsed);
+  }
+  // strict/crystal_family/bracelet_form = คำเดียวจากลิสต์ → ตัวแรก lowercase
+  return t.split(/\s+/)[0].toLowerCase();
+}
+
+/**
+ * เทียบผล full vs low หลัง normalize — pure function (มี unit test)
+ * @param {string} passType
+ * @param {string} fullText
+ * @param {string} lowText
+ */
+export function compareShadowLabels(passType, fullText, lowText) {
+  const fullLabel = normalizeShadowLabel(passType, fullText);
+  const lowLabel = normalizeShadowLabel(passType, lowText);
+  return { fullLabel, lowLabel, normalizedMatch: fullLabel === lowLabel };
+}
+
+/**
+ * ยิง low-detail คู่ขนาน (shadow — วัด agreement เท่านั้น ไม่ใช่ false accept/reject
+ * ซึ่งต้องมี golden/human label) — ห้ามกระทบผลจริงทุกกรณี · injectable สำหรับเทสต์
+ * @param {{ passType: string, instructionText: string, imageBase64: string,
+ *   mainPromise: Promise<any>, createFn?: (p: object) => Promise<any>, rand?: number }} p
+ * @returns {Promise<"disabled"|"sampled_out"|"busy"|"logged"|"error">}
+ */
+export async function runObjectCheckLowShadow({ passType, instructionText, imageBase64, mainPromise, createFn, rand }) {
+  if (
+    String(process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED ?? "false").trim().toLowerCase() !== "true"
+  ) return "disabled";
+  const r = typeof rand === "number" ? rand : Math.random();
+  if (r >= lowShadowRate()) return "sampled_out";
+  if (lowShadowInFlight >= LOW_SHADOW_MAX_CONCURRENT) return "busy";
+  lowShadowInFlight += 1;
+  const started = Date.now();
+  try {
+    const create = createFn ?? ((o) => openai.responses.create(o));
+    const lowPromise = create({
+      user: `objectCheck.low_shadow.${passType}`,
+      model: OBJECT_CHECK_MODEL,
+      temperature: 0,
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: instructionText },
+            { type: "input_image", image_url: `data:image/jpeg;base64,${imageBase64}`, detail: "low" },
+          ],
+        },
+      ],
+    });
+    const timeout = new Promise((_, rej) =>
+      setTimeout(() => rej(new Error("low_shadow_timeout")), LOW_SHADOW_TIMEOUT_MS),
+    );
+    const [lowRes, mainRes] = await Promise.all([
+      Promise.race([lowPromise, timeout]),
+      mainPromise.catch(() => null),
+    ]);
+    const cmp = compareShadowLabels(
+      passType,
+      String(mainRes?.output_text || ""),
+      String(lowRes?.output_text || ""),
+    );
+    console.log(
+      JSON.stringify({
+        event: "OBJECT_CHECK_LOW_SHADOW",
+        passType,
+        ...cmp,
+        latencyMs: Date.now() - started,
+        settled: true,
+      }),
+    );
+    return "logged";
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "OBJECT_CHECK_LOW_SHADOW",
+        passType,
+        settled: true,
+        error: String(e?.message || e).slice(0, 120),
+        latencyMs: Date.now() - started,
+      }),
+    );
+    return "error";
+  } finally {
+    lowShadowInFlight -= 1;
+  }
+}
+
+/**
+ * @param {string} instructionText
+ * @param {string} imageBase64
+ * @param {string} [passType] — strict|permissive|crystal_family|bracelet_form (Codex: callSite ต้องแยก pass)
+ */
+async function callObjectCheckModel(instructionText, imageBase64, passType = "strict") {
   const model = OBJECT_CHECK_MODEL;
   console.log("[OPENAI_MODEL]", model);
   const mainPromise = openai.responses.create({
-    user: "objectCheck",
+    user: `objectCheck.${passType}`,
     model,
     temperature: 0,
     input: [
@@ -289,54 +403,7 @@ async function callObjectCheckModel(instructionText, imageBase64) {
       },
     ],
   });
-  // detail:"low" SHADOW (Codex อนุมัติ 13 ส.ค. — log เทียบทุก label เท่านั้น
-  // ห้ามกระทบคำตัดสินจริงเด็ดขาด): เก็บ false accept / false reject จริงก่อน
-  // ตัดสินใจสลับ · เปิดด้วย OBJECT_CHECK_LOW_SHADOW_ENABLED (default ปิด)
-  if (
-    String(process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED ?? "false").trim().toLowerCase() === "true"
-  ) {
-    void (async () => {
-      try {
-        const lowRes = await openai.responses.create({
-          user: "objectCheckLowShadow",
-          model,
-          temperature: 0,
-          input: [
-            {
-              role: "user",
-              content: [
-                { type: "input_text", text: instructionText },
-                {
-                  type: "input_image",
-                  image_url: `data:image/jpeg;base64,${imageBase64}`,
-                  detail: "low",
-                },
-              ],
-            },
-          ],
-        });
-        const mainRes = await mainPromise.catch(() => null);
-        const norm = (r) => String(r?.output_text || "").trim().slice(0, 120);
-        const a = norm(mainRes);
-        const b = norm(lowRes);
-        console.log(
-          JSON.stringify({
-            event: "OBJECT_CHECK_LOW_SHADOW",
-            match: a === b,
-            full: a,
-            low: b,
-          }),
-        );
-      } catch (e) {
-        console.log(
-          JSON.stringify({
-            event: "OBJECT_CHECK_LOW_SHADOW_ERROR",
-            message: String(e?.message || e).slice(0, 120),
-          }),
-        );
-      }
-    })();
-  }
+  void runObjectCheckLowShadow({ passType, instructionText, imageBase64, mainPromise });
   return mainPromise;
 }
 
@@ -448,7 +515,7 @@ async function runStrictObjectCheck(imageBase64) {
     try {
       const response = await Promise.race([
         withOpenAi429RetryOnce(() =>
-          callObjectCheckModel(STRICT_PROMPT, imageBase64),
+          callObjectCheckModel(STRICT_PROMPT, imageBase64, "strict"),
         ),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error("object_check_timeout")), OBJECT_CHECK_TIMEOUT_MS),
@@ -536,7 +603,7 @@ async function runPermissiveStructuredObjectCheck(imageBase64) {
   const startedAt = Date.now();
   const response = await Promise.race([
     withOpenAi429RetryOnce(() =>
-      callObjectCheckModel(PERMISSIVE_PROMPT, imageBase64),
+      callObjectCheckModel(PERMISSIVE_PROMPT, imageBase64, "permissive"),
     ),
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error("object_check_timeout")), OBJECT_CHECK_TIMEOUT_MS),
@@ -747,7 +814,7 @@ export async function runStrictCrystalFamilyCheck(imageBase64) {
   const startedAt = Date.now();
   const response = await Promise.race([
     withOpenAi429RetryOnce(() =>
-      callObjectCheckModel(STRICT_CRYSTAL_FAMILY_PROMPT, imageBase64),
+      callObjectCheckModel(STRICT_CRYSTAL_FAMILY_PROMPT, imageBase64, "crystal_family"),
     ),
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error("object_check_timeout")), OBJECT_CHECK_TIMEOUT_MS),
@@ -779,7 +846,7 @@ export async function runStrictBraceletFormCheck(imageBase64) {
   const startedAt = Date.now();
   const response = await Promise.race([
     withOpenAi429RetryOnce(() =>
-      callObjectCheckModel(STRICT_BRACELET_FORM_PROMPT, imageBase64),
+      callObjectCheckModel(STRICT_BRACELET_FORM_PROMPT, imageBase64, "bracelet_form"),
     ),
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error("object_check_timeout")), OBJECT_CHECK_TIMEOUT_MS),

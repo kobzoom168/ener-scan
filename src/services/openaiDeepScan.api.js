@@ -30,22 +30,69 @@ if (viaOpenRouter) {
 const prefixModel = (m) =>
   viaOpenRouter && m && !String(m).includes("/") ? `openai/${m}` : m;
 
-export const openai = viaOpenRouter
-  ? {
-      responses: {
-        create: (p) => rawClient.responses.create({ ...p, model: prefixModel(p?.model) }),
-      },
-      embeddings: {
-        create: (p) => rawClient.embeddings.create({ ...p, model: prefixModel(p?.model) }),
-      },
-      chat: {
-        completions: {
-          create: (p) =>
-            rawClient.chat.completions.create({ ...p, model: prefixModel(p?.model) }),
-        },
-      },
+/** LLM_USAGE wrapper กลาง (Codex 13 ส.ค.: usage ต้องครบทุก call ใหญ่ ไม่ใช่แค่บิล CSV)
+ *  — callSite อ่านจาก field user ที่ call site ติดมา · log แม้ error (settled telemetry) */
+function withUsageTracking(api, createFn) {
+  return async (p) => {
+    const started = Date.now();
+    const callSite = String(p?.user || "untagged");
+    const model = String(p?.model || "");
+    try {
+      const res = await createFn(p);
+      try {
+        const u = res?.usage || {};
+        console.log(
+          JSON.stringify({
+            event: "LLM_USAGE",
+            api,
+            callSite,
+            model,
+            promptTokens: Number(u.input_tokens ?? u.prompt_tokens) || 0,
+            cachedTokens:
+              Number(u.input_tokens_details?.cached_tokens ?? u.prompt_tokens_details?.cached_tokens) || 0,
+            completionTokens: Number(u.output_tokens ?? u.completion_tokens) || 0,
+            genId: String(res?.id || "").slice(0, 48),
+            latencyMs: Date.now() - started,
+            ok: true,
+          }),
+        );
+      } catch { /* telemetry ห้ามขวาง */ }
+      return res;
+    } catch (e) {
+      console.log(
+        JSON.stringify({
+          event: "LLM_USAGE",
+          api,
+          callSite,
+          model,
+          ok: false,
+          latencyMs: Date.now() - started,
+          error: String(e?.message || e).slice(0, 120),
+        }),
+      );
+      throw e;
     }
-  : rawClient;
+  };
+}
+
+export const openai = {
+  responses: {
+    create: withUsageTracking("responses", (p) =>
+      rawClient.responses.create({ ...p, model: prefixModel(p?.model) }),
+    ),
+  },
+  embeddings: {
+    // embeddings ถูกมาก ($0.00001 ระดับ) — ไม่ log กัน noise
+    create: (p) => rawClient.embeddings.create({ ...p, model: prefixModel(p?.model) }),
+  },
+  chat: {
+    completions: {
+      create: withUsageTracking("chat", (p) =>
+        rawClient.chat.completions.create({ ...p, model: prefixModel(p?.model) }),
+      ),
+    },
+  },
+};
 
 /** Model id sent to `openai.responses.create` for deep-scan draft + rewrite. */
 // โหมดคุณภาพสูงสุด (กบ 12 ก.ค.: "ค่า AI เยอะไม่เป็นไร ขอคุณภาพ 100%") — override ได้ทาง env

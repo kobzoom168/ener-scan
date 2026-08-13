@@ -585,3 +585,10 @@
 - แก้ถ้อยคำตาม Codex: เป้าลด 45-55% = เป้าทดลอง ยังไม่รับรองจนมี attribution+ผล shadow จริง · "คุณภาพเท่าเดิม 100%" → "โมเดลและ context ไม่เปลี่ยน ไม่คาดว่ากระทบ แต่ต้องมี regression comparison ยืนยัน"
 - ยังไม่แตะ: cache restructure/TTL (รอข้อมูล spacing) · prompt trim (รอ golden tests) · voice model (รอ attribution ยืนยันต้นทุนจริง)
 - baseline 960/19 เดิม · ขึ้น staging
+
+## 2026-08-13 | Claude | Codex รอบ instrumentation — แก้ครบ 4 ข้อก่อนเปิด shadow
+- ①LLM_USAGE wrapper กลางใน openaiDeepScan.api ครอบ responses+chat ทั้งสองโหมด (direct/via OpenRouter): callSite/model/tokens/cached/genId/latency/ok แม้ error (settled) · embeddings ไม่ log กัน noise
+- ②callSite ละเอียดขึ้น: objectCheck.{strict,permissive,crystal_family,bracelet_form} + objectCheck.low_shadow.{pass} · imageForensic.{screen_check,thumb_touch} · deepScan = call เดียวจริง ไม่มี classifier/draft/rewrite แยกแล้ว (แจ้ง Codex)
+- ③shadow เทียบผ่าน normalizer production: compareShadowLabels/normalizeShadowLabel (strict=คำแรก lowercase · permissive=JSON parse + permissiveLabelFromParsedJson) log fullLabel/lowLabel/normalizedMatch/passType — เลิกเทียบ raw text
+- ④shadow hygiene: sampling OBJECT_CHECK_LOW_SHADOW_RATE (default 10%) + concurrency cap 2 + timeout 15s + settled log + ไม่ retry · แก้ถ้อยคำ: วัดได้แค่ agreement ไม่ใช่ false accept/reject (ต้องมี golden/human label)
+- tests ใหม่ 3 ชุด (normalize strict/permissive · flag-off/sampling/shadow-failure ไม่กระทบ main) — refactor เป็น injectable createFn · suite 963 pass / 19 known-fail เดิม · ขึ้น staging (flag shadow เปิดได้แล้วหลังแก้ครบตามเงื่อนไข Codex)
