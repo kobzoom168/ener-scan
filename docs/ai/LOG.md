@@ -572,3 +572,8 @@
 - sync staging→main → deploy pro healthy: Spend-to-upgrade fix ทั้งสาย + EasySlip passthrough + persona hardening (role router/money guard 2 ชั้น/handoff hint/defer consumer) + monitor H4-H5 + M10-B + เคาะ C + copy fixes
 - smoke: web 200 · ไม่มี error ใน 3 containers · AMULET_SCORE_V4 flag ไม่มีบน pro = ลูกค้ายังเห็น v3 ตามแผน shadow
 - จับตาหลัง deploy: AJARN_MONEY_PRESEND_* logs (guard ทำงานจริงครั้งแรกบน pro) + ORCH_DEFER_PAYMENT_CONSUMED + รายงาน monitor 6 โมงพรุ่งนี้
+
+## 2026-08-13 | Claude | Cost audit: verify ผลตรวจ Codex + เจอตัวการ Opus ลึกลับ
+- ยืนยันตาม Codex: Opus cache ไม่ได้พัง (cache_control ทำงาน แต่ miss เพราะลูกค้าคุยห่าง + TTL สั้น) · ตัวเลข "system 14k chars" ที่ Claude อ้างผิด — วัดจริง GEMINI_CONSULT_SYSTEM = 27,551 chars + call consult จริงเฉลี่ย 29,169 tokens/ข้อความ (≈5.6 บาท/คำตอบลูกค้าจ่าย!) — ตัวหนักคือ user prompt (history+facts+KB+scan history) ไม่ใช่แค่ system
+- 🔍 Opus ลึกลับ 147 calls @714 tok = **VOICE_SCRIPT_MODEL default "anthropic/claude-opus-4.8"** (scanVoiceNote.service.js:348) — สคริปต์เสียงอาจารย์ทุกสแกนใช้ Opus เขียน 3-4 ประโยค ($1.07/4วัน) · ผ่าน API key เดียวกันแต่ไม่ติด app header เลยโผล่เป็น (unknown)
+- แผนตามลำดับ Codex (จดใน docs/ai/plans/openrouter-cost-audit-2026-08-13.md ของ Codex): ①call-site attribution ②ลด consult prompt ③KB retrieval ④objectCheck detail:low แบบ shadow+escalation ⑤voice script เปลี่ยนโมเดล (รอกบเคาะ — เป็น product surface เสียง) ⑥ยุบ mini calls หลังเห็น attribution — เป้า 45-60% (60-70% = stretch)
