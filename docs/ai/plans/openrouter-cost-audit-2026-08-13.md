@@ -37,6 +37,13 @@
 
 ผลคาด: ลดค่า Opus customer consult ประมาณ $1.2–1.5 ต่อ 4 วัน โดยยังใช้ Opus เหมือนเดิม
 
+#### Correction หลังตรวจข้อเสนอ Claude
+
+- **prompt cache ไม่ได้พัง:** ใน 12 Ener Scan consult calls มี cache hit 2 ครั้งที่เกิดภายในไม่กี่นาทีหลัง cache write; รูปแบบ `system` block + `cache_control: { type: "ephemeral" }` ใน `geminiFlash.api.js` ถูกต้อง
+- default Anthropic/OpenRouter cache มีอายุประมาณ 5 นาที จึงเป็นเรื่องปกติที่บทสนทนาซึ่งห่างกันเป็นชั่วโมงจะ miss; ห้ามสรุปจาก `2/159` ว่าเป็น formatting bug
+- 159 Opus calls ไม่ใช่ customer consult ทั้งหมด: 12 calls มี `app_name=Ener Scan` และ input 28–30k tokens; อีก 147 calls มี prompt ราว 713 tokensและ `app_name` ว่าง ต้อง attribution ก่อนแก้
+- ไม่ควรเปิด cache TTL 1 ชั่วโมงทันที: cache write แพงขึ้นและ traffic ที่กระจายห่างอาจไม่คุ้ม ให้ลด static prompt 68k chars ก่อน แล้วคำนวณ break-even จาก turn spacing จริง
+
 ### P0 — แยกต้นทุนตาม call site ก่อนเปลี่ยนโมเดล
 
 CSV มี `app_name` ว่าง 4,733/5,479 calls และไม่มี user/call-site tag จึงยังแยก GPT cost ว่ามาจาก object gate, draft, rewrite, forensic, embedding descriptor หรือ verifier เท่าไรไม่ได้
@@ -64,6 +71,14 @@ CSV มี `app_name` ว่าง 4,733/5,479 calls และไม่มี us
 
 เป้าหมาย: ลด GPT-4.1 calls 60–80% โดย false reject ไม่แย่กว่า baseline; potential saving ประมาณ $3–4 ต่อ 4 วัน
 
+#### ทดลอง `detail: "low"` ก่อนสร้าง cascade
+
+- request ปัจจุบันส่ง `input_image.image_url` โดยไม่ระบุ `detail` และส่ง base64 จากรูปต้นฉบับตรง ๆ
+- ห้ามเปิด low 100% ทันที เพราะ gate ไม่ใช่ binary อย่างเดียว: แยก `single_supported`, `multiple`, `unclear`, `unsupported` และมี permissive second pass; ภาพยันต์ ตัวหนังสือเล็ก ขอบเขตหลายชิ้น และกำไล/คริสตัลอาจเสียสัญญาณที่ 512px
+- ทำ shadow A/B ด้วยรูปเดียวกัน: baseline ปัจจุบันเทียบ low แล้ววัด label agreement โดยเฉพาะ false reject; ช่วงแรก low ห้ามเป็นผู้ hard-reject เพียงลำพัง
+- ถ้า low ตอบ uncertain/reject หรืออยู่กลุ่มเสี่ยง ให้ escalate request ปัจจุบัน; ทดสอบก่อนว่า OpenRouter Responses bridge ส่งและคิด token ตาม `detail` จริง
+- 1,388 GPT-4.1 calls ยังห้ามเท่ากับ 1,388 scans เพราะ `checkSingleObjectGated` มี strict first pass และ permissive second pass รวมถึง crystal/bracelet checks; ต้อง tag pass/call site ก่อนคำนวณบาทต่อ scan
+
 ### P1 — ลดจำนวน mini calls ต่อ scan ด้วย contract เดียว
 
 - GPT-4.1-mini 2,683 calls / GPT-4.1 1,388 calls ≈ 1.93 mini calls ต่อ GPT call
@@ -79,6 +94,8 @@ CSV มี `app_name` ว่าง 4,733/5,479 calls และไม่มี us
 - ตั้ง budget `maxAiCallsPerFreshScan` และ telemetry เมื่อเกิน
 
 เป้าหมายแรก: ลด mini calls 25–40% โดย report quality/golden fixtures ไม่ถอย; potential saving $0.8–1.3 ต่อ 4 วัน
+
+หมายเหตุ `stableFeatureExtract`: ไม่ควรใช้ low ทั้ง contract โดยตรง แม้ prompt ระบุให้ดู overall composition เพราะผลมี motif/material/inscription/texture ที่พึ่งรายละเอียดเล็ก ควรแยก field ราคาถูก เช่น dominant color/outline ไป low และคง auto/high สำหรับ motif/อักขระ/ผิววัสดุ หรือทำ A/B golden fixtures ก่อน
 
 ### P1 — Ener-AI brainstorm ใช้ Opus ซ้ำเกินจำเป็น
 
@@ -100,6 +117,8 @@ potential saving สูงสุดราว $0.7–1.0 ต่อ 4 วัน �
 - ไม่ลด deep-scan draft model ก่อนแยก costตาม call siteและวัด report quality
 - ไม่เสียเวลาจูน DeepSeek/embedding ก่อน เพราะรวมกันไม่ถึง 1% ของ bill
 - ไม่ปิด cache; ต้องลด promptและทำ cache hit ให้ดีขึ้นพร้อมกัน
+- ไม่อ้างต้นทุน 4–6 บาท/scan หรือเป้าลด 60–70% จนกว่าจะมี successful-scan denominator และ call-site attribution; จากข้อมูลปัจจุบัน 45–60% เป็นเป้ารวมที่สมเหตุผลกว่า ส่วน 60–70% เป็น stretch goal
+- ไม่จูน embeddings: 515 calls รวมประมาณ $0.000009 แทบไม่มีผลต่อบิล
 
 ## Rollout ที่แนะนำ
 
@@ -130,4 +149,3 @@ potential saving สูงสุดราว $0.7–1.0 ต่อ 4 วัน �
 - object gate escalation rate + false reject/accept
 - report validation fail/retry/rewrite rate
 - consult guard retry/fallback rate และ customer complaint rate
-

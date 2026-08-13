@@ -171,6 +171,7 @@
 | 12 ส.ค. 2026 | Codex | `5583238` | ReferenceError/role guard/send-result แก้จริง; targeted 11/11 ผ่าน แต่ defer routing, unsolicited admin money และ dangling fallback ยังผิด | แก้ 3 logic blockers + เพิ่ม orchestrator branch tests |
 | 12 ส.ค. 2026 | Codex | `4460f1d` | guard timing/fallback ปิด; targeted 13/13 + baseline 959/19 ผ่าน | `deferTo` ยังไม่มี consumer; intent regex ต้องใช้ payment SSOT |
 | 12 ส.ค. 2026 | Codex | `058c151` | defer consumer + payment SSOT ต่อครบ; targeted 14/14 + baseline 960/19 ผ่าน | mixed-split/planner router, handoff state เต็ม, DI integration debts |
+| 13 ส.ค. 2026 | Codex | OpenRouter CSV + AI call flow (read-only) | ยืนยัน $12.51; ท้วงว่า Opus cache ไม่พังและ 159 calls ไม่ใช่ consult ทั้งหมด; object low ต้อง shadow/escalate | call-site attribution, prompt diet, image-detail A/B, cost/successful scan |
 
 ## กติกาการอัปเดตไฟล์นี้
 
