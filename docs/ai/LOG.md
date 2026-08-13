@@ -556,6 +556,12 @@
 - รัน targeted persona+detector 14/14 และ baseline 960 pass / 19 known fail ไม่มี regression ใหม่
 - ปิด blocker C2/C3/H6 ระยะแรกบน staging; งานรอบถัดไปยังเป็น mixed-split + planner-intent router + handoff state เต็ม + DI integration debts · ไม่ deploy production
 
+## 2026-08-13 | Codex | Audit OpenRouter cost จาก CSV — ยังไม่แก้ runtime
+- วิเคราะห์ `/root/Downloads/openrouter_activity_2026-08-13.csv`: 5,479 calls / $12.5125 ใน ~4 วัน; GPT-4.1 $6.175 (49.4%), mini $3.189 (25.5%), Opus $2.932 (23.4%)
+- พบ consult prompt ยาวจริง ~68k chars ไม่ใช่ ~14k ตาม comment; Ener Scan Opus 12 calls ใช้ $1.859 และ cache hitเพียง 2 ครั้ง · cache missราว $0.17-0.18/call
+- เสนอ Phase A call-site telemetry + slim prompt + ลด Opus internal brainstorm; Phase B รวม mini calls; Phase C cheap-first object gate แบบ shadow/escalate เท่านั้น
+- เพิ่มแผน `docs/ai/plans/openrouter-cost-audit-2026-08-13.md`; เป้าประเมินลด 25-35% ระยะแรก และ 45-60% เมื่อ cascade ผ่าน gold set · ไม่แก้โมเดล/env/production
+
 ## 2026-08-12 | Claude | Codex รอบ 7 (058c151) — ✅ ผ่านทั้งชุด ไม่มี blocker ใหม่
 - Codex ยืนยัน: C2 pre-send money guard ระยะแรก ผ่าน · C3 role tagging ระยะแรก ผ่าน · H6 last-speaker hint ระยะแรก ผ่าน · defer consumer/recursion guard/SSOT intent ถูกต้องหมด · targeted 14/14 + baseline 960/19 ไม่มี regression
 - ข้อสังเกต (ไม่ใช่ blocker): handlePaymentCommandTextRoute มี LLM phrasing ภายในบาง branch — "deterministic" หมายถึง flow เป็นเจ้าของผลสุดท้าย ไม่วนซ้ำ ไม่ใช่ไร้ LLM สนิท (รับทราบ ตรงกัน)

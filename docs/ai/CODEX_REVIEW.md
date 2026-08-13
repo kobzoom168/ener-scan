@@ -59,6 +59,15 @@
 - แนวคิดต้องรักษากติกา: conversion เป็นหน้าที่แอดมิน/ระบบ ไม่ใช่อาจารย์; ห้ามใช้ความกลัว, scarcity/FOMO ปลอม หรือคำรับประกัน
 - ก่อนทำ growth เพิ่ม ควรวัด funnel อย่างน้อย: add → ส่งรูป → ได้ผล → ถามต่อ → paywall → intent → จ่ายสำเร็จ → กลับมาใช้ซ้ำ และแยก source/campaign
 
+### E. OpenRouter cost
+
+- 13 ส.ค. 2026 กบให้ตรวจ CSV activity 4 วัน: 5,479 calls / $12.5125 ≈ $3.13 วัน หรือ $94 เดือนที่ volume เดิม
+- cost concentration: GPT-4.1 49.4% · GPT-4.1-mini 25.5% · Opus 23.4%
+- จุดผิดสัดส่วน: consult system prompt ยาวจริง ~68k chars ทำ Opus Ener Scan cache miss ~$0.17–0.18/call; comment เดิมบอก ~14k charsไม่ตรงจริง
+- แผน: `docs/ai/plans/openrouter-cost-audit-2026-08-13.md`
+- ลำดับ: observability/callSite → slim consult prompt → ลด Opus internal council → consolidate mini calls → shadow object-gate cascade
+- ห้ามเปลี่ยน GPT-4.1 object gate เป็น mini ตรง ๆ เพราะเคย false-reject crystal bracelet; ต้อง gold set/shadow/escalation
+
 ## สิ่งที่ยืนยันว่าแก้แล้วบน staging
 
 ### Commit `db2fef8`
