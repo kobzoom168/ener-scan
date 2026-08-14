@@ -653,3 +653,9 @@
 - LIFF pay: rights (รวมฟรี+จ่าย+paidUntil) จาก getRemainingScans โชว์หัวหน้าก่อนแพ็กทุก state (มีสิทธิ์→CTA กลับไปส่งรูป · หมด→เลือกค่าครูรอบถัดไป · pending_verify→กำลังตรวจ ห้ามโอนซ้ำ) · telemetry pay_liff_opened_from_richmenu (src=richmenu) / pay_existing_access_seen / pay_package_selected / pay_duplicate_attempt_prevented · myscans_* ครบ
 - rich menu staging v4: ค่าครู→?view=pay&src=richmenu (richmenu-c363ad06...) · จับ bug ใหญ่: npm test เป็นลิสต์ไฟล์ตายตัว เทสต์ใหม่ 3 ไฟล์ไม่เคยถูกรัน — เพิ่มแล้ว baseline 991 ผ่าน
 - ค้าง: กบทดสอบ ดูผลเก่า/ค่าครู/เปิดแอป บน staging → เคาะขึ้น pro (ต้อง migration 052 + เมนู pro ด้วย)
+
+## 2026-08-14 | Claude | myscans + LIFF pay ขึ้น Pro (กบสั่ง)
+- sync 7ca545f → migration 052 บน ener_scan_pro (พร้อม grants) → deploy pro healthy → smoke จริงผ่าน: /myscans เปิด 200 (119 รายการบัญชีแอดมิน) + headers private/no-store + noindex
+- rich menu pro v4: richmenu-210e1fbc... — ค่าครู→liff ?view=pay&src=richmenu · เปิดแอป Ener→liff · ชวนเพื่อนปิดกดไม่ได้ · ดูผลเก่า→การ์ดหน้า myscans
+- เมนู pro เก่าเก็บไว้ rollback ตามเดิม (88b2b76d=liff-entry, 32381f49=v3)
+- เฝ้าต่อ: telemetry myscans_* / pay_* ในบิล log รายวัน + รายงานคุณภาพเช้า
