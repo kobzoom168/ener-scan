@@ -604,3 +604,9 @@
 - ②Codex จับถูกอีก: deepScan ไม่ได้มี call เดียว — generateDeepScanDraft + rewriteDeepScanDraft ใน openaiDeepScan.api ยัง untagged และมี fengShuiAnalyze.service reuse draft อยู่จริง → แท็กครบ: deepScan.draft / deepScan.rewrite / fengShui.draft (callSite param)
 - Codex เห็นชอบ telemetry-only ขึ้น pro โดยเงื่อนไข: shadow flag absent/false บน pro · ไม่แตะ cache/prompt/model/detail · smoke ตรวจ App+user ในบิลหลัง deploy · เริ่มนับ 2-3 วันเมื่อเห็น tag แรกจริง — รอกบสั่ง deploy
 - suite ผ่าน baseline · ขึ้น staging
+
+## 2026-08-14 | Claude | Telemetry ขึ้น Pro (กบสั่ง) — หน้าต่างเก็บข้อมูลเริ่มนับ
+- ยืนยันก่อน deploy: OBJECT_CHECK_LOW_SHADOW_ENABLED absent บน pro (=ปิด shadow รันเฉพาะ staging ตามเงื่อนไข Codex) · sync 32 ไฟล์ → main → deploy pro healthy (200, 3 containers สะอาด)
+- smoke call ผ่าน: LLM_USAGE โผล่พร้อม callSite=smoke.telemetryCheck + token breakdown ครบ ตอบ "ok" — ระบบ attribution ทำงานจริงบน pro
+- เริ่มนับหน้าต่าง 2-3 วันจาก tag แรกของลูกค้าจริง (Codex: นับจาก tag แรกในบิล ไม่ใช่เวลา deploy) — export CSV รอบหน้าจะมีคอลัมน์ user เต็ม → วิเคราะห์ cost ต่อ callSite + cache break-even + shadow agreement แล้วค่อยเคาะมาตรการจริง
+- ระหว่างรอ: เดินงาน rich menu 6 ช่อง (วาดภาพให้กบดูก่อน)
