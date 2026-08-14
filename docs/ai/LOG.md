@@ -683,3 +683,9 @@
 - การ์ดลงทะเบียนเหลือปุ่มเดียว "กรอกข้อมูลเพื่อเริ่มอ่านพลัง" — ลบปุ่มให้แอดมินช่วยกรอก
 - พิมพ์ "เปิดไม่ได้/กรอกไม่ได้" → แนะนำวิธีเปิด (ฟอร์มเปิดใน LINE / ปิดเปิดแอปใหม่) + quickReply ลิงก์ — ไม่มีแชทกรอกแทน (log registration_liff_trouble_reported)
 - ลบ state machine chatReg + saveChatRegistration ออกทั้งชุด (webhook/logic/hold service/tests) — เทสต์ 19/19 + baseline 1010 ผ่าน
+
+## 2026-08-14 | Claude | Registration-first onboarding ขึ้น Pro (กบสั่ง)
+- sync fb4cbcc → deploy pro healthy log สะอาด · gate pro เปิดอยู่แล้ว (enabled=true) — flow ใหม่มีผลทันทีกับลูกค้าใหม่
+- อัปเดต app_settings registration_gate text บน pro เป็นเสียงแอดมิน ("ก่อนส่งรูป ขอข้อมูลผูกผลอ่านกับเจ้าของ...")
+- ของที่ live: welcome+การ์ดใบเดียว (ปุ่มเดียว บังคับกรอกเอง) · hold รูปก่อนสมัคร (R2+redis 24 ชม.) · ปุ่มเริ่มอ่านรูปนี้ (token, consume เฉพาะ scan_enqueued) · การ์ด cooldown 15 นาที · pendingDescription · success flow ไม่ครบ→ครบ+dedupe-clear-on-fail · เลิก fail-open ตามครั้ง
+- เฝ้า: REG_GATE_* / image_received_before_registration / pending_registration_image_resumed / registration_liff_trouble_reported ใน log pro + รายงานคุณภาพเช้า
