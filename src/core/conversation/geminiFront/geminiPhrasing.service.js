@@ -22,6 +22,7 @@ export async function runGeminiPhrasing({
     return null;
   }
   const model = getGeminiFlashModel({
+    callSite: "phrasing",
     systemInstruction: GEMINI_PHRASING_SYSTEM,
     jsonMode: false,
     temperature: env.GEMINI_FRONT_PHRASING_TEMPERATURE,

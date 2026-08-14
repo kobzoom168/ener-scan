@@ -111,6 +111,8 @@ function buildCompatModel(provider, opts = {}) {
             model: modelId,
             temperature,
             max_tokens: maxTokens,
+            // attribution ในบิล OpenRouter (คอลัมน์ user ใน activity export)
+            ...(opts.callSite ? { user: String(opts.callSite).slice(0, 60) } : {}),
             messages,
             ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
             // DeepSeek V4 Flash บางเจ้า (เช่น Alibaba) แอบคิดในใจ (reasoning) กิน max_tokens
@@ -125,6 +127,25 @@ function buildCompatModel(provider, opts = {}) {
         }
         const j = await res.json();
         const text = j?.choices?.[0]?.message?.content ?? "";
+        // cost telemetry (Codex อนุมัติ 13 ส.ค.: attribution ก่อน optimize):
+        // prompt/cached/output tokens ต่อ call พร้อม callSite — วัดของจริง ไม่เดา
+        try {
+          const u = j?.usage || {};
+          const cached =
+            Number(u?.prompt_tokens_details?.cached_tokens) ||
+            Number(u?.cached_tokens) || 0;
+          console.log(
+            JSON.stringify({
+              event: "LLM_USAGE",
+              callSite: String(opts.callSite || "untagged"),
+              model: modelId,
+              promptChars: (systemInstruction ? String(systemInstruction).length : 0) + String(userPrompt || "").length,
+              promptTokens: Number(u.prompt_tokens) || 0,
+              cachedTokens: cached,
+              completionTokens: Number(u.completion_tokens) || 0,
+            }),
+          );
+        } catch { /* telemetry ห้ามขวาง */ }
         return { response: { text: () => String(text || "") } };
       } finally {
         clearTimeout(timer);

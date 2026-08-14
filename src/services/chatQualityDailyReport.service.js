@@ -142,6 +142,7 @@ function safeParseJson(raw) {
  */
 async function analyzeConversation(transcript) {
   const model = getGeminiFlashModel({
+    callSite: "chatQuality",
     systemInstruction: ANALYZER_SYSTEM,
     jsonMode: true,
     temperature: 0.1,

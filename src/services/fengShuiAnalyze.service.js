@@ -35,6 +35,7 @@ export async function analyzeFengShui(p) {
       : 'นี่คือรูป "ห้อง/พื้นที่" ของลูกค้า — อ่านพลังงาน + ฮวงจุ้ย + สิ่งที่ควรปรับ 2-3 อย่าง + แนะนำของเสริม ตามหลักและกรอบด้านบน';
 
   const text = await generateDeepScanDraft({
+    callSite: "fengShui.draft",
     systemPrompt: FENGSHUI_SYSTEM,
     userPrompt,
     imageBase64: p.imageBase64,

@@ -78,6 +78,7 @@ export async function verifySameObject(
   try {
     const respRaw = await withTimeout(
       createResponses({
+        user: "objectSameIdentityVerifier",
         model,
         temperature: 0,
         input: [

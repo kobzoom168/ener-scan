@@ -307,6 +307,7 @@ async function buildContent({ uid, dateKey, pieces, sets, avg, dayAxis }) {
   for (let a = 0; a < 2 && !j; a++) {
     try {
       const model = getGeminiFlashModel({
+    callSite: "synergyReport",
         systemInstruction: CONTENT_SYS,
         temperature: 0.4,
         timeoutMs: 25000,

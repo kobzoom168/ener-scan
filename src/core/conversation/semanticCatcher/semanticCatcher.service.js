@@ -355,6 +355,7 @@ function buildCatcherPayload({
 async function runGeminiSemanticCatcher(payload) {
   if (!isGeminiConfigured()) throw new Error("gemini_not_configured");
   const model = getGeminiFlashModel({
+    callSite: "semanticCatcher",
     systemInstruction: SEMANTIC_CATCHER_SYSTEM_PROMPT,
     jsonMode: true,
   });

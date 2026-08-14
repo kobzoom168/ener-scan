@@ -71,6 +71,7 @@ async function defaultInvokeClassifier(cleanBase64) {
     const model = "gpt-4.1-mini";
     console.log("[OPENAI_MODEL]", model);
     return openai.responses.create({
+      user: "deepScan",
       model,
       temperature: 0,
       input: [

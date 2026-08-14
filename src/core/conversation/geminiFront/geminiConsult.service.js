@@ -10,6 +10,7 @@ import { buildCustomerFactsContext } from "./customerFactsContext.util.js";
 import { buildKbContext } from "./kbRetrieval.util.js";
 import { supabase } from "../../../config/supabase.js";
 import { computePaidActive } from "../../../services/scanOfferAccess.resolver.js";
+import { getValue, setLargeValueWithTtl } from "../../../redis/scanV2Redis.js";
 
 /**
  * แพ็กแอคทีฟ = Opus (LLM_CONSULT_MODEL) / ฟรี-แพ็กหมด = โมเดลถูก (LLM_CONSULT_MODEL_FREE)
@@ -77,6 +78,7 @@ export async function runGeminiConsult(p) {
     : env.LLM_CONSULT_MODEL_FREE || env.LLM_CONSULT_MODEL;
 
   const model = getGeminiFlashModel({
+    callSite: "consult",
     systemInstruction: GEMINI_CONSULT_SYSTEM,
     jsonMode: false,
     temperature: 0.7,
@@ -115,6 +117,25 @@ export async function runGeminiConsult(p) {
   if (!paidActive) {
     prompt += "\n\nข้อกำหนดรอบนี้: ตอบสั้นที่สุด ตรงคำถามพอ 1-2 ประโยค ไม่ต้องขยายความหรือชวนคุยต่อ ยกเว้นลูกค้าขอรายละเอียดชัด ๆ";
   }
+
+  // telemetry ช่องห่างระหว่าง consult ต่อคน (Codex 13 ส.ค.: ใช้คำนวณ break-even
+  // ของ cache TTL 5 นาที vs 1 ชม. จากพฤติกรรมจริง ก่อนตัดสินใจแตะ cache)
+  try {
+    const tsKey = `consult:last_ts:${String(p.userId || "anon")}`;
+    const prevTs = Number(await getValue(tsKey)) || 0;
+    const nowTs = Date.now();
+    if (prevTs > 0) {
+      console.log(
+        JSON.stringify({
+          event: "CONSULT_TURN_SPACING",
+          secSinceLast: Math.round((nowTs - prevTs) / 1000),
+          tier: paidActive ? "paid" : "free",
+          promptChars: GEMINI_CONSULT_SYSTEM.length + prompt.length,
+        }),
+      );
+    }
+    await setLargeValueWithTtl(tsKey, String(nowTs), 24 * 3600);
+  } catch { /* telemetry ห้ามขวาง */ }
 
   try {
     const text = await generateTextWithTimeout(

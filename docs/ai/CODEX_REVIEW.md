@@ -59,6 +59,15 @@
 - แนวคิดต้องรักษากติกา: conversion เป็นหน้าที่แอดมิน/ระบบ ไม่ใช่อาจารย์; ห้ามใช้ความกลัว, scarcity/FOMO ปลอม หรือคำรับประกัน
 - ก่อนทำ growth เพิ่ม ควรวัด funnel อย่างน้อย: add → ส่งรูป → ได้ผล → ถามต่อ → paywall → intent → จ่ายสำเร็จ → กลับมาใช้ซ้ำ และแยก source/campaign
 
+### E. OpenRouter cost
+
+- 13 ส.ค. 2026 กบให้ตรวจ CSV activity 4 วัน: 5,479 calls / $12.5125 ≈ $3.13 วัน หรือ $94 เดือนที่ volume เดิม
+- cost concentration: GPT-4.1 49.4% · GPT-4.1-mini 25.5% · Opus 23.4%
+- จุดผิดสัดส่วน: consult system prompt ยาวจริง ~68k chars ทำ Opus Ener Scan cache miss ~$0.17–0.18/call; comment เดิมบอก ~14k charsไม่ตรงจริง
+- แผน: `docs/ai/plans/openrouter-cost-audit-2026-08-13.md`
+- ลำดับ: observability/callSite → slim consult prompt → ลด Opus internal council → consolidate mini calls → shadow object-gate cascade
+- ห้ามเปลี่ยน GPT-4.1 object gate เป็น mini ตรง ๆ เพราะเคย false-reject crystal bracelet; ต้อง gold set/shadow/escalation
+
 ## สิ่งที่ยืนยันว่าแก้แล้วบน staging
 
 ### Commit `db2fef8`
@@ -162,6 +171,10 @@
 | 12 ส.ค. 2026 | Codex | `5583238` | ReferenceError/role guard/send-result แก้จริง; targeted 11/11 ผ่าน แต่ defer routing, unsolicited admin money และ dangling fallback ยังผิด | แก้ 3 logic blockers + เพิ่ม orchestrator branch tests |
 | 12 ส.ค. 2026 | Codex | `4460f1d` | guard timing/fallback ปิด; targeted 13/13 + baseline 959/19 ผ่าน | `deferTo` ยังไม่มี consumer; intent regex ต้องใช้ payment SSOT |
 | 12 ส.ค. 2026 | Codex | `058c151` | defer consumer + payment SSOT ต่อครบ; targeted 14/14 + baseline 960/19 ผ่าน | mixed-split/planner router, handoff state เต็ม, DI integration debts |
+| 13 ส.ค. 2026 | Codex | OpenRouter CSV + AI call flow (read-only) | ยืนยัน $12.51; ท้วงว่า Opus cache ไม่พังและ 159 calls ไม่ใช่ consult ทั้งหมด; object low ต้อง shadow/escalate | call-site attribution, prompt diet, image-detail A/B, cost/successful scan |
+| 13 ส.ค. 2026 | Codex | `f0f1444` cost attribution/shadow review | รับทิศทางและ flag ปิด แต่ telemetry ยัง partial; shadow เทียบ raw output และไม่ระบุ pass/กลุ่ม | แก้ usage coverage, normalized labels, pass tags, sampling/await, tests ก่อนเปิด staging flag |
+| 14 ส.ค. 2026 | Codex | `0aa8a9c` instrumentation follow-up | wrapper และ pass tags ดีขึ้น; targeted 3/3 ผ่าน แต่พบ timer/main-promise leak, JSON pass normalizer ผิด และหลาย Responses calls ยัง `untagged` | แก้ก่อนเก็บข้อมูล 2–3 วัน มิฉะนั้น agreement/cost attribution เพี้ยน |
+| 14 ส.ค. 2026 | Codex | `ad0ec59` instrumentation follow-up 2 | targeted 6/6 ใน 0.37s; normalizer 4 pass และ timer clear ถูก แต่ test “main ค้าง” ใช้ reject ทันที และ deep-scan draft/rewrite ยัง untagged | เติม tags + injectable timeout/hung-main test; telemetry-only deploy ได้หลังปิดสองจุดและยืนยัน pro shadow flag absent/false |
 
 ## กติกาการอัปเดตไฟล์นี้
 

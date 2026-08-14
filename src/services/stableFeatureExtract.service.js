@@ -172,6 +172,7 @@ export async function extractStableVisualFeatures(
     deps.createResponses ?? ((o) => openai.responses.create(o));
 
   const run = createResponses({
+    user: "stableFeatureExtract",
     model: STABLE_FEATURE_MODEL,
     temperature: 0,
     input: [

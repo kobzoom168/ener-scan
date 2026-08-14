@@ -556,8 +556,51 @@
 - รัน targeted persona+detector 14/14 และ baseline 960 pass / 19 known fail ไม่มี regression ใหม่
 - ปิด blocker C2/C3/H6 ระยะแรกบน staging; งานรอบถัดไปยังเป็น mixed-split + planner-intent router + handoff state เต็ม + DI integration debts · ไม่ deploy production
 
+## 2026-08-13 | Codex | Audit OpenRouter cost จาก CSV — ยังไม่แก้ runtime
+- วิเคราะห์ `/root/Downloads/openrouter_activity_2026-08-13.csv`: 5,479 calls / $12.5125 ใน ~4 วัน; GPT-4.1 $6.175 (49.4%), mini $3.189 (25.5%), Opus $2.932 (23.4%)
+- พบ consult prompt ยาวจริง ~68k chars ไม่ใช่ ~14k ตาม comment; Ener Scan Opus 12 calls ใช้ $1.859 และ cache hitเพียง 2 ครั้ง · cache missราว $0.17-0.18/call
+- เสนอ Phase A call-site telemetry + slim prompt + ลด Opus internal brainstorm; Phase B รวม mini calls; Phase C cheap-first object gate แบบ shadow/escalate เท่านั้น
+- เพิ่มแผน `docs/ai/plans/openrouter-cost-audit-2026-08-13.md`; เป้าประเมินลด 25-35% ระยะแรก และ 45-60% เมื่อ cascade ผ่าน gold set · ไม่แก้โมเดล/env/production
+
 ## 2026-08-12 | Claude | Codex รอบ 7 (058c151) — ✅ ผ่านทั้งชุด ไม่มี blocker ใหม่
 - Codex ยืนยัน: C2 pre-send money guard ระยะแรก ผ่าน · C3 role tagging ระยะแรก ผ่าน · H6 last-speaker hint ระยะแรก ผ่าน · defer consumer/recursion guard/SSOT intent ถูกต้องหมด · targeted 14/14 + baseline 960/19 ไม่มี regression
 - ข้อสังเกต (ไม่ใช่ blocker): handlePaymentCommandTextRoute มี LLM phrasing ภายในบาง branch — "deterministic" หมายถึง flow เป็นเจ้าของผลสุดท้าย ไม่วนซ้ำ ไม่ใช่ไร้ LLM สนิท (รับทราบ ตรงกัน)
 - คงเหลือฉบับเต็ม (คิวถัดไป): mixed-split · router จาก planner intent · handoff state เต็ม (topic/turnId/scanResultId/handoffDone) · integration+persisted metadata tests หลัง DI round · rich menu 6 ช่อง + broadcast (เฟส A โครง)
 - สถานะ staging stack พร้อมขึ้น pro 7 ก้อน: Spend-to-upgrade fix / Codex H4-H5-M7-M9-M11-M12 / detector เข้ม+await history / M10-B payment ไม่หน่วง / เคาะ C ถอดเสียงหลายรูป / persona hardening C2-C3-H6 ระยะแรก / defer consumer — รอกบสั่ง
+
+## 2026-08-12 | Claude | ขึ้น Pro ทั้ง stack (กบสั่ง) — 25 ไฟล์
+- sync staging→main → deploy pro healthy: Spend-to-upgrade fix ทั้งสาย + EasySlip passthrough + persona hardening (role router/money guard 2 ชั้น/handoff hint/defer consumer) + monitor H4-H5 + M10-B + เคาะ C + copy fixes
+- smoke: web 200 · ไม่มี error ใน 3 containers · AMULET_SCORE_V4 flag ไม่มีบน pro = ลูกค้ายังเห็น v3 ตามแผน shadow
+- จับตาหลัง deploy: AJARN_MONEY_PRESEND_* logs (guard ทำงานจริงครั้งแรกบน pro) + ORCH_DEFER_PAYMENT_CONSUMED + รายงาน monitor 6 โมงพรุ่งนี้
+
+## 2026-08-13 | Claude | Cost audit: verify ผลตรวจ Codex + เจอตัวการ Opus ลึกลับ
+- ยืนยันตาม Codex: Opus cache ไม่ได้พัง (cache_control ทำงาน แต่ miss เพราะลูกค้าคุยห่าง + TTL สั้น) · ตัวเลข "system 14k chars" ที่ Claude อ้างผิด — วัดจริง GEMINI_CONSULT_SYSTEM = 27,551 chars + call consult จริงเฉลี่ย 29,169 tokens/ข้อความ (≈5.6 บาท/คำตอบลูกค้าจ่าย!) — ตัวหนักคือ user prompt (history+facts+KB+scan history) ไม่ใช่แค่ system
+- 🔍 Opus ลึกลับ 147 calls @714 tok = **VOICE_SCRIPT_MODEL default "anthropic/claude-opus-4.8"** (scanVoiceNote.service.js:348) — สคริปต์เสียงอาจารย์ทุกสแกนใช้ Opus เขียน 3-4 ประโยค ($1.07/4วัน) · ผ่าน API key เดียวกันแต่ไม่ติด app header เลยโผล่เป็น (unknown)
+- แผนตามลำดับ Codex (จดใน docs/ai/plans/openrouter-cost-audit-2026-08-13.md ของ Codex): ①call-site attribution ②ลด consult prompt ③KB retrieval ④objectCheck detail:low แบบ shadow+escalation ⑤voice script เปลี่ยนโมเดล (รอกบเคาะ — เป็น product surface เสียง) ⑥ยุบ mini calls หลังเห็น attribution — เป้า 45-60% (60-70% = stretch)
+
+## 2026-08-13 | Claude | Cost audit ข้อ ① เริ่มแล้ว: attribution + telemetry (staging) — ตามที่ Codex อนุมัติ
+- attribution ครบสองชั้น: ①OpenAI client via OpenRouter ติด X-Title "Ener Scan" (แก้ app (unknown) ในบิล) ②ทุก call ใหญ่ติด user=callSite: objectCheck/stableFeatureExtract/deepScan/voiceScript/slipVisionClassifier/slipOcr(ยังไม่เจอจุด req—ข้าม)/conversationSurface/smartRejection/imageForensic ③ฝั่ง front LLM (geminiFlash) ติด callSite: consult/planner/phrasing/chatQuality/semanticCatcher/stateSafeClarifier/synergyReport/ytShortCaption/fbCaption/reportEnglish
+- telemetry ใหม่: LLM_USAGE ต่อ call (promptChars/promptTokens/cachedTokens/completionTokens/callSite) + CONSULT_TURN_SPACING (ช่องห่างระหว่าง consult ต่อคน — ใช้คำนวณ break-even TTL 5 นาที vs 1 ชม. ตามที่ Codex สั่ง ไม่เดา)
+- objectCheck detail:low = SHADOW เท่านั้น หลัง flag OBJECT_CHECK_LOW_SHADOW_ENABLED (default ปิด) — ยิงคู่ขนาน log OBJECT_CHECK_LOW_SHADOW {match, full, low} ทุก label ไม่กระทบคำตัดสินจริง
+- แก้ถ้อยคำตาม Codex: เป้าลด 45-55% = เป้าทดลอง ยังไม่รับรองจนมี attribution+ผล shadow จริง · "คุณภาพเท่าเดิม 100%" → "โมเดลและ context ไม่เปลี่ยน ไม่คาดว่ากระทบ แต่ต้องมี regression comparison ยืนยัน"
+- ยังไม่แตะ: cache restructure/TTL (รอข้อมูล spacing) · prompt trim (รอ golden tests) · voice model (รอ attribution ยืนยันต้นทุนจริง)
+- baseline 960/19 เดิม · ขึ้น staging
+
+## 2026-08-13 | Claude | Codex รอบ instrumentation — แก้ครบ 4 ข้อก่อนเปิด shadow
+- ①LLM_USAGE wrapper กลางใน openaiDeepScan.api ครอบ responses+chat ทั้งสองโหมด (direct/via OpenRouter): callSite/model/tokens/cached/genId/latency/ok แม้ error (settled) · embeddings ไม่ log กัน noise
+- ②callSite ละเอียดขึ้น: objectCheck.{strict,permissive,crystal_family,bracelet_form} + objectCheck.low_shadow.{pass} · imageForensic.{screen_check,thumb_touch} · deepScan = call เดียวจริง ไม่มี classifier/draft/rewrite แยกแล้ว (แจ้ง Codex)
+- ③shadow เทียบผ่าน normalizer production: compareShadowLabels/normalizeShadowLabel (strict=คำแรก lowercase · permissive=JSON parse + permissiveLabelFromParsedJson) log fullLabel/lowLabel/normalizedMatch/passType — เลิกเทียบ raw text
+- ④shadow hygiene: sampling OBJECT_CHECK_LOW_SHADOW_RATE (default 10%) + concurrency cap 2 + timeout 15s + settled log + ไม่ retry · แก้ถ้อยคำ: วัดได้แค่ agreement ไม่ใช่ false accept/reject (ต้องมี golden/human label)
+- tests ใหม่ 3 ชุด (normalize strict/permissive · flag-off/sampling/shadow-failure ไม่กระทบ main) — refactor เป็น injectable createFn · suite 963 pass / 19 known-fail เดิม · ขึ้น staging (flag shadow เปิดได้แล้วหลังแก้ครบตามเงื่อนไข Codex)
+
+## 2026-08-13 | Claude | Codex instrumentation รอบ 2 — แก้ 3 blockers ก่อนเปิดหน้าต่างเก็บข้อมูล
+- ①timer leak: clearTimeout ใน finally + timeout ครอบทั้งก้อน (Promise.race กับ work ที่รวมการรอ main) — main ค้างก็คืน slot เสมอ · หลักฐาน: เทสต์ shadow จาก 15.5s → 0.36s
+- ②normalizer ครบ 4 pass ตามชั้น production: strict=normalizeObjectCheckOutput ตัวจริง (จับคำพ้อง/ไทย) · permissive=label+objectCount+family+confidence bucket · crystal_family=crystalFamilyFromParsed (familyLabel/primaryObjectOwner/bucket) · bracelet_form=braceletFormFromParsed (formFactor/primaryOwner/wearable/loop flags/bucket) — เลิก first-word กับ structured pass
+- ③callSite ครบ 6 จุดที่ค้าง: amuletTypeClassify / hybridPersona / slipOcrExtractor / objectEmbedding.descriptor / objectSameIdentityVerifier / objectPairCompareAgent — ไม่มี untagged ใน Responses หลักแล้ว
+- tests 6 ตัวรวมเคสที่ Codex สั่ง: success ไม่ทิ้ง timer (วัดเวลา <2s) · main พัง→slot คืน→call ถัดไปไม่ busy · structured JSON ต่าง format แต่ outcome เดียว = match · suite ผ่าน baseline · ขึ้น staging — เริ่มหน้าต่างเก็บข้อมูล 2-3 วันได้แล้ว
+
+## 2026-08-14 | Claude | Codex instrumentation รอบ 3 — ปิด 2 จุดสุดท้าย ได้ไฟเขียว telemetry ขึ้น pro
+- ①test main-hang ใช้ unresolved promise จริง + timeoutMs injectable (30ms เฉพาะเทสต์) — พิสูจน์: hang → "error" → slot คืน → call ถัดไปไม่ busy · เทสต์จบ 0.6s ไม่มี open handle
+- ②Codex จับถูกอีก: deepScan ไม่ได้มี call เดียว — generateDeepScanDraft + rewriteDeepScanDraft ใน openaiDeepScan.api ยัง untagged และมี fengShuiAnalyze.service reuse draft อยู่จริง → แท็กครบ: deepScan.draft / deepScan.rewrite / fengShui.draft (callSite param)
+- Codex เห็นชอบ telemetry-only ขึ้น pro โดยเงื่อนไข: shadow flag absent/false บน pro · ไม่แตะ cache/prompt/model/detail · smoke ตรวจ App+user ในบิลหลัง deploy · เริ่มนับ 2-3 วันเมื่อเห็น tag แรกจริง — รอกบสั่ง deploy
+- suite ผ่าน baseline · ขึ้น staging
