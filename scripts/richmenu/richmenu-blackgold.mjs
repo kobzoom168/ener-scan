@@ -26,8 +26,10 @@ const icons = {
   coin: `<circle cx="44" cy="46" r="26" fill="none" stroke="{C}" stroke-width="6"/>
     <text x="44" y="57" text-anchor="middle" font-family="Kanit" font-weight="700" font-size="30" fill="{C}">฿</text>
     <path d="M62 74 a26 12 0 0 0 26 -8 M60 86 a30 10 0 0 0 30 -10" fill="none" stroke="{C}" stroke-width="5" stroke-linecap="round"/>`,
-  chat: `<path d="M18 26 h64 a8 8 0 0 1 8 8 v32 a8 8 0 0 1 -8 8 h-34 l-16 14 v-14 h-14 a8 8 0 0 1 -8 -8 v-32 a8 8 0 0 1 8 -8 z" fill="none" stroke="{C}" stroke-width="6" stroke-linejoin="round"/>
-    <circle cx="36" cy="50" r="4" fill="{C}"/><circle cx="52" cy="50" r="4" fill="{C}"/><circle cx="68" cy="50" r="4" fill="{C}"/>`,
+  app: `<rect x="30" y="12" width="40" height="76" rx="9" fill="none" stroke="{C}" stroke-width="6"/>
+    <path d="M44 20 h12" stroke="{C}" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="50" cy="78" r="3.5" fill="{C}"/>
+    <path d="M50 34 l4.5 9 10 1.4 -7.2 7 1.7 9.9 -9 -4.7 -9 4.7 1.7 -9.9 -7.2 -7 10 -1.4 z" fill="none" stroke="{C}" stroke-width="4.5" stroke-linejoin="round"/>`,
   gift: `<rect x="18" y="42" width="64" height="44" rx="6" fill="none" stroke="{C}" stroke-width="6"/>
     <path d="M50 42 v44 M18 60 h64" stroke="{C}" stroke-width="5"/>
     <path d="M50 42 c-16 0 -22 -8 -18 -16 c4 -7 14 -4 18 8 c4 -12 14 -15 18 -8 c4 8 -2 16 -18 16 z" fill="none" stroke="{C}" stroke-width="5"/>`,
@@ -38,7 +40,7 @@ const cells = [
   { icon: "compare", main: "เทียบพระในคลัง",  sub: "ชิ้นไหนเข้ากับคุณสุด" },
   { icon: "history", main: "ดูผลเก่า",        sub: "รายงานทุกชิ้นที่เคยสแกน" },
   { icon: "coin",    main: "ค่าครูและสิทธิ์",  sub: "เช็คสิทธิ์คงเหลือ" },
-  { icon: "chat",    main: "ถามแอดมิน",       sub: "ตอบทุกเรื่องการใช้งาน" },
+  { icon: "app",     main: "เปิดแอป Ener",     sub: "ดวงวันนี้ · สถิติ · ข้อมูลของฉัน" },
   { icon: "gift",    main: "ชวนเพื่อน",        sub: "รับสิทธิ์สแกนฟรีทั้งคู่" },
 ];
 

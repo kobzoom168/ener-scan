@@ -124,7 +124,7 @@ test("evaluateToneGuard: จับคำชม/ปลอบต้องห้า
   );
 });
 
-test("tone fail-closed (Codex รอบ 2): output สุดท้ายไม่มีคำต้องห้ามเสมอ ไม่ว่ากรณีไหน", async () => {
+test("tone fail-closed (Codex รอบ 3): sanitizer ได้ไทยอ่านรู้เรื่อง — ล็อก exact output เคสจริง", async () => {
   const { resolveToneGuardedText, sanitizePraiseComfort, PRAISE_COMFORT_RE, NEUTRAL_RECOVERY_FALLBACK } =
     await import("../src/core/conversation/personaRole.util.js");
   const blocked =
@@ -139,34 +139,52 @@ test("tone fail-closed (Codex รอบ 2): output สุดท้ายไม�
   assert.equal(r1.outcome, "retry_passed");
   assert.doesNotMatch(r1.text, PRAISE_COMFORT_RE);
 
-  // retry ยังหลุด → sanitizer ตัดเฉพาะวลีต้องห้าม เก็บสาระ (ตัวเลข) ไว้
-  const r2 = resolveToneGuardedText({
-    original: blocked,
-    retry: "สบายใจได้ครับ",
-    moneyCtx: {},
-  });
+  // เคสจริง 1 (Codex รัน): ต้องได้ประโยคไทยธรรมชาติ ตัวเลขครบ ไม่มีเศษ "ดีแล้ว"
+  assert.equal(
+    sanitizePraiseComfort(blocked),
+    "ครับ คะแนน 7.5 กับ 87% อยู่ตามตำแหน่งที่รายงานระบุครับ",
+  );
+  const r2 = resolveToneGuardedText({ original: blocked, retry: "สบายใจได้ครับ", moneyCtx: {} });
   assert.equal(r2.outcome, "sanitized");
-  assert.doesNotMatch(r2.text, PRAISE_COMFORT_RE);
-  assert.match(r2.text, /7\.5/);
+  assert.equal(r2.text, "ครับ คะแนน 7.5 กับ 87% อยู่ตามตำแหน่งที่รายงานระบุครับ");
 
-  // เคสปลอบจริง 13 ส.ค. → sanitizer แทนด้วยขั้นถัดไป
-  const r3 = resolveToneGuardedText({
-    original: "ครับ หาคนละสายไปเรื่อย ๆ เดี๋ยวก็เจอชิ้นที่ใช่เอง",
-    retry: null,
-    moneyCtx: {},
-  });
-  assert.doesNotMatch(r3.text, PRAISE_COMFORT_RE);
+  // เคสจริง 2: clause อนาคตโดนกลืนทั้งท่อน ไม่มีเศษ "นที่ใช่เอง"
+  assert.equal(
+    sanitizePraiseComfort("ครับ หาคนละสายไปเรื่อย ๆ เดี๋ยวก็เจอชิ้นที่ใช่เอง"),
+    "ครับ หาคนละสายไปเรื่อย ๆ หากต้องการเทียบให้ชัด ให้สแกนชิ้นต่างสายเพิ่มเติมครับ",
+  );
+
+  // rule order: "ถือว่าใช้ได้ดีแล้ว" ต้องโดนกินทั้งวลี (longest first) ไม่เหลือ "ดีแล้ว"
+  assert.equal(
+    sanitizePraiseComfort("ชิ้นนี้ถือว่าใช้ได้ดีแล้วครับ"),
+    "ชิ้นนี้อยู่ตามตำแหน่งที่รายงานระบุครับ",
+  );
 
   // sanitize แล้วเหลือแต่เศษ (ข้อความเป็นคำต้องห้ามล้วน) → neutral fallback
-  const r4 = resolveToneGuardedText({
-    original: "ไม่ต้องกังวลครับ",
-    retry: null,
-    moneyCtx: {},
-  });
+  const r4 = resolveToneGuardedText({ original: "ไม่ต้องกังวลครับ", retry: null, moneyCtx: {} });
   assert.equal(r4.outcome, "fallback");
   assert.equal(r4.text, NEUTRAL_RECOVERY_FALLBACK);
   assert.doesNotMatch(NEUTRAL_RECOVERY_FALLBACK, PRAISE_COMFORT_RE);
+});
 
-  // sanitizer เดี่ยว: ผลลัพธ์สะอาดเสมอ
-  assert.doesNotMatch(sanitizePraiseComfort(blocked), PRAISE_COMFORT_RE);
+test("sanitizedOutputQualityOk: กันเศษภาษาพัง/สาระหาย (Codex รอบ 3)", async () => {
+  const { sanitizedOutputQualityOk } = await import(
+    "../src/core/conversation/personaRole.util.js"
+  );
+  const orig = "ครับ คะแนน 7.5 กับ 87% แบบนี้ก็ถือว่าใช้ได้ดีแล้วครับ ไม่ต้องกังวล";
+  assert.equal(
+    sanitizedOutputQualityOk("ครับ คะแนน 7.5 กับ 87% อยู่ตามตำแหน่งที่รายงานระบุครับ", orig),
+    true,
+  );
+  // เศษที่ Codex เจอจริงต้องไม่ผ่าน
+  assert.equal(
+    sanitizedOutputQualityOk("ก็อยู่ตามระดับที่ตัวเลขระบุดีแล้วครับ", orig),
+    false,
+  );
+  assert.equal(
+    sanitizedOutputQualityOk("ให้สแกนชิ้นอื่นเพิ่มเติมนที่ใช่เอง", orig),
+    false,
+  );
+  assert.equal(sanitizedOutputQualityOk("สั้นไป", orig), false);
+  assert.equal(sanitizedOutputQualityOk("ครับ ", orig), false);
 });

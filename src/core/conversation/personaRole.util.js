@@ -117,18 +117,27 @@ export function evaluateToneGuard(text) {
 }
 
 /**
- * Deterministic sanitizer (Codex 14 ส.ค. รอบ 2): ตัด/แทนเฉพาะวลีต้องห้าม
- * เก็บสาระที่เหลือไว้ — ใช้เมื่อ retry ยังหลุด ก่อนถอยไป neutral fallback
+ * Deterministic sanitizer (Codex 14 ส.ค. รอบ 3): ตัด/แทนเฉพาะวลีต้องห้าม เก็บสาระไว้
+ * กติกา: longest phrase first (กัน rule สั้นกินก่อนแล้วเหลือเศษ "ดีแล้ว") ·
+ * วลีอนาคต/ปลอบแทนทั้ง clause ถึงจบบรรทัด ห้ามใช้ character class ภาษาไทยตัดกลางคำ
  */
 const PRAISE_COMFORT_SANITIZE_RULES = [
-  // วลีมีบริบทตามหลัง (เดี๋ยวก็เจอชิ้นที่ใช่เอง ฯลฯ) → แทนด้วยขั้นถัดไปที่ทำได้จริง
-  [/เดี๋ยวก็เจอ[^\sครับค่ะนะ]{0,20}(?:เอง)?/g, "หากต้องการเทียบ ให้สแกนชิ้นอื่นเพิ่มเติม"],
-  [/ถือว่า(?:ดี|ใช้ได้)(?:มาก)?(?:แล้ว)?/g, "อยู่ตามระดับที่ตัวเลขระบุ"],
-  // วลีตัดทิ้งได้เลย (รวมคำลงท้ายที่เกาะมาด้วย กันเศษ "ครับ" ลอย)
-  [/(?:แบบนี้)?(?:ก็)?ใช้ได้ดีแล้ว(?:นะ)?(?:ครับ|ค่ะ)?/g, ""],
+  // กลุ่มชมคะแนน — เรียงยาว→สั้น แทนด้วยการอ่านตำแหน่งแบบเป็นกลาง
+  [/แบบนี้ก็ถือว่าใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/ถือว่าใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/แบบนี้ก็ใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/ก็ใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/ใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/ถือว่า(?:ดีมาก|ใช้ได้|ดี)(?:แล้ว)?/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  // ปลอบอนาคต — กลืนทั้ง clause ถึงจบบรรทัด แทนด้วยขั้นถัดไปที่ทำได้จริง
+  [/เดี๋ยวก็เจอ[^\n]*/g, "หากต้องการเทียบให้ชัด ให้สแกนชิ้นต่างสายเพิ่มเติมครับ"],
+  // วลีปลอบตัดทิ้ง (รวมคำลงท้ายที่เกาะมา กันเศษ "ครับ" ลอย)
   [/ไม่ต้องกังวล(?:ไป|นะ)?(?:ครับ|ค่ะ)?/g, ""],
   [/สบายใจได้(?:เลย|นะ)?(?:ครับ|ค่ะ)?/g, ""],
 ];
+
+/** เศษภาษาพัง/ความหมายชมที่หลงเหลือ = sanitize ไม่ผ่าน (Codex รอบ 3) */
+const SANITIZE_LEFTOVER_RE = /ดีแล้ว|นที่ใช่เอง|ครับครับ|ค่ะค่ะ|ระบุระบุ/;
 
 /** @param {string} text */
 export function sanitizePraiseComfort(text) {
@@ -140,6 +149,24 @@ export function sanitizePraiseComfort(text) {
     .replace(/ +([\n.!?])/g, "$1")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/**
+ * Post-sanitize quality gate: ประโยคต้องอ่านรู้เรื่อง + สาระจากต้นฉบับยังอยู่
+ * ไม่ผ่านข้อใดข้อหนึ่ง = ไปใช้ neutral fallback แทน (fail-closed)
+ * @param {string} sanitized
+ * @param {string} original
+ */
+export function sanitizedOutputQualityOk(sanitized, original) {
+  const s = String(sanitized || "").trim();
+  const o = String(original || "");
+  if (s.length < 10) return false;
+  // สาระต้องเหลือพอ ไม่ใช่โดนตัดจนกลวง
+  if (s.length < Math.min(30, Math.floor(o.length * 0.4))) return false;
+  if (SANITIZE_LEFTOVER_RE.test(s)) return false;
+  // ลงท้ายต้องเป็นตัวอักษรไทย/ตัวเลข/วรรคตอนปกติ ไม่จบด้วยอักขระค้าง
+  if (!/[ก-๙0-9a-zA-Z%.!?)]$/.test(s)) return false;
+  return true;
 }
 
 /**
@@ -155,7 +182,7 @@ export function resolveToneGuardedText({ original, retry, moneyCtx = {} }) {
   }
   const sanitized = sanitizePraiseComfort(original);
   if (
-    sanitized.length >= 10 &&
+    sanitizedOutputQualityOk(sanitized, original) &&
     evaluateToneGuard(sanitized).ok &&
     evaluateMoneyGuard(sanitized, moneyCtx).ok
   ) {

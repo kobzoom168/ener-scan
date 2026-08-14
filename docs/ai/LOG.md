@@ -635,3 +635,8 @@
 - delivery honesty: runExactUtilityCommandTerminal รับ pushUnavailable+onDeliveryFailure — sender คืน boolean ตามจริง (sent/suppressed/exactDuplicate นับว่าถึงมือ) · reply ล้ม→push fallback ครั้งเดียว→ล้มทั้งคู่ log EXACT_UTILITY_UNAVAILABLE_DELIVERY_FAILED + Telegram alert · ทุกกรณียัง terminal
 - invariant tests ใหม่ (lineWebhookRouting.invariant.test.js): reg gate ก่อน exact utility · exact utility ก่อน orchestrator/payment ตัวแรก · single owner (referral/synergy call site เดียว) · terminal block มี reply+push+alert ครบ
 - เทสต์แตะ 3 ไฟล์ 23/23 ผ่าน · baseline ไม่มี fail ใหม่ (970 pass)
+
+## 2026-08-14 | Claude | Sanitizer รอบ 3 (Codex) + rich menu ช่อง LIFF (staging)
+- sanitizer แก้ตามหลักฐาน Codex: longest-first (แบบนี้ก็ถือว่าใช้ได้ดีแล้ว → ... → ถือว่าดี) กันเศษ "ดีแล้ว" · clause อนาคต /เดี๋ยวก็เจอ[^\n]*/ กลืนถึงจบบรรทัด เลิก character class ไทยที่ตัดกลางคำ · sanitizedOutputQualityOk: ห้ามเศษ (ดีแล้ว/นที่ใช่เอง/ครับครับ) + ยาวพอ (≥40% หรือ ≥30) + ลงท้ายอักขระปกติ + tone/money ซ้ำ — ไม่ผ่าน = neutral fallback
+- เทสต์ล็อก exact output เคสจริงทั้งสอง: "ครับ คะแนน 7.5 กับ 87% อยู่ตามตำแหน่งที่รายงานระบุครับ" / "ครับ หาคนละสายไปเรื่อย ๆ หากต้องการเทียบให้ชัด ให้สแกนชิ้นต่างสายเพิ่มเติมครับ" + quality gate ปฏิเสธ output พังที่ Codex เจอ · baseline 971 ผ่าน
+- rich menu (กบ+Codex เคาะ): ถามแอดมิน → "เปิดแอป Ener / ดวงวันนี้ · สถิติ · ข้อมูลของฉัน" ไอคอนมือถือ+ดาว action URI liff.line.me/2010609313-8Bv87fz5 (staging LIFF) — เมนูใหม่ richmenu-939d8a52... ตั้ง default บน staging OA แล้ว · ค้าง: กบเทสต์ LIFF เปิดถูกบัญชี + 6 ปุ่มก่อนคุยเรื่อง pro (pro ใช้ LIFF_ID คนละตัว 2010679581)
