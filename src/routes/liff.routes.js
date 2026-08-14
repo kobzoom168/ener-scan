@@ -636,10 +636,11 @@ async function getRemainingScans(userId) {
       .select("id,paid_remaining_scans,paid_until,free_scan_daily_offset,free_scan_offset_date")
       .eq("line_user_id", userId)
       .maybeSingle();
-    if (!data) return { total: 0, freeLeft: 0, paidLeft: 0 };
+    if (!data) return { total: 0, freeLeft: 0, paidLeft: 0, paidUntil: null };
     const now = new Date();
     const paidOk = data.paid_until && new Date(data.paid_until).getTime() > now.getTime();
     const paidLeft = paidOk ? Math.max(0, Number(data.paid_remaining_scans) || 0) : 0;
+    const paidUntil = paidOk ? String(data.paid_until) : null;
 
     // ฟรีรายวัน: quota - จำนวนสแกนวันนี้ (บวก offset ที่ admin ชดเชย) — ตอนแพ็ก
     // จ่ายเงิน active โควต้าฟรีถูกกันไว้ ไม่โดนนับ
@@ -660,9 +661,9 @@ async function getRemainingScans(userId) {
       }
       freeLeft = Math.max(0, freeQuota - used);
     }
-    return { total: paidLeft + freeLeft, freeLeft, paidLeft };
+    return { total: paidLeft + freeLeft, freeLeft, paidLeft, paidUntil };
   } catch {
-    return { total: 0, freeLeft: 0, paidLeft: 0 };
+    return { total: 0, freeLeft: 0, paidLeft: 0, paidUntil: null };
   }
 }
 
@@ -1210,12 +1211,23 @@ liffRouter.get("/api/liff/pay/info", async (req, res) => {
   try {
     const offer = loadActiveScanOffer();
     const packages = (offer.packages || []).filter((p) => p.active);
-    const [payment, access, upgradeCredit] = await Promise.all([
+    const [payment, access, upgradeCredit, rights] = await Promise.all([
       getLatestAwaitingPaymentForLineUserId(userId).catch(() => null),
       checkScanAccess({ userId }).catch(() => null),
       getUpgradeCreditForLineUser(userId).catch(() => null),
+      getRemainingScans(userId),
     ]);
+    // telemetry เมนูใหม่ (กบ+Codex 14 ส.ค.): วัดว่าปุ่ม rich menu → หน้า pay มีคนใช้จริง
+    const src = String(req.query.src || "").slice(0, 20);
+    if (src === "richmenu") {
+      console.log(JSON.stringify({ event: "pay_liff_opened_from_richmenu", uidPrefix: userId.slice(0, 8) }));
+    }
+    if (rights.total > 0) {
+      console.log(JSON.stringify({ event: "pay_existing_access_seen", uidPrefix: userId.slice(0, 8), total: rights.total }));
+    }
     res.json({
+      // สิทธิ์รวม (จ่าย+ฟรีวันนี้) + วันหมดอายุแพ็ก — หัวหน้า pay ต้องโชว์ก่อนแพ็กเสมอ
+      rights,
       ok: true,
       packages: packages.map(packageForApi),
       defaultPackageKey: offer.defaultPackageKey,
@@ -1274,10 +1286,13 @@ liffRouter.post("/api/liff/pay/create", express.json(), async (req, res) => {
       }
     }
 
+    console.log(JSON.stringify({ event: "pay_package_selected", uidPrefix: userId.slice(0, 8), packageKey: pkg.key }));
+
     // Reuse an open payment for the same package instead of piling up rows
     // (the chat flow may already have one going).
     const existing = await getLatestAwaitingPaymentForLineUserId(userId).catch(() => null);
     if (existing?.id && String(existing.status || "") === "pending_verify") {
+      console.log(JSON.stringify({ event: "pay_duplicate_attempt_prevented", uidPrefix: userId.slice(0, 8), reason: "pending_verify" }));
       return res.json({ ok: true, result: "pending_verify", paymentRef: existing.payment_ref || null });
     }
     let paymentId = null;
@@ -1287,6 +1302,7 @@ liffRouter.post("/api/liff/pay/create", express.json(), async (req, res) => {
       String(existing.status || "") === "awaiting_payment" &&
       Number(existing.expected_amount ?? existing.amount) === payAmountThb
     ) {
+      console.log(JSON.stringify({ event: "pay_duplicate_attempt_prevented", uidPrefix: userId.slice(0, 8), reason: "reuse_awaiting" }));
       paymentId = existing.id;
       paymentRef = existing.payment_ref || (await ensurePaymentRefForPaymentId(existing.id).catch(() => null));
     } else {
@@ -2262,6 +2278,12 @@ function buildLiffHtml(liffId) {
 
     <!-- step 1: pick package -->
     <div id="pay-pick" style="display:flex;flex-direction:column;gap:11px">
+      <!-- สถานะสิทธิ์ก่อนแพ็กเสมอ (กบ+Codex 14 ส.ค.: ห้ามดันขายก่อนบอกสถานะ) -->
+      <div id="pay-status" class="repcard hidden" style="padding:14px 16px">
+        <div id="pay-status-t" style="font-weight:600;font-size:15.5px"></div>
+        <div id="pay-status-s" style="font-size:13px;opacity:.75;margin-top:3px"></div>
+        <button class="readbtn hidden" id="pay-back-chat" style="margin-top:10px">กลับไปส่งรูป</button>
+      </div>
       <span class="paychip hidden" id="pay-remain" style="align-self:flex-start"></span>
       <div id="pay-pkgs" style="display:flex;flex-direction:column;gap:10px"></div>
       <button class="readbtn" id="pay-go">💳 สร้างรายการโอน</button>
@@ -2974,12 +2996,21 @@ function buildLiffHtml(liffId) {
     });
   }
 
-  function openPay(preferUnlimited){
+  function payFmtThaiDate(iso){
+    try{
+      var d = new Date(iso);
+      var m = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+      var b = new Date(d.getTime() + 7*3600*1000);
+      return b.getUTCDate() + " " + m[b.getUTCMonth()] + " " + (b.getUTCFullYear() + 543);
+    }catch(e){ return ""; }
+  }
+
+  function openPay(preferUnlimited, src){
     show("v-pay");
     $("pay-pick").classList.remove("hidden");
     $("pay-qr").classList.add("hidden");
     $("pay-done").classList.add("hidden");
-    api("/api/liff/pay/info").then(function(r){ return r.json(); }).then(function(j){
+    api("/api/liff/pay/info" + (src ? "?src=" + encodeURIComponent(src) : "")).then(function(r){ return r.json(); }).then(function(j){
       if(!j || !j.ok) return;
       pay.pkgs = j.packages || [];
       pay.credit = j.upgradeCredit || null;
@@ -2990,18 +3021,30 @@ function buildLiffHtml(liffId) {
       }
       pay.qrUrl = j.qrUrl || "";
       payRenderPkgs();
-      var rem = $("pay-remain");
-      if(j.access && j.access.paidRemainingScans > 0){
-        rem.textContent = j.access.paidRemainingScans >= 900000
-          ? "✦ ตอนนี้ใช้สิทธิ์รายเดือนอยู่"
-          : "✦ ตอนนี้เหลือสิทธิ์สแกน " + j.access.paidRemainingScans + " ครั้ง";
-        rem.classList.remove("hidden");
-      } else { rem.classList.add("hidden"); }
+      // สถานะสิทธิ์ก่อนแพ็กเสมอ (กบ+Codex 14 ส.ค.)
+      var st = $("pay-status"), stT = $("pay-status-t"), stS = $("pay-status-s"), backBtn = $("pay-back-chat");
+      var rights = j.rights || null;
+      if(rights && rights.total > 0){
+        stT.textContent = rights.paidLeft >= 900000
+          ? "ตอนนี้ใช้สิทธิ์รายเดือนอยู่"
+          : "สิทธิ์คงเหลือ " + rights.total + " ครั้ง";
+        stS.textContent = (rights.paidUntil ? "ใช้ได้ถึง " + payFmtThaiDate(rights.paidUntil) : "") +
+          (rights.freeLeft > 0 && rights.paidLeft > 0 ? (rights.paidUntil ? " · " : "") + "รวมสิทธิ์ฟรีวันนี้ " + rights.freeLeft + " ครั้ง" : "");
+        backBtn.classList.remove("hidden");
+        st.classList.remove("hidden");
+      } else if(rights){
+        stT.textContent = "วันนี้ใช้สิทธิ์ฟรีครบแล้ว";
+        stS.textContent = "เลือกค่าครูสำหรับรอบถัดไปได้ด้านล่างครับ";
+        backBtn.classList.add("hidden");
+        st.classList.remove("hidden");
+      } else { st.classList.add("hidden"); }
+      var rem = $("pay-remain"); rem.classList.add("hidden");
       if(j.payment && j.payment.status === "pending_verify"){
-        payShowDone("⏳", "สลิปกำลังตรวจอยู่", "รายการก่อนหน้ากำลังตรวจ เดี๋ยวแอดมินแจ้งผลในแชตครับ");
+        payShowDone("⏳", "รับรายการชำระแล้ว กำลังตรวจสอบ", "รายการก่อนหน้ากำลังตรวจกับธนาคาร เดี๋ยวแอดมินแจ้งผลในแชตครับ ไม่ต้องโอนซ้ำ");
       }
     }).catch(function(){});
   }
+  $("pay-back-chat").addEventListener("click", function(){ liff.closeWindow(); });
 
   function payShowQr(j){
     $("pay-pick").classList.add("hidden");
@@ -3113,7 +3156,10 @@ function buildLiffHtml(liffId) {
           // ลิงก์จากแชท liff.line.me/{id}?view=pay → เข้าหน้าเลือกแพ็กจ่ายทันที
           var qs = new URLSearchParams(location.search);
           var st = qs.get("liff.state") || "";
-          if (qs.get("view") === "pay" || st.indexOf("view=pay") !== -1) { openPay(); }
+          if (qs.get("view") === "pay" || st.indexOf("view=pay") !== -1) {
+            var paySrc = qs.get("src") || (st.indexOf("src=richmenu") !== -1 ? "richmenu" : "");
+            openPay(false, paySrc);
+          }
         }
         else { renderStep(); show("v-ob"); }
       });
