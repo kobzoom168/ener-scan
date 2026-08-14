@@ -174,3 +174,11 @@ Opus ยังเห็นรูปแบบเดิม: 3 Ener Scan calls ข�
 - `app_name` ว่าง 1,660 rows ($3.3990), Ener Scan 305 rows ($0.6203), Hermes Agent 5 rows ($0.0538)
 - ข้อมูลส่วนใหญ่เกิดก่อน/คาบเกี่ยว instrumentation rollout จึงใช้เป็น **pre-attribution baseline** เท่านั้น ยังใช้ตัดสินผล optimization ไม่ได้
 - หน้า OpenRouter ยังแสดง GPT rows เป็น App `Unknown` สอดคล้องกับ CSV; ต้องรอ export หลัง client/header rollout จริงก่อนสรุปว่า X-Title/user attribution ทำงานบน production/staging path ใด
+
+## Telemetry rollout — 14 ส.ค. 2026
+
+- `23bdf2e` รายงานว่า deploy telemetry-only ขึ้น production แล้ว; web และ 3 containers healthy
+- production ไม่มี `OBJECT_CHECK_LOW_SHADOW_ENABLED` จึงไม่มี low-detail shadow cost/behavior บนลูกค้าจริง
+- smoke application log: `callSite=smoke.telemetryCheck`, prompt 6 tokens, completion 1 token
+- ยังต้องยืนยัน smoke/real row ฝั่ง OpenRouter ว่าคอลัมน์ `user` มี callSite จริงก่อนถือว่า attribution window เริ่มครบวงจร
+- รอบวิเคราะห์ถัดไปต้องใช้ CSV หลัง rollout 2–3 วัน และแยก smoke calls ออกจาก cost/customer metrics
