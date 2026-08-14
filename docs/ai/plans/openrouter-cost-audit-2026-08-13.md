@@ -149,3 +149,28 @@ potential saving สูงสุดราว $0.7–1.0 ต่อ 4 วัน �
 - object gate escalation rate + false reject/accept
 - report validation fail/retry/rewrite rate
 - consult guard retry/fallback rate และ customer complaint rate
+
+## Snapshot เพิ่มเติม — CSV 14 ส.ค. 2026
+
+ไฟล์: `/root/Downloads/openrouter_activity_2026-08-14.csv` (ช่วงในไฟล์ 12–14 ส.ค.; วันที่ 14 เป็น partial ถึงประมาณ 08:10 น. ไทยตามภาพหน้าเว็บ)
+
+- 1,970 calls · รวม **$4.073127** · prompt 4.554M · completion 152.5k · cached 693.9k
+- 12 ส.ค. $2.1734 / 831 calls
+- 13 ส.ค. $1.5373 / 908 calls
+- 14 ส.ค. partial $0.3625 / 231 calls — ห้าม extrapolate เป็นเต็มวันโดยตรง
+
+| Model | Calls | Cost | Share |
+|---|---:|---:|---:|
+| GPT-4.1 | 488 | $2.0751 | 51.0% |
+| GPT-4.1-mini | 964 | $1.1196 | 27.5% |
+| Opus 4.8 | 31 | $0.7462 | 18.3% |
+| อื่น ๆ | 487 | $0.1322 | 3.2% |
+
+Opus ยังเห็นรูปแบบเดิม: 3 Ener Scan calls ขนาดใหญ่ ≥10k prompt tokens ใช้ $0.5420; 28 calls ขนาดเล็ก <2k tokensและ app ว่างใช้ $0.2042
+
+ข้อจำกัด attribution ของ snapshot นี้:
+
+- `user` ว่างทั้ง 1,970 rows จึงยังไม่มี call-site tag ใน export ชุดนี้
+- `app_name` ว่าง 1,660 rows ($3.3990), Ener Scan 305 rows ($0.6203), Hermes Agent 5 rows ($0.0538)
+- ข้อมูลส่วนใหญ่เกิดก่อน/คาบเกี่ยว instrumentation rollout จึงใช้เป็น **pre-attribution baseline** เท่านั้น ยังใช้ตัดสินผล optimization ไม่ได้
+- หน้า OpenRouter ยังแสดง GPT rows เป็น App `Unknown` สอดคล้องกับ CSV; ต้องรอ export หลัง client/header rollout จริงก่อนสรุปว่า X-Title/user attribution ทำงานบน production/staging path ใด
