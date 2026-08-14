@@ -2,6 +2,29 @@
 
 สถานะ: **IMPLEMENTED ON STAGING ที่ `7c66720` — ยังมี blockers ก่อน deploy Pro**
 
+## Codex review รอบ 2 — commit `4d4691a`
+
+ยืนยันว่าปิดของเดิมได้จริงบางส่วน: outcome ถูกแยกด้วย cache ใหม่ต่อ resume turn และตั้ง `scan_enqueued` หลัง `ingestScanImageAsyncV2().ok` ทั้งสองเส้น, hold ถูก consume เฉพาะ outcome นี้, resume lock เพิ่มเป็น 600 วินาที, ledger ถูกจดก่อน save และ helper registration-complete ถูก reuse ใน gate/LIFF แล้ว Targeted tests ผ่าน 20/20 ด้วย placeholder env
+
+ยังไม่ผ่าน Pro เพราะพบ 3 contract gaps:
+
+1. **Blocker — push failure ยัง retry success flow ไม่ได้จริง**
+   - แม้ล้าง dedupe key แล้ว แต่ profile ถูกบันทึกครบก่อน push รอบแรก
+   - เมื่อ client retry save รอบถัดไป `completeBefore=true`; `decideLiffSuccessFlow()` คืน `none` ก่อนแตะ dedupe จึงไม่มี success/resume card อีก
+   - ต้องมี delivery state แยกจาก registration transition เช่น `registration_success_pending/sent` หรือ retry delivery ใน request เดิม แล้วทดสอบ end-to-end: save สำเร็จ → push fail → save/trigger รอบสอง → push สำเร็จหนึ่งครั้ง
+
+2. **High — lock busy โดยยังไม่มี hold ถูกตอบเป็น `extra` ทั้งที่ไม่มีรูปแรกยืนยัน**
+   - หลัง retry lock 4 รอบ ถ้า `peek` ยังว่าง ฟังก์ชันคืน `{held:"extra"}` และ route บอกลูกค้าว่า “รับรูปแรกไว้แล้ว”
+   - owner ที่ถือ lock อาจ upload/save ล้มภายหลัง ทำให้รูปทั้งสองไม่ถูกเก็บ แต่ลูกค้าได้รับคำยืนยันผิด
+   - กรณีไม่มี hold หลังรอควรคืน `busy/failed` และตอบตามจริงให้ retry หรือใช้ durable inbox/idempotent claim; ห้ามอ้างว่ารูปแรกอยู่จน re-check พบ storagePath จริง
+
+3. **High — paywall ownership ยังอาจทำให้ scan ซ้ำและ hold ค้าง**
+   - paywall path เก็บ buffer ใน pending-image flow ขณะ pre-reg hold ยังคงอยู่ เมื่อ payment flow สแกน pending สำเร็จ hold/token เดิมยังใช้ได้
+   - ลูกค้าอาจกดปุ่มเดิมภายหลังและ enqueue รูปเดิมอีกรอบ/กินสิทธิ์เพิ่ม
+   - ต้องผูก hold id/token กับ pending payment image และ consume/mark resumed เมื่อ payment-driven enqueue สำเร็จ หรือเลือกให้ pre-reg hold เป็นเจ้าของภาพเพียงทางเดียวจนจ่ายเสร็จ พร้อม test `resume→paywall→paid auto scan→กด token ซ้ำ` ต้องไม่ enqueue รอบสอง
+
+ข้อสังเกต: ledger-first ลด orphan เมื่อ metadata save ล้ม แต่ production `ledgerAdd()` กลืน Redis error หากทั้ง ledger และ save ล้มหลัง S3 upload ไฟล์ยัง orphan ได้ ควร delete ชดเชยทันทีใน catch ของ save และให้ ledgerเป็น fallback ไม่ใช่กลไกเดียว
+
 ## Codex review — commit `7c66720` (14 ส.ค. 2026)
 
 ยืนยันจากโค้ดแล้วว่า flow หลักทั้ง 8 ข้อถูกนำไปทำบน staging: follow แบบ registration-first, durable hold, รูปที่สองไม่ตั้งใจ overwrite, pending description, LIFF/chat completion transition, resume token, chat fallback, cooldown, cleanup ledger และ telemetry พื้นฐาน
