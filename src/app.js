@@ -320,6 +320,109 @@ app.post("/synergy/:token/carry", async (req, res) => {
   }
 });
 
+// "ผลสแกนของฉัน" (กบเคาะ 14 ส.ค.) — หน้า HTML ส่วนตัว ลิสต์ผลสแกน 5 รายการ/หน้า
+// ความปลอดภัย (Codex): private no-store + noindex + rate limit + log แค่ token prefix
+async function myScansGuard(req, res) {
+  const svc = await import("./services/myscans/myScansPage.service.js");
+  const token = String(req.params.token || "");
+  if (!svc.isValidMyScansTokenFormat(token)) {
+    res.status(404).send("ไม่พบหน้านี้");
+    return null;
+  }
+  try {
+    const { incrementCounterWithTtl } = await import("./redis/scanV2Redis.js");
+    const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+    const n = await incrementCounterWithTtl(`myscans_rl:${ip}`, 60);
+    if (Number(n) > 30) {
+      res.status(429).send("เปิดหน้าถี่เกินไป ลองใหม่ในอีกสักครู่ครับ");
+      return null;
+    }
+  } catch { /* rate limit พังห้ามขวางหน้า */ }
+  const uid = await svc.resolveMyScansToken(token);
+  if (!uid) {
+    res.status(404).send("ลิงก์นี้ใช้ไม่ได้แล้ว เปิดจากปุ่ม ดูผลเก่า ในแชทอีกครั้งครับ");
+    return null;
+  }
+  res.set("Cache-Control", "private, no-store");
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  return { svc, token, uid };
+}
+
+app.get("/myscans/:token", async (req, res) => {
+  try {
+    const g = await myScansGuard(req, res);
+    if (!g) return;
+    const { svc, token, uid } = g;
+    const offset = Math.max(0, Math.min(115, Number(req.query.offset) || 0));
+    const items = await svc.loadMyScanItems(uid);
+    // CTA ล่าง: กลับแชท OA + จัดชุด (เฉพาะมีของ ≥3 ชิ้น — เงื่อนไขเดียวกับ Synergy)
+    let chatUrl = null;
+    let synergyUrl = null;
+    try {
+      chatUrl = await svc.getOaChatUrl(lineClient);
+    } catch { /* ไม่มีลิงก์แชทก็แค่ซ่อนปุ่ม */ }
+    if (items.length >= 3) {
+      try {
+        const { getOrCreateSynergyToken } = await import("./services/synergy/synergyReport.service.js");
+        const st = await getOrCreateSynergyToken(uid);
+        if (st) synergyUrl = `${svc.appBaseUrl()}/synergy/${st}`;
+      } catch { /* ซ่อนปุ่ม */ }
+    }
+    console.log(JSON.stringify({
+      event: offset > 0 ? "myscans_load_more" : "myscans_opened",
+      tokenPrefix: svc.tokenPrefixForLog(token),
+      offset,
+      total: items.length,
+    }));
+    res.status(200).type("html").send(
+      svc.renderMyScansHtml({ items, offset, total: items.length, token, synergyUrl, chatUrl }),
+    );
+  } catch (e) {
+    console.error(JSON.stringify({ event: "MYSCANS_PAGE_ERROR", message: String(e?.message || e).slice(0, 160) }));
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+  }
+});
+
+// เปิดรายงานเต็มผ่าน redirect เพื่อเก็บ telemetry myscans_report_opened
+app.get("/myscans/:token/open-report/:reportToken", async (req, res) => {
+  try {
+    const g = await myScansGuard(req, res);
+    if (!g) return;
+    const rt = String(req.params.reportToken || "").trim();
+    if (!/^[A-Za-z0-9_-]{6,80}$/.test(rt)) return res.status(404).send("ไม่พบรายงาน");
+    console.log(JSON.stringify({ event: "myscans_report_opened", tokenPrefix: g.svc.tokenPrefixForLog(g.token) }));
+    res.redirect(302, `/r/${encodeURIComponent(rt)}`);
+  } catch {
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+  }
+});
+
+// CTA ล่างหน้า — redirect พร้อม telemetry (chat = ส่งรูปชิ้นใหม่ / synergy = จัดชุด)
+app.get("/myscans/:token/goto/:target", async (req, res) => {
+  try {
+    const g = await myScansGuard(req, res);
+    if (!g) return;
+    const { svc, token, uid } = g;
+    const target = String(req.params.target || "");
+    if (target === "chat") {
+      const chatUrl = await svc.getOaChatUrl(lineClient);
+      if (!chatUrl) return res.status(404).send("ไม่พบลิงก์แชท");
+      console.log(JSON.stringify({ event: "myscans_rescan_clicked", tokenPrefix: svc.tokenPrefixForLog(token) }));
+      return res.redirect(302, chatUrl);
+    }
+    if (target === "synergy") {
+      const { getOrCreateSynergyToken } = await import("./services/synergy/synergyReport.service.js");
+      const st = await getOrCreateSynergyToken(uid);
+      if (!st) return res.status(404).send("ไม่พบหน้าจัดชุด");
+      console.log(JSON.stringify({ event: "myscans_synergy_clicked", tokenPrefix: svc.tokenPrefixForLog(token) }));
+      return res.redirect(302, `/synergy/${st}`);
+    }
+    res.status(404).send("ไม่พบหน้านี้");
+  } catch {
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+  }
+});
+
 // นโยบายความเป็นส่วนตัว — Meta บังคับต้องมี URL นี้ก่อนสลับ app เป็น Live (กบ 29 ก.ค.)
 app.get("/privacy", (req, res) => {
   res.status(200).type("html").send(`<!doctype html>

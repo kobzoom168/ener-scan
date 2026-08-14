@@ -60,6 +60,7 @@ export function detectAjarnMoneyBreach(rows) {
 export const INTERNAL_MARKER_TEXTS = new Set([
   "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]",
   "[เสียงเตือนเรื่องหลายรูป]",
+  "[ส่งการ์ดผลสแกนของฉันแล้ว]",
 ]);
 
 function isInternalMarkerRow(r) {

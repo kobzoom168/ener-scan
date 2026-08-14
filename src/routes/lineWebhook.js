@@ -2111,6 +2111,48 @@ async function handleHistoryCommand({
   userId,
   invokePhase1GeminiOrchestrator = null,
 }) {
+  // "ผลสแกนของฉัน" (กบเคาะ 14 ส.ค.): การ์ดใบเดียว + ลิงก์หน้า HTML ส่วนตัว
+  // (Codex ข้อ 5: ห้ามส่งหลาย bubble) — หน้า/token พัง = ถอยไปลิสต์ข้อความแบบเดิม
+  try {
+    const svc = await import("../services/myscans/myScansPage.service.js");
+    const items = await svc.loadMyScanItems(userId);
+    if (items.length > 0) {
+      const token = await svc.getOrCreateMyScansToken(userId);
+      if (token) {
+        const url = `${svc.appBaseUrl()}/myscans/${token}`;
+        console.log(
+          JSON.stringify({
+            event: "myscans_link_requested",
+            tokenPrefix: svc.tokenPrefixForLog(token),
+            total: items.length,
+          }),
+        );
+        await client.replyMessage(
+          replyToken,
+          svc.buildMyScansFlexCard({ url, total: items.length }),
+        );
+        try {
+          const { insertLineConversationMessage } = await import(
+            "../stores/conversationMessages.db.js"
+          );
+          await insertLineConversationMessage(
+            userId,
+            "bot",
+            "[ส่งการ์ดผลสแกนของฉันแล้ว]",
+            { speakerRole: "admin", replyType: "myscans_card", source: "flow" },
+          );
+        } catch { /* history insert พังห้ามขวาง */ }
+        return;
+      }
+    }
+  } catch (e) {
+    console.log(
+      JSON.stringify({
+        event: "MYSCANS_CARD_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+  }
   const history = getScanHistory(userId);
 
   if (!history.length) {

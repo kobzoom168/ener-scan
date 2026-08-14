@@ -646,3 +646,10 @@
 - rich menu ดำ-ทอง 6 ช่องขึ้น OA pro: richmenu-866e0da590cb2198f521a05bede80b4d (LIFF cell ใช้ pro LIFF_ID 2010679581 อัตโนมัติจาก env) ตั้ง default แล้ว
 - เมนูเดิม ener-liff-entry-prod (richmenu-88b2b76d6d30ffbf8dd3c8396145a62a — แผ่นเดียว "เปิด Ener" → LIFF) เก็บไว้ไม่ลบ · rollback ได้ด้วย setDefaultRichMenu(id เดิม)
 - เฝ้าต่อ: TONE_PRESEND_OUTCOME กับ EXACT_UTILITY_* ใน log pro + รายงานคุณภาพเช้าพรุ่งนี้ควรไม่มี false alarm marker แล้ว
+
+## 2026-08-14 | Claude | เมนู "ดูผลเก่า"→หน้าผลสแกนของฉัน + ค่าครู→LIFF pay (staging)
+- หน้าใหม่ /myscans/{token}: migration 052 user_page_tokens (sha256 hash-at-rest, rotate/revoke ได้) · 5 รายการ/หน้า + ดูเพิ่มเติม (server pagination ?offset) · ยุบเฉพาะ diagnostics.baselineIdPrefix ตรงกัน (ไม่มี=แสดงแยก) + "เคยสแกน N ครั้ง" · ค่าจาก stored report เท่านั้น · fallback รูป/ชื่อ/คะแนน/ลิงก์รายงานครบ · CTA ส่งรูปชิ้นใหม่ (line.me/R/ti/p จาก getBotInfo) + จัดชุด (≥3 ชิ้น) · headers private no-store + noindex + rate limit 30/นาที/IP + log แค่ token prefix
+- "ประวัติ" ตอบการ์ด flex ใบเดียว (ปุ่มเปิดหน้า) · marker "[ส่งการ์ดผลสแกนของฉันแล้ว]" เข้า allowlist detector · พัง=ถอย list ข้อความเดิม
+- LIFF pay: rights (รวมฟรี+จ่าย+paidUntil) จาก getRemainingScans โชว์หัวหน้าก่อนแพ็กทุก state (มีสิทธิ์→CTA กลับไปส่งรูป · หมด→เลือกค่าครูรอบถัดไป · pending_verify→กำลังตรวจ ห้ามโอนซ้ำ) · telemetry pay_liff_opened_from_richmenu (src=richmenu) / pay_existing_access_seen / pay_package_selected / pay_duplicate_attempt_prevented · myscans_* ครบ
+- rich menu staging v4: ค่าครู→?view=pay&src=richmenu (richmenu-c363ad06...) · จับ bug ใหญ่: npm test เป็นลิสต์ไฟล์ตายตัว เทสต์ใหม่ 3 ไฟล์ไม่เคยถูกรัน — เพิ่มแล้ว baseline 991 ผ่าน
+- ค้าง: กบทดสอบ ดูผลเก่า/ค่าครู/เปิดแอป บน staging → เคาะขึ้น pro (ต้อง migration 052 + เมนู pro ด้วย)

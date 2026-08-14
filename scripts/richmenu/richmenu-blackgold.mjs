@@ -41,7 +41,8 @@ const cells = [
   { icon: "history", main: "ดูผลเก่า",        sub: "รายงานทุกชิ้นที่เคยสแกน" },
   { icon: "coin",    main: "ค่าครูและสิทธิ์",  sub: "เช็คสิทธิ์คงเหลือ" },
   { icon: "app",     main: "เปิดแอป Ener",     sub: "ดวงวันนี้ · สถิติ · ข้อมูลของฉัน" },
-  { icon: "gift",    main: "ชวนเพื่อน",        sub: "รับสิทธิ์สแกนฟรีทั้งคู่" },
+  // กบ 14 ส.ค.: ปิดชวนเพื่อนไว้ก่อน (รายละเอียดยังไม่เคาะ) — หรี่ + ไม่มี tap area
+  { icon: "gift",    main: "ชวนเพื่อน",        sub: "เปิดให้ใช้เร็ว ๆ นี้", disabled: true },
 ];
 
 let body = `
@@ -73,10 +74,11 @@ cells.forEach((c, i) => {
 
   const iconSize = 300;
   const ix = cx - iconSize / 2, iy = y + 130;
-  body += `<g transform="translate(${ix},${iy}) scale(${iconSize / 100})">${icons[c.icon].replaceAll("{C}", iconColor)}</g>`;
+  const cellOpacity = c.disabled ? 0.3 : 1;
+  body += `<g opacity="${cellOpacity}"><g transform="translate(${ix},${iy}) scale(${iconSize / 100})">${icons[c.icon].replaceAll("{C}", iconColor)}</g>`;
 
   body += `<text x="${cx}" y="${y + 560}" text-anchor="middle" font-family="Kanit" font-weight="600" font-size="86" fill="${mainColor}">${c.main}</text>
-    <text x="${cx}" y="${y + 660}" text-anchor="middle" font-family="Kanit" font-weight="400" font-size="52" fill="${subColor}">${c.sub}</text>`;
+    <text x="${cx}" y="${y + 660}" text-anchor="middle" font-family="Kanit" font-weight="400" font-size="52" fill="${subColor}">${c.sub}</text></g>`;
 });
 
 // เส้นทองบางๆ กลางจอ + โลโก้เล็กมุม
