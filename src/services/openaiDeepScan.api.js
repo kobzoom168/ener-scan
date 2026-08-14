@@ -154,6 +154,7 @@ export async function generateDeepScanDraft({
   userPrompt,
   imageBase64,
   mimeType = "image/jpeg",
+  callSite = "deepScan.draft",
 }) {
   const startedAt = Date.now();
 
@@ -161,6 +162,7 @@ export async function generateDeepScanDraft({
     const model = OPENAI_DEEP_SCAN_RESPONSES_MODEL;
     console.log("[OPENAI_MODEL]", model);
     return openai.responses.create({
+      user: String(callSite || "deepScan.draft"),
       model,
       input: [
         {
@@ -200,13 +202,14 @@ export async function generateDeepScanDraft({
 /**
  * Layer 2: gpt-4.1-mini — rewrite draft (same format, polished language).
  */
-export async function rewriteDeepScanDraft({ systemPrompt, userPrompt }) {
+export async function rewriteDeepScanDraft({ systemPrompt, userPrompt, callSite = "deepScan.rewrite" }) {
   const startedAt = Date.now();
 
   const response = await withOpenAi429RetryOnce(() => {
     const model = OPENAI_DEEP_SCAN_RESPONSES_MODEL;
     console.log("[OPENAI_MODEL]", model);
     return openai.responses.create({
+      user: String(callSite || "deepScan.rewrite"),
       model,
       input: [
         {

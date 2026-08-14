@@ -598,3 +598,9 @@
 - ②normalizer ครบ 4 pass ตามชั้น production: strict=normalizeObjectCheckOutput ตัวจริง (จับคำพ้อง/ไทย) · permissive=label+objectCount+family+confidence bucket · crystal_family=crystalFamilyFromParsed (familyLabel/primaryObjectOwner/bucket) · bracelet_form=braceletFormFromParsed (formFactor/primaryOwner/wearable/loop flags/bucket) — เลิก first-word กับ structured pass
 - ③callSite ครบ 6 จุดที่ค้าง: amuletTypeClassify / hybridPersona / slipOcrExtractor / objectEmbedding.descriptor / objectSameIdentityVerifier / objectPairCompareAgent — ไม่มี untagged ใน Responses หลักแล้ว
 - tests 6 ตัวรวมเคสที่ Codex สั่ง: success ไม่ทิ้ง timer (วัดเวลา <2s) · main พัง→slot คืน→call ถัดไปไม่ busy · structured JSON ต่าง format แต่ outcome เดียว = match · suite ผ่าน baseline · ขึ้น staging — เริ่มหน้าต่างเก็บข้อมูล 2-3 วันได้แล้ว
+
+## 2026-08-14 | Claude | Codex instrumentation รอบ 3 — ปิด 2 จุดสุดท้าย ได้ไฟเขียว telemetry ขึ้น pro
+- ①test main-hang ใช้ unresolved promise จริง + timeoutMs injectable (30ms เฉพาะเทสต์) — พิสูจน์: hang → "error" → slot คืน → call ถัดไปไม่ busy · เทสต์จบ 0.6s ไม่มี open handle
+- ②Codex จับถูกอีก: deepScan ไม่ได้มี call เดียว — generateDeepScanDraft + rewriteDeepScanDraft ใน openaiDeepScan.api ยัง untagged และมี fengShuiAnalyze.service reuse draft อยู่จริง → แท็กครบ: deepScan.draft / deepScan.rewrite / fengShui.draft (callSite param)
+- Codex เห็นชอบ telemetry-only ขึ้น pro โดยเงื่อนไข: shadow flag absent/false บน pro · ไม่แตะ cache/prompt/model/detail · smoke ตรวจ App+user ในบิลหลัง deploy · เริ่มนับ 2-3 วันเมื่อเห็น tag แรกจริง — รอกบสั่ง deploy
+- suite ผ่าน baseline · ขึ้น staging

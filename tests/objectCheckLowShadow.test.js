@@ -48,20 +48,18 @@ test("shadow success จบเร็ว ไม่ทิ้ง timer ค้าง
   delete process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED;
 });
 
-test("main ค้าง → timeout ครอบทั้งก้อน คืน slot (call ถัดไปไม่โดน busy)", async () => {
+test("main ค้างจริง (unresolved promise) → timeout คืน slot, call ถัดไปไม่ busy", async () => {
   process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED = "true";
-  const never = new Promise(() => {});
-  // ย่อ timeout ไม่ได้ (const ในโมดูล) — ใช้ createFn เร็ว + main ค้าง แล้วเช็คว่า
-  // promise คืน "error" ภายใน ~16s ถือว่านานไปสำหรับ unit test → ทดสอบทางอ้อม:
-  // main reject เร็ว (catch เป็น null ใน shadow) ต้องยัง logged + slot คืน
+  const never = new Promise(() => {}); // main ที่ไม่มีวัน settle
   const res1 = await runObjectCheckLowShadow({
     passType: "strict", instructionText: "x", imageBase64: "aGk=",
-    mainPromise: Promise.reject(new Error("main died")),
+    mainPromise: never,
     createFn: async () => ({ output_text: "supported" }),
     rand: 0,
+    timeoutMs: 30, // inject สั้นเฉพาะเทสต์ (Codex: ต้องพิสูจน์ด้วย hang จริง)
   });
-  assert.equal(res1, "logged");
-  // slot ว่าง: ยิงต่อได้ทันที ไม่ busy
+  assert.equal(res1, "error"); // timeout ครอบทั้งก้อน
+  // slot ต้องคืนแล้ว: ยิงต่อได้ทันที ไม่ busy
   const res2 = await runObjectCheckLowShadow({
     passType: "strict", instructionText: "x", imageBase64: "aGk=",
     mainPromise: Promise.resolve({ output_text: "supported" }),
@@ -69,7 +67,14 @@ test("main ค้าง → timeout ครอบทั้งก้อน คื�
     rand: 0,
   });
   assert.equal(res2, "logged");
-  void never;
+  // main reject เร็ว = อีกเคส: catch เป็น null ยัง logged
+  const res3 = await runObjectCheckLowShadow({
+    passType: "strict", instructionText: "x", imageBase64: "aGk=",
+    mainPromise: Promise.reject(new Error("main died")),
+    createFn: async () => ({ output_text: "supported" }),
+    rand: 0,
+  });
+  assert.equal(res3, "logged");
   delete process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED;
 });
 

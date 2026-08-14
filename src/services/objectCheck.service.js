@@ -352,7 +352,7 @@ export function compareShadowLabels(passType, fullText, lowText) {
  *   mainPromise: Promise<any>, createFn?: (p: object) => Promise<any>, rand?: number }} p
  * @returns {Promise<"disabled"|"sampled_out"|"busy"|"logged"|"error">}
  */
-export async function runObjectCheckLowShadow({ passType, instructionText, imageBase64, mainPromise, createFn, rand }) {
+export async function runObjectCheckLowShadow({ passType, instructionText, imageBase64, mainPromise, createFn, rand, timeoutMs }) {
   if (
     String(process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED ?? "false").trim().toLowerCase() !== "true"
   ) return "disabled";
@@ -385,7 +385,8 @@ export async function runObjectCheckLowShadow({ passType, instructionText, image
       return { lowRes, mainRes };
     })();
     const deadline = new Promise((_, rej) => {
-      timer = setTimeout(() => rej(new Error("low_shadow_timeout")), LOW_SHADOW_TIMEOUT_MS);
+      const ms = Number(timeoutMs) > 0 ? Number(timeoutMs) : LOW_SHADOW_TIMEOUT_MS;
+      timer = setTimeout(() => rej(new Error("low_shadow_timeout")), ms);
     });
     const { lowRes, mainRes } = await Promise.race([work, deadline]);
     const cmp = compareShadowLabels(
