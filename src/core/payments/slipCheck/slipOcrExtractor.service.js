@@ -347,6 +347,7 @@ export async function extractSlipOcrFromImage({
     const call = createResponses ?? ((req) => openai.responses.create(req));
     const res = await withOpenAi429RetryOnce(() =>
       call({
+        user: "slipOcrExtractor",
         model: env.SLIP_OCR_MODEL,
         temperature: 0,
         input: [

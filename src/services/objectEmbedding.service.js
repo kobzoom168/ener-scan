@@ -97,6 +97,7 @@ export async function computeObjectEmbedding(
   try {
     const respRaw = await withTimeout(
       createResponses({
+        user: "objectEmbedding.descriptor",
         model: descriptorModel,
         temperature: 0,
         input: [

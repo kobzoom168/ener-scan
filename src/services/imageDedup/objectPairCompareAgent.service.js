@@ -118,6 +118,7 @@ export async function comparePossibleSameObjectWithAi({
   const call = createResponses ?? ((req) => openai.responses.create(req));
   const res = await withOpenAi429RetryOnce(() =>
     call({
+      user: "objectPairCompareAgent",
       model: MODEL,
       temperature: 0,
       input: [

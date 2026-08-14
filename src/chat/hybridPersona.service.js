@@ -157,6 +157,7 @@ export async function generateHybridPersonaMessages(input) {
     const startedAt = Date.now();
     const res = await withTimeout(
       openai.responses.create({
+        user: "hybridPersona",
         model: env.HYBRID_PERSONA_MODEL,
         input: [
           {

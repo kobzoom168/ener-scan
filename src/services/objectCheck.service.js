@@ -276,38 +276,78 @@ function lowShadowRate() {
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.1;
 }
 
-/** normalize label แบบเดียวกับ production ต่อ pass (Codex: ห้ามเทียบ raw text) */
-export function normalizeShadowLabel(passType, rawText) {
-  const t = String(rawText || "").trim();
-  if (passType === "permissive") {
-    // permissive = JSON contract → parse แบบเดียวกับ production
-    let parsed = null;
-    try {
-      const unfenced = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-      const v = JSON.parse(unfenced);
-      parsed = v && typeof v === "object" ? v : null;
-    } catch { parsed = null; }
-    return permissiveLabelFromParsedJson(parsed);
+/** JSON parse แบบเดียวกับ production (strip fence) */
+function parseShadowJsonLoose(t) {
+  try {
+    const un = String(t || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
+    const v = JSON.parse(un);
+    return v && typeof v === "object" ? v : null;
+  } catch {
+    return null;
   }
-  // strict/crystal_family/bracelet_form = คำเดียวจากลิสต์ → ตัวแรก lowercase
-  return t.split(/\s+/)[0].toLowerCase();
+}
+
+function confBucket(n) {
+  const c = Number(n) || 0;
+  return c >= 0.85 ? "high" : c >= 0.6 ? "mid" : "low";
 }
 
 /**
- * เทียบผล full vs low หลัง normalize — pure function (มี unit test)
+ * แปลงผลดิบเป็นชุดฟิลด์ที่ production ใช้ตัดสินจริง ต่อ pass (Codex: ห้าม first-word
+ * กับ structured pass) — strict ใช้ normalizeObjectCheckOutput ตัวจริง
+ * @param {string} passType
+ * @param {string} rawText
+ * @returns {Record<string, unknown>}
+ */
+export function shadowComparableFor(passType, rawText) {
+  if (passType === "permissive") {
+    const parsed = parseShadowJsonLoose(rawText);
+    return {
+      label: permissiveLabelFromParsedJson(parsed),
+      objectCount: parsed?.objectCount ?? null,
+      family: parsed?.supportedFamilyGuess ?? null,
+      confidence: confBucket(parsed?.confidence),
+    };
+  }
+  if (passType === "crystal_family") {
+    const f = crystalFamilyFromParsed(parseShadowJsonLoose(rawText));
+    return {
+      familyLabel: f.familyLabel,
+      primaryObjectOwner: f.primaryObjectOwner,
+      confidence: confBucket(f.familyConfidence),
+    };
+  }
+  if (passType === "bracelet_form") {
+    const f = braceletFormFromParsed(parseShadowJsonLoose(rawText));
+    return {
+      formFactor: f.formFactor,
+      primaryOwner: f.primaryOwner,
+      isSingleWearableObject: f.isSingleWearableObject,
+      hasBeadLoop: f.hasBeadLoop,
+      isClosedLoop: f.isClosedLoop,
+      confidence: confBucket(f.formConfidence),
+    };
+  }
+  // strict: normalizer production ตัวจริง
+  return { label: normalizeObjectCheckOutput(rawText) };
+}
+
+/**
+ * เทียบ full vs low หลัง normalize ตาม pass — pure function (มี unit test)
  * @param {string} passType
  * @param {string} fullText
  * @param {string} lowText
  */
 export function compareShadowLabels(passType, fullText, lowText) {
-  const fullLabel = normalizeShadowLabel(passType, fullText);
-  const lowLabel = normalizeShadowLabel(passType, lowText);
-  return { fullLabel, lowLabel, normalizedMatch: fullLabel === lowLabel };
+  const full = shadowComparableFor(passType, fullText);
+  const low = shadowComparableFor(passType, lowText);
+  return { full, low, normalizedMatch: JSON.stringify(full) === JSON.stringify(low) };
 }
 
 /**
- * ยิง low-detail คู่ขนาน (shadow — วัด agreement เท่านั้น ไม่ใช่ false accept/reject
- * ซึ่งต้องมี golden/human label) — ห้ามกระทบผลจริงทุกกรณี · injectable สำหรับเทสต์
+ * ยิง low-detail คู่ขนาน (shadow — วัด agreement เท่านั้น false accept/reject ต้องรอ
+ * golden/human label) — ห้ามกระทบผลจริง · timeout ครอบทั้งก้อนรวมการรอ main
+ * (Codex: main ค้างต้องไม่กิน slot ถาวร) · clearTimeout ใน finally เสมอ
  * @param {{ passType: string, instructionText: string, imageBase64: string,
  *   mainPromise: Promise<any>, createFn?: (p: object) => Promise<any>, rand?: number }} p
  * @returns {Promise<"disabled"|"sampled_out"|"busy"|"logged"|"error">}
@@ -321,29 +361,33 @@ export async function runObjectCheckLowShadow({ passType, instructionText, image
   if (lowShadowInFlight >= LOW_SHADOW_MAX_CONCURRENT) return "busy";
   lowShadowInFlight += 1;
   const started = Date.now();
+  let timer = null;
   try {
     const create = createFn ?? ((o) => openai.responses.create(o));
-    const lowPromise = create({
-      user: `objectCheck.low_shadow.${passType}`,
-      model: OBJECT_CHECK_MODEL,
-      temperature: 0,
-      input: [
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: instructionText },
-            { type: "input_image", image_url: `data:image/jpeg;base64,${imageBase64}`, detail: "low" },
+    const work = (async () => {
+      const [lowRes, mainRes] = await Promise.all([
+        create({
+          user: `objectCheck.low_shadow.${passType}`,
+          model: OBJECT_CHECK_MODEL,
+          temperature: 0,
+          input: [
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: instructionText },
+                { type: "input_image", image_url: `data:image/jpeg;base64,${imageBase64}`, detail: "low" },
+              ],
+            },
           ],
-        },
-      ],
+        }),
+        mainPromise.catch(() => null),
+      ]);
+      return { lowRes, mainRes };
+    })();
+    const deadline = new Promise((_, rej) => {
+      timer = setTimeout(() => rej(new Error("low_shadow_timeout")), LOW_SHADOW_TIMEOUT_MS);
     });
-    const timeout = new Promise((_, rej) =>
-      setTimeout(() => rej(new Error("low_shadow_timeout")), LOW_SHADOW_TIMEOUT_MS),
-    );
-    const [lowRes, mainRes] = await Promise.all([
-      Promise.race([lowPromise, timeout]),
-      mainPromise.catch(() => null),
-    ]);
+    const { lowRes, mainRes } = await Promise.race([work, deadline]);
     const cmp = compareShadowLabels(
       passType,
       String(mainRes?.output_text || ""),
@@ -353,7 +397,9 @@ export async function runObjectCheckLowShadow({ passType, instructionText, image
       JSON.stringify({
         event: "OBJECT_CHECK_LOW_SHADOW",
         passType,
-        ...cmp,
+        normalizedMatch: cmp.normalizedMatch,
+        full: cmp.full,
+        low: cmp.low,
         latencyMs: Date.now() - started,
         settled: true,
       }),
@@ -371,6 +417,7 @@ export async function runObjectCheckLowShadow({ passType, instructionText, image
     );
     return "error";
   } finally {
+    if (timer) clearTimeout(timer);
     lowShadowInFlight -= 1;
   }
 }

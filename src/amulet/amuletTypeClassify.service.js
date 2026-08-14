@@ -64,6 +64,7 @@ export async function classifyAmuletType(p) {
   try {
     const resp = await Promise.race([
       openai.responses.create({
+        user: "amuletTypeClassify",
         model: env.AMULET_TYPE_CLASSIFY_MODEL,
         temperature: 0,
         input: [

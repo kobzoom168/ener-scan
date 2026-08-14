@@ -592,3 +592,9 @@
 - ③shadow เทียบผ่าน normalizer production: compareShadowLabels/normalizeShadowLabel (strict=คำแรก lowercase · permissive=JSON parse + permissiveLabelFromParsedJson) log fullLabel/lowLabel/normalizedMatch/passType — เลิกเทียบ raw text
 - ④shadow hygiene: sampling OBJECT_CHECK_LOW_SHADOW_RATE (default 10%) + concurrency cap 2 + timeout 15s + settled log + ไม่ retry · แก้ถ้อยคำ: วัดได้แค่ agreement ไม่ใช่ false accept/reject (ต้องมี golden/human label)
 - tests ใหม่ 3 ชุด (normalize strict/permissive · flag-off/sampling/shadow-failure ไม่กระทบ main) — refactor เป็น injectable createFn · suite 963 pass / 19 known-fail เดิม · ขึ้น staging (flag shadow เปิดได้แล้วหลังแก้ครบตามเงื่อนไข Codex)
+
+## 2026-08-13 | Claude | Codex instrumentation รอบ 2 — แก้ 3 blockers ก่อนเปิดหน้าต่างเก็บข้อมูล
+- ①timer leak: clearTimeout ใน finally + timeout ครอบทั้งก้อน (Promise.race กับ work ที่รวมการรอ main) — main ค้างก็คืน slot เสมอ · หลักฐาน: เทสต์ shadow จาก 15.5s → 0.36s
+- ②normalizer ครบ 4 pass ตามชั้น production: strict=normalizeObjectCheckOutput ตัวจริง (จับคำพ้อง/ไทย) · permissive=label+objectCount+family+confidence bucket · crystal_family=crystalFamilyFromParsed (familyLabel/primaryObjectOwner/bucket) · bracelet_form=braceletFormFromParsed (formFactor/primaryOwner/wearable/loop flags/bucket) — เลิก first-word กับ structured pass
+- ③callSite ครบ 6 จุดที่ค้าง: amuletTypeClassify / hybridPersona / slipOcrExtractor / objectEmbedding.descriptor / objectSameIdentityVerifier / objectPairCompareAgent — ไม่มี untagged ใน Responses หลักแล้ว
+- tests 6 ตัวรวมเคสที่ Codex สั่ง: success ไม่ทิ้ง timer (วัดเวลา <2s) · main พัง→slot คืน→call ถัดไปไม่ busy · structured JSON ต่าง format แต่ outcome เดียว = match · suite ผ่าน baseline · ขึ้น staging — เริ่มหน้าต่างเก็บข้อมูล 2-3 วันได้แล้ว
