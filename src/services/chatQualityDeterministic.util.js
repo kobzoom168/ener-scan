@@ -52,7 +52,14 @@ export function detectAjarnMoneyBreach(rows) {
 
 /** ข้อความ bot เดิมซ้ำ ≥ count ครั้งใน windowMin นาที (เคสจริง 10 ส.ค.: เกตถามซ้ำ 30 รอบ) */
 export function detectRepeatedBotMessages(rows, { count = 3, windowMin = 10 } = {}) {
-  const bot = (rows || []).filter((r) => r.role === "bot" && String(r.text || "").trim());
+  // marker ภายใน "[ส่งรายงาน...]" ไม่ใช่ข้อความที่ลูกค้าเห็น — สแกนหลายชิ้นติดกัน
+  // marker ซ้ำเป็นเรื่องปกติ (false alarm 13 ส.ค.)
+  const bot = (rows || []).filter(
+    (r) =>
+      r.role === "bot" &&
+      String(r.text || "").trim() &&
+      !/^\[.+\]$/.test(String(r.text).trim()),
+  );
   const out = [];
   const flagged = new Set();
   for (let i = 0; i < bot.length; i++) {

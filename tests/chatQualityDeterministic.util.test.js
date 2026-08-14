@@ -44,6 +44,15 @@ test("ข้อความเดิมซ้ำ 3 ครั้งใน 10 น�
   assert.equal(detectRepeatedBotMessages(spread).length, 0);
 });
 
+test("marker ภายใน [ส่งรายงาน...] ซ้ำกี่ครั้งก็ไม่จับ (สแกนหลายชิ้นติดกัน — false alarm 13 ส.ค.)", () => {
+  const markers = [
+    row(0, "bot", "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]"),
+    row(2, "bot", "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]"),
+    row(4, "bot", "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]"),
+  ];
+  assert.equal(detectRepeatedBotMessages(markers).length, 0);
+});
+
 test("post-rollout ไม่มี tag = ไม่นับเป็นคำตอบ (กัน metadata regression) / consult ไม่นับ", () => {
   // ใช้เวลาแบบหลังวัน rollout metadata (13 ส.ค.) — no-tag ต้องไม่ผ่านเป็น legacy
   const t1 = Date.parse("2026-08-13T03:00:00Z");

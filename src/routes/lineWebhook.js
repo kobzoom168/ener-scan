@@ -3911,6 +3911,12 @@ async function handleTextMessage({ client, event, userId, session }) {
     if (await maybeHandleIdentityQuestion({ client, event, userId, text })) return;
   } catch { /* ignore */ }
 
+  // คำสั่งเป๊ะ ๆ จากปุ่ม/เมนู ("ชวนเพื่อน"/"จัดชุด") ต้องได้ของทันทีทุกสถานะ
+  // (เคสจริง 13 ส.ค.: ลูกค้ามีรูปค้าง+paywall พิมพ์ ชวนเพื่อน 3 รอบ โดนเลน consult
+  // แย่งไปสอนให้พิมพ์ ชวนเพื่อน ซ้ำ — เช็คก่อนทุก branch ที่เรียกสมองแชท)
+  if (await maybeHandleReferralInvite({ client, userId, replyToken: event.replyToken, text })) return;
+  if (await maybeHandleSynergyRequest({ client, userId, replyToken: event.replyToken, text })) return;
+
   // เกตข้อมูลชิ้น (กบ 7 ส.ค.): มีรายงานค้างรอข้อมูล → ข้อความนี้คือคำตอบ/ปุ่ม จบในตัว
   try {
     const { maybeHandleObjectInfoAnswer, maybeHandlePurposeAnswer } = await import(
