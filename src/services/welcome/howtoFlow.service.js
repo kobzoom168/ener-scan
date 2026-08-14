@@ -50,11 +50,32 @@ export async function maybeHandleHowtoAck({ client, event, userId, text }) {
   if (String(text || "").trim() !== "เข้าใจแล้ว") return false;
   try {
     await tryDedupeOnce(`howto:ack:${userId}`, 366 * 86400);
+    // ยังไม่ลงทะเบียน (gate เปิด) ห้ามชวนส่งรูป — จะขัดกับ gate ที่บล็อกรูป
+    // (Codex 14 ส.ค.: เคสจริงลูกค้าโดนสั่งส่งรูปแล้วเจอการ์ดลงทะเบียนสวน → block OA)
+    let inviteImage = true;
+    try {
+      const { getRegistrationGateConfig, isRegistrationComplete } = await import(
+        "../registrationGate.service.js"
+      );
+      const { decideHowtoAckReply } = await import("./registrationOnboarding.logic.js");
+      const cfg = await getRegistrationGateConfig();
+      const registered = cfg.enabled ? await isRegistrationComplete(userId) : true;
+      inviteImage =
+        decideHowtoAckReply({ registered, gateEnabled: cfg.enabled }) === "invite_send_image";
+    } catch { /* เช็คพลาด = ชวนตามเดิม (fail-open ฝั่งระบบ) */ }
     await client.replyMessage(event.replyToken, {
       type: "text",
-      text: "ส่งรูปชิ้นแรกมาได้เลยครับ ฟรีวันละ 1 ชิ้น",
+      text: inviteImage
+        ? "ส่งรูปชิ้นแรกมาได้เลยครับ ฟรีวันละ 1 ชิ้น"
+        : "รับทราบครับ เหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว กดการ์ดลงทะเบียนด้านบนได้เลย เสร็จแล้วส่งรูปชิ้นแรกได้ฟรีทันทีครับ",
     });
-    console.log(JSON.stringify({ event: "HOWTO_ACK", lineUserIdPrefix: String(userId).slice(0, 8) }));
+    console.log(
+      JSON.stringify({
+        event: "HOWTO_ACK",
+        lineUserIdPrefix: String(userId).slice(0, 8),
+        inviteImage,
+      }),
+    );
   } catch {
     /* ignore */
   }

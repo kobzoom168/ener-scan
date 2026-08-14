@@ -15,7 +15,8 @@ import { incrementCounterWithTtl, clearDedupeKey } from "../redis/scanV2Redis.js
 export const REGISTRATION_GATE_DEFAULTS = Object.freeze({
   enabled: false,
   sinceIso: null,
-  text: "ก่อนเริ่ม อาจารย์ขอรู้จักกันสักนิดครับ ลงทะเบียนตรงนี้ ไม่ถึงนาทีเสร็จ",
+  // เสียงแอดมิน (งานข้อมูล/ระบบ — ไม่ใช่อาจารย์) ตาม persona + Codex 14 ส.ค.
+  text: "ก่อนส่งรูป ขอข้อมูลผูกผลอ่านกับเจ้าของสักครู่ครับ ใช้เวลาไม่ถึงนาที เสร็จแล้วส่งรูปชิ้นแรกได้ฟรีเลยครับ",
 });
 
 /** โดนบล็อกเกินเท่านี้ = ถอยให้ใช้ flow เดิม (กัน LIFF ล่มแล้วลูกค้าติดคอขวด) */
@@ -90,7 +91,9 @@ export async function shouldBlockForRegistration(lineUserId) {
 
     // กบ 12 ก.ค. (รอบสอง): บังคับทุกคน — ไม่มีข้อยกเว้นลูกค้าเดิมแล้ว
 
-    // โดนบล็อกครบ 3 ครั้งแล้ว = ถอยให้ (LIFF อาจล่ม/ลูกค้าไม่ถนัด) — ใช้ flow เดิมได้
+    // กบเคาะ 14 ส.ค. (รอบสาม): เลิก fail-open ตามจำนวนครั้ง — ข้อมูลลูกค้าใหม่คือ
+    // requirement · ลูกค้าที่ LIFF เปิดไม่ได้ใช้ chat fallback (ปุ่มบนการ์ด/พิมพ์บอก)
+    // แทนการปล่อยผ่านเงียบ ๆ · ระบบเราพัง (catch ล่าง) ยัง fail-open เหมือนเดิม
     const attempt = await incrementCounterWithTtl(
       `scan_v2:reggate_hits:${lineUserId}`,
       86400,
@@ -98,12 +101,11 @@ export async function shouldBlockForRegistration(lineUserId) {
     if (attempt > GATE_MAX_BLOCKS) {
       console.log(
         JSON.stringify({
-          event: "REG_GATE_FALLBACK_OPEN",
+          event: "REG_GATE_MANY_BLOCKS",
           lineUserIdPrefix: String(lineUserId).slice(0, 8),
           attempt,
         }),
       );
-      return { block: false, reason: "fallback_after_blocks" };
     }
     return { block: true, reason: "unregistered", attempt };
   } catch (e) {
@@ -202,14 +204,27 @@ export function buildRegistrationFlexMessage(greetText, liffId) {
                 color: "#C9A227",
                 height: "md",
                 margin: "lg",
-                action: { type: "uri", label: "ลงทะเบียนกับอาจารย์", uri: liffUrl },
+                action: { type: "uri", label: "กรอกข้อมูลเพื่อเริ่มอ่านพลัง", uri: liffUrl },
               },
               {
+                // chat fallback (Codex 14 ส.ค.): ลูกค้าเลือกเองได้ตั้งแต่แรก ไม่ต้องรอติด 3 ครั้ง
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "message",
+                  label: "ให้แอดมินช่วยกรอกในแชท",
+                  text: "ให้แอดมินช่วยกรอกในแชท",
+                },
+              },
+              {
+                // ตรงการใช้งานจริง ไม่มีคำรับรองเด็ดขาด (Codex 14 ส.ค.)
                 type: "text",
-                text: "ข้อมูลใช้อ่านดวงเท่านั้น ปลอดภัย 100%",
+                text: "ใช้ชื่อและวันเกิดเพื่อผูกผลอ่านกับเจ้าของ เบอร์โทรใช้ติดต่อเรื่องสิทธิ์และบริการเท่านั้น",
                 size: "xxs",
                 color: "#9A8A66",
                 align: "center",
+                wrap: true,
                 margin: "md",
               },
             ],

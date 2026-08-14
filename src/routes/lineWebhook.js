@@ -115,6 +115,8 @@ import {
   buildRegistrationPrompt,
   buildRegistrationFlexMessage,
   getRegistrationGateConfig,
+  isRegistrationComplete,
+  bustRegistrationCache,
 } from "../services/registrationGate.service.js";
 import {
   handleProfileEditCommand,
@@ -2267,41 +2269,68 @@ async function finalizeAcceptedImage({
     imageBufferLength: imageBuffer?.length || 0,
   });
 
-  // 🔐 Registration Gate (กบ): ลูกค้าใหม่ยังไม่ลงทะเบียน → ส่งลิงก์ LIFF ก่อน ไม่เข้าสแกน
-  // (ลูกค้าเดิม/เช็คพลาด/ไม่มี LIFF/โดนครบ 3 ครั้ง = ปล่อยผ่านหมด — fail-open)
+  // 🔐 Registration Gate (กบเคาะใหม่ 14 ส.ค.): ลูกค้าใหม่ส่งรูปก่อนลงทะเบียน →
+  // เก็บรูปแรกแบบ durable (storage + redis) แล้ว resume หลังสมัคร — ห้ามทิ้งรูป
+  // (เคสจริง: รูปหาย ลูกค้าต้องส่งใหม่ → block OA) · รูปถัดไปไม่ทับรูปแรก
   {
     const regGate = await shouldBlockForRegistration(userId);
     if (regGate.block) {
-      const prompt = await buildRegistrationPrompt(regGate.attempt || 1);
-      if (prompt) {
-        console.log(
-          JSON.stringify({
-            event: "REG_GATE_BLOCKED_IMAGE",
-            lineUserIdPrefix: String(userId).slice(0, 8),
-            attempt: regGate.attempt || 1,
-          }),
+      console.log(
+        JSON.stringify({
+          event: "REG_GATE_BLOCKED_IMAGE",
+          lineUserIdPrefix: String(userId).slice(0, 8),
+          attempt: regGate.attempt || 1,
+        }),
+      );
+      let holdRes = { held: "failed" };
+      try {
+        const { holdFirstImage } = await import(
+          "../services/welcome/preRegistrationHold.service.js"
         );
-        // การ์ด Flex แบบ B (กบ 16 ก.ค. — ลูกค้ากลัวลิงก์เปล่า) → reply พลาดค่อย push → พลาดอีกถอยไปข้อความเดิม
+        holdRes = await holdFirstImage({
+          uid: userId,
+          messageId: event.message?.id,
+          buffer: imageBuffer,
+        });
+      } catch { /* hold พัง = แจ้งแบบเดิมด้านล่าง */ }
+
+      const holdText =
+        holdRes.held === "first"
+          ? "รับรูปไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nเหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว จากนั้นผมส่งรูปนี้ให้อาจารย์ทันทีครับ"
+          : holdRes.held === "extra"
+            ? "รับรูปแรกไว้แล้วครับ ระบบอ่านครั้งละ 1 ชิ้น รูปที่ส่งเพิ่มยังไม่นำเข้าสแกนครับ\n\nกรอกข้อมูลเจ้าของให้เสร็จก่อน แล้วผมส่งรูปแรกให้อาจารย์เลยครับ"
+            : null;
+
+      const { tryMarkRegCardShown } = await import(
+        "../services/welcome/preRegistrationHold.service.js"
+      );
+      const showCard = await tryMarkRegCardShown(userId, "image_gate");
+      const prompt = await buildRegistrationPrompt(regGate.attempt || 1);
+      const msgs = [];
+      if (holdText) msgs.push({ type: "text", text: holdText });
+      if (showCard && prompt) msgs.push(prompt.flexMessage);
+      if (!msgs.length && prompt) msgs.push(prompt.flexMessage);
+      try {
         try {
-          try {
-            await client.replyMessage(event.replyToken, prompt.flexMessage);
-          } catch {
-            await client.pushMessage(userId, prompt.flexMessage);
-          }
+          await client.replyMessage(event.replyToken, msgs);
         } catch {
+          await client.pushMessage(userId, msgs);
+        }
+      } catch {
+        if (prompt) {
           await sendNonScanReply({
             client,
             userId,
             replyToken: null,
             replyType: "registration_required",
             semanticKey: `registration_required:${regGate.attempt || 1}`,
-            text: prompt.text,
+            text: holdText || prompt.text,
             alternateTexts: [],
             quickReply: prompt.quickReply,
           });
         }
-        return;
       }
+      return;
     }
   }
 
@@ -3938,6 +3967,206 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
   return true;
 }
 
+/**
+ * ข้อความระหว่างติด registration gate (กบเคาะ 14 ส.ค. + Codex 8 ข้อ)
+ * ลำดับ: chat-fallback state ที่ค้าง → control intents (ยกเลิก/เปิดไม่ได้/แอดมิน)
+ * → เก็บชื่อพระ (pendingDescription) → การ์ด (cooldown 15 นาที) / reminder สั้น
+ * @returns {Promise<boolean>} true = จบเทิร์น
+ */
+async function handleUnregisteredText({ client, event, userId, text, attempt }) {
+  const hold = await import("../services/welcome/preRegistrationHold.service.js");
+  const logic = await import("../services/welcome/registrationOnboarding.logic.js");
+
+  const replyText = async (t, quickReply = null) => {
+    const msg = { type: "text", text: t, ...(quickReply ? { quickReply } : {}) };
+    try {
+      await client.replyMessage(event.replyToken, [msg]);
+    } catch {
+      await client.pushMessage(userId, [msg]).catch(() => {});
+    }
+  };
+
+  // 1) แชทลงทะเบียนค้างอยู่ → ข้อความนี้คือคำตอบของสเตทปัจจุบัน
+  const chatState = await hold.getChatRegState(userId);
+  if (chatState) {
+    const step = logic.chatRegNextStep({
+      state: chatState,
+      text,
+      parseBirthdateIso: (t) => {
+        const p = parseBirthdateInput(t);
+        return p?.ok ? p.isoDate : null;
+      },
+    });
+    if (step.done) {
+      const saved = await saveChatRegistration({ userId, ...step.done });
+      await hold.setChatRegState(userId, null);
+      if (saved) {
+        console.log(JSON.stringify({ event: "registration_chat_fallback_completed", uidPrefix: userId.slice(0, 8) }));
+        bustRegistrationCache(userId);
+        const { sendRegistrationSuccessFlow } = await import(
+          "../services/welcome/registrationSuccess.service.js"
+        );
+        // reply เปล่าก่อนกัน token หมดอายุ แล้ว success flow เป็น push
+        await replyText("บันทึกข้อมูลครบแล้วครับ ขอบคุณครับ");
+        await sendRegistrationSuccessFlow(client, {
+          userId,
+          nickname: step.done.nickname,
+          completeBefore: false,
+          completeAfter: await isRegistrationComplete(userId).catch(() => true),
+          source: "chat_fallback",
+        });
+      } else {
+        await replyText("บันทึกไม่สำเร็จครับ ลองพิมพ์ ช่วยลงทะเบียน เพื่อเริ่มใหม่ หรือกดการ์ดลงทะเบียนก็ได้ครับ");
+      }
+      return true;
+    }
+    await hold.setChatRegState(userId, step.state);
+    if (step.reply) await replyText(step.reply);
+    return true;
+  }
+
+  // 2) control intents ชนะก่อน description (Codex ข้อ 6)
+  const cls = logic.classifyPreRegText(text);
+  if (cls.kind === "chat_fallback_trigger") {
+    console.log(JSON.stringify({ event: "registration_chat_fallback_started", uidPrefix: userId.slice(0, 8) }));
+    const step = logic.chatRegNextStep({ state: null, text: "", parseBirthdateIso: () => null });
+    await hold.setChatRegState(userId, step.state);
+    await replyText(step.reply);
+    return true;
+  }
+  if (cls.kind === "cancel") {
+    await hold.cancelHold(userId).catch(() => {});
+    await hold.setChatRegState(userId, null);
+    await replyText("รับทราบครับ ยกเลิกให้แล้ว รูปที่ฝากไว้ (ถ้ามี) ผมนำออกจากคิวแล้วครับ พร้อมเมื่อไหร่ทักมาใหม่ได้เลย");
+    return true;
+  }
+  if (cls.kind === "admin_request") {
+    await replyText(
+      "ผมแอดมินอยู่ตรงนี้ครับ พิมพ์เรื่องที่ต้องการได้เลย\n\nส่วนการอ่านพลัง ขอข้อมูลเจ้าของก่อนหนึ่งขั้น กดการ์ดลงทะเบียน หรือพิมพ์ ช่วยลงทะเบียน ให้ผมถามทีละข้อในแชทก็ได้ครับ",
+    );
+    return true;
+  }
+
+  // 3) ข้อความทั่วไป → เก็บเป็นรายละเอียดพระผูกกับรูปค้าง (แก้/เขียนทับได้)
+  let descLine = null;
+  if (cls.kind === "description") {
+    const saved = await hold.attachDescription(userId, text).catch(() => null);
+    if (saved) descLine = `รับข้อมูลไว้แล้วครับ — ${saved}`;
+  }
+
+  // 4) สถานะรูป + การ์ดตาม cooldown (ทุก reply ต้องบอกสถานะรูป — Codex anti-loop)
+  const h = await hold.peekHold(userId);
+  const imageLine = h?.storagePath
+    ? "รูปที่ส่งไว้ผมถือไว้ให้แล้ว ยังไม่ต้องส่งซ้ำครับ"
+    : "ยังไม่มีรูปค้างในคิวครับ ลงทะเบียนเสร็จแล้วค่อยส่งรูปได้เลย";
+  const closing = "เหลือกรอกข้อมูลเจ้าของอีกขั้นเดียวครับ";
+  const showCard = await hold.tryMarkRegCardShown(userId, "text_gate");
+  const prompt = await buildRegistrationPrompt(attempt);
+  if (!prompt) return false; // ไม่มี LIFF — ปล่อยไหลตาม flow เดิม (fail-open)
+  const parts = [descLine, imageLine, closing].filter(Boolean).join("\n\n");
+  if (showCard) {
+    try {
+      await client.replyMessage(event.replyToken, [
+        { type: "text", text: parts },
+        prompt.flexMessage,
+      ]);
+    } catch {
+      await client.pushMessage(userId, [{ type: "text", text: parts }, prompt.flexMessage]).catch(() => {});
+    }
+  } else {
+    console.log(JSON.stringify({ event: "registration_reminder_shown", uidPrefix: userId.slice(0, 8) }));
+    await replyText(parts, prompt.quickReply);
+  }
+  return true;
+}
+
+/** บันทึกลงทะเบียนจากแชท — ช่องบังคับชุดเดียวกับ gate (SSOT: ชื่อเล่น/วันเกิด/เบอร์) */
+async function saveChatRegistration({ userId, nickname, birthdateIso, phone }) {
+  try {
+    const row = {
+      line_user_id: userId,
+      nickname: String(nickname).slice(0, 160),
+      birthdate: birthdateIso,
+      phone: String(phone).slice(0, 160),
+      updated_at: new Date().toISOString(),
+    };
+    const { data: existing, error: selErr } = await supabase
+      .from("liff_profiles")
+      .select("line_user_id")
+      .eq("line_user_id", userId)
+      .maybeSingle();
+    if (selErr) throw selErr;
+    if (existing) {
+      const { error } = await supabase.from("liff_profiles").update(row).eq("line_user_id", userId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("liff_profiles").insert(row);
+      if (error) throw error;
+    }
+    // mirror วันเกิดเข้าคลังเดียวกับ flow สแกน (แบบเดียวกับ LIFF save)
+    try {
+      const [y, m, d] = birthdateIso.split("-");
+      await saveBirthdate(userId, `${d}/${m}/${y}`, { rawBirthdateInput: "chat_fallback_registration" });
+    } catch { /* best-effort */ }
+    return true;
+  } catch (e) {
+    console.error(JSON.stringify({ event: "CHAT_REG_SAVE_ERROR", message: String(e?.message || e).slice(0, 160) }));
+    return false;
+  }
+}
+
+/**
+ * ปุ่ม "เริ่มอ่านรูปนี้:{token}" (Codex ข้อ 2): opaque token ผูก uid — ตรวจเจ้าของ
+ * + TTL + atomic lock · consume หลัง ingest สำเร็จเท่านั้น (ล้ม = retry ได้)
+ * @returns {Promise<boolean>}
+ */
+async function maybeHandlePreRegResume({ client, event, userId, text }) {
+  const logic = await import("../services/welcome/registrationOnboarding.logic.js");
+  const m = logic.RESUME_COMMAND_RE.exec(String(text || "").trim());
+  if (!m) return false;
+  const token = m[1];
+  const hold = await import("../services/welcome/preRegistrationHold.service.js");
+  const begin = await hold.beginResume(userId, token, { validate: logic.validateResumeAttempt });
+  if (!begin.ok) {
+    const msg =
+      begin.reason === "already_running"
+        ? "กำลังอ่านรูปเดิมอยู่ครับ รอผลได้เลย ไม่ต้องกดซ้ำครับ"
+        : begin.reason === "expired" || begin.reason === "no_hold"
+          ? "รูปที่ฝากไว้หมดอายุแล้วครับ (เก็บให้ 24 ชั่วโมง) รบกวนถ่ายส่งมาใหม่ได้เลยครับ"
+          : "เริ่มอ่านรูปเดิมไม่สำเร็จครับ ลองใหม่อีกครั้ง หรือส่งรูปมาใหม่ได้เลยครับ";
+    try {
+      await client.replyMessage(event.replyToken, { type: "text", text: msg });
+    } catch { /* ignore */ }
+    return true;
+  }
+  try {
+    // ถือว่ารับทราบกติกาแล้วจากพฤติกรรม (Codex ข้อ 1) — กันการ์ด how-to เด้งทีหลัง
+    void tryDedupeOnce(`howto:ack:${userId}`, 366 * 86400).catch(() => {});
+    await finalizeAcceptedImage({
+      client,
+      event,
+      userId,
+      flowVersion: "prereg_resume",
+      eventTimestamp: Number(event.timestamp) || Date.now(),
+      imageBuffer: begin.buffer,
+    });
+    await hold.consumeHoldAfterIngest(userId, begin.hold);
+    return true;
+  } catch (e) {
+    console.error(JSON.stringify({ event: "PREREG_RESUME_INGEST_FAILED", message: String(e?.message || e).slice(0, 160) }));
+    // ห้าม consume — ลูกค้ากดปุ่มเดิม retry ได้ (Codex ข้อ 7)
+    try {
+      await client.pushMessage(userId, {
+        type: "text",
+        text: "ระบบสะดุดตอนเริ่มอ่านครับ รูปยังอยู่ครบ แตะปุ่มเดิมอีกครั้งได้เลยครับ",
+      });
+    } catch { /* ignore */ }
+    return true;
+  } finally {
+    await begin.releaseLock();
+  }
+}
+
 async function handleTextMessage({ client, event, userId, session }) {
   const text = String(event.message.text || "").trim();
   const lowerText = text.toLowerCase();
@@ -4268,43 +4497,26 @@ async function handleTextMessage({ client, event, userId, session }) {
     sessionFlowVersion: session.flowVersion || 0,
   });
 
-  // 🔐 Registration Gate: ลูกค้าใหม่ยังไม่ลงทะเบียน → ชวนลง LIFF ก่อน ไม่ปล่อยเข้า AI/flow ใด ๆ
-  // (fail-open ทุกกรณีพิเศษ — ลูกค้าเดิม/เช็คพลาด/ไม่มี LIFF/ครบ 3 ครั้ง)
+  // 🔐 Registration Gate (กบเคาะใหม่ 14 ส.ค. + Codex 8 ข้อ): ยังไม่ลงทะเบียน —
+  // ลำดับใน gate: chat-fallback state → control intents → เก็บชื่อพระ → การ์ด/reminder
+  // (cooldown 15 นาที — ห้ามยิง Flex ซ้ำทุกข้อความแบบเคสจริงที่ลูกค้า block)
   {
     const regGateText = await shouldBlockForRegistration(userId);
     if (regGateText.block) {
-      const prompt = await buildRegistrationPrompt(regGateText.attempt || 1);
-      if (prompt) {
-        console.log(
-          JSON.stringify({
-            event: "REG_GATE_BLOCKED_TEXT",
-            lineUserIdPrefix: String(userId).slice(0, 8),
-            attempt: regGateText.attempt || 1,
-          }),
-        );
-        // การ์ด Flex แบบ B (กบ 16 ก.ค.) → reply พลาดค่อย push → พลาดอีกถอยไปข้อความเดิม
-        try {
-          try {
-            await client.replyMessage(event.replyToken, prompt.flexMessage);
-          } catch {
-            await client.pushMessage(userId, prompt.flexMessage);
-          }
-        } catch {
-          await sendNonScanReply({
-            client,
-            userId,
-            replyToken: null,
-            replyType: "registration_required",
-            semanticKey: `registration_required:${regGateText.attempt || 1}`,
-            text: prompt.text,
-            alternateTexts: [],
-            quickReply: prompt.quickReply,
-          });
-        }
-        return;
-      }
+      const handled = await handleUnregisteredText({
+        client,
+        event,
+        userId,
+        text,
+        attempt: regGateText.attempt || 1,
+      });
+      if (handled) return;
     }
   }
+
+  // ปุ่ม "เริ่มอ่านรูปนี้:{token}" หลังลงทะเบียนเสร็จ (resume รูปที่ฝากไว้ก่อนสมัคร)
+  // อยู่หลัง gate: ลูกค้าที่ยังไม่ลงทะเบียนกดปุ่มเก่าไม่ได้ลัดคิว
+  if (await maybeHandlePreRegResume({ client, event, userId, text })) return;
 
   // คำสั่งเป๊ะจากปุ่ม/เมนู ("ชวนเพื่อน"/"จัดชุด") — terminal เสมอ (Codex 14 ส.ค.):
   // สำเร็จ = ได้ของทันที · feature ปิด/พัง = แอดมินแจ้งขัดข้อง deterministic ห้ามไหลเข้า LLM
@@ -7972,31 +8184,57 @@ async function handleFollowEvent({ client, event }) {
     // gate เปิด + มี LIFF → welcome ต้องชวนลงทะเบียนเลย (กันย้อนแย้ง: บอกส่งรูปมา
     // แล้วพอส่งจริงโดนบล็อกให้ไปลงทะเบียน) — การ์ด Flex แบบ B แทนลิงก์เปล่า (กบ 16 ก.ค.:
     // ลูกค้าบางคนกลัวกดลิงก์ นึกว่ามิจฉาชีพ)
-    const welcomeText = buildFollowWelcomeText();
-    let welcomeRegCard = null;
+    // Registration-first onboarding (กบเคาะ 14 ส.ค. + Codex): ลูกค้าใหม่ยังไม่ลงทะเบียน
+    // = welcome สั้น + การ์ดลงทะเบียนใบเดียว — ห้ามส่ง how-to/ชวนส่งรูปจนกว่าจะลงเสร็จ
+    // (เคสจริง: การ์ดลงทะเบียน+how-to พร้อมกัน → คำสั่งขัดกัน → ลูกค้า block)
+    let followKind = "welcome_full";
     try {
+      const { decideFollowMessages } = await import(
+        "../services/welcome/registrationOnboarding.logic.js"
+      );
       const gateCfg = await getRegistrationGateConfig();
       const liffId = String(process.env.LIFF_ID || "").trim();
-      if (gateCfg.enabled && liffId) {
-        welcomeRegCard = buildRegistrationFlexMessage(gateCfg.text, liffId);
-      }
-    } catch {
-      /* welcome เดิมยังส่งได้ */
+      const registered = gateCfg.enabled
+        ? await isRegistrationComplete(userId).catch(() => true)
+        : true;
+      followKind = decideFollowMessages({
+        registered,
+        gateEnabled: gateCfg.enabled,
+        liffAvailable: Boolean(liffId),
+      }).kind;
+    } catch { /* พัง = ถอยไป welcome เดิม */ }
+
+    const welcomeMsgs = [];
+    if (followKind === "welcome_register") {
+      const gateCfg = await getRegistrationGateConfig();
+      const liffId = String(process.env.LIFF_ID || "").trim();
+      welcomeMsgs.push({
+        type: "text",
+        text: [
+          "สวัสดีครับ ผมแอดมิน Ener Scan",
+          "ก่อนส่งรูป ขอข้อมูลสำหรับผูกผลอ่านกับเจ้าของสักครู่นะครับ ใช้ประมาณ 1 นาที แล้วส่งรูปชิ้นแรกได้ฟรีเลยครับ",
+        ].join("\n"),
+      });
+      welcomeMsgs.push(buildRegistrationFlexMessage(gateCfg.text, liffId));
+      try {
+        const { tryMarkRegCardShown } = await import(
+          "../services/welcome/preRegistrationHold.service.js"
+        );
+        await tryMarkRegCardShown(userId, "follow");
+      } catch { /* ignore */ }
+    } else {
+      welcomeMsgs.push({ type: "text", text: buildFollowWelcomeText() });
+      try {
+        const { buildHowtoFlowFlex } = await import("../services/welcome/howtoFlow.service.js");
+        welcomeMsgs.push(buildHowtoFlowFlex());
+      } catch { /* ส่ง welcome เดิมได้ */ }
     }
-    // การ์ดกติกา 5 ขั้น + ปุ่ม "เข้าใจแล้ว" (กบ 8 ส.ค.) — ต่อท้าย welcome เสมอ
-    let howtoFlex = null;
-    try {
-      const { buildHowtoFlowFlex } = await import("../services/welcome/howtoFlow.service.js");
-      howtoFlex = buildHowtoFlowFlex();
-    } catch { /* ส่ง welcome เดิมได้ */ }
-    const welcomeMsgs = [{ type: "text", text: welcomeText }];
-    if (welcomeRegCard) welcomeMsgs.push(welcomeRegCard);
-    if (howtoFlex) welcomeMsgs.push(howtoFlex);
     await client.replyMessage(event.replyToken, welcomeMsgs);
     console.log(
       JSON.stringify({
         event: "LINE_FOLLOW_WELCOME_SENT",
         lineUserIdPrefix: String(userId).slice(0, 8),
+        kind: followKind,
       }),
     );
   } catch (error) {

@@ -659,3 +659,13 @@
 - rich menu pro v4: richmenu-210e1fbc... — ค่าครู→liff ?view=pay&src=richmenu · เปิดแอป Ener→liff · ชวนเพื่อนปิดกดไม่ได้ · ดูผลเก่า→การ์ดหน้า myscans
 - เมนู pro เก่าเก็บไว้ rollback ตามเดิม (88b2b76d=liff-entry, 32381f49=v3)
 - เฝ้าต่อ: telemetry myscans_* / pay_* ในบิล log รายวัน + รายงานคุณภาพเช้า
+
+## 2026-08-14 | Claude | Registration-first onboarding เต็มชุด (staging) — ปิดงาน OPEN flow ลูกค้าใหม่
+- follow ใหม่: ยังไม่ลง = welcome สั้นเสียงแอดมิน + การ์ดใบเดียว (ไม่มี how-to/ชวนส่งรูป) · ลงแล้ว = เดิม · การ์ด: CTA "กรอกข้อมูลเพื่อเริ่มอ่านพลัง" + ปุ่ม "ให้แอดมินช่วยกรอกในแชท" + footer เหตุผลขอข้อมูล — ลบ "ปลอดภัย 100%"
+- รูปก่อนลงทะเบียน: hold durable (R2 + redis 24 ชม.) รูปแรกเป็นเจ้าของ รูปเพิ่มไม่ทับแค่นับ · ตอบ "รับรูปไว้แล้ว ไม่ต้องส่งซ้ำ" · การ์ด cooldown 15 นาที ระหว่างนั้น reminder สั้น + ทุก reply บอกสถานะรูป · ชื่อพระเก็บ pendingDescription (control intents ชนะก่อน, กันเบอร์/ยาวเกิน, sanitize)
+- resume: ปุ่ม "เริ่มอ่านรูปนี้:{rs_token}" opaque 128-bit ผูก uid ตรวจเจ้าของ+TTL+lock กันกดซ้ำ · consume (ลบ metadata+ไฟล์) หลัง ingest สำเร็จเท่านั้น ล้ม=retry ได้ · cleanup ledger (redis zset) + opportunistic sweep กัน orphan · resume แล้วนับ howto ack ให้อัตโนมัติ
+- success flow: trigger จาก ไม่ครบ→ครบ (ไม่ใช่ !existing) + dedupe 24 ชม. — มีรูปค้าง = success+thumbnail+ปุ่ม resume (ไม่มี how-to) · ไม่มี = success+how-to+ชวนส่งรูป · ใช้ร่วมทั้ง LIFF save และ chat fallback
+- chat fallback: ปุ่มบนการ์ด/พิมพ์ "เปิดไม่ได้" ฯลฯ → ถามทีละช่อง ชื่อเล่น→วันเกิด→เบอร์ (SSOT 3 ช่องเดียวกับ gate) บันทึก liff_profiles + mirror วันเกิด · เลิก fail-open ตามจำนวนครั้ง (ระบบพังยัง fail-open)
+- howto ack เช็ค registration ก่อน — ยังไม่ลงไม่พูด "ส่งรูปได้เลย" · telemetry ครบชุด (card_shown/suppressed/reminder/image_received/resumed/expired/saved/chat_fallback_*)
+- tests: registrationOnboarding.test.js 15 ตัวครอบ 14 scenario (pure logic + DI + source-order invariants) · baseline 1006 ผ่าน · แก้ invariant anchor ตาม gate โครงใหม่
+- ค้าง: กบทดสอบบัญชีใหม่ 2 บัญชี (LIFF 1 / chat fallback 1) ก่อนเคาะ pro · หมายเหตุ SSOT: LIFF ยังถามเพศ (มีตัวเลือกไม่ระบุ) — ช่องบังคับจริงคือ 3 ช่องตาม gate

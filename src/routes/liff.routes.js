@@ -1142,6 +1142,22 @@ liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
   row.updated_at = new Date().toISOString();
 
   try {
+    // Codex ข้อ 4: success flow ต้อง trigger จาก "ไม่ครบ → ครบ" ไม่ใช่ !existing
+    // (บางคนมี row แต่ข้อมูลยังไม่ครบ) — เช็คก่อน save จาก DB ตรง ๆ ไม่ผ่าน cache
+    let completeBefore = false;
+    try {
+      const { data: prev } = await supabase
+        .from("liff_profiles")
+        .select("nickname,birthdate,phone")
+        .eq("line_user_id", userId)
+        .maybeSingle();
+      const prevPhone = String(prev?.phone || "").replace(/[^0-9]/g, "");
+      completeBefore = Boolean(
+        String(prev?.nickname || "").trim() &&
+          String(prev?.birthdate || "").trim() &&
+          prevPhone.length >= 9,
+      );
+    } catch { /* ถือว่ายังไม่ครบ */ }
     const { data: existing, error: selErr } = await supabase
       .from("liff_profiles")
       .select("line_user_id")
@@ -1173,13 +1189,24 @@ liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
     try {
       bustRegistrationCache(userId);
     } catch {}
-    // ลงทะเบียนใหม่ครบ (ชื่อ+วันเกิด) → บอกในแชทเลยว่าเริ่มใช้ได้ ไม่ต้องเดา
-    if (!existing && row.nickname && row.birthdate && row.phone && liffLineClient) {
-      pushText(
-        liffLineClient,
-        userId,
-        `ลงทะเบียนเรียบร้อยครับ คุณ${row.nickname}\nส่งรูปพระ เครื่องราง หิน หรือกำไล มาได้เลย เดี๋ยวอาจารย์อ่านให้`,
-      ).catch(() => {});
+    // ลงทะเบียนครบครั้งแรก (ไม่ครบ→ครบ) → success flow: มีรูปค้าง = การ์ด resume ·
+    // ไม่มี = How-to + ชวนส่งรูป (dedupe กันยิงซ้ำตอนแก้ข้อมูล — Codex ข้อ 1/4)
+    const phoneDigits = String(row.phone || "").replace(/[^0-9]/g, "");
+    const completeAfter = Boolean(row.nickname && row.birthdate && phoneDigits.length >= 9);
+    if (liffLineClient) {
+      import("../services/welcome/registrationSuccess.service.js")
+        .then((m) =>
+          m.sendRegistrationSuccessFlow(liffLineClient, {
+            userId,
+            nickname: row.nickname,
+            completeBefore,
+            completeAfter,
+            source: "liff",
+          }),
+        )
+        .catch((e) =>
+          console.error(JSON.stringify({ event: "LIFF_SUCCESS_FLOW_ERROR", message: String(e?.message || e).slice(0, 160) })),
+        );
     }
     res.json({ ok: true });
   } catch (e) {
