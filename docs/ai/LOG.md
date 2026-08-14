@@ -622,3 +622,10 @@
 - [AUTO] ซ้ำ 3 ครั้ง (U1a40e5): detector นับ marker "[ส่งรายงาน...]" ซึ่งลูกค้าไม่เห็น — ยกเว้น /^\[.+\]$/ ใน detectRepeatedBotMessages + เทสต์ล็อก
 - อวย "ใช้ได้ดีแล้ว...ไม่ต้องกังวล" + ปลอบ "เดี๋ยวก็เจอชิ้นที่ใช่เอง" (Ubfdbee): กฏเดิมเปิดช่อง "ใช้ได้ดี" เอง — แก้เป็นบอกตัวเลข+ตำแหน่งบนเกณฑ์ ห้ามคำตัดสินเชิงชม + กฏใหม่ห้ามปลอบ/การันตีอนาคต ให้ชี้ขั้นถัดไปแทน
 - test-baseline-check ผ่าน (967 pass / 19 known-fail) · ค้าง: กบทดสอบบน staging → สั่งขึ้น pro · rich menu ต่อคิวถัดไป
+
+## 2026-08-14 | Claude | ปิด 3 gaps จาก Codex review e5250c5 (staging)
+- คำสั่งเป๊ะ terminal: service ใหม่ exactUtilityCommand.service.js (matcher + runExactUtilityCommandTerminal DI) — match แล้วจบเสมอ: สำเร็จได้ของ / ปิด-พัง = แอดมินแจ้งขัดข้อง deterministic (utility_unavailable, speakerRole admin) ห้ามไหลเข้า LLM
+- priority: ย้าย call site ไปหลัง registration gate (admin/identity → reg gate → คำสั่งเป๊ะ → states → LLM) — ลูกค้าใหม่ไม่มีทางลัดข้ามลงทะเบียน · ลบ call sites ซ้ำ 2 จุดล่าง (เจ้าของเดียว)
+- marker detector: เลิก regex วงเล็บกว้าง → metadata replyType=scan_result + INTERNAL_MARKER_TEXTS exact allowlist · เทสต์ล็อกทั้งข้ามจริง+ไม่ข้ามข้อความวงเล็บปกติ
+- tone guard: PRAISE_COMFORT_RE + evaluateToneGuard ใน personaRole.util → orchestrator retry ครั้งเดียวพร้อม directive · retry ยังหลุด = ส่งของเดิม + log TONE_PRESEND_STILL (ตัดสินใจ: โทนหลุดเบากว่าไม่ตอบ — แจ้ง Codex แล้ว)
+- เทสต์ใหม่ 10 (terminal contract 7 / marker 2 / tone 1) — baseline ผ่าน ไม่มี fail ใหม่ · ค้าง: integration test ระดับ webhook routing (pending-image+paywall/pending-verify/reg-incomplete) รอ DI/test-mode refactor รอบใหญ่ตามที่ตกลงกับ Codex

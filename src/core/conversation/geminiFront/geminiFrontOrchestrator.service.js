@@ -15,6 +15,7 @@ import { runGeminiConsult } from "./geminiConsult.service.js";
 import {
   resolveSpeakerRole,
   evaluateMoneyGuard,
+  evaluateToneGuard,
   USER_MONEY_INTENT_RE,
   NEUTRAL_RECOVERY_FALLBACK,
 } from "../personaRole.util.js";
@@ -251,6 +252,42 @@ export async function runGeminiFrontOrchestrator(ctx) {
           JSON.stringify({ event: "AJARN_MONEY_PRESEND_FALLBACK", via, reason: verdict1.reason }),
         );
         guardedConsult = NEUTRAL_RECOVERY_FALLBACK;
+      }
+    }
+    // pre-send tone guard (Codex 14 ส.ค.): คำชม/ปลอบต้องห้าม → retry ครั้งเดียว
+    // retry ยังหลุด = ส่งฉบับที่ไม่มีคำต้องห้ามถ้ามี ไม่งั้นส่งของเดิม + log ให้ monitor เห็น
+    // (ดีกว่า fallback กลาง ๆ ที่ทิ้งคำถามลูกค้า — โทนหลุดเบากว่าไม่ตอบ)
+    const tone1 = evaluateToneGuard(guardedConsult);
+    if (!tone1.ok) {
+      console.warn(
+        JSON.stringify({
+          event: "TONE_PRESEND_BLOCKED",
+          via,
+          match: tone1.match,
+          attempt: 1,
+          sample: guardedConsult.slice(0, 120),
+        }),
+      );
+      const toneRetry = await runGeminiConsult({
+        userId: ctx.userId,
+        userText: ctx.text,
+        conversationHistory,
+        lastSpeaker: lastSpeaker || null,
+        extraDirective: `คำตอบก่อนหน้าของคุณผิดกติกาโทน: มีคำชม/ปลอบต้องห้าม ("${tone1.match}") — ตอบใหม่โดยไม่ใช้คำตัดสินเชิงชม (ใช้ได้ดีแล้ว ถือว่าดี) และไม่ปลอบ (ไม่ต้องกังวล เดี๋ยวก็เจอ สบายใจได้) บอกตัวเลข/ข้อเท็จจริงกับขั้นถัดไปตรง ๆ`,
+      });
+      const toneRetryGuarded = toneRetry
+        ? await guardStaleNoImageClaim(guardEntitlementClaims(toneRetry.slice(0, 1800), via))
+        : null;
+      if (
+        toneRetryGuarded &&
+        evaluateToneGuard(toneRetryGuarded).ok &&
+        evaluateMoneyGuard(toneRetryGuarded, guardCtx).ok
+      ) {
+        guardedConsult = toneRetryGuarded;
+      } else {
+        console.warn(
+          JSON.stringify({ event: "TONE_PRESEND_STILL", via, match: tone1.match }),
+        );
       }
     }
     // role router (Codex C3): resolve เสียงจริงก่อนส่ง — history/monitor ได้ tag ตรง

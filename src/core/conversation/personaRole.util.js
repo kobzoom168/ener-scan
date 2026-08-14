@@ -100,3 +100,18 @@ export function evaluateMoneyGuard(text, { userMoneyIntent = false, inPaymentSta
   if (!userMoneyIntent && !inPaymentState) return { ok: false, reason: "unsolicited" };
   return { ok: true };
 }
+
+/**
+ * คำชม/ปลอบต้องห้ามในเสียงอาจารย์ (Codex 14 ส.ค. — เคสจริง 13 ส.ค.:
+ * "ใช้ได้ดีแล้ว...ไม่ต้องกังวล" + "เดี๋ยวก็เจอชิ้นที่ใช่เอง") — prompt อย่างเดียว
+ * ไม่การันตี ต้องมี pre-send validator คู่กัน
+ */
+export const PRAISE_COMFORT_RE =
+  /ใช้ได้ดีแล้ว|ถือว่า(?:ดี|ใช้ได้)|ไม่ต้องกังวล|เดี๋ยวก็เจอ|สบายใจได้/;
+
+/** @returns {{ok: true} | {ok: false, reason: "praise_comfort", match: string}} */
+export function evaluateToneGuard(text) {
+  const m = PRAISE_COMFORT_RE.exec(String(text || ""));
+  if (!m) return { ok: true };
+  return { ok: false, reason: "praise_comfort", match: m[0] };
+}

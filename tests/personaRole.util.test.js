@@ -100,3 +100,26 @@ test("consumeOrchestratorOutcome (Codex รอบ 6): defer → payment route �
   const deferNoConsumer = { handled: false, deferTo: "deterministic_payment" };
   assert.equal(await consumeOrchestratorOutcome(deferNoConsumer, {}), deferNoConsumer);
 });
+
+test("evaluateToneGuard: จับคำชม/ปลอบต้องห้าม (เคสจริง 13 ส.ค.) — ข้อความปกติผ่าน", async () => {
+  const { evaluateToneGuard } = await import(
+    "../src/core/conversation/personaRole.util.js"
+  );
+  // เคสจริงทั้งสองข้อความจากรายงาน 13 ส.ค.
+  const praise = evaluateToneGuard(
+    "ชิ้นที่เข้ากับคุณที่สุดได้ 87% กับคะแนน 7.5 แบบนี้ก็ถือว่าใช้ได้ดีแล้วครับ ไม่ต้องกังวล",
+  );
+  assert.equal(praise.ok, false);
+  assert.equal(praise.reason, "praise_comfort");
+  const comfort = evaluateToneGuard("ครับ หาคนละสายไปเรื่อย ๆ เดี๋ยวก็เจอชิ้นที่ใช่เอง");
+  assert.equal(comfort.ok, false);
+  assert.equal(evaluateToneGuard("ถือว่าดีครับ").ok, false);
+  assert.equal(evaluateToneGuard("สบายใจได้ครับ").ok, false);
+  // แบบที่ต้องการ: ตัวเลข + ตำแหน่งบนเกณฑ์ + ขั้นถัดไป — ต้องผ่าน
+  assert.equal(
+    evaluateToneGuard(
+      "คะแนน 7.5 อยู่ระดับกลางค่อนดีของเกณฑ์ครับ ถ้าอยากได้ด้านเมตตาสูงกว่านี้ ลองสแกนชิ้นสายเมตตาเทียบดู",
+    ).ok,
+    true,
+  );
+});
