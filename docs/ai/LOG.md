@@ -604,3 +604,39 @@
 - ②Codex จับถูกอีก: deepScan ไม่ได้มี call เดียว — generateDeepScanDraft + rewriteDeepScanDraft ใน openaiDeepScan.api ยัง untagged และมี fengShuiAnalyze.service reuse draft อยู่จริง → แท็กครบ: deepScan.draft / deepScan.rewrite / fengShui.draft (callSite param)
 - Codex เห็นชอบ telemetry-only ขึ้น pro โดยเงื่อนไข: shadow flag absent/false บน pro · ไม่แตะ cache/prompt/model/detail · smoke ตรวจ App+user ในบิลหลัง deploy · เริ่มนับ 2-3 วันเมื่อเห็น tag แรกจริง — รอกบสั่ง deploy
 - suite ผ่าน baseline · ขึ้น staging
+
+## 2026-08-14 | Claude | Telemetry ขึ้น Pro (กบสั่ง) — หน้าต่างเก็บข้อมูลเริ่มนับ
+- ยืนยันก่อน deploy: OBJECT_CHECK_LOW_SHADOW_ENABLED absent บน pro (=ปิด shadow รันเฉพาะ staging ตามเงื่อนไข Codex) · sync 32 ไฟล์ → main → deploy pro healthy (200, 3 containers สะอาด)
+- smoke call ผ่าน: LLM_USAGE โผล่พร้อม callSite=smoke.telemetryCheck + token breakdown ครบ ตอบ "ok" — ระบบ attribution ทำงานจริงบน pro
+- เริ่มนับหน้าต่าง 2-3 วันจาก tag แรกของลูกค้าจริง (Codex: นับจาก tag แรกในบิล ไม่ใช่เวลา deploy) — export CSV รอบหน้าจะมีคอลัมน์ user เต็ม → วิเคราะห์ cost ต่อ callSite + cache break-even + shadow agreement แล้วค่อยเคาะมาตรการจริง
+- ระหว่างรอ: เดินงาน rich menu 6 ช่อง (วาดภาพให้กบดูก่อน)
+
+## 2026-08-14 | Claude | Rich Menu 6 ช่อง ดำ-ทอง ขึ้น staging (กบเคาะธีมดำทอง)
+- วาด 2 แบบ (เขียวทอง → กบขอดำทอง) เรนเดอร์ด้วย @resvg/resvg-js + Kanit ใน repo · generator เก็บที่ scripts/richmenu/richmenu-blackgold.mjs (+PNG)
+- สร้าง rich menu บน OA staging: richmenu-5fc7688f183c3575738d328b2354a7e8 ตั้งเป็น default แล้ว (ลบอันเก่าก่อนกันซ้อน)
+- ผูกปุ่มแบบ zero-code: ส่งรูป→LINE cameraRoll/single · เทียบพระในคลัง→"จัดชุด" (Synergy) · ดูผลเก่า→"ประวัติ" · ค่าครูและสิทธิ์→"ค่าครูมีแพ็กไหนบ้าง" (promo inquiry) · ถามแอดมิน→"สอบถาม" (สมองแชท) · ชวนเพื่อน→"ชวนเพื่อน" (referral card)
+- ค้าง: กบทดสอบ 6 ปุ่มบน staging → ปรับตามผลทดสอบ (จุดเสี่ยง: "สอบถาม" ผ่าน LLM ไม่ deterministic, "ค่าครูและสิทธิ์" ยังไม่โชว์สิทธิ์คงเหลือตรง ๆ) → กบสั่งชัดค่อยขึ้น pro
+
+## 2026-08-14 | Claude | แก้ 3 เคสจากรายงานคุณภาพแชท 13 ส.ค. (staging)
+- ชวนเพื่อนวนลูป 3 รอบ (Uf263f3): ลูกค้ามีรูปค้าง+paywall → "ชวนเพื่อน" โดนเลน consult แย่ง (metadata ยืนยัน replyType=gemini_front_consult) — ย้ายเช็ค maybeHandleReferralInvite/maybeHandleSynergyRequest ขึ้นต้นเลนข้อความ ก่อนทุก branch ที่เรียกสมองแชท
+- [AUTO] ซ้ำ 3 ครั้ง (U1a40e5): detector นับ marker "[ส่งรายงาน...]" ซึ่งลูกค้าไม่เห็น — ยกเว้น /^\[.+\]$/ ใน detectRepeatedBotMessages + เทสต์ล็อก
+- อวย "ใช้ได้ดีแล้ว...ไม่ต้องกังวล" + ปลอบ "เดี๋ยวก็เจอชิ้นที่ใช่เอง" (Ubfdbee): กฏเดิมเปิดช่อง "ใช้ได้ดี" เอง — แก้เป็นบอกตัวเลข+ตำแหน่งบนเกณฑ์ ห้ามคำตัดสินเชิงชม + กฏใหม่ห้ามปลอบ/การันตีอนาคต ให้ชี้ขั้นถัดไปแทน
+- test-baseline-check ผ่าน (967 pass / 19 known-fail) · ค้าง: กบทดสอบบน staging → สั่งขึ้น pro · rich menu ต่อคิวถัดไป
+
+## 2026-08-14 | Claude | ปิด 3 gaps จาก Codex review e5250c5 (staging)
+- คำสั่งเป๊ะ terminal: service ใหม่ exactUtilityCommand.service.js (matcher + runExactUtilityCommandTerminal DI) — match แล้วจบเสมอ: สำเร็จได้ของ / ปิด-พัง = แอดมินแจ้งขัดข้อง deterministic (utility_unavailable, speakerRole admin) ห้ามไหลเข้า LLM
+- priority: ย้าย call site ไปหลัง registration gate (admin/identity → reg gate → คำสั่งเป๊ะ → states → LLM) — ลูกค้าใหม่ไม่มีทางลัดข้ามลงทะเบียน · ลบ call sites ซ้ำ 2 จุดล่าง (เจ้าของเดียว)
+- marker detector: เลิก regex วงเล็บกว้าง → metadata replyType=scan_result + INTERNAL_MARKER_TEXTS exact allowlist · เทสต์ล็อกทั้งข้ามจริง+ไม่ข้ามข้อความวงเล็บปกติ
+- tone guard: PRAISE_COMFORT_RE + evaluateToneGuard ใน personaRole.util → orchestrator retry ครั้งเดียวพร้อม directive · retry ยังหลุด = ส่งของเดิม + log TONE_PRESEND_STILL (ตัดสินใจ: โทนหลุดเบากว่าไม่ตอบ — แจ้ง Codex แล้ว)
+- เทสต์ใหม่ 10 (terminal contract 7 / marker 2 / tone 1) — baseline ผ่าน ไม่มี fail ใหม่ · ค้าง: integration test ระดับ webhook routing (pending-image+paywall/pending-verify/reg-incomplete) รอ DI/test-mode refactor รอบใหญ่ตามที่ตกลงกับ Codex
+
+## 2026-08-14 | Claude | ปิด 2 blockers Codex รอบ 2 (0d52467) + invariant tests (staging)
+- tone guard fail-closed: resolveToneGuardedText (pure, personaRole.util) — retry ผ่านทั้ง tone+money → ใช้ retry · ไม่ผ่าน → sanitizePraiseComfort ตัด/แทนเฉพาะวลีต้องห้าม (เดี๋ยวก็เจอ→ชวนสแกนเทียบ, ถือว่าดี→ตามระดับตัวเลข) ตรวจ tone+money ซ้ำ · ยังไม่ผ่าน/เหลือเศษ → NEUTRAL fallback — ไม่มีทาง original ที่ถูก block หลุด · log TONE_PRESEND_OUTCOME {retry_passed|sanitized|fallback}
+- delivery honesty: runExactUtilityCommandTerminal รับ pushUnavailable+onDeliveryFailure — sender คืน boolean ตามจริง (sent/suppressed/exactDuplicate นับว่าถึงมือ) · reply ล้ม→push fallback ครั้งเดียว→ล้มทั้งคู่ log EXACT_UTILITY_UNAVAILABLE_DELIVERY_FAILED + Telegram alert · ทุกกรณียัง terminal
+- invariant tests ใหม่ (lineWebhookRouting.invariant.test.js): reg gate ก่อน exact utility · exact utility ก่อน orchestrator/payment ตัวแรก · single owner (referral/synergy call site เดียว) · terminal block มี reply+push+alert ครบ
+- เทสต์แตะ 3 ไฟล์ 23/23 ผ่าน · baseline ไม่มี fail ใหม่ (970 pass)
+
+## 2026-08-14 | Claude | Sanitizer รอบ 3 (Codex) + rich menu ช่อง LIFF (staging)
+- sanitizer แก้ตามหลักฐาน Codex: longest-first (แบบนี้ก็ถือว่าใช้ได้ดีแล้ว → ... → ถือว่าดี) กันเศษ "ดีแล้ว" · clause อนาคต /เดี๋ยวก็เจอ[^\n]*/ กลืนถึงจบบรรทัด เลิก character class ไทยที่ตัดกลางคำ · sanitizedOutputQualityOk: ห้ามเศษ (ดีแล้ว/นที่ใช่เอง/ครับครับ) + ยาวพอ (≥40% หรือ ≥30) + ลงท้ายอักขระปกติ + tone/money ซ้ำ — ไม่ผ่าน = neutral fallback
+- เทสต์ล็อก exact output เคสจริงทั้งสอง: "ครับ คะแนน 7.5 กับ 87% อยู่ตามตำแหน่งที่รายงานระบุครับ" / "ครับ หาคนละสายไปเรื่อย ๆ หากต้องการเทียบให้ชัด ให้สแกนชิ้นต่างสายเพิ่มเติมครับ" + quality gate ปฏิเสธ output พังที่ Codex เจอ · baseline 971 ผ่าน
+- rich menu (กบ+Codex เคาะ): ถามแอดมิน → "เปิดแอป Ener / ดวงวันนี้ · สถิติ · ข้อมูลของฉัน" ไอคอนมือถือ+ดาว action URI liff.line.me/2010609313-8Bv87fz5 (staging LIFF) — เมนูใหม่ richmenu-939d8a52... ตั้ง default บน staging OA แล้ว · ค้าง: กบเทสต์ LIFF เปิดถูกบัญชี + 6 ปุ่มก่อนคุยเรื่อง pro (pro ใช้ LIFF_ID คนละตัว 2010679581)

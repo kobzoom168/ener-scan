@@ -51,8 +51,26 @@ export function detectAjarnMoneyBreach(rows) {
 }
 
 /** ข้อความ bot เดิมซ้ำ ≥ count ครั้งใน windowMin นาที (เคสจริง 10 ส.ค.: เกตถามซ้ำ 30 รอบ) */
+/**
+ * marker ภายในที่ลูกค้าไม่เห็นจริง (บันทึกใน history ให้ monitor เห็น timeline) —
+ * สแกนหลายชิ้นติดกัน marker ซ้ำเป็นเรื่องปกติ (false alarm 13 ส.ค.)
+ * เช็คจาก metadata replyType=scan_result + exact allowlist เท่านั้น
+ * (Codex 14 ส.ค.: regex วงเล็บกว้างอาจซ่อนข้อความจริงที่บังเอิญอยู่ในวงเล็บเหลี่ยม)
+ */
+export const INTERNAL_MARKER_TEXTS = new Set([
+  "[ส่งรายงานผลสแกนพร้อมการ์ด/เสียงถึงลูกค้าแล้ว]",
+  "[เสียงเตือนเรื่องหลายรูป]",
+]);
+
+function isInternalMarkerRow(r) {
+  if (String(r?.metadata_json?.replyType || "") === "scan_result") return true;
+  return INTERNAL_MARKER_TEXTS.has(String(r?.text || "").trim());
+}
+
 export function detectRepeatedBotMessages(rows, { count = 3, windowMin = 10 } = {}) {
-  const bot = (rows || []).filter((r) => r.role === "bot" && String(r.text || "").trim());
+  const bot = (rows || []).filter(
+    (r) => r.role === "bot" && String(r.text || "").trim() && !isInternalMarkerRow(r),
+  );
   const out = [];
   const flagged = new Set();
   for (let i = 0; i < bot.length; i++) {

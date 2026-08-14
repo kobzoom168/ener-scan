@@ -4264,6 +4264,58 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
   }
 
+  // คำสั่งเป๊ะจากปุ่ม/เมนู ("ชวนเพื่อน"/"จัดชุด") — terminal เสมอ (Codex 14 ส.ค.):
+  // สำเร็จ = ได้ของทันที · feature ปิด/พัง = แอดมินแจ้งขัดข้อง deterministic ห้ามไหลเข้า LLM
+  // (เคสจริง 13 ส.ค.: รูปค้าง+paywall แล้วเลน consult แย่งไปสอนให้พิมพ์ซ้ำ 3 รอบ)
+  // ตั้งใจวางหลัง registration gate: ลูกค้าใหม่ต้องลงทะเบียนก่อนเสมอ ไม่มีทางลัด
+  {
+    const { runExactUtilityCommandTerminal, buildUtilityUnavailableText } = await import(
+      "../services/utilityCommands/exactUtilityCommand.service.js"
+    );
+    const consumed = await runExactUtilityCommandTerminal({
+      text,
+      handlers: {
+        referral: () =>
+          maybeHandleReferralInvite({ client, userId, replyToken: event.replyToken, text }),
+        synergy: () =>
+          maybeHandleSynergyRequest({ client, userId, replyToken: event.replyToken, text }),
+      },
+      sendUnavailable: async (kind) => {
+        const r = await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "utility_unavailable",
+          semanticKey: `utility_unavailable:${kind}`,
+          text: buildUtilityUnavailableText(kind),
+          alternateTexts: [],
+          speakerRoleOverride: "admin",
+        });
+        // dedupe/suppress = ลูกค้าเพิ่งได้ข้อความนี้ไปแล้ว ถือว่าถึงมือ ไม่ต้อง push ซ้ำ
+        return r?.sent === true || r?.suppressed === true || r?.exactDuplicate === true;
+      },
+      pushUnavailable: async (kind) => {
+        const r = await sendNonScanPushMessage({
+          client,
+          userId,
+          replyType: "utility_unavailable_push",
+          semanticKey: `utility_unavailable_push:${kind}`,
+          text: buildUtilityUnavailableText(kind),
+          alternateTexts: [],
+          speakerRoleOverride: "admin",
+        });
+        return r?.sent === true;
+      },
+      onDeliveryFailure: async (kind) => {
+        const { sendTelegramText } = await import("../services/telegramNotify.service.js");
+        await sendTelegramText(
+          `[EXACT_UTILITY] ส่งข้อความขัดข้องเมนู ${kind} ไม่ถึงลูกค้า (reply+push ล้มทั้งคู่) uid:${String(userId).slice(0, 10)}…`,
+        );
+      },
+    });
+    if (consumed) return;
+  }
+
   // ✏️ แก้ข้อมูลลงทะเบียนผ่านแชท (เปลี่ยนชื่อ/เบอร์/เพศ) — deterministic, มาก่อน AI
   // (วันเกิดมี flow เดิม birthdateChangeFlow อยู่แล้ว ไม่แตะ)
   // กบ 14 ก.ค.: สองจังหวะแบบคนคุยกัน — "เปลี่ยนเบอร์" → อาจารย์ถามกลับ → ลูกค้าตอบค่าใหม่
@@ -7016,8 +7068,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         }
         if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
-        if (await maybeHandleReferralInvite({ client, userId, replyToken: event.replyToken, text })) return;
-        if (await maybeHandleSynergyRequest({ client, userId, replyToken: event.replyToken, text })) return;
+        // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
         if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
         if (text === "สแกนพลังงาน") {
@@ -7757,8 +7808,7 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
   if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
-  if (await maybeHandleReferralInvite({ client, userId, replyToken: event.replyToken, text })) return;
-  if (await maybeHandleSynergyRequest({ client, userId, replyToken: event.replyToken, text })) return;
+  // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
   if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;

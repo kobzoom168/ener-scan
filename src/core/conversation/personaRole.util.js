@@ -100,3 +100,93 @@ export function evaluateMoneyGuard(text, { userMoneyIntent = false, inPaymentSta
   if (!userMoneyIntent && !inPaymentState) return { ok: false, reason: "unsolicited" };
   return { ok: true };
 }
+
+/**
+ * คำชม/ปลอบต้องห้ามในเสียงอาจารย์ (Codex 14 ส.ค. — เคสจริง 13 ส.ค.:
+ * "ใช้ได้ดีแล้ว...ไม่ต้องกังวล" + "เดี๋ยวก็เจอชิ้นที่ใช่เอง") — prompt อย่างเดียว
+ * ไม่การันตี ต้องมี pre-send validator คู่กัน
+ */
+export const PRAISE_COMFORT_RE =
+  /ใช้ได้ดีแล้ว|ถือว่า(?:ดี|ใช้ได้)|ไม่ต้องกังวล|เดี๋ยวก็เจอ|สบายใจได้/;
+
+/** @returns {{ok: true} | {ok: false, reason: "praise_comfort", match: string}} */
+export function evaluateToneGuard(text) {
+  const m = PRAISE_COMFORT_RE.exec(String(text || ""));
+  if (!m) return { ok: true };
+  return { ok: false, reason: "praise_comfort", match: m[0] };
+}
+
+/**
+ * Deterministic sanitizer (Codex 14 ส.ค. รอบ 3): ตัด/แทนเฉพาะวลีต้องห้าม เก็บสาระไว้
+ * กติกา: longest phrase first (กัน rule สั้นกินก่อนแล้วเหลือเศษ "ดีแล้ว") ·
+ * วลีอนาคต/ปลอบแทนทั้ง clause ถึงจบบรรทัด ห้ามใช้ character class ภาษาไทยตัดกลางคำ
+ */
+const PRAISE_COMFORT_SANITIZE_RULES = [
+  // กลุ่มชมคะแนน — เรียงยาว→สั้น แทนด้วยการอ่านตำแหน่งแบบเป็นกลาง
+  [/แบบนี้ก็ถือว่าใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/ถือว่าใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/แบบนี้ก็ใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/ก็ใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/ใช้ได้ดีแล้ว/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  [/ถือว่า(?:ดีมาก|ใช้ได้|ดี)(?:แล้ว)?/g, "อยู่ตามตำแหน่งที่รายงานระบุ"],
+  // ปลอบอนาคต — กลืนทั้ง clause ถึงจบบรรทัด แทนด้วยขั้นถัดไปที่ทำได้จริง
+  [/เดี๋ยวก็เจอ[^\n]*/g, "หากต้องการเทียบให้ชัด ให้สแกนชิ้นต่างสายเพิ่มเติมครับ"],
+  // วลีปลอบตัดทิ้ง (รวมคำลงท้ายที่เกาะมา กันเศษ "ครับ" ลอย)
+  [/ไม่ต้องกังวล(?:ไป|นะ)?(?:ครับ|ค่ะ)?/g, ""],
+  [/สบายใจได้(?:เลย|นะ)?(?:ครับ|ค่ะ)?/g, ""],
+];
+
+/** เศษภาษาพัง/ความหมายชมที่หลงเหลือ = sanitize ไม่ผ่าน (Codex รอบ 3) */
+const SANITIZE_LEFTOVER_RE = /ดีแล้ว|นที่ใช่เอง|ครับครับ|ค่ะค่ะ|ระบุระบุ/;
+
+/** @param {string} text */
+export function sanitizePraiseComfort(text) {
+  let t = String(text || "");
+  for (const [re, sub] of PRAISE_COMFORT_SANITIZE_RULES) t = t.replace(re, sub);
+  // เก็บกวาด: ช่องว่างซ้อน / ช่องว่างหน้าวรรคตอน / บรรทัดว่างเกิน
+  return t
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +([\n.!?])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Post-sanitize quality gate: ประโยคต้องอ่านรู้เรื่อง + สาระจากต้นฉบับยังอยู่
+ * ไม่ผ่านข้อใดข้อหนึ่ง = ไปใช้ neutral fallback แทน (fail-closed)
+ * @param {string} sanitized
+ * @param {string} original
+ */
+export function sanitizedOutputQualityOk(sanitized, original) {
+  const s = String(sanitized || "").trim();
+  const o = String(original || "");
+  if (s.length < 10) return false;
+  // สาระต้องเหลือพอ ไม่ใช่โดนตัดจนกลวง
+  if (s.length < Math.min(30, Math.floor(o.length * 0.4))) return false;
+  if (SANITIZE_LEFTOVER_RE.test(s)) return false;
+  // ลงท้ายต้องเป็นตัวอักษรไทย/ตัวเลข/วรรคตอนปกติ ไม่จบด้วยอักขระค้าง
+  if (!/[ก-๙0-9a-zA-Z%.!?)]$/.test(s)) return false;
+  return true;
+}
+
+/**
+ * Fail-closed tone resolution (Codex 14 ส.ค. รอบ 2 — ห้ามส่ง original ที่ถูก block):
+ * retry ผ่านทั้ง tone+money → ใช้ retry · ไม่งั้น sanitize original แล้วตรวจซ้ำ
+ * · ยังไม่ผ่าน → NEUTRAL_RECOVERY_FALLBACK — ไม่มีทางที่ข้อความมีคำต้องห้ามหลุดออกไป
+ * @param {{ original: string, retry: string | null, moneyCtx: { userMoneyIntent?: boolean, inPaymentState?: boolean } }} p
+ * @returns {{ text: string, outcome: "retry_passed" | "sanitized" | "fallback" }}
+ */
+export function resolveToneGuardedText({ original, retry, moneyCtx = {} }) {
+  if (retry && evaluateToneGuard(retry).ok && evaluateMoneyGuard(retry, moneyCtx).ok) {
+    return { text: retry, outcome: "retry_passed" };
+  }
+  const sanitized = sanitizePraiseComfort(original);
+  if (
+    sanitizedOutputQualityOk(sanitized, original) &&
+    evaluateToneGuard(sanitized).ok &&
+    evaluateMoneyGuard(sanitized, moneyCtx).ok
+  ) {
+    return { text: sanitized, outcome: "sanitized" };
+  }
+  return { text: NEUTRAL_RECOVERY_FALLBACK, outcome: "fallback" };
+}

@@ -15,6 +15,8 @@ import { runGeminiConsult } from "./geminiConsult.service.js";
 import {
   resolveSpeakerRole,
   evaluateMoneyGuard,
+  evaluateToneGuard,
+  resolveToneGuardedText,
   USER_MONEY_INTENT_RE,
   NEUTRAL_RECOVERY_FALLBACK,
 } from "../personaRole.util.js";
@@ -252,6 +254,45 @@ export async function runGeminiFrontOrchestrator(ctx) {
         );
         guardedConsult = NEUTRAL_RECOVERY_FALLBACK;
       }
+    }
+    // pre-send tone guard (Codex 14 ส.ค. รอบ 2 — fail-closed): คำชม/ปลอบต้องห้าม
+    // → retry ครั้งเดียว → retry ยังหลุด = deterministic sanitizer ตัดเฉพาะวลีต้องห้าม
+    // → ยังไม่ผ่าน = neutral fallback — ห้ามส่ง original ที่ถูก block เด็ดขาด
+    const tone1 = evaluateToneGuard(guardedConsult);
+    if (!tone1.ok) {
+      console.warn(
+        JSON.stringify({
+          event: "TONE_PRESEND_BLOCKED",
+          via,
+          match: tone1.match,
+          attempt: 1,
+          sample: guardedConsult.slice(0, 120),
+        }),
+      );
+      const toneRetry = await runGeminiConsult({
+        userId: ctx.userId,
+        userText: ctx.text,
+        conversationHistory,
+        lastSpeaker: lastSpeaker || null,
+        extraDirective: `คำตอบก่อนหน้าของคุณผิดกติกาโทน: มีคำชม/ปลอบต้องห้าม ("${tone1.match}") — ตอบใหม่โดยไม่ใช้คำตัดสินเชิงชม (ใช้ได้ดีแล้ว ถือว่าดี) และไม่ปลอบ (ไม่ต้องกังวล เดี๋ยวก็เจอ สบายใจได้) บอกตัวเลข/ข้อเท็จจริงกับขั้นถัดไปตรง ๆ`,
+      });
+      const toneRetryGuarded = toneRetry
+        ? await guardStaleNoImageClaim(guardEntitlementClaims(toneRetry.slice(0, 1800), via))
+        : null;
+      const toneRes = resolveToneGuardedText({
+        original: guardedConsult,
+        retry: toneRetryGuarded,
+        moneyCtx: guardCtx,
+      });
+      guardedConsult = toneRes.text;
+      console.warn(
+        JSON.stringify({
+          event: "TONE_PRESEND_OUTCOME",
+          via,
+          match: tone1.match,
+          outcome: toneRes.outcome,
+        }),
+      );
     }
     // role router (Codex C3): resolve เสียงจริงก่อนส่ง — history/monitor ได้ tag ตรง
     const speaker = resolveSpeakerRole(guardedConsult);
