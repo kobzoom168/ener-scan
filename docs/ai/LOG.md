@@ -640,3 +640,9 @@
 - sanitizer แก้ตามหลักฐาน Codex: longest-first (แบบนี้ก็ถือว่าใช้ได้ดีแล้ว → ... → ถือว่าดี) กันเศษ "ดีแล้ว" · clause อนาคต /เดี๋ยวก็เจอ[^\n]*/ กลืนถึงจบบรรทัด เลิก character class ไทยที่ตัดกลางคำ · sanitizedOutputQualityOk: ห้ามเศษ (ดีแล้ว/นที่ใช่เอง/ครับครับ) + ยาวพอ (≥40% หรือ ≥30) + ลงท้ายอักขระปกติ + tone/money ซ้ำ — ไม่ผ่าน = neutral fallback
 - เทสต์ล็อก exact output เคสจริงทั้งสอง: "ครับ คะแนน 7.5 กับ 87% อยู่ตามตำแหน่งที่รายงานระบุครับ" / "ครับ หาคนละสายไปเรื่อย ๆ หากต้องการเทียบให้ชัด ให้สแกนชิ้นต่างสายเพิ่มเติมครับ" + quality gate ปฏิเสธ output พังที่ Codex เจอ · baseline 971 ผ่าน
 - rich menu (กบ+Codex เคาะ): ถามแอดมิน → "เปิดแอป Ener / ดวงวันนี้ · สถิติ · ข้อมูลของฉัน" ไอคอนมือถือ+ดาว action URI liff.line.me/2010609313-8Bv87fz5 (staging LIFF) — เมนูใหม่ richmenu-939d8a52... ตั้ง default บน staging OA แล้ว · ค้าง: กบเทสต์ LIFF เปิดถูกบัญชี + 6 ปุ่มก่อนคุยเรื่อง pro (pro ใช้ LIFF_ID คนละตัว 2010679581)
+
+## 2026-08-14 | Claude | ขึ้น Pro ทั้งชุด (กบสั่ง) — chat fixes + rich menu OA จริง
+- sync main e5003e2 → deploy pro healthy (log สะอาด ไม่มี module error) — ได้ของครบ: referral/synergy terminal หลัง reg gate · marker allowlist · tone guard fail-closed (retry→sanitize→quality gate→fallback) · consult prompt ห้ามชม/ปลอบ · delivery honesty + Telegram alert
+- rich menu ดำ-ทอง 6 ช่องขึ้น OA pro: richmenu-866e0da590cb2198f521a05bede80b4d (LIFF cell ใช้ pro LIFF_ID 2010679581 อัตโนมัติจาก env) ตั้ง default แล้ว
+- เมนูเดิม ener-liff-entry-prod (richmenu-88b2b76d6d30ffbf8dd3c8396145a62a — แผ่นเดียว "เปิด Ener" → LIFF) เก็บไว้ไม่ลบ · rollback ได้ด้วย setDefaultRichMenu(id เดิม)
+- เฝ้าต่อ: TONE_PRESEND_OUTCOME กับ EXACT_UTILITY_* ใน log pro + รายงานคุณภาพเช้าพรุ่งนี้ควรไม่มี false alarm marker แล้ว
