@@ -206,17 +206,6 @@ export function buildRegistrationFlexMessage(greetText, liffId) {
                 action: { type: "uri", label: "กรอกข้อมูลเพื่อเริ่มอ่านพลัง", uri: liffUrl },
               },
               {
-                // chat fallback (Codex 14 ส.ค.): ลูกค้าเลือกเองได้ตั้งแต่แรก ไม่ต้องรอติด 3 ครั้ง
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "message",
-                  label: "ให้แอดมินช่วยกรอกในแชท",
-                  text: "ให้แอดมินช่วยกรอกในแชท",
-                },
-              },
-              {
                 // ตรงการใช้งานจริง ไม่มีคำรับรองเด็ดขาด (Codex 14 ส.ค.)
                 type: "text",
                 text: "ใช้ชื่อและวันเกิดเพื่อผูกผลอ่านกับเจ้าของ เบอร์โทรใช้ติดต่อเรื่องสิทธิ์และบริการเท่านั้น",

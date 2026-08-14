@@ -245,22 +245,3 @@ export async function tryMarkRegCardShown(uid, source) {
     return true; // redis พัง = ยอมส่งการ์ด (fail-open ฝั่งระบบ)
   }
 }
-
-/* ---------------- chat fallback state ---------------- */
-
-export async function getChatRegState(uid) {
-  try {
-    const raw = await getValue(chatRegKey(uid));
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function setChatRegState(uid, state) {
-  if (!state) {
-    await clearDedupeKey(chatRegKey(uid)).catch(() => {});
-    return;
-  }
-  await setLargeValueWithTtl(chatRegKey(uid), JSON.stringify(state), 3600).catch(() => {});
-}

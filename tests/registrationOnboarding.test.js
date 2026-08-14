@@ -19,7 +19,6 @@ import {
   sanitizeDescription,
   validateResumeAttempt,
   decideLiffSuccessFlow,
-  chatRegNextStep,
 } from "../src/services/welcome/registrationOnboarding.logic.js";
 import { holdFirstImage } from "../src/services/welcome/preRegistrationHold.service.js";
 
@@ -197,26 +196,6 @@ test("scenario 13: hold state ใช้ redis/storage ไม่ใช่ Map ใ
 test("scenario 14: cooldown 900s + required fields SSOT เดียว", () => {
   assert.equal(REG_CARD_COOLDOWN_SEC, 900);
   assert.deepEqual([...REGISTRATION_REQUIRED_FIELDS], ["nickname", "birthdate", "phone"]);
-});
-
-// chat fallback state machine ครบวง
-test("chat fallback: ถามทีละช่อง ชื่อเล่น → วันเกิด → เบอร์ → done", () => {
-  const parse = (t) => (t === "21/07/2530" ? "1987-07-21" : null);
-  let s = chatRegNextStep({ state: null, text: "", parseBirthdateIso: parse });
-  assert.match(s.reply, /ชื่อเล่น/);
-  s = chatRegNextStep({ state: s.state, text: "กบ", parseBirthdateIso: parse });
-  assert.match(s.reply, /วันเกิด/);
-  // วันเกิดผิด format → ถามซ้ำ ไม่เดินหน้า
-  const bad = chatRegNextStep({ state: s.state, text: "ไม่บอก", parseBirthdateIso: parse });
-  assert.equal(bad.state.step, "birthdate");
-  s = chatRegNextStep({ state: s.state, text: "21/07/2530", parseBirthdateIso: parse });
-  assert.match(s.reply, /เบอร์โทร/);
-  assert.match(s.reply, /สิทธิ์และบริการเท่านั้น/); // consent copy ตรงการใช้งาน
-  const done = chatRegNextStep({ state: s.state, text: "081-234-5678", parseBirthdateIso: parse });
-  assert.deepEqual(done.done, { nickname: "กบ", birthdateIso: "1987-07-21", phone: "0812345678" });
-  // ยกเลิกกลางทางได้
-  const cancel = chatRegNextStep({ state: { step: "phone" }, text: "ยกเลิก", parseBirthdateIso: parse });
-  assert.equal(cancel.state, null);
 });
 
 /* ---------------- behavior tests (Codex รอบ 2) — runtime contract ไม่ใช่แค่ source order ---------------- */

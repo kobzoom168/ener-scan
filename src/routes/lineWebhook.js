@@ -3992,57 +3992,25 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
     }
   };
 
-  // 1) แชทลงทะเบียนค้างอยู่ → ข้อความนี้คือคำตอบของสเตทปัจจุบัน
-  const chatState = await hold.getChatRegState(userId);
-  if (chatState) {
-    const step = logic.chatRegNextStep({
-      state: chatState,
-      text,
-      parseBirthdateIso: (t) => {
-        const p = parseBirthdateInput(t);
-        return p?.ok ? p.isoDate : null;
-      },
-    });
-    if (step.done) {
-      const saved = await saveChatRegistration({ userId, ...step.done });
-      await hold.setChatRegState(userId, null);
-      if (saved) {
-        console.log(JSON.stringify({ event: "registration_chat_fallback_completed", uidPrefix: userId.slice(0, 8) }));
-        bustRegistrationCache(userId);
-        const { sendRegistrationSuccessFlow } = await import(
-          "../services/welcome/registrationSuccess.service.js"
-        );
-        // reply เปล่าก่อนกัน token หมดอายุ แล้ว success flow เป็น push
-        await replyText("บันทึกข้อมูลครบแล้วครับ ขอบคุณครับ");
-        await sendRegistrationSuccessFlow(client, {
-          userId,
-          nickname: step.done.nickname,
-          completeBefore: false,
-          completeAfter: await isRegistrationComplete(userId).catch(() => true),
-          source: "chat_fallback",
-        });
-      } else {
-        await replyText("บันทึกไม่สำเร็จครับ ลองพิมพ์ ช่วยลงทะเบียน เพื่อเริ่มใหม่ หรือกดการ์ดลงทะเบียนก็ได้ครับ");
-      }
-      return true;
-    }
-    await hold.setChatRegState(userId, step.state);
-    if (step.reply) await replyText(step.reply);
-    return true;
-  }
-
-  // 2) control intents ชนะก่อน description (Codex ข้อ 6)
+  // 1) control intents ชนะก่อน description (Codex ข้อ 6)
+  // กบ 14 ส.ค. (รอบสอง): ตัด chat fallback ออก — บังคับกรอกฟอร์มเองทางเดียว
+  // เปิดไม่ได้ = แนะนำวิธีเปิด + ส่งลิงก์ให้ใหม่ ไม่มีแอดมินกรอกแทน
   const cls = logic.classifyPreRegText(text);
   if (cls.kind === "chat_fallback_trigger") {
-    console.log(JSON.stringify({ event: "registration_chat_fallback_started", uidPrefix: userId.slice(0, 8) }));
-    const step = logic.chatRegNextStep({ state: null, text: "", parseBirthdateIso: () => null });
-    await hold.setChatRegState(userId, step.state);
-    await replyText(step.reply);
+    console.log(JSON.stringify({ event: "registration_liff_trouble_reported", uidPrefix: userId.slice(0, 8) }));
+    const prompt = await buildRegistrationPrompt(attempt);
+    await replyText(
+      [
+        "ฟอร์มเปิดในแอป LINE นี้เลยครับ ไม่ต้องติดตั้งอะไรเพิ่ม",
+        "ลองแตะปุ่มบนการ์ดลงทะเบียนอีกครั้ง หรือแตะลิงก์จากปุ่มด้านล่างนี้ได้เลยครับ",
+        "ถ้ายังเปิดไม่ได้ ลองปิดแล้วเปิดแอป LINE ใหม่ก่อนครับ",
+      ].join("\n"),
+      prompt?.quickReply || null,
+    );
     return true;
   }
   if (cls.kind === "cancel") {
     await hold.cancelHold(userId).catch(() => {});
-    await hold.setChatRegState(userId, null);
     await replyText("รับทราบครับ ยกเลิกให้แล้ว รูปที่ฝากไว้ (ถ้ามี) ผมนำออกจากคิวแล้วครับ พร้อมเมื่อไหร่ทักมาใหม่ได้เลย");
     return true;
   }
@@ -4084,41 +4052,6 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
     await replyText(parts, prompt.quickReply);
   }
   return true;
-}
-
-/** บันทึกลงทะเบียนจากแชท — ช่องบังคับชุดเดียวกับ gate (SSOT: ชื่อเล่น/วันเกิด/เบอร์) */
-async function saveChatRegistration({ userId, nickname, birthdateIso, phone }) {
-  try {
-    const row = {
-      line_user_id: userId,
-      nickname: String(nickname).slice(0, 160),
-      birthdate: birthdateIso,
-      phone: String(phone).slice(0, 160),
-      updated_at: new Date().toISOString(),
-    };
-    const { data: existing, error: selErr } = await supabase
-      .from("liff_profiles")
-      .select("line_user_id")
-      .eq("line_user_id", userId)
-      .maybeSingle();
-    if (selErr) throw selErr;
-    if (existing) {
-      const { error } = await supabase.from("liff_profiles").update(row).eq("line_user_id", userId);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase.from("liff_profiles").insert(row);
-      if (error) throw error;
-    }
-    // mirror วันเกิดเข้าคลังเดียวกับ flow สแกน (แบบเดียวกับ LIFF save)
-    try {
-      const [y, m, d] = birthdateIso.split("-");
-      await saveBirthdate(userId, `${d}/${m}/${y}`, { rawBirthdateInput: "chat_fallback_registration" });
-    } catch { /* best-effort */ }
-    return true;
-  } catch (e) {
-    console.error(JSON.stringify({ event: "CHAT_REG_SAVE_ERROR", message: String(e?.message || e).slice(0, 160) }));
-    return false;
-  }
 }
 
 /**

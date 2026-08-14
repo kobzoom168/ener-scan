@@ -678,3 +678,8 @@
 - resume lock 120s→600s ครอบ worst-case + marker prereg:resumed 1 ชม. — กดซ้ำหลังเข้าคิวได้คำตอบ "เข้าคิวแล้ว" ไม่ใช่ "หมดอายุ"
 - SSOT: isRegistrationDataComplete ตัวเดียว — gate/LIFF before/after เรียกร่วม เลิกเขียนเงื่อนไขซ้ำ
 - behavior tests +5 (paywall ไม่ consume / push fail ล้าง dedupe + dedupe กัน push ซ้ำ / concurrent lock เจ้าของเดียว / upload-save fail เข้า ledger / SSOT) — 20/20 · baseline 1011 ผ่าน
+
+## 2026-08-14 | Claude | ตัด chat fallback ออก (กบสั่ง: บังคับกรอกฟอร์มเอง) — staging
+- การ์ดลงทะเบียนเหลือปุ่มเดียว "กรอกข้อมูลเพื่อเริ่มอ่านพลัง" — ลบปุ่มให้แอดมินช่วยกรอก
+- พิมพ์ "เปิดไม่ได้/กรอกไม่ได้" → แนะนำวิธีเปิด (ฟอร์มเปิดใน LINE / ปิดเปิดแอปใหม่) + quickReply ลิงก์ — ไม่มีแชทกรอกแทน (log registration_liff_trouble_reported)
+- ลบ state machine chatReg + saveChatRegistration ออกทั้งชุด (webhook/logic/hold service/tests) — เทสต์ 19/19 + baseline 1010 ผ่าน
