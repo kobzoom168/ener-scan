@@ -2851,7 +2851,10 @@ async function finalizeAcceptedImage({
               accessDecision: rerouteAccess,
               flowVersion: null,
             });
-            if (ing?.ok) return;
+            if (ing?.ok) {
+              if (turnCache) turnCache.imageIngestOutcome = "scan_enqueued";
+              return;
+            }
           }
         } catch (rerouteErr) {
           console.error(
@@ -3380,6 +3383,9 @@ async function finalizeAcceptedImage({
         flowVersion,
       });
       if (ing?.ok) {
+        // typed outcome สำหรับ prereg resume (Codex รอบ 2 ข้อ 1): เข้าคิวสแกนจริง
+        // = รูปมี durable owner ใหม่ → ผู้เรียก consume hold ได้
+        if (turnCache) turnCache.imageIngestOutcome = "scan_enqueued";
         console.log(
           JSON.stringify({
             event: "SCAN_V2_INGEST_OK",
@@ -4131,9 +4137,11 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
     const msg =
       begin.reason === "already_running"
         ? "กำลังอ่านรูปเดิมอยู่ครับ รอผลได้เลย ไม่ต้องกดซ้ำครับ"
-        : begin.reason === "expired" || begin.reason === "no_hold"
-          ? "รูปที่ฝากไว้หมดอายุแล้วครับ (เก็บให้ 24 ชั่วโมง) รบกวนถ่ายส่งมาใหม่ได้เลยครับ"
-          : "เริ่มอ่านรูปเดิมไม่สำเร็จครับ ลองใหม่อีกครั้ง หรือส่งรูปมาใหม่ได้เลยครับ";
+        : begin.reason === "already_resumed"
+          ? "รูปนี้เข้าคิวอาจารย์เรียบร้อยแล้วครับ รอผลได้เลย ไม่ต้องกดซ้ำครับ"
+          : begin.reason === "expired" || begin.reason === "no_hold"
+            ? "รูปที่ฝากไว้หมดอายุแล้วครับ (เก็บให้ 24 ชั่วโมง) รบกวนถ่ายส่งมาใหม่ได้เลยครับ"
+            : "เริ่มอ่านรูปเดิมไม่สำเร็จครับ ลองใหม่อีกครั้ง หรือส่งรูปมาใหม่ได้เลยครับ";
     try {
       await client.replyMessage(event.replyToken, { type: "text", text: msg });
     } catch { /* ignore */ }
@@ -4142,6 +4150,9 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
   try {
     // ถือว่ารับทราบกติกาแล้วจากพฤติกรรม (Codex ข้อ 1) — กันการ์ด how-to เด้งทีหลัง
     void tryDedupeOnce(`howto:ack:${userId}`, 366 * 86400).catch(() => {});
+    // typed outcome (Codex รอบ 2 ข้อ 1): finalize จบได้หลายทาง (paywall/slip/reject)
+    // — consume เฉพาะเมื่อเข้าคิวสแกนจริง ไม่งั้นเก็บ hold ไว้ให้ retry ได้
+    const resumeTurnCache = {};
     await finalizeAcceptedImage({
       client,
       event,
@@ -4149,8 +4160,22 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
       flowVersion: "prereg_resume",
       eventTimestamp: Number(event.timestamp) || Date.now(),
       imageBuffer: begin.buffer,
+      turnCache: resumeTurnCache,
     });
-    await hold.consumeHoldAfterIngest(userId, begin.hold);
+    const { shouldConsumeHoldAfterFinalize } = await import(
+      "../services/welcome/registrationOnboarding.logic.js"
+    );
+    if (shouldConsumeHoldAfterFinalize(resumeTurnCache.imageIngestOutcome)) {
+      await hold.consumeHoldAfterIngest(userId, begin.hold);
+    } else {
+      console.log(
+        JSON.stringify({
+          event: "PREREG_RESUME_NOT_CONSUMED",
+          uidPrefix: String(userId).slice(0, 8),
+          outcome: resumeTurnCache.imageIngestOutcome || "no_durable_owner",
+        }),
+      );
+    }
     return true;
   } catch (e) {
     console.error(JSON.stringify({ event: "PREREG_RESUME_INGEST_FAILED", message: String(e?.message || e).slice(0, 160) }));

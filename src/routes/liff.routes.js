@@ -1151,12 +1151,10 @@ liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
         .select("nickname,birthdate,phone")
         .eq("line_user_id", userId)
         .maybeSingle();
-      const prevPhone = String(prev?.phone || "").replace(/[^0-9]/g, "");
-      completeBefore = Boolean(
-        String(prev?.nickname || "").trim() &&
-          String(prev?.birthdate || "").trim() &&
-          prevPhone.length >= 9,
+      const { isRegistrationDataComplete } = await import(
+        "../services/welcome/registrationOnboarding.logic.js"
       );
+      completeBefore = isRegistrationDataComplete(prev || {});
     } catch { /* ถือว่ายังไม่ครบ */ }
     const { data: existing, error: selErr } = await supabase
       .from("liff_profiles")
@@ -1191,8 +1189,10 @@ liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
     } catch {}
     // ลงทะเบียนครบครั้งแรก (ไม่ครบ→ครบ) → success flow: มีรูปค้าง = การ์ด resume ·
     // ไม่มี = How-to + ชวนส่งรูป (dedupe กันยิงซ้ำตอนแก้ข้อมูล — Codex ข้อ 1/4)
-    const phoneDigits = String(row.phone || "").replace(/[^0-9]/g, "");
-    const completeAfter = Boolean(row.nickname && row.birthdate && phoneDigits.length >= 9);
+    const { isRegistrationDataComplete } = await import(
+      "../services/welcome/registrationOnboarding.logic.js"
+    );
+    const completeAfter = isRegistrationDataComplete(row);
     if (liffLineClient) {
       import("../services/welcome/registrationSuccess.service.js")
         .then((m) =>

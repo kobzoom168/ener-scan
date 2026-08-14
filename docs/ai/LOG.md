@@ -669,3 +669,12 @@
 - howto ack เช็ค registration ก่อน — ยังไม่ลงไม่พูด "ส่งรูปได้เลย" · telemetry ครบชุด (card_shown/suppressed/reminder/image_received/resumed/expired/saved/chat_fallback_*)
 - tests: registrationOnboarding.test.js 15 ตัวครอบ 14 scenario (pure logic + DI + source-order invariants) · baseline 1006 ผ่าน · แก้ invariant anchor ตาม gate โครงใหม่
 - ค้าง: กบทดสอบบัญชีใหม่ 2 บัญชี (LIFF 1 / chat fallback 1) ก่อนเคาะ pro · หมายเหตุ SSOT: LIFF ยังถามเพศ (มีตัวเลือกไม่ระบุ) — ช่องบังคับจริงคือ 3 ช่องตาม gate
+
+## 2026-08-14 | Claude | ปิด 5 จุด Codex รอบ 2 ของ registration flow (staging)
+- typed outcome: finalizeAcceptedImage set turnCache.imageIngestOutcome="scan_enqueued" ที่จุด ingest สำเร็จ (2 sites) — resume consume hold เฉพาะ outcome นี้ (shouldConsumeHoldAfterFinalize) · paywall/slip/reject = เก็บ hold + log PREREG_RESUME_NOT_CONSUMED
+- success push: dedupe → push → ล้ม = clearDedupe + log registration_success_push_failed (retry ได้ ไม่โดน suppress 24 ชม.)
+- holdFirstImage: lock ต่อ uid (retry 4x300ms) + re-check หลังได้ lock — สองรูปพร้อมกันข้าม container เจ้าของเดียว · lock ไม่ได้ = อีกฝั่งกำลัง hold → extra · redis ล่ม acquireShortLock fail-open (คืน token) ตาม policy
+- ledger จดทันทีหลัง upload ก่อน saveHold — save ล้มไฟล์ยังโดน sweep ไม่มี orphan ถาวร
+- resume lock 120s→600s ครอบ worst-case + marker prereg:resumed 1 ชม. — กดซ้ำหลังเข้าคิวได้คำตอบ "เข้าคิวแล้ว" ไม่ใช่ "หมดอายุ"
+- SSOT: isRegistrationDataComplete ตัวเดียว — gate/LIFF before/after เรียกร่วม เลิกเขียนเงื่อนไขซ้ำ
+- behavior tests +5 (paywall ไม่ consume / push fail ล้าง dedupe + dedupe กัน push ซ้ำ / concurrent lock เจ้าของเดียว / upload-save fail เข้า ledger / SSOT) — 20/20 · baseline 1011 ผ่าน

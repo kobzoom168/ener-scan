@@ -79,17 +79,31 @@ export async function buildResumeFlexCard(hold) {
  * @param {{ userId: string, nickname: string, completeBefore: boolean, completeAfter: boolean, source: string }} p
  * @returns {Promise<"none" | "success_resume" | "success_howto">}
  */
-export async function sendRegistrationSuccessFlow(client, { userId, nickname, completeBefore, completeAfter, source }) {
-  const hold = await peekHold(userId).catch(() => null);
+export async function sendRegistrationSuccessFlow(
+  client,
+  { userId, nickname, completeBefore, completeAfter, source },
+  deps = {},
+) {
+  const dedupe = deps.tryDedupeOnce || tryDedupeOnce;
+  const clearDedupe =
+    deps.clearDedupeKey ||
+    (async (k) => {
+      const { clearDedupeKey } = await import("../../redis/scanV2Redis.js");
+      return clearDedupeKey(k);
+    });
+  const peek = deps.peekHold || peekHold;
+
+  const hold = await peek(userId).catch(() => null);
   const flow = decideLiffSuccessFlow({
     completeBefore,
     completeAfter,
     hasHeldImage: Boolean(hold?.storagePath && hold?.resumeToken),
   });
   if (flow === "none") return "none";
-  // dedupe: แก้ข้อมูลภายหลัง (ครบ→ครบ) ไม่ trigger อยู่แล้ว แต่กันเคสซ้ำซ้อน
-  // (retry/หลาย instance) ด้วย dedupe 24 ชม. อีกชั้น
-  const first = await tryDedupeOnce(`prereg:success:${userId}`, 86400);
+  // dedupe กันยิงซ้ำ (retry/หลาย instance) — แต่ push ล้มต้องล้าง dedupe ให้ retry ได้
+  // (Codex รอบ 2 ข้อ 2: เดิม dedupe ก่อน push ล้ม = ลูกค้าไม่ได้ปุ่ม resume แล้วโดน suppress 24 ชม.)
+  const dedupeKey = `prereg:success:${userId}`;
+  const first = await dedupe(dedupeKey, 86400);
   if (!first) return "none";
 
   const name = String(nickname || "").trim();
@@ -107,7 +121,17 @@ export async function sendRegistrationSuccessFlow(client, { userId, nickname, co
       text: "ส่งรูปพระ เครื่องราง หิน หรือกำไล มาได้เลยครับ เดี๋ยวผมส่งให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้นครับ",
     });
   }
-  await client.pushMessage(userId, msgs);
+  try {
+    await client.pushMessage(userId, msgs);
+  } catch (e) {
+    await clearDedupe(dedupeKey).catch(() => {});
+    log("registration_success_push_failed", {
+      uidPrefix: userId.slice(0, 8),
+      source,
+      message: String(e?.message || e).slice(0, 120),
+    });
+    return "push_failed";
+  }
   log("registration_saved", { uidPrefix: userId.slice(0, 8), source, flow });
   return flow;
 }

@@ -62,12 +62,11 @@ export async function isRegistrationComplete(lineUserId) {
     .eq("line_user_id", uid)
     .maybeSingle();
   if (error) throw error;
-  const phoneDigits = String(data?.phone || "").replace(/[^0-9]/g, "");
-  const ok = Boolean(
-    String(data?.nickname || "").trim() &&
-      String(data?.birthdate || "").trim() &&
-      phoneDigits.length >= 9,
+  // SSOT ตัวเดียว (Codex รอบ 2) — LIFF/chat fallback ใช้ตัวเดียวกัน
+  const { isRegistrationDataComplete } = await import(
+    "./welcome/registrationOnboarding.logic.js"
   );
+  const ok = isRegistrationDataComplete(data || {});
   regCache.set(uid, { ok, at: Date.now() });
   return ok;
 }

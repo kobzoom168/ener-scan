@@ -10,6 +10,20 @@
 /** SSOT ช่องบังคับลงทะเบียน — gate/แชท fallback/LIFF ใช้ชุดเดียวกัน (Codex ข้อ 5) */
 export const REGISTRATION_REQUIRED_FIELDS = Object.freeze(["nickname", "birthdate", "phone"]);
 
+/**
+ * SSOT ตัวตัดสิน "ข้อมูลลงทะเบียนครบ" — gate/LIFF/chat fallback เรียกตัวนี้ตัวเดียว
+ * (Codex รอบ 2: ห้ามเขียนเงื่อนไขซ้ำหลายที่)
+ * @param {{ nickname?: string | null, birthdate?: string | null, phone?: string | null }} p
+ */
+export function isRegistrationDataComplete(p) {
+  const phoneDigits = String(p?.phone || "").replace(/[^0-9]/g, "");
+  return Boolean(
+    String(p?.nickname || "").trim() &&
+      String(p?.birthdate || "").trim() &&
+      phoneDigits.length >= 9,
+  );
+}
+
 export const RESUME_TOKEN_RE = /^rs_[a-f0-9]{32}$/;
 export const RESUME_COMMAND_RE = /^เริ่มอ่านรูปนี้:(rs_[a-f0-9]{32})$/;
 export const REG_CARD_COOLDOWN_SEC = 900; // 15 นาที (กบเคาะ)
@@ -90,6 +104,15 @@ export function validateResumeAttempt({ hold, uid, holdUid, token, nowMs }) {
   }
   if (!hold.storagePath) return { ok: false, reason: "no_image" };
   return { ok: true };
+}
+
+/**
+ * consume hold ได้เฉพาะเมื่อรูปเข้าคิวสแกนจริง (durable owner ใหม่) — paywall/slip/
+ * reject/abuse = เก็บ hold ไว้ retry (Codex รอบ 2 ข้อ 1: finalize คืนได้หลาย outcome)
+ * @param {string | undefined} outcome
+ */
+export function shouldConsumeHoldAfterFinalize(outcome) {
+  return outcome === "scan_enqueued";
 }
 
 /**

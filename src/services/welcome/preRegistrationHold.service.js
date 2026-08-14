@@ -103,37 +103,62 @@ export async function holdFirstImage({ uid, messageId, buffer, deps = {} }) {
   const peek = deps.peek || peekHold;
   const save = deps.save || saveHold;
   const upload = deps.upload || uploadScanImageToStorage;
+  const lock = deps.lock || ((k, ms) => acquireShortLock(k, ms));
+  const unlock = deps.unlock || ((k, t) => releaseShortLock(k, t));
+  const addLedger = deps.ledgerAdd || ledgerAdd;
   if (!deps.peek) void sweepExpiredPreRegFiles().catch(() => {});
-  const existing = await peek(uid);
-  if (existing?.storagePath) {
-    // รูปแรกเป็นเจ้าของ hold — รูปถัดไปห้ามทับ (Codex ข้อ 3) แค่นับและแจ้งตรง ๆ
+
+  const asExtra = async (existing) => {
     existing.extraImages = (Number(existing.extraImages) || 0) + 1;
     await save(uid, existing).catch(() => {});
     log("prereg_extra_image_ignored", { uidPrefix: uid.slice(0, 8), extraImages: existing.extraImages });
     return { held: "extra", hold: existing };
+  };
+
+  const pre = await peek(uid);
+  if (pre?.storagePath) return asExtra(pre); // รูปแรกเป็นเจ้าของ — รูปถัดไปห้ามทับ (Codex ข้อ 3)
+
+  // lock ต่อ uid กัน race สองรูปพร้อมกันข้าม container (Codex รอบ 2 ข้อ 3):
+  // ได้ lock แล้ว re-check ก่อนอัปโหลด · ไม่ได้ lock = อีกรูปกำลัง hold อยู่ → extra
+  const lockKey = `prereg:holdlock:${uid}`;
+  let lockToken = null;
+  for (let i = 0; i < 4 && !lockToken; i++) {
+    lockToken = await lock(lockKey, 15_000);
+    if (!lockToken) await new Promise((r) => setTimeout(r, 300));
+  }
+  if (!lockToken) {
+    const after = await peek(uid);
+    if (after?.storagePath) return asExtra(after);
+    log("prereg_hold_lock_busy", { uidPrefix: uid.slice(0, 8) });
+    return { held: "extra", hold: after || { extraImages: 1 } };
   }
   try {
+    const recheck = await peek(uid);
+    if (recheck?.storagePath) return asExtra(recheck);
     const up = await upload({
       lineUserId: uid,
       lineMessageId: `prereg-${messageId || "img"}`,
       buffer,
     });
+    // จด ledger ทันทีหลัง upload ก่อน save (Codex รอบ 2 ข้อ 4) — save ล้มไฟล์ยังถูกกวาด
+    await addLedger(up.bucket, up.path, Date.now() + PREREG_HOLD_TTL_SEC * 1000 + 3600_000);
     const hold = {
       resumeToken: `rs_${crypto.randomBytes(16).toString("hex")}`,
       storageBucket: up.bucket,
       storagePath: up.path,
       messageId: String(messageId || ""),
-      description: existing?.description || null,
+      description: recheck?.description || pre?.description || null,
       extraImages: 0,
       createdAt: Date.now(),
     };
     await save(uid, hold);
-    if (!deps.upload) await ledgerAdd(up.bucket, up.path, Date.now() + PREREG_HOLD_TTL_SEC * 1000 + 3600_000);
     log("image_received_before_registration", { uidPrefix: uid.slice(0, 8) });
     return { held: "first", hold };
   } catch (e) {
     log("prereg_hold_failed", { message: String(e?.message || e).slice(0, 120) });
     return { held: "failed" };
+  } finally {
+    await unlock(lockKey, lockToken).catch(() => {});
   }
 }
 
@@ -156,8 +181,15 @@ export async function attachDescription(uid, text) {
 export async function beginResume(uid, token, { validate }) {
   const hold = await peekHold(uid);
   const verdict = validate({ hold, uid, holdUid: uid, token, nowMs: Date.now() });
-  if (!verdict.ok) return { ok: false, reason: verdict.reason };
-  const lockToken = await acquireShortLock(`prereg:resumelock:${uid}`, 120_000);
+  if (!verdict.ok) {
+    // แยกเคส "เพิ่งเข้าคิวไปแล้ว" ออกจาก "หมดอายุ" — ข้อความถูกต้องต่อลูกค้า
+    if (verdict.reason === "no_hold" && (await getValue(`prereg:resumed:${uid}`).catch(() => null))) {
+      return { ok: false, reason: "already_resumed" };
+    }
+    return { ok: false, reason: verdict.reason };
+  }
+  // lock 10 นาที ครอบ worst-case ของ ingest (Codex รอบ 2 ข้อ 5 — เดิม 120 วิสั้นกว่าเวลาสแกน)
+  const lockToken = await acquireShortLock(`prereg:resumelock:${uid}`, 600_000);
   if (!lockToken) return { ok: false, reason: "already_running" };
   const releaseLock = () => releaseShortLock(`prereg:resumelock:${uid}`, lockToken).catch(() => {});
   try {
@@ -173,6 +205,8 @@ export async function beginResume(uid, token, { validate }) {
 /** consume หลัง ingest สำเร็จ: ลบ metadata + ไฟล์ + ledger (atomic ต่อ uid ผ่าน resume lock) */
 export async function consumeHoldAfterIngest(uid, hold) {
   await clearDedupeKey(holdKey(uid)).catch(() => {});
+  // marker ให้กดปุ่มซ้ำหลังเข้าคิวแล้วได้คำตอบตรง ("เข้าคิวแล้ว" ไม่ใช่ "หมดอายุ")
+  await setLargeValueWithTtl(`prereg:resumed:${uid}`, "1", 3600).catch(() => {});
   try {
     await deleteStorageObject(hold.storageBucket, hold.storagePath);
     await ledgerRemove(hold.storageBucket, hold.storagePath);
