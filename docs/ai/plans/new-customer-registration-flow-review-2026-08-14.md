@@ -1,6 +1,61 @@
 # New Customer Registration Flow Review — 14 ส.ค. 2026
 
-สถานะ: **OPEN — review only, ยังไม่แก้ runtime / ยังไม่ deploy**
+สถานะ: **IMPLEMENTED ON STAGING ที่ `7c66720` — ยังมี blockers ก่อน deploy Pro**
+
+## Codex review รอบ 2 — commit `4d4691a`
+
+ยืนยันว่าปิดของเดิมได้จริงบางส่วน: outcome ถูกแยกด้วย cache ใหม่ต่อ resume turn และตั้ง `scan_enqueued` หลัง `ingestScanImageAsyncV2().ok` ทั้งสองเส้น, hold ถูก consume เฉพาะ outcome นี้, resume lock เพิ่มเป็น 600 วินาที, ledger ถูกจดก่อน save และ helper registration-complete ถูก reuse ใน gate/LIFF แล้ว Targeted tests ผ่าน 20/20 ด้วย placeholder env
+
+ยังไม่ผ่าน Pro เพราะพบ 3 contract gaps:
+
+1. **Blocker — push failure ยัง retry success flow ไม่ได้จริง**
+   - แม้ล้าง dedupe key แล้ว แต่ profile ถูกบันทึกครบก่อน push รอบแรก
+   - เมื่อ client retry save รอบถัดไป `completeBefore=true`; `decideLiffSuccessFlow()` คืน `none` ก่อนแตะ dedupe จึงไม่มี success/resume card อีก
+   - ต้องมี delivery state แยกจาก registration transition เช่น `registration_success_pending/sent` หรือ retry delivery ใน request เดิม แล้วทดสอบ end-to-end: save สำเร็จ → push fail → save/trigger รอบสอง → push สำเร็จหนึ่งครั้ง
+
+2. **High — lock busy โดยยังไม่มี hold ถูกตอบเป็น `extra` ทั้งที่ไม่มีรูปแรกยืนยัน**
+   - หลัง retry lock 4 รอบ ถ้า `peek` ยังว่าง ฟังก์ชันคืน `{held:"extra"}` และ route บอกลูกค้าว่า “รับรูปแรกไว้แล้ว”
+   - owner ที่ถือ lock อาจ upload/save ล้มภายหลัง ทำให้รูปทั้งสองไม่ถูกเก็บ แต่ลูกค้าได้รับคำยืนยันผิด
+   - กรณีไม่มี hold หลังรอควรคืน `busy/failed` และตอบตามจริงให้ retry หรือใช้ durable inbox/idempotent claim; ห้ามอ้างว่ารูปแรกอยู่จน re-check พบ storagePath จริง
+
+3. **High — paywall ownership ยังอาจทำให้ scan ซ้ำและ hold ค้าง**
+   - paywall path เก็บ buffer ใน pending-image flow ขณะ pre-reg hold ยังคงอยู่ เมื่อ payment flow สแกน pending สำเร็จ hold/token เดิมยังใช้ได้
+   - ลูกค้าอาจกดปุ่มเดิมภายหลังและ enqueue รูปเดิมอีกรอบ/กินสิทธิ์เพิ่ม
+   - ต้องผูก hold id/token กับ pending payment image และ consume/mark resumed เมื่อ payment-driven enqueue สำเร็จ หรือเลือกให้ pre-reg hold เป็นเจ้าของภาพเพียงทางเดียวจนจ่ายเสร็จ พร้อม test `resume→paywall→paid auto scan→กด token ซ้ำ` ต้องไม่ enqueue รอบสอง
+
+ข้อสังเกต: ledger-first ลด orphan เมื่อ metadata save ล้ม แต่ production `ledgerAdd()` กลืน Redis error หากทั้ง ledger และ save ล้มหลัง S3 upload ไฟล์ยัง orphan ได้ ควร delete ชดเชยทันทีใน catch ของ save และให้ ledgerเป็น fallback ไม่ใช่กลไกเดียว
+
+## Codex review — commit `7c66720` (14 ส.ค. 2026)
+
+ยืนยันจากโค้ดแล้วว่า flow หลักทั้ง 8 ข้อถูกนำไปทำบน staging: follow แบบ registration-first, durable hold, รูปที่สองไม่ตั้งใจ overwrite, pending description, LIFF/chat completion transition, resume token, chat fallback, cooldown, cleanup ledger และ telemetry พื้นฐาน
+
+อย่างไรก็ตาม ยังไม่ควรขึ้น Pro จนปิดประเด็นต่อไปนี้:
+
+1. **Blocker — resume ลบ hold หลังฟังก์ชัน `finalizeAcceptedImage()` return ไม่ใช่หลัง scan ingest สำเร็จจริง**
+   - ฟังก์ชันนี้คืน `void` ทั้งกรณีเข้าคิว scan, paywall, abuse lock, slip route และ validation/rejection หลายชนิด
+   - `maybeHandlePreRegResume()` เรียก `consumeHoldAfterIngest()` ทันทีเมื่อไม่มี exception จึงอาจลบ metadata/ไฟล์ แม้ลูกค้าเพียงเจอ paywallหรือรูปไม่ได้เข้า scan job
+   - ต้องเปลี่ยน contract ให้คืน typed outcome เช่น `scan_enqueued | payment_held | slip_handled | rejected | failed` และ consume pre-reg hold เฉพาะ outcome ที่มี durable owner ของรูปแล้วเท่านั้น พร้อม test behavior ไม่ใช่ source-order
+
+2. **Blocker — success notification dedupe ก่อนยืนยัน delivery**
+   - `sendRegistrationSuccessFlow()` จอง dedupe key ก่อน `client.pushMessage()` หาก LINE push ล้ม ลูกค้าจะไม่ได้การ์ด resume และ retry ถูก suppress 24 ชั่วโมง
+   - ใช้ delivery-aware/idempotent state: pending → sent หลัง gateway ยืนยัน หรือ clear dedupe เมื่อส่งล้ม และมี retry/alert
+
+3. **High — hold รูปแรกยังมี race ข้าม container**
+   - `holdFirstImage()` ทำ `peek → upload → save` โดยไม่มี lock/CAS รูปสองรูปที่เข้าพร้อมกันอาจเห็นว่าไม่มี hold ทั้งคู่ แล้วรูปหลัง overwrite metadata รูปแรกและสร้าง orphan
+   - ต้อง lock ต่อ uid ก่อน peek/upload/save หรือใช้ atomic claim; หลังได้ lock ให้ re-check hold และเพิ่ม concurrent test จริง
+
+4. **High — upload สำเร็จแต่ save metadata ล้มทำให้ไฟล์ orphan นอก ledger**
+   - ปัจจุบัน `ledgerAdd()` เกิดหลัง `saveHold()` ถ้า upload สำเร็จแต่ Redis save ล้ม จะ return failed โดยไม่มี ledger cleanup
+   - จด ledger ทันทีหลัง upload ก่อน save หรือชดเชยด้วย delete เมื่อ save ล้ม พร้อม telemetry/test
+
+5. **High — resume lock TTL 120 วินาทีสั้นกว่าเวลาสแกนที่ประกาศ 1–3 นาที**
+   - หากงานเกิน 120 วินาที ปุ่มเดิมอาจเริ่มรอบสองก่อนรอบแรก consume
+   - ใช้ lock TTL ครอบ worst case พร้อม heartbeat/renewal หรือแยก idempotency key ของ scan enqueue ที่ durable
+
+6. **Test gap — 14 scenarios ส่วนสำคัญหลายข้อพิสูจน์ด้วย source-text order**
+   - ยังไม่มี integration/contract test ที่ยืนยัน typed scan outcome, paywall แล้ว hold ไม่หาย, push failure retry ได้, concurrent images มี owner เดียว, upload-save compensation และ resume timeout ไม่ทำซ้ำ
+
+ข้อสังเกตไม่เป็น blocker: `REGISTRATION_REQUIRED_FIELDS` ถูกประกาศเป็น SSOT แต่ gate และ LIFF ยังเขียนเงื่อนไขสามช่องซ้ำเอง จึงยังมีโอกาส drift ควรย้าย `isComplete` เป็น helper เดียวที่ทุกเส้นเรียกจริง
 
 ## เคสจริง
 

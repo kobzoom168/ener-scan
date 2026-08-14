@@ -18,12 +18,14 @@ const textLaneStart = SRC.indexOf("async function handleTextMessage");
 assert.ok(textLaneStart > 0, "หา handleTextMessage ไม่เจอ");
 const lane = SRC.slice(textLaneStart);
 
-test("invariant: registration gate มาก่อน exact utility block ใน text lane", () => {
-  const regIdx = lane.indexOf("REG_GATE_BLOCKED_TEXT");
+test("invariant: registration gate มาก่อน resume/exact utility ใน text lane", () => {
+  const regIdx = lane.indexOf("handleUnregisteredText({");
+  const resumeIdx = lane.indexOf("maybeHandlePreRegResume({ client");
   const utilIdx = lane.indexOf("runExactUtilityCommandTerminal({");
-  assert.ok(regIdx > 0, "หา registration gate (REG_GATE_BLOCKED_TEXT) ใน text lane ไม่เจอ");
+  assert.ok(regIdx > 0, "หา registration gate (handleUnregisteredText) ใน text lane ไม่เจอ");
   assert.ok(utilIdx > 0, "หา exact utility call site ไม่เจอ");
   assert.ok(regIdx < utilIdx, "exact utility ต้องอยู่หลัง registration gate");
+  assert.ok(regIdx < resumeIdx && resumeIdx < utilIdx, "resume ต้องอยู่หลัง gate และก่อน utility");
 });
 
 test("invariant: exact utility อยู่ก่อน orchestrator/payment routing ตัวแรกของ lane", () => {
