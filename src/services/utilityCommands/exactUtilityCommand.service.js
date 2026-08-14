@@ -33,14 +33,26 @@ export function buildUtilityUnavailableText(kind) {
 
 /**
  * รันคำสั่งเป๊ะแบบ terminal — คืน true = จบเทิร์นนี้ (ห้ามไปต่อ), false = ไม่ใช่คำสั่ง
+ * Delivery honesty (Codex 14 ส.ค. รอบ 2): reply ล้ม → push fallback หนึ่งครั้ง →
+ * ล้มทั้งคู่ = log DELIVERY_FAILED ตามจริง + แจ้ง monitor — ห้าม log _SENT ทั้งที่ไม่ถึงมือ
+ * ทุกกรณียัง terminal เพื่อไม่ไหลเข้า LLM
+ * sender contract: คืน true = ส่งถึงจริง · false/throw = ไม่ถึง
  * @param {{
  *   text: string,
  *   handlers: { referral: () => Promise<boolean>, synergy: () => Promise<boolean> },
- *   sendUnavailable: (kind: "referral" | "synergy") => Promise<unknown>,
+ *   sendUnavailable: (kind: "referral" | "synergy") => Promise<boolean>,
+ *   pushUnavailable?: (kind: "referral" | "synergy") => Promise<boolean>,
+ *   onDeliveryFailure?: (kind: "referral" | "synergy") => Promise<unknown>,
  * }} p
  * @returns {Promise<boolean>}
  */
-export async function runExactUtilityCommandTerminal({ text, handlers, sendUnavailable }) {
+export async function runExactUtilityCommandTerminal({
+  text,
+  handlers,
+  sendUnavailable,
+  pushUnavailable = null,
+  onDeliveryFailure = null,
+}) {
   const kind = matchExactUtilityCommand(text);
   if (!kind) return false;
   let ok = false;
@@ -50,14 +62,33 @@ export async function runExactUtilityCommandTerminal({ text, handlers, sendUnava
     ok = false;
   }
   if (!ok) {
+    let delivery = null;
     try {
-      await sendUnavailable(kind);
+      if ((await sendUnavailable(kind)) === true) delivery = "reply";
     } catch {
-      /* แจ้งไม่สำเร็จก็ยัง terminal — ห้ามไหลเข้า LLM */
+      delivery = null;
     }
-    console.log(
-      JSON.stringify({ event: "EXACT_UTILITY_UNAVAILABLE_SENT", kind }),
-    );
+    if (!delivery && pushUnavailable) {
+      try {
+        if ((await pushUnavailable(kind)) === true) delivery = "push_fallback";
+      } catch {
+        delivery = null;
+      }
+    }
+    if (delivery) {
+      console.log(
+        JSON.stringify({ event: "EXACT_UTILITY_UNAVAILABLE_SENT", kind, delivery }),
+      );
+    } else {
+      console.error(
+        JSON.stringify({ event: "EXACT_UTILITY_UNAVAILABLE_DELIVERY_FAILED", kind }),
+      );
+      try {
+        if (onDeliveryFailure) await onDeliveryFailure(kind);
+      } catch {
+        /* แจ้ง monitor ไม่ได้ก็ยัง terminal */
+      }
+    }
   }
   return true;
 }

@@ -76,15 +76,84 @@ test("handler โยน error: ยัง terminal + unavailable ครั้ง�
   assert.deepEqual(sent, ["synergy"]);
 });
 
-test("sendUnavailable เองพัง: ยัง terminal (คืน true) ไม่โยนต่อ", async () => {
+test("delivery honesty: reply ล้ม → push fallback หนึ่งครั้ง แล้วยัง terminal", async () => {
+  const calls = [];
   const consumed = await runExactUtilityCommandTerminal({
     text: "ชวนเพื่อน",
     handlers: { referral: async () => false, synergy: async () => true },
     sendUnavailable: async () => {
+      calls.push("reply");
       throw new Error("reply token used");
+    },
+    pushUnavailable: async () => {
+      calls.push("push");
+      return true;
+    },
+    onDeliveryFailure: async () => {
+      calls.push("alert");
     },
   });
   assert.equal(consumed, true);
+  assert.deepEqual(calls, ["reply", "push"]); // push สำเร็จ = ไม่ alert
+});
+
+test("delivery honesty: reply คืน false (ไม่ถึงมือ) ก็ต้องลอง push ไม่ใช่เชื่อว่าส่งแล้ว", async () => {
+  const calls = [];
+  const consumed = await runExactUtilityCommandTerminal({
+    text: "ชวนเพื่อน",
+    handlers: { referral: async () => false, synergy: async () => true },
+    sendUnavailable: async () => {
+      calls.push("reply");
+      return false;
+    },
+    pushUnavailable: async () => {
+      calls.push("push");
+      return true;
+    },
+  });
+  assert.equal(consumed, true);
+  assert.deepEqual(calls, ["reply", "push"]);
+});
+
+test("delivery honesty: reply+push ล้มทั้งคู่ → onDeliveryFailure (alert) และยัง terminal", async () => {
+  const calls = [];
+  const consumed = await runExactUtilityCommandTerminal({
+    text: "จัดชุด",
+    handlers: { referral: async () => true, synergy: async () => false },
+    sendUnavailable: async () => {
+      calls.push("reply");
+      return false;
+    },
+    pushUnavailable: async () => {
+      calls.push("push");
+      throw new Error("push quota");
+    },
+    onDeliveryFailure: async (kind) => {
+      calls.push(`alert:${kind}`);
+    },
+  });
+  assert.equal(consumed, true);
+  assert.deepEqual(calls, ["reply", "push", "alert:synergy"]);
+});
+
+test("delivery honesty: reply สำเร็จ → ไม่แตะ push/alert", async () => {
+  const calls = [];
+  await runExactUtilityCommandTerminal({
+    text: "ชวนเพื่อน",
+    handlers: { referral: async () => false, synergy: async () => true },
+    sendUnavailable: async () => {
+      calls.push("reply");
+      return true;
+    },
+    pushUnavailable: async () => {
+      calls.push("push");
+      return true;
+    },
+    onDeliveryFailure: async () => {
+      calls.push("alert");
+    },
+  });
+  assert.deepEqual(calls, ["reply"]);
 });
 
 test("ไม่ match: คืน false ไม่แตะ handler/unavailable (ปล่อยไหลตาม routing ปกติ)", async () => {

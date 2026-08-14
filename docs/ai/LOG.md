@@ -629,3 +629,9 @@
 - marker detector: เลิก regex วงเล็บกว้าง → metadata replyType=scan_result + INTERNAL_MARKER_TEXTS exact allowlist · เทสต์ล็อกทั้งข้ามจริง+ไม่ข้ามข้อความวงเล็บปกติ
 - tone guard: PRAISE_COMFORT_RE + evaluateToneGuard ใน personaRole.util → orchestrator retry ครั้งเดียวพร้อม directive · retry ยังหลุด = ส่งของเดิม + log TONE_PRESEND_STILL (ตัดสินใจ: โทนหลุดเบากว่าไม่ตอบ — แจ้ง Codex แล้ว)
 - เทสต์ใหม่ 10 (terminal contract 7 / marker 2 / tone 1) — baseline ผ่าน ไม่มี fail ใหม่ · ค้าง: integration test ระดับ webhook routing (pending-image+paywall/pending-verify/reg-incomplete) รอ DI/test-mode refactor รอบใหญ่ตามที่ตกลงกับ Codex
+
+## 2026-08-14 | Claude | ปิด 2 blockers Codex รอบ 2 (0d52467) + invariant tests (staging)
+- tone guard fail-closed: resolveToneGuardedText (pure, personaRole.util) — retry ผ่านทั้ง tone+money → ใช้ retry · ไม่ผ่าน → sanitizePraiseComfort ตัด/แทนเฉพาะวลีต้องห้าม (เดี๋ยวก็เจอ→ชวนสแกนเทียบ, ถือว่าดี→ตามระดับตัวเลข) ตรวจ tone+money ซ้ำ · ยังไม่ผ่าน/เหลือเศษ → NEUTRAL fallback — ไม่มีทาง original ที่ถูก block หลุด · log TONE_PRESEND_OUTCOME {retry_passed|sanitized|fallback}
+- delivery honesty: runExactUtilityCommandTerminal รับ pushUnavailable+onDeliveryFailure — sender คืน boolean ตามจริง (sent/suppressed/exactDuplicate นับว่าถึงมือ) · reply ล้ม→push fallback ครั้งเดียว→ล้มทั้งคู่ log EXACT_UTILITY_UNAVAILABLE_DELIVERY_FAILED + Telegram alert · ทุกกรณียัง terminal
+- invariant tests ใหม่ (lineWebhookRouting.invariant.test.js): reg gate ก่อน exact utility · exact utility ก่อน orchestrator/payment ตัวแรก · single owner (referral/synergy call site เดียว) · terminal block มี reply+push+alert ครบ
+- เทสต์แตะ 3 ไฟล์ 23/23 ผ่าน · baseline ไม่มี fail ใหม่ (970 pass)

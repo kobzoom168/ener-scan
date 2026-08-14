@@ -4280,8 +4280,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         synergy: () =>
           maybeHandleSynergyRequest({ client, userId, replyToken: event.replyToken, text }),
       },
-      sendUnavailable: (kind) =>
-        sendNonScanReply({
+      sendUnavailable: async (kind) => {
+        const r = await sendNonScanReply({
           client,
           userId,
           replyToken: event.replyToken,
@@ -4290,7 +4290,28 @@ async function handleTextMessage({ client, event, userId, session }) {
           text: buildUtilityUnavailableText(kind),
           alternateTexts: [],
           speakerRoleOverride: "admin",
-        }),
+        });
+        // dedupe/suppress = ลูกค้าเพิ่งได้ข้อความนี้ไปแล้ว ถือว่าถึงมือ ไม่ต้อง push ซ้ำ
+        return r?.sent === true || r?.suppressed === true || r?.exactDuplicate === true;
+      },
+      pushUnavailable: async (kind) => {
+        const r = await sendNonScanPushMessage({
+          client,
+          userId,
+          replyType: "utility_unavailable_push",
+          semanticKey: `utility_unavailable_push:${kind}`,
+          text: buildUtilityUnavailableText(kind),
+          alternateTexts: [],
+          speakerRoleOverride: "admin",
+        });
+        return r?.sent === true;
+      },
+      onDeliveryFailure: async (kind) => {
+        const { sendTelegramText } = await import("../services/telegramNotify.service.js");
+        await sendTelegramText(
+          `[EXACT_UTILITY] ส่งข้อความขัดข้องเมนู ${kind} ไม่ถึงลูกค้า (reply+push ล้มทั้งคู่) uid:${String(userId).slice(0, 10)}…`,
+        );
+      },
     });
     if (consumed) return;
   }

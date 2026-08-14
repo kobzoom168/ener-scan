@@ -115,3 +115,51 @@ export function evaluateToneGuard(text) {
   if (!m) return { ok: true };
   return { ok: false, reason: "praise_comfort", match: m[0] };
 }
+
+/**
+ * Deterministic sanitizer (Codex 14 ส.ค. รอบ 2): ตัด/แทนเฉพาะวลีต้องห้าม
+ * เก็บสาระที่เหลือไว้ — ใช้เมื่อ retry ยังหลุด ก่อนถอยไป neutral fallback
+ */
+const PRAISE_COMFORT_SANITIZE_RULES = [
+  // วลีมีบริบทตามหลัง (เดี๋ยวก็เจอชิ้นที่ใช่เอง ฯลฯ) → แทนด้วยขั้นถัดไปที่ทำได้จริง
+  [/เดี๋ยวก็เจอ[^\sครับค่ะนะ]{0,20}(?:เอง)?/g, "หากต้องการเทียบ ให้สแกนชิ้นอื่นเพิ่มเติม"],
+  [/ถือว่า(?:ดี|ใช้ได้)(?:มาก)?(?:แล้ว)?/g, "อยู่ตามระดับที่ตัวเลขระบุ"],
+  // วลีตัดทิ้งได้เลย (รวมคำลงท้ายที่เกาะมาด้วย กันเศษ "ครับ" ลอย)
+  [/(?:แบบนี้)?(?:ก็)?ใช้ได้ดีแล้ว(?:นะ)?(?:ครับ|ค่ะ)?/g, ""],
+  [/ไม่ต้องกังวล(?:ไป|นะ)?(?:ครับ|ค่ะ)?/g, ""],
+  [/สบายใจได้(?:เลย|นะ)?(?:ครับ|ค่ะ)?/g, ""],
+];
+
+/** @param {string} text */
+export function sanitizePraiseComfort(text) {
+  let t = String(text || "");
+  for (const [re, sub] of PRAISE_COMFORT_SANITIZE_RULES) t = t.replace(re, sub);
+  // เก็บกวาด: ช่องว่างซ้อน / ช่องว่างหน้าวรรคตอน / บรรทัดว่างเกิน
+  return t
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +([\n.!?])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Fail-closed tone resolution (Codex 14 ส.ค. รอบ 2 — ห้ามส่ง original ที่ถูก block):
+ * retry ผ่านทั้ง tone+money → ใช้ retry · ไม่งั้น sanitize original แล้วตรวจซ้ำ
+ * · ยังไม่ผ่าน → NEUTRAL_RECOVERY_FALLBACK — ไม่มีทางที่ข้อความมีคำต้องห้ามหลุดออกไป
+ * @param {{ original: string, retry: string | null, moneyCtx: { userMoneyIntent?: boolean, inPaymentState?: boolean } }} p
+ * @returns {{ text: string, outcome: "retry_passed" | "sanitized" | "fallback" }}
+ */
+export function resolveToneGuardedText({ original, retry, moneyCtx = {} }) {
+  if (retry && evaluateToneGuard(retry).ok && evaluateMoneyGuard(retry, moneyCtx).ok) {
+    return { text: retry, outcome: "retry_passed" };
+  }
+  const sanitized = sanitizePraiseComfort(original);
+  if (
+    sanitized.length >= 10 &&
+    evaluateToneGuard(sanitized).ok &&
+    evaluateMoneyGuard(sanitized, moneyCtx).ok
+  ) {
+    return { text: sanitized, outcome: "sanitized" };
+  }
+  return { text: NEUTRAL_RECOVERY_FALLBACK, outcome: "fallback" };
+}

@@ -123,3 +123,50 @@ test("evaluateToneGuard: จับคำชม/ปลอบต้องห้า
     true,
   );
 });
+
+test("tone fail-closed (Codex รอบ 2): output สุดท้ายไม่มีคำต้องห้ามเสมอ ไม่ว่ากรณีไหน", async () => {
+  const { resolveToneGuardedText, sanitizePraiseComfort, PRAISE_COMFORT_RE, NEUTRAL_RECOVERY_FALLBACK } =
+    await import("../src/core/conversation/personaRole.util.js");
+  const blocked =
+    "ครับ คะแนน 7.5 กับ 87% แบบนี้ก็ถือว่าใช้ได้ดีแล้วครับ ไม่ต้องกังวล";
+
+  // retry ผ่าน → ใช้ retry
+  const r1 = resolveToneGuardedText({
+    original: blocked,
+    retry: "คะแนน 7.5 อยู่ระดับกลางค่อนดีของเกณฑ์ครับ",
+    moneyCtx: {},
+  });
+  assert.equal(r1.outcome, "retry_passed");
+  assert.doesNotMatch(r1.text, PRAISE_COMFORT_RE);
+
+  // retry ยังหลุด → sanitizer ตัดเฉพาะวลีต้องห้าม เก็บสาระ (ตัวเลข) ไว้
+  const r2 = resolveToneGuardedText({
+    original: blocked,
+    retry: "สบายใจได้ครับ",
+    moneyCtx: {},
+  });
+  assert.equal(r2.outcome, "sanitized");
+  assert.doesNotMatch(r2.text, PRAISE_COMFORT_RE);
+  assert.match(r2.text, /7\.5/);
+
+  // เคสปลอบจริง 13 ส.ค. → sanitizer แทนด้วยขั้นถัดไป
+  const r3 = resolveToneGuardedText({
+    original: "ครับ หาคนละสายไปเรื่อย ๆ เดี๋ยวก็เจอชิ้นที่ใช่เอง",
+    retry: null,
+    moneyCtx: {},
+  });
+  assert.doesNotMatch(r3.text, PRAISE_COMFORT_RE);
+
+  // sanitize แล้วเหลือแต่เศษ (ข้อความเป็นคำต้องห้ามล้วน) → neutral fallback
+  const r4 = resolveToneGuardedText({
+    original: "ไม่ต้องกังวลครับ",
+    retry: null,
+    moneyCtx: {},
+  });
+  assert.equal(r4.outcome, "fallback");
+  assert.equal(r4.text, NEUTRAL_RECOVERY_FALLBACK);
+  assert.doesNotMatch(NEUTRAL_RECOVERY_FALLBACK, PRAISE_COMFORT_RE);
+
+  // sanitizer เดี่ยว: ผลลัพธ์สะอาดเสมอ
+  assert.doesNotMatch(sanitizePraiseComfort(blocked), PRAISE_COMFORT_RE);
+});

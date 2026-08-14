@@ -16,6 +16,7 @@ import {
   resolveSpeakerRole,
   evaluateMoneyGuard,
   evaluateToneGuard,
+  resolveToneGuardedText,
   USER_MONEY_INTENT_RE,
   NEUTRAL_RECOVERY_FALLBACK,
 } from "../personaRole.util.js";
@@ -254,9 +255,9 @@ export async function runGeminiFrontOrchestrator(ctx) {
         guardedConsult = NEUTRAL_RECOVERY_FALLBACK;
       }
     }
-    // pre-send tone guard (Codex 14 ส.ค.): คำชม/ปลอบต้องห้าม → retry ครั้งเดียว
-    // retry ยังหลุด = ส่งฉบับที่ไม่มีคำต้องห้ามถ้ามี ไม่งั้นส่งของเดิม + log ให้ monitor เห็น
-    // (ดีกว่า fallback กลาง ๆ ที่ทิ้งคำถามลูกค้า — โทนหลุดเบากว่าไม่ตอบ)
+    // pre-send tone guard (Codex 14 ส.ค. รอบ 2 — fail-closed): คำชม/ปลอบต้องห้าม
+    // → retry ครั้งเดียว → retry ยังหลุด = deterministic sanitizer ตัดเฉพาะวลีต้องห้าม
+    // → ยังไม่ผ่าน = neutral fallback — ห้ามส่ง original ที่ถูก block เด็ดขาด
     const tone1 = evaluateToneGuard(guardedConsult);
     if (!tone1.ok) {
       console.warn(
@@ -278,17 +279,20 @@ export async function runGeminiFrontOrchestrator(ctx) {
       const toneRetryGuarded = toneRetry
         ? await guardStaleNoImageClaim(guardEntitlementClaims(toneRetry.slice(0, 1800), via))
         : null;
-      if (
-        toneRetryGuarded &&
-        evaluateToneGuard(toneRetryGuarded).ok &&
-        evaluateMoneyGuard(toneRetryGuarded, guardCtx).ok
-      ) {
-        guardedConsult = toneRetryGuarded;
-      } else {
-        console.warn(
-          JSON.stringify({ event: "TONE_PRESEND_STILL", via, match: tone1.match }),
-        );
-      }
+      const toneRes = resolveToneGuardedText({
+        original: guardedConsult,
+        retry: toneRetryGuarded,
+        moneyCtx: guardCtx,
+      });
+      guardedConsult = toneRes.text;
+      console.warn(
+        JSON.stringify({
+          event: "TONE_PRESEND_OUTCOME",
+          via,
+          match: tone1.match,
+          outcome: toneRes.outcome,
+        }),
+      );
     }
     // role router (Codex C3): resolve เสียงจริงก่อนส่ง — history/monitor ได้ tag ตรง
     const speaker = resolveSpeakerRole(guardedConsult);
