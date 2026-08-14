@@ -11,3 +11,11 @@ CREATE TABLE IF NOT EXISTS user_page_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_user_page_tokens_uid_purpose
   ON user_page_tokens (line_user_id, purpose);
+
+-- app คุยผ่าน PostgREST ด้วย role web_anon (บาง env มี service_role ด้วย) —
+-- ตารางใหม่ต้อง grant เอง ไม่งั้น 42501 permission denied (เจอจริงบน staging 14 ส.ค.)
+GRANT SELECT, INSERT, UPDATE ON user_page_tokens TO web_anon;
+GRANT USAGE, SELECT ON SEQUENCE user_page_tokens_id_seq TO web_anon;
+GRANT SELECT, INSERT, UPDATE ON user_page_tokens TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE user_page_tokens_id_seq TO service_role;
+NOTIFY pgrst, 'reload schema';
