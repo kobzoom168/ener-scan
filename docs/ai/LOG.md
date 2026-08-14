@@ -610,3 +610,9 @@
 - smoke call ผ่าน: LLM_USAGE โผล่พร้อม callSite=smoke.telemetryCheck + token breakdown ครบ ตอบ "ok" — ระบบ attribution ทำงานจริงบน pro
 - เริ่มนับหน้าต่าง 2-3 วันจาก tag แรกของลูกค้าจริง (Codex: นับจาก tag แรกในบิล ไม่ใช่เวลา deploy) — export CSV รอบหน้าจะมีคอลัมน์ user เต็ม → วิเคราะห์ cost ต่อ callSite + cache break-even + shadow agreement แล้วค่อยเคาะมาตรการจริง
 - ระหว่างรอ: เดินงาน rich menu 6 ช่อง (วาดภาพให้กบดูก่อน)
+
+## 2026-08-14 | Claude | Rich Menu 6 ช่อง ดำ-ทอง ขึ้น staging (กบเคาะธีมดำทอง)
+- วาด 2 แบบ (เขียวทอง → กบขอดำทอง) เรนเดอร์ด้วย @resvg/resvg-js + Kanit ใน repo · generator เก็บที่ scripts/richmenu/richmenu-blackgold.mjs (+PNG)
+- สร้าง rich menu บน OA staging: richmenu-5fc7688f183c3575738d328b2354a7e8 ตั้งเป็น default แล้ว (ลบอันเก่าก่อนกันซ้อน)
+- ผูกปุ่มแบบ zero-code: ส่งรูป→LINE cameraRoll/single · เทียบพระในคลัง→"จัดชุด" (Synergy) · ดูผลเก่า→"ประวัติ" · ค่าครูและสิทธิ์→"ค่าครูมีแพ็กไหนบ้าง" (promo inquiry) · ถามแอดมิน→"สอบถาม" (สมองแชท) · ชวนเพื่อน→"ชวนเพื่อน" (referral card)
+- ค้าง: กบทดสอบ 6 ปุ่มบน staging → ปรับตามผลทดสอบ (จุดเสี่ยง: "สอบถาม" ผ่าน LLM ไม่ deterministic, "ค่าครูและสิทธิ์" ยังไม่โชว์สิทธิ์คงเหลือตรง ๆ) → กบสั่งชัดค่อยขึ้น pro
