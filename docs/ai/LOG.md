@@ -729,3 +729,9 @@
 - birthdate_missing recovery: CTA เปลี่ยนเป็น route ที่รับจริง — พิมพ์ "เปลี่ยนวันเกิด" (birthdateChangeFlow รับจากทุก state — ยืนยันจาก call sites 4 จุดใน webhook) หรือเมนู เปิดแอป Ener · เทสต์ล็อก CTA + ห้าม "พิมพ์วันเกิดมา" เปล่า ๆ
 - unknown status: ตัดสัญญา follow-up ("จะแจ้งในแชท") ที่ไม่มี owner → "ยังตรวจไม่ครบ ยังไม่ต้องส่งซ้ำ ลองเช็กอีกครั้งในอีกสักครู่" ตามที่ Codex เสนอ · เทสต์ห้าม match วลีสัญญาอนาคต
 - baseline 1021 ผ่าน ไม่มี fail ใหม่ — Codex ไฟเขียว deploy รวม เหลือ smoke 4 ข้อตอนขึ้น pro
+
+## 2026-08-17 | Claude | Deploy รวมขึ้น Pro (Codex ไฟเขียว f4f217d) + smoke 8 ข้อผ่าน
+- sync a7ad76d → deploy pro healthy · env ใหม่: OBJECT_CHECK_LOW_SHADOW_ENABLED=true RATE=0.1 DAILY_MAX=300 + LLM_CONSULT_MODEL=deepseek/deepseek-v4-flash (model-only — maxTokens/reasoning เดิมตามที่แจ้ง Codex) · สำรอง .env.bak-20260817
+- smoke: ①constraint 053 มี scan_failure_notify + enqueue จริง → OUTBOUND_SEND_SUCCESS ถึง LINE แอดมิน ②owner-map ครอบด้วยเทสต์ + เฝ้า log ③result-status ผูก job (เคสจริง delivery_queued → claims:false ถูกกิ่ง) ④counter unavailable → lowCalls:0 ⑤env ตรง ⑥full objectCheck path ไม่ถูกแตะ (log-only) ⑦MODEL_SWITCHED ⑧health 200 / log สะอาด
+- ค้นพบระหว่าง smoke (ไม่ใช่ blocker — จดเป็นงานถัดไป): scan_jobs หลายงานค้างสถานะ delivery_queued ทั้งที่ outbound ส่งแล้ว (72 งานใน 48 ชม.) — delivery worker ไม่ได้อัป status เป็น delivered → result-status จะตอบ "กำลังส่ง" กับงานเก่า (ปลอดภัยแต่ไม่แม่น) ควรให้ markSent อัป scan_jobs.status ด้วย
+- เฝ้าต่อ: OBJECT_CHECK_LOW_SHADOW agreement 2-3 วัน · OBJECT_SAME_IDENTITY_VERIFIER_ACCEPTED rank/counterfactual 7 วัน · บิล OpenRouter รอบหน้า (consult ควรไม่มี opus แล้ว เหลือ voiceScript)

@@ -42,3 +42,7 @@
 - 16 ก.ค. 2026 — สมองแชท 2 ชั้น (Opus/DeepSeek) + prompt cache ลดค่า OpenRouter · การ์ดลงทะเบียน Flex → LIVE pro
 - 15-16 ก.ค. 2026 — เคสคุณชิต seed collision: extractor v2 + dHash ใน seed + ชดเชยลูกค้า — ปิดเคส
 - 15 ก.ค. 2026 — เซ็นเซอร์คลังอันดับ 1-2 เฉพาะสมาชิกรายเดือน
+
+- [ ] delivery worker: อัป scan_jobs.status → delivered หลัง outbound ส่งสำเร็จ (พบ 17 ส.ค.: 72 งานค้าง delivery_queued — result-status ตอบ "กำลังส่ง" กับงานที่ส่งไปแล้ว)
+- [ ] A/B harness: deepScan.draft→mini (≥50 รูป) · forensic screen_check shadow (≥100 oversample เสี่ยง) · voiceScript blind 20-30 ชิ้น — เกณฑ์ตาม Codex 17 ส.ค.
+- [ ] verifier: หลังข้อมูล rank 7 วัน → เสนอ cap/threshold ทีละตัว (สงวน recent quota ≥1)
