@@ -8114,6 +8114,23 @@ async function handleTextMessage({ client, event, userId, session }) {
   if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
   // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
   if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
+
+  // ข้อความปิดบท "ขอบคุณ/ครับ/โชคดี/สาธุ" ในเลน idle = เงียบ (กบ 18 ส.ค.:
+  // ไม่ต้องตอบทุก chat — เงียบจนกว่าจะมีเรื่องใหม่) · state flows จบไปก่อนถึงบรรทัดนี้แล้ว
+  try {
+    const { isClosingPleasantry } = await import(
+      "../core/conversation/closingPleasantry.util.js"
+    );
+    if (isClosingPleasantry(text)) {
+      console.log(
+        JSON.stringify({
+          event: "CHAT_CLOSING_PLEASANTRY_SILENT",
+          uidPrefix: String(userId).slice(0, 8),
+        }),
+      );
+      return;
+    }
+  } catch { /* util พัง = ตอบตามปกติ */ }
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;
     try {

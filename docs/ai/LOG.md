@@ -740,3 +740,9 @@
 - YT owner push ตัดอีโมจิ (🎬/🎉) — ส่วน "คำโปรย 😮" ที่เห็นใต้ลิงก์คือ link preview ของ YouTube (description ของคลิป) ไม่ใช่ข้อความแชท · แชทสะอาดตามกติกาแล้ว
 - สติกเกอร์ ≠ เจตนาเรื่องเงิน: shouldRemindSlipOnSticker (pure) — ทวงสลิปเฉพาะรายการชำระอายุ ≤60 นาที · เคส Marut (สร้างใน LIFF 17:27 ส่งสติกเกอร์ 19:07) จะได้คำตอบสติกเกอร์ปกติแทน + log STICKER_SLIP_REMIND_SKIPPED_STALE
 - เทสต์ใหม่ stickerSlipRemind (เข้า npm test แล้ว) · baseline 1022 ผ่าน
+
+## 2026-08-18 | Claude | เงียบข้อความปิดบท + ปิด 2 gaps sticker ของ Codex (staging)
+- ข้อความปิดบท (กบ 18 ส.ค.): isClosingPleasantry — "ขอบคุณ/ครับ/โอเค/โชคดี/สาธุ/🙏" ในเลน idle = เงียบ (log CHAT_CLOSING_PLEASANTRY_SILENT) จนกว่าจะมีเรื่องใหม่ · แทรกหลัง state handlers ทั้งหมด — ยืนยันวันเกิด/paywall ack ไม่โดน · เทสต์คำจริง 19 แบบ + คำถามพ่วง/เรื่องเงินห้ามเงียบ
+- โทน consult แข็งขึ้น: ครับน้อยสุด (ท้ายคำตอบจุดเดียว/ไม่ใส่) + ตอบสั้นถามคำตอบคำ + กติกาคำปิดบท (prompt-only รอบแยกตามแนว Codex)
+- Codex gaps: shouldRemindSlipOnSticker กัน timestamp อนาคต (ageMs>=0) + boundary tests (0/60พอดี/60+1ms/อนาคต) · handleStickerLikeInput รับ deps DI — behavior tests 4 กรณี (fresh→ทวง 1 ครั้ง / stale→idle ไม่มีคำสลิป / DB throw→idle / stale+pending_verify→pending-verify ตามจริง) ทุกกรณี assert ไม่ double reply
+- text-recency (resolveAwaitingPaymentConversationMode payment_active|recent_soft_remind|release_to_normal_chat) → BACKLOG รอบถัดไปตามที่ Codex เคาะ · baseline 1029 ผ่าน

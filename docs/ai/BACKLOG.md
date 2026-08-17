@@ -46,3 +46,4 @@
 - [ ] delivery worker: อัป scan_jobs.status → delivered หลัง outbound ส่งสำเร็จ (พบ 17 ส.ค.: 72 งานค้าง delivery_queued — result-status ตอบ "กำลังส่ง" กับงานที่ส่งไปแล้ว)
 - [ ] A/B harness: deepScan.draft→mini (≥50 รูป) · forensic screen_check shadow (≥100 oversample เสี่ยง) · voiceScript blind 20-30 ชิ้น — เกณฑ์ตาม Codex 17 ส.ค.
 - [ ] verifier: หลังข้อมูล rank 7 วัน → เสนอ cap/threshold ทีละตัว (สงวน recent quota ≥1)
+- [ ] text awaiting_slip recency: helper กลาง resolveAwaitingPaymentConversationMode (SSOT isPaymentCommand/isPromoInquiryText + slip/status intents · >60 นาที + ไม่ใช่เรื่องเงิน = release สู่แชทปกติ + telemetry STALE_PAYMENT_TEXT_RELEASED) — Codex เคาะแนวแล้ว 18 ส.ค.
