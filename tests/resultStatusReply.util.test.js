@@ -29,6 +29,8 @@ test("ทุกสถานะได้คำตอบถูกแขนง — 
     // Codex รอบ 3: unknown อาจเป็นสถานะใหม่ที่ยังทำงานอยู่ — ห้ามชวนส่งซ้ำ
     assert.match(r.reply, /ยังไม่ต้องส่งรูปซ้ำ/);
     assert.doesNotMatch(r.reply, /ส่งรูปมาใหม่/);
+    // Codex รอบ 4: ห้ามสัญญา follow-up ที่ไม่มี owner ("จะแจ้ง/เดี๋ยวแจ้ง/จะบอก")
+    assert.doesNotMatch(r.reply, /จะแจ้ง|เดี๋ยว(ผม)?แจ้ง|จะบอก|จะตามให้/);
   }
   // completed ≠ delivered (dedup path ตั้ง completed ก่อน outbound ส่งจริง)
   const comp = resolveResultStatusReply({ status: "completed", jobReportToken: "rpt_x" });

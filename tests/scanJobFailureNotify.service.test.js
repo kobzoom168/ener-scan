@@ -150,8 +150,14 @@ test("recovery: birthdate_missing ได้ข้อความเฉพาะ�
     { insertOutboundMessage: async (row) => { calls += 1; lastRow = row; } },
   );
   assert.equal(calls, 1);
-  assert.match(String(lastRow?.payload_json?.text || ""), /วันเกิด/);
-  assert.doesNotMatch(String(lastRow?.payload_json?.text || ""), /รบกวนส่งใหม่อีกครั้ง/);
+  const txt = String(lastRow?.payload_json?.text || "");
+  assert.match(txt, /วันเกิด/);
+  assert.doesNotMatch(txt, /รบกวนส่งใหม่อีกครั้ง/);
+  // Codex รอบ 4: CTA ต้องตรง route ที่รับข้อมูลจริง — "เปลี่ยนวันเกิด" (birthdateChangeFlow)
+  // หรือเมนู เปิดแอป Ener · ห้ามบอก "พิมพ์วันเกิด" เปล่า ๆ (ระบบไม่รับนอก waiting_birthdate)
+  assert.match(txt, /เปลี่ยนวันเกิด/);
+  assert.match(txt, /เปิดแอป Ener/);
+  assert.doesNotMatch(txt, /พิมพ์วันเกิดมา/);
 });
 
 test("scan_results_v2_insert_failed อยู่ใน generic allowlist (Codex รอบ 3: เดิมตกหล่น)", async () => {

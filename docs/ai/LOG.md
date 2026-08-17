@@ -724,3 +724,8 @@
 - failure notify owner map ครบทุก code: GENERIC 9 (เพิ่ม scan_results_v2_insert_failed ที่ตกหล่น) · TAILORED_BY_FLOW 10 · RECOVERY birthdate_missing (ข้อความชวนพิมพ์วันเกิด ไม่ใช่ generic ส่งรูปใหม่) · code ใหม่ไม่มีเจ้าของ = log SCAN_FAILURE_NOTIFY_NO_OWNER ไม่ส่งมั่ว · เทสต์ scan source processScanJob — code ใหม่ที่ไม่จัดกลุ่มจะทำเทสต์แดงอัตโนมัติ
 - unknown status hardening: ตอบ "กำลังตรวจสถานะ ยังไม่ต้องส่งรูปซ้ำ" (กันสแกนซ้ำถ้าเป็นสถานะใหม่ที่ยังทำงาน) + warn RESULT_STATUS_UNKNOWN_STATUS ใน webhook
 - baseline 1021 ผ่าน ไม่มี fail ใหม่ (known-failing เหลือ 18) · พร้อม pro: โค้ด + migration 053 + env (shadow 10%/300 cap + consult model-only) + smoke 4 ข้อของ Codex
+
+## 2026-08-17 | Claude | ปิด 2 copy/flow gaps สุดท้าย (Codex รอบ 4) — ไฟเขียว deploy รวม
+- birthdate_missing recovery: CTA เปลี่ยนเป็น route ที่รับจริง — พิมพ์ "เปลี่ยนวันเกิด" (birthdateChangeFlow รับจากทุก state — ยืนยันจาก call sites 4 จุดใน webhook) หรือเมนู เปิดแอป Ener · เทสต์ล็อก CTA + ห้าม "พิมพ์วันเกิดมา" เปล่า ๆ
+- unknown status: ตัดสัญญา follow-up ("จะแจ้งในแชท") ที่ไม่มี owner → "ยังตรวจไม่ครบ ยังไม่ต้องส่งซ้ำ ลองเช็กอีกครั้งในอีกสักครู่" ตามที่ Codex เสนอ · เทสต์ห้าม match วลีสัญญาอนาคต
+- baseline 1021 ผ่าน ไม่มี fail ใหม่ — Codex ไฟเขียว deploy รวม เหลือ smoke 4 ข้อตอนขึ้น pro
