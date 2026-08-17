@@ -222,3 +222,32 @@ Opus ยังเห็นรูปแบบเดิม: 3 Ener Scan calls ข�
 5. ทดลอง stable/deep draft บน staging/golden
 
 เป้า -35% ยังเป็นเป้าทดลอง ไม่ใช่คำรับรอง จนกว่าจะวัด USD ต่อ successful scan หลัง rollout แต่ละข้อแยกกัน
+
+## CSV ล่าสุด — `openrouter_activity_2026-08-17.csv`
+
+ไฟล์ `/root/Downloads/openrouter_activity_2026-08-17.csv` มี 6,979 rows ช่วง UTC 11–17 ส.ค. 2026 ไม่ใช่เฉพาะ 3 วัน: cost รวม $14.354819, prompt 16.160M, completion 546k, cached 2.354M
+
+ก่อน attribution (11–13 ส.ค.) `user` ว่างทั้งหมด จึงห้ามนำทั้งไฟล์มาคิด call-site share ตรง ๆ หลัง 14 ส.ค. มี tagged 3,117 calls (ตัด smoke) cost $6.676904 และ blank อีก $0.536379; blank หลังวัน rollout ส่วนใหญ่อยู่วันที่ 14 ส่วนวันที่ 15–16 เหลือราว 3% ของ daily cost
+
+| Tagged call site ตั้งแต่ 14 ส.ค. | Calls | Cost | Share ของ tagged cost |
+|---|---:|---:|---:|
+| objectCheck.strict | 351 | $1.265446 | 18.95% |
+| deepScan.draft | 141 | $1.112534 | 16.66% |
+| objectSameIdentityVerifier | 787 | $0.984909 | 14.75% |
+| imageForensic.screen_check | 166 | $0.749056 | 11.22% |
+| consult | 68 | $0.688410 | 10.31% |
+| stableFeatureExtract | 293 | $0.463918 | 6.95% |
+| objectCheck.crystal_family | 144 | $0.435144 | 6.52% |
+| voiceScript | 38 | $0.277990 | 4.16% |
+| objectEmbedding.descriptor | 318 | $0.270991 | 4.06% |
+| deepScan | 281 | $0.222988 | 3.34% |
+
+ข้อแก้ไขจากสรุปก่อนหน้า:
+
+- CSV นี้ไม่รองรับคำกล่าวว่า verifier = 29% / 1,353 calls; ในไฟล์พบ 787 calls / 14.75% ของ tagged cost ต้องระบุ query window/denominator และ reconcile กับ application logs ก่อนใช้ตัวเลข 29%
+- หากลด verifier calls 5→2 แบบเชิงเส้น เพดานประหยัดจาก CSV นี้คือ ~8.85% ของ tagged bill (60% × 14.75%) ไม่ใช่ ~20%; actual ต่ำ/สูงกว่านี้ขึ้นกับ calls ต่อ scan และ early exit
+- consult 68 calls: DeepSeek 64 calls cost $0.085651; Opus เพียง 4 calls cost $0.602759 หรือ 87.6% ของ consult cost ดังนั้นย้าย paid consult ออกจาก Opus ลดก้อนนี้ได้ชัด แต่ historical saving ในหน้าต่างนี้ประมาณ $0.60 ไม่ใช่ 7% ของ bill ทุกวัน
+- voiceScript 38 Opus calls cost $0.277990 หรือ 4.16% ของ tagged cost ไม่ใช่ 8% ใน window นี้; ยังควร ear-test ก่อนสลับ
+- `stableFeatureExtract` 293 calls / $0.463918 และ `deepScan.draft` 141 calls / $1.112534; draft มีผลตอบแทนสูงกว่า stable แต่เสี่ยงคุณภาพสูง จึงต้อง golden/shadow ทั้งคู่
+
+ก่อน Claude เปลี่ยน env ให้สร้างรายงาน reproducible จาก CSV/log โดยล็อก: timezone, from/to, tagged-only หรือ all-cost, smoke exclusion, denominator และ mapping callSite→successful scan เพื่อป้องกันเปอร์เซ็นต์คนละฐาน
