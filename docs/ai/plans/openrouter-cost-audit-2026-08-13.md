@@ -281,3 +281,23 @@ Opus ยังเห็นรูปแบบเดิม: 3 Ener Scan calls ข�
 - verifier: เก็บ accepted rank/source/sim อย่างน้อย 7 วัน; rollout cap กับ threshold คนละขั้น พร้อม counterfactual miss = 0 ใน observed accepted hits และ recent reserve อย่างน้อย 1
 
 internal chatQuality/captions รวมเพียง 0.48% ในช่วงนี้ ไม่ใช่ 3% และไม่ใช่ความเสี่ยงศูนย์; เป็นงานท้ายคิวหลังตรวจว่าแต่ละ call site ใช้โมเดลถูกอยู่แล้ว
+
+## Pre-Pro review — commit `2e2fb33` + incident bundle `16306f3` (18 ส.ค.)
+
+สถานะ: **ยังไม่อนุมัติ deploy รวม** จนปิด blockers ต่อไปนี้
+
+1. `OBJECT_CHECK_LOW_SHADOW_DAILY_MAX` ยังไม่ใช่ hard ceiling: Redis timeout 400ms/error แล้วโค้ด fail-open ให้ยิง shadow ต่อ งานนี้ optional จึงต้อง fail-closed (`counter_unavailable` → skip shadow) เพื่อคุมเงินจริงและไม่กระทบ main decision
+2. `dailyMax` ต้อง parse/clamp ชัดเจน; counter นับ sampled attempts ก่อน create เป็น conservative budgetได้ แต่ชื่อควรสื่อว่า call ceiling ไม่ใช่ dollar ceiling และใช้ UTC day
+3. verifier telemetry rank/source/raw similarity ใช้ได้ แต่ `wouldMissAtThreshold070` ไม่ตรง threshold ที่กำลังพิจารณาจากช่วง 0.78–0.81; raw similarity เพียงพอสำหรับ offline thresholds หรือ log หลาย proposed thresholds โดยยังไม่แตะ policy
+4. paid consult deploy รอบนี้เป็น model-only จริง: env เปลี่ยน model แต่ paid branch ยัง 1536 tokens, reasoning เปิด และไม่มี short directive — ต้องรายงานตามจริง ไม่อ้างว่าปิด cost policy ครบ
+
+Blockers ใน incident bundle ที่รวม deploy:
+
+5. เปิด constraint/delivery ของ `scan_failure_notify` จะทำให้ generic failure ถูก enqueue จาก `failJob()` พร้อมข้อความเฉพาะทางในหลายเหตุผล เพราะ skip-list ยังขาด `auth_challenge_no_thumb`, `auth_challenge_failed`, `image_authenticity_suspect`, `auth_challenge_issued`, `ritual_object_not_readable`; ควรใช้ allowlist เฉพาะ unexpected/infrastructure failures แทน skip-list เพื่อกันเหตุผลใหม่ส่งซ้ำโดย default
+6. result-status handler ถือทุกสถานะนอก queued/processing/failed/delivery_queued เป็นผลออกแล้ว ทำให้ `cancelled` ถูกตอบผิด ต้อง exhaustive switch และ unknown/cancelled ห้าม claim success
+7. ลิงก์รายงานใช้ latest `scan_results_v2` ของ user ไม่ได้ bind กับ job ล่าสุด อาจส่งรายงานเก่าเมื่อ job ล่าสุดไม่มีผล ต้อง select job id/result_id และ query result ด้วย `scan_job_id`/`result_id` เดียวกัน
+8. copy queued/processing ว่า “ใกล้เสร็จ” และ delivery queued “ไม่เกิน 1 นาที” เป็น time promise ที่ระบบรับรองไม่ได้ ควรบอกสถานะตรง ๆ โดยไม่กำหนดเวลา
+
+หลังแก้ต้องมี tests: shadow counter timeout/error = no create; generic failureไม่ซ้ำทุก tailored reason; cancelled/unknown status; latest failed/cancelled job + old report ห้ามคืน old link; delivered job คืนเฉพาะ token ของ job นั้น
+
+Targeted verification ของ Codex: 33 tests ใน `objectCheckLowShadow`, `scanJobFailureNotify`, `exactUtilityCommand`, `personaRole` ได้ 32 pass / 1 fail — `scanJobFailureNotify.service.test` ยัง expect คำว่า `กรุณาส่งรูปใหม่` แต่ runtime copy เป็น `รบกวนส่งใหม่อีกครั้ง`; test นี้อยู่ใน `npm test` จึงคำกล่าว `baseline 1012 ไม่มี fail ใหม่` ต้องตรวจใหม่ด้วย baseline-check จริง ห้าม deploy ขณะ suite contract ยังแดง
