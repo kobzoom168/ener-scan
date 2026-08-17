@@ -135,3 +135,49 @@ test("daily ceiling (Codex 17 ส.ค.): เกินเพดานวัน = 
   assert.equal(created, 0);
   delete process.env.OBJECT_CHECK_LOW_SHADOW_DAILY_MAX;
 });
+
+test("fail-closed (Codex รอบ 2): counter ช้า/พัง = ไม่ยิง shadow · main ไม่กระทบ", async () => {
+  process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED = "true";
+  let created = 0;
+  // counter ค้าง (ช้ากว่า 400ms) → counter_unavailable และ createFn ห้ามถูกเรียก
+  const hang = await runObjectCheckLowShadow({
+    dailyCounter: () => new Promise(() => {}),
+    passType: "strict",
+    instructionText: "x",
+    imageBase64: "aGk=",
+    mainPromise: Promise.resolve({ output_text: "ok" }),
+    createFn: async () => { created += 1; return { output_text: "ok" }; },
+    rand: 0,
+    timeoutMs: 500,
+  });
+  assert.equal(hang, "counter_unavailable");
+  assert.equal(created, 0);
+  // counter โยน error → ไม่ยิง shadow
+  const thrown = await runObjectCheckLowShadow({
+    dailyCounter: async () => { throw new Error("redis down"); },
+    passType: "strict",
+    instructionText: "x",
+    imageBase64: "aGk=",
+    mainPromise: Promise.resolve({ output_text: "ok" }),
+    createFn: async () => { created += 1; return { output_text: "ok" }; },
+    rand: 0,
+    timeoutMs: 500,
+  });
+  assert.equal(thrown, "counter_unavailable");
+  assert.equal(created, 0);
+  // main promise reject ระหว่าง counter ล่ม → ไม่มี unhandled และผล main ไม่ถูกแตะ
+  const mainRejected = Promise.reject(new Error("main fail"));
+  mainRejected.catch(() => {});
+  const r3 = await runObjectCheckLowShadow({
+    dailyCounter: async () => { throw new Error("redis down"); },
+    passType: "strict",
+    instructionText: "x",
+    imageBase64: "aGk=",
+    mainPromise: mainRejected,
+    createFn: async () => { created += 1; return { output_text: "ok" }; },
+    rand: 0,
+    timeoutMs: 500,
+  });
+  assert.equal(r3, "counter_unavailable");
+  assert.equal(created, 0);
+});

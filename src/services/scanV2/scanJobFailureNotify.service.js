@@ -5,12 +5,21 @@ const SCAN_FAILURE_TEXT =
   "รูปนี้อ่านไม่สำเร็จครับ รบกวนส่งใหม่อีกครั้ง " +
   "ถ้ายังไม่ผ่านลองถ่ายมุมที่เห็นตัววัตถุชัดขึ้นครับ";
 
-/** Reasons where user already gets a tailored outbound (or failJob runs before that enqueue). */
-const SKIP_REASONS = [
-  "object_validation_failed",
-  "supported_lane_unresolved",
-  "unsupported_lane",
-];
+/**
+ * Allowlist (Codex 17 ส.ค. รอบ 2): ส่ง generic notify เฉพาะ failure เชิงระบบ
+ * ที่ไม่มีข้อความเฉพาะทางของมันเอง — เหตุผลใหม่ที่เพิ่มภายหลัง default = ไม่ส่ง
+ * (เดิมเป็น skip-list ทำให้เหตุผลที่มีข้อความเฉพาะทางอยู่แล้ว เช่น auth challenge / ritual_object_not_readable โดนส่งซ้ำ 2 ข้อความ)
+ */
+const GENERIC_NOTIFY_REASONS = new Set([
+  "upload_missing",
+  "storage_read_failed",
+  "deep_scan_failed",
+  "scan_request_failed",
+  "result_insert_failed",
+  "scan_result_legacy_failed",
+  "publication_id_missing_after_upsert",
+  "outbound_enqueue_failed",
+]);
 
 /**
  * Push LINE text แจ้ง user เมื่อ scan job ล้มเหลว
@@ -26,7 +35,7 @@ export async function notifyUserScanJobFailed(
   const uid = String(lineUserId || "").trim();
   if (!uid) return;
 
-  if (SKIP_REASONS.includes(String(reason || "").trim())) return;
+  if (!GENERIC_NOTIFY_REASONS.has(String(reason || "").trim())) return;
 
   try {
     await insert({

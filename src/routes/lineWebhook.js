@@ -4066,7 +4066,7 @@ async function maybeHandleResultStatusQuery({ client, event, userId, text }) {
   try {
     const { data: job } = await supabase
       .from("scan_jobs")
-      .select("status,error_code,created_at")
+      .select("id,status,error_code,created_at")
       .eq("line_user_id", userId)
       .gte("created_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString())
       .order("created_at", { ascending: false })
@@ -4074,28 +4074,24 @@ async function maybeHandleResultStatusQuery({ client, event, userId, text }) {
       .maybeSingle();
     if (!job) return false; // ไม่มีงานใน 24 ชม. — ปล่อยเข้า flow ปกติ
     const st = String(job.status || "");
-    let reply = null;
-    if (st === "queued" || st === "processing" || st === "claimed") {
-      reply = "อาจารย์กำลังอ่านอยู่ครับ ใกล้เสร็จแล้ว เดี๋ยวผลเด้งเข้าแชทนี้เลยครับ";
-    } else if (st === "failed") {
-      reply =
-        "รอบที่แล้วระบบอ่านสะดุดครับ ขออภัยด้วย\n\nรบกวนส่งรูปเดิมมาใหม่อีกครั้ง เดี๋ยวผมส่งให้อาจารย์ดูทันทีครับ";
-    } else if (st === "delivery_queued") {
-      reply = "ผลเสร็จแล้วครับ กำลังส่งเข้าแชทนี้ รอไม่เกิน 1 นาทีครับ";
-    } else {
-      // delivered/completed → ส่งลิงก์รายงานจริงล่าสุด (ห้ามให้ LLM แต่งลิงก์)
+    // Codex รอบ 2: report ต้องผูกกับ job นี้เท่านั้น — latest ของ user อาจเป็นรายงานเก่า
+    let jobReportToken = null;
+    if (st === "delivered" || st === "completed") {
       const { data: sr } = await supabase
         .from("scan_results_v2")
         .select("html_public_token")
-        .eq("line_user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(1)
+        .eq("scan_job_id", job.id)
         .maybeSingle();
-      const base = String(env.APP_BASE_URL || "").replace(/\/+$/, "");
-      reply = sr?.html_public_token
-        ? `ผลออกแล้วครับ เปิดดูรายงานเต็มได้ที่นี่เลย\n${base}/r/${sr.html_public_token}`
-        : "ผลส่งไปแล้วครับ เลื่อนดูการ์ดผลด้านบนได้เลย หรือกดเมนู ดูผลเก่า ก็ได้ครับ";
+      jobReportToken = sr?.html_public_token || null;
     }
+    const { resolveResultStatusReply } = await import(
+      "../services/scanV2/resultStatusReply.util.js"
+    );
+    const { reply } = resolveResultStatusReply({
+      status: st,
+      jobReportToken,
+      baseUrl: env.APP_BASE_URL,
+    });
     console.log(
       JSON.stringify({ event: "RESULT_STATUS_QUERY_ANSWERED", uidPrefix: String(userId).slice(0, 8), jobStatus: st }),
     );

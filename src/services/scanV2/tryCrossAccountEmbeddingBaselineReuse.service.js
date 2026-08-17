@@ -225,6 +225,7 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
               similarity: Number(cand.similarity).toFixed(4),
               wouldMissAtTop2: candidateRank > 2,
               wouldMissAtThreshold070: Number(cand.similarity) < 0.7,
+              wouldMissAtThreshold078: Number(cand.similarity) < 0.78,
               timestamp: scanV2TraceTs(),
             }),
           );

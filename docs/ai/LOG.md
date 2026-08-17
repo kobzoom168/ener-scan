@@ -711,3 +711,10 @@
 - untagged: objectInfoGate parser → tag objectInfoParse (ปิด nonzero rows) · เหลือ 3 calls gemini-3.1-lite ($0.002/2วัน) ไล่รอบหน้า
 - บั๊กที่เจอระหว่างทำ: daily-cap แตะ redis ใน test env → ioredis open handle เทสต์ค้างไม่จบ — แก้ DI + Promise.race 400ms + เทสต์ daily_capped ใหม่ · baseline 1012 ผ่าน
 - consult paid→โมเดลถูก = env ตอน deploy pro · A/B harness (deepScan.draft/forensic/voice) คิวถัดไป
+
+## 2026-08-17 | Claude | ปิด 4 blockers Codex ก่อนขึ้น pro (staging)
+- shadow ceiling fail-closed: counter ล่ม/ช้า(>400ms)/โยน error → "counter_unavailable" ไม่ยิง low model เด็ดขาด · เกินเพดาน → "daily_capped" · DAILY_MAX clamp 0-5000 ระบุชัดเป็น call ceiling ต่อวัน UTC · full model ไม่กระทบ + เทสต์ครบ 3 กิ่ง (timeout/throw/cap) + main-unaffected
+- scan_failure_notify: skip-list → allowlist infra 8 ตัว (upload_missing/storage_read/deep_scan/scan_request/result_insert/legacy/publication_id/outbound_enqueue) — tailored reasons + เหตุผลใหม่ default ไม่ส่ง generic · เทสต์วนทุก tailored reason = 0 ข้อความ + infra = 1 ข้อความ
+- result-status: แยก pure resolveResultStatusReply — exhaustive ทุกสถานะ (queued/processing/claimed, delivery_queued, delivered/completed, failed, cancelled, unknown ไม่ claim ผลออก) · delivered ผูก report ด้วย scan_job_id ของ job เท่านั้น (กันลิงก์รายงานเก่า) · ตัดคำสัญญาเวลาทุกแขนง + เทสต์ล็อก
+- test contract: แก้ scanJobFailureNotify test เป็นข้อความจริง "รบกวนส่งใหม่อีกครั้ง" — เขียวแล้ว เอาชื่อออกจาก known-failing.txt (เหลือ 18) — นี่คือเหตุที่รอบก่อนอ้าง 1012 ผ่านได้ทั้งที่ Codex เจอ fail: test อยู่ใน manifest เดิม
+- เพิ่ม wouldMissAtThreshold078 ใน counterfactual ตามช่วง 0.78-0.81 ที่พิจารณาจริง · baseline เขียว ไม่มี fail ใหม่

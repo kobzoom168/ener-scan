@@ -359,10 +359,12 @@ export async function runObjectCheckLowShadow({ passType, instructionText, image
   const r = typeof rand === "number" ? rand : Math.random();
   if (r >= lowShadowRate()) return "sampled_out";
   if (lowShadowInFlight >= LOW_SHADOW_MAX_CONCURRENT) return "busy";
-  // เพดานรายวัน (Codex 17 ส.ค. — เงื่อนไขก่อนเปิดบน pro): กันค่าใช้จ่าย shadow บานปลาย
-  // hang-proof: redis ช้า/พัง = ตอบภายใน 400ms แล้วปล่อยตาม rate เดิม (ห้ามขวาง shadow/เทสต์)
-  try {
-    const dailyMax = Number(process.env.OBJECT_CHECK_LOW_SHADOW_DAILY_MAX ?? 300);
+  // เพดานรายวัน (Codex 17 ส.ค. รอบ 2 — fail-closed): นับ "จำนวน call" ต่อวัน UTC
+  // (ไม่ใช่เพดานเงินตรง ๆ) · counter ล่ม/ช้า/เกินเพดาน = ไม่ยิง shadow เด็ดขาด
+  // — shadow เป็นงาน optional เพดานต้องเป็นเพดานจริง · full model ไม่เกี่ยว เดินต่อปกติ
+  {
+    const rawMax = Number(process.env.OBJECT_CHECK_LOW_SHADOW_DAILY_MAX ?? 300);
+    const dailyMax = Math.min(Math.max(Number.isFinite(rawMax) ? rawMax : 300, 0), 5000);
     const dayKey = new Date().toISOString().slice(0, 10);
     const count = dailyCounter
       ? dailyCounter
@@ -371,12 +373,18 @@ export async function runObjectCheckLowShadow({ passType, instructionText, image
           const { incrementCounterWithTtl } = await import("../redis/scanV2Redis.js");
           return incrementCounterWithTtl(k, ttl);
         };
-    const n = await Promise.race([
-      count(`objcheck_low_shadow:${dayKey}`, 86400),
-      new Promise((resolve) => setTimeout(() => resolve(null), 400)),
-    ]);
-    if (n != null && Number(n) > dailyMax) return "daily_capped";
-  } catch { /* redis พัง = ปล่อยตาม rate เดิม */ }
+    let n = null;
+    try {
+      n = await Promise.race([
+        count(`objcheck_low_shadow:${dayKey}`, 86400),
+        new Promise((resolve) => setTimeout(() => resolve(null), 400)),
+      ]);
+    } catch {
+      n = null;
+    }
+    if (n == null || !Number.isFinite(Number(n))) return "counter_unavailable";
+    if (Number(n) > dailyMax) return "daily_capped";
+  }
   lowShadowInFlight += 1;
   const started = Date.now();
   let timer = null;
