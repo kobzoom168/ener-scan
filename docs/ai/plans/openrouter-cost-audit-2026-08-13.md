@@ -251,3 +251,33 @@ Opus ยังเห็นรูปแบบเดิม: 3 Ener Scan calls ข�
 - `stableFeatureExtract` 293 calls / $0.463918 และ `deepScan.draft` 141 calls / $1.112534; draft มีผลตอบแทนสูงกว่า stable แต่เสี่ยงคุณภาพสูง จึงต้อง golden/shadow ทั้งคู่
 
 ก่อน Claude เปลี่ยน env ให้สร้างรายงาน reproducible จาก CSV/log โดยล็อก: timezone, from/to, tagged-only หรือ all-cost, smoke exclusion, denominator และ mapping callSite→successful scan เพื่อป้องกันเปอร์เซ็นต์คนละฐาน
+
+## Final prioritization จากช่วง tag ครบ 15–16 ส.ค. 2026
+
+ตรวจจาก CSV โดยรวม all cost วันที่ UTC 15–16: $3.992774 หรือ $1.996/วัน ตัวเลขกลุ่มของ Claude ตรงกับไฟล์: objectCheck 29.81%, deepScan draft+deepScan 21.36%, verifier+descriptor 19.98%, forensic screen 12.22%, stable 7.34%, voice 4.78%, consult 1.08%
+
+คำแก้ไข: CSV ยังมี blank user 221 rows / $0.072552 หรือ 1.82% ของ cost ไม่ใช่ 0% แม้ coverage ฝั่ง paid calls ดีมากแล้ว ต้องแยก zero-cost embeddings กับ nonzero untagged และตามปิด attribution ที่เหลือ
+
+### อนุมัติให้เริ่มทันที
+
+- เปิด objectCheck `detail:low` **shadow-only** บน Pro 10% ภายใต้ cap/timeout/no-retry/kill switch เดิม; ห้ามให้ low ตัดสินลูกค้า
+- เพิ่ม verifier `candidateRank`, source, accepted rank และ counterfactual fields ว่า policy `top2`/threshold ที่เสนอจะพลาด accepted candidate หรือไม่; ยังไม่เปลี่ยน MAX/threshold
+- สร้าง paired A/B harness สำหรับ deepScan draft, forensic และ voice โดยไม่สลับ production decision
+- ย้าย paid consult ไป cheap modelตาม product decisionได้ แต่แยก rollout จาก prompt slimming เพื่อระบุสาเหตุหากคุณภาพเปลี่ยน
+
+### ยังไม่อนุมัติให้สลับตรง
+
+- verifier 5→2 + threshold พร้อมกัน: เปลี่ยนสองตัวแปรและยังไม่มี accepted-rank/similarity distribution; ต้องทดสอบทีละตัว และสงวน recent candidate quota
+- forensic GPT-4.1→mini: ไม่ใช่งานเสี่ยงต่ำ เพราะ `suspect` เรียก `failJob`, ส่ง retry และหยุดสแกนลูกค้าจริง ต้อง shadow structured output แล้ววัด false suspect โดยเฉพาะรูปจริง/ภาพสะท้อน/กรอบพลาสติก
+- deepScan draft→mini: ต้องวัด schema-valid rate, retry/failure, score/top-axis stability, factual consistency, hallucination และ blind wording preference บนรูปเดียวกัน
+- consult prompt 27k→12k พร้อม model switch: ห้ามรวม rollout; prompt guard/persona/facts อาจหาย ขณะที่ consult มีเพียง 1.08% ของบิล จึงไม่มีเหตุเร่ง
+
+### เกณฑ์ทดลองแนะนำ
+
+- objectCheck low: ≥200 strict samples, auxiliary passes อย่างน้อย 30–50 ต่อ pass; human-review mismatch และทุกกรณีที่ low reject แต่ full pass
+- deepScan mini: อย่างน้อย 50 รูปหลายประเภท; schema/required fields 100%, no new critical hallucination, score/top-axis drift อยู่ในเกณฑ์ที่เจ้าของกำหนด และ blind preference ไม่ด้อยอย่างมีนัยสำคัญ
+- forensic mini: อย่างน้อย 100 รูป โดย oversample รูปจอจริง, รูปของจริงมีเงาสะท้อน/กรอบ, collage และ AI image; production decision ยังใช้ GPT-4.1 จน false-suspect ผ่าน human labels
+- voice: paired blind 20–30 ชิ้น; facts/score/top power ต้องตรง 100% ก่อนดู preference
+- verifier: เก็บ accepted rank/source/sim อย่างน้อย 7 วัน; rollout cap กับ threshold คนละขั้น พร้อม counterfactual miss = 0 ใน observed accepted hits และ recent reserve อย่างน้อย 1
+
+internal chatQuality/captions รวมเพียง 0.48% ในช่วงนี้ ไม่ใช่ 3% และไม่ใช่ความเสี่ยงศูนย์; เป็นงานท้ายคิวหลังตรวจว่าแต่ละ call site ใช้โมเดลถูกอยู่แล้ว
