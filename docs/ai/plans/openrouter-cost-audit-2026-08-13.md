@@ -182,3 +182,43 @@ Opus ยังเห็นรูปแบบเดิม: 3 Ener Scan calls ข�
 - smoke application log: `callSite=smoke.telemetryCheck`, prompt 6 tokens, completion 1 token
 - ยังต้องยืนยัน smoke/real row ฝั่ง OpenRouter ว่าคอลัมน์ `user` มี callSite จริงก่อนถือว่า attribution window เริ่มครบวงจร
 - รอบวิเคราะห์ถัดไปต้องใช้ CSV หลัง rollout 2–3 วัน และแยก smoke calls ออกจาก cost/customer metrics
+
+## Review telemetry 3 วันบน Pro — 17 ส.ค. 2026
+
+ข้อมูลที่ Claude สรุปจาก call-site attribution: objectSameIdentityVerifier 29%, stableFeatureExtract 14%, voiceScript 8%, objectCheck.strict 8%, consult 7%, deepScan รวม 13%; verifier 1,353 candidate calls และ `same=true` 21 calls (1.6%)
+
+### ข้อสรุป Codex
+
+1. **ยังไม่อนุมัติ verifier `MAX_CANDIDATES 5→2` พร้อมยก similarity threshold แบบ blind**
+   - 1.6% เป็นอัตราต่อ candidate call ไม่ใช่ recall หรือ hit ต่อ scan
+   - ต้องแจกแจง 21 true hits ตาม `candidate rank`, `recallSource`, similarity และ confidence ก่อน ตั้ง threshold จาก distribution ของตัวที่ถูก ไม่ใช่จากช่วง similarity ของตัวที่แพ้
+   - โค้ด `mergeVerifierCandidates()` เติม embedding ก่อน recent และใช้ cap เดียวกัน หาก embedding เต็ม cap จะไม่มี recency safety-net; ลด cap เป็น 2 จึงเสี่ยงตัด true object ที่ rank 3–5 และ recency
+   - ทางที่ปลอดภัยกว่าคือแยก quota เช่น embedding top 1–2 + recent reserve 1, short-circuit เมื่อผ่าน และทำ shadow replay จาก candidate logs ก่อน rollout
+   - เพดานประหยัดจากลดจำนวน calls 5→2 แบบเชิงเส้นคือไม่เกิน 60% ของก้อน 29% หรือ ~17.4% ของบิล ก่อนคิด early exit/overlap จึงยังไม่ควรสัญญา -20% จากข้อนี้
+
+2. **Consult cheap model ทุก tier ทำได้ตาม product decision แต่ไม่ใช่ env-only**
+   - ปัจจุบัน paid branch ยังเลือก `LLM_CONSULT_MODEL`, maxTokens 1536, ไม่ disable reasoning และไม่ได้เติม short-answer directive
+   - ต้องแก้ code ให้ model/512/disableReasoning/short directive ใช้ร่วมทุก tier หรือยุบ tier branchจริง
+   - คง exception เมื่อลูกค้าขอรายละเอียดหรือถามหลายข้อ และ monitor truncation, guard retry/fallback, complaint; 512 เป็นเพดานทดลองที่เหมาะกับคำตอบ 1–2 ประโยค
+
+3. **VoiceScript: ทำ paired blind ear-test ก่อนสลับ**
+   - ใช้รูป/รายงานเดียวกันอย่างน้อย 20–30 เคสหลากชนิด, สุ่มลำดับ A/B และวัดความถูกต้องต่อรายงาน, ความเป็นอาจารย์, การออกเสียง, ความยาว ไม่ตัดสินจาก 2–3 ตัวอย่าง
+
+4. **ObjectCheck low shadow บน Pro 10% อนุมัติแบบ observability-only**
+   - main decision เดิม 100%, concurrency cap 2, timeout, no retry และ kill switch เดิม
+   - เก็บตามจำนวนตัวอย่าง ไม่ใช่แค่จำนวนวัน: อย่างน้อย 200 sampled calls และจำนวนขั้นต่ำต่อ pass; agreement เป็นเพียงเทียบ full model ต้อง human-label mismatches/กลุ่ม reject ก่อนสลับจริง
+   - จำกัด daily extra cost/latency และเฝ้า `busy/error/timeout`; timeout ปล่อย upstream promise ทำงานต่อได้จึงต้องดูจำนวน in-flight ฝั่ง provider ด้วย
+
+5. **stableFeatureExtract/deepScan.draft→mini ยังเป็น shadow/golden only** เพราะกระทบคะแนนและรายงานลูกค้าโดยตรง
+
+6. **Cache consult 5 นาทีปิดประเด็นได้** จาก median spacing 1,484 วินาที โดยเฉพาะเมื่อย้ายออกจาก Opus; ไม่ต้องลงทุน refactor ตอนนี้
+
+### ลำดับที่แนะนำ
+
+1. ทำ consult cheap+short ทุก tier พร้อม telemetry/truncation guard
+2. เปิด objectCheck low shadow Pro 10% แบบมี budget/kill switch
+3. เพิ่ม verifier telemetry `candidateRank` และทำ rank/source/similarity table; จากนั้นทดลอง quota แยก embedding/recent ไม่ใช้ cap=2 ตรง ๆ
+4. ทำ voice paired blind test
+5. ทดลอง stable/deep draft บน staging/golden
+
+เป้า -35% ยังเป็นเป้าทดลอง ไม่ใช่คำรับรอง จนกว่าจะวัด USD ต่อ successful scan หลัง rollout แต่ละข้อแยกกัน
