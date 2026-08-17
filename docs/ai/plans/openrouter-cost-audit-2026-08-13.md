@@ -301,3 +301,14 @@ Blockers ใน incident bundle ที่รวม deploy:
 หลังแก้ต้องมี tests: shadow counter timeout/error = no create; generic failureไม่ซ้ำทุก tailored reason; cancelled/unknown status; latest failed/cancelled job + old report ห้ามคืน old link; delivered job คืนเฉพาะ token ของ job นั้น
 
 Targeted verification ของ Codex: 33 tests ใน `objectCheckLowShadow`, `scanJobFailureNotify`, `exactUtilityCommand`, `personaRole` ได้ 32 pass / 1 fail — `scanJobFailureNotify.service.test` ยัง expect คำว่า `กรุณาส่งรูปใหม่` แต่ runtime copy เป็น `รบกวนส่งใหม่อีกครั้ง`; test นี้อยู่ใน `npm test` จึงคำกล่าว `baseline 1012 ไม่มี fail ใหม่` ต้องตรวจใหม่ด้วย baseline-check จริง ห้าม deploy ขณะ suite contract ยังแดง
+
+### Review commit `a71afbf`
+
+ยืนยันว่าปิด shadow fail-closed, job-scoped report query, cancelled/unknown branches และ stale known-fail test ได้จริง; Codex รัน targeted 38/38 ผ่าน
+
+ยังเหลือ 2 blockers ก่อน Pro:
+
+1. `completed` ถูกจับรวมกับ `delivered` และ `claimsDelivered:true` แต่ runtime ใช้ `completed` ใน dedup pathก่อน outbound row ที่เพิ่ง `queued` จะถูกส่ง; ต้องแยก `completed` เป็นผลคำนวณ/เตรียมส่งแล้วแต่ยังไม่ยืนยัน delivery และห้ามพูด “ผลส่งเข้าแชทแล้ว” จน status=`delivered`
+2. generic failure allowlist ตก `scan_results_v2_insert_failed` ซึ่งเป็น failJob infra path จริงและไม่มี tailored outbound ทำให้ลูกค้าเงียบได้; เพิ่มเข้ารายการและ testทุก infra code ไม่ใช่เพียง 4 ตัวอย่าง ส่วน `birthdate_missing` ถูก default-skip แต่ไม่มี tailored response ต้องเพิ่มข้อความเฉพาะทางหรือกำหนด recovery ที่ไม่ทำให้เงียบ
+
+Hardening: unknown status ไม่ควรชวน “ส่งรูปใหม่” ทันทีเพราะอาจเป็น status ใหม่ที่ยัง in-flight และทำให้ enqueue ซ้ำ; ให้บอกว่ากำลังตรวจ/ยังไม่ต้องส่งซ้ำ พร้อม alert telemetry
