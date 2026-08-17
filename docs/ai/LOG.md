@@ -704,3 +704,10 @@
 - คำถาม "ต่อตรงถูกกว่าไหม": ตอบกบแล้ว — ประหยัดแค่ค่าเติมเงิน ~5% เสีย attribution/บิลรวม ไม่คุ้ม · โมเดลฟรี = text เท่านั้น (vision 80% ของบิลใช้ไม่ได้) เหมาะกับงานภายใน (chatQuality/caption ~3%)
 - แผนรวมเป้า -40-55%: ①verifier env ②objectCheck detail:low (ต้องเปิด shadow บน pro 10% ก่อน — staging ไม่มี traffic) ③deepScan.draft→mini (A/B staging) ④forensic screen_check→mini ⑤voiceScript ear-test · รอกบเคาะ
 - เหตุการณ์เครดิตหมด 17 ส.ค.: กู้แล้ว 2 ลูกค้าได้ผล (Benz+U4c0b) · สิงห์ต้องถ่ายใหม่ (รูปอ่านไม่ได้จริง) · ชุดแก้ (แจ้งสแกนล้ม/ผลออกยัง/link guard/เมนูระหว่างสแกน) อยู่บน staging รอเคาะขึ้น pro
+
+## 2026-08-17 | Claude | มาตรการ cost ตามลำดับ Codex (staging) — เก็บข้อมูลก่อนหรี่
+- objectCheck low shadow: เพิ่มเพดานรายวัน OBJECT_CHECK_LOW_SHADOW_DAILY_MAX (default 300/วัน, redis, hang-proof 400ms + DI dailyCounter) — ครบเงื่อนไข Codex (rate+cap+timeout+no-retry+kill switch+ceiling) พร้อมเปิด pro
+- verifier telemetry: candidateRank/poolSize ทุกผล + OBJECT_SAME_IDENTITY_VERIFIER_ACCEPTED (acceptedRank, recallSource, wouldMissAtTop2, wouldMissAtThreshold070) — เก็บ ≥7 วัน ยังไม่ลด cap ตาม Codex
+- untagged: objectInfoGate parser → tag objectInfoParse (ปิด nonzero rows) · เหลือ 3 calls gemini-3.1-lite ($0.002/2วัน) ไล่รอบหน้า
+- บั๊กที่เจอระหว่างทำ: daily-cap แตะ redis ใน test env → ioredis open handle เทสต์ค้างไม่จบ — แก้ DI + Promise.race 400ms + เทสต์ daily_capped ใหม่ · baseline 1012 ผ่าน
+- consult paid→โมเดลถูก = env ตอน deploy pro · A/B harness (deepScan.draft/forensic/voice) คิวถัดไป

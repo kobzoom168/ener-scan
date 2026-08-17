@@ -352,13 +352,31 @@ export function compareShadowLabels(passType, fullText, lowText) {
  *   mainPromise: Promise<any>, createFn?: (p: object) => Promise<any>, rand?: number }} p
  * @returns {Promise<"disabled"|"sampled_out"|"busy"|"logged"|"error">}
  */
-export async function runObjectCheckLowShadow({ passType, instructionText, imageBase64, mainPromise, createFn, rand, timeoutMs }) {
+export async function runObjectCheckLowShadow({ passType, instructionText, imageBase64, mainPromise, createFn, rand, timeoutMs, dailyCounter }) {
   if (
     String(process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED ?? "false").trim().toLowerCase() !== "true"
   ) return "disabled";
   const r = typeof rand === "number" ? rand : Math.random();
   if (r >= lowShadowRate()) return "sampled_out";
   if (lowShadowInFlight >= LOW_SHADOW_MAX_CONCURRENT) return "busy";
+  // เพดานรายวัน (Codex 17 ส.ค. — เงื่อนไขก่อนเปิดบน pro): กันค่าใช้จ่าย shadow บานปลาย
+  // hang-proof: redis ช้า/พัง = ตอบภายใน 400ms แล้วปล่อยตาม rate เดิม (ห้ามขวาง shadow/เทสต์)
+  try {
+    const dailyMax = Number(process.env.OBJECT_CHECK_LOW_SHADOW_DAILY_MAX ?? 300);
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const count = dailyCounter
+      ? dailyCounter
+      : async (k, ttl) => {
+          // import runtime เท่านั้น — เทสต์ inject เอง (สร้าง ioredis client ในเทสต์ = open handle ค้าง)
+          const { incrementCounterWithTtl } = await import("../redis/scanV2Redis.js");
+          return incrementCounterWithTtl(k, ttl);
+        };
+    const n = await Promise.race([
+      count(`objcheck_low_shadow:${dayKey}`, 86400),
+      new Promise((resolve) => setTimeout(() => resolve(null), 400)),
+    ]);
+    if (n != null && Number(n) > dailyMax) return "daily_capped";
+  } catch { /* redis พัง = ปล่อยตาม rate เดิม */ }
   lowShadowInFlight += 1;
   const started = Date.now();
   let timer = null;

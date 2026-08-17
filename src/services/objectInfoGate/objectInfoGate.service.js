@@ -218,7 +218,7 @@ async function parseOwnerInfo(rawText, lane) {
     `- objectName=ชื่อพิมพ์หรือชนิด เช่น "พระขุนแผน" "เหรียญหลวงพ่อคูณ" · stoneType เฉพาะหิน/กำไล\n` +
     `- normalizedName=ชื่อมาตรฐานกลางสำหรับจัดกลุ่ม (ตัดคำฟุ่มเฟือย/สะกดมาตรฐาน เช่น "พระสมเด็จ วัดระฆัง") · confidence 0-1 · ห้ามเดาข้อมูลที่ไม่ได้พูดถึง ให้ null`;
   try {
-    const model = getGeminiFlashModel();
+    const model = getGeminiFlashModel({ callSite: "objectInfoParse" });
     const out = await generateTextWithTimeout(model, `${sys}\n\nเลน: ${lane}\nข้อความ: ${rawText}`, 8000);
     const m = String(out || "").match(/\{[\s\S]*\}/);
     if (!m) return null;
