@@ -735,3 +735,8 @@
 - smoke: ①constraint 053 มี scan_failure_notify + enqueue จริง → OUTBOUND_SEND_SUCCESS ถึง LINE แอดมิน ②owner-map ครอบด้วยเทสต์ + เฝ้า log ③result-status ผูก job (เคสจริง delivery_queued → claims:false ถูกกิ่ง) ④counter unavailable → lowCalls:0 ⑤env ตรง ⑥full objectCheck path ไม่ถูกแตะ (log-only) ⑦MODEL_SWITCHED ⑧health 200 / log สะอาด
 - ค้นพบระหว่าง smoke (ไม่ใช่ blocker — จดเป็นงานถัดไป): scan_jobs หลายงานค้างสถานะ delivery_queued ทั้งที่ outbound ส่งแล้ว (72 งานใน 48 ชม.) — delivery worker ไม่ได้อัป status เป็น delivered → result-status จะตอบ "กำลังส่ง" กับงานเก่า (ปลอดภัยแต่ไม่แม่น) ควรให้ markSent อัป scan_jobs.status ด้วย
 - เฝ้าต่อ: OBJECT_CHECK_LOW_SHADOW agreement 2-3 วัน · OBJECT_SAME_IDENTITY_VERIFIER_ACCEPTED rank/counterfactual 7 วัน · บิล OpenRouter รอบหน้า (consult ควรไม่มี opus แล้ว เหลือ voiceScript)
+
+## 2026-08-18 | Claude | เคส Marut: อีโมจิใน YT push + ทวงสลิปจากสติกเกอร์ (staging)
+- YT owner push ตัดอีโมจิ (🎬/🎉) — ส่วน "คำโปรย 😮" ที่เห็นใต้ลิงก์คือ link preview ของ YouTube (description ของคลิป) ไม่ใช่ข้อความแชท · แชทสะอาดตามกติกาแล้ว
+- สติกเกอร์ ≠ เจตนาเรื่องเงิน: shouldRemindSlipOnSticker (pure) — ทวงสลิปเฉพาะรายการชำระอายุ ≤60 นาที · เคส Marut (สร้างใน LIFF 17:27 ส่งสติกเกอร์ 19:07) จะได้คำตอบสติกเกอร์ปกติแทน + log STICKER_SLIP_REMIND_SKIPPED_STALE
+- เทสต์ใหม่ stickerSlipRemind (เข้า npm test แล้ว) · baseline 1022 ผ่าน

@@ -285,9 +285,10 @@ async function notifyOwnerClipLive(lineUserId, youtubeUrl, sAlert) {
   const uid = String(lineUserId || "").trim();
   const url = String(youtubeUrl || "").trim();
   if (!token || !uid || !url) return;
+  // แชทห้ามมีอีโมจิทุกข้อความ (กติกากบ — เตือนซ้ำ 17 ส.ค. เคส Marut)
   const text = sAlert
-    ? `🎉 ชิ้นของคุณได้เกรด S ระดับหายาก และตอนนี้ขึ้นคลิปพิเศษในช่อง YouTube ของอาจารย์แล้วครับ\n${url}\nกดดูแล้วแชร์ให้เพื่อน ๆ ชมได้เลย`
-    : `🎬 ชิ้นของคุณถูกคัดเป็นชิ้นเด่น ขึ้นคลิปในช่อง YouTube ของอาจารย์แล้วครับ\n${url}\nกดดูแล้วแชร์ต่อได้เลย`;
+    ? `ชิ้นของคุณได้เกรด S ระดับหายาก และตอนนี้ขึ้นคลิปพิเศษในช่อง YouTube ของอาจารย์แล้วครับ\n${url}\nกดดูแล้วแชร์ให้เพื่อน ๆ ชมได้เลยครับ`
+    : `ชิ้นของคุณถูกคัดเป็นชิ้นเด่น ขึ้นคลิปในช่อง YouTube ของอาจารย์แล้วครับ\n${url}\nกดดูแล้วแชร์ต่อได้เลยครับ`;
   try {
     await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",

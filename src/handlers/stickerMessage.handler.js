@@ -69,6 +69,17 @@ export function shouldRemindWaitingBirthdateOnSticker(p) {
 }
 
 /**
+ * สติกเกอร์ไม่ใช่เจตนาเรื่องเงิน (กบ 17 ส.ค. เคส Marut: เปิดหน้า pay ใน LIFF ทิ้งไว้
+ * แล้วส่งสติกเกอร์ 100 นาทีต่อมา โดนทวงสลิป) — ทวงได้เฉพาะรายการที่เพิ่งสร้างสด ๆ
+ * @param {{ awaitingSlip: boolean, paymentCreatedAtMs: number | null, nowMs: number, maxAgeMin?: number }} p
+ */
+export function shouldRemindSlipOnSticker({ awaitingSlip, paymentCreatedAtMs, nowMs, maxAgeMin = 60 }) {
+  if (!awaitingSlip) return false;
+  if (!Number.isFinite(paymentCreatedAtMs)) return false;
+  return (nowMs - paymentCreatedAtMs) / 60000 <= maxAgeMin;
+}
+
+/**
  * @param {object} opts
  * @param {*} opts.client
  * @param {*} opts.event — LINE webhook message event
@@ -86,11 +97,13 @@ export async function handleStickerLikeInput(opts) {
     source === "sticker" ? "sticker_input" : "sticker_placeholder_text";
   const semanticKey = "sticker_like_input";
 
-  // awaiting_slip: remind slip
+  // awaiting_slip: remind slip — เฉพาะรายการที่เพิ่งสร้างภายใน 60 นาที
+  // (กบ 17 ส.ค.: ลูกค้าแวะดูหน้า pay แล้วส่งสติกเกอร์ทีหลัง ห้ามทวง)
   if (getPaymentState(uid).state === "awaiting_slip") {
     let paymentRef = null;
+    let row = null;
     try {
-      const row = await getLatestAwaitingPaymentForLineUserId(uid);
+      row = await getLatestAwaitingPaymentForLineUserId(uid);
       if (row?.id) {
         paymentRef =
           row.payment_ref || (await ensurePaymentRefForPaymentId(row.id));
@@ -98,19 +111,30 @@ export async function handleStickerLikeInput(opts) {
     } catch (_) {
       paymentRef = null;
     }
-    const text = await buildAwaitingSlipReminderText({ userId: uid, paymentRef });
-    await sendNonScanReply({
-      client,
-      userId: uid,
-      replyToken,
-      replyType,
-      semanticKey: "sticker_awaiting_slip",
-      text,
-      alternateTexts: [
-        "ตอนนี้รอสลิปโอนอยู่นะครับ ส่งสลิปมาในแชทนี้ได้เลย",
-      ],
+    const remind = shouldRemindSlipOnSticker({
+      awaitingSlip: true,
+      paymentCreatedAtMs: row?.created_at ? new Date(row.created_at).getTime() : null,
+      nowMs: Date.now(),
     });
-    return;
+    if (remind) {
+      const text = await buildAwaitingSlipReminderText({ userId: uid, paymentRef });
+      await sendNonScanReply({
+        client,
+        userId: uid,
+        replyToken,
+        replyType,
+        semanticKey: "sticker_awaiting_slip",
+        text,
+        alternateTexts: [
+          "ตอนนี้รอสลิปโอนอยู่นะครับ ส่งสลิปมาในแชทนี้ได้เลย",
+        ],
+      });
+      return;
+    }
+    console.log(
+      JSON.stringify({ event: "STICKER_SLIP_REMIND_SKIPPED_STALE", uidPrefix: uid.slice(0, 8) }),
+    );
+    // ไหลลงไปตอบแบบสติกเกอร์ปกติด้านล่าง
   }
 
   // pending_verify
