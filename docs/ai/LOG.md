@@ -697,3 +697,10 @@
 - ปุ่มเมนูโดน state กลืน (สิงห์กด ประวัติ 2 รอบ / Benz กด จัดชุด / U5c07052 กด ประวัติ ติด slip lane): เพิ่ม "ประวัติ/ดูผลเก่า" เป็น exact terminal command (การ์ด myscans ทุกสถานะ) + in-flight gate ปล่อยคำสั่งเมนู deterministic ผ่าน
 - เทสต์: matcher history + link guard 21/21 · baseline 1011 ผ่าน · หมายเหตุ resume Benz ทำงานถูก (multiple_objects → เก็บ hold ไว้ ไม่ consume — fail-safe จริงตามที่ Codex ขอ)
 - ค้าง: กบเติมเครดิต OpenRouter → deploy pro → re-enqueue 5 งานล้ม (รอกบยืนยัน) · เคสรายงานเช้าที่เหลือ (แอดมินหลุดบทตีความพระ/ดวง 75 คะแนนมโน) แก้รอบถัดไป
+
+## 2026-08-17 | Claude | วิเคราะห์บิลจริง OpenRouter (CSV 11-17 ส.ค.) — attribution ครอบ 100% ตั้งแต่ 15 ส.ค.
+- baseline จริง 15-16 ส.ค. (~$2.00/วัน): objectCheck 4-pass 30% · deepScan(draft 4.1) 21% · ตัวเช็คชิ้นซ้ำ+embedding 20% · forensic(screen_check 4.1) 12% · stableFeature 7% · voiceScript Opus 5% · แชท consult 1% ($0.02/วัน)
+- verifier hit rate จริง 21/1353 (1.6%) — env knobs (MAX_CANDIDATES 5→2 + ยก RECALL_MIN) พร้อมทำ · consult ถูกมากอยู่แล้ว — งานจริงคือหั่น GEMINI_CONSULT_SYSTEM 27k + ตอบสั้นตามกบเคาะ + ลูกค้าจ่ายลงโมเดลถูก
+- คำถาม "ต่อตรงถูกกว่าไหม": ตอบกบแล้ว — ประหยัดแค่ค่าเติมเงิน ~5% เสีย attribution/บิลรวม ไม่คุ้ม · โมเดลฟรี = text เท่านั้น (vision 80% ของบิลใช้ไม่ได้) เหมาะกับงานภายใน (chatQuality/caption ~3%)
+- แผนรวมเป้า -40-55%: ①verifier env ②objectCheck detail:low (ต้องเปิด shadow บน pro 10% ก่อน — staging ไม่มี traffic) ③deepScan.draft→mini (A/B staging) ④forensic screen_check→mini ⑤voiceScript ear-test · รอกบเคาะ
+- เหตุการณ์เครดิตหมด 17 ส.ค.: กู้แล้ว 2 ลูกค้าได้ผล (Benz+U4c0b) · สิงห์ต้องถ่ายใหม่ (รูปอ่านไม่ได้จริง) · ชุดแก้ (แจ้งสแกนล้ม/ผลออกยัง/link guard/เมนูระหว่างสแกน) อยู่บน staging รอเคาะขึ้น pro
