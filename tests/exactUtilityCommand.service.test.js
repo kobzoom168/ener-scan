@@ -19,6 +19,9 @@ test("matcher: exact เท่านั้น — ชวนเพื่อน/�
   assert.equal(matchExactUtilityCommand("ชุดวันนี้"), "synergy");
   assert.equal(matchExactUtilityCommand("ชุดพลัง"), "synergy");
   assert.equal(matchExactUtilityCommand("จัดชุดพลัง"), "synergy");
+  assert.equal(matchExactUtilityCommand("ประวัติ"), "history");
+  assert.equal(matchExactUtilityCommand("ดูผลเก่า"), "history");
+  assert.equal(matchExactUtilityCommand("ขอดูประวัติหน่อย"), null); // ประโยคยาว = flow เดิม
   assert.equal(matchExactUtilityCommand("อยากชวนเพื่อนทำยังไง"), null);
   assert.equal(matchExactUtilityCommand("จัดชุดให้หน่อยครับ"), null);
   assert.equal(matchExactUtilityCommand(""), null);

@@ -689,3 +689,11 @@
 - อัปเดต app_settings registration_gate text บน pro เป็นเสียงแอดมิน ("ก่อนส่งรูป ขอข้อมูลผูกผลอ่านกับเจ้าของ...")
 - ของที่ live: welcome+การ์ดใบเดียว (ปุ่มเดียว บังคับกรอกเอง) · hold รูปก่อนสมัคร (R2+redis 24 ชม.) · ปุ่มเริ่มอ่านรูปนี้ (token, consume เฉพาะ scan_enqueued) · การ์ด cooldown 15 นาที · pendingDescription · success flow ไม่ครบ→ครบ+dedupe-clear-on-fail · เลิก fail-open ตามครั้ง
 - เฝ้า: REG_GATE_* / image_received_before_registration / pending_registration_image_resumed / registration_liff_trouble_reported ใน log pro + รายงานคุณภาพเช้า
+
+## 2026-08-17 | Claude | เหตุการณ์เครดิต OpenRouter หมด + แก้ 4 จุดจากเคสจริง (staging)
+- 🔴 ROOT CAUSE เคส Benz/สิงห์: OpenRouter เครดิตหมด — scan ล้ม 402 ตั้งแต่ 17 ส.ค. 12:52 (5 งาน 4 ลูกค้า: U207223d x2, Ub2e5eaed, U4c0b2ff1, U518141d) **ต้องให้กบเติมเครดิตแล้วค่อย re-enqueue งานที่ล้ม**
+- 🔴 บั๊กซ่อน: scan_failure_notify enqueue ล้มเงียบมาตลอด (constraint outbound_messages_kind_check ไม่มี kind นี้) + deliverOutbound ไม่มี handler — ลูกค้าไม่เคยรู้ว่าสแกนพัง → migration 053 (apply staging+pro แล้ว) + เพิ่ม handler ใน generic text branch
+- consult มโนผล: ลูกค้าถาม "ผลออกมายังครับ" ระหว่างงานล้ม → LLM ตอบ "ออกแล้ว 7.2/10 68%" + ลิงก์ปลอม ener.app/report/xxxxx → (1) maybeHandleResultStatusQuery ตอบจากสถานะ scan_jobs จริง (กำลังอ่าน/ล้ม-ขอส่งใหม่/กำลังส่ง/ลิงก์จริงจาก scan_results_v2) (2) sanitizeForeignLinks ใน orchestrator — URL นอก allowlist (โดเมนเรา+LINE+YouTube) ตัดทิ้ง + log CONSULT_FOREIGN_LINK_STRIPPED
+- ปุ่มเมนูโดน state กลืน (สิงห์กด ประวัติ 2 รอบ / Benz กด จัดชุด / U5c07052 กด ประวัติ ติด slip lane): เพิ่ม "ประวัติ/ดูผลเก่า" เป็น exact terminal command (การ์ด myscans ทุกสถานะ) + in-flight gate ปล่อยคำสั่งเมนู deterministic ผ่าน
+- เทสต์: matcher history + link guard 21/21 · baseline 1011 ผ่าน · หมายเหตุ resume Benz ทำงานถูก (multiple_objects → เก็บ hold ไว้ ไม่ consume — fail-safe จริงตามที่ Codex ขอ)
+- ค้าง: กบเติมเครดิต OpenRouter → deploy pro → re-enqueue 5 งานล้ม (รอกบยืนยัน) · เคสรายงานเช้าที่เหลือ (แอดมินหลุดบทตีความพระ/ดวง 75 คะแนนมโน) แก้รอบถัดไป
