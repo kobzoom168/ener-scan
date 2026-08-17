@@ -718,3 +718,9 @@
 - result-status: แยก pure resolveResultStatusReply — exhaustive ทุกสถานะ (queued/processing/claimed, delivery_queued, delivered/completed, failed, cancelled, unknown ไม่ claim ผลออก) · delivered ผูก report ด้วย scan_job_id ของ job เท่านั้น (กันลิงก์รายงานเก่า) · ตัดคำสัญญาเวลาทุกแขนง + เทสต์ล็อก
 - test contract: แก้ scanJobFailureNotify test เป็นข้อความจริง "รบกวนส่งใหม่อีกครั้ง" — เขียวแล้ว เอาชื่อออกจาก known-failing.txt (เหลือ 18) — นี่คือเหตุที่รอบก่อนอ้าง 1012 ผ่านได้ทั้งที่ Codex เจอ fail: test อยู่ใน manifest เดิม
 - เพิ่ม wouldMissAtThreshold078 ใน counterfactual ตามช่วง 0.78-0.81 ที่พิจารณาจริง · baseline เขียว ไม่มี fail ใหม่
+
+## 2026-08-17 | Claude | ปิด 2 blockers สุดท้าย Codex รอบ 3 (staging)
+- completed ≠ delivered: resolveResultStatusReply แยกกิ่ง completed → "กำลังเตรียมส่ง" claimsDelivered:false (dedup path ตั้ง completed ก่อน outbound ส่งจริง) · delivered เท่านั้นที่ claim + ลิงก์ · webhook query token เฉพาะ delivered · เทสต์ล็อก completed ห้ามมีคำ "ส่งเข้าแชทแล้ว"
+- failure notify owner map ครบทุก code: GENERIC 9 (เพิ่ม scan_results_v2_insert_failed ที่ตกหล่น) · TAILORED_BY_FLOW 10 · RECOVERY birthdate_missing (ข้อความชวนพิมพ์วันเกิด ไม่ใช่ generic ส่งรูปใหม่) · code ใหม่ไม่มีเจ้าของ = log SCAN_FAILURE_NOTIFY_NO_OWNER ไม่ส่งมั่ว · เทสต์ scan source processScanJob — code ใหม่ที่ไม่จัดกลุ่มจะทำเทสต์แดงอัตโนมัติ
+- unknown status hardening: ตอบ "กำลังตรวจสถานะ ยังไม่ต้องส่งรูปซ้ำ" (กันสแกนซ้ำถ้าเป็นสถานะใหม่ที่ยังทำงาน) + warn RESULT_STATUS_UNKNOWN_STATUS ใน webhook
+- baseline 1021 ผ่าน ไม่มี fail ใหม่ (known-failing เหลือ 18) · พร้อม pro: โค้ด + migration 053 + env (shadow 10%/300 cap + consult model-only) + smoke 4 ข้อของ Codex

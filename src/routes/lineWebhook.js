@@ -4076,7 +4076,7 @@ async function maybeHandleResultStatusQuery({ client, event, userId, text }) {
     const st = String(job.status || "");
     // Codex รอบ 2: report ต้องผูกกับ job นี้เท่านั้น — latest ของ user อาจเป็นรายงานเก่า
     let jobReportToken = null;
-    if (st === "delivered" || st === "completed") {
+    if (st === "delivered") {
       const { data: sr } = await supabase
         .from("scan_results_v2")
         .select("html_public_token")
@@ -4092,6 +4092,13 @@ async function maybeHandleResultStatusQuery({ client, event, userId, text }) {
       jobReportToken,
       baseUrl: env.APP_BASE_URL,
     });
+    const KNOWN_JOB_STATUSES = ["queued", "processing", "claimed", "delivery_queued", "completed", "delivered", "failed", "cancelled"];
+    if (!KNOWN_JOB_STATUSES.includes(st)) {
+      // สถานะใหม่ที่ router ไม่รู้จัก — ต้องมีคนมาเก็บ (Codex รอบ 3)
+      console.warn(
+        JSON.stringify({ event: "RESULT_STATUS_UNKNOWN_STATUS", uidPrefix: String(userId).slice(0, 8), jobStatus: st }),
+      );
+    }
     console.log(
       JSON.stringify({ event: "RESULT_STATUS_QUERY_ANSWERED", uidPrefix: String(userId).slice(0, 8), jobStatus: st }),
     );

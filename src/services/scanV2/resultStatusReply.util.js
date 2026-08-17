@@ -23,7 +23,14 @@ export function resolveResultStatusReply({ status, jobReportToken = null, baseUr
       claimsDelivered: false,
     };
   }
-  if (st === "delivered" || st === "completed") {
+  if (st === "completed") {
+    // Codex รอบ 3: dedup path ตั้ง completed ก่อน outbound ถูกส่ง — ห้าม claim ว่าส่งแล้ว
+    return {
+      reply: "อาจารย์อ่านเสร็จแล้วครับ ระบบกำลังเตรียมส่งผลเข้าแชทนี้ ถ้าสักพักยังไม่เข้า ทักมาได้เลยครับ",
+      claimsDelivered: false,
+    };
+  }
+  if (st === "delivered") {
     return {
       reply: jobReportToken
         ? `ผลออกแล้วครับ เปิดดูรายงานเต็มได้ที่นี่เลย\n${base}/r/${jobReportToken}`
@@ -44,10 +51,11 @@ export function resolveResultStatusReply({ status, jobReportToken = null, baseUr
       claimsDelivered: false,
     };
   }
-  // สถานะไม่รู้จัก — ห้ามบอกว่าผลออกแล้ว (Codex: unknown ต้องไม่ถูกถือว่าสำเร็จ)
+  // สถานะไม่รู้จัก — ห้าม claim ว่าผลออก และห้ามชวนส่งซ้ำ (Codex รอบ 3:
+  // อาจเป็นสถานะใหม่ที่ยังทำงานอยู่ ชวนส่งซ้ำ = สแกนซ้ำ) — telemetry ที่ caller
   return {
     reply:
-      "ขอเช็คสถานะรอบล่าสุดให้ก่อนครับ ถ้าผลยังไม่เข้าแชทนี้ รบกวนส่งรูปมาใหม่ได้เลย เดี๋ยวผมส่งให้อาจารย์ดูครับ",
+      "ผมกำลังตรวจสถานะรอบล่าสุดให้ครับ ยังไม่ต้องส่งรูปซ้ำนะครับ ได้ความยังไงจะแจ้งในแชทนี้เลย",
     claimsDelivered: false,
   };
 }

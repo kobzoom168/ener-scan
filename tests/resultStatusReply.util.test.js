@@ -26,7 +26,15 @@ test("ทุกสถานะได้คำตอบถูกแขนง — 
     const r = resolveResultStatusReply({ status: st });
     assert.equal(r.claimsDelivered, false, `status "${st}" ห้าม claim ผลออก`);
     assert.doesNotMatch(r.reply, /ผลออกแล้ว/);
+    // Codex รอบ 3: unknown อาจเป็นสถานะใหม่ที่ยังทำงานอยู่ — ห้ามชวนส่งซ้ำ
+    assert.match(r.reply, /ยังไม่ต้องส่งรูปซ้ำ/);
+    assert.doesNotMatch(r.reply, /ส่งรูปมาใหม่/);
   }
+  // completed ≠ delivered (dedup path ตั้ง completed ก่อน outbound ส่งจริง)
+  const comp = resolveResultStatusReply({ status: "completed", jobReportToken: "rpt_x" });
+  assert.equal(comp.claimsDelivered, false);
+  assert.doesNotMatch(comp.reply, /ส่งเข้าแชทนี้แล้ว|ผลออกแล้ว/);
+  assert.doesNotMatch(comp.reply, /rpt_x/);
 });
 
 test("delivered: ใช้ token ของ job เท่านั้น — token เก่าของ user ห้ามหลุด (แขนง failed/cancelled ไม่รับ token)", () => {

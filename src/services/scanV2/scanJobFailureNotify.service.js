@@ -6,20 +6,44 @@ const SCAN_FAILURE_TEXT =
   "ถ้ายังไม่ผ่านลองถ่ายมุมที่เห็นตัววัตถุชัดขึ้นครับ";
 
 /**
- * Allowlist (Codex 17 ส.ค. รอบ 2): ส่ง generic notify เฉพาะ failure เชิงระบบ
- * ที่ไม่มีข้อความเฉพาะทางของมันเอง — เหตุผลใหม่ที่เพิ่มภายหลัง default = ไม่ส่ง
- * (เดิมเป็น skip-list ทำให้เหตุผลที่มีข้อความเฉพาะทางอยู่แล้ว เช่น auth challenge / ritual_object_not_readable โดนส่งซ้ำ 2 ข้อความ)
+ * Owner map ของทุก failJob code (Codex 17 ส.ค. รอบ 3: ห้ามมี code ที่ไม่มีเจ้าของ
+ * notification) — เทสต์ scan source ของ processScanJob ยืนยันว่า code ใหม่ทุกตัว
+ * ต้องถูกจัดเข้ากลุ่มใดกลุ่มหนึ่ง ไม่งั้นเทสต์แดง
  */
-const GENERIC_NOTIFY_REASONS = new Set([
+
+/** infra ล้มแบบไม่มีข้อความอื่น → generic notify 1 ข้อความ */
+export const GENERIC_NOTIFY_REASONS = new Set([
   "upload_missing",
   "storage_read_failed",
   "deep_scan_failed",
   "scan_request_failed",
   "result_insert_failed",
+  "scan_results_v2_insert_failed",
   "scan_result_legacy_failed",
   "publication_id_missing_after_upsert",
   "outbound_enqueue_failed",
 ]);
+
+/** flow ส่งข้อความเฉพาะทางของมันเองแล้ว → ห้ามส่ง generic ซ้อน */
+export const TAILORED_BY_FLOW_REASONS = new Set([
+  "object_validation_failed",
+  "supported_lane_unresolved",
+  "unsupported_lane",
+  "ritual_object_not_readable",
+  "auth_challenge_no_thumb",
+  "auth_challenge_failed",
+  "auth_challenge_issued",
+  "image_authenticity_suspect",
+  "forensic_flagged",
+  "forensic_suspect",
+]);
+
+/** ไม่มีข้อความจาก flow แต่ generic ก็ไม่แก้สาเหตุ → recovery เฉพาะทางที่นี่ */
+export const RECOVERY_TEXTS = Object.freeze({
+  birthdate_missing:
+    "รอบนี้อาจารย์ยังเริ่มอ่านไม่ได้ครับ เพราะยังไม่มีวันเกิดผูกกับบัญชี\n\n" +
+    "พิมพ์วันเกิดมาในแชทนี้ได้เลย (เช่น 21/07/2530) แล้วส่งรูปเดิมอีกครั้ง เดี๋ยวผมส่งให้อาจารย์ทันทีครับ",
+});
 
 /**
  * Push LINE text แจ้ง user เมื่อ scan job ล้มเหลว
@@ -35,7 +59,25 @@ export async function notifyUserScanJobFailed(
   const uid = String(lineUserId || "").trim();
   if (!uid) return;
 
-  if (!GENERIC_NOTIFY_REASONS.has(String(reason || "").trim())) return;
+  const r = String(reason || "").trim();
+  let text = null;
+  if (GENERIC_NOTIFY_REASONS.has(r)) {
+    text = SCAN_FAILURE_TEXT;
+  } else if (RECOVERY_TEXTS[r]) {
+    text = RECOVERY_TEXTS[r];
+  } else if (TAILORED_BY_FLOW_REASONS.has(r)) {
+    return; // flow เป็นเจ้าของข้อความอยู่แล้ว
+  } else {
+    // code ใหม่ที่ยังไม่มีเจ้าของ — ห้ามส่ง generic มั่ว แต่ต้องดังพอให้คนมาเก็บ
+    console.error(
+      JSON.stringify({
+        event: "SCAN_FAILURE_NOTIFY_NO_OWNER",
+        reason: r,
+        jobIdPrefix: String(jobId || "").slice(0, 8),
+      }),
+    );
+    return;
+  }
 
   try {
     await insert({
@@ -43,7 +85,7 @@ export async function notifyUserScanJobFailed(
       kind: "scan_failure_notify",
       priority: OUTBOUND_PRIORITY.scan_failure_notify,
       related_job_id: jobId,
-      payload_json: { text: SCAN_FAILURE_TEXT },
+      payload_json: { text },
       status: "queued",
     });
     console.log(
@@ -51,7 +93,7 @@ export async function notifyUserScanJobFailed(
         event: "SCAN_FAILURE_NOTIFY_ENQUEUED",
         jobIdPrefix: String(jobId || "").slice(0, 8),
         lineUserIdPrefix: uid.slice(0, 8),
-        reason,
+        reason: r,
       }),
     );
   } catch (e) {

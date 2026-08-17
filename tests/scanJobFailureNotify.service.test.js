@@ -94,8 +94,7 @@ test("allowlist (Codex 17 ส.ค.): ทุก tailored reason ต้องไ�
     "object_validation_failed",
     "supported_lane_unresolved",
     "unsupported_lane",
-    "birthdate_missing",
-    "some_future_new_reason", // เหตุผลใหม่ default = ไม่ส่ง generic
+    "some_future_new_reason", // เหตุผลใหม่ default = ไม่ส่ง + log NO_OWNER
   ];
   for (const reason of tailored) {
     let calls = 0;
@@ -114,4 +113,52 @@ test("allowlist (Codex 17 ส.ค.): ทุก tailored reason ต้องไ�
     );
     assert.equal(calls, 1, `reason ${reason} ต้องได้ generic 1 ครั้ง`);
   }
+});
+
+
+test("owner ครบทุก failJob code (Codex รอบ 3): scan source แล้วทุก code ต้องมีเจ้าของ", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const {
+    GENERIC_NOTIFY_REASONS,
+    TAILORED_BY_FLOW_REASONS,
+    RECOVERY_TEXTS,
+  } = await import("../src/services/scanV2/scanJobFailureNotify.service.js");
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "src", "services", "scanV2", "processScanJob.service.js"),
+    "utf8",
+  );
+  const codes = new Set();
+  const re = /failJob\(\s*[\w.]+,\s*\n?\s*"([a-z0-9_]+)"/g;
+  let m;
+  while ((m = re.exec(src))) codes.add(m[1]);
+  assert.ok(codes.size >= 15, `เจอ failJob codes น้อยผิดปกติ (${codes.size}) — regex อาจพัง`);
+  for (const code of codes) {
+    const owned =
+      GENERIC_NOTIFY_REASONS.has(code) ||
+      TAILORED_BY_FLOW_REASONS.has(code) ||
+      Boolean(RECOVERY_TEXTS[code]);
+    assert.ok(owned, `failJob code "${code}" ไม่มีเจ้าของ notification — จัดเข้ากลุ่มใน scanJobFailureNotify.service.js`);
+  }
+});
+
+test("recovery: birthdate_missing ได้ข้อความเฉพาะทาง 1 ข้อความ (ไม่ใช่ generic ส่งรูปใหม่)", async () => {
+  let lastRow = null;
+  let calls = 0;
+  await notifyUserScanJobFailed(
+    { lineUserId: "U1", jobId: "j1", reason: "birthdate_missing" },
+    { insertOutboundMessage: async (row) => { calls += 1; lastRow = row; } },
+  );
+  assert.equal(calls, 1);
+  assert.match(String(lastRow?.payload_json?.text || ""), /วันเกิด/);
+  assert.doesNotMatch(String(lastRow?.payload_json?.text || ""), /รบกวนส่งใหม่อีกครั้ง/);
+});
+
+test("scan_results_v2_insert_failed อยู่ใน generic allowlist (Codex รอบ 3: เดิมตกหล่น)", async () => {
+  let calls = 0;
+  await notifyUserScanJobFailed(
+    { lineUserId: "U1", jobId: "j1", reason: "scan_results_v2_insert_failed" },
+    { insertOutboundMessage: async () => { calls += 1; } },
+  );
+  assert.equal(calls, 1);
 });
