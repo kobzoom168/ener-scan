@@ -321,3 +321,9 @@ Hardening: unknown status ไม่ควรชวน “ส่งรูปใ�
 
 1. `birthdate_missing` recovery บอกให้พิมพ์วันเกิดในแชท แต่ chat-registration ถูกถอดใน `4298604` และ text route บันทึกวันเกิดได้เมื่อมี `waiting_birthdate` state เท่านั้น; failure notify ไม่ได้ตั้ง state จึงอาจรับคำแนะนำแล้วไม่เกิดผล ต้องเลือก: ตั้ง durable waiting-birthdate recovery state+ผูกรูป หรือพาลูกค้าแก้วันเกิดผ่าน LIFF/App ตาม product decision แล้วค่อยส่งรูป
 2. unknown status บอก “ได้ความยังไงจะแจ้งในแชทนี้เลย” แต่ implementation มีเพียง warn log ไม่มี follow-up job/human alert ที่รับประกันการแจ้ง เป็น dangling promise; เปลี่ยนเป็นคำตอบไม่สัญญาอนาคต เช่น “ยังไม่ต้องส่งซ้ำ ลองเช็กสถานะอีกครั้งสักครู่” หรือเพิ่ม owner/alert จริง
+
+### Final pre-Pro review — commit `f4f217d`
+
+ปิดสองจุดสุดท้ายแล้ว: `birthdate_missing` ชี้ route `เปลี่ยนวันเกิด` และเมนูเปิดแอป Ener ที่รับข้อมูลจริง; unknown status ไม่สัญญา follow-up และยังคงเตือนไม่ให้ส่งรูปซ้ำ Codex รัน targeted `resultStatusReply` + `scanJobFailureNotify` ผ่านทั้งสองไฟล์
+
+สถานะ: **CODEX GREEN FOR PRO DEPLOY** ภายใต้ smoke หลัง deploy: migration 053 ใช้งานจริง, failure ส่งหนึ่งข้อความ, result-status ผูก job, counter unavailable ไม่ยิง low shadow และตรวจ env ว่า shadow=10%/300 calls UTC + consult เป็น model-only ตามที่ประกาศ
