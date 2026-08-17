@@ -312,3 +312,12 @@ Targeted verification ของ Codex: 33 tests ใน `objectCheckLowShadow`, `
 2. generic failure allowlist ตก `scan_results_v2_insert_failed` ซึ่งเป็น failJob infra path จริงและไม่มี tailored outbound ทำให้ลูกค้าเงียบได้; เพิ่มเข้ารายการและ testทุก infra code ไม่ใช่เพียง 4 ตัวอย่าง ส่วน `birthdate_missing` ถูก default-skip แต่ไม่มี tailored response ต้องเพิ่มข้อความเฉพาะทางหรือกำหนด recovery ที่ไม่ทำให้เงียบ
 
 Hardening: unknown status ไม่ควรชวน “ส่งรูปใหม่” ทันทีเพราะอาจเป็น status ใหม่ที่ยัง in-flight และทำให้ enqueue ซ้ำ; ให้บอกว่ากำลังตรวจ/ยังไม่ต้องส่งซ้ำ พร้อม alert telemetry
+
+### Review commit `450dc0d`
+
+ยืนยัน completed/delivered แยกถูก, job token query เฉพาะ delivered, infra code ที่ตกหล่นถูกเพิ่ม และ owner-map invariant ทำงาน; targeted 5 files ผ่านทั้งหมด
+
+ก่อน Pro เหลือ copy/flow gaps เล็ก 2 จุด:
+
+1. `birthdate_missing` recovery บอกให้พิมพ์วันเกิดในแชท แต่ chat-registration ถูกถอดใน `4298604` และ text route บันทึกวันเกิดได้เมื่อมี `waiting_birthdate` state เท่านั้น; failure notify ไม่ได้ตั้ง state จึงอาจรับคำแนะนำแล้วไม่เกิดผล ต้องเลือก: ตั้ง durable waiting-birthdate recovery state+ผูกรูป หรือพาลูกค้าแก้วันเกิดผ่าน LIFF/App ตาม product decision แล้วค่อยส่งรูป
+2. unknown status บอก “ได้ความยังไงจะแจ้งในแชทนี้เลย” แต่ implementation มีเพียง warn log ไม่มี follow-up job/human alert ที่รับประกันการแจ้ง เป็น dangling promise; เปลี่ยนเป็นคำตอบไม่สัญญาอนาคต เช่น “ยังไม่ต้องส่งซ้ำ ลองเช็กสถานะอีกครั้งสักครู่” หรือเพิ่ม owner/alert จริง
