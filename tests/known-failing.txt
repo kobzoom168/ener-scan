@@ -17,5 +17,4 @@ resolveLineSummaryWording: crystal + protection code_bank diagnostics still gets
 buildPaymentQrIntroText: prepends curated line; facts block preserved
 free quota paywall: facts lines still include exact price/count/hours
 buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / spiritual / null)
-notifyUserScanJobFailed: deep_scan_failed + lineUserId → enqueue once
 paywall deterministic copy refresh stays short and human

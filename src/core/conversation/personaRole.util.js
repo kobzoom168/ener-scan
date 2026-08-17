@@ -170,6 +170,38 @@ export function sanitizedOutputQualityOk(sanitized, original) {
 }
 
 /**
+ * Link guard (เคสจริง 17 ส.ค.: consult มโนลิงก์ https://ener.app/report/xxxxx ส่งให้
+ * ลูกค้า): URL ที่ host ไม่อยู่ใน allowlist = ตัดทิ้งทั้ง URL — โดเมนเราและ LINE เท่านั้น
+ */
+const ALLOWED_LINK_HOSTS = [
+  "scan.my-ener.uk",
+  "my-ener.uk",
+  "liff.line.me",
+  "line.me",
+  "lin.ee",
+  "youtu.be",
+  "youtube.com",
+  "www.youtube.com",
+];
+
+/** @param {string} text @returns {{ text: string, stripped: string[] }} */
+export function sanitizeForeignLinks(text) {
+  const stripped = [];
+  const out = String(text || "").replace(/https?:\/\/[^\s"'<>]+/g, (url) => {
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      if (ALLOWED_LINK_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return url;
+    } catch { /* URL พัง = ตัด */ }
+    stripped.push(url.slice(0, 60));
+    return "";
+  });
+  return {
+    text: out.replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim(),
+    stripped,
+  };
+}
+
+/**
  * Fail-closed tone resolution (Codex 14 ส.ค. รอบ 2 — ห้ามส่ง original ที่ถูก block):
  * retry ผ่านทั้ง tone+money → ใช้ retry · ไม่งั้น sanitize original แล้วตรวจซ้ำ
  * · ยังไม่ผ่าน → NEUTRAL_RECOVERY_FALLBACK — ไม่มีทางที่ข้อความมีคำต้องห้ามหลุดออกไป

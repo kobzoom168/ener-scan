@@ -17,6 +17,7 @@ import {
   evaluateMoneyGuard,
   evaluateToneGuard,
   resolveToneGuardedText,
+  sanitizeForeignLinks,
   USER_MONEY_INTENT_RE,
   NEUTRAL_RECOVERY_FALLBACK,
 } from "../personaRole.util.js";
@@ -293,6 +294,16 @@ export async function runGeminiFrontOrchestrator(ctx) {
           outcome: toneRes.outcome,
         }),
       );
+    }
+    // link guard (17 ส.ค. — เคสลิงก์มโน ener.app): URL นอก allowlist ตัดทิ้งก่อนส่งเสมอ
+    {
+      const linkRes = sanitizeForeignLinks(guardedConsult);
+      if (linkRes.stripped.length > 0) {
+        console.warn(
+          JSON.stringify({ event: "CONSULT_FOREIGN_LINK_STRIPPED", via, stripped: linkRes.stripped }),
+        );
+        guardedConsult = linkRes.text || NEUTRAL_RECOVERY_FALLBACK;
+      }
     }
     // role router (Codex C3): resolve เสียงจริงก่อนส่ง — history/monitor ได้ tag ตรง
     const speaker = resolveSpeakerRole(guardedConsult);

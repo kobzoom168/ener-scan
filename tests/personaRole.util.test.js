@@ -188,3 +188,20 @@ test("sanitizedOutputQualityOk: กันเศษภาษาพัง/สา�
   assert.equal(sanitizedOutputQualityOk("สั้นไป", orig), false);
   assert.equal(sanitizedOutputQualityOk("ครับ ", orig), false);
 });
+
+test("sanitizeForeignLinks: ตัดลิงก์นอกโดเมน เก็บลิงก์เรา (เคสจริง ener.app 17 ส.ค.)", async () => {
+  const { sanitizeForeignLinks } = await import(
+    "../src/core/conversation/personaRole.util.js"
+  );
+  const bad = sanitizeForeignLinks(
+    "ออกแล้วครับ เปิดลิงก์ดูรายงานเต็มได้เลยครับ\n\nhttps://ener.app/report/xxxxx",
+  );
+  assert.equal(bad.stripped.length, 1);
+  assert.doesNotMatch(bad.text, /ener\.app/);
+  const good = sanitizeForeignLinks("ดูได้ที่ https://scan.my-ener.uk/r/rpt_abc ครับ");
+  assert.equal(good.stripped.length, 0);
+  assert.match(good.text, /scan\.my-ener\.uk\/r\/rpt_abc/);
+  const mixed = sanitizeForeignLinks("คลิปอยู่ที่ https://youtu.be/abc123 กับ http://scam.example/x");
+  assert.equal(mixed.stripped.length, 1);
+  assert.match(mixed.text, /youtu\.be/);
+});

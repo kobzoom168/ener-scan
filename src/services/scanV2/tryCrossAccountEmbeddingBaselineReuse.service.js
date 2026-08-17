@@ -173,7 +173,11 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
 
       const newImageBase64 = ctx.imageBuffer.toString("base64");
       const minConfidence = env.OBJECT_SAME_IDENTITY_VERIFIER_MIN_CONFIDENCE;
+      // telemetry ก่อนหรี่ (Codex 17 ส.ค.): เก็บ rank/counterfactual ≥7 วัน —
+      // ห้ามลด cap 5→2 หรือยก threshold จนกว่า counterfactual miss = 0 ใน true hits
+      let candidateRank = 0;
       for (const cand of pool) {
+        candidateRank += 1;
         let candUrl = "";
         try {
           candUrl = String((await resolveCandidateImageUrl(cand.thumbnailPath)) || "").trim();
@@ -197,6 +201,8 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
             candidateIdPrefix: String(cand.id).slice(0, 8),
             recallSource: String(cand.recallSource || "embedding"),
             similarity: Number(cand.similarity).toFixed(4),
+            candidateRank,
+            poolSize: pool.length,
             same: verdict.same === true,
             confidence: Number(verdict.confidence).toFixed(3),
             reason: String(verdict.reason || "").slice(0, 120),
@@ -207,6 +213,22 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
         if (verdict.same === true && Number(verdict.confidence) >= minConfidence) {
           candidate = cand;
           verifierVerdict = { same: true, confidence: Number(verdict.confidence), reason: verdict.reason };
+          // counterfactual (Codex): policy ใหม่ที่คิดไว้ (top-2 / threshold 0.70 /
+          // เฉพาะ embedding) จะพลาด hit นี้ไหม — วัดจากของจริงก่อนหรี่
+          log(
+            JSON.stringify({
+              event: "OBJECT_SAME_IDENTITY_VERIFIER_ACCEPTED",
+              path: "worker-scan",
+              jobIdPrefix: idPrefix8(ctx.jobId),
+              acceptedRank: candidateRank,
+              recallSource: String(cand.recallSource || "embedding"),
+              similarity: Number(cand.similarity).toFixed(4),
+              wouldMissAtTop2: candidateRank > 2,
+              wouldMissAtThreshold070: Number(cand.similarity) < 0.7,
+              wouldMissAtThreshold078: Number(cand.similarity) < 0.78,
+              timestamp: scanV2TraceTs(),
+            }),
+          );
           break;
         }
       }

@@ -352,13 +352,39 @@ export function compareShadowLabels(passType, fullText, lowText) {
  *   mainPromise: Promise<any>, createFn?: (p: object) => Promise<any>, rand?: number }} p
  * @returns {Promise<"disabled"|"sampled_out"|"busy"|"logged"|"error">}
  */
-export async function runObjectCheckLowShadow({ passType, instructionText, imageBase64, mainPromise, createFn, rand, timeoutMs }) {
+export async function runObjectCheckLowShadow({ passType, instructionText, imageBase64, mainPromise, createFn, rand, timeoutMs, dailyCounter }) {
   if (
     String(process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED ?? "false").trim().toLowerCase() !== "true"
   ) return "disabled";
   const r = typeof rand === "number" ? rand : Math.random();
   if (r >= lowShadowRate()) return "sampled_out";
   if (lowShadowInFlight >= LOW_SHADOW_MAX_CONCURRENT) return "busy";
+  // เพดานรายวัน (Codex 17 ส.ค. รอบ 2 — fail-closed): นับ "จำนวน call" ต่อวัน UTC
+  // (ไม่ใช่เพดานเงินตรง ๆ) · counter ล่ม/ช้า/เกินเพดาน = ไม่ยิง shadow เด็ดขาด
+  // — shadow เป็นงาน optional เพดานต้องเป็นเพดานจริง · full model ไม่เกี่ยว เดินต่อปกติ
+  {
+    const rawMax = Number(process.env.OBJECT_CHECK_LOW_SHADOW_DAILY_MAX ?? 300);
+    const dailyMax = Math.min(Math.max(Number.isFinite(rawMax) ? rawMax : 300, 0), 5000);
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const count = dailyCounter
+      ? dailyCounter
+      : async (k, ttl) => {
+          // import runtime เท่านั้น — เทสต์ inject เอง (สร้าง ioredis client ในเทสต์ = open handle ค้าง)
+          const { incrementCounterWithTtl } = await import("../redis/scanV2Redis.js");
+          return incrementCounterWithTtl(k, ttl);
+        };
+    let n = null;
+    try {
+      n = await Promise.race([
+        count(`objcheck_low_shadow:${dayKey}`, 86400),
+        new Promise((resolve) => setTimeout(() => resolve(null), 400)),
+      ]);
+    } catch {
+      n = null;
+    }
+    if (n == null || !Number.isFinite(Number(n))) return "counter_unavailable";
+    if (Number(n) > dailyMax) return "daily_capped";
+  }
   lowShadowInFlight += 1;
   const started = Date.now();
   let timer = null;

@@ -4054,6 +4054,71 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
   return true;
 }
 
+/** คำถามสถานะผล "ผลออกยัง/เสร็จยัง" — ตอบจากสถานะงานจริง ห้ามให้ LLM เดา
+ * (เคสจริง 17 ส.ค.: สแกนล้มเพราะเครดิต AI หมด ลูกค้าถาม 3 ชม.ต่อมา consult มโนว่า
+ * "ออกแล้ว 7.2/10" พร้อมลิงก์ปลอม ener.app — ต้นเหตุระดับ routing ต้องตัดที่นี่) */
+const RESULT_STATUS_QUERY_RE =
+  /^ผล(สแกน)?(ออก|เสร็จ|ได้)(มา)?(หรือ|รึ|แล้ว)?ยัง(ครับ|ค่ะ|คับ)?$|^(ออก|เสร็จ)(หรือ|รึ)?ยัง(ครับ|ค่ะ|คับ)?$/;
+
+async function maybeHandleResultStatusQuery({ client, event, userId, text }) {
+  const t = String(text || "").trim();
+  if (!RESULT_STATUS_QUERY_RE.test(t)) return false;
+  try {
+    const { data: job } = await supabase
+      .from("scan_jobs")
+      .select("id,status,error_code,created_at")
+      .eq("line_user_id", userId)
+      .gte("created_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!job) return false; // ไม่มีงานใน 24 ชม. — ปล่อยเข้า flow ปกติ
+    const st = String(job.status || "");
+    // Codex รอบ 2: report ต้องผูกกับ job นี้เท่านั้น — latest ของ user อาจเป็นรายงานเก่า
+    let jobReportToken = null;
+    if (st === "delivered") {
+      const { data: sr } = await supabase
+        .from("scan_results_v2")
+        .select("html_public_token")
+        .eq("scan_job_id", job.id)
+        .maybeSingle();
+      jobReportToken = sr?.html_public_token || null;
+    }
+    const { resolveResultStatusReply } = await import(
+      "../services/scanV2/resultStatusReply.util.js"
+    );
+    const { reply } = resolveResultStatusReply({
+      status: st,
+      jobReportToken,
+      baseUrl: env.APP_BASE_URL,
+    });
+    const KNOWN_JOB_STATUSES = ["queued", "processing", "claimed", "delivery_queued", "completed", "delivered", "failed", "cancelled"];
+    if (!KNOWN_JOB_STATUSES.includes(st)) {
+      // สถานะใหม่ที่ router ไม่รู้จัก — ต้องมีคนมาเก็บ (Codex รอบ 3)
+      console.warn(
+        JSON.stringify({ event: "RESULT_STATUS_UNKNOWN_STATUS", uidPrefix: String(userId).slice(0, 8), jobStatus: st }),
+      );
+    }
+    console.log(
+      JSON.stringify({ event: "RESULT_STATUS_QUERY_ANSWERED", uidPrefix: String(userId).slice(0, 8), jobStatus: st }),
+    );
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken: event.replyToken,
+      replyType: "result_status_answer",
+      semanticKey: `result_status:${st}`,
+      text: reply,
+      alternateTexts: [],
+      speakerRoleOverride: "admin",
+    });
+    return true;
+  } catch (e) {
+    console.log(JSON.stringify({ event: "RESULT_STATUS_QUERY_ERROR", message: String(e?.message || e).slice(0, 120) }));
+    return false; // เช็คพลาด = flow ปกติ
+  }
+}
+
 /**
  * ปุ่ม "เริ่มอ่านรูปนี้:{token}" (Codex ข้อ 2): opaque token ผูก uid — ตรวจเจ้าของ
  * + TTL + atomic lock · consume หลัง ingest สำเร็จเท่านั้น (ล้ม = retry ได้)
@@ -4267,8 +4332,21 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // ลูกค้าพิมพ์มาระหว่างอาจารย์กำลังสแกน (in-flight gate ยังล็อกอยู่) →
   // บอกให้รอแบบสายสมาธิ ครั้งเดียวต่อรอบ ไม่ปล่อยเข้าคิว AI ให้คุยแทรก
+  // ยกเว้นคำสั่งเมนู deterministic (ประวัติ/จัดชุด/ชวนเพื่อน/ปุ่ม resume) — ลูกค้ากดเมนู
+  // ระหว่างรอต้องได้ของ ไม่ใช่โดนกลืน (เคสจริง 17 ส.ค.: สิงห์กด ประวัติ 2 รอบ / Benz กด จัดชุด)
   try {
-    if (text && (await isDedupeKeyActive(scanInFlightKeyForUser(userId)))) {
+    let menuBypass = false;
+    try {
+      const { matchExactUtilityCommand } = await import(
+        "../services/utilityCommands/exactUtilityCommand.service.js"
+      );
+      const { RESUME_COMMAND_RE } = await import(
+        "../services/welcome/registrationOnboarding.logic.js"
+      );
+      menuBypass =
+        Boolean(matchExactUtilityCommand(text)) || RESUME_COMMAND_RE.test(String(text).trim());
+    } catch { /* เช็คพลาด = พฤติกรรมเดิม */ }
+    if (text && !menuBypass && (await isDedupeKeyActive(scanInFlightKeyForUser(userId)))) {
       const firstNotice = await tryDedupeOnce(
         `scan_v2:inflight_text_notice:${userId}`,
         60,
@@ -4476,6 +4554,9 @@ async function handleTextMessage({ client, event, userId, session }) {
   // อยู่หลัง gate: ลูกค้าที่ยังไม่ลงทะเบียนกดปุ่มเก่าไม่ได้ลัดคิว
   if (await maybeHandlePreRegResume({ client, event, userId, text })) return;
 
+  // "ผลออกยัง" → ตอบจากสถานะ scan job จริง ห้ามให้ LLM เดา (17 ส.ค.)
+  if (await maybeHandleResultStatusQuery({ client, event, userId, text })) return;
+
   // คำสั่งเป๊ะจากปุ่ม/เมนู ("ชวนเพื่อน"/"จัดชุด") — terminal เสมอ (Codex 14 ส.ค.):
   // สำเร็จ = ได้ของทันที · feature ปิด/พัง = แอดมินแจ้งขัดข้อง deterministic ห้ามไหลเข้า LLM
   // (เคสจริง 13 ส.ค.: รูปค้าง+paywall แล้วเลน consult แย่งไปสอนให้พิมพ์ซ้ำ 3 รอบ)
@@ -4491,6 +4572,17 @@ async function handleTextMessage({ client, event, userId, session }) {
           maybeHandleReferralInvite({ client, userId, replyToken: event.replyToken, text }),
         synergy: () =>
           maybeHandleSynergyRequest({ client, userId, replyToken: event.replyToken, text }),
+        // ปุ่มเมนู "ดูผลเก่า" ต้องได้การ์ดทุกสถานะ (เคสจริง 16-17 ส.ค.: โดน paywall/slip
+        // lane กลืนจนลูกค้าพิมพ์ซ้ำ) — handler ตอบการ์ด myscans เอง คืน true เมื่อสำเร็จ
+        history: async () => {
+          await handleHistoryCommand({
+            client,
+            replyToken: event.replyToken,
+            userId,
+            invokePhase1GeminiOrchestrator: null,
+          });
+          return true;
+        },
       },
       sendUnavailable: async (kind) => {
         const r = await sendNonScanReply({

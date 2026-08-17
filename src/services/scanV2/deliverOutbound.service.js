@@ -180,7 +180,14 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       return { sent: true };
     }
 
-    if (kind === "renewal_reminder" || kind === "daily_pick_push" || kind === "fb_consent_ask") {
+    if (
+      kind === "renewal_reminder" ||
+      kind === "daily_pick_push" ||
+      kind === "fb_consent_ask" ||
+      // แจ้งสแกนล้มเหลว (17 ส.ค.: เพิ่งใช้ได้จริง — เดิม constraint DB บล็อก enqueue
+      // แถม deliver ไม่มี handler → ลูกค้ารอเงียบ ๆ ตอนสแกนพัง)
+      kind === "scan_failure_notify"
+    ) {
       // push อัตโนมัติ (เตือนต่ออายุ / หนุนดวงเช้า / ขออนุญาตอวดชิ้นในเพจ) — ข้อความ + quickReply optional
       const text = String(payload.text || "").trim();
       if (!text) {

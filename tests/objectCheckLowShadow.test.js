@@ -38,6 +38,7 @@ test("shadow success จบเร็ว ไม่ทิ้ง timer ค้าง
   process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED = "true";
   const started = Date.now();
   const res = await runObjectCheckLowShadow({
+    dailyCounter: async () => 1,
     passType: "strict", instructionText: "x", imageBase64: "aGk=",
     mainPromise: Promise.resolve({ output_text: "supported" }),
     createFn: async () => ({ output_text: "supported" }),
@@ -52,6 +53,7 @@ test("main ค้างจริง (unresolved promise) → timeout คืน s
   process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED = "true";
   const never = new Promise(() => {}); // main ที่ไม่มีวัน settle
   const res1 = await runObjectCheckLowShadow({
+    dailyCounter: async () => 1,
     passType: "strict", instructionText: "x", imageBase64: "aGk=",
     mainPromise: never,
     createFn: async () => ({ output_text: "supported" }),
@@ -61,6 +63,7 @@ test("main ค้างจริง (unresolved promise) → timeout คืน s
   assert.equal(res1, "error"); // timeout ครอบทั้งก้อน
   // slot ต้องคืนแล้ว: ยิงต่อได้ทันที ไม่ busy
   const res2 = await runObjectCheckLowShadow({
+    dailyCounter: async () => 1,
     passType: "strict", instructionText: "x", imageBase64: "aGk=",
     mainPromise: Promise.resolve({ output_text: "supported" }),
     createFn: async () => ({ output_text: "supported" }),
@@ -69,6 +72,7 @@ test("main ค้างจริง (unresolved promise) → timeout คืน s
   assert.equal(res2, "logged");
   // main reject เร็ว = อีกเคส: catch เป็น null ยัง logged
   const res3 = await runObjectCheckLowShadow({
+    dailyCounter: async () => 1,
     passType: "strict", instructionText: "x", imageBase64: "aGk=",
     mainPromise: Promise.reject(new Error("main died")),
     createFn: async () => ({ output_text: "supported" }),
@@ -82,6 +86,7 @@ test("flag ปิด = disabled · sampling ตัด = sampled_out · shadow �
   delete process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED;
   assert.equal(
     await runObjectCheckLowShadow({
+    dailyCounter: async () => 1,
       passType: "strict", instructionText: "x", imageBase64: "aGk=",
       mainPromise: Promise.resolve({ output_text: "supported" }),
     }),
@@ -90,6 +95,7 @@ test("flag ปิด = disabled · sampling ตัด = sampled_out · shadow �
   process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED = "true";
   assert.equal(
     await runObjectCheckLowShadow({
+    dailyCounter: async () => 1,
       passType: "strict", instructionText: "x", imageBase64: "aGk=",
       mainPromise: Promise.resolve({ output_text: "supported" }),
       rand: 0.99,
@@ -99,6 +105,7 @@ test("flag ปิด = disabled · sampling ตัด = sampled_out · shadow �
   const main = Promise.resolve({ output_text: "supported" });
   assert.equal(
     await runObjectCheckLowShadow({
+    dailyCounter: async () => 1,
       passType: "strict", instructionText: "x", imageBase64: "aGk=",
       mainPromise: main,
       createFn: async () => { throw new Error("boom"); },
@@ -108,4 +115,69 @@ test("flag ปิด = disabled · sampling ตัด = sampled_out · shadow �
   );
   assert.equal((await main).output_text, "supported");
   delete process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED;
+});
+
+test("daily ceiling (Codex 17 ส.ค.): เกินเพดานวัน = daily_capped ไม่ยิง shadow", async () => {
+  process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED = "true";
+  process.env.OBJECT_CHECK_LOW_SHADOW_DAILY_MAX = "10";
+  let created = 0;
+  const res = await runObjectCheckLowShadow({
+    dailyCounter: async () => 11, // เกินเพดานแล้ว
+    passType: "strict",
+    instructionText: "x",
+    imageBase64: "aGk=",
+    mainPromise: Promise.resolve({ output_text: "ok" }),
+    createFn: async () => { created += 1; return { output_text: "ok" }; },
+    rand: 0,
+    timeoutMs: 500,
+  });
+  assert.equal(res, "daily_capped");
+  assert.equal(created, 0);
+  delete process.env.OBJECT_CHECK_LOW_SHADOW_DAILY_MAX;
+});
+
+test("fail-closed (Codex รอบ 2): counter ช้า/พัง = ไม่ยิง shadow · main ไม่กระทบ", async () => {
+  process.env.OBJECT_CHECK_LOW_SHADOW_ENABLED = "true";
+  let created = 0;
+  // counter ค้าง (ช้ากว่า 400ms) → counter_unavailable และ createFn ห้ามถูกเรียก
+  const hang = await runObjectCheckLowShadow({
+    dailyCounter: () => new Promise(() => {}),
+    passType: "strict",
+    instructionText: "x",
+    imageBase64: "aGk=",
+    mainPromise: Promise.resolve({ output_text: "ok" }),
+    createFn: async () => { created += 1; return { output_text: "ok" }; },
+    rand: 0,
+    timeoutMs: 500,
+  });
+  assert.equal(hang, "counter_unavailable");
+  assert.equal(created, 0);
+  // counter โยน error → ไม่ยิง shadow
+  const thrown = await runObjectCheckLowShadow({
+    dailyCounter: async () => { throw new Error("redis down"); },
+    passType: "strict",
+    instructionText: "x",
+    imageBase64: "aGk=",
+    mainPromise: Promise.resolve({ output_text: "ok" }),
+    createFn: async () => { created += 1; return { output_text: "ok" }; },
+    rand: 0,
+    timeoutMs: 500,
+  });
+  assert.equal(thrown, "counter_unavailable");
+  assert.equal(created, 0);
+  // main promise reject ระหว่าง counter ล่ม → ไม่มี unhandled และผล main ไม่ถูกแตะ
+  const mainRejected = Promise.reject(new Error("main fail"));
+  mainRejected.catch(() => {});
+  const r3 = await runObjectCheckLowShadow({
+    dailyCounter: async () => { throw new Error("redis down"); },
+    passType: "strict",
+    instructionText: "x",
+    imageBase64: "aGk=",
+    mainPromise: mainRejected,
+    createFn: async () => { created += 1; return { output_text: "ok" }; },
+    rand: 0,
+    timeoutMs: 500,
+  });
+  assert.equal(r3, "counter_unavailable");
+  assert.equal(created, 0);
 });

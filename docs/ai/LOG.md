@@ -689,3 +689,43 @@
 - อัปเดต app_settings registration_gate text บน pro เป็นเสียงแอดมิน ("ก่อนส่งรูป ขอข้อมูลผูกผลอ่านกับเจ้าของ...")
 - ของที่ live: welcome+การ์ดใบเดียว (ปุ่มเดียว บังคับกรอกเอง) · hold รูปก่อนสมัคร (R2+redis 24 ชม.) · ปุ่มเริ่มอ่านรูปนี้ (token, consume เฉพาะ scan_enqueued) · การ์ด cooldown 15 นาที · pendingDescription · success flow ไม่ครบ→ครบ+dedupe-clear-on-fail · เลิก fail-open ตามครั้ง
 - เฝ้า: REG_GATE_* / image_received_before_registration / pending_registration_image_resumed / registration_liff_trouble_reported ใน log pro + รายงานคุณภาพเช้า
+
+## 2026-08-17 | Claude | เหตุการณ์เครดิต OpenRouter หมด + แก้ 4 จุดจากเคสจริง (staging)
+- 🔴 ROOT CAUSE เคส Benz/สิงห์: OpenRouter เครดิตหมด — scan ล้ม 402 ตั้งแต่ 17 ส.ค. 12:52 (5 งาน 4 ลูกค้า: U207223d x2, Ub2e5eaed, U4c0b2ff1, U518141d) **ต้องให้กบเติมเครดิตแล้วค่อย re-enqueue งานที่ล้ม**
+- 🔴 บั๊กซ่อน: scan_failure_notify enqueue ล้มเงียบมาตลอด (constraint outbound_messages_kind_check ไม่มี kind นี้) + deliverOutbound ไม่มี handler — ลูกค้าไม่เคยรู้ว่าสแกนพัง → migration 053 (apply staging+pro แล้ว) + เพิ่ม handler ใน generic text branch
+- consult มโนผล: ลูกค้าถาม "ผลออกมายังครับ" ระหว่างงานล้ม → LLM ตอบ "ออกแล้ว 7.2/10 68%" + ลิงก์ปลอม ener.app/report/xxxxx → (1) maybeHandleResultStatusQuery ตอบจากสถานะ scan_jobs จริง (กำลังอ่าน/ล้ม-ขอส่งใหม่/กำลังส่ง/ลิงก์จริงจาก scan_results_v2) (2) sanitizeForeignLinks ใน orchestrator — URL นอก allowlist (โดเมนเรา+LINE+YouTube) ตัดทิ้ง + log CONSULT_FOREIGN_LINK_STRIPPED
+- ปุ่มเมนูโดน state กลืน (สิงห์กด ประวัติ 2 รอบ / Benz กด จัดชุด / U5c07052 กด ประวัติ ติด slip lane): เพิ่ม "ประวัติ/ดูผลเก่า" เป็น exact terminal command (การ์ด myscans ทุกสถานะ) + in-flight gate ปล่อยคำสั่งเมนู deterministic ผ่าน
+- เทสต์: matcher history + link guard 21/21 · baseline 1011 ผ่าน · หมายเหตุ resume Benz ทำงานถูก (multiple_objects → เก็บ hold ไว้ ไม่ consume — fail-safe จริงตามที่ Codex ขอ)
+- ค้าง: กบเติมเครดิต OpenRouter → deploy pro → re-enqueue 5 งานล้ม (รอกบยืนยัน) · เคสรายงานเช้าที่เหลือ (แอดมินหลุดบทตีความพระ/ดวง 75 คะแนนมโน) แก้รอบถัดไป
+
+## 2026-08-17 | Claude | วิเคราะห์บิลจริง OpenRouter (CSV 11-17 ส.ค.) — attribution ครอบ 100% ตั้งแต่ 15 ส.ค.
+- baseline จริง 15-16 ส.ค. (~$2.00/วัน): objectCheck 4-pass 30% · deepScan(draft 4.1) 21% · ตัวเช็คชิ้นซ้ำ+embedding 20% · forensic(screen_check 4.1) 12% · stableFeature 7% · voiceScript Opus 5% · แชท consult 1% ($0.02/วัน)
+- verifier hit rate จริง 21/1353 (1.6%) — env knobs (MAX_CANDIDATES 5→2 + ยก RECALL_MIN) พร้อมทำ · consult ถูกมากอยู่แล้ว — งานจริงคือหั่น GEMINI_CONSULT_SYSTEM 27k + ตอบสั้นตามกบเคาะ + ลูกค้าจ่ายลงโมเดลถูก
+- คำถาม "ต่อตรงถูกกว่าไหม": ตอบกบแล้ว — ประหยัดแค่ค่าเติมเงิน ~5% เสีย attribution/บิลรวม ไม่คุ้ม · โมเดลฟรี = text เท่านั้น (vision 80% ของบิลใช้ไม่ได้) เหมาะกับงานภายใน (chatQuality/caption ~3%)
+- แผนรวมเป้า -40-55%: ①verifier env ②objectCheck detail:low (ต้องเปิด shadow บน pro 10% ก่อน — staging ไม่มี traffic) ③deepScan.draft→mini (A/B staging) ④forensic screen_check→mini ⑤voiceScript ear-test · รอกบเคาะ
+- เหตุการณ์เครดิตหมด 17 ส.ค.: กู้แล้ว 2 ลูกค้าได้ผล (Benz+U4c0b) · สิงห์ต้องถ่ายใหม่ (รูปอ่านไม่ได้จริง) · ชุดแก้ (แจ้งสแกนล้ม/ผลออกยัง/link guard/เมนูระหว่างสแกน) อยู่บน staging รอเคาะขึ้น pro
+
+## 2026-08-17 | Claude | มาตรการ cost ตามลำดับ Codex (staging) — เก็บข้อมูลก่อนหรี่
+- objectCheck low shadow: เพิ่มเพดานรายวัน OBJECT_CHECK_LOW_SHADOW_DAILY_MAX (default 300/วัน, redis, hang-proof 400ms + DI dailyCounter) — ครบเงื่อนไข Codex (rate+cap+timeout+no-retry+kill switch+ceiling) พร้อมเปิด pro
+- verifier telemetry: candidateRank/poolSize ทุกผล + OBJECT_SAME_IDENTITY_VERIFIER_ACCEPTED (acceptedRank, recallSource, wouldMissAtTop2, wouldMissAtThreshold070) — เก็บ ≥7 วัน ยังไม่ลด cap ตาม Codex
+- untagged: objectInfoGate parser → tag objectInfoParse (ปิด nonzero rows) · เหลือ 3 calls gemini-3.1-lite ($0.002/2วัน) ไล่รอบหน้า
+- บั๊กที่เจอระหว่างทำ: daily-cap แตะ redis ใน test env → ioredis open handle เทสต์ค้างไม่จบ — แก้ DI + Promise.race 400ms + เทสต์ daily_capped ใหม่ · baseline 1012 ผ่าน
+- consult paid→โมเดลถูก = env ตอน deploy pro · A/B harness (deepScan.draft/forensic/voice) คิวถัดไป
+
+## 2026-08-17 | Claude | ปิด 4 blockers Codex ก่อนขึ้น pro (staging)
+- shadow ceiling fail-closed: counter ล่ม/ช้า(>400ms)/โยน error → "counter_unavailable" ไม่ยิง low model เด็ดขาด · เกินเพดาน → "daily_capped" · DAILY_MAX clamp 0-5000 ระบุชัดเป็น call ceiling ต่อวัน UTC · full model ไม่กระทบ + เทสต์ครบ 3 กิ่ง (timeout/throw/cap) + main-unaffected
+- scan_failure_notify: skip-list → allowlist infra 8 ตัว (upload_missing/storage_read/deep_scan/scan_request/result_insert/legacy/publication_id/outbound_enqueue) — tailored reasons + เหตุผลใหม่ default ไม่ส่ง generic · เทสต์วนทุก tailored reason = 0 ข้อความ + infra = 1 ข้อความ
+- result-status: แยก pure resolveResultStatusReply — exhaustive ทุกสถานะ (queued/processing/claimed, delivery_queued, delivered/completed, failed, cancelled, unknown ไม่ claim ผลออก) · delivered ผูก report ด้วย scan_job_id ของ job เท่านั้น (กันลิงก์รายงานเก่า) · ตัดคำสัญญาเวลาทุกแขนง + เทสต์ล็อก
+- test contract: แก้ scanJobFailureNotify test เป็นข้อความจริง "รบกวนส่งใหม่อีกครั้ง" — เขียวแล้ว เอาชื่อออกจาก known-failing.txt (เหลือ 18) — นี่คือเหตุที่รอบก่อนอ้าง 1012 ผ่านได้ทั้งที่ Codex เจอ fail: test อยู่ใน manifest เดิม
+- เพิ่ม wouldMissAtThreshold078 ใน counterfactual ตามช่วง 0.78-0.81 ที่พิจารณาจริง · baseline เขียว ไม่มี fail ใหม่
+
+## 2026-08-17 | Claude | ปิด 2 blockers สุดท้าย Codex รอบ 3 (staging)
+- completed ≠ delivered: resolveResultStatusReply แยกกิ่ง completed → "กำลังเตรียมส่ง" claimsDelivered:false (dedup path ตั้ง completed ก่อน outbound ส่งจริง) · delivered เท่านั้นที่ claim + ลิงก์ · webhook query token เฉพาะ delivered · เทสต์ล็อก completed ห้ามมีคำ "ส่งเข้าแชทแล้ว"
+- failure notify owner map ครบทุก code: GENERIC 9 (เพิ่ม scan_results_v2_insert_failed ที่ตกหล่น) · TAILORED_BY_FLOW 10 · RECOVERY birthdate_missing (ข้อความชวนพิมพ์วันเกิด ไม่ใช่ generic ส่งรูปใหม่) · code ใหม่ไม่มีเจ้าของ = log SCAN_FAILURE_NOTIFY_NO_OWNER ไม่ส่งมั่ว · เทสต์ scan source processScanJob — code ใหม่ที่ไม่จัดกลุ่มจะทำเทสต์แดงอัตโนมัติ
+- unknown status hardening: ตอบ "กำลังตรวจสถานะ ยังไม่ต้องส่งรูปซ้ำ" (กันสแกนซ้ำถ้าเป็นสถานะใหม่ที่ยังทำงาน) + warn RESULT_STATUS_UNKNOWN_STATUS ใน webhook
+- baseline 1021 ผ่าน ไม่มี fail ใหม่ (known-failing เหลือ 18) · พร้อม pro: โค้ด + migration 053 + env (shadow 10%/300 cap + consult model-only) + smoke 4 ข้อของ Codex
+
+## 2026-08-17 | Claude | ปิด 2 copy/flow gaps สุดท้าย (Codex รอบ 4) — ไฟเขียว deploy รวม
+- birthdate_missing recovery: CTA เปลี่ยนเป็น route ที่รับจริง — พิมพ์ "เปลี่ยนวันเกิด" (birthdateChangeFlow รับจากทุก state — ยืนยันจาก call sites 4 จุดใน webhook) หรือเมนู เปิดแอป Ener · เทสต์ล็อก CTA + ห้าม "พิมพ์วันเกิดมา" เปล่า ๆ
+- unknown status: ตัดสัญญา follow-up ("จะแจ้งในแชท") ที่ไม่มี owner → "ยังตรวจไม่ครบ ยังไม่ต้องส่งซ้ำ ลองเช็กอีกครั้งในอีกสักครู่" ตามที่ Codex เสนอ · เทสต์ห้าม match วลีสัญญาอนาคต
+- baseline 1021 ผ่าน ไม่มี fail ใหม่ — Codex ไฟเขียว deploy รวม เหลือ smoke 4 ข้อตอนขึ้น pro

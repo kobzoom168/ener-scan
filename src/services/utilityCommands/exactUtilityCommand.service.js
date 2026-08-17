@@ -13,21 +13,27 @@
 
 const REFERRAL_EXACT = new Set(["ชวนเพื่อน", "ชวนเพื่อน ได้สแกนฟรี"]);
 const SYNERGY_EXACT_RE = /^(จัดชุด|ชุดวันนี้|ชุดพลัง|จัดชุดพลัง)$/;
+// "ประวัติ" จากปุ่มเมนู (เคสจริง 16-17 ส.ค.: กดระหว่างสแกน/ติด slip แล้วโดน state
+// อื่นกลืน — ลูกค้าพิมพ์ซ้ำสองรอบก็ไม่ได้การ์ด) — exact เท่านั้น ประโยคยาวไป LLM ตามเดิม
+const HISTORY_EXACT = new Set(["ประวัติ", "history", "ดูผลเก่า"]);
 
 /**
  * @param {string} text
- * @returns {"referral" | "synergy" | null}
+ * @returns {"referral" | "synergy" | "history" | null}
  */
 export function matchExactUtilityCommand(text) {
-  const t = String(text || "").trim();
-  if (REFERRAL_EXACT.has(t)) return "referral";
-  if (SYNERGY_EXACT_RE.test(t)) return "synergy";
+  const t = String(text || "").trim().toLowerCase();
+  const orig = String(text || "").trim();
+  if (REFERRAL_EXACT.has(orig)) return "referral";
+  if (SYNERGY_EXACT_RE.test(orig)) return "synergy";
+  if (HISTORY_EXACT.has(orig) || HISTORY_EXACT.has(t)) return "history";
   return null;
 }
 
 /** เสียงแอดมิน จริงจัง ไม่มีอีโมจิ ไม่ over-promise */
 export function buildUtilityUnavailableText(kind) {
-  const menuName = kind === "referral" ? "ชวนเพื่อน" : "จัดชุด";
+  const menuName =
+    kind === "referral" ? "ชวนเพื่อน" : kind === "history" ? "ดูผลเก่า" : "จัดชุด";
   return `เมนู${menuName}ใช้งานไม่ได้ชั่วคราวครับ\n\nผมรับเรื่องไว้แล้ว เดี๋ยวตรวจให้ ระหว่างนี้ใช้งานส่วนอื่นได้ตามปกติครับ`;
 }
 
