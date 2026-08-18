@@ -2648,30 +2648,35 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
-    // กบ 18 ส.ค. (เคสลูกค้าใหม่ นอ.บำเหน็จฯ): ผลชิ้นแรกยังไม่ถึงมือ (สแกนกำลังทำ/
-    // เกตถือรายงานอยู่) ห้ามยิงการ์ดเก็บเงินแซงหน้า — รับรูปไว้ก่อน ให้ผลออกก่อน
-    // paywall ค่อยตามตอนลูกค้าขยับครั้งถัดไป (pendingImage ยังค้าง เส้นเดิมจัดการต่อ)
+    // กบ 18 ส.ค. (เคสลูกค้าใหม่ นอ.บำเหน็จฯ): ผลชิ้นก่อนหน้ายังไม่ยืนยันว่าถึงมือ
+    // → ห้ามยิงการ์ดเก็บเงินแซงหน้า (Codex รอบ 2: pure resolver + delivery evidence นำ
+    // เวลาเป็นแค่ safety bound + copy ไม่อ้างสถานะที่ไม่รู้จริง)
     try {
-      const firstReportStillPending =
-        (await isDedupeKeyActive(scanInFlightKeyForUser(userId))) ||
-        (await (async () => {
-          const { data: j } = await supabase
-            .from("scan_jobs")
-            .select("status")
-            .eq("line_user_id", userId)
-            .gte("created_at", new Date(Date.now() - 15 * 60000).toISOString())
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          return ["queued", "processing", "claimed", "delivery_queued", "completed"].includes(
-            String(j?.status || ""),
-          );
-        })().catch(() => false));
-      if (firstReportStillPending) {
+      const { resolvePaywallDeferDecision, PAYWALL_DEFER_TEXT } = await import(
+        "../services/lineWebhook/paywallDefer.util.js"
+      );
+      const inFlightActive = await isDedupeKeyActive(scanInFlightKeyForUser(userId)).catch(() => false);
+      let job = null;
+      let dbError = false;
+      try {
+        const { data: j } = await supabase
+          .from("scan_jobs")
+          .select("status,created_at")
+          .eq("line_user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (j) job = { status: String(j.status || ""), ageMs: Date.now() - new Date(j.created_at).getTime() };
+      } catch {
+        dbError = true;
+      }
+      const verdict = resolvePaywallDeferDecision({ inFlightActive, job, dbError });
+      if (verdict.decision === "defer") {
         console.log(
           JSON.stringify({
-            event: "PAYWALL_DEFERRED_FIRST_REPORT_PENDING",
+            event: "PAYWALL_DEFERRED_PREV_REPORT_PENDING",
             uidPrefix: String(userId).slice(0, 8),
+            reason: verdict.reason,
           }),
         );
         await sendNonScanReply({
@@ -2680,8 +2685,8 @@ async function finalizeAcceptedImage({
           replyToken: event.replyToken,
           replyType: "paywall_deferred_report_pending",
           semanticKey: "paywall_deferred_report_pending",
-          text: "รับรูปชิ้นนี้ไว้แล้วครับ ชิ้นแรกอาจารย์กำลังอ่านอยู่ ขอส่งผลชิ้นแรกให้ก่อนนะครับ",
-          alternateTexts: ["รับไว้แล้วครับ รอผลชิ้นแรกก่อนนะครับ เดี๋ยวเรียงคิวให้"],
+          text: PAYWALL_DEFER_TEXT,
+          alternateTexts: ["รับรูปไว้แล้วครับ ขอเรียงคิวส่งผลชิ้นก่อนหน้าให้ก่อนครับ"],
           speakerRoleOverride: "admin",
         });
         return;
@@ -8155,20 +8160,40 @@ async function handleTextMessage({ client, event, userId, session }) {
   // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
   if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
 
-  // ข้อความปิดบท "ขอบคุณ/ครับ/โชคดี/สาธุ" ในเลน idle = เงียบ (กบ 18 ส.ค.:
-  // ไม่ต้องตอบทุก chat — เงียบจนกว่าจะมีเรื่องใหม่) · state flows จบไปก่อนถึงบรรทัดนี้แล้ว
+  // ข้อความปิดบทในเลน idle = เงียบ (กบ 18 ส.ค. + Codex รอบ 2: ต้องรู้จังหวะจบเรื่องจริง)
+  // unconditional (ขอบคุณ/สาธุ) เงียบเลย · contextual (ครับ/โอเค/บาย) เงียบเฉพาะเมื่อ
+  // ข้อความบอทล่าสุดเป็น terminal reply และไม่ใช่คำถาม/handoff · "สวัสดี" ไม่เงียบ
   try {
-    const { isClosingPleasantry } = await import(
+    const { classifyClosingPleasantry, resolveClosingSilence } = await import(
       "../core/conversation/closingPleasantry.util.js"
     );
-    if (isClosingPleasantry(text)) {
-      console.log(
-        JSON.stringify({
-          event: "CHAT_CLOSING_PLEASANTRY_SILENT",
-          uidPrefix: String(userId).slice(0, 8),
-        }),
-      );
-      return;
+    if (classifyClosingPleasantry(text)) {
+      let lastBotReplyType = null;
+      let lastBotText = null;
+      try {
+        const { data: lastBot } = await supabase
+          .from("line_conversation_messages")
+          .select("text,metadata_json")
+          .eq("line_user_id", userId)
+          .eq("role", "bot")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        lastBotReplyType = lastBot?.metadata_json?.replyType || null;
+        lastBotText = lastBot?.text || null;
+      } catch { /* อ่านไม่ได้ = ปฏิบัติแบบไม่ terminal (ตอบปกติ) */ }
+      const verdict = resolveClosingSilence({ text, lastBotReplyType, lastBotText });
+      if (verdict.silent) {
+        console.log(
+          JSON.stringify({
+            event: "CHAT_CLOSING_PLEASANTRY_SILENT",
+            uidPrefix: String(userId).slice(0, 8),
+            tier: verdict.tier,
+            lastBotReplyType,
+          }),
+        );
+        return;
+      }
     }
   } catch { /* util พัง = ตอบตามปกติ */ }
   if (text === "สแกนพลังงาน") {

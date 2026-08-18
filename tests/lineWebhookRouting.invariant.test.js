@@ -57,7 +57,7 @@ test("invariant: terminal block ส่ง unavailable ผ่าน reply + push 
 
 test("invariant: paywall แซงผลชิ้นแรกไม่ได้ — defer check อยู่ก่อน sendFreeQuotaExhaustedPaywall (เคส 18 ส.ค.)", () => {
   const fin = SRC.slice(SRC.indexOf("async function finalizeAcceptedImage"));
-  const deferIdx = fin.indexOf("PAYWALL_DEFERRED_FIRST_REPORT_PENDING");
+  const deferIdx = fin.indexOf("PAYWALL_DEFERRED_PREV_REPORT_PENDING");
   const paywallIdx = fin.indexOf("sendFreeQuotaExhaustedPaywallViaGateway({");
   assert.ok(deferIdx > 0, "หา defer check ไม่เจอ");
   assert.ok(paywallIdx > 0);
