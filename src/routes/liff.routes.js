@@ -959,7 +959,15 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
       const n = Number(nRaw) || 0;
       if (lastKey === dayKey) streak = Math.max(1, n);
       else if (lastKey === yKey) streak = n + 1;
-      await setValueWithTtl(`liff:pickstreak:${userId}`, `${dayKey}|${streak}`, 3 * 24 * 3600);
+      // mutation เดียวใน read endpoint นี้ — คนแบนอ่านได้แต่ห้ามเขียน state (scope ด้านบน)
+      let bannedForStreak = false;
+      try {
+        const { isBanned } = await import("../services/ban/bannedUsers.repo.js");
+        bannedForStreak = await isBanned(userId);
+      } catch { bannedForStreak = false; }
+      if (!bannedForStreak) {
+        await setValueWithTtl(`liff:pickstreak:${userId}`, `${dayKey}|${streak}`, 3 * 24 * 3600);
+      }
     } catch {}
 
     // กบ 17 ก.ค. 2026: เคยจ่ายสักครั้ง = เทียบทั้งตู้ / ไม่เคยจ่าย = เห็นเฉพาะชิ้นล่าสุด
@@ -1130,9 +1138,14 @@ liffRouter.get("/api/liff/profile", async (req, res) => {
   }
 });
 
+/* Ban scope ฝั่ง LIFF (Codex รอบ 3): read-only endpoints (daily/reading/stats/
+   match/profile GET/pay info) เปิดตามปกติ · ทุก mutation + ทุกเส้นที่เผา AI
+   ต้องผ่าน rejectIfBannedLiff — ตอนนี้ครบ: pay/slip, pay/create, profile POST,
+   และ streak write ใน daily-pick (ข้าม write สำหรับคนแบน endpoint ยังอ่านได้) */
 liffRouter.post("/api/liff/profile", express.json(), async (req, res) => {
   const userId = await requireLiffUser(req, res);
   if (!userId) return;
+  if (await rejectIfBannedLiff(userId, res, "profile_post")) return;
   const b = req.body || {};
 
   const row = { line_user_id: userId, display_name: String(b.displayName || "").slice(0, 120) || null };

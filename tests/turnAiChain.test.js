@@ -63,7 +63,7 @@ test("aiLatencyMs สะสมแยกจาก turnLatencyMs + annotate state 
     await new Promise((r) => setTimeout(r, 10));
     const out = captureEmit(() => emitTurnAiChain());
     const e = out.find((o) => o.event === "CHAT_TURN_AI_CHAIN");
-    assert.equal(e.aiLatencyMs, 200);
+    assert.equal(e.settledAiLatencyMs, 200);
     assert.ok(e.turnLatencyMs >= 10);
     assert.equal(e.state, "idle");
   });
@@ -85,7 +85,8 @@ test("openai withUsageTracking: success + error ต่างก็นับ atte
       "openai.responses:conversationSurface",
       "openai.responses:conversationSurface.retry",
     ]);
-    assert.ok(e.aiLatencyMs >= 0);
+    assert.ok(e.settledAiLatencyMs >= 0);
+    assert.equal(e.pendingAiCount, 0);
   });
 });
 
@@ -94,4 +95,25 @@ test("gemini paths ครบทั้ง compat และ google-direct (source 
   const hits = [...s.matchAll(/recordTurnAiCall\(/g)].length;
   assert.ok(hits >= 2, `ต้องบันทึกทั้ง compat และ google path (พบ ${hits})`);
   assert.ok([...s.matchAll(/recordTurnAiLatency\(/g)].length >= 2);
+});
+
+test("pending accounting (Codex รอบ 3): call ค้างตอน emit → pendingAiCount>0 + elapsed ไม่ใช่ศูนย์เงียบ ๆ", async () => {
+  await runWithTurnContext({ messageId: "p1", kind: "text" }, async () => {
+    recordTurnAiCall("consult"); // ยิงแล้วยังไม่ settle (outer timeout scenario)
+    await new Promise((r) => setTimeout(r, 25));
+    const out = captureEmit(() => emitTurnAiChain());
+    const e = out.find((o) => o.event === "CHAT_TURN_AI_CHAIN");
+    assert.equal(e.aiCallCount, 1);
+    assert.equal(e.settledAiCallCount, 0);
+    assert.equal(e.pendingAiCount, 1, "request ค้างต้องเห็นเป็น pending");
+    assert.ok(e.pendingElapsedMs >= 20, "ต้องรายงาน elapsed ของตัวค้าง ไม่ใช่ latency=0 เฉย ๆ");
+    assert.equal(e.settledAiLatencyMs, 0);
+  });
+});
+
+test("embeddings เข้า wrapper แล้ว (Codex รอบ 3)", () => {
+  const s = fsMod.readFileSync("src/services/openaiDeepScan.api.js", "utf8");
+  const emb = s.indexOf("embeddings: {");
+  const seg = s.slice(emb, emb + 300);
+  assert.ok(seg.includes('withUsageTracking("embeddings"'), "embeddings ต้องผ่าน wrapper เดียวกัน");
 });

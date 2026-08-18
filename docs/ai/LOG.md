@@ -812,3 +812,15 @@
 - **P1**: sendCustomerAlert ใช้ lease 60s + sent marker หลังสำเร็จ (process ตายเสีย alert แค่ 60 วิ) + สองช่องส่งขนานพร้อม timeout ต่อช่อง (TG ค้างไม่ขวาง LINE) · migration 054 ใส่ BEGIN/COMMIT + preflight เช็ค status แปลกก่อน swap constraint · โทน: troll>=3 เงียบ+telemetry (ตัดบทเทศนา), identity reply เหลือข้อเท็จจริงประโยคเดียวไม่มี CTA
 - Tests: banSystem 24 · deliverOutbound.banGate 9 (รวม nested race + terminalize) · customerPushGateway 10 (รวม LIFF + wrapper inventory) · idleReply.util 5 (ใหม่ เข้า manifest) · turnAiChain 5 · geminiPhase1IdleRouting ชี้ util ใหม่
 - ค้าง: baseline เต็มกำลังรัน → commit → deploy staging → สรุป Codex · pro รอ: migration 054 (ฉบับ transaction) บน ener_scan_pro + Codex ไฟเขียว + กบสั่ง
+
+## 2026-08-19 | Claude | ปิด 7 blockers รอบสาม (Codex NO-GO บน d7fa93e) + P1
+- **R1 resurrection**: setKeyIfGuardAbsent (Lua atomic — SET positive ได้เฉพาะ tombstone ไม่มี ณ เวลาเขียนจริง) แทน fire-and-forget cacheSet; race test stale-write-หลัง-unban → หลัง tomb expiry ไม่แบนซ้ำ
+- **R2 single-flight**: evict entry ทันทีเมื่อ caller deadline หมด — DB ที่ฟื้นแล้วถูกอ่านใหม่ได้เลย ไม่ fail-open ซ้ำ 2 วิ (test recovery)
+- **R3 ban-during-retry**: sendScanResultPushWith429Retry มี beforeAttempt hook เช็คก่อนทุก transport attempt (jitter/backoff/flex→text fallback) คืน typed suppressedBanned · deliverOutbound ผูก hook ทั้ง 2 call sites + terminalize stage "during_retry" + no-voice retry ไม่วิ่งเมื่อ suppressed · แยก suppressOutboundBanned helper กลางใช้ 3 stage · backoffsMs injectable สำหรับเทสต์
+- **R4 LIFF mutations**: profile POST มี rejectIfBannedLiff · daily-pick ข้าม streak write เมื่อแบน (endpoint ยังอ่านได้) · ประกาศ scope ใน comment: read-only เปิด mutation/AI ห้าม
+- **R5 deterministic 0-AI**: ตัด orchestrator ออกจาก วิธีใช้/วิธีใช้งาน (pending_verify + idle) และ สแกนพลังงาน (2 จุด) — AI=0 จริง
+- **R6 troll false positive**: status query (RESULT_STATUS_QUERY_RE + ผลออก/เสร็จยัง/สถานะ/ถึงไหน/นานไหม/กี่นาที) ยกเว้นทั้งบล็อก troll ก่อนแตะ counter
+- **R7 AI-chain honesty**: rename → settledAiLatencyMs + settledAiCallCount + pendingAiCount + pendingElapsedMs (outer timeout เห็น pending ไม่ใช่ latency=0) · embeddings เข้า withUsageTracking แล้ว
+- **P1**: strictBound 1.5s ครอบ strict cache ops ใน ban/unban (คำสั่งแอดมินไม่ค้าง) · admin reply ตัดสัญญา "1 นาที" + not_banned แจ้ง cache ไม่ครบ · alert: kvBound ทุก kv op + clearTimeout + late-success ตั้ง sent marker แทนปล่อยส่งซ้ำ (TIMEOUT คง lease) · identity regex เพิ่ม chatgpt/จีพีที/แชทบอท/คนตอบ + copy factual ไร้ครับไร้ CTA 2 แบบ · migration 054 GRANT UPDATE เฉพาะคอลัมน์ unban (append-only จริง) — apply บน staging DB แล้ว
+- Tests ใหม่/แก้: banSystem 28 (resurrection, single-flight recovery, 0-AI+troll+LIFF contracts) · linePush429BanRecheck 5 (ใหม่ เข้า manifest) · turnAiChain 7 (pending accounting + embeddings) · รวม suite ที่แตะ 65 เขียว
+- ค้าง: host baseline + Node 20 (container image) baseline → commit → deploy staging → สรุป Codex · pro รอไฟเขียว

@@ -71,24 +71,59 @@ export async function sendCustomerAlert(p, deps = {}) {
   // Codex P1: lease สั้น (60s) กันส่งซ้อน + sent marker เต็ม TTL หลังส่งสำเร็จเท่านั้น
   // — process ตายกลางคันเสีย alert แค่ 60 วิ ไม่ใช่ทั้ง TTL · แต่ละ channel แยกส่ง
   // ขนานพร้อม timeout ของตัวเอง — ช่องหนึ่งค้างห้ามขวางอีกช่อง
+  // bounded kv op (Codex P1 รอบ 3): redis ค้างห้ามลากทั้ง alert path — ทุกตัวมี
+  // timeout ของตัวเองและ clearTimeout เก็บ timer เสมอ
+  const kvBound = async (promise, fallback, ms = 1000) => {
+    let timer = null;
+    try {
+      return await Promise.race([
+        Promise.resolve(promise).catch(() => fallback),
+        new Promise((resolve) => { timer = setTimeout(() => resolve(fallback), ms); }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+
   const sendViaChannel = async ({ channel, doSend }) => {
     const sentKey = `alert:${p.type}:${channel}:${p.userId}`;
     const leaseKey = `${sentKey}:lease`;
     try {
-      if ((await kvGet(sentKey)) === "1") return;
-      if (!(await dd(leaseKey, 60))) return; // มีคนกำลังส่งอยู่
-      let ok = false;
+      if ((await kvBound(kvGet(sentKey), null)) === "1") return;
+      if (!(await kvBound(dd(leaseKey, 60), false))) return; // มีคนกำลังส่งอยู่
+      const TIMEOUT = Symbol("timeout");
+      let timer = null;
+      const sendPromise = Promise.resolve()
+        .then(() => doSend())
+        .catch(() => false);
+      let outcome;
       try {
-        ok = await Promise.race([
-          doSend(),
-          new Promise((resolve) => setTimeout(() => resolve(false), deps.channelTimeoutMs || 8000)),
+        outcome = await Promise.race([
+          sendPromise,
+          new Promise((resolve) => { timer = setTimeout(() => resolve(TIMEOUT), deps.channelTimeoutMs || 8000); }),
         ]);
-      } catch { ok = false; }
-      if (ok) {
-        await kvSet(sentKey, "1", p.dedupeSec).catch(() => {});
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+      if (outcome === TIMEOUT) {
+        // ค้าง: คง lease ไว้ (กัน late success + รอบใหม่ยิงซ้อน) — ถ้า transport
+        // มา settle ทีหลังว่าสำเร็จจริง ค่อยตั้ง sent marker ตอนนั้น (ไม่ส่งซ้ำ)
+        log(channel === "tg" ? "CUSTOMER_ALERT_TG_TIMEOUT" : "CUSTOMER_ALERT_LINE_TIMEOUT", { type: p.type, uidPrefix });
+        void sendPromise.then(async (lateOk) => {
+          if (lateOk === true) {
+            await kvBound(kvSet(sentKey, "1", p.dedupeSec), null);
+            log("CUSTOMER_ALERT_LATE_SUCCESS", { type: p.type, channel, uidPrefix });
+          } else {
+            await kvBound(clear(leaseKey), null);
+          }
+        });
+        return;
+      }
+      if (outcome === true) {
+        await kvBound(kvSet(sentKey, "1", p.dedupeSec), null);
         log("CUSTOMER_ALERT_SENT", { type: p.type, channel, uidPrefix });
       } else {
-        await clear(leaseKey).catch(() => {});
+        await kvBound(clear(leaseKey), null);
         log(channel === "tg" ? "CUSTOMER_ALERT_TG_FAILED" : "CUSTOMER_ALERT_LINE_FAILED", { type: p.type, uidPrefix });
       }
     } catch { /* alert ห้ามล้มทับงานหลัก */ }

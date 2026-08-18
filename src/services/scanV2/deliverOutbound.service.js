@@ -101,6 +101,32 @@ function outboundDeliveryBase(msg, traceCtx = {}) {
 }
 
 /**
+ * Suppress outbound ของลูกค้าที่โดนแบน — typed terminal ชุดเดียวใช้ทุก stage
+ * (top gate / nested object-info hold / ban-during-retry): mark suppressed_banned
+ * (no retry), terminalize job ที่เกี่ยว, ปล่อย scan gate — transport ต้องเป็น 0 แล้ว
+ * ณ จุดที่เรียก
+ */
+async function suppressOutboundBanned({ id, lineUserId, relatedJobId, gateDeps, baseFn, stage, message }) {
+  const updateOutbound = gateDeps.updateOutboundMessage || updateOutboundMessage;
+  await updateOutbound(id, {
+    status: "suppressed_banned",
+    last_error_code: "suppressed_banned",
+    last_error_message: message || "user banned - outbound suppressed",
+    next_retry_at: null,
+  }).catch(() => {});
+  try { (gateDeps.releaseScanGate || releaseScanGate)(lineUserId); } catch { /* ignore */ }
+  if (relatedJobId) {
+    try {
+      const doFailJob =
+        gateDeps.failJob || (await import("./processScanJob.service.js")).failJob;
+      await doFailJob(relatedJobId, "suppressed_banned", message || "outbound suppressed for banned user", lineUserId, "delivery-gate");
+    } catch { /* job อาจ terminal แล้ว */ }
+  }
+  console.log(JSON.stringify({ event: "OUTBOUND_SUPPRESSED_BANNED", stage, ...baseFn() }));
+  return { sent: false, suppressedBanned: true, errorCode: "suppressed_banned" };
+}
+
+/**
  * @param {*} client LINE SDK client
  * @param {object} msg outbound_messages row
  * @param {{ workerId?: string, attempt?: number }} [traceCtx]
@@ -124,23 +150,9 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
     const checkBanned =
       gateDeps.isBanned || (await import("../ban/bannedUsers.repo.js")).isBanned;
     if (await checkBanned(lineUserId)) {
-      const updateOutbound = gateDeps.updateOutboundMessage || updateOutboundMessage;
-      await updateOutbound(id, {
-        status: "suppressed_banned",
-        last_error_code: "suppressed_banned",
-        last_error_message: "user banned - outbound suppressed",
-        next_retry_at: null,
-      }).catch(() => {});
-      try { (gateDeps.releaseScanGate || releaseScanGate)(lineUserId); } catch { /* ignore */ }
-      if (msg.related_job_id) {
-        try {
-          const doFailJob =
-            gateDeps.failJob || (await import("./processScanJob.service.js")).failJob;
-          await doFailJob(msg.related_job_id, "suppressed_banned", "outbound suppressed for banned user", lineUserId, "delivery-gate");
-        } catch { /* job อาจ terminal แล้ว */ }
-      }
-      console.log(JSON.stringify({ event: "OUTBOUND_SUPPRESSED_BANNED", ...base() }));
-      return { sent: false, suppressedBanned: true, errorCode: "suppressed_banned" };
+      return await suppressOutboundBanned({
+        id, lineUserId, relatedJobId: msg.related_job_id, gateDeps, baseFn: base, stage: "pre_send",
+      });
     }
   } catch { /* gate พัง = ส่งตามปกติ (fail-open) */ }
 
@@ -283,24 +295,11 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         const holdOutcome = hold && typeof hold === "object" ? hold.outcome : hold === true ? "held" : "not_held";
         if (holdOutcome === "suppressed_banned") {
           // ลูกค้าโดนแบนระหว่าง push การ์ดถามข้อมูล — suppress เต็มชุดเหมือน gate บนสุด
-          const gateDeps = traceCtx.banGateDeps || {};
-          const updateOutbound = gateDeps.updateOutboundMessage || updateOutboundMessage;
-          await updateOutbound(id, {
-            status: "suppressed_banned",
-            last_error_code: "suppressed_banned",
-            last_error_message: "user banned during object-info hold - outbound suppressed",
-            next_retry_at: null,
-          }).catch(() => {});
-          try { (gateDeps.releaseScanGate || releaseScanGate)(lineUserId); } catch { /* ignore */ }
-          if (msg.related_job_id) {
-            try {
-              const doFailJob =
-                gateDeps.failJob || (await import("./processScanJob.service.js")).failJob;
-              await doFailJob(msg.related_job_id, "suppressed_banned", "outbound suppressed for banned user (object-info hold)", lineUserId, "delivery-gate");
-            } catch { /* job อาจ terminal แล้ว */ }
-          }
-          console.log(JSON.stringify({ event: "OUTBOUND_SUPPRESSED_BANNED", stage: "object_info_hold", ...base() }));
-          return { sent: false, suppressedBanned: true, errorCode: "suppressed_banned" };
+          return await suppressOutboundBanned({
+            id, lineUserId, relatedJobId: msg.related_job_id,
+            gateDeps: traceCtx.banGateDeps || {}, baseFn: base, stage: "object_info_hold",
+            message: "user banned during object-info hold - outbound suppressed",
+          });
         }
         if (holdOutcome === "held") {
           await ((traceCtx.banGateDeps || {}).markSent || markSent)(id);
@@ -379,15 +378,27 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           ? [...baseMessages, audioMessage]
           : [{ type: "text", text: text.slice(0, 4900) }, audioMessage]
         : chatCardMessages || flex;
+      // Codex (ban-during-retry): jitter/backoff เปิดหน้าต่างหลายวินาที —
+      // เช็คแบนซ้ำก่อนทุก transport attempt ผ่าน hook
+      const banRecheckBeforeAttempt = async () => {
+        try {
+          const check =
+            (traceCtx.banGateDeps || {}).isBanned ||
+            (await import("../ban/bannedUsers.repo.js")).isBanned;
+          if (await check(lineUserId)) return { proceed: false, suppressedBanned: true };
+        } catch { /* fail-open */ }
+        return { proceed: true };
+      };
       let delivery = await sendScanResultPushWith429Retry({
         client,
         userId: lineUserId,
         flexMessage: primaryMessage,
         text,
         logPrefix: "[SCAN_V2_DELIVERY]",
+        beforeAttempt: banRecheckBeforeAttempt,
       });
       // เสียงห้ามทำให้ report ล่ม: push พร้อมเสียงไม่ผ่าน (ไม่ใช่ 429) → ส่งซ้ำแบบไม่มีเสียง
-      if (!delivery.sent && !delivery.is429 && audioMessage) {
+      if (!delivery.sent && !delivery.is429 && !delivery.suppressedBanned && audioMessage) {
         console.warn(
           JSON.stringify({
             event: "SCAN_VOICE_ATTACH_RETRY_WITHOUT_AUDIO",
@@ -401,6 +412,16 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           flexMessage: flex,
           text,
           logPrefix: "[SCAN_V2_DELIVERY_NO_VOICE]",
+          beforeAttempt: banRecheckBeforeAttempt,
+        });
+      }
+
+      if (delivery.suppressedBanned) {
+        // โดนแบนกลาง retry window — terminalize เหมือน gate อื่น (transport หลังแบน = 0)
+        return await suppressOutboundBanned({
+          id, lineUserId, relatedJobId: msg.related_job_id,
+          gateDeps: traceCtx.banGateDeps || {}, baseFn: base, stage: "during_retry",
+          message: "user banned during delivery retry - outbound suppressed",
         });
       }
 

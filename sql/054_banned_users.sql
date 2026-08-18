@@ -18,9 +18,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_banned_users_active
   ON banned_users (line_user_id) WHERE unbanned_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_banned_users_uid ON banned_users (line_user_id);
 
-GRANT SELECT, INSERT, UPDATE ON banned_users TO web_anon;
+-- append-only enforce (Codex รอบ 3): UPDATE ได้เฉพาะคอลัมน์ปลดแบน —
+-- line_user_id/reason/banned_by/banned_at ห้ามแก้ย้อนหลังผ่าน API role
+GRANT SELECT, INSERT ON banned_users TO web_anon;
+GRANT UPDATE (unbanned_by, unbanned_at, unban_reason) ON banned_users TO web_anon;
 GRANT USAGE, SELECT ON SEQUENCE banned_users_id_seq TO web_anon;
-GRANT SELECT, INSERT, UPDATE ON banned_users TO service_role;
+GRANT SELECT, INSERT ON banned_users TO service_role;
+GRANT UPDATE (unbanned_by, unbanned_at, unban_reason) ON banned_users TO service_role;
 GRANT USAGE, SELECT ON SEQUENCE banned_users_id_seq TO service_role;
 
 -- preflight (Codex): มี status แปลกนอกลิสต์ใหม่ → ยกเลิกทั้ง transaction

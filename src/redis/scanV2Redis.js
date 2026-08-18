@@ -279,6 +279,31 @@ export async function strictSetWithTtl(key, value, ttlSec) {
   }
 }
 
+/**
+ * atomic guarded SET (Codex ban-resurrection): เขียน key ได้เฉพาะเมื่อ guardKey
+ * ไม่มีอยู่ ณ เวลาที่เขียนจริง (Lua ก้อนเดียว) — ใช้กัน stale positive-ban write
+ * ฟื้น cache หลัง unban (re-read ก่อนเขียนไม่พอ เพราะ TOCTOU)
+ * @returns {Promise<{ ok: boolean, written?: boolean, reason?: string }>}
+ */
+export async function setKeyIfGuardAbsent(key, value, ttlSec, guardKey) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const ttl = Math.min(Math.max(Number(ttlSec) || 3600, 60), 45 * 86400);
+    const res = await r.eval(
+      "if redis.call('EXISTS',KEYS[2])==1 then return 0 end redis.call('SET',KEYS[1],ARGV[1],'EX',ARGV[2]) return 1",
+      2,
+      kDedupe(key),
+      kDedupe(guardKey),
+      String(value).slice(0, 4096),
+      String(ttl),
+    );
+    return { ok: true, written: Number(res) === 1 };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
 export async function clearDedupeKey(dedupeKey) {
   const r = await getScanV2Redis();
   if (!r) return;

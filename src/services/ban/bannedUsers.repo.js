@@ -19,6 +19,7 @@ import { db } from "../../config/supabase.js";
 import {
   getValue,
   setLargeValueWithTtl,
+  setKeyIfGuardAbsent,
   strictDeleteKey,
   strictSetWithTtl,
   tryDedupeOnce,
@@ -34,6 +35,20 @@ const NEG_TTL_SEC = 45;
 const TOMBSTONE_TTL_SEC = 120;
 
 const log = (event, extra = {}) => console.log(JSON.stringify({ event, ...extra }));
+
+/** strict cache op พร้อม deadline (Codex P1): redis ค้างห้ามลากคำสั่งแอดมิน —
+ *  timeout = {ok:false} ตามสัญญา strict (ไม่โกหกว่าล้างแล้ว) */
+async function strictBound(promise, ms = 1500) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      Promise.resolve(promise).catch((e) => ({ ok: false, reason: String(e?.message || e).slice(0, 80) })),
+      new Promise((resolve) => { timer = setTimeout(() => resolve({ ok: false, reason: "timeout" }), ms); }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /** race พร้อม timeout ที่ "เหลืออยู่" จาก deadline รวม — ค้าง/throw = fallback */
 async function raceRemaining(promise, fallback, remainingMs) {
@@ -56,7 +71,7 @@ const dbReadInFlight = new Map();
 function readActiveBanRow(uid, client) {
   const existing = dbReadInFlight.get(uid);
   const now = Date.now();
-  if (existing && now - existing.at < DB_READ_SHARE_MS) return existing.p;
+  if (existing && now - existing.at < DB_READ_SHARE_MS) return existing;
   const p = (async () => {
     const q = client
       .from("banned_users")
@@ -72,7 +87,13 @@ function readActiveBanRow(uid, client) {
   p.finally(() => {
     if (dbReadInFlight.get(uid) === entry) dbReadInFlight.delete(uid);
   }).catch(() => {});
-  return p;
+  return entry;
+}
+
+/** query ค้างจนเกิน deadline ของ caller → ถอดออกจาก map ทันที (Codex: ห้าม
+ *  poison call ถัดไป — DB ที่ฟื้นแล้วต้องถูกอ่านใหม่ได้เลย) */
+function evictDbReadInFlight(uid, entry) {
+  if (dbReadInFlight.get(uid) === entry) dbReadInFlight.delete(uid);
 }
 
 function fireFailOpenAlert(deps) {
@@ -115,7 +136,9 @@ export async function isBanned(lineUserId, deps = {}) {
 
   const client = deps.dbClient || db;
   const TIMEOUT_SENTINEL = { __timeout: true };
-  const res = await raceRemaining(readActiveBanRow(uid, client), TIMEOUT_SENTINEL, remaining());
+  const flight = readActiveBanRow(uid, client);
+  const res = await raceRemaining(flight.p, TIMEOUT_SENTINEL, remaining());
+  if (res === TIMEOUT_SENTINEL) evictDbReadInFlight(uid, flight);
   if (res === TIMEOUT_SENTINEL || !res || res.error) {
     // DB พัง/ช้า + ไม่มี positive cache → fail-open + critical alert (ไม่ block)
     log("BAN_CHECK_DB_ERROR_FAIL_OPEN", {
@@ -133,7 +156,10 @@ export async function isBanned(lineUserId, deps = {}) {
   if (tombAfter === "1") return false;
 
   if (banned) {
-    void Promise.resolve(cacheSet(banCacheKey(uid), "1", POSITIVE_TTL_SEC)).catch(() => {});
+    // atomic guarded write (Codex resurrection fix): SET positive เฉพาะเมื่อ
+    // tombstone ไม่มี "ณ เวลาเขียนจริง" — stale write ที่จบหลัง unban เขียนไม่เข้า
+    const guardedSet = deps.setPositiveGuarded || setKeyIfGuardAbsent;
+    void Promise.resolve(guardedSet(banCacheKey(uid), "1", POSITIVE_TTL_SEC, banTombstoneKey(uid))).catch(() => {});
     return true;
   }
   void Promise.resolve(cacheSet(banNegCacheKey(uid), "1", NEG_TTL_SEC)).catch(() => {});
@@ -161,14 +187,14 @@ export async function banUser({ lineUserId, reason, bannedBy }, deps = {}) {
     });
     if (error) {
       if (String(error.message || "").includes("idx_banned_users_active") || String(error.code) === "23505") {
-        await strictSet(banCacheKey(uid), "1", POSITIVE_TTL_SEC);
+        await strictBound(strictSet(banCacheKey(uid), "1", POSITIVE_TTL_SEC));
         return { ok: false, reason: "already_banned" };
       }
       throw new Error(error.message || "db_error");
     }
-    const negDel = await strictDel(banNegCacheKey(uid));
-    const tombDel = await strictDel(banTombstoneKey(uid));
-    const posSet = await strictSet(banCacheKey(uid), "1", POSITIVE_TTL_SEC);
+    const negDel = await strictBound(strictDel(banNegCacheKey(uid)));
+    const tombDel = await strictBound(strictDel(banTombstoneKey(uid)));
+    const posSet = await strictBound(strictSet(banCacheKey(uid), "1", POSITIVE_TTL_SEC));
     const cacheSynced = negDel.ok && tombDel.ok && posSet.ok;
     if (!cacheSynced) {
       log("BAN_USER_CACHE_SYNC_INCOMPLETE", {
@@ -219,10 +245,10 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
     if (error) throw new Error(error.message || "db_error");
     const wasBanned = Array.isArray(data) && data.length > 0;
     // tombstone ก่อน DEL (strict): กัน stale query เขียน positive กลับระหว่างล้าง
-    const tombSet = await strictSet(banTombstoneKey(uid), "1", TOMBSTONE_TTL_SEC);
+    const tombSet = await strictBound(strictSet(banTombstoneKey(uid), "1", TOMBSTONE_TTL_SEC));
     let cacheCleared = tombSet.ok;
     for (const k of UNBAN_CLEAR_KEYS(uid)) {
-      const r = await strictDel(k);
+      const r = await strictBound(strictDel(k));
       if (!r.ok) cacheCleared = false;
     }
     if (!wasBanned) return { ok: false, reason: "not_banned", cacheCleared };

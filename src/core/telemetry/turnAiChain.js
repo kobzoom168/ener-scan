@@ -26,13 +26,20 @@ export async function runWithTurnContext(meta, fn) {
 /** เรียกจาก LLM client ทุกครั้งที่ "พยายาม" ยิง (error/timeout ก็นับ) — นอก context = no-op */
 export function recordTurnAiCall(callSite) {
   const s = als.getStore();
-  if (s) s.callSites.push(String(callSite || "untagged"));
+  if (!s) return;
+  s.callSites.push(String(callSite || "untagged"));
+  // pending accounting (Codex รอบ 3): call ที่ยังไม่ settle ตอน emit ต้องไม่หาย
+  // จาก latency — เก็บเวลาเริ่มไว้คำนวณ elapsed ของตัวค้าง
+  (s.pendingStarts ||= []).push(Date.now());
 }
 
-/** เวลา AI จริงสะสม (แยกจากเวลาเทิร์นทั้งก้อน — Codex P0-6) */
+/** เวลา AI ที่ settle แล้วสะสม (request จบจริง — สำเร็จหรือ error ก็ตาม) */
 export function recordTurnAiLatency(ms) {
   const s = als.getStore();
-  if (s) s.aiMs = (s.aiMs || 0) + Math.max(0, Number(ms) || 0);
+  if (!s) return;
+  s.aiMs = (s.aiMs || 0) + Math.max(0, Number(ms) || 0);
+  s.settledCount = (s.settledCount || 0) + 1;
+  if (Array.isArray(s.pendingStarts) && s.pendingStarts.length) s.pendingStarts.shift();
 }
 
 /** เติมข้อมูล state/route ระหว่างทาง (เช่น phase1 ที่รู้ทีหลัง) */
@@ -53,7 +60,15 @@ export function emitTurnAiChain() {
       state: s.state ?? null,
       aiCallCount: s.callSites.length,
       callSites: s.callSites,
-      aiLatencyMs: Math.round(s.aiMs || 0),
+      // ชื่อซื่อสัตย์ (Codex รอบ 3): นี่คือ latency ของ call ที่ settle แล้วเท่านั้น —
+      // outer timeout ระหว่าง request ค้างจะเห็น pendingAiCount>0 + elapsed แทนศูนย์เงียบ ๆ
+      settledAiCallCount: s.settledCount || 0,
+      settledAiLatencyMs: Math.round(s.aiMs || 0),
+      pendingAiCount: Math.max(0, s.callSites.length - (s.settledCount || 0)),
+      pendingElapsedMs:
+        Array.isArray(s.pendingStarts) && s.pendingStarts.length
+          ? Date.now() - s.pendingStarts[0]
+          : 0,
       turnLatencyMs: Date.now() - s.startedAt,
     }),
   );

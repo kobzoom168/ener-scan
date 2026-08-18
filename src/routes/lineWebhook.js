@@ -4076,7 +4076,7 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     await reply(
       res.ok
         ? res.cacheSynced === false
-          ? `แบนบันทึกแล้วครับ\n${payload.target}\nแต่ระบบ cache ขัดข้อง อาจมีผลช้าไม่เกิน 1 นาที พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
+          ? `แบนบันทึกแล้วครับ\n${payload.target}\nแต่ระบบ cache ขัดข้อง อาจมีผลช้ากว่าปกติ เช็คซ้ำด้วย ดูแบน ได้ พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
           : `แบนแล้วครับ\n${payload.target}\nระบบจะเงียบกับบัญชีนี้ทุกช่องทาง พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
         : res.reason === "already_banned"
           ? "บัญชีนี้ถูกแบนอยู่แล้วครับ"
@@ -4095,7 +4095,9 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
           ? `ปลดแบนใน DB แล้วครับ ${unbanM[1]} แต่ล้าง cache ไม่ครบ — อาจยังเงียบต่ออีกพักหนึ่ง ถ้าเกิน 5 นาทีพิมพ์ ปลดแบน ${unbanM[1]} ซ้ำอีกครั้ง`
           : `ปลดแบนแล้วครับ ${unbanM[1]} กลับมาใช้งานได้ปกติ (ล้างสถานะเงียบชั่วคราวให้ด้วยแล้ว)`
         : res.reason === "not_banned"
-          ? "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ"
+          ? res.cacheCleared === false
+            ? "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ แต่ล้างสถานะชั่วคราวไม่ครบ ถ้ายังเงียบให้พิมพ์คำสั่งนี้ซ้ำ"
+            : "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ"
           : "ปลดแบนไม่สำเร็จ ลองใหม่อีกครั้งครับ",
     );
     return true;
@@ -4506,7 +4508,12 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // ความอดทนอาจารย์: ข้อความกวน (สั้นจุ๋มจิ๋ม/พิมพ์ซ้ำ) นับแต้มใน 30 นาที —
   // 3-4 แต้ม = ตัดบทสุภาพแบบมีบารมี (ไม่เปลือง AI), 5+ = เงียบ, 8+ = แบน 24 ชม. (เว้นลูกค้าเคยจ่าย)
-  try {
+  // ถามสถานะผลซ้ำ = ลูกค้ารอผลจริง ไม่ใช่ troll (Codex รอบ 3: false positive
+  // ทำลูกค้าที่ยังไม่ได้ผลโดนเงียบ) — ยกเว้นทั้งบล็อกก่อนแตะ counter
+  const isResultStatusQueryText =
+    RESULT_STATUS_QUERY_RE.test(String(text || "").trim()) ||
+    /ผลออก|เสร็จยัง|ได้ยัง|สถานะ|ถึงไหน|นานไหม|กี่นาที/.test(String(text || ""));
+  if (!isResultStatusQueryText) try {
     const bare = text.replace(/[\s!?.…ๆฯ]+/g, "");
     const isAck = /^(ครับ|คับ|ค่ะ|คะ|จ้า|จ๊ะ|โอเค|ok|okay|ได้|จ่าย|ปลดล็อก|ขอบคุณ|ขอบใจ|555|thank)/i.test(bare);
     const lastKey = `scan_v2:last_text:${userId}`;
@@ -7622,7 +7629,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "",
             "ส่งรูปถัดไปมาได้เลยครับ",
           ].join("\n");
-          if ((await invokePhase1GeminiOrchestrator()).handled) return;
+          // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
           await sendNonScanReply({
             client,
             userId,
@@ -7649,7 +7656,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "",
             `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
           ].join("\n");
-          if ((await invokePhase1GeminiOrchestrator()).handled) return;
+          // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
           await sendNonScanReply({
             client,
             userId,
@@ -8403,7 +8410,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "ส่งรูปถัดไปมาได้เลยครับ",
     ].join("\n");
 
-    if ((await invokePhase1GeminiOrchestrator()).handled) return;
+    // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
     await sendNonScanReply({
       client,
       userId,
@@ -8443,7 +8450,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "",
       `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
     ].join("\n");
-    if ((await invokePhase1GeminiOrchestrator()).handled) return;
+    // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
     await sendNonScanReply({
       client,
       userId,

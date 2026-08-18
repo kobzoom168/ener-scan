@@ -15,11 +15,10 @@ const IDENTITY_RE = new RegExp(
 );
 
 // กบ 11 ส.ค.: ไม่ใส่อีโมจิ พิมพ์เหมือนคน ยาวแล้วเว้นบรรทัด · โทนจริงจัง นิ่ง ห้ามติดตลก
-// โทนกบ (Codex เตือนรอบ 2): ข้อเท็จจริงประโยคเดียว ไม่มี CTA ไม่ชวนส่งรูป ครับเดียวพอ
+// โทนกบ (Codex รอบ 3): factual เดียว ไม่มี CTA ไม่มีคำฟุ่มเฟือย
 const REPLIES = [
-  "ผมแอดมินดูแลแชทนี้ คำอ่านพลังอาจารย์เป็นคนดูครับ",
-  "แชทนี้ผมกับอาจารย์ดูแลอยู่ครับ",
-  "มีคนดูแลแชทนี้ตลอดครับ",
+  "แอดมินรับเรื่องในแชท ส่วนคำอ่านพลังเป็นของอาจารย์",
+  "แชทนี้แอดมินดูแล คำอ่านพลังมาจากอาจารย์",
 ];
 
 /**
@@ -31,7 +30,7 @@ const REPLIES = [
 export function classifyIdentityQuestion(text) {
   const t = String(text || "").trim();
   if (t.length > 80 || !IDENTITY_RE.test(t)) return null;
-  if (/บอท|bot|\bai\b|เอไอ|โปรแกรม/i.test(t)) return "ai_bot";
+  if (/บอท|bot|\bai\b|เอไอ|โปรแกรม|chat\s*gpt|จีพีที|แชทบอท|คนตอบ.{0,8}(หรือ|รึ|ไหม)|ใคร.{0,6}ตอบ/i.test(t)) return "ai_bot";
   if (/แอดมิน|admin/i.test(t)) return "admin_check";
   return "who";
 }

@@ -96,8 +96,10 @@ export const openai = {
     ),
   },
   embeddings: {
-    // embeddings ถูกมาก ($0.00001 ระดับ) — ไม่ log กัน noise
-    create: (p) => rawClient.embeddings.create({ ...p, model: prefixModel(p?.model) }),
+    // เข้า wrapper เหมือนกัน (Codex รอบ 3: AI chain ต้องครบทุกเส้น) — ถูกแต่ก็คือ call
+    create: withUsageTracking("embeddings", (p) =>
+      rawClient.embeddings.create({ ...p, model: prefixModel(p?.model) }),
+    ),
   },
   chat: {
     completions: {

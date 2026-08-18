@@ -389,3 +389,99 @@ test("channel isolation: Telegram ค้าง → timeout เอง + LINE aler
     if (prevAdmin === undefined) delete process.env.ADMIN_LINE_USER_ID; else process.env.ADMIN_LINE_USER_ID = prevAdmin;
   }
 });
+
+/* ---------------- Codex รอบ 3: resurrection + single-flight recovery ---------------- */
+
+test("resurrection race: stale positive write หลัง unban เขียนไม่เข้า (atomic guarded SET)", async () => {
+  const uid = "U" + "2".repeat(32);
+  const store = new Map();
+  const cacheGet = async (k) => (store.has(k) ? store.get(k) : null);
+  const cacheSet = async (k, v) => { store.set(k, v); };
+  // guarded set แบบ production (Lua): เขียนเฉพาะเมื่อ tombstone ไม่มี ณ เวลาเขียนจริง
+  const setPositiveGuarded = async (key, value, ttl, guardKey) => {
+    if (store.has(guardKey)) return { ok: true, written: false };
+    store.set(key, value);
+    return { ok: true, written: true };
+  };
+  let resolveDb;
+  const dbClient = { from: () => ({ select: () => ({ eq: () => ({ is: () => ({ limit: () => ({
+    maybeSingle: () => new Promise((r) => { resolveDb = r; }),
+  }) }) }) }) }) };
+  // isBanned เริ่ม → DB ค้าง
+  const p = isBanned(uid, { dbClient, cacheGet, cacheSet, setPositiveGuarded, alertDedupe: async () => false });
+  await new Promise((r) => setTimeout(r, 20));
+  // unban สำเร็จระหว่างนั้น: ตั้ง tombstone + ลบ active
+  store.set(`ban:tomb:${uid}`, "1");
+  store.delete(`ban:active:${uid}`);
+  // active row เก่าเพิ่ง settle
+  resolveDb({ data: { id: 1 }, error: null });
+  await p;
+  await new Promise((r) => setTimeout(r, 30)); // ให้ delayed write settle
+  assert.equal(store.has(`ban:active:${uid}`), false, "stale write ต้องโดน guard บล็อก");
+  // tombstone หมดอายุ → เช็คใหม่กับ DB ที่ปลดแบนแล้ว ต้อง false ถาวร
+  store.delete(`ban:tomb:${uid}`);
+  const { client: cleanDb } = dbSelectCounter({ banned: false });
+  assert.equal(
+    await isBanned(uid, { dbClient: cleanDb, cacheGet, cacheSet, setPositiveGuarded, alertDedupe: async () => false }),
+    false,
+    "หลัง tomb expiry ห้ามแบนซ้ำจาก cache ผี",
+  );
+});
+
+test("single-flight recovery: query แรกค้างจน timeout → call ถัดไปอ่าน DB ที่ฟื้นแล้วได้ทันที", async () => {
+  const uid = "U" + "0".repeat(31) + "a";
+  const neverDb = { from: () => ({ select: () => ({ eq: () => ({ is: () => ({ limit: () => ({ maybeSingle: () => new Promise(() => {}) }) }) }) }) }) };
+  const r1 = await isBanned(uid, {
+    dbClient: neverDb, cacheGet: async () => null, cacheSet: async () => {},
+    alertDedupe: async () => false, overallTimeoutMs: 120,
+  });
+  assert.equal(r1, false, "timeout = fail-open");
+  // DB ฟื้น: call ถัดไปต้องไม่ reuse promise ค้าง — อ่านค่าจริง (banned=true) ได้เลย
+  const { state, client } = dbSelectCounter({ banned: true });
+  const r2 = await isBanned(uid, {
+    dbClient: client, cacheGet: async () => null, cacheSet: async () => {},
+    setPositiveGuarded: async () => ({ ok: true, written: true }),
+    alertDedupe: async () => false,
+  });
+  assert.equal(r2, true, "ต้องเห็นผลจริงจาก DB ที่ฟื้นแล้ว ไม่ fail-open ซ้ำ");
+  assert.equal(state.reads, 1);
+});
+
+test("troll exemption + deterministic 0-AI (source contract รอบ 3)", () => {
+  // status query ถูกยกเว้นทั้งบล็อกก่อนแตะ troll counter
+  const guardIdx = WEBHOOK.indexOf("if (!isResultStatusQueryText) try {");
+  const trollInc = WEBHOOK.indexOf("incrementCounterWithTtl(`scan_v2:troll:");
+  assert.ok(guardIdx > 0 && guardIdx < trollInc, "status query ต้องยกเว้นก่อน troll increment");
+  // 4 จุด deterministic ห้ามมี orchestrator ก่อน send
+  for (const marker of [
+    'replyType: "scan_energy_helper_pending_verify"',
+    'replyType: "usage_help_pending_verify"',
+  ]) {
+    const i = WEBHOOK.indexOf(marker);
+    assert.ok(i > 0, marker);
+    const back = WEBHOOK.slice(i - 600, i);
+    assert.ok(!back.includes("invokePhase1GeminiOrchestrator()"), `${marker} ต้อง AI=0`);
+  }
+  // usage_help (idle main) + สแกนพลังงาน (idle main): เช็คทุก occurrence
+  for (const marker of ['replyType: "usage_help"', 'replyType: "scan_energy_helper"']) {
+    let from = 0;
+    while (true) {
+      const i = WEBHOOK.indexOf(marker, from);
+      if (i < 0) break;
+      const back = WEBHOOK.slice(Math.max(0, i - 600), i);
+      assert.ok(!back.includes("invokePhase1GeminiOrchestrator()"), `${marker}@${i} ต้อง AI=0`);
+      from = i + marker.length;
+    }
+  }
+});
+
+test("LIFF mutations (source contract รอบ 3): profile POST มี guard · daily-pick ข้าม streak write เมื่อแบน", () => {
+  const liff = fs.readFileSync(path.join(process.cwd(), "src", "routes", "liff.routes.js"), "utf8");
+  const profilePost = liff.indexOf('liffRouter.post("/api/liff/profile"');
+  const profileGuard = liff.indexOf('rejectIfBannedLiff(userId, res, "profile_post")', profilePost);
+  const profileWrite = liff.indexOf('from("liff_profiles")', profilePost);
+  assert.ok(profileGuard > 0 && profileGuard < profileWrite, "profile POST ต้อง guard ก่อน mutate");
+  const streakWrite = liff.indexOf("liff:pickstreak:${userId}`, `${dayKey}|${streak}`");
+  const streakGuard = liff.lastIndexOf("bannedForStreak", streakWrite);
+  assert.ok(streakWrite > 0 && streakGuard > 0 && streakWrite - streakGuard < 400, "streak write ต้องเช็คแบนก่อน");
+});
