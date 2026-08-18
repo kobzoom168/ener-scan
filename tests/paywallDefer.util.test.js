@@ -6,9 +6,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   resolvePaywallDeferDecision,
+  gatherPaywallDeferEvidence,
+  selectRecoveryText,
   PAYWALL_DEFER_SAFETY_BOUND_MS,
   PAYWALL_DEFER_TEXT,
-  PAYWALL_RECOVERY_TEXT,
+  PAYWALL_RECOVERY_TEXTS,
 } from "../src/services/lineWebhook/paywallDefer.util.js";
 
 test("pending ทุกสถานะภายใน bound → defer (ไม่ว่าลูกค้าใหม่/เก่า) · delivered → paywall", () => {
@@ -99,11 +101,87 @@ test("in-flight → defer เสมอ · dbError/ไม่มี job → fail-o
   assert.equal(resolvePaywallDeferDecision({ inFlightActive: false, job: null }).decision, "paywall");
 });
 
-test("copy: defer/recovery ไม่มีเงิน-ราคา ไม่สัญญาว่าผลจะมาเอง", () => {
-  for (const txt of [PAYWALL_DEFER_TEXT, PAYWALL_RECOVERY_TEXT]) {
-    assert.doesNotMatch(txt, /บาท|จ่าย|ค่าครู|แพ็ก/);
+test("copy: defer/recovery ไม่มีราคา ไม่สัญญาผลมาเอง/handoff ลอย · stale ห้ามฟันธงว่าล้ม", () => {
+  for (const txt of [PAYWALL_DEFER_TEXT, ...Object.values(PAYWALL_RECOVERY_TEXTS)]) {
+    assert.doesNotMatch(txt, /บาท|จ่าย 29|จ่าย 49|แพ็ก|ราคา/);
     assert.doesNotMatch(txt, /เดี๋ยวผล|ผลจะมา|กำลังอ่าน|ไม่เกิน\s*\d/);
+    // ห้ามสัญญา handoff ถ้าไม่มี enqueue จริง (branch นี้ไม่ส่งให้อาจารย์)
+    assert.doesNotMatch(txt, /ส่งให้อาจารย์|อาจารย์อ่านให้/);
   }
-  assert.match(PAYWALL_RECOVERY_TEXT, /อ่านไม่สำเร็จ/);
-  assert.match(PAYWALL_RECOVERY_TEXT, /ส่งรูปชิ้นเดิมมาอีกครั้ง/);
+  // recovery ทุกแบบต้องบอกชัดว่าไม่ต้องส่งซ้ำ (รูปถูกถือไว้แล้ว — ไม่ใช่ dead end ที่สั่งส่งใหม่)
+  for (const txt of Object.values(PAYWALL_RECOVERY_TEXTS)) {
+    assert.match(txt, /ยังไม่ต้องส่งซ้ำ/);
+  }
+  // failed = พูดได้ว่าอ่านไม่สำเร็จ · stale/neutral = ห้าม
+  assert.match(PAYWALL_RECOVERY_TEXTS.failed, /อ่านไม่สำเร็จ/);
+  assert.doesNotMatch(PAYWALL_RECOVERY_TEXTS.stale, /ไม่สำเร็จ|ล้มเหลว/);
+  assert.doesNotMatch(PAYWALL_RECOVERY_TEXTS.neutral, /ไม่สำเร็จ|ล้มเหลว/);
+  // mapping reason → copy
+  assert.equal(selectRecoveryText("no_value_failed"), PAYWALL_RECOVERY_TEXTS.failed);
+  assert.equal(selectRecoveryText("no_value_cancelled"), PAYWALL_RECOVERY_TEXTS.failed);
+  assert.equal(selectRecoveryText("stale_pending_no_value"), PAYWALL_RECOVERY_TEXTS.stale);
+  assert.equal(selectRecoveryText("invalid_job_age"), PAYWALL_RECOVERY_TEXTS.neutral);
+  assert.equal(selectRecoveryText("no_value_unknown"), PAYWALL_RECOVERY_TEXTS.neutral);
+});
+
+/* ---------------- evidence gatherer: PostgREST คืน {error} ไม่ throw (Codex รอบ 4) ---------------- */
+
+function fakeSupabase({ jobResult, markerResult }) {
+  const chain = (result) => {
+    const o = {
+      select: () => o, eq: () => o, order: () => o, limit: () => o, filter: () => o,
+      maybeSingle: async () => result,
+    };
+    return o;
+  };
+  return {
+    from: (table) => chain(table === "scan_jobs" ? jobResult : markerResult),
+  };
+}
+
+test("evidence: job query คืน error object (ไม่ throw) → dbError=true", async () => {
+  const ev = await gatherPaywallDeferEvidence({
+    supabase: fakeSupabase({
+      jobResult: { data: null, error: { message: "db down" } },
+      markerResult: { data: { id: 1 }, error: null },
+    }),
+    userId: "U1",
+    inFlightActive: false,
+  });
+  assert.equal(ev.dbError, true);
+  assert.equal(ev.job, null);
+  // dbError → resolver fail-open paywall
+  assert.equal(resolvePaywallDeferDecision(ev).decision, "paywall");
+});
+
+test("evidence: marker query คืน error object → hasAnyDeliveredReport=true (fail-open) + markerError flag", async () => {
+  const ev = await gatherPaywallDeferEvidence({
+    supabase: fakeSupabase({
+      jobResult: { data: { status: "failed", created_at: new Date().toISOString() }, error: null },
+      markerResult: { data: null, error: { message: "db down" } },
+    }),
+    userId: "U1",
+    inFlightActive: false,
+  });
+  assert.equal(ev.markerError, true);
+  assert.equal(ev.hasAnyDeliveredReport, true); // ตรงข้ามกับบั๊กเดิมที่กลายเป็น false
+  assert.equal(resolvePaywallDeferDecision(ev).decision, "paywall"); // policy ปกติ ไม่ recovery มั่ว
+});
+
+test("evidence: ทางปกติ — job แปลง ageMs ถูก · marker ไม่มี = hasAnyDeliveredReport=false", async () => {
+  const now = Date.now();
+  const ev = await gatherPaywallDeferEvidence({
+    supabase: fakeSupabase({
+      jobResult: { data: { status: "failed", created_at: new Date(now - 5000).toISOString() }, error: null },
+      markerResult: { data: null, error: null },
+    }),
+    userId: "U1",
+    inFlightActive: false,
+    nowMs: now,
+  });
+  assert.equal(ev.dbError, false);
+  assert.equal(ev.hasAnyDeliveredReport, false);
+  assert.equal(ev.job.status, "failed");
+  assert.ok(ev.job.ageMs >= 4000 && ev.job.ageMs <= 6000);
+  assert.equal(resolvePaywallDeferDecision(ev).decision, "recovery"); // ลูกค้าใหม่+failed
 });

@@ -761,3 +761,9 @@
 - resolver รับ hasAnyDeliveredReport (หลักฐานส่งจริง = marker scan_result ใน history) + outcome ที่สาม recovery: ลูกค้าใหม่ที่ยังไม่เคยได้ผล + stale เกิน 30 นาที/failed/cancelled → แจ้งตรง "ชิ้นก่อนหน้าอ่านไม่สำเร็จ ส่งรูปเดิมมาอีกครั้ง" ห้ามยัดราคา · ลูกค้าเคยได้ผลแล้ว → paywall policy ปกติ
 - validate ageMs: Number.isFinite && >=0 — NaN/ติดลบ → reason invalid_job_age เลือกทางตาม hasAnyDeliveredReport (ห้าม defer ค้างไม่สิ้นสุด) + telemetry PAYWALL_RECOVERY_NO_VALUE_YET
 - เทสต์ตามสเปค 5 ข้อครบ (ใหม่+stale→recovery / ใหม่+failed→recovery / เก่า+stale→paywall / age invalid deterministic / recovery copy ไม่มีเงิน-ไม่สัญญาผลมาเอง) · baseline 1040 ผ่าน
+
+## 2026-08-18 | Claude | ปิด 2 runtime blockers (Codex รอบ 4) + alias db (staging)
+- PostgREST error ไม่ throw: gatherPaywallDeferEvidence (DI) ตรวจ {error} ตรง ๆ — jobError→dbError=true (fail-open paywall) · markerError→hasAnyDeliveredReport=true (fail-open policy ปกติ — เดิมกลายเป็น false สวนทาง comment) + log PAYWALL_DEFER_MARKER_QUERY_FAILED · DI tests: fake client คืน {data:null,error:{...}} ไม่ throw ครบทั้ง 3 ทาง
+- recovery ไม่ใช่ dead end แล้ว: (1) owner จริง = Telegram alert ถึงแอดมิน (dedupe 1 ชม./คน) ให้เข้ามาคืนสิทธิ์/re-enqueue (2) copy แยกตามเหตุ — failed พูด "อ่านไม่สำเร็จ" ได้ · stale/neutral ห้ามฟันธง (3) ทุก copy บอก "ยังไม่ต้องส่งซ้ำ" (รูปถูกถือไว้แล้ว — เลิกสั่งส่งใหม่) + ตัดสัญญา "ส่งให้อาจารย์" ที่ไม่มี enqueue จริง (4) กันวน: recovery เต็มครั้งเดียว/30 นาที รูปซ้ำระหว่างนั้นตอบสั้น · เทสต์ copy contract + mapping ครบ
+- หมายเหตุถึง Codex: resume-token + recovery entitlement (bypass paywall ครั้งเดียว) = ทางที่ดีที่สุดตามที่เสนอ — เข้า BACKLOG รอบถัดไป รอบนี้ใช้ minimum ที่มี owner จริงตามที่อนุญาต
+- กบถามชื่อ supabase: เพิ่ม export db (PostgREST client ของเราเอง) + supabase เป็น @deprecated alias — rename ทั้ง repo (54 ไฟล์) เข้า BACKLOG ไม่ทำ big-bang ช่วงใกล้ deploy · baseline 1043 ผ่าน

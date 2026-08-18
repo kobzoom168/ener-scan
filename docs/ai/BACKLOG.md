@@ -47,3 +47,4 @@
 - [ ] A/B harness: deepScan.draft→mini (≥50 รูป) · forensic screen_check shadow (≥100 oversample เสี่ยง) · voiceScript blind 20-30 ชิ้น — เกณฑ์ตาม Codex 17 ส.ค.
 - [ ] verifier: หลังข้อมูล rank 7 วัน → เสนอ cap/threshold ทีละตัว (สงวน recent quota ≥1)
 - [ ] text awaiting_slip recency: helper กลาง resolveAwaitingPaymentConversationMode (SSOT isPaymentCommand/isPromoInquiryText + slip/status intents · >60 นาที + ไม่ใช่เรื่องเงิน = release สู่แชทปกติ + telemetry STALE_PAYMENT_TEXT_RELEASED) — Codex เคาะแนวแล้ว 18 ส.ค.
+- [ ] rename supabase→db ทั้ง repo (54 ไฟล์ / 90 call sites): alias `db` เพิ่มแล้ว 18 ส.ค. ใน src/config/supabase.js — ทยอยย้ายไฟล์ที่แตะอยู่แล้วทีละงาน แล้วถอด alias ตอนครบ (ห้ามทำ big-bang ช่วงใกล้ deploy)

@@ -73,6 +73,80 @@ export function resolvePaywallDeferDecision({
 export const PAYWALL_DEFER_TEXT =
   "รับรูปชิ้นนี้ไว้แล้วครับ ขอส่งผลชิ้นก่อนหน้าให้เรียบร้อยก่อนนะครับ";
 
-/** copy recovery: แจ้งตรง เปิดทาง retry — ไม่มีเงิน/ราคา และไม่สัญญาว่าผลจะมาเอง */
-export const PAYWALL_RECOVERY_TEXT =
-  "รับรูปชิ้นนี้ไว้แล้วครับ ชิ้นก่อนหน้าระบบอ่านไม่สำเร็จ ยังไม่ได้ส่งผลให้ครับ\n\nส่งรูปชิ้นเดิมมาอีกครั้งได้เลย ผมจะส่งให้อาจารย์อ่านให้ครับ";
+/**
+ * copy recovery แยกตามเหตุ (Codex รอบ 4): failed = พูดได้ว่าอ่านไม่สำเร็จ ·
+ * stale = ห้ามฟันธงว่าล้ม (อาจแค่ค้าง) · invalid = กลาง ๆ — ทุกแบบ: ไม่มีเงิน/ราคา
+ * ไม่สัญญา handoff ลอย ๆ ("แอดมินรับเรื่องแล้ว" หนุนด้วย Telegram alert จริงใน webhook)
+ */
+export const PAYWALL_RECOVERY_TEXTS = Object.freeze({
+  failed:
+    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nชิ้นก่อนหน้าอ่านไม่สำเร็จ ยังไม่มีผลส่งถึงคุณ ระบบจึงยังไม่เปิดเรื่องค่าครูตอนนี้ครับ แอดมินรับเรื่องไว้แล้วครับ",
+  stale:
+    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nชิ้นก่อนหน้ายังไม่มีผลส่งถึงคุณ ระบบจึงยังไม่เปิดเรื่องค่าครูในตอนนี้ครับ แอดมินรับเรื่องไว้แล้วครับ",
+  neutral:
+    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nขอเช็คสถานะชิ้นก่อนหน้าให้ก่อนครับ ระบบยังไม่เปิดเรื่องค่าครูในตอนนี้ แอดมินรับเรื่องไว้แล้วครับ",
+});
+
+/** @param {string} reason */
+export function selectRecoveryText(reason) {
+  const r = String(reason || "");
+  if (/^no_value_(failed|cancelled)$/.test(r)) return PAYWALL_RECOVERY_TEXTS.failed;
+  if (r === "stale_pending_no_value") return PAYWALL_RECOVERY_TEXTS.stale;
+  return PAYWALL_RECOVERY_TEXTS.neutral;
+}
+
+/**
+ * เก็บหลักฐานสำหรับ resolver — ตรวจ {error} ของ supabase ตรง ๆ (Codex รอบ 4:
+ * PostgrestClient คืน {data,error} ไม่ throw — catch เปล่าจับไม่ได้)
+ * DI ครบเพื่อ behavior tests: client คืน error object โดยไม่ throw
+ * @param {{
+ *   supabase: { from: Function },
+ *   userId: string,
+ *   inFlightActive: boolean,
+ *   nowMs?: number,
+ * }} p
+ */
+export async function gatherPaywallDeferEvidence({ supabase, userId, inFlightActive, nowMs = Date.now() }) {
+  let job = null;
+  let dbError = false;
+  try {
+    const { data: j, error: jobError } = await supabase
+      .from("scan_jobs")
+      .select("status,created_at")
+      .eq("line_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (jobError) {
+      dbError = true;
+    } else if (j) {
+      job = { status: String(j.status || ""), ageMs: nowMs - new Date(j.created_at).getTime() };
+    }
+  } catch {
+    dbError = true;
+  }
+
+  // fail-open ตาม policy: อ่าน marker พลาด = ถือว่าเคยได้รับผลแล้ว (ใช้ policy ปกติ)
+  let hasAnyDeliveredReport = true;
+  let markerError = false;
+  try {
+    const { data: mk, error: mkError } = await supabase
+      .from("line_conversation_messages")
+      .select("id")
+      .eq("line_user_id", userId)
+      .eq("role", "bot")
+      .filter("metadata_json->>replyType", "eq", "scan_result")
+      .limit(1)
+      .maybeSingle();
+    if (mkError) {
+      markerError = true;
+      hasAnyDeliveredReport = true;
+    } else {
+      hasAnyDeliveredReport = Boolean(mk);
+    }
+  } catch {
+    markerError = true;
+    hasAnyDeliveredReport = true;
+  }
+  return { inFlightActive, job, dbError, hasAnyDeliveredReport, markerError };
+}
