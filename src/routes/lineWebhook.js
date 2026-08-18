@@ -2648,6 +2648,46 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
+    // กบ 18 ส.ค. (เคสลูกค้าใหม่ นอ.บำเหน็จฯ): ผลชิ้นแรกยังไม่ถึงมือ (สแกนกำลังทำ/
+    // เกตถือรายงานอยู่) ห้ามยิงการ์ดเก็บเงินแซงหน้า — รับรูปไว้ก่อน ให้ผลออกก่อน
+    // paywall ค่อยตามตอนลูกค้าขยับครั้งถัดไป (pendingImage ยังค้าง เส้นเดิมจัดการต่อ)
+    try {
+      const firstReportStillPending =
+        (await isDedupeKeyActive(scanInFlightKeyForUser(userId))) ||
+        (await (async () => {
+          const { data: j } = await supabase
+            .from("scan_jobs")
+            .select("status")
+            .eq("line_user_id", userId)
+            .gte("created_at", new Date(Date.now() - 15 * 60000).toISOString())
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          return ["queued", "processing", "claimed", "delivery_queued", "completed"].includes(
+            String(j?.status || ""),
+          );
+        })().catch(() => false));
+      if (firstReportStillPending) {
+        console.log(
+          JSON.stringify({
+            event: "PAYWALL_DEFERRED_FIRST_REPORT_PENDING",
+            uidPrefix: String(userId).slice(0, 8),
+          }),
+        );
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "paywall_deferred_report_pending",
+          semanticKey: "paywall_deferred_report_pending",
+          text: "รับรูปชิ้นนี้ไว้แล้วครับ ชิ้นแรกอาจารย์กำลังอ่านอยู่ ขอส่งผลชิ้นแรกให้ก่อนนะครับ",
+          alternateTexts: ["รับไว้แล้วครับ รอผลชิ้นแรกก่อนนะครับ เดี๋ยวเรียงคิวให้"],
+          speakerRoleOverride: "admin",
+        });
+        return;
+      }
+    } catch { /* เช็คพลาด = paywall ตามเดิม */ }
+
     console.log("[PAYMENT_GATE_REPLY_SELECTION]", {
       userId,
       chosenPath,

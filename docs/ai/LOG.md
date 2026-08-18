@@ -746,3 +746,8 @@
 - โทน consult แข็งขึ้น: ครับน้อยสุด (ท้ายคำตอบจุดเดียว/ไม่ใส่) + ตอบสั้นถามคำตอบคำ + กติกาคำปิดบท (prompt-only รอบแยกตามแนว Codex)
 - Codex gaps: shouldRemindSlipOnSticker กัน timestamp อนาคต (ageMs>=0) + boundary tests (0/60พอดี/60+1ms/อนาคต) · handleStickerLikeInput รับ deps DI — behavior tests 4 กรณี (fresh→ทวง 1 ครั้ง / stale→idle ไม่มีคำสลิป / DB throw→idle / stale+pending_verify→pending-verify ตามจริง) ทุกกรณี assert ไม่ double reply
 - text-recency (resolveAwaitingPaymentConversationMode payment_active|recent_soft_remind|release_to_normal_chat) → BACKLOG รอบถัดไปตามที่ Codex เคาะ · baseline 1029 ผ่าน
+
+## 2026-08-18 | Claude | Paywall ห้ามแซงผลชิ้นแรก (เคสลูกค้าใหม่ นอ.บำเหน็จฯ) — staging
+- ข้อมูลจริง: ลูกค้าใหม่ส่งรูปแรก 07:38 → เกตถือรายงานรอข้อมูล → ส่งรูปที่สอง 07:40 → โดนการ์ด free_quota_exhausted ก่อนเห็นผลชิ้นแรก (ผลออก 07:41) — ขายก่อนให้คุณค่า
+- แก้ใน finalize: ก่อนยิง paywall เช็ค "ผลชิ้นแรกยังไม่ถึงมือ" (scan in-flight gate หรือ job ล่าสุดใน 15 นาทียัง queued/processing/claimed/delivery_queued/completed) → เลื่อน paywall: ตอบ "รับรูปไว้แล้ว ชิ้นแรกกำลังอ่าน ขอส่งผลก่อน" (ไม่มีเรื่องเงิน) + pendingImage ค้างตามเดิม paywall ตามตอนลูกค้าขยับรอบถัดไป · log PAYWALL_DEFERRED_FIRST_REPORT_PENDING
+- invariant test: defer check ต้องอยู่ก่อน sendFreeQuotaExhaustedPaywall + ข้อความ defer ห้ามมีคำเงิน/ราคา · baseline 1030 ผ่าน
