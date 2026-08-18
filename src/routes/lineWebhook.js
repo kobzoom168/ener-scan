@@ -2652,7 +2652,7 @@ async function finalizeAcceptedImage({
     // → ห้ามยิงการ์ดเก็บเงินแซงหน้า (Codex รอบ 2: pure resolver + delivery evidence นำ
     // เวลาเป็นแค่ safety bound + copy ไม่อ้างสถานะที่ไม่รู้จริง)
     try {
-      const { resolvePaywallDeferDecision, PAYWALL_DEFER_TEXT } = await import(
+      const { resolvePaywallDeferDecision, PAYWALL_DEFER_TEXT, PAYWALL_RECOVERY_TEXT } = await import(
         "../services/lineWebhook/paywallDefer.util.js"
       );
       const inFlightActive = await isDedupeKeyActive(scanInFlightKeyForUser(userId)).catch(() => false);
@@ -2670,23 +2670,50 @@ async function finalizeAcceptedImage({
       } catch {
         dbError = true;
       }
-      const verdict = resolvePaywallDeferDecision({ inFlightActive, job, dbError });
-      if (verdict.decision === "defer") {
+      // "เคยได้รับคุณค่าแล้วหรือยัง" — หลักฐานส่งจริง: marker scan_result ใน history
+      // (insert หลัง delivery สำเร็จเท่านั้น) · เช็คพลาด = ถือว่าเคย (fail-open พฤติกรรมเดิม)
+      let hasAnyDeliveredReport = true;
+      try {
+        const { data: mk } = await supabase
+          .from("line_conversation_messages")
+          .select("id")
+          .eq("line_user_id", userId)
+          .eq("role", "bot")
+          .filter("metadata_json->>replyType", "eq", "scan_result")
+          .limit(1)
+          .maybeSingle();
+        hasAnyDeliveredReport = Boolean(mk);
+      } catch { /* ถือว่าเคยได้รับ — ใช้ policy ปกติ */ }
+      const verdict = resolvePaywallDeferDecision({ inFlightActive, job, dbError, hasAnyDeliveredReport });
+      if (verdict.decision !== "paywall") {
         console.log(
           JSON.stringify({
-            event: "PAYWALL_DEFERRED_PREV_REPORT_PENDING",
+            event:
+              verdict.decision === "defer"
+                ? "PAYWALL_DEFERRED_PREV_REPORT_PENDING"
+                : "PAYWALL_RECOVERY_NO_VALUE_YET",
             uidPrefix: String(userId).slice(0, 8),
             reason: verdict.reason,
+            hasAnyDeliveredReport,
           }),
         );
         await sendNonScanReply({
           client,
           userId,
           replyToken: event.replyToken,
-          replyType: "paywall_deferred_report_pending",
-          semanticKey: "paywall_deferred_report_pending",
-          text: PAYWALL_DEFER_TEXT,
-          alternateTexts: ["รับรูปไว้แล้วครับ ขอเรียงคิวส่งผลชิ้นก่อนหน้าให้ก่อนครับ"],
+          replyType:
+            verdict.decision === "defer"
+              ? "paywall_deferred_report_pending"
+              : "paywall_recovery_scan_issue",
+          semanticKey:
+            verdict.decision === "defer"
+              ? "paywall_deferred_report_pending"
+              : "paywall_recovery_scan_issue",
+          text: verdict.decision === "defer" ? PAYWALL_DEFER_TEXT : PAYWALL_RECOVERY_TEXT,
+          alternateTexts:
+            verdict.decision === "defer"
+              ? ["รับรูปไว้แล้วครับ ขอเรียงคิวส่งผลชิ้นก่อนหน้าให้ก่อนครับ"]
+              : ["รับรูปไว้แล้วครับ ชิ้นก่อนหน้าอ่านไม่สำเร็จ ส่งรูปเดิมมาใหม่ได้เลยครับ"],
           speakerRoleOverride: "admin",
         });
         return;
