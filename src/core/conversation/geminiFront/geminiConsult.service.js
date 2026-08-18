@@ -59,18 +59,26 @@ export async function runGeminiConsult(p) {
   let kbContext = null;
   let paidActive = false;
   let axisTop = null;
+  let rankingAllowed = false;
   const kbPromise = buildKbContext(p.userText).catch(() => null);
   if (p.userId) {
-    [recentScan, customerFacts, kbContext, paidActive, axisTop] = await Promise.all([
+    [recentScan, customerFacts, kbContext, paidActive, axisTop, rankingAllowed] = await Promise.all([
       buildScanHistoryContext(p.userId, 6).catch(() => null),
       buildCustomerFactsContext(p.userId).catch(() => null),
       kbPromise,
       isPaidActiveCustomer(p.userId),
       buildAxisTopContext(p.userId).catch(() => null),
+      // สิทธิ์ดูอันดับในแชท = SSOT เดียวกับเซ็นเซอร์หน้ารายงาน (จ่ายใน 3 วัน) — กบ 18 ส.ค.
+      (async () => {
+        const { hasRecentPaidAccess } = await import("../../../services/everPaid.service.js");
+        return hasRecentPaidAccess(p.userId);
+      })().catch(() => false),
     ]);
   } else {
     kbContext = await kbPromise;
   }
+  // ไม่มีสิทธิ์อันดับ: ตัด context ชิ้นเด่นต่อด้านทิ้ง — โมเดลไม่มีข้อมูลให้หลุด
+  if (!rankingAllowed) axisTop = null;
 
   // แพ็กแอคทีฟ = สมองแพง (Opus) / ฟรี = สมองถูก (DeepSeek) — persona/guardrails ชุดเดียวกัน
   const consultModel = paidActive
@@ -111,6 +119,10 @@ export async function runGeminiConsult(p) {
   // pre-send guard สั่งแก้ (retry ครั้งเดียวจาก orchestrator)
   if (p.extraDirective) {
     prompt += `\n\nข้อกำหนดเพิ่มรอบนี้ (สำคัญสุด): ${p.extraDirective}`;
+  }
+  // เกตอันดับ (กบ 18 ส.ค.): คนไม่มีประวัติจ่ายใน 3 วัน ห้ามได้อันดับ/ชิ้นแรงสุดจากแชท
+  if (!rankingAllowed) {
+    prompt += "\n\nข้อกำหนดสิทธิ์รอบนี้: ลูกค้ายังไม่มีสิทธิ์ดูอันดับ/ชิ้นเด่นเปรียบเทียบ — ถ้าถามหาชิ้นแรงสุด/คะแนนสูงสุด/จัดอันดับ ห้ามระบุชื่อชิ้นหรือตัวเลขเปรียบเทียบ ให้ตอบสั้น ๆ ว่าเปิดรายงานชิ้นล่าสุดแล้วเลื่อนลงด้านล่าง มีอันดับครบทุกด้าน";
   }
   // ชั้นฟรี: ถามคำตอบคำ (กบ 16 ก.ค.) — ตอบตรงคำถาม สั้นสุด ไม่ขยายความเอง
   // (ลูกค้าแพ็กแอคทีฟใช้กติกา 2-4 บรรทัดใน system ตามเดิม = ดูแลเต็ม)

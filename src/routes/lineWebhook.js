@@ -352,6 +352,51 @@ import {
  * ตรง pattern เท่านั้น กันชนบทสนทนาปกติ · โดนเซ็นเซอร์ = teaser ไม่เฉลยชิ้น
  * @returns {Promise<boolean>} handled
  */
+/**
+ * เกตอันดับสำหรับคนไม่มีประวัติจ่ายใน 3 วัน (กบ 18 ส.ค.): ถามอันดับ/ชิ้นแรงสุดในแชท
+ * → ชี้ไปรายงานหลัก (ตรงนั้นเซ็นเซอร์+ชวนเปิดสิทธิ์อยู่แล้ว) — ห้ามให้ LLM ตอบหลุด
+ * จ่ายใน 3 วัน = ตอบตามปกติทุกเส้นเดิม · เช็คสิทธิ์พลาด = redirect (กันรั่ว ไม่กันเงิน)
+ */
+async function maybeHandleRankingQueryGate({ client, userId, replyToken, text }) {
+  const { isRankingQuery, buildRankingRedirectText } = await import(
+    "../services/lineWebhook/rankingQueryGate.util.js"
+  );
+  if (!isRankingQuery(text)) return false;
+  try {
+    const { hasRecentPaidAccess } = await import("../services/everPaid.service.js");
+    if (await hasRecentPaidAccess(userId)) return false; // จ่ายใน 3 วัน = ตอบเต็มตามเดิม
+  } catch { /* เช็คพลาด = redirect (fail-closed ฝั่งกันรั่ว) */ }
+  let latestReportUrl = "";
+  try {
+    const { data: sr } = await supabase
+      .from("scan_results_v2")
+      .select("html_public_token")
+      .eq("line_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (sr?.html_public_token) {
+      const { buildPublicReportUrl } = await import("../services/reports/reportLink.service.js");
+      latestReportUrl = buildPublicReportUrl(String(sr.html_public_token));
+    }
+  } catch { /* ไม่มีลิงก์ก็ชี้ทางด้วยข้อความ */ }
+  if (!latestReportUrl) return false; // ยังไม่เคยมีรายงาน = ไม่ใช่เคสนี้ ปล่อย flow ปกติ
+  console.log(
+    JSON.stringify({ event: "RANKING_QUERY_REDIRECTED_UNPAID", uidPrefix: String(userId).slice(0, 8) }),
+  );
+  await sendNonScanReply({
+    client,
+    userId,
+    replyToken,
+    replyType: "ranking_query_redirect",
+    semanticKey: "ranking_query_redirect",
+    text: buildRankingRedirectText(latestReportUrl),
+    alternateTexts: [],
+    speakerRoleOverride: "admin",
+  });
+  return true;
+}
+
 async function maybeHandleAxisTopPieceQuery({ client, userId, replyToken, text }) {
   const t = String(text || "").trim();
   if (!t || t.length > 30) return false;
@@ -7451,6 +7496,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
         // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
         if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
+        if (await maybeHandleRankingQueryGate({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
         if (text === "สแกนพลังงาน") {
           let savedBirthdate = null;
@@ -8228,6 +8274,9 @@ async function handleTextMessage({ client, event, userId, session }) {
       }
     }
   } catch { /* util พัง = ตอบตามปกติ */ }
+
+  // คำถามอันดับ/ชิ้นแรงสุดจากคนไม่มีประวัติจ่ายใน 3 วัน → ชี้ไปรายงาน (กบ 18 ส.ค.)
+  if (await maybeHandleRankingQueryGate({ client, userId, replyToken: event.replyToken, text })) return;
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;
     try {

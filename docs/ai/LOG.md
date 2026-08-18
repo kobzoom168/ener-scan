@@ -776,3 +776,8 @@
 ## 2026-08-18 | Claude | Deploy Pro รวม (Codex ไฟเขียว 3dcbcc7) + smoke 6 ข้อผ่าน
 - sync → deploy pro healthy · smoke: ①②Telegram recovery alert จริง → OWNER_ASSIGNED (กบจะเห็นข้อความ [RECOVERY] smoke ใน Telegram 1 ข้อความ — ไม่ต้องสนใจ) ③จำลอง fail → DELIVERY_FAILED + dedupe ล้าง retry ได้จริง (attempts=2) ④resolver uid จริง → paywall ถูก (hasValue=true) ⑤สวัสดีตอบ/ครับหลังผลเงียบ ⑥สติกเกอร์เก่าไม่ทวง
 - hardening ไม่บล็อกจาก Codex → BACKLOG: แยก dedupe sending/sent กัน race + ใส่ job id/admin link ใน alert
+
+## 2026-08-18 | Claude | เกตอันดับในแชทสำหรับคนไม่มีประวัติจ่าย 3 วัน (staging) — เคสลูกค้าฟรีตี 1-5
+- ต้นเหตุ: เลนแชท (consult + axisTop context) ไม่เคยเช็ค hasRecentPaidAccess — ลูกค้าฟรีถาม "ชิ้นไหนคะแนนสูงสุด/อันดับ" เอาคำตอบที่หน้ารายงานเซ็นเซอร์ไว้ได้
+- แก้ 2 ชั้น: ①deterministic maybeHandleRankingQueryGate (SSOT hasRecentPaidAccess ตัวเดียวกับเซ็นเซอร์รายงาน) → ชี้ไปรายงานล่าสุด "เลื่อนลงด้านล่างมีอันดับ" + ลิงก์จริง (paywall หน้ารายงานทำหน้าที่ขายเอง) · เช็คสิทธิ์พลาด = redirect (fail-closed ฝั่งกันรั่ว) · call sites: idle lane (หลัง silencer) + pending_verify lane ②consult: rankingAllowed จาก hasRecentPaidAccess — ไม่มีสิทธิ์ = ตัด axisTop context ทิ้ง + directive ห้ามระบุชื่อชิ้น/ตัวเลขเปรียบเทียบ
+- จ่ายใน 3 วัน = พฤติกรรมเดิมทุกเส้น · เทสต์ matcher/copy/consult-invariant 3 ชุด · baseline 1048 ผ่าน
