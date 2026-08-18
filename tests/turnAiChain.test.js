@@ -4,6 +4,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import fsMod from "node:fs";
 import {
   runWithTurnContext,
   recordTurnAiCall,
@@ -66,4 +67,31 @@ test("aiLatencyMs สะสมแยกจาก turnLatencyMs + annotate state 
     assert.ok(e.turnLatencyMs >= 10);
     assert.equal(e.state, "idle");
   });
+});
+
+/* ---------------- Codex 18d5d3a P0-6: OpenAI wrapper ต้องเข้า chain ---------------- */
+
+test("openai withUsageTracking: success + error ต่างก็นับ attempted call เข้า chain", async () => {
+  const { withUsageTracking } = await import("../src/services/openaiDeepScan.api.js");
+  const okCall = withUsageTracking("responses", async () => ({ id: "r1", usage: { input_tokens: 1, output_tokens: 1 } }));
+  const failCall = withUsageTracking("responses", async () => { throw new Error("timeout"); });
+  await runWithTurnContext({ messageId: "oai", kind: "text" }, async () => {
+    await okCall({ user: "conversationSurface", model: "gpt-x" });
+    await assert.rejects(() => failCall({ user: "conversationSurface.retry", model: "gpt-x" }));
+    const out = captureEmit(() => emitTurnAiChain());
+    const e = out.find((o) => o.event === "CHAT_TURN_AI_CHAIN");
+    assert.equal(e.aiCallCount, 2, "error/timeout ต้องนับ attempted ด้วย");
+    assert.deepEqual(e.callSites, [
+      "openai.responses:conversationSurface",
+      "openai.responses:conversationSurface.retry",
+    ]);
+    assert.ok(e.aiLatencyMs >= 0);
+  });
+});
+
+test("gemini paths ครบทั้ง compat และ google-direct (source contract ใน geminiFlash)", () => {
+  const s = fsMod.readFileSync("src/integrations/gemini/geminiFlash.api.js", "utf8");
+  const hits = [...s.matchAll(/recordTurnAiCall\(/g)].length;
+  assert.ok(hits >= 2, `ต้องบันทึกทั้ง compat และ google path (พบ ${hits})`);
+  assert.ok([...s.matchAll(/recordTurnAiLatency\(/g)].length >= 2);
 });

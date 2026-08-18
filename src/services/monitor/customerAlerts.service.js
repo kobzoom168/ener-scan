@@ -58,56 +58,65 @@ export async function paidStatusForAlert(lineUserId, deps = {}) {
 export async function sendCustomerAlert(p, deps = {}) {
   const dd = deps.tryDedupeOnce || tryDedupeOnce;
   const clear = deps.clearDedupeKey || clearDedupeKey;
+  const kvGet = deps.getValue || getValue;
+  const kvSet = deps.setLargeValueWithTtl || setLargeValueWithTtl;
   const sendTg =
     deps.sendTelegramText ||
     (async (t) => {
       const { sendTelegramText } = await import("../telegramNotify.service.js");
       return sendTelegramText(t);
     });
+  const uidPrefix = String(p.userId).slice(0, 8);
 
-  // Telegram
-  const tgKey = `alert:${p.type}:tg:${p.userId}`;
-  try {
-    if (await dd(tgKey, p.dedupeSec)) {
+  // Codex P1: lease สั้น (60s) กันส่งซ้อน + sent marker เต็ม TTL หลังส่งสำเร็จเท่านั้น
+  // — process ตายกลางคันเสีย alert แค่ 60 วิ ไม่ใช่ทั้ง TTL · แต่ละ channel แยกส่ง
+  // ขนานพร้อม timeout ของตัวเอง — ช่องหนึ่งค้างห้ามขวางอีกช่อง
+  const sendViaChannel = async ({ channel, doSend }) => {
+    const sentKey = `alert:${p.type}:${channel}:${p.userId}`;
+    const leaseKey = `${sentKey}:lease`;
+    try {
+      if ((await kvGet(sentKey)) === "1") return;
+      if (!(await dd(leaseKey, 60))) return; // มีคนกำลังส่งอยู่
       let ok = false;
       try {
-        const r = await sendTg(p.telegramText);
-        ok = r?.ok === true;
-      } catch {
-        ok = false;
-      }
-      if (!ok) {
-        await clear(tgKey).catch(() => {});
-        log("CUSTOMER_ALERT_TG_FAILED", { type: p.type, uidPrefix: String(p.userId).slice(0, 8) });
+        ok = await Promise.race([
+          doSend(),
+          new Promise((resolve) => setTimeout(() => resolve(false), deps.channelTimeoutMs || 8000)),
+        ]);
+      } catch { ok = false; }
+      if (ok) {
+        await kvSet(sentKey, "1", p.dedupeSec).catch(() => {});
+        log("CUSTOMER_ALERT_SENT", { type: p.type, channel, uidPrefix });
       } else {
-        log("CUSTOMER_ALERT_SENT", { type: p.type, channel: "telegram", uidPrefix: String(p.userId).slice(0, 8) });
+        await clear(leaseKey).catch(() => {});
+        log(channel === "tg" ? "CUSTOMER_ALERT_TG_FAILED" : "CUSTOMER_ALERT_LINE_FAILED", { type: p.type, uidPrefix });
       }
-    }
-  } catch { /* alert ห้ามล้มทับงานหลัก */ }
+    } catch { /* alert ห้ามล้มทับงานหลัก */ }
+  };
 
-  // LINE (สั้น — เฉพาะ type ที่ส่ง lineText มา) · admin id หาย = delivery failure
-  // (clear dedupe ให้รอบหน้าลองใหม่ ไม่ใช่เงียบ 24 ชม. — Codex)
+  const channels = [
+    sendViaChannel({
+      channel: "tg",
+      doSend: async () => {
+        const r = await sendTg(p.telegramText);
+        return r?.ok === true;
+      },
+    }),
+  ];
   if (p.lineText && p.lineClient) {
-    const lnKey = `alert:${p.type}:line:${p.userId}`;
-    try {
-      if (await dd(lnKey, p.dedupeSec)) {
-        let sent = false;
-        try {
+    channels.push(
+      sendViaChannel({
+        channel: "line",
+        doSend: async () => {
           const adminUid = String(process.env.ADMIN_LINE_USER_ID || "").trim();
-          if (adminUid) {
-            await p.lineClient.pushMessage(adminUid, { type: "text", text: p.lineText });
-            sent = true;
-          }
-        } catch { sent = false; }
-        if (sent) {
-          log("CUSTOMER_ALERT_SENT", { type: p.type, channel: "line", uidPrefix: String(p.userId).slice(0, 8) });
-        } else {
-          await clear(lnKey).catch(() => {});
-          log("CUSTOMER_ALERT_LINE_FAILED", { type: p.type, uidPrefix: String(p.userId).slice(0, 8) });
-        }
-      }
-    } catch { /* ignore */ }
+          if (!adminUid) return false; // admin id หาย = delivery failure (lease หลุด รอบหน้าลองใหม่)
+          await p.lineClient.pushMessage(adminUid, { type: "text", text: p.lineText });
+          return true;
+        },
+      }),
+    );
   }
+  await Promise.allSettled(channels);
 }
 
 /* ---------------- repeat detector (Codex ข้อ 6: แยกจาก troll counter เดิม) ---------------- */

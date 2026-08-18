@@ -90,18 +90,17 @@ test("allowedActions + shadow: idle/scan_ready_idle = noop + consult เท่�
   assert.equal(isShadowPhase1Eligible("soft_locked"), true);
 });
 
-test("lineWebhook: replyIdleTextNoDuplicate invokes Phase-1 Gemini before sendNonScanReply", () => {
-  const src = fs.readFileSync(lineWebhookPath, "utf8");
-  const fnStart = src.indexOf("async function replyIdleTextNoDuplicate");
-  assert.ok(fnStart > 0, "replyIdleTextNoDuplicate not found");
-  const nextAsync = src.indexOf("\nasync function ", fnStart + 10);
-  const body = src.slice(
-    fnStart,
-    nextAsync > 0 ? nextAsync : fnStart + 1200,
+test("idleReply util: Phase-1 orchestrator (เมื่อ flag เปิด) มาก่อน deterministic send", () => {
+  // helper ย้ายไป util (Codex P0-5) — behavior เต็มอยู่ใน tests/idleReply.util.test.js
+  const src = fs.readFileSync(
+    path.join(process.cwd(), "src", "services", "lineWebhook", "idleReply.util.js"),
+    "utf8",
   );
-  const iInvoke = body.indexOf("invokePhase1GeminiOrchestrator");
-  const iSend = body.indexOf("await sendNonScanReply");
+  const iInvoke = src.indexOf("invokePhase1GeminiOrchestrator({ allowIdleDirectConsult: true })");
+  const iSend = src.indexOf("deps.sendNonScanReply");
   assert.ok(iInvoke > 0 && iSend > iInvoke, "Phase-1 must run before idle send");
+  const iFlag = src.indexOf("allowIdleDirectConsult === true");
+  assert.ok(iFlag > 0 && iFlag < iInvoke, "orchestrator ต้องถูก gate ด้วย flag");
 });
 
 test("lineWebhook: scan-ready guidance calls Phase-1 Gemini before buildPaidActiveScanReadyHumanText", () => {

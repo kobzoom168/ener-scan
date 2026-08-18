@@ -88,3 +88,87 @@ test("deliveryWorker: suppressed_banned ข้าม finalizeOutboundAttempt (ty
     "worker ต้องไม่ finalize/retry เมื่อ suppressedBanned",
   );
 });
+
+/* ---------------- Codex 18d5d3a: nested object-info ban race (P0-2) ---------------- */
+
+test("nested race: top gate ไม่แบน แต่โดนแบนระหว่าง hold → suppress เต็มชุด ไม่ markSent", async () => {
+  const { calls, deps, client } = makeDeps({ banned: false }); // top gate ปล่อยผ่าน
+  const r = await deliverOutboundMessage(
+    client,
+    { id: 90, line_user_id: "U" + "c".repeat(32), kind: "scan_result", related_job_id: 777, payload_json: { reportPayload: { x: 1 } } },
+    {
+      banGateDeps: deps,
+      // nested customerPush เจอแบน → hold คืน typed outcome
+      objectInfoHold: async () => ({ outcome: "suppressed_banned" }),
+    },
+  );
+  assert.equal(r.sent, false);
+  assert.equal(r.suppressedBanned, true);
+  assert.equal(r.errorCode, "suppressed_banned");
+  assert.equal(calls.push, 0, "transport ต้องเป็น 0");
+  assert.equal(calls.update.length, 1, "outbound ต้องถูก mark suppressed_banned ไม่ใช่ sent");
+  assert.equal(calls.update[0].patch.status, "suppressed_banned");
+  assert.equal(calls.update[0].patch.next_retry_at, null);
+  assert.equal(calls.failJob.length, 1, "job ที่เกี่ยวต้อง terminal");
+  assert.equal(calls.failJob[0][0], 777);
+  assert.deepEqual(calls.releaseGate, ["U" + "c".repeat(32)], "scan gate ต้องถูกปล่อย");
+});
+
+test("nested hold: outcome held → markSent ปกติ · not_held → ไหลไปส่งรายงาน (ไม่ suppress)", async () => {
+  // held: จบด้วย sent:true โดยไม่มี suppression side effect
+  const held = makeDeps({ banned: false });
+  const marked = [];
+  held.deps.markSent = async (id) => { marked.push(id); };
+  const r1 = await deliverOutboundMessage(
+    held.client,
+    { id: 91, line_user_id: "U" + "d".repeat(32), kind: "scan_result", payload_json: { reportPayload: { x: 1 } } },
+    { banGateDeps: held.deps, objectInfoHold: async () => ({ outcome: "held" }) },
+  );
+  assert.equal(r1.sent, true);
+  assert.deepEqual(marked, [91], "held ต้อง markSent");
+  assert.equal(held.calls.update.length, 0, "held ไม่แตะ suppression update");
+  assert.equal(held.calls.failJob.length, 0);
+});
+
+test("typed outcome contract: maybeHoldReportForObjectInfo ห้ามคืน boolean/object เปล่า (source contract)", () => {
+  const s = fs.readFileSync("src/services/objectInfoGate/objectInfoGate.service.js", "utf8");
+  const fn = s.slice(s.indexOf("export async function maybeHoldReportForObjectInfo"), s.indexOf("\nexport ", s.indexOf("export async function maybeHoldReportForObjectInfo") + 10));
+  assert.ok(!/return (true|false);/.test(fn), "ทุก return ต้องเป็น typed outcome");
+  assert.ok(fn.includes('{ outcome: "suppressed_banned" }'));
+  assert.ok(fn.includes('{ outcome: "held" }'));
+  // banned branch ต้องล้าง state ที่สร้างก่อน push (form/pending/backup)
+  const bannedIdx = fn.indexOf('OBJECT_INFO_GATE_SUPPRESSED_BANNED');
+  assert.ok(bannedIdx > 0);
+  const bannedBlock = fn.slice(fn.indexOf("suppressedBanned"), bannedIdx);
+  for (const key of ["objinfo:form:", "pendingKey(", "backupKey("]) {
+    assert.ok(bannedBlock.includes(key), `banned branch ต้องล้าง ${key}`);
+  }
+});
+
+/* ---------------- Codex 18d5d3a: scan-worker early suppression (P0-3) ---------------- */
+
+test("terminalizeSuppressedBannedJob: failJob + ปล่อย scan gate เสมอ (แม้ failJob ล้ม)", async () => {
+  const { terminalizeSuppressedBannedJob } = await import("../src/services/scanV2/processScanJob.service.js");
+  const uid = "U" + "1".repeat(32);
+  {
+    const failed = []; const clearedKeys = [];
+    await terminalizeSuppressedBannedJob({ jobId: "job-1", lineUserId: uid, workerId: "w1" }, {
+      failJob: async (...a) => { failed.push(a); },
+      clearDedupeKey: async (k) => { clearedKeys.push(k); },
+      scanInFlightKeyForUser: (u) => `scan_v2:inflight:${u}`,
+    });
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0][1], "suppressed_banned");
+    assert.deepEqual(clearedKeys, [`scan_v2:inflight:${uid}`], "gate ต้องถูกปล่อย");
+  }
+  {
+    // failJob ล้ม → gate ยังต้องถูกปล่อย (เคส pre-scan ack ส่งแล้ว ไม่มี outbound มาช่วย)
+    const clearedKeys = [];
+    await terminalizeSuppressedBannedJob({ jobId: "job-2", lineUserId: uid, workerId: "w1" }, {
+      failJob: async () => { throw new Error("db down"); },
+      clearDedupeKey: async (k) => { clearedKeys.push(k); },
+      scanInFlightKeyForUser: (u) => `scan_v2:inflight:${u}`,
+    });
+    assert.equal(clearedKeys.length, 1, "failJob ล้มก็ต้องปล่อย gate");
+  }
+});

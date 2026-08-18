@@ -86,10 +86,18 @@ async function releaseHeldWithoutInfo(userId, pending, rawText) {
  * เรียกจาก deliverOutbound ก่อนส่ง scan_result — คืน true = เกตยึดไว้แล้ว (ส่งคำถามแทน อย่าส่งรายงาน)
  * @param {object} p { client, lineUserId, payload (outbound payload_json ทั้งก้อน) }
  */
+/**
+ * Typed outcome (Codex nested-ban race): ห้ามคืน object เข้า boolean if
+ * @returns {Promise<{ outcome: "not_held" | "held" | "suppressed_banned" }>}
+ * not_held = ส่งรายงานปกติ · held = ยึดรายงานถามข้อมูลแล้ว ·
+ * suppressed_banned = ลูกค้าโดนแบนระหว่าง push การ์ด — ล้าง pending/backup/form
+ * ที่สร้างไว้แล้ว caller ต้อง suppress outbound (ห้าม markSent)
+ */
 export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload }) {
-  if (!objectInfoGateEnabled()) return false;
+  const NOT_HELD = { outcome: "not_held" };
+  if (!objectInfoGateEnabled()) return NOT_HELD;
   try {
-    if (payload?.error) return false;
+    if (payload?.error) return NOT_HELD;
     // โหมด summary_link ไม่แนบ reportPayload ใน outbound (เป็น JSON null) → โหลดจาก DB ด้วย token
     let rp = payload?.reportPayload || null;
     if (!rp && payload?.publicToken) {
@@ -103,22 +111,22 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     }
     if (!rp) {
       console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_SKIP", reason: "no_report_payload" }));
-      return false;
+      return NOT_HELD;
     }
-    if (rp.precheckMode) return false; // ชิ้นเช็คก่อนเช่า — ไม่ใช่ของลูกค้า ไม่ถาม
+    if (rp.precheckMode) return NOT_HELD; // ชิ้นเช็คก่อนเช่า — ไม่ใช่ของลูกค้า ไม่ถาม
     const objectKey = objectKeyFromReportPayload(rp);
-    if (!objectKey) return false;
-    if (await hasInfoForObject(lineUserId, objectKey)) return false;
+    if (!objectKey) return NOT_HELD;
+    if (await hasInfoForObject(lineUserId, objectKey)) return NOT_HELD;
 
     // กันสแปม+รายงานหาย (เคส 10 ส.ค.): ยึดได้ทีละชิ้นต่อคน — มีคำถามค้างอยู่
     // หรือเพิ่งถามไปไม่นาน → ชิ้นนี้ส่งรายงานปกติ ไม่ยึดเพิ่ม (pending เดิมห้ามโดนทับ)
     if (await getValue(pendingKey(lineUserId))) {
       console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_SKIP", reason: "pending_exists", lineUserIdPrefix: lineUserId.slice(0, 8) }));
-      return false;
+      return NOT_HELD;
     }
     if (await getValue(askCooldownKey(lineUserId))) {
       console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_SKIP", reason: "ask_cooldown", lineUserIdPrefix: lineUserId.slice(0, 8) }));
-      return false;
+      return NOT_HELD;
     }
 
     const lane = laneFromReportPayload(rp);
@@ -194,7 +202,14 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     {
       const { pushToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
       const pushed = await pushToCustomer(client, lineUserId, flexAsk, { source: "object_info_gate_ask" });
-      if (pushed.suppressedBanned) return { asked: false, suppressedBanned: true };
+      if (pushed.suppressedBanned) {
+        // ล้าง state ที่สร้างก่อน push — ลูกค้าไม่เคยเห็นคำถาม ห้ามค้าง pending/form
+        await clearDedupeKey(`objinfo:form:${formToken}`).catch(() => {});
+        await clearDedupeKey(pendingKey(lineUserId)).catch(() => {});
+        await clearDedupeKey(backupKey(lineUserId)).catch(() => {});
+        console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_SUPPRESSED_BANNED", lineUserIdPrefix: lineUserId.slice(0, 8) }));
+        return { outcome: "suppressed_banned" };
+      }
     }
     await setLargeValueWithTtl(askCooldownKey(lineUserId), "1", ASK_COOLDOWN_SEC()).catch(() => {});
     try {
@@ -202,10 +217,10 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
       void insertLineConversationMessage(lineUserId, "bot", askText, { speakerRole: "admin", replyType: "object_info_gate_ask", source: "worker" });
     } catch { /* ignore */ }
     console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_ASKED", lineUserIdPrefix: lineUserId.slice(0, 8), lane, isPaid }));
-    return true;
+    return { outcome: "held" };
   } catch (e) {
     console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_ERROR", step: "hold", msg: String(e?.message || e).slice(0, 140) }));
-    return false; // เกตพัง = ส่งรายงานปกติ ห้ามขวางลูกค้า
+    return NOT_HELD; // เกตพัง = ส่งรายงานปกติ ห้ามขวางลูกค้า
   }
 }
 

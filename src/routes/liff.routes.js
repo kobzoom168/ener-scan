@@ -36,6 +36,7 @@ import { uploadSlipImageToStorage } from "../services/slipUpload.service.js";
 import { runSlipAutoApprovalAfterGateAccept } from "../core/payments/slipCheck/slipAutoApprovalOrchestrator.service.js";
 import { maybeNotifyAdminSlipPendingVerify } from "../services/adminPaymentSlipNotify.service.js";
 import { pushText } from "../services/lineSequenceReply.service.js";
+import { rejectIfBannedLiff } from "../services/ban/liffBanGuard.util.js";
 import { bustRegistrationCache } from "../services/registrationGate.service.js";
 import { checkScanAccess } from "../services/paymentAccess.service.js";
 import {
@@ -1291,6 +1292,7 @@ liffRouter.get("/api/liff/pay/info", async (req, res) => {
 liffRouter.post("/api/liff/pay/create", express.json(), async (req, res) => {
   const userId = await requireLiffUser(req, res);
   if (!userId) return;
+  if (await rejectIfBannedLiff(userId, res, "pay_create")) return;
   try {
     const offer = loadActiveScanOffer();
     const packages = (offer.packages || []).filter((p) => p.active);
@@ -1376,6 +1378,7 @@ liffRouter.post(
   async (req, res) => {
     const userId = await requireLiffUser(req, res);
     if (!userId) return;
+    if (await rejectIfBannedLiff(userId, res, "pay_slip")) return;
     try {
       const b64 = String(req.body?.imageBase64 || "").replace(/^data:image\/\w+;base64,/, "");
       if (!b64) return res.status(400).json({ ok: false, error: "missing_image" });
@@ -1452,7 +1455,12 @@ liffRouter.post(
           const approvedText = swPkg
             ? buildSlipPackageSwitchedApprovedText(swPkg)
             : "✅ ตรวจสลิปเรียบร้อยครับ ผมเปิดสิทธิ์ให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล ให้อาจารย์ดูได้เลยครับ";
-          pushText(liffLineClient, userId, approvedText).catch(() => {});
+          import("../services/lineOutbound/customerPush.gateway.js")
+            .then(async (g) => {
+              const gate = await g.allowCustomerPush(userId, { source: "liff_slip_approved" });
+              if (gate.allowed) await pushText(liffLineClient, userId, approvedText);
+            })
+            .catch(() => {});
           // ลงประวัติแชทให้ AI เห็นว่าเรื่องจ่ายจบแล้ว (เคส 29 ก.ค.: บอททวงสลิปซ้ำ)
           void insertLineConversationMessage(userId, "bot", approvedText, { speakerRole: "admin", replyType: "slip_approved", source: "flow" });
           // Spend-to-upgrade (กบ 30 ก.ค.): จ่ายรอบ 2+ ของวัน → เสนอหักยอดขึ้นแพ็กใหญ่
@@ -1479,11 +1487,18 @@ liffRouter.post(
           slipUrl,
           reasons: approvalFlow?.reasons || [],
         }).catch(() => {});
-        pushText(
-          liffLineClient,
-          userId,
-          "🙏 รับสลิปแล้วครับ กำลังตรวจกับธนาคารอยู่\n⏳ เสร็จเมื่อไหร่ผมเปิดสิทธิ์แล้วแจ้งในแชตทันทีครับ",
-        ).catch(() => {});
+        import("../services/lineOutbound/customerPush.gateway.js")
+          .then(async (g) => {
+            const gate = await g.allowCustomerPush(userId, { source: "liff_slip_pending" });
+            if (gate.allowed) {
+              await pushText(
+                liffLineClient,
+                userId,
+                "🙏 รับสลิปแล้วครับ กำลังตรวจกับธนาคารอยู่\n⏳ เสร็จเมื่อไหร่ผมเปิดสิทธิ์แล้วแจ้งในแชตทันทีครับ",
+              );
+            }
+          })
+          .catch(() => {});
       }
       console.log(JSON.stringify({ event: "LIFF_SLIP_PENDING_VERIFY", paymentId }));
       return res.json({ ok: true, result: "pending" });

@@ -117,3 +117,71 @@ test("inventory: ไฟล์ที่ route ผ่าน gateway แล้ว�
     assert.ok(s.includes("customerPush.gateway.js"), `${rel} ไม่ได้ import gateway`);
   }
 });
+
+/* ---------------- Codex 18d5d3a: LIFF coverage (P0-4) ---------------- */
+
+test("rejectIfBannedLiff: แบน → 403 generic ก่อนแตะ AI/DB ใด ๆ · ไม่แบน → ผ่าน · เช็คพัง → fail-open", async () => {
+  const { rejectIfBannedLiff } = await import("../src/services/ban/liffBanGuard.util.js");
+  const makeRes = () => {
+    const r = { code: null, body: null };
+    r.status = (c) => { r.code = c; return { json: (b) => { r.body = b; } }; };
+    return r;
+  };
+  const uid = "U" + "a".repeat(32);
+  const res1 = makeRes();
+  assert.equal(await rejectIfBannedLiff(uid, res1, "pay_slip", { isBanned: async () => true }), true);
+  assert.equal(res1.code, 403);
+  assert.equal(res1.body.error, "unavailable", "ห้ามเฉลยว่าโดนแบน");
+  const res2 = makeRes();
+  assert.equal(await rejectIfBannedLiff(uid, res2, "pay_slip", { isBanned: async () => false }), false);
+  assert.equal(res2.code, null);
+  const res3 = makeRes();
+  assert.equal(await rejectIfBannedLiff(uid, res3, "pay_slip", { isBanned: async () => { throw new Error("x"); } }), false);
+});
+
+test("LIFF: slip/create endpoint เช็คแบนก่อน AI/mutation (source-order)", () => {
+  const s = fs.readFileSync("src/routes/liff.routes.js", "utf8");
+  // pay/slip: guard ต้องมาก่อน slip vision/upload/mutation ทุกตัว
+  const slipStart = s.indexOf('"/api/liff/pay/slip"');
+  assert.ok(slipStart > 0);
+  const slipGuard = s.indexOf('rejectIfBannedLiff(userId, res, "pay_slip")', slipStart);
+  assert.ok(slipGuard > 0, "slip endpoint ต้องมี ban guard");
+  for (const aiCall of ["evaluateAwaitingPaymentSlipImage", "uploadSlipImageToStorage", "setPaymentSlipPendingVerify", "runSlipAutoApprovalAfterGateAccept"]) {
+    const idx = s.indexOf(aiCall, slipStart);
+    assert.ok(idx < 0 || slipGuard < idx, `${aiCall} ต้องอยู่หลัง ban guard`);
+  }
+  // pay/create: guard ก่อนสร้าง payment
+  const createStart = s.indexOf('"/api/liff/pay/create"');
+  const createGuard = s.indexOf('rejectIfBannedLiff(userId, res, "pay_create")', createStart);
+  assert.ok(createGuard > 0 && createGuard - createStart < 400, "create endpoint ต้องมี guard ต้นทาง");
+  // pushText 2 จุด (approved/pending) ต้องผ่าน gateway
+  const approvedIdx = s.indexOf('source: "liff_slip_approved"');
+  const pendingIdx = s.indexOf('source: "liff_slip_pending"');
+  assert.ok(approvedIdx > 0 && pendingIdx > 0, "pushText ทั้งสองจุดต้องผ่าน allowCustomerPush");
+});
+
+/* wrapper-level inventory (Codex: จับ pushText/pushFlex/invokeLinePushMessage ด้วย ไม่ใช่แค่ raw transport) */
+const WRAPPER_RE = /\bpushText\(|\bpushFlex\(|\bpushTextWithTrailingSticker\(|\binvokeLinePushMessage\(/;
+const WRAPPER_EXEMPT = new Map([
+  ["src/services/lineSequenceReply.service.js", "wrapper definitions (transport layer)"],
+  ["src/utils/linePush429Retry.util.js", "transport retry layer"],
+  ["src/utils/lineNotify429Retry.util.js", "transport retry layer"],
+  ["src/utils/lineClientTransport.util.js", "transport layer"],
+  ["src/services/lineReply.service.js", "reply-first in-turn wrapper"],
+  ["src/services/nonScanReply.gateway.js", "in-turn (pre-dispatch gate ครอบ)"],
+  ["src/services/adminPaymentSlipNotify.service.js", "admin-only"],
+  ["src/services/scanV2/deliverOutbound.service.js", "own ban gate (suppressed_banned)"],
+]);
+
+test("inventory (wrapper): ทุกไฟล์ที่เรียก push wrapper ต้องผ่าน gateway หรือ allowlist มีเหตุผล", () => {
+  const offenders = [];
+  for (const f of walk("src")) {
+    const rel = f.split(path.sep).join("/");
+    const src = fs.readFileSync(f, "utf8");
+    if (!WRAPPER_RE.test(src)) continue;
+    if (WRAPPER_EXEMPT.has(rel)) continue;
+    if (src.includes("customerPush.gateway.js")) continue;
+    offenders.push(rel);
+  }
+  assert.deepEqual(offenders, [], `wrapper push ไม่ผ่าน gateway: ${offenders.join(", ")}`);
+});

@@ -275,12 +275,36 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       // เกตเก็บข้อมูลชิ้น (กบ 7 ส.ค.): ชิ้นใหม่ยังไม่มีข้อมูลเจ้าของ → ส่งคำถามแทน พักรายงานไว้
       // ตอบแล้วค่อย re-enqueue กลับมาคิวนี้ (ตอนนั้นเกตจะปล่อยผ่านเพราะมีข้อมูลแล้ว)
       if (!precheckActive) try {
-        const { maybeHoldReportForObjectInfo } = await import(
-          "../objectInfoGate/objectInfoGate.service.js"
-        );
-        if (await maybeHoldReportForObjectInfo({ client, lineUserId, payload })) {
-          await markSent(id);
-          releaseScanGate(lineUserId);
+        const holdFn =
+          traceCtx.objectInfoHold ||
+          (await import("../objectInfoGate/objectInfoGate.service.js")).maybeHoldReportForObjectInfo;
+        const hold = await holdFn({ client, lineUserId, payload });
+        // typed outcome (Codex nested-ban race): object เดิม ๆ ห้ามตีความเป็น "ส่งแล้ว"
+        const holdOutcome = hold && typeof hold === "object" ? hold.outcome : hold === true ? "held" : "not_held";
+        if (holdOutcome === "suppressed_banned") {
+          // ลูกค้าโดนแบนระหว่าง push การ์ดถามข้อมูล — suppress เต็มชุดเหมือน gate บนสุด
+          const gateDeps = traceCtx.banGateDeps || {};
+          const updateOutbound = gateDeps.updateOutboundMessage || updateOutboundMessage;
+          await updateOutbound(id, {
+            status: "suppressed_banned",
+            last_error_code: "suppressed_banned",
+            last_error_message: "user banned during object-info hold - outbound suppressed",
+            next_retry_at: null,
+          }).catch(() => {});
+          try { (gateDeps.releaseScanGate || releaseScanGate)(lineUserId); } catch { /* ignore */ }
+          if (msg.related_job_id) {
+            try {
+              const doFailJob =
+                gateDeps.failJob || (await import("./processScanJob.service.js")).failJob;
+              await doFailJob(msg.related_job_id, "suppressed_banned", "outbound suppressed for banned user (object-info hold)", lineUserId, "delivery-gate");
+            } catch { /* job อาจ terminal แล้ว */ }
+          }
+          console.log(JSON.stringify({ event: "OUTBOUND_SUPPRESSED_BANNED", stage: "object_info_hold", ...base() }));
+          return { sent: false, suppressedBanned: true, errorCode: "suppressed_banned" };
+        }
+        if (holdOutcome === "held") {
+          await ((traceCtx.banGateDeps || {}).markSent || markSent)(id);
+          ((traceCtx.banGateDeps || {}).releaseScanGate || releaseScanGate)(lineUserId);
           console.log(JSON.stringify({ event: "OUTBOUND_HELD_FOR_OBJECT_INFO", ...base() }));
           return { sent: true };
         }

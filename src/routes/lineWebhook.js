@@ -2115,40 +2115,18 @@ async function handlePaymentCommandTextRoute({
   return true;
 }
 
-async function replyIdleTextNoDuplicate({
-  client,
-  replyToken,
-  userId,
-  invokePhase1GeminiOrchestrator = null,
-}) {
-  if (
-    invokePhase1GeminiOrchestrator &&
-    (await invokePhase1GeminiOrchestrator({ allowIdleDirectConsult: true })).handled
-  )
-    return;
-  const primary = buildIdleDeterministicPrimaryText();
-  let personaSoft = null;
-  try {
-    personaSoft = await buildIdleText(userId);
-  } catch (_) {
-    personaSoft = null;
-  }
-  const altPersona =
-    String(personaSoft || "").trim() &&
-    String(personaSoft).trim() !== primary.trim()
-      ? String(personaSoft).trim()
-      : null;
-  await sendNonScanReply({
-    client,
-    userId,
-    replyToken,
-    replyType: "idle_post_scan",
-    semanticKey: "idle_post_scan",
-    text: primary,
-    alternateTexts: [
-      ...(altPersona ? [altPersona] : []),
-      "มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้",
-    ],
+async function replyIdleTextNoDuplicate(opts) {
+  // แยก logic ไป util (Codex P0-5) — webhook เหลือ thin wrapper ผูก deps จริง
+  const { replyIdleTextNoDuplicate: run } = await import(
+    "../services/lineWebhook/idleReply.util.js"
+  );
+  return run({
+    ...opts,
+    deps: {
+      sendNonScanReply,
+      buildIdleDeterministicPrimaryText,
+      buildIdleText,
+    },
   });
 }
 
@@ -4097,7 +4075,9 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     const res = await banUser({ lineUserId: payload.target, reason: payload.reason, bannedBy: adminUid });
     await reply(
       res.ok
-        ? `แบนแล้วครับ\n${payload.target}\nระบบจะเงียบกับบัญชีนี้ทุกช่องทาง พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
+        ? res.cacheSynced === false
+          ? `แบนบันทึกแล้วครับ\n${payload.target}\nแต่ระบบ cache ขัดข้อง อาจมีผลช้าไม่เกิน 1 นาที พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
+          : `แบนแล้วครับ\n${payload.target}\nระบบจะเงียบกับบัญชีนี้ทุกช่องทาง พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
         : res.reason === "already_banned"
           ? "บัญชีนี้ถูกแบนอยู่แล้วครับ"
           : "แบนไม่สำเร็จ (ระบบฐานข้อมูล) ลองใหม่อีกครั้งครับ",
@@ -4111,7 +4091,9 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     const res = await unbanUser({ lineUserId: unbanM[1], unbannedBy: adminUid, unbanReason: "manual_unban" });
     await reply(
       res.ok
-        ? `ปลดแบนแล้วครับ ${unbanM[1]} กลับมาใช้งานได้ปกติ (ล้างสถานะเงียบชั่วคราวให้ด้วยแล้ว)`
+        ? res.cacheCleared === false
+          ? `ปลดแบนใน DB แล้วครับ ${unbanM[1]} แต่ล้าง cache ไม่ครบ — อาจยังเงียบต่ออีกพักหนึ่ง ถ้าเกิน 5 นาทีพิมพ์ ปลดแบน ${unbanM[1]} ซ้ำอีกครั้ง`
+          : `ปลดแบนแล้วครับ ${unbanM[1]} กลับมาใช้งานได้ปกติ (ล้างสถานะเงียบชั่วคราวให้ด้วยแล้ว)`
         : res.reason === "not_banned"
           ? "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ"
           : "ปลดแบนไม่สำเร็จ ลองใหม่อีกครั้งครับ",
@@ -4550,19 +4532,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         return; // อาจารย์เงียบ — ท่าที่จริงที่สุดและประหยัดสุด
       }
       if (troll >= 3) {
-        const firstCut = await tryDedupeOnce(`scan_v2:troll_notice:${userId}`, 600);
-        if (firstCut) {
-          await sendNonScanReply({
-            client,
-            userId,
-            replyToken: event.replyToken,
-            replyType: "troll_soft_cut",
-            semanticKey: "troll_soft_cut",
-            text: "อาจารย์รับดูพลังพระ เครื่องราง หิน กำไล ไม่ได้รับคุยเล่นนะ\nมีเรื่องจริงเมื่อไหร่ค่อยว่ามา อาจารย์ขอเก็บสมาธิไว้ดูให้คนที่ตั้งใจ",
-            alternateTexts: ["พร้อมเรื่องพระจริง ๆ เมื่อไหร่ค่อยพิมพ์มานะ"],
-          });
-        }
-        console.log(JSON.stringify({ event: "TROLL_SOFT_CUT", userId, troll }));
+        // โทนกบ (Codex รอบ 2): troll ยืนยันแล้ว = เงียบ + telemetry — ไม่ส่งบทเทศนา
+        console.log(JSON.stringify({ event: "TROLL_SOFT_CUT", userId, troll, silent: true }));
         // แจ้งแอดมิน (กบ 18 ส.ค.): สัญญาณกวน — alert เท่านั้น ห้าม auto-ban
         void (async () => {
           const { sendCustomerAlert, redactForAlert, paidStatusForAlert } = await import(
@@ -8501,12 +8472,13 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
-  // True idle — generic fallback / recovery.
+  // True idle — generic fallback / recovery. (จุดเดียวที่เปิด idle consult bypass)
   await replyIdleTextNoDuplicate({
     client,
     replyToken: event.replyToken,
     userId,
     invokePhase1GeminiOrchestrator,
+    allowIdleDirectConsult: true,
   });
 }
 

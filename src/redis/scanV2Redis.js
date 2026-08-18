@@ -250,6 +250,35 @@ export async function isDedupeKeyActive(dedupeKey) {
  * delivered). Best-effort — TTL remains the safety net when redis is down.
  * @param {string} dedupeKey
  */
+/**
+ * strict primitives (Codex ban-cache round): งานที่ "ต้องรู้ผลจริง" เช่น ล้าง ban cache
+ * ห้ามใช้ตัวกลืน error ข้างบน — คืน {ok, reason} เสมอ ไม่ throw
+ * @returns {Promise<{ ok: boolean, reason?: string }>}
+ */
+export async function strictDeleteKey(key) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    await r.del(kDedupe(key));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
+/** @returns {Promise<{ ok: boolean, reason?: string }>} */
+export async function strictSetWithTtl(key, value, ttlSec) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const v = String(value).slice(0, 512 * 1024);
+    await r.set(kDedupe(key), v, "EX", Math.min(Math.max(Number(ttlSec) || 3600, 60), 45 * 86400));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
 export async function clearDedupeKey(dedupeKey) {
   const r = await getScanV2Redis();
   if (!r) return;
