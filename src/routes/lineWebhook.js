@@ -2690,8 +2690,6 @@ async function finalizeAcceptedImage({
         return;
       }
       if (verdict.decision === "recovery") {
-        // owner จริงของ flow (Codex รอบ 4): แจ้งแอดมินผ่าน Telegram ให้เข้ามาเคลียร์
-        // (คืนสิทธิ์/re-enqueue) — dedupe ต่อคน 1 ชม. กัน alert ถล่ม
         console.log(
           JSON.stringify({
             event: "PAYWALL_RECOVERY_NO_VALUE_YET",
@@ -2699,26 +2697,27 @@ async function finalizeAcceptedImage({
             reason: verdict.reason,
           }),
         );
-        try {
-          const firstAlert = await tryDedupeOnce(`paywall_recovery_alert:${userId}`, 3600);
-          if (firstAlert) {
-            const { sendTelegramText } = await import("../services/telegramNotify.service.js");
-            void sendTelegramText(
-              `[RECOVERY] ลูกค้าใหม่ยังไม่เคยได้ผลสแกน (${verdict.reason}) uid:${String(userId).slice(0, 10)}… ระบบพักการขายไว้ — เข้าไปเช็คงานล่าสุด/คืนสิทธิ์ให้หน่อยครับ`,
-            ).catch(() => {});
-          }
-        } catch { /* alert พังไม่ขวางลูกค้า */ }
-        // ข้อความ recovery ครั้งเดียวต่อ 30 นาที — ส่งรูปซ้ำระหว่างนั้นตอบสั้น กันวนลูป
+        // owner จริง (Codex รอบ 5): await + ตรวจ {ok} — ส่งไม่ถึง = clear dedupe ให้ลองใหม่
+        // และห้ามอ้างว่า "แอดมินรับเรื่องแล้ว" ถ้ายังไม่ถึงมือแอดมินจริง
+        const { assignRecoveryOwner } = await import("../services/lineWebhook/paywallDefer.util.js");
+        const { sendTelegramText } = await import("../services/telegramNotify.service.js");
+        const { ownerAssigned } = await assignRecoveryOwner({
+          userId,
+          reason: verdict.reason,
+          deps: { tryDedupeOnce, clearDedupeKey, sendTelegramText },
+        });
+        // ข้อความ recovery เต็มครั้งเดียวต่อ 30 นาที — ส่งรูปซ้ำระหว่างนั้นตอบสั้น กันวนลูป
         const firstRecoveryMsg = await tryDedupeOnce(`paywall_recovery_msg:${userId}`, 1800).catch(() => true);
+        const shortText = ownerAssigned
+          ? "รับไว้แล้วครับ ยังไม่ต้องส่งซ้ำ แอดมินกำลังเช็คให้อยู่ครับ"
+          : "รับไว้แล้วครับ ยังไม่ต้องส่งซ้ำครับ";
         await sendNonScanReply({
           client,
           userId,
           replyToken: event.replyToken,
           replyType: "paywall_recovery_scan_issue",
           semanticKey: `paywall_recovery_scan_issue:${firstRecoveryMsg ? "full" : "short"}`,
-          text: firstRecoveryMsg
-            ? selectRecoveryText(verdict.reason)
-            : "รับไว้แล้วครับ ยังไม่ต้องส่งซ้ำ แอดมินกำลังเช็คให้อยู่ครับ",
+          text: firstRecoveryMsg ? selectRecoveryText(verdict.reason, { ownerAssigned }) : shortText,
           alternateTexts: [],
           speakerRoleOverride: "admin",
         });

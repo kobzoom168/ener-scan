@@ -767,3 +767,8 @@
 - recovery ไม่ใช่ dead end แล้ว: (1) owner จริง = Telegram alert ถึงแอดมิน (dedupe 1 ชม./คน) ให้เข้ามาคืนสิทธิ์/re-enqueue (2) copy แยกตามเหตุ — failed พูด "อ่านไม่สำเร็จ" ได้ · stale/neutral ห้ามฟันธง (3) ทุก copy บอก "ยังไม่ต้องส่งซ้ำ" (รูปถูกถือไว้แล้ว — เลิกสั่งส่งใหม่) + ตัดสัญญา "ส่งให้อาจารย์" ที่ไม่มี enqueue จริง (4) กันวน: recovery เต็มครั้งเดียว/30 นาที รูปซ้ำระหว่างนั้นตอบสั้น · เทสต์ copy contract + mapping ครบ
 - หมายเหตุถึง Codex: resume-token + recovery entitlement (bypass paywall ครั้งเดียว) = ทางที่ดีที่สุดตามที่เสนอ — เข้า BACKLOG รอบถัดไป รอบนี้ใช้ minimum ที่มี owner จริงตามที่อนุญาต
 - กบถามชื่อ supabase: เพิ่ม export db (PostgREST client ของเราเอง) + supabase เป็น @deprecated alias — rename ทั้ง repo (54 ไฟล์) เข้า BACKLOG ไม่ทำ big-bang ช่วงใกล้ deploy · baseline 1043 ผ่าน
+
+## 2026-08-18 | Claude | ปิด blocker owner จริง (Codex รอบ 5) — staging
+- assignRecoveryOwner (DI): await sendTelegramText + ตรวจ {ok} จริง — สำเร็จ→PAYWALL_RECOVERY_OWNER_ASSIGNED + dedupe คงอยู่ 1 ชม. · ล้ม/not_configured/throw→clear dedupe (รอบหน้าลองใหม่ได้) + PAYWALL_RECOVERY_OWNER_DELIVERY_FAILED พร้อม failReason
+- copy: "แอดมินรับเรื่องไว้ตรวจแล้ว" ต่อท้ายเฉพาะเมื่อ ownerAssigned=true · เอา "ค่าครู" ออกจาก recovery ทุกตัว + คืน banned regex เต็ม /บาท|จ่าย|ค่าครู|แพ็ก|ราคา/ · ข้อความสั้นตอนกันวนก็แยกตาม ownerAssigned
+- เทสต์ owner honesty: ok:true→assigned+ไม่แจ้งซ้ำ · ok:false/not_configured/throw→clear dedupe+รอบสองส่งใหม่จริง (นับ sent=2) · baseline 1045 ผ่าน

@@ -8,9 +8,11 @@ import {
   resolvePaywallDeferDecision,
   gatherPaywallDeferEvidence,
   selectRecoveryText,
+  assignRecoveryOwner,
   PAYWALL_DEFER_SAFETY_BOUND_MS,
   PAYWALL_DEFER_TEXT,
   PAYWALL_RECOVERY_TEXTS,
+  RECOVERY_OWNER_ASSIGNED_SUFFIX,
 } from "../src/services/lineWebhook/paywallDefer.util.js";
 
 test("pending ทุกสถานะภายใน bound → defer (ไม่ว่าลูกค้าใหม่/เก่า) · delivered → paywall", () => {
@@ -103,7 +105,7 @@ test("in-flight → defer เสมอ · dbError/ไม่มี job → fail-o
 
 test("copy: defer/recovery ไม่มีราคา ไม่สัญญาผลมาเอง/handoff ลอย · stale ห้ามฟันธงว่าล้ม", () => {
   for (const txt of [PAYWALL_DEFER_TEXT, ...Object.values(PAYWALL_RECOVERY_TEXTS)]) {
-    assert.doesNotMatch(txt, /บาท|จ่าย 29|จ่าย 49|แพ็ก|ราคา/);
+    assert.doesNotMatch(txt, /บาท|จ่าย|ค่าครู|แพ็ก|ราคา/);
     assert.doesNotMatch(txt, /เดี๋ยวผล|ผลจะมา|กำลังอ่าน|ไม่เกิน\s*\d/);
     // ห้ามสัญญา handoff ถ้าไม่มี enqueue จริง (branch นี้ไม่ส่งให้อาจารย์)
     assert.doesNotMatch(txt, /ส่งให้อาจารย์|อาจารย์อ่านให้/);
@@ -116,12 +118,70 @@ test("copy: defer/recovery ไม่มีราคา ไม่สัญญา�
   assert.match(PAYWALL_RECOVERY_TEXTS.failed, /อ่านไม่สำเร็จ/);
   assert.doesNotMatch(PAYWALL_RECOVERY_TEXTS.stale, /ไม่สำเร็จ|ล้มเหลว/);
   assert.doesNotMatch(PAYWALL_RECOVERY_TEXTS.neutral, /ไม่สำเร็จ|ล้มเหลว/);
-  // mapping reason → copy
+  // mapping reason → copy · "แอดมินรับเรื่อง" โผล่เฉพาะเมื่อ owner assigned จริง
   assert.equal(selectRecoveryText("no_value_failed"), PAYWALL_RECOVERY_TEXTS.failed);
   assert.equal(selectRecoveryText("no_value_cancelled"), PAYWALL_RECOVERY_TEXTS.failed);
   assert.equal(selectRecoveryText("stale_pending_no_value"), PAYWALL_RECOVERY_TEXTS.stale);
   assert.equal(selectRecoveryText("invalid_job_age"), PAYWALL_RECOVERY_TEXTS.neutral);
   assert.equal(selectRecoveryText("no_value_unknown"), PAYWALL_RECOVERY_TEXTS.neutral);
+  for (const reason of ["no_value_failed", "stale_pending_no_value", "invalid_job_age"]) {
+    assert.doesNotMatch(selectRecoveryText(reason, { ownerAssigned: false }), /แอดมินรับเรื่อง/);
+    assert.match(selectRecoveryText(reason, { ownerAssigned: true }), /แอดมินรับเรื่องไว้ตรวจแล้ว/);
+  }
+  assert.doesNotMatch(RECOVERY_OWNER_ASSIGNED_SUFFIX, /บาท|จ่าย|ค่าครู|แพ็ก|ราคา/);
+});
+
+/* ---------------- owner assignment ซื่อสัตย์ (Codex รอบ 5) ---------------- */
+
+function ownerDeps({ sendResult, sendThrows = false }) {
+  const state = { dedupe: new Set(), cleared: [], sent: 0 };
+  return {
+    state,
+    deps: {
+      tryDedupeOnce: async (k) => {
+        if (state.dedupe.has(k)) return false;
+        state.dedupe.add(k);
+        return true;
+      },
+      clearDedupeKey: async (k) => {
+        state.dedupe.delete(k);
+        state.cleared.push(k);
+      },
+      sendTelegramText: async () => {
+        state.sent += 1;
+        if (sendThrows) throw new Error("network down");
+        return sendResult;
+      },
+    },
+  };
+}
+
+test("owner: Telegram {ok:true} → assigned + dedupe คงอยู่ (ไม่แจ้งซ้ำในชั่วโมง)", async () => {
+  const { state, deps } = ownerDeps({ sendResult: { ok: true } });
+  const r1 = await assignRecoveryOwner({ userId: "U1", reason: "no_value_failed", deps });
+  assert.equal(r1.ownerAssigned, true);
+  assert.equal(state.sent, 1);
+  // ครั้งที่สองในชั่วโมงเดียว: ไม่ส่งซ้ำ แต่ owner ยังถือว่ามี (แจ้งสำเร็จไปแล้ว)
+  const r2 = await assignRecoveryOwner({ userId: "U1", reason: "no_value_failed", deps });
+  assert.equal(r2.ownerAssigned, true);
+  assert.equal(state.sent, 1);
+  assert.equal(state.cleared.length, 0);
+});
+
+test("owner: {ok:false}/not_configured/throw → ไม่ assigned + clear dedupe ให้รอบหน้าลองใหม่", async () => {
+  for (const setup of [
+    ownerDeps({ sendResult: { ok: false, reason: "http_500" } }),
+    ownerDeps({ sendResult: { ok: false, reason: "not_configured" } }),
+    ownerDeps({ sendResult: null, sendThrows: true }),
+  ]) {
+    const r = await assignRecoveryOwner({ userId: "U2", reason: "no_value_failed", deps: setup.deps });
+    assert.equal(r.ownerAssigned, false);
+    assert.equal(setup.state.cleared.length, 1); // dedupe ถูกล้าง
+    // interaction ถัดไปลองส่งใหม่ได้จริง (dedupe ว่างแล้ว)
+    const r2 = await assignRecoveryOwner({ userId: "U2", reason: "no_value_failed", deps: setup.deps });
+    assert.equal(setup.state.sent, 2, "รอบสองต้องพยายามส่งใหม่");
+    void r2;
+  }
 });
 
 /* ---------------- evidence gatherer: PostgREST คืน {error} ไม่ throw (Codex รอบ 4) ---------------- */

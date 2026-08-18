@@ -74,25 +74,82 @@ export const PAYWALL_DEFER_TEXT =
   "รับรูปชิ้นนี้ไว้แล้วครับ ขอส่งผลชิ้นก่อนหน้าให้เรียบร้อยก่อนนะครับ";
 
 /**
- * copy recovery แยกตามเหตุ (Codex รอบ 4): failed = พูดได้ว่าอ่านไม่สำเร็จ ·
- * stale = ห้ามฟันธงว่าล้ม (อาจแค่ค้าง) · invalid = กลาง ๆ — ทุกแบบ: ไม่มีเงิน/ราคา
- * ไม่สัญญา handoff ลอย ๆ ("แอดมินรับเรื่องแล้ว" หนุนด้วย Telegram alert จริงใน webhook)
+ * copy recovery แยกตามเหตุ (Codex รอบ 5): failed = พูดได้ว่าอ่านไม่สำเร็จ ·
+ * stale = ห้ามฟันธงว่าล้ม · invalid = กลาง ๆ — ทุกแบบ: ไม่มีคำเงินทุกชนิด (รวม "ค่าครู")
+ * และคำว่า "แอดมินรับเรื่องไว้ตรวจแล้ว" ใส่ได้เฉพาะเมื่อ alert ถึง owner สำเร็จจริง
  */
 export const PAYWALL_RECOVERY_TEXTS = Object.freeze({
   failed:
-    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nชิ้นก่อนหน้าอ่านไม่สำเร็จ ยังไม่มีผลส่งถึงคุณ ระบบจึงยังไม่เปิดเรื่องค่าครูตอนนี้ครับ แอดมินรับเรื่องไว้แล้วครับ",
+    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nชิ้นก่อนหน้าอ่านไม่สำเร็จ ยังไม่มีผลส่งถึงคุณครับ",
   stale:
-    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nชิ้นก่อนหน้ายังไม่มีผลส่งถึงคุณ ระบบจึงยังไม่เปิดเรื่องค่าครูในตอนนี้ครับ แอดมินรับเรื่องไว้แล้วครับ",
+    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nชิ้นก่อนหน้ายังไม่มีผลส่งถึงคุณครับ",
   neutral:
-    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nขอเช็คสถานะชิ้นก่อนหน้าให้ก่อนครับ ระบบยังไม่เปิดเรื่องค่าครูในตอนนี้ แอดมินรับเรื่องไว้แล้วครับ",
+    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nขอเช็คสถานะชิ้นก่อนหน้าให้ก่อนครับ",
 });
 
-/** @param {string} reason */
-export function selectRecoveryText(reason) {
+export const RECOVERY_OWNER_ASSIGNED_SUFFIX = " แอดมินรับเรื่องไว้ตรวจแล้วครับ";
+
+/** @param {string} reason @param {{ ownerAssigned?: boolean }} [opts] */
+export function selectRecoveryText(reason, { ownerAssigned = false } = {}) {
   const r = String(reason || "");
-  if (/^no_value_(failed|cancelled)$/.test(r)) return PAYWALL_RECOVERY_TEXTS.failed;
-  if (r === "stale_pending_no_value") return PAYWALL_RECOVERY_TEXTS.stale;
-  return PAYWALL_RECOVERY_TEXTS.neutral;
+  let base = PAYWALL_RECOVERY_TEXTS.neutral;
+  if (/^no_value_(failed|cancelled)$/.test(r)) base = PAYWALL_RECOVERY_TEXTS.failed;
+  else if (r === "stale_pending_no_value") base = PAYWALL_RECOVERY_TEXTS.stale;
+  return ownerAssigned ? base + RECOVERY_OWNER_ASSIGNED_SUFFIX : base;
+}
+
+/**
+ * มอบ owner ให้เคส recovery แบบซื่อสัตย์ (Codex รอบ 5): await + ตรวจ {ok} จริง ·
+ * ส่งไม่สำเร็จ = clear dedupe ให้ interaction ถัดไปลองใหม่ + ห้ามอ้างว่าแอดมินรับเรื่อง
+ * @param {{ userId: string, reason: string, deps: {
+ *   tryDedupeOnce: (k: string, ttl: number) => Promise<boolean>,
+ *   clearDedupeKey: (k: string) => Promise<unknown>,
+ *   sendTelegramText: (t: string) => Promise<{ ok: boolean, reason?: string }>,
+ * } }} p
+ * @returns {Promise<{ ownerAssigned: boolean }>}
+ */
+export async function assignRecoveryOwner({ userId, reason, deps }) {
+  const key = `paywall_recovery_alert:${userId}`;
+  let first = true;
+  try {
+    first = await deps.tryDedupeOnce(key, 3600);
+  } catch {
+    first = true;
+  }
+  if (!first) {
+    // เคยแจ้งสำเร็จภายในชั่วโมงนี้แล้ว (คีย์อยู่ได้เฉพาะเมื่อส่งสำเร็จ) — owner มีอยู่แล้ว
+    return { ownerAssigned: true };
+  }
+  let ok = false;
+  let failReason = "unknown";
+  try {
+    const r = await deps.sendTelegramText(
+      `[RECOVERY] ลูกค้ายังไม่เคยได้ผลสแกน (${reason}) uid:${String(userId).slice(0, 10)}… ระบบพักการขายไว้ — เข้าไปเช็คงานล่าสุด/คืนสิทธิ์ให้หน่อยครับ`,
+    );
+    ok = r?.ok === true;
+    if (!ok) failReason = String(r?.reason || "send_failed");
+  } catch (e) {
+    ok = false;
+    failReason = String(e?.message || e).slice(0, 80);
+  }
+  if (ok) {
+    console.log(
+      JSON.stringify({ event: "PAYWALL_RECOVERY_OWNER_ASSIGNED", uidPrefix: String(userId).slice(0, 8), reason }),
+    );
+    return { ownerAssigned: true };
+  }
+  try {
+    await deps.clearDedupeKey(key); // ให้รอบหน้าแจ้งใหม่ได้ — failure ครั้งแรกห้ามปิดการแจ้งทั้งชั่วโมง
+  } catch { /* TTL เป็น safety net */ }
+  console.error(
+    JSON.stringify({
+      event: "PAYWALL_RECOVERY_OWNER_DELIVERY_FAILED",
+      uidPrefix: String(userId).slice(0, 8),
+      reason,
+      failReason,
+    }),
+  );
+  return { ownerAssigned: false };
 }
 
 /**
