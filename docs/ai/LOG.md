@@ -772,3 +772,7 @@
 - assignRecoveryOwner (DI): await sendTelegramText + ตรวจ {ok} จริง — สำเร็จ→PAYWALL_RECOVERY_OWNER_ASSIGNED + dedupe คงอยู่ 1 ชม. · ล้ม/not_configured/throw→clear dedupe (รอบหน้าลองใหม่ได้) + PAYWALL_RECOVERY_OWNER_DELIVERY_FAILED พร้อม failReason
 - copy: "แอดมินรับเรื่องไว้ตรวจแล้ว" ต่อท้ายเฉพาะเมื่อ ownerAssigned=true · เอา "ค่าครู" ออกจาก recovery ทุกตัว + คืน banned regex เต็ม /บาท|จ่าย|ค่าครู|แพ็ก|ราคา/ · ข้อความสั้นตอนกันวนก็แยกตาม ownerAssigned
 - เทสต์ owner honesty: ok:true→assigned+ไม่แจ้งซ้ำ · ok:false/not_configured/throw→clear dedupe+รอบสองส่งใหม่จริง (นับ sent=2) · baseline 1045 ผ่าน
+
+## 2026-08-18 | Claude | Deploy Pro รวม (Codex ไฟเขียว 3dcbcc7) + smoke 6 ข้อผ่าน
+- sync → deploy pro healthy · smoke: ①②Telegram recovery alert จริง → OWNER_ASSIGNED (กบจะเห็นข้อความ [RECOVERY] smoke ใน Telegram 1 ข้อความ — ไม่ต้องสนใจ) ③จำลอง fail → DELIVERY_FAILED + dedupe ล้าง retry ได้จริง (attempts=2) ④resolver uid จริง → paywall ถูก (hasValue=true) ⑤สวัสดีตอบ/ครับหลังผลเงียบ ⑥สติกเกอร์เก่าไม่ทวง
+- hardening ไม่บล็อกจาก Codex → BACKLOG: แยก dedupe sending/sent กัน race + ใส่ job id/admin link ใน alert
