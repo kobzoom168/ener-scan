@@ -81,3 +81,29 @@ test("invariant: idle bypass อยู่ก่อน runGeminiPlanner (Codex P0
   assert.match(block, /tryConsultReply\("consult_idle_direct"\)/);
   assert.doesNotMatch(block, /runGeminiPhrasing/);
 });
+
+test("invariant: hard-block = silent terminal — return ก่อน AI/reply ทุกชนิด (Codex P0-2)", () => {
+  const i = SRC.indexOf("ABUSE_GUARD_HARD_BLOCK_SILENT");
+  assert.ok(i > 0, "ต้องมี hard-block silent branch");
+  // ใน block ระหว่าง log กับ return ต้องไม่มีการเรียก AI หรือส่งข้อความใด ๆ
+  const ret = SRC.indexOf("return;", i);
+  assert.ok(ret > 0 && ret - i < 400, "ต้อง return ทันทีหลัง telemetry");
+  const block = SRC.slice(i, ret);
+  for (const fn of ["eventPhase1Invoke", "sendScanLockReply", "sendNonScanReply", "replyMessage", "pushMessage", "invokePhase1"]) {
+    assert.ok(!block.includes(fn), `hard-block ห้ามเรียก ${fn}`);
+  }
+  // branch นี้ต้องมาก่อน ensureUserByLineUserId (ไม่สร้าง user/ไม่แตะ DB ให้คนโดนบล็อก)
+  const ensure = SRC.indexOf("ensureUserByLineUserId", i);
+  assert.ok(ensure < 0 || ret < ensure, "silent return ต้องมาก่อน ensure user");
+});
+
+test("invariant: idle bypass เฉพาะ flag — orchestrator เช็ค allowIdleDirectConsult === true (Codex P0-8)", () => {
+  const orch = fs.readFileSync(
+    path.join(process.cwd(), "src", "core", "conversation", "geminiFront", "geminiFrontOrchestrator.service.js"),
+    "utf8",
+  );
+  assert.ok(orch.includes('ctx.allowIdleDirectConsult === true'), "bypass ต้อง opt-in ด้วย flag เข้มงวด");
+  // ฝั่ง webhook: มีที่เดียวที่ส่ง allowIdleDirectConsult: true (replyIdleTextNoDuplicate)
+  const hits = SRC.split("allowIdleDirectConsult: true").length - 1;
+  assert.equal(hits, 1, "จุดเปิด bypass ต้องมีที่เดียว");
+});

@@ -23,10 +23,16 @@ export async function runWithTurnContext(meta, fn) {
   return als.run(store, fn);
 }
 
-/** เรียกจาก LLM client ทุกครั้งที่ยิงจริง — นอก turn context = no-op */
+/** เรียกจาก LLM client ทุกครั้งที่ "พยายาม" ยิง (error/timeout ก็นับ) — นอก context = no-op */
 export function recordTurnAiCall(callSite) {
   const s = als.getStore();
   if (s) s.callSites.push(String(callSite || "untagged"));
+}
+
+/** เวลา AI จริงสะสม (แยกจากเวลาเทิร์นทั้งก้อน — Codex P0-6) */
+export function recordTurnAiLatency(ms) {
+  const s = als.getStore();
+  if (s) s.aiMs = (s.aiMs || 0) + Math.max(0, Number(ms) || 0);
 }
 
 /** เติมข้อมูล state/route ระหว่างทาง (เช่น phase1 ที่รู้ทีหลัง) */
@@ -47,7 +53,8 @@ export function emitTurnAiChain() {
       state: s.state ?? null,
       aiCallCount: s.callSites.length,
       callSites: s.callSites,
-      latencyMs: Date.now() - s.startedAt,
+      aiLatencyMs: Math.round(s.aiMs || 0),
+      turnLatencyMs: Date.now() - s.startedAt,
     }),
   );
 }

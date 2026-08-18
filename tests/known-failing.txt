@@ -11,7 +11,6 @@ renderCrystalBraceletReportV2Html: includes owner profile + disclaimer
 SSOT: summary 66 vs internal ownerFit.score 63 — HTML + Flex + owner profile
 deriveShowcaseCardData: ชื่อ = ส่วนหลัง · + แกนครบ 6 + สกิลท็อป 2 เรียงถูก
 buildDeterministicFreeQuotaExhaustedPaywallText: short natural copy + offer numbers
-allowedActions + shadow: idle and scan_ready_idle are phrase-only noop
 pre-push (2): code_bank + no db variant id → skips stored even if headlineShort exists; uses db_resolver when DB has rows
 resolveLineSummaryWording: crystal + protection code_bank diagnostics still gets db_resolver (not bank tone)
 buildPaymentQrIntroText: prepends curated line; facts block preserved

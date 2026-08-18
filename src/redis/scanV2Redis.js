@@ -42,6 +42,10 @@ function bucketHour() {
  */
 export async function getScanV2Redis() {
   if (!env.REDIS_URL) return null;
+  // URL ไม่ใช่ redis จริง (เช่น test-placeholder ใน test env) → no-op เหมือนไม่ตั้งค่า
+  // กัน ioredis DNS-retry ค้างเป็น open handle ทำ node --test แขวน (บทเรียนซ้ำหลายรอบ)
+  const redisUrlStr = String(env.REDIS_URL);
+  if (!redisUrlStr.startsWith("redis://") && !redisUrlStr.startsWith("rediss://")) return null;
   if (client) return client;
   try {
     const { default: IORedis } = await import("ioredis");

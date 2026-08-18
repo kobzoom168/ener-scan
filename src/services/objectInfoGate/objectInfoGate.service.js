@@ -191,7 +191,11 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
             },
       quickReply: { items },
     };
-    await client.pushMessage(lineUserId, flexAsk);
+    {
+      const { pushToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+      const pushed = await pushToCustomer(client, lineUserId, flexAsk, { source: "object_info_gate_ask" });
+      if (pushed.suppressedBanned) return { asked: false, suppressedBanned: true };
+    }
     await setLargeValueWithTtl(askCooldownKey(lineUserId), "1", ASK_COOLDOWN_SEC()).catch(() => {});
     try {
       const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
@@ -400,14 +404,14 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
     // การ์ดรายงานดันหาย (กบ 7 ส.ค. "ยังไม่ทันเลือกคำตอบ")
     await setLargeValueWithTtl(`objinfo:purpose:${userId}`, JSON.stringify({ objectKey: pending.objectKey }), PURPOSE_TTL_SEC);
     setTimeout(() => {
-      client
-        .pushMessage(userId, {
+      import("../lineOutbound/customerPush.gateway.js")
+        .then((g) => g.pushToCustomer(client, userId, {
           type: "text",
           text: "ถามเพิ่มนิดเดียวครับ ชิ้นนี้ตั้งใจพกเพื่ออะไรเป็นหลัก (ตอบหรือไม่ตอบก็ได้)",
           quickReply: {
             items: PURPOSE_CHOICES.map((c) => ({ type: "action", action: { type: "message", label: c, text: `พกเพื่อ${c}` } })),
           },
-        })
+        }, { source: "object_info_purpose_ask" }))
         .catch(() => {});
     }, 7000);
     console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", lineUserIdPrefix: userId.slice(0, 8), conflict, hasName: Boolean(merged.objectName) }));

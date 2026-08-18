@@ -624,11 +624,14 @@ async function maybeHandleReferralCodeRedeem({ client, userId, replyToken, text 
       text: replyText,
     });
     if (result.ok && result.referrerLineUserId) {
-      client
-        .pushMessage(result.referrerLineUserId, {
-          type: "text",
-          text: buildReferrerNotifyText(),
-        })
+      // referrer เป็นคนละ user กับ event นี้ — ต้องเช็คแบน ณ ส่งจริง (Codex P0-5)
+      import("../services/lineOutbound/customerPush.gateway.js")
+        .then((g) =>
+          g.pushToCustomer(client, result.referrerLineUserId, {
+            type: "text",
+            text: buildReferrerNotifyText(),
+          }, { source: "referral_notify" }),
+        )
         .catch(() => {});
     }
     return true;
@@ -2120,7 +2123,7 @@ async function replyIdleTextNoDuplicate({
 }) {
   if (
     invokePhase1GeminiOrchestrator &&
-    (await invokePhase1GeminiOrchestrator()).handled
+    (await invokePhase1GeminiOrchestrator({ allowIdleDirectConsult: true })).handled
   )
     return;
   const primary = buildIdleDeterministicPrimaryText();
@@ -4062,7 +4065,8 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
       const { getScanV2Redis } = await import("../redis/scanV2Redis.js");
       const r = await getScanV2Redis();
       if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว (redis) ยังไม่แบนครับ"); return true; }
-      await r.set(`ban:nonce:${adminUid}`, JSON.stringify({ nonce, target, reason }), "EX", 300);
+      // key ต่อ nonce (Codex: รหัสผิดห้ามกิน nonce ที่ถูกต้อง)
+      await r.set(`ban:nonce:${adminUid}:${nonce}`, JSON.stringify({ target, reason }), "EX", 300);
     } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบนครับ"); return true; }
     await reply(
       `กำลังจะแบน ${exists.display_name || "(ไม่มีชื่อ)"}\n${target}\nเหตุผล: ${reason}\n\nยืนยันภายใน 5 นาที พิมพ์:\nยืนยันแบน ${nonce}`,
@@ -4077,15 +4081,15 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
       const { getScanV2Redis } = await import("../redis/scanV2Redis.js");
       const r = await getScanV2Redis();
       if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบนครับ"); return true; }
-      // atomic consume ครั้งเดียว (GETDEL ผ่าน lua — กันใช้ nonce ซ้ำ)
+      // atomic consume เฉพาะ key ของ nonce ที่พิมพ์มา — ผิด = ไม่แตะตัวที่ถูก
       const raw = await r.eval(
         "local v=redis.call('GET',KEYS[1]) if v then redis.call('DEL',KEYS[1]) end return v",
         1,
-        `ban:nonce:${adminUid}`,
+        `ban:nonce:${adminUid}:${confirmM[1]}`,
       );
       payload = raw ? JSON.parse(raw) : null;
     } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบนครับ"); return true; }
-    if (!payload || payload.nonce !== confirmM[1]) {
+    if (!payload) {
       await reply("รหัสยืนยันไม่ตรงหรือหมดอายุครับ เริ่มคำสั่ง แบน ใหม่อีกครั้ง");
       return true;
     }
@@ -4406,36 +4410,7 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
   }
 }
 
-async function handleTextMessage(opts) {
-  // durable messageId dedupe (Codex P0 ข้อ 4): LINE redelivery ห้ามยิง parser/AI/
-  // detector ซ้ำ — SET NX ข้าม container · handler ล้ม = clear claim ให้ retry ได้
-  const msgId = String(opts?.event?.message?.id || "").trim();
-  if (msgId) {
-    const first = await tryDedupeOnce(`msgid_claim:${msgId}`, 600).catch(() => true);
-    if (!first) {
-      console.log(JSON.stringify({ event: "TEXT_TURN_DUPLICATE_MESSAGE_ID_DROPPED", messageId: msgId }));
-      return;
-    }
-  }
-  // CHAT_TURN_AI_CHAIN (Codex 18 ส.ค.): วัด AI calls ต่อเทิร์นจริง — acceptance ของ
-  // แผนลด AI ซ้อน (deterministic=0 / idle consult=1 planner=0)
-  const { runWithTurnContext, emitTurnAiChain } = await import("../core/telemetry/turnAiChain.js");
-  return runWithTurnContext(
-    { messageId: opts?.event?.message?.id ?? null, kind: "text" },
-    async () => {
-      try {
-        return await handleTextMessageInner(opts);
-      } catch (e) {
-        if (msgId) await clearDedupeKey(`msgid_claim:${msgId}`).catch(() => {});
-        throw e;
-      } finally {
-        emitTurnAiChain();
-      }
-    },
-  );
-}
-
-async function handleTextMessageInner({ client, event, userId, session }) {
+async function handleTextMessage({ client, event, userId, session }) {
   const text = String(event.message.text || "").trim();
   const lowerText = text.toLowerCase();
   const now = Date.now();
@@ -4453,11 +4428,12 @@ async function handleTextMessageInner({ client, event, userId, session }) {
     if (!rep.hit) return;
     const paidStatus = await paidStatusForAlert(userId);
     const when = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 16);
+    const recentLines = (rep.recent || []).map((m, i) => `${i + 1}. ${m}`).join("\n");
     await sendCustomerAlert({
       type: "repeat_input",
       userId,
       dedupeSec: 6 * 3600,
-      telegramText: `[REPEAT] ลูกค้าพิมพ์ข้อความเดิมวน ${rep.count} ครั้งใน 15 นาที\nเวลา: ${when} (ไทย)\nID: ${userId}\nสถานะ: ${paidStatus}\nข้อความ: "${redactForAlert(text)}"\n\nแบนได้ด้วย: แบน ${userId}`,
+      telegramText: `[REPEAT] ลูกค้าพิมพ์ข้อความเดิมวน ${rep.count} ครั้งใน 15 นาที\nเวลา: ${when} (ไทย)\nID: ${userId}\nสถานะ: ${paidStatus}\nข้อความล่าสุด:\n${recentLines}\n\nแบนได้ด้วย: แบน ${userId}`,
     });
   })().catch(() => {});
 
@@ -5081,7 +5057,7 @@ async function handleTextMessageInner({ client, event, userId, session }) {
   }
 
   /** Phase-1 Gemini runs only after deterministic shortcuts / micro-intents above each insertion point. */
-  const invokePhase1GeminiOrchestrator = async () => {
+  const invokePhase1GeminiOrchestrator = async (invokeOpts = {}) => {
     const phase1GeminiKey = resolveGeminiPhase1StateKey({
       session,
       paymentState,
@@ -5106,6 +5082,9 @@ async function handleTextMessageInner({ client, event, userId, session }) {
       pendingPaymentStatus: pendingStatus || null,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
       noProgressStreak: activeResolved.noProgressStreak ?? 0,
+      // P0-8 (Codex): direct-consult bypass เฉพาะ call site ที่เป็น free-form
+      // knowledge fallback จริง — exact/state handlers อื่นยังใช้ planner เดิม
+      allowIdleDirectConsult: invokeOpts.allowIdleDirectConsult === true,
       sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts, speakerRoleOverride }) => {
         return await sendNonScanReply({
           client,
@@ -8624,6 +8603,32 @@ async function handleEvent({ client, event }) {
   if (event.type !== "message") return;
   if (!event.replyToken) return;
 
+  // idempotency + AI-chain telemetry ครอบทั้ง dispatch (Codex P0-6/P0-7):
+  // AI ที่เกิดก่อน text-inner (เช่น branch พิเศษ) ก็ถูกนับ และทุก message type ถูกกันซ้ำ
+  const { claimInboundMessage } = await import("../services/lineWebhook/inboundClaim.util.js");
+  const claim = await claimInboundMessage(event?.message?.id);
+  if (!claim.proceed) {
+    console.log(JSON.stringify({ event: "INBOUND_DUPLICATE_MESSAGE_DROPPED", messageId: String(event?.message?.id || ""), reason: claim.reason }));
+    return;
+  }
+  const { runWithTurnContext, emitTurnAiChain } = await import("../core/telemetry/turnAiChain.js");
+  return runWithTurnContext(
+    { messageId: event?.message?.id ?? null, kind: String(event?.message?.type || "message") },
+    async () => {
+      let success = false;
+      try {
+        const out = await handleEventInner({ client, event });
+        success = true;
+        return out;
+      } finally {
+        await claim.release(success);
+        emitTurnAiChain();
+      }
+    },
+  );
+}
+
+async function handleEventInner({ client, event }) {
   const userId = event.source?.userId;
 
   if (!userId) {
@@ -8677,17 +8682,12 @@ async function handleEvent({ client, event }) {
     });
 
   if (globalStatus.isHardBlocked) {
-    console.warn("[ABUSE_GUARD_HARD_BLOCK]", {
+    // Codex P0-2 (นโยบายกบ: กวนมากแล้วเงียบ): confirmed hard-block = silent terminal
+    // — ไม่มี AI ไม่มี reply มีแค่ telemetry
+    console.warn("[ABUSE_GUARD_HARD_BLOCK_SILENT]", {
       userId,
       gate: "handleEvent",
       hardBlockReason: gateDiag.hardBlockReason,
-    });
-    if ((await eventPhase1Invoke()).handled) return;
-    await sendScanLockReply(client, {
-      userId,
-      replyToken: event.replyToken,
-      lockType: "hard",
-      semanticKey: "scan_locked_hard:handle_event",
     });
     return;
   }

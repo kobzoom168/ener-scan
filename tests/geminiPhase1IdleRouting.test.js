@@ -68,10 +68,15 @@ test("resolveGeminiPhase1StateKey: hard_blocked + soft_locked canonical", () => 
   );
 });
 
-test("allowedActions + shadow: idle and scan_ready_idle are phrase-only noop", () => {
-  assert.deepEqual(allowedActionsForPhase1State("idle"), ["noop_phrase_only"]);
+test("allowedActions + shadow: idle/scan_ready_idle = noop + consult เท่านั้น · locked = noop ล้วน", () => {
+  // idle consult (คำถามความรู้เครื่องราง) เป็น contract ตั้งใจ — ห้ามมี action อื่นเพิ่มเงียบ ๆ
+  assert.deepEqual(allowedActionsForPhase1State("idle"), [
+    "noop_phrase_only",
+    "consult_amulet",
+  ]);
   assert.deepEqual(allowedActionsForPhase1State("scan_ready_idle"), [
     "noop_phrase_only",
+    "consult_amulet",
   ]);
   assert.deepEqual(allowedActionsForPhase1State("hard_blocked"), [
     "noop_phrase_only",

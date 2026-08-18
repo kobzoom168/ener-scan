@@ -2382,7 +2382,7 @@ export async function processScanJob(workerId, jobRow) {
  * @param {string} code
  * @param {string} message
  */
-async function failJob(jobId, code, message, lineUserId, workerId) {
+export async function failJob(jobId, code, message, lineUserId, workerId) {
   await updateScanJob(jobId, {
     status: "failed",
     error_code: code,

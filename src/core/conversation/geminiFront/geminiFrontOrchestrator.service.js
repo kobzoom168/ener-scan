@@ -108,7 +108,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
   // จับคู่ทุกเทิร์น +~750ms): idle/scan_ready_idle อนุญาตแค่ noop_phrase_only กับ
   // consult_amulet และทั้งคู่จบที่ tryConsultReply — เข้า consult ตรง guard/context เดิม
   // ทุกชั้น · consult ไม่ได้ = handled:false ให้ deterministic idle fallback (0 AI เพิ่ม)
-  if (phase1 === "idle" || phase1 === "scan_ready_idle") {
+  if ((phase1 === "idle" || phase1 === "scan_ready_idle") && ctx.allowIdleDirectConsult === true) {
     const consultOutcome = await tryConsultReply("consult_idle_direct");
     if (consultOutcome === "sent") {
       logGeminiOrchestrator({ mode: "active", handled: true, via: "idle_bypass" });

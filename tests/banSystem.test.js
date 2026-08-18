@@ -84,20 +84,35 @@ test("identity classify: แจ้งเฉพาะ ai_bot — who/admin_check 
   assert.equal(classifyIdentityQuestion("พระองค์นี้ดีไหม"), null);
 });
 
-test("repeat detector: นับซ้ำ 3 ครั้ง hit · ถามสถานะไม่นับ · redelivery กันที่ msgid ก่อนแล้ว", async () => {
-  const counters = new Map();
-  const inc = async (k) => { counters.set(k, (counters.get(k) || 0) + 1); return counters.get(k); };
-  const r1 = await trackRepeatedInput("U1", "ทดสอบ", { incrementCounterWithTtl: inc });
-  const r2 = await trackRepeatedInput("U1", "ทดสอบ ", { incrementCounterWithTtl: inc });
-  const r3 = await trackRepeatedInput("U1", "ทดสอบ", { incrementCounterWithTtl: inc });
+test("repeat detector: sliding window 15 นาที นับซ้ำ 3 ครั้ง hit · ถามสถานะไม่นับ · recent 3 redacted", async () => {
+  // fake redis zset/list พอสำหรับ detector
+  const z = new Map(); const lists = new Map();
+  const fakeR = {
+    zadd: async (k, score, member) => { (z.get(k) || z.set(k, new Map()).get(k)).set(member, score); },
+    zremrangebyscore: async (k, min, max) => { const m = z.get(k); if (m) for (const [mem, sc] of m) if (sc >= min && sc <= max) m.delete(mem); },
+    zcard: async (k) => (z.get(k)?.size || 0),
+    expire: async () => {},
+    lpush: async (k, v) => { lists.set(k, [v, ...(lists.get(k) || [])]); },
+    ltrim: async (k, a, b) => { lists.set(k, (lists.get(k) || []).slice(a, b + 1)); },
+    lrange: async (k, a, b) => (lists.get(k) || []).slice(a, b + 1),
+  };
+  const deps = { getRedis: async () => fakeR };
+  const r1 = await trackRepeatedInput("U1", "ทดสอบ", deps);
+  const r2 = await trackRepeatedInput("U1", "ทดสอบ ", deps);
+  const r3 = await trackRepeatedInput("U1", "ทดสอบ", deps);
   assert.equal(r1.hit, false);
   assert.equal(r2.hit, false);
   assert.equal(r3.hit, true); // normalize ช่องว่างแล้วนับรวม
-  assert.equal((await trackRepeatedInput("U1", "ผลออกยังครับ", { incrementCounterWithTtl: inc })).hit, false);
+  assert.equal(r3.recent.length, 3);
+  assert.equal((await trackRepeatedInput("U1", "ผลออกยังครับ", deps)).hit, false);
   assert.equal(normalizeRepeatText("  ทดสอบ   A "), "ทดสอบ a");
-  // msgid dedupe อยู่ก่อน detector (source-order)
-  const wrapper = WEBHOOK.slice(WEBHOOK.indexOf("async function handleTextMessage(opts)"));
-  assert.ok(wrapper.indexOf("msgid_claim") < wrapper.indexOf("trackRepeatedInput"));
+  // idempotency claim (durable msgid dedupe) ครอบ dispatch ทั้งเทิร์น: ใน handleEvent
+  // claim ต้องมาก่อนเรียก handleEventInner — detector อยู่ใต้ inner เสมอ
+  const heStart = WEBHOOK.indexOf("async function handleEvent({ client, event })");
+  const heBody = WEBHOOK.slice(heStart, WEBHOOK.indexOf("async function handleEventInner", heStart));
+  assert.ok(heStart > 0);
+  assert.ok(heBody.indexOf("claimInboundMessage") > 0);
+  assert.ok(heBody.indexOf("claimInboundMessage") < heBody.indexOf("handleEventInner({ client, event })"));
 });
 
 test("alert honesty: Telegram ล้ม → dedupe ล้าง รอบหน้าลองใหม่", async () => {
@@ -127,9 +142,123 @@ test("cache contract: DB error + ไม่มี positive cache = fail-open", as
     await isBanned("U" + "b".repeat(32), { dbClient: err, cacheGet: async () => null, cacheSet: async () => {}, alertDedupe: async () => false }),
     false,
   );
-  // มี positive cache = drop ต่อแม้ DB พัง
+  // มี positive cache = drop ต่อแม้ DB พัง (คืน "1" เฉพาะ ban:active — tombstone ต้องไม่ติด)
   assert.equal(
-    await isBanned("U" + "b".repeat(32), { dbClient: err, cacheGet: async () => "1", cacheSet: async () => {}, alertDedupe: async () => false }),
+    await isBanned("U" + "b".repeat(32), {
+      dbClient: err,
+      cacheGet: async (k) => (String(k).startsWith("ban:active:") ? "1" : null),
+      cacheSet: async () => {},
+      alertDedupe: async () => false,
+    }),
     true,
   );
+});
+
+/* ---------------- Codex 908d0d2 round: unban + availability behavior ---------------- */
+
+const UID_OK = "U" + "9".repeat(32);
+
+function dbSelectCounter({ banned }) {
+  const state = { reads: 0 };
+  const client = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          is: () => ({
+            limit: () => ({
+              maybeSingle: async () => {
+                state.reads += 1;
+                return banned ? { data: { id: 1 }, error: null } : { data: null, error: null };
+              },
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+  return { state, client };
+}
+
+function memCache() {
+  const m = new Map();
+  return {
+    m,
+    cacheGet: async (k) => (m.has(k) ? m.get(k) : null),
+    cacheSet: async (k, v) => { m.set(k, v); },
+    cacheDel: async (k) => { m.delete(k); },
+  };
+}
+
+test("availability: negative cache 45s — burst หลาย event อ่าน DB ครั้งเดียว", async () => {
+  const { state, client } = dbSelectCounter({ banned: false });
+  const c = memCache();
+  for (let i = 0; i < 5; i++) {
+    assert.equal(await isBanned(UID_OK, { dbClient: client, ...c, alertDedupe: async () => false }), false);
+  }
+  assert.equal(state.reads, 1, "อ่าน DB ครั้งเดียวต่อ burst");
+});
+
+test("availability: DB ค้าง (ไม่ resolve) → bounded fail-open ไม่ลาก webhook", async () => {
+  const never = { from: () => ({ select: () => ({ eq: () => ({ is: () => ({ limit: () => ({ maybeSingle: () => new Promise(() => {}) }) }) }) }) }) };
+  const t0 = Date.now();
+  const r = await isBanned(UID_OK, { dbClient: never, cacheGet: async () => null, cacheSet: async () => {}, alertDedupe: async () => false });
+  assert.equal(r, false);
+  assert.ok(Date.now() - t0 < 3000, "ต้องจบภายใน bound (~800ms)");
+});
+
+test("แบนระหว่าง negative cache ยัง active: banUser เขียน positive → เห็นผลทันที", async () => {
+  const c = memCache();
+  const { client } = dbSelectCounter({ banned: false });
+  await isBanned(UID_OK, { dbClient: client, ...c, alertDedupe: async () => false }); // สร้าง neg cache
+  const insertOk = { from: () => ({ insert: async () => ({ error: null }) }) };
+  const r = await banUser({ lineUserId: UID_OK, reason: "x", bannedBy: "admin" }, { dbClient: insertOk, ...c });
+  assert.equal(r.ok, true);
+  // ไม่ต้องรอ neg cache หมดอายุ — positive cache ชนะทันที (ไม่แตะ DB อีก)
+  const noDb = { from: () => { throw new Error("must not read db"); } };
+  assert.equal(await isBanned(UID_OK, { dbClient: noDb, ...c, alertDedupe: async () => false }), true);
+});
+
+test("unban: DEL cache พลาด → ok แต่ cacheCleared=false (ห้ามโกหกว่าเรียบร้อย)", async () => {
+  const c = memCache();
+  const failDel = async () => { throw new Error("redis down"); };
+  const client = { from: () => ({ update: () => ({ eq: () => ({ is: () => ({ select: async () => ({ data: [{ id: 1 }], error: null }) }) }) }) }) };
+  const r = await unbanUser({ lineUserId: UID_OK, unbannedBy: "admin" }, { dbClient: client, cacheDel: failDel, cacheSet: c.cacheSet });
+  assert.equal(r.ok, true);
+  assert.equal(r.cacheCleared, false);
+});
+
+test("unban คนที่ไม่ได้แบน → not_banned แต่ล้าง cache/troll ทุก key อยู่ดี (กัน stale)", async () => {
+  const cleared = [];
+  const client = { from: () => ({ update: () => ({ eq: () => ({ is: () => ({ select: async () => ({ data: [], error: null }) }) }) }) }) };
+  const r = await unbanUser({ lineUserId: UID_OK, unbannedBy: "admin" }, {
+    dbClient: client,
+    cacheDel: async (k) => { cleared.push(k); },
+    cacheSet: async () => {},
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "not_banned");
+  assert.ok(cleared.includes(`ban:active:${UID_OK}`));
+  for (const suffix of ["banned", "troll", "troll_notice", "last_text", "sticker_streak"]) {
+    assert.ok(cleared.includes(`scan_v2:${suffix}:${UID_OK}`), `ต้องล้าง scan_v2:${suffix}`);
+  }
+});
+
+test("stale-read race: tombstone หลัง unban → positive cache เก่าไม่ถูกเชื่อ + ไม่ถูกเขียนกลับ", async () => {
+  const c = memCache();
+  c.m.set(`ban:tomb:${UID_OK}`, "1");
+  c.m.set(`ban:active:${UID_OK}`, "1"); // cache เก่าค้าง (จำลอง DEL แพ้ race)
+  const { state, client } = dbSelectCounter({ banned: false });
+  const r = await isBanned(UID_OK, { dbClient: client, ...c, alertDedupe: async () => false });
+  assert.equal(r, false, "tombstone ต้องบังคับไปถาม DB (SSOT)");
+  assert.equal(state.reads, 1);
+});
+
+test("shadow-mute → unban → event ผ่าน: unban ล้าง scan_v2:banned (soft mute) ด้วย", async () => {
+  const c = memCache();
+  c.m.set(`scan_v2:banned:${UID_OK}`, "1"); // soft mute เดิมของ troll system
+  const client = { from: () => ({ update: () => ({ eq: () => ({ is: () => ({ select: async () => ({ data: [{ id: 1 }], error: null }) }) }) }) }) };
+  const r = await unbanUser({ lineUserId: UID_OK, unbannedBy: "admin" }, { dbClient: client, ...c });
+  assert.equal(r.ok, true);
+  assert.equal(r.cacheCleared, true);
+  assert.equal(c.m.has(`scan_v2:banned:${UID_OK}`), false, "soft mute ต้องหายหลังปลดแบน");
 });

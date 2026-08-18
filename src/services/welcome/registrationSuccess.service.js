@@ -122,7 +122,9 @@ export async function sendRegistrationSuccessFlow(
     });
   }
   try {
-    await client.pushMessage(userId, msgs);
+    const { pushToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+    const pushed = await pushToCustomer(client, userId, msgs, { source: "registration_success" });
+    if (pushed.suppressedBanned) return { sent: false, suppressedBanned: true };
   } catch (e) {
     await clearDedupe(dedupeKey).catch(() => {});
     log("registration_success_push_failed", {

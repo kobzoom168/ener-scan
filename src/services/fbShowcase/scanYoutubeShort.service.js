@@ -290,6 +290,9 @@ async function notifyOwnerClipLive(lineUserId, youtubeUrl, sAlert) {
     ? `ชิ้นของคุณได้เกรด S ระดับหายาก และตอนนี้ขึ้นคลิปพิเศษในช่อง YouTube ของอาจารย์แล้วครับ\n${url}\nกดดูแล้วแชร์ให้เพื่อน ๆ ชมได้เลยครับ`
     : `ชิ้นของคุณถูกคัดเป็นชิ้นเด่น ขึ้นคลิปในช่อง YouTube ของอาจารย์แล้วครับ\n${url}\nกดดูแล้วแชร์ต่อได้เลยครับ`;
   try {
+    const { allowCustomerPush } = await import("../lineOutbound/customerPush.gateway.js");
+    const gate = await allowCustomerPush(uid, { source: "youtube_clip_notify" });
+    if (!gate.allowed) return;
     await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
