@@ -2648,6 +2648,83 @@ async function finalizeAcceptedImage({
     clearLatestScanJob(userId);
     setPendingImage(userId, { messageId: event?.message?.id, imageBuffer }, flowVersion);
 
+    // กบ 18 ส.ค. (เคสลูกค้าใหม่ นอ.บำเหน็จฯ): ผลชิ้นก่อนหน้ายังไม่ยืนยันว่าถึงมือ
+    // → ห้ามยิงการ์ดเก็บเงินแซงหน้า (Codex รอบ 2: pure resolver + delivery evidence นำ
+    // เวลาเป็นแค่ safety bound + copy ไม่อ้างสถานะที่ไม่รู้จริง)
+    try {
+      const {
+        resolvePaywallDeferDecision,
+        gatherPaywallDeferEvidence,
+        selectRecoveryText,
+        PAYWALL_DEFER_TEXT,
+      } = await import("../services/lineWebhook/paywallDefer.util.js");
+      const inFlightActive = await isDedupeKeyActive(scanInFlightKeyForUser(userId)).catch(() => false);
+      // evidence gatherer ตรวจ {error} ของ PostgREST client ตรง ๆ (ไม่ throw) — Codex รอบ 4
+      const evidence = await gatherPaywallDeferEvidence({ supabase, userId, inFlightActive });
+      if (evidence.markerError) {
+        console.warn(
+          JSON.stringify({ event: "PAYWALL_DEFER_MARKER_QUERY_FAILED", uidPrefix: String(userId).slice(0, 8) }),
+        );
+      }
+      const verdict = resolvePaywallDeferDecision(evidence);
+      const hasAnyDeliveredReport = evidence.hasAnyDeliveredReport;
+      if (verdict.decision === "defer") {
+        console.log(
+          JSON.stringify({
+            event: "PAYWALL_DEFERRED_PREV_REPORT_PENDING",
+            uidPrefix: String(userId).slice(0, 8),
+            reason: verdict.reason,
+            hasAnyDeliveredReport,
+          }),
+        );
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "paywall_deferred_report_pending",
+          semanticKey: "paywall_deferred_report_pending",
+          text: PAYWALL_DEFER_TEXT,
+          alternateTexts: ["รับรูปไว้แล้วครับ ขอเรียงคิวส่งผลชิ้นก่อนหน้าให้ก่อนครับ"],
+          speakerRoleOverride: "admin",
+        });
+        return;
+      }
+      if (verdict.decision === "recovery") {
+        console.log(
+          JSON.stringify({
+            event: "PAYWALL_RECOVERY_NO_VALUE_YET",
+            uidPrefix: String(userId).slice(0, 8),
+            reason: verdict.reason,
+          }),
+        );
+        // owner จริง (Codex รอบ 5): await + ตรวจ {ok} — ส่งไม่ถึง = clear dedupe ให้ลองใหม่
+        // และห้ามอ้างว่า "แอดมินรับเรื่องแล้ว" ถ้ายังไม่ถึงมือแอดมินจริง
+        const { assignRecoveryOwner } = await import("../services/lineWebhook/paywallDefer.util.js");
+        const { sendTelegramText } = await import("../services/telegramNotify.service.js");
+        const { ownerAssigned } = await assignRecoveryOwner({
+          userId,
+          reason: verdict.reason,
+          deps: { tryDedupeOnce, clearDedupeKey, sendTelegramText },
+        });
+        // ข้อความ recovery เต็มครั้งเดียวต่อ 30 นาที — ส่งรูปซ้ำระหว่างนั้นตอบสั้น กันวนลูป
+        const firstRecoveryMsg = await tryDedupeOnce(`paywall_recovery_msg:${userId}`, 1800).catch(() => true);
+        const shortText = ownerAssigned
+          ? "รับไว้แล้วครับ ยังไม่ต้องส่งซ้ำ แอดมินกำลังเช็คให้อยู่ครับ"
+          : "รับไว้แล้วครับ ยังไม่ต้องส่งซ้ำครับ";
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "paywall_recovery_scan_issue",
+          semanticKey: `paywall_recovery_scan_issue:${firstRecoveryMsg ? "full" : "short"}`,
+          text: firstRecoveryMsg ? selectRecoveryText(verdict.reason, { ownerAssigned }) : shortText,
+          alternateTexts: [],
+          speakerRoleOverride: "admin",
+        });
+        return;
+      }
+    } catch { /* เช็คพลาด = paywall ตามเดิม */ }
+
     console.log("[PAYMENT_GATE_REPLY_SELECTION]", {
       userId,
       chosenPath,
@@ -8114,6 +8191,43 @@ async function handleTextMessage({ client, event, userId, session }) {
   if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
   // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
   if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
+
+  // ข้อความปิดบทในเลน idle = เงียบ (กบ 18 ส.ค. + Codex รอบ 2: ต้องรู้จังหวะจบเรื่องจริง)
+  // unconditional (ขอบคุณ/สาธุ) เงียบเลย · contextual (ครับ/โอเค/บาย) เงียบเฉพาะเมื่อ
+  // ข้อความบอทล่าสุดเป็น terminal reply และไม่ใช่คำถาม/handoff · "สวัสดี" ไม่เงียบ
+  try {
+    const { classifyClosingPleasantry, resolveClosingSilence } = await import(
+      "../core/conversation/closingPleasantry.util.js"
+    );
+    if (classifyClosingPleasantry(text)) {
+      let lastBotReplyType = null;
+      let lastBotText = null;
+      try {
+        const { data: lastBot } = await supabase
+          .from("line_conversation_messages")
+          .select("text,metadata_json")
+          .eq("line_user_id", userId)
+          .eq("role", "bot")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        lastBotReplyType = lastBot?.metadata_json?.replyType || null;
+        lastBotText = lastBot?.text || null;
+      } catch { /* อ่านไม่ได้ = ปฏิบัติแบบไม่ terminal (ตอบปกติ) */ }
+      const verdict = resolveClosingSilence({ text, lastBotReplyType, lastBotText });
+      if (verdict.silent) {
+        console.log(
+          JSON.stringify({
+            event: "CHAT_CLOSING_PLEASANTRY_SILENT",
+            uidPrefix: String(userId).slice(0, 8),
+            tier: verdict.tier,
+            lastBotReplyType,
+          }),
+        );
+        return;
+      }
+    }
+  } catch { /* util พัง = ตอบตามปกติ */ }
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;
     try {

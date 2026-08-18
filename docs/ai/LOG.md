@@ -735,3 +735,40 @@
 - smoke: ①constraint 053 มี scan_failure_notify + enqueue จริง → OUTBOUND_SEND_SUCCESS ถึง LINE แอดมิน ②owner-map ครอบด้วยเทสต์ + เฝ้า log ③result-status ผูก job (เคสจริง delivery_queued → claims:false ถูกกิ่ง) ④counter unavailable → lowCalls:0 ⑤env ตรง ⑥full objectCheck path ไม่ถูกแตะ (log-only) ⑦MODEL_SWITCHED ⑧health 200 / log สะอาด
 - ค้นพบระหว่าง smoke (ไม่ใช่ blocker — จดเป็นงานถัดไป): scan_jobs หลายงานค้างสถานะ delivery_queued ทั้งที่ outbound ส่งแล้ว (72 งานใน 48 ชม.) — delivery worker ไม่ได้อัป status เป็น delivered → result-status จะตอบ "กำลังส่ง" กับงานเก่า (ปลอดภัยแต่ไม่แม่น) ควรให้ markSent อัป scan_jobs.status ด้วย
 - เฝ้าต่อ: OBJECT_CHECK_LOW_SHADOW agreement 2-3 วัน · OBJECT_SAME_IDENTITY_VERIFIER_ACCEPTED rank/counterfactual 7 วัน · บิล OpenRouter รอบหน้า (consult ควรไม่มี opus แล้ว เหลือ voiceScript)
+
+## 2026-08-18 | Claude | เคส Marut: อีโมจิใน YT push + ทวงสลิปจากสติกเกอร์ (staging)
+- YT owner push ตัดอีโมจิ (🎬/🎉) — ส่วน "คำโปรย 😮" ที่เห็นใต้ลิงก์คือ link preview ของ YouTube (description ของคลิป) ไม่ใช่ข้อความแชท · แชทสะอาดตามกติกาแล้ว
+- สติกเกอร์ ≠ เจตนาเรื่องเงิน: shouldRemindSlipOnSticker (pure) — ทวงสลิปเฉพาะรายการชำระอายุ ≤60 นาที · เคส Marut (สร้างใน LIFF 17:27 ส่งสติกเกอร์ 19:07) จะได้คำตอบสติกเกอร์ปกติแทน + log STICKER_SLIP_REMIND_SKIPPED_STALE
+- เทสต์ใหม่ stickerSlipRemind (เข้า npm test แล้ว) · baseline 1022 ผ่าน
+
+## 2026-08-18 | Claude | เงียบข้อความปิดบท + ปิด 2 gaps sticker ของ Codex (staging)
+- ข้อความปิดบท (กบ 18 ส.ค.): isClosingPleasantry — "ขอบคุณ/ครับ/โอเค/โชคดี/สาธุ/🙏" ในเลน idle = เงียบ (log CHAT_CLOSING_PLEASANTRY_SILENT) จนกว่าจะมีเรื่องใหม่ · แทรกหลัง state handlers ทั้งหมด — ยืนยันวันเกิด/paywall ack ไม่โดน · เทสต์คำจริง 19 แบบ + คำถามพ่วง/เรื่องเงินห้ามเงียบ
+- โทน consult แข็งขึ้น: ครับน้อยสุด (ท้ายคำตอบจุดเดียว/ไม่ใส่) + ตอบสั้นถามคำตอบคำ + กติกาคำปิดบท (prompt-only รอบแยกตามแนว Codex)
+- Codex gaps: shouldRemindSlipOnSticker กัน timestamp อนาคต (ageMs>=0) + boundary tests (0/60พอดี/60+1ms/อนาคต) · handleStickerLikeInput รับ deps DI — behavior tests 4 กรณี (fresh→ทวง 1 ครั้ง / stale→idle ไม่มีคำสลิป / DB throw→idle / stale+pending_verify→pending-verify ตามจริง) ทุกกรณี assert ไม่ double reply
+- text-recency (resolveAwaitingPaymentConversationMode payment_active|recent_soft_remind|release_to_normal_chat) → BACKLOG รอบถัดไปตามที่ Codex เคาะ · baseline 1029 ผ่าน
+
+## 2026-08-18 | Claude | Paywall ห้ามแซงผลชิ้นแรก (เคสลูกค้าใหม่ นอ.บำเหน็จฯ) — staging
+- ข้อมูลจริง: ลูกค้าใหม่ส่งรูปแรก 07:38 → เกตถือรายงานรอข้อมูล → ส่งรูปที่สอง 07:40 → โดนการ์ด free_quota_exhausted ก่อนเห็นผลชิ้นแรก (ผลออก 07:41) — ขายก่อนให้คุณค่า
+- แก้ใน finalize: ก่อนยิง paywall เช็ค "ผลชิ้นแรกยังไม่ถึงมือ" (scan in-flight gate หรือ job ล่าสุดใน 15 นาทียัง queued/processing/claimed/delivery_queued/completed) → เลื่อน paywall: ตอบ "รับรูปไว้แล้ว ชิ้นแรกกำลังอ่าน ขอส่งผลก่อน" (ไม่มีเรื่องเงิน) + pendingImage ค้างตามเดิม paywall ตามตอนลูกค้าขยับรอบถัดไป · log PAYWALL_DEFERRED_FIRST_REPORT_PENDING
+- invariant test: defer check ต้องอยู่ก่อน sendFreeQuotaExhaustedPaywall + ข้อความ defer ห้ามมีคำเงิน/ราคา · baseline 1030 ผ่าน
+
+## 2026-08-18 | Claude | ปิด 2 blockers Codex (silencer สองชั้น + paywall defer resolver) — staging
+- silencer: เอา "สวัสดี" ออก (คำเปิดบท) · สองชั้นตาม Codex — unconditional (ขอบคุณ/สาธุ/emoji) เงียบเสมอ · contextual (ครับ/โอเค/โชคดี/บาย) เงียบเฉพาะ lastBotReplyType ∈ TERMINAL_REPLY_TYPES และข้อความล่าสุดไม่ใช่คำถาม/handoff (resolveClosingSilence pure + webhook อ่าน last bot row จริง) · behavior tests: สวัสดีไม่เงียบ / ครับหลัง scan_result เงียบ / ครับหลัง gate ask,handoff,คำถาม consult ไม่เงียบ / DB อ่านพลาด=ตอบปกติ / source-order: payment route,reg gate,utility มาก่อน silencer
+- paywall defer: pure resolvePaywallDeferDecision — in_flight→defer · pending(queued/processing/claimed/completed/delivery_queued)→defer ภายใน safety bound 30 นาที · เกิน bound→paywall (stale_pending_over_bound — failure-notify เป็นเจ้าของการแจ้ง) · delivered/failed/cancelled→paywall · dbError+ไม่มี evidence→fail-open paywall · copy ใหม่ "รับรูปชิ้นนี้ไว้แล้วครับ ขอส่งผลชิ้นก่อนหน้าให้เรียบร้อยก่อนนะครับ" (ไม่อ้างกำลังอ่าน/ไม่มีเดี๋ยว) · เปลี่ยนชื่อ event → PAYWALL_DEFERRED_PREV_REPORT_PENDING (ตรง behavior — ใช้กับทุกคน) · behavior tests 6 ชุดทุกกิ่ง
+- baseline 1039 ผ่าน ไม่มี fail ใหม่
+
+## 2026-08-18 | Claude | ปิด blocker สุดท้าย: paywall policy "ได้คุณค่าก่อนขาย" (Codex รอบ 3) — staging
+- resolver รับ hasAnyDeliveredReport (หลักฐานส่งจริง = marker scan_result ใน history) + outcome ที่สาม recovery: ลูกค้าใหม่ที่ยังไม่เคยได้ผล + stale เกิน 30 นาที/failed/cancelled → แจ้งตรง "ชิ้นก่อนหน้าอ่านไม่สำเร็จ ส่งรูปเดิมมาอีกครั้ง" ห้ามยัดราคา · ลูกค้าเคยได้ผลแล้ว → paywall policy ปกติ
+- validate ageMs: Number.isFinite && >=0 — NaN/ติดลบ → reason invalid_job_age เลือกทางตาม hasAnyDeliveredReport (ห้าม defer ค้างไม่สิ้นสุด) + telemetry PAYWALL_RECOVERY_NO_VALUE_YET
+- เทสต์ตามสเปค 5 ข้อครบ (ใหม่+stale→recovery / ใหม่+failed→recovery / เก่า+stale→paywall / age invalid deterministic / recovery copy ไม่มีเงิน-ไม่สัญญาผลมาเอง) · baseline 1040 ผ่าน
+
+## 2026-08-18 | Claude | ปิด 2 runtime blockers (Codex รอบ 4) + alias db (staging)
+- PostgREST error ไม่ throw: gatherPaywallDeferEvidence (DI) ตรวจ {error} ตรง ๆ — jobError→dbError=true (fail-open paywall) · markerError→hasAnyDeliveredReport=true (fail-open policy ปกติ — เดิมกลายเป็น false สวนทาง comment) + log PAYWALL_DEFER_MARKER_QUERY_FAILED · DI tests: fake client คืน {data:null,error:{...}} ไม่ throw ครบทั้ง 3 ทาง
+- recovery ไม่ใช่ dead end แล้ว: (1) owner จริง = Telegram alert ถึงแอดมิน (dedupe 1 ชม./คน) ให้เข้ามาคืนสิทธิ์/re-enqueue (2) copy แยกตามเหตุ — failed พูด "อ่านไม่สำเร็จ" ได้ · stale/neutral ห้ามฟันธง (3) ทุก copy บอก "ยังไม่ต้องส่งซ้ำ" (รูปถูกถือไว้แล้ว — เลิกสั่งส่งใหม่) + ตัดสัญญา "ส่งให้อาจารย์" ที่ไม่มี enqueue จริง (4) กันวน: recovery เต็มครั้งเดียว/30 นาที รูปซ้ำระหว่างนั้นตอบสั้น · เทสต์ copy contract + mapping ครบ
+- หมายเหตุถึง Codex: resume-token + recovery entitlement (bypass paywall ครั้งเดียว) = ทางที่ดีที่สุดตามที่เสนอ — เข้า BACKLOG รอบถัดไป รอบนี้ใช้ minimum ที่มี owner จริงตามที่อนุญาต
+- กบถามชื่อ supabase: เพิ่ม export db (PostgREST client ของเราเอง) + supabase เป็น @deprecated alias — rename ทั้ง repo (54 ไฟล์) เข้า BACKLOG ไม่ทำ big-bang ช่วงใกล้ deploy · baseline 1043 ผ่าน
+
+## 2026-08-18 | Claude | ปิด blocker owner จริง (Codex รอบ 5) — staging
+- assignRecoveryOwner (DI): await sendTelegramText + ตรวจ {ok} จริง — สำเร็จ→PAYWALL_RECOVERY_OWNER_ASSIGNED + dedupe คงอยู่ 1 ชม. · ล้ม/not_configured/throw→clear dedupe (รอบหน้าลองใหม่ได้) + PAYWALL_RECOVERY_OWNER_DELIVERY_FAILED พร้อม failReason
+- copy: "แอดมินรับเรื่องไว้ตรวจแล้ว" ต่อท้ายเฉพาะเมื่อ ownerAssigned=true · เอา "ค่าครู" ออกจาก recovery ทุกตัว + คืน banned regex เต็ม /บาท|จ่าย|ค่าครู|แพ็ก|ราคา/ · ข้อความสั้นตอนกันวนก็แยกตาม ownerAssigned
+- เทสต์ owner honesty: ok:true→assigned+ไม่แจ้งซ้ำ · ok:false/not_configured/throw→clear dedupe+รอบสองส่งใหม่จริง (นับ sent=2) · baseline 1045 ผ่าน

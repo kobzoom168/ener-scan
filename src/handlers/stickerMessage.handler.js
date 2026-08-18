@@ -69,6 +69,19 @@ export function shouldRemindWaitingBirthdateOnSticker(p) {
 }
 
 /**
+ * สติกเกอร์ไม่ใช่เจตนาเรื่องเงิน (กบ 17 ส.ค. เคส Marut: เปิดหน้า pay ใน LIFF ทิ้งไว้
+ * แล้วส่งสติกเกอร์ 100 นาทีต่อมา โดนทวงสลิป) — ทวงได้เฉพาะรายการที่เพิ่งสร้างสด ๆ
+ * @param {{ awaitingSlip: boolean, paymentCreatedAtMs: number | null, nowMs: number, maxAgeMin?: number }} p
+ */
+export function shouldRemindSlipOnSticker({ awaitingSlip, paymentCreatedAtMs, nowMs, maxAgeMin = 60 }) {
+  if (!awaitingSlip) return false;
+  if (!Number.isFinite(paymentCreatedAtMs)) return false;
+  // timestamp อนาคต/นาฬิกาเพี้ยน = ข้อมูลผิดปกติ ไม่ถือเป็นรายการสด (Codex 18 ส.ค.)
+  const ageMs = nowMs - paymentCreatedAtMs;
+  return ageMs >= 0 && ageMs <= maxAgeMin * 60000;
+}
+
+/**
  * @param {object} opts
  * @param {*} opts.client
  * @param {*} opts.event — LINE webhook message event
@@ -77,7 +90,22 @@ export function shouldRemindWaitingBirthdateOnSticker(p) {
  * @param {"sticker"|"placeholder_text"} opts.source
  */
 export async function handleStickerLikeInput(opts) {
-  const { client, event, userId, session, source } = opts;
+  const { client, event, userId, session, source, deps = {} } = opts;
+  // DI สำหรับ behavior tests (Codex 18 ส.ค.) — default = ของจริงทั้งหมด
+  const d = {
+    getPaymentState,
+    getLatestAwaitingPaymentForLineUserId,
+    ensurePaymentRefForPaymentId,
+    buildAwaitingSlipReminderText,
+    buildPendingVerifyReminderText,
+    buildWaitingBirthdateGuidanceText,
+    getBirthdateChangeFlowState,
+    getSavedBirthdate,
+    sendNonScanReply,
+    incrementCounterWithTtl,
+    now: () => Date.now(),
+    ...deps,
+  };
   const replyToken = event.replyToken;
   const uid = String(userId || "").trim();
   if (!uid || !replyToken) return;
@@ -86,49 +114,62 @@ export async function handleStickerLikeInput(opts) {
     source === "sticker" ? "sticker_input" : "sticker_placeholder_text";
   const semanticKey = "sticker_like_input";
 
-  // awaiting_slip: remind slip
-  if (getPaymentState(uid).state === "awaiting_slip") {
+  // awaiting_slip: remind slip — เฉพาะรายการที่เพิ่งสร้างภายใน 60 นาที
+  // (กบ 17 ส.ค.: ลูกค้าแวะดูหน้า pay แล้วส่งสติกเกอร์ทีหลัง ห้ามทวง)
+  if (d.getPaymentState(uid).state === "awaiting_slip") {
     let paymentRef = null;
+    let row = null;
     try {
-      const row = await getLatestAwaitingPaymentForLineUserId(uid);
+      row = await d.getLatestAwaitingPaymentForLineUserId(uid);
       if (row?.id) {
         paymentRef =
-          row.payment_ref || (await ensurePaymentRefForPaymentId(row.id));
+          row.payment_ref || (await d.ensurePaymentRefForPaymentId(row.id));
       }
     } catch (_) {
       paymentRef = null;
     }
-    const text = await buildAwaitingSlipReminderText({ userId: uid, paymentRef });
-    await sendNonScanReply({
-      client,
-      userId: uid,
-      replyToken,
-      replyType,
-      semanticKey: "sticker_awaiting_slip",
-      text,
-      alternateTexts: [
-        "ตอนนี้รอสลิปโอนอยู่นะครับ ส่งสลิปมาในแชทนี้ได้เลย",
-      ],
+    const remind = shouldRemindSlipOnSticker({
+      awaitingSlip: true,
+      paymentCreatedAtMs: row?.created_at ? new Date(row.created_at).getTime() : null,
+      nowMs: d.now(),
     });
-    return;
+    if (remind) {
+      const text = await d.buildAwaitingSlipReminderText({ userId: uid, paymentRef });
+      await d.sendNonScanReply({
+        client,
+        userId: uid,
+        replyToken,
+        replyType,
+        semanticKey: "sticker_awaiting_slip",
+        text,
+        alternateTexts: [
+          "ตอนนี้รอสลิปโอนอยู่นะครับ ส่งสลิปมาในแชทนี้ได้เลย",
+        ],
+      });
+      return;
+    }
+    console.log(
+      JSON.stringify({ event: "STICKER_SLIP_REMIND_SKIPPED_STALE", uidPrefix: uid.slice(0, 8) }),
+    );
+    // ไหลลงไปตอบแบบสติกเกอร์ปกติด้านล่าง
   }
 
   // pending_verify
   try {
-    const row = await getLatestAwaitingPaymentForLineUserId(uid);
+    const row = await d.getLatestAwaitingPaymentForLineUserId(uid);
     if (row && String(row.status) === "pending_verify") {
       let paymentRef = null;
       try {
         paymentRef =
-          row.payment_ref || (await ensurePaymentRefForPaymentId(row.id));
+          row.payment_ref || (await d.ensurePaymentRefForPaymentId(row.id));
       } catch (_) {
         paymentRef = null;
       }
-      const text = await buildPendingVerifyReminderText({
+      const text = await d.buildPendingVerifyReminderText({
         userId: uid,
         paymentRef,
       });
-      await sendNonScanReply({
+      await d.sendNonScanReply({
         client,
         userId: uid,
         replyToken,
@@ -146,7 +187,7 @@ export async function handleStickerLikeInput(opts) {
   }
 
   // Profile flow: birthdate change (soft-detect + confirm; mirror image-handler hints)
-  const bdFlow = getBirthdateChangeFlowState(uid);
+  const bdFlow = d.getBirthdateChangeFlowState(uid);
   if (bdFlow) {
     let hint =
       "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
@@ -157,7 +198,7 @@ export async function handleStickerLikeInput(opts) {
         "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     }
     const text = hint;
-    await sendNonScanReply({
+    await d.sendNonScanReply({
       client,
       userId: uid,
       replyToken,
@@ -172,11 +213,11 @@ export async function handleStickerLikeInput(opts) {
   }
 
   // waiting_birthdate (pending scan image, not slip path)
-  const paymentStateNow = getPaymentState(uid).state;
+  const paymentStateNow = d.getPaymentState(uid).state;
   if (session?.pendingImage) {
     let savedBirthdate = null;
     try {
-      savedBirthdate = await getSavedBirthdate(uid);
+      savedBirthdate = await d.getSavedBirthdate(uid);
     } catch (_) {
       savedBirthdate = null;
     }
@@ -197,7 +238,7 @@ export async function handleStickerLikeInput(opts) {
     }
     if (!shouldRemindWaitingBirthdate) {
       const idle = pickIdleStickerLine(uid);
-      await sendNonScanReply({
+      await d.sendNonScanReply({
         client,
         userId: uid,
         replyToken,
@@ -208,8 +249,8 @@ export async function handleStickerLikeInput(opts) {
       });
       return;
     }
-    const text = await buildWaitingBirthdateGuidanceText(uid);
-    await sendNonScanReply({
+    const text = await d.buildWaitingBirthdateGuidanceText(uid);
+    await d.sendNonScanReply({
       client,
       userId: uid,
       replyToken,
@@ -228,7 +269,7 @@ export async function handleStickerLikeInput(opts) {
   // (นับซ้ำใน 2 ชม · ข้อความจริงจากลูกค้าจะล้าง streak ที่ webhook)
   let streak = 1;
   try {
-    streak = await incrementCounterWithTtl(`scan_v2:sticker_streak:${uid}`, 7200);
+    streak = await d.incrementCounterWithTtl(`scan_v2:sticker_streak:${uid}`, 7200);
   } catch {}
   if (streak === 2 || streak >= 4) {
     console.log(
@@ -237,7 +278,7 @@ export async function handleStickerLikeInput(opts) {
     return;
   }
   const idle = streak >= 3 ? "มีอะไรไหมครับ" : "ครับ";
-  await sendNonScanReply({
+  await d.sendNonScanReply({
     client,
     userId: uid,
     replyToken,

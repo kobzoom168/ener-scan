@@ -54,3 +54,15 @@ test("invariant: terminal block ส่ง unavailable ผ่าน reply + push 
   assert.match(block, /onDeliveryFailure/);
   assert.match(block, /sendTelegramText/);
 });
+
+test("invariant: paywall แซงผลชิ้นแรกไม่ได้ — defer check อยู่ก่อน sendFreeQuotaExhaustedPaywall (เคส 18 ส.ค.)", () => {
+  const fin = SRC.slice(SRC.indexOf("async function finalizeAcceptedImage"));
+  const deferIdx = fin.indexOf("PAYWALL_DEFERRED_PREV_REPORT_PENDING");
+  const paywallIdx = fin.indexOf("sendFreeQuotaExhaustedPaywallViaGateway({");
+  assert.ok(deferIdx > 0, "หา defer check ไม่เจอ");
+  assert.ok(paywallIdx > 0);
+  assert.ok(deferIdx < paywallIdx, "defer check ต้องมาก่อนยิง paywall");
+  // ข้อความ defer ต้องไม่มีเรื่องเงิน/ราคา
+  const block = fin.slice(deferIdx, deferIdx + 1200);
+  assert.doesNotMatch(block.slice(0, 900), /บาท|จ่าย|ค่าครู|แพ็ก/);
+});
