@@ -26,6 +26,7 @@ export const GENERIC_NOTIFY_REASONS = new Set([
 
 /** flow ส่งข้อความเฉพาะทางของมันเองแล้ว → ห้ามส่ง generic ซ้อน */
 export const TAILORED_BY_FLOW_REASONS = new Set([
+  "suppressed_banned", // แบนอยู่ — ตั้งใจเงียบ (ban gate เป็นเจ้าของ) ห้าม generic
   "object_validation_failed",
   "supported_lane_unresolved",
   "unsupported_lane",

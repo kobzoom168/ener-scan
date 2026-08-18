@@ -66,3 +66,18 @@ test("invariant: paywall แซงผลชิ้นแรกไม่ได้ 
   const block = fin.slice(deferIdx, deferIdx + 1200);
   assert.doesNotMatch(block.slice(0, 900), /บาท|จ่าย|ค่าครู|แพ็ก/);
 });
+
+test("invariant: idle bypass อยู่ก่อน runGeminiPlanner (Codex P0 — 1 call แทน 2)", () => {
+  const orch = fs.readFileSync(
+    path.join(process.cwd(), "src", "core", "conversation", "geminiFront", "geminiFrontOrchestrator.service.js"),
+    "utf8",
+  );
+  const bypassIdx = orch.indexOf('phase1 === "idle" || phase1 === "scan_ready_idle"');
+  const plannerIdx = orch.indexOf("await runGeminiPlanner(");
+  assert.ok(bypassIdx > 0 && plannerIdx > 0);
+  assert.ok(bypassIdx < plannerIdx, "idle bypass ต้องมาก่อนเรียก planner");
+  // bypass จบที่ tryConsultReply เท่านั้น (ปลายทางเดิม) — ตัด block ที่จุดเรียก planner
+  const block = orch.slice(bypassIdx, plannerIdx);
+  assert.match(block, /tryConsultReply\("consult_idle_direct"\)/);
+  assert.doesNotMatch(block, /runGeminiPhrasing/);
+});

@@ -11,6 +11,7 @@
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "../../config/env.js";
+import { recordTurnAiCall } from "../../core/telemetry/turnAiChain.js";
 
 let _googleClient = null;
 
@@ -75,6 +76,7 @@ function buildCompatModel(provider, opts = {}) {
   const maxTokens = Math.max(64, Number(opts.maxTokens) || 1024);
   return {
     async generateContent(userPrompt) {
+      recordTurnAiCall(opts.callSite || "front_untagged");
       const messages = [];
       if (systemInstruction) {
         // Prompt caching (กบ 16 ก.ค. — ค่าแชท consult แพง): system prompt อาจารย์ ~14k chars

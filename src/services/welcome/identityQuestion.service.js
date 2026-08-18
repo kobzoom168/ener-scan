@@ -21,10 +21,25 @@ const REPLIES = [
   "แชทนี้ผมกับอาจารย์ดูแลกันอยู่ครับ\nจะให้อาจารย์ดูชิ้นไหน ส่งรูปมาได้เลย",
 ];
 
+/**
+ * classify ชนิดคำถาม identity (Codex 18 ส.ค.): แจ้งแอดมินเฉพาะ ai_bot —
+ * "คุยกับใคร" (who) / "เป็นแอดมินไหม" (admin_check) ไม่ต้องแจ้ง
+ * @param {string} text
+ * @returns {"ai_bot" | "who" | "admin_check" | null}
+ */
+export function classifyIdentityQuestion(text) {
+  const t = String(text || "").trim();
+  if (t.length > 80 || !IDENTITY_RE.test(t)) return null;
+  if (/บอท|bot|\bai\b|เอไอ|โปรแกรม/i.test(t)) return "ai_bot";
+  if (/แอดมิน|admin/i.test(t)) return "admin_check";
+  return "who";
+}
+
 /** จับคำถาม identity — คืน true = ตอบแล้ว จบเลย อย่า route ต่อ */
 export async function maybeHandleIdentityQuestion({ client, event, userId, text }) {
   const t = String(text || "").trim();
-  if (t.length > 80 || !IDENTITY_RE.test(t)) return false;
+  const kind = classifyIdentityQuestion(t);
+  if (!kind) return false;
   try {
     // สลับสำนวนต่อคน (ถามซ้ำได้คำตอบไม่ซ้ำเดิม)
     const key = `identity_q:idx:${userId}`;
@@ -33,8 +48,28 @@ export async function maybeHandleIdentityQuestion({ client, event, userId, text 
     await setLargeValueWithTtl(key, String(prev + 1), 7 * 86400).catch(() => {});
     await client.replyMessage(event.replyToken, { type: "text", text: REPLIES[idx] });
     console.log(
-      JSON.stringify({ event: "IDENTITY_QUESTION_ANSWERED", lineUserIdPrefix: String(userId).slice(0, 8), idx }),
+      JSON.stringify({ event: "IDENTITY_QUESTION_ANSWERED", lineUserIdPrefix: String(userId).slice(0, 8), idx, kind }),
     );
+    // แจ้งแอดมินเฉพาะถาม AI/บอท (กบ 18 ส.ค.: ข้อความเต็ม+เวลา+ID) — ส่งข้อความดิบ
+    // เข้า alert ตรง ๆ (จุดนี้ history อาจยังไม่บันทึก) · ห้ามหน่วง/ล้มทับคำตอบลูกค้า
+    if (kind === "ai_bot") {
+      void (async () => {
+        const { sendCustomerAlert, redactForAlert, paidStatusForAlert } = await import(
+          "../monitor/customerAlerts.service.js"
+        );
+        const paidStatus = await paidStatusForAlert(userId);
+        const when = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 16);
+        await sendCustomerAlert({
+          type: "ai_question",
+          userId,
+          dedupeSec: 86400,
+          telegramText:
+            `[AI-QUESTION] ลูกค้าถามว่าเป็น AI/บอท\nเวลา: ${when} (ไทย)\nID: ${userId}\nสถานะ: ${paidStatus}\nข้อความ: "${redactForAlert(t)}"\n\nแบนได้ด้วยคำสั่ง: แบน ${userId}`,
+          lineText: `ลูกค้าถามว่าเป็น AI/บอท\nID: ${userId}\n"${redactForAlert(t).slice(0, 100)}"`,
+          lineClient: client,
+        });
+      })().catch(() => {});
+    }
     try {
       const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
       void insertLineConversationMessage(userId, "bot", REPLIES[idx], {

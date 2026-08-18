@@ -153,6 +153,18 @@ export async function processScanJob(workerId, jobRow) {
   const jobId = jobRow.id;
   const lineUserId = jobRow.line_user_id;
   const appUserId = jobRow.app_user_id;
+
+  // 🚫 ban gate ฝั่ง scan worker (Codex): งานที่เข้าคิวก่อนโดนแบน ห้ามเริ่ม AI
+  // terminalize ด้วยเหตุผลเฉพาะ (ไม่มีข้อความถึงลูกค้า — suppressed_banned อยู่ใน
+  // owner map ฝั่ง notify แบบ intentionally-silent)
+  try {
+    const { isBanned } = await import("../ban/bannedUsers.repo.js");
+    if (await isBanned(lineUserId)) {
+      await failJob(jobId, "suppressed_banned", "user banned - job terminalized", lineUserId, workerId);
+      console.log(JSON.stringify({ event: "SCAN_JOB_SUPPRESSED_BANNED", jobIdPrefix: String(jobId).slice(0, 8) }));
+      return;
+    }
+  } catch { /* gate พัง = ทำงานตามปกติ (fail-open) */ }
   /** Async Scan V2 may default to summary handoff; see LINE_FINAL_DELIVERY_MODE_SCAN_V2. */
   const lineFinalMode =
     env.LINE_FINAL_DELIVERY_MODE_SCAN_V2 ?? env.LINE_FINAL_DELIVERY_MODE;

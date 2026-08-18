@@ -116,6 +116,21 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       : {};
   const base = () => outboundDeliveryBase(msg, traceCtx);
 
+  // 🚫 ban gate ฝั่ง delivery (Codex): งานที่เข้าคิวก่อนโดนแบนต้องไม่ถูก push
+  try {
+    const { isBanned } = await import("../ban/bannedUsers.repo.js");
+    if (await isBanned(lineUserId)) {
+      await updateOutboundMessage(id, {
+        status: "suppressed_banned",
+        last_error_code: "suppressed_banned",
+        last_error_message: "user banned - outbound suppressed",
+        next_retry_at: null,
+      }).catch(() => {});
+      console.log(JSON.stringify({ event: "OUTBOUND_SUPPRESSED_BANNED", ...base() }));
+      return { sent: false, errorCode: "suppressed_banned" };
+    }
+  } catch { /* gate พัง = ส่งตามปกติ (fail-open) */ }
+
   await sleepIfRateHint(sleep, lineUserId);
 
   const scanResultTrace =
