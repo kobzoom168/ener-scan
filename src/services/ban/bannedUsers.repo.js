@@ -38,7 +38,8 @@ const MUTATION_LOCK_WAIT_MS = 2000;
 const MUTATION_LOCK_RENEW_MS = 3000; // ต่ออายุระหว่าง DB call (Codex รอบ 6)
 const MUTATION_DB_TIMEOUT_MS = 10000; // DB op ต้อง bounded ห้ามค้างไม่จำกัด
 const RECONCILE_ATTEMPTS = 2;
-const UNKNOWN_FINALIZER_WAIT_MS = 120000; // รอ DB request ที่ไม่รู้ผล settle นานสุด 2 นาที
+const UNKNOWN_FINALIZER_WAIT_MS = 120000; // checkpoint แรก: reconcile ครั้งที่ 1
+const UNKNOWN_FINALIZER_CAP_MS = 600000; // ถือความเป็นเจ้าของใน process นานสุด 10 นาที
 const POSITIVE_TTL_SEC = 30 * 24 * 3600;
 const NEG_TTL_SEC = 45;
 const TOMBSTONE_TTL_SEC = 120;
@@ -112,6 +113,9 @@ function mutationDeps(deps) {
     renewIntervalMs: Number(deps.lockRenewIntervalMs) > 0 ? Number(deps.lockRenewIntervalMs) : MUTATION_LOCK_RENEW_MS,
     dbTimeoutMs: Number(deps.dbTimeoutMs) > 0 ? Number(deps.dbTimeoutMs) : MUTATION_DB_TIMEOUT_MS,
     finalizerWaitMs: Number(deps.finalizerWaitMs) > 0 ? Number(deps.finalizerWaitMs) : UNKNOWN_FINALIZER_WAIT_MS,
+    finalizerCapMs: Number(deps.finalizerCapMs) > 0 ? Number(deps.finalizerCapMs) : UNKNOWN_FINALIZER_CAP_MS,
+    enqueueReconcile: deps.enqueueReconcile || null,
+    removeReconcile: deps.removeReconcile || null,
   };
 }
 
@@ -164,18 +168,46 @@ async function runDbOpWithLockRenewal(uid, m, dbOp) {
  * "unban commit ทีหลังแต่ positive cache ค้าง 30 วัน"
  */
 function scheduleUnknownOutcomeFinalizer(uid, m, client, opPromise, tag) {
+  const enqueue = m.enqueueReconcile;
+  const remove = m.removeReconcile;
+  let settled = false;
+  void opPromise.then(() => { settled = true; }).catch(() => { settled = true; });
+
+  const reconcileNow = () => reconcileCacheWithDb(uid, m, client);
+
   return (async () => {
     try {
-      let timer = null;
+      // checkpoint 1: รอ request เดิมพอสมควรแล้ว reconcile หนึ่งครั้ง
+      let t1 = null;
       await Promise.race([
         opPromise.catch(() => null),
-        new Promise((r) => { timer = setTimeout(r, m.finalizerWaitMs); }),
+        new Promise((r) => { t1 = setTimeout(r, m.finalizerWaitMs); }),
       ]);
-      if (timer) clearTimeout(timer);
-      const rec = await reconcileCacheWithDb(uid, m, client);
-      log("BAN_UNKNOWN_OUTCOME_FINALIZED", {
-        uidPrefix: uid.slice(0, 8), tag, reconciled: rec.ok === true, banned: rec.banned === true,
-      });
+      if (t1) clearTimeout(t1);
+      let rec = await reconcileNow();
+
+      if (settled) {
+        // request เดิมจบแล้ว + reconcile ตาม DB แล้ว → ปลด entry ในคิว durable
+        if (remove) await remove(uid, tag).catch(() => {});
+        log("BAN_UNKNOWN_OUTCOME_FINALIZED", { uidPrefix: uid.slice(0, 8), tag, reconciled: rec.ok === true, banned: rec.banned === true });
+        return rec;
+      }
+
+      // ยังไม่ settle: ห้ามปล่อยความเป็นเจ้าของ — รอต่อจนกว่าจะ settle หรือหมด cap
+      // (entry ใน durable queue ยังอยู่ ถ้า process ตาย sweeper จะตามต่อให้)
+      let t2 = null;
+      const lateSettled = await Promise.race([
+        opPromise.then(() => true).catch(() => true),
+        new Promise((r) => { t2 = setTimeout(() => r(false), m.finalizerCapMs); }),
+      ]);
+      if (t2) clearTimeout(t2);
+      if (!lateSettled) {
+        log("BAN_UNKNOWN_OUTCOME_STILL_PENDING", { uidPrefix: uid.slice(0, 8), tag });
+        return rec; // คิว durable ยังค้างไว้ให้ sweeper
+      }
+      rec = await reconcileNow();
+      if (rec.ok && remove) await remove(uid, tag).catch(() => {});
+      log("BAN_UNKNOWN_OUTCOME_FINALIZED", { uidPrefix: uid.slice(0, 8), tag, late: true, reconciled: rec.ok === true, banned: rec.banned === true });
       return rec;
     } catch (e) {
       log("BAN_UNKNOWN_OUTCOME_FINALIZE_FAILED", { uidPrefix: uid.slice(0, 8), tag, message: String(e?.message || e).slice(0, 100) });
@@ -352,7 +384,13 @@ export async function banUser({ lineUserId, reason, bannedBy }, deps = {}) {
     );
 
     if (run.outcome === "unknown") {
-      // enforcement ถูกกันไว้แล้ว (positive cache) · ผูกเจ้าของงานไว้ reconcile หลัง settle
+      // enforcement ถูกกันไว้แล้ว (positive cache) · บันทึกงานลงคิว durable ก่อน
+      // แล้วค่อยผูกเจ้าของใน process — restart แล้ว sweeper ตามต่อได้
+      const enqueue = m.enqueueReconcile || (await import("./banReconcileQueue.js")).enqueuePendingReconcile;
+      const remove = m.removeReconcile || (await import("./banReconcileQueue.js")).removePendingReconcile;
+      m.enqueueReconcile = enqueue;
+      m.removeReconcile = remove;
+      await enqueue(uid, "ban").catch(() => {});
       const finalizer = scheduleUnknownOutcomeFinalizer(uid, m, client, run.promise, "ban");
       log("BAN_USER_DB_OUTCOME_UNKNOWN", { uidPrefix: uid.slice(0, 8) });
       return {
@@ -435,6 +473,11 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
     if (run.outcome === "unknown") {
       // ไม่รู้ผล = คงสถานะแบนไว้ก่อน (ปลอดภัยกว่าปล่อยผ่าน) แต่ต้องมีเจ้าของ
       // ตาม settle แล้ว reconcile ไม่งั้น positive cache ค้าง 30 วันทั้งที่ปลดแล้ว
+      const enqueue = m.enqueueReconcile || (await import("./banReconcileQueue.js")).enqueuePendingReconcile;
+      const remove = m.removeReconcile || (await import("./banReconcileQueue.js")).removePendingReconcile;
+      m.enqueueReconcile = enqueue;
+      m.removeReconcile = remove;
+      await enqueue(uid, "unban").catch(() => {});
       const finalizer = scheduleUnknownOutcomeFinalizer(uid, m, client, run.promise, "unban");
       log("BAN_USER_UNBAN_DB_OUTCOME_UNKNOWN", { uidPrefix: uid.slice(0, 8) });
       return { ok: false, reason: "db_outcome_unknown", cacheCleared: false, pendingFinalizer: finalizer };
@@ -473,6 +516,17 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
   } finally {
     await Promise.resolve(m.releaseLock(banMutexKey(uid), lockToken)).catch(() => {});
   }
+}
+
+/**
+ * reconcile cache ตาม DB สำหรับ sweeper ภายนอก (maintenance worker)
+ * @param {string} lineUserId
+ */
+export async function reconcileBanCacheFromDb(lineUserId, deps = {}) {
+  const uid = String(lineUserId || "").trim();
+  if (!BAN_UID_RE.test(uid)) return { ok: false, reason: "invalid_uid" };
+  const m = mutationDeps(deps);
+  return reconcileCacheWithDb(uid, m, deps.dbClient || db);
 }
 
 /** ลิสต์แบน active (สำหรับคำสั่ง ดูแบน) */

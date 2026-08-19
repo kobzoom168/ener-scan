@@ -203,6 +203,7 @@ function dbSelectCounter({ banned }) {
 function memCache() {
   const m = new Map();
   const locks = new Map();
+  const queue = new Map(); // durable reconcile queue จำลอง
   let lockSeq = 0;
   return {
     m,
@@ -225,6 +226,9 @@ function memCache() {
     releaseLock: async (k, t) => { if (locks.get(k) === t) locks.delete(k); },
     checkLockHeld: async (k, t) => locks.get(k) === t,
     renewLock: async (k, t) => locks.get(k) === t, // ต่ออายุได้เฉพาะเจ้าของ token
+    queue,
+    enqueueReconcile: async (uid, reason) => { queue.set(`${uid}|${reason}`, Date.now()); return { ok: true }; },
+    removeReconcile: async (uid, reason) => { queue.delete(`${uid}|${reason}`); return { ok: true }; },
   };
 }
 
@@ -888,7 +892,8 @@ test("DB op bounded: insert ค้างไม่จบ → คืน db_outcome
   };
   const t0 = Date.now();
   const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, {
-    dbClient: hangDb, ...c, lockRenewIntervalMs: 10, dbTimeoutMs: 150, finalizerWaitMs: 100,
+    dbClient: hangDb, ...c, lockRenewIntervalMs: 10, dbTimeoutMs: 150,
+    finalizerWaitMs: 60, finalizerCapMs: 120,
   });
   assert.equal(r.ok, false);
   // timeout = ไม่รู้ผล (ไม่ใช่ล้มเหลว) + enforcement ถูกกันไว้ + มีเจ้าของงานตามต่อ
@@ -1022,7 +1027,8 @@ test("C) DB ไม่ settle เลย → finalizer มี owner + ยอมแ
   };
   const t0 = Date.now();
   const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, {
-    dbClient: neverDb, ...c, dbTimeoutMs: 40, lockRenewIntervalMs: 10, finalizerWaitMs: 120,
+    dbClient: neverDb, ...c, dbTimeoutMs: 40, lockRenewIntervalMs: 10,
+    finalizerWaitMs: 60, finalizerCapMs: 120,
   });
   assert.equal(r.reason, "db_outcome_unknown");
   assert.ok(r.pendingFinalizer, "ต้องมีเจ้าของงานเสมอ");
@@ -1051,4 +1057,132 @@ test("D) reconcile DB read ค้าง → bounded ไม่แขวน แล
   assert.equal(r.ok, false);
   assert.equal(r.reason, "cache_unreconciled");
   assert.ok(Date.now() - t0 < 4000, `reconcile ต้อง bounded (ใช้ ${Date.now() - t0}ms)`);
+});
+
+/* ---------------- Codex รอบ 8: durable reconciliation (late settle / restart) ---------------- */
+
+test("E) ban commit หลัง finalizer checkpoint → เจ้าของไม่ปล่อย reconcile จนกว่าจะ settle + คิวถูกเคลียร์", async () => {
+  const uid = "U" + "4".repeat(31) + "a";
+  const c = memCache();
+  let committed = false;
+  let release;
+  const lateDb = {
+    from: () => ({
+      insert: () => new Promise((r) => { release = () => { committed = true; r({ error: null }); }; }),
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({
+        maybeSingle: async () => (committed ? { data: { id: 1 }, error: null } : { data: null, error: null }),
+      }) }) }) }),
+    }),
+  };
+  const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, {
+    dbClient: lateDb, ...c, dbTimeoutMs: 30, lockRenewIntervalMs: 10,
+    finalizerWaitMs: 40, finalizerCapMs: 3000, // checkpoint แรกมาก่อน commit
+  });
+  assert.equal(r.reason, "db_outcome_unknown");
+  assert.equal(c.queue.has(`${uid}|ban`), true, "ต้องมี entry ในคิว durable ทันที");
+  // commit มาหลัง checkpoint แรกไปแล้ว
+  await new Promise((res) => setTimeout(res, 80));
+  release();
+  const rec = await r.pendingFinalizer;
+  assert.equal(rec.ok, true);
+  assert.equal(rec.banned, true, "reconcile รอบหลัง settle ต้องเห็นแบน");
+  assert.equal(c.m.get(`ban:active:${uid}`), "1", "cache ต้องลงเอยตรง DB");
+  assert.equal(c.queue.has(`${uid}|ban`), false, "งานจบแล้วต้องออกจากคิว");
+});
+
+test("F) unban commit หลัง checkpoint → positive cache ต้องไม่ค้างแบน + คิวถูกเคลียร์", async () => {
+  const uid = "U" + "4".repeat(31) + "b";
+  const c = memCache();
+  c.m.set(`ban:active:${uid}`, "1");
+  let unbanned = false;
+  let release;
+  const lateDb = {
+    from: () => ({
+      update: () => ({ eq: () => ({ is: () => ({
+        select: () => new Promise((r) => { release = () => { unbanned = true; r({ data: [{ id: 1 }], error: null }); }; }),
+      }) }) }),
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({
+        maybeSingle: async () => (unbanned ? { data: null, error: null } : { data: { id: 1 }, error: null }),
+      }) }) }) }),
+    }),
+  };
+  const r = await unbanUser({ lineUserId: uid, unbannedBy: "admin" }, {
+    dbClient: lateDb, ...c, dbTimeoutMs: 30, lockRenewIntervalMs: 10,
+    finalizerWaitMs: 40, finalizerCapMs: 3000,
+  });
+  assert.equal(r.reason, "db_outcome_unknown");
+  assert.equal(c.queue.has(`${uid}|unban`), true);
+  await new Promise((res) => setTimeout(res, 80));
+  release();
+  const rec = await r.pendingFinalizer;
+  assert.equal(rec.ok, true);
+  assert.equal(rec.banned, false);
+  assert.equal(c.m.has(`ban:active:${uid}`), false, "ห้ามค้างแบน 30 วันหลัง DB ยืนยันปลด");
+  assert.equal(c.queue.has(`${uid}|unban`), false);
+});
+
+test("G) จำลอง process restart: ทิ้ง pendingFinalizer → sweeper ตามงานจากคิว durable ต่อได้", async () => {
+  const uid = "U" + "4".repeat(31) + "c";
+  const c = memCache();
+  let committed = false;
+  const stuckDb = {
+    from: () => ({
+      insert: () => new Promise(() => {}), // process เดิมตายไปพร้อม request
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({
+        maybeSingle: async () => (committed ? { data: { id: 1 }, error: null } : { data: null, error: null }),
+      }) }) }) }),
+    }),
+  };
+  const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, {
+    dbClient: stuckDb, ...c, dbTimeoutMs: 30, lockRenewIntervalMs: 10,
+    finalizerWaitMs: 20, finalizerCapMs: 40,
+  });
+  assert.equal(r.reason, "db_outcome_unknown");
+  // "restart": ทิ้ง promise ทั้งหมด แต่ entry ต้องยังอยู่
+  await r.pendingFinalizer.catch(() => {});
+  assert.equal(c.queue.has(`${uid}|ban`), true, "งานที่ยังไม่ settle ต้องค้างในคิว ไม่หายไปกับ process");
+
+  // หลัง restart: DB commit ไปแล้วจริง (connection เดิมตาย) — sweeper กวาดต่อ
+  committed = true;
+  const { sweepPendingBanReconciles } = await import("../src/services/ban/banReconcileQueue.js");
+  const entries = [...c.queue.entries()].map(([k, at]) => ({ uid: k.split("|")[0], reason: k.split("|")[1], enqueuedAt: at }));
+  const fakeRedis = {
+    zrange: async () => entries.flatMap((e) => [`${e.uid}|${e.reason}`, String(e.enqueuedAt)]),
+    zrem: async (_k, member) => { c.queue.delete(member); },
+    zadd: async () => {}, expire: async () => {},
+  };
+  const { reconcileBanCacheFromDb } = await import("../src/services/ban/bannedUsers.repo.js");
+  const stats = await sweepPendingBanReconciles({
+    getRedis: async () => fakeRedis,
+    minSettleMs: 0,
+    reconcile: (u) => reconcileBanCacheFromDb(u, { dbClient: stuckDb, ...c }),
+  });
+  assert.equal(stats.reconciled, 1);
+  assert.equal(c.m.get(`ban:active:${uid}`), "1", "sweeper ต้องทำให้ cache ตรง DB");
+  assert.equal(c.queue.has(`${uid}|ban`), false, "งานเสร็จแล้วต้องออกจากคิว");
+});
+
+test("H) sweeper: entry ที่เพิ่ง enqueue (ยังไม่ถึง minSettle) ต้องข้ามไปก่อน ไม่ไปชนเจ้าของเดิม", async () => {
+  const { sweepPendingBanReconciles } = await import("../src/services/ban/banReconcileQueue.js");
+  const now = Date.now();
+  const fakeRedis = {
+    zrange: async () => [`U${"5".repeat(32)}|ban`, String(now - 1000)],
+    zrem: async () => {}, zadd: async () => {}, expire: async () => {},
+  };
+  let called = 0;
+  const stats = await sweepPendingBanReconciles({
+    getRedis: async () => fakeRedis,
+    minSettleMs: 60_000,
+    now: () => now,
+    reconcile: async () => { called += 1; return { ok: true }; },
+  });
+  assert.equal(called, 0);
+  assert.equal(stats.skipped, 1);
+  assert.equal(stats.reconciled, 0);
+});
+
+test("maintenance worker: มี sweeper ของคิว reconcile (source contract — งานต้องถูกกวาดหลัง restart)", () => {
+  const w = fs.readFileSync(path.join(process.cwd(), "src", "workers", "maintenanceWorker.js"), "utf8");
+  assert.ok(w.includes("sweepPendingBanReconciles"), "maintenance worker ต้องกวาดคิว");
+  assert.ok(w.includes("reconcileBanCacheFromDb"));
 });
