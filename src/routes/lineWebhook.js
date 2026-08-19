@@ -352,6 +352,51 @@ import {
  * ตรง pattern เท่านั้น กันชนบทสนทนาปกติ · โดนเซ็นเซอร์ = teaser ไม่เฉลยชิ้น
  * @returns {Promise<boolean>} handled
  */
+/**
+ * เกตอันดับสำหรับคนไม่มีประวัติจ่ายใน 3 วัน (กบ 18 ส.ค.): ถามอันดับ/ชิ้นแรงสุดในแชท
+ * → ชี้ไปรายงานหลัก (ตรงนั้นเซ็นเซอร์+ชวนเปิดสิทธิ์อยู่แล้ว) — ห้ามให้ LLM ตอบหลุด
+ * จ่ายใน 3 วัน = ตอบตามปกติทุกเส้นเดิม · เช็คสิทธิ์พลาด = redirect (กันรั่ว ไม่กันเงิน)
+ */
+async function maybeHandleRankingQueryGate({ client, userId, replyToken, text }) {
+  const { isRankingQuery, buildRankingRedirectText } = await import(
+    "../services/lineWebhook/rankingQueryGate.util.js"
+  );
+  if (!isRankingQuery(text)) return false;
+  try {
+    const { hasRecentPaidAccess } = await import("../services/everPaid.service.js");
+    if (await hasRecentPaidAccess(userId)) return false; // จ่ายใน 3 วัน = ตอบเต็มตามเดิม
+  } catch { /* เช็คพลาด = redirect (fail-closed ฝั่งกันรั่ว) */ }
+  let latestReportUrl = "";
+  try {
+    const { data: sr } = await supabase
+      .from("scan_results_v2")
+      .select("html_public_token")
+      .eq("line_user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (sr?.html_public_token) {
+      const { buildPublicReportUrl } = await import("../services/reports/reportLink.service.js");
+      latestReportUrl = buildPublicReportUrl(String(sr.html_public_token));
+    }
+  } catch { /* ไม่มีลิงก์ก็ชี้ทางด้วยข้อความ */ }
+  if (!latestReportUrl) return false; // ยังไม่เคยมีรายงาน = ไม่ใช่เคสนี้ ปล่อย flow ปกติ
+  console.log(
+    JSON.stringify({ event: "RANKING_QUERY_REDIRECTED_UNPAID", uidPrefix: String(userId).slice(0, 8) }),
+  );
+  await sendNonScanReply({
+    client,
+    userId,
+    replyToken,
+    replyType: "ranking_query_redirect",
+    semanticKey: "ranking_query_redirect",
+    text: buildRankingRedirectText(latestReportUrl),
+    alternateTexts: [],
+    speakerRoleOverride: "admin",
+  });
+  return true;
+}
+
 async function maybeHandleAxisTopPieceQuery({ client, userId, replyToken, text }) {
   const t = String(text || "").trim();
   if (!t || t.length > 30) return false;
@@ -579,11 +624,14 @@ async function maybeHandleReferralCodeRedeem({ client, userId, replyToken, text 
       text: replyText,
     });
     if (result.ok && result.referrerLineUserId) {
-      client
-        .pushMessage(result.referrerLineUserId, {
-          type: "text",
-          text: buildReferrerNotifyText(),
-        })
+      // referrer เป็นคนละ user กับ event นี้ — ต้องเช็คแบน ณ ส่งจริง (Codex P0-5)
+      import("../services/lineOutbound/customerPush.gateway.js")
+        .then((g) =>
+          g.pushToCustomer(client, result.referrerLineUserId, {
+            type: "text",
+            text: buildReferrerNotifyText(),
+          }, { source: "referral_notify" }),
+        )
         .catch(() => {});
     }
     return true;
@@ -2067,40 +2115,18 @@ async function handlePaymentCommandTextRoute({
   return true;
 }
 
-async function replyIdleTextNoDuplicate({
-  client,
-  replyToken,
-  userId,
-  invokePhase1GeminiOrchestrator = null,
-}) {
-  if (
-    invokePhase1GeminiOrchestrator &&
-    (await invokePhase1GeminiOrchestrator()).handled
-  )
-    return;
-  const primary = buildIdleDeterministicPrimaryText();
-  let personaSoft = null;
-  try {
-    personaSoft = await buildIdleText(userId);
-  } catch (_) {
-    personaSoft = null;
-  }
-  const altPersona =
-    String(personaSoft || "").trim() &&
-    String(personaSoft).trim() !== primary.trim()
-      ? String(personaSoft).trim()
-      : null;
-  await sendNonScanReply({
-    client,
-    userId,
-    replyToken,
-    replyType: "idle_post_scan",
-    semanticKey: "idle_post_scan",
-    text: primary,
-    alternateTexts: [
-      ...(altPersona ? [altPersona] : []),
-      "มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้",
-    ],
+async function replyIdleTextNoDuplicate(opts) {
+  // แยก logic ไป util (Codex P0-5) — webhook เหลือ thin wrapper ผูก deps จริง
+  const { replyIdleTextNoDuplicate: run } = await import(
+    "../services/lineWebhook/idleReply.util.js"
+  );
+  return run({
+    ...opts,
+    deps: {
+      sendNonScanReply,
+      buildIdleDeterministicPrimaryText,
+      buildIdleText,
+    },
   });
 }
 
@@ -3990,6 +4016,175 @@ async function handleImageMessage({ client, event, userId, session }) {
 
 // แอดมินช่วยตอบ (กบ 4 ส.ค.): LINE ไม่ส่ง webhook ข้อความที่แอดมินพิมพ์เองใน OA Manager
 // → กบพิมพ์ในแชทตัวเองกับ OA: "ช่วยตอบ <ชื่อลูกค้า>: <ที่ตอบไป>" ระบบผูกให้ AI ตอบต่อเนียน
+/**
+ * คำสั่งแบน/ปลดแบนจากแอดมิน (กบ 18 ส.ค. + Codex): signature ผ่าน middleware แล้ว
+ * + source.type === "user" + sender ตรง ADMIN_LINE_USER_ID เต็ม · confirm ด้วย
+ * nonce ใช้ครั้งเดียว (atomic GETDEL) ภายใน 5 นาที · redis ใช้ไม่ได้ = fail-closed
+ */
+async function maybeHandleBanCommand({ client, event, userId, text }) {
+  const adminUid = String(env.ADMIN_LINE_USER_ID || "").trim();
+  if (!adminUid || userId !== adminUid) return false;
+  if (String(event?.source?.type || "") !== "user") return false;
+  const t = String(text || "").trim();
+  const reply = async (msg) => {
+    try { await client.replyMessage(event.replyToken, { type: "text", text: msg }); } catch { /* ignore */ }
+  };
+
+  const banM = t.match(/^แบน\s+(U[0-9a-f]{32})(?:\s+(.{1,200}))?$/);
+  if (banM) {
+    const target = banM[1];
+    const reason = (banM[2] || "").trim() || "manual";
+    if (target === adminUid) { await reply("แบนบัญชีแอดมินเองไม่ได้ครับ"); return true; }
+    const { data: exists } = await supabase.from("app_users").select("display_name").eq("line_user_id", target).maybeSingle();
+    if (!exists) { await reply("ไม่พบ ID นี้ในระบบครับ เช็คอีกครั้ง"); return true; }
+    const crypto = await import("node:crypto");
+    const nonce = crypto.randomBytes(3).toString("hex");
+    try {
+      const { getScanV2Redis } = await import("../redis/scanV2Redis.js");
+      const r = await getScanV2Redis();
+      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว (redis) ยังไม่แบนครับ"); return true; }
+      // key ต่อ nonce (Codex: รหัสผิดห้ามกิน nonce ที่ถูกต้อง)
+      await r.set(`ban:nonce:${adminUid}:${nonce}`, JSON.stringify({ target, reason }), "EX", 300);
+    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบนครับ"); return true; }
+    await reply(
+      `กำลังจะแบน ${exists.display_name || "(ไม่มีชื่อ)"}\n${target}\nเหตุผล: ${reason}\n\nยืนยันภายใน 5 นาที พิมพ์:\nยืนยันแบน ${nonce}`,
+    );
+    return true;
+  }
+
+  const confirmM = t.match(/^ยืนยันแบน\s+([0-9a-f]{6})$/);
+  if (confirmM) {
+    let payload = null;
+    try {
+      const { getScanV2Redis } = await import("../redis/scanV2Redis.js");
+      const r = await getScanV2Redis();
+      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบนครับ"); return true; }
+      // atomic consume เฉพาะ key ของ nonce ที่พิมพ์มา — ผิด = ไม่แตะตัวที่ถูก
+      const raw = await r.eval(
+        "local v=redis.call('GET',KEYS[1]) if v then redis.call('DEL',KEYS[1]) end return v",
+        1,
+        `ban:nonce:${adminUid}:${confirmM[1]}`,
+      );
+      payload = raw ? JSON.parse(raw) : null;
+    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบนครับ"); return true; }
+    if (!payload) {
+      await reply("รหัสยืนยันไม่ตรงหรือหมดอายุครับ เริ่มคำสั่ง แบน ใหม่อีกครั้ง");
+      return true;
+    }
+    const { banUser } = await import("../services/ban/bannedUsers.repo.js");
+    const res = await banUser({ lineUserId: payload.target, reason: payload.reason, bannedBy: adminUid });
+    await reply(
+      res.ok
+        ? res.cacheSynced === false
+          ? `แบนบันทึกแล้วครับ\n${payload.target}\nแต่ระบบ cache ขัดข้อง อาจมีผลช้ากว่าปกติ เช็คซ้ำด้วย ดูแบน ได้ พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
+          : `แบนแล้วครับ\n${payload.target}\nระบบจะเงียบกับบัญชีนี้ทุกช่องทาง พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
+        : res.reason === "already_banned"
+          ? "บัญชีนี้ถูกแบนอยู่แล้วครับ"
+          : res.reason === "db_outcome_unknown" || res.reason === "reconcile_queue_unavailable"
+            // honesty (Codex รอบ 10): อ้างว่า "กันไว้แล้ว" ได้เฉพาะเมื่อเขียน cache สำเร็จจริง
+            ? res.enforcementHeld === true
+              ? `ยังไม่ยืนยันผลจากฐานข้อมูลครับ\n${payload.target}\nระบบกันบัญชีนี้ไว้ก่อนแล้ว เช็คซ้ำด้วย ดูแบน อีกครั้งในสักครู่`
+              : `ยังไม่ยืนยันผลจากฐานข้อมูลครับ\n${payload.target}\nและระบบกันไว้ล่วงหน้าไม่สำเร็จ (cache ขัดข้อง) ลูกค้าอาจยังใช้งานได้ พิมพ์ แบน ${payload.target} ซ้ำอีกครั้ง`
+          : res.reason === "pending_reconcile"
+            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูลครับ ระบบกำลังตามให้ตรงอยู่ รอสักครู่แล้วลองใหม่`
+          : res.reason === "pending_guard_unavailable"
+            // redis ล้ม = ไม่รู้ว่ามีงานเก่าค้างไหม — fail-closed ไม่แตะ DB (Codex รอบ 11)
+            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราวครับ ยังไม่แตะฐานข้อมูล รอสักครู่แล้วพิมพ์คำสั่งซ้ำ`
+          : res.reason === "cache_unreconciled"
+            // DB บันทึกแบนแล้วแต่ระบบ cache ยังไม่ยอมรับ = ยังไม่มีผลจริง ห้ามบอกว่าเรียบร้อย
+            ? `บันทึกแบนใน DB แล้ว แต่ระบบยังไม่บังคับใช้ครับ\n${payload.target}\nพิมพ์คำสั่ง แบน ซ้ำอีกครั้งเพื่อให้มีผล`
+            : res.reason === "busy"
+              ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ครับ รอสักครู่แล้วลองใหม่"
+              : "แบนไม่สำเร็จ (ระบบฐานข้อมูล) ลองใหม่อีกครั้งครับ",
+    );
+    return true;
+  }
+
+  const unbanM = t.match(/^ปลดแบน\s+(U[0-9a-f]{32})$/);
+  if (unbanM) {
+    const { unbanUser } = await import("../services/ban/bannedUsers.repo.js");
+    const res = await unbanUser({ lineUserId: unbanM[1], unbannedBy: adminUid, unbanReason: "manual_unban" });
+    await reply(
+      res.ok
+        ? res.cacheCleared === false
+          ? `ปลดแบนใน DB แล้วครับ ${unbanM[1]} แต่ล้าง cache ไม่ครบ — อาจยังเงียบต่ออีกพักหนึ่ง ถ้าเกิน 5 นาทีพิมพ์ ปลดแบน ${unbanM[1]} ซ้ำอีกครั้ง`
+          : `ปลดแบนแล้วครับ ${unbanM[1]} กลับมาใช้งานได้ปกติ (ล้างสถานะเงียบชั่วคราวให้ด้วยแล้ว)`
+        : res.reason === "busy"
+          ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ครับ รอสักครู่แล้วลองใหม่"
+          : res.reason === "db_outcome_unknown" || res.reason === "reconcile_queue_unavailable"
+            ? res.enforcementHeld === true
+              ? `ยังไม่ยืนยันผลจากฐานข้อมูลครับ บัญชีนี้ยังถูกกันไว้ก่อน ระบบจะปรับให้ตรงเองเมื่อฐานข้อมูลตอบ เช็คซ้ำด้วย ดูแบน อีกครั้ง`
+              : `ยังไม่ยืนยันผลจากฐานข้อมูลครับ และยืนยันสถานะกันไว้ไม่ได้ (cache ขัดข้อง) เช็คซ้ำด้วย ดูแบน อีกครั้งในสักครู่`
+          : res.reason === "pending_reconcile"
+            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูลครับ รอสักครู่แล้วลองใหม่`
+          : res.reason === "pending_guard_unavailable"
+            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราวครับ ยังไม่แตะฐานข้อมูล รอสักครู่แล้วพิมพ์คำสั่งซ้ำ`
+          : res.reason === "cache_unreconciled"
+            // DB ปลดแล้วแต่ cache ยังไม่ยอมรับ — ยังกันบัญชีไว้ก่อน (fail-closed) ระบบตามปรับให้ตรงเอง
+            ? `ปลดแบนใน DB แล้วครับ ${unbanM[1]} แต่ระบบ cache ยังไม่ยอมรับ — บัญชีนี้อาจยังเงียบต่ออีกพัก ระบบจะตามปรับให้ตรงเองครับ เช็คซ้ำด้วย ดูแบน อีกครั้งในสักครู่`
+          : res.reason === "not_banned"
+          ? res.cacheCleared === false
+            ? "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ แต่ล้างสถานะชั่วคราวไม่ครบ ระบบจะตามล้างให้เองครับ ถ้าเกิน 5 นาทียังเงียบพิมพ์คำสั่งนี้ซ้ำ"
+            : "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ"
+          : "ปลดแบนไม่สำเร็จ ลองใหม่อีกครั้งครับ",
+    );
+    return true;
+  }
+
+  if (/^ดูแบน$/.test(t)) {
+    const { listActiveBans } = await import("../services/ban/bannedUsers.repo.js");
+    const { ok, rows } = await listActiveBans();
+    if (!ok) { await reply("อ่านรายการแบนไม่ได้ครับ ลองใหม่"); return true; }
+    await reply(
+      rows.length
+        ? "รายการแบน (manual):\n" + rows.map((r0) => `${r0.line_user_id}\n  เหตุผล: ${r0.reason || "-"}`).join("\n")
+        : "ยังไม่มีบัญชีถูกแบนครับ",
+    );
+    return true;
+  }
+
+  // ตรวจงาน ban/unban ที่ยังไม่ยืนยันผล (Codex รอบ 12: ไม่มี TTL — ค้างได้จนกว่า
+  // DB ตรง intent หรือแอดมินปลดเองหลังตรวจ DB แล้ว)
+  if (/^งานแบนค้าง$/.test(t)) {
+    const { readPendingReconciles } = await import("../services/ban/banReconcileQueue.js");
+    const read = await readPendingReconciles();
+    // อ่านล้ม ≠ ว่าง (Codex รอบ 13): ห้ามตอบ "ไม่มีงานค้าง" ทั้งที่ไม่รู้จริง
+    if (!read.ok) { await reply("อ่านงานค้างไม่ได้ครับ (redis) ลองใหม่อีกครั้ง"); return true; }
+    const entries = read.entries;
+    if (!entries.length) { await reply("ไม่มีงานแบน/ปลดแบนค้างครับ"); return true; }
+    const lines = entries.map((e) => {
+      const ageMin = Math.round((Date.now() - e.enqueuedAt) / 60000);
+      return `${e.uid}\n  สั่ง ${e.reason} (คาด ${e.targetState}) ค้าง ${ageMin} นาที · opId ${e.opId}`;
+    });
+    await reply(
+      `งานค้างรอยืนยันผล ${entries.length} รายการ:\n${lines.join("\n")}\n\nระบบ retry ต่อเองไม่มีหมดอายุ — ถ้าตรวจ DB แล้วยืนยันว่างานจบจริง พิมพ์:\nปลดงานแบนค้าง <uid> <opId>`,
+    );
+    return true;
+  }
+
+  // ปลดงานค้างด้วยมือ: ต้องระบุ exact opId (กันปลดผิดงาน/งานใหม่ที่แซงเข้ามา) + audit log
+  const clearOpM = t.match(/^ปลดงานแบนค้าง\s+(U[0-9a-f]{32})\s+([0-9a-f]{12})$/);
+  if (clearOpM) {
+    const { adminClearPendingOperation } = await import("../services/ban/banReconcileQueue.js");
+    const res = await adminClearPendingOperation({ uid: clearOpM[1], opId: clearOpM[2], clearedBy: adminUid });
+    await reply(
+      res.ok
+        ? `ปลดงานค้างแล้วครับ\n${clearOpM[1]} (opId ${clearOpM[2]})\nเช็คสถานะจริงด้วย ดูแบน อีกครั้ง — ถ้า cache ยังไม่ตรงพิมพ์ แบน/ปลดแบน ตามที่ตั้งใจซ้ำ`
+        : res.reason === "no_pending_op"
+          ? "ไม่มีงานค้างของบัญชีนี้ครับ"
+          : res.reason === "op_mismatch"
+            ? `opId ไม่ตรงงานที่ค้างอยู่ครับ (ปัจจุบัน ${String(res.pending || "?").slice(0, 12)}) — เช็คด้วย งานแบนค้าง ก่อน`
+          : res.reason === "queue_read_failed"
+            ? "อ่านคิวงานค้างไม่ได้ครับ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้ง"
+          : res.reason === "queue_member_missing"
+            ? "สถานะงานค้างผิดปกติครับ (guard อยู่แต่ไม่พบงานในคิว) ยังไม่ปลดอะไร — แจ้ง dev ตรวจ redis ก่อน"
+            : "ปลดงานค้างไม่สำเร็จ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้งครับ",
+    );
+    return true;
+  }
+  return false;
+}
+
 async function maybeHandleAdminAssist({ client, event, userId, text }) {
   const adminUid = String(env.ADMIN_LINE_USER_ID || "").trim();
   if (!adminUid || userId !== adminUid) return false;
@@ -4134,12 +4329,36 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
 /** คำถามสถานะผล "ผลออกยัง/เสร็จยัง" — ตอบจากสถานะงานจริง ห้ามให้ LLM เดา
  * (เคสจริง 17 ส.ค.: สแกนล้มเพราะเครดิต AI หมด ลูกค้าถาม 3 ชม.ต่อมา consult มโนว่า
  * "ออกแล้ว 7.2/10" พร้อมลิงก์ปลอม ener.app — ต้นเหตุระดับ routing ต้องตัดที่นี่) */
-const RESULT_STATUS_QUERY_RE =
-  /^ผล(สแกน)?(ออก|เสร็จ|ได้)(มา)?(หรือ|รึ|แล้ว)?ยัง(ครับ|ค่ะ|คับ)?$|^(ออก|เสร็จ)(หรือ|รึ)?ยัง(ครับ|ค่ะ|คับ)?$/;
+// regex ย้ายไป SSOT: src/services/scanV2/statusQuery.util.js (Codex รอบ 4)
 
 async function maybeHandleResultStatusQuery({ client, event, userId, text }) {
   const t = String(text || "").trim();
-  if (!RESULT_STATUS_QUERY_RE.test(t)) return false;
+  // typed routing (Codex รอบ 5-6): router นี้ตอบ "สถานะสแกน" เท่านั้น — สถานะสลิป/
+  // เงิน/สมาชิกต้องไหลไป payment flow · generic_wait ต้องยืนยันว่าไม่มีเงินค้าง
+  // (ใช้ ACTIVE_PAYMENT_STATUSES จาก payments store · อ่านไม่ได้ = fail-closed)
+  const { resolveResultStatusRouting } = await import(
+    "../services/scanV2/resultStatusRouting.util.js"
+  );
+  const routing = await resolveResultStatusRouting({
+    text: t,
+    getPaymentEvidence: async () => {
+      const { hasActivePaymentForLineUserId } = await import("../stores/payments.db.js");
+      return hasActivePaymentForLineUserId(userId);
+    },
+  });
+  if (!routing.handle) {
+    if (routing.kind !== "other") {
+      console.log(
+        JSON.stringify({
+          event: "RESULT_STATUS_ROUTER_DECLINED",
+          uidPrefix: String(userId).slice(0, 8),
+          kind: routing.kind,
+          reason: routing.reason,
+        }),
+      );
+    }
+    return false;
+  }
   try {
     const { data: job } = await supabase
       .from("scan_jobs")
@@ -4272,7 +4491,27 @@ async function handleTextMessage({ client, event, userId, session }) {
   const lowerText = text.toLowerCase();
   const now = Date.now();
 
+  if (await maybeHandleBanCommand({ client, event, userId, text })) return;
   if (await maybeHandleAdminAssist({ client, event, userId, text })) return;
+
+  // ถามวนซ้ำ (ข้อความเดิม ≥3 ใน 15 นาที ไม่รวมถามสถานะ) → แจ้งแอดมินเงียบ ๆ
+  // ไม่กระทบ flow ตอบลูกค้า (fire-and-forget เสมอ)
+  void (async () => {
+    const { trackRepeatedInput, sendCustomerAlert, redactForAlert, paidStatusForAlert } = await import(
+      "../services/monitor/customerAlerts.service.js"
+    );
+    const rep = await trackRepeatedInput(userId, text);
+    if (!rep.hit) return;
+    const paidStatus = await paidStatusForAlert(userId);
+    const when = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 16);
+    const recentLines = (rep.recent || []).map((m, i) => `${i + 1}. ${m}`).join("\n");
+    await sendCustomerAlert({
+      type: "repeat_input",
+      userId,
+      dedupeSec: 6 * 3600,
+      telegramText: `[REPEAT] ลูกค้าพิมพ์ข้อความเดิมวน ${rep.count} ครั้งใน 15 นาที\nเวลา: ${when} (ไทย)\nID: ${userId}\nสถานะ: ${paidStatus}\nข้อความล่าสุด:\n${recentLines}\n\nแบนได้ด้วย: แบน ${userId}`,
+    });
+  })().catch(() => {});
 
   // คำถาม identity "คุยกับใคร/เป็นบอทไหม/เป็นแอดมินใช่ไหม" → สคริปต์ตายตัว ไม่พึ่ง LLM
   // (persona ข้อ 7 — เคส 11 ส.ค.: planner ตายแล้วคำถามนี้โดน nudge สแกนสวน)
@@ -4361,7 +4600,11 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // ความอดทนอาจารย์: ข้อความกวน (สั้นจุ๋มจิ๋ม/พิมพ์ซ้ำ) นับแต้มใน 30 นาที —
   // 3-4 แต้ม = ตัดบทสุภาพแบบมีบารมี (ไม่เปลือง AI), 5+ = เงียบ, 8+ = แบน 24 ชม. (เว้นลูกค้าเคยจ่าย)
-  try {
+  // ถามสถานะผลซ้ำ/บ่นรอนาน = ลูกค้ารอผลจริง ไม่ใช่ troll — ใช้ SSOT ตัวเดียว
+  // กับ result-status router (Codex รอบ 4: regex คนละชุดทำ "รอนานแล้วครับ" โดนนับแต้ม)
+  const { isStatusQueryText } = await import("../services/scanV2/statusQuery.util.js");
+  const isResultStatusQueryText = isStatusQueryText(text);
+  if (!isResultStatusQueryText) try {
     const bare = text.replace(/[\s!?.…ๆฯ]+/g, "");
     const isAck = /^(ครับ|คับ|ค่ะ|คะ|จ้า|จ๊ะ|โอเค|ok|okay|ได้|จ่าย|ปลดล็อก|ขอบคุณ|ขอบใจ|555|thank)/i.test(bare);
     const lastKey = `scan_v2:last_text:${userId}`;
@@ -4387,19 +4630,22 @@ async function handleTextMessage({ client, event, userId, session }) {
         return; // อาจารย์เงียบ — ท่าที่จริงที่สุดและประหยัดสุด
       }
       if (troll >= 3) {
-        const firstCut = await tryDedupeOnce(`scan_v2:troll_notice:${userId}`, 600);
-        if (firstCut) {
-          await sendNonScanReply({
-            client,
+        // โทนกบ (Codex รอบ 2): troll ยืนยันแล้ว = เงียบ + telemetry — ไม่ส่งบทเทศนา
+        console.log(JSON.stringify({ event: "TROLL_SOFT_CUT", userId, troll, silent: true }));
+        // แจ้งแอดมิน (กบ 18 ส.ค.): สัญญาณกวน — alert เท่านั้น ห้าม auto-ban
+        void (async () => {
+          const { sendCustomerAlert, redactForAlert, paidStatusForAlert } = await import(
+            "../services/monitor/customerAlerts.service.js"
+          );
+          const paidStatus = await paidStatusForAlert(userId);
+          const when = new Date(Date.now() + 7 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 16);
+          await sendCustomerAlert({
+            type: "troll_score",
             userId,
-            replyToken: event.replyToken,
-            replyType: "troll_soft_cut",
-            semanticKey: "troll_soft_cut",
-            text: "อาจารย์รับดูพลังพระ เครื่องราง หิน กำไล ไม่ได้รับคุยเล่นนะ\nมีเรื่องจริงเมื่อไหร่ค่อยว่ามา อาจารย์ขอเก็บสมาธิไว้ดูให้คนที่ตั้งใจ",
-            alternateTexts: ["พร้อมเรื่องพระจริง ๆ เมื่อไหร่ค่อยพิมพ์มานะ"],
+            dedupeSec: 6 * 3600,
+            telegramText: `[TROLL] ลูกค้าพิมพ์กวนต่อเนื่อง (score ${troll})\nเวลา: ${when} (ไทย)\nID: ${userId}\nสถานะ: ${paidStatus}\nข้อความล่าสุด: "${redactForAlert(text)}"\n\nแบนได้ด้วย: แบน ${userId}`,
           });
-        }
-        console.log(JSON.stringify({ event: "TROLL_SOFT_CUT", userId, troll }));
+        })().catch(() => {});
         return;
       }
     }
@@ -4414,14 +4660,10 @@ async function handleTextMessage({ client, event, userId, session }) {
   try {
     let menuBypass = false;
     try {
-      const { matchExactUtilityCommand } = await import(
-        "../services/utilityCommands/exactUtilityCommand.service.js"
+      const { shouldBypassInFlightGate } = await import(
+        "../services/lineWebhook/inFlightBypass.util.js"
       );
-      const { RESUME_COMMAND_RE } = await import(
-        "../services/welcome/registrationOnboarding.logic.js"
-      );
-      menuBypass =
-        Boolean(matchExactUtilityCommand(text)) || RESUME_COMMAND_RE.test(String(text).trim());
+      menuBypass = await shouldBypassInFlightGate(text);
     } catch { /* เช็คพลาด = พฤติกรรมเดิม */ }
     if (text && !menuBypass && (await isDedupeKeyActive(scanInFlightKeyForUser(userId)))) {
       const firstNotice = await tryDedupeOnce(
@@ -4697,6 +4939,25 @@ async function handleTextMessage({ client, event, userId, session }) {
     if (consumed) return;
   }
 
+  // 📖 info commands (Codex รอบ 4): "วิธีใช้/วิธีใช้งาน/สแกนพลังงาน" = AI=0 ทุก state
+  // (idle/pending_verify/paywall/awaiting_slip/waiting_birthdate/soft-verify) —
+  // router อยู่ก่อน semantic/orchestrator เสมอ exact match เท่านั้น
+  {
+    const infoCmd = await import("../services/lineWebhook/deterministicInfoCommand.util.js");
+    const infoKind = infoCmd.matchDeterministicInfoCommand(text);
+    if (infoKind) {
+      // ไม่แทรกราคา/ค่าครูในคำตอบ "วิธีใช้" — ลูกค้าไม่ได้ถามเรื่องเงิน (นโยบายกบ + Codex รอบ 5)
+      const done = await infoCmd.handleDeterministicInfoCommand({
+        kind: infoKind,
+        client,
+        userId,
+        replyToken: event.replyToken,
+        deps: { sendNonScanReply, getSavedBirthdate },
+      });
+      if (done) return;
+    }
+  }
+
   // ✏️ แก้ข้อมูลลงทะเบียนผ่านแชท (เปลี่ยนชื่อ/เบอร์/เพศ) — deterministic, มาก่อน AI
   // (วันเกิดมี flow เดิม birthdateChangeFlow อยู่แล้ว ไม่แตะ)
   // กบ 14 ก.ค.: สองจังหวะแบบคนคุยกัน — "เปลี่ยนเบอร์" → อาจารย์ถามกลับ → ลูกค้าตอบค่าใหม่
@@ -4880,7 +5141,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   }
 
   /** Phase-1 Gemini runs only after deterministic shortcuts / micro-intents above each insertion point. */
-  const invokePhase1GeminiOrchestrator = async () => {
+  const invokePhase1GeminiOrchestrator = async (invokeOpts = {}) => {
     const phase1GeminiKey = resolveGeminiPhase1StateKey({
       session,
       paymentState,
@@ -4905,6 +5166,9 @@ async function handleTextMessage({ client, event, userId, session }) {
       pendingPaymentStatus: pendingStatus || null,
       selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
       noProgressStreak: activeResolved.noProgressStreak ?? 0,
+      // P0-8 (Codex): direct-consult bypass เฉพาะ call site ที่เป็น free-form
+      // knowledge fallback จริง — exact/state handlers อื่นยังใช้ planner เดิม
+      allowIdleDirectConsult: invokeOpts.allowIdleDirectConsult === true,
       sendGatewayReply: async ({ replyType, semanticKey, text, alternateTexts, speakerRoleOverride }) => {
         return await sendNonScanReply({
           client,
@@ -7451,6 +7715,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
         // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
         if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
+        if (await maybeHandleRankingQueryGate({ client, userId, replyToken: event.replyToken, text })) return;
         if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
         if (text === "สแกนพลังงาน") {
           let savedBirthdate = null;
@@ -7470,7 +7735,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "",
             "ส่งรูปถัดไปมาได้เลยครับ",
           ].join("\n");
-          if ((await invokePhase1GeminiOrchestrator()).handled) return;
+          // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
           await sendNonScanReply({
             client,
             userId,
@@ -7497,7 +7762,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "",
             `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
           ].join("\n");
-          if ((await invokePhase1GeminiOrchestrator()).handled) return;
+          // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
           await sendNonScanReply({
             client,
             userId,
@@ -8228,6 +8493,9 @@ async function handleTextMessage({ client, event, userId, session }) {
       }
     }
   } catch { /* util พัง = ตอบตามปกติ */ }
+
+  // คำถามอันดับ/ชิ้นแรงสุดจากคนไม่มีประวัติจ่ายใน 3 วัน → ชี้ไปรายงาน (กบ 18 ส.ค.)
+  if (await maybeHandleRankingQueryGate({ client, userId, replyToken: event.replyToken, text })) return;
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;
     try {
@@ -8248,7 +8516,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "ส่งรูปถัดไปมาได้เลยครับ",
     ].join("\n");
 
-    if ((await invokePhase1GeminiOrchestrator()).handled) return;
+    // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
     await sendNonScanReply({
       client,
       userId,
@@ -8288,7 +8556,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "",
       `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
     ].join("\n");
-    if ((await invokePhase1GeminiOrchestrator()).handled) return;
+    // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
     await sendNonScanReply({
       client,
       userId,
@@ -8317,12 +8585,13 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
-  // True idle — generic fallback / recovery.
+  // True idle — generic fallback / recovery. (จุดเดียวที่เปิด idle consult bypass)
   await replyIdleTextNoDuplicate({
     client,
     replyToken: event.replyToken,
     userId,
     invokePhase1GeminiOrchestrator,
+    allowIdleDirectConsult: true,
   });
 }
 
@@ -8419,6 +8688,32 @@ async function handleEvent({ client, event }) {
   if (event.type !== "message") return;
   if (!event.replyToken) return;
 
+  // idempotency + AI-chain telemetry ครอบทั้ง dispatch (Codex P0-6/P0-7):
+  // AI ที่เกิดก่อน text-inner (เช่น branch พิเศษ) ก็ถูกนับ และทุก message type ถูกกันซ้ำ
+  const { claimInboundMessage } = await import("../services/lineWebhook/inboundClaim.util.js");
+  const claim = await claimInboundMessage(event?.message?.id);
+  if (!claim.proceed) {
+    console.log(JSON.stringify({ event: "INBOUND_DUPLICATE_MESSAGE_DROPPED", messageId: String(event?.message?.id || ""), reason: claim.reason }));
+    return;
+  }
+  const { runWithTurnContext, emitTurnAiChain } = await import("../core/telemetry/turnAiChain.js");
+  return runWithTurnContext(
+    { messageId: event?.message?.id ?? null, kind: String(event?.message?.type || "message") },
+    async () => {
+      let success = false;
+      try {
+        const out = await handleEventInner({ client, event });
+        success = true;
+        return out;
+      } finally {
+        await claim.release(success);
+        emitTurnAiChain();
+      }
+    },
+  );
+}
+
+async function handleEventInner({ client, event }) {
   const userId = event.source?.userId;
 
   if (!userId) {
@@ -8472,17 +8767,12 @@ async function handleEvent({ client, event }) {
     });
 
   if (globalStatus.isHardBlocked) {
-    console.warn("[ABUSE_GUARD_HARD_BLOCK]", {
+    // Codex P0-2 (นโยบายกบ: กวนมากแล้วเงียบ): confirmed hard-block = silent terminal
+    // — ไม่มี AI ไม่มี reply มีแค่ telemetry
+    console.warn("[ABUSE_GUARD_HARD_BLOCK_SILENT]", {
       userId,
       gate: "handleEvent",
       hardBlockReason: gateDiag.hardBlockReason,
-    });
-    if ((await eventPhase1Invoke()).handled) return;
-    await sendScanLockReply(client, {
-      userId,
-      replyToken: event.replyToken,
-      lockType: "hard",
-      semanticKey: "scan_locked_hard:handle_event",
     });
     return;
   }
@@ -8662,23 +8952,46 @@ export function lineWebhookRouter(lineConfig) {
 
   return async (req, res) => {
     try {
-      const events = Array.isArray(req.body.events) ? req.body.events : [];
-      const imageCountByUser = groupImageEventCountByUser(events);
+      const rawEvents = Array.isArray(req.body.events) ? req.body.events : [];
       const multiImageUsersReplied = new Set();
 
       console.log("========== LINE WEBHOOK ==========");
-      console.log("event count:", events.length);
-      console.log(
-        "[WEBHOOK] imageCountByUser:",
-        Object.fromEntries(imageCountByUser)
-      );
+      console.log("event count:", rawEvents.length);
 
       // ACK-FIRST: LINE expects a fast 200 — a slow response (image download can
       // take ~30s) makes LINE mark the delivery failed and the message is lost.
       // Respond now; all processing below continues detached. Reply tokens stay
       // valid (~1 min) regardless of when the 200 is sent.
       res.status(200).json({ ok: true });
-      console.log(JSON.stringify({ event: "WEBHOOK_ACK_FIRST_SENT", events: events.length }));
+      console.log(JSON.stringify({ event: "WEBHOOK_ACK_FIRST_SENT", events: rawEvents.length }));
+
+      // 🚫 pre-dispatch ban gate (กบ 18 ส.ค. + Codex): หลัง signature (middleware)
+      // ก่อนทุกอย่าง — welcome/loading/multi-image/ทุก event type · admin ยกเว้น ·
+      // unfollow ผ่านได้ (lifecycle ไม่มี outbound) · เช็คพลาด+ไม่มี positive cache
+      // = fail-open (จัดการใน repo)
+      const adminUidForBan = String(process.env.ADMIN_LINE_USER_ID || "").trim();
+      const bannedSet = new Set();
+      try {
+        const { isBanned } = await import("../services/ban/bannedUsers.repo.js");
+        const gateUids = [...new Set(
+          rawEvents.map((ev) => String(ev?.source?.userId || "").trim()).filter((u) => u && u !== adminUidForBan),
+        )];
+        const flags = await Promise.all(gateUids.map((u) => isBanned(u).catch(() => false)));
+        gateUids.forEach((u, i) => { if (flags[i]) bannedSet.add(u); });
+      } catch { /* gate พัง = fail-open */ }
+      const events = rawEvents.filter((ev) => {
+        const u = String(ev?.source?.userId || "").trim();
+        if (!bannedSet.has(u)) return true;
+        if (ev?.type === "unfollow") return true;
+        console.log(JSON.stringify({ event: "BANNED_EVENT_DROPPED", uidPrefix: u.slice(0, 8), evType: String(ev?.type || "") }));
+        return false;
+      });
+
+      const imageCountByUser = groupImageEventCountByUser(events);
+      console.log(
+        "[WEBHOOK] imageCountByUser:",
+        Object.fromEntries(imageCountByUser)
+      );
 
       // Show LINE's typing indicator "•••" right away for EVERY 1:1 message
       // (text, image, sticker) so the customer knows the bot is answering —

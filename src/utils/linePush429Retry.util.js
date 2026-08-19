@@ -67,6 +67,11 @@ export async function sendScanResultPushWith429Retry({
   flexMessage = null,
   text = "",
   logPrefix = "[SCAN_RESULT_LINE_PUSH]",
+  // Codex (ban-during-retry): hook เช็คสิทธิ์ก่อน "ทุก" transport attempt —
+  // jitter/backoff 5-10s เปิดหน้าต่างให้สถานะเปลี่ยนกลางคัน (เช่น โดนแบน)
+  // คืน { proceed:false, suppressedBanned:true } = หยุดทันที ไม่แตะ transport
+  beforeAttempt = null,
+  backoffsMs = null, // override สำหรับเทสต์ (default 5s/10s)
 }) {
   const uid = String(userId || "").trim();
   const safeText = String(text || "").slice(0, 4900);
@@ -96,7 +101,7 @@ export async function sendScanResultPushWith429Retry({
    * @param {"push_flex" | "push_text"} method
    */
   async function pushWithRetries(payload, method) {
-    const backoffs = [5000, 10000];
+    const backoffs = Array.isArray(backoffsMs) ? backoffsMs : [5000, 10000];
     /** @type {unknown} */
     let lastErr = null;
 
@@ -112,6 +117,31 @@ export async function sendScanResultPushWith429Retry({
     await sleep(jitterMs);
 
     for (let i = 0; i < 3; i += 1) {
+      if (beforeAttempt) {
+        try {
+          const gate = await beforeAttempt({ method, attempt: i + 1 });
+          if (gate && gate.proceed === false) {
+            console.log(
+              JSON.stringify({
+                event: `${logPrefix}_suppressed_before_attempt`,
+                attempt: i + 1,
+                method,
+                suppressedBanned: gate.suppressedBanned === true,
+                lineUserIdPrefix: uid.slice(0, 8),
+              }),
+            );
+            return {
+              sent: false,
+              method,
+              attempts: totalAttempts,
+              finalStatus: null,
+              finalMessage: "suppressed_before_attempt",
+              is429: false,
+              suppressedBanned: gate.suppressedBanned === true,
+            };
+          }
+        } catch { /* hook พัง = fail-open ส่งตามปกติ */ }
+      }
       totalAttempts += 1;
       try {
         console.log(
@@ -145,6 +175,17 @@ export async function sendScanResultPushWith429Retry({
           is429: false,
         };
       } catch (err) {
+        if (err?.suppressedBanned) {
+          return {
+            sent: false,
+            method,
+            attempts: totalAttempts,
+            finalStatus: null,
+            finalMessage: "suppressed_banned_transport",
+            is429: false,
+            suppressedBanned: true,
+          };
+        }
         lastErr = err;
         const is429 = isLine429Error(err);
         console.error(
@@ -193,6 +234,7 @@ export async function sendScanResultPushWith429Retry({
   if (hasFlex) {
     const flexRes = await pushWithRetries(flexMessage, "push_flex");
     if (flexRes.sent) return flexRes;
+    if (flexRes.suppressedBanned) return flexRes;
     if (!safeText) return flexRes;
     const textPayload = { type: "text", text: safeText };
     const textRes = await pushWithRetries(textPayload, "push_text");

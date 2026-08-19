@@ -42,6 +42,10 @@ function bucketHour() {
  */
 export async function getScanV2Redis() {
   if (!env.REDIS_URL) return null;
+  // URL ไม่ใช่ redis จริง (เช่น test-placeholder ใน test env) → no-op เหมือนไม่ตั้งค่า
+  // กัน ioredis DNS-retry ค้างเป็น open handle ทำ node --test แขวน (บทเรียนซ้ำหลายรอบ)
+  const redisUrlStr = String(env.REDIS_URL);
+  if (!redisUrlStr.startsWith("redis://") && !redisUrlStr.startsWith("rediss://")) return null;
   if (client) return client;
   try {
     const { default: IORedis } = await import("ioredis");
@@ -246,6 +250,170 @@ export async function isDedupeKeyActive(dedupeKey) {
  * delivered). Best-effort — TTL remains the safety net when redis is down.
  * @param {string} dedupeKey
  */
+/**
+ * strict primitives (Codex ban-cache round): งานที่ "ต้องรู้ผลจริง" เช่น ล้าง ban cache
+ * ห้ามใช้ตัวกลืน error ข้างบน — คืน {ok, reason} เสมอ ไม่ throw
+ * @returns {Promise<{ ok: boolean, reason?: string }>}
+ */
+export async function strictDeleteKey(key) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    await r.del(kDedupe(key));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
+/** @returns {Promise<{ ok: boolean, reason?: string }>} */
+export async function strictSetWithTtl(key, value, ttlSec) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const v = String(value).slice(0, 512 * 1024);
+    await r.set(kDedupe(key), v, "EX", Math.min(Math.max(Number(ttlSec) || 3600, 60), 45 * 86400));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
+/**
+ * atomic guarded SET (Codex ban-resurrection): เขียน key ได้เฉพาะเมื่อ guardKey
+ * ไม่มีอยู่ ณ เวลาที่เขียนจริง (Lua ก้อนเดียว) — ใช้กัน stale positive-ban write
+ * ฟื้น cache หลัง unban (re-read ก่อนเขียนไม่พอ เพราะ TOCTOU)
+ * @returns {Promise<{ ok: boolean, written?: boolean, reason?: string }>}
+ */
+export async function setKeyIfGuardAbsent(key, value, ttlSec, guardKey) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const ttl = Math.min(Math.max(Number(ttlSec) || 3600, 60), 45 * 86400);
+    const res = await r.eval(
+      "if redis.call('EXISTS',KEYS[2])==1 then return 0 end redis.call('SET',KEYS[1],ARGV[1],'EX',ARGV[2]) return 1",
+      2,
+      kDedupe(key),
+      kDedupe(guardKey),
+      String(value).slice(0, 4096),
+      String(ttl),
+    );
+    return { ok: true, written: Number(res) === 1 };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
+/**
+ * Generation counter + gen-guarded mutation (Codex รอบ 4 — linearizable ban cache):
+ * ทุก mutation รอบใหม่ bump gen ก่อน แล้วเขียน cache ผ่าน applyIfGenEquals —
+ * straggler ของ mutation เก่า (gen เก่า) เขียนไม่เข้า ไม่มีทางทับผลของรอบใหม่
+ */
+export async function bumpGeneration(genKey) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const gen = await r.incr(kDedupe(genKey));
+    await r.expire(kDedupe(genKey), 90 * 86400).catch(() => {});
+    return { ok: true, gen: String(gen) };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
+/**
+ * @param {string} genKey
+ * @param {string} expectedGen — ค่า gen ตอนเริ่ม mutation ("0" = ยังไม่เคยมี)
+ * @param {{ type: "set" | "del", key: string, value?: string, ttlSec?: number }} action
+ * @returns {Promise<{ ok: boolean, applied?: boolean, reason?: string }>}
+ */
+export async function applyIfGenEquals(genKey, expectedGen, action) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const ttl = Math.min(Math.max(Number(action.ttlSec) || 3600, 60), 45 * 86400);
+    const res = await r.eval(
+      "local g = redis.call('GET', KEYS[1]) or '0' " +
+        "if g ~= ARGV[1] then return 0 end " +
+        "if ARGV[2] == 'set' then redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[4]) " +
+        "else redis.call('DEL', KEYS[2]) end return 1",
+      2,
+      kDedupe(genKey),
+      kDedupe(action.key),
+      String(expectedGen),
+      action.type === "set" ? "set" : "del",
+      String(action.value ?? "1").slice(0, 4096),
+      String(ttl),
+    );
+    return { ok: true, applied: Number(res) === 1 };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
+/**
+ * atomic ban-state mutation (Codex รอบ 5): SET/DEL ทั้งชุดใน Lua ก้อนเดียว
+ * guarded ด้วย generation — ห้ามแตกเป็น 3 คำสั่งแยก (ช่องว่างระหว่างคำสั่ง =
+ * หน้าต่าง race) · sets: [{key, value, ttlSec}] · dels: [key]
+ * @returns {Promise<{ ok: boolean, applied?: boolean, reason?: string }>}
+ */
+export async function applyBanStateIfGen(genKey, expectedGen, { sets = [], dels = [] } = {}) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const keys = [kDedupe(genKey)];
+    const argv = [String(expectedGen), String(sets.length), String(dels.length)];
+    for (const it of sets) {
+      keys.push(kDedupe(it.key));
+      argv.push(String(it.value ?? "1").slice(0, 4096));
+      argv.push(String(Math.min(Math.max(Number(it.ttlSec) || 3600, 60), 45 * 86400)));
+    }
+    for (const k of dels) keys.push(kDedupe(k));
+    const script =
+      "local g = redis.call('GET', KEYS[1]) or '0' " +
+      "if g ~= ARGV[1] then return 0 end " +
+      "local nset = tonumber(ARGV[2]) local ndel = tonumber(ARGV[3]) " +
+      "for i = 1, nset do " +
+      "  redis.call('SET', KEYS[1 + i], ARGV[2 + i * 2], 'EX', ARGV[3 + i * 2]) " +
+      "end " +
+      "for j = 1, ndel do redis.call('DEL', KEYS[1 + nset + j]) end " +
+      "return 1";
+    const res = await r.eval(script, keys.length, ...keys, ...argv);
+    return { ok: true, applied: Number(res) === 1 };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
+/** เช็คว่า lock ยังเป็นของ token เรา (ใช้ก่อน mutation หลัง DB call ที่อาจลากยาว) */
+export async function checkShortLockHeld(resourceKey, token) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return true; // fail-open สอดคล้อง acquireShortLock ตอน redis หาย
+    return (await r.get(kLock(resourceKey))) === token;
+  } catch {
+    return false;
+  }
+}
+
+/** ต่ออายุ lock ถ้ายังถือ token อยู่ (compare-and-pexpire) */
+export async function renewShortLock(resourceKey, token, ttlMs) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return true;
+    const res = await r.eval(
+      "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('PEXPIRE',KEYS[1],ARGV[2]) end return 0",
+      1,
+      kLock(resourceKey),
+      token,
+      String(Math.min(Math.max(Number(ttlMs) || 5000, 1000), 600000)),
+    );
+    return Number(res) === 1;
+  } catch {
+    return false;
+  }
+}
+
 export async function clearDedupeKey(dedupeKey) {
   const r = await getScanV2Redis();
   if (!r) return;

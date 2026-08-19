@@ -38,6 +38,11 @@ export async function maybeIntroduceSynergy(lineUserId) {
     } catch {
       messages = [{ type: "text", text }];
     }
+    {
+      const { allowCustomerPush } = await import("../lineOutbound/customerPush.gateway.js");
+      const gate = await allowCustomerPush(uid, { source: "synergy_intro" });
+      if (!gate.allowed) return { sent: false, suppressedBanned: gate.suppressedBanned === true };
+    }
     await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` },

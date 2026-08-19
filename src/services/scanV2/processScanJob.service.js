@@ -153,6 +153,17 @@ export async function processScanJob(workerId, jobRow) {
   const jobId = jobRow.id;
   const lineUserId = jobRow.line_user_id;
   const appUserId = jobRow.app_user_id;
+
+  // 🚫 ban gate ฝั่ง scan worker (Codex): งานที่เข้าคิวก่อนโดนแบน ห้ามเริ่ม AI
+  // terminalize ด้วยเหตุผลเฉพาะ (ไม่มีข้อความถึงลูกค้า — suppressed_banned อยู่ใน
+  // owner map ฝั่ง notify แบบ intentionally-silent)
+  try {
+    const { isBanned } = await import("../ban/bannedUsers.repo.js");
+    if (await isBanned(lineUserId)) {
+      await terminalizeSuppressedBannedJob({ jobId, lineUserId, workerId });
+      return;
+    }
+  } catch { /* gate พัง = ทำงานตามปกติ (fail-open) */ }
   /** Async Scan V2 may default to summary handoff; see LINE_FINAL_DELIVERY_MODE_SCAN_V2. */
   const lineFinalMode =
     env.LINE_FINAL_DELIVERY_MODE_SCAN_V2 ?? env.LINE_FINAL_DELIVERY_MODE;
@@ -2370,7 +2381,28 @@ export async function processScanJob(workerId, jobRow) {
  * @param {string} code
  * @param {string} message
  */
-async function failJob(jobId, code, message, lineUserId, workerId) {
+/**
+ * Terminalize job ของลูกค้าที่โดนแบนก่อนเริ่ม AI (Codex scan-worker suppression):
+ * fail ด้วย suppressed_banned (notify ฝั่ง owner map เป็น intentionally-silent —
+ * ไม่มีข้อความถึงลูกค้า, quota ไม่ลดเพราะหักหลังส่งสำเร็จเท่านั้น) + ปล่อย scan gate
+ * เสมอ — เคส pre-scan ack ส่งไปแล้วไม่มี outbound ใหม่มาช่วยปล่อย gate หลังปลดแบน
+ */
+export async function terminalizeSuppressedBannedJob({ jobId, lineUserId, workerId }, deps = {}) {
+  const doFailJob = deps.failJob || failJob;
+  try {
+    await doFailJob(jobId, "suppressed_banned", "user banned - job terminalized", lineUserId, workerId);
+  } catch (e) {
+    console.error(JSON.stringify({ event: "SCAN_JOB_SUPPRESS_FAILJOB_ERROR", jobIdPrefix: String(jobId).slice(0, 8), message: String(e?.message || e).slice(0, 100) }));
+  }
+  try {
+    const clear = deps.clearDedupeKey || (await import("../../redis/scanV2Redis.js")).clearDedupeKey;
+    const keyFn = deps.scanInFlightKeyForUser || (await import("./webhookImageIngestion.service.js")).scanInFlightKeyForUser;
+    await clear(keyFn(lineUserId));
+  } catch { /* TTL เป็น safety net */ }
+  console.log(JSON.stringify({ event: "SCAN_JOB_SUPPRESSED_BANNED", jobIdPrefix: String(jobId).slice(0, 8) }));
+}
+
+export async function failJob(jobId, code, message, lineUserId, workerId) {
   await updateScanJob(jobId, {
     status: "failed",
     error_code: code,

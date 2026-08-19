@@ -126,7 +126,11 @@ export async function handlePrecheckAfterReport({ client, lineUserId, payload })
         },
       },
     };
-    await client.pushMessage(lineUserId, flex);
+    {
+      const { pushToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+      const pushed = await pushToCustomer(client, lineUserId, flex, { source: "precheck_delayed" });
+      if (pushed.suppressedBanned) return { sent: false, suppressedBanned: true };
+    }
     try {
       const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");
       void insertLineConversationMessage(

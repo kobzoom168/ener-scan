@@ -32,13 +32,27 @@ const prefixModel = (m) =>
 
 /** LLM_USAGE wrapper กลาง (Codex 13 ส.ค.: usage ต้องครบทุก call ใหญ่ ไม่ใช่แค่บิล CSV)
  *  — callSite อ่านจาก field user ที่ call site ติดมา · log แม้ error (settled telemetry) */
-function withUsageTracking(api, createFn) {
+export function withUsageTracking(api, createFn) {
   return async (p) => {
     const started = Date.now();
     const callSite = String(p?.user || "untagged");
     const model = String(p?.model || "");
+    // CHAT_TURN_AI_CHAIN (Codex P0-6): เส้น OpenAI (conversationSurface ฯลฯ) ต้องถูกนับ
+    // ด้วย — attempted นับตั้งแต่ก่อนยิง (error/timeout ก็นับ) · นอก turn context = no-op
+    let aiCallHandle = null;
+    try {
+      const { recordTurnAiCall } = await import("../core/telemetry/turnAiChain.js");
+      aiCallHandle = recordTurnAiCall(`openai.${api}:${callSite}`);
+    } catch { /* telemetry ห้ามขวาง */ }
+    const recordLatency = async () => {
+      try {
+        const { recordTurnAiLatency } = await import("../core/telemetry/turnAiChain.js");
+        recordTurnAiLatency(Date.now() - started, aiCallHandle);
+      } catch { /* ignore */ }
+    };
     try {
       const res = await createFn(p);
+      await recordLatency();
       try {
         const u = res?.usage || {};
         console.log(
@@ -59,6 +73,7 @@ function withUsageTracking(api, createFn) {
       } catch { /* telemetry ห้ามขวาง */ }
       return res;
     } catch (e) {
+      await recordLatency();
       console.log(
         JSON.stringify({
           event: "LLM_USAGE",
@@ -82,8 +97,10 @@ export const openai = {
     ),
   },
   embeddings: {
-    // embeddings ถูกมาก ($0.00001 ระดับ) — ไม่ log กัน noise
-    create: (p) => rawClient.embeddings.create({ ...p, model: prefixModel(p?.model) }),
+    // เข้า wrapper เหมือนกัน (Codex รอบ 3: AI chain ต้องครบทุกเส้น) — ถูกแต่ก็คือ call
+    create: withUsageTracking("embeddings", (p) =>
+      rawClient.embeddings.create({ ...p, model: prefixModel(p?.model) }),
+    ),
   },
   chat: {
     completions: {

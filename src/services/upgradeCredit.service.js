@@ -199,6 +199,11 @@ export async function maybeOfferSpendUpgrade(lineUserId) {
       "สนใจแตะปุ่มด้านล่างได้เลย หรือจะไว้ก่อนก็ได้ครับ",
     ].join("\n");
 
+    {
+      const { allowCustomerPush } = await import("./lineOutbound/customerPush.gateway.js");
+      const gate = await allowCustomerPush(uid, { source: "upgrade_offer" });
+      if (!gate.allowed) return { skipped: gate.suppressedBanned ? "suppressed_banned" : "no_uid" };
+    }
     const res = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

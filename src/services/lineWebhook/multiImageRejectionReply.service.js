@@ -95,7 +95,9 @@ export async function sendMultiImageRejectionViaGateway({
       if (rt) {
         await client.replyMessage(rt, audio);
       } else {
-        await client.pushMessage(uid, audio);
+        const { pushToCustomer } = await import("./../lineOutbound/customerPush.gateway.js");
+        const pushed = await pushToCustomer(client, uid, audio, { source: "multi_image_voice" });
+        if (pushed.suppressedBanned) return { sent: false, suppressed: true, suppressedBanned: true };
       }
       console.log(
         JSON.stringify({

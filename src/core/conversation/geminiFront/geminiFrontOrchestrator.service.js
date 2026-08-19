@@ -104,6 +104,23 @@ export async function runGeminiFrontOrchestrator(ctx) {
     return { handled: false, mode: "shadow", reason: "shadow_webhook" };
   }
 
+  // P0 idle bypass (Codex 18 ส.ค. — telemetry 15-17 ส.ค.: planner 36 / consult 36
+  // จับคู่ทุกเทิร์น +~750ms): idle/scan_ready_idle อนุญาตแค่ noop_phrase_only กับ
+  // consult_amulet และทั้งคู่จบที่ tryConsultReply — เข้า consult ตรง guard/context เดิม
+  // ทุกชั้น · consult ไม่ได้ = handled:false ให้ deterministic idle fallback (0 AI เพิ่ม)
+  if ((phase1 === "idle" || phase1 === "scan_ready_idle") && ctx.allowIdleDirectConsult === true) {
+    const consultOutcome = await tryConsultReply("consult_idle_direct");
+    if (consultOutcome === "sent") {
+      logGeminiOrchestrator({ mode: "active", handled: true, via: "idle_bypass" });
+      return { handled: true, mode: "active" };
+    }
+    if (consultOutcome === "defer_payment") {
+      return { handled: false, mode: "active", deferTo: "deterministic_payment" };
+    }
+    logGeminiOrchestrator({ mode: "active", handled: false, reason: "idle_bypass_consult_null" });
+    return { handled: false, reason: "idle_bypass_consult_null", mode: "active" };
+  }
+
   const plan = await runGeminiPlanner(plannerJson);
   if (!plan) {
     logGeminiOrchestrator({ mode: "active", reason: "planner_null" });

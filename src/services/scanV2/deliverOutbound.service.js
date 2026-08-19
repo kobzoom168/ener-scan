@@ -101,6 +101,64 @@ function outboundDeliveryBase(msg, traceCtx = {}) {
 }
 
 /**
+ * Suppress outbound ของลูกค้าที่โดนแบน — typed terminal ชุดเดียวใช้ทุก stage
+ * (top gate / nested object-info hold / ban-during-retry): mark suppressed_banned
+ * (no retry), terminalize job ที่เกี่ยว, ปล่อย scan gate — transport ต้องเป็น 0 แล้ว
+ * ณ จุดที่เรียก
+ */
+/**
+ * Customer transport boundary (Codex รอบ 4): เช็คแบนก่อน "ทุก" pushMessage จริง —
+ * ครอบทุก kind (payment_qr image→text, quota notice, pre-scan ack, reminder,
+ * generic, fallback) รวมหลัง rate-hint sleep / retry / follow-up โดยไม่ต้องไล่แก้
+ * ทีละ branch · แบน = throw error ติดธง suppressedBanned ให้ catch ชั้นนอก
+ * terminalize เป็น typed terminal (fail-open เมื่อเช็คพัง)
+ */
+export function wrapClientWithBanGuard(client, lineUserId, gateDeps = {}) {
+  return new Proxy(client, {
+    get(target, prop) {
+      if (prop === "pushMessage") {
+        return async (to, msgs) => {
+          let banned = false;
+          try {
+            const check =
+              gateDeps.isBanned || (await import("../ban/bannedUsers.repo.js")).isBanned;
+            banned = await check(lineUserId);
+          } catch { banned = false; }
+          if (banned) {
+            const e = new Error("user banned - transport blocked");
+            e.suppressedBanned = true;
+            throw e;
+          }
+          return target.pushMessage(to, msgs);
+        };
+      }
+      const v = target[prop];
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  });
+}
+
+async function suppressOutboundBanned({ id, lineUserId, relatedJobId, gateDeps, baseFn, stage, message }) {
+  const updateOutbound = gateDeps.updateOutboundMessage || updateOutboundMessage;
+  await updateOutbound(id, {
+    status: "suppressed_banned",
+    last_error_code: "suppressed_banned",
+    last_error_message: message || "user banned - outbound suppressed",
+    next_retry_at: null,
+  }).catch(() => {});
+  try { (gateDeps.releaseScanGate || releaseScanGate)(lineUserId); } catch { /* ignore */ }
+  if (relatedJobId) {
+    try {
+      const doFailJob =
+        gateDeps.failJob || (await import("./processScanJob.service.js")).failJob;
+      await doFailJob(relatedJobId, "suppressed_banned", message || "outbound suppressed for banned user", lineUserId, "delivery-gate");
+    } catch { /* job อาจ terminal แล้ว */ }
+  }
+  console.log(JSON.stringify({ event: "OUTBOUND_SUPPRESSED_BANNED", stage, ...baseFn() }));
+  return { sent: false, suppressedBanned: true, errorCode: "suppressed_banned" };
+}
+
+/**
  * @param {*} client LINE SDK client
  * @param {object} msg outbound_messages row
  * @param {{ workerId?: string, attempt?: number }} [traceCtx]
@@ -115,6 +173,23 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       ? msg.payload_json
       : {};
   const base = () => outboundDeliveryBase(msg, traceCtx);
+
+  // 🚫 ban gate ฝั่ง delivery (Codex P0-1): typed terminal — ห้าม retry/overwrite/
+  // fallback push · terminalize job ที่เกี่ยว + ปล่อย scan gate · quota ไม่ลด
+  // (quota หักหลังส่งสำเร็จเท่านั้น — เส้นนี้ไม่มีการส่ง)
+  try {
+    const gateDeps = traceCtx.banGateDeps || {};
+    const checkBanned =
+      gateDeps.isBanned || (await import("../ban/bannedUsers.repo.js")).isBanned;
+    if (await checkBanned(lineUserId)) {
+      return await suppressOutboundBanned({
+        id, lineUserId, relatedJobId: msg.related_job_id, gateDeps, baseFn: base, stage: "pre_send",
+      });
+    }
+  } catch { /* gate พัง = ส่งตามปกติ (fail-open) */ }
+
+  // จากจุดนี้ทุก push ผ่าน boundary — แบนกลางทาง (รวมหลัง sleep ยาว) = โดนบล็อกทันที
+  client = wrapClientWithBanGuard(client, lineUserId, traceCtx.banGateDeps || {});
 
   await sleepIfRateHint(sleep, lineUserId);
 
@@ -247,12 +322,23 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       // เกตเก็บข้อมูลชิ้น (กบ 7 ส.ค.): ชิ้นใหม่ยังไม่มีข้อมูลเจ้าของ → ส่งคำถามแทน พักรายงานไว้
       // ตอบแล้วค่อย re-enqueue กลับมาคิวนี้ (ตอนนั้นเกตจะปล่อยผ่านเพราะมีข้อมูลแล้ว)
       if (!precheckActive) try {
-        const { maybeHoldReportForObjectInfo } = await import(
-          "../objectInfoGate/objectInfoGate.service.js"
-        );
-        if (await maybeHoldReportForObjectInfo({ client, lineUserId, payload })) {
-          await markSent(id);
-          releaseScanGate(lineUserId);
+        const holdFn =
+          traceCtx.objectInfoHold ||
+          (await import("../objectInfoGate/objectInfoGate.service.js")).maybeHoldReportForObjectInfo;
+        const hold = await holdFn({ client, lineUserId, payload });
+        // typed outcome (Codex nested-ban race): object เดิม ๆ ห้ามตีความเป็น "ส่งแล้ว"
+        const holdOutcome = hold && typeof hold === "object" ? hold.outcome : hold === true ? "held" : "not_held";
+        if (holdOutcome === "suppressed_banned") {
+          // ลูกค้าโดนแบนระหว่าง push การ์ดถามข้อมูล — suppress เต็มชุดเหมือน gate บนสุด
+          return await suppressOutboundBanned({
+            id, lineUserId, relatedJobId: msg.related_job_id,
+            gateDeps: traceCtx.banGateDeps || {}, baseFn: base, stage: "object_info_hold",
+            message: "user banned during object-info hold - outbound suppressed",
+          });
+        }
+        if (holdOutcome === "held") {
+          await ((traceCtx.banGateDeps || {}).markSent || markSent)(id);
+          ((traceCtx.banGateDeps || {}).releaseScanGate || releaseScanGate)(lineUserId);
           console.log(JSON.stringify({ event: "OUTBOUND_HELD_FOR_OBJECT_INFO", ...base() }));
           return { sent: true };
         }
@@ -327,15 +413,27 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           ? [...baseMessages, audioMessage]
           : [{ type: "text", text: text.slice(0, 4900) }, audioMessage]
         : chatCardMessages || flex;
+      // Codex (ban-during-retry): jitter/backoff เปิดหน้าต่างหลายวินาที —
+      // เช็คแบนซ้ำก่อนทุก transport attempt ผ่าน hook
+      const banRecheckBeforeAttempt = async () => {
+        try {
+          const check =
+            (traceCtx.banGateDeps || {}).isBanned ||
+            (await import("../ban/bannedUsers.repo.js")).isBanned;
+          if (await check(lineUserId)) return { proceed: false, suppressedBanned: true };
+        } catch { /* fail-open */ }
+        return { proceed: true };
+      };
       let delivery = await sendScanResultPushWith429Retry({
         client,
         userId: lineUserId,
         flexMessage: primaryMessage,
         text,
         logPrefix: "[SCAN_V2_DELIVERY]",
+        beforeAttempt: banRecheckBeforeAttempt,
       });
       // เสียงห้ามทำให้ report ล่ม: push พร้อมเสียงไม่ผ่าน (ไม่ใช่ 429) → ส่งซ้ำแบบไม่มีเสียง
-      if (!delivery.sent && !delivery.is429 && audioMessage) {
+      if (!delivery.sent && !delivery.is429 && !delivery.suppressedBanned && audioMessage) {
         console.warn(
           JSON.stringify({
             event: "SCAN_VOICE_ATTACH_RETRY_WITHOUT_AUDIO",
@@ -349,6 +447,16 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           flexMessage: flex,
           text,
           logPrefix: "[SCAN_V2_DELIVERY_NO_VOICE]",
+          beforeAttempt: banRecheckBeforeAttempt,
+        });
+      }
+
+      if (delivery.suppressedBanned) {
+        // โดนแบนกลาง retry window — terminalize เหมือน gate อื่น (transport หลังแบน = 0)
+        return await suppressOutboundBanned({
+          id, lineUserId, relatedJobId: msg.related_job_id,
+          gateDeps: traceCtx.banGateDeps || {}, baseFn: base, stage: "during_retry",
+          message: "user banned during delivery retry - outbound suppressed",
         });
       }
 
@@ -626,6 +734,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         );
         return { sent: true };
       } catch (err) {
+        if (err?.suppressedBanned) throw err; // ให้ catch ชั้นนอก terminalize
         if (isLine429Error(err)) {
           console.warn(
             JSON.stringify({
@@ -660,6 +769,14 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
 
     return { sent: false, errorCode: "unknown_kind", errorMessage: String(kind) };
   } catch (err) {
+    if (err?.suppressedBanned) {
+      // โดนแบนระหว่างส่ง (boundary บล็อก) — terminalize เหมือน gate อื่น
+      return await suppressOutboundBanned({
+        id, lineUserId, relatedJobId: msg.related_job_id,
+        gateDeps: traceCtx.banGateDeps || {}, baseFn: base, stage: "transport_boundary",
+        message: "user banned mid-delivery - transport blocked",
+      });
+    }
     const is429 = isLine429Error(err);
     if (is429) {
       console.warn(
@@ -993,6 +1110,14 @@ async function handleScanResultTerminalFailure(msg, client) {
   if (msg.kind !== "scan_result") return;
   releaseScanGate(msg.line_user_id);
   if (!client) return;
+  // terminal fallback ก็คือ customer transport — เช็คแบน ณ ส่งจริง (Codex รอบ 4)
+  try {
+    const { isBanned } = await import("../ban/bannedUsers.repo.js");
+    if (await isBanned(msg.line_user_id)) {
+      console.log(JSON.stringify({ event: "TERMINAL_FAILURE_FALLBACK_SUPPRESSED_BANNED", uidPrefix: String(msg.line_user_id).slice(0, 8) }));
+      return;
+    }
+  } catch { /* fail-open */ }
   try {
     await pushText(client, msg.line_user_id, REPORT_LOST_RESEND_TEXT);
     console.log(

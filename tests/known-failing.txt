@@ -1,20 +1,20 @@
-# known-fail baseline (12 ส.ค. 2026) — เทสต์ที่พังค้างก่อนยุคนี้ ต้องใช้ redis/DB จริง หรือ copy เก่าค้าง
-# กติกา: เกณฑ์ release = ไม่มีชื่อ fail ใหม่นอกลิสต์นี้ (ห้ามเทียบจำนวนรวม) · แก้เขียวแล้วลบชื่อออก
-adminResetScanAbuseState clears scan spam, lock windows, image windows; keeps payment scores
-adminResetScanAbuseState clears hard block when only scan score crossed threshold
-adminResetScanAbuseState clears scan temp lock (user can pass scan abuse gate again)
-quota-only path (no store call): scan abuse state unchanged — documented baseline
-after combined scan-abuse reset, handleEvent gate is open (no hard block, no scan lock)
-adminResetScanAbuseState returns new scan and lock snapshot fields
-buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contract
-renderCrystalBraceletReportV2Html: includes owner profile + disclaimer
-SSOT: summary 66 vs internal ownerFit.score 63 — HTML + Flex + owner profile
-deriveShowcaseCardData: ชื่อ = ส่วนหลัง · + แกนครบ 6 + สกิลท็อป 2 เรียงถูก
-buildDeterministicFreeQuotaExhaustedPaywallText: short natural copy + offer numbers
-allowedActions + shadow: idle and scan_ready_idle are phrase-only noop
-pre-push (2): code_bank + no db variant id → skips stored even if headlineShort exists; uses db_resolver when DB has rows
-resolveLineSummaryWording: crystal + protection code_bank diagnostics still gets db_resolver (not bank tone)
-buildPaymentQrIntroText: prepends curated line; facts block preserved
-free quota paywall: facts lines still include exact price/count/hours
-buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / spiritual / null)
-paywall deterministic copy refresh stays short and human
+# known-fail baseline (12 ส.ค. 2026 · migrate เป็น file::leaf 19 ส.ค.) — เทสต์ที่พังค้างก่อนยุคนี้
+# กติกา: เกณฑ์ release = ไม่มี fail ใหม่นอกลิสต์นี้ (ห้ามเทียบจำนวนรวม) · แก้เขียวแล้วลบออก
+# รูปแบบ: <test file>::<leaf test name> — leaf ชื่อเดียวกันคนละไฟล์ถือเป็นคนละตัว
+tests/adminFreeResetAbuse.test.js::adminResetScanAbuseState clears hard block when only scan score crossed threshold
+tests/adminFreeResetAbuse.test.js::adminResetScanAbuseState clears scan spam, lock windows, image windows; keeps payment scores
+tests/adminFreeResetAbuse.test.js::adminResetScanAbuseState clears scan temp lock (user can pass scan abuse gate again)
+tests/adminFreeResetAbuse.test.js::adminResetScanAbuseState returns new scan and lock snapshot fields
+tests/adminFreeResetAbuse.test.js::after combined scan-abuse reset, handleEvent gate is open (no hard block, no scan lock)
+tests/adminFreeResetAbuse.test.js::quota-only path (no store call): scan abuse state unchanged — documented baseline
+tests/crystalBracelet/crystalBraceletPayload.build.test.js::SSOT: summary 66 vs internal ownerFit.score 63 — HTML + Flex + owner profile
+tests/crystalBracelet/crystalBraceletPayload.build.test.js::buildCrystalBraceletV1Slice: shape + deterministic_v1 + flexSurface contract
+tests/crystalBracelet/crystalBraceletPayload.build.test.js::renderCrystalBraceletReportV2Html: includes owner profile + disclaimer
+tests/fbShowcase.test.js::deriveShowcaseCardData: ชื่อ = ส่วนหลัง · + แกนครบ 6 + สกิลท็อป 2 เรียงถูก
+tests/freeQuotaPaywall.test.js::buildDeterministicFreeQuotaExhaustedPaywallText: short natural copy + offer numbers
+tests/lineSummaryWording.util.test.js::pre-push (2): code_bank + no db variant id → skips stored even if headlineShort exists; uses db_resolver when DB has rows
+tests/lineSummaryWording.util.test.js::resolveLineSummaryWording: crystal + protection code_bank diagnostics still gets db_resolver (not bank tone)
+tests/paymentWordingPools.integration.test.js::buildPaymentQrIntroText: prepends curated line; facts block preserved
+tests/paymentWordingPools.integration.test.js::free quota paywall: facts lines still include exact price/count/hours
+tests/reportWording.derive.test.js::buildReportPayloadFromScan: crystalMode + parsed.crystal_mode (general / spiritual / null)
+tests/stateSafeClarifier.integration.test.js::paywall deterministic copy refresh stays short and human

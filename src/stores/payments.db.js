@@ -17,7 +17,8 @@ const AWAITING_PAYMENT_TTL_MS = 24 * 60 * 60 * 1000;
 /**
  * Manual flow only: open checkout / slip verification.
  */
-const ACTIVE_PAYMENT_STATUSES = ["awaiting_payment", "pending_verify"];
+/** SSOT ของ "ยังมีเรื่องจ่ายเงินค้างอยู่" — ห้ามเขียนลิสต์นี้ซ้ำที่อื่น (Codex รอบ 6) */
+export const ACTIVE_PAYMENT_STATUSES = ["awaiting_payment", "pending_verify"];
 
 function getNowIso() {
   return new Date().toISOString();
@@ -376,6 +377,47 @@ export async function createPaymentPending({
  * Latest row for slip flow only: awaiting_payment (need slip) or pending_verify (re-upload slip).
  * Never matches paid | rejected | expired (those must not capture scan images as slips).
  */
+/**
+ * มีรายการจ่ายเงินค้างอยู่ไหม (สำหรับตัดสิน routing — ห้าม fail-open)
+ * pending_verify = active เสมอ (ไม่ auto-expire) · awaiting_payment = active ภายใน TTL 24 ชม.
+ * @param {string} lineUserId
+ * @param {{ dbClient?: any, awaitingTtlMs?: number }} [opts]
+ * @returns {Promise<{ ok: boolean, active: boolean, status?: string|null }>} ok=false = อ่านไม่ได้ (caller ต้อง fail-closed)
+ */
+export async function hasActivePaymentForLineUserId(lineUserId, opts = {}) {
+  const lu = String(lineUserId || "").trim();
+  if (!lu) return { ok: true, active: false };
+  const client = opts.dbClient || supabase;
+  // อายุต่างกันตามสถานะ (Codex รอบ 7): awaiting_payment หมดอายุ 24 ชม. ·
+  // pending_verify (ส่งสลิปแล้ว รอแอดมินตรวจ) ไม่ auto-expire — กรองด้วย gte
+  // ก้อนเดียวทั้งสองสถานะทำให้สลิปเก่ากว่า 24 ชม. หลุดไปเลนสถานะสแกน
+  const awaitingTtlMs = Number(opts.awaitingTtlMs) > 0 ? Number(opts.awaitingTtlMs) : AWAITING_PAYMENT_TTL_MS;
+  try {
+    const { data: pv, error: pvErr } = await client
+      .from("payments")
+      .select("id,status")
+      .eq("line_user_id", lu)
+      .eq("status", "pending_verify")
+      .limit(1)
+      .maybeSingle();
+    if (pvErr) return { ok: false, active: false };
+    if (pv) return { ok: true, active: true, status: "pending_verify" };
+
+    const { data: aw, error: awErr } = await client
+      .from("payments")
+      .select("id,status")
+      .eq("line_user_id", lu)
+      .eq("status", "awaiting_payment")
+      .gte("created_at", new Date(Date.now() - awaitingTtlMs).toISOString())
+      .limit(1)
+      .maybeSingle();
+    if (awErr) return { ok: false, active: false };
+    return { ok: true, active: Boolean(aw), status: aw ? "awaiting_payment" : null };
+  } catch {
+    return { ok: false, active: false };
+  }
+}
+
 export async function getLatestAwaitingPaymentForLineUserId(lineUserId) {
   const lu = String(lineUserId || "").trim();
   console.log("[PAYMENTS_DB] getLatestAwaitingPaymentForLineUserId:start", {

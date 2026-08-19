@@ -11,6 +11,7 @@
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "../../config/env.js";
+import { recordTurnAiCall, recordTurnAiLatency } from "../../core/telemetry/turnAiChain.js";
 
 let _googleClient = null;
 
@@ -75,6 +76,8 @@ function buildCompatModel(provider, opts = {}) {
   const maxTokens = Math.max(64, Number(opts.maxTokens) || 1024);
   return {
     async generateContent(userPrompt) {
+      const aiCallHandle = recordTurnAiCall(opts.callSite || "front_untagged");
+      const aiStarted = Date.now();
       const messages = [];
       if (systemInstruction) {
         // Prompt caching (กบ 16 ก.ค. — ค่าแชท consult แพง): system prompt อาจารย์ ~14k chars
@@ -149,6 +152,7 @@ function buildCompatModel(provider, opts = {}) {
         return { response: { text: () => String(text || "") } };
       } finally {
         clearTimeout(timer);
+        recordTurnAiLatency(Date.now() - aiStarted, aiCallHandle);
       }
     },
   };
@@ -185,11 +189,23 @@ export function getGeminiFlashModel(opts = {}) {
       ? { responseMimeType: "application/json" }
       : {}),
   };
-  return client.getGenerativeModel({
+  const googleModel = client.getGenerativeModel({
     model: modelId,
     systemInstruction: opts.systemInstruction,
     generationConfig,
   });
+  // telemetry ครอบ Google direct ด้วย (Codex P0-6: เดิมนับเฉพาะ compat)
+  return {
+    async generateContent(userPrompt) {
+      const aiCallHandle = recordTurnAiCall(opts.callSite || "front_untagged");
+      const aiStarted = Date.now();
+      try {
+        return await googleModel.generateContent(userPrompt);
+      } finally {
+        recordTurnAiLatency(Date.now() - aiStarted, aiCallHandle);
+      }
+    },
+  };
 }
 
 /** @returns {boolean} */
