@@ -304,6 +304,53 @@ export async function setKeyIfGuardAbsent(key, value, ttlSec, guardKey) {
   }
 }
 
+/**
+ * Generation counter + gen-guarded mutation (Codex รอบ 4 — linearizable ban cache):
+ * ทุก mutation รอบใหม่ bump gen ก่อน แล้วเขียน cache ผ่าน applyIfGenEquals —
+ * straggler ของ mutation เก่า (gen เก่า) เขียนไม่เข้า ไม่มีทางทับผลของรอบใหม่
+ */
+export async function bumpGeneration(genKey) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const gen = await r.incr(kDedupe(genKey));
+    await r.expire(kDedupe(genKey), 90 * 86400).catch(() => {});
+    return { ok: true, gen: String(gen) };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
+/**
+ * @param {string} genKey
+ * @param {string} expectedGen — ค่า gen ตอนเริ่ม mutation ("0" = ยังไม่เคยมี)
+ * @param {{ type: "set" | "del", key: string, value?: string, ttlSec?: number }} action
+ * @returns {Promise<{ ok: boolean, applied?: boolean, reason?: string }>}
+ */
+export async function applyIfGenEquals(genKey, expectedGen, action) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const ttl = Math.min(Math.max(Number(action.ttlSec) || 3600, 60), 45 * 86400);
+    const res = await r.eval(
+      "local g = redis.call('GET', KEYS[1]) or '0' " +
+        "if g ~= ARGV[1] then return 0 end " +
+        "if ARGV[2] == 'set' then redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[4]) " +
+        "else redis.call('DEL', KEYS[2]) end return 1",
+      2,
+      kDedupe(genKey),
+      kDedupe(action.key),
+      String(expectedGen),
+      action.type === "set" ? "set" : "del",
+      String(action.value ?? "1").slice(0, 4096),
+      String(ttl),
+    );
+    return { ok: true, applied: Number(res) === 1 };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
 export async function clearDedupeKey(dedupeKey) {
   const r = await getScanV2Redis();
   if (!r) return;

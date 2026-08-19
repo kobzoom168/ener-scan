@@ -23,23 +23,33 @@ export async function runWithTurnContext(meta, fn) {
   return als.run(store, fn);
 }
 
-/** เรียกจาก LLM client ทุกครั้งที่ "พยายาม" ยิง (error/timeout ก็นับ) — นอก context = no-op */
+/**
+ * เรียกจาก LLM client ทุกครั้งที่ "พยายาม" ยิง (error/timeout ก็นับ) — นอก context = no-op
+ * คืน handle สำหรับจับคู่ตอน settle (Codex รอบ 4 P1: FIFO รายงานผิดเมื่อ call
+ * หลังเสร็จก่อน call แรก) — caller ส่ง handle กลับมาที่ recordTurnAiLatency
+ * @returns {{ id: number } | null}
+ */
 export function recordTurnAiCall(callSite) {
   const s = als.getStore();
-  if (!s) return;
+  if (!s) return null;
   s.callSites.push(String(callSite || "untagged"));
-  // pending accounting (Codex รอบ 3): call ที่ยังไม่ settle ตอน emit ต้องไม่หาย
-  // จาก latency — เก็บเวลาเริ่มไว้คำนวณ elapsed ของตัวค้าง
-  (s.pendingStarts ||= []).push(Date.now());
+  const call = { id: (s.calls || []).length, startedAt: Date.now(), settled: false };
+  (s.calls ||= []).push(call);
+  return { id: call.id };
 }
 
-/** เวลา AI ที่ settle แล้วสะสม (request จบจริง — สำเร็จหรือ error ก็ตาม) */
-export function recordTurnAiLatency(ms) {
+/** settle call ตาม handle (fallback: ตัวค้างที่เก่าสุด เมื่อ caller เก่าไม่ส่ง handle) */
+export function recordTurnAiLatency(ms, handle = null) {
   const s = als.getStore();
   if (!s) return;
   s.aiMs = (s.aiMs || 0) + Math.max(0, Number(ms) || 0);
   s.settledCount = (s.settledCount || 0) + 1;
-  if (Array.isArray(s.pendingStarts) && s.pendingStarts.length) s.pendingStarts.shift();
+  const calls = Array.isArray(s.calls) ? s.calls : [];
+  const target =
+    handle && Number.isInteger(handle.id) && calls[handle.id] && !calls[handle.id].settled
+      ? calls[handle.id]
+      : calls.find((c) => !c.settled);
+  if (target) target.settled = true;
 }
 
 /** เติมข้อมูล state/route ระหว่างทาง (เช่น phase1 ที่รู้ทีหลัง) */
@@ -65,10 +75,10 @@ export function emitTurnAiChain() {
       settledAiCallCount: s.settledCount || 0,
       settledAiLatencyMs: Math.round(s.aiMs || 0),
       pendingAiCount: Math.max(0, s.callSites.length - (s.settledCount || 0)),
-      pendingElapsedMs:
-        Array.isArray(s.pendingStarts) && s.pendingStarts.length
-          ? Date.now() - s.pendingStarts[0]
-          : 0,
+      pendingElapsedMs: (() => {
+        const open = (Array.isArray(s.calls) ? s.calls : []).filter((c) => !c.settled);
+        return open.length ? Date.now() - Math.min(...open.map((c) => c.startedAt)) : 0;
+      })(),
       turnLatencyMs: Date.now() - s.startedAt,
     }),
   );

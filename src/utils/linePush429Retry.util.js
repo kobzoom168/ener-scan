@@ -175,6 +175,17 @@ export async function sendScanResultPushWith429Retry({
           is429: false,
         };
       } catch (err) {
+        if (err?.suppressedBanned) {
+          return {
+            sent: false,
+            method,
+            attempts: totalAttempts,
+            finalStatus: null,
+            finalMessage: "suppressed_banned_transport",
+            is429: false,
+            suppressedBanned: true,
+          };
+        }
         lastErr = err;
         const is429 = isLine429Error(err);
         console.error(

@@ -14,7 +14,10 @@ while IFS='=' read -r k _; do
 done < <(grep -E '^[A-Z_]+=' .env.example | grep -v '^#')
 
 OUT=$(npm test 2>&1)
-FAILS=$(echo "$OUT" | grep -E '^not ok' | sed -E 's/^not ok [0-9]+ - //' | sort -u)
+# Parser ต้องเทียบ "leaf test name" เหมือนกันทุกเวอร์ชัน Node (Codex รอบ 4):
+# Node บางรุ่น flatten leaf ขึ้น top-level บางรุ่น nest ใต้ไฟล์ (indent) —
+# เก็บ not ok ทุก indent แล้วตัดบรรทัดที่เป็นชื่อไฟล์ (file-level summary) ทิ้ง
+FAILS=$(echo "$OUT" | grep -E '^[[:space:]]*not ok'   | sed -E 's/^[[:space:]]*not ok [0-9]+ -? ?//; s/[[:space:]]*# (SKIP|TODO).*$//'   | grep -vE '^tests/[^[:space:]]+\.(m?js|ts)$' | sort -u)
 KNOWN=$(grep -vE '^#|^$' tests/known-failing.txt | sort -u)
 
 NEW=$(comm -13 <(echo "$KNOWN") <(echo "$FAILS"))

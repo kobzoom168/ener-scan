@@ -39,14 +39,15 @@ export function withUsageTracking(api, createFn) {
     const model = String(p?.model || "");
     // CHAT_TURN_AI_CHAIN (Codex P0-6): เส้น OpenAI (conversationSurface ฯลฯ) ต้องถูกนับ
     // ด้วย — attempted นับตั้งแต่ก่อนยิง (error/timeout ก็นับ) · นอก turn context = no-op
+    let aiCallHandle = null;
     try {
       const { recordTurnAiCall } = await import("../core/telemetry/turnAiChain.js");
-      recordTurnAiCall(`openai.${api}:${callSite}`);
+      aiCallHandle = recordTurnAiCall(`openai.${api}:${callSite}`);
     } catch { /* telemetry ห้ามขวาง */ }
     const recordLatency = async () => {
       try {
         const { recordTurnAiLatency } = await import("../core/telemetry/turnAiChain.js");
-        recordTurnAiLatency(Date.now() - started);
+        recordTurnAiLatency(Date.now() - started, aiCallHandle);
       } catch { /* ignore */ }
     };
     try {

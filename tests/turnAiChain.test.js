@@ -117,3 +117,19 @@ test("embeddings เข้า wrapper แล้ว (Codex รอบ 3)", () => {
   const seg = s.slice(emb, emb + 300);
   assert.ok(seg.includes('withUsageTracking("embeddings"'), "embeddings ต้องผ่าน wrapper เดียวกัน");
 });
+
+test("call-ID matching (Codex รอบ 4 P1): call หลังเสร็จก่อน call แรก → pending ชี้ตัวที่ค้างจริง", async () => {
+  await runWithTurnContext({ messageId: "ooo", kind: "text" }, async () => {
+    const h1 = recordTurnAiCall("slow_call");   // ตัวแรก — จะค้าง
+    await new Promise((r) => setTimeout(r, 15));
+    const h2 = recordTurnAiCall("fast_call");   // ตัวหลัง — เสร็จก่อน
+    recordTurnAiLatency(5, h2);                 // settle ตัวหลังด้วย handle
+    const out = captureEmit(() => emitTurnAiChain());
+    const e = out.find((o) => o.event === "CHAT_TURN_AI_CHAIN");
+    assert.equal(e.pendingAiCount, 1);
+    // ตัวค้างคือ slow_call (เริ่มก่อน ~15ms) — FIFO เดิมจะชี้ผิดเป็นตัวหลัง
+    assert.ok(e.pendingElapsedMs >= 15, `pendingElapsedMs ต้องเป็นของ slow_call ได้ ${e.pendingElapsedMs}`);
+    recordTurnAiLatency(100, h1);
+    assert.ok(h1 && h2 && h1.id !== h2.id);
+  });
+});

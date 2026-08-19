@@ -18,14 +18,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_banned_users_active
   ON banned_users (line_user_id) WHERE unbanned_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_banned_users_uid ON banned_users (line_user_id);
 
--- append-only enforce (Codex รอบ 3): UPDATE ได้เฉพาะคอลัมน์ปลดแบน —
--- line_user_id/reason/banned_by/banned_at ห้ามแก้ย้อนหลังผ่าน API role
+-- append-only enforce (Codex รอบ 4): GRANT เป็น additive — ต้อง REVOKE ALL ก่อน
+-- ไม่งั้น table-level UPDATE จากรุ่นก่อน/bulk-grant ยังค้าง แล้วค่อย grant กลับ
+-- เฉพาะ SELECT, INSERT และ UPDATE สามคอลัมน์ unban
+REVOKE ALL PRIVILEGES ON banned_users FROM web_anon;
+REVOKE ALL PRIVILEGES ON banned_users FROM service_role;
 GRANT SELECT, INSERT ON banned_users TO web_anon;
 GRANT UPDATE (unbanned_by, unbanned_at, unban_reason) ON banned_users TO web_anon;
 GRANT USAGE, SELECT ON SEQUENCE banned_users_id_seq TO web_anon;
 GRANT SELECT, INSERT ON banned_users TO service_role;
 GRANT UPDATE (unbanned_by, unbanned_at, unban_reason) ON banned_users TO service_role;
 GRANT USAGE, SELECT ON SEQUENCE banned_users_id_seq TO service_role;
+
+-- smoke (Codex รอบ 4): apply ซ้ำแล้วต้องไม่มี table-level UPDATE/DELETE/TRUNCATE ค้าง
+DO $$
+DECLARE bad text;
+BEGIN
+  SELECT string_agg(grantee || ':' || privilege_type, ', ') INTO bad
+  FROM information_schema.table_privileges
+  WHERE table_name = 'banned_users'
+    AND grantee IN ('web_anon', 'service_role')
+    AND privilege_type IN ('UPDATE', 'DELETE', 'TRUNCATE');
+  IF bad IS NOT NULL THEN
+    RAISE EXCEPTION 'banned_users ยังมีสิทธิ์ระดับตารางเกิน append-only: %', bad;
+  END IF;
+END $$;
 
 -- preflight (Codex): มี status แปลกนอกลิสต์ใหม่ → ยกเลิกทั้ง transaction
 -- ก่อน drop constraint เดิม กัน ADD CHECK ล้มแล้วตารางเหลือแบบไร้ constraint

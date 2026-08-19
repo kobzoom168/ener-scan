@@ -4261,12 +4261,12 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
 /** คำถามสถานะผล "ผลออกยัง/เสร็จยัง" — ตอบจากสถานะงานจริง ห้ามให้ LLM เดา
  * (เคสจริง 17 ส.ค.: สแกนล้มเพราะเครดิต AI หมด ลูกค้าถาม 3 ชม.ต่อมา consult มโนว่า
  * "ออกแล้ว 7.2/10" พร้อมลิงก์ปลอม ener.app — ต้นเหตุระดับ routing ต้องตัดที่นี่) */
-const RESULT_STATUS_QUERY_RE =
-  /^ผล(สแกน)?(ออก|เสร็จ|ได้)(มา)?(หรือ|รึ|แล้ว)?ยัง(ครับ|ค่ะ|คับ)?$|^(ออก|เสร็จ)(หรือ|รึ)?ยัง(ครับ|ค่ะ|คับ)?$/;
+// regex ย้ายไป SSOT: src/services/scanV2/statusQuery.util.js (Codex รอบ 4)
 
 async function maybeHandleResultStatusQuery({ client, event, userId, text }) {
   const t = String(text || "").trim();
-  if (!RESULT_STATUS_QUERY_RE.test(t)) return false;
+  const { isStatusQueryText } = await import("../services/scanV2/statusQuery.util.js");
+  if (!isStatusQueryText(t)) return false;
   try {
     const { data: job } = await supabase
       .from("scan_jobs")
@@ -4508,11 +4508,10 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // ความอดทนอาจารย์: ข้อความกวน (สั้นจุ๋มจิ๋ม/พิมพ์ซ้ำ) นับแต้มใน 30 นาที —
   // 3-4 แต้ม = ตัดบทสุภาพแบบมีบารมี (ไม่เปลือง AI), 5+ = เงียบ, 8+ = แบน 24 ชม. (เว้นลูกค้าเคยจ่าย)
-  // ถามสถานะผลซ้ำ = ลูกค้ารอผลจริง ไม่ใช่ troll (Codex รอบ 3: false positive
-  // ทำลูกค้าที่ยังไม่ได้ผลโดนเงียบ) — ยกเว้นทั้งบล็อกก่อนแตะ counter
-  const isResultStatusQueryText =
-    RESULT_STATUS_QUERY_RE.test(String(text || "").trim()) ||
-    /ผลออก|เสร็จยัง|ได้ยัง|สถานะ|ถึงไหน|นานไหม|กี่นาที/.test(String(text || ""));
+  // ถามสถานะผลซ้ำ/บ่นรอนาน = ลูกค้ารอผลจริง ไม่ใช่ troll — ใช้ SSOT ตัวเดียว
+  // กับ result-status router (Codex รอบ 4: regex คนละชุดทำ "รอนานแล้วครับ" โดนนับแต้ม)
+  const { isStatusQueryText } = await import("../services/scanV2/statusQuery.util.js");
+  const isResultStatusQueryText = isStatusQueryText(text);
   if (!isResultStatusQueryText) try {
     const bare = text.replace(/[\s!?.…ๆฯ]+/g, "");
     const isAck = /^(ครับ|คับ|ค่ะ|คะ|จ้า|จ๊ะ|โอเค|ok|okay|ได้|จ่าย|ปลดล็อก|ขอบคุณ|ขอบใจ|555|thank)/i.test(bare);
@@ -4850,6 +4849,29 @@ async function handleTextMessage({ client, event, userId, session }) {
       },
     });
     if (consumed) return;
+  }
+
+  // 📖 info commands (Codex รอบ 4): "วิธีใช้/วิธีใช้งาน/สแกนพลังงาน" = AI=0 ทุก state
+  // (idle/pending_verify/paywall/awaiting_slip/waiting_birthdate/soft-verify) —
+  // router อยู่ก่อน semantic/orchestrator เสมอ exact match เท่านั้น
+  {
+    const infoCmd = await import("../services/lineWebhook/deterministicInfoCommand.util.js");
+    const infoKind = infoCmd.matchDeterministicInfoCommand(text);
+    if (infoKind) {
+      let payPickLine = null;
+      try {
+        const payPick = formatPaywallPriceTokensForLine(loadActiveScanOffer()) || "ค่าครูจากเมนู";
+        payPickLine = `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`;
+      } catch { payPickLine = null; }
+      const done = await infoCmd.handleDeterministicInfoCommand({
+        kind: infoKind,
+        client,
+        userId,
+        replyToken: event.replyToken,
+        deps: { sendNonScanReply, getSavedBirthdate, payPickLine },
+      });
+      if (done) return;
+    }
   }
 
   // ✏️ แก้ข้อมูลลงทะเบียนผ่านแชท (เปลี่ยนชื่อ/เบอร์/เพศ) — deterministic, มาก่อน AI

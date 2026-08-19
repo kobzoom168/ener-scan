@@ -47,6 +47,19 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO web_anon;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO web_anon;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO web_anon;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO web_anon;
+
+-- banned_users เป็น append-only (Codex รอบ 4): bulk GRANT ALL ข้างบนห้ามเปิดสิทธิ์
+-- ตารางนี้กลับ — บีบเหลือ SELECT/INSERT + UPDATE เฉพาะคอลัมน์ unban เสมอ
+DO $$ BEGIN
+  IF to_regclass('public.banned_users') IS NOT NULL THEN
+    REVOKE ALL PRIVILEGES ON banned_users FROM web_anon;
+    REVOKE ALL PRIVILEGES ON banned_users FROM service_role;
+    GRANT SELECT, INSERT ON banned_users TO web_anon;
+    GRANT UPDATE (unbanned_by, unbanned_at, unban_reason) ON banned_users TO web_anon;
+    GRANT SELECT, INSERT ON banned_users TO service_role;
+    GRANT UPDATE (unbanned_by, unbanned_at, unban_reason) ON banned_users TO service_role;
+  END IF;
+END $$;
 EOF
 
 echo "==> table count"

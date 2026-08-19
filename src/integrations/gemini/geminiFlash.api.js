@@ -76,7 +76,7 @@ function buildCompatModel(provider, opts = {}) {
   const maxTokens = Math.max(64, Number(opts.maxTokens) || 1024);
   return {
     async generateContent(userPrompt) {
-      recordTurnAiCall(opts.callSite || "front_untagged");
+      const aiCallHandle = recordTurnAiCall(opts.callSite || "front_untagged");
       const aiStarted = Date.now();
       const messages = [];
       if (systemInstruction) {
@@ -152,7 +152,7 @@ function buildCompatModel(provider, opts = {}) {
         return { response: { text: () => String(text || "") } };
       } finally {
         clearTimeout(timer);
-        recordTurnAiLatency(Date.now() - aiStarted);
+        recordTurnAiLatency(Date.now() - aiStarted, aiCallHandle);
       }
     },
   };
@@ -197,12 +197,12 @@ export function getGeminiFlashModel(opts = {}) {
   // telemetry ครอบ Google direct ด้วย (Codex P0-6: เดิมนับเฉพาะ compat)
   return {
     async generateContent(userPrompt) {
-      recordTurnAiCall(opts.callSite || "front_untagged");
+      const aiCallHandle = recordTurnAiCall(opts.callSite || "front_untagged");
       const aiStarted = Date.now();
       try {
         return await googleModel.generateContent(userPrompt);
       } finally {
-        recordTurnAiLatency(Date.now() - aiStarted);
+        recordTurnAiLatency(Date.now() - aiStarted, aiCallHandle);
       }
     },
   };

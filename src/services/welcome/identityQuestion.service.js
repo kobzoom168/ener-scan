@@ -6,13 +6,20 @@
  */
 import { getValue, setLargeValueWithTtl } from "../../redis/scanV2Redis.js";
 
-// รับคำสะกดเพี้ยนด้วย (เคสจริง 11 ส.ค.: "สรุป เป็น ai ใช้ไหม" — ใช้ไหม หลุด regex เดิม)
+// classifier ตารางเดียว (Codex รอบ 4): เลิกใช้ outer regex ตัดก่อน — เคสจริงหลุด
+// ("เป็น AI หรือคนตอบครับ", "ใช้ ChatGPT ไหม") และ "ใครตอบ" เคยโดนจัดผิดเป็น ai_bot
+// รับคำสะกดเพี้ยนด้วย (เคสจริง 11 ส.ค.: "สรุป เป็น ai ใช้ไหม")
 const Q_PART =
-  "(ใช่ไหม|ใช่ใหม|ใช้ไหม|ใช่มั้ย|ใช้มั้ย|ใช่ปะ|ใช่ป่ะ|ป่ะ|หรือเปล่า|รึเปล่า|รึป่าว|หรอ|เหรอ|ป่าว|ไหม|มั้ย|ใช่ครับ|ใช่ไหมครับ)";
-const IDENTITY_RE = new RegExp(
-  `(คุยกับใคร|คุยอยู่กับใคร|ใครตอบ|ใครคุย|ใครดูแล|เป็น\\s*(บอท|bot|ai|เอไอ|โปรแกรม|แอดมิน|admin|คนจริง|คนจริงๆ|คน)\\s*${Q_PART}|บอทหรือคน|คนหรือบอท|ใช่\\s*(ai|เอไอ|บอท|bot|โปรแกรม)|(ai|บอท|bot)\\s*${Q_PART}|สรุป\\s*เป็น\\s*(ai|เอไอ|บอท|bot|โปรแกรม))`,
-  "i",
-);
+  "(?:ใช่ไหม|ใช่ใหม|ใช้ไหม|ใช่มั้ย|ใช้มั้ย|ใช่ปะ|ใช่ป่ะ|ป่ะ|หรือเปล่า|รึเปล่า|รึป่าว|หรอ|เหรอ|ป่าว|ไหม|มั้ย|ปะ|หรือ|รึ|ใช่|\\?)";
+// คำที่แปลว่า AI/บอท — latin terms กันติดคำอื่นด้วยขอบ non-letter
+const AI_TERM =
+  "(?:บอท|แชทบอท|เอไอ|จีพีที|แชทจีพีที|โปรแกรมตอบ|โปรแกรม|ระบบอัตโนมัติ|หุ่นยนต์|(?<![a-z])(?:bot|a\\.?i\\.?|ai|gpt|chat\\s*gpt|chat\\s*bot)(?![a-z]))";
+const HUMAN_TERM = "(?:คนจริง|คนตอบ|มนุษย์|คน)";
+const AI_TERM_RE = new RegExp(AI_TERM, "i");
+const Q_RE = new RegExp(Q_PART, "i");
+const AI_VS_HUMAN_RE = new RegExp(`${AI_TERM}.{0,14}${HUMAN_TERM}|${HUMAN_TERM}.{0,14}${AI_TERM}`, "i");
+const WHO_RE = /(คุยกับใคร|คุยอยู่กับใคร|ใครตอบ|ใครคุย|ใครดูแล|ใครเป็นคนตอบ|ใครอ่าน)/;
+const ADMIN_RE = /(แอดมิน|admin)/i;
 
 // กบ 11 ส.ค.: ไม่ใส่อีโมจิ พิมพ์เหมือนคน ยาวแล้วเว้นบรรทัด · โทนจริงจัง นิ่ง ห้ามติดตลก
 // โทนกบ (Codex รอบ 3): factual เดียว ไม่มี CTA ไม่มีคำฟุ่มเฟือย
@@ -29,10 +36,17 @@ const REPLIES = [
  */
 export function classifyIdentityQuestion(text) {
   const t = String(text || "").trim();
-  if (t.length > 80 || !IDENTITY_RE.test(t)) return null;
-  if (/บอท|bot|\bai\b|เอไอ|โปรแกรม|chat\s*gpt|จีพีที|แชทบอท|คนตอบ.{0,8}(หรือ|รึ|ไหม)|ใคร.{0,6}ตอบ/i.test(t)) return "ai_bot";
-  if (/แอดมิน|admin/i.test(t)) return "admin_check";
-  return "who";
+  if (!t || t.length > 80) return null;
+  // ai_bot: มีคำ AI + (เป็นคำถาม หรือ เทียบกับ "คน" หรือขึ้นต้นเชิงยืนยัน/ถาม)
+  if (AI_TERM_RE.test(t)) {
+    if (Q_RE.test(t) || AI_VS_HUMAN_RE.test(t) || /^(เป็น|คือ|ใช้|ใช่|สรุป|นี่)/.test(t)) {
+      return "ai_bot";
+    }
+    return null; // มีคำ AI แต่ไม่ใช่คำถาม identity (เช่นเล่าเรื่องอื่น)
+  }
+  if (ADMIN_RE.test(t) && Q_RE.test(t)) return "admin_check";
+  if (WHO_RE.test(t)) return "who";
+  return null;
 }
 
 /** จับคำถาม identity — คืน true = ตอบแล้ว จบเลย อย่า route ต่อ */

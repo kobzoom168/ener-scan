@@ -6,7 +6,14 @@
  * ส่งล้ม = clear ให้รอบหน้าลองใหม่ · alert ห้ามหน่วง/ล้มทับคำตอบลูกค้า (fire แบบ
  * แยก promise เสมอ) · redact เบอร์/URL/token + ตัวอย่างข้อความไม่เกิน 200 ตัวอักษร
  */
-import { getValue, setLargeValueWithTtl, clearDedupeKey, tryDedupeOnce } from "../../redis/scanV2Redis.js";
+import {
+  getValue,
+  setLargeValueWithTtl,
+  clearDedupeKey,
+  tryDedupeOnce,
+  acquireShortLock,
+  releaseShortLock,
+} from "../../redis/scanV2Redis.js";
 
 const log = (event, extra = {}) => console.log(JSON.stringify({ event, ...extra }));
 
@@ -56,10 +63,12 @@ export async function paidStatusForAlert(lineUserId, deps = {}) {
  * @param {{ tryDedupeOnce?: Function, clearDedupeKey?: Function, sendTelegramText?: Function }} [deps]
  */
 export async function sendCustomerAlert(p, deps = {}) {
-  const dd = deps.tryDedupeOnce || tryDedupeOnce;
-  const clear = deps.clearDedupeKey || clearDedupeKey;
   const kvGet = deps.getValue || getValue;
   const kvSet = deps.setLargeValueWithTtl || setLargeValueWithTtl;
+  // lease แบบ owner token (Codex รอบ 4 P1): compare-delete — request เก่าที่ล้มช้า
+  // ปล่อยได้เฉพาะ lease ของตัวเอง ไม่มีทางลบ lease ของ request ใหม่แล้วเปิดทางส่งซ้ำ
+  const acquireLease = deps.acquireLease || ((key, ttlMs) => acquireShortLock(key, ttlMs));
+  const releaseLease = deps.releaseLease || ((key, token) => releaseShortLock(key, token));
   const sendTg =
     deps.sendTelegramText ||
     (async (t) => {
@@ -90,7 +99,8 @@ export async function sendCustomerAlert(p, deps = {}) {
     const leaseKey = `${sentKey}:lease`;
     try {
       if ((await kvBound(kvGet(sentKey), null)) === "1") return;
-      if (!(await kvBound(dd(leaseKey, 60), false))) return; // มีคนกำลังส่งอยู่
+      const leaseToken = await kvBound(acquireLease(leaseKey, 60_000), null);
+      if (!leaseToken) return; // มีคนกำลังส่งอยู่
       const TIMEOUT = Symbol("timeout");
       let timer = null;
       const sendPromise = Promise.resolve()
@@ -114,7 +124,7 @@ export async function sendCustomerAlert(p, deps = {}) {
             await kvBound(kvSet(sentKey, "1", p.dedupeSec), null);
             log("CUSTOMER_ALERT_LATE_SUCCESS", { type: p.type, channel, uidPrefix });
           } else {
-            await kvBound(clear(leaseKey), null);
+            await kvBound(releaseLease(leaseKey, leaseToken), null);
           }
         });
         return;
@@ -123,7 +133,7 @@ export async function sendCustomerAlert(p, deps = {}) {
         await kvBound(kvSet(sentKey, "1", p.dedupeSec), null);
         log("CUSTOMER_ALERT_SENT", { type: p.type, channel, uidPrefix });
       } else {
-        await kvBound(clear(leaseKey), null);
+        await kvBound(releaseLease(leaseKey, leaseToken), null);
         log(channel === "tg" ? "CUSTOMER_ALERT_TG_FAILED" : "CUSTOMER_ALERT_LINE_FAILED", { type: p.type, uidPrefix });
       }
     } catch { /* alert ห้ามล้มทับงานหลัก */ }
@@ -158,8 +168,6 @@ export async function sendCustomerAlert(p, deps = {}) {
 
 const REPEAT_WINDOW_SEC = 15 * 60;
 const REPEAT_THRESHOLD = 3;
-/** คำถามสถานะที่สมเหตุผล — ถามซ้ำเพราะระบบยังไม่ตอบ ไม่ใช่กวน */
-const STATUS_QUERY_RE = /ผลออก|เสร็จยัง|ได้ยัง|สถานะ|ถึงไหน|นานไหม|กี่นาที/;
 
 export function normalizeRepeatText(text) {
   return String(text || "").trim().replace(/\s+/g, " ").toLowerCase().slice(0, 120);
@@ -173,7 +181,11 @@ export function normalizeRepeatText(text) {
 export async function trackRepeatedInput(userId, text, deps = {}) {
   const norm = normalizeRepeatText(text);
   if (!norm || norm.length < 2) return { hit: false, count: 0, recent: [] };
-  if (STATUS_QUERY_RE.test(norm)) return { hit: false, count: 0, recent: [] };
+  // status query = ลูกค้ารอผล — SSOT เดียวกับ router/troll guard (Codex รอบ 4)
+  try {
+    const { isStatusQueryText } = await import("../scanV2/statusQuery.util.js");
+    if (isStatusQueryText(text)) return { hit: false, count: 0, recent: [] };
+  } catch { /* SSOT พัง = นับตามปกติ */ }
   let h = 0;
   for (let i = 0; i < norm.length; i++) h = (h * 31 + norm.charCodeAt(i)) >>> 0;
   const zkey = `repeat:z:${userId}:${h}`;
