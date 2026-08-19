@@ -74,48 +74,95 @@ export async function listPendingReconciles(deps = {}) {
   }
 }
 
-/* ---------------- pending-operation guard (Codex รอบ 10 ข้อ 2) ----------------
- * ระหว่างมี operation ที่ "ไม่รู้ผล DB" ค้างอยู่ ห้ามรับ ban/unban รอบใหม่ของ uid
- * เดียวกัน — DB commit อาจกลับลำดับแล้วคำสั่งเก่าทับคำสั่งล่าสุด · guard ถูกตั้ง
- * ภายใต้ mutation lock และเคลียร์แบบ compare-exact opId หลัง state-confirmed เท่านั้น */
+/* ---------------- pending-operation lifecycle (Codex รอบ 10-11) ----------------
+ * รอบ 11: guard กับ queue ต้องเป็นก้อนเดียวกัน — แยกสองคำสั่งเปิดช่อง 3 ทาง
+ * (อ่าน guard ล้มแล้ว fail-open · เขียน guard ล้มแต่อ้าง durable · complete ครึ่งเดียว)
+ *
+ * beginPendingOperation: SET guard NX + ZADD queue ใน Lua เดียว — ล้มข้อใด = ห้ามแตะ DB
+ * completePendingOperation: ตรวจ guard==opId → ZREM exact member + DEL guard พร้อมกัน
+ *   คืน removed/cleared ตามจำนวนจริง · guard เป็นของ op อื่น = ไม่แตะอะไรเลย
+ */
 const PENDING_OP_PREFIX = "ban:pendingop:";
 const PENDING_OP_TTL_SEC = 7 * 24 * 3600;
 
-export async function setPendingOp(uid, opId, deps = {}) {
+/** อ่านสถานะ guard แบบ typed (Codex รอบ 11 ข้อ 1: อ่านล้ม ≠ ไม่มีงานค้าง) */
+export async function getPendingOpStatus(uid, deps = {}) {
   try {
     const r = await redis(deps);
     if (!r) return { ok: false };
-    await r.set(`${PENDING_OP_PREFIX}${uid}`, String(opId), "EX", PENDING_OP_TTL_SEC);
-    return { ok: true };
+    const v = await r.get(`${PENDING_OP_PREFIX}${uid}`);
+    return { ok: true, pending: v || null };
   } catch {
     return { ok: false };
   }
 }
 
-export async function getPendingOp(uid, deps = {}) {
+/**
+ * ลงทะเบียน operation ก่อนแตะ DB — atomic ทั้ง guard และ queue entry
+ * @returns {Promise<{ ok: boolean, reason?: "conflict"|"redis_unavailable"|"redis_error", member?: string }>}
+ */
+export async function beginPendingOperation({ uid, reason, targetState, opId }, deps = {}) {
   try {
     const r = await redis(deps);
-    if (!r) return null;
-    return await r.get(`${PENDING_OP_PREFIX}${uid}`);
-  } catch {
-    return null;
-  }
-}
-
-/** เคลียร์เฉพาะเมื่อ opId ตรง (compare-exact — งานใหม่ห้ามโดนงานเก่าเคลียร์ทิ้ง) */
-export async function clearPendingOp(uid, opId, deps = {}) {
-  try {
-    const r = await redis(deps);
-    if (!r) return { ok: false };
+    if (!r) return { ok: false, reason: "redis_unavailable" };
+    const member = buildReconcileMember({ uid, reason, targetState, opId });
+    const now = deps.now ? deps.now() : Date.now();
     const res = await r.eval(
-      "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end return 0",
-      1,
+      "if redis.call('EXISTS', KEYS[1]) == 1 then return 'conflict' end " +
+        "redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2]) " +
+        "redis.call('ZADD', KEYS[2], ARGV[3], ARGV[4]) " +
+        "redis.call('EXPIRE', KEYS[2], ARGV[5]) " +
+        "return 'ok'",
+      2,
       `${PENDING_OP_PREFIX}${uid}`,
+      QUEUE_KEY,
       String(opId),
+      String(PENDING_OP_TTL_SEC),
+      String(now),
+      member,
+      String(7 * 24 * 3600),
     );
-    return { ok: true, cleared: Number(res) === 1 };
+    if (res === "conflict") return { ok: false, reason: "conflict" };
+    return { ok: true, member };
   } catch {
-    return { ok: false };
+    return { ok: false, reason: "redis_error" };
+  }
+}
+
+/**
+ * จบ operation แบบ atomic: guard==opId → ZREM member + DEL guard พร้อมกัน
+ * guard หายไปแล้ว (TTL/complete ก่อนหน้า) → เก็บกวาด orphan member ได้
+ * guard เป็นของ op อื่น → ไม่แตะอะไรเลย
+ * @returns {Promise<{ ok: boolean, removed?: boolean, cleared?: boolean, reason?: string }>}
+ */
+export async function completePendingOperation({ uid, opId, member }, deps = {}) {
+  try {
+    const r = await redis(deps);
+    if (!r) return { ok: false, reason: "redis_unavailable" };
+    const res = await r.eval(
+      "local g = redis.call('GET', KEYS[1]) " +
+        "if g == ARGV[1] then " +
+        "  local removed = redis.call('ZREM', KEYS[2], ARGV[2]) " +
+        "  redis.call('DEL', KEYS[1]) " +
+        "  return {1, removed} " +
+        "end " +
+        "if not g then " +
+        "  local removed = redis.call('ZREM', KEYS[2], ARGV[2]) " +
+        "  return {2, removed} " +
+        "end " +
+        "return {0, 0}",
+      2,
+      `${PENDING_OP_PREFIX}${uid}`,
+      QUEUE_KEY,
+      String(opId),
+      String(member),
+    );
+    const mode = Number(res?.[0]);
+    const removed = Number(res?.[1]) === 1;
+    if (mode === 0) return { ok: false, reason: "op_mismatch" };
+    return { ok: true, removed, cleared: mode === 1 };
+  } catch {
+    return { ok: false, reason: "redis_error" };
   }
 }
 
@@ -151,22 +198,26 @@ function fireMismatchAlert(entry, banned, deps) {
  *   minSettleMs?: number, now?: () => number, getRedis?: Function, limit?: number, alert?: Function }} deps
  */
 export async function sweepPendingBanReconciles(deps) {
-  const stats = { scanned: 0, reconciled: 0, skipped: 0, mismatched: 0, failed: 0 };
+  const stats = { scanned: 0, reconciled: 0, skipped: 0, mismatched: 0, abandoned: 0, failed: 0 };
   const entries = await listPendingReconciles(deps);
   const now = deps.now ? deps.now() : Date.now();
   const minSettle = Number(deps.minSettleMs) >= 0 ? Number(deps.minSettleMs) : MIN_SETTLE_MS;
+  // op ที่ mismatch นานเกินนี้ = DB ไม่มีทาง commit แล้ว (transaction ไม่ค้างข้ามครึ่งชั่วโมง)
+  // — ถือว่า intent ไม่เกิดจริง ปิดงานตาม DB เพื่อไม่ให้ guard ล็อค uid ค้าง 7 วัน
+  const abandonAfter = Number(deps.abandonAfterMs) > 0 ? Number(deps.abandonAfterMs) : 30 * 60 * 1000;
   const limit = Number(deps.limit) > 0 ? Number(deps.limit) : 50;
+  const complete =
+    deps.complete || ((e) => completePendingOperation({ uid: e.uid, opId: e.opId, member: e.member }, deps));
   for (const e of entries.slice(0, limit)) {
     stats.scanned += 1;
     if (now - e.enqueuedAt < minSettle) { stats.skipped += 1; continue; }
     try {
-      // 1) observe DB แบบ read-only ก่อน (Codex รอบ 10 ข้อ 1): ห้ามแตะ cache
-      //    จนกว่าจะรู้ว่า DB ตรง intent — reconcile ทันทีจะพลิก fail-closed
-      //    ของ ban ที่ late commit ยังไม่มาถึง
+      // 1) observe DB แบบ read-only ก่อน (Codex รอบ 10): ห้ามแตะ cache จนกว่า DB ตรง intent
       const obs = await deps.observe(e.uid);
       if (!obs?.ok) { stats.failed += 1; continue; }
       const matches = (obs.banned === true) === (e.targetState === "banned");
-      if (!matches) {
+      const stale = now - e.enqueuedAt > abandonAfter;
+      if (!matches && !stale) {
         stats.mismatched += 1;
         console.log(
           JSON.stringify({
@@ -180,27 +231,40 @@ export async function sweepPendingBanReconciles(deps) {
         fireMismatchAlert(e, obs.banned === true, deps);
         continue; // cache/fail-closed state ไม่ถูกแตะ · entry ค้างไว้ retry
       }
-      // 2) DB ตรง intent แล้ว → ค่อย apply cache แล้วลบ exact member
+      // 2) DB ตรง intent (หรือ stale-abandon: DB คือความจริงสุดท้าย) → apply cache
       const rec = await deps.reconcile(e.uid);
-      const applied = rec?.ok === true && (rec.banned === true) === (e.targetState === "banned");
+      const applied = rec?.ok === true && (rec.banned === true) === (obs.banned === true);
       if (!applied) { stats.failed += 1; continue; }
-      const removed = await removePendingReconcile(e.member, deps);
-      if (removed?.ok !== true) {
-        // ลบไม่สำเร็จ = งานยังไม่จบ ห้ามนับ/log ว่าสำเร็จ (Codex รอบ 10 H)
+      // 3) จบงาน atomic: ZREM member + DEL guard พร้อมกัน — ล้ม = คงทั้งคู่ retry ห้าม log DONE
+      const done = await complete(e);
+      if (done?.ok !== true) {
         stats.failed += 1;
-        console.log(JSON.stringify({ event: "BAN_RECONCILE_SWEEP_REMOVE_FAILED", uidPrefix: String(e.uid).slice(0, 8) }));
+        console.log(JSON.stringify({ event: "BAN_RECONCILE_SWEEP_COMPLETE_FAILED", uidPrefix: String(e.uid).slice(0, 8), reason: done?.reason || "unknown" }));
         continue;
       }
-      if (deps.clearPendingOp) await Promise.resolve(deps.clearPendingOp(e.uid, e.opId)).catch(() => {});
-      stats.reconciled += 1;
-      console.log(
-        JSON.stringify({
-          event: "BAN_RECONCILE_SWEEP_DONE",
-          uidPrefix: String(e.uid).slice(0, 8),
-          reason: e.reason,
-          banned: e.targetState === "banned",
-        }),
-      );
+      if (!matches && stale) {
+        stats.abandoned += 1;
+        console.log(
+          JSON.stringify({
+            event: "BAN_RECONCILE_ABANDONED",
+            uidPrefix: String(e.uid).slice(0, 8),
+            reason: e.reason,
+            expected: e.targetState,
+            dbBanned: obs.banned === true,
+          }),
+        );
+        fireMismatchAlert(e, obs.banned === true, deps);
+      } else {
+        stats.reconciled += 1;
+        console.log(
+          JSON.stringify({
+            event: "BAN_RECONCILE_SWEEP_DONE",
+            uidPrefix: String(e.uid).slice(0, 8),
+            reason: e.reason,
+            banned: obs.banned === true,
+          }),
+        );
+      }
     } catch {
       stats.failed += 1;
     }

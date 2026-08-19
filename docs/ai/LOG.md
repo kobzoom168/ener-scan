@@ -879,3 +879,11 @@
 - **H**: ผล remove/zrem ตรวจจริงทั้ง finalizer และ sweeper — ลบไม่เข้า = ไม่นับสำเร็จ ไม่ปลด guard
 - **P1**: mismatch + queue-unavailable alerts เช็ค `sendTelegramText.ok` แล้วปล่อย dedupe เมื่อส่งล้ม
 - Tests A-r10 ถึง H-r10 ครบ 8 + ปรับ sweeper tests เดิมเป็น observe/reconcile แยก · banSystem รวม 67
+
+## 2026-08-20 (บ่าย) | Claude | ปิด atomic pending-operation รอบสิบเอ็ด (Codex NO-GO บน 7630226)
+- **โครงใหม่ (Codex สเปกเป๊ะ)**: `beginPendingOperation` — SET guard NX + ZADD queue member ใน Lua เดียว เรียกใต้ mutation lock "ก่อนแตะ DB เสมอ" (ทั้ง settle เร็วและ unknown) · conflict → `pending_reconcile` · redis ล้ม → `pending_guard_unavailable` (fail-closed: DB=0, durableOwner=false, ไม่มีทางอ้าง durable ทั้งที่เขียนไม่เข้า) · `completePendingOperation` — ตรวจ guard==opId → ZREM exact member + DEL guard ใน script เดียว คืน removed/cleared ตามจำนวนจริง · guard เป็นของ op อื่น = ไม่แตะอะไร · guard หายแล้ว (TTL) = เก็บ orphan member ได้
+- settle ปกติ/already_banned/DB ปฏิเสธ → complete atomic ก่อน return (ปิดไม่เข้า = `pendingCleanup` ให้ sweeper ตาม ไม่โกหกผล) · unknown → guard+queue คงอยู่ทั้งคู่ finalizer complete หลัง state-confirmed เท่านั้น · sweep ใช้ complete atomic (ล้ม = ทั้งคู่คงอยู่ + `SWEEP_COMPLETE_FAILED` ไม่ log DONE)
+- **stale-abandon เพิ่มเอง** (กัน deadlock ที่สเปกเปิดไว้): mismatch ค้างเกิน 30 นาที = DB ไม่มีทาง commit แล้ว → ปิดงานตาม DB จริง + `BAN_RECONCILE_ABANDONED` + alert — guard ไม่ล็อค uid จน TTL 7 วัน · mismatch ที่ยังใหม่ยังรอ late commit ตามเดิม
+- ผลข้าง: ban/unban ตอนนี้ serialize ต่อ uid สองชั้น (mutex + guard) — race B เดิมเขียนใหม่เป็น "คำสั่งใหม่โดนกัน (busy/pending_reconcile) จนงานเก่ายืนยันผล แล้วค่อยผ่าน"
+- Tests: harness เปลี่ยนเป็น begin/complete (semantics ตรง Lua) · new: begin conflict single-winner · settle → หายพร้อมกัน / unknown → อยู่ทั้งคู่ · sweep complete ล้ม → คงทั้งคู่ reconciled=0 · wrong opId → ไม่แตะทั้งคู่ + orphan cleanup · H-r10 ใหม่ (complete ล้ม → entryRemoved/completed false + guard+queue อยู่) · D-r9(2) ใหม่ (begin ล้ม → pending_guard_unavailable + DB=0) · stale-abandon 2 เคส · banSystem รวม 71
+- Webhook: admin copy `pending_guard_unavailable` ทั้ง ban/unban

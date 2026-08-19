@@ -175,14 +175,14 @@ async function runOnce() {
   // กวาดคิว reconcile ของระบบแบน (Codex รอบ 8): งานที่ DB ไม่รู้ผลแล้ว process
   // เดิมตายไป — ต้องมีคนตามให้ cache ตรง DB เสมอ ไม่งั้นแบนหลุด/แบนค้าง
   try {
-    const [{ sweepPendingBanReconciles, clearPendingOp }, { reconcileBanCacheFromDb, observeBanDbState }] = await Promise.all([
+    const [{ sweepPendingBanReconciles }, { reconcileBanCacheFromDb, observeBanDbState }] = await Promise.all([
       import("../services/ban/banReconcileQueue.js"),
       import("../services/ban/bannedUsers.repo.js"),
     ]);
     const stats = await sweepPendingBanReconciles({
       observe: (uid) => observeBanDbState(uid),
       reconcile: (uid) => reconcileBanCacheFromDb(uid),
-      clearPendingOp: (uid, opId) => clearPendingOp(uid, opId),
+      // complete ใช้ default ในโมดูล (atomic Lua: ZREM member + DEL guard พร้อมกัน)
     });
     if (stats.scanned > 0) {
       console.log(JSON.stringify({ event: "BAN_RECONCILE_SWEEP", ...stats }));
