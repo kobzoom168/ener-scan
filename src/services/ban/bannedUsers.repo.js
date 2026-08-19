@@ -103,16 +103,42 @@ function fireFailOpenAlert(deps) {
   })();
 }
 
+/** guard คำสั่งใหม่ระหว่างมี op ไม่รู้ผลค้าง (Codex รอบ 10 ข้อ 2) — เรียกใต้ mutation lock */
+async function checkPendingOpGuard(uid, m) {
+  const get = m.getPendingOp || (await import("./banReconcileQueue.js")).getPendingOp;
+  m.getPendingOp = get;
+  let pending = null;
+  try {
+    pending = await raceRemaining(Promise.resolve(get(uid)), null, 1000);
+  } catch { pending = null; }
+  return pending; // null = ไม่มีงานค้าง (หรืออ่านไม่ได้ = fail-open ตามแนวระบบ)
+}
+
+async function markPendingOp(uid, opId, m) {
+  const set = m.setPendingOp || (await import("./banReconcileQueue.js")).setPendingOp;
+  m.setPendingOp = set;
+  try { return await set(uid, opId); } catch { return { ok: false }; }
+}
+
 function fireReconcileQueueAlert(uid, op, m) {
   void (async () => {
     try {
       const alertDedupe = m.alertDedupe || tryDedupeOnce;
-      if (await alertDedupe("ban_reconcile_queue_unavailable_alert", 600)) {
+      const key = "ban_reconcile_queue_unavailable_alert";
+      if (!(await alertDedupe(key, 600))) return;
+      // honesty (Codex รอบ 10 P1): ส่งล้ม = ปล่อย dedupe ให้รอบหน้าลองใหม่
+      let sent = false;
+      try {
         const { sendTelegramText } = await import("../telegramNotify.service.js");
-        await Promise.race([
+        const res = await Promise.race([
           sendTelegramText(`[CRITICAL] คิว reconcile แบนใช้ไม่ได้ (${op} ${uid.slice(0, 10)}…) — งานไม่รอด restart รีบเช็ค redis ครับ`),
           new Promise((r) => setTimeout(r, 5000)),
         ]);
+        sent = res?.ok === true;
+      } catch { sent = false; }
+      if (!sent) {
+        const { clearDedupeKey } = await import("../../redis/scanV2Redis.js");
+        await clearDedupeKey(key).catch(() => {});
       }
     } catch { /* ignore */ }
   })();
@@ -133,6 +159,9 @@ function mutationDeps(deps) {
     enqueueReconcile: deps.enqueueReconcile || null,
     removeReconcile: deps.removeReconcile || null,
     alertDedupe: deps.alertDedupe || null,
+    getPendingOp: deps.getPendingOp || null,
+    setPendingOp: deps.setPendingOp || null,
+    clearPendingOp: deps.clearPendingOp || null,
   };
 }
 
@@ -193,6 +222,7 @@ function scheduleUnknownOutcomeFinalizer(uid, m, client, opPromise, tag, opts = 
   const remove = m.removeReconcile;
   const targetState = opts.targetState === "banned" ? "banned" : "unbanned";
   const member = opts.member || null;
+  const opId = opts.opId || null;
   const isSettleFailure = opts.isSettleFailure || (() => false);
 
   return (async () => {
@@ -213,8 +243,16 @@ function scheduleUnknownOutcomeFinalizer(uid, m, client, opPromise, tag, opts = 
       const opFailed = isSettleFailure(settleRes);
       const rec = await reconcileCacheWithDb(uid, m, client);
       const matchesIntent = rec.ok === true && (rec.banned === true) === (targetState === "banned");
-      const removable = rec.ok === true && (opFailed || matchesIntent);
-      if (removable && member && remove) await Promise.resolve(remove(member)).catch(() => {});
+      let removable = rec.ok === true && (opFailed || matchesIntent);
+      if (removable && member && remove) {
+        // ผลการลบต้องตรวจจริง (Codex รอบ 10 H): ลบไม่เข้า = งานยังไม่จบ
+        const removed = await Promise.resolve(remove(member)).catch(() => ({ ok: false }));
+        if (removed?.ok !== true) removable = false;
+      }
+      if (removable && opId) {
+        const clear = m.clearPendingOp || (await import("./banReconcileQueue.js")).clearPendingOp;
+        await Promise.resolve(clear(uid, opId)).catch(() => {});
+      }
       log("BAN_UNKNOWN_OUTCOME_FINALIZED", {
         uidPrefix: uid.slice(0, 8),
         tag,
@@ -377,6 +415,13 @@ export async function banUser({ lineUserId, reason, bannedBy }, deps = {}) {
   if (!lockToken) return { ok: false, reason: "busy" };
   m.__token = lockToken;
   try {
+    // 0) มี operation ไม่รู้ผลค้างอยู่ = ห้ามแตะ DB (Codex รอบ 10: commit อาจกลับ
+    //    ลำดับแล้วคำสั่งเก่าทับคำสั่งล่าสุด) — รอ reconcile จบก่อน
+    const pendingOp = await checkPendingOpGuard(uid, m);
+    if (pendingOp) {
+      log("BAN_USER_PENDING_OP_BLOCKED", { uidPrefix: uid.slice(0, 8), op: "ban" });
+      return { ok: false, reason: "pending_reconcile" };
+    }
     // 1) fail-closed ก่อนแตะ DB (Codex รอบ 7 อนุญาต): แอดมินยืนยันเจตนาแบนแล้ว —
     //    ตั้ง positive + ล้าง negative/tombstone ก่อน เพื่อไม่ให้ DB ช้า/ไม่รู้ผล
     //    เปิดช่องให้ลูกค้าผ่านต่อ · DB ตอบว่าไม่มี row จริงค่อย reconcile ออก
@@ -416,8 +461,10 @@ export async function banUser({ lineUserId, reason, bannedBy }, deps = {}) {
         fireReconcileQueueAlert(uid, "ban", m);
         log("BAN_RECONCILE_QUEUE_UNAVAILABLE", { uidPrefix: uid.slice(0, 8), op: "ban" });
       }
+      await markPendingOp(uid, opId, m); // ตั้งใต้ lock — คำสั่งใหม่จะโดนกันจนกว่างานนี้ยืนยันผล
       const finalizer = scheduleUnknownOutcomeFinalizer(uid, m, client, run.promise, "ban", {
         targetState: "banned",
+        opId,
         member: enq.ok ? enq.member : null,
         isSettleFailure: (res) => {
           if (res.error) return true;
@@ -492,6 +539,25 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
   if (!lockToken) return { ok: false, reason: "busy" };
   m.__token = lockToken;
   try {
+    const pendingOp = await checkPendingOpGuard(uid, m);
+    if (pendingOp) {
+      log("BAN_USER_PENDING_OP_BLOCKED", { uidPrefix: uid.slice(0, 8), op: "unban" });
+      return { ok: false, reason: "pending_reconcile" };
+    }
+    // pre-hold (Codex รอบ 10 ข้อ 3): ระหว่างไม่รู้ผล สถานะปลอดภัยคือ "ยังแบน" —
+    // ยืนยัน positive ไว้ก่อนจริง ๆ (ล้าง neg/tomb ที่อาจทำ isBanned ข้าม positive)
+    // แล้วรายงาน enforcementHeld ตามผลเขียนจริง
+    let unbanHoldOk = false;
+    {
+      const preGen = await m.bump(banGenKey(uid));
+      if (preGen.ok) {
+        const preApply = await m.applyState(banGenKey(uid), preGen.gen, {
+          sets: [{ key: banCacheKey(uid), value: "1", ttlSec: POSITIVE_TTL_SEC }],
+          dels: [banNegCacheKey(uid), banTombstoneKey(uid)],
+        });
+        unbanHoldOk = preApply.ok === true && preApply.applied === true;
+      }
+    }
     const run = await runDbOpWithLockRenewal(uid, m, () =>
       client
         .from("banned_users")
@@ -518,16 +584,19 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
         fireReconcileQueueAlert(uid, "unban", m);
         log("BAN_RECONCILE_QUEUE_UNAVAILABLE", { uidPrefix: uid.slice(0, 8), op: "unban" });
       }
+      await markPendingOp(uid, opId, m);
       const finalizer = scheduleUnknownOutcomeFinalizer(uid, m, client, run.promise, "unban", {
         targetState: "unbanned",
+        opId,
         member: enq.ok ? enq.member : null,
         isSettleFailure: (res) => Boolean(res.error || res.value?.error),
       });
-      log("BAN_USER_UNBAN_DB_OUTCOME_UNKNOWN", { uidPrefix: uid.slice(0, 8), durableOwner: enq.ok === true });
+      log("BAN_USER_UNBAN_DB_OUTCOME_UNKNOWN", { uidPrefix: uid.slice(0, 8), durableOwner: enq.ok === true, enforcementHeld: unbanHoldOk });
       return {
         ok: false,
         reason: enq.ok ? "db_outcome_unknown" : "reconcile_queue_unavailable",
         cacheCleared: false,
+        enforcementHeld: unbanHoldOk,
         durableOwner: enq.ok === true,
         pendingFinalizer: finalizer,
       };
@@ -566,6 +635,33 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
   } finally {
     await Promise.resolve(m.releaseLock(banMutexKey(uid), lockToken)).catch(() => {});
   }
+}
+
+/**
+ * อ่านสถานะแบนจาก DB แบบ read-only (Codex รอบ 10: sweeper ต้อง observe ก่อน
+ * ห้าม mutate cache จนกว่า DB จะตรง intent)
+ * @returns {Promise<{ ok: boolean, banned?: boolean }>}
+ */
+export async function observeBanDbState(lineUserId, deps = {}) {
+  const uid = String(lineUserId || "").trim();
+  if (!BAN_UID_RE.test(uid)) return { ok: false };
+  const client = deps.dbClient || db;
+  const m = mutationDeps(deps);
+  const res = await raceRemaining(
+    Promise.resolve(
+      client
+        .from("banned_users")
+        .select("id")
+        .eq("line_user_id", uid)
+        .is("unbanned_at", null)
+        .limit(1)
+        .maybeSingle(),
+    ).catch((e) => ({ error: e })),
+    { __timeout: true },
+    m.dbTimeoutMs,
+  );
+  if (res.__timeout || res.error) return { ok: false };
+  return { ok: true, banned: Boolean(res.data) };
 }
 
 /**

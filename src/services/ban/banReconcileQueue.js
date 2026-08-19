@@ -74,20 +74,71 @@ export async function listPendingReconciles(deps = {}) {
   }
 }
 
+/* ---------------- pending-operation guard (Codex รอบ 10 ข้อ 2) ----------------
+ * ระหว่างมี operation ที่ "ไม่รู้ผล DB" ค้างอยู่ ห้ามรับ ban/unban รอบใหม่ของ uid
+ * เดียวกัน — DB commit อาจกลับลำดับแล้วคำสั่งเก่าทับคำสั่งล่าสุด · guard ถูกตั้ง
+ * ภายใต้ mutation lock และเคลียร์แบบ compare-exact opId หลัง state-confirmed เท่านั้น */
+const PENDING_OP_PREFIX = "ban:pendingop:";
+const PENDING_OP_TTL_SEC = 7 * 24 * 3600;
+
+export async function setPendingOp(uid, opId, deps = {}) {
+  try {
+    const r = await redis(deps);
+    if (!r) return { ok: false };
+    await r.set(`${PENDING_OP_PREFIX}${uid}`, String(opId), "EX", PENDING_OP_TTL_SEC);
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function getPendingOp(uid, deps = {}) {
+  try {
+    const r = await redis(deps);
+    if (!r) return null;
+    return await r.get(`${PENDING_OP_PREFIX}${uid}`);
+  } catch {
+    return null;
+  }
+}
+
+/** เคลียร์เฉพาะเมื่อ opId ตรง (compare-exact — งานใหม่ห้ามโดนงานเก่าเคลียร์ทิ้ง) */
+export async function clearPendingOp(uid, opId, deps = {}) {
+  try {
+    const r = await redis(deps);
+    if (!r) return { ok: false };
+    const res = await r.eval(
+      "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end return 0",
+      1,
+      `${PENDING_OP_PREFIX}${uid}`,
+      String(opId),
+    );
+    return { ok: true, cleared: Number(res) === 1 };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/** alert แบบซื่อสัตย์ (Codex รอบ 10 P1): ส่งล้ม = ปล่อย dedupe ให้รอบหน้าลองใหม่ */
 function fireMismatchAlert(entry, banned, deps) {
   void (async () => {
     try {
       if (deps.alert) return void deps.alert(entry, banned);
-      const { tryDedupeOnce } = await import("../../redis/scanV2Redis.js");
-      if (await tryDedupeOnce(`ban:reconcile:mismatch_alert:${entry.uid}`, 3600)) {
+      const { tryDedupeOnce, clearDedupeKey } = await import("../../redis/scanV2Redis.js");
+      const key = `ban:reconcile:mismatch_alert:${entry.uid}`;
+      if (!(await tryDedupeOnce(key, 3600))) return;
+      let sent = false;
+      try {
         const { sendTelegramText } = await import("../telegramNotify.service.js");
-        await Promise.race([
+        const res = await Promise.race([
           sendTelegramText(
             `[CRITICAL] แบน/ปลดแบนยังไม่ลงตัว: ${entry.uid}\nสั่ง ${entry.reason} (คาด ${entry.targetState}) แต่ DB เป็น ${banned ? "banned" : "unbanned"}\nระบบจะ retry ต่อ — ตรวจด้วยคำสั่ง ดูแบน`,
           ),
           new Promise((r) => setTimeout(r, 5000)),
         ]);
-      }
+        sent = res?.ok === true;
+      } catch { sent = false; }
+      if (!sent) await clearDedupeKey(key).catch(() => {});
     } catch { /* alert ห้ามล้มทับงาน */ }
   })();
 }
@@ -109,11 +160,13 @@ export async function sweepPendingBanReconciles(deps) {
     stats.scanned += 1;
     if (now - e.enqueuedAt < minSettle) { stats.skipped += 1; continue; }
     try {
-      const rec = await deps.reconcile(e.uid);
-      if (!rec?.ok) { stats.failed += 1; continue; }
-      const matches = (rec.banned === true) === (e.targetState === "banned");
+      // 1) observe DB แบบ read-only ก่อน (Codex รอบ 10 ข้อ 1): ห้ามแตะ cache
+      //    จนกว่าจะรู้ว่า DB ตรง intent — reconcile ทันทีจะพลิก fail-closed
+      //    ของ ban ที่ late commit ยังไม่มาถึง
+      const obs = await deps.observe(e.uid);
+      if (!obs?.ok) { stats.failed += 1; continue; }
+      const matches = (obs.banned === true) === (e.targetState === "banned");
       if (!matches) {
-        // DB ยังไม่ตรง intent — ห้ามถือว่าสำเร็จ (late commit อาจกำลังมา หรือ op ล้มจริง)
         stats.mismatched += 1;
         console.log(
           JSON.stringify({
@@ -121,20 +174,31 @@ export async function sweepPendingBanReconciles(deps) {
             uidPrefix: String(e.uid).slice(0, 8),
             reason: e.reason,
             expected: e.targetState,
-            dbBanned: rec.banned === true,
+            dbBanned: obs.banned === true,
           }),
         );
-        fireMismatchAlert(e, rec.banned === true, deps);
+        fireMismatchAlert(e, obs.banned === true, deps);
+        continue; // cache/fail-closed state ไม่ถูกแตะ · entry ค้างไว้ retry
+      }
+      // 2) DB ตรง intent แล้ว → ค่อย apply cache แล้วลบ exact member
+      const rec = await deps.reconcile(e.uid);
+      const applied = rec?.ok === true && (rec.banned === true) === (e.targetState === "banned");
+      if (!applied) { stats.failed += 1; continue; }
+      const removed = await removePendingReconcile(e.member, deps);
+      if (removed?.ok !== true) {
+        // ลบไม่สำเร็จ = งานยังไม่จบ ห้ามนับ/log ว่าสำเร็จ (Codex รอบ 10 H)
+        stats.failed += 1;
+        console.log(JSON.stringify({ event: "BAN_RECONCILE_SWEEP_REMOVE_FAILED", uidPrefix: String(e.uid).slice(0, 8) }));
         continue;
       }
-      await removePendingReconcile(e.member, deps);
+      if (deps.clearPendingOp) await Promise.resolve(deps.clearPendingOp(e.uid, e.opId)).catch(() => {});
       stats.reconciled += 1;
       console.log(
         JSON.stringify({
           event: "BAN_RECONCILE_SWEEP_DONE",
           uidPrefix: String(e.uid).slice(0, 8),
           reason: e.reason,
-          banned: rec.banned === true,
+          banned: e.targetState === "banned",
         }),
       );
     } catch {

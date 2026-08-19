@@ -871,3 +871,11 @@
 - **จุด 3 honesty**: `enforcementHeld` มาจากผล applyState จริงของ pre-write · enqueue ล้ม → reason `reconcile_queue_unavailable` + `durableOwner:false` + critical alert — ห้ามอ้าง durable ทั้งที่เขียนไม่เข้า
 - **จุด 4 ABA**: member = `uid|reason|targetState|opId` (opId สุ่มต่อ operation) · ลบ exact member เท่านั้น — finalizer เก่าลบงานใหม่ชนิดเดียวกันไม่ได้
 - Tests รอบนี้: A (ระหว่างรอ ห้ามพลิก — assert กลางเทสต์ E เดิม) · B-r9 sweep mismatch ทั้งสองทิศ removed=0+alert · C-r9 sweep สองรอบ ลบเมื่อ DB ตรง · D-r9 applyState/enqueue ล้ม → honesty จริง · E-r9 reconcile ล้มหลัง settle → entry ค้าง · F-r9 ABA exact-member · C เดิมปรับเป็น "ไม่ settle = ไม่พลิก + entry ค้าง" · banSystem รวม 59
+
+## 2026-08-20 (สาย) | Claude | ปิด B1 รอบสิบ (Codex: gate/payment/ABA/finalizer-wait ผ่านแล้ว)
+- **จุด 1 observe-first sweep**: sweeper อ่าน DB แบบ read-only (`observeBanDbState` ใหม่ — ไม่แตะ cache) ก่อนเสมอ · mismatch = เก็บคิว + alert โดย **ไม่แตะ cache/fail-closed เลย** (repro ของ Codex: pending ban โดน reconcile พลิกเป็น tomb ระหว่างรอ late commit — ปิดแล้ว) · DB ตรง intent เท่านั้นจึง apply cache แล้วลบ exact member
+- **จุด 2 pending-op guard**: `ban:pendingop:{uid}` ตั้งใต้ mutation lock เมื่อ outcome unknown · ban/unban รอบใหม่เช็ค guard หลังได้ lock — มีงานค้าง = คืน `pending_reconcile` โดยไม่แตะ DB (กัน commit กลับลำดับ: unban เก่า commit ทีหลังทับ ban ใหม่) · เคลียร์ compare-exact opId เฉพาะหลัง state-confirmed (finalizer/sweeper)
+- **จุด 3 admin honesty**: copy "ระบบกันบัญชีนี้ไว้ก่อนแล้ว" ต่อเมื่อ `enforcementHeld === true` เท่านั้น สาขา false บอกตรง "กันไว้ล่วงหน้าไม่สำเร็จ ลูกค้าอาจยังใช้งานได้" · unban unknown มี pre-hold positive จริง (set active + del neg/tomb) แล้วรายงาน enforcementHeld ตามผลเขียน · เพิ่ม copy pending_reconcile ทั้งสองคำสั่ง
+- **H**: ผล remove/zrem ตรวจจริงทั้ง finalizer และ sweeper — ลบไม่เข้า = ไม่นับสำเร็จ ไม่ปลด guard
+- **P1**: mismatch + queue-unavailable alerts เช็ค `sendTelegramText.ok` แล้วปล่อย dedupe เมื่อส่งล้ม
+- Tests A-r10 ถึง H-r10 ครบ 8 + ปรับ sweeper tests เดิมเป็น observe/reconcile แยก · banSystem รวม 67
