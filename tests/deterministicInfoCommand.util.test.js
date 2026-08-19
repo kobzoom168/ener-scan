@@ -56,25 +56,38 @@ test("ทุก active state: aiCallCount=0 จริงตาม CHAT_TURN_AI_C
   }
 });
 
-test("scan_energy: ข้อความตามมี/ไม่มีวันเกิด · usage_help มี payPick line", async () => {
+test("scan_energy: ข้อความตามมี/ไม่มีวันเกิด · usage_help ไม่มีคำเงิน/ชวนซื้อ (Codex รอบ 5)", async () => {
   const sent = [];
   await handleDeterministicInfoCommand({
     kind: "scan_energy", client: {}, userId: "U1", replyToken: "rt",
     deps: { sendNonScanReply: async (p) => { sent.push(p); }, getSavedBirthdate: async () => null },
   });
-  assert.match(sent[0].text, /ยังไม่มีวันเกิดที่บันทึกไว้/);
+  assert.match(sent[0].text, /ยังไม่มีวันเกิดบันทึกไว้/);
+  assert.doesNotMatch(sent[0].text, /ส่งรูปถัดไป/, "ห้ามมี CTA ซ้ำ");
   await handleDeterministicInfoCommand({
     kind: "usage_help", client: {}, userId: "U1", replyToken: "rt",
-    deps: { sendNonScanReply: async (p) => { sent.push(p); }, payPickLine: "หากหมดสิทธิ์ฟรี: ทดสอบ" },
+    deps: { sendNonScanReply: async (p) => { sent.push(p); } },
   });
   assert.match(sent[1].text, /วิธีใช้งาน Ener Scan/);
-  assert.match(sent[1].text, /หากหมดสิทธิ์ฟรี/);
+  // นโยบาย: ลูกค้าไม่ได้ถามเรื่องเงิน — ห้ามแทรกราคา/ค่าครู/ชวนจ่าย
+  assert.doesNotMatch(sent[1].text, /บาท|จ่าย|ค่าครู|แพ็ก|ราคา|หมดสิทธิ์/);
+  // ครับไม่เกิน 1 ครั้งต่อข้อความ (โทนกบ)
+  for (const p of sent) {
+    assert.ok((p.text.match(/ครับ/g) || []).length <= 1, `ครับเกิน: ${p.text}`);
+  }
 });
 
-test("webhook wiring: info router อยู่หลัง exact-utility, ก่อน profile-edit/semantic (source-order)", () => {
+test("webhook wiring: info router หลัง exact-utility ก่อน semantic + in-flight gate ไม่กลืน (source-order)", () => {
   const s = fs.readFileSync("src/routes/lineWebhook.js", "utf8");
+  const infoHits = [...s.matchAll(/matchDeterministicInfoCommand\(text\)/g)].length;
+  assert.equal(infoHits, 2, "ต้องมี 2 จุด: in-flight bypass + router");
+  // in-flight gate: menuBypass ต้องรวม info commands (Codex รอบ 5: "วิธีใช้" เคยโดนกลืน)
+  const gate = s.indexOf("menuBypass =");
+  const gateBlock = s.slice(gate, gate + 400);
+  assert.ok(gateBlock.includes("matchDeterministicInfoCommand"), "in-flight bypass ต้องรวม info commands");
+  // router: หลัง exact utility ก่อน profile-edit/semantic
   const util = s.indexOf("runExactUtilityCommandTerminal({");
-  const info = s.indexOf("matchDeterministicInfoCommand(text)");
+  const info = s.indexOf("matchDeterministicInfoCommand(text)", util);
   const profileEdit = s.indexOf("handlePendingProfileEditValue(userId, text)");
   assert.ok(util > 0 && info > util, "info router ต้องอยู่หลัง exact utility");
   assert.ok(profileEdit > info, "info router ต้องมาก่อน profile-edit/semantic ทั้งหมด");

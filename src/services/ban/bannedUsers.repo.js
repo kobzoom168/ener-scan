@@ -1,23 +1,27 @@
 /**
- * ระบบแบน ID (กบ 18 ส.ค. + Codex 4 รอบ)
+ * ระบบแบน ID (กบ 18 ส.ค. + Codex 5 รอบ)
  *
- * Cache model (Codex รอบ 4 — linearizable): DB = SSOT · redis มี
- * generation counter ต่อ uid (`ban:gen`) — ทุก mutation (ban/unban/already_banned
- * resync) bump gen ก่อน แล้วเขียน cache ทุกตัวผ่าน Lua applyIfGenEquals ที่เช็ค
- * gen ณ เวลาเขียนจริง → straggler ของ mutation เก่า (unban ที่มาช้า ฯลฯ)
- * เขียนไม่เข้า ไม่มีทางทับผลของ ban/unban รอบใหม่กว่า
- *
- * isBanned: อ่าน gen ตอนเริ่ม → ผล DB จะถูก cache กลับก็ต่อเมื่อ gen ยังเท่าเดิม
- * (ไม่มี mutation แทรกระหว่าง query) — ปิดทั้ง resurrection และ stale negative
- *
- * ค้างเดิมที่ยังคุม: overall deadline ~800ms ต่อ isBanned · single-flight DB read
- * (evict เมื่อ caller ชน deadline) · fail-open + alert (fire-and-forget) เมื่อ DB พัง
+ * Concurrency model (Codex รอบ 5 — linearizable จริง):
+ * 1. ทุก mutation (ban/unban/already_banned resync) ถือ per-uid distributed lock
+ *    (`ban:mutex`) ครอบทั้ง DB mutation + gen bump + cache sync — ban/unban
+ *    แข่งกัน = เข้าคิวกัน ไม่สลับกลางคัน
+ * 2. DB call ภายใน lock อาจลากเกิน TTL — หลัง DB ตอบต้องเช็คว่ายังถือ lock อยู่
+ *    (compare token) ก่อนแตะ cache: เสีย lock = ห้าม mutate cache (มี mutation
+ *    ใหม่กว่าแซงไปแล้ว) → คืน cacheSynced/cacheCleared=false ตามจริง
+ * 3. cache state เขียนเป็น Lua ก้อนเดียว (applyBanStateIfGen: SET+DEL ทั้งชุด
+ *    atomic, guarded ด้วย generation) — ไม่มีหน้าต่างระหว่างคำสั่ง
+ * 4. isBanned: จับ gen ก่อน query → หลัง DB ตอบ re-read gen — เปลี่ยน = มี mutation
+ *    แทรก ห้ามคืนผลเก่า → retry รอบใหม่ (สูงสุด 2) · หมดงบ = อ่าน authoritative
+ *    cache ที่ mutation เพิ่งเขียน (positive → true, tombstone → false)
  */
 import { db } from "../../config/supabase.js";
 import {
   getValue,
-  applyIfGenEquals,
+  applyBanStateIfGen,
   bumpGeneration,
+  acquireShortLock,
+  releaseShortLock,
+  checkShortLockHeld,
   tryDedupeOnce,
 } from "../../redis/scanV2Redis.js";
 
@@ -25,16 +29,17 @@ const banCacheKey = (uid) => `ban:active:${uid}`;
 const banNegCacheKey = (uid) => `ban:neg:${uid}`;
 const banTombstoneKey = (uid) => `ban:tomb:${uid}`;
 const banGenKey = (uid) => `ban:gen:${uid}`;
+const banMutexKey = (uid) => `ban:mutex:${uid}`;
 export const BAN_UID_RE = /^U[0-9a-f]{32}$/;
 const OVERALL_TIMEOUT_MS = 800;
-const CACHE_MUTATION_DEADLINE_MS = 2500; // งบรวมทั้งชุด cache ops ของ ban/unban (Codex P1)
+const MUTATION_LOCK_TTL_MS = 8000;
+const MUTATION_LOCK_WAIT_MS = 2000;
 const POSITIVE_TTL_SEC = 30 * 24 * 3600;
 const NEG_TTL_SEC = 45;
 const TOMBSTONE_TTL_SEC = 120;
 
 const log = (event, extra = {}) => console.log(JSON.stringify({ event, ...extra }));
 
-/** race พร้อม timeout ที่เหลือจาก deadline รวม — ค้าง/throw = fallback */
 async function raceRemaining(promise, fallback, remainingMs) {
   if (remainingMs <= 0) return fallback;
   let timer = null;
@@ -48,8 +53,7 @@ async function raceRemaining(promise, fallback, remainingMs) {
   }
 }
 
-/** single-flight DB read ต่อ uid — burst แชร์ query เดียว · entry มีอายุ +
- *  ถูก evict ทันทีเมื่อ caller ชน deadline (query ค้างห้าม poison call ถัดไป) */
+/** single-flight DB read ต่อ uid — evict เมื่อ caller ชน deadline */
 const DB_READ_SHARE_MS = 2000;
 const dbReadInFlight = new Map();
 function readActiveBanRow(uid, client) {
@@ -78,7 +82,6 @@ function evictDbReadInFlight(uid, entry) {
 }
 
 function fireFailOpenAlert(deps) {
-  // ห้าม await — alert ต้องไม่ขวางการ return ของ webhook
   void (async () => {
     try {
       const alertDedupe = deps.alertDedupe || tryDedupeOnce;
@@ -93,93 +96,119 @@ function fireFailOpenAlert(deps) {
   })();
 }
 
+function mutationDeps(deps) {
+  return {
+    bump: deps.bumpGen || bumpGeneration,
+    applyState: deps.applyBanState || applyBanStateIfGen,
+    acquireLock: deps.acquireLock || ((k, ttl) => acquireShortLock(k, ttl)),
+    releaseLock: deps.releaseLock || ((k, t) => releaseShortLock(k, t)),
+    checkLockHeld: deps.checkLockHeld || ((k, t) => checkShortLockHeld(k, t)),
+  };
+}
+
+/** รอ lock แบบ bounded (คำสั่งแอดมิน — retry สั้น ๆ แล้วยอมแพ้เป็น busy) */
+async function acquireMutationLock(uid, m) {
+  const deadline = Date.now() + MUTATION_LOCK_WAIT_MS;
+  for (;;) {
+    const token = await m.acquireLock(banMutexKey(uid), MUTATION_LOCK_TTL_MS);
+    if (token) return token;
+    if (Date.now() >= deadline) return null;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
 /**
  * @param {string} lineUserId
- * @param {{ dbClient?: any, cacheGet?: Function, applyIfGen?: Function, alertDedupe?: Function, overallTimeoutMs?: number }} [deps]
+ * @param {{ dbClient?: any, cacheGet?: Function, applyBanState?: Function, alertDedupe?: Function, overallTimeoutMs?: number }} [deps]
  * @returns {Promise<boolean>} true = แบนอยู่ (drop ทุกอย่าง)
  */
 export async function isBanned(lineUserId, deps = {}) {
   const uid = String(lineUserId || "").trim();
   if (!uid) return false;
   const cacheGet = deps.cacheGet || getValue;
-  const applyGen = deps.applyIfGen || applyIfGenEquals;
+  const applyState = deps.applyBanState || applyBanStateIfGen;
   const deadlineAt = Date.now() + (deps.overallTimeoutMs || OVERALL_TIMEOUT_MS);
   const remaining = () => deadlineAt - Date.now();
-
-  // gen ตอนเริ่ม: ใช้เป็นเงื่อนไขการเขียน cache กลับหลัง DB ตอบ (linearizable)
-  const genBefore = String((await raceRemaining(cacheGet(banGenKey(uid)), null, remaining())) ?? "0");
-
-  // tombstone: เพิ่งปลดแบน — ห้ามเชื่อ positive cache
-  const tomb = await raceRemaining(cacheGet(banTombstoneKey(uid)), null, remaining());
-  if (tomb !== "1") {
-    const pos = await raceRemaining(cacheGet(banCacheKey(uid)), null, remaining());
-    if (pos === "1") return true;
-    const neg = await raceRemaining(cacheGet(banNegCacheKey(uid)), null, remaining());
-    if (neg === "1") return false;
-  }
-
   const client = deps.dbClient || db;
   const TIMEOUT_SENTINEL = { __timeout: true };
-  const flight = readActiveBanRow(uid, client);
-  const res = await raceRemaining(flight.p, TIMEOUT_SENTINEL, remaining());
-  if (res === TIMEOUT_SENTINEL) evictDbReadInFlight(uid, flight);
-  if (res === TIMEOUT_SENTINEL || !res || res.error) {
-    log("BAN_CHECK_DB_ERROR_FAIL_OPEN", {
-      uidPrefix: uid.slice(0, 8),
-      message: res === TIMEOUT_SENTINEL ? "deadline_exceeded" : String(res?.error?.message || "db_error").slice(0, 100),
-    });
-    fireFailOpenAlert(deps);
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const genBefore = String((await raceRemaining(cacheGet(banGenKey(uid)), null, remaining())) ?? "0");
+    const tomb = await raceRemaining(cacheGet(banTombstoneKey(uid)), null, remaining());
+    if (tomb !== "1") {
+      const pos = await raceRemaining(cacheGet(banCacheKey(uid)), null, remaining());
+      if (pos === "1") return true;
+      const neg = await raceRemaining(cacheGet(banNegCacheKey(uid)), null, remaining());
+      if (neg === "1") return false;
+    }
+
+    const flight = readActiveBanRow(uid, client);
+    const res = await raceRemaining(flight.p, TIMEOUT_SENTINEL, remaining());
+    if (res === TIMEOUT_SENTINEL) evictDbReadInFlight(uid, flight);
+    if (res === TIMEOUT_SENTINEL || !res || res.error) {
+      log("BAN_CHECK_DB_ERROR_FAIL_OPEN", {
+        uidPrefix: uid.slice(0, 8),
+        message: res === TIMEOUT_SENTINEL ? "deadline_exceeded" : String(res?.error?.message || "db_error").slice(0, 100),
+      });
+      fireFailOpenAlert(deps);
+      return false;
+    }
+    const banned = Boolean(res.data);
+
+    // linearizability (Codex รอบ 5): gen ขยับระหว่าง query = มี mutation แทรก —
+    // ผล DB ที่อ่านมา "เก่า" แล้ว ห้ามคืน · retry รอบใหม่ (อ่าน state ปัจจุบัน)
+    const genAfter = String((await raceRemaining(cacheGet(banGenKey(uid)), null, Math.max(remaining(), 50))) ?? "0");
+    if (genAfter !== genBefore) {
+      evictDbReadInFlight(uid, flight); // query ที่แชร์อยู่ก็เก่าแล้วเหมือนกัน
+      continue;
+    }
+
+    // gen นิ่ง — cache ผลกลับแบบ atomic gen-guarded (fire-and-forget)
+    if (banned) {
+      void Promise.resolve(
+        applyState(banGenKey(uid), genBefore, {
+          sets: [{ key: banCacheKey(uid), value: "1", ttlSec: POSITIVE_TTL_SEC }],
+        }),
+      ).catch(() => {});
+      return true;
+    }
+    void Promise.resolve(
+      applyState(banGenKey(uid), genBefore, {
+        sets: [{ key: banNegCacheKey(uid), value: "1", ttlSec: NEG_TTL_SEC }],
+      }),
+    ).catch(() => {});
     return false;
   }
-  const banned = Boolean(res.data);
 
-  // เขียน cache กลับแบบ gen-guarded (fire-and-forget): มี mutation แทรกระหว่าง
-  // query (gen ขยับ) = เขียนไม่เข้า — ผลเก่าไม่มีทางฟื้น cache ผี
-  if (banned) {
-    void Promise.resolve(
-      applyGen(banGenKey(uid), genBefore, { type: "set", key: banCacheKey(uid), value: "1", ttlSec: POSITIVE_TTL_SEC }),
-    ).catch(() => {});
-    // ผล DB สดกว่า cache เสมอ ณ จุดนี้ — แต่ถ้า gen ขยับระหว่าง query แปลว่ามี
-    // mutation ใหม่กว่า (เช่น unban) → เชื่อฝั่ง mutation: อ่าน tombstone ซ้ำ
-    const tombAfter = await raceRemaining(cacheGet(banTombstoneKey(uid)), null, Math.max(remaining(), 50));
-    if (tombAfter === "1") return false;
-    return true;
-  }
-  void Promise.resolve(
-    applyGen(banGenKey(uid), genBefore, { type: "set", key: banNegCacheKey(uid), value: "1", ttlSec: NEG_TTL_SEC }),
-  ).catch(() => {});
-  return false;
+  // retry หมดงบ — อ่าน authoritative cache ที่ mutation ล่าสุดเพิ่งเขียน (ภายใต้ lock)
+  const tombNow = await raceRemaining(cacheGet(banTombstoneKey(uid)), null, Math.max(remaining(), 50));
+  if (tombNow === "1") return false;
+  const posNow = await raceRemaining(cacheGet(banCacheKey(uid)), null, Math.max(remaining(), 50));
+  return posNow === "1";
 }
 
-/** cache mutation ชุดเต็มของสถานะ "แบน" (ใช้ทั้ง ban สำเร็จ และ already_banned resync) */
-async function syncCacheToBanned(uid, deps, deadlineAt) {
-  const bump = deps.bumpGen || bumpGeneration;
-  const applyGen = deps.applyIfGen || applyIfGenEquals;
-  const remaining = () => deadlineAt - Date.now();
-  const genRes = await raceRemaining(bump(banGenKey(uid)), { ok: false, reason: "timeout" }, remaining());
+/** cache state "แบน" ทั้งชุดใน Lua เดียว (ล้าง neg+tomb + ตั้ง positive) */
+async function syncCacheToBanned(uid, m) {
+  const genRes = await m.bump(banGenKey(uid));
   if (!genRes.ok) return false;
-  const gen = genRes.gen;
-  let synced = true;
-  for (const action of [
-    { type: "del", key: banNegCacheKey(uid) },
-    { type: "del", key: banTombstoneKey(uid) },
-    { type: "set", key: banCacheKey(uid), value: "1", ttlSec: POSITIVE_TTL_SEC },
-  ]) {
-    const r = await raceRemaining(applyGen(banGenKey(uid), gen, action), { ok: false, reason: "timeout" }, remaining());
-    if (!r.ok || r.applied === false) synced = false;
-  }
-  return synced;
+  const r = await m.applyState(banGenKey(uid), genRes.gen, {
+    sets: [{ key: banCacheKey(uid), value: "1", ttlSec: POSITIVE_TTL_SEC }],
+    dels: [banNegCacheKey(uid), banTombstoneKey(uid)],
+  });
+  return r.ok === true && r.applied === true;
 }
 
 /**
- * แบน — insert active row + sync cache แบบ gen-guarded
+ * แบน — ถือ per-uid lock ครอบ DB insert + cache sync
  * @returns {Promise<{ ok: boolean, reason?: string, cacheSynced?: boolean }>}
  */
 export async function banUser({ lineUserId, reason, bannedBy }, deps = {}) {
   const uid = String(lineUserId || "").trim();
   if (!BAN_UID_RE.test(uid)) return { ok: false, reason: "invalid_uid" };
   const client = deps.dbClient || db;
-  const deadlineAt = Date.now() + CACHE_MUTATION_DEADLINE_MS;
+  const m = mutationDeps(deps);
+  const lockToken = await acquireMutationLock(uid, m);
+  if (!lockToken) return { ok: false, reason: "busy" };
   try {
     const { error } = await client.from("banned_users").insert({
       line_user_id: uid,
@@ -187,22 +216,26 @@ export async function banUser({ lineUserId, reason, bannedBy }, deps = {}) {
       source: "manual",
       banned_by: String(bannedBy || "").trim(),
     });
+    // DB call อาจลากจน lock หลุด — เสีย lock = มี mutation ใหม่กว่าแซง ห้ามแตะ cache
+    const stillHeld = await m.checkLockHeld(banMutexKey(uid), lockToken);
     if (error) {
       if (String(error.message || "").includes("idx_banned_users_active") || String(error.code) === "23505") {
-        // แบนอยู่แล้วใน DB — ต้อง resync cache เต็มชุด (Codex รอบ 4: เดิมตั้งแค่
-        // positive ทำ neg/tomb ค้าง ตอบ "แบนอยู่แล้ว" ทั้งที่ isBanned=false)
-        const synced = await syncCacheToBanned(uid, deps, deadlineAt);
+        const synced = stillHeld ? await syncCacheToBanned(uid, m) : false;
+        if (!stillHeld) log("BAN_USER_LOCK_LOST", { uidPrefix: uid.slice(0, 8), op: "already_banned" });
         return { ok: false, reason: "already_banned", cacheSynced: synced };
       }
       throw new Error(error.message || "db_error");
     }
-    const cacheSynced = await syncCacheToBanned(uid, deps, deadlineAt);
+    const cacheSynced = stillHeld ? await syncCacheToBanned(uid, m) : false;
+    if (!stillHeld) log("BAN_USER_LOCK_LOST", { uidPrefix: uid.slice(0, 8), op: "ban" });
     if (!cacheSynced) log("BAN_USER_CACHE_SYNC_INCOMPLETE", { uidPrefix: uid.slice(0, 8) });
     log("BAN_USER_BANNED", { uidPrefix: uid.slice(0, 8), bannedBy: String(bannedBy || "").slice(0, 10), cacheSynced });
     return { ok: true, cacheSynced };
   } catch (e) {
     log("BAN_USER_BAN_FAILED", { uidPrefix: uid.slice(0, 8), message: String(e?.message || e).slice(0, 100) });
     return { ok: false, reason: "db_error" };
+  } finally {
+    await Promise.resolve(m.releaseLock(banMutexKey(uid), lockToken)).catch(() => {});
   }
 }
 
@@ -217,18 +250,15 @@ const UNBAN_CLEAR_KEYS = (uid) => [
 ];
 
 /**
- * ปลดแบน — ปิด active row (append-only) + ล้าง cache แบบ gen-guarded
- * cacheCleared=false = อย่างน้อยหนึ่ง op พลาด/โดน gen ใหม่กว่าแซง — caller ห้าม
- * อ้างว่าลูกค้ากลับมาใช้ได้ทันที
+ * ปลดแบน — ถือ per-uid lock ครอบ DB update + cache clear (Lua ชุดเดียว)
  */
 export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = {}) {
   const uid = String(lineUserId || "").trim();
   if (!BAN_UID_RE.test(uid)) return { ok: false, reason: "invalid_uid" };
-  const bump = deps.bumpGen || bumpGeneration;
-  const applyGen = deps.applyIfGen || applyIfGenEquals;
   const client = deps.dbClient || db;
-  const deadlineAt = Date.now() + CACHE_MUTATION_DEADLINE_MS;
-  const remaining = () => deadlineAt - Date.now();
+  const m = mutationDeps(deps);
+  const lockToken = await acquireMutationLock(uid, m);
+  if (!lockToken) return { ok: false, reason: "busy" };
   try {
     const { data, error } = await client
       .from("banned_users")
@@ -242,24 +272,20 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
       .select("id");
     if (error) throw new Error(error.message || "db_error");
     const wasBanned = Array.isArray(data) && data.length > 0;
-    // gen bump ก่อนทุก cache op — straggler ของรอบเก่าตกทันที และ ops ของรอบนี้
-    // จะโดนรอบใหม่กว่า (re-ban) แซงได้เท่านั้น ไม่มีทางแซงกลับ
-    const genRes = await raceRemaining(bump(banGenKey(uid)), { ok: false, reason: "timeout" }, remaining());
-    let cacheCleared = genRes.ok;
-    if (genRes.ok) {
-      const gen = genRes.gen;
-      const tombSet = await raceRemaining(
-        applyGen(banGenKey(uid), gen, { type: "set", key: banTombstoneKey(uid), value: "1", ttlSec: TOMBSTONE_TTL_SEC }),
-        { ok: false }, remaining(),
-      );
-      if (!tombSet.ok || tombSet.applied === false) cacheCleared = false;
-      for (const k of UNBAN_CLEAR_KEYS(uid)) {
-        const r = await raceRemaining(
-          applyGen(banGenKey(uid), gen, { type: "del", key: k }),
-          { ok: false }, remaining(),
-        );
-        if (!r.ok || r.applied === false) cacheCleared = false;
+    // DB update ลากจน lock หลุด = ban ใหม่กว่าอาจแซงไปแล้ว — ห้ามทิ้ง tombstone ทับ
+    const stillHeld = await m.checkLockHeld(banMutexKey(uid), lockToken);
+    let cacheCleared = false;
+    if (stillHeld) {
+      const genRes = await m.bump(banGenKey(uid));
+      if (genRes.ok) {
+        const r = await m.applyState(banGenKey(uid), genRes.gen, {
+          sets: [{ key: banTombstoneKey(uid), value: "1", ttlSec: TOMBSTONE_TTL_SEC }],
+          dels: UNBAN_CLEAR_KEYS(uid).concat(banNegCacheKey(uid)),
+        });
+        cacheCleared = r.ok === true && r.applied === true;
       }
+    } else {
+      log("BAN_USER_LOCK_LOST", { uidPrefix: uid.slice(0, 8), op: "unban" });
     }
     if (!wasBanned) return { ok: false, reason: "not_banned", cacheCleared };
     if (!cacheCleared) {
@@ -271,6 +297,8 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
   } catch (e) {
     log("BAN_USER_UNBAN_FAILED", { uidPrefix: uid.slice(0, 8), message: String(e?.message || e).slice(0, 100) });
     return { ok: false, reason: "db_error" };
+  } finally {
+    await Promise.resolve(m.releaseLock(banMutexKey(uid), lockToken)).catch(() => {});
   }
 }
 

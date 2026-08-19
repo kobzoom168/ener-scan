@@ -4265,8 +4265,29 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
 
 async function maybeHandleResultStatusQuery({ client, event, userId, text }) {
   const t = String(text || "").trim();
-  const { isStatusQueryText } = await import("../services/scanV2/statusQuery.util.js");
-  if (!isStatusQueryText(t)) return false;
+  // typed classification (Codex รอบ 5): router นี้ตอบ "สถานะสแกน" เท่านั้น —
+  // สถานะสลิป/เงิน/สมาชิกต้องไหลไป payment/entitlement flow ห้ามแย่ง
+  const { classifyStatusQuery, shouldResultStatusRouterHandle } = await import(
+    "../services/scanV2/statusQuery.util.js"
+  );
+  const kind = classifyStatusQuery(t);
+  if (kind === "other" || kind === "payment_status" || kind === "entitlement_status") return false;
+  // generic_wait: ถ้ามีเรื่องจ่ายเงินค้าง (awaiting/pending_verify) ลูกค้าน่าจะรอเรื่องนั้น
+  let hasPendingPayment = false;
+  if (kind === "generic_wait") {
+    try {
+      const { data: pay } = await supabase
+        .from("payments")
+        .select("id,status")
+        .eq("line_user_id", userId)
+        .in("status", ["awaiting_payment", "pending"])
+        .gte("created_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString())
+        .limit(1)
+        .maybeSingle();
+      hasPendingPayment = Boolean(pay);
+    } catch { hasPendingPayment = false; }
+  }
+  if (!shouldResultStatusRouterHandle({ kind, hasPendingPayment })) return false;
   try {
     const { data: job } = await supabase
       .from("scan_jobs")
@@ -4574,8 +4595,13 @@ async function handleTextMessage({ client, event, userId, session }) {
       const { RESUME_COMMAND_RE } = await import(
         "../services/welcome/registrationOnboarding.logic.js"
       );
+      const { matchDeterministicInfoCommand } = await import(
+        "../services/lineWebhook/deterministicInfoCommand.util.js"
+      );
       menuBypass =
-        Boolean(matchExactUtilityCommand(text)) || RESUME_COMMAND_RE.test(String(text).trim());
+        Boolean(matchExactUtilityCommand(text)) ||
+        Boolean(matchDeterministicInfoCommand(text)) || // วิธีใช้/สแกนพลังงาน (Codex รอบ 5 P1)
+        RESUME_COMMAND_RE.test(String(text).trim());
     } catch { /* เช็คพลาด = พฤติกรรมเดิม */ }
     if (text && !menuBypass && (await isDedupeKeyActive(scanInFlightKeyForUser(userId)))) {
       const firstNotice = await tryDedupeOnce(
@@ -4858,17 +4884,13 @@ async function handleTextMessage({ client, event, userId, session }) {
     const infoCmd = await import("../services/lineWebhook/deterministicInfoCommand.util.js");
     const infoKind = infoCmd.matchDeterministicInfoCommand(text);
     if (infoKind) {
-      let payPickLine = null;
-      try {
-        const payPick = formatPaywallPriceTokensForLine(loadActiveScanOffer()) || "ค่าครูจากเมนู";
-        payPickLine = `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`;
-      } catch { payPickLine = null; }
+      // ไม่แทรกราคา/ค่าครูในคำตอบ "วิธีใช้" — ลูกค้าไม่ได้ถามเรื่องเงิน (นโยบายกบ + Codex รอบ 5)
       const done = await infoCmd.handleDeterministicInfoCommand({
         kind: infoKind,
         client,
         userId,
         replyToken: event.replyToken,
-        deps: { sendNonScanReply, getSavedBirthdate, payPickLine },
+        deps: { sendNonScanReply, getSavedBirthdate },
       });
       if (done) return;
     }

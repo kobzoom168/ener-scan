@@ -17,25 +17,24 @@ export function matchDeterministicInfoCommand(text) {
   return null;
 }
 
-export function buildUsageHelpText(payPickLine) {
+// ไม่มีบรรทัดราคา/ค่าครู (Codex รอบ 5: ลูกค้าไม่ได้ถามเรื่องเงิน ห้ามชวนซื้อ)
+// และไม่มี CTA ซ้ำ/ครับซ้ำ — โทนกบ
+export function buildUsageHelpText() {
   return [
     "วิธีใช้งาน Ener Scan",
     "",
     "1) ส่งรูปวัตถุที่ต้องการสแกน",
     "2) ผมจะขอวันเกิด (DD/MM/YYYY)",
     "3) อาจารย์อ่านเสร็จ ผมส่งผลกลับมาในแชทนี้",
-    ...(payPickLine ? ["", payPickLine] : []),
   ].join("\n");
 }
 
 export function buildScanEnergyText(hasSavedBirthdate) {
   return [
-    "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
+    "ส่งรูปวัตถุที่ต้องการสแกนมาได้ 1 รูปครับ",
     hasSavedBirthdate
-      ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว อาจารย์จะเริ่มสแกนให้ทันที"
-      : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ อาจารย์จะขอวันเกิดก่อนสแกน",
-    "",
-    "ส่งรูปถัดไปมาได้เลยครับ",
+      ? "มีวันเกิดบันทึกไว้แล้ว อาจารย์เริ่มอ่านทันที"
+      : "ยังไม่มีวันเกิดบันทึกไว้ ผมจะขอวันเกิดก่อนเริ่ม",
   ].join("\n");
 }
 
@@ -72,7 +71,7 @@ export async function handleDeterministicInfoCommand({ kind, client, userId, rep
     replyToken,
     replyType: "usage_help",
     semanticKey: "usage_help",
-    text: buildUsageHelpText(deps.payPickLine || null),
+    text: buildUsageHelpText(),
     alternateTexts: [
       ["สรุปวิธีใช้", "", "ส่งรูป 1 รูป → บอกวันเกิด DD/MM/YYYY → รอผลในแชท"].join("\n"),
     ],

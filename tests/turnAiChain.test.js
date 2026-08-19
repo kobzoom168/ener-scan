@@ -53,17 +53,21 @@ test("นอก context: record/emit เป็น no-op ไม่พัง ไ�
   assert.equal(out.filter((o) => o.event === "CHAT_TURN_AI_CHAIN").length, 0);
 });
 
-test("aiLatencyMs สะสมแยกจาก turnLatencyMs + annotate state ติดไปด้วย", async () => {
+test("settledAiLatencyMs สะสมต่อ call ที่ settle จริง แยกจาก turnLatencyMs + annotate state", async () => {
   await runWithTurnContext({ messageId: "c", kind: "text" }, async () => {
-    recordTurnAiCall("x");
-    recordTurnAiLatency(120);
-    recordTurnAiLatency(80);
-    recordTurnAiLatency(-5); // ค่าลบต้องไม่ลดยอด
+    const h1 = recordTurnAiCall("x");
+    const h2 = recordTurnAiCall("y");
+    const h3 = recordTurnAiCall("z");
+    recordTurnAiLatency(120, h1);
+    recordTurnAiLatency(80, h2);
+    recordTurnAiLatency(-5, h3); // ค่าลบต้องไม่ลดยอด (นับ settle แต่บวก 0)
     annotateTurn({ state: "idle" });
     await new Promise((r) => setTimeout(r, 10));
     const out = captureEmit(() => emitTurnAiChain());
     const e = out.find((o) => o.event === "CHAT_TURN_AI_CHAIN");
     assert.equal(e.settledAiLatencyMs, 200);
+    assert.equal(e.settledAiCallCount, 3);
+    assert.equal(e.pendingAiCount, 0);
     assert.ok(e.turnLatencyMs >= 10);
     assert.equal(e.state, "idle");
   });
@@ -131,5 +135,20 @@ test("call-ID matching (Codex รอบ 4 P1): call หลังเสร็จ�
     assert.ok(e.pendingElapsedMs >= 15, `pendingElapsedMs ต้องเป็นของ slow_call ได้ ${e.pendingElapsedMs}`);
     recordTurnAiLatency(100, h1);
     assert.ok(h1 && h2 && h1.id !== h2.id);
+  });
+});
+
+test("settle guard (Codex รอบ 5 P1): settle ซ้ำด้วย handle เดิม/เกินจำนวน call → ไม่นับโป่ง", async () => {
+  await runWithTurnContext({ messageId: "dup", kind: "text" }, async () => {
+    const h = recordTurnAiCall("only_call");
+    recordTurnAiLatency(50, h);
+    recordTurnAiLatency(50, h);   // ซ้ำ handle เดิม — ต้องไม่นับ
+    recordTurnAiLatency(50);       // ไม่มี call ค้างเหลือ — ต้องไม่นับ
+    const out = captureEmit(() => emitTurnAiChain());
+    const e = out.find((o) => o.event === "CHAT_TURN_AI_CHAIN");
+    assert.equal(e.aiCallCount, 1);
+    assert.equal(e.settledAiCallCount, 1, "settle ซ้ำห้ามนับเพิ่ม");
+    assert.equal(e.settledAiLatencyMs, 50, "latency ซ้ำห้ามสะสมเพิ่ม");
+    assert.equal(e.pendingAiCount, 0);
   });
 });

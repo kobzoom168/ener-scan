@@ -13,6 +13,7 @@ import {
   tryDedupeOnce,
   acquireShortLock,
   releaseShortLock,
+  renewShortLock,
 } from "../../redis/scanV2Redis.js";
 
 const log = (event, extra = {}) => console.log(JSON.stringify({ event, ...extra }));
@@ -69,6 +70,7 @@ export async function sendCustomerAlert(p, deps = {}) {
   // ปล่อยได้เฉพาะ lease ของตัวเอง ไม่มีทางลบ lease ของ request ใหม่แล้วเปิดทางส่งซ้ำ
   const acquireLease = deps.acquireLease || ((key, ttlMs) => acquireShortLock(key, ttlMs));
   const releaseLease = deps.releaseLease || ((key, token) => releaseShortLock(key, token));
+  const renewLease = deps.renewLease || ((key, token, ttlMs) => renewShortLock(key, token, ttlMs));
   const sendTg =
     deps.sendTelegramText ||
     (async (t) => {
@@ -101,11 +103,18 @@ export async function sendCustomerAlert(p, deps = {}) {
       if ((await kvBound(kvGet(sentKey), null)) === "1") return;
       const leaseToken = await kvBound(acquireLease(leaseKey, 60_000), null);
       if (!leaseToken) return; // มีคนกำลังส่งอยู่
+      // renewal (Codex รอบ 5 P1): transport ที่ลากยาวกว่า lease → ต่ออายุไปเรื่อย
+      // ตราบใดที่ request ยังไม่ settle — กัน process อื่นชิง lease แล้วส่งซ้ำ
+      const renewTimer = setInterval(() => {
+        void Promise.resolve(renewLease(leaseKey, leaseToken, 60_000)).catch(() => {});
+      }, 20_000);
+      if (typeof renewTimer.unref === "function") renewTimer.unref();
       const TIMEOUT = Symbol("timeout");
       let timer = null;
       const sendPromise = Promise.resolve()
         .then(() => doSend())
         .catch(() => false);
+      void sendPromise.finally(() => clearInterval(renewTimer));
       let outcome;
       try {
         outcome = await Promise.race([

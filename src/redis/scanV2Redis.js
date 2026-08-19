@@ -351,6 +351,69 @@ export async function applyIfGenEquals(genKey, expectedGen, action) {
   }
 }
 
+/**
+ * atomic ban-state mutation (Codex รอบ 5): SET/DEL ทั้งชุดใน Lua ก้อนเดียว
+ * guarded ด้วย generation — ห้ามแตกเป็น 3 คำสั่งแยก (ช่องว่างระหว่างคำสั่ง =
+ * หน้าต่าง race) · sets: [{key, value, ttlSec}] · dels: [key]
+ * @returns {Promise<{ ok: boolean, applied?: boolean, reason?: string }>}
+ */
+export async function applyBanStateIfGen(genKey, expectedGen, { sets = [], dels = [] } = {}) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return { ok: false, reason: "no_redis" };
+    const keys = [kDedupe(genKey)];
+    const argv = [String(expectedGen), String(sets.length), String(dels.length)];
+    for (const it of sets) {
+      keys.push(kDedupe(it.key));
+      argv.push(String(it.value ?? "1").slice(0, 4096));
+      argv.push(String(Math.min(Math.max(Number(it.ttlSec) || 3600, 60), 45 * 86400)));
+    }
+    for (const k of dels) keys.push(kDedupe(k));
+    const script =
+      "local g = redis.call('GET', KEYS[1]) or '0' " +
+      "if g ~= ARGV[1] then return 0 end " +
+      "local nset = tonumber(ARGV[2]) local ndel = tonumber(ARGV[3]) " +
+      "for i = 1, nset do " +
+      "  redis.call('SET', KEYS[1 + i], ARGV[2 + i * 2], 'EX', ARGV[3 + i * 2]) " +
+      "end " +
+      "for j = 1, ndel do redis.call('DEL', KEYS[1 + nset + j]) end " +
+      "return 1";
+    const res = await r.eval(script, keys.length, ...keys, ...argv);
+    return { ok: true, applied: Number(res) === 1 };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+}
+
+/** เช็คว่า lock ยังเป็นของ token เรา (ใช้ก่อน mutation หลัง DB call ที่อาจลากยาว) */
+export async function checkShortLockHeld(resourceKey, token) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return true; // fail-open สอดคล้อง acquireShortLock ตอน redis หาย
+    return (await r.get(kLock(resourceKey))) === token;
+  } catch {
+    return false;
+  }
+}
+
+/** ต่ออายุ lock ถ้ายังถือ token อยู่ (compare-and-pexpire) */
+export async function renewShortLock(resourceKey, token, ttlMs) {
+  try {
+    const r = await getScanV2Redis();
+    if (!r) return true;
+    const res = await r.eval(
+      "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('PEXPIRE',KEYS[1],ARGV[2]) end return 0",
+      1,
+      kLock(resourceKey),
+      token,
+      String(Math.min(Math.max(Number(ttlMs) || 5000, 1000), 600000)),
+    );
+    return Number(res) === 1;
+  } catch {
+    return false;
+  }
+}
+
 export async function clearDedupeKey(dedupeKey) {
   const r = await getScanV2Redis();
   if (!r) return;

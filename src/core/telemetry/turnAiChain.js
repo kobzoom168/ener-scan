@@ -42,14 +42,17 @@ export function recordTurnAiCall(callSite) {
 export function recordTurnAiLatency(ms, handle = null) {
   const s = als.getStore();
   if (!s) return;
-  s.aiMs = (s.aiMs || 0) + Math.max(0, Number(ms) || 0);
-  s.settledCount = (s.settledCount || 0) + 1;
   const calls = Array.isArray(s.calls) ? s.calls : [];
   const target =
     handle && Number.isInteger(handle.id) && calls[handle.id] && !calls[handle.id].settled
       ? calls[handle.id]
       : calls.find((c) => !c.settled);
-  if (target) target.settled = true;
+  // นับ settle เฉพาะเมื่อจับคู่ call ที่ยังไม่ settle ได้จริง (Codex รอบ 5:
+  // เรียกซ้ำด้วย handle เดิม/เกินจำนวน call ห้ามทำ settledCount โป่ง)
+  if (!target) return;
+  target.settled = true;
+  s.aiMs = (s.aiMs || 0) + Math.max(0, Number(ms) || 0);
+  s.settledCount = (s.settledCount || 0) + 1;
 }
 
 /** เติมข้อมูล state/route ระหว่างทาง (เช่น phase1 ที่รู้ทีหลัง) */

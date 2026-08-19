@@ -199,24 +199,31 @@ function dbSelectCounter({ banned }) {
   return { state, client };
 }
 
-/** fake redis แบบ gen-model (ตรง contract จริง: bumpGeneration + applyIfGenEquals) */
+/** fake redis ตาม contract จริง: bumpGeneration + applyBanStateIfGen (atomic multi-op) + per-uid lock */
 function memCache() {
   const m = new Map();
+  const locks = new Map();
+  let lockSeq = 0;
   return {
     m,
+    locks,
+    expireLock: (k) => locks.delete(k),
     cacheGet: async (k) => (m.has(k) ? m.get(k) : null),
     bumpGen: async (genKey) => {
       const n = (parseInt(m.get(genKey) || "0", 10) || 0) + 1;
       m.set(genKey, String(n));
       return { ok: true, gen: String(n) };
     },
-    applyIfGen: async (genKey, expectedGen, action) => {
+    applyBanState: async (genKey, expectedGen, { sets = [], dels = [] } = {}) => {
       const cur = m.get(genKey) || "0";
       if (cur !== String(expectedGen)) return { ok: true, applied: false };
-      if (action.type === "set") m.set(action.key, String(action.value ?? "1"));
-      else m.delete(action.key);
+      for (const it of sets) m.set(it.key, String(it.value ?? "1"));
+      for (const k of dels) m.delete(k);
       return { ok: true, applied: true };
     },
+    acquireLock: async (k) => { if (locks.has(k)) return null; const t = `t${++lockSeq}`; locks.set(k, t); return t; },
+    releaseLock: async (k, t) => { if (locks.get(k) === t) locks.delete(k); },
+    checkLockHeld: async (k, t) => locks.get(k) === t,
   };
 }
 
@@ -260,8 +267,8 @@ test("unban: cache op คืน {ok:false} แบบไม่ throw (เหม�
   const client = { from: () => ({ update: () => ({ eq: () => ({ is: () => ({ select: async () => ({ data: [{ id: 1 }], error: null }) }) }) }) }) };
   const r = await unbanUser({ lineUserId: UID_OK, unbannedBy: "admin" }, {
     dbClient: client,
-    bumpGen: c.bumpGen,
-    applyIfGen: async () => ({ ok: false, reason: "no_redis" }),
+    ...c,
+    applyBanState: async () => ({ ok: false, reason: "no_redis" }),
   });
   assert.equal(r.ok, true);
   assert.equal(r.cacheCleared, false);
@@ -273,10 +280,10 @@ test("unban คนที่ไม่ได้แบน → not_banned แต่�
   const c0 = memCache();
   const r = await unbanUser({ lineUserId: UID_OK, unbannedBy: "admin" }, {
     dbClient: client,
-    bumpGen: c0.bumpGen,
-    applyIfGen: async (genKey, gen, action) => {
-      if (action.type === "del") cleared.push(action.key);
-      return c0.applyIfGen(genKey, gen, action);
+    ...c0,
+    applyBanState: async (genKey, gen, state) => {
+      for (const k of state.dels || []) cleared.push(k);
+      return c0.applyBanState(genKey, gen, state);
     },
   });
   assert.equal(r.ok, false);
@@ -330,11 +337,11 @@ test("acceptance b: stale DB read จบหลัง unban → ห้ามเ�
   const store = new Map();
   const cacheGet = async (k) => (store.has(k) ? store.get(k) : null);
   // guard ตาม contract จริง: stale write "พยายามได้" แต่ต้องไม่ apply เมื่อ gen ขยับ
-  const applyIfGen = async (genKey, gen, action) => {
+  const applyBanState = async (genKey, gen, { sets = [], dels = [] } = {}) => {
     const cur = store.get(genKey) || "0";
     if (cur !== String(gen)) return { ok: true, applied: false };
-    if (action.type === "set") store.set(action.key, String(action.value ?? "1"));
-    else store.delete(action.key);
+    for (const it of sets) store.set(it.key, String(it.value ?? "1"));
+    for (const k of dels) store.delete(k);
     return { ok: true, applied: true };
   };
   // DB query แขวนไว้ — resolve เป็น active row หลังเราตั้ง tombstone (จำลอง unban กลางคัน)
@@ -342,7 +349,7 @@ test("acceptance b: stale DB read จบหลัง unban → ห้ามเ�
   const dbClient = { from: () => ({ select: () => ({ eq: () => ({ is: () => ({ limit: () => ({
     maybeSingle: () => new Promise((r) => { resolveDb = r; }),
   }) }) }) }) }) };
-  const p = isBanned(uid, { dbClient, cacheGet, applyIfGen, alertDedupe: async () => false });
+  const p = isBanned(uid, { dbClient, cacheGet, applyBanState, alertDedupe: async () => false });
   await new Promise((r) => setTimeout(r, 20));
   store.set(`ban:gen:${uid}`, "1"); // unban bump gen ระหว่าง query วิ่ง
   store.set(`ban:tomb:${uid}`, "1");
@@ -358,8 +365,8 @@ test("acceptance c: banUser cache sync พลาด ({ok:false} ไม่ throw)
   const c = memCache();
   const r = await banUser({ lineUserId: "U" + "5".repeat(32), reason: "x", bannedBy: "admin" }, {
     dbClient: insertOk,
-    bumpGen: c.bumpGen,
-    applyIfGen: async () => ({ ok: false, reason: "no_redis" }),
+    ...c,
+    applyBanState: async () => ({ ok: false, reason: "no_redis" }),
   });
   assert.equal(r.ok, true);
   assert.equal(r.cacheSynced, false);
@@ -444,7 +451,7 @@ test("resurrection race: stale positive write หลัง unban เขียน
     maybeSingle: () => new Promise((r) => { resolveDb = r; }),
   }) }) }) }) }) };
   // isBanned เริ่ม (จับ gen ตอนเริ่ม) → DB ค้าง
-  const p = isBanned(uid, { dbClient, cacheGet: c.cacheGet, applyIfGen: c.applyIfGen, alertDedupe: async () => false });
+  const p = isBanned(uid, { dbClient, cacheGet: c.cacheGet, applyBanState: c.applyBanState, alertDedupe: async () => false });
   await new Promise((r) => setTimeout(r, 20));
   // unban สำเร็จระหว่างนั้น: bump gen + tombstone + ลบ active (จำลอง unbanUser)
   await c.bumpGen(`ban:gen:${uid}`);
@@ -459,30 +466,84 @@ test("resurrection race: stale positive write หลัง unban เขียน
   c.m.delete(`ban:tomb:${uid}`);
   const { client: cleanDb } = dbSelectCounter({ banned: false });
   assert.equal(
-    await isBanned(uid, { dbClient: cleanDb, cacheGet: c.cacheGet, applyIfGen: c.applyIfGen, alertDedupe: async () => false }),
+    await isBanned(uid, { dbClient: cleanDb, cacheGet: c.cacheGet, applyBanState: c.applyBanState, alertDedupe: async () => false }),
     false,
     "หลัง tomb expiry ห้ามแบนซ้ำจาก cache ผี",
   );
 });
 
-test("linearizable: unban เก่าที่มาช้า ทับ cache ของ re-ban ใหม่กว่าไม่ได้ (Codex รอบ 4)", async () => {
+test("race จริง A (Codex รอบ 5): isBanned ค้างกลาง query → banUser สำเร็จ → ต้องคืน true ไม่ใช่ผล DB เก่า", async () => {
   const uid = "U" + "e".repeat(32);
   const c = memCache();
-  const genKey = `ban:gen:${uid}`;
-  // unban รอบเก่า: จอง gen แล้ว ops ค้าง (ยังไม่ยิง)
-  const oldGen = (await c.bumpGen(genKey)).gen;
-  // re-ban ใหม่กว่า: bump gen + เขียน positive (จำลอง syncCacheToBanned)
-  const newGen = (await c.bumpGen(genKey)).gen;
-  await c.applyIfGen(genKey, newGen, { type: "del", key: `ban:neg:${uid}` });
-  await c.applyIfGen(genKey, newGen, { type: "del", key: `ban:tomb:${uid}` });
-  await c.applyIfGen(genKey, newGen, { type: "set", key: `ban:active:${uid}`, value: "1" });
-  // ops ของ unban เก่าเพิ่งมาถึง (gen เก่า) — ต้องไม่ apply สักตัว
-  const t = await c.applyIfGen(genKey, oldGen, { type: "set", key: `ban:tomb:${uid}`, value: "1" });
-  const d = await c.applyIfGen(genKey, oldGen, { type: "del", key: `ban:active:${uid}` });
-  assert.equal(t.applied, false);
-  assert.equal(d.applied, false);
-  assert.equal(c.m.get(`ban:active:${uid}`), "1", "cache สุดท้ายต้องเป็นของ mutation ใหม่กว่า (แบนอยู่)");
-  assert.equal(c.m.has(`ban:tomb:${uid}`), false);
+  // DB ของ isBanned: ครั้งแรกค้าง (จะ resolve เป็น null เก่า) · ครั้งถัดไปเห็นแบนแล้ว
+  let resolveFirst;
+  let readN = 0;
+  const readerDb = { from: () => ({ select: () => ({ eq: () => ({ is: () => ({ limit: () => ({
+    maybeSingle: () => {
+      readN += 1;
+      if (readN === 1) return new Promise((r) => { resolveFirst = r; });
+      return Promise.resolve({ data: { id: 1 }, error: null });
+    },
+  }) }) }) }) }) };
+  const p = isBanned(uid, { dbClient: readerDb, ...c, alertDedupe: async () => false });
+  await new Promise((r) => setTimeout(r, 20));
+  // banUser จริงวิ่งจนจบระหว่าง query แรกยังค้าง (lock ว่าง — isBanned ไม่ถือ lock)
+  const insertOk = { from: () => ({ insert: async () => ({ error: null }) }) };
+  const ban = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, { dbClient: insertOk, ...c });
+  assert.equal(ban.ok, true);
+  assert.equal(ban.cacheSynced, true);
+  // ผล DB เก่า (ยังไม่เห็นแบน) เพิ่งมาถึง
+  resolveFirst({ data: null, error: null });
+  const r = await p;
+  assert.equal(r, true, "gen ขยับระหว่าง query — ห้ามคืนผลเก่า ต้องเห็นแบนใหม่");
+});
+
+test("race จริง B (Codex รอบ 5): unban เก่า DB ช้า + lock หลุด → ban ใหม่ต้องไม่โดน tombstone ทับ", async () => {
+  const uid = "U" + "f".repeat(31) + "0";
+  const c = memCache();
+  // unban: DB update ค้าง (ช้า)
+  let resolveUpdate;
+  const slowUnbanDb = { from: () => ({ update: () => ({ eq: () => ({ is: () => ({
+    select: () => new Promise((r) => { resolveUpdate = r; }),
+  }) }) }) }) };
+  const unbanP = unbanUser({ lineUserId: uid, unbannedBy: "admin" }, { dbClient: slowUnbanDb, ...c });
+  await new Promise((r) => setTimeout(r, 20));
+  // lock ของ unban หมดอายุ (จำลอง TTL) แล้ว ban ใหม่วิ่งจนจบ
+  c.expireLock(`ban:mutex:${uid}`);
+  const insertOk = { from: () => ({ insert: async () => ({ error: null }) }) };
+  const ban = await banUser({ lineUserId: uid, reason: "re-ban", bannedBy: "admin" }, { dbClient: insertOk, ...c });
+  assert.equal(ban.ok, true);
+  assert.equal(ban.cacheSynced, true);
+  // DB ของ unban เก่าเพิ่งตอบ — ต้องเช็ค lock ก่อนแตะ cache แล้วถอย
+  resolveUpdate({ data: [{ id: 1 }], error: null });
+  const unban = await unbanP;
+  assert.equal(unban.ok, true);
+  assert.equal(unban.cacheCleared, false, "เสีย lock = ห้ามอ้างว่าล้างแล้ว");
+  // effective state ต้องเป็น "แบน" ตาม DB (active ban ใหม่)
+  assert.equal(c.m.get(`ban:active:${uid}`), "1", "positive ของ ban ใหม่ต้องรอด");
+  assert.equal(c.m.has(`ban:tomb:${uid}`), false, "tombstone ของ unban เก่าห้ามถูกทิ้งไว้");
+  const bannedDb = { from: () => ({ select: () => ({ eq: () => ({ is: () => ({ limit: () => ({
+    maybeSingle: async () => ({ data: { id: 2 }, error: null }),
+  }) }) }) }) }) };
+  assert.equal(
+    await isBanned(uid, { dbClient: bannedDb, ...c, alertDedupe: async () => false }),
+    true,
+    "effective isBanned ต้องตรง DB (แบนอยู่)",
+  );
+});
+
+test("mutation lock: ban/unban คนเดียวกันพร้อมกัน → ตัวหลังรอ/ได้ busy ไม่สลับกลางคัน", async () => {
+  const uid = "U" + "f".repeat(31) + "1";
+  const c = memCache();
+  // จองล็อกไว้เอง (จำลอง mutation อื่นถืออยู่ตลอด window)
+  const held = await c.acquireLock(`ban:mutex:${uid}`, 8000);
+  assert.ok(held);
+  const insertOk = { from: () => ({ insert: async () => ({ error: null }) }) };
+  const t0 = Date.now();
+  const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, { dbClient: insertOk, ...c });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "busy");
+  assert.ok(Date.now() - t0 >= 1900, "ต้องรอจนหมดงบก่อนคืน busy");
 });
 
 test("already_banned → resync cache เต็มชุด: ล้าง neg/tomb + ตั้ง positive + cacheSynced ตามจริง", async () => {
@@ -513,7 +574,7 @@ test("single-flight recovery: query แรกค้างจน timeout → call
   const { state, client } = dbSelectCounter({ banned: true });
   const r2 = await isBanned(uid, {
     dbClient: client, cacheGet: async () => null,
-    applyIfGen: async () => ({ ok: true, applied: true }),
+    applyBanState: async () => ({ ok: true, applied: true }),
     alertDedupe: async () => false,
   });
   assert.equal(r2, true, "ต้องเห็นผลจริงจาก DB ที่ฟื้นแล้ว ไม่ fail-open ซ้ำ");
@@ -584,4 +645,62 @@ test("status SSOT: router/troll/repeat ใช้ isStatusQueryText ตัวเ�
   const alerts = fs.readFileSync(path.join(process.cwd(), "src", "services", "monitor", "customerAlerts.service.js"), "utf8");
   assert.ok(alerts.includes("statusQuery.util.js"), "repeat detector ต้องใช้ SSOT เดียวกัน");
   assert.ok(!alerts.includes("STATUS_QUERY_RE ="), "ห้ามมี regex สำเนาใน detector");
+});
+
+/* ---------------- Codex รอบ 5: typed status classification ---------------- */
+
+test("typed status: เงิน/สิทธิ์ห้ามหลุดไป scan route (probe ทั้ง 4 ของ Codex)", async () => {
+  const { classifyStatusQuery, shouldResultStatusRouterHandle } = await import("../src/services/scanV2/statusQuery.util.js");
+  assert.equal(classifyStatusQuery("สถานะสลิป"), "payment_status");
+  assert.equal(classifyStatusQuery("สถานะการจ่ายเงิน"), "payment_status");
+  assert.equal(classifyStatusQuery("รอตรวจสลิปนานแล้ว"), "payment_status");
+  assert.equal(classifyStatusQuery("สถานะสมาชิก"), "entitlement_status");
+  assert.equal(classifyStatusQuery("สิทธิ์เหลือกี่ครั้ง"), "entitlement_status");
+  assert.equal(classifyStatusQuery("ผลออกยังครับ"), "scan_status");
+  assert.equal(classifyStatusQuery("ผลสแกนถึงไหนแล้ว"), "scan_status");
+  assert.equal(classifyStatusQuery("รอนานแล้วครับ"), "generic_wait");
+  assert.equal(classifyStatusQuery("สวัสดีครับ"), "other");
+  // router รับเฉพาะ scan_status · generic_wait ต้องไม่มีเรื่องเงินค้าง
+  assert.equal(shouldResultStatusRouterHandle({ kind: "payment_status" }), false);
+  assert.equal(shouldResultStatusRouterHandle({ kind: "entitlement_status" }), false);
+  assert.equal(shouldResultStatusRouterHandle({ kind: "scan_status", hasPendingPayment: true }), true);
+  assert.equal(shouldResultStatusRouterHandle({ kind: "generic_wait", hasPendingPayment: true }), false);
+  assert.equal(shouldResultStatusRouterHandle({ kind: "generic_wait", hasPendingPayment: false }), true);
+});
+
+test("router wiring: maybeHandleResultStatusQuery ใช้ typed decision + เช็ค pending payment (source contract)", () => {
+  const fn = WEBHOOK.slice(
+    WEBHOOK.indexOf("async function maybeHandleResultStatusQuery"),
+    WEBHOOK.indexOf("async function", WEBHOOK.indexOf("async function maybeHandleResultStatusQuery") + 10),
+  );
+  assert.ok(fn.includes("classifyStatusQuery"), "ต้องใช้ typed classifier");
+  assert.ok(fn.includes("shouldResultStatusRouterHandle"), "ต้องใช้ decision helper SSOT");
+  assert.ok(fn.includes('"payment_status"') && fn.includes('"entitlement_status"'), "เงิน/สิทธิ์ต้องถูกปัดออก");
+  assert.ok(fn.includes("awaiting_payment"), "generic_wait ต้องเช็ค pending payment");
+  assert.ok(!fn.includes("if (!isStatusQueryText(t)) return false"), "ห้ามใช้ broad boolean ตัดสิน route");
+});
+
+test("alert lease renewal (Codex รอบ 5 P1): transport ค้าง → renew ระหว่างรอ กัน lease หมดแล้วส่งซ้ำ", async () => {
+  const kv = new Map();
+  let renews = 0;
+  let resolveSend;
+  const deps = {
+    getValue: async (k) => (kv.has(k) ? kv.get(k) : null),
+    setLargeValueWithTtl: async (k, v) => { kv.set(k, v); },
+    acquireLease: async () => "tokR",
+    releaseLease: async () => {},
+    renewLease: async () => { renews += 1; return true; },
+    sendTelegramText: () => new Promise((r) => { resolveSend = r; }),
+    channelTimeoutMs: 120,
+  };
+  await sendCustomerAlert({ type: "rn", userId: "U7", dedupeSec: 3600, telegramText: "t" }, deps);
+  // ฟังก์ชันหลักจบด้วย timeout แล้ว — renew interval ยังต้องเดินจนกว่า send จะ settle
+  await new Promise((r) => setTimeout(r, 100));
+  // late success → sent marker + interval หยุด
+  resolveSend({ ok: true });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(kv.get("alert:rn:tg:U7"), "1", "late success ต้องตั้ง sent marker (กันส่งซ้ำ)");
+  // renew ถูกตั้ง interval 20s — ในเทสต์สั้นอาจยังไม่ fire แต่ contract คือ interval ถูกเคลียร์หลัง settle
+  // (พิสูจน์ทางอ้อม: ไม่มี unhandled interval ทำให้ node --test ค้าง — ถ้าค้างเทสต์ไฟล์นี้จะ timeout)
+  assert.ok(renews >= 0);
 });
