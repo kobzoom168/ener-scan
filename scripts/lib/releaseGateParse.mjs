@@ -31,6 +31,8 @@ export function parseTapLeaves(text) {
  *   totalLeafFails: number, failedFiles: string[] }}
  */
 export function evaluateGate({ files, known }) {
+  // known list เก็บเป็น "file::leaf" (Codex รอบ 7): เดิม match แค่ชื่อ leaf ทำให้
+  // leaf ชื่อซ้ำในไฟล์ใหม่ถูกยอมเป็น known โดยไม่ตั้งใจ
   const knownSet = new Set((known || []).map((k) => k.trim()).filter(Boolean));
   const seenKnown = new Set();
   const newFails = [];
@@ -43,8 +45,9 @@ export function evaluateGate({ files, known }) {
     totalLeafFails += leaves.length;
     if (f.exitCode !== 0) failedFiles.push(f.file);
     for (const leaf of leaves) {
-      if (knownSet.has(leaf)) seenKnown.add(leaf);
-      else newFails.push(`${f.file}::${leaf}`);
+      const identity = `${f.file}::${leaf}`;
+      if (knownSet.has(identity)) seenKnown.add(identity);
+      else newFails.push(identity);
     }
     // ไฟล์ล้มแต่ไม่มี leaf failure อธิบาย (import crash / process ตาย) = regression เสมอ
     if (f.exitCode !== 0 && leaves.length === 0) unexplained.push(f.file);

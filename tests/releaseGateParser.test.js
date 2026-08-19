@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { parseTapLeaves, evaluateGate } from "../scripts/lib/releaseGateParse.mjs";
 
 const FLAT = `TAP version 13
@@ -41,7 +42,7 @@ test("parseTapLeaves: SKIP/TODO ต่อท้ายถูกตัดออก
 });
 
 test("gate: known leaf → ผ่าน · new leaf → regression พร้อม identity file::leaf", () => {
-  const known = ["beta case"];
+  const known = ["tests/a.test.js::beta case"];
   const okRun = evaluateGate({
     files: [{ file: "tests/a.test.js", exitCode: 1, output: FLAT }],
     known,
@@ -61,7 +62,7 @@ test("gate: known leaf → ผ่าน · new leaf → regression พร้อ�
 test("gate: import crash (exit != 0 แต่ไม่มี leaf) = regression เสมอ", () => {
   const crash = evaluateGate({
     files: [{ file: "tests/boom.test.js", exitCode: 1, output: "SyntaxError: bad import\n" }],
-    known: ["beta case"],
+    known: ["tests/a.test.js::beta case"],
   });
   assert.equal(crash.ok, false);
   assert.deepEqual(crash.unexplained, ["tests/boom.test.js"]);
@@ -76,10 +77,21 @@ test("gate: process nonzero โดยไม่มี failure ที่ parse ไ
   assert.deepEqual(r.unexplained, ["tests/x.test.js"]);
 });
 
-test("gate: leaf ชื่อซ้ำกันคนละไฟล์ — known ครอบทั้งคู่ได้ แต่ identity แยกไฟล์ชัดเจน", () => {
+test("gate: leaf ชื่อซ้ำคนละไฟล์ — known ต้องระบุรายไฟล์ (ไฟล์ใหม่ห้ามถูกยอมโดยอัตโนมัติ)", () => {
   const dup = `TAP version 13
 not ok 1 - shared name`;
-  const known = ["shared name"];
+  // known ครอบเฉพาะ one.test.js — two.test.js ที่ leaf ชื่อเดียวกันต้องเป็น regression
+  const partial = evaluateGate({
+    files: [
+      { file: "tests/one.test.js", exitCode: 1, output: dup },
+      { file: "tests/two.test.js", exitCode: 1, output: dup },
+    ],
+    known: ["tests/one.test.js::shared name"],
+  });
+  assert.equal(partial.ok, false, "leaf ชื่อซ้ำในไฟล์ที่ไม่อยู่ใน known = regression");
+  assert.deepEqual(partial.newFails, ["tests/two.test.js::shared name"]);
+
+  const known = ["tests/one.test.js::shared name", "tests/two.test.js::shared name"];
   const r = evaluateGate({
     files: [
       { file: "tests/one.test.js", exitCode: 1, output: dup },
@@ -102,10 +114,10 @@ not ok 1 - shared name`;
 test("gate: known ที่ไม่ปรากฏแล้ว = รายงานว่าเขียวแล้ว (เอาออกจากลิสต์ได้) แต่ไม่ทำให้ fail", () => {
   const r = evaluateGate({
     files: [{ file: "tests/a.test.js", exitCode: 0, output: "TAP version 13\nok 1 - fine\n" }],
-    known: ["old flaky case"],
+    known: ["tests/old.test.js::old flaky case"],
   });
   assert.equal(r.ok, true);
-  assert.deepEqual(r.fixed, ["old flaky case"]);
+  assert.deepEqual(r.fixed, ["tests/old.test.js::old flaky case"]);
 });
 
 test("gate: ทุกไฟล์เขียว → ok และไม่มี failing files", () => {
@@ -116,4 +128,49 @@ test("gate: ทุกไฟล์เขียว → ok และไม่มี
   assert.equal(r.ok, true);
   assert.deepEqual(r.failedFiles, []);
   assert.equal(r.totalLeafFails, 0);
+});
+
+/* ---------------- integration self-tests (Codex รอบ 7): spawn ไฟล์จริง ---------------- */
+
+import { runTestFile } from "../scripts/lib/runTestFile.mjs";
+import path from "node:path";
+
+const FIXTURES = path.join(process.cwd(), "tests", "fixtures");
+
+test("integration: fixture ที่ leaf fail → runner เห็น leaf จริง + exit != 0 (กันเคส node ห่อไฟล์)", async () => {
+  const r = await runTestFile(path.join(FIXTURES, "gate-fail.fixture.mjs"));
+  assert.notEqual(r.exitCode, 0, "ไฟล์ที่มี leaf fail ต้อง exit != 0");
+  const leaves = parseTapLeaves(r.output);
+  assert.deepEqual(leaves, ["fixture: failing leaf"], `parser ต้องเห็น leaf จริง ได้: ${JSON.stringify(leaves)}`);
+  // ผ่าน evaluateGate: ไม่อยู่ใน known = regression
+  const verdict = evaluateGate({ files: [{ ...r, file: "tests/fixtures/gate-fail.fixture.mjs" }], known: [] });
+  assert.equal(verdict.ok, false);
+  assert.deepEqual(verdict.newFails, ["tests/fixtures/gate-fail.fixture.mjs::fixture: failing leaf"]);
+  assert.deepEqual(verdict.unexplained, [], "ไฟล์นี้มี leaf อธิบายแล้ว ห้ามนับเป็น unexplained");
+});
+
+test("integration: fixture ที่ผ่านหมด → exit 0 ไม่มี leaf fail", async () => {
+  const r = await runTestFile(path.join(FIXTURES, "gate-pass.fixture.mjs"));
+  assert.equal(r.exitCode, 0);
+  assert.deepEqual(parseTapLeaves(r.output), []);
+  const verdict = evaluateGate({ files: [{ ...r, file: "tests/fixtures/gate-pass.fixture.mjs" }], known: [] });
+  assert.equal(verdict.ok, true);
+});
+
+test("integration: fixture ที่ crash ตอน import → unexplained (regression เสมอ ห้ามเงียบ)", async () => {
+  const r = await runTestFile(path.join(FIXTURES, "gate-crash.fixture.mjs"));
+  assert.notEqual(r.exitCode, 0);
+  assert.deepEqual(parseTapLeaves(r.output), [], "crash ก่อนมี leaf");
+  const verdict = evaluateGate({ files: [{ ...r, file: "tests/fixtures/gate-crash.fixture.mjs" }], known: [] });
+  assert.equal(verdict.ok, false);
+  assert.deepEqual(verdict.unexplained, ["tests/fixtures/gate-crash.fixture.mjs"]);
+});
+
+test("integration: known list เป็น file::leaf จริง — ตัวอย่างจาก tests/known-failing.txt", () => {
+  const known = fs.readFileSync("tests/known-failing.txt", "utf8")
+    .split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+  assert.ok(known.length > 0);
+  for (const k of known) {
+    assert.match(k, /^tests\/[^\s]+\.(m?js|ts)::.+$/, `known entry ต้องเป็น file::leaf: ${k}`);
+  }
 });

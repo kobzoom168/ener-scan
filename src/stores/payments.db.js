@@ -379,25 +379,40 @@ export async function createPaymentPending({
  */
 /**
  * มีรายการจ่ายเงินค้างอยู่ไหม (สำหรับตัดสิน routing — ห้าม fail-open)
+ * pending_verify = active เสมอ (ไม่ auto-expire) · awaiting_payment = active ภายใน TTL 24 ชม.
  * @param {string} lineUserId
- * @param {{ withinMs?: number }} [opts]
- * @returns {Promise<{ ok: boolean, active: boolean }>} ok=false = อ่านไม่ได้ (caller ต้อง fail-closed)
+ * @param {{ dbClient?: any, awaitingTtlMs?: number }} [opts]
+ * @returns {Promise<{ ok: boolean, active: boolean, status?: string|null }>} ok=false = อ่านไม่ได้ (caller ต้อง fail-closed)
  */
 export async function hasActivePaymentForLineUserId(lineUserId, opts = {}) {
   const lu = String(lineUserId || "").trim();
   if (!lu) return { ok: true, active: false };
-  const withinMs = Number(opts.withinMs) > 0 ? Number(opts.withinMs) : 24 * 60 * 60 * 1000;
+  const client = opts.dbClient || supabase;
+  // อายุต่างกันตามสถานะ (Codex รอบ 7): awaiting_payment หมดอายุ 24 ชม. ·
+  // pending_verify (ส่งสลิปแล้ว รอแอดมินตรวจ) ไม่ auto-expire — กรองด้วย gte
+  // ก้อนเดียวทั้งสองสถานะทำให้สลิปเก่ากว่า 24 ชม. หลุดไปเลนสถานะสแกน
+  const awaitingTtlMs = Number(opts.awaitingTtlMs) > 0 ? Number(opts.awaitingTtlMs) : AWAITING_PAYMENT_TTL_MS;
   try {
-    const { data, error } = await supabase
+    const { data: pv, error: pvErr } = await client
       .from("payments")
       .select("id,status")
       .eq("line_user_id", lu)
-      .in("status", ACTIVE_PAYMENT_STATUSES)
-      .gte("created_at", new Date(Date.now() - withinMs).toISOString())
+      .eq("status", "pending_verify")
       .limit(1)
       .maybeSingle();
-    if (error) return { ok: false, active: false };
-    return { ok: true, active: Boolean(data) };
+    if (pvErr) return { ok: false, active: false };
+    if (pv) return { ok: true, active: true, status: "pending_verify" };
+
+    const { data: aw, error: awErr } = await client
+      .from("payments")
+      .select("id,status")
+      .eq("line_user_id", lu)
+      .eq("status", "awaiting_payment")
+      .gte("created_at", new Date(Date.now() - awaitingTtlMs).toISOString())
+      .limit(1)
+      .maybeSingle();
+    if (awErr) return { ok: false, active: false };
+    return { ok: true, active: Boolean(aw), status: aw ? "awaiting_payment" : null };
   } catch {
     return { ok: false, active: false };
   }

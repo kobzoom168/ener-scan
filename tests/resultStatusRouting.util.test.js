@@ -92,3 +92,71 @@ test("SSOT: payments store export ACTIVE_PAYMENT_STATUSES และ webhook ไ�
   assert.ok(!fn.includes('"pending"'), "ห้ามมีลิสต์สถานะเขียนเองใน webhook");
   assert.ok(!fn.includes('"awaiting_payment"'), "ห้าม hardcode สถานะซ้ำ");
 });
+
+/* ---------------- Codex รอบ 7: อายุ pending_verify vs awaiting_payment ---------------- */
+
+import { hasActivePaymentForLineUserId } from "../src/stores/payments.db.js";
+
+function fakePayments(rows) {
+  // rows: [{status, ageMs}] — จำลอง PostgREST chain แบบ eq/gte
+  return {
+    from: () => {
+      const q = { _status: null, _minCreated: null };
+      const api = {
+        select: () => api,
+        eq: (col, val) => { if (col === "status") q._status = val; return api; },
+        gte: (_col, iso) => { q._minCreated = Date.parse(iso); return api; },
+        limit: () => api,
+        maybeSingle: async () => {
+          const hit = rows.find((r) => {
+            if (r.status !== q._status) return false;
+            if (q._minCreated == null) return true;
+            return Date.now() - r.ageMs >= q._minCreated;
+          });
+          return { data: hit ? { id: 1, status: hit.status } : null, error: null };
+        },
+      };
+      return api;
+    },
+  };
+}
+
+test("pending_verify อายุ 25 ชม. ยัง active (ไม่ auto-expire) → 'รอนานแล้ว' เป็นเรื่องเงิน", async () => {
+  const db = fakePayments([{ status: "pending_verify", ageMs: 25 * 3600 * 1000 }]);
+  const ev = await hasActivePaymentForLineUserId("U1", { dbClient: db });
+  assert.deepEqual({ ok: ev.ok, active: ev.active }, { ok: true, active: true });
+  const r = await resolveResultStatusRouting({ text: "รอนานแล้วครับ", getPaymentEvidence: async () => ev });
+  assert.equal(r.handle, false);
+  assert.equal(r.reason, "pending_payment");
+});
+
+test("awaiting_payment ภายใน 24 ชม. = active · เกิน 24 ชม. = หมดอายุ (ไม่ใช่ active)", async () => {
+  const fresh = await hasActivePaymentForLineUserId("U1", {
+    dbClient: fakePayments([{ status: "awaiting_payment", ageMs: 2 * 3600 * 1000 }]),
+  });
+  assert.equal(fresh.active, true);
+  const stale = await hasActivePaymentForLineUserId("U1", {
+    dbClient: fakePayments([{ status: "awaiting_payment", ageMs: 30 * 3600 * 1000 }]),
+  });
+  assert.equal(stale.ok, true);
+  assert.equal(stale.active, false, "awaiting_payment เกิน TTL ต้องไม่ถือว่ายังค้าง");
+  // ไม่มีเงินค้างแล้ว → scan status รับได้
+  const r = await resolveResultStatusRouting({ text: "รอนานแล้วครับ", getPaymentEvidence: async () => stale });
+  assert.equal(r.handle, true);
+});
+
+test("payments อ่านไม่ได้ ({error}) → ok:false และ routing fail-closed", async () => {
+  const errDb = { from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: { message: "down" } }) }) }) }) }) }) };
+  const ev = await hasActivePaymentForLineUserId("U1", { dbClient: errDb });
+  assert.equal(ev.ok, false);
+  const r = await resolveResultStatusRouting({ text: "รอนานแล้วครับ", getPaymentEvidence: async () => ev });
+  assert.equal(r.handle, false);
+  assert.equal(r.reason, "payment_evidence_unavailable");
+});
+
+test("ไม่มี payment เลย → active:false และ scan status รับได้", async () => {
+  const ev = await hasActivePaymentForLineUserId("U1", { dbClient: fakePayments([]) });
+  assert.deepEqual({ ok: ev.ok, active: ev.active }, { ok: true, active: false });
+  const r = await resolveResultStatusRouting({ text: "รอนานแล้วครับ", getPaymentEvidence: async () => ev });
+  assert.equal(r.handle, true);
+});

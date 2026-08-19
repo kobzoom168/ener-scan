@@ -38,6 +38,7 @@ const MUTATION_LOCK_WAIT_MS = 2000;
 const MUTATION_LOCK_RENEW_MS = 3000; // ต่ออายุระหว่าง DB call (Codex รอบ 6)
 const MUTATION_DB_TIMEOUT_MS = 10000; // DB op ต้อง bounded ห้ามค้างไม่จำกัด
 const RECONCILE_ATTEMPTS = 2;
+const UNKNOWN_FINALIZER_WAIT_MS = 120000; // รอ DB request ที่ไม่รู้ผล settle นานสุด 2 นาที
 const POSITIVE_TTL_SEC = 30 * 24 * 3600;
 const NEG_TTL_SEC = 45;
 const TOMBSTONE_TTL_SEC = 120;
@@ -110,6 +111,7 @@ function mutationDeps(deps) {
     renewLock: deps.renewLock || ((k, t, ttl) => renewShortLock(k, t, ttl)),
     renewIntervalMs: Number(deps.lockRenewIntervalMs) > 0 ? Number(deps.lockRenewIntervalMs) : MUTATION_LOCK_RENEW_MS,
     dbTimeoutMs: Number(deps.dbTimeoutMs) > 0 ? Number(deps.dbTimeoutMs) : MUTATION_DB_TIMEOUT_MS,
+    finalizerWaitMs: Number(deps.finalizerWaitMs) > 0 ? Number(deps.finalizerWaitMs) : UNKNOWN_FINALIZER_WAIT_MS,
   };
 }
 
@@ -117,24 +119,39 @@ function mutationDeps(deps) {
  * รัน DB op โดยต่ออายุ lock เป็นระยะ (Codex รอบ 6: DB ช้าห้ามทำ lock หมดอายุเงียบ ๆ)
  * + bounded deadline
  */
+/** รอ lock แบบ bounded (คำสั่งแอดมิน — retry สั้น ๆ แล้วยอมแพ้เป็น busy) */
+async function acquireMutationLock(uid, m) {
+  const deadline = Date.now() + MUTATION_LOCK_WAIT_MS;
+  for (;;) {
+    const token = await m.acquireLock(banMutexKey(uid), MUTATION_LOCK_TTL_MS);
+    if (token) return token;
+    if (Date.now() >= deadline) return null;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
 async function runDbOpWithLockRenewal(uid, m, dbOp) {
   const key = banMutexKey(uid);
-  // interval ที่ยกเลิกได้ทันที (ห้ามใช้ loop+await sleep — เคยทำ mutation ช้าขึ้น
-  // เท่ากับ 1 รอบ renew ทุกครั้ง เจอจากเทสต์ race)
   const renewTimer = setInterval(() => {
     void Promise.resolve(m.renewLock(key, m.__token, MUTATION_LOCK_TTL_MS)).catch(() => {});
   }, m.renewIntervalMs);
   if (typeof renewTimer.unref === "function") renewTimer.unref();
   let dbTimer = null;
+  // ถือ promise เดิมไว้เสมอ (Codex รอบ 7): Promise.race ไม่ยกเลิก request จริง —
+  // timeout = "ไม่รู้ผล" ไม่ใช่ "ล้มเหลว" ต้องมีเจ้าของรอ settle แล้ว reconcile
+  const opPromise = Promise.resolve()
+    .then(() => dbOp())
+    .then((value) => ({ value }))
+    .catch((error) => ({ error }));
   try {
     const TIMEOUT = Symbol("db_timeout");
     const res = await Promise.race([
-      Promise.resolve(dbOp()).catch((e) => ({ __throw: e })),
+      opPromise,
       new Promise((resolve) => { dbTimer = setTimeout(() => resolve(TIMEOUT), m.dbTimeoutMs); }),
     ]);
-    if (res === TIMEOUT) throw new Error("db_timeout");
-    if (res && res.__throw) throw res.__throw;
-    return res;
+    if (res === TIMEOUT) return { outcome: "unknown", promise: opPromise };
+    if (res.error) throw res.error;
+    return { outcome: "settled", value: res.value, promise: opPromise };
   } finally {
     clearInterval(renewTimer);
     if (dbTimer) clearTimeout(dbTimer);
@@ -142,26 +159,59 @@ async function runDbOpWithLockRenewal(uid, m, dbOp) {
 }
 
 /**
+ * เจ้าของงานหลัง timeout (Codex รอบ 7): รอ DB request เดิม settle แล้ว reconcile
+ * cache ให้ตรง DB — กัน "insert commit ทีหลังแต่ negative cache ปล่อยผ่าน" และ
+ * "unban commit ทีหลังแต่ positive cache ค้าง 30 วัน"
+ */
+function scheduleUnknownOutcomeFinalizer(uid, m, client, opPromise, tag) {
+  return (async () => {
+    try {
+      let timer = null;
+      await Promise.race([
+        opPromise.catch(() => null),
+        new Promise((r) => { timer = setTimeout(r, m.finalizerWaitMs); }),
+      ]);
+      if (timer) clearTimeout(timer);
+      const rec = await reconcileCacheWithDb(uid, m, client);
+      log("BAN_UNKNOWN_OUTCOME_FINALIZED", {
+        uidPrefix: uid.slice(0, 8), tag, reconciled: rec.ok === true, banned: rec.banned === true,
+      });
+      return rec;
+    } catch (e) {
+      log("BAN_UNKNOWN_OUTCOME_FINALIZE_FAILED", { uidPrefix: uid.slice(0, 8), tag, message: String(e?.message || e).slice(0, 100) });
+      return { ok: false };
+    }
+  })();
+}
+
+/**
  * Reconcile cache ให้ตรง DB (SSOT) — ใช้เมื่อเสีย lock หรือ cache sync ไม่สำเร็จ
  * reacquire lock → อ่าน DB → เขียน state ทั้งชุดใน Lua ก้อนเดียว
  * @returns {Promise<{ ok: boolean, banned?: boolean }>}
  */
-async function reconcileCacheWithDb(uid, m, client) {
+async function reconcileCacheWithDb(uid, m, client, ownedToken = null) {
   for (let i = 0; i < RECONCILE_ATTEMPTS; i += 1) {
-    const token = await acquireMutationLock(uid, m);
+    // ถือ mutex ของตัวเองอยู่แล้ว = ใช้ต่อ ห้ามไปแย่ง lock ตัวเอง (เสียเวลารอฟรี)
+    const reusing =
+      Boolean(ownedToken) && (await m.checkLockHeld(banMutexKey(uid), ownedToken).catch(() => false));
+    const token = reusing ? ownedToken : await acquireMutationLock(uid, m);
     if (!token) continue;
     try {
-      const { data, error } = await Promise.resolve(
-        client
-          .from("banned_users")
-          .select("id")
-          .eq("line_user_id", uid)
-          .is("unbanned_at", null)
-          .limit(1)
-          .maybeSingle(),
+      const readRes = await raceRemaining(
+        Promise.resolve(
+          client
+            .from("banned_users")
+            .select("id")
+            .eq("line_user_id", uid)
+            .is("unbanned_at", null)
+            .limit(1)
+            .maybeSingle(),
+        ).catch((e) => ({ error: e })),
+        { __timeout: true },
+        m.dbTimeoutMs,
       );
-      if (error) continue;
-      const banned = Boolean(data);
+      if (readRes.__timeout || readRes.error) continue;
+      const banned = Boolean(readRes.data);
       const genRes = await m.bump(banGenKey(uid));
       if (!genRes.ok) continue;
       const state = banned
@@ -179,22 +229,11 @@ async function reconcileCacheWithDb(uid, m, client) {
         return { ok: true, banned };
       }
     } catch { /* ลองรอบถัดไป */ } finally {
-      await Promise.resolve(m.releaseLock(banMutexKey(uid), token)).catch(() => {});
+      if (!reusing) await Promise.resolve(m.releaseLock(banMutexKey(uid), token)).catch(() => {});
     }
   }
   log("BAN_CACHE_RECONCILE_FAILED", { uidPrefix: uid.slice(0, 8) });
   return { ok: false };
-}
-
-/** รอ lock แบบ bounded (คำสั่งแอดมิน — retry สั้น ๆ แล้วยอมแพ้เป็น busy) */
-async function acquireMutationLock(uid, m) {
-  const deadline = Date.now() + MUTATION_LOCK_WAIT_MS;
-  for (;;) {
-    const token = await m.acquireLock(banMutexKey(uid), MUTATION_LOCK_TTL_MS);
-    if (token) return token;
-    if (Date.now() >= deadline) return null;
-    await new Promise((r) => setTimeout(r, 100));
-  }
 }
 
 /**
@@ -291,17 +330,19 @@ export async function banUser({ lineUserId, reason, bannedBy }, deps = {}) {
   if (!lockToken) return { ok: false, reason: "busy" };
   m.__token = lockToken;
   try {
-    // 1) ล้าง negative/tombstone "ก่อน" เขียน DB (Codex รอบ 6): DB ช้าจน lock หมด
-    //    ก็ไม่มี stale negative ค้างปล่อยคนที่กำลังจะโดนแบนผ่านไปได้อีก
+    // 1) fail-closed ก่อนแตะ DB (Codex รอบ 7 อนุญาต): แอดมินยืนยันเจตนาแบนแล้ว —
+    //    ตั้ง positive + ล้าง negative/tombstone ก่อน เพื่อไม่ให้ DB ช้า/ไม่รู้ผล
+    //    เปิดช่องให้ลูกค้าผ่านต่อ · DB ตอบว่าไม่มี row จริงค่อย reconcile ออก
     const preGen = await m.bump(banGenKey(uid));
     if (preGen.ok) {
       await m.applyState(banGenKey(uid), preGen.gen, {
+        sets: [{ key: banCacheKey(uid), value: "1", ttlSec: POSITIVE_TTL_SEC }],
         dels: [banNegCacheKey(uid), banTombstoneKey(uid)],
       });
     }
 
-    // 2) DB insert — ต่ออายุ lock ระหว่างรอ + bounded deadline
-    const { error } = await runDbOpWithLockRenewal(uid, m, () =>
+    // 2) DB insert — renew lock ระหว่างรอ + bounded (timeout = ไม่รู้ผล ไม่ใช่ล้มเหลว)
+    const run = await runDbOpWithLockRenewal(uid, m, () =>
       client.from("banned_users").insert({
         line_user_id: uid,
         reason: String(reason || "").slice(0, 300) || null,
@@ -310,22 +351,36 @@ export async function banUser({ lineUserId, reason, bannedBy }, deps = {}) {
       }),
     );
 
+    if (run.outcome === "unknown") {
+      // enforcement ถูกกันไว้แล้ว (positive cache) · ผูกเจ้าของงานไว้ reconcile หลัง settle
+      const finalizer = scheduleUnknownOutcomeFinalizer(uid, m, client, run.promise, "ban");
+      log("BAN_USER_DB_OUTCOME_UNKNOWN", { uidPrefix: uid.slice(0, 8) });
+      return {
+        ok: false,
+        reason: "db_outcome_unknown",
+        enforcementHeld: true,
+        pendingFinalizer: finalizer,
+      };
+    }
+
+    const { error } = run.value || {};
     const alreadyBanned =
       Boolean(error) &&
       (String(error.message || "").includes("idx_banned_users_active") || String(error.code) === "23505");
-    if (error && !alreadyBanned) throw new Error(error.message || "db_error");
+    if (error && !alreadyBanned) {
+      // DB ปฏิเสธชัดเจน → reconcile เอา positive ที่กันไว้ออก (ใช้ lock เดิม)
+      await reconcileCacheWithDb(uid, m, client, lockToken);
+      throw new Error(error.message || "db_error");
+    }
 
-    // 3) sync positive cache ถ้ายังถือ lock อยู่จริง
     const stillHeld = await m.checkLockHeld(banMutexKey(uid), lockToken);
     let cacheSynced = stillHeld ? await syncCacheToBanned(uid, m) : false;
     if (!stillHeld) log("BAN_USER_LOCK_LOST", { uidPrefix: uid.slice(0, 8), op: alreadyBanned ? "already_banned" : "ban" });
 
-    // 4) เสีย lock หรือ sync ไม่สำเร็จ → reconcile จาก DB (authoritative) ห้ามปล่อยผ่าน
     if (!cacheSynced) {
-      const rec = await reconcileCacheWithDb(uid, m, client);
+      const rec = await reconcileCacheWithDb(uid, m, client, lockToken);
       cacheSynced = rec.ok === true && rec.banned === true;
       if (!cacheSynced) {
-        // enforcement ยังไม่มีผลจริง — ห้ามรายงานว่าสำเร็จ (Codex รอบ 6)
         log("BAN_USER_ENFORCEMENT_UNRECONCILED", { uidPrefix: uid.slice(0, 8) });
         return { ok: false, reason: "cache_unreconciled", dbBanned: true, cacheSynced: false };
       }
@@ -364,7 +419,7 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
   if (!lockToken) return { ok: false, reason: "busy" };
   m.__token = lockToken;
   try {
-    const { data, error } = await runDbOpWithLockRenewal(uid, m, () =>
+    const run = await runDbOpWithLockRenewal(uid, m, () =>
       client
         .from("banned_users")
         .update({
@@ -376,10 +431,19 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
         .is("unbanned_at", null)
         .select("id"),
     );
+
+    if (run.outcome === "unknown") {
+      // ไม่รู้ผล = คงสถานะแบนไว้ก่อน (ปลอดภัยกว่าปล่อยผ่าน) แต่ต้องมีเจ้าของ
+      // ตาม settle แล้ว reconcile ไม่งั้น positive cache ค้าง 30 วันทั้งที่ปลดแล้ว
+      const finalizer = scheduleUnknownOutcomeFinalizer(uid, m, client, run.promise, "unban");
+      log("BAN_USER_UNBAN_DB_OUTCOME_UNKNOWN", { uidPrefix: uid.slice(0, 8) });
+      return { ok: false, reason: "db_outcome_unknown", cacheCleared: false, pendingFinalizer: finalizer };
+    }
+
+    const { data, error } = run.value || {};
     if (error) throw new Error(error.message || "db_error");
     const wasBanned = Array.isArray(data) && data.length > 0;
 
-    // เสีย lock = อาจมี ban ใหม่กว่าแซง — ห้ามทิ้ง tombstone ทับ ให้ reconcile กับ DB แทน
     const stillHeld = await m.checkLockHeld(banMutexKey(uid), lockToken);
     let cacheCleared = false;
     if (stillHeld) {
@@ -393,8 +457,7 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
       }
     } else {
       log("BAN_USER_LOCK_LOST", { uidPrefix: uid.slice(0, 8), op: "unban" });
-      // reconcile: cache ต้องตรง DB (ถ้ามี ban ใหม่กว่า = ยังแบน, ถ้าไม่มี = ปลดจริง)
-      const rec = await reconcileCacheWithDb(uid, m, client);
+      const rec = await reconcileCacheWithDb(uid, m, client, lockToken);
       cacheCleared = rec.ok === true && rec.banned === false;
     }
     if (!wasBanned) return { ok: false, reason: "not_banned", cacheCleared };

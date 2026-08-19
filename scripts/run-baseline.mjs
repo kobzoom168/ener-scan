@@ -6,10 +6,10 @@
  * เกณฑ์: leaf ที่ fail ต้องอยู่ใน tests/known-failing.txt ครบทุกตัว ·
  * ไฟล์ที่ exit != 0 แต่ไม่มี leaf failure อธิบาย (import crash) = regression เสมอ
  */
-import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import os from "node:os";
 import { evaluateGate } from "./lib/releaseGateParse.mjs";
+import { runTestFile } from "./lib/runTestFile.mjs";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const testScript = String(pkg.scripts?.test || "");
@@ -27,27 +27,13 @@ const known = readFileSync("tests/known-failing.txt", "utf8")
 
 const CONCURRENCY = Math.max(2, (os.availableParallelism?.() || os.cpus().length || 4) - 2);
 
-function runFile(file) {
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, ["--test", "--test-reporter=tap", file], {
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let out = "";
-    child.stdout.on("data", (d) => { out += d; });
-    child.stderr.on("data", (d) => { out += d; });
-    child.on("close", (code) => resolve({ file, exitCode: code ?? 1, output: out }));
-    child.on("error", (e) => resolve({ file, exitCode: 1, output: `spawn_error: ${e?.message}` }));
-  });
-}
-
 const results = [];
 let cursor = 0;
 async function worker() {
   for (;;) {
     const i = cursor++;
     if (i >= files.length) return;
-    results.push(await runFile(files[i]));
+    results.push(await runTestFile(files[i]));
   }
 }
 await Promise.all(Array.from({ length: Math.min(CONCURRENCY, files.length) }, worker));
@@ -65,8 +51,8 @@ if (verdict.totalLeafFails) {
   const { parseTapLeaves } = await import("./lib/releaseGateParse.mjs");
   for (const r of results) {
     for (const leaf of parseTapLeaves(r.output)) {
-      const tag = known.includes(leaf) ? "known" : "NEW";
-      console.log(`  [${tag}] ${r.file}::${leaf}`);
+      const identity = `${r.file}::${leaf}`;
+      console.log(`  [${known.includes(identity) ? "known" : "NEW"}] ${identity}`);
     }
   }
 }

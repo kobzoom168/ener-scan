@@ -687,6 +687,82 @@ test("router wiring: webhook มอบการตัดสินให้ resol
   assert.ok(!fn.includes("if (!isStatusQueryText(t)) return false"), "ห้ามใช้ broad boolean ตัดสิน route");
 });
 
+test("alert lease renewal (Codex รอบ 7): lease มี TTL จริง — renew กันคู่แข่งชิงได้ · ไม่ renew = ชิงได้", async () => {
+  // fake lease ที่มี TTL จริง (เดิมไม่มี expiry เลยพิสูจน์ไม่ได้ว่า renew ช่วยจริง)
+  function leaseStore() {
+    const map = new Map(); // key → { token, expiresAt }
+    let seq = 0;
+    return {
+      acquire: async (k, ttlMs) => {
+        const cur = map.get(k);
+        if (cur && cur.expiresAt > Date.now()) return null;
+        const token = `lt${++seq}`;
+        map.set(k, { token, expiresAt: Date.now() + (ttlMs || 60000) });
+        return token;
+      },
+      renew: async (k, t, ttlMs) => {
+        const cur = map.get(k);
+        if (!cur || cur.token !== t) return false;
+        cur.expiresAt = Date.now() + (ttlMs || 60000);
+        return true;
+      },
+      release: async (k, t) => { const cur = map.get(k); if (cur && cur.token === t) map.delete(k); },
+    };
+  }
+
+  // (1) มี renewal → หลังเลย TTL เดิม คู่แข่งยังชิงไม่ได้
+  {
+    const kv = new Map();
+    const ls = leaseStore();
+    let resolveSend;
+    const LEASE_TTL = 60;
+    await sendCustomerAlert(
+      { type: "rw", userId: "U7", dedupeSec: 3600, telegramText: "t" },
+      {
+        getValue: async (k) => (kv.has(k) ? kv.get(k) : null),
+        setLargeValueWithTtl: async (k, v) => { kv.set(k, v); },
+        acquireLease: async (k) => ls.acquire(k, LEASE_TTL),
+        releaseLease: ls.release,
+        renewLease: async (k, t) => ls.renew(k, t, LEASE_TTL),
+        sendTelegramText: () => new Promise((r) => { resolveSend = r; }),
+        channelTimeoutMs: 30,
+        renewIntervalMs: 15,
+      },
+    );
+    await new Promise((r) => setTimeout(r, LEASE_TTL + 40)); // เลย TTL เดิมไปแล้ว
+    assert.equal(await ls.acquire("alert:rw:tg:U7:lease", LEASE_TTL), null, "renew ต้องกันคู่แข่งชิง lease ได้จริง");
+    resolveSend({ ok: true });
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(kv.get("alert:rw:tg:U7"), "1", "late success ต้องตั้ง sent marker");
+    const afterSettle = Date.now();
+    await new Promise((r) => setTimeout(r, LEASE_TTL + 40));
+    assert.ok(await ls.acquire("alert:rw:tg:U7:lease", LEASE_TTL), "หลัง settle ต้องหยุด renew (lease ปล่อยตามอายุ)");
+    assert.ok(Date.now() > afterSettle);
+  }
+
+  // (2) ไม่มี renewal (renew ล้มเหลว) → เลย TTL แล้วคู่แข่งชิงได้ = เทสต์นี้ไวต่อ regression จริง
+  {
+    const kv2 = new Map();
+    const ls2 = leaseStore();
+    const LEASE_TTL = 60;
+    await sendCustomerAlert(
+      { type: "rz", userId: "U8", dedupeSec: 3600, telegramText: "t" },
+      {
+        getValue: async (k) => (kv2.has(k) ? kv2.get(k) : null),
+        setLargeValueWithTtl: async (k, v) => { kv2.set(k, v); },
+        acquireLease: async (k) => ls2.acquire(k, LEASE_TTL),
+        releaseLease: ls2.release,
+        renewLease: async () => false, // renew ใช้ไม่ได้
+        sendTelegramText: () => new Promise(() => {}),
+        channelTimeoutMs: 30,
+        renewIntervalMs: 15,
+      },
+    );
+    await new Promise((r) => setTimeout(r, LEASE_TTL + 40));
+    assert.ok(await ls2.acquire("alert:rz:tg:U8:lease", LEASE_TTL), "ไม่มี renew = lease หมดอายุจริง (ยืนยันว่าเทสต์จับความต่างได้)");
+  }
+});
+
 test("alert lease renewal (Codex รอบ 6): renew จริงระหว่างส่ง + คู่แข่งชิง lease ไม่ได้ + หยุดหลัง settle", async () => {
   const kv = new Map();
   const leases = new Map();
@@ -801,17 +877,26 @@ test("lock renewal: DB ช้ากว่า TTL แต่ renew ได้ → �
   assert.equal(c.m.get(`ban:active:${uid}`), "1");
 });
 
-test("DB op bounded: insert ค้างไม่จบ → คืน db_error ภายใน dbTimeoutMs ไม่แขวน", async () => {
+test("DB op bounded: insert ค้างไม่จบ → คืน db_outcome_unknown ภายใน dbTimeoutMs ไม่แขวน (Codex รอบ 7)", async () => {
   const uid = "U" + "1".repeat(31) + "f";
   const c = memCache();
-  const hangDb = { from: () => ({ insert: () => new Promise(() => {}) }) };
+  const hangDb = {
+    from: () => ({
+      insert: () => new Promise(() => {}),
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }),
+    }),
+  };
   const t0 = Date.now();
   const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, {
-    dbClient: hangDb, ...c, lockRenewIntervalMs: 10, dbTimeoutMs: 150,
+    dbClient: hangDb, ...c, lockRenewIntervalMs: 10, dbTimeoutMs: 150, finalizerWaitMs: 100,
   });
   assert.equal(r.ok, false);
-  assert.equal(r.reason, "db_error");
+  // timeout = ไม่รู้ผล (ไม่ใช่ล้มเหลว) + enforcement ถูกกันไว้ + มีเจ้าของงานตามต่อ
+  assert.equal(r.reason, "db_outcome_unknown");
+  assert.equal(r.enforcementHeld, true);
+  assert.ok(r.pendingFinalizer);
   assert.ok(Date.now() - t0 < 3000);
+  await r.pendingFinalizer;
 });
 
 test("unban เสีย lock + มี re-ban ใหม่ใน DB → reconcile คืนสถานะแบน ไม่ claim ว่าปลดแล้ว", async () => {
@@ -835,4 +920,135 @@ test("unban เสีย lock + มี re-ban ใหม่ใน DB → reconcil
   assert.equal(r.cacheCleared, false, "มี ban ใหม่กว่า — ห้ามอ้างว่าล้างสถานะแล้ว");
   assert.equal(c.m.get(`ban:active:${uid}`), "1", "cache ต้องตรง DB (ยังแบน)");
   assert.equal(c.m.has(`ban:tomb:${uid}`), false);
+});
+
+/* ---------------- Codex รอบ 7: DB timeout = unknown outcome ---------------- */
+
+test("A) insert timeout แล้ว commit ทีหลัง → enforcement กันไว้ก่อน + finalizer ทำ cache ตรง DB", async () => {
+  const uid = "U" + "3".repeat(31) + "a";
+  const c = memCache();
+  c.m.set(`ban:neg:${uid}`, "1"); // negative cache เดิมค้าง (เคยเช็คว่าไม่แบน)
+  let committed = false;
+  let releaseInsert;
+  const lateDb = {
+    from: () => ({
+      insert: () => new Promise((r) => { releaseInsert = () => { committed = true; r({ error: null }); }; }),
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({
+        maybeSingle: async () => (committed ? { data: { id: 1 }, error: null } : { data: null, error: null }),
+      }) }) }) }),
+    }),
+  };
+  const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, {
+    dbClient: lateDb, ...c, dbTimeoutMs: 40, lockRenewIntervalMs: 10, finalizerWaitMs: 2000,
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "db_outcome_unknown", "timeout = ไม่รู้ผล ไม่ใช่ db_error");
+  assert.equal(r.enforcementHeld, true);
+  // ระหว่างยังไม่รู้ผล: ต้อง fail-closed (positive ถูกกันไว้ + neg หายแล้ว)
+  assert.equal(c.m.get(`ban:active:${uid}`), "1");
+  assert.equal(c.m.has(`ban:neg:${uid}`), false, "negative cache เดิมต้องถูกล้างก่อนแตะ DB");
+  const noDbRead = { from: () => { throw new Error("must not read db"); } };
+  assert.equal(await isBanned(uid, { dbClient: noDbRead, ...c, alertDedupe: async () => false }), true);
+  // DB commit ทีหลัง → finalizer reconcile ให้ตรง
+  releaseInsert();
+  const rec = await r.pendingFinalizer;
+  assert.equal(rec.ok, true);
+  assert.equal(rec.banned, true);
+  assert.equal(c.m.get(`ban:active:${uid}`), "1");
+  assert.equal(c.m.has(`ban:neg:${uid}`), false);
+});
+
+test("A2) insert timeout แล้ว DB ปฏิเสธจริงทีหลัง → finalizer ถอน enforcement ออก (ไม่แบนค้าง)", async () => {
+  const uid = "U" + "3".repeat(31) + "b";
+  const c = memCache();
+  let releaseInsert;
+  const failLateDb = {
+    from: () => ({
+      insert: () => new Promise((r) => { releaseInsert = () => r({ error: { code: "42501", message: "denied" } }); }),
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }),
+    }),
+  };
+  const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, {
+    dbClient: failLateDb, ...c, dbTimeoutMs: 40, lockRenewIntervalMs: 10, finalizerWaitMs: 2000,
+  });
+  assert.equal(r.reason, "db_outcome_unknown");
+  assert.equal(c.m.get(`ban:active:${uid}`), "1", "ระหว่างไม่รู้ผล = กันไว้ก่อน");
+  releaseInsert();
+  const rec = await r.pendingFinalizer;
+  assert.equal(rec.ok, true);
+  assert.equal(rec.banned, false, "DB ไม่มี active ban → ต้องถอน");
+  assert.equal(c.m.has(`ban:active:${uid}`), false, "positive cache ต้องถูกล้าง ไม่แบนค้าง");
+  assert.equal(c.m.get(`ban:tomb:${uid}`), "1");
+});
+
+test("B) unban timeout แล้ว commit ทีหลัง → cache ไม่ค้างแบน 30 วัน", async () => {
+  const uid = "U" + "3".repeat(31) + "c";
+  const c = memCache();
+  c.m.set(`ban:active:${uid}`, "1"); // แบนอยู่
+  let unbanned = false;
+  let releaseUpdate;
+  const lateUnbanDb = {
+    from: () => ({
+      update: () => ({ eq: () => ({ is: () => ({
+        select: () => new Promise((r) => { releaseUpdate = () => { unbanned = true; r({ data: [{ id: 1 }], error: null }); }; }),
+      }) }) }),
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({
+        maybeSingle: async () => (unbanned ? { data: null, error: null } : { data: { id: 1 }, error: null }),
+      }) }) }) }),
+    }),
+  };
+  const r = await unbanUser({ lineUserId: uid, unbannedBy: "admin" }, {
+    dbClient: lateUnbanDb, ...c, dbTimeoutMs: 40, lockRenewIntervalMs: 10, finalizerWaitMs: 2000,
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "db_outcome_unknown");
+  assert.equal(r.cacheCleared, false);
+  assert.equal(c.m.get(`ban:active:${uid}`), "1", "ยังไม่รู้ผล = คงแบนไว้ก่อน (ปลอดภัย)");
+  releaseUpdate();
+  const rec = await r.pendingFinalizer;
+  assert.equal(rec.ok, true);
+  assert.equal(rec.banned, false);
+  assert.equal(c.m.has(`ban:active:${uid}`), false, "หลัง DB ยืนยันปลดแล้ว positive ต้องหาย ไม่ค้าง 30 วัน");
+});
+
+test("C) DB ไม่ settle เลย → finalizer มี owner + ยอมแพ้ตามงบ ไม่แขวน", async () => {
+  const uid = "U" + "3".repeat(31) + "d";
+  const c = memCache();
+  const neverDb = {
+    from: () => ({
+      insert: () => new Promise(() => {}),
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }),
+    }),
+  };
+  const t0 = Date.now();
+  const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, {
+    dbClient: neverDb, ...c, dbTimeoutMs: 40, lockRenewIntervalMs: 10, finalizerWaitMs: 120,
+  });
+  assert.equal(r.reason, "db_outcome_unknown");
+  assert.ok(r.pendingFinalizer, "ต้องมีเจ้าของงานเสมอ");
+  const rec = await r.pendingFinalizer;
+  assert.ok(Date.now() - t0 < 3000, "ต้องไม่แขวน");
+  assert.equal(rec.ok, true, "reconcile ตาม DB ที่อ่านได้ (ไม่มี row → ถอน)");
+});
+
+test("D) reconcile DB read ค้าง → bounded ไม่แขวน และรายงานว่าไม่สำเร็จ", async () => {
+  const uid = "U" + "3".repeat(31) + "e";
+  const c = memCache();
+  const hangReadDb = {
+    from: () => ({
+      insert: async () => ({ error: null }),
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({ maybeSingle: () => new Promise(() => {}) }) }) }) }),
+    }),
+  };
+  const t0 = Date.now();
+  const r = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, {
+    dbClient: hangReadDb,
+    ...c,
+    applyBanState: async () => ({ ok: false, reason: "no_redis" }), // บังคับให้ต้อง reconcile
+    dbTimeoutMs: 60,
+    lockRenewIntervalMs: 10,
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "cache_unreconciled");
+  assert.ok(Date.now() - t0 < 4000, `reconcile ต้อง bounded (ใช้ ${Date.now() - t0}ms)`);
 });
