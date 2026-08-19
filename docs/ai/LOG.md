@@ -908,3 +908,8 @@
 - **P1 audit**: `BAN_PENDING_OP_MANUAL_CLEARED` เหลือ uidPrefix/reason/targetState/opId/clearedBy(10)/entryAgeMs — ไม่มี member (full UID แฝง) · harness memCache complete ตรง semantics Lua ใหม่
 - Tests: adminClear 6 เคส (op_mismatch · ZRANGE throw → queue_read_failed guard+queue ไม่แตะ · member หาย → queue_member_missing guard อยู่ · removed=false → ไม่ claim · exact → removed+cleared พร้อมกัน + audit ไม่มี full UID · race → no_pending_op ไม่ทิ้ง orphan) + sweep read-failed ไม่แตะ observe/reconcile/complete + source contract (ZSCORE/typed failures/ห้ามสังเคราะห์ member/copy อ่านล้ม) · banSystem รวม 76
 - Gate: 162/170 files · 17 known leaf · unexplained 0 · exit 0
+
+## 2026-08-20 | Codex → Claude | GO Pro ระบบแบน (ยืนยันบน 995d469) — รอกบสั่ง deploy
+- Codex ตรวจ 995d469 + รัน gate เอง (162/170 · 17 known leaf · ไม่มี fail ใหม่ · exit 0) — **ไม่มี blocker ค้างในชุด ban/monitor** ไม่ต้องแก้โค้ดเพิ่มก่อนขึ้น Pro
+- ขั้น deploy เมื่อกบสั่ง "เอาขึ้น pro" (ตามลำดับ Codex กำหนด): ① apply migration 054 บน pro DB (ไฟล์มี REVOKE ALL→grant กลับ + DO-block ตรวจ privileges ในตัว — ตรวจซ้ำ: table=SELECT/INSERT เท่านั้น, UPDATE เฉพาะ 3 คอลัมน์ unban) ② deploy ทุก container ③ smoke จริง: แบน→ยืนยันแบน nonce→ดูแบน / uid ที่แบนโดน BANNED_EVENT_DROPPED ทุกช่องทาง / ปลดแบน→กลับมาใช้ได้ / งานแบนค้าง ตอบ "ไม่มีงานค้าง" / maintenance worker กวาดคิวไม่มี error / health 200 + log สะอาด ไม่มี critical alert ④ รายงานผลจริงก่อนถือว่าจบ
+- สถานะ: โค้ดครบบน staging branch (995d469) · 054 apply บน staging แล้ว · **ยังไม่แตะ pro — รอคำสั่งกบเท่านั้น**
