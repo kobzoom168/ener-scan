@@ -17,7 +17,8 @@ const AWAITING_PAYMENT_TTL_MS = 24 * 60 * 60 * 1000;
 /**
  * Manual flow only: open checkout / slip verification.
  */
-const ACTIVE_PAYMENT_STATUSES = ["awaiting_payment", "pending_verify"];
+/** SSOT ของ "ยังมีเรื่องจ่ายเงินค้างอยู่" — ห้ามเขียนลิสต์นี้ซ้ำที่อื่น (Codex รอบ 6) */
+export const ACTIVE_PAYMENT_STATUSES = ["awaiting_payment", "pending_verify"];
 
 function getNowIso() {
   return new Date().toISOString();
@@ -376,6 +377,32 @@ export async function createPaymentPending({
  * Latest row for slip flow only: awaiting_payment (need slip) or pending_verify (re-upload slip).
  * Never matches paid | rejected | expired (those must not capture scan images as slips).
  */
+/**
+ * มีรายการจ่ายเงินค้างอยู่ไหม (สำหรับตัดสิน routing — ห้าม fail-open)
+ * @param {string} lineUserId
+ * @param {{ withinMs?: number }} [opts]
+ * @returns {Promise<{ ok: boolean, active: boolean }>} ok=false = อ่านไม่ได้ (caller ต้อง fail-closed)
+ */
+export async function hasActivePaymentForLineUserId(lineUserId, opts = {}) {
+  const lu = String(lineUserId || "").trim();
+  if (!lu) return { ok: true, active: false };
+  const withinMs = Number(opts.withinMs) > 0 ? Number(opts.withinMs) : 24 * 60 * 60 * 1000;
+  try {
+    const { data, error } = await supabase
+      .from("payments")
+      .select("id,status")
+      .eq("line_user_id", lu)
+      .in("status", ACTIVE_PAYMENT_STATUSES)
+      .gte("created_at", new Date(Date.now() - withinMs).toISOString())
+      .limit(1)
+      .maybeSingle();
+    if (error) return { ok: false, active: false };
+    return { ok: true, active: Boolean(data) };
+  } catch {
+    return { ok: false, active: false };
+  }
+}
+
 export async function getLatestAwaitingPaymentForLineUserId(lineUserId) {
   const lu = String(lineUserId || "").trim();
   console.log("[PAYMENTS_DB] getLatestAwaitingPaymentForLineUserId:start", {

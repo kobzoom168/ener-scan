@@ -105,9 +105,10 @@ export async function sendCustomerAlert(p, deps = {}) {
       if (!leaseToken) return; // มีคนกำลังส่งอยู่
       // renewal (Codex รอบ 5 P1): transport ที่ลากยาวกว่า lease → ต่ออายุไปเรื่อย
       // ตราบใดที่ request ยังไม่ settle — กัน process อื่นชิง lease แล้วส่งซ้ำ
+      const renewEveryMs = Number(deps.renewIntervalMs) > 0 ? Number(deps.renewIntervalMs) : 20_000;
       const renewTimer = setInterval(() => {
         void Promise.resolve(renewLease(leaseKey, leaseToken, 60_000)).catch(() => {});
-      }, 20_000);
+      }, renewEveryMs);
       if (typeof renewTimer.unref === "function") renewTimer.unref();
       const TIMEOUT = Symbol("timeout");
       let timer = null;

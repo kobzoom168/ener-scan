@@ -79,12 +79,9 @@ test("scan_energy: ข้อความตามมี/ไม่มีวัน
 
 test("webhook wiring: info router หลัง exact-utility ก่อน semantic + in-flight gate ไม่กลืน (source-order)", () => {
   const s = fs.readFileSync("src/routes/lineWebhook.js", "utf8");
-  const infoHits = [...s.matchAll(/matchDeterministicInfoCommand\(text\)/g)].length;
-  assert.equal(infoHits, 2, "ต้องมี 2 จุด: in-flight bypass + router");
-  // in-flight gate: menuBypass ต้องรวม info commands (Codex รอบ 5: "วิธีใช้" เคยโดนกลืน)
-  const gate = s.indexOf("menuBypass =");
-  const gateBlock = s.slice(gate, gate + 400);
-  assert.ok(gateBlock.includes("matchDeterministicInfoCommand"), "in-flight bypass ต้องรวม info commands");
+  // in-flight bypass ย้ายไป util แล้ว (behavior test: tests/inFlightBypass.util.test.js)
+  const gate = s.indexOf("menuBypass = await shouldBypassInFlightGate(text)");
+  assert.ok(gate > 0, "in-flight gate ต้องใช้ bypass util");
   // router: หลัง exact utility ก่อน profile-edit/semantic
   const util = s.indexOf("runExactUtilityCommandTerminal({");
   const info = s.indexOf("matchDeterministicInfoCommand(text)", util);

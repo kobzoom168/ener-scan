@@ -4080,7 +4080,12 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
           : `แบนแล้วครับ\n${payload.target}\nระบบจะเงียบกับบัญชีนี้ทุกช่องทาง พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
         : res.reason === "already_banned"
           ? "บัญชีนี้ถูกแบนอยู่แล้วครับ"
-          : "แบนไม่สำเร็จ (ระบบฐานข้อมูล) ลองใหม่อีกครั้งครับ",
+          : res.reason === "cache_unreconciled"
+            // DB บันทึกแบนแล้วแต่ระบบ cache ยังไม่ยอมรับ = ยังไม่มีผลจริง ห้ามบอกว่าเรียบร้อย
+            ? `บันทึกแบนใน DB แล้ว แต่ระบบยังไม่บังคับใช้ครับ\n${payload.target}\nพิมพ์คำสั่ง แบน ซ้ำอีกครั้งเพื่อให้มีผล`
+            : res.reason === "busy"
+              ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ครับ รอสักครู่แล้วลองใหม่"
+              : "แบนไม่สำเร็จ (ระบบฐานข้อมูล) ลองใหม่อีกครั้งครับ",
     );
     return true;
   }
@@ -4094,7 +4099,9 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
         ? res.cacheCleared === false
           ? `ปลดแบนใน DB แล้วครับ ${unbanM[1]} แต่ล้าง cache ไม่ครบ — อาจยังเงียบต่ออีกพักหนึ่ง ถ้าเกิน 5 นาทีพิมพ์ ปลดแบน ${unbanM[1]} ซ้ำอีกครั้ง`
           : `ปลดแบนแล้วครับ ${unbanM[1]} กลับมาใช้งานได้ปกติ (ล้างสถานะเงียบชั่วคราวให้ด้วยแล้ว)`
-        : res.reason === "not_banned"
+        : res.reason === "busy"
+          ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ครับ รอสักครู่แล้วลองใหม่"
+          : res.reason === "not_banned"
           ? res.cacheCleared === false
             ? "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ แต่ล้างสถานะชั่วคราวไม่ครบ ถ้ายังเงียบให้พิมพ์คำสั่งนี้ซ้ำ"
             : "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ"
@@ -4265,29 +4272,32 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
 
 async function maybeHandleResultStatusQuery({ client, event, userId, text }) {
   const t = String(text || "").trim();
-  // typed classification (Codex รอบ 5): router นี้ตอบ "สถานะสแกน" เท่านั้น —
-  // สถานะสลิป/เงิน/สมาชิกต้องไหลไป payment/entitlement flow ห้ามแย่ง
-  const { classifyStatusQuery, shouldResultStatusRouterHandle } = await import(
-    "../services/scanV2/statusQuery.util.js"
+  // typed routing (Codex รอบ 5-6): router นี้ตอบ "สถานะสแกน" เท่านั้น — สถานะสลิป/
+  // เงิน/สมาชิกต้องไหลไป payment flow · generic_wait ต้องยืนยันว่าไม่มีเงินค้าง
+  // (ใช้ ACTIVE_PAYMENT_STATUSES จาก payments store · อ่านไม่ได้ = fail-closed)
+  const { resolveResultStatusRouting } = await import(
+    "../services/scanV2/resultStatusRouting.util.js"
   );
-  const kind = classifyStatusQuery(t);
-  if (kind === "other" || kind === "payment_status" || kind === "entitlement_status") return false;
-  // generic_wait: ถ้ามีเรื่องจ่ายเงินค้าง (awaiting/pending_verify) ลูกค้าน่าจะรอเรื่องนั้น
-  let hasPendingPayment = false;
-  if (kind === "generic_wait") {
-    try {
-      const { data: pay } = await supabase
-        .from("payments")
-        .select("id,status")
-        .eq("line_user_id", userId)
-        .in("status", ["awaiting_payment", "pending"])
-        .gte("created_at", new Date(Date.now() - 24 * 3600 * 1000).toISOString())
-        .limit(1)
-        .maybeSingle();
-      hasPendingPayment = Boolean(pay);
-    } catch { hasPendingPayment = false; }
+  const routing = await resolveResultStatusRouting({
+    text: t,
+    getPaymentEvidence: async () => {
+      const { hasActivePaymentForLineUserId } = await import("../stores/payments.db.js");
+      return hasActivePaymentForLineUserId(userId);
+    },
+  });
+  if (!routing.handle) {
+    if (routing.kind !== "other") {
+      console.log(
+        JSON.stringify({
+          event: "RESULT_STATUS_ROUTER_DECLINED",
+          uidPrefix: String(userId).slice(0, 8),
+          kind: routing.kind,
+          reason: routing.reason,
+        }),
+      );
+    }
+    return false;
   }
-  if (!shouldResultStatusRouterHandle({ kind, hasPendingPayment })) return false;
   try {
     const { data: job } = await supabase
       .from("scan_jobs")
@@ -4589,19 +4599,10 @@ async function handleTextMessage({ client, event, userId, session }) {
   try {
     let menuBypass = false;
     try {
-      const { matchExactUtilityCommand } = await import(
-        "../services/utilityCommands/exactUtilityCommand.service.js"
+      const { shouldBypassInFlightGate } = await import(
+        "../services/lineWebhook/inFlightBypass.util.js"
       );
-      const { RESUME_COMMAND_RE } = await import(
-        "../services/welcome/registrationOnboarding.logic.js"
-      );
-      const { matchDeterministicInfoCommand } = await import(
-        "../services/lineWebhook/deterministicInfoCommand.util.js"
-      );
-      menuBypass =
-        Boolean(matchExactUtilityCommand(text)) ||
-        Boolean(matchDeterministicInfoCommand(text)) || // วิธีใช้/สแกนพลังงาน (Codex รอบ 5 P1)
-        RESUME_COMMAND_RE.test(String(text).trim());
+      menuBypass = await shouldBypassInFlightGate(text);
     } catch { /* เช็คพลาด = พฤติกรรมเดิม */ }
     if (text && !menuBypass && (await isDedupeKeyActive(scanInFlightKeyForUser(userId)))) {
       const firstNotice = await tryDedupeOnce(
