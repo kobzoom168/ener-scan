@@ -4146,8 +4146,11 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
   // ตรวจงาน ban/unban ที่ยังไม่ยืนยันผล (Codex รอบ 12: ไม่มี TTL — ค้างได้จนกว่า
   // DB ตรง intent หรือแอดมินปลดเองหลังตรวจ DB แล้ว)
   if (/^งานแบนค้าง$/.test(t)) {
-    const { listPendingReconciles } = await import("../services/ban/banReconcileQueue.js");
-    const entries = await listPendingReconciles();
+    const { readPendingReconciles } = await import("../services/ban/banReconcileQueue.js");
+    const read = await readPendingReconciles();
+    // อ่านล้ม ≠ ว่าง (Codex รอบ 13): ห้ามตอบ "ไม่มีงานค้าง" ทั้งที่ไม่รู้จริง
+    if (!read.ok) { await reply("อ่านงานค้างไม่ได้ครับ (redis) ลองใหม่อีกครั้ง"); return true; }
+    const entries = read.entries;
     if (!entries.length) { await reply("ไม่มีงานแบน/ปลดแบนค้างครับ"); return true; }
     const lines = entries.map((e) => {
       const ageMin = Math.round((Date.now() - e.enqueuedAt) / 60000);
@@ -4171,7 +4174,11 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
           ? "ไม่มีงานค้างของบัญชีนี้ครับ"
           : res.reason === "op_mismatch"
             ? `opId ไม่ตรงงานที่ค้างอยู่ครับ (ปัจจุบัน ${String(res.pending || "?").slice(0, 12)}) — เช็คด้วย งานแบนค้าง ก่อน`
-            : "ปลดงานค้างไม่สำเร็จ (redis) ลองใหม่อีกครั้งครับ",
+          : res.reason === "queue_read_failed"
+            ? "อ่านคิวงานค้างไม่ได้ครับ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้ง"
+          : res.reason === "queue_member_missing"
+            ? "สถานะงานค้างผิดปกติครับ (guard อยู่แต่ไม่พบงานในคิว) ยังไม่ปลดอะไร — แจ้ง dev ตรวจ redis ก่อน"
+            : "ปลดงานค้างไม่สำเร็จ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้งครับ",
     );
     return true;
   }

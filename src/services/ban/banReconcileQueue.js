@@ -28,19 +28,23 @@ export function parseReconcileMember(member) {
   return { uid: uid || "", reason: reason || "unknown", targetState: targetState === "banned" ? "banned" : "unbanned", opId: opId || "", member: String(member || "") };
 }
 
-/** entry ที่ค้างอยู่ (ใช้ใน sweeper/คำสั่งแอดมิน/เทสต์) */
-export async function listPendingReconciles(deps = {}) {
+/**
+ * อ่านคิวแบบ typed (Codex รอบ 13): อ่านล้ม ≠ คิวว่าง — Redis/ZRANGE error ห้าม
+ * แปลเป็น [] ให้ผู้เรียกตัดสินใจเหมือนไม่มีงานค้าง
+ * @returns {Promise<{ ok: boolean, entries: Array<{ uid, reason, targetState, opId, member, enqueuedAt }> }>}
+ */
+export async function readPendingReconciles(deps = {}) {
   try {
     const r = await redis(deps);
-    if (!r) return [];
+    if (!r) return { ok: false, entries: [] };
     const rows = await r.zrange(QUEUE_KEY, 0, -1, "WITHSCORES");
     const out = [];
     for (let i = 0; i < rows.length; i += 2) {
       out.push({ ...parseReconcileMember(rows[i]), enqueuedAt: Number(rows[i + 1]) || 0 });
     }
-    return out;
+    return { ok: true, entries: out };
   } catch {
-    return [];
+    return { ok: false, entries: [] };
   }
 }
 
@@ -102,7 +106,9 @@ export async function beginPendingOperation({ uid, reason, targetState, opId }, 
 }
 
 /**
- * จบ operation แบบ atomic: guard==opId → ZREM member + DEL guard พร้อมกัน
+ * จบ operation แบบ atomic: guard==opId "และ" exact member ยังอยู่ในคิว → ZREM+DEL
+ * พร้อมกัน (Codex รอบ 13: ตรวจ ZSCORE ก่อน — member ไม่มี = สภาพผิดปกติ ห้าม DEL
+ * guard เพราะจะทิ้ง orphan member/ปลด owner ทั้งที่ยังไม่ได้ลบงานจริง)
  * guard หายไปแล้ว (complete ก่อนหน้า/แอดมินปลดเอง) → เก็บกวาด orphan member ได้
  * guard เป็นของ op อื่น → ไม่แตะอะไรเลย
  * @returns {Promise<{ ok: boolean, removed?: boolean, cleared?: boolean, reason?: string }>}
@@ -114,9 +120,12 @@ export async function completePendingOperation({ uid, opId, member }, deps = {})
     const res = await r.eval(
       "local g = redis.call('GET', KEYS[1]) " +
         "if g == ARGV[1] then " +
-        "  local removed = redis.call('ZREM', KEYS[2], ARGV[2]) " +
-        "  redis.call('DEL', KEYS[1]) " +
-        "  return {1, removed} " +
+        "  if redis.call('ZSCORE', KEYS[2], ARGV[2]) then " +
+        "    local removed = redis.call('ZREM', KEYS[2], ARGV[2]) " +
+        "    redis.call('DEL', KEYS[1]) " +
+        "    return {1, removed} " +
+        "  end " +
+        "  return {3, 0} " +
         "end " +
         "if not g then " +
         "  local removed = redis.call('ZREM', KEYS[2], ARGV[2]) " +
@@ -132,6 +141,7 @@ export async function completePendingOperation({ uid, opId, member }, deps = {})
     const mode = Number(res?.[0]);
     const removed = Number(res?.[1]) === 1;
     if (mode === 0) return { ok: false, reason: "op_mismatch" };
+    if (mode === 3) return { ok: false, reason: "queue_member_missing" };
     return { ok: true, removed, cleared: mode === 1 };
   } catch {
     return { ok: false, reason: "redis_error" };
@@ -142,34 +152,46 @@ export async function completePendingOperation({ uid, opId, member }, deps = {})
  * ปลดงานค้างด้วยมือ (Codex รอบ 12 contract A): ทางเดียวนอกจาก state-confirmed
  * complete ที่ unresolved owner หายได้ — ใช้เมื่อมนุษย์ตรวจ DB เองแล้วยืนยันว่า
  * operation นั้นจบไปแล้วจริง (เช่น connection ตายถาวร) caller ต้องยืนยัน admin
- * identity ก่อนเรียกเสมอ · ต้องระบุ exact opId ที่ตรง guard ปัจจุบัน + ลง audit log
- * @returns {Promise<{ ok: boolean, reason?: string, pending?: string|null, member?: string }>}
+ * identity ก่อนเรียกเสมอ · ต้องระบุ exact opId ที่ตรง guard ปัจจุบัน และต้องพบ
+ * exact member ใน queue จริงเท่านั้น (รอบ 13: ห้ามสังเคราะห์) + ลง audit log
+ * @returns {Promise<{ ok: boolean, reason?: string, pending?: string|null, removed?: boolean, cleared?: boolean }>}
  */
 export async function adminClearPendingOperation({ uid, opId, clearedBy }, deps = {}) {
   const status = await getPendingOpStatus(uid, deps);
   if (!status.ok) return { ok: false, reason: "redis_error" };
   if (!status.pending) return { ok: false, reason: "no_pending_op" };
   if (status.pending !== String(opId)) return { ok: false, reason: "op_mismatch", pending: status.pending };
-  const entry = (await listPendingReconciles(deps)).find(
-    (e) => e.uid === String(uid) && e.opId === String(opId),
-  );
-  // member หายแต่ guard อยู่ (สภาพครึ่ง ๆ) → complete ด้วย member สังเคราะห์: ZREM พลาดเฉย ๆ แต่ guard ถูกปลด
-  const member = entry?.member || buildReconcileMember({ uid, reason: "manual", targetState: "unbanned", opId });
+  // อ่านคิวล้ม ≠ คิวว่าง (Codex รอบ 13): ห้ามเดา/ห้ามสังเคราะห์ member —
+  // มิฉะนั้น guard ถูก DEL ทั้งที่ member จริงยังค้าง = ทิ้ง orphan + ปลด owner ผิด ๆ
+  const read = await readPendingReconciles(deps);
+  if (!read.ok) return { ok: false, reason: "queue_read_failed" };
+  const entry = read.entries.find((e) => e.uid === String(uid) && e.opId === String(opId));
+  if (!entry) return { ok: false, reason: "queue_member_missing" };
   const complete = deps.complete || ((args) => completePendingOperation(args, deps));
-  const done = await complete({ uid, opId, member });
-  if (done.ok !== true) return { ok: false, reason: done.reason || "redis_error" };
+  const done = await complete({ uid, opId, member: entry.member });
+  // success เฉพาะเมื่อทั้งคู่หายจริงพร้อมกัน — removed/cleared ครึ่งเดียว = ไม่ claim
+  if (!(done?.ok === true && done.removed === true && done.cleared === true)) {
+    return {
+      ok: false,
+      reason: done?.reason || "clear_incomplete",
+      removed: done?.removed === true,
+      cleared: done?.cleared === true,
+    };
+  }
+  // audit ไม่มี full UID (P1): uidPrefix/reason/target/opId พอสำหรับตามรอย —
+  // จับคู่ตัวเต็มได้จากคำสั่งแอดมินใน LINE ที่จำกัดสิทธิ์อยู่แล้ว
   console.log(
     JSON.stringify({
       event: "BAN_PENDING_OP_MANUAL_CLEARED",
       uidPrefix: String(uid).slice(0, 8),
+      reason: entry.reason,
+      targetState: entry.targetState,
       opId: String(opId),
-      member,
       clearedBy: String(clearedBy || "").slice(0, 10),
-      entryAgeMs: entry ? Date.now() - entry.enqueuedAt : null,
-      removed: done.removed === true,
+      entryAgeMs: Date.now() - entry.enqueuedAt,
     }),
   );
-  return { ok: true, member };
+  return { ok: true };
 }
 
 /** alert แบบซื่อสัตย์ (Codex รอบ 10 P1): ส่งล้ม = ปล่อย dedupe ให้รอบหน้าลองใหม่ */
@@ -209,7 +231,13 @@ function fireMismatchAlert(entry, banned, deps) {
  */
 export async function sweepPendingBanReconciles(deps) {
   const stats = { scanned: 0, reconciled: 0, skipped: 0, mismatched: 0, failed: 0 };
-  const entries = await listPendingReconciles(deps);
+  const read = await readPendingReconciles(deps);
+  if (!read.ok) {
+    // อ่านคิวล้ม ≠ คิวว่าง — จบรอบนี้เฉย ๆ (ไม่มี mutation) รอบหน้าลองใหม่
+    console.log(JSON.stringify({ event: "BAN_RECONCILE_SWEEP_READ_FAILED" }));
+    return { ...stats, readFailed: true };
+  }
+  const entries = read.entries;
   const now = deps.now ? deps.now() : Date.now();
   const minSettle = Number(deps.minSettleMs) >= 0 ? Number(deps.minSettleMs) : MIN_SETTLE_MS;
   const limit = Number(deps.limit) > 0 ? Number(deps.limit) : 50;

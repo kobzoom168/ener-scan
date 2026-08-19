@@ -241,9 +241,11 @@ function memCache() {
     completePendingOp: async ({ uid, opId, member }) => {
       const g = pendingOps.get(uid);
       if (g === opId) {
-        const removed = queue.delete(member);
+        // semantics ตรง Lua รอบ 13: ZSCORE ก่อน — member ไม่มี = ห้าม DEL guard
+        if (!queue.has(member)) return { ok: false, reason: "queue_member_missing" };
+        queue.delete(member);
         pendingOps.delete(uid);
-        return { ok: true, removed, cleared: true };
+        return { ok: true, removed: true, cleared: true };
       }
       if (g === undefined) {
         const removed = queue.delete(member);
@@ -1764,10 +1766,11 @@ test("no-TTL: mismatch ค้าง 8 วัน → guard+queue ยังอย�
   assert.equal(c.queueHas(uid, "ban"), false);
 });
 
-test("adminClearPendingOperation: ปลดได้เฉพาะ exact opId + audit — opId ผิด/ไม่มีงาน = ไม่แตะอะไร", async () => {
+test("adminClearPendingOperation: exact opId + exact member จริงเท่านั้น — อ่านคิวล้ม/member หาย/complete ครึ่งเดียว = ไม่แตะ ไม่ claim", async () => {
   const { adminClearPendingOperation } = await import("../src/services/ban/banReconcileQueue.js");
   const c = memCache();
   const uid = "U" + "b".repeat(31) + "2";
+  const fullUid = uid;
   c.pendingOps.set(uid, "opStuck12345");
   c.queue.set(`${uid}|unban|unbanned|opStuck12345`, Date.now() - 3600_000);
   const fakeRedis = {
@@ -1775,21 +1778,82 @@ test("adminClearPendingOperation: ปลดได้เฉพาะ exact opId +
     zrange: async () => [...c.queue.entries()].flatMap(([k, at]) => [k, String(at)]),
   };
   const deps = { getRedis: async () => fakeRedis, complete: (args) => c.completePendingOp(args) };
-  // opId ผิด → op_mismatch ไม่แตะ guard/queue (กันปลดผิดงาน)
+
+  // (1) opId ผิด → op_mismatch ไม่แตะ guard/queue (กันปลดผิดงาน)
   const wrong = await adminClearPendingOperation({ uid, opId: "aaaaaaaaaaaa", clearedBy: "admin" }, deps);
   assert.equal(wrong.ok, false);
   assert.equal(wrong.reason, "op_mismatch");
   assert.equal(c.pendingOps.has(uid), true);
   assert.equal(c.queueHas(uid, "unban"), true);
-  // exact opId → guard+queue หายพร้อมกัน
-  const right = await adminClearPendingOperation({ uid, opId: "opStuck12345", clearedBy: "admin" }, deps);
+
+  // (2) repro Codex รอบ 13: ZRANGE throw + guard/queue จริงอยู่ → queue_read_failed ห้ามสังเคราะห์ member
+  const brokenQueueRedis = { ...fakeRedis, zrange: async () => { throw new Error("redis down"); } };
+  const readFail = await adminClearPendingOperation(
+    { uid, opId: "opStuck12345", clearedBy: "admin" },
+    { getRedis: async () => brokenQueueRedis, complete: (args) => c.completePendingOp(args) },
+  );
+  assert.equal(readFail.ok, false);
+  assert.equal(readFail.reason, "queue_read_failed", "อ่านคิวล้ม ≠ คิวว่าง — ห้ามเดา");
+  assert.equal(c.pendingOps.has(uid), true, "guard ต้องไม่ถูกแตะ");
+  assert.equal(c.queueHas(uid, "unban"), true, "queue จริงต้องไม่กลายเป็น orphan");
+
+  // (3) guard ตรงแต่ exact member หายจากคิว → queue_member_missing, guard ยังอยู่
+  const savedMember = `${uid}|unban|unbanned|opStuck12345`;
+  const savedAt = c.queue.get(savedMember);
+  c.queue.delete(savedMember);
+  const noMember = await adminClearPendingOperation({ uid, opId: "opStuck12345", clearedBy: "admin" }, deps);
+  assert.equal(noMember.ok, false);
+  assert.equal(noMember.reason, "queue_member_missing");
+  assert.equal(c.pendingOps.has(uid), true, "member ไม่มี = ห้ามปลด guard");
+  c.queue.set(savedMember, savedAt);
+
+  // (4) complete คืน removed=false → ห้าม claim success / ห้ามถือว่า clear แล้ว
+  const half = await adminClearPendingOperation(
+    { uid, opId: "opStuck12345", clearedBy: "admin" },
+    { ...deps, complete: async () => ({ ok: true, removed: false, cleared: true }) },
+  );
+  assert.equal(half.ok, false, "removed/cleared ครึ่งเดียว = ไม่ claim success");
+
+  // (5) exact guard+member → removed+cleared พร้อมกัน + audit ไม่มี full UID/member (P1)
+  const logs = [];
+  const origLog = console.log;
+  console.log = (line) => { logs.push(String(line)); };
+  let right;
+  try {
+    right = await adminClearPendingOperation({ uid, opId: "opStuck12345", clearedBy: "Uadmin12345678" }, deps);
+  } finally { console.log = origLog; }
   assert.equal(right.ok, true);
   assert.equal(c.pendingOps.has(uid), false);
-  assert.equal(c.queueHas(uid, "unban"), false);
-  // ไม่มีงานค้าง → no_pending_op
+  assert.equal(c.queueHas(uid, "unban"), false, "removed=true + cleared=true พร้อมกัน ไม่ทิ้ง orphan");
+  const audit = logs.map((l) => { try { return JSON.parse(l); } catch { return null; } })
+    .find((o) => o && o.event === "BAN_PENDING_OP_MANUAL_CLEARED");
+  assert.ok(audit, "ต้องมี audit log");
+  assert.equal(audit.uidPrefix, fullUid.slice(0, 8));
+  assert.equal("member" in audit, false, "audit ห้ามมี member (full UID แฝง)");
+  assert.ok(!JSON.stringify(audit).includes(fullUid), "audit ห้ามมี full UID");
+  assert.equal(audit.opId, "opStuck12345");
+  assert.equal(audit.targetState, "unbanned");
+
+  // (6) race: งานถูกปลดไปแล้ว → ฝั่งที่มาช้าได้ no_pending_op โดยไม่ทิ้ง orphan
   const none = await adminClearPendingOperation({ uid, opId: "opStuck12345", clearedBy: "admin" }, deps);
   assert.equal(none.ok, false);
   assert.equal(none.reason, "no_pending_op");
+  assert.equal(c.queue.size, 0);
+});
+
+test("sweep: อ่านคิวล้ม (ZRANGE throw) → readFailed ไม่ mutate อะไร ไม่ตีความเป็นคิวว่าง", async () => {
+  const { sweepPendingBanReconciles } = await import("../src/services/ban/banReconcileQueue.js");
+  let touched = 0;
+  const stats = await sweepPendingBanReconciles({
+    getRedis: async () => ({ zrange: async () => { throw new Error("redis down"); } }),
+    minSettleMs: 0,
+    observe: async () => { touched += 1; return { ok: true, banned: true }; },
+    reconcile: async () => { touched += 1; return { ok: true, banned: true }; },
+    complete: async () => { touched += 1; return { ok: true, removed: true, cleared: true }; },
+  });
+  assert.equal(stats.readFailed, true);
+  assert.equal(stats.scanned, 0);
+  assert.equal(touched, 0, "อ่านล้ม = จบรอบเฉย ๆ ห้ามแตะ observe/reconcile/complete");
 });
 
 test("admin manual clear: คำสั่งตรวจ/ปลดงานค้างอยู่ใต้ admin gate + บังคับ exact opId + audit (source contract)", () => {
@@ -1798,6 +1862,12 @@ test("admin manual clear: คำสั่งตรวจ/ปลดงานค�
   assert.ok(fn.includes("adminClearPendingOperation"), "ปลดงานค้างต้องผ่านฟังก์ชัน audit");
   assert.ok(fn.includes("ปลดงานแบนค้าง\\s+(U[0-9a-f]{32})\\s+([0-9a-f]{12})"), "ต้องบังคับ uid เต็ม + exact opId 12 hex");
   assert.ok(fn.includes("clearedBy: adminUid"), "audit ต้องระบุตัวแอดมินผู้สั่ง");
+  // Codex รอบ 13: อ่านคิวล้มต้องบอกตรง ๆ ไม่ใช่ตอบ "ไม่มีงานค้าง"
+  assert.ok(fn.includes("readPendingReconciles"), "งานแบนค้าง ต้องใช้ typed read");
+  assert.ok(fn.includes("อ่านงานค้างไม่ได้"), "อ่านล้มต้องมี copy แยกจากคิวว่าง");
   const src = fs.readFileSync(path.join(process.cwd(), "src", "services", "ban", "banReconcileQueue.js"), "utf8");
   assert.ok(src.includes("BAN_PENDING_OP_MANUAL_CLEARED"), "ต้องมี audit log event");
+  assert.ok(src.includes("ZSCORE"), "complete Lua ต้องตรวจ exact member ก่อน DEL guard");
+  assert.ok(src.includes("queue_read_failed") && src.includes("queue_member_missing"), "adminClear ต้องมี typed failure ทั้งสองทาง");
+  assert.ok(!src.includes("buildReconcileMember({ uid, reason: \"manual\""), "ห้ามสังเคราะห์ member ปลอม");
 });
