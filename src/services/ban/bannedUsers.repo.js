@@ -176,8 +176,6 @@ function mutationDeps(deps) {
     dbTimeoutMs: Number(deps.dbTimeoutMs) > 0 ? Number(deps.dbTimeoutMs) : MUTATION_DB_TIMEOUT_MS,
     finalizerWaitMs: Number(deps.finalizerWaitMs) > 0 ? Number(deps.finalizerWaitMs) : UNKNOWN_FINALIZER_WAIT_MS,
     finalizerCapMs: Number(deps.finalizerCapMs) > 0 ? Number(deps.finalizerCapMs) : UNKNOWN_FINALIZER_CAP_MS,
-    enqueueReconcile: deps.enqueueReconcile || null,
-    removeReconcile: deps.removeReconcile || null,
     alertDedupe: deps.alertDedupe || null,
     beginPendingOp: deps.beginPendingOp || null,
     completePendingOp: deps.completePendingOp || null,

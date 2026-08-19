@@ -1714,8 +1714,90 @@ test("no-abandon: mismatch อายุ 31 นาที → reconcile=0 complete
   assert.equal(c.queueHas(uid, "ban"), false);
 });
 
-test("source contract: sweeper ไม่มี age-based abandon (TTL/อายุไม่ใช่หลักฐานว่า op ล้ม)", () => {
+test("source contract: ไม่มีทางที่ unresolved owner หายเองตามอายุ — ทั้ง sweeper และ Redis TTL", () => {
   const src = fs.readFileSync(path.join(process.cwd(), "src", "services", "ban", "banReconcileQueue.js"), "utf8");
   assert.ok(!src.includes("abandonAfterMs"), "ห้ามมี abandonAfterMs");
   assert.ok(!src.includes("BAN_RECONCILE_ABANDONED"), "ห้ามมี abandon event");
+  // Codex รอบ 12: guard/queue ห้ามมี TTL — expiry 7 วันคือ stale-abandon ในคราบ Redis
+  assert.ok(!src.includes("'EX'") && !src.includes('"EX"'), "guard ห้ามตั้ง SET ... EX");
+  assert.ok(!/EXPIRE/i.test(src), "ห้ามมี EXPIRE/expire ใด ๆ ในโมดูล pending-op/queue");
+  assert.ok(!src.includes("PENDING_OP_TTL"), "ห้ามมี TTL constant ของ guard");
+});
+
+test("no-TTL: mismatch ค้าง 8 วัน → guard+queue ยังอยู่ + คำสั่งใหม่ conflict + ปิดได้เฉพาะ exact complete หลัง DB ตรง intent", async () => {
+  const { sweepPendingBanReconciles } = await import("../src/services/ban/banReconcileQueue.js");
+  const c = memCache();
+  const uid = "U" + "b".repeat(31) + "1";
+  c.pendingOps.set(uid, "opAncient");
+  c.queue.set(`${uid}|ban|banned|opAncient`, Date.now() - 8 * 24 * 3600 * 1000); // ค้าง 8 วัน
+  const fakeRedis = {
+    zrange: async () => [...c.queue.entries()].flatMap(([k, at]) => [k, String(at)]),
+    zrem: async (_k, member) => { c.queue.delete(member); },
+    zadd: async () => {}, expire: async () => {},
+  };
+  let dbBanned = false; // DB operation เก่ายัง unknown — late commit ยังเกิดได้แม้ผ่าน 8 วัน
+  const deps = {
+    getRedis: async () => fakeRedis,
+    minSettleMs: 0,
+    alert: () => {},
+    observe: async () => ({ ok: true, banned: dbBanned }),
+    reconcile: async () => ({ ok: true, banned: dbBanned }),
+    complete: (e) => c.completePendingOp({ uid: e.uid, opId: e.opId, member: e.member }),
+  };
+  const s1 = await sweepPendingBanReconciles(deps);
+  assert.equal(s1.mismatched, 1);
+  assert.equal(s1.reconciled, 0);
+  assert.equal(c.pendingOps.has(uid), true, "8 วันก็ห้ามลืม — guard ต้องอยู่");
+  assert.equal(c.queueHas(uid, "ban"), true, "queue ต้องอยู่");
+  // คำสั่งใหม่ของ uid เดิมต้องได้ conflict (pending_reconcile) โดยไม่แตะ DB
+  let dbTouched = 0;
+  const countingDb = { from: () => { dbTouched += 1; return { insert: async () => ({ error: null }) }; } };
+  const rNew = await banUser({ lineUserId: uid, reason: "x", bannedBy: "admin" }, { dbClient: countingDb, ...c });
+  assert.equal(rNew.ok, false);
+  assert.equal(rNew.reason, "pending_reconcile", "งานเก่ายังไม่ยืนยันผล = คำสั่งใหม่ห้ามผ่าน");
+  assert.equal(dbTouched, 0, "ห้ามแตะ DB — DB op เก่าอาจ commit ทีหลังได้");
+  // ปิดได้ทางเดียว: DB ตรง intent แล้ว exact complete → guard+queue หายพร้อมกัน
+  dbBanned = true;
+  const s2 = await sweepPendingBanReconciles(deps);
+  assert.equal(s2.reconciled, 1);
+  assert.equal(c.pendingOps.has(uid), false);
+  assert.equal(c.queueHas(uid, "ban"), false);
+});
+
+test("adminClearPendingOperation: ปลดได้เฉพาะ exact opId + audit — opId ผิด/ไม่มีงาน = ไม่แตะอะไร", async () => {
+  const { adminClearPendingOperation } = await import("../src/services/ban/banReconcileQueue.js");
+  const c = memCache();
+  const uid = "U" + "b".repeat(31) + "2";
+  c.pendingOps.set(uid, "opStuck12345");
+  c.queue.set(`${uid}|unban|unbanned|opStuck12345`, Date.now() - 3600_000);
+  const fakeRedis = {
+    get: async (k) => (k === `ban:pendingop:${uid}` ? c.pendingOps.get(uid) || null : null),
+    zrange: async () => [...c.queue.entries()].flatMap(([k, at]) => [k, String(at)]),
+  };
+  const deps = { getRedis: async () => fakeRedis, complete: (args) => c.completePendingOp(args) };
+  // opId ผิด → op_mismatch ไม่แตะ guard/queue (กันปลดผิดงาน)
+  const wrong = await adminClearPendingOperation({ uid, opId: "aaaaaaaaaaaa", clearedBy: "admin" }, deps);
+  assert.equal(wrong.ok, false);
+  assert.equal(wrong.reason, "op_mismatch");
+  assert.equal(c.pendingOps.has(uid), true);
+  assert.equal(c.queueHas(uid, "unban"), true);
+  // exact opId → guard+queue หายพร้อมกัน
+  const right = await adminClearPendingOperation({ uid, opId: "opStuck12345", clearedBy: "admin" }, deps);
+  assert.equal(right.ok, true);
+  assert.equal(c.pendingOps.has(uid), false);
+  assert.equal(c.queueHas(uid, "unban"), false);
+  // ไม่มีงานค้าง → no_pending_op
+  const none = await adminClearPendingOperation({ uid, opId: "opStuck12345", clearedBy: "admin" }, deps);
+  assert.equal(none.ok, false);
+  assert.equal(none.reason, "no_pending_op");
+});
+
+test("admin manual clear: คำสั่งตรวจ/ปลดงานค้างอยู่ใต้ admin gate + บังคับ exact opId + audit (source contract)", () => {
+  const fn = WEBHOOK.slice(WEBHOOK.indexOf("async function maybeHandleBanCommand"), WEBHOOK.indexOf("async function maybeHandleAdminAssist"));
+  assert.ok(fn.includes("งานแบนค้าง"), "ต้องมีคำสั่งตรวจงานค้าง");
+  assert.ok(fn.includes("adminClearPendingOperation"), "ปลดงานค้างต้องผ่านฟังก์ชัน audit");
+  assert.ok(fn.includes("ปลดงานแบนค้าง\\s+(U[0-9a-f]{32})\\s+([0-9a-f]{12})"), "ต้องบังคับ uid เต็ม + exact opId 12 hex");
+  assert.ok(fn.includes("clearedBy: adminUid"), "audit ต้องระบุตัวแอดมินผู้สั่ง");
+  const src = fs.readFileSync(path.join(process.cwd(), "src", "services", "ban", "banReconcileQueue.js"), "utf8");
+  assert.ok(src.includes("BAN_PENDING_OP_MANUAL_CLEARED"), "ต้องมี audit log event");
 });

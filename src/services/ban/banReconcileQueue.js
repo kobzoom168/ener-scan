@@ -28,37 +28,7 @@ export function parseReconcileMember(member) {
   return { uid: uid || "", reason: reason || "unknown", targetState: targetState === "banned" ? "banned" : "unbanned", opId: opId || "", member: String(member || "") };
 }
 
-/**
- * @param {{ uid: string, reason: string, targetState: "banned"|"unbanned", opId: string }} entry
- * @returns {Promise<{ ok: boolean, member?: string }>}
- */
-export async function enqueuePendingReconcile(entry, deps = {}) {
-  try {
-    const r = await redis(deps);
-    if (!r) return { ok: false };
-    const member = buildReconcileMember(entry);
-    const now = deps.now ? deps.now() : Date.now();
-    await r.zadd(QUEUE_KEY, now, member);
-    await r.expire(QUEUE_KEY, 7 * 24 * 3600).catch(() => {});
-    return { ok: true, member };
-  } catch {
-    return { ok: false };
-  }
-}
-
-/** ลบแบบ exact member เท่านั้น (กัน ABA) */
-export async function removePendingReconcile(member, deps = {}) {
-  try {
-    const r = await redis(deps);
-    if (!r) return { ok: false };
-    await r.zrem(QUEUE_KEY, String(member));
-    return { ok: true };
-  } catch {
-    return { ok: false };
-  }
-}
-
-/** entry ที่ค้างอยู่ (ใช้ในเทสต์/ตรวจสถานะ) */
+/** entry ที่ค้างอยู่ (ใช้ใน sweeper/คำสั่งแอดมิน/เทสต์) */
 export async function listPendingReconciles(deps = {}) {
   try {
     const r = await redis(deps);
@@ -74,16 +44,20 @@ export async function listPendingReconciles(deps = {}) {
   }
 }
 
-/* ---------------- pending-operation lifecycle (Codex รอบ 10-11) ----------------
+/* ---------------- pending-operation lifecycle (Codex รอบ 10-12) ----------------
  * รอบ 11: guard กับ queue ต้องเป็นก้อนเดียวกัน — แยกสองคำสั่งเปิดช่อง 3 ทาง
  * (อ่าน guard ล้มแล้ว fail-open · เขียน guard ล้มแต่อ้าง durable · complete ครึ่งเดียว)
+ * รอบ 12: guard+queue ของ operation ที่ยังไม่ยืนยันผล "ไม่มี TTL" — TTL/อายุไม่ใช่
+ * หลักฐานว่า operation ล้ม (client-side timeout ไม่ cancel DB request จริง late
+ * commit หลัง 7 วันก็ยังละเมิด invariant เดิมได้) หายได้สองทางเท่านั้น:
+ * completePendingOperation exact opId หลัง state-confirmed หรือแอดมินตรวจ DB แล้ว
+ * สั่งปลดเองผ่าน adminClearPendingOperation (exact opId + audit log)
  *
  * beginPendingOperation: SET guard NX + ZADD queue ใน Lua เดียว — ล้มข้อใด = ห้ามแตะ DB
  * completePendingOperation: ตรวจ guard==opId → ZREM exact member + DEL guard พร้อมกัน
  *   คืน removed/cleared ตามจำนวนจริง · guard เป็นของ op อื่น = ไม่แตะอะไรเลย
  */
 const PENDING_OP_PREFIX = "ban:pendingop:";
-const PENDING_OP_TTL_SEC = 7 * 24 * 3600;
 
 /** อ่านสถานะ guard แบบ typed (Codex รอบ 11 ข้อ 1: อ่านล้ม ≠ ไม่มีงานค้าง) */
 export async function getPendingOpStatus(uid, deps = {}) {
@@ -107,20 +81,18 @@ export async function beginPendingOperation({ uid, reason, targetState, opId }, 
     if (!r) return { ok: false, reason: "redis_unavailable" };
     const member = buildReconcileMember({ uid, reason, targetState, opId });
     const now = deps.now ? deps.now() : Date.now();
+    // ไม่มี TTL ทั้ง guard และ queue (Codex รอบ 12): unresolved owner ห้ามหายเอง
     const res = await r.eval(
       "if redis.call('EXISTS', KEYS[1]) == 1 then return 'conflict' end " +
-        "redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2]) " +
-        "redis.call('ZADD', KEYS[2], ARGV[3], ARGV[4]) " +
-        "redis.call('EXPIRE', KEYS[2], ARGV[5]) " +
+        "redis.call('SET', KEYS[1], ARGV[1]) " +
+        "redis.call('ZADD', KEYS[2], ARGV[2], ARGV[3]) " +
         "return 'ok'",
       2,
       `${PENDING_OP_PREFIX}${uid}`,
       QUEUE_KEY,
       String(opId),
-      String(PENDING_OP_TTL_SEC),
       String(now),
       member,
-      String(7 * 24 * 3600),
     );
     if (res === "conflict") return { ok: false, reason: "conflict" };
     return { ok: true, member };
@@ -131,7 +103,7 @@ export async function beginPendingOperation({ uid, reason, targetState, opId }, 
 
 /**
  * จบ operation แบบ atomic: guard==opId → ZREM member + DEL guard พร้อมกัน
- * guard หายไปแล้ว (TTL/complete ก่อนหน้า) → เก็บกวาด orphan member ได้
+ * guard หายไปแล้ว (complete ก่อนหน้า/แอดมินปลดเอง) → เก็บกวาด orphan member ได้
  * guard เป็นของ op อื่น → ไม่แตะอะไรเลย
  * @returns {Promise<{ ok: boolean, removed?: boolean, cleared?: boolean, reason?: string }>}
  */
@@ -166,6 +138,40 @@ export async function completePendingOperation({ uid, opId, member }, deps = {})
   }
 }
 
+/**
+ * ปลดงานค้างด้วยมือ (Codex รอบ 12 contract A): ทางเดียวนอกจาก state-confirmed
+ * complete ที่ unresolved owner หายได้ — ใช้เมื่อมนุษย์ตรวจ DB เองแล้วยืนยันว่า
+ * operation นั้นจบไปแล้วจริง (เช่น connection ตายถาวร) caller ต้องยืนยัน admin
+ * identity ก่อนเรียกเสมอ · ต้องระบุ exact opId ที่ตรง guard ปัจจุบัน + ลง audit log
+ * @returns {Promise<{ ok: boolean, reason?: string, pending?: string|null, member?: string }>}
+ */
+export async function adminClearPendingOperation({ uid, opId, clearedBy }, deps = {}) {
+  const status = await getPendingOpStatus(uid, deps);
+  if (!status.ok) return { ok: false, reason: "redis_error" };
+  if (!status.pending) return { ok: false, reason: "no_pending_op" };
+  if (status.pending !== String(opId)) return { ok: false, reason: "op_mismatch", pending: status.pending };
+  const entry = (await listPendingReconciles(deps)).find(
+    (e) => e.uid === String(uid) && e.opId === String(opId),
+  );
+  // member หายแต่ guard อยู่ (สภาพครึ่ง ๆ) → complete ด้วย member สังเคราะห์: ZREM พลาดเฉย ๆ แต่ guard ถูกปลด
+  const member = entry?.member || buildReconcileMember({ uid, reason: "manual", targetState: "unbanned", opId });
+  const complete = deps.complete || ((args) => completePendingOperation(args, deps));
+  const done = await complete({ uid, opId, member });
+  if (done.ok !== true) return { ok: false, reason: done.reason || "redis_error" };
+  console.log(
+    JSON.stringify({
+      event: "BAN_PENDING_OP_MANUAL_CLEARED",
+      uidPrefix: String(uid).slice(0, 8),
+      opId: String(opId),
+      member,
+      clearedBy: String(clearedBy || "").slice(0, 10),
+      entryAgeMs: entry ? Date.now() - entry.enqueuedAt : null,
+      removed: done.removed === true,
+    }),
+  );
+  return { ok: true, member };
+}
+
 /** alert แบบซื่อสัตย์ (Codex รอบ 10 P1): ส่งล้ม = ปล่อย dedupe ให้รอบหน้าลองใหม่ */
 function fireMismatchAlert(entry, banned, deps) {
   void (async () => {
@@ -179,7 +185,7 @@ function fireMismatchAlert(entry, banned, deps) {
         const { sendTelegramText } = await import("../telegramNotify.service.js");
         const res = await Promise.race([
           sendTelegramText(
-            `[CRITICAL] แบน/ปลดแบนยังไม่ลงตัว: ${entry.uid}\nสั่ง ${entry.reason} (คาด ${entry.targetState}) แต่ DB เป็น ${banned ? "banned" : "unbanned"}\nระบบจะ retry ต่อ — ตรวจด้วยคำสั่ง ดูแบน`,
+            `[CRITICAL] แบน/ปลดแบนยังไม่ลงตัว: ${entry.uid}\nสั่ง ${entry.reason} (คาด ${entry.targetState}) แต่ DB เป็น ${banned ? "banned" : "unbanned"}\nระบบจะ retry ต่อไม่มีหมดอายุ — ตรวจด้วยคำสั่ง งานแบนค้าง`,
           ),
           new Promise((r) => setTimeout(r, 5000)),
         ]);

@@ -4142,6 +4142,39 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     );
     return true;
   }
+
+  // ตรวจงาน ban/unban ที่ยังไม่ยืนยันผล (Codex รอบ 12: ไม่มี TTL — ค้างได้จนกว่า
+  // DB ตรง intent หรือแอดมินปลดเองหลังตรวจ DB แล้ว)
+  if (/^งานแบนค้าง$/.test(t)) {
+    const { listPendingReconciles } = await import("../services/ban/banReconcileQueue.js");
+    const entries = await listPendingReconciles();
+    if (!entries.length) { await reply("ไม่มีงานแบน/ปลดแบนค้างครับ"); return true; }
+    const lines = entries.map((e) => {
+      const ageMin = Math.round((Date.now() - e.enqueuedAt) / 60000);
+      return `${e.uid}\n  สั่ง ${e.reason} (คาด ${e.targetState}) ค้าง ${ageMin} นาที · opId ${e.opId}`;
+    });
+    await reply(
+      `งานค้างรอยืนยันผล ${entries.length} รายการ:\n${lines.join("\n")}\n\nระบบ retry ต่อเองไม่มีหมดอายุ — ถ้าตรวจ DB แล้วยืนยันว่างานจบจริง พิมพ์:\nปลดงานแบนค้าง <uid> <opId>`,
+    );
+    return true;
+  }
+
+  // ปลดงานค้างด้วยมือ: ต้องระบุ exact opId (กันปลดผิดงาน/งานใหม่ที่แซงเข้ามา) + audit log
+  const clearOpM = t.match(/^ปลดงานแบนค้าง\s+(U[0-9a-f]{32})\s+([0-9a-f]{12})$/);
+  if (clearOpM) {
+    const { adminClearPendingOperation } = await import("../services/ban/banReconcileQueue.js");
+    const res = await adminClearPendingOperation({ uid: clearOpM[1], opId: clearOpM[2], clearedBy: adminUid });
+    await reply(
+      res.ok
+        ? `ปลดงานค้างแล้วครับ\n${clearOpM[1]} (opId ${clearOpM[2]})\nเช็คสถานะจริงด้วย ดูแบน อีกครั้ง — ถ้า cache ยังไม่ตรงพิมพ์ แบน/ปลดแบน ตามที่ตั้งใจซ้ำ`
+        : res.reason === "no_pending_op"
+          ? "ไม่มีงานค้างของบัญชีนี้ครับ"
+          : res.reason === "op_mismatch"
+            ? `opId ไม่ตรงงานที่ค้างอยู่ครับ (ปัจจุบัน ${String(res.pending || "?").slice(0, 12)}) — เช็คด้วย งานแบนค้าง ก่อน`
+            : "ปลดงานค้างไม่สำเร็จ (redis) ลองใหม่อีกครั้งครับ",
+    );
+    return true;
+  }
   return false;
 }
 
