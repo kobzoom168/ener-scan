@@ -289,16 +289,50 @@ test("แบนระหว่าง negative cache ยัง active: banUser �
   assert.equal(await isBanned(UID_OK, { dbClient: noDb, ...c, alertDedupe: async () => false }), true);
 });
 
-test("unban: cache op คืน {ok:false} แบบไม่ throw (เหมือน production) → cacheCleared=false ห้ามโกหก", async () => {
+test("unban: DB ปลดสำเร็จแต่ cache apply+reconcile ล้ม → ห้าม complete (guard+queue อยู่) + fail-closed + sweeper ตามจบ", async () => {
   const c = memCache();
-  const client = { from: () => ({ update: () => ({ eq: () => ({ is: () => ({ select: async () => ({ data: [{ id: 1 }], error: null }) }) }) }) }) };
+  const client = {
+    from: () => ({
+      update: () => ({ eq: () => ({ is: () => ({ select: async () => ({ data: [{ id: 1 }], error: null }) }) }) }),
+      select: () => ({ eq: () => ({ is: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }),
+    }),
+  };
   const r = await unbanUser({ lineUserId: UID_OK, unbannedBy: "admin" }, {
     dbClient: client,
     ...c,
-    applyBanState: async () => ({ ok: false, reason: "no_redis" }),
+    // pre-hold (positive) เขียนเข้า แต่การล้าง (tombstone) ล้มทุกทาง — จำลอง cache sync พัง
+    applyBanState: async (genKey, gen, state) =>
+      (state.sets || []).some((s) => String(s.key).startsWith("ban:tomb:"))
+        ? { ok: false, reason: "no_redis" }
+        : c.applyBanState(genKey, gen, state),
   });
-  assert.equal(r.ok, true);
+  // Codex NO-GO ข้อ 2: DB ปลดแล้วแต่ effective cache อาจยังแบนลูกค้า — ห้าม claim สำเร็จ
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "cache_unreconciled");
   assert.equal(r.cacheCleared, false);
+  assert.equal(c.pendingOps.has(UID_OK), true, "guard ต้องคงอยู่ — durable owner ห้ามหาย");
+  assert.equal(c.queueHas(UID_OK, "unban"), true, "queue ต้องคงอยู่ให้ sweeper ตาม");
+  assert.equal(c.m.get(`ban:active:${UID_OK}`), "1", "fail-closed: pre-hold ยังกันบัญชีไว้ ไม่หลุดเป็นครึ่ง ๆ กลาง ๆ");
+
+  // cache กลับมาปกติ → sweeper reconcile เป็น unbanned แล้ว complete atomic
+  const { sweepPendingBanReconciles } = await import("../src/services/ban/banReconcileQueue.js");
+  const { reconcileBanCacheFromDb } = await import("../src/services/ban/bannedUsers.repo.js");
+  const fakeRedis = {
+    zrange: async () => [...c.queue.entries()].flatMap(([k, at]) => [k, String(at)]),
+    zrem: async (_k, member) => { c.queue.delete(member); },
+    zadd: async () => {}, expire: async () => {},
+  };
+  const stats = await sweepPendingBanReconciles({
+    getRedis: async () => fakeRedis,
+    minSettleMs: 0,
+    observe: async () => ({ ok: true, banned: false }),
+    reconcile: (u) => reconcileBanCacheFromDb(u, { dbClient: client, ...c }), // applyBanState ปกติแล้ว
+    complete: (e) => c.completePendingOp({ uid: e.uid, opId: e.opId, member: e.member }),
+  });
+  assert.equal(stats.reconciled, 1);
+  assert.equal(c.pendingOps.has(UID_OK), false, "cache ตรง DB แล้วค่อยปลด guard");
+  assert.equal(c.queueHas(UID_OK, "unban"), false);
+  assert.equal(c.m.has(`ban:active:${UID_OK}`), false, "positive ต้องถูกล้างหลัง reconcile สำเร็จ");
 });
 
 test("unban คนที่ไม่ได้แบน → not_banned แต่ล้าง cache/troll ทุก key อยู่ดี (กัน stale)", async () => {
@@ -1640,42 +1674,48 @@ test("sweep: complete ล้ม → guard+queue อยู่ทั้งคู�
   assert.equal(c.queueHas(uid, "ban"), true);
 });
 
-test("stale-abandon: mismatch ค้างเกินงบ (DB ไม่มีทาง commit แล้ว) → ปิดงานตาม DB จริง กัน guard ล็อค uid 7 วัน", async () => {
+test("no-abandon: mismatch อายุ 31 นาที → reconcile=0 complete=0 guard+queue อยู่ · late commit หลังนั้น sweep รอบถัดไปค่อยปิด", async () => {
+  // Codex NO-GO ข้อ 1: Promise.race ไม่ cancel DB request — commit หลัง 30 นาทีเกิดได้
+  // อายุ/TTL เพียงอย่างเดียวไม่ใช่หลักฐานว่า operation ล้ม ห้าม abandon ตามอายุ
   const { sweepPendingBanReconciles } = await import("../src/services/ban/banReconcileQueue.js");
   const c = memCache();
   const uid = "U" + "a".repeat(31) + "0";
-  // ban ที่ไม่เคยแตะ DB (crash หลัง begin): DB = ไม่แบน, intent = แบน
-  c.pendingOps.set(uid, "opDead");
-  c.queue.set(`${uid}|ban|banned|opDead`, Date.now() - 60 * 60 * 1000); // ค้าง 1 ชม.
+  c.pendingOps.set(uid, "opSlow");
+  c.queue.set(`${uid}|ban|banned|opSlow`, Date.now() - 31 * 60 * 1000); // mismatch ค้าง 31 นาที
   const fakeRedis = {
     zrange: async () => [...c.queue.entries()].flatMap(([k, at]) => [k, String(at)]),
-    zrem: async () => {}, zadd: async () => {}, expire: async () => {},
+    zrem: async (_k, member) => { c.queue.delete(member); },
+    zadd: async () => {}, expire: async () => {},
   };
-  const stats = await sweepPendingBanReconciles({
+  let dbBanned = false; // late commit ยังไม่มา
+  let reconcileCalls = 0;
+  let completeCalls = 0;
+  const deps = {
     getRedis: async () => fakeRedis,
     minSettleMs: 0,
-    abandonAfterMs: 30 * 60 * 1000,
     alert: () => {},
-    observe: async () => ({ ok: true, banned: false }),
-    reconcile: async () => ({ ok: true, banned: false }),
-    complete: (e) => c.completePendingOp({ uid: e.uid, opId: e.opId, member: e.member }),
-  });
-  assert.equal(stats.abandoned, 1);
-  assert.equal(c.pendingOps.has(uid), false, "guard ต้องถูกปลด — ไม่ล็อค uid จนถึง TTL 7 วัน");
+    observe: async () => ({ ok: true, banned: dbBanned }),
+    reconcile: async () => { reconcileCalls += 1; return { ok: true, banned: dbBanned }; },
+    complete: (e) => { completeCalls += 1; return c.completePendingOp({ uid: e.uid, opId: e.opId, member: e.member }); },
+  };
+  const s1 = await sweepPendingBanReconciles(deps);
+  assert.equal(s1.mismatched, 1);
+  assert.equal(s1.reconciled, 0);
+  assert.equal(reconcileCalls, 0, "mismatch ทุกอายุ — ห้าม reconcile สวน intent");
+  assert.equal(completeCalls, 0, "ห้าม complete ตามอายุ");
+  assert.equal(c.pendingOps.has(uid), true, "guard ต้องคงอยู่ (fail-closed ต่อ)");
+  assert.equal(c.queueHas(uid, "ban"), true, "queue ต้องคงอยู่ retry ต่อ");
+  // late commit มาถึงหลัง 31 นาที → sweep รอบถัดไปเห็น DB ตรง intent แล้วจึง reconcile+complete
+  dbBanned = true;
+  const s2 = await sweepPendingBanReconciles(deps);
+  assert.equal(s2.reconciled, 1);
+  assert.equal(reconcileCalls, 1);
+  assert.equal(c.pendingOps.has(uid), false, "ปิดงานได้เฉพาะเมื่อ DB ตรง intent");
   assert.equal(c.queueHas(uid, "ban"), false);
-  // mismatch ที่ยังใหม่ (ในงบ) ต้องไม่โดน abandon — ยังรอ late commit ตามเดิม
-  c.pendingOps.set(uid, "opNew");
-  c.queue.set(`${uid}|ban|banned|opNew`, Date.now() - 1000);
-  const s2 = await sweepPendingBanReconciles({
-    getRedis: async () => fakeRedis,
-    minSettleMs: 0,
-    abandonAfterMs: 30 * 60 * 1000,
-    alert: () => {},
-    observe: async () => ({ ok: true, banned: false }),
-    reconcile: async () => ({ ok: true, banned: false }),
-    complete: (e) => c.completePendingOp({ uid: e.uid, opId: e.opId, member: e.member }),
-  });
-  assert.equal(s2.mismatched, 1);
-  assert.equal(s2.abandoned, 0);
-  assert.equal(c.pendingOps.has(uid), true, "ยังในงบ = ค้างไว้รอ late commit");
+});
+
+test("source contract: sweeper ไม่มี age-based abandon (TTL/อายุไม่ใช่หลักฐานว่า op ล้ม)", () => {
+  const src = fs.readFileSync(path.join(process.cwd(), "src", "services", "ban", "banReconcileQueue.js"), "utf8");
+  assert.ok(!src.includes("abandonAfterMs"), "ห้ามมี abandonAfterMs");
+  assert.ok(!src.includes("BAN_RECONCILE_ABANDONED"), "ห้ามมี abandon event");
 });

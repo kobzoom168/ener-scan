@@ -617,6 +617,10 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
 
     const stillHeld = await m.checkLockHeld(banMutexKey(uid), lockToken);
     let cacheCleared = false;
+    // effective cache ตรง DB แล้วหรือยัง — เงื่อนไขเดียวที่อนุญาตให้ complete:
+    // DB ปลดแบนสำเร็จแต่ cache ยังไม่ยอมรับ = positive/pre-hold อาจยังแบนลูกค้าต่อ
+    // (Codex NO-GO ข้อ 2) ห้ามลบ guard+queue จนกว่า cache จะตรง
+    let cacheConsistent = false;
     if (stillHeld) {
       const genRes = await m.bump(banGenKey(uid));
       if (genRes.ok) {
@@ -625,11 +629,24 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
           dels: UNBAN_CLEAR_KEYS(uid).concat(banNegCacheKey(uid)),
         });
         cacheCleared = r.ok === true && r.applied === true;
+        cacheConsistent = cacheCleared;
       }
     } else {
       log("BAN_USER_LOCK_LOST", { uidPrefix: uid.slice(0, 8), op: "unban" });
+    }
+    if (!cacheConsistent) {
       const rec = await reconcileCacheWithDb(uid, m, client, lockToken);
+      // rec.banned === true ได้เมื่อมี ban ใหม่กว่าใน DB — cache ตรง DB แล้วเช่นกัน
+      cacheConsistent = rec.ok === true;
       cacheCleared = rec.ok === true && rec.banned === false;
+    }
+    if (!cacheConsistent) {
+      // ห้าม complete: คง guard+queue (target unbanned) ให้ sweeper ตามจน cache ตรง
+      // DB แล้วค่อยปิดงาน · fail-closed ระหว่างนี้คือ "ยังแบน" ตาม pre-hold — ห้าม
+      // claim สำเร็จทั้งที่ลูกค้าอาจยังถูกแบนจาก cache
+      log("BAN_USER_UNBAN_CACHE_UNRECONCILED", { uidPrefix: uid.slice(0, 8), wasBanned });
+      if (!wasBanned) return { ok: false, reason: "not_banned", cacheCleared: false, cacheUnreconciled: true };
+      return { ok: false, reason: "cache_unreconciled", dbUnbanned: true, cacheCleared: false };
     }
     // จบงาน atomic (guard+queue พร้อมกัน) — ปิดไม่เข้า = คงไว้ให้ sweeper
     const done = await completePendingOp(uid, opId, opMember, m);
@@ -637,11 +654,12 @@ export async function unbanUser({ lineUserId, unbannedBy, unbanReason }, deps = 
     if (pendingCleanup) log("BAN_USER_COMPLETE_PENDING_OP_FAILED", { uidPrefix: uid.slice(0, 8), op: "unban" });
     if (!wasBanned) return { ok: false, reason: "not_banned", cacheCleared, ...(pendingCleanup ? { pendingCleanup } : {}) };
     if (!cacheCleared) {
+      // DB ปลดแล้วแต่มี ban ใหม่กว่า — cache ตรง DB (ยังแบน) ถูกต้องแล้ว ห้ามอ้างว่าล้าง
       log("BAN_USER_UNBAN_CACHE_CLEAR_FAILED", { uidPrefix: uid.slice(0, 8) });
       return { ok: true, cacheCleared: false, ...(pendingCleanup ? { pendingCleanup } : {}) };
     }
     log("BAN_USER_UNBANNED", { uidPrefix: uid.slice(0, 8), unbannedBy: String(unbannedBy || "").slice(0, 10) });
-    return { ok: true, cacheCleared: true };
+    return { ok: true, cacheCleared: true, ...(pendingCleanup ? { pendingCleanup } : {}) };
   } catch (e) {
     log("BAN_USER_UNBAN_FAILED", { uidPrefix: uid.slice(0, 8), message: String(e?.message || e).slice(0, 100) });
     return { ok: false, reason: "db_error" };

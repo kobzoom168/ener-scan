@@ -193,18 +193,19 @@ function fireMismatchAlert(entry, banned, deps) {
 /**
  * กวาดคิว — maintenance worker เรียกเป็นรอบ ๆ
  * ลบ entry เฉพาะเมื่อ reconcile สำเร็จ "และ" ผล DB ตรง intent (targetState)
- * mismatch = late commit อาจยังมาไม่ถึง หรือ operation ล้มถาวร → ค้างไว้ + alert
+ * mismatch = ค้างไว้ + alert เสมอ ไม่ว่าอายุเท่าไร — client-side timeout
+ * (Promise.race) ไม่ cancel DB request จริง late commit หลังครึ่งชั่วโมงยังเกิดได้
+ * อายุ/TTL จึงไม่ใช่หลักฐานว่า operation ล้ม ห้าม abandon ตามอายุ: ปิดงานได้
+ * เฉพาะเมื่อ DB ตรง intent หรือเจ้าของ operation ยืนยัน definitive failure เอง
+ * (completePendingOperation หลัง settle) เท่านั้น
  * @param {{ reconcile: (uid: string) => Promise<{ ok: boolean, banned?: boolean }>,
  *   minSettleMs?: number, now?: () => number, getRedis?: Function, limit?: number, alert?: Function }} deps
  */
 export async function sweepPendingBanReconciles(deps) {
-  const stats = { scanned: 0, reconciled: 0, skipped: 0, mismatched: 0, abandoned: 0, failed: 0 };
+  const stats = { scanned: 0, reconciled: 0, skipped: 0, mismatched: 0, failed: 0 };
   const entries = await listPendingReconciles(deps);
   const now = deps.now ? deps.now() : Date.now();
   const minSettle = Number(deps.minSettleMs) >= 0 ? Number(deps.minSettleMs) : MIN_SETTLE_MS;
-  // op ที่ mismatch นานเกินนี้ = DB ไม่มีทาง commit แล้ว (transaction ไม่ค้างข้ามครึ่งชั่วโมง)
-  // — ถือว่า intent ไม่เกิดจริง ปิดงานตาม DB เพื่อไม่ให้ guard ล็อค uid ค้าง 7 วัน
-  const abandonAfter = Number(deps.abandonAfterMs) > 0 ? Number(deps.abandonAfterMs) : 30 * 60 * 1000;
   const limit = Number(deps.limit) > 0 ? Number(deps.limit) : 50;
   const complete =
     deps.complete || ((e) => completePendingOperation({ uid: e.uid, opId: e.opId, member: e.member }, deps));
@@ -216,8 +217,9 @@ export async function sweepPendingBanReconciles(deps) {
       const obs = await deps.observe(e.uid);
       if (!obs?.ok) { stats.failed += 1; continue; }
       const matches = (obs.banned === true) === (e.targetState === "banned");
-      const stale = now - e.enqueuedAt > abandonAfter;
-      if (!matches && !stale) {
+      if (!matches) {
+        // อายุมาก = สัญญาณผิดปกติ (alert ดังต่อทุกชั่วโมง) แต่ไม่ใช่หลักฐานว่า op
+        // ล้ม — late commit ยังเกิดได้ · guard+queue+fail-closed ต้องคงอยู่ทั้งหมด
         stats.mismatched += 1;
         console.log(
           JSON.stringify({
@@ -226,12 +228,13 @@ export async function sweepPendingBanReconciles(deps) {
             reason: e.reason,
             expected: e.targetState,
             dbBanned: obs.banned === true,
+            ageMs: now - e.enqueuedAt,
           }),
         );
         fireMismatchAlert(e, obs.banned === true, deps);
         continue; // cache/fail-closed state ไม่ถูกแตะ · entry ค้างไว้ retry
       }
-      // 2) DB ตรง intent (หรือ stale-abandon: DB คือความจริงสุดท้าย) → apply cache
+      // 2) DB ตรง intent เท่านั้น → apply cache
       const rec = await deps.reconcile(e.uid);
       const applied = rec?.ok === true && (rec.banned === true) === (obs.banned === true);
       if (!applied) { stats.failed += 1; continue; }
@@ -242,29 +245,15 @@ export async function sweepPendingBanReconciles(deps) {
         console.log(JSON.stringify({ event: "BAN_RECONCILE_SWEEP_COMPLETE_FAILED", uidPrefix: String(e.uid).slice(0, 8), reason: done?.reason || "unknown" }));
         continue;
       }
-      if (!matches && stale) {
-        stats.abandoned += 1;
-        console.log(
-          JSON.stringify({
-            event: "BAN_RECONCILE_ABANDONED",
-            uidPrefix: String(e.uid).slice(0, 8),
-            reason: e.reason,
-            expected: e.targetState,
-            dbBanned: obs.banned === true,
-          }),
-        );
-        fireMismatchAlert(e, obs.banned === true, deps);
-      } else {
-        stats.reconciled += 1;
-        console.log(
-          JSON.stringify({
-            event: "BAN_RECONCILE_SWEEP_DONE",
-            uidPrefix: String(e.uid).slice(0, 8),
-            reason: e.reason,
-            banned: obs.banned === true,
-          }),
-        );
-      }
+      stats.reconciled += 1;
+      console.log(
+        JSON.stringify({
+          event: "BAN_RECONCILE_SWEEP_DONE",
+          uidPrefix: String(e.uid).slice(0, 8),
+          reason: e.reason,
+          banned: obs.banned === true,
+        }),
+      );
     } catch {
       stats.failed += 1;
     }
