@@ -7,20 +7,32 @@
  * pattern เดียวกับ renewalReminder: ถูกเรียกทุกนาทีจาก maintenanceWorker แล้ว
  * self-gate ชั่วโมง 6 Bangkok + redis dedupe รายวัน · พังตรงไหน = ข้ามรอบ ไม่ล้ม worker
  */
+import crypto from "node:crypto";
 import { supabase } from "../config/supabase.js";
-import { tryDedupeOnce } from "../redis/scanV2Redis.js";
+import { acquireShortLock, releaseShortLock } from "../redis/scanV2Redis.js";
 import {
   getGeminiFlashModel,
   generateTextWithTimeout,
 } from "../integrations/gemini/geminiFlash.api.js";
 import { env } from "../config/env.js";
-import { sendTelegramText, isTelegramConfigured } from "./telegramNotify.service.js";
-import { setAppSetting } from "../stores/appSettings.db.js";
+import { sendTelegramText, isTelegramConfigured, chunkTelegramText } from "./telegramNotify.service.js";
+import { setAppSetting, getAppSetting } from "../stores/appSettings.db.js";
 import { getBangkokDayUtcRangeExclusiveEnd } from "../utils/bangkokTime.util.js";
+import { CURATOR_SYSTEM, curateWithFallback, buildDegradedReport } from "./chatQualityCurated.util.js";
+import { runReportDeliveryCycle } from "./chatQualityReportOutbox.util.js";
 
 const REPORT_HOUR_BKK = (() => {
   const n = Number(process.env.CHAT_QUALITY_REPORT_HOUR);
   return Number.isFinite(n) && n >= 0 && n <= 23 ? Math.floor(n) : 6;
+})();
+// รอบ retry: partial failure/curate ล้ม → worker (ทุกนาที) ตามต่อจนถึงชั่วโมงนี้
+const REPORT_RETRY_UNTIL_HOUR_BKK = (() => {
+  const n = Number(process.env.CHAT_QUALITY_REPORT_RETRY_UNTIL_HOUR);
+  return Number.isFinite(n) && n >= REPORT_HOUR_BKK && n <= 23 ? Math.floor(n) : 11;
+})();
+const CURATE_TIMEOUT_MS = (() => {
+  const n = Number(process.env.CHAT_QUALITY_CURATE_TIMEOUT_MS);
+  return Number.isFinite(n) && n >= 5000 ? Math.floor(n) : 45000;
 })();
 const MAX_ROWS = 4000;
 const MAX_TRANSCRIPT_CHARS_PER_USER = 6000;
@@ -187,25 +199,10 @@ function buildReportText({ dateKey, convCount, okCount, problemCases, analyzeFai
 }
 
 /**
- * เรียกทุกนาทีจาก maintenanceWorker — ยิงจริงวันละครั้งตอน 6 โมงเช้า (Bangkok)
- * @param {Date} [now]
- * @returns {Promise<{ skipped?: string, sent?: boolean, convCount?: number, problems?: number }>}
+ * สร้างรายงานดิบของวัน (deterministic checks + ตรวจต่อบทสนทนา) — throw เมื่อ DB พัง
+ * @returns {Promise<{ text: string, convCount: number, deterministicIncidents: number, problems: number }>}
  */
-export async function runChatQualityDailySweep(now = new Date()) {
-  if (
-    String(process.env.CHAT_QUALITY_REPORT_ENABLED ?? "true").trim().toLowerCase() === "false"
-  ) {
-    return { skipped: "disabled" };
-  }
-  if (!isTelegramConfigured()) return { skipped: "telegram_not_configured" };
-  if (bangkokHour(now) !== REPORT_HOUR_BKK) return { skipped: "not_report_hour" };
-
-  const dateKey = bangkokDateKey(now);
-  const first = await tryDedupeOnce(`scan_v2:chat_quality_report:${dateKey}`, 40 * 3600);
-  if (!first) return { skipped: "already_sent_today" };
-
-  // กบ 21 ก.ค.: ดึงเต็มวันปฏิทินของเมื่อวาน 00:00-23:59 เวลาไทย (ไม่ใช่ 24 ชม ย้อนจากตอนรัน)
-  const reportDateKey = bangkokDateKey(new Date(now.getTime() - 24 * 3600 * 1000));
+export async function buildBaseReportData(reportDateKey) {
   const dayRange = getBangkokDayUtcRangeExclusiveEnd(reportDateKey);
   let { data: rows, error } = await supabase
     .from("line_conversation_messages")
@@ -245,6 +242,7 @@ export async function runChatQualityDailySweep(now = new Date()) {
 
   let okCount = 0;
   let analyzeFailed = 0;
+  let deterministicIncidents = 0;
   const problemCases = [];
   for (const uid of targetIds) {
     const convRows = byUser.get(uid);
@@ -252,6 +250,7 @@ export async function runChatQualityDailySweep(now = new Date()) {
     try {
       for (const f of runDeterministicChecks(convRows).slice(0, 5)) {
         problemCases.push({ userId: uid, ...f, contextSummary: "" });
+        deterministicIncidents += 1;
       }
     } catch { /* deterministic พังไม่ขวาง LLM */ }
     try {
@@ -298,7 +297,7 @@ export async function runChatQualityDailySweep(now = new Date()) {
     analyzeFailed,
     truncatedUsers,
   });
-  // เก็บฉบับล่าสุดให้ Hermes Agent ดึงผ่าน /internal/chat-quality/latest (best-effort)
+  // เก็บฉบับล่าสุดให้ดึงผ่าน /internal/chat-quality/latest (best-effort)
   try {
     await setAppSetting("chat_quality_last_report", {
       dateKey: reportDateKey,
@@ -306,19 +305,103 @@ export async function runChatQualityDailySweep(now = new Date()) {
       createdAt: new Date().toISOString(),
     });
   } catch {}
-
-  const sent = await sendTelegramText(report);
   console.log(
     JSON.stringify({
-      event: "CHAT_QUALITY_DAILY_REPORT",
-      dateKey,
+      event: "CHAT_QUALITY_BASE_REPORT_BUILT",
+      reportDateKey,
       convCount: targetIds.length,
       okCount,
       problems: problemCases.length,
       analyzeFailed,
-      telegramOk: sent.ok,
-      telegramReason: sent.reason ?? null,
+      deterministicIncidents,
     }),
   );
-  return { sent: sent.ok, convCount: targetIds.length, problems: problemCases.length };
+  return {
+    text: report,
+    convCount: targetIds.length,
+    deterministicIncidents,
+    problems: problemCases.length,
+  };
+}
+
+const OUTBOX_KEY = (reportDateTH) => `chat_quality_outbox:${reportDateTH}`;
+const REPORT_LEASE_TTL_MS = 30 * 60 * 1000; // ครอบ base build ที่ยาวสุด (~60 บทสนทนา × 25s)
+
+/** chain ของ model คัดกรอง — แต่ละตัว timeout ของตัวเอง (env CSV override ได้) */
+function curateModelChain() {
+  const csv = String(process.env.CHAT_QUALITY_CURATE_MODELS || "").trim();
+  const models = csv
+    ? csv.split(",").map((s) => s.trim()).filter(Boolean)
+    : ["google/gemini-2.5-flash", String(env.LLM_CONSULT_MODEL_FREE || "").trim()].filter(Boolean);
+  return [...new Set(models)].map((model) => ({ model, timeoutMs: CURATE_TIMEOUT_MS }));
+}
+
+async function callCurateModel(model, prompt, timeoutMs) {
+  const m = getGeminiFlashModel({
+    callSite: "chatQualityCurate",
+    systemInstruction: CURATOR_SYSTEM,
+    temperature: 0.2,
+    timeoutMs,
+    maxTokens: 3000,
+    modelOverride: model,
+    disableReasoning: true,
+  });
+  if (!m) throw new Error("model_unavailable");
+  return generateTextWithTimeout(m, prompt, timeoutMs);
+}
+
+/**
+ * เรียกทุกนาทีจาก maintenanceWorker — ทำงานจริงในหน้าต่าง 6 โมงถึง RETRY_UNTIL
+ * (Bangkok) · idempotent ผ่าน durable outbox ต่อ reportDateTH: ครบแล้วรันซ้ำ =
+ * finalized ไม่ส่งซ้ำ · partial = ตามส่งเฉพาะส่วนที่ขาด (แทน tryDedupeOnce เดิม
+ * ที่ fail-open + claim ก่อนส่ง — Codex C7 / incident 20 ส.ค.)
+ * @param {Date} [now]
+ * @param {object} [deps] DI สำหรับเทสต์ — override ได้ทุกชั้น
+ */
+export async function runChatQualityDailySweep(now = new Date(), deps = {}) {
+  if (
+    String(process.env.CHAT_QUALITY_REPORT_ENABLED ?? "true").trim().toLowerCase() === "false"
+  ) {
+    return { skipped: "disabled" };
+  }
+  const telegramReady = deps.isTelegramConfigured ? deps.isTelegramConfigured() : isTelegramConfigured();
+  if (!telegramReady) return { skipped: "telegram_not_configured" };
+  const h = bangkokHour(now);
+  if (h < REPORT_HOUR_BKK || h > REPORT_RETRY_UNTIL_HOUR_BKK) return { skipped: "not_report_hour" };
+
+  // กบ 21 ก.ค.: รายงานคือเต็มวันปฏิทินของเมื่อวาน 00:00-23:59 เวลาไทย
+  const reportDateTH = bangkokDateKey(new Date(now.getTime() - 24 * 3600 * 1000));
+  const key = OUTBOX_KEY(reportDateTH);
+  const lineEnabled =
+    String(process.env.CHAT_QUALITY_REPORT_LINE_ENABLED ?? "false").trim().toLowerCase() === "true" &&
+    typeof deps.lineSend === "function";
+
+  return runReportDeliveryCycle({
+    reportDateTH,
+    loadOutbox: deps.loadOutbox || (async () => (await getAppSetting(key)) || null),
+    saveOutbox: deps.saveOutbox || (async (ob) => setAppSetting(key, ob)),
+    acquireLease:
+      deps.acquireLease || (() => acquireShortLock(`chat_quality:report:${reportDateTH}`, REPORT_LEASE_TTL_MS)),
+    releaseLease:
+      deps.releaseLease || ((token) => releaseShortLock(`chat_quality:report:${reportDateTH}`, token)),
+    buildBase: deps.buildBase || (() => buildBaseReportData(reportDateTH)),
+    curate:
+      deps.curate ||
+      ((baseText) =>
+        curateWithFallback(baseText, {
+          models: curateModelChain(),
+          callModel: callCurateModel,
+        })),
+    buildDegraded: deps.buildDegraded || buildDegradedReport,
+    chunkText: deps.chunkText || chunkTelegramText,
+    hashChunk: deps.hashChunk || ((t) => crypto.createHash("sha1").update(String(t)).digest("hex").slice(0, 16)),
+    channels: deps.channels || {
+      telegram: { enabled: true, send: (text) => sendTelegramText(text) },
+      line: { enabled: lineEnabled, send: (text) => deps.lineSend(text) },
+    },
+    notify: deps.notify || ((text) => sendTelegramText(text)),
+    renotifyEveryAttempts: deps.renotifyEveryAttempts,
+    nowIso: deps.nowIso,
+    log: deps.log,
+  });
 }
