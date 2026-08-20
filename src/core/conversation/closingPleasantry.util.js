@@ -110,6 +110,44 @@ export function isPureGreeting(text) {
   return GREETING_BASES.has(base);
 }
 
+/* -------- greeting + generic request ไม่มีหัวข้อ (Codex รอบสอง P1) --------
+ * เคสจริง: "สวัสดีคับผมท่านอาจารย์ รบกวนท่านอาจารย์ชี้แนะให้ด้วยคับผม" —
+ * ยาวเกิน pure greeting และมีคำขอทั่วไป แต่ "ไม่มีหัวข้อ" → deterministic
+ * "ระบุเรื่องที่ต้องการถาม" AI=0 · มีหัวข้อจริง (พระ/ชิ้น/ดวง/เงิน...) = route ปกติ */
+
+const TOPIC_HINT_RE =
+  /พระ|เทวรูป|เครื่องราง|ตะกรุด|ยันต์|หิน|กำไล|คริสตัล|ชิ้น|องค์|รูป|ภาพ|สแกน|ดวง|วันเกิด|แพ็ก|แพค|สลิป|โอน|จ่าย|ราคา|ค่าครู|สิทธิ|ผล|รายงาน|คลัง|จัดชุด|อันดับ|เลข|เบอร์|บ้าน|รถ|งาน|เงิน|ความรัก|สุขภาพ|โชค|บูชา|ห้อย|แขวน|พก/;
+
+const GENERIC_REQUEST_RE = /ชี้แนะ|แนะนำ|คำแนะนำ|ปรึกษา|สอบถาม|ถามหน่อย|ดูให้|ชี้ทาง|ขอความรู้|รบกวนหน่อย/;
+
+const LEADING_GREETING_RE = /^(สวัสดี|หวัดดี|ฮัลโหล|ฮัลโล|hello|hi)/i;
+const LEADING_SUFFIX_RE =
+  /^(ครับผม|คร้าบ|ครับ|คับผม|คับ|ค่ะ|คะ|จ้า|นะ|ผม|ท่านอาจารย์|อาจารย์|ท่าน)\s*/;
+
+function stripLeadingGreeting(t) {
+  let s = String(t || "").replace(LEADING_GREETING_RE, "").trim();
+  for (let i = 0; i < 8; i += 1) {
+    const next = s.replace(LEADING_SUFFIX_RE, "").trim();
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+
+/**
+ * ทักทาย+คำขอทั่วไปที่ยังไม่มีหัวข้อ → ตอบ deterministic ขอหัวข้อ (AI=0)
+ * @param {string} text
+ */
+export function isGreetingGenericRequest(text) {
+  const t = String(text || "").trim();
+  if (!t || t.length > 80) return false;
+  if (TOPIC_HINT_RE.test(t)) return false; // มีหัวข้อจริง = route ตามหัวข้อ ห้ามกลืน
+  // ห้ามตัดคำลงท้ายก่อนเช็ค pattern — "นะ$" จะกัดท้ายคำอย่าง "ชี้แนะ" (substring ไทย)
+  const body = stripLeadingGreeting(stripDecorations(t));
+  if (!body) return false; // ทักทายล้วน = isPureGreeting อีกทาง
+  return GENERIC_REQUEST_RE.test(body);
+}
+
 /** ข้อความบอทล่าสุดเป็นคำถาม/handoff ค้าง = ครับ/โอเค คือคำตอบ ไม่ใช่คำปิดบท */
 function lastBotAwaitsAnswer(lastBotText) {
   const t = String(lastBotText || "");

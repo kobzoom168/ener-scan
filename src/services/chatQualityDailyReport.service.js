@@ -9,7 +9,7 @@
  */
 import crypto from "node:crypto";
 import { supabase } from "../config/supabase.js";
-import { acquireShortLock, releaseShortLock } from "../redis/scanV2Redis.js";
+import { acquireShortLock, releaseShortLock, renewShortLock } from "../redis/scanV2Redis.js";
 import {
   getGeminiFlashModel,
   generateTextWithTimeout,
@@ -325,7 +325,10 @@ export async function buildBaseReportData(reportDateKey) {
 }
 
 const OUTBOX_KEY = (reportDateTH) => `chat_quality_outbox:${reportDateTH}`;
-const REPORT_LEASE_TTL_MS = 30 * 60 * 1000; // ครอบ base build ที่ยาวสุด (~60 บทสนทนา × 25s)
+// lease จริงถูก clamp ที่ 10 นาที (acquireShortLock สูงสุด 600s) — build worst-case
+// ~27 นาที จึงต้อง renew compare-token ทุก 60s ระหว่าง cycle (Codex รอบสอง)
+const REPORT_LEASE_TTL_MS = 10 * 60 * 1000;
+const REPORT_LEASE_RENEW_MS = 60 * 1000;
 
 /** chain ของ model คัดกรอง — แต่ละตัว timeout ของตัวเอง (env CSV override ได้) */
 function curateModelChain() {
@@ -384,6 +387,9 @@ export async function runChatQualityDailySweep(now = new Date(), deps = {}) {
       deps.acquireLease || (() => acquireShortLock(`chat_quality:report:${reportDateTH}`, REPORT_LEASE_TTL_MS)),
     releaseLease:
       deps.releaseLease || ((token) => releaseShortLock(`chat_quality:report:${reportDateTH}`, token)),
+    renewLease:
+      deps.renewLease || ((token) => renewShortLock(`chat_quality:report:${reportDateTH}`, token, REPORT_LEASE_TTL_MS)),
+    renewIntervalMs: Number(deps.renewIntervalMs) > 0 ? Number(deps.renewIntervalMs) : REPORT_LEASE_RENEW_MS,
     buildBase: deps.buildBase || (() => buildBaseReportData(reportDateTH)),
     curate:
       deps.curate ||

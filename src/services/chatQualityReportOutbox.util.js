@@ -39,6 +39,48 @@ export async function runReportDeliveryCycle(deps) {
   const nowIso = deps.nowIso || (() => new Date().toISOString());
   const token = await deps.acquireLease();
   if (!token) return { skipped: "lease_unavailable" };
+
+  // Ownership ต่อเนื่อง (Codex รอบสอง): lease จริงถูก clamp 10 นาที แต่ build
+  // worst-case (60 users × 25s + curator 2×45s) ~27 นาที — ต้อง renew แบบ
+  // compare-token ระหว่าง cycle · renew ไม่ผ่าน = เสีย ownership ทันที ห้าม
+  // save/send/finalize ต่อ (owner ใหม่อาจกำลังเขียน outbox อยู่ — last-write-wins)
+  let ownershipLost = false;
+  const renewIntervalMs = Number(deps.renewIntervalMs) > 0 ? Number(deps.renewIntervalMs) : 60_000;
+  let renewTimer = null;
+  if (deps.renewLease) {
+    renewTimer = setInterval(() => {
+      void Promise.resolve(deps.renewLease(token))
+        .then((ok) => {
+          if (!(ok === true || ok?.ok === true)) ownershipLost = true;
+        })
+        .catch(() => {
+          ownershipLost = true;
+        });
+    }, renewIntervalMs);
+    if (typeof renewTimer.unref === "function") renewTimer.unref();
+  }
+  /** เช็ค ownership ตรงจุดสำคัญ (หลัง build/curate ยาว ๆ ก่อน save/send ทุกครั้ง) */
+  const ensureOwner = async () => {
+    if (ownershipLost) throw new Error("lease_lost");
+    if (deps.renewLease) {
+      let ok = false;
+      try {
+        const r = await deps.renewLease(token);
+        ok = r === true || r?.ok === true;
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        ownershipLost = true;
+        throw new Error("lease_lost");
+      }
+    }
+  };
+  const rawSave = deps.saveOutbox;
+  const guardedSave = async (ob) => {
+    await ensureOwner();
+    await rawSave(ob);
+  };
   try {
     let ob = (await deps.loadOutbox()) || null;
     if (!ob || ob.reportDateTH !== deps.reportDateTH) {
@@ -51,11 +93,13 @@ export async function runReportDeliveryCycle(deps) {
     if (!ob.base) {
       try {
         ob.base = await deps.buildBase();
-        await deps.saveOutbox(ob);
+        await guardedSave(ob);
       } catch (e) {
+        if (String(e?.message) === "lease_lost") throw e;
         log("CHAT_QUALITY_BASE_BUILD_FAILED", { reportDateTH: deps.reportDateTH, attempt: ob.attempt, message: String(e?.message || e).slice(0, 160) });
+        await ensureOwner(); // เสีย lease = ห้ามแม้แต่ notify (owner ใหม่จะแจ้งเอง)
         await notifyFailureOnce(ob, deps, "base_build_failed", nowIso, log);
-        await deps.saveOutbox(ob).catch(() => {});
+        await guardedSave(ob).catch(() => {});
         return { failed: "base_build_failed", attempt: ob.attempt };
       }
     }
@@ -66,7 +110,7 @@ export async function runReportDeliveryCycle(deps) {
       ob.curated = cur.ok === true
         ? { ok: true, text: cur.text, attempts: cur.attempts }
         : { ok: false, failureType: cur.failureType || "provider_error", attempts: cur.attempts };
-      await deps.saveOutbox(ob);
+      await guardedSave(ob);
     }
     const finalText = ob.curated.ok
       ? ob.curated.text
@@ -81,7 +125,7 @@ export async function runReportDeliveryCycle(deps) {
     // 3) chunk ครั้งเดียว (hash ผูกเนื้อหา — เนื้อหาต่อวันนิ่งเพราะ base+curated ถูก freeze แล้ว)
     if (!Array.isArray(ob.chunks)) {
       ob.chunks = deps.chunkText(finalText).map((t) => ({ hash: deps.hashChunk(t), text: t, delivery: {} }));
-      await deps.saveOutbox(ob);
+      await guardedSave(ob);
     }
 
     // 4) ส่งเฉพาะ chunk/channel ที่ยังไม่มี sent marker — marker หลังส่งสำเร็จเท่านั้น
@@ -92,6 +136,7 @@ export async function runReportDeliveryCycle(deps) {
         const st = c.delivery[ch] || { sent: false, attempts: 0 };
         if (st.sent) continue;
         st.attempts += 1;
+        await ensureOwner(); // เสีย lease แล้วห้ามยิง transport (owner ใหม่กำลังทำงาน)
         let r = null;
         try {
           r = await cfg.send(c.text);
@@ -106,7 +151,10 @@ export async function runReportDeliveryCycle(deps) {
           allSent = false;
         }
         c.delivery[ch] = st;
-        await deps.saveOutbox(ob); // durable ทีละ chunk — crash กลางทางไม่ทำส่งซ้ำ
+        // at-least-once: marker เขียนหลังส่งสำเร็จ — ถ้า process crash หลัง Telegram
+        // รับข้อความแต่ก่อน save marker รอบถัดไปจะส่ง chunk นั้นซ้ำได้ (Telegram ไม่มี
+        // idempotency key ให้ใช้) — residual risk ที่ยอมรับ ห้าม claim exactly-once
+        await guardedSave(ob);
         if (!st.sent) break; // รักษาลำดับ chunk ในช่องนี้ รอบถัดไปต่อจากตัวที่ค้าง
       }
     }
@@ -114,7 +162,7 @@ export async function runReportDeliveryCycle(deps) {
     if (allSent) {
       ob.finalized = true;
       ob.finalizedAt = nowIso();
-      await deps.saveOutbox(ob);
+      await guardedSave(ob);
     }
     log("CHAT_QUALITY_DELIVERY_CYCLE", {
       reportDateTH: deps.reportDateTH,
@@ -125,7 +173,14 @@ export async function runReportDeliveryCycle(deps) {
       finalized: ob.finalized === true,
     });
     return { sent: allSent, degraded: ob.curated.ok !== true, attempt: ob.attempt, chunks: ob.chunks.length };
+  } catch (e) {
+    if (String(e?.message) === "lease_lost") {
+      log("CHAT_QUALITY_LEASE_LOST", { reportDateTH: deps.reportDateTH });
+      return { failed: "lease_lost" };
+    }
+    throw e;
   } finally {
+    if (renewTimer) clearInterval(renewTimer);
     await Promise.resolve(deps.releaseLease(token)).catch(() => {});
   }
 }

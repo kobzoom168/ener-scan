@@ -8503,7 +8503,9 @@ async function handleTextMessage({ client, event, userId, session }) {
   // ทักทายล้วน = deterministic AI=0 (Codex P1-4 raw log: greeting กิน consult ฟรี 3 calls
   // ~4.8s — ตอบนิ่ง ๆ คำเดียวพอ ไม่ถามสารทุกข์) · มีคำถามพ่วง = ไม่เข้าเงื่อนไขนี้
   try {
-    const { isPureGreeting } = await import("../core/conversation/closingPleasantry.util.js");
+    const { isPureGreeting, isGreetingGenericRequest } = await import(
+      "../core/conversation/closingPleasantry.util.js"
+    );
     if (isPureGreeting(text)) {
       console.log(JSON.stringify({ event: "CHAT_GREETING_DETERMINISTIC", uidPrefix: String(userId).slice(0, 8) }));
       await sendNonScanReply({
@@ -8515,6 +8517,23 @@ async function handleTextMessage({ client, event, userId, session }) {
         inboundMessageId: String(event?.message?.id || "") || null,
         text: "สวัสดี",
         alternateTexts: ["สวัสดีครับ"],
+        speakerRoleOverride: "admin",
+      });
+      return;
+    }
+    // ทักทาย+คำขอทั่วไปไม่มีหัวข้อ (Codex รอบสอง: "รบกวนชี้แนะ" ล้วน ๆ) → ขอหัวข้อ
+    // แบบ deterministic AI=0 · มีหัวข้อจริงจะไม่เข้าเงื่อนไขนี้ route ตามปกติ
+    if (isGreetingGenericRequest(text)) {
+      console.log(JSON.stringify({ event: "CHAT_GREETING_GENERIC_REQUEST_DETERMINISTIC", uidPrefix: String(userId).slice(0, 8) }));
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "greeting_generic_request",
+        semanticKey: "greeting_generic_request",
+        inboundMessageId: String(event?.message?.id || "") || null,
+        text: "ระบุเรื่องที่ต้องการถาม",
+        alternateTexts: ["บอกเรื่องที่ต้องการถามมาได้เลย"],
         speakerRoleOverride: "admin",
       });
       return;

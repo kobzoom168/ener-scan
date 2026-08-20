@@ -224,3 +224,80 @@ test("source contract: service เลิกใช้ tryDedupeOnce + มี retr
   assert.ok(src.includes("chat_quality_outbox:"), "ต้องมี durable outbox ต่อ reportDateTH");
   assert.ok(src.includes("CHAT_QUALITY_REPORT_LINE_ENABLED"), "โครง channel LINE ต้องมี (ปิด default)");
 });
+
+/* ---------------- P0-2 รอบสอง (Codex): lease renewal + ownership ---------------- */
+
+/** lease จำลองมี TTL จริง + renew compare-token */
+function makeRenewableLease(ttlMs = 80) {
+  const st = { holder: null, expiresAt: 0, seq: 0, renews: 0 };
+  return {
+    st,
+    acquire: async () => {
+      const now = Date.now();
+      if (st.holder && st.expiresAt > now) return null;
+      st.holder = `t${++st.seq}`;
+      st.expiresAt = now + ttlMs;
+      return st.holder;
+    },
+    renew: async (token) => {
+      st.renews += 1;
+      if (st.holder !== token) return false;
+      st.expiresAt = Date.now() + ttlMs;
+      return true;
+    },
+    release: async (token) => { if (st.holder === token) st.holder = null; },
+  };
+}
+
+test("lease-1/3: build นานเกิน TTL + renewal ทำงาน → contender/tick ซ้อน acquire ไม่ได้ · transport ครั้งเดียว", async () => {
+  const lease = makeRenewableLease(80);
+  const sends = [];
+  const mk = (buildDelayMs) => makeDeps({
+    acquireLease: lease.acquire,
+    releaseLease: lease.release,
+    renewLease: lease.renew,
+    renewIntervalMs: 20,
+    buildBase: async () => {
+      await new Promise((r) => setTimeout(r, buildDelayMs));
+      return { text: "BASE", convCount: 1, deterministicIncidents: 0 };
+    },
+    channels: { telegram: { enabled: true, send: async (t) => { sends.push(t); return { ok: true }; } } },
+  });
+  const a = mk(200); // ยาวเกิน TTL 80ms — รอดด้วย renewal
+  const p1 = runReportDeliveryCycle(a.deps);
+  await new Promise((r) => setTimeout(r, 150)); // เลย TTL เดิมไปแล้ว — tick ซ้อนเข้ามา
+  const b = mk(0);
+  const r2 = await runReportDeliveryCycle(b.deps);
+  const r1 = await p1;
+  assert.equal(r2.skipped, "lease_unavailable", "renewal ต้องกันตัวซ้อนแม้เลย TTL เดิม");
+  assert.equal(r1.sent, true);
+  assert.equal(sends.length, 1, "transport ต้องถูกเรียกครั้งเดียว");
+});
+
+test("lease-2/5: renew=false → owner เก่าห้าม save/send/finalize (outbox ไม่ถูกทับ)", async () => {
+  const sends = [];
+  const h = makeDeps({
+    renewLease: async () => false, // เสีย ownership ตั้งแต่ milestone แรก
+    renewIntervalMs: 5,
+    channels: { telegram: { enabled: true, send: async (t) => { sends.push(t); return { ok: true }; } } },
+  });
+  const r = await runReportDeliveryCycle(h.deps);
+  assert.equal(r.failed, "lease_lost");
+  assert.equal(sends.length, 0, "เสีย lease แล้วห้ามส่ง");
+  assert.equal(h.store.ob, null, "เสีย lease แล้วห้ามเขียน outbox (กันทับ owner ใหม่)");
+});
+
+test("lease-4: renew timer หยุดหลัง cycle จบ (ทั้ง success และ lease_lost)", async () => {
+  const lease = makeRenewableLease(500);
+  const h = makeDeps({
+    acquireLease: lease.acquire,
+    releaseLease: lease.release,
+    renewLease: lease.renew,
+    renewIntervalMs: 10,
+  });
+  const r = await runReportDeliveryCycle(h.deps);
+  assert.equal(r.sent, true);
+  const after = lease.st.renews;
+  await new Promise((res) => setTimeout(res, 60));
+  assert.equal(lease.st.renews, after, "จบแล้ว interval ต้องถูก clear — ห้าม renew ต่อ");
+});

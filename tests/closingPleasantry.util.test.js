@@ -123,3 +123,30 @@ test("webhook: greeting deterministic อยู่ในเลน idle ก่อ
   const rankIdx = src.indexOf("maybeHandleRankingQueryGate({ client, userId, replyToken: event.replyToken, text, inboundMessageId", silencerIdx);
   assert.ok(silencerIdx < gIdx && gIdx < rankIdx, "ลำดับ: silencer → greeting → ranking gate");
 });
+
+test("P1 รอบสอง: greeting+generic request ไม่มีหัวข้อ → deterministic · มีหัวข้อ = route ปกติ", async () => {
+  const { isGreetingGenericRequest, isPureGreeting } = await import("../src/core/conversation/closingPleasantry.util.js");
+  // เคสจริงจาก raw log ที่ isPureGreeting ไม่ครอบ
+  const raw = "สวัสดีคับผมท่านอาจารย์ รบกวนท่านอาจารย์ชี้แนะให้ด้วยคับผม";
+  assert.equal(isPureGreeting(raw), false);
+  assert.equal(isGreetingGenericRequest(raw), true, "greeting+ขอคำชี้แนะไม่มีหัวข้อ → ขอหัวข้อแบบ AI=0");
+  assert.equal(isGreetingGenericRequest("รบกวนชี้แนะด้วยครับ"), true);
+  assert.equal(isGreetingGenericRequest("สวัสดีครับ ขอคำแนะนำหน่อย"), true);
+  // มีหัวข้อจริง → ห้ามกลืน route ตามหัวข้อ
+  assert.equal(isGreetingGenericRequest("สวัสดี อยากถามเรื่องพระชิ้นนี้"), false);
+  assert.equal(isGreetingGenericRequest("รบกวนดูให้หน่อย กำไลหินเส้นนี้"), false);
+  assert.equal(isGreetingGenericRequest("สวัสดีครับ ปรึกษาเรื่องดวงหน่อย"), false);
+  assert.equal(isGreetingGenericRequest("สวัสดีครับ"), false, "ทักทายล้วนเป็นของ isPureGreeting");
+});
+
+test("P1 รอบสอง: webhook มี branch generic request AI=0 ตามหลัง pure greeting (source contract)", async () => {
+  const fs2 = await import("node:fs");
+  const src = fs2.readFileSync("src/routes/lineWebhook.js", "utf8");
+  const g = src.indexOf("CHAT_GREETING_DETERMINISTIC");
+  const gg = src.indexOf("CHAT_GREETING_GENERIC_REQUEST_DETERMINISTIC");
+  assert.ok(g > 0 && gg > g, "generic request branch ต้องอยู่หลัง pure greeting");
+  const block = src.slice(gg - 200, gg + 900);
+  assert.ok(block.includes("isGreetingGenericRequest"));
+  assert.ok(block.includes("ระบุเรื่องที่ต้องการถาม"));
+  assert.ok(!/orchestrat|tryConsultReply/i.test(block), "เส้นนี้ต้อง AI=0");
+});

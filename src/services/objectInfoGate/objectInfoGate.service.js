@@ -252,8 +252,11 @@ async function parseOwnerInfo(rawText, lane) {
   }
 }
 
-async function reEnqueueHeldReport(lineUserId, pending) {
-  const { insertOutboundMessage } = await import("../../stores/scanV2/outboundMessages.db.js");
+// export + DI (Codex รอบสอง): runtime test ต้องพิสูจน์ว่า re-enqueue คง related_job_id จริง
+export async function reEnqueueHeldReport(lineUserId, pending, deps = {}) {
+  const insertOutboundMessage =
+    deps.insertOutboundMessage ||
+    (await import("../../stores/scanV2/outboundMessages.db.js")).insertOutboundMessage;
   await insertOutboundMessage({
     line_user_id: lineUserId,
     kind: "scan_result",

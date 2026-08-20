@@ -814,11 +814,15 @@ export function shouldSkipPaidQuotaDecrementAfterDelivery(payload) {
  * @param {object} msg full row
  * @param {object} payload
  */
-async function handleScanResultPostDelivery(msg, payload) {
+export async function handleScanResultPostDelivery(msg, payload, deps = {}) {
+  // export + DI (Codex รอบสอง): runtime tests ต้องพิสูจน์ forward path ได้จริง
+  const getJob = deps.getScanJobById || getScanJobById;
+  const updateJob = deps.updateScanJob || updateScanJob;
+  const decrement = deps.decrementUserPaidRemainingScans || decrementUserPaidRemainingScans;
   const jobId = msg.related_job_id;
   if (!jobId || payload.error) return;
 
-  const job = await getScanJobById(jobId);
+  const job = await getJob(jobId);
   if (!job) return;
 
   // idempotent (Codex P0-2): delivered แล้ว = จบแล้ว — ห้ามทำซ้ำ (โดยเฉพาะ quota
@@ -836,7 +840,7 @@ async function handleScanResultPostDelivery(msg, payload) {
     return;
   }
 
-  await updateScanJob(jobId, {
+  await updateJob(jobId, {
     status: "delivered",
     updated_at: new Date().toISOString(),
   });
@@ -855,7 +859,7 @@ async function handleScanResultPostDelivery(msg, payload) {
 
   if (job.access_source === "paid" && job.app_user_id) {
     try {
-      await decrementUserPaidRemainingScans(job.app_user_id);
+      await decrement(job.app_user_id);
       console.log(
         JSON.stringify({
           event: "QUOTA_DECREMENT_AFTER_DELIVERY_OK",
@@ -871,6 +875,29 @@ async function handleScanResultPostDelivery(msg, payload) {
           message: e?.message,
         }),
       );
+      // Codex รอบสอง P1: job ถูก mark delivered ไปแล้ว — delivered guard จะกัน
+      // retry ทำให้ decrement ที่ล้ม "หายถาวร" ถ้าไม่จดไว้ → durable marker + alert
+      try {
+        const saveMarker =
+          deps.saveQuotaDecrementPending ||
+          (async (v) => (await import("../../stores/appSettings.db.js")).setAppSetting(`quota_decrement_pending:${jobId}`, v));
+        await saveMarker({
+          jobId: String(jobId),
+          appUserId: String(job.app_user_id),
+          failedAt: new Date().toISOString(),
+          message: String(e?.message || e).slice(0, 200),
+        });
+      } catch { /* marker ล้มก็ยังต้อง alert */ }
+      void (async () => {
+        try {
+          const alert =
+            deps.quotaAlert ||
+            (await import("../telegramNotify.service.js")).sendTelegramText;
+          await alert(
+            `[CRITICAL] หัก paid quota ไม่สำเร็จหลังส่งผล (job ${String(jobId).slice(0, 8)}…) — บันทึกใน app_settings quota_decrement_pending:${String(jobId).slice(0, 8)}… รอแก้มือ`,
+          );
+        } catch { /* alert ห้ามล้มทับ delivery */ }
+      })();
     }
   }
 
