@@ -60,6 +60,17 @@ DO $$ BEGIN
     GRANT UPDATE (unbanned_by, unbanned_at, unban_reason) ON banned_users TO service_role;
   END IF;
 END $$;
+
+-- scan_quota_decrements: mutation ผ่าน RPC เท่านั้น (Codex B2 รอบสาม) — bulk GRANT
+-- ALL ข้างบนห้ามเปิดสิทธิ์เขียนตรงกลับ (055 REVOKE ไว้แล้ว แต่ script นี้รันทีหลัง)
+DO $$ BEGIN
+  IF to_regclass('public.scan_quota_decrements') IS NOT NULL THEN
+    REVOKE ALL PRIVILEGES ON scan_quota_decrements FROM web_anon;
+    REVOKE ALL PRIVILEGES ON scan_quota_decrements FROM service_role;
+    GRANT SELECT ON scan_quota_decrements TO web_anon;
+    GRANT SELECT ON scan_quota_decrements TO service_role;
+  END IF;
+END $$;
 EOF
 
 echo "==> table count"

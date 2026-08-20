@@ -880,6 +880,10 @@ export async function handleScanResultPostDelivery(msg, payload, deps = {}) {
   await updateJob(jobId, {
     status: "delivered",
     updated_at: new Date().toISOString(),
+    // Codex รอบสาม: marker แยกรุ่น accounting — เฉพาะโค้ดรุ่น ledger ตั้ง version=2
+    // (เขียนก้อนเดียวกับ delivered) · reconcile reconstruct เฉพาะ version=2 —
+    // legacy decrement ของ container รุ่นเก่าช่วง rolling deploy ไม่มีวันโดนหักซ้ำ
+    ...(paidEligible ? { quota_accounting_version: 2 } : {}),
   });
 
   if (shouldSkipPaidQuotaDecrementAfterDelivery(payload)) {

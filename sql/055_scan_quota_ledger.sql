@@ -9,9 +9,13 @@
 --    SECURITY DEFINER ที่ REVOKE FROM PUBLIC แล้ว grant เฉพาะ runtime roles
 -- 4) durable owner จริง: reconcile RPC สร้าง ledger คืนจาก actual-delivery
 --    evidence ได้เอง (กรณี ensure ล้มตอนส่ง) — Telegram เป็นแค่ alert เสริม
--- 5) กันหักย้อนหลัง (policy write-off 223 scans): reconcile มองเฉพาะ job ที่
---    created_at >= quota_ledger_epoch (บันทึกตอน apply migration นี้) —
---    งานประวัติศาสตร์/งานที่ backfill delivered ทีหลัง ไม่มีวันถูกหักย้อนหลัง
+-- 5) cutover ปลอดภัยต่อ rolling deploy (Codex รอบสาม): epoch เวลาใช้ไม่ได้ —
+--    container รุ่นเก่ายังหัก legacy ระหว่าง blue-green ได้ → ใช้ explicit marker
+--    scan_jobs.quota_accounting_version = 2 ที่ "โค้ดรุ่น ledger เท่านั้น" ตั้ง
+--    ตอน mark delivered · reconcile มองเฉพาะ version=2 — งาน legacy (รุ่นเก่า/
+--    ประวัติศาสตร์/write-off 223 scans) ไม่มีวันถูก reconstruct ไม่ว่าลำดับ deploy
+--    เป็นแบบไหน (marker ยังกันตัวเองด้วย: ensure ล้มแต่ delivered+marker สำเร็จ
+--    ในการเขียนครั้งเดียว → reconcile เห็นแน่)
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS scan_quota_decrements (
@@ -33,10 +37,8 @@ REVOKE ALL PRIVILEGES ON scan_quota_decrements FROM service_role;
 GRANT SELECT ON scan_quota_decrements TO web_anon;
 GRANT SELECT ON scan_quota_decrements TO service_role;
 
--- epoch ของระบบ ledger — apply ซ้ำต้องไม่เลื่อน (DO NOTHING)
-INSERT INTO app_settings (key, value, updated_at)
-VALUES ('quota_ledger_epoch', to_jsonb(now()), now())
-ON CONFLICT (key) DO NOTHING;
+-- accounting marker บน job — nullable: NULL/อื่น = legacy accounting (ห้ามแตะ)
+ALTER TABLE scan_jobs ADD COLUMN IF NOT EXISTS quota_accounting_version integer;
 
 -- สเต็ป 1 (เรียก "ก่อน" mark delivered): จอง pending — derive เจ้าของจาก DB เท่านั้น
 CREATE OR REPLACE FUNCTION public.ensure_quota_decrement_pending(p_job_id uuid)
@@ -118,9 +120,9 @@ BEGIN
 END;
 $$;
 
--- Durable owner (Codex P0-1 รอบสอง): สร้าง ledger คืนจาก actual-delivery evidence
--- สำหรับ paid job ที่ delivered แล้วแต่ไม่มีแถว ledger (ensure ล้มตอนส่ง) —
--- เฉพาะ job ยุค ledger (created_at >= epoch) ห้ามแตะงานประวัติศาสตร์/write-off
+-- Durable owner (Codex P0-1): สร้าง ledger คืนจาก actual-delivery evidence สำหรับ
+-- job ที่ "โค้ดรุ่น ledger เป็นเจ้าของ" (quota_accounting_version = 2) เท่านั้น —
+-- legacy decrement (รุ่นเก่า/rolling deploy/ประวัติศาสตร์) ไม่มี marker → ไม่มีวันหักซ้ำ
 CREATE OR REPLACE FUNCTION public.reconcile_missing_quota_ledgers(p_limit integer DEFAULT 20)
 RETURNS integer
 LANGUAGE plpgsql
@@ -128,19 +130,15 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  epoch timestamptz;
   inserted integer;
 BEGIN
-  SELECT (value #>> '{}')::timestamptz INTO epoch FROM app_settings WHERE key = 'quota_ledger_epoch';
-  IF epoch IS NULL THEN RETURN 0; END IF; -- ไม่มี epoch = ไม่เดา ไม่แตะอะไร
-
   INSERT INTO scan_quota_decrements (job_id, app_user_id)
   SELECT j.id, j.app_user_id
   FROM scan_jobs j
-  WHERE j.access_source = 'paid'
+  WHERE j.quota_accounting_version = 2
+    AND j.access_source = 'paid'
     AND j.app_user_id IS NOT NULL
     AND j.status = 'delivered'
-    AND j.created_at >= epoch
     AND NOT EXISTS (SELECT 1 FROM scan_quota_decrements l WHERE l.job_id = j.id)
     AND EXISTS (
       SELECT 1 FROM outbound_messages o
@@ -150,7 +148,7 @@ BEGIN
         AND COALESCE(o.payload_json ->> 'skipQuotaDecrement', '') <> 'true'
     )
   ORDER BY j.created_at ASC
-  LIMIT GREATEST(COALESCE(p_limit, 20), 1)
+  LIMIT LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100)
   ON CONFLICT (job_id) DO NOTHING;
   GET DIAGNOSTICS inserted = ROW_COUNT;
   RETURN inserted;

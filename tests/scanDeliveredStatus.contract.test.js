@@ -156,6 +156,8 @@ test("ledger ปกติ: จอง pending ก่อน delivered → หั�
   assert.equal(led.state.decrements, 1);
   assert.equal(led.users.get("au-1"), 4);
   assert.equal(led.rows.get("job-1").status, "completed");
+  // Codex รอบสาม: marker แยกรุ่น accounting ต้องถูกตั้งก้อนเดียวกับ delivered
+  assert.equal(state.updates[0].quota_accounting_version, 2, "โค้ดรุ่น ledger ต้องตั้ง version=2");
 });
 
 test("acceptance P0-1: ensure ล้ม + alert ล้ม → reconcile sweep สร้าง ledger คืนจาก evidence แล้วหักหนึ่งครั้ง — ไม่หาย ไม่ซ้ำ", async () => {
@@ -170,11 +172,14 @@ test("acceptance P0-1: ensure ล้ม + alert ล้ม → reconcile sweep �
   // maintenance รอบถัดไป: reconcile จาก actual-delivery evidence (paid+delivered+outbound sent+ยุค epoch)
   led.state.failEnsure = false;
   const { sweepPendingQuotaDecrements } = await import("../src/services/scanV2/quotaLedger.util.js");
-  const deliveredJobs = [{ ...state.job }];
+  // legacy job: container รุ่นเก่าหัก quota ไปแล้วช่วง rolling deploy — ไม่มี marker
+  const legacyJob = { id: "job-legacy", access_source: "paid", app_user_id: "au-1", status: "delivered", quota_accounting_version: null };
+  const deliveredJobs = [{ ...state.job }, legacyJob];
   const reconcileMissing = async () => {
     let created = 0;
     for (const j of deliveredJobs) {
-      if (j.access_source === "paid" && j.app_user_id && j.status === "delivered" && !led.rows.has(j.id)) {
+      // predicate เดียวกับ RPC จริง: เฉพาะรุ่น ledger (version=2) เท่านั้น
+      if (j.quota_accounting_version === 2 && j.access_source === "paid" && j.app_user_id && j.status === "delivered" && !led.rows.has(j.id)) {
         led.rows.set(j.id, { appUserId: j.app_user_id, status: "pending", attempts: 0 });
         created += 1;
       }
@@ -186,7 +191,8 @@ test("acceptance P0-1: ensure ล้ม + alert ล้ม → reconcile sweep �
     runDecrement: led.runQuotaDecrement, markError: led.markQuotaDecrementError,
     alert: async () => ({ ok: true }), alertDedupe: async () => true,
   });
-  assert.equal(stats1.reconciledLedgers, 1);
+  assert.equal(stats1.reconciledLedgers, 1, "สร้างเฉพาะ job รุ่น ledger — legacy (rolling deploy) ห้ามโดน");
+  assert.ok(!led.rows.has("job-legacy"), "legacy job หัก legacy ไปแล้ว — reconstruct = หักซ้ำ ห้ามเด็ดขาด");
   assert.equal(stats1.completed, 1);
   assert.equal(led.state.decrements, 1);
   // รอบถัดไปอีก → ไม่ซ้ำ
@@ -304,6 +310,7 @@ test("ledger ไม่แตะงานฟรี/duplicate-skip + terminal ไ�
   const free = postDeliveryDeps({ ...PAID_JOB, access_source: "free" }, led);
   await handleScanResultPostDelivery(MSG, {}, free.deps);
   assert.equal(led.rows.size, 0);
+  assert.equal(free.state.updates[0].quota_accounting_version, undefined, "งานฟรีห้ามติด marker ledger");
   const led2 = fakeLedger({ "job-1": PAID_JOB });
   const dup = postDeliveryDeps(PAID_JOB, led2);
   await handleScanResultPostDelivery(MSG, { skipQuotaDecrement: true }, dup.deps);
@@ -328,11 +335,20 @@ test("source contract 055: authority/integrity ครบ (SECURITY DEFINER · RE
   assert.ok(sql.includes("user_mismatch"), "ledger คนละ user ต้อง reject");
   // integrity
   assert.ok(sql.includes("GET DIAGNOSTICS affected = ROW_COUNT") && sql.includes("RAISE EXCEPTION 'app_user_update_affected_%'"), "zero-row ต้อง rollback ห้าม completed");
-  // durable reconstruction + กันหักย้อนหลัง
+  // durable reconstruction + cutover ปลอดภัยต่อ rolling deploy (Codex รอบสาม)
   assert.ok(sql.includes("reconcile_missing_quota_ledgers"), "ต้องมี reconstruction RPC");
-  assert.ok(sql.includes("quota_ledger_epoch") && sql.includes("j.created_at >= epoch"), "epoch guard กันหักย้อนหลัง write-off");
+  assert.ok(!sql.includes("quota_ledger_epoch"), "epoch เวลาถูกถอด — พิสูจน์รุ่น accounting ไม่ได้ช่วง rolling deploy");
+  assert.ok(sql.includes("ADD COLUMN IF NOT EXISTS quota_accounting_version"), "ต้องมี explicit accounting marker บน job");
+  assert.ok(sql.includes("j.quota_accounting_version = 2"), "reconcile เฉพาะรุ่น ledger เท่านั้น");
   assert.ok(sql.includes("skipQuotaDecrement"), "duplicate redelivery ห้ามถูก reconstruct");
-  assert.ok(sql.includes("ON CONFLICT (key) DO NOTHING"), "apply ซ้ำ epoch ห้ามเลื่อน");
+  assert.ok(sql.includes("LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100)"), "p_limit clamp 1-100");
+  // migration scripts ห้ามเปิดสิทธิ์ ledger กลับหลัง bulk GRANT ALL
+  for (const sc of ["apply-local-db-migrations.sh", "continue-local-db-migrations.sh"]) {
+    const sh = fs.readFileSync(path.join(process.cwd(), "scripts", sc), "utf8");
+    const grantAllIdx = sh.indexOf("GRANT ALL ON ALL TABLES");
+    const lockIdx = sh.indexOf("REVOKE ALL PRIVILEGES ON scan_quota_decrements FROM web_anon");
+    assert.ok(grantAllIdx > 0 && lockIdx > grantAllIdx, `${sc}: lockdown ledger ต้องอยู่หลัง bulk grant`);
+  }
   // smoke ในไฟล์
   assert.ok(sql.includes("ยังมีสิทธิ์เขียนตรง"), "ต้องมี DO-block ตรวจ grants");
   // worker เป็นเจ้าของ recovery
