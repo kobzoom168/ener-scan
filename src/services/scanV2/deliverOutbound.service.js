@@ -849,21 +849,23 @@ export async function handleScanResultPostDelivery(msg, payload, deps = {}) {
   if (paidEligible) {
     const ensurePending = deps.ensureQuotaPending ||
       (await import("./quotaLedger.util.js")).ensureQuotaPending;
-    const claim = await ensurePending(jobId, job.app_user_id);
+    // authority (Codex B2 รอบสอง): ส่งได้แค่ jobId — เจ้าของ derive จาก scan_jobs ใน DB
+    const claim = await ensurePending(jobId);
     ledgerClaimed = claim.ok === true;
     if (!ledgerClaimed) {
-      // honesty (Codex B2): ledger เขียนไม่เข้า = ไม่มี durable owner — ห้ามอ้างว่า
-      // บันทึกแล้ว · alert แบบ awaited + ตรวจผลจริง แล้ว log ตามความเป็นจริง
+      // durable owner จริงคือ reconcile sweep ใน maintenanceWorker (สร้าง ledger คืน
+      // จาก actual-delivery evidence) — Telegram เป็น alert เสริม log ผลตามจริง
       console.error(JSON.stringify({
         event: "QUOTA_LEDGER_CLAIM_FAILED",
         jobIdPrefix: String(jobId).slice(0, 8),
         reason: claim.reason || "unknown",
+        durableOwner: "reconcile_sweep",
       }));
       let alertDelivered = false;
       try {
         const alert = deps.quotaAlert || (await import("../telegramNotify.service.js")).sendTelegramText;
         const res = await alert(
-          `[CRITICAL] จอง quota ledger ไม่สำเร็จ (job ${String(jobId).slice(0, 8)}…) — ไม่มี durable owner ของการหัก quota งานนี้ ต้องตรวจมือ: ${String(claim.reason || "unknown").slice(0, 80)}`,
+          `[CRITICAL] จอง quota ledger ไม่สำเร็จ (job ${String(jobId).slice(0, 8)}…: ${String(claim.reason || "unknown").slice(0, 80)}) — reconcile sweep จะสร้าง ledger คืนจากหลักฐานการส่งในรอบ maintenance ถัดไป`,
         );
         alertDelivered = res?.ok === true;
       } catch { alertDelivered = false; }
@@ -907,15 +909,17 @@ export async function handleScanResultPostDelivery(msg, payload, deps = {}) {
       );
     } else {
       // pending คงอยู่ใน ledger — sweeper ใน maintenanceWorker เป็นเจ้าของ retry
+      // P1 (Codex): durablePending log ตามจริงเท่านั้น — markError ต้อง typed + ตรวจผล
       const markError = deps.markQuotaDecrementError ||
         (await import("./quotaLedger.util.js")).markQuotaDecrementError;
-      await markError(jobId, r.reason || "decrement_failed");
+      const marked = await markError(jobId, r.reason || "decrement_failed");
       console.error(
         JSON.stringify({
           event: "QUOTA_DECREMENT_AFTER_DELIVERY_FAILED",
           jobIdPrefix: String(jobId).slice(0, 8),
           message: r.reason || "unknown",
-          durablePending: true,
+          durablePending: marked?.ok === true && Number(marked.affected) > 0,
+          markErrorOk: marked?.ok === true,
         }),
       );
     }

@@ -1,32 +1,35 @@
 /**
- * Paid-quota decrement ledger (Codex B2, 20 ส.ค. 2026) — คู่กับ migration 055
+ * Paid-quota decrement ledger (Codex B2 รอบสอง, 20 ส.ค. 2026) — คู่กับ migration 055
  *
- * Invariant: การหัก quota ของ job หนึ่งเกิด "ครั้งเดียวเท่านั้น" และห้ามหายเงียบ
- * - จอง pending "ก่อน" mark delivered (crash หลัง delivered ก่อนหัก → sweeper เห็น
- *   pending แล้วหักต่อให้)
- * - หักจริงผ่าน RPC transaction เดียว (decrement + mark completed atomic —
- *   crash ระหว่างกลางเป็นไปไม่ได้ · retry ได้ already_completed ไม่หักซ้ำ)
- * - RPC ล้ม → pending คงอยู่ + attempts/last_error → sweeper ใน maintenanceWorker
- *   ตามจนจบ · attempts สูง = CRITICAL alert (awaited + ตรวจ {ok} จริง)
+ * Invariant: หัก quota ต่อ job "ครั้งเดียว" และห้ามหายเงียบ
+ * - authority: JS ส่งได้แค่ jobId — เจ้าของ/ประเภทงาน derive จาก scan_jobs ใน DB
+ * - จอง pending "ก่อน" mark delivered · หักผ่าน RPC transaction เดียว (atomic,
+ *   already_completed = ไม่หักซ้ำ, app_users ไม่โดนแถว = rollback ห้ามสำเร็จปลอม)
+ * - durable owner จริง = DB: sweeper ทั้ง (1) reconcile สร้าง ledger คืนจาก
+ *   actual-delivery evidence (เฉพาะ job ยุค epoch — ห้ามหักย้อนหลัง write-off)
+ *   และ (2) ไล่หัก pending ที่ค้าง · Telegram เป็น alert เสริมเท่านั้น
  */
 import { supabase } from "../../config/supabase.js";
 
-/** จอง ledger pending — เรียกก่อน mark delivered เสมอ @returns {Promise<{ok:boolean, status?:string, reason?:string}>} */
-export async function ensureQuotaPending(jobId, appUserId, deps = {}) {
+/** จอง ledger pending — เรียกก่อน mark delivered เสมอ (RPC derive เจ้าของเอง)
+ * @returns {Promise<{ok:boolean, status?:string, reason?:string}>} */
+export async function ensureQuotaPending(jobId, deps = {}) {
   const client = deps.dbClient || supabase;
   try {
     const { data, error } = await client.rpc("ensure_quota_decrement_pending", {
       p_job_id: String(jobId),
-      p_app_user_id: String(appUserId),
     });
     if (error) return { ok: false, reason: String(error.message || "rpc_error").slice(0, 120) };
-    return { ok: true, status: String(data || "pending") };
+    const status = String(data || "");
+    if (status === "pending" || status === "completed") return { ok: true, status };
+    // job_not_found / not_paid / user_mismatch — ปฏิเสธชัด ๆ ไม่ใช่ ok
+    return { ok: false, reason: status || "unexpected" };
   } catch (e) {
     return { ok: false, reason: String(e?.message || e).slice(0, 120) };
   }
 }
 
-/** หักจริง (idempotent ต่อ job) @returns {Promise<{ok:boolean, outcome?:"completed"|"already_completed"|"no_ledger", reason?:string}>} */
+/** หักจริง (idempotent ต่อ job) @returns {Promise<{ok:boolean, outcome?:string, reason?:string}>} */
 export async function runQuotaDecrement(jobId, deps = {}) {
   const client = deps.dbClient || supabase;
   try {
@@ -36,21 +39,38 @@ export async function runQuotaDecrement(jobId, deps = {}) {
     if (error) return { ok: false, reason: String(error.message || "rpc_error").slice(0, 120) };
     const outcome = String(data || "");
     if (outcome === "completed" || outcome === "already_completed") return { ok: true, outcome };
-    return { ok: false, outcome: "no_ledger", reason: outcome || "unexpected" };
+    return { ok: false, outcome: outcome || "unexpected", reason: outcome || "unexpected" };
   } catch (e) {
     return { ok: false, reason: String(e?.message || e).slice(0, 120) };
   }
 }
 
-/** บันทึกรอบ retry ที่ล้ม (best-effort — pending คงอยู่ให้ sweeper) */
+/** บันทึกรอบ retry ที่ล้ม — typed (Codex P1: ต้องตรวจ {error} จริง ไม่ใช่ await ทิ้ง)
+ * @returns {Promise<{ok:boolean, affected?:number, reason?:string}>} */
 export async function markQuotaDecrementError(jobId, message, deps = {}) {
   const client = deps.dbClient || supabase;
   try {
-    await client.rpc("mark_quota_decrement_error", {
+    const { data, error } = await client.rpc("mark_quota_decrement_error", {
       p_job_id: String(jobId),
       p_error: String(message || "unknown").slice(0, 300),
     });
-  } catch { /* best-effort */ }
+    if (error) return { ok: false, reason: String(error.message || "rpc_error").slice(0, 120) };
+    return { ok: true, affected: Number(data) || 0 };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 120) };
+  }
+}
+
+/** สร้าง ledger คืนจาก actual-delivery evidence (durable owner ของเคส ensure ล้ม) */
+export async function reconcileMissingQuotaLedgers(deps = {}) {
+  const client = deps.dbClient || supabase;
+  try {
+    const { data, error } = await client.rpc("reconcile_missing_quota_ledgers", { p_limit: 20 });
+    if (error) return { ok: false, reason: String(error.message || "rpc_error").slice(0, 120) };
+    return { ok: true, created: Number(data) || 0 };
+  } catch (e) {
+    return { ok: false, reason: String(e?.message || e).slice(0, 120) };
+  }
 }
 
 const SWEEP_MIN_AGE_MS = 120_000;
@@ -58,15 +78,25 @@ const SWEEP_LIMIT = 20;
 const ALERT_AFTER_ATTEMPTS = 5;
 
 /**
- * กวาด ledger pending — maintenanceWorker เรียกเป็นรอบ ๆ (owner จริงของ recovery,
- * Telegram เป็น alert เสริมเท่านั้น)
- * @param {{ dbClient?: any, now?: () => number, alert?: (text: string) => Promise<{ok:boolean}>,
- *   alertDedupe?: (key: string, ttlSec: number) => Promise<boolean>, runDecrement?: Function, markError?: Function }} [deps]
+ * กวาด ledger — maintenanceWorker เรียกเป็นรอบ ๆ (เจ้าของจริงของ recovery):
+ * ① reconcile: paid job delivered ที่ไม่มีแถว ledger (ensure ล้มตอนส่ง) → สร้าง pending
+ * ② ไล่หัก pending ที่ค้าง · attempts สูง = CRITICAL alert (awaited + ตรวจ {ok})
  */
 export async function sweepPendingQuotaDecrements(deps = {}) {
   const client = deps.dbClient || supabase;
   const now = deps.now ? deps.now() : Date.now();
-  const stats = { scanned: 0, completed: 0, failed: 0, alerted: 0 };
+  const stats = { reconciledLedgers: 0, scanned: 0, completed: 0, failed: 0, alerted: 0 };
+
+  // ① durable reconstruction (Codex P0-1 รอบสอง): ห้ามพึ่ง Telegram เป็น owner
+  const reconcile = deps.reconcileMissing || (() => reconcileMissingQuotaLedgers(deps));
+  const rec = await reconcile();
+  if (rec?.ok === true && rec.created > 0) {
+    stats.reconciledLedgers = rec.created;
+    console.log(JSON.stringify({ event: "QUOTA_LEDGER_RECONCILED_MISSING", created: rec.created }));
+  } else if (rec?.ok === false) {
+    console.log(JSON.stringify({ event: "QUOTA_LEDGER_RECONCILE_FAILED", reason: rec.reason || "unknown" }));
+  }
+
   let rows = [];
   try {
     const cutoffIso = new Date(now - SWEEP_MIN_AGE_MS).toISOString();
@@ -115,6 +145,6 @@ export async function sweepPendingQuotaDecrements(deps = {}) {
       } catch { /* alert ห้ามล้มทับ sweep */ }
     }
   }
-  if (stats.scanned > 0) console.log(JSON.stringify({ event: "QUOTA_LEDGER_SWEEP", ...stats }));
+  if (stats.scanned > 0 || stats.reconciledLedgers > 0) console.log(JSON.stringify({ event: "QUOTA_LEDGER_SWEEP", ...stats }));
   return stats;
 }
