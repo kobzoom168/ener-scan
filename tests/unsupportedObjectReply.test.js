@@ -11,14 +11,12 @@ const servicePath = fileURLToPath(
   new URL("../src/services/lineWebhook/unsupportedObjectReply.service.js", import.meta.url),
 );
 
-test("buildUnsupportedObjectText: warm อาจารย์ copy keeps supported-type bullets", () => {
+// Codex P1-3 (20 ส.ค. 2026): copy เปลี่ยนจาก warm bullets → โทนแข็งบรรทัดเดียว
+test("buildUnsupportedObjectText: hard copy สั้น ตรง — ไม่มี ครับ/emoji/คำปลอบ", () => {
   const t = buildUnsupportedObjectText();
-  assert.ok(t.includes("อาจารย์"));
-  assert.ok(t.includes("• พระเครื่อง"));
-  assert.ok(t.includes("• เครื่องราง"));
-  assert.ok(t.includes("คริสตัล / หิน"));
-  assert.ok(t.includes("วัตถุสายพลังแบบชิ้นเดี่ยว"));
-  assert.ok(t.includes("ส่งรูป"));
+  assert.ok(t.includes("ชิ้นนี้ยังอ่านไม่ได้"));
+  assert.ok(t.includes("เต็มกรอบ"));
+  for (const w of ["ครับ", "นะ", "🙏", "อาจารย์"]) assert.ok(!t.includes(w), `ห้ามมี "${w}"`);
 });
 
 test("getUnsupportedObjectReplyCandidates: primary is buildUnsupportedObjectText", () => {

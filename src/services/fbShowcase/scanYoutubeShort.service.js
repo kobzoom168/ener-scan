@@ -286,9 +286,10 @@ async function notifyOwnerClipLive(lineUserId, youtubeUrl, sAlert) {
   const url = String(youtubeUrl || "").trim();
   if (!token || !uid || !url) return;
   // แชทห้ามมีอีโมจิทุกข้อความ (กติกากบ — เตือนซ้ำ 17 ส.ค. เคส Marut)
+  // Codex P1-3: push แชทเหลือบรรทัดเดียว ไม่มี CTA ชวนแชร์/คำลงท้าย
   const text = sAlert
-    ? `ชิ้นของคุณได้เกรด S ระดับหายาก และตอนนี้ขึ้นคลิปพิเศษในช่อง YouTube ของอาจารย์แล้วครับ\n${url}\nกดดูแล้วแชร์ให้เพื่อน ๆ ชมได้เลยครับ`
-    : `ชิ้นของคุณถูกคัดเป็นชิ้นเด่น ขึ้นคลิปในช่อง YouTube ของอาจารย์แล้วครับ\n${url}\nกดดูแล้วแชร์ต่อได้เลยครับ`;
+    ? `คลิปพิเศษของชิ้นนี้: ${url}`
+    : `คลิปของชิ้นนี้: ${url}`;
   try {
     const { allowCustomerPush } = await import("../lineOutbound/customerPush.gateway.js");
     const gate = await allowCustomerPush(uid, { source: "youtube_clip_notify" });

@@ -93,7 +93,7 @@ async function releaseHeldWithoutInfo(userId, pending, rawText) {
  * suppressed_banned = ลูกค้าโดนแบนระหว่าง push การ์ด — ล้าง pending/backup/form
  * ที่สร้างไว้แล้ว caller ต้อง suppress outbound (ห้าม markSent)
  */
-export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload }) {
+export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload, relatedJobId = null }) {
   const NOT_HELD = { outcome: "not_held" };
   if (!objectInfoGateEnabled()) return NOT_HELD;
   try {
@@ -140,6 +140,9 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
       isPaid,
       objectForm: String(rp.object?.objectUnderstanding?.objectForm || ""),
       scanResultId: String(payload.scanResultId || rp.scanId || ""),
+      // P0-2: ผูก job เดิมไว้ — outbound ที่ re-enqueue ต้องมี related_job_id
+      // ไม่งั้น post-delivery finalize job เป็น delivered ไม่ได้ (ค้าง delivery_queued)
+      relatedJobId: String(relatedJobId || "") || null,
       outboundPayload: payload,
       heldAt: Date.now(),
     };
@@ -159,8 +162,8 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     ).trim();
     const askText =
       lane === "bracelet"
-        ? "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลชิ้นนี้นิดเดียว เพื่อให้อาจารย์อ่านพลังได้ตรงทางที่สุด เป็นหิน/กำไลชนิดไหนครับ พิมพ์ตอบในแชทนี้ได้เลย หรือกดกรอกแบบละเอียดด้านล่าง"
-        : "อาจารย์อ่านพลังเสร็จแล้วครับ ก่อนส่งผล ขอข้อมูลองค์นี้นิดเดียว เพื่อให้อาจารย์อ่านพลังได้ตรงทางที่สุด เป็นพระอะไร วัดไหน รุ่น/ปีอะไร พิมพ์ตอบในแชทนี้ได้เลย รู้เท่าไหนบอกเท่านั้นได้";
+        ? "ขอชนิดหินหรือกำไลของชิ้นนี้ รู้เท่าไหนตอบเท่านั้น พิมพ์ในแชทนี้หรือกดกรอกด้านล่าง"
+        : "ขอชื่อ วัด รุ่นหรือปีของชิ้นนี้ รู้เท่าไหนตอบเท่านั้น พิมพ์ในแชทนี้หรือกดกรอกด้านล่าง";
     const items = [
       { type: "action", action: { type: "message", label: "ไม่ทราบข้อมูลชิ้นนี้", text: "ไม่ทราบข้อมูลชิ้นนี้" } },
     ];
@@ -257,6 +260,9 @@ async function reEnqueueHeldReport(lineUserId, pending) {
     priority: 50,
     payload_json: pending.outboundPayload,
     status: "queued",
+    // P0-2: คง related_job_id เดิม — ให้ post-delivery finalize job เป็น delivered
+    // และหัก paid quota ได้เหมือนรายงานที่ไม่โดนเกตยึด
+    related_job_id: pending.relatedJobId || null,
   });
 }
 
@@ -325,7 +331,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await releaseHeldWithoutInfo(userId, pending, t);
       await client.replyMessage(event.replyToken, {
         type: "text",
-        text: "ได้ครับ เดี๋ยวอาจารย์ส่งผลให้เลย ข้อมูลชิ้นนี้ไว้สะดวกค่อยบอกก็ได้ครับ",
+        text: "รับทราบ",
       });
       console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_RELEASED", reason: "declined", lineUserIdPrefix: userId.slice(0, 8) }));
       return true;

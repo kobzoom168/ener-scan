@@ -18,6 +18,26 @@ export function isRankingQuery(text) {
   return RANKING_RE.test(t);
 }
 
+const THAI_ORDINAL = { หนึ่ง: 1, สอง: 2, สาม: 3, สี่: 4, ห้า: 5 };
+
+/**
+ * อันดับที่ลูกค้าถามถึง (Codex P0-1: semanticKey ต้องรวม requestedRank —
+ * "อันดับ 1" กับ "อันดับ 2" คือคนละคำถาม ห้ามโดน semantic dedupe ยุบเป็นตัวเดียว)
+ * @param {string} text
+ * @returns {number|null} เลขอันดับ หรือ null เมื่อไม่ระบุ (เช่น "ชิ้นไหนแรงสุด")
+ */
+export function extractRequestedRank(text) {
+  const t = String(text || "").trim();
+  const m = t.match(/(?:อันดับ|ที่|ท็อป|top)\s*(\d{1,2})/i);
+  if (m) {
+    const n = Number(m[1]);
+    return Number.isFinite(n) && n >= 1 && n <= 99 ? n : null;
+  }
+  const w = t.match(/อันดับ\s*(หนึ่ง|สอง|สาม|สี่|ห้า)/);
+  if (w) return THAI_ORDINAL[w[1]] || null;
+  return null;
+}
+
 /** copy ชี้ทางไปรายงาน — ไม่มีตัวเลข/ชื่อชิ้น/คำเงิน (paywall บนหน้ารายงานทำหน้าที่เอง) */
 export function buildRankingRedirectText(latestReportUrl) {
   const lines = [

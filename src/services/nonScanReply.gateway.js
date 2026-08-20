@@ -22,10 +22,10 @@ import { emitPaymentQrBundleSent } from "../core/telemetry/paymentLifecycleTelem
 import { gatewayPathEnter, gatewayPathExit } from "./lineReplyAudit.context.js";
 import { insertLineConversationMessage } from "../stores/conversationMessages.db.js";
 
-/** @type {Map<string, string>} */
+/** @type {Map<string, { text: string, inboundMessageId: string|null }>} */
 const lastNonScanTextByUser = new Map();
 
-/** @type {Map<string, { key: string, norm: string, at: number }>} */
+/** @type {Map<string, { key: string, norm: string, at: number, inboundMessageId: string|null }>} */
 const lastSemanticByUser = new Map();
 
 const DEFAULT_SEMANTIC_WINDOW_MS = 22_000;
@@ -80,15 +80,32 @@ function resolveDedupeKey(replyType, semanticKey) {
 }
 
 /**
+ * เทียบ inbound messageId (Codex P0-1, raw log 19-20 ส.ค.): ลูกค้าถามคำถามเดิม
+ * ซ้ำด้วย "ข้อความใหม่" แล้ว copy ที่ generate ออกมาเหมือนเดิม = ต้องตอบ ไม่ใช่เงียบ
+ * — duplicate จริงมีทางเดียวคือ redelivery ของ inbound messageId เดิม
+ * คู่ไหนรู้ id ทั้งสองฝั่งแล้ว "คนละ id" = ไม่ใช่ duplicate เด็ดขาด ·
+ * ฝั่งใดไม่รู้ id (push/legacy caller) = พฤติกรรมเดิม (เทียบข้อความอย่างเดียว)
+ */
+function isDifferentInboundTurn(currentId, recordedId) {
+  const cur = String(currentId || "").trim();
+  const rec = String(recordedId || "").trim();
+  return Boolean(cur && rec && cur !== rec);
+}
+
+/**
  * @param {string} userId
  * @param {string} dedupeKey
  * @param {string} bodyText normalized multi-line body used for exact + semantic body match
+ * @param {string|null} [inboundMessageId] LINE messageId ของข้อความลูกค้าที่กำลังตอบ
  */
-function evaluateDuplicate(userId, dedupeKey, bodyText) {
+function evaluateDuplicate(userId, dedupeKey, bodyText, inboundMessageId = null) {
   const uid = String(userId || "").trim();
   const trimmed = String(bodyText || "").replace(/\r\n/g, "\n");
   const lastExact = lastNonScanTextByUser.get(uid) || null;
-  const exactDuplicate = lastExact !== null && lastExact === trimmed;
+  const exactDuplicate =
+    lastExact !== null &&
+    lastExact.text === trimmed &&
+    !isDifferentInboundTurn(inboundMessageId, lastExact.inboundMessageId);
 
   const norm = normalizeForSemantic(trimmed);
   const sem = lastSemanticByUser.get(uid);
@@ -98,7 +115,8 @@ function evaluateDuplicate(userId, dedupeKey, bodyText) {
     sem &&
       sem.key === dedupeKey &&
       sem.norm === norm &&
-      now - sem.at < windowMs,
+      now - sem.at < windowMs &&
+      !isDifferentInboundTurn(inboundMessageId, sem.inboundMessageId),
   );
 
   return {
@@ -108,14 +126,16 @@ function evaluateDuplicate(userId, dedupeKey, bodyText) {
   };
 }
 
-function recordSent(userId, dedupeKey, bodyText) {
+function recordSent(userId, dedupeKey, bodyText, inboundMessageId = null) {
   const uid = String(userId || "").trim();
   const trimmed = String(bodyText || "").replace(/\r\n/g, "\n");
-  lastNonScanTextByUser.set(uid, trimmed);
+  const msgId = String(inboundMessageId || "").trim() || null;
+  lastNonScanTextByUser.set(uid, { text: trimmed, inboundMessageId: msgId });
   lastSemanticByUser.set(uid, {
     key: dedupeKey,
     norm: normalizeForSemantic(trimmed),
     at: Date.now(),
+    inboundMessageId: msgId,
   });
 }
 
@@ -233,6 +253,8 @@ export async function sendNonScanReply(opts) {
     text,
     alternateTexts = [],
     scanOfferMeta,
+    /** @type {string|null|undefined} — LINE messageId ของข้อความลูกค้า (P0-1: กัน copy เดิมเงียบคำถามใหม่) */
+    inboundMessageId = null,
     /** @type {string|null|undefined} — เสียงผู้พูดจริงจาก role router (admin/ajarn/mixed) */
     speakerRoleOverride = null,
     turnPerf = undefined,
@@ -340,7 +362,7 @@ export async function sendNonScanReply(opts) {
 
   for (let i = 0; i < candidates.length; i += 1) {
     const body = candidates[i];
-    lastEval = evaluateDuplicate(uid, dedupeKey, body);
+    lastEval = evaluateDuplicate(uid, dedupeKey, body, inboundMessageId);
     if (!lastEval.blocked) {
       if (turnPerf) {
         turnPerf.log("NON_SCAN_REPLY_ROUTED", {
@@ -377,7 +399,7 @@ export async function sendNonScanReply(opts) {
         } else {
           await replyFlex(client, replyToken, flexToSend);
         }
-        recordSent(uid, dedupeKey, body);
+        recordSent(uid, dedupeKey, body, inboundMessageId);
         void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride));
         if (scanOfferMeta && typeof scanOfferMeta === "object") {
           console.log(
@@ -450,7 +472,7 @@ export async function sendNonScanReply(opts) {
       } else {
         await replyText(client, replyToken, body, quickReply);
       }
-      recordSent(uid, dedupeKey, body);
+      recordSent(uid, dedupeKey, body, inboundMessageId);
       void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride));
       if (scanOfferMeta && typeof scanOfferMeta === "object") {
         console.log(
@@ -535,6 +557,7 @@ export async function sendNonScanSequenceReply(opts) {
     messages,
     alternateSequences = [],
     speakerRoleOverride = null,
+    inboundMessageId = null,
   } = opts;
 
   const uid = String(userId || "").trim();
@@ -595,7 +618,7 @@ export async function sendNonScanSequenceReply(opts) {
 
   for (let i = 0; i < candidates.length; i += 1) {
     const { list, fingerprint } = candidates[i];
-    lastEval = evaluateDuplicate(uid, dedupeKey, fingerprint);
+    lastEval = evaluateDuplicate(uid, dedupeKey, fingerprint, inboundMessageId);
     if (!lastEval.blocked) {
       const tokenSpent = isScanFlowReplyTokenSpent(uid);
       const effectiveReplyToken = tokenSpent
@@ -607,7 +630,7 @@ export async function sendNonScanSequenceReply(opts) {
         userId,
         messages: list,
       });
-      recordSent(uid, dedupeKey, fingerprint);
+      recordSent(uid, dedupeKey, fingerprint, inboundMessageId);
       void insertLineConversationMessage(uid, "bot", list.join("\n\n"), speakerMetaFor(rt, speakerRoleOverride));
       logGateway({
         userId: uid,
@@ -752,6 +775,7 @@ export async function sendNonScanPushMessage(opts) {
       text,
       alternateTexts = [],
       speakerRoleOverride = null,
+      inboundMessageId = null,
       /** @type {{ type: "sticker", packageId: string, stickerId: string } | null | undefined} */
       trailingStickerMessage = null,
     } = opts;
@@ -816,14 +840,14 @@ export async function sendNonScanPushMessage(opts) {
 
     for (let i = 0; i < candidates.length; i += 1) {
       const body = candidates[i];
-      lastEval = evaluateDuplicate(uid, dedupeKey, body);
+      lastEval = evaluateDuplicate(uid, dedupeKey, body, inboundMessageId);
       if (!lastEval.blocked) {
         if (stickerPush) {
           await pushTextWithTrailingSticker(client, uid, body, stickerPush);
         } else {
           await pushText(client, uid, body);
         }
-        recordSent(uid, dedupeKey, body);
+        recordSent(uid, dedupeKey, body, inboundMessageId);
         void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride));
         logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
           userId: uid,

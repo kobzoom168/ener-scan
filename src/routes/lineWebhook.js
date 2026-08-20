@@ -357,8 +357,8 @@ import {
  * → ชี้ไปรายงานหลัก (ตรงนั้นเซ็นเซอร์+ชวนเปิดสิทธิ์อยู่แล้ว) — ห้ามให้ LLM ตอบหลุด
  * จ่ายใน 3 วัน = ตอบตามปกติทุกเส้นเดิม · เช็คสิทธิ์พลาด = redirect (กันรั่ว ไม่กันเงิน)
  */
-async function maybeHandleRankingQueryGate({ client, userId, replyToken, text }) {
-  const { isRankingQuery, buildRankingRedirectText } = await import(
+async function maybeHandleRankingQueryGate({ client, userId, replyToken, text, inboundMessageId = null }) {
+  const { isRankingQuery, buildRankingRedirectText, extractRequestedRank } = await import(
     "../services/lineWebhook/rankingQueryGate.util.js"
   );
   if (!isRankingQuery(text)) return false;
@@ -384,12 +384,16 @@ async function maybeHandleRankingQueryGate({ client, userId, replyToken, text })
   console.log(
     JSON.stringify({ event: "RANKING_QUERY_REDIRECTED_UNPAID", uidPrefix: String(userId).slice(0, 8) }),
   );
+  // P0-1 (Codex raw log 19-20 ส.ค.): semanticKey รวม requestedRank — ถามอันดับ 1
+  // แล้วถามอันดับ 2 ต่อคือคนละคำถาม · inboundMessageId กัน copy เดิมเงียบข้อความใหม่
+  const requestedRank = extractRequestedRank(text);
   await sendNonScanReply({
     client,
     userId,
     replyToken,
     replyType: "ranking_query_redirect",
-    semanticKey: "ranking_query_redirect",
+    semanticKey: `ranking_query_redirect:r${requestedRank ?? "top"}`,
+    inboundMessageId,
     text: buildRankingRedirectText(latestReportUrl),
     alternateTexts: [],
     speakerRoleOverride: "admin",
@@ -555,9 +559,10 @@ async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
     );
     const vault = await loadVault(userId);
     if (vault.length < 3) {
+      // Codex C6: จัดชุด = ข้อความบริการ (URL/CTA) เสียงแอดมิน — ไม่มีเสียง/คำอ้างอาจารย์
       await client.replyMessage(replyToken, {
         type: "text",
-        text: `ตอนนี้คลังของคุณมี ${vault.length} ชิ้นครับ อาจารย์จัดชุดให้ได้เมื่อมีตั้งแต่ 3 ชิ้นขึ้นไป ส่งรูปชิ้นเพิ่มเข้ามาได้เลย`,
+        text: `คลังของคุณมี ${vault.length} ชิ้น จัดชุดได้เมื่อครบ 3 ชิ้นขึ้นไป ส่งรูปชิ้นเพิ่มเข้ามาได้เลย`,
       });
       return true;
     }
@@ -575,7 +580,8 @@ async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
       replyToken,
       replyMsg || {
         type: "text",
-        text: `อาจารย์จัดชุดจากคลังของคุณ ${vault.length} ชิ้นไว้ให้แล้วครับ วันนี้ควรพกชุดไหน เปิดดูได้เลย\n${base}/synergy/${token}`,
+        // Codex C6: URL/CTA = เสียงแอดมิน · เนื้อหาวิชาอยู่ในหน้ารายงานเอง
+        text: `ชุดประจำวันจากคลังของคุณ ${vault.length} ชิ้น เปิดดูได้ที่นี่\n${base}/synergy/${token}`,
       },
     );
     console.log(JSON.stringify({ event: "SYNERGY_LINK_SENT", lineUserIdPrefix: String(userId).slice(0, 10), pieces: vault.length }));
@@ -7715,7 +7721,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
         // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
         if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
-        if (await maybeHandleRankingQueryGate({ client, userId, replyToken: event.replyToken, text })) return;
+        if (await maybeHandleRankingQueryGate({ client, userId, replyToken: event.replyToken, text, inboundMessageId: String(event?.message?.id || "") || null })) return;
         if (await maybeHandleAxisTopPieceQuery({ client, userId, replyToken: event.replyToken, text })) return;
         if (text === "สแกนพลังงาน") {
           let savedBirthdate = null;
@@ -8494,8 +8500,29 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
   } catch { /* util พัง = ตอบตามปกติ */ }
 
+  // ทักทายล้วน = deterministic AI=0 (Codex P1-4 raw log: greeting กิน consult ฟรี 3 calls
+  // ~4.8s — ตอบนิ่ง ๆ คำเดียวพอ ไม่ถามสารทุกข์) · มีคำถามพ่วง = ไม่เข้าเงื่อนไขนี้
+  try {
+    const { isPureGreeting } = await import("../core/conversation/closingPleasantry.util.js");
+    if (isPureGreeting(text)) {
+      console.log(JSON.stringify({ event: "CHAT_GREETING_DETERMINISTIC", uidPrefix: String(userId).slice(0, 8) }));
+      await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "greeting_deterministic",
+        semanticKey: "greeting_deterministic",
+        inboundMessageId: String(event?.message?.id || "") || null,
+        text: "สวัสดี",
+        alternateTexts: ["สวัสดีครับ"],
+        speakerRoleOverride: "admin",
+      });
+      return;
+    }
+  } catch { /* util พัง = flow เดิม */ }
+
   // คำถามอันดับ/ชิ้นแรงสุดจากคนไม่มีประวัติจ่ายใน 3 วัน → ชี้ไปรายงาน (กบ 18 ส.ค.)
-  if (await maybeHandleRankingQueryGate({ client, userId, replyToken: event.replyToken, text })) return;
+  if (await maybeHandleRankingQueryGate({ client, userId, replyToken: event.replyToken, text, inboundMessageId: String(event?.message?.id || "") || null })) return;
   if (text === "สแกนพลังงาน") {
     let savedBirthdate = null;
     try {

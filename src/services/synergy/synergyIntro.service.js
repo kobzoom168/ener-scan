@@ -20,12 +20,13 @@ export async function maybeIntroduceSynergy(lineUserId) {
     const base = String(env.APP_BASE_URL || "").replace(/\/+$/, "");
     const lineToken = String(process.env.CHANNEL_ACCESS_TOKEN || "").trim();
     if (!lineToken) return { skipped: "no_line_token" };
+    // Codex C6/P1-3: ข้อความอัตโนมัติที่มี URL/CTA = เสียงแอดมินล้วน ห้ามปนเสียง/
+    // คำตีความของอาจารย์ในข้อความเดียว · เนื้อหาวิชาอยู่ในหน้ารายงาน synergy เอง
     const text = [
-      `ตอนนี้คลังของคุณมี ${vaultCount} ชิ้นแล้ว อาจารย์จัดชุดให้ได้แล้วครับ`,
-      `วันไหนควรพกชิ้นไหน ชุดไหนเหมาะกับคุยงาน เดินทาง หรือนัดสำคัญ เปิดดูได้เลย`,
+      `คลังของคุณมี ${vaultCount} ชิ้นแล้ว เปิดดูชุดประจำวันได้ที่นี่`,
       `${base}/synergy/${token}`,
       "",
-      "พิมพ์ จัดชุด ในแชทนี้เมื่อไหร่ก็ได้ เพื่อเปิดดูชุดของวัน",
+      "พิมพ์ จัดชุด ในแชทนี้เมื่อไหร่ก็ได้",
     ].join("\n");
     // Flex carousel (กบ 1 ส.ค.) — พังค่อยถอยไป text
     let messages;
@@ -33,7 +34,7 @@ export async function maybeIntroduceSynergy(lineUserId) {
       const { buildSynergyCarouselFlex } = await import("./synergyReport.service.js");
       const flex = await buildSynergyCarouselFlex(uid);
       messages = flex
-        ? [{ type: "text", text: `ตอนนี้คลังของคุณมี ${vaultCount} ชิ้นแล้ว อาจารย์จัดชุดให้ได้แล้วครับ เลื่อนดูได้เลย (พิมพ์ จัดชุด เมื่อไหร่ก็ได้)` }, flex]
+        ? [{ type: "text", text: `คลังของคุณมี ${vaultCount} ชิ้นแล้ว เลื่อนดูชุดประจำวันได้เลย (พิมพ์ จัดชุด เมื่อไหร่ก็ได้)` }, flex]
         : [{ type: "text", text }];
     } catch {
       messages = [{ type: "text", text }];
@@ -52,7 +53,9 @@ export async function maybeIntroduceSynergy(lineUserId) {
     const { insertLineConversationMessage } = await import(
       "../../stores/conversationMessages.db.js"
     );
-    void insertLineConversationMessage(uid, "bot", text);
+    void insertLineConversationMessage(uid, "bot", text, {
+      speakerRole: "admin", replyType: "synergy_intro", source: "flow",
+    });
     console.log(JSON.stringify({ event: "SYNERGY_INTRO_SENT", lineUserIdPrefix: uid.slice(0, 10), pieces: vaultCount }));
     // prewarm: คำนวณ+cache หน้าไว้ล่วงหน้า คนกดลิงก์แล้วเปิดไว
     import("./synergyReport.service.js").then((m) => void m.renderSynergyPage(uid)).catch(() => {});

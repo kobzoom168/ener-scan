@@ -200,3 +200,51 @@ test("sequence + push success-path พร้อม speakerRoleOverride: ไม�
   assert.equal(pushRes.sent, true);
   assert.ok(c2.payloads.length >= 1);
 });
+
+/* ---------------- P0-1 (Codex raw log 19-20 ส.ค.): messageId-aware dedupe ---------------- */
+
+test("P0-1: คำถามใหม่ (messageId ใหม่) ได้ copy เดิม → ต้องตอบ ไม่ใช่เงียบ · redelivery messageId เดิมเท่านั้นที่ suppress", async () => {
+  const c = mockClient();
+  const uid = `u_rank_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const redirectCopy = "อันดับและชิ้นเด่นของคลังคุณอยู่ในรายงานหลักครับ";
+  // rank1 → ตอบ
+  const r1 = await sendNonScanReply({
+    client: c, userId: uid, replyToken: "t1",
+    replyType: "ranking_query_redirect", semanticKey: "ranking_query_redirect:r1",
+    inboundMessageId: "msg-001", text: redirectCopy, alternateTexts: [],
+  });
+  assert.equal(r1.sent, true);
+  // rank2 — messageId ใหม่ + copy generate ออกมาเหมือนเดิมเป๊ะ → ต้องตอบ
+  const r2 = await sendNonScanReply({
+    client: c, userId: uid, replyToken: "t2",
+    replyType: "ranking_query_redirect", semanticKey: "ranking_query_redirect:r2",
+    inboundMessageId: "msg-002", text: redirectCopy, alternateTexts: [],
+  });
+  assert.equal(r2.sent, true, "messageId ใหม่ห้ามเงียบเพียงเพราะ generated copy เหมือนเดิม");
+  assert.equal(c.payloads.length, 2);
+  // redelivery ของ messageId เดิม (LINE ยิงซ้ำ) → suppress
+  const r3 = await sendNonScanReply({
+    client: c, userId: uid, replyToken: "t3",
+    replyType: "ranking_query_redirect", semanticKey: "ranking_query_redirect:r2",
+    inboundMessageId: "msg-002", text: redirectCopy, alternateTexts: [],
+  });
+  assert.equal(r3.suppressed, true, "redelivery messageId เดิม = duplicate จริง ต้อง suppress");
+  assert.equal(c.payloads.length, 2);
+});
+
+test("P0-1: caller เก่าไม่ส่ง messageId → พฤติกรรม dedupe เดิมคงอยู่ (ไม่ regress)", async () => {
+  const c = mockClient();
+  const uid = `u_legacy_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  await sendNonScanReply({ client: c, userId: uid, replyToken: "a", replyType: "x", text: "same", alternateTexts: [] });
+  const r = await sendNonScanReply({ client: c, userId: uid, replyToken: "b", replyType: "x", text: "same", alternateTexts: [] });
+  assert.equal(r.suppressed, true, "ไม่มี messageId ทั้งคู่ = เทียบข้อความแบบเดิม");
+});
+
+test("P0-1: extractRequestedRank — เลข/คำไทย/ไม่ระบุ", async () => {
+  const { extractRequestedRank, isRankingQuery } = await import("../src/services/lineWebhook/rankingQueryGate.util.js");
+  assert.equal(extractRequestedRank("อันดับ 2 คือชิ้นไหน"), 2);
+  assert.equal(extractRequestedRank("ท็อป 3 มีอะไรบ้าง"), 3);
+  assert.equal(extractRequestedRank("อันดับสอง"), 2);
+  assert.equal(extractRequestedRank("ชิ้นไหนแรงสุด"), null);
+  assert.equal(isRankingQuery("อันดับ 2 คือชิ้นไหน"), true);
+});

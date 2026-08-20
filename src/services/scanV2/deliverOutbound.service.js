@@ -325,7 +325,10 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         const holdFn =
           traceCtx.objectInfoHold ||
           (await import("../objectInfoGate/objectInfoGate.service.js")).maybeHoldReportForObjectInfo;
-        const hold = await holdFn({ client, lineUserId, payload });
+        // P0-2 (Codex raw log): relatedJobId ต้องเดินทางไปกับ pending — outbound ที่
+        // re-enqueue หลังปล่อยเกตเคยไม่มี related_job_id ทำ job ค้าง delivery_queued
+        // ตลอด (62/85 งาน) + ข้าม quota decrement ของงาน paid
+        const hold = await holdFn({ client, lineUserId, payload, relatedJobId: msg.related_job_id || null });
         // typed outcome (Codex nested-ban race): object เดิม ๆ ห้ามตีความเป็น "ส่งแล้ว"
         const holdOutcome = hold && typeof hold === "object" ? hold.outcome : hold === true ? "held" : "not_held";
         if (holdOutcome === "suppressed_banned") {
@@ -817,6 +820,21 @@ async function handleScanResultPostDelivery(msg, payload) {
 
   const job = await getScanJobById(jobId);
   if (!job) return;
+
+  // idempotent (Codex P0-2): delivered แล้ว = จบแล้ว — ห้ามทำซ้ำ (โดยเฉพาะ quota
+  // decrement) · terminal failure ห้ามถูกทับเป็น delivered เงียบ ๆ
+  const st = String(job.status || "");
+  if (st === "delivered") return;
+  if (["failed", "cancelled", "suppressed_banned"].includes(st)) {
+    console.log(
+      JSON.stringify({
+        event: "SCAN_RESULT_POST_DELIVERY_STATUS_CONFLICT",
+        jobIdPrefix: String(jobId).slice(0, 8),
+        jobStatus: st,
+      }),
+    );
+    return;
+  }
 
   await updateScanJob(jobId, {
     status: "delivered",
