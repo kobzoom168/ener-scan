@@ -120,6 +120,68 @@ export async function acquireShortLock(resourceKey, ttlMs) {
   return ok === "OK" ? token : null;
 }
 
+/* ---------------- strict lock API (Codex B1, 20 ส.ค. 2026) ----------------
+ * acquireShortLock/renewShortLock เดิม fail-open โดยตั้งใจ (redis หาย = token
+ * ปลอม/renew true) — flow เดิมหลายจุดพึ่งพฤติกรรมนี้ **ห้ามเปลี่ยน**
+ * งานที่ต้อง fail-closed (chat-quality outbox: lease ปลอม = รายงานซ้ำ) ใช้ชุด
+ * strict นี้แทน: redis ไม่มี/พัง/ค้าง = ไม่ได้ lease ชัด ๆ ไม่มีการเดา + bounded */
+
+const STRICT_LOCK_BOUND_MS = 3000;
+
+function boundedOp(promise, timeoutMs) {
+  let timer = null;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("redis_op_timeout")), timeoutMs);
+    }),
+  ]).finally(() => { if (timer) clearTimeout(timer); });
+}
+
+/**
+ * fail-closed acquire: redis ไม่มี/throw/ค้าง = {ok:false} — ห้ามคืน token ปลอม
+ * @param {{ getRedis?: Function, timeoutMs?: number }} [deps] DI สำหรับเทสต์
+ * @returns {Promise<{ ok: boolean, token?: string, reason?: "redis_unavailable"|"held"|"redis_error" }>}
+ */
+export async function acquireShortLockStrict(resourceKey, ttlMs, deps = {}) {
+  const bound = Number(deps.timeoutMs) > 0 ? Number(deps.timeoutMs) : STRICT_LOCK_BOUND_MS;
+  try {
+    const r = await boundedOp(Promise.resolve((deps.getRedis || getScanV2Redis)()), bound);
+    if (!r) return { ok: false, reason: "redis_unavailable" };
+    const token = randomBytes(16).toString("hex");
+    const ttl = Math.min(Math.max(Number(ttlMs) || 5000, 1000), 600_000);
+    const res = await boundedOp(r.set(kLock(resourceKey), token, "PX", ttl, "NX"), bound);
+    return res === "OK" ? { ok: true, token } : { ok: false, reason: "held" };
+  } catch {
+    return { ok: false, reason: "redis_error" };
+  }
+}
+
+/**
+ * fail-closed renew (compare-token): redis ไม่มี/throw/ค้าง/token ไม่ตรง = false
+ * @param {{ getRedis?: Function, timeoutMs?: number }} [deps]
+ */
+export async function renewShortLockStrict(resourceKey, token, ttlMs, deps = {}) {
+  const bound = Number(deps.timeoutMs) > 0 ? Number(deps.timeoutMs) : STRICT_LOCK_BOUND_MS;
+  try {
+    const r = await boundedOp(Promise.resolve((deps.getRedis || getScanV2Redis)()), bound);
+    if (!r) return false;
+    const res = await boundedOp(
+      r.eval(
+        "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('PEXPIRE',KEYS[1],ARGV[2]) end return 0",
+        1,
+        kLock(resourceKey),
+        String(token),
+        String(Math.min(Math.max(Number(ttlMs) || 5000, 1000), 600000)),
+      ),
+      bound,
+    );
+    return Number(res) === 1;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * @param {string} resourceKey
  * @param {string} token

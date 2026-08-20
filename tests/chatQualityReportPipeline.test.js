@@ -301,3 +301,81 @@ test("lease-4: renew timer หยุดหลัง cycle จบ (ทั้ง s
   await new Promise((res) => setTimeout(res, 60));
   assert.equal(lease.st.renews, after, "จบแล้ว interval ต้องถูก clear — ห้าม renew ต่อ");
 });
+
+/* ---------------- B1 (Codex): strict lease — production no-Redis ต้อง fail-closed ---------------- */
+
+test("B1-1: production-like getRedis=null สอง instances → ทั้งคู่ lease_unavailable, transport=0", async () => {
+  const { acquireShortLockStrict } = await import("../src/redis/scanV2Redis.js");
+  const noRedis = { getRedis: async () => null };
+  const a1 = await acquireShortLockStrict("cq:test", 60000, noRedis);
+  assert.deepEqual(a1, { ok: false, reason: "redis_unavailable" }, "ห้ามคืน token ปลอมเมื่อไม่มี redis");
+  const mkCycle = () => makeDeps({
+    acquireLease: async () => {
+      const r = await acquireShortLockStrict("cq:test", 60000, noRedis);
+      return r.ok === true ? r.token : null;
+    },
+  });
+  const h1 = mkCycle();
+  const h2 = mkCycle();
+  const [r1, r2] = await Promise.all([runReportDeliveryCycle(h1.deps), runReportDeliveryCycle(h2.deps)]);
+  assert.equal(r1.skipped, "lease_unavailable");
+  assert.equal(r2.skipped, "lease_unavailable");
+  assert.equal(h1.sends.length + h2.sends.length, 0, "transport ต้องเป็น 0 ทั้งคู่");
+});
+
+test("B1-2: redis throw/hang → strict คืน fail-closed แบบ bounded", async () => {
+  const { acquireShortLockStrict, renewShortLockStrict } = await import("../src/redis/scanV2Redis.js");
+  const throwing = { getRedis: async () => { throw new Error("conn refused"); } };
+  assert.equal((await acquireShortLockStrict("cq:t2", 60000, throwing)).ok, false);
+  assert.equal(await renewShortLockStrict("cq:t2", "tok", 60000, throwing), false);
+  const hanging = { getRedis: () => new Promise(() => {}), timeoutMs: 100 };
+  const t0 = Date.now();
+  const r = await acquireShortLockStrict("cq:t3", 60000, hanging);
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, "redis_error");
+  assert.ok(Date.now() - t0 < 2000, "hang ต้องจบ bounded ไม่แขวน cycle");
+  assert.equal(await renewShortLockStrict("cq:t3", "tok", 60000, hanging), false);
+});
+
+test("B1-3+4: redis กลับมา → acquire/ส่งได้ · renewal compare-token — token เปลี่ยนแล้ว owner เก่าต่ออายุไม่ได้", async () => {
+  const { acquireShortLockStrict, renewShortLockStrict } = await import("../src/redis/scanV2Redis.js");
+  // fake redis จำลอง semantics จริง: SET NX + eval compare-token pexpire
+  const store = new Map();
+  const fakeRedis = {
+    set: async (k, v, _px, _ttl, nx) => {
+      if (nx === "NX" && store.has(k)) return null;
+      store.set(k, v);
+      return "OK";
+    },
+    eval: async (_lua, _n, k, token) => (store.get(k) === token ? 1 : 0),
+  };
+  const deps = { getRedis: async () => fakeRedis };
+  const a1 = await acquireShortLockStrict("cq:t4", 60000, deps);
+  assert.equal(a1.ok, true, "redis กลับมา = ทำงานปกติ");
+  assert.equal(await renewShortLockStrict("cq:t4", a1.token, 60000, deps), true, "owner จริงต่ออายุได้");
+  // token เปลี่ยนมือ (เช่น TTL หมดแล้ว owner ใหม่ acquire)
+  store.clear();
+  const a2 = await acquireShortLockStrict("cq:t4", 60000, deps);
+  assert.equal(a2.ok, true);
+  assert.equal(await renewShortLockStrict("cq:t4", a1.token, 60000, deps), false, "token เก่าต่ออายุไม่ได้หลังเปลี่ยนมือ");
+  assert.equal(await renewShortLockStrict("cq:t4", a2.token, 60000, deps), true);
+  // cycle จริงส่งได้เมื่อ lease ทำงาน
+  const h = makeDeps({
+    acquireLease: async () => {
+      const r = await acquireShortLockStrict("cq:t5", 60000, deps);
+      return r.ok === true ? r.token : null;
+    },
+    renewLease: (token) => renewShortLockStrict("cq:t5", token, 60000, deps),
+  });
+  const rr = await runReportDeliveryCycle(h.deps);
+  assert.equal(rr.sent, true);
+});
+
+test("B1: service ใช้ strict API เท่านั้น (source contract)", async () => {
+  const fs2 = await import("node:fs");
+  const src = fs2.readFileSync("src/services/chatQualityDailyReport.service.js", "utf8");
+  assert.ok(src.includes("acquireShortLockStrict") && src.includes("renewShortLockStrict"));
+  assert.ok(!/[^t]acquireShortLock\(/.test(src) && !/[^t]renewShortLock\(/.test(src), "ห้ามใช้ตัว fail-open ใน chat-quality");
+  const redisSrc = fs2.readFileSync("src/redis/scanV2Redis.js", "utf8");
+  assert.ok(redisSrc.includes("export async function acquireShortLock(") && redisSrc.includes("randomBytes(8)"), "ตัวเดิมต้องคง fail-open — flow อื่นพึ่งอยู่ ห้ามเปลี่ยน");
+});

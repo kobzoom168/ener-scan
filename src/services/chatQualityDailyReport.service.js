@@ -9,7 +9,7 @@
  */
 import crypto from "node:crypto";
 import { supabase } from "../config/supabase.js";
-import { acquireShortLock, releaseShortLock, renewShortLock } from "../redis/scanV2Redis.js";
+import { acquireShortLockStrict, releaseShortLock, renewShortLockStrict } from "../redis/scanV2Redis.js";
 import {
   getGeminiFlashModel,
   generateTextWithTimeout,
@@ -383,12 +383,18 @@ export async function runChatQualityDailySweep(now = new Date(), deps = {}) {
     reportDateTH,
     loadOutbox: deps.loadOutbox || (async () => (await getAppSetting(key)) || null),
     saveOutbox: deps.saveOutbox || (async (ob) => setAppSetting(key, ob)),
+    // strict (Codex B1): redis ไม่มี/พัง = ไม่ได้ lease — ห้าม fail-open เป็น token ปลอม
+    // (acquireShortLock เดิมคืน random token เมื่อไม่มี redis → ทุก instance คิดว่าถือ lease)
     acquireLease:
-      deps.acquireLease || (() => acquireShortLock(`chat_quality:report:${reportDateTH}`, REPORT_LEASE_TTL_MS)),
+      deps.acquireLease ||
+      (async () => {
+        const r = await acquireShortLockStrict(`chat_quality:report:${reportDateTH}`, REPORT_LEASE_TTL_MS);
+        return r.ok === true ? r.token : null;
+      }),
     releaseLease:
       deps.releaseLease || ((token) => releaseShortLock(`chat_quality:report:${reportDateTH}`, token)),
     renewLease:
-      deps.renewLease || ((token) => renewShortLock(`chat_quality:report:${reportDateTH}`, token, REPORT_LEASE_TTL_MS)),
+      deps.renewLease || ((token) => renewShortLockStrict(`chat_quality:report:${reportDateTH}`, token, REPORT_LEASE_TTL_MS)),
     renewIntervalMs: Number(deps.renewIntervalMs) > 0 ? Number(deps.renewIntervalMs) : REPORT_LEASE_RENEW_MS,
     buildBase: deps.buildBase || (() => buildBaseReportData(reportDateTH)),
     curate:

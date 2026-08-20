@@ -39,7 +39,6 @@ import { invokeLinePushMessage } from "../../utils/lineClientTransport.util.js";
 import { getStaticVoiceNote } from "../voiceNote/scanVoiceNote.service.js";
 import { updateOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
 import { getScanJobById, updateScanJob } from "../../stores/scanV2/scanJobs.db.js";
-import { decrementUserPaidRemainingScans } from "../../stores/paymentAccess.db.js";
 import {
   OUTBOUND_BACKOFF_MS,
   OUTBOUND_MAX_ATTEMPTS,
@@ -818,7 +817,6 @@ export async function handleScanResultPostDelivery(msg, payload, deps = {}) {
   // export + DI (Codex รอบสอง): runtime tests ต้องพิสูจน์ forward path ได้จริง
   const getJob = deps.getScanJobById || getScanJobById;
   const updateJob = deps.updateScanJob || updateScanJob;
-  const decrement = deps.decrementUserPaidRemainingScans || decrementUserPaidRemainingScans;
   const jobId = msg.related_job_id;
   if (!jobId || payload.error) return;
 
@@ -840,6 +838,43 @@ export async function handleScanResultPostDelivery(msg, payload, deps = {}) {
     return;
   }
 
+  // Ledger ก่อน mark delivered (Codex B2): crash หลัง delivered ก่อนหัก →
+  // pending อยู่ใน DB แล้ว sweeper หักต่อให้ · หักจริงเป็น RPC transaction เดียว
+  // (decrement+complete atomic) retry ไม่หักซ้ำ · Telegram เป็น alert เสริม ไม่ใช่ owner
+  const paidEligible =
+    job.access_source === "paid" &&
+    job.app_user_id &&
+    !shouldSkipPaidQuotaDecrementAfterDelivery(payload);
+  let ledgerClaimed = false;
+  if (paidEligible) {
+    const ensurePending = deps.ensureQuotaPending ||
+      (await import("./quotaLedger.util.js")).ensureQuotaPending;
+    const claim = await ensurePending(jobId, job.app_user_id);
+    ledgerClaimed = claim.ok === true;
+    if (!ledgerClaimed) {
+      // honesty (Codex B2): ledger เขียนไม่เข้า = ไม่มี durable owner — ห้ามอ้างว่า
+      // บันทึกแล้ว · alert แบบ awaited + ตรวจผลจริง แล้ว log ตามความเป็นจริง
+      console.error(JSON.stringify({
+        event: "QUOTA_LEDGER_CLAIM_FAILED",
+        jobIdPrefix: String(jobId).slice(0, 8),
+        reason: claim.reason || "unknown",
+      }));
+      let alertDelivered = false;
+      try {
+        const alert = deps.quotaAlert || (await import("../telegramNotify.service.js")).sendTelegramText;
+        const res = await alert(
+          `[CRITICAL] จอง quota ledger ไม่สำเร็จ (job ${String(jobId).slice(0, 8)}…) — ไม่มี durable owner ของการหัก quota งานนี้ ต้องตรวจมือ: ${String(claim.reason || "unknown").slice(0, 80)}`,
+        );
+        alertDelivered = res?.ok === true;
+      } catch { alertDelivered = false; }
+      console.log(JSON.stringify({
+        event: "QUOTA_LEDGER_CLAIM_FAILED_ALERT",
+        jobIdPrefix: String(jobId).slice(0, 8),
+        alertDelivered,
+      }));
+    }
+  }
+
   await updateJob(jobId, {
     status: "delivered",
     updated_at: new Date().toISOString(),
@@ -857,47 +892,32 @@ export async function handleScanResultPostDelivery(msg, payload, deps = {}) {
     return;
   }
 
-  if (job.access_source === "paid" && job.app_user_id) {
-    try {
-      await decrement(job.app_user_id);
+  if (paidEligible && ledgerClaimed) {
+    const doDecrement = deps.runQuotaDecrement ||
+      (await import("./quotaLedger.util.js")).runQuotaDecrement;
+    const r = await doDecrement(jobId);
+    if (r.ok === true) {
       console.log(
         JSON.stringify({
           event: "QUOTA_DECREMENT_AFTER_DELIVERY_OK",
           jobIdPrefix: String(jobId).slice(0, 8),
           appUserIdPrefix: String(job.app_user_id).slice(0, 8),
+          outcome: r.outcome,
         }),
       );
-    } catch (e) {
+    } else {
+      // pending คงอยู่ใน ledger — sweeper ใน maintenanceWorker เป็นเจ้าของ retry
+      const markError = deps.markQuotaDecrementError ||
+        (await import("./quotaLedger.util.js")).markQuotaDecrementError;
+      await markError(jobId, r.reason || "decrement_failed");
       console.error(
         JSON.stringify({
           event: "QUOTA_DECREMENT_AFTER_DELIVERY_FAILED",
           jobIdPrefix: String(jobId).slice(0, 8),
-          message: e?.message,
+          message: r.reason || "unknown",
+          durablePending: true,
         }),
       );
-      // Codex รอบสอง P1: job ถูก mark delivered ไปแล้ว — delivered guard จะกัน
-      // retry ทำให้ decrement ที่ล้ม "หายถาวร" ถ้าไม่จดไว้ → durable marker + alert
-      try {
-        const saveMarker =
-          deps.saveQuotaDecrementPending ||
-          (async (v) => (await import("../../stores/appSettings.db.js")).setAppSetting(`quota_decrement_pending:${jobId}`, v));
-        await saveMarker({
-          jobId: String(jobId),
-          appUserId: String(job.app_user_id),
-          failedAt: new Date().toISOString(),
-          message: String(e?.message || e).slice(0, 200),
-        });
-      } catch { /* marker ล้มก็ยังต้อง alert */ }
-      void (async () => {
-        try {
-          const alert =
-            deps.quotaAlert ||
-            (await import("../telegramNotify.service.js")).sendTelegramText;
-          await alert(
-            `[CRITICAL] หัก paid quota ไม่สำเร็จหลังส่งผล (job ${String(jobId).slice(0, 8)}…) — บันทึกใน app_settings quota_decrement_pending:${String(jobId).slice(0, 8)}… รอแก้มือ`,
-          );
-        } catch { /* alert ห้ามล้มทับ delivery */ }
-      })();
     }
   }
 

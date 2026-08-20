@@ -190,6 +190,14 @@ async function runOnce() {
   } catch (e) {
     console.log(JSON.stringify({ event: "BAN_RECONCILE_SWEEP_ERROR", message: String(e?.message || e).slice(0, 140) }));
   }
+  // กวาด quota ledger pending (Codex B2): เจ้าของจริงของ decrement ที่ค้าง —
+  // crash/RPC ล้มจุดไหน sweeper ตามหักต่อจนจบ (idempotent ต่อ job ใน DB)
+  try {
+    const { sweepPendingQuotaDecrements } = await import("../services/scanV2/quotaLedger.util.js");
+    await sweepPendingQuotaDecrements();
+  } catch (e) {
+    console.log(JSON.stringify({ event: "QUOTA_LEDGER_SWEEP_ERROR", message: String(e?.message || e).slice(0, 140) }));
+  }
   await sweepStaleOutboundSending();
   await sweepStaleScanProcessing();
   await logQueueHealthAndDlq();
