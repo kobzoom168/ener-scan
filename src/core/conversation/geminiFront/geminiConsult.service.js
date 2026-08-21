@@ -182,7 +182,42 @@ export async function runGeminiConsult(p) {
         model: consultModel || "(front_default)",
       }),
     );
-    return out || null;
+    if (!out) return null;
+    // เฟส 2 (Codex): customer-visible LLM output ต้องผ่าน contract กลาง —
+    // ไม่ผ่าน = regenerate 1 ครั้ง (directive จาก violations) → factual fallback
+    try {
+      const { enforceLlmCustomerOutput } = await import("../llmOutputContract.util.js");
+      const evidence = {
+        reportIds: recentScan?.reportIds || (recentScan ? ["recent_scan"] : []),
+        kbIds: kbContext ? ["kb"] : [],
+      };
+      const guarded = await enforceLlmCustomerOutput(
+        {
+          callSite: "gemini_front_consult",
+          replyType: "gemini_front_consult",
+          userText: p.userText,
+          userIntent: p.userIntent || null,
+          userAskedAdvice: p.userAskedAdvice === true,
+          requiredNextAction: p.requiredNextAction === true,
+          expectedRole: p.expectedRole || "consult",
+          evidence,
+        },
+        {
+          generate: async (directive) => {
+            if (!directive) return out;
+            const retry = await generateTextWithTimeout(
+              model,
+              `${prompt}\n\nแก้ตามนี้: ${directive}\nตอบใหม่สั้น ๆ`,
+              env.GEMINI_CONSULT_TIMEOUT_MS,
+            );
+            return String(retry || "").trim();
+          },
+        },
+      );
+      return guarded.text || null;
+    } catch {
+      return out || null;
+    }
   } catch (e) {
     console.log(
       JSON.stringify({
