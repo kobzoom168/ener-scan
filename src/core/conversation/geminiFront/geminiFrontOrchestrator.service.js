@@ -13,6 +13,7 @@ import {
 import { runGeminiPhrasing } from "./geminiPhrasing.service.js";
 import { runGeminiConsult } from "./geminiConsult.service.js";
 import { getCustomerAiBudget } from "../../telemetry/turnAiChain.js";
+import { classifyUserIntent } from "./intentContract.util.js";
 import {
   resolveSpeakerRole,
   evaluateMoneyGuard,
@@ -459,22 +460,10 @@ export async function runGeminiFrontOrchestrator(ctx) {
 }
 
 /**
- * typed contract ที่ router สร้างก่อนเรียกโมเดล (Codex P0-4)
- * ห้ามให้โมเดลเดา role จากข้อความเอง · metadata หายไป = ใช้ค่าเข้มสุด
+ * typed contract ที่ router สร้างก่อนเรียกโมเดล (Codex P0-4 / B1):
+ * จำแนก intent จากข้อความ+state เท่านั้น · role ไปตัดใน consult จาก evidence จริง
+ * (ห้ามให้ caller เดา role จาก flag ที่ไม่มีใครส่ง)
  */
 export function buildIntentContract(ctx = {}, phase1 = null) {
-  const text = String(ctx.text || "");
-  const askedAdvice = /ควรทำไง|ควรทำอย่างไร|แนะนำ|ทำไงดี|ควรพก|เลือกอันไหน|ควรเลือก/u.test(text);
-  const moneyOrFlow = /paywall|payment|slip|verify|awaiting|registration/i.test(String(phase1 || ""));
-  const hasReport = Array.isArray(ctx.recentScanIds) && ctx.recentScanIds.length > 0;
-  const energyAsk = /พลัง|ดวง|เข้ากับ|เด่นด้าน|สายไหน|แรงกว่า/u.test(text);
-  return {
-    userIntent: energyAsk ? (hasReport ? "energy_reading" : "energy_question") : moneyOrFlow ? "service_flow" : "general",
-    userAskedAdvice: askedAdvice,
-    requiredNextAction: moneyOrFlow,
-    // เสียงอาจารย์ได้เฉพาะตอนตีความพลังจากรายงานจริง · เรื่องเงิน/ระบบ = แอดมิน
-    expectedRole: moneyOrFlow ? "admin" : energyAsk && hasReport ? "ajarn" : "consult",
-    allowQuestion: false,
-    evidence: ctx.evidence || null,
-  };
+  return classifyUserIntent(ctx.text, phase1);
 }

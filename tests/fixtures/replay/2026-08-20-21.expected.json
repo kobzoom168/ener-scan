@@ -1,0 +1,12 @@
+{
+  "fixture": "2026-08-20-21.jsonl",
+  "source": "ener_scan_pro line_conversation_messages 2026-08-20 00:00 → 2026-08-21 24:00 (Asia/Bangkok), sanitized by scripts/replay/build-replay-fixture.mjs",
+  "rows": 203,
+  "conversations": 47,
+  "systemMarkersSkipped": 104,
+  "fixed": 203,
+  "stillFailing": 0,
+  "alreadyFixed": 0,
+  "falsePositive": 0,
+  "maxAiCallsPerTurn": 2
+}

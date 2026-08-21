@@ -222,11 +222,112 @@ test("CHAT_TURN_AI_CHAIN: consult + money guard + tone guard ใช้งบร�
     console.log = origLog;
   }
   // router สร้าง contract ก่อนเรียกโมเดล และ fail-closed เมื่อ metadata หาย
+  // B1: router จำแนก intent เท่านั้น — role ไปตัดใน consult จาก evidence จริง
+  const { resolveExpectedRole } = await import("../src/core/conversation/geminiFront/intentContract.util.js");
   const bare = buildIntentContract({ text: "พลังองค์นี้เป็นไง" }, null);
-  assert.equal(bare.expectedRole, "consult", "ไม่มีรายงาน = ห้ามเป็นเสียงอาจารย์");
+  assert.equal(bare.userIntent, "energy_question");
   assert.equal(bare.allowQuestion, false);
   assert.equal(bare.requiredNextAction, false);
-  const withReport = buildIntentContract({ text: "พลังองค์นี้เป็นไง", recentScanIds: ["r1"] }, null);
-  assert.equal(withReport.expectedRole, "ajarn");
-  assert.equal(buildIntentContract({ text: "จ่ายยังไง" }, "paywall").expectedRole, "admin");
+  assert.equal("expectedRole" in bare, false, "router ห้ามเดา role");
+  assert.equal(resolveExpectedRole(bare, { report: { ids: [] } }), "consult", "ไม่มีรายงาน = ห้ามเป็นเสียงอาจารย์");
+  assert.equal(resolveExpectedRole(bare, { report: { ids: ["r1"] } }), "ajarn");
+  assert.equal(resolveExpectedRole(buildIntentContract({ text: "จ่ายยังไง" }, "paywall"), { report: { ids: ["r1"] } }), "admin");
+});
+
+/* ---------- Codex รอบสาม: B1 / B2 / B3 / P1 ---------- */
+test("B1: evidence มาจาก typed scan history object เดียวกับ prompt (ไม่ parse string)", async () => {
+  const { buildConsultEvidence } = await import("../src/core/conversation/geminiFront/geminiConsult.service.js");
+  const typed = {
+    promptText: "1) ชื่อ/ประเภท: พระสมเด็จ · พลังเด่น: เมตตา · คะแนนพลัง: 7.2/10 · เข้ากับคุณ: 68%",
+    items: [{ reportId: "tok-1", label: "พระสมเด็จ", score: 7.2, compatPercent: 68, energyTags: ["เมตตา"] }],
+  };
+  const ev = buildConsultEvidence({ recentScan: typed, kbContext: null });
+  assert.deepEqual(ev.report.ids, ["tok-1"]);
+  assert.deepEqual(ev.report.scores, [7.2]);
+  assert.deepEqual(ev.report.percentages, [68]);
+  assert.deepEqual(ev.report.energyTags, ["เมตตา"]);
+  // acceptance 1-3
+  assert.equal(run("คะแนน 7.2", { evidence: ev, expectedRole: "ajarn" }).ok, true);
+  assert.equal(run("เด่นด้านเมตตา", { evidence: ev, expectedRole: "ajarn" }).ok, true);
+  assert.ok(run("คะแนน 9.9", { evidence: ev, expectedRole: "ajarn" }).violations.includes("ungrounded:score"));
+  assert.ok(run("เด่นด้านโชคลาภ", { evidence: ev, expectedRole: "ajarn" }).violations.includes("ungrounded:energy"));
+  const none = buildConsultEvidence({ recentScan: null });
+  assert.ok(run("คะแนน 7.2", { evidence: none }).violations.includes("ungrounded:score"));
+  assert.ok(run("เด่นด้านเมตตา", { evidence: none }).violations.includes("ungrounded:energy"));
+  // string เดิม (prompt) ไม่ปลดล็อกอะไร
+  assert.deepEqual(buildConsultEvidence({ recentScan: typed.promptText }).report.ids, []);
+});
+
+test("B1: role ตัดจาก evidence จริง ไม่ใช่ flag ที่ caller เดา", async () => {
+  const { classifyUserIntent, resolveExpectedRole, finalizeIntent } = await import(
+    "../src/core/conversation/geminiFront/intentContract.util.js"
+  );
+  const c = classifyUserIntent("พลังองค์นี้เป็นไง", null);
+  assert.equal(c.userIntent, "energy_question");
+  assert.equal(resolveExpectedRole(c, { report: { ids: [] } }), "consult");
+  assert.equal(resolveExpectedRole(c, { report: { ids: ["r1"] } }), "ajarn");
+  assert.equal(finalizeIntent(c, { report: { ids: ["r1"] } }), "energy_reading");
+  assert.equal(resolveExpectedRole(classifyUserIntent("จ่ายยังไง", "paywall"), { report: { ids: ["r1"] } }), "admin");
+  assert.equal(resolveExpectedRole(null, { report: { ids: ["r1"] } }), "consult");
+});
+
+test("B1/P1: production call chain — typed history → consult → gateway เป็นเจ้าของ call แรก", async () => {
+  // ยิงผ่าน runGeminiConsult จริง โดย mock เฉพาะ DB row + โมเดล (ไม่เรียก buildConsultEvidence ด้วย object ปลอม)
+  const scanDb = await import("../src/stores/scanV2/scanResultsV2.db.js");
+  const rows = [{ id: "row-1", html_public_token: "tok-1", created_at: "2026-08-20T10:00:00Z",
+    report_payload_json: { summary: { mainEnergyLabel: "เมตตา", energyScore: 7.2, compatibilityPercent: 68 }, object: { objectLabel: "พระสมเด็จ" } } }];
+  void scanDb;
+  // typed builder จาก DB row จริง (DI เฉพาะตัว loader — ไม่ประกอบ items เอง)
+  const mod = await import("../src/core/conversation/geminiFront/recentScanContext.util.js");
+  const typed = await mod.buildScanHistoryTyped("Utest", 6, { listRows: async () => rows });
+  assert.equal(typed.items[0].reportId, "tok-1");
+  assert.equal(typed.items[0].score, 7.2);
+  assert.equal(typed.items[0].compatPercent, 68);
+  assert.deepEqual(typed.items[0].energyTags, ["เมตตา"]);
+  assert.ok(typed.promptText.includes("7.2/10"));
+  // chain จริง: typed → buildConsultEvidence (ฟังก์ชันเดียวกับที่ consult ใช้) → contract
+  const { buildConsultEvidence } = await import("../src/core/conversation/geminiFront/geminiConsult.service.js");
+  const ev = buildConsultEvidence({ recentScan: typed });
+  assert.equal(run("คะแนน 7.2", { evidence: ev, expectedRole: "ajarn" }).ok, true);
+  assert.ok(run("คะแนน 9.9", { evidence: ev, expectedRole: "ajarn" }).violations.includes("ungrounded:score"));
+  // gateway: call แรกล้ม → LLM_FACTUAL_FALLBACK_USED จาก contract (ไม่ใช่ null เงียบจาก outer catch)
+  const { enforceLlmCustomerOutput } = await import("../src/core/conversation/llmOutputContract.util.js");
+  const events = [];
+  const r = await enforceLlmCustomerOutput({ callSite: "gemini_front_consult" }, {
+    generate: async () => { throw new Error("timeout 8000ms"); }, log: (e, x) => events.push({ e, ...x }),
+  });
+  assert.equal(r.source, "fallback");
+  assert.ok(events.some((x) => x.e === "LLM_FACTUAL_FALLBACK_USED" && x.failureType === "timeout"));
+  assert.ok(typeof mod.buildScanHistoryTyped === "function");
+});
+
+test("B2: evidence ตาม label/field — quota 75 ≠ score 75 · ปี 2506 ≠ คะแนน · compat 68 ≠ score 68", async () => {
+  const { evidenceFromAllowedFacts } = await import("../src/core/conversation/llmOutputContract.util.js");
+  assert.ok(run("คะแนน 75", { evidence: evidenceFromAllowedFacts("คงเหลือ 75 ครั้ง"), expectedRole: "ajarn" }).violations.includes("ungrounded:score"));
+  assert.ok(run("คะแนน 75", { evidence: evidenceFromAllowedFacts({ remainingScans: 75 }) }).violations.includes("ungrounded:score"));
+  assert.ok(run("คะแนน 2506", { evidence: evidenceFromAllowedFacts({ eraYear: 2506 }) }).violations.includes("ungrounded:score"));
+  assert.ok(run("คะแนน 68", { evidence: evidenceFromAllowedFacts({ compatPercent: 68 }) }).violations.includes("ungrounded:score"));
+  assert.ok(run("เลขนำโชค 2506", { evidence: evidenceFromAllowedFacts({ eraYear: 2506 }) }).violations.includes("ungrounded:lucky"));
+  // label ถูก → ผ่าน
+  const ev = evidenceFromAllowedFacts({ energyScore: 7.2, compatPercent: 68, energyTags: ["เมตตา"], reportId: "r1" });
+  assert.equal(run("คะแนน 7.2", { evidence: ev, expectedRole: "ajarn" }).ok, true);
+  assert.equal(run("เข้ากับดวง 68%", { evidence: ev, expectedRole: "ajarn" }).ok, true);
+  assert.ok(run("คะแนน 68", { evidence: ev, expectedRole: "ajarn" }).violations.includes("ungrounded:score"));
+});
+
+test("B3: provenance เทียบราย field · lucky เทียบค่าจริง", async () => {
+  const kb = (f) => ({ evidence: { kb: { ids: ["kb"], provenanceFacts: [f] } } });
+  assert.ok(run("วัดปลอม ปี 9999", kb("วัดระฆัง ปี 2506")).violations.includes("ungrounded:provenance"));
+  assert.equal(run("พระวัดระฆัง ปี 2506", kb("วัดระฆัง ปี 2506")).ok, true);
+  assert.equal(run("พระวัดระฆัง ปี 2506", kb({ temple: "วัดระฆัง", year: 2506 })).ok, true);
+  assert.ok(run("วัดระฆัง ปี 2500", kb({ temple: "วัดระฆัง", year: 2506 })).violations.includes("ungrounded:provenance"));
+  assert.ok(run("วัดระฆัง รุ่นแรก", kb({ temple: "วัดระฆัง", year: 2506 })).violations.includes("ungrounded:provenance"));
+  assert.ok(run("วัดระฆัง ปีเก่า", kb({ temple: "วัดระฆัง", year: 2506 })).violations.includes("ungrounded:provenance"), "ยุคคลุมเครือไม่มีค่าให้เทียบ");
+  // report ID ยังปลดล็อก provenance ไม่ได้
+  assert.ok(run("พระวัดระฆัง ปี 2506", { evidence: { report: { ids: ["r1"] } } }).violations.includes("ungrounded:provenance"));
+  const lucky = { report: { ids: ["r"], luckyAttributes: ["แดง", 9] } };
+  assert.equal(run("สีมงคลแดง", { evidence: lucky }).ok, true);
+  assert.equal(run("เลขมงคล 9", { evidence: lucky }).ok, true);
+  assert.ok(run("สีมงคลเขียว", { evidence: lucky }).violations.includes("ungrounded:lucky"));
+  assert.ok(run("เลขมงคล 7", { evidence: lucky }).violations.includes("ungrounded:lucky"));
 });

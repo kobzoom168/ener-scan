@@ -5336,10 +5336,15 @@ async function handleTextMessage({ client, event, userId, session }) {
             // → ให้สมอง consult ที่มีข้อมูลสิทธิ์จริงตอบแบบคน แทนการยิง paywall ซ้ำ
             try {
               const history = await getGeminiConversationHistory(userId, 8, 2000).catch(() => []);
+              // Codex B1: caller ตรงต้องส่ง intentContract เอง ไม่ใช้ default เงียบ ๆ
+              const { classifyUserIntent } = await import(
+                "../core/conversation/geminiFront/intentContract.util.js"
+              );
               const consultText = await runGeminiConsult({
                 userId,
                 userText: text,
                 conversationHistory: history,
+                intentContract: classifyUserIntent(text, "paywall_selecting_package"),
               });
               if (consultText) {
                 await sendNonScanReplyWithOptionalConvSurface({

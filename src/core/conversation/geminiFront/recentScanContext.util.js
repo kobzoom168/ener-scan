@@ -103,19 +103,31 @@ function formatItem(it) {
  * @returns {Promise<string | null>}
  */
 export async function buildScanHistoryContext(userId, maxItems = 6) {
+  const typed = await buildScanHistoryTyped(userId, maxItems);
+  return typed ? typed.promptText : null;
+}
+
+/**
+ * Typed scan history (Codex B1): object เดียวสร้างทั้ง prompt และ evidence ของ contract
+ * — ห้าม parse กลับจาก prompt string
+ * @param {string} userId
+ * @param {number} [maxItems]
+ * @returns {Promise<{ promptText: string, items: Array<{ reportId: string, label: string, score: number|null, compatPercent: number|null, energyTags: string[], when: string, url: string }> } | null>}
+ */
+export async function buildScanHistoryTyped(userId, maxItems = 6, deps = {}) {
   const uid = String(userId || "").trim();
   if (!uid) return null;
 
   let rows = [];
   try {
-    rows = await listScanResultsV2PayloadRowsForLineUser(uid, 14);
+    rows = await (deps.listRows || listScanResultsV2PayloadRowsForLineUser)(uid, 14);
   } catch {
     return null;
   }
   if (!Array.isArray(rows) || rows.length === 0) return null;
 
   const seen = new Set();
-  const items = [];
+  const raw = [];
   for (const row of rows) {
     const it = extractRow(row);
     if (!it) continue;
@@ -123,13 +135,22 @@ export async function buildScanHistoryContext(userId, maxItems = 6) {
     const key = `${it.label}|${it.power}|${it.score}|${it.compat}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    items.push(it);
-    if (items.length >= Math.max(1, maxItems)) break;
+    raw.push({ it, row });
+    if (raw.length >= Math.max(1, maxItems)) break;
   }
-  if (items.length === 0) return null;
+  if (raw.length === 0) return null;
 
-  const lines = items.map((it, i) => `${i + 1}) ${formatItem(it)}`);
-  return lines.join("\n");
+  const items = raw.map(({ it, row }) => ({
+    reportId: str(row?.html_public_token) || str(row?.id) || `${it.when}|${it.label}`,
+    label: it.label,
+    score: it.score,
+    compatPercent: it.compat,
+    energyTags: it.power ? [it.power] : [],
+    when: it.when,
+    url: it.url,
+  }));
+  const promptText = raw.map(({ it }, i) => `${i + 1}) ${formatItem(it)}`).join("\n");
+  return { promptText, items };
 }
 
 /**

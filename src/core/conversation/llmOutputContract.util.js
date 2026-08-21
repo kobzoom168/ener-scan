@@ -54,22 +54,71 @@ export function extractClaims(text) {
     claims.push({ type: "percent", value: num(m[1]) });
   }
   // ดวงวันนี้ N (คะแนนดวง) — เคสจริง 23:42
-  for (const m of t.matchAll(/ดวง(?:วันนี้|ของคุณ)?\s*(?:คุณ)?\s*(?:ได้)?\s*([\d๐-๙]+)/gu)) {
+  for (const m of t.matchAll(/ดวง(?:วันนี้|ของคุณ)?\s*(?:คุณ)?\s*(?:ได้)?\s*([\d๐-๙]+)(?![\d๐-๙])(?!\s*(?:%|เปอร์เซ็น|\.[\d๐-๙]))/gu)) {
     claims.push({ type: "score", value: num(m[1]) });
   }
   // energy tags
   for (const tag of ENERGY_TAGS) if (t.includes(tag)) claims.push({ type: "energy", value: tag });
   // materials
   for (const mat of MATERIALS) if (t.includes(mat)) claims.push({ type: "material", value: mat });
-  // lucky attributes (เลข/สี/วันมงคล)
-  if (LUCKY_CUE.test(t)) claims.push({ type: "lucky" });
-  for (const m of t.matchAll(/เลข\s*([\d๐-๙]+)/gu)) claims.push({ type: "lucky", value: num(m[1]) });
-  // provenance
-  if (PROVENANCE_CUE.test(t)) claims.push({ type: "provenance", value: (t.match(PROVENANCE_CUE) || [""])[0] });
+  // lucky attributes — สกัด "ค่า" จริง (สี/เลข/วัน) แล้วค่อยเทียบค่า (Codex B3)
+  for (const v of extractLuckyValues(t)) claims.push({ type: "lucky", value: v });
+  if (LUCKY_CUE.test(t) && extractLuckyValues(t).length === 0) claims.push({ type: "lucky", value: null });
+  // provenance typed {temple, model, year} (Codex B3) — เทียบราย field
+  const prov = extractProvenance(t);
+  if (prov) claims.push({ type: "provenance", value: prov });
   // ห้ามเสมอ
   if (CROSS_CUSTOMER_CUE.test(t)) claims.push({ type: "cross_customer_stat" });
   if (AUTHENTICITY_CUE.test(t)) claims.push({ type: "authenticity" });
   return claims;
+}
+
+const COLORS = ["แดง", "เขียว", "ขาว", "ดำ", "ทอง", "ฟ้า", "ม่วง", "เหลือง", "ชมพู", "น้ำเงิน", "ส้ม", "เงิน", "น้ำตาล", "เทา"];
+const DAYS = ["จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์", "อาทิตย์"];
+/** สกัดค่า lucky จริง: สี (ต้องตามหลังคำว่า สี) · เลข (ต้องตามหลัง เลข) · วัน */
+export function extractLuckyValues(t) {
+  const out = [];
+  for (const m of t.matchAll(/สี(?:มงคล|นำโชค|ประจำ(?:ตัว|วัน)?)?\s*([ก-๙]+)/gu)) {
+    const c = COLORS.find((x) => m[1].startsWith(x));
+    if (c) out.push(c);
+  }
+  for (const m of t.matchAll(/เลข(?:มงคล|นำโชค|ประจำตัว)?\s*([\d๐-๙]+)/gu)) out.push(num(m[1]));
+  for (const m of t.matchAll(/วัน(?:มงคล|ดี)?\s*(จันทร์|อังคาร|พุธ|พฤหัส|ศุกร์|เสาร์|อาทิตย์)/gu)) out.push(m[1]);
+  return out;
+}
+/** provenance typed — null เมื่อไม่มี claim เลย */
+export function extractProvenance(t) {
+  // ชื่อวัด = คำไทยถัดจาก "วัด" (ไม่กินคำกำกับ ปี/รุ่น/พ.ศ. ที่ตามมา)
+  const temple = (t.match(/วัด\s*((?!ปี|รุ่น|พ\.)[ก-๙]{2,}(?:\s(?!ปี|รุ่น|พ\.)[ก-๙]{2,})?)/u) || [])[1] || null;
+  const model = (t.match(/รุ่น\s*([ก-๙A-Za-z0-9]{1,}(?:\s[ก-๙A-Za-z0-9]+)?)/u) || [])[1] || null;
+  const yearM = t.match(/(?:ปี|พ\.?ศ\.?)\s*(?:พ\.?ศ\.?\s*)?([๐-๙\d]{4})/u);
+  const year = yearM ? num(yearM[1]) : null;
+  const vague = /ปีเก่า|ยุคเก่า|ยุคต้น|สมัยเก่า/u.test(t) ? "vague_era" : null;
+  if (!temple && !model && year == null && !vague) return null;
+  return { temple: normThai(temple), model: normThai(model), year, vague };
+}
+const normThai = (v) => (v == null ? null : String(v).replace(/\s+/g, "").replace(/^วัด/u, "").trim() || null);
+/** fact ฝั่ง evidence: รับได้ทั้ง string ("วัดระฆัง ปี 2506") และ object {temple, model, year} */
+function provenanceFactToTyped(f) {
+  if (f && typeof f === "object") return { temple: normThai(f.temple), model: normThai(f.model), year: f.year == null ? null : num(f.year) };
+  const str = String(f || "");
+  const p = extractProvenance(str);
+  if (!p) return null;
+  // fact ฝั่ง KB เขียนปีโดด ๆ ได้ ("วัดระฆัง 2506") — ฝั่ง claim ต้องมีคำว่า ปี/พ.ศ. เสมอ
+  const bareYear = p.year ?? (str.match(/(?<![\d๐-๙])((?:24|25)[\d๐-๙]{2})(?![\d๐-๙])/u) || [])[1];
+  return { temple: p.temple, model: p.model, year: bareYear == null ? null : num(bareYear) };
+}
+function provenanceMatches(claim, facts) {
+  const typedFacts = (Array.isArray(facts) ? facts : []).map(provenanceFactToTyped).filter(Boolean);
+  if (!typedFacts.length) return false;
+  if (claim.vague) return false; // "ปีเก่า" ไม่มีค่าให้เทียบ = ไม่ผ่าน
+  // ทุก field ที่ claim ระบุ ต้องตรงกับ fact เดียวกันอย่างน้อยหนึ่งรายการ
+  return typedFacts.some((f) => {
+    if (claim.temple && f.temple !== claim.temple) return false;
+    if (claim.model && f.model !== claim.model) return false;
+    if (claim.year != null && f.year !== claim.year) return false;
+    return true;
+  });
 }
 
 /* ---------------- claim-level verification ---------------- */
@@ -113,14 +162,15 @@ export function verifyClaims(claims, evidence = {}, opts = {}) {
         }
         break;
       case "lucky":
-        if (!inList(rep.luckyAttributes, c.value) && !inNums(rep.luckyAttributes, c.value)) {
+        // ต้องมีค่าจริง และค่านั้นต้องอยู่ใน report.luckyAttributes
+        if (c.value == null) out.push("ungrounded:lucky");
+        else if (typeof c.value === "number" ? !inNums(rep.luckyAttributes, c.value) : !inList(rep.luckyAttributes, c.value)) {
           out.push("ungrounded:lucky");
         }
         break;
       case "provenance":
-        // report ID ห้ามปลดล็อก provenance — ต้องมี KB/tool fact
-        if (!(Array.isArray(kb.provenanceFacts) && kb.provenanceFacts.length) &&
-            !(Array.isArray(tool.provenanceFacts) && tool.provenanceFacts.length)) {
+        // report ห้ามปลดล็อก provenance — เทียบราย field กับ KB/tool fact เท่านั้น
+        if (!provenanceMatches(c.value, kb.provenanceFacts) && !provenanceMatches(c.value, tool.provenanceFacts)) {
           out.push("ungrounded:provenance");
         }
         break;
@@ -289,27 +339,65 @@ export async function enforceLlmCustomerOutput(p, deps) {
 }
 
 /**
- * แปลง "ข้อเท็จจริงที่อนุญาต" (allowedFacts ของ phrasing / facts ของ clarifier)
- * เป็น typed evidence — โมเดลพูดซ้ำเลขที่อยู่ในบล็อกได้ แต่เลขที่แต่งเองไม่ผ่าน
+ * แปลง "ข้อเท็จจริงที่อนุญาต" เป็น typed evidence ตาม label/field (Codex B2)
+ * — ห้ามหยิบตัวเลขทุกตัวแล้วยัดทุกหมวด (quota 75 ≠ score 75 · ปี 2506 ≠ คะแนน)
+ * object: ดูชื่อ key · string: ดูคำกำกับหน้าเลข · เลขไม่มี label = ไม่ปลดล็อกอะไร
  */
+const KEY_SCORE = /^(energyScore|score|scores|powerScore|คะแนน(พลัง)?)$/i;
+const KEY_PERCENT = /^(compat(ibility)?Percent|percent(age)?s?|matchPercent|เข้ากับ)$/i;
+const KEY_LUCKY = /^(lucky(Number|Color|Day|Attributes)?|เลขมงคล|สีมงคล|วันมงคล)$/i;
+const KEY_ENERGY = /^(energyTags?|mainEnergyLabel|visibleMainLabel|พลังเด่น)$/i;
+const KEY_MATERIAL = /^(material|materials|เนื้อ)$/i;
+const KEY_TEMPLE = /^(temple|วัด)$/i;
+const KEY_MODEL = /^(model|รุ่น)$/i;
+const KEY_YEAR = /^(year|eraYear|ปี)$/i;
+const KEY_REPORT_ID = /^(reportId|resultId|publicToken|scanId)$/i;
+
 export function evidenceFromAllowedFacts(input) {
-  const t = normalizeInvisible(
-    typeof input === "string" ? input : JSON.stringify(input || {}),
-  );
-  const nums = [...t.matchAll(/[\d๐-๙]+(?:\.[\d๐-๙]+)?/gu)].map((m) => num(m[0]));
-  const energyTags = ENERGY_TAGS.filter((tag) => t.includes(tag));
-  const materials = MATERIALS.filter((m) => t.includes(m));
-  const provenance = [...t.matchAll(new RegExp(PROVENANCE_CUE.source, "gu"))].map((m) => m[0]);
-  return {
-    report: {
-      ids: t ? ["allowed_facts"] : [],
-      scores: nums,
-      percentages: nums,
-      energyTags,
-      luckyAttributes: nums,
-      materials,
-    },
-    kb: { ids: [], provenanceFacts: provenance, materialFacts: materials },
+  const ev = {
+    report: { ids: [], scores: [], percentages: [], energyTags: [], luckyAttributes: [], materials: [] },
+    kb: { ids: [], provenanceFacts: [], materialFacts: [] },
     tool: {},
   };
+  const addNum = (arr, v) => { const n = num(v); if (Number.isFinite(n)) arr.push(n); };
+  const addStr = (arr, v) => { const x = String(v ?? "").trim(); if (x) arr.push(x); };
+  const prov = {};
+  const walk = (node, depth = 0) => {
+    if (depth > 6 || node == null) return;
+    if (Array.isArray(node)) return node.forEach((x) => walk(x, depth + 1));
+    if (typeof node !== "object") return;
+    for (const [k, v] of Object.entries(node)) {
+      if (KEY_SCORE.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => addNum(ev.report.scores, x));
+      else if (KEY_PERCENT.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => addNum(ev.report.percentages, x));
+      else if (KEY_LUCKY.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => (Number.isFinite(num(x)) ? addNum(ev.report.luckyAttributes, x) : addStr(ev.report.luckyAttributes, x)));
+      else if (KEY_ENERGY.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => addStr(ev.report.energyTags, x));
+      else if (KEY_MATERIAL.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => addStr(ev.kb.materialFacts, x));
+      else if (KEY_TEMPLE.test(k)) prov.temple = String(v || "");
+      else if (KEY_MODEL.test(k)) prov.model = String(v || "");
+      else if (KEY_YEAR.test(k)) prov.year = num(v);
+      else if (KEY_REPORT_ID.test(k)) addStr(ev.report.ids, v);
+      else if (v && typeof v === "object") walk(v, depth + 1);
+    }
+  };
+  if (input && typeof input === "object") {
+    walk(input);
+  } else if (typeof input === "string") {
+    const t = normalizeInvisible(input);
+    for (const m of t.matchAll(/คะแนน(?:พลัง)?\s*:?\s*([\d๐-๙]+(?:\.[\d๐-๙]+)?)/gu)) addNum(ev.report.scores, m[1]);
+    for (const m of t.matchAll(/([\d๐-๙]+(?:\.[\d๐-๙]+)?)\s*\/\s*10/gu)) addNum(ev.report.scores, m[1]);
+    for (const m of t.matchAll(/([\d๐-๙]+(?:\.[\d๐-๙]+)?)\s*%/gu)) addNum(ev.report.percentages, m[1]);
+    for (const m of t.matchAll(/พลังเด่น\s*:?\s*([ก-๙]+)/gu)) addStr(ev.report.energyTags, m[1]);
+    ENERGY_TAGS.forEach((tag) => { if (new RegExp(`พลังเด่น[^\\n]*${tag}`, "u").test(t)) addStr(ev.report.energyTags, tag); });
+    extractLuckyValues(t).forEach((v) => (typeof v === "number" ? addNum(ev.report.luckyAttributes, v) : addStr(ev.report.luckyAttributes, v)));
+    MATERIALS.forEach((m) => { if (t.includes(m)) addStr(ev.kb.materialFacts, m); });
+    const p = extractProvenance(t);
+    if (p && !p.vague) Object.assign(prov, { temple: p.temple, model: p.model, year: p.year });
+  }
+  if (prov.temple || prov.model || prov.year != null) ev.kb.provenanceFacts.push(prov);
+  if (ev.report.scores.length || ev.report.percentages.length || ev.report.energyTags.length || ev.report.luckyAttributes.length) {
+    if (!ev.report.ids.length) ev.report.ids.push("allowed_facts");
+  }
+  if (ev.kb.provenanceFacts.length || ev.kb.materialFacts.length) ev.kb.ids.push("allowed_facts");
+  ev.report.energyTags = [...new Set(ev.report.energyTags)];
+  return ev;
 }

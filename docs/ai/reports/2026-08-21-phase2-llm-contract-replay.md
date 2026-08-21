@@ -32,13 +32,23 @@
 - `geminiPhrasingPrompt.js` — เขียนใหม่ทั้งบล็อก system: ตัวอย่างที่มี ครับ, "invite them warmly", "End with a soft question (สนใจไหมครับ?)", filler (เนอะ/นะ/จริงๆ), age-based warm tone → ออกทั้งหมด แทนด้วยกติกาโทนแข็ง + เพดานความยาว + กติกาข้อเท็จจริง
 - `geminiConsultPrompt.js` — ลบ/แทนที่รายข้อ: "KEEP IT SHORT 2-4 lines" → 1 ประโยค ≤40 ตัวอักษร · "ลูกค้าขอบคุณ → ตอบรับสั้น ๆ เช่น ขอบคุณเช่นกันครับ" → เงียบ · "รับทราบสั้น ๆ อบอุ่น" → ตอบ รับทราบ คำเดียว · "คุยเป็นเพื่อนคุยไปเลย" → ตอบเฉพาะสิ่งที่ถาม · **ลบตัวอย่างที่เป็นต้นตอของ "ตอบเรื่องพวกนี้มาเป็นหมื่นรอบ" และมุกตอบเรื่องบอททั้ง 3 มุม** · เพิ่มบล็อกกติกาบังคับไว้หัว VOICE & FORMAT ระบุชัดว่าเหนือกติกาโทนอื่นทุกข้อในพรอมป์
 
+## 3b. รอบสาม (Codex B1-B4 + P1) — แก้แล้ว
+
+| จุด | แก้ |
+|---|---|
+| B1 evidence ว่างตลอด | `buildScanHistoryTyped()` คืน `{promptText, items[{reportId, score, compatPercent, energyTags}]}` — object เดียวสร้างทั้ง prompt และ evidence · consult ใช้ typed แล้ว `buildConsultEvidence` อ่าน items จริง · `intentContract.util.js` แยก `classifyUserIntent` (ข้อความ+state) ออกจาก `resolveExpectedRole` (ตัดจาก evidence จริงใน consult) · router ไม่คืน `expectedRole` อีก · paywall caller ส่ง `intentContract` เอง · caller ไม่ส่ง = log `LLM_INTENT_CONTRACT_MISSING` + ค่าเข้มสุด |
+| B2 category laundering | `evidenceFromAllowedFacts` อ่านตาม key/label เท่านั้น: `energyScore`→scores, `compatPercent`→percentages, `eraYear`→provenance, quota/เลขไม่มี label → ไม่ปลดล็อกอะไร · probe "คงเหลือ 75 ครั้ง" + "คะแนน 75" = reject |
+| B3 provenance/lucky | `extractProvenance` → `{temple, model, year, vague}` เทียบราย field (ทุก field ที่ claim ระบุต้องตรง fact เดียวกัน · "ปีเก่า" = ไม่มีค่า = reject) · lucky สกัดสี/เลข/วันเป็นค่า แล้วเทียบค่า ("สีมงคลแดง" กับ evidence ["แดง"] ผ่าน, "เขียว" ตก) |
+| P1 honesty | consult และ phrasing ย้าย call แรกเข้า `enforceLlmCustomerOutput.generate(null)` — call แรกล้ม/timeout/ว่าง ออก `LLM_FACTUAL_FALLBACK_USED{failureType}` จาก contract จริง ไม่มี outer catch คืน null เงียบ |
+| B4 reproducible replay | `scripts/replay/build-replay-fixture.mjs` (sanitize: LINE id/URL/เลขยาว/ชื่อหลัง "คุณ") → `tests/fixtures/replay/2026-08-20-21.jsonl` (203 แถว) + `.expected.json` · `tests/replayConversations.test.js` ยิงทุกแถวผ่าน `customerPush.gateway.pushToCustomer` ด้วย fake LINE client (นับ transport จริง) และแถว LLM ผ่าน `enforceLlmCustomerOutput` ด้วย fake model คืนข้อความเก่า (ต้องได้ fallback + aiCalls ≤2) · ตัวเลขสรุปสร้างจาก runner แล้วเทียบ expected — fixture หาย/ตัวเลขต่าง = gate fail |
+
 ## 4. Replay บทสนทนาจริง 20-21 ส.ค. (Pro, อ่านอย่างเดียว)
 
 ดึงจาก `line_conversation_messages` ช่วง 20 ส.ค. 00:00 – 21 ส.ค. 24:00 (เวลาไทย) โดยไม่ดึง `line_user_id` (ใช้ hash 6 ตัวจัดกลุ่มบทสนทนาแทน)
 
 | ตัวเลข | ค่า |
 |---|---|
-| บทสนทนา | 52 |
+| บทสนทนาทั้งหมด / ที่มีข้อความบอทจริง | 52 / 47 |
 | ข้อความบอทที่เป็นข้อความถึงลูกค้าจริง | 203 |
 | marker ระบบ (`[ส่งรายงาน...]`) ที่ไม่นับ | 104 |
 | **fixed** (เคยผิดกติกา → guard ปัจจุบันจับได้) | **203** |
@@ -50,7 +60,7 @@
 
 ตรวจซ้ำที่ **ต้นทาง**: หยิบข้อความเก่าที่ไม่ซ้ำกัน 32 แบบ ไปค้นในซอร์สปัจจุบัน — พบ 3 ชิ้นที่ยังมี "โครงประโยคเดิม" แต่เวอร์ชันในซอร์สเป็นเวอร์ชันโทนแข็งแล้วทั้งหมด (ไม่มี ครับ/คำชวน) ที่เหลือ 29 แบบไม่มีในซอร์สอีกแล้ว → ไม่มีทางผลิตซ้ำ
 
-รายละเอียดรายข้อความ (inbound, outbound, replyType, speakerRole, source/route, จำนวน AI call, evidence) อยู่ที่ไฟล์ replay ใน scratchpad ของ session — สรุปที่นับได้อยู่ในตารางด้านบน
+รายละเอียดรายข้อความ (conversationHash, inbound, state, replyType, speakerRole, source, outbound, expected transport/aiCalls/route/evidence, classification+reason) commit แล้วที่ `tests/fixtures/replay/2026-08-20-21.jsonl` — ตัวเลขในตารางนี้คือผลที่ `tests/replayConversations.test.js` สร้างและยืนยันทุกครั้งที่รันเกต (ไม่ใช่ตัวเลขจาก Markdown หรือ source grep)
 
 ## 5. Release gate
 

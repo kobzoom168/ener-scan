@@ -42,50 +42,35 @@ export async function runGeminiPhrasing({
     userText,
     conversationHistory,
   });
-  try {
-    const text = await generateTextWithTimeout(
-      model,
-      prompt,
-      env.GEMINI_FRONT_TIMEOUT_MS,
-    );
-    const out = String(text || "").trim();
-    if (!out) return null;
-    // เฟส 2: phrasing พูดได้เฉพาะสิ่งที่อยู่ใน allowedFacts — เลข/พลัง/วัสดุที่แต่งเอง = ตก
-    const { enforceLlmCustomerOutput, evidenceFromAllowedFacts } = await import(
-      "../llmOutputContract.util.js"
-    );
-    const guarded = await enforceLlmCustomerOutput(
-      {
-        callSite: "gemini_front_phrasing",
-        replyType: "phrasing",
-        userText,
-        userIntent: "phrasing",
-        userAskedAdvice: false,
-        requiredNextAction: Boolean(nextStep),
-        expectedRole: "admin",
-        allowQuestion: false,
-        evidence: evidenceFromAllowedFacts(allowedFacts),
-        turnBudget,
+  // เฟส 2 (Codex P1): gateway เป็นเจ้าของทุก call รวม call แรก → ล้ม/timeout/ว่าง
+  // ออก LLM_FACTUAL_FALLBACK_USED จาก contract จริง ไม่ใช่ null เงียบจาก catch
+  const { enforceLlmCustomerOutput, evidenceFromAllowedFacts } = await import(
+    "../llmOutputContract.util.js"
+  );
+  const guarded = await enforceLlmCustomerOutput(
+    {
+      callSite: "gemini_front_phrasing",
+      replyType: "phrasing",
+      userText,
+      userIntent: "phrasing",
+      userAskedAdvice: false,
+      requiredNextAction: Boolean(nextStep),
+      expectedRole: "admin",
+      allowQuestion: false,
+      evidence: evidenceFromAllowedFacts(allowedFacts),
+      turnBudget,
+    },
+    {
+      generate: async (directive) => {
+        const text = await generateTextWithTimeout(
+          model,
+          directive ? `${prompt}\n\nแก้ตามนี้: ${directive}` : prompt,
+          env.GEMINI_FRONT_TIMEOUT_MS,
+        );
+        return String(text || "").trim();
       },
-      {
-        generate: async (directive) => {
-          if (!directive) return out;
-          const retry = await generateTextWithTimeout(
-            model,
-            `${prompt}\n\nแก้ตามนี้: ${directive}`,
-            env.GEMINI_FRONT_TIMEOUT_MS,
-          );
-          return String(retry || "").trim();
-        },
-      },
-    );
-    logGeminiPhrasing({ outcome: "ok", len: guarded.text.length, source: guarded.source });
-    return guarded.text || null;
-  } catch (e) {
-    logGeminiPhrasing({
-      outcome: "error",
-      message: e?.message || String(e),
-    });
-    return null;
-  }
+    },
+  );
+  logGeminiPhrasing({ outcome: guarded.source === "fallback" ? "fallback" : "ok", len: guarded.text.length, source: guarded.source, failureType: guarded.failureType || null });
+  return guarded.text || null;
 }

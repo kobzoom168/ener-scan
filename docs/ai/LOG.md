@@ -1071,3 +1071,13 @@
 - replay Pro 20-21 ส.ค. (อ่านอย่างเดียว ไม่ดึง line_user_id): 52 บทสนทนา · 203 ข้อความบอทจริง → fixed 203 · still failing 0 · false positive 0 · ตรวจย้อนที่ต้นทาง 32 แบบ ไม่มีอันไหนผลิตซ้ำได้
 - gate: ไม่มี fail ใหม่นอก baseline · รายงานเต็ม `docs/ai/reports/2026-08-21-phase2-llm-contract-replay.md`
 - **ค้าง**: staging smoke ด้วยบัญชีจริง — รอกบสั่ง deploy `tone-hard` ขึ้น staging (ห้ามปน bundle 055 ที่ GO รอขึ้น Pro) แล้วจึงขอ merge
+
+## 2026-08-21 | Claude | เฟส 2 รอบสาม — ปิด Codex B1-B4 + P1 (tone-hard ยังไม่ merge)
+- B1: `buildScanHistoryTyped` (object เดียวสร้าง prompt+evidence) · `intentContract.util.js` แยก classify intent / resolve role จาก evidence จริง · paywall caller ส่ง contract เอง · ไม่ส่ง = log `LLM_INTENT_CONTRACT_MISSING`
+- B2: `evidenceFromAllowedFacts` ตาม key/label — quota 75 ≠ score 75 · ปี ≠ คะแนน · compat ≠ score
+- B3: provenance typed {temple, model, year} เทียบราย field · lucky เทียบค่าจริง (สี/เลข/วัน)
+- P1: consult + phrasing ย้าย call แรกเข้า gateway → fallback event จาก contract จริง
+- B4: fixture sanitized 203 แถว + expected.json + `tests/replayConversations.test.js` ยิงผ่าน `pushToCustomer` fake transport + contract fake model · fixed 203 / still 0 / false-positive 0 สร้างจาก runner (47 บทสนทนาที่มีข้อความบอทจริง จาก 52)
+- เทสต์: llmOutputContract 23/23 · replayConversations 3/3 · gate ไม่มี fail ใหม่นอก baseline
+- **ยังไม่แตะ Pro** — ข้อความกบเป็นคำแนะนำ (ขึ้น 055 ก่อน) ยังไม่ใช่คำสั่ง รอคำสั่งชัด
+- ค้าง: staging smoke tone-hard ด้วยบัญชีจริง (valid/invalid evidence · payment · image rejection · AI budget ≤2)

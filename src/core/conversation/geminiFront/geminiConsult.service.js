@@ -5,7 +5,7 @@ import {
   isGeminiConfigured,
 } from "../../../integrations/gemini/geminiFlash.api.js";
 import { GEMINI_CONSULT_SYSTEM, buildConsultUserPrompt } from "./geminiConsultPrompt.js";
-import { buildScanHistoryContext, buildAxisTopContext } from "./recentScanContext.util.js";
+import { buildScanHistoryTyped, buildAxisTopContext } from "./recentScanContext.util.js";
 import { buildCustomerFactsContext } from "./customerFactsContext.util.js";
 import { buildKbContext } from "./kbRetrieval.util.js";
 import { supabase } from "../../../config/supabase.js";
@@ -69,7 +69,7 @@ export async function runGeminiConsult(p) {
   const kbPromise = buildKbContext(p.userText).catch(() => null);
   if (p.userId) {
     [recentScan, customerFacts, kbContext, paidActive, axisTop, rankingAllowed] = await Promise.all([
-      buildScanHistoryContext(p.userId, 6).catch(() => null),
+      buildScanHistoryTyped(p.userId, 6).catch(() => null),
       buildCustomerFactsContext(p.userId).catch(() => null),
       kbPromise,
       isPaidActiveCustomer(p.userId),
@@ -112,7 +112,7 @@ export async function runGeminiConsult(p) {
   let prompt = buildConsultUserPrompt({
     userText: p.userText,
     conversationHistory: p.conversationHistory,
-    recentScan,
+    recentScan: recentScan?.promptText || null,
     customerFacts,
     kbContext,
     axisTop,
@@ -155,15 +155,23 @@ export async function runGeminiConsult(p) {
     await setLargeValueWithTtl(tsKey, String(nowTs), 24 * 3600);
   } catch { /* telemetry ห้ามขวาง */ }
 
-  try {
-    const text = await generateTextWithTimeout(
-      model,
-      prompt,
-      env.GEMINI_CONSULT_TIMEOUT_MS,
-    );
+  // เฟส 2 (Codex B1/P1): gateway เป็นเจ้าของ "ทุก" การเรียกโมเดล รวม call แรก
+  // → call แรกล้ม/timeout/ว่าง ก็ออก LLM_FACTUAL_FALLBACK_USED จาก contract จริง ไม่หลุด outer catch
+  const { enforceLlmCustomerOutput } = await import("../llmOutputContract.util.js");
+  const { resolveExpectedRole, finalizeIntent } = await import("./intentContract.util.js");
+  const evidence = buildConsultEvidence({ recentScan, kbContext });
+  let contract = p.intentContract || null;
+  if (!contract) {
+    // ผู้เรียกไม่ส่ง contract = ไม่ใช่ default เงียบ ๆ — log แล้วใช้ค่าเข้มสุด
+    console.log(JSON.stringify({ event: "LLM_INTENT_CONTRACT_MISSING", callSite: "gemini_front_consult" }));
+    contract = { userIntent: null, userAskedAdvice: false, requiredNextAction: false, allowQuestion: false };
+  }
+  // role ตัดจาก evidence จริง (ไม่ใช่ flag ที่ caller เดา)
+  const expectedRole = resolveExpectedRole(contract, evidence);
+
+  const stripTrailingJunk = (text) => {
     let out = String(text || "").trim();
-    // ขยะท้ายคำตอบจากโมเดล (เคสจริง 11 ส.ค.: Opus ปิดท้ายด้วยบรรทัด "พูดno"):
-    // บรรทัดสุดท้ายสั้น ๆ มีตัวละติน ไม่มีลิงก์/ตัวเลข และไม่จบแบบประโยคไทยปกติ → ตัดทิ้ง
+    // ขยะท้ายคำตอบจากโมเดล (เคสจริง 11 ส.ค.: Opus ปิดท้ายด้วยบรรทัด "พูดno")
     const lines = out.split("\n");
     const last = (lines[lines.length - 1] || "").trim();
     if (
@@ -172,61 +180,50 @@ export async function runGeminiConsult(p) {
       last.length <= 12 &&
       /[A-Za-z]/.test(last) &&
       !/https?:\/\//.test(last) &&
-      !/\d/.test(last) &&
-      !/(ครับ|ค่ะ|นะ|เลย|จ้า)$/.test(last)
+      !/\d/.test(last)
     ) {
       console.log(JSON.stringify({ event: "GEMINI_CONSULT_TRAILING_JUNK_STRIPPED", junk: last.slice(0, 20) }));
       out = lines.slice(0, -1).join("\n").trim();
     }
-    console.log(
-      JSON.stringify({
-        event: "GEMINI_CONSULT",
-        outcome: out ? "ok" : "empty",
-        len: out.length,
-        hasRecentScan: Boolean(recentScan),
-        tier: paidActive ? "paid_opus" : "free_cheap",
-        model: consultModel || "(front_default)",
-      }),
-    );
-    if (!out) return null;
-    // เฟส 2 (Codex รอบสอง): fail-closed — ห้าม catch แล้วคืน raw output ที่ถูก reject
-    const { enforceLlmCustomerOutput } = await import("../llmOutputContract.util.js");
-    const guarded = await enforceLlmCustomerOutput(
-      {
-        callSite: "gemini_front_consult",
-        replyType: "gemini_front_consult",
-        userText: p.userText,
-        // typed contract จาก router (P0-4) — ไม่มี = fail-closed ค่าเข้มสุด
-        userIntent: p.intentContract?.userIntent ?? null,
-        userAskedAdvice: p.intentContract?.userAskedAdvice === true,
-        requiredNextAction: p.intentContract?.requiredNextAction === true,
-        expectedRole: p.intentContract?.expectedRole || "consult",
-        evidence: p.intentContract?.evidence || buildConsultEvidence({ recentScan, kbContext }),
-        turnBudget: p.turnBudget,
+    return out;
+  };
+
+  const guarded = await enforceLlmCustomerOutput(
+    {
+      callSite: "gemini_front_consult",
+      replyType: "gemini_front_consult",
+      userText: p.userText,
+      userIntent: finalizeIntent(contract, evidence),
+      userAskedAdvice: contract.userAskedAdvice === true,
+      requiredNextAction: contract.requiredNextAction === true,
+      allowQuestion: contract.allowQuestion === true,
+      expectedRole,
+      evidence,
+      turnBudget: p.turnBudget,
+    },
+    {
+      generate: async (directive) => {
+        const fullPrompt = directive
+          ? `${prompt}\n\nแก้ตามนี้: ${directive}\nตอบใหม่สั้น ๆ`
+          : prompt;
+        const text = await generateTextWithTimeout(model, fullPrompt, env.GEMINI_CONSULT_TIMEOUT_MS);
+        const out = stripTrailingJunk(text);
+        console.log(
+          JSON.stringify({
+            event: "GEMINI_CONSULT",
+            outcome: out ? "ok" : "empty",
+            attempt: directive ? 2 : 1,
+            len: out.length,
+            hasRecentScan: Boolean(recentScan),
+            tier: paidActive ? "paid_opus" : "free_cheap",
+            model: consultModel || "(front_default)",
+          }),
+        );
+        return out;
       },
-      {
-        generate: async (directive) => {
-          if (!directive) return out;
-          const retry = await generateTextWithTimeout(
-            model,
-            `${prompt}\n\nแก้ตามนี้: ${directive}\nตอบใหม่สั้น ๆ`,
-            env.GEMINI_CONSULT_TIMEOUT_MS,
-          );
-          return String(retry || "").trim();
-        },
-      },
-    );
-    return guarded.text || null;
-  } catch (e) {
-    console.log(
-      JSON.stringify({
-        event: "GEMINI_CONSULT",
-        outcome: "error",
-        message: (e && e.message) || String(e),
-      }),
-    );
-    return null;
-  }
+    },
+  );
+  return guarded.text || null;
 }
 
 /**
@@ -240,13 +237,14 @@ export function buildConsultEvidence({ recentScan, kbContext } = {}) {
   const energyTags = scans.flatMap((s) => (Array.isArray(s?.energyTags) ? s.energyTags : []));
   return {
     report: {
-      ids: scans.map((s) => String(s?.id || "")).filter(Boolean),
+      ids: scans.map((s) => String(s?.reportId || "")).filter(Boolean),
       scores,
       percentages,
       energyTags,
       luckyAttributes: [],
       materials: [],
     },
+    // kbContext เป็น prompt string — ยังไม่มี typed provenance/material fact → ไม่ปลดล็อกอะไร
     kb: { ids: kbContext ? ["kb"] : [], provenanceFacts: [], materialFacts: [] },
     tool: {},
   };
