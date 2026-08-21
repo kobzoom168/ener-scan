@@ -268,7 +268,7 @@ export async function processScanJob(workerId, jobRow) {
             related_job_id: jobId,
             payload_json: {
               type: "text",
-              text: `ชิ้นนี้เคยสแกนไปแล้วครับ\nดูผลเดิมได้ที่: ${shaDup.report_url}`,
+              text: `ชิ้นนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${shaDup.report_url}`,
               appUserId,
               skipQuotaDecrement: true,
               dedupHit: true,
@@ -331,7 +331,7 @@ export async function processScanJob(workerId, jobRow) {
             related_job_id: jobId,
             payload_json: {
               type: "text",
-              text: `ชิ้นนี้เคยสแกนไปแล้วครับ\nดูผลเดิมได้ที่: ${dupMatch.report_url}`,
+              text: `ชิ้นนี้เคยสแกนไปแล้ว\nดูผลเดิมได้ที่: ${dupMatch.report_url}`,
               appUserId,
               skipQuotaDecrement: true,
               dedupHit: true,
@@ -586,7 +586,7 @@ export async function processScanJob(workerId, jobRow) {
         rejectReason: "object_validation_failed",
         objectCheckResult: String(objectCheck),
         objectGateKind: objectGateRouting.kind,
-        text: rejText || c[0] || "ภาพนี้อาจารย์อ่านไม่ถนัดครับ ถ่ายใหม่ชัด ๆ ส่งมาอีกทีนะ",
+        text: rejText || c[0] || "ภาพนี้อาจารย์อ่านไม่ถนัด ถ่ายใหม่ชัด ๆ ส่งมาอีกทีนะ",
         accessSource: job.access_source,
         appUserId,
       },
@@ -1205,7 +1205,7 @@ export async function processScanJob(workerId, jobRow) {
         error: true,
         rejectReason: "supported_lane_unresolved",
         objectCheckResult: `supported_lane_unresolved:${strictLaneRes.reason}`,
-        text: c[0] || "ภาพนี้อาจารย์อ่านไม่ถนัดครับ ถ่ายใหม่ชัด ๆ ส่งมาอีกทีนะ",
+        text: c[0] || "ภาพนี้อาจารย์อ่านไม่ถนัด ถ่ายใหม่ชัด ๆ ส่งมาอีกทีนะ",
         accessSource: job.access_source,
         appUserId,
       },
@@ -1409,8 +1409,8 @@ export async function processScanJob(workerId, jobRow) {
             objectCheckResult: `ritual_gate:${ritualAction}`,
             text:
               ritualAction === "reject"
-                ? "ชิ้นนี้อาจารย์อ่านพลังให้ไม่ได้ครับ ไม่ตัดสิทธิ์นะครับ เปลี่ยนชิ้นอื่นส่งมาได้เลย"
-                : "ชิ้นนี้ยังอ่านไม่ชัดครับ ขอรูปมุมตรง ๆ เห็นเต็มชิ้นอีกทีนะครับ หรือเปลี่ยนชิ้นอื่นก็ได้ ไม่ตัดสิทธิ์ครับ",
+                ? "ชิ้นนี้อาจารย์อ่านพลังให้ไม่ได้ ไม่ตัดสิทธิ์ เปลี่ยนชิ้นอื่นส่งมาได้"
+                : "ชิ้นนี้ยังอ่านไม่ชัด ขอรูปมุมตรง ๆ เห็นเต็มชิ้นอีกที หรือเปลี่ยนชิ้นอื่นก็ได้ ไม่ตัดสิทธิ์",
             accessSource: job.access_source,
             appUserId,
           },

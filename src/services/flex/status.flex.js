@@ -270,7 +270,7 @@ export function buildWaitingBirthdateFlex() {
   return createBaseBubble({
     accentColor: "#D4AF37",
     title: "ขอวันเกิดของเจ้าของวัตถุ",
-    subtitle: "รับภาพแล้วครับ · ส่งวันเกิดเพื่อสรุปผลและสร้างรายงาน",
+    subtitle: "รับภาพแล้ว · ส่งวันเกิดเพื่อสรุปผลและสร้างรายงาน",
     bodyContents: [
       createCard(
         "ขั้นตอนถัดไป",
@@ -397,7 +397,7 @@ export function buildPaymentRequiredFlex({ usedScans = 0, freeLimit = 2 } = {}) 
       ),
       createCard(
         "ขั้นตอนถัดไป",
-        "ดูวิธีชำระเงินได้ โดยแจ้งว่าจ่ายเงิน หรือส่งคำว่า payment มาก็ได้ครับ",
+        "ดูวิธีชำระเงินได้ โดยแจ้งว่าจ่ายเงิน หรือส่งคำว่า payment มาก็ได้",
         {
           backgroundColor: "#1D1A14",
           borderColor: "#3A2F1D",

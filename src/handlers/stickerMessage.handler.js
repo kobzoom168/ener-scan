@@ -43,9 +43,8 @@ export function isLineStickerPlaceholderText(text) {
 }
 
 const IDLE_STICKER_LINES = [
-  "ได้ครับ",
-  "ส่งรูปมาได้เลย เดี๋ยวอาจารย์ดูให้",
-  "ถ้ามีชิ้นที่อยากให้ดู ส่งมาได้เลย",
+  "โอเค",
+  "ส่งรูปชิ้นที่ต้องการให้ดูได้",
 ];
 
 function pickIdleStickerLine(userId) {
@@ -143,7 +142,7 @@ export async function handleStickerLikeInput(opts) {
         semanticKey: "sticker_awaiting_slip",
         text,
         alternateTexts: [
-          "ตอนนี้รอสลิปโอนอยู่นะครับ ส่งสลิปมาในแชทนี้ได้เลย",
+          "รอสลิป แนบในแชตนี้",
         ],
       });
       return;
@@ -177,7 +176,7 @@ export async function handleStickerLikeInput(opts) {
         semanticKey: "sticker_pending_verify",
         text,
         alternateTexts: [
-          "รอแอดมินตรวจสลิปแป๊บนึงนะครับ ถ้ามีสลิปแล้วส่งมาได้เลย",
+          "รอตรวจสลิป",
         ],
       });
       return;
@@ -190,12 +189,12 @@ export async function handleStickerLikeInput(opts) {
   const bdFlow = d.getBirthdateChangeFlowState(uid);
   if (bdFlow) {
     let hint =
-      "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
+      "ตอบเป็นข้อความ ใช่ หรือ โอเค";
     if (bdFlow === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
       hint = pickBirthdateAskDateLine(uid);
     } else if (bdFlow === BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM) {
       hint =
-        "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
+        "ตอบเป็นข้อความยืนยัน ใช่ หรือ โอเค";
     }
     const text = hint;
     await d.sendNonScanReply({
@@ -206,7 +205,7 @@ export async function handleStickerLikeInput(opts) {
       semanticKey: "sticker_birthdate_change_flow",
       text,
       alternateTexts: [
-        `${hint}\n\nลองบอกวันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
+        `${hint}\nบอกวันเกิดใหม่ DD/MM/YYYY`,
       ],
     });
     return;
@@ -258,14 +257,14 @@ export async function handleStickerLikeInput(opts) {
       semanticKey: "sticker_waiting_birthdate",
       text,
       alternateTexts: [
-        "รอวันเกิดก่อนสแกนนะครับ บอกเป็น DD/MM/YYYY ได้เลยครับ",
+        "ขอวันเกิดก่อน DD/MM/YYYY",
       ],
     });
     return;
   }
 
   // กบ 19 ก.ค.: สติกเกอร์/ทักเปล่ามาหลายรอบ อย่าเห่อเหมือน AI —
-  // รอบแรกตอบ ครับ · รอบ 2 เงียบ · รอบ 3 ถามสั้น ๆ · รอบต่อ ๆ ไปเงียบ
+  // รอบแรกตอบสั้น · รอบ 2 เงียบ · รอบ 3 ถามสั้น ๆ · รอบต่อ ๆ ไปเงียบ
   // (นับซ้ำใน 2 ชม · ข้อความจริงจากลูกค้าจะล้าง streak ที่ webhook)
   let streak = 1;
   try {
@@ -277,7 +276,7 @@ export async function handleStickerLikeInput(opts) {
     );
     return;
   }
-  const idle = streak >= 3 ? "มีอะไรไหมครับ" : "ครับ";
+  const idle = streak >= 3 ? "ถามเรื่องอะไร" : "โอเค";
   await d.sendNonScanReply({
     client,
     userId: uid,

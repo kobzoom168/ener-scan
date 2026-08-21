@@ -15,7 +15,7 @@ const HOWTO_URL = () =>
 export function buildHowtoFlowFlex() {
   return {
     type: "flex",
-    altText: "ขั้นตอนให้อาจารย์อ่านพลัง ง่าย ๆ 5 ขั้นครับ",
+    altText: "ขั้นตอนให้อาจารย์อ่านพลัง ง่าย ๆ 5 ขั้น",
     contents: {
       type: "bubble",
       size: "mega",
@@ -66,8 +66,8 @@ export async function maybeHandleHowtoAck({ client, event, userId, text }) {
     await client.replyMessage(event.replyToken, {
       type: "text",
       text: inviteImage
-        ? "ส่งรูปชิ้นแรกมาได้เลยครับ ฟรีวันละ 1 ชิ้น"
-        : "รับทราบครับ เหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว กดการ์ดลงทะเบียนด้านบนได้เลย เสร็จแล้วส่งรูปชิ้นแรกได้ฟรีทันทีครับ",
+        ? "ส่งรูปชิ้นแรกมาได้ ฟรีวันละ 1 ชิ้น"
+        : "รับทราบ เหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว กดการ์ดลงทะเบียนด้านบนได้ เสร็จแล้วส่งรูปชิ้นแรกได้ฟรีทันที",
     });
     console.log(
       JSON.stringify({

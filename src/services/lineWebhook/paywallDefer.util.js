@@ -71,7 +71,7 @@ export function resolvePaywallDeferDecision({
 
 /** copy defer: ไม่อ้างสถานะที่ไม่รู้จริง ไม่มีคำสัญญาเวลา ไม่มีเรื่องเงิน */
 export const PAYWALL_DEFER_TEXT =
-  "รับรูปชิ้นนี้ไว้แล้วครับ ขอส่งผลชิ้นก่อนหน้าให้เรียบร้อยก่อนนะครับ";
+  "รับรูปแล้ว รอผลชิ้นก่อนหน้า";
 
 /**
  * copy recovery แยกตามเหตุ (Codex รอบ 5): failed = พูดได้ว่าอ่านไม่สำเร็จ ·
@@ -80,14 +80,14 @@ export const PAYWALL_DEFER_TEXT =
  */
 export const PAYWALL_RECOVERY_TEXTS = Object.freeze({
   failed:
-    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nชิ้นก่อนหน้าอ่านไม่สำเร็จ ยังไม่มีผลส่งถึงคุณครับ",
+    "รับรูปแล้ว ไม่ต้องส่งซ้ำ\nชิ้นก่อนหน้าอ่านไม่สำเร็จ",
   stale:
-    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nชิ้นก่อนหน้ายังไม่มีผลส่งถึงคุณครับ",
+    "รับรูปแล้ว ไม่ต้องส่งซ้ำ\nชิ้นก่อนหน้ายังไม่มีผล",
   neutral:
-    "รับรูปชิ้นนี้ไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nขอเช็คสถานะชิ้นก่อนหน้าให้ก่อนครับ",
+    "รับรูปแล้ว ไม่ต้องส่งซ้ำ\nกำลังเช็คสถานะชิ้นก่อนหน้า",
 });
 
-export const RECOVERY_OWNER_ASSIGNED_SUFFIX = " แอดมินรับเรื่องไว้ตรวจแล้วครับ";
+export const RECOVERY_OWNER_ASSIGNED_SUFFIX = " แอดมินรับเรื่องแล้ว";
 
 /** @param {string} reason @param {{ ownerAssigned?: boolean }} [opts] */
 export function selectRecoveryText(reason, { ownerAssigned = false } = {}) {
@@ -124,7 +124,7 @@ export async function assignRecoveryOwner({ userId, reason, deps }) {
   let failReason = "unknown";
   try {
     const r = await deps.sendTelegramText(
-      `[RECOVERY] ลูกค้ายังไม่เคยได้ผลสแกน (${reason}) uid:${String(userId).slice(0, 10)}… ระบบพักการขายไว้ — เข้าไปเช็คงานล่าสุด/คืนสิทธิ์ให้หน่อยครับ`,
+      `[RECOVERY] ลูกค้ายังไม่เคยได้ผลสแกน (${reason}) uid:${String(userId).slice(0, 10)}… ระบบพักการขายไว้ — เข้าไปเช็คงานล่าสุด/คืนสิทธิ์ให้หน่อย`,
     );
     ok = r?.ok === true;
     if (!ok) failReason = String(r?.reason || "send_failed");

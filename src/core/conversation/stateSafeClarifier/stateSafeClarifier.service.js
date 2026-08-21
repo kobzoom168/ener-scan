@@ -129,38 +129,38 @@ function buildPaywallAnswer(intent, facts) {
   const hours = Number(facts?.windowHours) || 24;
   if (intent === "explain_offer_value") {
     return {
-      answer_short: `ค่าครูรายการนี้ใช้สแกนเพิ่มได้ ${scans} ครั้ง ภายใน ${hours} ชั่วโมงครับ`,
+      answer_short: `ค่าครูรายการนี้ใช้สแกนเพิ่มได้ ${scans} ครั้ง ภายใน ${hours} ชั่วโมง`,
       bridge_back_to: "pay_intent",
     };
   }
   if (intent === "explain_next_step") {
     return {
-      answer_short: "ถ้าพร้อม เดี๋ยวผมส่งรายละเอียดกับคิวอาร์ให้ครับ",
+      answer_short: "ถ้าพร้อม จะส่งรายละเอียดกับคิวอาร์ให้",
       bridge_back_to: "pay_intent",
     };
   }
   if (intent === "explain_single_image_rule") {
     return {
-      answer_short: `อาจารย์ดูทีละ 1 รูปนะครับ เพื่อให้วิเคราะห์ได้แม่นที่สุด ค่าครูรายการนี้ใช้ได้ ${scans} ครั้งครับ`,
+      answer_short: `อาจารย์ดูทีละ 1 รูป เพื่อให้วิเคราะห์ได้แม่นที่สุด ค่าครูรายการนี้ใช้ได้ ${scans} ครั้ง`,
       bridge_back_to: "pay_intent",
     };
   }
   if (intent === "recommendation_question") {
     return {
       answer_short:
-        "อาจารย์จะดูจากวัตถุที่ส่งเข้ามาทีละชิ้นครับ แล้วประเมินว่าชิ้นไหนเข้ากับคุณมากกว่า",
+        "อาจารย์จะดูจากวัตถุที่ส่งเข้ามาทีละชิ้น แล้วประเมินว่าชิ้นไหนเข้ากับคุณมากกว่า",
       bridge_back_to: "pay_intent",
     };
   }
   if (intent === "explain_how_scan_works") {
     return {
-      answer_short: "ใช้งานง่ายครับ ส่งรูปวัตถุมา 1 รูป แล้วอาจารย์จะอ่านให้ทีละชิ้น",
+      answer_short: "ใช้งานง่าย ส่งรูปวัตถุมา 1 รูป แล้วอาจารย์จะอ่านให้ทีละชิ้น",
       bridge_back_to: "pay_intent",
     };
   }
   if (intent === "off_topic_recoverable") {
     return {
-      answer_short: `ถ้าจะสรุปสั้น ๆ คือ ค่าครูรายการนี้ ${price} บาท ใช้สแกนเพิ่มได้ ${scans} ครั้งใน ${hours} ชั่วโมงครับ`,
+      answer_short: `ถ้าจะสรุปสั้น ๆ คือ ค่าครูรายการนี้ ${price} บาท ใช้สแกนเพิ่มได้ ${scans} ครั้งใน ${hours} ชั่วโมง`,
       bridge_back_to: "pay_intent",
     };
   }
@@ -176,7 +176,7 @@ function buildBirthdateAnswer(intent) {
     intent === "off_topic_recoverable"
   ) {
     return {
-      answer_short: "ตอนนี้ขอเก็บวันเกิดก่อนครับ เพื่อให้อ่านผลได้ตรงขึ้น",
+      answer_short: "ตอนนี้ขอเก็บวันเกิดก่อน เพื่อให้อ่านผลได้ตรงขึ้น",
       bridge_back_to: "provide_birthdate",
     };
   }
@@ -187,14 +187,14 @@ function buildAwaitingSlipAnswer(intent) {
   if (intent === "explain_next_step") {
     return {
       answer_short:
-        "ขั้นตอนต่อไปคือโอนตามคิวอาร์ แล้วส่งรูปสลิปในแชตนี้ได้เลยครับ",
+        "ขั้นตอนต่อไปคือโอนตามคิวอาร์ แล้วส่งรูปสลิปในแชตนี้ได้",
       bridge_back_to: "upload_slip",
     };
   }
   if (intent === "off_topic_recoverable") {
     return {
       answer_short:
-        "ตอนนี้โฟลว์นี้รอหลักฐานการโอนครับ ถ้าต้องการคิวอาร์ใหม่ผมส่งให้ได้ทันที",
+        "ตอนนี้โฟลว์นี้รอหลักฐานการโอน ถ้าต้องการคิวอาร์ใหม่ผมส่งให้ได้ทันที",
       bridge_back_to: "resend_qr",
     };
   }
@@ -205,7 +205,7 @@ function buildPendingVerifyAnswer(intent) {
   if (intent === "explain_next_step" || intent === "off_topic_recoverable") {
     return {
       answer_short:
-        "ตอนนี้รับสลิปแล้วครับ ผมกำลังตรวจสอบก่อนเปิดสิทธิ์ให้",
+        "ตอนนี้รับสลิปแล้ว ผมกำลังตรวจสอบก่อนเปิดสิทธิ์ให้",
       bridge_back_to: "wait_status",
     };
   }
@@ -292,13 +292,13 @@ async function runGeminiClarifier(payload) {
 
 export function buildStateSafeBridgeBackText(bridgeBackTo) {
   const b = normalizeBridge(bridgeBackTo);
-  if (b === "pay_intent") return 'ถ้าพร้อม ตอบว่า "จ่าย" ได้เลยครับ';
-  if (b === "provide_birthdate") return "ตอนนี้ขอวันเกิดก่อนครับ เช่น 19/08/2528";
-  if (b === "send_one_image") return "ส่งรูปวัตถุทีละ 1 รูปได้เลยครับ";
-  if (b === "resend_qr") return 'ถ้าต้องการคิวอาร์อีกครั้ง บอกว่า "ขอ QR อีกที" ได้เลยครับ';
-  if (b === "upload_slip") return "โอนแล้วแนบสลิปในแชตนี้ได้เลยครับ";
+  if (b === "pay_intent") return "พิมพ์ จ่าย เมื่อพร้อม";
+  if (b === "provide_birthdate") return "ตอนนี้ขอวันเกิดก่อน เช่น 19/08/2528";
+  if (b === "send_one_image") return "ส่งรูปวัตถุทีละ 1 รูปได้";
+  if (b === "resend_qr") return "พิมพ์ ขอ QR อีกที เพื่อรับใหม่";
+  if (b === "upload_slip") return "โอนแล้วแนบสลิปในแชตนี้ได้";
   if (b === "wait_status")
-    return "ตอนนี้รอแอดมินตรวจสลิปก่อนครับ รอแจ้งผลในแชตนี้ได้เลยครับ";
+    return "ตอนนี้รอแอดมินตรวจสลิปก่อน รอแจ้งผลในแชตนี้ได้";
   return "";
 }
 

@@ -34,7 +34,7 @@ export function matchExactUtilityCommand(text) {
 export function buildUtilityUnavailableText(kind) {
   const menuName =
     kind === "referral" ? "ชวนเพื่อน" : kind === "history" ? "ดูผลเก่า" : "จัดชุด";
-  return `เมนู${menuName}ใช้งานไม่ได้ชั่วคราวครับ\n\nผมรับเรื่องไว้แล้ว เดี๋ยวตรวจให้ ระหว่างนี้ใช้งานส่วนอื่นได้ตามปกติครับ`;
+  return `เมนู${menuName}ใช้งานไม่ได้ชั่วคราว\n\nผมรับเรื่องไว้แล้ว ตรวจให้ ระหว่างนี้ใช้งานส่วนอื่นได้ตามปกติ`;
 }
 
 /**

@@ -18,7 +18,7 @@ test("ทุกสถานะได้คำตอบถูกแขนง — 
   assert.match(dq.reply, /กำลังส่ง/);
   const failed = resolveResultStatusReply({ status: "failed" });
   assert.equal(failed.claimsDelivered, false);
-  assert.match(failed.reply, /สะดุด/);
+  assert.match(failed.reply, /ไม่สำเร็จ/);
   const cancelled = resolveResultStatusReply({ status: "cancelled" });
   assert.equal(cancelled.claimsDelivered, false);
   assert.match(cancelled.reply, /ยกเลิก/);
@@ -27,7 +27,7 @@ test("ทุกสถานะได้คำตอบถูกแขนง — 
     assert.equal(r.claimsDelivered, false, `status "${st}" ห้าม claim ผลออก`);
     assert.doesNotMatch(r.reply, /ผลออกแล้ว/);
     // Codex รอบ 3: unknown อาจเป็นสถานะใหม่ที่ยังทำงานอยู่ — ห้ามชวนส่งซ้ำ
-    assert.match(r.reply, /ยังไม่ต้องส่งรูปซ้ำ/);
+    assert.match(r.reply, /ไม่ต้องส่งรูปซ้ำ|ตรวจสถานะไม่ครบ/);
     assert.doesNotMatch(r.reply, /ส่งรูปมาใหม่/);
     // Codex รอบ 4: ห้ามสัญญา follow-up ที่ไม่มี owner ("จะแจ้ง/เดี๋ยวแจ้ง/จะบอก")
     assert.doesNotMatch(r.reply, /จะแจ้ง|เดี๋ยว(ผม)?แจ้ง|จะบอก|จะตามให้/);

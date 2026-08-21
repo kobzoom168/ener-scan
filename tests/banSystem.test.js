@@ -74,7 +74,7 @@ test("admin command: user-only + nonce + fail-closed (source contract)", () => {
   assert.match(fn, /source\?\.type.*user/);
   assert.match(fn, /U\[0-9a-f\]\{32\}/);
   assert.match(fn, /ยืนยันแบน/);
-  assert.match(fn, /ยังไม่แบนครับ/); // redis fail = fail-closed
+  assert.match(fn, /ยังไม่แบน/); // redis fail = fail-closed
   assert.match(fn, /GET.*DEL|redis\.call\('DEL'/s); // atomic consume
   assert.match(fn, /แบนบัญชีแอดมินเองไม่ได้/);
 });

@@ -30,10 +30,10 @@ function packageDetailLine(p) {
  * @returns {object|null} LINE flex message (null เมื่อไม่มีแพ็กเปิดขาย)
  */
 export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
-  const title = String(opts.title || "").trim() || "วันนี้ใช้สิทธิ์ฟรีครบแล้วครับ";
+  const title = String(opts.title || "").trim() || "วันนี้ใช้สิทธิ์ฟรีครบแล้ว";
   const subtitle =
     String(opts.subtitle || "").trim() ||
-    "เปิดพลังต่อได้เลยวันนี้ หรือพรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีกครับ";
+    "เปิดพลังต่อได้วันนี้ หรือพรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก";
   const pkgs = listActivePackages(offer)
     .slice()
     .sort((a, b) => a.priceThb - b.priceThb);
@@ -116,8 +116,8 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
 
   const altText =
     String(opts.altText || "").trim() ||
-    `วันนี้ใช้สิทธิ์ฟรีครบแล้วครับ เปิดสิทธิ์ต่อได้ ${pkgs
-      .map((p) => `${p.priceThb} บาท`)
+    `วันนี้ใช้สิทธิ์ฟรีครบแล้ว เปิดสิทธิ์ต่อได้ ${pkgs
+.map((p) =>`${p.priceThb} บาท`)
       .join(" / ")}`;
 
   return {

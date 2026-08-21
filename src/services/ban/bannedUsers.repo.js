@@ -95,7 +95,7 @@ function fireFailOpenAlert(deps) {
       if (await alertDedupe("ban_check_db_error_alert", 600)) {
         const { sendTelegramText } = await import("../telegramNotify.service.js");
         await Promise.race([
-          sendTelegramText("[CRITICAL] เช็คแบนอ่าน DB ไม่ได้ — ระบบ fail-open ชั่วคราว รีบเช็คฐานข้อมูลครับ"),
+          sendTelegramText("[CRITICAL] เช็คแบนอ่าน DB ไม่ได้ — ระบบ fail-open ชั่วคราว รีบเช็คฐานข้อมูล"),
           new Promise((r) => setTimeout(r, 5000)),
         ]);
       }
@@ -151,7 +151,7 @@ function fireReconcileQueueAlert(uid, op, m) {
       try {
         const { sendTelegramText } = await import("../telegramNotify.service.js");
         const res = await Promise.race([
-          sendTelegramText(`[CRITICAL] คิว reconcile แบนใช้ไม่ได้ (${op} ${uid.slice(0, 10)}…) — งานไม่รอด restart รีบเช็ค redis ครับ`),
+          sendTelegramText(`[CRITICAL] คิว reconcile แบนใช้ไม่ได้ (${op} ${uid.slice(0, 10)}…) — งานไม่รอด restart รีบเช็ค redis`),
           new Promise((r) => setTimeout(r, 5000)),
         ]);
         sent = res?.ok === true;

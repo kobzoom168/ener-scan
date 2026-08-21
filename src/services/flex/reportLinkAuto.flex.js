@@ -56,7 +56,7 @@ export function buildReportLinkAutoFlex(p) {
         },
         {
           type: "text",
-          text: bodyText || "รายละเอียดอยู่ในรายงานครับ",
+          text: bodyText || "รายละเอียดอยู่ในรายงาน",
           size: "sm",
           color: "#444444",
           wrap: true,

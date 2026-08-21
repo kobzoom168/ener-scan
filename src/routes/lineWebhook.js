@@ -435,7 +435,7 @@ async function maybeHandleAxisTopPieceQuery({ client, userId, replyToken, text }
         replyToken,
         replyType: "axis_top_piece_none",
         semanticKey: `axis_top_none_${axisKey}`,
-        text: `ในคลังของคุณยังไม่มีชิ้นที่เด่นด้าน${axisLabelShort}ชัด ๆ ครับ ลองส่งพระหรือเครื่องรางชิ้นอื่นที่บ้านมาสแกนดู เผื่อเจอตัวเด่นด้านนี้ครับ`,
+        text: `ในคลังของคุณยังไม่มีชิ้นที่เด่นด้าน${axisLabelShort}ชัด ๆ ลองส่งพระหรือเครื่องรางชิ้นอื่นที่บ้านมาสแกนดู เผื่อเจอตัวเด่นด้านนี้`,
       });
       return true;
     }
@@ -490,10 +490,10 @@ async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, te
   let reply;
   if (t === "เปิดแจ้งเตือน") {
     await clearDailyPickOptout(userId).catch(() => {});
-    reply = "เปิดการแจ้งเตือนหนุนดวงตอนเช้าให้แล้วครับ วันไหนมีชิ้นหนุนแรงจะส่งมาบอกครับ";
+    reply = "เปิดแจ้งเตือนแล้ว";
   } else {
     await setDailyPickOptout(userId).catch(() => {});
-    reply = "ปิดการแจ้งเตือนหนุนดวงตอนเช้าให้แล้วครับ พิมพ์ เปิดแจ้งเตือน เมื่ออยากรับอีกครั้ง";
+    reply = "ปิดแจ้งเตือนแล้ว";
   }
   await sendNonScanReply({
     client,
@@ -1202,7 +1202,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_cancelled",
         semanticKey: "birthdate_change_cancelled",
-        text: "โอเคครับ ถ้าจะเปลี่ยนทีหลัง บอกได้เลย",
+        text: "โอเค ถ้าจะเปลี่ยนทีหลัง บอกได้",
       });
       return true;
     }
@@ -1218,7 +1218,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_please_confirm_first",
         semanticKey: "birthdate_change_candidate",
-        text: "ขอคอนเฟิร์มก่อนนะครับ จะเปลี่ยนวันเกิดที่บันทึกไว้ใช่ไหม\nถ้าใช่ ตอบว่าใช่ หรือโอเค มาก็ได้ครับ",
+        text: "ขอคอนเฟิร์มก่อน จะเปลี่ยนวันเกิดที่บันทึกไว้ใช่ไหม\nถ้าใช่ ตอบว่าใช่ หรือโอเค มาก็ได้",
       });
       return true;
     }
@@ -1283,7 +1283,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_remind_date",
         semanticKey: "waiting_birthdate_change",
-        text: "ขอวันเกิดเพียง 1 วันนะครับ เช่น 19/08/2528",
+        text: "ขอวันเกิดเพียง 1 วัน เช่น 19/08/2528",
       });
       return true;
     }
@@ -1461,7 +1461,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_ask_date_again",
         semanticKey: "waiting_birthdate_change",
-        text: `โอเคครับ บอกวันเกิดมาใหม่ได้เลยครับ\n\n${ask}`,
+        text: `โอเค บอกวันเกิดมาใหม่ได้\n\n${ask}`,
       });
       return true;
     }
@@ -1477,7 +1477,7 @@ async function handleBirthdateChangeFlowTurn({
         replyToken: event.replyToken,
         replyType: "birthdate_change_please_confirm_first_final",
         semanticKey: "waiting_birthdate_change_confirm",
-        text: "ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้ครับ",
+        text: "ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้",
       });
       return true;
     }
@@ -1609,7 +1609,7 @@ async function handlePaymentCommandTextRoute({
       semanticKey: "abuse_payment_lock_pay_cmd",
       text: ABUSE_MSG_PAYMENT_LOCK,
       alternateTexts: [
-        "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+        "เรื่องชำระเงินส่งถี่ไปหน่อย รอแล้วลองใหม่",
       ],
     });
     return true;
@@ -1702,7 +1702,7 @@ async function handlePaymentCommandTextRoute({
         semanticKey: "pending_verify_payment_cmd_inflight",
         text: buildPendingVerifyPaymentCommandText({ userId, paymentRef: paymentRefPv }),
         alternateTexts: [
-          "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้เลยครับ",
+          "รอแอดมินตรวจสลิปก่อน ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้",
         ],
       });
       return true;
@@ -1822,16 +1822,16 @@ async function handlePaymentCommandTextRoute({
       alternateTexts: [
         // สำนวนสำรอง — ถามซ้ำต้องได้คำตอบเสมอ (dedupe จะสลับมาใช้อันนี้แทนการเงียบ)
         [
-          "เลือกได้เลยครับ",
+          "เลือกได้",
           ...sortedPayPkgs.map((p) => formatOfferPackageLineThai(p)),
-          "เอาแบบไหนแตะปุ่มด้านล่าง หรือบอกราคามาเลยครับ",
+          "เอาแบบไหนแตะปุ่มด้านล่าง หรือบอกราคามาเลย",
         ].join("\n"),
-        "แตะปุ่มด้านล่าง หรือบอกราคามาเลยครับ เดี๋ยวส่งคิวอาร์ให้ทันที",
+        "แตะปุ่มด้านล่าง หรือบอกราคามาเลย ส่งคิวอาร์ให้ทันที",
       ],
       // การ์ดโปรใบเดียวกับ paywall โควตาหมด — หัวการ์ดปรับตามบริบท "พิมพ์ จ่าย"
       flexMessage: buildFreeQuotaPaywallFlex(offerPay, {
         title: "เปิดสิทธิ์เพิ่มวันนี้",
-        subtitle: "เลือกค่าครูที่สะดวก แตะแถวไหนก็ได้เลยครับ",
+        subtitle: "เลือกค่าครูที่สะดวก แตะแถวไหนก็ได้",
         altText: buildSingleOfferPaywallAltText(offerPay).slice(0, 400),
       }),
       quickReply: {
@@ -1942,13 +1942,13 @@ async function handlePaymentCommandTextRoute({
         replyType: "payment_switch_confirm_prompt",
         semanticKey: "payment_switch_confirm_prompt",
         text: [
-          "เดี๋ยวสับสนครับ สรุปจะเอาโปรไหนดีครับ",
+          "สับสน สรุปจะเอาโปรไหนดี",
           ...menuPkgs.map((pkg) => formatOfferPackageLineThai(pkg)),
           "",
-          "บอกมาคำเดียว เดี๋ยวอาจารย์ส่ง QR อันเดียวจบเลยครับ",
+          "บอกมาคำเดียว จะส่ง QR อันเดียวจบเลย",
         ].join("\n"),
         alternateTexts: [
-          "สรุปเอาค่าครูแบบไหนดีครับ บอกราคามาได้เลย เดี๋ยวส่ง QR ให้อันเดียวจบครับ",
+          "สรุปเอาค่าครูแบบไหนดี บอกราคามาได้ ส่ง QR ให้อันเดียวจบ",
         ],
         quickReply: {
           items: [
@@ -2137,7 +2137,7 @@ async function replyIdleTextNoDuplicate(opts) {
 }
 
 const ABUSE_MSG_PAYMENT_LOCK =
-  "ส่งเรื่องชำระเงินถี่ไปหน่อย ขอรอสักครู่แล้วลองใหม่นะครับ";
+  "ส่งเรื่องชำระเงินถี่ไปหน่อย ขอรอแล้วลองใหม่";
 
 async function handleHistoryCommand({
   client,
@@ -2202,7 +2202,7 @@ async function handleHistoryCommand({
       replyType: "history_empty",
       semanticKey: "history_empty",
       text: buildNoHistoryText(),
-      alternateTexts: [`${buildNoHistoryText()}\nลองส่งรูปมาใหม่ได้เลยครับ`],
+      alternateTexts: [`${buildNoHistoryText()}\nลองส่งรูปมาใหม่ได้`],
     });
     return;
   }
@@ -2245,7 +2245,7 @@ async function handleStatsCommand({
       replyType: "stats_empty",
       semanticKey: "stats_empty",
       text: buildNoStatsText(),
-      alternateTexts: ["ยังไม่มีสถิติสแกนให้แสดงตอนนี้ครับ"],
+      alternateTexts: ["ยังไม่มีสถิติสแกนให้แสดงตอนนี้"],
     });
     return;
   }
@@ -2328,9 +2328,9 @@ async function finalizeAcceptedImage({
 
       const holdText =
         holdRes.held === "first"
-          ? "รับรูปไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nเหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว จากนั้นผมส่งรูปนี้ให้อาจารย์ทันทีครับ"
+          ? "รับรูปไว้แล้ว ยังไม่ต้องส่งซ้ำ\n\nเหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว จากนั้นผมส่งรูปนี้ให้อาจารย์ทันที"
           : holdRes.held === "extra"
-            ? "รับรูปแรกไว้แล้วครับ ระบบอ่านครั้งละ 1 ชิ้น รูปที่ส่งเพิ่มยังไม่นำเข้าสแกนครับ\n\nกรอกข้อมูลเจ้าของให้เสร็จก่อน แล้วผมส่งรูปแรกให้อาจารย์เลยครับ"
+            ? "รับรูปแรกไว้แล้ว ระบบอ่านครั้งละ 1 ชิ้น รูปที่ส่งเพิ่มยังไม่นำเข้าสแกน\n\nกรอกข้อมูลเจ้าของให้เสร็จก่อน แล้วผมส่งรูปแรกให้อาจารย์เลย"
             : null;
 
       const { tryMarkRegCardShown } = await import(
@@ -2661,7 +2661,7 @@ async function finalizeAcceptedImage({
         semanticKey: "abuse_payment_lock_finalize",
         text: ABUSE_MSG_PAYMENT_LOCK,
         alternateTexts: [
-          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+          "เรื่องชำระเงินส่งถี่ไปหน่อย รอแล้วลองใหม่",
         ],
       });
       return;
@@ -2716,7 +2716,7 @@ async function finalizeAcceptedImage({
           replyType: "paywall_deferred_report_pending",
           semanticKey: "paywall_deferred_report_pending",
           text: PAYWALL_DEFER_TEXT,
-          alternateTexts: ["รับรูปไว้แล้วครับ ขอเรียงคิวส่งผลชิ้นก่อนหน้าให้ก่อนครับ"],
+          alternateTexts: ["รับรูปไว้แล้ว ขอเรียงคิวส่งผลชิ้นก่อนหน้าให้ก่อน"],
           speakerRoleOverride: "admin",
         });
         return;
@@ -2741,8 +2741,8 @@ async function finalizeAcceptedImage({
         // ข้อความ recovery เต็มครั้งเดียวต่อ 30 นาที — ส่งรูปซ้ำระหว่างนั้นตอบสั้น กันวนลูป
         const firstRecoveryMsg = await tryDedupeOnce(`paywall_recovery_msg:${userId}`, 1800).catch(() => true);
         const shortText = ownerAssigned
-          ? "รับไว้แล้วครับ ยังไม่ต้องส่งซ้ำ แอดมินกำลังเช็คให้อยู่ครับ"
-          : "รับไว้แล้วครับ ยังไม่ต้องส่งซ้ำครับ";
+          ? "รับไว้แล้ว ยังไม่ต้องส่งซ้ำ แอดมินกำลังเช็คให้อยู่"
+          : "รับไว้แล้ว ยังไม่ต้องส่งซ้ำ";
         await sendNonScanReply({
           client,
           userId,
@@ -2828,7 +2828,7 @@ async function finalizeAcceptedImage({
         semanticKey: "abuse_payment_lock",
         text: ABUSE_MSG_PAYMENT_LOCK,
         alternateTexts: [
-          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+          "เรื่องชำระเงินส่งถี่ไปหน่อย รอแล้วลองใหม่",
         ],
       });
       return;
@@ -2893,7 +2893,7 @@ async function finalizeAcceptedImage({
           semanticKey: "pending_verify_block_scan",
           text: buildPendingVerifyBlockScanText({ userId, paymentRef }),
           alternateTexts: [
-            "รูปนี้อาจารย์เก็บไว้ก่อนครับ สลิปเดิมกำลังตรวจอยู่ พอเปิดสิทธิ์แล้วค่อยส่งมาสแกนอีกทีครับ",
+            "รูปนี้อาจารย์เก็บไว้ก่อน สลิปเดิมกำลังตรวจอยู่ พอเปิดสิทธิ์แล้วค่อยส่งมาสแกนอีกที",
           ],
         });
         return;
@@ -2992,13 +2992,13 @@ async function finalizeAcceptedImage({
           replyType: "slip_object_photo_guard",
           semanticKey: "slip_object_photo_guard",
           text: [
-            "รูปนี้เป็นวัตถุมงคล ไม่ใช่สลิปนะครับ ✨",
+            "รูปนี้เป็นวัตถุมงคล ไม่ใช่สลิป ✨",
             "",
-            "ตอนนี้อาจารย์ยังรอสลิปเปิดสิทธิ์อยู่ โอนแล้วส่งสลิปมาได้เลยครับ",
-            "พอสิทธิ์เปิดแล้ว ส่งรูปชิ้นนี้มาอีกครั้ง อาจารย์ดูให้ทันทีครับ",
+            "ตอนนี้อาจารย์ยังรอสลิปเปิดสิทธิ์อยู่ โอนแล้วส่งสลิปมาได้",
+            "พอสิทธิ์เปิดแล้ว ส่งรูปชิ้นนี้มาอีกครั้ง อาจารย์ดูให้ทันที",
           ].join("\n"),
           alternateTexts: [
-            "ภาพนี้ยังไม่ใช่สลิปการโอนนะครับ โอนแล้วส่งสลิปมาก่อน เดี๋ยวผมเปิดสิทธิ์ให้แล้วค่อยส่งรูปชิ้นนี้มาใหม่ครับ",
+            "ภาพนี้ยังไม่ใช่สลิปการโอน โอนแล้วส่งสลิปมาก่อน จะเปิดสิทธิ์ให้แล้วค่อยส่งรูปชิ้นนี้มาใหม่",
           ],
         });
         return;
@@ -3183,13 +3183,13 @@ async function finalizeAcceptedImage({
           semanticKey: "slip_auto_approved",
           text: swPkg
             ? buildSlipPackageSwitchedApprovedText(swPkg)
-            : "ตรวจสลิปเรียบร้อยครับ ผมเปิดสิทธิ์ให้แล้ว\nส่งรูปชิ้นที่จะให้อาจารย์ดูเข้ามาได้เลยครับ",
+            : "เปิดสิทธิ์แล้ว ส่งรูปได้",
           alternateTexts: swPkg
             ? [
-                `ยืนยันสลิปแล้วครับ ยอด ${swPkg.priceThb} บาท ปรับรายการค่าครูให้ตามยอดแล้ว ส่งรูปมาสแกนได้เลย`,
+                `ยืนยันสลิปแล้ว ยอด ${swPkg.priceThb} บาท ปรับรายการค่าครูให้ตามยอดแล้ว ส่งรูปมาสแกนได้`,
               ]
             : [
-                "ยืนยันสลิปเรียบร้อยแล้วครับ ส่งรูปวัตถุที่ต้องการสแกนมาได้เลย",
+                "เปิดสิทธิ์แล้ว ส่งรูปได้",
               ],
         });
         // Spend-to-upgrade (กบ 30 ก.ค.): จ่ายรอบ 2+ ของวัน → เสนอหักยอดขึ้นแพ็กใหญ่
@@ -3241,10 +3241,10 @@ async function finalizeAcceptedImage({
           replyToken: event.replyToken,
           replyType: "slip_manual_review",
           semanticKey: "slip_manual_review",
-          text: "รับรูปแล้วครับ ขอเช็กแปปนึง\nถ้าเป็นสลิปโอน เดี๋ยวผมเปิดสิทธิ์แล้วแจ้งกลับในแชตนี้เลยครับ",
+          text: "รับรูปแล้ว ขอเช็ก\nถ้าเป็นสลิปโอน จะเปิดสิทธิ์แล้วแจ้งกลับในแชตนี้เลย",
           alternateTexts: [
-            "รอแปปนะครับ กำลังเช็กรูปที่ส่งมาให้อยู่",
-            "กำลังดูให้อยู่ครับ อีกแปปเดียว เดี๋ยวแจ้งผลในแชตนี้",
+            "รอแปป กำลังเช็กรูปที่ส่งมาให้อยู่",
+            "กำลังดูให้อยู่ อีกแปปเดียว แจ้งผลในแชตนี้",
           ],
         });
         return;
@@ -3267,7 +3267,7 @@ async function finalizeAcceptedImage({
         semanticKey: "slip_received",
         text: buildSlipReceivedText({ paymentRef: slipPaymentRef }),
         alternateTexts: [
-          "รับสลิปแล้วครับ รอแอดมินตรวจแป๊บนึงนะครับ",
+          "รับสลิปแล้ว รอแอดมินตรวจ",
         ],
       });
       logEvent("slip_uploaded", {
@@ -3295,9 +3295,9 @@ async function finalizeAcceptedImage({
         replyToken: event.replyToken,
         replyType: "slip_save_failed",
         semanticKey: "slip_save_failed",
-        text: "สลิปเข้ามาไม่ครบครับ ส่งรูปสลิปมาใหม่อีกครั้งได้เลย",
+        text: "สลิปเข้ามาไม่ครบ ส่งรูปสลิปมาใหม่อีกครั้งได้",
         alternateTexts: [
-          "บันทึกสลิปไม่สำเร็จชั่วคราว ลองส่งสลิปใหม่อีกครั้งได้เลยครับ",
+          "บันทึกสลิปไม่สำเร็จชั่วคราว ลองส่งสลิปใหม่อีกครั้งได้",
         ],
       });
       return;
@@ -3462,7 +3462,7 @@ async function finalizeAcceptedImage({
         await replyText(
           client,
           event.replyToken,
-          "ตอนนี้อาจารย์ขอพักแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่",
+          "ตอนนี้อาจารย์ขอพัก อีกค่อยส่งเข้ามาใหม่",
         );
       } catch (replyErr) {
         console.error(
@@ -3570,7 +3570,7 @@ async function finalizeAcceptedImage({
         await replyText(
           client,
           event.replyToken,
-          "รูปเข้ามาไม่ครบครับ ส่งมาใหม่อีกครั้งได้เลย",
+          "รูปเข้ามาไม่ครบ ส่งมาใหม่อีกครั้งได้",
         );
       } catch (replyErr) {
         console.error(
@@ -3749,7 +3749,7 @@ async function handleImageMessage({ client, event, userId, session }) {
         semanticKey: "abuse_payment_lock_image_slip",
         text: ABUSE_MSG_PAYMENT_LOCK,
         alternateTexts: [
-          "เรื่องชำระเงินส่งถี่ไปหน่อย รอสักครู่แล้วลองใหม่นะครับ",
+          "เรื่องชำระเงินส่งถี่ไปหน่อย รอแล้วลองใหม่",
         ],
       });
       return;
@@ -3794,13 +3794,13 @@ async function handleImageMessage({ client, event, userId, session }) {
   if (getBirthdateChangeFlowState(userId)) {
     const st = getBirthdateChangeFlowState(userId);
     let hint =
-      "รบกวนตอบกลับเป็นข้อความก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
+      "ตอบกลับเป็นข้อความก่อน ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     if (st === BIRTHDATE_CHANGE_FLOW.WAITING_DATE) {
       const askLine = pickBirthdateAskDateLine(userId);
-      hint = `ตอนนี้กำลังรอวันเกิดใหม่อยู่ครับ รบกวนพิมพ์วันเกิดเป็นข้อความก่อนนะครับ\n\n${askLine}`;
+      hint = `ตอนนี้กำลังรอวันเกิดใหม่อยู่ พิมพ์วันเกิดเป็นข้อความก่อน\n\n${askLine}`;
     } else if (st === BIRTHDATE_CHANGE_FLOW.WAITING_FINAL_CONFIRM) {
       hint =
-        "รบกวนตอบกลับเป็นข้อความยืนยันก่อนนะครับ ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
+        "ตอบกลับเป็นข้อความยืนยันก่อน ถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้";
     }
     await sendNonScanReply({
       client,
@@ -3810,7 +3810,7 @@ async function handleImageMessage({ client, event, userId, session }) {
       semanticKey: "birthdate_update_prompt",
       text: hint,
       alternateTexts: [
-        `${hint}\n\nลองบอกวันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้เลยครับ`,
+        `${hint}\n\nลองบอกวันเกิดใหม่ตามรูปแบบ DD/MM/YYYY ได้`,
       ],
     });
     return;
@@ -4040,18 +4040,18 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
   if (banM) {
     const target = banM[1];
     const reason = (banM[2] || "").trim() || "manual";
-    if (target === adminUid) { await reply("แบนบัญชีแอดมินเองไม่ได้ครับ"); return true; }
+    if (target === adminUid) { await reply("แบนบัญชีแอดมินเองไม่ได้"); return true; }
     const { data: exists } = await supabase.from("app_users").select("display_name").eq("line_user_id", target).maybeSingle();
-    if (!exists) { await reply("ไม่พบ ID นี้ในระบบครับ เช็คอีกครั้ง"); return true; }
+    if (!exists) { await reply("ไม่พบ ID นี้ในระบบ เช็คอีกครั้ง"); return true; }
     const crypto = await import("node:crypto");
     const nonce = crypto.randomBytes(3).toString("hex");
     try {
       const { getScanV2Redis } = await import("../redis/scanV2Redis.js");
       const r = await getScanV2Redis();
-      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว (redis) ยังไม่แบนครับ"); return true; }
+      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว (redis) ยังไม่แบน"); return true; }
       // key ต่อ nonce (Codex: รหัสผิดห้ามกิน nonce ที่ถูกต้อง)
       await r.set(`ban:nonce:${adminUid}:${nonce}`, JSON.stringify({ target, reason }), "EX", 300);
-    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบนครับ"); return true; }
+    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบน"); return true; }
     await reply(
       `กำลังจะแบน ${exists.display_name || "(ไม่มีชื่อ)"}\n${target}\nเหตุผล: ${reason}\n\nยืนยันภายใน 5 นาที พิมพ์:\nยืนยันแบน ${nonce}`,
     );
@@ -4064,7 +4064,7 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     try {
       const { getScanV2Redis } = await import("../redis/scanV2Redis.js");
       const r = await getScanV2Redis();
-      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบนครับ"); return true; }
+      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบน"); return true; }
       // atomic consume เฉพาะ key ของ nonce ที่พิมพ์มา — ผิด = ไม่แตะตัวที่ถูก
       const raw = await r.eval(
         "local v=redis.call('GET',KEYS[1]) if v then redis.call('DEL',KEYS[1]) end return v",
@@ -4072,9 +4072,9 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
         `ban:nonce:${adminUid}:${confirmM[1]}`,
       );
       payload = raw ? JSON.parse(raw) : null;
-    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบนครับ"); return true; }
+    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบน"); return true; }
     if (!payload) {
-      await reply("รหัสยืนยันไม่ตรงหรือหมดอายุครับ เริ่มคำสั่ง แบน ใหม่อีกครั้ง");
+      await reply("รหัสยืนยันไม่ตรงหรือหมดอายุ เริ่มคำสั่ง แบน ใหม่อีกครั้ง");
       return true;
     }
     const { banUser } = await import("../services/ban/bannedUsers.repo.js");
@@ -4082,26 +4082,26 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     await reply(
       res.ok
         ? res.cacheSynced === false
-          ? `แบนบันทึกแล้วครับ\n${payload.target}\nแต่ระบบ cache ขัดข้อง อาจมีผลช้ากว่าปกติ เช็คซ้ำด้วย ดูแบน ได้ พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
-          : `แบนแล้วครับ\n${payload.target}\nระบบจะเงียบกับบัญชีนี้ทุกช่องทาง พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
+          ? `แบนบันทึกแล้ว\n${payload.target}\nแต่ระบบ cache ขัดข้อง อาจมีผลช้ากว่าปกติ เช็คซ้ำด้วย ดูแบน ได้ พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
+          : `แบนแล้ว\n${payload.target}\nระบบจะเงียบกับบัญชีนี้ทุกช่องทาง พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
         : res.reason === "already_banned"
-          ? "บัญชีนี้ถูกแบนอยู่แล้วครับ"
+          ? "บัญชีนี้ถูกแบนอยู่แล้ว"
           : res.reason === "db_outcome_unknown" || res.reason === "reconcile_queue_unavailable"
             // honesty (Codex รอบ 10): อ้างว่า "กันไว้แล้ว" ได้เฉพาะเมื่อเขียน cache สำเร็จจริง
             ? res.enforcementHeld === true
-              ? `ยังไม่ยืนยันผลจากฐานข้อมูลครับ\n${payload.target}\nระบบกันบัญชีนี้ไว้ก่อนแล้ว เช็คซ้ำด้วย ดูแบน อีกครั้งในสักครู่`
-              : `ยังไม่ยืนยันผลจากฐานข้อมูลครับ\n${payload.target}\nและระบบกันไว้ล่วงหน้าไม่สำเร็จ (cache ขัดข้อง) ลูกค้าอาจยังใช้งานได้ พิมพ์ แบน ${payload.target} ซ้ำอีกครั้ง`
+              ? `ยังไม่ยืนยันผลจากฐานข้อมูล\n${payload.target}\nระบบกันบัญชีนี้ไว้ก่อนแล้ว เช็คซ้ำด้วย ดูแบน อีกครั้งใน`
+              : `ยังไม่ยืนยันผลจากฐานข้อมูล\n${payload.target}\nและระบบกันไว้ล่วงหน้าไม่สำเร็จ (cache ขัดข้อง) ลูกค้าอาจยังใช้งานได้ พิมพ์ แบน ${payload.target} ซ้ำอีกครั้ง`
           : res.reason === "pending_reconcile"
-            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูลครับ ระบบกำลังตามให้ตรงอยู่ รอสักครู่แล้วลองใหม่`
+            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูล ระบบกำลังตามให้ตรงอยู่ รอแล้วลองใหม่`
           : res.reason === "pending_guard_unavailable"
             // redis ล้ม = ไม่รู้ว่ามีงานเก่าค้างไหม — fail-closed ไม่แตะ DB (Codex รอบ 11)
-            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราวครับ ยังไม่แตะฐานข้อมูล รอสักครู่แล้วพิมพ์คำสั่งซ้ำ`
+            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราว ยังไม่แตะฐานข้อมูล รอแล้วพิมพ์คำสั่งซ้ำ`
           : res.reason === "cache_unreconciled"
             // DB บันทึกแบนแล้วแต่ระบบ cache ยังไม่ยอมรับ = ยังไม่มีผลจริง ห้ามบอกว่าเรียบร้อย
-            ? `บันทึกแบนใน DB แล้ว แต่ระบบยังไม่บังคับใช้ครับ\n${payload.target}\nพิมพ์คำสั่ง แบน ซ้ำอีกครั้งเพื่อให้มีผล`
+            ? `บันทึกแบนใน DB แล้ว แต่ระบบยังไม่บังใช้\n${payload.target}\nพิมพ์คำสั่ง แบน ซ้ำอีกครั้งเพื่อให้มีผล`
             : res.reason === "busy"
-              ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ครับ รอสักครู่แล้วลองใหม่"
-              : "แบนไม่สำเร็จ (ระบบฐานข้อมูล) ลองใหม่อีกครั้งครับ",
+              ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ รอแล้วลองใหม่"
+              : "แบนไม่สำเร็จ (ระบบฐานข้อมูล) ลองใหม่อีกครั้ง",
     );
     return true;
   }
@@ -4113,26 +4113,26 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     await reply(
       res.ok
         ? res.cacheCleared === false
-          ? `ปลดแบนใน DB แล้วครับ ${unbanM[1]} แต่ล้าง cache ไม่ครบ — อาจยังเงียบต่ออีกพักหนึ่ง ถ้าเกิน 5 นาทีพิมพ์ ปลดแบน ${unbanM[1]} ซ้ำอีกครั้ง`
-          : `ปลดแบนแล้วครับ ${unbanM[1]} กลับมาใช้งานได้ปกติ (ล้างสถานะเงียบชั่วคราวให้ด้วยแล้ว)`
+          ? `ปลดแบนใน DB แล้ว ${unbanM[1]} แต่ล้าง cache ไม่ครบ — อาจยังเงียบต่ออีกพักหนึ่ง ถ้าเกิน 5 นาทีพิมพ์ ปลดแบน ${unbanM[1]} ซ้ำอีกครั้ง`
+          : `ปลดแบนแล้ว ${unbanM[1]} กลับมาใช้งานได้ปกติ (ล้างสถานะเงียบชั่วคราวให้ด้วยแล้ว)`
         : res.reason === "busy"
-          ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ครับ รอสักครู่แล้วลองใหม่"
+          ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ รอแล้วลองใหม่"
           : res.reason === "db_outcome_unknown" || res.reason === "reconcile_queue_unavailable"
             ? res.enforcementHeld === true
-              ? `ยังไม่ยืนยันผลจากฐานข้อมูลครับ บัญชีนี้ยังถูกกันไว้ก่อน ระบบจะปรับให้ตรงเองเมื่อฐานข้อมูลตอบ เช็คซ้ำด้วย ดูแบน อีกครั้ง`
-              : `ยังไม่ยืนยันผลจากฐานข้อมูลครับ และยืนยันสถานะกันไว้ไม่ได้ (cache ขัดข้อง) เช็คซ้ำด้วย ดูแบน อีกครั้งในสักครู่`
+              ? `ยังไม่ยืนยันผลจากฐานข้อมูล บัญชีนี้ยังถูกกันไว้ก่อน ระบบจะปรับให้ตรงเองเมื่อฐานข้อมูลตอบ เช็คซ้ำด้วย ดูแบน อีกครั้ง`
+              : `ยังไม่ยืนยันผลจากฐานข้อมูล และยืนยันสถานะกันไว้ไม่ได้ (cache ขัดข้อง) เช็คซ้ำด้วย ดูแบน อีกครั้งใน`
           : res.reason === "pending_reconcile"
-            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูลครับ รอสักครู่แล้วลองใหม่`
+            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูล รอแล้วลองใหม่`
           : res.reason === "pending_guard_unavailable"
-            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราวครับ ยังไม่แตะฐานข้อมูล รอสักครู่แล้วพิมพ์คำสั่งซ้ำ`
+            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราว ยังไม่แตะฐานข้อมูล รอแล้วพิมพ์คำสั่งซ้ำ`
           : res.reason === "cache_unreconciled"
             // DB ปลดแล้วแต่ cache ยังไม่ยอมรับ — ยังกันบัญชีไว้ก่อน (fail-closed) ระบบตามปรับให้ตรงเอง
-            ? `ปลดแบนใน DB แล้วครับ ${unbanM[1]} แต่ระบบ cache ยังไม่ยอมรับ — บัญชีนี้อาจยังเงียบต่ออีกพัก ระบบจะตามปรับให้ตรงเองครับ เช็คซ้ำด้วย ดูแบน อีกครั้งในสักครู่`
+            ? `ปลดแบนใน DB แล้ว ${unbanM[1]} แต่ระบบ cache ยังไม่ยอมรับ — บัญชีนี้อาจยังเงียบต่ออีกพัก ระบบจะตามปรับให้ตรงเอง เช็คซ้ำด้วย ดูแบน อีกครั้งใน`
           : res.reason === "not_banned"
           ? res.cacheCleared === false
-            ? "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ แต่ล้างสถานะชั่วคราวไม่ครบ ระบบจะตามล้างให้เองครับ ถ้าเกิน 5 นาทียังเงียบพิมพ์คำสั่งนี้ซ้ำ"
-            : "บัญชีนี้ไม่ได้ถูกแบนอยู่ครับ"
-          : "ปลดแบนไม่สำเร็จ ลองใหม่อีกครั้งครับ",
+            ? "บัญชีนี้ไม่ได้ถูกแบนอยู่ แต่ล้างสถานะชั่วคราวไม่ครบ ระบบจะตามล้างให้เอง ถ้าเกิน 5 นาทียังเงียบพิมพ์คำสั่งนี้ซ้ำ"
+            : "บัญชีนี้ไม่ได้ถูกแบนอยู่"
+          : "ปลดแบนไม่สำเร็จ ลองใหม่อีกครั้ง",
     );
     return true;
   }
@@ -4140,11 +4140,11 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
   if (/^ดูแบน$/.test(t)) {
     const { listActiveBans } = await import("../services/ban/bannedUsers.repo.js");
     const { ok, rows } = await listActiveBans();
-    if (!ok) { await reply("อ่านรายการแบนไม่ได้ครับ ลองใหม่"); return true; }
+    if (!ok) { await reply("อ่านรายการแบนไม่ได้ ลองใหม่"); return true; }
     await reply(
       rows.length
         ? "รายการแบน (manual):\n" + rows.map((r0) => `${r0.line_user_id}\n  เหตุผล: ${r0.reason || "-"}`).join("\n")
-        : "ยังไม่มีบัญชีถูกแบนครับ",
+        : "ยังไม่มีบัญชีถูกแบน",
     );
     return true;
   }
@@ -4155,9 +4155,9 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     const { readPendingReconciles } = await import("../services/ban/banReconcileQueue.js");
     const read = await readPendingReconciles();
     // อ่านล้ม ≠ ว่าง (Codex รอบ 13): ห้ามตอบ "ไม่มีงานค้าง" ทั้งที่ไม่รู้จริง
-    if (!read.ok) { await reply("อ่านงานค้างไม่ได้ครับ (redis) ลองใหม่อีกครั้ง"); return true; }
+    if (!read.ok) { await reply("อ่านงานค้างไม่ได้ (redis) ลองใหม่อีกครั้ง"); return true; }
     const entries = read.entries;
-    if (!entries.length) { await reply("ไม่มีงานแบน/ปลดแบนค้างครับ"); return true; }
+    if (!entries.length) { await reply("ไม่มีงานแบน/ปลดแบนค้าง"); return true; }
     const lines = entries.map((e) => {
       const ageMin = Math.round((Date.now() - e.enqueuedAt) / 60000);
       return `${e.uid}\n  สั่ง ${e.reason} (คาด ${e.targetState}) ค้าง ${ageMin} นาที · opId ${e.opId}`;
@@ -4175,16 +4175,16 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     const res = await adminClearPendingOperation({ uid: clearOpM[1], opId: clearOpM[2], clearedBy: adminUid });
     await reply(
       res.ok
-        ? `ปลดงานค้างแล้วครับ\n${clearOpM[1]} (opId ${clearOpM[2]})\nเช็คสถานะจริงด้วย ดูแบน อีกครั้ง — ถ้า cache ยังไม่ตรงพิมพ์ แบน/ปลดแบน ตามที่ตั้งใจซ้ำ`
+        ? `ปลดงานค้างแล้ว\n${clearOpM[1]} (opId ${clearOpM[2]})\nเช็คสถานะจริงด้วย ดูแบน อีกครั้ง — ถ้า cache ยังไม่ตรงพิมพ์ แบน/ปลดแบน ตามที่ตั้งใจซ้ำ`
         : res.reason === "no_pending_op"
-          ? "ไม่มีงานค้างของบัญชีนี้ครับ"
+          ? "ไม่มีงานค้างของบัญชีนี้"
           : res.reason === "op_mismatch"
-            ? `opId ไม่ตรงงานที่ค้างอยู่ครับ (ปัจจุบัน ${String(res.pending || "?").slice(0, 12)}) — เช็คด้วย งานแบนค้าง ก่อน`
+            ? `opId ไม่ตรงงานที่ค้างอยู่ (ปัจจุบัน ${String(res.pending || "?").slice(0, 12)}) — เช็คด้วย งานแบนค้าง ก่อน`
           : res.reason === "queue_read_failed"
-            ? "อ่านคิวงานค้างไม่ได้ครับ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้ง"
+            ? "อ่านคิวงานค้างไม่ได้ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้ง"
           : res.reason === "queue_member_missing"
-            ? "สถานะงานค้างผิดปกติครับ (guard อยู่แต่ไม่พบงานในคิว) ยังไม่ปลดอะไร — แจ้ง dev ตรวจ redis ก่อน"
-            : "ปลดงานค้างไม่สำเร็จ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้งครับ",
+            ? "สถานะงานค้างผิดปกติ (guard อยู่แต่ไม่พบงานในคิว) ยังไม่ปลดอะไร — แจ้ง dev ตรวจ redis ก่อน"
+            : "ปลดงานค้างไม่สำเร็จ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้ง",
     );
     return true;
   }
@@ -4208,7 +4208,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
     if (!list.length) {
       await client.replyMessage(event.replyToken, {
         type: "text",
-        text: `ไม่เจอลูกค้าชื่อ "${nameQuery}" ครับ ลองพิมพ์ชื่อตามที่ขึ้นในแชท LINE เป๊ะ ๆ อีกครั้ง (รูปแบบ: ช่วยตอบ ชื่อ: ข้อความที่ตอบไป)`,
+        text: `ไม่เจอลูกค้าชื่อ "${nameQuery}" ลองพิมพ์ชื่อตามที่ขึ้นในแชท LINE เป๊ะ ๆ อีกครั้ง (รูปแบบ: ช่วยตอบ ชื่อ: ข้อความที่ตอบไป)`,
       });
       return true;
     }
@@ -4239,13 +4239,13 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
     );
     await client.replyMessage(event.replyToken, {
       type: "text",
-      text: `รับทราบครับ ผูกกับคุณ ${best.display_name || nameQuery} แล้ว อาจารย์จะตอบต่อจากที่พี่ตอบไว้ให้เนียน (มีผล 48 ชม.)`,
+      text: `รับทราบ ผูกกับคุณ ${best.display_name || nameQuery} แล้ว อาจารย์จะตอบต่อจากที่พี่ตอบไว้ให้เนียน (มีผล 48 ชม.)`,
     });
     console.log(JSON.stringify({ event: "ADMIN_ASSIST_NOTE_SAVED", target: targetUid.slice(0, 8), chars: said.length }));
   } catch (e) {
     console.error("[ADMIN_ASSIST] failed:", e?.message);
     try {
-      await client.replyMessage(event.replyToken, { type: "text", text: "บันทึกไม่สำเร็จ ลองใหม่อีกครั้งครับ" });
+      await client.replyMessage(event.replyToken, { type: "text", text: "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง" });
     } catch { /* ignore */ }
   }
   return true;
@@ -4279,9 +4279,9 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
     const prompt = await buildRegistrationPrompt(attempt);
     await replyText(
       [
-        "ฟอร์มเปิดในแอป LINE นี้เลยครับ ไม่ต้องติดตั้งอะไรเพิ่ม",
-        "ลองแตะปุ่มบนการ์ดลงทะเบียนอีกครั้ง หรือแตะลิงก์จากปุ่มด้านล่างนี้ได้เลยครับ",
-        "ถ้ายังเปิดไม่ได้ ลองปิดแล้วเปิดแอป LINE ใหม่ก่อนครับ",
+        "ฟอร์มเปิดในแอป LINE นี้เลย ไม่ต้องติดตั้งอะไรเพิ่ม",
+        "ลองแตะปุ่มบนการ์ดลงทะเบียนอีกครั้ง หรือแตะลิงก์จากปุ่มด้านล่างนี้ได้",
+        "ถ้ายังเปิดไม่ได้ ลองปิดแล้วเปิดแอป LINE ใหม่ก่อน",
       ].join("\n"),
       prompt?.quickReply || null,
     );
@@ -4289,12 +4289,12 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
   }
   if (cls.kind === "cancel") {
     await hold.cancelHold(userId).catch(() => {});
-    await replyText("รับทราบครับ ยกเลิกให้แล้ว รูปที่ฝากไว้ (ถ้ามี) ผมนำออกจากคิวแล้วครับ พร้อมเมื่อไหร่ทักมาใหม่ได้เลย");
+    await replyText("รับทราบ ยกเลิกให้แล้ว รูปที่ฝากไว้ (ถ้ามี) ผมนำออกจากคิวแล้ว พร้อมเมื่อไหร่ทักมาใหม่ได้");
     return true;
   }
   if (cls.kind === "admin_request") {
     await replyText(
-      "ผมแอดมินอยู่ตรงนี้ครับ พิมพ์เรื่องที่ต้องการได้เลย\n\nส่วนการอ่านพลัง ขอข้อมูลเจ้าของก่อนหนึ่งขั้น กดการ์ดลงทะเบียน หรือพิมพ์ ช่วยลงทะเบียน ให้ผมถามทีละข้อในแชทก็ได้ครับ",
+      "ผมแอดมินอยู่ตรงนี้ พิมพ์เรื่องที่ต้องการได้\n\nส่วนการอ่านพลัง ขอข้อมูลเจ้าของก่อนหนึ่งขั้น กดการ์ดลงทะเบียน หรือพิมพ์ ช่วยลงทะเบียน ให้ผมถามทีละข้อในแชทก็ได้",
     );
     return true;
   }
@@ -4303,15 +4303,15 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
   let descLine = null;
   if (cls.kind === "description") {
     const saved = await hold.attachDescription(userId, text).catch(() => null);
-    if (saved) descLine = `รับข้อมูลไว้แล้วครับ — ${saved}`;
+    if (saved) descLine = `รับข้อมูลไว้แล้ว — ${saved}`;
   }
 
   // 4) สถานะรูป + การ์ดตาม cooldown (ทุก reply ต้องบอกสถานะรูป — Codex anti-loop)
   const h = await hold.peekHold(userId);
   const imageLine = h?.storagePath
-    ? "รูปที่ส่งไว้ผมถือไว้ให้แล้ว ยังไม่ต้องส่งซ้ำครับ"
-    : "ยังไม่มีรูปค้างในคิวครับ ลงทะเบียนเสร็จแล้วค่อยส่งรูปได้เลย";
-  const closing = "เหลือกรอกข้อมูลเจ้าของอีกขั้นเดียวครับ";
+    ? "รูปที่ส่งไว้ผมถือไว้ให้แล้ว ยังไม่ต้องส่งซ้ำ"
+    : "ยังไม่มีรูปค้างในคิว ลงทะเบียนเสร็จแล้วค่อยส่งรูปได้";
+  const closing = "เหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว";
   const showCard = await hold.tryMarkRegCardShown(userId, "text_gate");
   const prompt = await buildRegistrationPrompt(attempt);
   if (!prompt) return false; // ไม่มี LIFF — ปล่อยไหลตาม flow เดิม (fail-open)
@@ -4436,12 +4436,12 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
   if (!begin.ok) {
     const msg =
       begin.reason === "already_running"
-        ? "กำลังอ่านรูปเดิมอยู่ครับ รอผลได้เลย ไม่ต้องกดซ้ำครับ"
+        ? "กำลังอ่านรูปเดิมอยู่ รอผลได้ ไม่ต้องกดซ้ำ"
         : begin.reason === "already_resumed"
-          ? "รูปนี้เข้าคิวอาจารย์เรียบร้อยแล้วครับ รอผลได้เลย ไม่ต้องกดซ้ำครับ"
+          ? "รูปนี้เข้าคิวอาจารย์เรียบร้อยแล้ว รอผลได้ ไม่ต้องกดซ้ำ"
           : begin.reason === "expired" || begin.reason === "no_hold"
-            ? "รูปที่ฝากไว้หมดอายุแล้วครับ (เก็บให้ 24 ชั่วโมง) รบกวนถ่ายส่งมาใหม่ได้เลยครับ"
-            : "เริ่มอ่านรูปเดิมไม่สำเร็จครับ ลองใหม่อีกครั้ง หรือส่งรูปมาใหม่ได้เลยครับ";
+            ? "รูปที่ฝากไว้หมดอายุแล้ว (เก็บให้ 24 ชั่วโมง) ถ่ายส่งมาใหม่ได้"
+            : "เริ่มอ่านรูปเดิมไม่สำเร็จ ลองใหม่อีกครั้ง หรือส่งรูปมาใหม่ได้";
     try {
       await client.replyMessage(event.replyToken, { type: "text", text: msg });
     } catch { /* ignore */ }
@@ -4483,7 +4483,7 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
     try {
       await client.pushMessage(userId, {
         type: "text",
-        text: "ระบบสะดุดตอนเริ่มอ่านครับ รูปยังอยู่ครบ แตะปุ่มเดิมอีกครั้งได้เลยครับ",
+        text: "ระบบสะดุดตอนเริ่มอ่าน รูปยังอยู่ครบ แตะปุ่มเดิมอีกครั้งได้",
       });
     } catch { /* ignore */ }
     return true;
@@ -4607,7 +4607,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   // ความอดทนอาจารย์: ข้อความกวน (สั้นจุ๋มจิ๋ม/พิมพ์ซ้ำ) นับแต้มใน 30 นาที —
   // 3-4 แต้ม = ตัดบทสุภาพแบบมีบารมี (ไม่เปลือง AI), 5+ = เงียบ, 8+ = แบน 24 ชม. (เว้นลูกค้าเคยจ่าย)
   // ถามสถานะผลซ้ำ/บ่นรอนาน = ลูกค้ารอผลจริง ไม่ใช่ troll — ใช้ SSOT ตัวเดียว
-  // กับ result-status router (Codex รอบ 4: regex คนละชุดทำ "รอนานแล้วครับ" โดนนับแต้ม)
+  // กับ result-status router (Codex รอบ 4: regex คนละชุดทำ "รอนานแล้ว" โดนนับแต้ม)
   const { isStatusQueryText } = await import("../services/scanV2/statusQuery.util.js");
   const isResultStatusQueryText = isStatusQueryText(text);
   if (!isResultStatusQueryText) try {
@@ -4683,8 +4683,8 @@ async function handleTextMessage({ client, event, userId, session }) {
           replyToken: event.replyToken,
           replyType: "scan_in_flight_wait",
           semanticKey: "scan_in_flight_wait",
-          text: "ชิ้นที่ส่งมาอาจารย์กำลังดูอยู่ครับ อีกสัก 1-2 นาทีผลออก รอแปปนึงนะครับ",
-          alternateTexts: ["รอผลอีกนิดนะครับ อาจารย์กำลังดูอยู่ เดี๋ยวผลมาเลย"],
+          text: "รอผลชิ้นแรกก่อน",
+          alternateTexts: ["รอผลอีกนิด อาจารย์กำลังดูอยู่ ผลมาเลย"],
         });
       }
       return;
@@ -4821,9 +4821,9 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyToken: event.replyToken,
         replyType: "fengshui_not_open",
         semanticKey: "fengshui_not_open",
-        text: "ตอนนี้อาจารย์ยังไม่เปิดรับดูฮวงจุ้ยหรือพลังบ้านครับ กำลังเตรียมเปิดเร็ว ๆ นี้ เปิดเมื่อไหร่จะแจ้งในแชทนี้เลย\n\nตอนนี้ส่งรูปพระ เครื่องราง หิน หรือกำไล มาให้อาจารย์อ่านพลังก่อนได้ครับ",
+        text: "ตอนนี้อาจารย์ยังไม่เปิดรับดูฮวงจุ้ยหรือพลังบ้าน กำลังเตรียมเปิดเร็ว ๆ นี้ เปิดเมื่อไหร่จะแจ้งในแชทนี้เลย\n\nตอนนี้ส่งรูปพระ เครื่องราง หิน หรือกำไล มาให้อาจารย์อ่านพลังก่อนได้",
         alternateTexts: [
-          "เรื่องฮวงจุ้ยกับพลังบ้านตอนนี้ยังไม่เปิดรับครับ ใกล้เปิดแล้ว เดี๋ยวอาจารย์แจ้งในแชทนี้ ระหว่างนี้ส่งรูปชิ้นงานมาอ่านพลังก่อนได้เลย",
+          "เรื่องฮวงจุ้ยกับพลังบ้านตอนนี้ยังไม่เปิดรับ ใกล้เปิดแล้ว จะแจ้งในแชทนี้ ระหว่างนี้ส่งรูปชิ้นงานมาอ่านพลังก่อนได้",
         ],
       });
       return;
@@ -5138,9 +5138,9 @@ async function handleTextMessage({ client, event, userId, session }) {
       replyToken: event.replyToken,
       replyType: "awaiting_payment_soft_defer_ack",
       semanticKey: "awaiting_payment_soft_defer_ack",
-      text: "ได้เลยครับ ไว้พร้อมเมื่อไหร่พิมพ์ จ่าย หรือส่งรูปมาสแกนใหม่ได้เลยครับ",
+      text: "ได้ ไว้พร้อมเมื่อไหร่พิมพ์ จ่าย หรือส่งรูปมาสแกนใหม่ได้",
       alternateTexts: [
-        "โอเคครับ ยกเลิกให้แล้ว อยากสแกนหรือเปิดสิทธิ์ตอนไหนบอกได้เลยครับ",
+        "โอเค ยกเลิกให้แล้ว อยากสแกนหรือเปิดสิทธิ์ตอนไหนบอกได้",
       ],
     });
     return;
@@ -5246,7 +5246,7 @@ async function handleTextMessage({ client, event, userId, session }) {
               semanticKey: "pending_verify_status",
               text: pendingText,
               alternateTexts: [
-                "รอแจ้งผลในแชตนี้ได้เลยครับ",
+                "รอแจ้งผลในแชตนี้ได้",
                 buildPendingVerifyReminderText({ paymentRef }),
               ],
               convSurface: buildConvSurfacePendingVerify(
@@ -5412,9 +5412,9 @@ async function handleTextMessage({ client, event, userId, session }) {
             replyToken: event.replyToken,
             replyType: "gemini_front_help_deterministic",
             semanticKey: "gemini_front_help_deterministic:phase1",
-            text: "ช่วยสั้นๆ: ต้องการชำระแจ้งว่าจ่ายเงินได้ หรือส่งรูปสลิปในแชตนี้หลังโอน รอแอดมินตรวจสลิปก่อนใช้ครับ",
+            text: "ช่วยสั้นๆ: ต้องการชำระแจ้งว่าจ่ายเงินได้ หรือส่งรูปสลิปในแชตนี้หลังโอน รอแอดมินตรวจสลิปก่อนใช้",
             alternateTexts: [
-              "ถ้าส่งสลิปแล้ว รอแจ้งผลในแชตนี้ได้เลยครับ",
+              "ถ้าส่งสลิปแล้ว รอแจ้งผลในแชตนี้ได้",
             ],
           });
           return true;
@@ -5462,9 +5462,9 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyToken: event.replyToken,
         replyType: "soft_verify_prompt",
         semanticKey: "soft_verify_prompt",
-        text: "ก่อนคุยต่อ ตอบว่ายืนยันมาก็ได้ครับ",
+        text: "ก่อนคุยต่อ ตอบว่ายืนยันมาก็ได้",
         alternateTexts: [
-          "ถ้าต้องการใช้งานต่อ บอกว่าเริ่มมาก็ได้ครับ",
+          "ถ้าต้องการใช้งานต่อ บอกว่าเริ่มมาก็ได้",
         ],
       });
       return;
@@ -5574,7 +5574,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "birthdate_change_candidate",
         text: pickBirthdateFirstConfirmQuestion(userId),
         alternateTexts: [
-          `${pickBirthdateFirstConfirmQuestion(userId)}\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\nยืนยันได้ด้วยคำว่าใช่ หรือโอเค`,
         ],
       });
       return;
@@ -5943,7 +5943,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "deterministic_paywall_soft_close",
         text: buildDeterministicPaywallSoftCloseText(),
         alternateTexts: [
-          "โอเคครับ พรุ่งนี้ค่อยส่งรูปมาใหม่ได้เลยนะครับ",
+          "โอเค พรุ่งนี้ค่อยส่งรูปมาใหม่ได้",
         ],
       });
       return;
@@ -6137,7 +6137,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             semanticKey: "payment_pick_package_menu_ack",
             text: buildSingleOfferPaywallAltText(offer),
             alternateTexts: [
-              "แตะปุ่มด้านล่าง หรือบอกราคามาเลยครับ เดี๋ยวส่งคิวอาร์ให้ทันที",
+              "แตะปุ่มด้านล่าง หรือบอกราคามาเลย ส่งคิวอาร์ให้ทันที",
             ],
             quickReply: {
               items: ackPkgs.slice(0, 3).map((p) => ({
@@ -6453,7 +6453,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "birthdate_change_candidate",
         text: pickBirthdateFirstConfirmQuestion(userId),
         alternateTexts: [
-          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเค`,
         ],
       });
       return;
@@ -6538,8 +6538,8 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: slipRtClaim,
         text: slipReminderClaim,
         alternateTexts: [
-          "ส่งรูปสลิปในแชตนี้ได้เลยครับ",
-          "ถ้าโอนแล้ว แนบสลิปมาในแชตนี้ได้เลยครับ",
+          "ส่งรูปสลิปในแชตนี้ได้",
+          "ถ้าโอนแล้ว แนบสลิปมาในแชตนี้ได้",
         ],
         convSurface: buildConvSurfaceAwaitingSlip(
           userId,
@@ -6715,8 +6715,8 @@ async function handleTextMessage({ client, event, userId, session }) {
             semanticKey: "awaiting_slip_side_question_bridge_back",
             text: clarifierText,
             alternateTexts: [
-              "โอนแล้วแนบสลิปในแชตนี้ได้เลยครับ",
-              'ถ้าต้องการคิวอาร์อีกครั้ง บอกว่า "ขอ QR อีกที" ได้เลยครับ',
+              "โอนแล้วแนบสลิปในแชตนี้ได้",
+              "พิมพ์ ขอ QR อีกที เพื่อรับใหม่",
             ],
             convSurface: buildConvSurfaceAwaitingSlip(
               userId,
@@ -6808,8 +6808,8 @@ async function handleTextMessage({ client, event, userId, session }) {
       semanticKey: slipRemReplyType,
       text: slipReminder,
       alternateTexts: [
-        "ส่งรูปสลิปในแชตนี้ได้เลยครับ",
-        "อยากดูคิวอาร์อีกครั้ง แจ้งว่าจ่ายเงินมาก็ได้ครับ",
+        "ส่งรูปสลิปในแชตนี้ได้",
+        "อยากดูคิวอาร์อีกครั้ง แจ้งว่าจ่ายเงินมาก็ได้",
       ],
       convSurface: buildConvSurfaceAwaitingSlip(
         userId,
@@ -6883,7 +6883,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "birthdate_change_candidate",
         text: pickBirthdateFirstConfirmQuestion(userId),
         alternateTexts: [
-          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
+          `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเค`,
         ],
       });
       return;
@@ -6900,7 +6900,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "pending_verify_payment_cmd",
         text: buildPendingVerifyPaymentCommandText({ userId, paymentRef }),
         alternateTexts: [
-          "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้เลยครับ",
+          "รอแอดมินตรวจสลิปก่อน ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้",
         ],
       });
       logStateMicroIntent({
@@ -6959,7 +6959,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "pending_verify_status",
         text: pendingText,
         alternateTexts: [
-          "รอแจ้งผลในแชตนี้ได้เลยครับ",
+          "รอแจ้งผลในแชตนี้ได้",
           buildPendingVerifyReminderText({ paymentRef }),
         ],
         convSurface: buildConvSurfacePendingVerify(
@@ -7010,7 +7010,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: pvReplyTypeRe,
           text: pendingTextRe,
           alternateTexts: [
-            "รอแจ้งผลในแชตนี้ได้เลยครับ",
+            "รอแจ้งผลในแชตนี้ได้",
             buildPendingVerifyReminderText({ paymentRef }),
           ],
           convSurface: buildConvSurfacePendingVerify(
@@ -7105,7 +7105,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: pvSemantic,
         text: pendingText,
         alternateTexts: [
-          "รอแจ้งผลในแชตนี้ได้เลยครับ",
+          "รอแจ้งผลในแชตนี้ได้",
           buildPendingVerifyReminderText({ paymentRef }),
         ],
         convSurface: buildConvSurfacePendingVerify(
@@ -7145,7 +7145,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             semanticKey: "pending_verify_side_question_bridge_back",
             text: clarifierText,
             alternateTexts: [
-              "ตอนนี้รอแอดมินตรวจสลิปก่อนครับ รอแจ้งผลในแชตนี้ได้เลยครับ",
+              "ตอนนี้รอแอดมินตรวจสลิปก่อน รอแจ้งผลในแชตนี้ได้",
             ],
             convSurface: buildConvSurfacePendingVerify(
               userId,
@@ -7245,7 +7245,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       semanticKey: pvSemantic,
       text: pendingText,
       alternateTexts: [
-        "รอแจ้งผลในแชตนี้ได้เลยครับ",
+        "รอแจ้งผลในแชตนี้ได้",
         buildPendingVerifyReminderText({ paymentRef }),
       ],
       convSurface: buildConvSurfacePendingVerify(
@@ -7288,7 +7288,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         const ambTier = guidanceTierFromStreak(ambStreak);
         const ambMsg =
           ambTier === "micro"
-            ? "ลองบอกวันเกิดมาใหม่ได้เลยครับ"
+            ? "ลองบอกวันเกิดมาใหม่ได้"
             : BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT;
         emitStateMicroIntent({
           userId,
@@ -7393,7 +7393,7 @@ async function handleTextMessage({ client, event, userId, session }) {
               replyType: "waiting_birthdate_side_question_bridge_back",
               semanticKey: "waiting_birthdate_side_question_bridge_back",
               text: clarifierText,
-              alternateTexts: ["ตอนนี้ขอวันเกิดก่อนครับ เช่น 19/08/2528"],
+              alternateTexts: ["ตอนนี้ขอวันเกิดก่อน เช่น 19/08/2528"],
               convSurface: buildConvSurfaceBirthdate(
                 userId,
                 text,
@@ -7435,7 +7435,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "waiting_birthdate_wrong_state_redirect",
           text: bdDeferPrimary,
           alternateTexts: [
-            "ตอนนี้ขอวันเกิดก่อนนะครับ เช่น 19/08/1985 บอกอาจารย์ได้เลยครับ",
+            "ตอนนี้ขอวันเกิดก่อน เช่น 19/08/1985 บอกอาจารย์ได้",
           ],
           convSurface: buildConvSurfaceBirthdate(
             userId,
@@ -7542,7 +7542,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "scan_ready_guidance",
         text: scanReadyText,
         alternateTexts: [
-          "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
+          "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้",
           "ส่งรูปมา 1 รูป เดี๋ยวอาจารย์อ่านให้",
         ],
       });
@@ -7601,7 +7601,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "pending_verify_payment_cmd",
           text: buildPendingVerifyPaymentCommandText({ userId, paymentRef }),
           alternateTexts: [
-            "รอแอดมินตรวจสลิปก่อนนะครับ ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้เลยครับ",
+            "รอแอดมินตรวจสลิปก่อน ถ้ายังไม่ได้แนบสลิป แนบในแชตนี้ได้",
           ],
         });
         return;
@@ -7628,7 +7628,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "pending_verify_status",
           text: pendingText,
           alternateTexts: [
-            "รอแจ้งผลในแชตนี้ได้เลยครับ",
+            "รอแจ้งผลในแชตนี้ได้",
             buildPendingVerifyReminderText({ paymentRef }),
           ],
           convSurface: buildConvSurfacePendingVerify(
@@ -7656,7 +7656,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "pending_verify_reminder",
           text: pvRem,
           alternateTexts: [
-            "รอตรวจสลิปแป๊บนึงนะครับ แจ้งแอดมินถ้ารอนานเกินไป",
+            "รอตรวจสลิป แจ้งแอดมินถ้ารอนานเกินไป",
           ],
           convSurface: buildConvSurfacePendingVerify(
             userId,
@@ -7712,7 +7712,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             semanticKey: "birthdate_change_candidate",
             text: pickBirthdateFirstConfirmQuestion(userId),
             alternateTexts: [
-              `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
+              `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเค`,
             ],
           });
           return;
@@ -7734,12 +7734,12 @@ async function handleTextMessage({ client, event, userId, session }) {
             });
           }
           const helperText = [
-            "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
+            "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้",
             savedBirthdate
               ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว อาจารย์จะเริ่มสแกนให้ทันที"
               : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ อาจารย์จะขอวันเกิดก่อนสแกน",
             "",
-            "ส่งรูปถัดไปมาได้เลยครับ",
+            "ส่งรูปถัดไปมาได้",
           ].join("\n");
           // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
           await sendNonScanReply({
@@ -7750,7 +7750,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             semanticKey: "scan_energy_helper",
             text: helperText,
             alternateTexts: [
-              "ส่งรูปวัตถุ 1 รูปมาได้เลยครับ แล้วตามด้วยวันเกิดถ้าอาจารย์ถาม",
+              "ส่งรูปวัตถุ 1 รูปมาได้ แล้วตามด้วยวันเกิดถ้าอาจารย์ถาม",
             ],
           });
           return;
@@ -7766,7 +7766,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             "2) ผมจะขอวันเกิด (DD/MM/YYYY)",
             "3) อาจารย์อ่านเสร็จ ผมส่งผลกลับมาในแชทนี้",
             "",
-            `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
+            `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPick} แล้วแจ้งว่าจ่ายเงินมาได้`,
           ].join("\n");
           // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
           await sendNonScanReply({
@@ -7847,7 +7847,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "awaiting_slip_reminder",
           text: slipRem2,
           alternateTexts: [
-            "รอสลิปโอนอยู่นะครับ ส่งสลิปมาในแชทนี้ได้เลย",
+            "รอสลิปโอนอยู่ ส่งสลิปมาในแชทนี้ได้",
           ],
         });
         return;
@@ -7864,7 +7864,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           semanticKey: "birthdate_change_candidate",
           text: pickBirthdateFirstConfirmQuestion(userId),
           alternateTexts: [
-            `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
+            `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเค`,
           ],
         });
         return;
@@ -7901,7 +7901,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       } else if (
         semanticWaitingBd?.reason_short === "multiple_birthdate_candidates"
       ) {
-        const oneDateText = "ขอวันเกิดเพียง 1 วันนะครับ เช่น 19/08/2528";
+        const oneDateText = "ขอวันเกิดเพียง 1 วัน เช่น 19/08/2528";
         await sendNonScanSequenceReply({
           client,
           userId,
@@ -8000,7 +8000,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             await replyText(
               client,
               event.replyToken,
-              "ตอนนี้อาจารย์ขอพักแป๊บนึงครับ อีกสักครู่ค่อยส่งเข้ามาใหม่",
+              "ตอนนี้อาจารย์ขอพัก อีกค่อยส่งเข้ามาใหม่",
             );
           } catch (replyErr) {
             console.error(
@@ -8107,7 +8107,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             await replyText(
               client,
               event.replyToken,
-              "รูปเข้ามาไม่ครบครับ ส่งมาใหม่อีกครั้งได้เลย",
+              "รูปเข้ามาไม่ครบ ส่งมาใหม่อีกครั้งได้",
             );
           } catch (replyErr) {
             console.error(
@@ -8131,7 +8131,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         const ambTier = guidanceTierFromStreak(ambStreak);
         const ambMsg =
           ambTier === "micro"
-            ? "ลองบอกวันเกิดมาใหม่ได้เลยครับ"
+            ? "ลองบอกวันเกิดมาใหม่ได้"
             : BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT;
         if ((await invokePhase1GeminiOrchestrator()).handled) return;
         await sendNonScanSequenceReply({
@@ -8297,7 +8297,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       semanticKey: "birthdate_change_candidate",
       text: pickBirthdateFirstConfirmQuestion(userId),
       alternateTexts: [
-        `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเคนะครับ`,
+        `${pickBirthdateFirstConfirmQuestion(userId)}\n\nยืนยันได้ด้วยคำว่าใช่ หรือโอเค`,
       ],
     });
     return;
@@ -8516,7 +8516,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "greeting_deterministic",
         inboundMessageId: String(event?.message?.id || "") || null,
         text: "สวัสดี",
-        alternateTexts: ["สวัสดีครับ"],
+        alternateTexts: ["สวัสดี"],
         speakerRoleOverride: "admin",
       });
       return;
@@ -8554,12 +8554,12 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
 
     const helperText = [
-      "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้เลยครับ",
+      "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้",
       savedBirthdate
         ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว อาจารย์จะเริ่มสแกนให้ทันที"
         : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ อาจารย์จะขอวันเกิดก่อนสแกน",
       "",
-      "ส่งรูปถัดไปมาได้เลยครับ",
+      "ส่งรูปถัดไปมาได้",
     ].join("\n");
 
     // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
@@ -8571,7 +8571,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       semanticKey: "scan_energy_helper",
       text: helperText,
       alternateTexts: [
-        "ส่งรูปวัตถุ 1 รูปมาได้เลยครับ แล้วตามด้วยวันเกิดถ้าอาจารย์ถาม",
+        "ส่งรูปวัตถุ 1 รูปมาได้ แล้วตามด้วยวันเกิดถ้าอาจารย์ถาม",
       ],
     });
     return;
@@ -8600,7 +8600,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       "2) ผมจะขอวันเกิด (DD/MM/YYYY)",
       "3) อาจารย์อ่านเสร็จ ผมส่งผลกลับมาในแชทนี้",
       "",
-      `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้ครับ`,
+      `หากหมดสิทธิ์ฟรี: เลือกค่าครูด้วย ${payPickMain} แล้วแจ้งว่าจ่ายเงินมาได้`,
     ].join("\n");
     // deterministic ล้วน (Codex: AI=0) — ห้ามผ่าน orchestrator
     await sendNonScanReply({
@@ -8690,8 +8690,8 @@ async function handleFollowEvent({ client, event }) {
       welcomeMsgs.push({
         type: "text",
         text: [
-          "สวัสดีครับ ผมแอดมิน Ener Scan",
-          "ก่อนส่งรูป ขอข้อมูลสำหรับผูกผลอ่านกับเจ้าของสักครู่นะครับ ใช้ประมาณ 1 นาที แล้วส่งรูปชิ้นแรกได้ฟรีเลยครับ",
+          "สวัสดี ผมแอดมิน Ener Scan",
+          "ก่อนส่งรูป ขอข้อมูลสำหรับผูกผลอ่านกับเจ้าของ ใช้ประมาณ 1 นาที แล้วส่งรูปชิ้นแรกได้ฟรีเลย",
         ].join("\n"),
       });
       welcomeMsgs.push(buildRegistrationFlexMessage(gateCfg.text, liffId));
@@ -8765,7 +8765,7 @@ async function handleEventInner({ client, event }) {
   if (!userId) {
     auditExemptEnter(AuditExemptReason.LINE_WEBHOOK_MISSING_USER_ID);
     try {
-      await replyText(client, event.replyToken, "ยังไม่พบข้อมูลผู้ใช้ครับ");
+      await replyText(client, event.replyToken, "ยังไม่พบข้อมูลผู้ใช้");
     } finally {
       auditExemptExit();
     }
@@ -9162,7 +9162,7 @@ export function lineWebhookRouter(lineConfig) {
                     semanticKey: "system_error",
                     text: buildSystemErrorText(),
                     alternateTexts: [
-                      "สัญญาณสะดุดนิดนึงครับ ส่งเข้ามาใหม่อีกทีได้เลย",
+                      "สัญญาณสะดุดนิดนึง ส่งเข้ามาใหม่อีกทีได้",
                     ],
                   });
                 }

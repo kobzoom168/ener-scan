@@ -30,10 +30,10 @@ export async function maybeHandlePrecheckTrigger({ client, event, userId, text }
     await client.replyMessage(event.replyToken, {
       type: "text",
       text:
-        "เปิดโหมดเช็คก่อนเช่าแล้วครับ (30 นาที) ถ่ายรูปองค์ที่กำลังจะเช่าส่งมาได้เลย " +
+        "เปิดโหมดเช็คก่อนเช่าแล้ว (30 นาที) ถ่ายรูปองค์ที่กำลังจะเช่าส่งมาได้" +
         "อาจารย์จะอ่านพลัง เทียบกับของประเภทเดียวกันในระบบ และดูความเข้ากับดวงคุณให้ " +
         "องค์ที่เช็คจะไม่ถูกเก็บเข้าคลังของคุณ (ยังไม่ใช่ของเรา) " +
-        "ใช้สิทธิ์สแกนตามปกติครับ",
+        "ใช้สิทธิ์สแกนตามปกติ",
     });
     console.log(JSON.stringify({ event: "PRECHECK_MODE_ON", lineUserIdPrefix: userId.slice(0, 8) }));
     return true;
@@ -47,9 +47,9 @@ function rangeLine(score, stats) {
   const p25 = Number(stats?.p25);
   const p75 = Number(stats?.p75);
   if (!Number.isFinite(sc) || !Number.isFinite(p25) || !Number.isFinite(p75)) return "";
-  if (sc > p75) return "องค์นี้อ่านค่าได้สูงกว่าช่วงที่พบบ่อยครับ";
-  if (sc < p25) return "องค์นี้อ่านค่าได้ต่างจากช่วงที่พบบ่อย ลองดูข้อมูลด้านอื่นประกอบด้วยครับ";
-  return "องค์นี้อยู่ในช่วงคะแนนที่พบได้บ่อยของของประเภทนี้ครับ";
+  if (sc > p75) return "องค์นี้อ่านค่าได้สูงกว่าช่วงที่พบบ่อย";
+  if (sc < p25) return "องค์นี้อ่านค่าได้ต่างจากช่วงที่พบบ่อย ลองดูข้อมูลด้านอื่นประกอบด้วย";
+  return "องค์นี้อยู่ในช่วงแนนที่พบได้บ่อยของของประเภทนี้";
 }
 
 /**
@@ -104,7 +104,7 @@ export async function handlePrecheckAfterReport({ client, lineUserId, payload })
     ];
     const flex = {
       type: "flex",
-      altText: "ผลเช็คก่อนเช่าครับ",
+      altText: "ผลเช็คก่อนเช่า",
       contents: {
         type: "bubble", size: "kilo",
         body: {

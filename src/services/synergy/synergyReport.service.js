@@ -326,15 +326,15 @@ async function buildContent({ uid, dateKey, pieces, sets, avg, dayAxis }) {
     // fallback deterministic — ไม่มี LLM ก็ต้องได้รายงานครบ
     const mk = (v) =>
       v
-        ? `พก${v.main.unit} ${v.main.n}${v.partner ? ` คู่กับ${v.partner.unit} ${v.partner.n}` : ""} ได้เลยครับ เชื่อกันว่าชุดนี้หนุนเรื่องนี้ได้ตรงทาง`
+        ? `พก${v.main.unit} ${v.main.n}${v.partner ? ` คู่กับ${v.partner.unit} ${v.partner.n}`: ""} ได้ เชื่อกันว่าชุดนี้หนุนเรื่องนี้ได้ตรงทาง`
         : "";
     j = {
       vaultTitle: `คลังสาย${dayAxis || "หนุนดวง"}`,
       tags: [dayAxis || "หนุนดวง", "ตั้งหลัก", "มั่นคง"],
       setLines: Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, mk(v)])),
-      mainLine: "วันไหนไม่แน่ใจ พกชิ้นหลักของคลังได้เลยครับ เชื่อกันว่าช่วยประคองดวงให้มั่นคง",
-      gapLine: `คลังยังบางด้าน${gapAxis} ถ้ามีชิ้นสายนั้นที่บ้าน ส่งมาให้อาจารย์ดูได้ครับ`,
-      intent: "ตั้งหลักให้มั่น แล้วเดินทีละก้าวครับ",
+      mainLine: "วันไหนไม่แน่ใจ พกชิ้นหลักของคลังได้ เชื่อกันว่าช่วยประคองดวงให้มั่นคง",
+      gapLine: `คลังยังบางด้าน${gapAxis} ถ้ามีชิ้นสายนั้นที่บ้าน ส่งมาให้อาจารย์ดูได้`,
+      intent: "ตั้งหลักให้มั่น แล้วเดินทีละก้าว",
     };
   }
   j.gapAxis = gapAxis;
@@ -764,7 +764,7 @@ document.getElementById("carry-btn").addEventListener("click", async function ()
       b.textContent = "บันทึกแล้ว ✓";
       b.classList.add("done");
       document.getElementById("carry-note").textContent =
-        j.streak > 1 ? "พกตามชุดแนะนำต่อเนื่อง " + j.streak + " วัน" : "ขอให้เป็นวันที่ดีครับ";
+        j.streak > 1 ? "พกตามชุดแนะนำต่อเนื่อง " + j.streak + " วัน" : "ขอให้เป็นวันที่ดี";
     } else { b.disabled = false; }
   } catch (e) { b.disabled = false; }
 });

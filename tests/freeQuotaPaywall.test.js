@@ -40,19 +40,15 @@ test("buildDeterministicFreeQuotaExhaustedPaywallText: short natural copy + offe
   const t = buildDeterministicFreeQuotaExhaustedPaywallText(o, {
     lineUserId: "U_test_free_quota_paywall",
   });
-  assert.ok(t.includes("วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ"));
-  assert.ok(t.includes("แพ็ก 49 บาท"));
+  assert.ok(t.includes("สิทธิ์ฟรีวันนี้หมด"));
+  assert.ok(t.includes("49 บาท"));
   assert.ok(t.includes("4 ครั้ง"));
-  assert.ok(t.includes("24 ชม."));
-  assert.ok(t.includes("แตะปุ่มด้านล่าง"));
+  assert.ok(/24 ชั่วโมง|24 ชม\./.test(t));
   assert.ok(!t.includes("• "));
 });
 
 test("buildDeterministicPaywallSoftCloseText", () => {
-  assert.equal(
-    buildDeterministicPaywallSoftCloseText(),
-    "ได้เลยครับ พรุ่งนี้ค่อยส่งมาใหม่ได้เสมอครับ",
-  );
+  assert.ok(!/ครับ/.test(buildDeterministicPaywallSoftCloseText()));
 });
 
 test("matchesDeterministicPaywallPurchaseIntent: pay / ok / scan ต่อ / แนวครับ", () => {
@@ -100,6 +96,5 @@ test("deterministic paywall primary is stable (phase1 must not replace before se
   const t = buildDeterministicFreeQuotaExhaustedPaywallText(testOffer(), {
     lineUserId: "U_test_stable_paywall",
   });
-  assert.ok(t.length > 120);
-  assert.ok(t.includes("วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ"));
+  assert.ok(t.includes("สิทธิ์ฟรีวันนี้หมด"));
 });

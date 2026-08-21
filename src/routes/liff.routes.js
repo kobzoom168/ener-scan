@@ -1467,7 +1467,7 @@ liffRouter.post(
           const swPkg = approvalFlow.switchedPackage || null;
           const approvedText = swPkg
             ? buildSlipPackageSwitchedApprovedText(swPkg)
-            : "✅ ตรวจสลิปเรียบร้อยครับ ผมเปิดสิทธิ์ให้แล้ว\n✨ ส่งรูปพระ เครื่องราง หิน หรือกำไล ให้อาจารย์ดูได้เลยครับ";
+            : "เปิดสิทธิ์แล้ว ส่งรูปได้";
           import("../services/lineOutbound/customerPush.gateway.js")
             .then(async (g) => {
               const gate = await g.allowCustomerPush(userId, { source: "liff_slip_approved" });
@@ -1507,7 +1507,7 @@ liffRouter.post(
               await pushText(
                 liffLineClient,
                 userId,
-                "🙏 รับสลิปแล้วครับ กำลังตรวจกับธนาคารอยู่\n⏳ เสร็จเมื่อไหร่ผมเปิดสิทธิ์แล้วแจ้งในแชตทันทีครับ",
+                "รับสลิปแล้ว กำลังตรวจ",
               );
             }
           })
@@ -2856,7 +2856,7 @@ function buildLiffHtml(liffId) {
       .then(function(r){ return r.json(); })
       .then(function(j){
         if(btn){ btn.disabled = false; btn.textContent = "🔮 เปิดดวงประจำเดือน"; }
-        if(!j || !j.ok){ alert("เปิดดวงไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
+        if(!j || !j.ok){ alert("เปิดดวงไม่สำเร็จ ลองใหม่"); return; }
         if(j.needsProfile || j.needsBirthdate){
           $("rd-needbd").classList.remove("hidden");
           $("rd-body").classList.add("hidden");
@@ -2871,7 +2871,7 @@ function buildLiffHtml(liffId) {
       })
       .catch(function(){
         if(btn){ btn.disabled = false; btn.textContent = "🔮 เปิดดวงประจำเดือน"; }
-        alert("เปิดดวงไม่สำเร็จ ลองใหม่อีกครั้งครับ");
+        alert("เปิดดวงไม่สำเร็จ ลองใหม่");
       });
   }
   $("btn-reading").addEventListener("click", openReading);
@@ -2884,8 +2884,8 @@ function buildLiffHtml(liffId) {
     try{
       liff.sendMessages([{ type:"text", text:"ถามอาจารย์เรื่องดวงเดือนนี้" }])
         .then(function(){ liff.closeWindow(); })
-        .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์ถามอาจารย์ได้เลยครับ"); liff.closeWindow(); });
-    }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์ถามอาจารย์ได้เลยครับ"); }
+        .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์ถาม"); liff.closeWindow(); });
+    }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์ถาม"); }
   });
 
   /* service rows / buttons → send message into the chat then close */
@@ -2893,8 +2893,8 @@ function buildLiffHtml(liffId) {
     try{
       liff.sendMessages([{ type:"text", text: say }])
         .then(function(){ liff.closeWindow(); })
-        .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + " ได้เลยครับ"); liff.closeWindow(); });
-    }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + " ได้เลยครับ"); }
+        .catch(function(){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + ""); liff.closeWindow(); });
+    }catch(e){ alert("กลับไปที่แชต แล้วพิมพ์คำว่า " + say + ""); }
   }
   Array.prototype.forEach.call(document.querySelectorAll(".row[data-say]"), function(btn){
     btn.addEventListener("click", function(){ sendSay(btn.getAttribute("data-say")); });
@@ -2966,7 +2966,7 @@ function buildLiffHtml(liffId) {
     api("/api/liff/match")
       .then(function(r){ return r.json(); })
       .then(function(j){
-        if(!j || !j.ok){ alert("เปิดไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
+        if(!j || !j.ok){ alert("เปิดไม่สำเร็จ ลองใหม่"); return; }
         if(j.needsBirthdate){
           $("mt-needbd").classList.remove("hidden");
           $("mt-body").classList.add("hidden");
@@ -2977,7 +2977,7 @@ function buildLiffHtml(liffId) {
         }
         show("v-match");
       })
-      .catch(function(){ alert("เปิดไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
+      .catch(function(){ alert("เปิดไม่สำเร็จ ลองใหม่"); });
   }
   /* row-match ถูกพักเป็น "เร็ว ๆ นี้" — openMatch ยังอยู่ พร้อมต่อกลับเมื่อเปิดบริการ */
   void openMatch;
@@ -3016,7 +3016,7 @@ function buildLiffHtml(liffId) {
     if(liff.isApiAvailable && liff.isApiAvailable("shareTargetPicker")){
       liff.shareTargetPicker([msg]).catch(function(){});
     } else {
-      alert("เปิดจากในแอป LINE แล้วกดแชร์อีกครั้งครับ");
+      alert("เปิดจากในแอป LINE แล้วกดแชร์อีกครั้ง");
     }
   });
   $("mt-back").addEventListener("click", function(){ show("v-home"); });
@@ -3089,13 +3089,13 @@ function buildLiffHtml(liffId) {
         st.classList.remove("hidden");
       } else if(rights){
         stT.textContent = "วันนี้ใช้สิทธิ์ฟรีครบแล้ว";
-        stS.textContent = "เลือกค่าครูสำหรับรอบถัดไปได้ด้านล่างครับ";
+        stS.textContent = "เลือกค่าครูรอบถัดไปด้านล่าง";
         backBtn.classList.add("hidden");
         st.classList.remove("hidden");
       } else { st.classList.add("hidden"); }
       var rem = $("pay-remain"); rem.classList.add("hidden");
       if(j.payment && j.payment.status === "pending_verify"){
-        payShowDone("⏳", "รับรายการชำระแล้ว กำลังตรวจสอบ", "รายการก่อนหน้ากำลังตรวจกับธนาคาร เดี๋ยวแอดมินแจ้งผลในแชตครับ ไม่ต้องโอนซ้ำ");
+        payShowDone("⏳", "รับรายการชำระแล้ว กำลังตรวจสอบ", "รายการก่อนหน้ากำลังตรวจ ไม่ต้องโอนซ้ำ");
       }
     }).catch(function(){});
   }
@@ -3128,14 +3128,14 @@ function buildLiffHtml(liffId) {
       .then(function(r){ return r.json(); })
       .then(function(j){
         btn.disabled = false; btn.textContent = "💳 สร้างรายการโอน";
-        if(!j || !j.ok){ alert("สร้างรายการไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
+        if(!j || !j.ok){ alert("สร้างรายการไม่สำเร็จ ลองใหม่"); return; }
         if(j.result === "pending_verify"){
-          payShowDone("⏳", "สลิปกำลังตรวจอยู่", "รายการก่อนหน้ากำลังตรวจ เดี๋ยวแอดมินแจ้งผลในแชตครับ");
+          payShowDone("⏳", "สลิปกำลังตรวจอยู่", "รายการก่อนหน้ากำลังตรวจ จะแจ้งผลในแชต");
           return;
         }
         payShowQr(j);
       })
-      .catch(function(){ btn.disabled = false; btn.textContent = "💳 สร้างรายการโอน"; alert("สร้างรายการไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
+      .catch(function(){ btn.disabled = false; btn.textContent = "💳 สร้างรายการโอน"; alert("สร้างรายการไม่สำเร็จ ลองใหม่"); });
   });
 
   /* slip: downscale big photos client-side so upload stays snappy */
@@ -3161,7 +3161,7 @@ function buildLiffHtml(liffId) {
     var f = this.files && this.files[0];
     if(!f) return;
     fileToJpegB64(f, function(b64){
-      if(!b64){ alert("อ่านรูปไม่สำเร็จ ลองรูปอื่นดูครับ"); return; }
+      if(!b64){ alert("อ่านรูปไม่สำเร็จ ลองรูปอื่น"); return; }
       pay.slipB64 = b64;
       var pv = $("pay-prev"); pv.src = b64; pv.classList.remove("hidden");
       $("pay-dt").textContent = "แตะอีกครั้งถ้าอยากเปลี่ยนรูป";
@@ -3177,16 +3177,16 @@ function buildLiffHtml(liffId) {
       .then(function(r){ return r.json(); })
       .then(function(j){
         btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ตรวจ";
-        if(!j || !j.ok){ alert("ส่งสลิปไม่สำเร็จ ลองใหม่อีกครั้งครับ"); return; }
+        if(!j || !j.ok){ alert("ส่งสลิปไม่สำเร็จ ลองใหม่"); return; }
         if(j.result === "approved"){
-          payShowDone("🎉", "เปิดสิทธิ์สแกนแล้ว", "ตรวจสลิปผ่านเรียบร้อย กลับไปที่แชตแล้วส่งรูปพระ เครื่องราง หิน หรือกำไล ได้เลยครับ");
+          payShowDone("🎉", "เปิดสิทธิ์สแกนแล้ว", "ตรวจสลิปผ่าน กลับไปที่แชตแล้วส่งรูป");
         } else if(j.result === "pending"){
-          payShowDone("⏳", "รับสลิปแล้ว กำลังตรวจ", "กำลังตรวจกับธนาคาร เสร็จแล้วแอดมินแจ้งในแชตทันทีครับ");
+          payShowDone("⏳", "รับสลิปแล้ว กำลังตรวจ", "กำลังตรวจกับธนาคาร จะแจ้งในแชต");
         } else {
-          alert("รูปนี้ยังไม่เหมือนสลิปโอนเงิน ลองแนบสลิปที่เห็นยอดและเวลาโอนชัด ๆ ครับ");
+          alert("รูปนี้ไม่ใช่สลิปโอน แนบสลิปที่เห็นยอดและเวลา");
         }
       })
-      .catch(function(){ btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ตรวจ"; alert("ส่งสลิปไม่สำเร็จ ลองใหม่อีกครั้งครับ"); });
+      .catch(function(){ btn.disabled = false; btn.textContent = "✅ ส่งสลิปให้ตรวจ"; alert("ส่งสลิปไม่สำเร็จ ลองใหม่"); });
   });
 
   $("btn-topup").addEventListener("click", openPay);

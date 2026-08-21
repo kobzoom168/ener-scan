@@ -43,9 +43,9 @@ const FIELD_LABEL = { nickname: "ชื่อเล่น", phone: "เบอร
 
 // กบ 14 ก.ค.: เลิกสอนลูกค้าพิมพ์คำสั่ง — บอกจะแก้อะไรแล้วอาจารย์ถามกลับเอง
 const FIELD_ASK = {
-  nickname: "ได้ครับ อยากให้อาจารย์เรียกว่าอะไรดีครับ",
-  phone: "ได้ครับ เบอร์ใหม่เบอร์อะไรครับ บอกมาได้เลย",
-  gender: "ได้ครับ สะดวกแบบไหน แตะเลือกด้านล่างได้เลยครับ",
+  nickname: "ได้ อยากให้อาจารย์เรียกว่าอะไรดี",
+  phone: "ได้ เบอร์ใหม่เบอร์อะไร บอกมาได้",
+  gender: "ได้ สะดวกแบบไหน แตะเลือกด้านล่างได้",
 };
 
 /** ปุ่มเลือกเพศ — แนบกับคำถามตอนขอแก้เพศ */
@@ -120,7 +120,7 @@ async function applyProfileEdit(uid, field, value) {
       field,
     }),
   );
-  return `เรียบร้อยครับ อาจารย์แก้${FIELD_LABEL[field]}ให้เป็น ${value} แล้ว`;
+  return `เรียบร้อย อาจารย์แก้${FIELD_LABEL[field]}ให้เป็น ${value} แล้ว`;
 }
 
 const GENDER_VALUE_MAP = {
@@ -146,7 +146,7 @@ export async function handlePendingProfileEditValue(lineUserId, text) {
   // เปลี่ยนใจ — เลิกแก้
   if (/^(ยกเลิก|ไม่เปลี่ยน|ไม่แก้|ไม่เอา)(แล้ว)?$/.test(t)) {
     await clearPendingProfileEdit(uid);
-    return "ได้ครับ ไม่เปลี่ยนนะครับ";
+    return "ได้ ไม่เปลี่ยน";
   }
 
   let value = null;
@@ -155,7 +155,7 @@ export async function handlePendingProfileEditValue(lineUserId, text) {
     if (/[ก-ฮ]/.test(t) && !/เบอร์/.test(t)) return null;
     if (digits.length >= 9 && digits.length <= 10) value = digits;
     else if (digits.length > 0) {
-      return "ขอเป็นเบอร์ 9 ถึง 10 หลักครับ บอกมาอีกทีได้เลย";
+      return "ขอเป็นเบอร์ 9 ถึง 10 หลัก บอกมาอีกทีได้";
     } else return null;
   } else if (field === "gender") {
     value = GENDER_VALUE_MAP[t] || null;
@@ -179,7 +179,7 @@ export async function handlePendingProfileEditValue(lineUserId, text) {
         message: String(e?.message || e).slice(0, 160),
       }),
     );
-    return "ตอนนี้แก้ข้อมูลไม่สำเร็จครับ อีกสักครู่บอกมาใหม่อีกทีนะครับ";
+    return "ตอนนี้แก้ข้อมูลไม่สำเร็จ อีกบอกมาใหม่อีกที";
   }
 }
 
@@ -209,7 +209,7 @@ export async function handleProfileEditCommand(lineUserId, text) {
       }),
     );
     return {
-      text: "ตอนนี้แก้ข้อมูลไม่สำเร็จครับ อีกสักครู่บอกมาใหม่อีกทีนะครับ",
+      text: "ตอนนี้แก้ข้อมูลไม่สำเร็จ อีกบอกมาใหม่อีกที",
       quickReply: null,
     };
   }

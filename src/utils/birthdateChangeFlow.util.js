@@ -60,13 +60,13 @@ export const BIRTHDATE_CHANGE_FLOW = {
 };
 
 const FIRST_CONFIRM_QUESTIONS = [
-  "จะเปลี่ยนวันเกิดที่บันทึกไว้ใช่ไหมครับ",
-  "ขอแก้วันเกิดที่บันทึกไว้ใช่ไหมครับ",
+  "จะเปลี่ยนวันเกิดที่บันทึกไว้ใช่ไหม",
+  "ขอแก้วันเกิดที่บันทึกไว้ใช่ไหม",
 ];
 
 const ASK_DATE_LINES = [
-  "ขอวันเกิดที่จะให้อาจารย์ใช้หน่อยครับ อ่านแบบ 19/08/2528 นะครับ",
-  "รอวันเกิดอยู่ครับ เช่น 19-08-2528 หรือ 19082528 บอกอาจารย์ได้เลยครับ",
+  "ขอวันเกิดที่จะให้อาจารย์ใช้หน่อย อ่านแบบ 19/08/2528",
+  "รอวันเกิดอยู่ เช่น 19-08-2528 หรือ 19082528 บอกอาจารย์ได้",
 ];
 
 const CONFIRM_YES = new Set([
@@ -97,7 +97,7 @@ const CONFIRM_NO = new Set([
 ]);
 
 /**
- * Strip trailing Thai polite particles (repeat) for stem matching, e.g. "ใช่ครับ" → "ใช่".
+ * Strip trailing Thai polite particles (repeat) for stem matching, e.g. "ใช่" → "ใช่".
  * @param {string} s
  */
 function stripTrailingPoliteParticles(s) {
@@ -202,14 +202,14 @@ export function pickBirthdateAskDateLine(userId = "") {
  */
 export function pickBirthdateFinalConfirmText(_userId = "", echo = "") {
   const e = String(echo || "").trim();
-  return `ได้ครับ อาจารย์อ่านเป็น ${e} ใช่ไหมครับ\n\nถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้ครับ`;
+  return `ได้ อาจารย์อ่านเป็น ${e} ใช่ไหม\n\nถ้าถูก ตอบว่าใช่ หรือโอเค มาก็ได้`;
 }
 
 export const BIRTHDATE_CHANGE_INVALID_FORMAT_TEXT =
-  "ยังอ่านวันเกิดไม่ได้ครับ ลองแบบ 19/08/2528 ได้เลย";
+  "ยังอ่านวันเกิดไม่ได้ ลองแบบ 19/08/2528 ได้";
 
 export const BIRTHDATE_CHANGE_LOW_CONFIDENCE_TEXT =
-  "ลองบอกวันเกิดอีกครั้งได้ไหมครับ แบบ 19/08/2528";
+  "ลองบอกวันเกิดอีกครั้งได้ไหม แบบ 19/08/2528";
 
 /**
  * Echo string for user-visible confirmations — compact input is expanded to DD/MM/YYYY (BE year kept when applicable).

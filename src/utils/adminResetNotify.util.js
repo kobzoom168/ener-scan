@@ -2,7 +2,7 @@ import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
 
 /** Fixed LINE copy after admin free reset (deterministic; not quota-dependent). */
 export const ADMIN_FREE_RESET_CONFIRM_TEXT =
-  "รีเซ็ตสิทธิ์สแกนฟรีให้แล้วครับ ตอนนี้ลองส่งภาพใหม่ได้เลย";
+  "รีเซ็ตสิทธิ์สแกนฟรีให้แล้ว ตอนนี้ลองส่งภาพใหม่ได้";
 
 /**
  * Metadata for admin API + analytics; user-visible `text` is always {@link ADMIN_FREE_RESET_CONFIRM_TEXT}.

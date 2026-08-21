@@ -207,7 +207,7 @@ export function renderMyScansHtml({ items, offset, total, token, synergyUrl = nu
     synergyUrl ? `<a class="cta ghost" href="${base}/goto/synergy">จัดชุดจากของในคลัง</a>` : "",
   ].join("");
 
-  const empty = `<div class="card"><div class="info"><div class="t">ยังไม่มีผลสแกนครับ</div><div class="s">ส่งรูปพระ เครื่องราง หรือหินมงคลในแชท LINE ได้เลย เดี๋ยวผลมารวมอยู่หน้านี้</div></div></div>`;
+  const empty = `<div class="card"><div class="info"><div class="t">ยังไม่มีผลสแกน</div><div class="s">ส่งรูปพระ เครื่องราง หรือหินมงคลในแชท LINE ได้ ผลมารวมอยู่หน้านี้</div></div></div>`;
 
   return `<!doctype html><html lang="th"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -252,7 +252,7 @@ ${moreBtn}${backBtn}
 export function buildMyScansFlexCard({ url, total }) {
   return {
     type: "flex",
-    altText: `ผลสแกนของคุณ ${total} รายการ เปิดดูได้เลยครับ`,
+    altText: `ผลสแกนของคุณ ${total} รายการ เปิดดูได้`,
     contents: {
       type: "bubble",
       size: "kilo",
@@ -265,7 +265,7 @@ export function buildMyScansFlexCard({ url, total }) {
           { type: "text", text: "ผลสแกนของฉัน", weight: "bold", size: "lg", color: "#E8C547" },
           {
             type: "text",
-            text: `พบผลสแกน ${total} รายการครับ\nเปิดดูรูป คะแนน และรายงานย้อนหลังได้ที่นี่`,
+            text: `พบผลสแกน ${total} รายการ\nเปิดดูรูป แนน และรายงานย้อนหลังได้ที่นี่`,
             wrap: true,
             size: "sm",
             color: "#CBB98A",

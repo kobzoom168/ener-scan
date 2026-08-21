@@ -285,7 +285,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
 
     if (kind === "scan_result") {
       if (payload.error) {
-        const t = String(payload.text || "").trim() || "รูปนี้อ่านไม่ผ่านครับ ส่งใหม่อีกทีนะ";
+        const t = String(payload.text || "").trim() || "รูปนี้อ่านไม่ผ่าน ส่งใหม่อีกทีนะ";
         await pushText(client, lineUserId, t);
         await markSent(id);
         releaseScanGate(lineUserId);
@@ -938,7 +938,7 @@ function releaseScanGate(lineUserId) {
 
 /** Report couldn't be delivered at all (LINE down/lost) — tell the customer to resend. */
 const REPORT_LOST_RESEND_TEXT =
-  "ผลอ่านพลังส่งเข้าแชทไม่ผ่านครับ ส่งรูปเดิมมาใหม่อีกครั้ง เดี๋ยวอาจารย์ดูให้ทันที";
+  "ผลอ่านพลังส่งเข้าแชทไม่ผ่าน ส่งรูปเดิมมาใหม่อีกครั้ง จะดูให้ทันที";
 
 /**
  * บอกสิทธิ์คงเหลือทันทีหลัง report ถึงมือ — และถ้าเพิ่งใช้ครั้งสุดท้ายของวัน
@@ -1016,11 +1016,11 @@ async function buildPackExhaustedUpsellNotice(lineUserId, paidUntilIso) {
     );
     return {
       text: [
-        "ครบทุกครั้งของรอบค่าครูนี้แล้วครับ ขอบคุณที่ให้อาจารย์ดูให้นะครับ",
+        "ครบทุกครั้งของรอบค่าครูนี้แล้ว ขอบคุณที่ให้อาจารย์ดูให้",
         "",
         `ถ้าช่วงนี้กำลังดูของเพลิน ค่าครูดูแลคลังพลัง ${credit.monthlyPriceThb} บาท อาจารย์ดูแลตลอด ${winDays} วัน สแกนได้ ${credit.monthlyScanCount} ครั้ง คลังกับเสียงอาจารย์เปิดยาวทั้งรอบ`,
         "",
-        `พิเศษ ภายในวันนี้ ค่าครู ${credit.creditThb} บาทที่ชำระไปหักออกได้เลย เหลือ ${credit.payThb} บาท แตะปุ่มด้านล่างได้เลยครับ`,
+        `พิเศษ ภายในวันนี้ ค่าครู ${credit.creditThb} บาทที่ชำระไปหักออกได้ เหลือ ${credit.payThb} บาท แตะปุ่มด้านล่างได้`,
       ].join("\n"),
       quickReply: {
         items: [
@@ -1071,8 +1071,8 @@ async function buildRemainingQuotaNoticeText(lineUserId, { paidOnly = false } = 
           // เตือนนุ่ม ๆ อย่างเดียว ไม่ขาย (กบ) — เมนูเลือกแพ็กจะเด้งเองตอนหมดจริง
           return pickRemainingText(
             [
-              `สิทธิ์รายเดือนเหลืออีก ${daysLeft} วันครับ`,
-              `รายเดือนของคุณใช้ได้ถึง ${dateTxt} นี้ครับ`,
+              `สิทธิ์รายเดือนเหลืออีก ${daysLeft} วัน`,
+              `รายเดือนของคุณใช้ได้ถึง ${dateTxt} นี้`,
             ],
             `${lineUserId}:unlimited:renew:${daysLeft}`,
           );
@@ -1080,7 +1080,7 @@ async function buildRemainingQuotaNoticeText(lineUserId, { paidOnly = false } = 
         return pickRemainingText(
           [
             `ส่งชิ้นต่อไปมาได้เลย รายเดือนใช้ได้ถึง ${dateTxt}`,
-            `รายเดือนของคุณใช้ได้ถึง ${dateTxt} ครับ`,
+            `รายเดือนของคุณใช้ได้ถึง ${dateTxt}`,
           ],
           `${lineUserId}:unlimited:${dateTxt}`,
         );
@@ -1148,13 +1148,13 @@ async function buildRemainingQuotaNoticeText(lineUserId, { paidOnly = false } = 
     );
     const paywallText = [
       `สิทธิ์สแกนวันนี้ครบแล้ว พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
-      "ถ้าอยากดูต่อวันนี้เลย เปิดสิทธิ์เพิ่มได้ครับ",
+      "ถ้าอยากดูต่อวันนี้เลย เปิดสิทธิ์เพิ่มได้",
       ...menuLines,
     ].join("\n");
     // การ์ด Flex โปร (กบ 17 ก.ค. — เส้นหลังสแกน) หัวการ์ดปรับตามบริบท
     const paywallFlex = buildFreeQuotaPaywallFlex(offer, {
       title: "สิทธิ์สแกนวันนี้ครบแล้ว",
-      subtitle: `พรุ่งนี้หลังเที่ยงคืนมีฟรีอีก ${freeQuota} ครั้ง หรือเปิดสิทธิ์ต่อวันนี้เลยครับ`,
+      subtitle: `พรุ่งนี้หลังเที่ยงคืนมีฟรีอีก ${freeQuota} ครั้ง หรือเปิดสิทธิ์ต่อวันนี้เลย`,
       altText: paywallText.slice(0, 400),
     });
     return {

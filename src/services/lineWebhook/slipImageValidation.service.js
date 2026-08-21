@@ -17,8 +17,8 @@ function bufferToBase64(buffer) {
 /** User-facing copy when image is not accepted as a transfer slip (gateway primary). */
 export function buildSlipNotTransferReceiptText() {
   return [
-    "ภาพนี้ยังไม่ใช่สลิปการโอนนะครับ",
-    "ถ้าจะส่งหลักฐานการชำระ รบกวนส่งภาพสลิปโอนเงินหรือหน้ารายการโอนที่เห็นยอดและเวลาให้ชัดอีกครั้งครับ",
+    "ภาพนี้ยังไม่ใช่สลิปการโอน",
+    "ถ้าจะส่งหลักฐานการชำระ ส่งภาพสลิปโอนเงินหรือหน้ารายการโอนที่เห็นยอดและเวลาให้ชัดอีกครั้ง",
   ].join("\n");
 }
 

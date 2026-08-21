@@ -135,8 +135,8 @@ export async function buildWaitingBirthdateGuidanceMessages(userId) {
 }
 
 export function buildMultiImageInRequestText() {
-  // persona 12 ส.ค.: งานจัดระเบียบรูป = แอดมิน · ไม่มีอีโมจิ (test ล็อกข้อความนี้เป๊ะ)
-  return "ส่งมาหลายรูปพร้อมกันนะครับ ขอทีละ 1 รูปครับ อาจารย์จะได้อ่านแม่นสุด รบกวนส่งรูปแรกเข้ามาใหม่ทีละรูปครับ";
+  // hard tone (กบ 21 ส.ค.): สั้น ตรง ไม่มีคำลงท้าย/คำอธิบายเสริม
+  return "มีหลายชิ้น แยกถ่ายทีละชิ้น";
 }
 
 /**
@@ -162,17 +162,17 @@ export function buildFollowWelcomeText() {
 
 export function buildMultipleObjectsText() {
   return [
-    "ในรูปมีหลายชิ้นปนกันอยู่นะครับ",
-    "อาจารย์ขอดูทีละชิ้นจะอ่านพลังได้แม่นสุด รบกวนถ่ายทีละชิ้นส่งมาใหม่นะครับ",
-    "ถ้าเป็นชิ้นเดียวกัน ถ่ายให้เห็นหน้าและหลังในรูปเดียวได้เลยครับ",
+    "ในรูปมีหลายชิ้นปนกันอยู่",
+    "อาจารย์ขอดูทีละชิ้นจะอ่านพลังได้แม่นสุด ถ่ายทีละชิ้นส่งมาใหม่",
+    "ถ้าเป็นชิ้นเดียวกัน ถ่ายให้เห็นหน้าและหลังในรูปเดียวได้",
   ].join("\n");
 }
 
 export function buildUnclearImageText() {
   return [
-    "รูปยังไม่ค่อยชัดนะครับ อาจารย์เลยอ่านพลังไม่ถนัด",
+    "รูปยังไม่ค่อยชัด อาจารย์เลยอ่านพลังไม่ถนัด",
     "ลองถ่ายใหม่ให้เห็นตัวชิ้นงานชัด ๆ ใกล้หน่อย วางไว้กลางภาพ",
-    "ทีละชิ้นต่อรูปนะครับ แล้วส่งกลับมาได้เลย",
+    "ทีละชิ้นต่อรูป แล้วส่งกลับมาได้",
   ].join("\n");
 }
 
@@ -183,8 +183,8 @@ export function buildUnsupportedObjectText() {
 
 export function buildDuplicateImageText() {
   return [
-    "รูปนี้เหมือนเคยส่งเข้ามาให้อาจารย์ดูแล้วนะครับ",
-    "ถ้าอยากดูชิ้นใหม่ ส่งรูปอีกชิ้นเข้ามาได้เลยครับ",
+    "รูปนี้เหมือนเคยส่งเข้ามาให้อาจารย์ดูแล้ว",
+    "ถ้าอยากดูชิ้นใหม่ ส่งรูปอีกชิ้นเข้ามาได้",
   ].join("\n");
 }
 
@@ -192,24 +192,24 @@ export function buildDuplicateImageText() {
 export function getDuplicateImageReplyCandidates() {
   return [
     buildDuplicateImageText(),
-    "รูปนี้เคยสแกนไปแล้วนะ ลองส่งภาพวัตถุใหม่ได้เลยครับ",
-    "ซ้ำกับที่เคยส่งมาแล้ว ขอเป็นภาพใหม่ของชิ้นนั้นนะครับ",
+    "รูปนี้เคยสแกนไปแล้วนะ ลองส่งภาพวัตถุใหม่ได้",
+    "ซ้ำกับที่เคยส่งมาแล้ว ขอเป็นภาพใหม่ของชิ้นนั้น",
   ];
 }
 
 export function getMultipleObjectsReplyCandidates() {
   return [
     buildMultipleObjectsText(),
-    "ในภาพมีหลายชิ้นอยู่นะครับ ขอถ่ายทีละชิ้นต่อรูป แล้วส่งมาใหม่ได้เลย",
-    "ขอวัตถุชิ้นเดียวในเฟรมนะครับ แยกชิ้นแล้วถ่ายทีละรูปได้เลย",
+    "ในภาพมีหลายชิ้นอยู่ ขอถ่ายทีละชิ้นต่อรูป แล้วส่งมาใหม่ได้",
+    "ขอวัตถุชิ้นเดียวในเฟรม แยกชิ้นแล้วถ่ายทีละรูปได้",
   ];
 }
 
 export function getUnclearImageReplyCandidates() {
   return [
     buildUnclearImageText(),
-    "ภาพยังไม่ชัดพอนะครับ ลองถ่ายใหม่ให้เห็นชิ้นง่าย ๆ ทีละชิ้น",
-    "ยังอ่านชิ้นในภาพไม่ชัด ลองถ่ายใกล้ ๆ ทีละชิ้นต่อรูปนะครับ",
+    "ภาพยังไม่ชัดพอ ลองถ่ายใหม่ให้เห็นชิ้นง่าย ๆ ทีละชิ้น",
+    "ยังอ่านชิ้นในภาพไม่ชัด ลองถ่ายใกล้ ๆ ทีละชิ้นต่อรูป",
   ];
 }
 
@@ -224,34 +224,34 @@ export function getUnsupportedObjectReplyCandidates() {
 /** Deterministic primary for object_gate / object_inconclusive (timeout, weak signal, inconclusive merge). */
 export function buildObjectInconclusiveText() {
   return [
-    "ภาพนี้อาจารย์ยังมองตัวชิ้นงานไม่ชัดครับ",
-    "รบกวนส่งรูปใหม่ที่เห็นพระหรือเครื่องราง 1 ชิ้นชัด ๆ อีกครั้งนะครับ",
-    "แนะนำให้ถ่ายใกล้ขึ้น วัตถุอยู่กลางภาพ และพื้นหลังเรียบครับ",
+    "ภาพนี้อาจารย์ยังมองตัวชิ้นงานไม่ชัด",
+    "ส่งรูปใหม่ที่เห็นพระหรือเครื่องราง 1 ชิ้นชัด ๆ อีกครั้ง",
+    "แนะนำให้ถ่ายใกล้ขึ้น วัตถุอยู่กลางภาพ และพื้นหลังเรียบ",
   ].join("\n");
 }
 
 export function getObjectInconclusiveReplyCandidates() {
   return [
     buildObjectInconclusiveText(),
-    "ภาพนี้อาจารย์ยังอ่านไม่ถนัดครับ รบกวนส่งรูปพระ เครื่องราง หิน หรือวัตถุสายพลังแบบชิ้นเดี่ยว 1 รูปที่ชัดกว่านี้อีกครั้งครับ",
-    "อาจารย์ยังมองชิ้นในภาพไม่ชัดพอ ขอส่งรูปใหม่ทีละชิ้น ให้เห็นชิ้นง่าย ๆ กลางเฟรมนะครับ",
+    "ภาพนี้อาจารย์ยังอ่านไม่ถนัด ส่งรูปพระ เครื่องราง หิน หรือวัตถุสายพลังแบบชิ้นเดี่ยว 1 รูปที่ชัดกว่านี้อีกครั้ง",
+    "อาจารย์ยังมองชิ้นในภาพไม่ชัดพอ ขอส่งรูปใหม่ทีละชิ้น ให้เห็นชิ้นง่าย ๆ กลางเฟรม",
   ];
 }
 
 /** Same family as unclear_image but dedicated replyType `image_retake_required` for observability. */
 export function buildImageRetakeRequiredPrimaryText() {
   return [
-    "ภาพนี้อาจารย์ยังมองไม่ชัดพอครับ",
-    "รบกวนส่งรูปพระ เครื่องราง หิน หรือวัตถุสายพลังแบบชิ้นเดี่ยว 1 รูปที่ชัดกว่านี้อีกครั้งนะครับ",
-    "แนะนำให้ถ่ายใกล้ขึ้น วางวัตถุกลางภาพ และใช้พื้นหลังเรียบครับ",
+    "ภาพนี้อาจารย์ยังมองไม่ชัดพอ",
+    "ส่งรูปพระ เครื่องราง หิน หรือวัตถุสายพลังแบบชิ้นเดี่ยว 1 รูปที่ชัดกว่านี้อีกครั้ง",
+    "แนะนำให้ถ่ายใกล้ขึ้น วางวัตถุกลางภาพ และใช้พื้นหลังเรียบ",
   ].join("\n");
 }
 
 export function getImageRetakeRequiredReplyCandidates() {
   return [
     buildImageRetakeRequiredPrimaryText(),
-    "ภาพยังไม่ชัดพอนะครับ ลองถ่ายใหม่ให้เห็นพระหรือเครื่องรางทีละชิ้นต่อรูป",
-    "ยังอ่านชิ้นในภาพไม่ชัด ลองถ่ายใกล้ ๆ วัตถุกลางเฟรม แล้วส่งมาใหม่ครับ",
+    "ภาพยังไม่ชัดพอ ลองถ่ายใหม่ให้เห็นพระหรือเครื่องรางทีละชิ้นต่อรูป",
+    "ยังอ่านชิ้นในภาพไม่ชัด ลองถ่ายใกล้ ๆ วัตถุกลางเฟรม แล้วส่งมาใหม่",
   ];
 }
 
@@ -311,40 +311,40 @@ export function getMultiImageInRequestReplyCandidates() {
   const primary = buildMultiImageInRequestText();
   return [
     primary,
-    "ส่งมาหลายรูปเลยนะครับ 🙏 มีหลายชิ้นส่งได้หมด แต่ขอทีละรูป เริ่มจากชิ้นแรกได้เลย",
-    "อาจารย์ขอดูทีละชิ้นนะครับ รบกวนส่งใหม่ทีละ 1 รูป",
+    "แยกส่งทีละชิ้น เริ่มจากชิ้นแรก",
+    "ขอทีละ 1 รูป",
   ];
 }
 
 export function buildRateLimitText(retryAfterSec = 0) {
   return [
-    "ส่งมาถี่ไปนิดนึงนะครับ 🙏",
+    "ส่งมาถี่ไปนิดนึง 🙏",
     retryAfterSec > 0
-      ? `ขอพักอีก ${retryAfterSec} วินาที แล้วค่อยส่งใหม่ได้เลยครับ`
-      : "ขอพักแป๊บนึง แล้วค่อยส่งใหม่ได้เลยครับ",
+      ? `ขอพักอีก ${retryAfterSec} วินาที แล้วค่อยส่งใหม่ได้`
+      : "ขอพัก แล้วค่อยส่งใหม่ได้",
   ].join("\n");
 }
 
 export function buildCooldownText(remainingSec = 0) {
   return [
     remainingSec > 0
-      ? `ขอเว้นอีก ${remainingSec} วินาทีก่อนสแกนรอบใหม่นะครับ`
-      : "ขอเว้นสักครู่ก่อนสแกนรอบใหม่นะครับ",
-    "อาจารย์จะได้อ่านพลังให้ได้นิ่ง ๆ ครับ",
+      ? `ขอเว้นอีก ${remainingSec} วินาทีก่อนสแกนรอบใหม่`
+      : "ขอเว้นก่อนสแกนรอบใหม่",
+    "อาจารย์จะได้อ่านพลังให้ได้นิ่ง ๆ",
   ].join("\n");
 }
 
 export function getRateLimitReplyCandidates(retryAfterSec = 0) {
   return [
     buildRateLimitText(retryAfterSec),
-    "ใช้งานถี่ไปหน่อย ขอพักแป๊บแล้วค่อยสแกนใหม่นะครับ",
+    "ใช้งานถี่ไปหน่อย ขอพักแป๊บแล้วค่อยสแกนใหม่",
   ];
 }
 
 export function getCooldownReplyCandidates(remainingSec = 0) {
   return [
     buildCooldownText(remainingSec),
-    "ขอเว้นระยะนิดนึงก่อนดูชิ้นถัดไปนะครับ",
+    "ขอเว้นระยะนิดนึงก่อนดูชิ้นถัดไป",
   ];
 }
 
@@ -394,18 +394,18 @@ export function buildPaymentQrIntroFactsText({
   const switchHeader =
     Number(switchedFromPriceThb) >= 1 && Number(switchedFromPriceThb) !== payThb
       ? [
-          `เปลี่ยนจากค่าครู ${Number(switchedFromPriceThb)} บาท เป็นรายการนี้ให้แล้วนะครับ รายการเดิมยกเลิกเรียบร้อย`,
+          `เปลี่ยนเป็นรายการนี้แล้ว ยกเลิกรายการเดิม ${Number(switchedFromPriceThb)} บาท`,
           "",
         ]
       : [];
   const base = [
     ...switchHeader,
-    "สรุปยอดก่อนโอนครับ",
+    "ยอดที่ต้องโอน",
     `โปร ${pkgLabel}`,
     ...amountLines,
-    ...(switchHeader.length ? ["ยึดตามรายการนี้อันเดียวนะครับ"] : []),
+    ...(switchHeader.length ? ["ยึดตามรายการนี้"] : []),
     "",
-    "สแกน QR ด้านล่างได้เลย โอนเสร็จส่งสลิปในแชตนี้",
+    "สแกน QR ด้านล่าง โอนแล้วส่งสลิปในแชตนี้",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -456,23 +456,23 @@ export function formatOfferScanCountThai(scanCount) {
 export function buildSingleOfferPaywallAltText(offer = loadActiveScanOffer()) {
   const pkgs = listActivePackages(offer);
   if (!pkgs.length) {
-    return "ตอนนี้ยังไม่เปิดรับค่าครู กรุณาลองใหม่ภายหลังครับ";
+    return "ตอนนี้ยังไม่เปิดรับค่าครู กรุณาลองใหม่ภายหลัง";
   }
   if (pkgs.length === 1) {
     const pkg = pkgs[0];
     return [
-      `เปิดสิทธิ์เพิ่มวันนี้ ${pkg.priceThb} บาทครับ ได้สแกนอีก ${pkg.scanCount} ครั้งใน ${formatOfferWindowThai(pkg.windowHours)}`,
-      "ส่งรูปทีละรูปนะครับ อาจารย์จะได้ดูให้ละเอียดเต็มที่",
-      "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์มาได้เลยครับ",
+      `เปิดสิทธิ์เพิ่มวันนี้ ${pkg.priceThb} บาท ได้สแกนอีก ${pkg.scanCount} ครั้งใน ${formatOfferWindowThai(pkg.windowHours)}`,
+      "ส่งรูปทีละรูป อาจารย์จะได้ดูให้ละเอียดเต็มที่",
+      "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์มาได้",
     ].join("\n");
   }
   // โทนคนพิมพ์เอง (กบ): ไม่มีขีด ไม่มีบูลเล็ต ไม่มีอิโมจิ ไม่สอนพิมพ์คำสั่ง
   const sorted = [...pkgs].sort((a, b) => a.priceThb - b.priceThb);
   const lines = sorted.map((p) => formatOfferPackageLineThai(p));
   return [
-    "เปิดสิทธิ์เพิ่มวันนี้มีให้เลือกครับ",
+    "เปิดสิทธิ์เพิ่มวันนี้มีให้เลือก",
     ...lines,
-    "สะดวกแบบไหนแตะปุ่มด้านล่าง หรือบอกราคามาเลยครับ",
+    "สะดวกแบบไหนแตะปุ่มด้านล่าง หรือบอกราคามาเลย",
   ].join("\n");
 }
 
@@ -495,9 +495,9 @@ export function buildSlipPackageSwitchedApprovedText(sw) {
     ? `สมาชิกรายเดือน อาจารย์ดูแลตลอด ${formatOfferWindowThai(sw.windowHours)} สแกนไม่จำกัด`
     : `สแกน ${sw.scanCount} ครั้ง ใช้ได้ ${formatOfferWindowThai(sw.windowHours)}`;
   return (
-    `ตรวจสอบสลิปเรียบร้อยครับ ยอดโอนเข้ามา ${sw.priceThb} บาท ` +
-    `อาจารย์จัดเป็นค่าครู${pkgPart} ให้ตามยอดเลยนะครับ\n\n` +
-    `เปิดสิทธิ์แล้ว ส่งรูปชิ้นที่ต้องการสแกนเข้ามาได้เลยครับ`
+    `ตรวจสอบสลิปเรียบร้อย ยอดโอนเข้ามา ${sw.priceThb} บาท` +
+    `อาจารย์จัดเป็นค่าครู${pkgPart} ให้ตามยอดเลย\n\n` +
+    `เปิดสิทธิ์แล้ว ส่งรูปชิ้นที่ต้องการสแกนเข้ามาได้`
   );
 }
 
@@ -525,12 +525,12 @@ export function buildPaymentPackageSelectedAck(paidPackage) {
   const p = paidPackage || getDefaultPackage(loadActiveScanOffer());
   if (!p) return buildSingleOfferPaywallAltText();
   return [
-    `โอเคครับ ค่าครูรายการนี้ ${p.priceThb} บาท`,
+    `โอเค ค่าครูรายการนี้ ${p.priceThb} บาท`,
     isUnlimitedScanCount(p.scanCount)
       ? `สแกนได้ไม่จำกัดตลอด ${formatOfferWindowThai(p.windowHours)}`
       : `ใช้สแกนเพิ่มได้ ${p.scanCount} ครั้ง ภายใน ${formatOfferWindowThai(p.windowHours)}`,
     "",
-    "ถ้าพร้อม ตอบว่า 'จ่าย' ได้เลยครับ เดี๋ยวผมส่งรายละเอียดกับคิวอาร์ให้ครับ",
+    "ถ้าพร้อม ตอบว่า 'จ่าย' ได้ จะส่งรายละเอียดกับคิวอาร์ให้",
   ].join("\n");
 }
 
@@ -548,11 +548,11 @@ function slotFromUserId(userId, modulo) {
 export function buildPackageAlreadySelectedContinueHuman(paidPackage) {
   const p = paidPackage || getDefaultPackage(loadActiveScanOffer());
   if (!p) {
-    return "พร้อมเมื่อไหร่ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
+    return "พร้อมเมื่อไหร่ แจ้งว่าจ่ายเงินมาก็ได้";
   }
   return [
-    `ตกลงครับ ค่าครู ${p.priceThb} บาท`,
-    "พร้อมโอนเมื่อไหร่ แจ้งอาจารย์ได้เลยครับ",
+    `ตกลง ค่าครู ${p.priceThb} บาท`,
+    "พร้อมโอนเมื่อไหร่ แจ้งอาจารย์ได้",
   ].join("\n");
 }
 
@@ -568,18 +568,18 @@ export function buildPaywallHumanGuidanceText({
   const pkg = getDefaultPackage(offer);
   const price = pkg?.priceThb ?? offer.paidPriceThb;
   if (guidanceReason === "birthdate_deferred") {
-    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้จะเปิดสิทธิ์ แจ้งอาจารย์ได้เลยครับ`;
+    return `วันเกิดค่อยใช้ตอนสแกน ตอนนี้จะเปิดสิทธิ์ แจ้งอาจารย์ได้`;
   }
   if (guidanceReason === "pay_intent_no_package") {
     const lines = [
-      `ถ้าพร้อมเปิดสิทธิ์ ${price} บาท บอกว่าจ่ายเงินมาก็ได้ครับ`,
-      `ตอนนี้รอคิวชำระอยู่ครับ แจ้งว่าจ่ายเงินมาได้เลยครับ`,
+      `ถ้าพร้อมเปิดสิทธิ์ ${price} บาท บอกว่าจ่ายเงินมาก็ได้`,
+      `ตอนนี้รอคิวชำระอยู่ แจ้งว่าจ่ายเงินมาได้`,
     ];
     return lines[slotFromUserId(userId, lines.length)];
   }
   const soft = [
-    `ถ้าจะใช้ต่อ แจ้งอาจารย์ได้เลยครับ`,
-    `พร้อมเมื่อไหร่บอกได้ครับ`,
+    `ถ้าจะใช้ต่อ แจ้งอาจารย์ได้`,
+    `พร้อมเมื่อไหร่บอกได้`,
   ];
   return soft[slotFromUserId(userId, soft.length)];
 }
@@ -591,8 +591,8 @@ export function buildPaymentPayIntentNoPackageHumanText({
 } = {}) {
   const alt = buildSingleOfferPaywallAltText(offer);
   const lines = [
-    "ตอนนี้ยังไม่ได้อยู่ในขั้นตอนชำระเงินครับ ถ้าฟรีหมดแล้ว จะมีข้อความบอกค่าครูให้",
-    "หรือถ้าจะเปิดสิทธิ์เลย บอกอาจารย์มาได้เลยครับ",
+    "ตอนนี้ยังไม่ได้อยู่ในขั้นตอนชำระเงิน ถ้าฟรีหมดแล้ว จะมีข้อความบอกค่าครูให้",
+    "หรือถ้าจะเปิดสิทธิ์เลย บอกอาจารย์มาได้",
   ];
   const head = lines[slotFromUserId(userId, lines.length)];
   return `${head}\n\n${alt}`;
@@ -612,14 +612,14 @@ export function isPackageSelectionTokenText(text, offer = loadActiveScanOffer())
 export async function buildWaitingBirthdateDateFirstGuidanceMessages(userId, opts = {}) {
   const tier = opts.tier || "full";
   if (tier === "micro") {
-    return ["ขอวันเกิดหน่อยครับ"];
+    return ["ขอวันเกิดหน่อย"];
   }
   if (tier === "short") {
-    return ["อาจารย์รอวันเกิดอยู่ครับ เช่น 19/08/2528"];
+    return ["อาจารย์รอวันเกิดอยู่ เช่น 19/08/2528"];
   }
   const lines = [
-    "ขอวันเกิดหน่อยครับ อ่านแบบ 19/08/2528 นะครับ",
-    "รอวันเกิดอยู่ครับ เช่น 19-08-2528 บอกอาจารย์ได้เลยครับ",
+    "ขอวันเกิดหน่อย อ่านแบบ 19/08/2528",
+    "รอวันเกิดอยู่ เช่น 19-08-2528 บอกอาจารย์ได้",
   ];
   const primary = lines[slotFromUserId(userId, lines.length)];
   return [primary];
@@ -636,49 +636,49 @@ export function buildDeterministicBirthdateErrorText(
 ) {
   const r = String(reason || "invalid_format");
   if (tier === "micro") {
-    return "ลองบอกวันเกิดอีกครั้งได้เลยครับ";
+    return "ลองบอกวันเกิดอีกครั้งได้";
   }
   if (tier === "short") {
-    if (r === "out_of_range") return "วันเกิดอยู่นอกช่วงที่ใช้ได้ครับ ลองปีอื่นดูนะครับ";
-    if (r === "invalid_date") return "วันที่ไม่ตรงปฏิทินครับ ลองใหม่อีกครั้ง";
-    return "รูปแบบยังไม่ตรงครับ ลองเช่น 19/08/2528";
+    if (r === "out_of_range") return "วันเกิดอยู่นอกช่วงที่ใช้ได้ ลองปีอื่นดู";
+    if (r === "invalid_date") return "วันที่ไม่ตรงปฏิทิน ลองใหม่อีกครั้ง";
+    return "รูปแบบยังไม่ตรง ลองเช่น 19/08/2528";
   }
   if (r === "out_of_range") {
-    return "วันเกิดนี้อาจารย์ยังใช้ผูกดวงไม่ได้ครับ ลองเช็คปีอีกทีนะ";
+    return "วันเกิดนี้อาจารย์ยังใช้ผูกดวงไม่ได้ ลองเช็คปีอีกทีนะ";
   }
   if (r === "invalid_date") {
-    return "วันที่ไม่ตรงกับปฏิทินครับ ลองบอกใหม่อีกครั้งนะครับ";
+    return "วันที่ไม่ตรงกับปฏิทิน ลองบอกใหม่อีกครั้ง";
   }
-  return "ยังอ่านวันเกิดไม่ได้ครับ ลองแบบ 19/08/2528 หรือ 19082528";
+  return "ยังอ่านวันเกิดไม่ได้ ลองแบบ 19/08/2528 หรือ 19082528";
 }
 
 /** Deterministic awaiting_slip text guard (persona may still vary alternates). */
 export function buildAwaitingSlipDeterministicGuidanceText({ paymentRef } = {}) {
   const base = [
-    "ถ้าโอนแล้ว แนบสลิปไว้ในแชตนี้ได้เลยครับ",
-    "เดี๋ยวมีคนตรวจแล้วเปิดสิทธิ์ให้ครับ",
+    "ถ้าโอนแล้ว แนบสลิปไว้ในแชตนี้ได้",
+    "มีคนตรวจแล้วเปิดสิทธิ์ให้",
     "",
-    "อยากดูคิวอาร์อีกครั้ง แจ้งว่าจ่ายเงินมาก็ได้ครับ",
+    "อยากดูคิวอาร์อีกครั้ง แจ้งว่าจ่ายเงินมาก็ได้",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
 
 export function buildPendingVerifyHumanGuidanceText({ paymentRef } = {}) {
   const base = [
-    "ได้รับสลิปแล้วครับ ผมกำลังตรวจสอบให้อยู่นะครับ",
-    "พอมีผล เดี๋ยวผมแจ้งต่อในแชตนี้เลยครับ",
+    "ได้รับสลิปแล้ว ผมกำลังตรวจสอบให้อยู่",
+    "พอมีผล จะแจ้งต่อในแชตนี้เลย",
     "",
-    "ถ้ายังไม่ได้แนบสลิป รูปสลิปแนบในแชตนี้ได้เลยครับ",
+    "ถ้ายังไม่ได้แนบสลิป รูปสลิปแนบในแชตนี้ได้",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
 
 export function buildPaidActiveScanReadyHumanText(userId) {
   const variants = [
-    ["ตอนนี้คุณพร้อมสแกนแล้วครับ", "ส่งรูปวัตถุ 1 รูปในแชตนี้ได้เลย"].join(
+    ["ตอนนี้คุณพร้อมสแกนแล้ว", "ส่งรูปวัตถุ 1 รูปในแชตนี้ได้เลย"].join(
       "\n\n",
     ),
-    ["พร้อมสแกนแล้วครับ", "ส่งรูปมา 1 รูป เดี๋ยวอาจารย์อ่านให้"].join("\n\n"),
+    ["พร้อมสแกนแล้ว", "ส่งรูปมา 1 รูป เดี๋ยวอาจารย์อ่านให้"].join("\n\n"),
   ];
   return variants[slotFromUserId(userId, variants.length)];
 }
@@ -688,7 +688,7 @@ export function buildPaymentQrSlipText() {
   // + เลขพร้อมเพย์แบบแตะค้างคัดลอก สำหรับคนไม่ถนัด QR
   const ppId = String(process.env.SLIP_RECEIVER_PROMPTPAY || "").trim();
   const lines = [
-    "โอนแล้วส่งสลิปในแชตนี้ได้เลยครับ",
+    "โอนแล้วส่งสลิปในแชตนี้ได้",
     "วิธีง่ายสุด: กดเซฟรูป QR ไว้ แล้วเปิดแอปธนาคาร เลือก สแกนจากรูป",
   ];
   // เครื่องเราเก็บแค่ 4 ตัวท้ายไว้เช็คสลิป — โชว์เฉพาะเมื่อเป็นเลขเต็ม 10-13 หลัก
@@ -741,11 +741,11 @@ export async function buildPaymentRequiredText({
 }
 
 export function buildNoHistoryText() {
-  return "ยังไม่มีประวัติการสแกนครับ";
+  return "ยังไม่มีประวัติการสแกน";
 }
 
 export function buildNoStatsText() {
-  return "ยังไม่มีสถิติการสแกนครับ";
+  return "ยังไม่มีสถิติการสแกน";
 }
 
 /** Deterministic idle copy — routing owns when this applies; persona may only vary alternates. */
@@ -824,15 +824,15 @@ export function isBlockedIntentDuringWaitingBirthdate(text, lowerText) {
 /** Payment / slip in progress (text guard when not utility command). */
 export function buildPaymentFlowLockedGuidanceText() {
   return [
-    "ตอนนี้รายการนี้อยู่ระหว่างชำระเงิน / ตรวจสอบสลิปครับ",
+    "ตอนนี้รายการนี้อยู่ระหว่างชำระเงิน / ตรวจสอบสลิป",
     "",
-    "ถ้าโอนแล้ว แนบสลิปในแชตนี้ได้เลยครับ",
-    "เดี๋ยวตรวจให้ก่อนเปิดสิทธิ์สแกนครับ",
+    "ถ้าโอนแล้ว แนบสลิปในแชตนี้ได้",
+    "ตรวจให้ก่อนเปิดสิทธิ์สแกน",
   ].join("\n");
 }
 
 export function buildSystemErrorText() {
-  return "ขออภัยครับ ติดขัดชั่วคราว ลองส่งใหม่อีกครั้งได้เลยครับ";
+  return "ติดขัดชั่วคราว ลองส่งใหม่อีกครั้งได้";
 }
 
 export function isPaymentCommand(text, lowerText) {
@@ -889,13 +889,13 @@ export function buildPaymentCommandIntroText({
     "วิธีชำระเงิน (พร้อมเพย์ + สลิป)",
     "",
     `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ อาจารย์ตรวจแล้วเปิดสิทธิ์ให้ทันที`,
-    `เปิดแล้วสแกนต่อได้ ${cnt} ครั้ง ภายใน ${hrs} ชั่วโมงครับ`,
+    `เปิดแล้วสแกนต่อได้ ${cnt} ครั้ง ภายใน ${hrs} ชั่วโมง`,
   ].join("\n");
 }
 
 /** ข้อความสั้นหลังรูป QR — ให้ส่งสลิปกลับมา */
 export function buildPaymentSlipFollowUpText() {
-  return "โอนแล้วส่งรูปสลิปในแชทนี้ เดี๋ยวอาจารย์ตรวจเปิดสิทธิ์ให้เลยครับ";
+  return "โอนแล้วส่งรูปสลิปในแชทนี้ จะตรวจเปิดสิทธิ์ให้เลย";
 }
 
 /** ข้อความเดียว (fallback เมื่อส่งรูป QR ไม่ได้ / LINE error) — ไม่ใส่ลิงก์ QR */
@@ -913,7 +913,7 @@ export function buildPaymentInstructionText({
   return [
     buildPaymentQrIntroText({ paymentRef, paidPackage: pkg, lineUserId }),
     "",
-    "ตอนนี้ยังโหลดรูปคิวอาร์ในแชตไม่ได้ชั่วคราว ลองแจ้งว่าจ่ายเงินอีกครั้งภายหลัง หรือติดต่อเราได้ครับ",
+    "ตอนนี้ยังโหลดรูปคิวอาร์ในแชตไม่ได้ชั่วคราว ลองแจ้งว่าจ่ายเงินอีกครั้งภายหลัง หรือติดต่อเราได้",
   ].join("\n");
 }
 
@@ -929,13 +929,13 @@ export function buildManualPaymentRequestText({ paymentRef } = {}) {
 /** slip image accepted: now waiting for admin verification. */
 export function buildSlipReceivedText({ paymentRef } = {}) {
   const base = [
-    "รับสลิปแล้วครับ",
+    "รับสลิปแล้ว",
     "",
     "กำลังรอตรวจสอบ",
     "ยังไม่ต้องส่งซ้ำนะ",
     "",
     "ตอนนี้ยังสแกนต่อไม่ได้",
-    "พออนุมัติแล้ว เดี๋ยวแจ้งในแชตนี้ให้ครับ",
+    "พออนุมัติแล้ว แจ้งในแชตนี้ให้",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -948,27 +948,27 @@ export function buildSlipGateRejectedText({ slipLabel = "other_image" } = {}) {
   const label = String(slipLabel || "other_image").trim();
   if (label === "chat_screenshot") {
     return [
-      "รูปนี้ดูเหมือนภาพหน้าจอแชตนะครับ",
-      "ขอรูปสลิปโอนจากแอปธนาคารหรือพร้อมเพย์ที่เห็นยอดและเวลาชัด ๆ แนบมาใหม่ในแชตนี้ได้เลยครับ",
+      "รูปนี้ดูเหมือนภาพหน้าจอแชต",
+      "ขอรูปสลิปโอนจากแอปธนาคารหรือพร้อมเพย์ที่เห็นยอดและเวลาชัด ๆ แนบมาใหม่ในแชตนี้ได้",
     ].join("\n");
   }
   if (label === "object_photo") {
     return [
-      "รูปนี้ดูเป็นภาพวัตถุ/ของชิ้นนะครับ ยังไม่ใช่สลิปโอน",
-      "แนบสลิปโอนที่เห็นยอดกับเวลาในแชตนี้ได้เลยครับ",
+      "รูปนี้ดูเป็นภาพวัตถุ/ของชิ้น ยังไม่ใช่สลิปโอน",
+      "แนบสลิปโอนที่เห็นยอดกับเวลาในแชตนี้ได้",
     ].join("\n");
   }
   return [
-    "ยังอ่านไม่ได้ว่าเป็นสลิปโอนครับ",
-    "ขอรูปจากหน้าโอนที่เห็นยอด วัน-เวลา และรายการชัด ๆ นะครับ",
+    "ยังอ่านไม่ได้ว่าเป็นสลิปโอน",
+    "ขอรูปจากหน้าโอนที่เห็นยอด วัน-เวลา และรายการชัด ๆ",
   ].join("\n");
 }
 
 /** awaiting_slip: gate could not confirm slip (weak evidence / tiny file / vision off). */
 export function buildSlipGateUnclearText() {
   return [
-    "รูปนี้ยังยืนยันไม่ได้ว่าเป็นสลิปโอนนะครับ",
-    "ลองส่งใหม่ให้เห็นยอดกับเวลาชัด ๆ หรือถ่ายใกล้ ๆ หน่อยครับ",
+    "รูปนี้ยังยืนยันไม่ได้ว่าเป็นสลิปโอน",
+    "ลองส่งใหม่ให้เห็นยอดกับเวลาชัด ๆ หรือถ่ายใกล้ ๆ หน่อย",
   ].join("\n");
 }
 
@@ -981,11 +981,11 @@ export function buildPendingVerifyReminderText({ paymentRef } = {}) {
 /** User sent another image while slip is already pending_verify (block scan / duplicate slip). */
 export function buildPendingVerifyBlockScanText({ paymentRef } = {}) {
   const base = [
-    "รูปนี้อาจารย์เก็บไว้ก่อนครับ",
+    "รูปนี้อาจารย์เก็บไว้ก่อน",
     "สลิปที่ส่งมาก่อนหน้ากำลังตรวจอยู่",
     "",
     "พอเปิดสิทธิ์แล้วจะแจ้งในแชตนี้",
-    "แล้วค่อยส่งรูปชิ้นงานมาสแกนได้เลยครับ",
+    "แล้วค่อยส่งรูปชิ้นงานมาสแกนได้",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -993,10 +993,10 @@ export function buildPendingVerifyBlockScanText({ paymentRef } = {}) {
 /** User typed payment / จ่ายเงิน / ปลดล็อก while already pending_verify. */
 export function buildPendingVerifyPaymentCommandText({ paymentRef } = {}) {
   const base = [
-    "ตอนนี้มีสลิปรอตรวจอยู่แล้วครับ",
+    "ตอนนี้มีสลิปรอตรวจอยู่แล้ว",
     "",
-    "ไม่ต้องส่งคำสั่งจ่ายเงินซ้ำในตอนนี้นะครับ",
-    "รอผลตรวจก่อนนะ อนุมัติหรือปฏิเสธ เดี๋ยวแจ้งในแชตนี้ให้ครับ",
+    "ไม่ต้องส่งคำสั่งจ่ายเงินซ้ำในตอนนี้",
+    "รอผลตรวจก่อนนะ อนุมัติหรือปฏิเสธ แจ้งในแชตนี้ให้",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -1015,12 +1015,12 @@ export function buildPayNotNeededIntentPayload({ accessDecision, session } = {})
       replyType: "pay_not_needed_scan_ready_after_result",
       semanticKey: "pay_not_needed_scan_ready_after_result",
       primaryText: [
-        "ตอนนี้สิทธิ์สแกนของคุณยังไม่หมดครับ",
+        "ตอนนี้สิทธิ์สแกนของคุณยังไม่หมด",
         "",
-        "ถ้าจะสแกนต่อ ส่งรูปพระ เครื่องราง หรือหินที่ต้องการได้เลยครับ",
+        "ถ้าจะสแกนต่อ ส่งรูปพระ เครื่องราง หรือหินที่ต้องการได้",
       ].join("\n"),
       alternateTexts: [
-        "ตอนนี้ยังใช้งานสแกนได้ตามปกติครับ ส่งรูปชิ้นถัดไปในแชทนี้ได้เลยครับ",
+        "ตอนนี้ยังใช้งานสแกนได้ตามปกติ ส่งรูปชิ้นถัดไปในแชทนี้ได้",
       ],
     };
   }
@@ -1030,13 +1030,13 @@ export function buildPayNotNeededIntentPayload({ accessDecision, session } = {})
       replyType: "pay_not_needed_paid_active",
       semanticKey: "pay_not_needed_paid_active",
       primaryText: [
-        "ตอนนี้ยังใช้งานสแกนได้ตามปกติครับ",
+        "ตอนนี้ยังใช้งานสแกนได้ตามปกติ",
         "ยังไม่ต้องจ่ายเพิ่มในตอนนี้",
         "",
-        "ส่งรูปพระ เครื่องราง หรือหินทีละชิ้นต่อรูปได้เลยครับ",
+        "ส่งรูปพระ เครื่องราง หรือหินทีละชิ้นต่อรูปได้",
       ].join("\n"),
       alternateTexts: [
-        "สิทธิ์สแกนของคุณยังใช้งานได้อยู่ครับ ส่งรูปมาได้เลย",
+        "สิทธิ์สแกนของคุณยังใช้งานได้อยู่ ส่งรูปมาได้",
       ],
     };
   }
@@ -1045,12 +1045,12 @@ export function buildPayNotNeededIntentPayload({ accessDecision, session } = {})
     replyType: "pay_not_needed_free_available",
     semanticKey: "pay_not_needed_free_available",
     primaryText: [
-      "ตอนนี้สิทธิ์สแกนของคุณยังไม่หมดครับ",
+      "ตอนนี้สิทธิ์สแกนของคุณยังไม่หมด",
       "",
-      "ส่งรูปพระ เครื่องราง หรือหินทีละชิ้นต่อรูปได้เลยครับ",
+      "ส่งรูปพระ เครื่องราง หรือหินทีละชิ้นต่อรูปได้",
     ].join("\n"),
     alternateTexts: [
-      "ตอนนี้ยังใช้งานสแกนได้ตามปกติครับ ยังไม่ต้องจ่ายเพิ่ม",
+      "ตอนนี้ยังใช้งานสแกนได้ตามปกติ ยังไม่ต้องจ่ายเพิ่ม",
     ],
   };
 }
@@ -1137,7 +1137,7 @@ export async function buildPaymentApprovedText({
             introPackage: introShape,
           })
         ).primaryText
-      : "อาจารย์ตรวจสลิปเรียบร้อย เปิดสิทธิ์ให้แล้วครับ ✨",
+      : "อาจารย์ตรวจสลิปเรียบร้อย เปิดสิทธิ์ให้แล้ว ✨",
   ];
   const refLine = formatPaymentRefLine(paymentRef);
   if (refLine) lines.push("", refLine);
@@ -1159,7 +1159,7 @@ export async function buildPaymentApprovedText({
     "",
     blessing,
     "",
-    "ส่งรูปมาสแกนต่อได้เลยครับ",
+    "ส่งรูปมาสแกนต่อได้",
   );
   return lines.join("\n");
 }
@@ -1174,7 +1174,7 @@ export function buildPaymentRejectedText({ reason = null } = {}) {
     .replace(/\s+/g, " ")
     .slice(0, 400);
   const lines = [
-    "อาจารย์ตรวจแล้ว สลิปนี้ใช้เปิดสิทธิ์ไม่ได้ครับ รายการเดิมปิดไปก่อนนะครับ",
+    "อาจารย์ตรวจแล้ว สลิปนี้ใช้เปิดสิทธิ์ไม่ได้ รายการเดิมปิดไปก่อน",
     "",
   ];
   if (r) {
@@ -1185,7 +1185,7 @@ export function buildPaymentRejectedText({ reason = null } = {}) {
     "ส่งรูปที่จะสแกนเข้ามาใหม่อีกครั้ง หรือ",
     "แจ้งว่า จ่ายเงิน หรือ ปลดล็อก เพื่อดูคิวอาร์อีกครั้ง",
     "",
-    "แล้วโอนตามยอด แนบสลิปใหม่ในแชทนี้ได้เลยครับ"
+    "แล้วโอนตามยอด แนบสลิปใหม่ในแชทนี้ได้"
   );
   return lines.join("\n");
 }
@@ -1228,15 +1228,15 @@ export function buildPaywallFullOfferIntroText(offer = loadActiveScanOffer()) {
   const scanCount = pkg?.scanCount ?? offer.paidScanCount;
   const hours = pkg?.windowHours ?? offer.paidWindowHours;
   return [
-    "วันนี้สิทธิ์ฟรีครบแล้วครับ",
+    "วันนี้สิทธิ์ฟรีครบแล้ว",
     "",
-    "พรุ่งนี้ยังมีฟรีต่อได้อีกครับ ถ้ายังไม่รีบค่อยมาใหม่ก็ได้",
+    "พรุ่งนี้ยังมีฟรีต่อได้อีก ถ้ายังค่อยมาใหม่ก็ได้",
     "",
     "ถ้าอยากสแกนต่อวันนี้",
     `เปิดสิทธิ์เพิ่มได้ ${price} บาท`,
     `สแกนได้ ${scanCount} ครั้ง ภายใน ${hours} ชั่วโมงหลังอนุมัติ`,
     "",
-    "พร้อมเมื่อไหร่ บอกว่าจ่ายเงิน หรือ ปลดล็อก มาก็ได้ครับ",
+    "พร้อมเมื่อไหร่ บอกว่าจ่ายเงิน หรือ ปลดล็อก มาก็ได้",
   ].join("\n");
 }
 
@@ -1252,16 +1252,16 @@ export function buildPaywallAckContinueText({
   void offer;
   const n = Math.max(1, Number(ackStreak) || 1);
   if (n >= 3) {
-    const pure = ["รับทราบครับ", "ได้ครับ", "โอเคครับ"];
+    const pure = ["รับทราบ", "ได้", "โอเค"];
     return pure[slotFromUserId(userId, pure.length)];
   }
   if (n === 2) {
-    const v = ["โอเคครับ ยังไม่รีบก็ได้ครับ", "รับทราบครับ"];
+    const v = ["โอเค ยังก็ได้", "รับทราบ"];
     return v[slotFromUserId(userId, v.length)];
   }
   const v = [
-    "ได้ครับ",
-    "โอเคครับ ถ้าจะเปิดสิทธิ์ต่อเมื่อไหร่ แจ้งอาจารย์ได้เลยครับ",
+    "ได้",
+    "โอเค ถ้าจะเปิดสิทธิ์ต่อเมื่อไหร่ แจ้งอาจารย์ได้",
   ];
   return v[slotFromUserId(userId, v.length)];
 }
@@ -1291,32 +1291,32 @@ export function buildPaywallFatiguePromptText({
 
   if (branch === "wait_tomorrow") {
     if (tier === "micro") {
-      return "โอเคครับ พรุ่งนี้มีฟรีใหม่อีกครับ หรือจะเปิดวันนี้ บอกว่าจ่ายเงินมาก็ได้ครับ";
+      return "โอเค พรุ่งนี้มีฟรีใหม่อีก หรือจะเปิดวันนี้ บอกว่าจ่ายเงินมาก็ได้";
     }
     if (tier === "short") {
-      return `รอพรุ่งนี้ได้เลยครับ ฟรีจะกลับมา ${freeQ} ครั้ง ถ้าจะใช้ต่อวันนี้ เปิดเพิ่ม ${price} บาท แจ้งว่าจ่ายเงินมาก็ได้ครับ`;
+      return `รอพรุ่งนี้ได้ ฟรีจะกลับมา ${freeQ} ครั้ง ถ้าจะใช้ต่อวันนี้ เปิดเพิ่ม ${price} บาท แจ้งว่าจ่ายเงินมาก็ได้`;
     }
     return [
-      "วันนี้สิทธิ์ฟรีครบแล้วครับ",
+      "วันนี้สิทธิ์ฟรีครบแล้ว",
       "ถ้าสะดวก รอพรุ่งนี้แล้วค่อยสแกนต่อได้เลย",
       "",
       "แต่ถ้าต้องการใช้ต่อทันที",
       `เปิดสิทธิ์เพิ่ม ${price} บาท สแกนได้ ${scanCount} ครั้ง ภายใน ${hours} ชม. หลังอนุมัติ`,
       "",
-      "พร้อมเมื่อไหร่ บอกว่าจ่ายเงินมาก็ได้ครับ",
+      "พร้อมเมื่อไหร่ บอกว่าจ่ายเงินมาก็ได้",
     ].join("\n");
   }
   if (branch === "date_wrong") {
     if (tier === "micro") {
-      return "เดี๋ยวค่อยใส่วันเกิดตอนสแกนครับ ตอนนี้จะเปิดสิทธิ์ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
+      return "ค่อยใส่วันเกิดตอนสแกน ตอนนี้จะเปิดสิทธิ์ แจ้งว่าจ่ายเงินมาก็ได้";
     }
-    return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ ${price} บาท แจ้งว่าจ่ายเงินมาก็ได้ครับ`;
+    return `วันเกิดค่อยใช้ตอนสแกน ตอนนี้ถ้าจะเปิดสิทธิ์ ${price} บาท แจ้งว่าจ่ายเงินมาก็ได้`;
   }
   if (tier === "micro") {
-    return `ฟรีวันนี้ครบแล้วครับ จะต่อวันนี้ บอกว่าจ่ายเงินมาก็ได้ครับ`;
+    return `ฟรีวันนี้ครบแล้ว จะต่อวันนี้ บอกว่าจ่ายเงินมาก็ได้`;
   }
   if (tier === "short") {
-    return `ตอนนี้สิทธิ์ฟรีของวันนี้ครบแล้วครับ ถ้าต้องการใช้ต่อ เปิดเพิ่มได้ ${price} บาท / ${scanCount} ครั้ง / ${hours} ชม. พร้อมเมื่อไหร่แจ้งว่าจ่ายเงินมาก็ได้ครับ`;
+    return `ตอนนี้สิทธิ์ฟรีของวันนี้ครบแล้ว ถ้าต้องการใช้ต่อ เปิดเพิ่มได้ ${price} บาท / ${scanCount} ครั้ง / ${hours} ชม. พร้อมเมื่อไหร่แจ้งว่าจ่ายเงินมาก็ได้`;
   }
   return buildPaywallFullOfferIntroText(offer);
 }
@@ -1346,26 +1346,26 @@ export function buildPaymentPackageSelectedHesitationText(
 ) {
   void paidPackage;
   void offer;
-  return "ถ้าพร้อมโอน แจ้งว่าจ่ายเงินมาก็ได้ครับ";
+  return "ถ้าพร้อมโอน แจ้งว่าจ่ายเงินมาก็ได้";
 }
 
 export function buildPaymentPackageSelectedGentleRemindText() {
-  return "ถ้าพร้อมโอน แจ้งว่าจ่ายเงินมาก็ได้ครับ";
+  return "ถ้าพร้อมโอน แจ้งว่าจ่ายเงินมาก็ได้";
 }
 
 export function buildPaymentPackageSelectedUnclearText({ tier = "short" } = {}) {
   if (tier === "micro") {
-    return "พร้อมเมื่อไหร่ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
+    return "พร้อมเมื่อไหร่ แจ้งว่าจ่ายเงินมาก็ได้";
   }
   if (tier === "short") {
-    return "ถ้าพร้อมเปิดสิทธิ์ บอกว่าจ่ายเงินมาก็ได้ครับ";
+    return "ถ้าพร้อมเปิดสิทธิ์ บอกว่าจ่ายเงินมาก็ได้";
   }
-  return "ตอนนี้อยู่ช่วงรอเปิดสิทธิ์ครับ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
+  return "ตอนนี้อยู่ช่วงรอเปิดสิทธิ์ แจ้งว่าจ่ายเงินมาก็ได้";
 }
 
 export function buildAwaitingSlipStatusHintText({ paymentRef } = {}) {
   const base =
-    "ตอนนี้อาจารย์รอสลิปอยู่ครับ แนบรูปสลิปโอนในแชตนี้ได้เลยครับ";
+    "ตอนนี้อาจารย์รอสลิปอยู่ แนบรูปสลิปโอนในแชตนี้ได้";
   return appendPaymentRefLine(base, paymentRef);
 }
 
@@ -1383,13 +1383,13 @@ export function buildAwaitingSlipFatigueGuidanceText({
   }
   if (tier === "micro") {
     return appendPaymentRefLine(
-      "รอสลิปอยู่ครับ แนบในแชตนี้ได้เลยครับ",
+      "รอสลิปอยู่ แนบในแชตนี้ได้",
       paymentRef,
     );
   }
   if (tier === "short") {
     return appendPaymentRefLine(
-      "ตอนนี้อาจารย์รอสลิปอยู่ครับ แนบรูปสลิปในแชตนี้ได้เลยครับ",
+      "ตอนนี้อาจารย์รอสลิปอยู่ แนบรูปสลิปในแชตนี้ได้",
       paymentRef,
     );
   }
@@ -1397,12 +1397,12 @@ export function buildAwaitingSlipFatigueGuidanceText({
 }
 
 export function buildPendingVerifyStatusShortText({ paymentRef } = {}) {
-  const base = "ตอนนี้กำลังตรวจสอบสลิปให้อยู่นะครับ พอมีผลจะแจ้งในแชตนี้ทันที";
+  const base = "ตอนนี้กำลังตรวจสอบสลิปให้อยู่ พอมีผลจะแจ้งในแชตนี้ทันที";
   return appendPaymentRefLine(base, paymentRef);
 }
 
 export function buildPendingVerifyGentleRemindText({ paymentRef } = {}) {
-  const base = "รอตรวจสลิปอยู่ครับ เดี๋ยวแจ้งในแชตนี้ให้";
+  const base = "รอตรวจสลิปอยู่ แจ้งในแชตนี้ให้";
   return appendPaymentRefLine(base, paymentRef);
 }
 
@@ -1417,16 +1417,16 @@ export function buildAwaitingSlipAckContinueText({
 } = {}) {
   const n = Math.max(1, Number(ackStreak) || 1);
   if (n >= 3) {
-    const b = ["รับทราบครับ", "ได้ครับ", "โอเคครับ"];
+    const b = ["รับทราบ", "ได้", "โอเค"];
     return appendPaymentRefLine(b[slotFromUserId(userId, b.length)], paymentRef);
   }
   if (n === 2) {
-    const b = ["โอเคครับ ยังไม่รีบก็ได้ครับ", "รับทราบครับ"];
+    const b = ["โอเค ยังก็ได้", "รับทราบ"];
     return appendPaymentRefLine(b[slotFromUserId(userId, b.length)], paymentRef);
   }
   const v = [
-    "ได้ครับ",
-    "ถ้าโอนแล้ว แนบสลิปไว้ในแชตนี้ได้เลยครับ เดี๋ยวตรวจให้ต่อครับ",
+    "ได้",
+    "ถ้าโอนแล้ว แนบสลิปไว้ในแชตนี้ได้ ตรวจให้ต่อ",
   ];
   return appendPaymentRefLine(v[slotFromUserId(userId, v.length)], paymentRef);
 }
@@ -1442,22 +1442,22 @@ export function buildPendingVerifyAckContinueText({
 } = {}) {
   const n = Math.max(1, Number(ackStreak) || 1);
   if (n >= 3) {
-    const b = ["รับทราบครับ", "ได้ครับ", "โอเคครับ"];
+    const b = ["รับทราบ", "ได้", "โอเค"];
     return appendPaymentRefLine(b[slotFromUserId(userId, b.length)], paymentRef);
   }
   if (n === 2) {
     const b = [
-      "โอเคครับ รอแป๊บนึงนะครับ",
-      "รับทราบครับ กำลังเช็กให้อยู่นะครับ",
+      "โอเค รอ",
+      "รับทราบ กำลังเช็กให้อยู่",
     ];
     return appendPaymentRefLine(b[slotFromUserId(userId, b.length)], paymentRef);
   }
-  const base = "ตอนนี้รับสลิปแล้วครับ กำลังเช็กให้อยู่นะครับ";
+  const base = "ตอนนี้รับสลิปแล้ว กำลังเช็กให้อยู่";
   return appendPaymentRefLine(base, paymentRef);
 }
 
 export function buildWaitingBirthdatePaymentDeferredRedirectText() {
-  return "เรื่องชำระค่อยทำทีหลังได้ครับ ตอนนี้ขอวันเกิดก่อนนะครับ เช่น 19/08/2528";
+  return "เรื่องชำระค่อยทำทีหลังได้ ตอนนี้ขอวันเกิดก่อน เช่น 19/08/2528";
 }
 
 /**
@@ -1479,12 +1479,10 @@ export function buildDeterministicFreeQuotaExhaustedPaywallText(offer, opts = {}
     const price = pkg?.priceThb ?? o.paidPriceThb;
     const count = pkg?.scanCount ?? o.paidScanCount;
     const hours = pkg?.windowHours ?? o.paidWindowHours;
+    // hard tone (กบ 21 ส.ค.): bundle โชว์เฉพาะราคา/จำนวน/อายุ ไม่มี CTA ชวน
     return [
-      "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ",
-      "",
-      `เปิดสแกนต่อได้เลย ค่าครู ${price} บาท สแกนได้ ${count} ครั้ง ใน ${hours} ชม.`,
-      "",
-      "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์ได้เลยครับ",
+      "สิทธิ์ฟรีวันนี้หมด",
+      `${price} บาท ${count} ครั้ง ใน ${formatOfferWindowThai(hours)}`,
     ].join("\n");
   }
   const def = getDefaultPackage(o);
@@ -1500,11 +1498,11 @@ export function buildDeterministicFreeQuotaExhaustedPaywallText(offer, opts = {}
       : `${p.scanCount} ครั้ง ${p.priceThb} บาท${perScan}${win}${star}`;
   });
   return [
-    "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้วนะครับ",
+    "วันนี้ใช้สิทธิ์สแกนฟรีครบแล้ว",
     "",
     ...lines,
     "",
-    "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์ได้เลยครับ",
+    "พร้อมเมื่อไหร่แตะปุ่มด้านล่าง หรือบอกอาจารย์ได้",
   ].join("\n");
 }
 
@@ -1532,15 +1530,15 @@ export function getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(
     )
     .join(" · ");
   const factsAlt = [
-    "สิทธิ์ฟรีวันนี้หมดแล้วนะครับ",
+    "สิทธิ์ฟรีวันนี้หมดแล้ว",
     "",
-    `สแกนต่อได้เลย ${menu} แตะปุ่มด้านล่างหรือบอกอาจารย์ได้เลยครับ`,
+    `สแกนต่อได้ ${menu} แตะปุ่มด้านล่างหรือบอกอาจารย์ได้`,
   ].join("\n");
   return [factsAlt];
 }
 
 export function buildDeterministicPaywallSoftCloseText() {
-  return "ได้เลยครับ พรุ่งนี้ค่อยส่งมาใหม่ได้เสมอครับ";
+  return "ได้ พรุ่งนี้ค่อยส่งมาใหม่ได้เสมอ";
 }
 
 /**
@@ -1551,6 +1549,7 @@ export function matchesDeterministicPaywallPurchaseIntent(text, lowerText) {
   const t = String(text || "").trim().replace(/\s+/g, " ");
   const lt = String(lowerText || t.toLowerCase()).trim();
   const exact = new Set([
+    "แนว",
     "แนวครับ",
     "scan ต่อ",
     "รายละเอียด",

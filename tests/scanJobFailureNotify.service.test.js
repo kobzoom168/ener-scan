@@ -65,7 +65,7 @@ test("notifyUserScanJobFailed: deep_scan_failed + lineUserId → enqueue once", 
   assert.equal(calls, 1);
   assert.equal(lastRow?.kind, "scan_failure_notify");
   assert.ok(
-    String(lastRow?.payload_json?.text || "").includes("รบกวนส่งใหม่อีกครั้ง"),
+    String(lastRow?.payload_json?.text || "").includes("ส่งใหม่อีกครั้ง"),
   );
 });
 

@@ -2135,8 +2135,8 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
               : "";
           const text =
             result.after > result.before
-              ? `ผมเติมสิทธิ์สแกนให้เรียบร้อยแล้วนะครับ ✨\n\nตอนนี้ใช้ได้อีก ${result.after} ครั้ง${untilLine}\nพร้อมใช้งานได้ทันที ส่งรูปพระ เครื่องราง หิน หรือกำไลเข้ามาได้เลยครับ อาจารย์รอดูให้อยู่ 🙏`
-              : `อาจารย์ปรับสิทธิ์สแกนของคุณให้เรียบร้อยแล้วนะครับ\n\nตอนนี้คงเหลือ ${result.after} ครั้ง${untilLine} มีอะไรสงสัยทักถามอาจารย์ได้เลยนะ`;
+              ? `ผมเติมสิทธิ์สแกนให้เรียบร้อยแล้ว ✨\n\nตอนนี้ใช้ได้อีก ${result.after} ครั้ง${untilLine}\nพร้อมใช้งานได้ทันที ส่งรูปพระ เครื่องราง หิน หรือกำไลเข้ามาได้ อาจารย์รอดูให้อยู่ 🙏`
+              : `อาจารย์ปรับสิทธิ์สแกนของคุณให้เรียบร้อยแล้ว\n\nตอนนี้คงเหลือ ${result.after} ครั้ง${untilLine} มีอะไรสงสัยทักถามอาจารย์ได้นะ`;
           try {
             await enqueueAdminSystemText({ lineUserId, text, replyToken: null });
             notified = true;

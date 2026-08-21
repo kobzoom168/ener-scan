@@ -156,7 +156,7 @@ function pageHtml({ cfg, voices, voicesError, savedMsg }) {
   });
   document.getElementById("preview").addEventListener("click", function(){
     var picked = document.querySelector('input[name=voiceId]:checked');
-    if(!picked){ alert("เลือกเสียงก่อนครับ"); return; }
+    if(!picked){ alert("เลือกเสียงก่อน"); return; }
     var st = document.getElementById("pvstate");
     st.textContent = "กำลังสร้างเสียงพรีวิว... (ใช้เครดิตนิดหน่อย รอ 3-8 วิ)";
     fetch("/admin/voice/preview", {

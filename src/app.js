@@ -234,25 +234,25 @@ textarea{min-height:72px;resize:vertical}
 button{width:100%;margin-top:22px;font-family:inherit;font-size:16px;font-weight:600;padding:14px;border:none;border-radius:12px;background:linear-gradient(90deg,#b8871b,#d9b93e);color:#fff;cursor:pointer}
 .note{font-size:11.5px;color:#9a8b66;text-align:center;margin-top:14px;line-height:1.6}</style></head><body>
 <h1>ข้อมูลชิ้นของคุณ</h1>
-<div class="sub">รู้เท่าไหนกรอกเท่านั้นได้เลยครับ · ส่งแล้วอาจารย์ส่งผลให้ทันที</div>
+<div class="sub">รู้เท่าไหนกรอกเท่านั้นได้ · ส่งแล้วอาจารย์ส่งผลให้ทันที</div>
 <form method="POST" action="/obj-info/${req.params.tok}">
-  <label>${nameLabel}</label>
-  <input name="objectName" placeholder="${namePh}" maxlength="120">
-  ${isBracelet ? "" : `<label>วัด <small>(ถ้าทราบ)</small></label><input name="temple" placeholder="เช่น วัดใหญ่ชัยมงคล" maxlength="120">
+<label>${nameLabel}</label>
+<input name="objectName" placeholder="${namePh}" maxlength="120">
+${isBracelet ? "" :`<label>วัด <small>(ถ้าทราบ)</small></label><input name="temple" placeholder="เช่น วัดใหญ่ชัยมงคล" maxlength="120">
   <label>รุ่น / ปีที่สร้าง <small>(ถ้าทราบ)</small></label><input name="eraYear" placeholder="เช่น รุ่นแรก ปี 2560" maxlength="60">`}
-  <label>ตั้งใจพกเพื่ออะไรเป็นหลัก <small>(เลือกได้)</small></label>
-  <select name="purpose"><option value="">— เลือก —</option><option>งาน</option><option>การเงิน</option><option>ความรัก</option><option>คุ้มครอง</option><option>เสี่ยงโชค</option><option>สะสมบูชา</option></select>
-  <label>ได้มาจากไหน <small>(เลือกได้)</small></label>
-  <select name="origin"><option value="">— เลือก —</option><option>เช่า/ซื้อมาเอง</option><option>มรดก/ผู้ใหญ่ให้</option><option>ของขวัญ</option><option>ได้จากวัดโดยตรง</option><option>อื่น ๆ</option></select>
-  <label>เรื่องราวของชิ้นนี้ <small>(อยากเล่าอะไรก็ได้ ไม่บังคับ)</small></label>
-  <textarea name="story" placeholder="เช่น พ่อให้ไว้ก่อนบวช พกมา 10 ปีแล้ว" maxlength="800"></textarea>
-  <button type="submit">บันทึก แล้วรับผลการอ่าน</button>
+<label>ตั้งใจพกเพื่ออะไรเป็นหลัก <small>(เลือกได้)</small></label>
+<select name="purpose"><option value="">— เลือก —</option><option>งาน</option><option>การเงิน</option><option>ความรัก</option><option>คุ้มครอง</option><option>เสี่ยงโชค</option><option>สะสมบูชา</option></select>
+<label>ได้มาจากไหน <small>(เลือกได้)</small></label>
+<select name="origin"><option value="">— เลือก —</option><option>เช่า/ซื้อมาเอง</option><option>มรดก/ผู้ใหญ่ให้</option><option>ของขวัญ</option><option>ได้จากวัดโดยตรง</option><option>อื่น ๆ</option></select>
+<label>เรื่องราวของชิ้นนี้ <small>(อยากเล่าอะไรก็ได้ ไม่บัง)</small></label>
+<textarea name="story" placeholder="เช่น พ่อให้ไว้ก่อนบวช พกมา 10 ปีแล้ว" maxlength="800"></textarea>
+<button type="submit">บันทึก แล้วรับผลการอ่าน</button>
 </form>
-<div class="note">ข้อมูลบันทึกแบบ "เจ้าของแจ้ง" เพื่อให้อาจารย์อ่านต่อยอดและเก็บเข้าทะเบียนคลังของคุณ<br>ไม่มีผลต่อคะแนนพลัง · Ener Scan ไม่ตัดสินแท้เก๊หรือมูลค่า</div>
+<div class="note">ข้อมูลบันทึกแบบ "เจ้าของแจ้ง" เพื่อให้อาจารย์อ่านต่อยอดและเก็บเข้าทะเบียนคลังของคุณ<br>ไม่มีผลต่อแนนพลัง · Ener Scan ไม่ตัดสินแท้เก๊หรือมูลค่า</div>
 </body></html>`);
   } catch (e) {
     console.error(JSON.stringify({ event: "OBJ_INFO_FORM_ERROR", message: String(e?.message || e).slice(0, 160) }));
-    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้ง");
   }
 });
 
@@ -263,12 +263,12 @@ app.post("/obj-info/:tok", async (req, res) => {
     const ok = out?.ok === true;
     res.status(ok ? 200 : 410).type("html").send(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ener Scan</title></head><body style="font-family:Kanit,sans-serif;background:#faf6ea;color:#43371f;text-align:center;padding:70px 24px">
 <div style="font-size:44px">${ok ? "✅" : "⌛"}</div>
-<h2 style="color:#a5811c;margin:12px 0 8px">${ok ? "บันทึกเรียบร้อยครับ" : "ลิงก์นี้หมดอายุแล้ว"}</h2>
-<p style="color:#6b5836;font-size:15px;line-height:1.7">${ok ? "อาจารย์กำลังส่งผลการอ่านเข้าแชท LINE ให้เลยครับ<br>ปิดหน้านี้แล้วกลับไปดูได้เลย" : "กลับไปที่แชท LINE แล้วพิมพ์ตอบอาจารย์ได้เลยครับ"}</p>
+<h2 style="color:#a5811c;margin:12px 0 8px">${ok ? "บันทึกเรียบร้อย" : "ลิงก์นี้หมดอายุแล้ว"}</h2>
+<p style="color:#6b5836;font-size:15px;line-height:1.7">${ok ? "อาจารย์กำลังส่งผลการอ่านเข้าแชท LINE ให้เลย<br>ปิดหน้านี้แล้วกลับไปดูได้" : "กลับไปที่แชท LINE แล้วพิมพ์ตอบอาจารย์ได้"}</p>
 </body></html>`);
   } catch (e) {
     console.error(JSON.stringify({ event: "OBJ_INFO_FORM_ERROR", message: String(e?.message || e).slice(0, 160) }));
-    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้ง");
   }
 });
 
@@ -296,12 +296,12 @@ app.get("/synergy/:token/body", async (req, res) => {
       return res
         .status(200)
         .type("html")
-        .send(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>จัดชุดพลัง - Ener Scan</title></head><body style="font-family:sans-serif;background:#faf6ea;color:#43371f;text-align:center;padding:60px 20px"><h2 style="color:#a5811c">คลังของคุณยังมีไม่ถึง 3 ชิ้น</h2><p>ส่งรูปชิ้นเพิ่มให้อาจารย์อ่านก่อน แล้วอาจารย์จะจัดชุดให้ครับ</p></body></html>`);
+        .send(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>จัดชุดพลัง - Ener Scan</title></head><body style="font-family:sans-serif;background:#faf6ea;color:#43371f;text-align:center;padding:60px 20px"><h2 style="color:#a5811c">คลังของคุณยังมีไม่ถึง 3 ชิ้น</h2><p>ส่งรูปชิ้นเพิ่มให้อาจารย์อ่านก่อน แล้วอาจารย์จะจัดชุดให้</p></body></html>`);
     }
     res.status(200).type("html").send(out.html);
   } catch (e) {
     console.error(JSON.stringify({ event: "SYNERGY_PAGE_ERROR", message: String(e?.message || e).slice(0, 160) }));
-    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้ง");
   }
 });
 
@@ -334,13 +334,13 @@ async function myScansGuard(req, res) {
     const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
     const n = await incrementCounterWithTtl(`myscans_rl:${ip}`, 60);
     if (Number(n) > 30) {
-      res.status(429).send("เปิดหน้าถี่เกินไป ลองใหม่ในอีกสักครู่ครับ");
+      res.status(429).send("เปิดหน้าถี่เกินไป ลองใหม่ในอีก");
       return null;
     }
   } catch { /* rate limit พังห้ามขวางหน้า */ }
   const uid = await svc.resolveMyScansToken(token);
   if (!uid) {
-    res.status(404).send("ลิงก์นี้ใช้ไม่ได้แล้ว เปิดจากปุ่ม ดูผลเก่า ในแชทอีกครั้งครับ");
+    res.status(404).send("ลิงก์นี้ใช้ไม่ได้แล้ว เปิดจากปุ่ม ดูผลเก่า ในแชทอีกครั้ง");
     return null;
   }
   res.set("Cache-Control", "private, no-store");
@@ -379,7 +379,7 @@ app.get("/myscans/:token", async (req, res) => {
     );
   } catch (e) {
     console.error(JSON.stringify({ event: "MYSCANS_PAGE_ERROR", message: String(e?.message || e).slice(0, 160) }));
-    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้ง");
   }
 });
 
@@ -393,7 +393,7 @@ app.get("/myscans/:token/open-report/:reportToken", async (req, res) => {
     console.log(JSON.stringify({ event: "myscans_report_opened", tokenPrefix: g.svc.tokenPrefixForLog(g.token) }));
     res.redirect(302, `/r/${encodeURIComponent(rt)}`);
   } catch {
-    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้ง");
   }
 });
 
@@ -419,7 +419,7 @@ app.get("/myscans/:token/goto/:target", async (req, res) => {
     }
     res.status(404).send("ไม่พบหน้านี้");
   } catch {
-    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้งครับ");
+    res.status(500).send("ระบบขัดข้อง ลองใหม่อีกครั้ง");
   }
 });
 

@@ -58,10 +58,7 @@ test("registerImageCandidateEvent: two events in window => count 2", () => {
 
 test("buildMultiImageInRequestText: deterministic single-line copy", () => {
   const t = buildMultiImageInRequestText();
-  assert.equal(
-    t,
-    "ส่งมาหลายรูปพร้อมกันนะครับ ขอทีละ 1 รูปครับ อาจารย์จะได้อ่านแม่นสุด รบกวนส่งรูปแรกเข้ามาใหม่ทีละรูปครับ",
-  );
+  assert.ok(!/ครับ/.test(t) && t.length <= 60);
   const c = getMultiImageInRequestReplyCandidates();
   assert.equal(c[0], t);
   assert.ok(c.length >= 2);

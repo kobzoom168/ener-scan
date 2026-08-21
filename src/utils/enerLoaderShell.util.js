@@ -81,6 +81,6 @@ export function buildLoaderShellHtml({ title, message, bodyUrlExpr, metaDescript
 <div class="loaddots"><i></i><i></i><i></i></div>
 <div class="tx">${message}</div>
 </div>
-<script>fetch(${bodyUrlExpr}).then(function(r){return r.text()}).then(function(h){document.open();document.write(h);document.close();}).catch(function(){document.querySelector(".tx").textContent="โหลดไม่สำเร็จ ลองรีเฟรชอีกครั้งครับ"});</script>
+<script>fetch(${bodyUrlExpr}).then(function(r){return r.text()}).then(function(h){document.open();document.write(h);document.close();}).catch(function(){document.querySelector(".tx").textContent="โหลดไม่สำเร็จ ลองรีเฟรชอีกครั้ง"});</script>
 </body></html>`;
 }

@@ -13,41 +13,41 @@ export function resolveResultStatusReply({ status, jobReportToken = null, baseUr
 
   if (st === "queued" || st === "processing" || st === "claimed") {
     return {
-      reply: "รูปอยู่ในคิวอาจารย์แล้วครับ กำลังอ่านอยู่ เสร็จเมื่อไหร่ผลจะเด้งเข้าแชทนี้เลยครับ",
+      reply: "อยู่ในคิว กำลังอ่าน",
       claimsDelivered: false,
     };
   }
   if (st === "delivery_queued") {
     return {
-      reply: "อาจารย์อ่านเสร็จแล้วครับ ระบบกำลังส่งผลเข้าแชทนี้ ถ้าสักพักยังไม่เข้า ทักมาได้เลยครับ",
+      reply: "อ่านเสร็จแล้ว กำลังส่งผล",
       claimsDelivered: false,
     };
   }
   if (st === "completed") {
     // Codex รอบ 3: dedup path ตั้ง completed ก่อน outbound ถูกส่ง — ห้าม claim ว่าส่งแล้ว
     return {
-      reply: "อาจารย์อ่านเสร็จแล้วครับ ระบบกำลังเตรียมส่งผลเข้าแชทนี้ ถ้าสักพักยังไม่เข้า ทักมาได้เลยครับ",
+      reply: "อ่านเสร็จแล้ว กำลังเตรียมส่งผล",
       claimsDelivered: false,
     };
   }
   if (st === "delivered") {
     return {
       reply: jobReportToken
-        ? `ผลออกแล้วครับ เปิดดูรายงานเต็มได้ที่นี่เลย\n${base}/r/${jobReportToken}`
-        : "ผลส่งเข้าแชทนี้แล้วครับ เลื่อนดูการ์ดผลด้านบน หรือกดเมนู ดูผลเก่า ก็ได้ครับ",
+        ? `ผลออกแล้ว\n${base}/r/${jobReportToken}`
+        : "ผลส่งแล้ว เลื่อนดูการ์ดด้านบน",
       claimsDelivered: true,
     };
   }
   if (st === "failed") {
     return {
       reply:
-        "รอบที่แล้วระบบอ่านสะดุดครับ ขออภัยด้วย\n\nรบกวนส่งรูปเดิมมาใหม่อีกครั้ง เดี๋ยวผมส่งให้อาจารย์ดูทันทีครับ",
+        "รอบที่แล้วอ่านไม่สำเร็จ ส่งรูปเดิมมาใหม่",
       claimsDelivered: false,
     };
   }
   if (st === "cancelled") {
     return {
-      reply: "รอบที่แล้วถูกยกเลิกไปครับ ส่งรูปมาใหม่ได้เลย เดี๋ยวผมส่งให้อาจารย์ดูครับ",
+      reply: "รอบที่แล้วถูกยกเลิก ส่งรูปใหม่ได้",
       claimsDelivered: false,
     };
   }
@@ -55,7 +55,7 @@ export function resolveResultStatusReply({ status, jobReportToken = null, baseUr
   // ที่ไม่มี owner จริง (Codex รอบ 4: "จะแจ้งในแชทนี้" ไม่มี worker/คนตามให้จริง)
   return {
     reply:
-      "สถานะรอบล่าสุดยังตรวจไม่ครบครับ ตอนนี้ยังไม่ต้องส่งรูปซ้ำ ลองเช็กสถานะอีกครั้งในอีกสักครู่ได้เลยครับ",
+      "ยังตรวจสถานะไม่ครบ ไม่ต้องส่งรูปซ้ำ",
     claimsDelivered: false,
   };
 }

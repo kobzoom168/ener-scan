@@ -172,11 +172,11 @@ export async function maybeEnqueueFbConsentAsk({ lineUserId, reportPayload, publ
           items: [
             {
               type: "action",
-              action: { type: "message", label: "ยินดีครับ อวดได้เลย", text: "ยินดีครับ อวดได้เลย" },
+              action: { type: "message", label: "ยินดี อวดได้", text: "ยินดี อวดได้" },
             },
             {
               type: "action",
-              action: { type: "message", label: "ขอเก็บส่วนตัวครับ", text: "ขอเก็บส่วนตัวครับ" },
+              action: { type: "message", label: "ขอเก็บส่วนตัว", text: "ขอเก็บส่วนตัว" },
             },
           ],
         },
@@ -210,11 +210,11 @@ export async function maybeEnqueueFbConsentAsk({ lineUserId, reportPayload, publ
 
 /** ข้อความขออนุญาต 5 แบบ สั้น ไม่อวย (กบ 24 ก.ค.) — เลือกตาม hash token คงที่ต่อชิ้น */
 const CONSENT_ASK_TEXTS = [
-  "ชิ้นนี้ออกมาสวยครับ อาจารย์ขอลงเพจ Ener ได้ไหมครับ ลงแค่ภาพกับผลอ่าน",
-  "ขออนุญาตนำชิ้นนี้ลงเพจหน่อยครับ ไม่มีข้อมูลส่วนตัวของคุณ",
-  "ชิ้นนี้น่าสนใจครับ อาจารย์ขอเอาลงเพจ Ener ได้ไหมครับ",
-  "ขอลงชิ้นนี้ในเพจได้ไหมครับ ลงเฉพาะภาพวัตถุกับผลอ่าน",
-  "ชิ้นนี้อยากเก็บไว้ลงเพจหน่อยครับ อนุญาตไหมครับ",
+  "ชิ้นนี้ออกมาสวย อาจารย์ขอลงเพจ Ener ได้ไหม ลงแค่ภาพกับผลอ่าน",
+  "ขออนุญาตนำชิ้นนี้ลงเพจหน่อย ไม่มีข้อมูลส่วนตัวของคุณ",
+  "ชิ้นนี้น่าสนใจ อาจารย์ขอเอาลงเพจ Ener ได้ไหม",
+  "ขอลงชิ้นนี้ในเพจได้ไหม ลงเฉพาะภาพวัตถุกับผลอ่าน",
+  "ชิ้นนี้อยากเก็บไว้ลงเพจหน่อย อนุญาตไหม",
 ];
 function pickConsentAskText(token) {
   let h = 0;
@@ -260,7 +260,7 @@ export async function handleFbConsentReplyText({ lineUserId, text }) {
     console.log(
       JSON.stringify({ event: "FB_CONSENT_DECLINED", tokenPrefix: token.slice(0, 10) }),
     );
-    return { reply: "ได้ครับ ชิ้นนี้เก็บไว้ดูส่วนตัว ไม่ลงเพจแน่นอนครับ" };
+    return { reply: "ได้ ชิ้นนี้เก็บไว้ดูส่วนตัว ไม่ลงเพจแน่นอน" };
   }
 
   try {
@@ -295,10 +295,10 @@ export async function handleFbConsentReplyText({ lineUserId, text }) {
         message: String(e?.message || e).slice(0, 160),
       }),
     );
-    return { reply: "ขอบคุณครับ เดี๋ยวผมจัดลงเพจให้สวย ๆ เลยครับ" };
+    return { reply: "ขอบคุณ จะจัดลงเพจให้สวย ๆ เลย" };
   }
   console.log(JSON.stringify({ event: "FB_CONSENT_ACCEPTED", tokenPrefix: token.slice(0, 10) }));
-  return { reply: "ขอบคุณครับ เดี๋ยวผมจัดลงเพจให้เลยครับ" };
+  return { reply: "ขอบคุณ จะจัดลงเพจให้เลย" };
 }
 
 /* ────────────────────── 3) แคปชัน ────────────────────── */
@@ -349,7 +349,7 @@ function captionFooter(peakLabel) {
 
 function fallbackCaptionBody(piece) {
   const peak = piece.peakLabel ? ` เด่นด้าน${piece.peakLabel}` : "";
-  return `เปิดคลังวันนี้ ${piece.name} อ่านพลังได้ ${piece.energyScore.toFixed(1)} เต็ม 10${peak} ครับ`;
+  return `เปิดคลังวันนี้ ${piece.name} อ่านพลังได้ ${piece.energyScore.toFixed(1)} เต็ม 10${peak}`;
 }
 
 const CAPTION_SYSTEM = `คุณคือแอดมินเพจ Ener เขียนแคปชันโพสต์โซเชียล (Facebook/TikTok) โชว์พลังของวัตถุมงคลชิ้นเด่น ให้คนเลื่อนผ่านแล้วอยากหยุดดู

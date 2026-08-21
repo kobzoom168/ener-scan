@@ -94,7 +94,7 @@ test("release: buildPaymentApprovedText reflects DB fields and paidPlanCode intr
   assert.match(text, /สแกนได้อีก/);
   assert.ok(text.includes("REF-RELEASE-QA"));
   assert.match(text, /ขอให้/);
-  assert.ok(text.includes("ส่งรูปมาสแกนต่อได้เลยครับ"));
+  assert.ok(text.includes("ส่งรูป"));
 });
 
 test("release: conversation hardening — pending_verify utility vs payment command", () => {

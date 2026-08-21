@@ -31,7 +31,7 @@ export function buildUsageHelpText() {
 
 export function buildScanEnergyText(hasSavedBirthdate) {
   return [
-    "ส่งรูปวัตถุที่ต้องการสแกนมาได้ 1 รูปครับ",
+    "ส่งรูปชิ้นเดียวเต็มกรอบ",
     hasSavedBirthdate
       ? "มีวันเกิดบันทึกไว้แล้ว อาจารย์เริ่มอ่านทันที"
       : "ยังไม่มีวันเกิดบันทึกไว้ ผมจะขอวันเกิดก่อนเริ่ม",

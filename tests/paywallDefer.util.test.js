@@ -112,7 +112,7 @@ test("copy: defer/recovery ไม่มีราคา ไม่สัญญา�
   }
   // recovery ทุกแบบต้องบอกชัดว่าไม่ต้องส่งซ้ำ (รูปถูกถือไว้แล้ว — ไม่ใช่ dead end ที่สั่งส่งใหม่)
   for (const txt of Object.values(PAYWALL_RECOVERY_TEXTS)) {
-    assert.match(txt, /ยังไม่ต้องส่งซ้ำ/);
+    assert.match(txt, /ไม่ต้องส่งซ้ำ/);
   }
   // failed = พูดได้ว่าอ่านไม่สำเร็จ · stale/neutral = ห้าม
   assert.match(PAYWALL_RECOVERY_TEXTS.failed, /อ่านไม่สำเร็จ/);
@@ -126,7 +126,7 @@ test("copy: defer/recovery ไม่มีราคา ไม่สัญญา�
   assert.equal(selectRecoveryText("no_value_unknown"), PAYWALL_RECOVERY_TEXTS.neutral);
   for (const reason of ["no_value_failed", "stale_pending_no_value", "invalid_job_age"]) {
     assert.doesNotMatch(selectRecoveryText(reason, { ownerAssigned: false }), /แอดมินรับเรื่อง/);
-    assert.match(selectRecoveryText(reason, { ownerAssigned: true }), /แอดมินรับเรื่องไว้ตรวจแล้ว/);
+    assert.match(selectRecoveryText(reason, { ownerAssigned: true }), /แอดมินรับเรื่องแล้ว/);
   }
   assert.doesNotMatch(RECOVERY_OWNER_ASSIGNED_SUFFIX, /บาท|จ่าย|ค่าครู|แพ็ก|ราคา/);
 });

@@ -21,13 +21,13 @@ export async function buildResumeFlexCard(hold) {
     thumbUrl = await createScanUploadBucketSignedUrl(hold.storagePath);
   } catch { /* ไม่มีรูปหัวการ์ดก็ยังใช้ได้ */ }
   const bodyLines = [
-    "รับรูปที่ส่งไว้ก่อนหน้าแล้วครับ ยังไม่ต้องส่งซ้ำ",
+    "รับรูปที่ส่งไว้ก่อนหน้าแล้ว ยังไม่ต้องส่งซ้ำ",
     hold.description ? `ข้อมูลที่แจ้งไว้: ${hold.description}` : null,
-    "แตะปุ่มด้านล่าง ผมส่งรูปนี้ให้อาจารย์อ่านทันทีครับ",
+    "แตะปุ่มด้านล่าง ผมส่งรูปนี้ให้อาจารย์อ่านทันที",
   ].filter(Boolean);
   return {
     type: "flex",
-    altText: "รับรูปที่ส่งไว้แล้ว แตะเริ่มอ่านได้เลยครับ",
+    altText: "รับรูปที่ส่งไว้แล้ว แตะเริ่มอ่านได้",
     contents: {
       type: "bubble",
       size: "kilo",
@@ -107,7 +107,7 @@ export async function sendRegistrationSuccessFlow(
   if (!first) return "none";
 
   const name = String(nickname || "").trim();
-  const successText = `ลงทะเบียนเรียบร้อยครับ${name ? ` คุณ${name}` : ""}`;
+  const successText = `ลงทะเบียนเรียบร้อย${name ?` คุณ${name}` : ""}`;
   const msgs = [{ type: "text", text: successText }];
   if (flow === "success_resume") {
     msgs.push(await buildResumeFlexCard(hold));
@@ -118,7 +118,7 @@ export async function sendRegistrationSuccessFlow(
     } catch { /* ไม่มีการ์ดก็เชิญด้วยข้อความ */ }
     msgs.push({
       type: "text",
-      text: "ส่งรูปพระ เครื่องราง หิน หรือกำไล มาได้เลยครับ เดี๋ยวผมส่งให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้นครับ",
+      text: "ส่งรูปพระ เครื่องราง หิน หรือกำไล มาได้ จะส่งให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้น",
     });
   }
   try {

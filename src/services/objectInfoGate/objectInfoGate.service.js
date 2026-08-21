@@ -180,7 +180,7 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     };
     const flexAsk = {
       type: "flex",
-      altText: "ขอข้อมูลชิ้นนี้ก่อนส่งผลครับ",
+      altText: "ขอข้อมูลชิ้นนี้ก่อนส่งผล",
       contents:
         lane === "amulet"
           ? {
@@ -193,7 +193,7 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
               body: {
                 type: "box", layout: "vertical", backgroundColor: "#14110C", paddingAll: "16px", spacing: "md",
                 contents: [
-                  { type: "text", text: "ก่อนส่งผล ขอข้อมูลชิ้นนี้ครับ", weight: "bold", size: "md", color: "#E8C547", wrap: true },
+                  { type: "text", text: "ก่อนส่งผล ขอข้อมูลชิ้นนี้", weight: "bold", size: "md", color: "#E8C547", wrap: true },
                   { type: "text", text: askText, size: "sm", color: "#F5EDD8", wrap: true },
                   { type: "text", text: "ข้อมูลจะถูกเก็บเข้าทะเบียนคลังของคุณ (บันทึกแบบ \"เจ้าของแจ้ง\")", size: "xs", color: "#CBB98A", wrap: true },
                 ],
@@ -305,7 +305,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await clearDedupeKey(pendingKey(userId));
       await clearDedupeKey(backupKey(userId));
       await reEnqueueHeldReport(userId, pending);
-      await client.replyMessage(event.replyToken, { type: "text", text: "ได้ครับ รับผลพลังได้ทันทีครับ" });
+      await client.replyMessage(event.replyToken, { type: "text", text: "ได้ รับผลพลังได้ทันที" });
       return true;
     }
     if (/^ไม่ทราบ/.test(t)) {
@@ -324,7 +324,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await clearDedupeKey(pendingKey(userId));
       await clearDedupeKey(backupKey(userId));
       await reEnqueueHeldReport(userId, pending);
-      await client.replyMessage(event.replyToken, { type: "text", text: "ไม่เป็นไรครับ อาจารย์ส่งผลให้เลย" });
+      await client.replyMessage(event.replyToken, { type: "text", text: "ไม่เป็นไร อาจารย์ส่งผลให้เลย" });
       return true;
     }
 
@@ -361,7 +361,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       }
       await client.replyMessage(event.replyToken, {
         type: "text",
-        text: "อาจารย์รอส่งผลอยู่ครับ ขอข้อมูลชิ้นนี้ก่อนนิดเดียว เป็นพระอะไร วัดไหน รุ่น/ปีอะไร (หรือชนิดหิน) พิมพ์บอกได้เลย ไม่แน่ใจกดปุ่มไม่ทราบได้ครับ",
+        text: "อาจารย์รอส่งผลอยู่ ขอข้อมูลชิ้นนี้ก่อนนิดเดียว เป็นพระอะไร วัดไหน รุ่น/ปีอะไร (หรือชนิดหิน) พิมพ์บอกได้ ไม่แน่ใจกดปุ่มไม่ทราบได้",
         quickReply: { items: remindItems },
       });
       return true;
@@ -390,8 +390,8 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await setLargeValueWithTtl(backupKey(userId), JSON.stringify(pending), PENDING_TTL_SEC * 2);
       await client.replyMessage(event.replyToken, {
         type: "text",
-        text: `ขอบคุณครับ ${merged.objectName} แล้วพอทราบไหมครับว่า${missing.join(" ")} (ไม่ทราบกดปุ่มได้เลย เดี๋ยวอาจารย์ส่งผลให้ทันที)`,
-        quickReply: { items: [{ type: "action", action: { type: "message", label: "ไม่ทราบครับ", text: "ไม่ทราบครับ" } }] },
+        text: `ขอบคุณ ${merged.objectName} แล้วพอทราบไหมว่า${missing.join(" ")} (ไม่ทราบกดปุ่มได้ จะส่งผลให้ทันที)`,
+        quickReply: { items: [{ type: "action", action: { type: "message", label: "ไม่ทราบ", text: "ไม่ทราบ" } }] },
       });
       return true;
     }
@@ -422,7 +422,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
 
     await client.replyMessage(event.replyToken, {
       type: "text",
-      text: "บันทึกเข้าทะเบียนคลังของคุณแล้วครับ อาจารย์ส่งผลให้เลยครับ",
+      text: "บันทึกเข้าทะเบียนคลังของคุณแล้ว อาจารย์ส่งผลให้เลย",
     });
     // คำถาม "พกเพื่ออะไร" ส่งหลังรายงานถึงมือ (~7 วิ) — ส่งพร้อมกันปุ่ม quickReply จะโดน
     // การ์ดรายงานดันหาย (กบ 7 ส.ค. "ยังไม่ทันเลือกคำตอบ")
@@ -431,7 +431,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       import("../lineOutbound/customerPush.gateway.js")
         .then((g) => g.pushToCustomer(client, userId, {
           type: "text",
-          text: "ถามเพิ่มนิดเดียวครับ ชิ้นนี้ตั้งใจพกเพื่ออะไรเป็นหลัก (ตอบหรือไม่ตอบก็ได้)",
+          text: "ถามเพิ่มนิดเดียว ชิ้นนี้ตั้งใจพกเพื่ออะไรเป็นหลัก (ตอบหรือไม่ตอบก็ได้)",
           quickReply: {
             items: PURPOSE_CHOICES.map((c) => ({ type: "action", action: { type: "message", label: c, text: `พกเพื่อ${c}` } })),
           },
@@ -538,7 +538,7 @@ export async function maybeHandlePurposeAnswer({ client, event, userId, text }) 
     await clearDedupeKey(`objinfo:purpose:${userId}`);
     await client.replyMessage(event.replyToken, {
       type: "text",
-      text: `รับทราบครับ ชิ้นนี้พกเพื่อ${choice} อาจารย์จะจำไว้เวลาแนะนำการพกครับ`,
+      text: `รับทราบ ชิ้นนี้พกเพื่อ${choice} อาจารย์จะจำไว้เวลาแนะนำการพก`,
     });
     return true;
   } catch {

@@ -635,7 +635,7 @@ export async function buildChatPhotoCardMessages(publicToken, reportUrl, lineUse
         }
         rankLine = `ชิ้นนี้พลังแรงเป็นอันดับ ${rank} จาก ${pieces.length} ชิ้นในคลังของคุณ`;
       } else {
-        rankLine = "ชิ้นแรกในคลังของคุณ สะสมเพิ่มได้เรื่อย ๆ ครับ";
+        rankLine = "ชิ้นแรกในคลังของคุณ สะสมเพิ่มได้เรื่อย ๆ";
       }
     }
   } catch {

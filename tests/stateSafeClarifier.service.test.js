@@ -44,7 +44,7 @@ test("paywall side questions: brief answer + bridge back to pay", async () => {
     assert.equal(out.bridge_back_to, expectedBridge);
     const finalText = composeStateSafeClarifierText(out);
     assert.ok(finalText.includes(String(needle)));
-    assert.ok(finalText.includes('ตอบว่า "จ่าย"'));
+    assert.ok(finalText.includes("พิมพ์ จ่าย"));
   }
 });
 
