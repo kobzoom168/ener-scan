@@ -93,10 +93,15 @@ export async function sendMultiImageRejectionViaGateway({
       };
       const rt = String(replyToken || "").trim();
       if (rt) {
-        await (async () => {
-      const { replyToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
-      return replyToCustomer(client, rt, audio, { source: "multi_image_audio", toneExemptSurface: "media_only" });
-    })();
+        const { replyToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+        const replied = await replyToCustomer(client, rt, audio, {
+          source: "multi_image_audio",
+          toneExemptSurface: "media_only",
+        });
+        if (replied.sent !== true) {
+          console.error(JSON.stringify({ event: "MULTI_IMAGE_VOICE_BLOCKED", reason: replied.reason || "unknown", branch: "reply" }));
+          return { sent: false, suppressed: true, reason: replied.reason };
+        }
       } else {
         const { pushToCustomer } = await import("./../lineOutbound/customerPush.gateway.js");
         const pushed = await pushToCustomer(client, uid, audio, { source: "multi_image_voice", toneExemptSurface: "media_only" });

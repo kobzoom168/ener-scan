@@ -579,3 +579,95 @@ test("EXEMPT_FILES ต้องไม่มีไฟล์ mixed surface ที�
   assert.ok(!EXEMPT_FILES["src/services/welcome/identityQuestion.service.js"], "identityQuestion ห้าม exempt ทั้งไฟล์");
   assert.ok(!EXEMPT_FILES["src/services/fbShowcase/scanYoutubeShort.service.js"], "scanYoutubeShort ห้าม exempt ทั้งไฟล์");
 });
+
+/* ---------------- 7) runtime kind matrix (Codex P0-1/P0-2 acceptance) ---------------- */
+
+test("kind matrix: payload จริงของฟีเจอร์ต้องไม่ถูก guard บล็อก (YT / referral / welcome / synergy<3)", async () => {
+  const { checkHardTone } = await import("../src/core/conversation/hardTone.util.js");
+  const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  const kindOf = gw.toneKindForPushSourceExported;
+
+  const REAL = [
+    ["youtube_clip_notify", "คลิปของชิ้นนี้: https://youtu.be/abcdefghijk"],
+    ["referral_notify", "เพื่อนของคุณใช้โค้ดแล้ว ทั้งคู่ได้สิทธิ์สแกนเพิ่มคนละ 1 ครั้ง ใช้ได้วันนี้"],
+    ["precheck_delayed", "เปิดโหมดเช็คก่อนเช่าแล้ว ถ่ายรูปองค์ที่จะเช่าส่งมา"],
+    ["registration_success", "ลงทะเบียนแล้ว\nส่งรูปชิ้นเดียวเต็มกรอบ"],
+  ];
+  for (const [source, text] of REAL) {
+    const kind = kindOf(source);
+    const r = checkHardTone(text, { kind });
+    assert.ok(r.ok, `${source} (kind=${kind}) ต้องผ่าน: ${r.violations.join(",")}`);
+  }
+  // unknown source ต้องยัง fail-closed ที่ reply
+  assert.equal(kindOf("something_new"), "reply");
+});
+
+test("kind matrix: YT notify payload จริงผ่าน raw boundary → ยิง HTTP 1 ครั้ง", async () => {
+  const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  let fetched = 0;
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => { fetched += 1; return { ok: true }; };
+  try {
+    const r = await gw.pushRawToCustomer("U" + "4".repeat(32), [
+      { type: "text", text: "คลิปของชิ้นนี้: https://youtu.be/abcdefghijk" },
+    ], { source: "youtube_clip_notify", isBanned: async () => false });
+    assert.equal(r.sent, true, r.reason || "");
+    assert.equal(fetched, 1);
+  } finally { globalThis.fetch = orig; }
+});
+
+test("kind matrix: referral notify payload จริง → push 1 · payload ผิด policy → 0", async () => {
+  const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  let c = fakeClient();
+  const ok = await gw.pushToCustomer(c, "U" + "5".repeat(32), [
+    { type: "text", text: "เพื่อนของคุณใช้โค้ดแล้ว ทั้งคู่ได้สิทธิ์สแกนเพิ่มคนละ 1 ครั้ง ใช้ได้วันนี้" },
+  ], { source: "referral_notify", isBanned: async () => false });
+  assert.equal(ok.sent, true, ok.reason || "");
+  assert.equal(c.calls.push, 1);
+
+  c = fakeClient();
+  const bad = await gw.pushToCustomer(c, "U" + "5".repeat(32), [
+    { type: "text", text: "ขอบคุณที่ช่วยบอกต่อครับ" },
+  ], { source: "referral_notify", isBanned: async () => false });
+  assert.equal(c.calls.push, 0);
+  assert.equal(bad.reason, "hard_tone_rejected");
+});
+
+test("P0-2: lineWebhook callers ประกาศ typed kind ตาม surface (source contract)", () => {
+  const src = read("src", "routes", "lineWebhook.js");
+  for (const [source, kind] of [
+    ["referral_invite", "bundle"],
+    ["synergy_not_enough", "step"],
+    ["myscans_card", "bundle"],
+    ["registration_image_gate", "step"],
+    ["follow_welcome", "step"],
+    ["registration_prompt", "step"],
+    ["chat_fallback", "step"],
+  ]) {
+    const re = new RegExp(`source:\\s*"${source}",\\s*toneKind:\\s*"${kind}"`);
+    assert.ok(re.test(src), `${source} ต้องประกาศ toneKind=${kind}`);
+  }
+});
+
+test("P0-3/P1: caller ตรวจ typed result — ห้าม log SENT เมื่อ transport 0 (behavior)", async () => {
+  // fake boundary ที่คืน sent:false เสมอ → ต้องไม่มี *_SENT ใน log และต้องมี *_BLOCKED
+  const src = read("src", "routes", "lineWebhook.js");
+  for (const [sentEvent, blockedEvent] of [
+    ["REFERRAL_INVITE_SENT", "REFERRAL_INVITE_BLOCKED"],
+    ["LINE_FOLLOW_WELCOME_SENT", "LINE_FOLLOW_WELCOME_BLOCKED"],
+  ]) {
+    const iBlocked = src.indexOf(blockedEvent);
+    const iSent = src.indexOf(sentEvent);
+    assert.ok(iBlocked > 0, `ต้องมี ${blockedEvent}`);
+    assert.ok(iBlocked < iSent, `${blockedEvent} ต้องเช็คก่อน log ${sentEvent}`);
+  }
+  assert.ok(src.includes("MYSCANS_CARD_BLOCKED"));
+  assert.ok(src.includes("SYNERGY_NOT_ENOUGH_BLOCKED"));
+
+  // multiImage: ทั้ง reply และ push branch ต้องตรวจ sent
+  const mi = read("src", "services", "lineWebhook", "multiImageRejectionReply.service.js");
+  assert.equal((mi.match(/MULTI_IMAGE_VOICE_BLOCKED/g) || []).length, 2, "ต้องมีทั้ง reply และ push branch");
+  const iSentMi = mi.indexOf("MULTI_IMAGE_VOICE_SENT");
+  const iReplyCheck = mi.indexOf('branch: "reply"');
+  assert.ok(iReplyCheck > 0 && iReplyCheck < iSentMi, "reply branch ต้องตรวจก่อน log SENT");
+});

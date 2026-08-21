@@ -1029,3 +1029,11 @@
 - **P1 typed failure ห้ามเงียบ**: synergyIntro ล้าง dedupe 365 วันเมื่อ transport ถูกบล็อก (เดิมลูกค้าจะไม่ได้ intro ทั้งปี) · objectInfoGate ask ถูกบล็อก → ล้าง pending/backup/form + ปล่อยรายงาน (NOT_HELD) ไม่ยึดเงียบ · precheck/multiImage voice/registration/YT notify → log typed + คืน sent:false · เพิ่มเทสต์คุมทั้ง 5 caller
 - Tests: hardChatCopy.contract **32/32** (contract 4 · inventory 2 · behavior 8 · invariant 6 · exemption 4 · P0-3/P1 3 · matcher lock 1) · **gate 167/173 · known 14 · ไม่มี fail ใหม่**
 - ค้างเฟส 2: LLM pre-send contract + regenerate/fallback · router priority · rewrite prompts · replay 20-21 ส.ค. · staging smoke
+
+## 2026-08-22 (บ่าย) | Claude | ปิด runtime kind matrix + typed result (Codex NO-GO บน 20ac46f)
+- **P0-1 source map บล็อกฟีเจอร์จริง** (regression ที่ผมสร้างเองตอนเปลี่ยน default เป็น reply ≤40): probe ยืนยัน "คลิปของชิ้นนี้: <URL>" ยาว 44 และ referral notify 74 → โดน too_long ทั้งคู่ · แก้ typed map: `youtube_clip_notify|referral_notify|precheck|multi_image` = step (unknown ยังคง reply fail-closed) · เทสต์ใช้ payload จริง: YT ผ่าน raw boundary → fetch 1 ครั้ง · referral → push 1 · payload ผิด policy → 0
+- **P0-2 caller ต้องประกาศ kind ตาม surface**: ใส่ typed `{source, toneKind}` ให้ทุก flow ใน lineWebhook — referral_invite=bundle · myscans_card=bundle · synergy_not_enough/registration_image_gate/registration_prompt/follow_welcome/chat_fallback=step · **ไม่คืน default step** ตามที่สั่ง
+- **P0-3 typed result จริง**: caller ที่ย้าย boundary ตรวจ `sent` ก่อน log SENT ทุกตัว — referral invite / follow welcome / myscans / synergy<3 / registration image gate (fallback ไป push เมื่อ reply ถูกบล็อก) · เพิ่ม `*_BLOCKED` log ทุกจุด
+- **P1 multiImage reply branch**: เดิม reply branch ทิ้ง return value แล้ว log SENT เสมอ — ตอนนี้ตรวจ `sent` เหมือน push branch (`MULTI_IMAGE_VOICE_BLOCKED` + `branch:"reply"`) และ log SENT เฉพาะเมื่อส่งจริง
+- Tests: hardChatCopy.contract **37/37** — เพิ่ม kind matrix (payload จริงของ YT/referral/precheck/registration ต้องผ่าน · unknown ยัง reply) · raw boundary fetch probe · caller contract (BLOCKED ต้องมาก่อน SENT) · **gate 167/173 · known 14 · ไม่มี fail ใหม่**
+- ค้างเฟส 2: LLM pre-send contract + regenerate/fallback · router priority · rewrite prompts · replay 20-21 ส.ค. · staging smoke

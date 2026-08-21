@@ -525,10 +525,14 @@ async function maybeHandleReferralInvite({ client, userId, replyToken, text }) {
     const used = await countReferrerRedemptionsThisMonth(userId).catch(() => 0);
     const remaining = Math.max(0, MONTHLY_CAP - used);
     // 2 ก้อนใน reply เดียว: การ์ดไว้ดูเอง + ข้อความธรรมดาไว้กดส่งต่อให้เพื่อน
-    await __replyCustomer(client, replyToken, [
+    const __r = await __replyCustomer(client, replyToken, [
       buildInviteCardFlex(code, remaining),
       { type: "text", text: buildInviteForwardText(code) },
-    ]);
+    ], { source: "referral_invite", toneKind: "bundle" });
+    if (__r.sent !== true) {
+      console.error(JSON.stringify({ event: "REFERRAL_INVITE_BLOCKED", reason: __r.reason || "unknown" }));
+      return true;
+    }
     console.log(
       JSON.stringify({
         event: "REFERRAL_INVITE_SENT",
@@ -560,10 +564,13 @@ async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
     const vault = await loadVault(userId);
     if (vault.length < 3) {
       // Codex C6: จัดชุด = ข้อความบริการ (URL/CTA) เสียงแอดมิน — ไม่มีเสียง/คำอ้างอาจารย์
-      await __replyCustomer(client, replyToken, {
+      const __s = await __replyCustomer(client, replyToken, {
         type: "text",
         text: `คลังของคุณมี ${vault.length} ชิ้น จัดชุดได้เมื่อครบ 3 ชิ้นขึ้นไป ส่งรูปชิ้นเพิ่มเข้ามา`,
-      });
+      }, { source: "synergy_not_enough", toneKind: "step" });
+      if (__s.sent !== true) {
+        console.error(JSON.stringify({ event: "SYNERGY_NOT_ENOUGH_BLOCKED", reason: __s.reason || "unknown" }));
+      }
       return true;
     }
     const token = await getOrCreateSynergyToken(userId);
@@ -2169,10 +2176,15 @@ async function handleHistoryCommand({
             total: items.length,
           }),
         );
-        await __replyCustomer(client, 
+        const __m = await __replyCustomer(client, 
           replyToken,
           svc.buildMyScansFlexCard({ url, total: items.length }),
+          { source: "myscans_card", toneKind: "bundle" },
         );
+        if (__m.sent !== true) {
+          console.error(JSON.stringify({ event: "MYSCANS_CARD_BLOCKED", reason: __m.reason || "unknown" }));
+          return true;
+        }
         try {
           const { insertLineConversationMessage } = await import(
             "../stores/conversationMessages.db.js"
@@ -2352,7 +2364,8 @@ async function finalizeAcceptedImage({
       if (!msgs.length && prompt) msgs.push(prompt.flexMessage);
       try {
         try {
-          await __replyCustomer(client, event.replyToken, msgs);
+          const __g = await __replyCustomer(client, event.replyToken, msgs, { source: "registration_image_gate", toneKind: "step" });
+          if (__g.sent !== true) throw new Error(__g.reason || "reply_blocked");
         } catch {
           await __pushCustomer(client, userId, msgs);
         }
@@ -4272,7 +4285,7 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
   const replyText = async (t, quickReply = null) => {
     const msg = { type: "text", text: t, ...(quickReply ? { quickReply } : {}) };
     try {
-      await __replyCustomer(client, event.replyToken, [msg]);
+      await __replyCustomer(client, event.replyToken, [msg], { source: "admin_assist_liff", toneKind: "step" });
     } catch {
       await __pushCustomer(client, userId, [msg]).catch(() => {});
     }
@@ -4329,7 +4342,7 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
       await __replyCustomer(client, event.replyToken, [
         { type: "text", text: parts },
         prompt.flexMessage,
-      ]);
+      ], { source: "registration_prompt", toneKind: "step" });
     } catch {
       await __pushCustomer(client, userId, [{ type: "text", text: parts }, prompt.flexMessage]).catch(() => {});
     }
@@ -4451,7 +4464,7 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
             ? "รูปที่ฝากไว้หมดอายุ ถ่ายส่งใหม่ได้"
             : "เริ่มอ่านรูปเดิมไม่สำเร็จ ลองใหม่อีกครั้ง หรือส่งรูปมาใหม่ได้";
     try {
-      await __replyCustomer(client, event.replyToken, { type: "text", text: msg });
+      await __replyCustomer(client, event.replyToken, { type: "text", text: msg }, { source: "chat_fallback", toneKind: "step" });
     } catch { /* ignore */ }
     return true;
   }
@@ -8716,7 +8729,11 @@ async function handleFollowEvent({ client, event }) {
         welcomeMsgs.push(buildHowtoFlowFlex());
       } catch { /* ส่ง welcome เดิมได้ */ }
     }
-    await __replyCustomer(client, event.replyToken, welcomeMsgs);
+    const __w = await __replyCustomer(client, event.replyToken, welcomeMsgs, { source: "follow_welcome", toneKind: "step" });
+    if (__w.sent !== true) {
+      console.error(JSON.stringify({ event: "LINE_FOLLOW_WELCOME_BLOCKED", reason: __w.reason || "unknown" }));
+      return;
+    }
     console.log(
       JSON.stringify({
         event: "LINE_FOLLOW_WELCOME_SENT",

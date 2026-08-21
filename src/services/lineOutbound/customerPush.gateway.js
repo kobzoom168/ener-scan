@@ -51,7 +51,7 @@ export async function pushToCustomer(client, lineUserId, messages, opts = {}) {
   const toneKindForPushSource = (src) => {
     const t = String(src || "");
     if (/payment|qr|slip|paywall|quota_offer|myscans|history|synergy_intro|daily_pick/i.test(t)) return "bundle";
-    if (/report|scan_result|registration|welcome|howto|onboarding|object_info|purpose/i.test(t)) return "step";
+    if (/report|scan_result|registration|welcome|howto|onboarding|object_info|purpose|youtube_clip_notify|referral_notify|precheck|multi_image/i.test(t)) return "step";
     return "reply";
   };
   const { resolveExemption: resolveEx } = await import("../../core/conversation/hardTone.util.js");
@@ -171,7 +171,7 @@ export async function pushRawToCustomer(lineUserId, messages, opts = {}) {
 export function toneKindForPushSourceExported(source) {
   const t = String(source || "");
   if (/payment|qr|slip|paywall|quota_offer|myscans|history|synergy_intro|daily_pick/i.test(t)) return "bundle";
-  if (/report|scan_result|registration|welcome|howto|onboarding|object_info|purpose/i.test(t)) return "step";
+  if (/report|scan_result|registration|welcome|howto|onboarding|object_info|purpose|youtube_clip_notify|referral_notify|precheck|multi_image/i.test(t)) return "step";
   return "reply";
 }
 
