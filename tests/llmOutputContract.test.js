@@ -12,7 +12,7 @@ for (const [k, v] of Object.entries({
 })) if (!process.env[k]) process.env[k] = v;
 
 const M = await import("../src/core/conversation/llmOutputContract.util.js");
-const REPORT_EV = { reportIds: ["res-1"] };
+const REPORT_EV = { report: { ids: ["res-1"], scores: [7.2], percentages: [68], energyTags: ["เมตตา"], luckyAttributes: [], materials: [] } };
 
 const run = (text, extra = {}) => M.checkLlmCustomerOutput({ text, ...extra });
 
@@ -39,10 +39,10 @@ test("grounding: ไม่มี evidence ห้ามคะแนน/%/พล�
   const cases = {
     "คะแนน 7.2/10": "ungrounded:score",
     "เข้ากับดวง 68%": "ungrounded:percent",
-    "เด่นด้านเมตตาและมหานิยม": "ungrounded:energy_claim",
+    "เด่นด้านเมตตาและมหานิยม": "ungrounded:energy",
     "เป็นพระเนื้อผง": "ungrounded:material",
     "พระสมเด็จวัดประสาทบุญญาวาส ปี 2506": "ungrounded:provenance",
-    "เลขนำโชค 7 สีแดงเป็นมงคล": "ungrounded:lucky_attr",
+    "เลขนำโชค 7 สีแดงเป็นมงคล": "ungrounded:lucky",
   };
   for (const [text, code] of Object.entries(cases)) {
     const r = run(text);
@@ -124,4 +124,109 @@ test("acceptance: fallback ไม่มีคำต้องห้าม แล�
     const t = M.factualFallbackFor(v, {});
     assert.ok(checkHardTone(t, { kind: "reply" }).ok, `fallback ต้องผ่าน hard tone: ${t}`);
   }
+});
+
+/* ---------- Codex รอบสอง: fixtures จริงจาก log 20-21 ส.ค. (P0-3) ---------- */
+test("fixtures จริง 20-21 ส.ค.: ทั้ง 6 เคสต้องถูก reject", () => {
+  const cases = [
+    ["คะแนน 75", "ungrounded:score"],
+    ["ดวงวันนี้ 75 เลข 7 สีแดง", "ungrounded:score"],
+    ["ตอบมาเป็นหมื่นรอบ", "ungrounded:cross_customer_stat"],
+    ["เคยดูมากกว่า 3,689 ชิ้น", "ungrounded:cross_customer_stat"],
+    ["แรงสุด 8.9", "ungrounded:score"],
+    ["วัด ประสาทบุญญาวาส ปีเก่า", "ungrounded:provenance"],
+  ];
+  for (const [text, code] of cases) {
+    const r = run(text, { evidence: REPORT_EV, expectedRole: "ajarn" });
+    assert.ok(r.violations.includes(code), `${text} → ${r.violations.join(",") || "ผ่าน (ไม่ควร)"}`);
+  }
+  assert.ok(run("ดวงวันนี้ 75 เลข 7 สีแดง", { evidence: REPORT_EV }).violations.includes("ungrounded:lucky"));
+});
+
+test("P0-2: ID เปล่าปลดล็อกไม่ได้ · report ID ไม่ปลดล็อก provenance · KB ID ไม่ปลดล็อกคะแนน/พลัง", () => {
+  const idOnly = { report: { ids: ["res-1"], scores: [], percentages: [], energyTags: [] }, kb: { ids: ["kb-1"] } };
+  assert.ok(run("คะแนน 7.2/10", { evidence: idOnly }).violations.includes("ungrounded:score"));
+  assert.ok(run("เด่นด้านเมตตา", { evidence: idOnly, expectedRole: "ajarn" }).violations.includes("ungrounded:energy"));
+  assert.ok(run("พระวัดระฆัง ปี 2506", { evidence: REPORT_EV }).violations.includes("ungrounded:provenance"));
+  // ค่าที่ไม่ตรงของจริงก็ต้องตก
+  assert.ok(run("คะแนน 9.1/10", { evidence: REPORT_EV }).violations.includes("ungrounded:score"));
+  // มี KB provenance fact จริง → ผ่าน
+  const kbProv = { report: REPORT_EV.report, kb: { ids: ["kb-1"], provenanceFacts: ["วัดระฆัง 2506"], materialFacts: ["เนื้อผง"] } };
+  assert.equal(run("พระวัดระฆัง ปี 2506 เนื้อผง", { evidence: kbProv }).ok, true);
+});
+
+test("P0-1 fail-closed: retry throw/timeout/ว่าง → ส่ง fallback เท่านั้น ห้ามคืน output เดิม", async () => {
+  const { enforceLlmCustomerOutput } = await import("../src/core/conversation/llmOutputContract.util.js");
+  const bad = "คะแนน 9.9/10 ส่งรูปมาอีกได้เลยครับ";
+  for (const fail of [() => { throw new Error("timeout of 8000ms"); }, () => "", () => { throw new Error("boom"); }]) {
+    let calls = 0;
+    const r = await enforceLlmCustomerOutput(
+      { callSite: "t", evidence: REPORT_EV },
+      { generate: async (d) => { calls += 1; return d ? fail() : bad; }, log: () => {} },
+    );
+    assert.equal(r.source, "fallback");
+    assert.notEqual(r.text, bad);
+    assert.equal(r.text, "ยังไม่มีข้อมูลยืนยัน จึงระบุไม่ได้");
+    assert.equal(calls, 2);
+  }
+  // call แรกล้มเลย → fallback ทันที ไม่มี transport ของ model
+  const r0 = await enforceLlmCustomerOutput(
+    { callSite: "t" }, { generate: async () => { throw new Error("timeout"); }, log: () => {} },
+  );
+  assert.equal(r0.source, "fallback");
+  assert.equal(r0.failureType, "timeout");
+});
+
+test("P0-6: turn budget ≤2 · guard ตัวหลังห้ามเริ่มเชนใหม่", async () => {
+  const { enforceLlmCustomerOutput } = await import("../src/core/conversation/llmOutputContract.util.js");
+  const turnBudget = { attempted: 0, max: 2 };
+  let calls = 0;
+  const gen = async () => { calls += 1; return "คะแนน 9.9/10"; };
+  await enforceLlmCustomerOutput({ callSite: "a", turnBudget, evidence: REPORT_EV }, { generate: gen, log: () => {} });
+  assert.equal(calls, 2);
+  const second = await enforceLlmCustomerOutput({ callSite: "b", turnBudget, evidence: REPORT_EV }, { generate: gen, log: () => {} });
+  assert.equal(calls, 2, "guard ตัวที่สองต้องไม่เรียกโมเดลเพิ่ม");
+  assert.equal(second.source, "fallback");
+  assert.equal(second.failureType, "budget_exhausted");
+});
+
+test("P0-5: คำถามใน output = reject เว้น allowQuestion · คำแนะนำ/ขั้นตอนได้อย่างละหนึ่ง", () => {
+  assert.ok(run("พกไว้ไหม").violations.includes("unsolicited_question"));
+  assert.ok(run("ใช่", { userText: "อันนี้เนื้อผงใช่ไหม" }).ok, "yes/no ตอบตรงผ่าน");
+  assert.ok(run("ใช่ แล้วอยากดูรุ่นอื่นไหม", { userText: "เนื้อผงใช่ไหม" }).violations.includes("unsolicited_question"));
+  assert.equal(run("พกไว้ไหม", { allowQuestion: true }).violations.includes("unsolicited_question"), false);
+  assert.ok(run("ควรพกติดตัว แนะนำให้สวดก่อนนอน", { userAskedAdvice: true }).violations.includes("multi_advice"));
+  assert.ok(run("โอนแล้วแนบสลิป จากนั้นพิมพ์ ตรวจ", { requiredNextAction: true }).violations.includes("multi_step"));
+  assert.equal(run("ยังระบุไม่ได้", { userText: "ของแท้ไหม" }).violations.includes("unsolicited_question"), false);
+});
+
+test("CHAT_TURN_AI_CHAIN: consult + money guard + tone guard ใช้งบร่วมกัน ≤2 เรียกจริง", async () => {
+  const { runGeminiConsult } = await import("../src/core/conversation/geminiFront/geminiConsult.service.js");
+  const { buildIntentContract } = await import(
+    "../src/core/conversation/geminiFront/geminiFrontOrchestrator.service.js"
+  );
+  const turnBudget = { attempted: 0, max: 2 };
+  const logs = [];
+  const origLog = console.log;
+  console.log = (x) => logs.push(String(x));
+  try {
+    // จำลอง: consult ใช้งบครบ 2 (contract เรียก + retry) แล้ว guard ตัวหลังขอเรียกอีก
+    turnBudget.attempted = 2;
+    const moneyRetry = await runGeminiConsult({ userId: "u1", userText: "ราคาเท่าไหร่", turnBudget });
+    const toneRetry = await runGeminiConsult({ userId: "u1", userText: "ราคาเท่าไหร่", turnBudget });
+    assert.equal(moneyRetry, null);
+    assert.equal(toneRetry, null);
+    assert.equal(turnBudget.attempted, 2, "guard ตัวหลังห้ามเพิ่มยอดเรียกโมเดล");
+    assert.ok(logs.filter((l) => l.includes("LLM_TURN_BUDGET_EXHAUSTED")).length === 2);
+  } finally {
+    console.log = origLog;
+  }
+  // router สร้าง contract ก่อนเรียกโมเดล และ fail-closed เมื่อ metadata หาย
+  const bare = buildIntentContract({ text: "พลังองค์นี้เป็นไง" }, null);
+  assert.equal(bare.expectedRole, "consult", "ไม่มีรายงาน = ห้ามเป็นเสียงอาจารย์");
+  assert.equal(bare.allowQuestion, false);
+  assert.equal(bare.requiredNextAction, false);
+  const withReport = buildIntentContract({ text: "พลังองค์นี้เป็นไง", recentScanIds: ["r1"] }, null);
+  assert.equal(withReport.expectedRole, "ajarn");
+  assert.equal(buildIntentContract({ text: "จ่ายยังไง" }, "paywall").expectedRole, "admin");
 });

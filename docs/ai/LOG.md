@@ -1051,3 +1051,13 @@
 - **ผูก surface แรก**: `runGeminiConsult` (ตัวที่ raw log ชี้มากสุด) ผ่าน gateway แล้ว — retry ใช้ prompt เดิม + directive · contract พังไม่กระทบ (fallback เป็นพฤติกรรมเดิม)
 - Tests: `llmOutputContract` **12/12** เข้า manifest — รวม acceptance จากเคสจริง: ชื่อพระอย่างเดียว → ห้ามมโนพลัง/คะแนน · "พระจริงพลังย่อมดีกว่า" → reject · ใช่/ไม่ใช่ตอบตรง · advice/next-action อนุญาตเดียว · AI 1 call เมื่อผ่าน · AI 2 + fallback เมื่อผิดสองรอบ · paid/free ไม่มี branch แยก · fallback เองต้องผ่าน hard tone · **gate 167/173 · known 14 · ไม่มี fail ใหม่**
 - ค้างเฟส 2: ผูก surface ที่เหลือ (phrasing / conversationSurface / stateSafeClarifier / smartRejection / objectInfo reply / paywall consult) · router priority ก่อน AI · rewrite prompts · replay 20-21 ส.ค. · staging smoke
+
+## 2026-08-21 | Claude | เฟส 2 รอบ 2 — ปิด P0 6 จุดของ Codex (LLM output contract)
+- **P0-1 fail-closed**: `enforceLlmCustomerOutput` จับ throw/timeout/ว่างเอง — call แรกล้ม = fallback ทันที · retry ล้ม = fallback จาก violations รอบแรก · ถอด `catch { return out || null }` ใน geminiConsult ทิ้ง (ห้ามคืน output ที่ถูก reject)
+- **P0-2 typed claim-level evidence**: `extractClaims` + `verifyClaims` ตรวจ "ค่าจริง" — score/% ต้องตรงเลขในรายงาน · energy tag ต้องอยู่ใน report.energyTags + role=ajarn · provenance/material ปลดล็อกได้จาก KB/tool เท่านั้น (report ID ปลดไม่ได้) · ID เปล่าไม่มีค่า = reject
+- **P0-3 fixtures จริง**: 6 เคสจาก log 20-21 ส.ค. reject ครบ (คะแนน 75 · ดวงวันนี้ 75 เลข 7 สีแดง · ตอบมาเป็นหมื่นรอบ · เคยดูมากกว่า 3,689 ชิ้น · แรงสุด 8.9 · วัด ประสาทบุญญาวาส ปีเก่า) — เลิกพึ่ง regex กว้างชั้นเดียว ใช้ typed extractor + เลขไทย
+- **P0-4 router สร้าง contract**: `buildIntentContract(ctx, phase1)` ใน orchestrator ส่ง userIntent/userAskedAdvice/requiredNextAction/expectedRole ก่อนเรียกโมเดล · metadata หาย = ค่าเข้มสุด (consult, ไม่ใช่ ajarn)
+- **P0-5 cardinality**: คำถามใน output = reject เว้น `allowQuestion===true` · แนะนำได้ 1 · ขั้นตอนได้ 1 (ตัวคั่นลำดับไทยไม่ต้องมีเว้นวรรค) · yes/no ตอบไม่ตรง = "ยังระบุไม่ได้"
+- **P0-6 AI budget**: `turnBudget {attempted,max:2}` ใช้ร่วม consult + money guard + tone guard · guard ตัวหลังหลังงบหมดได้ null → deterministic (log `LLM_TURN_BUDGET_EXHAUSTED`)
+- เทสต์ `tests/llmOutputContract.test.js` 18/18 · gate: ไม่มี fail ใหม่นอก baseline
+- **ค้าง**: ผูก surface ที่เหลือ (phrasing / conversationSurface / stateSafeClarifier / smartRejection / objectInfo / paywall) + adversarial ข้าม surface + rewrite prompt + replay 20-21 ส.ค. + staging smoke — `tone-hard` ยังไม่ merge/deploy

@@ -210,6 +210,11 @@ export async function runGeminiFrontOrchestrator(ctx) {
   /** Customer-visible answer via the smart consult brain (Opus + real facts).
       Used for consult/help/chit-chat so the cheap model never writes to the
       customer directly unless consult fails. */
+  // P0-4 (Codex): router เป็นคนสร้าง typed contract ก่อนเรียกโมเดล
+  // ไม่มี metadata ที่จำเป็น = fail-closed (ค่าเข้มสุด) ห้ามให้โมเดล/ผู้เรียกเดาเอง
+  const intentContract = buildIntentContract(ctx, phase1);
+  const turnBudget = { attempted: 0, max: 2 };
+
   async function tryConsultReply(via) {
     const lastSpeaker = await getValue(lastSpeakerKey(ctx.userId)).catch(() => null);
     const consultText = await runGeminiConsult({
@@ -217,6 +222,8 @@ export async function runGeminiFrontOrchestrator(ctx) {
       userText: ctx.text,
       conversationHistory,
       lastSpeaker: lastSpeaker || null,
+      intentContract,
+      turnBudget,
     });
     if (!consultText) return false;
     let guardedConsult = await guardStaleNoImageClaim(
@@ -249,6 +256,8 @@ export async function runGeminiFrontOrchestrator(ctx) {
         userText: ctx.text,
         conversationHistory,
         lastSpeaker: lastSpeaker || null,
+        intentContract,
+        turnBudget,
         extraDirective:
           verdict1.reason === "unsolicited"
             ? "คำตอบก่อนหน้าของคุณผิดกติกาใหญ่: พูดเรื่องเงิน/ค่าครู/สิทธิ์ทั้งที่ลูกค้าไม่ได้ถาม — ตอบใหม่โดยตัดเรื่องเงิน/ค่าครู/สิทธิ์/แพ็กออกทั้งหมด ตอบเฉพาะเรื่องที่ลูกค้าถามเท่านั้น"
@@ -292,6 +301,8 @@ export async function runGeminiFrontOrchestrator(ctx) {
         userText: ctx.text,
         conversationHistory,
         lastSpeaker: lastSpeaker || null,
+        intentContract,
+        turnBudget,
         extraDirective: `คำตอบก่อนหน้าของคุณผิดกติกาโทน: มีคำชม/ปลอบต้องห้าม ("${tone1.match}") — ตอบใหม่โดยไม่ใช้คำตัดสินเชิงชม (ใช้ได้ดีแล้ว ถือว่าดี) และไม่ปลอบ (ไม่ต้องกังวล เดี๋ยวก็เจอ สบายใจได้) บอกตัวเลข/ข้อเท็จจริงกับขั้นถัดไปตรง ๆ`,
       });
       const toneRetryGuarded = toneRetry
@@ -441,4 +452,25 @@ export async function runGeminiFrontOrchestrator(ctx) {
   });
   logGeminiOrchestrator({ mode: "active", handled: true, via: "noop_phrase" });
   return { handled: true, mode: "active" };
+}
+
+/**
+ * typed contract ที่ router สร้างก่อนเรียกโมเดล (Codex P0-4)
+ * ห้ามให้โมเดลเดา role จากข้อความเอง · metadata หายไป = ใช้ค่าเข้มสุด
+ */
+export function buildIntentContract(ctx = {}, phase1 = null) {
+  const text = String(ctx.text || "");
+  const askedAdvice = /ควรทำไง|ควรทำอย่างไร|แนะนำ|ทำไงดี|ควรพก|เลือกอันไหน|ควรเลือก/u.test(text);
+  const moneyOrFlow = /paywall|payment|slip|verify|awaiting|registration/i.test(String(phase1 || ""));
+  const hasReport = Array.isArray(ctx.recentScanIds) && ctx.recentScanIds.length > 0;
+  const energyAsk = /พลัง|ดวง|เข้ากับ|เด่นด้าน|สายไหน|แรงกว่า/u.test(text);
+  return {
+    userIntent: energyAsk ? (hasReport ? "energy_reading" : "energy_question") : moneyOrFlow ? "service_flow" : "general",
+    userAskedAdvice: askedAdvice,
+    requiredNextAction: moneyOrFlow,
+    // เสียงอาจารย์ได้เฉพาะตอนตีความพลังจากรายงานจริง · เรื่องเงิน/ระบบ = แอดมิน
+    expectedRole: moneyOrFlow ? "admin" : energyAsk && hasReport ? "ajarn" : "consult",
+    allowQuestion: false,
+    evidence: ctx.evidence || null,
+  };
 }

@@ -47,6 +47,12 @@ async function isPaidActiveCustomer(userId) {
  * @returns {Promise<string | null>}
  */
 export async function runGeminiConsult(p) {
+  // P0-6 (Codex): งบเรียกโมเดลที่ลูกค้าเห็น ≤2 ครั้งต่อเทิร์น ใช้ร่วมกันทุก guard
+  // guard ตัวหลัง (money/tone) ที่เรียกซ้ำหลังงบหมด = ต้องได้ null แล้วไป deterministic
+  if (p.turnBudget && p.turnBudget.attempted >= (p.turnBudget.max || 2)) {
+    console.log(JSON.stringify({ event: "LLM_TURN_BUDGET_EXHAUSTED", callSite: "gemini_front_consult" }));
+    return null;
+  }
   if (!env.GEMINI_CONSULT_ENABLED) return null;
   if (!isGeminiConfigured()) return null;
 
@@ -183,41 +189,34 @@ export async function runGeminiConsult(p) {
       }),
     );
     if (!out) return null;
-    // เฟส 2 (Codex): customer-visible LLM output ต้องผ่าน contract กลาง —
-    // ไม่ผ่าน = regenerate 1 ครั้ง (directive จาก violations) → factual fallback
-    try {
-      const { enforceLlmCustomerOutput } = await import("../llmOutputContract.util.js");
-      const evidence = {
-        reportIds: recentScan?.reportIds || (recentScan ? ["recent_scan"] : []),
-        kbIds: kbContext ? ["kb"] : [],
-      };
-      const guarded = await enforceLlmCustomerOutput(
-        {
-          callSite: "gemini_front_consult",
-          replyType: "gemini_front_consult",
-          userText: p.userText,
-          userIntent: p.userIntent || null,
-          userAskedAdvice: p.userAskedAdvice === true,
-          requiredNextAction: p.requiredNextAction === true,
-          expectedRole: p.expectedRole || "consult",
-          evidence,
+    // เฟส 2 (Codex รอบสอง): fail-closed — ห้าม catch แล้วคืน raw output ที่ถูก reject
+    const { enforceLlmCustomerOutput } = await import("../llmOutputContract.util.js");
+    const guarded = await enforceLlmCustomerOutput(
+      {
+        callSite: "gemini_front_consult",
+        replyType: "gemini_front_consult",
+        userText: p.userText,
+        // typed contract จาก router (P0-4) — ไม่มี = fail-closed ค่าเข้มสุด
+        userIntent: p.intentContract?.userIntent ?? null,
+        userAskedAdvice: p.intentContract?.userAskedAdvice === true,
+        requiredNextAction: p.intentContract?.requiredNextAction === true,
+        expectedRole: p.intentContract?.expectedRole || "consult",
+        evidence: p.intentContract?.evidence || buildConsultEvidence({ recentScan, kbContext }),
+        turnBudget: p.turnBudget,
+      },
+      {
+        generate: async (directive) => {
+          if (!directive) return out;
+          const retry = await generateTextWithTimeout(
+            model,
+            `${prompt}\n\nแก้ตามนี้: ${directive}\nตอบใหม่สั้น ๆ`,
+            env.GEMINI_CONSULT_TIMEOUT_MS,
+          );
+          return String(retry || "").trim();
         },
-        {
-          generate: async (directive) => {
-            if (!directive) return out;
-            const retry = await generateTextWithTimeout(
-              model,
-              `${prompt}\n\nแก้ตามนี้: ${directive}\nตอบใหม่สั้น ๆ`,
-              env.GEMINI_CONSULT_TIMEOUT_MS,
-            );
-            return String(retry || "").trim();
-          },
-        },
-      );
-      return guarded.text || null;
-    } catch {
-      return out || null;
-    }
+      },
+    );
+    return guarded.text || null;
   } catch (e) {
     console.log(
       JSON.stringify({
@@ -228,4 +227,27 @@ export async function runGeminiConsult(p) {
     );
     return null;
   }
+}
+
+/**
+ * แปลง context ของ consult เป็น typed evidence (Codex P0-2)
+ * — ต้องมี "ค่า" จริงเท่านั้นถึงปลดล็อก claim หมวดนั้น
+ */
+export function buildConsultEvidence({ recentScan, kbContext } = {}) {
+  const scans = Array.isArray(recentScan?.items) ? recentScan.items : [];
+  const scores = scans.map((s) => Number(s?.score)).filter((n) => Number.isFinite(n));
+  const percentages = scans.map((s) => Number(s?.compatPercent)).filter((n) => Number.isFinite(n));
+  const energyTags = scans.flatMap((s) => (Array.isArray(s?.energyTags) ? s.energyTags : []));
+  return {
+    report: {
+      ids: scans.map((s) => String(s?.id || "")).filter(Boolean),
+      scores,
+      percentages,
+      energyTags,
+      luckyAttributes: [],
+      materials: [],
+    },
+    kb: { ids: kbContext ? ["kb"] : [], provenanceFacts: [], materialFacts: [] },
+    tool: {},
+  };
 }
