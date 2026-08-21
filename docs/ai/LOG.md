@@ -976,3 +976,4 @@
 - เกณฑ์ตรวจที่ Codex กำหนด: remaining_with_actual_evidence=0 · held-only 5 งานคง delivery_queued · historical 223 scans ไม่มี ledger/ไม่ถูกหักย้อนหลัง · paid scan ใหม่ลดสิทธิ์ครั้งเดียว · free/duplicate ไม่มี marker+ledger
 - C1 grounded output guard: Codex ยืนยัน fixture 2 ตัว (เคส 20:48 พระสมเด็จมโน + U03877cd พระจริงพลังดีกว่า) เป็น P0 ชุดแรก — เริ่มหลัง deploy
 - สถานะ: โค้ดพร้อมบน staging @2321581 · runbook อัปเดตใน docs/ai/reports/2026-08-21-*.md · **ยังไม่แตะ pro รอคำสั่งกบ**
+- เงื่อนไข smoke native report นอกเวลา (Codex เพิ่ม 21 ส.ค.): ใช้ outbox/report date จริง ห้ามล้าง sent marker · `finalized` อย่างเดียวไม่นับผ่าน (ไม่พิสูจน์ transport) · ต้องเห็น Telegram ok:true + DELIVERY_CYCLE sent:true + marker ใน app_settings ของ native pipeline · ปิด Hermes หลังยืนยันครบ

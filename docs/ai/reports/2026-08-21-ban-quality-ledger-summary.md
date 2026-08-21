@@ -51,6 +51,14 @@
 - paid scan ใหม่ลดสิทธิ์ครั้งเดียว
 - free / duplicate ไม่มี marker และไม่มี ledger
 
+### Smoke native `ener_chat_quality` นอกหน้าต่าง 06:00–11:00 (เงื่อนไข Codex 21 ส.ค.)
+รันได้ แต่ต้องพิสูจน์ **transport จริง** ไม่ใช่แค่ state:
+- ใช้ outbox/reportDateTH **จริง** — ห้ามล้าง sent marker เดิม ห้าม reset outbox
+- ผลลัพธ์ `skipped: "finalized"` **ไม่นับว่าผ่าน** (แปลว่ารอบนั้นถูกส่งไปแล้ว ไม่ได้พิสูจน์ช่องส่ง)
+- ต้องเห็นครบ: Telegram ตอบ `ok:true` + `CHAT_QUALITY_DELIVERY_CYCLE` มี `sent:true` + sent marker ของ native pipeline ถูกเขียนลง `app_settings.chat_quality_outbox:<date>` (`delivery.telegram.sent = true`)
+- ถ้ารอบของวันนั้นถูก finalize ไปแล้ว → smoke ด้วย reportDateTH ที่ native ยังไม่เคยส่ง (กบจะเห็นรายงานเพิ่ม 1 ฉบับ — แจ้งล่วงหน้า) ห้ามลบ marker เพื่อบังคับให้ส่งซ้ำ
+- ปิด Hermes job **หลัง**ยืนยันครบทั้งสามอย่างเท่านั้น
+
 ## 4. ค้าง / คิวถัดไป
 - **C1 grounded output guard** (`enforceGroundedChatOutput` ทุก customer-visible LLM surface) — งานโฟกัสรอบถัดไป · fixture ชุดแรก: เคส 20 ส.ค. 20:48 (มโน "พระสมเด็จวัดประสาทบุญญาวาส ปี 2506 … พลังเด่นสมดุล/เมตตา") + เคส U03877cd "พระจริงพลังย่อมดีกว่า"
 - C2 language/link/role guard · C3+C5 replay จาก metadata ก่อนแก้ · Gemini object-form 429 (incident แยก — 22 ครั้ง/24 ชม.)
