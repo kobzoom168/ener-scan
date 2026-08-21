@@ -553,7 +553,7 @@ export async function processScanJob(workerId, jobRow) {
           kind: "pre_scan_ack",
           priority: OUTBOUND_PRIORITY.pre_scan_ack,
           payload_json: {
-            text: `⚠️ ลูกค้า ${String(lineUserId).slice(0, 10)}… รูปโดนปัด ${rejAttempt} ครั้งติด (${rejReason})
+            text: `⚠️ ลูกค้า ${String(lineUserId).slice(0, 10)}… รูปโดนปัด ${rejAttempt} ครั้งติด (${rejReason}) /* tone-exempt: admin_telegram */
 อาจารย์บอกเขาว่าจะรับไปดูเอง — เข้าไปช่วยเช็คใน OA หน่อย`,
           },
           status: "queued",
@@ -586,7 +586,7 @@ export async function processScanJob(workerId, jobRow) {
         rejectReason: "object_validation_failed",
         objectCheckResult: String(objectCheck),
         objectGateKind: objectGateRouting.kind,
-        text: rejText || c[0] || "ภาพนี้อาจารย์อ่านไม่ถนัด ถ่ายใหม่ชัด ๆ ส่งมาอีกทีนะ",
+        text: rejText || c[0] || "ภาพนี้อ่านไม่ได้ ส่งภาพชิ้นเดียวให้เต็มกรอบ",
         accessSource: job.access_source,
         appUserId,
       },
@@ -1205,7 +1205,7 @@ export async function processScanJob(workerId, jobRow) {
         error: true,
         rejectReason: "supported_lane_unresolved",
         objectCheckResult: `supported_lane_unresolved:${strictLaneRes.reason}`,
-        text: c[0] || "ภาพนี้อาจารย์อ่านไม่ถนัด ถ่ายใหม่ชัด ๆ ส่งมาอีกทีนะ",
+        text: c[0] || "ภาพนี้อ่านไม่ได้ ส่งภาพชิ้นเดียวให้เต็มกรอบ",
         accessSource: job.access_source,
         appUserId,
       },

@@ -99,8 +99,12 @@ export async function sendMultiImageRejectionViaGateway({
     })();
       } else {
         const { pushToCustomer } = await import("./../lineOutbound/customerPush.gateway.js");
-        const pushed = await pushToCustomer(client, uid, audio, { source: "multi_image_voice" });
+        const pushed = await pushToCustomer(client, uid, audio, { source: "multi_image_voice", toneExemptSurface: "media_only" });
         if (pushed.suppressedBanned) return { sent: false, suppressed: true, suppressedBanned: true };
+        if (pushed.sent !== true) {
+          console.error(JSON.stringify({ event: "MULTI_IMAGE_VOICE_BLOCKED", reason: pushed.reason || "unknown" }));
+          return { sent: false, suppressed: true, reason: pushed.reason };
+        }
       }
       console.log(
         JSON.stringify({

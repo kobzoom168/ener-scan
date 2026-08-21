@@ -2,7 +2,7 @@
  * แนะนำรายงานจัดชุดพลังตอนลูกค้ามีครบ 3 ชิ้นครั้งแรก (trigger ตามสเปก — ครั้งเดียวต่อคน)
  * fire-and-forget จาก deliverOutbound หลังส่ง report สำเร็จ
  */
-import { tryDedupeOnce } from "../../redis/scanV2Redis.js";
+import { tryDedupeOnce, clearDedupeKey } from "../../redis/scanV2Redis.js";
 import { env } from "../../config/env.js";
 
 export async function maybeIntroduceSynergy(lineUserId) {
@@ -43,7 +43,10 @@ export async function maybeIntroduceSynergy(lineUserId) {
       const { pushRawToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
       const sent = await pushRawToCustomer(uid, messages, { source: "synergy_intro" });
       if (sent.sent !== true) {
-        console.log(JSON.stringify({ event: "SYNERGY_INTRO_BLOCKED", reason: sent.reason || "unknown" }));
+        // P1 (Codex): dedupe อายุ 365 วันถูก claim ไปก่อนส่ง — ส่งไม่สำเร็จต้องคืนสิทธิ์
+        // ไม่งั้นลูกค้าจะไม่มีวันได้ intro อีกเลยทั้งปี
+        await clearDedupeKey(`synergy:intro:${uid}`).catch(() => {});
+        console.log(JSON.stringify({ event: "SYNERGY_INTRO_BLOCKED", reason: sent.reason || "unknown", dedupeCleared: true }));
         return { sent: false, suppressedBanned: sent.suppressedBanned === true, reason: sent.reason };
       }
     }

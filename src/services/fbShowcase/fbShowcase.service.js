@@ -172,7 +172,7 @@ export async function maybeEnqueueFbConsentAsk({ lineUserId, reportPayload, publ
           items: [
             {
               type: "action",
-              action: { type: "message", label: "ยินดี อวดได้", text: "ยินดี อวดได้" },
+              action: { type: "message", label: "อวดได้", text: "อวดได้" },
             },
             {
               type: "action",
@@ -295,10 +295,10 @@ export async function handleFbConsentReplyText({ lineUserId, text }) {
         message: String(e?.message || e).slice(0, 160),
       }),
     );
-    return { reply: "ขอบคุณ จะจัดลงเพจให้สวย ๆ เลย" };
+    return { reply: "รับทราบ จะจัดลงเพจ" };
   }
   console.log(JSON.stringify({ event: "FB_CONSENT_ACCEPTED", tokenPrefix: token.slice(0, 10) }));
-  return { reply: "ขอบคุณ จะจัดลงเพจให้เลย" };
+  return { reply: "รับทราบ จะจัดลงเพจ" };
 }
 
 /* ────────────────────── 3) แคปชัน ────────────────────── */
@@ -352,7 +352,7 @@ function fallbackCaptionBody(piece) {
   return `เปิดคลังวันนี้ ${piece.name} อ่านพลังได้ ${piece.energyScore.toFixed(1)} เต็ม 10${peak}`;
 }
 
-const CAPTION_SYSTEM = `คุณคือแอดมินเพจ Ener เขียนแคปชันโพสต์โซเชียล (Facebook/TikTok) โชว์พลังของวัตถุมงคลชิ้นเด่น ให้คนเลื่อนผ่านแล้วอยากหยุดดู
+const CAPTION_SYSTEM = `คุณคือแอดมินเพจ Ener เขียนแคปชันโพสต์โซเชียล (Facebook/TikTok) โชว์พลังของวัตถุมงคลชิ้นเด่น ให้คนเลื่อนผ่านแล้วอยากหยุดดู /* tone-exempt: llm_prompt */
 กติกา:
 - ภาษาไทย 2-3 บรรทัดสั้น เปิดด้วยประโยคที่สะดุด ชวนสนใจ (hook) แล้วขยายด้วยพลังด้านที่เด่นสุดของชิ้นนี้ (ให้ข้อมูล peakLabel นำ) เช่นถ้าเด่นโชคลาภก็พูดมุมเปิดทางการเงิน/ค้าขาย ถ้าเด่นคุ้มครองก็มุมแคล้วคลาดปลอดภัย — ดันทางที่เด่น
 - โทนสุขุมแบบอาจารย์ ไม่อวยเว่อร์ ไม่การันตีผล ไม่ขายตรง แต่เขียนให้มีชีวิตชวนอ่าน ไม่แข็งทื่อ
@@ -595,7 +595,7 @@ async function postShowcaseRow(row) {
     .eq("id", row.id);
   const permalink = res.postId ? await getPostPermalink(res.postId) : "";
   await sendTelegramText(
-    `โพสต์ขึ้นเพจ Ener แล้ว (${row.source === "library" ? "คลังกบ" : "ลูกค้ายินดี"})\n${piece.name} · ${piece.energyScore.toFixed(1)}/10${permalink ? `\n${permalink}` : ""}`,
+    `โพสต์ขึ้นเพจ Ener แล้ว (${row.source === "library" ? "คลังกบ" : "ลูกค้ายินดี"})\n${piece.name} · ${piece.energyScore.toFixed(1)}/10${permalink ? `\n${permalink}` : ""}`, /* tone-exempt: admin_telegram */
   ).catch(() => {});
   return { posted: 1, via: "facebook" };
 }

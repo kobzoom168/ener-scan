@@ -130,6 +130,10 @@ export async function handlePrecheckAfterReport({ client, lineUserId, payload })
       const { pushToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
       const pushed = await pushToCustomer(client, lineUserId, flex, { source: "precheck_delayed" });
       if (pushed.suppressedBanned) return { sent: false, suppressedBanned: true };
+      if (pushed.sent !== true) {
+        console.error(JSON.stringify({ event: "PRECHECK_DELAYED_BLOCKED", reason: pushed.reason || "unknown" }));
+        return { sent: false, reason: pushed.reason };
+      }
     }
     try {
       const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");

@@ -54,8 +54,14 @@ export async function pushToCustomer(client, lineUserId, messages, opts = {}) {
     if (/report|scan_result|registration|welcome|howto|onboarding|object_info|purpose/i.test(t)) return "step";
     return "reply";
   };
-  const exempt = opts.toneExemptSurface && TONE_EXEMPT_SURFACES[opts.toneExemptSurface];
-  if (!exempt) {
+  const { resolveExemption: resolveEx } = await import("../../core/conversation/hardTone.util.js");
+  const exPush = opts.toneExemptSurface
+    ? resolveEx({ surface: opts.toneExemptSurface, messages, adminContext: opts.adminContext === true, callerId: opts.callerId })
+    : { allowed: false };
+  if (opts.toneExemptSurface && !exPush.allowed) {
+    return { sent: false, reason: "hard_tone_rejected", exemptionRejected: exPush.reason };
+  }
+  if (!exPush.allowed) {
     const list = Array.isArray(messages) ? messages : [messages];
     const texts = [];
     for (const m of list) {
@@ -85,11 +91,16 @@ export async function pushToCustomer(client, lineUserId, messages, opts = {}) {
  * @returns {Promise<{ sent: boolean, reason?: string, toneViolations?: string[] }>}
  */
 export async function replyToCustomer(client, replyToken, messages, opts = {}) {
-  const { enforceHardToneBeforeSend, collectFlexTexts, TONE_EXEMPT_SURFACES } = await import(
+  const { enforceHardToneBeforeSend, collectFlexTexts, resolveExemption } = await import(
     "../../core/conversation/hardTone.util.js"
   );
-  const exempt = opts.toneExemptSurface && TONE_EXEMPT_SURFACES[opts.toneExemptSurface];
-  if (!exempt) {
+  const ex = opts.toneExemptSurface
+    ? resolveExemption({ surface: opts.toneExemptSurface, messages, adminContext: opts.adminContext === true, callerId: opts.callerId })
+    : { allowed: false };
+  if (opts.toneExemptSurface && !ex.allowed) {
+    return { sent: false, reason: "hard_tone_rejected", exemptionRejected: ex.reason };
+  }
+  if (!ex.allowed) {
     const list = Array.isArray(messages) ? messages : [messages];
     const texts = [];
     for (const m of list) {
@@ -122,12 +133,17 @@ export async function pushRawToCustomer(lineUserId, messages, opts = {}) {
   const gate = await allowCustomerPush(uid, opts);
   if (!gate.allowed) return { sent: false, suppressedBanned: gate.suppressedBanned === true, reason: "gate_blocked" };
 
-  const { enforceHardToneBeforeSend, collectFlexTexts, TONE_EXEMPT_SURFACES } = await import(
+  const { enforceHardToneBeforeSend, collectFlexTexts, resolveExemption } = await import(
     "../../core/conversation/hardTone.util.js"
   );
-  const exempt = opts.toneExemptSurface && TONE_EXEMPT_SURFACES[opts.toneExemptSurface];
+  const exRaw = opts.toneExemptSurface
+    ? resolveExemption({ surface: opts.toneExemptSurface, messages, adminContext: opts.adminContext === true, callerId: opts.callerId })
+    : { allowed: false };
+  if (opts.toneExemptSurface && !exRaw.allowed) {
+    return { sent: false, reason: "hard_tone_rejected", exemptionRejected: exRaw.reason };
+  }
   const list = Array.isArray(messages) ? messages : [messages];
-  if (!exempt) {
+  if (!exRaw.allowed) {
     const texts = [];
     for (const m of list) {
       if (typeof m === "string") texts.push(m);
@@ -157,4 +173,16 @@ export function toneKindForPushSourceExported(source) {
   if (/payment|qr|slip|paywall|quota_offer|myscans|history|synergy_intro|daily_pick/i.test(t)) return "bundle";
   if (/report|scan_result|registration|welcome|howto|onboarding|object_info|purpose/i.test(t)) return "step";
   return "reply";
+}
+
+/**
+ * ADMIN reply boundary (Codex P0-2): เส้นเดียวที่ใช้ admin exemption ได้ —
+ * caller ต้องมาจาก admin router ที่ยืนยัน identity แล้วเท่านั้น
+ */
+export async function replyToAdmin(client, replyToken, messages, opts = {}) {
+  if (opts.verifiedAdmin !== true) {
+    return { sent: false, reason: "admin_context_required" };
+  }
+  await client.replyMessage(replyToken, messages); /* tone-exempt: admin_command */
+  return { sent: true };
 }

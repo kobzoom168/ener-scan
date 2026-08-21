@@ -88,9 +88,7 @@ const SEND_PATH_RE =
 const EXEMPT_FILES = {
   "src/routes/liff.routes.js": "liff_page_html — หน้าเว็บ ไม่ใช่ข้อความแชท",
   "src/app.js": "liff_page_html — error page HTML",
-  "src/services/fbShowcase/fbShowcase.service.js": "social_caption — แคปชันเพจ ไม่ใช่แชท",
   "src/services/fbShowcase/showcasePhotoCard.service.js": "card_graphic — ข้อความบนการ์ดภาพ ไม่ใช่ข้อความแชท",
-  "src/services/scanV2/processScanJob.service.js": "scan_report_body — เนื้อหารายงาน",
   "src/services/reports/reportPayload.builder.js": "scan_report_body",
   "src/templates/reports/mobileReport.template.js": "scan_report_body",
   "src/services/monitor/customerAlerts.service.js": "admin_telegram",
@@ -469,4 +467,115 @@ test("invariant: raw push boundary ตรวจ payload ก่อนยิง HT
     assert.equal(fetched, false, "payload ผิดห้ามยิง HTTP");
     assert.equal(r.reason, "hard_tone_rejected");
   } finally { globalThis.fetch = origFetch; }
+});
+
+/* ---------------- 6) typed exemption enforcement (Codex P0-2 acceptance) ---------------- */
+
+const AUDIO_MSG = { type: "audio", originalContentUrl: "https://x/a.m4a", duration: 1000 };
+
+test("exemption 1-3: media_only ตรวจโครงสร้าง payload จริง (audio ผ่าน · text/quickReply ไม่ผ่าน)", async () => {
+  const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  const mk = () => { const c = fakeClient(); return c; };
+  const uidS = "U" + "3".repeat(32);
+  let c = mk();
+  const ok = await gw.pushToCustomer(c, uidS, [AUDIO_MSG], { toneExemptSurface: "media_only", isBanned: async () => false });
+  assert.equal(ok.sent, true);
+  assert.equal(c.calls.push, 1);
+
+  c = mk();
+  const bad = await gw.pushToCustomer(c, uidS, [{ type: "text", text: "ขอบคุณครับ" }], { toneExemptSurface: "media_only", isBanned: async () => false });
+  assert.equal(c.calls.push, 0, "media_only + text ต้องไม่ส่ง");
+  assert.equal(bad.exemptionRejected, "not_media_only");
+
+  c = mk();
+  const withQr = { ...AUDIO_MSG, quickReply: { items: [{ type: "action", action: { type: "message", label: "ขอบคุณครับ", text: "x" } }] } };
+  const bad2 = await gw.pushToCustomer(c, uidS, [withQr], { toneExemptSurface: "media_only", isBanned: async () => false });
+  assert.equal(c.calls.push, 0, "audio + quickReply label ผิด ต้องไม่ส่ง");
+  assert.equal(bad2.exemptionRejected, "not_media_only");
+});
+
+test("exemption 4-5: admin_command ใช้ผ่าน customer boundary ไม่ได้ · verified admin boundary ส่งได้", async () => {
+  const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  let c = fakeClient();
+  const bad = await gw.replyToCustomer(c, "tok", { type: "text", text: "ขอบคุณครับ" }, { toneExemptSurface: "admin_command" });
+  assert.equal(c.calls.reply, 0, "customer boundary ห้ามใช้ admin exemption");
+  assert.equal(bad.exemptionRejected, "admin_context_required");
+
+  c = fakeClient();
+  const okAdmin = await gw.replyToAdmin(c, "tok", { type: "text", text: "ขอบคุณครับ รายงานยาว ๆ ของแอดมิน" }, { verifiedAdmin: true });
+  assert.equal(okAdmin.sent, true);
+  assert.equal(c.calls.reply, 1);
+
+  c = fakeClient();
+  const noCtx = await gw.replyToAdmin(c, "tok", { type: "text", text: "x" }, {});
+  assert.equal(c.calls.reply, 0, "ไม่มี verified admin = ห้ามส่ง");
+  assert.equal(noCtx.reason, "admin_context_required");
+});
+
+test("exemption 6: scan_report_body ใช้ได้เฉพาะ caller ที่อนุมัติ", async () => {
+  const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  const c = fakeClient();
+  const bad = await gw.replyToCustomer(c, "tok", { type: "text", text: "ขอบคุณครับ" }, {
+    toneExemptSurface: "scan_report_body", callerId: "random_caller",
+  });
+  assert.equal(c.calls.reply, 0);
+  assert.equal(bad.exemptionRejected, "caller_not_approved");
+});
+
+test("exemption: unknown surface → reject (ไม่ใช่ผ่านเงียบ)", async () => {
+  const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  const c = fakeClient();
+  const r = await gw.replyToCustomer(c, "tok", { type: "text", text: "ขอบคุณครับ" }, { toneExemptSurface: "made_up_surface" });
+  assert.equal(c.calls.reply, 0);
+  assert.equal(r.exemptionRejected, "unknown_exemption");
+});
+
+test("P0-3: __replyCustomer ใน lineWebhook ห้ามเติม toneKind เอง (default = reply)", () => {
+  const src = read("src", "routes", "lineWebhook.js");
+  const fn = src.slice(src.indexOf("async function __replyCustomer"), src.indexOf("async function __replyCustomer") + 700);
+  assert.ok(!/toneKind:\s*opts\.toneKind\s*\|\|\s*"step"/.test(fn), "ห้าม default step");
+  assert.ok(/\.\.\.\(opts\.toneKind \? \{ toneKind: opts\.toneKind \} : \{\}\)/.test(fn), "ไม่ระบุ = ปล่อยให้ boundary default reply");
+  // admin-assist ต้องผ่าน admin boundary
+  const aStart = src.indexOf("async function maybeHandleAdminAssist");
+  const aEnd = src.indexOf("\nasync function ", aStart + 10);
+  const assist = src.slice(aStart, aEnd > aStart ? aEnd : aStart + 4000);
+  assert.ok(!assist.includes("__replyCustomer("), "admin-assist ต้องใช้ __replyAdmin");
+});
+
+test("P1: synergyIntro — guard reject → ต้องล้าง dedupe ให้ retry ได้ (ไม่ค้าง 365 วัน)", () => {
+  const src = read("src", "services", "synergy", "synergyIntro.service.js");
+  assert.ok(src.includes("clearDedupeKey"), "ต้อง import/เรียก clearDedupeKey");
+  const blocked = src.slice(src.indexOf("if (sent.sent !== true)"), src.indexOf("if (sent.sent !== true)") + 500);
+  assert.ok(blocked.includes("clearDedupeKey(`synergy:intro:"), "ส่งไม่สำเร็จต้องคืนสิทธิ์ dedupe");
+  assert.ok(blocked.includes("dedupeCleared: true"), "log ต้องบอกตามจริง");
+});
+
+test("P1: caller ที่ย้าย boundary ต้องจัดการ sent:false (ไม่เงียบ/ไม่ claim สำเร็จ)", () => {
+  for (const [f, marker] of [
+    ["src/services/objectInfoGate/objectInfoGate.service.js", "OBJECT_INFO_GATE_ASK_BLOCKED"],
+    ["src/services/precheck/precheck.service.js", "PRECHECK_DELAYED_BLOCKED"],
+    ["src/services/lineWebhook/multiImageRejectionReply.service.js", "MULTI_IMAGE_VOICE_BLOCKED"],
+    ["src/services/welcome/registrationSuccess.service.js", "registration_success_push_blocked"],
+    ["src/services/fbShowcase/scanYoutubeShort.service.js", "YT_CLIP_NOTIFY_BLOCKED"],
+  ]) {
+    const src = fs.readFileSync(path.join(process.cwd(), f), "utf8");
+    assert.ok(src.includes(marker), `${f} ต้อง log/จัดการเมื่อ transport ถูกบล็อก (${marker})`);
+    assert.ok(/sent\s*!==\s*true|pushed\.sent\s*!==\s*true|res\.sent/.test(src), `${f} ต้องตรวจ sent`);
+  }
+});
+
+test("EXEMPT_FILES ต้องไม่มีไฟล์ mixed surface ที่มี customer boundary calls", () => {
+  const CUSTOMER_BOUNDARY_RE = /replyToCustomer\(|pushToCustomer\(|pushRawToCustomer\(|sendNonScanReply\(|sendNonScanPushMessage\(|sendNonScanSequenceReply\(|insertOutboundMessage\(/;
+  const bad = [];
+  for (const f of Object.keys(EXEMPT_FILES)) {
+    if (!fs.existsSync(f)) continue;
+    const src = fs.readFileSync(f, "utf8");
+    for (const [i, line] of src.split("\n").entries()) {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;
+      if (CUSTOMER_BOUNDARY_RE.test(line)) bad.push(`${f}:${i + 1}`);
+    }
+  }
+  assert.deepEqual(bad, [], "ไฟล์ที่ exempt ทั้งไฟล์ห้ามมี customer boundary — ต้องใช้ line-level แทน");
+  assert.ok(!EXEMPT_FILES["src/services/welcome/identityQuestion.service.js"], "identityQuestion ห้าม exempt ทั้งไฟล์");
+  assert.ok(!EXEMPT_FILES["src/services/fbShowcase/scanYoutubeShort.service.js"], "scanYoutubeShort ห้าม exempt ทั้งไฟล์");
 });

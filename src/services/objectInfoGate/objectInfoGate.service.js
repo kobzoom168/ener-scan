@@ -205,6 +205,14 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     {
       const { pushToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
       const pushed = await pushToCustomer(client, lineUserId, flexAsk, { source: "object_info_gate_ask" });
+      if (pushed.sent !== true && !pushed.suppressedBanned) {
+        // ส่งคำถามไม่ได้ (tone/HTTP) — ต้องไม่ยึดรายงานไว้เงียบ ๆ ปล่อยรายงานต่อ
+        await clearDedupeKey(`objinfo:form:${formToken}`).catch(() => {});
+        await clearDedupeKey(pendingKey(lineUserId)).catch(() => {});
+        await clearDedupeKey(backupKey(lineUserId)).catch(() => {});
+        console.error(JSON.stringify({ event: "OBJECT_INFO_GATE_ASK_BLOCKED", reason: pushed.reason || "unknown" }));
+        return NOT_HELD;
+      }
       if (pushed.suppressedBanned) {
         // ล้าง state ที่สร้างก่อน push — ลูกค้าไม่เคยเห็นคำถาม ห้ามค้าง pending/form
         await clearDedupeKey(`objinfo:form:${formToken}`).catch(() => {});

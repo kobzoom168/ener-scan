@@ -4214,7 +4214,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
       .limit(5);
     const list = (cands || []).filter((c) => c.line_user_id && c.line_user_id !== adminUid);
     if (!list.length) {
-      await __replyCustomer(client, event.replyToken, {
+      await __replyAdmin(client, event.replyToken, {
         type: "text",
         text: `ไม่เจอลูกค้าชื่อ "${nameQuery}" ลองพิมพ์ชื่อตามที่ขึ้นในแชท LINE เป๊ะ ๆ อีกครั้ง (รูปแบบ: ช่วยตอบ ชื่อ: ข้อความที่ตอบไป)`,
       });
@@ -4245,7 +4245,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
       `แอดมินเพิ่งช่วยตอบลูกค้าคนนี้ในแชทด้วยตัวเองว่า: "${said.slice(0, 400)}" — ให้ตอบต่อยอดจากแนวนี้ให้เนียนเป็นเนื้อเดียวกัน ห้ามพูดสวนหรือแนะนำขัดกัน`, /* tone-exempt: admin_command */
       172800,
     );
-    await __replyCustomer(client, event.replyToken, {
+    await __replyAdmin(client, event.replyToken, {
       type: "text",
       text: `รับทราบ ผูกกับคุณ ${adminName} แล้ว มีผล 48 ชม.`,
     });
@@ -4253,7 +4253,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
   } catch (e) {
     console.error("[ADMIN_ASSIST] failed:", e?.message);
     try {
-      await __replyCustomer(client, event.replyToken, { type: "text", text: "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง" });
+      await __replyAdmin(client, event.replyToken, { type: "text", text: "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง" });
     } catch { /* ignore */ }
   }
   return true;
@@ -9212,7 +9212,8 @@ async function __replyCustomer(client, replyToken, messages, opts = {}) {
   const r = await replyToCustomer(client, replyToken, messages, {
     source: opts.source || "webhook_reply",
     replyType: opts.replyType || "webhook_reply",
-    toneKind: opts.toneKind || "step",
+    // ห้ามเติม kind เอง — ไม่ระบุ = boundary default reply (≤40) fail-closed
+    ...(opts.toneKind ? { toneKind: opts.toneKind } : {}),
   });
   if (r.sent !== true) {
     console.error(JSON.stringify({ event: "CUSTOMER_REPLY_TONE_BLOCKED", surface: "lineWebhook", violations: r.toneViolations || [] }));
@@ -9222,11 +9223,8 @@ async function __replyCustomer(client, replyToken, messages, opts = {}) {
 
 /** admin-only reply (คำสั่งแอดมินใน LINE) — typed exemption ไม่ใช่ข้อความลูกค้า */
 async function __replyAdmin(client, replyToken, messages) {
-  const { replyToCustomer } = await import("../services/lineOutbound/customerPush.gateway.js");
-  return replyToCustomer(client, replyToken, messages, {
-    source: "admin_command",
-    toneExemptSurface: "admin_command",
-  });
+  const { replyToAdmin } = await import("../services/lineOutbound/customerPush.gateway.js");
+  return replyToAdmin(client, replyToken, messages, { verifiedAdmin: true });
 }
 
 /** customer push boundary (Codex P0-1/P0-2) — push ตรงในไฟล์นี้ต้องผ่าน guard */

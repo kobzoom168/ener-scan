@@ -148,7 +148,12 @@ export function assertHardToneOrLog(text, meta = {}) {
   return enforceHardToneBeforeSend(text, meta);
 }
 
-/** typed exemption: surface ที่ยกเว้นได้ พร้อมเหตุผล (ต้องระบุชัด ห้ามข้ามเงียบ) */
+/**
+ * typed exemption: surface ที่ยกเว้นได้ พร้อมเหตุผล — "ชื่อ" อย่างเดียวไม่พอ
+ * แต่ละตัวมีเงื่อนไขบังคับ (Codex P0-2): media_only ต้องเป็น payload สื่อล้วน ·
+ * admin_command/admin_telegram ใช้ได้เฉพาะ admin boundary · scan_report_body
+ * ใช้ได้เฉพาะ caller ที่อนุมัติ
+ */
 export const TONE_EXEMPT_SURFACES = Object.freeze({
   scan_report_body: "รายงานผลสแกน — เนื้อหาวิชา ไม่ใช่ข้อความสนทนา",
   admin_telegram: "แจ้งเตือนแอดมิน ไม่ใช่ลูกค้า",
@@ -197,3 +202,46 @@ export function collectFlexTexts(flex) {
   return out.filter((t) => String(t || "").trim());
 }
 
+
+/** payload สื่อล้วน (audio/image/video) ที่ไม่มี field ข้อความใด ๆ */
+export function isMediaOnlyPayload(messages) {
+  const list = Array.isArray(messages) ? messages : [messages];
+  if (!list.length) return false;
+  const TEXT_KEYS = ["text", "altText", "label", "displayText"];
+  const hasTextField = (n) => {
+    if (!n || typeof n !== "object") return typeof n === "string";
+    if (Array.isArray(n)) return n.some(hasTextField);
+    for (const k of TEXT_KEYS) if (typeof n[k] === "string" && n[k].trim()) return true;
+    if (n.quickReply) return true; // quickReply มี label เสมอ = ไม่ใช่ media ล้วน
+    return Object.values(n).some((v) => v && typeof v === "object" && hasTextField(v));
+  };
+  return list.every((m) => m && typeof m === "object" && ["audio", "image", "video"].includes(m.type) && !hasTextField(m));
+}
+
+/** surface ที่ต้องมาจาก admin boundary เท่านั้น */
+export const ADMIN_ONLY_EXEMPT_SURFACES = new Set(["admin_command", "admin_telegram"]);
+/** surface ที่ต้องมาจาก caller ที่อนุมัติเท่านั้น */
+export const RESTRICTED_EXEMPT_CALLERS = Object.freeze({
+  scan_report_body: new Set(["scan_result_delivery", "report_publish"]),
+});
+
+/**
+ * ตัดสินว่า exemption ที่ caller อ้างใช้ได้จริงไหม (typed enforcement)
+ * @returns {{ allowed: boolean, reason?: string }}
+ */
+export function resolveExemption({ surface, messages, adminContext = false, callerId = null }) {
+  const key = String(surface || "").trim();
+  if (!key) return { allowed: false, reason: "no_exemption" };
+  if (!TONE_EXEMPT_SURFACES[key]) return { allowed: false, reason: "unknown_exemption" };
+  if (ADMIN_ONLY_EXEMPT_SURFACES.has(key) && adminContext !== true) {
+    return { allowed: false, reason: "admin_context_required" };
+  }
+  if (key === "media_only" && !isMediaOnlyPayload(messages)) {
+    return { allowed: false, reason: "not_media_only" };
+  }
+  const allowedCallers = RESTRICTED_EXEMPT_CALLERS[key];
+  if (allowedCallers && !allowedCallers.has(String(callerId || ""))) {
+    return { allowed: false, reason: "caller_not_approved" };
+  }
+  return { allowed: true };
+}
