@@ -34,12 +34,22 @@
 ### 2.4 เทสต์/gate
 - gate ล่าสุด **165/173 files · 17 known leaf · ไม่มี fail ใหม่** · ไฟล์เทสต์ใหม่ 4: chatQualityReportPipeline, scanDeliveredStatus.contract, hardChatCopy.contract, (+ ขยาย banSystem/nonScanReply/closingPleasantry)
 
-## 3. ลำดับ deploy รอบถัดไป (เมื่อ Codex GO + กบสั่ง)
+## 3. ลำดับ deploy (Codex GO ยืนยันบน `2321581` — 21 ส.ค. · รอกบสั่ง "เอาขึ้น pro")
+> Codex แก้ลำดับ 1 จุด: **ห้ามปิด Hermes job ก่อน native report ส่งผ่านจริง** (กันรายงานหายทั้งสองทาง)
+
 1. apply `sql/055_scan_quota_ledger.sql` บน `ener_scan_pro`
-2. sync staging → main → `deploy-ener.sh pro`
-3. รัน `sql/backfill_delivered_status_20260820.sql` → ตรวจ will_backfill≈703 · remaining=0 · held-only 5 งานคง delivery_queued · **ไม่มี quota reconciliation ย้อนหลัง**
-4. ปิด hermes job `ener_chat_quality` (pipeline ใหม่รับช่วง 06:00)
-5. smoke: ledger sweep log สะอาด · รายงานเช้าถัดไปมาจาก ener-scan ฉบับเดียว
+2. sync staging → main → `deploy-ener.sh pro` (ทุก container)
+3. รัน `sql/backfill_delivered_status_20260820.sql` แล้วตรวจผล
+4. smoke quota ledger
+5. smoke native `ener_chat_quality` ใน ener-scan ให้ส่งรายงานสำเร็จจริง
+6. **แล้วค่อย**ปิด Hermes job `ener_chat_quality` ตัวเดิม
+
+### เกณฑ์ตรวจ backfill + ledger (Codex กำหนด)
+- `remaining_with_actual_evidence = 0`
+- held-only 5 งานยังคง `delivery_queued`
+- historical 223 scans ไม่มี ledger และไม่ถูกหักย้อนหลัง
+- paid scan ใหม่ลดสิทธิ์ครั้งเดียว
+- free / duplicate ไม่มี marker และไม่มี ledger
 
 ## 4. ค้าง / คิวถัดไป
 - **C1 grounded output guard** (`enforceGroundedChatOutput` ทุก customer-visible LLM surface) — งานโฟกัสรอบถัดไป · fixture ชุดแรก: เคส 20 ส.ค. 20:48 (มโน "พระสมเด็จวัดประสาทบุญญาวาส ปี 2506 … พลังเด่นสมดุล/เมตตา") + เคส U03877cd "พระจริงพลังย่อมดีกว่า"

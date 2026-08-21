@@ -970,3 +970,9 @@
 - **ทดสอบ RPC จริงบน staging DB (P1-3 ตามที่ Codex สั่ง)**: apply 055 ฉบับใหม่บน ener_scan_staging สำเร็จ (committed) → ชุดทดสอบ psql จริงใน BEGIN..ROLLBACK ผ่าน **7/7**: ①ensure authority ในบท web_anon (not_paid/job_not_found/pending idempotent) ②user_mismatch reject ③claim หักครั้งเดียว + already_completed + no_ledger ④reconcile: legacy 0 / new-ledger ensure-fail 1 หักครั้งเดียว / skipQuotaDecrement 0 / รอบซ้ำ 0 ⑤mark error typed (pending=1, completed=0) ⑥จำลอง bulk GRANT ALL + lockdown → effective grants ปิดจริง (SELECT อย่างเดียว) ⑦INSERT ตรงในบท web_anon = insufficient_privilege · rollback สะอาดไม่ทิ้ง fixture
 - หมายเหตุ zero-row rollback: บน DB จริง FK app_user_id→app_users ทำให้เคสนี้ unreachable-by-construction — guard ROW_COUNT คงไว้เป็น defense-in-depth (ยืนยัน logic ผ่าน JS fixture)
 - JS tests 17 เขียว · gate 165/173 · 17 known · ไม่มี fail ใหม่ · deploy: apply 055 (ฉบับ marker) บน pro → deploy → backfill → smoke เดิม
+
+## 2026-08-21 | Codex → Claude | GO Pro ชุด quality+ledger (ยืนยันบน 2321581) — รอกบสั่ง deploy
+- Codex ตรวจ B2 รอบสามแล้ว **GO Pro ยังคงเดิม** · แก้ลำดับ deploy 1 จุด: **ห้ามปิด Hermes job ก่อน native ener_chat_quality ส่งรายงานผ่านจริง** (กันรายงานหายทั้งสองทาง) → ลำดับใหม่: apply 055 → deploy → backfill+ตรวจ → smoke ledger → smoke native report → ค่อยปิด Hermes
+- เกณฑ์ตรวจที่ Codex กำหนด: remaining_with_actual_evidence=0 · held-only 5 งานคง delivery_queued · historical 223 scans ไม่มี ledger/ไม่ถูกหักย้อนหลัง · paid scan ใหม่ลดสิทธิ์ครั้งเดียว · free/duplicate ไม่มี marker+ledger
+- C1 grounded output guard: Codex ยืนยัน fixture 2 ตัว (เคส 20:48 พระสมเด็จมโน + U03877cd พระจริงพลังดีกว่า) เป็น P0 ชุดแรก — เริ่มหลัง deploy
+- สถานะ: โค้ดพร้อมบน staging @2321581 · runbook อัปเดตใน docs/ai/reports/2026-08-21-*.md · **ยังไม่แตะ pro รอคำสั่งกบ**
