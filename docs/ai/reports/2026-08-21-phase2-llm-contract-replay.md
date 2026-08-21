@@ -42,6 +42,18 @@
 | P1 honesty | consult และ phrasing ย้าย call แรกเข้า `enforceLlmCustomerOutput.generate(null)` — call แรกล้ม/timeout/ว่าง ออก `LLM_FACTUAL_FALLBACK_USED{failureType}` จาก contract จริง ไม่มี outer catch คืน null เงียบ |
 | B4 reproducible replay | `scripts/replay/build-replay-fixture.mjs` (sanitize: LINE id/URL/เลขยาว/ชื่อหลัง "คุณ") → `tests/fixtures/replay/2026-08-20-21.jsonl` (203 แถว) + `.expected.json` · `tests/replayConversations.test.js` ยิงทุกแถวผ่าน `customerPush.gateway.pushToCustomer` ด้วย fake LINE client (นับ transport จริง) และแถว LLM ผ่าน `enforceLlmCustomerOutput` ด้วย fake model คืนข้อความเก่า (ต้องได้ fallback + aiCalls ≤2) · ตัวเลขสรุปสร้างจาก runner แล้วเทียบ expected — fixture หาย/ตัวเลขต่าง = gate fail |
 
+## 3c. รอบสี่ (Codex B1 intent priority / B2 canonical tags / B4 route replay) — แก้แล้ว
+
+| จุด | แก้ |
+|---|---|
+| B1 intent priority | `classifyUserIntent`: คำเงิน/แพ็ก/สิทธิ์ หรือ payment state → `payment_question` ชนะ energy cue · "ดีไหม/ดีมั้ย" ต้องมี object context (องค์/ชิ้น/พระ/…) ถึงเป็นพลัง · `requiredNextAction` ไม่ derive จาก state อีก — caller ที่ route เป็น action จริงประกาศผ่าน `withRequiredAction()` · acceptance 4 ข้อผ่าน (paywall+"แพ็กนี้ดีไหม"+report → admin, "ใช่" ไม่โดน energy guard) |
+| B2 canonical tags | `canonicalEnergyTags(label)` (vocabulary เดียวกับ claim extractor) ใช้ตอนสร้าง typed evidence — "เมตตา มหานิยม" → ["เมตตา","มหานิยม"] · raw label เก็บแยกเป็น `energyLabelRaw` สำหรับ prompt |
+| B4 แยกสองชุด | **ชุด A** `tests/replayConversations.test.js` = legacy-output rejection (ผลเรียก `legacyBlocked` ไม่ใช่ fixed) · **ชุด B** `tests/replayRoutes.test.js` = production route replay: registry ต่อ replyType ยิง builder/service จริง + customer gateway ด้วย fake LINE client/fake model/fake DB → ต้องสร้าง "ข้อความใหม่" ≠ เก่า, transport=1, ผ่าน contract ปัจจุบัน, replyType/speakerRole/route ตรง, AI=0 สำหรับ deterministic, 1–2 สำหรับ LLM, evidence id สำหรับ consult · แถวที่ไม่มี boundary ให้เรียก = `unreplayable` ไม่นับ fixed |
+| Route registry | pre_scan_ack (ผ่าน `deliverOutboundMessage` จริง) · object_info_gate_ask (`buildObjectInfoAskMessage` pure builder ใหม่ + gateway) · gemini_front_consult (`runGeminiConsult` DI fake model ที่ "ยังตอบแบบเก่า" → fallback ส่งจริง) · payment_qr_instructions_bundle · free_quota_exhausted_deterministic · multiple_objects · image_retake_required · scan_energy_helper |
+| สิ่งที่ route replay จับได้จริง | (1) paywall Flex จริงถูก hard-tone บล็อกด้วย `time_promise` จากบรรทัดอายุแพ็ก "4 ครั้ง · 24 ชม." — ขยาย VALIDITY_FACT mask ให้ครอบรูปแบบการ์ด (สัญญาเวลาตอบ "รอ 2-3 นาที"/"ผลมาใน 5 นาที" ยังโดนตามเดิม) (2) pre_scan_ack ใน deliverOutbound ส่งผ่าน `pushText` ตรง ไม่ผ่าน customer boundary → ย้ายเข้า `pushToCustomer` (คง ban suppression semantics) |
+
+**ผล runner (gate ทุกครั้ง):** legacyBlocked 203/203 · routeFixed **188** · routeStillFailing 0 · unreplayable **15** (youtube_clip_notify ไม่มี replyType 8 · scan_in_flight_wait 2 · slip_auto_approved 2 · slip_approved 1 · paywall_deferred_report_pending 1 · daily_pick_notify_toggle 1 — inline ใน lineWebhook/liff ไม่มี boundary แยก)
+
 ## 4. Replay บทสนทนาจริง 20-21 ส.ค. (Pro, อ่านอย่างเดียว)
 
 ดึงจาก `line_conversation_messages` ช่วง 20 ส.ค. 00:00 – 21 ส.ค. 24:00 (เวลาไทย) โดยไม่ดึง `line_user_id` (ใช้ hash 6 ตัวจัดกลุ่มบทสนทนาแทน)

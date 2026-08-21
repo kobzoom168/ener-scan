@@ -46,7 +46,7 @@ async function isPaidActiveCustomer(userId) {
  * @param {{ userId?: string, userText: string, conversationHistory?: { role: string, text: string }[] }} p
  * @returns {Promise<string | null>}
  */
-export async function runGeminiConsult(p) {
+export async function runGeminiConsult(p, deps = {}) {
   // P0-6 (Codex): งบเรียกโมเดลที่ลูกค้าเห็น ≤2 ครั้งต่อเทิร์น ใช้ร่วมกันทุก guard
   // guard ตัวหลัง (money/tone) ที่เรียกซ้ำหลังงบหมด = ต้องได้ null แล้วไป deterministic
   if (p.turnBudget && p.turnBudget.attempted >= (p.turnBudget.max || 2)) {
@@ -54,7 +54,7 @@ export async function runGeminiConsult(p) {
     return null;
   }
   if (!env.GEMINI_CONSULT_ENABLED) return null;
-  if (!isGeminiConfigured()) return null;
+  if (!deps.generate && !isGeminiConfigured()) return null;
 
   // Phase B: best-effort personalization from the user's own scan history
   // (multiple pieces, so it can compare "องค์ไหนแรงสุด/ดีสุด" + link the report)
@@ -69,10 +69,10 @@ export async function runGeminiConsult(p) {
   const kbPromise = buildKbContext(p.userText).catch(() => null);
   if (p.userId) {
     [recentScan, customerFacts, kbContext, paidActive, axisTop, rankingAllowed] = await Promise.all([
-      buildScanHistoryTyped(p.userId, 6).catch(() => null),
+      (deps.scanHistory || buildScanHistoryTyped)(p.userId, 6).catch(() => null),
       buildCustomerFactsContext(p.userId).catch(() => null),
       kbPromise,
-      isPaidActiveCustomer(p.userId),
+      (deps.isPaidActive || isPaidActiveCustomer)(p.userId),
       buildAxisTopContext(p.userId).catch(() => null),
       // สิทธิ์ดูอันดับในแชท = SSOT เดียวกับเซ็นเซอร์หน้ารายงาน (จ่ายใน 3 วัน) — กบ 18 ส.ค.
       (async () => {
@@ -107,7 +107,7 @@ export async function runGeminiConsult(p) {
     // ชั้นฟรี (DeepSeek): ปิดโหมดคิดในใจ กันกิน max_tokens จนคำตอบโดนตัด
     disableReasoning: !paidActive,
   });
-  if (!model) return null;
+  if (!model && !deps.generate) return null;
 
   let prompt = buildConsultUserPrompt({
     userText: p.userText,
@@ -206,7 +206,7 @@ export async function runGeminiConsult(p) {
         const fullPrompt = directive
           ? `${prompt}\n\nแก้ตามนี้: ${directive}\nตอบใหม่สั้น ๆ`
           : prompt;
-        const text = await generateTextWithTimeout(model, fullPrompt, env.GEMINI_CONSULT_TIMEOUT_MS);
+        const text = await (deps.generate || ((m, pr, ms) => generateTextWithTimeout(m, pr, ms)))(model, fullPrompt, env.GEMINI_CONSULT_TIMEOUT_MS);
         const out = stripTrailingJunk(text);
         console.log(
           JSON.stringify({

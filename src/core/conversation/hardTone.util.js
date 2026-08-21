@@ -84,7 +84,9 @@ export function normalizeInvisible(text) {
  * @returns {{ ok: boolean, violations: string[] }}
  */
 /** ระบุ "อายุสิทธิ์/ระยะเวลาใช้งาน" = ข้อเท็จจริง ไม่ใช่สัญญาว่าจะตอบเมื่อไร */
-const VALIDITY_FACT_RE = /(มีผล|ใช้ได้|ภายใน|อายุ|ตลอด|ถึง)\s*\d+\s*(นาที|ชม\.|ชั่วโมง|วัน)/u;
+// ข้อเท็จจริงอายุแพ็ก (ไม่ใช่สัญญาเวลาตอบ): "ใช้ได้ 24 ชม." และรูปแบบการ์ด "4 ครั้ง · 24 ชม." / "ใน 24 ชม."
+// (route replay 22 ส.ค.: paywall Flex จริงถูกบล็อกเพราะ mask ไม่ครอบรูปแบบการ์ด)
+const VALIDITY_FACT_RE = /(?:(มีผล|ใช้ได้|ภายใน|อายุ|ตลอด|ถึง)\s*\d+\s*(นาที|ชม\.|ชั่วโมง|วัน)|\d+\s*ครั้ง\s*(?:[·•/]|ใน)\s*\d+\s*(ชม\.|ชั่วโมง|วัน))/u;
 
 export function checkHardTone(text, opts = {}) {
   const raw = String(text || "");

@@ -4,9 +4,21 @@
   "rows": 203,
   "conversations": 47,
   "systemMarkersSkipped": 104,
-  "fixed": 203,
-  "stillFailing": 0,
-  "alreadyFixed": 0,
-  "falsePositive": 0,
-  "maxAiCallsPerTurn": 2
+  "maxAiCallsPerTurn": 2,
+  "legacyBlocked": 203,
+  "legacyStillSendable": 0,
+  "legacyCleanSendable": 0,
+  "legacyFalsePositive": 0,
+  "routeFixed": 188,
+  "routeStillFailing": 0,
+  "unreplayable": 15,
+  "unreplayableRoutes": {
+    "youtube_clip_notify(no replyType)": 8,
+    "scan_in_flight_wait": 2,
+    "slip_auto_approved": 2,
+    "slip_approved": 1,
+    "paywall_deferred_report_pending": 1,
+    "daily_pick_notify_toggle": 1
+  },
+  "unreplayableReason": "inline ใน lineWebhook/liff ไม่มี builder/service boundary ให้เรียกแยก — นับ unreplayable ไม่นับ fixed"
 }

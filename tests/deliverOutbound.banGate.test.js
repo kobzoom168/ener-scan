@@ -210,7 +210,7 @@ test("pre_scan_ack: แบนหลัง top gate ก่อนส่ง → tra
   const client = { pushMessage: async () => { calls.push += 1; } };
   const r = await deliverOutboundMessage(
     client,
-    { id: 102, line_user_id: "U" + "2".repeat(32), kind: "pre_scan_ack", payload_json: { text: "รับรูปแล้วครับ" } },
+    { id: 102, line_user_id: "U" + "2".repeat(32), kind: "pre_scan_ack", payload_json: { text: "รับรูปแล้ว" } },
     { banGateDeps: deps },
   );
   assert.equal(calls.push, 0, "transport หลังแบนต้องเป็น 0");

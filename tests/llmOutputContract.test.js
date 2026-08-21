@@ -331,3 +331,41 @@ test("B3: provenance เทียบราย field · lucky เทียบค�
   assert.ok(run("สีมงคลเขียว", { evidence: lucky }).violations.includes("ungrounded:lucky"));
   assert.ok(run("เลขมงคล 7", { evidence: lucky }).violations.includes("ungrounded:lucky"));
 });
+
+/* ---------- Codex รอบสี่: B1 intent priority · B2 canonical energy tags ---------- */
+test("B1: payment/registration state ชนะ energy cue · ดีไหม ลอย ๆ ไม่ใช่พลัง · requiredNextAction ไม่มาจาก state", async () => {
+  const { classifyUserIntent, resolveExpectedRole, finalizeIntent, withRequiredAction } = await import(
+    "../src/core/conversation/geminiFront/intentContract.util.js"
+  );
+  const rep = { report: { ids: ["r1"], scores: [7.2], energyTags: ["เมตตา"] } };
+  const c1 = classifyUserIntent("แพ็กนี้ดีไหม", "paywall_selecting_package");
+  assert.equal(c1.userIntent, "payment_question");
+  assert.equal(c1.requiredNextAction, false);
+  assert.equal(resolveExpectedRole(c1, rep), "admin");
+  assert.equal(run("ใช่", { userText: "แพ็กนี้ดีไหม", userIntent: finalizeIntent(c1, rep), expectedRole: "admin", evidence: rep }).ok, true);
+  const c2 = classifyUserIntent("พรุ่งนี้ใช้ฟรีได้กี่โมง", "paywall_selecting_package");
+  assert.equal(c2.requiredNextAction, false);
+  assert.ok(run("เที่ยงคืน ส่งรูปมาได้เลย", { userIntent: c2.userIntent, expectedRole: "admin" }).violations.includes("unsolicited_cta"));
+  const c3 = classifyUserIntent("พลังองค์นี้ดีไหม", null);
+  assert.equal(finalizeIntent(c3, rep), "energy_reading");
+  assert.equal(resolveExpectedRole(c3, rep), "ajarn");
+  assert.equal(classifyUserIntent("แพ็กนี้ดีไหม", null).userIntent, "payment_question");
+  assert.equal(classifyUserIntent("ดีไหม", null).userIntent, "general");
+  assert.equal(withRequiredAction(c2).requiredNextAction, true);
+});
+
+test("B2: report label รวม → canonical tags · claim แยกผ่าน · tag ที่ไม่มี reject", async () => {
+  const { canonicalEnergyTags } = await import("../src/core/conversation/llmOutputContract.util.js");
+  assert.deepEqual(canonicalEnergyTags("เมตตา มหานิยม"), ["เมตตา", "มหานิยม"]);
+  assert.deepEqual(canonicalEnergyTags("สมดุล/เมตตา").sort(), ["สมดุล", "เมตตา"].sort());
+  const ev = { report: { ids: ["r1"], energyTags: canonicalEnergyTags("เมตตา มหานิยม") } };
+  assert.equal(run("เด่นด้านเมตตา", { evidence: ev, expectedRole: "ajarn" }).ok, true);
+  assert.equal(run("เด่นด้านมหานิยม", { evidence: ev, expectedRole: "ajarn" }).ok, true);
+  assert.ok(run("เด่นด้านโชคลาภ", { evidence: ev, expectedRole: "ajarn" }).violations.includes("ungrounded:energy"));
+  // typed builder ใช้ normalizer เดียวกัน
+  const { buildScanHistoryTyped } = await import("../src/core/conversation/geminiFront/recentScanContext.util.js");
+  const typed = await buildScanHistoryTyped("Utest", 6, { listRows: async () => [{ id: "row", html_public_token: "tok", created_at: "2026-08-20",
+    report_payload_json: { summary: { mainEnergyLabel: "สมดุล/เมตตา", energyScore: 7 }, object: { objectLabel: "พระ" } } }] });
+  assert.deepEqual(typed.items[0].energyTags.sort(), ["สมดุล", "เมตตา"].sort());
+  assert.equal(typed.items[0].energyLabelRaw, "สมดุล/เมตตา");
+});

@@ -29,7 +29,7 @@ const PRE_SCAN_ACK_VARIANTS = [
   "รับรูปแล้ว",
 ];
 
-function pickPreScanAckText(seedStr) {
+export function pickPreScanAckText(seedStr) {
   let h = 0;
   const s = String(seedStr || "");
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;

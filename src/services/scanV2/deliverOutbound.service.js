@@ -232,7 +232,21 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           /* fall back to text */
         }
       }
-      if (!sentAsVoice) await pushText(client, lineUserId, text);
+      if (!sentAsVoice) {
+        // เฟส 2 (route replay): ack ต้องผ่าน customer boundary (hard tone + ban) ไม่ใช่ pushText ตรง
+        const { pushToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+        const r = await pushToCustomer(client, lineUserId, [{ type: "text", text }], {
+          source: "pre_scan_ack", isBanned: traceCtx.banGateDeps?.isBanned,
+        });
+        if (r.suppressedBanned) {
+          const e = new Error("user banned - transport blocked");
+          e.suppressedBanned = true;
+          throw e; // ให้ catch ชั้นนอก terminalize เหมือน branch อื่น
+        }
+        if (r.sent !== true) {
+          return { sent: false, errorCode: r.reason || "pre_scan_ack_blocked", errorMessage: (r.toneViolations || []).join(",") };
+        }
+      }
       await markSent(id);
       // history ให้ monitor เห็นครบ (Codex H4): ack รับรูป = เสียงแอดมิน
       try {

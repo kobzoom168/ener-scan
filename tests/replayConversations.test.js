@@ -1,5 +1,6 @@
 /**
- * Replay บทสนทนาจริง (sanitized) ผ่าน production boundary (Codex B4)
+ * ชุด A — legacy-output rejection (Codex B4): พิสูจน์เพียงว่า "ข้อความเก่า" ถูก boundary ปัจจุบันบล็อก (transport=0)
+ * ไม่ได้พิสูจน์ว่าระบบตอบใหม่ถูก — ส่วนนั้นอยู่ใน tests/replayRoutes.test.js (ชุด B)
  *
  * - fixture: tests/fixtures/replay/*.jsonl (สร้างจาก scripts/replay/build-replay-fixture.mjs)
  * - ทุกแถวยิงผ่าน customerPush.gateway.pushToCustomer ด้วย fake LINE client (transport นับจริง)
@@ -46,7 +47,7 @@ for (const ef of expectedFiles) {
   test(`replay ${exp.fixture}: ทุกแถวผ่าน production boundary → สรุปต้องตรง expected`, async () => {
     const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
     const { enforceLlmCustomerOutput } = await import("../src/core/conversation/llmOutputContract.util.js");
-    const tally = { fixed: 0, stillFailing: 0, alreadyFixed: 0, falsePositive: 0 };
+    const tally = { legacyBlocked: 0, legacyStillSendable: 0, legacyCleanSendable: 0, legacyFalsePositive: 0 };
     const failures = [];
     const convs = new Set();
     for (const r of rows) {
@@ -58,10 +59,10 @@ for (const ef of expectedFiles) {
       const transport = c.calls.reply + c.calls.push;
       const blocked = res.sent !== true && transport === 0;
       const violated = r.classification === "violated_old_policy";
-      if (violated && blocked) tally.fixed++;
-      else if (violated && !blocked) { tally.stillFailing++; failures.push(`${r.id} ยังส่งได้: ${r.outbound.slice(0, 60)}`); }
-      else if (!violated && !blocked) tally.alreadyFixed++;
-      else { tally.falsePositive++; failures.push(`${r.id} false positive: ${r.outbound.slice(0, 60)} → ${res.toneViolations}`); }
+      if (violated && blocked) tally.legacyBlocked++;
+      else if (violated && !blocked) { tally.legacyStillSendable++; failures.push(`${r.id} ยังส่งได้: ${r.outbound.slice(0, 60)}`); }
+      else if (!violated && !blocked) tally.legacyCleanSendable++;
+      else { tally.legacyFalsePositive++; failures.push(`${r.id} false positive: ${r.outbound.slice(0, 60)} → ${res.toneViolations}`); }
       assert.equal(transport, r.expected.transport, `${r.id} transport ${transport} ≠ expected ${r.expected.transport}`);
 
       // LLM flow: model คืนข้อความเก่า → contract ต้องไม่ปล่อย และไม่เกินงบ
@@ -77,7 +78,7 @@ for (const ef of expectedFiles) {
     }
     assert.equal(rows.length, exp.rows, "จำนวนแถว fixture ต่างจาก expected");
     assert.equal(convs.size, exp.conversations, "จำนวนบทสนทนาต่างจาก expected");
-    assert.deepEqual(tally, { fixed: exp.fixed, stillFailing: exp.stillFailing, alreadyFixed: exp.alreadyFixed, falsePositive: exp.falsePositive },
+    assert.deepEqual(tally, { legacyBlocked: exp.legacyBlocked, legacyStillSendable: exp.legacyStillSendable, legacyCleanSendable: exp.legacyCleanSendable, legacyFalsePositive: exp.legacyFalsePositive },
       `สรุปจาก runner ≠ expected\n${failures.slice(0, 10).join("\n")}`);
   });
 }

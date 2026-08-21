@@ -59,7 +59,7 @@ export const OLD_POLICY = [
 export function expectationFor(replyType, source) {
   const rt = String(replyType || "");
   const llm = /consult|phrasing|chat_fallback|clarifier|conv_surface/i.test(rt);
-  const report = /scan_result|report|scan_energy_helper/i.test(rt);
+  const report = /scan_result|report_delivery|gemini_front_consult/i.test(rt);
   const step = /payment|slip|paywall|qr|registration|onboard|multiple_objects|reject|retake|object_info_gate/i.test(rt);
   return {
     transport: 0,                // ข้อความเก่าที่ผิด policy ต้องถูก boundary ปัจจุบัน block (transport=0)

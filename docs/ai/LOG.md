@@ -1081,3 +1081,11 @@
 - เทสต์: llmOutputContract 23/23 · replayConversations 3/3 · gate ไม่มี fail ใหม่นอก baseline
 - **ยังไม่แตะ Pro** — ข้อความกบเป็นคำแนะนำ (ขึ้น 055 ก่อน) ยังไม่ใช่คำสั่ง รอคำสั่งชัด
 - ค้าง: staging smoke tone-hard ด้วยบัญชีจริง (valid/invalid evidence · payment · image rejection · AI budget ≤2)
+
+## 2026-08-21 | Claude | เฟส 2 รอบสี่ — Codex B1 intent priority / B2 canonical tags / B4 production route replay
+- B1: payment state/คำเงินชนะ energy cue · "ดีไหม" ต้องมี object context · requiredNextAction ไม่มาจาก state (`withRequiredAction`)
+- B2: `canonicalEnergyTags` ใช้ตอนสร้าง typed evidence (raw label แยก `energyLabelRaw`)
+- B4: แยก legacy rejection (`legacyBlocked` 203) กับ route replay ใหม่ `tests/replayRoutes.test.js` (registry 8 route ยิง builder/service จริง + gateway fake transport/model/DB) → routeFixed 188 · unreplayable 15 ระบุชื่อ route ใน expected.json
+- route replay จับ regression จริง 2 จุด: paywall Flex โดน time_promise จาก "4 ครั้ง · 24 ชม." (ขยาย validity mask) · pre_scan_ack ส่งผ่าน pushText ตรง (ย้ายเข้า pushToCustomer คง ban semantics)
+- เทสต์: llmOutputContract 25/25 · replayConversations 3/3 · replayRoutes 2/2 · banGate 14/14 · gate ไม่มี fail ใหม่
+- ยังไม่แตะ Pro / ยังไม่ staging — รอกบสั่ง

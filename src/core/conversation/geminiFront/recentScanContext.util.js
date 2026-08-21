@@ -5,6 +5,7 @@
  */
 import { listScanResultsV2PayloadRowsForLineUser } from "../../../stores/scanV2/scanResultsV2.db.js";
 import { buildPublicReportUrl } from "../../../services/reports/reportLink.service.js";
+import { canonicalEnergyTags } from "../llmOutputContract.util.js";
 
 function str(v) {
   const s = String(v ?? "").trim();
@@ -145,7 +146,9 @@ export async function buildScanHistoryTyped(userId, maxItems = 6, deps = {}) {
     label: it.label,
     score: it.score,
     compatPercent: it.compat,
-    energyTags: it.power ? [it.power] : [],
+    // Codex B2: canonical tags สำหรับ evidence (vocabulary เดียวกับ claim extractor) · raw label แยกไว้ให้ prompt
+    energyTags: canonicalEnergyTags(it.power),
+    energyLabelRaw: it.power || "",
     when: it.when,
     url: it.url,
   }));

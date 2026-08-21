@@ -154,54 +154,7 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     // สำรองกันรายงานหาย: pending หมดอายุโดยไม่มีคำตอบ → ข้อความถัดไปของลูกค้าจะปล่อยรายงานออก
     await setLargeValueWithTtl(backupKey(lineUserId), JSON.stringify(pending), PENDING_TTL_SEC * 2);
 
-    const base = String(process.env.APP_BASE_URL || "").replace(/\/+$/, "");
-    const formUrl = `${base}/obj-info/${formToken}`;
-    const POSTER_URL = String(
-      process.env.OBJECT_INFO_POSTER_URL ||
-        "https://pub-66a3e24b05f44d809106818ceb606936.r2.dev/brand/objinfo-ask-v3.png",
-    ).trim();
-    const askText =
-      lane === "bracelet"
-        ? "ขอชนิดหินหรือกำไลของชิ้นนี้ รู้เท่าไหนตอบเท่านั้น พิมพ์ในแชทนี้หรือกดกรอกด้านล่าง"
-        : "ขอชื่อ วัด รุ่นหรือปีของชิ้นนี้ รู้เท่าไหนตอบเท่านั้น พิมพ์ในแชทนี้หรือกดกรอกด้านล่าง";
-    const items = [
-      { type: "action", action: { type: "message", label: "ไม่ทราบข้อมูลชิ้นนี้", text: "ไม่ทราบข้อมูลชิ้นนี้" } },
-    ];
-    if (isPaid) {
-      items.push({ type: "action", action: { type: "message", label: "ข้ามก่อน รับผลเลย", text: "ข้ามก่อน รับผลเลย" } });
-    }
-    const formButtonFooter = {
-      type: "box", layout: "vertical", backgroundColor: lane === "amulet" ? "#0c241a" : "#14110C",
-      paddingAll: "12px",
-      contents: [{
-        type: "button", style: "primary", color: "#B8871B", height: "sm",
-        action: { type: "uri", label: "กรอกข้อมูลแบบละเอียด", uri: formUrl },
-      }],
-    };
-    const flexAsk = {
-      type: "flex",
-      altText: "ขอข้อมูลชิ้นนี้ก่อนส่งผล",
-      contents:
-        lane === "amulet"
-          ? {
-              type: "bubble", size: "mega",
-              hero: { type: "image", url: POSTER_URL, size: "full", aspectRatio: "1080:1300", aspectMode: "fit" },
-              footer: formButtonFooter,
-            }
-          : {
-              type: "bubble", size: "kilo",
-              body: {
-                type: "box", layout: "vertical", backgroundColor: "#14110C", paddingAll: "16px", spacing: "md",
-                contents: [
-                  { type: "text", text: "ก่อนส่งผล ขอข้อมูลชิ้นนี้", weight: "bold", size: "md", color: "#E8C547", wrap: true },
-                  { type: "text", text: askText, size: "sm", color: "#F5EDD8", wrap: true },
-                  { type: "text", text: "ข้อมูลจะถูกเก็บเข้าทะเบียนคลังของคุณ (บันทึกแบบ \"เจ้าของแจ้ง\")", size: "xs", color: "#CBB98A", wrap: true },
-                ],
-              },
-              footer: formButtonFooter,
-            },
-      quickReply: { items },
-    };
+    const { askText, flexAsk } = buildObjectInfoAskMessage({ lane, isPaid, formToken });
     {
       const { pushToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
       const pushed = await pushToCustomer(client, lineUserId, flexAsk, { source: "object_info_gate_ask" });
@@ -565,4 +518,60 @@ async function __replyCustomer(client, replyToken, messages) {
     console.error(JSON.stringify({ event: "CUSTOMER_REPLY_TONE_BLOCKED", surface: "object_info", violations: r.toneViolations || [] }));
   }
   return r;
+}
+
+/**
+ * pure builder ของคำถามเกตเก็บข้อมูล (แยกออกมาให้ route replay / เทสต์เรียกได้โดยไม่แตะ Redis)
+ * — ข้อความที่ส่งจริงมาจากที่นี่ที่เดียว
+ */
+export function buildObjectInfoAskMessage({ lane, isPaid, formToken }) {
+  const base = String(process.env.APP_BASE_URL || "").replace(/\/+$/, "");
+  const formUrl = `${base}/obj-info/${formToken}`;
+  const POSTER_URL = String(
+    process.env.OBJECT_INFO_POSTER_URL ||
+      "https://pub-66a3e24b05f44d809106818ceb606936.r2.dev/brand/objinfo-ask-v3.png",
+  ).trim();
+  const askText =
+    lane === "bracelet"
+      ? "ขอชนิดหินหรือกำไลของชิ้นนี้ รู้เท่าไหนตอบเท่านั้น พิมพ์ในแชทนี้หรือกดกรอกด้านล่าง"
+      : "ขอชื่อ วัด รุ่นหรือปีของชิ้นนี้ รู้เท่าไหนตอบเท่านั้น พิมพ์ในแชทนี้หรือกดกรอกด้านล่าง";
+  const items = [
+    { type: "action", action: { type: "message", label: "ไม่ทราบข้อมูลชิ้นนี้", text: "ไม่ทราบข้อมูลชิ้นนี้" } },
+  ];
+  if (isPaid) {
+    items.push({ type: "action", action: { type: "message", label: "ข้ามก่อน รับผลเลย", text: "ข้ามก่อน รับผลเลย" } });
+  }
+  const formButtonFooter = {
+    type: "box", layout: "vertical", backgroundColor: lane === "amulet" ? "#0c241a" : "#14110C",
+    paddingAll: "12px",
+    contents: [{
+      type: "button", style: "primary", color: "#B8871B", height: "sm",
+      action: { type: "uri", label: "กรอกข้อมูลแบบละเอียด", uri: formUrl },
+    }],
+  };
+  const flexAsk = {
+    type: "flex",
+    altText: "ขอข้อมูลชิ้นนี้ก่อนส่งผล",
+    contents:
+      lane === "amulet"
+        ? {
+            type: "bubble", size: "mega",
+            hero: { type: "image", url: POSTER_URL, size: "full", aspectRatio: "1080:1300", aspectMode: "fit" },
+            footer: formButtonFooter,
+          }
+        : {
+            type: "bubble", size: "kilo",
+            body: {
+              type: "box", layout: "vertical", backgroundColor: "#14110C", paddingAll: "16px", spacing: "md",
+              contents: [
+                { type: "text", text: "ก่อนส่งผล ขอข้อมูลชิ้นนี้", weight: "bold", size: "md", color: "#E8C547", wrap: true },
+                { type: "text", text: askText, size: "sm", color: "#F5EDD8", wrap: true },
+                { type: "text", text: "ข้อมูลจะถูกเก็บเข้าทะเบียนคลังของคุณ (บันทึกแบบ \"เจ้าของแจ้ง\")", size: "xs", color: "#CBB98A", wrap: true },
+              ],
+            },
+            footer: formButtonFooter,
+          },
+    quickReply: { items },
+  };
+  return { askText, flexAsk };
 }
