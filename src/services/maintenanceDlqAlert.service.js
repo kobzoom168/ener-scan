@@ -23,7 +23,7 @@ export async function maybeSendDlqAlert(counts, deps = {}) {
       channelSecret: e.CHANNEL_SECRET,
     });
   try {
-    await client.pushMessage(adminId, { type: "text", text });
+    await client.pushMessage(adminId, { type: "text", text }); /* tone-exempt: admin_telegram */
     console.log(
       JSON.stringify({
         event: "DLQ_ALERT_SENT",

@@ -97,7 +97,7 @@ export async function replyToCustomer(client, replyToken, messages, opts = {}) {
       else if (m?.type === "text" && typeof m.text === "string") texts.push(m.text);
       else if (m && typeof m === "object") texts.push(...collectFlexTexts(m));
     }
-    const kind = opts.toneKind || "step";
+    const kind = opts.toneKind || "reply"; // fail-closed: step/bundle ต้องระบุ typed
     const bad = texts
       .map((t) => enforceHardToneBeforeSend(t, { surface: opts.surface || "customer_reply", replyType: opts.replyType || null, kind }))
       .filter((r) => !r.ok);
@@ -107,4 +107,54 @@ export async function replyToCustomer(client, replyToken, messages, opts = {}) {
   }
   await client.replyMessage(replyToken, messages);
   return { sent: true };
+}
+
+/**
+ * RAW LINE push boundary (Codex P0-2): เส้นที่ยิง HTTP ตรงไป LINE ต้องมาที่นี่ —
+ * ban check → hard-tone payload validation → transport เดียว
+ * ห้ามมี fetch ไป api.line.me นอกโมดูลนี้
+ * @returns {Promise<{ sent: boolean, reason?: string, toneViolations?: string[], suppressedBanned?: boolean }>}
+ */
+export async function pushRawToCustomer(lineUserId, messages, opts = {}) {
+  const uid = String(lineUserId || "").trim();
+  const token = String(process.env.CHANNEL_ACCESS_TOKEN || "").trim();
+  if (!uid || !token) return { sent: false, reason: "not_configured" };
+  const gate = await allowCustomerPush(uid, opts);
+  if (!gate.allowed) return { sent: false, suppressedBanned: gate.suppressedBanned === true, reason: "gate_blocked" };
+
+  const { enforceHardToneBeforeSend, collectFlexTexts, TONE_EXEMPT_SURFACES } = await import(
+    "../../core/conversation/hardTone.util.js"
+  );
+  const exempt = opts.toneExemptSurface && TONE_EXEMPT_SURFACES[opts.toneExemptSurface];
+  const list = Array.isArray(messages) ? messages : [messages];
+  if (!exempt) {
+    const texts = [];
+    for (const m of list) {
+      if (typeof m === "string") texts.push(m);
+      else if (m?.type === "text" && typeof m.text === "string") texts.push(m.text);
+      else if (m && typeof m === "object") texts.push(...collectFlexTexts(m));
+    }
+    const kind = opts.toneKind || toneKindForPushSourceExported(opts.source);
+    const bad = texts
+      .map((t) => enforceHardToneBeforeSend(t, { surface: opts.source || "raw_push", replyType: opts.source || null, kind }))
+      .filter((r) => !r.ok);
+    if (bad.length) {
+      return { sent: false, reason: "hard_tone_rejected", toneViolations: [...new Set(bad.flatMap((r) => r.violations))] };
+    }
+  }
+  const res = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ to: uid, messages: list }),
+    signal: AbortSignal.timeout(Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : 15000),
+  });
+  return { sent: res.ok, reason: res.ok ? undefined : `http_${res.status}` };
+}
+
+/** typed source→kind (export ให้ raw boundary ใช้ร่วม) */
+export function toneKindForPushSourceExported(source) {
+  const t = String(source || "");
+  if (/payment|qr|slip|paywall|quota_offer|myscans|history|synergy_intro|daily_pick/i.test(t)) return "bundle";
+  if (/report|scan_result|registration|welcome|howto|onboarding|object_info|purpose/i.test(t)) return "step";
+  return "reply";
 }

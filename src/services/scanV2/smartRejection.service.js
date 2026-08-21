@@ -45,7 +45,7 @@ export async function notifyAdminRejectionStreak(client, lineUserId, attempt, re
   try {
     const adminId = String(process.env.ADMIN_LINE_USER_ID || "").trim();
     if (!adminId || !client) return;
-    await client.pushMessage(adminId, {
+    await client.pushMessage(adminId, { /* tone-exempt: admin_telegram */
       type: "text",
       text: `⚠️ ลูกค้า ${String(lineUserId).slice(0, 10)}… รูปโดนปัด ${attempt} ครั้งติด (${String(reason).slice(0, 40)})\nอาจารย์บอกเขาว่าจะรับไปดูเอง — เข้าไปช่วยเช็คใน OA หน่อย`, /* tone-exempt: admin_telegram */
     });

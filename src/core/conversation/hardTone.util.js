@@ -152,6 +152,8 @@ export function assertHardToneOrLog(text, meta = {}) {
 export const TONE_EXEMPT_SURFACES = Object.freeze({
   scan_report_body: "รายงานผลสแกน — เนื้อหาวิชา ไม่ใช่ข้อความสนทนา",
   admin_telegram: "แจ้งเตือนแอดมิน ไม่ใช่ลูกค้า",
+  admin_command: "คำสั่งแอดมินใน LINE (ห้องแอดมินเท่านั้น)",
+  media_only: "ข้อความสื่อ (เสียง/ภาพ) ที่ไม่มี chat copy",
   liff_page_html: "หน้าเว็บ LIFF (ไม่ใช่ข้อความแชท)",
 });
 
@@ -182,8 +184,11 @@ export function collectFlexTexts(flex) {
     if (typeof n.altText === "string") out.push(n.altText);
     if ((n.type === "text" || n.type === "span") && typeof n.text === "string") out.push(n.text);
     if (typeof n.label === "string") out.push(n.label);
-    if (n.action && typeof n.action === "object" && typeof n.action.label === "string") {
-      out.push(n.action.label);
+    if (n.action && typeof n.action === "object") {
+      if (typeof n.action.label === "string") out.push(n.action.label);
+      // displayText = ข้อความที่ LINE แสดงแทนผู้ใช้เมื่อกด action (ลูกค้าเห็น)
+      if (typeof n.action.displayText === "string") out.push(n.action.displayText);
+      if (typeof n.action.text === "string") out.push(n.action.text);
     }
     // เดินทุก property ที่เป็น object/array (carousel/bubble/box/contents/quickReply/items/...)
     for (const v of Object.values(n)) if (v && typeof v === "object") walk(v);

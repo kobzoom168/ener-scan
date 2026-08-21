@@ -63,7 +63,7 @@ export async function maybeHandleHowtoAck({ client, event, userId, text }) {
       inviteImage =
         decideHowtoAckReply({ registered, gateEnabled: cfg.enabled }) === "invite_send_image";
     } catch { /* เช็คพลาด = ชวนตามเดิม (fail-open ฝั่งระบบ) */ }
-    await client.replyMessage(event.replyToken, {
+    await __replyCustomer(client, event.replyToken, {
       type: "text",
       text: inviteImage
         ? "ส่งรูปชิ้นแรกมาได้ ฟรีวันละ 1 ชิ้น"
@@ -80,4 +80,14 @@ export async function maybeHandleHowtoAck({ client, event, userId, text }) {
     /* ignore */
   }
   return true;
+}
+
+/** customer reply boundary (Codex P0-1): ทุก reply ของไฟล์นี้ผ่าน hard-tone guard */
+async function __replyCustomer(client, replyToken, messages) {
+  const { replyToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+  const r = await replyToCustomer(client, replyToken, messages, { source: "howto", replyType: "howto", toneKind: "step" });
+  if (r.sent !== true) {
+    console.error(JSON.stringify({ event: "CUSTOMER_REPLY_TONE_BLOCKED", surface: "howto", violations: r.toneViolations || [] }));
+  }
+  return r;
 }

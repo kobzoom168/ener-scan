@@ -199,42 +199,32 @@ export async function maybeOfferSpendUpgrade(lineUserId) {
       "สนใจแตะปุ่มด้านล่างได้ หรือจะไว้ก่อนก็ได้",
     ].join("\n");
 
-    {
-      const { allowCustomerPush } = await import("./lineOutbound/customerPush.gateway.js");
-      const gate = await allowCustomerPush(uid, { source: "upgrade_offer" });
-      if (!gate.allowed) return { skipped: gate.suppressedBanned ? "suppressed_banned" : "no_uid" };
-    }
-    const res = await fetch("https://api.line.me/v2/bot/message/push", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        to: uid,
-        messages: [
-          {
-            type: "text",
-            text,
-            quickReply: {
-              items: [
-                {
-                  type: "action",
-                  action: {
-                    type: "message",
-                    label: `อัปเกรด เหลือโอน ${credit.payThb} บาท`,
-                    text: `จ่าย ${credit.monthlyPriceThb}`,
-                  },
+    // Codex P0-2: ผ่าน raw push boundary (ban + hard tone รวม quickReply label/text)
+    const { pushRawToCustomer } = await import("./lineOutbound/customerPush.gateway.js");
+    const res = await pushRawToCustomer(
+      uid,
+      [
+        {
+          type: "text",
+          text,
+          quickReply: {
+            items: [
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: `อัปเกรด เหลือโอน ${credit.payThb} บาท`,
+                  text: `จ่าย ${credit.monthlyPriceThb}`,
                 },
-                {
-                  type: "action",
-                  action: { type: "message", label: "ไว้ก่อน", text: "ไว้ก่อน" },
-                },
-              ],
-            },
+              },
+              { type: "action", action: { type: "message", label: "ไว้ก่อน", text: "ไว้ก่อน" } },
+            ],
           },
-        ],
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (res.ok) {
+        },
+      ],
+      { source: "upgrade_offer", toneKind: "bundle" },
+    );
+    if (res.sent) {
       const { insertLineConversationMessage } = await import(
         "../stores/conversationMessages.db.js"
       );
@@ -242,13 +232,13 @@ export async function maybeOfferSpendUpgrade(lineUserId) {
     }
     console.log(
       JSON.stringify({
-        event: res.ok ? "SPEND_UPGRADE_OFFER_SENT" : "SPEND_UPGRADE_OFFER_PUSH_FAILED",
+        event: res.sent ? "SPEND_UPGRADE_OFFER_SENT" : "SPEND_UPGRADE_OFFER_PUSH_FAILED",
         lineUserIdPrefix: uid.slice(0, 8),
         creditThb: credit.creditThb,
         payThb: credit.payThb,
       }),
     );
-    return { offered: res.ok };
+    return { offered: res.sent === true };
   } catch (e) {
     console.error(
       JSON.stringify({

@@ -1012,3 +1012,12 @@
 - **P1**: (1) line-level exemption ต้องอยู่ใน `ALLOWED_EXEMPT_REASONS` 9 ค่า + เทสต์สแกนทั้ง src/ ว่าไม่มี reason นอกลิสต์ (2) behavior test direct push เปลี่ยนมา inject `isBanned` ตาม production contract + assert `reason === "hard_tone_rejected"` และ transport 0 (3) เทสต์ hermetic — ตั้ง env ในไฟล์เอง รันได้โดยไม่ต้อง export
 - Tests: hardChatCopy.contract **16/16** · registrationOnboarding 19/19 · **gate 167/173 · known 14 · ไม่มี fail ใหม่**
 - ค้างเฟส 2: LLM pre-send contract + regenerate/fallback · router priority · rewrite prompts · replay 20-21 ส.ค. · staging smoke
+
+## 2026-08-22 | Claude | ปิด transport boundary ครบระบบ (Codex NO-GO บน 269ecd5) — เฟส 1 hard tone
+- **P0-1 direct reply/push ทั้งหมดเข้า boundary**: ย้าย `client.replyMessage`/`pushMessage` ทุกจุดที่เหลือ (lineWebhook 12 reply + 4 push, objectInfoGate 7, identityQuestion, howtoFlow, precheck, multiImage audio) ผ่าน `replyToCustomer`/`pushToCustomer` · admin command reply ใช้ `__replyAdmin` + typed exemption `admin_command` · audio ใช้ `media_only`
+- **P0-2 raw LINE HTTP push**: เพิ่ม `pushRawToCustomer()` (ban check → hard-tone payload validation → fetch) · ย้าย 3 เส้นที่ยิง `api.line.me` ตรง — scanYoutubeShort.notifyOwnerClipLive, synergyIntro, upgradeCredit (รวม quickReply label/text ที่เคยไม่ถูกตรวจ) · **ตอนนี้ raw endpoint เหลือที่เดียวคือใน boundary**
+- **P0-3 mixed-file exemption**: ถอด whole-file ของ identityQuestion (มี REPLIES ที่ลูกค้าเห็น) และ scanYoutubeShort (มี notify ลูกค้า) → ใช้ line-level `social_caption` เฉพาะแคปชัน/สคริปต์คลิป · เพิ่ม invariant: ไฟล์ที่ exempt ทั้งไฟล์ห้ามมี customer transport
+- **P0-4 reply default อ่อนเกิน**: `replyToCustomer` default `reply` (≤40) แทน `step` — step/bundle ต้องระบุ typed · เทสต์: caller ไม่ส่ง toneKind + ข้อความ 41 ตัว → transport 0
+- **P1**: walker เก็บ `action.displayText`/`action.text` เพิ่ม (+behavior test displayText ผิด → transport 0) · invariant tests ครบ 6 acceptance — direct transport ใหม่ใน fixture → fail · raw endpoint ใหม่ → fail · admin ที่ประกาศ typed → ผ่าน · mixed exempt file → fail · unknown reason → fail · reply default 41 ตัว → transport 0 · เพิ่ม raw-push probe (payload ผิด = ไม่ยิง HTTP จริง)
+- Tests: hardChatCopy.contract **24/24** (hermetic) · **gate 167/173 · known 14 · ไม่มี fail ใหม่**
+- ค้างเฟส 2: LLM pre-send contract + regenerate/fallback · router priority · rewrite prompts · replay 20-21 ส.ค. · staging smoke

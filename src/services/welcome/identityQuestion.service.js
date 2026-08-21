@@ -80,7 +80,7 @@ export async function maybeHandleIdentityQuestion({ client, event, userId, text 
     const prev = Number((await getValue(key)) || 0);
     const idx = prev % REPLIES.length;
     await setLargeValueWithTtl(key, String(prev + 1), 7 * 86400).catch(() => {});
-    await client.replyMessage(event.replyToken, { type: "text", text: REPLIES[idx] });
+    await __replyCustomer(client, event.replyToken, { type: "text", text: REPLIES[idx] });
     console.log(
       JSON.stringify({ event: "IDENTITY_QUESTION_ANSWERED", lineUserIdPrefix: String(userId).slice(0, 8), idx, kind }),
     );
@@ -96,4 +96,14 @@ export async function maybeHandleIdentityQuestion({ client, event, userId, text 
   } catch {
     return false;
   }
+}
+
+/** customer reply boundary (Codex P0-1): ทุก reply ของไฟล์นี้ผ่าน hard-tone guard */
+async function __replyCustomer(client, replyToken, messages) {
+  const { replyToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+  const r = await replyToCustomer(client, replyToken, messages, { source: "identity_reply", replyType: "identity_reply", toneKind: "reply" });
+  if (r.sent !== true) {
+    console.error(JSON.stringify({ event: "CUSTOMER_REPLY_TONE_BLOCKED", surface: "identity_reply", violations: r.toneViolations || [] }));
+  }
+  return r;
 }

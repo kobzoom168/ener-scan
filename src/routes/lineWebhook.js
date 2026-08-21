@@ -525,7 +525,7 @@ async function maybeHandleReferralInvite({ client, userId, replyToken, text }) {
     const used = await countReferrerRedemptionsThisMonth(userId).catch(() => 0);
     const remaining = Math.max(0, MONTHLY_CAP - used);
     // 2 ก้อนใน reply เดียว: การ์ดไว้ดูเอง + ข้อความธรรมดาไว้กดส่งต่อให้เพื่อน
-    await client.replyMessage(replyToken, [
+    await __replyCustomer(client, replyToken, [
       buildInviteCardFlex(code, remaining),
       { type: "text", text: buildInviteForwardText(code) },
     ]);
@@ -560,7 +560,7 @@ async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
     const vault = await loadVault(userId);
     if (vault.length < 3) {
       // Codex C6: จัดชุด = ข้อความบริการ (URL/CTA) เสียงแอดมิน — ไม่มีเสียง/คำอ้างอาจารย์
-      await client.replyMessage(replyToken, {
+      await __replyCustomer(client, replyToken, {
         type: "text",
         text: `คลังของคุณมี ${vault.length} ชิ้น จัดชุดได้เมื่อครบ 3 ชิ้นขึ้นไป ส่งรูปชิ้นเพิ่มเข้ามา`,
       });
@@ -2169,7 +2169,7 @@ async function handleHistoryCommand({
             total: items.length,
           }),
         );
-        await client.replyMessage(
+        await __replyCustomer(client, 
           replyToken,
           svc.buildMyScansFlexCard({ url, total: items.length }),
         );
@@ -2352,9 +2352,9 @@ async function finalizeAcceptedImage({
       if (!msgs.length && prompt) msgs.push(prompt.flexMessage);
       try {
         try {
-          await client.replyMessage(event.replyToken, msgs);
+          await __replyCustomer(client, event.replyToken, msgs);
         } catch {
-          await client.pushMessage(userId, msgs);
+          await __pushCustomer(client, userId, msgs);
         }
       } catch {
         if (prompt) {
@@ -4041,7 +4041,7 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
   if (String(event?.source?.type || "") !== "user") return false;
   const t = String(text || "").trim();
   const reply = async (msg) => {
-    try { await client.replyMessage(event.replyToken, { type: "text", text: msg }); } catch { /* ignore */ }
+    try { await __replyAdmin(client, event.replyToken, { type: "text", text: msg }); } catch { /* ignore */ }
   };
 
   const banM = t.match(/^แบน\s+(U[0-9a-f]{32})(?:\s+(.{1,200}))?$/);
@@ -4214,7 +4214,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
       .limit(5);
     const list = (cands || []).filter((c) => c.line_user_id && c.line_user_id !== adminUid);
     if (!list.length) {
-      await client.replyMessage(event.replyToken, {
+      await __replyCustomer(client, event.replyToken, {
         type: "text",
         text: `ไม่เจอลูกค้าชื่อ "${nameQuery}" ลองพิมพ์ชื่อตามที่ขึ้นในแชท LINE เป๊ะ ๆ อีกครั้ง (รูปแบบ: ช่วยตอบ ชื่อ: ข้อความที่ตอบไป)`,
       });
@@ -4245,7 +4245,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
       `แอดมินเพิ่งช่วยตอบลูกค้าคนนี้ในแชทด้วยตัวเองว่า: "${said.slice(0, 400)}" — ให้ตอบต่อยอดจากแนวนี้ให้เนียนเป็นเนื้อเดียวกัน ห้ามพูดสวนหรือแนะนำขัดกัน`, /* tone-exempt: admin_command */
       172800,
     );
-    await client.replyMessage(event.replyToken, {
+    await __replyCustomer(client, event.replyToken, {
       type: "text",
       text: `รับทราบ ผูกกับคุณ ${adminName} แล้ว มีผล 48 ชม.`,
     });
@@ -4253,7 +4253,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
   } catch (e) {
     console.error("[ADMIN_ASSIST] failed:", e?.message);
     try {
-      await client.replyMessage(event.replyToken, { type: "text", text: "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง" });
+      await __replyCustomer(client, event.replyToken, { type: "text", text: "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง" });
     } catch { /* ignore */ }
   }
   return true;
@@ -4272,9 +4272,9 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
   const replyText = async (t, quickReply = null) => {
     const msg = { type: "text", text: t, ...(quickReply ? { quickReply } : {}) };
     try {
-      await client.replyMessage(event.replyToken, [msg]);
+      await __replyCustomer(client, event.replyToken, [msg]);
     } catch {
-      await client.pushMessage(userId, [msg]).catch(() => {});
+      await __pushCustomer(client, userId, [msg]).catch(() => {});
     }
   };
 
@@ -4326,12 +4326,12 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
   const parts = [descLine, imageLine, closing].filter(Boolean).join("\n\n");
   if (showCard) {
     try {
-      await client.replyMessage(event.replyToken, [
+      await __replyCustomer(client, event.replyToken, [
         { type: "text", text: parts },
         prompt.flexMessage,
       ]);
     } catch {
-      await client.pushMessage(userId, [{ type: "text", text: parts }, prompt.flexMessage]).catch(() => {});
+      await __pushCustomer(client, userId, [{ type: "text", text: parts }, prompt.flexMessage]).catch(() => {});
     }
   } else {
     console.log(JSON.stringify({ event: "registration_reminder_shown", uidPrefix: userId.slice(0, 8) }));
@@ -4451,7 +4451,7 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
             ? "รูปที่ฝากไว้หมดอายุ ถ่ายส่งใหม่ได้"
             : "เริ่มอ่านรูปเดิมไม่สำเร็จ ลองใหม่อีกครั้ง หรือส่งรูปมาใหม่ได้";
     try {
-      await client.replyMessage(event.replyToken, { type: "text", text: msg });
+      await __replyCustomer(client, event.replyToken, { type: "text", text: msg });
     } catch { /* ignore */ }
     return true;
   }
@@ -4489,7 +4489,7 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
     console.error(JSON.stringify({ event: "PREREG_RESUME_INGEST_FAILED", message: String(e?.message || e).slice(0, 160) }));
     // ห้าม consume — ลูกค้ากดปุ่มเดิม retry ได้ (Codex ข้อ 7)
     try {
-      await client.pushMessage(userId, {
+      await __pushCustomer(client, userId, {
         type: "text",
         text: "ระบบสะดุดตอนเริ่มอ่าน รูปยังอยู่ครบ แตะปุ่มเดิมอีกครั้งได้",
       });
@@ -8716,7 +8716,7 @@ async function handleFollowEvent({ client, event }) {
         welcomeMsgs.push(buildHowtoFlowFlex());
       } catch { /* ส่ง welcome เดิมได้ */ }
     }
-    await client.replyMessage(event.replyToken, welcomeMsgs);
+    await __replyCustomer(client, event.replyToken, welcomeMsgs);
     console.log(
       JSON.stringify({
         event: "LINE_FOLLOW_WELCOME_SENT",
@@ -9205,4 +9205,39 @@ export function lineWebhookRouter(lineConfig) {
       if (!res.headersSent) res.status(500).json({ error: "webhook_failed" });
     }
   };
+}
+/** customer reply boundary (Codex P0-1): reply ตรงในไฟล์นี้ต้องผ่าน hard-tone guard */
+async function __replyCustomer(client, replyToken, messages, opts = {}) {
+  const { replyToCustomer } = await import("../services/lineOutbound/customerPush.gateway.js");
+  const r = await replyToCustomer(client, replyToken, messages, {
+    source: opts.source || "webhook_reply",
+    replyType: opts.replyType || "webhook_reply",
+    toneKind: opts.toneKind || "step",
+  });
+  if (r.sent !== true) {
+    console.error(JSON.stringify({ event: "CUSTOMER_REPLY_TONE_BLOCKED", surface: "lineWebhook", violations: r.toneViolations || [] }));
+  }
+  return r;
+}
+
+/** admin-only reply (คำสั่งแอดมินใน LINE) — typed exemption ไม่ใช่ข้อความลูกค้า */
+async function __replyAdmin(client, replyToken, messages) {
+  const { replyToCustomer } = await import("../services/lineOutbound/customerPush.gateway.js");
+  return replyToCustomer(client, replyToken, messages, {
+    source: "admin_command",
+    toneExemptSurface: "admin_command",
+  });
+}
+
+/** customer push boundary (Codex P0-1/P0-2) — push ตรงในไฟล์นี้ต้องผ่าน guard */
+async function __pushCustomer(client, userId, messages, opts = {}) {
+  const { pushToCustomer } = await import("../services/lineOutbound/customerPush.gateway.js");
+  const r = await pushToCustomer(client, userId, messages, {
+    source: opts.source || "webhook_push",
+    toneKind: opts.toneKind,
+  });
+  if (r.sent !== true) {
+    console.error(JSON.stringify({ event: "CUSTOMER_PUSH_TONE_BLOCKED", surface: "lineWebhook", reason: r.reason || "unknown" }));
+  }
+  return r;
 }

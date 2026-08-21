@@ -165,7 +165,7 @@ export async function sendCustomerAlert(p, deps = {}) {
         doSend: async () => {
           const adminUid = String(process.env.ADMIN_LINE_USER_ID || "").trim();
           if (!adminUid) return false; // admin id หาย = delivery failure (lease หลุด รอบหน้าลองใหม่)
-          await p.lineClient.pushMessage(adminUid, { type: "text", text: p.lineText });
+          await p.lineClient.pushMessage(adminUid, { type: "text", text: p.lineText }); /* tone-exempt: admin_telegram */
           return true;
         },
       }),

@@ -104,7 +104,7 @@ const HOOK_STYLES = [
   { key: "rank", hint: "เปิดด้วยอันดับ เช่น 'ชิ้นเด่นสุดของช่วงนี้มาแล้ว'" },
   { key: "twist", hint: "เปิดด้วยจุดผิดคาด เช่น 'คะแนนรวมระดับนี้ แต่ด้านที่เด่นสุดไม่ใช่อย่างที่คิด'" },
   { key: "question", hint: "เปิดด้วยคำถามชวนคิด เช่น 'พลังแบบไหนที่คนค้าขายตามหากันมากที่สุด'" },
-  { key: "stat", hint: "เปิดด้วยตัวเลข/คะแนนทันที เช่น 'แปดจุดหกเต็มสิบ ไม่ได้เจอบ่อย'" },
+  { key: "stat", hint: "เปิดด้วยตัวเลข/คะแนนทันที เช่น 'แปดจุดหกเต็มสิบ ไม่ได้เจอบ่อย'" }, /* tone-exempt: social_caption */
   { key: "event", hint: "เปิดแบบมีเหตุการณ์ เช่น 'เพิ่งอ่านจบสด ๆ ร้อน ๆ ชิ้นนี้น่าสนใจมาก'" },
 ];
 
@@ -123,14 +123,14 @@ const SHORT_SYSTEM = `คุณคือทีมคอนเทนต์ขอ�
 {"script": string, "title": string, "description": string, "hashtags": string[]}
 
 script (บทพูดของอาจารย์ ~4-5 ประโยค อ่านออกเสียง ~18-25 วินาที) โครงตามลำดับ:
-1. Hook 1 ประโยคแรกตามแนวที่กำหนดใน input (hookHint) — ⛔️ ห้ามเปิดด้วยชื่อลูกค้า ห้ามเปิดด้วย "สวัสดี"
+1. Hook 1 ประโยคแรกตามแนวที่กำหนดใน input (hookHint) — ⛔️ ห้ามเปิดด้วยชื่อลูกค้า ห้ามเปิดด้วย "สวัสดี" /* tone-exempt: social_caption */
 2. เครดิตเจ้าของสั้น ๆ: "ชิ้นนี้จากคุณ{ownerShort}" (ถ้า ownerShort ว่าง ให้ข้าม)
 3. เล่าความเชื่อของสายพลังเด่น 1-2 ประโยค แบบที่คนสายมูถือต่อกันมา — ใช้ "เชื่อกันว่า" หรือ "คนโบราณถือกันว่า" เสมอ ห้ามเล่าเป็นข้อเท็จจริง
 4. คะแนน (เขียนเป็นคำอ่าน เช่น "แปดจุดห้าเต็มสิบ" ห้ามเขียน 8.5/10) + "เด่นทางไหนดันทางนั้น"
-5. ปิดด้วย CTA ตามแนวที่กำหนดใน input (ctaHint) สั้น ๆ ไม่ hard sell
+5. ปิดด้วย CTA ตามแนวที่กำหนดใน input (ctaHint) สั้น ๆ ไม่ hard sell /* tone-exempt: social_caption */
 - ภาษาพูดเป็นกันเอง โทนสุขุมแบบอาจารย์วัย 41 เขียนแบบคนพูดจริง ไม่มีอีโมจิ
 - ถ้า input มี sAlert=true: โทนตื่นเต้นขึ้นแบบสุขุม ๆ ("ในที่สุดก็มา... เกรดเอสปรากฏแล้ว") — เกรดเอสหายากมาก
-title: ≤90 ตัวอักษร มี hook ชวนกด อีโมจิได้ไม่เกิน 1 ตัว · ถ้า sAlert ให้ขึ้นต้นว่า "เกรด S มาแล้ว"
+title: ≤90 ตัวอักษร มี hook ชวนกด อีโมจิได้ไม่เกิน 1 ตัว · ถ้า sAlert ให้ขึ้นต้นว่า "เกรด S มาแล้ว" /* tone-exempt: social_caption */
 description: 2-3 บรรทัดแนวความเชื่อ+พลังงาน คิดใหม่ไม่ซ้ำกับ script ปิดท้ายชวนติดตามนุ่ม ๆ
 hashtags: 5-8 แท็ก เช่น #วัตถุมงคล #สายมู #พลังงาน #มูเตลู #ความเชื่อ #Shorts
 
@@ -157,10 +157,10 @@ async function buildShortContent(p) {
   const credit = p.ownerShort ? `ชิ้นนี้จากคุณ${p.ownerShort} ` : "";
   const fallback = {
     script: p.sAlert
-      ? `ในที่สุดก็มา เกรดเอสปรากฏแล้ว ${credit}เชื่อกันมาแต่โบราณว่าพลังทาง${p.peakLabel}ระดับนี้หาไม่ได้ง่าย ๆ แนนอ่านได้${scoreThai(p.score)}เต็มสิบ เด่นทางไหนดันทางนั้น ติดตามไว้ นาน ๆ จะเจอสักชิ้น`
-      : `ชิ้นเด่นของช่วงนี้มาแล้ว ${credit}เชื่อกันมาแต่โบราณว่าพลังทาง${p.peakLabel}ช่วยหนุนให้ชีวิตเดินไปข้างหน้า แนนอ่านได้${scoreThai(p.score)}เต็มสิบ เด่นทางไหนดันทางนั้น อยากรู้พลังชิ้นของคุณ กดชื่อช่องแล้วแตะลิงก์แรกได้`,
+      ? `ในที่สุดก็มา เกรดเอสปรากฏแล้ว ${credit}เชื่อกันมาแต่โบราณว่าพลังทาง${p.peakLabel}ระดับนี้หาไม่ได้ง่าย ๆ แนนอ่านได้${scoreThai(p.score)}เต็มสิบ เด่นทางไหนดันทางนั้น ติดตามไว้ นาน ๆ จะเจอสักชิ้น` /* tone-exempt: social_caption */
+      : `ชิ้นเด่นของช่วงนี้มาแล้ว ${credit}เชื่อกันมาแต่โบราณว่าพลังทาง${p.peakLabel}ช่วยหนุนให้ชีวิตเดินไปข้างหน้า แนนอ่านได้${scoreThai(p.score)}เต็มสิบ เด่นทางไหนดันทางนั้น อยากรู้พลังชิ้นของคุณ กดชื่อช่องแล้วแตะลิงก์แรกได้`, /* tone-exempt: social_caption */
     title: p.sAlert
-      ? `เกรด S มาแล้ว ${p.score.toFixed(1)}/10 พลัง${p.peakLabel} ✨`
+      ? `เกรด S มาแล้ว ${p.score.toFixed(1)}/10 พลัง${p.peakLabel} ✨` /* tone-exempt: social_caption */
       : `ชิ้นเด่นวันนี้ พลัง${p.peakLabel} ${p.score.toFixed(1)}/10`,
     description: `เปิดผลอ่านพลังงานชิ้นเด่น เด่นทาง${p.peakLabel} เด่นทางไหนดันทางนั้น\nติดตามชิ้นต่อไปได้ที่ช่องนี้`,
     hashtags: ["#วัตถุมงคล", "#สายมู", "#พลังงาน", "#มูเตลู", "#Shorts"],
@@ -291,15 +291,13 @@ async function notifyOwnerClipLive(lineUserId, youtubeUrl, sAlert) {
     ? `คลิปพิเศษของชิ้นนี้: ${url}`
     : `คลิปของชิ้นนี้: ${url}`;
   try {
-    const { allowCustomerPush } = await import("../lineOutbound/customerPush.gateway.js");
-    const gate = await allowCustomerPush(uid, { source: "youtube_clip_notify" });
-    if (!gate.allowed) return;
-    await fetch("https://api.line.me/v2/bot/message/push", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ to: uid, messages: [{ type: "text", text }] }),
-      signal: AbortSignal.timeout(15000),
-    });
+    // Codex P0-2: ผ่าน raw push boundary (ban + hard tone) ห้าม fetch LINE ตรง
+    const { pushRawToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+    const sent = await pushRawToCustomer(uid, [{ type: "text", text }], { source: "youtube_clip_notify" });
+    if (sent.sent !== true) {
+      console.log(JSON.stringify({ event: "YT_CLIP_NOTIFY_BLOCKED", reason: sent.reason || "unknown" }));
+      return;
+    }
     // ลงประวัติแชทให้ AI เห็นว่าเพิ่งแจ้งเรื่องคลิป (จะได้คุยต่อถูก)
     const { insertLineConversationMessage } = await import(
       "../../stores/conversationMessages.db.js"
@@ -394,7 +392,7 @@ export async function buildAndUploadScanShort({
     const oaLink = String(process.env.YT_SHORT_OA_LINK || "https://lin.ee/p2sxdYFJ").trim();
     const description =
       `${content.description}\n\n` +
-      `อยากรู้พลังของชิ้นที่คุณมี กดชื่อช่องแล้วแตะลิงก์แรก หรือ 👉 ${oaLink}\n\n` +
+      `อยากรู้พลังของชิ้นที่คุณมี กดชื่อช่องแล้วแตะลิงก์แรก หรือ 👉 ${oaLink}\n\n` + /* tone-exempt: social_caption */
       `${content.hashtags.join(" ")}\n\n` +
       `อ่านตามแนวความเชื่อ ไม่รับรองผล ไม่ใช้ตัดสินแท้เก๊หรือมูลค่า`;
     const res = await uploadViaEnerAi({

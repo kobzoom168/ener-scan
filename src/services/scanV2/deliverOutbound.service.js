@@ -221,7 +221,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         try {
           const v = await getStaticVoiceNote(staticName);
           if (v?.url && v.durationMs >= 500) {
-            await client.pushMessage(lineUserId, {
+            await client.pushMessage(lineUserId, { /* tone-exempt: media_only */
               type: "audio",
               originalContentUrl: v.url,
               duration: Math.min(v.durationMs, 60000),

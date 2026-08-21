@@ -27,7 +27,7 @@ export async function maybeHandlePrecheckTrigger({ client, event, userId, text }
   if (!TRIGGER_RE.test(String(text || "").trim())) return false;
   try {
     await setValueWithTtl(modeKey(userId), "1", MODE_TTL_SEC);
-    await client.replyMessage(event.replyToken, {
+    await __replyCustomer(client, event.replyToken, {
       type: "text",
       text:
         "เปิดโหมดเช็คก่อนเช่าแล้ว ถ่ายรูปองค์ที่จะเช่าส่งมา" +
@@ -144,4 +144,14 @@ export async function handlePrecheckAfterReport({ client, lineUserId, payload })
   } catch (e) {
     console.log(JSON.stringify({ event: "PRECHECK_RESULT_ERROR", msg: String(e?.message || e).slice(0, 140) }));
   }
+}
+
+/** customer reply boundary (Codex P0-1): ทุก reply ของไฟล์นี้ผ่าน hard-tone guard */
+async function __replyCustomer(client, replyToken, messages) {
+  const { replyToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+  const r = await replyToCustomer(client, replyToken, messages, { source: "precheck", replyType: "precheck", toneKind: "step" });
+  if (r.sent !== true) {
+    console.error(JSON.stringify({ event: "CUSTOMER_REPLY_TONE_BLOCKED", surface: "precheck", violations: r.toneViolations || [] }));
+  }
+  return r;
 }

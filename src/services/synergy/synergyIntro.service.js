@@ -40,16 +40,13 @@ export async function maybeIntroduceSynergy(lineUserId) {
       messages = [{ type: "text", text }];
     }
     {
-      const { allowCustomerPush } = await import("../lineOutbound/customerPush.gateway.js");
-      const gate = await allowCustomerPush(uid, { source: "synergy_intro" });
-      if (!gate.allowed) return { sent: false, suppressedBanned: gate.suppressedBanned === true };
+      const { pushRawToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+      const sent = await pushRawToCustomer(uid, messages, { source: "synergy_intro" });
+      if (sent.sent !== true) {
+        console.log(JSON.stringify({ event: "SYNERGY_INTRO_BLOCKED", reason: sent.reason || "unknown" }));
+        return { sent: false, suppressedBanned: sent.suppressedBanned === true, reason: sent.reason };
+      }
     }
-    await fetch("https://api.line.me/v2/bot/message/push", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` },
-      body: JSON.stringify({ to: uid, messages }),
-      signal: AbortSignal.timeout(15000),
-    });
     const { insertLineConversationMessage } = await import(
       "../../stores/conversationMessages.db.js"
     );

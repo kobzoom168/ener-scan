@@ -305,7 +305,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await clearDedupeKey(pendingKey(userId));
       await clearDedupeKey(backupKey(userId));
       await reEnqueueHeldReport(userId, pending);
-      await client.replyMessage(event.replyToken, { type: "text", text: "รับทราบ" });
+      await __replyCustomer(client, event.replyToken, { type: "text", text: "รับทราบ" });
       return true;
     }
     if (/^ไม่ทราบ/.test(t)) {
@@ -324,7 +324,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await clearDedupeKey(pendingKey(userId));
       await clearDedupeKey(backupKey(userId));
       await reEnqueueHeldReport(userId, pending);
-      await client.replyMessage(event.replyToken, { type: "text", text: "รับทราบ" });
+      await __replyCustomer(client, event.replyToken, { type: "text", text: "รับทราบ" });
       return true;
     }
 
@@ -332,7 +332,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
     // → ปล่อยรายงานเลย บันทึกแบบข้าม ไม่ดันต่อ
     if (/^(ไว้ก่อน|ยังก่อน|ไว้ค่อย|เดี๋ยวค่อย|ยังไม่|ไม่บอก|ไม่สะดวก|ไม่อยากบอก|ไม่ตอบ|ขอข้าม|ข้าม|ไม่เอา)/.test(t)) {
       await releaseHeldWithoutInfo(userId, pending, t);
-      await client.replyMessage(event.replyToken, {
+      await __replyCustomer(client, event.replyToken, {
         type: "text",
         text: "รับทราบ",
       });
@@ -359,7 +359,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       if (pending.isPaid) {
         remindItems.push({ type: "action", action: { type: "message", label: "ข้ามก่อน รับผลเลย", text: "ข้ามก่อน รับผลเลย" } });
       }
-      await client.replyMessage(event.replyToken, {
+      await __replyCustomer(client, event.replyToken, {
         type: "text",
         text: "ขอชื่อ วัด รุ่นหรือปีของชิ้นนี้ วัดไหน รุ่น/ปีอะไร (หรือชนิดหิน) พิมพ์บอกได้ ไม่แน่ใจกดปุ่มไม่ทราบได้",
         quickReply: { items: remindItems },
@@ -388,7 +388,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       pending.rawSoFar = rawAll;
       await setLargeValueWithTtl(pendingKey(userId), JSON.stringify(pending), PENDING_TTL_SEC);
       await setLargeValueWithTtl(backupKey(userId), JSON.stringify(pending), PENDING_TTL_SEC * 2);
-      await client.replyMessage(event.replyToken, {
+      await __replyCustomer(client, event.replyToken, {
         type: "text",
         text: `รับข้อมูลแล้ว ขอ${missing.join(" ")} เพิ่ม (ไม่ทราบกดปุ่ม)`,
         quickReply: { items: [{ type: "action", action: { type: "message", label: "ไม่ทราบ", text: "ไม่ทราบ" } }] },
@@ -420,7 +420,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await clearDedupeKey(backupKey(userId));
     await reEnqueueHeldReport(userId, pending);
 
-    await client.replyMessage(event.replyToken, {
+    await __replyCustomer(client, event.replyToken, {
       type: "text",
       text: "บันทึกแล้ว",
     });
@@ -536,7 +536,7 @@ export async function maybeHandlePurposeAnswer({ client, event, userId, text }) 
       await supabase.from("object_owner_info").update({ purpose: choice }).eq("id", data[0].id);
     }
     await clearDedupeKey(`objinfo:purpose:${userId}`);
-    await client.replyMessage(event.replyToken, {
+    await __replyCustomer(client, event.replyToken, {
       type: "text",
       text: `รับทราบ ชิ้นนี้พกเพื่อ${choice} อาจารย์จะจำไว้เวลาแนะนำการพก`,
     });
@@ -544,4 +544,14 @@ export async function maybeHandlePurposeAnswer({ client, event, userId, text }) 
   } catch {
     return false;
   }
+}
+
+/** customer reply boundary (Codex P0-1): ทุก reply ของไฟล์นี้ผ่าน hard-tone guard */
+async function __replyCustomer(client, replyToken, messages) {
+  const { replyToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
+  const r = await replyToCustomer(client, replyToken, messages, { source: "object_info", replyType: "object_info", toneKind: "step" });
+  if (r.sent !== true) {
+    console.error(JSON.stringify({ event: "CUSTOMER_REPLY_TONE_BLOCKED", surface: "object_info", violations: r.toneViolations || [] }));
+  }
+  return r;
 }

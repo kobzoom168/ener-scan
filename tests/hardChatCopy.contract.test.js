@@ -89,9 +89,7 @@ const EXEMPT_FILES = {
   "src/routes/liff.routes.js": "liff_page_html — หน้าเว็บ ไม่ใช่ข้อความแชท",
   "src/app.js": "liff_page_html — error page HTML",
   "src/services/fbShowcase/fbShowcase.service.js": "social_caption — แคปชันเพจ ไม่ใช่แชท",
-  "src/services/fbShowcase/scanYoutubeShort.service.js": "social_caption — แคปชัน/สคริปต์คลิป",
   "src/services/fbShowcase/showcasePhotoCard.service.js": "card_graphic — ข้อความบนการ์ดภาพ ไม่ใช่ข้อความแชท",
-  "src/services/welcome/identityQuestion.service.js": "regex_source — pattern จับข้อความลูกค้า ไม่ใช่ copy",
   "src/services/scanV2/processScanJob.service.js": "scan_report_body — เนื้อหารายงาน",
   "src/services/reports/reportPayload.builder.js": "scan_report_body",
   "src/templates/reports/mobileReport.template.js": "scan_report_body",
@@ -164,6 +162,7 @@ function thaiLiterals(src) {
 const ALLOWED_EXEMPT_REASONS = [
   "admin_command", "admin_telegram", "llm_prompt", "liff_page_html",
   "scan_report_body", "social_caption", "card_graphic", "regex_source", "separator_token",
+  "media_only",
 ];
 const LINE_EXEMPT_RE = new RegExp(`tone-exempt:\\s*(${ALLOWED_EXEMPT_REASONS.join("|")})\\b`);
 
@@ -355,4 +354,119 @@ test("input matchers ยังทำงานเดิม (การแก้ co
   assert.equal(cp.classifyClosingPleasantry("ขอบคุณครับ"), "unconditional");
   assert.equal(cp.classifyClosingPleasantry("สาธุๆๆคับผมท่านอาจารย์"), "unconditional");
   assert.equal(cp.isPureGreeting("สวัสดีครับ"), true);
+});
+
+/* ---------------- 5) transport invariant (Codex P1: acceptance 6 ข้อ) ---------------- */
+
+/** ไฟล์ที่ได้รับอนุญาตให้แตะ transport ระดับล่าง */
+const APPROVED_TRANSPORT_FILES = new Set([
+  "src/services/lineReply.service.js",
+  "src/services/lineSequenceReply.service.js",
+  "src/services/nonScanReply.gateway.js",
+  "src/services/lineOutbound/customerPush.gateway.js",
+  "src/utils/lineClientTransport.util.js",
+  "src/utils/linePush429Retry.util.js",
+  "src/utils/lineNotify429Retry.util.js",
+]);
+
+const RAW_ENDPOINT_RE = /api\.line\.me\/v2\/bot\/message\/(push|reply)/;
+const DIRECT_CALL_RE = /\bclient\.(replyMessage|pushMessage)\(|\.replyMessage\(|\.pushMessage\(/;
+
+function scanTransportViolations(extraFiles = {}) {
+  const files = walkSrc(path.join(process.cwd(), "src")).map((f) => path.relative(process.cwd(), f));
+  const out = [];
+  const check = (f, src) => {
+    if (APPROVED_TRANSPORT_FILES.has(f)) return;
+    for (const [i, line] of src.split("\n").entries()) {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;
+      if (/tone-exempt:\s*(admin_command|admin_telegram|media_only)/.test(line)) continue;
+      if (RAW_ENDPOINT_RE.test(line)) out.push(`${f}:${i + 1} raw LINE endpoint`);
+      else if (DIRECT_CALL_RE.test(line) && !/target\.pushMessage|__reply(Customer|Admin)|replyToCustomer|pushRawToCustomer/.test(line)) {
+        out.push(`${f}:${i + 1} direct transport`);
+      }
+    }
+  };
+  for (const f of files) check(f, fs.readFileSync(f, "utf8"));
+  for (const [f, src] of Object.entries(extraFiles)) check(f, src);
+  return out;
+}
+
+test("invariant 1-2: ไม่มี direct transport / raw LINE endpoint นอก approved boundary", () => {
+  assert.deepEqual(scanTransportViolations(), [], "ต้องผ่าน boundary เท่านั้น");
+});
+
+test("invariant 1: fixture ที่มี customer direct transport ใหม่ → ต้อง fail", () => {
+  const bad = scanTransportViolations({
+    "src/services/__fixture_bad.js": 'await client.replyMessage(token, { type: "text", text: "x" });',
+  });
+  assert.ok(bad.some((v) => v.includes("__fixture_bad")), "fixture direct transport ต้องถูกจับ");
+});
+
+test("invariant 2: fixture ที่มี raw LINE endpoint ใหม่ → ต้อง fail", () => {
+  const bad = scanTransportViolations({
+    "src/services/__fixture_raw.js": 'await fetch("https://api.line.me/v2/bot/message/push", {});',
+  });
+  assert.ok(bad.some((v) => v.includes("__fixture_raw")), "raw endpoint ต้องถูกจับ");
+});
+
+test("invariant 3: admin transport ที่ประกาศ typed exemption → ผ่าน", () => {
+  const ok = scanTransportViolations({
+    "src/services/__fixture_admin.js": 'await client.pushMessage(uid, msg); /* tone-exempt: admin_telegram */',
+  });
+  assert.ok(!ok.some((v) => v.includes("__fixture_admin")), "admin ที่ประกาศชัดต้องผ่าน");
+});
+
+test("invariant 4: ไฟล์ที่ exempt ทั้งไฟล์ ห้ามมี customer transport (mixed surface)", () => {
+  const mixed = [];
+  for (const f of Object.keys(EXEMPT_FILES)) {
+    if (!fs.existsSync(f)) continue;
+    const src = fs.readFileSync(f, "utf8");
+    for (const [i, line] of src.split("\n").entries()) {
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;
+      if (/tone-exempt:\s*(admin_command|admin_telegram|media_only)/.test(line)) continue;
+      if (RAW_ENDPOINT_RE.test(line) || (DIRECT_CALL_RE.test(line) && !/target\.pushMessage|replyToCustomer|pushRawToCustomer/.test(line))) {
+        mixed.push(`${f}:${i + 1}`);
+      }
+    }
+  }
+  assert.deepEqual(mixed, [], "ไฟล์ exempt ต้องไม่มี customer transport — ต้องแยกไฟล์หรือใช้ line-level");
+});
+
+test("invariant 6: reply default — caller ไม่ส่ง toneKind + ข้อความ 41 ตัว → transport 0", async () => {
+  const { replyToCustomer } = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  const c = fakeClient();
+  const text = "ก".repeat(41);
+  const r = await replyToCustomer(c, "tok", { type: "text", text }, { source: "unknown_surface" });
+  assert.equal(c.calls.reply, 0, "default ต้องเป็น reply (≤40) — ยาวกว่านั้นห้ามส่ง");
+  assert.equal(r.reason, "hard_tone_rejected");
+});
+
+test("P1: Flex displayText ผิด → transport 0", async () => {
+  const { sendNonScanReply } = await import("../src/services/nonScanReply.gateway.js");
+  const c = fakeClient();
+  const r = await sendNonScanReply({
+    client: c, userId: uid(), replyToken: "t", replyType: "x_disp", text: "เปิดรายงาน",
+    flexMessage: {
+      type: "flex", altText: "เปิดรายงาน",
+      contents: { type: "bubble", body: { type: "box", layout: "vertical", contents: [
+        { type: "button", action: { type: "message", label: "ดู", displayText: "ขอบคุณครับ", text: "x" } },
+      ] } },
+    },
+  });
+  assert.equal(c.calls.reply + c.calls.push, 0);
+  assert.equal(r.reason, "hard_tone_rejected");
+});
+
+test("invariant: raw push boundary ตรวจ payload ก่อนยิง HTTP", async () => {
+  const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  let fetched = false;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async () => { fetched = true; return { ok: true }; };
+  try {
+    const r = await gw.pushRawToCustomer("U" + "2".repeat(32), [{ type: "text", text: "ขอบคุณครับ" }], {
+      source: "test_raw", isBanned: async () => false,
+    });
+    assert.equal(fetched, false, "payload ผิดห้ามยิง HTTP");
+    assert.equal(r.reason, "hard_tone_rejected");
+  } finally { globalThis.fetch = origFetch; }
 });
