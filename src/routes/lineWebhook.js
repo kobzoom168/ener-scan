@@ -576,14 +576,22 @@ async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
     } catch {
       replyMsg = null;
     }
-    await client.replyMessage(
+    // Codex P0-1/P0-2: Flex ที่ build จาก synergyReport ต้องผ่าน tone guard ก่อนส่ง
+    const { replyToCustomer } = await import("../services/lineOutbound/customerPush.gateway.js");
+    const sendRes = await replyToCustomer(
+      client,
       replyToken,
       replyMsg || {
         type: "text",
         // Codex C6: URL/CTA = เสียงแอดมิน · เนื้อหาวิชาอยู่ในหน้ารายงานเอง
         text: `ชุดประจำวันจากคลังของคุณ ${vault.length} ชิ้น เปิดดูได้ที่นี่\n${base}/synergy/${token}`,
       },
+      { surface: "synergy_carousel", replyType: "synergy_request", toneKind: "bundle" },
     );
+    if (sendRes.sent !== true) {
+      console.error(JSON.stringify({ event: "SYNERGY_REPLY_TONE_BLOCKED", violations: sendRes.toneViolations || [] }));
+      return true;
+    }
     console.log(JSON.stringify({ event: "SYNERGY_LINK_SENT", lineUserIdPrefix: String(userId).slice(0, 10), pieces: vault.length }));
     import("../services/synergy/synergyReport.service.js").then((m) => void m.renderSynergyPage(userId)).catch(() => {});
     return true;

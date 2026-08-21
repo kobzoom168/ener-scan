@@ -1002,3 +1002,13 @@
 - **copy ที่แก้เพิ่มรอบนี้ 60+ จุด**: static leaks ที่ Codex ชี้ (lineWebhook "ส่งรูปชิ้นเพิ่มเข้ามาได้เลย", synergyReport "พกชิ้นนี้ได้เลย", referral "ขอบคุณที่ช่วยบอกต่อ"/"อีกลองพิมพ์โค้ดมาใหม่") + imageForensic 7 · fengShuiFlow 3 · deliverOutbound 5 · precheck/idleReply/smartRejection/webhookImageIngestion · synergy altText · แก้บั๊กที่ auto-harden ทำ separator " หรือ " เสียด้วย
 - Tests: hardChatCopy.contract **15/15** (contract 4 + inventory 2 + behavior 8 + matcher lock 1) · **gate 167/173 · known 14 · ไม่มี fail ใหม่**
 - ค้างเฟส 2: LLM pre-send contract + regenerate/fallback · router priority · rewrite prompts · replay 20-21 ส.ค. รายแถว · staging smoke
+
+## 2026-08-21 (ดึกมาก) | Claude | ปิด 5 P0 + 3 P1 เฟส 1 รอบสาม (Codex NO-GO บน 109cc62)
+- **P0-1 whole-file exemption ผิดกับ mixed surface**: ถอด exemption ทั้งไฟล์ของ synergyReport.service.js (ไฟล์เดียวกัน export `buildSynergyCarouselFlex` ที่ส่งเข้าแชทจริง) → ใช้ line-level exemption เฉพาะบรรทัด HTML/inline-style (19 จุด) · Flex ของ synergy ตอนนี้ผ่าน guard ก่อน `replyMessage` แล้ว
+- **P0-2 direct reply bypass**: เพิ่ม `replyToCustomer()` ใน customerPush.gateway = customer-visible REPLY boundary (ตรวจ text + Flex ทุก node ก่อน transport · typed exemption เท่านั้นที่ข้ามได้) · ใช้ที่ synergy request แล้ว — blocked = ไม่ส่ง + log `SYNERGY_REPLY_TONE_BLOCKED`
+- **P0-3 Flex traversal ไม่ครบ**: `collectFlexTexts` เขียนใหม่เป็น generic recursive walker + cycle guard — เห็น altText / text / **span** / button label / **quickReply action label** / carousel-bubble ทุกระดับ (probe ยืนยัน span+quickReply ถูกจับแล้ว)
+- **P0-4 validity exception กว้างเกิน**: เปลี่ยนจาก boolean ยกเว้นทั้งข้อความ → **mask เฉพาะช่วง validity fact** แล้วตรวจ time promise ในส่วนที่เหลือ · "สิทธิ์มีผล 48 ชม." ผ่าน · "สิทธิ์มีผล 48 ชม. จะแจ้งให้ทันที" fail · "แพ็กใช้ได้ 30 วัน ผลตามมาในแชท" fail
+- **P0-5 direct push เป็น bundle หมด**: `toneKindForPushSource(source)` typed map — payment/qr/slip/paywall/list = bundle · report/registration/welcome/object_info = step · **unknown = reply (fail-closed)** · เจอผลข้างเคียงจริงตอน gate: registrationSuccess ไม่จัดการ `sent:false` → เพิ่ม clear dedupe + คืน "push_failed" (ไม่เงียบ)
+- **P1**: (1) line-level exemption ต้องอยู่ใน `ALLOWED_EXEMPT_REASONS` 9 ค่า + เทสต์สแกนทั้ง src/ ว่าไม่มี reason นอกลิสต์ (2) behavior test direct push เปลี่ยนมา inject `isBanned` ตาม production contract + assert `reason === "hard_tone_rejected"` และ transport 0 (3) เทสต์ hermetic — ตั้ง env ในไฟล์เอง รันได้โดยไม่ต้อง export
+- Tests: hardChatCopy.contract **16/16** · registrationOnboarding 19/19 · **gate 167/173 · known 14 · ไม่มี fail ใหม่**
+- ค้างเฟส 2: LLM pre-send contract + regenerate/fallback · router priority · rewrite prompts · replay 20-21 ส.ค. · staging smoke

@@ -624,11 +624,11 @@ export async function renderSynergyPage(lineUserId) {
     (m, i) => `<button class="mb${i === 0 ? " on" : ""}" data-m="${m.key}">${esc(m.label)}</button>`,
   ).join("");
 
-  const html = `<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  const html = `<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"> <!-- tone-exempt: liff_page_html -->
 <title>จัดชุดพลังของคุณ - Ener Scan</title>
-<meta name="description" content="อาจารย์จัดชุดวัตถุมงคลจากคลังของคุณ วันนี้ควรพกชิ้นไหน ดูได้เลย">
-<meta property="og:title" content="จัดชุดพลังของคุณ - Ener Scan">
-<meta property="og:description" content="อาจารย์จัดชุดจากวัตถุมงคลของคุณ ${Number(pieces.totalUniqueCount) || pieces.length} ชิ้น อ่านตามแนวทาง Ener">
+<meta name="description" content="อาจารย์จัดชุดวัตถุมงคลจากคลังของคุณ วันนี้ควรพกชิ้นไหน ดูได้เลย"> <!-- tone-exempt: liff_page_html -->
+<meta property="og:title" content="จัดชุดพลังของคุณ - Ener Scan"> <!-- tone-exempt: liff_page_html -->
+<meta property="og:description" content="อาจารย์จัดชุดจากวัตถุมงคลของคุณ ${Number(pieces.totalUniqueCount) || pieces.length} ชิ้น อ่านตามแนวทาง Ener"> <!-- tone-exempt: liff_page_html -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d0b08'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23e8c547'%3E✦%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
 <style>
@@ -691,24 +691,24 @@ body{font-family:Kanit,sans-serif;background:#faf6ea;color:#43371f;max-width:520
 @keyframes goflash{0%,60%{box-shadow:0 0 0 2px #a5811c,0 0 26px rgba(176,138,64,.4)}100%{box-shadow:none}}
 .goflash{animation:goflash 2.2s ease-out 1;border-radius:14px}
 </style></head><body>
-<div class="hd"><h1>ENER SCAN</h1><div class="vault">${esc(content.vaultTitle)}</div><small>จัดจากวัตถุมงคลของคุณ ${Number(pieces.totalUniqueCount) || pieces.length} ชิ้น</small></div>
+<div class="hd"><h1>ENER SCAN</h1><div class="vault">${esc(content.vaultTitle)}</div><small>จัดจากวัตถุมงคลของคุณ ${Number(pieces.totalUniqueCount) || pieces.length} ชิ้น</small></div> <!-- tone-exempt: liff_page_html -->
 
-<div class="tabs"><button class="db on" data-d="today">วันนี้</button><button class="db" data-d="tomorrow">พรุ่งนี้</button></div>
-<div class="mrowbtns" id="mission-row">${missionBtns}</div>
+<div class="tabs"><button class="db on" data-d="today">วันนี้</button><button class="db" data-d="tomorrow">พรุ่งนี้</button></div> <!-- tone-exempt: liff_page_html -->
+<div class="mrowbtns" id="mission-row">${missionBtns}</div> <!-- tone-exempt: liff_page_html -->
 
 <div class="today">
-  <div class="tag" id="set-title">${esc(dayName)} แนะนำพกชุดนี้</div>
-  <div class="pair" id="set-pair"></div>
+  <div class="tag" id="set-title">${esc(dayName)} แนะนำพกชุดนี้</div> <!-- tone-exempt: liff_page_html -->
+  <div class="pair" id="set-pair"></div> <!-- tone-exempt: liff_page_html -->
   <div class="tags">${(content.tags || []).map((t) => `<i>${esc(t)}</i>`).join("")}</div>
-  <div class="say" id="set-line"></div>
-  <div class="daymeta">โทนสีเสริมกำลังใจวันนี้: ${esc(dayColor)} · คำตั้งใจ: ${esc(content.intent || "")}</div>
+  <div class="say" id="set-line"></div> <!-- tone-exempt: liff_page_html -->
+  <div class="daymeta">โทนสีเสริมกำลังใจวันนี้: ${esc(dayColor)} · คำตั้งใจ: ${esc(content.intent || "")}</div> <!-- tone-exempt: liff_page_html -->
   <button class="carry" id="carry-btn">วันนี้พกชุดนี้</button>
-  <div class="carry-note" id="carry-note"></div>
+  <div class="carry-note" id="carry-note"></div> <!-- tone-exempt: liff_page_html -->
 </div>
 
-<div class="sec" id="main-piece"><h3>วันไหนไม่แน่ใจ พกชิ้นนี้</h3>
-  <div style="display:flex;flex-direction:column;gap:7px"><div class="grid" style="grid-template-columns:1fr">${`<div class="chip tap" data-n="${best.n}"><img src="${esc(best.img)}" alt="${best.unit} ${best.n}"><div><b>${best.unit} ${best.n}</b><span>${esc(best.peakShort)}</span></div></div>`}</div>
-  <p style="font-size:13px;color:#5d4d2b;line-height:1.55">${esc(content.mainLine || "")}</p></div>
+<div class="sec" id="main-piece"><h3>วันไหนไม่แน่ใจ พกชิ้นนี้</h3> <!-- tone-exempt: liff_page_html -->
+  <div style="display:flex;flex-direction:column;gap:7px"><div class="grid" style="grid-template-columns:1fr">${`<div class="chip tap" data-n="${best.n}"><img src="${esc(best.img)}" alt="${best.unit} ${best.n}"><div><b>${best.unit} ${best.n}</b><span>${esc(best.peakShort)}</span></div></div>`}</div> <!-- tone-exempt: liff_page_html -->
+  <p style="font-size:13px;color:#5d4d2b;line-height:1.55">${esc(content.mainLine || "")}</p></div> <!-- tone-exempt: liff_page_html -->
 </div>
 
 <div class="sec"><h3>คลังของคุณเด่นด้านไหน</h3>
@@ -718,10 +718,10 @@ body{font-family:Kanit,sans-serif;background:#faf6ea;color:#43371f;max-width:520
 <div class="gap"><b>ทัพคุณยังขาดสาย${esc(content.gapAxis || "")}</b><p>${esc(content.gapLine || "")}</p></div>
 
 <a class="cta" href="${esc(String(process.env.YT_SHORT_OA_LINK || "https://lin.ee/p2sxdYFJ"))}">ส่งชิ้นเพิ่มให้อาจารย์ดู เติมทัพให้ครบ</a>
-<div class="ft">อ่านพลังตามแนวทาง Ener ไม่ใช่คำทำนาย · ไม่ตัดสินแท้เก๊หรือมูลค่า · ไม่รับรองผล</div>
+<div class="ft">อ่านพลังตามแนวทาง Ener ไม่ใช่คำทำนาย · ไม่ตัดสินแท้เก๊หรือมูลค่า · ไม่รับรองผล</div> <!-- tone-exempt: liff_page_html -->
 
-<div id="ov" role="dialog" aria-modal="true"><div class="pm">
-<img id="pm-img" src="" alt=""><h4 id="pm-t"></h4><div class="ps" id="pm-s"></div><div class="sc" id="pm-sc"></div>
+<div id="ov" role="dialog" aria-modal="true"><div class="pm"> <!-- tone-exempt: liff_page_html -->
+<img id="pm-img" src="" alt=""><h4 id="pm-t"></h4><div class="ps" id="pm-s"></div><div class="sc" id="pm-sc"></div> <!-- tone-exempt: liff_page_html -->
 <a class="go" id="pm-go" href="#" target="_blank" rel="noopener">เปิดรายงานเต็มของชิ้นนี้</a>
 <button class="cl" onclick="document.getElementById('ov').classList.remove('show')">ปิด</button>
 </div></div>
@@ -732,7 +732,7 @@ var SETS=${setsJson};
 var DAYNAMES={today:${JSON.stringify(dayName)},tomorrow:${JSON.stringify(thaiDayName(tomorrowKey))}};
 var curDay="today",curM="daily";
 function byN(n){return PIECES.find(function(x){return x.n===n})}
-function pieceHtml(n){var p=byN(n);if(!p)return "";return '<div class="bp tap" data-n="'+p.n+'" role="button" tabindex="0"><img src="'+p.img+'" alt="'+p.unit+' '+p.n+'"><b>'+p.unit+" "+p.n+'</b><span>'+p.peak+'</span></div>'}
+function pieceHtml(n){var p=byN(n);if(!p)return "";return '<div class="bp tap" data-n="'+p.n+'" role="button" tabindex="0"><img src="'+p.img+'" alt="'+p.unit+' '+p.n+'"><b>'+p.unit+" "+p.n+'</b><span>'+p.peak+'</span></div>'} /* tone-exempt: liff_page_html */
 function renderSet(){var s=(SETS[curDay]||{})[curM];if(!s)return;
  var pair=pieceHtml(s.a)+(s.b?'<div class="plus">+</div>'+pieceHtml(s.b):"");
  document.getElementById("set-pair").innerHTML=pair; /* tone-exempt: liff_page_html */

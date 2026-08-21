@@ -125,6 +125,14 @@ export async function sendRegistrationSuccessFlow(
     const { pushToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
     const pushed = await pushToCustomer(client, userId, msgs, { source: "registration_success" });
     if (pushed.suppressedBanned) return { sent: false, suppressedBanned: true };
+    if (pushed.sent !== true) {
+      // tone guard บล็อกก่อนส่ง (หรือ gate อื่น) — ต้องล้าง dedupe ให้ retry ได้ ไม่ใช่เงียบ
+      await clearDedupe(dedupeKey).catch(() => {});
+      log("registration_success_push_blocked", {
+        uidPrefix: userId.slice(0, 8), source, reason: pushed.reason || "unknown",
+      });
+      return "push_failed";
+    }
   } catch (e) {
     await clearDedupe(dedupeKey).catch(() => {});
     log("registration_success_push_failed", {

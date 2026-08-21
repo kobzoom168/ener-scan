@@ -9,6 +9,18 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+// hermetic (Codex P1-3): ตั้ง env ที่โมดูล config ต้องการเองในไฟล์นี้ ก่อน dynamic import
+for (const [k, v] of Object.entries({
+  OPENAI_API_KEY: "sk-test",
+  CHANNEL_ACCESS_TOKEN: "test-token",
+  CHANNEL_SECRET: "test-secret",
+  LOCAL_POSTGREST_URL: "http://127.0.0.1:9",
+  LOCAL_POSTGREST_ANON_KEY: "x",
+  LOCAL_POSTGREST_SERVICE_KEY: "x",
+  SUPABASE_URL: "http://127.0.0.1:9",
+  SUPABASE_SERVICE_ROLE_KEY: "x",
+  HUMAN_REPLY_DELAY_MS_MAX: "0",
+})) if (!process.env[k]) process.env[k] = v;
 import fs from "node:fs";
 import path from "node:path";
 import { checkHardTone, isHardTone, normalizeInvisible } from "../src/core/conversation/hardTone.util.js";
@@ -79,7 +91,6 @@ const EXEMPT_FILES = {
   "src/services/fbShowcase/fbShowcase.service.js": "social_caption — แคปชันเพจ ไม่ใช่แชท",
   "src/services/fbShowcase/scanYoutubeShort.service.js": "social_caption — แคปชัน/สคริปต์คลิป",
   "src/services/fbShowcase/showcasePhotoCard.service.js": "card_graphic — ข้อความบนการ์ดภาพ ไม่ใช่ข้อความแชท",
-  "src/services/synergy/synergyReport.service.js": "liff_page_html — หน้าเว็บ synergy (ข้อความ push อยู่ใน synergyIntro ซึ่งตรวจแล้ว)",
   "src/services/welcome/identityQuestion.service.js": "regex_source — pattern จับข้อความลูกค้า ไม่ใช่ copy",
   "src/services/scanV2/processScanJob.service.js": "scan_report_body — เนื้อหารายงาน",
   "src/services/reports/reportPayload.builder.js": "scan_report_body",
@@ -137,6 +148,10 @@ function thaiLiterals(src) {
     const trimmed = t.trim();
     if (!trimmed) return;
     if (/^-\s/.test(trimmed) || /=/.test(trimmed)) return; // prompt spec line
+    // เศษ code fragment จากการ parse (เช่น '", size: ') — ต้องมีคำไทยจริงอย่างน้อย 2 ตัวติดกัน
+    if (!/[ก-๙]{2,}/.test(trimmed)) return;
+    // fragment จาก parser (มี escaped quote หรือ code separator ปน) — ไม่ใช่ literal เดี่ยว
+    if (/\\"|",\s|\s:\s"/.test(t)) return;
     out.push(t);
   };
   for (const m of src.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)) push(m[1]);
@@ -145,6 +160,13 @@ function thaiLiterals(src) {
 }
 
 /** บรรทัดที่ไม่ใช่ customer copy: comment · regex · token set · admin/telegram/log */
+/** เหตุผลที่ยกเว้นได้ระดับบรรทัด — นอกลิสต์ = ไม่นับเป็น exemption (test จะ fail) */
+const ALLOWED_EXEMPT_REASONS = [
+  "admin_command", "admin_telegram", "llm_prompt", "liff_page_html",
+  "scan_report_body", "social_caption", "card_graphic", "regex_source", "separator_token",
+];
+const LINE_EXEMPT_RE = new RegExp(`tone-exempt:\\s*(${ALLOWED_EXEMPT_REASONS.join("|")})\\b`);
+
 function stripNonCopy(src) {
   let s = src;
   for (const name of ["CONFIRM_YES", "CONFIRM_NO", "GENERIC_ACK", "PAY_INTENT_WORDS", "const exact = new Set(["]) {
@@ -160,8 +182,8 @@ function stripNonCopy(src) {
     .filter((l) => !/\/[^/\n]*[ก-๙][^/\n]*\/[gimsuy]*/.test(l))
     .filter((l) => !/sendTelegram|\[CRITICAL\]|\[RECOVERY\]|console\.(log|error|warn)/.test(l))
     .filter((l) => !/new Set\(\[.*\]\)/.test(l))
-    // typed exemption ระดับบรรทัด: /* tone-exempt: <reason> */ — ต้องระบุเหตุผล
-    .filter((l) => !/tone-exempt:\s*\w+/.test(l))
+    // typed exemption ระดับบรรทัด — reason ต้องอยู่ใน allowlist (P1: unknown = fail)
+    .filter((l) => !LINE_EXEMPT_RE.test(l))
     .join("\n");
 }
 
@@ -189,6 +211,19 @@ test("inventory: static customer copy ทุกไฟล์ (send-path derived) 
     }
   }
   assert.deepEqual(failures, [], `static copy ยังผิด contract (${failures.length}):\n${failures.slice(0, 25).join("\n")}`);
+});
+
+test("P1: typed exemption — reason ต้องอยู่ใน allowlist เท่านั้น (unknown ไม่นับ)", () => {
+  const files = walkSrc(path.join(process.cwd(), "src")).map((f) => path.relative(process.cwd(), f));
+  const bad = [];
+  for (const f of files) {
+    for (const line of fs.readFileSync(f, "utf8").split("\n")) {
+      const m = /tone-exempt:\s*([\w-]+)/.exec(line);
+      if (m && !ALLOWED_EXEMPT_REASONS.includes(m[1])) bad.push(`${f}: ${m[1]}`);
+    }
+  }
+  assert.deepEqual(bad, [], `exemption reason นอก allowlist:\n${bad.join("\n")}`);
+  assert.ok(ALLOWED_EXEMPT_REASONS.length >= 5);
 });
 
 /* ---------------- 3) runtime: behavior ด้วย fake transport ---------------- */
@@ -281,11 +316,11 @@ test("behavior 7: direct customer push ผิด → transport 0", async () => {
   const { pushToCustomer } = await import("../src/services/lineOutbound/customerPush.gateway.js");
   const c = fakeClient();
   const r = await pushToCustomer(c, "U" + "1".repeat(32), [{ type: "text", text: "ขอบคุณครับ" }], {
-    source: "test", allowCustomerPush: async () => ({ allowed: true }),
+    source: "test_direct_push",
+    isBanned: async () => false, // ผ่าน ban gate จริง → ต้องถูกบล็อกด้วย tone เท่านั้น
   });
-  // gate จริงอาจ block ด้วยเหตุอื่น — ที่ต้องพิสูจน์คือไม่มี transport
-  assert.equal(c.calls.push, 0);
-  assert.notEqual(r.sent, true);
+  assert.equal(c.calls.push, 0, "transport ต้องเป็น 0");
+  assert.equal(r.reason, "hard_tone_rejected");
 });
 
 test("behavior 8: typed exemption ใช้ได้เฉพาะ surface ที่อนุมัติ", async () => {

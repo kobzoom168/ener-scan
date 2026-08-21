@@ -96,7 +96,9 @@ export function checkHardTone(text, opts = {}) {
   if (m) violations.push(`polite_particle:${m[1]}`);
   if (SOFT_NA_RE.test(t)) violations.push("soft_particle:นะ");
   for (const p of BANNED_PHRASES) if (t.includes(p)) violations.push(`banned_phrase:${p}`);
-  if (TIME_PROMISE_RE.test(t) && !VALIDITY_FACT_RE.test(t)) violations.push("time_promise");
+  // validity fact ถูก mask เฉพาะช่วงของมัน — ส่วนที่เหลือยังต้องตรวจสัญญาเวลา
+  const masked = t.replace(new RegExp(VALIDITY_FACT_RE.source, "gu"), " ");
+  if (TIME_PROMISE_RE.test(masked)) violations.push("time_promise");
   if (/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}✅✨❌🙏]/u.test(raw)) violations.push("emoji");
   if (/[—–]/.test(raw)) violations.push("ai_dash");
   if (/[“”]/.test(raw)) violations.push("ai_quote");
@@ -169,15 +171,24 @@ export function toneKindForReplyType(replyType) {
  */
 export function collectFlexTexts(flex) {
   const out = [];
+  const seen = new Set();
+  /** เก็บทุก key ที่เป็นข้อความลูกค้าเห็น — recursive เต็มรูป (Codex P0-3) */
   const walk = (n) => {
     if (!n || typeof n !== "object") return;
+    if (seen.has(n)) return;
+    seen.add(n);
     if (Array.isArray(n)) return n.forEach(walk);
+    // ข้อความที่ลูกค้าเห็นได้ทุกชนิด: altText / text (text+span) / label (button+quickReply)
     if (typeof n.altText === "string") out.push(n.altText);
-    if (n.type === "text" && typeof n.text === "string") out.push(n.text);
-    if (n.type === "button" && typeof n.action?.label === "string") out.push(n.action.label);
-    if (n.action && typeof n.action.label === "string" && n.type !== "button") out.push(n.action.label);
-    for (const k of ["body", "header", "footer", "hero", "contents", "box"]) if (n[k]) walk(n[k]);
+    if ((n.type === "text" || n.type === "span") && typeof n.text === "string") out.push(n.text);
+    if (typeof n.label === "string") out.push(n.label);
+    if (n.action && typeof n.action === "object" && typeof n.action.label === "string") {
+      out.push(n.action.label);
+    }
+    // เดินทุก property ที่เป็น object/array (carousel/bubble/box/contents/quickReply/items/...)
+    for (const v of Object.values(n)) if (v && typeof v === "object") walk(v);
   };
   walk(flex);
   return out.filter((t) => String(t || "").trim());
 }
+
