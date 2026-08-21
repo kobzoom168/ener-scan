@@ -167,7 +167,7 @@ test("scenario 11: ingest fail ไม่ consume (retry ได้)", () => {
   const h = WEBHOOK_SRC.slice(WEBHOOK_SRC.indexOf("async function maybeHandlePreRegResume"));
   const catchBlock = h.slice(h.indexOf("PREREG_RESUME_INGEST_FAILED"), h.indexOf("finally"));
   assert.ok(!catchBlock.includes("consumeHoldAfterIngest"));
-  assert.match(catchBlock, /รูปยังอยู่ครบ/);
+  assert.match(catchBlock, /รูปยังอยู่/);
 });
 
 // 12) infra พัง → fail-open ตาม policy (แต่เลิก fail-open ตามจำนวนครั้ง)

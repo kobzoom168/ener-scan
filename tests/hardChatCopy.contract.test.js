@@ -671,3 +671,93 @@ test("P0-3/P1: caller ตรวจ typed result — ห้าม log SENT เม
   const iReplyCheck = mi.indexOf('branch: "reply"');
   assert.ok(iReplyCheck > 0 && iReplyCheck < iSentMi, "reply branch ต้องตรวจก่อน log SENT");
 });
+
+/* ---------------- 8) registration + fallback behavior (Codex acceptance 6 ข้อ) ---------------- */
+
+const LIFF_TROUBLE = ["แตะปุ่มบนการ์ดลงทะเบียนอีกครั้ง", "ยังไม่ได้ ปิดแล้วเปิดแอป LINE ใหม่"].join("\n");
+const REG_WITH_DESC = [
+  ["รับข้อมูลแล้ว สมเด็จ", "รูปที่ส่งไว้ถืออยู่แล้ว ไม่ต้องส่งซ้ำ"].join(" "),
+  "กรอกข้อมูลเจ้าของให้ครบ",
+].join("\n");
+
+test("acceptance 1-2: LIFF trouble / registration+description payload จริงผ่าน contract", () => {
+  for (const [name, text] of [["liff_trouble", LIFF_TROUBLE], ["registration_desc", REG_WITH_DESC]]) {
+    const r = checkHardTone(text, { kind: "step" });
+    assert.ok(r.ok, `${name} ต้องผ่าน: ${r.violations.join(",")} (len=${text.length}, lines=${text.split("\n").length})`);
+    assert.ok(text.split("\n").length <= 2, `${name} ต้องไม่เกิน 2 บรรทัด`);
+  }
+});
+
+test("acceptance 3: reply throw → push fallback ใช้ policy เดิม (source/toneKind ไม่หาย)", async () => {
+  const { sendCustomerReplyWithPushFallback } = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  const seen = [];
+  const r = await sendCustomerReplyWithPushFallback({
+    client: {}, replyToken: "tok", userId: "U1", messages: [{ type: "text", text: REG_WITH_DESC }],
+    source: "registration_prompt", toneKind: "step",
+    replyFn: async () => { throw new Error("token_expired"); },
+    pushFn: async (_c, _u, _m, opts) => { seen.push(opts); return { sent: true }; },
+  });
+  assert.equal(r.sent, true);
+  assert.equal(r.via, "push");
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].source, "registration_prompt");
+  assert.equal(seen[0].toneKind, "step", "fallback ต้องใช้ kind เดิม ไม่ตกกลับเป็น unknown/reply");
+});
+
+test("acceptance 4: reply คืน sent:false (ไม่ throw) → ยัง fallback ไป push ด้วย policy เดิม", async () => {
+  const { sendCustomerReplyWithPushFallback } = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  let pushOpts = null;
+  const r = await sendCustomerReplyWithPushFallback({
+    client: {}, replyToken: "tok", userId: "U1", messages: [{ type: "text", text: LIFF_TROUBLE }],
+    source: "registration_image_gate", toneKind: "step",
+    replyFn: async () => ({ sent: false, reason: "hard_tone_rejected" }),
+    pushFn: async (_c, _u, _m, opts) => { pushOpts = opts; return { sent: true }; },
+  });
+  assert.equal(r.sent, true);
+  assert.equal(r.via, "push");
+  assert.equal(pushOpts.toneKind, "step");
+});
+
+test("acceptance 5: push ก็ล้ม → typed failure (ห้าม return handled-success)", async () => {
+  const { sendCustomerReplyWithPushFallback } = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  const r = await sendCustomerReplyWithPushFallback({
+    client: {}, replyToken: "tok", userId: "U1", messages: [{ type: "text", text: LIFF_TROUBLE }],
+    source: "registration_prompt", toneKind: "step",
+    replyFn: async () => ({ sent: false, reason: "hard_tone_rejected" }),
+    pushFn: async () => ({ sent: false, reason: "http_500" }),
+  });
+  assert.equal(r.sent, false);
+  assert.equal(r.reason, "http_500");
+});
+
+test("acceptance 6: payload ผิด policy → transport 0 ทั้ง reply และ push (ผ่าน boundary จริง)", async () => {
+  const gw = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  const c = fakeClient();
+  const r = await gw.sendCustomerReplyWithPushFallback({
+    client: c, replyToken: "tok", userId: "U" + "6".repeat(32),
+    messages: [{ type: "text", text: "ขอบคุณครับ เดี๋ยวส่งให้ทันที" }],
+    source: "registration_prompt", toneKind: "step",
+  });
+  assert.equal(c.calls.reply + c.calls.push, 0, "payload ผิด contract ห้ามส่งทั้งสองทาง");
+  assert.equal(r.sent, false);
+});
+
+test("P1: source map มีชุดเดียวใน gateway (กัน drift)", () => {
+  const src = read("src", "services", "lineOutbound", "customerPush.gateway.js");
+  const impls = (src.match(/payment\|qr\|slip\|paywall/g) || []).length;
+  assert.equal(impls, 1, `source map ต้องมีชุดเดียว (พบ ${impls})`);
+  assert.ok(src.includes("export function toneKindForPushSourceExported"), "ต้อง export ตัวเดียวให้ทุก boundary ใช้");
+});
+
+test("P0: registration callers ใช้ helper fallback + ตรวจ typed result (source contract)", () => {
+  const src = read("src", "routes", "lineWebhook.js");
+  assert.ok(src.includes("sendCustomerReplyWithPushFallback"), "registration ต้องใช้ helper");
+  assert.ok(src.includes("REGISTRATION_IMAGE_GATE_BLOCKED"));
+  assert.ok(src.includes("REGISTRATION_PROMPT_BLOCKED"));
+  // push fallback ทุกจุดต้องมี policy
+  const pushCalls = src.match(/__pushCustomer\(client, userId, [^;]*?\)/gs) || [];
+  for (const call of pushCalls) {
+    if (call.includes("__pushCustomer(client, userId, messages")) continue; // ตัว helper เอง
+    assert.ok(/source:/.test(call), `push fallback ต้องระบุ policy: ${call.slice(0, 60)}`);
+  }
+});

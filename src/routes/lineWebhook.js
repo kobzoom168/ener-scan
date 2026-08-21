@@ -2364,10 +2364,16 @@ async function finalizeAcceptedImage({
       if (!msgs.length && prompt) msgs.push(prompt.flexMessage);
       try {
         try {
-          const __g = await __replyCustomer(client, event.replyToken, msgs, { source: "registration_image_gate", toneKind: "step" });
-          if (__g.sent !== true) throw new Error(__g.reason || "reply_blocked");
-        } catch {
-          await __pushCustomer(client, userId, msgs);
+          const { sendCustomerReplyWithPushFallback } = await import("../services/lineOutbound/customerPush.gateway.js");
+          const __g = await sendCustomerReplyWithPushFallback({
+            client, replyToken: event.replyToken, userId, messages: msgs,
+            source: "registration_image_gate", toneKind: "step",
+          });
+          if (__g.sent !== true) {
+            console.error(JSON.stringify({ event: "REGISTRATION_IMAGE_GATE_BLOCKED", reason: __g.reason || "unknown" }));
+          }
+        } catch (e) {
+          console.error(JSON.stringify({ event: "REGISTRATION_IMAGE_GATE_ERROR", message: String(e?.message || e).slice(0, 80) }));
         }
       } catch {
         if (prompt) {
@@ -4287,7 +4293,7 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
     try {
       await __replyCustomer(client, event.replyToken, [msg], { source: "admin_assist_liff", toneKind: "step" });
     } catch {
-      await __pushCustomer(client, userId, [msg]).catch(() => {});
+      await __pushCustomer(client, userId, [msg], { source: "admin_assist_liff", toneKind: "step" }).catch(() => {});
     }
   };
 
@@ -4299,11 +4305,7 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
     console.log(JSON.stringify({ event: "registration_liff_trouble_reported", uidPrefix: userId.slice(0, 8) }));
     const prompt = await buildRegistrationPrompt(attempt);
     await replyText(
-      [
-        "ฟอร์มเปิดในแอป LINE นี้เลย ไม่ต้องติดตั้งอะไรเพิ่ม",
-        "ลองแตะปุ่มบนการ์ดลงทะเบียนอีกครั้ง หรือแตะลิงก์จากปุ่มด้านล่างนี้ได้",
-        "ถ้ายังเปิดไม่ได้ ลองปิดแล้วเปิดแอป LINE ใหม่ก่อน",
-      ].join("\n"),
+      ["แตะปุ่มบนการ์ดลงทะเบียนอีกครั้ง", "ยังไม่ได้ ปิดแล้วเปิดแอป LINE ใหม่"].join("\n"),
       prompt?.quickReply || null,
     );
     return true;
@@ -4336,15 +4338,25 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
   const showCard = await hold.tryMarkRegCardShown(userId, "text_gate");
   const prompt = await buildRegistrationPrompt(attempt);
   if (!prompt) return false; // ไม่มี LIFF — ปล่อยไหลตาม flow เดิม (fail-open)
-  const parts = [descLine, imageLine, closing].filter(Boolean).join("\n\n");
+  // hard tone: รวมเหลือไม่เกิน 2 บรรทัด (desc รวมกับ image ในบรรทัดเดียว)
+  const parts = [[descLine, imageLine].filter(Boolean).join(" "), closing]
+    .filter(Boolean)
+    .join("\n");
   if (showCard) {
     try {
-      await __replyCustomer(client, event.replyToken, [
-        { type: "text", text: parts },
-        prompt.flexMessage,
-      ], { source: "registration_prompt", toneKind: "step" });
+      const { sendCustomerReplyWithPushFallback: __regSend } = await import("../services/lineOutbound/customerPush.gateway.js");
+      const __rp = await __regSend({
+        client, replyToken: event.replyToken, userId,
+        messages: [{ type: "text", text: parts }, prompt.flexMessage],
+        source: "registration_prompt", toneKind: "step",
+      });
+      if (__rp.sent !== true) {
+        console.error(JSON.stringify({ event: "REGISTRATION_PROMPT_BLOCKED", reason: __rp.reason || "unknown" }));
+      }
     } catch {
-      await __pushCustomer(client, userId, [{ type: "text", text: parts }, prompt.flexMessage]).catch(() => {});
+      await __pushCustomer(client, userId, [{ type: "text", text: parts }, prompt.flexMessage], {
+        source: "registration_prompt", toneKind: "step",
+      }).catch(() => {});
     }
   } else {
     console.log(JSON.stringify({ event: "registration_reminder_shown", uidPrefix: userId.slice(0, 8) }));
@@ -4504,8 +4516,8 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
     try {
       await __pushCustomer(client, userId, {
         type: "text",
-        text: "ระบบสะดุดตอนเริ่มอ่าน รูปยังอยู่ครบ แตะปุ่มเดิมอีกครั้งได้",
-      });
+        text: "เริ่มอ่านไม่สำเร็จ รูปยังอยู่ แตะปุ่มเดิมอีกครั้ง",
+      }, { source: "prereg_resume_error", toneKind: "step" });
     } catch { /* ignore */ }
     return true;
   } finally {

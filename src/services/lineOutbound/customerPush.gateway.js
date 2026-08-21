@@ -47,13 +47,6 @@ export async function pushToCustomer(client, lineUserId, messages, opts = {}) {
   const { enforceHardToneBeforeSend, collectFlexTexts, TONE_EXEMPT_SURFACES } = await import(
     "../../core/conversation/hardTone.util.js"
   );
-  /** typed source→kind (Codex P0-5): unknown = reply fail-closed · bundle เฉพาะ payment/list */
-  const toneKindForPushSource = (src) => {
-    const t = String(src || "");
-    if (/payment|qr|slip|paywall|quota_offer|myscans|history|synergy_intro|daily_pick/i.test(t)) return "bundle";
-    if (/report|scan_result|registration|welcome|howto|onboarding|object_info|purpose|youtube_clip_notify|referral_notify|precheck|multi_image/i.test(t)) return "step";
-    return "reply";
-  };
   const { resolveExemption: resolveEx } = await import("../../core/conversation/hardTone.util.js");
   const exPush = opts.toneExemptSurface
     ? resolveEx({ surface: opts.toneExemptSurface, messages, adminContext: opts.adminContext === true, callerId: opts.callerId })
@@ -70,7 +63,7 @@ export async function pushToCustomer(client, lineUserId, messages, opts = {}) {
       else if (m?.type === "flex") texts.push(...collectFlexTexts(m));
     }
     const bad = texts
-      .map((t) => enforceHardToneBeforeSend(t, { surface: "customer_push", replyType: opts.source || null, kind: opts.toneKind || toneKindForPushSource(opts.source) }))
+      .map((t) => enforceHardToneBeforeSend(t, { surface: "customer_push", replyType: opts.source || null, kind: opts.toneKind || toneKindForPushSourceExported(opts.source) }))
       .filter((r) => !r.ok);
     if (bad.length) {
       return {
@@ -185,4 +178,33 @@ export async function replyToAdmin(client, replyToken, messages, opts = {}) {
   }
   await client.replyMessage(replyToken, messages); /* tone-exempt: admin_command */
   return { sent: true };
+}
+
+/**
+ * Reply พร้อม push fallback ที่ใช้ policy ชุดเดียวกัน (Codex: fallback kind หาย)
+ * — reply ถูกบล็อก/throw = fallback ไป push ด้วย source+toneKind เดิม
+ * @param {{ replyFn?: Function, pushFn?: Function, source: string, toneKind?: string,
+ *   client: any, replyToken: string, userId: string, messages: any }} p
+ * @returns {Promise<{ sent: boolean, via?: "reply"|"push", reason?: string }>}
+ */
+export async function sendCustomerReplyWithPushFallback(p) {
+  const policy = { source: p.source, replyType: p.source, ...(p.toneKind ? { toneKind: p.toneKind } : {}) };
+  const replyFn = p.replyFn || replyToCustomer;
+  const pushFn = p.pushFn || pushToCustomer;
+  let replyRes = null;
+  try {
+    replyRes = await replyFn(p.client, p.replyToken, p.messages, policy);
+  } catch (e) {
+    replyRes = { sent: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+  if (replyRes?.sent === true) return { sent: true, via: "reply" };
+  // policy เดิมทุกครั้ง — ห้ามตกกลับเป็น unknown/reply
+  let pushRes = null;
+  try {
+    pushRes = await pushFn(p.client, p.userId, p.messages, policy);
+  } catch (e) {
+    pushRes = { sent: false, reason: String(e?.message || e).slice(0, 80) };
+  }
+  if (pushRes?.sent === true) return { sent: true, via: "push" };
+  return { sent: false, reason: pushRes?.reason || replyRes?.reason || "blocked" };
 }
