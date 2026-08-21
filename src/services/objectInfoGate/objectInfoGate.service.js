@@ -305,7 +305,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await clearDedupeKey(pendingKey(userId));
       await clearDedupeKey(backupKey(userId));
       await reEnqueueHeldReport(userId, pending);
-      await client.replyMessage(event.replyToken, { type: "text", text: "ได้ รับผลพลังได้ทันที" });
+      await client.replyMessage(event.replyToken, { type: "text", text: "รับทราบ" });
       return true;
     }
     if (/^ไม่ทราบ/.test(t)) {
@@ -324,7 +324,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await clearDedupeKey(pendingKey(userId));
       await clearDedupeKey(backupKey(userId));
       await reEnqueueHeldReport(userId, pending);
-      await client.replyMessage(event.replyToken, { type: "text", text: "ไม่เป็นไร อาจารย์ส่งผลให้เลย" });
+      await client.replyMessage(event.replyToken, { type: "text", text: "รับทราบ" });
       return true;
     }
 
@@ -361,7 +361,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       }
       await client.replyMessage(event.replyToken, {
         type: "text",
-        text: "อาจารย์รอส่งผลอยู่ ขอข้อมูลชิ้นนี้ก่อนนิดเดียว เป็นพระอะไร วัดไหน รุ่น/ปีอะไร (หรือชนิดหิน) พิมพ์บอกได้ ไม่แน่ใจกดปุ่มไม่ทราบได้",
+        text: "ขอชื่อ วัด รุ่นหรือปีของชิ้นนี้ วัดไหน รุ่น/ปีอะไร (หรือชนิดหิน) พิมพ์บอกได้ ไม่แน่ใจกดปุ่มไม่ทราบได้",
         quickReply: { items: remindItems },
       });
       return true;
@@ -390,7 +390,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       await setLargeValueWithTtl(backupKey(userId), JSON.stringify(pending), PENDING_TTL_SEC * 2);
       await client.replyMessage(event.replyToken, {
         type: "text",
-        text: `ขอบคุณ ${merged.objectName} แล้วพอทราบไหมว่า${missing.join(" ")} (ไม่ทราบกดปุ่มได้ จะส่งผลให้ทันที)`,
+        text: `รับข้อมูลแล้ว ขอ${missing.join(" ")} เพิ่ม (ไม่ทราบกดปุ่ม)`,
         quickReply: { items: [{ type: "action", action: { type: "message", label: "ไม่ทราบ", text: "ไม่ทราบ" } }] },
       });
       return true;
@@ -422,7 +422,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
 
     await client.replyMessage(event.replyToken, {
       type: "text",
-      text: "บันทึกเข้าทะเบียนคลังของคุณแล้ว อาจารย์ส่งผลให้เลย",
+      text: "บันทึกแล้ว",
     });
     // คำถาม "พกเพื่ออะไร" ส่งหลังรายงานถึงมือ (~7 วิ) — ส่งพร้อมกันปุ่ม quickReply จะโดน
     // การ์ดรายงานดันหาย (กบ 7 ส.ค. "ยังไม่ทันเลือกคำตอบ")
@@ -431,7 +431,7 @@ export async function maybeHandleObjectInfoAnswer({ client, event, userId, text 
       import("../lineOutbound/customerPush.gateway.js")
         .then((g) => g.pushToCustomer(client, userId, {
           type: "text",
-          text: "ถามเพิ่มนิดเดียว ชิ้นนี้ตั้งใจพกเพื่ออะไรเป็นหลัก (ตอบหรือไม่ตอบก็ได้)",
+          text: "ชิ้นนี้พกเพื่ออะไร",
           quickReply: {
             items: PURPOSE_CHOICES.map((c) => ({ type: "action", action: { type: "message", label: c, text: `พกเพื่อ${c}` } })),
           },

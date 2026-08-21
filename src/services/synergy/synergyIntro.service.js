@@ -34,7 +34,7 @@ export async function maybeIntroduceSynergy(lineUserId) {
       const { buildSynergyCarouselFlex } = await import("./synergyReport.service.js");
       const flex = await buildSynergyCarouselFlex(uid);
       messages = flex
-        ? [{ type: "text", text: `คลังของคุณมี ${vaultCount} ชิ้นแล้ว เลื่อนดูชุดประจำวันได้เลย (พิมพ์ จัดชุด เมื่อไหร่ก็ได้)` }, flex]
+        ? [{ type: "text", text: `คลังของคุณมี ${vaultCount} ชิ้นแล้ว เลื่อนดูชุดประจำวัน (พิมพ์ จัดชุด)` }, flex]
         : [{ type: "text", text }];
     } catch {
       messages = [{ type: "text", text }];

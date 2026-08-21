@@ -194,7 +194,7 @@ function buildAwaitingSlipAnswer(intent) {
   if (intent === "off_topic_recoverable") {
     return {
       answer_short:
-        "ตอนนี้โฟลว์นี้รอหลักฐานการโอน ถ้าต้องการคิวอาร์ใหม่ผมส่งให้ได้ทันที",
+        "รอหลักฐานการโอน พิมพ์ ขอ QR อีกที เพื่อรับใหม่",
       bridge_back_to: "resend_qr",
     };
   }

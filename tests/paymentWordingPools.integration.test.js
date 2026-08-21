@@ -55,8 +55,8 @@ test("buildPaymentQrIntroText: prepends curated line; facts block preserved", ()
     paidPackage: { priceThb: 49, scanCount: 4, windowHours: 24 },
   });
   assert.ok(full.endsWith(facts));
-  assert.ok(full.length > facts.length);
-  assert.ok(paymentSupportVariants.some((v) => full.startsWith(v)));
+  assert.ok(full.length >= facts.length); // pool ถูกถอด — curated line ไม่เพิ่มความยาวแล้ว
+  assert.equal(full, facts, "pool ถูกถอด — ข้อความ = facts ล้วน ไม่มี curated line");
 });
 
 test("free quota paywall: facts lines still include exact price/count/hours", () => {
@@ -65,12 +65,11 @@ test("free quota paywall: facts lines still include exact price/count/hours", ()
   const t = buildDeterministicFreeQuotaExhaustedPaywallText(o, {
     lineUserId: "U_fq_facts",
   });
-  assert.ok(t.includes("แพ็ก 49 บาท"));
+  assert.ok(t.includes("49 บาท"));
   assert.ok(t.includes("4 ครั้ง"));
   assert.ok(t.includes("24 ชม."));
 });
 
-test("blessing pool size and uniqueness", () => {
-  assert.equal(paymentApprovedBlessingVariants.length, 30);
-  assert.equal(new Set(paymentApprovedBlessingVariants).size, 30);
+test("blessing pool ถูกถอดตามโทนใหม่ (ห้ามอวยพร/ขอบคุณกลับ)", () => {
+  assert.equal(paymentApprovedBlessingVariants.length, 0);
 });

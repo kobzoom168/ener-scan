@@ -23,7 +23,7 @@ export async function buildResumeFlexCard(hold) {
   const bodyLines = [
     "รับรูปที่ส่งไว้ก่อนหน้าแล้ว ยังไม่ต้องส่งซ้ำ",
     hold.description ? `ข้อมูลที่แจ้งไว้: ${hold.description}` : null,
-    "แตะปุ่มด้านล่าง ผมส่งรูปนี้ให้อาจารย์อ่านทันที",
+    "แตะปุ่มด้านล่างเพื่อส่งรูป",
   ].filter(Boolean);
   return {
     type: "flex",

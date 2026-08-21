@@ -3462,7 +3462,7 @@ async function finalizeAcceptedImage({
         await replyText(
           client,
           event.replyToken,
-          "ตอนนี้อาจารย์ขอพัก อีกค่อยส่งเข้ามาใหม่",
+          "พักรับสแกนชั่วคราว",
         );
       } catch (replyErr) {
         console.error(
@@ -8000,7 +8000,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             await replyText(
               client,
               event.replyToken,
-              "ตอนนี้อาจารย์ขอพัก อีกค่อยส่งเข้ามาใหม่",
+              "พักรับสแกนชั่วคราว",
             );
           } catch (replyErr) {
             console.error(
@@ -8691,7 +8691,7 @@ async function handleFollowEvent({ client, event }) {
         type: "text",
         text: [
           "สวัสดี ผมแอดมิน Ener Scan",
-          "ก่อนส่งรูป ขอข้อมูลสำหรับผูกผลอ่านกับเจ้าของ ใช้ประมาณ 1 นาที แล้วส่งรูปชิ้นแรกได้ฟรีเลย",
+          "ก่อนส่งรูป ขอข้อมูลผูกผลอ่าน",
         ].join("\n"),
       });
       welcomeMsgs.push(buildRegistrationFlexMessage(gateCfg.text, liffId));

@@ -22,6 +22,6 @@ test("pickReplyVariant: small pool falls back without throwing", () => {
   assert.equal(v, "only");
 });
 
-test("paymentSupportVariants has 30 entries for pool coverage", () => {
-  assert.equal(paymentSupportVariants.length, 30);
+test("paymentSupportVariants ถูกถอดตามโทนใหม่ (กบ 21 ส.ค.) — ห้ามมีข้อความขอสนับสนุน", () => {
+  assert.equal(paymentSupportVariants.length, 0);
 });

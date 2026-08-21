@@ -33,7 +33,7 @@ export function buildScanEnergyText(hasSavedBirthdate) {
   return [
     "ส่งรูปชิ้นเดียวเต็มกรอบ",
     hasSavedBirthdate
-      ? "มีวันเกิดบันทึกไว้แล้ว อาจารย์เริ่มอ่านทันที"
+      ? "มีวันเกิดในระบบแล้ว"
       : "ยังไม่มีวันเกิดบันทึกไว้ ผมจะขอวันเกิดก่อนเริ่ม",
   ].join("\n");
 }

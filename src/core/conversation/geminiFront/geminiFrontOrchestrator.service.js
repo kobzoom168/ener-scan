@@ -39,12 +39,12 @@ const ENTITLEMENT_CLAIM_RE =
 /** ข้อความตายตัวเมื่อ guard จับได้ — ตามสถานะจริง */
 function safeTextForBlockedClaim(phase1State) {
   if (phase1State === "pending_verify") {
-    return "สลิปกำลังตรวจอยู่ พอเรียบร้อยผมเปิดสิทธิ์แล้วแจ้งในแชตนี้ทันที รอ";
+    return "กำลังตรวจสลิป";
   }
   if (phase1State === "awaiting_slip") {
-    return "ยังไม่เห็นสลิปเข้ามา โอนแล้วแนบสลิปในแชตนี้ได้ จะเปิดสิทธิ์ให้ทันที";
+    return "ยังไม่ได้รับสลิป แนบในแชตนี้";
   }
-  return "จะเช็กสถานะให้ก่อน แล้วแจ้งกลับในแชตนี้";
+  return "กำลังตรวจสถานะ";
 }
 
 /**
@@ -182,7 +182,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
             lineUserIdPrefix: String(ctx.userId || "").slice(0, 8),
           }),
         );
-        return "รับรูปแล้ว อาจารย์กำลังเพ่งดูให้อยู่ ผลตามมาในแชทนี้";
+        return "รับรูปแล้ว";
       }
     } catch {
       /* เช็คไม่ได้ = ปล่อยข้อความเดิม */

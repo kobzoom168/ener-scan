@@ -28,7 +28,6 @@ import {
   parsePackageSelectionFromText,
 } from "../services/scanOffer.packages.js";
 import {
-  paymentApprovedBlessingVariants,
   paymentSupportVariants,
 } from "../config/paymentWordingPools.th.js";
 import {
@@ -148,7 +147,7 @@ export function buildFollowWelcomeText() {
   const freeQ = Number(loadActiveScanOffer()?.freeQuotaPerDay) || 1;
   return [
     "พระที่ห้อยอยู่ รู้ไหมว่าพลังด้านไหนเด่น",
-    `ถ่ายรูปส่งมา 1 ชิ้น เดี๋ยวผมส่งให้อาจารย์เพ่งให้เลย ฟรีวันละ ${freeQ} ครั้ง`,
+    `ถ่ายรูปชิ้นเดียวส่งมา ฟรีวันละ ${freeQ} ครั้ง`,
     "ผลออกเป็นการ์ดพลังครบทุกด้าน พร้อมความเข้ากับดวงคุณ",
     "",
     "กติกาสำคัญ อาจารย์รับดูเฉพาะภาพถ่ายสดจากของจริง",
@@ -192,7 +191,7 @@ export function buildDuplicateImageText() {
 export function getDuplicateImageReplyCandidates() {
   return [
     buildDuplicateImageText(),
-    "รูปนี้เคยสแกนไปแล้วนะ ลองส่งภาพวัตถุใหม่ได้",
+    "รูปนี้เคยสแกนแล้ว ส่งภาพชิ้นใหม่ได้",
     "ซ้ำกับที่เคยส่งมาแล้ว ขอเป็นภาพใหม่ของชิ้นนั้น",
   ];
 }
@@ -318,7 +317,7 @@ export function getMultiImageInRequestReplyCandidates() {
 
 export function buildRateLimitText(retryAfterSec = 0) {
   return [
-    "ส่งมาถี่ไปนิดนึง 🙏",
+    "ส่งถี่เกินไป",
     retryAfterSec > 0
       ? `ขอพักอีก ${retryAfterSec} วินาที แล้วค่อยส่งใหม่ได้`
       : "ขอพัก แล้วค่อยส่งใหม่ได้",
@@ -337,7 +336,7 @@ export function buildCooldownText(remainingSec = 0) {
 export function getRateLimitReplyCandidates(retryAfterSec = 0) {
   return [
     buildRateLimitText(retryAfterSec),
-    "ใช้งานถี่ไปหน่อย ขอพักแป๊บแล้วค่อยสแกนใหม่",
+    "ส่งถี่เกินไป พักก่อนแล้วสแกนใหม่",
   ];
 }
 
@@ -644,7 +643,7 @@ export function buildDeterministicBirthdateErrorText(
     return "รูปแบบยังไม่ตรง ลองเช่น 19/08/2528";
   }
   if (r === "out_of_range") {
-    return "วันเกิดนี้อาจารย์ยังใช้ผูกดวงไม่ได้ ลองเช็คปีอีกทีนะ";
+    return "วันเกิดนี้ใช้ไม่ได้ ตรวจปีอีกครั้ง";
   }
   if (r === "invalid_date") {
     return "วันที่ไม่ตรงกับปฏิทิน ลองบอกใหม่อีกครั้ง";
@@ -675,10 +674,10 @@ export function buildPendingVerifyHumanGuidanceText({ paymentRef } = {}) {
 
 export function buildPaidActiveScanReadyHumanText(userId) {
   const variants = [
-    ["ตอนนี้คุณพร้อมสแกนแล้ว", "ส่งรูปวัตถุ 1 รูปในแชตนี้ได้เลย"].join(
+    ["ตอนนี้คุณพร้อมสแกนแล้ว", "ส่งรูปชิ้นเดียวในแชตนี้"].join(
       "\n\n",
     ),
-    ["พร้อมสแกนแล้ว", "ส่งรูปมา 1 รูป เดี๋ยวอาจารย์อ่านให้"].join("\n\n"),
+    ["พร้อมสแกนแล้ว", "ส่งรูปชิ้นเดียว"].join("\n\n"),
   ];
   return variants[slotFromUserId(userId, variants.length)];
 }
@@ -750,7 +749,7 @@ export function buildNoStatsText() {
 
 /** Deterministic idle copy — routing owns when this applies; persona may only vary alternates. */
 export function buildIdleDeterministicPrimaryText() {
-  return "ส่งรูปมาได้เลย\nอาจารย์จะดูให้ทีละชิ้น";
+  return "ส่งรูปทีละชิ้น";
 }
 
 export async function buildIdleText(userId = null) {
@@ -888,7 +887,7 @@ export function buildPaymentCommandIntroText({
   return [
     "วิธีชำระเงิน (พร้อมเพย์ + สลิป)",
     "",
-    `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้ อาจารย์ตรวจแล้วเปิดสิทธิ์ให้ทันที`,
+    `โอน ${thb} บาท แล้วส่งสลิป 1 รูปในแชทนี้`,
     `เปิดแล้วสแกนต่อได้ ${cnt} ครั้ง ภายใน ${hrs} ชั่วโมง`,
   ].join("\n");
 }
@@ -932,7 +931,7 @@ export function buildSlipReceivedText({ paymentRef } = {}) {
     "รับสลิปแล้ว",
     "",
     "กำลังรอตรวจสอบ",
-    "ยังไม่ต้องส่งซ้ำนะ",
+    "ไม่ต้องส่งซ้ำ",
     "",
     "ตอนนี้ยังสแกนต่อไม่ได้",
     "พออนุมัติแล้ว แจ้งในแชตนี้ให้",
@@ -996,7 +995,7 @@ export function buildPendingVerifyPaymentCommandText({ paymentRef } = {}) {
     "ตอนนี้มีสลิปรอตรวจอยู่แล้ว",
     "",
     "ไม่ต้องส่งคำสั่งจ่ายเงินซ้ำในตอนนี้",
-    "รอผลตรวจก่อนนะ อนุมัติหรือปฏิเสธ แจ้งในแชตนี้ให้",
+    "รอผลตรวจ ผลแจ้งในแชตนี้",
   ].join("\n");
   return appendPaymentRefLine(base, paymentRef);
 }
@@ -1137,30 +1136,11 @@ export async function buildPaymentApprovedText({
             introPackage: introShape,
           })
         ).primaryText
-      : "อาจารย์ตรวจสลิปเรียบร้อย เปิดสิทธิ์ให้แล้ว ✨",
+      : "เปิดสิทธิ์แล้ว",
   ];
   const refLine = formatPaymentRefLine(paymentRef);
   if (refLine) lines.push("", refLine);
-  const uidBless =
-    lineUserId != null && String(lineUserId).trim()
-      ? String(lineUserId).trim()
-      : "anonymous";
-  const blessing = pickReplyVariant(
-    uidBless,
-    "payment_approved_blessing",
-    paymentApprovedBlessingVariants,
-    3,
-  );
-
-  lines.push(
-    "",
-    scanLine,
-    untilLine,
-    "",
-    blessing,
-    "",
-    "ส่งรูปมาสแกนต่อได้",
-  );
+  lines.push("", scanLine, untilLine, "", "ส่งรูปได้");
   return lines.join("\n");
 }
 
@@ -1182,7 +1162,7 @@ export function buildPaymentRejectedText({ reason = null } = {}) {
   }
   lines.push(
     "เริ่มขั้นตอนชำระใหม่ได้แบบนี้",
-    "ส่งรูปที่จะสแกนเข้ามาใหม่อีกครั้ง หรือ",
+    "ส่งรูปเข้ามาใหม่อีกครั้ง",
     "แจ้งว่า จ่ายเงิน หรือ ปลดล็อก เพื่อดูคิวอาร์อีกครั้ง",
     "",
     "แล้วโอนตามยอด แนบสลิปใหม่ในแชทนี้ได้"
@@ -1298,9 +1278,9 @@ export function buildPaywallFatiguePromptText({
     }
     return [
       "วันนี้สิทธิ์ฟรีครบแล้ว",
-      "ถ้าสะดวก รอพรุ่งนี้แล้วค่อยสแกนต่อได้เลย",
+      "พรุ่งนี้สแกนต่อได้",
       "",
-      "แต่ถ้าต้องการใช้ต่อทันที",
+      "ใช้ต่อวันนี้",
       `เปิดสิทธิ์เพิ่ม ${price} บาท สแกนได้ ${scanCount} ครั้ง ภายใน ${hours} ชม. หลังอนุมัติ`,
       "",
       "พร้อมเมื่อไหร่ บอกว่าจ่ายเงินมาก็ได้",
@@ -1397,7 +1377,7 @@ export function buildAwaitingSlipFatigueGuidanceText({
 }
 
 export function buildPendingVerifyStatusShortText({ paymentRef } = {}) {
-  const base = "ตอนนี้กำลังตรวจสอบสลิปให้อยู่ พอมีผลจะแจ้งในแชตนี้ทันที";
+  const base = "กำลังตรวจสลิป ผลแจ้งในแชตนี้";
   return appendPaymentRefLine(base, paymentRef);
 }
 
@@ -1563,7 +1543,7 @@ export function matchesDeterministicPaywallPurchaseIntent(text, lowerText) {
 export function matchesDeterministicPaywallSoftDeclineIntent(text) {
   const t = String(text || "").trim().replace(/\s+/g, " ");
   if (!t) return false;
-  return new Set(["พรุ่งนี้", "ไว้ก่อน", "ยังไม่เอา", "เดี๋ยวก่อน"]).has(t);
+  return new Set(["พรุ่งนี้", "ไว้ก่อน", "ยังไม่เอา", "รอก่อน", "เดี๋ยวก่อน"]).has(t);
 }
 
 export function isHistoryCommand(text, lowerText) {

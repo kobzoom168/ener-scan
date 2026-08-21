@@ -21,6 +21,7 @@ import { emitStateFallbackReason } from "../core/telemetry/stateTelemetry.servic
 import { emitPaymentQrBundleSent } from "../core/telemetry/paymentLifecycleTelemetry.service.js";
 import { gatewayPathEnter, gatewayPathExit } from "./lineReplyAudit.context.js";
 import { insertLineConversationMessage } from "../stores/conversationMessages.db.js";
+import { assertHardToneOrLog } from "../core/conversation/hardTone.util.js";
 
 /** @type {Map<string, { text: string, inboundMessageId: string|null }>} */
 const lastNonScanTextByUser = new Map();
@@ -127,6 +128,9 @@ function evaluateDuplicate(userId, dedupeKey, bodyText, inboundMessageId = null)
 }
 
 function recordSent(userId, dedupeKey, bodyText, inboundMessageId = null) {
+  // hard tone guard (กบ 21 ส.ค.): ทุกข้อความที่ลูกค้าเห็นจริงต้องผ่าน contract —
+  // ไม่แก้ข้อความ (ห้าม sanitize ทีหลัง) แต่ log violation เพื่อจับ regression
+  assertHardToneOrLog(bodyText, { surface: "non_scan_gateway", replyType: dedupeKey, kind: "step" });
   const uid = String(userId || "").trim();
   const trimmed = String(bodyText || "").replace(/\r\n/g, "\n");
   const msgId = String(inboundMessageId || "").trim() || null;
