@@ -12,6 +12,7 @@ import {
 } from "./geminiPhrasingContext.builder.js";
 import { runGeminiPhrasing } from "./geminiPhrasing.service.js";
 import { runGeminiConsult } from "./geminiConsult.service.js";
+import { getCustomerAiBudget } from "../../telemetry/turnAiChain.js";
 import {
   resolveSpeakerRole,
   evaluateMoneyGuard,
@@ -213,7 +214,8 @@ export async function runGeminiFrontOrchestrator(ctx) {
   // P0-4 (Codex): router เป็นคนสร้าง typed contract ก่อนเรียกโมเดล
   // ไม่มี metadata ที่จำเป็น = fail-closed (ค่าเข้มสุด) ห้ามให้โมเดล/ผู้เรียกเดาเอง
   const intentContract = buildIntentContract(ctx, phase1);
-  const turnBudget = { attempted: 0, max: 2 };
+  // P0-6: งบร่วมทั้งเทิร์น — ถ้ามี turn context ใช้ SSOT เดียวกับ CHAT_TURN_AI_CHAIN
+  const turnBudget = getCustomerAiBudget(2) || { attempted: 0, max: 2 };
 
   async function tryConsultReply(via) {
     const lastSpeaker = await getValue(lastSpeakerKey(ctx.userId)).catch(() => null);
@@ -375,6 +377,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
       }
     }
     const ph = await runGeminiPhrasing({
+      turnBudget,
       allowedFacts: buildAllowedFactsForPhrasing({
         phase1State: phase1,
         planner: plan,
@@ -428,6 +431,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
   }
 
   const ph = await runGeminiPhrasing({
+      turnBudget,
     allowedFacts: buildAllowedFactsForPhrasing({
       phase1State: phase1,
       planner: plan,

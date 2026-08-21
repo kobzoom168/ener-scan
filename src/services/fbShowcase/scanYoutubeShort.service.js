@@ -287,6 +287,8 @@ async function notifyOwnerClipLive(lineUserId, youtubeUrl, sAlert) {
   if (!token || !uid || !url) return;
   // แชทห้ามมีอีโมจิทุกข้อความ (กติกากบ — เตือนซ้ำ 17 ส.ค. เคส Marut)
   // Codex P1-3: push แชทเหลือบรรทัดเดียว ไม่มี CTA ชวนแชร์/คำลงท้าย
+  // llm-not-customer-chat: ข้อความ push นี้เป็น copy คงที่ + URL เท่านั้น
+  // เอาต์พุตของโมเดลในไฟล์นี้ไปที่ YouTube (title/description/script) ไม่ไหลเข้าแชทลูกค้า
   const text = sAlert
     ? `คลิปพิเศษของชิ้นนี้: ${url}`
     : `คลิปของชิ้นนี้: ${url}`;

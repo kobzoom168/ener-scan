@@ -326,6 +326,12 @@ export async function runStateSafeClarifier(p) {
     try {
       const history = userId ? await getGeminiConversationHistory(userId, 6, 1800) : [];
       const payload = buildPayload({ activeState, text, facts, conversationHistory: history });
+      const { getCustomerAiBudget } = await import("../../telemetry/turnAiChain.js");
+      const budget = getCustomerAiBudget(2);
+      if (budget && budget.attempted >= budget.max) {
+        throw new Error("turn_ai_budget_exhausted");
+      }
+      if (budget) budget.attempted += 1;
       const modelRunner = p.runModel || runGeminiClarifier;
       const raw = await modelRunner(payload);
       const parsed = parseStateSafeClarifierJson(raw);
@@ -363,6 +369,40 @@ export async function runStateSafeClarifier(p) {
   } else if (final.confidence < STATE_SAFE_CLARIFIER_SAFE_THRESHOLD) {
     final.safe_to_answer = false;
     final.reason_short = final.reason_short || "below_threshold";
+  }
+
+  // เฟส 2 (Codex): answer_short เป็นข้อความที่ลูกค้าเห็น → ต้องผ่าน contract กลาง
+  // clarifier เป็น JSON mode + มี bridge deterministic อยู่แล้ว → ไม่ regenerate
+  // ผิดกติกา = ตัด answer ทิ้ง เหลือ bridge อย่างเดียว (fail-closed ไม่ส่งของที่ถูก reject)
+  if (source === "gemini" && final.answer_short) {
+    const { checkLlmCustomerOutput, evidenceFromAllowedFacts } = await import(
+      "../llmOutputContract.util.js"
+    );
+    const res = checkLlmCustomerOutput({
+      text: final.answer_short,
+      userText: text,
+      userIntent: "state_safe_clarifier",
+      userAskedAdvice: false,
+      requiredNextAction: false,
+      expectedRole: "admin",
+      allowQuestion: false,
+      evidence: evidenceFromAllowedFacts(facts),
+    });
+    if (!res.ok) {
+      console.log(
+        JSON.stringify({
+          event: "LLM_TONE_REJECTED",
+          callSite: "state_safe_clarifier",
+          replyType: "clarifier_answer",
+          violations: res.violations,
+          evidencePresent: Object.keys(facts).length > 0,
+        }),
+      );
+      final.answer_short = "";
+      final.safe_to_answer = Boolean(final.bridge_back_to && final.bridge_back_to !== "unknown");
+      final.reason_short = final.reason_short || "contract_rejected";
+      rejectedReason = rejectedReason || "contract_rejected";
+    }
   }
 
   return {

@@ -152,3 +152,23 @@ test("settle guard (Codex รอบ 5 P1): settle ซ้ำด้วย handle �
     assert.equal(e.pendingAiCount, 0);
   });
 });
+
+test("P0-6: งบข้อความที่ลูกค้าเห็น ≤2 ต่อเทิร์น ใช้ร่วมกันข้ามไฟล์ (ALS SSOT)", async () => {
+  const { runWithTurnContext, getCustomerAiBudget } = await import("../src/core/telemetry/turnAiChain.js");
+  // นอก turn context = null → caller ใช้ budget ท้องถิ่น
+  assert.equal(getCustomerAiBudget(2), null);
+  await runWithTurnContext({}, async () => {
+    const a = getCustomerAiBudget(2);
+    const b = getCustomerAiBudget(2); // guard คนละไฟล์
+    assert.equal(a.attempted, 0);
+    a.attempted += 1;
+    assert.equal(b.attempted, 1, "guard ตัวที่สองต้องเห็นยอดเดียวกัน");
+    b.attempted += 1;
+    assert.equal(a.attempted, 2);
+    assert.ok(a.attempted >= a.max, "งบเต็ม → guard ถัดไปต้องไม่ยิงโมเดล");
+  });
+  // เทิร์นใหม่เริ่มนับใหม่
+  await runWithTurnContext({}, async () => {
+    assert.equal(getCustomerAiBudget(2).attempted, 0);
+  });
+});

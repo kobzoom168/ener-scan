@@ -19,6 +19,16 @@ export async function rephraseWithConversationModel(input) {
   const model = env.CONV_AI_MODEL || "gpt-4.1-mini";
   const { system, user } = buildConversationRephrasePrompts(input);
 
+  {
+    // P0-6: งบเรียกโมเดลที่ลูกค้าเห็นต่อเทิร์น ≤2 (ร่วมกับ consult/phrasing/clarifier)
+    const { getCustomerAiBudget } = await import("../telemetry/turnAiChain.js");
+    const budget = getCustomerAiBudget(2);
+    if (budget && budget.attempted >= budget.max) {
+      throw new Error("turn_ai_budget_exhausted");
+    }
+    if (budget) budget.attempted += 1;
+  }
+
   const started = Date.now();
   const response = await withTimeout(
     openai.responses.create({
@@ -51,6 +61,36 @@ export async function rephraseWithConversationModel(input) {
 
   if (!text) {
     throw new Error("conv_ai_empty_text");
+  }
+
+  // เฟส 2: rephrase พูดได้เฉพาะข้อเท็จจริงที่ส่งเข้าไป — เลข/พลัง/วัดที่แต่งเอง = โยน
+  // ให้ caller ตกไป deterministic copy (fail-closed ห้ามส่งของที่ถูก reject)
+  {
+    const { checkLlmCustomerOutput, evidenceFromAllowedFacts } = await import(
+      "./llmOutputContract.util.js"
+    );
+    const res = checkLlmCustomerOutput({
+      text,
+      userText: input?.userText || "",
+      userIntent: "conversation_rephrase",
+      userAskedAdvice: false,
+      requiredNextAction: Boolean(input?.nextStep),
+      expectedRole: "admin",
+      allowQuestion: false,
+      evidence: evidenceFromAllowedFacts(input?.facts ?? input?.allowedFacts ?? input),
+    });
+    if (!res.ok) {
+      console.log(
+        JSON.stringify({
+          event: "LLM_TONE_REJECTED",
+          callSite: "conversation_surface",
+          replyType: "rephrase",
+          violations: res.violations,
+          evidencePresent: true,
+        }),
+      );
+      throw new Error("conv_ai_contract_rejected");
+    }
   }
 
   console.log(

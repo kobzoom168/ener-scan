@@ -69,6 +69,16 @@ const REASON_HINTS = {
 export async function generateSmartRejectionText(p) {
   if (!env.SMART_REJECTION_ENABLED) return null;
   if (!openaiAuxBreaker.allow()) return null; // quota ตึง → อย่าเพิ่มภาระ ใช้ fallback เดิม
+  {
+    // P0-6: งบเรียกโมเดลที่ลูกค้าเห็นต่อเทิร์น ≤2 ใช้ร่วมกับ consult/phrasing/clarifier
+    const { getCustomerAiBudget } = await import("../../core/telemetry/turnAiChain.js");
+    const budget = getCustomerAiBudget(2);
+    if (budget && budget.attempted >= budget.max) {
+      console.log(JSON.stringify({ event: "LLM_TURN_BUDGET_EXHAUSTED", callSite: "smart_rejection" }));
+      return null;
+    }
+    if (budget) budget.attempted += 1;
+  }
   const attempt = Math.max(1, Number(p.attempt) || 1);
   // กบ 19 ก.ค. (เคสคุณปิติรูปมืด): รูปมืดจริงให้บอกเรื่องแสงตรง ๆ สั้น ๆ ก่อนเหตุอื่น
   const hint = p.imageDark
@@ -113,6 +123,34 @@ export async function generateSmartRejectionText(p) {
       .trim();
     if (!text || text.length < 15 || text.length > 500) return null;
     if (/\b(AI|bot)\b|บอท|ระบบ|ขอโทษ|ขออภัย/i.test(text)) return null; // กันหลุดบท
+    // เฟส 2: ข้อความนี้ลูกค้าเห็น → ผ่าน contract กลาง · ไม่มีรายงาน = อ้างพลัง/เลข/วัดไม่ได้
+    // ผิด = คืน null ให้ deterministic copy เดิมทำงาน (fail-closed ไม่ส่งของที่ถูก reject)
+    {
+      const { checkLlmCustomerOutput } = await import(
+        "../../core/conversation/llmOutputContract.util.js"
+      );
+      const res = checkLlmCustomerOutput({
+        text,
+        userIntent: "image_rejected",
+        userAskedAdvice: true, // ลูกค้าส่งรูปไม่ผ่าน = ต้องบอกวิธีถ่ายใหม่
+        requiredNextAction: true,
+        expectedRole: "admin",
+        allowQuestion: false,
+        evidence: {},
+      });
+      if (!res.ok) {
+        console.log(
+          JSON.stringify({
+            event: "LLM_TONE_REJECTED",
+            callSite: "smart_rejection",
+            replyType: "image_rejected",
+            violations: res.violations,
+            evidencePresent: false,
+          }),
+        );
+        return null;
+      }
+    }
     console.log(
       JSON.stringify({
         event: "SMART_REJECTION_TEXT",

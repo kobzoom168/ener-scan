@@ -86,3 +86,24 @@ export function emitTurnAiChain() {
     }),
   );
 }
+
+/**
+ * งบเรียกโมเดล "ที่ลูกค้าเห็นข้อความ" ต่อหนึ่งเทิร์น (Codex P0-6)
+ * ผูกกับ ALS store เดียวกับ CHAT_TURN_AI_CHAIN → guard ที่อยู่คนละไฟล์
+ * ก็เห็นยอดเดียวกัน โดยไม่ต้องส่ง object ต่อกันทุกชั้น
+ * นอก turn context = คืน null (caller ใช้ budget ท้องถิ่นแทน)
+ */
+export function getCustomerAiBudget(max = 2) {
+  const s = als.getStore();
+  if (!s) return null;
+  if (typeof s.customerAiAttempted !== "number") s.customerAiAttempted = 0;
+  return {
+    get attempted() {
+      return s.customerAiAttempted;
+    },
+    set attempted(v) {
+      s.customerAiAttempted = Number(v) || 0;
+    },
+    max,
+  };
+}

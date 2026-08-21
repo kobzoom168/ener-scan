@@ -555,6 +555,9 @@ export async function maybeHandlePurposeAnswer({ client, event, userId, text }) 
 }
 
 /** customer reply boundary (Codex P0-1): ทุก reply ของไฟล์นี้ผ่าน hard-tone guard */
+// llm-not-customer-chat: parseOwnerInfo คืน JSON ที่เอาไปเก็บ/ตัดสินใจเท่านั้น
+// ข้อความที่ส่งลูกค้าเป็น copy คงที่ (ตัวแปรที่แทรกได้คือชื่อช่องที่ขาด กับตัวเลือกปุ่ม)
+// ไม่มีร้อยแก้วจากโมเดลไหลเข้าแชท จึงไม่ต้องผ่าน LLM contract
 async function __replyCustomer(client, replyToken, messages) {
   const { replyToCustomer } = await import("../lineOutbound/customerPush.gateway.js");
   const r = await replyToCustomer(client, replyToken, messages, { source: "object_info", replyType: "object_info", toneKind: "step" });

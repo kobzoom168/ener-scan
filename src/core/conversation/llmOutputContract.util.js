@@ -287,3 +287,29 @@ export async function enforceLlmCustomerOutput(p, deps) {
   log("LLM_FACTUAL_FALLBACK_USED", { ...meta, violations: res.violations, aiCalls: budget.attempted });
   return { text, source: "fallback", aiCalls: budget.attempted, violations: res.violations };
 }
+
+/**
+ * แปลง "ข้อเท็จจริงที่อนุญาต" (allowedFacts ของ phrasing / facts ของ clarifier)
+ * เป็น typed evidence — โมเดลพูดซ้ำเลขที่อยู่ในบล็อกได้ แต่เลขที่แต่งเองไม่ผ่าน
+ */
+export function evidenceFromAllowedFacts(input) {
+  const t = normalizeInvisible(
+    typeof input === "string" ? input : JSON.stringify(input || {}),
+  );
+  const nums = [...t.matchAll(/[\d๐-๙]+(?:\.[\d๐-๙]+)?/gu)].map((m) => num(m[0]));
+  const energyTags = ENERGY_TAGS.filter((tag) => t.includes(tag));
+  const materials = MATERIALS.filter((m) => t.includes(m));
+  const provenance = [...t.matchAll(new RegExp(PROVENANCE_CUE.source, "gu"))].map((m) => m[0]);
+  return {
+    report: {
+      ids: t ? ["allowed_facts"] : [],
+      scores: nums,
+      percentages: nums,
+      energyTags,
+      luckyAttributes: nums,
+      materials,
+    },
+    kb: { ids: [], provenanceFacts: provenance, materialFacts: materials },
+    tool: {},
+  };
+}
