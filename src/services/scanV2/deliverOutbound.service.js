@@ -11,6 +11,8 @@ async function startPostAckLoadingAnimation(chatId) {
   const uid = String(chatId || "").trim();
   const token = String(env.CHANNEL_ACCESS_TOKEN || "").trim();
   if (!uid || !token) return;
+  // LINE_LOADING_ANIMATION=off → ไม่ยิง LINE HTTP (hermetic tests)
+  if (String(process.env.LINE_LOADING_ANIMATION || "").trim().toLowerCase() === "off") return;
   try {
     await fetch("https://api.line.me/v2/bot/chat/loading/start", {
       method: "POST",
@@ -247,7 +249,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           return { sent: false, errorCode: r.reason || "pre_scan_ack_blocked", errorMessage: (r.toneViolations || []).join(",") };
         }
       }
-      await markSent(id);
+      await ((traceCtx.banGateDeps || {}).markSent || markSent)(id);
       // history ให้ monitor เห็นครบ (Codex H4): ack รับรูป = เสียงแอดมิน
       try {
         const { insertLineConversationMessage } = await import("../../stores/conversationMessages.db.js");

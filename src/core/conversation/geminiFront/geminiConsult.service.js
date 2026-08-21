@@ -66,16 +66,17 @@ export async function runGeminiConsult(p, deps = {}) {
   let paidActive = false;
   let axisTop = null;
   let rankingAllowed = false;
-  const kbPromise = buildKbContext(p.userText).catch(() => null);
+  const kbPromise = (deps.kbContext || buildKbContext)(p.userText).catch(() => null);
   if (p.userId) {
     [recentScan, customerFacts, kbContext, paidActive, axisTop, rankingAllowed] = await Promise.all([
       (deps.scanHistory || buildScanHistoryTyped)(p.userId, 6).catch(() => null),
-      buildCustomerFactsContext(p.userId).catch(() => null),
+      (deps.customerFacts || buildCustomerFactsContext)(p.userId).catch(() => null),
       kbPromise,
       (deps.isPaidActive || isPaidActiveCustomer)(p.userId),
-      buildAxisTopContext(p.userId).catch(() => null),
+      (deps.axisTop || buildAxisTopContext)(p.userId).catch(() => null),
       // สิทธิ์ดูอันดับในแชท = SSOT เดียวกับเซ็นเซอร์หน้ารายงาน (จ่ายใน 3 วัน) — กบ 18 ส.ค.
       (async () => {
+        if (deps.rankingAllowed) return deps.rankingAllowed(p.userId);
         const { hasRecentPaidAccess } = await import("../../../services/everPaid.service.js");
         return hasRecentPaidAccess(p.userId);
       })().catch(() => false),

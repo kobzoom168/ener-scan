@@ -18,6 +18,8 @@ let offerDbFetchedAt = 0;
 let offerDbInFlight = false;
 
 function maybeRefreshOfferDbOverride() {
+  // SCAN_OFFER_DB_OVERRIDE=off = ใช้ไฟล์อย่างเดียว (hermetic tests — ห้ามแตะ DB)
+  if (String(process.env.SCAN_OFFER_DB_OVERRIDE || "").trim().toLowerCase() === "off") return;
   if (offerDbInFlight || Date.now() - offerDbFetchedAt < OFFER_DB_REFRESH_MS) return;
   offerDbInFlight = true;
   getAppSetting(OFFER_SETTING_KEY)

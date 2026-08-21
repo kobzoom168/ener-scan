@@ -45,6 +45,9 @@ async function maybeAlertAjarnMoneyBreach(uid, body) {
  *   persona 2 ชั้น: บอกว่าข้อความ bot เป็นเสียงใคร — เก็บลง metadata_json ให้ monitor ตรวจแบบ role-based
  * @returns {Promise<void>}
  */
+/** ที่เก็บ history ตอน CONVERSATION_HISTORY_SINK=memory (เทสต์อ่านกลับได้) */
+export const MEMORY_SINK = [];
+
 export async function insertLineConversationMessage(lineUserId, role, text, meta = null) {
   const uid = String(lineUserId || "").trim();
   const r = String(role || "").trim();
@@ -65,6 +68,13 @@ export async function insertLineConversationMessage(lineUserId, role, text, meta
 
   if (r === "bot" && cleanMeta?.speakerRole === "ajarn") {
     void maybeAlertAjarnMoneyBreach(uid, body);
+  }
+
+  // CONVERSATION_HISTORY_SINK=memory → เก็บในหน่วยความจำ ไม่แตะ DB (hermetic tests)
+  if (String(process.env.CONVERSATION_HISTORY_SINK || "").trim().toLowerCase() === "memory") {
+    MEMORY_SINK.push({ lineUserId: uid, role: r, text: body, meta: cleanMeta, at: Date.now() });
+    if (MEMORY_SINK.length > 500) MEMORY_SINK.splice(0, MEMORY_SINK.length - 500);
+    return;
   }
 
   try {

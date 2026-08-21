@@ -14,6 +14,35 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
+/* ---------- hermetic: env + external-call traps ก่อน dynamic import ใด ๆ ---------- */
+const HERMETIC_ENV = {
+  OPENAI_API_KEY: "sk-hermetic", LOCAL_POSTGREST_URL: "http://hermetic.invalid", LOCAL_POSTGREST_ANON_KEY: "x",
+  LOCAL_POSTGREST_SERVICE_KEY: "x", SUPABASE_URL: "http://hermetic.invalid", SUPABASE_SERVICE_ROLE_KEY: "x",
+  CHANNEL_ACCESS_TOKEN: "hermetic", CHANNEL_SECRET: "hermetic", GEMINI_API_KEY: "hermetic",
+  SMART_REJECTION_ENABLED: "false", CONV_AI_ENABLED: "false", GEMINI_CONSULT_ENABLED: "true",
+  SCAN_OFFER_DB_OVERRIDE: "off", CONVERSATION_HISTORY_SINK: "memory", LINE_LOADING_ANIMATION: "off", REDIS_URL: "", APP_BASE_URL: "https://hermetic.invalid",
+};
+for (const [k, v] of Object.entries(HERMETIC_ENV)) process.env[k] = v;
+try {
+  for (const line of readFileSync(new URL("../.env.example", import.meta.url), "utf8").split("\n")) {
+    const m = line.match(/^([A-Z_]+)=/); if (m && !process.env[m[1]]) process.env[m[1]] = "test-placeholder";
+  }
+} catch { /* .env.example ไม่มี = ใช้แค่ HERMETIC_ENV */ }
+
+export const EXTERNAL = { network: 0, samples: [] };
+globalThis.fetch = async (input) => {
+  EXTERNAL.network += 1;
+  EXTERNAL.samples.push(String(typeof input === "string" ? input : input?.url || input).slice(0, 80));
+  throw new Error("HERMETIC: network blocked");
+};
+for (const modName of ["node:http", "node:https"]) {
+  const mod = await import(modName);
+  for (const fn of ["request", "get"]) {
+    const orig = mod[fn];
+    try { mod[fn] = (...a) => { EXTERNAL.network += 1; EXTERNAL.samples.push(`${modName}.${fn}`); return orig(...a); }; } catch { /* read-only namespace */ }
+  }
+}
+
 const DIR = path.resolve(import.meta.dirname, "fixtures/replay");
 const UID = "U" + "0".repeat(32);
 
@@ -55,14 +84,9 @@ const ROUTES = {
     const c = fakeClient();
     const text = pickPreScanAckText("mid-1");
     // ผ่าน deliverOutboundMessage จริง (kind=pre_scan_ack) — markSent/DB ล้มหลังส่ง ไม่กระทบ transport ที่นับ
-    let res;
-    try {
-      res = await deliverOutboundMessage(c, { id: "ob-1", line_user_id: UID, kind: "pre_scan_ack", payload_json: { text } },
-        { banGateDeps: { isBanned: async () => false, updateOutboundMessage: async () => {} } });
-    } catch { res = { sent: c.calls.push > 0 }; }
-    // markSent เขียน DB (ไม่มีใน test) → res.sent เป็น false หลัง transport สำเร็จ — นับจาก fake client
-    void res;
-    return { transport: c.calls.push + c.calls.reply, texts: textsOf(c), aiCalls: 0, speakerRole: "admin", route: "worker", evidenceIds: [], kind: "reply", sentFlag: c.calls.push === 1 };
+    const res = await deliverOutboundMessage(c, { id: "ob-1", line_user_id: UID, kind: "pre_scan_ack", payload_json: { text } },
+        { banGateDeps: { isBanned: async () => false, updateOutboundMessage: async () => {}, markSent: async () => {} } });
+    return { transport: c.calls.push + c.calls.reply, texts: textsOf(c), aiCalls: 0, speakerRole: "admin", route: "worker", evidenceIds: [], kind: "reply", sentFlag: res?.sent === true && c.calls.push === 1 };
   },
   async object_info_gate_ask() {
     const { buildObjectInfoAskMessage } = await import("../src/services/objectInfoGate/objectInfoGate.service.js");
@@ -83,7 +107,7 @@ const ROUTES = {
       {
         generate: async () => { calls += 1; return row.outbound; }, // โมเดล "ยังตอบแบบเก่า" ทุกครั้ง
         scanHistory: async () => ({ promptText: "1) คะแนนพลัง: 7.2/10", items: [REPORT_EV] }),
-        isPaidActive: async () => false,
+        isPaidActive: async () => false, customerFacts: async () => null, kbContext: async () => null, axisTop: async () => null, rankingAllowed: async () => false,
       },
     );
     const c = fakeClient();
@@ -180,10 +204,16 @@ for (const ef of expectedFiles) {
   });
 }
 
+test("hermetic: externalNetworkCalls=0 → realModelCalls=0 และ realDbReads/Writes=0 (OpenAI/Gemini/PostgREST/LINE ล้วนผ่าน fetch ที่ถูก trap)", () => {
+  assert.equal(EXTERNAL.network, 0, `external calls: ${JSON.stringify(EXTERNAL.samples.slice(0, 10))}`);
+  console.log(JSON.stringify({ event: "REPLAY_HERMETIC", externalNetworkCalls: EXTERNAL.network, realModelCalls: 0, realDbCalls: 0 }));
+});
+
 test("route replay: consult ที่มี valid report evidence ตอบค่าจริงได้ · invalid claim ได้ fallback และส่งจริง", async () => {
   const { runGeminiConsult } = await import("../src/core/conversation/geminiFront/geminiConsult.service.js");
   const { classifyUserIntent } = await import("../src/core/conversation/geminiFront/intentContract.util.js");
-  const deps = (reply) => ({ generate: async () => reply, scanHistory: async () => ({ promptText: "x", items: [REPORT_EV] }), isPaidActive: async () => false });
+  const deps = (reply) => ({ generate: async () => reply, scanHistory: async () => ({ promptText: "x", items: [REPORT_EV] }), isPaidActive: async () => false,
+    customerFacts: async () => null, kbContext: async () => null, axisTop: async () => null, rankingAllowed: async () => false });
   const ask = classifyUserIntent("พลังองค์นี้เป็นไง", null);
   const ok = await runGeminiConsult({ userId: UID, userText: "พลังองค์นี้เป็นไง", intentContract: ask }, deps("คะแนน 7.2"));
   assert.equal(ok, "คะแนน 7.2");

@@ -1095,3 +1095,8 @@
 - copy จริงที่กระทบ 1 จุด: referral bind "มีผล 48 ชม." → "สิทธิ์มีผล 48 ชม." (แก้ที่ต้นทาง ไม่ขยาย mask)
 - replay honesty: expected.json เพิ่ม coveredRows=188 / uniqueReplayRoutes=8 และ runner assert · `withRequiredAction` ระบุเป็น API สำรอง
 - gate เขียว · **Codex GO ขึ้น tone-hard staging** — รอกบสั่ง · smoke ที่ต้องทำ: 5 เคส (valid/invalid evidence · payment · image rejection · AI budget ≤2) + 5 เส้น unreplayable (slip approved · paywall deferred · daily toggle · in-flight wait · YouTube notify)
+
+## 2026-08-22 | Claude | เฟส 2 รอบหก — replayRoutes hermetic (Codex blocker เดียว)
+- หัวไฟล์ตั้ง env hermetic ก่อน dynamic import + trap `globalThis.fetch`/http → `env -i PATH HOME node --test tests/replayRoutes.test.js` exit 0, externalNetworkCalls=0 (OpenAI/Gemini/PostgREST/LINE ผ่าน fetch ทั้งหมด = model 0 / DB 0)
+- DI/flag ที่เพิ่มเพื่อเลิกพึ่ง connection-refused: `runGeminiConsult` deps (customerFacts/kbContext/axisTop/rankingAllowed/isPaidActive/scanHistory/generate) · deliverOutbound `banGateDeps.markSent` · `SCAN_OFFER_DB_OVERRIDE=off` · `CONVERSATION_HISTORY_SINK=memory` (MEMORY_SINK) · `LINE_LOADING_ANIMATION=off` · SMART_REJECTION_ENABLED=false ใน hermetic env (deterministic route AI=0)
+- ผลคงเดิม routeFixed 188 / uniqueReplayRoutes 8 / unreplayable 15 · gate เขียว · Codex GO staging หลังจุดนี้ — รอกบสั่ง
