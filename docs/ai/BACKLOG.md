@@ -13,6 +13,14 @@
 2. **ไดคัทพระลอยตัว** บนการ์ดแชร์ เฟส 2 (ตัดพื้นหลังด้วย ener-vision — ต้นทุนศูนย์)
 
 ## 🎯 คิวคุณภาพแชท (Codex เคาะแผนร่วม 20 ส.ค. 2026 — ทำ "หลัง" deploy pro @995d469 เท่านั้น ห้ามแซง)
+
+### เฟส 2 LLM contract (21 ส.ค. 2026 — ปิด P0 ครบ 6 ข้อแล้ว)
+- [x] contract กลาง fail-closed + typed claim evidence + router intent contract + AI budget ≤2/เทิร์น
+- [x] ผูกทุก surface ที่ข้อความโมเดลถึงลูกค้า + inventory test กันหลุดใหม่
+- [x] rewrite prompt consult/phrasing (ลบกติกาที่ขัด)
+- [x] replay 20-21 ส.ค. — fixed 203 / still failing 0
+- [ ] **staging smoke ด้วยบัญชีจริง** (รอกบสั่ง deploy `tone-hard` ขึ้น staging)
+- [ ] merge + deploy pro (หลัง smoke ผ่านเท่านั้น)
 1. **Deploy @995d469 Pro + smoke ตาม GO เดิม** — รอกบสั่ง "เอาขึ้น pro" (ปิดกลุ่ม B ของรายงานคุณภาพ 16-18 ส.ค. ทันที: exact utility ก่อน payment lanes รวม "ประวัติ" / in-flight bypass / identity deterministic / ranking gate / status routing)
 2. **C1 Evidence-aware no-fabrication guard** — contract กลาง `enforceGroundedChatOutput(text, {expectedRole, intent, reportEvidence, kbEvidence, allowedFacts, userAskedAdvice})` ครอบ customer-visible LLM ทุก surface (direct consult, paywall consult, phrasing, conversation surface, state clarifier) · คะแนน/10, %, สี, เลข, พลังเฉพาะชิ้น ต้องตรง reportEvidence ของ user/job นั้น · KB facts ผ่านได้แต่ห้ามแปลงเป็นพลังเฉพาะชิ้น · สถิติรวมห้ามตอบถ้าไม่มี authorized query · ไม่มีหลักฐาน → retry พร้อม allowed facts 1 ครั้ง → deterministic fallback "ยังไม่มีข้อมูลยืนยัน" · **ห้าม regex กว้างบล็อกตัวเลข** (ราคา 49 บาท/วันเกิด/เวลา ต้องรอด) + ห้าม sanitize ตัวเลขมโนให้ดูจริง · prompt เป็นชั้นช่วย pre-send guard เป็นชั้นบังคับ
 3. **C2 Language/link/role guard** — ①inbound external URL → deterministic ไทย AI=0 ("ลิงก์นี้อ่านเนื้อหาข้างในไม่ได้ ส่งข้อความหรือภาพมาแทน") ②LLM ตอบไทยเป็นหลัก ยอม proper noun/URL ③role-leak guard ตาม expectedRole/intent (อาจารย์ห้ามเล่ากลไกภายใน/แก้ตัวเป็นคน-โปรแกรม · identity route ใช้ factual copy เดิม · retry 1 ครั้ง → factual fallback) · **ห้าม global regex แบนคำ "ระบบ/โปรแกรม/AI"** (ชน identity/support ที่ถูกต้อง)

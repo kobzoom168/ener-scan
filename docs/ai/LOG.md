@@ -1061,3 +1061,13 @@
 - **P0-6 AI budget**: `turnBudget {attempted,max:2}` ใช้ร่วม consult + money guard + tone guard · guard ตัวหลังหลังงบหมดได้ null → deterministic (log `LLM_TURN_BUDGET_EXHAUSTED`)
 - เทสต์ `tests/llmOutputContract.test.js` 18/18 · gate: ไม่มี fail ใหม่นอก baseline
 - **ค้าง**: ผูก surface ที่เหลือ (phrasing / conversationSurface / stateSafeClarifier / smartRejection / objectInfo / paywall) + adversarial ข้าม surface + rewrite prompt + replay 20-21 ส.ค. + staging smoke — `tone-hard` ยังไม่ merge/deploy
+
+## 2026-08-21 | Claude | เฟส 2 (ต่อ) — ผูกทุก surface + rewrite prompt + replay 20-21 ส.ค.
+- ผูก contract: phrasing (regenerate→fallback) · stateSafeClarifier (ตัด answer เหลือ bridge) · smartRejection (คืน null → copy คงที่) · conversationSurface (throw → deterministic)
+- `tests/llmSurfaceInventory.test.js`: สแกน src/ ทั้งต้นไม้ ไฟล์ที่เรียกโมเดลต้องผูก contract · ลิสต์ยกเว้น 18 ไฟล์ต้องมีเหตุผล และถ้ามี transport หาลูกค้าด้วยต้องมีหมายเหตุ `llm-not-customer-chat:` (บังคับได้จริง ไม่ใช่ยกเว้นด้วยชื่อ)
+- adversarial 8 เคส × 5 surface profile + เคสที่ต้องผ่านจริงไม่ over-block
+- budget: `getCustomerAiBudget()` ผูก ALS เดียวกับ CHAT_TURN_AI_CHAIN → guard ข้ามไฟล์เห็นยอดเดียวกัน ≤2/เทิร์น
+- prompt: เขียนใหม่ทั้งบล็อก phrasing · consult ลบกติกาที่ขัดรายข้อ (ขอบคุณกลับ/อบอุ่น/คุยเป็นเพื่อน/2-4 บรรทัด) และ**ลบตัวอย่างที่เป็นต้นตอ "ตอบมาเป็นหมื่นรอบ"** ออกจากพรอมป์
+- replay Pro 20-21 ส.ค. (อ่านอย่างเดียว ไม่ดึง line_user_id): 52 บทสนทนา · 203 ข้อความบอทจริง → fixed 203 · still failing 0 · false positive 0 · ตรวจย้อนที่ต้นทาง 32 แบบ ไม่มีอันไหนผลิตซ้ำได้
+- gate: ไม่มี fail ใหม่นอก baseline · รายงานเต็ม `docs/ai/reports/2026-08-21-phase2-llm-contract-replay.md`
+- **ค้าง**: staging smoke ด้วยบัญชีจริง — รอกบสั่ง deploy `tone-hard` ขึ้น staging (ห้ามปน bundle 055 ที่ GO รอขึ้น Pro) แล้วจึงขอ merge
