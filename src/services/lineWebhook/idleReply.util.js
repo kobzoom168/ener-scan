@@ -54,7 +54,7 @@ export async function replyIdleTextNoDuplicate({
     text: primary,
     alternateTexts: [
       ...(altPersona ? [altPersona] : []),
-      "มีชิ้นไหนอยากให้ดูต่อก็ส่งมา\nเดี๋ยวไล่ดูให้",
+      "มีชิ้นไหนต้องการให้ดู ส่งมา",
     ],
   });
   return { via: "deterministic" };

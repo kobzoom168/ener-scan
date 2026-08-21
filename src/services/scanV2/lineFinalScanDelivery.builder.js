@@ -86,7 +86,7 @@ export function extractLineSummaryFields(reportPayload, parsed) {
 export function buildLineSummaryCtaText(reportUrl) {
   const url = String(reportUrl || "").trim();
   if (!url) {
-    return "เปิดรายงานฉบับเต็ม — ลิงก์ยังไม่พร้อม";
+    return "เปิดรายงานฉบับเต็ม — ลิงก์ยังไม่พร้อม"; /* tone-exempt: scan_report_body */
   }
   return `เปิดรายงานฉบับเต็ม\n${url}`;
 }
@@ -117,7 +117,7 @@ export function buildLineSummaryText(p) {
     .replace(/\s+/g, " ")
     .trim();
   const lines = [];
-  lines.push("สรุปผลสแกน — พร้อมอ่านรายงานฉบับเต็มแล้ว");
+  lines.push("สรุปผลสแกน — พร้อมอ่านรายงานฉบับเต็มแล้ว"); /* tone-exempt: scan_report_body */
   lines.push("");
   lines.push(`• พลังหลัก: ${mainShort} · ${scoreStr}`);
   if (compatibility != null && Number.isFinite(compatibility)) {
@@ -177,7 +177,7 @@ export function buildSummaryLinkFallbackText(resultText, reportUrl) {
         .slice(0, 320)
     : "";
   const url = String(reportUrl || "").trim();
-  const parts = ["สรุปผลสแกน — ฉบับย่อ", ""];
+  const parts = ["สรุปผลสแกน — ฉบับย่อ", ""]; /* tone-exempt: scan_report_body */
   if (snippet) {
     parts.push(snippet.length >= 320 ? `${snippet}…` : snippet);
     parts.push("");

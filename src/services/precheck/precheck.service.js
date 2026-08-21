@@ -30,7 +30,7 @@ export async function maybeHandlePrecheckTrigger({ client, event, userId, text }
     await client.replyMessage(event.replyToken, {
       type: "text",
       text:
-        "เปิดโหมดเช็คก่อนเช่าแล้ว (30 นาที) ถ่ายรูปองค์ที่กำลังจะเช่าส่งมาได้" +
+        "เปิดโหมดเช็คก่อนเช่าแล้ว ถ่ายรูปองค์ที่จะเช่าส่งมา" +
         "อาจารย์จะอ่านพลัง เทียบกับของประเภทเดียวกันในระบบ และดูความเข้ากับดวงคุณให้ " +
         "องค์ที่เช็คจะไม่ถูกเก็บเข้าคลังของคุณ (ยังไม่ใช่ของเรา) " +
         "ใช้สิทธิ์สแกนตามปกติ",
@@ -110,7 +110,7 @@ export async function handlePrecheckAfterReport({ client, lineUserId, payload })
         body: {
           type: "box", layout: "vertical", backgroundColor: "#14110C", paddingAll: "16px", spacing: "md",
           contents: [
-            { type: "text", text: "🔎 ผลเช็คก่อนเช่า", weight: "bold", size: "md", color: "#E8C547" },
+            { type: "text", text: "ผลเช็คก่อนเช่า", weight: "bold", size: "md", color: "#E8C547" },
             { type: "separator", color: "#3A3122" },
             ...lines,
           ],

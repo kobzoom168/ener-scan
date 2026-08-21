@@ -21,7 +21,7 @@ import { emitStateFallbackReason } from "../core/telemetry/stateTelemetry.servic
 import { emitPaymentQrBundleSent } from "../core/telemetry/paymentLifecycleTelemetry.service.js";
 import { gatewayPathEnter, gatewayPathExit } from "./lineReplyAudit.context.js";
 import { insertLineConversationMessage } from "../stores/conversationMessages.db.js";
-import { assertHardToneOrLog } from "../core/conversation/hardTone.util.js";
+import { enforceHardToneBeforeSend, toneKindForReplyType, collectFlexTexts } from "../core/conversation/hardTone.util.js";
 
 /** @type {Map<string, { text: string, inboundMessageId: string|null }>} */
 const lastNonScanTextByUser = new Map();
@@ -128,9 +128,6 @@ function evaluateDuplicate(userId, dedupeKey, bodyText, inboundMessageId = null)
 }
 
 function recordSent(userId, dedupeKey, bodyText, inboundMessageId = null) {
-  // hard tone guard (กบ 21 ส.ค.): ทุกข้อความที่ลูกค้าเห็นจริงต้องผ่าน contract —
-  // ไม่แก้ข้อความ (ห้าม sanitize ทีหลัง) แต่ log violation เพื่อจับ regression
-  assertHardToneOrLog(bodyText, { surface: "non_scan_gateway", replyType: dedupeKey, kind: "step" });
   const uid = String(userId || "").trim();
   const trimmed = String(bodyText || "").replace(/\r\n/g, "\n");
   const msgId = String(inboundMessageId || "").trim() || null;
@@ -363,11 +360,24 @@ export async function sendNonScanReply(opts) {
     exactDuplicate: false,
     semanticDuplicate: false,
   };
+  const toneKind = opts.toneKind || toneKindForReplyType(rt);
+  const toneViolations = [];
 
   for (let i = 0; i < candidates.length; i += 1) {
     const body = candidates[i];
     lastEval = evaluateDuplicate(uid, dedupeKey, body, inboundMessageId);
     if (!lastEval.blocked) {
+      // Pre-send hard tone (Codex Blocker 1): ตรวจ "ก่อน" transport ทุกครั้ง —
+      // candidate ไม่ผ่าน = ข้ามไปตัวถัดไป · ไม่มีตัวไหนผ่าน = ไม่ส่งเลย
+      const toneRes = enforceHardToneBeforeSend(body, {
+        surface: "non_scan_gateway",
+        replyType: rt,
+        kind: toneKind,
+      });
+      if (!toneRes.ok) {
+        toneViolations.push(...toneRes.violations);
+        continue;
+      }
       if (turnPerf) {
         turnPerf.log("NON_SCAN_REPLY_ROUTED", {
           replyType: rt,
@@ -381,6 +391,14 @@ export async function sendNonScanReply(opts) {
         : null;
       // โหมดการ์ด Flex: ส่งการ์ดแทนข้อความ (quickReply เกาะบนการ์ด, altText = body)
       if (autoFlexMessage && typeof autoFlexMessage === "object") {
+        // Flex: altText + text node + button label ทุกตัวต้องผ่าน ก่อน transport
+        const flexBad = collectFlexTexts(autoFlexMessage)
+          .map((t) => enforceHardToneBeforeSend(t, { surface: "non_scan_flex", replyType: rt, kind: "bundle" }))
+          .filter((r) => !r.ok);
+        if (flexBad.length) {
+          toneViolations.push(...flexBad.flatMap((r) => r.violations));
+          continue;
+        }
         const flexToSend = {
           ...autoFlexMessage,
           altText: String(autoFlexMessage.altText || body).slice(0, 400),
@@ -521,6 +539,7 @@ export async function sendNonScanReply(opts) {
     semanticDuplicate: lastEval.semanticDuplicate,
     suppressed: true,
     retryCount: candidates.length,
+    ...(toneViolations.length ? { toneViolations: [...new Set(toneViolations)] } : {}),
   });
 
   return {
@@ -529,6 +548,9 @@ export async function sendNonScanReply(opts) {
     exactDuplicate: lastEval.exactDuplicate,
     semanticDuplicate: lastEval.semanticDuplicate,
     retryCount: candidates.length,
+    ...(toneViolations.length
+      ? { reason: "hard_tone_rejected", toneViolations: [...new Set(toneViolations)] }
+      : {}),
   };
   } finally {
     gatewayPathExit();
@@ -620,10 +642,20 @@ export async function sendNonScanSequenceReply(opts) {
     semanticDuplicate: false,
   };
 
+  const toneKindSeq = opts.toneKind || toneKindForReplyType(rt);
+  const toneViolationsSeq = [];
   for (let i = 0; i < candidates.length; i += 1) {
     const { list, fingerprint } = candidates[i];
     lastEval = evaluateDuplicate(uid, dedupeKey, fingerprint, inboundMessageId);
     if (!lastEval.blocked) {
+      // Pre-send: ทุก bubble ในชุดต้องผ่าน — bubble ใดผิด = ทั้งชุดไม่ส่ง
+      const bad = list
+        .map((b) => enforceHardToneBeforeSend(b, { surface: "non_scan_sequence", replyType: rt, kind: toneKindSeq }))
+        .filter((r) => !r.ok);
+      if (bad.length) {
+        toneViolationsSeq.push(...bad.flatMap((r) => r.violations));
+        continue;
+      }
       const tokenSpent = isScanFlowReplyTokenSpent(uid);
       const effectiveReplyToken = tokenSpent
         ? null
@@ -665,6 +697,7 @@ export async function sendNonScanSequenceReply(opts) {
     suppressed: true,
     retryCount: candidates.length,
     sequence: true,
+    ...(toneViolationsSeq.length ? { toneViolations: [...new Set(toneViolationsSeq)] } : {}),
   });
 
   return {
@@ -673,6 +706,9 @@ export async function sendNonScanSequenceReply(opts) {
     exactDuplicate: lastEval.exactDuplicate,
     semanticDuplicate: lastEval.semanticDuplicate,
     retryCount: candidates.length,
+    ...(toneViolationsSeq.length
+      ? { reason: "hard_tone_rejected", toneViolations: [...new Set(toneViolationsSeq)] }
+      : {}),
   };
   } finally {
     gatewayPathExit();
@@ -842,10 +878,19 @@ export async function sendNonScanPushMessage(opts) {
       semanticDuplicate: false,
     };
 
+    const toneKindPush = opts.toneKind || toneKindForReplyType(rt);
+    const toneViolationsPush = [];
     for (let i = 0; i < candidates.length; i += 1) {
       const body = candidates[i];
       lastEval = evaluateDuplicate(uid, dedupeKey, body, inboundMessageId);
       if (!lastEval.blocked) {
+        // Pre-send hard tone — push ตรงก็ต้องผ่าน contract ก่อน transport
+        const toneRes = enforceHardToneBeforeSend(body, {
+          surface: "non_scan_push",
+          replyType: rt,
+          kind: toneKindPush,
+        });
+        if (!toneRes.ok) { toneViolationsPush.push(...toneRes.violations); continue; }
         if (stickerPush) {
           await pushTextWithTrailingSticker(client, uid, body, stickerPush);
         } else {
@@ -889,6 +934,7 @@ export async function sendNonScanPushMessage(opts) {
       suppressed: true,
       retryCount: candidates.length,
       channel: "push",
+      ...(toneViolationsPush.length ? { toneViolations: [...new Set(toneViolationsPush)] } : {}),
     });
     return {
       sent: false,
@@ -896,6 +942,9 @@ export async function sendNonScanPushMessage(opts) {
       exactDuplicate: lastEval.exactDuplicate,
       semanticDuplicate: lastEval.semanticDuplicate,
       retryCount: candidates.length,
+      ...(toneViolationsPush.length
+        ? { reason: "hard_tone_rejected", toneViolations: [...new Set(toneViolationsPush)] }
+        : {}),
     };
   } finally {
     gatewayPathExit();

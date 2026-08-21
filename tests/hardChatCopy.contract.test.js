@@ -61,54 +61,91 @@ test("contract: normalize อักขระซ่อน (zero-width/NBSP) ก�
   assert.equal(isHardTone("ขอบคุณ​ครับ​"), false);
 });
 
-/* ---------------- 2) inventory: static copy ทุก surface ---------------- */
+/* ---------------- 2) inventory: derive จาก send-path จริง ---------------- */
 
-/** ไฟล์ที่ส่งข้อความถึงลูกค้า (reply/push/outbound/Flex/LIFF/delayed) — ตรวจทุกไฟล์ ไม่เลือก */
-const COPY_FILES = [
-  "src/utils/webhookText.util.js",
-  "src/core/conversation/deterministicFallbacks.js",
-  "src/config/scanOffer.templates.th.js",
-  "src/config/replyVariants.th.js",
-  "src/utils/scanLockReply.util.js",
-  "src/utils/birthdateChangeFlow.util.js",
-  "src/services/scanV2/resultStatusReply.util.js",
-  "src/services/scanV2/webhookImageIngestion.service.js",
-  "src/services/scanV2/scanJobFailureNotify.service.js",
-  "src/services/lineWebhook/paywallDefer.util.js",
-  "src/services/lineWebhook/deterministicInfoCommand.util.js",
-  "src/services/lineWebhook/rankingQueryGate.util.js",
-  "src/services/lineWebhook/unsupportedObjectReply.service.js",
-  "src/services/objectInfoGate/objectInfoGate.service.js",
-  "src/services/synergy/synergyIntro.service.js",
-  "src/services/welcome/registrationSuccess.service.js",
-  "src/handlers/stickerMessage.handler.js",
-  "src/core/conversation/stateSafeClarifier/stateSafeClarifier.service.js",
-  "src/core/conversation/geminiFront/geminiFrontOrchestrator.service.js",
-];
+/**
+ * Codex Blocker 2: ห้าม hardcode ลิสต์ไฟล์ — derive จาก "ไฟล์ที่เรียก send path จริง"
+ * (sendNonScanReply / sendNonScanPushMessage / sendNonScanSequenceReply /
+ *  pushToCustomer / pushText / pushFlex / replyMessage / insertOutboundMessage)
+ * แล้วบวกไฟล์ copy pool ที่ถูก import เข้าไปในนั้น
+ */
+const SEND_PATH_RE =
+  /sendNonScanReply|sendNonScanPushMessage|sendNonScanSequenceReply|sendNonScanPaymentQrInstructions|pushToCustomer|pushText\(|pushFlex\(|replyMessage\(|replyText\(|insertOutboundMessage/;
 
-/** ดึง string literal ที่เป็นภาษาไทย (= customer copy) ออกจากไฟล์ */
+/** surface ที่ยกเว้นได้ — ต้องมีเหตุผล typed (ห้ามข้ามเงียบ) */
+const EXEMPT_FILES = {
+  "src/routes/liff.routes.js": "liff_page_html — หน้าเว็บ ไม่ใช่ข้อความแชท",
+  "src/app.js": "liff_page_html — error page HTML",
+  "src/services/fbShowcase/fbShowcase.service.js": "social_caption — แคปชันเพจ ไม่ใช่แชท",
+  "src/services/fbShowcase/scanYoutubeShort.service.js": "social_caption — แคปชัน/สคริปต์คลิป",
+  "src/services/fbShowcase/showcasePhotoCard.service.js": "card_graphic — ข้อความบนการ์ดภาพ ไม่ใช่ข้อความแชท",
+  "src/services/synergy/synergyReport.service.js": "liff_page_html — หน้าเว็บ synergy (ข้อความ push อยู่ใน synergyIntro ซึ่งตรวจแล้ว)",
+  "src/services/welcome/identityQuestion.service.js": "regex_source — pattern จับข้อความลูกค้า ไม่ใช่ copy",
+  "src/services/scanV2/processScanJob.service.js": "scan_report_body — เนื้อหารายงาน",
+  "src/services/reports/reportPayload.builder.js": "scan_report_body",
+  "src/templates/reports/mobileReport.template.js": "scan_report_body",
+  "src/services/monitor/customerAlerts.service.js": "admin_telegram",
+  "src/workers/maintenanceWorker.js": "admin_telegram",
+  "src/services/telegramNotify.service.js": "admin_telegram",
+  "src/services/chatQualityDailyReport.service.js": "admin_telegram",
+  "src/core/conversation/geminiFront/geminiConsultPrompt.js": "llm_prompt — เฟส 2",
+  "src/core/conversation/geminiFront/geminiPhrasingPrompt.js": "llm_prompt — เฟส 2",
+  "src/config/personaEner.th.js": "llm_prompt — เฟส 2",
+  "src/chat/hybridPersona.prompt.js": "llm_prompt — เฟส 2",
+  "src/core/conversation/geminiFront/customerFactsContext.util.js": "llm_prompt — context ที่ป้อนโมเดล ไม่ใช่ข้อความลูกค้า",
+  "src/core/conversation/geminiFront/geminiFrontOrchestrator.service.js": "llm_prompt+directive — เฟส 2 (ข้อความ safeText ตรวจผ่าน gateway อยู่แล้ว)",
+};
+
+function walkSrc(dir, acc = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) walkSrc(full, acc);
+    else if (e.name.endsWith(".js")) acc.push(full);
+  }
+  return acc;
+}
+
+function discoverCopyFiles() {
+  const root = path.join(process.cwd(), "src");
+  const files = walkSrc(root).map((f) => path.relative(process.cwd(), f));
+  return files.filter((f) => {
+    if (EXEMPT_FILES[f]) return false;
+    const src = fs.readFileSync(f, "utf8");
+    if (!/[ก-๙]/.test(src)) return false;
+    // ไฟล์ที่ "ส่งเอง" หรือเป็น copy builder/pool ที่ถูกใช้ในเส้นส่ง
+    return (
+      SEND_PATH_RE.test(src) ||
+      /Variants|TEXTS|templates\.th|replyVariants|Fallbacks|WordingPools/.test(f) ||
+      /export function build[A-Z]\w*Text|export const [A-Z_]+_TEXTS?|export async function render|buildSynergy/.test(src)
+    );
+  });
+}
+
+/** kind ที่ถูกต้องต่อ literal — bundle เฉพาะ payload รายการ/เงิน (typed ไม่เดาจาก \n) */
+function kindForLiteral(file, lit) {
+  if (/payment|paywall|scanOffer|quota|slip|qr|synergy|myscans/i.test(file)) return "bundle";
+  if (lit.includes("\n")) return "step";
+  return lit.trim().length <= 40 ? "reply" : "step";
+}
+
+/** ดึง string literal ที่เป็นภาษาไทย (= customer copy) — ห้าม skip เพราะสั้น */
 function thaiLiterals(src) {
   const out = [];
   const push = (s) => {
     const t = s.replace(/\\n/g, "\n").replace(/\\"/g, '"');
-    // ข้าม separator/token สั้น ๆ (เช่น " หรือ ") และ prompt บรรทัดสเปก (ขึ้นด้วย "- ")
     if (!/[ก-๙]/.test(t)) return;
     const trimmed = t.trim();
-    if (trimmed.length <= 6 || /^-\s/.test(trimmed) || /=/.test(trimmed)) return;
+    if (!trimmed) return;
+    if (/^-\s/.test(trimmed) || /=/.test(trimmed)) return; // prompt spec line
     out.push(t);
   };
   for (const m of src.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)) push(m[1]);
-  for (const m of src.matchAll(/`((?:[^`\\]|\\.)*)`/gs)) {
-    // ตัด interpolation ออกก่อนตรวจ (ค่าเป็น runtime)
-    push(m[1].replace(/\$\{[^}]*\}/g, "X"));
-  }
+  for (const m of src.matchAll(/`((?:[^`\\]|\\.)*)`/gs)) push(m[1].replace(/\$\{[^}]*\}/g, "X"));
   return out;
 }
 
-/** บรรทัดที่เป็น comment/regex/prompt — ไม่ใช่ copy */
+/** บรรทัดที่ไม่ใช่ customer copy: comment · regex · token set · admin/telegram/log */
 function stripNonCopy(src) {
-  // ตัดสิ่งที่ไม่ใช่ customer copy: comment · regex literal · token set ที่ใช้จับ
-  // input (CONFIRM_YES/GENERIC_ACK/exact intent) · ข้อความ Telegram แอดมิน
   let s = src;
   for (const name of ["CONFIRM_YES", "CONFIRM_NO", "GENERIC_ACK", "PAY_INTENT_WORDS", "const exact = new Set(["]) {
     const i = s.indexOf(name);
@@ -120,55 +157,145 @@ function stripNonCopy(src) {
   return s
     .split("\n")
     .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
-    .filter((l) => !/\/[^/\n]*[ก-๙][^/\n]*\/[gimsuy]*/.test(l)) // regex literal ภาษาไทย
+    .filter((l) => !/\/[^/\n]*[ก-๙][^/\n]*\/[gimsuy]*/.test(l))
     .filter((l) => !/sendTelegram|\[CRITICAL\]|\[RECOVERY\]|console\.(log|error|warn)/.test(l))
-    .filter((l) => !/new Set\(\[.*\]\)/.test(l)) // inline token set = input matcher ไม่ใช่ copy
+    .filter((l) => !/new Set\(\[.*\]\)/.test(l))
+    // typed exemption ระดับบรรทัด: /* tone-exempt: <reason> */ — ต้องระบุเหตุผล
+    .filter((l) => !/tone-exempt:\s*\w+/.test(l))
     .join("\n");
 }
 
-test("inventory: static customer copy ทุกไฟล์ผ่าน hard tone contract", () => {
+test("inventory: ครอบคลุมจาก send-path จริง — ต้องเจอไฟล์หลักครบและมี exemption ที่ระบุเหตุผล", () => {
+  const files = discoverCopyFiles();
+  assert.ok(files.length >= 25, `inventory ต้อง derive ได้กว้างจริง (ได้ ${files.length})`);
+  for (const must of [
+    "src/routes/lineWebhook.js",
+    "src/utils/webhookText.util.js",
+    "src/services/referral/referral.service.js",
+    "src/services/objectInfoGate/objectInfoGate.service.js",
+  ]) assert.ok(files.includes(must), `ต้องอยู่ใน inventory: ${must}`);
+  for (const [f, reason] of Object.entries(EXEMPT_FILES)) {
+    assert.ok(reason && reason.length > 5, `exemption ต้องมีเหตุผล: ${f}`);
+  }
+});
+
+test("inventory: static customer copy ทุกไฟล์ (send-path derived) ผ่าน hard tone contract", () => {
   const failures = [];
-  for (const f of COPY_FILES) {
-    const src = stripNonCopy(read(f));
+  for (const f of discoverCopyFiles()) {
+    const src = stripNonCopy(fs.readFileSync(f, "utf8"));
     for (const lit of thaiLiterals(src)) {
-      const kind = lit.includes("\n") ? "bundle" : "step";
-      const r = checkHardTone(lit, { kind });
-      if (!r.ok) failures.push(`${f}: ${JSON.stringify(lit.slice(0, 50))} → ${r.violations.join(",")}`);
+      const r = checkHardTone(lit, { kind: kindForLiteral(f, lit) });
+      if (!r.ok) failures.push(`${f}: ${JSON.stringify(lit.slice(0, 45))} → ${r.violations.join(",")}`);
     }
   }
-  assert.deepEqual(failures, [], `static copy ยังผิด contract:\n${failures.join("\n")}`);
+  assert.deepEqual(failures, [], `static copy ยังผิด contract (${failures.length}):\n${failures.slice(0, 25).join("\n")}`);
 });
 
-/* ---------------- 3) runtime interception ---------------- */
+/* ---------------- 3) runtime: behavior ด้วย fake transport ---------------- */
 
-test("runtime: gateway ทุก path ที่ส่งจริงต้องผ่าน hard tone guard (reply/flex/push/sequence)", () => {
-  const src = read("src", "services", "nonScanReply.gateway.js");
-  assert.ok(src.includes("assertHardToneOrLog"), "gateway ต้องเรียก guard");
-  // guard อยู่ใน recordSent ซึ่งถูกเรียกทุก path ที่ส่งสำเร็จ
-  const fn = src.slice(src.indexOf("function recordSent"), src.indexOf("function recordSent") + 500);
-  assert.ok(fn.includes("assertHardToneOrLog"), "guard ต้องอยู่ใน recordSent (ทุก path ส่งจริง)");
-  const paths = ["replyFlex(", "pushFlex(", "replyText(", "pushText(", "replyTextSequenceOrSingle("];
-  for (const p of paths) assert.ok(src.includes(p), `path ${p} ต้องยังอยู่ใน gateway`);
-  const recordCalls = (src.match(/recordSent\(uid, dedupeKey/g) || []).length;
-  assert.ok(recordCalls >= 4, `ทุก send path ต้อง recordSent (พบ ${recordCalls})`);
+/** fake LINE client — นับ transport จริง (Codex Blocker 4: ห้าม source assertion) */
+function fakeClient() {
+  const calls = { reply: 0, push: 0, payloads: [] };
+  return {
+    calls,
+    replyMessage: async (_t, m) => { calls.reply += 1; calls.payloads.push(m); },
+    pushMessage: async (_u, m) => { calls.push += 1; calls.payloads.push(m); },
+  };
+}
+const uid = () => `u_tone_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+test("behavior 1: text reply ผิด contract → transport 0", async () => {
+  const { sendNonScanReply } = await import("../src/services/nonScanReply.gateway.js");
+  const c = fakeClient();
+  const r = await sendNonScanReply({
+    client: c, userId: uid(), replyToken: "t", replyType: "x_test",
+    text: "ขอบคุณครับ", alternateTexts: [],
+  });
+  assert.equal(c.calls.reply + c.calls.push, 0, "ข้อความผิดต้องไม่ถูกส่ง");
+  assert.equal(r.sent, false);
+  assert.equal(r.reason, "hard_tone_rejected");
+  assert.ok(r.toneViolations.length >= 1);
 });
 
-test("runtime: guard ไม่แก้ข้อความ (ห้าม sanitize ทีหลัง) — log อย่างเดียว", async () => {
-  const { assertHardToneOrLog } = await import("../src/core/conversation/hardTone.util.js");
-  const logs = [];
-  const orig = console.log;
-  console.log = (l) => logs.push(String(l));
-  let res;
-  try {
-    res = assertHardToneOrLog("ขอบคุณครับ", { surface: "test", replyType: "x" });
-  } finally { console.log = orig; }
-  assert.equal(res.ok, false);
-  const ev = logs.map((l) => { try { return JSON.parse(l); } catch { return null; } })
-    .find((o) => o && o.event === "HARD_TONE_VIOLATION");
-  assert.ok(ev, "ต้อง log violation");
-  assert.ok(ev.violations.length >= 1);
-  const src = read("src", "core", "conversation", "hardTone.util.js");
-  assert.ok(!/function assertHardToneOrLog[\s\S]{0,600}return\s+\w*sanitiz/i.test(src), "ห้ามคืนข้อความที่ถูกแก้");
+test("behavior 2: push ผิด contract → transport 0", async () => {
+  const { sendNonScanPushMessage } = await import("../src/services/nonScanReply.gateway.js");
+  const c = fakeClient();
+  const r = await sendNonScanPushMessage({
+    client: c, userId: uid(), replyType: "x_test", text: "รอแป๊บนะครับ", alternateTexts: [],
+  });
+  assert.equal(c.calls.push, 0);
+  assert.equal(r.reason, "hard_tone_rejected");
+});
+
+test("behavior 3: sequence — bubble ใดผิด ทั้งชุดไม่ส่ง", async () => {
+  const { sendNonScanSequenceReply } = await import("../src/services/nonScanReply.gateway.js");
+  const c = fakeClient();
+  const r = await sendNonScanSequenceReply({
+    client: c, userId: uid(), replyToken: "t", replyType: "x_seq",
+    messages: ["รับรูปแล้ว", "ขอบคุณครับ"],
+  });
+  assert.equal(c.calls.reply + c.calls.push, 0, "bubble ผิดหนึ่งตัว = ทั้งชุดห้ามส่ง");
+  assert.equal(r.reason, "hard_tone_rejected");
+});
+
+test("behavior 4: Flex — altText ผ่านแต่ nested text ผิด → transport 0", async () => {
+  const { sendNonScanReply } = await import("../src/services/nonScanReply.gateway.js");
+  const c = fakeClient();
+  const r = await sendNonScanReply({
+    client: c, userId: uid(), replyToken: "t", replyType: "x_flex",
+    text: "เปิดรายงาน",
+    flexMessage: {
+      type: "flex", altText: "เปิดรายงาน",
+      contents: { type: "bubble", body: { type: "box", layout: "vertical", contents: [
+        { type: "text", text: "ขอบคุณครับ ที่ใช้บริการ" },
+      ] } },
+    },
+  });
+  assert.equal(c.calls.reply + c.calls.push, 0, "nested text ผิด = ห้ามส่ง");
+  assert.equal(r.reason, "hard_tone_rejected");
+});
+
+test("behavior 5: candidate แรกผิด → ต้องข้ามไปตัวถัดไปที่ผ่าน ไม่ใช่ส่งตัวผิด", async () => {
+  const { sendNonScanReply } = await import("../src/services/nonScanReply.gateway.js");
+  const c = fakeClient();
+  const r = await sendNonScanReply({
+    client: c, userId: uid(), replyToken: "t", replyType: "x_alt",
+    text: "ขอบคุณครับ", alternateTexts: ["รับรูปแล้ว"],
+  });
+  assert.equal(r.sent, true);
+  assert.equal(c.calls.reply, 1);
+  assert.equal(c.calls.payloads[0].text, "รับรูปแล้ว", "ต้องส่งตัวที่ผ่าน contract เท่านั้น");
+});
+
+test("behavior 6: valid reply → transport 1", async () => {
+  const { sendNonScanReply } = await import("../src/services/nonScanReply.gateway.js");
+  const c = fakeClient();
+  const r = await sendNonScanReply({
+    client: c, userId: uid(), replyToken: "t", replyType: "x_ok", text: "รับรูปแล้ว",
+  });
+  assert.equal(r.sent, true);
+  assert.equal(c.calls.reply, 1);
+});
+
+test("behavior 7: direct customer push ผิด → transport 0", async () => {
+  const { pushToCustomer } = await import("../src/services/lineOutbound/customerPush.gateway.js");
+  const c = fakeClient();
+  const r = await pushToCustomer(c, "U" + "1".repeat(32), [{ type: "text", text: "ขอบคุณครับ" }], {
+    source: "test", allowCustomerPush: async () => ({ allowed: true }),
+  });
+  // gate จริงอาจ block ด้วยเหตุอื่น — ที่ต้องพิสูจน์คือไม่มี transport
+  assert.equal(c.calls.push, 0);
+  assert.notEqual(r.sent, true);
+});
+
+test("behavior 8: typed exemption ใช้ได้เฉพาะ surface ที่อนุมัติ", async () => {
+  const { TONE_EXEMPT_SURFACES } = await import("../src/core/conversation/hardTone.util.js");
+  assert.ok(TONE_EXEMPT_SURFACES.scan_report_body);
+  assert.ok(TONE_EXEMPT_SURFACES.admin_telegram);
+  assert.equal(TONE_EXEMPT_SURFACES.random_surface, undefined, "surface นอกลิสต์ยกเว้นไม่ได้");
+  for (const [k, v] of Object.entries(TONE_EXEMPT_SURFACES)) {
+    assert.ok(String(v).length > 5, `exemption ${k} ต้องมีเหตุผล`);
+  }
 });
 
 /* ---------------- 4) input matchers ต้องไม่เปลี่ยน ---------------- */

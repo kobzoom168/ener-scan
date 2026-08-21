@@ -83,6 +83,9 @@ export function normalizeInvisible(text) {
  * @param {{ kind?: "reply"|"step"|"bundle", maxChars?: number, maxLines?: number }} [opts]
  * @returns {{ ok: boolean, violations: string[] }}
  */
+/** ระบุ "อายุสิทธิ์/ระยะเวลาใช้งาน" = ข้อเท็จจริง ไม่ใช่สัญญาว่าจะตอบเมื่อไร */
+const VALIDITY_FACT_RE = /(มีผล|ใช้ได้|ภายใน|อายุ|ตลอด|ถึง)\s*\d+\s*(นาที|ชม\.|ชั่วโมง|วัน)/u;
+
 export function checkHardTone(text, opts = {}) {
   const raw = String(text || "");
   const t = normalizeInvisible(raw);
@@ -93,7 +96,7 @@ export function checkHardTone(text, opts = {}) {
   if (m) violations.push(`polite_particle:${m[1]}`);
   if (SOFT_NA_RE.test(t)) violations.push("soft_particle:นะ");
   for (const p of BANNED_PHRASES) if (t.includes(p)) violations.push(`banned_phrase:${p}`);
-  if (TIME_PROMISE_RE.test(t)) violations.push("time_promise");
+  if (TIME_PROMISE_RE.test(t) && !VALIDITY_FACT_RE.test(t)) violations.push("time_promise");
   if (/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}✅✨❌🙏]/u.test(raw)) violations.push("emoji");
   if (/[—–]/.test(raw)) violations.push("ai_dash");
   if (/[“”]/.test(raw)) violations.push("ai_quote");
@@ -116,16 +119,18 @@ export function isHardTone(text, opts) {
 }
 
 /**
- * Runtime guard ก่อน customer send — static copy ต้องผ่านตั้งแต่ source แล้ว
- * ตัวนี้ "ไม่แก้ข้อความ" (ห้าม sanitize ทีหลังตามสเปกกบ) แต่ log ให้จับ regress ได้
+ * Pre-send enforcement (Codex รอบสาม Blocker 1): ต้องเรียก "ก่อน" transport เสมอ —
+ * ไม่ผ่าน = ห้ามส่ง (transport 0) ไม่ใช่ log ทีหลัง · ไม่แก้ข้อความ (ห้าม sanitize)
+ * @param {string} text
+ * @param {{ surface?: string, replyType?: string, kind?: "reply"|"step"|"bundle" }} meta
  * @returns {{ ok: boolean, violations: string[] }}
  */
-export function assertHardToneOrLog(text, meta = {}) {
+export function enforceHardToneBeforeSend(text, meta = {}) {
   const res = checkHardTone(text, { kind: meta.kind });
   if (!res.ok) {
-    console.log(
+    console.error(
       JSON.stringify({
-        event: "HARD_TONE_VIOLATION",
+        event: "HARD_TONE_BLOCKED_BEFORE_SEND",
         surface: meta.surface || "unknown",
         replyType: meta.replyType || null,
         violations: res.violations,
@@ -134,4 +139,45 @@ export function assertHardToneOrLog(text, meta = {}) {
     );
   }
   return res;
+}
+
+/** @deprecated ใช้ enforceHardToneBeforeSend — คงไว้ให้ caller เก่าไม่พัง */
+export function assertHardToneOrLog(text, meta = {}) {
+  return enforceHardToneBeforeSend(text, meta);
+}
+
+/** typed exemption: surface ที่ยกเว้นได้ พร้อมเหตุผล (ต้องระบุชัด ห้ามข้ามเงียบ) */
+export const TONE_EXEMPT_SURFACES = Object.freeze({
+  scan_report_body: "รายงานผลสแกน — เนื้อหาวิชา ไม่ใช่ข้อความสนทนา",
+  admin_telegram: "แจ้งเตือนแอดมิน ไม่ใช่ลูกค้า",
+  liff_page_html: "หน้าเว็บ LIFF (ไม่ใช่ข้อความแชท)",
+});
+
+/** เลือก kind ตาม replyType — bundle เฉพาะ payload ที่เป็นรายการ/เงิน (ไม่เดาจาก \n) */
+const BUNDLE_REPLY_TYPES = /payment|paywall|quota_exhausted|offer|slip|qr|myscans|history|synergy_intro/i;
+const REPLY_KIND_TYPES = /ack|greeting|closing|sticker|status|confirm/i;
+export function toneKindForReplyType(replyType) {
+  const rt = String(replyType || "");
+  if (BUNDLE_REPLY_TYPES.test(rt)) return "bundle";
+  if (REPLY_KIND_TYPES.test(rt)) return "reply";
+  return "step";
+}
+
+/**
+ * ดึงข้อความที่ลูกค้าเห็นทั้งหมดจาก Flex message (altText + text node + button label)
+ * — Codex Blocker 4: nested text ต้องถูกตรวจ ไม่ใช่แค่ altText
+ */
+export function collectFlexTexts(flex) {
+  const out = [];
+  const walk = (n) => {
+    if (!n || typeof n !== "object") return;
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (typeof n.altText === "string") out.push(n.altText);
+    if (n.type === "text" && typeof n.text === "string") out.push(n.text);
+    if (n.type === "button" && typeof n.action?.label === "string") out.push(n.action.label);
+    if (n.action && typeof n.action.label === "string" && n.type !== "button") out.push(n.action.label);
+    for (const k of ["body", "header", "footer", "hero", "contents", "box"]) if (n[k]) walk(n[k]);
+  };
+  walk(flex);
+  return out.filter((t) => String(t || "").trim());
 }

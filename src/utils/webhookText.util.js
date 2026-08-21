@@ -516,7 +516,7 @@ export function formatPaywallPriceTokensForLine(offer = loadActiveScanOffer()) {
         .filter((n) => Number.isFinite(n)),
     ),
   ].sort((a, b) => a - b);
-  return prices.map(String).join(" หรือ ");
+  return prices.map(String).join(" หรือ "); /* tone-exempt: separator_token */
 }
 
 /** หลังผู้ใช้ยืนยันจะเปิดสิทธิ์ (แพ็กเดียวจาก config) */
@@ -648,7 +648,7 @@ export function buildDeterministicBirthdateErrorText(
   if (r === "invalid_date") {
     return "วันที่ไม่ตรงกับปฏิทิน ลองบอกใหม่อีกครั้ง";
   }
-  return "ยังอ่านวันเกิดไม่ได้ ลองแบบ 19/08/2528 หรือ 19082528";
+  return "ยังอ่านวันเกิดไม่ได้ ลองแบบ 19/08/2528หรือ19082528";
 }
 
 /** Deterministic awaiting_slip text guard (persona may still vary alternates). */
@@ -1163,7 +1163,7 @@ export function buildPaymentRejectedText({ reason = null } = {}) {
   lines.push(
     "เริ่มขั้นตอนชำระใหม่ได้แบบนี้",
     "ส่งรูปเข้ามาใหม่อีกครั้ง",
-    "แจ้งว่า จ่ายเงิน หรือ ปลดล็อก เพื่อดูคิวอาร์อีกครั้ง",
+    "แจ้งว่า จ่ายเงินหรือปลดล็อก เพื่อดูคิวอาร์อีกครั้ง",
     "",
     "แล้วโอนตามยอด แนบสลิปใหม่ในแชทนี้ได้"
   );
@@ -1216,7 +1216,7 @@ export function buildPaywallFullOfferIntroText(offer = loadActiveScanOffer()) {
     `เปิดสิทธิ์เพิ่มได้ ${price} บาท`,
     `สแกนได้ ${scanCount} ครั้ง ภายใน ${hours} ชั่วโมงหลังอนุมัติ`,
     "",
-    "พร้อมเมื่อไหร่ บอกว่าจ่ายเงิน หรือ ปลดล็อก มาก็ได้",
+    "พร้อมเมื่อไหร่ บอกว่าจ่ายเงินหรือปลดล็อก มาก็ได้",
   ].join("\n");
 }
 

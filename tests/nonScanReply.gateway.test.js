@@ -206,7 +206,7 @@ test("sequence + push success-path พร้อม speakerRoleOverride: ไม�
 test("P0-1: คำถามใหม่ (messageId ใหม่) ได้ copy เดิม → ต้องตอบ ไม่ใช่เงียบ · redelivery messageId เดิมเท่านั้นที่ suppress", async () => {
   const c = mockClient();
   const uid = `u_rank_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-  const redirectCopy = "อันดับและชิ้นเด่นของคลังคุณอยู่ในรายงานหลักครับ";
+  const redirectCopy = "อันดับอยู่ในรายงานหลัก";
   // rank1 → ตอบ
   const r1 = await sendNonScanReply({
     client: c, userId: uid, replyToken: "t1",

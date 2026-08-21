@@ -38,7 +38,7 @@ function pickPreScanAckText(seedStr) {
 
 /** กติกา 1 ชิ้นต่อ 1 รูป: extra images while a scan is in flight are held (no scan, no quota). */
 const MULTI_IMAGE_WAIT_TEXT =
-  "ขอทีละ 1 รูป\nชิ้นแรกอาจารย์กำลังดูอยู่ ผลออกแล้วค่อยส่งชิ้นถัดไป\nถ้าชิ้นเดียวกันหลายมุม เลือกมุมที่ชัดสุดรูปเดียวพอ";
+  "ขอทีละ 1 รูป\nชิ้นเดียวกันหลายมุม เลือกมุมที่ชัดสุด";
 
 /** ครั้งที่ 2+ ภายใน 6 ชม. → ดุ. */
 const MULTI_IMAGE_WAIT_TEXT_STERN =

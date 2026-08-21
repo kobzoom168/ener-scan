@@ -530,7 +530,7 @@ export async function buildSynergyCarouselFlex(lineUserId) {
             },
           ],
         },
-        { type: "text", text: "วันไหนไม่แน่ใจ พกชิ้นนี้ได้เลย", size: "sm", color: CREAM, wrap: true },
+        { type: "text", text: "วันไหนไม่แน่ใจ พกชิ้นนี้", size: "sm", color: CREAM, wrap: true },
       ],
       btnLabel: "ดูรายละเอียด",
       href: `${url}?go=main`,
@@ -555,7 +555,7 @@ export async function buildSynergyCarouselFlex(lineUserId) {
 
   return {
     type: "flex",
-    altText: "อาจารย์จัดชุดพลังจากคลังของคุณไว้ให้แล้ว เปิดดูได้เลย",
+    altText: "ชุดประจำวันจากคลังของคุณ",
     contents: { type: "carousel", contents: bubbles },
   };
 }
@@ -735,7 +735,7 @@ function byN(n){return PIECES.find(function(x){return x.n===n})}
 function pieceHtml(n){var p=byN(n);if(!p)return "";return '<div class="bp tap" data-n="'+p.n+'" role="button" tabindex="0"><img src="'+p.img+'" alt="'+p.unit+' '+p.n+'"><b>'+p.unit+" "+p.n+'</b><span>'+p.peak+'</span></div>'}
 function renderSet(){var s=(SETS[curDay]||{})[curM];if(!s)return;
  var pair=pieceHtml(s.a)+(s.b?'<div class="plus">+</div>'+pieceHtml(s.b):"");
- document.getElementById("set-pair").innerHTML=pair;
+ document.getElementById("set-pair").innerHTML=pair; /* tone-exempt: liff_page_html */
  document.getElementById("set-line").textContent=s.line||"";
  var label=curM==="daily"?" แนะนำพกชุดนี้":" · ชุดสำหรับภารกิจนี้";
  document.getElementById("set-title").textContent=DAYNAMES[curDay]+label;}
@@ -761,9 +761,9 @@ document.getElementById("carry-btn").addEventListener("click", async function ()
     var r = await fetch(location.pathname + "/carry", { method: "POST" });
     var j = await r.json();
     if (j.ok) {
-      b.textContent = "บันทึกแล้ว ✓";
+      b.textContent = "บันทึกแล้ว ✓"; /* tone-exempt: liff_page_html */
       b.classList.add("done");
-      document.getElementById("carry-note").textContent =
+      document.getElementById("carry-note").textContent = /* tone-exempt: liff_page_html */
         j.streak > 1 ? "พกตามชุดแนะนำต่อเนื่อง " + j.streak + " วัน" : "ขอให้เป็นวันที่ดี";
     } else { b.disabled = false; }
   } catch (e) { b.disabled = false; }

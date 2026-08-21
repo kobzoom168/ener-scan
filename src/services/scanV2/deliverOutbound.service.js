@@ -285,7 +285,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
 
     if (kind === "scan_result") {
       if (payload.error) {
-        const t = String(payload.text || "").trim() || "รูปนี้อ่านไม่ผ่าน ส่งใหม่อีกทีนะ";
+        const t = String(payload.text || "").trim() || "รูปนี้อ่านไม่ผ่าน ส่งใหม่อีกที";
         await pushText(client, lineUserId, t);
         await markSent(id);
         releaseScanGate(lineUserId);
@@ -938,7 +938,7 @@ function releaseScanGate(lineUserId) {
 
 /** Report couldn't be delivered at all (LINE down/lost) — tell the customer to resend. */
 const REPORT_LOST_RESEND_TEXT =
-  "ผลอ่านพลังส่งเข้าแชทไม่ผ่าน ส่งรูปเดิมมาใหม่อีกครั้ง จะดูให้ทันที";
+  "ผลอ่านพลังส่งเข้าแชทไม่ผ่าน ส่งรูปเดิมมาใหม่อีกครั้ง จะดูให้";
 
 /**
  * บอกสิทธิ์คงเหลือทันทีหลัง report ถึงมือ — และถ้าเพิ่งใช้ครั้งสุดท้ายของวัน
@@ -1016,9 +1016,9 @@ async function buildPackExhaustedUpsellNotice(lineUserId, paidUntilIso) {
     );
     return {
       text: [
-        "ครบทุกครั้งของรอบค่าครูนี้แล้ว ขอบคุณที่ให้อาจารย์ดูให้",
+        "ใช้ครบทุกครั้งของรอบนี้แล้ว",
         "",
-        `ถ้าช่วงนี้กำลังดูของเพลิน ค่าครูดูแลคลังพลัง ${credit.monthlyPriceThb} บาท อาจารย์ดูแลตลอด ${winDays} วัน สแกนได้ ${credit.monthlyScanCount} ครั้ง คลังกับเสียงอาจารย์เปิดยาวทั้งรอบ`,
+        `ค่าครูดูแลคลังพลัง ${p.priceThb} บาท ${p.windowHours / 24} วัน สแกน ${p.scanCount} ครั้ง`,
         "",
         `พิเศษ ภายในวันนี้ ค่าครู ${credit.creditThb} บาทที่ชำระไปหักออกได้ เหลือ ${credit.payThb} บาท แตะปุ่มด้านล่างได้`,
       ].join("\n"),
@@ -1079,7 +1079,7 @@ async function buildRemainingQuotaNoticeText(lineUserId, { paidOnly = false } = 
         }
         return pickRemainingText(
           [
-            `ส่งชิ้นต่อไปมาได้เลย รายเดือนใช้ได้ถึง ${dateTxt}`,
+            `ส่งชิ้นต่อไปได้ รายเดือนถึง ${dateTxt}`,
             `รายเดือนของคุณใช้ได้ถึง ${dateTxt}`,
           ],
           `${lineUserId}:unlimited:${dateTxt}`,
@@ -1090,7 +1090,7 @@ async function buildRemainingQuotaNoticeText(lineUserId, { paidOnly = false } = 
           `เหลืออีก ${paidRemaining} ครั้ง`,
           `สแกนได้อีก ${paidRemaining} ครั้ง`,
           `เหลือ ${paidRemaining} ครั้งนะ`,
-          `ยังเหลืออีก ${paidRemaining} ครั้ง ส่งมาต่อได้เลย`,
+          `เหลืออีก ${paidRemaining} ครั้ง`,
         ],
         `${lineUserId}:${paidRemaining}`,
       );
@@ -1127,7 +1127,7 @@ async function buildRemainingQuotaNoticeText(lineUserId, { paidOnly = false } = 
           `วันนี้ฟรีเหลืออีก ${left} ครั้ง`,
           `ฟรีวันนี้ยังเหลือ ${left} ครั้ง`,
           `สแกนฟรีได้อีก ${left} ครั้งวันนี้`,
-          `เหลือฟรีอีก ${left} ครั้ง ส่งมาได้เลย`,
+          `เหลือฟรีอีก ${left} ครั้ง`,
         ],
         `${lineUserId}:free:${left}`,
       );

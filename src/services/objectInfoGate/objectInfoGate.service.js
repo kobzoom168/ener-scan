@@ -241,7 +241,7 @@ async function parseOwnerInfo(rawText, lane) {
     `- normalizedName=ชื่อมาตรฐานกลางสำหรับจัดกลุ่ม (ตัดคำฟุ่มเฟือย/สะกดมาตรฐาน เช่น "พระสมเด็จ วัดระฆัง") · confidence 0-1 · ห้ามเดาข้อมูลที่ไม่ได้พูดถึง ให้ null`;
   try {
     const model = getGeminiFlashModel({ callSite: "objectInfoParse" });
-    const out = await generateTextWithTimeout(model, `${sys}\n\nเลน: ${lane}\nข้อความ: ${rawText}`, 8000);
+    const out = await generateTextWithTimeout(model, `${sys}\n\nเลน: ${lane}\nข้อความ: ${rawText}`, 8000); /* tone-exempt: llm_prompt */
     const m = String(out || "").match(/\{[\s\S]*\}/);
     if (!m) return null;
     const j = JSON.parse(m[0].replace(/,\s*([}\]])/g, "$1"));

@@ -562,7 +562,7 @@ async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
       // Codex C6: จัดชุด = ข้อความบริการ (URL/CTA) เสียงแอดมิน — ไม่มีเสียง/คำอ้างอาจารย์
       await client.replyMessage(replyToken, {
         type: "text",
-        text: `คลังของคุณมี ${vault.length} ชิ้น จัดชุดได้เมื่อครบ 3 ชิ้นขึ้นไป ส่งรูปชิ้นเพิ่มเข้ามาได้เลย`,
+        text: `คลังของคุณมี ${vault.length} ชิ้น จัดชุดได้เมื่อครบ 3 ชิ้นขึ้นไป ส่งรูปชิ้นเพิ่มเข้ามา`,
       });
       return true;
     }
@@ -1826,7 +1826,7 @@ async function handlePaymentCommandTextRoute({
           ...sortedPayPkgs.map((p) => formatOfferPackageLineThai(p)),
           "เอาแบบไหนแตะปุ่มด้านล่าง หรือบอกราคามาเลย",
         ].join("\n"),
-        "แตะปุ่มด้านล่าง หรือบอกราคามาเลย ส่งคิวอาร์ให้ทันที",
+        "แตะปุ่มด้านล่าง หรือบอกราคามา ส่งคิวอาร์ให้",
       ],
       // การ์ดโปรใบเดียวกับ paywall โควตาหมด — หัวการ์ดปรับตามบริบท "พิมพ์ จ่าย"
       flexMessage: buildFreeQuotaPaywallFlex(offerPay, {
@@ -2328,9 +2328,9 @@ async function finalizeAcceptedImage({
 
       const holdText =
         holdRes.held === "first"
-          ? "รับรูปไว้แล้ว ยังไม่ต้องส่งซ้ำ\n\nเหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว จากนั้นผมส่งรูปนี้ให้อาจารย์ทันที"
+          ? "รับรูปแล้ว ไม่ต้องส่งซ้ำ\nกรอกข้อมูลเจ้าของให้ครบก่อน"
           : holdRes.held === "extra"
-            ? "รับรูปแรกไว้แล้ว ระบบอ่านครั้งละ 1 ชิ้น รูปที่ส่งเพิ่มยังไม่นำเข้าสแกน\n\nกรอกข้อมูลเจ้าของให้เสร็จก่อน แล้วผมส่งรูปแรกให้อาจารย์เลย"
+            ? "รับรูปแรกแล้ว อ่านครั้งละ 1 ชิ้น\nกรอกข้อมูลเจ้าของให้ครบก่อน"
             : null;
 
       const { tryMarkRegCardShown } = await import(
@@ -2992,13 +2992,13 @@ async function finalizeAcceptedImage({
           replyType: "slip_object_photo_guard",
           semanticKey: "slip_object_photo_guard",
           text: [
-            "รูปนี้เป็นวัตถุมงคล ไม่ใช่สลิป ✨",
+            "รูปนี้เป็นวัตถุมงคล ไม่ใช่สลิป",
             "",
             "ตอนนี้อาจารย์ยังรอสลิปเปิดสิทธิ์อยู่ โอนแล้วส่งสลิปมาได้",
-            "พอสิทธิ์เปิดแล้ว ส่งรูปชิ้นนี้มาอีกครั้ง อาจารย์ดูให้ทันที",
+            "พอสิทธิ์เปิดแล้ว ส่งรูปชิ้นนี้มาอีกครั้ง อาจารย์ดูให้",
           ].join("\n"),
           alternateTexts: [
-            "ภาพนี้ยังไม่ใช่สลิปการโอน โอนแล้วส่งสลิปมาก่อน จะเปิดสิทธิ์ให้แล้วค่อยส่งรูปชิ้นนี้มาใหม่",
+            "ภาพนี้ไม่ใช่สลิปโอน โอนแล้วส่งสลิปก่อน",
           ],
         });
         return;
@@ -3243,8 +3243,8 @@ async function finalizeAcceptedImage({
           semanticKey: "slip_manual_review",
           text: "รับรูปแล้ว ขอเช็ก\nถ้าเป็นสลิปโอน จะเปิดสิทธิ์แล้วแจ้งกลับในแชตนี้เลย",
           alternateTexts: [
-            "รอแปป กำลังเช็กรูปที่ส่งมาให้อยู่",
-            "กำลังดูให้อยู่ อีกแปปเดียว แจ้งผลในแชตนี้",
+            "กำลังเช็กรูปที่ส่งมาให้อยู่",
+            "กำลังดูให้อยู่ แจ้งผลในแชตนี้",
           ],
         });
         return;
@@ -4040,20 +4040,20 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
   if (banM) {
     const target = banM[1];
     const reason = (banM[2] || "").trim() || "manual";
-    if (target === adminUid) { await reply("แบนบัญชีแอดมินเองไม่ได้"); return true; }
+    if (target === adminUid) { await reply("แบนบัญชีแอดมินเองไม่ได้"); return true; } /* tone-exempt: admin_command */
     const { data: exists } = await supabase.from("app_users").select("display_name").eq("line_user_id", target).maybeSingle();
-    if (!exists) { await reply("ไม่พบ ID นี้ในระบบ เช็คอีกครั้ง"); return true; }
+    if (!exists) { await reply("ไม่พบ ID นี้ในระบบ เช็คอีกครั้ง"); return true; } /* tone-exempt: admin_command */
     const crypto = await import("node:crypto");
     const nonce = crypto.randomBytes(3).toString("hex");
     try {
       const { getScanV2Redis } = await import("../redis/scanV2Redis.js");
       const r = await getScanV2Redis();
-      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว (redis) ยังไม่แบน"); return true; }
+      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว (redis) ยังไม่แบน"); return true; } /* tone-exempt: admin_command */
       // key ต่อ nonce (Codex: รหัสผิดห้ามกิน nonce ที่ถูกต้อง)
       await r.set(`ban:nonce:${adminUid}:${nonce}`, JSON.stringify({ target, reason }), "EX", 300);
-    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบน"); return true; }
+    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบน"); return true; } /* tone-exempt: admin_command */
     await reply(
-      `กำลังจะแบน ${exists.display_name || "(ไม่มีชื่อ)"}\n${target}\nเหตุผล: ${reason}\n\nยืนยันภายใน 5 นาที พิมพ์:\nยืนยันแบน ${nonce}`,
+      `กำลังจะแบน ${exists.display_name || "(ไม่มีชื่อ)"}\n${target}\nเหตุผล: ${reason}\n\nยืนยันภายใน 5 นาที พิมพ์:\nยืนยันแบน ${nonce}`, /* tone-exempt: admin_command */
     );
     return true;
   }
@@ -4064,7 +4064,7 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     try {
       const { getScanV2Redis } = await import("../redis/scanV2Redis.js");
       const r = await getScanV2Redis();
-      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบน"); return true; }
+      if (!r) { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบน"); return true; } /* tone-exempt: admin_command */
       // atomic consume เฉพาะ key ของ nonce ที่พิมพ์มา — ผิด = ไม่แตะตัวที่ถูก
       const raw = await r.eval(
         "local v=redis.call('GET',KEYS[1]) if v then redis.call('DEL',KEYS[1]) end return v",
@@ -4072,9 +4072,9 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
         `ban:nonce:${adminUid}:${confirmM[1]}`,
       );
       payload = raw ? JSON.parse(raw) : null;
-    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบน"); return true; }
+    } catch { await reply("ระบบยืนยันใช้ไม่ได้ชั่วคราว ยังไม่แบน"); return true; } /* tone-exempt: admin_command */
     if (!payload) {
-      await reply("รหัสยืนยันไม่ตรงหรือหมดอายุ เริ่มคำสั่ง แบน ใหม่อีกครั้ง");
+      await reply("รหัสยืนยันไม่ตรงหรือหมดอายุ เริ่มคำสั่ง แบน ใหม่อีกครั้ง"); /* tone-exempt: admin_command */
       return true;
     }
     const { banUser } = await import("../services/ban/bannedUsers.repo.js");
@@ -4082,26 +4082,26 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     await reply(
       res.ok
         ? res.cacheSynced === false
-          ? `แบนบันทึกแล้ว\n${payload.target}\nแต่ระบบ cache ขัดข้อง อาจมีผลช้ากว่าปกติ เช็คซ้ำด้วย ดูแบน ได้ พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
-          : `แบนแล้ว\n${payload.target}\nระบบจะเงียบกับบัญชีนี้ทุกช่องทาง พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก`
+          ? `แบนบันทึกแล้ว\n${payload.target}\nแต่ระบบ cache ขัดข้อง อาจมีผลช้ากว่าปกติ เช็คซ้ำด้วย ดูแบน ได้ พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก` /* tone-exempt: admin_command */
+          : `แบนแล้ว\n${payload.target}\nระบบจะเงียบกับบัญชีนี้ทุกช่องทาง พิมพ์ ปลดแบน ${payload.target} เมื่อต้องการยกเลิก` /* tone-exempt: admin_command */
         : res.reason === "already_banned"
-          ? "บัญชีนี้ถูกแบนอยู่แล้ว"
+          ? "บัญชีนี้ถูกแบนอยู่แล้ว" /* tone-exempt: admin_command */
           : res.reason === "db_outcome_unknown" || res.reason === "reconcile_queue_unavailable"
             // honesty (Codex รอบ 10): อ้างว่า "กันไว้แล้ว" ได้เฉพาะเมื่อเขียน cache สำเร็จจริง
             ? res.enforcementHeld === true
-              ? `ยังไม่ยืนยันผลจากฐานข้อมูล\n${payload.target}\nระบบกันบัญชีนี้ไว้ก่อนแล้ว เช็คซ้ำด้วย ดูแบน อีกครั้งใน`
-              : `ยังไม่ยืนยันผลจากฐานข้อมูล\n${payload.target}\nและระบบกันไว้ล่วงหน้าไม่สำเร็จ (cache ขัดข้อง) ลูกค้าอาจยังใช้งานได้ พิมพ์ แบน ${payload.target} ซ้ำอีกครั้ง`
+              ? `ยังไม่ยืนยันผลจากฐานข้อมูล\n${payload.target}\nระบบกันบัญชีนี้ไว้ก่อนแล้ว เช็คซ้ำด้วย ดูแบน อีกครั้งใน` /* tone-exempt: admin_command */
+              : `ยังไม่ยืนยันผลจากฐานข้อมูล\n${payload.target}\nและระบบกันไว้ล่วงหน้าไม่สำเร็จ (cache ขัดข้อง) ลูกค้าอาจยังใช้งานได้ พิมพ์ แบน ${payload.target} ซ้ำอีกครั้ง` /* tone-exempt: admin_command */
           : res.reason === "pending_reconcile"
-            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูล ระบบกำลังตามให้ตรงอยู่ รอแล้วลองใหม่`
+            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูล ระบบกำลังตามให้ตรงอยู่ รอแล้วลองใหม่` /* tone-exempt: admin_command */
           : res.reason === "pending_guard_unavailable"
             // redis ล้ม = ไม่รู้ว่ามีงานเก่าค้างไหม — fail-closed ไม่แตะ DB (Codex รอบ 11)
-            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราว ยังไม่แตะฐานข้อมูล รอแล้วพิมพ์คำสั่งซ้ำ`
+            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราว ยังไม่แตะฐานข้อมูล รอแล้วพิมพ์คำสั่งซ้ำ` /* tone-exempt: admin_command */
           : res.reason === "cache_unreconciled"
             // DB บันทึกแบนแล้วแต่ระบบ cache ยังไม่ยอมรับ = ยังไม่มีผลจริง ห้ามบอกว่าเรียบร้อย
-            ? `บันทึกแบนใน DB แล้ว แต่ระบบยังไม่บังใช้\n${payload.target}\nพิมพ์คำสั่ง แบน ซ้ำอีกครั้งเพื่อให้มีผล`
+            ? `บันทึกแบนใน DB แล้ว แต่ระบบยังไม่บังใช้\n${payload.target}\nพิมพ์คำสั่ง แบน ซ้ำอีกครั้งเพื่อให้มีผล` /* tone-exempt: admin_command */
             : res.reason === "busy"
-              ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ รอแล้วลองใหม่"
-              : "แบนไม่สำเร็จ (ระบบฐานข้อมูล) ลองใหม่อีกครั้ง",
+              ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ รอแล้วลองใหม่" /* tone-exempt: admin_command */
+              : "แบนไม่สำเร็จ (ระบบฐานข้อมูล) ลองใหม่อีกครั้ง", /* tone-exempt: admin_command */
     );
     return true;
   }
@@ -4113,26 +4113,26 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     await reply(
       res.ok
         ? res.cacheCleared === false
-          ? `ปลดแบนใน DB แล้ว ${unbanM[1]} แต่ล้าง cache ไม่ครบ — อาจยังเงียบต่ออีกพักหนึ่ง ถ้าเกิน 5 นาทีพิมพ์ ปลดแบน ${unbanM[1]} ซ้ำอีกครั้ง`
-          : `ปลดแบนแล้ว ${unbanM[1]} กลับมาใช้งานได้ปกติ (ล้างสถานะเงียบชั่วคราวให้ด้วยแล้ว)`
+          ? `ปลดแบนใน DB แล้ว ${unbanM[1]} แต่ล้าง cache ไม่ครบ — อาจยังเงียบต่ออีกพักหนึ่ง ถ้าเกิน 5 นาทีพิมพ์ ปลดแบน ${unbanM[1]} ซ้ำอีกครั้ง` /* tone-exempt: admin_command */
+          : `ปลดแบนแล้ว ${unbanM[1]} กลับมาใช้งานได้ปกติ (ล้างสถานะเงียบชั่วคราวให้ด้วยแล้ว)` /* tone-exempt: admin_command */
         : res.reason === "busy"
-          ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ รอแล้วลองใหม่"
+          ? "มีคำสั่งแบน/ปลดแบนของบัญชีนี้กำลังทำงานอยู่ รอแล้วลองใหม่" /* tone-exempt: admin_command */
           : res.reason === "db_outcome_unknown" || res.reason === "reconcile_queue_unavailable"
             ? res.enforcementHeld === true
-              ? `ยังไม่ยืนยันผลจากฐานข้อมูล บัญชีนี้ยังถูกกันไว้ก่อน ระบบจะปรับให้ตรงเองเมื่อฐานข้อมูลตอบ เช็คซ้ำด้วย ดูแบน อีกครั้ง`
-              : `ยังไม่ยืนยันผลจากฐานข้อมูล และยืนยันสถานะกันไว้ไม่ได้ (cache ขัดข้อง) เช็คซ้ำด้วย ดูแบน อีกครั้งใน`
+              ? `ยังไม่ยืนยันผลจากฐานข้อมูล บัญชีนี้ยังถูกกันไว้ก่อน ระบบจะปรับให้ตรงเองเมื่อฐานข้อมูลตอบ เช็คซ้ำด้วย ดูแบน อีกครั้ง` /* tone-exempt: admin_command */
+              : `ยังไม่ยืนยันผลจากฐานข้อมูล และยืนยันสถานะกันไว้ไม่ได้ (cache ขัดข้อง) เช็คซ้ำด้วย ดูแบน อีกครั้งใน` /* tone-exempt: admin_command */
           : res.reason === "pending_reconcile"
-            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูล รอแล้วลองใหม่`
+            ? `คำสั่งก่อนหน้าของบัญชีนี้ยังรอยืนยันผลจากฐานข้อมูล รอแล้วลองใหม่` /* tone-exempt: admin_command */
           : res.reason === "pending_guard_unavailable"
-            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราว ยังไม่แตะฐานข้อมูล รอแล้วพิมพ์คำสั่งซ้ำ`
+            ? `ระบบกันคำสั่งซ้อนใช้ไม่ได้ชั่วคราว ยังไม่แตะฐานข้อมูล รอแล้วพิมพ์คำสั่งซ้ำ` /* tone-exempt: admin_command */
           : res.reason === "cache_unreconciled"
             // DB ปลดแล้วแต่ cache ยังไม่ยอมรับ — ยังกันบัญชีไว้ก่อน (fail-closed) ระบบตามปรับให้ตรงเอง
-            ? `ปลดแบนใน DB แล้ว ${unbanM[1]} แต่ระบบ cache ยังไม่ยอมรับ — บัญชีนี้อาจยังเงียบต่ออีกพัก ระบบจะตามปรับให้ตรงเอง เช็คซ้ำด้วย ดูแบน อีกครั้งใน`
+            ? `ปลดแบนใน DB แล้ว ${unbanM[1]} แต่ระบบ cache ยังไม่ยอมรับ — บัญชีนี้อาจยังเงียบต่ออีกพัก ระบบจะตามปรับให้ตรงเอง เช็คซ้ำด้วย ดูแบน อีกครั้งใน` /* tone-exempt: admin_command */
           : res.reason === "not_banned"
           ? res.cacheCleared === false
-            ? "บัญชีนี้ไม่ได้ถูกแบนอยู่ แต่ล้างสถานะชั่วคราวไม่ครบ ระบบจะตามล้างให้เอง ถ้าเกิน 5 นาทียังเงียบพิมพ์คำสั่งนี้ซ้ำ"
-            : "บัญชีนี้ไม่ได้ถูกแบนอยู่"
-          : "ปลดแบนไม่สำเร็จ ลองใหม่อีกครั้ง",
+            ? "บัญชีนี้ไม่ได้ถูกแบน แต่ล้างสถานะไม่ครบ พิมพ์คำสั่งซ้ำได้" /* tone-exempt: admin_command */
+            : "บัญชีนี้ไม่ได้ถูกแบนอยู่" /* tone-exempt: admin_command */
+          : "ปลดแบนไม่สำเร็จ ลองใหม่อีกครั้ง", /* tone-exempt: admin_command */
     );
     return true;
   }
@@ -4140,11 +4140,11 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
   if (/^ดูแบน$/.test(t)) {
     const { listActiveBans } = await import("../services/ban/bannedUsers.repo.js");
     const { ok, rows } = await listActiveBans();
-    if (!ok) { await reply("อ่านรายการแบนไม่ได้ ลองใหม่"); return true; }
+    if (!ok) { await reply("อ่านรายการแบนไม่ได้ ลองใหม่"); return true; } /* tone-exempt: admin_command */
     await reply(
       rows.length
-        ? "รายการแบน (manual):\n" + rows.map((r0) => `${r0.line_user_id}\n  เหตุผล: ${r0.reason || "-"}`).join("\n")
-        : "ยังไม่มีบัญชีถูกแบน",
+        ? "รายการแบน (manual):\n" + rows.map((r0) => `${r0.line_user_id}\n  เหตุผล: ${r0.reason || "-"}`).join("\n") /* tone-exempt: admin_command */
+        : "ยังไม่มีบัญชีถูกแบน", /* tone-exempt: admin_command */
     );
     return true;
   }
@@ -4155,15 +4155,15 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     const { readPendingReconciles } = await import("../services/ban/banReconcileQueue.js");
     const read = await readPendingReconciles();
     // อ่านล้ม ≠ ว่าง (Codex รอบ 13): ห้ามตอบ "ไม่มีงานค้าง" ทั้งที่ไม่รู้จริง
-    if (!read.ok) { await reply("อ่านงานค้างไม่ได้ (redis) ลองใหม่อีกครั้ง"); return true; }
+    if (!read.ok) { await reply("อ่านงานค้างไม่ได้ (redis) ลองใหม่อีกครั้ง"); return true; } /* tone-exempt: admin_command */
     const entries = read.entries;
-    if (!entries.length) { await reply("ไม่มีงานแบน/ปลดแบนค้าง"); return true; }
+    if (!entries.length) { await reply("ไม่มีงานแบน/ปลดแบนค้าง"); return true; } /* tone-exempt: admin_command */
     const lines = entries.map((e) => {
       const ageMin = Math.round((Date.now() - e.enqueuedAt) / 60000);
       return `${e.uid}\n  สั่ง ${e.reason} (คาด ${e.targetState}) ค้าง ${ageMin} นาที · opId ${e.opId}`;
     });
     await reply(
-      `งานค้างรอยืนยันผล ${entries.length} รายการ:\n${lines.join("\n")}\n\nระบบ retry ต่อเองไม่มีหมดอายุ — ถ้าตรวจ DB แล้วยืนยันว่างานจบจริง พิมพ์:\nปลดงานแบนค้าง <uid> <opId>`,
+      `งานค้างรอยืนยันผล ${entries.length} รายการ:\n${lines.join("\n")}\n\nระบบ retry ต่อเองไม่มีหมดอายุ — ถ้าตรวจ DB แล้วยืนยันว่างานจบจริง พิมพ์:\nปลดงานแบนค้าง <uid> <opId>`, /* tone-exempt: admin_command */
     );
     return true;
   }
@@ -4175,16 +4175,16 @@ async function maybeHandleBanCommand({ client, event, userId, text }) {
     const res = await adminClearPendingOperation({ uid: clearOpM[1], opId: clearOpM[2], clearedBy: adminUid });
     await reply(
       res.ok
-        ? `ปลดงานค้างแล้ว\n${clearOpM[1]} (opId ${clearOpM[2]})\nเช็คสถานะจริงด้วย ดูแบน อีกครั้ง — ถ้า cache ยังไม่ตรงพิมพ์ แบน/ปลดแบน ตามที่ตั้งใจซ้ำ`
+        ? `ปลดงานค้างแล้ว\n${clearOpM[1]} (opId ${clearOpM[2]})\nเช็คสถานะจริงด้วย ดูแบน อีกครั้ง — ถ้า cache ยังไม่ตรงพิมพ์ แบน/ปลดแบน ตามที่ตั้งใจซ้ำ` /* tone-exempt: admin_command */
         : res.reason === "no_pending_op"
-          ? "ไม่มีงานค้างของบัญชีนี้"
+          ? "ไม่มีงานค้างของบัญชีนี้" /* tone-exempt: admin_command */
           : res.reason === "op_mismatch"
-            ? `opId ไม่ตรงงานที่ค้างอยู่ (ปัจจุบัน ${String(res.pending || "?").slice(0, 12)}) — เช็คด้วย งานแบนค้าง ก่อน`
+            ? `opId ไม่ตรงงานที่ค้างอยู่ (ปัจจุบัน ${String(res.pending || "?").slice(0, 12)}) — เช็คด้วย งานแบนค้าง ก่อน` /* tone-exempt: admin_command */
           : res.reason === "queue_read_failed"
-            ? "อ่านคิวงานค้างไม่ได้ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้ง"
+            ? "อ่านคิวงานค้างไม่ได้ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้ง" /* tone-exempt: admin_command */
           : res.reason === "queue_member_missing"
-            ? "สถานะงานค้างผิดปกติ (guard อยู่แต่ไม่พบงานในคิว) ยังไม่ปลดอะไร — แจ้ง dev ตรวจ redis ก่อน"
-            : "ปลดงานค้างไม่สำเร็จ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้ง",
+            ? "สถานะงานค้างผิดปกติ (guard อยู่แต่ไม่พบงานในคิว) ยังไม่ปลดอะไร — แจ้ง dev ตรวจ redis ก่อน" /* tone-exempt: admin_command */
+            : "ปลดงานค้างไม่สำเร็จ (redis) ยังไม่ปลดอะไร ลองใหม่อีกครั้ง", /* tone-exempt: admin_command */
     );
     return true;
   }
@@ -4234,12 +4234,12 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
     // แปะโน้ตสด 48 ชม. ให้ fact block ชี้ชัดว่ามีคนช่วยตอบ — ห้ามพูดสวน
     await setLargeValueWithTtl(
       `admin_case_note:${targetUid}`,
-      `แอดมินเพิ่งช่วยตอบลูกค้าคนนี้ในแชทด้วยตัวเองว่า: "${said.slice(0, 400)}" — ให้ตอบต่อยอดจากแนวนี้ให้เนียนเป็นเนื้อเดียวกัน ห้ามพูดสวนหรือแนะนำขัดกัน`,
+      `แอดมินเพิ่งช่วยตอบลูกค้าคนนี้ในแชทด้วยตัวเองว่า: "${said.slice(0, 400)}" — ให้ตอบต่อยอดจากแนวนี้ให้เนียนเป็นเนื้อเดียวกัน ห้ามพูดสวนหรือแนะนำขัดกัน`, /* tone-exempt: admin_command */
       172800,
     );
     await client.replyMessage(event.replyToken, {
       type: "text",
-      text: `รับทราบ ผูกกับคุณ ${best.display_name || nameQuery} แล้ว อาจารย์จะตอบต่อจากที่พี่ตอบไว้ให้เนียน (มีผล 48 ชม.)`,
+      text: `รับทราบ ผูกกับคุณ ${adminName} แล้ว มีผล 48 ชม.`,
     });
     console.log(JSON.stringify({ event: "ADMIN_ASSIST_NOTE_SAVED", target: targetUid.slice(0, 8), chars: said.length }));
   } catch (e) {
@@ -4294,7 +4294,7 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
   }
   if (cls.kind === "admin_request") {
     await replyText(
-      "ผมแอดมินอยู่ตรงนี้ พิมพ์เรื่องที่ต้องการได้\n\nส่วนการอ่านพลัง ขอข้อมูลเจ้าของก่อนหนึ่งขั้น กดการ์ดลงทะเบียน หรือพิมพ์ ช่วยลงทะเบียน ให้ผมถามทีละข้อในแชทก็ได้",
+      "พิมพ์เรื่องที่ต้องการได้\nอ่านพลังต้องลงทะเบียนก่อน กดการ์ดหรือพิมพ์ ช่วยลงทะเบียน",
     );
     return true;
   }
@@ -4303,7 +4303,7 @@ async function handleUnregisteredText({ client, event, userId, text, attempt }) 
   let descLine = null;
   if (cls.kind === "description") {
     const saved = await hold.attachDescription(userId, text).catch(() => null);
-    if (saved) descLine = `รับข้อมูลไว้แล้ว — ${saved}`;
+    if (saved) descLine = `รับข้อมูลแล้ว ${saved}`;
   }
 
   // 4) สถานะรูป + การ์ดตาม cooldown (ทุก reply ต้องบอกสถานะรูป — Codex anti-loop)
@@ -4440,7 +4440,7 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
         : begin.reason === "already_resumed"
           ? "รูปนี้เข้าคิวอาจารย์เรียบร้อยแล้ว รอผลได้ ไม่ต้องกดซ้ำ"
           : begin.reason === "expired" || begin.reason === "no_hold"
-            ? "รูปที่ฝากไว้หมดอายุแล้ว (เก็บให้ 24 ชั่วโมง) ถ่ายส่งมาใหม่ได้"
+            ? "รูปที่ฝากไว้หมดอายุ ถ่ายส่งใหม่ได้"
             : "เริ่มอ่านรูปเดิมไม่สำเร็จ ลองใหม่อีกครั้ง หรือส่งรูปมาใหม่ได้";
     try {
       await client.replyMessage(event.replyToken, { type: "text", text: msg });
@@ -4515,7 +4515,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       type: "repeat_input",
       userId,
       dedupeSec: 6 * 3600,
-      telegramText: `[REPEAT] ลูกค้าพิมพ์ข้อความเดิมวน ${rep.count} ครั้งใน 15 นาที\nเวลา: ${when} (ไทย)\nID: ${userId}\nสถานะ: ${paidStatus}\nข้อความล่าสุด:\n${recentLines}\n\nแบนได้ด้วย: แบน ${userId}`,
+      telegramText: `[REPEAT] ลูกค้าพิมพ์ข้อความเดิมวน ${rep.count} ครั้งใน 15 นาที\nเวลา: ${when} (ไทย)\nID: ${userId}\nสถานะ: ${paidStatus}\nข้อความล่าสุด:\n${recentLines}\n\nแบนได้ด้วย: แบน ${userId}`, /* tone-exempt: admin_command */
     });
   })().catch(() => {});
 
@@ -4584,8 +4584,8 @@ async function handleTextMessage({ client, event, userId, session }) {
           replyToken: event.replyToken,
           replyType: "profanity_ban",
           semanticKey: "profanity_ban",
-          text: "อาจารย์ขอพักการคุยกับคุณไว้ก่อนนะ วันหลังพร้อมคุยกันดี ๆ ค่อยกลับมา",
-          alternateTexts: ["ขอพักไว้ตรงนี้ก่อนนะ"],
+          text: "อาจารย์ขอพักการคุยกับคุณไว้ก่อน วันหลังพร้อมคุยกันดี ๆ ค่อยกลับมา",
+          alternateTexts: ["ขอพักไว้ตรงนี้ก่อน"],
         });
         return;
       }
@@ -4649,7 +4649,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             type: "troll_score",
             userId,
             dedupeSec: 6 * 3600,
-            telegramText: `[TROLL] ลูกค้าพิมพ์กวนต่อเนื่อง (score ${troll})\nเวลา: ${when} (ไทย)\nID: ${userId}\nสถานะ: ${paidStatus}\nข้อความล่าสุด: "${redactForAlert(text)}"\n\nแบนได้ด้วย: แบน ${userId}`,
+            telegramText: `[TROLL] ลูกค้าพิมพ์กวนต่อเนื่อง (score ${troll})\nเวลา: ${when} (ไทย)\nID: ${userId}\nสถานะ: ${paidStatus}\nข้อความล่าสุด: "${redactForAlert(text)}"\n\nแบนได้ด้วย: แบน ${userId}`, /* tone-exempt: admin_command */
           });
         })().catch(() => {});
         return;
@@ -4821,7 +4821,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         replyToken: event.replyToken,
         replyType: "fengshui_not_open",
         semanticKey: "fengshui_not_open",
-        text: "ตอนนี้อาจารย์ยังไม่เปิดรับดูฮวงจุ้ยหรือพลังบ้าน กำลังเตรียมเปิดเร็ว ๆ นี้ เปิดเมื่อไหร่จะแจ้งในแชทนี้เลย\n\nตอนนี้ส่งรูปพระ เครื่องราง หิน หรือกำไล มาให้อาจารย์อ่านพลังก่อนได้",
+        text: "ยังไม่เปิดรับดูฮวงจุ้ย\nส่งรูปพระ เครื่องราง หิน หรือกำไล ได้",
         alternateTexts: [
           "เรื่องฮวงจุ้ยกับพลังบ้านตอนนี้ยังไม่เปิดรับ ใกล้เปิดแล้ว จะแจ้งในแชทนี้ ระหว่างนี้ส่งรูปชิ้นงานมาอ่านพลังก่อนได้",
         ],
@@ -6137,7 +6137,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             semanticKey: "payment_pick_package_menu_ack",
             text: buildSingleOfferPaywallAltText(offer),
             alternateTexts: [
-              "แตะปุ่มด้านล่าง หรือบอกราคามาเลย ส่งคิวอาร์ให้ทันที",
+              "แตะปุ่มด้านล่าง หรือบอกราคามา ส่งคิวอาร์ให้",
             ],
             quickReply: {
               items: ackPkgs.slice(0, 3).map((p) => ({
@@ -7543,7 +7543,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         text: scanReadyText,
         alternateTexts: [
           "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้",
-          "ส่งรูปมา 1 รูป เดี๋ยวอาจารย์อ่านให้",
+          "ส่งรูปมา 1 รูป อ่านให้",
         ],
       });
       return;
@@ -7736,7 +7736,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           const helperText = [
             "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้",
             savedBirthdate
-              ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว อาจารย์จะเริ่มสแกนให้ทันที"
+              ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว อาจารย์จะเริ่มสแกนให้"
               : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ อาจารย์จะขอวันเกิดก่อนสแกน",
             "",
             "ส่งรูปถัดไปมาได้",
@@ -8533,7 +8533,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         semanticKey: "greeting_generic_request",
         inboundMessageId: String(event?.message?.id || "") || null,
         text: "ระบุเรื่องที่ต้องการถาม",
-        alternateTexts: ["บอกเรื่องที่ต้องการถามมาได้เลย"],
+        alternateTexts: ["บอกเรื่องที่ต้องการถามมาได้"],
         speakerRoleOverride: "admin",
       });
       return;
@@ -8556,7 +8556,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     const helperText = [
       "ส่งรูปวัตถุที่ต้องการสแกน 1 รูปได้",
       savedBirthdate
-        ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว อาจารย์จะเริ่มสแกนให้ทันที"
+        ? "ถ้าคุณมีวันเกิดที่บันทึกไว้แล้ว อาจารย์จะเริ่มสแกนให้"
         : "ถ้ายังไม่มีวันเกิดที่บันทึกไว้ อาจารย์จะขอวันเกิดก่อนสแกน",
       "",
       "ส่งรูปถัดไปมาได้",
@@ -8908,10 +8908,10 @@ async function handleEventInner({ client, event }) {
   // ไม่สะดวกเปิดลำโพง ให้พิมพ์มาแทน (สุ่มสำนวนตาม message id, gateway กันสแปมให้)
   if (event.message?.type === "audio" || event.message?.type === "video") {
     const variants = [
-      "ตอนนี้อาจารย์ไม่สะดวกเปิดลำโพงนะ พิมพ์มาได้เลย",
-      "อาจารย์ไม่สะดวกฟังเสียงตอนนี้ พิมพ์มาเลยนะ",
+      "ตอนนี้อาจารย์ไม่สะดวกเปิดลำโพง พิมพ์มาได้",
+      "อาจารย์ไม่สะดวกฟังเสียงตอนนี้ พิมพ์มา",
       "ขอเป็นพิมพ์นะ ตอนนี้ไม่สะดวกเปิดเสียง",
-      "ไม่สะดวกเปิดลำโพงตอนนี้นะ พิมพ์มาได้เลย เดี๋ยวตอบให้",
+      "ไม่สะดวกเปิดลำโพงตอนนี้ พิมพ์มาได้ ตอบให้",
     ];
     let hh = 0;
     const mid = String(event.message?.id || userId);

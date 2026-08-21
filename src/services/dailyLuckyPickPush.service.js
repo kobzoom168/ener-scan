@@ -98,7 +98,7 @@ const OPTOUT_FOOTER = "(พิมพ์ หยุดแจ้งเตือน 
 function buildFullText(top) {
   const url = top.token ? buildPublicReportUrl(top.token) : "";
   return [
-    "☀️ หนุนดวงเช้านี้",
+    "หนุนดวงเช้านี้",
     `อาจารย์เลือกให้วันนี้: ${top.name || "ชิ้นเด่นในคลังของคุณ"} เหมาะกับวันนี้ ${top.suit}%`,
     top.reason,
     url ? `เปิดดูชิ้นนี้: ${url}` : "",
@@ -115,7 +115,7 @@ function buildFullText(top) {
 function buildTeaserText(top) {
   const libUrl = top.token ? `${buildPublicReportUrl(top.token)}/library` : "";
   return [
-    "☀️ หนุนดวงเช้านี้",
+    "หนุนดวงเช้านี้",
     `วันนี้มีชิ้นในคลังของคุณหนุนดวงถึง ${top.suit}%${top.peakLabel ? ` พลังเด่นด้าน${top.peakLabel}` : ""}`,
     "เปิดสิทธิ์แล้วดูได้ว่าชิ้นไหน จะได้พกถูกชิ้นวันนี้",
     libUrl ? `ดูคลังของคุณ: ${libUrl}` : "",

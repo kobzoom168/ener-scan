@@ -42,6 +42,32 @@ export async function allowCustomerPush(lineUserId, opts = {}) {
 export async function pushToCustomer(client, lineUserId, messages, opts = {}) {
   const gate = await allowCustomerPush(lineUserId, opts);
   if (!gate.allowed) return { sent: false, suppressedBanned: gate.suppressedBanned };
+  // Pre-send hard tone (Codex Blocker 1/2): direct push ก็ต้องผ่าน contract ก่อน
+  // transport · typed exemption ระบุชัดเท่านั้น (เช่น scan report body)
+  const { enforceHardToneBeforeSend, collectFlexTexts, TONE_EXEMPT_SURFACES } = await import(
+    "../../core/conversation/hardTone.util.js"
+  );
+  const exempt = opts.toneExemptSurface && TONE_EXEMPT_SURFACES[opts.toneExemptSurface];
+  if (!exempt) {
+    const list = Array.isArray(messages) ? messages : [messages];
+    const texts = [];
+    for (const m of list) {
+      if (typeof m === "string") texts.push(m);
+      else if (m?.type === "text" && typeof m.text === "string") texts.push(m.text);
+      else if (m?.type === "flex") texts.push(...collectFlexTexts(m));
+    }
+    const bad = texts
+      .map((t) => enforceHardToneBeforeSend(t, { surface: "customer_push", replyType: opts.source || null, kind: opts.toneKind || "bundle" }))
+      .filter((r) => !r.ok);
+    if (bad.length) {
+      return {
+        sent: false,
+        suppressed: true,
+        reason: "hard_tone_rejected",
+        toneViolations: [...new Set(bad.flatMap((r) => r.violations))],
+      };
+    }
+  }
   await client.pushMessage(String(lineUserId).trim(), messages);
   return { sent: true };
 }
