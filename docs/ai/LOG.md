@@ -1089,3 +1089,9 @@
 - route replay จับ regression จริง 2 จุด: paywall Flex โดน time_promise จาก "4 ครั้ง · 24 ชม." (ขยาย validity mask) · pre_scan_ack ส่งผ่าน pushText ตรง (ย้ายเข้า pushToCustomer คง ban semantics)
 - เทสต์: llmOutputContract 25/25 · replayConversations 3/3 · replayRoutes 2/2 · banGate 14/14 · gate ไม่มี fail ใหม่
 - ยังไม่แตะ Pro / ยังไม่ staging — รอกบสั่ง
+
+## 2026-08-22 | Claude | เฟส 2 รอบห้า — Codex P0 เดียว: validity mask
+- `VALIDITY_FACT_RE` ผูกกับ สิทธิ์/แพ็ก/โปร/อายุ หรือรูปแบบการ์ด "N ครั้ง ·|/|ใน N ชม." เท่านั้น — "ภายใน N นาที" ลอย ๆ = time_promise (acceptance 12 เคสผ่าน)
+- copy จริงที่กระทบ 1 จุด: referral bind "มีผล 48 ชม." → "สิทธิ์มีผล 48 ชม." (แก้ที่ต้นทาง ไม่ขยาย mask)
+- replay honesty: expected.json เพิ่ม coveredRows=188 / uniqueReplayRoutes=8 และ runner assert · `withRequiredAction` ระบุเป็น API สำรอง
+- gate เขียว · **Codex GO ขึ้น tone-hard staging** — รอกบสั่ง · smoke ที่ต้องทำ: 5 เคส (valid/invalid evidence · payment · image rejection · AI budget ≤2) + 5 เส้น unreplayable (slip approved · paywall deferred · daily toggle · in-flight wait · YouTube notify)

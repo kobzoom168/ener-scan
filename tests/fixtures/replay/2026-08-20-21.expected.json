@@ -20,5 +20,8 @@
     "paywall_deferred_report_pending": 1,
     "daily_pick_notify_toggle": 1
   },
-  "unreplayableReason": "inline ใน lineWebhook/liff ไม่มี builder/service boundary ให้เรียกแยก — นับ unreplayable ไม่นับ fixed"
+  "unreplayableReason": "inline ใน lineWebhook/liff ไม่มี builder/service boundary ให้เรียกแยก — นับ unreplayable ไม่นับ fixed",
+  "coveredRows": 188,
+  "uniqueReplayRoutes": 8,
+  "honesty": "routeFixed=coveredRows คือ 188 แถวประวัติที่ครอบด้วย 8 route implementation ไม่ใช่ 188 flow ที่แตกต่างกัน"
 }

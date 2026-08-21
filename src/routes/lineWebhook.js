@@ -4266,7 +4266,7 @@ async function maybeHandleAdminAssist({ client, event, userId, text }) {
     );
     await __replyAdmin(client, event.replyToken, {
       type: "text",
-      text: `รับทราบ ผูกกับคุณ ${adminName} แล้ว มีผล 48 ชม.`,
+      text: `รับทราบ ผูกกับคุณ ${adminName} แล้ว สิทธิ์มีผล 48 ชม.`,
     });
     console.log(JSON.stringify({ event: "ADMIN_ASSIST_NOTE_SAVED", target: targetUid.slice(0, 8), chars: said.length }));
   } catch (e) {

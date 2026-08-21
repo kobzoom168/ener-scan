@@ -48,7 +48,10 @@ export function classifyUserIntent(text, phase1 = null) {
   };
 }
 
-/** ผู้เรียกที่ route เป็น action จริง (ส่ง QR / ขอสลิป / ขอวันเกิด) ประกาศเอง */
+/**
+ * API สำรอง (ยังไม่มี caller ณ 22 ส.ค. 2026): ผู้เรียกที่ route เป็น action จริง (ส่ง QR / ขอสลิป / ขอวันเกิด)
+ * ประกาศเองเมื่อเพิ่ม action-route ใหม่ — ห้าม derive จาก state
+ */
 export function withRequiredAction(contract) {
   return { ...(contract || classifyUserIntent("")), requiredNextAction: true };
 }

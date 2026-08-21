@@ -761,3 +761,13 @@ test("P0: registration callers ใช้ helper fallback + ตรวจ typed re
     assert.ok(/source:/.test(call), `push fallback ต้องระบุ policy: ${call.slice(0, 60)}`);
   }
 });
+
+test("validity mask ผูกกับสิทธิ์/แพ็กเท่านั้น — SLA 'ภายใน N นาที' ลอย ๆ = time_promise (Codex รอบห้า)", async () => {
+  const { checkHardTone } = await import("../src/core/conversation/hardTone.util.js");
+  for (const t of ["สิทธิ์ใช้ได้ 24 ชม.", "แพ็กมีผล 30 วัน", "อายุสิทธิ์ 24 ชั่วโมง", "4 ครั้ง · 24 ชม.", "4 ครั้ง / 24 ชม.", "4 ครั้งใน 24 ชม."]) {
+    assert.equal(checkHardTone(t, { kind: "bundle" }).ok, true, `${t} ต้องผ่าน`);
+  }
+  for (const t of ["ผลส่งภายใน 5 นาที", "ผลมาให้ภายใน 5 นาที", "รอผลภายใน 5 นาที", "ตรวจเสร็จภายใน 3 นาที", "อาจารย์ตอบภายใน 10 นาที"]) {
+    assert.ok(checkHardTone(t, { kind: "bundle" }).violations.includes("time_promise"), `${t} ต้องโดน time_promise`);
+  }
+});

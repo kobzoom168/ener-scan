@@ -144,6 +144,7 @@ for (const ef of expectedFiles) {
 
   test(`route replay ${exp.fixture}: ระบบปัจจุบันตอบลูกค้าได้ถูกต้อง (ไม่ใช่แค่บล็อกของเก่า)`, async () => {
     const tally = { routeFixed: 0, stillFailing: 0, unreplayable: 0 };
+    const routesUsed = new Set();
     const failures = [];
     const byRoute = {};
     for (const row of rows) {
@@ -162,11 +163,15 @@ for (const ef of expectedFiles) {
         else assert.ok(r.aiCalls >= 1 && r.aiCalls <= exp.maxAiCallsPerTurn, `${row.id} aiCalls=${r.aiCalls}`);
         if (row.expected.evidence === "report_id") assert.ok(r.evidenceIds.length >= 1, `${row.id} ไม่มี evidence id`);
         tally.routeFixed++;
+        routesUsed.add(row.replyType);
       } catch (e) {
         tally.stillFailing++;
         failures.push(String(e.message).slice(0, 160));
       }
     }
+    // P1 honesty: routeFixed = จำนวน historical rows ที่ครอบ ไม่ใช่จำนวน flow ที่ต่างกัน
+    assert.equal(routesUsed.size, exp.uniqueReplayRoutes, `uniqueReplayRoutes ${routesUsed.size} ≠ expected ${exp.uniqueReplayRoutes}`);
+    assert.equal(tally.routeFixed, exp.coveredRows, "coveredRows");
     assert.deepEqual(
       tally,
       { routeFixed: exp.routeFixed, stillFailing: exp.routeStillFailing, unreplayable: exp.unreplayable },
