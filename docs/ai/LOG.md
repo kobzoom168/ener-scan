@@ -1100,3 +1100,8 @@
 - หัวไฟล์ตั้ง env hermetic ก่อน dynamic import + trap `globalThis.fetch`/http → `env -i PATH HOME node --test tests/replayRoutes.test.js` exit 0, externalNetworkCalls=0 (OpenAI/Gemini/PostgREST/LINE ผ่าน fetch ทั้งหมด = model 0 / DB 0)
 - DI/flag ที่เพิ่มเพื่อเลิกพึ่ง connection-refused: `runGeminiConsult` deps (customerFacts/kbContext/axisTop/rankingAllowed/isPaidActive/scanHistory/generate) · deliverOutbound `banGateDeps.markSent` · `SCAN_OFFER_DB_OVERRIDE=off` · `CONVERSATION_HISTORY_SINK=memory` (MEMORY_SINK) · `LINE_LOADING_ANIMATION=off` · SMART_REJECTION_ENABLED=false ใน hermetic env (deterministic route AI=0)
 - ผลคงเดิม routeFixed 188 / uniqueReplayRoutes 8 / unreplayable 15 · gate เขียว · Codex GO staging หลังจุดนี้ — รอกบสั่ง
+
+## 2026-08-22 | Claude | tone-hard ขึ้น staging (กบสั่ง + Codex GO)
+- push `tone-hard` → origin · server `/root/ener-scan-staging` checkout `tone-hard` @ 8293654 (staging DB มี 054/055 อยู่แล้ว: tables 2 · RPC · marker) · `deploy-ener.sh staging` blue-green ผ่าน ทุก container Up · :3200 = 200
+- ติดตั้ง `/root/smoke-watch-staging.sh [since]` กรอง signal ที่ Codex ให้ดู (HARD_TONE_BLOCKED_BEFORE_SEND / LLM_INTENT_CONTRACT_MISSING / CHAT_TURN_AI_CHAIN / fallback / transport)
+- **ค้าง**: smoke 10 เคสต้องยิงจากบัญชี LINE จริงบน OA staging (test.my-ener.uk) — รอกบยิง แล้ว Claude อ่าน log รายงาน · Pro ยังไม่แตะ
