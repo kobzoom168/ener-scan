@@ -1116,3 +1116,9 @@
 - (6) identity reply ย่อ ≤40 ทั้งสองสำนวน + history เฉพาะ transport สำเร็จ (IDENTITY_QUESTION_BLOCKED เมื่อไม่ส่ง)
 - เพิ่มที่พบเอง: ranking_query_redirect 163 ตัว/3 บรรทัดโดน step limit → "อันดับอยู่ท้ายรายงานชิ้นล่าสุด\n<url>"
 - gate เขียว · redeploy staging → ยิงซ้ำ A เคส 1, 2, 8, 9 (+ ranking/identity)
+
+## 2026-08-24 | Claude | Codex probe หลัง ec19343 — 3 จุดก่อนยิงซ้ำ A
+- ENERGY_TAGS ถอด "พลังเด่น"/"สายพลัง" (คำกำกับ ไม่ใช่ค่า) — acceptance exact: "พลังเด่นด้านคุ้มครอง คะแนน 7.8" กับ evidence จาก label "ปกป้อง" ผ่าน
+- held object-info → typed: migration **056** เพิ่ม status `held_object_info` (worker claim เฉพาะ queued/sending/retry_wait จึงไม่ retry) · deliverOutbound คืน `{sent:false, held:true}` ไม่อ้างส่งแล้ว · deliveryWorker ไม่ส่ง held เข้า finalizer · applied บน staging DB แล้ว (UPDATE 0) · **pro ต้อง apply 056 ก่อน deploy tone-hard**
+- idle "แพ็กนี้ดีไหม/โปรคุ้มไหม" → `payment_package_fact` deterministic AI=0: มี selected package → "49 บาท 4 ครั้ง ใน 24 ชม." · ไม่มี → "แพ็กมี 29, 49 และ 399 บาท" · ไม่เปิด QR
+- gate เขียว · replayRoutes hermetic 3/3 · redeploy staging → กบยิง A รอบเดียวครบชุด

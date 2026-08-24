@@ -8673,6 +8673,31 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
+  // "แพ็กนี้ดีไหม" ตอน idle (Codex smoke 24 ส.ค.): ข้อเท็จจริงแพ็ก deterministic AI=0 ไม่เปิด QR
+  {
+    const { isPackageOpinionQuestion, buildPackageFactText } = await import(
+      "../services/lineWebhook/packageFactReply.util.js"
+    );
+    if (isPackageOpinionQuestion(text)) {
+      const fact = buildPackageFactText(loadActiveScanOffer(), getSelectedPaymentPackageKey(userId) || null);
+      if (fact.text) {
+        console.log(JSON.stringify({ event: "PACKAGE_FACT_REPLY", via: fact.via, uidPrefix: String(userId).slice(0, 8) }));
+        await sendNonScanReply({
+          client,
+          userId,
+          replyToken: event.replyToken,
+          replyType: "payment_package_fact",
+          semanticKey: `payment_package_fact:${fact.via}`,
+          inboundMessageId: String(event?.message?.id || "") || null,
+          text: fact.text,
+          alternateTexts: [],
+          speakerRoleOverride: "admin",
+        });
+        return;
+      }
+    }
+  }
+
   // True idle — generic fallback / recovery. (จุดเดียวที่เปิด idle consult bypass)
   await replyIdleTextNoDuplicate({
     client,

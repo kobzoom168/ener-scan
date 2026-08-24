@@ -378,5 +378,9 @@ test("smoke 24 ส.ค. เคส 1: alias ปกป้อง↔คุ้มค�
   const ev = { report: { ids: ["r1"], scores: [7.8], percentages: [78], energyTags: canonicalEnergyTags("ปกป้อง") } };
   assert.equal(run("คะแนน 7.8 เด่นด้านปกป้อง", { evidence: ev, expectedRole: "ajarn" }).ok, true, "รายงานจริง 7.8/ปกป้อง/78% ต้องผ่าน");
   assert.equal(run("เด่นด้านคุ้มครอง", { evidence: ev, expectedRole: "ajarn" }).ok, true);
+  // Codex probe (exact): คำกำกับ "พลังเด่น" ต้องไม่กลายเป็น claim
+  assert.equal(run("พลังเด่นด้านคุ้มครอง คะแนน 7.8", { evidence: ev, expectedRole: "ajarn" }).ok, true, "พลังเด่นด้านคุ้มครอง คะแนน 7.8 ต้องผ่าน");
+  const { extractClaims } = await import("../src/core/conversation/llmOutputContract.util.js");
+  assert.ok(!extractClaims("พลังเด่นด้านคุ้มครอง").some((c) => c.value === "พลังเด่น" || c.value === "สายพลัง"));
   assert.ok(run("เด่นด้านโชคลาภ", { evidence: ev, expectedRole: "ajarn" }).violations.includes("ungrounded:energy"));
 });

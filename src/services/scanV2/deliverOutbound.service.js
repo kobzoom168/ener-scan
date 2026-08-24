@@ -355,18 +355,17 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
           });
         }
         if (holdOutcome === "held") {
-          // smoke 24 ส.ค. (job c88e7d43): แถวที่ถูกเกตยึด "ไม่ได้ส่ง" — มาร์ก sent เพื่อกัน retry
-          // แต่ต้องมี marker ให้ audit แยกจากแถวที่ส่งจริง (ไม่งั้นดูเหมือนส่งรายงานซ้ำ 2 outbound)
+          // smoke 24 ส.ค. (job c88e7d43 / Codex): แถวที่ถูกเกตยึด "ไม่ได้ส่ง" → typed terminal
+          // status=held_object_info (migration 056) worker ไม่ claim ซ้ำ และห้ามคืน sent:true
           await ((traceCtx.banGateDeps || {}).updateOutboundMessage || updateOutboundMessage)(id, {
-            status: "sent",
-            sent_at: new Date().toISOString(),
+            status: "held_object_info",
             last_error_code: "held_object_info",
             last_error_message: "report held by object-info gate; re-enqueued as new outbound after answer",
             next_retry_at: null,
           });
           ((traceCtx.banGateDeps || {}).releaseScanGate || releaseScanGate)(lineUserId);
           console.log(JSON.stringify({ event: "OUTBOUND_HELD_FOR_OBJECT_INFO", ...base() }));
-          return { sent: true };
+          return { sent: false, held: true, errorCode: "held_object_info" };
         }
       } catch { /* เกตพัง = ส่งรายงานปกติ */ }
 
