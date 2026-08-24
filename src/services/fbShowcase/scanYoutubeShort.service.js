@@ -280,7 +280,7 @@ function extractYoutubeUrl(message) {
 }
 
 /** แจ้งลูกค้าใน LINE ว่าชิ้นเขาขึ้นคลิป (เขาแชร์ต่อเอง = viral loop — ไอเดีย Claude กบเคาะ 30 ก.ค.) */
-async function notifyOwnerClipLive(lineUserId, youtubeUrl, sAlert) {
+export async function notifyOwnerClipLive(lineUserId, youtubeUrl, sAlert) {
   const token = String(process.env.CHANNEL_ACCESS_TOKEN || "").trim();
   const uid = String(lineUserId || "").trim();
   const url = String(youtubeUrl || "").trim();
