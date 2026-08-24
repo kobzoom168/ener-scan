@@ -114,7 +114,7 @@ test("nested race: top gate ไม่แบน แต่โดนแบนระ
   assert.deepEqual(calls.releaseGate, ["U" + "c".repeat(32)], "scan gate ต้องถูกปล่อย");
 });
 
-test("nested hold: outcome held → markSent ปกติ · not_held → ไหลไปส่งรายงาน (ไม่ suppress)", async () => {
+test("nested hold: outcome held → mark sent พร้อม marker held_object_info (ไม่ใช่ markSent เปล่า) · not_held → ไหลไปส่งรายงาน (ไม่ suppress)", async () => {
   // held: จบด้วย sent:true โดยไม่มี suppression side effect
   const held = makeDeps({ banned: false });
   const marked = [];
@@ -125,8 +125,10 @@ test("nested hold: outcome held → markSent ปกติ · not_held → ไห
     { banGateDeps: held.deps, objectInfoHold: async () => ({ outcome: "held" }) },
   );
   assert.equal(r1.sent, true);
-  assert.deepEqual(marked, [91], "held ต้อง markSent");
-  assert.equal(held.calls.update.length, 0, "held ไม่แตะ suppression update");
+  assert.deepEqual(marked, [], "held ห้าม markSent เปล่า (smoke 24 ส.ค.: ดูเหมือนส่งซ้ำ 2 outbound)");
+  assert.equal(held.calls.update.length, 1, "held ต้อง update 1 ครั้งพร้อม marker");
+  assert.equal(held.calls.update[0].patch.status, "sent");
+  assert.equal(held.calls.update[0].patch.last_error_code, "held_object_info");
   assert.equal(held.calls.failJob.length, 0);
 });
 

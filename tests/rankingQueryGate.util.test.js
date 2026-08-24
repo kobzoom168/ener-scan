@@ -23,8 +23,9 @@ test("จับคำถามอันดับจริง (เคสตี 1-
 
 test("redirect copy: ชี้เลื่อนลงด้านล่างของรายงาน + ลิงก์จริง — ไม่มีตัวเลข/ชื่อชิ้น/คำเงิน", () => {
   const txt = buildRankingRedirectText("https://scan.my-ener.uk/r/rpt_abc");
-  assert.match(txt, /เลื่อนลงด้านล่าง/);
-  assert.match(txt, /rpt_abc/);
+  // smoke 24 ส.ค.: copy เดิม 163 ตัว/3 บรรทัด โดน step limit → ต้อง ≤120 และ ≤2 บรรทัด
+  assert.equal(txt, "อันดับอยู่ท้ายรายงานชิ้นล่าสุด\nhttps://scan.my-ener.uk/r/rpt_abc");
+  assert.ok(txt.split("\n").length <= 2 && [...txt].length <= 120);
   assert.doesNotMatch(txt, /บาท|จ่าย|ค่าครู|แพ็ก|ราคา/);
   assert.doesNotMatch(txt, /\d+\s*\/\s*10|คะแนน \d/);
 });

@@ -16,14 +16,25 @@ const num = (s) => Number(String(toArabic(s)).replace(/,/g, ""));
 /** คำที่บ่งบอกว่าเลขนั้นเป็น "คะแนน" */
 const SCORE_CUE = /คะแนน|แรงสุด|เต็ม\s*(สิบ|10)|\/\s*10|ระดับ/u;
 const PERCENT_CUE = /%|เปอร์เซ็น|เข้ากับดวง|ความเข้ากัน/u;
+/** canonical tags = ค่า mainEnergyLabel จริงบน pro (24 ส.ค. 2026) + คำที่โมเดลใช้ */
 const ENERGY_TAGS = [
   "เมตตา", "มหานิยม", "แคล้วคลาด", "โชคลาภ", "คุ้มครอง", "การเงิน", "เสน่ห์",
   "สมดุล", "หนุนดวง", "ค้าขาย", "พุทธคุณ", "สายพลัง", "พลังเด่น",
+  "อำนาจ", "เสริมพลัง", "เร่งการเปลี่ยนแปลง", "บารมี", "งานเฉพาะ",
 ];
+/** alias → canonical (smoke 24 ส.ค.: รายงานจริง "ปกป้อง" 2,039 ชิ้น แต่ vocabulary มีแค่ "คุ้มครอง") */
+const ENERGY_ALIAS = {
+  "ปกป้อง": "คุ้มครอง", "ป้องกัน": "คุ้มครอง", "เกราะ": "คุ้มครอง",
+  "เสน่หา": "เสน่ห์", "เมตตามหานิยม": "เมตตา",
+  "ความมั่งคั่ง": "การเงิน", "ทรัพย์": "การเงิน",
+  "เปลี่ยนแปลง": "เร่งการเปลี่ยนแปลง",
+};
+const ENERGY_SURFACE = [...ENERGY_TAGS, ...Object.keys(ENERGY_ALIAS)];
+const toCanonicalEnergy = (w) => ENERGY_ALIAS[w] || w;
 /** normalizer เดียวกับ claim extractor: label รวม ("เมตตา มหานิยม", "สมดุล/เมตตา") → canonical tags */
 export function canonicalEnergyTags(label) {
   const t = normalizeInvisible(String(label || ""));
-  return ENERGY_TAGS.filter((tag) => t.includes(tag));
+  return [...new Set(ENERGY_SURFACE.filter((w) => t.includes(w)).map(toCanonicalEnergy))];
 }
 const MATERIALS = ["เนื้อผง", "เนื้อโลหะ", "เนื้อว่าน", "เนื้อดิน", "เนื้อชิน", "เนื้อทองเหลือง", "เนื้อเงิน"];
 const LUCKY_CUE = /เลขนำโชค|เลขมงคล|สีมงคล|สีประจำ|วันมงคล|สีแดงเป็นมงคล|สี(?:แดง|เขียว|ขาว|ดำ|ทอง|ฟ้า|ม่วง|เหลือง)(?=เป็นมงคล|มงคล|ดี)/u;
@@ -63,7 +74,7 @@ export function extractClaims(text) {
     claims.push({ type: "score", value: num(m[1]) });
   }
   // energy tags
-  for (const tag of ENERGY_TAGS) if (t.includes(tag)) claims.push({ type: "energy", value: tag });
+  for (const tag of canonicalEnergyTags(t)) claims.push({ type: "energy", value: tag });
   // materials
   for (const mat of MATERIALS) if (t.includes(mat)) claims.push({ type: "material", value: mat });
   // lucky attributes — สกัด "ค่า" จริง (สี/เลข/วัน) แล้วค่อยเทียบค่า (Codex B3)
@@ -375,7 +386,7 @@ export function evidenceFromAllowedFacts(input) {
       if (KEY_SCORE.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => addNum(ev.report.scores, x));
       else if (KEY_PERCENT.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => addNum(ev.report.percentages, x));
       else if (KEY_LUCKY.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => (Number.isFinite(num(x)) ? addNum(ev.report.luckyAttributes, x) : addStr(ev.report.luckyAttributes, x)));
-      else if (KEY_ENERGY.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => addStr(ev.report.energyTags, x));
+      else if (KEY_ENERGY.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => canonicalEnergyTags(x).forEach((tag) => addStr(ev.report.energyTags, tag)));
       else if (KEY_MATERIAL.test(k)) (Array.isArray(v) ? v : [v]).forEach((x) => addStr(ev.kb.materialFacts, x));
       else if (KEY_TEMPLE.test(k)) prov.temple = String(v || "");
       else if (KEY_MODEL.test(k)) prov.model = String(v || "");
@@ -392,7 +403,7 @@ export function evidenceFromAllowedFacts(input) {
     for (const m of t.matchAll(/([\d๐-๙]+(?:\.[\d๐-๙]+)?)\s*\/\s*10/gu)) addNum(ev.report.scores, m[1]);
     for (const m of t.matchAll(/([\d๐-๙]+(?:\.[\d๐-๙]+)?)\s*%/gu)) addNum(ev.report.percentages, m[1]);
     for (const m of t.matchAll(/พลังเด่น\s*:?\s*([ก-๙]+)/gu)) addStr(ev.report.energyTags, m[1]);
-    ENERGY_TAGS.forEach((tag) => { if (new RegExp(`พลังเด่น[^\\n]*${tag}`, "u").test(t)) addStr(ev.report.energyTags, tag); });
+    for (const line of t.split("\n")) if (/พลังเด่น/u.test(line)) canonicalEnergyTags(line).forEach((tag) => addStr(ev.report.energyTags, tag));
     extractLuckyValues(t).forEach((v) => (typeof v === "number" ? addNum(ev.report.luckyAttributes, v) : addStr(ev.report.luckyAttributes, v)));
     MATERIALS.forEach((m) => { if (t.includes(m)) addStr(ev.kb.materialFacts, m); });
     const p = extractProvenance(t);

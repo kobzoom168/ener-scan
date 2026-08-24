@@ -23,9 +23,10 @@ const ADMIN_RE = /(แอดมิน|admin)/i;
 
 // กบ 11 ส.ค.: ไม่ใส่อีโมจิ พิมพ์เหมือนคน ยาวแล้วเว้นบรรทัด · โทนจริงจัง นิ่ง ห้ามติดตลก
 // โทนกบ (Codex รอบ 3): factual เดียว ไม่มี CTA ไม่มีคำฟุ่มเฟือย
+// smoke 24 ส.ค.: สำนวนแรก 49 ตัวโดน hard-tone (reply ≤40) → ลูกค้าเงียบ · ย่อทั้งคู่ ≤40
 const REPLIES = [
-  "แอดมินรับเรื่องในแชท ส่วนคำอ่านพลังเป็นของอาจารย์",
-  "แชทนี้แอดมินดูแล คำอ่านพลังมาจากอาจารย์",
+  "แอดมินรับเรื่อง คำอ่านพลังเป็นของอาจารย์",
+  "แชทนี้แอดมินดูแล คำอ่านมาจากอาจารย์",
 ];
 
 /**
@@ -80,7 +81,12 @@ export async function maybeHandleIdentityQuestion({ client, event, userId, text 
     const prev = Number((await getValue(key)) || 0);
     const idx = prev % REPLIES.length;
     await setLargeValueWithTtl(key, String(prev + 1), 7 * 86400).catch(() => {});
-    await __replyCustomer(client, event.replyToken, { type: "text", text: REPLIES[idx] });
+    const sent = await __replyCustomer(client, event.replyToken, { type: "text", text: REPLIES[idx] });
+    if (sent?.sent !== true) {
+      // ห้ามบันทึก history/ประกาศสำเร็จเมื่อ transport ไม่เกิด (smoke 24 ส.ค.: monitor แจ้งสำเร็จทั้งที่ถูก block)
+      console.log(JSON.stringify({ event: "IDENTITY_QUESTION_BLOCKED", lineUserIdPrefix: String(userId).slice(0, 8), reason: sent?.reason || "unknown" }));
+      return true;
+    }
     console.log(
       JSON.stringify({ event: "IDENTITY_QUESTION_ANSWERED", lineUserIdPrefix: String(userId).slice(0, 8), idx, kind }),
     );

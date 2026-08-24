@@ -79,6 +79,15 @@ export async function runGeminiFrontOrchestrator(ctx) {
   }
 
   const phase1 = ctx.phase1State;
+  // smoke staging 24 ส.ค. (Ufe02ff): const เคยอยู่ใต้ path idle-direct-consult ที่เรียก
+  // tryConsultReply ก่อน → TDZ "Cannot access 'intentContract' before initialization"
+  // ทุก text turn ล้ม แล้ว recovery ของ webhook ยิง planner+consult นอก turn context
+  // → ประกาศไว้ต้นฟังก์ชันก่อนทุก branch
+  // P0-4 (Codex): router เป็นคนสร้าง typed contract ก่อนเรียกโมเดล
+  // ไม่มี metadata ที่จำเป็น = fail-closed (ค่าเข้มสุด) ห้ามให้โมเดล/ผู้เรียกเดาเอง
+  const intentContract = buildIntentContract(ctx, phase1);
+  // P0-6: งบร่วมทั้งเทิร์น — ถ้ามี turn context ใช้ SSOT เดียวกับ CHAT_TURN_AI_CHAIN
+  const turnBudget = getCustomerAiBudget(2) || { attempted: 0, max: 2 };
   if (!phase1) {
     return { handled: false, reason: "not_phase1" };
   }
@@ -212,11 +221,6 @@ export async function runGeminiFrontOrchestrator(ctx) {
   /** Customer-visible answer via the smart consult brain (Opus + real facts).
       Used for consult/help/chit-chat so the cheap model never writes to the
       customer directly unless consult fails. */
-  // P0-4 (Codex): router เป็นคนสร้าง typed contract ก่อนเรียกโมเดล
-  // ไม่มี metadata ที่จำเป็น = fail-closed (ค่าเข้มสุด) ห้ามให้โมเดล/ผู้เรียกเดาเอง
-  const intentContract = buildIntentContract(ctx, phase1);
-  // P0-6: งบร่วมทั้งเทิร์น — ถ้ามี turn context ใช้ SSOT เดียวกับ CHAT_TURN_AI_CHAIN
-  const turnBudget = getCustomerAiBudget(2) || { attempted: 0, max: 2 };
 
   async function tryConsultReply(via) {
     const lastSpeaker = await getValue(lastSpeakerKey(ctx.userId)).catch(() => null);

@@ -369,3 +369,14 @@ test("B2: report label รวม → canonical tags · claim แยกผ่า�
   assert.deepEqual(typed.items[0].energyTags.sort(), ["สมดุล", "เมตตา"].sort());
   assert.equal(typed.items[0].energyLabelRaw, "สมดุล/เมตตา");
 });
+
+test("smoke 24 ส.ค. เคส 1: alias ปกป้อง↔คุ้มครอง และ label จริงบน pro ต้องเป็น evidence ได้", async () => {
+  const { canonicalEnergyTags } = await import("../src/core/conversation/llmOutputContract.util.js");
+  assert.deepEqual(canonicalEnergyTags("ปกป้อง"), ["คุ้มครอง"]);
+  assert.deepEqual(canonicalEnergyTags("พลังคุ้มครอง (เน้นเกราะใจ)"), ["คุ้มครอง"]);
+  for (const l of ["อำนาจ", "เสริมพลัง", "เร่งการเปลี่ยนแปลง", "บารมี", "หนุนดวง", "โชคลาภ", "สมดุล"]) assert.deepEqual(canonicalEnergyTags(l), [l], l);
+  const ev = { report: { ids: ["r1"], scores: [7.8], percentages: [78], energyTags: canonicalEnergyTags("ปกป้อง") } };
+  assert.equal(run("คะแนน 7.8 เด่นด้านปกป้อง", { evidence: ev, expectedRole: "ajarn" }).ok, true, "รายงานจริง 7.8/ปกป้อง/78% ต้องผ่าน");
+  assert.equal(run("เด่นด้านคุ้มครอง", { evidence: ev, expectedRole: "ajarn" }).ok, true);
+  assert.ok(run("เด่นด้านโชคลาภ", { evidence: ev, expectedRole: "ajarn" }).violations.includes("ungrounded:energy"));
+});

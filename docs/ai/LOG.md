@@ -1105,3 +1105,14 @@
 - push `tone-hard` → origin · server `/root/ener-scan-staging` checkout `tone-hard` @ 8293654 (staging DB มี 054/055 อยู่แล้ว: tables 2 · RPC · marker) · `deploy-ener.sh staging` blue-green ผ่าน ทุก container Up · :3200 = 200
 - ติดตั้ง `/root/smoke-watch-staging.sh [since]` กรอง signal ที่ Codex ให้ดู (HARD_TONE_BLOCKED_BEFORE_SEND / LLM_INTENT_CONTRACT_MISSING / CHAT_TURN_AI_CHAIN / fallback / transport)
 - **ค้าง**: smoke 10 เคสต้องยิงจากบัญชี LINE จริงบน OA staging (test.my-ener.uk) — รอกบยิง แล้ว Claude อ่าน log รายงาน · Pro ยังไม่แตะ
+
+## 2026-08-24 | Claude | smoke staging บัญชี A (Ufe02ff 10:49–11:05) NO-GO → แก้ 8 จุด
+- **ต้นตอหลัก (ใหม่)**: TDZ `Cannot access 'intentContract' before initialization` ใน orchestrator (const อยู่ใต้ idle-direct path ที่เรียก tryConsultReply ก่อน) → **ทุก text turn ล้มใน ~130ms** → loop catch ของ webhook ยิง `invokePhase1FreshNoop` recovery นอก turn context และไม่มี inboundMessageId → อธิบายทั้ง aiCallCount=0 (planner+consult นับไม่ได้) และ exactDuplicate เงียบคำถามใหม่ · ย้าย const ขึ้นต้นฟังก์ชัน + regression test (ลำดับ + runtime ห้าม ReferenceError)
+- เคส 1: alias `ปกป้อง→คุ้มครอง` (+เสน่หา, อำนาจ, เสริมพลัง, เร่งการเปลี่ยนแปลง, บารมี, งานเฉพาะ จาก mainEnergyLabel จริงบน pro — ปกป้อง 2,039 ชิ้น) ใช้ทั้ง extractor/evidence/allowedFacts
+- เคส 9: ตัด alternate "รอผลอีกนิด อาจารย์กำลังดูอยู่ ผลมาเลย"
+- (3) job c88e7d43 **ไม่ใช่ส่งซ้ำ**: 3e055d40 ถูกเกตยึด (OUTBOUND_HELD_FOR_OBJECT_INFO ไม่มี SEND_SUCCESS) ลูกค้ากด "ไม่ทราบข้อมูลชิ้นนี้" 10:52:51 → re-enqueue b28ddc19 ส่งจริง 1 ครั้ง · ที่ดูซ้ำเพราะ held row ถูก markSent เปล่า → ตอนนี้มาร์ก `last_error_code=held_object_info` ให้ audit แยกได้
+- (4) AI budget: `attempted` = max(ที่ guard ประกาศ, callSites จริงใน ALS รวม planner) → ≤2 นับทุก call
+- (5) consult sendGatewayReply ส่ง `inboundMessageId` ทั้ง 2 site (dedupe เฉพาะ redelivery)
+- (6) identity reply ย่อ ≤40 ทั้งสองสำนวน + history เฉพาะ transport สำเร็จ (IDENTITY_QUESTION_BLOCKED เมื่อไม่ส่ง)
+- เพิ่มที่พบเอง: ranking_query_redirect 163 ตัว/3 บรรทัดโดน step limit → "อันดับอยู่ท้ายรายงานชิ้นล่าสุด\n<url>"
+- gate เขียว · redeploy staging → ยิงซ้ำ A เคส 1, 2, 8, 9 (+ ranking/identity)

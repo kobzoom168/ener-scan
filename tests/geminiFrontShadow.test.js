@@ -352,3 +352,21 @@ test("lineWebhook: paywall recovery primaryText block does not reference shadow 
   assert.ok(!block.includes("invokePhase1GeminiShadow"));
   assert.ok(!block.includes("getGeminiFrontMode"));
 });
+
+test("regression smoke 24 ส.ค.: intentContract/turnBudget ต้องประกาศก่อน idle-direct-consult (TDZ ทำทุก text turn ล้ม)", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync("src/core/conversation/geminiFront/geminiFrontOrchestrator.service.js", "utf8");
+  const declAt = src.indexOf("const intentContract = buildIntentContract(ctx, phase1);");
+  const firstUse = src.indexOf('tryConsultReply("consult_idle_direct")');
+  assert.ok(declAt > 0 && firstUse > 0);
+  assert.ok(declAt < firstUse, "const intentContract ต้องอยู่ก่อนการเรียก tryConsultReply ครั้งแรก");
+  // runtime: เส้น idle-direct ห้ามโยน ReferenceError (error อื่นจาก DB/LLM ที่ไม่มีใน test ยอมรับได้)
+  const { runGeminiFrontOrchestrator } = await import("../src/core/conversation/geminiFront/geminiFrontOrchestrator.service.js");
+  let err = null;
+  try {
+    await runGeminiFrontOrchestrator({ userId: "U" + "7".repeat(32), text: "พลังองค์นี้เป็นไง", lowerText: "พลังองค์นี้เป็นไง",
+      phase1State: "idle", allowIdleDirectConsult: true, sendGatewayReply: async () => ({ sent: true }) });
+  } catch (e) { err = e; }
+  assert.ok(!(err instanceof ReferenceError), `ReferenceError: ${err?.message}`);
+  assert.doesNotMatch(String(err?.message || ""), /before initialization/);
+});

@@ -98,8 +98,10 @@ export function getCustomerAiBudget(max = 2) {
   if (!s) return null;
   if (typeof s.customerAiAttempted !== "number") s.customerAiAttempted = 0;
   return {
+    // smoke 24 ส.ค. (Codex): ต้องนับ "ทุก" call ในเทิร์น รวม planner — ใช้ยอดจริงที่ LLM client
+    // บันทึกผ่าน recordTurnAiCall เป็นฐาน แล้วบวกที่ guard ประกาศเอง (กรณี client ไม่ได้ผ่าน wrapper)
     get attempted() {
-      return s.customerAiAttempted;
+      return Math.max(s.customerAiAttempted, (s.callSites || []).length);
     },
     set attempted(v) {
       s.customerAiAttempted = Number(v) || 0;

@@ -1093,6 +1093,8 @@ async function invokePhase1GeminiFromSnapshot({
         text,
         alternateTexts: alternateTexts || [],
         speakerRoleOverride: speakerRoleOverride || null,
+        // dedupe เฉพาะ redelivery ของ messageId เดิม — คำถามใหม่ที่ได้คำตอบเดิมห้ามเงียบ
+        inboundMessageId: String(event?.message?.id || "") || null,
       });
     },
     delegates,
@@ -4717,7 +4719,8 @@ async function handleTextMessage({ client, event, userId, session }) {
           replyType: "scan_in_flight_wait",
           semanticKey: "scan_in_flight_wait",
           text: "รอผลชิ้นแรกก่อน",
-          alternateTexts: ["รอผลอีกนิด อาจารย์กำลังดูอยู่ ผลมาเลย"],
+          // smoke 24 ส.ค.: alternate เก่ามีคำสัญญา "ผลมาเลย" — ตัดออก คงประโยคเดียว
+          alternateTexts: [],
         });
       }
       return;
@@ -5218,6 +5221,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           text,
           alternateTexts: alternateTexts || [],
           speakerRoleOverride: speakerRoleOverride || null,
+          inboundMessageId: String(event?.message?.id || "") || null,
         });
       },
       delegates: {

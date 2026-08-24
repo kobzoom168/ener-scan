@@ -40,10 +40,8 @@ export function extractRequestedRank(text) {
 
 /** copy ชี้ทางไปรายงาน — ไม่มีตัวเลข/ชื่อชิ้น/คำเงิน (paywall บนหน้ารายงานทำหน้าที่เอง) */
 export function buildRankingRedirectText(latestReportUrl) {
-  const lines = [
-    "อันดับและชิ้นเด่นของคลังคุณอยู่ในรายงานหลัก",
-    "เปิดรายงานชิ้นล่าสุดแล้วเลื่อนลงด้านล่าง จะเห็นอันดับครบทุกด้าน",
-  ];
-  if (latestReportUrl) lines.push("", latestReportUrl);
+  // smoke 24 ส.ค.: copy เดิม 163 ตัว/3 บรรทัด โดน step limit (120/2) → ลูกค้าเงียบ
+  const lines = ["อันดับอยู่ท้ายรายงานชิ้นล่าสุด"];
+  if (latestReportUrl) lines.push(latestReportUrl);
   return lines.join("\n");
 }
