@@ -918,3 +918,9 @@
 - Codex ตรวจเทียบ staging @995d469 แล้วแก้การจัดกลุ่มของ Claude 4 จุด: ①C4 "ประวัติใน payment lane" แก้แล้วบน staging (exact utility อยู่หลัง registration gate ก่อน payment states ทุกตัว) ย้ายไปกลุ่ม B ②C3 ack ซ้ำห้ามแก้ด้วย cooldown ต่อ uid — มี messageId claim/ingest dedupe/in-flight notice อยู่แล้ว ต้อง replay metadata พิสูจน์ก่อน ③C2 identity deterministic แล้ว งานจริงคือ inbound external link + output role leak ④พบบั๊กตัวรายงานเอง: dedupe fail-open เมื่อ redis มีปัญหา → อธิบายรายงานซ้ำวันละ 2 รอบได้ (→ C7)
 - ลำดับที่เคาะ: deploy @995d469 pro ก่อน → C1 evidence guard (enforceGroundedChatOutput — pre-send บังคับ prompt ช่วย) + C2 → C7 report outbox idempotency → replay C3+C5 แล้วแก้เฉพาะที่ยืนยัน → C6 synergy แยกบท (URL/CTA=แอดมิน คำแนะนำ=อาจารย์เมื่อถูกถาม)
 - รายละเอียด contract/acceptance ครบใน BACKLOG หมวด "🎯 คิวคุณภาพแชท" · ยังไม่แตะโค้ด quality บน staging กันปนก้อน GO — รอกบสั่ง "เอาขึ้น pro" เป็นสเต็ปแรก
+
+## 2026-08-26 | Claude | ยกเลิก tone-hard ทั้งชุด — Pro เป็น baseline ใหม่
+- กบเลือกพฤติกรรมบน Pro · staging ถอยกลับ main `9a19b87` = pro (source tree match, clean, 200, 4 containers Up, boot error 0) · Pro ไม่ถูกแตะ
+- branch `tone-hard` (ถึง 2f3138d) เก็บเป็นประวัติ **ห้าม merge/deploy** · migration 055–056 ยังอยู่บน staging DB แต่โค้ด Pro ไม่เรียก ไม่ลบย้อน (เสี่ยงข้อมูล) · Pro ไม่มี 055/056
+- กติกาใหม่ (กบ): ปรับแชทจากเคสจริงทีละจุด แก้ให้น้อยที่สุด · **ห้าม** global output contract / global sanitizer / จำกัดทุกข้อความ ≤40
+- ความปลอดภัย: shell history บนเซิร์ฟเวอร์มี credential plaintext 23 บรรทัด (นับอย่างเดียว) → แผน `docs/ai/plans/security-shell-history-rotation.md` ทำแยกรอบ

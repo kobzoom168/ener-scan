@@ -57,3 +57,9 @@
 - [ ] text awaiting_slip recency: helper กลาง resolveAwaitingPaymentConversationMode (SSOT isPaymentCommand/isPromoInquiryText + slip/status intents · >60 นาที + ไม่ใช่เรื่องเงิน = release สู่แชทปกติ + telemetry STALE_PAYMENT_TEXT_RELEASED) — Codex เคาะแนวแล้ว 18 ส.ค.
 - [ ] rename supabase→db ทั้ง repo (54 ไฟล์ / 90 call sites): alias `db` เพิ่มแล้ว 18 ส.ค. ใน src/config/supabase.js — ทยอยย้ายไฟล์ที่แตะอยู่แล้วทีละงาน แล้วถอด alias ตอนครบ (ห้ามทำ big-bang ช่วงใกล้ deploy)
 - [ ] recovery owner hardening (Codex 18 ส.ค. ไม่บล็อก): แยก dedupe "กำลังส่ง" กับ "ส่งสำเร็จ" กัน concurrent race + เพิ่ม job id/ลิงก์ /admin/payments ใน Telegram alert
+
+## 🔐 ความปลอดภัย (26 ส.ค. 2026 — ทำแยกรอบ ต้องมีกบ)
+- [ ] ล้าง shell history ทุกไฟล์ + ตั้ง HISTIGNORE · rotate key ตามรายการชื่อตัวแปร · revoke ของเก่า — แผน: docs/ai/plans/security-shell-history-rotation.md
+
+## ❌ ยกเลิก (26 ส.ค. 2026)
+- ชุด tone-hard / คิวคุณภาพแชท C1–C7 แบบ global — กบเลือก Pro เป็น baseline · ถ้าจะแก้แชท: เคสจริงทีละจุด

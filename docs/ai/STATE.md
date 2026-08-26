@@ -61,3 +61,9 @@ ssh -p 2222 root@204.168.246.103 'bash /root/deploy-ener.sh pro'      # pro — 
 - **โลโก้โหลดแบบ LIFF (LIVE pro 4 ส.ค.)**: util กลาง src/utils/enerLoaderShell.util.js (emblem วาดตัวเอง + Ener + จุดวิ่ง) ใช้ทั้ง /synergy/:token และ **report หลัก /r/:publicToken** — browser จริงได้ shell แล้ว fetch /r/:token/body (คง ?lang=en) · crawler (CRAWLER_UA regex) ได้หน้าเต็มทันที OG ไม่พัง — ห้ามย้าย OG ออกจาก response ของ crawler
 - **Persona 2 ชั้น แอดมิน→อาจารย์ (staging 11 ส.ค. — แผน docs/ai/plans/ener-admin-teacher-persona.md)**: ข้อความบริการ/เงินทั้งหมด = เสียงแอดมิน (ผม) · อาจารย์ = คำอ่านล้วน ห้ามแตะเงิน · GEMINI_PHRASING_SYSTEM=persona แอดมิน, GEMINI_CONSULT_SYSTEM มี TWO ROLES + router แยกตอบข้อความผสม · การ์ดกติกา v3 ตอน follow (howtoFlow.service) · ห้ามคำ AI/บอท ทั้งระบบ + สคริปต์เลี่ยงเมื่อโดนถาม · ค้าง: rich menu/broadcast/greeting เฟส A เต็ม + ขึ้น pro (ต้องไปพร้อม monitor ใหม่)
 - **Chat quality monitor v2 (staging 11 ส.ค.)**: conversation history มี metadata_json (migration 051 — apply staging แล้ว, pro ตอน deploy) speakerRole admin/ajarn/consult · analyzer รู้ 2 บทบาท (แอดมินไม่ใช่หลุดบท, อาจารย์+เงิน=ร้ายแรงสุด) · deterministic checks ก่อน LLM (เงินหลุดปากอาจารย์/ข้อความซ้ำ 3 ใน 10 นาที/handoff ค้าง) · จัดลำดับตรวจ ด่า>เงิน>คุยเยอะ · เสียงอาจารย์หลุดคำเงิน → Telegram ทันที (dedupe 1 ชม./คน) · ⚠️ ห้าม deploy persona ขึ้น pro โดยไม่เอา monitor ชุดนี้ไปด้วย
+
+## Baseline แชท (26 ส.ค. 2026)
+- พฤติกรรมแชทบน Pro `9a19b87` คือ baseline · ชุด `tone-hard` (hard tone ≤40 / LLM output contract / replay gate) **ยกเลิกทั้งหมด** ห้าม merge/deploy — branch เก็บเป็นประวัติ
+- ปรับแชทได้เฉพาะจากเคสจริงทีละจุด แก้น้อยที่สุด · ห้าม global contract / sanitizer / length cap ทุกข้อความ
+- DB: staging มี migration 055–056 (โค้ดไม่เรียก) · pro มีถึง 054
+- ค้างความปลอดภัย: ล้าง shell history + rotate key (แผนใน docs/ai/plans/security-shell-history-rotation.md)
