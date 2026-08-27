@@ -937,3 +937,12 @@
 - rubric: replyType ต่อบรรทัด + STATE header (scan_jobs/payments ของวัน) + เกณฑ์ admin/ajarn/ระบบ + traps gate/pending_verify
 - tests `tests/flowRole.behavior.test.js` 12/12 hermetic (network=0) · gate เขียว · ปรับ resultStatusReply test ตาม copy ใหม่
 - ค้าง: deploy staging → replay 13 เคสด้วยข้อความเดิม (บัญชีจริง) → ขอ GO Pro · หมายเหตุ: `ctx.hasReport` ยังไม่ถูกส่งจาก webhook → role-safe fallback ใช้สำนวน "ขอดูจากชิ้นจริง" เสมอ
+
+## 2026-08-27 | Claude | flow-role รอบสอง — ปิด Codex 7 ข้อ (runtime blockers)
+- #1 bind ตอน "รับรูป/สร้าง job": `moveKeyAtomic` (Lua GET→DEL→SET) uid→`objinfo:pre_job:{jobId}` ใน webhookImageIngestion ก่อน ack · gate อ่าน job-scoped ผ่าน `relatedJobId` (deliverOutbound ส่งให้) ด้วย `getDelKey` atomic · race test: A รับก่อน B รับทีหลัง B เสร็จก่อน → ข้อมูลอยู่กับ A เท่านั้น · สอง worker consume ได้ตัวเดียว
+- #2 insert ตรวจ `{error}` ตรง ๆ → `OBJECT_INFO_PRE_SCAN_SAVE_FAILED` + restore evidence ให้ job + ไหลไปถามตามเดิม · ห้าม log SAVED
+- #3 `checkAjarnVoice` reject "ผม" ทุกกรณี (lookahead ผมว่า/ผมจะ/…) รวม mixed voice · FLOW_RE เพิ่ม status patterns (ผล…ออก/มา…ยัง, คะแนน…ออก…ยัง, สถานะ…ผล) admin ชนะ energy · `hasReport` wire จาก `hasDeliveredReport` (delivered เท่านั้น) · fallback ไม่สั่งส่งรูปซ้ำ
+- #4/#6 `consultGuardChain.util.js`: primary + regenerate รวมสูงสุด 1 (model calls ≤2) ครอบ role/money/tone/คำต้องห้าม "ระบบ" · ยังผิด → deterministic fallback (defer_payment / role-safe / tone sanitize เดิม / neutral) · orchestrator ไม่มี retry แยกอีก · test role+money+tone+ระบบ พร้อมกัน → calls=2
+- #5 `deliveredEvidence.util.js`: อ่านเฉพาะ scan_jobs.status=delivered → scan_results_v2 by result_id · null ไม่กลายเป็น 0 · ใช้ตอบเฉพาะคำถามชิ้นล่าสุด ("มีแบบพลังเต็มไหม" → honest)
+- #7 tests เป็น behavior ผ่าน production helper (gate จริงด้วย fake DB/redis, chain จริง, evidence จริง) · ชื่อ replay ซื่อสัตย์ "9 inbound จาก 13 เคส ผ่าน matchers ไม่ใช่ webhook เต็มสาย" · 15/15 hermetic
+- gate เขียว · ยังไม่ merge/ไม่แตะ Pro · ต่อไป: redeploy staging → กบยิงบัญชีจริงรอบเดียว

@@ -325,7 +325,7 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         const holdFn =
           traceCtx.objectInfoHold ||
           (await import("../objectInfoGate/objectInfoGate.service.js")).maybeHoldReportForObjectInfo;
-        const hold = await holdFn({ client, lineUserId, payload });
+        const hold = await holdFn({ client, lineUserId, payload, relatedJobId: msg.related_job_id || null });
         // typed outcome (Codex nested-ban race): object เดิม ๆ ห้ามตีความเป็น "ส่งแล้ว"
         const holdOutcome = hold && typeof hold === "object" ? hold.outcome : hold === true ? "held" : "not_held";
         if (holdOutcome === "suppressed_banned") {

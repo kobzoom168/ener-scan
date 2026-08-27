@@ -8624,26 +8624,12 @@ async function handleTextMessage({ client, event, userId, session }) {
         "../services/lineWebhook/consultTimeoutFallback.util.js"
       );
       if (!isQuestionLike(text)) return null;
-      let ev = { hasReport: false };
-      try {
-        const { data: sr } = await supabase
-          .from("scan_results_v2")
-          .select("report_payload_json")
-          .eq("line_user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const rp = sr?.report_payload_json && typeof sr.report_payload_json === "object" ? sr.report_payload_json : null;
-        if (rp?.summary) {
-          ev = {
-            hasReport: true,
-            latestScore: Number(rp.summary.energyScore),
-            latestPower: rp.summary.mainEnergyLabel || rp.summary.visibleMainLabel || null,
-            latestCompat: Number(rp.summary.compatibilityPercent),
-          };
-        }
-      } catch { /* ไม่มี evidence = honest text */ }
-      const out = buildConsultUnavailableText(ev);
+      // actual-delivery evidence เท่านั้น (ห้ามอ่าน scan_results_v2 ล่าสุดที่อาจถูก gate ยึด/failed)
+      const { getLatestDeliveredReport, isLatestReportQuestion } = await import(
+        "../services/scanV2/deliveredEvidence.util.js"
+      );
+      const delivered = await getLatestDeliveredReport(userId).catch(() => null);
+      const out = buildConsultUnavailableText(text, delivered, { isLatestReportQuestion });
       return { text: out.text, replyType: "consult_unavailable", speakerRole: out.via === "evidence" ? "ajarn" : "admin", via: out.via };
     },
   });

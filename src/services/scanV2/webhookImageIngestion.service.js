@@ -380,6 +380,14 @@ export async function ingestScanImageAsyncV2({
     }),
   );
 
+  // ข้อมูลชิ้นที่ลูกค้าพิมพ์ก่อนรูป → bind กับ job นี้ตอนรับรูป (atomic) — ไม่ใช่ตอนรายงานเสร็จ
+  // (flow-role รอบสอง: สองรูปติดกัน รูปสองเสร็จก่อน ต้องไม่เอาชื่อพระไปติดผิดองค์)
+  try {
+    const { bindPreScanInfoToJob } = await import("../objectInfoGate/preScanObjectInfo.util.js");
+    const bound = await bindPreScanInfoToJob(lineUserId, jobRow.id);
+    if (bound) console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_BOUND", ...base(), jobIdPrefix: idPrefix8(jobRow.id) }));
+  } catch { /* bind ไม่ได้ = gate ถามตามปกติ */ }
+
   const ackRow = await insertOutboundMessage({
     line_user_id: lineUserId,
     kind: "pre_scan_ack",

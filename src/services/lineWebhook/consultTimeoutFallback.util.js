@@ -18,20 +18,20 @@ export function isQuestionLike(text) {
 export const CONSULT_UNAVAILABLE_TEXT = "ตอนนี้ยังตอบคำถามนี้ไม่ได้ครับ";
 
 /**
- * @param {{ hasReport?: boolean, latestScore?: number|null, latestPower?: string|null, latestCompat?: number|null }} ev
+ * ใช้ report evidence เฉพาะ (1) delivered จริง (2) คำถามเป็นเรื่องคะแนน/พลัง/ความเข้ากันของชิ้นล่าสุด
+ * (3) มีค่าจริง (null ไม่กลายเป็น 0) — ไม่งั้น honest fallback (Codex รอบสอง #5)
+ * @param {string} userText
+ * @param {{ resultId?: string, score?: number|null, compat?: number|null, power?: string|null } | null} delivered
  * @returns {{ text: string, via: "evidence" | "honest" }}
  */
-export function buildConsultUnavailableText(ev = {}) {
-  const score = Number(ev.latestScore);
-  const power = String(ev.latestPower || "").trim();
-  const compat = Number(ev.latestCompat);
-  if (ev.hasReport && Number.isFinite(score) && power) {
-    // ข้อเท็จจริงจากรายงานล่าสุดของลูกค้าเอง (เสียงอาจารย์ ไม่แต่งเพิ่ม)
-    const compatPart = Number.isFinite(compat) ? ` เข้ากับคุณ ${compat}%` : "";
-    return {
-      text: `จากผลอ่านชิ้นล่าสุดของคุณ พลังเด่นด้าน${power} คะแนน ${score}/10${compatPart} รายละเอียดอยู่ในรายงานครับ`,
-      via: "evidence",
-    };
+export function buildConsultUnavailableText(userText, delivered, deps = {}) {
+  const isLatestQ = deps.isLatestReportQuestion || ((t) => /(?:องค์นี้|ชิ้นนี้|อันนี้|ล่าสุด)[^\n]{0,20}(?:คะแนน|พลัง|เข้ากับ|เด่นด้าน|เป็นไง|เป็นยังไง|ดีไหม)/u.test(String(t || "")));
+  if (delivered && isLatestQ(userText)) {
+    const parts = [];
+    if (delivered.power) parts.push(`พลังเด่นด้าน${delivered.power}`);
+    if (Number.isFinite(delivered.score)) parts.push(`คะแนน ${delivered.score}/10`);
+    if (Number.isFinite(delivered.compat)) parts.push(`เข้ากับคุณ ${delivered.compat}%`);
+    if (parts.length) return { text: `จากผลอ่านชิ้นล่าสุดของคุณ ${parts.join(" ")} รายละเอียดอยู่ในรายงานครับ`, via: "evidence" };
   }
   return { text: CONSULT_UNAVAILABLE_TEXT, via: "honest" };
 }

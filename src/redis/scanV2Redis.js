@@ -545,3 +545,44 @@ export async function sleepIfRateHint(sleep, lineUserId) {
     await sleep(ms);
   }
 }
+
+/**
+ * Atomic MOVE (GET src → DEL src → SET dst EX ttl) ใน Lua เดียว — bind ข้อมูลก่อนรูปเข้ากับ job
+ * (flow-role รอบสอง: get→clear ไม่ atomic ทำสอง worker อ่านค่าเดียวกัน) · ไม่มี redis = null
+ * @returns {Promise<string|null>} ค่าที่ย้าย หรือ null เมื่อไม่มี/ไม่มี redis
+ */
+export async function moveKeyAtomic(srcKey, dstKey, ttlSec) {
+  const r = await getScanV2Redis();
+  if (!r) return null;
+  const lua = `
+    local v = redis.call("get", KEYS[1])
+    if not v then return nil end
+    redis.call("del", KEYS[1])
+    redis.call("set", KEYS[2], v, "EX", ARGV[1])
+    return v
+  `;
+  try {
+    const v = await r.eval(lua, 2, kDedupe(srcKey), kDedupe(dstKey), String(Math.max(60, Number(ttlSec) || 900)));
+    return v == null ? null : String(v);
+  } catch {
+    return null;
+  }
+}
+
+/** Atomic GET+DEL (consume ครั้งเดียว) — ไม่มี redis = null */
+export async function getDelKey(key) {
+  const r = await getScanV2Redis();
+  if (!r) return null;
+  const lua = `
+    local v = redis.call("get", KEYS[1])
+    if not v then return nil end
+    redis.call("del", KEYS[1])
+    return v
+  `;
+  try {
+    const v = await r.eval(lua, 1, kDedupe(key));
+    return v == null ? null : String(v);
+  } catch {
+    return null;
+  }
+}

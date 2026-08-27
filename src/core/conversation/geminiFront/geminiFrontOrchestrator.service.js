@@ -212,159 +212,66 @@ export async function runGeminiFrontOrchestrator(ctx) {
       customer directly unless consult fails. */
   async function tryConsultReply(via) {
     const lastSpeaker = await getValue(lastSpeakerKey(ctx.userId)).catch(() => null);
-    // บทบาทตัดจาก route ก่อน generate (flow-role audit 26 ส.ค. เคส 2/13) — ไม่อนุมานจากข้อความทีหลัง
-    const { routeConsultRole, roleDirectiveFor, checkAjarnVoice, ajarnRoleSafeFallback } = await import(
-      "../consultRoleRoute.util.js"
-    );
+    // บทบาทตัดจาก route ก่อน generate (flow-role เคส 2/13) · guard ทุกตัวใช้ regenerate budget ร่วม
+    // (primary + regenerate รวมสูงสุด 1 = model calls ≤ 2) · ยังผิด = deterministic fallback ไม่เงียบ
+    const { routeConsultRole, roleDirectiveFor } = await import("../consultRoleRoute.util.js");
+    const { runConsultGuardChain } = await import("../consultGuardChain.util.js");
     const routedRole = routeConsultRole(ctx.text);
     const roleDirective = roleDirectiveFor(routedRole);
-    let consultText = await runGeminiConsult({
-      userId: ctx.userId,
-      userText: ctx.text,
-      conversationHistory,
-      lastSpeaker: lastSpeaker || null,
-      ...(roleDirective ? { extraDirective: roleDirective } : {}),
-    });
-    if (!consultText) return false;
-    let roleFallbackUsed = false;
-    if (routedRole === "ajarn") {
-      const v1 = checkAjarnVoice(consultText);
-      if (!v1.ok) {
-        console.warn(JSON.stringify({ event: "CONSULT_ROLE_PRESEND_BLOCKED", via, reason: v1.reason, attempt: 1, sample: consultText.slice(0, 120) }));
-        const retry = await runGeminiConsult({
-          userId: ctx.userId,
-          userText: ctx.text,
-          conversationHistory,
-          lastSpeaker: lastSpeaker || null,
-          extraDirective: `${roleDirective} · คำตอบก่อนหน้าผิดบท (${v1.reason === "handoff_phrase" ? "บอกให้ส่งให้อาจารย์ทั้งที่อาจารย์คือคนตอบ" : "พูดเป็นผม/แอดมิน"}) — ตอบใหม่เป็นเสียงอาจารย์ล้วน`,
-        });
-        if (retry && checkAjarnVoice(retry).ok) {
-          consultText = retry;
-        } else {
-          // ห้ามส่งของที่ reject ห้ามเงียบ → role-safe fallback (ไม่แต่งผล ไม่สัญญา)
-          consultText = ajarnRoleSafeFallback({ hasReport: Boolean(ctx.hasReport) });
-          roleFallbackUsed = true;
-          console.warn(JSON.stringify({ event: "CONSULT_ROLE_PRESEND_FALLBACK", via, reason: v1.reason }));
-        }
-      }
-    }
-    let guardedConsult = await guardStaleNoImageClaim(
-      guardEntitlementClaims(consultText.slice(0, 1800), via),
-    );
-    // pre-send money guard สองชั้น (Codex รอบ 5): ①เงินต้องออกจากเสียงแอดมิน
-    // ②และต้องเป็นจังหวะที่ลูกค้าถามเงิน/อยู่ payment state เท่านั้น (unsolicited = block
-    // แม้เสียงแอดมิน — ไม่งั้น guard แค่ย้ายการขายไปให้อีกคนพูด)
-    // SSOT ก่อน (isPaymentCommand/isPromoInquiryText จาก webhook ส่งเป็น boolean) —
-    // regex เป็น fallback ให้ caller เก่าเท่านั้น (Codex รอบ 6)
     const userMoneyIntent =
       typeof ctx.userMoneyIntent === "boolean"
         ? ctx.userMoneyIntent
         : USER_MONEY_INTENT_RE.test(String(ctx.text || ""));
     const inPaymentState = /paywall|payment|slip|verify|awaiting/i.test(String(phase1 || ""));
     const guardCtx = { userMoneyIntent, inPaymentState };
-    const verdict1 = evaluateMoneyGuard(guardedConsult, guardCtx);
-    if (!verdict1.ok) {
-      console.warn(
-        JSON.stringify({
-          event: "AJARN_MONEY_PRESEND_BLOCKED",
-          via,
-          reason: verdict1.reason,
-          attempt: 1,
-          sample: guardedConsult.slice(0, 120),
-        }),
-      );
-      const retry = await runGeminiConsult({
-        userId: ctx.userId,
-        userText: ctx.text,
-        conversationHistory,
-        lastSpeaker: lastSpeaker || null,
-        extraDirective:
-          verdict1.reason === "unsolicited"
-            ? "คำตอบก่อนหน้าของคุณผิดกติกาใหญ่: พูดเรื่องเงิน/ค่าครู/สิทธิ์ทั้งที่ลูกค้าไม่ได้ถาม — ตอบใหม่โดยตัดเรื่องเงิน/ค่าครู/สิทธิ์/แพ็กออกทั้งหมด ตอบเฉพาะเรื่องที่ลูกค้าถามเท่านั้น"
-            : "คำตอบก่อนหน้าของคุณผิดกติกาใหญ่: พูดเรื่องเงิน/ค่าครู/สิทธิ์โดยไม่ใช่เสียงแอดมิน — ตอบใหม่: ส่วนที่เป็นเงินต้องพูดเป็นเสียงแอดมิน (เรียกตัวเองว่า ผม) เท่านั้น หรือถ้าเงินไม่จำเป็นต่อคำถาม ให้ตัดเรื่องเงินออกทั้งหมด",
-      });
-      const retryGuarded = retry
-        ? await guardStaleNoImageClaim(guardEntitlementClaims(retry.slice(0, 1800), via))
-        : null;
-      if (retryGuarded && evaluateMoneyGuard(retryGuarded, guardCtx).ok) {
-        guardedConsult = retryGuarded;
-      } else if (userMoneyIntent) {
-        // ลูกค้าถามเงินจริง → ออกจาก orchestrator ทันที (typed outcome — ห้ามไหลลง
-        // Gemini phrasing) ให้ deterministic payment flow ของ webhook ชั้นนอกตอบ
-        console.warn(
-          JSON.stringify({ event: "AJARN_MONEY_PRESEND_DEFER_TO_PAYMENT_FLOW", via }),
-        );
-        return "defer_payment";
-      } else {
-        console.warn(
-          JSON.stringify({ event: "AJARN_MONEY_PRESEND_FALLBACK", via, reason: verdict1.reason }),
-        );
-        guardedConsult = NEUTRAL_RECOVERY_FALLBACK;
-      }
+    let hasReport = false;
+    if (routedRole === "ajarn") {
+      try {
+        const { hasDeliveredReport } = await import("../../../services/scanV2/deliveredEvidence.util.js");
+        hasReport = await hasDeliveredReport(ctx.userId);
+      } catch { hasReport = false; }
     }
-    // pre-send tone guard (Codex 14 ส.ค. รอบ 2 — fail-closed): คำชม/ปลอบต้องห้าม
-    // → retry ครั้งเดียว → retry ยังหลุด = deterministic sanitizer ตัดเฉพาะวลีต้องห้าม
-    // → ยังไม่ผ่าน = neutral fallback — ห้ามส่ง original ที่ถูก block เด็ดขาด
-    const tone1 = evaluateToneGuard(guardedConsult);
-    if (!tone1.ok) {
-      console.warn(
-        JSON.stringify({
-          event: "TONE_PRESEND_BLOCKED",
-          via,
-          match: tone1.match,
-          attempt: 1,
-          sample: guardedConsult.slice(0, 120),
+    const chain = await runConsultGuardChain({
+      generate: (directive) =>
+        runGeminiConsult({
+          userId: ctx.userId,
+          userText: ctx.text,
+          conversationHistory,
+          lastSpeaker: lastSpeaker || null,
+          ...(directive ? { extraDirective: directive } : {}),
         }),
-      );
-      const toneRetry = await runGeminiConsult({
-        userId: ctx.userId,
-        userText: ctx.text,
-        conversationHistory,
-        lastSpeaker: lastSpeaker || null,
-        extraDirective: `คำตอบก่อนหน้าของคุณผิดกติกาโทน: มีคำชม/ปลอบต้องห้าม ("${tone1.match}") — ตอบใหม่โดยไม่ใช้คำตัดสินเชิงชม (ใช้ได้ดีแล้ว ถือว่าดี) และไม่ปลอบ (ไม่ต้องกังวล เดี๋ยวก็เจอ สบายใจได้) บอกตัวเลข/ข้อเท็จจริงกับขั้นถัดไปตรง ๆ`,
-      });
-      const toneRetryGuarded = toneRetry
-        ? await guardStaleNoImageClaim(guardEntitlementClaims(toneRetry.slice(0, 1800), via))
-        : null;
-      const toneRes = resolveToneGuardedText({
-        original: guardedConsult,
-        retry: toneRetryGuarded,
-        moneyCtx: guardCtx,
-      });
-      guardedConsult = toneRes.text;
-      console.warn(
-        JSON.stringify({
-          event: "TONE_PRESEND_OUTCOME",
-          via,
-          match: tone1.match,
-          outcome: toneRes.outcome,
-        }),
-      );
+      postProcess: async (t) => {
+        let g = await guardStaleNoImageClaim(guardEntitlementClaims(String(t).slice(0, 1800), via));
+        const linkRes = sanitizeForeignLinks(g);
+        if (linkRes.stripped.length > 0) {
+          console.warn(JSON.stringify({ event: "CONSULT_FOREIGN_LINK_STRIPPED", via, stripped: linkRes.stripped }));
+          g = linkRes.text || NEUTRAL_RECOVERY_FALLBACK;
+        }
+        return g;
+      },
+      routedRole,
+      roleDirective,
+      moneyCtx: guardCtx,
+      hasReport,
+      maxRegenerate: 1,
+      log: (event, data) => console.warn(JSON.stringify({ event, via, ...data })),
+    });
+    if (chain.outcome === "empty") return false;
+    if (chain.outcome === "defer_payment") {
+      console.warn(JSON.stringify({ event: "AJARN_MONEY_PRESEND_DEFER_TO_PAYMENT_FLOW", via }));
+      return "defer_payment";
     }
-    // link guard (17 ส.ค. — เคสลิงก์มโน ener.app): URL นอก allowlist ตัดทิ้งก่อนส่งเสมอ
-    {
-      const linkRes = sanitizeForeignLinks(guardedConsult);
-      if (linkRes.stripped.length > 0) {
-        console.warn(
-          JSON.stringify({ event: "CONSULT_FOREIGN_LINK_STRIPPED", via, stripped: linkRes.stripped }),
-        );
-        guardedConsult = linkRes.text || NEUTRAL_RECOVERY_FALLBACK;
-      }
-    }
-    // role router (Codex C3): resolve เสียงจริงก่อนส่ง — history/monitor ได้ tag ตรง
-    // route ตัดบทไว้แล้ว = ใช้บทนั้น (ผ่าน checkAjarnVoice/fallback มาแล้ว) · ไม่ได้ route = resolve เดิม
+    const guardedConsult = chain.text;
+    console.log(JSON.stringify({ event: "CONSULT_GUARD_CHAIN", via, modelCalls: chain.modelCalls, guardOutcome: chain.guardOutcome, reasons: chain.reasons }));
+    // role router: route ตัดบทไว้แล้ว = ใช้บทนั้น (ผ่าน guard/fallback มาแล้ว) · ไม่ได้ route = resolve เดิม
     const speaker = routedRole === "ajarn" ? "ajarn" : routedRole === "admin" ? "admin" : resolveSpeakerRole(guardedConsult);
-    void roleFallbackUsed;
     const sendRes = await ctx.sendGatewayReply({
       replyType: "gemini_front_consult",
       semanticKey: `gemini_front_consult:${phase1}`,
       text: guardedConsult,
       alternateTexts: [],
-      // unknown = surface resolve ไม่ได้ → คง tag consult ตามจริง ไม่อ้างว่า resolved
       speakerRoleOverride: speaker === "unknown" ? "consult" : speaker,
     });
-    // จำเสียงล่าสุด 30 นาที (handoff hint — ยังไม่ใช่ state เต็ม topic/turnId/scanResultId)
-    // เขียนเฉพาะข้อความที่ส่งจริง — dedupe/suppress ห้ามอัปเดต state (Codex รอบ 4 ข้อ 6)
     if ((speaker === "ajarn" || speaker === "admin") && sendRes?.sent === true) {
       void setLargeValueWithTtl(lastSpeakerKey(ctx.userId), speaker, 1800).catch(() => {});
     }

@@ -6,7 +6,7 @@
  * (ห้ามส่งข้อความสั้นทุกข้อความเข้า LLM parser) → เก็บ provisional TTL 15 นาที →
  * bind/consume ครั้งเดียวกับรูปถัดไป แล้วลบทันที
  */
-import { getValue, setLargeValueWithTtl, clearDedupeKey } from "../../redis/scanV2Redis.js";
+import { setLargeValueWithTtl, moveKeyAtomic, getDelKey } from "../../redis/scanV2Redis.js";
 
 export const PRE_SCAN_INFO_TTL_SEC = 15 * 60;
 const key = (uid) => `objinfo:preprovided:${uid}`;
@@ -41,25 +41,37 @@ export async function storePreScanObjectInfo(lineUserId, rawText, deps = {}) {
   return true;
 }
 
+const jobKey = (jobId) => `objinfo:pre_job:${jobId}`;
+
 /**
- * bind/consume ครั้งเดียว: คืน {raw, at} แล้วลบทันที (กันข้อมูลเก่าไปผูกผิดชิ้น)
- * หมดอายุ/ไม่มี = null
+ * bind ตอน "รับรูป/สร้าง job" (Codex รอบสอง #1): ย้าย uid-scoped → job-scoped แบบ atomic (Lua MOVE)
+ * → รูปถัดไปเท่านั้นที่ได้ข้อมูล · สองรูปติดกัน รูปแรกได้ รูปสองไม่ได้ · ไม่มี redis = ไม่ bind
+ * @returns {Promise<boolean>} true = bind แล้ว
  */
-export async function consumePreScanObjectInfo(lineUserId, deps = {}) {
+export async function bindPreScanInfoToJob(lineUserId, jobId, deps = {}) {
   const uid = String(lineUserId || "").trim();
-  if (!uid) return null;
-  const get = deps.get || getValue;
-  const clear = deps.clear || clearDedupeKey;
+  const jid = String(jobId || "").trim();
+  if (!uid || !jid) return false;
+  const move = deps.move || moveKeyAtomic;
+  const v = await move(key(uid), jobKey(jid), PRE_SCAN_INFO_TTL_SEC);
+  return Boolean(v);
+}
+
+/**
+ * consume ครั้งเดียว (atomic GETDEL) ตาม jobId — gate เรียกตอนจะตัดสินว่าต้องถามหรือไม่
+ * @returns {Promise<{ raw: string, at: number } | null>}
+ */
+export async function consumeJobPreScanInfo(jobId, deps = {}) {
+  const jid = String(jobId || "").trim();
+  if (!jid) return null;
+  const getdel = deps.getdel || getDelKey;
   let raw = null;
   try {
-    raw = await get(key(uid));
+    raw = await getdel(jobKey(jid));
   } catch {
     return null;
   }
   if (!raw) return null;
-  try {
-    await clear(key(uid));
-  } catch { /* ลบไม่ได้ก็ยังใช้รอบนี้ — TTL ปิดให้ */ }
   try {
     const j = JSON.parse(raw);
     if (!j || !j.raw) return null;
@@ -68,6 +80,14 @@ export async function consumePreScanObjectInfo(lineUserId, deps = {}) {
   } catch {
     return null;
   }
+}
+
+/** DB insert ล้ม → คืน evidence กลับให้ job (ยังไม่หาย) แล้ว gate ถามตามปกติ */
+export async function restoreJobPreScanInfo(jobId, info, deps = {}) {
+  const jid = String(jobId || "").trim();
+  if (!jid || !info?.raw) return;
+  const set = deps.set || setLargeValueWithTtl;
+  await set(jobKey(jid), JSON.stringify({ raw: info.raw, at: info.at || Date.now() }), PRE_SCAN_INFO_TTL_SEC);
 }
 
 /** copy แอดมินรับข้อมูล (โทนเดิม) */

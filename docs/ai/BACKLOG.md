@@ -66,5 +66,5 @@
 
 ## 🧭 flow-role (26 ส.ค. 2026 — branch flow-role รอ staging replay)
 - [ ] deploy staging + replay 13 เคสด้วยข้อความเดิม → GO Pro (ไม่แตะโทน ไม่มี global guard)
-- [ ] ส่ง `hasReport` จาก webhook เข้า orchestrator ctx ให้ role-safe fallback ชี้รายงานได้
+- [x] hasReport = delivered evidence (27 ส.ค.)
 - [ ] H (product decision): auto-release รายงานที่ถูก gate ยึดเมื่อไม่กรอกข้อมูล — ยังไม่ทำ

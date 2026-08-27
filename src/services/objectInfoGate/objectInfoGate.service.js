@@ -93,7 +93,8 @@ async function releaseHeldWithoutInfo(userId, pending, rawText) {
  * suppressed_banned = ลูกค้าโดนแบนระหว่าง push การ์ด — ล้าง pending/backup/form
  * ที่สร้างไว้แล้ว caller ต้อง suppress outbound (ห้าม markSent)
  */
-export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload }) {
+export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload, relatedJobId = null }, deps = {}) {
+  const db = deps.supabase || supabase;
   const NOT_HELD = { outcome: "not_held" };
   if (!objectInfoGateEnabled()) return NOT_HELD;
   try {
@@ -116,17 +117,17 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     if (rp.precheckMode) return NOT_HELD; // ชิ้นเช็คก่อนเช่า — ไม่ใช่ของลูกค้า ไม่ถาม
     const objectKey = objectKeyFromReportPayload(rp);
     if (!objectKey) return NOT_HELD;
-    if (await hasInfoForObject(lineUserId, objectKey)) return NOT_HELD;
+    if (await (deps.hasInfoForObject || hasInfoForObject)(lineUserId, objectKey)) return NOT_HELD;
 
-    // ข้อมูลที่ลูกค้าพิมพ์ก่อน/พร้อมรูป (flow-role audit 26 ส.ค. เคส 1/4/9/12): bind ครั้งเดียว
-    // แล้วบันทึกเลย ไม่ถามซ้ำ · consume ลบทันทีกันผูกผิดชิ้น
-    try {
-      const { consumePreScanObjectInfo } = await import("./preScanObjectInfo.util.js");
-      const pre = await consumePreScanObjectInfo(lineUserId);
+    // ข้อมูลที่ลูกค้าพิมพ์ก่อนรูป — job-scoped (bind ตอนรับรูป) consume ครั้งเดียว (atomic GETDEL)
+    // insert ต้องตรวจ {error} ตรง ๆ: ล้ม = คืน evidence ให้ job แล้วถามตามปกติ ห้าม log SAVED
+    if (relatedJobId) {
+      const { consumeJobPreScanInfo, restoreJobPreScanInfo } = await import("./preScanObjectInfo.util.js");
+      const pre = await (deps.consumeJobPreScanInfo || consumeJobPreScanInfo)(relatedJobId);
       if (pre?.raw) {
         const lanePre = laneFromReportPayload(rp);
-        const parsedPre = await parseOwnerInfo(pre.raw, lanePre).catch(() => null);
-        await supabase.from("object_owner_info").insert({
+        const parsedPre = await (deps.parseOwnerInfo || parseOwnerInfo)(pre.raw, lanePre).catch(() => null);
+        const { error: insErr } = await db.from("object_owner_info").insert({
           line_user_id: lineUserId,
           scan_result_id: String(payload.scanResultId || rp.scanId || "") || null,
           object_key: objectKey,
@@ -139,10 +140,16 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
           stone_type: parsedPre?.stoneType || null,
           parse_confidence: Number(parsedPre?.confidence) || null,
         });
-        console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", via: "pre_scan_text", lineUserIdPrefix: lineUserId.slice(0, 8), hasName: Boolean(parsedPre?.objectName) }));
-        return NOT_HELD;
+        if (insErr) {
+          console.error(JSON.stringify({ event: "OBJECT_INFO_PRE_SCAN_SAVE_FAILED", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), message: String(insErr.message || insErr).slice(0, 120) }));
+          await (deps.restoreJobPreScanInfo || restoreJobPreScanInfo)(relatedJobId, pre).catch(() => {});
+          // ไหลต่อไปถามตามปกติ (ข้อมูลยังอยู่กับ job)
+        } else {
+          console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", via: "pre_scan_text", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), hasName: Boolean(parsedPre?.objectName) }));
+          return NOT_HELD;
+        }
       }
-    } catch { /* บันทึกไม่ได้ = ถามตามปกติ */ }
+    }
 
     // กันสแปม+รายงานหาย (เคส 10 ส.ค.): ยึดได้ทีละชิ้นต่อคน — มีคำถามค้างอยู่
     // หรือเพิ่งถามไปไม่นาน → ชิ้นนี้ส่งรายงานปกติ ไม่ยึดเพิ่ม (pending เดิมห้ามโดนทับ)
