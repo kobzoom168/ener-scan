@@ -118,6 +118,32 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
     if (!objectKey) return NOT_HELD;
     if (await hasInfoForObject(lineUserId, objectKey)) return NOT_HELD;
 
+    // ข้อมูลที่ลูกค้าพิมพ์ก่อน/พร้อมรูป (flow-role audit 26 ส.ค. เคส 1/4/9/12): bind ครั้งเดียว
+    // แล้วบันทึกเลย ไม่ถามซ้ำ · consume ลบทันทีกันผูกผิดชิ้น
+    try {
+      const { consumePreScanObjectInfo } = await import("./preScanObjectInfo.util.js");
+      const pre = await consumePreScanObjectInfo(lineUserId);
+      if (pre?.raw) {
+        const lanePre = laneFromReportPayload(rp);
+        const parsedPre = await parseOwnerInfo(pre.raw, lanePre).catch(() => null);
+        await supabase.from("object_owner_info").insert({
+          line_user_id: lineUserId,
+          scan_result_id: String(payload.scanResultId || rp.scanId || "") || null,
+          object_key: objectKey,
+          lane: lanePre,
+          unknown: !(parsedPre?.objectName || parsedPre?.stoneType),
+          raw_text: pre.raw.slice(0, 400),
+          object_name: parsedPre?.objectName || null,
+          temple: parsedPre?.temple || null,
+          era_year: parsedPre?.eraYear || null,
+          stone_type: parsedPre?.stoneType || null,
+          parse_confidence: Number(parsedPre?.confidence) || null,
+        });
+        console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", via: "pre_scan_text", lineUserIdPrefix: lineUserId.slice(0, 8), hasName: Boolean(parsedPre?.objectName) }));
+        return NOT_HELD;
+      }
+    } catch { /* บันทึกไม่ได้ = ถามตามปกติ */ }
+
     // กันสแปม+รายงานหาย (เคส 10 ส.ค.): ยึดได้ทีละชิ้นต่อคน — มีคำถามค้างอยู่
     // หรือเพิ่งถามไปไม่นาน → ชิ้นนี้ส่งรายงานปกติ ไม่ยึดเพิ่ม (pending เดิมห้ามโดนทับ)
     if (await getValue(pendingKey(lineUserId))) {
@@ -513,7 +539,14 @@ export async function maybeHandlePurposeAnswer({ client, event, userId, text }) 
       for (const [re, c] of KEYMAP) {
         if (re.test(t)) { choice = c; break; }
       }
-      if (!choice) return false;
+      // flow-role audit 26 ส.ค. เคส 2: "เสริมบารมีครับ" ไม่อยู่ใน KEYMAP → เคยหลุดไป consult
+      // → purpose state ค้างจริง + ข้อความสั้น ไม่ใช่คำถาม/เงิน/เมนู = เก็บเป็น free-text
+      if (!choice) {
+        const short = t.replace(/(ครับ|ค่ะ|คะ|นะ|จ้า)+$/u, "").trim();
+        const notPurpose = /[?？]|ไหม|มั้ย|หรือเปล่า|ยังไง|เท่าไหร่|กี่|ทำไม|อะไร|จ่าย|โอน|สลิป|ค่าครู|ราคา|แพ็ก|โปร(?!ด)|สิทธิ์|ประวัติ|จัดชุด|เมนู|ยกเลิก|วิธีใช้/u;
+        if (!short || short.length > 30 || notPurpose.test(short)) return false;
+        choice = short.slice(0, 40);
+      }
     }
     const { objectKey } = JSON.parse(raw);
     const { data } = await supabase

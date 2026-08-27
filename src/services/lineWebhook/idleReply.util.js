@@ -25,14 +25,31 @@ export async function replyIdleTextNoDuplicate({
   userId,
   invokePhase1GeminiOrchestrator = null,
   allowIdleDirectConsult = false,
+  onConsultUnavailable = null,
   deps,
 }) {
-  if (
-    allowIdleDirectConsult === true &&
-    invokePhase1GeminiOrchestrator &&
-    (await invokePhase1GeminiOrchestrator({ allowIdleDirectConsult: true })).handled
-  )
-    return { via: "orchestrator" };
+  if (allowIdleDirectConsult === true && invokePhase1GeminiOrchestrator) {
+    const orch = await invokePhase1GeminiOrchestrator({ allowIdleDirectConsult: true });
+    if (orch.handled) return { via: "orchestrator" };
+    // consult ตอบไม่ได้ (timeout/ว่าง) + คำถาม → fallback ซื่อสัตย์แทน nudge (flow-role เคส 6)
+    if (orch.reason === "idle_bypass_consult_null" && typeof onConsultUnavailable === "function") {
+      const fb = await onConsultUnavailable().catch(() => null);
+      if (fb && fb.text) {
+        const r = await deps.sendNonScanReply({
+          client,
+          userId,
+          replyToken,
+          replyType: fb.replyType || "consult_unavailable",
+          semanticKey: fb.replyType || "consult_unavailable",
+          text: fb.text,
+          alternateTexts: [],
+          speakerRoleOverride: fb.speakerRole || "admin",
+        });
+        console.log(JSON.stringify({ event: "CONSULT_UNAVAILABLE_FALLBACK", via: fb.via, sent: r?.sent === true }));
+        return { via: "consult_unavailable" };
+      }
+    }
+  }
   const primary = deps.buildIdleDeterministicPrimaryText();
   let personaSoft = null;
   try {

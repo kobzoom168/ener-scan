@@ -548,7 +548,9 @@ async function maybeHandleReferralInvite({ client, userId, replyToken, text }) {
 /** ลูกค้าพิมพ์ "จัดชุด/ชุดวันนี้/ชุดพลัง" → ลิงก์รายงานจัดชุดพลังของเขา (Synergy — กบ 31 ก.ค.) */
 async function maybeHandleSynergyRequest({ client, userId, replyToken, text }) {
   const t = String(text || "").trim();
-  if (!/^(จัดชุด|ชุดวันนี้|ชุดพลัง|จัดชุดพลัง)$/.test(t)) return false;
+  // flow-role audit 26 ส.ค. เคส 5: ประโยคสุภาพ "จัดชุดพระให้หน่อยครับ" ต้องเข้า synergy ไม่ตก paywall
+  const { isSynergyRequest } = await import("../services/lineWebhook/synergyIntent.util.js");
+  if (!isSynergyRequest(t)) return false;
   try {
     const { loadVault, getOrCreateSynergyToken } = await import(
       "../services/synergy/synergyReport.service.js"
@@ -2324,7 +2326,7 @@ async function finalizeAcceptedImage({
         holdRes.held === "first"
           ? "รับรูปไว้แล้วครับ ยังไม่ต้องส่งซ้ำ\n\nเหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว จากนั้นผมส่งรูปนี้ให้อาจารย์ทันทีครับ"
           : holdRes.held === "extra"
-            ? "รับรูปแรกไว้แล้วครับ ระบบอ่านครั้งละ 1 ชิ้น รูปที่ส่งเพิ่มยังไม่นำเข้าสแกนครับ\n\nกรอกข้อมูลเจ้าของให้เสร็จก่อน แล้วผมส่งรูปแรกให้อาจารย์เลยครับ"
+            ? "รับรูปแรกไว้แล้วครับ อาจารย์อ่านทีละ 1 ชิ้น รูปที่ส่งเพิ่มยังไม่นำเข้าสแกนครับ\n\nกรอกข้อมูลเจ้าของให้เสร็จก่อน แล้วผมส่งรูปแรกให้อาจารย์เลยครับ"
             : null;
 
       const { tryMarkRegCardShown } = await import(
@@ -4477,7 +4479,7 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
     try {
       await client.pushMessage(userId, {
         type: "text",
-        text: "ระบบสะดุดตอนเริ่มอ่านครับ รูปยังอยู่ครบ แตะปุ่มเดิมอีกครั้งได้เลยครับ",
+        text: "เริ่มอ่านไม่สำเร็จครับ รูปยังอยู่ครบ แตะปุ่มเดิมอีกครั้งได้เลยครับ",
       });
     } catch { /* ignore */ }
     return true;
@@ -4529,6 +4531,29 @@ async function handleTextMessage({ client, event, userId, session }) {
     if (await maybeHandleObjectInfoAnswer({ client, event, userId, text })) return;
     if (await maybeHandlePurposeAnswer({ client, event, userId, text })) return;
   } catch { /* เกตพังห้ามขวางแชทปกติ */ }
+
+  // ข้อมูลชิ้นที่พิมพ์ "ก่อน/พร้อม" รูป (flow-role audit 26 ส.ค. เคส 1/4/9/12): deterministic gate
+  // → เก็บ provisional 15 นาที ให้ gate ใช้ตอนรูปมา · ห้ามเข้า consult (เคยแต่งผลจากชื่อรุ่น)
+  try {
+    const { isPreScanObjectInfoText, storePreScanObjectInfo, PRE_SCAN_INFO_ACK_TEXT } = await import(
+      "../services/objectInfoGate/preScanObjectInfo.util.js"
+    );
+    if (isPreScanObjectInfoText(text)) {
+      await storePreScanObjectInfo(userId, text);
+      const r = await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "pre_scan_object_info_ack",
+        semanticKey: "pre_scan_object_info_ack",
+        text: PRE_SCAN_INFO_ACK_TEXT,
+        alternateTexts: [],
+        speakerRoleOverride: "admin",
+      });
+      console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_CAPTURED", uidPrefix: String(userId).slice(0, 8), sent: r?.sent === true }));
+      return;
+    }
+  } catch { /* จับไม่ได้ = flow เดิม */ }
 
   // ปุ่ม "เข้าใจแล้ว" จากการ์ดกติกาตอน add เพื่อน (กบ 8 ส.ค.)
   try {
@@ -8592,6 +8617,35 @@ async function handleTextMessage({ client, event, userId, session }) {
     userId,
     invokePhase1GeminiOrchestrator,
     allowIdleDirectConsult: true,
+    // flow-role audit 26 ส.ค. เคส 6: consult timeout + ข้อความเป็นคำถาม → ห้ามตอบ nudge ส่งรูป
+    // → ตอบจาก report evidence ถ้ามี ไม่งั้นข้อความซื่อสัตย์ไม่สัญญา (transport จริง)
+    onConsultUnavailable: async () => {
+      const { isQuestionLike, buildConsultUnavailableText } = await import(
+        "../services/lineWebhook/consultTimeoutFallback.util.js"
+      );
+      if (!isQuestionLike(text)) return null;
+      let ev = { hasReport: false };
+      try {
+        const { data: sr } = await supabase
+          .from("scan_results_v2")
+          .select("report_payload_json")
+          .eq("line_user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const rp = sr?.report_payload_json && typeof sr.report_payload_json === "object" ? sr.report_payload_json : null;
+        if (rp?.summary) {
+          ev = {
+            hasReport: true,
+            latestScore: Number(rp.summary.energyScore),
+            latestPower: rp.summary.mainEnergyLabel || rp.summary.visibleMainLabel || null,
+            latestCompat: Number(rp.summary.compatibilityPercent),
+          };
+        }
+      } catch { /* ไม่มี evidence = honest text */ }
+      const out = buildConsultUnavailableText(ev);
+      return { text: out.text, replyType: "consult_unavailable", speakerRole: out.via === "evidence" ? "ajarn" : "admin", via: out.via };
+    },
   });
 }
 

@@ -66,6 +66,8 @@ TWO ROLES (persona 2 ชั้น — กบ 11 ส.ค. 2026). Transcript bot l
 - อาจารย์ = the master who does readings only. Calls himself อาจารย์. He must NEVER mention money in any form (บาท ค่าครู แพ็ก สิทธิ์ ราคา โอน สลิป QR โปร) and never sell.
 Role violations to flag:
 - แอดมินตีความพลัง/ให้คะแนน/แนะนำเชิงวิชาเอง = violation (reading is อาจารย์'s job)
+- อาจารย์ตอบเรื่องพลังจาก evidence (มี scan_result ของลูกค้าใน transcript/state header) = NORMAL, do not flag · แอดมินตอบเรื่องเงิน/สถานะ/คิว/รับรูป = NORMAL · ไม่ต้องบังคับให้ทุกข้อความเป็นอาจารย์ (flow-role 26 ส.ค.)
+- คำว่า "ระบบ" ใน customer-visible text (ทุกเสียง) = issue (ห้ามอ้างถึงตัวเองหรือบริการว่าเป็นระบบ)
 - อาจารย์พูดเรื่องเงิน/ชวนเปิดสิทธิ์ = violation ร้ายแรงสุด (severity high เสมอ)
 - Handoff: first พลัง question of a topic should get a short admin handoff (เดี๋ยวผมเรียนถามอาจารย์ให้) then an อาจารย์ answer. Follow-up questions on the SAME topic must NOT repeat the handoff (handoff ทุกข้อความ = flag ความรำคาญ). Admin saying he will forward to อาจารย์ with NO answer following = flag.
 - Mixed message (พลัง+เงินในข้อความเดียว) should be answered in two voices: อาจารย์ ส่วนพลัง แล้วแอดมินส่วนเงิน — อาจารย์ตอบส่วนเงินเอง = flag.
@@ -91,6 +93,10 @@ CRITICAL CONTEXT — the nature of this business (กบ 21 ก.ค.): this is a
 - What IS a violation: revealing it is AI/บอท/"ระบบ" (any self-reference as a system), OR stating concrete numbers/results (เปอร์เซ็นต์เข้ากับดวง, คะแนน, ด้านเด่น) that the system has not actually computed in a delivered report, OR contradicting the real flow.
 - Judge "เดา/มโน" ONLY for invented facts and numbers — never for staying in character as a human master.
 
+State-based judgement (flow-role 26 ส.ค. — ห้ามตัดสินจากข้อความอย่างเดียว): each bot line carries [replyType] and the transcript starts with a STATE header (scan jobs + payments of the day). Use it:
+- [object_info_gate_ask] after [pre_scan_ack]/[scan_in_flight_wait] is NORMAL when a scan job of that time has status delivered/delivery_queued (report computed then held for owner info) and a [scan_result] follows — not "ถามซ้ำ/ผลไม่มา"
+- [pending_verify_block_scan] saying สลิปกำลังตรวจ while payment status is manual_review/pending is a status notice, NOT "ทวงสลิป"
+- [paywall_deferred_report_pending] / [payment_pick_package_menu] after the customer replied to a paywall = NORMAL flow
 Do NOT flag: normal polite replies, the bot declining to answer authenticity/price (that is correct), short answers, system paywall cards, image messages you cannot see, in-persona master roleplay as described above.
 
 Two false-positive traps to avoid (กบ 22 ก.ค. — both happened):
@@ -114,16 +120,35 @@ function speakerLabel(r) {
   return "บอท";
 }
 
-function buildTranscript(rows) {
-  const lines = rows.map(
-    (r) => `[${bangkokHm(r.created_at)}] ${speakerLabel(r)}: ${String(r.text || "").slice(0, 500)}`,
-  );
-  let out = lines.join("\n");
+function buildTranscript(rows, stateHeader = "") {
+  const lines = rows.map((r) => {
+    const rt = r.role === "bot" ? String(r.metadata_json?.replyType || "").trim() : "";
+    return `[${bangkokHm(r.created_at)}] ${speakerLabel(r)}${rt ? ` [${rt}]` : ""}: ${String(r.text || "").slice(0, 500)}`;
+  });
+  let out = (stateHeader ? `${stateHeader}\n` : "") + lines.join("\n");
   if (out.length > MAX_TRANSCRIPT_CHARS_PER_USER) {
     out = out.slice(out.length - MAX_TRANSCRIPT_CHARS_PER_USER);
     out = `(ตัดช่วงต้นออก เกินขนาด)\n${out}`;
   }
   return out;
+}
+
+/**
+ * STATE header ให้ evaluator (flow-role 26 ส.ค.): job status/delivery timing + payment state ของวันนั้น
+ * — ห้ามให้ LLM เดา object_info_gate / pending_verify จากข้อความอย่างเดียว
+ */
+export async function buildStateHeader(lineUserId, dayRange, deps = {}) {
+  const db = deps.supabase || supabase;
+  const [{ data: jobs }, { data: pays }] = await Promise.all([
+    db.from("scan_jobs").select("id,status,created_at,updated_at").eq("line_user_id", lineUserId)
+      .gte("created_at", dayRange.startIso).lt("created_at", dayRange.endIso).order("created_at", { ascending: true }).limit(20),
+    db.from("payments").select("status,slip_verify_status,created_at,updated_at").eq("line_user_id", lineUserId)
+      .gte("created_at", dayRange.startIso).lt("created_at", dayRange.endIso).order("created_at", { ascending: true }).limit(10),
+  ]);
+  const j = (jobs || []).map((x) => `${bangkokHm(x.created_at)} job ${String(x.id).slice(0, 8)} ${x.status} (upd ${bangkokHm(x.updated_at)})`);
+  const p = (pays || []).map((x) => `${bangkokHm(x.created_at)} payment ${x.status}${x.slip_verify_status ? `/${x.slip_verify_status}` : ""} (upd ${bangkokHm(x.updated_at)})`);
+  if (!j.length && !p.length) return "STATE: (no scan job / payment today)";
+  return `STATE:\n${[...j, ...p].join("\n")}`;
 }
 
 function safeParseJson(raw) {
@@ -255,7 +280,8 @@ export async function runChatQualityDailySweep(now = new Date()) {
       }
     } catch { /* deterministic พังไม่ขวาง LLM */ }
     try {
-      const verdict = await analyzeConversation(buildTranscript(convRows));
+      const stateHeader = await buildStateHeader(uid, dayRange).catch(() => "");
+      const verdict = await analyzeConversation(buildTranscript(convRows, stateHeader));
       if (!verdict) {
         analyzeFailed += 1;
         continue;

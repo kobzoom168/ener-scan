@@ -18,7 +18,7 @@ test("ทุกสถานะได้คำตอบถูกแขนง — 
   assert.match(dq.reply, /กำลังส่ง/);
   const failed = resolveResultStatusReply({ status: "failed" });
   assert.equal(failed.claimsDelivered, false);
-  assert.match(failed.reply, /สะดุด/);
+  assert.match(failed.reply, /อ่านไม่สำเร็จ/); // flow-role G: ไม่มีคำว่า ระบบ
   const cancelled = resolveResultStatusReply({ status: "cancelled" });
   assert.equal(cancelled.claimsDelivered, false);
   assert.match(cancelled.reply, /ยกเลิก/);

@@ -19,14 +19,14 @@ export function resolveResultStatusReply({ status, jobReportToken = null, baseUr
   }
   if (st === "delivery_queued") {
     return {
-      reply: "อาจารย์อ่านเสร็จแล้วครับ ระบบกำลังส่งผลเข้าแชทนี้ ถ้าสักพักยังไม่เข้า ทักมาได้เลยครับ",
+      reply: "อาจารย์อ่านเสร็จแล้วครับ ผมกำลังส่งผลเข้าแชทนี้ ถ้าสักพักยังไม่เข้า ทักมาได้เลยครับ",
       claimsDelivered: false,
     };
   }
   if (st === "completed") {
     // Codex รอบ 3: dedup path ตั้ง completed ก่อน outbound ถูกส่ง — ห้าม claim ว่าส่งแล้ว
     return {
-      reply: "อาจารย์อ่านเสร็จแล้วครับ ระบบกำลังเตรียมส่งผลเข้าแชทนี้ ถ้าสักพักยังไม่เข้า ทักมาได้เลยครับ",
+      reply: "อาจารย์อ่านเสร็จแล้วครับ ผมกำลังเตรียมส่งผลเข้าแชทนี้ ถ้าสักพักยังไม่เข้า ทักมาได้เลยครับ",
       claimsDelivered: false,
     };
   }
@@ -41,7 +41,7 @@ export function resolveResultStatusReply({ status, jobReportToken = null, baseUr
   if (st === "failed") {
     return {
       reply:
-        "รอบที่แล้วระบบอ่านสะดุดครับ ขออภัยด้วย\n\nรบกวนส่งรูปเดิมมาใหม่อีกครั้ง เดี๋ยวผมส่งให้อาจารย์ดูทันทีครับ",
+        "รอบที่แล้วรูปนี้อ่านไม่สำเร็จครับ ขออภัยด้วย\n\nรบกวนส่งรูปเดิมมาใหม่อีกครั้ง เดี๋ยวผมส่งให้อาจารย์ดูทันทีครับ",
       claimsDelivered: false,
     };
   }

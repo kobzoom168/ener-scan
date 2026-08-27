@@ -31,7 +31,7 @@ export async function maybeHandlePrecheckTrigger({ client, event, userId, text }
       type: "text",
       text:
         "เปิดโหมดเช็คก่อนเช่าแล้วครับ (30 นาที) ถ่ายรูปองค์ที่กำลังจะเช่าส่งมาได้เลย " +
-        "อาจารย์จะอ่านพลัง เทียบกับของประเภทเดียวกันในระบบ และดูความเข้ากับดวงคุณให้ " +
+        "อาจารย์จะอ่านพลัง เทียบกับของประเภทเดียวกัน และดูความเข้ากับดวงคุณให้ " +
         "องค์ที่เช็คจะไม่ถูกเก็บเข้าคลังของคุณ (ยังไม่ใช่ของเรา) " +
         "ใช้สิทธิ์สแกนตามปกติครับ",
     });
@@ -84,7 +84,7 @@ export async function handlePrecheckAfterReport({ client, lineUserId, payload })
       const { data: st } = await supabase.rpc("ener_form_stats", { p_form: form });
       const j = typeof st === "string" ? JSON.parse(st) : st;
       if (j && Number(j.count) >= 20) {
-        statsLine = `${formTh}ในระบบ ${Number(j.count).toLocaleString()} รายการ ส่วนใหญ่อ่านได้ช่วง ${j.p25}-${j.p75} (เฉลี่ย ${j.avg})`;
+        statsLine = `${formTh}ที่อาจารย์อ่านมา ${Number(j.count).toLocaleString()} รายการ ส่วนใหญ่อ่านได้ช่วง ${j.p25}-${j.p75} (เฉลี่ย ${j.avg})`;
         judged = rangeLine(score, j);
       }
     }

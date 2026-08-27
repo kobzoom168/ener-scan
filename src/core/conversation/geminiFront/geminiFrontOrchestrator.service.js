@@ -212,13 +212,42 @@ export async function runGeminiFrontOrchestrator(ctx) {
       customer directly unless consult fails. */
   async function tryConsultReply(via) {
     const lastSpeaker = await getValue(lastSpeakerKey(ctx.userId)).catch(() => null);
-    const consultText = await runGeminiConsult({
+    // บทบาทตัดจาก route ก่อน generate (flow-role audit 26 ส.ค. เคส 2/13) — ไม่อนุมานจากข้อความทีหลัง
+    const { routeConsultRole, roleDirectiveFor, checkAjarnVoice, ajarnRoleSafeFallback } = await import(
+      "../consultRoleRoute.util.js"
+    );
+    const routedRole = routeConsultRole(ctx.text);
+    const roleDirective = roleDirectiveFor(routedRole);
+    let consultText = await runGeminiConsult({
       userId: ctx.userId,
       userText: ctx.text,
       conversationHistory,
       lastSpeaker: lastSpeaker || null,
+      ...(roleDirective ? { extraDirective: roleDirective } : {}),
     });
     if (!consultText) return false;
+    let roleFallbackUsed = false;
+    if (routedRole === "ajarn") {
+      const v1 = checkAjarnVoice(consultText);
+      if (!v1.ok) {
+        console.warn(JSON.stringify({ event: "CONSULT_ROLE_PRESEND_BLOCKED", via, reason: v1.reason, attempt: 1, sample: consultText.slice(0, 120) }));
+        const retry = await runGeminiConsult({
+          userId: ctx.userId,
+          userText: ctx.text,
+          conversationHistory,
+          lastSpeaker: lastSpeaker || null,
+          extraDirective: `${roleDirective} · คำตอบก่อนหน้าผิดบท (${v1.reason === "handoff_phrase" ? "บอกให้ส่งให้อาจารย์ทั้งที่อาจารย์คือคนตอบ" : "พูดเป็นผม/แอดมิน"}) — ตอบใหม่เป็นเสียงอาจารย์ล้วน`,
+        });
+        if (retry && checkAjarnVoice(retry).ok) {
+          consultText = retry;
+        } else {
+          // ห้ามส่งของที่ reject ห้ามเงียบ → role-safe fallback (ไม่แต่งผล ไม่สัญญา)
+          consultText = ajarnRoleSafeFallback({ hasReport: Boolean(ctx.hasReport) });
+          roleFallbackUsed = true;
+          console.warn(JSON.stringify({ event: "CONSULT_ROLE_PRESEND_FALLBACK", via, reason: v1.reason }));
+        }
+      }
+    }
     let guardedConsult = await guardStaleNoImageClaim(
       guardEntitlementClaims(consultText.slice(0, 1800), via),
     );
@@ -323,7 +352,9 @@ export async function runGeminiFrontOrchestrator(ctx) {
       }
     }
     // role router (Codex C3): resolve เสียงจริงก่อนส่ง — history/monitor ได้ tag ตรง
-    const speaker = resolveSpeakerRole(guardedConsult);
+    // route ตัดบทไว้แล้ว = ใช้บทนั้น (ผ่าน checkAjarnVoice/fallback มาแล้ว) · ไม่ได้ route = resolve เดิม
+    const speaker = routedRole === "ajarn" ? "ajarn" : routedRole === "admin" ? "admin" : resolveSpeakerRole(guardedConsult);
+    void roleFallbackUsed;
     const sendRes = await ctx.sendGatewayReply({
       replyType: "gemini_front_consult",
       semanticKey: `gemini_front_consult:${phase1}`,

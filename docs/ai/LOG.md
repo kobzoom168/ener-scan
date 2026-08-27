@@ -924,3 +924,16 @@
 - branch `tone-hard` (ถึง 2f3138d) เก็บเป็นประวัติ **ห้าม merge/deploy** · migration 055–056 ยังอยู่บน staging DB แต่โค้ด Pro ไม่เรียก ไม่ลบย้อน (เสี่ยงข้อมูล) · Pro ไม่มี 055/056
 - กติกาใหม่ (กบ): ปรับแชทจากเคสจริงทีละจุด แก้ให้น้อยที่สุด · **ห้าม** global output contract / global sanitizer / จำกัดทุกข้อความ ≤40
 - ความปลอดภัย: shell history บนเซิร์ฟเวอร์มี credential plaintext 23 บรรทัด (นับอย่างเดียว) → แผน `docs/ai/plans/security-shell-history-rotation.md` ทำแยกรอบ
+
+## 2026-08-26 | Claude | flow-role: implement A–H + rubric (branch `flow-role`, ยังไม่ merge/ไม่แตะ Pro)
+- A `preScanObjectInfo.util.js`: deterministic gate (วัด/รุ่น/ปี/หลวงปู่… + ไม่ใช่คำถาม/เงิน/เมนู) → provisional 15 นาที → gate consume ครั้งเดียวแล้วลบ · ack แอดมิน `pre_scan_object_info_ack` · ห้ามเข้า consult
+- B purpose free-text (state ค้าง + ≤30 ตัว ไม่ใช่คำถาม/เงิน/เมนู) → เก็บ + copy เดิม
+- C `consultRoleRoute.util.js`: role จาก route ก่อน generate (energy/amulet → ajarn, เงิน/สถานะ → admin) + directive · output handoff/"ผม" → retry 1 → role-safe fallback (ไม่ส่งของ reject ไม่เงียบ) · speakerRole บันทึกตาม route
+- D `synergyIntent.util.js`: ประโยคสุภาพเข้า synergy, negation/ความหมายอื่น/เล่าเรื่องไม่เข้า
+- E RANKING_RE + "เข้ากับ…มากที่สุด/เหมาะ…ที่สุด" → redirect เดิม AI=0
+- F `consultTimeoutFallback.util.js` + `onConsultUnavailable` ใน idleReply: consult null + คำถาม → ตอบจาก report evidence ถ้ามี ไม่งั้น "ตอนนี้ยังตอบคำถามนี้ไม่ได้ครับ" (ไม่สัญญา)
+- G "ระบบ" ที่ต้นทาง: customerFactsContext (label ภายใน ห้ามอ้างขอบเขต), resultStatusReply, referral, precheck, multi-image hold copy, 4482 · static inventory test
+- H pre_scan_ack 10 สำนวนตัดสัญญาเวลา/ผล (คงโทน)
+- rubric: replyType ต่อบรรทัด + STATE header (scan_jobs/payments ของวัน) + เกณฑ์ admin/ajarn/ระบบ + traps gate/pending_verify
+- tests `tests/flowRole.behavior.test.js` 12/12 hermetic (network=0) · gate เขียว · ปรับ resultStatusReply test ตาม copy ใหม่
+- ค้าง: deploy staging → replay 13 เคสด้วยข้อความเดิม (บัญชีจริง) → ขอ GO Pro · หมายเหตุ: `ctx.hasReport` ยังไม่ถูกส่งจาก webhook → role-safe fallback ใช้สำนวน "ขอดูจากชิ้นจริง" เสมอ
