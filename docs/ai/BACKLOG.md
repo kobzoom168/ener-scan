@@ -67,4 +67,6 @@
 ## 🧭 flow-role (26 ส.ค. 2026 — branch flow-role รอ staging replay)
 - [ ] deploy staging + replay 13 เคสด้วยข้อความเดิม → GO Pro (ไม่แตะโทน ไม่มี global guard)
 - [x] hasReport = delivered evidence (27 ส.ค.)
+- [x] Codex P0-1 typed persistence / P0-2 ผม ทุกแบบ / P0-3 งบ AI ≤2 ต่อเทิร์น / P1 gate manifest + redis integration script (27 ส.ค. บ่าย)
+- [ ] redis integration บน staging container (live + unavailable) แล้วค่อยให้กบยิง LINE
 - [ ] H (product decision): auto-release รายงานที่ถูก gate ยึดเมื่อไม่กรอกข้อมูล — ยังไม่ทำ

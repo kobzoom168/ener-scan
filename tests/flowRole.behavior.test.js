@@ -10,6 +10,10 @@ const HERMETIC_ENV = {
   OPENAI_API_KEY: "sk-hermetic", LOCAL_POSTGREST_URL: "http://hermetic.invalid", LOCAL_POSTGREST_ANON_KEY: "x",
   LOCAL_POSTGREST_SERVICE_KEY: "x", SUPABASE_URL: "http://hermetic.invalid", SUPABASE_SERVICE_ROLE_KEY: "x",
   CHANNEL_ACCESS_TOKEN: "hermetic", CHANNEL_SECRET: "hermetic", GEMINI_API_KEY: "hermetic", REDIS_URL: "", OBJECT_INFO_GATE_ENABLED: "true",
+  // P0-3 budget test ผ่าน orchestrator จริง: LLM client ใช้ fetch (openrouter compat) → fake ได้
+  LLM_FRONT_PROVIDER: "openrouter", OPENROUTER_API_KEY: "hermetic", OPENROUTER_BASE_URL: "http://llm.hermetic.invalid/v1",
+  GEMINI_FRONT_ORCHESTRATOR_ENABLED: "true", GEMINI_FRONT_ORCHESTRATOR_MODE: "active", GEMINI_CONSULT_ENABLED: "true",
+  GEMINI_FRONT_TIMEOUT_MS: "2000", GEMINI_CONSULT_TIMEOUT_MS: "2000",
 };
 for (const [k, v] of Object.entries(HERMETIC_ENV)) process.env[k] = v;
 try {
@@ -40,13 +44,14 @@ test("A: bind ตอนรับรูป (atomic move) · reverse completion: �
   const m = await import("../src/services/objectInfoGate/preScanObjectInfo.util.js");
   const mem = new Map();
   const fake = {
-    set: async (k, v) => { mem.set(k, v); },
-    move: async (src, dst) => { const v = mem.get(src); if (v == null) return null; mem.delete(src); mem.set(dst, v); return v; },
-    getdel: async (k) => { const v = mem.get(k); if (v == null) return null; mem.delete(k); return v; },
+    set: async (k, v) => { mem.set(k, v); return { ok: true }; },
+    move: async (src, dst) => { const v = mem.get(src); if (v == null) return { status: "no_source", value: null }; mem.delete(src); mem.set(dst, v); return { status: "moved", value: v }; },
+    getdel: async (k) => { const v = mem.get(k); if (v == null) return { status: "missing", value: null }; mem.delete(k); return { status: "got", value: v }; },
+    del: async (k) => { mem.delete(k); return { ok: true }; },
   };
-  await m.storePreScanObjectInfo("U1", "พระสมเด็จวัดระฆัง ปี 2506", fake);
-  assert.equal(await m.bindPreScanInfoToJob("U1", "jobA", fake), true, "รูป A รับก่อน → bind");
-  assert.equal(await m.bindPreScanInfoToJob("U1", "jobB", fake), false, "รูป B รับทีหลัง ไม่มีข้อมูลเหลือ");
+  assert.deepEqual(await m.storePreScanObjectInfo("U1", "พระสมเด็จวัดระฆัง ปี 2506", fake), { ok: true });
+  assert.deepEqual(await m.bindPreScanInfoToJob("U1", "jobA", fake), { bound: true, status: "moved" }, "รูป A รับก่อน → bind");
+  assert.deepEqual(await m.bindPreScanInfoToJob("U1", "jobB", fake), { bound: false, status: "no_source" }, "รูป B รับทีหลัง ไม่มีข้อมูลเหลือ");
   // B เสร็จก่อน
   assert.equal(await m.consumeJobPreScanInfo("jobB", fake), null);
   const a = await m.consumeJobPreScanInfo("jobA", fake);
@@ -60,8 +65,8 @@ test("A: bind ตอนรับรูป (atomic move) · reverse completion: �
   // DB ล้ม → restore แล้ว consume ได้อีกครั้ง
   await m.restoreJobPreScanInfo("jobC", w1 || w2, fake);
   assert.ok((await m.consumeJobPreScanInfo("jobC", fake))?.raw);
-  // ไม่มี redis (move คืน null) = ไม่ bind → gate ถามตามปกติ
-  assert.equal(await m.bindPreScanInfoToJob("U9", "jobZ", { move: async () => null }), false);
+  // ไม่มี redis = ไม่ bind (typed) → gate ถามตามปกติ
+  assert.deepEqual(await m.bindPreScanInfoToJob("U9", "jobZ", { move: async () => ({ status: "redis_unavailable", value: null }) }), { bound: false, status: "redis_unavailable" });
 });
 
 test("A: gate ผ่าน production helper — insert {error} → ไม่ log SAVED, คืน evidence ให้ job, ไหลไปถามตามเดิม · insert สำเร็จ → NOT_HELD ไม่ถาม", async () => {
@@ -346,4 +351,177 @@ test("route replay 9 inbound จริง (จาก 13 เคส; 4 เคส�
   };
   for (const [t, exp] of cases) assert.equal(routeOf(t), exp, t);
   assert.equal(EXTERNAL.network - (EXTERNAL.gateAskPathLookups || 0), 0, "matcher/chain/evidence ห้ามออกเน็ต");
+});
+
+
+/* ---------- P0-1 (Codex 27 ส.ค.): pre-scan persistence honesty ---------- */
+test("P0-1: store typed — no redis / SET throw / SET error / untyped → ok:false ห้ามอ้าง captured · webhook ใช้ failure copy + return ก่อน consult (AI=0)", async () => {
+  const m = await import("../src/services/objectInfoGate/preScanObjectInfo.util.js");
+  const txt = "พระสมเด็จวัดระฆัง ปี 2506";
+  assert.deepEqual(await m.storePreScanObjectInfo("U1", txt, { set: async () => ({ ok: false, reason: "redis_unavailable" }) }), { ok: false, reason: "redis_unavailable", message: undefined });
+  const thrown = await m.storePreScanObjectInfo("U1", txt, { set: async () => { throw new Error("ECONNRESET"); } });
+  assert.equal(thrown.ok, false); assert.equal(thrown.reason, "redis_error");
+  const errd = await m.storePreScanObjectInfo("U1", txt, { set: async () => ({ ok: false, reason: "redis_error", message: "READONLY" }) });
+  assert.equal(errd.ok, false); assert.equal(errd.reason, "redis_error");
+  const untyped = await m.storePreScanObjectInfo("U1", txt, { set: async () => undefined });
+  assert.equal(untyped.ok, false, "set ที่ไม่คืนผล typed ต้องไม่ถือว่าสำเร็จ");
+  // default deps = setValueWithTtlTyped จริง · REDIS_URL="" → redis_unavailable (ไม่ throw ไม่ claim)
+  const real = await m.storePreScanObjectInfo("U1", txt);
+  assert.deepEqual(real, { ok: false, reason: "redis_unavailable", message: undefined });
+  // failure copy: deterministic, ไม่ตีความพลัง, ไม่สัญญาเวลา, ไม่อ้างว่าเก็บแล้ว
+  assert.doesNotMatch(m.PRE_SCAN_INFO_STORE_FAILED_TEXT, /เด่นด้าน|พลัง|คะแนน|รับข้อมูล.*แล้ว|เก็บ.*แล้ว|\d+\s*นาที|ระบบ/);
+  // webhook: ok=false → replyType store_failed + failure text แล้ว return (ไม่ไหลลง orchestrator)
+  const src = readFileSync("src/routes/lineWebhook.js", "utf8");
+  const at = src.indexOf("const stored = await storePreScanObjectInfo(userId, text);");
+  assert.ok(at > 0, "webhook ต้องใช้ผล typed ของ store");
+  const blk = src.slice(at, at + 1600);
+  assert.match(blk, /const ok = stored && stored\.ok === true/);
+  assert.match(blk, /ok \? "pre_scan_object_info_ack" : "pre_scan_object_info_store_failed"/);
+  assert.match(blk, /ok \? PRE_SCAN_INFO_ACK_TEXT : PRE_SCAN_INFO_STORE_FAILED_TEXT/);
+  assert.match(blk, /PRE_SCAN_OBJECT_INFO_STORE_FAILED/);
+  assert.match(blk, /\n      return;\n    }/);
+  assert.ok(at < src.indexOf("const invokePhase1GeminiOrchestrator = async"), "ยังอยู่ก่อน orchestrator");
+});
+
+test("P0-1: bind typed — no_source ≠ redis_unavailable ≠ redis_error · error = ล้าง source best-effort (sourceCleared) กันไป bind รูปถัดไปผิด · ingestion log แยก", async () => {
+  const m = await import("../src/services/objectInfoGate/preScanObjectInfo.util.js");
+  assert.deepEqual(await m.bindPreScanInfoToJob("U1", "j1", { move: async () => ({ status: "no_source", value: null }) }), { bound: false, status: "no_source" });
+  assert.deepEqual(await m.bindPreScanInfoToJob("U1", "j1", { move: async () => ({ status: "redis_unavailable", value: null }) }), { bound: false, status: "redis_unavailable" });
+  const dels = [];
+  const e1 = await m.bindPreScanInfoToJob("U1", "j1", { move: async () => ({ status: "redis_error", value: null, message: "BUSY" }), del: async (k) => { dels.push(k); return { ok: true }; } });
+  assert.equal(e1.bound, false); assert.equal(e1.status, "redis_error"); assert.equal(e1.sourceCleared, true);
+  assert.deepEqual(dels, ["objinfo:preprovided:U1"], "ต้องพยายามล้าง uid-key ที่อาจค้าง");
+  const e2 = await m.bindPreScanInfoToJob("U1", "j1", { move: async () => { throw new Error("ETIMEDOUT"); }, del: async () => { throw new Error("ETIMEDOUT"); } });
+  assert.equal(e2.status, "redis_error"); assert.equal(e2.sourceCleared, false, "ล้างไม่ได้ต้องรายงานตรง ๆ");
+  // default deps (REDIS_URL="") → redis_unavailable ไม่ throw
+  assert.deepEqual(await m.bindPreScanInfoToJob("U1", "j1"), { bound: false, status: "redis_unavailable" });
+  // consume typed: missing/unavailable/error → null (gate ถามตามปกติ)
+  assert.equal(await m.consumeJobPreScanInfo("j1", { getdel: async () => ({ status: "redis_error", value: null }) }), null);
+  assert.equal(await m.consumeJobPreScanInfo("j1"), null);
+  // ingestion: BOUND เฉพาะ bound===true · BIND_FAILED เมื่อ status ≠ no_source
+  const ing = readFileSync("src/services/scanV2/webhookImageIngestion.service.js", "utf8");
+  assert.match(ing, /if \(bind\?\.bound === true\)/);
+  assert.match(ing, /else if \(bind && bind\.status !== "no_source"\)[\s\S]{0,200}PRE_SCAN_OBJECT_INFO_BIND_FAILED/);
+  assert.match(ing, /sourceCleared: bind\.sourceCleared/);
+});
+
+/* ---------- P0-2 (Codex 27 ส.ค.): mixed role — "ผม" ทุกแบบ ไม่ใช้ verb allowlist ---------- */
+test("P0-2: route=ajarn reject ผม ทุกแบบ (ผมเห็นว่า/ผมชอบ/ผมเชื่อว่า/แต่ผมว่า) · compound ไม่ใช่สรรพนามผ่าน · fallback+regenerate ไม่มี mixed voice", async () => {
+  const m = await import("../src/core/conversation/consultRoleRoute.util.js");
+  for (const t of [
+    "อาจารย์มองว่าเหมาะครับ ผมเห็นว่าพกได้เลย",
+    "ผมชอบองค์นี้ครับ",
+    "ผมเชื่อว่าสายเสน่หาเหมาะกับคุณ",
+    "อาจารย์มองว่าพระขุนแผนเด่นด้านเสน่หา แต่ผมว่าตะกรุดก็ดี",
+    "ผม",
+    "แนะนำผมว่า",
+  ]) assert.equal(m.checkAjarnVoice(t).ok, false, `ต้อง reject: ${t}`);
+  assert.equal(m.checkAjarnVoice("อาจารย์มองว่าพระขุนแผนเด่นด้านเสน่หา แต่ผมว่าตะกรุดก็ดี").reason, "admin_self_voice");
+  for (const t of ["อาจารย์มองว่าเหมาะครับผม", "อาจารย์ว่าเส้นผมไม่เกี่ยวกับพลังครับ", "อาจารย์มองว่าสายเสน่หา พระขุนแผนเด่นด้านนี้ครับ"]) {
+    assert.equal(m.checkAjarnVoice(t).ok, true, `ต้องผ่าน: ${t}`);
+  }
+  // chain: mixed voice ทุกครั้ง → regenerate directive สั่งห้าม ผม → ยังผิด → role-safe fallback ไม่มี ผม/handoff
+  const { runConsultGuardChain, buildRegenerateDirective, evaluateConsultGuards } = await import("../src/core/conversation/consultGuardChain.util.js");
+  const mixed = "อาจารย์มองว่าเหมาะครับ ผมเห็นว่าพกได้เลย";
+  const dir = buildRegenerateDirective(evaluateConsultGuards(mixed, { routedRole: "ajarn" }), { roleDirective: "x" });
+  assert.match(dir, /ห้ามใช้คำว่า ผม/);
+  const r = await runConsultGuardChain({ generate: async () => mixed, routedRole: "ajarn", log: () => {} });
+  assert.equal(r.modelCalls, 2); assert.equal(r.guardOutcome, "role_safe_fallback");
+  assert.equal(m.hasFirstPersonPhom(r.text), false); assert.doesNotMatch(r.text, /ส่งรูป|ให้อาจารย์ดู/);
+  for (const hr of [true, false]) assert.equal(m.hasFirstPersonPhom(m.ajarnRoleSafeFallback({ hasReport: hr })), false);
+});
+
+/* ---------- P0-3 (Codex 27 ส.ค.): งบ AI ต่อเทิร์นเดียว ≤2 (planner+consult+regenerate+phrasing) วัดจาก ALS callSites จริง ---------- */
+test("P0-3: chain เคารพ maxModelCalls (1 → ไม่ regenerate · 0 → budget_exhausted ไม่ยิง) + ALS budget helper", async () => {
+  const { runConsultGuardChain } = await import("../src/core/conversation/consultGuardChain.util.js");
+  const als = await import("../src/core/telemetry/turnAiChain.js");
+  const bad = "ผมว่าองค์นี้ดีครับ";
+  let c = 0;
+  const one = await runConsultGuardChain({ generate: async () => { c += 1; return bad; }, routedRole: "ajarn", maxModelCalls: 1, log: () => {} });
+  assert.equal(c, 1); assert.equal(one.modelCalls, 1); assert.equal(one.guardOutcome, "role_safe_fallback");
+  let z = 0;
+  const zero = await runConsultGuardChain({ generate: async () => { z += 1; return bad; }, routedRole: "ajarn", maxModelCalls: 0, log: () => {} });
+  assert.equal(z, 0); assert.equal(zero.outcome, "budget_exhausted");
+  assert.equal(als.TURN_AI_CALL_BUDGET, 2);
+  assert.equal(als.turnAiBudgetRemaining(), 2, "นอก context = เต็มงบ");
+  await als.runWithTurnContext({ messageId: "m", kind: "text" }, async () => {
+    assert.equal(als.hasTurnContext(), true);
+    als.recordTurnAiCall("planner");
+    assert.equal(als.turnAiBudgetRemaining(), 1);
+    // chain ที่ generate นับเข้า ALS จริง → planner 1 + consult 1 = 2, ไม่ regenerate
+    const r = await runConsultGuardChain({
+      generate: async () => { als.recordTurnAiCall("consult"); return bad; },
+      routedRole: "ajarn", maxModelCalls: als.turnAiBudgetRemaining(), log: () => {},
+    });
+    assert.equal(r.modelCalls, 1); assert.equal(als.getTurnAiCallCount(), 2); assert.equal(als.turnAiBudgetRemaining(), 0);
+  });
+});
+
+test("P0-3: orchestrator จริง + fake LLM transport — non-idle (planner+consult ผิดบท) = callSites 2 · idle direct (consult ผิด 2 ครั้ง) = 2 · consult ว่างหลัง planner → phrasing ถูกกันด้วยงบ = 2 (hermetic)", async () => {
+  const als = await import("../src/core/telemetry/turnAiChain.js");
+  const { runGeminiFrontOrchestrator } = await import("../src/core/conversation/geminiFront/geminiFrontOrchestrator.service.js");
+  const prevFetch = globalThis.fetch;
+  const llm = { calls: [], consultReply: () => "ผมว่าองค์นี้เด่นด้านเสน่หาครับ" };
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes("/chat/completions")) {
+      const body = JSON.parse(init?.body || "{}");
+      const site = String(body.user || "untagged");
+      llm.calls.push(site);
+      let content = "";
+      if (site === "planner") content = JSON.stringify({ intent: "consult", state_guess: "idle", proposed_action: "consult_amulet", confidence: 0.95, reply_style: "neutral_help" });
+      else if (site === "consult") content = llm.consultReply();
+      else content = "ข้อความ phrasing";
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }], usage: {} }), text: async () => "" };
+    }
+    EXTERNAL.orchDbLookups = (EXTERNAL.orchDbLookups || 0) + 1; // DB lookups ของ consult context (fail-open) — ไม่นับเป็น network ของ matcher
+    throw new Error("HERMETIC: db blocked");
+  };
+  const oWarn = console.warn, oLog = console.log; const warns = [];
+  console.warn = (x) => warns.push(String(x)); console.log = () => {};
+  try {
+    const mkCtx = (phase1, extra = {}) => {
+      const sent = [];
+      return {
+        sent,
+        ctx: {
+          userId: "U" + "7".repeat(32), text: "สายเสน่ห์ ต้องหาพระแบบไหนครับ", phase1State: phase1,
+          conversationOwner: phase1, paymentState: "none", flowState: "idle", accessState: "free", pendingPaymentStatus: null, selectedPackageKey: null,
+          sendGatewayReply: async (o) => { sent.push(o); return { sent: true }; }, delegates: {}, ...extra,
+        },
+      };
+    };
+    // (1) non-idle: planner 1 + consult 1 (ผิดบท → งบหมด ไม่ regenerate → role-safe fallback ส่งจริง)
+    llm.calls.length = 0;
+    const a = mkCtx("scan_ready_idle"); // consult_amulet อนุญาต แต่ไม่ idle-bypass (ไม่ส่ง allowIdleDirectConsult) → planner path
+    let sitesA;
+    const resA = await als.runWithTurnContext({ messageId: "a", kind: "text" }, async () => { const r = await runGeminiFrontOrchestrator(a.ctx); sitesA = als.getTurnAiCallCount(); return r; });
+    assert.deepEqual(llm.calls, ["planner", "consult"], "transport จริง: planner 1 + consult 1");
+    assert.equal(sitesA, 2, "ALS callSites ต้อง = 2 (≤ งบ)");
+    assert.equal(resA.handled, true); assert.equal(a.sent.length, 1);
+    assert.equal(a.sent[0].speakerRoleOverride, "ajarn"); assert.doesNotMatch(a.sent[0].text, /ผม/);
+    // (2) idle direct: consult ผิด 2 ครั้ง = 2 (ไม่มี planner)
+    llm.calls.length = 0;
+    const b = mkCtx("idle", { allowIdleDirectConsult: true });
+    let sitesB;
+    const resB = await als.runWithTurnContext({ messageId: "b", kind: "text" }, async () => { const r = await runGeminiFrontOrchestrator(b.ctx); sitesB = als.getTurnAiCallCount(); return r; });
+    assert.deepEqual(llm.calls, ["consult", "consult"]);
+    assert.equal(sitesB, 2); assert.equal(resB.handled, true); assert.equal(b.sent.length, 1);
+    // (3) planner + consult ว่าง → phrasing ถูกกันด้วยงบ (ไม่ยิง call ที่ 3) → handled:false reason ai_budget_exhausted
+    llm.calls.length = 0; llm.consultReply = () => "";
+    const c = mkCtx("scan_ready_idle");
+    let sitesC;
+    const resC = await als.runWithTurnContext({ messageId: "c", kind: "text" }, async () => { const r = await runGeminiFrontOrchestrator(c.ctx); sitesC = als.getTurnAiCallCount(); return r; });
+    assert.deepEqual(llm.calls, ["planner", "consult"], "ห้ามมี phrasing เป็น call ที่ 3");
+    assert.equal(sitesC, 2); assert.equal(resC.handled, false); assert.equal(resC.reason, "ai_budget_exhausted");
+    assert.ok(warns.some((w) => w.includes("CHAT_TURN_AI_BUDGET_EXHAUSTED")));
+    // (4) state ที่ validator ไม่อนุญาต consult (paywall) → planner + phrasing = 2 พอดี ไม่มี call ที่ 3
+    llm.calls.length = 0; llm.consultReply = () => "ผมว่าองค์นี้เด่นด้านเสน่หาครับ";
+    const d = mkCtx("paywall_selecting_package");
+    let sitesD;
+    await als.runWithTurnContext({ messageId: "d", kind: "text" }, async () => { const r = await runGeminiFrontOrchestrator(d.ctx); sitesD = als.getTurnAiCallCount(); return r; });
+    assert.deepEqual(llm.calls, ["planner", "phrasing"]);
+    assert.equal(sitesD, 2);
+  } finally {
+    globalThis.fetch = prevFetch; console.warn = oWarn; console.log = oLog;
+  }
 });

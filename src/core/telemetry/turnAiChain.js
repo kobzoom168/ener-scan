@@ -55,6 +55,28 @@ export function recordTurnAiLatency(ms, handle = null) {
   s.settledCount = (s.settledCount || 0) + 1;
 }
 
+/**
+ * งบ AI ต่อเทิร์นข้อความลูกค้า (flow-role P0-3, Codex 27 ส.ค.): planner + consult + regenerate + phrasing
+ * รวมกันห้ามเกิน 2 calls — วัดจาก callSites จริงใน ALS ไม่ใช่ตัวนับของ chain
+ */
+export const TURN_AI_CALL_BUDGET = 2;
+
+/** จำนวน AI calls ที่ "พยายามยิง" แล้วในเทิร์นนี้ · นอก context = 0 (วัดไม่ได้) */
+export function getTurnAiCallCount() {
+  const s = als.getStore();
+  return s ? s.callSites.length : 0;
+}
+
+/** true = อยู่ใน turn context (งบวัดได้จริง) */
+export function hasTurnContext() {
+  return Boolean(als.getStore());
+}
+
+/** งบที่เหลือของเทิร์น (นอก context = เต็มงบ — caller ที่ต้องการเข้มกว่านั้นเช็ค hasTurnContext เอง) */
+export function turnAiBudgetRemaining(budget = TURN_AI_CALL_BUDGET) {
+  return Math.max(0, Number(budget) - getTurnAiCallCount());
+}
+
 /** เติมข้อมูล state/route ระหว่างทาง (เช่น phase1 ที่รู้ทีหลัง) */
 export function annotateTurn(patch) {
   const s = als.getStore();

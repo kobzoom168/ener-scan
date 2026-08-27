@@ -37,17 +37,26 @@ export function roleDirectiveFor(role) {
 
 /** วลี handoff ที่ผิดเมื่อผู้พูดควรเป็นอาจารย์เอง */
 const HANDOFF_RE = /ส่ง(?:รูป)?(?:มา)?ให้อาจารย์|ให้อาจารย์(?:ดู|สแกน|อ่าน|เช็ค)|ผม(?:จะ)?(?:ถาม|เรียนถาม|ส่งต่อ)อาจารย์|เดี๋ยว(?:ผม)?ส่งให้อาจารย์|อาจารย์จะดูให้/u;
-const ADMIN_SELF_RE = /(?:^|[^ก-๙])ผม(?=ว่า|จะ|ส่ง|ถาม|เอง|คิด|ก็|ขอ|มอง|ดู|เช็ค|เปิด|แนะนำ|รับ|เรียน|ตอบ|[^ก-๙]|$)/u;
+/**
+ * "ผม" ที่ไม่ใช่สรรพนาม (P0-2 Codex: ห้ามใช้ verb allowlist — reject ผม ทุกแบบ ยกเว้น compound ที่ชัดว่าไม่ใช่สรรพนาม)
+ * ครับผม = คำลงท้ายสุภาพ · เส้นผม/ทรงผม/สีผม/ผมหงอก/ผมร่วง = เส้นผม
+ */
+const NON_PRONOUN_PHOM_RE = /ครับผม|เส้นผม|ทรงผม|สีผม|ปอยผม|ผมหงอก|ผมร่วง|ผมยาว|ผมสั้น|ผมบาง|ผมดก/gu;
+
+/** true = มีสรรพนามบุรุษที่ 1 "ผม" (โดด/ติดคำอื่น ทุกกริยา) หลังตัด compound ที่ไม่ใช่สรรพนาม */
+export function hasFirstPersonPhom(text) {
+  const t = String(text || "").replace(NON_PRONOUN_PHOM_RE, " ");
+  return /ผม/u.test(t);
+}
 
 /**
- * output ผิดบทเมื่อ route = ajarn: มี handoff หรือพูดเป็น "ผม"
+ * output ผิดบทเมื่อ route = ajarn: มี handoff หรือพูดเป็น "ผม" (ทุกกรณี รวม mixed voice — ไม่ใช้ verb allowlist)
  * @returns {{ ok: boolean, reason: string|null }}
  */
 export function checkAjarnVoice(text) {
   const t = String(text || "");
   if (HANDOFF_RE.test(t)) return { ok: false, reason: "handoff_phrase" };
-  // route=ajarn ห้าม first-person "ผม" ทุกกรณี รวม mixed voice (Codex รอบสอง #3)
-  if (ADMIN_SELF_RE.test(t)) return { ok: false, reason: "admin_self_voice" };
+  if (hasFirstPersonPhom(t)) return { ok: false, reason: "admin_self_voice" };
   return { ok: true, reason: null };
 }
 

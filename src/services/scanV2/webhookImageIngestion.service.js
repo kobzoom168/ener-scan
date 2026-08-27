@@ -384,9 +384,16 @@ export async function ingestScanImageAsyncV2({
   // (flow-role รอบสอง: สองรูปติดกัน รูปสองเสร็จก่อน ต้องไม่เอาชื่อพระไปติดผิดองค์)
   try {
     const { bindPreScanInfoToJob } = await import("../objectInfoGate/preScanObjectInfo.util.js");
-    const bound = await bindPreScanInfoToJob(lineUserId, jobRow.id);
-    if (bound) console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_BOUND", ...base(), jobIdPrefix: idPrefix8(jobRow.id) }));
-  } catch { /* bind ไม่ได้ = gate ถามตามปกติ */ }
+    const bind = await bindPreScanInfoToJob(lineUserId, jobRow.id);
+    // typed (P0-1): no_source = ปกติ (เงียบ) · redis_unavailable/redis_error = log ตรง ๆ (source อาจค้าง → sourceCleared บอกว่าล้างได้ไหม)
+    if (bind?.bound === true) {
+      console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_BOUND", ...base(), jobIdPrefix: idPrefix8(jobRow.id) }));
+    } else if (bind && bind.status !== "no_source") {
+      console.error(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_BIND_FAILED", ...base(), jobIdPrefix: idPrefix8(jobRow.id), status: bind.status, message: bind.message || null, sourceCleared: bind.sourceCleared ?? null }));
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_BIND_FAILED", ...base(), jobIdPrefix: idPrefix8(jobRow.id), status: "exception", message: String(e?.message || e).slice(0, 120) }));
+  }
 
   const ackRow = await insertOutboundMessage({
     line_user_id: lineUserId,

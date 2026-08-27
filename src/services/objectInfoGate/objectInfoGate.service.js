@@ -142,8 +142,12 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
         });
         if (insErr) {
           console.error(JSON.stringify({ event: "OBJECT_INFO_PRE_SCAN_SAVE_FAILED", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), message: String(insErr.message || insErr).slice(0, 120) }));
-          await (deps.restoreJobPreScanInfo || restoreJobPreScanInfo)(relatedJobId, pre).catch(() => {});
-          // ไหลต่อไปถามตามปกติ (ข้อมูลยังอยู่กับ job)
+          const rs = await (deps.restoreJobPreScanInfo || restoreJobPreScanInfo)(relatedJobId, pre).catch((e) => ({ ok: false, reason: "exception", message: String(e?.message || e).slice(0, 120) }));
+          if (!(rs && rs.ok === true)) {
+            // typed (P0-1): restore ไม่สำเร็จ = evidence หายจริง — log ตรง ๆ ไม่อ้างว่ายังอยู่กับ job
+            console.error(JSON.stringify({ event: "OBJECT_INFO_PRE_SCAN_RESTORE_FAILED", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), reason: rs?.reason || "untyped", message: rs?.message || null }));
+          }
+          // ไหลต่อไปถามตามปกติ (gate ถามลูกค้าเหมือนไม่มีข้อมูล)
         } else {
           console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", via: "pre_scan_text", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), hasName: Boolean(parsedPre?.objectName) }));
           return NOT_HELD;

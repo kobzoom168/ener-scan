@@ -547,13 +547,42 @@ export async function sleepIfRateHint(sleep, lineUserId) {
 }
 
 /**
+ * SET EX แบบ typed (flow-role P0-1): caller ต้องรู้ว่าเขียนสำเร็จจริงไหม — ห้ามอ้าง "เก็บแล้ว"
+ * เมื่อไม่มี redis / SET ล้ม (setLargeValueWithTtl เดิมคืน undefined ทุกกรณี — คงไว้ให้ caller เก่า)
+ * @returns {Promise<{ ok: true } | { ok: false, reason: "redis_unavailable" | "redis_error", message?: string }>}
+ */
+export async function setValueWithTtlTyped(key, value, ttlSec) {
+  let r = null;
+  try {
+    r = await getScanV2Redis();
+  } catch (e) {
+    return { ok: false, reason: "redis_error", message: String(e?.message || e).slice(0, 120) };
+  }
+  if (!r) return { ok: false, reason: "redis_unavailable" };
+  try {
+    const v = String(value).slice(0, 512 * 1024);
+    const res = await r.set(kDedupe(key), v, "EX", Math.min(Math.max(Number(ttlSec) || 3600, 60), 45 * 86400));
+    if (res !== "OK") return { ok: false, reason: "redis_error", message: `set_reply:${String(res).slice(0, 40)}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: "redis_error", message: String(e?.message || e).slice(0, 120) };
+  }
+}
+
+/**
  * Atomic MOVE (GET src → DEL src → SET dst EX ttl) ใน Lua เดียว — bind ข้อมูลก่อนรูปเข้ากับ job
- * (flow-role รอบสอง: get→clear ไม่ atomic ทำสอง worker อ่านค่าเดียวกัน) · ไม่มี redis = null
- * @returns {Promise<string|null>} ค่าที่ย้าย หรือ null เมื่อไม่มี/ไม่มี redis
+ * (flow-role รอบสอง: get→clear ไม่ atomic ทำสอง worker อ่านค่าเดียวกัน)
+ * typed (P0-1): no_source ≠ redis_unavailable ≠ redis_error — caller ต้องแยก log/ตัดสินใจ
+ * @returns {Promise<{ status: "moved", value: string } | { status: "no_source" | "redis_unavailable" | "redis_error", value: null, message?: string }>}
  */
 export async function moveKeyAtomic(srcKey, dstKey, ttlSec) {
-  const r = await getScanV2Redis();
-  if (!r) return null;
+  let r = null;
+  try {
+    r = await getScanV2Redis();
+  } catch (e) {
+    return { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
+  }
+  if (!r) return { status: "redis_unavailable", value: null };
   const lua = `
     local v = redis.call("get", KEYS[1])
     if not v then return nil end
@@ -563,16 +592,25 @@ export async function moveKeyAtomic(srcKey, dstKey, ttlSec) {
   `;
   try {
     const v = await r.eval(lua, 2, kDedupe(srcKey), kDedupe(dstKey), String(Math.max(60, Number(ttlSec) || 900)));
-    return v == null ? null : String(v);
-  } catch {
-    return null;
+    if (v == null) return { status: "no_source", value: null };
+    return { status: "moved", value: String(v) };
+  } catch (e) {
+    return { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
   }
 }
 
-/** Atomic GET+DEL (consume ครั้งเดียว) — ไม่มี redis = null */
+/**
+ * Atomic GET+DEL (consume ครั้งเดียว) — typed เหมือน moveKeyAtomic
+ * @returns {Promise<{ status: "got", value: string } | { status: "missing" | "redis_unavailable" | "redis_error", value: null, message?: string }>}
+ */
 export async function getDelKey(key) {
-  const r = await getScanV2Redis();
-  if (!r) return null;
+  let r = null;
+  try {
+    r = await getScanV2Redis();
+  } catch (e) {
+    return { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
+  }
+  if (!r) return { status: "redis_unavailable", value: null };
   const lua = `
     local v = redis.call("get", KEYS[1])
     if not v then return nil end
@@ -581,8 +619,26 @@ export async function getDelKey(key) {
   `;
   try {
     const v = await r.eval(lua, 1, kDedupe(key));
-    return v == null ? null : String(v);
-  } catch {
-    return null;
+    if (v == null) return { status: "missing", value: null };
+    return { status: "got", value: String(v) };
+  } catch (e) {
+    return { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
+  }
+}
+
+/** best-effort DEL (typed) — ใช้ล้าง source ที่ค้างหลัง move ล้ม */
+export async function delKeyTyped(key) {
+  let r = null;
+  try {
+    r = await getScanV2Redis();
+  } catch (e) {
+    return { ok: false, reason: "redis_error", message: String(e?.message || e).slice(0, 120) };
+  }
+  if (!r) return { ok: false, reason: "redis_unavailable" };
+  try {
+    await r.del(kDedupe(key));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: "redis_error", message: String(e?.message || e).slice(0, 120) };
   }
 }

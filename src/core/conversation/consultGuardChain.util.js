@@ -71,14 +71,21 @@ export function buildRegenerateDirective(v, { roleDirective = "" } = {}) {
  *   moneyCtx?: { userMoneyIntent?: boolean, inPaymentState?: boolean },
  *   hasReport?: boolean,
  *   maxRegenerate?: number,                                        // default 1 (รวมทุก guard)
+ *   maxModelCalls?: number,                                        // P0-3: งบรวมของเทิร์นที่เหลือ (primary+regenerate ≤ นี้) · 0 = ห้ามยิงเลย
  *   log?: (event: string, data: object) => void,
  * }} p
- * @returns {Promise<{ outcome: "sent"|"defer_payment"|"empty", text: string|null, modelCalls: number, guardOutcome: string, reasons: string[] }>}
+ * @returns {Promise<{ outcome: "sent"|"defer_payment"|"empty"|"budget_exhausted", text: string|null, modelCalls: number, guardOutcome: string, reasons: string[] }>}
  */
 export async function runConsultGuardChain(p) {
   const log = p.log || ((e, d) => console.warn(JSON.stringify({ event: e, ...d })));
   const post = p.postProcess || (async (t) => t);
-  const maxRegen = Number.isFinite(p.maxRegenerate) ? p.maxRegenerate : 1;
+  // งบรวม: primary 1 + regenerate ≤ maxRegenerate แต่ไม่เกิน maxModelCalls (งบเทิร์นที่เหลือจริง)
+  const maxCalls = Number.isFinite(p.maxModelCalls) ? Math.max(0, Math.floor(p.maxModelCalls)) : Infinity;
+  const maxRegen = Math.min(Number.isFinite(p.maxRegenerate) ? p.maxRegenerate : 1, Math.max(0, maxCalls - 1));
+  if (maxCalls <= 0) {
+    log("CONSULT_GUARD_BUDGET_EXHAUSTED", { maxModelCalls: maxCalls });
+    return { outcome: "budget_exhausted", text: null, modelCalls: 0, guardOutcome: "budget_exhausted", reasons: [] };
+  }
   let modelCalls = 0;
   const gen = async (directive) => {
     modelCalls += 1;

@@ -27,6 +27,7 @@ import { getValue, setLargeValueWithTtl } from "../../../redis/scanV2Redis.js";
 const lastSpeakerKey = (uid) => `persona:last_speaker:${uid}`;
 import { logGeminiOrchestrator } from "./geminiFront.telemetry.js";
 import { getGeminiConversationHistory } from "../../../utils/conversationHistory.util.js";
+import { turnAiBudgetRemaining, getTurnAiCallCount, TURN_AI_CALL_BUDGET } from "../../telemetry/turnAiChain.js";
 
 /**
  * สถานะเงิน/สิทธิ์ = ข้อเท็จจริงจากระบบเท่านั้น — LLM ห้ามประกาศเอง
@@ -254,8 +255,14 @@ export async function runGeminiFrontOrchestrator(ctx) {
       moneyCtx: guardCtx,
       hasReport,
       maxRegenerate: 1,
+      // P0-3: งบเดียวทั้งเทิร์น (ALS callSites จริง): planner ใช้ไป 1 → consult เหลือ 1 · idle direct = 2
+      maxModelCalls: turnAiBudgetRemaining(),
       log: (event, data) => console.warn(JSON.stringify({ event, via, ...data })),
     });
+    if (chain.outcome === "budget_exhausted") {
+      console.warn(JSON.stringify({ event: "CHAT_TURN_AI_BUDGET_EXHAUSTED", via, stage: "consult", used: getTurnAiCallCount(), budget: TURN_AI_CALL_BUDGET }));
+      return false;
+    }
     if (chain.outcome === "empty") return false;
     if (chain.outcome === "defer_payment") {
       console.warn(JSON.stringify({ event: "AJARN_MONEY_PRESEND_DEFER_TO_PAYMENT_FLOW", via }));
@@ -300,6 +307,12 @@ export async function runGeminiFrontOrchestrator(ctx) {
         // ออกทั้ง orchestrator — ห้ามไหลลง phrasing (Codex รอบ 5 ข้อ 1)
         return { handled: false, mode: "active", deferTo: "deterministic_payment" };
       }
+    }
+    // P0-3: phrasing ก็อยู่ในงบเดียวกัน — งบหมด (planner+consult ใช้ครบ 2) = ไม่ยิงเพิ่ม ให้ deterministic ชั้นนอกตอบ
+    if (turnAiBudgetRemaining() <= 0) {
+      console.warn(JSON.stringify({ event: "CHAT_TURN_AI_BUDGET_EXHAUSTED", stage: "phrasing", used: getTurnAiCallCount(), budget: TURN_AI_CALL_BUDGET, phase1State: phase1 }));
+      logGeminiOrchestrator({ mode: "active", handled: false, reason: "ai_budget_exhausted" });
+      return { handled: false, reason: "ai_budget_exhausted", mode: "active" };
     }
     const ph = await runGeminiPhrasing({
       allowedFacts: buildAllowedFactsForPhrasing({
@@ -354,6 +367,12 @@ export async function runGeminiFrontOrchestrator(ctx) {
     }
   }
 
+  // P0-3: phrasing ก็อยู่ในงบเดียวกัน — งบหมด (planner+consult ใช้ครบ 2) = ไม่ยิงเพิ่ม ให้ deterministic ชั้นนอกตอบ
+  if (turnAiBudgetRemaining() <= 0) {
+    console.warn(JSON.stringify({ event: "CHAT_TURN_AI_BUDGET_EXHAUSTED", stage: "phrasing", used: getTurnAiCallCount(), budget: TURN_AI_CALL_BUDGET, phase1State: phase1 }));
+    logGeminiOrchestrator({ mode: "active", handled: false, reason: "ai_budget_exhausted" });
+    return { handled: false, reason: "ai_budget_exhausted", mode: "active" };
+  }
   const ph = await runGeminiPhrasing({
     allowedFacts: buildAllowedFactsForPhrasing({
       phase1State: phase1,

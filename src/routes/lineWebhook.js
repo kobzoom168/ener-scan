@@ -4535,22 +4535,28 @@ async function handleTextMessage({ client, event, userId, session }) {
   // ข้อมูลชิ้นที่พิมพ์ "ก่อน/พร้อม" รูป (flow-role audit 26 ส.ค. เคส 1/4/9/12): deterministic gate
   // → เก็บ provisional 15 นาที ให้ gate ใช้ตอนรูปมา · ห้ามเข้า consult (เคยแต่งผลจากชื่อรุ่น)
   try {
-    const { isPreScanObjectInfoText, storePreScanObjectInfo, PRE_SCAN_INFO_ACK_TEXT } = await import(
+    const { isPreScanObjectInfoText, storePreScanObjectInfo, PRE_SCAN_INFO_ACK_TEXT, PRE_SCAN_INFO_STORE_FAILED_TEXT } = await import(
       "../services/objectInfoGate/preScanObjectInfo.util.js"
     );
     if (isPreScanObjectInfoText(text)) {
-      await storePreScanObjectInfo(userId, text);
+      // P0-1: typed persistence — เขียนไม่สำเร็จ = ห้ามอ้างว่าเก็บแล้ว และห้ามปล่อยเข้า consult (AI=0)
+      const stored = await storePreScanObjectInfo(userId, text);
+      const ok = stored && stored.ok === true;
       const r = await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: "pre_scan_object_info_ack",
-        semanticKey: "pre_scan_object_info_ack",
-        text: PRE_SCAN_INFO_ACK_TEXT,
+        replyType: ok ? "pre_scan_object_info_ack" : "pre_scan_object_info_store_failed",
+        semanticKey: ok ? "pre_scan_object_info_ack" : "pre_scan_object_info_store_failed",
+        text: ok ? PRE_SCAN_INFO_ACK_TEXT : PRE_SCAN_INFO_STORE_FAILED_TEXT,
         alternateTexts: [],
         speakerRoleOverride: "admin",
       });
-      console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_CAPTURED", uidPrefix: String(userId).slice(0, 8), sent: r?.sent === true }));
+      if (ok) {
+        console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_CAPTURED", uidPrefix: String(userId).slice(0, 8), sent: r?.sent === true }));
+      } else {
+        console.error(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_STORE_FAILED", uidPrefix: String(userId).slice(0, 8), reason: stored?.reason || "unknown", message: stored?.message || null, sent: r?.sent === true }));
+      }
       return;
     }
   } catch { /* จับไม่ได้ = flow เดิม */ }
