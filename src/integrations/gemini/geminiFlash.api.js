@@ -11,7 +11,18 @@
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from "../../config/env.js";
-import { recordTurnAiCall, recordTurnAiLatency } from "../../core/telemetry/turnAiChain.js";
+import { recordTurnAiLatency, tryReserveTurnAiCall, TurnAiBudgetExhaustedError } from "../../core/telemetry/turnAiChain.js";
+
+/** P0-3: จอง slot งบเทิร์นก่อนแตะ transport — งบหมด (text turn) = throw typed ไม่ยิง */
+function reserveOrThrow(callSite) {
+  const site = callSite || "front_untagged";
+  const r = tryReserveTurnAiCall(site);
+  if (!r.ok) {
+    console.warn(JSON.stringify({ event: "CHAT_TURN_AI_BUDGET_BLOCKED", stage: "transport", client: "front", callSite: site }));
+    throw new TurnAiBudgetExhaustedError(site);
+  }
+  return r.handle;
+}
 
 let _googleClient = null;
 
@@ -76,7 +87,7 @@ function buildCompatModel(provider, opts = {}) {
   const maxTokens = Math.max(64, Number(opts.maxTokens) || 1024);
   return {
     async generateContent(userPrompt) {
-      const aiCallHandle = recordTurnAiCall(opts.callSite || "front_untagged");
+      const aiCallHandle = reserveOrThrow(opts.callSite);
       const aiStarted = Date.now();
       const messages = [];
       if (systemInstruction) {
@@ -197,7 +208,7 @@ export function getGeminiFlashModel(opts = {}) {
   // telemetry ครอบ Google direct ด้วย (Codex P0-6: เดิมนับเฉพาะ compat)
   return {
     async generateContent(userPrompt) {
-      const aiCallHandle = recordTurnAiCall(opts.callSite || "front_untagged");
+      const aiCallHandle = reserveOrThrow(opts.callSite);
       const aiStarted = Date.now();
       try {
         return await googleModel.generateContent(userPrompt);

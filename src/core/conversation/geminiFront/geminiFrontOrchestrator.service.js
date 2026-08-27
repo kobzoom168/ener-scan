@@ -122,6 +122,12 @@ export async function runGeminiFrontOrchestrator(ctx) {
     return { handled: false, reason: "idle_bypass_consult_null", mode: "active" };
   }
 
+  // P0-3: จองงบก่อน planner ด้วย (boundary ใน LLM client บังคับอีกชั้น) — งบหมด = typed ไม่ยิง
+  if (turnAiBudgetRemaining() <= 0) {
+    console.warn(JSON.stringify({ event: "CHAT_TURN_AI_BUDGET_EXHAUSTED", stage: "planner", used: getTurnAiCallCount(), budget: TURN_AI_CALL_BUDGET, phase1State: phase1 }));
+    logGeminiOrchestrator({ mode: "active", handled: false, reason: "ai_budget_exhausted" });
+    return { handled: false, reason: "ai_budget_exhausted", mode: "active" };
+  }
   const plan = await runGeminiPlanner(plannerJson);
   if (!plan) {
     logGeminiOrchestrator({ mode: "active", reason: "planner_null" });

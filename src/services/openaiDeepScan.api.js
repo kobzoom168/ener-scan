@@ -40,10 +40,19 @@ export function withUsageTracking(api, createFn) {
     // CHAT_TURN_AI_CHAIN (Codex P0-6): เส้น OpenAI (conversationSurface ฯลฯ) ต้องถูกนับ
     // ด้วย — attempted นับตั้งแต่ก่อนยิง (error/timeout ก็นับ) · นอก turn context = no-op
     let aiCallHandle = null;
+    let budgetBlocked = null;
     try {
-      const { recordTurnAiCall } = await import("../core/telemetry/turnAiChain.js");
-      aiCallHandle = recordTurnAiCall(`openai.${api}:${callSite}`);
+      const { tryReserveTurnAiCall, TurnAiBudgetExhaustedError } = await import("../core/telemetry/turnAiChain.js");
+      const site = `openai.${api}:${callSite}`;
+      // P0-3: enforcement กลางที่ boundary (text turn เท่านั้น) — งบหมด = ไม่แตะ transport
+      const r = tryReserveTurnAiCall(site);
+      if (!r.ok) budgetBlocked = new TurnAiBudgetExhaustedError(site);
+      else aiCallHandle = r.handle;
     } catch { /* telemetry ห้ามขวาง */ }
+    if (budgetBlocked) {
+      console.warn(JSON.stringify({ event: "CHAT_TURN_AI_BUDGET_BLOCKED", stage: "transport", client: "openai", api, callSite }));
+      throw budgetBlocked;
+    }
     const recordLatency = async () => {
       try {
         const { recordTurnAiLatency } = await import("../core/telemetry/turnAiChain.js");

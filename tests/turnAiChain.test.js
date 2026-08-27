@@ -96,8 +96,10 @@ test("openai withUsageTracking: success + error ต่างก็นับ atte
 
 test("gemini paths ครบทั้ง compat และ google-direct (source contract ใน geminiFlash)", () => {
   const s = fsMod.readFileSync("src/integrations/gemini/geminiFlash.api.js", "utf8");
-  const hits = [...s.matchAll(/recordTurnAiCall\(/g)].length;
-  assert.ok(hits >= 2, `ต้องบันทึกทั้ง compat และ google path (พบ ${hits})`);
+  // P0-3 (27 ส.ค.): ทั้งสอง path ผ่าน reserveOrThrow → tryReserveTurnAiCall (จอง slot + บันทึก callSite ก่อนแตะ transport)
+  const hits = [...s.matchAll(/reserveOrThrow\(/g)].length - 1; // -1 = ตัว definition
+  assert.ok(hits >= 2, `ต้องจอง/บันทึกทั้ง compat และ google path (พบ ${hits})`);
+  assert.ok(/tryReserveTurnAiCall\(/.test(s), "boundary ต้องใช้ tryReserveTurnAiCall");
   assert.ok([...s.matchAll(/recordTurnAiLatency\(/g)].length >= 2);
 });
 

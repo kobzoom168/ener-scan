@@ -388,6 +388,9 @@ export async function ingestScanImageAsyncV2({
     // typed (P0-1): no_source = ปกติ (เงียบ) · redis_unavailable/redis_error = log ตรง ๆ (source อาจค้าง → sourceCleared บอกว่าล้างได้ไหม)
     if (bind?.bound === true) {
       console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_BOUND", ...base(), jobIdPrefix: idPrefix8(jobRow.id) }));
+    } else if (bind && (bind.status === "stale_after_prior_job" || bind.status === "stale_check_failed")) {
+      // ข้อมูลก่อนรูปเป็นของรูปก่อนหน้า (Redis ล่มตอนนั้น) หรือตรวจไม่ได้ → ทิ้ง ไม่ให้ติดรูปนี้ · gate ถามตามปกติ
+      console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_STALE_DISCARDED", ...base(), jobIdPrefix: idPrefix8(jobRow.id), status: bind.status, priorJobIdPrefix: bind.priorJobIdPrefix || null, destinationCleared: bind.destinationCleared ?? null, message: bind.message || null }));
     } else if (bind && bind.status !== "no_source") {
       console.error(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_BIND_FAILED", ...base(), jobIdPrefix: idPrefix8(jobRow.id), status: bind.status, message: bind.message || null, sourceCleared: bind.sourceCleared ?? null }));
     }

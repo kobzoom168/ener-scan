@@ -77,6 +77,39 @@ export function turnAiBudgetRemaining(budget = TURN_AI_CALL_BUDGET) {
   return Math.max(0, Number(budget) - getTurnAiCallCount());
 }
 
+/** typed error เมื่อ LLM boundary ปฏิเสธยิงเพราะงบเทิร์นหมด (code = "budget_exhausted") */
+export class TurnAiBudgetExhaustedError extends Error {
+  constructor(callSite) {
+    super(`turn_ai_budget_exhausted:${String(callSite || "untagged")}`);
+    this.name = "TurnAiBudgetExhaustedError";
+    this.code = "budget_exhausted";
+    this.callSite = String(callSite || "untagged");
+  }
+}
+
+/** true = เทิร์นนี้บังคับงบ (เฉพาะ customer text turn — image/อื่น ๆ และนอก context พฤติกรรมเดิม) */
+export function isTurnAiBudgetEnforced() {
+  const s = als.getStore();
+  return Boolean(s && s.kind === "text");
+}
+
+/**
+ * enforcement กลางที่ LLM boundary (P0-3 Codex 27 ส.ค.): จอง slot ก่อนยิง transport
+ * - นอก context / ไม่ใช่ text turn → ok เสมอ (นับ telemetry ตามเดิม)
+ * - text turn และ callSites.length ≥ budget → ok:false + บันทึก blocked (ไม่แตะ transport)
+ * @returns {{ ok: true, handle: {id:number}|null, enforced: boolean } | { ok: false, reason: "budget_exhausted", handle: null, enforced: true }}
+ */
+export function tryReserveTurnAiCall(callSite, budget = TURN_AI_CALL_BUDGET) {
+  const s = als.getStore();
+  if (!s) return { ok: true, handle: null, enforced: false };
+  const enforced = s.kind === "text";
+  if (enforced && s.callSites.length >= Number(budget)) {
+    (s.blockedCallSites ||= []).push(String(callSite || "untagged"));
+    return { ok: false, reason: "budget_exhausted", handle: null, enforced: true };
+  }
+  return { ok: true, handle: recordTurnAiCall(callSite), enforced };
+}
+
 /** เติมข้อมูล state/route ระหว่างทาง (เช่น phase1 ที่รู้ทีหลัง) */
 export function annotateTurn(patch) {
   const s = als.getStore();
@@ -95,6 +128,10 @@ export function emitTurnAiChain() {
       state: s.state ?? null,
       aiCallCount: s.callSites.length,
       callSites: s.callSites,
+      // P0-3: call ที่ boundary ปฏิเสธเพราะงบเทิร์นหมด (ไม่ได้ยิง transport)
+      blockedAiCallCount: (s.blockedCallSites || []).length,
+      blockedCallSites: s.blockedCallSites || [],
+      aiBudget: TURN_AI_CALL_BUDGET,
       // ชื่อซื่อสัตย์ (Codex รอบ 3): นี่คือ latency ของ call ที่ settle แล้วเท่านั้น —
       // outer timeout ระหว่าง request ค้างจะเห็น pendingAiCount>0 + elapsed แทนศูนย์เงียบ ๆ
       settledAiCallCount: s.settledCount || 0,

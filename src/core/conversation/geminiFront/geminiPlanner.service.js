@@ -39,7 +39,7 @@ export function parsePlannerJson(raw) {
  * @param {{ silent?: boolean }} [opts] — when `silent`, skip GEMINI_FRONT_PLANNER logs (e.g. shadow path emits SHADOW_* only).
  * @returns {Promise<{
  *   plan: import('./geminiPlanner.types.js').GeminiPlannerOutput | null,
- *   outcome: "ok" | "parse_fail" | "error" | "skipped_no_key",
+ *   outcome: "ok" | "parse_fail" | "error" | "skipped_no_key" | "budget_exhausted",
  *   errorMessage?: string,
  * }>}
  */
@@ -79,13 +79,15 @@ export async function runGeminiPlannerWithMeta(userPayloadJson, opts = {}) {
     };
   } catch (e) {
     const message = e?.message || String(e);
+    // P0-3: boundary ปฏิเสธเพราะงบเทิร์นหมด = typed outcome ไม่ใช่ error ทั่วไป
+    const outcome = e?.code === "budget_exhausted" ? "budget_exhausted" : "error";
     if (!silent) {
       logGeminiPlanner({
-        outcome: "error",
+        outcome,
         message,
       });
     }
-    return { plan: null, outcome: "error", errorMessage: message };
+    return { plan: null, outcome, errorMessage: message };
   }
 }
 

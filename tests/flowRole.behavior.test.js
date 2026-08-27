@@ -48,6 +48,7 @@ test("A: bind ตอนรับรูป (atomic move) · reverse completion: �
     move: async (src, dst) => { const v = mem.get(src); if (v == null) return { status: "no_source", value: null }; mem.delete(src); mem.set(dst, v); return { status: "moved", value: v }; },
     getdel: async (k) => { const v = mem.get(k); if (v == null) return { status: "missing", value: null }; mem.delete(k); return { status: "got", value: v }; },
     del: async (k) => { mem.delete(k); return { ok: true }; },
+    findPriorJobSince: async () => ({ ok: true, priorJobId: null }),
   };
   assert.deepEqual(await m.storePreScanObjectInfo("U1", "พระสมเด็จวัดระฆัง ปี 2506", fake), { ok: true });
   assert.deepEqual(await m.bindPreScanInfoToJob("U1", "jobA", fake), { bound: true, status: "moved" }, "รูป A รับก่อน → bind");
@@ -415,9 +416,11 @@ test("P0-2: route=ajarn reject ผม ทุกแบบ (ผมเห็นว�
     "อาจารย์มองว่าพระขุนแผนเด่นด้านเสน่หา แต่ผมว่าตะกรุดก็ดี",
     "ผม",
     "แนะนำผมว่า",
+    "อาจารย์มองว่าเหมาะครับผม", // Codex รอบสี่: ครับผม = เสียงแอดมิน ห้ามยกเว้น
+    "ครับผม",
   ]) assert.equal(m.checkAjarnVoice(t).ok, false, `ต้อง reject: ${t}`);
   assert.equal(m.checkAjarnVoice("อาจารย์มองว่าพระขุนแผนเด่นด้านเสน่หา แต่ผมว่าตะกรุดก็ดี").reason, "admin_self_voice");
-  for (const t of ["อาจารย์มองว่าเหมาะครับผม", "อาจารย์ว่าเส้นผมไม่เกี่ยวกับพลังครับ", "อาจารย์มองว่าสายเสน่หา พระขุนแผนเด่นด้านนี้ครับ"]) {
+  for (const t of ["อาจารย์ว่าเส้นผมไม่เกี่ยวกับพลังครับ", "อาจารย์มองว่าทรงผมไม่มีผลครับ", "อาจารย์มองว่าสายเสน่หา พระขุนแผนเด่นด้านนี้ครับ"]) {
     assert.equal(m.checkAjarnVoice(t).ok, true, `ต้องผ่าน: ${t}`);
   }
   // chain: mixed voice ทุกครั้ง → regenerate directive สั่งห้าม ผม → ยังผิด → role-safe fallback ไม่มี ผม/handoff
@@ -524,4 +527,140 @@ test("P0-3: orchestrator จริง + fake LLM transport — non-idle (planner
   } finally {
     globalThis.fetch = prevFetch; console.warn = oWarn; console.log = oLog;
   }
+});
+
+
+/* ---------- Codex รอบสี่ P0-1: stale provisional หลัง redis_unavailable — "รูปถัดไปเท่านั้น" แม้ Redis outage ---------- */
+test("P0-1 stale: store ok → รูป A move ได้ redis_unavailable (source ค้าง) → Redis กลับมา → รูป B move สำเร็จแต่มี job A หลัง capturedAt → bound:false stale_after_prior_job + source/destination ถูกล้าง · path ปกติ A bind ได้ · สองรูปแข่ง = ผู้ชนะ 1", async () => {
+  const m = await import("../src/services/objectInfoGate/preScanObjectInfo.util.js");
+  const mem = new Map();
+  let redisUp = true;
+  const jobs = []; // { id, createdAt }
+  const fake = {
+    set: async (k, v) => { if (!redisUp) return { ok: false, reason: "redis_unavailable" }; mem.set(k, v); return { ok: true }; },
+    move: async (src, dst) => {
+      if (!redisUp) return { status: "redis_unavailable", value: null };
+      const v = mem.get(src); if (v == null) return { status: "no_source", value: null };
+      mem.delete(src); mem.set(dst, v); return { status: "moved", value: v };
+    },
+    del: async (k) => { if (!redisUp) return { ok: false, reason: "redis_unavailable" }; mem.delete(k); return { ok: true }; },
+    getdel: async (k) => { const v = mem.get(k); if (v == null) return { status: "missing", value: null }; mem.delete(k); return { status: "got", value: v }; },
+    // เหมือน query scan_jobs: job อื่นของ uid ที่ created_at > capturedAt
+    findPriorJobSince: async (uid, at, cur) => ({ ok: true, priorJobId: jobs.find((j) => j.createdAt > at && j.id !== cur)?.id || null }),
+  };
+  const t0 = Date.now() - 10_000;
+  mem.set("objinfo:preprovided:U1", JSON.stringify({ raw: "พระสมเด็จวัดระฆัง ปี 2506", at: t0 }));
+  // รูป A: สร้าง job แล้ว Redis ล่ม → move = redis_unavailable, source ยังค้าง
+  jobs.push({ id: "jobA", createdAt: t0 + 1000 });
+  redisUp = false;
+  assert.deepEqual(await m.bindPreScanInfoToJob("U1", "jobA", fake), { bound: false, status: "redis_unavailable" });
+  assert.ok(mem.has("objinfo:preprovided:U1"), "source ค้างจริงหลัง outage (DEL ก็ทำไม่ได้)");
+  // Redis กลับมา → รูป B
+  redisUp = true;
+  jobs.push({ id: "jobB", createdAt: t0 + 5000 });
+  const b = await m.bindPreScanInfoToJob("U1", "jobB", fake);
+  assert.equal(b.bound, false); assert.equal(b.status, "stale_after_prior_job"); assert.equal(b.priorJobIdPrefix, "jobA"); assert.equal(b.destinationCleared, true);
+  assert.equal(mem.has("objinfo:preprovided:U1"), false, "source ถูก move ออกแล้ว");
+  assert.equal(mem.has("objinfo:pre_job:jobB"), false, "destination ถูกล้าง — B ต้องไม่ได้ข้อมูลของ A");
+  assert.equal(await m.consumeJobPreScanInfo("jobB", fake), null, "gate ของ B ต้องไม่เจอข้อมูล");
+  // ตรวจไม่ได้ (DB ล้ม) = discard เช่นกัน ไม่อาศัย DEL อย่างเดียว
+  mem.set("objinfo:preprovided:U2", JSON.stringify({ raw: "หลวงปู่ทวด วัดช้างให้", at: Date.now() }));
+  const f = await m.bindPreScanInfoToJob("U2", "jobX", { ...fake, findPriorJobSince: async () => { throw new Error("db down"); } });
+  assert.equal(f.status, "stale_check_failed"); assert.equal(f.destinationCleared, true); assert.equal(mem.has("objinfo:pre_job:jobX"), false);
+  // path ปกติ: store → รูป A ทันที (ไม่มี job อื่นหลัง capturedAt) → bind ได้
+  jobs.length = 0;
+  const at2 = Date.now();
+  mem.set("objinfo:preprovided:U3", JSON.stringify({ raw: "เหรียญหลวงปู่หนูเพชร รุ่นหนุนดวง", at: at2 }));
+  jobs.push({ id: "jobN", createdAt: at2 + 500 });
+  assert.deepEqual(await m.bindPreScanInfoToJob("U3", "jobN", fake), { bound: true, status: "moved" });
+  assert.equal((await m.consumeJobPreScanInfo("jobN", fake))?.raw, "เหรียญหลวงปู่หนูเพชร รุ่นหนุนดวง");
+  // สองรูปแข่งกัน: ผู้ชนะ 1 job
+  const at3 = Date.now();
+  mem.set("objinfo:preprovided:U4", JSON.stringify({ raw: "พระขุนแผน วัดบ้านกร่าง", at: at3 }));
+  jobs.length = 0; jobs.push({ id: "jobP", createdAt: at3 + 100 }, { id: "jobQ", createdAt: at3 + 101 });
+  const fakeRace = { ...fake, findPriorJobSince: async (uid, at, cur) => ({ ok: true, priorJobId: null }) };
+  const [rp, rq] = await Promise.all([m.bindPreScanInfoToJob("U4", "jobP", fakeRace), m.bindPreScanInfoToJob("U4", "jobQ", fakeRace)]);
+  assert.equal([rp, rq].filter((r) => r.bound).length, 1);
+  assert.ok([rp, rq].some((r) => r.status === "no_source"));
+  // ingestion log แยก stale
+  const ing = readFileSync("src/services/scanV2/webhookImageIngestion.service.js", "utf8");
+  assert.match(ing, /stale_after_prior_job[\s\S]{0,400}PRE_SCAN_OBJECT_INFO_STALE_DISCARDED/);
+});
+
+/* ---------- Codex รอบสี่ P0-3: enforcement กลางที่ LLM boundary ผ่าน ALS (text turn) ---------- */
+test("P0-3 boundary: pre-used=1 → ทั้งเทิร์นยิงเพิ่มได้ 1 · pre-used=2 → planner/consult/phrasing transport=0 (typed) · orchestrator ซ้ำ → รวม ≤2 · นอก context/image turn พฤติกรรมเดิม · emit blockedCallSites", async () => {
+  const als = await import("../src/core/telemetry/turnAiChain.js");
+  const { runGeminiFrontOrchestrator } = await import("../src/core/conversation/geminiFront/geminiFrontOrchestrator.service.js");
+  const { runGeminiPlannerWithMeta } = await import("../src/core/conversation/geminiFront/geminiPlanner.service.js");
+  const { runGeminiConsult } = await import("../src/core/conversation/geminiFront/geminiConsult.service.js");
+  const { runGeminiPhrasing } = await import("../src/core/conversation/geminiFront/geminiPhrasing.service.js");
+  const prevFetch = globalThis.fetch;
+  const llm = { calls: [] };
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes("/chat/completions")) {
+      const body = JSON.parse(init?.body || "{}"); const site = String(body.user || "untagged"); llm.calls.push(site);
+      const content = site === "planner" ? JSON.stringify({ proposed_action: "consult_amulet", confidence: 0.95 }) : site === "consult" ? "ผมว่าองค์นี้เด่นด้านเสน่หาครับ" : "phrasing";
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }], usage: {} }), text: async () => "" };
+    }
+    throw new Error("HERMETIC: db blocked");
+  };
+  const oWarn = console.warn, oLog = console.log; const warns = []; const logs = [];
+  console.warn = (x) => warns.push(String(x)); console.log = (x) => logs.push(String(x));
+  const mkCtx = (phase1, extra = {}) => ({
+    userId: "U" + "8".repeat(32), text: "สายเสน่ห์ ต้องหาพระแบบไหนครับ", phase1State: phase1, conversationOwner: phase1,
+    paymentState: "none", flowState: "idle", accessState: "free", pendingPaymentStatus: null, selectedPackageKey: null,
+    sendGatewayReply: async () => ({ sent: true }), delegates: {}, ...extra,
+  });
+  try {
+    // (a) pre-used=1 (เช่น semanticCatcher) → non-idle: planner ยิงได้ 1, consult ถูกกัน, phrasing ถูกกัน → รวม 2
+    llm.calls.length = 0;
+    let a;
+    await als.runWithTurnContext({ messageId: "a", kind: "text" }, async () => {
+      als.recordTurnAiCall("semanticCatcher");
+      const r = await runGeminiFrontOrchestrator(mkCtx("scan_ready_idle"));
+      a = { r, count: als.getTurnAiCallCount() };
+    });
+    assert.deepEqual(llm.calls, ["planner"]); assert.equal(a.count, 2); assert.equal(a.r.handled, false); assert.equal(a.r.reason, "ai_budget_exhausted");
+    // (b) pre-used=2 → orchestrator ไม่ยิง (typed) · boundary ตรง ๆ: planner/consult/phrasing transport=0
+    llm.calls.length = 0;
+    let b;
+    await als.runWithTurnContext({ messageId: "b", kind: "text" }, async () => {
+      als.recordTurnAiCall("x"); als.recordTurnAiCall("y");
+      const r = await runGeminiFrontOrchestrator(mkCtx("scan_ready_idle"));
+      const pl = await runGeminiPlannerWithMeta(JSON.stringify({ text: "hi" }));
+      const co = await runGeminiConsult({ userId: "U" + "8".repeat(32), userText: "พลังองค์นี้เป็นไง" });
+      const ph = await runGeminiPhrasing({ allowedFacts: [], nextStep: "x", replyStyle: "neutral_help", userText: "hi", conversationHistory: [] }).catch(() => null);
+      b = { r, pl, co, ph, count: als.getTurnAiCallCount() };
+      const lines = []; const o = console.log; console.log = (x) => lines.push(String(x)); als.emitTurnAiChain(); console.log = o;
+      b.emit = JSON.parse(lines.find((l) => l.includes("CHAT_TURN_AI_CHAIN")));
+    });
+    assert.deepEqual(llm.calls, [], "งบหมด = transport 0 ทุก surface");
+    assert.equal(b.r.reason, "ai_budget_exhausted"); assert.equal(b.pl.outcome, "budget_exhausted"); assert.equal(b.co, null); assert.ok(b.ph == null);
+    assert.equal(b.count, 2); assert.equal(b.emit.aiCallCount, 2); assert.ok(b.emit.blockedAiCallCount >= 2); assert.ok(b.emit.blockedCallSites.includes("planner"));
+    assert.ok(warns.some((w) => w.includes("CHAT_TURN_AI_BUDGET_BLOCKED")));
+    // (c) orchestrator ถูกเรียกซ้ำในเทิร์นเดียว → รอบแรก planner+consult=2, รอบสอง transport 0 → รวม 2
+    llm.calls.length = 0;
+    let c;
+    await als.runWithTurnContext({ messageId: "c", kind: "text" }, async () => {
+      const r1 = await runGeminiFrontOrchestrator(mkCtx("scan_ready_idle"));
+      const after1 = llm.calls.slice();
+      const r2 = await runGeminiFrontOrchestrator(mkCtx("scan_ready_idle"));
+      c = { r1, r2, after1, count: als.getTurnAiCallCount() };
+    });
+    assert.deepEqual(c.after1, ["planner", "consult"]); assert.deepEqual(llm.calls, ["planner", "consult"]); assert.equal(c.count, 2);
+    assert.equal(c.r1.handled, true); assert.equal(c.r2.reason, "ai_budget_exhausted");
+    // (d) นอก text-turn context: boundary ไม่บังคับ — transport เดิม
+    llm.calls.length = 0;
+    const outside = await runGeminiPlannerWithMeta(JSON.stringify({ text: "hi" }));
+    assert.equal(outside.outcome, "ok"); assert.deepEqual(llm.calls, ["planner"]);
+    assert.equal(als.tryReserveTurnAiCall("z").enforced, false);
+    // (e) image turn context ที่ใช้ AI ไปแล้ว 2 → ยังยิงได้ (บังคับเฉพาะ text)
+    llm.calls.length = 0;
+    await als.runWithTurnContext({ messageId: "e", kind: "image" }, async () => {
+      als.recordTurnAiCall("slipGate"); als.recordTurnAiCall("objectCheck");
+      const r = await runGeminiPlannerWithMeta(JSON.stringify({ text: "hi" }));
+      assert.equal(r.outcome, "ok");
+    });
+    assert.deepEqual(llm.calls, ["planner"]);
+  } finally { globalThis.fetch = prevFetch; console.warn = oWarn; console.log = oLog; }
 });
