@@ -370,6 +370,8 @@ export async function processScanJob(workerId, jobRow) {
               skipQuotaDecrement: true,
               dedupHit: true,
               dedupType: "phash",
+              // P0-E: เหมือน sha256 path — gate ต้องหา report payload ของผลเดิมเพื่อบันทึกข้อมูลที่ลูกค้าพิมพ์ก่อนรูป
+              scanResultId: dupMatch.scan_result_id ? String(dupMatch.scan_result_id) : null,
             },
             status: "queued",
           });

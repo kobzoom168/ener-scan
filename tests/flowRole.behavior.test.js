@@ -757,5 +757,9 @@ test("P0-E: dedup/cached path (ไม่มี reportPayload แต่มี sca
   const psj = readFileSync(new URL("../src/services/scanV2/processScanJob.service.js", import.meta.url), "utf8");
   const dedupAt = psj.indexOf('dedupType: "sha256",');
   assert.ok(dedupAt > 0);
-  assert.ok(psj.slice(dedupAt, dedupAt + 400).includes("scanResultId: shaDup.scan_result_id"), "dedup outbound ต้องมี scanResultId");
+  assert.ok(psj.slice(dedupAt, dedupAt + 400).includes("scanResultId: shaDup.scan_result_id"), "sha256 dedup outbound ต้องมี scanResultId");
+  // path ที่ 2 (smoke 08:47Z): dHash near-exact dedup → SCAN_IMAGE_DEDUP_HIT ต้องแนบด้วย
+  const phashAt = psj.indexOf('dedupType: "phash",');
+  assert.ok(phashAt > 0);
+  assert.ok(psj.slice(phashAt, phashAt + 400).includes("scanResultId: dupMatch.scan_result_id"), "phash dedup outbound ต้องมี scanResultId");
 });
