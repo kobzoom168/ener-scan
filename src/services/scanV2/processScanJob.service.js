@@ -305,6 +305,8 @@ export async function processScanJob(workerId, jobRow) {
               skipQuotaDecrement: true,
               dedupHit: true,
               dedupType: "sha256",
+              // P0-E (Codex 28 ส.ค.): gate ต้องหา report payload ของผลเดิมได้ เพื่อบันทึกข้อมูลชิ้นที่ลูกค้าพิมพ์ก่อนรูป
+              scanResultId: shaDup.scan_result_id ? String(shaDup.scan_result_id) : null,
             },
             status: "queued",
           });

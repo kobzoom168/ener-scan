@@ -86,6 +86,67 @@ async function releaseHeldWithoutInfo(userId, pending, rawText) {
  * เรียกจาก deliverOutbound ก่อนส่ง scan_result — คืน true = เกตยึดไว้แล้ว (ส่งคำถามแทน อย่าส่งรายงาน)
  * @param {object} p { client, lineUserId, payload (outbound payload_json ทั้งก้อน) }
  */
+
+/** โหลด report payload ของผลสแกนตาม id (ทางออก dedup/cached ที่ outbound ไม่แนบ payload) */
+async function loadReportPayloadById(scanResultId) {
+  const { data } = await supabase
+    .from("scan_results_v2")
+    .select("id,report_payload_json")
+    .eq("id", String(scanResultId))
+    .maybeSingle();
+  return data?.report_payload_json || null;
+}
+
+/**
+ * P0-E: ทางออกของ gate ที่บันทึกข้อมูลไม่ได้ (ไม่มี payload/objectKey/precheck) — ห้ามปล่อย key ค้างเงียบ
+ * consume แล้ว log DROPPED พร้อมเหตุผล (งานจบแล้ว ไม่มีใครมา consume อีก)
+ */
+async function dropPreScanEvidence({ lineUserId, relatedJobId, reason, deps }) {
+  if (!relatedJobId) return;
+  try {
+    const { consumeJobPreScanInfo } = await import("./preScanObjectInfo.util.js");
+    const pre = await (deps.consumeJobPreScanInfo || consumeJobPreScanInfo)(relatedJobId);
+    if (pre?.raw) {
+      console.warn(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_DROPPED", reason, lineUserIdPrefix: String(lineUserId).slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), rawChars: pre.raw.length }));
+    }
+  } catch { /* best-effort */ }
+}
+
+/**
+ * consume evidence job-scoped → parse → insert object_owner_info
+ * @returns {Promise<"saved"|"none"|"failed">} failed = insert ล้ม (คืน evidence ให้ job แล้ว) — caller ไหลไปถามตามปกติ
+ */
+async function persistPreScanEvidence({ db, lineUserId, relatedJobId, rp, objectKey, scanResultId, deps }) {
+  const { consumeJobPreScanInfo, restoreJobPreScanInfo } = await import("./preScanObjectInfo.util.js");
+  const pre = await (deps.consumeJobPreScanInfo || consumeJobPreScanInfo)(relatedJobId);
+  if (!pre?.raw) return "none";
+  const lanePre = laneFromReportPayload(rp);
+  const parsedPre = await (deps.parseOwnerInfo || parseOwnerInfo)(pre.raw, lanePre).catch(() => null);
+  const { error: insErr } = await db.from("object_owner_info").insert({
+    line_user_id: lineUserId,
+    scan_result_id: scanResultId || null,
+    object_key: objectKey,
+    lane: lanePre,
+    unknown: !(parsedPre?.objectName || parsedPre?.stoneType),
+    raw_text: pre.raw.slice(0, 400),
+    object_name: parsedPre?.objectName || null,
+    temple: parsedPre?.temple || null,
+    era_year: parsedPre?.eraYear || null,
+    stone_type: parsedPre?.stoneType || null,
+    parse_confidence: Number(parsedPre?.confidence) || null,
+  });
+  if (insErr) {
+    console.error(JSON.stringify({ event: "OBJECT_INFO_PRE_SCAN_SAVE_FAILED", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), message: String(insErr.message || insErr).slice(0, 160) }));
+    const rs = await (deps.restoreJobPreScanInfo || restoreJobPreScanInfo)(relatedJobId, pre).catch((e) => ({ ok: false, reason: "exception", message: String(e?.message || e).slice(0, 120) }));
+    if (!(rs && rs.ok === true)) {
+      console.error(JSON.stringify({ event: "OBJECT_INFO_PRE_SCAN_RESTORE_FAILED", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), reason: rs?.reason || "unknown", message: rs?.message || null }));
+    }
+    return "failed";
+  }
+  console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", via: "pre_scan_text", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), hasName: Boolean(parsedPre?.objectName || parsedPre?.stoneType) }));
+  return "saved";
+}
+
 /**
  * Typed outcome (Codex nested-ban race): ห้ามคืน object เข้า boolean if
  * @returns {Promise<{ outcome: "not_held" | "held" | "suppressed_banned" }>}
@@ -110,50 +171,34 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
       rp = srow?.report_payload_json || null;
       if (srow?.id && !payload.scanResultId) payload.scanResultId = String(srow.id);
     }
+    // P0-E (Codex 28 ส.ค.): ทางออก sha256 dedup — outbound ไม่มี reportPayload/publicToken แต่มี scanResultId ของผลเดิม
+    if (!rp && payload?.scanResultId) {
+      rp = await (deps.loadReportPayloadById || loadReportPayloadById)(String(payload.scanResultId)).catch(() => null);
+    }
     if (!rp) {
       console.log(JSON.stringify({ event: "OBJECT_INFO_GATE_SKIP", reason: "no_report_payload" }));
+      await dropPreScanEvidence({ lineUserId, relatedJobId, reason: "no_report_payload", deps });
       return NOT_HELD;
     }
-    if (rp.precheckMode) return NOT_HELD; // ชิ้นเช็คก่อนเช่า — ไม่ใช่ของลูกค้า ไม่ถาม
+    if (rp.precheckMode) {
+      await dropPreScanEvidence({ lineUserId, relatedJobId, reason: "precheck_mode", deps });
+      return NOT_HELD; // ชิ้นเช็คก่อนเช่า — ไม่ใช่ของลูกค้า ไม่ถาม
+    }
     const objectKey = objectKeyFromReportPayload(rp);
-    if (!objectKey) return NOT_HELD;
-    if (await (deps.hasInfoForObject || hasInfoForObject)(lineUserId, objectKey)) return NOT_HELD;
+    if (!objectKey) {
+      await dropPreScanEvidence({ lineUserId, relatedJobId, reason: "no_object_key", deps });
+      return NOT_HELD;
+    }
+    const alreadyHasInfo = await (deps.hasInfoForObject || hasInfoForObject)(lineUserId, objectKey);
 
-    // ข้อมูลที่ลูกค้าพิมพ์ก่อนรูป — job-scoped (bind ตอนรับรูป) consume ครั้งเดียว (atomic GETDEL)
+    // ข้อมูลที่ลูกค้าพิมพ์ก่อนรูป — job-scoped (bind ตอนรับรูป) consume ครั้งเดียว ตรง jobId เท่านั้น
+    // P0-E: บันทึกทุกทางออกที่มี objectKey (รวม dedup/cached และชิ้นที่มีข้อมูลอยู่แล้ว — ข้อมูลใหม่จากลูกค้าห้ามหาย)
     // insert ต้องตรวจ {error} ตรง ๆ: ล้ม = คืน evidence ให้ job แล้วถามตามปกติ ห้าม log SAVED
     if (relatedJobId) {
-      const { consumeJobPreScanInfo, restoreJobPreScanInfo } = await import("./preScanObjectInfo.util.js");
-      const pre = await (deps.consumeJobPreScanInfo || consumeJobPreScanInfo)(relatedJobId);
-      if (pre?.raw) {
-        const lanePre = laneFromReportPayload(rp);
-        const parsedPre = await (deps.parseOwnerInfo || parseOwnerInfo)(pre.raw, lanePre).catch(() => null);
-        const { error: insErr } = await db.from("object_owner_info").insert({
-          line_user_id: lineUserId,
-          scan_result_id: String(payload.scanResultId || rp.scanId || "") || null,
-          object_key: objectKey,
-          lane: lanePre,
-          unknown: !(parsedPre?.objectName || parsedPre?.stoneType),
-          raw_text: pre.raw.slice(0, 400),
-          object_name: parsedPre?.objectName || null,
-          temple: parsedPre?.temple || null,
-          era_year: parsedPre?.eraYear || null,
-          stone_type: parsedPre?.stoneType || null,
-          parse_confidence: Number(parsedPre?.confidence) || null,
-        });
-        if (insErr) {
-          console.error(JSON.stringify({ event: "OBJECT_INFO_PRE_SCAN_SAVE_FAILED", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), message: String(insErr.message || insErr).slice(0, 120) }));
-          const rs = await (deps.restoreJobPreScanInfo || restoreJobPreScanInfo)(relatedJobId, pre).catch((e) => ({ ok: false, reason: "exception", message: String(e?.message || e).slice(0, 120) }));
-          if (!(rs && rs.ok === true)) {
-            // typed (P0-1): restore ไม่สำเร็จ = evidence หายจริง — log ตรง ๆ ไม่อ้างว่ายังอยู่กับ job
-            console.error(JSON.stringify({ event: "OBJECT_INFO_PRE_SCAN_RESTORE_FAILED", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), reason: rs?.reason || "untyped", message: rs?.message || null }));
-          }
-          // ไหลต่อไปถามตามปกติ (gate ถามลูกค้าเหมือนไม่มีข้อมูล)
-        } else {
-          console.log(JSON.stringify({ event: "OBJECT_INFO_SAVED", via: "pre_scan_text", lineUserIdPrefix: lineUserId.slice(0, 8), jobIdPrefix: String(relatedJobId).slice(0, 8), hasName: Boolean(parsedPre?.objectName) }));
-          return NOT_HELD;
-        }
-      }
+      const saved = await persistPreScanEvidence({ db, lineUserId, relatedJobId, rp, objectKey, scanResultId: String(payload.scanResultId || rp.scanId || "") || null, deps });
+      if (saved === "saved") return NOT_HELD;
     }
+    if (alreadyHasInfo) return NOT_HELD;
 
     // กันสแปม+รายงานหาย (เคส 10 ส.ค.): ยึดได้ทีละชิ้นต่อคน — มีคำถามค้างอยู่
     // หรือเพิ่งถามไปไม่นาน → ชิ้นนี้ส่งรายงานปกติ ไม่ยึดเพิ่ม (pending เดิมห้ามโดนทับ)

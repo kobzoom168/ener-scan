@@ -3787,6 +3787,25 @@ async function handleImageMessage({ client, event, userId, session }) {
 
   if (isUserProcessingImage(userId)) {
     console.log("[WEBHOOK] ignore image: active processing", userId);
+    // P0-D (Codex 28 ส.ค.): รูปที่มาระหว่างรูปก่อนหน้ากำลังประมวลผล ห้ามหายเงียบ —
+    // แจ้งแอดมิน deterministic (AI=0) ข้อความเดียวกับ ingestion in-flight notice · gateway
+    // semantic window (22 วิ) กันยิงซ้ำในชุดรูปรัว · ไม่สัญญาว่าจะส่งต่อ (รูปนี้ไม่ได้เข้าคิว)
+    try {
+      const { MULTI_IMAGE_WAIT_TEXT } = await import("../services/scanV2/webhookImageIngestion.service.js");
+      const r = await sendNonScanReply({
+        client,
+        userId,
+        replyToken: event.replyToken,
+        replyType: "image_inflight_notice",
+        semanticKey: "image_inflight_notice",
+        text: MULTI_IMAGE_WAIT_TEXT,
+        alternateTexts: [],
+        speakerRoleOverride: "admin",
+      });
+      console.log(JSON.stringify({ event: "IMAGE_INFLIGHT_NOTICE", lineUserIdPrefix: String(userId).slice(0, 8), sent: r?.sent === true, suppressed: r?.suppressed === true }));
+    } catch (e) {
+      console.error(JSON.stringify({ event: "IMAGE_INFLIGHT_NOTICE_FAIL", lineUserIdPrefix: String(userId).slice(0, 8), message: String(e?.message || e).slice(0, 120) }));
+    }
     return;
   }
 

@@ -687,3 +687,75 @@ test("P0-3 boundary (งบ 3): pre-used=2 → ยิงเพิ่มได้
     assert.deepEqual(llm.calls, ["planner"]);
   } finally { globalThis.fetch = prevFetch; console.warn = oWarn; console.log = oLog; }
 });
+
+/* ---------- P0-D / P0-E (Codex 28 ส.ค. หลัง smoke รอบ "ครบ" 08:01Z) ---------- */
+test("P0-D: รูปที่มาระหว่างรูปก่อนหน้ากำลังประมวลผล ต้องได้ข้อความรอ (admin, AI=0) ไม่หายเงียบ · copy ไม่สัญญา/ไม่มีคำว่า ระบบ (static + text)", async () => {
+  const src = readFileSync(new URL("../src/routes/lineWebhook.js", import.meta.url), "utf8");
+  const guardAt = src.indexOf("ignore image: active processing");
+  assert.ok(guardAt > 0);
+  const after = src.slice(guardAt, guardAt + 1600);
+  const returnAt = after.indexOf("\n    return;");
+  const noticeAt = after.indexOf('replyType: "image_inflight_notice"');
+  assert.ok(noticeAt > 0 && noticeAt < returnAt, "ต้องส่ง notice ก่อน return ใน guard");
+  assert.ok(after.slice(0, returnAt).includes('speakerRoleOverride: "admin"'));
+  assert.ok(after.slice(0, returnAt).includes("IMAGE_INFLIGHT_NOTICE"));
+  const { MULTI_IMAGE_WAIT_TEXT } = await import("../src/services/scanV2/webhookImageIngestion.service.js");
+  assert.ok(typeof MULTI_IMAGE_WAIT_TEXT === "string" && MULTI_IMAGE_WAIT_TEXT.length > 10);
+  assert.ok(!/ระบบ/.test(MULTI_IMAGE_WAIT_TEXT), "ห้ามคำว่า ระบบ");
+  assert.ok(!/(แจ้งกลับ|ส่งต่อให้|จะส่งให้)/.test(MULTI_IMAGE_WAIT_TEXT), "ห้ามสัญญางานอนาคตที่ไม่ได้ทำ (รูปนี้ไม่ได้เข้าคิว)");
+});
+
+test("P0-E: dedup/cached path (ไม่มี reportPayload แต่มี scanResultId) → โหลด payload ตาม id → consume+SAVED · ชิ้นที่มีข้อมูลแล้ว → ยัง SAVED ข้อมูลใหม่ · ไม่มีทางบันทึก → DROPPED ไม่ค้าง key · processScanJob แนบ scanResultId (static)", async () => {
+  const { maybeHoldReportForObjectInfo } = await import("../src/services/objectInfoGate/objectInfoGate.service.js");
+  const rp = { summary: { energyScore: 8.1 }, amuletV1: { powerCategories: { metta: { score: 77 } } }, scanId: "srCached" };
+  const logs = []; const warns = []; const oLog = console.log, oWarn = console.warn, oErr = console.error;
+  console.log = (x) => logs.push(String(x)); console.warn = (x) => warns.push(String(x)); console.error = () => {};
+  try {
+    // 1) sha256 dedup outbound: reportPayload null, publicToken none, scanResultId ของผลเดิม
+    const inserted = [];
+    const consumed = [];
+    const db = { from: () => ({ insert: async (row) => { inserted.push(row); return { error: null }; } }) };
+    const r1 = await maybeHoldReportForObjectInfo(
+      { client: {}, lineUserId: "U" + "3".repeat(32), payload: { text: "ชิ้นนี้เคยสแกนไปแล้วครับ", dedupHit: true, dedupType: "sha256", scanResultId: "srCached" }, relatedJobId: "jobDup" },
+      { supabase: db, loadReportPayloadById: async (id) => (id === "srCached" ? rp : null), hasInfoForObject: async () => false,
+        consumeJobPreScanInfo: async (jid) => { consumed.push(jid); return { raw: "หลวงพ่อคูณวัดบ้านไร่", at: Date.now() }; },
+        parseOwnerInfo: async () => ({ isObjectInfo: true, objectName: "หลวงพ่อคูณ", temple: "วัดบ้านไร่", confidence: 0.9 }) },
+    );
+    assert.equal(r1.outcome, "not_held");
+    assert.deepEqual(consumed, ["jobDup"]);
+    assert.equal(inserted.length, 1);
+    assert.equal(inserted[0].scan_result_id, "srCached");
+    assert.equal(inserted[0].temple, "วัดบ้านไร่");
+    assert.ok(logs.some((l) => l.includes('"OBJECT_INFO_SAVED"') && l.includes("pre_scan_text") && l.includes("jobDup")));
+    assert.ok(!logs.some((l) => l.includes("no_report_payload")), "มี scanResultId ต้องโหลด payload ได้ ไม่ skip");
+
+    // 2) ชิ้นมีข้อมูลอยู่แล้ว → ข้อมูลใหม่ที่ลูกค้าพิมพ์ต้องถูกบันทึก ไม่ทิ้ง
+    const inserted2 = [];
+    const db2 = { from: () => ({ insert: async (row) => { inserted2.push(row); return { error: null }; } }) };
+    const r2 = await maybeHoldReportForObjectInfo(
+      { client: {}, lineUserId: "U" + "4".repeat(32), payload: { reportPayload: rp }, relatedJobId: "jobHas" },
+      { supabase: db2, hasInfoForObject: async () => true,
+        consumeJobPreScanInfo: async () => ({ raw: "พระสมเด็จวัดระฆัง ปี 2500", at: Date.now() }),
+        parseOwnerInfo: async () => ({ isObjectInfo: true, objectName: "พระสมเด็จ", temple: "วัดระฆัง", eraYear: "2500", confidence: 0.9 }) },
+    );
+    assert.equal(r2.outcome, "not_held");
+    assert.equal(inserted2.length, 1);
+    assert.equal(inserted2[0].era_year, "2500");
+
+    // 3) ไม่มี payload และไม่มี scanResultId → บันทึกไม่ได้ → consume + DROPPED (ห้ามค้าง key เงียบ)
+    const consumed3 = [];
+    const r3 = await maybeHoldReportForObjectInfo(
+      { client: {}, lineUserId: "U" + "5".repeat(32), payload: { text: "x" }, relatedJobId: "jobNoRp" },
+      { supabase: db, consumeJobPreScanInfo: async (jid) => { consumed3.push(jid); return { raw: "เหรียญหลวงปู่ทวด", at: Date.now() }; } },
+    );
+    assert.equal(r3.outcome, "not_held");
+    assert.deepEqual(consumed3, ["jobNoRp"]);
+    assert.ok(warns.some((l) => l.includes("PRE_SCAN_OBJECT_INFO_DROPPED") && l.includes("no_report_payload")));
+  } finally { console.log = oLog; console.warn = oWarn; console.error = oErr; }
+
+  // static: dedup-hit outbound แนบ scanResultId ของผลเดิม
+  const psj = readFileSync(new URL("../src/services/scanV2/processScanJob.service.js", import.meta.url), "utf8");
+  const dedupAt = psj.indexOf('dedupType: "sha256",');
+  assert.ok(dedupAt > 0);
+  assert.ok(psj.slice(dedupAt, dedupAt + 400).includes("scanResultId: shaDup.scan_result_id"), "dedup outbound ต้องมี scanResultId");
+});
