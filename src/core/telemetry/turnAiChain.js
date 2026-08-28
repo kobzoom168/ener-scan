@@ -56,10 +56,11 @@ export function recordTurnAiLatency(ms, handle = null) {
 }
 
 /**
- * งบ AI ต่อเทิร์นข้อความลูกค้า (flow-role P0-3, Codex 27 ส.ค.): planner + consult + regenerate + phrasing
- * รวมกันห้ามเกิน 2 calls — วัดจาก callSites จริงใน ALS ไม่ใช่ตัวนับของ chain
+ * งบ AI ต่อเทิร์นข้อความลูกค้า (flow-role P0-3, Codex 27 ส.ค.): ทุก surface (semanticCatcher/clarifier/planner/
+ * consult+regenerate/phrasing) รวมกันห้ามเกินค่านี้ — วัดจาก callSites จริงใน ALS ไม่ใช่ตัวนับของ chain
+ * Codex verdict rollout นี้ = 3 (รักษาเทิร์น 3-call จริงบน Pro ไว้ 6/333, หยุด chain 4–5) — ค่อยลดเป็น 2 หลังยุบ call ซ้ำด้วย telemetry
  */
-export const TURN_AI_CALL_BUDGET = 2;
+export const TURN_AI_CALL_BUDGET = 3;
 
 /** จำนวน AI calls ที่ "พยายามยิง" แล้วในเทิร์นนี้ · นอก context = 0 (วัดไม่ได้) */
 export function getTurnAiCallCount() {

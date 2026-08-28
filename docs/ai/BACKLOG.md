@@ -70,5 +70,6 @@
 - [x] Codex P0-1 typed persistence / P0-2 ผม ทุกแบบ / P0-3 งบ AI ≤2 ต่อเทิร์น / P1 gate manifest + redis integration script (27 ส.ค. บ่าย)
 - [x] redis integration บน staging container (live 13/13 + unavailable 4/4, 27 ส.ค.)
 - [x] Codex รอบสี่: stale bind check ผ่าน scan_jobs / ตัด ครับผม / AI budget enforcement ที่ LLM boundary (27 ส.ค. เย็น)
-- [ ] กบ/Codex เคาะ: งบ AI ต่อเทิร์น 2 (ตัด consult ใน 3.3% เทิร์นที่มี semanticCatcher นำ) หรือ 3
+- [x] Codex เคาะงบ AI ต่อเทิร์น = 3 (27 ส.ค. ค่ำ) · หลังขึ้นจริงใช้ telemetry ยุบ semanticCatcher/clarifier/planner ซ้ำ ค่อยลดเป็น 2
+- [x] P0-1 eligibility-before-move (earliest job รวม current + compare-move) race test ผ่าน production helper (27 ส.ค. ค่ำ)
 - [ ] H (product decision): auto-release รายงานที่ถูก gate ยึดเมื่อไม่กรอกข้อมูล — ยังไม่ทำ

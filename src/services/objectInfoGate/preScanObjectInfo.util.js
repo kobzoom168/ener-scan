@@ -9,29 +9,40 @@
  * P0-1 (Codex 27 ส.ค.): persistence contract เป็น typed ตามผลเขียนจริง — ไม่มี redis / SET ล้ม
  * = ห้ามอ้าง "รับข้อมูลไว้แล้ว" · bind แยก no_source / redis_unavailable / redis_error
  */
-import { setValueWithTtlTyped, moveKeyAtomic, getDelKey, delKeyTyped } from "../../redis/scanV2Redis.js";
+import { setValueWithTtlTyped, getDelKey, delKeyTyped, getValueTyped, moveKeyIfValueAtomic } from "../../redis/scanV2Redis.js";
 
 /**
- * มี scan job อื่นของ uid ที่สร้าง "หลัง" capturedAt ไหม (ไม่นับ job ปัจจุบัน) — ใช้พิสูจน์ "รูปถัดไปเท่านั้น"
- * แม้ Redis ล่มตอนรูปแรกแล้วกลับมาตอนรูปสอง (Codex รอบสี่ P0-1)
- * @returns {Promise<{ ok: true, priorJobId: string|null } | { ok: false, message?: string }>}
+ * job "แรกสุด" ของ uid ที่สร้างหลัง capturedAt (รวม current) — ORDER BY created_at ASC, id ASC (tie-break deterministic)
+ * production eligibility helper (Codex รอบห้า): current bind ได้เฉพาะเมื่อ earliest === current
+ * deps.supabase ใช้ inject client จำลองใน test — logic query/decision เดียวกับ production
+ * @returns {Promise<{ ok: true, earliestJobId: string|null } | { ok: false, message?: string }>}
  */
-async function findPriorJobSinceDefault(lineUserId, capturedAtMs, currentJobId) {
+export async function findEarliestJobSince(lineUserId, capturedAtMs, deps = {}) {
   try {
-    const { supabase } = await import("../../config/supabase.js");
+    const supabase = deps.supabase || (await import("../../config/supabase.js")).supabase;
     const { data, error } = await supabase
       .from("scan_jobs")
       .select("id,created_at")
       .eq("line_user_id", String(lineUserId))
       .gt("created_at", new Date(Number(capturedAtMs) || 0).toISOString())
-      .neq("id", String(currentJobId))
       .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
       .limit(1);
     if (error) return { ok: false, message: String(error.message || error).slice(0, 120) };
-    return { ok: true, priorJobId: Array.isArray(data) && data[0]?.id ? String(data[0].id) : null };
+    return { ok: true, earliestJobId: Array.isArray(data) && data[0]?.id ? String(data[0].id) : null };
   } catch (e) {
     return { ok: false, message: String(e?.message || e).slice(0, 120) };
   }
+}
+
+/** pure decision: current ขยับ MOVE ได้ไหม */
+export function decideBindEligibility({ currentJobId, earliest }) {
+  if (!earliest || earliest.ok !== true) return { eligible: false, status: "stale_check_failed", message: earliest?.message || "earliest_job_check_failed" };
+  if (!earliest.earliestJobId) return { eligible: false, status: "stale_check_failed", message: "current_job_not_visible" };
+  if (String(earliest.earliestJobId) !== String(currentJobId)) {
+    return { eligible: false, status: "stale_after_prior_job", priorJobIdPrefix: String(earliest.earliestJobId).slice(0, 8) };
+  }
+  return { eligible: true, status: "eligible" };
 }
 
 export const PRE_SCAN_INFO_TTL_SEC = 15 * 60;
@@ -83,73 +94,71 @@ export async function storePreScanObjectInfo(lineUserId, rawText, deps = {}) {
 }
 
 /**
- * bind ตอน "รับรูป/สร้าง job" (Codex รอบสอง #1): ย้าย uid-scoped → job-scoped แบบ atomic (Lua MOVE)
- * → รูปถัดไปเท่านั้นที่ได้ข้อมูล · สองรูปติดกัน รูปแรกได้ รูปสองไม่ได้
- * typed (P0-1): no_source (ไม่มีข้อมูลค้าง = ปกติ) ≠ redis_unavailable ≠ redis_error
- * stale (Codex รอบสี่): Redis ล่มตอนรูป A (source ค้าง) → กลับมาตอนรูป B → move ได้ แต่ต้องตรวจว่ามี job
- * ของ uid ที่สร้างหลัง capturedAt (= รูป A) หรือไม่ → มี = discard (ลบ destination) ห้าม bind กับ B ·
- * ตรวจไม่ได้ (DB ล้ม/ค่าเพี้ยน) = discard เช่นกัน (gate ถามตามปกติ) — ไม่อาศัย best-effort DEL อย่างเดียว
+ * bind ตอน "รับรูป/สร้าง job" — eligibility-before-move (Codex รอบห้า P0-1):
+ *  1. typed GET source (ไม่ลบ) → อ่าน capturedAt
+ *  2. earliest job ของ uid หลัง capturedAt (รวม current, ORDER created_at ASC, id ASC)
+ *  3. MOVE ได้เฉพาะเมื่อ earliest === current · earliest เป็น job อื่น = stale_after_prior_job ห้าม MOVE (source คงไว้ให้เจ้าของ/หมด TTL)
+ *  4. MOVE แบบ compare value ที่อ่านไว้ — provisional ชุดใหม่ที่เขียนทับระหว่าง precheck กับ MOVE ไม่ถูกย้าย (source_changed)
+ *  5. DB/parse ตรวจไม่ได้ → ห้าม MOVE (stale_check_failed) fail-safe ให้ gate ถามตามปกติ · ไม่พึ่ง best-effort DEL
  * @returns {Promise<
  *   { bound: true, status: "moved" } |
- *   { bound: false, status: "no_source" | "redis_unavailable" | "redis_error" | "invalid_input" | "stale_after_prior_job" | "stale_check_failed", message?: string, sourceCleared?: boolean, destinationCleared?: boolean, priorJobIdPrefix?: string }
+ *   { bound: false, status: "no_source" | "redis_unavailable" | "redis_error" | "invalid_input" | "stale_after_prior_job" | "stale_check_failed" | "source_changed", message?: string, priorJobIdPrefix?: string }
  * >}
  */
 export async function bindPreScanInfoToJob(lineUserId, jobId, deps = {}) {
   const uid = String(lineUserId || "").trim();
   const jid = String(jobId || "").trim();
   if (!uid || !jid) return { bound: false, status: "invalid_input" };
-  const move = deps.move || moveKeyAtomic;
-  const del = deps.del || delKeyTyped;
-  let res;
-  try {
-    res = await move(key(uid), jobKey(jid), PRE_SCAN_INFO_TTL_SEC);
-  } catch (e) {
-    res = { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
-  }
-  const status = res && typeof res === "object" ? res.status : null;
-  if (status === "no_source") return { bound: false, status: "no_source" };
-  if (status === "redis_unavailable") return { bound: false, status: "redis_unavailable" };
-  if (status !== "moved" || !res.value) {
-    // redis_error (หรือผลไม่ typed): source อาจค้าง → ล้าง best-effort (ชั้นแรก) · ชั้นสอง = stale check ตอน bind ถัดไป
-    let sourceCleared = false;
-    try {
-      const d = await del(key(uid));
-      sourceCleared = Boolean(d && d.ok === true);
-    } catch {
-      sourceCleared = false;
-    }
-    return { bound: false, status: "redis_error", message: res?.message, sourceCleared };
-  }
+  const get = deps.get || getValueTyped;
+  const moveIfValue = deps.moveIfValue || moveKeyIfValueAtomic;
+  const findEarliest = deps.findEarliestJobSince || ((u, at) => findEarliestJobSince(u, at, { supabase: deps.supabase }));
 
-  // moved → พิสูจน์ "รูปถัดไปเท่านั้น": ห้ามมี job อื่นของ uid ที่สร้างหลัง capturedAt
+  // 1) typed GET (ไม่ลบ)
+  let g;
+  try {
+    g = await get(key(uid));
+  } catch (e) {
+    g = { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
+  }
+  const gs = g && typeof g === "object" ? g.status : null;
+  if (gs === "missing") return { bound: false, status: "no_source" };
+  if (gs === "redis_unavailable") return { bound: false, status: "redis_unavailable" };
+  if (gs !== "got" || !g.value) return { bound: false, status: "redis_error", message: g?.message || "untyped_get_result" };
+  const observed = String(g.value);
   let capturedAt = 0;
   try {
-    const j = JSON.parse(res.value);
-    capturedAt = Number(j?.at) || 0;
+    capturedAt = Number(JSON.parse(observed)?.at) || 0;
   } catch {
     capturedAt = 0;
   }
-  const discard = async (st, extra = {}) => {
-    let destinationCleared = false;
-    try {
-      const d = await del(jobKey(jid));
-      destinationCleared = Boolean(d && d.ok === true);
-    } catch {
-      destinationCleared = false;
-    }
-    return { bound: false, status: st, destinationCleared, ...extra };
-  };
-  if (!capturedAt) return discard("stale_check_failed", { message: "captured_at_missing" });
-  const findPrior = deps.findPriorJobSince || findPriorJobSinceDefault;
-  let prior;
+  if (!capturedAt) return { bound: false, status: "stale_check_failed", message: "captured_at_missing" };
+
+  // 2-3) eligibility ผ่าน production helper + pure decision
+  let earliest;
   try {
-    prior = await findPrior(uid, capturedAt, jid);
+    earliest = await findEarliest(uid, capturedAt);
   } catch (e) {
-    prior = { ok: false, message: String(e?.message || e).slice(0, 120) };
+    earliest = { ok: false, message: String(e?.message || e).slice(0, 120) };
   }
-  if (!prior || prior.ok !== true) return discard("stale_check_failed", { message: prior?.message || "prior_job_check_failed" });
-  if (prior.priorJobId) return discard("stale_after_prior_job", { priorJobIdPrefix: String(prior.priorJobId).slice(0, 8) });
-  return { bound: true, status: "moved" };
+  const decision = decideBindEligibility({ currentJobId: jid, earliest });
+  if (!decision.eligible) {
+    const { eligible, ...rest } = decision;
+    return { bound: false, ...rest };
+  }
+
+  // 4) compare-and-MOVE
+  let res;
+  try {
+    res = await moveIfValue(key(uid), jobKey(jid), observed, PRE_SCAN_INFO_TTL_SEC);
+  } catch (e) {
+    res = { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
+  }
+  const st = res && typeof res === "object" ? res.status : null;
+  if (st === "moved" && res.value) return { bound: true, status: "moved" };
+  if (st === "no_source") return { bound: false, status: "no_source" };
+  if (st === "value_mismatch") return { bound: false, status: "source_changed" };
+  if (st === "redis_unavailable") return { bound: false, status: "redis_unavailable" };
+  return { bound: false, status: "redis_error", message: res?.message || "untyped_move_result" };
 }
 
 /**

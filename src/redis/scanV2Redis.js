@@ -626,6 +626,58 @@ export async function getDelKey(key) {
   }
 }
 
+/**
+ * GET แบบ typed ไม่ลบ (P0-1 รอบห้า: อ่าน capturedAt ก่อนตัดสิน eligibility)
+ * @returns {Promise<{ status: "got", value: string } | { status: "missing" | "redis_unavailable" | "redis_error", value: null, message?: string }>}
+ */
+export async function getValueTyped(key) {
+  let r = null;
+  try {
+    r = await getScanV2Redis();
+  } catch (e) {
+    return { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
+  }
+  if (!r) return { status: "redis_unavailable", value: null };
+  try {
+    const v = await r.get(kDedupe(key));
+    if (v == null) return { status: "missing", value: null };
+    return { status: "got", value: String(v) };
+  } catch (e) {
+    return { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
+  }
+}
+
+/**
+ * Atomic compare-and-MOVE (Lua): ย้าย src → dst เฉพาะเมื่อค่าใน src ยังเท่ากับ expectedValue ที่อ่านไว้ตอน precheck
+ * — provisional ชุดใหม่ที่ถูกเขียนทับระหว่าง GET กับ MOVE จะไม่ถูกย้าย (value_mismatch)
+ * @returns {Promise<{ status: "moved", value: string } | { status: "no_source" | "value_mismatch" | "redis_unavailable" | "redis_error", value: null, message?: string }>}
+ */
+export async function moveKeyIfValueAtomic(srcKey, dstKey, expectedValue, ttlSec) {
+  let r = null;
+  try {
+    r = await getScanV2Redis();
+  } catch (e) {
+    return { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
+  }
+  if (!r) return { status: "redis_unavailable", value: null };
+  const lua = `
+    local v = redis.call("get", KEYS[1])
+    if not v then return nil end
+    if v ~= ARGV[2] then return "__MISMATCH__" end
+    redis.call("del", KEYS[1])
+    redis.call("set", KEYS[2], v, "EX", ARGV[1])
+    return v
+  `;
+  try {
+    const v = await r.eval(lua, 2, kDedupe(srcKey), kDedupe(dstKey), String(Math.max(60, Number(ttlSec) || 900)), String(expectedValue ?? ""));
+    if (v == null) return { status: "no_source", value: null };
+    if (v === "__MISMATCH__") return { status: "value_mismatch", value: null };
+    return { status: "moved", value: String(v) };
+  } catch (e) {
+    return { status: "redis_error", value: null, message: String(e?.message || e).slice(0, 120) };
+  }
+}
+
 /** best-effort DEL (typed) — ใช้ล้าง source ที่ค้างหลัง move ล้ม */
 export async function delKeyTyped(key) {
   let r = null;

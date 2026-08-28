@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 
 const expectUnavailable = process.argv.includes("--expect-unavailable");
-const { moveKeyAtomic, getDelKey, setValueWithTtlTyped, delKeyTyped, getScanV2Redis } = await import("../src/redis/scanV2Redis.js");
+const { moveKeyAtomic, getDelKey, setValueWithTtlTyped, delKeyTyped, getScanV2Redis, getValueTyped, moveKeyIfValueAtomic } = await import("../src/redis/scanV2Redis.js");
 
 const run = randomUUID().slice(0, 8);
 const K = (n) => `objinfo:it:${run}:${n}`;
@@ -17,7 +17,7 @@ const check = (name, ok, detail) => { results.push({ name, ok: Boolean(ok), deta
 
 let redis = null;
 try { redis = await getScanV2Redis(); } catch { redis = null; }
-const keys = [K("src"), K("dst"), K("src2"), K("dst2"), K("gd"), K("set")];
+const keys = [K("src"), K("dst"), K("src2"), K("dst2"), K("gd"), K("set"), K("cas"), K("casdst")];
 const prefix = String(process.env.SCAN_V2_REDIS_PREFIX || "ener-scan:v2:").trim() || "ener-scan:v2:";
 const raw = (k) => `${prefix}dedupe:${k}`;
 
@@ -29,6 +29,10 @@ async function main() {
     check("unavailable/error: set typed", s.ok === false && (s.reason === "redis_unavailable" || s.reason === "redis_error"), s);
     check("unavailable/error: move typed", m.status === "redis_unavailable" || m.status === "redis_error", m);
     check("unavailable/error: getdel typed", g.status === "redis_unavailable" || g.status === "redis_error", g);
+    const gv = await getValueTyped(K("cas"));
+    const cm = await moveKeyIfValueAtomic(K("cas"), K("casdst"), "x", 60);
+    check("unavailable/error: get typed", gv.status === "redis_unavailable" || gv.status === "redis_error", gv);
+    check("unavailable/error: compare-move typed", cm.status === "redis_unavailable" || cm.status === "redis_error", cm);
     return;
   }
   if (!redis) { check("redis client available", false, "getScanV2Redis() returned null — REDIS_URL?"); return; }
@@ -71,7 +75,19 @@ async function main() {
   const moved = [ma, mb].filter((x) => x.status === "moved");
   check("two binders: exactly one moved", moved.length === 1 && [ma, mb].some((x) => x.status === "no_source"), { ma, mb });
 
-  // 6) del typed
+  // 6) compare-and-move (eligibility-before-move รอบห้า): GET typed → mismatch ไม่ย้าย → match ย้าย → missing
+  await setValueWithTtlTyped(K("cas"), "OLD", 120);
+  const gv = await getValueTyped(K("cas"));
+  check("get typed got", gv.status === "got" && gv.value === "OLD", gv);
+  const mm = await moveKeyIfValueAtomic(K("cas"), K("casdst"), "NEW", 120);
+  check("compare-move mismatch → value_mismatch, source intact", mm.status === "value_mismatch" && (await redis.get(raw(K("cas")))) === "OLD" && (await redis.get(raw(K("casdst")))) === null, mm);
+  const mv = await moveKeyIfValueAtomic(K("cas"), K("casdst"), "OLD", 120);
+  check("compare-move match → moved, dest has value, source gone", mv.status === "moved" && (await redis.get(raw(K("casdst")))) === "OLD" && (await redis.get(raw(K("cas")))) === null, mv);
+  const gm = await getValueTyped(K("cas"));
+  check("get typed missing after move", gm.status === "missing", gm);
+  const mn = await moveKeyIfValueAtomic(K("cas"), K("casdst"), "OLD", 120);
+  check("compare-move missing source → no_source", mn.status === "no_source", mn);
+  // 7) del typed
   const d = await delKeyTyped(K("dst"));
   check("del typed ok", d.ok === true, d);
 }
