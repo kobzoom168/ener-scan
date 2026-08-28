@@ -97,7 +97,7 @@ function thaiShortDate(iso) {
 /**
  * "สิทธิ์สแกนเหลือกี่ครั้ง" — อ่านสิทธิ์จริง (checkScanAccess + free quota วันนี้) ห้ามเดา ห้ามสัญญา
  * @param {{
- *   access: { paidUntil?: string|null, paidRemainingScans?: number|null } | null,
+ *   access: { allowed?: boolean, reason?: string, remaining?: number|null, paidUntil?: string|null, paidRemainingScans?: number|null } | null,
  *   freeRemainingToday: number|null,
  *   freeQuotaPerDay: number|null,
  *   nextResetLabel?: string,
@@ -108,6 +108,12 @@ export function buildQuotaRemainingReply({ access, freeRemainingToday, freeQuota
   const paidUntil = access?.paidUntil || null;
   const paidRemaining = Number(access?.paidRemainingScans);
   const paidActive = Boolean(paidUntil && new Date(paidUntil).getTime() > now.getTime());
+  const allowed = access?.allowed === true;
+  const isNum = (x) => x != null && x !== "" && Number.isFinite(Number(x));
+  const fr = isNum(freeRemainingToday) ? Math.max(0, Number(freeRemainingToday)) : null;
+  const fl = isNum(freeQuotaPerDay) ? Number(freeQuotaPerDay) : null;
+  // label จาก resolver เป็น "พรุ่งนี้เวลา 00:00 น. (รีเซ็ตโควตฟรี)" — ตัดวงเล็บท้ายออกให้อ่านเป็นประโยค
+  const resetLabel = String(nextResetLabel || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
   const lines = [];
   if (paidActive) {
     const until = thaiShortDate(paidUntil);
@@ -118,18 +124,23 @@ export function buildQuotaRemainingReply({ access, freeRemainingToday, freeQuota
     } else {
       lines.push(`สิทธิ์แพ็กยังเปิดอยู่${until ? ` ถึง ${until}` : ""}ครับ`);
     }
-  } else {
-    lines.push("ตอนนี้ไม่มีสิทธิ์แพ็กเปิดอยู่ครับ");
+    if (fr != null && fl != null) lines.push(fr > 0 ? `สแกนฟรีวันนี้เหลือ ${fr} จาก ${fl} ครั้ง` : `สแกนฟรีวันนี้ใช้ครบ ${fl} ครั้งแล้ว`);
+    return lines.join(" ");
   }
-  const isNum = (x) => x != null && x !== "" && Number.isFinite(Number(x));
+  // ไม่มีแพ็ก active แต่ authority บอก allowed (ฟรีเหลือ / โบนัสชวนเพื่อน / อื่น ๆ) → ห้ามพูดว่า "ใช้ครบแล้ว"
+  // (เคสจริง staging 28 ส.ค.: checkScanAccess allowed:true reason:free ผ่านโบนัส แต่ freeRemaining=0 → ข้อความเดิมบอกหมดสิทธิ์ = ขัดกับ authority)
+  if (allowed) {
+    if (fr != null && fl != null && fr > 0) {
+      return `ตอนนี้ไม่มีสิทธิ์แพ็กเปิดอยู่ครับ สแกนฟรีวันนี้เหลือ ${fr} จาก ${fl} ครั้ง`;
+    }
+    const rem = Number(access?.remaining);
+    const remTxt = Number.isFinite(rem) && rem > 0 && rem < 999999 ? ` ใช้ได้อีก ${rem} ครั้ง` : "";
+    return `ตอนนี้ยังมีสิทธิ์สแกนอยู่ครับ${remTxt} ส่งรูปมาได้เลย`;
+  }
+  lines.push("ตอนนี้ไม่มีสิทธิ์แพ็กเปิดอยู่ครับ");
   // ห้าม hardcode/เดาจำนวนฟรี: ไม่มีค่าจริงจาก checkScanAccess = ไม่พูดถึงฟรีเลย
-  if (isNum(freeRemainingToday) && isNum(freeQuotaPerDay)) {
-    const fr = Math.max(0, Number(freeRemainingToday));
-    lines.push(
-      fr > 0
-        ? `สแกนฟรีวันนี้เหลือ ${fr} จาก ${freeQuotaPerDay} ครั้ง`
-        : `สแกนฟรีวันนี้ใช้ครบ ${freeQuotaPerDay} ครั้งแล้ว${nextResetLabel ? ` ${nextResetLabel}` : ""}`,
-    );
+  if (fr != null && fl != null) {
+    lines.push(fr > 0 ? `สแกนฟรีวันนี้เหลือ ${fr} จาก ${fl} ครั้ง` : `สแกนฟรีวันนี้ใช้ครบ ${fl} ครั้งแล้ว${resetLabel ? ` รอบใหม่${resetLabel}` : ""}`);
   }
   return lines.join(" ");
 }
@@ -168,7 +179,7 @@ export async function resolvePackageQuestionReply(deps) {
   const freeRemaining = Number.isFinite(Number(access.freeScansRemaining)) ? Number(access.freeScansRemaining) : null;
   const freeLimit = Number.isFinite(Number(access.freeScansLimit)) ? Number(access.freeScansLimit) : null;
   const used = Number.isFinite(Number(access.usedScans)) ? Number(access.usedScans) : null;
-  const nextResetLabel = freeRemaining === 0 && typeof deps.nextResetLabel === "function" ? String(deps.nextResetLabel(used ?? 0) || "") : "";
+  const nextResetLabel = access.allowed !== true && freeRemaining === 0 && typeof deps.nextResetLabel === "function" ? String(deps.nextResetLabel(used ?? 0) || "") : "";
   return {
     kind,
     text: buildQuotaRemainingReply({ access, freeRemainingToday: freeRemaining, freeQuotaPerDay: freeLimit, nextResetLabel }),

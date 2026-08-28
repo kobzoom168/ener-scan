@@ -167,14 +167,19 @@ test("P0-C replies (copy ตาม Codex): ราคา/ครั้งตรง
     assert.doesNotMatch(t, /พิมพ์ จ่าย|จ่าย \d|แจ้งกลับ|เช็กสถานะให้ก่อน|http|QR|คิวอาร์|ระบบ/, `ห้ามชวนจ่าย/สัญญา/QR: ${t}`);
   }
   const now = new Date("2026-08-28T04:00:00Z");
-  const q1 = u.buildQuotaRemainingReply({ access: { paidUntil: "2026-09-10T00:00:00Z", paidRemainingScans: 3 }, freeRemainingToday: 1, freeQuotaPerDay: 2, now });
+  const q1 = u.buildQuotaRemainingReply({ access: { allowed: true, reason: "paid", paidUntil: "2026-09-10T00:00:00Z", paidRemainingScans: 3 }, freeRemainingToday: 1, freeQuotaPerDay: 2, now });
   assert.match(q1, /สิทธิ์แพ็กเหลือ 3 ครั้ง ใช้ได้ถึง 10 ก\.ย\./); assert.match(q1, /สแกนฟรีวันนี้เหลือ 1 จาก 2 ครั้ง/);
-  const q2 = u.buildQuotaRemainingReply({ access: { paidUntil: null, paidRemainingScans: 0 }, freeRemainingToday: 0, freeQuotaPerDay: 2, nextResetLabel: "รีเซ็ตเที่ยงคืน", now });
-  assert.match(q2, /ไม่มีสิทธิ์แพ็กเปิดอยู่/); assert.match(q2, /ใช้ครบ 2 ครั้งแล้ว รีเซ็ตเที่ยงคืน/);
-  const q3 = u.buildQuotaRemainingReply({ access: { paidUntil: "2026-09-10T00:00:00Z", paidRemainingScans: 999999 }, freeRemainingToday: null, freeQuotaPerDay: null, now });
+  const q2 = u.buildQuotaRemainingReply({ access: { allowed: false, reason: "payment_required", paidUntil: null, paidRemainingScans: 0 }, freeRemainingToday: 0, freeQuotaPerDay: 2, nextResetLabel: "พรุ่งนี้เวลา 00:00 น. (รีเซ็ตโควตฟรี)", now });
+  assert.match(q2, /ไม่มีสิทธิ์แพ็กเปิดอยู่/); assert.match(q2, /ใช้ครบ 2 ครั้งแล้ว รอบใหม่พรุ่งนี้เวลา 00:00 น\.$/); assert.doesNotMatch(q2, /\(/, "ตัดวงเล็บ label ออก");
+  const q3 = u.buildQuotaRemainingReply({ access: { allowed: true, reason: "paid", paidUntil: "2026-09-10T00:00:00Z", paidRemainingScans: 999999 }, freeRemainingToday: null, freeQuotaPerDay: null, now });
   assert.match(q3, /สแกนไม่จำกัด/); assert.doesNotMatch(q3, /สแกนฟรี/, "ไม่รู้ฟรี = ไม่พูดตัวเลขฟรี (ห้าม hardcode)");
-  const q4 = u.buildQuotaRemainingReply({ access: { paidUntil: "2026-08-01T00:00:00Z", paidRemainingScans: 5 }, freeRemainingToday: 2, freeQuotaPerDay: 2, now });
-  assert.match(q4, /ไม่มีสิทธิ์แพ็กเปิดอยู่/, "แพ็กหมดอายุ = ไม่ active แม้ remaining>0");
+  const q4 = u.buildQuotaRemainingReply({ access: { allowed: true, reason: "free", paidUntil: "2026-08-01T00:00:00Z", paidRemainingScans: 5 }, freeRemainingToday: 2, freeQuotaPerDay: 2, now });
+  assert.match(q4, /ไม่มีสิทธิ์แพ็กเปิดอยู่/, "แพ็กหมดอายุ = ไม่ active แม้ remaining>0"); assert.match(q4, /เหลือ 2 จาก 2/);
+  // เคสจริง staging 28 ส.ค. 06:10Z: authority allowed:true (โบนัสชวนเพื่อน) แต่ free วันนี้ 0 → ห้ามบอก "ใช้ครบแล้ว/ไม่มีสิทธิ์" ขัดกับ authority
+  const q5 = u.buildQuotaRemainingReply({ access: { allowed: true, reason: "free", remaining: 1, paidUntil: null, paidRemainingScans: 999977 }, freeRemainingToday: 0, freeQuotaPerDay: 1, nextResetLabel: "พรุ่งนี้เวลา 00:00 น. (รีเซ็ตโควตฟรี)", now });
+  assert.match(q5, /ยังมีสิทธิ์สแกนอยู่ครับ ใช้ได้อีก 1 ครั้ง ส่งรูปมาได้เลย/); assert.doesNotMatch(q5, /ใช้ครบ|ไม่มีสิทธิ์|รีเซ็ต|พรุ่งนี้/, "allowed=true ห้ามบอกหมดสิทธิ์");
+  const q6 = u.buildQuotaRemainingReply({ access: { allowed: true, reason: "free", remaining: 999999, paidUntil: null }, freeRemainingToday: 0, freeQuotaPerDay: 1, now });
+  assert.equal(q6, "ตอนนี้ยังมีสิทธิ์สแกนอยู่ครับ ส่งรูปมาได้เลย", "remaining sentinel ≥999999 ไม่โชว์เลขดิบ");
   assert.equal(EXTERNAL.ai, 0, "AI=0");
 });
 
@@ -236,3 +241,13 @@ test("P0-C webhook (static contract): router อยู่หลังจับ�
   const fb = orch.slice(orch.indexOf("function safeTextForBlockedClaim"), orch.indexOf("function safeTextForBlockedClaim") + 900);
   assert.doesNotMatch(fb.replace(/\/\/.*$/gm, ""), /แจ้งกลับ|เช็กสถานะให้ก่อน/, "fallback สิทธิ์ห้ามสัญญางานอนาคต");
 });
+
+test("P0-C webhook (static contract): 'จ่าย 49' ขณะสิทธิ์ยังอยู่ (PAYMENT_INTENT_BLOCKED_ACCESS_ALLOWED) → deterministic pay_not_needed ทันที ไม่ผ่าน Phase-1 Gemini hook (เคสจริง staging 28 ส.ค. AI=2 ตอบลอย)", () => {
+  const src = readFileSync(new URL("../src/routes/lineWebhook.js", import.meta.url), "utf8");
+  const i = src.indexOf('event: "PAYMENT_INTENT_BLOCKED_ACCESS_ALLOWED"');
+  assert.ok(i > 0);
+  const seg = src.slice(i, src.indexOf("return true;", i));
+  assert.doesNotMatch(seg, /invokePhase1PaymentRoute|invokePhase1Gemini/, "ห้ามยิง Phase-1 Gemini hook ก่อนตอบ pay_not_needed");
+  assert.match(seg, /sendNonScanReply\(/); assert.match(seg, /inboundMessageId: event\.message\?\.id/); assert.match(seg, /speakerRoleOverride: "admin"/);
+});
+

@@ -1662,7 +1662,8 @@ async function handlePaymentCommandTextRoute({
         replyType: payload.replyType,
       }),
     );
-    if ((await invokePhase1PaymentRoute()).handled) return true;
+    // P0-C (Codex 28 ส.ค. — เคสจริง staging "จ่าย 49" ขณะสิทธิ์ยังอยู่): เดิมยิง Phase-1 Gemini hook ก่อน
+    // → planner noop + consult ตอบลอย "เดี๋ยวมีตัวเลือกเด้งให้แตะ" (AI=2) — ตอบข้อเท็จจริง deterministic ทันที AI=0
     await sendNonScanReply({
       client,
       userId,
@@ -1671,6 +1672,8 @@ async function handlePaymentCommandTextRoute({
       semanticKey: payload.semanticKey,
       text: payload.primaryText,
       alternateTexts: payload.alternateTexts,
+      speakerRoleOverride: "admin",
+      inboundMessageId: event.message?.id ? String(event.message.id) : null,
     });
     return true;
   }
