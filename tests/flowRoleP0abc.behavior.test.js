@@ -58,7 +58,8 @@ test("P0-A: ack ข้อมูลชิ้น — inbound A → 1 · inbound B 
   assert.equal(c.payloads.length, 2);
   // webhook ส่ง inboundMessageId ที่ call site ack จริง
   const wh = src("src/routes/lineWebhook.js");
-  const i = wh.indexOf('replyType: ok ? "pre_scan_object_info_ack"');
+  // P0-F: replyType ตาม target (ackType) แต่ contract เดิมคง: ack ผูก inboundMessageId ในบล็อกเดียวกัน
+  const i = wh.indexOf('replyType: ok ? ackType : "pre_scan_object_info_store_failed"');
   assert.ok(i > 0);
   assert.match(wh.slice(i, i + 900), /inboundMessageId: event\.message\?\.id/);
   assert.equal(EXTERNAL.ai, 0, "AI=0");
