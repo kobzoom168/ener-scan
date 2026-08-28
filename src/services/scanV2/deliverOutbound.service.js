@@ -817,6 +817,12 @@ async function handleScanResultPostDelivery(msg, payload) {
 
   const job = await getScanJobById(jobId);
   if (!job) return;
+  // idempotent: รายงานที่ถูก hold แล้วปล่อย (gate answer / form / fail-open) พา related_job_id มาแล้ว
+  // (P0-F follow-up) — ถ้า job เคย delivered แล้ว ห้าม mark/หักสิทธิ์ซ้ำ
+  if (String(job.status || "") === "delivered") {
+    console.log(JSON.stringify({ event: "SCAN_RESULT_POST_DELIVERY_ALREADY_DELIVERED", jobIdPrefix: String(jobId).slice(0, 8) }));
+    return;
+  }
 
   await updateScanJob(jobId, {
     status: "delivered",

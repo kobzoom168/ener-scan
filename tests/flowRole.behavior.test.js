@@ -877,3 +877,22 @@ test("P0-F: webhook ตัดสินเจ้าของก่อนเก็
     assert.ok(!/(แจ้งกลับ|เดี๋ยว.*ให้)/.test(s), `ห้ามสัญญาลอย: ${s}`);
   }
 });
+
+test("P0-F follow-up: held report ปล่อยหลังตอบ gate ต้องพา related_job_id (job ไม่ค้าง delivery_queued → ไม่ถูกนับเป็น active ผิด) (static)", () => {
+  const src = readFileSync(new URL("../src/services/objectInfoGate/objectInfoGate.service.js", import.meta.url), "utf8");
+  const p = src.indexOf("const pending = {");
+  assert.ok(src.slice(p, p + 700).includes("relatedJobId: relatedJobId ? String(relatedJobId) : null"), "pending ต้องเก็บ relatedJobId");
+  const r = src.indexOf("async function reEnqueueHeldReport(");
+  assert.ok(src.slice(r, r + 500).includes("related_job_id: pending?.relatedJobId || null"), "re-enqueue ต้องส่ง related_job_id");
+});
+
+test("P0-F follow-up: post-delivery idempotent — job ที่ delivered แล้วห้าม mark/หักสิทธิ์ซ้ำ (static)", () => {
+  const src = readFileSync(new URL("../src/services/scanV2/deliverOutbound.service.js", import.meta.url), "utf8");
+  const f = src.indexOf("async function handleScanResultPostDelivery(");
+  const body = src.slice(f, f + 1400);
+  const guard = body.indexOf('=== "delivered"');
+  const mark = body.indexOf('status: "delivered"');
+  const dec = body.indexOf("decrementUserPaidRemainingScans(");
+  assert.ok(guard > 0 && guard < mark && mark < dec, "guard delivered ต้องมาก่อน mark และก่อนหักสิทธิ์");
+  assert.ok(body.includes("SCAN_RESULT_POST_DELIVERY_ALREADY_DELIVERED"));
+});

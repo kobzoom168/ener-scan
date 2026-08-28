@@ -223,6 +223,9 @@ export async function maybeHoldReportForObjectInfo({ client, lineUserId, payload
       objectForm: String(rp.object?.objectUnderstanding?.objectForm || ""),
       scanResultId: String(payload.scanResultId || rp.scanId || ""),
       outboundPayload: payload,
+      // P0-F follow-up: ปล่อยรายงานหลังตอบ ต้องพา related_job_id ไปด้วย ไม่งั้น job ค้าง delivery_queued
+      // ตลอดกาล → findActiveJobsForUid นับเป็น "หลายชิ้นในคิว" ผิด (smoke 09:53Z)
+      relatedJobId: relatedJobId ? String(relatedJobId) : null,
       heldAt: Date.now(),
     };
     // token ฟอร์ม HTML (กรอกแยกฟิลด์) — อายุเท่าคีย์สำรอง
@@ -337,6 +340,7 @@ async function reEnqueueHeldReport(lineUserId, pending) {
     line_user_id: lineUserId,
     kind: "scan_result",
     priority: 50,
+    related_job_id: pending?.relatedJobId || null,
     payload_json: pending.outboundPayload,
     status: "queued",
   });
