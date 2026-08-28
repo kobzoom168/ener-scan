@@ -678,6 +678,26 @@ export async function moveKeyIfValueAtomic(srcKey, dstKey, expectedValue, ttlSec
   }
 }
 
+/**
+ * EXPIRE แบบ typed (P0-B): ขยายอายุ evidence ของ job ที่ติด auth challenge ให้เท่าหน้าต่าง challenge
+ * @returns {Promise<{ ok: true, existed: boolean } | { ok: false, reason: "redis_unavailable" | "redis_error", message?: string }>}
+ */
+export async function expireKeyTyped(key, ttlSec) {
+  let r = null;
+  try {
+    r = await getScanV2Redis();
+  } catch (e) {
+    return { ok: false, reason: "redis_error", message: String(e?.message || e).slice(0, 120) };
+  }
+  if (!r) return { ok: false, reason: "redis_unavailable" };
+  try {
+    const n = await r.expire(kDedupe(key), Math.min(Math.max(Number(ttlSec) || 60, 60), 45 * 86400));
+    return { ok: true, existed: Number(n) === 1 };
+  } catch (e) {
+    return { ok: false, reason: "redis_error", message: String(e?.message || e).slice(0, 120) };
+  }
+}
+
 /** best-effort DEL (typed) — ใช้ล้าง source ที่ค้างหลัง move ล้ม */
 export async function delKeyTyped(key) {
   let r = null;

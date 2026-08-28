@@ -73,3 +73,4 @@
 - [x] Codex เคาะงบ AI ต่อเทิร์น = 3 (27 ส.ค. ค่ำ) · หลังขึ้นจริงใช้ telemetry ยุบ semanticCatcher/clarifier/planner ซ้ำ ค่อยลดเป็น 2
 - [x] P0-1 eligibility-before-move (earliest job รวม current + compare-move) race test ผ่าน production helper (27 ส.ค. ค่ำ)
 - [ ] H (product decision): auto-release รายงานที่ถูก gate ยึดเมื่อไม่กรอกข้อมูล — ยังไม่ทำ
+- [ ] **P1 (Codex 28 ส.ค. 2026) inbound history blind spot:** ข้อความ user บน path gate-answer (objectInfoGate answer) และ pre-scan capture (preScanObjectInfo) ไม่ถูกบันทึกลง `line_conversation_messages` (user row หาย) + `scan_result_error_text` (auth challenge) ไม่ลง history → chat quality monitor มองไม่เห็น · แก้แยกรอบ ห้ามขยาย patch flow-role P0-A/B/C · เคสจริง smoke staging 28 ส.ค. 03:10:42Z / 03:16:44Z / 03:44:52Z

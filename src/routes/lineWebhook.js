@@ -4488,6 +4488,83 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
   }
 }
 
+/**
+ * P0-C router: ค่าครู X ได้กี่ครั้ง / แพ็กนี้ดีไหม / สิทธิ์สแกนเหลือกี่ครั้ง → SSOT, admin, AI=0, ไม่เปิด QR
+ * @returns {Promise<boolean>} true = ตอบแล้ว (turn จบ)
+ */
+async function maybeHandlePackageQuestion({ client, event, userId, text, lowerText }) {
+  const t = String(text || "").trim();
+  if (!t) return false;
+  // คำสั่งจ่ายจริง ("จ่าย 49") = payment route เดิมเท่านั้น (QR) — router นี้ไม่แตะ
+  if (isPaymentCommand(t, lowerText)) return false;
+  const { classifyPackageQuestion, buildPackagePriceCountReply, buildPackageWorthReply, buildQuotaRemainingReply } = await import(
+    "../utils/packageQuestion.util.js"
+  );
+  const kind = classifyPackageQuestion(t);
+  if (kind === "other") return false;
+
+  const offer = loadActiveScanOffer();
+  let replyText = null;
+  if (kind === "pack_price_count") {
+    replyText = buildPackagePriceCountReply({ offer, text: t });
+  } else if (kind === "pack_worth") {
+    replyText = buildPackageWorthReply({ offer, text: t });
+  } else if (kind === "quota_remaining") {
+    // สิทธิ์จริงจากระบบ — อ่านไม่ได้ = บอกตรง ๆ ไม่เดา ไม่สัญญา
+    let access = null;
+    try {
+      access = await checkScanAccess({ userId });
+    } catch (e) {
+      console.error(JSON.stringify({ event: "PACKAGE_QUESTION_ACCESS_READ_FAILED", uidPrefix: String(userId).slice(0, 8), message: String(e?.message || e).slice(0, 120) }));
+    }
+    if (!access) {
+      replyText = "ตอนนี้อ่านสิทธิ์ไม่ได้ชั่วคราวครับ ลองถามใหม่อีกครั้งได้เลย";
+    } else {
+      // checkScanAccess คืน usedScans/freeScansRemaining/freeScansLimit (SSOT เดียวกับ gate สแกน)
+      const freeUsed = Number.isFinite(Number(access.usedScans)) ? Number(access.usedScans) : null;
+      const ctxFree =
+        freeUsed == null
+          ? null
+          : resolveScanOfferAccessContext({
+              offer,
+              freeUsedToday: freeUsed,
+              paidUntil: access.paidUntil ?? null,
+              paidRemainingScans: Number(access.paidRemainingScans) || 0,
+            });
+      replyText = buildQuotaRemainingReply({
+        access,
+        freeRemainingToday: Number.isFinite(Number(access.freeScansRemaining)) ? Number(access.freeScansRemaining) : ctxFree ? ctxFree.freeRemainingToday : null,
+        freeQuotaPerDay: Number.isFinite(Number(access.freeScansLimit)) ? Number(access.freeScansLimit) : offer.freeQuotaPerDay ?? null,
+        nextResetLabel: ctxFree ? ctxFree.nextResetLabel : "",
+      });
+    }
+  }
+  if (!replyText) return false;
+
+  const r = await sendNonScanReply({
+    client,
+    userId,
+    replyToken: event.replyToken,
+    replyType: `package_question_${kind}`,
+    semanticKey: `package_question_${kind}`,
+    text: replyText,
+    alternateTexts: [],
+    speakerRoleOverride: "admin",
+    inboundMessageId: event.message?.id ? String(event.message.id) : null,
+  });
+  console.log(
+    JSON.stringify({
+      event: "PACKAGE_QUESTION_DETERMINISTIC",
+      uidPrefix: String(userId).slice(0, 8),
+      kind,
+      aiCallCount: 0,
+      sent: r?.sent === true,
+      suppressed: r?.suppressed === true,
+    }),
+  );
+  return true;
+}
+
 async function handleTextMessage({ client, event, userId, session }) {
   const text = String(event.message.text || "").trim();
   const lowerText = text.toLowerCase();
@@ -4551,6 +4628,9 @@ async function handleTextMessage({ client, event, userId, session }) {
         text: ok ? PRE_SCAN_INFO_ACK_TEXT : PRE_SCAN_INFO_STORE_FAILED_TEXT,
         alternateTexts: [],
         speakerRoleOverride: "admin",
+        // P0-A (Codex 28 ส.ค.): ack ผูกกับ inbound — ข้อมูลชิ้นคนละข้อความต้องได้ ack ทุกครั้ง
+        // แม้ copy เหมือนเดิม · LINE redelivery (messageId เดิม) ยังส่งครั้งเดียว
+        inboundMessageId: event.message?.id ? String(event.message.id) : null,
       });
       if (ok) {
         console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_CAPTURED", uidPrefix: String(userId).slice(0, 8), sent: r?.sent === true }));
@@ -4560,6 +4640,15 @@ async function handleTextMessage({ client, event, userId, session }) {
       return;
     }
   } catch { /* จับไม่ได้ = flow เดิม */ }
+
+  // P0-C (Codex 28 ส.ค. 2026): คำถามราคา/แพ็ก/สิทธิ์ = ข้อเท็จจริงจาก SSOT ตอบ deterministic เสียงแอดมิน AI=0
+  // ไม่เปิด QR (QR เฉพาะคำสั่งจ่าย เช่น "จ่าย 49" ที่ isPaymentCommand ส่งให้ payment route เดิม)
+  // เคสจริง smoke 28 ส.ค.: "ค่าครู 49 บาทได้กี่ครั้ง" ตก AI แล้ว guard สิทธิ์แทนด้วย "เดี๋ยวแจ้งกลับ" (handoff ค้าง)
+  try {
+    if (await maybeHandlePackageQuestion({ client, event, userId, text, lowerText })) return;
+  } catch (e) {
+    console.error(JSON.stringify({ event: "PACKAGE_QUESTION_ROUTER_ERROR", uidPrefix: String(userId).slice(0, 8), message: String(e?.message || e).slice(0, 120) }));
+  }
 
   // ปุ่ม "เข้าใจแล้ว" จากการ์ดกติกาตอน add เพื่อน (กบ 8 ส.ค.)
   try {

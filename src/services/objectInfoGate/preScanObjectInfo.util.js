@@ -9,7 +9,7 @@
  * P0-1 (Codex 27 ส.ค.): persistence contract เป็น typed ตามผลเขียนจริง — ไม่มี redis / SET ล้ม
  * = ห้ามอ้าง "รับข้อมูลไว้แล้ว" · bind แยก no_source / redis_unavailable / redis_error
  */
-import { setValueWithTtlTyped, getDelKey, delKeyTyped, getValueTyped, moveKeyIfValueAtomic } from "../../redis/scanV2Redis.js";
+import { setValueWithTtlTyped, getDelKey, delKeyTyped, getValueTyped, moveKeyIfValueAtomic, moveKeyAtomic, expireKeyTyped } from "../../redis/scanV2Redis.js";
 
 /**
  * job "แรกสุด" ของ uid ที่สร้างหลัง capturedAt (รวม current) — ORDER BY created_at ASC, id ASC (tie-break deterministic)
@@ -46,6 +46,8 @@ export function decideBindEligibility({ currentJobId, earliest }) {
 }
 
 export const PRE_SCAN_INFO_TTL_SEC = 15 * 60;
+/** sanity cap ของ evidence ที่ถูกขยายอายุ (P0-B) — redis TTL คืออายุจริง */
+export const PRE_SCAN_INFO_MAX_AGE_SEC = 24 * 3600;
 const key = (uid) => `objinfo:preprovided:${uid}`;
 const jobKey = (jobId) => `objinfo:pre_job:${jobId}`;
 
@@ -184,11 +186,54 @@ export async function consumeJobPreScanInfo(jobId, deps = {}) {
   try {
     const j = JSON.parse(res.value);
     if (!j || !j.raw) return null;
-    if (Date.now() - Number(j.at || 0) > PRE_SCAN_INFO_TTL_SEC * 1000) return null;
+    // P0-B: อายุจริงคุมด้วย redis TTL ของ key (ถูกขยายตามหน้าต่าง auth challenge ได้) —
+    // wall-clock เดิม 15 นาทีจะทิ้ง evidence ของ retry ทั้งที่ key ยังอยู่ · คง sanity cap 24 ชม.
+    if (Date.now() - Number(j.at || 0) > PRE_SCAN_INFO_MAX_AGE_SEC * 1000) return null;
     return { raw: String(j.raw), at: Number(j.at) };
   } catch {
     return null;
   }
+}
+
+/**
+ * P0-B (Codex 28 ส.ค. 2026): job ติด auth challenge → evidence ต้องอยู่รอรูปถ่ายแก้ตัวจนหมดหน้าต่าง challenge
+ * ขยายอายุ key job-scoped (ไม่คืนเป็น uid-scoped — กันติดรูปอื่น) · typed
+ * @returns {Promise<{ ok: true, existed: boolean } | { ok: false, reason: string, message?: string }>}
+ */
+export async function extendJobPreScanInfoTtl(jobId, ttlSec, deps = {}) {
+  const jid = String(jobId || "").trim();
+  if (!jid) return { ok: false, reason: "invalid_input" };
+  const expire = deps.expire || expireKeyTyped;
+  try {
+    const r = await expire(jobKey(jid), Math.max(Number(ttlSec) || 0, PRE_SCAN_INFO_TTL_SEC));
+    if (r && typeof r === "object" && r.ok === true) return { ok: true, existed: r.existed === true };
+    return { ok: false, reason: r?.reason || "redis_error", message: r?.message };
+  } catch (e) {
+    return { ok: false, reason: "redis_error", message: String(e?.message || e).slice(0, 120) };
+  }
+}
+
+/**
+ * P0-B: ย้าย evidence จาก job ที่ถูก challenge → job รูปแก้ตัวที่พิสูจน์แล้ว (atomic MOVE ใน Lua เดียว)
+ * ownership มาจาก challenge จริง (originalJobId ใน key authchal) · MOVE ทำให้ evidence อยู่ได้ทีละ job เดียว
+ * @returns {Promise<{ moved: true } | { moved: false, status: "no_source" | "redis_unavailable" | "redis_error" | "invalid_input", message?: string }>}
+ */
+export async function transferJobPreScanInfo(fromJobId, toJobId, deps = {}) {
+  const from = String(fromJobId || "").trim();
+  const to = String(toJobId || "").trim();
+  if (!from || !to || from === to) return { moved: false, status: "invalid_input" };
+  const move = deps.move || moveKeyAtomic;
+  let res;
+  try {
+    res = await move(jobKey(from), jobKey(to), PRE_SCAN_INFO_TTL_SEC);
+  } catch (e) {
+    return { moved: false, status: "redis_error", message: String(e?.message || e).slice(0, 120) };
+  }
+  const st = res && typeof res === "object" ? res.status : null;
+  if (st === "moved" && res.value) return { moved: true };
+  if (st === "no_source") return { moved: false, status: "no_source" };
+  if (st === "redis_unavailable") return { moved: false, status: "redis_unavailable" };
+  return { moved: false, status: "redis_error", message: res?.message || "untyped_move_result" };
 }
 
 /** DB insert ล้ม → คืน evidence กลับให้ job (ยังไม่หาย) แล้ว gate ถามตามปกติ — typed */

@@ -28,6 +28,8 @@ const lastNonScanTextByUser = new Map();
 /** @type {Map<string, { key: string, norm: string, at: number }>} */
 const lastSemanticByUser = new Map();
 
+/** P0-A: inbound messageId ล่าสุดที่ทำให้ส่ง reply (dedupe ผูก inbound) */
+const lastInboundByUser = new Map();
 const DEFAULT_SEMANTIC_WINDOW_MS = 22_000;
 
 /**
@@ -84,31 +86,54 @@ function resolveDedupeKey(replyType, semanticKey) {
  * @param {string} dedupeKey
  * @param {string} bodyText normalized multi-line body used for exact + semantic body match
  */
-function evaluateDuplicate(userId, dedupeKey, bodyText) {
+/**
+ * P0-A (Codex 28 ส.ค. 2026): reply ที่ผูกกับ inbound message (เช่น ack ข้อมูลชิ้นก่อนรูป)
+ * ต้องได้ส่งทุกครั้งที่ inbound เป็นคนละข้อความ แม้ copy ตอบเหมือนเดิม —
+ * dedupe จึงผูกกับ inbound messageId: record ล่าสุดของ user มาจาก inbound เดียวกัน = ซ้ำ
+ * (LINE redelivery) · inbound คนละอัน = ไม่ซ้ำ · caller ที่ไม่ส่ง inboundMessageId = พฤติกรรมเดิม
+ * @param {string} userId
+ * @param {string} dedupeKey
+ * @param {string} bodyText normalized multi-line body used for exact + semantic body match
+ * @param {string|null} [inboundMessageId]
+ */
+function evaluateDuplicate(userId, dedupeKey, bodyText, inboundMessageId = null) {
   const uid = String(userId || "").trim();
   const trimmed = String(bodyText || "").replace(/\r\n/g, "\n");
   const lastExact = lastNonScanTextByUser.get(uid) || null;
-  const exactDuplicate = lastExact !== null && lastExact === trimmed;
+  let exactDuplicate = lastExact !== null && lastExact === trimmed;
 
   const norm = normalizeForSemantic(trimmed);
   const sem = lastSemanticByUser.get(uid);
   const now = Date.now();
   const windowMs = resolveSemanticWindowMs();
-  const semanticDuplicate = Boolean(
+  let semanticDuplicate = Boolean(
     sem &&
       sem.key === dedupeKey &&
       sem.norm === norm &&
       now - sem.at < windowMs,
   );
 
+  const inbound = String(inboundMessageId || "").trim();
+  let inboundScoped = false;
+  if (inbound) {
+    const lastInbound = String(lastInboundByUser.get(uid) || "").trim();
+    // inbound คนละข้อความ → ห้ามนับซ้ำ (ทั้ง exact และ semantic) · inbound เดิม = redelivery → คงกฎเดิม
+    if (lastInbound !== inbound) {
+      inboundScoped = true;
+      exactDuplicate = false;
+      semanticDuplicate = false;
+    }
+  }
+
   return {
     blocked: exactDuplicate || semanticDuplicate,
     exactDuplicate,
     semanticDuplicate,
+    inboundScoped,
   };
 }
 
-function recordSent(userId, dedupeKey, bodyText) {
+function recordSent(userId, dedupeKey, bodyText, inboundMessageId = null) {
   const uid = String(userId || "").trim();
   const trimmed = String(bodyText || "").replace(/\r\n/g, "\n");
   lastNonScanTextByUser.set(uid, trimmed);
@@ -117,6 +142,9 @@ function recordSent(userId, dedupeKey, bodyText) {
     norm: normalizeForSemantic(trimmed),
     at: Date.now(),
   });
+  const inbound = String(inboundMessageId || "").trim();
+  if (inbound) lastInboundByUser.set(uid, inbound);
+  else lastInboundByUser.delete(uid);
 }
 
 
@@ -245,6 +273,11 @@ export async function sendNonScanReply(opts) {
      * ข้อความ (text ใช้เป็น altText/dedupe/fallback) — sticker ท้ายถูกงดในโหมดการ์ด
      */
     flexMessage = null,
+    /**
+     * @type {string|null|undefined} — P0-A: LINE inbound messageId ที่ reply นี้ตอบ
+     * เมื่อส่งมา dedupe จะผูกกับ inbound: inbound คนละอันส่งเสมอ · inbound เดิม (redelivery) ซ้ำได้
+     */
+    inboundMessageId = null,
   } = opts;
 
   const uid = String(userId || "").trim();
@@ -340,7 +373,7 @@ export async function sendNonScanReply(opts) {
 
   for (let i = 0; i < candidates.length; i += 1) {
     const body = candidates[i];
-    lastEval = evaluateDuplicate(uid, dedupeKey, body);
+    lastEval = evaluateDuplicate(uid, dedupeKey, body, inboundMessageId);
     if (!lastEval.blocked) {
       if (turnPerf) {
         turnPerf.log("NON_SCAN_REPLY_ROUTED", {
@@ -377,7 +410,7 @@ export async function sendNonScanReply(opts) {
         } else {
           await replyFlex(client, replyToken, flexToSend);
         }
-        recordSent(uid, dedupeKey, body);
+        recordSent(uid, dedupeKey, body, inboundMessageId);
         void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride));
         if (scanOfferMeta && typeof scanOfferMeta === "object") {
           console.log(
@@ -450,7 +483,7 @@ export async function sendNonScanReply(opts) {
       } else {
         await replyText(client, replyToken, body, quickReply);
       }
-      recordSent(uid, dedupeKey, body);
+      recordSent(uid, dedupeKey, body, inboundMessageId);
       void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride));
       if (scanOfferMeta && typeof scanOfferMeta === "object") {
         console.log(
@@ -492,6 +525,7 @@ export async function sendNonScanReply(opts) {
     replyType: rt,
     semanticKey: skLog,
     exactDuplicate: lastEval.exactDuplicate,
+    inboundScoped: lastEval.inboundScoped === true,
     semanticDuplicate: lastEval.semanticDuplicate,
     suppressed: true,
     retryCount: candidates.length,
@@ -501,6 +535,7 @@ export async function sendNonScanReply(opts) {
     sent: false,
     suppressed: true,
     exactDuplicate: lastEval.exactDuplicate,
+    inboundScoped: lastEval.inboundScoped === true,
     semanticDuplicate: lastEval.semanticDuplicate,
     retryCount: candidates.length,
   };
@@ -634,6 +669,7 @@ export async function sendNonScanSequenceReply(opts) {
     replyType: rt,
     semanticKey: skLog,
     exactDuplicate: lastEval.exactDuplicate,
+    inboundScoped: lastEval.inboundScoped === true,
     semanticDuplicate: lastEval.semanticDuplicate,
     suppressed: true,
     retryCount: candidates.length,
@@ -644,6 +680,7 @@ export async function sendNonScanSequenceReply(opts) {
     sent: false,
     suppressed: true,
     exactDuplicate: lastEval.exactDuplicate,
+    inboundScoped: lastEval.inboundScoped === true,
     semanticDuplicate: lastEval.semanticDuplicate,
     retryCount: candidates.length,
   };
@@ -754,7 +791,9 @@ export async function sendNonScanPushMessage(opts) {
       speakerRoleOverride = null,
       /** @type {{ type: "sticker", packageId: string, stickerId: string } | null | undefined} */
       trailingStickerMessage = null,
-    } = opts;
+    /** P0-A: ผูก dedupe กับ inbound messageId (optional — ไม่ส่ง = พฤติกรรมเดิม) */
+    inboundMessageId = null,
+  } = opts;
 
     const uid = String(userId || "").trim();
     const dedupeKey = resolveDedupeKey(replyType, semanticKey);
@@ -816,14 +855,14 @@ export async function sendNonScanPushMessage(opts) {
 
     for (let i = 0; i < candidates.length; i += 1) {
       const body = candidates[i];
-      lastEval = evaluateDuplicate(uid, dedupeKey, body);
+      lastEval = evaluateDuplicate(uid, dedupeKey, body, inboundMessageId);
       if (!lastEval.blocked) {
         if (stickerPush) {
           await pushTextWithTrailingSticker(client, uid, body, stickerPush);
         } else {
           await pushText(client, uid, body);
         }
-        recordSent(uid, dedupeKey, body);
+        recordSent(uid, dedupeKey, body, inboundMessageId);
         void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride));
         logTelemetryEvent(TelemetryEvents.NONSCAN_GATEWAY_PUSH, {
           userId: uid,
@@ -857,6 +896,7 @@ export async function sendNonScanPushMessage(opts) {
       replyType: rt,
       semanticKey: skLog,
       exactDuplicate: lastEval.exactDuplicate,
+    inboundScoped: lastEval.inboundScoped === true,
       semanticDuplicate: lastEval.semanticDuplicate,
       suppressed: true,
       retryCount: candidates.length,
@@ -866,6 +906,7 @@ export async function sendNonScanPushMessage(opts) {
       sent: false,
       suppressed: true,
       exactDuplicate: lastEval.exactDuplicate,
+    inboundScoped: lastEval.inboundScoped === true,
       semanticDuplicate: lastEval.semanticDuplicate,
       retryCount: candidates.length,
     };

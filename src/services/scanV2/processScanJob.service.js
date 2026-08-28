@@ -61,6 +61,8 @@ import {
   setValueWithTtl,
   clearDedupeKey,
 } from "../../redis/scanV2Redis.js";
+// P0-B (Codex 28 ส.ค. 2026): evidence ข้อมูลชิ้นก่อนรูปต้องตามไป job รูปแก้ตัวของ auth challenge
+import { extendJobPreScanInfoTtl, transferJobPreScanInfo } from "../objectInfoGate/preScanObjectInfo.util.js";
 import { visionMatchPair } from "./visionSidecar.client.js";
 import { buildReportPayloadFromGlobalBaseline } from "./buildReportPayloadFromGlobalBaseline.service.js";
 import { tryCrossAccountExactBaselineReusePhase2A } from "./tryCrossAccountExactBaselineReuse.service.js";
@@ -132,6 +134,36 @@ const NEAR_EXACT_DEDUP_THRESHOLD = 4;
  * @param {object} jobRow from claim_next_scan_job
  * @returns {Promise<void>}
  */
+/**
+ * P0-B: รูปแก้ตัวพิสูจน์แล้ว (challenge proven) → ย้าย evidence จาก job ที่ถูก challenge มา job นี้ (atomic)
+ * ownership = originalJobId ที่ฝังใน key authchal ตอน issue เท่านั้น · ไม่มี = ไม่ย้าย (ไม่เดา)
+ */
+async function transferChallengedPreScanInfo({ chal, jobId, lineUserId }) {
+  const originalJobId = String(chal?.jobId || "").trim();
+  const base = {
+    path: "worker-scan",
+    jobIdPrefix: idPrefix8(jobId),
+    lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+    originalJobIdPrefix: originalJobId ? originalJobId.slice(0, 8) : null,
+  };
+  if (!originalJobId) {
+    console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_RETRY_NO_OWNER", ...base }));
+    return;
+  }
+  try {
+    const t = await transferJobPreScanInfo(originalJobId, jobId);
+    if (t.moved === true) {
+      console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_RETRY_BOUND", ...base }));
+    } else if (t.status === "no_source") {
+      console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_RETRY_NO_SOURCE", ...base }));
+    } else {
+      console.error(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_RETRY_BIND_FAILED", ...base, status: t.status, message: t.message || null }));
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_RETRY_BIND_FAILED", ...base, status: "exception", message: String(e?.message || e).slice(0, 120) }));
+  }
+}
+
 export async function processScanJob(workerId, jobRow) {
   const workerTurnStartMs = Date.now();
   if (
@@ -395,6 +427,7 @@ export async function processScanJob(workerId, jobRow) {
           if (thumbOk) {
             await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
             challengeProven = true; // ของจริงพิสูจน์แล้ว — ข้าม forensic รอบนี้
+            await transferChallengedPreScanInfo({ chal, jobId, lineUserId }); // P0-B
           } else {
             // ชิ้นถูกแต่ลืมนิ้ว — คีย์ยังอยู่ ให้ถ่ายซ้ำได้จน TTL หมด ไม่กินสิทธิ์
             console.log(
@@ -432,6 +465,7 @@ export async function processScanJob(workerId, jobRow) {
           if (thumbOkSoft) {
             await clearDedupeKey(`scan_v2:authchal:${lineUserId}`);
             challengeProven = true;
+            await transferChallengedPreScanInfo({ chal, jobId, lineUserId }); // P0-B
             console.log(
               JSON.stringify({
                 event: "AUTH_CHALLENGE_SOFT_PASS",
@@ -821,8 +855,24 @@ export async function processScanJob(workerId, jobRow) {
         try {
           await setValueWithTtl(
             `scan_v2:authchal:${lineUserId}`,
-            JSON.stringify({ b: upload.storage_bucket, p: upload.storage_path }),
+            // P0-B: ฝัง originalJobId = เจ้าของ evidence ข้อมูลชิ้น (รูปแก้ตัวที่พิสูจน์แล้วรับต่อ)
+            JSON.stringify({ b: upload.storage_bucket, p: upload.storage_path, jobId: String(jobId) }),
             env.AUTH_CHALLENGE_TTL_SEC,
+          );
+        } catch {}
+        // P0-B: evidence ของ job นี้ต้องอยู่รอรูปแก้ตัวจนหมดหน้าต่าง challenge (job-scoped เท่านั้น)
+        try {
+          const held = await extendJobPreScanInfoTtl(jobId, env.AUTH_CHALLENGE_TTL_SEC + 120);
+          console.log(
+            JSON.stringify({
+              event: held.ok === true ? "PRE_SCAN_OBJECT_INFO_CHALLENGE_HELD" : "PRE_SCAN_OBJECT_INFO_CHALLENGE_HOLD_FAILED",
+              path: "worker-scan",
+              jobIdPrefix: idPrefix8(jobId),
+              lineUserIdPrefix: lineUserIdPrefix8(lineUserId),
+              existed: held.ok === true ? held.existed : null,
+              ttlSec: env.AUTH_CHALLENGE_TTL_SEC + 120,
+              ...(held.ok === true ? {} : { reason: held.reason, message: held.message || null }),
+            }),
           );
         } catch {}
         console.log(
