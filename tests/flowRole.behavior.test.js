@@ -170,7 +170,7 @@ test("A: webhook ส่ง ack แอดมิน 1 ครั้ง ไม่เ
   assert.ok(at > 0 && at < orch, "gate ต้องอยู่ก่อน orchestrator");
   const { PRE_SCAN_INFO_ACK_TEXT } = await import("../src/services/objectInfoGate/preScanObjectInfo.util.js");
   assert.doesNotMatch(PRE_SCAN_INFO_ACK_TEXT, /เด่นด้าน|พลัง|คะแนน|วัด|รุ่น|ปี/);
-  assert.match(src.slice(at, at + 1200), /speakerRoleOverride: "admin"/);
+  assert.match(src.slice(at, at + 3000), /speakerRoleOverride: "admin"/); // บล็อกยาวขึ้นหลัง P0-F (decide เจ้าของก่อนเก็บ)
 });
 
 /* ---------- B: purpose free-text (เคส 2) ---------- */
@@ -415,12 +415,13 @@ test("P0-1: store typed — no redis / SET throw / SET error / untyped → ok:fa
   assert.doesNotMatch(m.PRE_SCAN_INFO_STORE_FAILED_TEXT, /เด่นด้าน|พลัง|คะแนน|รับข้อมูล.*แล้ว|เก็บ.*แล้ว|\d+\s*นาที|ระบบ/);
   // webhook: ok=false → replyType store_failed + failure text แล้ว return (ไม่ไหลลง orchestrator)
   const src = readFileSync("src/routes/lineWebhook.js", "utf8");
-  const at = src.indexOf("const stored = await storePreScanObjectInfo(userId, text);");
+  const at = src.indexOf("stored = await storePreScanObjectInfo(userId, text);");
   assert.ok(at > 0, "webhook ต้องใช้ผล typed ของ store");
-  const blk = src.slice(at, at + 1600);
+  const blk = src.slice(at, at + 1800);
+  assert.match(blk, /ackText = PRE_SCAN_INFO_ACK_TEXT/); // next_image path ใช้ copy เดิม
   assert.match(blk, /const ok = stored && stored\.ok === true/);
-  assert.match(blk, /ok \? "pre_scan_object_info_ack" : "pre_scan_object_info_store_failed"/);
-  assert.match(blk, /ok \? PRE_SCAN_INFO_ACK_TEXT : PRE_SCAN_INFO_STORE_FAILED_TEXT/);
+  assert.match(blk, /ok \? ackType : "pre_scan_object_info_store_failed"/); // P0-F: ackType ตาม target แต่ failure copy เดิม
+  assert.match(blk, /ok \? ackText : PRE_SCAN_INFO_STORE_FAILED_TEXT/);
   assert.match(blk, /PRE_SCAN_OBJECT_INFO_STORE_FAILED/);
   assert.match(blk, /\n      return;\n    }/);
   assert.ok(at < src.indexOf("const invokePhase1GeminiOrchestrator = async"), "ยังอยู่ก่อน orchestrator");
@@ -762,4 +763,117 @@ test("P0-E: dedup/cached path (ไม่มี reportPayload แต่มี sca
   const phashAt = psj.indexOf('dedupType: "phash",');
   assert.ok(phashAt > 0);
   assert.ok(psj.slice(phashAt, phashAt + 400).includes("scanResultId: dupMatch.scan_result_id"), "phash dedup outbound ต้องมี scanResultId");
+});
+
+/* ---------- P0-F (Codex 28 ส.ค. หลัง smoke 50c4c2f): ข้อความข้อมูลชิ้นระหว่างรูป A ประมวลผล = ของ A ---------- */
+function fakeSupabaseJobs(rows) {
+  // เคารพ eq/in/gte/lte/order/limit จริง (findActiveJobsForUid ใช้ครบชุดนี้)
+  return {
+    from: () => {
+      const q = { filters: [], orders: [], lim: null };
+      const b = {
+        select: () => b,
+        eq: (c, v) => { q.filters.push((r) => String(r[c]) === String(v)); return b; },
+        in: (c, arr) => { q.filters.push((r) => arr.map(String).includes(String(r[c]))); return b; },
+        gte: (c, v) => { q.filters.push((r) => r[c] >= v); return b; },
+        lte: (c, v) => { q.filters.push((r) => r[c] <= v); return b; },
+        gt: (c, v) => { q.filters.push((r) => r[c] > v); return b; },
+        order: (c, { ascending = true } = {}) => { q.orders.push([c, ascending]); return b; },
+        limit: (n) => { q.lim = n; return b; },
+        then: (res, rej) => {
+          try {
+            let out = rows.filter((r) => q.filters.every((f) => f(r)));
+            out.sort((x, y) => { for (const [c, asc] of q.orders) { if (x[c] < y[c]) return asc ? -1 : 1; if (x[c] > y[c]) return asc ? 1 : -1; } return 0; });
+            if (q.lim != null) out = out.slice(0, q.lim);
+            res({ data: out, error: null });
+          } catch (e) { rej(e); }
+        },
+      };
+      return b;
+    },
+  };
+}
+
+test("P0-F: decision — ไม่มี active → next_image · 1 งาน → current_job · หลายงาน/DB error → ambiguous (fail-safe ไม่ผูกอะไร)", async () => {
+  const { decidePreScanTarget, findActiveJobsForUid, PRE_SCAN_ACTIVE_JOB_STATUSES } = await import("../src/services/objectInfoGate/preScanObjectInfo.util.js");
+  const uid = "U" + "6".repeat(32);
+  const now = Date.now();
+  const j = (id, status, agoMs, u = uid) => ({ id, status, created_at: new Date(now - agoMs).toISOString(), line_user_id: u });
+  // 0 งาน
+  assert.deepEqual(decidePreScanTarget(await findActiveJobsForUid(uid, now, { supabase: fakeSupabaseJobs([]) })), { target: "next_image" });
+  // งานที่ส่งผลแล้ว/ล้ม ไม่นับ
+  assert.deepEqual(decidePreScanTarget(await findActiveJobsForUid(uid, now, { supabase: fakeSupabaseJobs([j("d1", "delivered", 30_000), j("f1", "failed", 20_000)]) })), { target: "next_image" });
+  // 1 งาน active ที่เริ่มก่อนข้อความ → current_job
+  assert.deepEqual(decidePreScanTarget(await findActiveJobsForUid(uid, now, { supabase: fakeSupabaseJobs([j("A", "queued", 15_000), j("d1", "delivered", 60_000)]) })), { target: "current_job", jobId: "A" });
+  // งาน hold (delivery_queued) ก็เป็น current ได้
+  assert.equal(decidePreScanTarget(await findActiveJobsForUid(uid, now, { supabase: fakeSupabaseJobs([j("H", "delivery_queued", 40_000)]) })).jobId, "H");
+  // งานที่เริ่ม "หลัง" ข้อความ ไม่ใช่เจ้าของ (created_at > textAt)
+  assert.deepEqual(decidePreScanTarget(await findActiveJobsForUid(uid, now, { supabase: fakeSupabaseJobs([j("later", "queued", -5_000)]) })), { target: "next_image" });
+  // งานเก่าเกิน 20 นาที ไม่นับ
+  assert.deepEqual(decidePreScanTarget(await findActiveJobsForUid(uid, now, { supabase: fakeSupabaseJobs([j("old", "queued", 25 * 60_000)]) })), { target: "next_image" });
+  // หลายงาน → ambiguous
+  const amb = decidePreScanTarget(await findActiveJobsForUid(uid, now, { supabase: fakeSupabaseJobs([j("A", "queued", 15_000), j("B", "queued", 8_000)]) }));
+  assert.equal(amb.target, "ambiguous"); assert.equal(amb.reason, "multiple_active_jobs");
+  // คนอื่นไม่ปน
+  assert.deepEqual(decidePreScanTarget(await findActiveJobsForUid(uid, now, { supabase: fakeSupabaseJobs([j("X", "queued", 10_000, "U" + "7".repeat(32))]) })), { target: "next_image" });
+  // DB error → ambiguous
+  const errChain = { then: (res) => res({ data: null, error: { message: "timeout" } }) };
+  for (const k of ["select", "eq", "in", "gte", "lte", "gt", "neq", "order", "limit"]) errChain[k] = () => errChain;
+  const dbErr = { from: () => errChain };
+  const d = decidePreScanTarget(await findActiveJobsForUid(uid, now, { supabase: dbErr }));
+  assert.equal(d.target, "ambiguous"); assert.ok(String(d.reason).startsWith("db_error"));
+  assert.ok(PRE_SCAN_ACTIVE_JOB_STATUSES.includes("queued") && PRE_SCAN_ACTIVE_JOB_STATUSES.includes("delivery_queued"));
+});
+
+test("P0-F: ownership — ข้อความระหว่าง A ประมวลผล → key ของ A (ไม่แตะ preprovided) · B มาต่อทันที → no_source (ไม่ inherit) · gate ของ A consume ได้ · race text∥B พร้อมกัน → A เท่านั้น · เขียนล้ม = typed ไม่อ้างว่าเก็บแล้ว", async () => {
+  const { bindPreScanInfoToCurrentJob, bindPreScanInfoToJob, consumeJobPreScanInfo, storePreScanObjectInfo } = await import("../src/services/objectInfoGate/preScanObjectInfo.util.js");
+  const uid = "U" + "8".repeat(32);
+  const mem = new Map(); const r = fakeRedis(mem);
+  // A กำลังประมวลผล → ผูกตรง
+  const w = await bindPreScanInfoToCurrentJob("A", "พระปิดตา วัดท่าสะแบง", { set: r.set });
+  assert.deepEqual(w, { ok: true });
+  assert.ok(mem.has("objinfo:pre_job:A"));
+  assert.ok(!mem.has(`objinfo:preprovided:${uid}`), "current_job path ห้ามเขียน preprovided");
+  // B มาต่อ → ingestion bind หา preprovided ไม่เจอ
+  const b = await bindPreScanInfoToJob(uid, "B", { get: r.get, moveIfValue: r.moveIfValue, findEarliestJobSince: async () => ({ ok: true, earliestJobId: "B" }) });
+  assert.equal(b.bound, false); assert.equal(b.status, "no_source");
+  assert.ok(!mem.has("objinfo:pre_job:B"));
+  // gate ของ A consume ได้ครั้งเดียว
+  const pre = await consumeJobPreScanInfo("A", { getdel: r.getdel });
+  assert.equal(pre.raw, "พระปิดตา วัดท่าสะแบง");
+  assert.equal(await consumeJobPreScanInfo("A", { getdel: r.getdel }), null);
+  // race: ข้อความ (current_job path) กับ B ingestion พร้อมกัน — B ต้องไม่ได้ ไม่ว่าลำดับ
+  for (const order of ["text_first", "b_first"]) {
+    const m2 = new Map(); const r2 = fakeRedis(m2);
+    const textP = () => bindPreScanInfoToCurrentJob("A2", "เหรียญหลวงพ่อคูณ", { set: r2.set });
+    const bP = () => bindPreScanInfoToJob(uid, "B2", { get: r2.get, moveIfValue: r2.moveIfValue, findEarliestJobSince: async () => ({ ok: true, earliestJobId: "B2" }) });
+    const [tw, bw] = await Promise.all(order === "text_first" ? [textP(), bP()] : [bP(), textP()].reverse());
+    assert.equal(tw.ok, true); assert.equal(bw.bound, false);
+    assert.ok(m2.has("objinfo:pre_job:A2") && !m2.has("objinfo:pre_job:B2"));
+  }
+  // เขียนล้ม (redis ล่ม) → ok:false typed
+  const down = fakeRedis(new Map(), { up: false });
+  const f = await bindPreScanInfoToCurrentJob("A3", "พระสมเด็จ", { set: down.set });
+  assert.equal(f.ok, false); assert.equal(f.reason, "redis_unavailable");
+  // next_image path เดิมยังทำงาน (regression)
+  const m3 = new Map(); const r3 = fakeRedis(m3);
+  assert.deepEqual(await storePreScanObjectInfo(uid, "พระรอด วัดมหาวัน", { set: r3.set }), { ok: true });
+  assert.ok(m3.has(`objinfo:preprovided:${uid}`));
+});
+
+test("P0-F: webhook ตัดสินเจ้าของก่อนเก็บ (static) · ambiguous ใช้ replyType แยก · copy ไม่มีคำว่า ระบบ", async () => {
+  const src = readFileSync(new URL("../src/routes/lineWebhook.js", import.meta.url), "utf8");
+  const at = src.indexOf("if (isPreScanObjectInfoText(text)) {");
+  const blk = src.slice(at, at + 2500);
+  const iDecide = blk.indexOf("decidePreScanTarget(");
+  const iStore = blk.indexOf("storePreScanObjectInfo(userId, text)");
+  const iCurrent = blk.indexOf("bindPreScanInfoToCurrentJob(decision.jobId, text)");
+  assert.ok(iDecide > 0 && iDecide < iStore && iDecide < iCurrent, "ต้อง decide ก่อนเขียนทั้งสอง path");
+  assert.ok(blk.includes('"pre_scan_object_info_ambiguous"'));
+  assert.ok(blk.includes("target: decision.target"), "log CAPTURED ต้องบอก target");
+  const { PRE_SCAN_INFO_CURRENT_JOB_ACK_TEXT, PRE_SCAN_INFO_AMBIGUOUS_TEXT } = await import("../src/services/objectInfoGate/preScanObjectInfo.util.js");
+  for (const s of [PRE_SCAN_INFO_CURRENT_JOB_ACK_TEXT, PRE_SCAN_INFO_AMBIGUOUS_TEXT]) {
+    assert.ok(!/ระบบ/.test(s));
+    assert.ok(!/(แจ้งกลับ|เดี๋ยว.*ให้)/.test(s), `ห้ามสัญญาลอย: ${s}`);
+  }
 });

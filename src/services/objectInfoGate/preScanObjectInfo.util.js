@@ -253,3 +253,78 @@ export async function restoreJobPreScanInfo(jobId, info, deps = {}) {
 export const PRE_SCAN_INFO_ACK_TEXT = "รับข้อมูลชิ้นนี้ไว้แล้วครับ ส่งรูปมาได้เลย เดี๋ยวผมส่งให้อาจารย์ดู";
 /** copy เมื่อบันทึกไม่ได้ (deterministic, โทนเดิม, ไม่สัญญา, ไม่ตีความพลัง) — gate จะถามตามปกติหลังอ่านเสร็จ */
 export const PRE_SCAN_INFO_STORE_FAILED_TEXT = "รอบนี้ยังบันทึกข้อมูลชิ้นไม่ได้ครับ ส่งรูปมาได้เลย เดี๋ยวผมถามข้อมูลอีกทีหลังอาจารย์ดูเสร็จ";
+
+/* ---------- P0-F (Codex 28 ส.ค.): ข้อมูลชิ้นที่พิมพ์ "ระหว่าง" รูปกำลังประมวลผล = ของงานปัจจุบัน ไม่ใช่รูปถัดไป ---------- */
+
+/** สถานะที่ถือว่างานยัง "เป็นเจ้าของ" ข้อความข้อมูลชิ้นได้ (ยังไม่ส่งผล/ยังถูก hold) */
+export const PRE_SCAN_ACTIVE_JOB_STATUSES = ["queued", "processing", "running", "delivery_queued"];
+/** งานที่เก่ากว่านี้ไม่นับเป็น current (กันผูกกับงานค้างเก่า) */
+export const PRE_SCAN_ACTIVE_JOB_MAX_AGE_MS = 20 * 60 * 1000;
+
+/**
+ * งาน active ของ uid ที่สร้าง "ก่อน" ข้อความ (ORDER created_at DESC, id DESC) สูงสุด 2 แถว — พอสำหรับตัดสิน 0/1/หลาย
+ * @returns {Promise<{ ok: true, jobs: Array<{ id: string, status: string, created_at: string }> } | { ok: false, message?: string }>}
+ */
+export async function findActiveJobsForUid(lineUserId, textAtMs, deps = {}) {
+  try {
+    const supabase = deps.supabase || (await import("../../config/supabase.js")).supabase;
+    const at = Number(textAtMs) || Date.now();
+    const { data, error } = await supabase
+      .from("scan_jobs")
+      .select("id,status,created_at")
+      .eq("line_user_id", String(lineUserId))
+      .in("status", PRE_SCAN_ACTIVE_JOB_STATUSES)
+      .gte("created_at", new Date(at - PRE_SCAN_ACTIVE_JOB_MAX_AGE_MS).toISOString())
+      .lte("created_at", new Date(at).toISOString())
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(2);
+    if (error) return { ok: false, message: String(error.message || error).slice(0, 120) };
+    return { ok: true, jobs: Array.isArray(data) ? data.filter((j) => j && j.id) : [] };
+  } catch (e) {
+    return { ok: false, message: String(e?.message || e).slice(0, 120) };
+  }
+}
+
+/**
+ * pure decision — ข้อความข้อมูลชิ้นควรไปที่ไหน
+ *  current_job = มีงาน active เดียวที่เริ่มก่อนข้อความ → ผูกตรงกับงานนั้น (ห้ามเก็บให้รูปถัดไป)
+ *  next_image  = ไม่มีงาน active → พฤติกรรม pre-scan เดิม (preprovided → earliest next job)
+ *  ambiguous   = หลายงาน / DB ตรวจไม่ได้ → fail-safe ไม่ผูกอะไรเลย ให้ gate ถามตามปกติ
+ * @returns {{ target: "current_job", jobId: string } | { target: "next_image" } | { target: "ambiguous", reason: string }}
+ */
+export function decidePreScanTarget(active) {
+  if (!active || active.ok !== true) return { target: "ambiguous", reason: active?.message ? `db_error:${active.message}` : "db_error" };
+  const jobs = Array.isArray(active.jobs) ? active.jobs : [];
+  if (jobs.length === 0) return { target: "next_image" };
+  if (jobs.length > 1) return { target: "ambiguous", reason: "multiple_active_jobs" };
+  return { target: "current_job", jobId: String(jobs[0].id) };
+}
+
+/**
+ * ผูกข้อมูลกับงานปัจจุบันโดยตรง (job-scoped key เดียวกับที่ ingestion MOVE ให้) — ไม่แตะ preprovided
+ * จึงรูปถัดไป (B) ไม่มีทาง inherit · typed ตามผลเขียนจริง
+ * @returns {Promise<{ ok: true } | { ok: false, reason: "invalid_input" | "redis_unavailable" | "redis_error", message?: string }>}
+ */
+export async function bindPreScanInfoToCurrentJob(jobId, rawText, deps = {}) {
+  const jid = String(jobId || "").trim();
+  const raw = String(rawText || "").trim().slice(0, 400);
+  if (!jid || !raw) return { ok: false, reason: "invalid_input" };
+  const set = deps.set || setValueWithTtlTyped;
+  let res;
+  try {
+    res = await set(jobKey(jid), JSON.stringify({ raw, at: Date.now(), source: "current_job" }), PRE_SCAN_INFO_TTL_SEC);
+  } catch (e) {
+    return { ok: false, reason: "redis_error", message: String(e?.message || e).slice(0, 120) };
+  }
+  if (res && typeof res === "object" && res.ok === true) return { ok: true };
+  if (res && typeof res === "object" && res.ok === false) {
+    return { ok: false, reason: res.reason === "redis_unavailable" ? "redis_unavailable" : "redis_error", message: res.message };
+  }
+  return { ok: false, reason: "redis_error", message: "untyped_set_result" };
+}
+
+/** copy เมื่อผูกกับชิ้นที่อาจารย์กำลังดูอยู่ (โทนเดิม ไม่ตีความพลัง) */
+export const PRE_SCAN_INFO_CURRENT_JOB_ACK_TEXT = "รับข้อมูลไว้แล้วครับ ใช้กับชิ้นที่อาจารย์กำลังดูอยู่เลย";
+/** copy เมื่อพิสูจน์เจ้าของไม่ได้ (หลายชิ้นในคิว / ตรวจไม่ได้) — gate เป็นเจ้าของถาวรของการถาม ไม่สัญญาลอย */
+export const PRE_SCAN_INFO_AMBIGUOUS_TEXT = "ตอนนี้มีหลายชิ้นอยู่ในคิวครับ ผมจะถามข้อมูลทีละองค์ตอนผลแต่ละชิ้นออกนะครับ";

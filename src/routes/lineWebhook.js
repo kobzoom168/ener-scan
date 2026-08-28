@@ -4603,20 +4603,43 @@ async function handleTextMessage({ client, event, userId, session }) {
   // ข้อมูลชิ้นที่พิมพ์ "ก่อน/พร้อม" รูป (flow-role audit 26 ส.ค. เคส 1/4/9/12): deterministic gate
   // → เก็บ provisional 15 นาที ให้ gate ใช้ตอนรูปมา · ห้ามเข้า consult (เคยแต่งผลจากชื่อรุ่น)
   try {
-    const { isPreScanObjectInfoText, storePreScanObjectInfo, PRE_SCAN_INFO_ACK_TEXT, PRE_SCAN_INFO_STORE_FAILED_TEXT } = await import(
-      "../services/objectInfoGate/preScanObjectInfo.util.js"
-    );
+    const {
+      isPreScanObjectInfoText, storePreScanObjectInfo, PRE_SCAN_INFO_ACK_TEXT, PRE_SCAN_INFO_STORE_FAILED_TEXT,
+      findActiveJobsForUid, decidePreScanTarget, bindPreScanInfoToCurrentJob,
+      PRE_SCAN_INFO_CURRENT_JOB_ACK_TEXT, PRE_SCAN_INFO_AMBIGUOUS_TEXT,
+    } = await import("../services/objectInfoGate/preScanObjectInfo.util.js");
     if (isPreScanObjectInfoText(text)) {
       // P0-1: typed persistence — เขียนไม่สำเร็จ = ห้ามอ้างว่าเก็บแล้ว และห้ามปล่อยเข้า consult (AI=0)
-      const stored = await storePreScanObjectInfo(userId, text);
+      // P0-F (Codex 28 ส.ค.): ข้อความมาระหว่างรูป A กำลังประมวลผล = ข้อมูลของ A ไม่ใช่รูปถัดไป
+      //  current_job → เขียน job-scoped key ของ A ตรง ๆ (ไม่แตะ preprovided → B inherit ไม่ได้)
+      //  next_image  → พฤติกรรม pre-scan เดิม · ambiguous/DB error → ไม่ผูกอะไร gate ถามตามปกติ
+      const textAt = getEventTimestamp(event);
+      const active = await findActiveJobsForUid(userId, textAt);
+      const decision = decidePreScanTarget(active);
+      let stored;
+      let ackText;
+      let ackType;
+      if (decision.target === "current_job") {
+        stored = await bindPreScanInfoToCurrentJob(decision.jobId, text);
+        ackType = "pre_scan_object_info_ack";
+        ackText = PRE_SCAN_INFO_CURRENT_JOB_ACK_TEXT;
+      } else if (decision.target === "next_image") {
+        stored = await storePreScanObjectInfo(userId, text);
+        ackType = "pre_scan_object_info_ack";
+        ackText = PRE_SCAN_INFO_ACK_TEXT;
+      } else {
+        stored = { ok: true, skipped: true };
+        ackType = "pre_scan_object_info_ambiguous";
+        ackText = PRE_SCAN_INFO_AMBIGUOUS_TEXT;
+      }
       const ok = stored && stored.ok === true;
       const r = await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
-        replyType: ok ? "pre_scan_object_info_ack" : "pre_scan_object_info_store_failed",
-        semanticKey: ok ? "pre_scan_object_info_ack" : "pre_scan_object_info_store_failed",
-        text: ok ? PRE_SCAN_INFO_ACK_TEXT : PRE_SCAN_INFO_STORE_FAILED_TEXT,
+        replyType: ok ? ackType : "pre_scan_object_info_store_failed",
+        semanticKey: ok ? ackType : "pre_scan_object_info_store_failed",
+        text: ok ? ackText : PRE_SCAN_INFO_STORE_FAILED_TEXT,
         alternateTexts: [],
         speakerRoleOverride: "admin",
         // P0-A (Codex 28 ส.ค.): ack ผูกกับ inbound — ข้อมูลชิ้นคนละข้อความต้องได้ ack ทุกครั้ง
@@ -4624,7 +4647,14 @@ async function handleTextMessage({ client, event, userId, session }) {
         inboundMessageId: event.message?.id ? String(event.message.id) : null,
       });
       if (ok) {
-        console.log(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_CAPTURED", uidPrefix: String(userId).slice(0, 8), sent: r?.sent === true }));
+        console.log(JSON.stringify({
+          event: "PRE_SCAN_OBJECT_INFO_CAPTURED",
+          uidPrefix: String(userId).slice(0, 8),
+          sent: r?.sent === true,
+          target: decision.target,
+          jobIdPrefix: decision.target === "current_job" ? String(decision.jobId).slice(0, 8) : null,
+          reason: decision.target === "ambiguous" ? decision.reason : null,
+        }));
       } else {
         console.error(JSON.stringify({ event: "PRE_SCAN_OBJECT_INFO_STORE_FAILED", uidPrefix: String(userId).slice(0, 8), reason: stored?.reason || "unknown", message: stored?.message || null, sent: r?.sent === true }));
       }
