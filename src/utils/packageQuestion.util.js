@@ -6,7 +6,7 @@
  * เคสจริง smoke 28 ส.ค.: "ค่าครู 49 บาทได้กี่ครั้ง" → consult ตอบถูกแต่ guard สิทธิ์แทนด้วย
  * "เดี๋ยวผมเช็กสถานะให้ก่อนครับ แล้วแจ้งกลับ" (handoff ค้าง) · "แพ็คนี้ดีไหม" → guard บล็อก 2 รอบ
  */
-import { listActivePackages, getDefaultPackage, findActivePackageByPriceThb } from "../services/scanOffer.packages.js";
+import { listActivePackages, getDefaultPackage, findActivePackageByPriceThb, findPackageByKey } from "../services/scanOffer.packages.js";
 
 const NEG_OBJECT_RE = /ประเมิน|เช่า|ปล่อย|พระ|เหรียญ|องค์|หิน|กำไล|พลัง|ดวง/;
 const PACK_TERM_RE = /แพ็ก|แพ็ค|แพค|แพคเกจ|แพ็กเกจ|ค่าครู|โปร(?!ด|ไฟล์|แกรม)|สมาชิก/;
@@ -48,41 +48,40 @@ export function extractPriceThbFromText(text) {
 }
 
 /**
- * "ค่าครู 49 บาทได้กี่ครั้ง" — ข้อเท็จจริงจาก offer · ไม่เปิด QR · ไม่สัญญา
+ * "ค่าครู 49 บาทได้กี่ครั้ง" — ข้อเท็จจริงจาก offer เท่านั้น (Codex 28 ส.ค.: ห้ามแถมคำชวนจ่าย —
+ * ลูกค้าถามแค่ใช้ได้กี่ครั้ง ไม่ได้ขอเปิดสิทธิ์) · ไม่เปิด QR · ไม่สัญญา
  * @param {{ offer: object, text: string }} p
  */
 export function buildPackagePriceCountReply({ offer, text }) {
   const pkgs = listActivePackages(offer);
   const price = extractPriceThbFromText(text);
   const hit = price != null ? findActivePackageByPriceThb(offer, price) : null;
-  if (hit) {
-    return `${pkgLine(hit)}ครับ ถ้าต้องการเปิดสิทธิ์ พิมพ์ จ่าย ${hit.priceThb} ได้เลย`;
-  }
+  if (hit) return `${pkgLine(hit)}ครับ`;
   if (price != null && pkgs.length > 0) {
-    // ราคาที่ถามไม่มีในแพ็กปัจจุบัน → บอกตรง ๆ + แพ็กที่มีจริง
-    return `ตอนนี้ไม่มีแพ็ก ${price} บาทครับ แพ็กที่เปิดอยู่:\n${pkgs.map((p, i) => `${i + 1}) ${pkgLine(p)}`).join("\n")}\nต้องการอันไหน พิมพ์ จ่าย ตามด้วยราคาได้เลย`;
+    return `ตอนนี้ไม่มีแพ็ก ${price} บาทครับ แพ็กที่เปิดอยู่:\n${pkgs.map((p, i) => `${i + 1}) ${pkgLine(p)}`).join("\n")}`;
   }
-  if (pkgs.length === 1) return `${pkgLine(pkgs[0])}ครับ ถ้าต้องการเปิดสิทธิ์ พิมพ์ จ่าย ${pkgs[0].priceThb} ได้เลย`;
-  if (pkgs.length > 1) {
-    return `แพ็กที่เปิดอยู่ตอนนี้ครับ:\n${pkgs.map((p, i) => `${i + 1}) ${pkgLine(p)}`).join("\n")}\nต้องการอันไหน พิมพ์ จ่าย ตามด้วยราคาได้เลย`;
-  }
+  if (pkgs.length === 1) return `${pkgLine(pkgs[0])}ครับ`;
+  if (pkgs.length > 1) return `แพ็กที่เปิดอยู่ตอนนี้ครับ:\n${pkgs.map((p, i) => `${i + 1}) ${pkgLine(p)}`).join("\n")}`;
   const def = getDefaultPackage(offer);
-  return def ? `${pkgLine(def)}ครับ` : "ตอนนี้ยังไม่มีแพ็กเปิดให้เลือกครับ ใช้สแกนฟรีรายวันได้ตามปกติ";
+  return def ? `${pkgLine(def)}ครับ` : "ตอนนี้ยังไม่มีแพ็กเปิดให้เลือกครับ";
 }
 
 /**
- * "แพ็กนี้ดีไหม" — ไม่ขาย ไม่ตีความ: บอกสิ่งที่ได้จริงต่อแพ็ก แล้วให้ลูกค้าเลือกตามการใช้งาน
- * @param {{ offer: object, text: string }} p
+ * "แพ็กนี้ดีไหม" — มี selected package (หรือราคาในข้อความ) → ข้อเท็จจริงของแพ็กนั้น · ไม่มี → สรุปแพ็กสั้น ๆ
+ * ไม่ขาย ไม่ตีความ ไม่เปิด QR ไม่ชวนจ่าย
+ * @param {{ offer: object, text: string, selectedPackageKey?: string|null }} p
  */
-export function buildPackageWorthReply({ offer, text }) {
+export function buildPackageWorthReply({ offer, text, selectedPackageKey = null }) {
   const pkgs = listActivePackages(offer);
   const price = extractPriceThbFromText(text);
-  const hit = price != null ? findActivePackageByPriceThb(offer, price) : null;
+  const hit =
+    (price != null ? findActivePackageByPriceThb(offer, price) : null) ||
+    (selectedPackageKey ? findPackageByKey(offer, selectedPackageKey) : null);
   if (hit) {
     const per = Number(hit.scanCount) >= 999999 ? "" : ` ตกครั้งละประมาณ ${Math.round(hit.priceThb / Math.max(1, Number(hit.scanCount)))} บาท`;
-    return `แพ็ก ${hit.priceThb} บาท ได้${Number(hit.scanCount) >= 999999 ? "สแกนไม่จำกัด" : ` ${hit.scanCount} ครั้ง`} ภายใน ${winTxt(hit.windowHours)}${per} เหมาะถ้ามีหลายชิ้นอยากดูในช่วงนี้ครับ ถ้ามีชิ้นเดียว ใช้สแกนฟรีรายวันก่อนได้ ตัดสินใจแล้วพิมพ์ จ่าย ${hit.priceThb} ได้เลย`;
+    return `${pkgLine(hit)}${per} เหมาะถ้ามีหลายชิ้นอยากดูในช่วงนี้ครับ ชิ้นเดียวใช้สแกนฟรีรายวันก่อนได้`;
   }
-  if (pkgs.length === 0) return "ตอนนี้ยังไม่มีแพ็กเปิดให้เลือกครับ ใช้สแกนฟรีรายวันได้ตามปกติ";
+  if (pkgs.length === 0) return "ตอนนี้ยังไม่มีแพ็กเปิดให้เลือกครับ";
   return `แพ็กที่เปิดอยู่ครับ:\n${pkgs.map((p, i) => `${i + 1}) ${pkgLine(p)}`).join("\n")}\nเลือกตามจำนวนชิ้นที่อยากดูในช่วงนี้ได้เลย ชิ้นเดียวใช้สแกนฟรีรายวันก่อนก็ได้ครับ`;
 }
 
@@ -122,7 +121,9 @@ export function buildQuotaRemainingReply({ access, freeRemainingToday, freeQuota
   } else {
     lines.push("ตอนนี้ไม่มีสิทธิ์แพ็กเปิดอยู่ครับ");
   }
-  if (Number.isFinite(Number(freeRemainingToday)) && Number.isFinite(Number(freeQuotaPerDay))) {
+  const isNum = (x) => x != null && x !== "" && Number.isFinite(Number(x));
+  // ห้าม hardcode/เดาจำนวนฟรี: ไม่มีค่าจริงจาก checkScanAccess = ไม่พูดถึงฟรีเลย
+  if (isNum(freeRemainingToday) && isNum(freeQuotaPerDay)) {
     const fr = Math.max(0, Number(freeRemainingToday));
     lines.push(
       fr > 0
@@ -132,3 +133,45 @@ export function buildQuotaRemainingReply({ access, freeRemainingToday, freeQuota
   }
   return lines.join(" ");
 }
+
+export const QUOTA_READ_FAILED_TEXT = "ตอนนี้ตรวจสิทธิ์ให้ไม่ได้ครับ ลองถามใหม่อีกครั้งได้เลย";
+
+/**
+ * ตัวรวม (ใช้ทั้ง webhook และ test hermetic): คำถามแพ็ก/ราคา/สิทธิ์ → { kind, text } · ไม่ใช่ = null
+ * - คำสั่งจ่ายจริง (deps.isPaymentCommand) = null เสมอ → payment route เดิม (QR)
+ * - สิทธิ์: อ่าน deps.checkScanAccess เท่านั้น (authoritative) · ล้ม/ว่าง → บอกตรงว่าตรวจไม่ได้ ไม่สัญญา
+ * - AI = 0 ทุกกรณี (ไม่มี LLM ใน path นี้)
+ * @param {{
+ *   text: string, lowerText?: string, userId: string,
+ *   offer: object, selectedPackageKey?: string|null,
+ *   isPaymentCommand: (t: string, lt?: string) => boolean,
+ *   checkScanAccess: (p: { userId: string }) => Promise<object|null>,
+ *   nextResetLabel?: (usedScans: number) => string,
+ * }} deps
+ * @returns {Promise<{ kind: string, text: string, accessReadFailed?: boolean } | null>}
+ */
+export async function resolvePackageQuestionReply(deps) {
+  const t = String(deps.text || "").trim();
+  if (!t) return null;
+  if (deps.isPaymentCommand(t, deps.lowerText)) return null;
+  const kind = classifyPackageQuestion(t);
+  if (kind === "other") return null;
+  if (kind === "pack_price_count") return { kind, text: buildPackagePriceCountReply({ offer: deps.offer, text: t }) };
+  if (kind === "pack_worth") return { kind, text: buildPackageWorthReply({ offer: deps.offer, text: t, selectedPackageKey: deps.selectedPackageKey || null }) };
+  let access = null;
+  try {
+    access = await deps.checkScanAccess({ userId: deps.userId });
+  } catch {
+    access = null;
+  }
+  if (!access || typeof access !== "object") return { kind, text: QUOTA_READ_FAILED_TEXT, accessReadFailed: true };
+  const freeRemaining = Number.isFinite(Number(access.freeScansRemaining)) ? Number(access.freeScansRemaining) : null;
+  const freeLimit = Number.isFinite(Number(access.freeScansLimit)) ? Number(access.freeScansLimit) : null;
+  const used = Number.isFinite(Number(access.usedScans)) ? Number(access.usedScans) : null;
+  const nextResetLabel = freeRemaining === 0 && typeof deps.nextResetLabel === "function" ? String(deps.nextResetLabel(used ?? 0) || "") : "";
+  return {
+    kind,
+    text: buildQuotaRemainingReply({ access, freeRemainingToday: freeRemaining, freeQuotaPerDay: freeLimit, nextResetLabel }),
+  };
+}
+

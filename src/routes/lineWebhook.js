@@ -4493,61 +4493,30 @@ async function maybeHandlePreRegResume({ client, event, userId, text }) {
  * @returns {Promise<boolean>} true = ตอบแล้ว (turn จบ)
  */
 async function maybeHandlePackageQuestion({ client, event, userId, text, lowerText }) {
-  const t = String(text || "").trim();
-  if (!t) return false;
-  // คำสั่งจ่ายจริง ("จ่าย 49") = payment route เดิมเท่านั้น (QR) — router นี้ไม่แตะ
-  if (isPaymentCommand(t, lowerText)) return false;
-  const { classifyPackageQuestion, buildPackagePriceCountReply, buildPackageWorthReply, buildQuotaRemainingReply } = await import(
-    "../utils/packageQuestion.util.js"
-  );
-  const kind = classifyPackageQuestion(t);
-  if (kind === "other") return false;
-
+  const { resolvePackageQuestionReply } = await import("../utils/packageQuestion.util.js");
   const offer = loadActiveScanOffer();
-  let replyText = null;
-  if (kind === "pack_price_count") {
-    replyText = buildPackagePriceCountReply({ offer, text: t });
-  } else if (kind === "pack_worth") {
-    replyText = buildPackageWorthReply({ offer, text: t });
-  } else if (kind === "quota_remaining") {
-    // สิทธิ์จริงจากระบบ — อ่านไม่ได้ = บอกตรง ๆ ไม่เดา ไม่สัญญา
-    let access = null;
-    try {
-      access = await checkScanAccess({ userId });
-    } catch (e) {
-      console.error(JSON.stringify({ event: "PACKAGE_QUESTION_ACCESS_READ_FAILED", uidPrefix: String(userId).slice(0, 8), message: String(e?.message || e).slice(0, 120) }));
-    }
-    if (!access) {
-      replyText = "ตอนนี้อ่านสิทธิ์ไม่ได้ชั่วคราวครับ ลองถามใหม่อีกครั้งได้เลย";
-    } else {
-      // checkScanAccess คืน usedScans/freeScansRemaining/freeScansLimit (SSOT เดียวกับ gate สแกน)
-      const freeUsed = Number.isFinite(Number(access.usedScans)) ? Number(access.usedScans) : null;
-      const ctxFree =
-        freeUsed == null
-          ? null
-          : resolveScanOfferAccessContext({
-              offer,
-              freeUsedToday: freeUsed,
-              paidUntil: access.paidUntil ?? null,
-              paidRemainingScans: Number(access.paidRemainingScans) || 0,
-            });
-      replyText = buildQuotaRemainingReply({
-        access,
-        freeRemainingToday: Number.isFinite(Number(access.freeScansRemaining)) ? Number(access.freeScansRemaining) : ctxFree ? ctxFree.freeRemainingToday : null,
-        freeQuotaPerDay: Number.isFinite(Number(access.freeScansLimit)) ? Number(access.freeScansLimit) : offer.freeQuotaPerDay ?? null,
-        nextResetLabel: ctxFree ? ctxFree.nextResetLabel : "",
-      });
-    }
+  const resolved = await resolvePackageQuestionReply({
+    text,
+    lowerText,
+    userId,
+    offer,
+    selectedPackageKey: getSelectedPaymentPackageKey(userId) || null,
+    isPaymentCommand, // "จ่าย 49" = payment route เดิม (QR) — router นี้ไม่แตะ
+    checkScanAccess, // สิทธิ์ authoritative เท่านั้น
+    nextResetLabel: (usedScans) =>
+      resolveScanOfferAccessContext({ offer, freeUsedToday: usedScans, paidUntil: null, paidRemainingScans: 0 }).nextResetLabel,
+  });
+  if (!resolved) return false;
+  if (resolved.accessReadFailed) {
+    console.error(JSON.stringify({ event: "PACKAGE_QUESTION_ACCESS_READ_FAILED", uidPrefix: String(userId).slice(0, 8) }));
   }
-  if (!replyText) return false;
-
   const r = await sendNonScanReply({
     client,
     userId,
     replyToken: event.replyToken,
-    replyType: `package_question_${kind}`,
-    semanticKey: `package_question_${kind}`,
-    text: replyText,
+    replyType: `package_question_${resolved.kind}`,
+    semanticKey: `package_question_${resolved.kind}`,
+    text: resolved.text,
     alternateTexts: [],
     speakerRoleOverride: "admin",
     inboundMessageId: event.message?.id ? String(event.message.id) : null,
@@ -4556,7 +4525,7 @@ async function maybeHandlePackageQuestion({ client, event, userId, text, lowerTe
     JSON.stringify({
       event: "PACKAGE_QUESTION_DETERMINISTIC",
       uidPrefix: String(userId).slice(0, 8),
-      kind,
+      kind: resolved.kind,
       aiCallCount: 0,
       sent: r?.sent === true,
       suppressed: r?.suppressed === true,

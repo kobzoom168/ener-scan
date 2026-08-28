@@ -150,21 +150,21 @@ test("P0-C classifier: ค่าครู 49 บาทได้กี่คร�
   assert.equal(classifyPackageQuestion("สายเสน่ห์ควรหาพระแบบไหน"), "other");
 });
 
-test("P0-C replies: SSOT ราคา/ครั้ง ตรง offer · ไม่มี QR/ลิงก์ · ไม่มีคำสัญญา 'แจ้งกลับ' · สิทธิ์อ่านจาก access จริง", async () => {
+test("P0-C replies (copy ตาม Codex): ราคา/ครั้งตรง offer ไม่แถมชวนจ่าย · แพ็กนี้ดีไหม ใช้ selected package ก่อน ไม่มีค่อยสรุป · ไม่มี QR/ลิงก์/แจ้งกลับ · สิทธิ์อ่านจาก access จริง", async () => {
   const u = await import("../src/utils/packageQuestion.util.js");
   const a = u.buildPackagePriceCountReply({ offer: OFFER, text: "ค่าครู 49 บาทได้กี่ครั้ง" });
-  assert.match(a, /49 บาท ใช้ได้ 4 ครั้ง ภายใน 24 ชั่วโมง/);
-  assert.match(a, /พิมพ์ จ่าย 49/);
+  assert.equal(a, "49 บาท ใช้ได้ 4 ครั้ง ภายใน 24 ชั่วโมงครับ");
   const b = u.buildPackagePriceCountReply({ offer: OFFER, text: "แพ็ก 399 ได้กี่ครั้ง" });
-  assert.match(b, /399 บาท สแกนไม่จำกัด 30 วัน/);
+  assert.equal(b, "399 บาท สแกนไม่จำกัด 30 วัน (รายเดือน)ครับ");
   const c = u.buildPackagePriceCountReply({ offer: OFFER, text: "ค่าครู 149 บาทได้กี่ครั้ง" });
   assert.match(c, /ไม่มีแพ็ก 149 บาท/); assert.match(c, /1\) 29 บาท/);
-  const w = u.buildPackageWorthReply({ offer: OFFER, text: "แพ็คนี้ดีไหม" });
+  const w = u.buildPackageWorthReply({ offer: OFFER, text: "แพ็กนี้ดีไหม" });
   assert.match(w, /29 บาท/); assert.match(w, /49 บาท/); assert.match(w, /399 บาท/);
-  const w49 = u.buildPackageWorthReply({ offer: OFFER, text: "แพ็ก 49 คุ้มไหม" });
-  assert.match(w49, /ตกครั้งละประมาณ 12 บาท/);
-  for (const t of [a, b, c, w, w49]) {
-    assert.doesNotMatch(t, /แจ้งกลับ|เช็กสถานะให้ก่อน|http|QR|คิวอาร์|ระบบ/);
+  const wSel = u.buildPackageWorthReply({ offer: OFFER, text: "แพ็กนี้ดีไหม", selectedPackageKey: "49" });
+  assert.match(wSel, /^49 บาท ใช้ได้ 4 ครั้ง ภายใน 24 ชั่วโมง ตกครั้งละประมาณ 12 บาท/);
+  assert.doesNotMatch(wSel, /29 บาท|399 บาท/, "มี selected package = ตอบแพ็กนั้นเท่านั้น");
+  for (const t of [a, b, c, w, wSel]) {
+    assert.doesNotMatch(t, /พิมพ์ จ่าย|จ่าย \d|แจ้งกลับ|เช็กสถานะให้ก่อน|http|QR|คิวอาร์|ระบบ/, `ห้ามชวนจ่าย/สัญญา/QR: ${t}`);
   }
   const now = new Date("2026-08-28T04:00:00Z");
   const q1 = u.buildQuotaRemainingReply({ access: { paidUntil: "2026-09-10T00:00:00Z", paidRemainingScans: 3 }, freeRemainingToday: 1, freeQuotaPerDay: 2, now });
@@ -172,13 +172,51 @@ test("P0-C replies: SSOT ราคา/ครั้ง ตรง offer · ไม�
   const q2 = u.buildQuotaRemainingReply({ access: { paidUntil: null, paidRemainingScans: 0 }, freeRemainingToday: 0, freeQuotaPerDay: 2, nextResetLabel: "รีเซ็ตเที่ยงคืน", now });
   assert.match(q2, /ไม่มีสิทธิ์แพ็กเปิดอยู่/); assert.match(q2, /ใช้ครบ 2 ครั้งแล้ว รีเซ็ตเที่ยงคืน/);
   const q3 = u.buildQuotaRemainingReply({ access: { paidUntil: "2026-09-10T00:00:00Z", paidRemainingScans: 999999 }, freeRemainingToday: null, freeQuotaPerDay: null, now });
-  assert.match(q3, /สแกนไม่จำกัด/);
+  assert.match(q3, /สแกนไม่จำกัด/); assert.doesNotMatch(q3, /สแกนฟรี/, "ไม่รู้ฟรี = ไม่พูดตัวเลขฟรี (ห้าม hardcode)");
   const q4 = u.buildQuotaRemainingReply({ access: { paidUntil: "2026-08-01T00:00:00Z", paidRemainingScans: 5 }, freeRemainingToday: 2, freeQuotaPerDay: 2, now });
   assert.match(q4, /ไม่มีสิทธิ์แพ็กเปิดอยู่/, "แพ็กหมดอายุ = ไม่ active แม้ remaining>0");
   assert.equal(EXTERNAL.ai, 0, "AI=0");
 });
 
-test("P0-C webhook (static contract): router อยู่หลังจับข้อมูลชิ้น ก่อน 'เข้าใจแล้ว' และก่อน orchestrator ทุกตัว · ข้ามคำสั่งจ่าย (QR เฉพาะ จ่าย 49) · admin · AI=0 · orchestrator ไม่มี 'แจ้งกลับ'", () => {
+test("P0-C evidence: 3 คำถาม → resolver ตอบจาก SSOT/checkScanAccess, AI=0, transport=1 ต่อคำถาม (gateway จริง+mock client) · 'จ่าย 49' = isPaymentCommand จริง → null (QR route เดิม) · คำถามราคาไม่ใช่ payment command · access ล้ม → 'ตรวจไม่ได้' ไม่สัญญา", async () => {
+  const u = await import("../src/utils/packageQuestion.util.js");
+  const { isPaymentCommand, isPromoInquiryText } = await import("../src/utils/webhookText.util.js");
+  const { sendNonScanReply } = await import("../src/services/nonScanReply.gateway.js");
+  const access = { allowed: true, reason: "free", usedScans: 0, freeScansLimit: 2, freeScansRemaining: 2, paidUntil: null, paidRemainingScans: 0 };
+  let accessCalls = 0;
+  const deps = (text) => ({ text, lowerText: text.toLowerCase(), userId: "Uevidence", offer: OFFER, selectedPackageKey: null, isPaymentCommand, checkScanAccess: async () => { accessCalls += 1; return access; } });
+  const expect = {
+    "ค่าครู 49 บาทได้กี่ครั้ง": { kind: "pack_price_count", re: /^49 บาท ใช้ได้ 4 ครั้ง ภายใน 24 ชั่วโมงครับ$/ },
+    "แพ็กนี้ดีไหม": { kind: "pack_worth", re: /29 บาท[\s\S]*49 บาท[\s\S]*399 บาท/ },
+    "สิทธิ์สแกนเหลือกี่ครั้ง": { kind: "quota_remaining", re: /ไม่มีสิทธิ์แพ็กเปิดอยู่ครับ สแกนฟรีวันนี้เหลือ 2 จาก 2 ครั้ง/ },
+  };
+  const c = mockClient();
+  let n = 0;
+  for (const [q, exp] of Object.entries(expect)) {
+    assert.equal(isPaymentCommand(q, q.toLowerCase()), false, `${q} ต้องไม่ใช่คำสั่งจ่าย`);
+    const r = await u.resolvePackageQuestionReply(deps(q));
+    assert.ok(r, q); assert.equal(r.kind, exp.kind); assert.match(r.text, exp.re);
+    const before = c.payloads.length;
+    const sent = await sendNonScanReply({ client: c, userId: `u_ev_${n++}`, replyToken: `t${n}`, replyType: `package_question_${r.kind}`, semanticKey: `package_question_${r.kind}`, text: r.text, alternateTexts: [], speakerRoleOverride: "admin", inboundMessageId: `m${n}` });
+    assert.equal(sent.sent, true); assert.equal(c.payloads.length - before, 1, "transport=1");
+    assert.equal(c.payloads[c.payloads.length - 1].text, r.text);
+  }
+  assert.equal(accessCalls, 1, "สิทธิ์อ่าน authoritative 1 ครั้ง (เฉพาะคำถามสิทธิ์)");
+  assert.equal(EXTERNAL.ai, 0, "AI=0");
+  // "จ่าย 49" = payment command จริง → resolver ไม่แตะ (payment route เดิม → QR)
+  assert.equal(isPaymentCommand("จ่าย 49", "จ่าย 49"), true);
+  assert.equal(await u.resolvePackageQuestionReply(deps("จ่าย 49")), null);
+  assert.equal(await u.resolvePackageQuestionReply(deps("จ่ายเงิน")), null);
+  // "มีโปรอะไรบ้าง" = promo inquiry เดิม (เมนูแพ็ก) — ไม่ถูก router นี้แย่ง
+  assert.equal(isPromoInquiryText("มีโปรอะไรบ้าง"), true);
+  assert.equal(await u.resolvePackageQuestionReply(deps("มีโปรอะไรบ้าง")), null);
+  // access ล้ม → บอกตรง ไม่สัญญา
+  const fail = await u.resolvePackageQuestionReply({ ...deps("สิทธิ์สแกนเหลือกี่ครั้ง"), checkScanAccess: async () => { throw new Error("db down"); } });
+  assert.equal(fail.accessReadFailed, true); assert.equal(fail.text, u.QUOTA_READ_FAILED_TEXT);
+  assert.doesNotMatch(fail.text, /แจ้งกลับ|เดี๋ยว/);
+});
+
+test("P0-C webhook (static contract): router อยู่หลังจับข้อมูลชิ้น ก่อน 'เข้าใจแล้ว' และก่อน orchestrator ทุกตัว · ใช้ resolver เดียวกับ test · ส่ง isPaymentCommand+checkScanAccess จริง · admin · AI=0 · orchestrator ไม่มี 'แจ้งกลับ'", () => {
   const wh = src("src/routes/lineWebhook.js");
   const iCapture = wh.indexOf('event: "PRE_SCAN_OBJECT_INFO_CAPTURED"');
   const iRouter = wh.indexOf("await maybeHandlePackageQuestion({ client, event, userId, text, lowerText })");
@@ -189,12 +227,11 @@ test("P0-C webhook (static contract): router อยู่หลังจับ�
   const firstOrchInText = wh.indexOf("invokePhase1GeminiOrchestrator()", iHandleText);
   assert.ok(firstOrchInText < 0 || iRouter < firstOrchInText, "router ต้องมาก่อน orchestrator ใน handleTextMessage");
   const fn = wh.slice(wh.indexOf("async function maybeHandlePackageQuestion("), iHandleText);
-  assert.match(fn, /if \(isPaymentCommand\(t, lowerText\)\) return false;/);
-  assert.match(fn, /speakerRoleOverride: "admin"/);
-  assert.match(fn, /aiCallCount: 0/);
-  assert.match(fn, /await checkScanAccess\(\{ userId \}\)/, "สิทธิ์เหลือ = อ่านจริง");
-  assert.doesNotMatch(fn, /runGeminiFrontOrchestrator|runGeminiConsult|sendQrBundle|handlePaymentCommandTextRoute/);
-  assert.doesNotMatch(fn, /แจ้งกลับ/);
+  assert.match(fn, /resolvePackageQuestionReply\(\{/);
+  assert.match(fn, /\n\s*isPaymentCommand,/); assert.match(fn, /\n\s*checkScanAccess,/);
+  assert.match(fn, /selectedPackageKey: getSelectedPaymentPackageKey\(userId\)/);
+  assert.match(fn, /speakerRoleOverride: "admin"/); assert.match(fn, /aiCallCount: 0/);
+  assert.doesNotMatch(fn, /runGeminiFrontOrchestrator|runGeminiConsult|sendQrBundle|handlePaymentCommandTextRoute|แจ้งกลับ/);
   const orch = src("src/core/conversation/geminiFront/geminiFrontOrchestrator.service.js");
   const fb = orch.slice(orch.indexOf("function safeTextForBlockedClaim"), orch.indexOf("function safeTextForBlockedClaim") + 900);
   assert.doesNotMatch(fb.replace(/\/\/.*$/gm, ""), /แจ้งกลับ|เช็กสถานะให้ก่อน/, "fallback สิทธิ์ห้ามสัญญางานอนาคต");
