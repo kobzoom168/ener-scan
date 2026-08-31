@@ -886,13 +886,137 @@ test("P0-F follow-up: held report ปล่อยหลังตอบ gate ต�
   assert.ok(src.slice(r, r + 500).includes("related_job_id: pending?.relatedJobId || null"), "re-enqueue ต้องส่ง related_job_id");
 });
 
-test("P0-F follow-up: post-delivery idempotent — job ที่ delivered แล้วห้าม mark/หักสิทธิ์ซ้ำ (static)", () => {
+test("P0-F follow-up (แทนที่ด้วย P0-G contract): delivered แล้วห้าม mark ซ้ำ แต่ต้องไหลต่อไป settle ledger (static)", () => {
   const src = readFileSync(new URL("../src/services/scanV2/deliverOutbound.service.js", import.meta.url), "utf8");
   const f = src.indexOf("async function handleScanResultPostDelivery(");
-  const body = src.slice(f, f + 1400);
+  const body = src.slice(f, f + 2200);
   const guard = body.indexOf('=== "delivered"');
   const mark = body.indexOf('status: "delivered"');
-  const dec = body.indexOf("decrementUserPaidRemainingScans(");
-  assert.ok(guard > 0 && guard < mark && mark < dec, "guard delivered ต้องมาก่อน mark และก่อนหักสิทธิ์");
+  const settle = body.indexOf("settlePaidQuotaAfterDelivery(");
+  assert.ok(guard > 0 && guard < mark && mark < settle, "เช็ค delivered → ข้ามแค่ mark → settle เสมอ");
   assert.ok(body.includes("SCAN_RESULT_POST_DELIVERY_ALREADY_DELIVERED"));
+});
+
+/* ---------- P0-G (Codex 29 ส.ค.): durable paid-quota ledger — delivered ≠ หักแล้ว ---------- */
+function fakeQuotaDb(state) {
+  // state: { ledger: Map<jobId,{status,app_user_id,attempts}>, jobs: Map<jobId,{access_source,app_user_id}>, balance: number, claimFailOnce?: boolean }
+  const rpc = async (fn, args) => {
+    if (state.rpcDown) return { data: null, error: { message: "connect_timeout" } };
+    const jid = args?.p_job_id;
+    if (fn === "ensure_quota_decrement_pending") {
+      const j = state.jobs.get(jid);
+      if (!j) return { data: "job_not_found", error: null };
+      if (j.access_source !== "paid" || !j.app_user_id) return { data: "not_paid", error: null };
+      const led = state.ledger.get(jid);
+      if (led) return { data: led.status, error: null };
+      state.ledger.set(jid, { status: "pending", app_user_id: j.app_user_id, attempts: 0 });
+      return { data: "pending", error: null };
+    }
+    if (fn === "claim_paid_scan_decrement") {
+      const led = state.ledger.get(jid);
+      if (!led) return { data: "no_ledger", error: null };
+      if (led.status === "completed") return { data: "already_completed", error: null };
+      if (state.claimFailOnce) { state.claimFailOnce = false; return { data: null, error: { message: "db_timeout" } }; }
+      // atomic เหมือน RPC จริง: หัก + completed ใน transaction เดียว
+      state.balance = Math.max(0, state.balance - 1);
+      led.status = "completed"; led.attempts += 1;
+      return { data: "completed", error: null };
+    }
+    if (fn === "mark_quota_decrement_error") {
+      const led = state.ledger.get(jid);
+      if (led && led.status === "pending") { led.attempts += 1; led.last_error = args?.p_error; return { data: 1, error: null }; }
+      return { data: 0, error: null };
+    }
+    if (fn === "reconcile_missing_quota_ledgers") {
+      let n = 0;
+      for (const [id, j] of state.jobs) {
+        if (j.access_source === "paid" && j.app_user_id && j.delivered && j.version === 2 && j.sentOutbound && !j.skip && !state.ledger.has(id)) {
+          state.ledger.set(id, { status: "pending", app_user_id: j.app_user_id, attempts: 0 }); n += 1;
+        }
+      }
+      return { data: n, error: null };
+    }
+    throw new Error(`unknown rpc ${fn}`);
+  };
+  const from = (table) => {
+    const q = { limit: 20 };
+    const b = {
+      select: () => b, eq: () => b, lte: () => b, order: () => b,
+      limit: () => b,
+      then: (res) => {
+        const rows = [...state.ledger.entries()].filter(([, l]) => l.status === "pending").map(([job_id, l]) => ({ job_id, attempts: l.attempts }));
+        res({ data: rows, error: null });
+      },
+    };
+    return table === "scan_quota_decrements" ? b : (() => { throw new Error("unexpected table"); })();
+  };
+  return { rpc, supabase: { from } };
+}
+
+test("P0-G A/C/E/F: หักครั้งเดียวต่อ job — settle สำเร็จลด 1 · เรียกซ้ำ/พร้อมกัน = already_completed ยอดนิ่ง · free = not_paid ไม่มี ledger", async () => {
+  const { settlePaidQuotaAfterDelivery } = await import("../src/services/scanV2/quotaLedger.util.js");
+  const st = { ledger: new Map(), jobs: new Map([["J1", { access_source: "paid", app_user_id: "U1" }], ["F1", { access_source: "free", app_user_id: "U1" }]]), balance: 4 };
+  const deps = fakeQuotaDb(st);
+  // A: paid → completed, ลด 1
+  assert.equal((await settlePaidQuotaAfterDelivery("J1", deps)).outcome, "completed");
+  assert.equal(st.balance, 3);
+  // E: retry → already_completed ยอดนิ่ง (จาก ensure ไม่ต้อง claim)
+  assert.equal((await settlePaidQuotaAfterDelivery("J1", deps)).outcome, "already_completed");
+  assert.equal(st.balance, 3);
+  // C: duplicate พร้อมกัน 2 ตัวบน job ใหม่ → ลดรวม 1
+  st.jobs.set("J2", { access_source: "paid", app_user_id: "U1" });
+  const [r1, r2] = await Promise.all([settlePaidQuotaAfterDelivery("J2", deps), settlePaidQuotaAfterDelivery("J2", deps)]);
+  assert.deepEqual([r1.outcome, r2.outcome].sort(), ["already_completed", "completed"]);
+  assert.equal(st.balance, 2);
+  // F: free → not_paid ไม่มี ledger
+  assert.equal((await settlePaidQuotaAfterDelivery("F1", deps)).outcome, "not_paid");
+  assert.equal(st.ledger.has("F1"), false);
+  assert.equal(st.balance, 2);
+});
+
+test("P0-G B/D: claim ล้ม → ledger คง pending + mark error + ยอดนิ่ง → sweeper ตามหักสำเร็จ 1 ครั้ง · crash หลัง delivered ก่อน ensure → reconcile สร้าง ledger แล้ว sweeper หัก", async () => {
+  const { settlePaidQuotaAfterDelivery, sweepQuotaLedger } = await import("../src/services/scanV2/quotaLedger.util.js");
+  // D: claim ล้มครั้งแรก
+  const st = { ledger: new Map(), jobs: new Map([["J3", { access_source: "paid", app_user_id: "U2" }]]), balance: 5, claimFailOnce: true };
+  const deps = fakeQuotaDb(st);
+  const d = await settlePaidQuotaAfterDelivery("J3", deps);
+  assert.equal(d.outcome, "pending_retry");
+  assert.equal(st.ledger.get("J3").status, "pending");
+  assert.ok(st.ledger.get("J3").attempts >= 1, "mark_quota_decrement_error ต้องนับ attempt");
+  assert.equal(st.balance, 5, "ล้มแล้วยอดต้องนิ่ง");
+  // sweeper ตามหักต่อ → ลด 1
+  const sw = await sweepQuotaLedger(deps);
+  assert.equal(sw.claimed, 1);
+  assert.equal(st.balance, 4);
+  assert.equal(st.ledger.get("J3").status, "completed");
+  // B: crash หลัง delivered(version2)+outbound sent ก่อน ensure → ไม่มี ledger → reconcile เก็บ → sweeper หัก
+  st.jobs.set("J4", { access_source: "paid", app_user_id: "U2", delivered: true, version: 2, sentOutbound: true });
+  const sw2 = await sweepQuotaLedger(deps);
+  assert.equal(sw2.reconciled, 1);
+  assert.equal(sw2.claimed, 1);
+  assert.equal(st.balance, 3);
+  // idempotent รอบถัดไป: ไม่มีอะไรให้ทำ ยอดนิ่ง
+  const sw3 = await sweepQuotaLedger(deps);
+  assert.equal(sw3.claimed + sw3.reconciled, 0);
+  assert.equal(st.balance, 3);
+  // rpc ล่มทั้งระบบ → typed pending_retry ไม่ throw
+  st.rpcDown = true; st.jobs.set("J5", { access_source: "paid", app_user_id: "U2" });
+  assert.equal((await settlePaidQuotaAfterDelivery("J5", deps)).outcome, "pending_retry");
+});
+
+test("P0-G static: post-delivery ห้ามใช้ delivered เป็นหลักฐานหักสิทธิ์ — already_delivered ไหลต่อไป settle · mark delivered stamp version 2 · ไม่มี direct decrement · maintenance มี sweep", () => {
+  const d = readFileSync(new URL("../src/services/scanV2/deliverOutbound.service.js", import.meta.url), "utf8");
+  const f = d.indexOf("async function handleScanResultPostDelivery(");
+  const body = d.slice(f, f + 2200);
+  assert.ok(body.includes("const alreadyDelivered"), "ต้องมี alreadyDelivered flag");
+  const iAlready = body.indexOf("SCAN_RESULT_POST_DELIVERY_ALREADY_DELIVERED");
+  const iSettle = body.indexOf("settlePaidQuotaAfterDelivery(");
+  assert.ok(iAlready > 0 && iSettle > iAlready, "already_delivered ต้องไม่ return ก่อน settle");
+  assert.ok(!/if \(String\(job\.status[^)]*\) === "delivered"\) \{\s*console\.log[^}]+\}\s*return;/.test(body), "ห้าม return ทันทีเมื่อ delivered");
+  assert.ok(body.includes("quota_accounting_version: 2"), "mark delivered ต้อง stamp version 2");
+  assert.ok(!d.includes("decrementUserPaidRemainingScans"), "ห้าม direct decrement ใน deliverOutbound");
+  const m = readFileSync(new URL("../src/workers/maintenanceWorker.js", import.meta.url), "utf8");
+  assert.ok(m.includes("sweepQuotaLedger()"), "maintenance ต้องเรียก sweepQuotaLedger");
+  const skipAt = body.indexOf("shouldSkipPaidQuotaDecrementAfterDelivery(payload)");
+  assert.ok(skipAt > 0 && skipAt < iSettle, "skipQuotaDecrement (free/dedup) ต้อง return ก่อน settle — ไม่สร้าง pending");
 });

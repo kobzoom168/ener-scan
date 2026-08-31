@@ -192,6 +192,13 @@ async function runOnce() {
   }
   await sweepStaleOutboundSending();
   await sweepStaleScanProcessing();
+  // P0-G: ตามหัก paid quota ที่ค้าง (ledger pending / job delivered ที่ ledger หาย) — sql/055
+  try {
+    const { sweepQuotaLedger } = await import("../services/scanV2/quotaLedger.util.js");
+    await sweepQuotaLedger();
+  } catch (error) {
+    console.error("[MAINTENANCE] quota ledger sweep failed:", error.message);
+  }
   await logQueueHealthAndDlq();
   // เตือนต่ออายุรายเดือนอัตโนมัติ — self-gated (เปิด/ปิดจาก /admin/promo, ช่วง 10-20 น.,
   // ครั้งเดียวต่อรอบสมาชิกผ่าน redis dedupe) เรียกทุกรอบได้ปลอดภัย

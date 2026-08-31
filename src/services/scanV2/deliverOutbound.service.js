@@ -39,7 +39,6 @@ import { invokeLinePushMessage } from "../../utils/lineClientTransport.util.js";
 import { getStaticVoiceNote } from "../voiceNote/scanVoiceNote.service.js";
 import { updateOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
 import { getScanJobById, updateScanJob } from "../../stores/scanV2/scanJobs.db.js";
-import { decrementUserPaidRemainingScans } from "../../stores/paymentAccess.db.js";
 import {
   OUTBOUND_BACKOFF_MS,
   OUTBOUND_MAX_ATTEMPTS,
@@ -817,17 +816,19 @@ async function handleScanResultPostDelivery(msg, payload) {
 
   const job = await getScanJobById(jobId);
   if (!job) return;
-  // idempotent: รายงานที่ถูก hold แล้วปล่อย (gate answer / form / fail-open) พา related_job_id มาแล้ว
-  // (P0-F follow-up) — ถ้า job เคย delivered แล้ว ห้าม mark/หักสิทธิ์ซ้ำ
-  if (String(job.status || "") === "delivered") {
+  // P0-G (Codex 29 ส.ค.): delivered ไม่ใช่หลักฐานว่าหักสิทธิ์แล้ว — quota เป็นของ ledger (sql/055)
+  // job เคย delivered → ข้ามแค่การ mark ซ้ำ แล้วไหลต่อไป settle ledger (idempotent ที่ DB)
+  const alreadyDelivered = String(job.status || "") === "delivered";
+  if (alreadyDelivered) {
     console.log(JSON.stringify({ event: "SCAN_RESULT_POST_DELIVERY_ALREADY_DELIVERED", jobIdPrefix: String(jobId).slice(0, 8) }));
-    return;
+  } else {
+    await updateScanJob(jobId, {
+      status: "delivered",
+      // stamp version 2 พร้อม delivered: reconcile_missing_quota_ledgers ใช้หา job ที่ crash ก่อนสร้าง ledger
+      quota_accounting_version: 2,
+      updated_at: new Date().toISOString(),
+    });
   }
-
-  await updateScanJob(jobId, {
-    status: "delivered",
-    updated_at: new Date().toISOString(),
-  });
 
   if (shouldSkipPaidQuotaDecrementAfterDelivery(payload)) {
     console.log(
@@ -842,24 +843,18 @@ async function handleScanResultPostDelivery(msg, payload) {
   }
 
   if (job.access_source === "paid" && job.app_user_id) {
-    try {
-      await decrementUserPaidRemainingScans(job.app_user_id);
-      console.log(
-        JSON.stringify({
-          event: "QUOTA_DECREMENT_AFTER_DELIVERY_OK",
-          jobIdPrefix: String(jobId).slice(0, 8),
-          appUserIdPrefix: String(job.app_user_id).slice(0, 8),
-        }),
-      );
-    } catch (e) {
-      console.error(
-        JSON.stringify({
-          event: "QUOTA_DECREMENT_AFTER_DELIVERY_FAILED",
-          jobIdPrefix: String(jobId).slice(0, 8),
-          message: e?.message,
-        }),
-      );
-    }
+    // durable: ensure ledger (pending) → claim (หักครั้งเดียว atomic) · ล้ม = ledger คง pending
+    // maintenance sweeper (sweepQuotaLedger) ตามหักต่อ — ไม่มีทาง "ส่งผลแล้วแต่ไม่หักถาวร"
+    const { settlePaidQuotaAfterDelivery } = await import("./quotaLedger.util.js");
+    const settled = await settlePaidQuotaAfterDelivery(jobId);
+    console.log(
+      JSON.stringify({
+        event: "QUOTA_SETTLE_AFTER_DELIVERY",
+        jobIdPrefix: String(jobId).slice(0, 8),
+        appUserIdPrefix: String(job.app_user_id).slice(0, 8),
+        outcome: settled.outcome,
+      }),
+    );
   }
 
 }
