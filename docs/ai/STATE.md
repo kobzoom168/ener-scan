@@ -19,12 +19,14 @@ LINE OA "อาจารย์เอเนอร์" — ลูกค้าส�
 
 ## วิธี deploy (blue-green ไม่มี downtime)
 ```
-# บนเครื่อง dev: งานทำบน branch staging
-git add ... && git commit && git push origin staging
-git checkout main && git cherry-pick staging && git push origin main && git checkout staging
-ssh -p 2222 root@204.168.246.103 'bash /root/deploy-ener.sh staging'   # staging
-ssh -p 2222 root@204.168.246.103 'bash /root/deploy-ener.sh pro'      # pro — ต้องให้กบสั่งเท่านั้น
+# บนเครื่อง dev (3 ก.ย. 2026: GitHub เป็น private แล้ว — server pull ผ่าน mirror)
+git push origin <branch>            # GitHub = source of truth
+git push ener-mirror <branch>       # mirror บน server /root/ener-scan-mirror.git (origin ของ repo บน server ชี้ที่นี่)
+ssh ener 'bash /root/deploy-ener.sh staging'   # staging
+ssh ener 'bash /root/deploy-ener.sh pro'      # pro — ต้องให้กบสั่งเท่านั้น
+# deploy key read-only ของ GitHub อยู่ที่ server: /root/.ssh/ener_scan_github_deploy (ยังไม่สลับ origin กลับ GitHub)
 ```
+**Pro ปัจจุบัน: `a311d7c` (flow-role P0-A→H ครบ) LIVE 3 ก.ย. 2026 02:29:57Z** · image 311dc6b43793 · rollback: `241952d` · quota ledger (sql/055 v2) apply บน ener_scan_pro แล้ว + lockdown SELECT-only
 
 ## สมองแชท (แก้ 16 ก.ค. 2026 — ลดค่า OpenRouter)
 - consult ลูกค้าแพ็กแอคทีฟ = Opus 4.8 (`LLM_CONSULT_MODEL`) / ฟรี = DeepSeek V4 Flash (`LLM_CONSULT_MODEL_FREE`, ตอบสั้น, ปิด reasoning)
