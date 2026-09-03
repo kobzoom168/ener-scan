@@ -21,13 +21,23 @@
 - เพดานเงินที่ลดได้จากจุดนี้ (ถ้า gate/cap สำเร็จ): ~$5.4/21วัน ≈ **$7–8/เดือน** — ไม่ใช่หลักสิบเหรียญ
 - ส่วนแบ่งของ 2G arbiter (LightGlue 12–24 inliers → LLM) ยังแยกไม่ได้จาก tag เดียวกัน → collector ใหม่เก็บ event VISION_REID_* แล้ว
 
-## 3. cost ต่อ job (จากข้อมูลที่มี — ยังไม่แยก free/paid ได้)
+## 3. cost ต่อ job — แยก denominator ชัด (แก้ตาม Codex: ห้ามปนฐานหาร)
 
-- jobs สร้างจริง 14 ส.ค.–3 ก.ย.: **pro 937 · staging 28** (รวม dedup/failed; delivered pro ≈ 13/วัน)
-- เงินเฉพาะ tag สายสแกน 21 วัน ≈ $31.0 ÷ 965 jobs ≈ **$0.032/job ≈ 1.2฿** (เพดานบน — รวม staging tests)
-- ตัวเลข "$0.17 หรือ 6฿/สแกน" ของ AI ภายนอก **สูงเกิน ~5 เท่า** (เอาบิลทั้งเดือนรวมช่วงก่อนติดป้าย+แชท+วิดีโอ หารเฉพาะ delivered)
+ช่วง 14 ส.ค.–3 ก.ย. (21 วัน) เงินเฉพาะ tag สายสแกน ≈ **$31.0** · jobs pro+staging:
+
+| denominator | จำนวน | $/job | หมายเหตุ |
+|---|---|---|---|
+| created jobs | 966 | **$0.032** | ฐานที่ใช้ตอนกล่าว "1.2฿/job" |
+| AI-started | 966 | $0.032 | ทุก job ที่สร้างได้เริ่มประมวลผล (started_at ครบ) |
+| failed | 85 | — | เงินจมใน job ล้ม ≈ 8.8% ของ jobs |
+| delivered (ถูก mark) | 170 | $0.182 | **ตัวเลขนี้สูงเกินจริง** — ดู finding ใหม่ด้านล่าง |
+| delivered free / paid | 40 / 130 | ยังแยกเงินไม่ได้ | ต้องรอ accessSource ใน telemetry (ข้อ 6) |
+
+**Finding ใหม่จากการตรวจ denominator: zombie `delivery_queued` 707 jobs (75% ของ pro)** — ลูกค้าจริงหลายราย ได้รายงานแล้วแต่ job ไม่ถูก mark delivered เพราะ outbound ยุคโค้ดเก่าไม่มี related_job_id (บั๊กเดียวกับที่ P0-F แก้) · **พิสูจน์ว่าจบแล้ว**: หลัง deploy a311d7c (3 ก.ย. 02:30Z) 13 ชม. → delivered 4 / failed 2 / **delivery_queued 0** · จำนวน "delivered จริง" ในอดีตจึง ≈ created − failed ≈ 881 → cost ต่อ delivered จริง ≈ **$0.035** · ผลกระทบ ledger: jobs เก่าไม่มี quota_accounting_version → reconcile ไม่แตะ (ไม่มี retroactive charge, paid ยุคเก่าถูกหักด้วยโค้ดเดิมตอนส่งแล้ว) · เสนอเป็น hygiene item: backfill mark jobs เก่าที่มีหลักฐานส่ง (แยกรอบ ไม่ใช่งาน discovery)
+
+- ตัวเลข "$0.17 หรือ 6฿/สแกน" ของ AI ภายนอกปนฐานหาร (บิลรวมทั้งเดือน ÷ delivered ที่ undercount)
 - แชท+consult+voiceScript+fbCaption ≈ $3.4/21วัน
-- แยก free/paid ต่อ call ยังทำไม่ได้ — LLM_USAGE ไม่มี accessSource/jobId → ต้องเพิ่ม (ดูข้อ 6)
+- **$49/เดือน = current 21-day run-rate ฉายภาพ ไม่ใช่ monthly truth** (ต้องยืนยันด้วยหน้าต่างวัดใหม่หลัง key แยกแล้ว)
 
 ## 4. hash-before-AI — ยืนยัน: จริง
 

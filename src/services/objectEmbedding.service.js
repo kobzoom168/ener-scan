@@ -133,7 +133,7 @@ export async function computeObjectEmbedding(
     }
 
     const embRaw = await withTimeout(
-      createEmbedding({ model, input: descriptor }),
+      createEmbedding({ user: "objectEmbedding.vector", model, input: descriptor }),
       timeoutMs,
       "object_embedding_vector",
     );

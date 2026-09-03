@@ -510,7 +510,7 @@ test("P0-3: orchestrator จริง + fake LLM transport (งบ 3) — non-id
   const llm = { calls: [], consultReply: () => "ผมว่าองค์นี้เด่นด้านเสน่หาครับ" };
   globalThis.fetch = async (url, init) => {
     if (String(url).includes("/chat/completions")) {
-      const body = JSON.parse(init?.body || "{}"); const site = String(body.user || "untagged"); llm.calls.push(site);
+      const body = JSON.parse(init?.body || "{}"); const site = String(body.user || "untagged").replace(/^(pro|staging|local):/, ""); llm.calls.push(site); /* Cost Discovery: payload จริง = env:callSite */
       let content = "";
       if (site === "planner") content = JSON.stringify({ intent: "consult", state_guess: "idle", proposed_action: "consult_amulet", confidence: 0.95, reply_style: "neutral_help" });
       else if (site === "consult") content = llm.consultReply();
@@ -641,7 +641,7 @@ test("P0-3 boundary (งบ 3): pre-used=2 → ยิงเพิ่มได้
   const llm = { calls: [] };
   globalThis.fetch = async (url, init) => {
     if (String(url).includes("/chat/completions")) {
-      const body = JSON.parse(init?.body || "{}"); const site = String(body.user || "untagged"); llm.calls.push(site);
+      const body = JSON.parse(init?.body || "{}"); const site = String(body.user || "untagged").replace(/^(pro|staging|local):/, ""); llm.calls.push(site); /* Cost Discovery: payload จริง = env:callSite */
       const content = site === "planner" ? JSON.stringify({ proposed_action: "consult_amulet", confidence: 0.95 }) : site === "consult" ? "ผมว่าองค์นี้เด่นด้านเสน่หาครับ" : "phrasing";
       return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content } }], usage: {} }), text: async () => "" };
     }

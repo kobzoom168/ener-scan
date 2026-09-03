@@ -75,7 +75,7 @@ export async function tryVisionReidBaselineReuse(ctx) {
    * Geometric verify: LightGlue inliers decide; borderline band → forensic LLM.
    * Matches verifySameObject's contract ({same, confidence, reason}).
    */
-  const verifyGeometric = async ({ newImageBase64, candidateImageUrl, objectFamily }) => {
+  const verifyGeometric = async ({ newImageBase64, candidateImageUrl, objectFamily, telemetry = null }) => {
     // candidateImageUrl here is actually the thumbnail PATH resolved to b64 below
     const candB64 = await thumbnailToBase64(candidateImageUrl);
     if (!candB64) return { same: false, confidence: 0, reason: "no_candidate_thumbnail", ok: false };
@@ -111,6 +111,7 @@ export async function tryVisionReidBaselineReuse(ctx) {
         newImageMimeType: "image/jpeg",
         candidateImageUrl: `data:image/jpeg;base64,${candB64}`,
         objectFamily,
+        telemetry: { ...(telemetry || {}), decisionPath: "2g_reid_arbiter" },
       });
       if (verdict.same === true && Number(verdict.confidence) >= 0.9) {
         return {
@@ -143,6 +144,7 @@ export async function tryVisionReidBaselineReuse(ctx) {
       computeObjectEmbedding,
       matchGlobalObjectBaselinesByEmbedding: matchByVisual,
       verifySameObject: verifyGeometric,
+      decisionPath: "2g_reid",
       // hand the raw thumbnail PATH through so verifyGeometric can read storage directly
       resolveCandidateImageUrl: (thumbnailPath) => String(thumbnailPath || ""),
       enrollRecognizedAngle: enrollWithoutLegacyEmbedding,

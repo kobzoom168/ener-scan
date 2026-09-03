@@ -55,7 +55,7 @@ function withTimeout(p, ms, label) {
  * @returns {Promise<{ same: boolean, confidence: number, reason: string, ok: boolean }>}
  */
 export async function verifySameObject(
-  { newImageBase64, newImageMimeType = "image/jpeg", candidateImageUrl, objectFamily = "" },
+  { newImageBase64, newImageMimeType = "image/jpeg", candidateImageUrl, objectFamily = "", telemetry = null },
   deps = {},
 ) {
   const fail = (reason) => ({ same: false, confidence: 0, reason: String(reason || ""), ok: false });
@@ -79,6 +79,7 @@ export async function verifySameObject(
     const respRaw = await withTimeout(
       createResponses({
         user: "objectSameIdentityVerifier",
+        ...(telemetry && typeof telemetry === "object" ? { telemetry } : {}),
         model,
         temperature: 0,
         input: [

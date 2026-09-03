@@ -26,6 +26,7 @@ import {
 import { insertScanResultV2 } from "../../stores/scanV2/scanResultsV2.db.js";
 import { insertOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
 import { notifyUserScanJobFailed } from "./scanJobFailureNotify.service.js";
+import { runWithScanJobContext } from "../../core/telemetry/scanJobContext.js";
 import {
   OUTBOUND_PRIORITY,
 } from "../../stores/scanV2/outboundPriority.js";
@@ -165,6 +166,19 @@ async function transferChallengedPreScanInfo({ chal, jobId, lineUserId }) {
 }
 
 export async function processScanJob(workerId, jobRow) {
+  // Cost Discovery (Codex 3 ก.ย.): job context ลง ALS → ทุก LLM call ใต้สายนี้
+  // ติด jobIdPrefix/accessSource/attempt ใน LLM_USAGE เอง (instrumentation-only)
+  const telemetryCtx = jobRow?.id
+    ? {
+        jobIdPrefix: String(jobRow.id).slice(0, 8),
+        accessSource: String(jobRow.access_source || "").trim() || null,
+        attempt: Number(jobRow.attempt_count) || 0,
+      }
+    : null;
+  return runWithScanJobContext(telemetryCtx, () => processScanJobInner(workerId, jobRow));
+}
+
+async function processScanJobInner(workerId, jobRow) {
   const workerTurnStartMs = Date.now();
   if (
     !jobRow?.id ||

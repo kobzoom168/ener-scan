@@ -191,6 +191,12 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
           newImageMimeType: "image/jpeg",
           candidateImageUrl: candUrl,
           objectFamily: "sacred_amulet",
+          // Cost Discovery telemetry (instrumentation-only): fan-out ต่อ job วัดได้จากบิล/LLM_USAGE
+          telemetry: {
+            candidateRank,
+            candidateCount: pool.length,
+            decisionPath: deps.decisionPath || "2d_embedding",
+          },
         });
 
         log(

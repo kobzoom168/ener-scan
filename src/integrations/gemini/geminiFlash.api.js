@@ -10,7 +10,10 @@
  * to `{ response: { text(): string } }`, so callers stay provider-agnostic.
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { env } from "../../config/env.js";
+import { env, envRuntimeMeta } from "../../config/env.js";
+const TELEMETRY_ENV_LABEL =
+  String(process.env.ENER_ENV || "").trim() ||
+  ({ production: "pro", staging: "staging" }[envRuntimeMeta.appEnv] || "local");
 import { recordTurnAiLatency, tryReserveTurnAiCall, TurnAiBudgetExhaustedError } from "../../core/telemetry/turnAiChain.js";
 
 /** P0-3: จอง slot งบเทิร์นก่อนแตะ transport — งบหมด (text turn) = throw typed ไม่ยิง */
@@ -126,7 +129,7 @@ function buildCompatModel(provider, opts = {}) {
             temperature,
             max_tokens: maxTokens,
             // attribution ในบิล OpenRouter (คอลัมน์ user ใน activity export)
-            ...(opts.callSite ? { user: String(opts.callSite).slice(0, 60) } : {}),
+            ...(opts.callSite ? { user: `${TELEMETRY_ENV_LABEL}:${String(opts.callSite)}`.slice(0, 60) } : {}),
             messages,
             ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
             // DeepSeek V4 Flash บางเจ้า (เช่น Alibaba) แอบคิดในใจ (reasoning) กิน max_tokens

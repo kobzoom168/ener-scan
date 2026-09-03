@@ -1,5 +1,6 @@
 import OpenAI from "openai";
-import { env } from "../config/env.js";
+import { env, envRuntimeMeta } from "../config/env.js";
+import { getScanJobContext } from "../core/telemetry/scanJobContext.js";
 
 // 🌉 สะพานฉุกเฉิน: OPENAI_VIA_OPENROUTER=true → ทุกคอล OpenAI (responses/embeddings)
 // วิ่งผ่าน OpenRouter แทน (บทเรียน 12 ก.ค.: เครดิตบัญชี OpenAI หมด ระบบสแกนล้มทั้งเส้น
@@ -31,11 +32,48 @@ const prefixModel = (m) =>
   viaOpenRouter && m && !String(m).includes("/") ? `openai/${m}` : m;
 
 /** LLM_USAGE wrapper กลาง (Codex 13 ส.ค.: usage ต้องครบทุก call ใหญ่ ไม่ใช่แค่บิล CSV)
- *  — callSite อ่านจาก field user ที่ call site ติดมา · log แม้ error (settled telemetry) */
+ *  — callSite อ่านจาก field user ที่ call site ติดมา · log แม้ error (settled telemetry)
+ *  Cost Discovery (Codex 3 ก.ย.): user ที่ส่ง OpenRouter = "<env>:<callSite>" (parseable, grouping คงเดิม)
+ *  + p.telemetry {jobIdPrefix,accessSource,attempt,candidateCount,candidateRank,decisionPath,reason}
+ *  ถูกถอดออกก่อนยิง API (ห้ามหลุด payload) · call ใต้ processScanJob ได้ job context ฟรีจาก ALS */
+const TELEMETRY_ENV_LABEL =
+  String(process.env.ENER_ENV || "").trim() ||
+  ({ production: "pro", staging: "staging" }[envRuntimeMeta.appEnv] || "local");
+// invariant Codex: call สายสแกนต้องมี job context — ไม่มีให้ warn ห้ามหายเงียบ
+// user ที่ส่งขึ้น OpenRouter จริง = "<env>:<callSite>" (ทำที่ชั้น rawClient เท่านั้น —
+// transport ที่ inject ในเทสต์เห็น callSite ดิบเหมือนเดิม)
+const envTagUser = (u) => `${TELEMETRY_ENV_LABEL}:${String(u || "untagged")}`.slice(0, 60);
+const SCAN_CALL_SITE_RE =
+  /^(objectCheck|deepScan|stableFeatureExtract|objectEmbedding|imageForensic|objectSameIdentityVerifier|smartRejection)/;
+
 export function withUsageTracking(api, createFn) {
-  return async (p) => {
+  return async (pIn) => {
     const started = Date.now();
+    const { telemetry: rawTelemetry, ...p } = pIn && typeof pIn === "object" ? pIn : {};
+    const telemetry = rawTelemetry && typeof rawTelemetry === "object" ? rawTelemetry : {};
     const callSite = String(p?.user || "untagged");
+    const scanCtx = (() => {
+      try { return getScanJobContext() || null; } catch { return null; }
+    })();
+    const jobIdPrefix = telemetry.jobIdPrefix ?? scanCtx?.jobIdPrefix ?? null;
+    const accessSource = telemetry.accessSource ?? scanCtx?.accessSource ?? null;
+    const usageExtras = {
+      env: TELEMETRY_ENV_LABEL,
+      jobIdPrefix,
+      accessSource,
+      attempt: telemetry.attempt ?? scanCtx?.attempt ?? null,
+      candidateCount: telemetry.candidateCount ?? null,
+      candidateRank: telemetry.candidateRank ?? null,
+      decisionPath: telemetry.decisionPath ?? null,
+      // ไม่มี job/accessSource ต้องบอกเหตุผลเสมอ (pre_job / non_scan / unavailable)
+      contextReason:
+        jobIdPrefix && accessSource
+          ? null
+          : String(telemetry.reason || (scanCtx ? "unavailable" : "non_scan")),
+    };
+    if (SCAN_CALL_SITE_RE.test(callSite) && !jobIdPrefix) {
+      console.warn(JSON.stringify({ event: "SCAN_CALL_MISSING_JOB_CONTEXT", api, callSite }));
+    }
     const model = String(p?.model || "");
     // CHAT_TURN_AI_CHAIN (Codex P0-6): เส้น OpenAI (conversationSurface ฯลฯ) ต้องถูกนับ
     // ด้วย — attempted นับตั้งแต่ก่อนยิง (error/timeout ก็นับ) · นอก turn context = no-op
@@ -75,6 +113,8 @@ export function withUsageTracking(api, createFn) {
               Number(u.input_tokens_details?.cached_tokens ?? u.prompt_tokens_details?.cached_tokens) || 0,
             completionTokens: Number(u.output_tokens ?? u.completion_tokens) || 0,
             genId: String(res?.id || "").slice(0, 48),
+            generationId: String(res?.id || "").slice(0, 48),
+            ...usageExtras,
             latencyMs: Date.now() - started,
             ok: true,
           }),
@@ -89,6 +129,7 @@ export function withUsageTracking(api, createFn) {
           api,
           callSite,
           model,
+          ...usageExtras,
           ok: false,
           latencyMs: Date.now() - started,
           error: String(e?.message || e).slice(0, 120),
@@ -102,19 +143,19 @@ export function withUsageTracking(api, createFn) {
 export const openai = {
   responses: {
     create: withUsageTracking("responses", (p) =>
-      rawClient.responses.create({ ...p, model: prefixModel(p?.model) }),
+      rawClient.responses.create({ ...p, user: envTagUser(p?.user), model: prefixModel(p?.model) }),
     ),
   },
   embeddings: {
     // เข้า wrapper เหมือนกัน (Codex รอบ 3: AI chain ต้องครบทุกเส้น) — ถูกแต่ก็คือ call
     create: withUsageTracking("embeddings", (p) =>
-      rawClient.embeddings.create({ ...p, model: prefixModel(p?.model) }),
+      rawClient.embeddings.create({ ...p, user: envTagUser(p?.user), model: prefixModel(p?.model) }),
     ),
   },
   chat: {
     completions: {
       create: withUsageTracking("chat", (p) =>
-        rawClient.chat.completions.create({ ...p, model: prefixModel(p?.model) }),
+        rawClient.chat.completions.create({ ...p, user: envTagUser(p?.user), model: prefixModel(p?.model) }),
       ),
     },
   },
