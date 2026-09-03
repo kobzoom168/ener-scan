@@ -35,7 +35,7 @@ export function buildLlmUsageContext(telemetry = {}) {
   };
 }
 
-const SECRET_RE = /sk-or-v1-[A-Za-z0-9]+|Bearer\s+[A-Za-z0-9._-]+/g;
+const SECRET_RE = /sk-or-v1-[A-Za-z0-9]+|Bearer\s+[A-Za-z0-9._-]+|AIza[0-9A-Za-z_-]{10,}|[?&]key=[^&\s"]+/g;
 
 /** ข้อความ error แบบปลอดภัย: ตัด body/secret ทิ้ง เหลือหัวเรื่องสั้น ๆ */
 export function sanitizeErrorMessage(e) {
