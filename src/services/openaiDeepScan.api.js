@@ -1,6 +1,6 @@
 import OpenAI from "openai";
-import { env, envRuntimeMeta } from "../config/env.js";
-import { getScanJobContext } from "../core/telemetry/scanJobContext.js";
+import { env } from "../config/env.js";
+import { buildLlmUsageContext, TELEMETRY_ENV_LABEL } from "../core/telemetry/llmUsage.util.js";
 
 // 🌉 สะพานฉุกเฉิน: OPENAI_VIA_OPENROUTER=true → ทุกคอล OpenAI (responses/embeddings)
 // วิ่งผ่าน OpenRouter แทน (บทเรียน 12 ก.ค.: เครดิตบัญชี OpenAI หมด ระบบสแกนล้มทั้งเส้น
@@ -36,9 +36,6 @@ const prefixModel = (m) =>
  *  Cost Discovery (Codex 3 ก.ย.): user ที่ส่ง OpenRouter = "<env>:<callSite>" (parseable, grouping คงเดิม)
  *  + p.telemetry {jobIdPrefix,accessSource,attempt,candidateCount,candidateRank,decisionPath,reason}
  *  ถูกถอดออกก่อนยิง API (ห้ามหลุด payload) · call ใต้ processScanJob ได้ job context ฟรีจาก ALS */
-const TELEMETRY_ENV_LABEL =
-  String(process.env.ENER_ENV || "").trim() ||
-  ({ production: "pro", staging: "staging" }[envRuntimeMeta.appEnv] || "local");
 // invariant Codex: call สายสแกนต้องมี job context — ไม่มีให้ warn ห้ามหายเงียบ
 // user ที่ส่งขึ้น OpenRouter จริง = "<env>:<callSite>" (ทำที่ชั้น rawClient เท่านั้น —
 // transport ที่ inject ในเทสต์เห็น callSite ดิบเหมือนเดิม)
@@ -52,26 +49,9 @@ export function withUsageTracking(api, createFn) {
     const { telemetry: rawTelemetry, ...p } = pIn && typeof pIn === "object" ? pIn : {};
     const telemetry = rawTelemetry && typeof rawTelemetry === "object" ? rawTelemetry : {};
     const callSite = String(p?.user || "untagged");
-    const scanCtx = (() => {
-      try { return getScanJobContext() || null; } catch { return null; }
-    })();
-    const jobIdPrefix = telemetry.jobIdPrefix ?? scanCtx?.jobIdPrefix ?? null;
-    const accessSource = telemetry.accessSource ?? scanCtx?.accessSource ?? null;
-    const usageExtras = {
-      env: TELEMETRY_ENV_LABEL,
-      jobIdPrefix,
-      accessSource,
-      attempt: telemetry.attempt ?? scanCtx?.attempt ?? null,
-      candidateCount: telemetry.candidateCount ?? null,
-      candidateRank: telemetry.candidateRank ?? null,
-      decisionPath: telemetry.decisionPath ?? null,
-      // ไม่มี job/accessSource ต้องบอกเหตุผลเสมอ (pre_job / non_scan / unavailable)
-      contextReason:
-        jobIdPrefix && accessSource
-          ? null
-          : String(telemetry.reason || (scanCtx ? "unavailable" : "non_scan")),
-    };
-    if (SCAN_CALL_SITE_RE.test(callSite) && !jobIdPrefix) {
+    // helper กลาง (Codex P0-1): logic เดียวกันทุก provider path
+    const usageExtras = buildLlmUsageContext(telemetry);
+    if (SCAN_CALL_SITE_RE.test(callSite) && !usageExtras.jobIdPrefix) {
       console.warn(JSON.stringify({ event: "SCAN_CALL_MISSING_JOB_CONTEXT", api, callSite }));
     }
     const model = String(p?.model || "");

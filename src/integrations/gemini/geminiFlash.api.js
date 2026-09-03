@@ -10,10 +10,14 @@
  * to `{ response: { text(): string } }`, so callers stay provider-agnostic.
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { env, envRuntimeMeta } from "../../config/env.js";
-const TELEMETRY_ENV_LABEL =
-  String(process.env.ENER_ENV || "").trim() ||
-  ({ production: "pro", staging: "staging" }[envRuntimeMeta.appEnv] || "local");
+import { env } from "../../config/env.js";
+import {
+  TELEMETRY_ENV_LABEL,
+  buildLlmUsageContext,
+  classifyLlmFailure,
+  logLlmUsage,
+  sanitizeErrorMessage,
+} from "../../core/telemetry/llmUsage.util.js";
 import { recordTurnAiLatency, tryReserveTurnAiCall, TurnAiBudgetExhaustedError } from "../../core/telemetry/turnAiChain.js";
 
 /** P0-3: จอง slot งบเทิร์นก่อนแตะ transport — งบหมด (text turn) = throw typed ไม่ยิง */
@@ -75,7 +79,7 @@ function getGoogleClient() {
  * @param {"openrouter"|"featherless"} provider
  * @param {{ systemInstruction?: string, jsonMode?: boolean, temperature?: number, timeoutMs?: number, maxTokens?: number, cacheSystemPrompt?: boolean, disableReasoning?: boolean }} opts
  */
-function buildCompatModel(provider, opts = {}) {
+export function buildCompatModel(provider, opts = {}) { // export เพื่อ behavior test (Codex P0-2)
   const cfg = OPENAI_COMPAT[provider];
   const modelId = String(opts.modelOverride || "").trim() || cfg.model();
   const apiKey = String(cfg.apiKey() || "").trim();
@@ -115,6 +119,15 @@ function buildCompatModel(provider, opts = {}) {
       messages.push({ role: "user", content: String(userPrompt || "") });
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), abortMs);
+      // Codex P0-1: usage context เดียวกับ OpenAI wrapper (ALS + contextReason)
+      const usageCtx = buildLlmUsageContext(opts.telemetry);
+      const usageBase = {
+        provider,
+        api: "chat",
+        callSite: String(opts.callSite || "untagged"),
+        model: modelId,
+        ...usageCtx,
+      };
       try {
         const res = await fetch(`${baseURL}/chat/completions`, {
           method: "POST",
@@ -144,26 +157,30 @@ function buildCompatModel(provider, opts = {}) {
         }
         const j = await res.json();
         const text = j?.choices?.[0]?.message?.content ?? "";
-        // cost telemetry (Codex อนุมัติ 13 ส.ค.: attribution ก่อน optimize):
-        // prompt/cached/output tokens ต่อ call พร้อม callSite — วัดของจริง ไม่เดา
-        try {
-          const u = j?.usage || {};
-          const cached =
-            Number(u?.prompt_tokens_details?.cached_tokens) ||
-            Number(u?.cached_tokens) || 0;
-          console.log(
-            JSON.stringify({
-              event: "LLM_USAGE",
-              callSite: String(opts.callSite || "untagged"),
-              model: modelId,
-              promptChars: (systemInstruction ? String(systemInstruction).length : 0) + String(userPrompt || "").length,
-              promptTokens: Number(u.prompt_tokens) || 0,
-              cachedTokens: cached,
-              completionTokens: Number(u.completion_tokens) || 0,
-            }),
-          );
-        } catch { /* telemetry ห้ามขวาง */ }
+        // cost telemetry (Codex อนุมัติ 13 ส.ค. + P0-1 3 ก.ย.): ทุก attempted call = 1 record
+        const u = j?.usage || {};
+        logLlmUsage({
+          ...usageBase,
+          promptChars: (systemInstruction ? String(systemInstruction).length : 0) + String(userPrompt || "").length,
+          promptTokens: Number(u.prompt_tokens) || 0,
+          cachedTokens:
+            Number(u?.prompt_tokens_details?.cached_tokens) || Number(u?.cached_tokens) || 0,
+          completionTokens: Number(u.completion_tokens) || 0,
+          generationId: String(j?.id || "").slice(0, 48) || null,
+          latencyMs: Date.now() - aiStarted,
+          ok: true,
+        });
         return { response: { text: () => String(text || "") } };
+      } catch (e) {
+        // ห้าม log raw provider error body — เก็บแค่ typed failure + ข้อความ sanitized สั้น
+        logLlmUsage({
+          ...usageBase,
+          latencyMs: Date.now() - aiStarted,
+          ok: false,
+          failureType: classifyLlmFailure(e),
+          error: sanitizeErrorMessage(e),
+        });
+        throw e;
       } finally {
         clearTimeout(timer);
         recordTurnAiLatency(Date.now() - aiStarted, aiCallHandle);
@@ -208,13 +225,46 @@ export function getGeminiFlashModel(opts = {}) {
     systemInstruction: opts.systemInstruction,
     generationConfig,
   });
-  // telemetry ครอบ Google direct ด้วย (Codex P0-6: เดิมนับเฉพาะ compat)
+  // telemetry ครอบ Google direct ด้วย (Codex P0-6 + P0-1: LLM_USAGE ครบ success/error)
+  return wrapGoogleModel(googleModel, { ...opts, modelId });
+}
+
+/** ครอบ google-direct model ด้วย budget + LLM_USAGE (export เพื่อ behavior test) */
+export function wrapGoogleModel(googleModel, opts = {}) {
+  const modelId = String(opts.modelId || "google-direct");
   return {
     async generateContent(userPrompt) {
       const aiCallHandle = reserveOrThrow(opts.callSite);
       const aiStarted = Date.now();
+      const usageBase = {
+        provider: "google",
+        api: "generateContent",
+        callSite: String(opts.callSite || "untagged"),
+        model: modelId,
+        ...buildLlmUsageContext(opts.telemetry),
+      };
       try {
-        return await googleModel.generateContent(userPrompt);
+        const r = await googleModel.generateContent(userPrompt);
+        const um = r?.response?.usageMetadata || {};
+        logLlmUsage({
+          ...usageBase,
+          promptTokens: Number(um.promptTokenCount) || 0,
+          cachedTokens: Number(um.cachedContentTokenCount) || 0,
+          completionTokens: Number(um.candidatesTokenCount) || 0,
+          generationId: String(r?.response?.responseId || "").slice(0, 48) || null,
+          latencyMs: Date.now() - aiStarted,
+          ok: true,
+        });
+        return r;
+      } catch (e) {
+        logLlmUsage({
+          ...usageBase,
+          latencyMs: Date.now() - aiStarted,
+          ok: false,
+          failureType: classifyLlmFailure(e),
+          error: sanitizeErrorMessage(e),
+        });
+        throw e;
       } finally {
         recordTurnAiLatency(Date.now() - aiStarted, aiCallHandle);
       }

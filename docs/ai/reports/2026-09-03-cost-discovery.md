@@ -27,13 +27,13 @@
 
 | denominator | จำนวน | $/job | หมายเหตุ |
 |---|---|---|---|
-| created jobs | 966 | **$0.032** | ฐานที่ใช้ตอนกล่าว "1.2฿/job" |
+| created jobs | 966 | **$0.032 (per-created-job)** | ฐานที่ใช้ตอนกล่าว "1.2฿/job" |
 | AI-started | 966 | $0.032 | ทุก job ที่สร้างได้เริ่มประมวลผล (started_at ครบ) |
 | failed | 85 | — | เงินจมใน job ล้ม ≈ 8.8% ของ jobs |
 | delivered (ถูก mark) | 170 | $0.182 | **ตัวเลขนี้สูงเกินจริง** — ดู finding ใหม่ด้านล่าง |
 | delivered free / paid | 40 / 130 | ยังแยกเงินไม่ได้ | ต้องรอ accessSource ใน telemetry (ข้อ 6) |
 
-**Finding ใหม่จากการตรวจ denominator: zombie `delivery_queued` 707 jobs (75% ของ pro)** — ลูกค้าจริงหลายราย ได้รายงานแล้วแต่ job ไม่ถูก mark delivered เพราะ outbound ยุคโค้ดเก่าไม่มี related_job_id (บั๊กเดียวกับที่ P0-F แก้) · **พิสูจน์ว่าจบแล้ว**: หลัง deploy a311d7c (3 ก.ย. 02:30Z) 13 ชม. → delivered 4 / failed 2 / **delivery_queued 0** · จำนวน "delivered จริง" ในอดีตจึง ≈ created − failed ≈ 881 → cost ต่อ delivered จริง ≈ **$0.035** · ผลกระทบ ledger: jobs เก่าไม่มี quota_accounting_version → reconcile ไม่แตะ (ไม่มี retroactive charge, paid ยุคเก่าถูกหักด้วยโค้ดเดิมตอนส่งแล้ว) · เสนอเป็น hygiene item: backfill mark jobs เก่าที่มีหลักฐานส่ง (แยกรอบ ไม่ใช่งาน discovery)
+**Finding ใหม่จากการตรวจ denominator: zombie `delivery_queued` 707 jobs (75% ของ pro)** — ลูกค้าจริงหลายราย ได้รายงานแล้วแต่ job ไม่ถูก mark delivered เพราะ outbound ยุคโค้ดเก่าไม่มี related_job_id (บั๊กเดียวกับที่ P0-F แก้) · **พิสูจน์ว่าจบแล้ว**: หลัง deploy a311d7c (3 ก.ย. 02:30Z) 13 ชม. → delivered 4 / failed 2 / **delivery_queued 0** · delivered ตาม DB จริง = 170 (authoritative) ส่วน **881 เป็น inferred completion** (created−failed, อนุมานจากบั๊ก mark — ห้ามใช้เป็น authoritative) → cost ต่อ inferred-delivered ≈ **$0.035 (ประมาณการ)** · ผลกระทบ ledger: jobs เก่าไม่มี quota_accounting_version → reconcile ไม่แตะ (ไม่มี retroactive charge, paid ยุคเก่าถูกหักด้วยโค้ดเดิมตอนส่งแล้ว) · backfill mark jobs เก่า = hygiene item **แยกรอบเด็ดขาด ห้ามทำพร้อม instrumentation** (ตามกำชับ Codex)
 
 - ตัวเลข "$0.17 หรือ 6฿/สแกน" ของ AI ภายนอกปนฐานหาร (บิลรวมทั้งเดือน ÷ delivered ที่ undercount)
 - แชท+consult+voiceScript+fbCaption ≈ $3.4/21วัน

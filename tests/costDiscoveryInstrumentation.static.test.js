@@ -13,12 +13,26 @@ test("wrapper: user ส่ง OpenRouter เป็น env:callSite และถ�
   assert.match(s, /const envTagUser = \(u\) => `\$\{TELEMETRY_ENV_LABEL\}:\$\{String\(u \|\| "untagged"\)\}`/);
   assert.equal((s.match(/user: envTagUser\(p\?\.user\)/g) || []).length, 3, "responses+embeddings+chat ต้องผ่าน envTagUser ครบ");
   assert.match(s, /const \{ telemetry: rawTelemetry, \.\.\.p \}/);
-  assert.match(s, /contextReason/);
-  assert.match(s, /"non_scan"/);
+  assert.match(s, /buildLlmUsageContext\(telemetry\)/);
   assert.match(s, /SCAN_CALL_MISSING_JOB_CONTEXT/);
   assert.match(s, /generationId/);
   // LLM_USAGE ทั้งฝั่ง ok และ error ต้องมี usageExtras
   assert.equal((s.match(/\.\.\.usageExtras/g) || []).length >= 2, true);
+  // helper กลาง: contextReason non_scan/unavailable + sanitize/classify
+  const h = read("src/core/telemetry/llmUsage.util.js");
+  assert.match(h, /contextReason/);
+  assert.match(h, /"non_scan"/);
+  assert.match(h, /sanitizeErrorMessage/);
+  assert.match(h, /classifyLlmFailure/);
+});
+
+test("geminiFlash: ครบ 4 path — compat success/error + google-direct success/error ผ่าน logLlmUsage", () => {
+  const g = read("src/integrations/gemini/geminiFlash.api.js");
+  assert.equal((g.match(/logLlmUsage\(\{/g) || []).length, 4, "compat ok/err + google ok/err = 4 จุด");
+  assert.equal((g.match(/failureType: classifyLlmFailure\(e\)/g) || []).length, 2);
+  assert.equal((g.match(/error: sanitizeErrorMessage\(e\)/g) || []).length, 2);
+  assert.match(g, /export function wrapGoogleModel/);
+  assert.match(g, /buildLlmUsageContext\(opts\.telemetry\)/);
 });
 
 test("processScanJob: ครอบ job ด้วย runWithScanJobContext (jobIdPrefix/accessSource/attempt)", () => {
