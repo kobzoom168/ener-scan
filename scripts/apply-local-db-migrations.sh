@@ -71,6 +71,19 @@ DO $$ BEGIN
     GRANT UPDATE (unbanned_by, unbanned_at, unban_reason) ON banned_users TO service_role;
   END IF;
 END $$;
+
+-- quota ledger (P0-H Codex 31 ส.ค.): bulk GRANT ALL ข้างบนห้ามเปิด DML ตาราง ledger กลับ —
+-- REVOKE แล้วเหลือ SELECT · แก้ไขได้ผ่าน RPC SECURITY DEFINER เท่านั้น
+DO $$ BEGIN
+  IF to_regclass('public.scan_quota_decrements') IS NOT NULL THEN
+    REVOKE ALL PRIVILEGES ON scan_quota_decrements FROM PUBLIC;
+    REVOKE ALL PRIVILEGES ON scan_quota_decrements FROM web_anon;
+    REVOKE ALL PRIVILEGES ON scan_quota_decrements FROM service_role;
+    GRANT SELECT ON scan_quota_decrements TO web_anon;
+    GRANT SELECT ON scan_quota_decrements TO service_role;
+  END IF;
+END $$;
+
 EOF
 
 echo "==> table count"

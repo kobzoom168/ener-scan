@@ -13,7 +13,7 @@ const logErr = (event, extra) => console.error(JSON.stringify({ event, ...extra 
 
 /**
  * เรียกหลังรายงานถึงลูกค้าแล้ว (post-delivery) — typed, ห้าม throw
- * @returns {Promise<{ outcome: "completed" | "already_completed" | "not_paid" | "skipped_no_job" | "pending_retry", message?: string }>}
+ * @returns {Promise<{ outcome: "completed" | "already_completed" | "not_paid" | "skipped" | "not_ready" | "skipped_no_job" | "pending_retry", message?: string }>}
  */
 export async function settlePaidQuotaAfterDelivery(jobId, deps = {}) {
   const jid = String(jobId || "").trim();
@@ -30,6 +30,15 @@ export async function settlePaidQuotaAfterDelivery(jobId, deps = {}) {
     return { outcome: "pending_retry", message: "ensure_failed" };
   }
   if (ensured === "not_paid" || ensured === "job_not_found") return { outcome: "not_paid" };
+  // P0-H: DB ตรวจหลักฐานส่งเอง — ยังไม่พร้อม = ไม่สร้าง ledger (reconcile เก็บเมื่อหลักฐานครบ)
+  if (ensured === "skip_quota") {
+    log("QUOTA_LEDGER_SKIPPED", { jobIdPrefix: jid.slice(0, 8), via: "ensure" });
+    return { outcome: "skipped" };
+  }
+  if (ensured === "not_delivered" || ensured === "not_accountable" || ensured === "no_sent_outbound") {
+    log("QUOTA_LEDGER_NOT_READY", { jobIdPrefix: jid.slice(0, 8), reason: ensured });
+    return { outcome: "not_ready", message: ensured };
+  }
   if (ensured === "user_mismatch") {
     logErr("QUOTA_LEDGER_USER_MISMATCH", { jobIdPrefix: jid.slice(0, 8) });
     return { outcome: "pending_retry", message: "user_mismatch" };
@@ -50,6 +59,15 @@ export async function settlePaidQuotaAfterDelivery(jobId, deps = {}) {
     if (res === "already_completed") {
       log("QUOTA_LEDGER_ALREADY_COMPLETED", { jobIdPrefix: jid.slice(0, 8), via: "claim" });
       return { outcome: "already_completed" };
+    }
+    // P0-H: claim ตรวจหลักฐานซ้ำใน transaction — refuse แบบ typed (ledger คง pending, ไม่ลด balance)
+    const refusals = ["not_delivered", "not_accountable", "no_sent_outbound", "skip_quota", "not_paid", "job_not_found", "user_mismatch", "no_ledger"];
+    if (refusals.includes(res)) {
+      log("QUOTA_LEDGER_CLAIM_REFUSED", { jobIdPrefix: jid.slice(0, 8), reason: res });
+      try {
+        await rpc("mark_quota_decrement_error", { p_job_id: jid, p_error: `claim_refused:${res}` });
+      } catch { /* best-effort */ }
+      return { outcome: "pending_retry", message: res };
     }
     throw new Error(`claim_unexpected:${res}`);
   } catch (e) {
