@@ -1,4 +1,7 @@
 import line from "@line/bot-sdk";
+import { runWithScanJobContext } from "../core/telemetry/scanJobContext.js";
+import { createHash as _cshash } from "node:crypto";
+const preJobRefOf = (mid) => "pj1:" + _cshash("sha256").update(String(mid || "nomid")).digest("hex").slice(0, 12);
 
 import { maybeFlushPendingApprovedIntroCompensation } from "../utils/adminApproveIntroCompensation.util.js";
 import {
@@ -2927,10 +2930,13 @@ async function finalizeAcceptedImage({
       ) {
         try {
           slipRejectObjectResult = String(
-            (await checkSingleObjectGated(imageBuffer.toString("base64"), {
-              messageId: slipMessageId ?? null,
-              path: "slip_reject_object_confirm",
-            }))?.result || "",
+            (await runWithScanJobContext(
+              { preJobRef: preJobRefOf(slipMessageId), reason: "pre_job" },
+              () => checkSingleObjectGated(imageBuffer.toString("base64"), {
+                messageId: slipMessageId ?? null,
+                path: "slip_reject_object_confirm",
+              }),
+            ))?.result || "",
           );
         } catch {
           slipRejectObjectResult = "";
@@ -3348,11 +3354,24 @@ async function finalizeAcceptedImage({
   }
 
   const imageBase64 = toBase64(imageBuffer);
-  const gated = await checkSingleObjectGated(imageBase64, {
-    messageId: event?.message?.id ?? null,
-    path: "webhook_finalize_image",
-  });
+  // Week2 (Codex): pre-job context — join ค่า objectCheck ที่เกิดก่อนสร้าง job (ไม่มี UID/ข้อความ)
+  const preJobRef = preJobRefOf(event?.message?.id);
+  const gated = await runWithScanJobContext({ preJobRef, reason: "pre_job" }, () =>
+    checkSingleObjectGated(imageBase64, {
+      messageId: event?.message?.id ?? null,
+      path: "webhook_finalize_image",
+    }),
+  );
   const objectCheck = gated.result;
+  if (objectCheck !== "single_supported") {
+    // typed terminal: รูปถูกปัดก่อนเกิด scan job — cost ก้อน pre-job จบที่นี่
+    console.log(JSON.stringify({
+      event: "PRE_JOB_GATE_TERMINAL",
+      preJobRef,
+      terminalReason: "rejected_before_job",
+      objectCheckResult: String(objectCheck || ""),
+    }));
+  }
   const objectGateRouting = resolveObjectGateReplyRouting(gated);
   if (turnPerf) {
     turnPerf.log("OBJECT_CHECK_DONE", {

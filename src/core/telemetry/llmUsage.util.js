@@ -22,16 +22,22 @@ export function buildLlmUsageContext(telemetry = {}) {
   }
   const jobIdPrefix = t.jobIdPrefix ?? scanCtx?.jobIdPrefix ?? null;
   const accessSource = t.accessSource ?? scanCtx?.accessSource ?? null;
+  const preJobRef = t.preJobRef ?? scanCtx?.preJobRef ?? null;
   return {
     env: TELEMETRY_ENV_LABEL,
     jobIdPrefix,
     accessSource,
+    preJobRef,
     attempt: t.attempt ?? scanCtx?.attempt ?? null,
     candidateCount: t.candidateCount ?? null,
     candidateRank: t.candidateRank ?? null,
+    candidateIdPrefix: t.candidateIdPrefix ?? null,
+    opaquePairId: t.opaquePairId ?? null,
     decisionPath: t.decisionPath ?? null,
     contextReason:
-      jobIdPrefix && accessSource ? null : String(t.reason || (scanCtx ? "unavailable" : "non_scan")),
+      jobIdPrefix && accessSource
+        ? null
+        : String(t.reason || scanCtx?.reason || (preJobRef ? "pre_job" : scanCtx ? "unavailable" : "non_scan")),
   };
 }
 

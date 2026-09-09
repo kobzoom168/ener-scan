@@ -14,7 +14,7 @@ CURS = os.path.join(BASE, ".cursors")
 LOCK = os.path.join(BASE, ".lock")
 EVENT_RE = re.compile(
     r"LLM_USAGE|OBJECT_SAME_IDENTITY_VERIFIER_(RESULT|ACCEPTED)|"
-    r"CROSS_ACCOUNT_BASELINE_EMBEDDING_REUSE_(HIT|SKIPPED)|VISION_REID_[A-Z_]+")
+    r"CROSS_ACCOUNT_BASELINE_EMBEDDING_REUSE_(HIT|SKIPPED)|VISION_REID_[A-Z_]+|PRE_JOB_GATE_TERMINAL")
 # whitelist กัน PII/prompt/secret หลุด — คีย์นอกลิสต์ถูกทิ้งเสมอ (คง *Prefix ที่ตัดแล้วเท่านั้น)
 ALLOW = {
     "event","api","callSite","model","promptTokens","cachedTokens","completionTokens",
@@ -24,6 +24,7 @@ ALLOW = {
     "matchCount","inliers","similarity","count","source","verdict","scanIdPrefix",
     "poolSize","recallSource","path","rawMatches","acceptInliers","arbiterMin",
     "failureType","provider","promptChars",
+    "opaquePairId","preJobRef","matcherVersion","terminalReason","objectCheckResult",
 }
 SECRET_RE = re.compile(r"sk-or-v1-[A-Za-z0-9]+|Bearer [A-Za-z0-9._-]+")
 TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T[0-9:.]+Z)\s")

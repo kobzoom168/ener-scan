@@ -7,6 +7,19 @@
  * Doubles as anti-gaming: re-shooting an object at a new angle snaps back to its registered baseline.
  */
 import { env } from "../../config/env.js";
+import { createHash } from "node:crypto";
+
+/** Week2 (Codex): pair id แบบ opaque/versioned — sha256(imageSha|candidateId) ไม่มี UID/รูป */
+export function buildOpaquePairId(ctx, cand) {
+  try {
+    const imgSha = ctx?.imageBuffer
+      ? createHash("sha256").update(ctx.imageBuffer).digest("hex").slice(0, 16)
+      : String(ctx?.jobId || "nojob").slice(0, 16);
+    return "pv1:" + createHash("sha256").update(`${imgSha}|${String(cand?.id || "")}`).digest("hex").slice(0, 20);
+  } catch {
+    return null;
+  }
+}
 import {
   findGlobalObjectBaselineByIdWithGroup,
   matchGlobalObjectBaselinesByEmbedding,
@@ -192,10 +205,13 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
           candidateImageUrl: candUrl,
           objectFamily: "sacred_amulet",
           // Cost Discovery telemetry (instrumentation-only): fan-out ต่อ job วัดได้จากบิล/LLM_USAGE
+          // Week2: opaquePairId (pv1 = sha256(imageSha|candidateId) — ไม่มี UID) ใช้ join replay/pair-cache
           telemetry: {
             candidateRank,
             candidateCount: pool.length,
             decisionPath: deps.decisionPath || "2d_embedding",
+            candidateIdPrefix: String(cand.id).slice(0, 8),
+            opaquePairId: buildOpaquePairId(ctx, cand),
           },
         });
 
@@ -209,6 +225,8 @@ export async function tryCrossAccountEmbeddingBaselineReuse(ctx, deps = {}) {
             similarity: Number(cand.similarity).toFixed(4),
             candidateRank,
             poolSize: pool.length,
+            opaquePairId: buildOpaquePairId(ctx, cand),
+            matcherVersion: "llm-verifier-v1",
             same: verdict.same === true,
             confidence: Number(verdict.confidence).toFixed(3),
             reason: String(verdict.reason || "").slice(0, 120),
