@@ -84,7 +84,7 @@
 - 591bdbed (08-28 free): สแกนสำเร็จภายหลัง 2 ครั้ง → ไม่ต้องเยียวยา
 - ก่อนส่งจริงทุกราย: ตรวจซ้ำว่า result ยังโหลดได้ + ไม่มี outbound อื่นถึงลูกค้าแล้ว + กบอนุมัติรายตัว
 
-## สาย Cost (ปิดแล้ว 11 ก.ย. 2026 — verdict STOP)
+## สาย Cost — ✅ ปิดถาวร (Codex เคาะ 11 ก.ย. 2026)
 - objectCheck consolidation ($3.1/เดือน, 2-4 วันคน) · LightGlue verifier gate ($0.27/เดือน net, latency +20 วิ/สแกน) · pair-cache (repeat=0) — **ทั้งหมดไม่คุ้ม อย่ารื้อใหม่จนกว่าปริมาณสแกนโตหลายเท่า**
 - เหลือของฟรีอย่างเดียว: ปิด flag `OBJECT_CHECK_LOW_SHADOW_ENABLED` เมื่อการทดลอง shadow สรุปผลแล้ว (~$0.75/เดือน, effort ~0)
-- instrumentation W2 (opaquePairId/preJobRef/PRE_JOB_GATE_TERMINAL) อยู่ staging รอ Codex เคาะว่าจะขึ้น Pro ไหม
+- instrumentation W2 (opaquePairId/preJobRef/PRE_JOB_GATE_TERMINAL): **Codex สั่งห้ามขึ้น Pro ตอนนี้** — คง commits `b743f3a`/`b5e9da7` ไว้อ้างอิงเท่านั้น, staging ไม่ต้องย้อน

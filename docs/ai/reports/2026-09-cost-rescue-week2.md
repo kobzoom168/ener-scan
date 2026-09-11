@@ -6,6 +6,8 @@
 
 # 🔴 STOP verifier optimization
 
+**สถานะ: Codex เคาะรับ verdict นี้แล้ว (11 ก.ย. 2026)** — ห้าม canary · ห้ามเปลี่ยน verifier production · ห้าม deploy W2 instrumentation ขึ้น Pro · Pro คง `0bb11bc`
+
 เหตุผลรวบยอด: replay จริงครบ 971 คู่ **ประหยัดได้ $0.27/เดือนสุทธิ (≈10 บาท) = 9% ของเกณฑ์ $3/เดือน** และต้องจ่าย **latency +4.18 วิ/คู่ ใน 95.5% ของ call ที่ยังต้อง fallback ไป LLM อยู่ดี** (per-job จาก 19.3 วิ → ~40 วิ) · pair-cache ไม่มี savings (exact repeat = 0) · **ไม่มี confirmed false reuse — แต่ไม่ช่วยให้คุ้ม**
 
 ## 2. Replay summary (971/971 คู่ · concurrency 1 · นอก request path · ไม่เรียก LLM ใหม่)
@@ -19,7 +21,9 @@
 
 inliers distribution: 0–4 = 102 (10.5%) · 5–11 = 706 (72.7%) · 12–24 = 148 (15.2%) · ≥25 = 15 (1.5%)
 
-**Agreement กับคำตัดสิน LLM ที่บันทึกไว้ (comparator เท่านั้น ไม่ใช่ ground truth): 971/971 = 100%** — LightGlue จับ same ได้ครบทุกคู่ที่ LLM เคยตอบ same (15/15) และไม่มีคู่ใดที่ LightGlue ว่า same แต่ LLM ว่า different
+**Agreement กับคำตัดสิน LLM ที่บันทึกไว้ = 971/971 ใน replay dataset ชุดนี้** — LightGlue จับ same ได้ครบทุกคู่ที่ LLM เคยตอบ same (15/15) และไม่มีคู่ใดที่ LightGlue ว่า same แต่ LLM ว่า different
+
+> ⚠️ **Correction (Codex 11 ก.ย.):** ตัวเลขนี้คือ **agreement ภายใน replay dataset** เทียบกับ LLM decision ที่บันทึกไว้ — **ไม่ใช่ ground-truth accuracy 100%** ไม่มีการยืนยันด้วยมนุษย์ว่าคู่ใดเป็นองค์เดียวกันจริง และ positives มีเพียง 15 คู่ · ไม่เปลี่ยน verdict = STOP
 
 ## 3. Disagreement review
 
@@ -62,7 +66,7 @@ inliers distribution: 0–4 = 102 (10.5%) · 5–11 = 706 (72.7%) · 12–24 = 1
 ## 6. ประโยชน์อื่นนอกจากลดเงิน (ตอบตามที่ขอ)
 
 - **LightGlue พบ same ที่ LLM พลาดหรือไม่: ไม่พบ** — high_same ทั้ง 15 คู่คือคู่เดียวกับที่ LLM ตอบ same อยู่แล้ว จึงไม่มี quality win ด้านการค้นพบเพิ่มในหน้าต่างนี้
-- **False reuse risk: ไม่พบ confirmed false reuse** (high_same × llmDifferent = 0) — แต่ย้ำว่านี่เทียบกับ LLM decision ไม่ใช่ ground truth และ positives มีแค่ 15 คู่ ซึ่งเล็กเกินกว่าจะสรุปความปลอดภัยระยะยาว
+- **False reuse risk: ไม่พบ confirmed false reuse ใน dataset นี้** (high_same × llmDifferent = 0) — แต่ย้ำว่าเป็น agreement กับ LLM decision **ไม่ใช่ ground truth** และ positives มีแค่ 15 คู่ ซึ่งเล็กเกินกว่าจะสรุปความปลอดภัยระยะยาว
 - **สิ่งที่ได้จริง (เชิงความรู้):** threshold `inliers ≥ 25` ที่เส้น 2G ใช้อยู่ **ดูตั้งไว้เหมาะสม** — ในหน้าต่างนี้ไม่มี false positive และไม่ตัดของจริงทิ้ง · และยืนยันว่า 72.7% ของคู่ candidate อยู่ที่ inliers 5–11 ซึ่งต่ำกว่า arbiter band มาก (คู่ที่ไม่เกี่ยวข้องกันจริง ๆ ตามคำตัดสิน LLM)
 - **คำถามเปิดที่ยังตอบไม่ได้ (ไม่ใช่ข้อเสนอ):** การ *แทน* LLM ด้วย LightGlue ทั้งหมดจะแตะเพดาน $6.9/เดือนและ latency พอ ๆ กัน แต่ต้องมี ground truth จริง + ตัวอย่างภาพต่างมุม/หน้า-หลัง ซึ่งหน้าต่างนี้ไม่มีเลย (positives 15 คู่ทั้งหมดเป็น geometry ชัด) — **ห้ามใช้ผลชุดนี้เป็นเหตุผลเปิด automatic reuse**
 
