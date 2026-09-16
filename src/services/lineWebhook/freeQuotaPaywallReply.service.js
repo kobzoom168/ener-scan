@@ -10,6 +10,7 @@ import { getDefaultPackage } from "../scanOffer.packages.js";
 import { sendNonScanReply } from "../nonScanReply.gateway.js";
 import { lineStickerPaymentSupportMessage } from "../../utils/lineStickerMessage.util.js";
 import { buildFreeQuotaPaywallFlex } from "../flex/paywallOffer.flex.js";
+import { buildTrialPaywallText } from "../newCustomerTrial.service.js";
 import {
   buildDeterministicFreeQuotaExhaustedPaywallText,
   getDeterministicFreeQuotaExhaustedPaywallAlternateTexts,
@@ -40,11 +41,12 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
   const uid = String(userId || "").trim();
   const offer = loadActiveScanOffer();
   const pkg = getDefaultPackage(offer);
-  const primary = buildDeterministicFreeQuotaExhaustedPaywallText(offer, {
+  const isTrial = accessDecision?.freePolicy === "new_customer";
+  const primary = isTrial ? buildTrialPaywallText(offer) : buildDeterministicFreeQuotaExhaustedPaywallText(offer, {
     lineUserId: uid,
   });
   const primaryFirstLine = primary.split("\n")[0] || "";
-  const alternates = getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(offer, {
+  const alternates = isTrial ? [] : getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(offer, {
     lineUserId: uid,
     primaryFirstLine,
   });
@@ -99,7 +101,7 @@ export async function sendFreeQuotaExhaustedPaywallViaGateway({
 
   // การ์ด Flex โปรทั้งร้าน (กบ 17 ก.ค.) — text เป็น altText/fallback; การ์ด build
   // ไม่ได้ (เช่นไม่มีแพ็ก) = ถอยไปส่งข้อความแบบเดิมเอง
-  const paywallFlex = buildFreeQuotaPaywallFlex(offer, { altText: primary.slice(0, 400) });
+  const paywallFlex = isTrial ? null : buildFreeQuotaPaywallFlex(offer, { altText: primary.slice(0, 400) });
 
   const res = await sendNonScanReply({
     client,

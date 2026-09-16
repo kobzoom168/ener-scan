@@ -874,7 +874,7 @@ function renderAccessSnapshotPanel(accessSnapshot) {
         <div class="kv">
           <div>สแกนได้ตอนนี้</div><div><strong>${escapeHtml(allowed)}</strong></div>
           <div>เหตุผล</div><div>${reason}</div>
-          <div>โควต้าฟรีคงเหลือ (วันนี้)</div><div>${freeRem}</div>
+          <div>${accessSnapshot.freePolicy === "new_customer" ? "สิทธิ์ทดลองคงเหลือ (ไม่รีเซ็ตรายวัน)" : "โควต้าฟรีคงเหลือ (วันนี้)"}</div><div>${freeRem}</div>
           <div>สิทธิ์ที่เหลือ (แพ็กเกจ)</div><div>${rem}</div>
           <div>หมดอายุ paid</div><div>${pd}</div>
         </div>`;

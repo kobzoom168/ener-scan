@@ -13,6 +13,7 @@ import {
 } from "../../../stores/paymentAccess.db.js";
 import { computePaidActive } from "../../../services/scanOfferAccess.resolver.js";
 import { loadActiveScanOffer } from "../../../services/scanOffer.loader.js";
+import { getNewCustomerTrialStatus } from "../../../services/newCustomerTrial.service.js";
 import { getValue, setLargeValueWithTtl } from "../../../redis/scanV2Redis.js";
 
 const REJECT_REASON_THAI = {
@@ -82,10 +83,14 @@ export async function buildCustomerFactsContext(lineUserId) {
 
     let freeLine;
     let adminResetLine = null;
+    const trial = await getNewCustomerTrialStatus(uid);
     if (paidActive) {
       freeLine =
         `สิทธิ์แบบชำระเงินยังใช้งานอยู่ เหลือ ${paidRemaining} ครั้ง (ตัดสิทธิ์จ่ายก่อน โควต้าฟรีถูกกันไว้)` +
         ` — ลูกค้าจ่ายเงินและเปิดสิทธิ์เรียบร้อยแล้ว ⛔️ ห้ามทวงสลิป ห้ามพูดเรื่องโอน/QR เด็ดขาด แม้ประวัติแชทจะค้างเรื่องโอนอยู่ (เรื่องจ่ายจบไปแล้ว) — ลูกค้าทักสั้น ๆ เฉย ๆ ให้รับทราบและบอกว่าส่งรูปมาใช้สิทธิ์ได้เลย`;
+    } else if (trial.enabled) {
+      const remaining = trial.eligible ? Math.max(0, 2 - trial.used) : 0;
+      freeLine = `นโยบายปัจจุบัน: ยุติฟรีรายวัน ลูกค้าใหม่ได้ทดลองรวม 2 ครั้งต่อบัญชี ไม่รีเซ็ตพรุ่งนี้; สิทธิ์ทดลองของคนนี้เหลือ ${remaining} ครั้ง`;
     } else {
       let freeUsed = 0;
       if (userRow?.id) {
@@ -170,7 +175,9 @@ export async function buildCustomerFactsContext(lineUserId) {
     return [
       `• วันเกิดที่บันทึกไว้: ${birthdate ? `${birthdate} (มีแล้ว — ห้ามถามซ้ำ)` : "ยังไม่มี"}`,
       `• ${freeLine}`,
-      `• กติกาสิทธิ์ฟรี: วันละ ${freeQuota} ครั้ง รีเซ็ตหลังเที่ยงคืนเวลาไทย ใช้ไม่หมดไม่ทบไปวันถัดไป`,
+      trial.enabled
+        ? "• กติกาสิทธิ์ฟรี: เฉพาะลูกค้าใหม่ รวม 2 ครั้งต่อบัญชี ไม่รีเซ็ตรายวัน"
+        : `• กติกาสิทธิ์ฟรี: วันละ ${freeQuota} ครั้ง รีเซ็ตหลังเที่ยงคืนเวลาไทย ใช้ไม่หมดไม่ทบไปวันถัดไป`,
       "• ค่าครู (ภาษาการเงิน — กบ 30 ก.ค.): เรียกการชำระเงินทุกแบบว่า ค่าครู เสมอ ห้ามใช้คำว่า ซื้อแพ็ก/แพ็กเกจ/สมัครสมาชิก · ห้ามอาจารย์เชียร์ขายหรือเลือกแทนลูกค้าเด็ดขาด — ลูกค้าอยากเปิดสิทธิ์ ให้บอกว่าบอกอาจารย์มาได้เลย เดี๋ยวมีตัวเลือกเด้งให้แตะเลือก (ห้ามสอนพิมพ์คำสั่ง) · ⛔️ ถ้าข้อความล่าสุดของลูกค้าเป็นการตอบคำถามที่อาจารย์ถามไป (เช่น บอกว่าพกเพื่ออะไร บอกชื่อพระ) ให้รับทราบเรื่องนั้น ห้ามสวนด้วยการพูดราคา/ชวนจ่ายเด็ดขาด (เคสจริง 8 ส.ค.: ลูกค้าตอบว่าใส่เสริมงาน แต่บอทตอบราคา 49 จนแอดมินต้องขอโทษ)",
       `• โปรตอนนี้ (ข้อเท็จจริง — ตอบได้เฉพาะเมื่อลูกค้าถามเรื่องโปร/แพ็ก/ราคาเอง ห้ามยกขึ้นมาเสนอก่อน): ${(offer?.packages || [])
         .filter((p) => p && p.active !== false)
@@ -180,7 +187,7 @@ export async function buildCustomerFactsContext(lineUserId) {
             ? `${p.priceThb} บาท สมาชิกรายเดือน อาจารย์ดูแลทั้งเดือน สแกนไม่จำกัด`
             : `${p.priceThb} บาท สแกน ${p.scanCount} ครั้ง`,
         )
-        .join(", ") || "ยังไม่เปิดรับค่าครู"} และมีฟรีวันละ ${freeQuota} ครั้ง`,
+        .join(", ") || "ยังไม่เปิดรับค่าครู"}${trial.enabled ? " และลูกค้าใหม่ทดลองฟรีรวม 2 ครั้ง" : ` และมีฟรีวันละ ${freeQuota} ครั้ง`}`,
 
       ...(adminCaseLine ? [`• ${adminCaseLine}`] : []),
       ...(adminResetLine ? [`• ${adminResetLine}`] : []),
