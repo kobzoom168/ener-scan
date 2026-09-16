@@ -632,6 +632,14 @@ function aggregateScanAxes(rows) {
 /** สิทธิ์เหลือรวม: แพ็กจ่ายเงิน (ถ้ายังไม่หมดอายุ) + ฟรีที่เหลือของวันนี้. */
 async function getRemainingScans(userId) {
   try {
+    const authority = await checkScanAccess({ userId });
+    if (authority.freePolicy === "new_customer") {
+      const paidLeft = authority.reason === "paid" ? Math.max(0, Number(authority.remaining) || 0) : 0;
+      const freeLeft = Math.max(0, Number(authority.freeScansRemaining) || 0);
+      const bonusLeft = authority.freeAccessKind === "bonus" ? Math.max(0, Number(authority.remaining) || 0) : 0;
+      return { total: paidLeft + freeLeft + bonusLeft, freeLeft, paidLeft, bonusLeft,
+        paidUntil: paidLeft ? authority.paidUntil : null, freePolicy: "new_customer" };
+    }
     const { data } = await supabase
       .from("app_users")
       .select("id,paid_remaining_scans,paid_until,free_scan_daily_offset,free_scan_offset_date")
@@ -3084,7 +3092,7 @@ function buildLiffHtml(liffId) {
           ? "ตอนนี้ใช้สิทธิ์รายเดือนอยู่"
           : "สิทธิ์คงเหลือ " + rights.total + " ครั้ง";
         stS.textContent = (rights.paidUntil ? "ใช้ได้ถึง " + payFmtThaiDate(rights.paidUntil) : "") +
-          (rights.freeLeft > 0 && rights.paidLeft > 0 ? (rights.paidUntil ? " · " : "") + "รวมสิทธิ์ฟรีวันนี้ " + rights.freeLeft + " ครั้ง" : "");
+          (rights.freeLeft > 0 && rights.paidLeft > 0 ? (rights.paidUntil ? " · " : "") + (rights.freePolicy === "new_customer" ? "รวมสิทธิ์ทดลองคงเหลือ " : "รวมสิทธิ์ฟรีวันนี้ ") + rights.freeLeft + " ครั้ง" : "");
         backBtn.classList.remove("hidden");
         st.classList.remove("hidden");
       } else if(rights){

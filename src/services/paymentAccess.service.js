@@ -11,6 +11,7 @@ import {
   computePaidActive,
 } from "./scanOfferAccess.resolver.js";
 import { buildScanOfferReply } from "./scanOffer.copy.js";
+import { getNewCustomerTrialStatus, applyTrialToGate, buildTrialPaywallText } from "./newCustomerTrial.service.js";
 
 export async function checkScanAccess({ userId, now = new Date(), consumeBonus = false }) {
   const lineUserId = String(userId || "").trim();
@@ -95,12 +96,13 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
     : 0;
 
   const paidActiveNow = computePaidActive(paidUntil, paidRemainingScans, now);
+  const trial = await getNewCustomerTrialStatus(lineUserId);
 
   // Free usage for gate math:
   // - paid_active => keep free quota untouched for this request (prevents paid scans from exhausting free quota)
   // - non-paid path => count scans created today, then apply admin offset
   let freeUsedToday = 0;
-  if (appUserId && !paidActiveNow) {
+  if (appUserId && !paidActiveNow && !trial.enabled) {
     freeUsedToday = await countScanResultsTodayForAppUser(appUserId, now);
   }
 
@@ -116,17 +118,17 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
     freeUsedToday = Math.max(0, freeUsedToday - offsetN);
   }
 
-  const gate = decideScanGate({
+  const gate = applyTrialToGate(decideScanGate({
     freeUsedToday,
     freeQuotaPerDay,
     paidUntil,
     paidRemainingScans,
     now,
-  });
+  }), trial);
 
   const ctx = resolveScanOfferAccessContext({
-    offer,
-    freeUsedToday,
+    offer: trial.enabled ? { ...offer, freeQuotaPerDay: gate.freeScansLimit } : offer,
+    freeUsedToday: trial.enabled ? gate.usedScans : freeUsedToday,
     paidUntil,
     paidRemainingScans,
     now,
@@ -139,6 +141,7 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
   console.log(
     JSON.stringify({
       event: "SCAN_OFFER_ACCESS_RESOLVED",
+      freePolicy: trial.enabled ? "new_customer" : "daily",
       userIdPrefix: lineUserId.slice(0, 8),
       scenario: ctx.scenario,
       offerLabel: ctx.offerLabel,
@@ -160,7 +163,8 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
   let viaBonus = false;
   const bonusScansAvail = Number(appUserRow?.bonus_scans) || 0;
   if (!gate.allowed && bonusScansAvail > 0 && appUserId) {
-    if (!consumeBonus) {
+    if (!consumeBonus || trial.enabled) {
+      // Trial-mode bonus is reserved atomically by the job insert trigger.
       viaBonus = true;
     } else {
       try {
@@ -191,7 +195,7 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
   if (viaBonus) {
     gate.allowed = true;
     gate.reason = "free";
-    gate.remaining = Math.max(1, Number(gate.remaining) || 0);
+    gate.remaining = trial.enabled ? bonusScansAvail : Math.max(1, Number(gate.remaining) || 0);
   }
 
   const finalDecision = gate.allowed
@@ -219,12 +223,30 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
     freeScansRemaining: gate.freeScansRemaining,
     paidUntil: gate.paidUntil,
     paidRemainingScans,
+    freePolicy: gate.freePolicy || "daily",
+    freeAccessKind: viaBonus ? "bonus" : trial.enabled ? "trial" : "daily",
+    trialEligible: gate.trialEligible ?? null,
+    trialPending: trial.enabled ? Number(trial.pending) || 0 : 0,
   };
 }
 
 /** Text-only paywall reply (LINE Flex reserved for final scan result). */
 export async function buildPaymentGateReply({ decision, userId = null }) {
   const offer = loadActiveScanOffer();
+  if (decision?.freePolicy === "new_customer") {
+    const primaryText = buildTrialPaywallText(offer);
+    return {
+      fallbackText: primaryText,
+      scanOffer: {
+        replyType: "free_quota_exhausted",
+        semanticKey: "scan_offer:new_customer_trial_exhausted",
+        primaryText,
+        alternateTexts: [],
+        scanOfferMeta: { freePolicy: "new_customer" },
+      },
+      decision,
+    };
+  }
   const ctx = resolveScanOfferAccessContext({
     offer,
     freeUsedToday: decision?.usedScans ?? 0,

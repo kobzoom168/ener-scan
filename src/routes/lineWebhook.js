@@ -3697,7 +3697,7 @@ async function handleImageMessage({ client, event, userId, session }) {
           userId,
           message: routeErr?.message,
         });
-        return { allowed: false };
+        return { allowed: false, accessUnavailable: true };
       }),
       getLatestAwaitingPaymentForLineUserId(userId).catch(() => null),
     ]);
@@ -3805,6 +3805,26 @@ async function handleImageMessage({ client, event, userId, session }) {
       console.log(JSON.stringify({ event: "IMAGE_INFLIGHT_NOTICE", lineUserIdPrefix: String(userId).slice(0, 8), sent: r?.sent === true, suppressed: r?.suppressed === true }));
     } catch (e) {
       console.error(JSON.stringify({ event: "IMAGE_INFLIGHT_NOTICE_FAIL", lineUserIdPrefix: String(userId).slice(0, 8), message: String(e?.message || e).slice(0, 120) }));
+    }
+    return;
+  }
+
+  // Reject exhausted trials before image download/objectCheck, after the
+  // in-flight notice. Pending payment images must still reach slip validation.
+  if (!imageWillUseSlipPath && !routeAccessDecision?.allowed &&
+      (routeAccessDecision?.freePolicy === "new_customer" || routeAccessDecision?.accessUnavailable)) {
+    if (routeAccessDecision.accessUnavailable) {
+      await sendNonScanReply({ client, userId, replyToken: event.replyToken,
+        replyType: "scan_access_unavailable", semanticKey: `scan_access_unavailable:${event.message?.id}`,
+        text: "ตอนนี้ตรวจสิทธิ์ให้ไม่ได้ครับ กรุณาลองส่งใหม่อีกครั้ง", alternateTexts: [] });
+    } else if (routeAccessDecision.trialPending > 0) {
+      await sendNonScanReply({ client, userId, replyToken: event.replyToken,
+        replyType: "image_inflight_notice", semanticKey: "image_inflight_notice",
+        text: "มีชิ้นก่อนหน้ารอผลอยู่ครับ รอรับผลก่อน แล้วค่อยส่งชิ้นถัดไป", alternateTexts: [],
+        speakerRoleOverride: "admin" });
+    } else {
+      await sendFreeQuotaExhaustedPaywallViaGateway({ client, userId, replyToken: event.replyToken,
+        messageId: event.message?.id, accessDecision: routeAccessDecision, pathSegment: "pre_object_check", turnPerf });
     }
     return;
   }

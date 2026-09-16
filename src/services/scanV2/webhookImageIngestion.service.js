@@ -342,19 +342,28 @@ export async function ingestScanImageAsyncV2({
   );
 
   const debounceSec = Number(env.SCAN_IMAGE_DEBOUNCE_SECONDS) || 0;
-  const jobRow = await insertScanJob({
-    line_user_id: lineUserId,
-    app_user_id: appUserId,
-    upload_id: uploadRow.id,
-    birthdate_snapshot: String(birthdateSnapshot || "").trim() || null,
-    access_source: accessSource,
-    status: "queued",
-    priority: 100,
-    // 1 ชิ้นต่อ 1 รูป: hold the job briefly so burst photos attach here
-    ...(debounceSec > 0
-      ? { process_after: new Date(Date.now() + debounceSec * 1000).toISOString() }
-      : {}),
-  });
+  let jobRow;
+  try {
+    jobRow = await insertScanJob({
+      line_user_id: lineUserId,
+      app_user_id: appUserId,
+      upload_id: uploadRow.id,
+      birthdate_snapshot: String(birthdateSnapshot || "").trim() || null,
+      access_source: accessSource,
+      ...(accessSource === "free" ? { free_access_kind: accessDecision?.freeAccessKind || "daily" } : {}),
+      status: "queued",
+      priority: 100,
+      // Hold burst photos briefly so they attach to the same report.
+      ...(debounceSec > 0
+        ? { process_after: new Date(Date.now() + debounceSec * 1000).toISOString() }
+        : {}),
+    });
+  } catch (error) {
+    // A concurrent admission or policy change can invalidate the earlier
+    // access snapshot. Release the ingestion lock even when SQL rejects it.
+    await clearDedupeKey(inflightKey);
+    throw error;
+  }
 
   if (!jobRow?.id) {
     console.error(

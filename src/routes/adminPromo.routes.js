@@ -5,6 +5,7 @@
  * ปุ่มล้าง override = กลับไปใช้ค่าจากไฟล์ในโค้ด.
  */
 import express from "express";
+import createAdminFreeTrialRouter from "./adminFreeTrial.routes.js";
 import { requireAdminSession } from "../middleware/requireAdmin.js";
 import {
   loadActiveScanOffer,
@@ -35,7 +36,7 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
-function pageHtml({ offer, overrideOn, savedMsg, errorMsg, renewal, regGate }) {
+function pageHtml({ offer, overrideOn, savedMsg, errorMsg, renewal, regGate, upgradeCredit }) {
   const pkgRows = offer.packages
     .map(
       (p, i) => `
@@ -104,6 +105,8 @@ small{color:var(--muted);font-size:.7rem}</style>
   <form method="POST" action="/admin/promo/save" id="promoForm">
     <div class="card">
       <h2>โควตาฟรี</h2>
+      <p><a class="btn" href="/admin/free-trial">ตั้งค่า: ลูกค้าใหม่ฟรีรวม 2 ครั้ง / ฟรีรายวัน</a></p>
+      <small>จำนวนด้านล่างใช้เมื่อปิดโหมดลูกค้าใหม่เท่านั้น</small>
       <label style="max-width:220px">ฟรีวันละ (ครั้ง/คน)
         <input type="number" name="freeQuotaPerDay" min="0" value="${offer.freeQuotaPerDay}"/>
       </label>
@@ -224,6 +227,7 @@ ${pkgRows}
 
 export default function createAdminPromoRouter() {
   const router = express.Router();
+  router.use(createAdminFreeTrialRouter());
 
   router.get("/admin/promo", requireAdminSession, async (req, res) => {
     const overrideRaw = await getScanOfferOverrideRaw().catch(() => null);
@@ -236,6 +240,7 @@ export default function createAdminPromoRouter() {
         offer,
         renewal,
         regGate,
+        upgradeCredit,
         overrideOn: Boolean(overrideRaw),
         savedMsg: req.query.saved ? "บันทึกแล้ว — มีผลกับลูกค้าภายใน ~30 วินาที" : "",
         errorMsg: req.query.err ? String(req.query.err) : "",

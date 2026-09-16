@@ -115,6 +115,19 @@ export function buildQuotaRemainingReply({ access, freeRemainingToday, freeQuota
   // label จาก resolver เป็น "พรุ่งนี้เวลา 00:00 น. (รีเซ็ตโควตฟรี)" — ตัดวงเล็บท้ายออกให้อ่านเป็นประโยค
   const resetLabel = String(nextResetLabel || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
   const lines = [];
+  if (access?.freePolicy === "new_customer") {
+    if (access.reason === "paid" && allowed) {
+      return `สิทธิ์แพ็กเหลือ ${Math.max(0, paidRemaining)} ครั้งครับ`;
+    }
+    if (access.freeAccessKind === "bonus" && allowed) {
+      return "ยังมีสิทธิ์โบนัสสแกนอยู่ครับ";
+    }
+    if (allowed && access.trialEligible) {
+      return `สิทธิ์ทดลองสำหรับลูกค้าใหม่เหลือ ${access.freeScansRemaining} จากทั้งหมด 2 ครั้งครับ ไม่รีเซ็ตรายวัน`;
+    }
+    if (access.trialPending > 0) return "สิทธิ์ทดลองกำลังใช้กับชิ้นที่รอผลอยู่ครับ รอรับผลก่อนนะครับ";
+    return "ตอนนี้ไม่มีสิทธิ์สแกนที่ใช้ได้ครับ เลือกซื้อแพ็กเพื่อสแกนต่อได้";
+  }
   if (paidActive) {
     const until = thaiShortDate(paidUntil);
     if (Number.isFinite(paidRemaining) && paidRemaining >= 999999) {
@@ -185,4 +198,3 @@ export async function resolvePackageQuestionReply(deps) {
     text: buildQuotaRemainingReply({ access, freeRemainingToday: freeRemaining, freeQuotaPerDay: freeLimit, nextResetLabel }),
   };
 }
-
