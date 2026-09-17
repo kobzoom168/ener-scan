@@ -1041,3 +1041,12 @@
     - **ยังไม่คืน optout ให้บัญชีจริง** (10 คนที่เคยกดปิด) — รออนุมัติตามที่สั่ง
   - **#1-2 acceptance ที่เหลือ**: เขียนขั้นตอนละเอียดไว้ที่ `docs/ai/plans/2026-09-17-staging-acceptance-procedure.md` — ครอบคลุมข้อควรระวังของ Codex (เปิดสวิตช์ก่อนแล้วค่อยสร้างบัญชี · ตรวจ created_at >= eligible_since ก่อนเริ่ม · ห้ามแก้ created_at/ล้างประวัติ · ส่งรูปทีละรูปรอจบ · เคสส่งพร้อมกันแยกทดสอบ · คืน OFF โดยเก็บ cutoff จริง) · **รอกบว่างเพื่อส่งรูปจริง**
   - สถานะ: staging ยังเป็น `release/new-customer-trial @ 1d675d4` สวิตช์ **OFF** · **Pro คง `0bb11bc` ไม่ถูกแตะ** · ยังไม่ deploy Pro / ไม่ broadcast / ไม่เปิดนโยบายจริง
+
+## 17 ก.ย. 2026 | Claude | รวม trial + optout เป็น branch ทดสอบ staging + ปิดช่องว่าง optout 4 ข้อ
+- branch `staging-test/trial+optout` = `0bb11bc` (Pro) + `1d675d4` (trial ของ Codex) + `a8303b3` (optout) — commit แยกกัน · W2 markers 0 ไฟล์ · cherry-pick ชนแค่ `package.json` (test manifest)
+- ปิดช่องว่างตาม Codex: (1) scope — `daily_pick_push` + `fb_consent_ask` ปิดได้, `renewal_reminder`/`scan_result`/`scan_failure_notify` ไม่ผูกสวิตช์ (2) อ่าน Redis เดิมแล้ว migrate เข้า DB ("ไม่มีแถว" ≠ "เปิดรับ") (3) คำถาม "ปิดแจ้งเตือนยังไง" ตอบวิธีโดยไม่เปลี่ยนค่า (4) เทสต์ 9 ข้อ
+- staging: apply `sql/058` 2 รอบ (idempotent) · PUBLIC ถูก REVOKE · web_anon เขียนตารางตรงไม่ได้ · 0 แถว (ไม่ backfill)
+- acceptance staging 12/12 ผ่าน (persist off→on→off · DB ล้มไม่ยืนยันสำเร็จ+ไม่ส่งเชิงรุก · คิวเก่า suppress+markSent ไม่ retry · ข้อความธุรกรรมยังส่ง · duplicate ไม่กลับด้าน) — คืนสิทธิ์ DB และลบข้อมูลสังเคราะห์แล้ว
+- gate: `staging-test/trial+optout` ✅ ไม่มี fail ใหม่ · optout 9/9 · trial 6/6
+- **ผล: Pro คง `main @ 0bb11bc` /health 200 · trial switch OFF (`eligible_since` ยัง null)**
+- ค้าง: ส่งรายการทดสอบให้กบ (`docs/ai/plans/2026-09-17-kob-live-test-list.md`) → รอกบยืนยัน → เปิด trial ชั่วคราว → live smoke → ปิดคืนโดยไม่รีเซ็ต cutoff · ยังไม่คืน optout ให้ 10 บัญชีจริง (รออนุมัติ)

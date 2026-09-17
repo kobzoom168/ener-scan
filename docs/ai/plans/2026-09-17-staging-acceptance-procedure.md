@@ -34,3 +34,35 @@
 | E | กบ | พิมพ์ "ปิดแจ้งเตือนยังไง" → **ต้องไม่ถูกจับเป็นคำสั่ง** (ให้ AI ตอบปกติ) |
 | F | Claude | จำลองงานเข้าคิวแล้วปิด → ตรวจว่าไม่ถูกส่ง (log `OUTBOUND_SUPPRESSED_OPTOUT`) |
 | G | กบ | พิมพ์ "เปิดแจ้งเตือน" → กลับมารับได้ |
+
+---
+
+## ภาคผนวก — ผล staging acceptance ฝั่ง optout (17 ก.ย. 2026)
+
+branch ทดสอบ `staging-test/trial+optout` = `0bb11bc` (Pro baseline) + `1d675d4` (trial, Codex) + `a8303b3` (optout) — **commit แยกกันตามที่สั่ง** · W2 markers (`opaquePairId` / `preJobRef` / `PRE_JOB_GATE_TERMINAL` / `matcherVersion`) = **0 ไฟล์**
+cherry-pick ชนเฉพาะ `package.json` (ทั้งสอง commit เติม test เข้า manifest) — **โค้ดไม่ชนกันเลย** = สองงานเป็นอิสระต่อกันจริง
+
+### migration 058 บน staging
+apply 2 รอบ สำเร็จทั้งคู่ (idempotent) · ตาราง 1 · RPC 2 · `PUBLIC` EXECUTE = false ทั้งคู่ · `web_anon` EXECUTE = true · `web_anon` เขียนตารางตรงไม่ได้ (INSERT/UPDATE/DELETE = false, SELECT = true) → แก้ค่าได้เฉพาะผ่าน RPC · **แถวข้อมูล 0 (ไม่มี backfill)**
+
+### ผลทดสอบ 12/12 ผ่าน (UID สังเคราะห์ + fake LINE client + DB staging จริง)
+
+| # | สถานการณ์ | ผล |
+|---|---|---|
+| S1a/b/c | ปิด → เปิดคืน → ปิด บันทึกถาวรและอ่านกลับตรงทุกครั้ง | PASS |
+| S2a | DB ล้ม (REVOKE EXECUTE ชั่วคราว) → `ok:false` ไม่ยืนยันว่าสำเร็จ | PASS |
+| S2b | DB ล้ม → fail-safe ถือว่า "ปิดอยู่" | PASS |
+| S2c | DB ล้ม → ไม่ส่งข้อความเชิงรุกเลย (pushes=0) | PASS |
+| S3 | คิว `daily_pick_push` ที่เข้าก่อนกดปิด → suppress + `markSent` → **ไม่ retry วน** | PASS |
+| S3b | `fb_consent_ask` (เชิงรุกเช่นกัน) → suppress | PASS |
+| S4 | `scan_failure_notify` / `renewal_reminder` → **ไม่ถูก optout บล็อก** (push เกิดจริง) | PASS |
+| S5 | ส่งซ้ำ 2 รอบ → สถานะยังปิด ไม่กลับด้าน | PASS |
+| S5b | สั่งปิดซ้ำ (idempotent) → ไม่กลับเป็นเปิด | PASS |
+
+ข้อจำกัดที่ต้องรายงานตรง ๆ: ใน S4 หลัง push สำเร็จ `markSent` คืน error เพราะ id สังเคราะห์ไม่ใช่ UUID — เป็นข้อจำกัดของสคริปต์ทดสอบ ไม่ใช่พฤติกรรมของระบบ สิ่งที่วัดจริงคือ "ไม่ถูก optout บล็อก + push เกิดขึ้น" ซึ่งผ่าน
+
+การเปลี่ยนสิทธิ์สำหรับ S2 ทำบน staging เท่านั้นและ **คืนสิทธิ์แล้ว** (`web_anon`/`service_role` EXECUTE = true ทั้งสอง RPC) · แถวสังเคราะห์ถูกลบ เหลือ 0 · สคริปต์ทดสอบลบออกจาก container แล้ว
+
+### สถานะที่ยืนยันหลังจบงาน
+- **Pro = `main @ 0bb11bc` ไม่ถูกแตะ · `/health` = 200 · container up 22 ชม.**
+- staging = `staging-test/trial+optout @ a8303b3` · **trial switch OFF** (`{"limit":2,"enabled":false,"eligible_since":null}`) → cutoff ยังไม่ถูกตั้ง
