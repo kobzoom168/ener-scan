@@ -43,24 +43,83 @@ const MIN_PIECES = 5;
 const MAX_USERS = 2000;
 
 export const DAILY_PICK_OPTOUT_KEY_PREFIX = "scan_v2:daily_pick_optout:";
-const OPTOUT_TTL_SECONDS = 400 * 86400;
 
 export function dailyPickOptoutKey(lineUserId) {
   return `${DAILY_PICK_OPTOUT_KEY_PREFIX}${String(lineUserId || "").trim()}`;
 }
 
+/**
+ * ความต้องการของลูกค้าต้องอยู่ถาวร (16 ก.ย. 2026)
+ * เดิมเก็บใน Redis ด้วย setValueWithTtl ซึ่ง cap TTL ไว้ที่ 604800 วิ = 7 วัน
+ * ทั้งที่ขอ 400 วัน → การปิดหมดอายุเองเงียบ ๆ แล้วแจ้งเตือนกลับมาอีก
+ * ตอนนี้ DB (migration 058) เป็นแหล่งความจริง · คืน boolean ที่อ่านกลับจากแถวจริง
+ * เพื่อให้ผู้เรียก "ยืนยันกับลูกค้าหลังบันทึกสำเร็จเท่านั้น"
+ */
+async function writeDailyPickOptout(lineUserId, optedOut) {
+  const uid = String(lineUserId || "").trim();
+  if (!uid) return { ok: false, optedOut: null, reason: "no_user" };
+  const { data, error } = await supabase.rpc("set_daily_pick_optout", {
+    p_line_user_id: uid,
+    p_opted_out: Boolean(optedOut),
+  });
+  if (error) {
+    console.log(JSON.stringify({
+      event: "DAILY_PICK_OPTOUT_WRITE_FAILED",
+      lineUserIdPrefix: uid.slice(0, 8),
+      wanted: Boolean(optedOut),
+      reason: String(error?.message || error).slice(0, 120),
+    }));
+    return { ok: false, optedOut: null, reason: "db_error" };
+  }
+  const stored = data === true;
+  console.log(JSON.stringify({
+    event: "DAILY_PICK_OPTOUT_SAVED",
+    lineUserIdPrefix: uid.slice(0, 8),
+    optedOut: stored,
+  }));
+  return { ok: stored === Boolean(optedOut), optedOut: stored };
+}
+
 export async function setDailyPickOptout(lineUserId) {
-  await setValueWithTtl(dailyPickOptoutKey(lineUserId), "1", OPTOUT_TTL_SECONDS);
+  return writeDailyPickOptout(lineUserId, true);
 }
 
 export async function clearDailyPickOptout(lineUserId) {
-  // เขียนทับด้วยค่า "0" TTL สั้น แทนการลบ (scanV2Redis ไม่มี del ตรง ๆ สำหรับ key ทั่วไป)
-  await setValueWithTtl(dailyPickOptoutKey(lineUserId), "0", 60);
+  return writeDailyPickOptout(lineUserId, false);
 }
 
+/**
+ * fail-safe: อ่านไม่ได้ = ถือว่า "ปิดอยู่" เพื่อไม่ส่งหาคนที่อาจเคยกดปิด
+ * (แจ้งเตือนแนะนำเป็นงาน optional — พลาดไม่ส่งดีกว่าส่งหาคนที่ไม่อยากรับ)
+ */
 export async function isDailyPickOptedOut(lineUserId) {
-  const v = await getValue(dailyPickOptoutKey(lineUserId)).catch(() => null);
-  return String(v || "") === "1";
+  const uid = String(lineUserId || "").trim();
+  if (!uid) return true;
+  const { data, error } = await supabase.rpc("get_daily_pick_optout", { p_line_user_id: uid });
+  if (error) {
+    console.log(JSON.stringify({
+      event: "DAILY_PICK_OPTOUT_READ_FAILED",
+      lineUserIdPrefix: uid.slice(0, 8),
+      reason: String(error?.message || error).slice(0, 120),
+    }));
+    return true;
+  }
+  if (data?.known === true) return data.optedOut === true;
+
+  // ยังไม่มีแถวใน DB — ห้ามตีความว่า "เปิดรับแจ้งเตือน" ทันที
+  // ค่าที่ลูกค้าเคยตั้งไว้ก่อน migration อาจยังค้างใน Redis (ที่ TTL โดน cap 7 วัน)
+  // เจอแล้วให้ย้ายมาเก็บถาวร เพื่อไม่ให้ความต้องการเดิมหายตอน rollout
+  const legacy = await getValue(dailyPickOptoutKey(uid)).catch(() => null);
+  if (String(legacy || "") === "1") {
+    const moved = await writeDailyPickOptout(uid, true).catch(() => ({ ok: false }));
+    console.log(JSON.stringify({
+      event: "DAILY_PICK_OPTOUT_LEGACY_MIGRATED",
+      lineUserIdPrefix: uid.slice(0, 8),
+      persisted: moved?.ok === true,
+    }));
+    return true;
+  }
+  return false;
 }
 
 function bangkokWeekday(now) {

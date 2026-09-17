@@ -262,6 +262,34 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       // แถม deliver ไม่มี handler → ลูกค้ารอเงียบ ๆ ตอนสแกนพัง)
       kind === "scan_failure_notify"
     ) {
+      // เช็ค preference ซ้ำก่อนส่งจริง (17 ก.ย. 2026): เดิมเช็คแค่ตอน enqueue
+      // → ลูกค้าที่กดปิดหลังงานเข้าคิวแล้วยังได้รับข้อความอยู่ดี
+      // จำกัดเฉพาะ "แจ้งเตือนแนะนำอัตโนมัติ" เท่านั้น — ข้อความธุรกรรมอย่าง
+      // scan_failure_notify/renewal_reminder ต้องส่งเสมอ ไม่ผูกกับ optout
+      // ขอบเขตของสวิตช์ "หยุดแจ้งเตือน" (Codex 17 ก.ย.):
+      //   daily_pick_push  = แจ้งเตือนแนะนำอัตโนมัติ → ปิดได้ (ตรงกับที่แจ้งลูกค้า)
+      //   fb_consent_ask   = ข้อความเชิงรุกที่ลูกค้าไม่ได้ขอเช่นกัน → ปิดด้วย
+      //                      (เราสัญญาว่าจะหยุดแจ้งเตือนเช้า การส่งน้อยกว่าที่สัญญาไม่ผิดคำพูด
+      //                       ปัจจุบัน kind นี้ส่ง 0 ครั้ง/30 วัน ผลกระทบทางธุรกิจ ~0)
+      //   renewal_reminder = เรื่องเงินที่ลูกค้าจ่าย ไม่ผูกสวิตช์นี้ (ควรมีสวิตช์ของตัวเองในอนาคต)
+      //   scan_result / scan_failure_notify = งานที่ลูกค้าสั่งเอง ห้ามบล็อกเด็ดขาด
+      if (kind === "daily_pick_push" || kind === "fb_consent_ask") {
+        try {
+          const { isDailyPickOptedOut } = await import("../dailyLuckyPickPush.service.js");
+          if (await isDailyPickOptedOut(lineUserId)) {
+            await ((traceCtx.banGateDeps || {}).markSent || markSent)(id);
+            console.log(JSON.stringify({
+              event: "OUTBOUND_SUPPRESSED_OPTOUT",
+              kind,
+              ...base(),
+            }));
+            return { sent: true, suppressedOptout: true };
+          }
+        } catch {
+          /* อ่าน preference ไม่ได้ = ปล่อยผ่านตามเดิม ไม่ขวางคิว */
+        }
+      }
+
       // push อัตโนมัติ (เตือนต่ออายุ / หนุนดวงเช้า / ขออนุญาตอวดชิ้นในเพจ) — ข้อความ + quickReply optional
       const text = String(payload.text || "").trim();
       if (!text) {
