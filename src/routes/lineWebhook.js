@@ -483,7 +483,7 @@ async function maybeHandleAxisTopPieceQuery({ client, userId, replyToken, text }
  * "เดี๋ยวผมจัดการให้ครับ" โดยไม่บันทึกอะไรเลย (พบจริง 2 ครั้ง replyType=gemini_front_reply)
  * ตอนนี้ถูกเรียกต้นสายก่อน orchestrator ทั้งหมด และ **ยืนยันกับลูกค้าเฉพาะเมื่อบันทึกสำเร็จ**
  */
-async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, text }) {
+async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, text, inboundMessageId = null }) {
   const { matchDailyPickNotifyCommand, DAILY_PICK_NOTIFY_HELP_TEXT } = await import(
     "../utils/dailyPickNotifyCommand.util.js"
   );
@@ -498,6 +498,9 @@ async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, te
       replyType: "daily_pick_notify_help",
       semanticKey: "daily_pick_notify_help",
       text: DAILY_PICK_NOTIFY_HELP_TEXT,
+      // ผูก dedupe กับ inbound (แนวเดียวกับ pre-scan ack P0-A): ลูกค้าถามใหม่ = ตอบใหม่เสมอ
+      // ส่วน LINE redelivery messageId เดิม = ไม่ตอบซ้ำ — ไม่ปิด dedupe กลาง
+      inboundMessageId,
     });
     return true;
   }
@@ -520,6 +523,9 @@ async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, te
     replyType: res?.ok ? "daily_pick_notify_toggle" : "daily_pick_notify_toggle_failed",
     semanticKey: "daily_pick_notify_toggle",
     text: reply,
+    // คำสั่งใหม่ (คนละ messageId) ต้องได้คำยืนยันทุกครั้ง แม้ข้อความตอบเหมือนเดิม
+    // — เดิมถูก gateway กันเป็น exactDuplicate ลูกค้าเห็นเงียบ เลยนึกว่าสั่งไม่ติด (พบใน live test)
+    inboundMessageId,
   });
   return true;
 }
@@ -4606,7 +4612,7 @@ async function handleTextMessage({ client, event, userId, session }) {
   if (await maybeHandleBanCommand({ client, event, userId, text })) return;
   if (await maybeHandleAdminAssist({ client, event, userId, text })) return;
   // คำสั่งเป๊ะเรื่องแจ้งเตือน: ต้องอยู่ก่อน AI orchestrator ทุกจุด ไม่งั้นถูกแย่งตอบ
-  if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
+  if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text, inboundMessageId: event.message?.id ? String(event.message.id) : null })) return;
 
   // ถามวนซ้ำ (ข้อความเดิม ≥3 ใน 15 นาที ไม่รวมถามสถานะ) → แจ้งแอดมินเงียบ ๆ
   // ไม่กระทบ flow ตอบลูกค้า (fire-and-forget เสมอ)
@@ -7896,7 +7902,7 @@ async function handleTextMessage({ client, event, userId, session }) {
           });
           return;
         }
-        if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
+        if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text, inboundMessageId: event.message?.id ? String(event.message.id) : null })) return;
         if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
         // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
         if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
@@ -8637,7 +8643,7 @@ async function handleTextMessage({ client, event, userId, session }) {
     return;
   }
 
-  if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
+  if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text, inboundMessageId: event.message?.id ? String(event.message.id) : null })) return;
   if (await maybeHandleFbShowcaseConsentReply({ client, userId, replyToken: event.replyToken, text })) return;
   // referral/synergy คำสั่งเป๊ะ: จบไปแล้วที่ terminal block หลัง registration gate
   if (await maybeHandleReferralCodeRedeem({ client, userId, replyToken: event.replyToken, text })) return;
