@@ -477,25 +477,47 @@ async function maybeHandleAxisTopPieceQuery({ client, userId, replyToken, text }
   }
 }
 
+/**
+ * คำสั่งเป๊ะ: ปิด/เปิดแจ้งเตือนหนุนดวงรายเช้า
+ * แก้ 16-17 ก.ย. 2026 — เดิมตัวจับอยู่หลัง AI orchestrator หลายจุด ทำให้ AI แย่งตอบ
+ * "เดี๋ยวผมจัดการให้ครับ" โดยไม่บันทึกอะไรเลย (พบจริง 2 ครั้ง replyType=gemini_front_reply)
+ * ตอนนี้ถูกเรียกต้นสายก่อน orchestrator ทั้งหมด และ **ยืนยันกับลูกค้าเฉพาะเมื่อบันทึกสำเร็จ**
+ */
 async function maybeHandleDailyPickNotifyToggle({ client, userId, replyToken, text }) {
-  const t = String(text || "").trim();
-  if (t !== "หยุดแจ้งเตือน" && t !== "ปิดแจ้งเตือน" && t !== "เปิดแจ้งเตือน") return false;
+  const { matchDailyPickNotifyCommand, DAILY_PICK_NOTIFY_HELP_TEXT } = await import(
+    "../utils/dailyPickNotifyCommand.util.js"
+  );
+  const action = matchDailyPickNotifyCommand(text);
+  if (!action) return false;
+  // คำถามเรื่องวิธีปิด: ตอบแบบ deterministic ไม่แตะค่า และไม่ปล่อยให้ AI ไปสัญญาว่าปิดให้แล้ว
+  if (action === "help") {
+    await sendNonScanReply({
+      client,
+      userId,
+      replyToken,
+      replyType: "daily_pick_notify_help",
+      semanticKey: "daily_pick_notify_help",
+      text: DAILY_PICK_NOTIFY_HELP_TEXT,
+    });
+    return true;
+  }
   const { setDailyPickOptout, clearDailyPickOptout } = await import(
     "../services/dailyLuckyPickPush.service.js"
   );
-  let reply;
-  if (t === "เปิดแจ้งเตือน") {
-    await clearDailyPickOptout(userId).catch(() => {});
-    reply = "เปิดการแจ้งเตือนหนุนดวงตอนเช้าให้แล้วครับ วันไหนมีชิ้นหนุนแรงจะส่งมาบอกครับ";
-  } else {
-    await setDailyPickOptout(userId).catch(() => {});
-    reply = "ปิดการแจ้งเตือนหนุนดวงตอนเช้าให้แล้วครับ พิมพ์ เปิดแจ้งเตือน เมื่ออยากรับอีกครั้ง";
-  }
+  const res = action === "on"
+    ? await clearDailyPickOptout(userId).catch(() => ({ ok: false }))
+    : await setDailyPickOptout(userId).catch(() => ({ ok: false }));
+  // บันทึกไม่สำเร็จ = ห้ามบอกว่า "ปิดให้แล้ว" (บทเรียน: ลูกค้าเชื่อว่าปิดแล้วทั้งที่ไม่ได้ปิด)
+  const reply = !res?.ok
+    ? "ตอนนี้บันทึกการตั้งค่าแจ้งเตือนให้ไม่สำเร็จครับ รบกวนพิมพ์มาอีกครั้งนะครับ"
+    : action === "on"
+      ? "เปิดการแจ้งเตือนหนุนดวงตอนเช้าให้แล้วครับ วันไหนมีชิ้นหนุนแรงจะส่งมาบอกครับ"
+      : "ปิดการแจ้งเตือนหนุนดวงตอนเช้าให้แล้วครับ พิมพ์ เปิดแจ้งเตือน เมื่ออยากรับอีกครั้ง";
   await sendNonScanReply({
     client,
     userId,
     replyToken,
-    replyType: "daily_pick_notify_toggle",
+    replyType: res?.ok ? "daily_pick_notify_toggle" : "daily_pick_notify_toggle_failed",
     semanticKey: "daily_pick_notify_toggle",
     text: reply,
   });
@@ -4563,6 +4585,8 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   if (await maybeHandleBanCommand({ client, event, userId, text })) return;
   if (await maybeHandleAdminAssist({ client, event, userId, text })) return;
+  // คำสั่งเป๊ะเรื่องแจ้งเตือน: ต้องอยู่ก่อน AI orchestrator ทุกจุด ไม่งั้นถูกแย่งตอบ
+  if (await maybeHandleDailyPickNotifyToggle({ client, userId, replyToken: event.replyToken, text })) return;
 
   // ถามวนซ้ำ (ข้อความเดิม ≥3 ใน 15 นาที ไม่รวมถามสถานะ) → แจ้งแอดมินเงียบ ๆ
   // ไม่กระทบ flow ตอบลูกค้า (fire-and-forget เสมอ)
