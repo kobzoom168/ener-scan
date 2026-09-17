@@ -1029,3 +1029,15 @@
   - **tests**: newCustomerTrial 6/6 บน release branch · **full gate ไม่มี fail ใหม่นอก baseline**
   - **สถานะจบรอบ**: staging `1d675d4` สวิตช์ **OFF** · synthetic users/jobs = 0 · **Pro คง `0bb11bc` health 200 ไม่มีคอลัมน์ free_access_kind (ไม่ถูกแตะเลย)**
   - **ค้าง (ต้องให้กบ/Codex ตัดสิน)**: live LINE smoke ด้วยบัญชีจริงยังไม่ได้ทำ (ต้องมีคนส่งรูปจริง) — ครอบคลุมเคส quota copy ใน LINE/LIFF, รูปซ้ำ replay, ส่งหลายรูปพร้อมกันผ่าน webhook จริง · CSRF path ที่ล็อกอินสำเร็จยังไม่ทดสอบ (ไม่มี credential) · ยังไม่ขอ GO Pro · ยังไม่เปิดนโยบาย · ยังไม่ broadcast
+- **17 ก.ย. 2026 | Claude | #4 หลักฐาน low_shadow + #3 แก้บั๊กปิดแจ้งเตือน (commit แยก) + เตรียม #1-2 รอกบ**
+  - **#4 low_shadow — หลักฐานที่ Codex ขอ**: ในหน้าต่าง 24 ชม. เดียวกันมี **objectCheck.strict 124 ครั้ง (app 84 + worker 40) · crystal_family 34 · permissive 5 = รวม 163 ครั้ง** ขณะที่ shadow = **0** → เส้นทางที่เคยยิง shadow ถูกใช้งานจริงหนัก (ที่ sampling 10% ควรได้ ~16 ครั้ง แต่ได้ 0) = ปิดสนิทแน่นอน ไม่ใช่แค่ไม่มี traffic
+  - **#3 บั๊กปิดแจ้งเตือน — commit `9b74c81` branch `fix/daily-pick-optout` แยกจากฐาน Pro `0bb11bc`** (ไม่พ่วง W2 ไม่พ่วง trial)
+    - **ถาวรใน DB**: migration `sql/058_notification_preferences.sql` ตาราง `notification_preferences` (line_user_id PK, daily_pick_optout_at, updated_at) **ไม่มี TTL/expiry** + RPC `set_daily_pick_optout`/`get_daily_pick_optout` · REVOKE PUBLIC ครบ GRANT เฉพาะ web_anon/service_role (ตามบทเรียน P0-H) · เลิกใช้ `setValueWithTtl` ที่ cap 7 วัน
+    - **deterministic ก่อน AI**: ย้ายตัวจับคำสั่งไปต้นสาย `handleTextMessage` หลัง ban/admin guard **ก่อน AI ทุกจุด** (เดิมอยู่หลัง orchestrator 8 จุด) · แยก matcher เป็น `src/utils/dailyPickNotifyCommand.util.js` เพื่อทดสอบได้ · รับคำลงท้ายสุภาพ ("หยุดแจ้งเตือนครับ") แต่**ไม่ดักบทสนทนา** ("ปิดแจ้งเตือนยังไง" ไม่จับ)
+    - **ยืนยันหลังบันทึกสำเร็จ**: RPC อ่านกลับจากแถวจริงแล้วคืน boolean · บันทึกไม่สำเร็จ → ตอบ "บันทึกให้ไม่สำเร็จ รบกวนพิมพ์มาอีกครั้ง" + replyType `daily_pick_notify_toggle_failed` (เดิมตอบ "ปิดให้แล้ว" ทุกกรณี)
+    - **ตรวจ preference ก่อนส่งคิว**: `deliverOutbound` เช็ค `isDailyPickOptedOut` ก่อนส่ง **เฉพาะ `daily_pick_push`** → suppress + log `OUTBOUND_SUPPRESSED_OPTOUT` · **ไม่แตะข้อความธุรกรรม** (scan_failure_notify/renewal_reminder/scan_result ส่งเสมอ — มีเทสต์บังคับ)
+    - fail-safe: อ่าน preference ไม่ได้ = ถือว่าปิดไว้ (ไม่ส่งหาคนที่อาจเคยกดปิด)
+    - tests ใหม่ `tests/dailyPickOptout.behavior.test.js` **6/6** + เข้า gate manifest · **full gate ไม่มี fail ใหม่นอก baseline**
+    - **ยังไม่คืน optout ให้บัญชีจริง** (10 คนที่เคยกดปิด) — รออนุมัติตามที่สั่ง
+  - **#1-2 acceptance ที่เหลือ**: เขียนขั้นตอนละเอียดไว้ที่ `docs/ai/plans/2026-09-17-staging-acceptance-procedure.md` — ครอบคลุมข้อควรระวังของ Codex (เปิดสวิตช์ก่อนแล้วค่อยสร้างบัญชี · ตรวจ created_at >= eligible_since ก่อนเริ่ม · ห้ามแก้ created_at/ล้างประวัติ · ส่งรูปทีละรูปรอจบ · เคสส่งพร้อมกันแยกทดสอบ · คืน OFF โดยเก็บ cutoff จริง) · **รอกบว่างเพื่อส่งรูปจริง**
+  - สถานะ: staging ยังเป็น `release/new-customer-trial @ 1d675d4` สวิตช์ **OFF** · **Pro คง `0bb11bc` ไม่ถูกแตะ** · ยังไม่ deploy Pro / ไม่ broadcast / ไม่เปิดนโยบายจริง
