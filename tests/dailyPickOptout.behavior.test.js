@@ -234,3 +234,54 @@ test("DB ล้ม: ไม่อ้างว่าสำเร็จ และ r
   const wr = svc.slice(svc.indexOf("async function writeDailyPickOptout"));
   assert.match(wr.slice(0, wr.indexOf("\n}\n")), /return \{ ok: false/, "RPC error ต้องคืน ok:false");
 });
+
+/* ---- Codex 18 ก.ย. 2026: สองจุดที่ขอให้ยืนยันเพิ่ม ---- */
+
+test("คิวที่งดส่ง ต้องแยกจาก 'ส่งถึงลูกค้าแล้ว' และไม่ถูกนับเป็นยอดส่ง", async () => {
+  const { deliverOutboundMessage } = await import("../src/services/scanV2/deliverOutbound.service.js");
+  const updates = [];
+  const pushes = [];
+  const client = { pushMessage: async (_u, m) => { pushes.push(m); }, replyMessage: async () => ({}) };
+  const res = await deliverOutboundMessage(
+    client,
+    { id: "11111111-1111-4111-8111-111111111111", line_user_id: "Uoptout_scope_test", kind: "daily_pick_push", payload_json: { text: "x" }, related_job_id: null },
+    { banGateDeps: {
+        isBanned: async () => false,
+        updateOutboundMessage: async (id, patch) => { updates.push(patch); },
+        markSent: async () => { updates.push({ status: "sent", via: "markSent" }); },
+    } },
+  );
+  assert.equal(res.suppressedOptout, true);
+  assert.equal(res.sent, false, "งดส่ง ห้ามรายงานว่า sent — ไม่งั้นถูกนับเป็นยอดส่งจริง");
+  assert.equal(pushes.length, 0, "ต้องไม่มีข้อความถึงลูกค้า");
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].status, "suppressed_optout", "ต้องเป็นสถานะเฉพาะ ไม่ใช่ 'sent'");
+  assert.equal(updates[0].last_error_code, "suppressed_optout");
+  assert.equal(updates[0].next_retry_at, null, "terminal — ห้าม retry");
+  assert.ok(!updates.some((u) => u.via === "markSent"), "ห้ามใช้ markSent กับคิวที่งดส่ง");
+  // สถานะใหม่ต้องถูกประกาศใน migration และ worker ต้องไม่หยิบไป retry/finalize
+  assert.match(read("sql/059_outbound_suppressed_optout.sql"), /'suppressed_optout'::text/);
+  const w = read("src/workers/deliveryWorker.js");
+  assert.match(w, /!result\.sent && !result\.suppressedBanned && !result\.suppressedOptout/,
+    "worker ต้องไม่ finalize คิวที่งดส่งเป็น failed");
+  const store = read("src/stores/scanV2/outboundMessages.db.js");
+  assert.match(store, /\.in\("status", \["queued", "sending", "retry_wait"\]\)/,
+    "worker หยิบเฉพาะสถานะที่ยังค้าง → suppressed_optout จึงไม่ถูก retry");
+});
+
+test("Redis → DB ต้องไม่ทับค่าที่ใหม่กว่า: ลูกค้าสั่งเปิดคืนแล้ว ให้ยึด DB", () => {
+  const sql = read("sql/058_notification_preferences.sql");
+  // เปิดคืน = เก็บแถวไว้โดยตั้งเวลาเป็น NULL (ไม่ใช่ลบแถว) → known ยังเป็น true
+  assert.match(sql, /v := CASE WHEN p_opted_out THEN now\(\) ELSE NULL END/);
+  assert.doesNotMatch(sql, /DELETE FROM public\.notification_preferences/,
+    "เปิดคืนต้องไม่ลบแถว ไม่งั้น known กลับเป็น false แล้วค่าเก่าใน Redis จะฟื้น");
+  const svc = read("src/services/dailyLuckyPickPush.service.js");
+  const fn = svc.slice(svc.indexOf("export async function isDailyPickOptedOut"));
+  const body = fn.slice(0, fn.indexOf("\n}\n"));
+  const iKnown = body.indexOf("data?.known === true");
+  const iLegacy = body.indexOf("getValue(dailyPickOptoutKey");
+  assert.ok(iKnown > -1 && iLegacy > iKnown,
+    "ต้องเช็ค DB ก่อนเสมอ และอ่าน Redis เฉพาะตอนที่ยังไม่มีแถวใน DB");
+  assert.match(body.slice(iKnown, iLegacy), /return data\.optedOut === true/,
+    "มีแถวใน DB = จบที่ค่า DB ห้ามไปดู Redis ต่อ");
+});
