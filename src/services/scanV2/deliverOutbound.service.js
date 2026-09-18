@@ -277,13 +277,23 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
         try {
           const { isDailyPickOptedOut } = await import("../dailyLuckyPickPush.service.js");
           if (await isDailyPickOptedOut(lineUserId)) {
-            await ((traceCtx.banGateDeps || {}).markSent || markSent)(id);
+            // typed terminal — ห้ามใช้ markSent เพราะ 'sent' แปลว่าส่งถึงลูกค้าแล้ว
+            // "งดส่ง" ต้องแยกออกจาก "ส่งจริง" ไม่งั้นถูกนับรวมเป็นยอดส่ง (Codex 18 ก.ย.)
+            // worker หยิบเฉพาะ queued/sending/retry_wait → สถานะนี้จึงไม่ถูก retry
+            const upd = (traceCtx.banGateDeps || {}).updateOutboundMessage || updateOutboundMessage;
+            await upd(id, {
+              status: "suppressed_optout",
+              last_error_code: "suppressed_optout",
+              last_error_message: "customer opted out of proactive notifications",
+              next_retry_at: null,
+              updated_at: new Date().toISOString(),
+            }).catch(() => {});
             console.log(JSON.stringify({
               event: "OUTBOUND_SUPPRESSED_OPTOUT",
               kind,
               ...base(),
             }));
-            return { sent: true, suppressedOptout: true };
+            return { sent: false, suppressedOptout: true, errorCode: "suppressed_optout" };
           }
         } catch {
           /* อ่าน preference ไม่ได้ = ปล่อยผ่านตามเดิม ไม่ขวางคิว */

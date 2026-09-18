@@ -82,7 +82,9 @@ async function loop() {
         const result = await deliverOutboundMessage(lineClient, msg, traceCtx);
         // suppressed_banned = typed terminal (Codex P0-1): ห้ามเข้า finalizer
         // (finalizer จะ overwrite เป็น failed + อาจ push ข้อความ resend หาคนถูกแบน)
-        if (!result.sent && !result.suppressedBanned) {
+        // suppressed_optout = typed terminal เช่นกัน (Codex 18 ก.ย.): งดส่งตามความต้องการลูกค้า
+        // ไม่ใช่ความล้มเหลว ห้าม finalize เป็น failed และห้าม retry
+        if (!result.sent && !result.suppressedBanned && !result.suppressedOptout) {
           await finalizeOutboundAttempt(msg.id, msg, result, traceCtx, lineClient);
         }
       } finally {
