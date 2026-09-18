@@ -65,12 +65,32 @@ SELECT count(*) FROM notification_preferences;                                  
 ```
 
 ## ขั้นที่ 3 — deploy exact SHA
+
+> ⚠️ **พบตอน preflight 18 ก.ย.: `docker-compose.yml` บน Pro ถูกแก้ไว้เฉพาะเครื่อง**
+> (tracked + modified · ตรงกับกติกา "ห้าม commit compose บนเครื่อง server")
+> **ห้ามใช้ `git reset --hard`** เพราะจะทับไฟล์นั้นทิ้ง
+> ไฟล์นี้เหมือนกันทั้ง `0bb11bc` และ `be67a98` (diff ว่าง) → `git checkout` ข้าม branch จึงไม่แตะ
+> และ `deploy-ener.sh` ใช้ `git pull` เฉย ๆ ไม่ได้ reset
+
 ```bash
+# 3.1 สำรอง compose ที่แก้ไว้เฉพาะเครื่อง ก่อนแตะ git
+ssh ener 'cd /root/ener-scan-pro && cp docker-compose.yml /root/backup-optout-<วันที่>/docker-compose.pro.local.yml && \
+  sha256sum docker-compose.yml'
+
+# 3.2 ย้ายไป exact SHA โดยไม่ reset --hard
 ssh ener 'cd /root/ener-scan-pro && git fetch origin && \
-  git checkout release/optout-notification && \
-  git reset --hard be67a98185e3b2b2379303b919c69b5c37632cde && git rev-parse HEAD'
+  git checkout be67a98185e3b2b2379303b919c69b5c37632cde && git rev-parse HEAD'
+
+# 3.3 ยืนยันว่า compose ยังเป็นของเดิม (sha256 ต้องตรงกับ 3.1)
+ssh ener 'cd /root/ener-scan-pro && sha256sum docker-compose.yml && git status --porcelain docker-compose.yml'
+
+# 3.4 deploy
 ssh ener 'bash /root/deploy-ener.sh pro'
 ```
+หมายเหตุ: หลัง checkout จะอยู่ในสภาพ detached HEAD — ตั้งใจให้เป็นแบบนั้นเพื่อล็อกที่ exact SHA
+ตอน rollback ให้ `git checkout main` (ซึ่งชี้ `0bb11bc`) ตามแผน rollback
+ไฟล์ untracked ที่ค้างอยู่บน Pro (`migrate-pro-full.mjs`, `migrate-pro-v2.mjs`, `migrate-via-psql.mjs`)
+ไม่เกี่ยวกับ deploy — **ห้ามลบ** ไม่ใช่ขอบเขตงานนี้
 ### ตรวจ runtime hash — **ทั้ง web และ worker ทุกตัว**
 เทียบกับ git object ของ `be67a98` (ไม่ใช่ working tree) สำหรับ
 `ener-scan-pro` · `ener-scan-pro-worker-delivery` · `ener-scan-pro-worker-scan` · `ener-scan-pro-worker-maintenance`
@@ -87,7 +107,11 @@ ssh ener 'bash /root/deploy-ener.sh pro'
 ไม่ตรงแม้ไฟล์เดียว = หยุดและเข้า rollback
 
 ## ขั้นที่ 4 — smoke เปิด–ปิด
-**ต้องใช้บัญชีทดสอบที่กบระบุและอนุญาตตอนสั่ง GO เท่านั้น** (ห้ามเลือกบัญชีเอง ห้ามใช้บัญชีลูกค้าจริง)
+**ต้องใช้บัญชีทดสอบที่กบระบุและอนุญาตตอนสั่ง GO เท่านั้น** (ห้ามเลือกบัญชีเอง)
+
+ยืนยันตอน preflight 18 ก.ย.: บัญชีที่กบใช้ทดสอบ staging (`Ufe02fff…`) **มีอยู่บน Pro ด้วยและเป็น UID เดียวกัน**
+(staging สร้าง 2026-07-05 · Pro สร้าง 2026-03-19) — เป็นบัญชีจริงของกบเองที่มีประวัติใช้งานบน Pro
+การ smoke จะสร้างแถว preference จริงให้บัญชีนี้ · กบพิมพ์เอง ผมไม่แก้ค่าใน DB ให้
 ตั้ง marker เวลา UTC ก่อนเริ่ม แล้วให้กบพิมพ์ `หยุดแจ้งเตือน` → รอคำตอบ → `เปิดแจ้งเตือน`
 
 ต้องได้ครบ:
