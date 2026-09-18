@@ -36,9 +36,9 @@ test("ยังไม่มีแถวใน DB ห้ามตีความ�
   assert.match(sql, /'known',\s*EXISTS/, "RPC ต้องคืน known แยกจาก optedOut");
   const svc = read("src/services/dailyLuckyPickPush.service.js");
   const fn = svc.slice(svc.indexOf("export async function isDailyPickOptedOut"));
-  assert.match(fn, /data\?\.known === true/, "ถ้ามีแถวแล้วใช้ค่าจาก DB");
+  assert.match(fn, /data\.known === true/, "ถ้ามีแถวแล้วใช้ค่าจาก DB");
   assert.match(fn, /getValue\(dailyPickOptoutKey/, "ถ้ายังไม่มีแถว ต้องอ่าน Redis เดิม");
-  assert.match(fn, /DAILY_PICK_OPTOUT_LEGACY_MIGRATED/, "เจอค่าเดิมต้องย้ายมาเก็บถาวร");
+  assert.match(fn, /migrate_daily_pick_optout_if_absent/, "เจอค่าเดิมต้องย้ายแบบ insert-if-absent");
 });
 
 test("ขอบเขตสวิตช์: ปิดแจ้งเตือนแนะนำ ไม่แตะงานที่ลูกค้าสั่ง", () => {
@@ -132,6 +132,7 @@ try {
   }
 } catch { /* ignore */ }
 const EXTERNAL = { ai: 0 };
+const NATIVE_FETCH = globalThis.fetch;   // เก็บของจริงไว้ให้ fake PostgREST ใช้
 globalThis.fetch = async (url) => {
   if (/openai|openrouter|generativelanguage|anthropic|deepseek|llm\./i.test(String(url))) EXTERNAL.ai += 1;
   throw new Error("HERMETIC: network blocked");
@@ -278,10 +279,85 @@ test("Redis → DB ต้องไม่ทับค่าที่ใหม่�
   const svc = read("src/services/dailyLuckyPickPush.service.js");
   const fn = svc.slice(svc.indexOf("export async function isDailyPickOptedOut"));
   const body = fn.slice(0, fn.indexOf("\n}\n"));
-  const iKnown = body.indexOf("data?.known === true");
+  const iKnown = body.indexOf("data.known === true");
   const iLegacy = body.indexOf("getValue(dailyPickOptoutKey");
   assert.ok(iKnown > -1 && iLegacy > iKnown,
     "ต้องเช็ค DB ก่อนเสมอ และอ่าน Redis เฉพาะตอนที่ยังไม่มีแถวใน DB");
   assert.match(body.slice(iKnown, iLegacy), /return data\.optedOut === true/,
     "มีแถวใน DB = จบที่ค่า DB ห้ามไปดู Redis ต่อ");
+});
+
+/* ============================================================================
+ * Codex 18 ก.ย. 2026 (ตรวจ source a65eeda) — เส้นทางผิดพลาด + การทำงานพร้อมกัน
+ * ========================================================================== */
+
+async function deliverProactive(depsOverride) {
+  const { deliverOutboundMessage } = await import("../src/services/scanV2/deliverOutbound.service.js");
+  const pushes = [];
+  const updates = [];
+  const client = { pushMessage: async (_u, m) => { pushes.push(m); }, replyMessage: async () => ({}) };
+  const res = await deliverOutboundMessage(
+    client,
+    { id: "55555555-5555-4555-8555-555555555555", line_user_id: "Uoptout_errpath", kind: "daily_pick_push", payload_json: { text: "x" }, related_job_id: null },
+    { banGateDeps: {
+        isBanned: async () => false,
+        updateOutboundMessage: async (id, patch) => { updates.push(patch); },
+        ...depsOverride,
+    } },
+  );
+  return { res, pushes, updates };
+}
+
+test("อ่าน preference แล้ว throw → ห้ามส่ง และต้อง retry ได้ (ไม่ใช่ terminal)", async () => {
+  const { res, pushes, updates } = await deliverProactive({
+    isDailyPickOptedOut: async () => { throw new Error("rpc network reset"); },
+  });
+  assert.equal(pushes.length, 0, "throw แล้วต้องไม่ push เด็ดขาด (บั๊กเดิม: catch แล้วไหลไปส่ง)");
+  assert.equal(res.sent, false);
+  assert.notEqual(res.suppressedOptout, true, "ห้ามรายงานว่างดส่งสำเร็จ ทั้งที่ยังไม่รู้ค่า");
+  assert.equal(res.errorCode, "optout_check_failed");
+  assert.equal(updates.length, 0, "ยังไม่รู้ค่า ห้ามเขียนสถานะ terminal");
+});
+
+test("อ่าน preference reject เป็น non-Error → ยังต้องไม่ส่ง", async () => {
+  const { res, pushes } = await deliverProactive({
+    isDailyPickOptedOut: async () => { throw "boom"; },
+  });
+  assert.equal(pushes.length, 0);
+  assert.equal(res.errorCode, "optout_check_failed");
+});
+
+test("บันทึก suppressed_optout ล้ม → ห้ามส่ง และห้ามรายงานว่าจบสำเร็จ", async () => {
+  for (const fail of [
+    async () => { throw new Error("db write failed"); },
+    async () => { const e = new Error("permission denied"); e.code = "42501"; throw e; },
+  ]) {
+    const { res, pushes } = await deliverProactive({
+      isDailyPickOptedOut: async () => true,
+      updateOutboundMessage: fail,
+    });
+    assert.equal(pushes.length, 0, "ห้าม push");
+    assert.equal(res.sent, false);
+    assert.notEqual(res.suppressedOptout, true, "บันทึกไม่สำเร็จ = ยังไม่ terminal (ไม่งั้นแถวค้างให้ sweeper ดึงซ้ำ)");
+    assert.equal(res.errorCode, "suppress_persist_failed");
+  }
+});
+
+test("บันทึกสำเร็จเท่านั้นจึงคืน terminal", async () => {
+  const { res, pushes, updates } = await deliverProactive({ isDailyPickOptedOut: async () => true });
+  assert.equal(pushes.length, 0);
+  assert.equal(res.suppressedOptout, true);
+  assert.equal(updates[0].status, "suppressed_optout");
+});
+
+test("migration ต้องเป็น insert-if-absent ห้ามใช้ setter แบบทับค่า", () => {
+  const sql = read("sql/060_daily_pick_optout_migrate_if_absent.sql");
+  assert.match(sql, /ON CONFLICT \(line_user_id\) DO NOTHING/, "ต้องไม่ทับแถวที่มีอยู่");
+  assert.match(sql, /SELECT daily_pick_optout_at[\s\S]*FROM public\.notification_preferences/, "ต้องอ่านค่าที่ชนะจริงกลับไป");
+  const svc = read("src/services/dailyLuckyPickPush.service.js");
+  const fn = svc.slice(svc.indexOf("export async function isDailyPickOptedOut"));
+  const body = fn.slice(0, fn.indexOf("\n}\n"));
+  assert.match(body, /migrate_daily_pick_optout_if_absent/);
+  assert.doesNotMatch(body, /writeDailyPickOptout/, "ห้ามใช้ setter แบบ overwrite ในเส้น migration");
+  assert.match(body, /DAILY_PICK_OPTOUT_READ_MALFORMED/);
 });

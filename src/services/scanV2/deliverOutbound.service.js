@@ -274,29 +274,63 @@ export async function deliverOutboundMessage(client, msg, traceCtx = {}) {
       //   renewal_reminder = เรื่องเงินที่ลูกค้าจ่าย ไม่ผูกสวิตช์นี้ (ควรมีสวิตช์ของตัวเองในอนาคต)
       //   scan_result / scan_failure_notify = งานที่ลูกค้าสั่งเอง ห้ามบล็อกเด็ดขาด
       if (kind === "daily_pick_push" || kind === "fb_consent_ask") {
+        // อ่าน preference — throw ที่นี่ "ห้าม" ตกไปส่งต่อ (Codex 18 ก.ย.)
+        // เดิม catch กลืน error แล้วไหลลงไป push = ส่งหาคนที่อาจกดปิดไว้
+        let optedOut;
         try {
-          const { isDailyPickOptedOut } = await import("../dailyLuckyPickPush.service.js");
-          if (await isDailyPickOptedOut(lineUserId)) {
-            // typed terminal — ห้ามใช้ markSent เพราะ 'sent' แปลว่าส่งถึงลูกค้าแล้ว
-            // "งดส่ง" ต้องแยกออกจาก "ส่งจริง" ไม่งั้นถูกนับรวมเป็นยอดส่ง (Codex 18 ก.ย.)
-            // worker หยิบเฉพาะ queued/sending/retry_wait → สถานะนี้จึงไม่ถูก retry
-            const upd = (traceCtx.banGateDeps || {}).updateOutboundMessage || updateOutboundMessage;
+          const readOptedOut =
+            (traceCtx.banGateDeps || {}).isDailyPickOptedOut ||
+            (await import("../dailyLuckyPickPush.service.js")).isDailyPickOptedOut;
+          optedOut = (await readOptedOut(lineUserId)) === true;
+        } catch (e) {
+          console.log(JSON.stringify({
+            event: "OUTBOUND_OPTOUT_CHECK_FAILED",
+            kind,
+            reason: String(e?.message || e).slice(0, 120),
+            ...base(),
+          }));
+          // ไม่รู้ค่า = ไม่ส่ง · ไม่ terminal → ปล่อยให้ worker retry ตามนโยบายเดิม
+          return {
+            sent: false,
+            errorCode: "optout_check_failed",
+            errorMessage: "could not read notification preference",
+          };
+        }
+        if (optedOut) {
+          // typed terminal — ห้ามใช้ markSent เพราะ 'sent' แปลว่าส่งถึงลูกค้าแล้ว
+          // "งดส่ง" ต้องแยกออกจาก "ส่งจริง" ไม่งั้นถูกนับรวมเป็นยอดส่ง
+          // worker หยิบเฉพาะ queued/sending/retry_wait → สถานะนี้จึงไม่ถูก retry
+          const upd = (traceCtx.banGateDeps || {}).updateOutboundMessage || updateOutboundMessage;
+          try {
+            // ต้องยืนยันว่าบันทึกสำเร็จก่อนจึงคืน terminal ได้ (Codex 18 ก.ย.)
+            // เดิม .catch(()=>{}) แล้วคืนสำเร็จ → แถวอาจค้าง sending ให้ sweeper ดึงกลับมาส่งซ้ำ
             await upd(id, {
               status: "suppressed_optout",
               last_error_code: "suppressed_optout",
               last_error_message: "customer opted out of proactive notifications",
               next_retry_at: null,
               updated_at: new Date().toISOString(),
-            }).catch(() => {});
+            });
+          } catch (e) {
             console.log(JSON.stringify({
-              event: "OUTBOUND_SUPPRESSED_OPTOUT",
+              event: "OUTBOUND_SUPPRESS_PERSIST_FAILED",
               kind,
+              reason: String(e?.message || e).slice(0, 120),
               ...base(),
             }));
-            return { sent: false, suppressedOptout: true, errorCode: "suppressed_optout" };
+            // บันทึกไม่ได้ = ยังไม่ terminal · ห้าม push · ให้ worker retry
+            return {
+              sent: false,
+              errorCode: "suppress_persist_failed",
+              errorMessage: "could not persist suppressed_optout",
+            };
           }
-        } catch {
-          /* อ่าน preference ไม่ได้ = ปล่อยผ่านตามเดิม ไม่ขวางคิว */
+          console.log(JSON.stringify({
+            event: "OUTBOUND_SUPPRESSED_OPTOUT",
+            kind,
+            ...base(),
+          }));
+          return { sent: false, suppressedOptout: true, errorCode: "suppressed_optout" };
         }
       }
 

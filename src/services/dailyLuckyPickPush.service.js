@@ -104,22 +104,44 @@ export async function isDailyPickOptedOut(lineUserId) {
     }));
     return true;
   }
-  if (data?.known === true) return data.optedOut === true;
-
-  // ยังไม่มีแถวใน DB — ห้ามตีความว่า "เปิดรับแจ้งเตือน" ทันที
-  // ค่าที่ลูกค้าเคยตั้งไว้ก่อน migration อาจยังค้างใน Redis (ที่ TTL โดน cap 7 วัน)
-  // เจอแล้วให้ย้ายมาเก็บถาวร เพื่อไม่ให้ความต้องการเดิมหายตอน rollout
-  const legacy = await getValue(dailyPickOptoutKey(uid)).catch(() => null);
-  if (String(legacy || "") === "1") {
-    const moved = await writeDailyPickOptout(uid, true).catch(() => ({ ok: false }));
+  // รูปแบบคำตอบต้องเป็นออบเจ็กต์ที่มี known เป็น boolean เท่านั้น
+  // ผิดรูป (null / string / ไม่มี known) = อ่านค่าไม่ได้ → ห้ามตีความว่า "ส่งได้"
+  if (!data || typeof data !== "object" || typeof data.known !== "boolean") {
     console.log(JSON.stringify({
-      event: "DAILY_PICK_OPTOUT_LEGACY_MIGRATED",
+      event: "DAILY_PICK_OPTOUT_READ_MALFORMED",
       lineUserIdPrefix: uid.slice(0, 8),
-      persisted: moved?.ok === true,
+      gotType: data === null ? "null" : typeof data,
     }));
     return true;
   }
-  return false;
+  if (data.known === true) return data.optedOut === true;
+
+  // ยังไม่มีแถวใน DB — ห้ามตีความว่า "เปิดรับแจ้งเตือน" ทันที
+  // ค่าที่ลูกค้าเคยตั้งไว้ก่อน migration อาจยังค้างใน Redis (ที่ TTL โดน cap 7 วัน)
+  const legacy = await getValue(dailyPickOptoutKey(uid)).catch(() => null);
+  if (String(legacy || "") !== "1") return false;
+
+  // ย้ายค่าเก่าแบบ atomic insert-if-absent แล้วยึด "ค่าที่ชนะจริง" (Codex 18 ก.ย.)
+  // ถ้าลูกค้าสั่งเปิดคืนระหว่างนี้จนมีแถวใน DB แล้ว ค่านั้นต้องชนะ — migration ห้ามทับ
+  const { data: m, error: mErr } = await supabase.rpc(
+    "migrate_daily_pick_optout_if_absent",
+    { p_line_user_id: uid },
+  );
+  if (mErr || !m || typeof m !== "object" || typeof m.optedOut !== "boolean") {
+    console.log(JSON.stringify({
+      event: "DAILY_PICK_OPTOUT_LEGACY_MIGRATE_FAILED",
+      lineUserIdPrefix: uid.slice(0, 8),
+      reason: String(mErr?.message || mErr || "malformed").slice(0, 120),
+    }));
+    return true; // ย้ายไม่สำเร็จ = ไม่รู้ค่าแน่ชัด → ไม่ส่ง
+  }
+  console.log(JSON.stringify({
+    event: "DAILY_PICK_OPTOUT_LEGACY_MIGRATED",
+    lineUserIdPrefix: uid.slice(0, 8),
+    migrated: m.migrated === true,
+    optedOut: m.optedOut === true,
+  }));
+  return m.optedOut === true;
 }
 
 function bangkokWeekday(now) {
