@@ -113,4 +113,4 @@ UPDATE outbound_messages m
 ตรวจหลังทดสอบ: แถวสังเคราะห์ลบหมด · CSV ลบแล้ว · `notification_preferences` ครบตามเดิม · `suppressed_optout` ค้าง 0 · `next_retry_at=infinity` ค้าง 0 · worker ทั้ง 3 ตัวกลับมา Up · **ไม่แตะข้อมูล Pro**
 
 ## ลำดับ deploy ไปข้างหน้า
-`sql/058` → `sql/059` → โค้ด · **ห้ามสลับ** — deploy โค้ดก่อน migration จะทำให้ RPC ไม่มี (fail-safe งดส่งแจ้งเตือนแนะนำทั้งหมดชั่วคราว) และสถานะ `suppressed_optout` ชน CHECK เดิม
+`sql/058` → `sql/059` → `sql/060` → โค้ด · **ห้ามสลับ** — deploy โค้ดก่อน migration จะทำให้ RPC ไม่มี (fail-safe งดส่งแจ้งเตือนแนะนำทั้งหมดชั่วคราว) · สถานะ `suppressed_optout` ชน CHECK เดิม · และ `migrate_daily_pick_optout_if_absent` หายไป ทำให้ค่าเก่าใน Redis ย้ายเข้า DB ไม่ได้ (อ่านแล้วถือว่าปิดไว้ ไม่ส่ง)
