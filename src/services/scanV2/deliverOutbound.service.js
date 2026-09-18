@@ -137,6 +137,12 @@ export function wrapClientWithBanGuard(client, lineUserId, gateDeps = {}) {
   });
 }
 
+/**
+ * error ชั่วคราวของเส้นตรวจ optout ที่ควร retry แบบมีเพดาน แทนที่จะ failed ทันที
+ * (ทั้งสองแบบ "ยังไม่ได้ส่งอะไรออกไป" จึง retry ได้โดยไม่เสี่ยงส่งซ้ำ)
+ */
+const OPTOUT_GUARD_RETRYABLE = new Set(["optout_check_failed", "suppress_persist_failed"]);
+
 async function suppressOutboundBanned({ id, lineUserId, relatedJobId, gateDeps, baseFn, stage, message }) {
   const updateOutbound = gateDeps.updateOutboundMessage || updateOutboundMessage;
   await updateOutbound(id, {
@@ -1273,6 +1279,61 @@ export async function finalizeOutboundAttempt(id, msg, result, traceCtx = {}, cl
         backoffMs: backoff,
         nextRetryAt: next,
         reason: "line_429",
+      }),
+    );
+    return;
+  }
+
+  // ── bounded retry เฉพาะความผิดพลาดชั่วคราวของเส้นตรวจ optout (Codex 18 ก.ย. 2026)
+  // เดิม error ที่ไม่ใช่ 429 ถูกตั้ง failed ทันที → การคืน sent:false จากเส้น optout
+  // จึงไม่ได้ retry จริง (ลูกค้าที่ควรได้รับข้อความเสียโอกาสถาวรจาก DB สะดุดครั้งเดียว)
+  // ขอบเขตแคบ: เฉพาะ 2 error code นี้ และเฉพาะข้อความเชิงรุก 2 ชนิด
+  // ไม่ปลอมเป็น 429 (ไม่ตั้ง rate backoff ให้ผู้ใช้) และไม่แตะนโยบายของ kind อื่น
+  if (
+    (kind === "daily_pick_push" || kind === "fb_consent_ask") &&
+    OPTOUT_GUARD_RETRYABLE.has(String(result.errorCode || ""))
+  ) {
+    const nextAttempt = msg.attempt_count || 0;
+    if (nextAttempt < max) {
+      const backoff =
+        OUTBOUND_BACKOFF_MS[Math.min(nextAttempt - 1, OUTBOUND_BACKOFF_MS.length - 1)] ??
+        40000;
+      const next = new Date(Date.now() + backoff).toISOString();
+      await updateOutboundMessage(id, {
+        status: "retry_wait",
+        next_retry_at: next,
+        last_error_code: result.errorCode,
+        last_error_message: String(result.errorMessage || "").slice(0, 2000),
+        updated_at: new Date().toISOString(),
+      });
+      console.warn(
+        JSON.stringify({
+          event: "OUTBOUND_SEND_RETRY",
+          ...base,
+          attempt: nextAttempt + 1,
+          backoffMs: backoff,
+          nextRetryAt: next,
+          reason: result.errorCode,
+        }),
+      );
+      return;
+    }
+    // ครบเพดาน → terminal พร้อมเหตุผลชัดเจน ไม่วน retry ต่อ
+    await updateOutboundMessage(id, {
+      status: "failed",
+      last_error_code: `${result.errorCode}_max_attempts`,
+      last_error_message: String(result.errorMessage || "").slice(0, 2000),
+      next_retry_at: null,
+      updated_at: new Date().toISOString(),
+    });
+    console.error(
+      JSON.stringify({
+        event: "OUTBOUND_SEND_FAIL",
+        ...base,
+        errorCode: result.errorCode,
+        attempt: nextAttempt,
+        reason: "max_optout_guard_retry",
+        errorMessage: String(result.errorMessage || "").slice(0, 200),
       }),
     );
     return;
