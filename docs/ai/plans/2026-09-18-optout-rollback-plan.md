@@ -58,6 +58,10 @@ UPDATE outbound_messages SET status='retry_wait', next_retry_at='infinity'::time
 
 เก็บไฟล์ CSV ไว้ (chmod 600) — **ห้ามลบจนกว่าจะปลดพักเสร็จ**
 
+หมายเหตุ: แถวที่ค้างเป็น `retry_wait` จาก `optout_check_failed` / `suppress_persist_failed`
+(bounded retry ของเส้นตรวจ optout) **ถูกครอบด้วย B1 อยู่แล้ว** เพราะกรอง `status IN ('queued','retry_wait')`
+ถ้าไม่พักไว้ โค้ดเก่าจะ claim มันกลับมาส่งหลังหมด backoff โดยไม่ตรวจ preference
+
 ## ขั้นที่ 4 — ย้อนโค้ดและ start worker
 `git reset --hard 0bb11bc` บน Pro → `bash /root/deploy-ener.sh pro` → ตรวจ `/health` + hash ไฟล์ใน container
 → `docker start ener-scan-pro-worker-delivery ener-scan-pro-worker-maintenance` (ถ้า deploy ไม่ได้ start ให้เอง)
