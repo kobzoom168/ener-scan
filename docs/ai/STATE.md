@@ -69,3 +69,11 @@ ssh ener 'bash /root/deploy-ener.sh pro'      # pro — ต้องให้ก
 - ปรับแชทได้เฉพาะจากเคสจริงทีละจุด แก้น้อยที่สุด · ห้าม global contract / sanitizer / length cap ทุกข้อความ
 - DB: staging มี migration 055–056 (โค้ดไม่เรียก) · pro มีถึง 054
 - ค้างความปลอดภัย: ล้าง shell history + rotate key (แผนใน docs/ai/plans/security-shell-history-rotation.md)
+
+## ปิด/เปิดแจ้งเตือน "ชิ้นไหนหนุนดวง" — LIVE บน Pro (18 ก.ย. 2026)
+- Pro รัน `be67a98185e3b2b2379303b919c69b5c37632cde` (branch `pro-optout` → pointer `origin/pro/optout-be67a98`)
+- เก็บความต้องการถาวรใน `notification_preferences` (ไม่มี TTL แล้ว) · RPC `get/set_daily_pick_optout` + `migrate_daily_pick_optout_if_absent`
+- คำสั่งที่รับ: ปิด/หยุด/ยกเลิก/งด/ไม่รับ + (แจ้ง)เตือน → ปิด · เปิด/อยากรับ/ขอรับ → เปิด · กำกวม/คำถาม/ปฏิเสธ/อ้างคำพูด → ตอบวิธีโดยไม่เปลี่ยนค่า
+- ขอบเขตสวิตช์: `daily_pick_push` + `fb_consent_ask` ปิดได้ · `scan_result`/`scan_failure_notify`/`renewal_reminder` ไม่ถูกบล็อก
+- คิวที่งดส่งได้สถานะ `suppressed_optout` (`sent_at` ว่าง ไม่นับเป็นยอดส่ง ไม่ retry)
+- rollback: ต้องพัก producer (`DAILY_PICK_PUSH_ENABLED` + `FB_CONSENT_ASK_ENABLED`) และพักคิวก่อนย้อนโค้ดเสมอ → `docs/ai/plans/2026-09-18-optout-rollback-plan.md`

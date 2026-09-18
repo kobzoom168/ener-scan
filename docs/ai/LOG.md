@@ -1007,3 +1007,16 @@
 - live smoke บนชุดจริง: ปิด/เปิดคืนผ่าน AI=0 ยืนยันด้วยภาพหน้าจอกบ
 - เอกสาร: `2026-09-18-optout-pro-deploy-runbook.md` (5 ขั้น + เกณฑ์ยกเลิก) · `2026-09-18-optout-rollback-plan.md` (พัก producer/คิวก่อนย้อนโค้ด)
 - **ค้าง: รอกบสั่ง "GO Pro เฉพาะ optout"** · Pro คง `0bb11bc` · trial ยัง OFF คนละชุด · ไม่ backfill 10 บัญชีที่ค่าหายจาก TTL (ต้องอนุมัติแยก)
+
+## 18 ก.ย. 2026 | Claude | **ชุด optout LIVE บน Pro** `be67a98185e3b2b2379303b919c69b5c37632cde`
+- กบสั่ง GO Pro เฉพาะ optout (Codex GO ด้านโค้ดก่อนหน้า) · rollback point `0bb11bc16a92ab564173f1753eebe9af1dd571fa`
+- migration `058`→`059`→`060` apply บน Pro สำเร็จ · PUBLIC EXECUTE=false ทั้ง 3 RPC · web_anon เขียนตารางตรงไม่ได้ · **0 แถว ไม่ backfill** · จำนวน outbound เท่าเดิม (failed 31 / sent 13745)
+- สำรองก่อน apply ที่ `/root/backup-optout-20260918-084309` (compose local, schema outbound, app_settings, row counts, constraint เดิม)
+- **อุปสรรคตอน deploy**: `deploy-ener.sh` ใช้ `git pull` → detached HEAD ใช้ไม่ได้ script หยุดก่อน build (Pro ไม่เสียหาย) → แก้ด้วย release pointer `origin/pro/optout-be67a98` + branch `pro-optout` ที่ track มัน (`git pull` = Already up to date)
+- **เลี่ยง `git reset --hard`** เพราะ `docker-compose.yml` บน Pro ถูกแก้เฉพาะเครื่อง — sha256 `9b200234bee66d64` ก่อน/หลังเท่ากัน
+- runtime hash ตรง `be67a98` **ครบทั้ง 4 คอนเทนเนอร์** (web + worker delivery/scan/maintenance)
+- live smoke 08:47:22Z ปิด → 08:48:27Z เปิดคืน · reply `daily_pick_notify_toggle` `suppressed:false` ทั้งคู่ · DB `{"known":true,"optedOut":false}` · **AI=0** · กบยืนยันด้วยภาพหน้าจอ
+- เฝ้า 30 นาที (08:45:29→09:20:50Z): health 200 ทุกรอบ · ไม่มี restart · **optout error ทุกชนิด = 0** (`OPTOUT_CHECK_FAILED`/`SUPPRESS_PERSIST_FAILED`/`READ_FAILED`/`READ_MALFORMED`/`SUPPRESSED_OPTOUT`) · worker-delivery หมุนลูป 4,209 ครั้ง error 0
+- **ข้อจำกัดที่ต้องบอกตรง ๆ: ไม่มีทราฟฟิก outbound เลยในหน้าต่างนั้น** จึงยังไม่มีหลักฐาน live ว่าข้อความธุรกรรมส่งผ่านชุดใหม่ได้ (24 ชม. ก่อน deploy มี scan_result 68 · pre_scan_ack 39 · daily_pick_push 128) — ต้องดูสแกนจริงรายแรกและ sweep เช้าพรุ่งนี้
+- ข้อจำกัด branch pointer: **ขยับได้ ไม่ใช่ล็อก SHA ถาวร** — deploy รอบหน้าต้องตรวจ exact SHA + runtime hash ซ้ำเสมอ (บันทึกใน runbook)
+- **ยังไม่ทำ: นโยบายฟรี 2 ครั้ง (คนละชุด ยัง OFF) · คืนค่า optout ให้ 10 บัญชีที่หมดอายุจาก TTL (ต้องอนุมัติแยก)**
