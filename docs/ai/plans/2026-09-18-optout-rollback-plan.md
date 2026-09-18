@@ -1,4 +1,9 @@
-# Rollback plan — ชุด release `optout-notification` (`a65eeda`)
+# Rollback plan — ชุด release `optout-notification`
+
+> **SHA ปัจจุบันของชุดนี้: `be67a98185e3b2b2379303b919c69b5c37632cde`**
+> (เดิมเขียนไว้ตอนยังเป็น `a65eeda` — ต่อมาเพิ่ม `55a17ec` เส้นทางผิดพลาด และ `be67a98` bounded retry)
+> diff ทั้งชุดเทียบ Pro `0bb11bc`: **13 ไฟล์ +1,215 / −22** — โค้ด+SQL+manifest 9 ไฟล์ (+491/−22),
+> tests 3 ไฟล์ (+608), เอกสาร 1 ไฟล์ (+116)
 
 > รอบสอง แก้ตาม Codex 18 ก.ย. 2026 (4 ช่องว่าง) · ทุกขั้นทดสอบบน staging แล้ว
 > **ห้ามย้อนเป็น `0bb11bc` เฉย ๆ** — โค้ดเดิมไม่เช็ค optout คนที่กดปิดจะกลับมารับข้อความทันที
