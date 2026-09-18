@@ -87,7 +87,24 @@ ssh ener 'cd /root/ener-scan-pro && sha256sum docker-compose.yml && git status -
 # 3.4 deploy
 ssh ener 'bash /root/deploy-ener.sh pro'
 ```
-หมายเหตุ: หลัง checkout จะอยู่ในสภาพ detached HEAD — ตั้งใจให้เป็นแบบนั้นเพื่อล็อกที่ exact SHA
+### ⚠️ แก้ตอน deploy จริง 18 ก.ย.: detached HEAD ใช้กับ `deploy-ener.sh` ไม่ได้
+`deploy-ener.sh` มี `git pull` ซึ่ง fail ทันทีถ้าไม่อยู่บน branch ("You are not currently on a branch")
+script หยุดก่อนขั้น build → Pro ยังรันโค้ดเดิม ไม่เสียหาย แต่ deploy ไม่เกิด
+
+วิธีที่ใช้จริง: สร้าง **release pointer** บน origin ที่ชี้ exact SHA แล้วให้ Pro อยู่บน branch ที่ track มัน
+```bash
+# บนเครื่อง dev (ครั้งเดียวต่อ release)
+git push origin <exact-sha>:refs/heads/pro/optout-<short-sha>
+# บน Pro
+git fetch origin && git checkout -B pro-optout <exact-sha> && \
+  git branch --set-upstream-to=origin/pro/optout-<short-sha> pro-optout
+git pull    # ต้องได้ "Already up to date."
+```
+
+> **ข้อจำกัดที่ต้องรู้ (Codex 18 ก.ย.):** branch pointer **ขยับได้** — ไม่ใช่การล็อก SHA ถาวร
+> ใครก็ตามที่ force-push `pro/optout-be67a98` จะทำให้ deploy รอบถัดไปได้โค้ดคนละชุด
+> **การ deploy ทุกครั้งจึงต้องตรวจ exact SHA + runtime hash ซ้ำเสมอ** ห้ามเชื่อชื่อ branch อย่างเดียว
+
 ตอน rollback ให้ `git checkout main` (ซึ่งชี้ `0bb11bc`) ตามแผน rollback
 ไฟล์ untracked ที่ค้างอยู่บน Pro (`migrate-pro-full.mjs`, `migrate-pro-v2.mjs`, `migrate-via-psql.mjs`)
 ไม่เกี่ยวกับ deploy — **ห้ามลบ** ไม่ใช่ขอบเขตงานนี้
