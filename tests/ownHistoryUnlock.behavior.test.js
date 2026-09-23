@@ -24,7 +24,11 @@ const { ownHistoryViewFlags, canViewOwnHistory } =
 
 test("กติกาถาวร: เจ้าของเปิดดูของเดิมได้เสมอ และไม่ผูกกับสวิตช์ trial", () => {
   assert.equal(canViewOwnHistory(), true);
-  assert.deepEqual(ownHistoryViewFlags(), { accessFull: true, memberAccess: true });
+  // แบบ A: ธงเปิดเต็มต่อเมื่อพิสูจน์ว่าเป็นเจ้าของแล้วเท่านั้น
+  assert.deepEqual(ownHistoryViewFlags(true), { accessFull: true, memberAccess: true });
+  assert.deepEqual(ownHistoryViewFlags(false), { accessFull: false, memberAccess: false });
+  assert.deepEqual(ownHistoryViewFlags(), { accessFull: false, memberAccess: false },
+    "ไม่ระบุ = ถือว่าไม่ใช่เจ้าของ (ปลอดภัยไว้ก่อน)");
   // ตรวจเฉพาะ "โค้ด" (ตัดคอมเมนต์อธิบายที่มา) — ห้ามผูกกับนโยบายลูกค้าใหม่/สถานะการจ่ายเงิน
   const src = read("src/services/reports/ownHistoryAccess.util.js");
   const code = src.replace(/\/\*[\s\S]*?\*\//g, "").split("\n")
@@ -58,7 +62,7 @@ test("ไม่มีแพ็ก/แพ็กหมดอายุ ก็ยั
     byProtection: items, byFit: items, bySpecialty: items,
     byFortuneAnchor: items, axisHighlights: {},
   };
-  const { accessFull, memberAccess } = ownHistoryViewFlags();
+  const { accessFull, memberAccess } = ownHistoryViewFlags(true);
   const html = renderAmuletLibraryRankingHtml({
     pagePublicToken: "tok_history_test", library, pinnedOriginalCount: 0,
     accessFull, memberAccess, lockedAll: !memberAccess, liffPayUrl: "https://example.invalid",
@@ -86,13 +90,14 @@ test("เส้นเปิดดูไม่เหลือเงื่อน�
   const code = ctrl.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
   assert.ok(!code.includes("hasRecentPaidAccess("), "controller ต้องไม่เรียกเกตจ่ายเงินอีก");
   assert.ok(!code.includes("countUserPiecesForCensorGate"), "ข้อยกเว้นคลัง ≤5 ชิ้นต้องถูกยกเลิก");
-  assert.match(ctrl, /ownHistoryViewFlags\(\)/, "ต้องใช้กติกาถาวรแทน");
-  assert.equal((ctrl.match(/ownHistoryViewFlags\(\)/g) || []).length, 2, "ต้องแทนครบทั้งหน้ารายงานและหน้าคลัง");
+  assert.match(ctrl, /ownHistoryViewFlags\(/, "ต้องใช้กติกาถาวรแทน");
+  assert.equal((ctrl.match(/ownHistoryViewFlags\(/g) || []).length, 2, "ต้องแทนครบทั้งหน้ารายงานและหน้าคลัง");
 
   const liff = read("src/routes/liff.routes.js");
   const liffCode = liff.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
   assert.ok(!liffCode.includes("hasRecentPaidAccess"), "LIFF ต้องไม่เกตด้วยการจ่ายเงินในเส้นเปิดดู");
-  assert.match(liff, /const isMember = canViewOwnHistory\(\);/);
+  assert.match(liff, /const isMember = canViewOwnHistory\(\);/,
+    "LIFF ยืนยันด้วย LINE idToken อยู่แล้ว = เจ้าของโดยธรรมชาติ");
   assert.match(liff, /if \(canViewOwnHistory\(\)\) return null;/, "teaser เบลอต้องไม่ถูกสร้างอีก");
 });
 
@@ -132,7 +137,7 @@ test("เปิดดูย้อนหลัง = ใช้ข้อมูล�
       return { totalCount: 2, items: arr, topOverall: arr[0], byOverall: arr, byBaramee: arr, byMetta: arr,
         byLuck: arr, byProtection: arr, byFit: arr, bySpecialty: arr, byFortuneAnchor: arr, axisHighlights: {} };
     })(),
-    ...ownHistoryViewFlags(), lockedAll: false, liffPayUrl: "https://example.invalid",
+    ...ownHistoryViewFlags(true), lockedAll: false, liffPayUrl: "https://example.invalid",
   });
   assert.equal(EXTERNAL.ai, before, "การ render ของเดิมต้องไม่เรียก AI");
   // โมดูลกติกาต้องไม่ลาก client AI เข้ามาเลย

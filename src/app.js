@@ -346,6 +346,12 @@ async function myScansGuard(req, res) {
   }
   res.set("Cache-Control", "private, no-store");
   res.set("X-Robots-Tag", "noindex, nofollow");
+  // กบ 23 ก.ย. 2026 (แบบ A): เจ้าของเปิดลิงก์ส่วนตัวของตัวเอง → ออก cookie พิสูจน์เจ้าของ
+  // (httpOnly · ไม่ใส่ token ใน URL/OG/log) เพื่อใช้เปิดคลังบนหน้ารายงานของตัวเอง
+  try {
+    const { issueOwnerCookie } = await import("./services/reports/ownerProof.util.js");
+    issueOwnerCookie(res, uid);
+  } catch { /* ออก cookie ไม่ได้ = เปิดคลังไม่ได้ แต่หน้า myscans ยังใช้ได้ */ }
   return { svc, token, uid };
 }
 

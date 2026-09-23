@@ -19,6 +19,7 @@ import {
 } from "../services/reports/crystalBraceletLibrary.service.js";
 import { env } from "../config/env.js";
 import { ownHistoryViewFlags } from "../services/reports/ownHistoryAccess.util.js";
+import { isOwnerViewing } from "../services/reports/ownerProof.util.js";
 import {
   translateReportPayloadEn,
   buildEnglishReportPage,
@@ -150,7 +151,9 @@ export async function getReportBodyByToken(req, res) {
     !Array.isArray(normPre.amuletV1)
   ) {
     const uid = String(normPre.userId || "").trim();
-    if (uid) {
+    // กบ 23 ก.ย. 2026 (แบบ A): ลิงก์รายงานที่แชร์ต่อ **ห้ามเห็นทั้งคลัง** แม้เจ้าของมีแพ็ก
+    // ไม่ใช่เจ้าของ → ตกไปใช้ข้อมูลในรายงานใบนี้เท่านั้น (ขอบเขตเดิมของรายงาน)
+    if (uid && isOwnerViewing(req, uid)) {
       try {
         // full: คลังย้ายมาโชว์ทั้งแท่นรางวัล + อันดับบนหน้ารายงานแล้ว (กบ 15 ก.ค.)
         sacredAmuletLibrary = await buildSacredAmuletLibraryForLineUser(uid, {
@@ -183,7 +186,8 @@ export async function getReportBodyByToken(req, res) {
     !Array.isArray(normPre.crystalBraceletV1)
   ) {
     const uid = String(normPre.userId || "").trim();
-    if (uid) {
+    // เช่นเดียวกับคลังพระ: เฉพาะเจ้าของที่พิสูจน์ตัวแล้วจึงดึงทั้งคลัง
+    if (uid && isOwnerViewing(req, uid)) {
       try {
         crystalBraceletLibrary = await buildCrystalBraceletLibraryForLineUser(uid);
       } catch (libErr) {
@@ -215,16 +219,16 @@ export async function getReportBodyByToken(req, res) {
   // กบ 23 ก.ย. 2026: เจ้าของดูของเดิมของตัวเองได้เสมอ — ไม่ผูกกับการซื้อแพ็ก/วันหมดอายุ
   // (เดิมเซ็นเซอร์เมื่อ hasRecentPaidAccess=false และมีข้อยกเว้นคลัง ≤5 ชิ้น — ยกเลิกทั้งคู่)
   // ส่วน "สร้างของใหม่" ยังใช้เกตเดิมทุกประการ ดู ownHistoryAccess.util.js
-  const { accessFull, memberAccess } = ownHistoryViewFlags();
-  if (normPre.amuletV1 || normPre.crystalBraceletV1 || normPre.moldaviteV1) {
+  // เจ้าของที่พิสูจน์ตัวแล้วเท่านั้นจึงเปิดคลังเต็ม (ดู ownerProof.util.js)
+  const ownerViewing = isOwnerViewing(req, String(normPre.userId || "").trim());
+  const { accessFull, memberAccess } = ownHistoryViewFlags(ownerViewing);
+  if (ownerViewing && (normPre.amuletV1 || normPre.crystalBraceletV1 || normPre.moldaviteV1)) {
     const uid = String(normPre.userId || "").trim();
-    if (uid) {
-      try {
-        const { buildDailyPickTeaserForLineUser } = await import("../routes/liff.routes.js");
-        dailyPickTeaser = await buildDailyPickTeaserForLineUser(uid);
-      } catch {
-        dailyPickTeaser = null;
-      }
+    try {
+      const { buildDailyPickTeaserForLineUser } = await import("../routes/liff.routes.js");
+      dailyPickTeaser = await buildDailyPickTeaserForLineUser(uid);
+    } catch {
+      dailyPickTeaser = null;
     }
   }
   const liffPayUrl = process.env.LIFF_ID
@@ -613,6 +617,21 @@ export async function getLibraryRankingByToken(req, res) {
     );
   }
 
+  // กบ 23 ก.ย. 2026 (แบบ A): หน้าคลังต้องพิสูจน์ว่าเป็นเจ้าของก่อนทุกอย่าง
+  // ถือลิงก์รายงานอย่างเดียวไม่พอ แม้เจ้าของจะมีแพ็กอยู่ก็ตาม
+  // ตรวจก่อนแม้แต่การบอกว่าเป็นเลนไหน — ไม่ใช่เจ้าของไม่ควรรู้อะไรเพิ่มจากรายงานที่ถืออยู่
+  if (!isOwnerViewing(req, String(normalized.userId || "").trim())) {
+    console.log(JSON.stringify({
+      event: "REPORT_HTTP",
+      path: "getLibraryRankingByToken",
+      status: 302,
+      reason: "owner_proof_required",
+      publicTokenPrefix: publicTokenPrefix12(publicToken),
+    }));
+    res.set("Cache-Control", "private, no-store");
+    return res.redirect(302, `/r/${encodeURIComponent(publicToken)}`);
+  }
+
   const hasAmulet =
     normalized.amuletV1 &&
     typeof normalized.amuletV1 === "object" &&
@@ -673,8 +692,8 @@ export async function getLibraryRankingByToken(req, res) {
   // กบ 18 ก.ค. 2026: เกต = จ่ายใบล่าสุดไม่เกิน 3 วัน หรือ paid_until ยังไม่หมด (399 เปิดตลอด 30 วัน) — เกิน 3 วันเซ็นเซอร์ ดึงกลับมาจ่ายซ้ำ
   // เคยจ่าย = เห็นหมด (คลังเต็ม + อันดับ 1-2 + หนุนดวงวันนี้)
   // ไม่เคยจ่าย = ล็อกคลังทั้งหน้า (lockedAll) — เช็คพลาด = เปิดหมด (fail-open) ตามเดิม
-  // กบ 23 ก.ย. 2026: คลังของเจ้าของเปิดดูได้เสมอ (ดู ownHistoryAccess.util.js)
-  const { accessFull, memberAccess } = ownHistoryViewFlags();
+  // มาถึงตรงนี้ = พิสูจน์แล้วว่าเป็นเจ้าของ → เปิดเต็ม ไม่ผูกกับการซื้อแพ็ก
+  const { accessFull, memberAccess } = ownHistoryViewFlags(true);
   let dailyPick = null;
   if (uid) {
     try {
