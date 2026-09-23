@@ -127,8 +127,13 @@ async function buildRuntimeDeps() {
         lineUserId: data.line_user_id,
       };
     },
-    // ← approval service เดิม (atomic pending_verify→paid + grant entitlement)
-    approvePayment: payments.markPaymentApprovedAndUnlock,
+    // ← approval service เดิม แต่ตอนนี้เป็น transaction เดียว (ดู sql/062)
+    // ส่ง expect เข้าไปให้ตรวจ "ยอด/แพ็ก/สถานะ" ณ จุด commit จริง ไม่ใช่ตรวจใน handler แล้วอ่านใหม่
+    async approvePayment({ paymentId, approvedBy, expect }) {
+      return payments.markPaymentApprovedAndUnlock({
+        paymentId, approvedBy, expect, channel: "telegram",
+      });
+    },
     async notifyCustomer({ activation, paymentId }) {
       const { buildPaymentApprovedText } = await import("../utils/webhookText.util.js");
       const text = await buildPaymentApprovedText({

@@ -323,7 +323,16 @@ export async function handleApprovalCallback(cb, deps = {}) {
     // ── เติมสิทธิ์ด้วย service เดิม (มี atomic claim กันเติมซ้ำข้ามช่องทางอยู่แล้ว)
     let activation;
     try {
-      activation = await deps.approvePayment({ paymentId, approvedBy: `telegram:${auth.fromId}` });
+      // ส่ง snapshot ที่ผู้อนุมัติเห็นบนจอเข้าไปตรวจในทรานแซกชันเดียวกับการเปลี่ยนสถานะ
+      // (ตรวจใน handler อย่างเดียวไม่พอ — แพ็กอาจเปลี่ยนระหว่างนั้น)
+      activation = await deps.approvePayment({
+        paymentId,
+        approvedBy: `telegram:${auth.fromId}`,
+        expect: {
+          packageCode: consumed.snapshotPackageCode ?? null,
+          expectedAmount: consumed.snapshotAmount ?? null,
+        },
+      });
     } catch (e) {
       await recordApprovalAudit({ paymentId, channel: "telegram", actor: auth.fromId,
         action: "approve_confirmed", result: "error",

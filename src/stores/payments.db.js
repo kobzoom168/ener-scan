@@ -4,7 +4,7 @@ import {
   emitPaymentApprovedFunnel,
   emitPaymentRejectedFunnel,
 } from "../core/telemetry/paymentLifecycleTelemetry.service.js";
-import { grantEntitlementForPackage } from "../services/entitlement.service.js";
+import { resolveEntitlementForPackage } from "../services/entitlement.service.js";
 import { sendEnerAiEvent } from "../services/enerAiEvent.service.js";
 import { generatePaymentRef } from "../utils/paymentRef.util.js";
 
@@ -867,72 +867,48 @@ export async function switchPendingPaymentPackageByAdmin({
   return data;
 }
 
+/**
+ * อนุมัติใบชำระเงิน + เติมสิทธิ์ **เป็น transaction เดียว** (กบเคาะ 23 ก.ย. 2026)
+ *
+ * เดิมเขียน status='paid' ก่อน แล้วค่อยเติมสิทธิ์เป็นคนละ statement → ล้มกลางทาง =
+ * จ่ายแล้วไม่ได้สิทธิ์ และ retry จะ early-return โดยไม่เติมให้ (เสียถาวร)
+ *
+ * ตอนนี้ทุกอย่าง (ตรวจ expect → เติมสิทธิ์ → หลักฐาน grant → set paid → audit)
+ * อยู่ใน `approve_payment_and_grant` ครั้งเดียว สำเร็จหรือ rollback พร้อมกัน
+ * `payment_entitlement_grants.payment_id` เป็น PK → เติมซ้ำไม่ได้ ไม่ว่ามาจากช่องทางไหน
+ *
+ * @param {object} p
+ * @param {string} p.paymentId
+ * @param {string|null} [p.approvedBy]
+ * @param {{ packageCode?: string|null, expectedAmount?: number|null }} [p.expect]
+ *        ค่าที่ผู้อนุมัติเห็นบนจอ — ถูกตรวจ **ในทรานแซกชันเดียวกับการเปลี่ยนสถานะ**
+ *        ไม่ส่ง = ไม่ตรวจ (พฤติกรรมเดิมของ web/LINE)
+ * @param {string} [p.channel]
+ */
 export async function markPaymentApprovedAndUnlock({
   paymentId,
   approvedBy = null,
+  expect = null,
+  channel = "web",
 } = {}) {
   const id = String(paymentId || "").trim();
   if (!id) throw new Error("payments_missing_payment_id");
 
-  const nowIso = getNowIso();
   const { data: payment, error: fetchError } = await supabase
     .from("payments")
     .select(
-      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,unlock_hours",
+      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,unlock_hours,payment_ref",
     )
     .eq("id", id)
     .maybeSingle();
-
   if (fetchError) throw fetchError;
   if (!payment) throw new Error("payment_not_found");
 
-  if (payment.status === "paid") {
-    await safeCleanupOtherActivePaymentsForUser(payment.user_id, id);
-    return { lineUserId: payment.line_user_id || null };
-  }
-  if (payment.status !== "pending_verify") {
-    throw new Error(`payment_not_approvable_in_status_${payment.status}`);
-  }
-
   const packageCode = String(payment.package_code || "").trim();
-  if (!packageCode) {
-    throw new Error("payment_missing_package_code");
-  }
+  if (!packageCode) throw new Error("payment_missing_package_code");
 
-  // 1) Claim row: only pending_verify -> paid (prevents double grant on concurrent approve)
-  const { data: updatedRows, error: updatePaymentError } = await supabase
-    .from("payments")
-    .update({
-      status: "paid",
-      verified_at: nowIso,
-      approved_by: approvedBy || null,
-      updated_at: nowIso,
-    })
-    .eq("id", id)
-    .eq("status", "pending_verify")
-    .select("id");
-
-  if (updatePaymentError) throw updatePaymentError;
-
-  if (!updatedRows || updatedRows.length === 0) {
-    const { data: rowAgain, error: againErr } = await supabase
-      .from("payments")
-      .select("id,user_id,line_user_id,status")
-      .eq("id", id)
-      .maybeSingle();
-    if (againErr) throw againErr;
-    if (rowAgain?.status === "paid") {
-      await safeCleanupOtherActivePaymentsForUser(rowAgain.user_id, id);
-      return { lineUserId: rowAgain.line_user_id || null };
-    }
-    throw new Error(
-      `payment_not_approvable_in_status_${rowAgain?.status || "unknown"}`
-    );
-  }
-
-  // 2) Grant entitlement by package code.
-  const entitlement = await grantEntitlementForPackage({
-    appUserId: payment.user_id,
+  // คำนวณ "พารามิเตอร์ของแพ็ก" แบบอ่านอย่างเดียว — carry-over ไปคำนวณใต้ row lock ใน SQL
+  const params = resolveEntitlementForPackage({
     packageCode,
     expectedAmountThb:
       payment.expected_amount != null ? Number(payment.expected_amount) : null,
@@ -940,21 +916,53 @@ export async function markPaymentApprovedAndUnlock({
       payment.unlock_hours != null ? Number(payment.unlock_hours) : null,
   });
 
+  const { data: res, error: rpcError } = await supabase.rpc("approve_payment_and_grant", {
+    p_payment_id: id,
+    p_channel: String(channel || "web"),
+    p_actor: approvedBy || null,
+    p_expect_package_code: expect?.packageCode ?? null,
+    p_expect_amount: expect?.expectedAmount ?? null,
+    p_plan_code: params.planCode,
+    p_scans: params.scans,
+    p_paid_until: params.paidUntilIso,
+    p_is_top_package: params.isTopPackage,
+  });
+  if (rpcError) throw rpcError;
+  if (!res || typeof res !== "object") throw new Error("approve_rpc_malformed_response");
+
+  if (res.ok !== true) {
+    // legacy_unverified = แถว paid เก่าที่ไม่มีหลักฐานการเติม — ห้ามเดา ห้ามเติมย้อนหลัง
+    throw new Error(`payment_not_approvable_${String(res.reason || "unknown")}`);
+  }
+
+  await safeCleanupOtherActivePaymentsForUser(payment.user_id, id);
+
+  const lineUid = String(payment.line_user_id || "").trim();
+  if (res.alreadyGranted === true) {
+    // เคยเติมไปแล้ว (อีกช่องทางชนะไปก่อน) — รูปแบบคืนค่าเดิม: null = idempotent
+    console.log(
+      JSON.stringify({
+        event: "PAYMENT_APPROVE_ALREADY_GRANTED",
+        paymentId: id,
+        channel: String(channel || "web"),
+      }),
+    );
+    return { lineUserId: payment.line_user_id || null, paidUntil: null, paidRemainingScans: null, paidPlanCode: null };
+  }
+
   console.log(
     JSON.stringify({
       event: "PAYMENT_APPROVED_ENTITLEMENT_GRANTED",
       paymentId: id,
       appUserId: payment.user_id,
-      packageKey: entitlement.paidPlanCode,
+      packageKey: res.paidPlanCode,
       priceThb: payment.expected_amount != null ? Number(payment.expected_amount) : null,
-      scanCount: entitlement.paidRemainingScans,
-      windowHours: payment.unlock_hours != null ? Number(payment.unlock_hours) : null,
+      scanCount: res.paidRemainingScans,
+      carryOver: res.carryOver,
+      channel: String(channel || "web"),
     }),
   );
 
-  await safeCleanupOtherActivePaymentsForUser(payment.user_id, id);
-
-  const lineUid = String(payment.line_user_id || "").trim();
   if (lineUid) {
     emitPaymentApprovedFunnel({
       userId: lineUid,
@@ -976,20 +984,18 @@ export async function markPaymentApprovedAndUnlock({
       packageCode: payment.package_code || null,
       packageName: payment.package_name || null,
       amount: payment.expected_amount != null ? Number(payment.expected_amount) : null,
-      approvedAt: nowIso,
-      paidUntil: entitlement.paidUntil || null,
+      approvedAt: getNowIso(),
+      paidUntil: res.paidUntil || null,
       paidRemainingScans:
-        entitlement.paidRemainingScans != null
-          ? Number(entitlement.paidRemainingScans)
-          : null,
+        res.paidRemainingScans != null ? Number(res.paidRemainingScans) : null,
     },
   });
 
   return {
     lineUserId: payment.line_user_id || null,
-    paidUntil: entitlement.paidUntil,
-    paidRemainingScans: entitlement.paidRemainingScans,
-    paidPlanCode: entitlement.paidPlanCode,
+    paidUntil: res.paidUntil ?? null,
+    paidRemainingScans: res.paidRemainingScans ?? null,
+    paidPlanCode: res.paidPlanCode ?? null,
   };
 }
 

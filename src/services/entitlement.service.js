@@ -89,6 +89,57 @@ function paidUntilMsFromUnlockHint(unlockHoursFromPayment, pkg) {
   return null;
 }
 
+/**
+ * คำนวณสิทธิ์ที่แพ็กให้ **แบบอ่านอย่างเดียว** (ไม่แตะ DB เลย) — กบ 23 ก.ย. 2026
+ *
+ * แยกออกมาจาก `grantEntitlementForPackage` เพื่อให้การ "เขียน" ไปอยู่ใน transaction เดียว
+ * ฝั่ง SQL (`approve_payment_and_grant`) ที่ล็อกแถวแล้วคำนวณ carry-over ใต้ล็อก
+ * → กติกาแพ็กไม่เปลี่ยน แต่ carry-over ต้องคำนวณตอนล็อกเท่านั้น ห้ามอ่านค้างไว้ก่อน
+ *
+ * @returns {{ planCode: string, scans: number, paidUntilIso: string, isTopPackage: boolean,
+ *             source: "offer"|"legacy_code" }}
+ */
+export function resolveEntitlementForPackage({
+  packageCode,
+  expectedAmountThb = null,
+  unlockHoursFromPayment = null,
+  now = Date.now(),
+} = {}) {
+  const offer = resolveActiveScanOfferCalm();
+  let pkg = findPackageByKey(offer, packageCode);
+  if (!pkg && expectedAmountThb != null) {
+    const amt = Number(expectedAmountThb);
+    if (Number.isFinite(amt) && amt > 0) pkg = findActivePackageByPriceThb(offer, amt);
+  }
+  if (pkg) {
+    const paidUntilMs =
+      paidUntilMsFromUnlockHint(unlockHoursFromPayment, pkg) ?? now + 24 * 60 * 60 * 1000;
+    const pkgsAll = listActivePackages(offer);
+    const isTopPackage =
+      pkgsAll.length > 0 &&
+      Number(pkg.priceThb) === Math.max(...pkgsAll.map((p) => Number(p.priceThb)));
+    return {
+      planCode: pkg.key,
+      scans: Number(pkg.scanCount),
+      paidUntilIso: new Date(paidUntilMs).toISOString(),
+      isTopPackage,
+      source: "offer",
+    };
+  }
+  const legacy = parsePackageCodeToEntitlement(packageCode);
+  let paidUntilMs = legacy.paid_until_ms;
+  const unlock = Number(unlockHoursFromPayment);
+  if (Number.isFinite(unlock) && unlock > 0) paidUntilMs = now + unlock * 60 * 60 * 1000;
+  return {
+    planCode: legacy.paid_plan_code,
+    scans: Number(legacy.paid_remaining_scans),
+    paidUntilIso: new Date(paidUntilMs).toISOString(),
+    // เส้น legacy code ไม่เคยเข้าเงื่อนไข carry-over เดิม (isTop คำนวณจาก offer เท่านั้น)
+    isTopPackage: false,
+    source: "legacy_code",
+  };
+}
+
 export async function grantEntitlementForPackage({
   appUserId,
   packageCode,

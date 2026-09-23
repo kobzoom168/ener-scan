@@ -212,6 +212,21 @@ async function runOnce() {
       }),
     );
   }
+  // แจ้งลูกค้าที่เติมสิทธิ์สำเร็จแล้วแต่ยังไม่มีงานแจ้ง (กบ 23 ก.ย. 2026)
+  // กู้คืนเฉพาะ "การแจ้ง" ไม่แตะสิทธิ์ · legacy (paid เก่าไม่มี grant) ไม่ถูกหยิบ
+  try {
+    const { runPaymentGrantNotifySweep } = await import(
+      "../services/payments/paymentGrantNotifier.service.js"
+    );
+    await runPaymentGrantNotifySweep();
+  } catch (e) {
+    console.warn(
+      JSON.stringify({
+        event: "PAYMENT_GRANT_NOTIFY_SWEEP_ERROR",
+        message: String(e?.message || e).slice(0, 160),
+      }),
+    );
+  }
   // push หนุนดวงเช้า 7 โมง (กบ 19 ก.ค.) — self-gated + dedupe รายวัน/รายคน
   try {
     await runDailyLuckyPickSweep();
