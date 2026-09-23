@@ -71,3 +71,16 @@ ssh ener 'bash /root/deploy-ener.sh pro'      # pro — ต้องให้ก
 - ปรับแชทได้เฉพาะจากเคสจริงทีละจุด แก้น้อยที่สุด · ห้าม global contract / sanitizer / length cap ทุกข้อความ
 - DB: staging มี migration 055–056 (โค้ดไม่เรียก) · pro มีถึง 054
 - ค้างความปลอดภัย: ล้าง shell history + rotate key (แผนใน docs/ai/plans/security-shell-history-rotation.md)
+
+## คลัง/รายงานย้อนหลังของเจ้าของ — ปลดล็อกถาวร (staging 23 ก.ย. 2026, ยังไม่ขึ้น Pro)
+- เจ้าของเปิดดูคลัง/รายการ/รายละเอียดรายงานที่เคยได้รับได้เสมอ **ไม่ผูกกับการซื้อแพ็กหรือวันหมดอายุ**
+- จุดตัดสินใจเดียว: `src/services/reports/ownHistoryAccess.util.js` (`canViewOwnHistory`/`ownHistoryViewFlags`)
+- เดิมผูกกับ `hasRecentPaidAccess` (จ่าย ≤3 วัน / paid_until) + ข้อยกเว้นคลัง ≤5 ชิ้น → ยกเลิกทั้งคู่
+- **ไม่ผูกกับสวิตช์ trial** · เส้น "สร้างของใหม่" (สแกน/คำอ่าน/voice/push/consult) ยังใช้เกตเดิมทุกประการ
+
+## อนุมัติสลิปผ่าน Telegram (staging 23 ก.ย. 2026 — **ปิดอยู่**)
+- `POST /telegram/webhook` เท่านั้น · ตรวจ `X-Telegram-Bot-Api-Secret-Token` timing-safe
+- ปุ่ม 2 ขั้น: "อนุมัติรายการนี้" → แสดงยอด/แพ็ก → "ยืนยันอนุมัติ" (token ฝั่ง server 10 นาที ใช้ครั้งเดียว)
+- ตรวจ Telegram user id + chat id ทุกครั้ง (ไม่ใช้ username / ไม่ถือว่าอยู่ในกลุ่ม = มีสิทธิ์)
+- เติมสิทธิ์ผ่าน `markPaymentApprovedAndUnlock` เดิม · แจ้งลูกค้าผ่าน `enqueueApproveNotify` เดิม
+- เปิดได้เมื่อครบ: `TELEGRAM_SLIP_APPROVAL_ENABLED` + `TELEGRAM_APPROVER_USER_IDS` + `TELEGRAM_WEBHOOK_SECRET` + BOT_TOKEN + CHAT_ID
