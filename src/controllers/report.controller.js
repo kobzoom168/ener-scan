@@ -18,7 +18,7 @@ import {
   buildCrystalBraceletLibraryViewFromPayloadOnly,
 } from "../services/reports/crystalBraceletLibrary.service.js";
 import { env } from "../config/env.js";
-import { hasRecentPaidAccess } from "../services/everPaid.service.js";
+import { ownHistoryViewFlags } from "../services/reports/ownHistoryAccess.util.js";
 import {
   translateReportPayloadEn,
   buildEnglishReportPage,
@@ -212,8 +212,10 @@ export async function getReportBodyByToken(req, res) {
   let dailyPickTeaser = null;
   // กบ 18 ก.ค. 2026: เกต = จ่ายใบล่าสุดไม่เกิน 3 วัน หรือ paid_until ยังไม่หมด (399 เปิดตลอด 30 วัน)
   // (ลิสต์เต็ม + อันดับ 1-2) / ไม่เคยจ่าย = เซ็นเซอร์ — เช็คพลาด = เปิดหมด (fail-open)
-  let accessFull = true;
-  let memberAccess = true;
+  // กบ 23 ก.ย. 2026: เจ้าของดูของเดิมของตัวเองได้เสมอ — ไม่ผูกกับการซื้อแพ็ก/วันหมดอายุ
+  // (เดิมเซ็นเซอร์เมื่อ hasRecentPaidAccess=false และมีข้อยกเว้นคลัง ≤5 ชิ้น — ยกเลิกทั้งคู่)
+  // ส่วน "สร้างของใหม่" ยังใช้เกตเดิมทุกประการ ดู ownHistoryAccess.util.js
+  const { accessFull, memberAccess } = ownHistoryViewFlags();
   if (normPre.amuletV1 || normPre.crystalBraceletV1 || normPre.moldaviteV1) {
     const uid = String(normPre.userId || "").trim();
     if (uid) {
@@ -222,23 +224,6 @@ export async function getReportBodyByToken(req, res) {
         dailyPickTeaser = await buildDailyPickTeaserForLineUser(uid);
       } catch {
         dailyPickTeaser = null;
-      }
-      try {
-        const recentPaid = await hasRecentPaidAccess(uid);
-        accessFull = recentPaid;
-        memberAccess = recentPaid;
-        if (!recentPaid) {
-          // กบ 19 ก.ค.: คลังไม่เกิน 5 ชิ้น = ไม่เซ็นเซอร์ (นับพลาด = เปิด)
-          const { countUserPiecesForCensorGate } = await import("../routes/liff.routes.js");
-          const n = await countUserPiecesForCensorGate(uid);
-          if (n == null || n <= 5) {
-            accessFull = true;
-            memberAccess = true;
-          }
-        }
-      } catch {
-        accessFull = true;
-        memberAccess = true;
       }
     }
   }
@@ -688,27 +673,10 @@ export async function getLibraryRankingByToken(req, res) {
   // กบ 18 ก.ค. 2026: เกต = จ่ายใบล่าสุดไม่เกิน 3 วัน หรือ paid_until ยังไม่หมด (399 เปิดตลอด 30 วัน) — เกิน 3 วันเซ็นเซอร์ ดึงกลับมาจ่ายซ้ำ
   // เคยจ่าย = เห็นหมด (คลังเต็ม + อันดับ 1-2 + หนุนดวงวันนี้)
   // ไม่เคยจ่าย = ล็อกคลังทั้งหน้า (lockedAll) — เช็คพลาด = เปิดหมด (fail-open) ตามเดิม
-  let accessFull = true;
-  let memberAccess = true;
+  // กบ 23 ก.ย. 2026: คลังของเจ้าของเปิดดูได้เสมอ (ดู ownHistoryAccess.util.js)
+  const { accessFull, memberAccess } = ownHistoryViewFlags();
   let dailyPick = null;
   if (uid) {
-    try {
-      const recentPaid = await hasRecentPaidAccess(uid);
-      accessFull = recentPaid;
-      memberAccess = recentPaid;
-      if (!recentPaid) {
-        // กบ 19 ก.ค.: คลังไม่เกิน 5 ชิ้น = ไม่เซ็นเซอร์ (นับพลาด = เปิด)
-        const { countUserPiecesForCensorGate } = await import("../routes/liff.routes.js");
-        const n = await countUserPiecesForCensorGate(uid);
-        if (n == null || n <= 5) {
-          accessFull = true;
-          memberAccess = true;
-        }
-      }
-    } catch {
-      accessFull = true;
-      memberAccess = true;
-    }
     try {
       const { listDailyPickRankedForLineUser } = await import("../routes/liff.routes.js");
       dailyPick = await listDailyPickRankedForLineUser(uid);

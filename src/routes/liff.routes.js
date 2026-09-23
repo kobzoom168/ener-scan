@@ -16,7 +16,7 @@ import { supabase } from "../config/supabase.js";
 import { saveBirthdate, getSavedBirthdate } from "../stores/userProfile.db.js";
 import { listScanResultsV2PayloadRowsForLineUser } from "../stores/scanV2/scanResultsV2.db.js";
 import { loadActiveScanOffer } from "../services/scanOffer.loader.js";
-import { hasRecentPaidAccess } from "../services/everPaid.service.js";
+import { canViewOwnHistory } from "../services/reports/ownHistoryAccess.util.js";
 import { getPromptPayQrPublicUrl } from "../utils/promptpayQrPublicUrl.util.js";
 import { ensureUserByLineUserId } from "../stores/users.db.js";
 import {
@@ -897,9 +897,9 @@ export async function buildDailyPickTeaserForLineUser(lineUserId) {
   try {
     const uid = String(lineUserId || "").trim();
     if (!uid) return null;
-    // กบ 17 ก.ค. 2026: เกต "เคยจ่ายสักครั้ง" — เคยจ่ายเห็นของจริงในแอปอยู่แล้ว ไม่ต้องมี teaser
-    const isMember = await hasRecentPaidAccess(uid).catch(() => false);
-    if (isMember) return null;
+    // กบ 23 ก.ย. 2026: คลังของเจ้าของเปิดดูได้เสมอแล้ว → teaser เบลอ "อันดับ 1 ที่ยังไม่เห็น"
+    // ไม่มีความหมายและขัดกับหน้าที่แสดงของจริงอยู่แล้ว จึงไม่สร้าง teaser อีกต่อไป
+    if (canViewOwnHistory()) return null;
     const rows = await listScanResultsV2PayloadRowsForLineUser(uid, 100);
     const pieces = extractPickPieces(rows);
     // กบ 19 ก.ค.: คลังไม่เกิน 5 ชิ้น = ไม่เซ็นเซอร์ → ไม่ต้องมี teaser ขาย
@@ -978,13 +978,10 @@ liffRouter.get("/api/liff/daily-pick", async (req, res) => {
       }
     } catch {}
 
-    // กบ 17 ก.ค. 2026: เคยจ่ายสักครั้ง = เทียบทั้งตู้ / ไม่เคยจ่าย = เห็นเฉพาะชิ้นล่าสุด
-    let isMember = false;
-    try {
-      isMember = await hasRecentPaidAccess(userId);
-    } catch {}
-    // กบ 19 ก.ค.: คลังไม่เกิน 5 ชิ้น = เปิดหมดเหมือนสมาชิก (ยังไม่เซ็นเซอร์)
-    if (!isMember && pieces.length <= 5) isMember = true;
+    // กบ 23 ก.ย. 2026: เจ้าของเห็นคลังของตัวเองทั้งตู้เสมอ ไม่ผูกกับการซื้อแพ็ก
+    // (เดิม: จ่ายใน 3 วัน = ทั้งตู้ / ไม่เคยจ่าย = เห็นเฉพาะชิ้นล่าสุด + teaser เบลอ)
+    // ดู src/services/reports/ownHistoryAccess.util.js — เส้น "สร้างของใหม่" ไม่เปลี่ยน
+    const isMember = canViewOwnHistory();
 
     if (isMember) {
       return res.json({ ok: true, member: true, dayStar, streak, total: ranked.length, items: ranked.slice(0, 3) });
