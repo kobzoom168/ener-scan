@@ -18,6 +18,7 @@ import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
 import { schedulePersonaAbRecompute } from "./services/personaAbSchedule.service.js";
 import reportRoutes from "./routes/report.routes.js";
+import createTelegramWebhookRouter from "./routes/telegramWebhook.routes.js";
 import { liffRouter, setLiffLineClient } from "./routes/liff.routes.js";
 import { lineWebhookErrorHandler } from "./middleware/lineWebhookError.middleware.js";
 
@@ -452,6 +453,8 @@ setLiffLineClient(lineClient);
 app.use(liffRouter);
 
 app.use(reportRoutes);
+// Telegram webhook (งาน 3): POST เท่านั้น · ปิดอยู่ถ้า config ไม่ครบ → ตอบ 404
+app.use(createTelegramWebhookRouter());
 
 // Serve static PromptPay QR for manual payments.
 // URL: /payment/promptpay-qr.jpg

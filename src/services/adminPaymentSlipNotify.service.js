@@ -25,15 +25,43 @@ export async function maybeNotifyAdminSlipPendingVerify({
   packageKey,
   slipUrl,
   reasons,
+  packageName = null,
+  expectedAmount = null,
+  slipAmount = null,
   env: envOverride,
+  telegram: telegramOverride = null,
 } = {}) {
   const e = envOverride ? { ...env, ...envOverride } : env;
-  const adminId = String(e.ADMIN_LINE_USER_ID || "").trim();
-  if (!adminId || !e.ADMIN_PAYMENT_SLIP_NOTIFY) return;
-
   const uid = String(lineUserId || "").trim();
   const pid = paymentId != null ? String(paymentId).trim() : "";
   if (!pid) return;
+
+  // ── ช่องทางเพิ่ม (งาน 3, 23 ก.ย. 2026): แจ้งเข้า Telegram พร้อมปุ่มอนุมัติ
+  // ปิดอยู่โดยค่าเริ่มต้น · ล้มเหลวไม่กระทบ LINE · ไม่อนุมัติอัตโนมัติ
+  try {
+    const tg = telegramOverride
+      ?? (await import("./payments/telegramSlipApproval.service.js"));
+    await tg.notifyTelegramSlipPendingVerify({
+      paymentId: pid,
+      paymentRef: paymentRef != null ? String(paymentRef).trim() : null,
+      packageCode: packageKey != null ? String(packageKey).trim() : null,
+      packageName,
+      expectedAmount,
+      slipAmount,
+      reasons: Array.isArray(reasons) ? reasons : [],
+      lineUserId: uid || null,
+      slipUrl: slipUrl != null ? String(slipUrl).trim() : null,
+    });
+  } catch (tgErr) {
+    console.error(JSON.stringify({
+      event: "ADMIN_SLIP_TELEGRAM_NOTIFY_FAIL",
+      paymentId: pid,
+      message: String(tgErr?.message || tgErr).slice(0, 160),
+    }));
+  }
+
+  const adminId = String(e.ADMIN_LINE_USER_ID || "").trim();
+  if (!adminId || !e.ADMIN_PAYMENT_SLIP_NOTIFY) return;
 
   const ref = paymentRef != null ? String(paymentRef).trim() : "";
   const pkg = packageKey != null ? String(packageKey).trim() : "";
