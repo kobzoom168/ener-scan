@@ -346,6 +346,9 @@ async function myScansGuard(req, res) {
   }
   res.set("Cache-Control", "private, no-store");
   res.set("X-Robots-Tag", "noindex, nofollow");
+  // `/myscans/:token` คือ "ลิงก์กุญแจส่วนตัว" — กันไม่ให้ token รั่วผ่าน Referer
+  // เมื่อผู้ใช้กดลิงก์ออกไปเว็บอื่นจากหน้านี้ (Codex 23 ก.ย.)
+  res.set("Referrer-Policy", "no-referrer");
   // กบ 23 ก.ย. 2026 (แบบ A): เจ้าของเปิดลิงก์ส่วนตัวของตัวเอง → ออก cookie พิสูจน์เจ้าของ
   // (httpOnly · ไม่ใส่ token ใน URL/OG/log) เพื่อใช้เปิดคลังบนหน้ารายงานของตัวเอง
   try {

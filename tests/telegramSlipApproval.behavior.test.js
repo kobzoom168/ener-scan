@@ -344,6 +344,13 @@ test("ไม่เขียนทางลัดเติมโควตา — 
   for (const shortcut of ["paid_until", "bonus_scans", "grantEntitlement", "from(\"payments\")", "update("])
     assert.ok(!src.includes(shortcut), `ห้ามแตะสิทธิ์ตรง ๆ: ${shortcut}`);
   const route = read("src/routes/telegramWebhook.routes.js");
-  assert.match(route, /approvePayment: payments\.markPaymentApprovedAndUnlock/);
+  assert.match(route, /payments\.markPaymentApprovedAndUnlock\(/,
+    "ต้องเรียก approval service เดิม ไม่เขียนเส้นเติมสิทธิ์เอง");
+  assert.match(route, /channel: "telegram"/, "ต้องระบุช่องทางลง audit");
+  assert.match(route, /expect,/, "ต้องส่ง snapshot ไปตรวจในทรานแซกชันเดียวกับการอนุมัติ");
   assert.match(route, /enqueueApproveNotify/, "แจ้งลูกค้าต้องผ่านคิวเดิมที่มี retry");
+  // เส้นเติมสิทธิ์ต้องเป็น transaction เดียวใน DB ไม่ใช่สองสเต็ปในโค้ด
+  const store = read("src/stores/payments.db.js");
+  assert.match(store, /approve_payment_and_grant/, "ต้องผ่าน RPC ที่เป็นทรานแซกชันเดียว");
+  assert.ok(!store.includes("grantEntitlementForPackage"), "ต้องไม่เหลือเส้นเติมสิทธิ์แบบสองสเต็ป");
 });

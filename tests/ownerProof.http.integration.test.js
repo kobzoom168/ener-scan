@@ -13,6 +13,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
+import { readFileSync } from "node:fs";
 
 for (const [k, v] of Object.entries({
   SUPABASE_URL: "http://127.0.0.1:9", LOCAL_POSTGREST_URL: "http://127.0.0.1:9",
@@ -118,6 +119,18 @@ test("owner token ไม่โผล่ใน URL — ใช้ cookie httpOnly 
   // และ log ของคำขอนี้ต้องไม่มีค่า cookie
   assert.ok(!r.logs.join("\n").includes(buildOwnerCookieValue(OWNER).split(".")[2]),
     "ห้าม log ลายเซ็น cookie");
+});
+
+
+test("ลิงก์กุญแจส่วนตัวต้องไม่รั่วผ่าน Referer (Codex 23 ก.ย.)", () => {
+  const app = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+  const guard = app.slice(app.indexOf("async function myScansGuard"), app.indexOf("app.get(\"/myscans/:token\""));
+  assert.match(guard, /Referrer-Policy[\s\S]*no-referrer/, "หน้า myscans ต้องตั้ง no-referrer");
+  assert.match(guard, /private, no-store/);
+  assert.match(guard, /noindex, nofollow/);
+  // แอปต้อง log เฉพาะ prefix ไม่เคย log token เต็ม
+  assert.ok(!/tokenPrefixForLog\(\s*\)/.test(app));
+  assert.match(app, /tokenPrefix: svc\.tokenPrefixForLog\(token\)|tokenPrefix: g\.svc\.tokenPrefixForLog\(g\.token\)/);
 });
 
 test.after(() => new Promise((r) => server.close(r)));

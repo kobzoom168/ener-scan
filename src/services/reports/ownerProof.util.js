@@ -11,7 +11,13 @@
  *   2) owner token ของหน้า "ผลสแกนของฉัน" (`user_page_tokens.purpose='myscans'`, เพิกถอนได้)
  *      โดยต้องตรงกับเจ้าของรายงานที่กำลังเปิดด้วย
  *
- * owner token เป็นกุญแจเข้าคลัง จึง **ไม่ถูกใส่ในลิงก์แชร์ / OG / log**:
+ * ⚠️ แก้คำตามที่ Codex ทัก: cookie ไม่อยู่ใน URL ก็จริง **แต่ `/myscans/:token` เองยังเป็น
+ * "ลิงก์กุญแจส่วนตัว"** — ใครได้ URL นั้นไปก็เปิดคลังได้ จึงต้องกันการรั่วทุกทาง:
+ *   - แอป log เฉพาะ prefix ของ token (`tokenPrefixForLog`) ไม่เคย log ตัวเต็ม
+ *   - หน้า `/myscans/:token` ตั้ง `Referrer-Policy: no-referrer` กัน token ติดไปกับ Referer
+ *   - **ค้าง (งาน ops)**: nginx access log ยังบันทึก path เต็ม → ต้องปิดบัง/ปิด log เส้นนี้
+ *
+ * owner token เป็นกุญแจเข้าคลัง จึง **ไม่ถูกใส่ในลิงก์แชร์ / OG / log ของแอป**:
  * เมื่อเจ้าของเปิด `/myscans/:token` (ลิงก์ส่วนตัวที่ส่งให้ในแชท) ระบบออก cookie httpOnly
  * ผูกกับ uid ให้แทน — cookie ไม่โผล่ใน URL และ JS ฝั่งหน้าเว็บอ่านไม่ได้
  */
