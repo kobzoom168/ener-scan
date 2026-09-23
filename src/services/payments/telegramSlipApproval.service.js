@@ -35,8 +35,9 @@ function boolEnv(name) {
 /** @returns {{token:string, chatId:string, approvers:Set<string>, webhookSecret:string}|null} */
 export function readTelegramApprovalConfig() {
   if (!boolEnv("TELEGRAM_SLIP_APPROVAL_ENABLED")) return null;
-  const token = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
-  const chatId = String(process.env.TELEGRAM_CHAT_ID || "").trim();
+  // No fallback to the shared alert bot.
+  const token = String(process.env.TELEGRAM_APPROVAL_BOT_TOKEN || "").trim();
+  const chatId = String(process.env.TELEGRAM_APPROVAL_CHAT_ID || "").trim();
   const webhookSecret = String(process.env.TELEGRAM_WEBHOOK_SECRET || "").trim();
   const approvers = new Set(
     String(process.env.TELEGRAM_APPROVER_USER_IDS || "")

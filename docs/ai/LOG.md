@@ -1032,3 +1032,12 @@
 - **พบ bot เดิมมี webhook ผูกอยู่แล้ว** และ staging/Pro ใช้ bot ตัวเดียวกัน → ไม่ setWebhook รอ bot แยก
 - **ข้อสังเกตเรื่องเงินที่พบระหว่างทาง (พฤติกรรมเดิม ไม่ได้แก้)**: ซื้อแพ็กเดิมซ้ำขณะยังมีสิทธิ์เหลือ → ยอดถูกตั้งเป็นค่าสัมบูรณ์ ไม่ทบ (carry-over ใช้เฉพาะตอนอัปเป็นแพ็กใหญ่สุดที่ต่าง plan) — ของเดิมเป็นแบบนี้อยู่แล้ว ยังไม่แก้ รอกบเคาะ
 - full gate ✅ ไม่มี fail ใหม่ · staging รัน `e53ef94` hash ตรงทุกไฟล์ · **Pro `be67a98` ไม่ถูกแตะ**
+
+## 23 ก.ย. 2026 | Codex | รับช่วงแก้ 5 review gaps จาก e53ef94 (local-only)
+- worktree `/tmp/ener-3tasks` เริ่ม clean ที่ `6660273`; ไม่ทับงานค้างของ Claude. แยก `TELEGRAM_APPROVAL_BOT_TOKEN/CHAT_ID` ไม่มี fallback ไป bot กลาง; ยังไม่ตั้ง env/setWebhook.
+- เพิ่ม SQL 063: mandatory JSON calculation snapshot ของ package/amount/unlock_hours/owner/status ตรวจภายใต้ payment lock ทุก caller; ถอด RPC overload เก่าที่ข้าม snapshot ได้. Telegram operator snapshot ยังคงตรวจเพิ่ม. ไม่เปลี่ยน carry-over/แพ็กเดิม ไม่ backfill.
+- notifier stamp ตรวจ RPC `{error}`/throw/false/malformed; SQL ต้องมี approve_notify ของ payment จริงก่อน stamp; unique race ไม่ถือเป็นหลักฐานสำเร็จลอย ๆ.
+- **ทดสอบจริงในเครื่อง:** hardening 3/3 + Telegram 22/22; PostgreSQL16 network=none ใช้ migrations 061/062/063 จริง: audit trigger ล้ม rollback payment/user/grant ทั้งหมด, retry หลังใช้สิทธิ์ไม่คืนยอด, stale/null snapshot, concurrent 5 connections, JS approval caller จริงผ่าน SQL adapter, outbox insert ล้ม→production sweep กู้ครั้งเดียว/legacy ไม่แตะ/ไม่ regrant; stamp evidence และ PUBLIC deny ผ่าน. ลบ synthetic DB/container+volume หลังทดสอบแล้ว.
+- **Nginx:** เตรียม access-log redaction snippet ไม่เพิ่ม location/ไม่เปลี่ยน routing; nginx -t และ HTTP ผ่าน proxy 5 แบบบน container network=none ผ่าน ไม่มี path/query/referrer token ใน access log. ลบ container แล้ว แต่ image ทดสอบยังอยู่. ไม่อ้างว่าแก้ log บน server จริงแล้ว; config จริง/old logs/error logs เป็น ops handoff.
+- **Full gate EXIT 0: 172/180 files · 17 leaf failures ทั้งหมด known · ไม่มี fail ใหม่**, ไม่แก้ known-failing manifest. Initial test harness missing CHANNEL env แก้ด้วย dummy env; ไม่มี credentials จริงถูกใช้.
+- อัปเดต rollout 057→061→062→063; คู่มือ `docs/ai/plans/2026-09-23-codex-approval-hardening.md`. **ไม่ SSH ไม่ apply staging/Pro ไม่ deploy ไม่ broadcast ไม่แก้ข้อมูลลูกค้า**. ค้าง staging verification/live smoke + owner policy ซื้อแพ็กซ้ำ. ยัง NO-GO Pro.

@@ -88,18 +88,20 @@ function mkDeps(over = {}) {
 
 test("ปิดอยู่โดยค่าเริ่มต้น และ config ไม่ครบ = ไม่เปิดครึ่ง ๆ", () => {
   const saved = { ...process.env };
-  for (const k of ["TELEGRAM_SLIP_APPROVAL_ENABLED","TELEGRAM_BOT_TOKEN","TELEGRAM_CHAT_ID",
+  for (const k of ["TELEGRAM_SLIP_APPROVAL_ENABLED","TELEGRAM_APPROVAL_BOT_TOKEN","TELEGRAM_APPROVAL_CHAT_ID",
                    "TELEGRAM_WEBHOOK_SECRET","TELEGRAM_APPROVER_USER_IDS"]) delete process.env[k];
   assert.equal(svc.readTelegramApprovalConfig(), null, "ไม่ตั้งอะไรเลย = ปิด");
   assert.equal(svc.isTelegramSlipApprovalEnabled(), false);
 
   process.env.TELEGRAM_SLIP_APPROVAL_ENABLED = "true";
-  process.env.TELEGRAM_BOT_TOKEN = "t"; process.env.TELEGRAM_CHAT_ID = "-100";
+  process.env.TELEGRAM_BOT_TOKEN = "shared-alert-bot"; process.env.TELEGRAM_CHAT_ID = "-200";
   process.env.TELEGRAM_WEBHOOK_SECRET = "s";
   assert.equal(svc.readTelegramApprovalConfig(), null, "ไม่มีรายชื่อผู้อนุมัติ = ปิด");
   process.env.TELEGRAM_APPROVER_USER_IDS = "notanumber,  ";
   assert.equal(svc.readTelegramApprovalConfig(), null, "id ไม่ใช่ตัวเลข = ไม่นับ");
   process.env.TELEGRAM_APPROVER_USER_IDS = "555000111";
+  assert.equal(svc.readTelegramApprovalConfig(), null, "shared alert bot must not enable approval");
+  process.env.TELEGRAM_APPROVAL_BOT_TOKEN = "t"; process.env.TELEGRAM_APPROVAL_CHAT_ID = "-100";
   assert.ok(svc.readTelegramApprovalConfig(), "ครบแล้วจึงเปิด");
   for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
   Object.assign(process.env, saved);

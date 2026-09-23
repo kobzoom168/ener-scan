@@ -882,7 +882,7 @@ export async function switchPendingPaymentPackageByAdmin({
  * @param {string|null} [p.approvedBy]
  * @param {{ packageCode?: string|null, expectedAmount?: number|null }} [p.expect]
  *        ค่าที่ผู้อนุมัติเห็นบนจอ — ถูกตรวจ **ในทรานแซกชันเดียวกับการเปลี่ยนสถานะ**
- *        ไม่ส่ง = ไม่ตรวจ (พฤติกรรมเดิมของ web/LINE)
+ *        optional operator snapshot; all callers also verify the complete calculation input
  * @param {string} [p.channel]
  */
 export async function markPaymentApprovedAndUnlock({
@@ -907,6 +907,17 @@ export async function markPaymentApprovedAndUnlock({
   const packageCode = String(payment.package_code || "").trim();
   if (!packageCode) throw new Error("payment_missing_package_code");
 
+  // The operator snapshot and the calculation snapshot serve different purposes.
+  // Never calculate package B while authorizing the operator's older package A.
+  if (expect) {
+    if (Object.hasOwn(expect, "packageCode") && expect.packageCode !== payment.package_code)
+      throw new Error("payment_not_approvable_stale_package");
+    if (Object.hasOwn(expect, "expectedAmount") &&
+        (expect.expectedAmount == null ? payment.expected_amount != null :
+          payment.expected_amount == null || Number(expect.expectedAmount) !== Number(payment.expected_amount)))
+      throw new Error("payment_not_approvable_stale_amount");
+  }
+
   // คำนวณ "พารามิเตอร์ของแพ็ก" แบบอ่านอย่างเดียว — carry-over ไปคำนวณใต้ row lock ใน SQL
   const params = resolveEntitlementForPackage({
     packageCode,
@@ -922,6 +933,14 @@ export async function markPaymentApprovedAndUnlock({
     p_actor: approvedBy || null,
     p_expect_package_code: expect?.packageCode ?? null,
     p_expect_amount: expect?.expectedAmount ?? null,
+    p_calculation_snapshot: {
+      package_code: payment.package_code,
+      expected_amount: payment.expected_amount == null ? null : Number(payment.expected_amount),
+      unlock_hours: payment.unlock_hours == null ? null : Number(payment.unlock_hours),
+      user_id: payment.user_id,
+      line_user_id: payment.line_user_id,
+      status: payment.status,
+    },
     p_plan_code: params.planCode,
     p_scans: params.scans,
     p_paid_until: params.paidUntilIso,

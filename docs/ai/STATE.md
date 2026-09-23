@@ -2,6 +2,7 @@
 (อัปเดตล่าสุด: 4 ส.ค. 2026 — ใครแก้สถานะระบบต้องอัปเดตไฟล์นี้ + วันที่บรรทัดนี้)
 
 ## ระบบคืออะไร
+**งานเตรียม 23 ก.ย. 2026 (Codex, local-only ยังไม่ deploy):** ปิด review gaps ของ `e53ef94` บน `release/three-tasks`: แยก approval bot token/chat; migration 063 บังคับ snapshot ทุก approval caller; notification stamp ตรวจ evidence/error; disposable PostgreSQL audit rollback/recovery + nginx redaction tests ผ่าน. Full gate 172/180, 17 known leaf failures, ไม่มี fail ใหม่. ยังไม่ apply 063 หรือ nginx config บน staging/Pro; trial/Telegram ไม่เปิด. คู่มือ `docs/ai/plans/2026-09-23-codex-approval-hardening.md`.
 **งานเตรียม 16 ก.ย. 2026 (ยังไม่ LIVE):** `feature/new-customer-trial` เพิ่ม `/admin/free-trial` สลับฟรีรายวัน ↔ ลูกค้าใหม่ฟรีรวม 2 ครั้ง. SQL 057 default OFF; first activation cutoff ถาวร; paid/bonus ไม่ยกเลิก. รอ staging smoke และ GO Pro; ต้องแจ้งล่วงหน้า 7 วันก่อนเปิดจริง. ห้าม deploy ancestry ของ branch โดยไม่ตรวจ W2 instrumentation ที่ยังไม่อนุมัติ. อ่านคู่มือ `docs/ai/plans/2026-09-new-customer-trial.md`.
 
 LINE OA "อาจารย์เอเนอร์" — ลูกค้าส่งรูปพระ/เครื่องราง/กำไลหิน → ระบบสแกนให้คะแนนพลัง 6 แกน + คำอ่านอาจารย์ + แชทถามต่อได้

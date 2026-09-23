@@ -2,6 +2,7 @@
 (กติกา: งานใหม่เพิ่มเข้าหมวด · เริ่มทำ/เสร็จ ให้ย้ายหมวด พร้อมวันที่ · คิวฝั่ง ener-ai ดูไฟล์เดียวกันใน repo ener-ai ประกอบ)
 
 ## 🔔 มีกำหนดเวลา
+- **23 ก.ย. 2026 — 3-task review hardening (Codex):** local fixes/tests เสร็จ: approval bot แยกจริง, mandatory calculation snapshot + SQL 063, truthful notification stamp, audit rollback/notify recovery, nginx access-log snippet. ค้าง apply 063 + verify exact runtime บน staging, nginx config ของจริง, bot แยก/ผู้อนุมัติ + live smoke, trial ON acceptance. ยัง NO-GO Pro/ไม่ broadcast. กติกาซื้อแพ็กเดิมซ้ำรอเจ้าของตัดสิน ไม่เปลี่ยนใน patch นี้.
 - **16 ก.ย. 2026 — ลูกค้าใหม่ฟรีรวม 2 ครั้ง + Admin switch:** โค้ดเสร็จบน `feature/new-customer-trial`, default OFF; tests 6/6 + PostgreSQL synthetic concurrency + full gate ไม่มี fail ใหม่. ค้างประกอบ release แบบไม่พ่วง W2 → migration 057 → staging live LINE smoke → GO Pro และแจ้งลูกค้าล่วงหน้า 7 วันก่อนเปิด. คู่มือ `docs/ai/plans/2026-09-new-customer-trial.md`. ยังไม่ deploy/ส่ง broadcast/แก้สิทธิ์ลูกค้าจริง.
 - **ถึง ~31 ก.ค. 2026** — เฝ้าโปรใหม่ v2 บน pro (ขึ้นแล้ว 17 ก.ค.เย็น): conversion ฟรี→29→49 · ยอด/บิล · มีใครงงโปรเปลี่ยนไหม · แอด 20 ก.ค. อ่าน funnel แยกช่วงก่อน/หลัง 17 ก.ค.เย็น
 - **~19 ก.ค. 2026** — เฝ้าคำตอบ DeepSeek ชั้นฟรีครบ 2-3 วัน: ถ้าหลุดบท/ปัดลูกค้าจ่าย → จูน prompt ชั้นฟรี หรือสลับ env `LLM_CONSULT_MODEL_FREE`

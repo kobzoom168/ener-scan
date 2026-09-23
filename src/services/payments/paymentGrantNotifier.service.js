@@ -20,6 +20,12 @@
  */
 import { supabase } from "../../config/supabase.js";
 
+async function stampQueued(db, paymentId) {
+  const { data, error } = await db.rpc("mark_payment_grant_notified", { p_payment_id: paymentId });
+  if (error) throw error;
+  if (data !== true) throw new Error("payment_grant_notify_stamp_unconfirmed");
+}
+
 export async function runPaymentGrantNotifySweep(deps = {}) {
   const db = deps.db ?? supabase;
   const limit = Number(deps.limit) || 20;
@@ -51,12 +57,17 @@ export async function runPaymentGrantNotifySweep(deps = {}) {
         lineUserId: g.line_user_id,
         paidPlanCode: g.paid_plan_code,
       });
-      const r = await enqueue({ lineUserId: g.line_user_id, paymentId, text });
+      let r;
+      try {
+        r = await enqueue({ lineUserId: g.line_user_id, paymentId, text });
+      } catch (e) {
+        // The RPC below verifies durable evidence even for a uniqueness race.
+        if (String(e?.code) !== "23505") throw e;
+        r = { deduped: true };
+      }
+      await stampQueued(db, paymentId);
       if (r?.deduped) summary.alreadyQueued += 1;
       else summary.enqueued += 1;
-
-      // มีงานแล้ว (ไม่ว่าเพิ่งสร้างหรือมีอยู่ก่อน) → stamp เพื่อไม่วนสร้างซ้ำ
-      await db.rpc("mark_payment_grant_notified", { p_payment_id: paymentId });
       console.log(JSON.stringify({
         event: "PAYMENT_GRANT_NOTIFY_ENQUEUED",
         paymentIdPrefix: paymentId.slice(0, 8),
@@ -66,14 +77,6 @@ export async function runPaymentGrantNotifySweep(deps = {}) {
       summary.failed += 1;
       // ไม่ stamp → รอบหน้าลองใหม่ · ห้ามแตะสิทธิ์ ห้ามเติมซ้ำ
       const msg = String(e?.message || e);
-      const isDupe = /duplicate key|uq_outbound_approve_notify/i.test(msg);
-      if (isDupe) {
-        // แข่งกันสร้างงาน — อีกเส้นชนะไปแล้ว ถือว่ามีงานแล้ว
-        summary.alreadyQueued += 1;
-        summary.failed -= 1;
-        await db.rpc("mark_payment_grant_notified", { p_payment_id: paymentId }).catch(() => {});
-        continue;
-      }
       console.error(JSON.stringify({
         event: "PAYMENT_GRANT_NOTIFY_FAILED",
         paymentIdPrefix: paymentId.slice(0, 8),
