@@ -1023,3 +1023,12 @@
 - service-level บน staging DB จริง **13/13** (token atomic/ใช้ซ้ำ/หมดอายุ/TTL เพดาน · ยิงพร้อมกัน 6 เส้นชนะคนเดียว · ตาราง token/audit อ่านตรงไม่ได้ · trial OFF · กติกาคลังถาวร · regression optout)
 - staging deploy `e414938` · runtime hash ตรงทุกไฟล์ · Telegram endpoint ตอบ 404 (ปิดอยู่) · ข้อมูลสังเคราะห์ล้างหมด
 - **ค้าง**: ร่าง+ส่งประกาศ 7 วันของงาน 1 · รายชื่อ Telegram user id + setWebhook + สลิปจริงใบแรก · live smoke ที่ต้องใช้บัญชีกบ · **Pro ไม่ถูกแตะ (`be67a98`)**
+
+## 23 ก.ย. 2026 (รอบสอง) | Claude | atomic approval + owner gate ตามข้อแก้ Codex
+- **ข้อ 5 owner gate (แบบ A)** `4bb603b`: cookie httpOnly ลงลายเซ็น HMAC ออกตอนเจ้าของเปิด `/myscans/:token` · gate ทุกจุดที่ดึงทั้งคลัง (คลังพระ/กำไล/teaser/หน้าคลัง — ตรวจก่อนแม้แต่บอกว่าเป็นเลนไหน) · ไม่ใช่เจ้าของ = ใช้ข้อมูลในรายงานใบนั้นเท่านั้น · LIFF ไม่ต้องแก้ (verify idToken อยู่แล้ว) · HTTP integration 8/8
+- **ข้อ 1/2/3/4 atomic approval** `9412726`: `sql/062 approve_payment_and_grant()` ทำ lock payments → ตรวจ expect ณ จุด commit → lock app_users → carry-over ใต้ล็อก → เติมสิทธิ์ → grant (PK=payment_id) → set paid → audit **ในทรานแซกชันเดียว** · **ไม่ backfill** (paid เดิมไม่มี grant = `legacy_unverified` ไม่เติมย้อนหลัง) · unique index กัน `approve_notify` ซ้ำที่ชั้น DB (ตรวจก่อนสร้าง: staging 0 · Pro 0) · notifier sweeper กู้เฉพาะ "การแจ้ง" ไม่แตะสิทธิ์
+- **DB integration บน staging จริง 11/11** รวม parity carry-over JS vs SQL ตรงทุกเคส · retry หลังลูกค้าใช้สิทธิ์ไม่คืนยอด · อนุมัติพร้อมกัน 5 ช่องทางเติมครั้งเดียว · อนุมัติพร้อมหักสิทธิ์สแกนไม่ทับกัน
+- **ข้อทัก Referer** `e53ef94`: `/myscans/:token` ตั้ง `Referrer-Policy: no-referrer` · **ค้าง (ops)**: nginx access log ยังบันทึก path เต็ม
+- **พบ bot เดิมมี webhook ผูกอยู่แล้ว** และ staging/Pro ใช้ bot ตัวเดียวกัน → ไม่ setWebhook รอ bot แยก
+- **ข้อสังเกตเรื่องเงินที่พบระหว่างทาง (พฤติกรรมเดิม ไม่ได้แก้)**: ซื้อแพ็กเดิมซ้ำขณะยังมีสิทธิ์เหลือ → ยอดถูกตั้งเป็นค่าสัมบูรณ์ ไม่ทบ (carry-over ใช้เฉพาะตอนอัปเป็นแพ็กใหญ่สุดที่ต่าง plan) — ของเดิมเป็นแบบนี้อยู่แล้ว ยังไม่แก้ รอกบเคาะ
+- full gate ✅ ไม่มี fail ใหม่ · staging รัน `e53ef94` hash ตรงทุกไฟล์ · **Pro `be67a98` ไม่ถูกแตะ**
