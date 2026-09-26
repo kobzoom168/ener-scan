@@ -51,7 +51,27 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 
 **ข้อควรระวังเพิ่มเติม 063:** `e53ef94`/`9412726` เรียก RPC signature เก่า ไม่ใช่ rollback target ที่เข้ากันได้กับ 063; อย่าคืน overload ที่ข้าม snapshot เพื่อแก้เฉพาะหน้า ต้องวาง maintenance/approval pause ก่อนสลับรุ่นกลางเหล่านี้. ถ้าย้อนเป็น `be67a98` เส้นอนุมัติจะกลับมีบั๊กสอง statement และ notifier ใหม่ไม่รัน ต้องทบทวนงาน grant ที่ยังไม่ enqueue ก่อนเลือก rollback; ไม่ควรย้อนโดยคิดว่าปลอดผลกระทบ.
 
-**หลักฐานรอบ Codex local:** ดู `2026-09-23-codex-approval-hardening.md`. ยังไม่ apply 063 บน staging/Pro และยังไม่ติดตั้ง nginx snippet บนเครื่องจริง.
+**หลักฐานรอบ Codex local:** ดู `2026-09-23-codex-approval-hardening.md`. **063 apply บน staging แล้ว (26 ก.ย.)** — `pg_proc` เหลือ overload เดียว `(uuid,text,text,text,numeric,text,integer,timestamptz,boolean,jsonb)`. Pro ยังไม่ apply. nginx snippet ยังไม่ติดตั้งบนเครื่องจริง (`nginx -T` ไม่มี `ener_private`).
+
+## อัปเดต 26 ก.ย. 2026 — LIFF ใช้ authority เดียวกับด่านรับรูป (`90827a8`)
+- staging = `90827a8` (runtime hash `liff.routes.js`/`paymentAccess.service.js` ตรง) · Pro = `be67a98` ไม่แตะ
+- `resolveLiffRights()` ถอดยอดจาก `checkScanAccess` ล้วน · รักษา 0 · อ่านล้ม → `unavailable` ("ตรวจสอบสิทธิ์ไม่ได้ กรุณาลองใหม่") · แยก ค่าครู/ทดลอง|ฟรี/โบนัส
+- rollback งานนี้: ย้อนโค้ดเป็น `27fdff4` ได้ทันที ไม่มี migration/config ใหม่ (การ์ดสถิติจะกลับมี fallback `2` อีก)
+- **หลักฐานลำดับด่านรูป (อ่านโค้ด):** `lineWebhook.js` `checkScanAccess({consumeBonus:true})` → ถ้า `payment_required` เลือก path `payment_gate` ก่อนสร้าง `scan_jobs` · AI ถูกเรียกเฉพาะใน `scanWorker` หลัง `claimNextScanJob` → **ครั้งที่ 3 ถูกกันก่อน vision AI เสมอ** · trigger 057 บน INSERT `scan_jobs` เป็นด่านสองใต้ row lock
+- **semantics การนับ trial (sql/057 `new_customer_trial_used`):** นับเฉพาะ `access_source='free'` · ไม่นับ `bonus` · ไม่นับ `status='failed'` (รูปไม่ชัด/ไม่ใช่วัตถุ → `failJob` = failed) · ไม่นับงานที่ส่งผลแบบ `skipQuotaDecrement=true` (รูปซ้ำ sha256/phash) · concurrent slot สุดท้าย serialize ด้วย `FOR UPDATE` — ทั้งหมดพิสูจน์ใน `scripts/ops/test-new-customer-trial-db.mjs` (PASS 26 ก.ย.)
+
+### รายการเทสต์สดบน staging ที่ต้องให้กบทำ (ยังไม่เปิดสวิตช์ — ต้องขออนุมัติก่อนทุกครั้ง)
+เงื่อนไข: เปิดสวิตช์ชั่วคราวเฉพาะช่วงเทสต์ · บัญชีทดสอบต้องมี `created_at` ≥ `eligible_since` จริง (ไม่แก้ค่าลูกค้า) · จบแล้วปิด OFF โดย **ไม่ล้าง `eligible_since` และไม่ลบ scan_jobs**
+1. ก่อนเปิด: LIFF ของบัญชีใหม่แสดง "ทดลอง 2 ครั้ง" ไม่ได้ (สวิตช์ OFF = ฟรีรายวันตามเดิม) — ถ่ายภาพ
+2. เปิดสวิตช์ (Admin, ยืนยัน 2 ชั้น) → LIFF แสดง "ทดลอง 2 ครั้ง" · ห้ามมีคำว่า "พรุ่งนี้"
+3. สแกนรูปพระ #1 สำเร็จ → LIFF "ทดลอง 1 ครั้ง" · ตรวจ `scan_jobs.free_access_kind='trial'`
+4. ส่ง **รูปเดิมซ้ำ** → ได้ลิงก์ผลเดิม · LIFF ยังคง 1 · `skipQuotaDecrement=true` ใน outbound
+5. ส่ง **รูปไม่ชัด/ไม่ใช่พระ** → job failed · LIFF ยังคง 1
+6. สแกนรูปพระ #2 สำเร็จ → LIFF "สิทธิ์ทดลองใช้ครบแล้ว"
+7. ส่งรูปพระ #3 → ถูกกันด้วยข้อความจ่าย · **ไม่มี** `scan_jobs` ใหม่ · **ไม่มี** AI call (ตรวจ log worker = 0)
+8. ข้ามเที่ยงคืน (หรือจำลองด้วย `now`) → ยังกัน ไม่รีเซ็ต
+9. ปิดสวิตช์ → บัญชีใหม่กลับเป็นฟรีรายวัน · `eligible_since` คงเดิม
+
 
 ## สิ่งที่ยังไม่ได้ทำ (ต้องมีอนุมัติแยก)
 - ประกาศล่วงหน้า 7 วันของงาน 1 (ยังไม่ร่าง ยังไม่ส่ง)
