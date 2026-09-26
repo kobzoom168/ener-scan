@@ -100,6 +100,9 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 
 **หลักฐาน:** `scripts/ops/test-bonus-reservation-integration.mjs` — Postgres 16 + PostgREST จริง (container ใช้แล้วทิ้ง) ขับผ่าน `checkScanAccess` / `ingestScanImageAsyncV2` / `processScanJob` (sha256 dedup) / `failJob` / RPC จริง; ปลอมเฉพาะ S3 + thumbnail ผ่าน `--import` hook · 12 สถานการณ์ PASS (worker เก่า be67a98 กับงานที่จองแล้ว 10 · ดู 0 · สำเร็จ+ซ้ำตอน 0 ไม่งอก 1 · inbound ซ้ำ 2 · ล้ม 3a · รูปซ้ำคืนเฉพาะการจองใหม่ 3b · concurrent 4 · INSERT abort ใน tx เดียว + DB คืนเองจากหลักฐาน 5 · legacy ไม่คืน 7 · โค้ดเก่าบน 064 ไม่หักซ้ำ 8 · โค้ดใหม่บน 057 ไม่พัง 9 · trial ON 6) · `test-new-customer-trial-db.mjs` PASS บน 057+064 · unit `tests/bonusConsume.behavior.test.js` 4/4 · gate ✅
 
+## อัปเดต 26 ก.ย. 2026 (รอบ 4) — ข้อความเรื่องสิทธิ์ชุดเดียวทั้งระบบ (`85e7ad7`+)
+โมดูลกลาง `src/services/entitlementCopy.service.js` · LINE/LIFF เลือกข้อความจากสถานะสิทธิ์เดียวกัน · โหมด daily คงเดิมเมื่อ trial ปิด · รายละเอียดก่อน→หลัง + รายการนอก repo: `docs/ai/reports/2026-09-26-entitlement-copy-audit.md` · **ยังไม่มี migration/config ใหม่** — rollback = ย้อนโค้ด · เทสต์สด: ต้องเห็น 2 โหมด → โหมด daily ดูได้ทันทีบน staging (บัญชีกบ) · โหมด new_customer ต้องเปิดสวิตช์ชั่วคราว (รวมกับ acceptance trial 9 ขั้น)
+
 ### รายการเทสต์สดบน staging ที่ต้องให้กบทำ (ยังไม่เปิดสวิตช์ — ต้องขออนุมัติก่อนทุกครั้ง)
 เงื่อนไข: เปิดสวิตช์ชั่วคราวเฉพาะช่วงเทสต์ · บัญชีทดสอบต้องมี `created_at` ≥ `eligible_since` จริง (ไม่แก้ค่าลูกค้า) · จบแล้วปิด OFF โดย **ไม่ล้าง `eligible_since` และไม่ลบ scan_jobs**
 1. ก่อนเปิด: LIFF ของบัญชีใหม่แสดง "ทดลอง 2 ครั้ง" ไม่ได้ (สวิตช์ OFF = ฟรีรายวันตามเดิม) — ถ่ายภาพ

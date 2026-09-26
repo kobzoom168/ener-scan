@@ -9,9 +9,9 @@ import { formatOfferWindowThai } from "../../utils/webhookText.util.js";
 // ที่ทำให้เข้าใจว่าต้องจ่ายถึงดูคลังเดิมได้ — กบ/Codex 26 ก.ย. 2026)
 import { packageDisplayName, packageButton } from "../entitlementCopy.service.js";
 
-/** บรรทัดรอง: "4 ครั้ง · 24 ชม." / "30 ครั้ง · 30 วัน" */
+/** บรรทัดรอง: "ใช้ได้ 24 ชม." / "ใช้ได้ 30 วัน" (ชื่อแพ็กบอกจำนวนครั้งแล้ว) */
 function packageDetailLine(p) {
-  return `${p.scanCount} ครั้ง · ${formatOfferWindowThai(p.windowHours)}`;
+  return `ใช้ได้ ${formatOfferWindowThai(p.windowHours)}`;
 }
 
 /**
