@@ -193,7 +193,7 @@ const STATIC_LABELS = {
   "พลังเสน่ห์ แรงดึงดูดใจ และความประทับใจแรกพบ": "Attraction, appeal, and first impressions",
   "เจ็ดมิติพลัง": "seven energy aspects",
   "ชิ้นไหนในคลังหนุนดวงคุณวันนี้": "Which piece supports your fortune today",
-  "ส่งรูปให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้น": "Send a photo for Ajarn to read, free once a day",
+  "ส่งรูปให้อาจารย์อ่านพลัง": "Send a photo for Ajarn to read, free once a day",
   "อ่านคำอธิบายพลังทั้ง 6 ด้าน": "Read all six energy aspects",
   "เปิดสิทธิ์ครั้งแรกแล้วดูได้ตลอด": "Unlock once to keep access",
   "เปิดดูชิ้นที่หนุนดวงวันนี้": "See today's supporting piece",

@@ -239,7 +239,7 @@ export async function buildPaymentGateReply({ decision, userId = null }) {
   };
   const built = buildScanOfferReply({
     offer,
-    accessContext: ctx,
+    accessContext: { ...ctx, freePolicy: decision?.freePolicy, trialEligible: decision?.trialEligible },
     gate,
     userId,
   });

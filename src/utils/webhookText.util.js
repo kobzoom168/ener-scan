@@ -1,3 +1,4 @@
+import { buildFirstScanInviteLine, buildSoftCloseCopy, buildPaywallCopy, resolveEntitlementState } from "../services/entitlementCopy.service.js";
 import { parseBirthdateInput, looksLikeBirthdateInput } from "./birthdateParse.util.js";
 import {
   waitingBirthdateInitial,
@@ -143,12 +144,14 @@ export function buildMultiImageInRequestText() {
  * ข้อความต้อนรับเมื่อผู้ใช้กดเพิ่มเพื่อน (LINE follow event).
  * เป้าหมาย: บอกทันทีว่าทำอะไรได้ + ใช้ยังไง + กระตุ้นให้ส่งรูปแรก + disclaimer.
  */
-export function buildFollowWelcomeText() {
+export function buildFollowWelcomeText(policy = "unknown") {
   // เลขฟรีดึงจากโปรจริง (แก้ใน /admin/promo แล้วข้อความนี้ตามเอง — เลิก hardcode)
+  // นโยบายฟรี (daily / new_customer) มาจาก DB ผู้เรียกส่งมา — "unknown" = ไม่สัญญาเรื่องฟรีเลย
   const freeQ = Number(loadActiveScanOffer()?.freeQuotaPerDay) || 1;
+  const inviteLine = buildFirstScanInviteLine(policy, { freeQuotaPerDay: freeQ });
   return [
     "พระที่ห้อยอยู่ รู้ไหมว่าพลังด้านไหนเด่น",
-    `ถ่ายรูปส่งมา 1 ชิ้น เดี๋ยวผมส่งให้อาจารย์เพ่งให้เลย ฟรีวันละ ${freeQ} ครั้ง`,
+    `ถ่ายรูปส่งมา 1 ชิ้น เดี๋ยวผมส่งให้อาจารย์เพ่งให้เลย ${inviteLine}`,
     "ผลออกเป็นการ์ดพลังครบทุกด้าน พร้อมความเข้ากับดวงคุณ",
     "",
     "กติกาสำคัญ อาจารย์รับดูเฉพาะภาพถ่ายสดจากของจริง",
@@ -742,7 +745,7 @@ export async function buildPaymentRequiredText({
   };
   const built = buildScanOfferReply({
     offer,
-    accessContext: ctx,
+    accessContext: { ...ctx, freePolicy: decision?.freePolicy, trialEligible: decision?.trialEligible },
     gate,
     userId: null,
   });
@@ -1231,7 +1234,11 @@ export async function buildAwaitingSlipReminderText({ userId, paymentRef } = {})
 // --- Micro-intent / menu fatigue (deterministic reply families) ---
 
 /** First full paywall explanation (single offer) — used on unclear tier full. */
-export function buildPaywallFullOfferIntroText(offer = loadActiveScanOffer()) {
+export function buildPaywallFullOfferIntroText(offer = loadActiveScanOffer(), policy = "daily") {
+  // นอกโหมด daily: ใช้ชุดข้อความกลาง (ไม่มี "พรุ่งนี้ยังมีฟรี")
+  if (policy !== "daily") {
+    return buildPaywallCopy(resolveEntitlementState({ allowed: false, reason: "payment_required", freePolicy: "new_customer" }), { offer }).textLines.join("\n");
+  }
   const pkg = getDefaultPackage(offer);
   const price = pkg?.priceThb ?? offer.paidPriceThb;
   const scanCount = pkg?.scanCount ?? offer.paidScanCount;
@@ -1287,6 +1294,7 @@ export function buildPaywallFatiguePromptText({
   tier = "full",
   branch = "unclear",
   ackStreak = 1,
+  policy = "daily",
 } = {}) {
   const pkg = getDefaultPackage(offer);
   const price = pkg?.priceThb ?? offer.paidPriceThb;
@@ -1299,6 +1307,8 @@ export function buildPaywallFatiguePromptText({
   }
 
   if (branch === "wait_tomorrow") {
+    // ลูกค้าบอกว่า "พรุ่งนี้" — นอกโหมด daily ห้ามรับปากว่าพรุ่งนี้มีฟรี
+    if (policy !== "daily") return buildSoftCloseCopy(policy);
     if (tier === "micro") {
       return "โอเคครับ พรุ่งนี้มีฟรีใหม่อีกครับ หรือจะเปิดวันนี้ บอกว่าจ่ายเงินมาก็ได้ครับ";
     }
@@ -1320,6 +1330,11 @@ export function buildPaywallFatiguePromptText({
       return "เดี๋ยวค่อยใส่วันเกิดตอนสแกนครับ ตอนนี้จะเปิดสิทธิ์ แจ้งว่าจ่ายเงินมาก็ได้ครับ";
     }
     return `เดี๋ยววันเกิดค่อยใช้ตอนสแกนครับ ตอนนี้ถ้าจะเปิดสิทธิ์ ${price} บาท แจ้งว่าจ่ายเงินมาก็ได้ครับ`;
+  }
+  if (policy !== "daily") {
+    if (tier === "micro") return "ตอนนี้ยังไม่มีสิทธิ์สแกนองค์ใหม่ครับ จะต่อวันนี้ เลือกแพ็กได้เลยครับ";
+    if (tier === "short") return `ยังไม่มีสิทธิ์สำหรับสแกนองค์ใหม่ครับ เติมสิทธิ์ ${price} บาท สแกนได้ ${scanCount} ครั้ง ภายใน ${hours} ชม. หลังอนุมัติ รายงานเดิมยังเปิดดูได้ครับ`;
+    return buildPaywallFullOfferIntroText(offer, policy);
   }
   if (tier === "micro") {
     return `ฟรีวันนี้ครบแล้วครับ จะต่อวันนี้ บอกว่าจ่ายเงินมาก็ได้ครับ`;
@@ -1548,8 +1563,8 @@ export function getDeterministicFreeQuotaExhaustedPaywallAlternateTexts(
   return [factsAlt];
 }
 
-export function buildDeterministicPaywallSoftCloseText() {
-  return "ได้เลยครับ พรุ่งนี้ค่อยส่งมาใหม่ได้เสมอครับ";
+export function buildDeterministicPaywallSoftCloseText(policy = "daily") {
+  return buildSoftCloseCopy(policy);
 }
 
 /**

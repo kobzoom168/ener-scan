@@ -308,6 +308,7 @@ import {
 } from "../stores/manualPaymentAccess.store.js";
 import { insertLineConversationMessage } from "../stores/conversationMessages.db.js";
 import { checkScanAccess } from "../services/paymentAccess.service.js";
+import { resolveFreePolicy } from "../services/entitlementCopy.service.js";
 import {
   isActiveSlipPaymentRow,
   isAwaitingPaymentActionableForTextRouting,
@@ -6140,16 +6141,17 @@ async function handleTextMessage({ client, event, userId, session }) {
         text,
         chosenReplyType: "paywall_soft_decline_ack",
       });
+      const softClosePolicy = await resolveFreePolicy();
       await sendNonScanReply({
         client,
         userId,
         replyToken: event.replyToken,
         replyType: "paywall_soft_decline_ack",
         semanticKey: "deterministic_paywall_soft_close",
-        text: buildDeterministicPaywallSoftCloseText(),
-        alternateTexts: [
-          "โอเคครับ พรุ่งนี้ค่อยส่งรูปมาใหม่ได้เลยนะครับ",
-        ],
+        text: buildDeterministicPaywallSoftCloseText(softClosePolicy),
+        alternateTexts: softClosePolicy === "daily"
+          ? ["โอเคครับ พรุ่งนี้ค่อยส่งรูปมาใหม่ได้เลยนะครับ"]
+          : ["โอเคครับ พร้อมเมื่อไหร่ค่อยเลือกแพ็กสแกนได้เลยครับ"],
       });
       return;
     }
@@ -6181,6 +6183,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         userId,
         tier,
         branch: "wait_tomorrow",
+        policy: await resolveFreePolicy(),
       });
       console.log(
         JSON.stringify({
@@ -6395,6 +6398,7 @@ async function handleTextMessage({ client, event, userId, session }) {
         tier: ackTier,
         branch: "ack",
         ackStreak,
+        policy: await resolveFreePolicy(),
       });
       const chosenReplyType = resolvePaywallPromptReplyType("ack", ackTier);
       const ackOutboundRt = mapPaywallSurfaceReplyType(chosenReplyType, userId);
@@ -6490,6 +6494,7 @@ async function handleTextMessage({ client, event, userId, session }) {
       noProgressCount: streak,
       guidanceLevel: tier,
     });
+    const fatiguePolicy = await resolveFreePolicy();
     const primaryText =
       branch === "date_wrong"
         ? buildPaywallFatiguePromptText({
@@ -6497,6 +6502,7 @@ async function handleTextMessage({ client, event, userId, session }) {
             userId,
             tier,
             branch: "date_wrong",
+            policy: fatiguePolicy,
           })
         : selectedPkgPaywall
           ? buildPaymentPackageSelectedUnclearText({ tier })
@@ -6505,6 +6511,7 @@ async function handleTextMessage({ client, event, userId, session }) {
               userId,
               tier,
               branch: "unclear",
+              policy: fatiguePolicy,
             });
     const chosenReplyType = resolvePaywallPromptReplyType(
       branch === "date_wrong" ? "date_wrong" : "unclear",
@@ -8882,7 +8889,7 @@ async function handleFollowEvent({ client, event }) {
         await tryMarkRegCardShown(userId, "follow");
       } catch { /* ignore */ }
     } else {
-      welcomeMsgs.push({ type: "text", text: buildFollowWelcomeText() });
+      welcomeMsgs.push({ type: "text", text: buildFollowWelcomeText(await resolveFreePolicy()) });
       try {
         const { buildHowtoFlowFlex } = await import("../services/welcome/howtoFlow.service.js");
         welcomeMsgs.push(buildHowtoFlowFlex());

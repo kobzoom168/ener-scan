@@ -280,7 +280,7 @@ function buildShareCardSvg({ objectImageDataUri, powerTotal, gradeLabel, peakLab
   </g>
   <text x="200" y="1222" font-family="Cormorant Garamond" font-weight="700" font-size="64" letter-spacing="18" fill="#e3bc5f">ENER</text>
   <text x="200" y="1262" font-family="Kanit" font-weight="400" font-size="25" fill="#bfa878">อาจารย์อ่านพลังพระ/เครื่องราง/หิน</text>
-  <text x="200" y="1300" font-family="Kanit" font-weight="600" font-size="25" fill="#e8c547">สแกนฟรีวันละ 1 ชิ้น</text>
+  <text x="200" y="1300" font-family="Kanit" font-weight="600" font-size="25" fill="#e8c547">ส่งรูปให้อาจารย์อ่านพลัง</text>
 
   <rect x="838" y="1136" width="178" height="196" rx="18" fill="#fffdf6" stroke="rgba(201,162,77,0.7)" stroke-width="3"/>
   <image href="${qrDataUri}" x="852" y="1148" width="150" height="150"/>

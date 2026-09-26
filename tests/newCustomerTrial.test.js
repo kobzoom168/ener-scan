@@ -48,7 +48,7 @@ test("trial quota and paywall copy never promise tomorrow's daily free reset", (
   assert.doesNotMatch(buildTrialPaywallText(offer), /พรุ่งนี้|ฟรีวันนี้/);
   const access = applyTrialToGate(daily, trial(1));
   const text = buildQuotaRemainingReply({ access, freeRemainingToday: 1, freeQuotaPerDay: 1 });
-  assert.match(text, /1 จากทั้งหมด 2 ครั้ง/);
+  assert.match(text, /สิทธิ์ทดลองฟรีคงเหลือ 1 ครั้ง/); assert.match(text, /รวม 2 ครั้งต่อบัญชี/);
   assert.doesNotMatch(text, /ฟรีวันนี้|พรุ่งนี้/);
 });
 

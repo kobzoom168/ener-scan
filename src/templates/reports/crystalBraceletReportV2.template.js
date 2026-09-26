@@ -737,7 +737,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     : "";
   const stickyCtaHtml = `
   <nav class="pk-stickycta" aria-label="เริ่มใช้ Ener">
-    <a class="pk-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้น</a>
+    <a class="pk-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่านพลัง</a>
     ${pickTeaser ? `<a class="pk-cta-member" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>` : ""}
   </nav>`;
 

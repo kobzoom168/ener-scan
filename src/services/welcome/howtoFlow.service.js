@@ -4,6 +4,8 @@
  * + ปุ่ม "เข้าใจแล้ว" — แบบนุ่ม: ไม่ล็อกการสแกน (ส่งรูปมาเลยก็ถือว่าเข้าใจโดยพฤติกรรม)
  * บันทึก ack ไว้เป็นหลักฐานว่ารับทราบกติกา
  */
+import { resolveFreePolicy, buildFirstScanInviteLine } from "../entitlementCopy.service.js";
+import { loadActiveScanOffer } from "../scanOffer.loader.js";
 import { tryDedupeOnce } from "../../redis/scanV2Redis.js";
 
 const HOWTO_URL = () =>
@@ -66,7 +68,7 @@ export async function maybeHandleHowtoAck({ client, event, userId, text }) {
     await client.replyMessage(event.replyToken, {
       type: "text",
       text: inviteImage
-        ? "ส่งรูปชิ้นแรกมาได้เลยครับ ฟรีวันละ 1 ชิ้น"
+        ? `ส่งรูปชิ้นแรกมาได้เลยครับ ${buildFirstScanInviteLine(await resolveFreePolicy(), { freeQuotaPerDay: Number(loadActiveScanOffer()?.freeQuotaPerDay) || 1 })}`
         : "รับทราบครับ เหลือกรอกข้อมูลเจ้าของอีกขั้นเดียว กดการ์ดลงทะเบียนด้านบนได้เลย เสร็จแล้วส่งรูปชิ้นแรกได้ฟรีทันทีครับ",
     });
     console.log(

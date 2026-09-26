@@ -6,6 +6,7 @@
  * เคสจริง smoke 28 ส.ค.: "ค่าครู 49 บาทได้กี่ครั้ง" → consult ตอบถูกแต่ guard สิทธิ์แทนด้วย
  * "เดี๋ยวผมเช็กสถานะให้ก่อนครับ แล้วแจ้งกลับ" (handoff ค้าง) · "แพ็คนี้ดีไหม" → guard บล็อก 2 รอบ
  */
+import { resolveEntitlementState, buildEntitlementStatusLine } from "../services/entitlementCopy.service.js";
 import { listActivePackages, getDefaultPackage, findActivePackageByPriceThb, findPackageByKey } from "../services/scanOffer.packages.js";
 
 const NEG_OBJECT_RE = /ประเมิน|เช่า|ปล่อย|พระ|เหรียญ|องค์|หิน|กำไล|พลัง|ดวง/;
@@ -116,17 +117,12 @@ export function buildQuotaRemainingReply({ access, freeRemainingToday, freeQuota
   const resetLabel = String(nextResetLabel || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
   const lines = [];
   if (access?.freePolicy === "new_customer") {
-    if (access.reason === "paid" && allowed) {
-      return `สิทธิ์แพ็กเหลือ ${Math.max(0, paidRemaining)} ครั้งครับ`;
-    }
-    if (access.freeAccessKind === "bonus" && allowed) {
-      return "ยังมีสิทธิ์โบนัสสแกนอยู่ครับ";
-    }
-    if (allowed && access.trialEligible) {
-      return `สิทธิ์ทดลองสำหรับลูกค้าใหม่เหลือ ${access.freeScansRemaining} จากทั้งหมด 2 ครั้งครับ ไม่รีเซ็ตรายวัน`;
-    }
-    if (access.trialPending > 0) return "สิทธิ์ทดลองกำลังใช้กับชิ้นที่รอผลอยู่ครับ รอรับผลก่อนนะครับ";
-    return "ตอนนี้ไม่มีสิทธิ์สแกนที่ใช้ได้ครับ เลือกซื้อแพ็กเพื่อสแกนต่อได้";
+    // ชุดข้อความเดียวกับ LIFF/paywall (entitlementCopy) — ห้ามพูดฟรีรายวัน/พรุ่งนี้
+    const es = resolveEntitlementState(access, { now });
+    const line = buildEntitlementStatusLine(es);
+    const extra = line.breakdown.length > 1 ? ` (${line.breakdown.join(" · ")})` : "";
+    if (!allowed && access.trialPending > 0) return "สิทธิ์ทดลองกำลังใช้กับชิ้นที่รอผลอยู่ครับ รอรับผลก่อนนะครับ";
+    return `${line.headline}${extra}ครับ${line.detail ? ` ${line.detail}` : ""}`;
   }
   if (paidActive) {
     const until = thaiShortDate(paidUntil);

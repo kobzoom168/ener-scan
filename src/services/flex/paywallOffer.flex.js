@@ -5,19 +5,9 @@
  */
 import { listActivePackages, getDefaultPackage } from "../scanOffer.packages.js";
 import { formatOfferWindowThai } from "../../utils/webhookText.util.js";
-
-/**
- * ชื่อแพ็กจาก label ใน config: ตัด "29 บาท " หน้า + "1 ครั้ง / 24 ชม." ท้ายออก
- * เหลือชื่อเรียกสั้น ๆ (บรรทัดเดียวไม่ตัดคำ) — รายละเอียดครั้ง/อายุแยกไปบรรทัดรอง
- */
-function packageDisplayName(p) {
-  const label = String(p?.label || "").trim();
-  const stripped = label
-    .replace(/^\d+\s*บาท\s*/, "")
-    .replace(/\s*\d+\s*ครั้ง.*$/, "")
-    .trim();
-  return stripped || "ค่าครูสแกน";
-}
+// ชื่อแพ็ก = สิ่งที่ซื้อตรง ๆ ("สแกน 4 ครั้ง") ไม่ใช้ label การตลาดจาก config (เช่น "ค่าครูดูแลคลังพลัง"
+// ที่ทำให้เข้าใจว่าต้องจ่ายถึงดูคลังเดิมได้ — กบ/Codex 26 ก.ย. 2026)
+import { packageDisplayName, packageButton } from "../entitlementCopy.service.js";
 
 /** บรรทัดรอง: "4 ครั้ง · 24 ชม." / "30 ครั้ง · 30 วัน" */
 function packageDetailLine(p) {
@@ -30,10 +20,11 @@ function packageDetailLine(p) {
  * @returns {object|null} LINE flex message (null เมื่อไม่มีแพ็กเปิดขาย)
  */
 export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
-  const title = String(opts.title || "").trim() || "วันนี้ใช้สิทธิ์ฟรีครบแล้วครับ";
+  // ค่าเริ่มต้นเป็นกลาง (ไม่พูดฟรีรายวัน/พรุ่งนี้) — ผู้เรียกส่ง title/subtitle ตามสถานะสิทธิ์จริง
+  const title = String(opts.title || "").trim() || "เติมสิทธิ์เพื่อสแกนองค์ใหม่";
   const subtitle =
     String(opts.subtitle || "").trim() ||
-    "เปิดพลังต่อได้เลยวันนี้ หรือพรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีกครับ";
+    "เลือกแพ็กสแกนด้านล่างได้เลยครับ คลังและรายงานเดิมของคุณยังเปิดดูได้โดยไม่ต้องซื้อแพ็ก";
   const pkgs = listActivePackages(offer)
     .slice()
     .sort((a, b) => a.priceThb - b.priceThb);
@@ -107,7 +98,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
           color: isDefault ? "#B8871B" : "#241C12",
         },
       ],
-      action: { type: "message", label: `จ่าย ${p.priceThb}`, text: `จ่าย ${p.priceThb}` },
+      action: { type: "message", ...packageButton(p) },
     };
   });
 
@@ -116,9 +107,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
 
   const altText =
     String(opts.altText || "").trim() ||
-    `วันนี้ใช้สิทธิ์ฟรีครบแล้วครับ เปิดสิทธิ์ต่อได้ ${pkgs
-      .map((p) => `${p.priceThb} บาท`)
-      .join(" / ")}`;
+    `${title} ${pkgs.map((p) => `${p.priceThb} บาท`).join(" / ")}`;
 
   return {
     type: "flex",
@@ -185,11 +174,7 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
             style: "primary",
             height: "sm",
             color: "#D4AF37",
-            action: {
-              type: "message",
-              label: `จ่าย ${def.priceThb}`,
-              text: `จ่าย ${def.priceThb}`,
-            },
+            action: { type: "message", ...packageButton(def) },
           },
           ...(others.length
             ? [
@@ -201,14 +186,18 @@ export function buildFreeQuotaPaywallFlex(offer, opts = {}) {
                     type: "button",
                     style: "secondary",
                     height: "sm",
-                    action: {
-                      type: "message",
-                      label: `จ่าย ${p.priceThb}`,
-                      text: `จ่าย ${p.priceThb}`,
-                    },
+                    action: { type: "message", ...packageButton(p) },
                   })),
                 },
               ]
+            : []),
+          ...(opts.secondaryAction?.label
+            ? [{
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: { type: "message", label: opts.secondaryAction.label, text: opts.secondaryAction.text },
+              }]
             : []),
           {
             type: "button",

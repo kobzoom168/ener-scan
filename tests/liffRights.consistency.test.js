@@ -146,12 +146,16 @@ test("copy: trial ห้ามสื่อว่า 'พรุ่งนี้ไ
   assert.ok(!/\|\|\s*2\b/.test(fn), "ห้าม || 2");
   assert.ok(!fn.includes('from("app_users")') && !fn.includes("countScanResultsTodayForAppUser"), "ห้ามคำนวณเอง");
   assert.ok(!/remainingFree != null \? j\.remainingFree : 2/.test(src), "หน้า stats ห้าม fallback 2");
-  assert.match(src, /สิทธิ์ทดลองใช้ครบแล้ว/, "zero-state ของ trial");
+  // zero-state ชุดเดียวกับ LINE (entitlementCopy): สาขา new_customer ห้ามพูด "พรุ่งนี้" · สาขา daily พูดได้
   const zeroBranch = src.slice(src.indexOf("} else if(rights){"), src.indexOf('} else { st.classList.add("hidden"); }'));
-  const shownStrings = [...zeroBranch.matchAll(/textContent = [\s\S]*?;/g)].map((m) => m[0]).join("\n");
-  assert.ok(shownStrings.includes("สิทธิ์ทดลองใช้ครบแล้ว"), "zero-state ของ trial ต้องเป็นข้อความที่แสดงจริง");
-  assert.ok(!shownStrings.includes("พรุ่งนี้"), "ข้อความที่แสดงให้ trial ห้ามพูดถึงพรุ่งนี้");
-  assert.ok(!/new_customer"[\s\S]{0,80}วันนี้ใช้สิทธิ์ฟรีครบแล้ว"\s*\)/.test(zeroBranch) || true);
+  const trialBranch = zeroBranch.slice(zeroBranch.indexOf('if(rights.freePolicy === "new_customer"){'), zeroBranch.indexOf("} else {"));
+  const shown = [...trialBranch.matchAll(/textContent = [\s\S]*?;/g)].map((m) => m[0]).join("\n");
+  assert.ok(shown.includes("ใช้สิทธิ์ทดลองฟรีครบ 2 ครั้งแล้ว"), "zero-state ของ trial ต้องเป็นข้อความที่แสดงจริง");
+  assert.ok(shown.includes("ยังไม่มีสิทธิ์สำหรับสแกนองค์ใหม่") && shown.includes("แพ็กสแกนหมดอายุแล้ว"), "แยกลูกค้าเดิม/แพ็กหมดอายุ");
+  assert.ok(shown.includes("ยังเปิดดูได้โดยไม่ต้องซื้อแพ็ก"), "ต้องบอกว่าของเดิมดูได้");
+  assert.ok(!/พรุ่งนี้|ฟรีวันนี้|หลังเที่ยงคืน/.test(shown), "ข้อความที่แสดงให้ trial ห้ามพูดถึงพรุ่งนี้/ฟรีวันนี้");
+  const dailyBranch = zeroBranch.slice(zeroBranch.indexOf("} else {"));
+  assert.ok(/วันนี้ใช้สิทธิ์ฟรีครบแล้ว/.test(dailyBranch), "โหมด daily ยังคงข้อความฟรีรายวัน");
   assert.equal((src.match(/ตรวจสอบสิทธิ์ไม่ได้ กรุณาลองใหม่/g) || []).length >= 2, true, "ทั้งหน้า pay และ stats ต้องมีสถานะอ่านไม่ได้");
   assert.match(src, /"โบนัส " \+/, "ต้องแยกแสดงโบนัส");
 });

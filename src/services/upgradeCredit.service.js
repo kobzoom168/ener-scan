@@ -58,7 +58,7 @@ function bangkokDayEndMs(now = new Date()) {
   return new Date(`${bangkokDateKey(now)}T00:00:00+07:00`).getTime() + 24 * 3600e3;
 }
 
-/** แพ็กเป้าหมาย = แพ็กราคาสูงสุดที่เปิดขาย (ตอนนี้ = ค่าครูดูแลคลังพลัง 399) */
+/** แพ็กเป้าหมาย = แพ็กราคาสูงสุดที่เปิดขาย (ตอนนี้ = แพ็ก 399 สแกน 30 ครั้ง / 30 วัน) */
 function resolveTargetPackage(offer) {
   const pkgs = listActivePackages(offer);
   if (!pkgs.length) return { target: null, smalls: [] };
@@ -194,7 +194,7 @@ export async function maybeOfferSpendUpgrade(lineUserId) {
 
     const text = [
       `วันนี้คุณเปิดค่าครูไปแล้ว ${credit.creditThb} บาท (${credit.paymentsTodayCount} รายการ)`,
-      `ยอดนี้นำไปหักจากค่าครูดูแลคลังพลัง ${credit.monthlyPriceThb} บาทได้เลยครับ`,
+      `ยอดนี้นำไปหักจากแพ็กสแกน ${credit.monthlyScanCount} ครั้ง ${credit.monthlyPriceThb} บาทได้เลยครับ`,
       `เพิ่มอีก ${credit.payThb} บาท ได้สิทธิ์สแกน ${credit.monthlyScanCount} ครั้ง ตลอด 30 วัน และสิทธิ์ที่เหลืออยู่ตอนนี้ไม่หายไปไหน ระบบทบให้`,
       "สนใจแตะปุ่มด้านล่างได้เลย หรือจะไว้ก่อนก็ได้ครับ",
     ].join("\n");

@@ -671,6 +671,8 @@ export async function resolveLiffRights(userId, access = null) {
     freeLeft, paidLeft, bonusLeft,
     paidUntil: paidLeft ? (a.paidUntil ?? null) : null,
     freePolicy: a.freePolicy || "daily",
+    trialEligible: a.trialEligible === true,
+    paidExpired: !paidLeft && Number.isFinite(Date.parse(String(a.paidUntil || ""))) && Date.parse(String(a.paidUntil || "")) <= Date.now(),
     unavailable: false,
   };
 }
@@ -2116,7 +2118,7 @@ function buildLiffHtml(liffId) {
       <!-- ลูกค้าใหม่ (สแกน 0 ชิ้น): แทนตารางขีด ๆ ด้วยการ์ดชวนสแกนองค์แรก -->
       <div class="firstscan hidden" id="st-first">
         <div class="fst serif">สแกนชิ้นแรกของคุณ <em>ฟรี</em></div>
-        <p>ส่งรูปพระ เครื่องราง หรือกำไลหินมา<br>อาจารย์อ่านพลังให้ทันที วันนี้มีสิทธิ์ฟรี <b id="st-first-free">2</b> ครั้ง</p>
+        <p>ส่งรูปพระ เครื่องราง หรือกำไลหินมา<br>อาจารย์อ่านพลังให้ทันที สิทธิ์<span id="st-first-kind">ฟรี</span>คงเหลือ <b id="st-first-free">–</b> ครั้ง</p>
       </div>
       <div class="stbtns">
         <button class="stgo" id="btn-scan"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5"/><path d="M15.5 4H18a2 2 0 0 1 2 2v2.5"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5"/><path d="M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><circle cx="12" cy="12" r="3.2"/></svg>สแกนเลย</button>
@@ -2642,12 +2644,13 @@ function buildLiffHtml(liffId) {
         var sub = $("st-left-sub");
         if(sub){
           if(j.rightsUnavailable){
-            sub.textContent = "ตรวจสอบสิทธิ์ไม่ได้ กรุณาลองใหม่";
+            sub.textContent = "ยังตรวจสอบสิทธิ์ไม่ได้ กรุณาลองใหม่อีกครั้ง";
             sub.classList.remove("hidden");
           } else {
+            /* คำเดียวกับ LINE (entitlementCopy): จากแพ็ก / ทดลอง|ฟรีวันนี้ / โบนัส */
             var bits = [];
-            if(j.remainingPaid > 0) bits.push("ค่าครู " + j.remainingPaid);
-            if(j.remainingFree > 0) bits.push((j.freePolicy === "new_customer" ? "ทดลอง " : "ฟรี ") + j.remainingFree);
+            if(j.remainingPaid > 0) bits.push("จากแพ็ก " + j.remainingPaid);
+            if(j.remainingFree > 0) bits.push((j.freePolicy === "new_customer" ? "ทดลอง " : "ฟรีวันนี้ ") + j.remainingFree);
             if(j.remainingBonus > 0) bits.push("โบนัส " + j.remainingBonus);
             if(bits.length > 1){ sub.textContent = bits.join(" · "); sub.classList.remove("hidden"); }
             else { sub.classList.add("hidden"); }
@@ -2660,7 +2663,10 @@ function buildLiffHtml(liffId) {
           first.classList.toggle("hidden", !fresh);
           grid.classList.toggle("hidden", fresh);
           /* ไม่มี fallback 2 อีก — ค่าจริงจาก authority (0 ก็คือ 0 · อ่านไม่ได้ = "–") */
-          if(fresh) $("st-first-free").textContent = j.rightsUnavailable ? "–" : (j.remainingFree != null ? j.remainingFree : 0);
+          if(fresh){
+            $("st-first-free").textContent = j.rightsUnavailable ? "–" : (j.remainingFree != null ? j.remainingFree : 0);
+            var fk = $("st-first-kind"); if(fk) fk.textContent = j.freePolicy === "new_customer" ? "ทดลองฟรี" : "ฟรีวันนี้";
+          }
         }
       }).catch(function(){});
   }
@@ -3107,13 +3113,13 @@ function buildLiffHtml(liffId) {
       var rights = j.rights || null;
       if(rights && rights.unavailable){
         /* อ่านสิทธิ์ไม่ได้ = บอกตรง ๆ ห้ามโชว์ยอดสมมติ (ตรงกับด่านรับรูปที่ fail-closed) */
-        stT.textContent = "ตรวจสอบสิทธิ์ไม่ได้ กรุณาลองใหม่";
+        stT.textContent = "ยังตรวจสอบสิทธิ์ไม่ได้ กรุณาลองใหม่อีกครั้ง";
         stS.textContent = "ปิดแล้วเปิดหน้านี้อีกครั้ง หรือทักแอดมินในแชตครับ";
         backBtn.classList.add("hidden");
         st.classList.remove("hidden");
       } else if(rights && rights.total > 0){
         var parts = [];
-        if(rights.paidLeft > 0) parts.push(rights.paidLeft >= 900000 ? "รายเดือน" : "ค่าครู " + rights.paidLeft + " ครั้ง");
+        if(rights.paidLeft > 0) parts.push(rights.paidLeft >= 900000 ? "จากแพ็ก: ไม่จำกัด" : "จากแพ็ก " + rights.paidLeft + " ครั้ง");
         if(rights.freeLeft > 0) parts.push((rights.freePolicy === "new_customer" ? "ทดลอง " : "ฟรีวันนี้ ") + rights.freeLeft + " ครั้ง");
         if(rights.bonusLeft > 0) parts.push("โบนัส " + rights.bonusLeft + " ครั้ง");
         stT.textContent = rights.paidLeft >= 900000
@@ -3124,11 +3130,15 @@ function buildLiffHtml(liffId) {
         backBtn.classList.remove("hidden");
         st.classList.remove("hidden");
       } else if(rights){
-        /* zero-state ต้องแยกตามนโยบาย — trial ห้ามสื่อว่า "พรุ่งนี้ได้ใหม่" */
-        stT.textContent = rights.freePolicy === "new_customer"
-          ? "สิทธิ์ทดลองใช้ครบแล้ว"
-          : "วันนี้ใช้สิทธิ์ฟรีครบแล้ว";
-        stS.textContent = "เลือกค่าครูสำหรับรอบถัดไปได้ด้านล่างครับ";
+        /* zero-state ชุดเดียวกับ LINE (entitlementCopy) — โหมดลูกค้าใหม่ห้ามสื่อว่า "พรุ่งนี้ได้ใหม่" */
+        if(rights.freePolicy === "new_customer"){
+          stT.textContent = rights.trialEligible ? "ใช้สิทธิ์ทดลองฟรีครบ 2 ครั้งแล้ว"
+            : rights.paidExpired ? "แพ็กสแกนหมดอายุแล้ว" : "ยังไม่มีสิทธิ์สำหรับสแกนองค์ใหม่";
+          stS.textContent = "เติมสิทธิ์เพื่อสแกนองค์ใหม่ได้ด้านล่าง ส่วนคลังและรายงานเดิมยังเปิดดูได้โดยไม่ต้องซื้อแพ็กครับ";
+        } else {
+          stT.textContent = "วันนี้ใช้สิทธิ์ฟรีครบแล้ว";
+          stS.textContent = "เลือกแพ็กสแกนสำหรับวันนี้ได้ด้านล่าง หรือพรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีกครับ";
+        }
         backBtn.classList.add("hidden");
         st.classList.remove("hidden");
       } else { st.classList.add("hidden"); }

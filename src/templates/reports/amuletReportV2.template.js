@@ -639,7 +639,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     : "";
   const stickyCtaHtml = `
   <nav class="mv2-stickycta" aria-label="เริ่มใช้ Ener">
-    <a class="mv2-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้น</a>
+    <a class="mv2-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่านพลัง</a>
     ${teaser ? `<a class="mv2-cta-member" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>` : ""}
   </nav>`;
 

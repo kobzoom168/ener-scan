@@ -5,6 +5,8 @@
  * - มีรูปค้าง: success + การ์ด thumbnail รูปเดิม + ปุ่ม "เริ่มอ่านรูปนี้:{token}"
  *   (ห้ามส่ง How-to ที่ชวนส่งรูป — จะขัดกับรูปที่ค้างอยู่)
  */
+import { resolveFreePolicy, buildFirstScanInviteLine } from "../entitlementCopy.service.js";
+import { loadActiveScanOffer } from "../scanOffer.loader.js";
 import { tryDedupeOnce } from "../../redis/scanV2Redis.js";
 import { peekHold } from "./preRegistrationHold.service.js";
 import { decideLiffSuccessFlow } from "./registrationOnboarding.logic.js";
@@ -118,7 +120,7 @@ export async function sendRegistrationSuccessFlow(
     } catch { /* ไม่มีการ์ดก็เชิญด้วยข้อความ */ }
     msgs.push({
       type: "text",
-      text: "ส่งรูปพระ เครื่องราง หิน หรือกำไล มาได้เลยครับ เดี๋ยวผมส่งให้อาจารย์อ่าน ฟรีวันละ 1 ชิ้นครับ",
+      text: `ส่งรูปพระ เครื่องราง หิน หรือกำไล มาได้เลยครับ เดี๋ยวผมส่งให้อาจารย์อ่าน ${buildFirstScanInviteLine(await resolveFreePolicy(), { freeQuotaPerDay: Number(loadActiveScanOffer()?.freeQuotaPerDay) || 1 })}ครับ`,
     });
   }
   try {

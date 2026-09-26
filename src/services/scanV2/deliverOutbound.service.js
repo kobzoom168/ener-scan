@@ -1,6 +1,7 @@
 import { pushText } from "../lineSequenceReply.service.js";
 import { pushFlex } from "../lineReply.service.js";
 import { buildFreeQuotaPaywallFlex } from "../flex/paywallOffer.flex.js";
+import { resolveEntitlementState, buildPaywallCopy, buildEntitlementStatusLine, packageDisplayName, HISTORY_COMMAND_TEXT } from "../entitlementCopy.service.js";
 import { env } from "../../config/env.js";
 
 /**
@@ -1024,7 +1025,7 @@ async function buildPackExhaustedUpsellNotice(lineUserId, paidUntilIso) {
       text: [
         "ครบทุกครั้งของรอบค่าครูนี้แล้วครับ ขอบคุณที่ให้อาจารย์ดูให้นะครับ",
         "",
-        `ถ้าช่วงนี้กำลังดูของเพลิน ค่าครูดูแลคลังพลัง ${credit.monthlyPriceThb} บาท อาจารย์ดูแลตลอด ${winDays} วัน สแกนได้ ${credit.monthlyScanCount} ครั้ง คลังกับเสียงอาจารย์เปิดยาวทั้งรอบ`,
+        `ถ้าช่วงนี้กำลังดูของเพลิน แพ็ก${packageDisplayName(monthly)} ${credit.monthlyPriceThb} บาท อาจารย์ดูแลตลอด ${winDays} วัน สแกนได้ ${credit.monthlyScanCount} ครั้ง คลังกับเสียงอาจารย์เปิดยาวทั้งรอบ`,
         "",
         `พิเศษ ภายในวันนี้ ค่าครู ${credit.creditThb} บาทที่ชำระไปหักออกได้เลย เหลือ ${credit.payThb} บาท แตะปุ่มด้านล่างได้เลยครับ`,
       ].join("\n"),
@@ -1115,19 +1116,15 @@ async function buildRemainingQuotaNoticeText(lineUserId, { paidOnly = false } = 
     }
 
     if (paidOnly) return null; // โหมดแจ้งเฉพาะคนจ่าย — ลูกค้าฟรีเงียบตามกติกา 18 ก.ค.
-
+    // ท้ายผลสแกน: ใช้สถานะสิทธิ์เดียวกับ LIFF/paywall (entitlementCopy) — ไม่คำนวณฟรีเอง ไม่มี fallback 2
+    // โหมด daily คงข้อความเดิม · โหมด new_customer ห้ามพูดฟรีรายวัน/พรุ่งนี้ · คลังเดิมดูได้เสมอ
     const offer = loadActiveScanOffer(now);
-    const freeQuota = Number(offer?.freeQuotaPerDay) || 2;
-    let used = await countScanResultsTodayForAppUser(String(u.id), now).catch(() => 0);
-    const offsetDate = u.free_scan_offset_date
-      ? String(u.free_scan_offset_date).slice(0, 10)
-      : null;
-    const offsetN = Number(u.free_scan_daily_offset) || 0;
-    if (offsetDate && offsetDate === getLocalDateKey(now) && offsetN > 0) {
-      used = Math.max(0, used - offsetN);
-    }
-    const left = Math.max(0, freeQuota - used);
-    if (left > 0) {
+    const { checkScanAccess } = await import("../paymentAccess.service.js");
+    const access = await checkScanAccess({ userId: lineUserId, now }).catch(() => null);
+    const es = resolveEntitlementState(access, { now });
+    if (es.state === "unavailable") return null; // อ่านสิทธิ์ไม่ได้ = ไม่พูดตัวเลข
+    if (es.state === "daily_left") {
+      const left = es.freeLeft;
       return pickRemainingText(
         [
           `วันนี้ฟรีเหลืออีก ${left} ครั้ง`,
@@ -1138,34 +1135,26 @@ async function buildRemainingQuotaNoticeText(lineUserId, { paidOnly = false } = 
         `${lineUserId}:free:${left}`,
       );
     }
-    const pkgs = (offer?.packages || []).filter((p) => p.active);
-    if (!pkgs.length) {
-      return {
-        text: `สิทธิ์สแกนวันนี้ครบแล้ว พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
-        quickReply: null,
-      };
+    if (es.allowed) {
+      // ยังมีสิทธิ์อื่น (ทดลอง/โบนัส/แพ็ก) — ห้ามบอกว่าหมด
+      const line = buildEntitlementStatusLine(es);
+      return { text: `${line.headline}${line.detail ? ` ${line.detail}` : ""}`, quickReply: null };
     }
-    // โทนคนพิมพ์เอง (กบ): ไม่มีขีด ไม่มีบูลเล็ต ไม่มีอิโมจิ
-    const sortedPkgs = [...pkgs].sort((a, b) => a.priceThb - b.priceThb);
-    const menuLines = sortedPkgs.map((p) =>
-      Number(p.scanCount) >= 999999
-        ? `${p.priceThb} บาท สมาชิกรายเดือน อาจารย์ดูแลตลอด ${Math.round(p.windowHours / 24)} วัน สแกนไม่จำกัด`
-        : `${p.priceThb} บาท สแกนได้ ${p.scanCount} ครั้ง${p.windowHours >= 48 ? ` ใช้ได้ ${Math.round(p.windowHours / 24)} วัน` : ""}`,
-    );
-    const paywallText = [
-      `สิทธิ์สแกนวันนี้ครบแล้ว พรุ่งนี้หลังเที่ยงคืนมีฟรีให้อีก ${freeQuota} ครั้ง`,
-      "ถ้าอยากดูต่อวันนี้เลย เปิดสิทธิ์เพิ่มได้ครับ",
-      ...menuLines,
-    ].join("\n");
-    // การ์ด Flex โปร (กบ 17 ก.ค. — เส้นหลังสแกน) หัวการ์ดปรับตามบริบท
+    const copy = buildPaywallCopy(es, { offer });
+    const pkgs = copy.packages;
+    if (!pkgs.length) {
+      return { text: `${copy.title}\n${copy.subtitle}`, quickReply: null };
+    }
+    const paywallText = copy.textLines.join("\n");
     const paywallFlex = buildFreeQuotaPaywallFlex(offer, {
-      title: "สิทธิ์สแกนวันนี้ครบแล้ว",
-      subtitle: `พรุ่งนี้หลังเที่ยงคืนมีฟรีอีก ${freeQuota} ครั้ง หรือเปิดสิทธิ์ต่อวันนี้เลยครับ`,
-      altText: paywallText.slice(0, 400),
+      title: copy.title,
+      subtitle: copy.subtitle,
+      altText: copy.altText,
+      secondaryAction: { label: copy.ctaSecondary.label, text: HISTORY_COMMAND_TEXT },
     });
     return {
       text: paywallText,
-      quickReply: buildPayLiffQuickReply(sortedPkgs),
+      quickReply: buildPayLiffQuickReply(pkgs),
       flexMessage: paywallFlex,
     };
   } catch {

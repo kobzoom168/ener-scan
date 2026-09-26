@@ -205,10 +205,10 @@ export function buildInviteCardFlex(code, remainingThisMonth) {
         backgroundColor: BG,
         paddingAll: "18px",
         contents: [
-          { type: "text", text: "ชวนเพื่อน ได้สแกนฟรี", weight: "bold", size: "lg", color: "#222222" },
+          { type: "text", text: "ชวนเพื่อน รับโบนัสสแกน", weight: "bold", size: "lg", color: "#222222" },
           {
             type: "text",
-            text: "เพื่อนใหม่ได้สแกนฟรี 1 ครั้ง คุณก็ได้เพิ่ม 1 ครั้ง",
+            text: "เพื่อนใหม่ได้โบนัสสแกน 1 ครั้ง คุณก็ได้โบนัสเพิ่ม 1 ครั้ง (โบนัสจากการชวนเพื่อน ใช้เมื่อไรก็ได้ ไม่หมดอายุรายวัน)",
             size: "sm",
             color: "#555555",
             wrap: true,
