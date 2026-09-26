@@ -65,11 +65,27 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 
 **กติกาใหม่ (ทุกโหมด ไม่ขึ้นกับ trial):** ดู/LIFF = ไม่แตะ `bonus_scans` · จอง = INSERT `scan_jobs` (`free_access_kind='bonus'`) หัก −1 ใต้ `FOR UPDATE` ทรานแซกชันเดียวกัน (trigger `guard_new_customer_trial_job` ขยายจาก 057) · ใช้ = งานส่งผล (kind คง `bonus`) · คืน = ครั้งเดียว `bonus` → `bonus_released` (+1) เมื่อ status→failed (trigger) หรือมีหลักฐานรูปซ้ำ (outbound `scan_result` `skipQuotaDecrement=true` → RPC `release_bonus_reservation`, worker เรียกทันที + maintenance `sweep_bonus_releases` กวาดกรณี crash) · retry failed→active ของงานที่คืนแล้ว = จองใหม่ · webhook ซ้ำ = `uq_scan_uploads_line_message` เดิม · DB กันตอนจอง → ingestion คืน `quota_exhausted_at_insert` + ลบ upload กำพร้า → webhook ตอบ paywall เดิม (AI=0) · `new_customer_trial_used` ไม่นับ `bonus%`
 
+**ค่าใน `free_access_kind` (Codex รอบ 2 — แยกงานที่จองจริงจาก legacy):** `bonus` = legacy ของโค้ดเก่า (trigger ไม่จอง ไม่คืน ไม่แตะ — งาน 2 งานของกบวันที่ 26 ก.ย. อยู่กลุ่มนี้) · `bonus_reserved` = โค้ดใหม่ขอจอง หัก −1 ที่ INSERT (ตัวเดียวที่คืนได้) · `bonus_released` = คืนแล้ว · retry failed→active ของ `bonus_released` = จองใหม่
+
+**ช่วงโค้ดเก่า/ใหม่ปนกัน (พิสูจน์ใน integration T7–T9):**
+- โค้ดเก่า + 064: เก่าเขียน `bonus` → trigger ผ่านเฉย ๆ → ถ้าเก่าหักที่ webhook (0af41f5) = หักครั้งเดียว ไม่ซ้ำ · ถ้าเก่าไม่หัก (27fdff4/Pro) = บั๊กเดิมคงอยู่ ไม่แย่ลง
+- rollback โค้ดโดยคง 064: ผลเดียวกับข้างบน = **ปลอดภัย** ไม่ต้องย้อน DB
+- โค้ดใหม่ + DB มีแค่ 057 (ยังไม่ apply 064): เขียน `bonus_reserved` → 057 ไม่รู้จัก → ไม่หัก ไม่พัง (บั๊กเดิม) · RPC release/sweep log error เฉย ๆ · **แต่ถ้า trial ON บน 057 จะนับ `bonus_reserved` เป็น trial usage → ต้อง apply 064 ก่อนเปิด trial เสมอ**
+- legacy `bonus` ที่เปลี่ยนเป็น failed ทีหลัง / มี outbound รูปซ้ำ / ถูก release/sweep → **ไม่ได้เงินคืน** (T7)
+
 **Migration:** `sql/064_bonus_reservation.sql` (idempotent, ไม่เพิ่ม schema — ใช้ค่าใหม่ในคอลัมน์ text เดิม) · apply **ก่อน** deploy โค้ด (โค้ดใหม่เรียก RPC ที่ 064 สร้าง; โค้ดเก่าบน 064 ก็ทำงานได้ — trigger จองแทน webhook) · ไม่ backfill · งาน `bonus` เดิม 2 งานของกบ (delivered) ไม่ถูกแตะ (dry-run sweep = 0)
 
-**Rollback 064:** โค้ดย้อนได้ทันที (RPC ไม่ถูกเรียก = ไม่มีผล) · ฝั่ง DB ถ้าจำเป็น: re-apply `sql/057` ส่วน trigger + `new_customer_trial_used` แล้ว `DROP FUNCTION release_bonus_reservation(uuid), sweep_bonus_releases(integer)` · ค่า `bonus_released` ที่ค้างในแถวเก่าไม่กระทบ (057 ตีเป็นไม่ใช่ bonus → นับเป็น trial usage ได้ถ้า trial เปิด — ควร UPDATE เป็น 'bonus' ก่อน ถ้าย้อนจริง) · **ห้ามย้อนเป็นการหักที่ webhook** (พฤติกรรมเสียโบนัสเมื่อรูปซ้ำ/ล้ม ที่ Codex ปฏิเสธ)
+**Rollback 064:** ย้อนโค้ดอย่างเดียว คง 064 ไว้ = ปลอดภัย (ข้างบน) และเป็นทางที่แนะนำ · ถ้าจำเป็นต้องย้อน DB จริง: re-apply `sql/057` ส่วน trigger + `new_customer_trial_used` แล้ว `DROP FUNCTION release_bonus_reservation(uuid), sweep_bonus_releases(integer)` — ก่อนนั้นต้องแน่ใจว่า trial OFF หรือ UPDATE แถว `bonus_reserved`/`bonus_released` → `bonus` (057 ไม่รู้จักค่าเหล่านี้จะนับเป็น trial usage) · **ห้ามย้อนเป็นการหักที่ webhook** (0af41f5 — เสียโบนัสเมื่อรูปซ้ำ/ล้ม Codex ปฏิเสธ)
 
-**หลักฐาน:** `scripts/ops/test-bonus-reservation-integration.mjs` — Postgres 16 + PostgREST จริง (container ใช้แล้วทิ้ง) ขับผ่าน `checkScanAccess` / `ingestScanImageAsyncV2` / `processScanJob` (sha256 dedup) / `failJob` / RPC จริง; ปลอมเฉพาะ S3 + thumbnail ผ่าน `--import` hook · 8 สถานการณ์ PASS (ดู 0 · สำเร็จ 1 · inbound ซ้ำ 2 · ล้ม 3a · รูปซ้ำ 3b · concurrent 4 · crash/sweep 5 · trial ON 6) · `test-new-customer-trial-db.mjs` PASS บน 057+064 · unit `tests/bonusConsume.behavior.test.js` 4/4 · gate ✅
+**แผนทดสอบสดโบนัส (แก้ตาม Codex — ใช้บัญชี/ข้อมูลสังเคราะห์บน staging, ไม่แตะยอดกบ):**
+- A. โบนัส 1 → รูปใหม่สำเร็จ → 0 · ส่งรูปเดิมซ้ำตอนยอด 0 → ถูกกันด้วย paywall ที่ด่านสิทธิ์ (ไม่มีงาน ไม่คืน) ยอดคง 0 — **ห้ามงอกกลับ**
+- B. มีผลสแกนรูป X อยู่แล้ว + โบนัส 1 → ส่งรูป X ซ้ำ → จอง (0) → worker พบรูปซ้ำ → คืน **เฉพาะการจองใหม่นั้น** → กลับเป็น 1 (ก่อน=หลัง=1) · งานเดิมที่ใช้สำเร็จไม่ถูกแตะ
+- C. LINE ส่ง webhook messageId เดิมซ้ำ → ไม่มีงานใหม่ ไม่หัก ไม่คืน
+(ทั้งสามมี automated เทียบเท่าใน integration T1/T3b/T2 แล้ว — เทสต์สดรอกบเคาะ)
+
+**ผลกระทบ Pro (ตามหลักฐานที่ตรวจ):** ผู้เขียน `bonus_scans` ในโค้ดมีแหล่งเดียวคือ `referral.service.js` (+1 เมื่อ redeem) — ไม่มีเส้นทาง admin · Pro: `referral_redemptions` = 0 แถว, `bonus_scans>0` = 0 บัญชี ณ ปัจจุบัน · ไม่มี ledger ประวัติโบนัส จึง**ตัดการเติมด้วยมือ (psql) ในอดีตไม่ได้** → สรุปได้แค่ "**ยังไม่พบผู้ได้รับผลกระทบจากข้อมูลที่ตรวจ**"
+
+**หลักฐาน:** `scripts/ops/test-bonus-reservation-integration.mjs` — Postgres 16 + PostgREST จริง (container ใช้แล้วทิ้ง) ขับผ่าน `checkScanAccess` / `ingestScanImageAsyncV2` / `processScanJob` (sha256 dedup) / `failJob` / RPC จริง; ปลอมเฉพาะ S3 + thumbnail ผ่าน `--import` hook · 11 สถานการณ์ PASS (ดู 0 · สำเร็จ+ซ้ำตอน 0 ไม่งอก 1 · inbound ซ้ำ 2 · ล้ม 3a · รูปซ้ำคืนเฉพาะการจองใหม่ 3b · concurrent 4 · crash/sweep 5 · legacy ไม่คืน 7 · โค้ดเก่าบน 064 ไม่หักซ้ำ 8 · โค้ดใหม่บน 057 ไม่พัง 9 · trial ON 6) · `test-new-customer-trial-db.mjs` PASS บน 057+064 · unit `tests/bonusConsume.behavior.test.js` 4/4 · gate ✅
 
 ### รายการเทสต์สดบน staging ที่ต้องให้กบทำ (ยังไม่เปิดสวิตช์ — ต้องขออนุมัติก่อนทุกครั้ง)
 เงื่อนไข: เปิดสวิตช์ชั่วคราวเฉพาะช่วงเทสต์ · บัญชีทดสอบต้องมี `created_at` ≥ `eligible_since` จริง (ไม่แก้ค่าลูกค้า) · จบแล้วปิด OFF โดย **ไม่ล้าง `eligible_since` และไม่ลบ scan_jobs**
