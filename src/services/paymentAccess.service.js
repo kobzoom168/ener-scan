@@ -161,6 +161,7 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
   // เส้นทางฟรีล้วน: ไม่แตะ paid_until/payments → ไม่กระทบเกตเซ็นเซอร์
   // consumeBonus=true เฉพาะจุดสแกนรูปจริง — จุดเช็คสถานะอื่นดูเฉย ๆ ไม่กินสิทธิ์
   let viaBonus = false;
+  let bonusConsumed = false; // true เฉพาะเมื่อหัก bonus_scans ใน DB สำเร็จจริงในคำขอนี้
   const bonusScansAvail = Number(appUserRow?.bonus_scans) || 0;
   if (!gate.allowed && bonusScansAvail > 0 && appUserId) {
     if (!consumeBonus || trial.enabled) {
@@ -176,6 +177,7 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
           .select("id")
           .maybeSingle();
         viaBonus = Boolean(upd?.id);
+        bonusConsumed = viaBonus;
         if (viaBonus) {
           console.log(
             JSON.stringify({
@@ -225,11 +227,32 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
     paidRemainingScans,
     freePolicy: gate.freePolicy || "daily",
     freeAccessKind: viaBonus ? "bonus" : trial.enabled ? "trial" : "daily",
-    // โบนัสคงเหลือจริง (ยังไม่ถูกหัก) — ให้ LIFF แยกแสดง "โบนัส" ออกจากฟรี/ทดลอง/ซื้อ
-    bonusScansAvailable: Math.max(0, Number(appUserRow?.bonus_scans) || 0),
+    // ผลนี้อนุญาตเพราะโบนัส แต่หักจริงหรือยัง — ด่านรับรูปห้ามเอาผลที่ "ยังไม่หัก" ไปสร้างงาน
+    viaBonus,
+    bonusConsumed,
+    // โบนัสคงเหลือจริงหลังคำขอนี้ — ให้ LIFF แยกแสดง "โบนัส" ออกจากฟรี/ทดลอง/ซื้อ
+    bonusScansAvailable: Math.max(0, bonusScansAvail - (bonusConsumed ? 1 : 0)),
     trialEligible: gate.trialEligible ?? null,
     trialPending: trial.enabled ? Number(trial.pending) || 0 : 0,
   };
+}
+
+/**
+ * ผลสิทธิ์ที่ cache ไว้ในเทิร์น (คำนวณแบบ "ดูเฉย ๆ" consumeBonus=false) ใช้สร้างงานสแกนได้ไหม
+ *
+ * บั๊กจริง 26 ก.ย. 2026 (staging, บัญชีกบ): snapshot ต้นเทิร์นเรียก checkScanAccess({userId})
+ * แล้วด่านรับรูปหยิบผลนั้นจาก turnCache → งานถูกสร้างเป็น free_access_kind='bonus'
+ * โดย bonus_scans ไม่ถูกหักเลย (สแกน 2 รอบด้วยโบนัสก้อนเดียว ยอดคงเหลือยัง 1)
+ * turn cache (1177d82, มี.ค.) เกิดก่อนระบบโบนัส (ก.ค.) — path หักจริงจึงไม่เคยถูกเรียกในเคสนี้
+ *
+ * กติกา: ผลที่อนุญาตเพราะโบนัสแต่ยังไม่หัก → ห้ามใช้ ต้องเรียกใหม่แบบ consumeBonus=true
+ * (หัก CAS `eq(bonus_scans, ยอดเดิม)` → ส่งพร้อมกันได้โบนัสแค่คนเดียว)
+ * ผลอื่น (daily/trial/paid/ไม่อนุญาต/หักแล้ว) ใช้ต่อได้ตามเดิม
+ */
+export function cachedAccessUsableForScan(decision) {
+  if (!decision || typeof decision !== "object") return false;
+  if (decision.viaBonus === true && decision.bonusConsumed !== true) return false;
+  return true;
 }
 
 /** Text-only paywall reply (LINE Flex reserved for final scan result). */

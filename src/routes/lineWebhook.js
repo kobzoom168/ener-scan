@@ -307,7 +307,7 @@ import {
   clearPaymentState,
 } from "../stores/manualPaymentAccess.store.js";
 import { insertLineConversationMessage } from "../stores/conversationMessages.db.js";
-import { checkScanAccess } from "../services/paymentAccess.service.js";
+import { checkScanAccess, cachedAccessUsableForScan } from "../services/paymentAccess.service.js";
 import {
   isActiveSlipPaymentRow,
   isAwaitingPaymentActionableForTextRouting,
@@ -2395,9 +2395,12 @@ async function finalizeAcceptedImage({
 
   // Access truth + DB payment row: active slip rows own slip validation unless paid entitlement says scan first.
   let accessDecision;
+  // ผลจาก snapshot ต้นเทิร์นคำนวณแบบไม่หักโบนัส — ถ้าอนุญาตเพราะโบนัสต้องคำนวณใหม่แบบหักจริง
+  // (ไม่งั้นงานถูกสร้างเป็น bonus โดยยอดไม่ลด — เคสจริง 26 ก.ย. 2026)
   const accessFromParent =
     turnCache &&
-    Object.prototype.hasOwnProperty.call(turnCache, "accessDecision");
+    Object.prototype.hasOwnProperty.call(turnCache, "accessDecision") &&
+    cachedAccessUsableForScan(turnCache.accessDecision);
   if (accessFromParent) {
     accessDecision = turnCache.accessDecision;
   } else {
