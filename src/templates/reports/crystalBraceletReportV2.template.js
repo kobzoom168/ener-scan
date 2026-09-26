@@ -712,8 +712,9 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
   // ชิ้นหนุนดวงวันนี้ของเจ้าของ — ข้อมูลเดิม เปิดดูได้โดยไม่ต้องจ่าย (Codex 26 ก.ย.) · (เดิม teaser เบลอ+ขาย 299 — ยกเลิก)
   const pickTeaser = options.dailyPickTeaser ?? null;
   void options.liffPayUrl; // ไม่มีปุ่มจ่ายเพื่อดูของเดิม
-  const pkTok = String(payload.publicToken || "").trim();
-  const libraryTodayHref = pkTok ? `/r/${encodeURIComponent(pkTok)}/library#today` : "";
+  // กำไลไม่มีหน้าคลังอันดับแยก (หน้า /library เป็นของเลนพระ): คลังกำไลอยู่ในหน้านี้ → anchor · หนุนดวงวันนี้ → LIFF (ยืนยัน LINE แล้ว)
+  const libraryTodayHref = String(options.liffHomeUrl || "").trim();
+  const ownLibraryAnchor = options.crystalBraceletLibrary?.totalCount > 0 ? "#cb2-lib-h" : libraryTodayHref;
   const pickTeaserHtml = pickTeaser
     ? `
     <section class="cb2-card pk-tease-card" aria-label="ชิ้นที่หนุนดวงวันนี้">
@@ -735,7 +736,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
   const stickyCtaHtml = `
   <nav class="pk-stickycta" aria-label="เริ่มใช้ Ener">
     <a class="pk-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่านพลัง</a>
-    ${options.viewerRole === "guest" && options.ownerVerifyUrl ? `<a class="pk-cta-member" href="${escapeHtml(options.ownerVerifyUrl)}">คลังของฉัน</a>` : options.viewerRole !== "guest" && libraryTodayHref ? `<a class="pk-cta-member" href="${escapeHtml(libraryTodayHref)}">คลังของฉัน</a>` : ""}
+    ${options.viewerRole === "guest" && options.ownerVerifyUrl ? `<a class="pk-cta-member" href="${escapeHtml(options.ownerVerifyUrl)}">คลังของฉัน</a>` : options.viewerRole !== "guest" && ownLibraryAnchor ? `<a class="pk-cta-member" href="${escapeHtml(ownLibraryAnchor)}">คลังของฉัน</a>` : ""}
   </nav>`;
 
   const fs = cb.flexSurface;

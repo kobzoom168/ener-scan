@@ -144,6 +144,10 @@ for (const lane of Object.keys(LANES)) for (const n of [3, 8]) {
       }
       assert.ok(!/data-owner-vault-cta/.test(r.text), "เจ้าของไม่ต้องเห็นบล็อกยืนยัน");
       assert.match(r.text, /คลังของฉัน/);
+      // ลิงก์ "คลังของฉัน"/หนุนดวง ของเจ้าของต้องไปที่ที่เปิดได้จริง: พระ → /library · กำไล → anchor คลังในหน้า · หิน → LIFF (ไม่ใช่ view=pay)
+      if (lane === "amulet") assert.match(r.text, /class="mv2-cta-member" href="\/r\/[^"]+\/library#today"/);
+      if (lane === "bracelet") assert.match(r.text, /class="pk-cta-member" href="#cb2-lib-h"/);
+      if (lane === "moldavite") assert.match(r.text, /class="pk-cta-member" href="https:\/\/liff\.line\.me\/2000000000-abcdefgh"/);
       // teaser หนุนดวงวันนี้ = เปิด ไม่เบลอ ลิงก์ไปคลัง
       assert.ok(!/pk-tease-cta[^>]*href="[^"]*view=pay|mv2-tease-btn[^>]*href="[^"]*view=pay/.test(r.text));
       htmls.push(r.text.replace(/\d{2}:\d{2}/g, ""));
@@ -164,6 +168,7 @@ for (const lane of Object.keys(LANES)) for (const n of [3, 8]) {
       assert.match(r.text, /data-owner-vault-cta="1"/, `${name}: ต้องมีบล็อกยืนยันเจ้าของ`);
       const cta = r.text.slice(r.text.indexOf('data-owner-vault-cta="1"'), r.text.indexOf("</section>", r.text.indexOf('data-owner-vault-cta="1"')));
       assert.match(cta, /view=owner&amp;return=%2Fr%2F/, "ปุ่มไปยืนยันผ่าน LINE แล้วกลับหน้าคลัง");
+      if (lane === "amulet") assert.match(cta, /%2Flibrary"/); else assert.ok(!/%2Flibrary"/.test(cta), "เลนที่ไม่มีหน้าคลังแยก ต้องกลับมารายงานเดิม");
       assert.ok(!/view=pay/.test(cta), "บล็อกยืนยันห้ามพาไปหน้าจ่าย");
       assert.ok(!/img\.test\/teaser\.jpg/.test(r.text), "teaser ของเจ้าของต้องไม่โผล่ให้ guest");
     }

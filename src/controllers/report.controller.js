@@ -238,8 +238,10 @@ export async function getReportBodyByToken(req, res) {
       liffPayUrl,
       accessFull,
       viewerRole,
-      // ทางยืนยันเจ้าของจากหน้ารายงาน (ไม่ใช่หน้าจ่ายเงิน) — กลับมาที่หน้าคลังของรายงานนี้
-      ownerVerifyUrl: ownerVerifyUrl(`/r/${encodeURIComponent(publicToken)}/library`),
+      // ทางยืนยันเจ้าของจากหน้ารายงาน (ไม่ใช่หน้าจ่ายเงิน) — พระ: กลับมาหน้าคลังอันดับ · เลนอื่น: กลับมารายงานเดิม (คลังอยู่ในหน้า)
+      ownerVerifyUrl: ownerVerifyUrl(normPre.amuletV1 ? `/r/${encodeURIComponent(publicToken)}/library` : `/r/${encodeURIComponent(publicToken)}`),
+      // หน้าแรก LIFF (ยืนยันตัวตนด้วย LINE อยู่แล้ว) สำหรับเลนที่ไม่มีหน้าคลังอันดับแยก
+      liffHomeUrl: process.env.LIFF_ID ? `https://liff.line.me/${String(process.env.LIFF_ID).trim()}` : "https://lin.ee/6YZeFZ1",
     });
   } catch (renderErr) {
     console.error(

@@ -58,6 +58,7 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
       accessFull: renderOpts.accessFull ?? true,
       viewerRole: renderOpts.viewerRole ?? "owner",
       ownerVerifyUrl: renderOpts.ownerVerifyUrl ?? "",
+      liffHomeUrl: renderOpts.liffHomeUrl ?? "",
     });
   }
   if (
@@ -78,6 +79,7 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
       accessFull: renderOpts.accessFull ?? true,
       viewerRole: renderOpts.viewerRole ?? "owner",
       ownerVerifyUrl: renderOpts.ownerVerifyUrl ?? "",
+      liffHomeUrl: renderOpts.liffHomeUrl ?? "",
     });
   }
   if (
@@ -99,6 +101,7 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
       accessFull: renderOpts.accessFull ?? true,
       viewerRole: renderOpts.viewerRole ?? "owner",
       ownerVerifyUrl: renderOpts.ownerVerifyUrl ?? "",
+      liffHomeUrl: renderOpts.liffHomeUrl ?? "",
     });
   }
   console.log(

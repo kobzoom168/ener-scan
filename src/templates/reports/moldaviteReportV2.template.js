@@ -400,8 +400,8 @@ export function renderMoldaviteReportV2Html(payload, options = {}) {
   // ชิ้นหนุนดวงวันนี้ของเจ้าของ — ข้อมูลเดิม เปิดดูได้โดยไม่ต้องจ่าย (Codex 26 ก.ย.) · (เดิม teaser เบลอ+ขาย 299 — ยกเลิก)
   const pickTeaser = options.dailyPickTeaser ?? null;
   void options.liffPayUrl; // ไม่มีปุ่มจ่ายเพื่อดูของเดิม
-  const pkTok = String(payload.publicToken || "").trim();
-  const libraryTodayHref = pkTok ? `/r/${encodeURIComponent(pkTok)}/library#today` : "";
+  // หินไม่มีหน้าคลังอันดับแยก → "คลังของฉัน"/หนุนดวงวันนี้ ไปที่ LIFF (ยืนยันตัวตนด้วย LINE อยู่แล้ว ดูประวัติ/Daily Pick ได้)
+  const libraryTodayHref = String(options.liffHomeUrl || "").trim();
   // guest (ลิงก์แชร์): ให้ทางยืนยันเจ้าของผ่าน LINE (ไม่ใช่หน้าจ่ายเงิน)
   const ownerVaultCta =
     options.viewerRole === "guest" && options.ownerVerifyUrl
