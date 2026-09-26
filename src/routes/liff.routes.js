@@ -630,50 +630,49 @@ function aggregateScanAxes(rows) {
 }
 
 /** สิทธิ์เหลือรวม: แพ็กจ่ายเงิน (ถ้ายังไม่หมดอายุ) + ฟรีที่เหลือของวันนี้. */
-async function getRemainingScans(userId) {
-  try {
-    const authority = await checkScanAccess({ userId });
-    if (authority.freePolicy === "new_customer") {
-      const paidLeft = authority.reason === "paid" ? Math.max(0, Number(authority.remaining) || 0) : 0;
-      const freeLeft = Math.max(0, Number(authority.freeScansRemaining) || 0);
-      const bonusLeft = authority.freeAccessKind === "bonus" ? Math.max(0, Number(authority.remaining) || 0) : 0;
-      return { total: paidLeft + freeLeft + bonusLeft, freeLeft, paidLeft, bonusLeft,
-        paidUntil: paidLeft ? authority.paidUntil : null, freePolicy: "new_customer" };
+/**
+ * สิทธิ์ที่ LIFF แสดง — **ต้องมาจากแหล่งตัดสินเดียวกับด่านรับรูป** (`checkScanAccess`)
+ * (กบ/Codex 26 ก.ย. 2026: เดิม daily mode คำนวณเองจาก app_users + นับสแกนวันนี้ →
+ *  `|| 2` ทำโควตา 0 กลายเป็น 2 · นับล้มถูกกลืนเป็น 0 = โชว์สิทธิ์เกินจริง · LIFF กับสแกนจึงไม่ตรงกัน)
+ *
+ * กติกา:
+ *  - ไม่อ่าน app_users / ไม่นับสแกนเอง — ใช้ผล authority ล้วน
+ *  - รักษาค่า 0 (โควตา 0 = 0 ไม่ใช่ 2)
+ *  - authority ล้ม → `unavailable:true` ทุกยอด = 0 และ **ห้ามสร้างยอดสมมติ**
+ *    (ตรงกับด่านรับรูปที่ตอบ accessUnavailable / fail-closed)
+ *  - แยก ฟรีรายวัน / ทดลองรวม 2 ครั้ง / ซื้อ / โบนัส ให้ชัด
+ * @param {string} userId
+ * @param {object|null} [access] ผล checkScanAccess ที่คำนวณไว้แล้ว (กันเรียก gate ซ้ำในหน้า pay)
+ */
+export async function resolveLiffRights(userId, access = null) {
+  const empty = { total: 0, freeLeft: 0, paidLeft: 0, bonusLeft: 0, paidUntil: null, freePolicy: null };
+  let a = access;
+  if (!a) {
+    try {
+      a = await checkScanAccess({ userId });
+    } catch (e) {
+      console.error(JSON.stringify({
+        event: "LIFF_RIGHTS_UNAVAILABLE",
+        uidPrefix: String(userId || "").slice(0, 8),
+        reason: String(e?.message || e).slice(0, 160),
+      }));
+      return { ...empty, unavailable: true };
     }
-    const { data } = await supabase
-      .from("app_users")
-      .select("id,paid_remaining_scans,paid_until,free_scan_daily_offset,free_scan_offset_date")
-      .eq("line_user_id", userId)
-      .maybeSingle();
-    if (!data) return { total: 0, freeLeft: 0, paidLeft: 0, paidUntil: null };
-    const now = new Date();
-    const paidOk = data.paid_until && new Date(data.paid_until).getTime() > now.getTime();
-    const paidLeft = paidOk ? Math.max(0, Number(data.paid_remaining_scans) || 0) : 0;
-    const paidUntil = paidOk ? String(data.paid_until) : null;
-
-    // ฟรีรายวัน: quota - จำนวนสแกนวันนี้ (บวก offset ที่ admin ชดเชย) — ตอนแพ็ก
-    // จ่ายเงิน active โควต้าฟรีถูกกันไว้ ไม่โดนนับ
-    const { loadActiveScanOffer } = await import("../services/scanOffer.loader.js");
-    const { countScanResultsTodayForAppUser, getLocalDateKey } = await import(
-      "../stores/paymentAccess.db.js"
-    );
-    const freeQuota = Number(loadActiveScanOffer(now)?.freeQuotaPerDay) || 2;
-    let freeLeft = freeQuota;
-    if (!paidOk) {
-      let used = await countScanResultsTodayForAppUser(String(data.id), now).catch(() => 0);
-      const offsetDate = data.free_scan_offset_date
-        ? String(data.free_scan_offset_date).slice(0, 10)
-        : null;
-      const offsetN = Number(data.free_scan_daily_offset) || 0;
-      if (offsetDate && offsetDate === getLocalDateKey(now) && offsetN > 0) {
-        used = Math.max(0, used - offsetN);
-      }
-      freeLeft = Math.max(0, freeQuota - used);
-    }
-    return { total: paidLeft + freeLeft, freeLeft, paidLeft, paidUntil };
-  } catch {
-    return { total: 0, freeLeft: 0, paidLeft: 0, paidUntil: null };
   }
+  if (!a || typeof a !== "object" || typeof a.allowed !== "boolean") {
+    return { ...empty, unavailable: true };
+  }
+  const n = (v) => Math.max(0, Number(v) || 0);
+  const paidLeft = a.reason === "paid" ? n(a.remaining) : 0;
+  const freeLeft = n(a.freeScansRemaining);                      // รักษา 0
+  const bonusLeft = n(a.bonusScansAvailable);
+  return {
+    total: paidLeft + freeLeft + bonusLeft,
+    freeLeft, paidLeft, bonusLeft,
+    paidUntil: paidLeft ? (a.paidUntil ?? null) : null,
+    freePolicy: a.freePolicy || "daily",
+    unavailable: false,
+  };
 }
 
 liffRouter.get("/api/liff/stats", async (req, res) => {
@@ -682,7 +681,7 @@ liffRouter.get("/api/liff/stats", async (req, res) => {
   try {
     const [rows, remaining] = await Promise.all([
       listScanResultsV2PayloadRowsForLineUser(userId, 150),
-      getRemainingScans(userId),
+      resolveLiffRights(userId),
     ]);
     const agg = aggregateScanAxes(rows);
     res.json({
@@ -691,6 +690,9 @@ liffRouter.get("/api/liff/stats", async (req, res) => {
       remaining: remaining.total,
       remainingFree: remaining.freeLeft,
       remainingPaid: remaining.paidLeft,
+      remainingBonus: remaining.bonusLeft,
+      freePolicy: remaining.freePolicy,
+      rightsUnavailable: remaining.unavailable === true,
       topScore: agg.topScore,
       bestAxis: agg.bestAxis ? agg.bestAxis.label : null,
     });
@@ -1257,12 +1259,24 @@ liffRouter.get("/api/liff/pay/info", async (req, res) => {
   try {
     const offer = loadActiveScanOffer();
     const packages = (offer.packages || []).filter((p) => p.active);
-    const [payment, access, upgradeCredit, rights] = await Promise.all([
+    // gate เรียกครั้งเดียว แล้วให้ rights ถอดจากผลเดียวกัน (เดิมเรียก 2 รอบ อาจเห็นคนละค่า)
+    const [payment, accessResult, upgradeCredit] = await Promise.all([
       getLatestAwaitingPaymentForLineUserId(userId).catch(() => null),
-      checkScanAccess({ userId }).catch(() => null),
+      checkScanAccess({ userId }).then((a) => ({ ok: true, a })).catch((e) => ({ ok: false, e })),
       getUpgradeCreditForLineUser(userId).catch(() => null),
-      getRemainingScans(userId),
     ]);
+    const access = accessResult.ok ? accessResult.a : null;
+    if (!accessResult.ok) {
+      console.error(JSON.stringify({
+        event: "LIFF_RIGHTS_UNAVAILABLE",
+        uidPrefix: userId.slice(0, 8),
+        path: "pay",
+        reason: String(accessResult.e?.message || accessResult.e).slice(0, 160),
+      }));
+    }
+    const rights = access
+      ? await resolveLiffRights(userId, access)
+      : { total: 0, freeLeft: 0, paidLeft: 0, bonusLeft: 0, paidUntil: null, freePolicy: null, unavailable: true };
     // telemetry เมนูใหม่ (กบ+Codex 14 ส.ค.): วัดว่าปุ่ม rich menu → หน้า pay มีคนใช้จริง
     const src = String(req.query.src || "").slice(0, 20);
     if (src === "richmenu") {
@@ -2620,17 +2634,23 @@ function buildLiffHtml(liffId) {
       .then(function(j){
         if(!j || !j.ok) return;
         countUp($("st-count"), j.scanned || 0);
-        $("st-left").textContent = j.remaining != null ? j.remaining : 0;
+        /* อ่านสิทธิ์ไม่ได้ = "–" ห้ามโชว์ตัวเลขสมมติ */
+        $("st-left").textContent = j.rightsUnavailable ? "–" : (j.remaining != null ? j.remaining : 0);
         $("st-top").textContent = j.topScore != null ? j.topScore : "–";
         $("st-axis").textContent = j.bestAxis || "–";
         /* บรรทัดจิ๋วแยกฟรี/แพ็ก ใต้ตัวเลขรวม (โปร่งใสว่าสิทธิ์มาจากไหน) */
         var sub = $("st-left-sub");
         if(sub){
-          if(j.remainingPaid > 0){
-            sub.textContent = "ฟรี " + (j.remainingFree || 0) + " · ค่าครู " + j.remainingPaid;
+          if(j.rightsUnavailable){
+            sub.textContent = "ตรวจสอบสิทธิ์ไม่ได้ กรุณาลองใหม่";
             sub.classList.remove("hidden");
           } else {
-            sub.classList.add("hidden");
+            var bits = [];
+            if(j.remainingPaid > 0) bits.push("ค่าครู " + j.remainingPaid);
+            if(j.remainingFree > 0) bits.push((j.freePolicy === "new_customer" ? "ทดลอง " : "ฟรี ") + j.remainingFree);
+            if(j.remainingBonus > 0) bits.push("โบนัส " + j.remainingBonus);
+            if(bits.length > 1){ sub.textContent = bits.join(" · "); sub.classList.remove("hidden"); }
+            else { sub.classList.add("hidden"); }
           }
         }
         /* ลูกค้าใหม่ยังไม่เคยสแกน: ตารางขีด ๆ ดูจืด → สลับเป็นการ์ดชวนสแกนองค์แรก */
@@ -2639,7 +2659,8 @@ function buildLiffHtml(liffId) {
           var fresh = !(j.scanned > 0);
           first.classList.toggle("hidden", !fresh);
           grid.classList.toggle("hidden", fresh);
-          if(fresh) $("st-first-free").textContent = j.remainingFree != null ? j.remainingFree : 2;
+          /* ไม่มี fallback 2 อีก — ค่าจริงจาก authority (0 ก็คือ 0 · อ่านไม่ได้ = "–") */
+          if(fresh) $("st-first-free").textContent = j.rightsUnavailable ? "–" : (j.remainingFree != null ? j.remainingFree : 0);
         }
       }).catch(function(){});
   }
@@ -3084,16 +3105,29 @@ function buildLiffHtml(liffId) {
       // สถานะสิทธิ์ก่อนแพ็กเสมอ (กบ+Codex 14 ส.ค.)
       var st = $("pay-status"), stT = $("pay-status-t"), stS = $("pay-status-s"), backBtn = $("pay-back-chat");
       var rights = j.rights || null;
-      if(rights && rights.total > 0){
+      if(rights && rights.unavailable){
+        /* อ่านสิทธิ์ไม่ได้ = บอกตรง ๆ ห้ามโชว์ยอดสมมติ (ตรงกับด่านรับรูปที่ fail-closed) */
+        stT.textContent = "ตรวจสอบสิทธิ์ไม่ได้ กรุณาลองใหม่";
+        stS.textContent = "ปิดแล้วเปิดหน้านี้อีกครั้ง หรือทักแอดมินในแชตครับ";
+        backBtn.classList.add("hidden");
+        st.classList.remove("hidden");
+      } else if(rights && rights.total > 0){
+        var parts = [];
+        if(rights.paidLeft > 0) parts.push(rights.paidLeft >= 900000 ? "รายเดือน" : "ค่าครู " + rights.paidLeft + " ครั้ง");
+        if(rights.freeLeft > 0) parts.push((rights.freePolicy === "new_customer" ? "ทดลอง " : "ฟรีวันนี้ ") + rights.freeLeft + " ครั้ง");
+        if(rights.bonusLeft > 0) parts.push("โบนัส " + rights.bonusLeft + " ครั้ง");
         stT.textContent = rights.paidLeft >= 900000
           ? "ตอนนี้ใช้สิทธิ์รายเดือนอยู่"
           : "สิทธิ์คงเหลือ " + rights.total + " ครั้ง";
         stS.textContent = (rights.paidUntil ? "ใช้ได้ถึง " + payFmtThaiDate(rights.paidUntil) : "") +
-          (rights.freeLeft > 0 && rights.paidLeft > 0 ? (rights.paidUntil ? " · " : "") + (rights.freePolicy === "new_customer" ? "รวมสิทธิ์ทดลองคงเหลือ " : "รวมสิทธิ์ฟรีวันนี้ ") + rights.freeLeft + " ครั้ง" : "");
+          (parts.length ? (rights.paidUntil ? " · " : "") + parts.join(" · ") : "");
         backBtn.classList.remove("hidden");
         st.classList.remove("hidden");
       } else if(rights){
-        stT.textContent = "วันนี้ใช้สิทธิ์ฟรีครบแล้ว";
+        /* zero-state ต้องแยกตามนโยบาย — trial ห้ามสื่อว่า "พรุ่งนี้ได้ใหม่" */
+        stT.textContent = rights.freePolicy === "new_customer"
+          ? "สิทธิ์ทดลองใช้ครบแล้ว"
+          : "วันนี้ใช้สิทธิ์ฟรีครบแล้ว";
         stS.textContent = "เลือกค่าครูสำหรับรอบถัดไปได้ด้านล่างครับ";
         backBtn.classList.add("hidden");
         st.classList.remove("hidden");

@@ -225,6 +225,8 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
     paidRemainingScans,
     freePolicy: gate.freePolicy || "daily",
     freeAccessKind: viaBonus ? "bonus" : trial.enabled ? "trial" : "daily",
+    // โบนัสคงเหลือจริง (ยังไม่ถูกหัก) — ให้ LIFF แยกแสดง "โบนัส" ออกจากฟรี/ทดลอง/ซื้อ
+    bonusScansAvailable: Math.max(0, Number(appUserRow?.bonus_scans) || 0),
     trialEligible: gate.trialEligible ?? null,
     trialPending: trial.enabled ? Number(trial.pending) || 0 : 0,
   };
