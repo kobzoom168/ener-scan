@@ -11,6 +11,7 @@
  * the server verifies it with LINE (oauth2/v2.1/verify) and uses the verified
  * `sub` as the userId — client-sent userId is never trusted.
  */
+import * as ownerVerifyClient from "./liffOwnerVerify.client.js";
 import express from "express";
 import { supabase } from "../config/supabase.js";
 import { saveBirthdate, getSavedBirthdate } from "../stores/userProfile.db.js";
@@ -1554,14 +1555,21 @@ liffRouter.post("/api/liff/owner-session", async (req, res) => {
   const userId = await requireLiffUser(req, res);
   if (!userId) return;
   const { issueOwnerCookie } = await import("../services/reports/ownerProof.util.js");
-  issueOwnerCookie(res, userId);
-  console.log(JSON.stringify({ event: "OWNER_SESSION_ISSUED", uidPrefix: String(userId).slice(0, 8), source: "liff" }));
   res.set("Cache-Control", "no-store");
+  const issued = issueOwnerCookie(res, userId);
+  if (!issued) {
+    // ออก cookie ไม่ได้ = ล้มจริง — ห้ามตอบ ok / ห้าม log ISSUED (Codex รอบ 6)
+    console.error(JSON.stringify({ event: "OWNER_SESSION_COOKIE_FAILED", uidPrefix: String(userId).slice(0, 8), source: "liff" }));
+    res.status(500).json({ ok: false, error: "cookie_not_issued" });
+    return;
+  }
+  console.log(JSON.stringify({ event: "OWNER_SESSION_ISSUED", uidPrefix: String(userId).slice(0, 8), source: "liff" }));
   res.json({ ok: true });
 });
 
 liffRouter.get("/liff", (req, res) => {
   const liffId = String(process.env.LIFF_ID || "").trim();
+  // เส้นยืนยันเจ้าของ: ฝัง source ของโมดูลเดียวกับที่เทสต์ใช้ (ไม่มีสองสำเนา)
   res.set("Content-Type", "text/html; charset=utf-8");
   res.send(buildLiffHtml(liffId));
 });
@@ -3259,6 +3267,29 @@ function buildLiffHtml(liffId) {
     try{ liff.closeWindow(); }catch(e){ show("v-home"); }
   });
 
+  /* ---- ยืนยันเจ้าของผ่าน LINE (โมดูลเดียวกับเทสต์ liffOwnerVerify.client.js) ---- */
+  ${ownerVerifyClient.isSafeOwnerReturnPathClient.toString()}
+  ${ownerVerifyClient.readOwnerReturnPath.toString()}
+  ${ownerVerifyClient.isOwnerVerifyRequest.toString()}
+  ${ownerVerifyClient.createOwnerVerifyFlow.toString()}
+  function runOwnerVerify(){
+    var ret = readOwnerReturnPath(location.search);
+    var lm = $("loadmsg");
+    var flow = createOwnerVerifyFlow({
+      api: function(path, opts){ return api(path, opts); },
+      navigate: function(p){ location.replace(p); },
+      ui: {
+        verifying: function(){ show("v-load"); showLoadMsg("กำลังยืนยันตัวตนกับ LINE…"); var b=$("owner-retry"); if(b) b.remove(); },
+        failed: function(retry, detail){
+          showLoadMsg("ยืนยันไม่สำเร็จ กรุณาลองใหม่" + (detail === "login_expired" ? " (เปิดหน้านี้จาก LINE อีกครั้ง)" : ""));
+          if(lm && !$("owner-retry")){ var b=document.createElement("button"); b.id="owner-retry"; b.className="btn"; b.style.marginTop="14px"; b.textContent="ลองอีกครั้ง"; b.addEventListener("click", function(){ retry(); }); lm.parentNode.insertBefore(b, lm.nextSibling); }
+        },
+        noReturn: function(){ showLoadMsg("ลิงก์ยืนยันไม่ถูกต้อง เปิดจากหน้ารายงานอีกครั้งครับ"); }
+      }
+    });
+    return flow.run(ret);
+  }
+
   /* ---- boot ---- */
   function boot(){
     fillDates();
@@ -3268,8 +3299,12 @@ function buildLiffHtml(liffId) {
       return liff.getProfile().then(function(p){
         state.userId = p.userId; state.displayName = p.displayName || "";
         try { sessionStorage.removeItem("liffReauth"); } catch(e){}
+        /* view=owner: ยืนยันเจ้าของด้วย LINE idToken ตรงนี้เลย — ไม่ผูกกับโปรไฟล์ LIFF (Codex รอบ 6)
+           คนที่มีรายงานอยู่แล้วแต่ไม่เคยเข้า LIFF ต้องยืนยันได้และกลับรายงานเดิม */
+        if (isOwnerVerifyRequest(location.search)) { return runOwnerVerify().then(function(){ return { __ownerVerify: true }; }); }
         return api("/api/liff/profile").then(function(r){ return r.json(); });
       }).then(function(j){
+        if (j && j.__ownerVerify) return; // จบที่ flow ยืนยันแล้ว (redirect หรือแสดงปุ่มลองอีกครั้ง)
         if(j && j.found && j.profile && j.profile.nickname){
           enterHome(j.profile.nickname);
           // ลิงก์จากแชท liff.line.me/{id}?view=pay → เข้าหน้าเลือกแพ็กจ่ายทันที
@@ -3278,16 +3313,6 @@ function buildLiffHtml(liffId) {
           if (qs.get("view") === "pay" || st.indexOf("view=pay") !== -1) {
             var paySrc = qs.get("src") || (st.indexOf("src=richmenu") !== -1 ? "richmenu" : "");
             openPay(false, paySrc);
-          }
-          /* ยืนยันเจ้าของจากหน้ารายงาน (view=owner&return=/r/...): ออก cookie เจ้าของแล้วกลับไปหน้านั้น
-             return ต้องเป็น path ในโดเมนนี้เท่านั้น (/r/... หรือ /myscans/...) */
-          if (qs.get("view") === "owner" || st.indexOf("view=owner") !== -1) {
-            var ret = qs.get("return") || "";
-            if (!ret && st) { try { ret = new URLSearchParams(st.replace(/^\?/, "")).get("return") || ""; } catch(e){} }
-            try { ret = decodeURIComponent(ret); } catch(e){}
-            if (!/^\/(r|myscans)\/[A-Za-z0-9._%-]+(\/[a-z-]+)?$/.test(ret)) ret = "";
-            api("/api/liff/owner-session", { method: "POST" }).then(function(r){ return r.ok; }).catch(function(){ return false; })
-              .then(function(ok){ if (ok && ret) { location.replace(ret); } });
           }
         }
         else { renderStep(); show("v-ob"); }

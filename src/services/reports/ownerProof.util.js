@@ -77,8 +77,13 @@ export function issueOwnerCookie(res, lineUserId) {
       maxAge: MAX_AGE_MS,
       path: "/",
     });
+    // ยืนยันว่า header ถูกตั้งจริง (Codex รอบ 6: ห้ามรายงานสำเร็จทั้งที่ไม่ได้ออก cookie)
+    const set = res.getHeader ? res.getHeader("set-cookie") : null;
+    const list = Array.isArray(set) ? set : set ? [String(set)] : [];
+    return list.some((c) => String(c).startsWith(`${OWNER_COOKIE}=`));
   } catch {
-    /* ออก cookie ไม่ได้ = เปิดคลังไม่ได้ แต่หน้ารายงานยังใช้งานได้ตามปกติ */
+    /* ออก cookie ไม่ได้ = เปิดคลังไม่ได้ แต่หน้ารายงานยังใช้งานได้ตามปกติ — ผู้เรียกต้องตรวจค่าที่คืน */
+    return false;
   }
 }
 

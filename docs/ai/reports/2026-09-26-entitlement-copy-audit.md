@@ -107,3 +107,13 @@
 **ยังไม่ทดสอบสด:** เลนหิน · ปุ่ม "ยืนยันผ่าน LINE" กดจริงจากมือถือ (LIFF → cookie → กลับหน้า) · เปิดจาก rich menu · สลับบัญชี A/B บนอุปกรณ์จริง — รอกบกด (ไม่กระทบยอด/สิทธิ์)
 
 **ขอบเขตที่ไม่แตะ:** owner gate ของ `/library` และ `/myscans` · ban/optout · held/pending/failed · การสร้างของใหม่ (สแกน/consult/voice note) ยังเช็คสิทธิ์ตามเดิม · ไม่มี AI call เพิ่ม
+
+## เส้นยืนยันเจ้าของ — ปิดช่องว่าง 2 จุด (Codex รอบ 6)
+| จุด | ก่อน | หลัง |
+|---|---|---|
+| view=owner ผูกกับโปรไฟล์ | รันเฉพาะเมื่อ `profile.nickname` มี · ไม่มี → เข้าหน้ากรอกข้อมูล แล้วไม่กลับรายงาน | `runOwnerVerify()` รันทันทีหลัง LINE login (ก่อนเรียก `/api/liff/profile`) — คนที่มีรายงานแต่ไม่เคยเข้า LIFF ก็ยืนยันได้ · return path เดิม |
+| ล้มเหลวเงียบ / รายงานสำเร็จปลอม | frontend `catch` เงียบ · `issueOwnerCookie` กลืน exception แต่ endpoint ตอบ `ok:true` + log ISSUED | `issueOwnerCookie` คืน boolean (ตรวจ `Set-Cookie` จริง) · owner-session: ล้ม → 500 `{ok:false,error:"cookie_not_issued"}` + log `OWNER_SESSION_COOKIE_FAILED` ไม่มี ISSUED · frontend สำเร็จเฉพาะ 200 **และ** `ok===true` → redirect · ล้ม (401/5xx/network/ok:false) → "ยืนยันไม่สำเร็จ กรุณาลองใหม่" + ปุ่ม "ลองอีกครั้ง" · ไม่ retry/redirect อัตโนมัติ · หน้ารายงาน guest ไม่มี auto-redirect (ไม่มีวน) |
+| โค้ด 2 สำเนา | flow อยู่ใน HTML string อย่างเดียว | `src/routes/liffOwnerVerify.client.js` โมดูลเดียว — ฝังใน LIFF HTML ด้วย `.toString()` และ import ตรงในเทสต์ |
+
+**Browser-flow test** `tests/ownerVerify.browserflow.test.js` (cookie jar + api ใส่ Bearer + navigate บันทึกปลายทาง · LINE verify จำลองที่ `fetch` · owner-session/report จริง — ไม่มีการสร้าง signed cookie ข้ามขั้น): มีโปรไฟล์/ไม่มีโปรไฟล์ (ไม่แตะ `/api/liff/profile`, กลับ `/library` แล้วเห็นคลัง 3 ชิ้น) · token หมดอายุ (401 → failed:login_expired ไม่มี cookie ไม่ redirect → ลองใหม่ด้วย token ดีผ่าน) · API ล้ม (network, attempts=1 ไม่วนเอง) · cookie ออกไม่ได้ (500 ok:false, ไม่มี ISSUED, มี COOKIE_FAILED) · 200 แต่ ok:false ไม่นับสำเร็จ · บัญชี B กดจากลิงก์ของ A (ได้ cookie B → guest view, `/library` 302, คลัง A ไม่รั่ว) · return path นอกโดเมนถูกปฏิเสธ · หน้า LIFF ฝัง flow ก่อนเช็คโปรไฟล์ — **8/8**
+**ยังไม่ทดสอบสด:** กดจากมือถือจริง (LIFF จริง) — รอกบ
