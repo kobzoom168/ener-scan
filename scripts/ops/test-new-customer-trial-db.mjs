@@ -41,8 +41,11 @@ try {
   for (let n=2;n<=5;n++) sql(`INSERT INTO app_users(id,line_user_id,created_at) VALUES ('${uid(n)}','user${n}',now());`);
   sql(insert(2)); sql(insert(2));
   assert.throws(() => sql(insert(2)), /trial_quota_exhausted/);
-  sql(insert(2,"paid")); sql(insert(1,"free","'bonus'"));
-  assert.throws(() => sql(insert(1,"free","'bonus'")), /bonus_quota_exhausted/);
+  sql(insert(2,"paid"));
+  // 064: การจองโบนัสใช้ค่า 'bonus_reserved' · 'bonus' = legacy ผ่านได้แต่ไม่หัก
+  sql(insert(1,"free","'bonus_reserved'"));
+  assert.throws(() => sql(insert(1,"free","'bonus_reserved'")), /bonus_quota_exhausted/);
+  sql(insert(1,"free","'bonus'")); assert.equal(sql(`SELECT bonus_scans FROM app_users WHERE id='${uid(1)}'`),"0");
   assert.equal(JSON.parse(sql("SELECT new_customer_trial_status('user2')")).used,2);
   sql("SELECT set_new_customer_trial_policy(false); SELECT set_new_customer_trial_policy(true);");
   assert.equal(JSON.parse(sql("SELECT new_customer_trial_status(NULL)")).eligible_since,first);

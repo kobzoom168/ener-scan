@@ -5,12 +5,17 @@
 --
 -- กติกาใหม่ (ทุกโหมด ไม่ขึ้นกับ trial):
 --   ดู (checkScanAccess/LIFF)  = ไม่แตะ bonus_scans
---   จอง = INSERT scan_jobs (free_access_kind='bonus') → bonus_scans-1 ใต้ FOR UPDATE ทรานแซกชันเดียวกัน
---   ใช้ = งานส่งผลสำเร็จ (kind คง 'bonus' ตลอด · delivery ไม่หักซ้ำ)
---   คืน = ครั้งเดียว โดยเปลี่ยน kind 'bonus' → 'bonus_released' (+1) เมื่อ
+--   จอง = INSERT scan_jobs (free_access_kind='bonus_reserved') → bonus_scans-1 ใต้ FOR UPDATE ทรานแซกชันเดียวกัน
+--   ใช้ = งานส่งผลสำเร็จ (kind คง 'bonus_reserved' ตลอด · delivery ไม่หักซ้ำ)
+--   คืน = ครั้งเดียว โดยเปลี่ยน kind 'bonus_reserved' → 'bonus_released' (+1) เมื่อ
 --         (ก) status → failed (trigger)  (ข) มีหลักฐาน outbound scan_result skipQuotaDecrement=true (รูปซ้ำ)
 --   retry failed → active ของงานที่คืนแล้ว = จองใหม่ (หรือ bonus_quota_exhausted)
 --   webhook ซ้ำ = uq_scan_uploads_line_message กัน upload/job ตัวที่สองอยู่แล้ว
+-- ค่าใน free_access_kind (Codex รอบ 2: แยกงานที่จองจริงจากงาน legacy อย่างชัดเจน)
+--   'bonus'          = legacy — โค้ดเก่าเขียน (หัก/ไม่หักที่ webhook) trigger ไม่จอง ไม่คืน ไม่แตะเลย
+--   'bonus_reserved' = โค้ดใหม่ขอจอง → trigger หัก −1 ที่ INSERT (ตัวเดียวที่คืนได้)
+--   'bonus_released' = คืนแล้ว (ครั้งเดียว) · retry failed→active = จองใหม่กลับเป็น 'bonus_reserved'
+-- ผลลัพธ์: โค้ดเก่า+064 ไม่หักซ้ำ · rollback โค้ดโดยคง 064 ปลอดภัย · legacy ที่ล้มทีหลังไม่ได้เงินฟรี
 -- ไม่แตะ schema (ใช้ค่าใหม่ในคอลัมน์ text เดิม) · ไม่ backfill · ไม่แก้ยอดลูกค้า
 -- idempotent: apply ซ้ำได้
 BEGIN;
@@ -35,9 +40,9 @@ BEGIN
   IF NEW.access_source <> 'free' THEN RETURN NEW; END IF;
 
   IF TG_OP = 'UPDATE' THEN
-    -- (ก) คืนโบนัสครั้งเดียวเมื่อกลายเป็น failed
+    -- (ก) คืนโบนัสครั้งเดียวเมื่อกลายเป็น failed — เฉพาะงานที่จองจริง ('bonus' legacy ไม่คืน)
     IF NEW.status = 'failed' AND OLD.status <> 'failed' THEN
-      IF NEW.free_access_kind = 'bonus' THEN
+      IF NEW.free_access_kind = 'bonus_reserved' THEN
         PERFORM 1 FROM public.app_users WHERE id = NEW.app_user_id FOR UPDATE;
         UPDATE public.app_users SET bonus_scans = bonus_scans + 1 WHERE id = NEW.app_user_id;
         NEW.free_access_kind := 'bonus_released';
@@ -50,13 +55,16 @@ BEGIN
       SELECT * INTO u FROM public.app_users WHERE id = NEW.app_user_id FOR UPDATE;
       IF COALESCE(u.bonus_scans, 0) < 1 THEN RAISE EXCEPTION 'bonus_quota_exhausted'; END IF;
       UPDATE public.app_users SET bonus_scans = bonus_scans - 1 WHERE id = u.id;
-      NEW.free_access_kind := 'bonus';
+      NEW.free_access_kind := 'bonus_reserved';
       RETURN NEW;
     END IF;
-    IF NEW.free_access_kind = 'bonus' THEN RETURN NEW; END IF;
+    IF NEW.free_access_kind IN ('bonus', 'bonus_reserved') THEN RETURN NEW; END IF;
     -- daily/trial: ตรวจโควตา trial ซ้ำด้านล่าง (พฤติกรรมเดิม 057)
   ELSIF NEW.free_access_kind = 'bonus' THEN
-    -- จองโบนัสที่ INSERT ทุกโหมด (เดิมเฉพาะ trial เปิด)
+    -- legacy จากโค้ดเก่า (หัก/ไม่หักที่ webhook แล้ว) — ห้ามหักซ้ำ ห้ามคืน
+    RETURN NEW;
+  ELSIF NEW.free_access_kind = 'bonus_reserved' THEN
+    -- จองโบนัสที่ INSERT ทุกโหมด
     SELECT * INTO u FROM public.app_users WHERE id = NEW.app_user_id FOR UPDATE;
     IF u.id IS NULL OR u.line_user_id IS DISTINCT FROM NEW.line_user_id THEN
       RAISE EXCEPTION 'trial_user_mismatch';
@@ -89,7 +97,8 @@ CREATE TRIGGER guard_new_customer_trial_job BEFORE INSERT OR UPDATE OF status ON
 FOR EACH ROW EXECUTE FUNCTION public.guard_new_customer_trial_job();
 
 -- (ข) คืนโบนัสตามหลักฐาน — idempotent, เรียกซ้ำ/พร้อมกันไม่คืนซ้ำ
--- คืนได้เฉพาะ: งาน kind='bonus' และ (failed หรือ มี outbound scan_result skipQuotaDecrement=true)
+-- คืนได้เฉพาะ: งาน kind='bonus_reserved' (จองจริง) และ (failed หรือ มี outbound scan_result skipQuotaDecrement=true)
+-- งาน legacy kind='bonus' → 'noop' เสมอ
 -- ไม่แตะ status → trigger ข้างบนไม่ทำงานซ้ำ
 CREATE OR REPLACE FUNCTION public.release_bonus_reservation(p_job_id uuid)
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -97,7 +106,7 @@ DECLARE j public.scan_jobs%ROWTYPE;
 BEGIN
   SELECT * INTO j FROM public.scan_jobs WHERE id = p_job_id FOR UPDATE;
   IF j.id IS NULL THEN RETURN 'job_not_found'; END IF;
-  IF j.access_source <> 'free' OR j.free_access_kind IS DISTINCT FROM 'bonus' THEN RETURN 'noop'; END IF;
+  IF j.access_source <> 'free' OR j.free_access_kind IS DISTINCT FROM 'bonus_reserved' THEN RETURN 'noop'; END IF;
   IF j.status <> 'failed' AND NOT EXISTS (
     SELECT 1 FROM public.outbound_messages o
     WHERE o.related_job_id = j.id AND o.kind = 'scan_result'
@@ -117,7 +126,7 @@ DECLARE n integer := 0; r record;
 BEGIN
   FOR r IN
     SELECT j.id FROM public.scan_jobs j
-    WHERE j.access_source = 'free' AND j.free_access_kind = 'bonus'
+    WHERE j.access_source = 'free' AND j.free_access_kind = 'bonus_reserved'
       AND (j.status = 'failed' OR EXISTS (
         SELECT 1 FROM public.outbound_messages o
         WHERE o.related_job_id = j.id AND o.kind = 'scan_result'

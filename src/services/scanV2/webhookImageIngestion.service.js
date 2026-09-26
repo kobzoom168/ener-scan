@@ -358,7 +358,10 @@ export async function ingestScanImageAsyncV2({
       upload_id: uploadRow.id,
       birthdate_snapshot: String(birthdateSnapshot || "").trim() || null,
       access_source: accessSource,
-      ...(accessSource === "free" ? { free_access_kind: accessDecision?.freeAccessKind || "daily" } : {}),
+      // 064: โบนัส = ขอจองที่ DB ('bonus_reserved' → trigger หัก −1) · 'bonus' เฉย ๆ คือค่า legacy ของโค้ดเก่า
+      ...(accessSource === "free"
+        ? { free_access_kind: accessDecision?.freeAccessKind === "bonus" ? "bonus_reserved" : accessDecision?.freeAccessKind || "daily" }
+        : {}),
       status: "queued",
       priority: 100,
       // Hold burst photos briefly so they attach to the same report.

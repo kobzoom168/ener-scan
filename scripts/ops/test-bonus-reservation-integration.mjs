@@ -74,7 +74,7 @@ if (!process.env.ENER_BONUS_IT_CHILD) {
 
 // ───────────────────────── child: ทดสอบกับของจริง ─────────────────────────
 const PGC = process.env.ENER_BONUS_IT_PG;
-const q = (s) => sh("docker", ["exec", "-i", PGC, "psql", "-U", "postgres", "-d", "bonus_it", "-X", "-qAt", "-v", "ON_ERROR_STOP=1"], { input: s });
+const q = (s, db = "bonus_it") => sh("docker", ["exec", "-i", PGC, "psql", "-U", "postgres", "-d", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1"], { input: s });
 const { checkScanAccess } = await import(new URL("src/services/paymentAccess.service.js", root));
 const { ingestScanImageAsyncV2, quotaGuardCodeFromError } = await import(new URL("src/services/scanV2/webhookImageIngestion.service.js", root));
 const { processScanJob, failJob } = await import(new URL("src/services/scanV2/processScanJob.service.js", root));
@@ -122,7 +122,7 @@ await t("1 โบนัส 1 → รับรูป (จองที่ INSERT) 
   const ing = await ingest(u.uid, "mid-1-" + u.uid, image("A"), a);
   assert.equal(ing.ok, true, JSON.stringify(ing)); assert.ok(ing.jobId);
   assert.equal(bonusOf(u.uid), 0, "จองตอน INSERT");
-  assert.match(jobsOf(u.uid)[0], /\|queued\|bonus$/);
+  assert.match(jobsOf(u.uid)[0], /\|queued\|bonus_reserved$/);
   await updateScanJob(ing.jobId, { status: "processing" });
   await updateScanJob(ing.jobId, { status: "completed" });
   await updateScanJob(ing.jobId, { status: "delivered" });
@@ -131,6 +131,11 @@ await t("1 โบนัส 1 → รับรูป (จองที่ INSERT) 
   assert.equal(bonusOf(u.uid), 0);
   // สิทธิ์หลังจากนั้น: ไม่มีทั้งฟรีและโบนัส
   const b = await gate(u.uid); assert.equal(b.allowed, false); assert.equal(b.reason, "payment_required");
+  // A (Codex): ส่งรูปเดิมซ้ำตอนยอด 0 → ถูกกันที่ด่านสิทธิ์ ไม่มีงาน ไม่มีการคืน ยอดต้องไม่งอก
+  const again = await ingest(u.uid, "mid-1-again-" + u.uid, image("A"), b);
+  assert.equal(again.ok, false); assert.equal(again.error, "access_denied");
+  assert.equal(jobsOf(u.uid).length, 1); assert.equal(bonusOf(u.uid), 0, "รูปซ้ำห้ามทำให้โบนัสงอกกลับ");
+  assert.equal(await releaseBonusReservation(ing.jobId), "no_evidence"); assert.equal(bonusOf(u.uid), 0);
 });
 
 await t("2 inbound เดิมถูกส่งซ้ำ (line_message_id เดิม) → หักครั้งเดียว งานเดียว", async () => {
@@ -170,7 +175,7 @@ await t("3a งานล้ม (failJob จริง → trigger) → คืน�
   assert.equal(bonusOf(u.uid), 1);
   // retry failed → queued ของงานที่คืนแล้ว = จองใหม่
   await updateScanJob(ing.jobId, { status: "queued" });
-  assert.equal(bonusOf(u.uid), 0); assert.match(jobsOf(u.uid)[0], /\|queued\|bonus$/);
+  assert.equal(bonusOf(u.uid), 0); assert.match(jobsOf(u.uid)[0], /\|queued\|bonus_reserved$/);
 });
 
 await t("3b รูปซ้ำ (processScanJob จริง → sha256 dedup) → คืนครั้งเดียว", async () => {
@@ -188,7 +193,7 @@ await t("3b รูปซ้ำ (processScanJob จริง → sha256 dedup) �
   const row = await getScanJobById(dup.jobId);
   const r = quiet(); try { await processScanJob("it-worker", row); } finally { r(); }
   const job = await getScanJobById(dup.jobId);
-  assert.equal(job.status, "completed"); assert.equal(job.free_access_kind, "bonus_released", "คืนตามหลักฐานรูปซ้ำ");
+  assert.equal(job.status, "completed"); assert.equal(job.free_access_kind, "bonus_released", "คืนตามหลักฐานรูปซ้ำ (เฉพาะการจองใหม่ของงานนี้)");
   assert.equal(q(`select count(*) from outbound_messages where related_job_id='${dup.jobId}' and kind='scan_result' and payload_json->>'skipQuotaDecrement'='true'`), "1");
   assert.equal(bonusOf(u.uid), 1);
   assert.equal(await releaseBonusReservation(dup.jobId), "noop"); assert.equal(bonusOf(u.uid), 1, "คืนซ้ำไม่ได้");
@@ -228,6 +233,45 @@ await t("5 crash/retry: INSERT abort ไม่หาย · หลักฐาน
   assert.equal(Number(s3.data), 0); assert.equal(bonusOf(u2.uid), 0);
 });
 
+await t("7 legacy: งาน kind='bonus' ของโค้ดเก่า (ไม่เคยจอง) → failed/รูปซ้ำ/release/sweep ไม่คืนเงินฟรี", async () => {
+  const u = await newUser({ bonus: 1 });
+  const jid = q(`insert into scan_jobs(line_user_id,app_user_id,upload_id,access_source,status,free_access_kind) values('${u.uid}','${u.id}',gen_random_uuid(),'free','queued','bonus') returning id`);
+  assert.equal(bonusOf(u.uid), 1, "INSERT 'bonus' legacy ไม่หัก (โค้ดเก่าจัดการเองแล้ว)");
+  q(`update scan_jobs set status='failed' where id='${jid}'`);
+  assert.equal(bonusOf(u.uid), 1, "legacy ล้มทีหลัง ห้ามคืน");
+  assert.equal(q(`select free_access_kind from scan_jobs where id='${jid}'`), "bonus");
+  q(`insert into outbound_messages(line_user_id,kind,related_job_id,payload_json,status) values('${u.uid}','scan_result','${jid}','{"skipQuotaDecrement":true}','sent')`);
+  assert.equal(await releaseBonusReservation(jid), "noop");
+  const sw = await supabase.rpc("sweep_bonus_releases", { p_limit: 50 }); assert.equal(Number(sw.data), 0);
+  assert.equal(bonusOf(u.uid), 1);
+  q(`update scan_jobs set status='queued' where id='${jid}'`); // retry legacy → ไม่จอง ไม่หัก
+  assert.equal(bonusOf(u.uid), 1);
+});
+
+await t("8 ช่วง rollout/rollback: โค้ดเก่า (หักที่ webhook แล้ว INSERT 'bonus') บน 064 → หักครั้งเดียว ไม่ซ้ำ", async () => {
+  const u = await newUser({ bonus: 1 });
+  // จำลองโค้ดเก่า 0af41f5: CAS หักที่ webhook ก่อน แล้วสร้างงาน kind='bonus'
+  assert.equal(q(`update app_users set bonus_scans=0 where line_user_id='${u.uid}' and bonus_scans=1 returning bonus_scans`), "0");
+  q(`insert into scan_jobs(line_user_id,app_user_id,upload_id,access_source,status,free_access_kind) values('${u.uid}','${u.id}',gen_random_uuid(),'free','queued','bonus')`);
+  assert.equal(bonusOf(u.uid), 0, "trigger ต้องไม่หักซ้ำจนติดลบ/ปฏิเสธงาน");
+  // โค้ดเก่า 27fdff4 (turnCache ไม่หัก) → INSERT 'bonus' ยอด 1 → ยัง 1 (บั๊กเดิมคงอยู่ แต่ไม่แย่ลง)
+  const u2 = await newUser({ bonus: 1 });
+  q(`insert into scan_jobs(line_user_id,app_user_id,upload_id,access_source,status,free_access_kind) values('${u2.uid}','${u2.id}',gen_random_uuid(),'free','queued','bonus')`);
+  assert.equal(bonusOf(u2.uid), 1);
+});
+
+await t("9 โค้ดใหม่บน DB ที่มีแค่ 057 (ยังไม่ apply 064, trial OFF): INSERT 'bonus_reserved' ไม่พัง ไม่หัก (บั๊กเดิม ไม่แย่ลง)", async () => {
+  q("CREATE DATABASE only057", "postgres");
+  const q57 = (sql) => q(sql, "only057");
+  q57(readFileSync(new URL("fixtures/scanv2-bonus-schema.sql", import.meta.url), "utf8"));
+  q57(readFileSync(new URL("sql/057_new_customer_trial.sql", root), "utf8"));
+  const id = q57(`insert into app_users(line_user_id,bonus_scans,status) values('Uold057',1,'active') returning id`);
+  q57(`insert into scan_jobs(line_user_id,app_user_id,upload_id,access_source,status,free_access_kind) values('Uold057','${id}',gen_random_uuid(),'free','queued','bonus_reserved')`);
+  assert.equal(q57(`select bonus_scans from app_users where id='${id}'`), "1");
+  assert.equal(q57(`select free_access_kind from scan_jobs where app_user_id='${id}'`), "bonus_reserved");
+  assert.equal(q57(`select new_customer_trial_used('${id}')`), "1", "057 เดิมนับ 'bonus_reserved' เป็น trial usage → ต้อง apply 064 ก่อนเปิด trial");
+});
+
 await t("6 trial ON: กติกาเดิมของ 057 ยังอยู่ (คนเก่าไม่ eligible · คนใหม่ 2 ครั้ง · โบนัสจองเหมือนกัน)", async () => {
   q(`select set_new_customer_trial_policy(true)`);
   try {
@@ -238,7 +282,7 @@ await t("6 trial ON: กติกาเดิมของ 057 ยังอยู
     const ins = () => q(`insert into scan_jobs(line_user_id,app_user_id,upload_id,access_source,status) values('${nu.uid}','${nu.id}',gen_random_uuid(),'free','queued') returning free_access_kind`);
     assert.equal(ins(), "trial"); assert.equal(ins(), "trial");
     assert.throws(ins, /trial_quota_exhausted/);
-    q(`insert into scan_jobs(line_user_id,app_user_id,upload_id,access_source,status,free_access_kind) values('${nu.uid}','${nu.id}',gen_random_uuid(),'free','queued','bonus')`);
+    q(`insert into scan_jobs(line_user_id,app_user_id,upload_id,access_source,status,free_access_kind) values('${nu.uid}','${nu.id}',gen_random_uuid(),'free','queued','bonus_reserved')`);
     assert.equal(bonusOf(nu.uid), 0);
     assert.equal(Number(q(`select new_customer_trial_used('${nu.id}')`)), 2, "bonus/bonus_released ไม่นับเป็น trial");
   } finally { q(`select set_new_customer_trial_policy(false)`); }
