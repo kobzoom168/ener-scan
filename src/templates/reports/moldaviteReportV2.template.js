@@ -1,3 +1,4 @@
+import { ownerVaultCtaHtml } from "./ownerVaultCta.util.js";
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import { buildMoldaviteHtmlV2ViewModel } from "../../moldavite/moldaviteHtmlV2.model.js";
 import {
@@ -396,9 +397,16 @@ export function renderMoldaviteReportV2Html(payload, options = {}) {
   const vm = buildMoldaviteHtmlV2ViewModel(payload);
   const h = vm.hero;
 
-  // teaser ขาย 299 (กบ: คนไม่จ่ายเห็นแล้วต้องจ่าย) — เลขชุดเดียวกับ Daily Pick ใน LIFF
+  // ชิ้นหนุนดวงวันนี้ของเจ้าของ — ข้อมูลเดิม เปิดดูได้โดยไม่ต้องจ่าย (Codex 26 ก.ย.) · (เดิม teaser เบลอ+ขาย 299 — ยกเลิก)
   const pickTeaser = options.dailyPickTeaser ?? null;
-  const liffPayUrl = String(options.liffPayUrl || "https://lin.ee/6YZeFZ1");
+  void options.liffPayUrl; // ไม่มีปุ่มจ่ายเพื่อดูของเดิม
+  const pkTok = String(payload.publicToken || "").trim();
+  const libraryTodayHref = pkTok ? `/r/${encodeURIComponent(pkTok)}/library#today` : "";
+  // guest (ลิงก์แชร์): ให้ทางยืนยันเจ้าของผ่าน LINE (ไม่ใช่หน้าจ่ายเงิน)
+  const ownerVaultCta =
+    options.viewerRole === "guest" && options.ownerVerifyUrl
+      ? ownerVaultCtaHtml({ ownerVerifyUrl: options.ownerVerifyUrl, laneWordTh: "คลัง", cssPrefix: "pk-ovc" })
+      : "";
   const pickTeaserHtml = pickTeaser
     ? `
     <section class="mv2-card pk-tease-card" aria-label="ชิ้นที่หนุนดวงวันนี้">
@@ -406,7 +414,7 @@ export function renderMoldaviteReportV2Html(payload, options = {}) {
       <div class="pk-tease-row">
         ${
           pickTeaser.img
-            ? `<img class="pk-tease-img" src="${escapeHtml(pickTeaser.img)}" alt="" loading="lazy" onerror="this.remove()"/>`
+            ? `<img class="pk-tease-img pk-tease-img--open" src="${escapeHtml(pickTeaser.img)}" alt="" loading="lazy" onerror="this.remove()"/>`
             : `<div class="pk-tease-img pk-tease-img--empty" aria-hidden="true"></div>`
         }
         <div class="pk-tease-main">
@@ -414,13 +422,13 @@ export function renderMoldaviteReportV2Html(payload, options = {}) {
           <p class="pk-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(pickTeaser.total))} ชิ้นกับดาวประจำวันแล้ว ลูกค้าอาจารย์เห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
         </div>
       </div>
-      <a class="pk-tease-cta" href="${escapeHtml(liffPayUrl)}">เปิดดูชิ้นที่หนุนดวงวันนี้</a>
+      <a class="pk-tease-cta" href="${escapeHtml(libraryTodayHref)}">ดูอันดับหนุนดวงวันนี้</a>
     </section>`
     : "";
   const stickyCtaHtml = `
   <nav class="pk-stickycta" aria-label="เริ่มใช้ Ener">
     <a class="pk-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่านพลัง</a>
-    ${pickTeaser ? `<a class="pk-cta-member" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>` : ""}
+    ${options.viewerRole === "guest" && options.ownerVerifyUrl ? `<a class="pk-cta-member" href="${escapeHtml(options.ownerVerifyUrl)}">คลังของฉัน</a>` : options.viewerRole !== "guest" && libraryTodayHref ? `<a class="pk-cta-member" href="${escapeHtml(libraryTodayHref)}">คลังของฉัน</a>` : ""}
   </nav>`;
   const scannedIso = resolveScannedAtIsoForReportMeta(payload);
   const metaScannedLabel = scannedAtLabelThai(scannedIso);
@@ -1211,7 +1219,7 @@ export function renderMoldaviteReportV2Html(payload, options = {}) {
     .pk-tease-card { border: 1.5px dashed rgba(74, 222, 128, 0.4); }
     .pk-tease-h { margin: 0 0 0.7rem; font-size: 1.05rem; }
     .pk-tease-row { display: flex; gap: 12px; align-items: center; }
-    .pk-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: blur(9px) saturate(0.75); background: rgba(74, 222, 128, 0.1); }
+    .pk-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: none; background: rgba(74, 222, 128, 0.1); }
     .pk-tease-img--empty { filter: none; }
     .pk-tease-main { min-width: 0; flex: 1; }
     .pk-tease-line { margin: 0; font-weight: 800; font-size: 0.98rem; }
@@ -1273,7 +1281,7 @@ export function renderMoldaviteReportV2Html(payload, options = {}) {
       <ul class="mv2-owner-traits">${usageHtml}</ul>
     </section>
 
-    ${pickTeaserHtml}
+    ${pickTeaserHtml}${ownerVaultCta}
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์และบันทึก</h2>
       <p class="mv2-share-note">แชร์ลิงก์รายงานนี้ หรือเพิ่มเพื่อน LINE OA เพื่อกลับมาดูได้อีกครั้ง</p>

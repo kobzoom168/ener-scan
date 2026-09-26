@@ -25,10 +25,12 @@ const { ownHistoryViewFlags, canViewOwnHistory } =
 test("กติกาถาวร: เจ้าของเปิดดูของเดิมได้เสมอ และไม่ผูกกับสวิตช์ trial", () => {
   assert.equal(canViewOwnHistory(), true);
   // แบบ A: ธงเปิดเต็มต่อเมื่อพิสูจน์ว่าเป็นเจ้าของแล้วเท่านั้น
-  assert.deepEqual(ownHistoryViewFlags(true), { accessFull: true, memberAccess: true });
-  assert.deepEqual(ownHistoryViewFlags(false), { accessFull: false, memberAccess: false });
-  assert.deepEqual(ownHistoryViewFlags(), { accessFull: false, memberAccess: false },
+  // Codex 26 ก.ย.: แยก owner authorization ออกจาก paid membership — ไม่มี memberAccess อีก
+  assert.deepEqual(ownHistoryViewFlags(true), { accessFull: true, viewerRole: "owner" });
+  assert.deepEqual(ownHistoryViewFlags(false), { accessFull: false, viewerRole: "guest" });
+  assert.deepEqual(ownHistoryViewFlags(), { accessFull: false, viewerRole: "guest" },
     "ไม่ระบุ = ถือว่าไม่ใช่เจ้าของ (ปลอดภัยไว้ก่อน)");
+  assert.ok(!("memberAccess" in ownHistoryViewFlags(false)), "\"ยืนยันเจ้าของไม่ได้\" ต้องไม่ถูกแปลว่า \"ต้องซื้อแพ็ก\"");
   // ตรวจเฉพาะ "โค้ด" (ตัดคอมเมนต์อธิบายที่มา) — ห้ามผูกกับนโยบายลูกค้าใหม่/สถานะการจ่ายเงิน
   const src = read("src/services/reports/ownHistoryAccess.util.js");
   const code = src.replace(/\/\*[\s\S]*?\*\//g, "").split("\n")
@@ -62,24 +64,22 @@ test("ไม่มีแพ็ก/แพ็กหมดอายุ ก็ยั
     byProtection: items, byFit: items, bySpecialty: items,
     byFortuneAnchor: items, axisHighlights: {},
   };
-  const { accessFull, memberAccess } = ownHistoryViewFlags(true);
+  const { accessFull } = ownHistoryViewFlags(true);
   const html = renderAmuletLibraryRankingHtml({
-    pagePublicToken: "tok_history_test", library, pinnedOriginalCount: 0,
-    accessFull, memberAccess, lockedAll: !memberAccess, liffPayUrl: "https://example.invalid",
+    pagePublicToken: "tok_history_test", library, pinnedOriginalCount: 0, accessFull, liffPayUrl: "https://example.invalid",
   });
-  // คลาสเบลออยู่ใน stylesheet เสมอ — ต้องเช็คว่า "ถูกใส่ให้ element" หรือไม่
   const appliedBlur = (html.match(/class="[^"]*alib-row-img--blur[^"]*"/g) || []).length;
   const appliedLocked = (html.match(/class="[^"]*alib-pod--locked[^"]*"/g) || []).length;
   assert.equal(appliedBlur, 0, "ห้ามเบลอรูปของเจ้าของ");
   assert.equal(appliedLocked, 0, "ห้ามล็อกชิ้นของเจ้าของ");
-  assert.doesNotMatch(html, /เปิดสิทธิ์เพื่อดู/, "ห้ามมีปุ่มจ่ายเงินเพื่อดูของเดิม");
-  // และต้องพิสูจน์ว่าเทสต์นี้จับของจริง: ถ้าล็อก ต้องเบลอ
-  const lockedHtml = renderAmuletLibraryRankingHtml({
+  assert.doesNotMatch(html, /เปิดสิทธิ์เพื่อดู|href="https:\/\/example\.invalid"/, "ห้ามมีปุ่มจ่ายเงินเพื่อดูของเดิม (liffPayUrl ต้องไม่ถูกใช้ในหน้าคลัง)");
+  // โหมดล็อกไม่มีอีกแล้ว (Codex 26 ก.ย.): template ไม่รับ lockedAll/memberAccess — ส่งมาก็ต้องไม่เบลอ
+  const stillOpen = renderAmuletLibraryRankingHtml({
     pagePublicToken: "tok_history_test", library, pinnedOriginalCount: 0,
     accessFull: false, memberAccess: false, lockedAll: true, liffPayUrl: "https://example.invalid",
   });
-  assert.ok((lockedHtml.match(/class="[^"]*alib-row-img--blur[^"]*"/g) || []).length > 0,
-    "sanity: โหมดล็อกต้องเบลอจริง ไม่งั้นเทสต์ข้างบนไม่มีความหมาย");
+  assert.equal((stillOpen.match(/class="[^"]*alib-row-img--blur[^"]*"/g) || []).length, 0, "ไม่มีทางเบลอคลังเจ้าของได้อีก");
+  assert.doesNotMatch(stillOpen, /เปิดสิทธิ์เพื่อดู|alib-today-locked/);
   assert.match(html, /ชิ้น 9/, "ต้องเห็นรายการครบ ไม่ใช่เฉพาะชิ้นล่าสุด");
   assert.match(html, /ชิ้น 1/);
 });

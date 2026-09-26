@@ -1545,6 +1545,21 @@ liffRouter.post(
 
 /* ---------------- the LIFF single-page app ---------------- */
 
+/**
+ * ยืนยันเจ้าของจากหน้ารายงาน (Codex 26 ก.ย. 2026): LIFF ยืนยัน LINE idToken แล้วออก cookie เจ้าของ
+ * (ตัวเดียวกับที่ /myscans/:token ออก) → หน้า /r/... และ /r/.../library ในเบราว์เซอร์นี้เห็นว่าเป็นเจ้าของ
+ * ห้ามเชื่อ uid จาก query/body — uid มาจาก idToken ที่ verify แล้วเท่านั้น · ไม่แตะสิทธิ์/แพ็ก
+ */
+liffRouter.post("/api/liff/owner-session", async (req, res) => {
+  const userId = await requireLiffUser(req, res);
+  if (!userId) return;
+  const { issueOwnerCookie } = await import("../services/reports/ownerProof.util.js");
+  issueOwnerCookie(res, userId);
+  console.log(JSON.stringify({ event: "OWNER_SESSION_ISSUED", uidPrefix: String(userId).slice(0, 8), source: "liff" }));
+  res.set("Cache-Control", "no-store");
+  res.json({ ok: true });
+});
+
 liffRouter.get("/liff", (req, res) => {
   const liffId = String(process.env.LIFF_ID || "").trim();
   res.set("Content-Type", "text/html; charset=utf-8");
@@ -3263,6 +3278,16 @@ function buildLiffHtml(liffId) {
           if (qs.get("view") === "pay" || st.indexOf("view=pay") !== -1) {
             var paySrc = qs.get("src") || (st.indexOf("src=richmenu") !== -1 ? "richmenu" : "");
             openPay(false, paySrc);
+          }
+          /* ยืนยันเจ้าของจากหน้ารายงาน (view=owner&return=/r/...): ออก cookie เจ้าของแล้วกลับไปหน้านั้น
+             return ต้องเป็น path ในโดเมนนี้เท่านั้น (/r/... หรือ /myscans/...) */
+          if (qs.get("view") === "owner" || st.indexOf("view=owner") !== -1) {
+            var ret = qs.get("return") || "";
+            if (!ret && st) { try { ret = new URLSearchParams(st.replace(/^\?/, "")).get("return") || ""; } catch(e){} }
+            try { ret = decodeURIComponent(ret); } catch(e){}
+            if (!/^\/(r|myscans)\/[A-Za-z0-9._%-]+(\/[a-z-]+)?$/.test(ret)) ret = "";
+            api("/api/liff/owner-session", { method: "POST" }).then(function(r){ return r.ok; }).catch(function(){ return false; })
+              .then(function(ok){ if (ok && ret) { location.replace(ret); } });
           }
         }
         else { renderStep(); show("v-ob"); }

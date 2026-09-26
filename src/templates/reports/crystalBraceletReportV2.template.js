@@ -1,6 +1,7 @@
 /**
  * Crystal bracelet lane HTML — standalone renderer (does not import Moldavite/amulet templates).
  */
+import { ownerVaultCtaHtml } from "./ownerVaultCta.util.js";
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
 import {
   resolveScannedAtIsoForReportMeta,
@@ -572,13 +573,13 @@ function buildCrystalBraceletLibraryHtml(library, currentToken, opts = {}) {
   if (!library || library.totalCount <= 0) return "";
   const top = library.topOverall;
   void currentToken;
-  // กบ 18 ก.ค. 2026: ไม่เคยจ่าย = เห็นคลังกำไลแบบเบลอ+เซ็นเซอร์ + ปุ่มเปิดสิทธิ์ (เหมือนเลนพระ)
-  const censorAll = opts.censorAll === true;
-  const liffPayUrl = String(opts.liffPayUrl || "https://lin.ee/6YZeFZ1");
+  // Codex 26 ก.ย. 2026: ฟังก์ชันนี้ถูกเรียกเฉพาะเจ้าของที่พิสูจน์แล้ว → เปิดครบ ไม่เบลอ ไม่มีปุ่มซื้อเพื่อดู
+  // (เดิม กบ 18 ก.ค.: ไม่เคยจ่าย = เบลอ+เซ็นเซอร์ — ยกเลิกแล้ว)
+  void opts;
 
   // Spotlight (อันดับ 1 โดยรวม) — like the amulet library's top card.
   const spotThumb = top?.thumbUrl
-    ? `<div class="cb2-lib-spot-img"><img class="${censorAll ? "cb2-lib-blur" : ""}" src="${escapeHtml(top.thumbUrl)}" alt="" width="76" height="76" loading="lazy" decoding="async"/></div>`
+    ? `<div class="cb2-lib-spot-img"><img src="${escapeHtml(top.thumbUrl)}" alt="" width="76" height="76" loading="lazy" decoding="async"/></div>`
     : `<div class="cb2-lib-spot-img cb2-lib-spot-img--empty" aria-hidden="true"></div>`;
   const spotHtml = top
     ? `<div class="cb2-lib-spot">
@@ -600,11 +601,9 @@ function buildCrystalBraceletLibraryHtml(library, currentToken, opts = {}) {
       const it = h.item;
       const href = it?.publicToken ? `/r/${encodeURIComponent(it.publicToken)}` : "";
       const img = it?.thumbUrl
-        ? `<div class="cb2-lib-ax-img"><img class="${censorAll ? "cb2-lib-blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
+        ? `<div class="cb2-lib-ax-img"><img src="${escapeHtml(it.thumbUrl)}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
         : `<div class="cb2-lib-ax-img cb2-lib-ax-img--empty" aria-hidden="true"></div>`;
-      const cta = censorAll
-        ? `<a class="cb2-lib-ax-btn" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>`
-        : href
+      const cta = href
           ? `<a class="cb2-lib-ax-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>`
           : `<span class="cb2-lib-ax-btn cb2-lib-ax-btn--off" aria-disabled="true">ดูรายละเอียด</span>`;
       return `<article class="cb2-lib-ax-slide" data-cb2-slide-i="${idx}">
@@ -666,15 +665,11 @@ function buildCrystalBraceletLibraryHtml(library, currentToken, opts = {}) {
         .cb2-lib-ax-dot{width:.44rem;height:.44rem;padding:0;border:none;border-radius:50%;background:rgba(184,135,27,.35);cursor:pointer;transition:transform .12s,background .12s}
         .cb2-lib-ax-dot.on{background:var(--cb2-accent);transform:scale(1.2)}
         .cb2-lib-nudge{margin:.55rem 0 0;font-size:.8rem;opacity:.75}
-        .cb2-lib-blur{filter:blur(9px);transform:scale(1.06)}
-        .cb2-lib-unlock{display:block;text-align:center;margin:.6rem 0 0;padding:.55rem;font-size:.84rem;font-weight:800;border-radius:999px;text-decoration:none;color:#04121d;background:linear-gradient(165deg,#8f6710,#b8871b 55%,#8f6710)}
       </style>
       <h2 id="cb2-lib-h">คลังกำไลของคุณ</h2>
       <p class="cb2-lib-count">คุณสแกนกำไลไว้แล้ว ${escapeHtml(String(library.totalCount))} เส้น (${escapeHtml(String(library.scanCount))} ครั้ง) 🔮</p>
-      ${censorAll ? `<p class="cb2-lib-count" role="note">อาจารย์จัดอันดับกำไลทุกเส้นของคุณไว้แล้ว — เปิดสิทธิ์ครั้งแรกดูภาพชัดได้ตลอด</p>` : ""}
       ${spotHtml}
       ${carousel}
-      ${censorAll ? `<a class="cb2-lib-unlock" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดูคลังชัด ๆ</a>` : ""}
       ${nudge}
     </section>
     <script>
@@ -714,9 +709,11 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     throw new Error("CRYSTAL_BRACELET_HTML_MISSING_PAYLOAD");
   }
 
-  // teaser ขาย 299 (กบ: คนไม่จ่ายเห็นแล้วต้องจ่าย) — เลขชุดเดียวกับ Daily Pick ใน LIFF
+  // ชิ้นหนุนดวงวันนี้ของเจ้าของ — ข้อมูลเดิม เปิดดูได้โดยไม่ต้องจ่าย (Codex 26 ก.ย.) · (เดิม teaser เบลอ+ขาย 299 — ยกเลิก)
   const pickTeaser = options.dailyPickTeaser ?? null;
-  const liffPayUrl = String(options.liffPayUrl || "https://lin.ee/6YZeFZ1");
+  void options.liffPayUrl; // ไม่มีปุ่มจ่ายเพื่อดูของเดิม
+  const pkTok = String(payload.publicToken || "").trim();
+  const libraryTodayHref = pkTok ? `/r/${encodeURIComponent(pkTok)}/library#today` : "";
   const pickTeaserHtml = pickTeaser
     ? `
     <section class="cb2-card pk-tease-card" aria-label="ชิ้นที่หนุนดวงวันนี้">
@@ -724,7 +721,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
       <div class="pk-tease-row">
         ${
           pickTeaser.img
-            ? `<img class="pk-tease-img" src="${escapeHtml(pickTeaser.img)}" alt="" loading="lazy" onerror="this.remove()"/>`
+            ? `<img class="pk-tease-img pk-tease-img--open" src="${escapeHtml(pickTeaser.img)}" alt="" loading="lazy" onerror="this.remove()"/>`
             : `<div class="pk-tease-img pk-tease-img--empty" aria-hidden="true"></div>`
         }
         <div class="pk-tease-main">
@@ -732,13 +729,13 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
           <p class="pk-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(pickTeaser.total))} ชิ้นกับดาวประจำวันแล้ว ลูกค้าอาจารย์เห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
         </div>
       </div>
-      <a class="pk-tease-cta" href="${escapeHtml(liffPayUrl)}">เปิดดูชิ้นที่หนุนดวงวันนี้</a>
+      <a class="pk-tease-cta" href="${escapeHtml(libraryTodayHref)}">ดูอันดับหนุนดวงวันนี้</a>
     </section>`
     : "";
   const stickyCtaHtml = `
   <nav class="pk-stickycta" aria-label="เริ่มใช้ Ener">
     <a class="pk-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่านพลัง</a>
-    ${pickTeaser ? `<a class="pk-cta-member" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>` : ""}
+    ${options.viewerRole === "guest" && options.ownerVerifyUrl ? `<a class="pk-cta-member" href="${escapeHtml(options.ownerVerifyUrl)}">คลังของฉัน</a>` : options.viewerRole !== "guest" && libraryTodayHref ? `<a class="pk-cta-member" href="${escapeHtml(libraryTodayHref)}">คลังของฉัน</a>` : ""}
   </nav>`;
 
   const fs = cb.flexSurface;
@@ -865,11 +862,13 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
   const braceletLibraryHtml = buildCrystalBraceletLibraryHtml(
     options.crystalBraceletLibrary || null,
     String(payload.publicToken || "").trim(),
-    {
-      censorAll: options.memberAccess === false,
-      liffPayUrl: options.liffPayUrl || "",
-    },
+    {},
   );
+  // guest (ลิงก์แชร์): ไม่มีข้อมูลคลังในหน้า — ให้ทางยืนยันเจ้าของผ่าน LINE (ไม่ใช่หน้าจ่ายเงิน)
+  const ownerVaultCta =
+    options.viewerRole === "guest" && options.ownerVerifyUrl
+      ? ownerVaultCtaHtml({ ownerVerifyUrl: options.ownerVerifyUrl, laneWordTh: "คลังกำไล", cssPrefix: "cb2-ovc" })
+      : "";
 
   const canonicalLinkTag = canonicalUrl
     ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
@@ -1573,7 +1572,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     .pk-tease-card { border: 1.5px dashed rgba(184,135,27, 0.55); }
     .pk-tease-h { margin: 0 0 0.7rem; font-size: 1.05rem; }
     .pk-tease-row { display: flex; gap: 12px; align-items: center; }
-    .pk-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: blur(9px) saturate(0.75); background: rgba(184,135,27, 0.12); }
+    .pk-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: none; background: rgba(184,135,27, 0.12); }
     .pk-tease-img--empty { filter: none; }
     .pk-tease-main { min-width: 0; flex: 1; }
     .pk-tease-line { margin: 0; font-weight: 800; font-size: 0.98rem; }
@@ -1628,7 +1627,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
     ${energyTimingHtml}
 
     ${pickTeaserHtml}
-    ${braceletLibraryHtml}
+    ${braceletLibraryHtml}${ownerVaultCta}
 
     <section class="cb2-card cb2-share-card" aria-labelledby="cb2-share-h">
       <h2 id="cb2-share-h">แชร์และบันทึก</h2>

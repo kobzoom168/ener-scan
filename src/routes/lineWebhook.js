@@ -359,43 +359,10 @@ import {
  * จ่ายใน 3 วัน = ตอบตามปกติทุกเส้นเดิม · เช็คสิทธิ์พลาด = redirect (กันรั่ว ไม่กันเงิน)
  */
 async function maybeHandleRankingQueryGate({ client, userId, replyToken, text }) {
-  const { isRankingQuery, buildRankingRedirectText } = await import(
-    "../services/lineWebhook/rankingQueryGate.util.js"
-  );
-  if (!isRankingQuery(text)) return false;
-  try {
-    const { hasRecentPaidAccess } = await import("../services/everPaid.service.js");
-    if (await hasRecentPaidAccess(userId)) return false; // จ่ายใน 3 วัน = ตอบเต็มตามเดิม
-  } catch { /* เช็คพลาด = redirect (fail-closed ฝั่งกันรั่ว) */ }
-  let latestReportUrl = "";
-  try {
-    const { data: sr } = await supabase
-      .from("scan_results_v2")
-      .select("html_public_token")
-      .eq("line_user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (sr?.html_public_token) {
-      const { buildPublicReportUrl } = await import("../services/reports/reportLink.service.js");
-      latestReportUrl = buildPublicReportUrl(String(sr.html_public_token));
-    }
-  } catch { /* ไม่มีลิงก์ก็ชี้ทางด้วยข้อความ */ }
-  if (!latestReportUrl) return false; // ยังไม่เคยมีรายงาน = ไม่ใช่เคสนี้ ปล่อย flow ปกติ
-  console.log(
-    JSON.stringify({ event: "RANKING_QUERY_REDIRECTED_UNPAID", uidPrefix: String(userId).slice(0, 8) }),
-  );
-  await sendNonScanReply({
-    client,
-    userId,
-    replyToken,
-    replyType: "ranking_query_redirect",
-    semanticKey: "ranking_query_redirect",
-    text: buildRankingRedirectText(latestReportUrl),
-    alternateTexts: [],
-    speakerRoleOverride: "admin",
-  });
-  return true;
+  // Codex 26 ก.ย. 2026: เจ้าของดูอันดับ/คลังของตัวเองได้ทุกโหมด ไม่ผูกกับการจ่าย → ไม่มีเกตอีก
+  // (เดิม กบ 18 ส.ค.: ไม่จ่ายใน 3 วัน = redirect ไปรายงานที่เซ็นเซอร์ — ยกเลิก) ปล่อยไหลไป flow ปกติ
+  void client; void userId; void replyToken; void text;
+  return false;
 }
 
 async function maybeHandleAxisTopPieceQuery({ client, userId, replyToken, text }) {
@@ -436,18 +403,15 @@ async function maybeHandleAxisTopPieceQuery({ client, userId, replyToken, text }
       });
       return true;
     }
-    const { hasRecentPaidAccess } = await import("../services/everPaid.service.js");
-    const totalCount = Number(lib.totalCount) || 0;
-    let open = totalCount <= 5;
-    if (!open) open = await hasRecentPaidAccess(userId).catch(() => false);
+    // Codex 26 ก.ย. 2026: ชิ้นเด่นในคลังของเจ้าของ = ข้อมูลเดิม เปิดเสมอ (ผู้ถามคือเจ้าของบัญชี LINE นี้)
+    // (เดิม: >5 ชิ้น + ไม่จ่ายใน 3 วัน = teaser — ยกเลิก)
+    const open = true;
     const { buildAxisTopPieceFlex } = await import("../services/flex/dailyPickPush.flex.js");
     const { buildPublicReportUrl } = await import("../services/reports/reportLink.service.js");
     const reportUrl = item.publicToken ? buildPublicReportUrl(String(item.publicToken)) : "";
-    const altText = open
-      ? `ชิ้นเด่นด้าน${axisLabelShort}ของคุณ คะแนนด้านนี้ ${score} เปิดดู: ${reportUrl}`
-      : `ชิ้นเด่นด้าน${axisLabelShort}ของคุณ คะแนนด้านนี้ ${score} เปิดสิทธิ์เพื่อดูว่าชิ้นไหน`;
+    const altText = `ชิ้นเด่นด้าน${axisLabelShort}ของคุณ คะแนนด้านนี้ ${score} เปิดดู: ${reportUrl}`;
     const flexMessage = buildAxisTopPieceFlex({
-      img: open ? item.thumbUrl || null : null,
+      img: item.thumbUrl || null,
       pieceName: String(item.displayReportId || item.objectLabel || ""),
       axisLabelTh: axisLabelFull,
       axisScore: score,

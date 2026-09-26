@@ -115,3 +115,20 @@ export function isOwnerViewing(req, ownerLineUserId) {
   const b = Buffer.from(owner, "utf8");
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+
+/**
+ * ลิงก์ให้เจ้าของ "ยืนยันผ่าน LINE" จากหน้ารายงาน (Codex 26 ก.ย. 2026)
+ * เปิด LIFF (LINE ยืนยันตัวตน) → POST /api/liff/owner-session ออก cookie เจ้าของ → กลับมาที่ returnPath
+ * ห้ามเชื่อ uid จาก query · ห้ามถือ public report token เป็น owner proof — ตัวยืนยันคือ LINE idToken เท่านั้น
+ * @param {string} returnPath path ในโดเมนนี้ เช่น /r/<token>/library
+ */
+export function ownerVerifyUrl(returnPath) {
+  const id = String(process.env.LIFF_ID || "").trim();
+  const ret = String(returnPath || "/").trim();
+  const safeRet = /^\/(r|myscans)\/[A-Za-z0-9._%-]+(\/[a-z-]+)?$/.test(ret) ? ret : "/";
+  if (!id) return "https://lin.ee/6YZeFZ1";
+  return `https://liff.line.me/${id}?view=owner&return=${encodeURIComponent(safeRet)}`;
+}
+export function isSafeOwnerReturnPath(p) {
+  return /^\/(r|myscans)\/[A-Za-z0-9._%-]+(\/[a-z-]+)?$/.test(String(p || ""));
+}

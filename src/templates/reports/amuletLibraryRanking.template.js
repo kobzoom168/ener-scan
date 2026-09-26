@@ -75,29 +75,6 @@ function rankCardHtml(it, rank, opts = {}) {
 }
 
 /**
- * แถวเซ็นเซอร์ (กบ 15 ก.ค.: ฟรีไม่เห็นอันดับ 1-2 — จ่ายถึงเห็นชิ้นแรงสุดของตัวเอง)
- * @param {SacredAmuletLibraryItem} it
- * @param {number} rank
- * @param {string} liffPayUrl
- */
-function lockedRowHtml(it, rank, liffPayUrl) {
-  const img = it.thumbUrl
-    ? `<img class="alib-row-img alib-row-img--blur" src="${escapeHtml(it.thumbUrl)}" alt="" width="46" height="46" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
-    : `<span class="alib-row-img alib-row-img--empty" aria-hidden="true"></span>`;
-  const inner = `
-    <span class="alib-row-rank">${rank}</span>
-    ${img}
-    <span class="alib-row-main">
-      <span class="alib-row-id">ชิ้นอันดับ ${rank} ของคุณ</span>
-      <span class="alib-row-peak">เปิดสิทธิ์เพื่อดูว่าชิ้นไหนแรงสุด</span>
-    </span>
-    <span class="alib-row-lockpill">ล็อก</span>`;
-  return liffPayUrl
-    ? `<a class="alib-row alib-row--locked" data-rank="${rank}" href="${escapeHtml(liffPayUrl)}">${inner}</a>`
-    : `<span class="alib-row alib-row--locked" data-rank="${rank}">${inner}</span>`;
-}
-
-/**
  * @param {SacredAmuletLibraryItem[]} list
  * @param {string} [emptyText]
  * @param {{ censorTop?: boolean, liffPayUrl?: string }} [opts]
@@ -106,14 +83,8 @@ function panelHtml(list, emptyText = "ยังไม่มีข้อมูล
   if (!list.length) {
     return `<p class="alib-empty">${escapeHtml(emptyText)}</p>`;
   }
-  const censorTop = opts.censorTop === true;
-  const censorAll = opts.censorAll === true;
-  const liffPayUrl = String(opts.liffPayUrl || "");
-  const rows = list.map((it, i) =>
-    censorAll || (censorTop && i < 2)
-      ? lockedRowHtml(it, i + 1, liffPayUrl)
-      : rankCardHtml(it, i + 1, opts),
-  );
+  // เจ้าของเท่านั้นที่มาถึงหน้านี้ (owner gate ใน controller) → ทุกแถวเปิดชัด (Codex 26 ก.ย.)
+  const rows = list.map((it, i) => rankCardHtml(it, i + 1, opts));
   return `<div class="alib-rows">${rows.join("")}</div>`;
 }
 
@@ -125,31 +96,26 @@ function panelHtml(list, emptyText = "ยังไม่มีข้อมูล
  */
 function podiumCardHtml(it, rank, pagePublicToken, opts = {}) {
   const first = rank === 1;
-  const censored = opts.censorAll === true || (opts.censorTop === true && rank <= 2);
-  const liffPayUrl = String(opts.liffPayUrl || "");
+  void opts;
   const href = `/r/${encodeURIComponent(it.publicToken)}`;
   const img = it.thumbUrl
-    ? `<img class="alib-pod-img${censored ? " alib-row-img--blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
+    ? `<img class="alib-pod-img" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
     : `<span class="alib-pod-img alib-pod-img--empty" aria-hidden="true"></span>`;
   const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
   const fitBits = [];
   if (it.compatPercent != null) fitBits.push(`เข้ากับคุณ ${it.compatPercent}%`);
   if (first && when) fitBits.push(`สแกนเมื่อ ${when}`);
-  const pinForm = first && !censored ? spotlightPinFormHtml(pagePublicToken, it) : "";
-  const idLine = censored
-    ? `<p class="alib-pod-id">เปิดสิทธิ์ครั้งแรกแล้วดูได้ตลอด</p>`
-    : `<p class="alib-pod-id">${escapeHtml(it.displayReportId)}</p>`;
-  const action = censored
-    ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl || href)}">เปิดสิทธิ์เพื่อดู</a>`
-    : `<a class="alib-spot-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>`;
+  const pinForm = first ? spotlightPinFormHtml(pagePublicToken, it) : "";
+  const idLine = `<p class="alib-pod-id">${escapeHtml(it.displayReportId)}</p>`;
+  const action = `<a class="alib-spot-btn" href="${escapeHtml(href)}">ดูรายงานนี้</a>`;
   return `
-  <article class="alib-pod${first ? " alib-pod--first" : ""}${censored ? " alib-pod--locked" : ""}" data-rank="${rank}">
+  <article class="alib-pod${first ? " alib-pod--first" : ""}" data-rank="${rank}">
     <span class="alib-pod-chip">${first ? "อันดับ 1 ของคลังคุณ" : `อันดับ ${rank}`}</span>
     ${img}
     ${idLine}
     <p class="alib-pod-total">${escapeHtml(String(it.powerTotal))}<small>พลังรวม</small></p>
     <p class="alib-pod-peak">${escapeHtml(it.peakPowerLabelTh)}</p>
-    ${!censored && fitBits.length ? `<p class="alib-pod-fit">${escapeHtml(fitBits.join(" · "))}</p>` : ""}
+    ${fitBits.length ? `<p class="alib-pod-fit">${escapeHtml(fitBits.join(" · "))}</p>` : ""}
     ${pinForm}
     ${action}
   </article>`;
@@ -225,17 +191,12 @@ function spotlightCardHtml(it, pagePublicToken) {
  */
 function axisHighlightCardHtml(h, opts = {}) {
   const { item, labelTh, axisScore } = h;
-  const censored = opts.censorAll === true;
-  const liffPayUrl = String(opts.liffPayUrl || "");
-  const href = censored
-    ? escapeHtml(liffPayUrl || `/r/${encodeURIComponent(item.publicToken)}`)
-    : `/r/${encodeURIComponent(item.publicToken)}`;
+  void opts;
+  const href = `/r/${encodeURIComponent(item.publicToken)}`;
   const img = item.thumbUrl
-    ? `<div class="alib-axis-img"><img class="${censored ? "alib-row-img--blur" : ""}" src="${escapeHtml(item.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/></div>`
+    ? `<div class="alib-axis-img"><img src="${escapeHtml(item.thumbUrl)}" alt="" width="88" height="88" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/></div>`
     : `<div class="alib-axis-img alib-axis-img--empty" aria-hidden="true"></div>`;
-  const nameLine = censored
-    ? `<p class="alib-axis-name">เปิดสิทธิ์เพื่อดู</p>`
-    : `<p class="alib-axis-name">${escapeHtml(item.displayReportId)}</p>`;
+  const nameLine = `<p class="alib-axis-name">${escapeHtml(item.displayReportId)}</p>`;
   return `
   <article class="alib-axis-card">
     <p class="alib-axis-dim">${escapeHtml(labelTh)}</p>
@@ -250,7 +211,7 @@ function axisHighlightCardHtml(h, opts = {}) {
     <div class="alib-axis-score-block" aria-label="คะแนนด้านนี้">
       <span class="alib-axis-score-num">${escapeHtml(String(axisScore))}</span><span class="alib-axis-score-suf">คะแนน</span>
     </div>
-    <a class="alib-axis-btn" href="${href}">${censored ? "เปิดสิทธิ์เพื่อดู" : "ดูรายละเอียด"}</a>
+    <a class="alib-axis-btn" href="${href}">ดูรายละเอียด</a>
   </article>`;
 }
 
@@ -270,18 +231,13 @@ export function renderAmuletLibraryRankingHtml({
   pinFlash = null,
   freeTierPinLimit = 10,
   accessFull = true,
-  memberAccess = true,
-  freeVisibleCount = 7,
   dailyPick = null,
   liffPayUrl = "",
-  lockedAll = false,
 } = {}) {
   const backHref = `/r/${encodeURIComponent(pagePublicToken)}`;
-  // กบ 17 ก.ค. 2026: ไม่เคยจ่าย = เห็นภาพคลังทั้งหน้าแต่เบลอ+เซ็นเซอร์ทุกชิ้น (censorAll)
-  // ทุกชิ้นมีปุ่มเปิดสิทธิ์ · เคยจ่ายสักครั้ง = เห็นชัดครบทุกแท็บทุกอันดับ
-  void freeVisibleCount;
-  const censorAll = lockedAll === true;
-  const panelOpts = { censorTop: !memberAccess, censorAll, liffPayUrl };
+  // Codex 26 ก.ย. 2026: หน้านี้ผ่าน owner gate มาแล้ว → เจ้าของเห็นชัดครบทุกแท็บทุกอันดับ ไม่ผูกกับแพ็ก
+  void accessFull; void liffPayUrl;
+  const panelOpts = {};
   const n = library.totalCount;
   const dedupeExplainLine =
     Array.isArray(library.items) && library.items.length < n
@@ -322,7 +278,7 @@ export function renderAmuletLibraryRankingHtml({
     <div class="alib-axis-track" role="list">${axisHighlights
       .map(
         (h) =>
-          `<div class="alib-axis-slide" role="listitem">${axisHighlightCardHtml(h, { censorAll, liffPayUrl })}</div>`,
+          `<div class="alib-axis-slide" role="listitem">${axisHighlightCardHtml(h, {})}</div>`,
       )
       .join("")}</div>
     <p class="alib-axis-scroll-hint">เลื่อนดูพลังด้านอื่น ๆ</p>
@@ -347,17 +303,10 @@ export function renderAmuletLibraryRankingHtml({
             (todayOrder.get(String(b.publicToken)) ?? 9999),
         )
       : [];
-  const todayLockedPanel = `
-    <div class="alib-today-locked">
-      <p class="alib-today-locked-line">อาจารย์เทียบทุกชิ้นในคลังกับ${escapeHtml(String(dailyPick?.dayStar || "ดาวประจำวัน"))}แล้ว</p>
-      <p class="alib-today-locked-sub">เปิดค่าครูเพื่อดูว่าวันนี้ควรพกชิ้นไหน อาจารย์เรียงให้ใหม่ทุกเช้า</p>
-      ${liffPayUrl ? `<a class="alib-spot-btn" href="${escapeHtml(liffPayUrl)}">เปิดดูอันดับวันนี้</a>` : ""}
-    </div>`;
-
   const tabs = [
     { id: "overall", label: "แรงสุดโดยรวม", list: library.byOverall, emptyText: "ยังไม่มีข้อมูลในหมวดนี้" },
     ...(todayList.length
-      ? [{ id: "today", label: "หนุนดวงวันนี้", list: todayList, emptyText: emptyAxisTab, lockedPanel: !accessFull }]
+      ? [{ id: "today", label: "หนุนดวงวันนี้", list: todayList, emptyText: emptyAxisTab }]
       : []),
     { id: "fit", label: "เข้ากับคุณที่สุด", list: library.byFit, emptyText: "ยังไม่มีข้อมูลในหมวดนี้" },
     { id: "protection", label: "คุ้มครองสูงสุด", list: library.byProtection ?? [], emptyText: emptyAxisTab, axisKey: "protection" },
@@ -385,7 +334,7 @@ export function renderAmuletLibraryRankingHtml({
     .map(
       (t, i) =>
         `<div class="alib-panel${i === 0 ? " alib-panel--on" : ""}" data-alib-panel="${escapeHtml(t.id)}" role="tabpanel">${
-          t.lockedPanel ? todayLockedPanel : panelHtml(t.list, t.emptyText, { ...panelOpts, axisKey: t.axisKey || "" })
+          panelHtml(t.list, t.emptyText, { ...panelOpts, axisKey: t.axisKey || "" })
         }</div>`,
     )
     .join("");
@@ -532,16 +481,8 @@ ${amuletSubpageAutoDarkScriptHtml()}
       .alib-podium { max-width: 860px; margin-left: auto; margin-right: auto; }
     }
     /* ── สเต็ป 2 แบบ A: แถวล็อกเบลอ + แท็บหนุนดวงวันนี้ ── */
-    .alib-row--locked { cursor: default; opacity: 0.92; border-style: dashed; }
-    .alib-row-img--blur { filter: blur(7px) saturate(0.7); }
-    .alib-row--locked .alib-row-id { color: var(--alib-muted); }
-    .alib-row-lockpill { flex: 0 0 auto; font-size: 0.68rem; font-weight: 800; color: var(--alib-gold-soft); border: 1px solid var(--alib-chip-border); background: var(--alib-chip-bg); border-radius: 999px; padding: 0.2rem 0.7rem; }
     .alib-row--more { justify-content: center; font-weight: 800; color: var(--alib-gold-soft); border-style: dashed; font-size: 0.85rem; }
     .alib-tab--today { border-color: var(--alib-gold); color: var(--alib-gold-soft); font-weight: 800; }
-    .alib-today-locked { text-align: center; border: 1.5px dashed var(--alib-chip-border); border-radius: 16px; padding: 1.3rem 1rem; background: var(--alib-panel-bg); }
-    .alib-today-locked-line { margin: 0; font-weight: 800; font-size: 0.95rem; }
-    .alib-today-locked-sub { margin: 0.35rem 0 0.8rem; font-size: 0.82rem; color: var(--alib-muted); }
-    .alib-today-locked .alib-spot-btn { display: inline-block; padding: 0.45rem 1.6rem; }
     .alib-axis-section { margin: 0.35rem 0 0.5rem; }
     .alib-axis-h2 {
       margin: 0 0 0.35rem;
@@ -869,14 +810,6 @@ ${amuletSubpageAutoDarkScriptHtml()}
     <a class="alib-back" href="${escapeHtml(backHref)}">← กลับรายงาน</a>
     <h1 class="alib-h1">คลังพลังของคุณ</h1>
     <p class="alib-sub">คุณมีรายการสแกนแล้ว ${escapeHtml(String(n))} รายการ</p>
-    ${
-      censorAll && liffPayUrl
-        ? `<div class="alib-today-locked" role="note">
-      <p class="alib-today-locked-line">อาจารย์จัดอันดับทุกชิ้นของคุณไว้แล้ว — เปิดสิทธิ์ครั้งแรกดูภาพชัดได้ตลอด</p>
-      <a class="alib-spot-btn" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดูคลังชัด ๆ</a>
-    </div>`
-        : ""
-    }
     ${dedupeExplainLine}
     <p class="alib-safety" role="note">อันดับนี้จัดจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
     ${retentionNoticeHtml}

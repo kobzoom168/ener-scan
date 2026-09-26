@@ -24,7 +24,11 @@
  */
 export function ownHistoryViewFlags(ownerProven) {
   const owner = ownerProven === true;
-  return { accessFull: owner, memberAccess: owner };
+  // viewerRole = "owner" | "guest" — คนละแกนกับการซื้อแพ็ก (Codex 26 ก.ย.):
+  //   owner → เปิดครบ ไม่เบลอ ไม่ตัดอันดับ ไม่ชวนซื้อเพื่อดู
+  //   guest → เห็นเฉพาะรายงานที่แชร์ ไม่ดึงคลัง และให้ทาง "ยืนยันผ่าน LINE" ไม่ใช่หน้าจ่ายเงิน
+  // ไม่มี memberAccess อีกต่อไป: "ยืนยันเจ้าของไม่ได้" ต้องไม่ถูกแปลว่า "ต้องซื้อแพ็ก"
+  return { accessFull: owner, viewerRole: owner ? "owner" : "guest" };
 }
 
 /**

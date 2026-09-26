@@ -14,7 +14,6 @@ import { supabase } from "../config/supabase.js";
 import { tryDedupeOnce, getValue, setValueWithTtl } from "../redis/scanV2Redis.js";
 import { insertOutboundMessage } from "../stores/scanV2/outboundMessages.db.js";
 import { OUTBOUND_PRIORITY } from "../stores/scanV2/outboundPriority.js";
-import { hasRecentPaidAccess } from "./everPaid.service.js";
 import { buildPublicReportUrl } from "./reports/reportLink.service.js";
 import { buildDailyPickPushFlex } from "./flex/dailyPickPush.flex.js";
 
@@ -260,8 +259,9 @@ export async function runDailyLuckyPickSweep(now = new Date()) {
         continue;
       }
       // เกตเดียวกับเซ็นเซอร์คลัง: ≤5 เปิดเสมอ (แต่เกณฑ์ MIN_PIECES=5 → เคส 5 พอดีเปิด)
-      let open = pick.piecesCount <= 5;
-      if (!open) open = await hasRecentPaidAccess(uid).catch(() => false);
+      // Codex 26 ก.ย. 2026: ชิ้นหนุนดวงจากคลังเดิมของเจ้าของ = เปิดเสมอ ไม่ผูกกับแพ็ก
+      // (เดิม: >5 ชิ้น + ไม่จ่ายใน 3 วัน = teaser เบลอ — ยกเลิก) · optout/ban/ตารางส่ง/dedupe คงเดิม
+      const open = true;
 
       const text = open ? buildFullText(pick.top) : buildTeaserText(pick.top);
       const reportUrl = pick.top.token ? buildPublicReportUrl(pick.top.token) : "";

@@ -1,4 +1,5 @@
 import { escapeHtml } from "../../utils/reports/reportHtml.util.js";
+import { ownerVaultCtaHtml } from "./ownerVaultCta.util.js";
 import { formatBangkokScanDateThaiBE } from "../../utils/dateTime.util.js";
 import { buildAmuletHtmlV2ViewModel } from "../../amulet/amuletHtmlV2.model.js";
 import {
@@ -353,8 +354,7 @@ function mainGraphBlock(vm) {
  */
 function buildLibraryAxisHighlightsMiniCarouselHtml(highlights, opts = {}) {
   if (!Array.isArray(highlights) || highlights.length === 0) return "";
-  const censored = opts.censorAll === true;
-  const liffPayUrl = String(opts.liffPayUrl || "");
+  void opts; // เจ้าของเท่านั้นที่มาถึงนี่ (Codex 26 ก.ย.: ไม่มีการเซ็นเซอร์คลังของเจ้าของอีก)
   const list = highlights.length > 6 ? highlights.slice(0, 6) : highlights;
   const slides = list
     .map((h, idx) => {
@@ -362,15 +362,11 @@ function buildLibraryAxisHighlightsMiniCarouselHtml(highlights, opts = {}) {
       const tok = String(item?.publicToken || "").trim();
       const href = tok ? `/r/${encodeURIComponent(tok)}` : "";
       const img = item?.thumbUrl
-        ? `<div class="mv2-lib-axis-img"><img class="${censored ? "mv2r-blur" : ""}" src="${escapeHtml(String(item.thumbUrl))}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
+        ? `<div class="mv2-lib-axis-img"><img src="${escapeHtml(String(item.thumbUrl))}" alt="" width="72" height="72" loading="lazy" decoding="async"/></div>`
         : `<div class="mv2-lib-axis-img mv2-lib-axis-img--empty" aria-hidden="true"></div>`;
       const scoreStr = String(Math.round(Number(h.axisScore) || 0));
-      const idLine = censored
-        ? "เปิดสิทธิ์เพื่อดู"
-        : String(item?.displayReportId || "");
-      const cta = censored
-        ? `<a class="mv2-lib-axis-btn" href="${escapeHtml(liffPayUrl || href)}">เปิดสิทธิ์เพื่อดู</a>`
-        : href
+      const idLine = String(item?.displayReportId || "");
+      const cta = href
           ? `<a class="mv2-lib-axis-btn" href="${escapeHtml(href)}">ดูรายละเอียด</a>`
           : `<span class="mv2-lib-axis-btn mv2-lib-axis-btn--disabled" aria-disabled="true">ดูรายละเอียด</span>`;
       return `
@@ -410,28 +406,22 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   if (!library || library.totalCount <= 0) return "";
   const top = library.topOverall;
   if (!top) return "";
-  const accessFull = opts.accessFull !== false;
-  // กบ 17 ก.ค. 2026: เกต "เคยจ่ายเงินสักครั้ง" — ไม่เคยจ่าย = เห็นภาพคลังทั้งหมดแต่เบลอ+
-  // เซ็นเซอร์ทุกชิ้น (ไม่ใช่ซ่อนทั้งหน้า) มีปุ่มเปิดสิทธิ์ทุกชิ้น · เคยจ่าย = เห็นชัดครบ
-  const memberAccess = opts.memberAccess !== false;
-  const censorAll = !memberAccess;
-  const liffPayUrl = String(opts.liffPayUrl || "https://lin.ee/6YZeFZ1");
+  // กบ 23 ก.ย. / Codex 26 ก.ย. 2026: ฟังก์ชันนี้ถูกเรียกเฉพาะเมื่อผู้ชมพิสูจน์แล้วว่าเป็นเจ้าของ
+  // → เปิดครบ ไม่เบลอ ไม่ตัดอันดับ ไม่มีปุ่มซื้อเพื่อดู (guest ไม่ได้ library มาถึงตรงนี้เลย)
+  // (เดิม: กบ 17 ก.ค. เกต "เคยจ่ายเงินสักครั้ง" เบลอ+เซ็นเซอร์ — ยกเลิกแล้ว)
+  void opts;
   const tok = String(pageToken || "").trim();
   const canLinkLibrary = Boolean(tok && tok !== "unknown");
   const libHref = canLinkLibrary ? `/r/${encodeURIComponent(tok)}/library` : "";
   const byOverall = Array.isArray(library.byOverall) ? library.byOverall : [];
 
-  // ── แท่นรางวัลท็อป 3 โชว์บนหน้ารายงานเลย ไม่ต้องกดเข้าไปดู (กบ 15 ก.ค.)
-  //    ไม่เคยจ่าย = เบลอทุกชิ้น (censorAll) / เคยจ่าย = ชัดครบ
+  // ── แท่นรางวัลท็อป 3 โชว์บนหน้ารายงานเลย ไม่ต้องกดเข้าไปดู — เจ้าของเห็นชัดครบ
   const podCard = (it, rank) => {
     const first = rank === 1;
-    const censored = censorAll;
     const img = it.thumbUrl
-      ? `<img class="mv2r-pod-img${censored ? " mv2r-blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
+      ? `<img class="mv2r-pod-img" src="${escapeHtml(it.thumbUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
       : `<span class="mv2r-pod-img mv2r-pod-img--empty" aria-hidden="true"></span>`;
-    const idLine = censored
-      ? `<p class="mv2r-pod-id">เปิดสิทธิ์ครั้งแรกแล้วดูได้ตลอด</p>`
-      : `<p class="mv2r-pod-id">${escapeHtml(it.displayReportId)}</p>`;
+    const idLine = `<p class="mv2r-pod-id">${escapeHtml(it.displayReportId)}</p>`;
     const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
     const fitBits = [];
     if (it.compatPercent != null) fitBits.push(`เข้ากับคุณ ${it.compatPercent}%`);
@@ -440,23 +430,21 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
     const sid = String(it?.scanResultV2Id || "").trim();
     const upId = String(it?.uploadId || "").trim();
     const pinForm =
-      first && !censored && sid && upId && !it?.uploadOriginalDeletedAt && tok && tok !== "unknown"
+      first && sid && upId && !it?.uploadOriginalDeletedAt && tok && tok !== "unknown"
         ? `<form method="post" action="/r/${encodeURIComponent(tok)}/library/pin" class="mv2r-pin-form">
         <input type="hidden" name="scanResultV2Id" value="${escapeHtml(sid)}" />
         <button type="submit" class="mv2r-pin-btn">ปักหมุดรูปนี้</button>
       </form>`
         : "";
-    const action = censored
-      ? `<a class="mv2r-pod-btn mv2r-pod-btn--pay" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>`
-      : `<a class="mv2r-pod-btn" href="/r/${encodeURIComponent(it.publicToken)}">ดูรายงานนี้</a>`;
+    const action = `<a class="mv2r-pod-btn" href="/r/${encodeURIComponent(it.publicToken)}">ดูรายงานนี้</a>`;
     return `
-    <article class="mv2r-pod${first ? " mv2r-pod--first" : ""}${censored ? " mv2r-pod--locked" : ""}" data-rank="${rank}">
+    <article class="mv2r-pod${first ? " mv2r-pod--first" : ""}" data-rank="${rank}">
       <span class="mv2r-pod-chip">${first ? "อันดับ 1 ของคลังคุณ" : `อันดับ ${rank}`}</span>
       ${img}
       ${idLine}
       <p class="mv2r-pod-total">${escapeHtml(String(it.powerTotal))}<small>พลังรวม</small></p>
       <p class="mv2r-pod-peak">${escapeHtml(it.peakPowerLabelTh)}</p>
-      ${!censored && fitBits.length ? `<p class="mv2r-pod-fit">${escapeHtml(fitBits.join(" · "))}</p>` : ""}
+      ${fitBits.length ? `<p class="mv2r-pod-fit">${escapeHtml(fitBits.join(" · "))}</p>` : ""}
       ${pinForm}
       ${action}
     </article>`;
@@ -471,24 +459,12 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
         ].join("")}</div>`
       : "";
 
-  // ── อันดับทั้งหมดต่อท้ายเลย: จ่าย = 10 แถวแรก + ปุ่มดูเพิ่ม / ฟรี = 1-2 เซ็นเซอร์ 3-5 โชว์ + CTA
-  const rowHtml = (it, rank, censored) => {
+  // ── อันดับทั้งหมดต่อท้ายเลย: 10 แถวแรก + ปุ่มดูเพิ่ม (เจ้าของเห็นครบเสมอ)
+  const rowHtml = (it, rank) => {
     const img = it.thumbUrl
-      ? `<img class="mv2r-row-img${censored ? " mv2r-blur" : ""}" src="${escapeHtml(it.thumbUrl)}" alt="" width="44" height="44" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
+      ? `<img class="mv2r-row-img" src="${escapeHtml(it.thumbUrl)}" alt="" width="44" height="44" loading="lazy" decoding="async" onerror="this.onerror=null;this.removeAttribute('src');"/>`
       : `<span class="mv2r-row-img mv2r-row-img--empty" aria-hidden="true"></span>`;
     const when = formatBangkokScanDateThaiBE(it.scannedAtIso);
-    if (censored) {
-      return `
-      <a class="mv2r-row mv2r-row--locked" href="${escapeHtml(liffPayUrl)}">
-        <span class="mv2r-row-rank">${rank}</span>
-        ${img}
-        <span class="mv2r-row-main">
-          <span class="mv2r-row-id">ชิ้นอันดับ ${rank} ของคุณ</span>
-          <span class="mv2r-row-peak">เปิดสิทธิ์เพื่อดูว่าชิ้นไหนแรงสุด</span>
-        </span>
-        <span class="mv2r-row-lockpill">ล็อก</span>
-      </a>`;
-    }
     return `
     <a class="mv2r-row" href="/r/${encodeURIComponent(it.publicToken)}">
       <span class="mv2r-row-rank">${rank}</span>
@@ -505,30 +481,19 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   };
 
   let rowsHtml = "";
-  if (accessFull) {
+  {
     const first10 = byOverall
       .slice(0, 10)
-      .map((it, i) => rowHtml(it, i + 1, false))
+      .map((it, i) => rowHtml(it, i + 1))
       .join("");
-    const rest = byOverall.slice(10).map((it, i) => rowHtml(it, i + 11, false)).join("");
+    const rest = byOverall.slice(10).map((it, i) => rowHtml(it, i + 11)).join("");
     rowsHtml = `
       <div class="mv2r-rows">${first10}</div>
       ${
         rest
           ? `<div class="mv2r-rows mv2r-rows--more" id="mv2r-more" hidden>${rest}</div>
       <button type="button" class="mv2r-more-btn" id="mv2r-more-btn">ดูเพิ่มอีก ${byOverall.length - 10} รายการ ˅</button>
-      <script>(function(){var b=document.getElementById("mv2r-more-btn"),m=document.getElementById("mv2r-more");if(b&&m){b.addEventListener("click",function(){var open=m.hidden;m.hidden=!open;b.textContent=open?"ย่อกลับ ˄":"ดูเพิ่มอีก ${byOverall.length - 10} รายการ ˅";});}})();</script>`
-          : ""
-      }`;
-  } else {
-    // ไม่เคยจ่าย: โชว์ 5 แถวแรก เบลอ+เซ็นเซอร์ทุกแถว (เห็นภาพแต่ยังดูไม่ได้) + CTA
-    const five = byOverall.slice(0, 5).map((it, i) => rowHtml(it, i + 1, true)).join("");
-    const remain = Math.max(0, byOverall.length - 5);
-    rowsHtml = `
-      <div class="mv2r-rows">${five}</div>
-      ${
-        remain > 0
-          ? `<a class="mv2r-row mv2r-row--cta" href="${escapeHtml(liffPayUrl)}">และอีก ${remain} ชิ้นในคลัง · เปิดสิทธิ์เพื่อดูครบทุกอันดับ ›</a>`
+      <script>(function(){var b=document.getElementById("mv2r-more-btn"),m=document.getElementById("mv2r-more");if(b&&m){b.addEventListener("click",function(){var open=m.hidden;m.hidden=!open;b.textContent=open?"ซ่อนรายการ ˄":"ดูเพิ่มอีก ${byOverall.length - 10} รายการ ˅";});}})();</script>`
           : ""
       }`;
   }
@@ -541,8 +506,6 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
     ? `<a class="mv2-lib-btn" href="${escapeHtml(libHref)}">เปิดหน้าคลังแบบเต็ม แยกตามด้านพลัง</a>`
     : "";
   const axisCarouselHtml = buildLibraryAxisHighlightsMiniCarouselHtml(library.axisHighlights, {
-    censorAll,
-    liffPayUrl,
   });
   return `
     <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">
@@ -608,17 +571,19 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   const libraryMiniHtml = buildSacredAmuletLibraryMiniHtml(
     sacredAmuletLibrary,
     publicTokenForLinks,
-    {
-      accessFull: options.accessFull !== false,
-      memberAccess: options.memberAccess !== false,
-      liffPayUrl: options.liffPayUrl || "",
-    },
+    { accessFull: options.accessFull !== false },
   );
+  // guest (ลิงก์แชร์): ไม่มีข้อมูลคลังในหน้า — ให้ทางยืนยันเจ้าของผ่าน LINE (ไม่ใช่หน้าจ่ายเงิน)
+  const ownerVaultCta =
+    options.viewerRole === "guest" && options.ownerVerifyUrl
+      ? ownerVaultCtaHtml({ ownerVerifyUrl: options.ownerVerifyUrl, laneWordTh: "คลัง", cssPrefix: "mv2-ovc" })
+      : "";
 
-  // teaser ขาย 299 (กบ: คนไม่จ่ายเห็นแล้วต้องจ่าย): อันดับ 1 ของคลังวันนี้ รูปเบลอ
-  // ตัวเลขจริงชุดเดียวกับ Daily Pick ใน LIFF — เฉพาะเจ้าของที่ยังไม่เป็นสมาชิก
+  // ชิ้นหนุนดวงวันนี้ของเจ้าของ — ข้อมูลเดิมของเจ้าของ เปิดดูได้โดยไม่ต้องจ่าย (Codex 26 ก.ย.)
+  // ตัวเลขชุดเดียวกับ Daily Pick ใน LIFF · ลิงก์ไปแท็บ "หนุนดวงวันนี้" ในหน้าคลัง · (เดิม teaser เบลอ+ขาย 299 — ยกเลิก)
   const teaser = options.dailyPickTeaser ?? null;
-  const liffPayUrl = String(options.liffPayUrl || "https://lin.ee/6YZeFZ1");
+  void options.liffPayUrl; // ไม่มีปุ่มจ่ายเพื่อดูของเดิมในหน้ารายงานอีก
+  const libraryTodayHref = publicTokenForLinks ? `/r/${encodeURIComponent(publicTokenForLinks)}/library#today` : "";
   const pickTeaserHtml = teaser
     ? `
     <section class="mv2-card mv2-pick-tease" aria-label="ชิ้นที่หนุนดวงวันนี้">
@@ -626,7 +591,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
       <div class="mv2-tease-row">
         ${
           teaser.img
-            ? `<img class="mv2-tease-img" src="${escapeHtml(teaser.img)}" alt="" loading="lazy" onerror="this.remove()"/>`
+            ? `<img class="mv2-tease-img mv2-tease-img--open" src="${escapeHtml(teaser.img)}" alt="" loading="lazy" onerror="this.remove()"/>`
             : `<div class="mv2-tease-img mv2-tease-img--empty" aria-hidden="true"></div>`
         }
         <div class="mv2-tease-main">
@@ -634,13 +599,13 @@ export function renderAmuletReportV2Html(payload, options = {}) {
           <p class="mv2-tease-sub">อาจารย์เทียบทั้ง ${escapeHtml(String(teaser.total))} ชิ้นกับดาวประจำวันแล้ว ลูกค้าอาจารย์เห็นทันทีว่าชิ้นไหน และอาจารย์เลือกให้ใหม่ทุกเช้า</p>
         </div>
       </div>
-      <a class="mv2-share-btn mv2-share-btn--primary mv2-tease-btn" href="${escapeHtml(liffPayUrl)}">เปิดดูชิ้นที่หนุนดวงวันนี้</a>
+      <a class="mv2-share-btn mv2-share-btn--primary mv2-tease-btn" href="${escapeHtml(libraryTodayHref)}">ดูอันดับหนุนดวงวันนี้</a>
     </section>`
     : "";
   const stickyCtaHtml = `
   <nav class="mv2-stickycta" aria-label="เริ่มใช้ Ener">
     <a class="mv2-cta-scan" href="https://lin.ee/6YZeFZ1">ส่งรูปให้อาจารย์อ่านพลัง</a>
-    ${teaser ? `<a class="mv2-cta-member" href="${escapeHtml(liffPayUrl)}">เปิดสิทธิ์เพื่อดู</a>` : ""}
+    ${options.viewerRole === "guest" && options.ownerVerifyUrl ? `<a class="mv2-cta-member" href="${escapeHtml(options.ownerVerifyUrl)}">คลังของฉัน</a>` : options.viewerRole !== "guest" && libraryTodayHref ? `<a class="mv2-cta-member" href="${escapeHtml(libraryTodayHref)}">คลังของฉัน</a>` : ""}
   </nav>`;
 
   const graphSummaryHtml = `<div class="mv2-gsum-rows">${vm.graphSummary.rows
@@ -2401,12 +2366,10 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2r-podium { display: flex; gap: 12px; align-items: flex-end; margin: 1.1rem 0 0.5rem; }
     .mv2r-pod { flex: 1; text-align: center; position: relative; border: 1px solid rgba(165, 129, 58, 0.28); border-radius: 16px; padding: 1.15rem 0.6rem 0.75rem; background: rgba(233, 207, 147, 0.05); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05); }
     .mv2r-pod--first { flex: 1.5; border: 2px solid #c9a24d; box-shadow: 0 10px 28px rgba(165, 129, 58, 0.18); padding: 1.6rem 1rem 1rem; border-radius: 18px; }
-    .mv2r-pod--locked { border-style: dashed; }
     .mv2r-pod-chip { position: absolute; top: -0.8rem; left: 50%; transform: translateX(-50%); white-space: nowrap; background: #a5813a; color: #fffdf6; font-weight: 800; font-size: 0.72rem; border-radius: 999px; padding: 0.15rem 0.85rem; }
     .mv2r-pod--first .mv2r-pod-chip { background: linear-gradient(90deg, #b98a2e, #e3bc5f); font-size: 0.8rem; padding: 0.2rem 1.1rem; }
     .mv2r-pod-img { width: 4.2rem; height: 4.2rem; border-radius: 12px; object-fit: cover; border: 1px solid rgba(165, 129, 58, 0.3); display: block; margin: 0.35rem auto 0.4rem; background: rgba(165, 129, 58, 0.08); }
     .mv2r-pod--first .mv2r-pod-img { width: 7.6rem; height: 7.6rem; border: 2px solid #c9a24d; border-radius: 14px; }
-    .mv2r-blur { filter: blur(8px) saturate(0.75); }
     .mv2r-pod-id { margin: 0; font-weight: 800; font-size: 0.78rem; color: var(--mv2a-muted); letter-spacing: 0.02em; }
     .mv2r-pod-total { margin: 0.1rem 0 0; font-size: 1.45rem; font-weight: 700; color: #a5813a; line-height: 1.1; }
     .mv2r-pod--first .mv2r-pod-total { font-size: 2.5rem; }
@@ -2416,7 +2379,6 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2r-pin-form { margin: 0.55rem 0 0; }
     .mv2r-pin-btn { display: block; width: 100%; padding: 0.42rem 0.5rem; border-radius: 10px; border: 1.5px solid #c9a24d; background: transparent; color: #8f6710; font-weight: 700; font-size: 0.8rem; font-family: inherit; cursor: pointer; }
     .mv2r-pod-btn { display: block; margin-top: 0.5rem; text-decoration: none; text-align: center; font-weight: 700; font-size: 0.82rem; padding: 0.48rem 0.4rem; border-radius: 10px; background: linear-gradient(165deg, #e8c547, #c9a227); color: #1a1610; }
-    .mv2r-pod-btn--pay { background: transparent; border: 1.5px solid #a5813a; color: #a5813a; }
     @media (max-width: 560px) {
       /* มือถือ (กบ): แถวบน = อันดับ 1 ใหญ่ + อันดับ 2 เล็กข้างกัน / แถวล่าง = อันดับ 3 เต็มแถว */
       .mv2r-podium { flex-wrap: wrap; align-items: flex-end; }
@@ -2428,7 +2390,6 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2r-rows { display: flex; flex-direction: column; gap: 0.5rem; }
     .mv2r-rows--more { margin-top: 0.5rem; }
     .mv2r-row { display: flex; align-items: center; min-height: 44px; gap: 0.55rem; border: 1px solid rgba(165, 129, 58, 0.22); border-radius: 12px; padding: 0.5rem 0.65rem; text-decoration: none; color: inherit; }
-    .mv2r-row--locked { border-style: dashed; }
     .mv2r-row--cta { justify-content: center; font-weight: 800; color: #8f6710; border-style: dashed; font-size: 0.82rem; margin-top: 0.5rem; }
     .mv2r-row-rank { flex: 0 0 1.5rem; text-align: center; font-weight: 800; color: var(--mv2a-muted); font-size: 0.85rem; }
     .mv2r-row-img { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; flex: 0 0 auto; background: rgba(165, 129, 58, 0.08); border: 1px solid rgba(165, 129, 58, 0.25); }
@@ -2440,13 +2401,12 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     .mv2r-row-score b { font-size: 1.15rem; color: #a5813a; font-weight: 700; }
     .mv2r-row-score span { font-size: 0.58rem; color: var(--mv2a-muted); }
     .mv2r-row-go { flex: 0 0 auto; color: #c9a24d; font-weight: 800; }
-    .mv2r-row-lockpill { flex: 0 0 auto; font-size: 0.64rem; font-weight: 800; color: #8f6710; border: 1px solid rgba(180, 140, 40, 0.35); background: rgba(200, 155, 30, 0.08); border-radius: 999px; padding: 0.18rem 0.6rem; }
     .mv2r-more-btn { display: block; width: 100%; margin-top: 0.6rem; padding: 0.6rem; border-radius: 12px; border: 1.5px solid #c9a24d; background: transparent; color: #8f6710; font-weight: 800; font-size: 0.86rem; font-family: inherit; cursor: pointer; }
     /* teaser อันดับ 1 ของวันนี้ (เบลอ) + แถบเริ่มใช้ล่างจอ */
     .mv2-pick-tease { border: 1.5px dashed rgba(165, 129, 58, 0.55); }
     .mv2-tease-h { margin: 0 0 0.7rem; font-size: 1.05rem; }
     .mv2-tease-row { display: flex; gap: 12px; align-items: center; }
-    .mv2-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: blur(9px) saturate(0.75); background: rgba(165, 129, 58, 0.12); }
+    .mv2-tease-img { width: 76px; height: 76px; border-radius: 14px; object-fit: cover; flex: 0 0 auto; filter: none; background: rgba(165, 129, 58, 0.12); }
     .mv2-tease-img--empty { filter: none; }
     .mv2-tease-main { min-width: 0; flex: 1; }
     .mv2-tease-line { margin: 0; font-weight: 800; font-size: 0.98rem; }
@@ -2533,7 +2493,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
     ${timingActionCardHtml}
     ${timingCardHtml}
     ${pickTeaserHtml}
-    ${libraryMiniHtml}
+    ${libraryMiniHtml}${ownerVaultCta}
 
     <section class="mv2-card mv2-share-card" aria-labelledby="mv2-share-h">
       <h2 id="mv2-share-h">แชร์รายงาน</h2>

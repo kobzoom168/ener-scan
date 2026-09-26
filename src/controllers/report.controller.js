@@ -19,7 +19,7 @@ import {
 } from "../services/reports/crystalBraceletLibrary.service.js";
 import { env } from "../config/env.js";
 import { ownHistoryViewFlags } from "../services/reports/ownHistoryAccess.util.js";
-import { isOwnerViewing } from "../services/reports/ownerProof.util.js";
+import { isOwnerViewing, ownerVerifyUrl } from "../services/reports/ownerProof.util.js";
 import {
   translateReportPayloadEn,
   buildEnglishReportPage,
@@ -173,9 +173,7 @@ export async function getReportBodyByToken(req, res) {
         );
       }
     }
-    if (!sacredAmuletLibrary) {
-      sacredAmuletLibrary = buildSacredAmuletLibraryViewFromPayloadOnly(normPre);
-    }
+    // guest (ลิงก์แชร์): ไม่สร้างคลังแม้จาก payload ใบนี้ — เห็นเฉพาะรายงานที่แชร์ (Codex 26 ก.ย.)
   }
 
   // "คลังกำไลของคุณ" — bracelet counterpart of the amulet library (per กบ).
@@ -205,10 +203,7 @@ export async function getReportBodyByToken(req, res) {
         );
       }
     }
-    if (!crystalBraceletLibrary) {
-      crystalBraceletLibrary =
-        buildCrystalBraceletLibraryViewFromPayloadOnly(normPre);
-    }
+    // guest: ไม่สร้างคลังกำไลจาก payload ใบนี้
   }
 
   // teaser อันดับ 1 ของคลังวันนี้ (เบลอ) บนหน้ารายงาน — เฉพาะเจ้าของที่ยังไม่เคยจ่าย
@@ -221,7 +216,7 @@ export async function getReportBodyByToken(req, res) {
   // ส่วน "สร้างของใหม่" ยังใช้เกตเดิมทุกประการ ดู ownHistoryAccess.util.js
   // เจ้าของที่พิสูจน์ตัวแล้วเท่านั้นจึงเปิดคลังเต็ม (ดู ownerProof.util.js)
   const ownerViewing = isOwnerViewing(req, String(normPre.userId || "").trim());
-  const { accessFull, memberAccess } = ownHistoryViewFlags(ownerViewing);
+  const { accessFull, viewerRole } = ownHistoryViewFlags(ownerViewing);
   if (ownerViewing && (normPre.amuletV1 || normPre.crystalBraceletV1 || normPre.moldaviteV1)) {
     const uid = String(normPre.userId || "").trim();
     try {
@@ -242,7 +237,9 @@ export async function getReportBodyByToken(req, res) {
       dailyPickTeaser,
       liffPayUrl,
       accessFull,
-      memberAccess,
+      viewerRole,
+      // ทางยืนยันเจ้าของจากหน้ารายงาน (ไม่ใช่หน้าจ่ายเงิน) — กลับมาที่หน้าคลังของรายงานนี้
+      ownerVerifyUrl: ownerVerifyUrl(`/r/${encodeURIComponent(publicToken)}/library`),
     });
   } catch (renderErr) {
     console.error(
@@ -693,7 +690,7 @@ export async function getLibraryRankingByToken(req, res) {
   // เคยจ่าย = เห็นหมด (คลังเต็ม + อันดับ 1-2 + หนุนดวงวันนี้)
   // ไม่เคยจ่าย = ล็อกคลังทั้งหน้า (lockedAll) — เช็คพลาด = เปิดหมด (fail-open) ตามเดิม
   // มาถึงตรงนี้ = พิสูจน์แล้วว่าเป็นเจ้าของ → เปิดเต็ม ไม่ผูกกับการซื้อแพ็ก
-  const { accessFull, memberAccess } = ownHistoryViewFlags(true);
+  const { accessFull } = ownHistoryViewFlags(true);
   let dailyPick = null;
   if (uid) {
     try {
@@ -716,11 +713,8 @@ export async function getLibraryRankingByToken(req, res) {
       pinFlash,
       freeTierPinLimit: env.FREE_TIER_PINNED_ORIGINAL_LIMIT,
       accessFull,
-      memberAccess,
-      freeVisibleCount: 7,
       dailyPick,
       liffPayUrl: libLiffPayUrl,
-      lockedAll: !memberAccess,
     });
   } catch (renderErr) {
     console.error(

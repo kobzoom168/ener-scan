@@ -258,11 +258,12 @@ test("E: เข้ากับผมมากที่สุด/เหมาะ�
   // redirect copy deterministic ไม่มีตัวเลข/% (AI=0)
   const txt = buildRankingRedirectText("https://scan.my-ener.uk/r/rpt_x");
   assert.doesNotMatch(txt, /\d+\s*%|\d+\/10/);
-  // มีสิทธิ์ → return false (flow เดิม) — static: hasRecentPaidAccess → return false อยู่ก่อน redirect
-  const src = readFileSync("src/routes/lineWebhook.js", "utf8");
-  const fn = src.slice(src.indexOf("async function maybeHandleRankingQueryGate"), src.indexOf("async function maybeHandleRankingQueryGate") + 2600);
-  assert.match(fn, /hasRecentPaidAccess\(userId\)\) return false/);
-  assert.match(fn, /speakerRoleOverride: "admin"/);
+  // Codex 26 ก.ย. 2026: เกตนี้ถูกยกเลิก — เจ้าของถามอันดับ/ชิ้นเด่นของตัวเองได้ทุกโหมด ไม่ผูกกับการจ่าย
+  // ฟังก์ชันคง signature เดิมแต่คืน false เสมอ (flow เดิมสำหรับทุกคน) และไม่มีการเช็คจ่ายเงิน/redirect อีก
+  const lw = readFileSync(new URL("../src/routes/lineWebhook.js", import.meta.url), "utf8");
+  const fn = lw.slice(lw.indexOf("async function maybeHandleRankingQueryGate"), lw.indexOf("async function maybeHandleAxisTopPieceQuery"));
+  assert.doesNotMatch(fn, /hasRecentPaidAccess|RANKING_QUERY_REDIRECTED_UNPAID|sendNonScanReply/);
+  assert.match(fn, /return false;/);
 });
 
 /* ---------- F: consult timeout fallback (เคส 6) ---------- */
