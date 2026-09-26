@@ -31,7 +31,7 @@ const { default: express } = await import("express");
 const { liffRouter } = await import("../src/routes/liff.routes.js?real");
 const { default: reportRoutes } = await import("../src/routes/report.routes.js");
 const { OWNER_COOKIE } = await import("../src/services/reports/ownerProof.util.js");
-const { createOwnerVerifyFlow, readOwnerReturnPath, isOwnerVerifyRequest } = await import("../src/routes/liffOwnerVerify.client.js");
+const { createOwnerVerifyFlow, readOwnerReturnPath, isOwnerVerifyRequest, createLiffApi, runOwnerVerifyBoot } = await import("../src/routes/liffOwnerVerify.client.js");
 
 const A = "U" + "a".repeat(32), B = "U" + "b".repeat(32);
 // LINE verify จำลอง: token → uid (หมดอายุ = ไม่ผ่าน)
@@ -181,6 +181,63 @@ test("หน้า LIFF ฝังโมดูลเดียวกัน แล�
   const iOwner = page.text.indexOf("if (isOwnerVerifyRequest(location.search))"); const iProfile = page.text.indexOf('api("/api/liff/profile")', iOwner - 2000);
   assert.ok(iOwner > 0 && iProfile > iOwner, "ยืนยันเจ้าของต้องมาก่อนการเรียกโปรไฟล์");
   assert.match(page.text, /ยืนยันไม่สำเร็จ กรุณาลองใหม่/); assert.match(page.text, /ลองอีกครั้ง/);
+});
+
+/** หน้า LIFF จริง: fetch จริงไปเซิร์ฟเวอร์ (คง cookie jar เอง) · liff.login เป็น spy · sessionStorage จำลอง */
+function realLiffPage({ idToken }) {
+  const jar = new Map(); const nav = []; const login = [];
+  const storage = new Map();
+  const fetchImpl = async (path, opts) => {
+    const headers = { ...(opts?.headers || {}) };
+    if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+    const r = await realFetch(`http://127.0.0.1:${port}${path}`, { ...opts, headers });
+    for (const c of r.headers.getSetCookie?.() || []) { const [kv] = c.split(";"); const i = kv.indexOf("="); jar.set(kv.slice(0, i), kv.slice(i + 1)); }
+    return r;
+  };
+  const api = createLiffApi({ fetch: fetchImpl, liff: { getIDToken: () => idToken, login: () => login.push("login") }, sessionStorage: { getItem: (k) => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) } });
+  const ui = { events: [], retry: null, verifying() { this.events.push("verifying"); }, failed(retry, d) { this.events.push("failed:" + d); this.retry = retry; }, noReturn() { this.events.push("no_return"); } };
+  return { api, jar, nav, login, ui, storage, boot: (search) => runOwnerVerifyBoot({ search, api, navigate: (p) => nav.push(p), ui }) };
+}
+const withTimeout = (p, ms = 3000) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("flow ค้าง (Promise ไม่จบ)")), ms))]);
+
+test("[helper จริง] 401 บนเส้นยืนยัน → login_expired + ปุ่มลองอีกครั้ง · ไม่ auto-login · ไม่ redirect · Promise จบ", async () => {
+  const pg = realLiffPage({ idToken: "tok-expired" });
+  const r = await withTimeout(pg.boot("?view=owner&return=%2Fr%2Frpt-A1%2Flibrary"));
+  assert.equal(r.ok, false); assert.equal(r.reason, "login_expired");
+  assert.deepEqual(pg.ui.events, ["verifying", "failed:login_expired"]);
+  assert.deepEqual(pg.login, [], "ห้าม liff.login() อัตโนมัติบนเส้นยืนยัน");
+  assert.equal(pg.storage.get("liffReauth"), undefined, "ห้ามตั้ง liffReauth (กันวนล็อกอิน)");
+  assert.equal(pg.nav.length, 0); assert.ok(!pg.jar.has(OWNER_COOKIE));
+  assert.equal(typeof pg.ui.retry, "function");
+  // กดลองอีกครั้งด้วย token เดิม → ยัง 401 → ยังไม่ login เอง ยังจบ
+  const r2 = await withTimeout(pg.ui.retry());
+  assert.equal(r2.reason, "login_expired"); assert.deepEqual(pg.login, []);
+});
+
+test("[helper จริง] happy path: token ดี → cookie จากเซิร์ฟเวอร์ → กลับ return path → คลังชัด", async () => {
+  const pg = realLiffPage({ idToken: "tok-A" });
+  const r = await withTimeout(pg.boot("?liff.state=%3Fview%3Downer%26return%3D%252Fr%252Frpt-A1%252Flibrary"));
+  assert.equal(r.ok, true); assert.deepEqual(pg.nav, ["/r/rpt-A1/library"]); assert.ok(pg.jar.has(OWNER_COOKIE)); assert.deepEqual(pg.login, []);
+  const lib = await pg.api("/r/rpt-A1/library", { noReauth: true });
+  assert.equal(lib.status, 200); const html = await lib.text(); for (const it of items) assert.ok(html.includes(`/r/${it.publicToken}`));
+});
+
+test("[helper จริง] หน้าอื่นยังได้พฤติกรรมเดิม: 401 → liff.login() หนึ่งรอบ + ตั้ง liffReauth (ไม่เปลี่ยนหน้าจ่ายเงิน)", async () => {
+  const pg = realLiffPage({ idToken: "tok-expired" });
+  let settled = false;
+  pg.api("/api/liff/owner-session", { method: "POST" }).then(() => { settled = true; });
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepEqual(pg.login, ["login"]); assert.equal(pg.storage.get("liffReauth"), "1"); assert.equal(settled, false, "รอบ re-login: Promise ค้างตามเดิม (พฤติกรรมเดิมของหน้าอื่น)");
+});
+
+test("หน้า LIFF ใช้ helper/boot ตัวเดียวกับเทสต์ (ฝัง createLiffApi + runOwnerVerifyBoot) และเส้นยืนยันส่ง noReauth", async () => {
+  const b = browser({});
+  const page = await b.request("/liff?view=owner", { auth: false });
+  assert.match(page.text, /function createLiffApi\(/); assert.match(page.text, /var api = createLiffApi\(/);
+  assert.match(page.text, /function runOwnerVerifyBoot\(/); assert.match(page.text, /return runOwnerVerifyBoot\(\{/);
+  assert.ok(!page.text.includes("function api(path, opts){\n    opts = opts || {};"), "ไม่มี api() สำเนาเก่าในหน้า");
+  const mod = readFileSync(new URL("../src/routes/liffOwnerVerify.client.js", import.meta.url), "utf8");
+  assert.match(mod, /noReauth: true/);
 });
 
 test.after(() => { console.log = origLog; console.error = origErr; globalThis.fetch = realFetch; return new Promise((r) => server.close(r)); });

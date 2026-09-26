@@ -2556,21 +2556,14 @@ function buildLiffHtml(liffId) {
   }
 
   /* All API calls carry the LINE idToken; the server verifies it and derives
-     the userId itself. On 401 (token expired) → one re-login round trip. */
-  function api(path, opts){
-    opts = opts || {};
-    var h = opts.headers || {};
-    try { h["Authorization"] = "Bearer " + (liff.getIDToken() || ""); } catch(e){}
-    opts.headers = h;
-    return fetch(path, opts).then(function(r){
-      if(r.status === 401 && !sessionStorage.getItem("liffReauth")){
-        sessionStorage.setItem("liffReauth", "1");
-        liff.login();
-        return new Promise(function(){});
-      }
-      return r;
-    });
-  }
+     the userId itself. On 401 (token expired) → one re-login round trip.
+     ตัวจริงอยู่ใน liffOwnerVerify.client.js (createLiffApi) — ฝังด้านล่างพร้อม owner flow · เทสต์ใช้ตัวเดียวกัน */
+  ${ownerVerifyClient.createLiffApi.toString()}
+  var api = createLiffApi({
+    fetch: function(u, o){ return fetch(u, o); },
+    liff: { getIDToken: function(){ return liff.getIDToken(); }, login: function(){ liff.login(); } },
+    sessionStorage: sessionStorage
+  });
 
   function saveProfile(){
     var btn = $("ob-next"); btn.disabled = true; btn.textContent = "อาจารย์กำลังจดไว้...";
@@ -3272,11 +3265,12 @@ function buildLiffHtml(liffId) {
   ${ownerVerifyClient.readOwnerReturnPath.toString()}
   ${ownerVerifyClient.isOwnerVerifyRequest.toString()}
   ${ownerVerifyClient.createOwnerVerifyFlow.toString()}
+  ${ownerVerifyClient.runOwnerVerifyBoot.toString()}
   function runOwnerVerify(){
-    var ret = readOwnerReturnPath(location.search);
     var lm = $("loadmsg");
-    var flow = createOwnerVerifyFlow({
-      api: function(path, opts){ return api(path, opts); },
+    return runOwnerVerifyBoot({
+      search: location.search,
+      api: api,
       navigate: function(p){ location.replace(p); },
       ui: {
         verifying: function(){ show("v-load"); showLoadMsg("กำลังยืนยันตัวตนกับ LINE…"); var b=$("owner-retry"); if(b) b.remove(); },
@@ -3287,7 +3281,6 @@ function buildLiffHtml(liffId) {
         noReturn: function(){ showLoadMsg("ลิงก์ยืนยันไม่ถูกต้อง เปิดจากหน้ารายงานอีกครั้งครับ"); }
       }
     });
-    return flow.run(ret);
   }
 
   /* ---- boot ---- */

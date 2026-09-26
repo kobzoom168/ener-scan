@@ -58,3 +58,41 @@ export function createOwnerVerifyFlow(deps) {
   }
   return { run: run, attempts: function () { return attempts; } };
 }
+
+/**
+ * ตัวเรียก API ของหน้า LIFF (ตัวจริงที่ทุกหน้าใช้ — ย้ายมาที่นี่เพื่อให้เทสต์ผ่าน helper เดียวกัน)
+ * ทุกคำขอใส่ LINE idToken · 401 → re-login หนึ่งรอบ (พฤติกรรมเดิมของหน้าจ่ายเงิน/หน้าอื่น)
+ * ยกเว้น opts.noReauth = true (เส้นยืนยันเจ้าของ): คืน response 401 ตรง ๆ ให้ผู้เรียกแสดงข้อความ — ไม่ auto-login ไม่ค้าง Promise
+ * @param {{ fetch: Function, liff: { getIDToken?: Function, login: Function }, sessionStorage: { getItem: Function, setItem: Function } }} env
+ */
+export function createLiffApi(env) {
+  return function api(path, opts) {
+    opts = opts || {};
+    var h = opts.headers || {};
+    try { h["Authorization"] = "Bearer " + (env.liff.getIDToken() || ""); } catch (e) { /* ไม่มี token = ให้เซิร์ฟเวอร์ตอบ 401 */ }
+    opts.headers = h;
+    var noReauth = opts.noReauth === true;
+    delete opts.noReauth;
+    return env.fetch(path, opts).then(function (r) {
+      if (r.status === 401 && !noReauth && !env.sessionStorage.getItem("liffReauth")) {
+        env.sessionStorage.setItem("liffReauth", "1");
+        env.liff.login();
+        return new Promise(function () {});
+      }
+      return r;
+    });
+  };
+}
+
+/**
+ * ทางเข้าเส้นยืนยันเจ้าของจาก boot (ตัวจริงที่หน้า LIFF เรียก): อ่าน return path จาก URL แล้วรัน flow ด้วย api จริง
+ * เรียก api แบบ noReauth เสมอ → 401 มาถึง flow → "login_expired" + ปุ่มลองอีกครั้ง (ไม่ auto-login)
+ */
+export function runOwnerVerifyBoot(env) {
+  var flow = createOwnerVerifyFlow({
+    api: function (path, opts) { return env.api(path, Object.assign({}, opts || {}, { noReauth: true })); },
+    navigate: env.navigate,
+    ui: env.ui,
+  });
+  return flow.run(readOwnerReturnPath(env.search));
+}
