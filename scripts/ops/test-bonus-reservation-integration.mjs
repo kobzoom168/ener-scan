@@ -56,8 +56,13 @@ if (!process.env.ENER_BONUS_IT_CHILD) {
     if (!up) execFileSync("sleep", ["0.5"]);
   }
   if (!up) { teardown(); assert.ok(up, "PostgREST ไม่ขึ้น"); }
+  const OLD_SHA = process.env.ROLLBACK_SHA || "be67a98";
+  const OLD_ROOT = `/tmp/ener-bonus-it-rollback-${OLD_SHA}`;
+  spawnSync("git", ["-C", new URL(".", root).pathname, "worktree", "remove", "--force", OLD_ROOT], { stdio: "ignore" });
+  sh("git", ["-C", new URL(".", root).pathname, "worktree", "add", "--detach", OLD_ROOT, OLD_SHA]);
+  sh("ln", ["-s", new URL("node_modules", root).pathname, `${OLD_ROOT}/node_modules`]);
   const env = {
-    ...process.env, ENER_BONUS_IT_CHILD: "1", ENER_BONUS_IT_PG: PG, ENER_BONUS_IT_PORT: String(PORT),
+    ...process.env, ENER_BONUS_IT_CHILD: "1", ENER_BONUS_IT_OLD_ROOT: OLD_ROOT, ENER_BONUS_IT_OLD_SHA: OLD_SHA, ENER_BONUS_IT_PG: PG, ENER_BONUS_IT_PORT: String(PORT),
     LOCAL_POSTGREST_URL: `http://127.0.0.1:${PORT}`, LOCAL_POSTGREST_ANON_KEY: jwt("web_anon"),
     LOCAL_POSTGREST_SERVICE_KEY: jwt("service_role"), SUPABASE_URL: "http://127.0.0.1:9", SUPABASE_SERVICE_ROLE_KEY: "x",
     OPENAI_API_KEY: "sk-test", CHANNEL_ACCESS_TOKEN: "t", CHANNEL_SECRET: "s", GEMINI_API_KEY: "g", REDIS_URL: "",
@@ -69,6 +74,7 @@ if (!process.env.ENER_BONUS_IT_CHILD) {
   const r = spawnSync(process.execPath, ["--import", new URL("fixtures/bonus-it-hooks.mjs", import.meta.url).pathname, new URL(import.meta.url).pathname],
     { env, stdio: "inherit" });
   teardown();
+  spawnSync("git", ["-C", new URL(".", root).pathname, "worktree", "remove", "--force", OLD_ROOT], { stdio: "ignore" });
   process.exit(r.status ?? 1);
 }
 
@@ -209,19 +215,33 @@ await t("4 ส่ง 3 รูปพร้อมกัน โบนัส 1 → �
   assert.equal(jobsOf(u.uid).length, 1); assert.equal(bonusOf(u.uid), 0);
 });
 
-await t("5 crash/retry: INSERT abort ไม่หาย · หลักฐานค้าง (worker ตายก่อน release) → sweep คืน 1 ครั้ง · sweep ซ้ำ 0", async () => {
+await t("5 crash/retry: INSERT abort (จองจริงใน tx) ยอดคืน+ไม่มีงาน · หลักฐานรูปซ้ำโดยไม่มีใครเรียก release → DB คืนเอง · sweep ซ้ำ 0", async () => {
   const u = await newUser();
   // (ก) ทรานแซกชันจอง abort กลางทาง → ยอดเดิม
-  q(`begin; insert into scan_jobs(line_user_id,app_user_id,upload_id,access_source,status,free_access_kind) values('${u.uid}','${u.id}',gen_random_uuid(),'free','queued','bonus'); rollback;`);
-  assert.equal(bonusOf(u.uid), 1);
+  // psql เรียกครั้งเดียว = connection เดียว: จองจริง → อ่านยอดในทรานแซกชัน (ต้องลด) → ROLLBACK
+  const inTx = q(`begin;
+    insert into scan_jobs(line_user_id,app_user_id,upload_id,access_source,status,free_access_kind) values('${u.uid}','${u.id}',gen_random_uuid(),'free','queued','bonus_reserved');
+    select 'in_tx_bonus=' || bonus_scans from app_users where id='${u.id}';
+    select 'in_tx_jobs=' || count(*) from scan_jobs where app_user_id='${u.id}';
+    rollback;`);
+  assert.match(inTx, /in_tx_bonus=0/, "ในทรานแซกชันต้องหักจริง");
+  assert.match(inTx, /in_tx_jobs=1/);
+  assert.equal(bonusOf(u.uid), 1, "หลัง ROLLBACK ต้องได้ยอดเดิม");
+  assert.equal(jobsOf(u.uid).length, 0, "หลัง ROLLBACK ต้องไม่มีงาน");
   // (ข) งานจองแล้ว + outbound รูปซ้ำถูกเขียน แต่ process ตายก่อนเรียก release
   const ing = await ingest(u.uid, "mid-5-" + u.uid, image("J"), await gate(u.uid));
   assert.equal(bonusOf(u.uid), 0);
   q(`update scan_jobs set status='completed' where id='${ing.jobId}'`);
   q(`insert into outbound_messages(line_user_id,kind,related_job_id,payload_json,status) values('${u.uid}','scan_result','${ing.jobId}','{"skipQuotaDecrement":true,"dedupHit":true}','queued')`);
+  assert.equal(bonusOf(u.uid), 1, "หลักฐานรูปซ้ำถูกเขียน → trigger DB คืนทันที แม้ไม่มีใครเรียก release");
   const s1 = await supabase.rpc("sweep_bonus_releases", { p_limit: 50 });
-  assert.equal(s1.error, null); assert.equal(Number(s1.data), 1, "sweep คืน 1 งาน");
-  assert.equal(bonusOf(u.uid), 1);
+  assert.equal(s1.error, null); assert.equal(Number(s1.data), 0, "ไม่มีอะไรค้างให้ sweep");
+  // failed ที่เกิดจากกระบวนการอื่น (ไม่ผ่าน failJob) → trigger scan_jobs คืนเหมือนกัน
+  const u3 = await newUser();
+  const j3 = await ingest(u3.uid, "mid-5f-" + u3.uid, image("L"), await gate(u3.uid));
+  assert.equal(bonusOf(u3.uid), 0);
+  q(`update scan_jobs set status='failed' where id='${j3.jobId}'`);
+  assert.equal(bonusOf(u3.uid), 1);
   const s2 = await supabase.rpc("sweep_bonus_releases", { p_limit: 50 });
   assert.equal(Number(s2.data), 0, "sweep ซ้ำไม่คืนซ้ำ"); assert.equal(bonusOf(u.uid), 1);
   // (ค) งานสำเร็จปกติต้องไม่ถูก sweep คืน
@@ -270,6 +290,47 @@ await t("9 โค้ดใหม่บน DB ที่มีแค่ 057 (ย�
   assert.equal(q57(`select bonus_scans from app_users where id='${id}'`), "1");
   assert.equal(q57(`select free_access_kind from scan_jobs where app_user_id='${id}'`), "bonus_reserved");
   assert.equal(q57(`select new_customer_trial_used('${id}')`), "1", "057 เดิมนับ 'bonus_reserved' เป็น trial usage → ต้อง apply 064 ก่อนเปิด trial");
+});
+
+await t("10 rollback: โค้ดใหม่จองแล้ว → worker เก่า be67a98 (processScanJob จริงของ SHA นั้น) พบรูปซ้ำ → คืนครั้งเดียว", async () => {
+  const OLD = process.env.ENER_BONUS_IT_OLD_ROOT;
+  assert.ok(OLD, "ต้องมี worktree ของ rollback SHA");
+  const oldRoot = new URL(`file://${OLD}/`);
+  const oldSha = sh("git", ["-C", OLD, "rev-parse", "--short", "HEAD"]);
+  assert.equal(oldSha, process.env.ENER_BONUS_IT_OLD_SHA, "ต้องเป็น exact rollback SHA");
+  const oldWorker = await import(new URL("src/services/scanV2/processScanJob.service.js", oldRoot));
+  const oldJobs = await import(new URL("src/stores/scanV2/scanJobs.db.js", oldRoot));
+  assert.equal(typeof oldJobs.releaseBonusReservation, "undefined", "worker เก่าต้องไม่มีโค้ดคืนโบนัส (ยืนยันว่าเทสต์นี้พิสูจน์ DB เอง)");
+  const u = await newUser();
+  const old = await ingest(u.uid, "mid-10-old-" + u.uid, image("R"), await gate(u.uid));
+  const resId = q(`insert into scan_results_v2(scan_job_id,line_user_id,app_user_id,report_url) values('${old.jobId}','${u.uid}','${u.id}','https://example.test/r/r') returning id`);
+  await updateScanJob(old.jobId, { status: "completed", result_id: resId });
+  q(`update app_users set bonus_scans=1 where line_user_id='${u.uid}'`);
+  // โค้ดใหม่รับรูป R ซ้ำ → จอง
+  const dup = await ingest(u.uid, "mid-10-dup-" + u.uid, image("R"), await gate(u.uid));
+  assert.equal(dup.ok, true); assert.equal(bonusOf(u.uid), 0);
+  assert.equal(q(`select free_access_kind from scan_jobs where id='${dup.jobId}'`), "bonus_reserved");
+  // …ย้อนเป็น worker เก่า แล้วมันหยิบงานนี้ไปทำ
+  q(`update scan_jobs set status='processing', locked_at=now(), worker_id='old-worker' where id='${dup.jobId}'`);
+  const row = q(`select row_to_json(j) from scan_jobs j where id='${dup.jobId}'`);
+  const r = quiet(); try { await oldWorker.processScanJob("old-worker", JSON.parse(row)); } finally { r(); }
+  assert.equal(q(`select status from scan_jobs where id='${dup.jobId}'`), "completed");
+  assert.equal(q(`select count(*) from outbound_messages where related_job_id='${dup.jobId}' and payload_json->>'skipQuotaDecrement'='true'`), "1", "worker เก่าเขียนหลักฐานรูปซ้ำ");
+  assert.equal(bonusOf(u.uid), 1, "คืนการจองใหม่นั้นแม้ worker เก่าไม่เรียก release");
+  assert.equal(q(`select free_access_kind from scan_jobs where id='${dup.jobId}'`), "bonus_released");
+  // ไม่คืนซ้ำ: RPC + sweep + แก้ payload ซ้ำ
+  assert.equal(await releaseBonusReservation(dup.jobId), "noop");
+  assert.equal(Number((await supabase.rpc("sweep_bonus_releases", { p_limit: 50 })).data), 0);
+  q(`update outbound_messages set payload_json = payload_json || '{"x":1}' where related_job_id='${dup.jobId}'`);
+  assert.equal(bonusOf(u.uid), 1, "คืนครั้งเดียว");
+  // งานเดิมที่ใช้สำเร็จ (legacy/สำเร็จ) ไม่ถูกคืน
+  assert.equal(q(`select free_access_kind from scan_jobs where id='${old.jobId}'`), "bonus_reserved");
+  // worker เก่าทำงานปกติ (ไม่ใช่รูปซ้ำ) ของงาน bonus_reserved แล้วล้ม → trigger คืน
+  const u2 = await newUser();
+  const j2 = await ingest(u2.uid, "mid-10-f-" + u2.uid, image("S"), await gate(u2.uid));
+  assert.equal(bonusOf(u2.uid), 0);
+  const r2 = quiet(); try { await oldWorker.failJob(j2.jobId, "object_validation_failed", "old", u2.uid, "old-worker"); } finally { r2(); }
+  assert.equal(bonusOf(u2.uid), 1, "failJob ของ worker เก่าก็คืนผ่าน trigger");
 });
 
 await t("6 trial ON: กติกาเดิมของ 057 ยังอยู่ (คนเก่าไม่ eligible · คนใหม่ 2 ครั้ง · โบนัสจองเหมือนกัน)", async () => {

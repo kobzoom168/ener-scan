@@ -8,7 +8,10 @@
 --   จอง = INSERT scan_jobs (free_access_kind='bonus_reserved') → bonus_scans-1 ใต้ FOR UPDATE ทรานแซกชันเดียวกัน
 --   ใช้ = งานส่งผลสำเร็จ (kind คง 'bonus_reserved' ตลอด · delivery ไม่หักซ้ำ)
 --   คืน = ครั้งเดียว โดยเปลี่ยน kind 'bonus_reserved' → 'bonus_released' (+1) เมื่อ
---         (ก) status → failed (trigger)  (ข) มีหลักฐาน outbound scan_result skipQuotaDecrement=true (รูปซ้ำ)
+--         (ก) status → failed (trigger บน scan_jobs)
+--         (ข) มีหลักฐาน outbound scan_result skipQuotaDecrement=true (รูปซ้ำ) — trigger บน outbound_messages
+--         ทั้งสองอยู่ใน DB → ทำงานเหมือนกันไม่ว่าโค้ด/worker รุ่นไหน (rollback โค้ดปลอดภัย)
+--         worker ใหม่เรียก RPC ซ้ำ + maintenance sweep = สำรอง (idempotent)
 --   retry failed → active ของงานที่คืนแล้ว = จองใหม่ (หรือ bonus_quota_exhausted)
 --   webhook ซ้ำ = uq_scan_uploads_line_message กัน upload/job ตัวที่สองอยู่แล้ว
 -- ค่าใน free_access_kind (Codex รอบ 2: แยกงานที่จองจริงจากงาน legacy อย่างชัดเจน)
@@ -138,6 +141,27 @@ BEGIN
   RETURN n;
 END;
 $$;
+
+-- (ค) คืนตามหลักฐานที่ DB เอง — ไม่พึ่งว่า worker รุ่นไหนรันอยู่ (Codex รอบ 3)
+-- เหตุ: ถ้าโค้ดใหม่จองไว้แล้วย้อนเป็น worker/maintenance รุ่นเก่า (be67a98) worker เก่าเขียน outbound
+-- รูปซ้ำ (skipQuotaDecrement=true) ได้ แต่ไม่เรียก release และไม่มี sweep → โบนัสค้าง
+-- trigger นี้ทำให้ "หลักฐานรูปซ้ำ" คืนการจองของงานนั้นทันทีในทรานแซกชันเดียวกัน ทุกรุ่นโค้ด
+-- คืนเฉพาะ 'bonus_reserved' ที่มีหลักฐาน (release_bonus_reservation ตรวจซ้ำ) — ไม่คืนเหมา
+CREATE OR REPLACE FUNCTION public.release_bonus_on_dup_evidence()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.kind = 'scan_result' AND NEW.related_job_id IS NOT NULL
+     AND NEW.payload_json->>'skipQuotaDecrement' = 'true' THEN
+    PERFORM public.release_bonus_reservation(NEW.related_job_id);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_release_bonus_on_dup_evidence ON public.outbound_messages;
+CREATE TRIGGER trg_release_bonus_on_dup_evidence
+AFTER INSERT OR UPDATE OF payload_json ON public.outbound_messages
+FOR EACH ROW EXECUTE FUNCTION public.release_bonus_on_dup_evidence();
+REVOKE ALL ON FUNCTION public.release_bonus_on_dup_evidence() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION public.release_bonus_reservation(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sweep_bonus_releases(integer) FROM PUBLIC;
