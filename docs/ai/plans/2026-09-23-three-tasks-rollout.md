@@ -103,6 +103,11 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 ## อัปเดต 26 ก.ย. 2026 (รอบ 4) — ข้อความเรื่องสิทธิ์ชุดเดียวทั้งระบบ (`85e7ad7`+)
 โมดูลกลาง `src/services/entitlementCopy.service.js` · LINE/LIFF เลือกข้อความจากสถานะสิทธิ์เดียวกัน · โหมด daily คงเดิมเมื่อ trial ปิด · รายละเอียดก่อน→หลัง + รายการนอก repo: `docs/ai/reports/2026-09-26-entitlement-copy-audit.md` · **ยังไม่มี migration/config ใหม่** — rollback = ย้อนโค้ด · เทสต์สด: ต้องเห็น 2 โหมด → โหมด daily ดูได้ทันทีบน staging (บัญชีกบ) · โหมด new_customer ต้องเปิดสวิตช์ชั่วคราว (รวมกับ acceptance trial 9 ขั้น)
 
+## อัปเดต 26 ก.ย. 2026 (รอบ 5) — ปลดคลังเจ้าของครบทุกเลน (`2212c34`, `cdfeab6`)
+viewerRole owner/guest แทน memberAccess · guest ไม่ได้ข้อมูลคลัง + ยืนยันผ่าน LINE (`POST /api/liff/owner-session`, LIFF `view=owner`) · ถอด paywall ดูของเดิมทุก template + LINE (ranking gate / ชิ้นเด่น / daily pick) · ไม่มี migration/config ใหม่ (ใช้ `LIFF_ID` เดิม) · rollback = ย้อนโค้ด · หลักฐาน+ก่อน/หลัง: `docs/ai/reports/2026-09-26-entitlement-copy-audit.md` ส่วนท้าย
+
+**หมายเหตุสถานะ staging 26 ก.ย. 09:08Z:** `new_customer_trial.enabled` ถูกเปิดผ่านหน้า `/admin/free-trial` (Windows browser — ไม่ใช่จาก Claude) · `eligible_since = 2026-09-26 09:07:59Z` ถูกตั้งถาวรแล้ว · staging จึงอยู่โหมด new_customer ตั้งแต่นั้น (ภาพ LIFF 16:15 "แพ็กสแกนหมดอายุแล้ว" = ข้อความโหมดใหม่ที่ถูกต้อง)
+
 ### รายการเทสต์สดบน staging ที่ต้องให้กบทำ (ยังไม่เปิดสวิตช์ — ต้องขออนุมัติก่อนทุกครั้ง)
 เงื่อนไข: เปิดสวิตช์ชั่วคราวเฉพาะช่วงเทสต์ · บัญชีทดสอบต้องมี `created_at` ≥ `eligible_since` จริง (ไม่แก้ค่าลูกค้า) · จบแล้วปิด OFF โดย **ไม่ล้าง `eligible_since` และไม่ลบ scan_jobs**
 1. ก่อนเปิด: LIFF ของบัญชีใหม่แสดง "ทดลอง 2 ครั้ง" ไม่ได้ (สวิตช์ OFF = ฟรีรายวันตามเดิม) — ถ่ายภาพ

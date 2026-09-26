@@ -63,3 +63,47 @@
 ## ปุ่มจริง (Codex ข้อ 3) — หลักฐาน
 - **เลือกแพ็ก N บาท** → ส่งข้อความ `จ่าย N` (คำสั่งเดิม) → routing `package_selected_shortcut` → `create_or_show_payment_qr` · หลักฐานสด staging 26 ก.ย. 08:21:54Z บัญชีกบกด "จ่าย 399" (log `PAYMENT_PAY_INTENT_CONSUMED … action:"create_or_show_payment_qr"` + `paywall_shown … qr_intro_image_slip`) · automated: `isPaymentCommand("จ่าย N")` = true ทุกแพ็ก และไม่ชนคำสั่ง utility
 - **ดูคลังของฉัน** → ส่ง `ดูผลเก่า` → `matchExactUtilityCommand` = history → `handleHistoryCommand` (ไม่มีการเช็ค checkScanAccess/paid/entitlement ในโค้ด) → การ์ดลิงก์ `/myscans/<token ส่วนตัว>` (token 128-bit เก็บ hash, no-referrer, ไม่ใช่ลิงก์แชร์ `/r/`) · ลิงก์แชร์ `/r/:token/library` ยังถูก owner gate (HTTP test 8/8) · **ยังไม่มีหลักฐานสดจากบัญชีกบ** (กบยังไม่เคยกดวันนี้)
+
+---
+# ปลดคลัง/รายงานเดิมของเจ้าของให้ครบจริง (Codex รอบ 5 — `2212c34` + `cdfeab6`)
+
+## ต้นตอที่ Codex ชี้ (ยืนยันจากโค้ด `29d50de`)
+`report.controller.js` ส่ง `memberAccess=false` เมื่อ**ยืนยันเจ้าของไม่ได้** (เปิดจากลิงก์ในแชท = ไม่มี cookie) แล้ว template ทุกเลนตีความว่า "ต้องซื้อแพ็ก" → เบลอ + ปุ่ม "เปิดสิทธิ์เพื่อดู" + ลิงก์ `view=pay` — ตรงกับภาพ 16:12 ของกบ · cookie เจ้าของออกเฉพาะที่ `/myscans/:token` จึงไม่มีทางยืนยันจากหน้ารายงาน · LINE (`maybeHandleRankingQueryGate`, ชิ้นเด่นรายด้าน, daily pick push) ยังเช็ค "จ่ายใน 3 วัน / ≤5 ชิ้น"
+
+## กติกาที่ใช้ตอนนี้
+- **owner (พิสูจน์ด้วย cookie จาก LINE)** → เปิดครบ ไม่เบลอ ไม่ตัดอันดับ ไม่ชวนซื้อเพื่อดู — ทุกเลน ทุกโหมด ไม่ขึ้นกับ paid/trial
+- **guest (ลิงก์แชร์ / ยังยืนยันไม่ได้)** → เห็นเฉพาะรายงานที่แชร์ · **ไม่มีข้อมูลคลังใน HTML** (ไม่ใช่เบลอด้วย CSS) · บล็อก "คลังของฉัน · ยืนยันผ่าน LINE" → LIFF `view=owner&return=/r/…` → `POST /api/liff/owner-session` (LINE idToken) → cookie เจ้าของ → กลับมาหน้าเดิม · **ไม่พาไปหน้าจ่ายเงิน**
+- คิดสิทธิ์เฉพาะตอนสแกนใหม่ · `hasRecentPaidAccess` เหลือใช้เฉพาะการสร้างของใหม่ (consult / voice note)
+
+## จุดที่แก้
+| จุด | ก่อน | หลัง |
+|---|---|---|
+| `ownHistoryAccess.util.js` | `{accessFull, memberAccess}` | `{accessFull, viewerRole: owner\|guest}` — ไม่มี memberAccess |
+| `report.controller.js` | guest ได้คลังจาก payload ใบเดียว + memberAccess=false | guest ไม่สร้างคลัง · ส่ง `viewerRole`, `ownerVerifyUrl` (พระ → `/library`, เลนอื่น → รายงานเดิม), `liffHomeUrl` · หน้า `/library` ไม่มี `lockedAll` |
+| `ownerProof.util.js` | — | `ownerVerifyUrl()` / `isSafeOwnerReturnPath()` (จำกัด path ในโดเมน) |
+| `liff.routes.js` | cookie เจ้าของออกได้แค่ `/myscans` | `POST /api/liff/owner-session` (uid จาก idToken เท่านั้น) + หน้า LIFF รับ `view=owner&return=` |
+| `amuletReportV2` | podium/แถว/แคโรเซล เบลอ + "เปิดสิทธิ์เพื่อดู" + "และอีก N ชิ้น · เปิดสิทธิ์…" + teaser เบลอขาย 299 + sticky "เปิดสิทธิ์เพื่อดู" | ลบทั้งหมด · teaser เปิดชัด → `/library#today` · sticky "คลังของฉัน" · guest = บล็อกยืนยัน · ลบ CSS `.mv2r-blur/.mv2r-pod--locked/.mv2r-row--locked/.mv2r-pod-btn--pay` |
+| `crystalBraceletReportV2` | `censorAll` เบลอ + "เปิดสิทธิ์เพื่อดูคลังชัด ๆ" + teaser | ลบ · owner sticky → `#cb2-lib-h` · teaser → LIFF · guest บล็อกยืนยัน · ลบ CSS `.cb2-lib-blur/.cb2-lib-unlock` |
+| `moldaviteReportV2` | teaser เบลอ + sticky "เปิดสิทธิ์เพื่อดู" | teaser เปิด → LIFF · sticky "คลังของฉัน" → LIFF · guest บล็อกยืนยัน |
+| `amuletLibraryRanking` | `lockedAll/censorTop` เบลอแถว 1-2 / ทั้งหน้า + แท็บ "หนุนดวงวันนี้" ล็อก "เปิดค่าครูเพื่อดู" | ลบทั้งหมด (`lockedRowHtml`, `todayLockedPanel`, CSS) — owner gate ยังอยู่ที่ controller (guest 302) |
+| `lineWebhook` ranking gate | ไม่จ่ายใน 3 วัน → redirect ไปรายงานที่เซ็นเซอร์ | ยกเลิก (return false) |
+| `lineWebhook` ชิ้นเด่นรายด้าน | >5 ชิ้น + ไม่จ่าย = teaser ไม่มีรูป | open เสมอ |
+| `dailyLuckyPickPush` | >5 ชิ้น + ไม่จ่าย = teaser เบลอ | open เสมอ · optout/ban/ตารางส่ง/dedupe คงเดิม |
+| `reportEnglish` | "Unlock to view" | เพิ่ม "My library / Open my library · verify via LINE / See today's fortune ranking" |
+
+## หลักฐาน HTTP จริงบน staging (บัญชีกบ, read-only — cookie เจ้าของสร้างในคอนเทนเนอร์ด้วย secret ของ staging เพื่อจำลองผู้ชมที่ยืนยันแล้ว ไม่ได้แตะข้อมูลใด)
+| เลน / ผู้ชม | ก่อน (`29d50de`) | หลัง (`cdfeab6`) |
+|---|---|---|
+| กำไล guest (ลิงก์ในแชท ไม่มี cookie) | "เปิดสิทธิ์เพื่อดู" ×2 · class เบลอ ×3 · `view=pay` ×2 · หัวข้อ "คลังกำไลของคุณ" โผล่ (ข้อมูลคลังหลุดแบบเบลอ) | ×0 ทั้งหมด · ไม่มีหัวข้อคลัง · ไม่มีลิงก์ `/r/` ของชิ้นอื่น · บล็อก "คลังของฉัน · ยืนยันผ่าน LINE" → `view=owner&return=/r/<token>` |
+| กำไล owner | (ไม่มีทางยืนยันจากหน้ารายงาน) | "คุณสแกนกำไลไว้แล้ว 4 เส้น (4 ครั้ง)" · อันดับ 1 + เด่น 4 ด้าน ชัด · ลิงก์ชิ้นอื่น 4 · sticky "คลังของฉัน" → `#cb2-lib-h` · 0 paywall |
+| พระ guest | "เปิดสิทธิ์เพื่อดู" ×2 · เบลอ ×2 · `view=pay` ×1 · หัวข้อคลังโผล่ | ×0 · ไม่มีคลัง · บล็อกยืนยัน → `return=/r/<token>/library` |
+| พระ owner | — | หัวข้อคลัง · ลิงก์ชิ้นในคลัง 72 · 0 paywall · `/library` = 200 (guest = 302) |
+| หิน | กบไม่มีรายงานเลนหินบน staging | **ยังไม่ทดสอบสด** — ครอบด้วย HTTP matrix เท่านั้น |
+| `POST /api/liff/owner-session` ไม่มี token | — | 401 ไม่มี cookie |
+
+## ทดสอบ
+`tests/ownerVault.http.matrix.test.js` (HTTP จริงผ่าน express + controller + renderer + template ทุกเลน; fixture ผ่าน loader hook แทน DB): พระ/กำไล/หิน × owner/no-cookie/บัญชีอื่น × ≤5/>5 × จ่าย-ไม่จ่าย (HTML เท่ากัน) × TH/EN · `/library` owner 200 ครบ / guest 302 ไม่รั่ว · held → 503 ไม่รั่ว · ดูรายงานไม่เรียก `hasRecentPaidAccess`/ไม่แตะสิทธิ์ · owner-session: ไม่มี token 401, token ปลอม 401, uid จาก body ถูกเมิน, cookie ที่ได้เปิดคลังตัวเองได้/ของบัญชีอื่นไม่ได้ (สลับ A/B) · ownerVerifyUrl กัน path นอกโดเมน · ช่องทาง LINE ไม่มีเกตจ่าย — **19/19** · `ownHistoryUnlock`/`flowRole E` ปรับตามกติกาใหม่ · gate ✅ (fail เฉพาะ known-failing เดิม)
+
+**ยังไม่ทดสอบสด:** เลนหิน · ปุ่ม "ยืนยันผ่าน LINE" กดจริงจากมือถือ (LIFF → cookie → กลับหน้า) · เปิดจาก rich menu · สลับบัญชี A/B บนอุปกรณ์จริง — รอกบกด (ไม่กระทบยอด/สิทธิ์)
+
+**ขอบเขตที่ไม่แตะ:** owner gate ของ `/library` และ `/myscans` · ban/optout · held/pending/failed · การสร้างของใหม่ (สแกน/consult/voice note) ยังเช็คสิทธิ์ตามเดิม · ไม่มี AI call เพิ่ม
