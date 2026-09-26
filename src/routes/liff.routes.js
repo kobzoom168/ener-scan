@@ -3119,14 +3119,14 @@ function buildLiffHtml(liffId) {
         st.classList.remove("hidden");
       } else if(rights && rights.total > 0){
         var parts = [];
-        if(rights.paidLeft > 0) parts.push(rights.paidLeft >= 900000 ? "จากแพ็ก: ไม่จำกัด" : "จากแพ็ก " + rights.paidLeft + " ครั้ง");
+        /* วันหมดอายุผูกกับสิทธิ์ซื้อเท่านั้น — โบนัสไม่มีวันหมดอายุในระบบ จึงไม่แสดงวัน (Codex 26 ก.ย.) */
+        if(rights.paidLeft > 0) parts.push((rights.paidLeft >= 900000 ? "จากแพ็ก: ไม่จำกัด" : "จากแพ็ก " + rights.paidLeft + " ครั้ง") + (rights.paidUntil ? " (ใช้ได้ถึง " + payFmtThaiDate(rights.paidUntil) + ")" : ""));
         if(rights.freeLeft > 0) parts.push((rights.freePolicy === "new_customer" ? "ทดลอง " : "ฟรีวันนี้ ") + rights.freeLeft + " ครั้ง");
         if(rights.bonusLeft > 0) parts.push("โบนัส " + rights.bonusLeft + " ครั้ง");
         stT.textContent = rights.paidLeft >= 900000
           ? "ตอนนี้ใช้สิทธิ์รายเดือนอยู่"
           : "สิทธิ์คงเหลือ " + rights.total + " ครั้ง";
-        stS.textContent = (rights.paidUntil ? "ใช้ได้ถึง " + payFmtThaiDate(rights.paidUntil) : "") +
-          (parts.length ? (rights.paidUntil ? " · " : "") + parts.join(" · ") : "");
+        stS.textContent = parts.join(" · ");
         backBtn.classList.remove("hidden");
         st.classList.remove("hidden");
       } else if(rights){

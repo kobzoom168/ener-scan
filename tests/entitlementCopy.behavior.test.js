@@ -86,8 +86,13 @@ test("ข้อความตามตาราง Codex: trial 2/1/0 · บั
 test("หลายสิทธิ์: แยกยอด ไม่รวมเรียกว่าฟรี · ผู้ที่ยังมีสิทธิ์อื่นไม่ถูกบอกว่าหมด", () => {
   const es = C.resolveEntitlementState(T({ allowed: true, reason: "paid", remaining: 4, paidUntil: FUTURE, bonusScansAvailable: 1 }));
   const l = C.buildEntitlementStatusLine(es);
-  assert.deepEqual(l.breakdown, ["จากแพ็ก 4 ครั้ง", "โบนัส 1 ครั้ง"]);
+  assert.equal(l.breakdown.length, 2);
+  assert.match(l.breakdown[0], /^สิทธิ์จากแพ็ก 4 ครั้ง · ใช้ได้ถึง /, "วันหมดอายุอยู่กับสิทธิ์ซื้อ");
+  assert.equal(l.breakdown[1], "สิทธิ์โบนัส 1 ครั้ง", "โบนัสไม่มีวันหมดอายุ ห้ามสมมติ");
   assert.ok(!/ฟรี/.test(l.breakdown.join(" ")), "ห้ามเรียกรวมว่าฟรี");
+  const multi = buildQuotaRemainingReply({ access: T({ allowed: true, reason: "paid", remaining: 4, paidUntil: FUTURE, bonusScansAvailable: 1 }), freeRemainingToday: 0, freeQuotaPerDay: 0 });
+  const [l1, l2] = multi.split("\n");
+  assert.match(l1, /^สิทธิ์จากแพ็ก 4 ครั้ง · ใช้ได้ถึง /); assert.equal(l2, "สิทธิ์โบนัส 1 ครั้ง");
   // trial หมดแต่มีโบนัส → ยังสแกนได้ ต้องไม่บอกว่าหมด
   const b = C.buildEntitlementStatusLine(C.resolveEntitlementState(T({ allowed: true, reason: "free", freeAccessKind: "bonus", trialEligible: true, freeScansRemaining: 0, bonusScansAvailable: 1 })));
   assert.match(b.headline, /โบนัสคงเหลือ 1/); assert.ok(!/ครบ|หมด|ไม่มีสิทธิ์/.test(b.headline));
@@ -171,4 +176,23 @@ test("จุดที่ต้องเลิกพูด 'ฟรีวันล
   const lw = read("src/routes/lineWebhook.js");
   assert.equal((lw.match(/policy: (await resolveFreePolicy\(\)|fatiguePolicy)/g) || []).length, 4, "fatigue prompt ทุกจุดส่ง policy");
   assert.match(lw, /buildFollowWelcomeText\(await resolveFreePolicy\(\)\)/);
+});
+
+test("ปุ่มจริง: 'เลือกแพ็ก N บาท' ส่งคำสั่งจ่ายที่ routing รู้จัก · 'ดูคลังของฉัน' = คำสั่ง history ที่ไม่เช็คแพ็ก และลิงก์เป็น /myscans ส่วนตัว", async () => {
+  const { matchExactUtilityCommand } = await import("../src/services/utilityCommands/exactUtilityCommand.service.js");
+  const { isPaymentCommandLikeText } = await import("../src/utils/stateMicroIntent.util.js");
+  for (const p of OFFER.packages) {
+    const b = C.packageButton(p);
+    assert.equal(b.label, `เลือกแพ็ก ${p.priceThb} บาท`);
+    assert.equal(b.text, `จ่าย ${p.priceThb}`, "ข้อความที่ส่งเข้าแชทต้องเป็นคำสั่งจ่ายเดิม");
+    assert.equal(W.isPaymentCommand(b.text, b.text.toLowerCase()), true, `${b.text} ต้องเป็น payment command`);
+    assert.equal(isPaymentCommandLikeText(b.text), true);
+    assert.equal(matchExactUtilityCommand(b.text), null, "ปุ่มแพ็กห้ามชนคำสั่ง utility");
+  }
+  assert.equal(matchExactUtilityCommand(C.HISTORY_COMMAND_TEXT), "history", "ดูคลังของฉัน → history exact");
+  const lw = read("src/routes/lineWebhook.js");
+  const h = lw.slice(lw.indexOf("async function handleHistoryCommand"), lw.indexOf("async function", lw.indexOf("async function handleHistoryCommand") + 10));
+  assert.ok(!/checkScanAccess|paid_until|paidRemaining|payment_required|entitle/i.test(h), "history handler ต้องไม่เช็คสิทธิ์/แพ็ก");
+  assert.match(h, /\/myscans\/\$\{token\}/, "ลิงก์คลังเจ้าของ = /myscans/<token ส่วนตัว>");
+  assert.ok(!/\/r\/|publicToken|share/.test(h), "ห้ามส่งคลังผ่านลิงก์แชร์ /r/");
 });

@@ -129,10 +129,13 @@ function thaiDateTime(iso) {
  * @returns {{ headline: string, detail: string, breakdown: string[] }}
  */
 export function buildEntitlementStatusLine(es) {
+  // แต่ละรายการสมบูรณ์ในตัว — วันหมดอายุผูกกับสิทธิ์ซื้อเท่านั้น (Codex: ห้ามทำให้เข้าใจว่าโบนัสหมดอายุด้วย)
+  // โบนัสไม่มีวันหมดอายุในระบบ (app_users.bonus_scans ไม่มีคอลัมน์หมดอายุ) จึงไม่แสดงวันใด ๆ
+  const paidUntilTxt = es.paidUntil ? ` · ใช้ได้ถึง ${thaiDateTime(es.paidUntil)}` : "";
   const breakdown = [];
-  if (es.paidLeft > 0 || es.paidUnlimited) breakdown.push(es.paidUnlimited ? "จากแพ็ก: ไม่จำกัด" : `จากแพ็ก ${es.paidLeft} ครั้ง`);
-  if (es.freeLeft > 0) breakdown.push(`${es.policy === "new_customer" ? "ทดลอง" : "ฟรีวันนี้"} ${es.freeLeft} ครั้ง`);
-  if (es.bonusLeft > 0) breakdown.push(`โบนัส ${es.bonusLeft} ครั้ง`);
+  if (es.paidLeft > 0 || es.paidUnlimited) breakdown.push(`${es.paidUnlimited ? "สิทธิ์จากแพ็ก: สแกนไม่จำกัด" : `สิทธิ์จากแพ็ก ${es.paidLeft} ครั้ง`}${paidUntilTxt}`);
+  if (es.freeLeft > 0) breakdown.push(`สิทธิ์${es.policy === "new_customer" ? "ทดลองฟรี" : "ฟรีวันนี้"} ${es.freeLeft} ครั้ง`);
+  if (es.bonusLeft > 0) breakdown.push(`สิทธิ์โบนัส ${es.bonusLeft} ครั้ง`);
   switch (es.state) {
     case "unavailable":
       return { headline: "ยังตรวจสอบสิทธิ์ไม่ได้", detail: "กรุณาลองใหม่อีกครั้ง", breakdown: [] };
@@ -140,6 +143,7 @@ export function buildEntitlementStatusLine(es) {
       return {
         headline: es.paidUnlimited ? "สิทธิ์จากแพ็ก: สแกนไม่จำกัด" : `สิทธิ์จากแพ็กคงเหลือ ${es.paidLeft} ครั้ง`,
         detail: es.paidUntil ? `ใช้ได้ถึง ${thaiDateTime(es.paidUntil)}` : "", breakdown,
+        // หลายสิทธิ์: แสดงเป็นบรรทัดแยก (breakdown) ไม่รวมวันหมดอายุเข้ากับโบนัส
       };
     case "bonus":
       return { headline: `สิทธิ์โบนัสคงเหลือ ${es.bonusLeft} ครั้ง`, detail: "โบนัสจากการชวนเพื่อน ใช้เมื่อไรก็ได้", breakdown };

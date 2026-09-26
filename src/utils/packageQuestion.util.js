@@ -120,10 +120,10 @@ export function buildQuotaRemainingReply({ access, freeRemainingToday, freeQuota
     // ชุดข้อความเดียวกับ LIFF/paywall (entitlementCopy) — ห้ามพูดฟรีรายวัน/พรุ่งนี้
     const es = resolveEntitlementState(access, { now });
     const line = buildEntitlementStatusLine(es);
-    // หลายสิทธิ์: บอกยอดที่เหลือนอกเหนือจากหัวข้อ เช่น "…4 ครั้ง และโบนัส 1 ครั้ง"
-    const extra = line.breakdown.length > 1 ? ` และ${line.breakdown.slice(1).join(" และ ")}` : "";
     if (!allowed && access.trialPending > 0) return "สิทธิ์ทดลองกำลังใช้กับชิ้นที่รอผลอยู่ครับ รอรับผลก่อนนะครับ";
-    return `${line.headline}${extra}ครับ${line.detail ? ` ${line.detail}` : ""}`;
+    // หลายสิทธิ์: คนละบรรทัด วันหมดอายุอยู่กับสิทธิ์ซื้อเท่านั้น (Codex 26 ก.ย.)
+    if (line.breakdown.length > 1) return `${line.breakdown.join("\n")}\nครับ`;
+    return `${line.headline}ครับ${line.detail ? ` ${line.detail}` : ""}`;
   }
   if (paidActive) {
     const until = thaiShortDate(paidUntil);
