@@ -332,3 +332,13 @@ export async function listRecentScanUploadsDebug(limit = 20) {
     };
   });
 }
+
+/**
+ * ลบแถว upload ที่ไม่มีงาน (064): เมื่อ INSERT scan_jobs ถูก trigger กัน (โบนัส/ทดลองหมด)
+ * ถ้าปล่อยไว้ webhook ที่ LINE ส่งซ้ำด้วย message id เดิมจะถูกมองเป็น "duplicate" เงียบ ๆ
+ * ไม่แตะไฟล์ใน storage (retention worker จัดการตามอายุ)
+ */
+export async function deleteOrphanScanUpload(uploadId) {
+  const { error } = await supabase.from("scan_uploads").delete().eq("id", uploadId);
+  if (error) throw error;
+}

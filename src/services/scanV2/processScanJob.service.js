@@ -22,6 +22,7 @@ import {
 import {
   getScanJobById,
   updateScanJob,
+  releaseBonusReservation,
 } from "../../stores/scanV2/scanJobs.db.js";
 import { insertScanResultV2 } from "../../stores/scanV2/scanResultsV2.db.js";
 import { insertOutboundMessage } from "../../stores/scanV2/outboundMessages.db.js";
@@ -324,6 +325,8 @@ async function processScanJobInner(workerId, jobRow) {
             },
             status: "queued",
           });
+          // รูปซ้ำ = ไม่ใช้สิทธิ์ → คืนโบนัสที่จองไว้ (064) ตามหลักฐาน outbound ข้างบน
+          await releaseBonusReservation(jobId);
           emitScanCompletedEvent({
             lineUserId,
             appUserId,
@@ -389,6 +392,8 @@ async function processScanJobInner(workerId, jobRow) {
             },
             status: "queued",
           });
+          // รูปซ้ำ = ไม่ใช้สิทธิ์ → คืนโบนัสที่จองไว้ (064) ตามหลักฐาน outbound ข้างบน
+          await releaseBonusReservation(jobId);
           emitScanCompletedEvent({
             lineUserId,
             appUserId,
@@ -2345,6 +2350,7 @@ async function processScanJobInner(workerId, jobRow) {
       },
       status: "queued",
     });
+    if (wasExactDup) await releaseBonusReservation(jobId);
   } catch (enqueueErr) {
     console.error(
       JSON.stringify({

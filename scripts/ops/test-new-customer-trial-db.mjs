@@ -30,6 +30,9 @@ try {
     INSERT INTO app_users(id,line_user_id,created_at,bonus_scans) VALUES ('${uid(1)}','user1',now()-interval '1 day',1);`);
   const migration = readFileSync(new URL("../../sql/057_new_customer_trial.sql", import.meta.url),"utf8");
   sql(migration); sql(migration);
+  // 064 (โบนัสจอง/คืนที่ scan_jobs) ต้องไม่เปลี่ยนกติกา trial ของ 057 — apply ทับแล้วรันชุดเดิม
+  const m064 = readFileSync(new URL("../../sql/064_bonus_reservation.sql", import.meta.url),"utf8");
+  sql(m064); sql(m064);
   assert.equal(JSON.parse(sql("SELECT new_customer_trial_status(NULL)" )).enabled,false);
   sql(insert(1)); sql(insert(1)); sql(insert(1)); // OFF retains daily admission behavior
   sql("SET ROLE web_anon; SELECT set_new_customer_trial_policy(true); RESET ROLE;");

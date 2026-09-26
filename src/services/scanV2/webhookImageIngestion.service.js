@@ -4,6 +4,7 @@ import { uploadScanImageToStorage } from "../../storage/scanUploadStorage.js";
 import {
   getScanUploadByLineMessageId,
   insertScanUpload,
+  deleteOrphanScanUpload,
 } from "../../stores/scanV2/scanUploads.db.js";
 import {
   insertScanJob,
@@ -63,6 +64,13 @@ const DEBOUNCE_ATTACHED_TEXT =
 const DEBOUNCE_MAX_EXTRAS = 4;
 
 /** In-flight gate key (delivery worker clears it when the report lands; TTL is the safety net). */
+/** exception ที่ trigger guard_new_customer_trial_job ยกตอน INSERT scan_jobs → รหัสสั้น หรือ null */
+export function quotaGuardCodeFromError(error) {
+  const m = String(error?.message || error?.details || error || "")
+    .match(/bonus_quota_exhausted|trial_quota_exhausted|trial_not_eligible/);
+  return m ? m[0] : null;
+}
+
 export function scanInFlightKeyForUser(lineUserId) {
   return `scan_v2:inflight:${String(lineUserId || "").trim()}`;
 }
@@ -362,6 +370,25 @@ export async function ingestScanImageAsyncV2({
     // A concurrent admission or policy change can invalidate the earlier
     // access snapshot. Release the ingestion lock even when SQL rejects it.
     await clearDedupeKey(inflightKey);
+    const guardCode = quotaGuardCodeFromError(error);
+    if (guardCode) {
+      // trigger 057/064 กันที่ INSERT (โบนัส/ทดลองหมด, ไม่ eligible) → ไม่มีงาน ไม่มีการหัก
+      // ส่งกลับให้ webhook ตอบ paywall เดิม (deterministic) แทน error ทั่วไป
+      console.log(
+        JSON.stringify({
+          event: "SCAN_V2_INGEST_QUOTA_GUARD",
+          ...base(),
+          guardCode,
+          uploadIdPrefix: idPrefix8(uploadRow.id),
+        }),
+      );
+      try {
+        await deleteOrphanScanUpload(uploadRow.id);
+      } catch (delErr) {
+        console.error(JSON.stringify({ event: "SCAN_V2_INGEST_ORPHAN_UPLOAD_DELETE_FAILED", ...base(), message: String(delErr?.message || delErr).slice(0, 160) }));
+      }
+      return { ok: false, error: "quota_exhausted_at_insert", errorMessage: guardCode };
+    }
     throw error;
   }
 

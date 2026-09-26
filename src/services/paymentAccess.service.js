@@ -158,42 +158,15 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
   );
 
   // สิทธิ์โบนัสจากชวนเพื่อน (กบ 23 ก.ค.) — ใช้เมื่อฟรีรายวันหมดเท่านั้น
-  // เส้นทางฟรีล้วน: ไม่แตะ paid_until/payments → ไม่กระทบเกตเซ็นเซอร์
-  // consumeBonus=true เฉพาะจุดสแกนรูปจริง — จุดเช็คสถานะอื่นดูเฉย ๆ ไม่กินสิทธิ์
+  // ฟังก์ชันนี้ **ดูอย่างเดียว ไม่หัก** (064, 26 ก.ย. 2026): การจองโบนัสเกิดที่ INSERT scan_jobs
+  // (trigger guard_new_customer_trial_job ใต้ row lock) และคืนครั้งเดียวเมื่อ failed/รูปซ้ำ
+  // เดิมหักที่นี่เมื่อ consumeBonus=true แต่ด่านรับรูปหยิบผลจาก turnCache (ไม่หัก) ไปใช้ →
+  // งานเป็น bonus โดยยอดไม่ลด และหักที่ webhook ไม่มีทางคืนเมื่องานล้ม/รูปซ้ำ
+  // `consumeBonus` คงรับไว้เพื่อ compat ของผู้เรียกเดิม — ไม่มีผลใด ๆ
+  void consumeBonus;
   let viaBonus = false;
-  let bonusConsumed = false; // true เฉพาะเมื่อหัก bonus_scans ใน DB สำเร็จจริงในคำขอนี้
   const bonusScansAvail = Number(appUserRow?.bonus_scans) || 0;
-  if (!gate.allowed && bonusScansAvail > 0 && appUserId) {
-    if (!consumeBonus || trial.enabled) {
-      // Trial-mode bonus is reserved atomically by the job insert trigger.
-      viaBonus = true;
-    } else {
-      try {
-        const { data: upd } = await supabase
-          .from("app_users")
-          .update({ bonus_scans: bonusScansAvail - 1 })
-          .eq("id", appUserId)
-          .eq("bonus_scans", bonusScansAvail)
-          .select("id")
-          .maybeSingle();
-        viaBonus = Boolean(upd?.id);
-        bonusConsumed = viaBonus;
-        if (viaBonus) {
-          console.log(
-            JSON.stringify({
-              event: "REFERRAL_BONUS_SCAN_CONSUMED",
-              userIdPrefix: lineUserId.slice(0, 8),
-              bonusLeft: bonusScansAvail - 1,
-            }),
-          );
-        }
-      } catch (e) {
-        console.error("[SCAN_ACCESS] bonus consume failed (ignored):", {
-          message: e?.message,
-        });
-      }
-    }
-  }
+  if (!gate.allowed && bonusScansAvail > 0 && appUserId) viaBonus = true;
   if (viaBonus) {
     gate.allowed = true;
     gate.reason = "free";
@@ -227,32 +200,13 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
     paidRemainingScans,
     freePolicy: gate.freePolicy || "daily",
     freeAccessKind: viaBonus ? "bonus" : trial.enabled ? "trial" : "daily",
-    // ผลนี้อนุญาตเพราะโบนัส แต่หักจริงหรือยัง — ด่านรับรูปห้ามเอาผลที่ "ยังไม่หัก" ไปสร้างงาน
+    // อนุญาตเพราะโบนัส (ยังไม่จอง — จองตอน INSERT งาน)
     viaBonus,
-    bonusConsumed,
-    // โบนัสคงเหลือจริงหลังคำขอนี้ — ให้ LIFF แยกแสดง "โบนัส" ออกจากฟรี/ทดลอง/ซื้อ
-    bonusScansAvailable: Math.max(0, bonusScansAvail - (bonusConsumed ? 1 : 0)),
+    // โบนัสคงเหลือจริง — ให้ LIFF แยกแสดง "โบนัส" ออกจากฟรี/ทดลอง/ซื้อ
+    bonusScansAvailable: bonusScansAvail,
     trialEligible: gate.trialEligible ?? null,
     trialPending: trial.enabled ? Number(trial.pending) || 0 : 0,
   };
-}
-
-/**
- * ผลสิทธิ์ที่ cache ไว้ในเทิร์น (คำนวณแบบ "ดูเฉย ๆ" consumeBonus=false) ใช้สร้างงานสแกนได้ไหม
- *
- * บั๊กจริง 26 ก.ย. 2026 (staging, บัญชีกบ): snapshot ต้นเทิร์นเรียก checkScanAccess({userId})
- * แล้วด่านรับรูปหยิบผลนั้นจาก turnCache → งานถูกสร้างเป็น free_access_kind='bonus'
- * โดย bonus_scans ไม่ถูกหักเลย (สแกน 2 รอบด้วยโบนัสก้อนเดียว ยอดคงเหลือยัง 1)
- * turn cache (1177d82, มี.ค.) เกิดก่อนระบบโบนัส (ก.ค.) — path หักจริงจึงไม่เคยถูกเรียกในเคสนี้
- *
- * กติกา: ผลที่อนุญาตเพราะโบนัสแต่ยังไม่หัก → ห้ามใช้ ต้องเรียกใหม่แบบ consumeBonus=true
- * (หัก CAS `eq(bonus_scans, ยอดเดิม)` → ส่งพร้อมกันได้โบนัสแค่คนเดียว)
- * ผลอื่น (daily/trial/paid/ไม่อนุญาต/หักแล้ว) ใช้ต่อได้ตามเดิม
- */
-export function cachedAccessUsableForScan(decision) {
-  if (!decision || typeof decision !== "object") return false;
-  if (decision.viaBonus === true && decision.bonusConsumed !== true) return false;
-  return true;
 }
 
 /** Text-only paywall reply (LINE Flex reserved for final scan result). */

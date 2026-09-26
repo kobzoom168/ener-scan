@@ -307,7 +307,7 @@ import {
   clearPaymentState,
 } from "../stores/manualPaymentAccess.store.js";
 import { insertLineConversationMessage } from "../stores/conversationMessages.db.js";
-import { checkScanAccess, cachedAccessUsableForScan } from "../services/paymentAccess.service.js";
+import { checkScanAccess } from "../services/paymentAccess.service.js";
 import {
   isActiveSlipPaymentRow,
   isAwaitingPaymentActionableForTextRouting,
@@ -2395,18 +2395,16 @@ async function finalizeAcceptedImage({
 
   // Access truth + DB payment row: active slip rows own slip validation unless paid entitlement says scan first.
   let accessDecision;
-  // ผลจาก snapshot ต้นเทิร์นคำนวณแบบไม่หักโบนัส — ถ้าอนุญาตเพราะโบนัสต้องคำนวณใหม่แบบหักจริง
-  // (ไม่งั้นงานถูกสร้างเป็น bonus โดยยอดไม่ลด — เคสจริง 26 ก.ย. 2026)
+  // ผลสิทธิ์เป็น read-only ทุกจุด (064): โบนัสถูกจองตอน INSERT scan_jobs ไม่ใช่ที่นี่
+  // → ใช้ผลจาก snapshot ต้นเทิร์นซ้ำได้อย่างปลอดภัย
   const accessFromParent =
     turnCache &&
-    Object.prototype.hasOwnProperty.call(turnCache, "accessDecision") &&
-    cachedAccessUsableForScan(turnCache.accessDecision);
+    Object.prototype.hasOwnProperty.call(turnCache, "accessDecision");
   if (accessFromParent) {
     accessDecision = turnCache.accessDecision;
   } else {
     try {
-      // consumeBonus: จุดนี้คือการสแกนรูปจริง — สิทธิ์โบนัสชวนเพื่อนถูกกินที่นี่ที่เดียว
-      accessDecision = await checkScanAccess({ userId, consumeBonus: true });
+      accessDecision = await checkScanAccess({ userId });
       if (turnCache) turnCache.accessDecision = accessDecision;
     } catch (accessErr) {
       console.error("[WEBHOOK] checkScanAccess (image routing) failed:", {
@@ -3597,11 +3595,30 @@ async function finalizeAcceptedImage({
         );
       }
       try {
-        await replyText(
-          client,
-          event.replyToken,
-          "รูปเข้ามาไม่ครบครับ ส่งมาใหม่อีกครั้งได้เลย",
-        );
+        if (ingestReason === "quota_exhausted_at_insert") {
+          // DB กันตอนจอง (โบนัส/ทดลองหมดพอดี เช่น ส่งหลายรูปพร้อมกัน) → paywall เดิม ไม่ใช่ "รูปไม่ครบ"
+          await sendFreeQuotaExhaustedPaywallViaGateway({
+            client,
+            userId,
+            replyToken: event.replyToken,
+            flowVersion,
+            messageId: event?.message?.id ?? null,
+            accessDecision,
+            pathSegment: "ingest_quota_guard",
+            turnPerf,
+          });
+          await logPaywallShown(userId, {
+            patternUsed: "ingest_quota_exhausted_at_insert",
+            bubbleCount: 1,
+            source: "ingest_quota_exhausted_at_insert",
+          });
+        } else {
+          await replyText(
+            client,
+            event.replyToken,
+            "รูปเข้ามาไม่ครบครับ ส่งมาใหม่อีกครั้งได้เลย",
+          );
+        }
       } catch (replyErr) {
         console.error(
           JSON.stringify({

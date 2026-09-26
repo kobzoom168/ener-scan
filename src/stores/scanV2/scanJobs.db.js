@@ -147,3 +147,28 @@ export async function listScanJobsUploadIdsByIds(scanJobIds, lineUserId) {
   if (error) throw error;
   return Array.isArray(data) ? data : [];
 }
+
+/**
+ * คืนโบนัสของงานตามหลักฐาน (064) — idempotent: DB คืนได้ครั้งเดียว (kind 'bonus' → 'bonus_released')
+ * เรียกหลังบันทึกหลักฐานรูปซ้ำ (outbound scan_result skipQuotaDecrement=true) · งาน failed คืนโดย trigger เอง
+ * ล้ม = log แล้วปล่อย — maintenance `sweep_bonus_releases` กวาดซ้ำจากหลักฐานเดิม
+ * @returns {Promise<"released"|"noop"|"no_evidence"|"job_not_found"|"error">}
+ */
+export async function releaseBonusReservation(jobId) {
+  try {
+    const { data, error } = await supabase.rpc("release_bonus_reservation", { p_job_id: jobId });
+    if (error) throw error;
+    const result = String(data || "error");
+    if (result === "released") {
+      console.log(JSON.stringify({ event: "BONUS_RESERVATION_RELEASED", jobIdPrefix: String(jobId).slice(0, 8) }));
+    }
+    return result;
+  } catch (e) {
+    console.error(JSON.stringify({
+      event: "BONUS_RESERVATION_RELEASE_FAILED",
+      jobIdPrefix: String(jobId).slice(0, 8),
+      reason: String(e?.message || e).slice(0, 160),
+    }));
+    return "error";
+  }
+}

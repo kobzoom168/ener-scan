@@ -103,6 +103,17 @@ async function sweepStaleScanProcessing() {
   }
 }
 
+/** 064: คืนโบนัสของงานที่มีหลักฐาน (failed / รูปซ้ำ) แต่ยังค้าง kind='bonus' (worker crash ก่อนเรียก release) */
+async function sweepBonusReleases() {
+  try {
+    const { data, error } = await supabase.rpc("sweep_bonus_releases", { p_limit: 50 });
+    if (error) throw error;
+    if (Number(data) > 0) console.log(JSON.stringify({ event: "BONUS_RELEASE_SWEEP", released: Number(data) }));
+  } catch (e) {
+    console.error("[MAINTENANCE] bonus release sweep failed:", String(e?.message || e).slice(0, 160));
+  }
+}
+
 async function countEq(table, status) {
   const { count, error } = await supabase
     .from(table)
@@ -192,6 +203,7 @@ async function runOnce() {
   }
   await sweepStaleOutboundSending();
   await sweepStaleScanProcessing();
+  await sweepBonusReleases();
   // P0-G: ตามหัก paid quota ที่ค้าง (ledger pending / job delivered ที่ ledger หาย) — sql/055
   try {
     const { sweepQuotaLedger } = await import("../services/scanV2/quotaLedger.util.js");
