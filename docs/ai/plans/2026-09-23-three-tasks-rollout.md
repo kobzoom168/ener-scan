@@ -5,7 +5,7 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 
 | งาน | commit | สวิตช์ | สถานะสวิตช์ |
 |---|---|---|---|
-| 1 ลูกค้าใหม่ฟรีรวม 2 ครั้ง | `d8dcd41` | `app_settings.new_customer_trial.enabled` (Admin UI) | **OFF** · `eligible_since = null` |
+| 1 ลูกค้าใหม่ฟรีรวม 2 ครั้ง | `d8dcd41` | `app_settings.new_customer_trial.enabled` (Admin UI `/admin/free-trial`) | **staging ปัจจุบัน: ON** (`eligible_since = 2026-09-26 09:07:59Z` — กบเปิด 26 ก.ย.) · **Pro เมื่อ apply 057: ต้องเป็น OFF · `eligible_since = null`** (ค่าเริ่มต้นใน migration; เปิดครั้งแรกหลังประกาศ ≥72 ชม. และกบอนุมัติ) |
 | 2 ปลดล็อกคลัง/รายงานย้อนหลัง | `845c4ec` | **ไม่มีสวิตช์ — กติกาถาวร** | ผลทันทีเมื่อ deploy |
 | 3 อนุมัติสลิปผ่าน Telegram | `e414938` | `TELEGRAM_SLIP_APPROVAL_ENABLED` + 4 ตัวประกอบ | **ปิด** (ยังไม่มีรายชื่อผู้อนุมัติ) |
 

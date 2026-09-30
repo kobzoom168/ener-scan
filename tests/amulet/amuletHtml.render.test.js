@@ -117,8 +117,8 @@ test("renderAmuletReportV2Html: renders sacred amulet shell", () => {
     "score strip: grade column sublabel is เกรดพลังงาน (B etc. above)",
   );
   assert.ok(html.includes("level-grade--B"), "ความเด่นพลังงาน strip: score 7 → B + sacred_amulet gold lane class");
-  assert.ok(html.includes("กราฟหกมิติพลังพระเครื่อง"));
-  assert.ok(html.includes("เทียบโปรไฟล์คุณกับพลังพระเครื่อง"));
+  assert.ok(html.includes("กราฟเจ็ดมิติพลังพระ/เทวรูป/เครื่องราง"), "หัวกราฟ (wording f10e43b 7 ก.ค. 2026: พระเครื่อง → พระ/เทวรูป/เครื่องราง)");
+  assert.ok(html.includes("เทียบโปรไฟล์คุณกับพลังพระ/เทวรูป/เครื่องราง"), "wording f10e43b 7 ก.ค. 2026");
   assert.ok(html.includes('class="mv2a-radar-svg mv2a-radar-svg--animate"'));
   assert.ok(html.includes('class="mv2a-radar-layer mv2a-radar-layer--owner"'));
   assert.ok(html.includes('class="mv2a-radar-layer mv2a-radar-layer--amulet"'));
@@ -314,7 +314,7 @@ test("renderAmuletReportV2Html: optional dark-gold dashboard via wording.amuletR
   assert.ok(html.includes("--mv2a-bg: #090a0d"));
   assert.ok(html.includes("--mv2a-gold: #e8c547"));
   assert.ok(html.includes("var(--mv2a-radar-spoke)"));
-  assert.ok(html.includes("กราฟหกมิติพลังพระเครื่อง"));
+  assert.ok(html.includes("กราฟเจ็ดมิติพลังพระ/เทวรูป/เครื่องราง"), "หัวกราฟ (wording f10e43b 7 ก.ค. 2026: พระเครื่อง → พระ/เทวรูป/เครื่องราง)");
 });
 
 test("renderAmuletReportV2Html: hero clarifier when โทนหลักไม่ตรงพลังเด่นสุด", () => {
@@ -456,15 +456,15 @@ test("renderAmuletReportV2Html: library mini box when sacredAmuletLibrary provid
   const html = renderAmuletReportV2Html(norm, { sacredAmuletLibrary: lib });
   assert.ok(html.includes('class="mv2-card mv2-lib-mini"'), "mini box section in main report HTML");
   assert.ok(html.includes("คลังพลังของคุณ"));
-  assert.ok(html.includes("คุณมีรายการสแกนแล้ว 1 รายการ"));
-  assert.ok(html.includes("อันดับ 1 โดยรวมตอนนี้"));
+  assert.ok(html.includes("พระ/เทวรูป/เครื่องราง 1 รายการ (ไม่นับกำไล/หิน)"));
+  assert.ok(html.includes("อันดับ 1 ของคลังคุณ"), "podium chip (2aa8b27 15 ก.ค. 2026 คลังย้ายขึ้นหน้ารายงาน)");
   assert.ok(html.includes("พลังรวม"));
   assert.ok(html.includes("พระเด่นประจำพลังของคุณ"));
   assert.ok(html.includes("เลื่อนดูพลังด้านอื่น ๆ"));
   assert.ok(html.includes('id="mv2-lib-axis-carousel"'));
   assert.ok(html.includes("mv2-lib-axis-viewport"));
   assert.ok(html.includes("/r/t/library"));
-  assert.ok(html.includes("ดูอันดับทั้งหมดในคลัง"));
+  assert.ok(html.includes("เปิดหน้าคลังแบบเต็ม แยกตามด้านพลัง"), "CTA คลัง (wording 2aa8b27 15 ก.ค. 2026)");
   assert.ok(html.includes("สแกนเพิ่มอีกสักรายการ"));
   assert.ok(html.includes("https://example.com/thumb.jpg"));
 });
@@ -670,5 +670,5 @@ test("renderReportHtmlPage: sacred amulet + library shows คลังพลั�
   assert.ok(html.includes('class="mv2-card mv2-lib-mini"'), "renderReportHtmlPage passes library into amulet template");
   assert.ok(html.includes("คลังพลังของคุณ"));
   assert.ok(html.includes("/r/t/library"));
-  assert.ok(html.includes("ดูอันดับทั้งหมดในคลัง"));
+  assert.ok(html.includes("เปิดหน้าคลังแบบเต็ม แยกตามด้านพลัง"), "CTA คลัง (wording 2aa8b27 15 ก.ค. 2026)");
 });
