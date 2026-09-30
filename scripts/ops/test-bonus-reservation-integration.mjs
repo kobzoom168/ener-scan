@@ -81,6 +81,15 @@ if (!process.env.ENER_BONUS_IT_CHILD) {
 // ───────────────────────── child: ทดสอบกับของจริง ─────────────────────────
 const PGC = process.env.ENER_BONUS_IT_PG;
 const q = (s, db = "bonus_it") => sh("docker", ["exec", "-i", PGC, "psql", "-U", "postgres", "-d", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1"], { input: s });
+// spy: การเรียกออกนอกเครื่อง (OpenAI/Gemini/vision sidecar/LINE ใช้ global fetch) — ต้องเป็น 0 ในทุกเส้นที่ถูกกันก่อน AI
+// (วางก่อน import โมดูลแอป เพราะ SDK จับ fetch ตอนสร้าง client)
+const externalCalls = [];
+const REAL_FETCH = globalThis.fetch;
+globalThis.fetch = function spiedFetch(input, init) {
+  const u = String(input instanceof Request ? input.url : input);
+  if (!/^https?:\/\/127\.0\.0\.1(:|\/)/.test(u)) externalCalls.push(u.replace(/^(https?:\/\/[^/]+).*/, "$1"));
+  return REAL_FETCH.call(this, input, init);
+};
 const { checkScanAccess } = await import(new URL("src/services/paymentAccess.service.js", root));
 const { ingestScanImageAsyncV2, quotaGuardCodeFromError } = await import(new URL("src/services/scanV2/webhookImageIngestion.service.js", root));
 const { processScanJob, failJob } = await import(new URL("src/services/scanV2/processScanJob.service.js", root));
@@ -349,5 +358,158 @@ await t("6 trial ON: กติกาเดิมของ 057 ยังอยู
   } finally { q(`select set_new_customer_trial_policy(false)`); }
 });
 
+
+// ───────────── trial ลูกค้าใหม่ (057 ON) ผ่านโค้ด release จริง: checkScanAccess → ด่านรับรูป → trigger → worker ─────────────
+// (Codex 30 ก.ย. 2026: ไม่มีบัญชี LINE ใหม่ → ใช้บัญชีสังเคราะห์ใน DB ใช้แล้วทิ้ง · ไม่แตะบัญชีจริง · ไม่เรียก AI/LINE จริง)
+const { resolveLiffRights } = await import(new URL("src/routes/liff.routes.js", root));
+const { resolveEntitlementState, buildEntitlementStatusLine, buildPaywallCopy, findForbiddenPhrase } = await import(new URL("src/services/entitlementCopy.service.js", root));
+const { buildPaymentGateReply } = await import(new URL("src/services/paymentAccess.service.js", root));
+const trialUsed = (id) => Number(q(`select new_customer_trial_used('${id}')`));
+const noForbidden = (text, where) => { const f = findForbiddenPhrase(text, "new_customer"); assert.equal(f, null, `${where}: มีคำต้องห้ามในโหมดลูกค้าใหม่ "${f}" ใน: ${text}`); };
+// สิทธิ์ที่ LIFF/LINE เห็นต้องตรงกัน + ข้อความไม่สัญญาฟรีรายวัน
+async function rights(uid, expect) {
+  const a = await gate(uid);
+  const es = resolveEntitlementState(a);
+  const line = buildEntitlementStatusLine(es);
+  const liff = await resolveLiffRights(uid, a);
+  assert.equal(a.freePolicy, "new_customer"); assert.equal(liff.freePolicy, "new_customer");
+  assert.equal(es.state, expect.state, `state: ${JSON.stringify({ a, es })}`);
+  assert.equal(liff.total, expect.total); assert.equal(liff.freeLeft, expect.freeLeft ?? 0); assert.equal(liff.bonusLeft, expect.bonusLeft ?? 0); assert.equal(liff.paidLeft, expect.paidLeft ?? 0);
+  assert.equal(a.allowed, expect.total > 0, "LIFF total>0 ⇔ ด่านอนุญาต");
+  if (expect.headline) assert.match(line.headline, expect.headline, `headline: ${line.headline}`);
+  noForbidden([line.headline, line.detail, ...line.breakdown].join(" "), "status line");
+  if (!a.allowed) {
+    const pw = buildPaywallCopy(es, {}); noForbidden(pw.textLines.join(" "), "paywall copy");
+    const r = quiet(); let reply; try { reply = await buildPaymentGateReply({ decision: a, userId: uid }); } finally { r(); }
+    noForbidden(typeof reply === "string" ? reply : JSON.stringify(reply), "buildPaymentGateReply");
+  }
+  return a;
+}
+const extBefore = externalCalls.length;
+
+q(`select set_new_customer_trial_policy(true)`);
+try {
+  await t("11 trial ON: บัญชีเก่า (created_at ก่อน cutoff, โบนัส 0) ไม่ได้ฟรีรายวันอีก · ข้อความไม่สัญญาพรุ่งนี้ · DB กันแม้ snapshot สิทธิ์เก่าบอกว่าผ่าน", async () => {
+    const u = await newUser({ bonus: 0, dailyExhausted: false });
+    q(`update app_users set created_at=now()-interval '30 days' where line_user_id='${u.uid}'`);
+    const a = await rights(u.uid, { state: "existing_no_rights", total: 0, headline: /ยังไม่มีสิทธิ์สำหรับสแกนองค์ใหม่/ });
+    assert.equal(a.trialEligible, false); assert.equal(a.freeScansRemaining, 0);
+    const denied = await ingest(u.uid, "mid-11-" + u.uid, image("T1"), a);
+    assert.equal(denied.ok, false); assert.equal(denied.error, "access_denied"); assert.equal(jobsOf(u.uid).length, 0);
+    // snapshot เก่าจากยุค daily (allowed=true ฟรี) หลุดมาถึงด่านรับรูป → trigger กัน ไม่มีงาน ไม่มี upload ค้าง
+    const stale = { ...a, allowed: true, reason: "free", freePolicy: "daily", freeAccessKind: "daily", freeScansRemaining: 1 };
+    const blocked = await ingest(u.uid, "mid-11s-" + u.uid, image("T2"), stale);
+    assert.equal(blocked.ok, false); assert.equal(blocked.error, "quota_exhausted_at_insert"); assert.equal(blocked.errorMessage, "trial_not_eligible");
+    assert.equal(jobsOf(u.uid).length, 0); assert.equal(q(`select count(*) from scan_uploads where line_user_id='${u.uid}'`), "0", "upload กำพร้าต้องถูกลบ");
+  });
+
+  await t("12 ลูกค้าใหม่: ครั้ง 1/2 ผ่าน (งาน kind=trial) · สิทธิ์+ข้อความ 2→1→0 ตรงกันทั้ง LINE/LIFF · ครั้งที่ 3 ไม่มีงาน (ทั้งด่านสิทธิ์และ DB)", async () => {
+    const u = await newUser({ bonus: 0, dailyExhausted: false }); // created_at = now() ≥ eligible_since
+    const a2 = await rights(u.uid, { state: "trial_left", total: 2, freeLeft: 2, headline: /ทดลองฟรีคงเหลือ 2 ครั้ง/ });
+    assert.equal(a2.freeAccessKind, "trial"); assert.equal(a2.trialEligible, true);
+    const j1 = await ingest(u.uid, "mid-12a-" + u.uid, image("T3"), a2);
+    assert.equal(j1.ok, true, JSON.stringify(j1)); assert.match(jobsOf(u.uid)[0], /\|queued\|trial$/); assert.equal(trialUsed(u.id), 1);
+    const a1 = await rights(u.uid, { state: "trial_left", total: 1, freeLeft: 1, headline: /ทดลองฟรีคงเหลือ 1 ครั้ง/ });
+    const j2 = await ingest(u.uid, "mid-12b-" + u.uid, image("T4"), a1);
+    assert.equal(j2.ok, true); assert.equal(jobsOf(u.uid).length, 2); assert.equal(trialUsed(u.id), 2);
+    const a0 = await rights(u.uid, { state: "trial_exhausted", total: 0, headline: /ใช้สิทธิ์ทดลองฟรีครบ 2 ครั้งแล้ว/ });
+    assert.equal(a0.allowed, false); assert.equal(a0.reason, "payment_required");
+    const d = await ingest(u.uid, "mid-12c-" + u.uid, image("T5"), a0);
+    assert.equal(d.ok, false); assert.equal(d.error, "access_denied");
+    // snapshot สิทธิ์ที่ยังบอกว่าเหลือ 1 (turnCache/แข่งกัน) → DB กันที่ INSERT
+    const s = await ingest(u.uid, "mid-12d-" + u.uid, image("T6"), a1);
+    assert.equal(s.ok, false); assert.equal(s.error, "quota_exhausted_at_insert"); assert.equal(s.errorMessage, "trial_quota_exhausted");
+    assert.equal(jobsOf(u.uid).length, 2, "ครั้งที่ 3 ต้องไม่มีงาน → worker/AI ไม่มีอะไรให้ทำ");
+    assert.equal(q(`select count(*) from scan_uploads where line_user_id='${u.uid}'`), "2", "upload ของครั้งที่ 3 ต้องถูกลบ");
+    // ส่งมอบแล้วไม่คืนสิทธิ์
+    for (const j of [j1, j2]) { await updateScanJob(j.jobId, { status: "processing" }); await updateScanJob(j.jobId, { status: "completed" }); await updateScanJob(j.jobId, { status: "delivered" }); }
+    assert.equal(trialUsed(u.id), 2); await rights(u.uid, { state: "trial_exhausted", total: 0 });
+  });
+
+  await t("13 งานล้ม (failJob จริง) คืนสิทธิ์ทดลอง 1 ครั้ง · ล้มซ้ำไม่คืนซ้ำ · retry งานที่ล้มหลังใช้ครบต้องถูกกัน", async () => {
+    const u = await newUser({ bonus: 0, dailyExhausted: false });
+    const j1 = await ingest(u.uid, "mid-13a-" + u.uid, image("T7"), await gate(u.uid));
+    const j2 = await ingest(u.uid, "mid-13b-" + u.uid, image("T8"), await gate(u.uid));
+    assert.equal(j1.ok && j2.ok, true); assert.equal(trialUsed(u.id), 2);
+    await updateScanJob(j1.jobId, { status: "processing" });
+    const r = quiet(); try { await failJob(j1.jobId, "object_validation_failed", "it", u.uid, "it-worker"); await failJob(j1.jobId, "object_validation_failed", "it-again", u.uid, "it-worker"); } finally { r(); }
+    assert.equal(trialUsed(u.id), 1, "failed ไม่นับ (คืน 1 ช่อง ครั้งเดียว)");
+    const a1 = await rights(u.uid, { state: "trial_left", total: 1, freeLeft: 1 });
+    const j3 = await ingest(u.uid, "mid-13c-" + u.uid, image("T9"), a1);
+    assert.equal(j3.ok, true); assert.equal(trialUsed(u.id), 2);
+    await rights(u.uid, { state: "trial_exhausted", total: 0 });
+    assert.throws(() => q(`update scan_jobs set status='queued' where id='${j1.jobId}'`), /trial_quota_exhausted/, "retry งานที่ล้มเมื่อโควตาเต็มแล้วต้องถูกกัน");
+    assert.equal(jobsOf(u.uid).filter((x) => !/\|failed\|/.test(x)).length, 2);
+  });
+
+  await t("14 รูปซ้ำ (processScanJob จริง → dedup → หลักฐาน skipQuotaDecrement) ไม่นับสิทธิ์ทดลอง · inbound ซ้ำ (message id เดิม) ไม่นับซ้ำ", async () => {
+    const u = await newUser({ bonus: 0, dailyExhausted: false });
+    const old = await ingest(u.uid, "mid-14a-" + u.uid, image("T10"), await gate(u.uid));
+    const resId = q(`insert into scan_results_v2(scan_job_id,line_user_id,app_user_id,report_url) values('${old.jobId}','${u.uid}','${u.id}','https://example.test/r/t') returning id`);
+    await updateScanJob(old.jobId, { status: "completed", result_id: resId });
+    assert.equal(trialUsed(u.id), 1);
+    // inbound เดิมถูก LINE ส่งซ้ำ → งานเดียว
+    const again = await ingest(u.uid, "mid-14a-" + u.uid, image("T10"), await gate(u.uid));
+    assert.equal(again.ok && again.duplicate, true); assert.equal(jobsOf(u.uid).length, 1); assert.equal(trialUsed(u.id), 1);
+    // รูปเดิม message ใหม่ → จองช่องที่ 2 ตอน INSERT แล้ว worker พบรูปซ้ำ → ไม่นับ
+    const dup = await ingest(u.uid, "mid-14b-" + u.uid, image("T10"), await gate(u.uid));
+    assert.equal(dup.ok, true); assert.equal(trialUsed(u.id), 2, "จองไว้ก่อนระหว่างรอ worker");
+    q(`update scan_jobs set status='processing', locked_at=now(), worker_id='it' where id='${dup.jobId}'`);
+    const row = await getScanJobById(dup.jobId);
+    const r = quiet(); try { await processScanJob("it-worker", row); } finally { r(); }
+    assert.equal((await getScanJobById(dup.jobId)).status, "completed");
+    assert.equal(q(`select count(*) from outbound_messages where related_job_id='${dup.jobId}' and kind='scan_result' and status='queued' and payload_json->>'skipQuotaDecrement'='true'`), "1");
+    // กติกา 057: หลักฐานรูปซ้ำนับเมื่อข้อความถูก "ส่งแล้ว" (status='sent') — ระหว่างรอ delivery worker ช่องยังถูกถือไว้ (กันใช้เกิน)
+    assert.equal(trialUsed(u.id), 2, "ระหว่าง queued ยังถือช่องไว้");
+    q(`update outbound_messages set status='sent' where related_job_id='${dup.jobId}' and kind='scan_result'`); // delivery worker ส่งสำเร็จ
+    assert.equal(trialUsed(u.id), 1, "รูปซ้ำไม่กินสิทธิ์ทดลองหลังส่งข้อความสำเร็จ");
+    await rights(u.uid, { state: "trial_left", total: 1, freeLeft: 1 });
+    const j3 = await ingest(u.uid, "mid-14c-" + u.uid, image("T18"), await gate(u.uid));
+    assert.equal(j3.ok, true, "ใช้ช่องที่คืนมาได้จริง"); assert.equal(trialUsed(u.id), 2);
+  });
+
+  await t("15 ส่ง 3 รูปพร้อมกันด้วย snapshot สิทธิ์เดียวกัน (เหลือ 2) → งาน 2 · ถูกกันที่ DB 1 · ไม่เกินยอด", async () => {
+    const u = await newUser({ bonus: 0, dailyExhausted: false });
+    const a = await gate(u.uid);
+    const rs = await Promise.all(["T11", "T12", "T13"].map((s, i) => ingest(u.uid, `mid-15-${i}-` + u.uid, image(s), a)));
+    assert.equal(rs.filter((r) => r.ok).length, 2, JSON.stringify(rs));
+    assert.equal(rs.filter((r) => r.error === "quota_exhausted_at_insert" && r.errorMessage === "trial_quota_exhausted").length, 1);
+    assert.equal(jobsOf(u.uid).length, 2); assert.equal(trialUsed(u.id), 2);
+    assert.equal(q(`select count(*) from scan_uploads where line_user_id='${u.uid}'`), "2");
+  });
+
+  await t("16 paid/bonus ไม่เสียสิทธิ์: แพ็กมาก่อน (ไม่กินทดลอง) · ทดลองครบแล้วโบนัสยังใช้ได้ (จอง/คืนตาม 064) · ข้อความรวมสิทธิ์ถูกต้อง", async () => {
+    const u = await newUser({ bonus: 0, dailyExhausted: false });
+    q(`update app_users set paid_remaining_scans=1, paid_until=now()+interval '7 days' where line_user_id='${u.uid}'`);
+    const ap = await rights(u.uid, { state: "paid", total: 3, paidLeft: 1, freeLeft: 2, headline: /สิทธิ์จากแพ็กคงเหลือ 1 ครั้ง/ });
+    assert.equal(ap.reason, "paid");
+    const jp = await ingest(u.uid, "mid-16a-" + u.uid, image("T14"), ap);
+    assert.equal(jp.ok, true); assert.match(jobsOf(u.uid)[0], /\|queued\|-$/); assert.equal(q(`select access_source from scan_jobs where id='${jp.jobId}'`), "paid");
+    assert.equal(trialUsed(u.id), 0, "งานแพ็กไม่นับเป็นทดลอง");
+    q(`update app_users set paid_remaining_scans=0 where line_user_id='${u.uid}'`);
+    // ทดลอง 2 ครั้ง (ไม่มีแพ็กแล้ว)
+    for (const s of ["T15", "T16"]) { const r = await ingest(u.uid, `mid-16-${s}-` + u.uid, image(s), await gate(u.uid)); assert.equal(r.ok, true); }
+    assert.equal(trialUsed(u.id), 2);
+    // แพ็กเหลือ 0 (ยังไม่หมดอายุ) + ทดลองครบ → บอกว่าทดลองครบ ไม่หลอกว่ามีแพ็ก
+    await rights(u.uid, { state: "trial_exhausted", total: 0, headline: /ใช้สิทธิ์ทดลองฟรีครบ 2 ครั้งแล้ว/ });
+    // ได้โบนัสชวนเพื่อน → ยังสแกนได้ผ่านโบนัส (จองที่ INSERT) แม้ทดลองครบ · ทดลองไม่ถูกนับเพิ่ม
+    q(`update app_users set bonus_scans=1, paid_until=null where line_user_id='${u.uid}'`);
+    const ab = await rights(u.uid, { state: "bonus", total: 1, bonusLeft: 1, headline: /สิทธิ์โบนัสคงเหลือ 1 ครั้ง/ });
+    assert.equal(ab.viaBonus, true);
+    const jb = await ingest(u.uid, "mid-16b-" + u.uid, image("T17"), ab);
+    assert.equal(jb.ok, true); assert.equal(bonusOf(u.uid), 0); assert.match(jobsOf(u.uid).at(-1), /\|queued\|bonus_reserved$/);
+    assert.equal(trialUsed(u.id), 2, "งานโบนัสไม่นับเป็นทดลอง");
+    await updateScanJob(jb.jobId, { status: "processing" });
+    const r = quiet(); try { await failJob(jb.jobId, "object_validation_failed", "it", u.uid, "it-worker"); } finally { r(); }
+    assert.equal(bonusOf(u.uid), 1, "โบนัสล้ม → คืน"); assert.equal(trialUsed(u.id), 2);
+    await rights(u.uid, { state: "bonus", total: 1, bonusLeft: 1 });
+  });
+
+  await t("17 ตลอดชุด trial: ไม่มีการเรียกออกนอกเครื่อง (AI/LINE) แม้แต่ครั้งเดียว — ทุกครั้งที่ 3 ถูกกันก่อน worker", async () => {
+    const ext = externalCalls.slice(extBefore);
+    assert.deepEqual(ext, [], `เรียกออกนอก: ${JSON.stringify([...new Set(ext)])}`);
+  });
+} finally { q(`select set_new_customer_trial_policy(false)`); }
+
 out(results.join("\n"));
-out(process.exitCode ? "RESULT: FAIL" : "RESULT: PASS (bonus reservation integration)");
+out(process.exitCode ? "RESULT: FAIL" : "RESULT: PASS (bonus reservation + new-customer trial integration)");
