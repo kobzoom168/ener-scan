@@ -6,10 +6,25 @@
  *   (LIFF ยืนยันตัวตน → cookie เจ้าของ → กลับมาหน้าคลัง) — ห้ามพาไปหน้าจ่ายเงิน
  * ไม่มีข้อมูลคลังใด ๆ ถูกส่งมาใน HTML สำหรับ guest (ไม่ใช่การเบลอด้วย CSS)
  */
-export function ownerVaultCtaHtml({ ownerVerifyUrl, laneWordTh = "คลัง", cssPrefix = "ovc" } = {}) {
+export function ownerVaultCtaHtml({ ownerVerifyUrl, laneWordTh = "คลัง", cssPrefix = "ovc", verifiedMismatch = false } = {}) {
   const href = String(ownerVerifyUrl || "").trim();
   if (!href) return "";
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  if (verifiedMismatch) {
+    // Codex 30 ก.ย.: ยืนยัน LINE แล้วแต่ไม่ใช่เจ้าของรายงานนี้ → บอกตรง ๆ ไม่แสดงเหมือนยืนยันเจ้าของสำเร็จ · ไม่เปิดคลัง
+    return `
+    <section class="${cssPrefix}" aria-labelledby="${cssPrefix}-h" data-owner-vault-cta="mismatch">
+      <style>
+        .${cssPrefix}{margin:1rem 0;padding:1rem 1.1rem;border:1px solid rgba(201,162,77,.45);border-radius:16px;background:rgba(201,162,77,.07)}
+        .${cssPrefix} h2{margin:0 0 .35rem;font-size:1.05rem}
+        .${cssPrefix} p{margin:0 0 .7rem;font-size:.86rem;line-height:1.5;opacity:.85}
+        .${cssPrefix}-btn{display:block;text-align:center;text-decoration:none;font-weight:700;padding:.65rem 1rem;border-radius:999px;border:1px solid rgba(201,162,77,.6);color:inherit}
+      </style>
+      <h2 id="${cssPrefix}-h">${esc(laneWordTh)}ของรายงานนี้</h2>
+      <p><strong>บัญชี LINE ที่ยืนยันไว้ในเบราว์เซอร์นี้ไม่ใช่เจ้าของรายงานนี้</strong> — ${esc(laneWordTh)}และอันดับของรายงานนี้เปิดให้เฉพาะเจ้าของ · ผลสแกนของบัญชีคุณเองดูได้ในแชท LINE (พิมพ์ ดูผลเก่า) หรือแอป Ener</p>
+      <a class="${cssPrefix}-btn" href="${esc(href)}" rel="nofollow">ยืนยันใหม่ด้วยบัญชีเจ้าของรายงาน</a>
+    </section>`;
+  }
   return `
     <section class="${cssPrefix}" aria-labelledby="${cssPrefix}-h" data-owner-vault-cta="1">
       <style>

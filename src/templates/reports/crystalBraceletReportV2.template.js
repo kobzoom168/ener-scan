@@ -868,7 +868,7 @@ export function renderCrystalBraceletReportV2Html(payload, options = {}) {
   // guest (ลิงก์แชร์): ไม่มีข้อมูลคลังในหน้า — ให้ทางยืนยันเจ้าของผ่าน LINE (ไม่ใช่หน้าจ่ายเงิน)
   const ownerVaultCta =
     options.viewerRole === "guest" && options.ownerVerifyUrl
-      ? ownerVaultCtaHtml({ ownerVerifyUrl: options.ownerVerifyUrl, laneWordTh: "คลังกำไล", cssPrefix: "cb2-ovc" })
+      ? ownerVaultCtaHtml({ ownerVerifyUrl: options.ownerVerifyUrl, verifiedMismatch: options.viewerVerifiedMismatch === true, laneWordTh: "คลังกำไล", cssPrefix: "cb2-ovc" })
       : "";
 
   const canonicalLinkTag = canonicalUrl

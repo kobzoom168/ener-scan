@@ -405,7 +405,7 @@ export function renderMoldaviteReportV2Html(payload, options = {}) {
   // guest (ลิงก์แชร์): ให้ทางยืนยันเจ้าของผ่าน LINE (ไม่ใช่หน้าจ่ายเงิน)
   const ownerVaultCta =
     options.viewerRole === "guest" && options.ownerVerifyUrl
-      ? ownerVaultCtaHtml({ ownerVerifyUrl: options.ownerVerifyUrl, laneWordTh: "คลัง", cssPrefix: "pk-ovc" })
+      ? ownerVaultCtaHtml({ ownerVerifyUrl: options.ownerVerifyUrl, verifiedMismatch: options.viewerVerifiedMismatch === true, laneWordTh: "คลัง", cssPrefix: "pk-ovc" })
       : "";
   const pickTeaserHtml = pickTeaser
     ? `

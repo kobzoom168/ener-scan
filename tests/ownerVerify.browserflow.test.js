@@ -159,7 +159,7 @@ test("บัญชี B กดยืนยันจากลิงก์ขอ�
   assert.equal(lib.status, 302);
   const body = await b.request("/r/rpt-A1/body", { auth: false });
   assert.equal(body.status, 200); for (const it of items) assert.ok(!body.text.includes(it.publicToken), "คลังของ A ต้องไม่รั่วให้ B");
-  assert.match(body.text, /data-owner-vault-cta="1"/);
+  assert.match(body.text, /data-owner-vault-cta="mismatch"/); assert.match(body.text, /ไม่ใช่เจ้าของรายงานนี้/);
 });
 
 test("ไม่วน redirect: หน้ารายงาน guest ไม่มี auto-redirect ไป LIFF · return path นอกโดเมนถูกปฏิเสธ", async () => {

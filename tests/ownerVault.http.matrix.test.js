@@ -165,8 +165,12 @@ for (const lane of Object.keys(LANES)) for (const n of [3, 8]) {
       }
       if (LANES[lane].heading) assert.ok(!r.text.includes(LANES[lane].heading), `${name}: ห้ามมีหัวข้อคลัง`);
       assert.doesNotMatch(r.text, FORBIDDEN_VIEW_PAYWALL);
-      assert.match(r.text, /data-owner-vault-cta="1"/, `${name}: ต้องมีบล็อกยืนยันเจ้าของ`);
-      const cta = r.text.slice(r.text.indexOf('data-owner-vault-cta="1"'), r.text.indexOf("</section>", r.text.indexOf('data-owner-vault-cta="1"')));
+      // ไม่มี cookie → ชวนยืนยัน · cookie บัญชีอื่น → "ไม่ใช่เจ้าของรายงานนี้" (ไม่แสดงเหมือนยืนยันสำเร็จ)
+      const marker = cookie ? 'data-owner-vault-cta="mismatch"' : 'data-owner-vault-cta="1"';
+      assert.ok(r.text.includes(marker), `${name}: ต้องมีบล็อก ${marker}`);
+      if (cookie) assert.match(r.text, /ไม่ใช่เจ้าของรายงานนี้/, "บัญชีอื่นต้องถูกบอกตรง ๆ");
+      else assert.ok(!/ไม่ใช่เจ้าของรายงานนี้/.test(r.text));
+      const cta = r.text.slice(r.text.indexOf(marker), r.text.indexOf("</section>", r.text.indexOf(marker)));
       assert.match(cta, /view=owner&amp;return=%2Fr%2F/, "ปุ่มไปยืนยันผ่าน LINE แล้วกลับหน้าคลัง");
       if (lane === "amulet") assert.match(cta, /%2Flibrary"/); else assert.ok(!/%2Flibrary"/.test(cta), "เลนที่ไม่มีหน้าคลังแยก ต้องกลับมารายงานเดิม");
       assert.ok(!/view=pay/.test(cta), "บล็อกยืนยันห้ามพาไปหน้าจ่าย");

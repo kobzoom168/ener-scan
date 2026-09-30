@@ -57,6 +57,7 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
       liffPayUrl: renderOpts.liffPayUrl ?? null,
       accessFull: renderOpts.accessFull ?? true,
       viewerRole: renderOpts.viewerRole ?? "owner",
+      viewerVerifiedMismatch: renderOpts.viewerVerifiedMismatch === true,
       ownerVerifyUrl: renderOpts.ownerVerifyUrl ?? "",
       liffHomeUrl: renderOpts.liffHomeUrl ?? "",
     });
@@ -78,6 +79,7 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
       liffPayUrl: renderOpts.liffPayUrl ?? null,
       accessFull: renderOpts.accessFull ?? true,
       viewerRole: renderOpts.viewerRole ?? "owner",
+      viewerVerifiedMismatch: renderOpts.viewerVerifiedMismatch === true,
       ownerVerifyUrl: renderOpts.ownerVerifyUrl ?? "",
       liffHomeUrl: renderOpts.liffHomeUrl ?? "",
     });
@@ -100,6 +102,7 @@ export function renderReportHtmlPage(payload, renderOpts = {}) {
       liffPayUrl: renderOpts.liffPayUrl ?? null,
       accessFull: renderOpts.accessFull ?? true,
       viewerRole: renderOpts.viewerRole ?? "owner",
+      viewerVerifiedMismatch: renderOpts.viewerVerifiedMismatch === true,
       ownerVerifyUrl: renderOpts.ownerVerifyUrl ?? "",
       liffHomeUrl: renderOpts.liffHomeUrl ?? "",
     });

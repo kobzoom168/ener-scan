@@ -19,7 +19,7 @@ import {
 } from "../services/reports/crystalBraceletLibrary.service.js";
 import { env } from "../config/env.js";
 import { ownHistoryViewFlags } from "../services/reports/ownHistoryAccess.util.js";
-import { isOwnerViewing, ownerVerifyUrl } from "../services/reports/ownerProof.util.js";
+import { isOwnerViewing, ownerVerifyUrl, viewerOwnerUid } from "../services/reports/ownerProof.util.js";
 import {
   translateReportPayloadEn,
   buildEnglishReportPage,
@@ -238,6 +238,8 @@ export async function getReportBodyByToken(req, res) {
       liffPayUrl,
       accessFull,
       viewerRole,
+      // มี cookie เจ้าของ (ยืนยัน LINE แล้ว) แต่ไม่ตรงเจ้าของรายงานนี้ → บอกว่า "ไม่ใช่เจ้าของ" ไม่ใช่ชวนยืนยันเหมือนยังไม่ยืนยัน
+      viewerVerifiedMismatch: !ownerViewing && Boolean(viewerOwnerUid(req)),
       // ทางยืนยันเจ้าของจากหน้ารายงาน (ไม่ใช่หน้าจ่ายเงิน) — พระ: กลับมาหน้าคลังอันดับ · เลนอื่น: กลับมารายงานเดิม (คลังอยู่ในหน้า)
       ownerVerifyUrl: ownerVerifyUrl(normPre.amuletV1 ? `/r/${encodeURIComponent(publicToken)}/library` : `/r/${encodeURIComponent(publicToken)}`),
       // หน้าแรก LIFF (ยืนยันตัวตนด้วย LINE อยู่แล้ว) สำหรับเลนที่ไม่มีหน้าคลังอันดับแยก

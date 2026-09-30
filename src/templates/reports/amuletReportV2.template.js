@@ -576,7 +576,7 @@ export function renderAmuletReportV2Html(payload, options = {}) {
   // guest (ลิงก์แชร์): ไม่มีข้อมูลคลังในหน้า — ให้ทางยืนยันเจ้าของผ่าน LINE (ไม่ใช่หน้าจ่ายเงิน)
   const ownerVaultCta =
     options.viewerRole === "guest" && options.ownerVerifyUrl
-      ? ownerVaultCtaHtml({ ownerVerifyUrl: options.ownerVerifyUrl, laneWordTh: "คลัง", cssPrefix: "mv2-ovc" })
+      ? ownerVaultCtaHtml({ ownerVerifyUrl: options.ownerVerifyUrl, verifiedMismatch: options.viewerVerifiedMismatch === true, laneWordTh: "คลัง", cssPrefix: "mv2-ovc" })
       : "";
 
   // ชิ้นหนุนดวงวันนี้ของเจ้าของ — ข้อมูลเดิมของเจ้าของ เปิดดูได้โดยไม่ต้องจ่าย (Codex 26 ก.ย.)
