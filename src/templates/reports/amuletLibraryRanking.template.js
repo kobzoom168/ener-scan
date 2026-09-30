@@ -809,7 +809,7 @@ ${amuletSubpageAutoDarkScriptHtml()}
   <div class="alib-wrap">
     <a class="alib-back" href="${escapeHtml(backHref)}">← กลับรายงาน</a>
     <h1 class="alib-h1">คลังพลังของคุณ</h1>
-    <p class="alib-sub">คุณมีรายการสแกนแล้ว ${escapeHtml(String(n))} รายการ</p>
+    <p class="alib-sub">พระ/เทวรูป/เครื่องราง ${escapeHtml(String(n))} รายการ (ไม่นับกำไล/หิน)</p>
     ${dedupeExplainLine}
     <p class="alib-safety" role="note">อันดับนี้จัดจากผลสแกนของคุณเท่านั้น ไม่ได้ระบุชื่อพระหรือรุ่นพระจริง</p>
     ${retentionNoticeHtml}

@@ -117,7 +117,7 @@ test("admin switch: authentication, CSRF, explicit confirmation, save failure, O
     assert.equal((await request(port, "/admin/free-trial", "GET", "", false)).status, 302);
     assert.equal((await request(port, "/admin/free-trial", "POST", "enabled=on", false)).status, 302);
     const page = await request(port, "/admin/free-trial");
-    assert.match(page.text, /ฟรีรายวัน 1 ครั้ง/);
+    assert.match(page.text, /ปิด \(OFF\) — ฟรีรายวัน 1 ครั้ง/); assert.match(page.text, /ยกเลิกฟรีรายวัน — ให้ลูกค้าใหม่ทดลองรวม 2 ครั้ง/); assert.match(page.text, /Environment:/); assert.match(page.text, /Cutoff ลูกค้าใหม่/); assert.match(page.text, /อย่างน้อย 3 วัน/); assert.ok(!/ล่วงหน้า 7 วัน/.test(page.text));
     assert.doesNotMatch(page.text, /name="enabled" checked/);
     assert.equal((await request(port, "/admin/free-trial", "POST", "enabled=on&confirmed=on")).status, 403);
     const csrf = session.freeTrialCsrf;

@@ -2133,7 +2133,7 @@ function buildLiffHtml(liffId) {
     <div class="stat">
       <div class="k">คลังพลังของคุณ</div>
       <div class="stgrid" id="stgrid">
-        <div class="stc"><small>สแกนแล้ว</small><span class="stv"><b class="serif" id="st-count">–</b><i>ชิ้น</i></span></div>
+        <div class="stc"><small>สแกนแล้ว (ทุกประเภท)</small><span class="stv"><b class="serif" id="st-count">–</b><i>ชิ้น</i></span></div>
         <div class="stc"><small>สิทธิ์เหลือ</small><span class="stv"><b class="serif" id="st-left">–</b><i>ครั้ง</i></span><small class="stsub hidden" id="st-left-sub"></small></div>
         <div class="stc"><small>คะแนนสูงสุด</small><span class="stv"><b class="serif" id="st-top">–</b><i>/10</i></span></div>
         <div class="stc"><small>พลังเด่นสุด</small><span class="stv"><b class="staxis" id="st-axis">–</b></span></div>

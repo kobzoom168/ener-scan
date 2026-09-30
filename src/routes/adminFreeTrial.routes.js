@@ -21,27 +21,34 @@ export default function createAdminFreeTrialRouter({
       if (!req.session) return res.status(503).send("admin_session_unavailable");
       req.session.freeTrialCsrf ||= randomBytes(24).toString("hex");
       const daily = offer().freeQuotaPerDay;
+      // Codex 30 ก.ย.: แสดงสถานะที่ใช้งานจริง + environment + cutoff + ผลของ ON/OFF ให้เข้าใจทันที
+      const envLabel = String(process.env.APP_ENV || process.env.NODE_ENV || "unknown");
+      const cutoffThai = policy.eligible_since
+        ? `${new Date(policy.eligible_since).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" })} (เวลาไทย) · ${esc(policy.eligible_since)}`
+        : "ยังไม่ตั้ง — จะบันทึกถาวรเมื่อเปิดครั้งแรก (บัญชีที่ created_at >= ค่านี้ = ลูกค้าใหม่)";
       res.set("Cache-Control", "no-store").type("html").send(`<!doctype html>
 <html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>สิทธิ์ทดลองใช้ฟรี — Ener Scan</title><style>
+<title>ยกเลิกฟรีรายวัน — ให้ลูกค้าใหม่ทดลองรวม 2 ครั้ง — Ener Scan</title><style>
 body{font-family:system-ui,sans-serif;background:#17140f;color:#f5eddf;margin:0;padding:24px;font-size:18px}
 main{max-width:620px;margin:auto}section{background:#252017;padding:24px;border-radius:16px}
 h1{font-size:26px}p{line-height:1.7}a{color:#e9c36d}label{display:flex;gap:14px;align-items:center;font-weight:bold}
 input{width:28px;height:28px}button{background:#e9c36d;border:0;border-radius:10px;padding:16px;font-size:18px;width:100%;cursor:pointer}
 small{display:block;color:#c1b6a5;line-height:1.7;margin:16px 0}</style></head><body><main>
-<a href="/admin/promo">← โปรโมชันและแพ็ก</a><h1>สิทธิ์ทดลองใช้ฟรี</h1><section>
-<p>สถานะ: <strong>${policy.enabled ? "ลูกค้าใหม่ฟรีรวม 2 ครั้ง" : `ฟรีรายวัน ${esc(daily)} ครั้งต่อคน`}</strong></p>
+<a href="/admin/promo">← โปรโมชันและแพ็ก</a><h1>ยกเลิกฟรีรายวัน — ให้ลูกค้าใหม่ทดลองรวม 2 ครั้ง</h1><section>
+<p>สถานะที่ใช้งานจริงตอนนี้: <strong>${policy.enabled ? "เปิด (ON) — ยกเลิกฟรีรายวันแล้ว ลูกค้าใหม่ทดลองรวม 2 ครั้งต่อบัญชี" : `ปิด (OFF) — ฟรีรายวัน ${esc(daily)} ครั้งต่อคน`}</strong></p>
+<p>Environment: <strong>${esc(envLabel)}</strong> · ${req.hostname ? `host ${esc(req.hostname)}` : ""}</p>
+<p>Cutoff ลูกค้าใหม่ (eligible_since): <strong>${cutoffThai}</strong></p>
 ${req.query.saved ? "<p role=\"status\">บันทึกสำเร็จแล้ว</p>" : ""}
 <form method="post" action="/admin/free-trial">
 <input type="hidden" name="csrf" value="${esc(req.session.freeTrialCsrf)}">
-<label><input type="checkbox" name="enabled"${policy.enabled ? " checked" : ""}>เปิดโหมดลูกค้าใหม่ฟรีรวม 2 ครั้ง</label>
-<p>เปิด: หยุดฟรีรายวัน ลูกค้าใหม่ได้สิทธิ์ทดลองรวม 2 ครั้งต่อบัญชี ไม่เติมใหม่ทุกวัน</p>
-<p>ปิด: กลับไปใช้ฟรีรายวัน ${esc(daily)} ครั้ง ตามค่าที่ตั้งในหน้าโปรโมชัน</p>
+<label><input type="checkbox" name="enabled"${policy.enabled ? " checked" : ""}>ยกเลิกฟรีรายวัน — ให้ลูกค้าใหม่ทดลองรวม 2 ครั้ง (ON)</label>
+<p><strong>ON</strong> = ปิดฟรีรายวัน · ลูกค้าใหม่ที่เข้าเกณฑ์ (created_at ≥ cutoff) ได้รวม 2 ครั้งต่อบัญชี ไม่เติมใหม่รายวัน · บัญชีเก่าไม่ได้ฟรีรายวันอีก</p>
+<p><strong>OFF</strong> = กลับใช้ฟรีรายวัน ${esc(daily)} ครั้งต่อคน ตาม config หน้าโปรโมชัน · cutoff ไม่ถูกรีเซ็ต</p>
 <small>ลูกค้าใหม่ = บัญชีที่เริ่มใช้ตั้งแต่การเปิดโหมดนี้ครั้งแรก บัญชีเก่าไม่ได้รับสิทธิ์ใหม่ย้อนหลัง
 สิทธิ์แพ็กและโบนัสที่ให้ไว้ยังใช้ได้ตามเดิม ยอดทดลองใช้ฟรีไม่รีเซ็ตเมื่อปิดแล้วเปิดใหม่
 งานที่อยู่ในคิวจองสิทธิ์ไว้จนเสร็จ งานล้มเหลวไม่กินสิทธิ์</small>
 <small>วันเริ่มนโยบายครั้งแรก: ${esc(policy.eligible_since || "ยังไม่เริ่ม — จะบันทึกเมื่อเปิดครั้งแรก")}</small>
-<label><input type="checkbox" name="confirmed" required>ยืนยันการเปลี่ยนนโยบาย (เปิดครั้งแรกหลังแจ้งลูกค้าล่วงหน้า 7 วัน)</label>
+<label><input type="checkbox" name="confirmed" required>ยืนยันการเปลี่ยนนโยบาย (เปิดครั้งแรกหลังแจ้งลูกค้าล่วงหน้าอย่างน้อย 3 วัน / 72 ชั่วโมง)</label>
 <button type="submit">บันทึกนโยบาย</button></form></section></main></body></html>`);
     } catch {
       res.status(503).send("ยังอ่านนโยบายไม่ได้ ตรวจ migration 057 และการเชื่อมต่อฐานข้อมูลก่อนครับ");

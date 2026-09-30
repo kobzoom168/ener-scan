@@ -1,0 +1,17 @@
+# md5(prosrc) อ้างอิงของฟังก์ชัน migration ชุด three-tasks (057/061/062/063/064)
+# ที่มา: staging DB ener_scan_staging 30 ก.ย. 2026 หลัง apply ไฟล์ใน repo ตามลำดับ + integration tests ผ่าน
+# 057/064: ตรงกับผลจากการ apply ไฟล์ commit ลง DB ใช้แล้วทิ้ง (ตรวจ 26 ก.ย.) · ใช้กับ scripts/ops/verify-migration-versions.sh
+approve_payment_and_grant 07362f4b541c1a7da38e508a557f9757
+consume_telegram_approval_token aa101094ff223e55a55707ffe57f798e
+guard_new_customer_trial_job ddfa713c1888a67016e8e875cb1611ee
+issue_telegram_approval_token 4b08783667015e50663fade567166ed0
+list_payment_grants_pending_notify 12bd5e87190863cf2d955371a4a70e12
+mark_payment_grant_notified b7e4f3178d38ab5d0293fd3507f48875
+new_customer_trial_status bc30ac2e956891658ce9d75dbe8a45db
+new_customer_trial_used 73e32701eab031e4c7c1163caca6342e
+purge_expired_telegram_approval_tokens 16cf3416a9deb010d24353727c3d3631
+record_payment_approval_audit d528752c00ad0a5521f448c6a101c99a
+release_bonus_on_dup_evidence 5960d1cc145aa6479c40ac9fc298ad4c
+release_bonus_reservation 80eff2d140918a1cc0bf10c28ea6814d
+set_new_customer_trial_policy 6c882ecd13b0a87b44aa54e9890d4765
+sweep_bonus_releases 80afae7bab8c991c1e52b4e4c4f60c12

@@ -510,7 +510,7 @@ function buildSacredAmuletLibraryMiniHtml(library, pageToken, opts = {}) {
   return `
     <section class="mv2-card mv2-lib-mini" aria-labelledby="mv2-lib-h">
       <h2 id="mv2-lib-h">คลังพลังของคุณ</h2>
-      <p class="mv2-lib-count">คุณมีรายการสแกนแล้ว ${escapeHtml(String(library.totalCount))} รายการ</p>
+      <p class="mv2-lib-count">พระ/เทวรูป/เครื่องราง ${escapeHtml(String(library.totalCount))} รายการ (ไม่นับกำไล/หิน)</p>
       ${podiumHtml}
       ${axisCarouselHtml}
       ${byOverall.length > 1 ? `<h3 class="mv2r-rank-h">อันดับทั้งหมดในคลัง</h3>` : ""}

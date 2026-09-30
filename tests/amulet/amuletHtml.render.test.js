@@ -607,7 +607,7 @@ test("renderAmuletReportV2Html: library mini — no nudge when totalCount > 1", 
   assert.ok(base);
   const lib = { ...base, totalCount: 2 };
   const html = renderAmuletReportV2Html(norm, { sacredAmuletLibrary: lib });
-  assert.ok(html.includes("คุณมีรายการสแกนแล้ว 2 รายการ"));
+  assert.ok(html.includes("พระ/เทวรูป/เครื่องราง 2 รายการ (ไม่นับกำไล/หิน)"));
   assert.ok(!html.includes("สแกนเพิ่มอีกสักรายการ"));
 });
 
