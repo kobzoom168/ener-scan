@@ -101,7 +101,7 @@ if (!process.env.ENER_TG_IT_CHILD) {
   const { buildChildEnv } = await import("./fixtures/it-child-env.mjs");
   const env = buildChildEnv(codeRoot, {
     ENER_TG_IT_CHILD: "1", ENER_TG_IT_PG: PG, ENER_TG_IT_APP_LOG: process.env.ENER_TG_IT_APP_LOG || "",
-    ...(LIVE ? { ENER_TG_IT_MODE: "live", ENER_TG_DRY_RUN: DRY ? "1" : "", ENER_TG_LIVE_PORT: String(process.env.ENER_TG_LIVE_PORT || 3390),
+    ...(LIVE ? { ENER_TG_IT_MODE: "live", ENER_TG_DRY_RUN: DRY ? "1" : "", ENER_TG_LIVE_SHA: String(process.env.ENER_TG_LIVE_SHA || ""), ENER_TG_LIVE_PORT: String(process.env.ENER_TG_LIVE_PORT || 3390),
       ENER_TG_LIVE_OUT: String(process.env.ENER_TG_LIVE_OUT || "/tmp/ener-tg-live-out"), ENER_IT_ALLOW_HOSTS: DRY ? "" : "api.telegram.org" } : {}),
     LOCAL_POSTGREST_URL: `http://127.0.0.1:${PORT}`, LOCAL_POSTGREST_ANON_KEY: jwt("web_anon"),
     LOCAL_POSTGREST_SERVICE_KEY: jwt("service_role"), SUPABASE_URL: "http://127.0.0.1:9", SUPABASE_SERVICE_ROLE_KEY: "x",
