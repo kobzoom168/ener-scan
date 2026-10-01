@@ -214,13 +214,14 @@ if (process.env.ENER_TG_IT_MODE === "live") {
   let stopping = false;
   const stop = async (why) => {
     if (stopping) return; stopping = true; tick();
-    const evidence = {
+    let evidence;
+    try { evidence = {
       event: "TG_LIVE_EVIDENCE", why, sha: process.env.ENER_TG_LIVE_SHA || null, dryRun: dry, stoppedAt: new Date().toISOString(),
       payments: seeds.map((p) => ({ pid: p.pid, uid: p.uid, status: pay(p.pid), grants: grants(p.pid), paidRemaining: q(`select coalesce(paid_remaining_scans,0) from app_users where id='${p.appUserId}'`), audit: auditDump(p.pid), tokens: q(`select count(*)||' total · used='||count(used_at) from telegram_approval_tokens where payment_id='${p.pid}'`), outbound: outbound(p.uid) })),
-      deniedAudit: q(`select coalesce(detail->>'reason','-')||'='||count(*) from payment_approval_audit where channel='telegram' and action='callback' and result='denied' group by 1`).split("\n").filter(Boolean),
+      deniedAudit: q(`select r||'='||n from (select coalesce(detail->>'reason','-') as r, count(*) as n from payment_approval_audit where channel='telegram' and action='callback' and result='denied' group by 1) x`).split("\n").filter(Boolean),
       lineOrAiAttemptsBlocked: blockedAttempts.length, blockedHosts: [...new Set(blockedAttempts)], telegramCallsDryRun: dry ? tgCalls.length : null,
       deliveryWorker: "none (ระบบแยก)", dbScope: "throwaway only",
-    };
+    }; } catch (e) { evidence = { event: "TG_LIVE_EVIDENCE_PARTIAL", why, error: String(e?.message || e).slice(0, 300), blocked: blockedAttempts.length }; }
     const file = `${OUT}/evidence-${Date.now()}.json`;
     fs.writeFileSync(file, JSON.stringify(evidence, null, 2));
     out(JSON.stringify({ event: "TG_LIVE_STOPPED", why, evidenceFile: file, blocked: blockedAttempts.length }));
